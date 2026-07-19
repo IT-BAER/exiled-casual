@@ -14,3 +14,4 @@ export type {
 export { registerResourceRegen } from "./systems/resource";
 export { registerPlayerMovement } from "./systems/player-movement";
 export { registerSkillCast } from "./systems/skill-cast";
+export { registerProjectileMove } from "./systems/projectile";
