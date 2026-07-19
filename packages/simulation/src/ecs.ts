@@ -27,7 +27,7 @@ export class World {
     for (const store of this.stores.values()) store.delete(e);
   }
 
-  set<T extends Record<string, unknown>>(e: Entity, comp: string, data: T): void {
+  set<T extends object>(e: Entity, comp: string, data: T): void {
     let store = this.stores.get(comp);
     if (!store) {
       store = new Map<Entity, unknown>();
