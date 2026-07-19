@@ -50,10 +50,15 @@ export function App() {
       const alpha = Math.min(1, (performance.now() - prevTickTime) / MS_PER_TICK);
       renderer.apply(prevSnap, curSnap, alpha);
       // Camera follows the player (interpolated) so they stay centred like an ARPG.
+      // The 4th arg (cloneAlphaBetaRadius=true) keeps the orbit fixed and moves the
+      // camera WITH the target; the default recomputes the angles and drifts.
       const p = curSnap.player;
       const pp = prevSnap?.player ?? p;
       camera.setTarget(
         new Vector3(pp.x + (p.x - pp.x) * alpha, 0, pp.y + (p.y - pp.y) * alpha),
+        false,
+        false,
+        true,
       );
       scene.render();
     });

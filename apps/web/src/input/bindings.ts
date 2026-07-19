@@ -4,7 +4,11 @@ import type { Scene } from "@babylonjs/core";
 
 // ponytail: thin DOM glue — all key→intent mapping lives in intents.ts
 
-/** Current world-space aim (updated on pointermove via ground-plane raycast). */
+/**
+ * Current aim in RAW world floats (sim x, sim y=Babylon z), updated on pointermove
+ * via ground-plane raycast. Raw (not fixed-point) because keyToIntent applies fp()
+ * itself — pre-converting here would double-scale the skill target ~1000×.
+ */
 let aimWorld = { x: 0, y: 0 };
 
 const MOVE_KEYS = new Set(["w", "a", "s", "d"]);
@@ -54,10 +58,8 @@ export function attachBindings(
   function onPointerMove(e: PointerEvent) {
     const pick = scene.pick(e.clientX, e.clientY);
     if (pick.hit && pick.pickedPoint) {
-      aimWorld = pointerToWorld({
-        x: pick.pickedPoint.x,
-        z: pick.pickedPoint.z,
-      });
+      // Raw world floats; keyToIntent applies fp() when building the skill target.
+      aimWorld = { x: pick.pickedPoint.x, y: pick.pickedPoint.z };
     }
   }
 
