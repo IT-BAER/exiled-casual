@@ -11,3 +11,5 @@ export type {
   Cooldowns, MonsterC, DefensesC, ProjectileC, GroundAreaC, AilmentC,
   DamageEvent,
 } from "./components";
+export { registerResourceRegen } from "./systems/resource";
+export { registerPlayerMovement } from "./systems/player-movement";
