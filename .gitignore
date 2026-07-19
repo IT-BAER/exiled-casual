@@ -26,3 +26,4 @@ Thumbs.db
 # test / coverage
 coverage/
 .nyc_output/
+poe2-screenshots/
