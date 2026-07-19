@@ -3,17 +3,20 @@ import {
   Camera,
   Color3,
   Color4,
-  DynamicTexture,
   HemisphericLight,
   MeshBuilder,
   Scene,
   StandardMaterial,
+  Texture,
   Vector3,
   type Engine,
 } from "@babylonjs/core";
 
 /** Half-height of the orthographic view in world units (smaller = more zoomed in). */
 const ORTHO_HALF_HEIGHT = 10;
+
+/** Flagstone texture repeats across the 200u floor (25 → ~8u per tile). */
+const FLOOR_TILES = 25;
 
 export interface SceneHandle {
   scene: Scene;
@@ -66,8 +69,12 @@ export function createScene(engine: Engine): SceneHandle {
   );
   const groundMat = new StandardMaterial("groundMat", scene);
   try {
-    // greybox grid: scale + motion cues (needs a real 2D canvas; NullEngine lacks one)
-    groundMat.diffuseTexture = makeGridTexture(scene);
+    // Real flagstone floor, tiled across the plane. Texture load is async and
+    // non-fatal under NullEngine (no canvas), so tests keep the unloaded texture.
+    const floor = new Texture("/textures/floor.png", scene);
+    floor.uScale = FLOOR_TILES;
+    floor.vScale = FLOOR_TILES;
+    groundMat.diffuseTexture = floor;
   } catch {
     groundMat.diffuseColor = new Color3(0.2, 0.22, 0.27); // headless fallback
   }
@@ -75,30 +82,4 @@ export function createScene(engine: Engine): SceneHandle {
   ground.material = groundMat;
 
   return { scene, camera };
-}
-
-/** A slate grid drawn to a canvas texture: 4-unit cells across the 200u floor. */
-function makeGridTexture(scene: Scene): DynamicTexture {
-  const S = 1024;
-  const tex = new DynamicTexture("grid", { width: S, height: S }, scene, false);
-  const ctx = tex.getContext();
-  ctx.fillStyle = "#20242b";
-  ctx.fillRect(0, 0, S, S);
-  ctx.strokeStyle = "#39414e";
-  ctx.lineWidth = 1;
-  const cells = 50; // 200u / 50 = 4-unit cells
-  const step = S / cells;
-  for (let i = 0; i <= cells; i++) {
-    const p = i * step;
-    ctx.beginPath();
-    ctx.moveTo(p, 0);
-    ctx.lineTo(p, S);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(0, p);
-    ctx.lineTo(S, p);
-    ctx.stroke();
-  }
-  tex.update();
-  return tex;
 }
