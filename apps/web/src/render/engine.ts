@@ -26,16 +26,19 @@ export function createScene(engine: Engine): SceneHandle {
   // ground plane (xz). Alpha=0, beta=π/4 gives a comfortable isometric feel.
   // alpha=-π/2 puts the camera on the -Z side looking toward +Z, so world +x =
   // screen-right and world +z (sim +y) = screen-up — WASD then matches the view.
+  // beta ~0.72 (≈49° elevation) + a narrow fov + long radius gives a flat, near-
+  // orthographic high-isometric look like PoE, instead of a wide-angle receding plane.
   const camera = new ArcRotateCamera(
     "cam",
     -Math.PI / 2,
-    Math.PI / 3.4,
-    18,
+    0.72,
+    48,
     Vector3.Zero(),
     scene,
   );
-  camera.lowerRadiusLimit = 5;
-  camera.upperRadiusLimit = 80;
+  camera.fov = 0.4;
+  camera.lowerRadiusLimit = 20;
+  camera.upperRadiusLimit = 90;
 
   new HemisphericLight("sun", new Vector3(0, 1, 0), scene);
 
