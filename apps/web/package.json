@@ -14,10 +14,10 @@
     "@babylonjs/core": "^7.35.0",
     "@pact/protocol": "*",
     "@pact/simulation": "*",
-    "@pact/content-runtime": "*"
+    "@pact/content-runtime": "*",
+    "@pact/fixed-point": "*"
   },
   "devDependencies": {
-    "@pact/fixed-point": "*",
     "vite": "^5.4.0",
     "@vitejs/plugin-react": "^4.3.4",
     "jsdom": "^25.0.1",
