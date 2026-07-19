@@ -1,2 +1,4 @@
 export * from "./stats.js";
 export * from "./damage.js";
+export * from "./ailment.js";
+export * from "./rare.js";
