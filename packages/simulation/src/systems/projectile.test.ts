@@ -98,4 +98,21 @@ describe("registerProjectileMove", () => {
     const p = sim.world.get<ProjectileC>(proj, "projectile")!;
     expect(p.remainingRange).toBeLessThanOrEqual(0);
   });
+
+  it("a spent projectile does not move or deal damage again on later ticks", () => {
+    const sim = new Simulation();
+    registerProjectileMove(sim);
+    const proj = makeProjectile(sim, 0, 0, fp(1), 0, fp(20));
+    const monster1 = makeMonster(sim, fp(1), 0);
+    sim.step(); // hit monster1: 1 damage, remainingRange set to 0, proj now at (fp(1),0)
+    expect(sim.damageQueue).toHaveLength(1);
+    const afterHit = sim.world.get<Position>(proj, "position")!;
+    // place a SECOND monster right where the projectile would advance to next tick
+    makeMonster(sim, fp(2), 0);
+    sim.step(); // spent projectile must be inert: no new damage, no movement
+    expect(sim.damageQueue).toHaveLength(0);
+    const afterSecond = sim.world.get<Position>(proj, "position")!;
+    expect(afterSecond.x).toBe(afterHit.x);
+    expect(afterSecond.y).toBe(afterHit.y);
+  });
 });

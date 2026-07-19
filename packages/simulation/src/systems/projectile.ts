@@ -5,8 +5,10 @@ import type { Position, ProjectileC, MonsterC, Faction } from "../components";
 export function registerProjectileMove(sim: Simulation): void {
   sim.register("projectileMove", (world) => {
     for (const e of world.query("projectile", "position")) {
-      const pos = world.get<Position>(e, "position")!;
       const proj = world.get<ProjectileC>(e, "projectile")!;
+      if (proj.remainingRange <= 0) continue; // spent last tick; inert until the expiry system despawns it
+
+      const pos = world.get<Position>(e, "position")!;
 
       // Advance.
       const nx = pos.x + proj.dirx;
@@ -37,6 +39,7 @@ export function registerProjectileMove(sim: Simulation): void {
         }
       }
 
+      // Intentionally not clamped to WORLD_MIN/WORLD_MAX: projectiles fly past the arena edge and are removed by range depletion / the expiry system, not pinned to the wall.
       world.set<Position>(e, "position", { x: nx, y: ny });
       world.set<ProjectileC>(e, "projectile", { ...proj, remainingRange: newRange });
     }
