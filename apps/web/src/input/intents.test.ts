@@ -22,6 +22,10 @@ describe("keyToIntent", () => {
     expect(i).toEqual({ kind: "moveDir", dx: 1, dy: 0 });
   });
 
+  it("uppercase W (CapsLock/Shift) → moveDir north (+y)", () => {
+    expect(keyToIntent("W", aim)).toEqual({ kind: "moveDir", dx: 0, dy: 1 });
+  });
+
   it("1 → useSkill ember_bolt aimed at aim point", () => {
     const aimPt = { x: 3.2, y: -1.7 };
     const i = keyToIntent("1", aimPt);

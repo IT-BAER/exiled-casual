@@ -23,7 +23,8 @@ export function keyToIntent(
   key: string,
   aim: { x: number; y: number },
 ): Intent | null {
-  const move = MOVE_KEYS[key];
+  // Lower-case so CapsLock / Shift ("W") still map to WASD movement.
+  const move = MOVE_KEYS[key.toLowerCase()];
   if (move) return { kind: "moveDir", ...move };
 
   const skillId = SKILL_KEYS[key];
