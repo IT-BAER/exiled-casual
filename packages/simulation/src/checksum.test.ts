@@ -31,6 +31,38 @@ describe("checksum", () => {
     expect(checksumWorld(a)).not.toBe(checksumWorld(b));
   });
 
+  test("throws on a non-integer (float-leakage) numeric value", () => {
+    const w = new World();
+    const e = w.create();
+    w.set(e, "position", { x: 1.5, y: 2 });
+    expect(() => checksumWorld(w)).toThrow(/non-integer/);
+  });
+
+  test("a live entity with no components changes the checksum", () => {
+    const a = new World();
+    a.create();
+
+    const b = new World();
+    b.create();
+    b.create(); // second entity is alive but carries no components
+
+    expect(checksumWorld(a)).not.toBe(checksumWorld(b));
+  });
+
+  test("allocator history (next id) affects the checksum independently of the alive set", () => {
+    // Both worlds end with the identical alive set {1}, but different next id,
+    // so the next create() would diverge — the checksum must catch that.
+    const a = new World();
+    a.create(); // id 1
+    a.create(); // id 2
+    a.destroy(2); // alive={1}, next=3
+
+    const b = new World();
+    b.create(); // alive={1}, next=2
+
+    expect(checksumWorld(a)).not.toBe(checksumWorld(b));
+  });
+
   test("checksum is an unsigned 32-bit integer", () => {
     const w = new World();
     const e = w.create();

@@ -46,7 +46,7 @@ describe("wander determinism proof", () => {
     expect(a.checksums.length).toBe(1000);
 
     // Final positions stayed integer and inside the arena for the whole run.
-    // (Any non-finite value would have thrown inside checksumWorld during the run.)
+    // (Any non-integer or non-finite value would have thrown inside checksumWorld during the run.)
     for (const id of a.world.query("position")) {
       const p = a.world.get<{ x: number; y: number }>(id, "position")!;
       expect(Number.isInteger(p.x)).toBe(true);

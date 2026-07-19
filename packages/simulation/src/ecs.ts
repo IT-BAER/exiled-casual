@@ -10,6 +10,12 @@ export class World {
   readonly alive = new Set<Entity>();
   private readonly stores = new Map<string, Map<Entity, unknown>>();
 
+  // The next id to be allocated. Part of serialized state so create/destroy
+  // history is captured by the checksum, not just the current alive set.
+  get nextId(): Entity {
+    return this.next;
+  }
+
   create(): Entity {
     const e = this.next++;
     this.alive.add(e);
