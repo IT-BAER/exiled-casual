@@ -6,6 +6,9 @@
   "main": "./src/index.ts",
   "exports": { ".": "./src/index.ts" },
   "dependencies": {
-    "@pact/fixed-point": "*"
+    "@pact/fixed-point": "*",
+    "@pact/rules": "*",
+    "@pact/content-schema": "*",
+    "@pact/content-runtime": "*"
   }
 }

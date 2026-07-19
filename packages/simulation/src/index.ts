@@ -21,3 +21,4 @@ export { registerMonsterAI } from "./systems/monster-ai";
 export { registerDamageResolve } from "./systems/damage-resolve";
 export { registerDeath } from "./systems/death";
 export { registerExpiry } from "./systems/expiry";
+export { createCombatSim } from "./combat-sim";

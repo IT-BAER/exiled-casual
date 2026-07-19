@@ -1,0 +1,111 @@
+import { fp } from "@pact/fixed-point";
+import { baseCasterStats, makeRare } from "@pact/rules";
+import { SKILLS, MONSTERS, RARE_TEMPLATE } from "@pact/content-runtime";
+import type { MonsterDef } from "@pact/content-schema";
+import { Simulation } from "./loop";
+import { World } from "./ecs";
+import type { Entity } from "./ecs";
+import type {
+  Position, Health, Mana, Faction, PlayerC, Cooldowns, DefensesC,
+  MoveTarget, MoveDir, MonsterC,
+} from "./components";
+import { registerResourceRegen } from "./systems/resource";
+import { registerSkillCast } from "./systems/skill-cast";
+import { registerPlayerMovement } from "./systems/player-movement";
+import { registerMonsterAI } from "./systems/monster-ai";
+import { registerProjectileMove } from "./systems/projectile";
+import { registerGroundAreaTick } from "./systems/ground-area";
+import { registerAilmentTick } from "./systems/ailment";
+import { registerDamageResolve } from "./systems/damage-resolve";
+import { registerDeath } from "./systems/death";
+import { registerExpiry } from "./systems/expiry";
+
+// ponytail: _seed unused by Phase C2 systems; reserved for Phase C3 RNG-driven monster variance.
+export function createCombatSim(
+  _seed: number,
+): { sim: Simulation; world: World; playerEntity: Entity } {
+  const sim = new Simulation();
+  const { world } = sim;
+
+  // ── Register systems in canonical order ──────────────────────────────────
+  registerResourceRegen(sim);
+  registerSkillCast(sim, SKILLS);
+  registerPlayerMovement(sim);
+  registerMonsterAI(sim);
+  registerProjectileMove(sim);
+  registerGroundAreaTick(sim);
+  registerAilmentTick(sim);
+  registerDamageResolve(sim);
+  registerDeath(sim);
+  registerExpiry(sim);
+
+  // ── Bootstrap player ─────────────────────────────────────────────────────
+  const s = baseCasterStats();
+  const playerEntity = world.create();
+  world.set<Position>(playerEntity, "position", { x: 0, y: 0 });
+  world.set<Health>(playerEntity, "health", { life: s.maxLifeFixed, maxLife: s.maxLifeFixed });
+  world.set<Mana>(playerEntity, "mana", {
+    mana: s.maxManaFixed,
+    maxMana: s.maxManaFixed,
+    regen: Math.trunc(s.manaRegenPerSecFixed / 30),
+  });
+  world.set<Faction>(playerEntity, "faction", { team: 0 });
+  world.set<PlayerC>(playerEntity, "player", {
+    moveSpeed: Math.trunc(s.moveSpeedFixed / 30),
+    bodyRadius: fp(0.5),
+  });
+  world.set<Cooldowns>(playerEntity, "cooldowns", {});
+  world.set<DefensesC>(playerEntity, "defenses", {
+    fireResPct: s.fireResPct,
+    armour: s.armourFixed,
+  });
+  world.set<MoveTarget>(playerEntity, "moveTarget", { x: 0, y: 0, active: 0 });
+  world.set<MoveDir>(playerEntity, "moveDir", { dx: 0, dy: 0 });
+
+  // ── Bootstrap monsters ────────────────────────────────────────────────────
+  const impDef = MONSTERS.get("monster.cinder_imp.v1")!;
+
+  const normalCoords: [number, number][] = [
+    [fp(5), fp(0)], [fp(-5), fp(0)],
+    [fp(0), fp(5)], [fp(0), fp(-5)],
+    [fp(6), fp(6)],
+  ];
+  for (const [x, y] of normalCoords) {
+    spawnMonster(world, impDef, x, y, false);
+  }
+
+  const rareDef = makeRare(impDef, RARE_TEMPLATE);
+  spawnMonster(world, rareDef, fp(8), fp(8), true);
+
+  return { sim, world, playerEntity };
+}
+
+function spawnMonster(
+  world: World,
+  def: MonsterDef,
+  x: number,
+  y: number,
+  rare: boolean,
+): Entity {
+  const e = world.create();
+  world.set<Position>(e, "position", { x, y });
+  world.set<Health>(e, "health", { life: def.maxLifeFixed, maxLife: def.maxLifeFixed });
+  world.set<Faction>(e, "faction", { team: 1 });
+  world.set<MonsterC>(e, "monster", {
+    defId: def.id,
+    moveSpeed: Math.trunc(def.moveSpeedFixed / 30),
+    bodyRadius: def.radiusFixed,
+    attackRange: def.attackRangeFixed,
+    attackCooldownTicks: def.attackCooldownTicks,
+    attackDamage: def.attackDamage.amountFixed,
+    attackType: def.attackDamage.type === "fire" ? 0 : 1,
+    attackReadyTick: 0,
+    state: "idle",
+    rare: rare ? 1 : 0,
+  });
+  world.set<DefensesC>(e, "defenses", {
+    fireResPct: def.defenses.fireResPct,
+    armour: def.defenses.armourFixed,
+  });
+  return e;
+}
