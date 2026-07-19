@@ -17,3 +17,4 @@ export { registerSkillCast } from "./systems/skill-cast";
 export { registerProjectileMove } from "./systems/projectile";
 export { registerGroundAreaTick } from "./systems/ground-area";
 export { registerAilmentTick } from "./systems/ailment";
+export { registerMonsterAI } from "./systems/monster-ai";
