@@ -1,0 +1,43 @@
+import { describe, expect, test } from "vitest";
+import { World, serializeWorld, checksumWorld } from "./index";
+
+describe("checksum", () => {
+  test("serialization is canonical regardless of insertion order", () => {
+    const a = new World();
+    const e1 = a.create();
+    const e2 = a.create();
+    a.set(e1, "position", { y: 2, x: 1 });
+    a.set(e2, "position", { x: 3, y: 4 });
+
+    const b = new World();
+    const f1 = b.create();
+    const f2 = b.create();
+    b.set(f2, "position", { x: 3, y: 4 });
+    b.set(f1, "position", { x: 1, y: 2 });
+
+    expect(serializeWorld(a)).toBe(serializeWorld(b));
+    expect(checksumWorld(a)).toBe(checksumWorld(b));
+  });
+
+  test("different state produces a different checksum", () => {
+    const a = new World();
+    const e = a.create();
+    a.set(e, "position", { x: 1, y: 2 });
+
+    const b = new World();
+    const f = b.create();
+    b.set(f, "position", { x: 1, y: 3 });
+
+    expect(checksumWorld(a)).not.toBe(checksumWorld(b));
+  });
+
+  test("checksum is an unsigned 32-bit integer", () => {
+    const w = new World();
+    const e = w.create();
+    w.set(e, "position", { x: 1, y: 2 });
+    const c = checksumWorld(w);
+    expect(Number.isInteger(c)).toBe(true);
+    expect(c).toBeGreaterThanOrEqual(0);
+    expect(c).toBeLessThanOrEqual(0xffffffff);
+  });
+});
