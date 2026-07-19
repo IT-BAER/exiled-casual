@@ -1,5 +1,6 @@
 import {
   ArcRotateCamera,
+  Camera,
   Color3,
   Color4,
   DynamicTexture,
@@ -10,6 +11,9 @@ import {
   Vector3,
   type Engine,
 } from "@babylonjs/core";
+
+/** Half-height of the orthographic view in world units (smaller = more zoomed in). */
+const ORTHO_HALF_HEIGHT = 10;
 
 export interface SceneHandle {
   scene: Scene;
@@ -26,19 +30,27 @@ export function createScene(engine: Engine): SceneHandle {
   // ground plane (xz). Alpha=0, beta=π/4 gives a comfortable isometric feel.
   // alpha=-π/2 puts the camera on the -Z side looking toward +Z, so world +x =
   // screen-right and world +z (sim +y) = screen-up — WASD then matches the view.
-  // beta ~0.72 (≈49° elevation) + a narrow fov + long radius gives a flat, near-
-  // orthographic high-isometric look like PoE, instead of a wide-angle receding plane.
+  // beta ~0.72 (≈49° elevation) is the isometric tilt.
   const camera = new ArcRotateCamera(
     "cam",
     -Math.PI / 2,
     0.72,
-    48,
+    40,
     Vector3.Zero(),
     scene,
   );
-  camera.fov = 0.4;
-  camera.lowerRadiusLimit = 20;
-  camera.upperRadiusLimit = 90;
+  // Orthographic projection: no perspective vanishing point, so grid lines stay
+  // parallel — a flat high-isometric ARPG look, not a wide receding "CCTV" plane.
+  camera.mode = Camera.ORTHOGRAPHIC_CAMERA;
+  const applyOrtho = () => {
+    const aspect = engine.getRenderWidth() / engine.getRenderHeight();
+    camera.orthoTop = ORTHO_HALF_HEIGHT;
+    camera.orthoBottom = -ORTHO_HALF_HEIGHT;
+    camera.orthoLeft = -ORTHO_HALF_HEIGHT * aspect;
+    camera.orthoRight = ORTHO_HALF_HEIGHT * aspect;
+  };
+  applyOrtho();
+  engine.onResizeObservable.add(applyOrtho);
 
   new HemisphericLight("sun", new Vector3(0, 1, 0), scene);
 
