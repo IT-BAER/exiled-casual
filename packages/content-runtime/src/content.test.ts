@@ -1,0 +1,119 @@
+import { describe, it, expect } from "vitest";
+import { fp } from "@pact/fixed-point";
+import { validateSkillDef, validateMonsterDef, ID_PATTERN } from "@pact/content-schema";
+import { CONTENT_VERSION, SKILLS, MONSTERS, RARE_TEMPLATE } from "./index.js";
+
+describe("CONTENT_VERSION", () => {
+  it('=== "slice1.v1"', () => {
+    expect(CONTENT_VERSION).toBe("slice1.v1");
+  });
+});
+
+describe("RARE_TEMPLATE", () => {
+  it("has exact contract values", () => {
+    expect(RARE_TEMPLATE).toEqual({
+      lifeMulPct: 250,
+      moveSpeedMulPct: 120,
+      damageMulPct: 150,
+      addedFireResPct: 30,
+    });
+  });
+});
+
+describe("SKILLS", () => {
+  it("every entry passes validateSkillDef", () => {
+    for (const [id, def] of SKILLS) {
+      const r = validateSkillDef(def);
+      expect(r.ok, `${id}: ${r.errors.join(", ")}`).toBe(true);
+    }
+  });
+
+  it("every id matches ID_PATTERN", () => {
+    for (const id of SKILLS.keys()) {
+      expect(ID_PATTERN.test(id), `"${id}" should match ID_PATTERN`).toBe(true);
+    }
+  });
+
+  it("contains the 3 authored skills", () => {
+    expect(SKILLS.has("skill.ember_bolt.v1")).toBe(true);
+    expect(SKILLS.has("skill.cinder_ground.v1")).toBe(true);
+    expect(SKILLS.has("skill.blink.v1")).toBe(true);
+  });
+
+  it("ember_bolt has a spawnProjectile effect with damage.amountFixed === fp(25)", () => {
+    const def = SKILLS.get("skill.ember_bolt.v1")!;
+    const effect = def.effects.find((e) => e.type === "spawnProjectile");
+    expect(effect).toBeDefined();
+    if (effect?.type === "spawnProjectile") {
+      expect(effect.damage.amountFixed).toBe(fp(25));       // 25000
+      expect(effect.maxRangeFixed).toBe(fp(20));             // 20000
+    }
+  });
+
+  it("ember_bolt manaCostFixed === fp(8) and cooldownTicks === 6", () => {
+    const def = SKILLS.get("skill.ember_bolt.v1")!;
+    expect(def.manaCostFixed).toBe(fp(8));
+    expect(def.cooldownTicks).toBe(6);
+  });
+
+  it("cinder_ground has a spawnGroundArea effect with burning ailment maxStacks=5 dpsFixed=fp(8)", () => {
+    const def = SKILLS.get("skill.cinder_ground.v1")!;
+    const effect = def.effects.find((e) => e.type === "spawnGroundArea");
+    expect(effect).toBeDefined();
+    if (effect?.type === "spawnGroundArea") {
+      expect(effect.ailment.kind).toBe("burning");
+      expect(effect.ailment.maxStacks).toBe(5);
+      expect(effect.ailment.dpsFixed).toBe(fp(8));           // 8000
+    }
+  });
+
+  it("blink has a teleport effect with distanceFixed === fp(5)", () => {
+    const def = SKILLS.get("skill.blink.v1")!;
+    const effect = def.effects.find((e) => e.type === "teleport");
+    expect(effect).toBeDefined();
+    if (effect?.type === "teleport") {
+      expect(effect.distanceFixed).toBe(fp(5));              // 5000
+    }
+  });
+});
+
+describe("MONSTERS", () => {
+  it("every entry passes validateMonsterDef", () => {
+    for (const [id, def] of MONSTERS) {
+      const r = validateMonsterDef(def);
+      expect(r.ok, `${id}: ${r.errors.join(", ")}`).toBe(true);
+    }
+  });
+
+  it("every id matches ID_PATTERN", () => {
+    for (const id of MONSTERS.keys()) {
+      expect(ID_PATTERN.test(id), `"${id}" should match ID_PATTERN`).toBe(true);
+    }
+  });
+
+  it("contains the authored monster", () => {
+    expect(MONSTERS.has("monster.cinder_imp.v1")).toBe(true);
+  });
+
+  it("cinder_imp maxLifeFixed === fp(40)", () => {
+    const def = MONSTERS.get("monster.cinder_imp.v1")!;
+    expect(def.maxLifeFixed).toBe(fp(40));                   // 40000
+  });
+
+  it("cinder_imp moveSpeedFixed === fp(2.4)", () => {
+    const def = MONSTERS.get("monster.cinder_imp.v1")!;
+    expect(def.moveSpeedFixed).toBe(fp(2.4));                // 2400
+  });
+
+  it("cinder_imp attackDamage is physical fp(6)", () => {
+    const def = MONSTERS.get("monster.cinder_imp.v1")!;
+    expect(def.attackDamage.type).toBe("physical");
+    expect(def.attackDamage.amountFixed).toBe(fp(6));        // 6000
+  });
+
+  it("cinder_imp defenses.fireResPct === 0 and armourFixed === fp(0.5)", () => {
+    const def = MONSTERS.get("monster.cinder_imp.v1")!;
+    expect(def.defenses.fireResPct).toBe(0);
+    expect(def.defenses.armourFixed).toBe(fp(0.5));          // 500
+  });
+});
