@@ -83,6 +83,20 @@ describe("registerPlayerMovement", () => {
     expect(posAfter).toBe(posBefore);
   });
 
+  it("moveTo with out-of-bounds target clamps goal and deactivates on arrival", () => {
+    const sim = new Simulation();
+    registerPlayerMovement(sim);
+    // place player near WORLD_MAX, issue target beyond WORLD_MAX
+    const p = makePlayer(sim, WORLD_MAX - fp(2), 0, fp(10));
+    sim.step([{ tick: 0, entity: p, type: "moveTo", data: { x: WORLD_MAX + fp(10), y: 0 } }]);
+    // step several more ticks — player should reach WORLD_MAX and deactivate
+    for (let i = 1; i <= 5; i++) sim.step();
+    const pos = sim.world.get<Position>(p, "position")!;
+    const mt = sim.world.get<MoveTarget>(p, "moveTarget")!;
+    expect(pos.x).toBe(WORLD_MAX);
+    expect(mt.active).toBe(0);
+  });
+
   it("clamps position to arena bounds", () => {
     const sim = new Simulation();
     registerPlayerMovement(sim);

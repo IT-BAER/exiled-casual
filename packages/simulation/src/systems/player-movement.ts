@@ -11,8 +11,8 @@ export function registerPlayerMovement(sim: Simulation): void {
       if (!world.has(cmd.entity, "player")) continue;
       const e = cmd.entity;
       if (cmd.type === "moveTo") {
-        const x = cmd.data?.["x"] ?? 0;
-        const y = cmd.data?.["y"] ?? 0;
+        const x = fpClamp(cmd.data?.["x"] ?? 0, WORLD_MIN, WORLD_MAX);
+        const y = fpClamp(cmd.data?.["y"] ?? 0, WORLD_MIN, WORLD_MAX);
         world.set<MoveTarget>(e, "moveTarget", { x, y, active: 1 });
       } else if (cmd.type === "moveDir") {
         const dx = cmd.data?.["dx"] ?? 0;
