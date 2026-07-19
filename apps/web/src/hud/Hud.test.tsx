@@ -37,10 +37,10 @@ describe("Hud", () => {
     // no assertion needed — just must not throw
   });
 
-  it("life bar width reflects life/maxLife ratio", () => {
+  it("life orb fill reflects life/maxLife ratio", () => {
     const { getByTestId } = render(<Hud snapshot={makeSnap({ life: 50, maxLife: 100 })} />);
-    const bar = getByTestId("life-bar-fill");
-    expect(bar).toHaveStyle({ width: "50%" });
+    const fill = getByTestId("life-orb-fill");
+    expect(fill).toHaveStyle({ height: "50%" });
   });
 
   it("skill with cooldown shows remaining seconds", () => {
