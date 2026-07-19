@@ -6,3 +6,8 @@ export { serializeWorld, checksumWorld } from "./checksum";
 export { Simulation } from "./loop";
 export type { Command, System } from "./loop";
 export { WORLD_MIN, WORLD_MAX, registerMovement } from "./movement";
+export type {
+  Position, Health, Mana, Faction, PlayerC, MoveTarget, MoveDir,
+  Cooldowns, MonsterC, DefensesC, ProjectileC, GroundAreaC, AilmentC,
+  DamageEvent,
+} from "./components";
