@@ -103,3 +103,16 @@ describe("SnapshotRenderer", () => {
     expect(monsters.length).toBe(3);
   });
 });
+
+describe("createScene", () => {
+  it("includes a pickable ground plane so click-to-move/aim can raycast", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+
+    // bindings.ts gates click-to-move and pointer aim on scene.pick().hit; a
+    // missing or unpickable ground makes empty-space picks miss entirely.
+    const ground = scene.getMeshByName("ground");
+    expect(ground).not.toBeNull();
+    expect(ground!.isPickable).toBe(true);
+  });
+});
