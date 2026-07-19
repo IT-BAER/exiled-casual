@@ -26,10 +26,22 @@ export function attachBindings(
   // Movement keys currently held, oldest→newest. Needed so releasing one key
   // resumes another still-held direction, and releasing the last sends "stop".
   const held: string[] = [];
+  // True while the left mouse button is down: hold-to-move keeps steering the
+  // player toward the cursor as it moves, instead of a single click-to-point.
+  let pointerHeld = false;
 
   function post(intent: Intent) {
     const msg: ToWorker = { type: "intent", intent };
     worker.postMessage(msg);
+  }
+
+  function issueMoveTo(clientX: number, clientY: number) {
+    const pick = scene.pick(clientX, clientY);
+    if (pick.hit && pick.pickedPoint) {
+      // moveTo wants fixed-point world coords, so route through pointerToWorld.
+      const world = pointerToWorld({ x: pick.pickedPoint.x, z: pick.pickedPoint.z });
+      post({ kind: "moveTo", x: world.x, y: world.y });
+    }
   }
 
   function onKeyDown(e: KeyboardEvent) {
@@ -60,29 +72,37 @@ export function attachBindings(
     if (pick.hit && pick.pickedPoint) {
       // Raw world floats; keyToIntent applies fp() when building the skill target.
       aimWorld = { x: pick.pickedPoint.x, y: pick.pickedPoint.z };
+      // Hold-to-move: while the button is held, re-target toward the cursor so
+      // dragging steers the player continuously (reuse this pick's world point).
+      if (pointerHeld) {
+        const world = pointerToWorld({ x: pick.pickedPoint.x, z: pick.pickedPoint.z });
+        post({ kind: "moveTo", x: world.x, y: world.y });
+      }
     }
   }
 
-  function onClick(e: MouseEvent) {
-    const pick = scene.pick(e.clientX, e.clientY);
-    if (pick.hit && pick.pickedPoint) {
-      const world = pointerToWorld({
-        x: pick.pickedPoint.x,
-        z: pick.pickedPoint.z,
-      });
-      post({ kind: "moveTo", x: world.x, y: world.y });
-    }
+  function onPointerDown(e: PointerEvent) {
+    if (e.button !== 0) return; // left button drives movement
+    pointerHeld = true;
+    issueMoveTo(e.clientX, e.clientY);
+  }
+
+  function onPointerUp(e: PointerEvent) {
+    if (e.button === 0) pointerHeld = false;
   }
 
   window.addEventListener("keydown", onKeyDown);
   window.addEventListener("keyup", onKeyUp);
   canvas.addEventListener("pointermove", onPointerMove);
-  canvas.addEventListener("click", onClick);
+  canvas.addEventListener("pointerdown", onPointerDown);
+  // Listen on window so releasing outside the canvas still ends hold-to-move.
+  window.addEventListener("pointerup", onPointerUp);
 
   return () => {
     window.removeEventListener("keydown", onKeyDown);
     window.removeEventListener("keyup", onKeyUp);
     canvas.removeEventListener("pointermove", onPointerMove);
-    canvas.removeEventListener("click", onClick);
+    canvas.removeEventListener("pointerdown", onPointerDown);
+    window.removeEventListener("pointerup", onPointerUp);
   };
 }
