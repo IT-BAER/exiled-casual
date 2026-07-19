@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Engine } from "@babylonjs/core";
+import { Engine, Vector3 } from "@babylonjs/core";
 import { createScene } from "./render/engine";
 import { SnapshotRenderer } from "./render/renderer";
 import { attachBindings } from "./input/bindings";
@@ -41,7 +41,7 @@ export function App() {
 
     // Babylon engine + render loop
     const engine = new Engine(canvas, true);
-    const { scene } = createScene(engine);
+    const { scene, camera } = createScene(engine);
     const renderer = new SnapshotRenderer(scene);
 
     engine.runRenderLoop(() => {
@@ -49,6 +49,12 @@ export function App() {
       // ponytail: float alpha for lerp — never fed into sim
       const alpha = Math.min(1, (performance.now() - prevTickTime) / MS_PER_TICK);
       renderer.apply(prevSnap, curSnap, alpha);
+      // Camera follows the player (interpolated) so they stay centred like an ARPG.
+      const p = curSnap.player;
+      const pp = prevSnap?.player ?? p;
+      camera.setTarget(
+        new Vector3(pp.x + (p.x - pp.x) * alpha, 0, pp.y + (p.y - pp.y) * alpha),
+      );
       scene.render();
     });
 
