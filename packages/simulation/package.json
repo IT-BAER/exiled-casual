@@ -9,6 +9,7 @@
     "@pact/fixed-point": "*",
     "@pact/rules": "*",
     "@pact/content-schema": "*",
-    "@pact/content-runtime": "*"
+    "@pact/content-runtime": "*",
+    "@pact/protocol": "*"
   }
 }

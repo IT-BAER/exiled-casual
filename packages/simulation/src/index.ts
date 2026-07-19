@@ -22,3 +22,4 @@ export { registerDamageResolve } from "./systems/damage-resolve";
 export { registerDeath } from "./systems/death";
 export { registerExpiry } from "./systems/expiry";
 export { createCombatSim } from "./combat-sim";
+export { intentToCommand, buildSnapshot } from "./protocol-bridge";
