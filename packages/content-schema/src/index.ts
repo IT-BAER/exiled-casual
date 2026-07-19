@@ -108,22 +108,22 @@ function validateEffectNode(v: unknown, idx: number, errors: string[]): boolean 
   let ok = true;
   const type = v["type"];
   if (type === "spawnProjectile") {
-    if (typeof v["speedPerSecFixed"] !== "number") {
-      errors.push(`${path}.speedPerSecFixed: required number`);
+    if (!isNonNegInt(v["speedPerSecFixed"])) {
+      errors.push(`${path}.speedPerSecFixed: must be a non-negative integer`);
       ok = false;
     }
-    if (typeof v["radiusFixed"] !== "number") {
-      errors.push(`${path}.radiusFixed: required number`);
+    if (!isNonNegInt(v["radiusFixed"])) {
+      errors.push(`${path}.radiusFixed: must be a non-negative integer`);
       ok = false;
     }
-    if (typeof v["maxRangeFixed"] !== "number") {
-      errors.push(`${path}.maxRangeFixed: required number`);
+    if (!isNonNegInt(v["maxRangeFixed"])) {
+      errors.push(`${path}.maxRangeFixed: must be a non-negative integer`);
       ok = false;
     }
     if (!validateDamageSpec(v["damage"], `${path}.damage`, errors)) ok = false;
   } else if (type === "spawnGroundArea") {
-    if (typeof v["radiusFixed"] !== "number") {
-      errors.push(`${path}.radiusFixed: required number`);
+    if (!isNonNegInt(v["radiusFixed"])) {
+      errors.push(`${path}.radiusFixed: must be a non-negative integer`);
       ok = false;
     }
     if (!isNonNegInt(v["durationTicks"])) {
@@ -143,8 +143,8 @@ function validateEffectNode(v: unknown, idx: number, errors: string[]): boolean 
         errors.push(`${path}.ailment.stacksPerApply: must be non-negative integer`);
         ok = false;
       }
-      if (typeof a["dpsFixed"] !== "number") {
-        errors.push(`${path}.ailment.dpsFixed: required number`);
+      if (!isNonNegInt(a["dpsFixed"])) {
+        errors.push(`${path}.ailment.dpsFixed: must be a non-negative integer`);
         ok = false;
       }
       if (!isNonNegInt(a["durationTicks"])) {
@@ -157,8 +157,8 @@ function validateEffectNode(v: unknown, idx: number, errors: string[]): boolean 
       }
     }
   } else if (type === "teleport") {
-    if (typeof v["distanceFixed"] !== "number") {
-      errors.push(`${path}.distanceFixed: required number`);
+    if (!isNonNegInt(v["distanceFixed"])) {
+      errors.push(`${path}.distanceFixed: must be a non-negative integer`);
       ok = false;
     }
   } else {
@@ -225,12 +225,13 @@ export function validateMonsterDef(v: unknown): ValidationResult {
     if (
       typeof def["fireResPct"] !== "number" ||
       !Number.isInteger(def["fireResPct"]) ||
-      def["fireResPct"] < 0
+      def["fireResPct"] < 0 ||
+      def["fireResPct"] > 100
     ) {
-      errors.push("defenses.fireResPct: must be a non-negative integer");
+      errors.push("defenses.fireResPct: must be an integer 0..100");
     }
-    if (typeof def["armourFixed"] !== "number") {
-      errors.push("defenses.armourFixed: required number");
+    if (!isNonNegInt(def["armourFixed"])) {
+      errors.push("defenses.armourFixed: must be a non-negative integer");
     }
   }
   validateDamageSpec(v["attackDamage"], "attackDamage", errors);

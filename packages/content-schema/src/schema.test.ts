@@ -155,4 +155,55 @@ describe("validateMonsterDef", () => {
     });
     expect(r.ok).toBe(false);
   });
+
+  it("rejects fractional armourFixed", () => {
+    const r = validateMonsterDef({
+      ...validMonster,
+      defenses: { fireResPct: 0, armourFixed: 1.5 },
+    });
+    expect(r.ok).toBe(false);
+  });
+
+  it("rejects fireResPct above 100", () => {
+    const r = validateMonsterDef({
+      ...validMonster,
+      defenses: { fireResPct: 500, armourFixed: fp(0.5) },
+    });
+    expect(r.ok).toBe(false);
+  });
+});
+
+describe("Fixed field integer enforcement", () => {
+  it("rejects fractional speedPerSecFixed in spawnProjectile", () => {
+    const r = validateSkillDef({
+      ...validSkill,
+      effects: [
+        {
+          type: "spawnProjectile",
+          speedPerSecFixed: 0.4,
+          radiusFixed: fp(0.4),
+          maxRangeFixed: fp(20),
+          damage: { type: "fire", amountFixed: fp(25) },
+        },
+      ],
+    });
+    expect(r.ok).toBe(false);
+    expect(r.errors.some((e) => e.includes("speedPerSecFixed"))).toBe(true);
+  });
+
+  it("rejects negative radiusFixed in spawnProjectile", () => {
+    const r = validateSkillDef({
+      ...validSkill,
+      effects: [
+        {
+          type: "spawnProjectile",
+          speedPerSecFixed: fp(12),
+          radiusFixed: -5,
+          maxRangeFixed: fp(20),
+          damage: { type: "fire", amountFixed: fp(25) },
+        },
+      ],
+    });
+    expect(r.ok).toBe(false);
+  });
 });
