@@ -23,21 +23,16 @@ describe("WorkerCore", () => {
     expect(JSON.stringify(snapsA)).toBe(JSON.stringify(snapsB));
   });
 
-  it("a pushed moveTo intent moves the player from origin", () => {
+  it("a pushed moveTo intent moves the player toward the target", () => {
     const core = new WorkerCore(42);
-    const before = core.snapshot();
-    const startX = before?.player.x ?? 0;
-    const startY = before?.player.y ?? 0;
-
+    // Player spawns at origin (0,0); target is +x/+y, so both coords must increase.
     const intent: Intent = { kind: "moveTo", x: fp(10), y: fp(10) };
     core.pushIntent(intent);
     core.advance(34); // one tick
     const after = core.snapshot();
 
     expect(after).not.toBeNull();
-    // Player must have moved at least somewhat toward (10,10)
-    const dx = (after!.player.x - startX) ** 2;
-    const dy = (after!.player.y - startY) ** 2;
-    expect(dx + dy).toBeGreaterThan(0);
+    expect(after!.player.x).toBeGreaterThan(0);
+    expect(after!.player.y).toBeGreaterThan(0);
   });
 });
