@@ -1,5 +1,5 @@
 import { Simulation } from "../loop";
-import type { Health, Mana } from "../components";
+import type { Health, Mana, MoveTarget, MoveDir } from "../components";
 
 export function registerDeath(sim: Simulation): void {
   sim.register("death", (world) => {
@@ -16,6 +16,11 @@ export function registerDeath(sim: Simulation): void {
       world.set<Health>(e, "health", { ...h, life: h.maxLife });
       const mn = world.get<Mana>(e, "mana");
       if (mn) world.set<Mana>(e, "mana", { ...mn, mana: mn.maxMana });
+      const mt = world.get<MoveTarget>(e, "moveTarget");
+      if (mt) world.set<MoveTarget>(e, "moveTarget", { ...mt, active: 0 });
+      const md = world.get<MoveDir>(e, "moveDir");
+      if (md) world.set<MoveDir>(e, "moveDir", { dx: 0, dy: 0 });
+      world.remove(e, "ailment");
     }
   });
 }

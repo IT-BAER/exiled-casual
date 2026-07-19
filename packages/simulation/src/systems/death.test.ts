@@ -37,6 +37,27 @@ describe("registerDeath", () => {
     expect(world.get<{ x: number; y: number }>(p, "position")).toEqual({ x: 0, y: 0 });
   });
 
+  it("respawn clears stale moveTarget, moveDir, and ailment", () => {
+    const sim = new Simulation();
+    registerDeath(sim);
+    const { world } = sim;
+    const p = world.create();
+    world.set(p, "player", { moveSpeed: 0, bodyRadius: fp(0.5) });
+    world.set(p, "health", { life: 0, maxLife: fp(100) });
+    world.set(p, "mana", { mana: fp(10), maxMana: fp(60), regen: 0 });
+    world.set(p, "position", { x: fp(5), y: fp(5) });
+    world.set(p, "moveTarget", { x: fp(9), y: fp(9), active: 1 });
+    world.set(p, "moveDir", { dx: 1, dy: 0 });
+    world.set(p, "ailment", { kind: "burning", stacks: 3, dps: fp(8), expiryTick: 999 });
+    sim.step();
+    expect(world.get<{ active: number }>(p, "moveTarget")!.active).toBe(0);
+    expect(world.get<{ dx: number; dy: number }>(p, "moveDir")).toEqual({ dx: 0, dy: 0 });
+    expect(world.get(p, "ailment")).toBeUndefined();
+    // existing respawn guarantees still hold:
+    expect(world.get<{ life: number }>(p, "health")!.life).toBe(fp(100));
+    expect(world.get<{ x: number; y: number }>(p, "position")).toEqual({ x: 0, y: 0 });
+  });
+
   it("does not touch a monster with life > 0", () => {
     const sim = new Simulation();
     registerDeath(sim);
