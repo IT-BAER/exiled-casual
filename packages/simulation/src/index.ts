@@ -5,3 +5,4 @@ export type { Entity } from "./ecs";
 export { serializeWorld, checksumWorld } from "./checksum";
 export { Simulation } from "./loop";
 export type { Command, System } from "./loop";
+export { WORLD_MIN, WORLD_MAX, registerMovement } from "./movement";
