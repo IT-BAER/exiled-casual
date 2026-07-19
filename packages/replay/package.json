@@ -7,6 +7,9 @@
   "exports": { ".": "./src/index.ts" },
   "dependencies": {
     "@pact/fixed-point": "*",
-    "@pact/simulation": "*"
+    "@pact/simulation": "*",
+    "@pact/content-runtime": "*",
+    "@pact/rules": "*",
+    "@pact/protocol": "*"
   }
 }
