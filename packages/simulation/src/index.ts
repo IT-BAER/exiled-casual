@@ -18,3 +18,6 @@ export { registerProjectileMove } from "./systems/projectile";
 export { registerGroundAreaTick } from "./systems/ground-area";
 export { registerAilmentTick } from "./systems/ailment";
 export { registerMonsterAI } from "./systems/monster-ai";
+export { registerDamageResolve } from "./systems/damage-resolve";
+export { registerDeath } from "./systems/death";
+export { registerExpiry } from "./systems/expiry";
