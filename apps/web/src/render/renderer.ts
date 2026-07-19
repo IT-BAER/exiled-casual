@@ -3,7 +3,7 @@ import type { Mesh } from "@babylonjs/core";
 import type { Snapshot, SnapshotEntity } from "@pact/protocol";
 import { makeMesh, Y_LIFT } from "./meshes";
 import type { MeshKind } from "./meshes";
-import { lerp } from "./interp";
+import { lerp, lerpAngle } from "./interp";
 
 function kindOf(e: SnapshotEntity): MeshKind {
   if (e.kind === "monster") return e.rare ? "rare" : "monster";
@@ -77,5 +77,15 @@ export class SnapshotRenderer {
     mesh.position.x = lerp(prevX, nextX, alpha);
     mesh.position.z = lerp(prevY, nextY, alpha);
     mesh.position.y = Y_LIFT[kind];
+
+    // Turn the actor to face where it's heading (sim x,y -> world x,z). The
+    // meshes are authored facing +z; yaw = atan2(dx, dz) aligns +z with the
+    // movement direction. Only turn while actually moving so idle actors hold
+    // their last heading instead of snapping back to +z.
+    const dx = nextX - prevX;
+    const dz = nextY - prevY;
+    if (dx * dx + dz * dz > 1e-6) {
+      mesh.rotation.y = lerpAngle(mesh.rotation.y, Math.atan2(dx, dz), 0.25);
+    }
   }
 }
