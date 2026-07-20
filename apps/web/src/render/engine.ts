@@ -7,6 +7,7 @@ import {
   HemisphericLight,
   MeshBuilder,
   Scene,
+  ShadowGenerator,
   StandardMaterial,
   Texture,
   Vector3,
@@ -18,6 +19,13 @@ const ORTHO_HALF_HEIGHT = 7;
 
 /** Flagstone texture repeats across the 200u floor (25 → ~8u per tile). */
 const FLOOR_TILES = 25;
+
+/**
+ * Half-size of the shadow frustum, in world units. Needs to cover the visible
+ * area (ORTHO_HALF_HEIGHT by that times the aspect ratio) plus enough margin for
+ * shadows thrown in from just off screen.
+ */
+const SHADOW_EXTENT = 22;
 
 export interface SceneHandle {
   scene: Scene;
@@ -59,12 +67,11 @@ export function createScene(engine: Engine): SceneHandle {
   // Dim sky fill so shadowed sides stay readable instead of going black...
   const fill = new HemisphericLight("fill", new Vector3(0, 1, 0), scene);
   fill.intensity = 0.5;
-  // ...and a key light raking across the arena, which is what gives the actors
-  // a lit side and a dark side instead of the flat cutout look. Cast shadows are
-  // faked per-actor in meshes.ts: a real directional shadow map would need its
-  // frustum dragged along with the follow camera across the whole 200u floor.
-  const sun = new DirectionalLight("sun", new Vector3(-0.55, -1, -0.4), scene);
-  sun.intensity = 0.85;
+  // ...and a low key light raking across the arena. The long shadows it throws
+  // are what sell the ground plane, so it is deliberately closer to the horizon
+  // than to overhead.
+  const sun = new DirectionalLight("sun", new Vector3(-0.62, -0.38, -0.45), scene);
+  sun.intensity = 0.95;
 
   // Pickable greybox floor. bindings.ts resolves click-to-move and pointer aim
   // via scene.pick().hit; without a ground mesh, picks on empty space miss and
@@ -84,11 +91,52 @@ export function createScene(engine: Engine): SceneHandle {
     floor.uScale = FLOOR_TILES;
     floor.vScale = FLOOR_TILES;
     groundMat.diffuseTexture = floor;
+    // Lift the flagstones above 1.0: the actors are near-black, and they only
+    // read as silhouettes if the floor is clearly brighter than they are.
+    groundMat.diffuseColor = new Color3(1.45, 1.45, 1.45);
   } catch {
     groundMat.diffuseColor = new Color3(0.2, 0.22, 0.27); // headless fallback
   }
   groundMat.specularColor = new Color3(0, 0, 0); // matte, no hotspot
   ground.material = groundMat;
+  ground.receiveShadows = true;
+
+  try {
+    // Cast shadows, the single biggest cue that the actors stand ON the floor.
+    //
+    // A directional light has no position, only a frustum, and ours has to cover
+    // just the sliver of a 200u floor that is on screen — fit it to the whole
+    // floor and every actor's shadow blurs into a few texels. So the frustum is
+    // pinned to a fixed on-screen-sized box (autoUpdateExtends off, or Babylon
+    // shrink-wraps it to the casters and everything outside reads as shadowed)
+    // and dragged along behind the follow camera every frame.
+    sun.autoUpdateExtends = false;
+    sun.orthoLeft = -SHADOW_EXTENT;
+    sun.orthoRight = SHADOW_EXTENT;
+    sun.orthoBottom = -SHADOW_EXTENT;
+    sun.orthoTop = SHADOW_EXTENT;
+    sun.shadowMinZ = 1;
+    sun.shadowMaxZ = 140;
+
+    const shadows = new ShadowGenerator(2048, sun);
+    shadows.usePercentageCloserFiltering = true; // soft, and lit outside the frustum
+    shadows.filteringQuality = ShadowGenerator.QUALITY_MEDIUM;
+    shadows.darkness = 0.12; // deep, but the flagstones still read through them
+    // Every actor part the renderer spawns later becomes a caster on its own, so
+    // the renderer never has to know a shadow generator exists. The ground is the
+    // only mesh alive at this point, and it only receives.
+    scene.onNewMeshAddedObservable.add((mesh) => shadows.addShadowCaster(mesh));
+
+    // Walk the light along with the camera so the frustum always brackets what
+    // the player can see. Backwards along the light direction, and high enough
+    // that nothing on screen falls behind shadowMinZ.
+    const back = sun.direction.negate().scaleInPlace(70);
+    scene.onBeforeRenderObservable.add(() => {
+      sun.position.copyFrom(camera.target).addInPlace(back);
+    });
+  } catch {
+    /* no render targets under NullEngine — lit but unshadowed is fine in tests */
+  }
 
   return { scene, camera };
 }
