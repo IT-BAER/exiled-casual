@@ -1,5 +1,6 @@
 import {
   Color3,
+  DynamicTexture,
   Mesh,
   MeshBuilder,
   StandardMaterial,
@@ -76,6 +77,45 @@ function glow(scene: Scene, key: string, r: number, g: number, b: number): Stand
   return m;
 }
 
+/**
+ * Fake contact shadow: a soft dark disc parented under the actor. Cheaper and
+ * steadier than a real shadow map here, because the camera follows the player
+ * across a 200u floor and a directional shadow frustum would have to chase it.
+ */
+function blob(scene: Scene, root: Mesh, diameter: number): void {
+  const name = "part-blob";
+  let m = scene.getMaterialByName(name) as StandardMaterial | null;
+  if (!m) {
+    m = new StandardMaterial(name, scene);
+    m.diffuseColor = new Color3(0, 0, 0);
+    m.specularColor = new Color3(0, 0, 0);
+    m.disableLighting = true;
+    m.alpha = 0.5;
+    try {
+      // Radial gradient = soft edge. Canvas is unavailable under NullEngine, so
+      // tests fall back to a flat (hard-edged) disc, which they never look at.
+      const tex = new DynamicTexture(name, 128, scene, false);
+      const ctx = tex.getContext();
+      const g = ctx.createRadialGradient(64, 64, 4, 64, 64, 64);
+      g.addColorStop(0, "#ffffff");
+      g.addColorStop(0.5, "#9a9a9a");
+      g.addColorStop(1, "#000000");
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, 128, 128);
+      tex.update();
+      m.opacityTexture = tex; // white centre = opaque, black rim = invisible
+    } catch {
+      /* flat disc */
+    }
+  }
+  const disc = MeshBuilder.CreateDisc("blob", { radius: diameter / 2, tessellation: 20 }, scene);
+  disc.rotation.x = Math.PI / 2; // discs are authored in xy; lay it on the floor
+  disc.position.y = 0.02; // just above the ground plane, no z-fighting
+  disc.isPickable = false; // never swallow a click-to-move pick
+  disc.parent = root;
+  disc.material = m;
+}
+
 function attach(root: Mesh, part: Mesh, material: StandardMaterial): Mesh {
   part.parent = root;
   part.material = material;
@@ -89,6 +129,8 @@ function buildCaster(scene: Scene, root: Mesh): void {
   const skin = mat(scene, "skin", 0.72, 0.56, 0.43);
   const wood = mat(scene, "staff", 0.32, 0.22, 0.13);
   const fire = glow(scene, "fire", 1.0, 0.45, 0.1);
+
+  blob(scene, root, 1.1);
 
   const robe = MeshBuilder.CreateCylinder("robe", { diameterTop: 0.45, diameterBottom: 0.95, height: 1.15, tessellation: 14 }, scene);
   robe.position.y = 0.575;
@@ -124,8 +166,10 @@ function buildCaster(scene: Scene, root: Mesh): void {
   staffFire.position.set(0.4, 1.98, 0.02);
   attach(root, staffFire, fire);
 
-  const fireball = MeshBuilder.CreateSphere("fireball", { diameter: 0.2, segments: 10 }, scene);
-  fireball.position.set(-0.34, 1.2, 0.12);
+  // Held out in front (+z): from a top-down camera this is the only bright
+  // asymmetric bit, so it is what makes the caster's facing readable.
+  const fireball = MeshBuilder.CreateSphere("fireball", { diameter: 0.24, segments: 10 }, scene);
+  fireball.position.set(-0.22, 1.22, 0.38);
   attach(root, fireball, fire);
 }
 
@@ -134,6 +178,8 @@ function buildImp(scene: Scene, root: Mesh, key: string, rock: [number, number, 
   const hide = mat(scene, `${key}-hide`, rock[0], rock[1], rock[2], lava, `/textures/${key}_skin.png`, 2);
   const horn = mat(scene, `${key}-horn`, 0.09, 0.07, 0.07, 0.1);
   const eyes = glow(scene, `${key}-eye`, eye[0], eye[1], eye[2]);
+
+  blob(scene, root, 1.05);
 
   const body = MeshBuilder.CreateSphere("body", { diameter: 0.7, segments: 10 }, scene);
   body.scaling.set(1.1, 0.75, 1.35);

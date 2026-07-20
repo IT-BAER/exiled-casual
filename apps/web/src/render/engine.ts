@@ -3,6 +3,7 @@ import {
   Camera,
   Color3,
   Color4,
+  DirectionalLight,
   HemisphericLight,
   MeshBuilder,
   Scene,
@@ -55,7 +56,15 @@ export function createScene(engine: Engine): SceneHandle {
   applyOrtho();
   engine.onResizeObservable.add(applyOrtho);
 
-  new HemisphericLight("sun", new Vector3(0, 1, 0), scene);
+  // Dim sky fill so shadowed sides stay readable instead of going black...
+  const fill = new HemisphericLight("fill", new Vector3(0, 1, 0), scene);
+  fill.intensity = 0.5;
+  // ...and a key light raking across the arena, which is what gives the actors
+  // a lit side and a dark side instead of the flat cutout look. Cast shadows are
+  // faked per-actor in meshes.ts: a real directional shadow map would need its
+  // frustum dragged along with the follow camera across the whole 200u floor.
+  const sun = new DirectionalLight("sun", new Vector3(-0.55, -1, -0.4), scene);
+  sun.intensity = 0.85;
 
   // Pickable greybox floor. bindings.ts resolves click-to-move and pointer aim
   // via scene.pick().hit; without a ground mesh, picks on empty space miss and
