@@ -16,8 +16,17 @@ import {
 import { ARENA_RADIUS } from "@pact/simulation";
 import { toNumber } from "@pact/fixed-point";
 
-/** Half-height of the orthographic view in world units (smaller = more zoomed in). */
-const ORTHO_HALF_HEIGHT = 7;
+/**
+ * Half-height of the orthographic view in world units (smaller = more zoomed in).
+ *
+ * Calibrated against `poe2-screenshots/article-1280x720`, where the player fills
+ * ~12.5% of the frame height. A 1.87-unit character projects at cos(48.75°) of
+ * its height under this camera tilt, so matching that exactly would need 5.0.
+ * Held at 6 instead: the Warden's slam telegraph is 7 units across, and at 5.0
+ * it eats most of the vertical field, which costs more in readability than the
+ * last bit of framing parity is worth.
+ */
+const ORTHO_HALF_HEIGHT = 6;
 
 /** Flagstone texture repeats across the 200u floor (25 → ~8u per tile). */
 const FLOOR_TILES = 25;
@@ -27,7 +36,7 @@ const FLOOR_TILES = 25;
  * area (ORTHO_HALF_HEIGHT by that times the aspect ratio) plus enough margin for
  * shadows thrown in from just off screen.
  */
-const SHADOW_EXTENT = 22;
+const SHADOW_EXTENT = 16;
 
 export interface SceneHandle {
   scene: Scene;
