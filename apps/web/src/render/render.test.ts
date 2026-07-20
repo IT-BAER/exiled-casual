@@ -181,26 +181,26 @@ describe("makeMesh kinds", () => {
     expect(mesh).not.toBeNull();
   });
 
-  it("boss mesh scaling is 2.6, distinguishing it from plain monster (1.0)", () => {
+  it("boss mesh scaling is 2.0, distinguishing it from plain monster (1.0)", () => {
     engine = new NullEngine();
     const { scene } = createScene(engine);
     const boss = makeMesh(scene, "boss", "b");
     const monster = makeMesh(scene, "monster", "m");
-    expect(boss.scaling.x).toBeCloseTo(2.6);
+    expect(boss.scaling.x).toBeCloseTo(2.0);
     expect(monster.scaling.x).toBeCloseTo(1.0);
   });
 
-  it("updateTelegraph sets fill alpha to ~0.15 at progress 0 and ~0.55 at progress 1", () => {
+  it("updateTelegraph sets fill alpha to ~0.12 at progress 0 and ~0.30 at progress 1", () => {
     engine = new NullEngine();
     const { scene } = createScene(engine);
     const mesh = makeMesh(scene, "telegraph", "tel-alpha");
     const parts = mesh.metadata as { fill: StandardMaterial };
 
     updateTelegraph(mesh, 0);
-    expect(parts.fill.alpha).toBeCloseTo(0.15, 2);
+    expect(parts.fill.alpha).toBeCloseTo(0.12, 2);
 
     updateTelegraph(mesh, 1);
-    expect(parts.fill.alpha).toBeCloseTo(0.55, 2);
+    expect(parts.fill.alpha).toBeCloseTo(0.30, 2);
   });
 });
 
@@ -228,7 +228,7 @@ describe("SnapshotRenderer — new kinds", () => {
     expect(mesh!.scaling.x).toBeCloseTo(3.5);
   });
 
-  it("boss:true monster entity gets boss mesh (scaling ~2.6)", () => {
+  it("boss:true monster entity gets boss mesh (scaling ~2.0)", () => {
     engine = new NullEngine();
     const { scene } = createScene(engine);
     const renderer = new SnapshotRenderer(scene);
@@ -238,6 +238,6 @@ describe("SnapshotRenderer — new kinds", () => {
     renderer.apply(null, snap, 1);
     const mesh = scene.getMeshByName("entity-7");
     expect(mesh).not.toBeNull();
-    expect(mesh!.scaling.x).toBeCloseTo(2.6);
+    expect(mesh!.scaling.x).toBeCloseTo(2.0);
   });
 });

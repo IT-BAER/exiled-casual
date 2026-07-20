@@ -217,16 +217,18 @@ function buildImp(scene: Scene, root: Mesh, key: string, rock: [number, number, 
 function buildTelegraph(scene: Scene, root: Mesh): void {
   // Per-entity materials (not cached by key) so multiple live telegraphs each
   // animate their own alpha/emissive independently.
+  // Black diffuse on both: the danger zone must not be lit by the scene, or the
+  // key light washes it into a pale spotlight. Emissive carries all the colour.
   const fillMat = new StandardMaterial(`${root.name}-tel-fill`, scene);
-  fillMat.diffuseColor = new Color3(1.0, 0.35, 0.05);
-  fillMat.emissiveColor = new Color3(0.8, 0.25, 0.02);
+  fillMat.diffuseColor = new Color3(0, 0, 0);
+  fillMat.emissiveColor = new Color3(0.55, 0.1, 0.02);
   fillMat.specularColor = new Color3(0, 0, 0);
-  fillMat.alpha = 0.15;
+  fillMat.alpha = 0.12;
   fillMat.backFaceCulling = false;
 
   const rimMat = new StandardMaterial(`${root.name}-tel-rim`, scene);
-  rimMat.diffuseColor = new Color3(1.0, 0.65, 0.1);
-  rimMat.emissiveColor = new Color3(1.0, 0.65, 0.1);
+  rimMat.diffuseColor = new Color3(0, 0, 0);
+  rimMat.emissiveColor = new Color3(1.0, 0.32, 0.06);
   rimMat.specularColor = new Color3(0, 0, 0);
 
   // diameter=2 → radius=1; renderer scales x/z to match entity.radius
@@ -240,7 +242,7 @@ function buildTelegraph(scene: Scene, root: Mesh): void {
   rim.material = rimMat;
   rim.receiveShadows = false;
 
-  root.metadata = { fill: fillMat };
+  root.metadata = { fill: fillMat, rim: rimMat };
 }
 
 /**
@@ -249,15 +251,17 @@ function buildTelegraph(scene: Scene, root: Mesh): void {
  * Mutates existing material properties — no allocations per call.
  */
 export function updateTelegraph(root: Mesh, progress: number): void {
-  const parts = root.metadata as { fill: StandardMaterial } | null;
+  const parts = root.metadata as
+    | { fill: StandardMaterial; rim: StandardMaterial }
+    | null;
   if (!parts?.fill) return;
-  parts.fill.alpha = 0.15 + progress * 0.4;
-  // shift emissive: deep orange → near-white
-  parts.fill.emissiveColor.set(
-    0.8 + progress * 0.2,
-    0.25 + progress * 0.7,
-    0.02 + progress * 0.9,
-  );
+  // The fill only ever deepens — it marks the ground, it must not light it.
+  parts.fill.alpha = 0.12 + progress * 0.18;
+  parts.fill.emissiveColor.set(0.55 + progress * 0.35, 0.1 + progress * 0.12, 0.02);
+  // The rim carries the urgency, and only whitens in the last moment before
+  // impact, so the flash reads as "now" instead of a slow fade to white.
+  const flash = Math.max(0, (progress - 0.85) / 0.15);
+  parts.rim.emissiveColor.set(1.0, 0.32 + flash * 0.6, 0.06 + flash * 0.7);
 }
 
 const GREYBOX_COLOR: Record<"projectile" | "groundArea", [number, number, number]> = {
@@ -276,8 +280,10 @@ export function makeMesh(scene: Scene, kind: MeshKind, name: string): Mesh {
     else if (kind === "boss") {
       // Darker charcoal rock, hotter lava glow, bright near-white eye.
       // Reuses rare_skin.png (boss_skin.png does not exist in public/textures/).
-      buildImp(scene, root, "boss", [0.18, 0.13, 0.11], 0.85, [1.0, 0.95, 0.8], "/textures/rare_skin.png");
-      root.scaling.setAll(2.6);
+      // Low emissive on purpose: the reference look is a dark silhouette with hot
+      // accents. At 0.85 the whole hide self-lit and the boss read as an orange blob.
+      buildImp(scene, root, "boss", [0.18, 0.13, 0.11], 0.3, [1.0, 0.95, 0.8], "/textures/rare_skin.png");
+      root.scaling.setAll(2.0);
     } else if (kind === "rare") {
       buildImp(scene, root, "rare", [0.42, 0.19, 0.06], 0.7, [1.0, 0.55, 0.15]);
       root.scaling.setAll(1.7); // elite: bigger than the common imp

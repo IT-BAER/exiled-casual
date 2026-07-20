@@ -108,10 +108,12 @@ export function createScene(engine: Engine): SceneHandle {
   const arenaRadius = toNumber(ARENA_RADIUS); // 14 world units
   const wall = MeshBuilder.CreateTorus(
     "arena-wall",
-    { diameter: arenaRadius * 2, thickness: 1.5, tessellation: 64 },
+    // Thin: at ORTHO_HALF_HEIGHT 7 the camera sees ~14 units, so a fat ring eats
+    // the frame on both sides and reads as a donut instead of a boundary.
+    { diameter: arenaRadius * 2, thickness: 0.5, tessellation: 64 },
     scene,
   );
-  wall.position.y = 0.75; // lift so the bottom of the tube sits on y=0
+  wall.position.y = 0.25; // lift so the bottom of the tube sits on y=0
   const wallMat = new StandardMaterial("arena-wall-mat", scene);
   wallMat.diffuseColor = new Color3(0.12, 0.11, 0.10);
   wallMat.emissiveColor = new Color3(0.03, 0.025, 0.02);
