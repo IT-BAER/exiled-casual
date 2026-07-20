@@ -62,6 +62,32 @@ describe("SnapshotRenderer", () => {
     expect(mesh.rotation.y).toBeCloseTo(Math.PI / 8, 4);
   });
 
+  it("swings a monster's legs while it walks and rests them when it stops", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const renderer = new SnapshotRenderer(scene);
+
+    const s0 = makeSnapshot({ entities: [{ id: 1, kind: "monster", x: 0, y: 0 }] });
+    renderer.apply(null, s0, 1);
+    const leg = scene.getMeshByName("leg0")!;
+    expect(leg.rotation.x).toBe(0);
+
+    // Walk in small per-frame steps, the way the render loop actually calls in.
+    let prev = s0;
+    let peak = 0;
+    for (let step = 1; step <= 24; step++) {
+      const next = makeSnapshot({ entities: [{ id: 1, kind: "monster", x: step * 0.15, y: 0 }] });
+      renderer.apply(prev, next, 1);
+      peak = Math.max(peak, Math.abs(leg.rotation.x));
+      prev = next;
+    }
+    expect(peak).toBeGreaterThan(0.2);
+
+    // Standing still eases the legs back toward rest.
+    for (let i = 0; i < 12; i++) renderer.apply(prev, prev, 1);
+    expect(Math.abs(leg.rotation.x)).toBeLessThan(0.02);
+  });
+
   it("creates meshes for each entity and places them correctly", () => {
     engine = new NullEngine();
     const { scene } = createScene(engine);

@@ -1,7 +1,7 @@
 import type { Scene } from "@babylonjs/core";
 import type { Mesh } from "@babylonjs/core";
 import type { Snapshot, SnapshotEntity } from "@pact/protocol";
-import { makeMesh, Y_LIFT } from "./meshes";
+import { animateActor, makeMesh, Y_LIFT } from "./meshes";
 import type { MeshKind } from "./meshes";
 import { lerp, lerpAngle } from "./interp";
 
@@ -15,6 +15,9 @@ export class SnapshotRenderer {
   private readonly scene: Scene;
   // keyed by entity id (player id = player.id)
   private readonly meshes = new Map<number, Mesh>();
+  /** Walk-cycle position per entity, advanced by distance walked (radians/unit). */
+  private readonly gait = new Map<number, number>();
+  private static readonly GAIT_PER_UNIT = 3.2;
 
   constructor(scene: Scene) {
     this.scene = scene;
@@ -56,6 +59,7 @@ export class SnapshotRenderer {
       if (!liveIds.has(id)) {
         mesh.dispose();
         this.meshes.delete(id);
+        this.gait.delete(id);
       }
     }
   }
@@ -70,13 +74,26 @@ export class SnapshotRenderer {
     alpha: number,
   ): void {
     let mesh = this.meshes.get(id);
+    const fresh = !mesh;
     if (!mesh) {
       mesh = makeMesh(this.scene, kind, `entity-${id}`);
       this.meshes.set(id, mesh);
     }
+    const wasX = mesh.position.x;
+    const wasZ = mesh.position.z;
     mesh.position.x = lerp(prevX, nextX, alpha);
     mesh.position.z = lerp(prevY, nextY, alpha);
     mesh.position.y = Y_LIFT[kind];
+
+    // Advance the walk cycle by how far the mesh actually moved on screen this
+    // frame, not by the snapshot delta: apply() runs several times per snapshot
+    // while interpolating, so a snapshot delta would count the same step twice.
+    // A mesh spawning at the origin teleports on its first frame, which is not
+    // a step.
+    const step = fresh ? 0 : Math.hypot(mesh.position.x - wasX, mesh.position.z - wasZ);
+    const phase = (this.gait.get(id) ?? 0) + step * SnapshotRenderer.GAIT_PER_UNIT;
+    this.gait.set(id, phase);
+    animateActor(mesh, phase, step > 1e-5);
 
     // Turn the actor to face where it's heading (sim x,y -> world x,z). The
     // meshes are authored facing +z; yaw = atan2(dx, dz) aligns +z with the

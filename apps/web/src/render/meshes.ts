@@ -122,6 +122,33 @@ function attach(root: Mesh, part: Mesh, material: StandardMaterial): Mesh {
   return part;
 }
 
+/**
+ * What the walk cycle moves, stashed on the actor root at build time so the
+ * render loop never has to look parts up by name.
+ */
+interface ActorParts {
+  /** Limbs that swing back and forth, each with its own offset in the cycle. */
+  limbs: { mesh: Mesh; offset: number; amp: number }[];
+  /** How far the body rises on each step. */
+  bob: number;
+}
+
+/**
+ * Advance one actor's walk cycle. `phase` is driven by distance travelled, not
+ * by wall time, so the legs always keep up with the feet and never skate.
+ * Everything eases toward its target, which is what smooths the stop.
+ */
+export function animateActor(root: Mesh, phase: number, moving: boolean): void {
+  const parts = root.metadata as ActorParts | null;
+  if (!parts) return;
+  for (const limb of parts.limbs) {
+    const target = moving ? Math.sin(phase + limb.offset) * limb.amp : 0;
+    limb.mesh.rotation.x += (target - limb.mesh.rotation.x) * 0.3;
+  }
+  // Two rises per stride (one per leg), and only ever upward off the floor.
+  if (moving) root.position.y += Math.abs(Math.sin(phase)) * parts.bob;
+}
+
 /** Robed fire-mage: skirt + torso + hooded head, staff with a fire tip, offhand fireball. */
 function buildCaster(scene: Scene, root: Mesh): void {
   const cloth = mat(scene, "robe", 0.13, 0.14, 0.17, 0.22, "/textures/robe_cloth.png");
@@ -152,12 +179,15 @@ function buildCaster(scene: Scene, root: Mesh): void {
   hood.position.set(0, 1.78, -0.06);
   attach(root, hood, cloth);
 
+  const limbs: ActorParts["limbs"] = [];
   for (const side of [-1, 1]) {
     const arm = MeshBuilder.CreateCapsule(`arm${side}`, { radius: 0.09, height: 0.7 }, scene);
     arm.position.set(side * 0.3, 1.25, 0);
     arm.rotation.z = side * 0.25;
     attach(root, arm, cloth);
+    limbs.push({ mesh: arm, offset: side < 0 ? 0 : Math.PI, amp: 0.35 });
   }
+  root.metadata = { limbs, bob: 0.05 } satisfies ActorParts;
 
   const staff = MeshBuilder.CreateCylinder("staff", { diameter: 0.06, height: 1.95, tessellation: 8 }, scene);
   staff.position.set(0.4, 0.98, 0.02);
@@ -202,11 +232,15 @@ function buildImp(scene: Scene, root: Mesh, key: string, rock: [number, number, 
   }
 
   const legPositions: [number, number][] = [[-0.22, 0.4], [0.22, 0.4], [-0.22, -0.28], [0.22, -0.28]];
+  const limbs: ActorParts["limbs"] = [];
   legPositions.forEach(([x, z], i) => {
     const leg = MeshBuilder.CreateCylinder(`leg${i}`, { diameter: 0.13, height: 0.32, tessellation: 6 }, scene);
     leg.position.set(x, 0.16, z);
     attach(root, leg, hide);
+    // Diagonal gait: front-left steps with back-right, as a real quadruped does.
+    limbs.push({ mesh: leg, offset: i === 0 || i === 3 ? 0 : Math.PI, amp: 0.6 });
   });
+  root.metadata = { limbs, bob: 0.045 } satisfies ActorParts;
 
   const tail = MeshBuilder.CreateCylinder("tail", { diameterTop: 0, diameterBottom: 0.14, height: 0.55, tessellation: 6 }, scene);
   tail.position.set(0, 0.36, -0.5);
