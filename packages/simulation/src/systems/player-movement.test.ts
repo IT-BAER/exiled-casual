@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { fp, fpClamp } from "@pact/fixed-point";
+import { fp, fpClamp, fpDist2 } from "@pact/fixed-point";
 import { Simulation } from "../loop";
 import { registerPlayerMovement } from "./player-movement";
-import { WORLD_MIN, WORLD_MAX } from "../movement";
+import { WORLD_MIN, WORLD_MAX, ARENA_RADIUS } from "../movement";
 import type { Position, PlayerC, MoveTarget, MoveDir, Faction } from "../components";
 
 function makePlayer(sim: Simulation, x = 0, y = 0, moveSpeed = fp(3)) {
@@ -83,27 +83,52 @@ describe("registerPlayerMovement", () => {
     expect(posAfter).toBe(posBefore);
   });
 
-  it("moveTo with out-of-bounds target clamps goal and deactivates on arrival", () => {
+  it("moveTo with out-of-bounds target clamps goal to WORLD_MAX and player stays inside arena", () => {
     const sim = new Simulation();
     registerPlayerMovement(sim);
-    // place player near WORLD_MAX, issue target beyond WORLD_MAX
-    const p = makePlayer(sim, WORLD_MAX - fp(2), 0, fp(10));
+    // target beyond WORLD_MAX; moveTo command clamps it to WORLD_MAX
+    const p = makePlayer(sim, 0, 0, fp(10));
     sim.step([{ tick: 0, entity: p, type: "moveTo", data: { x: WORLD_MAX + fp(10), y: 0 } }]);
-    // step several more ticks — player should reach WORLD_MAX and deactivate
+    const mt0 = sim.world.get<MoveTarget>(p, "moveTarget")!;
+    expect(mt0.x).toBe(WORLD_MAX); // goal clamped to world bounds
+    // after several ticks player presses against arena wall — position stays within arena
     for (let i = 1; i <= 5; i++) sim.step();
     const pos = sim.world.get<Position>(p, "position")!;
+    expect(pos.x).toBeLessThanOrEqual(ARENA_RADIUS);
+  });
+
+  it("deactivates the move target on arrival at an in-arena goal", () => {
+    const sim = new Simulation();
+    registerPlayerMovement(sim);
+    const p = makePlayer(sim, 0, 0, fp(10));
+    sim.step([{ tick: 0, entity: p, type: "moveTo", data: { x: fp(5), y: 0 } }]);
+    for (let i = 1; i <= 20; i++) sim.step();
+    const pos = sim.world.get<Position>(p, "position")!;
     const mt = sim.world.get<MoveTarget>(p, "moveTarget")!;
-    expect(pos.x).toBe(WORLD_MAX);
+    expect(pos.x).toBe(fp(5));
     expect(mt.active).toBe(0);
+  });
+
+  it("moveTo far outside arena: player stays within ARENA_RADIUS after many ticks", () => {
+    const sim = new Simulation();
+    registerPlayerMovement(sim);
+    const p = makePlayer(sim, 0, 0, fp(3));
+    // target well beyond arena
+    sim.step([{ tick: 0, entity: p, type: "moveTo", data: { x: fp(200), y: fp(200) } }]);
+    for (let i = 1; i <= 60; i++) sim.step();
+    const pos = sim.world.get<Position>(p, "position")!;
+    const d2 = fpDist2(0, 0, pos.x, pos.y);
+    expect(d2).toBeLessThanOrEqual(ARENA_RADIUS * ARENA_RADIUS);
   });
 
   it("clamps position to arena bounds", () => {
     const sim = new Simulation();
     registerPlayerMovement(sim);
-    const p = makePlayer(sim, WORLD_MAX, 0, fp(10));
-    // moveDir +x pushes past WORLD_MAX
+    // player starts at arena edge; moveDir +x tries to push further out
+    const p = makePlayer(sim, ARENA_RADIUS, 0, fp(10));
     sim.step([{ tick: 0, entity: p, type: "moveDir", data: { dx: 1, dy: 0 } }]);
     const pos = sim.world.get<Position>(p, "position")!;
-    expect(pos.x).toBe(WORLD_MAX);
+    // the body stays fully inside the wall: limit is ARENA_RADIUS - bodyRadius
+    expect(pos.x).toBeLessThanOrEqual(ARENA_RADIUS - fp(0.5));
   });
 });

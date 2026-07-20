@@ -1,6 +1,6 @@
 import { fpClamp, fpStepToward } from "@pact/fixed-point";
 import { Simulation } from "../loop";
-import { WORLD_MIN, WORLD_MAX } from "../movement";
+import { WORLD_MIN, WORLD_MAX, clampToArena } from "../movement";
 import type { Position, PlayerC, MoveTarget, MoveDir } from "../components";
 
 export function registerPlayerMovement(sim: Simulation): void {
@@ -58,10 +58,12 @@ export function registerPlayerMovement(sim: Simulation): void {
         }
       }
 
-      world.set<Position>(e, "position", {
-        x: fpClamp(nx, WORLD_MIN, WORLD_MAX),
-        y: fpClamp(ny, WORLD_MIN, WORLD_MAX),
-      });
+      const clamped = clampToArena(
+        fpClamp(nx, WORLD_MIN, WORLD_MAX),
+        fpClamp(ny, WORLD_MIN, WORLD_MAX),
+        player.bodyRadius,
+      );
+      world.set<Position>(e, "position", clamped);
     }
   });
 }

@@ -1,4 +1,4 @@
-import { fp, fpAdd, fpClamp, type Fixed } from "@pact/fixed-point";
+import { fp, fpAdd, fpClamp, fpDiv, fpMul, fpDist2, isqrt, type Fixed } from "@pact/fixed-point";
 import { createStream, type RandomStream } from "./rng";
 import { Simulation } from "./loop";
 import type { Command } from "./loop";
@@ -6,6 +6,21 @@ import type { Entity } from "./ecs";
 
 export const WORLD_MIN: Fixed = fp(-100);
 export const WORLD_MAX: Fixed = fp(100);
+
+export const ARENA_RADIUS: Fixed = fp(14);
+
+/**
+ * Clamp a position inside the circular arena, keeping the body fully inside the wall.
+ * Returns the input unchanged when it is already inside.
+ */
+export function clampToArena(x: Fixed, y: Fixed, bodyRadius: Fixed): { x: Fixed; y: Fixed } {
+  const limit = Math.max(0, ARENA_RADIUS - bodyRadius);
+  const dist2 = fpDist2(0, 0, x, y);
+  if (dist2 <= limit * limit) return { x, y };
+  const d = isqrt(dist2);
+  if (d === 0) return { x, y };
+  return { x: fpDiv(fpMul(x, limit), d), y: fpDiv(fpMul(y, limit), d) };
+}
 
 interface Position { x: Fixed; y: Fixed }
 interface Motion { vx: Fixed; vy: Fixed; streamName: string }
