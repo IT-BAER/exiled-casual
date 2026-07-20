@@ -3,6 +3,7 @@ import {
   Mesh,
   MeshBuilder,
   StandardMaterial,
+  Texture,
   type Scene,
 } from "@babylonjs/core";
 
@@ -23,8 +24,21 @@ const Y_LIFT: Record<MeshKind, number> = {
 
 export { Y_LIFT };
 
-/** Matte diffuse+emissive material, shared per key across every actor part. */
-function mat(scene: Scene, key: string, r: number, g: number, b: number, emiss = 0.22): StandardMaterial {
+/**
+ * Matte diffuse+emissive material, shared per key across every actor part.
+ * With `texture`, the tiled skin drives both diffuse and emissive instead of
+ * the flat colour, which stays as the headless fallback.
+ */
+function mat(
+  scene: Scene,
+  key: string,
+  r: number,
+  g: number,
+  b: number,
+  emiss = 0.22,
+  texture?: string,
+  tiles = 1,
+): StandardMaterial {
   const name = `part-${key}`;
   const existing = scene.getMaterialByName(name);
   if (existing) return existing as StandardMaterial;
@@ -32,6 +46,21 @@ function mat(scene: Scene, key: string, r: number, g: number, b: number, emiss =
   m.diffuseColor = new Color3(r, g, b);
   m.emissiveColor = new Color3(r * emiss, g * emiss, b * emiss);
   m.specularColor = new Color3(0, 0, 0);
+  if (texture) {
+    try {
+      // Texture load is async and non-fatal under NullEngine (no canvas), so
+      // tests keep the flat colour set above.
+      const skin = new Texture(texture, scene);
+      skin.uScale = tiles;
+      skin.vScale = tiles;
+      m.diffuseTexture = skin;
+      m.emissiveTexture = skin; // glow follows the bright pixels (lava, runes)
+      m.diffuseColor = new Color3(1, 1, 1); // the texture carries the colour now
+      m.emissiveColor = new Color3(emiss, emiss, emiss);
+    } catch {
+      /* keep the flat colour */
+    }
+  }
   return m;
 }
 
@@ -55,7 +84,7 @@ function attach(root: Mesh, part: Mesh, material: StandardMaterial): Mesh {
 
 /** Robed fire-mage: skirt + torso + hooded head, staff with a fire tip, offhand fireball. */
 function buildCaster(scene: Scene, root: Mesh): void {
-  const cloth = mat(scene, "robe", 0.13, 0.14, 0.17);
+  const cloth = mat(scene, "robe", 0.13, 0.14, 0.17, 0.22, "/textures/robe_cloth.png");
   const teal = mat(scene, "trim", 0.08, 0.5, 0.45, 0.35);
   const skin = mat(scene, "skin", 0.72, 0.56, 0.43);
   const wood = mat(scene, "staff", 0.32, 0.22, 0.13);
@@ -102,7 +131,7 @@ function buildCaster(scene: Scene, root: Mesh): void {
 
 /** Quadruped cinder imp: humped body, horned head with glowing eyes, four legs, a tail. */
 function buildImp(scene: Scene, root: Mesh, key: string, rock: [number, number, number], lava: number, eye: [number, number, number]): void {
-  const hide = mat(scene, `${key}-hide`, rock[0], rock[1], rock[2], lava);
+  const hide = mat(scene, `${key}-hide`, rock[0], rock[1], rock[2], lava, `/textures/${key}_skin.png`, 2);
   const horn = mat(scene, `${key}-horn`, 0.09, 0.07, 0.07, 0.1);
   const eyes = glow(scene, `${key}-eye`, eye[0], eye[1], eye[2]);
 
