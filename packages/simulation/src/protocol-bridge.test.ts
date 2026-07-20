@@ -4,6 +4,8 @@ import { createCombatSim } from "./combat-sim";
 import { intentToCommand, buildSnapshot } from "./protocol-bridge";
 import { CONTENT_VERSION } from "@pact/content-runtime";
 import type { Intent } from "@pact/protocol";
+import { World } from "./ecs";
+import type { Position, Health, Mana, MonsterC, BossC, TelegraphC } from "./components";
 
 describe("intentToCommand", () => {
   it("moveTo maps to correct Command shape", () => {
@@ -88,6 +90,126 @@ describe("buildSnapshot", () => {
     const intent: Intent = { kind: "useSkill", skillId: "skill.cinder_ground.v1", tx: fp(3), ty: fp(0) };
     sim.step([intentToCommand(intent, playerEntity, 0)]);
     const snap = buildSnapshot(world, sim, sim.tick, CONTENT_VERSION);
+    for (let i = 1; i < snap.entities.length; i++) {
+      expect(snap.entities[i]!.id).toBeGreaterThan(snap.entities[i - 1]!.id);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Helpers for minimal-world fixtures (no content needed)
+// ---------------------------------------------------------------------------
+
+function makeMinimalWorld() {
+  const world = new World();
+  const p = world.create();
+  world.set<Position>(p, "position", { x: fp(0), y: fp(0) });
+  world.set<Health>(p, "health", { life: fp(100), maxLife: fp(100) });
+  world.set<Mana>(p, "mana", { mana: fp(60), maxMana: fp(60), regen: fp(0) });
+  world.set(p, "cooldowns", {});
+  world.set(p, "player", { moveSpeed: fp(0), bodyRadius: fp(0.5) });
+  return { world, playerEntity: p };
+}
+
+function addMonster(world: World, x: number, y: number): number {
+  const e = world.create();
+  world.set<Position>(e, "position", { x: fp(x), y: fp(y) });
+  world.set<Health>(e, "health", { life: fp(200), maxLife: fp(200) });
+  world.set<MonsterC>(e, "monster", {
+    defId: "test.monster",
+    moveSpeed: fp(2), bodyRadius: fp(1),
+    attackRange: fp(1.5), attackCooldownTicks: 60,
+    attackDamage: fp(10), attackType: 1 as const,
+    attackReadyTick: 0, state: "idle",
+    rare: 0 as const, summoned: 0 as const,
+  });
+  return e;
+}
+
+function addBoss(world: World, x: number, y: number): number {
+  const e = addMonster(world, x, y);
+  world.set<BossC>(e, "boss", {
+    phase: 1, nextAbilityTick: 0,
+    spawnX: fp(x), spawnY: fp(y), rootedUntilTick: 0,
+  });
+  return e;
+}
+
+function addTelegraph(world: World, x: number, y: number, startTick: number, impactTick: number): number {
+  const e = world.create();
+  world.set<Position>(e, "position", { x: fp(x), y: fp(y) });
+  world.set<TelegraphC>(e, "telegraph", {
+    ownerId: 0, team: 1,
+    radius: fp(3), startTick, impactTick,
+    damage: fp(28), damageType: 0 as const, leavesGroundTicks: 120,
+  });
+  return e;
+}
+
+describe("buildSnapshot — boss & telegraph", () => {
+  it("boss entity serialises as kind:monster with boss===true and bossPhase===1", () => {
+    const { world } = makeMinimalWorld();
+    addBoss(world, 5, 3);
+    // sim is unused; pass a minimal stub
+    const snap = buildSnapshot(world, {} as never, 0, "test");
+    const bosses = snap.entities.filter(e => e.kind === "monster" && e.boss === true);
+    expect(bosses).toHaveLength(1);
+    expect(bosses[0]!.bossPhase).toBe(1);
+  });
+
+  it("plain monster does NOT carry boss or bossPhase keys", () => {
+    const { world } = makeMinimalWorld();
+    addMonster(world, 2, 2);
+    const snap = buildSnapshot(world, {} as never, 0, "test");
+    const plain = snap.entities.filter(e => e.kind === "monster");
+    expect(plain).toHaveLength(1);
+    expect(plain[0]!.boss).toBeUndefined();
+    expect(plain[0]!.bossPhase).toBeUndefined();
+  });
+
+  it("telegraph entity serialises with correct kind, float x/y/radius", () => {
+    const { world } = makeMinimalWorld();
+    addTelegraph(world, 4, -2, 10, 40);
+    const snap = buildSnapshot(world, {} as never, 0, "test");
+    const tgs = snap.entities.filter(e => e.kind === "telegraph");
+    expect(tgs).toHaveLength(1);
+    expect(tgs[0]!.x).toBeCloseTo(4, 5);
+    expect(tgs[0]!.y).toBeCloseTo(-2, 5);
+    expect(tgs[0]!.radius).toBeCloseTo(3, 5);
+  });
+
+  it("progress is 0 at startTick, ~0.5 halfway, 1 at impactTick, clamped past it", () => {
+    const { world } = makeMinimalWorld();
+    const startTick = 10;
+    const impactTick = 40;
+    addTelegraph(world, 0, 0, startTick, impactTick);
+
+    const snapStart = buildSnapshot(world, {} as never, startTick, "test");
+    expect(snapStart.entities[0]!.progress).toBeCloseTo(0, 5);
+
+    const snapMid = buildSnapshot(world, {} as never, 25, "test");
+    expect(snapMid.entities[0]!.progress).toBeCloseTo(0.5, 5);
+
+    const snapImpact = buildSnapshot(world, {} as never, impactTick, "test");
+    expect(snapImpact.entities[0]!.progress).toBeCloseTo(1, 5);
+
+    const snapPast = buildSnapshot(world, {} as never, impactTick + 5, "test");
+    expect(snapPast.entities[0]!.progress).toBe(1);
+  });
+
+  it("zero-length wind-up (startTick === impactTick) yields progress 1", () => {
+    const { world } = makeMinimalWorld();
+    addTelegraph(world, 0, 0, 10, 10);
+    const snap = buildSnapshot(world, {} as never, 10, "test");
+    expect(snap.entities[0]!.progress).toBe(1);
+  });
+
+  it("combined entity list stays sorted by id when telegraphs are mixed in", () => {
+    const { world } = makeMinimalWorld();
+    addMonster(world, 1, 1);
+    addTelegraph(world, 2, 2, 0, 30);
+    addMonster(world, 3, 3);
+    const snap = buildSnapshot(world, {} as never, 0, "test");
     for (let i = 1; i < snap.entities.length; i++) {
       expect(snap.entities[i]!.id).toBeGreaterThan(snap.entities[i - 1]!.id);
     }

@@ -4,7 +4,7 @@ import type { Command, Simulation } from "./loop";
 import type { World, Entity } from "./ecs";
 import type {
   Health, Mana, Position, Cooldowns, MonsterC,
-  AilmentC, ProjectileC, GroundAreaC,
+  AilmentC, ProjectileC, GroundAreaC, BossC, TelegraphC,
 } from "./components";
 
 export function intentToCommand(intent: Intent, player: Entity, tick: number): Command {
@@ -59,6 +59,11 @@ export function buildSnapshot(
       rare: mon.rare === 1,
     };
     if (ail !== undefined) entry.ailmentStacks = ail.stacks;
+    if (world.has(e, "boss")) {
+      const bc = world.get<BossC>(e, "boss")!;
+      entry.boss = true;
+      entry.bossPhase = bc.phase;
+    }
     entities.push(entry);
   }
 
@@ -80,6 +85,20 @@ export function buildSnapshot(
       x: toNumber(gp.x), y: toNumber(gp.y),
       radius: toNumber(ga.radius),
       remainingSeconds: (ga.expiryTick - tick) / 30,
+    });
+  }
+
+  for (const e of world.query("telegraph", "position")) {
+    const tp = world.get<Position>(e, "position")!;
+    const tg = world.get<TelegraphC>(e, "telegraph")!;
+    const raw = tg.impactTick === tg.startTick
+      ? 1
+      : (tick - tg.startTick) / (tg.impactTick - tg.startTick);
+    entities.push({
+      id: e, kind: "telegraph",
+      x: toNumber(tp.x), y: toNumber(tp.y),
+      radius: toNumber(tg.radius),
+      progress: Math.min(1, Math.max(0, raw)),
     });
   }
 

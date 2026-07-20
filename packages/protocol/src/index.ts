@@ -27,13 +27,19 @@ export type ToWorker = ToWorker_Init | ToWorker_Intent | ToWorker_Reset;
 
 export interface SnapshotEntity {
   id: number;
-  kind: "monster" | "projectile" | "groundArea";
+  kind: "monster" | "projectile" | "groundArea" | "telegraph";
   x: number; y: number;
   radius?: number;
   life?: number; maxLife?: number;
   rare?: boolean;
   remainingSeconds?: number;
   ailmentStacks?: number;
+  /** true for the boss monster; kind stays "monster" so existing consumers keep working */
+  boss?: boolean;
+  /** boss phase, present only when boss === true */
+  bossPhase?: 1 | 2;
+  /** telegraph wind-up progress: 0 at cast → 1 at impact, for fill animation */
+  progress?: number;
 }
 
 export interface Snapshot {
