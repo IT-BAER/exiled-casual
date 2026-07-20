@@ -1,8 +1,9 @@
 // @vitest-environment node
 import { describe, it, expect, afterEach } from "vitest";
-import { NullEngine, Scene } from "@babylonjs/core";
+import { NullEngine, Scene, StandardMaterial } from "@babylonjs/core";
 import { createScene } from "./engine";
 import { SnapshotRenderer } from "./renderer";
+import { makeMesh, updateTelegraph } from "./meshes";
 import type { Snapshot } from "@pact/protocol";
 
 function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
@@ -156,5 +157,87 @@ describe("createScene", () => {
     const ground = scene.getMeshByName("ground");
     expect(ground).not.toBeNull();
     expect(ground!.isPickable).toBe(true);
+  });
+
+  it("produces an arena-wall mesh", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    expect(scene.getMeshByName("arena-wall")).not.toBeNull();
+  });
+});
+
+describe("makeMesh kinds", () => {
+  it("makeMesh boss produces a mesh", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const mesh = makeMesh(scene, "boss", "test-boss");
+    expect(mesh).not.toBeNull();
+  });
+
+  it("makeMesh telegraph produces a mesh", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const mesh = makeMesh(scene, "telegraph", "test-tel");
+    expect(mesh).not.toBeNull();
+  });
+
+  it("boss mesh scaling is 2.6, distinguishing it from plain monster (1.0)", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const boss = makeMesh(scene, "boss", "b");
+    const monster = makeMesh(scene, "monster", "m");
+    expect(boss.scaling.x).toBeCloseTo(2.6);
+    expect(monster.scaling.x).toBeCloseTo(1.0);
+  });
+
+  it("updateTelegraph sets fill alpha to ~0.15 at progress 0 and ~0.55 at progress 1", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const mesh = makeMesh(scene, "telegraph", "tel-alpha");
+    const parts = mesh.metadata as { fill: StandardMaterial };
+
+    updateTelegraph(mesh, 0);
+    expect(parts.fill.alpha).toBeCloseTo(0.15, 2);
+
+    updateTelegraph(mesh, 1);
+    expect(parts.fill.alpha).toBeCloseTo(0.55, 2);
+  });
+});
+
+describe("SnapshotRenderer — new kinds", () => {
+  it("applies a snapshot with a telegraph entity without throwing", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const renderer = new SnapshotRenderer(scene);
+    const snap = makeSnapshot({
+      entities: [{ id: 5, kind: "telegraph", x: 3, y: 2, radius: 4, progress: 0.5 }],
+    });
+    expect(() => renderer.apply(null, snap, 1)).not.toThrow();
+  });
+
+  it("scales telegraph mesh x/z to entity.radius", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const renderer = new SnapshotRenderer(scene);
+    const snap = makeSnapshot({
+      entities: [{ id: 6, kind: "telegraph", x: 0, y: 0, radius: 3.5, progress: 0 }],
+    });
+    renderer.apply(null, snap, 1);
+    const mesh = scene.getMeshByName("entity-6");
+    expect(mesh).not.toBeNull();
+    expect(mesh!.scaling.x).toBeCloseTo(3.5);
+  });
+
+  it("boss:true monster entity gets boss mesh (scaling ~2.6)", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const renderer = new SnapshotRenderer(scene);
+    const snap = makeSnapshot({
+      entities: [{ id: 7, kind: "monster", x: 0, y: 0, boss: true, bossPhase: 1, life: 1000, maxLife: 1000 }],
+    });
+    renderer.apply(null, snap, 1);
+    const mesh = scene.getMeshByName("entity-7");
+    expect(mesh).not.toBeNull();
+    expect(mesh!.scaling.x).toBeCloseTo(2.6);
   });
 });

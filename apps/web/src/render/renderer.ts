@@ -1,13 +1,17 @@
 import type { Scene } from "@babylonjs/core";
 import type { Mesh } from "@babylonjs/core";
 import type { Snapshot, SnapshotEntity } from "@pact/protocol";
-import { animateActor, makeMesh, Y_LIFT } from "./meshes";
+import { animateActor, makeMesh, updateTelegraph, Y_LIFT } from "./meshes";
 import type { MeshKind } from "./meshes";
 import { lerp, lerpAngle } from "./interp";
 
 function kindOf(e: SnapshotEntity): MeshKind {
-  if (e.kind === "monster") return e.rare ? "rare" : "monster";
+  if (e.kind === "monster") {
+    if (e.boss) return "boss";
+    return e.rare ? "rare" : "monster";
+  }
   if (e.kind === "projectile") return "projectile";
+  if (e.kind === "telegraph") return "telegraph";
   return "groundArea";
 }
 
@@ -51,7 +55,12 @@ export class SnapshotRenderer {
         e.x,
         e.y,
         alpha,
+        e.radius,
       );
+      if (e.kind === "telegraph") {
+        const mesh = this.meshes.get(e.id);
+        if (mesh) updateTelegraph(mesh, e.progress ?? 0);
+      }
     }
 
     // Dispose meshes for entities that no longer exist
@@ -72,6 +81,7 @@ export class SnapshotRenderer {
     nextX: number,
     nextY: number,
     alpha: number,
+    radius?: number,
   ): void {
     let mesh = this.meshes.get(id);
     const fresh = !mesh;
@@ -84,6 +94,12 @@ export class SnapshotRenderer {
     mesh.position.x = lerp(prevX, nextX, alpha);
     mesh.position.z = lerp(prevY, nextY, alpha);
     mesh.position.y = Y_LIFT[kind];
+
+    // Scale telegraph and groundArea on x/z only to match their world radius.
+    if ((kind === "telegraph" || kind === "groundArea") && radius !== undefined) {
+      mesh.scaling.x = radius;
+      mesh.scaling.z = radius;
+    }
 
     // Advance the walk cycle by how far the mesh actually moved on screen this
     // frame, not by the snapshot delta: apply() runs several times per snapshot

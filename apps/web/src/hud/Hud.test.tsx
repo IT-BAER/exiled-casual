@@ -70,4 +70,20 @@ describe("Hud", () => {
     // All three skill slots should show Ready when no cooldowns present
     expect(readyLabels.length).toBe(3);
   });
+
+  it("renders boss bar and phase indicator when a boss entity is present", () => {
+    const snap: Snapshot = {
+      tick: 1,
+      player: { id: 0, x: 0, y: 0, life: 100, maxLife: 100, mana: 30, maxMana: 60, cooldowns: {}, alive: true },
+      entities: [{ id: 10, kind: "monster", x: 0, y: 0, boss: true, bossPhase: 2, life: 600, maxLife: 1000 }],
+    };
+    render(<Hud snapshot={snap} />);
+    expect(screen.getByTestId("boss-bar")).toBeInTheDocument();
+    expect(screen.getByTestId("boss-phase")).toHaveTextContent("II");
+  });
+
+  it("renders no boss bar when no boss entity is present", () => {
+    render(<Hud snapshot={makeSnap({})} />);
+    expect(screen.queryByTestId("boss-bar")).toBeNull();
+  });
 });

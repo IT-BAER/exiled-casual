@@ -105,6 +105,12 @@ export function Hud({ snapshot }: HudProps) {
   const lifePct = maxLife > 0 ? Math.max(0, Math.min(100, (life / maxLife) * 100)) : 0;
   const manaPct = maxMana > 0 ? Math.max(0, Math.min(100, (mana / maxMana) * 100)) : 0;
 
+  const boss = snapshot.entities.find((e) => e.boss);
+  const bossLifePct =
+    boss && boss.maxLife && boss.maxLife > 0
+      ? Math.max(0, Math.min(100, ((boss.life ?? 0) / boss.maxLife) * 100))
+      : 0;
+
   return (
     <div
       style={{
@@ -115,6 +121,53 @@ export function Hud({ snapshot }: HudProps) {
         fontFamily: "system-ui, sans-serif",
       }}
     >
+      {boss && (
+        <div
+          data-testid="boss-bar"
+          style={{
+            position: "absolute",
+            top: 20,
+            left: "50%",
+            transform: "translateX(-50%)",
+            width: 400,
+            height: 22,
+            background: "#0b0d11",
+            border: "2px solid #4a3a1c",
+            borderRadius: 4,
+            overflow: "hidden",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.7)",
+          }}
+        >
+          <div
+            style={{
+              position: "absolute",
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: `${bossLifePct}%`,
+              background: "linear-gradient(to right, #6d0a0a, #c4241a)",
+              transition: "width 120ms linear",
+            }}
+          />
+          <div
+            data-testid="boss-phase"
+            style={{
+              position: "absolute",
+              right: 8,
+              top: "50%",
+              transform: "translateY(-50%)",
+              color: "#f4f0e6",
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: 1,
+              textShadow: "0 1px 3px #000",
+            }}
+          >
+            {boss.bossPhase === 2 ? "II" : "I"}
+          </div>
+        </div>
+      )}
+
       <Orb
         pct={lifePct}
         fillTestId="life-orb-fill"

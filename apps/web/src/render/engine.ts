@@ -13,6 +13,8 @@ import {
   Vector3,
   type Engine,
 } from "@babylonjs/core";
+import { ARENA_RADIUS } from "@pact/simulation";
+import { toNumber } from "@pact/fixed-point";
 
 /** Half-height of the orthographic view in world units (smaller = more zoomed in). */
 const ORTHO_HALF_HEIGHT = 7;
@@ -101,6 +103,22 @@ export function createScene(engine: Engine): SceneHandle {
   ground.material = groundMat;
   ground.receiveShadows = true;
 
+  // Arena boundary wall — a torus ring at the clamp radius so players can see
+  // where they'll be stopped. Dark stone, sits flush with the floor.
+  const arenaRadius = toNumber(ARENA_RADIUS); // 14 world units
+  const wall = MeshBuilder.CreateTorus(
+    "arena-wall",
+    { diameter: arenaRadius * 2, thickness: 1.5, tessellation: 64 },
+    scene,
+  );
+  wall.position.y = 0.75; // lift so the bottom of the tube sits on y=0
+  const wallMat = new StandardMaterial("arena-wall-mat", scene);
+  wallMat.diffuseColor = new Color3(0.12, 0.11, 0.10);
+  wallMat.emissiveColor = new Color3(0.03, 0.025, 0.02);
+  wallMat.specularColor = new Color3(0, 0, 0);
+  wall.material = wallMat;
+  wall.receiveShadows = true;
+
   try {
     // Cast shadows, the single biggest cue that the actors stand ON the floor.
     //
@@ -125,7 +143,11 @@ export function createScene(engine: Engine): SceneHandle {
     // Every actor part the renderer spawns later becomes a caster on its own, so
     // the renderer never has to know a shadow generator exists. The ground is the
     // only mesh alive at this point, and it only receives.
-    scene.onNewMeshAddedObservable.add((mesh) => shadows.addShadowCaster(mesh));
+    // Telegraph meshes (fill disc + rim torus, named "telegraph-*") must not cast
+    // shadows — they are unlit VFX decals and a shadow from them would look wrong.
+    scene.onNewMeshAddedObservable.add((mesh) => {
+      if (!mesh.name.startsWith("telegraph-")) shadows.addShadowCaster(mesh);
+    });
 
     // Walk the light along with the camera so the frustum always brackets what
     // the player can see. Backwards along the light direction, and high enough

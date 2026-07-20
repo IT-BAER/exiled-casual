@@ -7,7 +7,7 @@ import {
   type Scene,
 } from "@babylonjs/core";
 
-export type MeshKind = "player" | "monster" | "rare" | "projectile" | "groundArea";
+export type MeshKind = "player" | "monster" | "rare" | "boss" | "projectile" | "groundArea" | "telegraph";
 
 /**
  * Y-lift off the ground plane per kind (render only). The authored actors
@@ -18,8 +18,10 @@ const Y_LIFT: Record<MeshKind, number> = {
   player: 0,
   monster: 0,
   rare: 0,
+  boss: 0,
   projectile: 0.3,
   groundArea: 0.05,
+  telegraph: 0.06,
 };
 
 export { Y_LIFT };
@@ -100,7 +102,9 @@ interface ActorParts {
  */
 export function animateActor(root: Mesh, phase: number, moving: boolean): void {
   const parts = root.metadata as ActorParts | null;
-  if (!parts) return;
+  // Not every mesh with metadata is an actor — telegraphs park their materials
+  // there too, so check for limbs rather than for metadata.
+  if (!parts?.limbs) return;
   for (const limb of parts.limbs) {
     const target = moving ? Math.sin(phase + limb.offset) * limb.amp : 0;
     limb.mesh.rotation.x += (target - limb.mesh.rotation.x) * 0.3;
@@ -162,8 +166,8 @@ function buildCaster(scene: Scene, root: Mesh): void {
 }
 
 /** Quadruped cinder imp: humped body, horned head with glowing eyes, four legs, a tail. */
-function buildImp(scene: Scene, root: Mesh, key: string, rock: [number, number, number], lava: number, eye: [number, number, number]): void {
-  const hide = mat(scene, `${key}-hide`, rock[0], rock[1], rock[2], lava, `/textures/${key}_skin.png`, 2);
+function buildImp(scene: Scene, root: Mesh, key: string, rock: [number, number, number], lava: number, eye: [number, number, number], texturePath?: string): void {
+  const hide = mat(scene, `${key}-hide`, rock[0], rock[1], rock[2], lava, texturePath ?? `/textures/${key}_skin.png`, 2);
   const horn = mat(scene, `${key}-horn`, 0.09, 0.07, 0.07, 0.1);
   const eyes = glow(scene, `${key}-eye`, eye[0], eye[1], eye[2]);
 
@@ -204,6 +208,58 @@ function buildImp(scene: Scene, root: Mesh, key: string, rock: [number, number, 
   attach(root, tail, hide);
 }
 
+/**
+ * Flat disc + bright rim ring for a boss telegraph.
+ * Built at radius=1 so the renderer can scale it to any real radius.
+ * Material refs stored in root.metadata so updateTelegraph can animate them
+ * without re-allocating per frame.
+ */
+function buildTelegraph(scene: Scene, root: Mesh): void {
+  // Per-entity materials (not cached by key) so multiple live telegraphs each
+  // animate their own alpha/emissive independently.
+  const fillMat = new StandardMaterial(`${root.name}-tel-fill`, scene);
+  fillMat.diffuseColor = new Color3(1.0, 0.35, 0.05);
+  fillMat.emissiveColor = new Color3(0.8, 0.25, 0.02);
+  fillMat.specularColor = new Color3(0, 0, 0);
+  fillMat.alpha = 0.15;
+  fillMat.backFaceCulling = false;
+
+  const rimMat = new StandardMaterial(`${root.name}-tel-rim`, scene);
+  rimMat.diffuseColor = new Color3(1.0, 0.65, 0.1);
+  rimMat.emissiveColor = new Color3(1.0, 0.65, 0.1);
+  rimMat.specularColor = new Color3(0, 0, 0);
+
+  // diameter=2 → radius=1; renderer scales x/z to match entity.radius
+  const fill = MeshBuilder.CreateCylinder("telegraph-fill", { diameter: 2, height: 0.02, tessellation: 32 }, scene);
+  fill.parent = root;
+  fill.material = fillMat;
+  fill.receiveShadows = false;
+
+  const rim = MeshBuilder.CreateTorus("telegraph-rim", { diameter: 2, thickness: 0.06, tessellation: 48 }, scene);
+  rim.parent = root;
+  rim.material = rimMat;
+  rim.receiveShadows = false;
+
+  root.metadata = { fill: fillMat };
+}
+
+/**
+ * Animate a telegraph's fill as wind-up progresses.
+ * progress 0 → dim deep-orange; progress 1 → bright near-white flash.
+ * Mutates existing material properties — no allocations per call.
+ */
+export function updateTelegraph(root: Mesh, progress: number): void {
+  const parts = root.metadata as { fill: StandardMaterial } | null;
+  if (!parts?.fill) return;
+  parts.fill.alpha = 0.15 + progress * 0.4;
+  // shift emissive: deep orange → near-white
+  parts.fill.emissiveColor.set(
+    0.8 + progress * 0.2,
+    0.25 + progress * 0.7,
+    0.02 + progress * 0.9,
+  );
+}
+
 const GREYBOX_COLOR: Record<"projectile" | "groundArea", [number, number, number]> = {
   projectile: [1.0, 0.9, 0.25], // yellow — ember bolt
   groundArea: [1.0, 0.42, 0.12], // ember — cinder ground disc
@@ -214,14 +270,26 @@ export function makeMesh(scene: Scene, kind: MeshKind, name: string): Mesh {
   // (shared materials, but geometry is not GPU-instanced). Fine for a lab-sized
   // fight; if a large imp swarm tanks FPS, build one template per kind and
   // clone/thin-instance it instead.
-  if (kind === "player" || kind === "monster" || kind === "rare") {
+  if (kind === "player" || kind === "monster" || kind === "rare" || kind === "boss") {
     const root = new Mesh(name, scene); // empty container; renderer positions this
     if (kind === "player") buildCaster(scene, root);
-    else if (kind === "monster") buildImp(scene, root, "imp", [0.36, 0.11, 0.07], 0.5, [1.0, 0.85, 0.2]);
-    else {
+    else if (kind === "boss") {
+      // Darker charcoal rock, hotter lava glow, bright near-white eye.
+      // Reuses rare_skin.png (boss_skin.png does not exist in public/textures/).
+      buildImp(scene, root, "boss", [0.18, 0.13, 0.11], 0.85, [1.0, 0.95, 0.8], "/textures/rare_skin.png");
+      root.scaling.setAll(2.6);
+    } else if (kind === "rare") {
       buildImp(scene, root, "rare", [0.42, 0.19, 0.06], 0.7, [1.0, 0.55, 0.15]);
       root.scaling.setAll(1.7); // elite: bigger than the common imp
+    } else {
+      buildImp(scene, root, "imp", [0.36, 0.11, 0.07], 0.5, [1.0, 0.85, 0.2]);
     }
+    return root;
+  }
+
+  if (kind === "telegraph") {
+    const root = new Mesh(name, scene);
+    buildTelegraph(scene, root);
     return root;
   }
 
@@ -235,10 +303,11 @@ export function makeMesh(scene: Scene, kind: MeshKind, name: string): Mesh {
     m.specularColor = new Color3(0, 0, 0);
     if (kind === "groundArea") m.alpha = 0.45; // see the floor through the disc
   }
+  // groundArea built at diameter=2 (radius=1); renderer scales x/z to entity.radius.
   const mesh =
     kind === "projectile"
       ? MeshBuilder.CreateSphere(name, { diameter: 0.3 }, scene)
-      : MeshBuilder.CreateCylinder(name, { diameter: 5, height: 0.1, tessellation: 24 }, scene);
+      : MeshBuilder.CreateCylinder(name, { diameter: 2, height: 0.1, tessellation: 24 }, scene);
   mesh.material = m;
   return mesh;
 }
