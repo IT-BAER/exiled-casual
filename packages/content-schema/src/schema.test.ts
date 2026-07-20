@@ -173,6 +173,82 @@ describe("validateMonsterDef", () => {
   });
 });
 
+describe("validateMonsterDef — boss field", () => {
+  const validBossMonster: MonsterDef = {
+    ...validMonster,
+    id: "monster.cinder_warden.v1",
+    boss: {
+      phase2AtLifePct: 50,
+      slam: {
+        windupTicks: 30,
+        radiusFixed: fp(3.5),
+        damageFixed: fp(28),
+        cooldownTicks: 150,
+        rangeFixed: fp(9),
+      },
+      phase2: {
+        fireGroundDurationTicks: 120,
+        addCount: 2,
+        addDefId: "monster.cinder_imp.v1",
+        cadenceMulPct: 70,
+      },
+    },
+  };
+
+  it("accepts a valid boss block", () => {
+    const r = validateMonsterDef(validBossMonster);
+    expect(r.ok).toBe(true);
+    expect(r.errors).toHaveLength(0);
+  });
+
+  it("a def with no boss field still passes (regression)", () => {
+    const r = validateMonsterDef(validMonster);
+    expect(r.ok).toBe(true);
+  });
+
+  it("rejects phase2AtLifePct: 0", () => {
+    const r = validateMonsterDef({
+      ...validBossMonster,
+      boss: { ...validBossMonster.boss!, phase2AtLifePct: 0 },
+    });
+    expect(r.ok).toBe(false);
+    expect(r.errors.some((e) => e.includes("boss.phase2AtLifePct"))).toBe(true);
+  });
+
+  it("rejects phase2AtLifePct: 101", () => {
+    const r = validateMonsterDef({
+      ...validBossMonster,
+      boss: { ...validBossMonster.boss!, phase2AtLifePct: 101 },
+    });
+    expect(r.ok).toBe(false);
+    expect(r.errors.some((e) => e.includes("boss.phase2AtLifePct"))).toBe(true);
+  });
+
+  it("rejects malformed boss.slam (windupTicks: -1)", () => {
+    const r = validateMonsterDef({
+      ...validBossMonster,
+      boss: {
+        ...validBossMonster.boss!,
+        slam: { ...validBossMonster.boss!.slam, windupTicks: -1 },
+      },
+    });
+    expect(r.ok).toBe(false);
+    expect(r.errors.some((e) => e.includes("boss.slam.windupTicks"))).toBe(true);
+  });
+
+  it("rejects boss.phase2.addDefId: 'not_an_id'", () => {
+    const r = validateMonsterDef({
+      ...validBossMonster,
+      boss: {
+        ...validBossMonster.boss!,
+        phase2: { ...validBossMonster.boss!.phase2, addDefId: "not_an_id" },
+      },
+    });
+    expect(r.ok).toBe(false);
+    expect(r.errors.some((e) => e.includes("boss.phase2.addDefId"))).toBe(true);
+  });
+});
+
 describe("Fixed field integer enforcement", () => {
   it("rejects fractional speedPerSecFixed in spawnProjectile", () => {
     const r = validateSkillDef({

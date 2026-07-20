@@ -116,4 +116,16 @@ describe("MONSTERS", () => {
     expect(def.defenses.fireResPct).toBe(0);
     expect(def.defenses.armourFixed).toBe(fp(0.5));          // 500
   });
+
+  it("cinder_warden is defined and has boss", () => {
+    const def = MONSTERS.get("monster.cinder_warden.v1");
+    expect(def).toBeDefined();
+    expect(def?.boss).toBeDefined();
+  });
+
+  it("cinder_warden boss.phase2.addDefId resolves in MONSTERS (referential integrity)", () => {
+    const def = MONSTERS.get("monster.cinder_warden.v1")!;
+    const addId = def.boss?.phase2.addDefId ?? "";
+    expect(MONSTERS.has(addId)).toBe(true);
+  });
 });

@@ -13,6 +13,22 @@ const MONSTER_DEFS: MonsterDef[] = [
     radiusFixed: fp(0.5),
     defenses: { fireResPct: 0, armourFixed: fp(0.5) },
   },
+  {
+    id: "monster.cinder_warden.v1",
+    name: "Cinder Warden",
+    maxLifeFixed: fp(750),
+    moveSpeedFixed: fp(1.8),
+    attackRangeFixed: fp(2.2),
+    attackDamage: { type: "physical", amountFixed: fp(10) },
+    attackCooldownTicks: 60,
+    radiusFixed: fp(1.4),
+    defenses: { fireResPct: 40, armourFixed: fp(3) },
+    boss: {
+      phase2AtLifePct: 50,
+      slam: { windupTicks: 30, radiusFixed: fp(3.5), damageFixed: fp(28), cooldownTicks: 150, rangeFixed: fp(9) },
+      phase2: { fireGroundDurationTicks: 120, addCount: 2, addDefId: "monster.cinder_imp.v1", cadenceMulPct: 70 },
+    },
+  },
 ];
 
 // Validate at module load — bad content is a programmer error, fail fast.

@@ -53,6 +53,23 @@ export interface RareModifier {
   addedFireResPct: number;
 }
 
+export interface BossSpec {
+  phase2AtLifePct: number;
+  slam: {
+    windupTicks: number;
+    radiusFixed: Fixed;
+    damageFixed: Fixed;
+    cooldownTicks: number;
+    rangeFixed: Fixed;
+  };
+  phase2: {
+    fireGroundDurationTicks: number;
+    addCount: number;
+    addDefId: string;
+    cadenceMulPct: number;
+  };
+}
+
 export interface MonsterDef {
   id: string;
   name: string;
@@ -63,6 +80,7 @@ export interface MonsterDef {
   attackCooldownTicks: number;
   radiusFixed: Fixed;
   defenses: Defenses;
+  boss?: BossSpec;
 }
 
 export interface ValidationResult {
@@ -235,5 +253,53 @@ export function validateMonsterDef(v: unknown): ValidationResult {
     }
   }
   validateDamageSpec(v["attackDamage"], "attackDamage", errors);
+  if (v["boss"] !== undefined) {
+    const b = v["boss"];
+    if (!isObj(b)) {
+      errors.push("boss: must be an object");
+    } else {
+      const pct = b["phase2AtLifePct"];
+      if (
+        typeof pct !== "number" ||
+        !Number.isInteger(pct) ||
+        pct < 1 ||
+        pct > 100
+      ) {
+        errors.push("boss.phase2AtLifePct: must be an integer in 1..100");
+      }
+      if (!isObj(b["slam"])) {
+        errors.push("boss.slam: must be an object");
+      } else {
+        const slam = b["slam"] as Record<string, unknown>;
+        for (const field of ["windupTicks", "radiusFixed", "damageFixed", "cooldownTicks", "rangeFixed"] as const) {
+          if (!isNonNegInt(slam[field])) {
+            errors.push(`boss.slam.${field}: must be a non-negative integer`);
+          }
+        }
+      }
+      if (!isObj(b["phase2"])) {
+        errors.push("boss.phase2: must be an object");
+      } else {
+        const p2 = b["phase2"] as Record<string, unknown>;
+        for (const field of ["fireGroundDurationTicks", "addCount"] as const) {
+          if (!isNonNegInt(p2[field])) {
+            errors.push(`boss.phase2.${field}: must be a non-negative integer`);
+          }
+        }
+        if (typeof p2["addDefId"] !== "string" || !ID_PATTERN.test(p2["addDefId"])) {
+          errors.push("boss.phase2.addDefId: must match ID_PATTERN");
+        }
+        const cmp = p2["cadenceMulPct"];
+        if (
+          typeof cmp !== "number" ||
+          !Number.isInteger(cmp) ||
+          cmp < 1 ||
+          cmp > 100
+        ) {
+          errors.push("boss.phase2.cadenceMulPct: must be an integer in 1..100");
+        }
+      }
+    }
+  }
   return { ok: errors.length === 0, errors };
 }
