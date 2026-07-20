@@ -22,7 +22,7 @@ describe("registerMonsterAI", () => {
       defId: "test", moveSpeed: fp(2), bodyRadius: fp(0.5),
       attackRange: fp(1.2), attackCooldownTicks: 45,
       attackDamage: fp(6), attackType: 1 as const,
-      attackReadyTick: 0, state: "idle", rare: 0 as const,
+      attackReadyTick: 0, state: "idle", rare: 0 as const, summoned: 0 as const,
     });
 
     const before = fpDist2(fp(10), fp(0), fp(0), fp(0));
@@ -50,7 +50,7 @@ describe("registerMonsterAI", () => {
       defId: "test", moveSpeed: fp(2), bodyRadius: fp(0.5),
       attackRange: fp(1.2), attackCooldownTicks: 45,
       attackDamage: fp(6), attackType: 1 as const,
-      attackReadyTick: 0, state: "idle", rare: 0 as const,
+      attackReadyTick: 0, state: "idle", rare: 0 as const, summoned: 0 as const,
     });
 
     // tick=0, attackReadyTick=0 → enqueue
@@ -74,7 +74,7 @@ describe("registerMonsterAI", () => {
       defId: "test", moveSpeed: fp(2), bodyRadius: fp(0.5),
       attackRange: fp(1.2), attackCooldownTicks: 45,
       attackDamage: fp(6), attackType: 1 as const,
-      attackReadyTick: 0, state: "chase", rare: 0 as const,
+      attackReadyTick: 0, state: "chase", rare: 0 as const, summoned: 0 as const,
     });
 
     sim.step();

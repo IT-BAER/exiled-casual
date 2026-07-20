@@ -47,7 +47,7 @@ describe("registerExpiry", () => {
     world.set(e, "groundArea", {
       radius: fp(2.5), expiryTick: 0, nextTick: 0,
       ailmentKind: "burning", stacksPerApply: 1,
-      dps: fp(8), ailmentDuration: 60, maxStacks: 5,
+      dps: fp(8), ailmentDuration: 60, maxStacks: 5, team: 0,
     });
     world.set(e, "position", { x: fp(0), y: fp(0) });
 
@@ -64,7 +64,7 @@ describe("registerExpiry", () => {
     world.set(e, "groundArea", {
       radius: fp(2.5), expiryTick: 90, nextTick: 0,
       ailmentKind: "burning", stacksPerApply: 1,
-      dps: fp(8), ailmentDuration: 60, maxStacks: 5,
+      dps: fp(8), ailmentDuration: 60, maxStacks: 5, team: 0,
     });
     world.set(e, "position", { x: fp(0), y: fp(0) });
 

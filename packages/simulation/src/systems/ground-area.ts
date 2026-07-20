@@ -1,7 +1,8 @@
 import { fpDist2 } from "@pact/fixed-point";
 import { refreshBurning, AILMENT_TICK_INTERVAL } from "@pact/rules";
 import { Simulation } from "../loop";
-import type { Position, MonsterC, GroundAreaC, AilmentC } from "../components";
+import { bodyRadiusOf } from "../body";
+import type { Position, Faction, GroundAreaC, AilmentC } from "../components";
 
 export function registerGroundAreaTick(sim: Simulation): void {
   sim.register("groundAreaTick", (world, tick) => {
@@ -11,10 +12,13 @@ export function registerGroundAreaTick(sim: Simulation): void {
 
       const aPos = world.get<Position>(ae, "position")!;
 
-      for (const m of world.query("position", "monster")) {
+      for (const m of world.query("position", "health", "faction")) {
+        const mFaction = world.get<Faction>(m, "faction")!;
+        if (mFaction.team === ga.team) continue;
+
         const mPos = world.get<Position>(m, "position")!;
-        const mMon = world.get<MonsterC>(m, "monster")!;
-        const threshold = ga.radius + mMon.bodyRadius;
+        const mRadius = bodyRadiusOf(world, m);
+        const threshold = ga.radius + mRadius;
         if (fpDist2(aPos.x, aPos.y, mPos.x, mPos.y) > threshold * threshold) continue;
 
         const prev = world.get<AilmentC>(m, "ailment");

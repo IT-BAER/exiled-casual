@@ -74,6 +74,7 @@ export function registerSkillCast(sim: Simulation, skills: ReadonlyMap<string, S
             dps: effect.ailment.dpsFixed,
             ailmentDuration: effect.ailment.durationTicks,
             maxStacks: effect.ailment.maxStacks,
+            team: casterTeam,
           });
         } else if (effect.type === "teleport") {
           const step = fpStepToward(pos.x, pos.y, tx, ty, effect.distanceFixed);

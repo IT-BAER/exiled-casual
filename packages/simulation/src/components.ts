@@ -27,6 +27,8 @@ export interface MonsterC {
   state: "idle" | "chase" | "attack";
   /** 1 = rare, 0 = normal */
   rare: 0 | 1;
+  /** 1 = boss add, 0 = normal spawn */
+  summoned: 0 | 1;
 }
 export interface DefensesC  { fireResPct: number; armour: Fixed }
 export interface ProjectileC {
@@ -49,6 +51,24 @@ export interface GroundAreaC {
   dps: Fixed;
   ailmentDuration: number;
   maxStacks: number;
+  /** team that OWNS this area; only entities on a different team are affected */
+  team: number;
+}
+export interface BossC {
+  phase: 1 | 2;
+  nextAbilityTick: number;
+  spawnX: Fixed; spawnY: Fixed;
+  rootedUntilTick: number;
+}
+export interface TelegraphC {
+  ownerId: Entity; team: number;
+  radius: Fixed;
+  startTick: number; impactTick: number;
+  damage: Fixed; damageType: 0 | 1;
+  leavesGroundTicks: number;
+}
+export interface CheckpointC {
+  x: Fixed; y: Fixed;
 }
 export interface AilmentC {
   kind: string;

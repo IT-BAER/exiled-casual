@@ -102,6 +102,7 @@ function spawnMonster(
     attackReadyTick: 0,
     state: "idle",
     rare: rare ? 1 : 0,
+    summoned: 0,
   });
   world.set<DefensesC>(e, "defenses", {
     fireResPct: def.defenses.fireResPct,

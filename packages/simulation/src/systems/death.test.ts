@@ -11,7 +11,7 @@ describe("registerDeath", () => {
 
     const m = world.create();
     world.set(m, "monster", { defId: "test", state: "idle", moveSpeed: 0, bodyRadius: 0,
-      attackRange: 0, attackCooldownTicks: 0, attackDamage: 0, attackType: 1, attackReadyTick: 0, rare: 0 });
+      attackRange: 0, attackCooldownTicks: 0, attackDamage: 0, attackType: 1, attackReadyTick: 0, rare: 0, summoned: 0 });
     world.set(m, "health", { life: 0, maxLife: fp(40) });
 
     sim.step();
@@ -65,7 +65,7 @@ describe("registerDeath", () => {
 
     const m = world.create();
     world.set(m, "monster", { defId: "test", state: "idle", moveSpeed: 0, bodyRadius: 0,
-      attackRange: 0, attackCooldownTicks: 0, attackDamage: 0, attackType: 1, attackReadyTick: 0, rare: 0 });
+      attackRange: 0, attackCooldownTicks: 0, attackDamage: 0, attackType: 1, attackReadyTick: 0, rare: 0, summoned: 0 });
     world.set(m, "health", { life: fp(1), maxLife: fp(40) });
 
     sim.step();
