@@ -26,7 +26,7 @@ export class WorkerCore {
   private pending: Intent[] = [];
 
   constructor(seed: number) {
-    const { sim, world, playerEntity } = createCombatSim(seed);
+    const { sim, world, playerEntity } = createCombatSim(seed, { boss: true });
     this.sim = sim;
     this.world = world;
     this.playerEntity = playerEntity;

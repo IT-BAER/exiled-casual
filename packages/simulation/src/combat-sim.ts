@@ -7,7 +7,7 @@ import { World } from "./ecs";
 import type { Entity } from "./ecs";
 import type {
   Position, Health, Mana, Faction, PlayerC, Cooldowns, DefensesC,
-  MoveTarget, MoveDir, MonsterC,
+  MoveTarget, MoveDir, MonsterC, BossC,
 } from "./components";
 import { registerResourceRegen } from "./systems/resource";
 import { registerSkillCast } from "./systems/skill-cast";
@@ -25,6 +25,7 @@ import { registerExpiry } from "./systems/expiry";
 // ponytail: _seed unused by Phase C2 systems; reserved for Phase C3 RNG-driven monster variance.
 export function createCombatSim(
   _seed: number,
+  opts: { boss?: boolean } = {},
 ): { sim: Simulation; world: World; playerEntity: Entity } {
   const sim = new Simulation();
   const { world } = sim;
@@ -82,6 +83,11 @@ export function createCombatSim(
   const rareDef = makeRare(impDef, RARE_TEMPLATE);
   spawnMonster(world, rareDef, fp(8), fp(8), true);
 
+  if (opts.boss) {
+    const wardenDef = MONSTERS.get("monster.cinder_warden.v1")!;
+    spawnMonster(world, wardenDef, fp(0), fp(12), false);
+  }
+
   return { sim, world, playerEntity };
 }
 
@@ -113,5 +119,14 @@ function spawnMonster(
     fireResPct: def.defenses.fireResPct,
     armour: def.defenses.armourFixed,
   });
+  if (def.boss) {
+    world.set<BossC>(e, "boss", {
+      phase: 1,
+      nextAbilityTick: 0,
+      spawnX: x,
+      spawnY: y,
+      rootedUntilTick: 0,
+    });
+  }
   return e;
 }

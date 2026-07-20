@@ -23,6 +23,15 @@ describe("WorkerCore", () => {
     expect(JSON.stringify(snapsA)).toBe(JSON.stringify(snapsB));
   });
 
+  it("WorkerCore (boss=true) snapshot after first tick contains 7 monster entities", () => {
+    // WorkerCore passes { boss: true } internally — 6 normal/rare imps + 1 cinder warden
+    const core = new WorkerCore(42);
+    core.advance(34); // one tick
+    const snap = core.snapshot()!;
+    const monsterCount = snap.entities.filter(e => e.kind === "monster").length;
+    expect(monsterCount).toBe(7);
+  });
+
   it("a pushed moveTo intent moves the player toward the target", () => {
     const core = new WorkerCore(42);
     // Player spawns at origin (0,0); target is +x/+y, so both coords must increase.

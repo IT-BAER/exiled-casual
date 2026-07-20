@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { checksumWorld } from "@pact/simulation";
 import { fp } from "@pact/fixed-point";
+import { MONSTERS } from "@pact/content-runtime";
 import { createCombatSim } from "./combat-sim";
+import type { BossC, MonsterC, Position } from "./components";
 
 describe("createCombatSim", () => {
   it("spawns exactly 1 player and 6 monsters (5 normal + 1 rare)", () => {
@@ -67,6 +69,40 @@ describe("createCombatSim", () => {
       return sums;
     };
     expect(run()).toEqual(run());
+  });
+
+  // ── Boss opt-in regression guard ─────────────────────────────────────────
+  it("default (no opts) spawns exactly 6 monsters and NO boss component", () => {
+    const { world } = createCombatSim(42);
+    expect(world.query("monster")).toHaveLength(6);
+    expect(world.query("boss")).toHaveLength(0);
+  });
+
+  it("opts.boss=true adds exactly one boss entity at (0,12) with correct defId and BossC", () => {
+    const { world } = createCombatSim(42, { boss: true });
+    const bossEntities = world.query("boss");
+    expect(bossEntities).toHaveLength(1);
+    const boss = bossEntities[0]!;
+
+    const mon = world.get<MonsterC>(boss, "monster")!;
+    expect(mon.defId).toBe("monster.cinder_warden.v1");
+
+    const pos = world.get<Position>(boss, "position")!;
+    expect(pos.x).toBe(fp(0));
+    expect(pos.y).toBe(fp(12));
+
+    const bc = world.get<BossC>(boss, "boss")!;
+    expect(bc.spawnX).toBe(fp(0));
+    expect(bc.spawnY).toBe(fp(12));
+    expect(bc.phase).toBe(1);
+  });
+
+  it("boss maxLife matches the real content def", () => {
+    const { world } = createCombatSim(42, { boss: true });
+    const boss = world.query("boss")[0]!;
+    const wardenDef = MONSTERS.get("monster.cinder_warden.v1")!;
+    const health = world.get<{ maxLife: number }>(boss, "health")!;
+    expect(health.maxLife).toBe(wardenDef.maxLifeFixed);
   });
 
   it("system registration order matches canonical spec", () => {
