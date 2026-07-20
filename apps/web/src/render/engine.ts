@@ -14,7 +14,7 @@ import {
 } from "@babylonjs/core";
 
 /** Half-height of the orthographic view in world units (smaller = more zoomed in). */
-const ORTHO_HALF_HEIGHT = 10;
+const ORTHO_HALF_HEIGHT = 7;
 
 /** Flagstone texture repeats across the 200u floor (25 → ~8u per tile). */
 const FLOOR_TILES = 25;
