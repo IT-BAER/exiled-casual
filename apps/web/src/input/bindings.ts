@@ -1,8 +1,20 @@
-import type { Intent, ToWorker } from "@pact/protocol";
+import type { Intent, SpawnKind, ToWorker } from "@pact/protocol";
 import { keyToIntent, pointerToWorld } from "./intents";
 import type { Scene } from "@babylonjs/core";
 
 // ponytail: thin DOM glue — all key→intent mapping lives in intents.ts
+
+/**
+ * Lab spawn keys. Keyed on `event.code`, not `event.key`: the numpad digits
+ * report the same `key` as the skill row, so only the code tells them apart.
+ */
+const SPAWN_KEYS: Record<string, SpawnKind> = {
+  Numpad1: "imp",
+  Numpad2: "pack",
+  Numpad3: "rare",
+  Numpad4: "boss",
+  Numpad0: "clear",
+};
 
 /**
  * Current aim in RAW world floats (sim x, sim y=Babylon z), updated on pointermove
@@ -22,6 +34,7 @@ export function attachBindings(
   canvas: HTMLCanvasElement,
   worker: Worker,
   scene: Scene,
+  onCycleOutfit?: () => void,
 ): () => void {
   // Movement keys currently held, oldest→newest. Needed so releasing one key
   // resumes another still-held direction, and releasing the last sends "stop".
@@ -45,10 +58,21 @@ export function attachBindings(
   }
 
   function onKeyDown(e: KeyboardEvent) {
+    // Checked before the skill row, which shares these keys' `key` values.
+    const spawn = SPAWN_KEYS[e.code];
+    if (spawn) {
+      worker.postMessage({ type: "spawn", what: spawn } satisfies ToWorker);
+      return;
+    }
     const k = e.key.toLowerCase();
     // r = lab respawn: fresh player + monsters back at their spawn ring
     if (k === "r") {
       worker.postMessage({ type: "reset" } satisfies ToWorker);
+      return;
+    }
+    // o = try on the next outfit. Render-only, the sim never hears about it.
+    if (k === "o") {
+      onCycleOutfit?.();
       return;
     }
     if (MOVE_KEYS.has(k) && !held.includes(k)) held.push(k);

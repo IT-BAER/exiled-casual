@@ -20,6 +20,8 @@ self.onmessage = (e: MessageEvent) => {
   } else if (msg.type === "intent" && core) {
     // isToWorker only checks intent is a non-null object — deep-validate its fields.
     core.pushIntent(validateIntent(msg.intent));
+  } else if (msg.type === "spawn" && core) {
+    core.spawn(msg.what);
   } else if (msg.type === "reset") {
     // seed preserved across reset is not in the protocol — recreate with seed 42
     // (lab default). Full seed-carry requires a ToWorker_Reset extension in M3+.

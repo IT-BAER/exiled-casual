@@ -72,4 +72,27 @@ describe("attachBindings hold-to-move", () => {
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "r", bubbles: true }));
     expect(worker.postMessage).toHaveBeenCalledWith({ type: "reset" });
   });
+
+  it("numpad keys post spawn messages", () => {
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "2", code: "Numpad2", bubbles: true }));
+    expect(worker.postMessage).toHaveBeenCalledWith({ type: "spawn", what: "pack" });
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "0", code: "Numpad0", bubbles: true }));
+    expect(worker.postMessage).toHaveBeenCalledWith({ type: "spawn", what: "clear" });
+  });
+
+  it("a numpad key never doubles as its skill-row twin", () => {
+    // Both report key "1"; only the code separates spawning from casting.
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "1", code: "Numpad1", bubbles: true }));
+    const casts = worker.postMessage.mock.calls.filter(
+      (c) => c[0]?.type === "intent" && c[0]?.intent?.kind === "useSkill",
+    );
+    expect(casts.length).toBe(0);
+
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "1", code: "Digit1", bubbles: true }));
+    expect(
+      worker.postMessage.mock.calls.filter(
+        (c) => c[0]?.type === "intent" && c[0]?.intent?.kind === "useSkill",
+      ).length,
+    ).toBe(1);
+  });
 });

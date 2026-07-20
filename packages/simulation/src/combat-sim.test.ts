@@ -27,7 +27,7 @@ describe("createCombatSim", () => {
     expect(faction.team).toBe(0);
 
     const player = world.get<{ moveSpeed: number; bodyRadius: number }>(playerEntity, "player")!;
-    expect(player.moveSpeed).toBe(Math.trunc(fp(3.5) / 30)); // 116
+    expect(player.moveSpeed).toBe(Math.trunc(fp(4.2) / 30)); // 140
     expect(player.bodyRadius).toBe(fp(0.5));
 
     const pos = world.get<{ x: number; y: number }>(playerEntity, "position")!;

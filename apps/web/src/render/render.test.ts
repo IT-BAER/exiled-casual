@@ -55,12 +55,14 @@ describe("SnapshotRenderer", () => {
     const s0 = makeSnapshot({ player: { id: 0, x: 0, y: 0, life: 100, maxLife: 100, mana: 60, maxMana: 60, cooldowns: {}, alive: true } });
     renderer.apply(null, s0, 1);
     const mesh = scene.getMeshByName("entity-0")!;
-    expect(mesh.rotation.y).toBe(0); // idle: no heading yet
+    // Spawned facing south (toward the camera), holding that until it moves.
+    expect(mesh.rotation.y).toBeCloseTo(Math.PI, 6);
 
-    // Move +x (world +x). Heading yaw = atan2(dx=5, dz=0) = PI/2, eased 0->PI/2 by 0.25.
+    // Move +x (world +x). Heading yaw = atan2(dx=5, dz=0) = PI/2; the shortest
+    // path from PI is -PI/2, eased by 0.25 → PI - PI/8.
     const s1 = makeSnapshot({ player: { id: 0, x: 5, y: 0, life: 100, maxLife: 100, mana: 60, maxMana: 60, cooldowns: {}, alive: true } });
     renderer.apply(s0, s1, 1);
-    expect(mesh.rotation.y).toBeCloseTo(Math.PI / 8, 4);
+    expect(mesh.rotation.y).toBeCloseTo(Math.PI - Math.PI / 8, 4);
   });
 
   it("swings a monster's legs while it walks and rests them when it stops", () => {

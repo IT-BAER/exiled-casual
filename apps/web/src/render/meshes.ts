@@ -6,6 +6,7 @@ import {
   Texture,
   type Scene,
 } from "@babylonjs/core";
+import { attachRig, rigOf, type RigParts } from "./rig";
 
 export type MeshKind = "player" | "monster" | "rare" | "boss" | "projectile" | "groundArea" | "telegraph";
 
@@ -100,7 +101,20 @@ interface ActorParts {
  * by wall time, so the legs always keep up with the feet and never skate.
  * Everything eases toward its target, which is what smooths the stop.
  */
-export function animateActor(root: Mesh, phase: number, moving: boolean): void {
+export function animateActor(
+  root: Mesh,
+  phase: number,
+  moving: boolean,
+  speed = 0,
+): void {
+  // A skinned actor runs authored clips instead of a limb swing, and picks the
+  // clip from its real ground speed rather than from the cycle phase.
+  const rig = rigOf(root);
+  if (rig) {
+    rig.setLocomotion(speed);
+    return;
+  }
+
   const parts = root.metadata as ActorParts | null;
   // Not every mesh with metadata is an actor — telegraphs park their materials
   // there too, so check for limbs rather than for metadata.
@@ -276,8 +290,13 @@ export function makeMesh(scene: Scene, kind: MeshKind, name: string): Mesh {
   // clone/thin-instance it instead.
   if (kind === "player" || kind === "monster" || kind === "rare" || kind === "boss") {
     const root = new Mesh(name, scene); // empty container; renderer positions this
-    if (kind === "player") buildCaster(scene, root);
-    else if (kind === "boss") {
+    if (kind === "player") {
+      // Skinned humanoid when its assets loaded; the primitive caster is the
+      // fallback for headless tests and for a failed model fetch.
+      const rig = attachRig(scene, root);
+      if (rig) root.metadata = { rig } satisfies RigParts;
+      else buildCaster(scene, root);
+    } else if (kind === "boss") {
       // Darker charcoal rock, hotter lava glow, bright near-white eye.
       // Reuses rare_skin.png (boss_skin.png does not exist in public/textures/).
       // Low emissive on purpose: the reference look is a dark silhouette with hot

@@ -17,7 +17,7 @@ export function baseCasterStats(): StatBlock {
     maxLifeFixed: fp(100),
     maxManaFixed: fp(60),
     manaRegenPerSecFixed: fp(6),
-    moveSpeedFixed: fp(3.5),
+    moveSpeedFixed: fp(4.2),
     fireResPct: 0,
     armourFixed: fp(0),
   };

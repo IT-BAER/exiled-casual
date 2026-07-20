@@ -16,10 +16,16 @@ export type CommandType = "moveTo" | "moveDir" | "useSkill" | "stop";
 // Worker message types (client → worker)
 // ---------------------------------------------------------------------------
 
+/** Lab-only spawn control, so a test arena can start empty and be filled on demand. */
+export type SpawnKind = "imp" | "pack" | "rare" | "boss" | "clear";
+
+export const SPAWN_KINDS: readonly SpawnKind[] = ["imp", "pack", "rare", "boss", "clear"];
+
 export interface ToWorker_Init   { type: "init"; seed: number }
 export interface ToWorker_Intent { type: "intent"; intent: Intent }
 export interface ToWorker_Reset  { type: "reset" }
-export type ToWorker = ToWorker_Init | ToWorker_Intent | ToWorker_Reset;
+export interface ToWorker_Spawn  { type: "spawn"; what: SpawnKind }
+export type ToWorker = ToWorker_Init | ToWorker_Intent | ToWorker_Reset | ToWorker_Spawn;
 
 // ---------------------------------------------------------------------------
 // Snapshot types (worker → client); coords are render floats (worker calls toNumber())
@@ -101,7 +107,7 @@ export function validateIntent(v: unknown): Intent {
   }
 }
 
-const TO_WORKER_TYPES = new Set(["init", "intent", "reset"]);
+const TO_WORKER_TYPES = new Set(["init", "intent", "reset", "spawn"]);
 
 // Structural type guard for ToWorker messages.
 export function isToWorker(v: unknown): v is ToWorker {
@@ -112,6 +118,7 @@ export function isToWorker(v: unknown): v is ToWorker {
     case "init":   return typeof obj["seed"] === "number";
     case "intent": return typeof obj["intent"] === "object" && obj["intent"] !== null;
     case "reset":  return true;
+    case "spawn":  return SPAWN_KINDS.includes(obj["what"] as SpawnKind);
     default:       return false;
   }
 }

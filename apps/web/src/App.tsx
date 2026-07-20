@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Engine, Vector3 } from "@babylonjs/core";
 import { createScene } from "./render/engine";
 import { SnapshotRenderer } from "./render/renderer";
+import { loadPlayerRig, resetPlayerRig } from "./render/rig";
 import { attachBindings } from "./input/bindings";
 import { Hud } from "./hud/Hud";
 import type { Snapshot, FromWorker } from "@pact/protocol";
@@ -44,7 +45,7 @@ export function App() {
     const { scene, camera } = createScene(engine);
     const renderer = new SnapshotRenderer(scene);
 
-    engine.runRenderLoop(() => {
+    const renderFrame = () => {
       if (!curSnap) return;
       // ponytail: float alpha for lerp — never fed into sim
       const alpha = Math.min(1, (performance.now() - prevTickTime) / MS_PER_TICK);
@@ -61,15 +62,27 @@ export function App() {
         true,
       );
       scene.render();
+    };
+
+    // Wait for the humanoid before the first frame, so the player is never built
+    // as a primitive actor and then swapped for a skinned one mid-run. A failed
+    // load resolves too and leaves the primitive fallback in place.
+    let unmounted = false;
+    void loadPlayerRig(scene).then(() => {
+      if (!unmounted) engine.runRenderLoop(renderFrame);
     });
 
     window.addEventListener("resize", () => engine.resize());
 
     // Input bindings (keydown, pointermove, click)
-    const detach = attachBindings(canvas, worker, scene);
+    const detach = attachBindings(canvas, worker, scene, () =>
+      renderer.cyclePlayerOutfit(),
+    );
 
     return () => {
+      unmounted = true;
       detach();
+      resetPlayerRig(); // containers belong to the scene we are about to dispose
       engine.dispose();
       worker.terminate();
     };

@@ -19,7 +19,7 @@ describe("baseCasterStats", () => {
     expect(s.maxLifeFixed).toBe(fp(100));        // 100000
     expect(s.maxManaFixed).toBe(fp(60));          // 60000
     expect(s.manaRegenPerSecFixed).toBe(fp(6));   // 6000
-    expect(s.moveSpeedFixed).toBe(fp(3.5));       // 3500
+    expect(s.moveSpeedFixed).toBe(fp(4.2));       // 4200
     expect(s.fireResPct).toBe(0);
     expect(s.armourFixed).toBe(fp(0));            // 0
   });

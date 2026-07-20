@@ -25,7 +25,7 @@ import { registerExpiry } from "./systems/expiry";
 // ponytail: _seed unused by Phase C2 systems; reserved for Phase C3 RNG-driven monster variance.
 export function createCombatSim(
   _seed: number,
-  opts: { boss?: boolean } = {},
+  opts: { boss?: boolean; monsters?: boolean } = {},
 ): { sim: Simulation; world: World; playerEntity: Entity } {
   const sim = new Simulation();
   const { world } = sim;
@@ -69,19 +69,24 @@ export function createCombatSim(
   world.set<MoveDir>(playerEntity, "moveDir", { dx: 0, dy: 0 });
 
   // ── Bootstrap monsters ────────────────────────────────────────────────────
-  const impDef = MONSTERS.get("monster.cinder_imp.v1")!;
+  // Default on: the golden replay scenarios anchor on this exact composition.
+  // The lab opts out and spawns on demand instead, so a model or an effect can
+  // be inspected without a pack chewing on the player.
+  if (opts.monsters !== false) {
+    const impDef = MONSTERS.get("monster.cinder_imp.v1")!;
 
-  const normalCoords: [number, number][] = [
-    [fp(5), fp(0)], [fp(-5), fp(0)],
-    [fp(0), fp(5)], [fp(0), fp(-5)],
-    [fp(6), fp(6)],
-  ];
-  for (const [x, y] of normalCoords) {
-    spawnMonster(world, impDef, x, y, false);
+    const normalCoords: [number, number][] = [
+      [fp(5), fp(0)], [fp(-5), fp(0)],
+      [fp(0), fp(5)], [fp(0), fp(-5)],
+      [fp(6), fp(6)],
+    ];
+    for (const [x, y] of normalCoords) {
+      spawnMonster(world, impDef, x, y, false);
+    }
+
+    const rareDef = makeRare(impDef, RARE_TEMPLATE);
+    spawnMonster(world, rareDef, fp(8), fp(8), true);
   }
-
-  const rareDef = makeRare(impDef, RARE_TEMPLATE);
-  spawnMonster(world, rareDef, fp(8), fp(8), true);
 
   if (opts.boss) {
     const wardenDef = MONSTERS.get("monster.cinder_warden.v1")!;
@@ -89,6 +94,53 @@ export function createCombatSim(
   }
 
   return { sim, world, playerEntity };
+}
+
+/**
+ * Ring offsets for a spawned pack. Literal fixed-point, not trig: the sim must
+ * never depend on an engine's Math.cos rounding.
+ */
+const PACK_RING: readonly [number, number][] = [
+  [fp(0), fp(6)],
+  [fp(5.7), fp(1.85)],
+  [fp(3.53), fp(-4.85)],
+  [fp(-3.53), fp(-4.85)],
+  [fp(-5.7), fp(1.85)],
+];
+
+/**
+ * Drop actors into a running world, on a ring around (cx, cy).
+ *
+ * Lab tooling, driven by a debug keybind. It mutates between ticks rather than
+ * inside a system, so it is deliberately not part of any recorded scenario —
+ * a replay that used it would not reproduce.
+ */
+export function spawnLabActors(
+  world: World,
+  kind: "imp" | "pack" | "rare" | "boss" | "clear",
+  cx: number,
+  cy: number,
+): void {
+  if (kind === "clear") {
+    for (const e of [...world.query("monster")]) world.destroy(e);
+    return;
+  }
+
+  const impDef = MONSTERS.get("monster.cinder_imp.v1")!;
+  switch (kind) {
+    case "imp":
+      spawnMonster(world, impDef, cx, cy + fp(6), false);
+      break;
+    case "pack":
+      for (const [dx, dy] of PACK_RING) spawnMonster(world, impDef, cx + dx, cy + dy, false);
+      break;
+    case "rare":
+      spawnMonster(world, makeRare(impDef, RARE_TEMPLATE), cx, cy + fp(7), true);
+      break;
+    case "boss":
+      spawnMonster(world, MONSTERS.get("monster.cinder_warden.v1")!, cx, cy + fp(10), false);
+      break;
+  }
 }
 
 function spawnMonster(

@@ -3,7 +3,27 @@ import type { Mesh } from "@babylonjs/core";
 import type { Snapshot, SnapshotEntity } from "@pact/protocol";
 import { animateActor, makeMesh, updateTelegraph, Y_LIFT } from "./meshes";
 import type { MeshKind } from "./meshes";
+import { OUTFITS, rigOf } from "./rig";
 import { lerp, lerpAngle } from "./interp";
+
+/** Sim rate. Consecutive snapshots are one tick apart, which is what turns a
+ *  position delta into a ground speed for the animation state machine. */
+const TICKS_PER_SEC = 30;
+
+/**
+ * Heading a freshly spawned actor holds until it first moves. South (-Z) faces
+ * the camera, so an actor that has not moved yet shows its front rather than
+ * its back — the difference between a usable screenshot and a shot of a hood.
+ */
+const SPAWN_YAW = Math.PI;
+
+/** True when any skill's cooldown jumped up, i.e. it was just cast. */
+function didCast(prev: Snapshot, next: Snapshot): boolean {
+  for (const [id, remaining] of Object.entries(next.player.cooldowns)) {
+    if (remaining > (prev.player.cooldowns[id] ?? 0)) return true;
+  }
+  return false;
+}
 
 function kindOf(e: SnapshotEntity): MeshKind {
   if (e.kind === "monster") {
@@ -22,9 +42,22 @@ export class SnapshotRenderer {
   /** Walk-cycle position per entity, advanced by distance walked (radians/unit). */
   private readonly gait = new Map<number, number>();
   private static readonly GAIT_PER_UNIT = 3.2;
+  /** apply() runs several times per snapshot while interpolating; once-per-tick
+   *  work (like firing a cast animation) is gated on this. */
+  private lastTick = -1;
+  private playerId: number | null = null;
 
   constructor(scene: Scene) {
     this.scene = scene;
+  }
+
+  /** Try on the next outfit. Render-only: the sim never hears about it. */
+  cyclePlayerOutfit(): void {
+    const mesh = this.playerId === null ? undefined : this.meshes.get(this.playerId);
+    const rig = mesh ? rigOf(mesh) : null;
+    if (!rig) return;
+    const next = OUTFITS[(OUTFITS.indexOf(rig.outfit) + 1) % OUTFITS.length]!;
+    rig.setOutfit(next);
   }
 
   apply(prev: Snapshot | null, next: Snapshot, alpha: number): void {
@@ -32,6 +65,7 @@ export class SnapshotRenderer {
     const liveIds = new Set<number>();
 
     // Player
+    this.playerId = next.player.id;
     liveIds.add(next.player.id);
     this.syncMesh(
       next.player.id,
@@ -63,12 +97,24 @@ export class SnapshotRenderer {
       }
     }
 
-    // Dispose meshes for entities that no longer exist
+    // Dispose meshes for entities that no longer exist. A rig owns scene-level
+    // animation groups that mesh.dispose() would leave behind.
     for (const [id, mesh] of this.meshes) {
       if (!liveIds.has(id)) {
+        rigOf(mesh)?.dispose();
         mesh.dispose();
         this.meshes.delete(id);
         this.gait.delete(id);
+      }
+    }
+
+    if (next.tick !== this.lastTick) {
+      this.lastTick = next.tick;
+      // A cooldown that just went up means a skill fired this tick — the only
+      // cast signal in the snapshot, and enough to drive the spell animation.
+      if (prev && didCast(prev, next)) {
+        const playerMesh = this.meshes.get(next.player.id);
+        if (playerMesh) rigOf(playerMesh)?.playCast();
       }
     }
   }
@@ -87,6 +133,7 @@ export class SnapshotRenderer {
     const fresh = !mesh;
     if (!mesh) {
       mesh = makeMesh(this.scene, kind, `entity-${id}`);
+      mesh.rotation.y = SPAWN_YAW;
       this.meshes.set(id, mesh);
     }
     const wasX = mesh.position.x;
@@ -109,7 +156,10 @@ export class SnapshotRenderer {
     const step = fresh ? 0 : Math.hypot(mesh.position.x - wasX, mesh.position.z - wasZ);
     const phase = (this.gait.get(id) ?? 0) + step * SnapshotRenderer.GAIT_PER_UNIT;
     this.gait.set(id, phase);
-    animateActor(mesh, phase, step > 1e-5);
+    // Ground speed comes from the snapshot delta, not the frame step: it is one
+    // tick's worth of movement regardless of how many frames render between.
+    const speed = Math.hypot(nextX - prevX, nextY - prevY) * TICKS_PER_SEC;
+    animateActor(mesh, phase, step > 1e-5, speed);
 
     // Turn the actor to face where it's heading (sim x,y -> world x,z). The
     // meshes are authored facing +z; yaw = atan2(dx, dz) aligns +z with the

@@ -2,9 +2,10 @@ import {
   createCombatSim,
   intentToCommand,
   buildSnapshot,
+  spawnLabActors,
 } from "@pact/simulation";
-import type { Simulation, World, Entity } from "@pact/simulation";
-import type { Intent, Snapshot } from "@pact/protocol";
+import type { Simulation, World, Entity, Position } from "@pact/simulation";
+import type { Intent, Snapshot, SpawnKind } from "@pact/protocol";
 import { CONTENT_VERSION } from "@pact/content-runtime";
 
 // Wall-clock pacing constant (client-side only) — never fed into the sim.
@@ -26,7 +27,9 @@ export class WorkerCore {
   private pending: Intent[] = [];
 
   constructor(seed: number) {
-    const { sim, world, playerEntity } = createCombatSim(seed, { boss: true });
+    // The lab starts empty. Monsters and the boss arrive on the numpad spawn
+    // keys, so a model, an animation, or an effect can be looked at in peace.
+    const { sim, world, playerEntity } = createCombatSim(seed, { monsters: false });
     this.sim = sim;
     this.world = world;
     this.playerEntity = playerEntity;
@@ -34,6 +37,12 @@ export class WorkerCore {
 
   pushIntent(intent: Intent): void {
     this.pending.push(intent);
+  }
+
+  /** Debug spawn, placed relative to wherever the player is standing. */
+  spawn(what: SpawnKind): void {
+    const p = this.world.get<Position>(this.playerEntity, "position");
+    spawnLabActors(this.world, what, p?.x ?? 0, p?.y ?? 0);
   }
 
   advance(dtMs: number): Snapshot[] {

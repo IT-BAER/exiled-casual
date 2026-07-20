@@ -3,6 +3,10 @@ import { WorkerCore } from "./worker-core";
 import type { Intent } from "@pact/protocol";
 import { fp } from "@pact/fixed-point";
 
+function monsters(core: WorkerCore) {
+  return core.snapshot()!.entities.filter((e) => e.kind === "monster");
+}
+
 // ponytail: determinism is the whole point — these three cases cover the contract
 describe("WorkerCore", () => {
   it("advance(100) from rest produces exactly 3 ticks (3 × ~33.33 ms ≤ 100 ms)", () => {
@@ -23,13 +27,29 @@ describe("WorkerCore", () => {
     expect(JSON.stringify(snapsA)).toBe(JSON.stringify(snapsB));
   });
 
-  it("WorkerCore (boss=true) snapshot after first tick contains 7 monster entities", () => {
-    // WorkerCore passes { boss: true } internally — 6 normal/rare imps + 1 cinder warden
+  it("starts with an empty arena so an actor can be inspected in peace", () => {
     const core = new WorkerCore(42);
     core.advance(34); // one tick
-    const snap = core.snapshot()!;
-    const monsterCount = snap.entities.filter(e => e.kind === "monster").length;
-    expect(monsterCount).toBe(7);
+    expect(monsters(core).length).toBe(0);
+  });
+
+  it("spawns on demand and clears again", () => {
+    const core = new WorkerCore(42);
+    core.advance(34);
+
+    core.spawn("pack");
+    core.advance(34);
+    expect(monsters(core).length).toBe(5);
+
+    core.spawn("boss");
+    core.advance(34);
+    const withBoss = monsters(core);
+    expect(withBoss.length).toBe(6);
+    expect(withBoss.some((e) => e.boss)).toBe(true);
+
+    core.spawn("clear");
+    core.advance(34);
+    expect(monsters(core).length).toBe(0);
   });
 
   it("a pushed moveTo intent moves the player toward the target", () => {

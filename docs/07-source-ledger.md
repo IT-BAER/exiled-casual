@@ -221,6 +221,22 @@ The official [developer docs](https://www.pathofexile.com/developer/docs) restri
 
 The PoE 2 Wiki footer states CC BY-NC 3.0 for wiki text, with game media often having separate rights. PoE2DB identifies a CC BY-NC-SA 3.0-style licence for its site data. Noncommercial and share-alike terms are not compatible with silently copying a database into a proprietary commercial game. Treat these as research references unless counsel confirms a specific permitted reuse.
 
+### Shipped third-party assets
+
+Assets that ship inside the product, as opposed to research references. Every row must carry a licence that permits commercial redistribution.
+
+| Asset | Source | Licence | Used as |
+|---|---|---|---|
+| `apps/web/public/models/anim-library.glb` | [Universal Animation Library](https://quaternius.com/packs/universalanimationlibrary.html) by Quaternius (Standard) | CC0 1.0 Universal | 45 humanoid clips on a 65-bone Unreal-named rig. Idle, walk, jog and spell-cast drive the player |
+| `apps/web/public/models/Male_Ranger.*`, `Male_Peasant.*`, `T_*.png` | [Modular Character Outfits - Fantasy](https://quaternius.com/packs/modularcharacteroutfitsfantasy.html) by Quaternius (Standard) | CC0 1.0 Universal | The player character and its swappable outfits, rigged to the same skeleton |
+
+CC0 is a public-domain dedication, so there is no attribution obligation and no share-alike clause; the credit above is courtesy, not a licence term. Neither pack is derived from any Path of Exile material.
+
+Preparation applied before check-in, reproducible from the untouched downloads:
+
+- The animation pack ships glTF only for Godot, and that export carries a Rigify `DEF-*` skeleton that does not match the outfits' Unreal-named one. The Unreal `AL_Standard.fbx` does match, so it was converted with [FBX2glTF](https://github.com/godotengine/FBX2glTF) v0.13.1 (Apache-2.0, a build tool, not shipped): `FBX2glTF --binary -i AL_Standard.fbx -o anim-library`.
+- Source textures are 4K PNGs up to 14 MB each. Downscaled to 512 px for base colour and 256 px for normal and ORM, which is generous for an actor about 150 px tall on screen. Total shipped model payload is ~7 MB, from ~300 MB of source.
+
 ### Clean-room classification
 
 | Material | Treatment |
