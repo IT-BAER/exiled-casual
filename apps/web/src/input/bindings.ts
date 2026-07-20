@@ -46,6 +46,11 @@ export function attachBindings(
 
   function onKeyDown(e: KeyboardEvent) {
     const k = e.key.toLowerCase();
+    // r = lab respawn: fresh player + monsters back at their spawn ring
+    if (k === "r") {
+      worker.postMessage({ type: "reset" } satisfies ToWorker);
+      return;
+    }
     if (MOVE_KEYS.has(k) && !held.includes(k)) held.push(k);
     const intent = keyToIntent(e.key, aimWorld);
     if (intent) post(intent);

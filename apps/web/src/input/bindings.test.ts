@@ -67,4 +67,9 @@ describe("attachBindings hold-to-move", () => {
     pointer("pointermove");
     expect(moveToCount(worker.postMessage)).toBe(0);
   });
+
+  it("r key posts a reset message", () => {
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "r", bubbles: true }));
+    expect(worker.postMessage).toHaveBeenCalledWith({ type: "reset" });
+  });
 });
