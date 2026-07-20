@@ -13,8 +13,10 @@ import { registerResourceRegen } from "./systems/resource";
 import { registerSkillCast } from "./systems/skill-cast";
 import { registerPlayerMovement } from "./systems/player-movement";
 import { registerMonsterAI } from "./systems/monster-ai";
+import { registerBossAI } from "./systems/boss-ai";
 import { registerProjectileMove } from "./systems/projectile";
 import { registerGroundAreaTick } from "./systems/ground-area";
+import { registerTelegraphResolve } from "./systems/telegraph-resolve";
 import { registerAilmentTick } from "./systems/ailment";
 import { registerDamageResolve } from "./systems/damage-resolve";
 import { registerDeath } from "./systems/death";
@@ -32,8 +34,11 @@ export function createCombatSim(
   registerSkillCast(sim, SKILLS);
   registerPlayerMovement(sim);
   registerMonsterAI(sim);
+  registerBossAI(sim, MONSTERS);
   registerProjectileMove(sim);
   registerGroundAreaTick(sim);
+  // Impacts land before damageResolve so a telegraph hits on its own impact tick.
+  registerTelegraphResolve(sim);
   registerAilmentTick(sim);
   registerDamageResolve(sim);
   registerDeath(sim);

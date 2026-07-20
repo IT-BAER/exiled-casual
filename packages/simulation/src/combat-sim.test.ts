@@ -72,8 +72,8 @@ describe("createCombatSim", () => {
   it("system registration order matches canonical spec", () => {
     const { sim } = createCombatSim(42);
     expect(sim.systemOrder()).toEqual([
-      "resourceRegen", "skillCast", "playerMovement", "monsterAI",
-      "projectileMove", "groundAreaTick", "ailmentTick",
+      "resourceRegen", "skillCast", "playerMovement", "monsterAI", "bossAI",
+      "projectileMove", "groundAreaTick", "telegraphResolve", "ailmentTick",
       "damageResolve", "death", "expiry",
     ]);
   });
