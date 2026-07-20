@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { Simulation } from "../loop";
 import { fp, fpDist2 } from "@pact/fixed-point";
-import type { Position, MonsterC, Faction, PlayerC } from "../components";
+import type { Position, MonsterC, Faction, PlayerC, BossC } from "../components";
 import { registerMonsterAI } from "./monster-ai";
 
 describe("registerMonsterAI", () => {
@@ -59,6 +59,36 @@ describe("registerMonsterAI", () => {
     expect(world.get<MonsterC>(m, "monster")!.state).toBe("attack");
     // attackReadyTick is now 0+45=45; tick 1 < 45 → no re-enqueue
     sim.step();
+    expect(sim.damageQueue).toHaveLength(0);
+  });
+
+  it("boss entity is skipped — registerMonsterAI does not move it", () => {
+    const sim = new Simulation();
+    registerMonsterAI(sim);
+    const { world } = sim;
+
+    const player = world.create();
+    world.set<Position>(player, "position", { x: fp(0), y: fp(0) });
+    world.set<Faction>(player, "faction", { team: 0 });
+    world.set<PlayerC>(player, "player", { moveSpeed: 0, bodyRadius: fp(0.5) });
+
+    const boss = world.create();
+    world.set<Position>(boss, "position", { x: fp(10), y: fp(0) });
+    world.set<Faction>(boss, "faction", { team: 1 });
+    world.set<MonsterC>(boss, "monster", {
+      defId: "boss.test", moveSpeed: fp(2), bodyRadius: fp(1),
+      attackRange: fp(1.5), attackCooldownTicks: 60,
+      attackDamage: fp(10), attackType: 1 as const,
+      attackReadyTick: 0, state: "idle", rare: 0 as const, summoned: 0 as const,
+    });
+    // Give it a boss component so the guard fires.
+    world.set<BossC>(boss, "boss", {
+      phase: 1, nextAbilityTick: 0, spawnX: fp(10), spawnY: fp(0), rootedUntilTick: 0,
+    });
+
+    sim.step();
+    // Position must be unchanged — monster-ai skipped this entity.
+    expect(world.get<Position>(boss, "position")).toEqual({ x: fp(10), y: fp(0) });
     expect(sim.damageQueue).toHaveLength(0);
   });
 

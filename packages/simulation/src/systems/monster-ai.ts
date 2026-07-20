@@ -10,6 +10,9 @@ export function registerMonsterAI(sim: Simulation): void {
       .filter((e) => (world.get<Faction>(e, "faction")?.team ?? -1) === 0);
 
     for (const m of world.query("monster", "position")) {
+      // Boss entities have their own system (boss-ai.ts); skip them here.
+      if (world.has(m, "boss")) continue;
+
       const mpos = world.get<Position>(m, "position")!;
       const mon = world.get<MonsterC>(m, "monster")!;
 
