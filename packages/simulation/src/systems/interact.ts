@@ -1,4 +1,5 @@
 import { MAP_PORTALS } from "@pact/protocol";
+import { offerWaystones, atlasNodes, WAYSTONE_OFFER_COUNT } from "@pact/rules";
 import { Simulation } from "../loop";
 import type { Position, InteractableC, SessionC } from "../components";
 import { spawnPortalRing } from "../areas";
@@ -12,6 +13,31 @@ export function registerInteractSystem(sim: Simulation): void {
     const sessionE = sessionEntities[0]!;
 
     for (const cmd of commands) {
+      // ── Map activation: pick a node + waystone from the preparation panel ──
+      if (cmd.type === "activateMap") {
+        const session = world.get<SessionC>(sessionE, "session")!;
+        if (session.mapOpen !== 0) continue;      // already open
+        if (session.area !== "hideout") continue; // only from the hideout device
+        const atlasNodeId = cmd.atlasNodeId;
+        const waystoneId = cmd.waystoneId;
+        if (!atlasNodeId || !waystoneId) continue;
+        if (!atlasNodes().some((n) => n.id === atlasNodeId)) continue;
+        if (session.completedNodes.includes(atlasNodeId)) continue;
+        const ws = offerWaystones(session.atlasSeed, WAYSTONE_OFFER_COUNT)
+          .find((w) => w.id === waystoneId);
+        if (!ws) continue;
+        world.set<SessionC>(sessionE, "session", {
+          ...session,
+          mapSeed: ws.seed,
+          areaTier: ws.tier,
+          activeNodeId: atlasNodeId,
+          portalsLeft: MAP_PORTALS,
+          mapOpen: 1,
+        });
+        spawnPortalRing(world, MAP_PORTALS);
+        continue;
+      }
+
       if (cmd.type !== "interact" || cmd.entity === undefined) continue;
 
       const targetId = cmd.data?.["targetId"];
@@ -33,13 +59,9 @@ export function registerInteractSystem(sim: Simulation): void {
       const session = world.get<SessionC>(sessionE, "session")!;
 
       if (ia.kind === "mapDevice") {
-        if (session.mapOpen !== 0) continue; // already open, no-op
-        world.set<SessionC>(sessionE, "session", {
-          ...session,
-          mapOpen: 1,
-          portalsLeft: MAP_PORTALS,
-        });
-        spawnPortalRing(world, MAP_PORTALS);
+        // The device no longer auto-opens; the client opens the preparation
+        // panel and sends activateMap. A device click is now a no-op.
+        continue;
       } else if (ia.kind === "portal") {
         world.set<SessionC>(sessionE, "session", {
           ...session,

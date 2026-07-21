@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { fp } from "@pact/fixed-point";
+import { offerWaystones, WAYSTONE_OFFER_COUNT } from "@pact/rules";
+import { MAP_PORTALS } from "@pact/protocol";
 import { Simulation } from "../loop";
 import { registerInteractSystem } from "./interact";
 import type { SessionC, Position, InteractableC } from "../components";
@@ -36,36 +38,58 @@ function interactCmd(player: number, targetId: number) {
   return { tick: 0, entity: player, type: "interact", data: { targetId } };
 }
 
+function activateCmd(player: number, atlasNodeId: string, waystoneId: string) {
+  return { tick: 0, entity: player, type: "activateMap", atlasNodeId, waystoneId };
+}
+
 describe("registerInteractSystem", () => {
-  it("in-range click on map device opens the map: mapOpen=1, portalsLeft=6, six portals created", () => {
-    const { sim, world, player, sessionE, device } = makeWorld();
-    // Player is at device position → d2=0 ≤ r2 → in range.
-    sim.step([interactCmd(player, device)]);
+  it("activateMap opens the chosen waystone's map: sets seed/tier/node, six portals", () => {
+    const { sim, world, player, sessionE } = makeWorld();
+    const ws = offerWaystones(0, WAYSTONE_OFFER_COUNT)[0]!;
+
+    sim.step([activateCmd(player, "node.ashen_glade", ws.id)]);
 
     const session = world.get<SessionC>(sessionE, "session")!;
     expect(session.mapOpen).toBe(1);
-    expect(session.portalsLeft).toBe(6);
-    expect(world.query("interactable").filter(e =>
+    expect(session.mapSeed).toBe(ws.seed);
+    expect(session.areaTier).toBe(ws.tier);
+    expect(session.activeNodeId).toBe("node.ashen_glade");
+    expect(session.portalsLeft).toBe(MAP_PORTALS);
+    expect(world.query("interactable").filter((e) =>
       world.get<InteractableC>(e, "interactable")!.kind === "portal",
-    )).toHaveLength(6);
+    )).toHaveLength(MAP_PORTALS);
   });
 
-  it("clicking the device again while already open is a no-op", () => {
-    const { sim, world, player, sessionE, device } = makeWorld();
-    // Open the map first.
-    sim.step([interactCmd(player, device)]);
-    const portalsBefore = world.query("interactable").filter(e =>
-      world.get<InteractableC>(e, "interactable")!.kind === "portal",
-    ).length;
+  it("activateMap is rejected for an unknown node", () => {
+    const { sim, world, player, sessionE } = makeWorld();
+    const ws = offerWaystones(0, WAYSTONE_OFFER_COUNT)[0]!;
+    sim.step([activateCmd(player, "node.nope", ws.id)]);
+    expect(world.get<SessionC>(sessionE, "session")!.mapOpen).toBe(0);
+  });
 
-    // Second click.
-    sim.step([interactCmd(player, device)]);
-    const portalsAfter = world.query("interactable").filter(e =>
-      world.get<InteractableC>(e, "interactable")!.kind === "portal",
-    ).length;
+  it("activateMap is rejected for a waystone not in the offers", () => {
+    const { sim, world, player, sessionE } = makeWorld();
+    sim.step([activateCmd(player, "node.ashen_glade", "ws-999")]);
+    expect(world.get<SessionC>(sessionE, "session")!.mapOpen).toBe(0);
+  });
 
-    expect(portalsAfter).toBe(portalsBefore); // no additional portals spawned
-    expect(world.get<SessionC>(sessionE, "session")!.portalsLeft).toBe(6);
+  it("activateMap is a no-op when a map is already open", () => {
+    const { sim, world, player, sessionE } = makeWorld();
+    const ws = offerWaystones(0, WAYSTONE_OFFER_COUNT)[0]!;
+    sim.step([activateCmd(player, "node.ashen_glade", ws.id)]); // open once
+    const seedAfterFirst = world.get<SessionC>(sessionE, "session")!.mapSeed;
+    const ws2 = offerWaystones(0, WAYSTONE_OFFER_COUNT)[1]!;
+    sim.step([activateCmd(player, "node.emberfall", ws2.id)]); // ignored
+    expect(world.get<SessionC>(sessionE, "session")!.mapSeed).toBe(seedAfterFirst);
+  });
+
+  it("activateMap is rejected for an already-completed node", () => {
+    const { sim, world, player, sessionE } = makeWorld();
+    const s = world.get<SessionC>(sessionE, "session")!;
+    world.set<SessionC>(sessionE, "session", { ...s, completedNodes: ["node.ashen_glade"] });
+    const ws = offerWaystones(0, WAYSTONE_OFFER_COUNT)[0]!;
+    sim.step([activateCmd(player, "node.ashen_glade", ws.id)]);
+    expect(world.get<SessionC>(sessionE, "session")!.mapOpen).toBe(0);
   });
 
   it("out-of-range click on map device is ignored (trust boundary)", () => {
