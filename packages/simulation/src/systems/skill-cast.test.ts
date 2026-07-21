@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import { fp } from "@pact/fixed-point";
 import { Simulation } from "../loop";
 import { registerSkillCast } from "./skill-cast";
+import { gridCollision } from "../collision";
+import { makeGrid } from "../test-grid";
 import type { SkillDef } from "@pact/content-schema";
 import type { Position, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC, CastingC } from "../components";
 
@@ -170,5 +172,27 @@ describe("registerSkillCast", () => {
     // aim is fp(10) away; blink distance is fp(5) — should land at fp(5), y=0
     expect(pos.x).toBe(fp(5));
     expect(pos.y).toBe(0);
+  });
+
+  it("blink will not land inside a wall — shortens to the nearest walkable point", () => {
+    // Floor on cx0..3, wall on cx4..7. A full fp(5) blink would land at cx5 (wall).
+    const collision = gridCollision(
+      makeGrid([
+        "....####",
+        "....####",
+        "....####",
+      ]),
+    );
+    const sim = new Simulation();
+    registerSkillCast(sim, ALL_SKILLS, collision);
+    const caster = makeCaster(sim, fp(60));
+    sim.step([{
+      tick: 0, entity: caster, type: "useSkill",
+      skillId: "skill.blink.v1", data: { tx: fp(10), ty: 0 },
+    }]);
+    const pos = sim.world.get<Position>(caster, "position")!;
+    expect(pos.x).toBeGreaterThan(0);      // it did move
+    expect(pos.x).toBeLessThan(fp(4));     // but stopped short of the wall
+    expect(collision.isWalkable(pos.x, pos.y, 0)).toBe(true);
   });
 });

@@ -1,7 +1,7 @@
 import { fp, fpDist2, fpStepToward } from "@pact/fixed-point";
 import type { MonsterDef } from "@pact/content-schema";
 import { Simulation } from "../loop";
-import { clampToArena } from "../movement";
+import { slide, type Collision } from "../collision";
 import { spawnMonster } from "../areas";
 import type { Position, MonsterC, Faction, BossC, TelegraphC, Health } from "../components";
 
@@ -20,6 +20,7 @@ const SUMMON_RING: readonly { dx: number; dy: number }[] = [
 export function registerBossAI(
   sim: Simulation,
   monsters: ReadonlyMap<string, MonsterDef>,
+  collision?: Collision,
 ): void {
   sim.register("bossAI", (world, tick) => {
     for (const e of world.query("boss", "monster", "position", "faction")) {
@@ -51,7 +52,13 @@ export function registerBossAI(
           const n = Math.min(phase2.addCount, SUMMON_RING.length);
           for (let i = 0; i < n; i++) {
             const slot = SUMMON_RING[i]!;
-            const spot = clampToArena(bpos.x + slot.dx, bpos.y + slot.dy, addDef.radiusFixed);
+            // Keep the add on walkable ground: fall back to the boss's own cell
+            // (always walkable — it is standing there) if the ring slot is a wall.
+            const sx = bpos.x + slot.dx;
+            const sy = bpos.y + slot.dy;
+            const spot = collision && !collision.isWalkable(sx, sy, addDef.radiusFixed)
+              ? { x: bpos.x, y: bpos.y }
+              : { x: sx, y: sy };
             const imp = spawnMonster(world, addDef, spot.x, spot.y, false);
             world.set<MonsterC>(imp, "monster", { ...world.get<MonsterC>(imp, "monster")!, summoned: 1 });
           }
@@ -105,7 +112,7 @@ export function registerBossAI(
         continue;
       }
 
-      // 3. Chase / melee — mirrors monster-ai.ts exactly, with arena clamp.
+      // 3. Chase / melee — mirrors monster-ai.ts exactly, sliding on collision.
       const ar = mon.attackRange;
       if (dist2 <= ar * ar) {
         let { attackReadyTick } = mon;
@@ -121,8 +128,10 @@ export function registerBossAI(
         world.set<MonsterC>(e, "monster", { ...mon, state: "attack", attackReadyTick });
       } else {
         const { dx, dy } = fpStepToward(bpos.x, bpos.y, ppos.x, ppos.y, mon.moveSpeed);
-        const clamped = clampToArena(bpos.x + dx, bpos.y + dy, mon.bodyRadius);
-        world.set<Position>(e, "position", clamped);
+        const moved = collision
+          ? slide(collision, bpos.x, bpos.y, dx, dy, mon.bodyRadius)
+          : { x: bpos.x + dx, y: bpos.y + dy };
+        world.set<Position>(e, "position", moved);
         world.set<MonsterC>(e, "monster", { ...mon, state: "chase" });
       }
     }

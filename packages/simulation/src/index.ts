@@ -5,7 +5,9 @@ export type { Entity } from "./ecs";
 export { serializeWorld, checksumWorld } from "./checksum";
 export { Simulation } from "./loop";
 export type { Command, System } from "./loop";
-export { WORLD_MIN, WORLD_MAX, ARENA_RADIUS, clampToArena, registerMovement } from "./movement";
+export { WORLD_MIN, WORLD_MAX, ARENA_RADIUS, registerMovement } from "./movement";
+export { gridCollision, slide } from "./collision";
+export type { Collision } from "./collision";
 export { bodyRadiusOf } from "./body";
 export type {
   Position, Health, Mana, Faction, PlayerC, MoveTarget, MoveDir,

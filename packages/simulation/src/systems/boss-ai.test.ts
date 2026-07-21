@@ -6,7 +6,8 @@ import { Simulation } from "../loop";
 import { World } from "../ecs";
 import type { Position, MonsterC, Faction, PlayerC, BossC, TelegraphC, Health } from "../components";
 import { registerBossAI } from "./boss-ai";
-import { ARENA_RADIUS } from "../movement";
+import { gridCollision } from "../collision";
+import { makeGrid } from "../test-grid";
 
 // Minimal boss fixture — does NOT import real content (except the integration test below).
 const SLAM_RANGE = fp(9);
@@ -209,30 +210,37 @@ describe("registerBossAI", () => {
     // (player is fp(12) away, attack range fp(1.5), so state = chase)
   });
 
-  it("boss respects arena wall — clamped inside ARENA_RADIUS", () => {
+  it("chasing boss is blocked by a wall in collision", () => {
+    // Wall column at cx=3 (world x=3); boss on the left, player on the right.
+    const collision = gridCollision(
+      makeGrid([
+        "...#...",
+        "...#...",
+        "...#...",
+        "...#...",
+        "...#...",
+      ]),
+    );
     const sim = new Simulation();
-    registerBossAI(sim, testMonsters);
+    registerBossAI(sim, testMonsters, collision);
     const { world } = sim;
 
-    // Player far in the opposite direction; boss starts outside arena
-    makePlayerEntity(world, fp(-5), fp(0));
-    const boss = makeBossEntity(world, fp(20), fp(0)); // fp(20) > ARENA_RADIUS fp(14)
-    // Prevent slam
+    makePlayerEntity(world, fp(5), fp(2));
+    const boss = makeBossEntity(world, fp(1), fp(2));
+    // Prevent slam so the boss takes the chase branch.
     world.set<BossC>(boss, "boss", {
       phase: 1,
       nextAbilityTick: 9999,
-      spawnX: fp(20),
-      spawnY: fp(0),
+      spawnX: fp(1),
+      spawnY: fp(2),
       rootedUntilTick: 0,
     });
 
-    sim.step();
+    for (let i = 0; i < 5; i++) sim.step();
 
+    // The boss can never cross the wall to reach the player's side.
     const pos = world.get<Position>(boss, "position")!;
-    const bodyRadius = fp(1);
-    const limit = ARENA_RADIUS - bodyRadius;
-    // Squared distance from center must be <= limit²
-    expect(fpDist2(0, 0, pos.x, pos.y)).toBeLessThanOrEqual(limit * limit);
+    expect(pos.x).toBeLessThan(fp(3));
   });
 
   it("real cinder_warden content drives the system end to end", () => {

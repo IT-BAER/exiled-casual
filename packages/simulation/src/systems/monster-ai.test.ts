@@ -3,6 +3,8 @@ import { Simulation } from "../loop";
 import { fp, fpDist2 } from "@pact/fixed-point";
 import type { Position, MonsterC, Faction, PlayerC, BossC } from "../components";
 import { registerMonsterAI } from "./monster-ai";
+import { gridCollision } from "../collision";
+import { makeGrid } from "../test-grid";
 
 describe("registerMonsterAI", () => {
   it("monster far from player chases — squared distance strictly decreases", () => {
@@ -111,5 +113,41 @@ describe("registerMonsterAI", () => {
     expect(world.get<MonsterC>(m, "monster")!.state).toBe("idle");
     expect(world.get<Position>(m, "position")).toEqual({ x: fp(5), y: fp(3) });
     expect(sim.damageQueue).toHaveLength(0);
+  });
+
+  it("a chasing monster is blocked by a wall in collision", () => {
+    // Wall column at cx=3; monster on the left, player on the right.
+    const collision = gridCollision(
+      makeGrid([
+        "...#...",
+        "...#...",
+        "...#...",
+        "...#...",
+        "...#...",
+      ]),
+    );
+    const sim = new Simulation();
+    registerMonsterAI(sim, collision);
+    const { world } = sim;
+
+    const player = world.create();
+    world.set<Position>(player, "position", { x: fp(5), y: fp(2) });
+    world.set<Faction>(player, "faction", { team: 0 });
+    world.set<PlayerC>(player, "player", { moveSpeed: 0, bodyRadius: fp(0.5) });
+
+    const m = world.create();
+    world.set<Position>(m, "position", { x: fp(1), y: fp(2) });
+    world.set<Faction>(m, "faction", { team: 1 });
+    world.set<MonsterC>(m, "monster", {
+      defId: "test", moveSpeed: fp(2), bodyRadius: 0,
+      attackRange: fp(1.2), attackCooldownTicks: 45,
+      attackDamage: fp(6), attackType: 1 as const,
+      attackReadyTick: 0, state: "idle", rare: 0 as const, summoned: 0 as const,
+    });
+
+    for (let i = 0; i < 5; i++) sim.step();
+    // Never crosses the wall to reach the player's side.
+    expect(world.get<Position>(m, "position")!.x).toBeLessThan(fp(3));
+    expect(world.get<MonsterC>(m, "monster")!.state).toBe("chase");
   });
 });

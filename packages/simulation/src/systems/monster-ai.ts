@@ -1,9 +1,10 @@
 import { fpDist2, fpStepToward, fpClamp } from "@pact/fixed-point";
 import { WORLD_MIN, WORLD_MAX } from "../movement";
+import { slide, type Collision } from "../collision";
 import { Simulation } from "../loop";
 import type { Position, MonsterC, Faction } from "../components";
 
-export function registerMonsterAI(sim: Simulation): void {
+export function registerMonsterAI(sim: Simulation, collision?: Collision): void {
   sim.register("monsterAI", (world, tick) => {
     const players = world
       .query("player", "faction", "position")
@@ -52,9 +53,12 @@ export function registerMonsterAI(sim: Simulation): void {
         world.set<MonsterC>(m, "monster", { ...mon, state: "attack", attackReadyTick });
       } else {
         const { dx, dy } = fpStepToward(mpos.x, mpos.y, ppos.x, ppos.y, mon.moveSpeed);
+        const moved = collision
+          ? slide(collision, mpos.x, mpos.y, dx, dy, mon.bodyRadius)
+          : { x: mpos.x + dx, y: mpos.y + dy };
         world.set<Position>(m, "position", {
-          x: fpClamp(mpos.x + dx, WORLD_MIN, WORLD_MAX),
-          y: fpClamp(mpos.y + dy, WORLD_MIN, WORLD_MAX),
+          x: fpClamp(moved.x, WORLD_MIN, WORLD_MAX),
+          y: fpClamp(moved.y, WORLD_MIN, WORLD_MAX),
         });
         world.set<MonsterC>(m, "monster", { ...mon, state: "chase" });
       }

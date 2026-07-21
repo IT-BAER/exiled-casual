@@ -158,9 +158,13 @@ No new message type. The HUD finds the boss with `entities.find(e => e.boss)`.
       walkableArea, validationChecks, hash }` per spec §5). Deterministic fallback template
       when validation fails. Tests: same seed → same hash, 200 seeds all pass the reachability
       BFS + min-corridor-width + spawn-budget gates, fallback is deterministic.
-- [ ] **C2 — sim collision.** `registerPlayerMovement/MonsterAI/BossAI(sim, collision?)`;
-      axis-separated slide against the walkable grid; `clampToArena` retired.
-      Tests: cannot walk through a wall, slides along it, doors are passable.
+- [x] **C2 — sim collision.** `registerPlayerMovement/MonsterAI/BossAI(sim, collision?)` +
+      `registerSkillCast(sim, skills, collision?)`; axis-separated `slide` against the walkable
+      grid (`collision.ts`: `Collision`/`gridCollision`/`slide`); Blink shortens to the nearest
+      walkable point; phase-2 summons stay on walkable ground; `clampToArena` retired (movement is
+      world-bounded without a map, collision-bounded with one). combat-sim still passes no collision
+      (C4 wires it). Goldens unchanged — actors never crossed the old r=14. Tests: wall block +
+      slide + door per system, Blink clamp.
 - [ ] **C3 — transport + render.** Worker sends the layout once (`FromWorker` `"area"`);
       renderer builds floor + wall meshes from it. Tests: message round-trip, wall mesh count.
 - [ ] **C4 — wiring.** `createCombatSim(seed)` generates the area, places the player at the

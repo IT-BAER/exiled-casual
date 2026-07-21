@@ -1,12 +1,13 @@
 import { fpClamp, fpStepToward } from "@pact/fixed-point";
 import { Simulation } from "../loop";
-import { WORLD_MIN, WORLD_MAX, clampToArena } from "../movement";
+import { WORLD_MIN, WORLD_MAX } from "../movement";
+import { slide, type Collision } from "../collision";
 import type { Position, PlayerC, MoveTarget, MoveDir, CastingC } from "../components";
 
 /** Player moves at this percent of moveSpeed during post-cast recovery. */
 export const CASTING_MOVE_PCT = 40;
 
-export function registerPlayerMovement(sim: Simulation): void {
+export function registerPlayerMovement(sim: Simulation, collision?: Collision): void {
   sim.register("playerMovement", (world, tick, commands) => {
     // 1. Apply commands to moveTarget / moveDir components.
     for (const cmd of commands) {
@@ -35,44 +36,47 @@ export function registerPlayerMovement(sim: Simulation): void {
       const moveDir = world.get<MoveDir>(e, "moveDir");
       const moveTarget = world.get<MoveTarget>(e, "moveTarget");
 
-      let nx = pos.x;
-      let ny = pos.y;
-
       // Post-cast recovery slows the player; effect already fired on the cast tick.
       const casting = world.get<CastingC>(e, "casting");
       const speed = casting && casting.untilTick > tick
         ? Math.trunc(player.moveSpeed * CASTING_MOVE_PCT / 100)
         : player.moveSpeed;
 
+      // Intended movement delta for this tick.
+      let ddx = 0;
+      let ddy = 0;
       const dirActive = moveDir && (moveDir.dx !== 0 || moveDir.dy !== 0);
       if (dirActive && moveDir) {
         if (moveDir.dx !== 0 && moveDir.dy !== 0) {
           // ponytail: 707/1000 approximates 1/sqrt(2) in integer math
           const diagSpeed = Math.trunc(speed * 707 / 1000);
-          nx += moveDir.dx * diagSpeed;
-          ny += moveDir.dy * diagSpeed;
+          ddx = moveDir.dx * diagSpeed;
+          ddy = moveDir.dy * diagSpeed;
         } else {
-          nx += moveDir.dx * speed;
-          ny += moveDir.dy * speed;
+          ddx = moveDir.dx * speed;
+          ddy = moveDir.dy * speed;
         }
       } else if (moveTarget?.active === 1) {
         const step = fpStepToward(pos.x, pos.y, moveTarget.x, moveTarget.y, speed);
-        nx += step.dx;
-        ny += step.dy;
-        // snap: if new position equals target, deactivate
-        const cnx = fpClamp(nx, WORLD_MIN, WORLD_MAX);
-        const cny = fpClamp(ny, WORLD_MIN, WORLD_MAX);
-        if (cnx === moveTarget.x && cny === moveTarget.y) {
-          world.set<MoveTarget>(e, "moveTarget", { x: moveTarget.x, y: moveTarget.y, active: 0 });
-        }
+        ddx = step.dx;
+        ddy = step.dy;
       }
 
-      const clamped = clampToArena(
-        fpClamp(nx, WORLD_MIN, WORLD_MAX),
-        fpClamp(ny, WORLD_MIN, WORLD_MAX),
-        player.bodyRadius,
-      );
-      world.set<Position>(e, "position", clamped);
+      // Resolve against level collision (slide along walls) when a map is loaded;
+      // otherwise the actor is bounded only by the world extent.
+      const moved = collision
+        ? slide(collision, pos.x, pos.y, ddx, ddy, player.bodyRadius)
+        : { x: pos.x + ddx, y: pos.y + ddy };
+      const resolved = {
+        x: fpClamp(moved.x, WORLD_MIN, WORLD_MAX),
+        y: fpClamp(moved.y, WORLD_MIN, WORLD_MAX),
+      };
+
+      // Deactivate the move target once we actually reach it.
+      if (moveTarget?.active === 1 && resolved.x === moveTarget.x && resolved.y === moveTarget.y) {
+        world.set<MoveTarget>(e, "moveTarget", { x: moveTarget.x, y: moveTarget.y, active: 0 });
+      }
+      world.set<Position>(e, "position", resolved);
     }
   });
 }

@@ -2,9 +2,14 @@ import { fpClamp, fpStepToward } from "@pact/fixed-point";
 import type { SkillDef } from "@pact/content-schema";
 import { Simulation } from "../loop";
 import { WORLD_MIN, WORLD_MAX } from "../movement";
-import type { Position, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC, CastingC } from "../components";
+import { type Collision } from "../collision";
+import type { Position, PlayerC, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC, CastingC } from "../components";
 
-export function registerSkillCast(sim: Simulation, skills: ReadonlyMap<string, SkillDef>): void {
+export function registerSkillCast(
+  sim: Simulation,
+  skills: ReadonlyMap<string, SkillDef>,
+  collision?: Collision,
+): void {
   sim.register("skillCast", (world, tick, commands) => {
     for (const cmd of commands) {
       if (cmd.type !== "useSkill" || cmd.entity === undefined || !cmd.skillId) continue;
@@ -84,9 +89,23 @@ export function registerSkillCast(sim: Simulation, skills: ReadonlyMap<string, S
           });
         } else if (effect.type === "teleport") {
           const step = fpStepToward(pos.x, pos.y, tx, ty, effect.distanceFixed);
+          let dx = step.dx;
+          let dy = step.dy;
+          if (collision) {
+            // Blink must not land inside a wall: shorten the hop along its own
+            // vector to the farthest walkable point, or stay put if none is.
+            const body = world.get<PlayerC>(caster, "player")?.bodyRadius ?? 0;
+            dx = 0;
+            dy = 0;
+            for (const [num, den] of [[1, 1], [3, 4], [1, 2], [1, 4]] as const) {
+              const cx = pos.x + Math.trunc((step.dx * num) / den);
+              const cy = pos.y + Math.trunc((step.dy * num) / den);
+              if (collision.isWalkable(cx, cy, body)) { dx = cx - pos.x; dy = cy - pos.y; break; }
+            }
+          }
           world.set<Position>(caster, "position", {
-            x: fpClamp(pos.x + step.dx, WORLD_MIN, WORLD_MAX),
-            y: fpClamp(pos.y + step.dy, WORLD_MIN, WORLD_MAX),
+            x: fpClamp(pos.x + dx, WORLD_MIN, WORLD_MAX),
+            y: fpClamp(pos.y + dy, WORLD_MIN, WORLD_MAX),
           });
         }
       }
