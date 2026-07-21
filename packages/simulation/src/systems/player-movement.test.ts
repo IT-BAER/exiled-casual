@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { fp, fpClamp, fpDist2 } from "@pact/fixed-point";
 import { Simulation } from "../loop";
-import { registerPlayerMovement } from "./player-movement";
+import { registerPlayerMovement, CASTING_MOVE_PCT } from "./player-movement";
 import { WORLD_MIN, WORLD_MAX, ARENA_RADIUS } from "../movement";
-import type { Position, PlayerC, MoveTarget, MoveDir, Faction } from "../components";
+import type { Position, PlayerC, MoveTarget, MoveDir, Faction, CastingC } from "../components";
 
 function makePlayer(sim: Simulation, x = 0, y = 0, moveSpeed = fp(3)) {
   const e = sim.world.create();
@@ -119,6 +119,29 @@ describe("registerPlayerMovement", () => {
     const pos = sim.world.get<Position>(p, "position")!;
     const d2 = fpDist2(0, 0, pos.x, pos.y);
     expect(d2).toBeLessThanOrEqual(ARENA_RADIUS * ARENA_RADIUS);
+  });
+
+  it("moves at CASTING_MOVE_PCT of speed while casting (cardinal)", () => {
+    const sim = new Simulation();
+    registerPlayerMovement(sim);
+    const speed = fp(3);
+    const p = makePlayer(sim, 0, 0, speed);
+    // first sim.step runs at tick 0; casting is active while tick < untilTick
+    sim.world.set<CastingC>(p, "casting", { untilTick: 10 });
+    sim.step([{ tick: 0, entity: p, type: "moveDir", data: { dx: 1, dy: 0 } }]);
+    const pos = sim.world.get<Position>(p, "position")!;
+    expect(pos.x).toBe(Math.trunc(speed * CASTING_MOVE_PCT / 100));
+  });
+
+  it("moves at full speed once the casting recovery has elapsed", () => {
+    const sim = new Simulation();
+    registerPlayerMovement(sim);
+    const speed = fp(3);
+    const p = makePlayer(sim, 0, 0, speed);
+    // untilTick 0 means recovery already over at tick 0 (tick < untilTick is false)
+    sim.world.set<CastingC>(p, "casting", { untilTick: 0 });
+    sim.step([{ tick: 0, entity: p, type: "moveDir", data: { dx: 1, dy: 0 } }]);
+    expect(sim.world.get<Position>(p, "position")!.x).toBe(speed);
   });
 
   it("clamps position to arena bounds", () => {

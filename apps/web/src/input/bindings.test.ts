@@ -25,7 +25,7 @@ function makeSnap(entityOverrides: Partial<Snapshot["entities"][number]>[] = [])
     area: "hideout",
     portalsLeft: 0,
     mapOpen: false,
-    player: { id: 0, x: 0, y: 0, life: 100, maxLife: 100, mana: 60, maxMana: 60, cooldowns: {}, alive: true },
+    player: { id: 0, x: 0, y: 0, life: 100, maxLife: 100, mana: 60, maxMana: 60, cooldowns: {}, alive: true, casting: false },
     entities: entityOverrides as Snapshot["entities"],
   };
 }

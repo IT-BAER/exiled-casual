@@ -1,10 +1,13 @@
 import { fpClamp, fpStepToward } from "@pact/fixed-point";
 import { Simulation } from "../loop";
 import { WORLD_MIN, WORLD_MAX, clampToArena } from "../movement";
-import type { Position, PlayerC, MoveTarget, MoveDir } from "../components";
+import type { Position, PlayerC, MoveTarget, MoveDir, CastingC } from "../components";
+
+/** Player moves at this percent of moveSpeed during post-cast recovery. */
+export const CASTING_MOVE_PCT = 40;
 
 export function registerPlayerMovement(sim: Simulation): void {
-  sim.register("playerMovement", (world, _tick, commands) => {
+  sim.register("playerMovement", (world, tick, commands) => {
     // 1. Apply commands to moveTarget / moveDir components.
     for (const cmd of commands) {
       if (cmd.entity === undefined) continue;
@@ -35,19 +38,25 @@ export function registerPlayerMovement(sim: Simulation): void {
       let nx = pos.x;
       let ny = pos.y;
 
+      // Post-cast recovery slows the player; effect already fired on the cast tick.
+      const casting = world.get<CastingC>(e, "casting");
+      const speed = casting && casting.untilTick > tick
+        ? Math.trunc(player.moveSpeed * CASTING_MOVE_PCT / 100)
+        : player.moveSpeed;
+
       const dirActive = moveDir && (moveDir.dx !== 0 || moveDir.dy !== 0);
       if (dirActive && moveDir) {
         if (moveDir.dx !== 0 && moveDir.dy !== 0) {
           // ponytail: 707/1000 approximates 1/sqrt(2) in integer math
-          const diagSpeed = Math.trunc(player.moveSpeed * 707 / 1000);
+          const diagSpeed = Math.trunc(speed * 707 / 1000);
           nx += moveDir.dx * diagSpeed;
           ny += moveDir.dy * diagSpeed;
         } else {
-          nx += moveDir.dx * player.moveSpeed;
-          ny += moveDir.dy * player.moveSpeed;
+          nx += moveDir.dx * speed;
+          ny += moveDir.dy * speed;
         }
       } else if (moveTarget?.active === 1) {
-        const step = fpStepToward(pos.x, pos.y, moveTarget.x, moveTarget.y, player.moveSpeed);
+        const step = fpStepToward(pos.x, pos.y, moveTarget.x, moveTarget.y, speed);
         nx += step.dx;
         ny += step.dy;
         // snap: if new position equals target, deactivate

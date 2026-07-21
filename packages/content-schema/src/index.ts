@@ -43,6 +43,8 @@ export interface SkillDef {
   name: string;
   manaCostFixed: Fixed;
   cooldownTicks: number;
+  /** Post-cast movement recovery, in ticks. Omitted/0 = instant, no slow. */
+  castTicks?: number;
   effects: EffectNode[];
 }
 
@@ -208,6 +210,9 @@ export function validateSkillDef(v: unknown): ValidationResult {
   }
   if (!isNonNegInt(v["cooldownTicks"])) {
     errors.push("cooldownTicks: must be a non-negative integer");
+  }
+  if (v["castTicks"] !== undefined && !isNonNegInt(v["castTicks"])) {
+    errors.push("castTicks: must be a non-negative integer");
   }
   const effects = v["effects"];
   if (!Array.isArray(effects) || effects.length === 0) {

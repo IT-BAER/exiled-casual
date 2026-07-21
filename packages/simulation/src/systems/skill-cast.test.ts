@@ -3,7 +3,7 @@ import { fp } from "@pact/fixed-point";
 import { Simulation } from "../loop";
 import { registerSkillCast } from "./skill-cast";
 import type { SkillDef } from "@pact/content-schema";
-import type { Position, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC } from "../components";
+import type { Position, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC, CastingC } from "../components";
 
 // Authored skill defs matching the contract tables exactly.
 const EMBER_BOLT: SkillDef = {
@@ -132,6 +132,29 @@ describe("registerSkillCast", () => {
     expect(ga.ailmentKind).toBe("burning");
     expect(ga.stacksPerApply).toBe(1);
     expect(ga.maxStacks).toBe(5);
+  });
+
+  it("a cast with castTicks>0 sets CastingC.untilTick = tick + castTicks", () => {
+    const sim = new Simulation();
+    const emberSlow: SkillDef = { ...EMBER_BOLT, castTicks: 8 };
+    registerSkillCast(sim, new Map([[emberSlow.id, emberSlow]]));
+    const caster = makeCaster(sim, fp(60));
+    sim.step([{
+      tick: 0, entity: caster, type: "useSkill",
+      skillId: emberSlow.id, data: { tx: fp(10), ty: 0 },
+    }]);
+    expect(sim.world.get<CastingC>(caster, "casting")!.untilTick).toBe(8);
+  });
+
+  it("an instant cast (no castTicks) sets no CastingC", () => {
+    const sim = new Simulation();
+    registerSkillCast(sim, ALL_SKILLS);
+    const caster = makeCaster(sim, fp(60));
+    sim.step([{
+      tick: 0, entity: caster, type: "useSkill",
+      skillId: "skill.blink.v1", data: { tx: fp(10), ty: 0 },
+    }]);
+    expect(sim.world.get<CastingC>(caster, "casting")).toBeUndefined();
   });
 
   it("blink moves caster toward aim by at most fp(5)", () => {

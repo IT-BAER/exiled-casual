@@ -17,12 +17,9 @@ const TICKS_PER_SEC = 30;
  */
 const SPAWN_YAW = Math.PI;
 
-/** True when any skill's cooldown jumped up, i.e. it was just cast. */
+/** Rising edge of the sim's casting flag, i.e. a cast just started this tick. */
 function didCast(prev: Snapshot, next: Snapshot): boolean {
-  for (const [id, remaining] of Object.entries(next.player.cooldowns)) {
-    if (remaining > (prev.player.cooldowns[id] ?? 0)) return true;
-  }
-  return false;
+  return next.player.casting && !prev.player.casting;
 }
 
 function kindOf(e: SnapshotEntity): MeshKind {
@@ -133,8 +130,8 @@ export class SnapshotRenderer {
 
     if (next.tick !== this.lastTick) {
       this.lastTick = next.tick;
-      // A cooldown that just went up means a skill fired this tick — the only
-      // cast signal in the snapshot, and enough to drive the spell animation.
+      // The sim's casting flag going up means a cast started this tick — drives
+      // the spell animation. Instant skills (castTicks 0) never raise it.
       if (prev && didCast(prev, next)) {
         const playerMesh = this.meshes.get(next.player.id);
         if (playerMesh) rigOf(playerMesh)?.playCast();

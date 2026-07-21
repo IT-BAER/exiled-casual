@@ -2,7 +2,7 @@ import { fpClamp, fpStepToward } from "@pact/fixed-point";
 import type { SkillDef } from "@pact/content-schema";
 import { Simulation } from "../loop";
 import { WORLD_MIN, WORLD_MAX } from "../movement";
-import type { Position, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC } from "../components";
+import type { Position, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC, CastingC } from "../components";
 
 export function registerSkillCast(sim: Simulation, skills: ReadonlyMap<string, SkillDef>): void {
   sim.register("skillCast", (world, tick, commands) => {
@@ -28,6 +28,12 @@ export function registerSkillCast(sim: Simulation, skills: ReadonlyMap<string, S
         ...cds,
         [cmd.skillId]: tick + skill.cooldownTicks,
       });
+
+      // Post-cast recovery: effect still fires this tick (below), but the caster
+      // is slowed until untilTick. Instant skills (castTicks 0/absent) skip this.
+      if (skill.castTicks && skill.castTicks > 0) {
+        world.set<CastingC>(caster, "casting", { untilTick: tick + skill.castTicks });
+      }
 
       // NOTE (ordering edge case): mana is spent and cooldown is set before the
       // pos/aim guards below. A caster with no Position component, or one aiming

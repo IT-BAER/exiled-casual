@@ -83,6 +83,8 @@ export interface Snapshot {
     life: number; maxLife: number; mana: number; maxMana: number;
     cooldowns: Record<string, number>;
     alive: boolean;
+    /** In post-cast recovery this tick (moving slowed, cast pose held). */
+    casting: boolean;
   };
   entities: SnapshotEntity[];
 }

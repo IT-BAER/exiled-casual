@@ -117,6 +117,28 @@ describe("validateSkillDef", () => {
     const r = validateSkillDef(null);
     expect(r.ok).toBe(false);
   });
+
+  it("accepts an optional castTicks", () => {
+    const r = validateSkillDef({ ...validSkill, castTicks: 12 });
+    expect(r.ok).toBe(true);
+    expect(r.errors).toHaveLength(0);
+  });
+
+  it("a def with no castTicks still passes (regression)", () => {
+    expect(validateSkillDef(validSkill).ok).toBe(true);
+  });
+
+  it("rejects negative castTicks", () => {
+    const r = validateSkillDef({ ...validSkill, castTicks: -1 });
+    expect(r.ok).toBe(false);
+    expect(r.errors.some((e) => e.includes("castTicks"))).toBe(true);
+  });
+
+  it("rejects fractional castTicks", () => {
+    const r = validateSkillDef({ ...validSkill, castTicks: 1.5 });
+    expect(r.ok).toBe(false);
+    expect(r.errors.some((e) => e.includes("castTicks"))).toBe(true);
+  });
 });
 
 describe("validateMonsterDef", () => {

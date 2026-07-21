@@ -50,6 +50,15 @@ describe("buildSnapshot", () => {
     expect(snap.player.maxLife).toBeCloseTo(toNumber(fp(100)), 5);
     expect(snap.player.mana).toBeCloseTo(toNumber(fp(60)), 5);
     expect(snap.player.alive).toBe(true);
+    expect(snap.player.casting).toBe(false);
+  });
+
+  it("player.casting is true during a cast's recovery window", () => {
+    const { world, sim, playerEntity } = createCombatSim(42);
+    const intent: Intent = { kind: "useSkill", skillId: "skill.ember_bolt.v1", tx: fp(5), ty: fp(0) };
+    sim.step([intentToCommand(intent, playerEntity, 0)]); // castTicks 8 → untilTick 8
+    const snap = buildSnapshot(world, sim, sim.tick, CONTENT_VERSION);
+    expect(snap.player.casting).toBe(true);
   });
 
   it("cooldown shows remaining seconds after a skill is cast", () => {

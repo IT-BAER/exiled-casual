@@ -7,6 +7,7 @@ const SKILL_DEFS: SkillDef[] = [
     name: "Ember Bolt",
     manaCostFixed: fp(8),
     cooldownTicks: 6,
+    castTicks: 8,
     effects: [
       {
         type: "spawnProjectile",
@@ -22,6 +23,7 @@ const SKILL_DEFS: SkillDef[] = [
     name: "Cinder Ground",
     manaCostFixed: fp(20),
     cooldownTicks: 30,
+    castTicks: 15,
     effects: [
       {
         type: "spawnGroundArea",

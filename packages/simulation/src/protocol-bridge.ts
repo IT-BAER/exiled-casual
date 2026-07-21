@@ -3,7 +3,7 @@ import type { Intent, Snapshot, SnapshotEntity } from "@pact/protocol";
 import type { Command, Simulation } from "./loop";
 import type { World, Entity } from "./ecs";
 import type {
-  Health, Mana, Position, Cooldowns, MonsterC,
+  Health, Mana, Position, Cooldowns, CastingC, MonsterC,
   AilmentC, ProjectileC, GroundAreaC, BossC, TelegraphC,
   SessionC, InteractableC,
 } from "./components";
@@ -151,6 +151,10 @@ export function buildSnapshot(
       mana: toNumber(pm.mana), maxMana: toNumber(pm.maxMana),
       cooldowns,
       alive: ph.life > 0,
+      casting: (() => {
+        const c = world.get<CastingC>(playerEntity, "casting");
+        return c !== undefined && c.untilTick > tick;
+      })(),
     },
     entities,
   };

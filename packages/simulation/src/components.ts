@@ -38,6 +38,8 @@ export interface MoveTarget { x: Fixed; y: Fixed; active: 0 | 1 }
 export interface MoveDir    { dx: number; dy: number }
 /** keys are skillId strings; values are the tick at which the skill becomes ready */
 export interface Cooldowns  { [skillId: string]: number }
+/** Post-cast recovery: caster is "casting" (and moves slower) while tick < untilTick. */
+export interface CastingC   { untilTick: number }
 export interface MonsterC {
   defId: string;
   moveSpeed: Fixed;
