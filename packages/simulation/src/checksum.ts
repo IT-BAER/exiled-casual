@@ -16,9 +16,13 @@ function stableValue(v: unknown): string {
   }
   if (typeof v === "boolean") return `b:${v ? 1 : 0}`;
   if (typeof v === "string") return `s:${v}`;
+  // An array (e.g. SessionC.completedNodes) is an ordered collection: serialize
+  // element-by-element so order-sensitive divergence is caught. Elements are
+  // strings/integers by construction and hash through the cases above.
+  if (Array.isArray(v)) return `[${v.map(stableValue).join(",")}]`;
   // A nested record (e.g. TelegraphC.ground) is serialized by its sorted keys, so
   // its contents are part of the hash — divergence in a sub-object is still caught.
-  if (typeof v === "object" && !Array.isArray(v)) {
+  if (typeof v === "object") {
     const rec = v as Record<string, unknown>;
     return `{${Object.keys(rec).sort().map((k) => `${k}=${stableValue(rec[k])}`).join(",")}}`;
   }

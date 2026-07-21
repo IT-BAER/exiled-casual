@@ -63,6 +63,26 @@ describe("checksum", () => {
     expect(checksumWorld(a)).not.toBe(checksumWorld(b));
   });
 
+  test("serializes an array-valued field (e.g. SessionC.completedNodes), order-sensitive", () => {
+    // completedNodes is an ordered string[]; the checksum must hash it (it gates
+    // sim behaviour) rather than throw, and element order must matter.
+    const a = new World();
+    const e = a.create();
+    a.set(e, "session", { area: "map", completedNodes: ["node.a", "node.b"] });
+
+    const b = new World();
+    const f = b.create();
+    b.set(f, "session", { area: "map", completedNodes: ["node.b", "node.a"] });
+
+    expect(() => checksumWorld(a)).not.toThrow();
+    expect(checksumWorld(a)).not.toBe(checksumWorld(b));
+
+    const c = new World();
+    const g = c.create();
+    c.set(g, "session", { area: "map", completedNodes: ["node.a", "node.b"] });
+    expect(checksumWorld(a)).toBe(checksumWorld(c));
+  });
+
   test("checksum is an unsigned 32-bit integer", () => {
     const w = new World();
     const e = w.create();
