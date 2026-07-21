@@ -5,7 +5,7 @@ import { intentToCommand, buildSnapshot } from "./protocol-bridge";
 import { CONTENT_VERSION } from "@pact/content-runtime";
 import type { Intent } from "@pact/protocol";
 import { World } from "./ecs";
-import type { Position, Health, Mana, MonsterC, BossC, TelegraphC } from "./components";
+import type { Position, Health, Mana, MonsterC, BossC, TelegraphC, SessionC, InteractableC } from "./components";
 
 describe("intentToCommand", () => {
   it("moveTo maps to correct Command shape", () => {
@@ -213,5 +213,79 @@ describe("buildSnapshot — boss & telegraph", () => {
     for (let i = 1; i < snap.entities.length; i++) {
       expect(snap.entities[i]!.id).toBeGreaterThan(snap.entities[i - 1]!.id);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Session + interactable snapshot tests
+// ---------------------------------------------------------------------------
+
+describe("buildSnapshot — session fields and interactables", () => {
+  function makeWorldWithSession(area: "hideout" | "map", portalsLeft: number, mapOpen: 0 | 1) {
+    const { world, playerEntity } = makeMinimalWorld();
+    const sessionE = world.create();
+    world.set<SessionC>(sessionE, "session", {
+      area, mapSeed: 0, portalsLeft, mapOpen, pendingArea: "",
+    });
+    return { world, playerEntity };
+  }
+
+  it("snapshot carries area, portalsLeft, mapOpen from session", () => {
+    const { world } = makeWorldWithSession("hideout", 4, 1);
+    const snap = buildSnapshot(world, {} as never, 0, "test");
+    expect(snap.area).toBe("hideout");
+    expect(snap.portalsLeft).toBe(4);
+    expect(snap.mapOpen).toBe(true);
+  });
+
+  it("defaults to area='map', portalsLeft=0, mapOpen=false when no session (legacy sim)", () => {
+    const { world } = makeMinimalWorld();
+    const snap = buildSnapshot(world, {} as never, 0, "test");
+    expect(snap.area).toBe("map");
+    expect(snap.portalsLeft).toBe(0);
+    expect(snap.mapOpen).toBe(false);
+  });
+
+  it("map device entity appears with correct kind and yaw", () => {
+    const { world } = makeMinimalWorld();
+    const device = world.create();
+    world.set<Position>(device, "position", { x: fp(0), y: fp(8) });
+    world.set<InteractableC>(device, "interactable", { kind: "mapDevice", radius: fp(2.5), yaw: 0 });
+
+    const snap = buildSnapshot(world, {} as never, 0, "test");
+    const devices = snap.entities.filter(e => e.kind === "mapDevice");
+    expect(devices).toHaveLength(1);
+    expect(devices[0]!.yaw).toBe(0);
+    expect(devices[0]!.x).toBeCloseTo(0, 5);
+    expect(devices[0]!.y).toBeCloseTo(8, 5);
+  });
+
+  it("portal entity appears with yaw", () => {
+    const { world } = makeMinimalWorld();
+    const portal = world.create();
+    world.set<Position>(portal, "position", { x: fp(4.33), y: fp(10.5) });
+    world.set<InteractableC>(portal, "interactable", { kind: "portal", radius: fp(2.5), yaw: 1.0472 });
+
+    const snap = buildSnapshot(world, {} as never, 0, "test");
+    const portals = snap.entities.filter(e => e.kind === "portal");
+    expect(portals).toHaveLength(1);
+    expect(portals[0]!.yaw).toBe(1.0472);
+  });
+
+  it("inRange is false when player is far, true when player is within radius", () => {
+    const { world, playerEntity } = makeMinimalWorld();
+    // Player at (0,0). Device at (0, fp(8))=8 units away. Radius=fp(2.5)=2.5 units.
+    // Distance 8 > 2.5 → out of range.
+    const device = world.create();
+    world.set<Position>(device, "position", { x: 0, y: fp(8) });
+    world.set<InteractableC>(device, "interactable", { kind: "mapDevice", radius: fp(2.5), yaw: 0 });
+
+    const snapFar = buildSnapshot(world, {} as never, 0, "test");
+    expect(snapFar.entities.find(e => e.kind === "mapDevice")!.inRange).toBe(false);
+
+    // Move player right next to the device.
+    world.set<Position>(playerEntity, "position", { x: 0, y: fp(8) });
+    const snapNear = buildSnapshot(world, {} as never, 0, "test");
+    expect(snapNear.entities.find(e => e.kind === "mapDevice")!.inRange).toBe(true);
   });
 });

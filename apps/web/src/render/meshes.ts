@@ -8,7 +8,7 @@ import {
 } from "@babylonjs/core";
 import { attachRig, rigOf, type RigParts } from "./rig";
 
-export type MeshKind = "player" | "monster" | "rare" | "boss" | "projectile" | "groundArea" | "telegraph";
+export type MeshKind = "player" | "monster" | "rare" | "boss" | "projectile" | "groundArea" | "telegraph" | "portal" | "mapDevice";
 
 /**
  * Y-lift off the ground plane per kind (render only). The authored actors
@@ -23,6 +23,10 @@ const Y_LIFT: Record<MeshKind, number> = {
   projectile: 0.3,
   groundArea: 0.05,
   telegraph: 0.06,
+  // portal children self-position (inner disc at y=1.75 in local space); root sits on ground
+  portal: 0,
+  // map device cylinder base already starts at y=0 (children lift themselves)
+  mapDevice: 0,
 };
 
 export { Y_LIFT };
@@ -278,6 +282,148 @@ export function updateTelegraph(root: Mesh, progress: number): void {
   parts.rim.emissiveColor.set(1.0, 0.32 + flash * 0.6, 0.06 + flash * 0.7);
 }
 
+/**
+ * Standing elliptical portal — a vertical void framed by a blazing rim.
+ * The disc + torus are rotated 90° on X so they stand upright in world space;
+ * scaling.z stretches them from circular to elliptical (local Z → world Y
+ * after the rotation). entity.yaw is applied by the renderer post-syncMesh.
+ */
+function buildPortal(scene: Scene, root: Mesh): void {
+  // per-instance so each portal can pulse and hover-highlight independently
+  const voidMat = new StandardMaterial(`${root.name}-portal-void`, scene);
+  voidMat.diffuseColor = new Color3(0, 0, 0);
+  voidMat.emissiveColor = new Color3(0.02, 0.02, 0.10); // deep near-black navy void
+  voidMat.specularColor = new Color3(0, 0, 0);
+  voidMat.backFaceCulling = false; // visible from both sides; it's a window into void
+
+  const rimMat = new StandardMaterial(`${root.name}-portal-rim`, scene);
+  rimMat.diffuseColor = new Color3(0, 0, 0);
+  // Starting value; updatePortal drives this each frame. Set high so the GlowLayer
+  // has enough emissive energy to produce a real bloom halo.
+  rimMat.emissiveColor = new Color3(0.85, 0.92, 1.0);
+  rimMat.specularColor = new Color3(0, 0, 0);
+
+  // Tight warm-blue ground pool — soft and transparent so the stone reads through.
+  // alpha + additive rendering produces a light-bleed look rather than opaque paint.
+  const bloomMat = new StandardMaterial(`${root.name}-portal-bloom`, scene);
+  bloomMat.diffuseColor = new Color3(0, 0, 0);
+  bloomMat.emissiveColor = new Color3(0.08, 0.12, 0.45); // cool blue, not violet
+  bloomMat.specularColor = new Color3(0, 0, 0);
+  bloomMat.alpha = 0.18; // subtle — readable stone beneath; standard alpha-blend is the default
+
+  // Void face: diameter=1.2, scaling.z=1.75 → 1.2 units wide × 2.1 units tall ellipse.
+  // Six portals on a ~3.5u-radius arc have ~3.7u spacing; 1.2u wide avoids overlap.
+  // After rotation.x=π/2, local-Z→world-Y; position.y = half-height = 0.6×1.75 = 1.05.
+  const inner = MeshBuilder.CreateCylinder(`${root.name}-pi`, { diameter: 1.2, height: 0.02, tessellation: 36 }, scene);
+  inner.rotation.x = Math.PI / 2;
+  inner.scaling.z = 1.75;
+  inner.position.y = 1.05; // 0.6 * 1.75 — bottom flush with ground
+  inner.parent = root;
+  inner.material = voidMat;
+  inner.receiveShadows = false;
+
+  // Blazing rim: torus matches the inner ellipse dimensions.
+  // ponytail: non-uniform torus scale distorts tube cross-section slightly; fine at this size.
+  const rim = MeshBuilder.CreateTorus(`${root.name}-pr`, { diameter: 1.2, thickness: 0.15, tessellation: 48 }, scene);
+  rim.rotation.x = Math.PI / 2;
+  rim.scaling.z = 1.75;
+  rim.position.y = 1.05;
+  rim.parent = root;
+  rim.material = rimMat;
+  rim.receiveShadows = false;
+
+  // Small ground bloom disc — 1.4u diameter (just wider than the portal), very faint.
+  const bloom = MeshBuilder.CreateCylinder(`${root.name}-pb`, { diameter: 1.4, height: 0.02, tessellation: 24 }, scene);
+  bloom.position.y = 0.01;
+  bloom.parent = root;
+  bloom.material = bloomMat;
+  bloom.receiveShadows = false;
+
+  // interactKind lets bindings.ts identify a picked portal child without the snapshot
+  root.metadata = { rimMat, voidMat, interactKind: "portal" };
+}
+
+/**
+ * Pulse the portal rim and indicate inRange affordance.
+ * Called every apply() so the animation is driven off real time without needing
+ * a render-timestamp parameter. Mutates material properties only — no allocs.
+ */
+export function updatePortal(root: Mesh, hovered: boolean): void {
+  const parts = root.metadata as { rimMat: StandardMaterial } | null;
+  if (!parts?.rimMat) return;
+  // ponytail: Date.now() as animation clock — cheap and always available; upgrade
+  // to a passed render-time argument if sub-frame precision ever matters.
+  const t = Date.now() / 1000;
+  const pulse = 0.88 + 0.12 * Math.sin(t * 1.8);
+  // Base brightness: high so the GlowLayer has enough energy for real bloom.
+  // Hovered: push into near-white so the pickup is unmistakable.
+  const base = hovered ? 1.0 : 0.78;
+  parts.rimMat.emissiveColor.set(
+    pulse * base * 0.85,  // slight blue-white tint
+    pulse * base * 0.92,
+    pulse * base * 1.0,
+  );
+}
+
+/**
+ * Low brass/gold ceremonial basin — cylindrical pedestal with a wider decorative rim.
+ * Warm metallic gold with specular so it catches key light; faint emissive stays
+ * readable in dark scenes. inRange pulses the emissive for the interact affordance.
+ */
+function buildMapDevice(scene: Scene, root: Mesh): void {
+  // Dark antique brass — lower diffuse, high specular so the directional key light
+  // creates a visible metallic catch rather than flat painted-yellow plastic.
+  const brassBody = new StandardMaterial(`${root.name}-md-body`, scene);
+  brassBody.diffuseColor = new Color3(0.40, 0.26, 0.08); // dark warm brass
+  brassBody.emissiveColor = new Color3(0.06, 0.04, 0.01); // stays readable in dark
+  brassBody.specularColor = new Color3(0.95, 0.78, 0.42); // strong metallic highlight
+  brassBody.specularPower = 96;
+
+  // Slightly warmer rim material with more emissive for the decorative band.
+  const brassRim = new StandardMaterial(`${root.name}-md-rim`, scene);
+  brassRim.diffuseColor = new Color3(0.50, 0.34, 0.10);
+  brassRim.emissiveColor = new Color3(0.10, 0.07, 0.02);
+  brassRim.specularColor = new Color3(0.9, 0.72, 0.38);
+  brassRim.specularPower = 128;
+
+  // Stepped base ring — wide, low slab that anchors it to the ground.
+  const baseRing = MeshBuilder.CreateCylinder(`${root.name}-md-br`, { diameter: 1.6, height: 0.14, tessellation: 16 }, scene);
+  baseRing.position.y = 0.07;
+  baseRing.parent = root;
+  baseRing.material = brassBody;
+
+  // Narrower column rising from the base.
+  const column = MeshBuilder.CreateCylinder(`${root.name}-md-col`, { diameterTop: 0.75, diameterBottom: 0.85, height: 0.55, tessellation: 16 }, scene);
+  column.position.y = 0.14 + 0.275; // sits on top of baseRing
+  column.parent = root;
+  column.material = brassBody;
+
+  // Wide ornate rim — the decorative basin lip at the top of the column.
+  const decorRim = MeshBuilder.CreateTorus(`${root.name}-md-dr`, { diameter: 1.4, thickness: 0.14, tessellation: 28 }, scene);
+  decorRim.position.y = 0.69; // flush with column top
+  decorRim.parent = root;
+  decorRim.material = brassRim;
+
+  // Shallow recessed centre bowl — the "basin" the reference shows as a dark inset.
+  const bowl = MeshBuilder.CreateCylinder(`${root.name}-md-bwl`, { diameter: 0.68, height: 0.08, tessellation: 16 }, scene);
+  bowl.position.y = 0.73;
+  bowl.parent = root;
+  bowl.material = brassBody;
+
+  root.metadata = { brassBody, brassRim, interactKind: "mapDevice" };
+}
+
+/** Brighten the device emissive on mouse hover so it reads as interactive. */
+export function updateMapDevice(root: Mesh, hovered: boolean): void {
+  const parts = root.metadata as { brassBody: StandardMaterial; brassRim: StandardMaterial } | null;
+  if (!parts?.brassBody) return;
+  // Idle: faint warm glow so it reads in a dark scene. Hovered: push enough
+  // emissive that the GlowLayer produces a visible warm halo.
+  const e = hovered ? 0.28 : 0.06;
+  parts.brassBody.emissiveColor.set(e, e * 0.67, e * 0.17);
+  parts.brassRim.emissiveColor.set(e * 1.4, e, e * 0.25);
+}
+
 const GREYBOX_COLOR: Record<"projectile" | "groundArea", [number, number, number]> = {
   projectile: [1.0, 0.9, 0.25], // yellow — ember bolt
   groundArea: [1.0, 0.42, 0.12], // ember — cinder ground disc
@@ -315,6 +461,18 @@ export function makeMesh(scene: Scene, kind: MeshKind, name: string): Mesh {
   if (kind === "telegraph") {
     const root = new Mesh(name, scene);
     buildTelegraph(scene, root);
+    return root;
+  }
+
+  if (kind === "portal") {
+    const root = new Mesh(name, scene);
+    buildPortal(scene, root);
+    return root;
+  }
+
+  if (kind === "mapDevice") {
+    const root = new Mesh(name, scene);
+    buildMapDevice(scene, root);
     return root;
   }
 

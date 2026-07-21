@@ -29,7 +29,7 @@ export class WorkerCore {
   constructor(seed: number) {
     // The lab starts empty. Monsters and the boss arrive on the numpad spawn
     // keys, so a model, an animation, or an effect can be looked at in peace.
-    const { sim, world, playerEntity } = createCombatSim(seed, { monsters: false });
+    const { sim, world, playerEntity } = createCombatSim(seed, { area: "hideout" });
     this.sim = sim;
     this.world = world;
     this.playerEntity = playerEntity;

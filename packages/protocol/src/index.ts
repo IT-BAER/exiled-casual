@@ -8,9 +8,28 @@ export type Intent =
   | { kind: "moveTo"; x: Fixed; y: Fixed }
   | { kind: "moveDir"; dx: -1 | 0 | 1; dy: -1 | 0 | 1 }
   | { kind: "useSkill"; skillId: string; tx: Fixed; ty: Fixed }
-  | { kind: "stop" };
+  | { kind: "stop" }
+  /** Activate a clicked interactable (map device, portal). Sim re-checks range. */
+  | { kind: "interact"; targetId: number };
 
-export type CommandType = "moveTo" | "moveDir" | "useSkill" | "stop";
+export type CommandType = "moveTo" | "moveDir" | "useSkill" | "stop" | "interact";
+
+// ---------------------------------------------------------------------------
+// Run loop
+// ---------------------------------------------------------------------------
+
+/** Where the player currently is. The hideout is the session's home area. */
+export type AreaKind = "hideout" | "map";
+
+export const AREA_KINDS: readonly AreaKind[] = ["hideout", "map"];
+
+/**
+ * Portals a freshly-opened map grants. Per docs/01 §8 this is the retry budget,
+ * not an entry charge: entering and leaving is free, each death spends one, and
+ * the map closes at zero. Starting at 6 and decrementing on death yields exactly
+ * "six total lives including the initial entry".
+ */
+export const MAP_PORTALS = 6;
 
 // ---------------------------------------------------------------------------
 // Worker message types (client → worker)
@@ -33,7 +52,7 @@ export type ToWorker = ToWorker_Init | ToWorker_Intent | ToWorker_Reset | ToWork
 
 export interface SnapshotEntity {
   id: number;
-  kind: "monster" | "projectile" | "groundArea" | "telegraph";
+  kind: "monster" | "projectile" | "groundArea" | "telegraph" | "portal" | "mapDevice";
   x: number; y: number;
   radius?: number;
   life?: number; maxLife?: number;
@@ -46,10 +65,19 @@ export interface SnapshotEntity {
   bossPhase?: 1 | 2;
   /** telegraph wind-up progress: 0 at cast → 1 at impact, for fill animation */
   progress?: number;
+  /** portal/mapDevice only: the player is close enough to activate it */
+  inRange?: boolean;
+  /** portal/mapDevice only: fixed yaw in radians, so the renderer angles it consistently */
+  yaw?: number;
 }
 
 export interface Snapshot {
   tick: number;
+  /** Area the player is standing in. Absent session (legacy sim) reports "map". */
+  area: AreaKind;
+  /** Retry budget left on the open map; 0 when no map is open. */
+  portalsLeft: number;
+  mapOpen: boolean;
   player: {
     id: number; x: number; y: number;
     life: number; maxLife: number; mana: number; maxMana: number;
@@ -102,6 +130,11 @@ export function validateIntent(v: unknown): Intent {
     }
     case "stop":
       return { kind: "stop" };
+    case "interact": {
+      if (!Number.isInteger(obj["targetId"]))
+        throw new Error("validateIntent interact: targetId must be an integer");
+      return { kind: "interact", targetId: obj["targetId"] as number };
+    }
     default:
       throw new Error(`validateIntent: unknown kind: ${String(obj["kind"])}`);
   }

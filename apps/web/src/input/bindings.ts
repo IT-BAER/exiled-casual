@@ -1,6 +1,6 @@
-import type { Intent, SpawnKind, ToWorker } from "@pact/protocol";
+import type { Intent, Snapshot, SpawnKind, ToWorker } from "@pact/protocol";
 import { keyToIntent, pointerToWorld } from "./intents";
-import type { Scene } from "@babylonjs/core";
+import type { Node, Scene } from "@babylonjs/core";
 
 // ponytail: thin DOM glue — all key→intent mapping lives in intents.ts
 
@@ -26,16 +26,42 @@ let aimWorld = { x: 0, y: 0 };
 const MOVE_KEYS = new Set(["w", "a", "s", "d"]);
 
 /**
+ * Walk the parent chain of a picked node to find an interactable root.
+ * Portal and mapDevice roots carry `metadata.interactKind` set by their builders;
+ * child geometry meshes do not, so the walk always terminates at the root or null.
+ */
+function findInteractRoot(node: Node | null): { entityId: number } | null {
+  let n = node;
+  while (n) {
+    const meta = n.metadata as { interactKind?: string } | null;
+    if (meta?.interactKind) {
+      const match = n.name.match(/^entity-(\d+)$/);
+      if (match) return { entityId: parseInt(match[1]!, 10) };
+    }
+    n = n.parent as Node | null;
+  }
+  return null;
+}
+
+/**
  * Attach keyboard + pointer listeners to the canvas.
  * Requires an initialised Babylon scene for ground-plane raycasting.
- * Returns a cleanup function.
+ *
+ * `onHoverInteractable` fires when the hovered portal/mapDevice entity id changes
+ * (including to null when leaving). Called at most once per distinct id change so
+ * React does not re-render on every pixel of mouse movement.
+ *
+ * Returns `detach` (removes all listeners) and `onSnapshot` (feed each incoming
+ * snapshot to check whether the queued interact target is now in range, and to
+ * clear hover state for entities that have disappeared).
  */
 export function attachBindings(
   canvas: HTMLCanvasElement,
   worker: Worker,
   scene: Scene,
   onCycleOutfit?: () => void,
-): () => void {
+  onHoverInteractable?: (entityId: number | null) => void,
+): { detach: () => void; onSnapshot: (snap: Snapshot) => void } {
   // Movement keys currently held, oldest→newest. Needed so releasing one key
   // resumes another still-held direction, and releasing the last sends "stop".
   const held: string[] = [];
@@ -43,18 +69,24 @@ export function attachBindings(
   // player toward the cursor as it moves, instead of a single click-to-point.
   let pointerHeld = false;
 
+  // Entity id of the portal or map device the player last clicked; null when
+  // nothing is pending. Cleared on interact fire, entity disappearance, or a
+  // subsequent non-interactable click (so clicking away cancels the approach).
+  let pendingInteractId: number | null = null;
+
+  // Currently hovered interactable entity id; null when the cursor is over ground.
+  // Tracked here so we only fire the callback on actual changes.
+  let hoveredEntityId: number | null = null;
+
+  function setHover(id: number | null) {
+    if (id === hoveredEntityId) return; // no change — avoid spurious re-renders
+    hoveredEntityId = id;
+    onHoverInteractable?.(id);
+  }
+
   function post(intent: Intent) {
     const msg: ToWorker = { type: "intent", intent };
     worker.postMessage(msg);
-  }
-
-  function issueMoveTo(clientX: number, clientY: number) {
-    const pick = scene.pick(clientX, clientY);
-    if (pick.hit && pick.pickedPoint) {
-      // moveTo wants fixed-point world coords, so route through pointerToWorld.
-      const world = pointerToWorld({ x: pick.pickedPoint.x, z: pick.pickedPoint.z });
-      post({ kind: "moveTo", x: world.x, y: world.y });
-    }
   }
 
   function onKeyDown(e: KeyboardEvent) {
@@ -97,6 +129,7 @@ export function attachBindings(
   }
 
   function onPointerMove(e: PointerEvent) {
+    // Single pick drives both the aim vector AND hover detection — no second raycast.
     const pick = scene.pick(e.clientX, e.clientY);
     if (pick.hit && pick.pickedPoint) {
       // Raw world floats; keyToIntent applies fp() when building the skill target.
@@ -108,30 +141,82 @@ export function attachBindings(
         post({ kind: "moveTo", x: world.x, y: world.y });
       }
     }
+    // Resolve hovered interactable from the same pick result.
+    const interactable = pick.pickedMesh ? findInteractRoot(pick.pickedMesh) : null;
+    setHover(interactable ? interactable.entityId : null);
+  }
+
+  function onPointerLeave() {
+    setHover(null);
   }
 
   function onPointerDown(e: PointerEvent) {
     if (e.button !== 0) return; // left button drives movement
+    // Single pick per pointerdown — shared between the interactable and ground paths.
+    const pick = scene.pick(e.clientX, e.clientY);
+    if (!pick.hit || !pick.pickedPoint) return;
+    const world = pointerToWorld({ x: pick.pickedPoint.x, z: pick.pickedPoint.z });
+    // PoE-style: clicking directly on a portal or map device auto-walks to it and
+    // queues an interact. Do NOT start hold-to-move steering for this case.
+    const interactable = pick.pickedMesh ? findInteractRoot(pick.pickedMesh) : null;
+    if (interactable) {
+      post({ kind: "moveTo", x: world.x, y: world.y });
+      pendingInteractId = interactable.entityId;
+      return;
+    }
+    // Ground or other non-interactable click: normal move + cancel any queued interact.
+    post({ kind: "moveTo", x: world.x, y: world.y });
+    pendingInteractId = null;
     pointerHeld = true;
-    issueMoveTo(e.clientX, e.clientY);
   }
 
   function onPointerUp(e: PointerEvent) {
     if (e.button === 0) pointerHeld = false;
   }
 
+  /**
+   * Feed each incoming snapshot from the worker to this function.
+   * When `pendingInteractId` is set and that entity reports `inRange`, fires
+   * `{ kind: "interact", targetId }` exactly once and clears the pending state.
+   * Also clears pending and hover state if the entity disappears from the snapshot.
+   */
+  function onSnapshot(snap: Snapshot): void {
+    if (pendingInteractId !== null) {
+      const entity = snap.entities.find((e) => e.id === pendingInteractId);
+      if (!entity) {
+        pendingInteractId = null; // entity vanished — cancel silently
+      } else if (entity.inRange) {
+        post({ kind: "interact", targetId: pendingInteractId });
+        // Halt at interaction range. The moveTo that started the approach aims at
+        // the entity itself, so without this the player keeps walking and ends up
+        // standing inside the map device.
+        post({ kind: "stop" });
+        pendingInteractId = null;
+      }
+    }
+    // Clear hover if the hovered entity left the snapshot.
+    if (hoveredEntityId !== null) {
+      const stillExists = snap.entities.some((e) => e.id === hoveredEntityId);
+      if (!stillExists) setHover(null);
+    }
+  }
+
   window.addEventListener("keydown", onKeyDown);
   window.addEventListener("keyup", onKeyUp);
   canvas.addEventListener("pointermove", onPointerMove);
+  canvas.addEventListener("pointerleave", onPointerLeave);
   canvas.addEventListener("pointerdown", onPointerDown);
   // Listen on window so releasing outside the canvas still ends hold-to-move.
   window.addEventListener("pointerup", onPointerUp);
 
-  return () => {
+  function detach() {
     window.removeEventListener("keydown", onKeyDown);
     window.removeEventListener("keyup", onKeyUp);
     canvas.removeEventListener("pointermove", onPointerMove);
+    canvas.removeEventListener("pointerleave", onPointerLeave);
     canvas.removeEventListener("pointerdown", onPointerDown);
     window.removeEventListener("pointerup", onPointerUp);
-  };
+  }
+
+  return { detach, onSnapshot };
 }

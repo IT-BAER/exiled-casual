@@ -10,7 +10,7 @@ export { bodyRadiusOf } from "./body";
 export type {
   Position, Health, Mana, Faction, PlayerC, MoveTarget, MoveDir,
   Cooldowns, MonsterC, DefensesC, ProjectileC, GroundAreaC, AilmentC,
-  DamageEvent, BossC, TelegraphC, CheckpointC,
+  DamageEvent, BossC, TelegraphC, SessionC, InteractableC, AreaKind,
 } from "./components";
 export { registerResourceRegen } from "./systems/resource";
 export { registerPlayerMovement } from "./systems/player-movement";
@@ -25,4 +25,7 @@ export { registerDamageResolve } from "./systems/damage-resolve";
 export { registerDeath } from "./systems/death";
 export { registerExpiry } from "./systems/expiry";
 export { createCombatSim, spawnLabActors } from "./combat-sim";
+export { buildArea } from "./areas";
+export { registerInteractSystem } from "./systems/interact";
+export { registerAreaTransition } from "./systems/area-transition";
 export { intentToCommand, buildSnapshot } from "./protocol-bridge";

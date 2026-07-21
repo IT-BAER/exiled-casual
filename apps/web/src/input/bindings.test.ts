@@ -2,10 +2,32 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { attachBindings } from "./bindings";
 import type { Scene } from "@babylonjs/core";
+import type { Snapshot } from "@pact/protocol";
 
 // Minimal fake scene: every pick hits the ground at a fixed world point.
 function fakeScene(): Scene {
-  return { pick: () => ({ hit: true, pickedPoint: { x: 1, z: 2 } }) } as unknown as Scene;
+  return { pick: () => ({ hit: true, pickedPoint: { x: 1, z: 2 }, pickedMesh: null }) } as unknown as Scene;
+}
+
+// Fake scene where every pick hits a portal child mesh (entity-42).
+function fakeInteractScene(entityId = 42): Scene {
+  // The root carries interactKind; the child (what the pick returns) does not.
+  const root = { name: `entity-${entityId}`, metadata: { interactKind: "portal" }, parent: null };
+  const childMesh = { name: `entity-${entityId}-pi`, metadata: null, parent: root };
+  return {
+    pick: () => ({ hit: true, pickedPoint: { x: 5, z: 7 }, pickedMesh: childMesh }),
+  } as unknown as Scene;
+}
+
+function makeSnap(entityOverrides: Partial<Snapshot["entities"][number]>[] = []): Snapshot {
+  return {
+    tick: 1,
+    area: "hideout",
+    portalsLeft: 0,
+    mapOpen: false,
+    player: { id: 0, x: 0, y: 0, life: 100, maxLife: 100, mana: 60, maxMana: 60, cooldowns: {}, alive: true },
+    entities: entityOverrides as Snapshot["entities"],
+  };
 }
 
 function moveToCount(post: ReturnType<typeof vi.fn>): number {
@@ -23,7 +45,7 @@ describe("attachBindings hold-to-move", () => {
     canvas = document.createElement("canvas");
     document.body.appendChild(canvas);
     worker = { postMessage: vi.fn() };
-    detach = attachBindings(canvas, worker as unknown as Worker, fakeScene());
+    ({ detach } = attachBindings(canvas, worker as unknown as Worker, fakeScene()));
   });
 
   afterEach(() => {
@@ -94,5 +116,106 @@ describe("attachBindings hold-to-move", () => {
         (c) => c[0]?.type === "intent" && c[0]?.intent?.kind === "useSkill",
       ).length,
     ).toBe(1);
+  });
+});
+
+describe("attachBindings hover", () => {
+  function move(canvas: HTMLCanvasElement) {
+    canvas.dispatchEvent(new MouseEvent("pointermove", { clientX: 50, clientY: 50, bubbles: true }));
+  }
+
+  it("hovering an interactable invokes the callback once with its id", () => {
+    const canvas = document.createElement("canvas");
+    document.body.appendChild(canvas);
+    const onHover = vi.fn();
+    const { detach } = attachBindings(
+      canvas,
+      { postMessage: vi.fn() } as unknown as Worker,
+      fakeInteractScene(42),
+      undefined,
+      onHover,
+    );
+
+    move(canvas);
+    expect(onHover).toHaveBeenCalledTimes(1);
+    expect(onHover).toHaveBeenCalledWith(42);
+
+    detach();
+    canvas.remove();
+  });
+
+  it("moving within the same entity does NOT invoke the callback again", () => {
+    const canvas = document.createElement("canvas");
+    document.body.appendChild(canvas);
+    const onHover = vi.fn();
+    const { detach } = attachBindings(
+      canvas,
+      { postMessage: vi.fn() } as unknown as Worker,
+      fakeInteractScene(42),
+      undefined,
+      onHover,
+    );
+
+    move(canvas);
+    move(canvas); // still over entity-42
+    move(canvas);
+    expect(onHover).toHaveBeenCalledTimes(1); // fired exactly once on first enter
+
+    detach();
+    canvas.remove();
+  });
+
+  it("moving off to ground invokes the callback once with null", () => {
+    const canvas = document.createElement("canvas");
+    document.body.appendChild(canvas);
+    const onHover = vi.fn();
+    // Start over an interactable, then switch to a ground scene
+    let useInteract = true;
+    const switchingScene = {
+      pick: () =>
+        useInteract
+          ? { hit: true, pickedPoint: { x: 1, z: 1 }, pickedMesh: { name: "entity-7-pi", metadata: null, parent: { name: "entity-7", metadata: { interactKind: "portal" }, parent: null } } }
+          : { hit: true, pickedPoint: { x: 2, z: 2 }, pickedMesh: null },
+    } as unknown as Scene;
+    const { detach } = attachBindings(
+      canvas,
+      { postMessage: vi.fn() } as unknown as Worker,
+      switchingScene,
+      undefined,
+      onHover,
+    );
+
+    move(canvas); // hover entity-7 → callback(7)
+    useInteract = false;
+    move(canvas); // hover ground → callback(null)
+
+    expect(onHover).toHaveBeenCalledTimes(2);
+    expect(onHover).toHaveBeenNthCalledWith(1, 7);
+    expect(onHover).toHaveBeenNthCalledWith(2, null);
+
+    detach();
+    canvas.remove();
+  });
+
+  it("pointerleave on the canvas fires callback with null", () => {
+    const canvas = document.createElement("canvas");
+    document.body.appendChild(canvas);
+    const onHover = vi.fn();
+    const { detach } = attachBindings(
+      canvas,
+      { postMessage: vi.fn() } as unknown as Worker,
+      fakeInteractScene(9),
+      undefined,
+      onHover,
+    );
+
+    move(canvas); // enter entity-9
+    canvas.dispatchEvent(new MouseEvent("pointerleave", { bubbles: false }));
+
+    expect(onHover).toHaveBeenCalledTimes(2);
+    expect(onHover).toHaveBeenNthCalledWith(2, null);
+
+    detach();
+    canvas.remove();
   });
 });

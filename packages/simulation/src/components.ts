@@ -1,6 +1,31 @@
 import type { Entity } from "./ecs";
 import type { Fixed } from "@pact/fixed-point";
 
+export type AreaKind = "hideout" | "map";
+
+/**
+ * Session singleton. Exactly one entity carries this and it survives every
+ * area transition, so the run's retry budget outlives the areas it spans.
+ */
+export interface SessionC {
+  area: AreaKind;
+  mapSeed: number;
+  /** Retry budget for the open map. See MAP_PORTALS in @pact/protocol. */
+  portalsLeft: number;
+  mapOpen: 0 | 1;
+  /** Area to build at the end of this tick; "" means stay put. */
+  pendingArea: AreaKind | "";
+}
+
+/** Something the player can activate with the `interact` intent. */
+export interface InteractableC {
+  kind: "mapDevice" | "portal";
+  /** Activation range, Fixed. */
+  radius: Fixed;
+  /** Render-only fixed yaw in radians. A literal constant, never computed. */
+  yaw: number;
+}
+
 export interface Position   { x: Fixed; y: Fixed }
 export interface Health     { life: Fixed; maxLife: Fixed }
 /** regen is per-tick Fixed; derived from perSec via Math.trunc(perSecFixed / 30) */
@@ -66,9 +91,6 @@ export interface TelegraphC {
   startTick: number; impactTick: number;
   damage: Fixed; damageType: 0 | 1;
   leavesGroundTicks: number;
-}
-export interface CheckpointC {
-  x: Fixed; y: Fixed;
 }
 export interface AilmentC {
   kind: string;

@@ -1,7 +1,7 @@
 import type { Scene } from "@babylonjs/core";
 import type { Mesh } from "@babylonjs/core";
 import type { Snapshot, SnapshotEntity } from "@pact/protocol";
-import { animateActor, makeMesh, updateTelegraph, Y_LIFT } from "./meshes";
+import { animateActor, makeMesh, updateTelegraph, updatePortal, updateMapDevice, Y_LIFT } from "./meshes";
 import type { MeshKind } from "./meshes";
 import { OUTFITS, rigOf } from "./rig";
 import { lerp, lerpAngle } from "./interp";
@@ -32,6 +32,8 @@ function kindOf(e: SnapshotEntity): MeshKind {
   }
   if (e.kind === "projectile") return "projectile";
   if (e.kind === "telegraph") return "telegraph";
+  if (e.kind === "portal") return "portal";
+  if (e.kind === "mapDevice") return "mapDevice";
   return "groundArea";
 }
 
@@ -46,9 +48,16 @@ export class SnapshotRenderer {
    *  work (like firing a cast animation) is gated on this. */
   private lastTick = -1;
   private playerId: number | null = null;
+  /** Entity id the mouse is hovering; drives mesh highlight, NOT inRange. */
+  private hoveredEntityId: number | null = null;
 
   constructor(scene: Scene) {
     this.scene = scene;
+  }
+
+  /** Set the entity the mouse is hovering; drives portal/device highlight visuals. */
+  setHoveredEntity(id: number | null): void {
+    this.hoveredEntityId = id;
   }
 
   /** Try on the next outfit. Render-only: the sim never hears about it. */
@@ -91,9 +100,23 @@ export class SnapshotRenderer {
         alpha,
         e.radius,
       );
+      const mesh = this.meshes.get(e.id);
+      if (!mesh) continue;
       if (e.kind === "telegraph") {
-        const mesh = this.meshes.get(e.id);
-        if (mesh) updateTelegraph(mesh, e.progress ?? 0);
+        updateTelegraph(mesh, e.progress ?? 0);
+      }
+      // Portals and map devices carry a fixed yaw from the sim so a ring of portals
+      // reads correctly (some face the camera, others turn nearly edge-on).
+      if (e.yaw !== undefined) {
+        mesh.rotation.y = e.yaw;
+      }
+      // Highlight is driven by mouse hover, not by sim inRange. inRange only
+      // triggers the interact intent once the player has walked close enough.
+      if (e.kind === "portal") {
+        updatePortal(mesh, this.hoveredEntityId === e.id);
+      }
+      if (e.kind === "mapDevice") {
+        updateMapDevice(mesh, this.hoveredEntityId === e.id);
       }
     }
 

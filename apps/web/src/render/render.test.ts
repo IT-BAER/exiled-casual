@@ -20,6 +20,9 @@ function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
       cooldowns: {},
       alive: true,
     },
+    area: "map",
+    portalsLeft: 0,
+    mapOpen: false,
     entities: [],
     ...overrides,
   };

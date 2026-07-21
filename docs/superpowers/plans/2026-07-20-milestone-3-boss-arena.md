@@ -56,9 +56,8 @@ export interface TelegraphC {              // key "telegraph"  (+ Position)
   damage: Fixed; damageType: 0 | 1;
   leavesGroundTicks: number;               // 0 = none
 }
-export interface CheckpointC {             // key "checkpoint"  (on the player)
-  x: Fixed; y: Fixed;
-}
+// CheckpointC — deleted. The session singleton (Phase D) owns respawn and portal budget;
+// no system ever read CheckpointC, so it is removed rather than retained.
 // MonsterC gains:    summoned: 0 | 1      (adds are removed on boss reset)
 // GroundAreaC gains: team: number         (only damages other teams)
 ```
@@ -100,8 +99,8 @@ No new message type. The HUD finds the boss with `entities.find(e => e.boss)`.
 - [ ] **A1 — content.** `BossSpec` in content-schema + validator; `monster.cinder_warden.v1`
       in content-runtime (life ~fp(900), moveSpeed fp(1.8), radius fp(1.4), melee fp(14),
       slam r=fp(3.5) dmg fp(30) windup 30 cd 150). Tests: validator accepts/rejects, def loads.
-- [ ] **A2 — components.** `BossC`, `TelegraphC`, `CheckpointC`, `MonsterC.summoned`,
-      `GroundAreaC.team`; `groundAreaTick` becomes faction-aware (damages any entity with
+- [ ] **A2 — components.** `BossC`, `TelegraphC`, `MonsterC.summoned`,
+      `GroundAreaC.team` (`CheckpointC` dropped; see Phase D); `groundAreaTick` becomes faction-aware (damages any entity with
       `health` + `faction` on another team, using a shared `bodyRadiusOf(world, e)` helper).
       Tests: player standing in a hostile ground area burns; own-team areas do not.
 - [ ] **A3 — `registerBossAI(sim)`.** Chase to melee range, melee on cooldown, spawn a
@@ -129,11 +128,14 @@ No new message type. The HUD finds the boss with `entities.find(e => e.boss)`.
 - [ ] **B1 — phase 2.** Transition at `phase2AtLifePct`: summon `addCount` imps
       (`summoned: 1`) on a ring, slam gains `leavesGroundTicks`, cadence × `cadenceMulPct`.
       Tests: transition fires once at the threshold, adds spawn, slam leaves fire, cadence drops.
-- [ ] **B2 — death / checkpoint / boss reset.** `CheckpointC` drives the respawn point
-      (default origin). On player death, `resetBoss(world, tick)` (exported from `boss-ai.ts`,
-      called by `death.ts`): boss to full life, phase 1, back to spawn, all `summoned` monsters
-      and all telegraphs destroyed. Tests: respawn at checkpoint, full boss reset, no reset
-      when no boss exists.
+- [ ] **B2 — death / checkpoint / boss reset.** _(Superseded and absorbed by Phase D: death,
+      respawn, and boss-reset are now owned by `areaTransition` + `SessionC`. `CheckpointC` is
+      deleted. `resetBoss` is still exported from `boss-ai.ts` and called by `death.ts`, but the
+      transition to the hideout is driven by the session machinery rather than an in-place
+      respawn.)_ `CheckpointC` drives the respawn point (default origin). On player death,
+      `resetBoss(world, tick)` (exported from `boss-ai.ts`, called by `death.ts`): boss to full
+      life, phase 1, back to spawn, all `summoned` monsters and all telegraphs destroyed. Tests:
+      respawn at checkpoint, full boss reset, no reset when no boss exists.
 - [ ] **B3 — golden replay.** `packages/replay/src/scenarios/boss.ts` + tests: phase
       transition, telegraph impact, boss reset, and checksum-equality determinism
       (spec §9 requires exactly this scenario).
@@ -155,6 +157,47 @@ No new message type. The HUD finds the boss with `entities.find(e => e.boss)`.
       renderer builds floor + wall meshes from it. Tests: message round-trip, wall mesh count.
 - [ ] **C4 — wiring.** `createCombatSim(seed)` generates the area, places the player at the
       start socket and the Warden in the arena socket. Devlog screenshot.
+
+## Phase D — run loop
+
+One `World` for the whole session; areas swap their contents. A persistent session singleton
+carries the portal budget and current area. Can be wired before Phase C lands; the `"map"`
+area uses the existing arena + Warden + imps until C1-C4 replace it.
+
+- [ ] **D1 — `SessionC` + singleton.** `SessionC { area: "hideout" | "map"; mapSeed: number;
+      portalsLeft: number; mapOpen: boolean; pendingArea: string | null }` registered on a
+      dedicated session entity created once at startup. This entity is excluded from the
+      area-transition cleanup predicate. Tests: session entity survives a round-trip through
+      `areaTransition`, component fields serialise correctly.
+- [ ] **D2 — `areaTransition` system.** On `SessionC.pendingArea !== null`: destroy every
+      entity that is neither the player nor the session singleton, run the target area's factory
+      function to rebuild entities, clear `pendingArea`. Player life, mana, and active cooldowns
+      are carried forward on the surviving player entity. Tests: non-player, non-session entities
+      are absent after transition; player health and cooldowns survive; factory is called with
+      the correct area key.
+- [ ] **D3 — hideout area factory.** Spawns a map device entity at `(0, 8)` and up to 6 portal
+      entities in a ring around it, count equal to `SessionC.portalsLeft`. Portal entities carry
+      a component that marks them as interact targets. Tests: portal count matches `portalsLeft`
+      after rebuild, map device is present at the correct position.
+- [ ] **D4 — click-to-interact.** Client sends an `interact` intent with a `targetId`. The
+      player walks toward the target; the simulation re-checks range authoritatively before
+      acting. A hideout portal sets `pendingArea = "map"` and transitions. The in-map return
+      portal sets `pendingArea = "hideout"` and transitions. The map device sets
+      `SessionC.mapOpen = true` (map selection UI, not yet implemented). Out-of-range intents
+      are silently ignored. Tests: out-of-range interact is a no-op; in-range portal triggers
+      area transition; in-range map device sets `mapOpen`.
+- [ ] **D5 — death in the map.** When the `death` system confirms player death and
+      `SessionC.area === "map"`: restore player life and mana to full, decrement
+      `SessionC.portalsLeft` by 1, call `resetBoss(world, tick)`, then set
+      `pendingArea = "hideout"`. If `portalsLeft` reaches 0, also set `mapOpen = false`.
+      `MAP_PORTALS = 6` as the starting budget (zero or one map affix, per spec section 8:
+      five post-death revives, six total lives including the initial entry). Tests: portals
+      decrement on map death, boss resets, transition to hideout fires, map closes and
+      `mapOpen` clears when portals reach 0.
+- [ ] **D6 — wiring + devlog screenshot.** `MAP_PORTALS = 6` constant in
+      `packages/simulation`; hideout is the default start area (`SessionC.area = "hideout"` on
+      init); `createCombatSim` selects arena + Warden + imps when `area === "map"` until Phase C
+      replaces it. Devlog screenshot showing the hideout with the map device and the portal ring.
 
 ---
 

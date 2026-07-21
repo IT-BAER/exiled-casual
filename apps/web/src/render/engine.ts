@@ -4,6 +4,7 @@ import {
   Color3,
   Color4,
   DirectionalLight,
+  GlowLayer,
   HemisphericLight,
   MeshBuilder,
   Scene,
@@ -20,13 +21,17 @@ import { toNumber } from "@pact/fixed-point";
  * Half-height of the orthographic view in world units (smaller = more zoomed in).
  *
  * Calibrated against `poe2-screenshots/article-1280x720`, where the player fills
- * ~12.5% of the frame height. A 1.87-unit character projects at cos(48.75°) of
- * its height under this camera tilt, so matching that exactly would need 5.0.
- * Held at 6 instead: the Warden's slam telegraph is 7 units across, and at 5.0
- * it eats most of the vertical field, which costs more in readability than the
- * last bit of framing parity is worth.
+ * ~12% of the frame height. Measure at 16:9, never ultrawide: an ortho camera
+ * keeps the vertical span fixed, so a wider window only adds world sideways and
+ * makes the character read smaller than this number suggests.
+ *
+ * KNOWN TENSION: the Warden's slam telegraph is 7 units across, and this value
+ * shows only 9.5 units vertically, so the telegraph covers ~74% of the field
+ * during that fight. An earlier pass held this at 6 for exactly that reason and
+ * the user has since asked twice for a larger character, so framing parity won.
+ * Revisit against the boss, not against the hideout, if the slam reads badly.
  */
-const ORTHO_HALF_HEIGHT = 6;
+const ORTHO_HALF_HEIGHT = 4.75;
 
 /** Flagstone texture repeats across the 200u floor (25 → ~8u per tile). */
 const FLOOR_TILES = 25;
@@ -129,6 +134,17 @@ export function createScene(engine: Engine): SceneHandle {
   wallMat.specularColor = new Color3(0, 0, 0);
   wall.material = wallMat;
   wall.receiveShadows = true;
+
+  try {
+    // Glow bloom: emissive materials above a threshold bloom outward, which is how
+    // the portal rim and fire-eyes read as actual light sources rather than flat paint.
+    // ponytail: a single global GlowLayer; per-layer exclusion lists if non-emissive
+    // meshes blooming becomes a problem.
+    const gl = new GlowLayer("glow", scene);
+    gl.intensity = 0.85;
+  } catch {
+    /* GlowLayer needs a render target; silently skipped under NullEngine in tests */
+  }
 
   try {
     // Cast shadows, the single biggest cue that the actors stand ON the floor.

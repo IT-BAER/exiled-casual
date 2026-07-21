@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { fp } from "@pact/fixed-point";
 import { Simulation } from "../loop";
 import { registerDeath } from "./death";
+import type { SessionC } from "../components";
 
 describe("registerDeath", () => {
   it("destroys a monster with life <= 0", () => {
@@ -56,6 +57,52 @@ describe("registerDeath", () => {
     // existing respawn guarantees still hold:
     expect(world.get<{ life: number }>(p, "health")!.life).toBe(fp(100));
     expect(world.get<{ x: number; y: number }>(p, "position")).toEqual({ x: 0, y: 0 });
+  });
+
+  // ── Session-aware death tests ────────────────────────────────────────────
+
+  function makePlayerWithSession(area: "hideout" | "map", portalsLeft: number) {
+    const sim = new Simulation();
+    registerDeath(sim);
+    const { world } = sim;
+
+    const p = world.create();
+    world.set(p, "player", { moveSpeed: 0, bodyRadius: fp(0.5) });
+    world.set(p, "health", { life: 0, maxLife: fp(100) });
+    world.set(p, "mana", { mana: fp(0), maxMana: fp(60), regen: 0 });
+    world.set(p, "position", { x: fp(3), y: fp(3) });
+
+    const sessionE = world.create();
+    world.set<SessionC>(sessionE, "session", {
+      area, mapSeed: 0, portalsLeft, mapOpen: 1, pendingArea: "",
+    });
+
+    return { sim, world, p, sessionE };
+  }
+
+  it("map death decrements portalsLeft and sets pendingArea='hideout'", () => {
+    const { sim, world, sessionE } = makePlayerWithSession("map", 6);
+    sim.step();
+    const session = world.get<SessionC>(sessionE, "session")!;
+    expect(session.portalsLeft).toBe(5);
+    expect(session.pendingArea).toBe("hideout");
+  });
+
+  it("6th map death drives portalsLeft to 0 and sets mapOpen=0", () => {
+    const { sim, world, sessionE } = makePlayerWithSession("map", 1);
+    sim.step();
+    const session = world.get<SessionC>(sessionE, "session")!;
+    expect(session.portalsLeft).toBe(0);
+    expect(session.mapOpen).toBe(0);
+    expect(session.pendingArea).toBe("hideout");
+  });
+
+  it("hideout death does NOT decrement portalsLeft", () => {
+    const { sim, world, sessionE } = makePlayerWithSession("hideout", 6);
+    sim.step();
+    const session = world.get<SessionC>(sessionE, "session")!;
+    expect(session.portalsLeft).toBe(6);
+    expect(session.pendingArea).toBe("");
   });
 
   it("does not touch a monster with life > 0", () => {

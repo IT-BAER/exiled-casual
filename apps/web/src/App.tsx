@@ -14,6 +14,7 @@ const MS_PER_TICK = 1000 / 30;
 export function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+  const [hoveredEntityId, setHoveredEntityId] = useState<number | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -30,6 +31,25 @@ export function App() {
     let curSnap: Snapshot | null = null;
     let prevTickTime = performance.now();
 
+    // Babylon engine + render loop
+    const engine = new Engine(canvas, true);
+    const { scene, camera } = createScene(engine);
+    const renderer = new SnapshotRenderer(scene);
+
+    // Bindings need the scene for ground picking, and must be attached before the
+    // onmessage handler below so onSnapshot exists when the worker starts sending.
+    const { detach, onSnapshot } = attachBindings(
+      canvas,
+      worker,
+      scene,
+      () => renderer.cyclePlayerOutfit(),
+      (id) => {
+        // Both the renderer (mesh highlight) and React (HUD label) must update.
+        renderer.setHoveredEntity(id);
+        setHoveredEntityId(id);
+      },
+    );
+
     worker.onmessage = (e: MessageEvent<FromWorker>) => {
       const msg = e.data;
       if (msg.type === "snapshot") {
@@ -37,13 +57,10 @@ export function App() {
         curSnap = msg.snapshot;
         prevTickTime = performance.now();
         setSnapshot(msg.snapshot);
+        // Let bindings fire the interact intent once the pending target is inRange.
+        onSnapshot(msg.snapshot);
       }
     };
-
-    // Babylon engine + render loop
-    const engine = new Engine(canvas, true);
-    const { scene, camera } = createScene(engine);
-    const renderer = new SnapshotRenderer(scene);
 
     const renderFrame = () => {
       if (!curSnap) return;
@@ -74,11 +91,6 @@ export function App() {
 
     window.addEventListener("resize", () => engine.resize());
 
-    // Input bindings (keydown, pointermove, click)
-    const detach = attachBindings(canvas, worker, scene, () =>
-      renderer.cyclePlayerOutfit(),
-    );
-
     return () => {
       unmounted = true;
       detach();
@@ -94,7 +106,7 @@ export function App() {
         ref={canvasRef}
         style={{ width: "100%", height: "100%", display: "block" }}
       />
-      <Hud snapshot={snapshot} />
+      <Hud snapshot={snapshot} hoveredEntityId={hoveredEntityId} />
     </div>
   );
 }

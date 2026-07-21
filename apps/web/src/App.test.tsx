@@ -12,10 +12,10 @@ vi.mock("./render/engine", () => ({
   createScene: () => ({ scene: { render: vi.fn() } }),
 }));
 vi.mock("./render/renderer", () => ({
-  SnapshotRenderer: vi.fn(() => ({ apply: vi.fn() })),
+  SnapshotRenderer: vi.fn(() => ({ apply: vi.fn(), cyclePlayerOutfit: vi.fn(), setHoveredEntity: vi.fn() })),
 }));
 vi.mock("./input/bindings", () => ({
-  attachBindings: () => () => {},
+  attachBindings: () => ({ detach: () => {}, onSnapshot: () => {} }),
 }));
 
 import { App } from "./App";

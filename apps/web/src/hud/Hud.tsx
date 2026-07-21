@@ -1,5 +1,6 @@
 import React from "react";
 import type { Snapshot } from "@pact/protocol";
+import { MAP_PORTALS } from "@pact/protocol";
 
 const SKILL_SLOTS = [
   { id: "skill.ember_bolt.v1", key: "1", label: "Ember", glow: "#ff7a2f" },
@@ -9,6 +10,8 @@ const SKILL_SLOTS = [
 
 interface HudProps {
   snapshot: Snapshot | null;
+  /** Entity id the mouse is hovering — drives the name label. Null = no label. */
+  hoveredEntityId?: number | null;
 }
 
 /** A PoE-style resource orb: dark well, bottom-anchored liquid at `pct`, gold ring. */
@@ -98,7 +101,7 @@ function Orb(props: {
   );
 }
 
-export function Hud({ snapshot }: HudProps) {
+export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
   if (!snapshot) return null;
 
   const { life, maxLife, mana, maxMana, cooldowns } = snapshot.player;
@@ -106,6 +109,22 @@ export function Hud({ snapshot }: HudProps) {
   const manaPct = maxMana > 0 ? Math.max(0, Math.min(100, (mana / maxMana) * 100)) : 0;
 
   const boss = snapshot.entities.find((e) => e.boss);
+
+  // Hovered entity drives the name label — mouse proximity, not character proximity.
+  // inRange (character distance) only drives the auto-interact fire; never shown.
+  const hoveredEntity =
+    hoveredEntityId !== null
+      ? snapshot.entities.find(
+          (e) => e.id === hoveredEntityId && (e.kind === "portal" || e.kind === "mapDevice"),
+        )
+      : undefined;
+  const hoverLabel = hoveredEntity
+    ? hoveredEntity.kind === "mapDevice"
+      ? "Map Device"
+      : snapshot.area === "hideout"
+      ? "Enter Map"
+      : "Return to Hideout"
+    : null;
   const bossLifePct =
     boss && boss.maxLife && boss.maxLife > 0
       ? Math.max(0, Math.min(100, ((boss.life ?? 0) / boss.maxLife) * 100))
@@ -165,6 +184,68 @@ export function Hud({ snapshot }: HudProps) {
           >
             {boss.bossPhase === 2 ? "II" : "I"}
           </div>
+        </div>
+      )}
+
+      {/* Area label — top-right, matches the gold border language of the orb ring */}
+      <div
+        data-testid="area-label"
+        style={{
+          position: "absolute",
+          top: 20,
+          right: 28,
+          color: "#c9a84c",
+          fontSize: 13,
+          fontWeight: 700,
+          letterSpacing: 1,
+          textShadow: "0 1px 4px #000",
+          textTransform: "uppercase",
+        }}
+      >
+        {snapshot.area === "hideout" ? "Hideout" : "Map"}
+      </div>
+
+      {/* Portal budget — shown while a map is open, next to the area label */}
+      {snapshot.mapOpen && (
+        <div
+          data-testid="portal-counter"
+          style={{
+            position: "absolute",
+            top: 38,
+            right: 28,
+            color: "#8ab4e8",
+            fontSize: 12,
+            fontWeight: 600,
+            letterSpacing: 0.5,
+            textShadow: "0 1px 3px #000",
+          }}
+        >
+          {`Portals ${snapshot.portalsLeft} / ${MAP_PORTALS}`}
+        </div>
+      )}
+
+      {/* Hovered interactable name — centered, just above the skill bar */}
+      {hoverLabel && (
+        <div
+          data-testid="interact-label"
+          style={{
+            position: "absolute",
+            bottom: 100,
+            left: "50%",
+            transform: "translateX(-50%)",
+            color: "#f4f0e6",
+            fontSize: 14,
+            fontWeight: 700,
+            letterSpacing: 0.5,
+            textShadow: "0 1px 4px #000, 0 0 12px rgba(100,140,220,0.55)",
+            background: "rgba(0,0,0,0.45)",
+            padding: "4px 14px",
+            borderRadius: 4,
+            border: "1px solid #4a5a7a",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {hoverLabel}
         </div>
       )}
 

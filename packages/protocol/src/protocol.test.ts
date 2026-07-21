@@ -91,3 +91,18 @@ describe("isToWorker", () => {
     expect(isToWorker({ type: "init" })).toBe(false);
   });
 });
+
+describe("validateIntent — interact", () => {
+  test("interact without targetId throws", () => {
+    expect(() => validateIntent({ kind: "interact" })).toThrow();
+  });
+
+  test("interact with a non-integer targetId throws", () => {
+    expect(() => validateIntent({ kind: "interact", targetId: 1.5 })).toThrow();
+  });
+
+  test("interact with integer targetId round-trips", () => {
+    const intent = { kind: "interact", targetId: 42 };
+    expect(validateIntent(intent)).toEqual({ kind: "interact", targetId: 42 });
+  });
+});

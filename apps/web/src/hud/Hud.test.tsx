@@ -4,6 +4,7 @@ import "@testing-library/jest-dom/vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import { Hud } from "./Hud";
 import type { Snapshot } from "@pact/protocol";
+import { MAP_PORTALS } from "@pact/protocol";
 
 // No globals:true in this repo, so @testing-library/react does not auto-register
 // its afterEach cleanup — do it explicitly or renders leak across tests.
@@ -13,9 +14,16 @@ function makeSnap(overrides: {
   life?: number;
   maxLife?: number;
   cooldowns?: Record<string, number>;
+  area?: Snapshot["area"];
+  portalsLeft?: number;
+  mapOpen?: boolean;
+  entities?: Snapshot["entities"];
 }): Snapshot {
   return {
     tick: 1,
+    area: overrides.area ?? "hideout",
+    portalsLeft: overrides.portalsLeft ?? 0,
+    mapOpen: overrides.mapOpen ?? false,
     player: {
       id: 0,
       x: 0,
@@ -27,7 +35,7 @@ function makeSnap(overrides: {
       cooldowns: overrides.cooldowns ?? {},
       alive: true,
     },
-    entities: [],
+    entities: overrides.entities ?? [],
   };
 }
 
@@ -74,6 +82,9 @@ describe("Hud", () => {
   it("renders boss bar and phase indicator when a boss entity is present", () => {
     const snap: Snapshot = {
       tick: 1,
+      area: "map",
+      portalsLeft: 4,
+      mapOpen: true,
       player: { id: 0, x: 0, y: 0, life: 100, maxLife: 100, mana: 30, maxMana: 60, cooldowns: {}, alive: true },
       entities: [{ id: 10, kind: "monster", x: 0, y: 0, boss: true, bossPhase: 2, life: 600, maxLife: 1000 }],
     };
@@ -85,5 +96,89 @@ describe("Hud", () => {
   it("renders no boss bar when no boss entity is present", () => {
     render(<Hud snapshot={makeSnap({})} />);
     expect(screen.queryByTestId("boss-bar")).toBeNull();
+  });
+
+  // --- area label ---
+
+  it("shows Hideout label in hideout area", () => {
+    render(<Hud snapshot={makeSnap({ area: "hideout" })} />);
+    expect(screen.getByTestId("area-label")).toHaveTextContent("Hideout");
+  });
+
+  it("shows Map label in map area", () => {
+    render(<Hud snapshot={makeSnap({ area: "map" })} />);
+    expect(screen.getByTestId("area-label")).toHaveTextContent("Map");
+  });
+
+  // --- portal counter ---
+
+  it("shows portal counter with correct budget when map is open", () => {
+    render(<Hud snapshot={makeSnap({ area: "map", mapOpen: true, portalsLeft: 5 })} />);
+    const counter = screen.getByTestId("portal-counter");
+    expect(counter).toHaveTextContent(`Portals 5 / ${MAP_PORTALS}`);
+  });
+
+  it("hides portal counter when map is not open", () => {
+    render(<Hud snapshot={makeSnap({ mapOpen: false })} />);
+    expect(screen.queryByTestId("portal-counter")).toBeNull();
+  });
+
+  // --- hover-driven interact labels ---
+
+  it("shows Map Device label when a mapDevice entity is hovered", () => {
+    render(
+      <Hud
+        snapshot={makeSnap({ entities: [{ id: 1, kind: "mapDevice", x: 0, y: 0 }] })}
+        hoveredEntityId={1}
+      />,
+    );
+    expect(screen.getByTestId("interact-label")).toHaveTextContent("Map Device");
+  });
+
+  it("shows Enter Map when a portal is hovered in the hideout", () => {
+    render(
+      <Hud
+        snapshot={makeSnap({
+          area: "hideout",
+          entities: [{ id: 2, kind: "portal", x: 0, y: 0 }],
+        })}
+        hoveredEntityId={2}
+      />,
+    );
+    expect(screen.getByTestId("interact-label")).toHaveTextContent("Enter Map");
+  });
+
+  it("shows Return to Hideout when a portal is hovered in the map", () => {
+    render(
+      <Hud
+        snapshot={makeSnap({
+          area: "map",
+          entities: [{ id: 3, kind: "portal", x: 0, y: 0 }],
+        })}
+        hoveredEntityId={3}
+      />,
+    );
+    expect(screen.getByTestId("interact-label")).toHaveTextContent("Return to Hideout");
+  });
+
+  it("shows no interact label when hoveredEntityId is null", () => {
+    render(
+      <Hud
+        snapshot={makeSnap({ entities: [{ id: 4, kind: "portal", x: 0, y: 0 }] })}
+        hoveredEntityId={null}
+      />,
+    );
+    expect(screen.queryByTestId("interact-label")).toBeNull();
+  });
+
+  it("inRange-only entity shows no label when not hovered", () => {
+    // inRange is a distance check for the interact trigger, not a visual signal
+    render(
+      <Hud
+        snapshot={makeSnap({ entities: [{ id: 5, kind: "portal", x: 0, y: 0, inRange: true }] })}
+        hoveredEntityId={null}
+      />,
+    );
+    expect(screen.queryByTestId("interact-label")).toBeNull();
   });
 });

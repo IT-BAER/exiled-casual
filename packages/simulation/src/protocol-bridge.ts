@@ -1,11 +1,25 @@
-import { toNumber } from "@pact/fixed-point";
+import { toNumber, fpDist2 } from "@pact/fixed-point";
 import type { Intent, Snapshot, SnapshotEntity } from "@pact/protocol";
 import type { Command, Simulation } from "./loop";
 import type { World, Entity } from "./ecs";
 import type {
   Health, Mana, Position, Cooldowns, MonsterC,
   AilmentC, ProjectileC, GroundAreaC, BossC, TelegraphC,
+  SessionC, InteractableC,
 } from "./components";
+
+/**
+ * Shared range check: is (px,py) within `radius` of (tx,ty)?
+ * Both buildSnapshot (HUD inRange) and the interact system call this so they
+ * can never disagree about whether an interactable is reachable.
+ */
+export function inRangeOf(
+  px: number, py: number,
+  tx: number, ty: number,
+  radius: number,
+): boolean {
+  return fpDist2(px, py, tx, ty) <= radius * radius;
+}
 
 export function intentToCommand(intent: Intent, player: Entity, tick: number): Command {
   switch (intent.kind) {
@@ -21,6 +35,8 @@ export function intentToCommand(intent: Intent, player: Entity, tick: number): C
       };
     case "stop":
       return { tick, entity: player, type: "stop" };
+    case "interact":
+      return { tick, entity: player, type: "interact", data: { targetId: intent.targetId } };
   }
 }
 
@@ -43,6 +59,12 @@ export function buildSnapshot(
   for (const [skillId, readyTick] of Object.entries(rawCds)) {
     cooldowns[skillId] = Math.max(0, (readyTick - tick) / 30);
   }
+
+  // Session singleton (optional; legacy sims without one default to "map", 0, false).
+  const sessionE = world.query("session")[0];
+  const session = sessionE !== undefined
+    ? world.get<SessionC>(sessionE, "session")
+    : undefined;
 
   const entities: SnapshotEntity[] = [];
 
@@ -102,10 +124,26 @@ export function buildSnapshot(
     });
   }
 
+  for (const e of world.query("interactable", "position")) {
+    const ia = world.get<InteractableC>(e, "interactable")!;
+    const pos = world.get<Position>(e, "position")!;
+    entities.push({
+      id: e,
+      kind: ia.kind,
+      x: toNumber(pos.x),
+      y: toNumber(pos.y),
+      yaw: ia.yaw,
+      inRange: inRangeOf(pp.x, pp.y, pos.x, pos.y, ia.radius),
+    });
+  }
+
   entities.sort((a, b) => a.id - b.id);
 
   return {
     tick,
+    area: session?.area ?? "map",
+    portalsLeft: session?.portalsLeft ?? 0,
+    mapOpen: session?.mapOpen === 1,
     player: {
       id: playerEntity,
       x: toNumber(pp.x), y: toNumber(pp.y),

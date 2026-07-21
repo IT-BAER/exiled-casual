@@ -1,13 +1,12 @@
 import { fp } from "@pact/fixed-point";
 import { baseCasterStats, makeRare } from "@pact/rules";
 import { SKILLS, MONSTERS, RARE_TEMPLATE } from "@pact/content-runtime";
-import type { MonsterDef } from "@pact/content-schema";
 import { Simulation } from "./loop";
 import { World } from "./ecs";
 import type { Entity } from "./ecs";
 import type {
   Position, Health, Mana, Faction, PlayerC, Cooldowns, DefensesC,
-  MoveTarget, MoveDir, MonsterC, BossC,
+  MoveTarget, MoveDir, SessionC, AreaKind,
 } from "./components";
 import { registerResourceRegen } from "./systems/resource";
 import { registerSkillCast } from "./systems/skill-cast";
@@ -21,11 +20,14 @@ import { registerAilmentTick } from "./systems/ailment";
 import { registerDamageResolve } from "./systems/damage-resolve";
 import { registerDeath } from "./systems/death";
 import { registerExpiry } from "./systems/expiry";
+import { registerInteractSystem } from "./systems/interact";
+import { registerAreaTransition } from "./systems/area-transition";
+import { buildArea, spawnMonster } from "./areas";
 
 // ponytail: _seed unused by Phase C2 systems; reserved for Phase C3 RNG-driven monster variance.
 export function createCombatSim(
   _seed: number,
-  opts: { boss?: boolean; monsters?: boolean } = {},
+  opts: { boss?: boolean; monsters?: boolean; area?: AreaKind } = {},
 ): { sim: Simulation; world: World; playerEntity: Entity } {
   const sim = new Simulation();
   const { world } = sim;
@@ -68,29 +70,47 @@ export function createCombatSim(
   world.set<MoveTarget>(playerEntity, "moveTarget", { x: 0, y: 0, active: 0 });
   world.set<MoveDir>(playerEntity, "moveDir", { dx: 0, dy: 0 });
 
-  // ── Bootstrap monsters ────────────────────────────────────────────────────
-  // Default on: the golden replay scenarios anchor on this exact composition.
-  // The lab opts out and spawns on demand instead, so a model or an effect can
-  // be inspected without a pack chewing on the player.
-  if (opts.monsters !== false) {
-    const impDef = MONSTERS.get("monster.cinder_imp.v1")!;
+  if (opts.area !== undefined) {
+    // ── Area-based path: session singleton + buildArea ────────────────────
+    // ponytail: legacy path below exists to protect the golden-replay checksums and
+    // can be deleted once task B3 re-records its scenarios against the run loop.
+    const sessionE = world.create();
+    const session: SessionC = {
+      area: opts.area,
+      mapSeed: _seed,
+      portalsLeft: 0,
+      mapOpen: 0,
+      pendingArea: "",
+    };
+    world.set<SessionC>(sessionE, "session", session);
+    buildArea(world, opts.area, session);
 
-    const normalCoords: [number, number][] = [
-      [fp(5), fp(0)], [fp(-5), fp(0)],
-      [fp(0), fp(5)], [fp(0), fp(-5)],
-      [fp(6), fp(6)],
-    ];
-    for (const [x, y] of normalCoords) {
-      spawnMonster(world, impDef, x, y, false);
+    // New systems only needed for area-based sims. Appended to preserve the
+    // canonical ordering of the first 12 systems (checked by legacy tests).
+    registerInteractSystem(sim);
+    registerAreaTransition(sim);
+  } else {
+    // ── Legacy path: no session, golden-replay–safe bootstrap ────────────
+    if (opts.monsters !== false) {
+      const impDef = MONSTERS.get("monster.cinder_imp.v1")!;
+
+      const normalCoords: [number, number][] = [
+        [fp(5), fp(0)], [fp(-5), fp(0)],
+        [fp(0), fp(5)], [fp(0), fp(-5)],
+        [fp(6), fp(6)],
+      ];
+      for (const [x, y] of normalCoords) {
+        spawnMonster(world, impDef, x, y, false);
+      }
+
+      const rareDef = makeRare(impDef, RARE_TEMPLATE);
+      spawnMonster(world, rareDef, fp(8), fp(8), true);
     }
 
-    const rareDef = makeRare(impDef, RARE_TEMPLATE);
-    spawnMonster(world, rareDef, fp(8), fp(8), true);
-  }
-
-  if (opts.boss) {
-    const wardenDef = MONSTERS.get("monster.cinder_warden.v1")!;
-    spawnMonster(world, wardenDef, fp(0), fp(12), false);
+    if (opts.boss) {
+      const wardenDef = MONSTERS.get("monster.cinder_warden.v1")!;
+      spawnMonster(world, wardenDef, fp(0), fp(12), false);
+    }
   }
 
   return { sim, world, playerEntity };
@@ -143,42 +163,5 @@ export function spawnLabActors(
   }
 }
 
-function spawnMonster(
-  world: World,
-  def: MonsterDef,
-  x: number,
-  y: number,
-  rare: boolean,
-): Entity {
-  const e = world.create();
-  world.set<Position>(e, "position", { x, y });
-  world.set<Health>(e, "health", { life: def.maxLifeFixed, maxLife: def.maxLifeFixed });
-  world.set<Faction>(e, "faction", { team: 1 });
-  world.set<MonsterC>(e, "monster", {
-    defId: def.id,
-    moveSpeed: Math.trunc(def.moveSpeedFixed / 30),
-    bodyRadius: def.radiusFixed,
-    attackRange: def.attackRangeFixed,
-    attackCooldownTicks: def.attackCooldownTicks,
-    attackDamage: def.attackDamage.amountFixed,
-    attackType: def.attackDamage.type === "fire" ? 0 : 1,
-    attackReadyTick: 0,
-    state: "idle",
-    rare: rare ? 1 : 0,
-    summoned: 0,
-  });
-  world.set<DefensesC>(e, "defenses", {
-    fireResPct: def.defenses.fireResPct,
-    armour: def.defenses.armourFixed,
-  });
-  if (def.boss) {
-    world.set<BossC>(e, "boss", {
-      phase: 1,
-      nextAbilityTick: 0,
-      spawnX: x,
-      spawnY: y,
-      rootedUntilTick: 0,
-    });
-  }
-  return e;
-}
+// Re-export spawnMonster for callers that may import it from this module.
+export { spawnMonster };
