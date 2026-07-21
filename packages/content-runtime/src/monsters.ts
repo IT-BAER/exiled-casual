@@ -26,7 +26,13 @@ const MONSTER_DEFS: MonsterDef[] = [
     boss: {
       phase2AtLifePct: 50,
       slam: { windupTicks: 30, radiusFixed: fp(3.5), damageFixed: fp(28), cooldownTicks: 150, rangeFixed: fp(9) },
-      phase2: { fireGroundDurationTicks: 120, addCount: 2, addDefId: "monster.cinder_imp.v1", cadenceMulPct: 70 },
+      phase2: {
+        fireGroundDurationTicks: 120,
+        addCount: 2,
+        addDefId: "monster.cinder_imp.v1",
+        cadenceMulPct: 70,
+        fireGround: { kind: "burning", stacksPerApply: 1, dpsFixed: fp(12), durationTicks: 60, maxStacks: 5 },
+      },
     },
   },
 ];

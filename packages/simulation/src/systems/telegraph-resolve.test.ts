@@ -3,7 +3,7 @@ import { fp } from "@pact/fixed-point";
 import { Simulation } from "../loop";
 import { registerTelegraphResolve } from "./telegraph-resolve";
 import { registerDamageResolve } from "./damage-resolve";
-import type { Position, Health, MonsterC, PlayerC, Faction, TelegraphC, DefensesC } from "../components";
+import type { Position, Health, MonsterC, PlayerC, Faction, TelegraphC, DefensesC, GroundAreaC } from "../components";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -17,6 +17,8 @@ function makeTelegraph(
     damageType?: 0 | 1;
     team?: number;
     ownerId?: number;
+    leavesGroundTicks?: number;
+    ground?: TelegraphC["ground"];
   } = {},
 ) {
   const {
@@ -27,6 +29,8 @@ function makeTelegraph(
     damageType = 1,
     team = 1,
     ownerId = 99,
+    leavesGroundTicks = 0,
+    ground,
   } = opts;
   const e = sim.world.create();
   sim.world.set<Position>(e, "position", { x, y });
@@ -38,10 +42,19 @@ function makeTelegraph(
     impactTick,
     damage,
     damageType,
-    leavesGroundTicks: 0,
+    leavesGroundTicks,
+    ground,
   });
   return e;
 }
+
+const BURN: NonNullable<TelegraphC["ground"]> = {
+  ailmentKind: "burning",
+  stacksPerApply: 1,
+  dps: fp(12),
+  ailmentDuration: 60,
+  maxStacks: 5,
+};
 
 function makeMonster(sim: Simulation, x = fp(1), y = 0, team = 0, bodyRadius = fp(0.5)) {
   const e = sim.world.create();
@@ -157,6 +170,49 @@ describe("registerTelegraphResolve", () => {
     sim.step();
     expect(sim.damageQueue).toHaveLength(1);
     expect(sim.damageQueue[0]!.target).toBe(target);
+  });
+
+  it("leaves a burning ground patch at the impact point when leavesGroundTicks > 0", () => {
+    const sim = new Simulation();
+    registerTelegraphResolve(sim);
+
+    makeTelegraph(sim, {
+      x: fp(2), y: fp(3),
+      impactTick: 0,
+      radius: fp(3.5),
+      team: 1,
+      leavesGroundTicks: 120,
+      ground: BURN,
+    });
+
+    sim.step(); // tick 0 — resolves and drops the patch
+
+    const areas = sim.world.entitiesWith("groundArea");
+    expect(areas).toHaveLength(1);
+    const ga = sim.world.get<GroundAreaC>(areas[0]!, "groundArea")!;
+    const pos = sim.world.get<Position>(areas[0]!, "position")!;
+    expect(pos).toEqual({ x: fp(2), y: fp(3) }); // at impact point
+    expect(ga.radius).toBe(fp(3.5));             // same footprint as the slam
+    expect(ga.expiryTick).toBe(120);             // tick 0 + leavesGroundTicks
+    expect(ga.nextTick).toBe(0);                 // first DoT tick is immediate
+    expect(ga.team).toBe(1);                     // owner team → only hits others
+    expect(ga.ailmentKind).toBe("burning");
+    expect(ga.dps).toBe(fp(12));
+    expect(ga.ailmentDuration).toBe(60);
+    expect(ga.maxStacks).toBe(5);
+    expect(ga.stacksPerApply).toBe(1);
+  });
+
+  it("leaves NO ground patch when leavesGroundTicks is 0", () => {
+    const sim = new Simulation();
+    registerTelegraphResolve(sim);
+
+    makeTelegraph(sim, { impactTick: 0, radius: fp(3), team: 1 }); // leavesGroundTicks defaults to 0
+    makeMonster(sim, fp(1), 0, 0);
+
+    sim.step();
+
+    expect(sim.world.entitiesWith("groundArea")).toHaveLength(0);
   });
 
   it("end-to-end: health drops through damage pipeline, less with fire resistance", () => {

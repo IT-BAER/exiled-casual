@@ -191,6 +191,7 @@ describe("validateMonsterDef — boss field", () => {
         addCount: 2,
         addDefId: "monster.cinder_imp.v1",
         cadenceMulPct: 70,
+        fireGround: { kind: "burning", stacksPerApply: 1, dpsFixed: fp(12), durationTicks: 60, maxStacks: 5 },
       },
     },
   };
@@ -246,6 +247,31 @@ describe("validateMonsterDef — boss field", () => {
     });
     expect(r.ok).toBe(false);
     expect(r.errors.some((e) => e.includes("boss.phase2.addDefId"))).toBe(true);
+  });
+
+  it("rejects boss.phase2.fireGround with a bad kind", () => {
+    const r = validateMonsterDef({
+      ...validBossMonster,
+      boss: {
+        ...validBossMonster.boss!,
+        phase2: {
+          ...validBossMonster.boss!.phase2,
+          fireGround: { ...validBossMonster.boss!.phase2.fireGround, kind: "chilled" },
+        },
+      },
+    });
+    expect(r.ok).toBe(false);
+    expect(r.errors.some((e) => e.includes("boss.phase2.fireGround"))).toBe(true);
+  });
+
+  it("rejects a boss.phase2 missing fireGround", () => {
+    const { fireGround: _f, ...phase2NoGround } = validBossMonster.boss!.phase2;
+    const r = validateMonsterDef({
+      ...validBossMonster,
+      boss: { ...validBossMonster.boss!, phase2: phase2NoGround },
+    });
+    expect(r.ok).toBe(false);
+    expect(r.errors.some((e) => e.includes("boss.phase2.fireGround"))).toBe(true);
   });
 });
 

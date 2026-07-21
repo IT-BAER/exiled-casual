@@ -67,6 +67,8 @@ export interface BossSpec {
     addCount: number;
     addDefId: string;
     cadenceMulPct: number;
+    /** Burning patch the phase-2 slam leaves; fireGroundDurationTicks is its lifetime. */
+    fireGround: AilmentSpec;
   };
 }
 
@@ -117,6 +119,35 @@ function validateDamageSpec(v: unknown, path: string, errors: string[]): boolean
   return ok;
 }
 
+function validateAilmentSpec(v: unknown, path: string, errors: string[]): boolean {
+  if (!isObj(v)) {
+    errors.push(`${path}: required object`);
+    return false;
+  }
+  let ok = true;
+  if (v["kind"] !== "burning") {
+    errors.push(`${path}.kind: must be "burning"`);
+    ok = false;
+  }
+  if (!isNonNegInt(v["stacksPerApply"])) {
+    errors.push(`${path}.stacksPerApply: must be non-negative integer`);
+    ok = false;
+  }
+  if (!isNonNegInt(v["dpsFixed"])) {
+    errors.push(`${path}.dpsFixed: must be a non-negative integer`);
+    ok = false;
+  }
+  if (!isNonNegInt(v["durationTicks"])) {
+    errors.push(`${path}.durationTicks: must be non-negative integer`);
+    ok = false;
+  }
+  if (!isNonNegInt(v["maxStacks"])) {
+    errors.push(`${path}.maxStacks: must be non-negative integer`);
+    ok = false;
+  }
+  return ok;
+}
+
 function validateEffectNode(v: unknown, idx: number, errors: string[]): boolean {
   const path = `effects[${idx}]`;
   if (!isObj(v)) {
@@ -148,32 +179,7 @@ function validateEffectNode(v: unknown, idx: number, errors: string[]): boolean 
       errors.push(`${path}.durationTicks: must be a non-negative integer`);
       ok = false;
     }
-    const a = v["ailment"];
-    if (!isObj(a)) {
-      errors.push(`${path}.ailment: required object`);
-      ok = false;
-    } else {
-      if (a["kind"] !== "burning") {
-        errors.push(`${path}.ailment.kind: must be "burning"`);
-        ok = false;
-      }
-      if (!isNonNegInt(a["stacksPerApply"])) {
-        errors.push(`${path}.ailment.stacksPerApply: must be non-negative integer`);
-        ok = false;
-      }
-      if (!isNonNegInt(a["dpsFixed"])) {
-        errors.push(`${path}.ailment.dpsFixed: must be a non-negative integer`);
-        ok = false;
-      }
-      if (!isNonNegInt(a["durationTicks"])) {
-        errors.push(`${path}.ailment.durationTicks: must be non-negative integer`);
-        ok = false;
-      }
-      if (!isNonNegInt(a["maxStacks"])) {
-        errors.push(`${path}.ailment.maxStacks: must be non-negative integer`);
-        ok = false;
-      }
-    }
+    if (!validateAilmentSpec(v["ailment"], `${path}.ailment`, errors)) ok = false;
   } else if (type === "teleport") {
     if (!isNonNegInt(v["distanceFixed"])) {
       errors.push(`${path}.distanceFixed: must be a non-negative integer`);
@@ -289,6 +295,7 @@ export function validateMonsterDef(v: unknown): ValidationResult {
         if (typeof p2["addDefId"] !== "string" || !ID_PATTERN.test(p2["addDefId"])) {
           errors.push("boss.phase2.addDefId: must match ID_PATTERN");
         }
+        validateAilmentSpec(p2["fireGround"], "boss.phase2.fireGround", errors);
         const cmp = p2["cadenceMulPct"];
         if (
           typeof cmp !== "number" ||

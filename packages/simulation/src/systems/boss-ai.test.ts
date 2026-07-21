@@ -41,6 +41,7 @@ const testMonsters: ReadonlyMap<string, MonsterDef> = new Map([
           addCount: 2,
           addDefId: "monster.cinder_imp.v1",
           cadenceMulPct: 80,
+          fireGround: { kind: "burning", stacksPerApply: 1, dpsFixed: fp(9), durationTicks: 45, maxStacks: 4 },
         },
       },
     },
@@ -347,7 +348,31 @@ describe("registerBossAI", () => {
 
     const teles = world.entitiesWith("telegraph");
     expect(teles).toHaveLength(1);
-    expect(world.get<TelegraphC>(teles[0]!, "telegraph")!.leavesGroundTicks).toBe(120);
+    const tg = world.get<TelegraphC>(teles[0]!, "telegraph")!;
+    expect(tg.leavesGroundTicks).toBe(120);
+    // The telegraph carries the phase-2 fireGround profile, mapped to GroundAreaC field names.
+    expect(tg.ground).toEqual({
+      ailmentKind: "burning",
+      stacksPerApply: 1,
+      dps: fp(9),
+      ailmentDuration: 45,
+      maxStacks: 4,
+    });
+  });
+
+  it("phase-1 slam leaves no ground (no patch, no profile)", () => {
+    const sim = new Simulation();
+    registerBossAI(sim, summonMonsters);
+    const { world } = sim;
+
+    makePlayerEntity(world, fp(5), fp(0));
+    makeBossEntity(world, fp(0), fp(0)); // phase 1, nextAbilityTick 0
+
+    sim.step();
+
+    const tg = world.get<TelegraphC>(world.entitiesWith("telegraph")[0]!, "telegraph")!;
+    expect(tg.leavesGroundTicks).toBe(0);
+    expect(tg.ground).toBeUndefined();
   });
 
   it("phase-2 slam uses the faster phase-2 cadence", () => {

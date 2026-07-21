@@ -91,6 +91,17 @@ export interface TelegraphC {
   startTick: number; impactTick: number;
   damage: Fixed; damageType: 0 | 1;
   leavesGroundTicks: number;
+  /**
+   * Burning-patch profile spawned at impact when leavesGroundTicks > 0. Field
+   * names mirror GroundAreaC so telegraphResolve can spread it. Absent = no patch.
+   */
+  ground?: {
+    ailmentKind: string;
+    stacksPerApply: number;
+    dps: Fixed;
+    ailmentDuration: number;
+    maxStacks: number;
+  };
 }
 export interface AilmentC {
   kind: string;

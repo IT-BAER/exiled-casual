@@ -81,6 +81,16 @@ export function registerBossAI(
           damage: slam.damageFixed,
           damageType: 1,
           leavesGroundTicks: boss.phase === 2 ? phase2.fireGroundDurationTicks : 0,
+          ground:
+            boss.phase === 2
+              ? {
+                  ailmentKind: phase2.fireGround.kind,
+                  stacksPerApply: phase2.fireGround.stacksPerApply,
+                  dps: phase2.fireGround.dpsFixed,
+                  ailmentDuration: phase2.fireGround.durationTicks,
+                  maxStacks: phase2.fireGround.maxStacks,
+                }
+              : undefined,
         });
         const cooldown =
           boss.phase === 2
