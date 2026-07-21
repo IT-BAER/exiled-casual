@@ -164,12 +164,6 @@ describe("createScene", () => {
     expect(ground).not.toBeNull();
     expect(ground!.isPickable).toBe(true);
   });
-
-  it("produces an arena-wall mesh", () => {
-    engine = new NullEngine();
-    const { scene } = createScene(engine);
-    expect(scene.getMeshByName("arena-wall")).not.toBeNull();
-  });
 });
 
 describe("makeMesh kinds", () => {

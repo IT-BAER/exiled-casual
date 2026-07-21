@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vitest";
 import { validateIntent, isToWorker } from "./index.js";
+import type { FromWorker } from "./index.js";
 import { fp } from "@pact/fixed-point";
+import { generateArea } from "@pact/mapgen";
 
 describe("validateIntent — valid intents pass through", () => {
   test("moveTo with integer coords", () => {
@@ -104,5 +106,20 @@ describe("validateIntent — interact", () => {
   test("interact with integer targetId round-trips", () => {
     const intent = { kind: "interact", targetId: 42 };
     expect(validateIntent(intent)).toEqual({ kind: "interact", targetId: 42 });
+  });
+});
+
+describe("FromWorker area message", () => {
+  // postMessage clones with the structured-clone algorithm; this guards against a
+  // future "optimisation" (e.g. JSON) that would silently drop the Uint8Array grid.
+  test("survives a structured-clone round-trip with grid.cells intact", () => {
+    const layout = generateArea(42, "slice1.v1");
+    const msg: FromWorker = { type: "area", layout };
+    const clone = structuredClone(msg);
+    expect(clone.type).toBe("area");
+    if (clone.type !== "area") throw new Error("unreachable");
+    expect(clone.layout.grid.cells).toBeInstanceOf(Uint8Array);
+    expect(clone.layout.grid.cells).toEqual(layout.grid.cells);
+    expect(clone.layout.hash).toBe(layout.hash);
   });
 });

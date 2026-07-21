@@ -7,6 +7,7 @@ import {
 import type { Simulation, World, Entity, Position } from "@pact/simulation";
 import type { Intent, Snapshot, SpawnKind } from "@pact/protocol";
 import { CONTENT_VERSION } from "@pact/content-runtime";
+import { generateArea, type AreaLayout } from "@pact/mapgen";
 
 // Wall-clock pacing constant (client-side only) — never fed into the sim.
 // ponytail: float constant is intentional; the accumulator drives integer tick steps.
@@ -23,6 +24,7 @@ export class WorkerCore {
   private readonly sim: Simulation;
   private readonly world: World;
   private readonly playerEntity: Entity;
+  private readonly areaLayout: AreaLayout;
   private accMs = 0;
   private pending: Intent[] = [];
 
@@ -33,6 +35,15 @@ export class WorkerCore {
     this.sim = sim;
     this.world = world;
     this.playerEntity = playerEntity;
+    // C3: generate the layout for the renderer to draw. The sim does NOT yet
+    // collide against it or place entities at its sockets — that is C4, which
+    // moves generation into createCombatSim and reads it back through here.
+    this.areaLayout = generateArea(seed, CONTENT_VERSION);
+  }
+
+  /** The area layout, sent to the renderer once so it can build floor + walls. */
+  getAreaLayout(): AreaLayout {
+    return this.areaLayout;
   }
 
   pushIntent(intent: Intent): void {

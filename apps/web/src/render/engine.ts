@@ -14,8 +14,6 @@ import {
   Vector3,
   type Engine,
 } from "@babylonjs/core";
-import { ARENA_RADIUS } from "@pact/simulation";
-import { toNumber } from "@pact/fixed-point";
 
 /**
  * Half-height of the orthographic view in world units (smaller = more zoomed in).
@@ -117,23 +115,9 @@ export function createScene(engine: Engine): SceneHandle {
   ground.material = groundMat;
   ground.receiveShadows = true;
 
-  // Arena boundary wall — a torus ring at the clamp radius so players can see
-  // where they'll be stopped. Dark stone, sits flush with the floor.
-  const arenaRadius = toNumber(ARENA_RADIUS); // 14 world units
-  const wall = MeshBuilder.CreateTorus(
-    "arena-wall",
-    // Thin: at ORTHO_HALF_HEIGHT 7 the camera sees ~14 units, so a fat ring eats
-    // the frame on both sides and reads as a donut instead of a boundary.
-    { diameter: arenaRadius * 2, thickness: 0.5, tessellation: 64 },
-    scene,
-  );
-  wall.position.y = 0.25; // lift so the bottom of the tube sits on y=0
-  const wallMat = new StandardMaterial("arena-wall-mat", scene);
-  wallMat.diffuseColor = new Color3(0.12, 0.11, 0.10);
-  wallMat.emissiveColor = new Color3(0.03, 0.025, 0.02);
-  wallMat.specularColor = new Color3(0, 0, 0);
-  wall.material = wallMat;
-  wall.receiveShadows = true;
+  // The dungeon walls are no longer a fixed arena ring — they come from the
+  // generated area's walkable grid, built by buildLevel() when the worker sends
+  // the "area" message. The ground plane above stays as the floor + pick target.
 
   try {
     // Glow bloom: emissive materials above a threshold bloom outward, which is how

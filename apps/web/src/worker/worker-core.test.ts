@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import { WorkerCore } from "./worker-core";
 import type { Intent } from "@pact/protocol";
 import { fp } from "@pact/fixed-point";
+import { generateArea } from "@pact/mapgen";
+import { CONTENT_VERSION } from "@pact/content-runtime";
 
 function monsters(core: WorkerCore) {
   return core.snapshot()!.entities.filter((e) => e.kind === "monster");
@@ -63,5 +65,11 @@ describe("WorkerCore", () => {
     expect(after).not.toBeNull();
     expect(after!.player.x).toBeGreaterThan(0);
     expect(after!.player.y).toBeGreaterThan(0);
+  });
+
+  it("exposes the area layout for transport, deterministic for the seed", () => {
+    // Same seed + content version as generateArea → identical layout (same hash).
+    const core = new WorkerCore(42);
+    expect(core.getAreaLayout().hash).toBe(generateArea(42, CONTENT_VERSION).hash);
   });
 });

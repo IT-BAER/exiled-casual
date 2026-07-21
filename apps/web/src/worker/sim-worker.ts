@@ -15,6 +15,9 @@ self.onmessage = (e: MessageEvent) => {
   const msg = raw;
   if (msg.type === "init") {
     core = new WorkerCore(msg.seed);
+    // Send the level layout once so the renderer can build floor + walls, then ready.
+    const area: FromWorker = { type: "area", layout: core.getAreaLayout() };
+    self.postMessage(area);
     const ready: FromWorker = { type: "ready" };
     self.postMessage(ready);
   } else if (msg.type === "intent" && core) {

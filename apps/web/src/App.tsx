@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Engine, Vector3 } from "@babylonjs/core";
 import { createScene } from "./render/engine";
+import { buildLevel } from "./render/level";
 import { SnapshotRenderer } from "./render/renderer";
 import { loadPlayerRig, resetPlayerRig } from "./render/rig";
 import { attachBindings } from "./input/bindings";
@@ -59,6 +60,9 @@ export function App() {
         setSnapshot(msg.snapshot);
         // Let bindings fire the interact intent once the pending target is inRange.
         onSnapshot(msg.snapshot);
+      } else if (msg.type === "area") {
+        // Sent once when the area is built — draw its floor + walls from the grid.
+        buildLevel(scene, msg.layout.grid);
       }
     };
 
