@@ -2,15 +2,16 @@ import { fpClamp, fpStepToward } from "@pact/fixed-point";
 import type { SkillDef } from "@pact/content-schema";
 import { Simulation } from "../loop";
 import { WORLD_MIN, WORLD_MAX } from "../movement";
-import { type Collision } from "../collision";
+import { type CollisionRef } from "../collision";
 import type { Position, PlayerC, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC, CastingC } from "../components";
 
 export function registerSkillCast(
   sim: Simulation,
   skills: ReadonlyMap<string, SkillDef>,
-  collision?: Collision,
+  collisionRef?: CollisionRef,
 ): void {
   sim.register("skillCast", (world, tick, commands) => {
+    const collision = collisionRef?.active ?? undefined;
     for (const cmd of commands) {
       if (cmd.type !== "useSkill" || cmd.entity === undefined || !cmd.skillId) continue;
       const caster = cmd.entity;

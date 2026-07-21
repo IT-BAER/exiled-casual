@@ -37,6 +37,12 @@ self.onmessage = (e: MessageEvent) => {
 setInterval(() => {
   if (!core) return;
   const snaps = core.advance(MS_PER_TICK);
+  // A portal transition swaps the level; re-send `area` before the snapshots so
+  // the renderer rebuilds (or clears) walls before drawing the new positions.
+  if (core.consumeAreaChange()) {
+    const area: FromWorker = { type: "area", area: core.getArea(), layout: core.getAreaLayout() };
+    self.postMessage(area);
+  }
   for (const snapshot of snaps) {
     const msg: FromWorker = { type: "snapshot", snapshot };
     self.postMessage(msg);

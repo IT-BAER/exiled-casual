@@ -127,7 +127,7 @@ describe("registerMonsterAI", () => {
       ]),
     );
     const sim = new Simulation();
-    registerMonsterAI(sim, collision);
+    registerMonsterAI(sim, { active: collision });
     const { world } = sim;
 
     const player = world.create();

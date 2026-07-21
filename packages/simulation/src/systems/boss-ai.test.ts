@@ -222,7 +222,7 @@ describe("registerBossAI", () => {
       ]),
     );
     const sim = new Simulation();
-    registerBossAI(sim, testMonsters, collision);
+    registerBossAI(sim, testMonsters, { active: collision });
     const { world } = sim;
 
     makePlayerEntity(world, fp(5), fp(2));

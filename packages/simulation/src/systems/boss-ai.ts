@@ -1,7 +1,7 @@
 import { fp, fpDist2, fpStepToward } from "@pact/fixed-point";
 import type { MonsterDef } from "@pact/content-schema";
 import { Simulation } from "../loop";
-import { slide, type Collision } from "../collision";
+import { slide, type CollisionRef } from "../collision";
 import { spawnMonster } from "../areas";
 import type { Position, MonsterC, Faction, BossC, TelegraphC, Health } from "../components";
 
@@ -20,9 +20,10 @@ const SUMMON_RING: readonly { dx: number; dy: number }[] = [
 export function registerBossAI(
   sim: Simulation,
   monsters: ReadonlyMap<string, MonsterDef>,
-  collision?: Collision,
+  collisionRef?: CollisionRef,
 ): void {
   sim.register("bossAI", (world, tick) => {
+    const collision = collisionRef?.active ?? undefined;
     for (const e of world.query("boss", "monster", "position", "faction")) {
       const mon = world.get<MonsterC>(e, "monster")!;
       const def = monsters.get(mon.defId);

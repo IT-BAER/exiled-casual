@@ -1,12 +1,30 @@
 import { describe, it, expect } from "vitest";
 import { WorkerCore } from "./worker-core";
-import type { Intent } from "@pact/protocol";
+import type { Intent, Snapshot } from "@pact/protocol";
 import { fp } from "@pact/fixed-point";
 import { generateArea } from "@pact/mapgen";
 import { CONTENT_VERSION } from "@pact/content-runtime";
 
 function monsters(core: WorkerCore) {
   return core.snapshot()!.entities.filter((e) => e.kind === "monster");
+}
+
+function advanceUntil(core: WorkerCore, pred: (s: Snapshot) => boolean, maxTicks = 600): Snapshot {
+  for (let i = 0; i < maxTicks; i++) {
+    core.advance(34);
+    const s = core.snapshot()!;
+    if (pred(s)) return s;
+  }
+  throw new Error("advanceUntil: predicate never held");
+}
+
+/**
+ * Steer to a world-unit point and advance until the player is within interact
+ * range of it. Snapshot positions are world floats, but moveTo wants fixed-point.
+ */
+function walkTo(core: WorkerCore, x: number, y: number): void {
+  core.pushIntent({ kind: "moveTo", x: fp(x), y: fp(y) });
+  advanceUntil(core, (s) => Math.hypot(s.player.x - x, s.player.y - y) <= 2);
 }
 
 // ponytail: determinism is the whole point — these three cases cover the contract
@@ -70,6 +88,30 @@ describe("WorkerCore", () => {
   it("exposes the area layout for transport, deterministic for the seed", () => {
     // Same seed + content version as generateArea → identical layout (same hash).
     const core = new WorkerCore(42);
+    expect(core.getAreaLayout().hash).toBe(generateArea(42, CONTENT_VERSION).hash);
+  });
+
+  it("flags an area change and swaps to the map layout when the player enters through a portal", () => {
+    const core = new WorkerCore(42);
+    core.advance(34);
+    expect(core.getArea()).toBe("hideout");
+    expect(core.consumeAreaChange()).toBe(false); // no change yet
+
+    // Walk to the map device and open the portal ring.
+    const device = core.snapshot()!.entities.find((e) => e.kind === "mapDevice")!;
+    walkTo(core, device.x, device.y);
+    core.pushIntent({ kind: "interact", targetId: device.id });
+    advanceUntil(core, (s) => s.entities.some((e) => e.kind === "portal"));
+
+    // Step through a portal into the dungeon.
+    const portal = core.snapshot()!.entities.find((e) => e.kind === "portal")!;
+    walkTo(core, portal.x, portal.y);
+    core.pushIntent({ kind: "interact", targetId: portal.id });
+    advanceUntil(core, () => core.getArea() === "map");
+
+    // The glue can now re-send `area`, and the layout matches the generated map.
+    expect(core.consumeAreaChange()).toBe(true);
+    expect(core.consumeAreaChange()).toBe(false); // one-shot
     expect(core.getAreaLayout().hash).toBe(generateArea(42, CONTENT_VERSION).hash);
   });
 });

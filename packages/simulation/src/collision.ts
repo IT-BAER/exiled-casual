@@ -13,6 +13,17 @@ export interface Collision {
 }
 
 /**
+ * A mutable holder for the active level collision, read fresh by every movement
+ * system each tick. Collision is captured in a system's register-time closure,
+ * so an area transition (hideout → map) can only turn walls on/off by mutating
+ * this shared holder — `active` is `null` wherever there is no level to collide
+ * against (the hideout lab, legacy sims).
+ */
+export interface CollisionRef {
+  active: Collision | null;
+}
+
+/**
  * Axis-separated slide against `collision`: move along X and Y independently,
  * cancelling only the axis that would push the body into a wall. This is what
  * makes an actor slide along a wall it walks into instead of sticking.

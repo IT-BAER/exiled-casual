@@ -160,7 +160,7 @@ describe("registerPlayerMovement", () => {
       ]),
     );
     const sim = new Simulation();
-    registerPlayerMovement(sim, collision);
+    registerPlayerMovement(sim, { active: collision });
     // Point body so the test reasons in whole cells.
     const p = sim.world.create();
     sim.world.set<Position>(p, "position", { x: fp(2), y: fp(2) });

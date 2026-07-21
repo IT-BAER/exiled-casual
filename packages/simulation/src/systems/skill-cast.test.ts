@@ -184,7 +184,7 @@ describe("registerSkillCast", () => {
       ]),
     );
     const sim = new Simulation();
-    registerSkillCast(sim, ALL_SKILLS, collision);
+    registerSkillCast(sim, ALL_SKILLS, { active: collision });
     const caster = makeCaster(sim, fp(60));
     sim.step([{
       tick: 0, entity: caster, type: "useSkill",

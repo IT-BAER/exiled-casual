@@ -2,7 +2,7 @@ import { fp } from "@pact/fixed-point";
 import { baseCasterStats, makeRare } from "@pact/rules";
 import { SKILLS, MONSTERS, RARE_TEMPLATE, CONTENT_VERSION } from "@pact/content-runtime";
 import { generateArea, type AreaLayout } from "@pact/mapgen";
-import { gridCollision } from "./collision";
+import { gridCollision, type CollisionRef } from "./collision";
 import { Simulation } from "./loop";
 import { World } from "./ecs";
 import type { Entity } from "./ecs";
@@ -37,14 +37,19 @@ export function createCombatSim(
   // Phase D's areaTransition pass a pre-built layout). Collision is only wired
   // for the "map" area; the hideout lab and legacy paths stay world-bounded.
   const layout = opts.layout ?? generateArea(seed, CONTENT_VERSION);
-  const collision = opts.area === "map" ? gridCollision(layout.grid) : undefined;
+  // One mutable holder shared by every movement system AND the area-transition
+  // system, so walking hideout → map turns collision on mid-session (and off on
+  // the way back) without re-registering systems.
+  const collisionRef: CollisionRef = {
+    active: opts.area === "map" ? gridCollision(layout.grid) : null,
+  };
 
   // ── Register systems in canonical order ──────────────────────────────────
   registerResourceRegen(sim);
-  registerSkillCast(sim, SKILLS, collision);
-  registerPlayerMovement(sim, collision);
-  registerMonsterAI(sim, collision);
-  registerBossAI(sim, MONSTERS, collision);
+  registerSkillCast(sim, SKILLS, collisionRef);
+  registerPlayerMovement(sim, collisionRef);
+  registerMonsterAI(sim, collisionRef);
+  registerBossAI(sim, MONSTERS, collisionRef);
   registerProjectileMove(sim);
   registerGroundAreaTick(sim);
   // Impacts land before damageResolve so a telegraph hits on its own impact tick.
@@ -96,7 +101,7 @@ export function createCombatSim(
     // New systems only needed for area-based sims. Appended to preserve the
     // canonical ordering of the first 12 systems (checked by legacy tests).
     registerInteractSystem(sim);
-    registerAreaTransition(sim);
+    registerAreaTransition(sim, collisionRef);
   } else {
     // ── Legacy path: no session, golden-replay–safe bootstrap ────────────
     if (opts.monsters !== false) {

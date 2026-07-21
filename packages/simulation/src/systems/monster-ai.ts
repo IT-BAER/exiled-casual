@@ -1,11 +1,12 @@
 import { fpDist2, fpStepToward, fpClamp } from "@pact/fixed-point";
 import { WORLD_MIN, WORLD_MAX } from "../movement";
-import { slide, type Collision } from "../collision";
+import { slide, type CollisionRef } from "../collision";
 import { Simulation } from "../loop";
 import type { Position, MonsterC, Faction } from "../components";
 
-export function registerMonsterAI(sim: Simulation, collision?: Collision): void {
+export function registerMonsterAI(sim: Simulation, collisionRef?: CollisionRef): void {
   sim.register("monsterAI", (world, tick) => {
+    const collision = collisionRef?.active ?? undefined;
     const players = world
       .query("player", "faction", "position")
       .filter((e) => (world.get<Faction>(e, "faction")?.team ?? -1) === 0);

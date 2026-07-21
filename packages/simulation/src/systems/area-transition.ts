@@ -1,10 +1,12 @@
+import { fp } from "@pact/fixed-point";
 import { generateArea } from "@pact/mapgen";
 import { CONTENT_VERSION } from "@pact/content-runtime";
 import { Simulation } from "../loop";
+import { gridCollision, type CollisionRef } from "../collision";
 import type { SessionC, MoveTarget, MoveDir, Position } from "../components";
-import { buildArea, HIDEOUT_SPAWN, MAP_SPAWN } from "../areas";
+import { buildArea, HIDEOUT_SPAWN } from "../areas";
 
-export function registerAreaTransition(sim: Simulation): void {
+export function registerAreaTransition(sim: Simulation, collisionRef?: CollisionRef): void {
   sim.register("areaTransition", (world) => {
     const sessionEntities = world.query("session");
     if (sessionEntities.length === 0) return;
@@ -29,13 +31,17 @@ export function registerAreaTransition(sim: Simulation): void {
     world.set<SessionC>(sessionE, "session", newSession);
 
     // The map is placed against its generated layout; the hideout ignores it.
-    // ponytail: collision is registered once at sim creation, so transitioning
-    // INTO the map won't collide until Phase D re-wires systems per area.
     const layout = generateArea(newSession.mapSeed, CONTENT_VERSION);
     buildArea(world, newArea, newSession, layout);
 
-    // Move player(s) to the area's spawn and clear stale movement state.
-    const spawnPt = newArea === "hideout" ? HIDEOUT_SPAWN : MAP_SPAWN;
+    // Swap the shared level collision: walls on inside the map, off in the hideout.
+    if (collisionRef) {
+      collisionRef.active = newArea === "map" ? gridCollision(layout.grid) : null;
+    }
+
+    // Move player(s) to the area's spawn and clear stale movement state. On the
+    // map that is the generated "start" socket, not the (0,0) map origin.
+    const spawnPt = newArea === "map" ? mapStart(layout) : HIDEOUT_SPAWN;
     for (const p of world.query("player")) {
       world.set<Position>(p, "position", { x: spawnPt.x, y: spawnPt.y });
       const mt = world.get<MoveTarget>(p, "moveTarget");
@@ -44,4 +50,11 @@ export function registerAreaTransition(sim: Simulation): void {
       if (md) world.set<MoveDir>(p, "moveDir", { dx: 0, dy: 0 });
     }
   });
+}
+
+/** The map's "start" objective anchor, as fixed-point spawn coordinates. */
+function mapStart(layout: ReturnType<typeof generateArea>): { x: number; y: number } {
+  const a = layout.objectiveAnchors.find((s) => s.id === "start");
+  if (!a) throw new Error('layout missing "start" anchor');
+  return { x: fp(a.x), y: fp(a.y) };
 }

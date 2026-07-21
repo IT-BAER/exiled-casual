@@ -1,7 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { fp } from "@pact/fixed-point";
+import { generateArea } from "@pact/mapgen";
+import { CONTENT_VERSION } from "@pact/content-runtime";
 import { Simulation } from "../loop";
 import { registerAreaTransition } from "./area-transition";
+import { gridCollision, type CollisionRef } from "../collision";
 import type { SessionC, Health, Mana, Position } from "../components";
 
 function makeWorld() {
@@ -124,5 +127,56 @@ describe("registerAreaTransition", () => {
     const posBefore = world.get<Position>(player, "position")!;
     sim.step();
     expect(world.get<Position>(player, "position")).toEqual(posBefore);
+  });
+});
+
+describe("registerAreaTransition — map entry (collision + start socket)", () => {
+  function makePlayer(world: ReturnType<typeof makeWorld>["world"]) {
+    const player = world.create();
+    world.set(player, "player", { moveSpeed: fp(4), bodyRadius: fp(0.5) });
+    world.set<Position>(player, "position", { x: fp(5), y: fp(3) });
+    world.set(player, "moveTarget", { x: fp(5), y: fp(3), active: 1 });
+    world.set(player, "moveDir", { dx: 0, dy: 0 });
+    return player;
+  }
+
+  it("entering the map activates collision and spawns the player at the start socket", () => {
+    const sim = new Simulation();
+    const ref: CollisionRef = { active: null };
+    registerAreaTransition(sim, ref);
+    const { world } = sim;
+    const player = makePlayer(world);
+
+    const seed = 42;
+    const sessionE = world.create();
+    world.set<SessionC>(sessionE, "session", {
+      area: "hideout", mapSeed: seed, portalsLeft: 0, mapOpen: 1, pendingArea: "map",
+    });
+
+    sim.step();
+
+    // Collision is now live (the map has walls).
+    expect(ref.active).not.toBeNull();
+    // Player lands on the generated map's start socket, not the (0,0) map spawn.
+    const start = generateArea(seed, CONTENT_VERSION).objectiveAnchors.find((a) => a.id === "start")!;
+    expect(world.get<Position>(player, "position")).toEqual({ x: fp(start.x), y: fp(start.y) });
+  });
+
+  it("leaving the map (back to hideout) clears collision and spawns at (0,0)", () => {
+    const sim = new Simulation();
+    const ref: CollisionRef = { active: gridCollision(generateArea(1, CONTENT_VERSION).grid) };
+    registerAreaTransition(sim, ref);
+    const { world } = sim;
+    const player = makePlayer(world);
+
+    const sessionE = world.create();
+    world.set<SessionC>(sessionE, "session", {
+      area: "map", mapSeed: 1, portalsLeft: 0, mapOpen: 1, pendingArea: "hideout",
+    });
+
+    sim.step();
+
+    expect(ref.active).toBeNull();
+    expect(world.get<Position>(player, "position")).toEqual({ x: 0, y: 0 });
   });
 });

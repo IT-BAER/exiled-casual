@@ -4,10 +4,10 @@ import {
   buildSnapshot,
   spawnLabActors,
 } from "@pact/simulation";
-import type { Simulation, World, Entity, Position } from "@pact/simulation";
+import type { Simulation, World, Entity, Position, SessionC } from "@pact/simulation";
 import type { Intent, Snapshot, SpawnKind, AreaKind } from "@pact/protocol";
 import { CONTENT_VERSION } from "@pact/content-runtime";
-import type { AreaLayout } from "@pact/mapgen";
+import { generateArea, type AreaLayout } from "@pact/mapgen";
 
 // Wall-clock pacing constant (client-side only) — never fed into the sim.
 // ponytail: float constant is intentional; the accumulator drives integer tick steps.
@@ -24,14 +24,19 @@ export class WorkerCore {
   private readonly sim: Simulation;
   private readonly world: World;
   private readonly playerEntity: Entity;
-  private readonly areaLayout: AreaLayout;
-  private readonly area: AreaKind;
+  private readonly seed: number;
+  private areaLayout: AreaLayout;
+  private area: AreaKind;
+  // Set when the session's area flips mid-run (portal transition); the glue reads
+  // it via consumeAreaChange() to re-send the `area` message so walls rebuild.
+  private areaDirty = false;
   private accMs = 0;
   private pending: Intent[] = [];
 
   constructor(seed: number) {
     // The lab starts empty. Monsters and the boss arrive on the numpad spawn
     // keys, so a model, an animation, or an effect can be looked at in peace.
+    this.seed = seed;
     this.area = "hideout";
     const { sim, world, playerEntity, layout } = createCombatSim(seed, { area: this.area });
     this.sim = sim;
@@ -50,6 +55,17 @@ export class WorkerCore {
   /** The area layout, sent to the renderer once so it can build floor + walls. */
   getAreaLayout(): AreaLayout {
     return this.areaLayout;
+  }
+
+  /**
+   * True at most once per transition: the session's area changed since the last
+   * call, so the glue should re-send `area` (with getArea/getAreaLayout) to make
+   * the renderer swap the dungeon walls in or out. Clears the flag on read.
+   */
+  consumeAreaChange(): boolean {
+    const changed = this.areaDirty;
+    this.areaDirty = false;
+    return changed;
   }
 
   pushIntent(intent: Intent): void {
@@ -72,11 +88,28 @@ export class WorkerCore {
       this.pending = [];
       this.sim.step(commands);
       this.accMs -= MS_PER_TICK;
+      this.syncArea();
       out.push(
         buildSnapshot(this.world, this.sim, this.sim.tick, CONTENT_VERSION),
       );
     }
     return out;
+  }
+
+  /**
+   * Reconcile the cached area with the sim's session after a step. A portal
+   * transition flips session.area; when it does, regenerate the layout (seed →
+   * layout is pure, so this matches the collision grid the sim installed) and
+   * raise areaDirty for the glue to re-emit.
+   */
+  private syncArea(): void {
+    const sessionE = this.world.query("session")[0];
+    if (sessionE === undefined) return;
+    const session = this.world.get<SessionC>(sessionE, "session");
+    if (session === undefined || session.area === this.area) return;
+    this.area = session.area;
+    this.areaLayout = generateArea(this.seed, CONTENT_VERSION);
+    this.areaDirty = true;
   }
 
   /** Latest snapshot, or null before the first tick. */

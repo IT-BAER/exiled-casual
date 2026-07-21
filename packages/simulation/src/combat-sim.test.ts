@@ -5,7 +5,7 @@ import { MONSTERS, CONTENT_VERSION } from "@pact/content-runtime";
 import { generateArea } from "@pact/mapgen";
 import { createCombatSim, spawnLabActors } from "./combat-sim";
 import { gridCollision } from "./collision";
-import type { BossC, MonsterC, Position, MoveTarget } from "./components";
+import type { BossC, MonsterC, Position, MoveTarget, SessionC } from "./components";
 
 describe("createCombatSim", () => {
   it("spawns exactly 1 player and 6 monsters (5 normal + 1 rare)", () => {
@@ -154,6 +154,30 @@ describe("createCombatSim", () => {
     for (let t = 0; t < 120; t++) sim.step([]);
     const p = world.get<Position>(playerEntity, "position")!;
     expect(col.isWalkable(p.x, p.y, fp(0.5))).toBe(true);
+  });
+
+  it("hideout → map transition turns collision on in the running sim (player can't leave the walkable grid)", () => {
+    // Boot in the hideout: no walls, player free at the origin.
+    const { sim, world, playerEntity } = createCombatSim(42, { area: "hideout" });
+    const start = generateArea(42, CONTENT_VERSION).objectiveAnchors.find((a) => a.id === "start")!;
+    const mapCol = gridCollision(generateArea(42, CONTENT_VERSION).grid);
+
+    // Enter the map the way a portal interact would: flag the pending area, step.
+    const sessionE = world.query("session")[0]!;
+    const session = world.get<SessionC>(sessionE, "session")!;
+    world.set<SessionC>(sessionE, "session", { ...session, pendingArea: "map" });
+    sim.step([]);
+
+    // Landed on the start socket.
+    const afterEntry = world.get<Position>(playerEntity, "position")!;
+    expect(afterEntry).toEqual({ x: fp(start.x), y: fp(start.y) });
+
+    // Now steering hard into a guaranteed wall never lands off the walkable grid —
+    // proof the collision the transition installed is the one the movement system reads.
+    world.set<MoveTarget>(playerEntity, "moveTarget", { x: fp(100), y: fp(100), active: 1 });
+    for (let t = 0; t < 120; t++) sim.step([]);
+    const p = world.get<Position>(playerEntity, "position")!;
+    expect(mapCol.isWalkable(p.x, p.y, fp(0.5))).toBe(true);
   });
 
   it("system registration order matches canonical spec", () => {

@@ -9,9 +9,9 @@ import type {
   InteractableC, SessionC, AreaKind,
 } from "./components";
 
-// Player spawn points for each area (both happen to be the origin).
+// Hideout player spawn (the origin). The map spawns the player on its generated
+// "start" socket instead — see area-transition.ts / combat-sim.ts.
 export const HIDEOUT_SPAWN = { x: fp(0), y: fp(0) } as const;
-export const MAP_SPAWN = { x: fp(0), y: fp(0) } as const;
 
 // Close enough to the (0,0) spawn that the device is on screen the moment you
 // arrive: the ortho camera only shows ~9.5 world units vertically.

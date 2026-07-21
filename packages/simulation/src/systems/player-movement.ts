@@ -1,14 +1,17 @@
 import { fpClamp, fpStepToward } from "@pact/fixed-point";
 import { Simulation } from "../loop";
 import { WORLD_MIN, WORLD_MAX } from "../movement";
-import { slide, type Collision } from "../collision";
+import { slide, type CollisionRef } from "../collision";
 import type { Position, PlayerC, MoveTarget, MoveDir, CastingC } from "../components";
 
 /** Player moves at this percent of moveSpeed during post-cast recovery. */
 export const CASTING_MOVE_PCT = 40;
 
-export function registerPlayerMovement(sim: Simulation, collision?: Collision): void {
+export function registerPlayerMovement(sim: Simulation, collisionRef?: CollisionRef): void {
   sim.register("playerMovement", (world, tick, commands) => {
+    // Read the live level collision (mutated by area transitions); null off-map.
+    const collision = collisionRef?.active ?? undefined;
+
     // 1. Apply commands to moveTarget / moveDir components.
     for (const cmd of commands) {
       if (cmd.entity === undefined) continue;
