@@ -36,9 +36,9 @@ export const MAP_PORTALS = 6;
 // ---------------------------------------------------------------------------
 
 /** Lab-only spawn control, so a test arena can start empty and be filled on demand. */
-export type SpawnKind = "imp" | "pack" | "rare" | "boss" | "clear";
+export type SpawnKind = "imp" | "pack" | "rare" | "boss" | "clear" | "hurtboss";
 
-export const SPAWN_KINDS: readonly SpawnKind[] = ["imp", "pack", "rare", "boss", "clear"];
+export const SPAWN_KINDS: readonly SpawnKind[] = ["imp", "pack", "rare", "boss", "clear", "hurtboss"];
 
 export interface ToWorker_Init   { type: "init"; seed: number }
 export interface ToWorker_Intent { type: "intent"; intent: Intent }

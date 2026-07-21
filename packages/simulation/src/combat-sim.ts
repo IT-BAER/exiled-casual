@@ -137,12 +137,25 @@ const PACK_RING: readonly [number, number][] = [
  */
 export function spawnLabActors(
   world: World,
-  kind: "imp" | "pack" | "rare" | "boss" | "clear",
+  kind: "imp" | "pack" | "rare" | "boss" | "clear" | "hurtboss",
   cx: number,
   cy: number,
 ): void {
   if (kind === "clear") {
     for (const e of [...world.query("monster")]) world.destroy(e);
+    return;
+  }
+
+  if (kind === "hurtboss") {
+    // Lab-only: chip 20% of maxLife off every boss so the phase-2 transition and
+    // death can be driven for visual QA without a full mana-limited fight. Bypasses
+    // resistances by design (debug damage) and clamps at 0 rather than going negative.
+    for (const e of world.query("boss")) {
+      const h = world.get<Health>(e, "health");
+      if (h) {
+        world.set<Health>(e, "health", { ...h, life: Math.max(0, h.life - Math.trunc((h.maxLife * 20) / 100)) });
+      }
+    }
     return;
   }
 

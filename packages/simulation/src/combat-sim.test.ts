@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { checksumWorld } from "@pact/simulation";
 import { fp } from "@pact/fixed-point";
 import { MONSTERS } from "@pact/content-runtime";
-import { createCombatSim } from "./combat-sim";
+import { createCombatSim, spawnLabActors } from "./combat-sim";
 import type { BossC, MonsterC, Position } from "./components";
 
 describe("createCombatSim", () => {
@@ -103,6 +103,26 @@ describe("createCombatSim", () => {
     const wardenDef = MONSTERS.get("monster.cinder_warden.v1")!;
     const health = world.get<{ maxLife: number }>(boss, "health")!;
     expect(health.maxLife).toBe(wardenDef.maxLifeFixed);
+  });
+
+  it("lab 'hurtboss' chips 20% of maxLife per call, crosses the phase-2 line, and clamps at 0", () => {
+    const { world } = createCombatSim(42, { boss: true });
+    const boss = world.query("boss")[0]!;
+    const life = () => world.get<{ life: number; maxLife: number }>(boss, "health")!;
+    const { maxLife } = life();
+    const chunk = Math.trunc((maxLife * 20) / 100);
+
+    spawnLabActors(world, "hurtboss", 0, 0);
+    expect(life().life).toBe(maxLife - chunk);
+
+    // Two more chips drop it to 40% of max — at or below the 50% phase-2 threshold.
+    spawnLabActors(world, "hurtboss", 0, 0);
+    spawnLabActors(world, "hurtboss", 0, 0);
+    expect(life().life * 2).toBeLessThanOrEqual(maxLife);
+
+    // Never underflows past 0, however many times it is applied.
+    for (let i = 0; i < 10; i++) spawnLabActors(world, "hurtboss", 0, 0);
+    expect(life().life).toBe(0);
   });
 
   it("system registration order matches canonical spec", () => {
