@@ -136,9 +136,17 @@ No new message type. The HUD finds the boss with `entities.find(e => e.boss)`.
       `resetBoss(world, tick)` (exported from `boss-ai.ts`, called by `death.ts`): boss to full
       life, phase 1, back to spawn, all `summoned` monsters and all telegraphs destroyed. Tests:
       respawn at checkpoint, full boss reset, no reset when no boss exists.
-- [ ] **B3 — golden replay.** `packages/replay/src/scenarios/boss.ts` + tests: phase
+- [x] **B3 — golden replay.** `packages/replay/src/scenarios/boss.ts` + tests: phase
       transition, telegraph impact, boss reset, and checksum-equality determinism
-      (spec §9 requires exactly this scenario).
+      (spec §9 requires exactly this scenario). Recorded against the AREA run loop
+      (`createCombatSim(seed, { area: "map" })` + real interact/areaTransition), not
+      the legacy path. Two replay-safe fixture tunes: isolate the boss from the imp
+      swarm, and seed the warden near its phase-2 threshold (a full-life solo is
+      infeasible under caster mana-regen vs. slam damage) so scripted bolts drive the
+      real transition. Reset = portal interact → areaTransition teardown. Fixing this
+      exposed and fixed two determinism-serializer gaps the legacy path never hit:
+      `checksumWorld` now skips the render-only `yaw` and recurses into nested
+      objects (`TelegraphC.ground`) instead of throwing.
 - [ ] **B4 — devlog screenshot** of the phase-2 fight.
 
 ## Phase C — indoor mapgen

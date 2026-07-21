@@ -7,12 +7,21 @@ import { fnv1a32 } from "./rng";
 // non-integer is float leakage — the one real cross-engine hazard (transcendental
 // results are finite but differ across engines) — and must throw, not just NaN/Inf.
 function stableValue(v: unknown): string {
+  // An unset optional field (e.g. TelegraphC.ground on a phase-1 slam) hashes as
+  // absent — identical to the field simply not being present.
+  if (v === undefined || v === null) return "_";
   if (typeof v === "number") {
     if (!Number.isInteger(v)) throw new Error(`non-integer value in world state: ${v}`);
     return `n:${v}`;
   }
   if (typeof v === "boolean") return `b:${v ? 1 : 0}`;
   if (typeof v === "string") return `s:${v}`;
+  // A nested record (e.g. TelegraphC.ground) is serialized by its sorted keys, so
+  // its contents are part of the hash — divergence in a sub-object is still caught.
+  if (typeof v === "object" && !Array.isArray(v)) {
+    const rec = v as Record<string, unknown>;
+    return `{${Object.keys(rec).sort().map((k) => `${k}=${stableValue(rec[k])}`).join(",")}}`;
+  }
   throw new Error(`unsupported component value type: ${typeof v}`);
 }
 
@@ -30,6 +39,11 @@ export function serializeWorld(world: World): string {
       if (!data) continue;
       parts.push(`@${e}`);
       for (const key of Object.keys(data).sort()) {
+        // `yaw` is the one documented render-only field (InteractableC): a radian
+        // angle, not a Fixed, set as a construction constant by buildArea. It never
+        // varies between runs of the same area, so it cannot mask a divergence —
+        // and hashing a cosmetic float would trip the integer guard below.
+        if (key === "yaw") continue;
         parts.push(`${key}=${stableValue(data[key])}`);
       }
     }
