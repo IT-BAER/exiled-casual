@@ -5,7 +5,7 @@ import {
   spawnLabActors,
 } from "@pact/simulation";
 import type { Simulation, World, Entity, Position } from "@pact/simulation";
-import type { Intent, Snapshot, SpawnKind } from "@pact/protocol";
+import type { Intent, Snapshot, SpawnKind, AreaKind } from "@pact/protocol";
 import { CONTENT_VERSION } from "@pact/content-runtime";
 import type { AreaLayout } from "@pact/mapgen";
 
@@ -25,20 +25,26 @@ export class WorkerCore {
   private readonly world: World;
   private readonly playerEntity: Entity;
   private readonly areaLayout: AreaLayout;
+  private readonly area: AreaKind;
   private accMs = 0;
   private pending: Intent[] = [];
 
   constructor(seed: number) {
     // The lab starts empty. Monsters and the boss arrive on the numpad spawn
     // keys, so a model, an animation, or an effect can be looked at in peace.
-    const { sim, world, playerEntity, layout } = createCombatSim(seed, { area: "hideout" });
+    this.area = "hideout";
+    const { sim, world, playerEntity, layout } = createCombatSim(seed, { area: this.area });
     this.sim = sim;
     this.world = world;
     this.playerEntity = playerEntity;
-    // The sim owns generation (seed → layout); the renderer draws these walls.
-    // The hideout is collision-free, so the layout here is cosmetic until the
-    // player enters the "map" area.
+    // The sim owns generation (seed → layout); the renderer draws the map's
+    // walls from it. The hideout is an open lab, so its walls aren't drawn.
     this.areaLayout = layout;
+  }
+
+  /** The current area kind — the renderer draws dungeon walls only for "map". */
+  getArea(): AreaKind {
+    return this.area;
   }
 
   /** The area layout, sent to the renderer once so it can build floor + walls. */

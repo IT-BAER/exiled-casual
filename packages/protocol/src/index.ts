@@ -94,7 +94,7 @@ export interface FromWorker_Snapshot { type: "snapshot"; snapshot: Snapshot }
 export interface FromWorker_Ready    { type: "ready" }
 /** Sent once when an area is built, so the renderer can draw its floor + walls.
  *  Carries the whole layout; the renderer only reads `layout.grid` today. */
-export interface FromWorker_Area     { type: "area"; layout: AreaLayout }
+export interface FromWorker_Area     { type: "area"; area: AreaKind; layout: AreaLayout }
 export type FromWorker = FromWorker_Snapshot | FromWorker_Ready | FromWorker_Area;
 
 // ---------------------------------------------------------------------------

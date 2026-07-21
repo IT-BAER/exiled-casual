@@ -12,8 +12,9 @@ afterEach(() => {
 });
 
 // 5×5 grid with a centred 3×3 walkable room (cells (1..3, 1..3)). A wall cell (0)
-// is "boundary" when a cardinal neighbour is floor — the 12 edge cells around the
-// room qualify; the 4 outer corners do not. 12 is the independent expected value.
+// is "boundary" when ANY of its 8 neighbours is floor (diagonals included, so room
+// corners fill and walls meet flush). Every one of the 16 wall cells here is within
+// a Chebyshev step of the room, so all 16 qualify. 16 is the independent expected value.
 function roomGrid(): WalkableGrid {
   const cells = new Uint8Array(25);
   for (let y = 1; y <= 3; y++) for (let x = 1; x <= 3; x++) cells[y * 5 + x] = 1;
@@ -27,7 +28,7 @@ describe("buildLevel", () => {
 
     const result = buildLevel(scene, roomGrid());
 
-    expect(result.wallCells).toBe(12);
+    expect(result.wallCells).toBe(16);
     expect(scene.getMeshByName("level-walls")).not.toBeNull();
   });
 
@@ -39,5 +40,17 @@ describe("buildLevel", () => {
     buildLevel(scene, roomGrid());
 
     expect(scene.meshes.filter((m) => m.name === "level-walls").length).toBe(1);
+  });
+
+  it("clears the walls when given a null grid (open area like the hideout)", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+
+    buildLevel(scene, roomGrid());
+    const result = buildLevel(scene, null);
+
+    expect(result.walls).toBeNull();
+    expect(result.wallCells).toBe(0);
+    expect(scene.getMeshByName("level-walls")).toBeNull();
   });
 });

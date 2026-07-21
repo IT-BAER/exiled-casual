@@ -61,8 +61,10 @@ export function App() {
         // Let bindings fire the interact intent once the pending target is inRange.
         onSnapshot(msg.snapshot);
       } else if (msg.type === "area") {
-        // Sent once when the area is built — draw its floor + walls from the grid.
-        buildLevel(scene, msg.layout.grid);
+        // Dungeon walls belong to the "map". The hideout is an open lab: pass an
+        // empty grid so buildLevel clears any stale walls and draws none.
+        const grid = msg.area === "map" ? msg.layout.grid : null;
+        buildLevel(scene, grid);
       }
     };
 
