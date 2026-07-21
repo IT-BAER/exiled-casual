@@ -119,4 +119,45 @@ describe("registerDeath", () => {
     sim.step();
     expect(world.alive.has(m)).toBe(true);
   });
+
+  // ── Atlas node completion on boss death ─────────────────────────────────
+
+  function makeBossDeath(area: "hideout" | "map", activeNodeId: string, completedNodes: string[]) {
+    const sim = new Simulation();
+    registerDeath(sim);
+    const { world } = sim;
+
+    const sessionE = world.create();
+    world.set<SessionC>(sessionE, "session", {
+      area, atlasSeed: 0, mapSeed: 0, areaTier: 5, activeNodeId, completedNodes,
+      portalsLeft: 6, mapOpen: 1, pendingArea: "",
+    });
+
+    const boss = world.create();
+    world.set(boss, "monster", { defId: "boss", state: "idle", moveSpeed: 0, bodyRadius: 0,
+      attackRange: 0, attackCooldownTicks: 0, attackDamage: 0, attackType: 1, attackReadyTick: 0, rare: 0, summoned: 0 });
+    world.set(boss, "health", { life: 0, maxLife: fp(500) });
+    world.set(boss, "boss", { phase: 1, nextAbilityTick: 0, spawnX: 0, spawnY: 0, rootedUntilTick: 0 });
+
+    return { sim, world, sessionE, boss };
+  }
+
+  it("marks the active node completed when the map boss dies", () => {
+    const { sim, world, sessionE } = makeBossDeath("map", "node.ashen_glade", []);
+    sim.step();
+    expect(world.get<SessionC>(sessionE, "session")!.completedNodes).toContain("node.ashen_glade");
+  });
+
+  it("does not double-add an already-completed node", () => {
+    const { sim, world, sessionE } = makeBossDeath("map", "node.ashen_glade", ["node.ashen_glade"]);
+    sim.step();
+    expect(world.get<SessionC>(sessionE, "session")!.completedNodes).toEqual(["node.ashen_glade"]);
+  });
+
+  it("does not complete a node when a non-boss monster dies", () => {
+    const { sim, world, sessionE } = makeBossDeath("map", "node.ashen_glade", []);
+    world.remove(world.query("boss")[0]!, "boss"); // now an ordinary monster at 0 life
+    sim.step();
+    expect(world.get<SessionC>(sessionE, "session")!.completedNodes).toEqual([]);
+  });
 });

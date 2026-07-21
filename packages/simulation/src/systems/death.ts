@@ -4,9 +4,21 @@ import type { Health, Mana, MoveTarget, MoveDir, SessionC } from "../components"
 export function registerDeath(sim: Simulation): void {
   sim.register("death", (world) => {
     for (const e of world.query("monster", "health")) {
-      if ((world.get<Health>(e, "health")?.life ?? 1) <= 0) {
-        world.destroy(e);
+      if ((world.get<Health>(e, "health")?.life ?? 1) > 0) continue;
+      // A dying map boss completes the active Atlas node before it is destroyed.
+      if (world.has(e, "boss")) {
+        const sessionE = world.query("session")[0];
+        if (sessionE !== undefined) {
+          const s = world.get<SessionC>(sessionE, "session")!;
+          if (s.area === "map" && s.activeNodeId !== "" && !s.completedNodes.includes(s.activeNodeId)) {
+            world.set<SessionC>(sessionE, "session", {
+              ...s,
+              completedNodes: [...s.completedNodes, s.activeNodeId],
+            });
+          }
+        }
       }
+      world.destroy(e);
     }
 
     for (const e of world.query("player", "health")) {
