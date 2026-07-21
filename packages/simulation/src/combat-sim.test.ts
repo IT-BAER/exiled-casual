@@ -1,9 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { checksumWorld } from "@pact/simulation";
 import { fp } from "@pact/fixed-point";
-import { MONSTERS } from "@pact/content-runtime";
+import { MONSTERS, CONTENT_VERSION } from "@pact/content-runtime";
+import { generateArea } from "@pact/mapgen";
 import { createCombatSim, spawnLabActors } from "./combat-sim";
-import type { BossC, MonsterC, Position } from "./components";
+import { gridCollision } from "./collision";
+import type { BossC, MonsterC, Position, MoveTarget } from "./components";
 
 describe("createCombatSim", () => {
   it("spawns exactly 1 player and 6 monsters (5 normal + 1 rare)", () => {
@@ -123,6 +125,35 @@ describe("createCombatSim", () => {
     // Never underflows past 0, however many times it is applied.
     for (let i = 0; i < 10; i++) spawnLabActors(world, "hurtboss", 0, 0);
     expect(life().life).toBe(0);
+  });
+
+  // ── Map area: generated layout, socket placement, collision (C4) ─────────
+  it("map area returns the generated layout (hash matches generateArea)", () => {
+    const { layout } = createCombatSim(42, { area: "map" });
+    expect(layout.hash).toBe(generateArea(42, CONTENT_VERSION).hash);
+  });
+
+  it("map area places the player at the start socket and the warden at the boss socket", () => {
+    const { world, playerEntity, layout } = createCombatSim(42, { area: "map" });
+    const start = layout.objectiveAnchors.find((a) => a.id === "start")!;
+    const boss = layout.objectiveAnchors.find((a) => a.id === "boss")!;
+
+    const ppos = world.get<Position>(playerEntity, "position")!;
+    expect(ppos).toEqual({ x: fp(start.x), y: fp(start.y) });
+
+    const wardenE = world.query("boss")[0]!;
+    const wpos = world.get<Position>(wardenE, "position")!;
+    expect(wpos).toEqual({ x: fp(boss.x), y: fp(boss.y) });
+  });
+
+  it("map area collides the player: steering into a wall never lands it off the walkable grid", () => {
+    const { sim, world, playerEntity, layout } = createCombatSim(42, { area: "map" });
+    const col = gridCollision(layout.grid);
+    // Aim well outside the dungeon (a guaranteed wall) and run into it.
+    world.set<MoveTarget>(playerEntity, "moveTarget", { x: fp(100), y: fp(100), active: 1 });
+    for (let t = 0; t < 120; t++) sim.step([]);
+    const p = world.get<Position>(playerEntity, "position")!;
+    expect(col.isWalkable(p.x, p.y, fp(0.5))).toBe(true);
   });
 
   it("system registration order matches canonical spec", () => {

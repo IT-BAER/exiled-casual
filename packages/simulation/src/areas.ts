@@ -2,6 +2,7 @@ import { fp } from "@pact/fixed-point";
 import { makeRare } from "@pact/rules";
 import { MONSTERS, RARE_TEMPLATE } from "@pact/content-runtime";
 import type { MonsterDef } from "@pact/content-schema";
+import type { AreaLayout } from "@pact/mapgen";
 import type { World, Entity } from "./ecs";
 import type {
   Position, Health, Faction, MonsterC, DefensesC, BossC,
@@ -57,7 +58,7 @@ export function spawnPortalRing(world: World, count: number): void {
   }
 }
 
-export function buildArea(world: World, area: AreaKind, session: SessionC): void {
+export function buildArea(world: World, area: AreaKind, session: SessionC, layout: AreaLayout): void {
   if (area === "hideout") {
     // Map device
     const deviceE = world.create();
@@ -71,31 +72,38 @@ export function buildArea(world: World, area: AreaKind, session: SessionC): void
     // Portals equal to the current portal budget (0 if map not open or exhausted).
     spawnPortalRing(world, session.portalsLeft);
   } else {
-    // Map: same monster composition as the legacy bootstrap.
+    // Map: imps fill the spawn sockets (last one carries the rare), the warden
+    // holds the boss room, and the return portal sits in the exit room. Every
+    // position is a walkable socket from the generated layout.
     const impDef = MONSTERS.get("monster.cinder_imp.v1")!;
-
-    const normalCoords: [number, number][] = [
-      [fp(5), fp(0)], [fp(-5), fp(0)],
-      [fp(0), fp(5)], [fp(0), fp(-5)],
-      [fp(6), fp(6)],
-    ];
-    for (const [x, y] of normalCoords) {
-      spawnMonster(world, impDef, x, y, false);
+    const spawns = layout.spawnSockets;
+    for (let i = 0; i < spawns.length; i++) {
+      const s = spawns[i]!;
+      const rare = i === spawns.length - 1;
+      const def = rare ? makeRare(impDef, RARE_TEMPLATE) : impDef;
+      spawnMonster(world, def, fp(s.x), fp(s.y), rare);
     }
-    spawnMonster(world, makeRare(impDef, RARE_TEMPLATE), fp(8), fp(8), true);
 
-    const wardenDef = MONSTERS.get("monster.cinder_warden.v1")!;
-    spawnMonster(world, wardenDef, fp(0), fp(12), false);
+    const boss = anchor(layout, "boss");
+    spawnMonster(world, MONSTERS.get("monster.cinder_warden.v1")!, fp(boss.x), fp(boss.y), false);
 
     // Return portal so the map can be exited without dying.
+    const exit = anchor(layout, "exit");
     const portalE = world.create();
-    world.set<Position>(portalE, "position", { x: fp(0), y: fp(-6) });
+    world.set<Position>(portalE, "position", { x: fp(exit.x), y: fp(exit.y) });
     world.set<InteractableC>(portalE, "interactable", {
       kind: "portal",
       radius: fp(2.5),
       yaw: 3.1416,
     });
   }
+}
+
+/** An objective anchor from the layout, or throw if the generator omitted it. */
+function anchor(layout: AreaLayout, id: string): { x: number; y: number } {
+  const a = layout.objectiveAnchors.find((s) => s.id === id);
+  if (!a) throw new Error(`layout missing "${id}" anchor`);
+  return a;
 }
 
 export function spawnMonster(

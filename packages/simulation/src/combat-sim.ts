@@ -1,6 +1,8 @@
 import { fp } from "@pact/fixed-point";
 import { baseCasterStats, makeRare } from "@pact/rules";
-import { SKILLS, MONSTERS, RARE_TEMPLATE } from "@pact/content-runtime";
+import { SKILLS, MONSTERS, RARE_TEMPLATE, CONTENT_VERSION } from "@pact/content-runtime";
+import { generateArea, type AreaLayout } from "@pact/mapgen";
+import { gridCollision } from "./collision";
 import { Simulation } from "./loop";
 import { World } from "./ecs";
 import type { Entity } from "./ecs";
@@ -24,20 +26,25 @@ import { registerInteractSystem } from "./systems/interact";
 import { registerAreaTransition } from "./systems/area-transition";
 import { buildArea, spawnMonster } from "./areas";
 
-// ponytail: _seed unused by Phase C2 systems; reserved for Phase C3 RNG-driven monster variance.
 export function createCombatSim(
-  _seed: number,
-  opts: { boss?: boolean; monsters?: boolean; area?: AreaKind } = {},
-): { sim: Simulation; world: World; playerEntity: Entity } {
+  seed: number,
+  opts: { boss?: boolean; monsters?: boolean; area?: AreaKind; layout?: AreaLayout } = {},
+): { sim: Simulation; world: World; playerEntity: Entity; layout: AreaLayout } {
   const sim = new Simulation();
   const { world } = sim;
 
+  // Generate the indoor layout (or accept an injected one — the boss golden and
+  // Phase D's areaTransition pass a pre-built layout). Collision is only wired
+  // for the "map" area; the hideout lab and legacy paths stay world-bounded.
+  const layout = opts.layout ?? generateArea(seed, CONTENT_VERSION);
+  const collision = opts.area === "map" ? gridCollision(layout.grid) : undefined;
+
   // ── Register systems in canonical order ──────────────────────────────────
   registerResourceRegen(sim);
-  registerSkillCast(sim, SKILLS);
-  registerPlayerMovement(sim);
-  registerMonsterAI(sim);
-  registerBossAI(sim, MONSTERS);
+  registerSkillCast(sim, SKILLS, collision);
+  registerPlayerMovement(sim, collision);
+  registerMonsterAI(sim, collision);
+  registerBossAI(sim, MONSTERS, collision);
   registerProjectileMove(sim);
   registerGroundAreaTick(sim);
   // Impacts land before damageResolve so a telegraph hits on its own impact tick.
@@ -48,9 +55,12 @@ export function createCombatSim(
   registerExpiry(sim);
 
   // ── Bootstrap player ─────────────────────────────────────────────────────
+  // On the generated map the player starts at the "start" socket; every other
+  // path keeps the origin spawn its tests and hand-built areas rely on.
+  const spawn = opts.area === "map" ? anchorFp(layout, "start") : { x: 0, y: 0 };
   const s = baseCasterStats();
   const playerEntity = world.create();
-  world.set<Position>(playerEntity, "position", { x: 0, y: 0 });
+  world.set<Position>(playerEntity, "position", { x: spawn.x, y: spawn.y });
   world.set<Health>(playerEntity, "health", { life: s.maxLifeFixed, maxLife: s.maxLifeFixed });
   world.set<Mana>(playerEntity, "mana", {
     mana: s.maxManaFixed,
@@ -67,23 +77,21 @@ export function createCombatSim(
     fireResPct: s.fireResPct,
     armour: s.armourFixed,
   });
-  world.set<MoveTarget>(playerEntity, "moveTarget", { x: 0, y: 0, active: 0 });
+  world.set<MoveTarget>(playerEntity, "moveTarget", { x: spawn.x, y: spawn.y, active: 0 });
   world.set<MoveDir>(playerEntity, "moveDir", { dx: 0, dy: 0 });
 
   if (opts.area !== undefined) {
     // ── Area-based path: session singleton + buildArea ────────────────────
-    // ponytail: legacy path below exists to protect the golden-replay checksums and
-    // can be deleted once task B3 re-records its scenarios against the run loop.
     const sessionE = world.create();
     const session: SessionC = {
       area: opts.area,
-      mapSeed: _seed,
+      mapSeed: seed,
       portalsLeft: 0,
       mapOpen: 0,
       pendingArea: "",
     };
     world.set<SessionC>(sessionE, "session", session);
-    buildArea(world, opts.area, session);
+    buildArea(world, opts.area, session, layout);
 
     // New systems only needed for area-based sims. Appended to preserve the
     // canonical ordering of the first 12 systems (checked by legacy tests).
@@ -113,7 +121,13 @@ export function createCombatSim(
     }
   }
 
-  return { sim, world, playerEntity };
+  return { sim, world, playerEntity, layout };
+}
+
+/** A layout objective anchor, converted to fixed-point at the sim boundary. */
+function anchorFp(layout: AreaLayout, id: string): { x: number; y: number } {
+  const a = layout.objectiveAnchors.find((s) => s.id === id)!;
+  return { x: fp(a.x), y: fp(a.y) };
 }
 
 /**

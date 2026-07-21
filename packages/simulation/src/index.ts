@@ -28,6 +28,7 @@ export { registerDeath } from "./systems/death";
 export { registerExpiry } from "./systems/expiry";
 export { createCombatSim, spawnLabActors } from "./combat-sim";
 export { buildArea } from "./areas";
+export type { AreaLayout, WalkableGrid, Socket } from "@pact/mapgen";
 export { registerInteractSystem } from "./systems/interact";
 export { registerAreaTransition } from "./systems/area-transition";
 export { intentToCommand, buildSnapshot } from "./protocol-bridge";

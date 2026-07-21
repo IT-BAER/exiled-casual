@@ -11,9 +11,48 @@ import {
   type Health,
   type InteractableC,
   type MonsterC,
+  type AreaLayout,
 } from "@pact/simulation";
 import { CONTENT_VERSION } from "@pact/content-runtime";
 import type { Intent, Snapshot } from "@pact/protocol";
+
+/**
+ * A flat, all-walkable arena that reproduces the pre-mapgen boss encounter:
+ * warden at (0,12), player start at the origin, return portal at (0,-6), and the
+ * legacy imp coordinates as spawn sockets (last = rare). Injected so the boss
+ * golden tests boss *behaviour* on fixed geometry instead of a seed-dependent
+ * dungeon — every actor stays well inside the grid, so collision never fires and
+ * the recorded scenario is byte-identical to the arena it replaced.
+ */
+const GRID_CELLS = 80;
+const FLAT_LAYOUT: AreaLayout = {
+  algorithmVersion: 0,
+  contentVersion: CONTENT_VERSION,
+  seed: 0,
+  chosenVariantIds: [],
+  objectiveAnchors: [
+    { id: "start", x: 0, y: 0 },
+    { id: "boss", x: 0, y: 12 },
+    { id: "exit", x: 0, y: -6 },
+  ],
+  spawnSockets: [
+    { id: "s0", x: 5, y: 0 }, { id: "s1", x: -5, y: 0 },
+    { id: "s2", x: 0, y: 5 }, { id: "s3", x: 0, y: -5 },
+    { id: "s4", x: 6, y: 6 }, { id: "s5", x: 8, y: 8 },
+  ],
+  grid: {
+    cols: GRID_CELLS,
+    rows: GRID_CELLS,
+    cellSize: 0.5,
+    originX: -((GRID_CELLS - 1) / 2) * 0.5,
+    originY: -((GRID_CELLS - 1) / 2) * 0.5,
+    cells: new Uint8Array(GRID_CELLS * GRID_CELLS).fill(1),
+  },
+  walkableArea: GRID_CELLS * GRID_CELLS * 0.25,
+  validationChecks: [],
+  usedFallback: false,
+  hash: 0,
+};
 
 /**
  * Boss golden replay (spec §9: boss phase transition + reset, deterministic
@@ -54,7 +93,7 @@ export function buildBossArena(
   seed: number = BOSS_SEED,
   opts: { wardenLife?: number } = {},
 ): BossArena {
-  const { sim, world, playerEntity } = createCombatSim(seed, { area: "map" });
+  const { sim, world, playerEntity } = createCombatSim(seed, { area: "map", layout: FLAT_LAYOUT });
   isolateBoss(world);
 
   const bossId = world.query("boss")[0]!;

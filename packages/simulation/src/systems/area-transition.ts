@@ -1,3 +1,5 @@
+import { generateArea } from "@pact/mapgen";
+import { CONTENT_VERSION } from "@pact/content-runtime";
 import { Simulation } from "../loop";
 import type { SessionC, MoveTarget, MoveDir, Position } from "../components";
 import { buildArea, HIDEOUT_SPAWN, MAP_SPAWN } from "../areas";
@@ -26,7 +28,11 @@ export function registerAreaTransition(sim: Simulation): void {
     const newSession: SessionC = { ...session, area: newArea, pendingArea: "" };
     world.set<SessionC>(sessionE, "session", newSession);
 
-    buildArea(world, newArea, newSession);
+    // The map is placed against its generated layout; the hideout ignores it.
+    // ponytail: collision is registered once at sim creation, so transitioning
+    // INTO the map won't collide until Phase D re-wires systems per area.
+    const layout = generateArea(newSession.mapSeed, CONTENT_VERSION);
+    buildArea(world, newArea, newSession, layout);
 
     // Move player(s) to the area's spawn and clear stale movement state.
     const spawnPt = newArea === "hideout" ? HIDEOUT_SPAWN : MAP_SPAWN;
