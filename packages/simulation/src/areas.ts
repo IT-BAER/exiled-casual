@@ -1,5 +1,5 @@
 import { fp } from "@pact/fixed-point";
-import { makeRare } from "@pact/rules";
+import { makeRare, monsterTierScale } from "@pact/rules";
 import { MONSTERS, RARE_TEMPLATE } from "@pact/content-runtime";
 import type { MonsterDef } from "@pact/content-schema";
 import type { AreaLayout } from "@pact/mapgen";
@@ -75,17 +75,18 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
     // Map: imps fill the spawn sockets (last one carries the rare), the warden
     // holds the boss room, and the return portal sits in the exit room. Every
     // position is a walkable socket from the generated layout.
+    const scale = monsterTierScale(session.areaTier);
     const impDef = MONSTERS.get("monster.cinder_imp.v1")!;
     const spawns = layout.spawnSockets;
     for (let i = 0; i < spawns.length; i++) {
       const s = spawns[i]!;
       const rare = i === spawns.length - 1;
       const def = rare ? makeRare(impDef, RARE_TEMPLATE) : impDef;
-      spawnMonster(world, def, fp(s.x), fp(s.y), rare);
+      spawnMonster(world, def, fp(s.x), fp(s.y), rare, scale);
     }
 
     const boss = anchor(layout, "boss");
-    spawnMonster(world, MONSTERS.get("monster.cinder_warden.v1")!, fp(boss.x), fp(boss.y), false);
+    spawnMonster(world, MONSTERS.get("monster.cinder_warden.v1")!, fp(boss.x), fp(boss.y), false, scale);
 
     // Return portal so the map can be exited without dying.
     const exit = anchor(layout, "exit");
@@ -112,10 +113,13 @@ export function spawnMonster(
   x: number,
   y: number,
   rare: boolean,
+  scale: { lifeMilli: number; dmgMilli: number } = { lifeMilli: 1000, dmgMilli: 1000 },
 ): Entity {
+  const scaledLife = Math.trunc(def.maxLifeFixed * scale.lifeMilli / 1000);
+  const scaledDmg = Math.trunc(def.attackDamage.amountFixed * scale.dmgMilli / 1000);
   const e = world.create();
   world.set<Position>(e, "position", { x, y });
-  world.set<Health>(e, "health", { life: def.maxLifeFixed, maxLife: def.maxLifeFixed });
+  world.set<Health>(e, "health", { life: scaledLife, maxLife: scaledLife });
   world.set<Faction>(e, "faction", { team: 1 });
   world.set<MonsterC>(e, "monster", {
     defId: def.id,
@@ -123,7 +127,7 @@ export function spawnMonster(
     bodyRadius: def.radiusFixed,
     attackRange: def.attackRangeFixed,
     attackCooldownTicks: def.attackCooldownTicks,
-    attackDamage: def.attackDamage.amountFixed,
+    attackDamage: scaledDmg,
     attackType: def.attackDamage.type === "fire" ? 0 : 1,
     attackReadyTick: 0,
     state: "idle",
