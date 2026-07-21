@@ -11,9 +11,11 @@ export type Intent =
   | { kind: "useSkill"; skillId: string; tx: Fixed; ty: Fixed }
   | { kind: "stop" }
   /** Activate a clicked interactable (map device, portal). Sim re-checks range. */
-  | { kind: "interact"; targetId: number };
+  | { kind: "interact"; targetId: number }
+  /** Activate the map device with a chosen node + waystone. Sim re-validates both. */
+  | { kind: "activateMap"; atlasNodeId: string; waystoneId: string };
 
-export type CommandType = "moveTo" | "moveDir" | "useSkill" | "stop" | "interact";
+export type CommandType = "moveTo" | "moveDir" | "useSkill" | "stop" | "interact" | "activateMap";
 
 // ---------------------------------------------------------------------------
 // Run loop
@@ -79,6 +81,12 @@ export interface Snapshot {
   /** Retry budget left on the open map; 0 when no map is open. */
   portalsLeft: number;
   mapOpen: boolean;
+  /** Tier of the open map; 0 when no map is open. areaLevel = 64 + areaTier. */
+  areaTier: number;
+  /** Stable session seed the client uses to compute the Waystone offers. */
+  atlasSeed: number;
+  /** Atlas node ids already completed this session. */
+  completedNodes: string[];
   player: {
     id: number; x: number; y: number;
     life: number; maxLife: number; mana: number; maxMana: number;
@@ -140,6 +148,17 @@ export function validateIntent(v: unknown): Intent {
       if (!Number.isInteger(obj["targetId"]))
         throw new Error("validateIntent interact: targetId must be an integer");
       return { kind: "interact", targetId: obj["targetId"] as number };
+    }
+    case "activateMap": {
+      if (typeof obj["atlasNodeId"] !== "string" || obj["atlasNodeId"].length === 0)
+        throw new Error("validateIntent activateMap: atlasNodeId must be a non-empty string");
+      if (typeof obj["waystoneId"] !== "string" || obj["waystoneId"].length === 0)
+        throw new Error("validateIntent activateMap: waystoneId must be a non-empty string");
+      return {
+        kind: "activateMap",
+        atlasNodeId: obj["atlasNodeId"] as string,
+        waystoneId: obj["waystoneId"] as string,
+      };
     }
     default:
       throw new Error(`validateIntent: unknown kind: ${String(obj["kind"])}`);

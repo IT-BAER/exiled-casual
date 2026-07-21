@@ -24,6 +24,9 @@ function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
     area: "map",
     portalsLeft: 0,
     mapOpen: false,
+    areaTier: 0,
+    atlasSeed: 0,
+    completedNodes: [],
     entities: [],
     ...overrides,
   };

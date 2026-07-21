@@ -256,6 +256,27 @@ describe("buildSnapshot — session fields and interactables", () => {
     expect(snap.mapOpen).toBe(false);
   });
 
+  it("snapshot carries areaTier, atlasSeed, completedNodes from session", () => {
+    const { world } = makeMinimalWorld();
+    const sessionE = world.create();
+    world.set<SessionC>(sessionE, "session", {
+      area: "map", atlasSeed: 42, mapSeed: 7, areaTier: 3, activeNodeId: "node.emberfall",
+      completedNodes: ["node.emberfall"], portalsLeft: 6, mapOpen: 1, pendingArea: "",
+    });
+    const snap = buildSnapshot(world, {} as never, 0, "test");
+    expect(snap.areaTier).toBe(3);
+    expect(snap.atlasSeed).toBe(42);
+    expect(snap.completedNodes).toEqual(["node.emberfall"]);
+  });
+
+  it("defaults areaTier=0, atlasSeed=0, completedNodes=[] when no session (legacy sim)", () => {
+    const { world } = makeMinimalWorld();
+    const snap = buildSnapshot(world, {} as never, 0, "test");
+    expect(snap.areaTier).toBe(0);
+    expect(snap.atlasSeed).toBe(0);
+    expect(snap.completedNodes).toEqual([]);
+  });
+
   it("map device entity appears with correct kind and yaw", () => {
     const { world } = makeMinimalWorld();
     const device = world.create();

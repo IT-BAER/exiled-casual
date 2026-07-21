@@ -37,6 +37,11 @@ export function intentToCommand(intent: Intent, player: Entity, tick: number): C
       return { tick, entity: player, type: "stop" };
     case "interact":
       return { tick, entity: player, type: "interact", data: { targetId: intent.targetId } };
+    case "activateMap":
+      return {
+        tick, entity: player, type: "activateMap",
+        atlasNodeId: intent.atlasNodeId, waystoneId: intent.waystoneId,
+      };
   }
 }
 
@@ -144,6 +149,9 @@ export function buildSnapshot(
     area: session?.area ?? "map",
     portalsLeft: session?.portalsLeft ?? 0,
     mapOpen: session?.mapOpen === 1,
+    areaTier: session?.areaTier ?? 0,
+    atlasSeed: session?.atlasSeed ?? 0,
+    completedNodes: session?.completedNodes ?? [],
     player: {
       id: playerEntity,
       x: toNumber(pp.x), y: toNumber(pp.y),

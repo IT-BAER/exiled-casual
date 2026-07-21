@@ -8,6 +8,10 @@ export interface Command {
   /** Set when type === "useSkill" */
   skillId?: string;
   data?: Record<string, number>;
+  /** Set when type === "activateMap"; kept off `data` since that field is numbers-only. */
+  atlasNodeId?: string;
+  /** Set when type === "activateMap" */
+  waystoneId?: string;
 }
 
 export type System = (

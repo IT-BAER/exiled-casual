@@ -109,6 +109,17 @@ describe("validateIntent — interact", () => {
   });
 });
 
+describe("validateIntent — activateMap", () => {
+  test("validates activateMap", () => {
+    expect(validateIntent({ kind: "activateMap", atlasNodeId: "node.ashen_glade", waystoneId: "ws-0" }))
+      .toEqual({ kind: "activateMap", atlasNodeId: "node.ashen_glade", waystoneId: "ws-0" });
+  });
+  test("rejects activateMap with empty ids", () => {
+    expect(() => validateIntent({ kind: "activateMap", atlasNodeId: "", waystoneId: "ws-0" })).toThrow();
+    expect(() => validateIntent({ kind: "activateMap", atlasNodeId: "n", waystoneId: 5 })).toThrow();
+  });
+});
+
 describe("FromWorker area message", () => {
   // postMessage clones with the structured-clone algorithm; this guards against a
   // future "optimisation" (e.g. JSON) that would silently drop the Uint8Array grid.
