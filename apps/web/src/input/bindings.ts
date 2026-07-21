@@ -67,8 +67,13 @@ export function attachBindings(
   // resumes another still-held direction, and releasing the last sends "stop".
   const held: string[] = [];
   // True while the left mouse button is down: hold-to-move keeps steering the
-  // player toward the cursor as it moves, instead of a single click-to-point.
+  // player toward the cursor, instead of a single click-to-point.
   let pointerHeld = false;
+  // Last cursor screen position, so held-move can re-pick the world point every
+  // snapshot. The camera follows the player, so a stationary cursor sits over a
+  // DIFFERENT world point each frame — re-picking is what keeps the player moving
+  // when the button is held without the mouse moving.
+  let lastScreen: { x: number; y: number } | null = null;
 
   // Entity id of the portal or map device the player last clicked; null when
   // nothing is pending. Cleared on interact fire, entity disappearance, or a
@@ -130,6 +135,7 @@ export function attachBindings(
   }
 
   function onPointerMove(e: PointerEvent) {
+    lastScreen = { x: e.clientX, y: e.clientY };
     // Single pick drives both the aim vector AND hover detection — no second raycast.
     const pick = scene.pick(e.clientX, e.clientY);
     if (pick.hit && pick.pickedPoint) {
@@ -168,6 +174,7 @@ export function attachBindings(
     // Ground or other non-interactable click: normal move + cancel any queued interact.
     post({ kind: "moveTo", x: world.x, y: world.y });
     pendingInteractId = null;
+    lastScreen = { x: e.clientX, y: e.clientY };
     pointerHeld = true;
   }
 
@@ -182,6 +189,18 @@ export function attachBindings(
    * Also clears pending and hover state if the entity disappears from the snapshot.
    */
   function onSnapshot(snap: Snapshot): void {
+    // Hold-to-move: while the button is held, re-pick the world point under the
+    // cursor and steer there every snapshot. Because the camera tracks the player,
+    // that point drifts as the player advances, so the player keeps moving in the
+    // cursor's direction even when the mouse is perfectly still.
+    if (pointerHeld && lastScreen) {
+      const pick = scene.pick(lastScreen.x, lastScreen.y);
+      if (pick.hit && pick.pickedPoint) {
+        const world = pointerToWorld({ x: pick.pickedPoint.x, z: pick.pickedPoint.z });
+        post({ kind: "moveTo", x: world.x, y: world.y });
+      }
+    }
+
     if (pendingInteractId !== null) {
       const entity = snap.entities.find((e) => e.id === pendingInteractId);
       if (!entity) {

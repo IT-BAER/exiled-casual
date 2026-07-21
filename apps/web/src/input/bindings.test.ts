@@ -71,6 +71,35 @@ describe("attachBindings hold-to-move", () => {
     expect(moveToCount(worker.postMessage)).toBe(3); // down + 2 held moves
   });
 
+  it("keeps moving toward the cursor while held even without mouse movement", () => {
+    const w = { postMessage: vi.fn() };
+    const c = document.createElement("canvas");
+    document.body.appendChild(c);
+    const { detach: d, onSnapshot } = attachBindings(c, w as unknown as Worker, fakeScene());
+    c.dispatchEvent(new MouseEvent("pointerdown", { button: 0, clientX: 50, clientY: 50, bubbles: true }));
+    expect(moveToCount(w.postMessage)).toBe(1); // initial click
+    // Each snapshot re-picks the cursor's (drifting) world point and re-steers.
+    onSnapshot(makeSnap());
+    onSnapshot(makeSnap());
+    expect(moveToCount(w.postMessage)).toBe(3);
+    d();
+    c.remove();
+  });
+
+  it("stops steering from snapshots once the button is released", () => {
+    const w = { postMessage: vi.fn() };
+    const c = document.createElement("canvas");
+    document.body.appendChild(c);
+    const { detach: d, onSnapshot } = attachBindings(c, w as unknown as Worker, fakeScene());
+    c.dispatchEvent(new MouseEvent("pointerdown", { button: 0, clientX: 50, clientY: 50, bubbles: true }));
+    window.dispatchEvent(new MouseEvent("pointerup", { button: 0, bubbles: true }));
+    onSnapshot(makeSnap());
+    onSnapshot(makeSnap());
+    expect(moveToCount(w.postMessage)).toBe(1); // only the initial click
+    d();
+    c.remove();
+  });
+
   it("does not move on pointermove when the button is not held", () => {
     pointer("pointermove");
     pointer("pointermove");
