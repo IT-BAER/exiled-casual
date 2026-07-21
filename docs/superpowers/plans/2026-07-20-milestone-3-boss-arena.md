@@ -151,7 +151,7 @@ No new message type. The HUD finds the boss with `entities.find(e => e.boss)`.
 
 ## Phase C — indoor mapgen
 
-- [ ] **C1 — `@pact/mapgen` package.** `generateArea(seed, contentVersion): AreaLayout` —
+- [x] **C1 — `@pact/mapgen` package.** `generateArea(seed, contentVersion): AreaLayout` —
       room graph → axis-aligned rooms → corridors → boss-arena socket → walkable grid
       (`Uint8Array`, 0.5-unit cells) → spawn sockets → validation
       (`{ algorithmVersion, contentVersion, seed, chosenVariantIds, objectiveAnchors,
