@@ -234,7 +234,8 @@ describe("buildSnapshot — session fields and interactables", () => {
     const { world, playerEntity } = makeMinimalWorld();
     const sessionE = world.create();
     world.set<SessionC>(sessionE, "session", {
-      area, mapSeed: 0, portalsLeft, mapOpen, pendingArea: "",
+      area, atlasSeed: 0, areaTier: 0, activeNodeId: "", completedNodes: [],
+      mapSeed: 0, portalsLeft, mapOpen, pendingArea: "",
     });
     return { world, playerEntity };
   }

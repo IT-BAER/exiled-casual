@@ -9,7 +9,15 @@ export type AreaKind = "hideout" | "map";
  */
 export interface SessionC {
   area: AreaKind;
+  /** Stable per-session seed that drives the Waystone offers. Never overwritten. */
+  atlasSeed: number;
   mapSeed: number;
+  /** Tier of the open map. 0 = no map open. areaLevel = 64 + areaTier. */
+  areaTier: number;
+  /** Atlas node the open map belongs to; "" when none. */
+  activeNodeId: string;
+  /** Atlas node ids completed this session (in-memory only). */
+  completedNodes: string[];
   /** Retry budget for the open map. See MAP_PORTALS in @pact/protocol. */
   portalsLeft: number;
   mapOpen: 0 | 1;

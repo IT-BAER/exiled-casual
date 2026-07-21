@@ -74,7 +74,8 @@ describe("registerDeath", () => {
 
     const sessionE = world.create();
     world.set<SessionC>(sessionE, "session", {
-      area, mapSeed: 0, portalsLeft, mapOpen: 1, pendingArea: "",
+      area, atlasSeed: 0, areaTier: 0, activeNodeId: "", completedNodes: [],
+      mapSeed: 0, portalsLeft, mapOpen: 1, pendingArea: "",
     });
 
     return { sim, world, p, sessionE };

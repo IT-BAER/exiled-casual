@@ -90,7 +90,11 @@ export function createCombatSim(
     const sessionE = world.create();
     const session: SessionC = {
       area: opts.area,
+      atlasSeed: seed,
       mapSeed: seed,
+      areaTier: 0,
+      activeNodeId: "",
+      completedNodes: [],
       portalsLeft: 0,
       mapOpen: 0,
       pendingArea: "",

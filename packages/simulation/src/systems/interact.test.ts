@@ -17,6 +17,7 @@ function makeWorld() {
   const sessionE = world.create();
   const session: SessionC = {
     area: "hideout",
+    atlasSeed: 0, areaTier: 0, activeNodeId: "", completedNodes: [],
     mapSeed: 0,
     portalsLeft: 0,
     mapOpen: 0,
@@ -97,7 +98,8 @@ describe("registerInteractSystem", () => {
     const { sim, world, player, sessionE } = makeWorld();
     // Set up: map is open with portals.
     world.set<SessionC>(sessionE, "session", {
-      area: "hideout", mapSeed: 0, portalsLeft: 6, mapOpen: 1, pendingArea: "",
+      area: "hideout", atlasSeed: 0, areaTier: 0, activeNodeId: "", completedNodes: [],
+      mapSeed: 0, portalsLeft: 6, mapOpen: 1, pendingArea: "",
     });
     const portal = world.create();
     world.set<Position>(portal, "position", { x: fp(0), y: fp(8) }); // at player
@@ -113,7 +115,8 @@ describe("registerInteractSystem", () => {
   it("portal click in the map sets pendingArea='hideout' without changing portalsLeft", () => {
     const { sim, world, player, sessionE } = makeWorld();
     world.set<SessionC>(sessionE, "session", {
-      area: "map", mapSeed: 0, portalsLeft: 4, mapOpen: 1, pendingArea: "",
+      area: "map", atlasSeed: 0, areaTier: 0, activeNodeId: "", completedNodes: [],
+      mapSeed: 0, portalsLeft: 4, mapOpen: 1, pendingArea: "",
     });
     const portal = world.create();
     world.set<Position>(portal, "position", { x: fp(0), y: fp(8) }); // at player
