@@ -201,6 +201,24 @@ area uses the existing arena + Warden + imps until C1-C4 replace it.
 
 ---
 
+## Spec deviations (prototype-scoped, adjudicated 2026-07-21)
+
+The run loop deliberately simplifies the PoE2-faithful research spec (`docs/01`–`docs/08`).
+These are prototype scope, not spec corrections — the research pack stays the full-game target
+and is left unedited:
+
+- **Respawn target.** `docs/03` `DeathPolicy.respawnTarget` still enumerates `"checkpoint"`; the
+  prototype only exercises entrance/hideout respawn. `SessionC` owns respawn; there is no
+  `CheckpointC` (deleted, Phase D). Checkpoints remain a valid campaign-area policy for later.
+- **Intents collapsed.** `docs/08` lists `InteractIntent` / `ReviveIntent` / `PortalIntent` as
+  three client→server messages. The prototype uses a single `interact { targetId }` intent for
+  every interactable (portal, map device); revive is automatic (death returns to the hideout,
+  no channel). The three-intent split stays the full-game protocol design.
+- **"Checkpoints" in build-plan checklists** (`docs/06:126`, `:464`) means the game feature
+  (restore life/mana, local travel), not the deleted `CheckpointC` component or replay snapshots.
+
+---
+
 ## Risks
 
 - **Blink through walls** (Phase C): the teleport skill ignores collision. Clamp the
