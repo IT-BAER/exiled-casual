@@ -125,7 +125,7 @@ No new message type. The HUD finds the boss with `entities.find(e => e.boss)`.
 
 ## Phase B — phases + rules
 
-- [ ] **B1 — phase 2.** Transition at `phase2AtLifePct`: summon `addCount` imps
+- [x] **B1 — phase 2.** Transition at `phase2AtLifePct`: summon `addCount` imps
       (`summoned: 1`) on a ring, slam gains `leavesGroundTicks`, cadence × `cadenceMulPct`.
       Tests: transition fires once at the threshold, adds spawn, slam leaves fire, cadence drops.
 - [ ] **B2 — death / checkpoint / boss reset.** _(Superseded and absorbed by Phase D: death,

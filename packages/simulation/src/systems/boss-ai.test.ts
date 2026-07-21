@@ -4,7 +4,7 @@ import { MONSTERS } from "@pact/content-runtime";
 import type { MonsterDef } from "@pact/content-schema";
 import { Simulation } from "../loop";
 import { World } from "../ecs";
-import type { Position, MonsterC, Faction, PlayerC, BossC, TelegraphC } from "../components";
+import type { Position, MonsterC, Faction, PlayerC, BossC, TelegraphC, Health } from "../components";
 import { registerBossAI } from "./boss-ai";
 import { ARENA_RADIUS } from "../movement";
 
@@ -46,6 +46,16 @@ const testMonsters: ReadonlyMap<string, MonsterDef> = new Map([
     },
   ],
 ]);
+
+// The fixture's addDefId points at the real imp; add it so summons can resolve it.
+const impDef = MONSTERS.get("monster.cinder_imp.v1")!;
+const summonMonsters: ReadonlyMap<string, MonsterDef> = new Map<string, MonsterDef>([
+  ...testMonsters,
+  ["monster.cinder_imp.v1", impDef],
+]);
+
+const summonedAdds = (world: World) =>
+  world.query("monster").filter((m) => world.get<MonsterC>(m, "monster")!.summoned === 1);
 
 function makeBossEntity(world: World, x: number, y: number) {
   const e = world.create();
@@ -266,5 +276,98 @@ describe("registerBossAI", () => {
     const pos = world.get<Position>(boss, "position")!;
     // Boss should have moved toward origin
     expect(fpDist2(pos.x, pos.y, fp(0), fp(0))).toBeLessThan(before);
+  });
+
+  it("transitions to phase 2 at ≤50% life, summoning adds on the boss's team", () => {
+    const sim = new Simulation();
+    registerBossAI(sim, summonMonsters);
+    const { world } = sim;
+
+    makePlayerEntity(world, fp(0), fp(0));
+    const boss = makeBossEntity(world, fp(0), fp(0));
+    world.set<Health>(boss, "health", { life: fp(500), maxLife: fp(1000) }); // exactly 50%
+
+    sim.step();
+
+    expect(world.get<BossC>(boss, "boss")!.phase).toBe(2);
+    const adds = summonedAdds(world);
+    expect(adds).toHaveLength(2); // fixture addCount
+    for (const a of adds) {
+      expect(world.get<Faction>(a, "faction")!.team).toBe(1); // boss's team
+    }
+  });
+
+  it("does not transition above 50% life — stays phase 1, no adds", () => {
+    const sim = new Simulation();
+    registerBossAI(sim, summonMonsters);
+    const { world } = sim;
+
+    makePlayerEntity(world, fp(0), fp(0));
+    const boss = makeBossEntity(world, fp(0), fp(0));
+    world.set<Health>(boss, "health", { life: fp(600), maxLife: fp(1000) }); // 60%
+
+    sim.step();
+
+    expect(world.get<BossC>(boss, "boss")!.phase).toBe(1);
+    expect(summonedAdds(world)).toHaveLength(0);
+  });
+
+  it("transitions only once — a second tick summons no further adds", () => {
+    const sim = new Simulation();
+    registerBossAI(sim, summonMonsters);
+    const { world } = sim;
+
+    makePlayerEntity(world, fp(0), fp(0));
+    const boss = makeBossEntity(world, fp(0), fp(0));
+    world.set<Health>(boss, "health", { life: fp(400), maxLife: fp(1000) }); // 40%
+
+    sim.step();
+    expect(summonedAdds(world)).toHaveLength(2);
+    sim.step();
+    expect(world.get<BossC>(boss, "boss")!.phase).toBe(2);
+    expect(summonedAdds(world)).toHaveLength(2); // no new summon
+  });
+
+  it("phase-2 slam leaves burning ground for fireGroundDurationTicks", () => {
+    const sim = new Simulation();
+    registerBossAI(sim, summonMonsters);
+    const { world } = sim;
+
+    makePlayerEntity(world, fp(5), fp(0)); // within slam range fp(9)
+    const boss = makeBossEntity(world, fp(0), fp(0));
+    world.set<BossC>(boss, "boss", {
+      phase: 2, // already phase 2 → transition guard skips, slam fires
+      nextAbilityTick: 0,
+      spawnX: fp(0),
+      spawnY: fp(0),
+      rootedUntilTick: 0,
+    });
+
+    sim.step();
+
+    const teles = world.entitiesWith("telegraph");
+    expect(teles).toHaveLength(1);
+    expect(world.get<TelegraphC>(teles[0]!, "telegraph")!.leavesGroundTicks).toBe(120);
+  });
+
+  it("phase-2 slam uses the faster phase-2 cadence", () => {
+    const sim = new Simulation();
+    registerBossAI(sim, summonMonsters);
+    const { world } = sim;
+
+    makePlayerEntity(world, fp(5), fp(0));
+    const boss = makeBossEntity(world, fp(0), fp(0));
+    world.set<BossC>(boss, "boss", {
+      phase: 2,
+      nextAbilityTick: 0,
+      spawnX: fp(0),
+      spawnY: fp(0),
+      rootedUntilTick: 0,
+    });
+
+    sim.step();
+
+    // cooldown 150 × cadenceMulPct 80 / 100 = 120 (vs 150 in phase 1)
+    expect(world.get<BossC>(boss, "boss")!.nextAbilityTick).toBe(120);
   });
 });
