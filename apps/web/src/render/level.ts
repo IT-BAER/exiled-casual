@@ -10,8 +10,10 @@ import {
 import type { WalkableGrid } from "@pact/mapgen";
 
 /** Wall height in world units — tall enough to read as walls, not kerbs, under
- *  the ~9.5u-tall isometric view; greybox, tune against the boss framing later. */
-const WALL_HEIGHT = 2;
+ *  the ~9.5u-tall isometric view; greybox, tune against the boss framing later.
+ *  At 2 the short boxes read as flat dark floor-patches from this near-top-down
+ *  ortho angle; 3.5 gives a lit brick side face that reads as a real barrier. */
+const WALL_HEIGHT = 3.5;
 const WALL_MESH_NAME = "level-walls";
 const WALL_MAT_NAME = "level-wall-mat";
 /** World units per texture repeat, applied via per-box faceUV so bricks keep a
@@ -32,7 +34,11 @@ function wallMaterial(scene: Scene): StandardMaterial {
   const mat = new StandardMaterial(WALL_MAT_NAME, scene);
   mat.diffuseTexture = new Texture("/textures/walls/wall_color.jpg", scene);
   mat.bumpTexture = new Texture("/textures/walls/wall_normal.jpg", scene);
-  mat.diffuseColor = new Color3(0.62, 0.62, 0.7); // cool, slightly dimmed stone
+  // The floor albedo is boosted to 1.45 (engine.ts) so near-black actors read;
+  // a wall at 0.62 was ~2.3x darker and crushed the light masonry texture to a
+  // muddy near-black. Lift close to the floor, kept a touch cooler+darker so the
+  // walls still read as distinct from the ground rather than merging into it.
+  mat.diffuseColor = new Color3(1.15, 1.15, 1.25);
   mat.specularColor = new Color3(0, 0, 0);
   return mat;
 }
