@@ -315,3 +315,104 @@ export function validateMonsterDef(v: unknown): ValidationResult {
   }
   return { ok: errors.length === 0, errors };
 }
+
+// ── Items (First Loot slice) ────────────────────────────────────────────────
+export type Rarity = "normal" | "magic";
+
+export interface ItemBase {
+  id: string;
+  name: string;
+  itemClass: string;
+  w: number;
+  h: number;
+}
+
+export interface Affix {
+  id: string;
+  stat: string;
+  label: string;
+  minItemLevel: number;
+  min: number;
+  max: number;
+}
+
+export interface ItemAffix {
+  affixId: string;
+  value: number;
+}
+
+export interface Item {
+  baseId: string;
+  rarity: Rarity;
+  itemLevel: number;
+  affixes: ItemAffix[];
+}
+
+export interface ItemPools {
+  bases: ItemBase[];
+  affixes: Affix[];
+}
+
+function isPosInt(v: unknown): boolean {
+  return typeof v === "number" && Number.isInteger(v) && v > 0;
+}
+
+export function validateItemBase(v: unknown): ValidationResult {
+  const errors: string[] = [];
+  if (!isObj(v)) {
+    return { ok: false, errors: ["input: must be an object"] };
+  }
+  if (typeof v["id"] !== "string" || v["id"].length === 0) {
+    errors.push("id: must be a non-empty string");
+  }
+  if (typeof v["name"] !== "string" || v["name"].length === 0) {
+    errors.push("name: must be a non-empty string");
+  }
+  if (typeof v["itemClass"] !== "string" || v["itemClass"].length === 0) {
+    errors.push("itemClass: must be a non-empty string");
+  }
+  if (!isPosInt(v["w"])) {
+    errors.push("w: must be a positive integer");
+  }
+  if (!isPosInt(v["h"])) {
+    errors.push("h: must be a positive integer");
+  }
+  return { ok: errors.length === 0, errors };
+}
+
+export function validateAffix(v: unknown): ValidationResult {
+  const errors: string[] = [];
+  if (!isObj(v)) {
+    return { ok: false, errors: ["input: must be an object"] };
+  }
+  if (typeof v["id"] !== "string" || v["id"].length === 0) {
+    errors.push("id: must be a non-empty string");
+  }
+  if (typeof v["stat"] !== "string" || v["stat"].length === 0) {
+    errors.push("stat: must be a non-empty string");
+  }
+  if (typeof v["label"] !== "string" || v["label"].length === 0) {
+    errors.push("label: must be a non-empty string");
+  }
+  if (!isPosInt(v["minItemLevel"])) {
+    errors.push("minItemLevel: must be a positive integer");
+  }
+  const min = v["min"];
+  const max = v["max"];
+  if (typeof min !== "number" || !Number.isInteger(min)) {
+    errors.push("min: must be an integer");
+  }
+  if (typeof max !== "number" || !Number.isInteger(max)) {
+    errors.push("max: must be an integer");
+  }
+  if (
+    typeof min === "number" &&
+    typeof max === "number" &&
+    Number.isInteger(min) &&
+    Number.isInteger(max) &&
+    min > max
+  ) {
+    errors.push("min: must be <= max");
+  }
+  return { ok: errors.length === 0, errors };
+}
