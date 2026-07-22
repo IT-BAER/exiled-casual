@@ -40,6 +40,7 @@ function makeSnap(overrides: {
       casting: false,
     },
     entities: overrides.entities ?? [],
+    inventory: { cols: 12, rows: 5, items: [] },
   };
 }
 
@@ -94,6 +95,7 @@ describe("Hud", () => {
       completedNodes: [],
       player: { id: 0, x: 0, y: 0, life: 100, maxLife: 100, mana: 30, maxMana: 60, cooldowns: {}, alive: true, casting: false },
       entities: [{ id: 10, kind: "monster", x: 0, y: 0, boss: true, bossPhase: 2, life: 600, maxLife: 1000 }],
+      inventory: { cols: 12, rows: 5, items: [] },
     };
     render(<Hud snapshot={snap} />);
     expect(screen.getByTestId("boss-bar")).toBeInTheDocument();

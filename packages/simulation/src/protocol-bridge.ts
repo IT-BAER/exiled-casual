@@ -1,11 +1,13 @@
 import { toNumber, fpDist2 } from "@pact/fixed-point";
+import { PICKUP_RADIUS } from "@pact/protocol";
 import type { Intent, Snapshot, SnapshotEntity } from "@pact/protocol";
+import { describeItem } from "@pact/content-runtime";
 import type { Command, Simulation } from "./loop";
 import type { World, Entity } from "./ecs";
 import type {
   Health, Mana, Position, Cooldowns, CastingC, MonsterC,
   AilmentC, ProjectileC, GroundAreaC, BossC, TelegraphC,
-  SessionC, InteractableC,
+  SessionC, InteractableC, ItemC, InventoryC,
 } from "./components";
 
 /**
@@ -42,6 +44,8 @@ export function intentToCommand(intent: Intent, player: Entity, tick: number): C
         tick, entity: player, type: "activateMap",
         atlasNodeId: intent.atlasNodeId, waystoneId: intent.waystoneId,
       };
+    case "pickupItem":
+      return { tick, entity: player, type: "pickupItem", data: { entityId: intent.entityId } };
   }
 }
 
@@ -142,7 +146,32 @@ export function buildSnapshot(
     });
   }
 
+  for (const e of world.query("item", "position")) {
+    const ip = world.get<Position>(e, "position")!;
+    const ic = world.get<ItemC>(e, "item")!;
+    const d = describeItem(ic.item);
+    entities.push({
+      id: e,
+      kind: "groundItem",
+      x: toNumber(ip.x), y: toNumber(ip.y),
+      rarity: d.rarity,
+      name: d.name,
+      lines: d.lines,
+      inRange: inRangeOf(pp.x, pp.y, ip.x, ip.y, PICKUP_RADIUS),
+    });
+  }
+
   entities.sort((a, b) => a.id - b.id);
+
+  const invC = sessionE !== undefined ? world.get<InventoryC>(sessionE, "inventory") : undefined;
+  const inventory = {
+    cols: invC?.cols ?? 12,
+    rows: invC?.rows ?? 5,
+    items: (invC?.items ?? []).map((p) => {
+      const d = describeItem(p.item);
+      return { x: p.x, y: p.y, w: p.w, h: p.h, rarity: d.rarity, name: d.name, lines: d.lines };
+    }),
+  };
 
   return {
     tick,
@@ -165,5 +194,6 @@ export function buildSnapshot(
       })(),
     },
     entities,
+    inventory,
   };
 }

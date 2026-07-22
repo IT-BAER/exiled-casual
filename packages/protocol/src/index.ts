@@ -13,9 +13,11 @@ export type Intent =
   /** Activate a clicked interactable (map device, portal). Sim re-checks range. */
   | { kind: "interact"; targetId: number }
   /** Activate the map device with a chosen node + waystone. Sim re-validates both. */
-  | { kind: "activateMap"; atlasNodeId: string; waystoneId: string };
+  | { kind: "activateMap"; atlasNodeId: string; waystoneId: string }
+  /** Pick up a ground item. Sim re-checks range + placement. */
+  | { kind: "pickupItem"; entityId: number };
 
-export type CommandType = "moveTo" | "moveDir" | "useSkill" | "stop" | "interact" | "activateMap";
+export type CommandType = "moveTo" | "moveDir" | "useSkill" | "stop" | "interact" | "activateMap" | "pickupItem";
 
 // ---------------------------------------------------------------------------
 // Run loop
@@ -33,6 +35,12 @@ export const AREA_KINDS: readonly AreaKind[] = ["hideout", "map"];
  * "six total lives including the initial entry".
  */
 export const MAP_PORTALS = 6;
+
+/** Rarity tint for a display-ready item. Protocol-local; no content-schema import. */
+export type ItemRarity = "normal" | "magic";
+
+/** Interaction range for picking up a ground item, Fixed units (matches device/portal radius). */
+export const PICKUP_RADIUS = 2.5;
 
 // ---------------------------------------------------------------------------
 // Worker message types (client → worker)
@@ -55,7 +63,7 @@ export type ToWorker = ToWorker_Init | ToWorker_Intent | ToWorker_Reset | ToWork
 
 export interface SnapshotEntity {
   id: number;
-  kind: "monster" | "projectile" | "groundArea" | "telegraph" | "portal" | "mapDevice";
+  kind: "monster" | "projectile" | "groundArea" | "telegraph" | "portal" | "mapDevice" | "groundItem";
   x: number; y: number;
   radius?: number;
   life?: number; maxLife?: number;
@@ -72,6 +80,10 @@ export interface SnapshotEntity {
   inRange?: boolean;
   /** portal/mapDevice only: fixed yaw in radians, so the renderer angles it consistently */
   yaw?: number;
+  /** groundItem only: rarity tint, display name, and affix lines for hover. */
+  rarity?: ItemRarity;
+  name?: string;
+  lines?: string[];
 }
 
 export interface Snapshot {
@@ -96,6 +108,11 @@ export interface Snapshot {
     casting: boolean;
   };
   entities: SnapshotEntity[];
+  /** Grid inventory (session singleton), display-ready. Empty when no session. */
+  inventory: {
+    cols: number; rows: number;
+    items: { x: number; y: number; w: number; h: number; rarity: ItemRarity; name: string; lines: string[] }[];
+  };
 }
 
 export interface FromWorker_Snapshot { type: "snapshot"; snapshot: Snapshot }
@@ -159,6 +176,11 @@ export function validateIntent(v: unknown): Intent {
         atlasNodeId: obj["atlasNodeId"] as string,
         waystoneId: obj["waystoneId"] as string,
       };
+    }
+    case "pickupItem": {
+      if (!Number.isInteger(obj["entityId"]))
+        throw new Error("validateIntent pickupItem: entityId must be an integer");
+      return { kind: "pickupItem", entityId: obj["entityId"] as number };
     }
     default:
       throw new Error(`validateIntent: unknown kind: ${String(obj["kind"])}`);

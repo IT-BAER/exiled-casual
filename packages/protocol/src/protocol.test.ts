@@ -120,6 +120,15 @@ describe("validateIntent — activateMap", () => {
   });
 });
 
+describe("validateIntent — pickupItem", () => {
+  test("validates a pickupItem intent", () => {
+    expect(validateIntent({ kind: "pickupItem", entityId: 7 })).toEqual({ kind: "pickupItem", entityId: 7 });
+  });
+  test("rejects pickupItem with a non-integer entityId", () => {
+    expect(() => validateIntent({ kind: "pickupItem", entityId: "x" })).toThrow();
+  });
+});
+
 describe("FromWorker area message", () => {
   // postMessage clones with the structured-clone algorithm; this guards against a
   // future "optimisation" (e.g. JSON) that would silently drop the Uint8Array grid.

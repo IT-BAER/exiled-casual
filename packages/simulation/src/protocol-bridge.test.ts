@@ -3,9 +3,13 @@ import { fp, toNumber } from "@pact/fixed-point";
 import { createCombatSim } from "./combat-sim";
 import { intentToCommand, buildSnapshot } from "./protocol-bridge";
 import { CONTENT_VERSION } from "@pact/content-runtime";
+import { ITEM_POOLS, baseOf } from "@pact/content-runtime";
+import { rollItem } from "@pact/rules";
 import type { Intent } from "@pact/protocol";
 import { World } from "./ecs";
-import type { Position, Health, Mana, MonsterC, BossC, TelegraphC, SessionC, InteractableC } from "./components";
+import type {
+  Position, Health, Mana, MonsterC, BossC, TelegraphC, SessionC, InteractableC,
+} from "./components";
 
 describe("intentToCommand", () => {
   it("moveTo maps to correct Command shape", () => {
@@ -318,5 +322,26 @@ describe("buildSnapshot — session fields and interactables", () => {
     world.set<Position>(playerEntity, "position", { x: 0, y: fp(8) });
     const snapNear = buildSnapshot(world, {} as never, 0, "test");
     expect(snapNear.entities.find(e => e.kind === "mapDevice")!.inRange).toBe(true);
+  });
+});
+
+describe("buildSnapshot — ground items and inventory", () => {
+  it("reports ground items and an empty inventory in the snapshot", () => {
+    const { world, sim, playerEntity } = createCombatSim(42, { area: "map" });
+    const playerPos = world.get<Position>(playerEntity, "position")!;
+
+    const item = rollItem(ITEM_POOLS, 1, 65, 1);
+    const base = baseOf(item.baseId);
+    const ge = world.create();
+    world.set(ge, "position", playerPos); // same cell as player → in range
+    world.set(ge, "item", { item, w: base.w, h: base.h });
+
+    const snap = buildSnapshot(world, sim, 1, "test");
+    const gi = snap.entities.find((e) => e.kind === "groundItem");
+    expect(gi).toBeDefined();
+    expect(gi!.rarity).toBe(item.rarity);
+    expect(gi!.name).toBe(base.name);
+    expect(gi!.inRange).toBe(true);
+    expect(snap.inventory).toEqual({ cols: 12, rows: 5, items: [] });
   });
 });

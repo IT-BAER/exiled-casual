@@ -28,6 +28,7 @@ function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
     atlasSeed: 0,
     completedNodes: [],
     entities: [],
+    inventory: { cols: 12, rows: 5, items: [] },
     ...overrides,
   };
 }
