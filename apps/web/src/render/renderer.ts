@@ -31,6 +31,7 @@ function kindOf(e: SnapshotEntity): MeshKind {
   if (e.kind === "telegraph") return "telegraph";
   if (e.kind === "portal") return "portal";
   if (e.kind === "mapDevice") return "mapDevice";
+  if (e.kind === "groundItem") return "groundItem";
   return "groundArea";
 }
 

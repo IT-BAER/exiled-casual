@@ -8,7 +8,7 @@ import {
 } from "@babylonjs/core";
 import { attachRig, rigOf, type RigParts } from "./rig";
 
-export type MeshKind = "player" | "monster" | "rare" | "boss" | "projectile" | "groundArea" | "telegraph" | "portal" | "mapDevice";
+export type MeshKind = "player" | "monster" | "rare" | "boss" | "projectile" | "groundArea" | "telegraph" | "portal" | "mapDevice" | "groundItem";
 
 /**
  * Y-lift off the ground plane per kind (render only). The authored actors
@@ -27,6 +27,8 @@ const Y_LIFT: Record<MeshKind, number> = {
   portal: 0,
   // map device cylinder base already starts at y=0 (children lift themselves)
   mapDevice: 0,
+  // small floor-level beacon marker
+  groundItem: 0.15,
 };
 
 export { Y_LIFT };
@@ -474,6 +476,17 @@ export function makeMesh(scene: Scene, kind: MeshKind, name: string): Mesh {
     const root = new Mesh(name, scene);
     buildMapDevice(scene, root);
     return root;
+  }
+
+  if (kind === "groundItem") {
+    // Small rarity-neutral beacon marker; full per-rarity ground visuals are out of scope this slice.
+    const m = MeshBuilder.CreateCylinder(name, { diameter: 0.5, height: 0.3, tessellation: 6 }, scene);
+    const itemMat = new StandardMaterial(`${name}-mat`, scene);
+    itemMat.diffuseColor = new Color3(0.2, 0.3, 0.6);
+    itemMat.emissiveColor = new Color3(0.55, 0.7, 1.0); // magic-blue-ish beacon
+    itemMat.specularColor = new Color3(0, 0, 0);
+    m.material = itemMat;
+    return m;
   }
 
   const matName = `mat-${kind}`;
