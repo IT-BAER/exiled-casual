@@ -3,6 +3,7 @@ import { WorkerCore } from "./worker-core";
 import type { Intent, Snapshot } from "@pact/protocol";
 import { fp } from "@pact/fixed-point";
 import { generateArea } from "@pact/mapgen";
+import { offerWaystones, WAYSTONE_OFFER_COUNT } from "@pact/rules";
 import { CONTENT_VERSION } from "@pact/content-runtime";
 
 function monsters(core: WorkerCore) {
@@ -108,9 +109,14 @@ describe("WorkerCore", () => {
     core.pushIntent({ kind: "interact", targetId: portal.id });
     advanceUntil(core, () => core.getArea() === "map");
 
-    // The glue can now re-send `area`, and the layout matches the generated map.
+    // The glue can now re-send `area`, and the rendered layout must match the map
+    // the sim actually installed collision for: generateArea(mapSeed), where the
+    // map seed is the activated waystone's seed — NOT the combat-lab seed. If the
+    // render layout and the collision grid diverge, walls are walkable and empty
+    // floor blocks (the "walk through some walls, invisible walls elsewhere" bug).
     expect(core.consumeAreaChange()).toBe(true);
     expect(core.consumeAreaChange()).toBe(false); // one-shot
-    expect(core.getAreaLayout().hash).toBe(generateArea(42, CONTENT_VERSION).hash);
+    const mapSeed = offerWaystones(42, WAYSTONE_OFFER_COUNT)[0]!.seed;
+    expect(core.getAreaLayout().hash).toBe(generateArea(mapSeed, CONTENT_VERSION).hash);
   });
 });

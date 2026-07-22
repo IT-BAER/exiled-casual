@@ -108,7 +108,11 @@ export class WorkerCore {
     const session = this.world.get<SessionC>(sessionE, "session");
     if (session === undefined || session.area === this.area) return;
     this.area = session.area;
-    this.areaLayout = generateArea(this.seed, CONTENT_VERSION);
+    // Regenerate from the session's mapSeed — the SAME seed the sim used to build
+    // the collision grid (area-transition installs gridCollision(generateArea(
+    // mapSeed))). Using this.seed here drew a different dungeon than the one the
+    // player collided against: walkable rendered walls, invisible blocking floor.
+    this.areaLayout = generateArea(session.mapSeed, CONTENT_VERSION);
     this.areaDirty = true;
   }
 
