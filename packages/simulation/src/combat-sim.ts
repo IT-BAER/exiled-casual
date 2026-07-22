@@ -23,6 +23,7 @@ import { registerDamageResolve } from "./systems/damage-resolve";
 import { registerDeath } from "./systems/death";
 import { registerExpiry } from "./systems/expiry";
 import { registerInteractSystem } from "./systems/interact";
+import { registerPickupSystem } from "./systems/pickup";
 import { registerAreaTransition } from "./systems/area-transition";
 import { buildArea, spawnMonster } from "./areas";
 
@@ -106,6 +107,7 @@ export function createCombatSim(
     // New systems only needed for area-based sims. Appended to preserve the
     // canonical ordering of the first 12 systems (checked by legacy tests).
     registerInteractSystem(sim);
+    registerPickupSystem(sim);
     registerAreaTransition(sim, collisionRef);
   } else {
     // ── Legacy path: no session, golden-replay–safe bootstrap ────────────
