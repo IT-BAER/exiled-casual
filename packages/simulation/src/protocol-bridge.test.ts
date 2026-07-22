@@ -333,7 +333,8 @@ describe("buildSnapshot — ground items and inventory", () => {
     const item = rollItem(ITEM_POOLS, 1, 65, 1);
     const base = baseOf(item.baseId);
     const ge = world.create();
-    world.set(ge, "position", playerPos); // same cell as player → in range
+    // Offset by fp(1) in x: within the fp(2.5) pickup radius → in range.
+    world.set(ge, "position", { x: playerPos.x + fp(1), y: playerPos.y });
     world.set(ge, "item", { item, w: base.w, h: base.h });
 
     const snap = buildSnapshot(world, sim, 1, "test");
@@ -343,5 +344,22 @@ describe("buildSnapshot — ground items and inventory", () => {
     expect(gi!.name).toBe(base.name);
     expect(gi!.inRange).toBe(true);
     expect(snap.inventory).toEqual({ cols: 12, rows: 5, items: [] });
+  });
+
+  it("reports inRange false for a ground item beyond the pickup radius", () => {
+    const { world, sim, playerEntity } = createCombatSim(42, { area: "map" });
+    const playerPos = world.get<Position>(playerEntity, "position")!;
+
+    const item = rollItem(ITEM_POOLS, 1, 65, 1);
+    const base = baseOf(item.baseId);
+    const ge = world.create();
+    // Offset by fp(3) in x: beyond the fp(2.5) pickup radius → out of range.
+    world.set(ge, "position", { x: playerPos.x + fp(3), y: playerPos.y });
+    world.set(ge, "item", { item, w: base.w, h: base.h });
+
+    const snap = buildSnapshot(world, sim, 1, "test");
+    const gi = snap.entities.find((e) => e.kind === "groundItem");
+    expect(gi).toBeDefined();
+    expect(gi!.inRange).toBe(false);
   });
 });

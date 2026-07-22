@@ -1,4 +1,4 @@
-import type { Fixed } from "@pact/fixed-point";
+import { fp, type Fixed } from "@pact/fixed-point";
 import type { AreaLayout } from "@pact/mapgen";
 
 // ---------------------------------------------------------------------------
@@ -39,8 +39,8 @@ export const MAP_PORTALS = 6;
 /** Rarity tint for a display-ready item. Protocol-local; no content-schema import. */
 export type ItemRarity = "normal" | "magic";
 
-/** Interaction range for picking up a ground item, Fixed units (matches device/portal radius). */
-export const PICKUP_RADIUS = 2.5;
+/** Interaction range for picking up a ground item, Fixed-scaled (matches device/portal interact radius fp(2.5)). */
+export const PICKUP_RADIUS = fp(2.5);
 
 // ---------------------------------------------------------------------------
 // Worker message types (client → worker)
