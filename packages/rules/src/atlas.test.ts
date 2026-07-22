@@ -27,6 +27,14 @@ describe("atlas rules", () => {
     expect(new Set(a.map((w) => w.id)).size).toBe(3); // ids unique
   });
 
+  it("always offers a Tier 1 waystone in the first slot", () => {
+    for (const seed of [1, 42, 999, 0xdeadbeef]) {
+      const ws = offerWaystones(seed, WAYSTONE_OFFER_COUNT);
+      expect(ws[0]!.id).toBe("ws-0");
+      expect(ws[0]!.tier).toBe(1);
+    }
+  });
+
   it("different seeds usually differ", () => {
     expect(offerWaystones(1, 3)).not.toEqual(offerWaystones(2, 3));
   });

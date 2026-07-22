@@ -47,7 +47,10 @@ export function offerWaystones(atlasSeed: number, count: number): Waystone[] {
   const out: Waystone[] = [];
   for (let i = 0; i < count; i++) {
     const seed = rnd();
-    const tier = 1 + (rnd() % 15); // 1..15
+    const roll = 1 + (rnd() % 15); // 1..15
+    // First slot is always Tier 1 so a fresh character has a survivable map to
+    // enter (Area Level 65); the rest roll the full range.
+    const tier = i === 0 ? 1 : roll;
     out.push({ id: `ws-${i}`, seed, tier });
   }
   return out;
