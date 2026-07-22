@@ -135,6 +135,39 @@ describe("attachBindings hold-to-move", () => {
     expect(worker.postMessage).toHaveBeenCalledWith({ type: "spawn", what: "clear" });
   });
 
+  it("g key picks up the nearest in-range ground item", () => {
+    const w = { postMessage: vi.fn() };
+    const c = document.createElement("canvas");
+    document.body.appendChild(c);
+    const { detach: d, onSnapshot } = attachBindings(c, w as unknown as Worker, fakeScene());
+    onSnapshot(
+      makeSnap([
+        { id: 55, kind: "groundItem", x: 0, y: 0, inRange: true },
+      ]),
+    );
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "g", bubbles: true }));
+    expect(intentCount(w.postMessage, "pickupItem")).toBe(1);
+    expect(w.postMessage).toHaveBeenCalledWith({ type: "intent", intent: { kind: "pickupItem", entityId: 55 } });
+    d();
+    c.remove();
+  });
+
+  it("g key ignores ground items that are not in range", () => {
+    const w = { postMessage: vi.fn() };
+    const c = document.createElement("canvas");
+    document.body.appendChild(c);
+    const { detach: d, onSnapshot } = attachBindings(c, w as unknown as Worker, fakeScene());
+    onSnapshot(
+      makeSnap([
+        { id: 55, kind: "groundItem", x: 0, y: 0, inRange: false },
+      ]),
+    );
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "g", bubbles: true }));
+    expect(intentCount(w.postMessage, "pickupItem")).toBe(0);
+    d();
+    c.remove();
+  });
+
   it("a numpad key never doubles as its skill-row twin", () => {
     // Both report key "1"; only the code separates spawning from casting.
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "1", code: "Numpad1", bubbles: true }));

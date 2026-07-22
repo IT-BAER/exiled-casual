@@ -85,6 +85,10 @@ export function attachBindings(
   // Tracked here so we only fire the callback on actual changes.
   let hoveredEntityId: number | null = null;
 
+  // Latest snapshot from the worker, so the `g` pickup keybind can find the
+  // nearest in-range ground item without waiting on a dedicated intent round-trip.
+  let latestSnap: Snapshot | null = null;
+
   function setHover(id: number | null) {
     if (id === hoveredEntityId) return; // no change — avoid spurious re-renders
     hoveredEntityId = id;
@@ -112,6 +116,17 @@ export function attachBindings(
     // o = try on the next outfit. Render-only, the sim never hears about it.
     if (k === "o") {
       onCycleOutfit?.();
+      return;
+    }
+    // g = pick up the nearest in-range ground item (sim re-checks range).
+    if (k === "g" && latestSnap) {
+      const items = latestSnap.entities.filter((e) => e.kind === "groundItem" && e.inRange);
+      if (items.length > 0) {
+        const px = latestSnap.player.x, py = latestSnap.player.y;
+        const nearest = items.reduce((a, b) =>
+          (a.x - px) ** 2 + (a.y - py) ** 2 <= (b.x - px) ** 2 + (b.y - py) ** 2 ? a : b);
+        post({ kind: "pickupItem", entityId: nearest.id });
+      }
       return;
     }
     if (MOVE_KEYS.has(k) && !held.includes(k)) held.push(k);
@@ -190,6 +205,7 @@ export function attachBindings(
    * Also clears pending and hover state if the entity disappears from the snapshot.
    */
   function onSnapshot(snap: Snapshot): void {
+    latestSnap = snap;
     // Hold-to-move: while the button is held, re-pick the world point under the
     // cursor and steer there every snapshot. Because the camera tracks the player,
     // that point drifts as the player advances, so the player keeps moving in the

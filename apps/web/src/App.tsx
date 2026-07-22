@@ -7,6 +7,7 @@ import { loadPlayerRig, resetPlayerRig } from "./render/rig";
 import { attachBindings } from "./input/bindings";
 import { Hud } from "./hud/Hud";
 import { PreparationPanel } from "./hud/PreparationPanel";
+import { InventoryPanel } from "./hud/InventoryPanel";
 import type { Snapshot, FromWorker } from "@pact/protocol";
 
 const LAB_SEED = 42;
@@ -18,6 +19,7 @@ export function App() {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [hoveredEntityId, setHoveredEntityId] = useState<number | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [inventoryOpen, setInventoryOpen] = useState(false);
   const workerRef = useRef<Worker | null>(null);
 
   useEffect(() => {
@@ -104,9 +106,16 @@ export function App() {
 
     window.addEventListener("resize", () => engine.resize());
 
+    // i = toggle the inventory panel. Render-only, the sim never hears about it.
+    const onInvKey = (ev: KeyboardEvent) => {
+      if (ev.key.toLowerCase() === "i") setInventoryOpen((v) => !v);
+    };
+    window.addEventListener("keydown", onInvKey);
+
     return () => {
       unmounted = true;
       detach();
+      window.removeEventListener("keydown", onInvKey);
       resetPlayerRig(); // containers belong to the scene we are about to dispose
       engine.dispose();
       worker.terminate();
@@ -134,6 +143,9 @@ export function App() {
             setPanelOpen(false);
           }}
         />
+      )}
+      {inventoryOpen && snapshot && (
+        <InventoryPanel inventory={snapshot.inventory} onClose={() => setInventoryOpen(false)} />
       )}
     </div>
   );
