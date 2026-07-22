@@ -21,11 +21,11 @@ const AFFIXES: Affix[] = [
 // Validate at module load; bad content is a programmer error, fail fast.
 for (const b of ITEM_BASES) {
   const r = validateItemBase(b);
-  if (!r.ok) throw new Error(`[content-runtime] Invalid item base "${(b as ItemBase).id}": ${r.errors.join("; ")}`);
+  if (!r.ok) throw new Error(`[content-runtime] Invalid item base "${b.id}": ${r.errors.join("; ")}`);
 }
 for (const a of AFFIXES) {
   const r = validateAffix(a);
-  if (!r.ok) throw new Error(`[content-runtime] Invalid affix "${(a as Affix).id}": ${r.errors.join("; ")}`);
+  if (!r.ok) throw new Error(`[content-runtime] Invalid affix "${a.id}": ${r.errors.join("; ")}`);
 }
 
 export const ITEM_POOLS: ItemPools = { bases: ITEM_BASES, affixes: AFFIXES };

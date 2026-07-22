@@ -152,6 +152,27 @@ describe("attachBindings hold-to-move", () => {
     c.remove();
   });
 
+  it("g key picks the nearest in-range item, ignoring a closer out-of-range one", () => {
+    const w = { postMessage: vi.fn() };
+    const c = document.createElement("canvas");
+    document.body.appendChild(c);
+    const { detach: d, onSnapshot } = attachBindings(c, w as unknown as Worker, fakeScene());
+    // Player at origin. 56 is the nearest in-range; 66 is closer but out of range.
+    onSnapshot(
+      makeSnap([
+        { id: 55, kind: "groundItem", x: 10, y: 0, inRange: true },
+        { id: 56, kind: "groundItem", x: 2, y: 0, inRange: true },
+        { id: 57, kind: "groundItem", x: 5, y: 5, inRange: true },
+        { id: 66, kind: "groundItem", x: 1, y: 0, inRange: false },
+      ]),
+    );
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "g", bubbles: true }));
+    expect(intentCount(w.postMessage, "pickupItem")).toBe(1);
+    expect(w.postMessage).toHaveBeenCalledWith({ type: "intent", intent: { kind: "pickupItem", entityId: 56 } });
+    d();
+    c.remove();
+  });
+
   it("g key ignores ground items that are not in range", () => {
     const w = { postMessage: vi.fn() };
     const c = document.createElement("canvas");
