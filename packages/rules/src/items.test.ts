@@ -52,6 +52,17 @@ describe("rollItem", () => {
     expect(magicAt(79, 2)).toBeGreaterThan(magicAt(65, 1));
   });
 
+  it("never returns a magic item with zero affixes when no affix is eligible", () => {
+    const HIGH_ONLY: ItemPools = {
+      bases: [{ id: "b0", name: "B0", itemClass: "wand", w: 1, h: 2 }],
+      affixes: [{ id: "a.high", stat: "armour", label: "armour", minItemLevel: 90, min: 10, max: 60 }],
+    };
+    for (let s = 1; s <= 200; s++) {
+      const it = rollItem(HIGH_ONLY, s, 65, 2); // ilvl 65 < 90 => nothing eligible
+      expect(!(it.rarity === "magic" && it.affixes.length === 0)).toBe(true);
+    }
+  });
+
   it("affix values fall within the affix range", () => {
     for (let s = 1; s <= 200; s++) {
       const it = rollItem(POOLS, s, 70, 2);

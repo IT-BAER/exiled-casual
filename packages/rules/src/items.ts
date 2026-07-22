@@ -42,5 +42,6 @@ export function rollItem(pools: ItemPools, seed: number, ilvl: number, monsterRa
     }
   }
 
-  return { baseId: base.id, rarity, itemLevel: ilvl, affixes };
+  const finalRarity = rarity === "magic" && affixes.length === 0 ? "normal" : rarity;
+  return { baseId: base.id, rarity: finalRarity, itemLevel: ilvl, affixes };
 }
