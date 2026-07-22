@@ -160,4 +160,38 @@ describe("registerDeath", () => {
     sim.step();
     expect(world.get<SessionC>(sessionE, "session")!.completedNodes).toEqual([]);
   });
+
+  // ── Item drops on boss/rare death ────────────────────────────────────────
+
+  it("drops one ground item when a rare monster dies in a map", () => {
+    const sim = new Simulation();
+    registerDeath(sim);
+    const w = sim.world;
+    const s = w.create();
+    w.set(s, "session", { area: "map", atlasSeed: 1, mapSeed: 7, areaTier: 5, activeNodeId: "node.ashen_glade", completedNodes: [], portalsLeft: 6, mapOpen: 1, pendingArea: "" });
+    const m = w.create();
+    w.set(m, "position", { x: 100, y: 200 });
+    w.set(m, "health", { life: 0, maxLife: 40 });
+    w.set(m, "monster", { defId: "d", moveSpeed: 0, bodyRadius: 0, attackRange: 0, attackCooldownTicks: 0, attackDamage: 0, attackType: 1, attackReadyTick: 0, state: "idle", rare: 1, summoned: 0 });
+    sim.step([]);
+    const groundItems = w.query("item", "position");
+    expect(groundItems.length).toBe(1);
+    const ic = w.get(groundItems[0]!, "item") as { item: { itemLevel: number }; w: number; h: number };
+    expect(ic.item.itemLevel).toBe(69); // 64 + tier 5
+    expect(ic.w).toBeGreaterThan(0);
+  });
+
+  it("does not drop when an ordinary (non-rare, non-boss) monster dies", () => {
+    const sim = new Simulation();
+    registerDeath(sim);
+    const w = sim.world;
+    const s = w.create();
+    w.set(s, "session", { area: "map", atlasSeed: 1, mapSeed: 7, areaTier: 5, activeNodeId: "n", completedNodes: [], portalsLeft: 6, mapOpen: 1, pendingArea: "" });
+    const m = w.create();
+    w.set(m, "position", { x: 0, y: 0 });
+    w.set(m, "health", { life: 0, maxLife: 40 });
+    w.set(m, "monster", { defId: "d", moveSpeed: 0, bodyRadius: 0, attackRange: 0, attackCooldownTicks: 0, attackDamage: 0, attackType: 1, attackReadyTick: 0, state: "idle", rare: 0, summoned: 0 });
+    sim.step([]);
+    expect(w.query("item", "position").length).toBe(0);
+  });
 });

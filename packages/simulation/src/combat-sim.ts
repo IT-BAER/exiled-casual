@@ -8,7 +8,7 @@ import { World } from "./ecs";
 import type { Entity } from "./ecs";
 import type {
   Position, Health, Mana, Faction, PlayerC, Cooldowns, DefensesC,
-  MoveTarget, MoveDir, SessionC, AreaKind,
+  MoveTarget, MoveDir, SessionC, AreaKind, InventoryC,
 } from "./components";
 import { registerResourceRegen } from "./systems/resource";
 import { registerSkillCast } from "./systems/skill-cast";
@@ -100,6 +100,7 @@ export function createCombatSim(
       pendingArea: "",
     };
     world.set<SessionC>(sessionE, "session", session);
+    world.set<InventoryC>(sessionE, "inventory", { cols: 12, rows: 5, items: [] });
     buildArea(world, opts.area, session, layout);
 
     // New systems only needed for area-based sims. Appended to preserve the
