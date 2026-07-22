@@ -97,10 +97,9 @@ describe("WorkerCore", () => {
     expect(core.getArea()).toBe("hideout");
     expect(core.consumeAreaChange()).toBe(false); // no change yet
 
-    // Walk to the map device and open the portal ring.
-    const device = core.snapshot()!.entities.find((e) => e.kind === "mapDevice")!;
-    walkTo(core, device.x, device.y);
-    core.pushIntent({ kind: "interact", targetId: device.id });
+    // Open the portal ring by activating a map (T5: activateMap opens it, not a
+    // device interact — that is now a no-op). ws-0 resolves against the session seed.
+    core.pushIntent({ kind: "activateMap", atlasNodeId: "node.ashen_glade", waystoneId: "ws-0" });
     advanceUntil(core, (s) => s.entities.some((e) => e.kind === "portal"));
 
     // Step through a portal into the dungeon.
