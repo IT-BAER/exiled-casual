@@ -14,6 +14,8 @@ export type {
   Cooldowns, MonsterC, DefensesC, ProjectileC, GroundAreaC, AilmentC,
   DamageEvent, BossC, TelegraphC, SessionC, InteractableC, AreaKind,
 } from "./components";
+export type { ItemC, PlacedItem, InventoryC } from "./components";
+export { placeFirstFit } from "./inventory";
 export { registerResourceRegen } from "./systems/resource";
 export { registerPlayerMovement } from "./systems/player-movement";
 export { registerSkillCast } from "./systems/skill-cast";

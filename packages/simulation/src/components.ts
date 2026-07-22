@@ -1,5 +1,6 @@
 import type { Entity } from "./ecs";
 import type { Fixed } from "@pact/fixed-point";
+import type { Item } from "@pact/content-schema";
 
 export type AreaKind = "hideout" | "map";
 
@@ -126,3 +127,10 @@ export interface DamageEvent {
   /** 0 = fire, 1 = physical */
   type: 0 | 1;
 }
+
+/** A committed item lying on the ground; lives on an entity with Position. */
+export interface ItemC { item: Item; w: number; h: number }
+/** One placed stack in the grid inventory. */
+export interface PlacedItem { x: number; y: number; w: number; h: number; item: Item }
+/** Grid inventory on the session singleton. In-memory only this slice. */
+export interface InventoryC { cols: number; rows: number; items: PlacedItem[] }
