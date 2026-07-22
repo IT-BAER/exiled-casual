@@ -101,6 +101,49 @@ describe("generateArea", () => {
     expect(width?.passed).toBe(true);
     expect(3 * CELL_SIZE).toBeGreaterThanOrEqual(MIN_ROUTE_WIDTH);
   });
+
+  // Open-map spec: a big open field with walls on the outer boundary and a
+  // single central ruin — NOT a maze of scattered rooms and corridors.
+  it("is an open field: over half the grid is walkable", () => {
+    for (const s of [0, 5, 42, 99, 777]) {
+      const { grid } = generateArea(s, V);
+      let walk = 0;
+      for (const c of grid.cells) if (c === 1) walk++;
+      const frac = walk / (grid.cols * grid.rows);
+      expect(frac, `seed ${s} walkable fraction ${frac.toFixed(3)}`).toBeGreaterThan(0.5);
+    }
+  });
+
+  it("walls the whole outer boundary so the player can't leave the field", () => {
+    const { grid } = generateArea(11, V);
+    const { cols, rows, cells } = grid;
+    for (let x = 0; x < cols; x++) {
+      expect(cells[x], `top row cell ${x}`).toBe(0);
+      expect(cells[(rows - 1) * cols + x], `bottom row cell ${x}`).toBe(0);
+    }
+    for (let y = 0; y < rows; y++) {
+      expect(cells[y * cols], `left col cell ${y}`).toBe(0);
+      expect(cells[y * cols + cols - 1], `right col cell ${y}`).toBe(0);
+    }
+  });
+
+  it("has a central ruin: a wall cluster near the middle of the open field", () => {
+    for (const s of [0, 5, 42, 99, 777]) {
+      const { grid } = generateArea(s, V);
+      const { cols, rows, cells } = grid;
+      const midX = (cols - 1) / 2, midY = (rows - 1) / 2;
+      let central = 0;
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+          if (cells[y * cols + x] !== 0) continue;
+          if (Math.abs(x - midX) <= 8 && Math.abs(y - midY) <= 8) central++;
+        }
+      }
+      // The ruin block occupies a chunk of the central window; a bare open
+      // field or a maze whose rooms happen to miss the centre would score ~0.
+      expect(central, `seed ${s} central wall cells`).toBeGreaterThanOrEqual(20);
+    }
+  });
 });
 
 describe("fallbackLayout", () => {

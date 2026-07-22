@@ -4,7 +4,7 @@
 // to fixed-point at the sim boundary. The walkable grid is integer cells.
 import { createStream, fnv1a32, type RandomStream } from "./rng";
 
-export const ALGORITHM_VERSION = 1;
+export const ALGORITHM_VERSION = 2;
 
 /** Cell edge length in world units. Player body radius is 0.5, so a 3-cell
  *  corridor is 1.5 world units wide — player diameter (1.0) plus margin. */
@@ -56,9 +56,18 @@ export interface AreaLayout {
   hash: number;
 }
 
-const GAP = 2; // min empty cells between rooms
-const MIN_ROOMS = 3; // start, boss, exit
 const SPAWN_TARGET = 6;
+
+const TAU = Math.PI * 2;
+/** Open-field radius in cells before per-seed wobble. Leaves a wall margin to
+ *  the grid edge (34 + max wobble < 39.5 half-grid) so the whole boundary is wall. */
+const OPEN_RADIUS_CELLS = 34;
+/** Half-extent of the central ruin (a plus of two bars ~13 cells across). */
+const RUIN_HALF_CELLS = 6;
+const RUIN_ARM_CELLS = 2;
+/** Anchors sit at 0.55·R, spawns at 0.7·R — inside the field, clear of the ruin. */
+const ANCHOR_RADIUS_CELLS = Math.round(OPEN_RADIUS_CELLS * 0.55);
+const SPAWN_RADIUS_CELLS = Math.round(OPEN_RADIUS_CELLS * 0.7);
 
 interface Room {
   x0: number;
@@ -78,31 +87,6 @@ function cellCentre(cx: number, cy: number): { x: number; y: number } {
 
 function roomCentre(r: Room): { cx: number; cy: number } {
   return { cx: Math.floor((r.x0 + r.x1) / 2), cy: Math.floor((r.y0 + r.y1) / 2) };
-}
-
-function roomArea(r: Room): number {
-  return (r.x1 - r.x0 + 1) * (r.y1 - r.y0 + 1);
-}
-
-function overlaps(a: Room, b: Room): boolean {
-  return (
-    a.x0 - GAP <= b.x1 && a.x1 + GAP >= b.x0 && a.y0 - GAP <= b.y1 && a.y1 + GAP >= b.y0
-  );
-}
-
-function placeRooms(rng: RandomStream): Room[] {
-  const target = rng.nextInt(5, 7);
-  const rooms: Room[] = [];
-  for (let attempt = 0; attempt < 60 && rooms.length < target; attempt++) {
-    const w = rng.nextInt(8, 16);
-    const h = rng.nextInt(8, 16);
-    const x0 = rng.nextInt(1, GRID_CELLS - w - 2);
-    const y0 = rng.nextInt(1, GRID_CELLS - h - 2);
-    const cand: Room = { x0, y0, x1: x0 + w - 1, y1: y0 + h - 1 };
-    if (rooms.some((r) => overlaps(r, cand))) continue;
-    rooms.push(cand);
-  }
-  return rooms;
 }
 
 function carveRoom(cells: Uint8Array, r: Room): void {
@@ -280,49 +264,98 @@ function spawnPointsFor(rooms: Room[], count: number): Socket[] {
   return out;
 }
 
+function fieldCentre(): { cx: number; cy: number } {
+  const m = (GRID_CELLS - 1) / 2;
+  return { cx: m, cy: m };
+}
+
+/** Carve an irregular open disc as walkable; everything outside stays wall, so
+ *  walls only ring the outer boundary. Per-seed sinusoidal wobble makes the
+ *  edge organic instead of a clean circle. */
+function carveOpenField(cells: Uint8Array, rng: RandomStream): void {
+  const { cx: mx, cy: my } = fieldCentre();
+  const a1 = rng.nextInt(2, 4), a2 = rng.nextInt(1, 3);
+  const p1 = (rng.nextU32() / 0x1_0000_0000) * TAU;
+  const p2 = (rng.nextU32() / 0x1_0000_0000) * TAU;
+  for (let y = 0; y < GRID_CELLS; y++) {
+    for (let x = 0; x < GRID_CELLS; x++) {
+      const dx = x - mx, dy = y - my;
+      const ang = Math.atan2(dy, dx);
+      const r = OPEN_RADIUS_CELLS + a1 * Math.sin(3 * ang + p1) + a2 * Math.sin(5 * ang + p2);
+      if (Math.hypot(dx, dy) <= r) cells[y * GRID_CELLS + x] = 1;
+    }
+  }
+}
+
+/** Stamp a single central ruin: a plus-shaped wall block, offset a little by
+ *  seed, as a landmark and cover. A convex-enough solid that the field stays
+ *  fully walkable around it. Returns its cell centre. */
+function carveRuin(cells: Uint8Array, rng: RandomStream): { cx: number; cy: number } {
+  const { cx: mx, cy: my } = fieldCentre();
+  const rx = Math.round(mx) + rng.nextInt(-4, 4);
+  const ry = Math.round(my) + rng.nextInt(-4, 4);
+  const H = RUIN_HALF_CELLS, arm = RUIN_ARM_CELLS;
+  for (let y = -H; y <= H; y++) {
+    for (let x = -H; x <= H; x++) {
+      if (Math.abs(y) > arm && Math.abs(x) > arm) continue; // plus footprint
+      const gx = rx + x, gy = ry + y;
+      if (gx < 0 || gy < 0 || gx >= GRID_CELLS || gy >= GRID_CELLS) continue;
+      cells[gy * GRID_CELLS + gx] = 0;
+    }
+  }
+  return { cx: rx, cy: ry };
+}
+
+function ringCell(mx: number, my: number, radius: number, angle: number): { cx: number; cy: number } {
+  return { cx: Math.round(mx + radius * Math.cos(angle)), cy: Math.round(my + radius * Math.sin(angle)) };
+}
+
+/** Pull a point toward the field centre until it lands on a walkable cell.
+ *  Ring points at 0.55–0.7·R are already clear; this is a determinism-safe guard. */
+function snapToWalkable(cells: Uint8Array, mx: number, my: number, cx: number, cy: number): { cx: number; cy: number } {
+  let x = cx, y = cy;
+  for (let i = 0; i <= GRID_CELLS; i++) {
+    if (x >= 0 && y >= 0 && x < GRID_CELLS && y < GRID_CELLS && cells[y * GRID_CELLS + x] === 1) {
+      return { cx: x, cy: y };
+    }
+    x += Math.sign(mx - x);
+    y += Math.sign(my - y);
+  }
+  return { cx: Math.round(mx), cy: Math.round(my) };
+}
+
 export function generateArea(seed: number, contentVersion: string): AreaLayout {
   const rng = createStream(seed, `mapgen.${contentVersion}`);
-  const rooms = placeRooms(rng);
-  if (rooms.length < MIN_ROOMS) return fallbackLayout(seed, contentVersion);
-
   const cells = new Uint8Array(GRID_CELLS * GRID_CELLS);
-  for (const r of rooms) carveRoom(cells, r);
-  // Chain every room to the previous one → a spanning tree → fully connected.
-  for (let i = 1; i < rooms.length; i++) {
-    const a = roomCentre(rooms[i - 1]!), b = roomCentre(rooms[i]!);
-    carveCorridor(cells, a.cx, a.cy, b.cx, b.cy);
-  }
+  carveOpenField(cells, rng);
+  carveRuin(cells, rng);
 
-  // start = first placed; boss = largest; exit = farthest from start.
-  const startIdx = 0;
-  let bossIdx = 0, bossA = -1;
-  for (let i = 0; i < rooms.length; i++) {
-    const a = roomArea(rooms[i]!);
-    if (i !== startIdx && a > bossA) { bossA = a; bossIdx = i; }
-  }
-  const sc = roomCentre(rooms[startIdx]!);
-  let exitIdx = -1, exitD = -1;
-  for (let i = 0; i < rooms.length; i++) {
-    if (i === startIdx || i === bossIdx) continue;
-    const c = roomCentre(rooms[i]!);
-    const d = (c.cx - sc.cx) ** 2 + (c.cy - sc.cy) ** 2;
-    if (d > exitD) { exitD = d; exitIdx = i; }
-  }
-  if (exitIdx < 0) return fallbackLayout(seed, contentVersion);
-
-  const bc = roomCentre(rooms[bossIdx]!), ec = roomCentre(rooms[exitIdx]!);
+  const { cx: mx, cy: my } = fieldCentre();
+  // start / boss opposite (180°) / exit at +90°, on a mid-radius ring.
+  const theta = (rng.nextU32() / 0x1_0000_0000) * TAU;
+  const anchorAt = (angle: number): { cx: number; cy: number } => {
+    const p = ringCell(mx, my, ANCHOR_RADIUS_CELLS, angle);
+    return snapToWalkable(cells, mx, my, p.cx, p.cy);
+  };
+  const sc = anchorAt(theta);
+  const bc = anchorAt(theta + Math.PI);
+  const ec = anchorAt(theta + Math.PI / 2);
   const anchors: Socket[] = [
     { id: "start", ...cellCentre(sc.cx, sc.cy) },
     { id: "boss", ...cellCentre(bc.cx, bc.cy) },
     { id: "exit", ...cellCentre(ec.cx, ec.cy) },
   ];
-  const spawnRooms = rooms.filter((_, i) => i !== startIdx);
-  const spawns = spawnPointsFor(spawnRooms, SPAWN_TARGET);
 
-  const layout = assemble(seed, contentVersion, false, cells, anchors, spawns, [
-    `rooms.${rooms.length}`,
-  ]);
-  // Any gate failing (e.g. a spawn stranded off the walkable net) → safe fallback.
+  // Spawns spread evenly around a wider ring, snapped onto the open field.
+  const spawns: Socket[] = [];
+  for (let k = 0; k < SPAWN_TARGET; k++) {
+    const p = ringCell(mx, my, SPAWN_RADIUS_CELLS, theta + (k * TAU) / SPAWN_TARGET + TAU / 12);
+    const c = snapToWalkable(cells, mx, my, p.cx, p.cy);
+    spawns.push({ id: `spawn.${k}`, ...cellCentre(c.cx, c.cy) });
+  }
+
+  const layout = assemble(seed, contentVersion, false, cells, anchors, spawns, ["open.field"]);
+  // Any gate failing (e.g. a socket stranded off the walkable net) → safe fallback.
   if (!layout.validationChecks.every((c) => c.passed)) {
     return fallbackLayout(seed, contentVersion);
   }
