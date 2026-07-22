@@ -14,6 +14,7 @@
     "@pact/content-runtime": "*",
     "@pact/fixed-point": "*",
     "@pact/protocol": "*",
+    "@pact/rules": "*",
     "@pact/simulation": "*",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"

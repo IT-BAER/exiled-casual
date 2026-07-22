@@ -1,0 +1,235 @@
+import React, { useState } from "react";
+import { offerWaystones, atlasNodes, areaLevel, WAYSTONE_OFFER_COUNT } from "@pact/rules";
+import { MAP_PORTALS } from "@pact/protocol";
+
+interface Props {
+  atlasSeed: number;
+  completedNodes: string[];
+  onActivate: (atlasNodeId: string, waystoneId: string) => void;
+  onClose: () => void;
+}
+
+// PoE2 map-device look: aged near-black panel behind an ornate gold frame, a
+// carved red-brown title banner, engraved small-caps serif, item-tile choices.
+// Matches poe2-screenshots/atlas-maps.webp (banner + gilt frame) and
+// portals-map-device.webp (Map Device / waystone naming).
+const SERIF = '"Cinzel", "Trajan Pro", Georgia, "Times New Roman", serif';
+const GOLD = "#c8a44d";
+const GOLD_DIM = "#7a5c22";
+const PARCHMENT = "#e8dcc0";
+const MAGIC = "#8aa6ff"; // waystone (magic item) tint, as in PoE rarity
+
+function tile(selected: boolean, disabled: boolean, accent: string): React.CSSProperties {
+  return {
+    position: "relative",
+    minWidth: 132,
+    padding: "10px 12px",
+    borderRadius: 3,
+    cursor: disabled ? "default" : "pointer",
+    textAlign: "center",
+    fontFamily: SERIF,
+    letterSpacing: 0.5,
+    background: selected
+      ? "linear-gradient(180deg, #241f14 0%, #14110a 100%)"
+      : "linear-gradient(180deg, #17181d 0%, #0d0e12 100%)",
+    border: `1px solid ${selected ? accent : "#33301f"}`,
+    boxShadow: selected ? `inset 0 0 12px ${accent}55, 0 0 6px ${accent}44` : "inset 0 0 8px rgba(0,0,0,0.6)",
+    color: disabled ? "#5a564a" : PARCHMENT,
+    opacity: disabled ? 0.55 : 1,
+    transition: "border-color 120ms, box-shadow 120ms",
+  };
+}
+
+export function PreparationPanel({ atlasSeed, completedNodes, onActivate, onClose }: Props) {
+  const nodes = atlasNodes();
+  const waystones = offerWaystones(atlasSeed, WAYSTONE_OFFER_COUNT);
+  const [nodeId, setNodeId] = useState<string | null>(null);
+  const [wsId, setWsId] = useState<string | null>(null);
+  const ws = waystones.find((w) => w.id === wsId);
+  const canActivate = nodeId !== null && ws !== undefined;
+
+  return (
+    <div
+      data-testid="prep-panel"
+      style={{
+        position: "absolute",
+        inset: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "radial-gradient(ellipse at center, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.78) 100%)",
+        pointerEvents: "auto",
+        fontFamily: SERIF,
+        color: PARCHMENT,
+      }}
+    >
+      <div
+        style={{
+          width: 560,
+          background: "linear-gradient(180deg, #0e0f13 0%, #100d09 100%)",
+          border: `1px solid ${GOLD_DIM}`,
+          boxShadow: `0 0 0 1px #000, 0 0 0 4px #1b1710, 0 0 0 5px ${GOLD_DIM}, 0 14px 48px rgba(0,0,0,0.8)`,
+          padding: 0,
+        }}
+      >
+        {/* Carved title banner (mirrors the atlas "WORLD" banner) */}
+        <div
+          style={{
+            position: "relative",
+            padding: "12px 0",
+            textAlign: "center",
+            background: "linear-gradient(180deg, #4a1a13 0%, #6b2018 45%, #3a1310 100%)",
+            borderBottom: `1px solid ${GOLD_DIM}`,
+            boxShadow: `inset 0 1px 0 ${GOLD}55, inset 0 -1px 0 #000`,
+          }}
+        >
+          <span
+            style={{
+              fontSize: 17,
+              fontWeight: 700,
+              letterSpacing: 3,
+              textTransform: "uppercase",
+              color: PARCHMENT,
+              textShadow: "0 1px 2px #000",
+            }}
+          >
+            Map Device
+          </span>
+          <button
+            data-testid="prep-close"
+            onClick={onClose}
+            style={{
+              position: "absolute",
+              top: 8,
+              right: 12,
+              background: "none",
+              border: "none",
+              color: "#c9b48a",
+              cursor: "pointer",
+              fontSize: 20,
+              lineHeight: 1,
+            }}
+          >
+            ×
+          </button>
+        </div>
+
+        <div style={{ padding: 22 }}>
+          <SectionLabel>Destination</SectionLabel>
+          <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
+            {nodes.map((n) => {
+              const done = completedNodes.includes(n.id);
+              const selected = n.id === nodeId;
+              return (
+                <button
+                  key={n.id}
+                  data-testid={`prep-node-${n.id}`}
+                  disabled={done}
+                  onClick={() => setNodeId(n.id)}
+                  style={tile(selected, done, GOLD)}
+                >
+                  <div style={{ fontSize: 14 }}>{n.name}</div>
+                  {done && (
+                    <div style={{ fontSize: 10, letterSpacing: 1, color: "#6f8a5a", marginTop: 3 }}>
+                      COMPLETED
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          <SectionLabel>Waystone</SectionLabel>
+          <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
+            {waystones.map((w) => {
+              const selected = w.id === wsId;
+              return (
+                <button
+                  key={w.id}
+                  data-testid={`prep-ws-${w.id}`}
+                  onClick={() => setWsId(w.id)}
+                  style={tile(selected, false, MAGIC)}
+                >
+                  <div style={{ fontSize: 13, color: MAGIC }}>Waystone</div>
+                  <div style={{ fontSize: 15, fontWeight: 700, marginTop: 2 }}>Tier {w.tier}</div>
+                </button>
+              );
+            })}
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              padding: "12px 14px",
+              marginBottom: 18,
+              background: "rgba(0,0,0,0.35)",
+              border: "1px solid #2a2517",
+              borderRadius: 3,
+              fontSize: 14,
+            }}
+          >
+            <span data-testid="prep-arealevel" style={{ letterSpacing: 0.5 }}>
+              Area Level{" "}
+              <b style={{ color: ws ? GOLD : "#5a564a", fontSize: 16 }}>
+                {ws ? areaLevel(ws.tier) : "—"}
+              </b>
+            </span>
+            <span data-testid="prep-revives" style={{ letterSpacing: 0.5, color: "#b7ac8e" }}>
+              Portals <b style={{ color: MAGIC }}>{MAP_PORTALS}</b>
+            </span>
+          </div>
+
+          <button
+            data-testid="prep-activate"
+            disabled={!canActivate}
+            onClick={() => {
+              if (canActivate && nodeId && ws) onActivate(nodeId, ws.id);
+            }}
+            style={{
+              width: "100%",
+              padding: "12px 0",
+              borderRadius: 3,
+              fontFamily: SERIF,
+              fontWeight: 700,
+              fontSize: 15,
+              letterSpacing: 2,
+              textTransform: "uppercase",
+              cursor: canActivate ? "pointer" : "default",
+              color: canActivate ? "#1a1408" : "#5a564a",
+              background: canActivate
+                ? "linear-gradient(180deg, #e6c366 0%, #b8923c 50%, #8a6a24 100%)"
+                : "linear-gradient(180deg, #1a1b20 0%, #101116 100%)",
+              border: `1px solid ${canActivate ? GOLD : "#2a2517"}`,
+              boxShadow: canActivate
+                ? `inset 0 1px 0 #ffe9a8, 0 0 10px ${GOLD}55`
+                : "inset 0 0 8px rgba(0,0,0,0.6)",
+              textShadow: canActivate ? "0 1px 0 #f6e2a0" : "none",
+            }}
+          >
+            Activate
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        fontSize: 11,
+        letterSpacing: 2,
+        textTransform: "uppercase",
+        color: GOLD,
+        marginBottom: 8,
+        borderBottom: "1px solid #2a2517",
+        paddingBottom: 4,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
