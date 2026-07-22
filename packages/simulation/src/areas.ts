@@ -1,4 +1,4 @@
-import { fp } from "@pact/fixed-point";
+import { fp, fpMul } from "@pact/fixed-point";
 import { makeRare, monsterTierScale } from "@pact/rules";
 import { MONSTERS, RARE_TEMPLATE } from "@pact/content-runtime";
 import type { MonsterDef } from "@pact/content-schema";
@@ -115,8 +115,8 @@ export function spawnMonster(
   rare: boolean,
   scale: { lifeMilli: number; dmgMilli: number } = { lifeMilli: 1000, dmgMilli: 1000 },
 ): Entity {
-  const scaledLife = Math.trunc(def.maxLifeFixed * scale.lifeMilli / 1000);
-  const scaledDmg = Math.trunc(def.attackDamage.amountFixed * scale.dmgMilli / 1000);
+  const scaledLife = fpMul(def.maxLifeFixed, scale.lifeMilli);
+  const scaledDmg = fpMul(def.attackDamage.amountFixed, scale.dmgMilli);
   const e = world.create();
   world.set<Position>(e, "position", { x, y });
   world.set<Health>(e, "health", { life: scaledLife, maxLife: scaledLife });
