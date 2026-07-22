@@ -62,6 +62,7 @@ export function attachBindings(
   scene: Scene,
   onCycleOutfit?: () => void,
   onHoverInteractable?: (entityId: number | null) => void,
+  onOpenPanel?: () => void,
 ): { detach: () => void; onSnapshot: (snap: Snapshot) => void } {
   // Movement keys currently held, oldest→newest. Needed so releasing one key
   // resumes another still-held direction, and releasing the last sends "stop".
@@ -206,7 +207,13 @@ export function attachBindings(
       if (!entity) {
         pendingInteractId = null; // entity vanished — cancel silently
       } else if (entity.inRange) {
-        post({ kind: "interact", targetId: pendingInteractId });
+        // The map device opens the preparation panel (activation is a separate
+        // activateMap intent sent from the panel); everything else interacts.
+        if (entity.kind === "mapDevice") {
+          onOpenPanel?.();
+        } else {
+          post({ kind: "interact", targetId: pendingInteractId });
+        }
         // Halt at interaction range. The moveTo that started the approach aims at
         // the entity itself, so without this the player keeps walking and ends up
         // standing inside the map device.

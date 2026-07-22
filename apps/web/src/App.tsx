@@ -6,6 +6,7 @@ import { SnapshotRenderer } from "./render/renderer";
 import { loadPlayerRig, resetPlayerRig } from "./render/rig";
 import { attachBindings } from "./input/bindings";
 import { Hud } from "./hud/Hud";
+import { PreparationPanel } from "./hud/PreparationPanel";
 import type { Snapshot, FromWorker } from "@pact/protocol";
 
 const LAB_SEED = 42;
@@ -16,6 +17,8 @@ export function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [hoveredEntityId, setHoveredEntityId] = useState<number | null>(null);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const workerRef = useRef<Worker | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -26,6 +29,7 @@ export function App() {
       new URL("./worker/sim-worker.ts", import.meta.url),
       { type: "module" },
     );
+    workerRef.current = worker;
     worker.postMessage({ type: "init", seed: LAB_SEED });
 
     let prevSnap: Snapshot | null = null;
@@ -49,6 +53,7 @@ export function App() {
         renderer.setHoveredEntity(id);
         setHoveredEntityId(id);
       },
+      () => setPanelOpen(true),
     );
 
     worker.onmessage = (e: MessageEvent<FromWorker>) => {
@@ -58,6 +63,8 @@ export function App() {
         curSnap = msg.snapshot;
         prevTickTime = performance.now();
         setSnapshot(msg.snapshot);
+        // Activation opened the map — the panel's job is done, close it.
+        if (msg.snapshot.mapOpen) setPanelOpen(false);
         // Let bindings fire the interact intent once the pending target is inRange.
         onSnapshot(msg.snapshot);
       } else if (msg.type === "area") {
@@ -103,6 +110,7 @@ export function App() {
       resetPlayerRig(); // containers belong to the scene we are about to dispose
       engine.dispose();
       worker.terminate();
+      workerRef.current = null;
     };
   }, []);
 
@@ -113,6 +121,20 @@ export function App() {
         style={{ width: "100%", height: "100%", display: "block" }}
       />
       <Hud snapshot={snapshot} hoveredEntityId={hoveredEntityId} />
+      {panelOpen && snapshot && (
+        <PreparationPanel
+          atlasSeed={snapshot.atlasSeed}
+          completedNodes={snapshot.completedNodes}
+          onClose={() => setPanelOpen(false)}
+          onActivate={(atlasNodeId, waystoneId) => {
+            workerRef.current?.postMessage({
+              type: "intent",
+              intent: { kind: "activateMap", atlasNodeId, waystoneId },
+            });
+            setPanelOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }

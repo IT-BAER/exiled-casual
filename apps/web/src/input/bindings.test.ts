@@ -151,6 +151,73 @@ describe("attachBindings hold-to-move", () => {
   });
 });
 
+// Scene where every pick hits a mapDevice child mesh (root carries interactKind).
+function fakeMapDeviceScene(entityId = 7): Scene {
+  const root = { name: `entity-${entityId}`, metadata: { interactKind: "mapDevice" }, parent: null };
+  const childMesh = { name: `entity-${entityId}-pi`, metadata: null, parent: root };
+  return {
+    pick: () => ({ hit: true, pickedPoint: { x: 5, z: 7 }, pickedMesh: childMesh }),
+  } as unknown as Scene;
+}
+
+function intentCount(post: ReturnType<typeof vi.fn>, kind: string): number {
+  return post.mock.calls.filter(
+    (c) => c[0]?.type === "intent" && c[0]?.intent?.kind === kind,
+  ).length;
+}
+
+describe("attachBindings map device", () => {
+  it("opens the panel and does NOT interact when a mapDevice is in range", () => {
+    const canvas = document.createElement("canvas");
+    document.body.appendChild(canvas);
+    const worker = { postMessage: vi.fn() };
+    const onOpenPanel = vi.fn();
+    const { detach, onSnapshot } = attachBindings(
+      canvas,
+      worker as unknown as Worker,
+      fakeMapDeviceScene(7),
+      undefined,
+      undefined,
+      onOpenPanel,
+    );
+
+    // Click the device: queues an approach (pendingInteractId = 7).
+    canvas.dispatchEvent(new MouseEvent("pointerdown", { button: 0, clientX: 50, clientY: 50, bubbles: true }));
+    // Device reports in range → open the panel instead of firing interact.
+    onSnapshot(makeSnap([{ id: 7, kind: "mapDevice", inRange: true }]));
+
+    expect(onOpenPanel).toHaveBeenCalledTimes(1);
+    expect(intentCount(worker.postMessage, "interact")).toBe(0);
+
+    detach();
+    canvas.remove();
+  });
+
+  it("still interacts (no panel) for a non-device interactable in range", () => {
+    const canvas = document.createElement("canvas");
+    document.body.appendChild(canvas);
+    const worker = { postMessage: vi.fn() };
+    const onOpenPanel = vi.fn();
+    const { detach, onSnapshot } = attachBindings(
+      canvas,
+      worker as unknown as Worker,
+      fakeInteractScene(42), // portal
+      undefined,
+      undefined,
+      onOpenPanel,
+    );
+
+    canvas.dispatchEvent(new MouseEvent("pointerdown", { button: 0, clientX: 50, clientY: 50, bubbles: true }));
+    onSnapshot(makeSnap([{ id: 42, kind: "portal", inRange: true }]));
+
+    expect(onOpenPanel).not.toHaveBeenCalled();
+    expect(intentCount(worker.postMessage, "interact")).toBe(1);
+
+    detach();
+    canvas.remove();
+  });
+});
+
 describe("attachBindings hover", () => {
   function move(canvas: HTMLCanvasElement) {
     canvas.dispatchEvent(new MouseEvent("pointermove", { clientX: 50, clientY: 50, bubbles: true }));
