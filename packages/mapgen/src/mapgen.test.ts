@@ -127,6 +127,20 @@ describe("generateArea", () => {
     }
   });
 
+  it("keeps spawns off the start so the player gets a safe entry beat", () => {
+    // Regression: the open-field rewrite once ringed spawns evenly, dropping two
+    // monsters ~6 units from the start anchor → instant death on entry.
+    const SAFE = 10; // world units of breathing room around the start
+    for (const s of [0, 5, 42, 99, 777, 1234]) {
+      const layout = generateArea(s, V);
+      const start = layout.objectiveAnchors.find((a) => a.id === "start")!;
+      for (const sp of layout.spawnSockets) {
+        const d = Math.hypot(sp.x - start.x, sp.y - start.y);
+        expect(d, `seed ${s} spawn ${sp.id} only ${d.toFixed(1)} from start`).toBeGreaterThanOrEqual(SAFE);
+      }
+    }
+  });
+
   it("has a central ruin: a wall cluster near the middle of the open field", () => {
     for (const s of [0, 5, 42, 99, 777]) {
       const { grid } = generateArea(s, V);

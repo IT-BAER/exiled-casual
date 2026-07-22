@@ -68,6 +68,9 @@ const RUIN_ARM_CELLS = 2;
 /** Anchors sit at 0.55·R, spawns at 0.7·R — inside the field, clear of the ruin. */
 const ANCHOR_RADIUS_CELLS = Math.round(OPEN_RADIUS_CELLS * 0.55);
 const SPAWN_RADIUS_CELLS = Math.round(OPEN_RADIUS_CELLS * 0.7);
+/** Spawns spread over this arc centred on the boss side, leaving a safe wedge
+ *  around the start (216° arc → nearest spawn ~72° off the start direction). */
+const SPAWN_ARC = Math.PI * 1.2;
 
 interface Room {
   x0: number;
@@ -346,10 +349,14 @@ export function generateArea(seed: number, contentVersion: string): AreaLayout {
     { id: "exit", ...cellCentre(ec.cx, ec.cy) },
   ];
 
-  // Spawns spread evenly around a wider ring, snapped onto the open field.
+  // Spawns spread across the far arc, centred on the boss side (theta + PI) and
+  // spanning SPAWN_ARC, so none land next to the start — the player needs a safe
+  // beat on entry, not two monsters in their face.
   const spawns: Socket[] = [];
   for (let k = 0; k < SPAWN_TARGET; k++) {
-    const p = ringCell(mx, my, SPAWN_RADIUS_CELLS, theta + (k * TAU) / SPAWN_TARGET + TAU / 12);
+    const frac = k / (SPAWN_TARGET - 1); // 0..1 across the arc (SPAWN_TARGET > 1)
+    const angle = theta + Math.PI - SPAWN_ARC / 2 + frac * SPAWN_ARC;
+    const p = ringCell(mx, my, SPAWN_RADIUS_CELLS, angle);
     const c = snapToWalkable(cells, mx, my, p.cx, p.cy);
     spawns.push({ id: `spawn.${k}`, ...cellCentre(c.cx, c.cy) });
   }
