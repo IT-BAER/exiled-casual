@@ -15,6 +15,7 @@ iterating so the result matches the original game exactly. Do not design from me
 - `boss-fight.png` — boss encounter
 - `atlas-maps.webp` — Atlas / waystone map screen
 - `item-normal.png`, `item-magic.png`, `item-rare.png`, `item-unique.png` — item hover/tooltip look per rarity (colors, header, stat lines)
+- `inventory+equipment.png` — full inventory screen: equipment paper-doll, flasks, currency, backpack grid
 
 ## Itemization & rarity — RESEARCH BEFORE ITEM/LOOT WORK
 
