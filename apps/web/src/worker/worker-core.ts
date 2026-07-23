@@ -3,8 +3,12 @@ import {
   intentToCommand,
   buildSnapshot,
   spawnLabActors,
+  loadInto,
+  saveTo,
+  IndexedDbKv,
+  MemoryKv,
 } from "@pact/simulation";
-import type { Simulation, World, Entity, Position, SessionC } from "@pact/simulation";
+import type { Simulation, World, Entity, Position, SessionC, InventoryC, KvStore } from "@pact/simulation";
 import type { Intent, Snapshot, SpawnKind, AreaKind } from "@pact/protocol";
 import { CONTENT_VERSION } from "@pact/content-runtime";
 import { generateArea, type AreaLayout } from "@pact/mapgen";
@@ -32,12 +36,18 @@ export class WorkerCore {
   private areaDirty = false;
   private accMs = 0;
   private pending: Intent[] = [];
+  // Persistence (spec §8). saveTo/loadInto write the whole durable state as one
+  // atomic blob; we only write when it changes (see maybePersist). In node tests
+  // there is no indexedDB, so a MemoryKv keeps the calls harmless no-ops.
+  private readonly kv: KvStore;
+  private lastSig = "";
 
-  constructor(seed: number) {
+  constructor(seed: number, kv?: KvStore) {
     // The lab starts empty. Monsters and the boss arrive on the numpad spawn
     // keys, so a model, an animation, or an effect can be looked at in peace.
     this.seed = seed;
     this.area = "hideout";
+    this.kv = kv ?? (typeof indexedDB !== "undefined" ? new IndexedDbKv() : new MemoryKv());
     const { sim, world, playerEntity, layout } = createCombatSim(seed, { area: this.area });
     this.sim = sim;
     this.world = world;
@@ -45,6 +55,17 @@ export class WorkerCore {
     // The sim owns generation (seed → layout); the renderer draws the map's
     // walls from it. The hideout is an open lab, so its walls aren't drawn.
     this.areaLayout = layout;
+    this.lastSig = this.durableSig();
+  }
+
+  /**
+   * Restore any saved run before the first tick. loadInto abandons an in-flight
+   * map back to the hideout, so the cached area stays "hideout" and no layout
+   * rebuild is needed. Idempotent: re-hydrating never duplicates progress.
+   */
+  async hydrate(): Promise<void> {
+    await loadInto(this.kv, this.world);
+    this.lastSig = this.durableSig();
   }
 
   /** The current area kind — the renderer draws dungeon walls only for "map". */
@@ -93,7 +114,30 @@ export class WorkerCore {
         buildSnapshot(this.world, this.sim, this.sim.tick, CONTENT_VERSION),
       );
     }
+    this.maybePersist();
     return out;
+  }
+
+  /** Cheap fingerprint of the durable state — node progress + inventory size. */
+  private durableSig(): string {
+    const e = this.world.query("session")[0];
+    if (e === undefined) return "";
+    const s = this.world.get<SessionC>(e, "session");
+    const inv = this.world.get<InventoryC>(e, "inventory");
+    return `${s?.completedNodes.join(",") ?? ""}|${inv?.items.length ?? 0}`;
+  }
+
+  /**
+   * Persist only when the durable state actually changed, so we write on a kill
+   * or a pickup, not 30x/second.
+   * ponytail: fire-and-forget async write; a crash in the ~ms before it lands
+   * loses at most that one change (re-earnable). Await it if that ever matters.
+   */
+  private maybePersist(): void {
+    const sig = this.durableSig();
+    if (sig === this.lastSig) return;
+    this.lastSig = sig;
+    void saveTo(this.kv, this.world);
   }
 
   /**

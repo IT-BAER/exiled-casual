@@ -35,3 +35,6 @@ export { registerInteractSystem } from "./systems/interact";
 export { registerPickupSystem } from "./systems/pickup";
 export { registerAreaTransition } from "./systems/area-transition";
 export { intentToCommand, buildSnapshot } from "./protocol-bridge";
+export { snapshot, restore, saveTo, loadInto } from "./persist";
+export { MemoryKv, IndexedDbKv } from "@pact/persistence";
+export type { KvStore } from "@pact/persistence";

@@ -11,6 +11,7 @@
     "@pact/rules": "*",
     "@pact/content-schema": "*",
     "@pact/content-runtime": "*",
-    "@pact/protocol": "*"
+    "@pact/protocol": "*",
+    "@pact/persistence": "*"
   }
 }

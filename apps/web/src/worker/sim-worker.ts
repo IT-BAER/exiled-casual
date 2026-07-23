@@ -14,12 +14,16 @@ self.onmessage = (e: MessageEvent) => {
   if (!isToWorker(raw)) return;
   const msg = raw;
   if (msg.type === "init") {
-    core = new WorkerCore(msg.seed);
-    // Send the level layout once so the renderer can build floor + walls, then ready.
-    const area: FromWorker = { type: "area", area: core.getArea(), layout: core.getAreaLayout() };
-    self.postMessage(area);
-    const ready: FromWorker = { type: "ready" };
-    self.postMessage(ready);
+    const c = new WorkerCore(msg.seed);
+    core = c;
+    // Restore any saved run first, THEN send the (possibly restored) layout once
+    // so the renderer builds floor + walls, then ready.
+    void c.hydrate().then(() => {
+      const area: FromWorker = { type: "area", area: c.getArea(), layout: c.getAreaLayout() };
+      self.postMessage(area);
+      const ready: FromWorker = { type: "ready" };
+      self.postMessage(ready);
+    });
   } else if (msg.type === "intent" && core) {
     // isToWorker only checks intent is a non-null object — deep-validate its fields.
     core.pushIntent(validateIntent(msg.intent));
