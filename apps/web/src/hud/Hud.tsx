@@ -352,13 +352,12 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
         ))}
       </div>
 
-      {/* Skill bar */}
+      {/* Skill bar — left of the mana orb, mirroring the flask row, per inside-map.jpg */}
       <div
         style={{
           position: "absolute",
           bottom: 24,
-          left: "50%",
-          transform: "translateX(-50%)",
+          right: 150,
           display: "flex",
           gap: 10,
         }}
