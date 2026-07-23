@@ -124,20 +124,21 @@ function Orb(props: {
         {/* specular glass highlight, upper-left */}
         <div style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "radial-gradient(ellipse 46% 34% at 34% 24%, rgba(255,255,255,0.5), rgba(255,255,255,0) 62%)" }} />
       </div>
-      {/* ornate beveled metal frame */}
+      {/* ornate PoE2 orb frame (generated art). The PNG has a black background, so an
+          annular mask keeps only the gold band (59-74px radius) and drops the black
+          center + corners, letting the live liquid show through the hole. */}
       <div
         style={{
           position: "absolute",
-          inset: 0,
-          borderRadius: "50%",
-          border: "3px solid #b8903f",
-          boxShadow: [
-            "0 0 0 1px #e6c877", // bright inner bevel
-            "0 0 0 4px #6d5220", // dark gold band
-            "0 0 0 6px #2a2013", // black outline
-            "0 4px 12px rgba(0,0,0,0.7)", // drop shadow
-            "inset 0 0 14px rgba(0,0,0,0.6)", // seat the glass into the frame
-          ].join(", "),
+          inset: -22, // 116 + 44 = 160px frame; hole aligns to the 116 liquid sphere
+          backgroundImage: "url(/hud/orb-frame-v1.png)",
+          backgroundSize: "100% 100%",
+          WebkitMaskImage:
+            "radial-gradient(circle at 50% 50%, transparent 56px, #000 59px, #000 74px, transparent 78px)",
+          maskImage:
+            "radial-gradient(circle at 50% 50%, transparent 56px, #000 59px, #000 74px, transparent 78px)",
+          filter: "drop-shadow(0 4px 10px rgba(0,0,0,0.7))",
+          pointerEvents: "none",
         }}
       />
       <div
