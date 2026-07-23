@@ -107,6 +107,16 @@ describe("Hud", () => {
     expect(screen.queryByTestId("boss-bar")).toBeNull();
   });
 
+  // --- flask row ---
+
+  it("renders 5 flask slots (3 life + 2 mana)", () => {
+    render(<Hud snapshot={makeSnap({})} />);
+    expect(screen.getByTestId("flask-row")).toBeInTheDocument();
+    for (let i = 1; i <= 5; i++) {
+      expect(screen.getByTestId(`flask-slot-${i}`)).toBeInTheDocument();
+    }
+  });
+
   // --- area label ---
 
   it("shows Hideout label in hideout area", () => {

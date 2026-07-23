@@ -8,6 +8,69 @@ const SKILL_SLOTS = [
   { id: "skill.blink.v1", key: "3", label: "Blink", glow: "#3fb6ff" },
 ] as const;
 
+// 3 life + 2 mana, keybinds 1-5, per inside-map.jpg. Charges aren't simulated yet,
+// so this is a static HUD prop. ponytail: fixed 5-flask layout, wire to sim state
+// when flask charges exist.
+const FLASKS = [
+  { key: "1", deep: "#5a0f0c", bright: "#d8352a" },
+  { key: "2", deep: "#5a0f0c", bright: "#d8352a" },
+  { key: "3", deep: "#5a0f0c", bright: "#d8352a" },
+  { key: "4", deep: "#0e2c55", bright: "#3a9be0" },
+  { key: "5", deep: "#0e2c55", bright: "#3a9be0" },
+] as const;
+
+/** A single PoE2 flask: recessed slot, glass vial with bottom-anchored liquid, cork neck. */
+function Flask(props: { deep: string; bright: string; idx: number }) {
+  const { deep, bright, idx } = props;
+  return (
+    <div
+      data-testid={`flask-slot-${idx}`}
+      style={{
+        width: 26,
+        height: 54,
+        borderRadius: 4,
+        background: "radial-gradient(circle at 50% 30%, #1a1e26, #05070a)",
+        border: "1px solid #2a2013",
+        boxShadow: "inset 0 0 6px rgba(0,0,0,0.8)",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "flex-end",
+        padding: 3,
+      }}
+    >
+      {/* glass vial */}
+      <div
+        style={{
+          position: "relative",
+          width: 16,
+          height: 40,
+          borderRadius: "4px 4px 6px 6px",
+          overflow: "hidden",
+          background: "#0a0c10",
+          border: "1px solid rgba(200,180,120,0.35)",
+        }}
+      >
+        {/* liquid — flasks read full */}
+        <div
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: "78%",
+            background: `linear-gradient(to top, ${deep}, ${bright})`,
+            boxShadow: "inset 0 2px 4px rgba(255,255,255,0.4)",
+          }}
+        />
+        {/* cork neck */}
+        <div style={{ position: "absolute", top: 0, left: 3, right: 3, height: 5, background: "#6b4a28", borderRadius: "0 0 2px 2px" }} />
+        {/* specular stripe */}
+        <div style={{ position: "absolute", top: 6, left: 3, width: 3, bottom: 4, background: "rgba(255,255,255,0.35)", borderRadius: 2 }} />
+      </div>
+    </div>
+  );
+}
+
 interface HudProps {
   snapshot: Snapshot | null;
   /** Entity id the mouse is hovering — drives the name label. Null = no label. */
@@ -261,6 +324,33 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
         value={`${Math.round(mana)}`}
         side="right"
       />
+
+      {/* Flask row — right of the life orb, per inside-map.jpg */}
+      <div
+        data-testid="flask-row"
+        style={{
+          position: "absolute",
+          bottom: 26,
+          left: 150,
+          display: "flex",
+          gap: 4,
+          padding: "6px 8px",
+          background: "linear-gradient(#15120c, #0a0806)",
+          border: "2px solid #6d5220",
+          borderRadius: 6,
+          boxShadow: [
+            "inset 0 0 0 1px #b8903f",
+            "0 3px 10px rgba(0,0,0,0.7)",
+          ].join(", "),
+        }}
+      >
+        {FLASKS.map((f, i) => (
+          <div key={f.key} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+            <Flask deep={f.deep} bright={f.bright} idx={i + 1} />
+            <span style={{ fontSize: 10, color: "#9aa0a8", textShadow: "0 1px 2px #000" }}>{f.key}</span>
+          </div>
+        ))}
+      </div>
 
       {/* Skill bar */}
       <div
