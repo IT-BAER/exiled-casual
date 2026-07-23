@@ -40,8 +40,7 @@ function Orb(props: {
           inset: 0,
           borderRadius: "50%",
           overflow: "hidden",
-          background: "#0b0d11",
-          boxShadow: "inset 0 0 24px rgba(0,0,0,0.85)",
+          background: "radial-gradient(circle at 50% 42%, #12151b, #05070a)",
         }}
       >
         <div
@@ -53,32 +52,29 @@ function Orb(props: {
             bottom: 0,
             height: `${pct}%`,
             background: `linear-gradient(to top, ${deep}, ${bright})`,
+            boxShadow: "inset 0 4px 7px rgba(255,255,255,0.30)", // liquid meniscus highlight
             transition: "height 120ms linear",
           }}
         />
-        {/* glass sheen */}
-        <div
-          style={{
-            position: "absolute",
-            top: "12%",
-            left: "20%",
-            width: "36%",
-            height: "24%",
-            borderRadius: "50%",
-            background: "rgba(255,255,255,0.22)",
-            filter: "blur(3px)",
-          }}
-        />
+        {/* sphere volume: dark rim vignette so the edges read as curvature */}
+        <div style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "radial-gradient(circle at 50% 50%, transparent 50%, rgba(0,0,0,0.6) 92%)" }} />
+        {/* specular glass highlight, upper-left */}
+        <div style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "radial-gradient(ellipse 46% 34% at 34% 24%, rgba(255,255,255,0.5), rgba(255,255,255,0) 62%)" }} />
       </div>
-      {/* ornate gold ring */}
+      {/* ornate beveled metal frame */}
       <div
         style={{
           position: "absolute",
           inset: 0,
           borderRadius: "50%",
-          border: "4px solid #9c7b3a",
-          boxShadow:
-            "0 0 0 2px #4a3a1c, 0 3px 10px rgba(0,0,0,0.6), inset 0 0 12px rgba(0,0,0,0.55)",
+          border: "3px solid #b8903f",
+          boxShadow: [
+            "0 0 0 1px #e6c877", // bright inner bevel
+            "0 0 0 4px #6d5220", // dark gold band
+            "0 0 0 6px #2a2013", // black outline
+            "0 4px 12px rgba(0,0,0,0.7)", // drop shadow
+            "inset 0 0 14px rgba(0,0,0,0.6)", // seat the glass into the frame
+          ].join(", "),
         }}
       />
       <div
