@@ -3,7 +3,14 @@ import { validateItemBase, validateAffix, type ItemBase, type Affix, type Item, 
 // Tiny hand-authored pool for the First Loot slice. Grid dims (w×h) follow the
 // 12×5 inventory. Real 45-base / 120-affix content is Phase 4 proper.
 const ITEM_BASES: ItemBase[] = [
-  { id: "base.emberwand", name: "Ember Wand", itemClass: "wand", w: 1, h: 2 },
+  {
+    id: "base.emberwand",
+    name: "Ember Wand",
+    itemClass: "wand",
+    w: 1,
+    h: 2,
+    stats: { physMin: 5, physMax: 10, critPct: 8, aps: 1.2, reqLevel: 8, reqAttrValue: 29, reqAttr: "Int" },
+  },
   { id: "base.ashen_focus", name: "Ashen Focus", itemClass: "focus", w: 2, h: 2 },
   { id: "base.cinder_cap", name: "Cinder Cap", itemClass: "helmet", w: 2, h: 2 },
   { id: "base.emberweave_robe", name: "Emberweave Robe", itemClass: "body", w: 2, h: 3 },
@@ -40,11 +47,38 @@ export function baseOf(baseId: string): ItemBase {
 }
 
 // Render-ready projection: base name + one line per committed affix roll.
-export function describeItem(item: Item): { name: string; rarity: Rarity; itemClass: string; lines: string[] } {
+export interface ItemDescription {
+  name: string;
+  rarity: Rarity;
+  itemClass: string;
+  /** base-stat lines rendered "label: value" (empty for bases without stats) */
+  statLines: { label: string; value: string }[];
+  reqLevel?: number;
+  reqAttrValue?: number;
+  reqAttr?: string;
+  /** affix lines */
+  lines: string[];
+}
+
+export function describeItem(item: Item): ItemDescription {
   const base = baseOf(item.baseId);
+  const s = base.stats;
+  const statLines: { label: string; value: string }[] = [];
+  if (s?.physMin !== undefined && s.physMax !== undefined) statLines.push({ label: "Physical Damage", value: `${s.physMin}-${s.physMax}` });
+  if (s?.critPct !== undefined) statLines.push({ label: "Critical Strike Chance", value: `${s.critPct.toFixed(2)}%` });
+  if (s?.aps !== undefined) statLines.push({ label: "Attacks per Second", value: s.aps.toFixed(2) });
   const lines = item.affixes.map((ia) => {
     const a = AFFIX_BY_ID.get(ia.affixId);
     return a ? `+${ia.value} ${a.label}` : `+${ia.value} ${ia.affixId}`;
   });
-  return { name: base.name, rarity: item.rarity, itemClass: base.itemClass, lines };
+  return {
+    name: base.name,
+    rarity: item.rarity,
+    itemClass: base.itemClass,
+    statLines,
+    reqLevel: s?.reqLevel,
+    reqAttrValue: s?.reqAttrValue,
+    reqAttr: s?.reqAttr,
+    lines,
+  };
 }

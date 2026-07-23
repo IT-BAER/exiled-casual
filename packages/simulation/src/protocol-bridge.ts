@@ -157,6 +157,10 @@ export function buildSnapshot(
       rarity: d.rarity,
       name: d.name,
       itemClass: d.itemClass,
+      statLines: d.statLines,
+      reqLevel: d.reqLevel,
+      reqAttrValue: d.reqAttrValue,
+      reqAttr: d.reqAttr,
       lines: d.lines,
       inRange: inRangeOf(pp.x, pp.y, ip.x, ip.y, PICKUP_RADIUS),
     });
@@ -170,7 +174,11 @@ export function buildSnapshot(
     rows: invC?.rows ?? 5,
     items: (invC?.items ?? []).map((p) => {
       const d = describeItem(p.item);
-      return { x: p.x, y: p.y, w: p.w, h: p.h, rarity: d.rarity, name: d.name, itemClass: d.itemClass, lines: d.lines };
+      return {
+        x: p.x, y: p.y, w: p.w, h: p.h,
+        rarity: d.rarity, name: d.name, itemClass: d.itemClass, lines: d.lines,
+        statLines: d.statLines, reqLevel: d.reqLevel, reqAttrValue: d.reqAttrValue, reqAttr: d.reqAttr,
+      };
     }),
   };
 

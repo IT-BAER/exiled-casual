@@ -247,6 +247,10 @@ export function InventoryPanel({ inventory, onClose }: { inventory: Inventory; o
           name={items[hover.i]!.name}
           rarity={items[hover.i]!.rarity}
           itemClass={items[hover.i]!.itemClass}
+          statLines={items[hover.i]!.statLines}
+          reqLevel={items[hover.i]!.reqLevel}
+          reqAttrValue={items[hover.i]!.reqAttrValue}
+          reqAttr={items[hover.i]!.reqAttr}
           lines={items[hover.i]!.lines}
           x={hover.x}
           y={hover.y}

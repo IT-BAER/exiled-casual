@@ -86,6 +86,17 @@ export interface SnapshotEntity {
   lines?: string[];
   /** groundItem only: base item class label ("wand", "focus") for the tooltip. */
   itemClass?: string;
+  /** groundItem only: tooltip base-stat block + requirements (poe2-screenshots/item-*.png). */
+  statLines?: ItemStatLine[];
+  reqLevel?: number;
+  reqAttrValue?: number;
+  reqAttr?: string;
+}
+
+/** One "label: value" row in an item tooltip's base-stat block. */
+export interface ItemStatLine {
+  label: string;
+  value: string;
 }
 
 export interface Snapshot {
@@ -113,7 +124,11 @@ export interface Snapshot {
   /** Grid inventory (session singleton), display-ready. Empty when no session. */
   inventory: {
     cols: number; rows: number;
-    items: { x: number; y: number; w: number; h: number; rarity: ItemRarity; name: string; itemClass?: string; lines: string[] }[];
+    items: {
+      x: number; y: number; w: number; h: number;
+      rarity: ItemRarity; name: string; itemClass?: string; lines: string[];
+      statLines?: ItemStatLine[]; reqLevel?: number; reqAttrValue?: number; reqAttr?: string;
+    }[];
   };
 }
 

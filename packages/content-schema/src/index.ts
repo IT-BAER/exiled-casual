@@ -319,12 +319,28 @@ export function validateMonsterDef(v: unknown): ValidationResult {
 // ── Items (First Loot slice) ────────────────────────────────────────────────
 export type Rarity = "normal" | "magic";
 
+/** Tooltip base-stat block shown between the header and affixes (poe2-screenshots/item-*.png). */
+export interface ItemStats {
+  /** weapon physical damage range (rendered "min-max") */
+  physMin?: number;
+  physMax?: number;
+  /** weapon crit chance percent (8 -> "8.00%") */
+  critPct?: number;
+  /** weapon attacks per second (1.2 -> "1.20") */
+  aps?: number;
+  /** requirement level */
+  reqLevel?: number;
+  /** single attribute requirement, e.g. { value: 29, attr: "Int" } */
+  reqAttrValue?: number;
+  reqAttr?: "Str" | "Dex" | "Int";
+}
 export interface ItemBase {
   id: string;
   name: string;
   itemClass: string;
   w: number;
   h: number;
+  stats?: ItemStats;
 }
 
 export interface Affix {
@@ -376,6 +392,9 @@ export function validateItemBase(v: unknown): ValidationResult {
   }
   if (!isPosInt(v["h"])) {
     errors.push("h: must be a positive integer");
+  }
+  if (v["stats"] !== undefined && !isObj(v["stats"])) {
+    errors.push("stats: must be an object when present");
   }
   return { ok: errors.length === 0, errors };
 }

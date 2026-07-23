@@ -1,4 +1,5 @@
 import React from "react";
+import type { ItemStatLine } from "@pact/protocol";
 
 // PoE2 item tooltip. Matched to poe2-screenshots/item-{normal,magic,rare,unique}.png:
 // near-black panel, centered small-caps serif, a rarity-framed header band with
@@ -9,6 +10,8 @@ import React from "react";
 const SERIF = '"Cinzel", "Trajan Pro", Georgia, "Times New Roman", serif';
 const AFFIX_BLUE = "#8f97ff";
 const CLASS_TAN = "#8a8065";
+const LABEL_GREY = "#7b7b74"; // stat/requirement words
+const VALUE_LIGHT = "#d2d2c8"; // stat/requirement numbers
 
 type Look = { text: string; headBg: string; frame: string; flourish: string; ornate: boolean };
 const RARITY = {
@@ -46,10 +49,19 @@ function Flourish({ color, side, ornate }: { color: string; side: "left" | "righ
   );
 }
 
+// Faint section divider between the stat block, requirements, and affixes.
+function Rule() {
+  return <div style={{ height: 1, margin: "8px auto", width: "82%", background: "linear-gradient(90deg,transparent,#302f28 18%,#302f28 82%,transparent)" }} />;
+}
+
 export function ItemTooltip({
   name,
   rarity,
   itemClass,
+  statLines,
+  reqLevel,
+  reqAttrValue,
+  reqAttr,
   lines,
   x,
   y,
@@ -57,6 +69,10 @@ export function ItemTooltip({
   name: string;
   rarity: string;
   itemClass?: string;
+  statLines?: ItemStatLine[];
+  reqLevel?: number;
+  reqAttrValue?: number;
+  reqAttr?: string;
   lines: string[];
   x: number;
   y: number;
@@ -111,15 +127,39 @@ export function ItemTooltip({
         <Flourish color={r.flourish} side="right" ornate={r.ornate} />
       </div>
 
-      <div style={{ padding: "8px 14px 11px" }}>
+      <div style={{ padding: "9px 14px 12px" }}>
         {itemClass && (
-          <div style={{ color: CLASS_TAN, fontSize: 12, letterSpacing: 1, textTransform: "uppercase" }}>{itemClass}</div>
+          <div style={{ color: CLASS_TAN, fontSize: 12, letterSpacing: 1, textTransform: "uppercase", marginBottom: 1 }}>{itemClass}</div>
         )}
+        {statLines?.map((s, i) => (
+          <div key={i} style={{ fontSize: 13, letterSpacing: 0.3, margin: "1px 0", textTransform: "uppercase" }}>
+            <span style={{ color: LABEL_GREY }}>{s.label}: </span>
+            <span style={{ color: VALUE_LIGHT }}>{s.value}</span>
+          </div>
+        ))}
+
+        {reqLevel !== undefined && (
+          <>
+            <Rule />
+            <div style={{ fontSize: 13, letterSpacing: 0.3, textTransform: "uppercase" }}>
+              <span style={{ color: LABEL_GREY }}>Requires Level </span>
+              <span style={{ color: VALUE_LIGHT }}>{reqLevel}</span>
+              {reqAttrValue !== undefined && reqAttr && (
+                <>
+                  <span style={{ color: LABEL_GREY }}>, </span>
+                  <span style={{ color: VALUE_LIGHT }}>{reqAttrValue} </span>
+                  <span style={{ color: LABEL_GREY }}>{reqAttr}</span>
+                </>
+              )}
+            </div>
+          </>
+        )}
+
         {lines.length > 0 && (
           <>
-            <div style={{ height: 1, margin: "8px auto", width: "72%", background: "linear-gradient(90deg,transparent,#33323a,transparent)" }} />
+            <Rule />
             {lines.map((l, i) => (
-              <div key={i} style={{ color: AFFIX_BLUE, fontSize: 13, letterSpacing: 0.4, margin: "3px 0" }}>
+              <div key={i} style={{ color: AFFIX_BLUE, fontSize: 13, letterSpacing: 0.4, margin: "4px 0" }}>
                 {l}
               </div>
             ))}
