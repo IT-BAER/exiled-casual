@@ -84,6 +84,8 @@ export interface SnapshotEntity {
   rarity?: ItemRarity;
   name?: string;
   lines?: string[];
+  /** groundItem only: base item class label ("wand", "focus") for the tooltip. */
+  itemClass?: string;
 }
 
 export interface Snapshot {
@@ -111,7 +113,7 @@ export interface Snapshot {
   /** Grid inventory (session singleton), display-ready. Empty when no session. */
   inventory: {
     cols: number; rows: number;
-    items: { x: number; y: number; w: number; h: number; rarity: ItemRarity; name: string; lines: string[] }[];
+    items: { x: number; y: number; w: number; h: number; rarity: ItemRarity; name: string; itemClass?: string; lines: string[] }[];
   };
 }
 

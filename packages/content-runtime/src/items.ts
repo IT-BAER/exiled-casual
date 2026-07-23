@@ -40,10 +40,11 @@ export function baseOf(baseId: string): ItemBase {
 }
 
 // Render-ready projection: base name + one line per committed affix roll.
-export function describeItem(item: Item): { name: string; rarity: Rarity; lines: string[] } {
+export function describeItem(item: Item): { name: string; rarity: Rarity; itemClass: string; lines: string[] } {
+  const base = baseOf(item.baseId);
   const lines = item.affixes.map((ia) => {
     const a = AFFIX_BY_ID.get(ia.affixId);
     return a ? `+${ia.value} ${a.label}` : `+${ia.value} ${ia.affixId}`;
   });
-  return { name: baseOf(item.baseId).name, rarity: item.rarity, lines };
+  return { name: base.name, rarity: item.rarity, itemClass: base.itemClass, lines };
 }

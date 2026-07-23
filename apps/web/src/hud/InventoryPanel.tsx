@@ -1,5 +1,6 @@
 import React from "react";
 import type { Snapshot } from "@pact/protocol";
+import { ItemTooltip } from "./ItemTooltip";
 
 type Inventory = Snapshot["inventory"];
 
@@ -99,6 +100,7 @@ function SectionRule({ children }: { children?: React.ReactNode }) {
 
 export function InventoryPanel({ inventory, onClose }: { inventory: Inventory; onClose: () => void }) {
   const { cols, rows, items } = inventory;
+  const [hover, setHover] = React.useState<{ i: number; x: number; y: number } | null>(null);
   const equipW = 10 * U; // paper-doll spans 10 units wide
   const equipH = 6 * U;
   const gridW = cols * CELL;
@@ -210,7 +212,9 @@ export function InventoryPanel({ inventory, onClose }: { inventory: Inventory; o
               <div
                 key={i}
                 data-testid={`inventory-item-${i}`}
-                title={`${it.name}${it.lines.length ? "\n" + it.lines.join("\n") : ""}`}
+                onMouseEnter={(e) => setHover({ i, x: e.clientX + 18, y: e.clientY + 18 })}
+                onMouseMove={(e) => setHover({ i, x: e.clientX + 18, y: e.clientY + 18 })}
+                onMouseLeave={() => setHover((h) => (h?.i === i ? null : h))}
                 style={{
                   position: "absolute",
                   left: it.x * CELL + 2,
@@ -238,6 +242,16 @@ export function InventoryPanel({ inventory, onClose }: { inventory: Inventory; o
           </div>
         </div>
       </div>
+      {hover && items[hover.i] && (
+        <ItemTooltip
+          name={items[hover.i]!.name}
+          rarity={items[hover.i]!.rarity}
+          itemClass={items[hover.i]!.itemClass}
+          lines={items[hover.i]!.lines}
+          x={hover.x}
+          y={hover.y}
+        />
+      )}
     </div>
   );
 }
