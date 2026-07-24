@@ -2,15 +2,16 @@ import React from "react";
 import type { Snapshot } from "@exiled/protocol";
 import { MAP_PORTALS } from "@exiled/protocol";
 
-// Bottom HUD geometry. The orbs sit in the screen corners with their lower edge
-// running off-screen and the flask/skill bars tucked under the frame, per
-// poe2-screenshots/boss-fight.png.
-const ORB = 140; // liquid sphere diameter
-const ORB_FRAME = Math.round(ORB / 0.664); // frame art: its hole is 0.664 of the file
-const ORB_INSET = 4; // how far the sphere sits in from the screen edge
-const ORB_SUNK = 26; // how much of the sphere the screen edge cuts off
-const BAR_H = 100; // flask / skill bar height, incl. the art's top and bottom rails
-const SLOT = 52; // flask + skill slot size, sized to the bar art's inner trough
+// Bottom HUD geometry, measured off poe2-screenshots/floor#2.webp (2048x1152): the
+// liquid sphere is 8.4% of the screen width, the frame ring sits flush with the bottom
+// edge and about 1.2% of the width in from the side, and the bars butt up against it.
+const ORB = 136; // liquid sphere diameter
+const ORB_FRAME = Math.round(ORB / 0.716); // frame art: its hole is 0.716 of the file
+const ORB_RING = (ORB_FRAME - ORB) / 2; // ring band thickness
+const ORB_INSET = 24 + ORB_RING; // sphere offset from the side; ring keeps a 24px margin
+const ORB_BOTTOM = ORB_RING; // ring flush with the bottom edge, sphere sits on top of it
+const BAR_H = 76; // flask / skill bar height, incl. the art's top and bottom rails
+const SLOT = 42; // flask + skill slot size, sized to the bar art's inner trough
 
 // Six skill slots on keys 1-6; only three skills exist, 4-6 render as empty sockets.
 // PoE2 itself puts skills on QWERT and flasks on the digits — we swap the two, so
@@ -41,7 +42,7 @@ function Flask(props: { kind: "life" | "mana"; hotkey: string }) {
       data-testid={`flask-${kind}`}
       style={{
         position: "relative",
-        width: 38,
+        width: 30,
         height: SLOT,
         borderRadius: "3px 3px 8px 8px",
         background: "radial-gradient(circle at 50% 30%, #1a1e26, #05070a)",
@@ -82,30 +83,6 @@ function Flask(props: { kind: "life" | "mana"; hotkey: string }) {
   );
 }
 
-/**
- * Guardian statue standing on the inner end of a bar, the way PoE2 caps its flask
- * and skill panels with a bronze figure. One file, mirrored for the right cluster.
- */
-function BarGuardian({ side }: { side: "left" | "right" }) {
-  return (
-    <img
-      src="/hud/corner-statue-v1.png"
-      alt=""
-      style={{
-        position: "absolute",
-        bottom: -6,
-        // offsets are from the padding box, so clear the 55px border-image edge first
-        [side === "left" ? "right" : "left"]: -84,
-        height: 138,
-        zIndex: 4,
-        transform: side === "right" ? "scaleX(-1)" : undefined,
-        filter: "drop-shadow(0 2px 8px rgba(0,0,0,0.85))",
-        pointerEvents: "none",
-      }}
-    />
-  );
-}
-
 interface HudProps {
   snapshot: Snapshot | null;
   /** Entity id the mouse is hovering — drives the name label. Null = no label. */
@@ -120,9 +97,9 @@ const barStyle: React.CSSProperties = {
   boxSizing: "border-box",
   display: "flex",
   alignItems: "center",
-  gap: 6,
+  gap: 5,
   borderStyle: "solid",
-  borderWidth: "21px 55px 24px 55px",
+  borderWidth: "16px 40px 18px 40px",
   borderImageSource: "url(/hud/bar-panel-v1.png)",
   borderImageSlice: "42 110 48 110 fill",
   filter: "drop-shadow(0 2px 8px rgba(0,0,0,0.7))",
@@ -142,7 +119,7 @@ function Orb(props: {
     <div
       style={{
         position: "absolute",
-        bottom: -ORB_SUNK,
+        bottom: ORB_BOTTOM,
         [side]: ORB_INSET,
         width: ORB,
         height: ORB,
@@ -167,19 +144,19 @@ function Orb(props: {
             bottom: 0,
             height: `${pct}%`,
             background: `linear-gradient(to top, ${deep}, ${bright})`,
-            boxShadow: "inset 0 4px 7px rgba(255,255,255,0.30)", // liquid meniscus highlight
+            boxShadow: "inset 0 3px 6px rgba(255,255,255,0.22)", // liquid meniscus highlight
             transition: "height 120ms linear",
           }}
         />
         {/* sphere volume: dark rim vignette so the edges read as curvature */}
-        <div style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "radial-gradient(circle at 50% 50%, transparent 50%, rgba(0,0,0,0.6) 92%)" }} />
+        <div style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "radial-gradient(circle at 50% 50%, transparent 42%, rgba(0,0,0,0.75) 94%)" }} />
         {/* specular glass highlight, upper-left */}
-        <div style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "radial-gradient(ellipse 46% 34% at 34% 24%, rgba(255,255,255,0.5), rgba(255,255,255,0) 62%)" }} />
+        <div style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "radial-gradient(ellipse 52% 40% at 38% 26%, rgba(255,255,255,0.16), rgba(255,255,255,0) 70%)" }} />
       </div>
-      {/* Ornate orb frame (generated art). Its alpha is baked in: the hole is 0.664 of
-          the file's width, so at ORB_FRAME the ring lands exactly on the liquid sphere. */}
+      {/* Orb frame (generated art). Its alpha is baked in: the hole is 0.716 of the
+          file's width, so at ORB_FRAME the ring lands exactly on the liquid sphere. */}
       <img
-        src="/hud/orb-frame-v2.png"
+        src="/hud/orb-frame-v4.png"
         alt=""
         style={{
           position: "absolute",
@@ -194,7 +171,7 @@ function Orb(props: {
       <div
         style={{
           position: "absolute",
-          bottom: ORB_SUNK + 10, // clear of the screen edge that clips the orb
+          bottom: 14,
           left: 0,
           right: 0,
           textAlign: "center",
@@ -362,30 +339,29 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
       <Orb
         pct={lifePct}
         fillTestId="life-orb-fill"
-        deep="#6d1410"
-        bright="#e33b2c"
+        deep="#3d0a0f"
+        bright="#94222a"
         value={`${Math.round(life)}`}
         side="left"
       />
       <Orb
         pct={manaPct}
         fillTestId="mana-orb-fill"
-        deep="#0e2c55"
-        bright="#3a9be0"
+        deep="#131f41"
+        bright="#1f6498"
         value={`${Math.round(mana)}`}
         side="right"
       />
 
       {/* Flask bar — tucked under the life orb frame, per boss-fight.png */}
-      <div data-testid="flask-row" style={{ ...barStyle, left: 148, zIndex: 2 }}>
+      <div data-testid="flask-row" style={{ ...barStyle, left: ORB_INSET + ORB + ORB_RING - 16, zIndex: 2 }}>
         {FLASKS.map((f) => (
           <Flask key={f.key} kind={f.kind} hotkey={f.key} />
         ))}
-        <BarGuardian side="left" />
       </div>
 
       {/* Skill bar — mirror of the flask bar, tucked under the mana orb frame */}
-      <div style={{ ...barStyle, right: 148, zIndex: 2 }}>
+      <div style={{ ...barStyle, right: ORB_INSET + ORB + ORB_RING - 16, zIndex: 2 }}>
         {SKILL_SLOTS.map((slot, idx) => {
           const cd = slot.id ? cooldowns[slot.id] ?? 0 : 0;
           const ready = cd <= 0;
@@ -458,7 +434,6 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
             </div>
           );
         })}
-        <BarGuardian side="right" />
       </div>
     </div>
   );
