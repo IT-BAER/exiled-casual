@@ -1,7 +1,9 @@
 # Exiled Casual
 
-Browser PoE2 clone. TypeScript, npm workspaces. ECS sim (30 Hz, fixed-point) in `packages/`,
-React + Babylon client in `apps/web`. Tests: Vitest.
+Browser ARPG drawing on both Path of Exile 1 and 2, not a strict PoE2 clone: take the best of
+either where they differ, and say which one a borrowed mechanic or look comes from. TypeScript,
+npm workspaces. ECS sim (30 Hz, fixed-point) in `packages/`, React + Babylon client in `apps/web`.
+Tests: Vitest.
 
 ## Visual reference — ALWAYS CHECK BEFORE UI/RENDER/ART WORK
 
