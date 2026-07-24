@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Engine, Vector3 } from "@babylonjs/core";
+import { Engine, Matrix, Vector3 } from "@babylonjs/core";
 import { createScene } from "./render/engine";
 import { buildLevel } from "./render/level";
 import { SnapshotRenderer } from "./render/renderer";
@@ -8,6 +8,8 @@ import { attachBindings } from "./input/bindings";
 import { Hud } from "./hud/Hud";
 import { PreparationPanel } from "./hud/PreparationPanel";
 import { InventoryPanel } from "./hud/InventoryPanel";
+import { LootLabels } from "./hud/LootLabels";
+import type { Projector } from "./hud/LootLabels";
 import type { Snapshot, FromWorker, ToWorker } from "@exiled/protocol";
 
 const LAB_SEED = 42;
@@ -20,6 +22,7 @@ export function App() {
   const [hoveredEntityId, setHoveredEntityId] = useState<number | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const [inventoryOpen, setInventoryOpen] = useState(false);
+  const [project, setProject] = useState<Projector | null>(null);
   const workerRef = useRef<Worker | null>(null);
 
   useEffect(() => {
@@ -42,6 +45,18 @@ export function App() {
     const engine = new Engine(canvas, true);
     const { scene, camera } = createScene(engine);
     const renderer = new SnapshotRenderer(scene);
+
+    // Ground-item name plates live in the DOM, so they need the camera's
+    // world -> canvas projection. Sim (x, y) maps to world (x, z).
+    setProject(() => (x: number, y: number) => {
+      const p = Vector3.Project(
+        new Vector3(x, 0, y),
+        Matrix.Identity(),
+        scene.getTransformMatrix(),
+        camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight()),
+      );
+      return { x: p.x, y: p.y, visible: p.z > 0 && p.z < 1 };
+    });
 
     // Bindings need the scene for ground picking, and must be attached before the
     // onmessage handler below so onSnapshot exists when the worker starts sending.
@@ -129,6 +144,7 @@ export function App() {
         ref={canvasRef}
         style={{ width: "100%", height: "100%", display: "block" }}
       />
+      <LootLabels snapshot={snapshot} project={project} />
       <Hud snapshot={snapshot} hoveredEntityId={hoveredEntityId} />
       {panelOpen && snapshot && (
         <PreparationPanel

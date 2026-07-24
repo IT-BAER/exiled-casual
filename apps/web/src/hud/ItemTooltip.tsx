@@ -6,14 +6,14 @@ import type { ItemStatLine } from "@exiled/protocol";
 // inward flourishes, an item-class line, then affix lines in augmented-blue.
 // All four rarities roll today; the sim still does not model weapon base stats or
 // requirements beyond what the base carries, so those rows are absent when unknown.
-const SERIF = '"Cinzel", "Trajan Pro", Georgia, "Times New Roman", serif';
+export const SERIF = '"Cinzel", "Trajan Pro", Georgia, "Times New Roman", serif';
 const AFFIX_BLUE = "#8f97ff";
 const CLASS_TAN = "#8a8065";
 const LABEL_GREY = "#7b7b74"; // stat/requirement words
 const VALUE_LIGHT = "#d2d2c8"; // stat/requirement numbers
 
 type Look = { text: string; headBg: string; frame: string; flourish: string; ornate: boolean };
-const RARITY = {
+export const RARITY = {
   normal: { text: "#c8c8c8", headBg: "linear-gradient(180deg,#4a4a4a,#282828)", frame: "#8a8a8a", flourish: "#c0c0c0", ornate: false },
   magic: { text: "#8f97ff", headBg: "linear-gradient(180deg,#1a2340,#0c1020)", frame: "#57699f", flourish: "#8f9bd8", ornate: false },
   rare: { text: "#e6d64a", headBg: "linear-gradient(180deg,#3a2e15,#201707)", frame: "#a3812f", flourish: "#d8b048", ornate: true },

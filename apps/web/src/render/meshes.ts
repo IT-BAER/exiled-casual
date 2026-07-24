@@ -345,6 +345,23 @@ function buildPortal(scene: Scene, root: Mesh): void {
   root.metadata = { rimMat, voidMat, interactKind: "portal" };
 }
 
+/** Beacon colour per rarity, matched to the tooltip palette in hud/ItemTooltip.tsx. */
+const GROUND_ITEM_COLOR: Record<string, [number, number, number]> = {
+  normal: [0.78, 0.78, 0.78],
+  magic: [0.56, 0.59, 1.0],
+  rare: [0.9, 0.84, 0.29],
+  unique: [0.69, 0.38, 0.15],
+};
+
+/** Tint a ground-item beacon by rarity, so a drop reads before its plate is. */
+export function updateGroundItem(mesh: Mesh, rarity: string | undefined): void {
+  const mat = mesh.material as StandardMaterial | null;
+  if (!mat) return;
+  const [r, g, b] = GROUND_ITEM_COLOR[rarity ?? "normal"] ?? GROUND_ITEM_COLOR["normal"]!;
+  mat.diffuseColor = new Color3(r * 0.35, g * 0.35, b * 0.35);
+  mat.emissiveColor = new Color3(r, g, b);
+}
+
 /**
  * Pulse the portal rim and indicate inRange affordance.
  * Called every apply() so the animation is driven off real time without needing
@@ -479,13 +496,12 @@ export function makeMesh(scene: Scene, kind: MeshKind, name: string): Mesh {
   }
 
   if (kind === "groundItem") {
-    // Small rarity-neutral beacon marker; full per-rarity ground visuals are out of scope this slice.
+    // Beacon marker; the name plate over it is DOM (hud/LootLabels.tsx).
     const m = MeshBuilder.CreateCylinder(name, { diameter: 0.5, height: 0.3, tessellation: 6 }, scene);
     const itemMat = new StandardMaterial(`${name}-mat`, scene);
-    itemMat.diffuseColor = new Color3(0.2, 0.3, 0.6);
-    itemMat.emissiveColor = new Color3(0.55, 0.7, 1.0); // magic-blue-ish beacon
     itemMat.specularColor = new Color3(0, 0, 0);
     m.material = itemMat;
+    updateGroundItem(m, "normal");
     return m;
   }
 

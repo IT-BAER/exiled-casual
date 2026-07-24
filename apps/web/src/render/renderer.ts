@@ -1,7 +1,7 @@
 import type { Scene } from "@babylonjs/core";
 import type { Mesh } from "@babylonjs/core";
 import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
-import { animateActor, makeMesh, updateTelegraph, updatePortal, updateMapDevice, Y_LIFT } from "./meshes";
+import { animateActor, makeMesh, updateTelegraph, updatePortal, updateMapDevice, updateGroundItem, Y_LIFT } from "./meshes";
 import type { MeshKind } from "./meshes";
 import { OUTFITS, rigOf } from "./rig";
 import { lerp, lerpAngle } from "./interp";
@@ -115,6 +115,9 @@ export class SnapshotRenderer {
       }
       if (e.kind === "mapDevice") {
         updateMapDevice(mesh, this.hoveredEntityId === e.id);
+      }
+      if (e.kind === "groundItem") {
+        updateGroundItem(mesh, e.rarity);
       }
     }
 
