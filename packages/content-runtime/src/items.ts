@@ -17,13 +17,15 @@ const ITEM_BASES: ItemBase[] = [
   { id: "base.emberweave_robe", name: "Emberweave Robe", itemClass: "body", w: 2, h: 3, icon: "/textures/items/emberweave_robe.png" },
 ];
 
+// Prefix/suffix split follows PoE: raw power (life, mana, added damage, armour) is a
+// prefix, while resistances and speed hang off the suffix side.
 const AFFIXES: Affix[] = [
-  { id: "affix.life", stat: "maxLife", label: "to maximum Life", minItemLevel: 1, min: 5, max: 40 },
-  { id: "affix.mana", stat: "maxMana", label: "to maximum Mana", minItemLevel: 1, min: 4, max: 30 },
-  { id: "affix.fire_dmg", stat: "fireDamage", label: "to Fire Damage", minItemLevel: 1, min: 2, max: 18 },
-  { id: "affix.fire_res", stat: "fireResPct", label: "% to Fire Resistance", minItemLevel: 1, min: 5, max: 25 },
-  { id: "affix.armour", stat: "armour", label: "to Armour", minItemLevel: 8, min: 10, max: 60 },
-  { id: "affix.cast_speed", stat: "castSpeedPct", label: "% increased Cast Speed", minItemLevel: 12, min: 3, max: 12 },
+  { id: "affix.life", kind: "prefix", stat: "maxLife", label: "to maximum Life", minItemLevel: 1, min: 5, max: 40 },
+  { id: "affix.mana", kind: "prefix", stat: "maxMana", label: "to maximum Mana", minItemLevel: 1, min: 4, max: 30 },
+  { id: "affix.fire_dmg", kind: "prefix", stat: "fireDamage", label: "to Fire Damage", minItemLevel: 1, min: 2, max: 18 },
+  { id: "affix.fire_res", kind: "suffix", stat: "fireResPct", label: "% to Fire Resistance", minItemLevel: 1, min: 5, max: 25 },
+  { id: "affix.armour", kind: "prefix", stat: "armour", label: "to Armour", minItemLevel: 8, min: 10, max: 60 },
+  { id: "affix.cast_speed", kind: "suffix", stat: "castSpeedPct", label: "% increased Cast Speed", minItemLevel: 12, min: 3, max: 12 },
 ];
 
 // Named items bound to one base each. Mod ranges are the unique's own and deliberately

@@ -347,6 +347,8 @@ export interface ItemBase {
 
 export interface Affix {
   id: string;
+  /** Which half of the mod pool this belongs to. PoE caps the two sides separately. */
+  kind: "prefix" | "suffix";
   stat: string;
   label: string;
   minItemLevel: number;
@@ -431,6 +433,9 @@ export function validateAffix(v: unknown): ValidationResult {
   }
   if (typeof v["id"] !== "string" || v["id"].length === 0) {
     errors.push("id: must be a non-empty string");
+  }
+  if (v["kind"] !== "prefix" && v["kind"] !== "suffix") {
+    errors.push('kind: must be "prefix" or "suffix"');
   }
   if (typeof v["stat"] !== "string" || v["stat"].length === 0) {
     errors.push("stat: must be a non-empty string");

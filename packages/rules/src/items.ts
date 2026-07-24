@@ -74,12 +74,20 @@ export function rollItem(
     const eligible = pools.affixes.filter((a) => a.minItemLevel <= ilvl);
     if (eligible.length > 0) {
       const want = rarity === "rare" ? 3 + (rnd() % 4) : 1 + (rnd() % 2); // rare 3..6, magic 1..2
+      // Each side is capped on its own: magic 1+1, rare 3+3, same as PoE. A pool that
+      // is short on one side just yields fewer mods rather than overfilling the other.
+      const left: Record<"prefix" | "suffix", number> = rarity === "rare"
+        ? { prefix: 3, suffix: 3 }
+        : { prefix: 1, suffix: 1 };
       const picked = new Set<string>();
-      // Bounded attempts to pick `want` distinct affixes; deterministic order.
-      for (let attempt = 0; attempt < want * 4 && picked.size < want && picked.size < eligible.length; attempt++) {
+      // Bounded attempts to pick `want` distinct affixes; deterministic order. An affix
+      // bounced by a full side stays picked, so the loop always makes progress.
+      for (let attempt = 0; attempt < want * 4 && affixes.length < want && picked.size < eligible.length; attempt++) {
         const a = eligible[rnd() % eligible.length]!;
         if (picked.has(a.id)) continue;
         picked.add(a.id);
+        if (left[a.kind] === 0) continue;
+        left[a.kind]--;
         const value = a.min + (rnd() % (a.max - a.min + 1));
         affixes.push({ affixId: a.id, value });
       }

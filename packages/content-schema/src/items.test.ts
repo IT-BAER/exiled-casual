@@ -18,11 +18,15 @@ describe("validateItemBase", () => {
 
 describe("validateAffix", () => {
   it("accepts a well-formed affix", () => {
-    const r = validateAffix({ id: "affix.life", stat: "maxLife", label: "to maximum Life", minItemLevel: 1, min: 5, max: 20 });
+    const r = validateAffix({ id: "affix.life", kind: "prefix", stat: "maxLife", label: "to maximum Life", minItemLevel: 1, min: 5, max: 20 });
     expect(r.ok).toBe(true);
   });
+  it("rejects an affix that is neither prefix nor suffix", () => {
+    const r = validateAffix({ id: "affix.life", kind: "implicit", stat: "maxLife", label: "to maximum Life", minItemLevel: 1, min: 5, max: 20 });
+    expect(r.ok).toBe(false);
+  });
   it("rejects min greater than max", () => {
-    const r = validateAffix({ id: "affix.life", stat: "maxLife", label: "to maximum Life", minItemLevel: 1, min: 30, max: 20 });
+    const r = validateAffix({ id: "affix.life", kind: "prefix", stat: "maxLife", label: "to maximum Life", minItemLevel: 1, min: 30, max: 20 });
     expect(r.ok).toBe(false);
   });
 });

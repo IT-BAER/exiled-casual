@@ -8,13 +8,53 @@ const POOLS: ItemPools = {
     { id: "b1", name: "B1", itemClass: "focus", w: 2, h: 2 },
   ],
   affixes: [
-    { id: "a.low", stat: "maxLife", label: "life", minItemLevel: 1, min: 5, max: 20 },
-    { id: "a.mid", stat: "maxMana", label: "mana", minItemLevel: 1, min: 4, max: 10 },
-    { id: "a.high", stat: "armour", label: "armour", minItemLevel: 90, min: 10, max: 60 },
+    { id: "a.low", kind: "prefix", stat: "maxLife", label: "life", minItemLevel: 1, min: 5, max: 20 },
+    { id: "a.mid", kind: "suffix", stat: "fireResPct", label: "res", minItemLevel: 1, min: 4, max: 10 },
+    { id: "a.high", kind: "prefix", stat: "armour", label: "armour", minItemLevel: 90, min: 10, max: 60 },
   ],
 };
 
+// Four of each kind, so a broken cap can actually overshoot.
+const KINDED: ItemPools = {
+  bases: [{ id: "b0", name: "B0", itemClass: "wand", w: 1, h: 2 }],
+  affixes: [
+    ...Array.from({ length: 4 }, (_, i) => ({
+      id: `p${i}`, kind: "prefix" as const, stat: "maxLife", label: "life", minItemLevel: 1, min: 1, max: 2,
+    })),
+    ...Array.from({ length: 4 }, (_, i) => ({
+      id: `s${i}`, kind: "suffix" as const, stat: "fireResPct", label: "res", minItemLevel: 1, min: 1, max: 2,
+    })),
+  ],
+};
+
+function kindsOf(item: { affixes: { affixId: string }[] }) {
+  const of = (id: string) => KINDED.affixes.find((a) => a.id === id)!.kind;
+  const prefixes = item.affixes.filter((x) => of(x.affixId) === "prefix").length;
+  return { prefixes, suffixes: item.affixes.length - prefixes };
+}
+
 describe("rollItem", () => {
+  it("caps a rare at 3 prefixes and 3 suffixes, a magic at one of each", () => {
+    for (let s = 1; s <= 300; s++) {
+      for (const [rarity, cap] of [["magic", 1], ["rare", 3]] as const) {
+        const { prefixes, suffixes } = kindsOf(rollItem(KINDED, s, 80, 2, rarity));
+        expect(prefixes).toBeLessThanOrEqual(cap);
+        expect(suffixes).toBeLessThanOrEqual(cap);
+      }
+    }
+  });
+
+  it("rolls both kinds onto rares rather than only one side", () => {
+    const seen = { prefixes: 0, suffixes: 0 };
+    for (let s = 1; s <= 100; s++) {
+      const k = kindsOf(rollItem(KINDED, s, 80, 2, "rare"));
+      seen.prefixes += k.prefixes;
+      seen.suffixes += k.suffixes;
+    }
+    expect(seen.prefixes).toBeGreaterThan(0);
+    expect(seen.suffixes).toBeGreaterThan(0);
+  });
+
   it("is deterministic for the same inputs", () => {
     const a = rollItem(POOLS, 12345, 70, 1);
     const b = rollItem(POOLS, 12345, 70, 1);
@@ -55,7 +95,7 @@ describe("rollItem", () => {
   it("never returns a magic item with zero affixes when no affix is eligible", () => {
     const HIGH_ONLY: ItemPools = {
       bases: [{ id: "b0", name: "B0", itemClass: "wand", w: 1, h: 2 }],
-      affixes: [{ id: "a.high", stat: "armour", label: "armour", minItemLevel: 90, min: 10, max: 60 }],
+      affixes: [{ id: "a.high", kind: "prefix", stat: "armour", label: "armour", minItemLevel: 90, min: 10, max: 60 }],
     };
     for (let s = 1; s <= 200; s++) {
       const it = rollItem(HIGH_ONLY, s, 65, 2); // ilvl 65 < 90 => nothing eligible
@@ -77,8 +117,10 @@ describe("rollItem", () => {
   // Pool with enough eligible affixes to exercise a full 3..6 rare roll.
   const RARE_POOLS: ItemPools = {
     bases: [{ id: "b0", name: "B0", itemClass: "wand", w: 1, h: 2 }],
+    // Alternating, so 3 prefixes + 3 suffixes is still reachable.
     affixes: Array.from({ length: 8 }, (_, i) => ({
-      id: `a${i}`, stat: `s${i}`, label: `l${i}`, minItemLevel: 1, min: 1, max: 10,
+      id: `a${i}`, kind: (i % 2 === 0 ? "prefix" : "suffix") as "prefix" | "suffix",
+      stat: `s${i}`, label: `l${i}`, minItemLevel: 1, min: 1, max: 10,
     })),
   };
 
