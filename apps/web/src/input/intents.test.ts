@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { keyToIntent, pointerToWorld } from "./intents";
-import { fp } from "@pact/fixed-point";
+import { fp } from "@exiled/fixed-point";
 
 describe("keyToIntent", () => {
   const aim = { x: 0, y: 0 };

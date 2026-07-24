@@ -1,11 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { fp, toNumber } from "@pact/fixed-point";
-import { applyDamage } from "@pact/rules";
-import { createCombatSim, intentToCommand, checksumWorld } from "@pact/simulation";
-import { CONTENT_VERSION } from "@pact/content-runtime";
+import { fp, toNumber } from "@exiled/fixed-point";
+import { applyDamage } from "@exiled/rules";
+import { createCombatSim, intentToCommand, checksumWorld } from "@exiled/simulation";
+import { CONTENT_VERSION } from "@exiled/content-runtime";
 import { firstDifference } from "../index";
 import { runCombat } from "./combat";
-import type { Intent } from "@pact/protocol";
+import type { Intent } from "@exiled/protocol";
 
 function fireSkill(player: number, skillId: string, tx: number, ty: number, atTick: number) {
   const intent: Intent = { kind: "useSkill", skillId, tx, ty };
@@ -99,7 +99,7 @@ describe("golden (d): monster death removes entity", () => {
 describe("golden (e): determinism", () => {
   it("two runCombat calls with same seed and commands yield identical checksum sequences", () => {
     const ticks = 30;
-    const cmds: import("@pact/simulation").Command[][] = [];
+    const cmds: import("@exiled/simulation").Command[][] = [];
     const { playerEntity } = createCombatSim(42);
     const bolt = fireSkill(playerEntity, "skill.ember_bolt.v1", fp(5), fp(0), 0);
     cmds[0] = [bolt];

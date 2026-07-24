@@ -1,8 +1,8 @@
 import { Simulation } from "../loop";
 import type { Health, Mana, MoveTarget, MoveDir, SessionC, MonsterC, Position, ItemC } from "../components";
 import { fnv1a32 } from "../rng";
-import { rollItem, areaLevel } from "@pact/rules";
-import { ITEM_POOLS, baseOf } from "@pact/content-runtime";
+import { rollItem, areaLevel } from "@exiled/rules";
+import { ITEM_POOLS, baseOf } from "@exiled/content-runtime";
 
 export function registerDeath(sim: Simulation): void {
   sim.register("death", (world, tick) => {

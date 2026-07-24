@@ -1,7 +1,7 @@
-import { createCombatSim, buildSnapshot, checksumWorld } from "@pact/simulation";
-import { CONTENT_VERSION } from "@pact/content-runtime";
-import type { Command } from "@pact/simulation";
-import type { Snapshot } from "@pact/protocol";
+import { createCombatSim, buildSnapshot, checksumWorld } from "@exiled/simulation";
+import { CONTENT_VERSION } from "@exiled/content-runtime";
+import type { Command } from "@exiled/simulation";
+import type { Snapshot } from "@exiled/protocol";
 
 export function runCombat(
   seed: number,

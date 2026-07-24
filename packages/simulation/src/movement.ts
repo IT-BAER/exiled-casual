@@ -1,4 +1,4 @@
-import { fp, fpAdd, fpClamp, type Fixed } from "@pact/fixed-point";
+import { fp, fpAdd, fpClamp, type Fixed } from "@exiled/fixed-point";
 import { createStream, type RandomStream } from "./rng";
 import { Simulation } from "./loop";
 import type { Command } from "./loop";

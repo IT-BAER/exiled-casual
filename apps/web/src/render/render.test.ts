@@ -4,7 +4,7 @@ import { NullEngine, Scene, StandardMaterial } from "@babylonjs/core";
 import { createScene } from "./engine";
 import { SnapshotRenderer } from "./renderer";
 import { makeMesh, updateTelegraph } from "./meshes";
-import type { Snapshot } from "@pact/protocol";
+import type { Snapshot } from "@exiled/protocol";
 
 function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
   return {

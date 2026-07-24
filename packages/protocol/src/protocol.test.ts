@@ -1,8 +1,8 @@
 import { describe, expect, test } from "vitest";
 import { validateIntent, isToWorker } from "./index.js";
 import type { FromWorker } from "./index.js";
-import { fp } from "@pact/fixed-point";
-import { generateArea } from "@pact/mapgen";
+import { fp } from "@exiled/fixed-point";
+import { generateArea } from "@exiled/mapgen";
 
 describe("validateIntent — valid intents pass through", () => {
   test("moveTo with integer coords", () => {

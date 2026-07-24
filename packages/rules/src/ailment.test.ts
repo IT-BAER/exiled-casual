@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { fp } from "@pact/fixed-point";
+import { fp } from "@exiled/fixed-point";
 import { AILMENT_TICK_INTERVAL, refreshBurning, burningTickDamage, type AilmentState } from "./ailment.js";
 
 describe("AILMENT_TICK_INTERVAL", () => {

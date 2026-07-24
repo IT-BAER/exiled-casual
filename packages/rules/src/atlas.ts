@@ -1,4 +1,4 @@
-// Pure, deterministic Waystone/Atlas rules. No @pact imports so both the sim and
+// Pure, deterministic Waystone/Atlas rules. No @exiled imports so both the sim and
 // the client can compute identical offers from the same seed (replay-stable).
 
 export interface Waystone { id: string; seed: number; tier: number }
@@ -30,7 +30,7 @@ export function monsterTierScale(tier: number): { lifeMilli: number; dmgMilli: n
 }
 
 // Mulberry32 (same family as the sim PRNG, but inlined so this leaf module keeps
-// zero @pact deps and cannot form an import cycle with @pact/simulation).
+// zero @exiled deps and cannot form an import cycle with @exiled/simulation).
 function mulberry32(seed: number): () => number {
   let s = seed >>> 0;
   return () => {

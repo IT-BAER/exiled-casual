@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { fp } from "@pact/fixed-point";
-import type { DamageSpec, Defenses } from "@pact/content-schema";
+import { fp } from "@exiled/fixed-point";
+import type { DamageSpec, Defenses } from "@exiled/content-schema";
 import { applyDamage } from "./damage.js";
 import { ARMOUR_K } from "./stats.js";
 

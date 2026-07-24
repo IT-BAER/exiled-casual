@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { fp } from "@pact/fixed-point";
+import { fp } from "@exiled/fixed-point";
 import { Simulation } from "../loop";
 import { registerSkillCast } from "./skill-cast";
 import { gridCollision } from "../collision";
 import { makeGrid } from "../test-grid";
-import type { SkillDef } from "@pact/content-schema";
+import type { SkillDef } from "@exiled/content-schema";
 import type { Position, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC, CastingC } from "../components";
 
 // Authored skill defs matching the contract tables exactly.

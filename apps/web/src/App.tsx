@@ -8,7 +8,7 @@ import { attachBindings } from "./input/bindings";
 import { Hud } from "./hud/Hud";
 import { PreparationPanel } from "./hud/PreparationPanel";
 import { InventoryPanel } from "./hud/InventoryPanel";
-import type { Snapshot, FromWorker } from "@pact/protocol";
+import type { Snapshot, FromWorker } from "@exiled/protocol";
 
 const LAB_SEED = 42;
 // ponytail: fixed seed for the lab; M3 will thread seed from game state

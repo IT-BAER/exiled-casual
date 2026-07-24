@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { fp } from "@pact/fixed-point";
-import { AILMENT_TICK_INTERVAL, burningTickDamage } from "@pact/rules";
+import { fp } from "@exiled/fixed-point";
+import { AILMENT_TICK_INTERVAL, burningTickDamage } from "@exiled/rules";
 import { Simulation } from "../loop";
 import { registerAilmentTick } from "./ailment";
 import type { AilmentC, DamageEvent } from "../components";

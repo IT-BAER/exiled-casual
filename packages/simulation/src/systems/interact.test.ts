@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { fp } from "@pact/fixed-point";
-import { offerWaystones, WAYSTONE_OFFER_COUNT } from "@pact/rules";
-import { MAP_PORTALS } from "@pact/protocol";
+import { fp } from "@exiled/fixed-point";
+import { offerWaystones, WAYSTONE_OFFER_COUNT } from "@exiled/rules";
+import { MAP_PORTALS } from "@exiled/protocol";
 import { Simulation } from "../loop";
 import { registerInteractSystem } from "./interact";
 import type { SessionC, Position, InteractableC } from "../components";

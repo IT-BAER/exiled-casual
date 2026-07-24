@@ -1,4 +1,4 @@
-import { fpDist2, fpStepToward, fpClamp } from "@pact/fixed-point";
+import { fpDist2, fpStepToward, fpClamp } from "@exiled/fixed-point";
 import { WORLD_MIN, WORLD_MAX } from "../movement";
 import { slide, type CollisionRef } from "../collision";
 import { Simulation } from "../loop";

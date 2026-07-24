@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { WorkerCore } from "./worker-core";
-import type { Intent, Snapshot } from "@pact/protocol";
-import { fp } from "@pact/fixed-point";
-import { generateArea } from "@pact/mapgen";
-import { offerWaystones, WAYSTONE_OFFER_COUNT } from "@pact/rules";
-import { CONTENT_VERSION } from "@pact/content-runtime";
+import type { Intent, Snapshot } from "@exiled/protocol";
+import { fp } from "@exiled/fixed-point";
+import { generateArea } from "@exiled/mapgen";
+import { offerWaystones, WAYSTONE_OFFER_COUNT } from "@exiled/rules";
+import { CONTENT_VERSION } from "@exiled/content-runtime";
 
 function monsters(core: WorkerCore) {
   return core.snapshot()!.entities.filter((e) => e.kind === "monster");

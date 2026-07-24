@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { generateArea } from "@pact/mapgen";
-import { CONTENT_VERSION, MONSTERS } from "@pact/content-runtime";
-import { monsterTierScale } from "@pact/rules";
+import { generateArea } from "@exiled/mapgen";
+import { CONTENT_VERSION, MONSTERS } from "@exiled/content-runtime";
+import { monsterTierScale } from "@exiled/rules";
 import { World } from "./ecs.js";
 import { buildArea } from "./areas.js";
 import type { SessionC, Health, MonsterC } from "./components.js";

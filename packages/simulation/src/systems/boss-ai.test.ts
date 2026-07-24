@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { fp, fpDist2 } from "@pact/fixed-point";
-import { MONSTERS } from "@pact/content-runtime";
-import type { MonsterDef } from "@pact/content-schema";
+import { fp, fpDist2 } from "@exiled/fixed-point";
+import { MONSTERS } from "@exiled/content-runtime";
+import type { MonsterDef } from "@exiled/content-schema";
 import { Simulation } from "../loop";
 import { World } from "../ecs";
 import type { Position, MonsterC, Faction, PlayerC, BossC, TelegraphC, Health } from "../components";

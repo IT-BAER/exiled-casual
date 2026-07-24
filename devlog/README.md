@@ -1,6 +1,6 @@
 # Devlog
 
-Screenshots from building Pact of Ruin with Claude Code, in order. Each shot is the
+Screenshots from building Exiled Casual with Claude Code, in order. Each shot is the
 visible result of one slice of work. The early days are the sim and character; the later
 ones are the HUD and items. Also posted as a running "Day N" series on
 [r/ClaudeAI](https://www.reddit.com/r/ClaudeAI/comments/1v4nqeh).

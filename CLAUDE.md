@@ -1,4 +1,4 @@
-# Pact of Ruin
+# Exiled Casual
 
 Browser PoE2 clone. TypeScript, npm workspaces. ECS sim (30 Hz, fixed-point) in `packages/`,
 React + Babylon client in `apps/web`. Tests: Vitest.
@@ -41,5 +41,5 @@ PoE2 itemization actually works — do not invent mechanics or colors from memor
 ## Conventions
 
 - Sim math is deterministic fixed-point integers; keep replay checksums stable.
-- `@pact/rules` is a pure leaf: no imports from other `@pact` packages.
+- `@exiled/rules` is a pure leaf: no imports from other `@exiled` packages.
 - Commit workflow: direct-to-main, one commit per task. No attribution trailers, no emdashes in messages.

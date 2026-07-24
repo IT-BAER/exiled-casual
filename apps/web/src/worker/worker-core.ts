@@ -7,11 +7,11 @@ import {
   saveTo,
   IndexedDbKv,
   MemoryKv,
-} from "@pact/simulation";
-import type { Simulation, World, Entity, Position, SessionC, InventoryC, KvStore } from "@pact/simulation";
-import type { Intent, Snapshot, SpawnKind, AreaKind } from "@pact/protocol";
-import { CONTENT_VERSION } from "@pact/content-runtime";
-import { generateArea, type AreaLayout } from "@pact/mapgen";
+} from "@exiled/simulation";
+import type { Simulation, World, Entity, Position, SessionC, InventoryC, KvStore } from "@exiled/simulation";
+import type { Intent, Snapshot, SpawnKind, AreaKind } from "@exiled/protocol";
+import { CONTENT_VERSION } from "@exiled/content-runtime";
+import { generateArea, type AreaLayout } from "@exiled/mapgen";
 
 // Wall-clock pacing constant (client-side only) — never fed into the sim.
 // ponytail: float constant is intentional; the accumulator drives integer tick steps.

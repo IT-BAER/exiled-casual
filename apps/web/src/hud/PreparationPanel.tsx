@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import { offerWaystones, atlasNodes, areaLevel, WAYSTONE_OFFER_COUNT } from "@pact/rules";
-import { MAP_PORTALS } from "@pact/protocol";
+import { offerWaystones, atlasNodes, areaLevel, WAYSTONE_OFFER_COUNT } from "@exiled/rules";
+import { MAP_PORTALS } from "@exiled/protocol";
 
 interface Props {
   atlasSeed: number;

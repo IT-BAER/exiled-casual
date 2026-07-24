@@ -1,5 +1,5 @@
-import { MAP_PORTALS } from "@pact/protocol";
-import { offerWaystones, atlasNodes, WAYSTONE_OFFER_COUNT } from "@pact/rules";
+import { MAP_PORTALS } from "@exiled/protocol";
+import { offerWaystones, atlasNodes, WAYSTONE_OFFER_COUNT } from "@exiled/rules";
 import { Simulation } from "../loop";
 import type { Position, InteractableC, SessionC } from "../components";
 import { spawnPortalRing } from "../areas";

@@ -1,4 +1,4 @@
-# Pact of Ruin — Slice: "Waystones + Tier Scaling"
+# Exiled Casual — Slice: "Waystones + Tier Scaling"
 
 Design spec. Status: approved for planning, 2026-07-21.
 Baseline research: `docs/` pack (PoE 2 EA 0.5.4b clean-room reconstruction).

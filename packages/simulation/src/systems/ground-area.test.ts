@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { fp } from "@pact/fixed-point";
-import { AILMENT_TICK_INTERVAL } from "@pact/rules";
+import { fp } from "@exiled/fixed-point";
+import { AILMENT_TICK_INTERVAL } from "@exiled/rules";
 import { Simulation } from "../loop";
 import { registerGroundAreaTick } from "./ground-area";
 import type { Position, Health, MonsterC, PlayerC, Faction, GroundAreaC, AilmentC } from "../components";

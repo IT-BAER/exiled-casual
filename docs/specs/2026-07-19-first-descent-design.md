@@ -1,4 +1,4 @@
-# Pact of Ruin — Vertical Slice 1: "First Descent"
+# Exiled Casual — Vertical Slice 1: "First Descent"
 
 Design spec. Status: approved for planning, 2026-07-19.
 Baseline research: `docs/` pack (PoE 2 EA 0.5.4b clean-room reconstruction).

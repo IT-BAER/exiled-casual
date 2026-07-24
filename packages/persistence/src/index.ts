@@ -3,7 +3,7 @@
  * atomically under one key, so a forced restart mid-write can never leave a
  * half-committed state: the reader sees either the old blob or the new one,
  * never a mix. That atomicity IS the run-transaction integrity proof — see
- * `@pact/simulation`'s persist module and spec §8.
+ * `@exiled/simulation`'s persist module and spec §8.
  */
 export interface KvStore {
   /** The saved blob, or null if nothing has been saved yet. */
@@ -24,7 +24,7 @@ export class MemoryKv implements KvStore {
   }
 }
 
-const DB_NAME = "pact";
+const DB_NAME = "exiled-casual";
 const STORE = "state";
 const KEY = "save";
 

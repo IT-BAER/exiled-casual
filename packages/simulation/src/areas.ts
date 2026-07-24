@@ -1,8 +1,8 @@
-import { fp, fpMul } from "@pact/fixed-point";
-import { makeRare, monsterTierScale } from "@pact/rules";
-import { MONSTERS, RARE_TEMPLATE } from "@pact/content-runtime";
-import type { MonsterDef } from "@pact/content-schema";
-import type { AreaLayout } from "@pact/mapgen";
+import { fp, fpMul } from "@exiled/fixed-point";
+import { makeRare, monsterTierScale } from "@exiled/rules";
+import { MONSTERS, RARE_TEMPLATE } from "@exiled/content-runtime";
+import type { MonsterDef } from "@exiled/content-schema";
+import type { AreaLayout } from "@exiled/mapgen";
 import type { World, Entity } from "./ecs";
 import type {
   Position, Health, Faction, MonsterC, DefensesC, BossC,

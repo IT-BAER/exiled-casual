@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { fp } from "@pact/fixed-point";
+import { fp } from "@exiled/fixed-point";
 import { World } from "./ecs";
 import { bodyRadiusOf } from "./body";
 import type { MonsterC, PlayerC } from "./components";

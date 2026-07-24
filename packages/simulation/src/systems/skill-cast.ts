@@ -1,5 +1,5 @@
-import { fpClamp, fpStepToward } from "@pact/fixed-point";
-import type { SkillDef } from "@pact/content-schema";
+import { fpClamp, fpStepToward } from "@exiled/fixed-point";
+import type { SkillDef } from "@exiled/content-schema";
 import { Simulation } from "../loop";
 import { WORLD_MIN, WORLD_MAX } from "../movement";
 import { type CollisionRef } from "../collision";

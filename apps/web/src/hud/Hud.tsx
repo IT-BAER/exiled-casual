@@ -1,6 +1,6 @@
 import React from "react";
-import type { Snapshot } from "@pact/protocol";
-import { MAP_PORTALS } from "@pact/protocol";
+import type { Snapshot } from "@exiled/protocol";
+import { MAP_PORTALS } from "@exiled/protocol";
 
 const SKILL_SLOTS = [
   { id: "skill.ember_bolt.v1", key: "1", label: "Ember", glow: "#ff7a2f" },

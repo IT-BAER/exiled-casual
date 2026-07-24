@@ -1,5 +1,5 @@
 {
-  "name": "@pact/web",
+  "name": "@exiled/web",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -11,11 +11,11 @@
   "dependencies": {
     "@babylonjs/core": "^7.35.0",
     "@babylonjs/loaders": "^7.54.3",
-    "@pact/content-runtime": "*",
-    "@pact/fixed-point": "*",
-    "@pact/protocol": "*",
-    "@pact/rules": "*",
-    "@pact/simulation": "*",
+    "@exiled/content-runtime": "*",
+    "@exiled/fixed-point": "*",
+    "@exiled/protocol": "*",
+    "@exiled/rules": "*",
+    "@exiled/simulation": "*",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

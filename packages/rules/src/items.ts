@@ -1,6 +1,6 @@
 // Pure, deterministic item generation. Type-only content-schema import keeps this
-// a leaf (matches rare.ts). PRNG inlined like atlas.ts so there is no @pact dep.
-import type { ItemPools, Item, ItemAffix } from "@pact/content-schema";
+// a leaf (matches rare.ts). PRNG inlined like atlas.ts so there is no @exiled dep.
+import type { ItemPools, Item, ItemAffix } from "@exiled/content-schema";
 import { rareName } from "./item-names.js";
 
 function mulberry32(seed: number): () => number {

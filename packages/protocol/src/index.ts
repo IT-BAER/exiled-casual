@@ -1,5 +1,5 @@
-import { fp, type Fixed } from "@pact/fixed-point";
-import type { AreaLayout } from "@pact/mapgen";
+import { fp, type Fixed } from "@exiled/fixed-point";
+import type { AreaLayout } from "@exiled/mapgen";
 
 // ---------------------------------------------------------------------------
 // Intent — client-side input, coords are Fixed integers (client calls fp())

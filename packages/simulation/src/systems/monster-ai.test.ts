@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { Simulation } from "../loop";
-import { fp, fpDist2 } from "@pact/fixed-point";
+import { fp, fpDist2 } from "@exiled/fixed-point";
 import type { Position, MonsterC, Faction, PlayerC, BossC } from "../components";
 import { registerMonsterAI } from "./monster-ai";
 import { gridCollision } from "../collision";

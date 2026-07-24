@@ -1,13 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { fp } from "@pact/fixed-point";
+import { fp } from "@exiled/fixed-point";
 import {
   buildSnapshot,
   intentToCommand,
   type Position,
   type Health,
-} from "@pact/simulation";
-import { CONTENT_VERSION } from "@pact/content-runtime";
-import type { Intent } from "@pact/protocol";
+} from "@exiled/simulation";
+import { CONTENT_VERSION } from "@exiled/content-runtime";
+import type { Intent } from "@exiled/protocol";
 import { firstDifference } from "../index";
 import {
   BOSS_SEED,

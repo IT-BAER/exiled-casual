@@ -4,7 +4,7 @@
 
 **Goal:** Replace the Map Device's instant auto-open with a real choice — pick an Atlas node and a Waystone (seed + tier), see the resulting area level and revives, activate — where tier raises area level and scales monster life/damage.
 
-**Architecture:** Waystone/node/tier math is pure functions in `@pact/rules` (deterministic, shared by sim and client). The authoritative sim gains four `SessionC` fields and an `activateMap` intent handler; monsters scale at spawn. The client renders a Preparation Panel that computes the same offers from an `atlasSeed` exposed in the snapshot, and sends `activateMap`.
+**Architecture:** Waystone/node/tier math is pure functions in `@exiled/rules` (deterministic, shared by sim and client). The authoritative sim gains four `SessionC` fields and an `activateMap` intent handler; monsters scale at spawn. The client renders a Preparation Panel that computes the same offers from an `atlasSeed` exposed in the snapshot, and sends `activateMap`.
 
 **Tech Stack:** TypeScript, npm workspaces, ECS sim (30 Hz, fixed-point), React + Babylon client, Vitest.
 
@@ -20,7 +20,7 @@
 
 ---
 
-### Task 1: Pure atlas rules in `@pact/rules`
+### Task 1: Pure atlas rules in `@exiled/rules`
 
 **Files:**
 - Create: `packages/rules/src/atlas.ts`
@@ -28,7 +28,7 @@
 - Test: `packages/rules/src/atlas.test.ts`
 
 **Interfaces:**
-- Consumes: nothing (leaf module; no imports from other `@pact` packages).
+- Consumes: nothing (leaf module; no imports from other `@exiled` packages).
 - Produces:
   - `interface Waystone { id: string; seed: number; tier: number }`
   - `interface AtlasNode { id: string; name: string }`
@@ -92,7 +92,7 @@ Expected: FAIL — cannot find module `./atlas.js`.
 
 ```ts
 // packages/rules/src/atlas.ts
-// Pure, deterministic Waystone/Atlas rules. No @pact imports so both the sim and
+// Pure, deterministic Waystone/Atlas rules. No @exiled imports so both the sim and
 // the client can compute identical offers from the same seed (replay-stable).
 
 export interface Waystone { id: string; seed: number; tier: number }
@@ -124,7 +124,7 @@ export function monsterTierScale(tier: number): { lifeMilli: number; dmgMilli: n
 }
 
 // Mulberry32 (same family as the sim PRNG, but inlined so this leaf module keeps
-// zero @pact deps and cannot form an import cycle with @pact/simulation).
+// zero @exiled deps and cannot form an import cycle with @exiled/simulation).
 function mulberry32(seed: number): () => number {
   let s = seed >>> 0;
   return () => {
@@ -196,7 +196,7 @@ export interface SessionC {
   activeNodeId: string;
   /** Atlas node ids completed this session (in-memory only). */
   completedNodes: string[];
-  /** Retry budget for the open map. See MAP_PORTALS in @pact/protocol. */
+  /** Retry budget for the open map. See MAP_PORTALS in @exiled/protocol. */
   portalsLeft: number;
   mapOpen: 0 | 1;
   /** Area to build at the end of this tick; "" means stay put. */
@@ -257,7 +257,7 @@ git commit -m "feat(sim): session carries atlasSeed, areaTier, activeNode, compl
 - Test: `packages/simulation/src/areas.test.ts` (new; or append if it exists — a `combat-sim.test.ts` already imports areas, but add a focused unit test)
 
 **Interfaces:**
-- Consumes: `monsterTierScale` from `@pact/rules` (Task 1); `SessionC.areaTier` (Task 2).
+- Consumes: `monsterTierScale` from `@exiled/rules` (Task 1); `SessionC.areaTier` (Task 2).
 - Produces: `spawnMonster(world, def, x, y, rare, scale?)` where `scale?: { lifeMilli: number; dmgMilli: number }` (default `{ lifeMilli: 1000, dmgMilli: 1000 }`, i.e. unchanged).
 
 - [ ] **Step 1: Write the failing test**
@@ -265,9 +265,9 @@ git commit -m "feat(sim): session carries atlasSeed, areaTier, activeNode, compl
 ```ts
 // packages/rules is pure; this test drives the sim spawn. Create packages/simulation/src/areas.test.ts
 import { describe, it, expect } from "vitest";
-import { generateArea } from "@pact/mapgen";
-import { CONTENT_VERSION, MONSTERS } from "@pact/content-runtime";
-import { monsterTierScale } from "@pact/rules";
+import { generateArea } from "@exiled/mapgen";
+import { CONTENT_VERSION, MONSTERS } from "@exiled/content-runtime";
+import { monsterTierScale } from "@exiled/rules";
 import { World } from "./ecs.js";
 import { buildArea } from "./areas.js";
 import type { SessionC, Health, MonsterC } from "./components.js";
@@ -329,7 +329,7 @@ Expected: FAIL — scaled life differs from base (scaling not applied yet).
 Add the import at the top of `packages/simulation/src/areas.ts`:
 
 ```ts
-import { monsterTierScale } from "@pact/rules";
+import { monsterTierScale } from "@exiled/rules";
 ```
 
 Change the map branch of `buildArea` (the `else` block) to compute the scale once and pass it to every map spawn:
@@ -570,7 +570,7 @@ git commit -m "feat(protocol): activateMap intent + areaTier/atlasSeed/completed
 - Test: `packages/simulation/src/systems/interact.test.ts`
 
 **Interfaces:**
-- Consumes: `activateMap` command (Task 4); `offerWaystones`, `atlasNodes`, `WAYSTONE_OFFER_COUNT` from `@pact/rules`; `MAP_PORTALS` from `@pact/protocol`.
+- Consumes: `activateMap` command (Task 4); `offerWaystones`, `atlasNodes`, `WAYSTONE_OFFER_COUNT` from `@exiled/rules`; `MAP_PORTALS` from `@exiled/protocol`.
 - Produces: on a valid `activateMap`, sets `session { mapSeed, areaTier, activeNodeId, portalsLeft: MAP_PORTALS, mapOpen: 1 }` and spawns the portal ring. The `mapDevice` interact becomes a no-op.
 
 **First, convert the two obsolete device tests.** In `interact.test.ts` the tests "in-range click on map device opens the map" (~line 39) and "clicking the device again while already open is a no-op" (~line 52) assert the *old* auto-open behaviour, which Task 5 removes. Delete both — their coverage moves to the new `activateMap` tests below. The "out-of-range" and both "portal click" tests stay as-is (still valid).
@@ -581,8 +581,8 @@ The file's `makeWorld()` helper already builds a hideout session (its literal ga
 
 ```ts
 // packages/simulation/src/systems/interact.test.ts — add imports at top
-import { offerWaystones, WAYSTONE_OFFER_COUNT } from "@pact/rules";
-import { MAP_PORTALS } from "@pact/protocol";
+import { offerWaystones, WAYSTONE_OFFER_COUNT } from "@exiled/rules";
+import { MAP_PORTALS } from "@exiled/protocol";
 
 // helper alongside interactCmd
 function activateCmd(player: number, atlasNodeId: string, waystoneId: string) {
@@ -655,8 +655,8 @@ Expected: FAIL — map does not open (handler not implemented).
 Replace `packages/simulation/src/systems/interact.ts` with:
 
 ```ts
-import { MAP_PORTALS } from "@pact/protocol";
-import { offerWaystones, atlasNodes, WAYSTONE_OFFER_COUNT } from "@pact/rules";
+import { MAP_PORTALS } from "@exiled/protocol";
+import { offerWaystones, atlasNodes, WAYSTONE_OFFER_COUNT } from "@exiled/rules";
 import { Simulation } from "../loop";
 import type { Position, InteractableC, SessionC } from "../components";
 import { spawnPortalRing } from "../areas";
@@ -847,18 +847,18 @@ git commit -m "feat(sim): boss death completes the active atlas node"
 
 **Files:**
 - Create: `apps/web/src/hud/PreparationPanel.tsx`
-- Modify: `apps/web/package.json` (add `@pact/rules` dependency)
+- Modify: `apps/web/package.json` (add `@exiled/rules` dependency)
 - Test: `apps/web/src/hud/PreparationPanel.test.tsx`
 
 **Interfaces:**
-- Consumes: `offerWaystones`, `atlasNodes`, `areaLevel`, `WAYSTONE_OFFER_COUNT` from `@pact/rules`; `MAP_PORTALS` from `@pact/protocol`.
+- Consumes: `offerWaystones`, `atlasNodes`, `areaLevel`, `WAYSTONE_OFFER_COUNT` from `@exiled/rules`; `MAP_PORTALS` from `@exiled/protocol`.
 - Produces: `PreparationPanel(props: { atlasSeed: number; completedNodes: string[]; onActivate: (atlasNodeId: string, waystoneId: string) => void; onClose: () => void })`.
 
 - [ ] **Step 1: Add the workspace dependency**
 
 ```jsonc
 // apps/web/package.json — add to "dependencies"
-    "@pact/rules": "*",
+    "@exiled/rules": "*",
 ```
 
 Run: `npm install`
@@ -871,7 +871,7 @@ Expected: rc=0 (links the workspace package).
 import React from "react";
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { offerWaystones, areaLevel, atlasNodes, WAYSTONE_OFFER_COUNT } from "@pact/rules";
+import { offerWaystones, areaLevel, atlasNodes, WAYSTONE_OFFER_COUNT } from "@exiled/rules";
 import { PreparationPanel } from "./PreparationPanel.js";
 
 describe("PreparationPanel", () => {
@@ -921,8 +921,8 @@ Expected: FAIL — cannot find `./PreparationPanel.js`.
 ```tsx
 // apps/web/src/hud/PreparationPanel.tsx
 import React, { useState } from "react";
-import { offerWaystones, atlasNodes, areaLevel, WAYSTONE_OFFER_COUNT } from "@pact/rules";
-import { MAP_PORTALS } from "@pact/protocol";
+import { offerWaystones, atlasNodes, areaLevel, WAYSTONE_OFFER_COUNT } from "@exiled/rules";
+import { MAP_PORTALS } from "@exiled/protocol";
 
 interface Props {
   atlasSeed: number;

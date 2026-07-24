@@ -1,5 +1,5 @@
-import { fp } from "@pact/fixed-point";
-import { validateSkillDef, type SkillDef } from "@pact/content-schema";
+import { fp } from "@exiled/fixed-point";
+import { validateSkillDef, type SkillDef } from "@exiled/content-schema";
 
 const SKILL_DEFS: SkillDef[] = [
   {

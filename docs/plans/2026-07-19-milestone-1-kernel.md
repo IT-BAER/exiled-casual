@@ -4,7 +4,7 @@
 
 **Goal:** Build the deterministic simulation foundation — a fixed-point math lib, seeded RNG streams, an ECS, a canonical world checksum, a fixed-step loop with a command model, and a replay runner — proven by a headless scenario that reproduces an identical checksum across repeated runs and replays.
 
-**Architecture:** A TypeScript monorepo (npm workspaces) of pure, framework-free packages. `@pact/fixed-point` provides scaled-integer math. `@pact/simulation` holds the ECS, RNG, checksum, and fixed-step loop. `@pact/replay` records command logs and re-runs scenarios to prove determinism. No rendering, no Babylon, no network, no persistence in this milestone — everything is headless and exercised by Vitest.
+**Architecture:** A TypeScript monorepo (npm workspaces) of pure, framework-free packages. `@exiled/fixed-point` provides scaled-integer math. `@exiled/simulation` holds the ECS, RNG, checksum, and fixed-step loop. `@exiled/replay` records command logs and re-runs scenarios to prove determinism. No rendering, no Babylon, no network, no persistence in this milestone — everything is headless and exercised by Vitest.
 
 **Tech Stack:** TypeScript (strict, ESM), npm workspaces, Vitest, Node 20+. Cross-package imports resolve through workspace symlinks and each package's `exports` pointing at `./src/index.ts` (Vitest/Vite transpiles TS directly — no build step).
 
@@ -41,7 +41,7 @@ Every task's requirements implicitly include these (from `docs/specs/2026-07-19-
 
 ```json
 {
-  "name": "pact-of-ruin",
+  "name": "exiled-casual",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -166,7 +166,7 @@ Note: commit the generated `package-lock.json` — CI's `npm ci` requires it.
 
 **Interfaces:**
 - Consumes: nothing from other packages.
-- Produces (all exported from `@pact/fixed-point`):
+- Produces (all exported from `@exiled/fixed-point`):
   - `FP_SCALE: number` (= 1000)
   - `type Fixed = number` (an integer equal to real × FP_SCALE)
   - `fp(n: number): Fixed`
@@ -185,7 +185,7 @@ Note: commit the generated `package-lock.json` — CI's `npm ci` requires it.
 
 ```json
 {
-  "name": "@pact/fixed-point",
+  "name": "@exiled/fixed-point",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -306,7 +306,7 @@ git commit -m "feat(fixed-point): scaled-integer math library"
 
 **Interfaces:**
 - Consumes: nothing from other packages yet.
-- Produces (exported from `@pact/simulation`):
+- Produces (exported from `@exiled/simulation`):
   - `interface RandomStream { nextU32(): number; nextInt(minInclusive: number, maxInclusive: number): number; ordinal(): number; }`
   - `createStream(masterSeed: number, name: string): RandomStream`
   - `fnv1a32(input: string): number` (also reused by the checksum task)
@@ -317,14 +317,14 @@ git commit -m "feat(fixed-point): scaled-integer math library"
 
 ```json
 {
-  "name": "@pact/simulation",
+  "name": "@exiled/simulation",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
   "exports": { ".": "./src/index.ts" },
   "dependencies": {
-    "@pact/fixed-point": "*"
+    "@exiled/fixed-point": "*"
   }
 }
 ```
@@ -473,7 +473,7 @@ git commit -m "feat(simulation): deterministic named rng streams"
 
 **Interfaces:**
 - Consumes: nothing.
-- Produces (exported from `@pact/simulation`):
+- Produces (exported from `@exiled/simulation`):
   - `type Entity = number`
   - `class World` with:
     - `create(): Entity`
@@ -650,7 +650,7 @@ git commit -m "feat(simulation): deterministic ecs world"
 
 **Interfaces:**
 - Consumes: `World` (Task 4), `fnv1a32` (Task 3).
-- Produces (exported from `@pact/simulation`):
+- Produces (exported from `@exiled/simulation`):
   - `serializeWorld(world: World): string` (canonical)
   - `checksumWorld(world: World): number` (uint32)
 
@@ -781,7 +781,7 @@ git commit -m "feat(simulation): canonical world serialization and checksum"
 
 **Interfaces:**
 - Consumes: `World` (Task 4).
-- Produces (exported from `@pact/simulation`):
+- Produces (exported from `@exiled/simulation`):
   - `interface Command { tick: number; entity?: Entity; type: string; data?: Record<string, number>; }`
   - `type System = (world: World, tick: number, commands: readonly Command[]) => void`
   - `class Simulation` with: `readonly world: World`, `tick: number`, `register(name: string, fn: System): void`, `systemOrder(): string[]`, `step(commands?: readonly Command[]): void`
@@ -904,8 +904,8 @@ git commit -m "feat(simulation): fixed-step loop and command model"
 - Test: `packages/replay/src/replay.test.ts`
 
 **Interfaces:**
-- Consumes: `Simulation`, `Command`, `checksumWorld` (from `@pact/simulation`).
-- Produces (exported from `@pact/replay`):
+- Consumes: `Simulation`, `Command`, `checksumWorld` (from `@exiled/simulation`).
+- Produces (exported from `@exiled/replay`):
   - `interface Scenario { seed: number; contentVersion: string; ticks: number; commandsByTick: Command[][]; build: (sim: Simulation, seed: number) => void; }`
   - `interface ReplayResult { checksums: number[]; final: number; systemOrder: string[]; world: World; }`
   - `runScenario(scenario: Scenario): ReplayResult`
@@ -917,15 +917,15 @@ git commit -m "feat(simulation): fixed-step loop and command model"
 
 ```json
 {
-  "name": "@pact/replay",
+  "name": "@exiled/replay",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
   "exports": { ".": "./src/index.ts" },
   "dependencies": {
-    "@pact/fixed-point": "*",
-    "@pact/simulation": "*"
+    "@exiled/fixed-point": "*",
+    "@exiled/simulation": "*"
   }
 }
 ```
@@ -939,7 +939,7 @@ git commit -m "feat(simulation): fixed-step loop and command model"
 }
 ```
 
-Then run `npm install` so `@pact/simulation` is symlinked into `@pact/replay`.
+Then run `npm install` so `@exiled/simulation` is symlinked into `@exiled/replay`.
 
 - [ ] **Step 2: Write the failing test**
 
@@ -947,8 +947,8 @@ Then run `npm install` so `@pact/simulation` is symlinked into `@pact/replay`.
 
 ```ts
 import { describe, expect, test } from "vitest";
-import { fpAdd } from "@pact/fixed-point";
-import type { Simulation } from "@pact/simulation";
+import { fpAdd } from "@exiled/fixed-point";
+import type { Simulation } from "@exiled/simulation";
 import { runScenario, firstDifference, type Scenario } from "./index";
 
 // A trivial scenario: one entity whose counter increments by 1 (fixed-point)
@@ -1004,7 +1004,7 @@ Expected: FAIL — `./index` does not export `runScenario`.
 `packages/replay/src/index.ts`:
 
 ```ts
-import { Simulation, checksumWorld, type Command, type World } from "@pact/simulation";
+import { Simulation, checksumWorld, type Command, type World } from "@exiled/simulation";
 
 export interface Scenario {
   seed: number;
@@ -1074,12 +1074,12 @@ git commit -m "feat(replay): scenario runner and first-difference tool"
 - Test: `packages/replay/src/scenarios/wander.test.ts`
 
 **Interfaces:**
-- Consumes: `Simulation`, `World`, `createStream`, `Command` (`@pact/simulation`); fixed-point math (`@pact/fixed-point`); `runScenario`, `firstDifference` (`@pact/replay`).
-- Produces (exported from `@pact/simulation`):
+- Consumes: `Simulation`, `World`, `createStream`, `Command` (`@exiled/simulation`); fixed-point math (`@exiled/fixed-point`); `runScenario`, `firstDifference` (`@exiled/replay`).
+- Produces (exported from `@exiled/simulation`):
   - `WORLD_MIN: Fixed`, `WORLD_MAX: Fixed` (arena bounds)
   - `registerMovement(sim: Simulation, seed: number): void` — registers a movement system that: applies `impulse` commands (`data.dvx`, `data.dvy`) to each entity's `motion`, adds a per-entity RNG wander via a named stream, integrates `motion` into `position`, and clamps `position` to `[WORLD_MIN, WORLD_MAX]`.
   - Component shapes: `position` = `{ x: Fixed; y: Fixed }`, `motion` = `{ vx: Fixed; vy: Fixed; streamName: string }` (streamName is a string so it is part of the canonical checksum and picks the entity's wander stream).
-- Produces (exported from `@pact/replay`):
+- Produces (exported from `@exiled/replay`):
   - `makeWanderScenario(seed: number, ticks: number, commandsByTick?: Command[][]): Scenario`
 
 - [ ] **Step 1: Write the movement system**
@@ -1087,7 +1087,7 @@ git commit -m "feat(replay): scenario runner and first-difference tool"
 `packages/simulation/src/movement.ts`:
 
 ```ts
-import { fp, fpAdd, fpClamp, type Fixed } from "@pact/fixed-point";
+import { fp, fpAdd, fpClamp, type Fixed } from "@exiled/fixed-point";
 import { createStream, type RandomStream } from "./rng";
 import { Simulation } from "./loop";
 import type { Command } from "./loop";
@@ -1159,8 +1159,8 @@ export { WORLD_MIN, WORLD_MAX, registerMovement } from "./movement";
 `packages/replay/src/scenarios/wander.ts`:
 
 ```ts
-import { registerMovement, type Command, type Simulation } from "@pact/simulation";
-import { fp } from "@pact/fixed-point";
+import { registerMovement, type Command, type Simulation } from "@exiled/simulation";
+import { fp } from "@exiled/fixed-point";
 import type { Scenario } from "../index";
 
 // Five entities wandering under a shared deterministic seed, with optional
@@ -1193,7 +1193,7 @@ export function makeWanderScenario(
 
 ```ts
 import { describe, expect, test } from "vitest";
-import { WORLD_MIN, WORLD_MAX, type Command } from "@pact/simulation";
+import { WORLD_MIN, WORLD_MAX, type Command } from "@exiled/simulation";
 import { runScenario, firstDifference } from "../index";
 import { makeWanderScenario } from "./wander";
 
@@ -1289,11 +1289,11 @@ Before Milestone 1 is considered done, confirm:
 - System execution order is documented and inspectable (`systemOrder()`).
 - Every random draw goes through a named seeded stream.
 
-This kernel is headless by design. Milestone 2 (Combat Lab) adds the Web Worker authority boundary, `@pact/protocol`, the Babylon greybox client, and the three elemental-caster skills on top of these primitives — it gets its own plan once this milestone is green.
+This kernel is headless by design. Milestone 2 (Combat Lab) adds the Web Worker authority boundary, `@exiled/protocol`, the Babylon greybox client, and the three elemental-caster skills on top of these primitives — it gets its own plan once this milestone is green.
 
 ## Self-review notes
 
 - **Spec coverage (§10.1):** monorepo + CI (Task 1), fixed-point (Task 2), named RNG (Task 3), ECS (Task 4), canonical checksum (Task 5), fixed-step loop + command model (Task 6), replay runner + first-difference (Task 7), headless determinism proof (Task 8). All Milestone-1 deliverables covered.
 - **Determinism invariants (§3):** fixed-point only (Task 2, used in Task 8); one inspectable system order (Task 6); named RNG streams with ordinal (Task 3); canonical serialization + rolling checksum + replay equality (Tasks 5, 7, 8); sorted iteration everywhere output is produced (Task 4). The checksum serializer throws on non-finite values, catching accidental float leakage.
 - **Type consistency:** `Command`, `System`, `Entity`, `World`, `Simulation`, `RandomStream`, `Scenario`, `ReplayResult`, `Fixed` names are defined once and reused verbatim across tasks; component shapes (`position`, `motion`, `counter`) are consistent between producing and consuming tasks.
-- **Deferred (not Milestone 1):** `@pact/protocol`, worker boundary, Babylon, persistence adapter, skills/monsters/mapgen — all in later milestone plans per spec §10.
+- **Deferred (not Milestone 1):** `@exiled/protocol`, worker boundary, Babylon, persistence adapter, skills/monsters/mapgen — all in later milestone plans per spec §10.

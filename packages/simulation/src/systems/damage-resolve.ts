@@ -1,4 +1,4 @@
-import { applyDamage } from "@pact/rules";
+import { applyDamage } from "@exiled/rules";
 import { Simulation } from "../loop";
 import type { Health, DefensesC } from "../components";
 

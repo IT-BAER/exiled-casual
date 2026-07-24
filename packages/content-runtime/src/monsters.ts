@@ -1,5 +1,5 @@
-import { fp } from "@pact/fixed-point";
-import { validateMonsterDef, type MonsterDef, type RareModifier } from "@pact/content-schema";
+import { fp } from "@exiled/fixed-point";
+import { validateMonsterDef, type MonsterDef, type RareModifier } from "@exiled/content-schema";
 
 const MONSTER_DEFS: MonsterDef[] = [
   {

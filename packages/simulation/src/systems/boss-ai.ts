@@ -1,5 +1,5 @@
-import { fp, fpDist2, fpStepToward } from "@pact/fixed-point";
-import type { MonsterDef } from "@pact/content-schema";
+import { fp, fpDist2, fpStepToward } from "@exiled/fixed-point";
+import type { MonsterDef } from "@exiled/content-schema";
 import { Simulation } from "../loop";
 import { slide, type CollisionRef } from "../collision";
 import { spawnMonster } from "../areas";

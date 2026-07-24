@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { fp } from "@pact/fixed-point";
-import type { WalkableGrid } from "@pact/mapgen";
+import { fp } from "@exiled/fixed-point";
+import type { WalkableGrid } from "@exiled/mapgen";
 import { gridCollision, slide } from "./collision";
 
 // Build a WalkableGrid from an ASCII map. '.' = walkable, '#' = wall.

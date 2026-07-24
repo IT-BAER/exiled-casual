@@ -1,4 +1,4 @@
-# Pact of Ruin
+# Exiled Casual
 
 A browser-native action RPG in the spirit of Path of Exile 2, built spec-first with
 [Claude Code](https://claude.com/claude-code) as a public devlog experiment: how far a
@@ -37,7 +37,7 @@ npm workspaces, TypeScript throughout.
 | `packages/fixed-point` | Deterministic fixed-point integer math |
 | `packages/simulation` | ECS combat simulation, 30 Hz fixed timestep |
 | `packages/mapgen` | Procedural map generation |
-| `packages/rules` | Pure rules engine (a leaf: imports no other `@pact` package) |
+| `packages/rules` | Pure rules engine (a leaf: imports no other `@exiled` package) |
 | `packages/content-schema`, `packages/content-runtime` | Data-authored content and its loader |
 | `packages/protocol` | Client/server message contracts |
 | `packages/replay` | Replay a run from its seed and command log |

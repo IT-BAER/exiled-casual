@@ -1,5 +1,5 @@
-import { fpDist2 } from "@pact/fixed-point";
-import { refreshBurning, AILMENT_TICK_INTERVAL } from "@pact/rules";
+import { fpDist2 } from "@exiled/fixed-point";
+import { refreshBurning, AILMENT_TICK_INTERVAL } from "@exiled/rules";
 import { Simulation } from "../loop";
 import { bodyRadiusOf } from "../body";
 import type { Position, Faction, GroundAreaC, AilmentC } from "../components";

@@ -1,7 +1,7 @@
-import { toNumber, fpDist2 } from "@pact/fixed-point";
-import { PICKUP_RADIUS } from "@pact/protocol";
-import type { Intent, Snapshot, SnapshotEntity } from "@pact/protocol";
-import { describeItem } from "@pact/content-runtime";
+import { toNumber, fpDist2 } from "@exiled/fixed-point";
+import { PICKUP_RADIUS } from "@exiled/protocol";
+import type { Intent, Snapshot, SnapshotEntity } from "@exiled/protocol";
+import { describeItem } from "@exiled/content-runtime";
 import type { Command, Simulation } from "./loop";
 import type { World, Entity } from "./ecs";
 import type {

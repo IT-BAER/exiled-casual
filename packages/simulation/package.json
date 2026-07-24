@@ -1,17 +1,17 @@
 {
-  "name": "@pact/simulation",
+  "name": "@exiled/simulation",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
   "exports": { ".": "./src/index.ts" },
   "dependencies": {
-    "@pact/fixed-point": "*",
-    "@pact/mapgen": "*",
-    "@pact/rules": "*",
-    "@pact/content-schema": "*",
-    "@pact/content-runtime": "*",
-    "@pact/protocol": "*",
-    "@pact/persistence": "*"
+    "@exiled/fixed-point": "*",
+    "@exiled/mapgen": "*",
+    "@exiled/rules": "*",
+    "@exiled/content-schema": "*",
+    "@exiled/content-runtime": "*",
+    "@exiled/protocol": "*",
+    "@exiled/persistence": "*"
   }
 }

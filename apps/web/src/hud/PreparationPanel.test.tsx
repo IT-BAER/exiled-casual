@@ -2,7 +2,7 @@
 import React from "react";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
-import { offerWaystones, areaLevel, atlasNodes, WAYSTONE_OFFER_COUNT } from "@pact/rules";
+import { offerWaystones, areaLevel, atlasNodes, WAYSTONE_OFFER_COUNT } from "@exiled/rules";
 import { PreparationPanel } from "./PreparationPanel.js";
 
 describe("PreparationPanel", () => {

@@ -1,15 +1,15 @@
 {
-  "name": "@pact/replay",
+  "name": "@exiled/replay",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
   "exports": { ".": "./src/index.ts" },
   "dependencies": {
-    "@pact/fixed-point": "*",
-    "@pact/simulation": "*",
-    "@pact/content-runtime": "*",
-    "@pact/rules": "*",
-    "@pact/protocol": "*"
+    "@exiled/fixed-point": "*",
+    "@exiled/simulation": "*",
+    "@exiled/content-runtime": "*",
+    "@exiled/rules": "*",
+    "@exiled/protocol": "*"
   }
 }

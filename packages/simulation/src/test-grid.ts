@@ -1,4 +1,4 @@
-import type { WalkableGrid } from "@pact/mapgen";
+import type { WalkableGrid } from "@exiled/mapgen";
 
 /**
  * Test-only helper: build a WalkableGrid from an ASCII map. '.' = walkable,

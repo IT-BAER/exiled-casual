@@ -1,6 +1,6 @@
 // Deterministic, integer-only PRNG (Mulberry32) + FNV-1a hash.
-// Copied from @pact/simulation rather than imported: @pact/simulation will
-// depend on @pact/mapgen (Phase C4), so a back-dependency here would be circular.
+// Copied from @exiled/simulation rather than imported: @exiled/simulation will
+// depend on @exiled/mapgen (Phase C4), so a back-dependency here would be circular.
 // Keep the two copies behaviourally identical — they are both determinism-critical.
 
 export function fnv1a32(input: string): number {

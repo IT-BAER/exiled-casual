@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { attachBindings } from "./bindings";
 import type { Scene } from "@babylonjs/core";
-import type { Snapshot } from "@pact/protocol";
+import type { Snapshot } from "@exiled/protocol";
 
 // Minimal fake scene: every pick hits the ground at a fixed world point.
 function fakeScene(): Scene {

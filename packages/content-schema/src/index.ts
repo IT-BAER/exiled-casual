@@ -1,4 +1,4 @@
-import type { Fixed } from "@pact/fixed-point";
+import type { Fixed } from "@exiled/fixed-point";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 

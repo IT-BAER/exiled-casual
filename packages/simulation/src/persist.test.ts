@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { MemoryKv } from "@pact/persistence";
-import { rollItem, areaLevel } from "@pact/rules";
-import { ITEM_POOLS, baseOf } from "@pact/content-runtime";
+import { MemoryKv } from "@exiled/persistence";
+import { rollItem, areaLevel } from "@exiled/rules";
+import { ITEM_POOLS, baseOf } from "@exiled/content-runtime";
 import { createCombatSim } from "./combat-sim";
 import { snapshot, restore, saveTo, loadInto } from "./persist";
 import type { SessionC, InventoryC } from "./components";

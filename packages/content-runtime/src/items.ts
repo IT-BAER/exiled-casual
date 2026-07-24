@@ -1,4 +1,4 @@
-import { validateItemBase, validateAffix, type ItemBase, type Affix, type Item, type ItemPools, type Rarity } from "@pact/content-schema";
+import { validateItemBase, validateAffix, type ItemBase, type Affix, type Item, type ItemPools, type Rarity } from "@exiled/content-schema";
 
 // Tiny hand-authored pool for the First Loot slice. Grid dims (w×h) follow the
 // 12×5 inventory. Real 45-base / 120-affix content is Phase 4 proper.

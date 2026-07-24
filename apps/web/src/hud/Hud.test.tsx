@@ -3,8 +3,8 @@ import { describe, it, expect, afterEach } from "vitest";
 import "@testing-library/jest-dom/vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import { Hud } from "./Hud";
-import type { Snapshot } from "@pact/protocol";
-import { MAP_PORTALS } from "@pact/protocol";
+import type { Snapshot } from "@exiled/protocol";
+import { MAP_PORTALS } from "@exiled/protocol";
 
 // No globals:true in this repo, so @testing-library/react does not auto-register
 // its afterEach cleanup — do it explicitly or renders leak across tests.

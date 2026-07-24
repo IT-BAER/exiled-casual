@@ -1,12 +1,12 @@
 {
-  "name": "@pact/protocol",
+  "name": "@exiled/protocol",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
   "exports": { ".": "./src/index.ts" },
   "dependencies": {
-    "@pact/fixed-point": "*",
-    "@pact/mapgen": "*"
+    "@exiled/fixed-point": "*",
+    "@exiled/mapgen": "*"
   }
 }

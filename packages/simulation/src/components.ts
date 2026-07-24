@@ -1,6 +1,6 @@
 import type { Entity } from "./ecs";
-import type { Fixed } from "@pact/fixed-point";
-import type { Item } from "@pact/content-schema";
+import type { Fixed } from "@exiled/fixed-point";
+import type { Item } from "@exiled/content-schema";
 
 export type AreaKind = "hideout" | "map";
 
@@ -19,7 +19,7 @@ export interface SessionC {
   activeNodeId: string;
   /** Atlas node ids completed this session (in-memory only). */
   completedNodes: string[];
-  /** Retry budget for the open map. See MAP_PORTALS in @pact/protocol. */
+  /** Retry budget for the open map. See MAP_PORTALS in @exiled/protocol. */
   portalsLeft: number;
   mapOpen: 0 | 1;
   /** Area to build at the end of this tick; "" means stay put. */

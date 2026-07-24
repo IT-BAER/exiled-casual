@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { fp, fpClamp, fpDist2 } from "@pact/fixed-point";
+import { fp, fpClamp, fpDist2 } from "@exiled/fixed-point";
 import { Simulation } from "../loop";
 import { registerPlayerMovement, CASTING_MOVE_PCT } from "./player-movement";
 import { WORLD_MIN, WORLD_MAX, ARENA_RADIUS } from "../movement";

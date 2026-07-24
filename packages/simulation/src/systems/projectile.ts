@@ -1,4 +1,4 @@
-import { isqrt, fpDist2 } from "@pact/fixed-point";
+import { isqrt, fpDist2 } from "@exiled/fixed-point";
 import { Simulation } from "../loop";
 import type { Position, ProjectileC, MonsterC, Faction } from "../components";
 

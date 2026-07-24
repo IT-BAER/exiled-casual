@@ -1,4 +1,4 @@
-import { fp } from "@pact/fixed-point";
+import { fp } from "@exiled/fixed-point";
 import {
   createCombatSim,
   buildSnapshot,
@@ -12,9 +12,9 @@ import {
   type InteractableC,
   type MonsterC,
   type AreaLayout,
-} from "@pact/simulation";
-import { CONTENT_VERSION } from "@pact/content-runtime";
-import type { Intent, Snapshot } from "@pact/protocol";
+} from "@exiled/simulation";
+import { CONTENT_VERSION } from "@exiled/content-runtime";
+import type { Intent, Snapshot } from "@exiled/protocol";
 
 /**
  * A flat, all-walkable arena that reproduces the pre-mapgen boss encounter:

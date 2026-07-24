@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { Simulation } from "../loop";
 import { registerPickupSystem } from "./pickup";
-import type { Item } from "@pact/content-schema";
+import type { Item } from "@exiled/content-schema";
 
 const ITEM: Item = { baseId: "b0", rarity: "normal", itemLevel: 65, affixes: [] };
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { fp } from "@pact/fixed-point";
-import type { MonsterDef, RareModifier } from "@pact/content-schema";
+import { fp } from "@exiled/fixed-point";
+import type { MonsterDef, RareModifier } from "@exiled/content-schema";
 import { makeRare } from "./rare.js";
 
 const cinderImp: MonsterDef = {

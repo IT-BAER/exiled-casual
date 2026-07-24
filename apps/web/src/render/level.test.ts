@@ -3,7 +3,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { NullEngine } from "@babylonjs/core";
 import { createScene } from "./engine";
 import { buildLevel } from "./level";
-import type { WalkableGrid } from "@pact/mapgen";
+import type { WalkableGrid } from "@exiled/mapgen";
 
 let engine: InstanceType<typeof NullEngine>;
 

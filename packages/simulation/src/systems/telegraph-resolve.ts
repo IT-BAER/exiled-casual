@@ -1,4 +1,4 @@
-import { fpDist2 } from "@pact/fixed-point";
+import { fpDist2 } from "@exiled/fixed-point";
 import { Simulation } from "../loop";
 import { bodyRadiusOf } from "../body";
 import type { Position, Faction, TelegraphC, GroundAreaC } from "../components";

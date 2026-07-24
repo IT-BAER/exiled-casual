@@ -1,4 +1,4 @@
-import { fp, type Fixed } from "@pact/fixed-point";
+import { fp, type Fixed } from "@exiled/fixed-point";
 
 export interface StatBlock {
   maxLifeFixed: Fixed;

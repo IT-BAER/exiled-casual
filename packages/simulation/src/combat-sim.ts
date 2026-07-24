@@ -1,7 +1,7 @@
-import { fp } from "@pact/fixed-point";
-import { baseCasterStats, makeRare } from "@pact/rules";
-import { SKILLS, MONSTERS, RARE_TEMPLATE, CONTENT_VERSION } from "@pact/content-runtime";
-import { generateArea, type AreaLayout } from "@pact/mapgen";
+import { fp } from "@exiled/fixed-point";
+import { baseCasterStats, makeRare } from "@exiled/rules";
+import { SKILLS, MONSTERS, RARE_TEMPLATE, CONTENT_VERSION } from "@exiled/content-runtime";
+import { generateArea, type AreaLayout } from "@exiled/mapgen";
 import { gridCollision, type CollisionRef } from "./collision";
 import { Simulation } from "./loop";
 import { World } from "./ecs";

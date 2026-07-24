@@ -1,5 +1,5 @@
-import type { Fixed } from "@pact/fixed-point";
-import type { DamageSpec, Defenses } from "@pact/content-schema";
+import type { Fixed } from "@exiled/fixed-point";
+import type { DamageSpec, Defenses } from "@exiled/content-schema";
 import { RES_CAP, ARMOUR_K } from "./stats.js";
 
 /**

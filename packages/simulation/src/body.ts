@@ -1,5 +1,5 @@
 import type { World, Entity } from "./ecs";
-import type { Fixed } from "@pact/fixed-point";
+import type { Fixed } from "@exiled/fixed-point";
 import type { MonsterC, PlayerC } from "./components";
 
 /** Body radius of any entity, whatever component carries it. */

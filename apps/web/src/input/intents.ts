@@ -1,5 +1,5 @@
-import type { Intent } from "@pact/protocol";
-import { fp } from "@pact/fixed-point";
+import type { Intent } from "@exiled/protocol";
+import { fp } from "@exiled/fixed-point";
 
 const SKILL_KEYS: Record<string, string> = {
   "1": "skill.ember_bolt.v1",

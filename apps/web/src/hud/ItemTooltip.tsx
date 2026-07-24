@@ -1,10 +1,10 @@
 import React from "react";
-import type { ItemStatLine } from "@pact/protocol";
+import type { ItemStatLine } from "@exiled/protocol";
 
 // PoE2 item tooltip. Matched to poe2-screenshots/item-{normal,magic,rare,unique}.png:
 // near-black panel, centered small-caps serif, a rarity-framed header band with
 // inward flourishes, an item-class line, then affix lines in augmented-blue.
-// The sim only rolls normal+magic today (see @pact/content-schema Rarity), and it
+// The sim only rolls normal+magic today (see @exiled/content-schema Rarity), and it
 // does not model weapon base stats or requirements, so those tooltip rows are
 // honestly absent. rare/unique styling is latent for when itemization adds them.
 const SERIF = '"Cinzel", "Trajan Pro", Georgia, "Times New Roman", serif';

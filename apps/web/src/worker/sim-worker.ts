@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 import { WorkerCore } from "./worker-core";
-import { isToWorker, validateIntent } from "@pact/protocol";
-import type { FromWorker } from "@pact/protocol";
+import { isToWorker, validateIntent } from "@exiled/protocol";
+import type { FromWorker } from "@exiled/protocol";
 
 // ponytail: thin glue only — no logic lives here; all sim logic is in WorkerCore
 const MS_PER_TICK = 1000 / 30;

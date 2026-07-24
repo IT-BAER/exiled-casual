@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { fp } from "@pact/fixed-point";
+import { fp } from "@exiled/fixed-point";
 import { StatBlock, baseCasterStats, RES_CAP, ARMOUR_K } from "./stats.js";
 
 describe("constants", () => {

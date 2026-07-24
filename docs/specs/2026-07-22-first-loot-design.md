@@ -1,4 +1,4 @@
-# Pact of Ruin — Slice: "First Loot"
+# Exiled Casual — Slice: "First Loot"
 
 Design spec. Status: approved for planning, 2026-07-22.
 Baseline research: `docs/` pack (PoE 2 EA 0.5.4b clean-room reconstruction).
@@ -22,17 +22,17 @@ the waystone difficulty dial shipped last slice.
 | Drop source | Map **boss** + monsters flagged `rare===1`. Ordinary monsters do not drop (deferred). One item per qualifying death. |
 | Item depth | **Normal + Magic** only. Magic rolls 1–2 affixes from a small hand-authored pool. Rare/Unique + the 6-affix engine + 8:3:1 ratio deferred. |
 | Inventory | **Full 12×5 grid** (60 cells, `docs/02:214`). Per-base integer `w×h`. Auto **first-fit** placement, row-bitset collision. No drag/reorder this slice. |
-| Item level | `ilvl = areaLevel(areaTier) = 64 + tier` (reuses `@pact/rules` `areaLevel`). |
+| Item level | `ilvl = areaLevel(areaTier) = 64 + tier` (reuses `@exiled/rules` `areaLevel`). |
 | Tier → rarity | Magic-vs-Normal odds shift up with `ilvl` + `monsterRarity`. One centralized calibration knob (`ponytail:` comment). |
 | Identification | Items drop **identified** (fully visible). Unidentified state + Scroll of Wisdom deferred (`docs/02:53`). |
 | Persistence | In-memory session only. `InventoryC` on the session singleton; not saved across reload (matches current slices). |
 
 ## In scope
 
-- `@pact/content-schema` (types only): `Rarity`, `ItemBase`, `Affix`, `Item`.
-- `@pact/content-runtime`: a tiny authored pool — ~4 bases (each `w×h`, item class), ~6 affixes
+- `@exiled/content-schema` (types only): `Rarity`, `ItemBase`, `Affix`, `Item`.
+- `@exiled/content-runtime`: a tiny authored pool — ~4 bases (each `w×h`, item class), ~6 affixes
   (e.g. `+maxLife`, `+fire dmg`, `+fire res`), each with `minItemLevel` + integer roll range.
-- `@pact/rules` (pure leaf): `rollItem(pools, seed, ilvl, monsterRarity) → Item`. Deterministic:
+- `@exiled/rules` (pure leaf): `rollItem(pools, seed, ilvl, monsterRarity) → Item`. Deterministic:
   pick base, roll rarity (weighted by `ilvl` + `monsterRarity`), for Magic roll 1–2 eligible affixes
   (gated by `minItemLevel`), roll integer values. Item authored **complete** at drop.
 - `packages/simulation`: boss/rare death spawns a ground-item entity; new `pickupItem` handler
@@ -67,7 +67,7 @@ Map (tier T)
 
 ## 2. Data model deltas
 
-`@pact/content-schema` (type-only, importable by `@pact/rules`):
+`@exiled/content-schema` (type-only, importable by `@exiled/rules`):
 
 ```ts
 export type Rarity = "normal" | "magic";               // this slice
@@ -83,7 +83,7 @@ export interface Item {
 export interface ItemPools { bases: ItemBase[]; affixes: Affix[] }
 ```
 
-`@pact/rules` — new `items.ts` (pure, deterministic):
+`@exiled/rules` — new `items.ts` (pure, deterministic):
 
 ```ts
 export function rollItem(pools: ItemPools, seed: number, ilvl: number, monsterRarity: number): Item;
@@ -163,7 +163,7 @@ first-fit scans top-left → bottom-right for the first free `w×h` rectangle (`
 
 ## 8. Testing
 
-- `@pact/rules`: `rollItem` determinism (same seed → identical item); rarity weighting rises with
+- `@exiled/rules`: `rollItem` determinism (same seed → identical item); rarity weighting rises with
   ilvl/monsterRarity; affix count ≤ 2 for magic, 0 for normal; only `minItemLevel ≤ ilvl` affixes roll.
 - `packages/simulation`: boss death and rare-monster death each spawn one ground item; pickup in range
   places into the grid and destroys the ground entity; pickup out of range is a no-op; pickup into a full

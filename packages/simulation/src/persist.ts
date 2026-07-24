@@ -1,10 +1,10 @@
-import type { KvStore } from "@pact/persistence";
+import type { KvStore } from "@exiled/persistence";
 import type { World } from "./ecs";
 import type { SessionC, InventoryC } from "./components";
 
 /**
  * Run-transaction persistence. The whole durable state (session + inventory) is
- * snapshotted as one blob and written atomically (see `@pact/persistence`), so a
+ * snapshotted as one blob and written atomically (see `@exiled/persistence`), so a
  * forced worker restart at any boundary cannot duplicate or lose progression or
  * loot — spec §8. Restore ABANDONS any in-flight map run back to the hideout
  * (like a disconnect mid-map in PoE): completed nodes and inventory survive, a

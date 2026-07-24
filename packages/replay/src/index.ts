@@ -1,4 +1,4 @@
-import { Simulation, checksumWorld, type Command, type World } from "@pact/simulation";
+import { Simulation, checksumWorld, type Command, type World } from "@exiled/simulation";
 
 export interface Scenario {
   seed: number;

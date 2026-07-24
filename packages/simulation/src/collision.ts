@@ -1,5 +1,5 @@
-import { fp, type Fixed } from "@pact/fixed-point";
-import type { WalkableGrid } from "@pact/mapgen";
+import { fp, type Fixed } from "@exiled/fixed-point";
+import type { WalkableGrid } from "@exiled/mapgen";
 
 /**
  * Static level collision. `isWalkable` answers whether the body disc of the

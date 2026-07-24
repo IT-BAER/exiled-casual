@@ -1,4 +1,4 @@
-import { burningTickDamage, AILMENT_TICK_INTERVAL } from "@pact/rules";
+import { burningTickDamage, AILMENT_TICK_INTERVAL } from "@exiled/rules";
 import { Simulation } from "../loop";
 import type { AilmentC } from "../components";
 

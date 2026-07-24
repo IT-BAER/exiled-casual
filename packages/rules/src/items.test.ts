@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { rollItem } from "./items.js";
-import type { ItemPools } from "@pact/content-schema";
+import type { ItemPools } from "@exiled/content-schema";
 
 const POOLS: ItemPools = {
   bases: [

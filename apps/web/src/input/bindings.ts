@@ -1,4 +1,4 @@
-import type { Intent, Snapshot, SpawnKind, ToWorker } from "@pact/protocol";
+import type { Intent, Snapshot, SpawnKind, ToWorker } from "@exiled/protocol";
 import { keyToIntent, pointerToWorld } from "./intents";
 import type { Node, Scene } from "@babylonjs/core";
 

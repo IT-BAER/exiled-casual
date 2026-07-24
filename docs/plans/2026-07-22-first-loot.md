@@ -4,17 +4,17 @@
 
 **Goal:** The map boss and rare monsters drop an item on death; the player picks it up into a 12×5 grid inventory whose tooltips read from the rolls the sim committed at drop time, with item level and rarity odds scaling by area tier.
 
-**Architecture:** Item generation is a pure deterministic function in the `@pact/rules` leaf (`rollItem`), fed hand-authored base/affix pools from `@pact/content-runtime`, with shared types in `@pact/content-schema`. The sim drops a ground-item entity on qualifying deaths, and a new pickup system validates range + first-fit grid placement authoritatively. The client renders ground markers, an inventory panel, and a keypress pickup, all from a display-ready snapshot projection so `@pact/protocol` stays free of item internals.
+**Architecture:** Item generation is a pure deterministic function in the `@exiled/rules` leaf (`rollItem`), fed hand-authored base/affix pools from `@exiled/content-runtime`, with shared types in `@exiled/content-schema`. The sim drops a ground-item entity on qualifying deaths, and a new pickup system validates range + first-fit grid placement authoritatively. The client renders ground markers, an inventory panel, and a keypress pickup, all from a display-ready snapshot projection so `@exiled/protocol` stays free of item internals.
 
 **Tech Stack:** TypeScript, npm workspaces, Vitest, React + Babylon (apps/web), fixed-point deterministic ECS sim.
 
 ## Global Constraints
 
 - Sim math is deterministic; item fields are plain integers/strings/booleans only (no floats) so `checksum.ts` `stableValue` accepts them and replay checksums stay stable.
-- `@pact/rules` is a pure leaf: **no imports from other `@pact` packages** except **type-only** imports from `@pact/content-schema` (matches `rare.ts`). Inline its own PRNG (mulberry32) like `atlas.ts` does.
+- `@exiled/rules` is a pure leaf: **no imports from other `@exiled` packages** except **type-only** imports from `@exiled/content-schema` (matches `rare.ts`). Inline its own PRNG (mulberry32) like `atlas.ts` does.
 - Rarity this slice is **`"normal" | "magic"`** only. Magic has 1–2 affixes. No Rare/Unique.
 - Inventory is a **12×5** grid (60 cells), auto **first-fit** placement, no drag/reorder.
-- `ilvl = 64 + areaTier` (reuse `@pact/rules` `areaLevel`). Rarity odds rise with `ilvl` + `monsterRarity`; centralize in one place with a `ponytail:` calibration comment.
+- `ilvl = 64 + areaTier` (reuse `@exiled/rules` `areaLevel`). Rarity odds rise with `ilvl` + `monsterRarity`; centralize in one place with a `ponytail:` calibration comment.
 - Items drop **identified** (no unidentified state this slice).
 - Inventory is in-memory on the session singleton; not saved across reload.
 - Test: `npx vitest run <scope>` from repo root. Typecheck: `npm run typecheck` (mandatory — vitest strips types). Web build: `npm run build -w apps/web`.
@@ -146,7 +146,7 @@ git commit -m "feat(content-schema): item domain types + validators (First Loot)
 - Test: `packages/content-runtime/src/items.test.ts` (create)
 
 **Interfaces:**
-- Consumes: `ItemBase`, `Affix`, `Item`, `ItemPools`, `Rarity`, `validateItemBase`, `validateAffix` from `@pact/content-schema` (Task 1).
+- Consumes: `ItemBase`, `Affix`, `Item`, `ItemPools`, `Rarity`, `validateItemBase`, `validateAffix` from `@exiled/content-schema` (Task 1).
 - Produces:
   - `const ITEM_POOLS: ItemPools`
   - `function baseOf(baseId: string): ItemBase` (throws if unknown)
@@ -204,7 +204,7 @@ Expected: FAIL (`./items.js` has no such exports).
 Create `packages/content-runtime/src/items.ts`:
 
 ```ts
-import { validateItemBase, validateAffix, type ItemBase, type Affix, type Item, type ItemPools, type Rarity } from "@pact/content-schema";
+import { validateItemBase, validateAffix, type ItemBase, type Affix, type Item, type ItemPools, type Rarity } from "@exiled/content-schema";
 
 // Tiny hand-authored pool for the First Loot slice. Grid dims (w×h) follow the
 // 12×5 inventory. Real 45-base / 120-affix content is Phase 4 proper.
@@ -279,7 +279,7 @@ git commit -m "feat(content-runtime): item base/affix pools + describeItem (Firs
 
 ---
 
-### Task 3: rollItem generator (@pact/rules)
+### Task 3: rollItem generator (@exiled/rules)
 
 **Files:**
 - Create: `packages/rules/src/items.ts`
@@ -287,7 +287,7 @@ git commit -m "feat(content-runtime): item base/affix pools + describeItem (Firs
 - Test: `packages/rules/src/items.test.ts` (create)
 
 **Interfaces:**
-- Consumes: `ItemPools`, `Item`, `ItemAffix`, `Rarity` (type-only) from `@pact/content-schema`.
+- Consumes: `ItemPools`, `Item`, `ItemAffix`, `Rarity` (type-only) from `@exiled/content-schema`.
 - Produces: `function rollItem(pools: ItemPools, seed: number, ilvl: number, monsterRarity: number): Item`
   - Deterministic. `monsterRarity`: pass `1` for a rare monster, `2` for the boss.
   - Magic items carry 1–2 affixes, each with `minItemLevel <= ilvl`; normal items carry none.
@@ -299,7 +299,7 @@ Create `packages/rules/src/items.test.ts`:
 ```ts
 import { describe, it, expect } from "vitest";
 import { rollItem } from "./items.js";
-import type { ItemPools } from "@pact/content-schema";
+import type { ItemPools } from "@exiled/content-schema";
 
 const POOLS: ItemPools = {
   bases: [
@@ -375,8 +375,8 @@ Create `packages/rules/src/items.ts`:
 
 ```ts
 // Pure, deterministic item generation. Type-only content-schema import keeps this
-// a leaf (matches rare.ts). PRNG inlined like atlas.ts so there is no @pact dep.
-import type { ItemPools, Item, ItemAffix } from "@pact/content-schema";
+// a leaf (matches rare.ts). PRNG inlined like atlas.ts so there is no @exiled dep.
+import type { ItemPools, Item, ItemAffix } from "@exiled/content-schema";
 
 function mulberry32(seed: number): () => number {
   let s = seed >>> 0;
@@ -455,7 +455,7 @@ git commit -m "feat(rules): deterministic rollItem generator (First Loot)"
 - Test: `packages/simulation/src/inventory.test.ts` (create)
 
 **Interfaces:**
-- Consumes: `Item` (type-only) from `@pact/content-schema`.
+- Consumes: `Item` (type-only) from `@exiled/content-schema`.
 - Produces:
   - `interface ItemC { item: Item; w: number; h: number }`
   - `interface PlacedItem { x: number; y: number; w: number; h: number; item: Item }`
@@ -470,7 +470,7 @@ Create `packages/simulation/src/inventory.test.ts`:
 import { describe, it, expect } from "vitest";
 import { placeFirstFit } from "./inventory";
 import type { InventoryC } from "./components";
-import type { Item } from "@pact/content-schema";
+import type { Item } from "@exiled/content-schema";
 
 const ITEM: Item = { baseId: "b0", rarity: "normal", itemLevel: 65, affixes: [] };
 const empty = (): InventoryC => ({ cols: 12, rows: 5, items: [] });
@@ -505,7 +505,7 @@ Expected: FAIL (`./inventory` missing).
 
 - [ ] **Step 3: Add components**
 
-Append to `packages/simulation/src/components.ts` (add a type-only import at the top of the file: `import type { Item } from "@pact/content-schema";`):
+Append to `packages/simulation/src/components.ts` (add a type-only import at the top of the file: `import type { Item } from "@exiled/content-schema";`):
 
 ```ts
 /** A committed item lying on the ground; lives on an entity with Position. */
@@ -576,7 +576,7 @@ git commit -m "feat(sim): inventory components + first-fit placement (First Loot
 - Test: `packages/simulation/src/systems/death.test.ts` (extend)
 
 **Interfaces:**
-- Consumes: `rollItem` (`@pact/rules`), `ITEM_POOLS` + `baseOf` (`@pact/content-runtime`), `areaLevel` (`@pact/rules`), `fnv1a32` (`../rng`), `ItemC`, `Position`, `SessionC`, `MonsterC`, `BossC`.
+- Consumes: `rollItem` (`@exiled/rules`), `ITEM_POOLS` + `baseOf` (`@exiled/content-runtime`), `areaLevel` (`@exiled/rules`), `fnv1a32` (`../rng`), `ItemC`, `Position`, `SessionC`, `MonsterC`, `BossC`.
 - Produces: on a boss or `rare===1` monster death while `session.area === "map"`, one ground entity with `ItemC` + `Position` at the corpse. Drop seed = `fnv1a32(\`${mapSeed}:${tick}:${entity}\`)`, ilvl = `areaLevel(areaTier)`, monsterRarity = boss ? 2 : 1.
 
 - [ ] **Step 1: Write the failing test**
@@ -584,7 +584,7 @@ git commit -m "feat(sim): inventory components + first-fit placement (First Loot
 Add to `packages/simulation/src/systems/death.test.ts` (import helpers as the file already does; add `ITEM_POOLS` usage as needed). These tests build a minimal world with a session in "map", a dying rare monster and a dying boss, run the death system, and assert a ground item entity appears:
 
 ```ts
-import { ITEM_POOLS } from "@pact/content-runtime";
+import { ITEM_POOLS } from "@exiled/content-runtime";
 // ...existing imports (Simulation, registerDeath, component setters used by this file)...
 
 it("drops one ground item when a rare monster dies in a map", () => {
@@ -633,8 +633,8 @@ In `packages/simulation/src/systems/death.ts`, add imports at the top:
 
 ```ts
 import { fnv1a32 } from "../rng";
-import { rollItem, areaLevel } from "@pact/rules";
-import { ITEM_POOLS, baseOf } from "@pact/content-runtime";
+import { rollItem, areaLevel } from "@exiled/rules";
+import { ITEM_POOLS, baseOf } from "@exiled/content-runtime";
 import type { ItemC, Position } from "../components";
 ```
 
@@ -712,7 +712,7 @@ git commit -m "feat(sim): boss and rare monsters drop a committed item on death"
 - Test: `packages/protocol/src/protocol.test.ts` (extend), `packages/simulation/src/protocol-bridge.test.ts` (extend)
 
 **Interfaces:**
-- Consumes: existing `Intent`, `validateIntent`, `Snapshot`, `intentToCommand`, `buildSnapshot`, `inRangeOf`; `describeItem` (`@pact/content-runtime`); `ItemC`, `InventoryC`, `Position`, `SessionC`.
+- Consumes: existing `Intent`, `validateIntent`, `Snapshot`, `intentToCommand`, `buildSnapshot`, `inRangeOf`; `describeItem` (`@exiled/content-runtime`); `ItemC`, `InventoryC`, `Position`, `SessionC`.
 - Produces:
   - Intent `{ kind: "pickupItem"; entityId: number }`; `CommandType` gains `"pickupItem"`; `intentToCommand` emits `data: { entityId }`.
   - `type ItemRarity = "normal" | "magic"` (protocol-local; no content-schema import).
@@ -822,8 +822,8 @@ In `packages/simulation/src/protocol-bridge.ts`:
 Add imports:
 
 ```ts
-import { PICKUP_RADIUS } from "@pact/protocol";
-import { describeItem } from "@pact/content-runtime";
+import { PICKUP_RADIUS } from "@exiled/protocol";
+import { describeItem } from "@exiled/content-runtime";
 import type { ItemC, InventoryC } from "./components";
 ```
 
@@ -894,7 +894,7 @@ git commit -m "feat(protocol): pickupItem intent + ground-item/inventory snapsho
 - Test: `packages/simulation/src/systems/pickup.test.ts` (create)
 
 **Interfaces:**
-- Consumes: `inRangeOf` (protocol-bridge), `placeFirstFit` (`../inventory`), `PICKUP_RADIUS` (`@pact/protocol`), `ItemC`, `InventoryC`, `Position`, `SessionC`.
+- Consumes: `inRangeOf` (protocol-bridge), `placeFirstFit` (`../inventory`), `PICKUP_RADIUS` (`@exiled/protocol`), `ItemC`, `InventoryC`, `Position`, `SessionC`.
 - Produces: `function registerPickupSystem(sim: Simulation): void`. On a `pickupItem` command whose target ground entity is in range, first-fit-places the item into the session `InventoryC` and destroys the ground entity. Out of range, missing target, or no room → no-op (no ownership change).
 
 - [ ] **Step 1: Write the failing test**
@@ -905,7 +905,7 @@ Create `packages/simulation/src/systems/pickup.test.ts`:
 import { describe, it, expect } from "vitest";
 import { Simulation } from "../loop";
 import { registerPickupSystem } from "./pickup";
-import type { Item } from "@pact/content-schema";
+import type { Item } from "@exiled/content-schema";
 
 const ITEM: Item = { baseId: "b0", rarity: "normal", itemLevel: 65, affixes: [] };
 
@@ -962,7 +962,7 @@ Expected: FAIL (`./pickup` missing).
 Create `packages/simulation/src/systems/pickup.ts`:
 
 ```ts
-import { PICKUP_RADIUS } from "@pact/protocol";
+import { PICKUP_RADIUS } from "@exiled/protocol";
 import { Simulation } from "../loop";
 import { inRangeOf } from "../protocol-bridge";
 import { placeFirstFit } from "../inventory";
@@ -1165,7 +1165,7 @@ Create `apps/web/src/hud/InventoryPanel.tsx` (follow the PoE-styled idiom of `Pr
 
 ```tsx
 import React from "react";
-import type { Snapshot } from "@pact/protocol";
+import type { Snapshot } from "@exiled/protocol";
 
 type Inventory = Snapshot["inventory"];
 

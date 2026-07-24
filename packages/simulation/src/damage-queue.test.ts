@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { fp } from "@pact/fixed-point";
+import { fp } from "@exiled/fixed-point";
 import { Simulation } from "./loop";
 import type { DamageEvent } from "./components";
 

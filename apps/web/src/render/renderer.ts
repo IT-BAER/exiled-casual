@@ -1,6 +1,6 @@
 import type { Scene } from "@babylonjs/core";
 import type { Mesh } from "@babylonjs/core";
-import type { Snapshot, SnapshotEntity } from "@pact/protocol";
+import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
 import { animateActor, makeMesh, updateTelegraph, updatePortal, updateMapDevice, Y_LIFT } from "./meshes";
 import type { MeshKind } from "./meshes";
 import { OUTFITS, rigOf } from "./rig";

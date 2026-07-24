@@ -16,7 +16,7 @@ the ability cadence speeds up.
 
 ## Locked contracts
 
-### `@pact/content-schema`
+### `@exiled/content-schema`
 
 ```ts
 export interface BossSpec {
@@ -40,7 +40,7 @@ export interface BossSpec {
 
 `validateMonsterDef` validates `boss` when present (all counts > 0, pct in 1..100).
 
-### `@pact/simulation` components
+### `@exiled/simulation` components
 
 ```ts
 export interface BossC {                   // key "boss"
@@ -74,7 +74,7 @@ groundAreaTick, telegraphResolve, ailmentTick, damageResolve, death, expiry
 - `expiry` also destroys telegraphs whose `impactTick` has passed (resolve destroys them
   itself; the expiry guard is the safety net).
 
-### `@pact/protocol`
+### `@exiled/protocol`
 
 ```ts
 SnapshotEntity.kind |= "telegraph"
@@ -151,7 +151,7 @@ No new message type. The HUD finds the boss with `entities.find(e => e.boss)`.
 
 ## Phase C — indoor mapgen
 
-- [x] **C1 — `@pact/mapgen` package.** `generateArea(seed, contentVersion): AreaLayout` —
+- [x] **C1 — `@exiled/mapgen` package.** `generateArea(seed, contentVersion): AreaLayout` —
       room graph → axis-aligned rooms → corridors → boss-arena socket → walkable grid
       (`Uint8Array`, 0.5-unit cells) → spawn sockets → validation
       (`{ algorithmVersion, contentVersion, seed, chosenVariantIds, objectiveAnchors,

@@ -1,6 +1,6 @@
-import { fp } from "@pact/fixed-point";
-import { generateArea } from "@pact/mapgen";
-import { CONTENT_VERSION } from "@pact/content-runtime";
+import { fp } from "@exiled/fixed-point";
+import { generateArea } from "@exiled/mapgen";
+import { CONTENT_VERSION } from "@exiled/content-runtime";
 import { Simulation } from "../loop";
 import { gridCollision, type CollisionRef } from "../collision";
 import type { SessionC, MoveTarget, MoveDir, Position } from "../components";

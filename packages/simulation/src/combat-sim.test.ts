@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { checksumWorld } from "@pact/simulation";
-import { fp } from "@pact/fixed-point";
-import { MONSTERS, CONTENT_VERSION } from "@pact/content-runtime";
-import { generateArea } from "@pact/mapgen";
+import { checksumWorld } from "@exiled/simulation";
+import { fp } from "@exiled/fixed-point";
+import { MONSTERS, CONTENT_VERSION } from "@exiled/content-runtime";
+import { generateArea } from "@exiled/mapgen";
 import { createCombatSim, spawnLabActors } from "./combat-sim";
 import { gridCollision } from "./collision";
 import type { BossC, MonsterC, Position, MoveTarget, SessionC } from "./components";

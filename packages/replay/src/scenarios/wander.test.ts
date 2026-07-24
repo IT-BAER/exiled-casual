@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { WORLD_MIN, WORLD_MAX, type Command } from "@pact/simulation";
+import { WORLD_MIN, WORLD_MAX, type Command } from "@exiled/simulation";
 import { runScenario, firstDifference } from "../index";
 import { makeWanderScenario } from "./wander";
 

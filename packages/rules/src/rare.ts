@@ -1,4 +1,4 @@
-import type { MonsterDef, RareModifier } from "@pact/content-schema";
+import type { MonsterDef, RareModifier } from "@exiled/content-schema";
 
 /**
  * Apply rare-tier multipliers to a normal MonsterDef. Returns a new object;

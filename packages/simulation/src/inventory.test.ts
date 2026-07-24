@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { placeFirstFit } from "./inventory";
 import type { InventoryC } from "./components";
-import type { Item } from "@pact/content-schema";
+import type { Item } from "@exiled/content-schema";
 
 const ITEM: Item = { baseId: "b0", rarity: "normal", itemLevel: 65, affixes: [] };
 const empty = (): InventoryC => ({ cols: 12, rows: 5, items: [] });

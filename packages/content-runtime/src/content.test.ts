@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { fp } from "@pact/fixed-point";
-import { validateSkillDef, validateMonsterDef, ID_PATTERN } from "@pact/content-schema";
+import { fp } from "@exiled/fixed-point";
+import { validateSkillDef, validateMonsterDef, ID_PATTERN } from "@exiled/content-schema";
 import { CONTENT_VERSION, SKILLS, MONSTERS, RARE_TEMPLATE } from "./index.js";
 
 describe("CONTENT_VERSION", () => {

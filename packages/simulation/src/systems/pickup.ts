@@ -1,4 +1,4 @@
-import { PICKUP_RADIUS } from "@pact/protocol";
+import { PICKUP_RADIUS } from "@exiled/protocol";
 import { Simulation } from "../loop";
 import { inRangeOf } from "../protocol-bridge";
 import { placeFirstFit } from "../inventory";

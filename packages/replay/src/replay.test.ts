@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { fpAdd } from "@pact/fixed-point";
-import type { Simulation } from "@pact/simulation";
+import { fpAdd } from "@exiled/fixed-point";
+import type { Simulation } from "@exiled/simulation";
 import { runScenario, firstDifference, type Scenario } from "./index";
 
 // A trivial scenario: one entity whose counter increments by 1 (fixed-point)

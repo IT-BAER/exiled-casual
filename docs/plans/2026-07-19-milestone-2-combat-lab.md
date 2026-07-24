@@ -4,7 +4,7 @@
 
 **Goal:** Turn the deterministic kernel into a playable greybox combat arena: an authoritative sim in a Web Worker, a real intent/command/snapshot protocol, a pure `rules` combat engine, a data-driven content pipeline, the three elemental-caster skills, a normal monster pack plus a rare — and a Babylon.js render host with input and a combat HUD you can fight in.
 
-**Architecture:** Approach A (spec §2). The client (`apps/web`, main thread) sends **intents**; a Web Worker owns the authoritative deterministic sim (`@pact/simulation`, built on the M1 kernel) and returns **snapshots**. The boundary shapes live in `@pact/protocol` and are transport-agnostic (`postMessage` now, WebSocket later). All combat math is pure and framework-free in `@pact/rules`; all skills and monsters are data in `@pact/content-schema` (definitions/validators) compiled into `@pact/content-runtime`. Fixed-point integers everywhere in the sim; IEEE floats only after the snapshot crosses into rendering.
+**Architecture:** Approach A (spec §2). The client (`apps/web`, main thread) sends **intents**; a Web Worker owns the authoritative deterministic sim (`@exiled/simulation`, built on the M1 kernel) and returns **snapshots**. The boundary shapes live in `@exiled/protocol` and are transport-agnostic (`postMessage` now, WebSocket later). All combat math is pure and framework-free in `@exiled/rules`; all skills and monsters are data in `@exiled/content-schema` (definitions/validators) compiled into `@exiled/content-runtime`. Fixed-point integers everywhere in the sim; IEEE floats only after the snapshot crosses into rendering.
 
 **Tech Stack:** TypeScript (strict, ESM), npm workspaces, Vitest, Node 20+. New for this milestone: **Vite** (bundles `apps/web` and the worker for the browser), **React 18** (shell + HUD), **@babylonjs/core** (3D greybox render; `NullEngine` for headless render tests), **jsdom** + **@testing-library/react** (HUD tests). The pure packages keep the M1 no-build-step convention (Vitest transpiles TS via `exports` → `./src/index.ts`).
 
@@ -12,12 +12,12 @@
 
 Every task's requirements implicitly include these (from the spec §2, §3, §6). Values are our clean-room tuning targets, not extracted.
 
-- **Determinism is load-bearing (spec §3).** All authoritative spatial/time/resource/percent values are **fixed-point scaled integers** (`@pact/fixed-point`, `FP_SCALE = 1000`). Resistances and integer percents are plain integers `0..100`. IEEE floats are forbidden in `@pact/simulation`, `@pact/rules`, `@pact/protocol` command handling, and content data; floats appear only in `Snapshot` render values and `apps/web` rendering.
-- **Named RNG only.** Every random outcome draws from a named `@pact/simulation` RNG stream with a recorded ordinal. Never `Math.random`/`Date`/`performance.now`/`crypto` in sim, rules, or worker command paths. (Client input and wall-clock loop pacing may use `performance.now` — never fed into the sim.)
+- **Determinism is load-bearing (spec §3).** All authoritative spatial/time/resource/percent values are **fixed-point scaled integers** (`@exiled/fixed-point`, `FP_SCALE = 1000`). Resistances and integer percents are plain integers `0..100`. IEEE floats are forbidden in `@exiled/simulation`, `@exiled/rules`, `@exiled/protocol` command handling, and content data; floats appear only in `Snapshot` render values and `apps/web` rendering.
+- **Named RNG only.** Every random outcome draws from a named `@exiled/simulation` RNG stream with a recorded ordinal. Never `Math.random`/`Date`/`performance.now`/`crypto` in sim, rules, or worker command paths. (Client input and wall-clock loop pacing may use `performance.now` — never fed into the sim.)
 - **One documented system order per tick.** Execution order equals registration order (Task 15 fixes it) and is the canonical order in this contract. Changing it is a simulation migration.
 - **Canonical checksum extends to combat.** New components are flat records of `number | string | boolean` (M1 `serializeWorld` already sorts and hashes them). No new state may live outside a component or the world's `alive`/`nextId` (both already hashed).
 - **Stable namespaced IDs (spec §6).** Content is addressed by string IDs like `skill.ember_bolt.v1`, `monster.cinder_imp.v1` — never array indices or display names. Renaming a display label never changes identity.
-- **The authority boundary is real (spec §2).** The client never mutates sim state; it sends `Intent`s. The worker is authoritative for movement, collision, damage, death, and resources. Messages use `@pact/protocol` shapes.
+- **The authority boundary is real (spec §2).** The client never mutates sim state; it sends `Intent`s. The worker is authoritative for movement, collision, damage, death, and resources. Messages use `@exiled/protocol` shapes.
 - Node floor **20+**, TypeScript **strict**, module type **ESM**. Clean-room: original identifiers only; no PoE asset/data/protocol references.
 
 ---
@@ -31,7 +31,7 @@ Every task's requirements implicitly include these (from the spec §2, §3, §6)
 - Simulation runs at **30 Hz** (`TICK_HZ = 30`, `MS_PER_TICK = 1000/30`). "Per second" tuning divides by 30 to get per-tick, truncated: `perTick = Math.trunc(perSecondFixed / 30)` unless stated otherwise.
 - World arena is the M1 `[WORLD_MIN, WORLD_MAX] = [fp(-100), fp(100)]` square on x and y (top-down; no z in sim — render lifts to 3D).
 
-### `@pact/fixed-point` additions (Task 1)
+### `@exiled/fixed-point` additions (Task 1)
 
 ```ts
 // Deterministic integer square root (Newton, pure integer ops — NOT Math.sqrt,
@@ -61,7 +61,7 @@ if len <= speedFixed return {dx, dy}    // within one step: snap exactly
 return { dx: Math.trunc(dx * speedFixed / len), dy: Math.trunc(dy * speedFixed / len) }
 ```
 
-### `@pact/protocol` (Task 2)
+### `@exiled/protocol` (Task 2)
 
 Coordinates in `Intent` are **Fixed** integers (client converts its float pick via `fp()`); coordinates in `Snapshot` are **render floats** (worker converts via `toNumber()`).
 
@@ -110,14 +110,14 @@ export function validateIntent(v: unknown): Intent;           // throws on malfo
 export function isToWorker(v: unknown): v is ToWorker;
 ```
 
-### `@pact/rules` (Tasks 4–6)
+### `@exiled/rules` (Tasks 4–6)
 
 `rules` owns combat **behavior** and `StatBlock`; it imports all data types
 (`DamageType`, `DamageSpec`, `Defenses`, `MonsterDef`, `RareModifier`, …) from
-`@pact/content-schema`. Dependency direction is one-way: `fixed-point ← content-schema ← rules ← simulation`. No `rules ↔ content-schema` cycle.
+`@exiled/content-schema`. Dependency direction is one-way: `fixed-point ← content-schema ← rules ← simulation`. No `rules ↔ content-schema` cycle.
 
 ```ts
-import type { DamageType, DamageSpec, Defenses, MonsterDef, RareModifier } from "@pact/content-schema";
+import type { DamageType, DamageSpec, Defenses, MonsterDef, RareModifier } from "@exiled/content-schema";
 
 export interface StatBlock {
   maxLifeFixed: Fixed; maxManaFixed: Fixed;
@@ -153,9 +153,9 @@ export function burningTickDamage(a: AilmentState): Fixed;
 export function makeRare(def: MonsterDef, mods: RareModifier): MonsterDef;
 ```
 
-### `@pact/content-schema` (Task 3)
+### `@exiled/content-schema` (Task 3)
 
-Owns **all data types** (imported by `rules`, `content-runtime`, `simulation`) plus validators. Only dependency is `@pact/fixed-point` (for `Fixed`).
+Owns **all data types** (imported by `rules`, `content-runtime`, `simulation`) plus validators. Only dependency is `@exiled/fixed-point` (for `Fixed`).
 
 ```ts
 export type DamageType = "fire" | "physical";
@@ -184,7 +184,7 @@ export function validateMonsterDef(v: unknown): ValidationResult;
 export const ID_PATTERN: RegExp;   // /^(skill|monster)\.[a-z0-9_]+\.v\d+$/
 ```
 
-### `@pact/content-runtime` (Task 7) — authored slice content (our clean-room numbers)
+### `@exiled/content-runtime` (Task 7) — authored slice content (our clean-room numbers)
 
 ```ts
 export const CONTENT_VERSION = "slice1.v1";
@@ -209,7 +209,7 @@ Authored values (Fixed via `fp()`; `perSec` where noted):
 
 Player base (`baseCasterStats`): maxLife fp(100), maxMana fp(60), manaRegen fp(6)/s, moveSpeed fp(3.5)/s, fireResPct 0, armourFixed fp(0). Player body radius fp(0.5). Pack: 5 × Cinder Imp; the lab also spawns 1 rare Cinder Imp.
 
-### `@pact/simulation` combat additions (Tasks 8–16)
+### `@exiled/simulation` combat additions (Tasks 8–16)
 
 **Components** (component name → flat record). Fixed unless noted.
 
@@ -263,7 +263,7 @@ export function buildSnapshot(world: World, sim: Simulation, tick: number, conte
 
 ## Tasks
 
-### Task 1: `@pact/fixed-point` geometry (`isqrt`, `fpDist2`, `fpStepToward`)
+### Task 1: `@exiled/fixed-point` geometry (`isqrt`, `fpDist2`, `fpStepToward`)
 
 **Files:**
 - Modify: `packages/fixed-point/src/index.ts`
@@ -424,7 +424,7 @@ Expected: PASS (all 10 assertions green)
 
 ---
 
-### Task 2: `@pact/protocol` package
+### Task 2: `@exiled/protocol` package
 
 **Files:**
 - Create: `packages/protocol/package.json`
@@ -433,7 +433,7 @@ Expected: PASS (all 10 assertions green)
 - Test: `packages/protocol/src/protocol.test.ts`
 
 **Interfaces:**
-- Consumes: `Fixed` type from `@pact/fixed-point`
+- Consumes: `Fixed` type from `@exiled/fixed-point`
 - Produces: `Intent`, `CommandType`, `ToWorker_Init`, `ToWorker_Intent`, `ToWorker_Reset`, `ToWorker`, `SnapshotEntity`, `Snapshot`, `FromWorker_Snapshot`, `FromWorker_Ready`, `FromWorker`, `validateIntent(v: unknown): Intent`, `isToWorker(v: unknown): v is ToWorker` — consumed by Tasks 8–16 (simulation worker bridge) and Tasks 18–23 (apps/web)
 
 ---
@@ -445,7 +445,7 @@ Expected: PASS (all 10 assertions green)
 ```ts
 import { describe, expect, test } from "vitest";
 import { validateIntent, isToWorker } from "./index.js";
-import { fp } from "@pact/fixed-point";
+import { fp } from "@exiled/fixed-point";
 
 describe("validateIntent — valid intents pass through", () => {
   test("moveTo with integer coords", () => {
@@ -542,7 +542,7 @@ describe("isToWorker", () => {
 
 Run: `npx vitest run packages/protocol/src/protocol.test.ts`
 
-Expected: FAIL with "Cannot find module '@pact/protocol'" (package doesn't exist yet)
+Expected: FAIL with "Cannot find module '@exiled/protocol'" (package doesn't exist yet)
 
 ---
 
@@ -552,14 +552,14 @@ Expected: FAIL with "Cannot find module '@pact/protocol'" (package doesn't exist
 
 ```json
 {
-  "name": "@pact/protocol",
+  "name": "@exiled/protocol",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
   "exports": { ".": "./src/index.ts" },
   "dependencies": {
-    "@pact/fixed-point": "*"
+    "@exiled/fixed-point": "*"
   }
 }
 ```
@@ -576,7 +576,7 @@ Expected: FAIL with "Cannot find module '@pact/protocol'" (package doesn't exist
 `packages/protocol/src/index.ts`:
 
 ```ts
-import type { Fixed } from "@pact/fixed-point";
+import type { Fixed } from "@exiled/fixed-point";
 
 // ---------------------------------------------------------------------------
 // Intent — client-side input, coords are Fixed integers (client calls fp())
@@ -697,9 +697,9 @@ Expected: PASS (all 18 assertions green)
 
 - [ ] **Step 5: Commit**
 
-`git add packages/protocol/package.json packages/protocol/tsconfig.json packages/protocol/src/index.ts packages/protocol/src/protocol.test.ts && git commit -m "feat(protocol): add @pact/protocol package with Intent types, validateIntent, isToWorker"`
+`git add packages/protocol/package.json packages/protocol/tsconfig.json packages/protocol/src/index.ts packages/protocol/src/protocol.test.ts && git commit -m "feat(protocol): add @exiled/protocol package with Intent types, validateIntent, isToWorker"`
 
-### Task 3: `@pact/content-schema` — all data types + validators
+### Task 3: `@exiled/content-schema` — all data types + validators
 
 **Files:**
 - Create: `packages/content-schema/package.json`
@@ -708,7 +708,7 @@ Expected: PASS (all 18 assertions green)
 - Create: `packages/content-schema/src/schema.test.ts`
 
 **Interfaces:**
-- Consumes: `@pact/fixed-point` (`Fixed`, `fp`).
+- Consumes: `@exiled/fixed-point` (`Fixed`, `fp`).
 - Produces: `DamageType`, `Defenses`, `DamageSpec`, `AilmentSpec`, `EffectNode`, `SkillDef`, `RareModifier`, `MonsterDef`, `ValidationResult`, `validateSkillDef(v)`, `validateMonsterDef(v)`, `ID_PATTERN`.
 
 ---
@@ -719,7 +719,7 @@ Expected: PASS (all 18 assertions green)
 
 ```ts
 import { describe, it, expect } from "vitest";
-import { fp } from "@pact/fixed-point";
+import { fp } from "@exiled/fixed-point";
 import {
   ID_PATTERN,
   validateSkillDef,
@@ -892,14 +892,14 @@ Expected FAIL: `Cannot find module './index.js'` — package does not exist yet.
 
 ```json
 {
-  "name": "@pact/content-schema",
+  "name": "@exiled/content-schema",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
   "exports": { ".": "./src/index.ts" },
   "dependencies": {
-    "@pact/fixed-point": "*"
+    "@exiled/fixed-point": "*"
   }
 }
 ```
@@ -916,7 +916,7 @@ Expected FAIL: `Cannot find module './index.js'` — package does not exist yet.
 - [ ] **Step 5: Implement `packages/content-schema/src/index.ts`**
 
 ```ts
-import type { Fixed } from "@pact/fixed-point";
+import type { Fixed } from "@exiled/fixed-point";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -1170,7 +1170,7 @@ git add packages/content-schema && git commit -m "feat(content-schema): add data
 
 ---
 
-### Task 4: `@pact/rules` — StatBlock + baseCasterStats
+### Task 4: `@exiled/rules` — StatBlock + baseCasterStats
 
 **Files:**
 - Create: `packages/rules/package.json`
@@ -1180,7 +1180,7 @@ git add packages/content-schema && git commit -m "feat(content-schema): add data
 - Create: `packages/rules/src/stats.test.ts`
 
 **Interfaces:**
-- Consumes: `@pact/fixed-point` (`fp`, `Fixed`), `@pact/content-schema` (type imports for `Defenses`).
+- Consumes: `@exiled/fixed-point` (`fp`, `Fixed`), `@exiled/content-schema` (type imports for `Defenses`).
 - Produces: `StatBlock`, `RES_CAP = 75`, `ARMOUR_K = fp(10)`, `baseCasterStats(): StatBlock`.
 
 ---
@@ -1191,7 +1191,7 @@ git add packages/content-schema && git commit -m "feat(content-schema): add data
 
 ```ts
 import { describe, it, expect } from "vitest";
-import { fp } from "@pact/fixed-point";
+import { fp } from "@exiled/fixed-point";
 import { StatBlock, baseCasterStats, RES_CAP, ARMOUR_K } from "./stats.js";
 
 describe("constants", () => {
@@ -1238,15 +1238,15 @@ Expected FAIL: `Cannot find module './stats.js'` — package does not exist yet.
 
 ```json
 {
-  "name": "@pact/rules",
+  "name": "@exiled/rules",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
   "exports": { ".": "./src/index.ts" },
   "dependencies": {
-    "@pact/fixed-point": "*",
-    "@pact/content-schema": "*"
+    "@exiled/fixed-point": "*",
+    "@exiled/content-schema": "*"
   }
 }
 ```
@@ -1263,7 +1263,7 @@ Expected FAIL: `Cannot find module './stats.js'` — package does not exist yet.
 - [ ] **Step 5: Implement `packages/rules/src/stats.ts`**
 
 ```ts
-import { fp, type Fixed } from "@pact/fixed-point";
+import { fp, type Fixed } from "@exiled/fixed-point";
 
 export interface StatBlock {
   maxLifeFixed: Fixed;
@@ -1309,7 +1309,7 @@ git add packages/rules && git commit -m "feat(rules): add StatBlock, RES_CAP, AR
 
 ---
 
-### Task 5: `@pact/rules` — damage pipeline
+### Task 5: `@exiled/rules` — damage pipeline
 
 **Files:**
 - Create: `packages/rules/src/damage.ts`
@@ -1317,7 +1317,7 @@ git add packages/rules && git commit -m "feat(rules): add StatBlock, RES_CAP, AR
 - Edit: `packages/rules/src/index.ts` (add `export * from "./damage.js"`)
 
 **Interfaces:**
-- Consumes: `@pact/content-schema` (`DamageSpec`, `Defenses`), `./stats.js` (`RES_CAP`, `ARMOUR_K`).
+- Consumes: `@exiled/content-schema` (`DamageSpec`, `Defenses`), `./stats.js` (`RES_CAP`, `ARMOUR_K`).
 - Produces: `applyDamage(pkt: DamageSpec, def: Defenses): Fixed`.
 
 ---
@@ -1328,8 +1328,8 @@ git add packages/rules && git commit -m "feat(rules): add StatBlock, RES_CAP, AR
 
 ```ts
 import { describe, it, expect } from "vitest";
-import { fp } from "@pact/fixed-point";
-import type { DamageSpec, Defenses } from "@pact/content-schema";
+import { fp } from "@exiled/fixed-point";
+import type { DamageSpec, Defenses } from "@exiled/content-schema";
 import { applyDamage } from "./damage.js";
 import { ARMOUR_K } from "./stats.js";
 
@@ -1408,8 +1408,8 @@ Expected FAIL: `Cannot find module './damage.js'`.
 - [ ] **Step 3: Implement `packages/rules/src/damage.ts`**
 
 ```ts
-import type { Fixed } from "@pact/fixed-point";
-import type { DamageSpec, Defenses } from "@pact/content-schema";
+import type { Fixed } from "@exiled/fixed-point";
+import type { DamageSpec, Defenses } from "@exiled/content-schema";
 import { RES_CAP, ARMOUR_K } from "./stats.js";
 
 /**
@@ -1451,7 +1451,7 @@ git add packages/rules/src/damage.ts packages/rules/src/damage.test.ts packages/
 
 ---
 
-### Task 6: `@pact/rules` — ailments + rare modifier
+### Task 6: `@exiled/rules` — ailments + rare modifier
 
 **Files:**
 - Create: `packages/rules/src/ailment.ts`
@@ -1461,7 +1461,7 @@ git add packages/rules/src/damage.ts packages/rules/src/damage.test.ts packages/
 - Edit: `packages/rules/src/index.ts` (add ailment + rare exports)
 
 **Interfaces:**
-- Consumes: `@pact/fixed-point` (`Fixed`), `@pact/content-schema` (`MonsterDef`, `RareModifier`).
+- Consumes: `@exiled/fixed-point` (`Fixed`), `@exiled/content-schema` (`MonsterDef`, `RareModifier`).
 - Produces: `AilmentState`, `AILMENT_TICK_INTERVAL`, `refreshBurning(...)`, `burningTickDamage(a)`, `makeRare(def, mods)`.
 
 ---
@@ -1472,7 +1472,7 @@ git add packages/rules/src/damage.ts packages/rules/src/damage.test.ts packages/
 
 ```ts
 import { describe, it, expect } from "vitest";
-import { fp } from "@pact/fixed-point";
+import { fp } from "@exiled/fixed-point";
 import { AILMENT_TICK_INTERVAL, refreshBurning, burningTickDamage, type AilmentState } from "./ailment.js";
 
 describe("AILMENT_TICK_INTERVAL", () => {
@@ -1537,8 +1537,8 @@ describe("burningTickDamage", () => {
 
 ```ts
 import { describe, it, expect } from "vitest";
-import { fp } from "@pact/fixed-point";
-import type { MonsterDef, RareModifier } from "@pact/content-schema";
+import { fp } from "@exiled/fixed-point";
+import type { MonsterDef, RareModifier } from "@exiled/content-schema";
 import { makeRare } from "./rare.js";
 
 const cinderImp: MonsterDef = {
@@ -1619,7 +1619,7 @@ Expected FAIL: `Cannot find module './ailment.js'` and `Cannot find module './ra
 - [ ] **Step 4: Implement `packages/rules/src/ailment.ts`**
 
 ```ts
-import type { Fixed } from "@pact/fixed-point";
+import type { Fixed } from "@exiled/fixed-point";
 
 export interface AilmentState {
   kind: "burning";
@@ -1659,7 +1659,7 @@ export function burningTickDamage(a: AilmentState): Fixed {
 - [ ] **Step 5: Implement `packages/rules/src/rare.ts`**
 
 ```ts
-import type { MonsterDef, RareModifier } from "@pact/content-schema";
+import type { MonsterDef, RareModifier } from "@exiled/content-schema";
 
 /**
  * Apply rare-tier multipliers to a normal MonsterDef. Returns a new object;
@@ -1705,7 +1705,7 @@ git add packages/rules/src/ailment.ts packages/rules/src/ailment.test.ts package
 
 ---
 
-### Task 7: `@pact/content-runtime` — authored slice content
+### Task 7: `@exiled/content-runtime` — authored slice content
 
 **Files:**
 - Create: `packages/content-runtime/package.json`
@@ -1716,7 +1716,7 @@ git add packages/rules/src/ailment.ts packages/rules/src/ailment.test.ts package
 - Create: `packages/content-runtime/src/content.test.ts`
 
 **Interfaces:**
-- Consumes: `@pact/fixed-point` (`fp`), `@pact/content-schema` (`SkillDef`, `MonsterDef`, `RareModifier`, `validateSkillDef`, `validateMonsterDef`, `ID_PATTERN`).
+- Consumes: `@exiled/fixed-point` (`fp`), `@exiled/content-schema` (`SkillDef`, `MonsterDef`, `RareModifier`, `validateSkillDef`, `validateMonsterDef`, `ID_PATTERN`).
 - Produces: `CONTENT_VERSION`, `SKILLS: ReadonlyMap<string, SkillDef>`, `MONSTERS: ReadonlyMap<string, MonsterDef>`, `RARE_TEMPLATE: RareModifier`.
 
 ---
@@ -1727,8 +1727,8 @@ git add packages/rules/src/ailment.ts packages/rules/src/ailment.test.ts package
 
 ```ts
 import { describe, it, expect } from "vitest";
-import { fp } from "@pact/fixed-point";
-import { validateSkillDef, validateMonsterDef, ID_PATTERN } from "@pact/content-schema";
+import { fp } from "@exiled/fixed-point";
+import { validateSkillDef, validateMonsterDef, ID_PATTERN } from "@exiled/content-schema";
 import { CONTENT_VERSION, SKILLS, MONSTERS, RARE_TEMPLATE } from "./index.js";
 
 describe("CONTENT_VERSION", () => {
@@ -1861,15 +1861,15 @@ Expected FAIL: `Cannot find module './index.js'` — package does not exist yet.
 
 ```json
 {
-  "name": "@pact/content-runtime",
+  "name": "@exiled/content-runtime",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
   "exports": { ".": "./src/index.ts" },
   "dependencies": {
-    "@pact/fixed-point": "*",
-    "@pact/content-schema": "*"
+    "@exiled/fixed-point": "*",
+    "@exiled/content-schema": "*"
   }
 }
 ```
@@ -1886,8 +1886,8 @@ Expected FAIL: `Cannot find module './index.js'` — package does not exist yet.
 - [ ] **Step 5: Implement `packages/content-runtime/src/skills.ts`**
 
 ```ts
-import { fp } from "@pact/fixed-point";
-import { validateSkillDef, type SkillDef } from "@pact/content-schema";
+import { fp } from "@exiled/fixed-point";
+import { validateSkillDef, type SkillDef } from "@exiled/content-schema";
 
 const SKILL_DEFS: SkillDef[] = [
   {
@@ -1950,8 +1950,8 @@ export const SKILLS: ReadonlyMap<string, SkillDef> = new Map(
 - [ ] **Step 6: Implement `packages/content-runtime/src/monsters.ts`**
 
 ```ts
-import { fp } from "@pact/fixed-point";
-import { validateMonsterDef, type MonsterDef, type RareModifier } from "@pact/content-schema";
+import { fp } from "@exiled/fixed-point";
+import { validateMonsterDef, type MonsterDef, type RareModifier } from "@exiled/content-schema";
 
 const MONSTER_DEFS: MonsterDef[] = [
   {
@@ -2018,14 +2018,14 @@ git add packages/content-runtime && git commit -m "feat(content-runtime): author
 - Test: `packages/simulation/src/damage-queue.test.ts`
 
 **Interfaces:**
-- Consumes: `World`, `Entity` from `./ecs`; `Fixed` from `@pact/fixed-point`
+- Consumes: `World`, `Entity` from `./ecs`; `Fixed` from `@exiled/fixed-point`
 - Produces: `DamageEvent`, `Position`, `Health`, `Mana`, `Faction`, `PlayerC`, `MoveTarget`, `MoveDir`, `Cooldowns`, `MonsterC`, `DefensesC`, `ProjectileC`, `GroundAreaC`, `AilmentC` (exported from `src/index.ts`); `sim.damageQueue: DamageEvent[]`; `sim.enqueueDamage(e: DamageEvent): void`; `Command.skillId?: string`
 
 - [ ] **Step 1: Write failing test `packages/simulation/src/damage-queue.test.ts`**
 
 ```ts
 import { describe, it, expect } from "vitest";
-import { fp } from "@pact/fixed-point";
+import { fp } from "@exiled/fixed-point";
 import { Simulation } from "./loop";
 import type { DamageEvent } from "./components";
 
@@ -2084,7 +2084,7 @@ Expected: type errors — `DamageEvent` and `enqueueDamage` do not exist yet.
 
 ```ts
 import type { Entity } from "./ecs";
-import type { Fixed } from "@pact/fixed-point";
+import type { Fixed } from "@exiled/fixed-point";
 
 export interface Position   { x: Fixed; y: Fixed }
 export interface Health     { life: Fixed; maxLife: Fixed }
@@ -2243,14 +2243,14 @@ feat(simulation): add combat components and damage queue
 - Modify: `packages/simulation/src/index.ts`
 
 **Interfaces:**
-- Consumes: `Simulation`, `Command`, `World`, `Entity`; `fp`, `fpClamp`, `fpStepToward` from `@pact/fixed-point`; `Mana`, `PlayerC`, `MoveTarget`, `MoveDir`, `Position` from `./components`; `WORLD_MIN`, `WORLD_MAX` from `./movement`
+- Consumes: `Simulation`, `Command`, `World`, `Entity`; `fp`, `fpClamp`, `fpStepToward` from `@exiled/fixed-point`; `Mana`, `PlayerC`, `MoveTarget`, `MoveDir`, `Position` from `./components`; `WORLD_MIN`, `WORLD_MAX` from `./movement`
 - Produces: `registerResourceRegen(sim)`, `registerPlayerMovement(sim)` exported from `src/index.ts`
 
 - [ ] **Step 1: Write failing test `packages/simulation/src/systems/resource.test.ts`**
 
 ```ts
 import { describe, it, expect } from "vitest";
-import { fp } from "@pact/fixed-point";
+import { fp } from "@exiled/fixed-point";
 import { Simulation } from "../loop";
 import { registerResourceRegen } from "./resource";
 import type { Mana } from "../components";
@@ -2307,7 +2307,7 @@ describe("registerResourceRegen", () => {
 
 ```ts
 import { describe, it, expect } from "vitest";
-import { fp, fpClamp } from "@pact/fixed-point";
+import { fp, fpClamp } from "@exiled/fixed-point";
 import { Simulation } from "../loop";
 import { registerPlayerMovement } from "./player-movement";
 import { WORLD_MIN, WORLD_MAX } from "../movement";
@@ -2431,7 +2431,7 @@ export function registerResourceRegen(sim: Simulation): void {
 - [ ] **Step 5: Create `packages/simulation/src/systems/player-movement.ts`**
 
 ```ts
-import { fp, fpClamp, fpStepToward } from "@pact/fixed-point";
+import { fp, fpClamp, fpStepToward } from "@exiled/fixed-point";
 import { Simulation } from "../loop";
 import { WORLD_MIN, WORLD_MAX } from "../movement";
 import type { Position, PlayerC, MoveTarget, MoveDir } from "../components";
@@ -2542,17 +2542,17 @@ feat(simulation): add resourceRegen and playerMovement systems
 - Modify: `packages/simulation/src/index.ts`
 
 **Interfaces:**
-- Consumes: `Simulation`, `Command`; `fp`, `fpClamp`, `fpStepToward` from `@pact/fixed-point`; `SkillDef`, `EffectNode` from `@pact/content-schema`; `Position`, `Mana`, `Faction`, `Cooldowns`, `ProjectileC`, `GroundAreaC` from `./components`; `WORLD_MIN`, `WORLD_MAX`
+- Consumes: `Simulation`, `Command`; `fp`, `fpClamp`, `fpStepToward` from `@exiled/fixed-point`; `SkillDef`, `EffectNode` from `@exiled/content-schema`; `Position`, `Mana`, `Faction`, `Cooldowns`, `ProjectileC`, `GroundAreaC` from `./components`; `WORLD_MIN`, `WORLD_MAX`
 - Produces: `registerSkillCast(sim, skills)` exported from `src/index.ts`
 
 - [ ] **Step 1: Write failing test `packages/simulation/src/systems/skill-cast.test.ts`**
 
 ```ts
 import { describe, it, expect } from "vitest";
-import { fp } from "@pact/fixed-point";
+import { fp } from "@exiled/fixed-point";
 import { Simulation } from "../loop";
 import { registerSkillCast } from "./skill-cast";
-import type { SkillDef } from "@pact/content-schema";
+import type { SkillDef } from "@exiled/content-schema";
 import type { Position, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC } from "../components";
 
 // Authored skill defs matching the contract tables exactly.
@@ -2712,8 +2712,8 @@ Expected: module-not-found for `./skill-cast`.
 - [ ] **Step 3: Create `packages/simulation/src/systems/skill-cast.ts`**
 
 ```ts
-import { fp, fpClamp, fpStepToward } from "@pact/fixed-point";
-import type { SkillDef } from "@pact/content-schema";
+import { fp, fpClamp, fpStepToward } from "@exiled/fixed-point";
+import type { SkillDef } from "@exiled/content-schema";
 import { Simulation } from "../loop";
 import { WORLD_MIN, WORLD_MAX } from "../movement";
 import type { Position, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC } from "../components";
@@ -2840,14 +2840,14 @@ feat(simulation): add skillCast system
 - Modify: `packages/simulation/src/index.ts`
 
 **Interfaces:**
-- Consumes: `Simulation`; `isqrt`, `fpDist2` from `@pact/fixed-point`; `Position`, `ProjectileC`, `MonsterC`, `Faction`, `DamageEvent` from `./components`
+- Consumes: `Simulation`; `isqrt`, `fpDist2` from `@exiled/fixed-point`; `Position`, `ProjectileC`, `MonsterC`, `Faction`, `DamageEvent` from `./components`
 - Produces: `registerProjectileMove(sim)` exported from `src/index.ts`
 
 - [ ] **Step 1: Write failing test `packages/simulation/src/systems/projectile.test.ts`**
 
 ```ts
 import { describe, it, expect } from "vitest";
-import { fp } from "@pact/fixed-point";
+import { fp } from "@exiled/fixed-point";
 import { Simulation } from "../loop";
 import { registerProjectileMove } from "./projectile";
 import type { Position, ProjectileC, MonsterC, Faction, DamageEvent } from "../components";
@@ -2958,7 +2958,7 @@ npx vitest run packages/simulation/src/systems/projectile.test.ts
 - [ ] **Step 3: Create `packages/simulation/src/systems/projectile.ts`**
 
 ```ts
-import { isqrt, fpDist2 } from "@pact/fixed-point";
+import { isqrt, fpDist2 } from "@exiled/fixed-point";
 import { Simulation } from "../loop";
 import type { Position, ProjectileC, MonsterC, Faction } from "../components";
 
@@ -3054,15 +3054,15 @@ feat(simulation): add projectileMove system
 - Modify: `packages/simulation/src/index.ts`
 
 **Interfaces:**
-- Consumes: `Simulation`; `fpDist2` from `@pact/fixed-point`; `refreshBurning`, `burningTickDamage`, `AILMENT_TICK_INTERVAL` from `@pact/rules`; `Position`, `MonsterC`, `Faction`, `GroundAreaC`, `AilmentC` from `./components`
+- Consumes: `Simulation`; `fpDist2` from `@exiled/fixed-point`; `refreshBurning`, `burningTickDamage`, `AILMENT_TICK_INTERVAL` from `@exiled/rules`; `Position`, `MonsterC`, `Faction`, `GroundAreaC`, `AilmentC` from `./components`
 - Produces: `registerGroundAreaTick(sim)`, `registerAilmentTick(sim)` exported from `src/index.ts`
 
 - [ ] **Step 1: Write failing test `packages/simulation/src/systems/ground-area.test.ts`**
 
 ```ts
 import { describe, it, expect } from "vitest";
-import { fp } from "@pact/fixed-point";
-import { AILMENT_TICK_INTERVAL } from "@pact/rules";
+import { fp } from "@exiled/fixed-point";
+import { AILMENT_TICK_INTERVAL } from "@exiled/rules";
 import { Simulation } from "../loop";
 import { registerGroundAreaTick } from "./ground-area";
 import type { Position, MonsterC, Faction, GroundAreaC, AilmentC } from "../components";
@@ -3155,8 +3155,8 @@ describe("registerGroundAreaTick", () => {
 
 ```ts
 import { describe, it, expect } from "vitest";
-import { fp } from "@pact/fixed-point";
-import { AILMENT_TICK_INTERVAL, burningTickDamage } from "@pact/rules";
+import { fp } from "@exiled/fixed-point";
+import { AILMENT_TICK_INTERVAL, burningTickDamage } from "@exiled/rules";
 import { Simulation } from "../loop";
 import { registerAilmentTick } from "./ailment";
 import type { AilmentC, DamageEvent } from "../components";
@@ -3239,8 +3239,8 @@ npx vitest run packages/simulation/src/systems/ground-area.test.ts packages/simu
 - [ ] **Step 4: Create `packages/simulation/src/systems/ground-area.ts`**
 
 ```ts
-import { fpDist2 } from "@pact/fixed-point";
-import { refreshBurning, AILMENT_TICK_INTERVAL } from "@pact/rules";
+import { fpDist2 } from "@exiled/fixed-point";
+import { refreshBurning, AILMENT_TICK_INTERVAL } from "@exiled/rules";
 import { Simulation } from "../loop";
 import type { Position, MonsterC, GroundAreaC, AilmentC } from "../components";
 
@@ -3280,7 +3280,7 @@ export function registerGroundAreaTick(sim: Simulation): void {
 - [ ] **Step 5: Create `packages/simulation/src/systems/ailment.ts`**
 
 ```ts
-import { burningTickDamage, AILMENT_TICK_INTERVAL } from "@pact/rules";
+import { burningTickDamage, AILMENT_TICK_INTERVAL } from "@exiled/rules";
 import { Simulation } from "../loop";
 import type { AilmentC } from "../components";
 
@@ -3355,7 +3355,7 @@ feat(simulation): add groundAreaTick and ailmentTick systems
 - Modify `packages/simulation/src/index.ts`: add `export { registerMonsterAI } from "./systems/monster-ai";`
 
 **Interfaces:**
-- Consumes: `Simulation` (with `enqueueDamage` added by Task 8), `World`; `fpDist2`, `fpStepToward`, `fpClamp` from `@pact/fixed-point`; `WORLD_MIN`, `WORLD_MAX` from `@pact/simulation`; components `monster`, `position`, `faction`
+- Consumes: `Simulation` (with `enqueueDamage` added by Task 8), `World`; `fpDist2`, `fpStepToward`, `fpClamp` from `@exiled/fixed-point`; `WORLD_MIN`, `WORLD_MAX` from `@exiled/simulation`; components `monster`, `position`, `faction`
 - Produces: `registerMonsterAI(sim: Simulation): void`
 
 - [ ] **Step 1: Write the failing test**
@@ -3364,8 +3364,8 @@ feat(simulation): add groundAreaTick and ailmentTick systems
 
 ```ts
 import { describe, it, expect } from "vitest";
-import { Simulation } from "@pact/simulation";
-import { fp, fpDist2 } from "@pact/fixed-point";
+import { Simulation } from "@exiled/simulation";
+import { fp, fpDist2 } from "@exiled/fixed-point";
 import { registerMonsterAI } from "./monster-ai";
 
 interface DamageEvent { target: number; source: number; amountFixed: number; type: 0 | 1 }
@@ -3473,7 +3473,7 @@ Fails: `Cannot find module './monster-ai'`.
 `packages/simulation/src/systems/monster-ai.ts`:
 
 ```ts
-import { fpDist2, fpStepToward, fpClamp } from "@pact/fixed-point";
+import { fpDist2, fpStepToward, fpClamp } from "@exiled/fixed-point";
 import { WORLD_MIN, WORLD_MAX } from "../movement";
 import type { Simulation } from "../loop";
 import type { Entity } from "../ecs";
@@ -3587,7 +3587,7 @@ git commit -m "feat(simulation): registerMonsterAI — chase/attack/idle AI stat
 - Modify `packages/simulation/src/index.ts`: export all three
 
 **Interfaces:**
-- Consumes: `Simulation` (with `damageQueue`/`enqueueDamage` from Task 8); `applyDamage` from `@pact/rules`; `DamageSpec`, `Defenses` from `@pact/content-schema`; components `health`, `defenses`, `monster`, `player`, `mana`, `position`, `projectile`, `groundArea`
+- Consumes: `Simulation` (with `damageQueue`/`enqueueDamage` from Task 8); `applyDamage` from `@exiled/rules`; `DamageSpec`, `Defenses` from `@exiled/content-schema`; components `health`, `defenses`, `monster`, `player`, `mana`, `position`, `projectile`, `groundArea`
 - Produces: `registerDamageResolve(sim: Simulation): void`, `registerDeath(sim: Simulation): void`, `registerExpiry(sim: Simulation): void`
 
 - [ ] **Step 1: Write the failing tests**
@@ -3596,8 +3596,8 @@ git commit -m "feat(simulation): registerMonsterAI — chase/attack/idle AI stat
 
 ```ts
 import { describe, it, expect } from "vitest";
-import { Simulation } from "@pact/simulation";
-import { fp } from "@pact/fixed-point";
+import { Simulation } from "@exiled/simulation";
+import { fp } from "@exiled/fixed-point";
 import { registerDamageResolve } from "./damage-resolve";
 
 interface DamageEvent { target: number; source: number; amountFixed: number; type: 0 | 1 }
@@ -3658,8 +3658,8 @@ describe("registerDamageResolve", () => {
 
 ```ts
 import { describe, it, expect } from "vitest";
-import { Simulation } from "@pact/simulation";
-import { fp } from "@pact/fixed-point";
+import { Simulation } from "@exiled/simulation";
+import { fp } from "@exiled/fixed-point";
 import { registerDeath } from "./death";
 
 describe("registerDeath", () => {
@@ -3716,8 +3716,8 @@ describe("registerDeath", () => {
 
 ```ts
 import { describe, it, expect } from "vitest";
-import { Simulation } from "@pact/simulation";
-import { fp } from "@pact/fixed-point";
+import { Simulation } from "@exiled/simulation";
+import { fp } from "@exiled/fixed-point";
 import { registerExpiry } from "./expiry";
 
 describe("registerExpiry", () => {
@@ -3807,7 +3807,7 @@ All fail: modules not found.
 `packages/simulation/src/systems/damage-resolve.ts`:
 
 ```ts
-import { applyDamage } from "@pact/rules";
+import { applyDamage } from "@exiled/rules";
 import type { Simulation } from "../loop";
 import type { Entity } from "../ecs";
 
@@ -3945,28 +3945,28 @@ git commit -m "feat(simulation): damageResolve, death, expiry systems"
 - Create `packages/simulation/src/combat-sim.ts`
 - Create `packages/simulation/src/combat-sim.test.ts`
 - Modify `packages/simulation/src/index.ts`: export `createCombatSim`
-- Modify `packages/simulation/package.json`: add deps `@pact/rules`, `@pact/content-schema`, `@pact/content-runtime`, `@pact/protocol`
+- Modify `packages/simulation/package.json`: add deps `@exiled/rules`, `@exiled/content-schema`, `@exiled/content-runtime`, `@exiled/protocol`
 
 **Interfaces:**
-- Consumes: all `register*` functions (C1 + T13/T14); `baseCasterStats`, `makeRare` from `@pact/rules`; `SKILLS`, `MONSTERS`, `RARE_TEMPLATE`, `CONTENT_VERSION` from `@pact/content-runtime`; `fp` from `@pact/fixed-point`; `Simulation`, `World`, `Entity` from `@pact/simulation`
+- Consumes: all `register*` functions (C1 + T13/T14); `baseCasterStats`, `makeRare` from `@exiled/rules`; `SKILLS`, `MONSTERS`, `RARE_TEMPLATE`, `CONTENT_VERSION` from `@exiled/content-runtime`; `fp` from `@exiled/fixed-point`; `Simulation`, `World`, `Entity` from `@exiled/simulation`
 - Produces: `createCombatSim(seed: number): { sim: Simulation; world: World; playerEntity: Entity }`
 
 - [ ] **Step 1: Update `packages/simulation/package.json`**
 
 ```json
 {
-  "name": "@pact/simulation",
+  "name": "@exiled/simulation",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
   "exports": { ".": "./src/index.ts" },
   "dependencies": {
-    "@pact/fixed-point": "*",
-    "@pact/rules": "*",
-    "@pact/content-schema": "*",
-    "@pact/content-runtime": "*",
-    "@pact/protocol": "*"
+    "@exiled/fixed-point": "*",
+    "@exiled/rules": "*",
+    "@exiled/content-schema": "*",
+    "@exiled/content-runtime": "*",
+    "@exiled/protocol": "*"
   }
 }
 ```
@@ -3977,8 +3977,8 @@ git commit -m "feat(simulation): damageResolve, death, expiry systems"
 
 ```ts
 import { describe, it, expect } from "vitest";
-import { checksumWorld } from "@pact/simulation";
-import { fp } from "@pact/fixed-point";
+import { checksumWorld } from "@exiled/simulation";
+import { fp } from "@exiled/fixed-point";
 import { createCombatSim } from "./combat-sim";
 
 describe("createCombatSim", () => {
@@ -4071,10 +4071,10 @@ Fails: `Cannot find module './combat-sim'`.
 `packages/simulation/src/combat-sim.ts`:
 
 ```ts
-import { fp } from "@pact/fixed-point";
-import { baseCasterStats, makeRare } from "@pact/rules";
-import { SKILLS, MONSTERS, RARE_TEMPLATE } from "@pact/content-runtime";
-import type { MonsterDef } from "@pact/content-schema";
+import { fp } from "@exiled/fixed-point";
+import { baseCasterStats, makeRare } from "@exiled/rules";
+import { SKILLS, MONSTERS, RARE_TEMPLATE } from "@exiled/content-runtime";
+import type { MonsterDef } from "@exiled/content-schema";
 import { Simulation, World } from "./ecs";
 import type { Entity } from "./ecs";
 import {
@@ -4222,7 +4222,7 @@ git commit -m "feat(simulation): createCombatSim — full system assembly and wo
 - (No `loop.ts` change: `Command.skillId?: string` already exists from Task 8; `data` stays `Record<string, number>`.)
 
 **Interfaces:**
-- Consumes: `Intent`, `Snapshot`, `SnapshotEntity` from `@pact/protocol`; `Command`, `Simulation`, `World`, `Entity` from `@pact/simulation`; `toNumber` from `@pact/fixed-point`; `CONTENT_VERSION` from `@pact/content-runtime`
+- Consumes: `Intent`, `Snapshot`, `SnapshotEntity` from `@exiled/protocol`; `Command`, `Simulation`, `World`, `Entity` from `@exiled/simulation`; `toNumber` from `@exiled/fixed-point`; `CONTENT_VERSION` from `@exiled/content-runtime`
 - Produces: `intentToCommand(intent: Intent, player: Entity, tick: number): Command`, `buildSnapshot(world: World, sim: Simulation, tick: number, contentVersion: string): Snapshot`
 
 - [ ] **Step 1: Write the failing test**
@@ -4231,11 +4231,11 @@ git commit -m "feat(simulation): createCombatSim — full system assembly and wo
 
 ```ts
 import { describe, it, expect } from "vitest";
-import { fp, toNumber } from "@pact/fixed-point";
+import { fp, toNumber } from "@exiled/fixed-point";
 import { createCombatSim } from "./combat-sim";
 import { intentToCommand, buildSnapshot } from "./protocol-bridge";
-import { CONTENT_VERSION } from "@pact/content-runtime";
-import type { Intent } from "@pact/protocol";
+import { CONTENT_VERSION } from "@exiled/content-runtime";
+import type { Intent } from "@exiled/protocol";
 
 describe("intentToCommand", () => {
   it("moveTo maps to correct Command shape", () => {
@@ -4344,8 +4344,8 @@ Fails: `Cannot find module './protocol-bridge'`.
 `packages/simulation/src/protocol-bridge.ts`:
 
 ```ts
-import { toNumber } from "@pact/fixed-point";
-import type { Intent, Snapshot, SnapshotEntity } from "@pact/protocol";
+import { toNumber } from "@exiled/fixed-point";
+import type { Intent, Snapshot, SnapshotEntity } from "@exiled/protocol";
 import type { Command } from "./loop";
 import type { Simulation } from "./loop";
 import type { World, Entity } from "./ecs";
@@ -4481,10 +4481,10 @@ git commit -m "feat(simulation): intentToCommand and buildSnapshot protocol brid
 **Files:**
 - Create `packages/replay/src/scenarios/combat.ts`
 - Create `packages/replay/src/scenarios/combat.test.ts`
-- Verify `@pact/simulation` is already in `packages/replay/package.json` (it is — no change needed)
+- Verify `@exiled/simulation` is already in `packages/replay/package.json` (it is — no change needed)
 
 **Interfaces:**
-- Consumes: `createCombatSim`, `intentToCommand`, `buildSnapshot` from `@pact/simulation`; `checksumWorld` from `@pact/simulation`; `applyDamage` from `@pact/rules`; `fp` from `@pact/fixed-point`; `firstDifference` from `@pact/replay`; `CONTENT_VERSION` from `@pact/content-runtime`; `Command` from `@pact/simulation`; `Snapshot` from `@pact/protocol`
+- Consumes: `createCombatSim`, `intentToCommand`, `buildSnapshot` from `@exiled/simulation`; `checksumWorld` from `@exiled/simulation`; `applyDamage` from `@exiled/rules`; `fp` from `@exiled/fixed-point`; `firstDifference` from `@exiled/replay`; `CONTENT_VERSION` from `@exiled/content-runtime`; `Command` from `@exiled/simulation`; `Snapshot` from `@exiled/protocol`
 - Produces: `runCombat(seed, commandsByTick, ticks): { checksums: number[]; finalSnapshot: Snapshot }`
 
 - [ ] **Step 1: Write the failing test**
@@ -4493,13 +4493,13 @@ git commit -m "feat(simulation): intentToCommand and buildSnapshot protocol brid
 
 ```ts
 import { describe, it, expect } from "vitest";
-import { fp, toNumber } from "@pact/fixed-point";
-import { applyDamage } from "@pact/rules";
-import { createCombatSim, intentToCommand, checksumWorld } from "@pact/simulation";
-import { CONTENT_VERSION } from "@pact/content-runtime";
+import { fp, toNumber } from "@exiled/fixed-point";
+import { applyDamage } from "@exiled/rules";
+import { createCombatSim, intentToCommand, checksumWorld } from "@exiled/simulation";
+import { CONTENT_VERSION } from "@exiled/content-runtime";
 import { firstDifference } from "../index";
 import { runCombat } from "./combat";
-import type { Intent } from "@pact/protocol";
+import type { Intent } from "@exiled/protocol";
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -4631,7 +4631,7 @@ describe("golden (d): monster death removes entity", () => {
 describe("golden (e): determinism", () => {
   it("two runCombat calls with same seed and commands yield identical checksum sequences", () => {
     const ticks = 30;
-    const cmds: import("@pact/simulation").Command[][] = [];
+    const cmds: import("@exiled/simulation").Command[][] = [];
     // Fire Ember Bolt at tick 0
     const { playerEntity } = createCombatSim(42);
     const bolt = fireSkill(playerEntity, "skill.ember_bolt.v1", fp(5), fp(0), 0);
@@ -4658,10 +4658,10 @@ Fails: `Cannot find module './combat'`.
 `packages/replay/src/scenarios/combat.ts`:
 
 ```ts
-import { createCombatSim, buildSnapshot, checksumWorld } from "@pact/simulation";
-import { CONTENT_VERSION } from "@pact/content-runtime";
-import type { Command } from "@pact/simulation";
-import type { Snapshot } from "@pact/protocol";
+import { createCombatSim, buildSnapshot, checksumWorld } from "@exiled/simulation";
+import { CONTENT_VERSION } from "@exiled/content-runtime";
+import type { Command } from "@exiled/simulation";
+import type { Snapshot } from "@exiled/protocol";
 
 export function runCombat(
   seed: number,
@@ -4724,14 +4724,14 @@ git commit -m "test(replay): golden combat scenarios — damage, ailment, resist
 - Modify: `.github/workflows/ci.yml` (add `npm run build -w apps/web`)
 
 **Interfaces:**
-- Consumes: `@pact/protocol` (`Snapshot`), nothing from sim yet (stub only).
+- Consumes: `@exiled/protocol` (`Snapshot`), nothing from sim yet (stub only).
 - Produces: a working `npm run dev -w apps/web` entry point; `apps/web` tests run under `vitest` via jsdom pragma; CI builds the bundle.
 
 - [ ] **Step 1: Modify root `package.json` — add `apps/*` workspace**
 
 ```json
 {
-  "name": "pact-of-ruin",
+  "name": "exiled-casual",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -4846,9 +4846,9 @@ Run: `npm test` — **expected to fail** (modules do not exist yet).
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "@babylonjs/core": "^7.35.0",
-    "@pact/protocol": "*",
-    "@pact/simulation": "*",
-    "@pact/content-runtime": "*"
+    "@exiled/protocol": "*",
+    "@exiled/simulation": "*",
+    "@exiled/content-runtime": "*"
   },
   "devDependencies": {
     "vite": "^5.4.0",
@@ -4899,7 +4899,7 @@ export default defineConfig({
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Pact of Ruin — Combat Lab</title>
+    <title>Exiled Casual — Combat Lab</title>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
       html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
@@ -4977,7 +4977,7 @@ feat(apps/web): scaffold Vite+React workspace, wire CI build
 - Create: `apps/web/src/worker/worker-core.test.ts`
 
 **Interfaces:**
-- Consumes: `@pact/simulation` (`createCombatSim`, `intentToCommand`, `buildSnapshot`, `Simulation`, `World`, `Entity`); `@pact/protocol` (`Intent`, `Snapshot`, `ToWorker`, `FromWorker`); `@pact/content-runtime` (`CONTENT_VERSION`).
+- Consumes: `@exiled/simulation` (`createCombatSim`, `intentToCommand`, `buildSnapshot`, `Simulation`, `World`, `Entity`); `@exiled/protocol` (`Intent`, `Snapshot`, `ToWorker`, `FromWorker`); `@exiled/content-runtime` (`CONTENT_VERSION`).
 - Produces: `WorkerCore` — headless, testable fixed-step sim driver; `sim-worker.ts` — thin `onmessage` glue (not unit-tested; verified in Task 23).
 
 - [ ] **Step 1: Write failing tests first**
@@ -4987,8 +4987,8 @@ feat(apps/web): scaffold Vite+React workspace, wire CI build
 ```ts
 import { describe, it, expect } from "vitest";
 import { WorkerCore } from "./worker-core";
-import type { Intent } from "@pact/protocol";
-import { fp } from "@pact/fixed-point";
+import type { Intent } from "@exiled/protocol";
+import { fp } from "@exiled/fixed-point";
 
 // ponytail: determinism is the whole point — these three cases cover the contract
 describe("WorkerCore", () => {
@@ -5039,10 +5039,10 @@ import {
   createCombatSim,
   intentToCommand,
   buildSnapshot,
-} from "@pact/simulation";
-import type { Simulation, World, Entity } from "@pact/simulation";
-import type { Intent, Snapshot } from "@pact/protocol";
-import { CONTENT_VERSION } from "@pact/content-runtime";
+} from "@exiled/simulation";
+import type { Simulation, World, Entity } from "@exiled/simulation";
+import type { Intent, Snapshot } from "@exiled/protocol";
+import { CONTENT_VERSION } from "@exiled/content-runtime";
 
 // MS_PER_TICK lives here (client wall-clock pacing) — never fed into the sim.
 // ponytail: float constant is intentional; accumulator drives integer tick steps
@@ -5096,7 +5096,7 @@ export class WorkerCore {
 ```ts
 /// <reference lib="webworker" />
 import { WorkerCore } from "./worker-core";
-import type { ToWorker, FromWorker } from "@pact/protocol";
+import type { ToWorker, FromWorker } from "@exiled/protocol";
 
 // ponytail: thin glue only — no logic lives here; all sim logic is in WorkerCore
 const MS_PER_TICK = 1000 / 30;
@@ -5157,7 +5157,7 @@ feat(apps/web): WorkerCore fixed-step sim driver and sim-worker glue
 - Create: `apps/web/src/render/render.test.ts`
 
 **Interfaces:**
-- Consumes: `@babylonjs/core` (`Engine`, `NullEngine`, `Scene`, `ArcRotateCamera`, `HemisphericLight`, `Vector3`, `MeshBuilder`, `Mesh`); `@pact/protocol` (`Snapshot`, `SnapshotEntity`).
+- Consumes: `@babylonjs/core` (`Engine`, `NullEngine`, `Scene`, `ArcRotateCamera`, `HemisphericLight`, `Vector3`, `MeshBuilder`, `Mesh`); `@exiled/protocol` (`Snapshot`, `SnapshotEntity`).
 - Produces: `lerp` (pure); `createScene`; `makeMesh`; `SnapshotRenderer` (keyed by entity id, interpolates positions between ticks).
 
 **Coordinate map:** sim `x` → `mesh.position.x`; sim `y` → `mesh.position.z` (ground plane); `mesh.position.y` is lifted per kind (player/monster: 0.5, rare: 1.0, projectile: 0.3, groundArea: 0.05).
@@ -5187,7 +5187,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { NullEngine, Scene } from "@babylonjs/core";
 import { createScene } from "./engine";
 import { SnapshotRenderer } from "./renderer";
-import type { Snapshot } from "@pact/protocol";
+import type { Snapshot } from "@exiled/protocol";
 
 function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
   return {
@@ -5378,7 +5378,7 @@ export function makeMesh(scene: Scene, kind: MeshKind, name: string): Mesh {
 ```ts
 import type { Scene } from "@babylonjs/core";
 import type { Mesh } from "@babylonjs/core";
-import type { Snapshot, SnapshotEntity } from "@pact/protocol";
+import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
 import { makeMesh, Y_LIFT } from "./meshes";
 import type { MeshKind } from "./meshes";
 import { lerp } from "./interp";
@@ -5483,7 +5483,7 @@ feat(apps/web): greybox render — lerp, createScene, makeMesh, SnapshotRenderer
 - Create: `apps/web/src/input/intents.test.ts`
 
 **Interfaces:**
-- Consumes: `@pact/protocol` (`Intent`); `@pact/fixed-point` (`fp`, `Fixed`).
+- Consumes: `@exiled/protocol` (`Intent`); `@exiled/fixed-point` (`fp`, `Fixed`).
 - Produces: pure `keyToIntent` and `pointerToWorld`; thin DOM `attachBindings` (no test — exercised in Task 23).
 
 - [ ] **Step 1: Write failing tests first**
@@ -5493,7 +5493,7 @@ feat(apps/web): greybox render — lerp, createScene, makeMesh, SnapshotRenderer
 ```ts
 import { describe, it, expect } from "vitest";
 import { keyToIntent, pointerToWorld } from "./intents";
-import { fp } from "@pact/fixed-point";
+import { fp } from "@exiled/fixed-point";
 
 describe("keyToIntent", () => {
   const aim = { x: 0, y: 0 };
@@ -5555,8 +5555,8 @@ Run: `npm test` — **expected to fail**.
 - [ ] **Step 2: Create `apps/web/src/input/intents.ts`**
 
 ```ts
-import type { Intent } from "@pact/protocol";
-import { fp } from "@pact/fixed-point";
+import type { Intent } from "@exiled/protocol";
+import { fp } from "@exiled/fixed-point";
 
 const SKILL_KEYS: Record<string, string> = {
   "1": "skill.ember_bolt.v1",
@@ -5606,7 +5606,7 @@ export function pointerToWorld(pick: {
 - [ ] **Step 3: Create `apps/web/src/input/bindings.ts`**
 
 ```ts
-import type { ToWorker } from "@pact/protocol";
+import type { ToWorker } from "@exiled/protocol";
 import { keyToIntent, pointerToWorld } from "./intents";
 import type { Scene } from "@babylonjs/core";
 
@@ -5693,7 +5693,7 @@ feat(apps/web): pure input mapping — keyToIntent, pointerToWorld, bindings
 - Rewrite: `apps/web/src/App.tsx` (replaces the Task 18 stub)
 
 **Interfaces:**
-- Consumes: `@pact/protocol` (`Snapshot`); `@babylonjs/core` (`Engine`); all render, worker, input modules from Tasks 19–21.
+- Consumes: `@exiled/protocol` (`Snapshot`); `@babylonjs/core` (`Engine`); all render, worker, input modules from Tasks 19–21.
 - Produces: `Hud` component (testable in jsdom); fully wired `App` (verified manually in Task 23).
 
 - [ ] **Step 1: Write failing tests first**
@@ -5706,7 +5706,7 @@ import { describe, it, expect, beforeAll } from "vitest";
 import "@testing-library/jest-dom";
 import { render, screen } from "@testing-library/react";
 import { Hud } from "./Hud";
-import type { Snapshot } from "@pact/protocol";
+import type { Snapshot } from "@exiled/protocol";
 
 function makeSnap(overrides: {
   life?: number;
@@ -5770,7 +5770,7 @@ Run: `npm test` — **expected to fail**.
 
 ```tsx
 import React from "react";
-import type { Snapshot } from "@pact/protocol";
+import type { Snapshot } from "@exiled/protocol";
 
 const SKILL_SLOTS = [
   { id: "skill.ember_bolt.v1", label: "Ember Bolt" },
@@ -5869,7 +5869,7 @@ import { createScene } from "./render/engine";
 import { SnapshotRenderer } from "./render/renderer";
 import { attachBindings } from "./input/bindings";
 import { Hud } from "./hud/Hud";
-import type { Snapshot, FromWorker } from "@pact/protocol";
+import type { Snapshot, FromWorker } from "@exiled/protocol";
 
 const LAB_SEED = 42;
 // ponytail: fixed seed for the lab; M3 will thread seed from game state

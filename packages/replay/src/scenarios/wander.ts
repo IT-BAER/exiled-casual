@@ -1,5 +1,5 @@
-import { registerMovement, type Command, type Simulation } from "@pact/simulation";
-import { fp } from "@pact/fixed-point";
+import { registerMovement, type Command, type Simulation } from "@exiled/simulation";
+import { fp } from "@exiled/fixed-point";
 import type { Scenario } from "../index";
 
 // Five entities wandering under a shared deterministic seed, with optional

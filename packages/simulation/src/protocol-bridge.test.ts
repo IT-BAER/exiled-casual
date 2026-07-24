@@ -1,11 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { fp, toNumber } from "@pact/fixed-point";
+import { fp, toNumber } from "@exiled/fixed-point";
 import { createCombatSim } from "./combat-sim";
 import { intentToCommand, buildSnapshot } from "./protocol-bridge";
-import { CONTENT_VERSION } from "@pact/content-runtime";
-import { ITEM_POOLS, baseOf } from "@pact/content-runtime";
-import { rollItem } from "@pact/rules";
-import type { Intent } from "@pact/protocol";
+import { CONTENT_VERSION } from "@exiled/content-runtime";
+import { ITEM_POOLS, baseOf } from "@exiled/content-runtime";
+import { rollItem } from "@exiled/rules";
+import type { Intent } from "@exiled/protocol";
 import { World } from "./ecs";
 import type {
   Position, Health, Mana, MonsterC, BossC, TelegraphC, SessionC, InteractableC,

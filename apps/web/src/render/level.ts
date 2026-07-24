@@ -7,7 +7,7 @@ import {
   Vector4,
   type Scene,
 } from "@babylonjs/core";
-import type { WalkableGrid } from "@pact/mapgen";
+import type { WalkableGrid } from "@exiled/mapgen";
 
 /** Wall height in world units — tall enough to read as walls, not kerbs, under
  *  the ~9.5u-tall isometric view; greybox, tune against the boss framing later.
