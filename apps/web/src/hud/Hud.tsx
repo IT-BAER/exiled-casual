@@ -105,16 +105,19 @@ const barStyle: React.CSSProperties = {
   filter: "drop-shadow(0 2px 8px rgba(0,0,0,0.7))",
 };
 
-/** A PoE-style resource orb: dark well, bottom-anchored liquid at `pct`, gold ring. */
+/**
+ * A PoE-style resource orb. The liquid is painted art, not a CSS gradient: the globe
+ * image is pinned to the bottom of the well and revealed up to `pct`, so draining it
+ * uncovers the dark well the way a real liquid level drops.
+ */
 function Orb(props: {
   pct: number;
   fillTestId: string;
-  deep: string;
-  bright: string;
+  art: string;
   value: string;
   side: "left" | "right";
 }) {
-  const { pct, fillTestId, deep, bright, value, side } = props;
+  const { pct, fillTestId, art, value, side } = props;
   return (
     <div
       style={{
@@ -143,15 +146,15 @@ function Orb(props: {
             right: 0,
             bottom: 0,
             height: `${pct}%`,
-            background: `linear-gradient(to top, ${deep}, ${bright})`,
+            backgroundImage: `url(${art})`,
+            backgroundSize: `${ORB}px ${ORB}px`,
+            backgroundPosition: "center bottom", // globe stays put, the level moves
             boxShadow: "inset 0 3px 6px rgba(255,255,255,0.22)", // liquid meniscus highlight
             transition: "height 120ms linear",
           }}
         />
-        {/* sphere volume: dark rim vignette so the edges read as curvature */}
-        <div style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "radial-gradient(circle at 50% 50%, transparent 42%, rgba(0,0,0,0.75) 94%)" }} />
-        {/* specular glass highlight, upper-left */}
-        <div style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "radial-gradient(ellipse 52% 40% at 38% 26%, rgba(255,255,255,0.16), rgba(255,255,255,0) 70%)" }} />
+        {/* inner shadow cast by the ring onto the liquid */}
+        <div style={{ position: "absolute", inset: 0, borderRadius: "50%", boxShadow: "inset 0 0 14px rgba(0,0,0,0.85)" }} />
       </div>
       {/* Orb frame (generated art). Its alpha is baked in: the hole is 0.716 of the
           file's width, so at ORB_FRAME the ring lands exactly on the liquid sphere. */}
@@ -339,16 +342,14 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
       <Orb
         pct={lifePct}
         fillTestId="life-orb-fill"
-        deep="#3d0a0f"
-        bright="#94222a"
+        art="/hud/orb-life-v1.png"
         value={`${Math.round(life)}`}
         side="left"
       />
       <Orb
         pct={manaPct}
         fillTestId="mana-orb-fill"
-        deep="#131f41"
-        bright="#1f6498"
+        art="/hud/orb-mana-v1.png"
         value={`${Math.round(mana)}`}
         side="right"
       />

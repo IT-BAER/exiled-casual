@@ -87,3 +87,15 @@ Named pool items land, and every base gets painted inventory art.
 <td width="33%"><img src="screenshots/2026-07-24-orbs-poe2-parity.jpeg" alt="Orbs measured against PoE2" width="100%"><br><sub><b>Orbs, measured</b> - sphere size, corner margin and liquid colours read straight off floor#2.webp: 8.4% of the screen wide, ring flush with the bottom edge, deep crimson falling to near-black at the base. The gaudy frame gave way to a slim blackened-bronze one and the guardians went away.</sub></td>
 </tr>
 </table>
+
+## 2026-07-25 - painted globes
+
+The orbs stop being CSS.
+
+<table>
+<tr>
+<td width="33%"><img src="screenshots/2026-07-25-painted-orbs.jpeg" alt="Painted orbs" width="100%"><br><sub><b>Painted globes</b> - the liquid is generated art now, pinned to the bottom of the well and revealed up to the current life or mana, so draining uncovers the dark glass instead of shrinking a gradient. A CSS ball was never going to read like PoE2's.</sub></td>
+<td width="33%"></td>
+<td width="33%"></td>
+</tr>
+</table>
