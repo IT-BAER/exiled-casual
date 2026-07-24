@@ -81,4 +81,9 @@ Named pool items land, and every base gets painted inventory art.
 <td width="33%"><img src="screenshots/2026-07-24-item-icons.jpeg" alt="Item icons" width="100%"><br><sub><b>Item art</b> - every base carries painted inventory art, sized to its grid footprint. The item name stays as the fallback for bases without an icon.</sub></td>
 <td width="33%"><img src="screenshots/2026-07-24-drag-equip.jpeg" alt="Drag to equip" width="100%"><br><sub><b>Drag to equip</b> - mid-drag: legal slots glow gold and the rest fade back. Releasing over the world behind the panel puts the item back on the floor, where it can be picked up again.</sub></td>
 </tr>
+<tr>
+<td width="33%"><img src="screenshots/2026-07-24-flasks-qe-skills.jpeg" alt="Flasks on Q and E" width="100%"><br><sub><b>Flasks on Q and E</b> - two painted flasks instead of five vials, and the skill bar becomes six icon slots on keys 1-6. PoE2 has it the other way round (flasks on digits, skills on QWERT); this keeps the flasks under the movement hand.</sub></td>
+<td width="33%"></td>
+<td width="33%"></td>
+</tr>
 </table>

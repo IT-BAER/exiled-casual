@@ -99,28 +99,30 @@ const PAPER_DOLL: { slot: EquipSlotId; x: number; y: number; w: number; h: numbe
   { slot: "ring2", x: 6, y: 5, w: 1, h: 1, label: "Ring" },
 ];
 
-// Life/mana flask or charm vial.
-function Flask({ kind }: { kind: "life" | "mana" | "charm" }) {
-  const fill =
-    kind === "life"
-      ? "linear-gradient(180deg,#7d1420 0%,#c0303a 55%,#5c0e17 100%)"
-      : kind === "mana"
-        ? "linear-gradient(180deg,#12315f 0%,#2f66c4 55%,#0d2247 100%)"
-        : "linear-gradient(180deg,#3a2a52 0%,#6b4fa0 55%,#241a36 100%)";
+// Life or mana flask, in its socket with the hotkey underneath. Same two flasks the
+// HUD shows (life on Q, mana on E); charges aren't simulated, so these are static.
+function Flask({ kind, hotkey }: { kind: "life" | "mana"; hotkey: string }) {
   return (
-    <div
-      style={{
-        width: U - 8,
-        height: U * 1.35,
-        borderRadius: "6px 6px 8px 8px",
-        border: "1px solid #4a3a1c",
-        background: "#0b0906",
-        boxShadow: "inset 0 0 8px rgba(0,0,0,0.7)",
-        padding: 3,
-        boxSizing: "border-box",
-      }}
-    >
-      <div style={{ width: "100%", height: "100%", borderRadius: "4px 4px 6px 6px", background: fill, boxShadow: `inset 0 2px 3px rgba(255,255,255,0.18)` }} />
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+      <div
+        style={{
+          width: U - 4,
+          height: U * 1.35,
+          borderRadius: "6px 6px 8px 8px",
+          border: "1px solid #4a3a1c",
+          background: "#0b0906",
+          boxShadow: "inset 0 0 8px rgba(0,0,0,0.7)",
+          padding: 3,
+          boxSizing: "border-box",
+        }}
+      >
+        <img
+          src={`/textures/ui/flask_${kind}.png`}
+          alt=""
+          style={{ width: "100%", height: "100%", objectFit: "contain", filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.8))" }}
+        />
+      </div>
+      <span style={{ color: GOLD_DIM, fontSize: 10, letterSpacing: 1 }}>{hotkey}</span>
     </div>
   );
 }
@@ -273,12 +275,9 @@ export function InventoryPanel({
           {/* Flasks + currency */}
           <SectionRule>Flasks</SectionRule>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
-            <div style={{ display: "flex", gap: 8 }}>
-              <Flask kind="life" />
-              <Flask kind="life" />
-              <Flask kind="mana" />
-              <Flask kind="mana" />
-              <Flask kind="charm" />
+            <div style={{ display: "flex", gap: 10 }}>
+              <Flask kind="life" hotkey="Q" />
+              <Flask kind="mana" hotkey="E" />
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
               <Currency label="Gold" value={0} />

@@ -63,9 +63,8 @@ describe("Hud", () => {
     expect(screen.getByText("1.5s")).toBeInTheDocument();
   });
 
-  it("skill with cooldown 0 shows Ready", () => {
-    // ember_bolt just hit 0 → Ready; keep the other two on cooldown so exactly one
-    // slot reads "Ready" and getByText resolves to a single element.
+  it("ready skills show no countdown", () => {
+    // ember_bolt just hit 0 → ready; the other two still count down.
     const snap = makeSnap({
       cooldowns: {
         "skill.ember_bolt.v1": 0,
@@ -74,15 +73,15 @@ describe("Hud", () => {
       },
     });
     render(<Hud snapshot={snap} />);
-    expect(screen.getByText("Ready")).toBeInTheDocument();
+    expect(screen.getByTestId("skill-slot-1")).not.toHaveTextContent(/s$/);
+    expect(screen.getByTestId("skill-slot-2")).toHaveTextContent("2.0s");
   });
 
-  it("skill with no cooldown entry shows Ready", () => {
-    const snap = makeSnap({ cooldowns: {} });
-    render(<Hud snapshot={snap} />);
-    const readyLabels = screen.getAllByText("Ready");
-    // All three skill slots should show Ready when no cooldowns present
-    expect(readyLabels.length).toBe(3);
+  it("renders six skill slots, keys 1-6", () => {
+    render(<Hud snapshot={makeSnap({ cooldowns: {} })} />);
+    for (let i = 1; i <= 6; i++) {
+      expect(screen.getByTestId(`skill-slot-${i}`)).toHaveTextContent(String(i));
+    }
   });
 
   it("renders boss bar and phase indicator when a boss entity is present", () => {
@@ -111,12 +110,13 @@ describe("Hud", () => {
 
   // --- flask row ---
 
-  it("renders 5 flask slots (3 life + 2 mana)", () => {
+  it("renders one life flask on Q and one mana flask on E", () => {
     render(<Hud snapshot={makeSnap({})} />);
-    expect(screen.getByTestId("flask-row")).toBeInTheDocument();
-    for (let i = 1; i <= 5; i++) {
-      expect(screen.getByTestId(`flask-slot-${i}`)).toBeInTheDocument();
-    }
+    const row = screen.getByTestId("flask-row");
+    expect(screen.getByTestId("flask-life")).toBeInTheDocument();
+    expect(screen.getByTestId("flask-mana")).toBeInTheDocument();
+    expect(row).toHaveTextContent("Q");
+    expect(row).toHaveTextContent("E");
   });
 
   // --- area label ---

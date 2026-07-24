@@ -2,71 +2,55 @@ import React from "react";
 import type { Snapshot } from "@exiled/protocol";
 import { MAP_PORTALS } from "@exiled/protocol";
 
-const SKILL_SLOTS = [
-  { id: "skill.ember_bolt.v1", key: "1", label: "Ember", glow: "#ff7a2f" },
-  { id: "skill.cinder_ground.v1", key: "2", label: "Cinder", glow: "#e0492b" },
-  { id: "skill.blink.v1", key: "3", label: "Blink", glow: "#3fb6ff" },
-] as const;
+// Six skill slots on keys 1-6; only three skills exist, 4-6 render as empty sockets.
+// PoE2 itself puts skills on QWERT and flasks on the digits — we swap the two, so
+// the movement hand keeps the flasks. Deliberate, not a parity miss.
+type SkillSlot = { id: string | null; key: string; icon?: string; glow?: string };
+const SKILL_SLOTS: SkillSlot[] = [
+  { id: "skill.ember_bolt.v1", key: "1", icon: "/textures/skills/ember_bolt.png", glow: "#ff7a2f" },
+  { id: "skill.cinder_ground.v1", key: "2", icon: "/textures/skills/cinder_ground.png", glow: "#e0492b" },
+  { id: "skill.blink.v1", key: "3", icon: "/textures/skills/blink.png", glow: "#3fb6ff" },
+  { id: null, key: "4" },
+  { id: null, key: "5" },
+  { id: null, key: "6" },
+];
 
-// 3 life + 2 mana, keybinds 1-5, per inside-map.jpg. Charges aren't simulated yet,
-// so this is a static HUD prop. ponytail: fixed 5-flask layout, wire to sim state
-// when flask charges exist.
+// One life flask on Q, one mana flask on E. Charges aren't simulated yet, so these
+// are static HUD props and the keys do nothing.
+// ponytail: decorative flasks, wire to sim state when flask charges exist.
 const FLASKS = [
-  { key: "1", deep: "#5a0f0c", bright: "#d8352a" },
-  { key: "2", deep: "#5a0f0c", bright: "#d8352a" },
-  { key: "3", deep: "#5a0f0c", bright: "#d8352a" },
-  { key: "4", deep: "#0e2c55", bright: "#3a9be0" },
-  { key: "5", deep: "#0e2c55", bright: "#3a9be0" },
+  { kind: "life", key: "Q" },
+  { kind: "mana", key: "E" },
 ] as const;
 
-/** A single PoE2 flask: recessed slot, glass vial with bottom-anchored liquid, cork neck. */
-function Flask(props: { deep: string; bright: string; idx: number }) {
-  const { deep, bright, idx } = props;
+/** A single flask: recessed PoE2 socket holding the painted vial. */
+function Flask(props: { kind: "life" | "mana" }) {
+  const { kind } = props;
   return (
     <div
-      data-testid={`flask-slot-${idx}`}
+      data-testid={`flask-${kind}`}
       style={{
-        width: 26,
-        height: 54,
+        width: 34,
+        height: 58,
         borderRadius: 4,
         background: "radial-gradient(circle at 50% 30%, #1a1e26, #05070a)",
         border: "1px solid #2a2013",
         boxShadow: "inset 0 0 6px rgba(0,0,0,0.8)",
         display: "flex",
         justifyContent: "center",
-        alignItems: "flex-end",
-        padding: 3,
+        alignItems: "center",
       }}
     >
-      {/* glass vial */}
-      <div
+      <img
+        src={`/textures/ui/flask_${kind}.png`}
+        alt=""
         style={{
-          position: "relative",
-          width: 16,
-          height: 40,
-          borderRadius: "4px 4px 6px 6px",
-          overflow: "hidden",
-          background: "#0a0c10",
-          border: "1px solid rgba(200,180,120,0.35)",
+          width: "100%",
+          height: "100%",
+          objectFit: "contain",
+          filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.8))",
         }}
-      >
-        {/* liquid — flasks read full */}
-        <div
-          style={{
-            position: "absolute",
-            left: 0,
-            right: 0,
-            bottom: 0,
-            height: "78%",
-            background: `linear-gradient(to top, ${deep}, ${bright})`,
-            boxShadow: "inset 0 2px 4px rgba(255,255,255,0.4)",
-          }}
-        />
-        {/* cork neck */}
-        <div style={{ position: "absolute", top: 0, left: 3, right: 3, height: 5, background: "#6b4a28", borderRadius: "0 0 2px 2px" }} />
-        {/* specular stripe */}
-        <div style={{ position: "absolute", top: 6, left: 3, width: 3, bottom: 4, background: "rgba(255,255,255,0.35)", borderRadius: 2 }} />
-      </div>
+      />
     </div>
   );
 }
@@ -345,9 +329,9 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
           ].join(", "),
         }}
       >
-        {FLASKS.map((f, i) => (
+        {FLASKS.map((f) => (
           <div key={f.key} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-            <Flask deep={f.deep} bright={f.bright} idx={i + 1} />
+            <Flask kind={f.kind} />
             <span style={{ fontSize: 10, color: "#9aa0a8", textShadow: "0 1px 2px #000" }}>{f.key}</span>
           </div>
         ))}
@@ -364,54 +348,74 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
         }}
       >
         {SKILL_SLOTS.map((slot, idx) => {
-          const cd = cooldowns[slot.id] ?? 0;
+          const cd = slot.id ? cooldowns[slot.id] ?? 0 : 0;
           const ready = cd <= 0;
           return (
             <div
-              key={slot.id}
+              key={slot.key}
               data-testid={`skill-slot-${idx + 1}`}
               style={{
-                width: 60,
-                height: 60,
+                width: 56,
+                height: 56,
                 position: "relative",
-                background: ready
-                  ? "radial-gradient(circle at 50% 35%, #333a44, #12151b)"
-                  : "#12151b",
-                border: `2px solid ${ready ? "#9c7b3a" : "#3a4048"}`,
-                borderRadius: 8,
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                boxShadow: ready
+                overflow: "hidden",
+                background: slot.icon
+                  ? "radial-gradient(circle at 50% 35%, #262c34, #0b0d11)"
+                  : "radial-gradient(circle at 50% 35%, #14171d, #07090c)",
+                border: `2px solid ${slot.icon && ready ? "#9c7b3a" : "#3a4048"}`,
+                borderRadius: 6,
+                boxShadow: slot.icon && ready
                   ? `0 0 10px ${slot.glow}55, inset 0 0 8px rgba(0,0,0,0.6)`
                   : "inset 0 0 8px rgba(0,0,0,0.7)",
-                color: ready ? "#f4f0e6" : "#7b828c",
-                fontSize: 11,
               }}
             >
+              {slot.icon && (
+                <img
+                  src={slot.icon}
+                  alt=""
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    filter: ready ? "none" : "grayscale(0.8) brightness(0.5)",
+                  }}
+                />
+              )}
+              {/* cooldown veil, PoE-style: the tile darkens and counts down */}
+              {!ready && (
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    background: "rgba(4,6,10,0.55)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#f4f0e6",
+                    fontSize: 13,
+                    fontWeight: 700,
+                    textShadow: "0 1px 3px #000",
+                  }}
+                >
+                  {`${cd.toFixed(1)}s`}
+                </div>
+              )}
               <span
                 style={{
                   position: "absolute",
-                  top: 2,
-                  left: 5,
+                  bottom: 0,
+                  left: 0,
+                  padding: "0 4px 1px",
+                  borderTopRightRadius: 4,
+                  background: "rgba(4,6,10,0.7)",
                   fontSize: 10,
-                  color: "#9aa0a8",
+                  fontWeight: 700,
+                  color: "#c9cdd3",
+                  textShadow: "0 1px 3px #000",
                 }}
               >
                 {slot.key}
               </span>
-              <span
-                style={{
-                  fontSize: 15,
-                  fontWeight: 700,
-                  color: ready ? slot.glow : "#565c64",
-                  lineHeight: 1,
-                }}
-              >
-                {slot.label[0]}
-              </span>
-              <span style={{ marginTop: 3 }}>{ready ? "Ready" : `${cd.toFixed(1)}s`}</span>
             </div>
           );
         })}
