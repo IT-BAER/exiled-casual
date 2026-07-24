@@ -47,9 +47,9 @@ export const PICKUP_RADIUS = fp(2.5);
 // ---------------------------------------------------------------------------
 
 /** Lab-only spawn control, so a test arena can start empty and be filled on demand. */
-export type SpawnKind = "imp" | "pack" | "rare" | "boss" | "clear" | "hurtboss";
+export type SpawnKind = "imp" | "pack" | "rare" | "boss" | "clear" | "hurtboss" | "item";
 
-export const SPAWN_KINDS: readonly SpawnKind[] = ["imp", "pack", "rare", "boss", "clear", "hurtboss"];
+export const SPAWN_KINDS: readonly SpawnKind[] = ["imp", "pack", "rare", "boss", "clear", "hurtboss", "item"];
 
 export interface ToWorker_Init   { type: "init"; seed: number }
 export interface ToWorker_Intent { type: "intent"; intent: Intent }

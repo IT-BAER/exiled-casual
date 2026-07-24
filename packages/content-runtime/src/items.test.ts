@@ -26,6 +26,15 @@ describe("describeItem", () => {
     const d = describeItem({ baseId: base.id, rarity: "magic", itemLevel: 65, affixes: [{ affixId: affix.id, value: 12 }] });
     expect(d.lines).toEqual([`+12 ${affix.label}`]);
   });
+  it("hugs the percent sign and drops the plus on increased mods", () => {
+    const base = ITEM_POOLS.bases[0]!;
+    const line = (affixId: string, value: number) =>
+      describeItem({ baseId: base.id, rarity: "magic", itemLevel: 65, affixes: [{ affixId, value }] }).lines[0];
+    expect(line("affix.cast_speed", 3)).toBe("3% increased Cast Speed");
+    expect(line("affix.fire_res", 13)).toBe("+13% to Fire Resistance");
+    expect(line("affix.life", 9)).toBe("+9 to maximum Life");
+  });
+
   it("shows a rare item's generated name and keeps the base type", () => {
     const base = ITEM_POOLS.bases[0]!;
     const d = describeItem({ baseId: base.id, rarity: "rare", itemLevel: 82, affixes: [], name: "Corpse Husk" });

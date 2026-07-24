@@ -1,6 +1,6 @@
 // Pure, deterministic item generation. Type-only content-schema import keeps this
 // a leaf (matches rare.ts). PRNG inlined like atlas.ts so there is no @exiled dep.
-import type { ItemPools, Item, ItemAffix } from "@exiled/content-schema";
+import type { ItemPools, Item, ItemAffix, Rarity } from "@exiled/content-schema";
 import { rareName } from "./item-names.js";
 
 function mulberry32(seed: number): () => number {
@@ -30,7 +30,17 @@ function uniquePercent(ilvl: number, monsterRarity: number): number {
   return Math.max(0, Math.min(6, pct));
 }
 
-export function rollItem(pools: ItemPools, seed: number, ilvl: number, monsterRarity: number): Item {
+/**
+ * @param forceRarity debug/lab only: skip the rarity roll and produce this tier.
+ *   Best-effort: asking for "unique" on a pool without uniques yields a normal item.
+ */
+export function rollItem(
+  pools: ItemPools,
+  seed: number,
+  ilvl: number,
+  monsterRarity: number,
+  forceRarity?: Rarity,
+): Item {
   const rnd = mulberry32(seed);
   const base = pools.bases[rnd() % pools.bases.length]!;
   const roll = rnd() % 100;
@@ -40,7 +50,7 @@ export function rollItem(pools: ItemPools, seed: number, ilvl: number, monsterRa
   // Its band is carved from below the rare band so rare always stays reachable.
   const uniques = pools.uniques ?? [];
   const uniquePct = Math.min(uniquePercent(ilvl, monsterRarity), Math.max(0, rarePct - 1));
-  if (uniques.length > 0 && roll < uniquePct) {
+  if (uniques.length > 0 && (forceRarity === "unique" || (forceRarity === undefined && roll < uniquePct))) {
     const u = uniques[rnd() % uniques.length]!;
     return {
       baseId: u.baseId,
@@ -51,8 +61,11 @@ export function rollItem(pools: ItemPools, seed: number, ilvl: number, monsterRa
     };
   }
 
+  // "unique" only reaches here when the pool had none to give, so it degrades to normal.
   let rarity: "normal" | "magic" | "rare" =
-    roll < rarePct ? "rare"
+    forceRarity !== undefined
+    ? (forceRarity === "unique" ? "normal" : forceRarity)
+    : roll < rarePct ? "rare"
     : roll < magicPercent(ilvl, monsterRarity) ? "magic"
     : "normal";
 

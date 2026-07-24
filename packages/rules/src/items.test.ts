@@ -138,6 +138,15 @@ describe("rollItem", () => {
     expect(count("unique")).toBeLessThan(count("rare"));
   });
 
+  it("forceRarity produces exactly that tier, and degrades unique to normal without a unique pool", () => {
+    for (const want of ["normal", "magic", "rare", "unique"] as const) {
+      for (let s = 1; s <= 50; s++) {
+        expect(rollItem(UNIQUE_POOLS, s, 80, 3, want).rarity).toBe(want);
+      }
+    }
+    expect(rollItem(RARE_POOLS, 7, 80, 3, "unique").rarity).toBe("normal");
+  });
+
   it("never rolls a unique from a pool without uniques", () => {
     for (let s = 1; s <= 800; s++) {
       expect(rollItem(RARE_POOLS, s, 95, 3).rarity).not.toBe("unique");

@@ -14,6 +14,7 @@ const SPAWN_KEYS: Record<string, SpawnKind> = {
   Numpad3: "rare",
   Numpad4: "boss",
   Numpad5: "hurtboss",
+  Numpad6: "item",
   Numpad0: "clear",
 };
 

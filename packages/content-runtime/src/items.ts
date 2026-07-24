@@ -123,6 +123,17 @@ export interface ItemDescription {
   flavour?: string;
 }
 
+/**
+ * Affix line exactly as poe2-screenshots/item-*.png renders it: a percent label
+ * hugs its number ("13% to Fire Resistance", not "13 % ..."), and increased/reduced
+ * mods carry no sign, while flat and resistance mods do ("+9 to maximum Life").
+ */
+function affixLine(value: number, label: string): string {
+  const pct = label.startsWith("%");
+  const signed = !/^% (increased|reduced)\b/.test(label);
+  return `${signed ? "+" : ""}${value}${pct ? "" : " "}${label}`;
+}
+
 export function describeItem(item: Item): ItemDescription {
   const base = baseOf(item.baseId);
   const s = base.stats;
@@ -132,7 +143,7 @@ export function describeItem(item: Item): ItemDescription {
   if (s?.aps !== undefined) statLines.push({ label: "Attacks per Second", value: s.aps.toFixed(2) });
   const lines = item.affixes.map((ia) => {
     const a = AFFIX_BY_ID.get(ia.affixId);
-    return a ? `+${ia.value} ${a.label}` : `+${ia.value} ${ia.affixId}`;
+    return a ? affixLine(ia.value, a.label) : `+${ia.value} ${ia.affixId}`;
   });
   const d: ItemDescription = {
     name: item.name ?? base.name,

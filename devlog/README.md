@@ -71,3 +71,7 @@ Matching the Path of Exile 2 HUD against the reference screenshots.
 
 **Item tooltip** - a full item tooltip with base stats and requirements.
 ![Item tooltip](2026-07-23-item-tooltip.png)
+
+**Unique items** - Ashmaw, a named pool item with its own mods and flavour line. Numpad6 drops
+one debug item per press, cycling normal to magic to rare to unique.
+![Unique item](2026-07-24-unique-item.jpeg)

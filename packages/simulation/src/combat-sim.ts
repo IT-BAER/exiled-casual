@@ -1,14 +1,15 @@
 import { fp } from "@exiled/fixed-point";
-import { baseCasterStats, makeRare } from "@exiled/rules";
-import { SKILLS, MONSTERS, RARE_TEMPLATE, CONTENT_VERSION } from "@exiled/content-runtime";
+import { baseCasterStats, makeRare, rollItem } from "@exiled/rules";
+import { SKILLS, MONSTERS, RARE_TEMPLATE, CONTENT_VERSION, ITEM_POOLS, baseOf } from "@exiled/content-runtime";
 import { generateArea, type AreaLayout } from "@exiled/mapgen";
 import { gridCollision, type CollisionRef } from "./collision";
+import { fnv1a32 } from "./rng";
 import { Simulation } from "./loop";
 import { World } from "./ecs";
 import type { Entity } from "./ecs";
 import type {
   Position, Health, Mana, Faction, PlayerC, Cooldowns, DefensesC,
-  MoveTarget, MoveDir, SessionC, AreaKind, InventoryC,
+  MoveTarget, MoveDir, SessionC, AreaKind, InventoryC, ItemC,
 } from "./components";
 import { registerResourceRegen } from "./systems/resource";
 import { registerSkillCast } from "./systems/skill-cast";
@@ -161,14 +162,31 @@ const PACK_RING: readonly [number, number][] = [
  * inside a system, so it is deliberately not part of any recorded scenario —
  * a replay that used it would not reproduce.
  */
+// Rarity the next lab item drop takes. Cycles so all four tiers are reachable in
+// four presses instead of waiting on the real drop odds. Lab-only, like the rest
+// of this function, so it deliberately lives outside the world state.
+const LAB_ITEM_TIERS = ["normal", "magic", "rare", "unique"] as const;
+let labItemDrops = 0;
+
 export function spawnLabActors(
   world: World,
-  kind: "imp" | "pack" | "rare" | "boss" | "clear" | "hurtboss",
+  kind: "imp" | "pack" | "rare" | "boss" | "clear" | "hurtboss" | "item",
   cx: number,
   cy: number,
 ): void {
   if (kind === "clear") {
     for (const e of [...world.query("monster")]) world.destroy(e);
+    return;
+  }
+
+  if (kind === "item") {
+    // Drop one item at the player's feet, walking the rarity tiers press by press.
+    const n = labItemDrops++;
+    const item = rollItem(ITEM_POOLS, fnv1a32(`lab.item:${n}`), 80, 3, LAB_ITEM_TIERS[n % LAB_ITEM_TIERS.length]);
+    const base = baseOf(item.baseId);
+    const ge = world.create();
+    world.set<Position>(ge, "position", { x: cx, y: cy + fp(1) });
+    world.set<ItemC>(ge, "item", { item, w: base.w, h: base.h });
     return;
   }
 

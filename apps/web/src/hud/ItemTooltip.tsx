@@ -87,14 +87,18 @@ export function ItemTooltip({
   const vw = typeof window !== "undefined" ? window.innerWidth : 1920;
   const vh = typeof window !== "undefined" ? window.innerHeight : 1080;
   const left = Math.min(x, vw - width - 8);
-  const top = Math.min(y, vh - 120);
+  // Below the midpoint the tooltip grows upward from the cursor instead of down, so a
+  // tall one (unique, with stats + mods + flavour) cannot run off the bottom edge.
+  // Anchoring an edge avoids measuring the rendered height.
+  const flipUp = y > vh / 2;
+  const place = flipUp ? { bottom: Math.max(8, vh - y) } : { top: y };
   return (
     <div
       data-testid="item-tooltip"
       style={{
         position: "fixed",
         left,
-        top,
+        ...place,
         zIndex: 50,
         width,
         pointerEvents: "none",
