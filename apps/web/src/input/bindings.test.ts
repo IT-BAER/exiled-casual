@@ -153,6 +153,25 @@ describe("attachBindings hold-to-move", () => {
     c.remove();
   });
 
+  it("approach() walks to a ground item and picks it up once it is in range", () => {
+    const w = { postMessage: vi.fn() };
+    const c = document.createElement("canvas");
+    document.body.appendChild(c);
+    const { detach: d, onSnapshot, approach } = attachBindings(c, w as unknown as Worker, fakeScene());
+    approach(77, 4, 6);
+    expect(w.postMessage).toHaveBeenCalledWith({ type: "intent", intent: { kind: "moveTo", x: 4, y: 6 } });
+    // Still walking: out of range means no pickup yet.
+    onSnapshot(makeSnap([{ id: 77, kind: "groundItem", x: 4, y: 6, inRange: false }]));
+    expect(intentCount(w.postMessage, "pickupItem")).toBe(0);
+    onSnapshot(makeSnap([{ id: 77, kind: "groundItem", x: 4, y: 6, inRange: true }]));
+    expect(w.postMessage).toHaveBeenCalledWith({ type: "intent", intent: { kind: "pickupItem", entityId: 77 } });
+    // Fires once, not on every later snapshot.
+    onSnapshot(makeSnap([{ id: 77, kind: "groundItem", x: 4, y: 6, inRange: true }]));
+    expect(intentCount(w.postMessage, "pickupItem")).toBe(1);
+    d();
+    c.remove();
+  });
+
   it("g key picks the nearest in-range item, ignoring a closer out-of-range one", () => {
     const w = { postMessage: vi.fn() };
     const c = document.createElement("canvas");

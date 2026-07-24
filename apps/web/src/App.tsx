@@ -23,6 +23,7 @@ export function App() {
   const [panelOpen, setPanelOpen] = useState(false);
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const [project, setProject] = useState<Projector | null>(null);
+  const [pick, setPick] = useState<((id: number, x: number, y: number) => void) | null>(null);
   const workerRef = useRef<Worker | null>(null);
 
   useEffect(() => {
@@ -60,7 +61,7 @@ export function App() {
 
     // Bindings need the scene for ground picking, and must be attached before the
     // onmessage handler below so onSnapshot exists when the worker starts sending.
-    const { detach, onSnapshot } = attachBindings(
+    const { detach, onSnapshot, approach } = attachBindings(
       canvas,
       worker,
       scene,
@@ -72,6 +73,10 @@ export function App() {
       },
       () => setPanelOpen(true),
     );
+
+    // Loot plates are DOM, so their click has to reach the same approach-then-act
+    // path the canvas picker uses for portals and devices.
+    setPick(() => approach);
 
     worker.onmessage = (e: MessageEvent<FromWorker>) => {
       const msg = e.data;
@@ -144,7 +149,7 @@ export function App() {
         ref={canvasRef}
         style={{ width: "100%", height: "100%", display: "block" }}
       />
-      <LootLabels snapshot={snapshot} project={project} />
+      <LootLabels snapshot={snapshot} project={project} onPick={pick ?? undefined} />
       <Hud snapshot={snapshot} hoveredEntityId={hoveredEntityId} />
       {panelOpen && snapshot && (
         <PreparationPanel

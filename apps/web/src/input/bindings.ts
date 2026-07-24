@@ -64,7 +64,11 @@ export function attachBindings(
   onCycleOutfit?: () => void,
   onHoverInteractable?: (entityId: number | null) => void,
   onOpenPanel?: () => void,
-): { detach: () => void; onSnapshot: (snap: Snapshot) => void } {
+): {
+  detach: () => void;
+  onSnapshot: (snap: Snapshot) => void;
+  approach: (entityId: number, x: number, y: number) => void;
+} {
   // Movement keys currently held, oldest→newest. Needed so releasing one key
   // resumes another still-held direction, and releasing the last sends "stop".
   const held: string[] = [];
@@ -228,6 +232,8 @@ export function attachBindings(
         // activateMap intent sent from the panel); everything else interacts.
         if (entity.kind === "mapDevice") {
           onOpenPanel?.();
+        } else if (entity.kind === "groundItem") {
+          post({ kind: "pickupItem", entityId: pendingInteractId });
         } else {
           post({ kind: "interact", targetId: pendingInteractId });
         }
@@ -262,5 +268,12 @@ export function attachBindings(
     window.removeEventListener("pointerup", onPointerUp);
   }
 
-  return { detach, onSnapshot };
+  /** Walk to an entity and act on it once the sim reports it inRange. Used by the
+   *  DOM loot plates, which sit above the canvas and never reach its picker. */
+  function approach(entityId: number, x: number, y: number) {
+    pendingInteractId = entityId;
+    post({ kind: "moveTo", x, y });
+  }
+
+  return { detach, onSnapshot, approach };
 }

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import type { Snapshot } from "@exiled/protocol";
 import { RARITY, SERIF } from "./ItemTooltip";
+import { playDropSound } from "../audio/drop-sound";
 
 /** Screen-space position of a world point, in CSS pixels of the canvas. */
 export interface ScreenPoint {
@@ -24,6 +25,8 @@ export interface LootLabelsProps {
   snapshot: Snapshot | null;
   /** Null until the Babylon scene exists; plates then hold their last position. */
   project: Projector | null;
+  /** Clicking a plate walks to the drop and picks it up once in range. */
+  onPick?: (entityId: number, x: number, y: number) => void;
 }
 
 /**
@@ -35,14 +38,33 @@ export interface LootLabelsProps {
  * snapshot only changes at 30 Hz, so a rAF loop writes transforms straight to
  * the plate nodes instead of re-rendering the tree.
  */
-export function LootLabels({ snapshot, project }: LootLabelsProps) {
+export function LootLabels({ snapshot, project, onPick }: LootLabelsProps) {
   const nodes = useRef(new Map<number, HTMLDivElement>());
   const positions = useRef(new Map<number, { x: number; y: number }>());
+  /** Ids already announced. Null until the first snapshot, so items lying on the
+   *  ground when the page loads do not all chime at once. */
+  const heard = useRef<Set<number> | null>(null);
 
   // Ground items are static, so the world position can come from the last
   // snapshot even between ticks; only the projection has to be per-frame.
   const items = (snapshot?.entities ?? []).filter((e) => e.kind === "groundItem");
   for (const e of items) positions.current.set(e.id, { x: e.x, y: e.y });
+
+  if (snapshot) {
+    const seen = heard.current;
+    if (seen === null) heard.current = new Set(items.map((e) => e.id));
+    else {
+      for (const e of items) {
+        if (!seen.has(e.id)) {
+          seen.add(e.id);
+          playDropSound(e.rarity);
+        }
+      }
+      // Forget picked-up ids so a re-drop of the same entity id chimes again.
+      const live = new Set(items.map((e) => e.id));
+      for (const id of seen) if (!live.has(id)) seen.delete(id);
+    }
+  }
 
   useEffect(() => {
     if (!project) return;
@@ -88,6 +110,10 @@ export function LootLabels({ snapshot, project }: LootLabelsProps) {
               if (node) nodes.current.set(e.id, node);
               else nodes.current.delete(e.id);
             }}
+            onPointerDown={(ev) => {
+              ev.stopPropagation(); // the plate is the target, not the ground under it
+              onPick?.(e.id, e.x, e.y);
+            }}
             style={{
               position: "absolute",
               left: 0,
@@ -102,6 +128,8 @@ export function LootLabels({ snapshot, project }: LootLabelsProps) {
               letterSpacing: "0.04em",
               whiteSpace: "nowrap",
               textShadow: "0 1px 2px #000",
+              pointerEvents: "auto", // the wrapper is inert; the plates are clickable
+              cursor: "pointer",
             }}
           >
             {e.name ?? "Item"}

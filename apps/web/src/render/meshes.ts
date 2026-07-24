@@ -1,5 +1,6 @@
 import {
   Color3,
+  DynamicTexture,
   Mesh,
   MeshBuilder,
   StandardMaterial,
@@ -345,6 +346,30 @@ function buildPortal(scene: Scene, root: Mesh): void {
   root.metadata = { rimMat, voidMat, interactKind: "portal" };
 }
 
+/** World height of the loot beam, in the same units as the actors (~1.8 tall). */
+const BEAM_H = 2.4;
+
+/**
+ * Vertical falloff for the loot beam: solid where it meets the floor, gone at the
+ * top. One texture shared by every beam — a cylinder UV runs v=0 at the bottom,
+ * which is the bottom row of the image.
+ */
+function beamGradient(scene: Scene): DynamicTexture {
+  const existing = scene.getTextureByName("loot-beam-falloff");
+  if (existing) return existing as DynamicTexture;
+  const tex = new DynamicTexture("loot-beam-falloff", { width: 4, height: 64 }, scene, false);
+  const ctx = tex.getContext() as unknown as CanvasRenderingContext2D;
+  const grad = ctx.createLinearGradient(0, 0, 0, 64);
+  grad.addColorStop(0, "#000"); // top of the image = top of the beam
+  grad.addColorStop(0.55, "#555");
+  grad.addColorStop(1, "#fff"); // floor end stays bright
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 4, 64);
+  tex.update();
+  tex.getAlphaFromRGB = true;
+  return tex;
+}
+
 /** Beacon colour per rarity, matched to the tooltip palette in hud/ItemTooltip.tsx. */
 const GROUND_ITEM_COLOR: Record<string, [number, number, number]> = {
   normal: [0.78, 0.78, 0.78],
@@ -360,7 +385,21 @@ export function updateGroundItem(mesh: Mesh, rarity: string | undefined): void {
   const [r, g, b] = GROUND_ITEM_COLOR[rarity ?? "normal"] ?? GROUND_ITEM_COLOR["normal"]!;
   mat.diffuseColor = new Color3(r * 0.35, g * 0.35, b * 0.35);
   mat.emissiveColor = new Color3(r, g, b);
+  const beamMat = mesh.getChildMeshes()[0]?.material as StandardMaterial | null;
+  if (beamMat) {
+    beamMat.emissiveColor = new Color3(r, g, b);
+    // Junk barely glows, a unique is visible across the room. Same idea as a
+    // NeverSink filter turning the beam up with the tier.
+    beamMat.alpha = BEAM_ALPHA[rarity ?? "normal"] ?? BEAM_ALPHA["normal"]!;
+  }
 }
+
+const BEAM_ALPHA: Record<string, number> = {
+  normal: 0.18,
+  magic: 0.34,
+  rare: 0.48,
+  unique: 0.62,
+};
 
 /**
  * Pulse the portal rim and indicate inRange affordance.
@@ -501,6 +540,22 @@ export function makeMesh(scene: Scene, kind: MeshKind, name: string): Mesh {
     const itemMat = new StandardMaterial(`${name}-mat`, scene);
     itemMat.specularColor = new Color3(0, 0, 0);
     m.material = itemMat;
+    // Light beam standing on the drop, the way PoE marks loot from across a room.
+    // Additive so it glows over the floor instead of masking it, and unlit so it
+    // keeps its rarity colour in a dark map.
+    const beam = MeshBuilder.CreateCylinder(`${name}-beam`, { diameter: 0.2, height: BEAM_H, tessellation: 10 }, scene);
+    beam.parent = m;
+    beam.position.y = BEAM_H / 2;
+    beam.isPickable = false;
+    const beamMat = new StandardMaterial(`${name}-beam-mat`, scene);
+    beamMat.diffuseColor = new Color3(0, 0, 0);
+    beamMat.specularColor = new Color3(0, 0, 0);
+    beamMat.alpha = 0.45;
+    beamMat.alphaMode = 1; // ALPHA_ADD
+    beamMat.disableLighting = true;
+    beamMat.backFaceCulling = false;
+    beamMat.opacityTexture = beamGradient(scene); // bright at the floor, gone at the top
+    beam.material = beamMat;
     updateGroundItem(m, "normal");
     return m;
   }

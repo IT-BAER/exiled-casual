@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach } from "vitest";
 import "@testing-library/jest-dom/vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { vi } from "vitest";
 import { LootLabels } from "./LootLabels";
 import type { Snapshot } from "@exiled/protocol";
 
@@ -86,5 +87,20 @@ describe("LootLabels", () => {
       return Number(m![2]);
     });
     expect(Math.abs(ys[0]! - ys[1]!)).toBeGreaterThan(10);
+  });
+
+  it("asks to pick the item up when its plate is clicked", () => {
+    const onPick = vi.fn();
+    render(
+      <LootLabels
+        project={null}
+        onPick={onPick}
+        snapshot={snapWith([
+          { id: 9, kind: "groundItem", x: 3, y: -2, rarity: "unique", name: "Ashmaw" },
+        ])}
+      />,
+    );
+    fireEvent.pointerDown(screen.getByTestId("loot-label-9"));
+    expect(onPick).toHaveBeenCalledWith(9, 3, -2);
   });
 });
