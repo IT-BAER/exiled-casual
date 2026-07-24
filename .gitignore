@@ -26,4 +26,11 @@ Thumbs.db
 # test / coverage
 coverage/
 .nyc_output/
+
+# local reference (copyrighted game screenshots, not distributed)
 poe2-screenshots/
+
+# local agent / session state
+.claude/
+.agents/
+.superpowers/

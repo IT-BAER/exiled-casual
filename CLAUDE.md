@@ -27,9 +27,16 @@ PoE2 itemization actually works — do not invent mechanics or colors from memor
 
 ## Build / test
 
-- Test: `rtk proxy npx vitest run [scope]` from repo root (plain vitest under RTK flakes).
+- Test: `npx vitest run [scope]` from repo root.
 - Typecheck: `npm run typecheck` (tsc --noEmit; vitest strips types so this is mandatory).
 - Web build: `npm run build -w apps/web`.
+
+## Devlog — SCREENSHOT EACH VISIBLE STEP
+
+- After any step with a visible result, screenshot the running app into `devlog/` named
+  `YYYY-MM-DD-<slug>.jpeg` (JPEG q75-80; use a small PNG only when transparency/fine detail needs it).
+- Add that shot to `devlog/README.md` under its date with a one-line caption. Chronological, one entry per slice.
+- Frame-accurate capture needs in-page timing plus a render freeze, not a loose sleep.
 
 ## Conventions
 

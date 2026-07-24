@@ -15,7 +15,7 @@
 - Tier → monster stats via integer per-mille: `lifeMilli = 1000 + 150*tier`, `dmgMilli = 1000 + 100*tier`; `scaled = Math.trunc(base * milli / 1000)`. Tier 0 → factor 1000 → no-op.
 - All sim math deterministic (fixed-point integers); offers are a pure function of `atlasSeed` so the replay checksum stays stable.
 - Commit workflow: direct-to-main, one commit per task, **no attribution trailers, no emdashes in messages**.
-- Run tests with `rtk proxy npx vitest run` from repo root (plain vitest under RTK flakes).
+- Run tests with `npx vitest run` from repo root.
 - Node/Waystone are plain data, NOT ECS components.
 
 ---
@@ -85,7 +85,7 @@ describe("atlas rules", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `rtk proxy npx vitest run packages/rules/src/atlas.test.ts`
+Run: `npx vitest run packages/rules/src/atlas.test.ts`
 Expected: FAIL — cannot find module `./atlas.js`.
 
 - [ ] **Step 3: Write minimal implementation**
@@ -157,7 +157,7 @@ export * from "./atlas.js";
 
 - [ ] **Step 5: Run test to verify it passes**
 
-Run: `rtk proxy npx vitest run packages/rules/src/atlas.test.ts`
+Run: `npx vitest run packages/rules/src/atlas.test.ts`
 Expected: PASS (5 tests).
 
 - [ ] **Step 6: Commit**
@@ -238,7 +238,7 @@ Expected: rc=0 (any missed fixture surfaces here as a missing-property error).
 
 - [ ] **Step 5: Run the sim suite to confirm no behaviour changed**
 
-Run: `rtk proxy npx vitest run packages/simulation`
+Run: `npx vitest run packages/simulation`
 Expected: PASS (same count as before, fixtures only gained inert fields).
 
 - [ ] **Step 6: Commit**
@@ -321,7 +321,7 @@ describe("tier scaling on map spawn", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `rtk proxy npx vitest run packages/simulation/src/areas.test.ts`
+Run: `npx vitest run packages/simulation/src/areas.test.ts`
 Expected: FAIL — scaled life differs from base (scaling not applied yet).
 
 - [ ] **Step 3: Implement scaling in areas.ts**
@@ -411,7 +411,7 @@ export function spawnMonster(
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `rtk proxy npx vitest run packages/simulation`
+Run: `npx vitest run packages/simulation`
 Expected: PASS. The hideout/legacy paths call `spawnMonster` without `scale` → default 1000 → unchanged, so existing tests and the boss golden stay green.
 
 - [ ] **Step 5: Commit**
@@ -482,7 +482,7 @@ it("defaults areaTier=0, atlasSeed=0, completedNodes=[] when no session (legacy 
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `rtk proxy npx vitest run packages/protocol packages/simulation/src/protocol-bridge.test.ts`
+Run: `npx vitest run packages/protocol packages/simulation/src/protocol-bridge.test.ts`
 Expected: FAIL — activateMap not in the union; snapshot has no `areaTier`.
 
 - [ ] **Step 3: Extend the protocol types**
@@ -551,7 +551,7 @@ In `buildSnapshot`, add the three fields to the returned object (next to `mapOpe
 
 - [ ] **Step 5: Run tests to verify they pass**
 
-Run: `rtk proxy npx vitest run packages/protocol packages/simulation && npm run typecheck`
+Run: `npx vitest run packages/protocol packages/simulation && npm run typecheck`
 Expected: PASS + typecheck rc=0.
 
 - [ ] **Step 6: Commit**
@@ -647,7 +647,7 @@ it("activateMap is rejected for an already-completed node", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `rtk proxy npx vitest run packages/simulation/src/systems/interact.test.ts`
+Run: `npx vitest run packages/simulation/src/systems/interact.test.ts`
 Expected: FAIL — map does not open (handler not implemented).
 
 - [ ] **Step 3: Implement the handler**
@@ -731,7 +731,7 @@ export function registerInteractSystem(sim: Simulation): void {
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `rtk proxy npx vitest run packages/simulation/src/systems/interact.test.ts`
+Run: `npx vitest run packages/simulation/src/systems/interact.test.ts`
 Expected: PASS (the two old device-open tests were deleted in this task's preamble; the five new `activateMap` tests and the surviving portal/out-of-range tests pass).
 
 - [ ] **Step 5: Commit**
@@ -800,7 +800,7 @@ it("does not complete a node when a non-boss monster dies", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `rtk proxy npx vitest run packages/simulation/src/systems/death.test.ts`
+Run: `npx vitest run packages/simulation/src/systems/death.test.ts`
 Expected: FAIL — completedNodes stays empty.
 
 - [ ] **Step 3: Implement completion in the monster-death loop**
@@ -831,7 +831,7 @@ In `packages/simulation/src/systems/death.ts`, replace the monster loop at the t
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `rtk proxy npx vitest run packages/simulation`
+Run: `npx vitest run packages/simulation`
 Expected: PASS (including the boss golden — its legacy sim has no session, so the `sessionE === undefined` guard skips completion).
 
 - [ ] **Step 5: Commit**
@@ -913,7 +913,7 @@ describe("PreparationPanel", () => {
 
 - [ ] **Step 3: Run test to verify it fails**
 
-Run: `rtk proxy npx vitest run apps/web/src/hud/PreparationPanel.test.tsx`
+Run: `npx vitest run apps/web/src/hud/PreparationPanel.test.tsx`
 Expected: FAIL — cannot find `./PreparationPanel.js`.
 
 - [ ] **Step 4: Implement the component**
@@ -1029,7 +1029,7 @@ export function PreparationPanel({ atlasSeed, completedNodes, onActivate, onClos
 
 - [ ] **Step 5: Run tests to verify they pass**
 
-Run: `rtk proxy npx vitest run apps/web/src/hud/PreparationPanel.test.tsx`
+Run: `npx vitest run apps/web/src/hud/PreparationPanel.test.tsx`
 Expected: PASS (3 tests).
 
 - [ ] **Step 6: Commit**
@@ -1071,7 +1071,7 @@ it("opens the panel instead of interacting when a mapDevice is in range", () => 
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `rtk proxy npx vitest run apps/web/src/input/bindings.test.ts`
+Run: `npx vitest run apps/web/src/input/bindings.test.ts`
 Expected: FAIL — `onOpenPanel` param does not exist.
 
 - [ ] **Step 3: Add onOpenPanel to bindings**
@@ -1107,7 +1107,7 @@ Replace the in-range branch inside `onSnapshot` (the `else if (entity.inRange)` 
 
 - [ ] **Step 4: Run the bindings test to verify it passes**
 
-Run: `rtk proxy npx vitest run apps/web/src/input/bindings.test.ts`
+Run: `npx vitest run apps/web/src/input/bindings.test.ts`
 Expected: PASS.
 
 - [ ] **Step 5: Wire App.tsx**
@@ -1198,7 +1198,7 @@ Render the panel below the HUD:
 
 - [ ] **Step 6: Run the web suite + typecheck + build**
 
-Run: `rtk proxy npx vitest run apps/web && npm run typecheck && npm run build -w apps/web`
+Run: `npx vitest run apps/web && npm run typecheck && npm run build -w apps/web`
 Expected: PASS; typecheck rc=0; build rc=0 (pre-existing Babylon chunk-size warning only).
 
 - [ ] **Step 7: Commit**
@@ -1216,7 +1216,7 @@ git commit -m "feat(web): open preparation panel from the device, send activateM
 
 - [ ] **Step 1: Run the entire suite green**
 
-Run: `npm run typecheck && rtk proxy npx vitest run && npm run build -w apps/web`
+Run: `npm run typecheck && npx vitest run && npm run build -w apps/web`
 Expected: typecheck rc=0; all vitest files pass (prior baseline 391 tests / 46 files, now higher); build rc=0.
 
 - [ ] **Step 2: Manual run + screenshot for the devlog**

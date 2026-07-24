@@ -3,7 +3,7 @@
 Design spec. Status: approved for planning, 2026-07-22.
 Baseline research: `docs/` pack (PoE 2 EA 0.5.4b clean-room reconstruction).
 Position: opens **Phase 4** (item & crafting loop, `docs/06:138`). Follows the
-"Waystones + Tier Scaling" slice (`docs/superpowers/specs/2026-07-21-waystones-tier-scaling-design.md`,
+"Waystones + Tier Scaling" slice (`docs/specs/2026-07-21-waystones-tier-scaling-design.md`,
 integrated on `main` at `c1dd39e`).
 
 ## Product thesis

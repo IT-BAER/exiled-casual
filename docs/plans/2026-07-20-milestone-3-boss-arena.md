@@ -9,7 +9,7 @@ winding up). Phase 2 (≤50% life): the slam leaves burning ground, two imps are
 the ability cadence speeds up.
 
 **Execution:** ordered tasks, one commit each, all three gates green before every commit
-(`npm run typecheck`, `rtk proxy npx vitest run`, `npm run build -w apps/web`). Tests first
+(`npm run typecheck`, `npx vitest run`, `npm run build -w apps/web`). Tests first
 (red → green). Committing directly to `main`.
 
 ---

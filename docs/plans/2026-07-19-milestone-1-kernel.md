@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-Every task's requirements implicitly include these (from `docs/superpowers/specs/2026-07-19-first-descent-design.md` §3 and §2):
+Every task's requirements implicitly include these (from `docs/specs/2026-07-19-first-descent-design.md` §3 and §2):
 
 - Authoritative numeric values (spatial, time, resource, percent) are **fixed-point scaled integers**. IEEE floats are forbidden in simulation code; allowed only in rendering (not present this milestone).
 - **One documented system order per tick.** Execution order equals system registration order and is queryable.

@@ -17,7 +17,7 @@
 - `ilvl = 64 + areaTier` (reuse `@pact/rules` `areaLevel`). Rarity odds rise with `ilvl` + `monsterRarity`; centralize in one place with a `ponytail:` calibration comment.
 - Items drop **identified** (no unidentified state this slice).
 - Inventory is in-memory on the session singleton; not saved across reload.
-- Test: `rtk proxy npx vitest run <scope>` from repo root (plain vitest under RTK flakes). Typecheck: `npm run typecheck` (mandatory — vitest strips types). Web build: `npm run build -w apps/web`.
+- Test: `npx vitest run <scope>` from repo root. Typecheck: `npm run typecheck` (mandatory — vitest strips types). Web build: `npm run build -w apps/web`.
 - Commit direct-to-main, one commit per task. **No attribution trailers, no emdashes** in messages.
 - **Verification runs against `packages/replay` (or the full suite), not just the touched package** (the waystones slice masked a checksum break by scoping too narrowly).
 
@@ -78,7 +78,7 @@ describe("validateAffix", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `rtk proxy npx vitest run packages/content-schema/src/items.test.ts`
+Run: `npx vitest run packages/content-schema/src/items.test.ts`
 Expected: FAIL (`validateItemBase`/`validateAffix` are not exported).
 
 - [ ] **Step 3: Write minimal implementation**
@@ -125,7 +125,7 @@ If `ValidationResult` is not already exported/shaped as `{ ok: true } | { ok: fa
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `rtk proxy npx vitest run packages/content-schema/src/items.test.ts`
+Run: `npx vitest run packages/content-schema/src/items.test.ts`
 Expected: PASS (5 tests).
 
 - [ ] **Step 5: Typecheck + commit**
@@ -196,7 +196,7 @@ describe("baseOf", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `rtk proxy npx vitest run packages/content-runtime/src/items.test.ts`
+Run: `npx vitest run packages/content-runtime/src/items.test.ts`
 Expected: FAIL (`./items.js` has no such exports).
 
 - [ ] **Step 3: Write minimal implementation**
@@ -265,7 +265,7 @@ export { ITEM_POOLS, baseOf, describeItem } from "./items.js";
 
 - [ ] **Step 5: Run test + typecheck**
 
-Run: `rtk proxy npx vitest run packages/content-runtime/src/items.test.ts`
+Run: `npx vitest run packages/content-runtime/src/items.test.ts`
 Expected: PASS (5 tests).
 Run: `npm run typecheck`
 Expected: rc=0.
@@ -366,7 +366,7 @@ describe("rollItem", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `rtk proxy npx vitest run packages/rules/src/items.test.ts`
+Run: `npx vitest run packages/rules/src/items.test.ts`
 Expected: FAIL (`rollItem` not defined).
 
 - [ ] **Step 3: Write minimal implementation**
@@ -432,7 +432,7 @@ export * from "./items.js";
 
 - [ ] **Step 5: Run test + typecheck**
 
-Run: `rtk proxy npx vitest run packages/rules/src/items.test.ts`
+Run: `npx vitest run packages/rules/src/items.test.ts`
 Expected: PASS (6 tests).
 Run: `npm run typecheck`
 Expected: rc=0.
@@ -500,7 +500,7 @@ describe("placeFirstFit", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `rtk proxy npx vitest run packages/simulation/src/inventory.test.ts`
+Run: `npx vitest run packages/simulation/src/inventory.test.ts`
 Expected: FAIL (`./inventory` missing).
 
 - [ ] **Step 3: Add components**
@@ -554,7 +554,7 @@ export { placeFirstFit } from "./inventory";
 
 - [ ] **Step 6: Run test + typecheck**
 
-Run: `rtk proxy npx vitest run packages/simulation/src/inventory.test.ts`
+Run: `npx vitest run packages/simulation/src/inventory.test.ts`
 Expected: PASS (4 tests).
 Run: `npm run typecheck`
 Expected: rc=0.
@@ -624,7 +624,7 @@ it("does not drop when an ordinary (non-rare, non-boss) monster dies", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `rtk proxy npx vitest run packages/simulation/src/systems/death.test.ts`
+Run: `npx vitest run packages/simulation/src/systems/death.test.ts`
 Expected: FAIL (no `item` entities are created).
 
 - [ ] **Step 3: Implement the drop in death.ts**
@@ -685,12 +685,12 @@ Add `InventoryC` to the component type import at the top of `combat-sim.ts`.
 
 - [ ] **Step 5: Run tests to verify they pass**
 
-Run: `rtk proxy npx vitest run packages/simulation/src/systems/death.test.ts`
+Run: `npx vitest run packages/simulation/src/systems/death.test.ts`
 Expected: PASS (existing death tests + 2 new).
 
 - [ ] **Step 6: Verify replay + checksum stability (the waystones lesson)**
 
-Run: `rtk proxy npx vitest run packages/simulation packages/replay`
+Run: `npx vitest run packages/simulation packages/replay`
 Expected: PASS, including boss golden replays (item objects + affix arrays serialize through `stableValue`'s existing recursive object/array handling — no checksum.ts change).
 Run: `npm run typecheck`
 Expected: rc=0.
@@ -757,7 +757,7 @@ it("reports ground items and an empty inventory in the snapshot", () => {
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `rtk proxy npx vitest run packages/protocol packages/simulation/src/protocol-bridge.test.ts`
+Run: `npx vitest run packages/protocol packages/simulation/src/protocol-bridge.test.ts`
 Expected: FAIL.
 
 - [ ] **Step 3: Extend the protocol**
@@ -871,7 +871,7 @@ Add `inventory,` to the returned `Snapshot` object literal.
 
 - [ ] **Step 5: Run tests + typecheck**
 
-Run: `rtk proxy npx vitest run packages/protocol packages/simulation/src/protocol-bridge.test.ts`
+Run: `npx vitest run packages/protocol packages/simulation/src/protocol-bridge.test.ts`
 Expected: PASS.
 Run: `npm run typecheck`
 Expected: rc=0 (fix any web/HUD callers that destructure `Snapshot` and now need the `inventory` field — the `Hud`/render tests build `Snapshot` fixtures; add `inventory: { cols: 12, rows: 5, items: [] }` to those fixtures if the compiler flags them).
@@ -954,7 +954,7 @@ describe("registerPickupSystem", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `rtk proxy npx vitest run packages/simulation/src/systems/pickup.test.ts`
+Run: `npx vitest run packages/simulation/src/systems/pickup.test.ts`
 Expected: FAIL (`./pickup` missing).
 
 - [ ] **Step 3: Implement the system**
@@ -1018,9 +1018,9 @@ Import `registerPickupSystem` in `combat-sim.ts`.
 
 - [ ] **Step 5: Run tests + replay + typecheck**
 
-Run: `rtk proxy npx vitest run packages/simulation/src/systems/pickup.test.ts`
+Run: `npx vitest run packages/simulation/src/systems/pickup.test.ts`
 Expected: PASS (3 tests).
-Run: `rtk proxy npx vitest run packages/simulation packages/replay`
+Run: `npx vitest run packages/simulation packages/replay`
 Expected: PASS (system order changed — the pickup system is appended after interact, so legacy golden replays that assert the first-N system order are unaffected; if any order-snapshot test fails, confirm the append position and update the expected order only if it is an area-based ordering check, not a legacy one).
 Run: `npm run typecheck`
 Expected: rc=0.
@@ -1063,7 +1063,7 @@ describe("ground item mesh", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `rtk proxy npx vitest run apps/web/src/render/ground-item.test.ts`
+Run: `npx vitest run apps/web/src/render/ground-item.test.ts`
 Expected: FAIL (`Y_LIFT["groundItem"]` is `undefined`).
 
 - [ ] **Step 3: Extend meshes.ts**
@@ -1096,7 +1096,7 @@ In `apps/web/src/render/renderer.ts`, `kindOf` (line 25), add before the final `
 
 - [ ] **Step 5: Run test + typecheck + build**
 
-Run: `rtk proxy npx vitest run apps/web/src/render/ground-item.test.ts`
+Run: `npx vitest run apps/web/src/render/ground-item.test.ts`
 Expected: PASS.
 Run: `npm run typecheck`
 Expected: rc=0.
@@ -1156,7 +1156,7 @@ describe("InventoryPanel", () => {
 
 - [ ] **Step 2: Run it to verify it fails**
 
-Run: `rtk proxy npx vitest run apps/web/src/hud/InventoryPanel.test.tsx`
+Run: `npx vitest run apps/web/src/hud/InventoryPanel.test.tsx`
 Expected: FAIL (module missing).
 
 - [ ] **Step 3: Implement the panel**
@@ -1220,7 +1220,7 @@ export function InventoryPanel({ inventory, onClose }: { inventory: Inventory; o
 
 - [ ] **Step 4: Run panel test**
 
-Run: `rtk proxy npx vitest run apps/web/src/hud/InventoryPanel.test.tsx`
+Run: `npx vitest run apps/web/src/hud/InventoryPanel.test.tsx`
 Expected: PASS.
 
 - [ ] **Step 5: Write the failing bindings test**
@@ -1235,7 +1235,7 @@ expect(postedIntents).toContainEqual({ kind: "pickupItem", entityId: 55 });
 
 - [ ] **Step 6: Run it to verify it fails**
 
-Run: `rtk proxy npx vitest run apps/web/src/input/bindings.test.ts`
+Run: `npx vitest run apps/web/src/input/bindings.test.ts`
 Expected: FAIL (no `g` handler yet).
 
 - [ ] **Step 7: Implement the pickup keypress in bindings.ts**
@@ -1261,7 +1261,7 @@ In `apps/web/src/input/bindings.ts`:
 
 - [ ] **Step 8: Run bindings test**
 
-Run: `rtk proxy npx vitest run apps/web/src/input/bindings.test.ts`
+Run: `npx vitest run apps/web/src/input/bindings.test.ts`
 Expected: PASS.
 
 - [ ] **Step 9: Wire the panel into App.tsx**
@@ -1288,7 +1288,7 @@ and import it: `import { InventoryPanel } from "./hud/InventoryPanel";`.
 
 - [ ] **Step 10: Run the web suite + typecheck + build**
 
-Run: `rtk proxy npx vitest run apps/web`
+Run: `npx vitest run apps/web`
 Expected: PASS (existing + new).
 Run: `npm run typecheck`
 Expected: rc=0.
@@ -1313,7 +1313,7 @@ git commit -m "feat(web): inventory panel, ground-item pickup keybind, App wirin
 
 Run: `npm run typecheck`
 Expected: rc=0.
-Run: `rtk proxy npx vitest run`
+Run: `npx vitest run`
 Expected: all packages green, including `packages/replay` golden replays (boss drop is now part of the boss golden path).
 Run: `npm run build -w apps/web`
 Expected: rc=0.
