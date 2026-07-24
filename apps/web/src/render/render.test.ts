@@ -29,6 +29,7 @@ function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
     completedNodes: [],
     entities: [],
     inventory: { cols: 12, rows: 5, items: [] },
+    equipment: {},
     ...overrides,
   };
 }

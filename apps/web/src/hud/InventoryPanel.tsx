@@ -1,8 +1,13 @@
 import React from "react";
-import type { Snapshot } from "@exiled/protocol";
+import type { DisplayItem, EquipSlotId, Intent, Snapshot } from "@exiled/protocol";
+import { canEquip } from "@exiled/simulation";
 import { ItemTooltip } from "./ItemTooltip";
 
 type Inventory = Snapshot["inventory"];
+type Equipment = Snapshot["equipment"];
+
+/** Where a drag started, which decides the intent it turns into on release. */
+type DragSource = { kind: "grid"; x: number; y: number } | { kind: "slot"; slot: EquipSlotId };
 
 // PoE2 inventory+equipment screen. The 12x5 backpack grid is functional (fed by
 // snapshot.inventory, the real drop->pickup path). The equipment paper-doll,
@@ -42,16 +47,57 @@ function slotStyle(): React.CSSProperties {
   };
 }
 
-function EquipSlot({ x, y, w, h, label }: { x: number; y: number; w: number; h: number; label: string }) {
+/**
+ * One paper-doll slot. `highlight` is driven by the in-flight drag: legal targets
+ * glow gold, illegal ones fade back, so the eye lands on the right slot without
+ * reading labels (poe2-screenshots/inventory+equipment.png).
+ */
+function EquipSlot({
+  slot, x, y, w, h, label, item, highlight, onGrab,
+}: {
+  slot: EquipSlotId; x: number; y: number; w: number; h: number; label: string;
+  item?: DisplayItem; highlight: "legal" | "illegal" | "none";
+  onGrab: (slot: EquipSlotId, e: React.PointerEvent) => void;
+}) {
+  const border = highlight === "legal" ? GOLD : item ? RARITY_BORDER[item.rarity]! : "#3b2f18";
   return (
     <div
-      data-testid={`equip-slot-${label.toLowerCase()}-${x}-${y}`}
-      style={{ ...slotStyle(), left: x * U, top: y * U, width: w * U - 4, height: h * U - 4, margin: 2 }}
+      data-testid={`equip-slot-${slot}`}
+      data-drop-slot={slot}
+      onPointerDown={item ? (e) => onGrab(slot, e) : undefined}
+      style={{
+        ...slotStyle(),
+        left: x * U, top: y * U, width: w * U - 4, height: h * U - 4, margin: 2,
+        border: `${highlight === "legal" ? 2 : 1}px solid ${border}`,
+        boxShadow: highlight === "legal"
+          ? `inset 0 0 10px rgba(0,0,0,0.75), 0 0 10px ${GOLD}88`
+          : "inset 0 0 10px rgba(0,0,0,0.75), inset 0 1px 0 rgba(200,164,77,0.08)",
+        opacity: highlight === "illegal" ? 0.35 : 1,
+        cursor: item ? "grab" : "default",
+      }}
     >
-      {label}
+      {item?.icon ? (
+        <img src={item.icon} alt={item.name} draggable={false} style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", pointerEvents: "none" }} />
+      ) : (
+        item?.name ?? label
+      )}
     </div>
   );
 }
+
+// Paper-doll layout in equipment units, matching poe2-screenshots/inventory+equipment.png.
+const PAPER_DOLL: { slot: EquipSlotId; x: number; y: number; w: number; h: number; label: string }[] = [
+  { slot: "weapon1", x: 0, y: 0, w: 2, h: 4, label: "Weapon" },
+  { slot: "weapon2", x: 8, y: 0, w: 2, h: 4, label: "Weapon" },
+  { slot: "helmet", x: 4, y: 0, w: 2, h: 2, label: "Helmet" },
+  { slot: "amulet", x: 7, y: 0, w: 1, h: 1, label: "Amulet" },
+  { slot: "body", x: 4, y: 2, w: 2, h: 3, label: "Body" },
+  { slot: "gloves", x: 2, y: 3, w: 2, h: 2, label: "Gloves" },
+  { slot: "boots", x: 6, y: 3, w: 2, h: 2, label: "Boots" },
+  { slot: "ring1", x: 3, y: 5, w: 1, h: 1, label: "Ring" },
+  { slot: "belt", x: 4, y: 5, w: 2, h: 1, label: "Belt" },
+  { slot: "ring2", x: 6, y: 5, w: 1, h: 1, label: "Ring" },
+];
 
 // Life/mana flask or charm vial.
 function Flask({ kind }: { kind: "life" | "mana" | "charm" }) {
@@ -99,9 +145,62 @@ function SectionRule({ children }: { children?: React.ReactNode }) {
   );
 }
 
-export function InventoryPanel({ inventory, onClose }: { inventory: Inventory; onClose: () => void }) {
+export function InventoryPanel({
+  inventory, equipment = {}, onClose, onIntent,
+}: {
+  inventory: Inventory; equipment?: Equipment; onClose: () => void; onIntent?: (intent: Intent) => void;
+}) {
   const { cols, rows, items } = inventory;
   const [hover, setHover] = React.useState<{ i: number; x: number; y: number } | null>(null);
+  const [drag, setDrag] = React.useState<{ from: DragSource; item: DisplayItem; x: number; y: number } | null>(null);
+  const boxRef = React.useRef<HTMLDivElement | null>(null);
+
+  // Pointer events, not HTML5 drag-and-drop: the release target can be the Babylon
+  // canvas behind the panel (drop to ground), which native DnD does not reach.
+  React.useEffect(() => {
+    if (!drag) return;
+    const move = (e: PointerEvent) => setDrag((d) => (d ? { ...d, x: e.clientX, y: e.clientY } : d));
+    const up = (e: PointerEvent) => {
+      setDrag(null);
+      // e.target is the topmost element under the pointer (nothing captures it, and
+      // the drag ghost is pointer-transparent); elementFromPoint covers synthetic events.
+      const target = e.target instanceof Element ? e.target : document.elementFromPoint(e.clientX, e.clientY);
+      const slot = target?.closest<HTMLElement>("[data-drop-slot]")?.dataset["dropSlot"] as EquipSlotId | undefined;
+      const onGrid = !!target?.closest("[data-drop-grid]");
+      const insidePanel = !!boxRef.current && !!target && boxRef.current.contains(target);
+      if (slot) {
+        if (drag.from.kind === "grid" && canEquip(drag.item.itemClass ?? "", slot)) {
+          onIntent?.({ kind: "equipItem", x: drag.from.x, y: drag.from.y, slot });
+        }
+        return;
+      }
+      if (onGrid) {
+        if (drag.from.kind === "slot") onIntent?.({ kind: "unequipItem", slot: drag.from.slot });
+        return;
+      }
+      // Released over the world behind the panel: the item goes back on the floor.
+      if (!insidePanel && drag.from.kind === "grid") {
+        onIntent?.({ kind: "dropItem", x: drag.from.x, y: drag.from.y });
+      }
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    return () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+  }, [drag, onIntent]);
+
+  const grab = (from: DragSource, item: DisplayItem, e: React.PointerEvent) => {
+    e.preventDefault();
+    setHover(null);
+    setDrag({ from, item, x: e.clientX, y: e.clientY });
+  };
+  const slotHighlight = (slot: EquipSlotId): "legal" | "illegal" | "none" => {
+    if (!drag || drag.from.kind === "slot") return "none";
+    return canEquip(drag.item.itemClass ?? "", slot) ? "legal" : "illegal";
+  };
+
   const equipW = 10 * U; // paper-doll spans 10 units wide
   const equipH = 6 * U;
   const gridW = cols * CELL;
@@ -123,6 +222,7 @@ export function InventoryPanel({ inventory, onClose }: { inventory: Inventory; o
       }}
     >
       <div
+        ref={boxRef}
         style={{
           maxHeight: "96vh",
           overflowY: "auto",
@@ -159,16 +259,15 @@ export function InventoryPanel({ inventory, onClose }: { inventory: Inventory; o
         <div style={{ padding: 20, width: contentW, boxSizing: "content-box" }}>
           {/* Equipment paper-doll */}
           <div style={{ position: "relative", width: equipW, height: equipH, margin: "0 auto" }}>
-            <EquipSlot x={0} y={0} w={2} h={4} label="Weapon" />
-            <EquipSlot x={8} y={0} w={2} h={4} label="Weapon" />
-            <EquipSlot x={4} y={0} w={2} h={2} label="Helmet" />
-            <EquipSlot x={7} y={0} w={1} h={1} label="Amulet" />
-            <EquipSlot x={4} y={2} w={2} h={3} label="Body" />
-            <EquipSlot x={2} y={3} w={2} h={2} label="Gloves" />
-            <EquipSlot x={6} y={3} w={2} h={2} label="Boots" />
-            <EquipSlot x={3} y={5} w={1} h={1} label="Ring" />
-            <EquipSlot x={4} y={5} w={2} h={1} label="Belt" />
-            <EquipSlot x={6} y={5} w={1} h={1} label="Ring" />
+            {PAPER_DOLL.map((s) => (
+              <EquipSlot
+                key={s.slot}
+                {...s}
+                item={equipment[s.slot]}
+                highlight={slotHighlight(s.slot)}
+                onGrab={(slot, e) => grab({ kind: "slot", slot }, equipment[slot]!, e)}
+              />
+            ))}
           </div>
 
           {/* Flasks + currency */}
@@ -190,6 +289,7 @@ export function InventoryPanel({ inventory, onClose }: { inventory: Inventory; o
           {/* Backpack grid (functional) */}
           <SectionRule>Backpack</SectionRule>
           <div
+            data-drop-grid=""
             style={{
               position: "relative",
               width: gridW,
@@ -213,9 +313,10 @@ export function InventoryPanel({ inventory, onClose }: { inventory: Inventory; o
               <div
                 key={i}
                 data-testid={`inventory-item-${i}`}
-                onMouseEnter={(e) => setHover({ i, x: e.clientX + 18, y: e.clientY + 18 })}
-                onMouseMove={(e) => setHover({ i, x: e.clientX + 18, y: e.clientY + 18 })}
+                onMouseEnter={(e) => !drag && setHover({ i, x: e.clientX + 18, y: e.clientY + 18 })}
+                onMouseMove={(e) => !drag && setHover({ i, x: e.clientX + 18, y: e.clientY + 18 })}
                 onMouseLeave={() => setHover((h) => (h?.i === i ? null : h))}
+                onPointerDown={(e) => grab({ kind: "grid", x: it.x, y: it.y }, it, e)}
                 style={{
                   position: "absolute",
                   left: it.x * CELL + 2,
@@ -235,6 +336,8 @@ export function InventoryPanel({ inventory, onClose }: { inventory: Inventory; o
                   padding: 2,
                   boxSizing: "border-box",
                   boxShadow: `inset 0 0 8px ${RARITY_BORDER[it.rarity]}44`,
+                  cursor: "grab",
+                  opacity: drag?.from.kind === "grid" && drag.from.x === it.x && drag.from.y === it.y ? 0.3 : 1,
                 }}
               >
                 {it.icon ? (
@@ -267,6 +370,31 @@ export function InventoryPanel({ inventory, onClose }: { inventory: Inventory; o
           x={hover.x}
           y={hover.y}
         />
+      )}
+      {drag && (
+        <div
+          data-testid="drag-ghost"
+          style={{
+            position: "fixed",
+            left: drag.x - CELL / 2,
+            top: drag.y - CELL / 2,
+            width: CELL * 1.5,
+            height: CELL * 1.5,
+            pointerEvents: "none",
+            zIndex: 10,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: RARITY_TEXT[drag.item.rarity],
+            fontSize: 10,
+            textShadow: "0 1px 2px #000",
+            filter: `drop-shadow(0 0 6px ${RARITY_BORDER[drag.item.rarity]})`,
+          }}
+        >
+          {drag.item.icon
+            ? <img src={drag.item.icon} alt="" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+            : drag.item.name}
+        </div>
       )}
     </div>
   );

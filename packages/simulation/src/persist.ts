@@ -1,6 +1,6 @@
 import type { KvStore } from "@exiled/persistence";
 import type { World } from "./ecs";
-import type { SessionC, InventoryC } from "./components";
+import type { SessionC, InventoryC, EquipmentC } from "./components";
 
 /**
  * Run-transaction persistence. The whole durable state (session + inventory) is
@@ -16,6 +16,7 @@ interface PersistedState {
   version: number;
   session: SessionC;
   inventory: InventoryC;
+  equipment?: EquipmentC;
 }
 
 /** Read the durable state off the session singleton, or null if there is none. */
@@ -25,7 +26,8 @@ export function snapshot(world: World): PersistedState | null {
   const session = world.get<SessionC>(e, "session");
   const inventory = world.get<InventoryC>(e, "inventory");
   if (!session || !inventory) return null;
-  return { version: VERSION, session, inventory };
+  const equipment = world.get<EquipmentC>(e, "equipment") ?? { slots: {} };
+  return { version: VERSION, session, inventory, equipment };
 }
 
 /**
@@ -47,6 +49,7 @@ export function restore(world: World, state: PersistedState): void {
   };
   world.set<SessionC>(e, "session", safe);
   world.set<InventoryC>(e, "inventory", state.inventory);
+  world.set<EquipmentC>(e, "equipment", state.equipment ?? { slots: {} });
 }
 
 /** Serialize `world`'s durable state to `kv`. No-op if there is no session. */

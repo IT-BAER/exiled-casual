@@ -1,3 +1,4 @@
+import type { EquipSlotId } from "@exiled/protocol";
 import { World, type Entity } from "./ecs";
 import type { DamageEvent } from "./components";
 
@@ -12,6 +13,8 @@ export interface Command {
   atlasNodeId?: string;
   /** Set when type === "activateMap" */
   waystoneId?: string;
+  /** Set when type === "equipItem" | "unequipItem" */
+  slot?: EquipSlotId;
 }
 
 export type System = (

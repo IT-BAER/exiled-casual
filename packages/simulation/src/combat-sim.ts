@@ -9,7 +9,7 @@ import { World } from "./ecs";
 import type { Entity } from "./ecs";
 import type {
   Position, Health, Mana, Faction, PlayerC, Cooldowns, DefensesC,
-  MoveTarget, MoveDir, SessionC, AreaKind, InventoryC, ItemC,
+  MoveTarget, MoveDir, SessionC, AreaKind, InventoryC, ItemC, EquipmentC,
 } from "./components";
 import { registerResourceRegen } from "./systems/resource";
 import { registerSkillCast } from "./systems/skill-cast";
@@ -25,6 +25,7 @@ import { registerDeath } from "./systems/death";
 import { registerExpiry } from "./systems/expiry";
 import { registerInteractSystem } from "./systems/interact";
 import { registerPickupSystem } from "./systems/pickup";
+import { registerEquipmentSystem } from "./systems/equipment";
 import { registerAreaTransition } from "./systems/area-transition";
 import { buildArea, spawnMonster } from "./areas";
 
@@ -103,12 +104,14 @@ export function createCombatSim(
     };
     world.set<SessionC>(sessionE, "session", session);
     world.set<InventoryC>(sessionE, "inventory", { cols: 12, rows: 5, items: [] });
+    world.set<EquipmentC>(sessionE, "equipment", { slots: {} });
     buildArea(world, opts.area, session, layout);
 
     // New systems only needed for area-based sims. Appended to preserve the
     // canonical ordering of the first 12 systems (checked by legacy tests).
     registerInteractSystem(sim);
     registerPickupSystem(sim);
+    registerEquipmentSystem(sim);
     registerAreaTransition(sim, collisionRef);
   } else {
     // ── Legacy path: no session, golden-replay–safe bootstrap ────────────

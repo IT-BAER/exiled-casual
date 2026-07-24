@@ -1,0 +1,300 @@
+import { describe, it, expect } from "vitest";
+import { fp } from "@exiled/fixed-point";
+import { MemoryKv } from "@exiled/persistence";
+import type { Item } from "@exiled/content-schema";
+import { createCombatSim } from "./combat-sim";
+import { intentToCommand, buildSnapshot } from "./protocol-bridge";
+import { saveTo, loadInto } from "./persist";
+import { canEquip, EQUIP_SLOTS_BY_CLASS } from "./equipment";
+import { CONTENT_VERSION } from "@exiled/content-runtime";
+import type { InventoryC, EquipmentC, Position } from "./components";
+
+// ---------------------------------------------------------------------------
+// Fixtures
+// ---------------------------------------------------------------------------
+
+// base.emberwand: itemClass="wand", w=1, h=2
+const WAND: Item = { baseId: "base.emberwand", rarity: "normal", itemLevel: 65, affixes: [] };
+// base.cinder_cap: itemClass="helmet", w=2, h=2
+const HELMET: Item = { baseId: "base.cinder_cap", rarity: "normal", itemLevel: 65, affixes: [] };
+// base.ashen_focus: itemClass="focus", w=2, h=2
+const FOCUS: Item = { baseId: "base.ashen_focus", rarity: "normal", itemLevel: 65, affixes: [] };
+
+function makeWorld() {
+  return createCombatSim(7, { area: "hideout" });
+}
+
+function sessionE(world: ReturnType<typeof makeWorld>["world"]) {
+  return world.query("session")[0]!;
+}
+
+function getInv(world: ReturnType<typeof makeWorld>["world"]): InventoryC {
+  return world.get<InventoryC>(sessionE(world), "inventory")!;
+}
+
+function getEquip(world: ReturnType<typeof makeWorld>["world"]): EquipmentC {
+  return world.get<EquipmentC>(sessionE(world), "equipment")!;
+}
+
+function placeInInv(
+  world: ReturnType<typeof makeWorld>["world"],
+  item: Item, x: number, y: number, w: number, h: number,
+) {
+  const inv = getInv(world);
+  world.set<InventoryC>(sessionE(world), "inventory", {
+    ...inv,
+    items: [...inv.items, { x, y, w, h, item }],
+  });
+}
+
+// ---------------------------------------------------------------------------
+// canEquip / EQUIP_SLOTS_BY_CLASS unit tests
+// ---------------------------------------------------------------------------
+
+describe("canEquip", () => {
+  it("allows wand in weapon1 and weapon2", () => {
+    expect(canEquip("wand", "weapon1")).toBe(true);
+    expect(canEquip("wand", "weapon2")).toBe(true);
+  });
+
+  it("rejects wand in helmet slot", () => {
+    expect(canEquip("wand", "helmet")).toBe(false);
+  });
+
+  it("rejects unknown item class anywhere", () => {
+    expect(canEquip("boots", "weapon1")).toBe(false);
+    expect(canEquip("unknown", "helmet")).toBe(false);
+  });
+
+  it("allows helmet in helmet slot only", () => {
+    expect(canEquip("helmet", "helmet")).toBe(true);
+    expect(canEquip("helmet", "weapon1")).toBe(false);
+  });
+
+  it("EQUIP_SLOTS_BY_CLASS wand entry contains weapon1 and weapon2", () => {
+    expect(EQUIP_SLOTS_BY_CLASS["wand"]).toContain("weapon1");
+    expect(EQUIP_SLOTS_BY_CLASS["wand"]).toContain("weapon2");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// equipItem intent
+// ---------------------------------------------------------------------------
+
+describe("equipment system — equipItem", () => {
+  it("equips a wand from the grid into weapon1: removes from grid, fills slot", () => {
+    const { sim, world, playerEntity } = makeWorld();
+    placeInInv(world, WAND, 0, 0, 1, 2);
+
+    sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "weapon1" }, playerEntity, 0)]);
+
+    expect(getInv(world).items).toHaveLength(0);
+    expect(getEquip(world).slots["weapon1"]?.baseId).toBe("base.emberwand");
+  });
+
+  it("rejects equipping a helmet into weapon1 (illegal class/slot pair)", () => {
+    const { sim, world, playerEntity } = makeWorld();
+    placeInInv(world, HELMET, 0, 0, 2, 2);
+
+    sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "weapon1" }, playerEntity, 0)]);
+
+    expect(getInv(world).items).toHaveLength(1); // unchanged
+    expect(getEquip(world).slots["weapon1"]).toBeUndefined();
+  });
+
+  it("no-op when no item at the given origin cell", () => {
+    const { sim, world, playerEntity } = makeWorld();
+
+    sim.step([intentToCommand({ kind: "equipItem", x: 5, y: 3, slot: "weapon1" }, playerEntity, 0)]);
+
+    expect(getEquip(world).slots["weapon1"]).toBeUndefined();
+  });
+
+  it("equipping into an occupied slot swaps the occupant back into the grid", () => {
+    const { sim, world, playerEntity } = makeWorld();
+
+    // Equip first wand
+    placeInInv(world, WAND, 0, 0, 1, 2);
+    sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "weapon1" }, playerEntity, 0)]);
+    expect(getEquip(world).slots["weapon1"]?.itemLevel).toBe(65);
+
+    // Equip second wand (different itemLevel to tell them apart)
+    placeInInv(world, { ...WAND, itemLevel: 70 }, 0, 0, 1, 2);
+    sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "weapon1" }, playerEntity, 1)]);
+
+    expect(getEquip(world).slots["weapon1"]?.itemLevel).toBe(70);
+    expect(getInv(world).items).toHaveLength(1);
+    expect(getInv(world).items[0]!.item.itemLevel).toBe(65); // first wand back in grid
+  });
+
+  it("rolls back entirely when displaced occupant does not fit back in the grid", () => {
+    const { sim, world, playerEntity } = makeWorld();
+
+    // Use a 1-col × 2-row inventory: exactly fits a wand (1x2), never a focus (2x2).
+    world.set<InventoryC>(sessionE(world), "inventory", { cols: 1, rows: 2, items: [] });
+
+    // Manually put a focus (2x2) into weapon1 (bypasses equip rules; tests rollback path only).
+    world.set<EquipmentC>(sessionE(world), "equipment", { slots: { weapon1: FOCUS } });
+
+    // Place a wand in the 1x2 inventory.
+    placeInInv(world, WAND, 0, 0, 1, 2);
+
+    // Try to equip the wand into weapon1. After removing wand from grid (empty), the
+    // system tries to place the 2x2 focus back into a 1-col grid → fails → rollback.
+    sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "weapon1" }, playerEntity, 0)]);
+
+    // Everything must be unchanged.
+    expect(getInv(world).items).toHaveLength(1);
+    expect(getInv(world).items[0]!.item.baseId).toBe("base.emberwand");
+    expect(getEquip(world).slots["weapon1"]?.baseId).toBe("base.ashen_focus");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// unequipItem intent
+// ---------------------------------------------------------------------------
+
+describe("equipment system — unequipItem", () => {
+  it("unequip returns item to the grid", () => {
+    const { sim, world, playerEntity } = makeWorld();
+
+    placeInInv(world, WAND, 0, 0, 1, 2);
+    sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "weapon1" }, playerEntity, 0)]);
+    expect(getEquip(world).slots["weapon1"]).toBeDefined();
+
+    sim.step([intentToCommand({ kind: "unequipItem", slot: "weapon1" }, playerEntity, 1)]);
+
+    expect(getEquip(world).slots["weapon1"]).toBeUndefined();
+    expect(getInv(world).items).toHaveLength(1);
+    expect(getInv(world).items[0]!.item.baseId).toBe("base.emberwand");
+  });
+
+  it("no-op when the slot is already empty", () => {
+    const { sim, world, playerEntity } = makeWorld();
+
+    sim.step([intentToCommand({ kind: "unequipItem", slot: "weapon1" }, playerEntity, 0)]);
+
+    expect(getEquip(world).slots["weapon1"]).toBeUndefined();
+    expect(getInv(world).items).toHaveLength(0);
+  });
+
+  it("no-op when inventory is full (item stays equipped)", () => {
+    const { sim, world, playerEntity } = makeWorld();
+
+    // Use a 1x1 inventory (too small for any real item).
+    world.set<InventoryC>(sessionE(world), "inventory", { cols: 1, rows: 1, items: [] });
+    world.set<EquipmentC>(sessionE(world), "equipment", { slots: { weapon1: WAND } });
+
+    // Wand is 1x2 → h=2 > rows=1 → placeFirstFit returns null → no-op.
+    sim.step([intentToCommand({ kind: "unequipItem", slot: "weapon1" }, playerEntity, 0)]);
+
+    expect(getEquip(world).slots["weapon1"]?.baseId).toBe("base.emberwand");
+    expect(getInv(world).items).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// dropItem intent
+// ---------------------------------------------------------------------------
+
+describe("equipment system — dropItem", () => {
+  it("removes item from grid and spawns a groundItem entity at the player position", () => {
+    const { sim, world, playerEntity } = makeWorld();
+    placeInInv(world, WAND, 0, 0, 1, 2);
+
+    const playerPos = world.get<Position>(playerEntity, "position")!;
+    sim.step([intentToCommand({ kind: "dropItem", x: 0, y: 0 }, playerEntity, 0)]);
+
+    expect(getInv(world).items).toHaveLength(0);
+
+    const groundItems = world.query("item", "position");
+    expect(groundItems).toHaveLength(1);
+    const pos = world.get<Position>(groundItems[0]!, "position")!;
+    expect(pos.x).toBe(playerPos.x);
+    expect(pos.y).toBe(playerPos.y);
+  });
+
+  it("no-op when no item at the given origin cell", () => {
+    const { sim, world, playerEntity } = makeWorld();
+
+    sim.step([intentToCommand({ kind: "dropItem", x: 3, y: 2 }, playerEntity, 0)]);
+
+    expect(getInv(world).items).toHaveLength(0);
+    expect(world.query("item", "position")).toHaveLength(0);
+  });
+
+  it("dropped item is pickup-able by the existing pickup path", () => {
+    const { sim, world, playerEntity } = makeWorld();
+    placeInInv(world, WAND, 0, 0, 1, 2);
+
+    // Drop it (player at origin, item spawns at origin).
+    sim.step([intentToCommand({ kind: "dropItem", x: 0, y: 0 }, playerEntity, 0)]);
+    expect(getInv(world).items).toHaveLength(0);
+
+    const groundEntity = world.query("item", "position")[0]!;
+    // Pick it back up.
+    sim.step([intentToCommand({ kind: "pickupItem", entityId: groundEntity }, playerEntity, 1)]);
+
+    expect(getInv(world).items).toHaveLength(1);
+    expect(world.alive.has(groundEntity)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Snapshot — equipment field
+// ---------------------------------------------------------------------------
+
+describe("buildSnapshot — equipment", () => {
+  it("snapshot.equipment is empty when no slots are filled", () => {
+    const { world, sim } = makeWorld();
+    const snap = buildSnapshot(world, sim, 0, CONTENT_VERSION);
+    expect(snap.equipment).toEqual({});
+  });
+
+  it("snapshot.equipment reflects a filled slot with display-ready fields", () => {
+    const { world, sim } = makeWorld();
+    world.set<EquipmentC>(sessionE(world), "equipment", { slots: { weapon1: WAND } });
+
+    const snap = buildSnapshot(world, sim, 0, CONTENT_VERSION);
+    expect(snap.equipment["weapon1"]).toBeDefined();
+    expect(snap.equipment["weapon1"]!.name).toBe("Ember Wand");
+    expect(snap.equipment["weapon1"]!.rarity).toBe("normal");
+    expect(snap.equipment["weapon1"]!.itemClass).toBe("wand");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Persist round-trip
+// ---------------------------------------------------------------------------
+
+describe("persist — equipment", () => {
+  it("round-trip preserves filled equipment slots", async () => {
+    const kv = new MemoryKv();
+    const { world } = makeWorld();
+    world.set<EquipmentC>(sessionE(world), "equipment", { slots: { weapon1: WAND } });
+
+    await saveTo(kv, world);
+
+    const { world: w2 } = makeWorld();
+    expect(await loadInto(kv, w2)).toBe(true);
+    expect(w2.get<EquipmentC>(sessionE(w2), "equipment")!.slots["weapon1"]?.baseId)
+      .toBe("base.emberwand");
+  });
+
+  it("old save without equipment field loads as empty slots (backwards compat)", async () => {
+    const kv = new MemoryKv();
+    // Manually write a v1 save with no equipment field.
+    await kv.save(JSON.stringify({
+      version: 1,
+      session: {
+        area: "hideout", atlasSeed: 0, mapSeed: 0, areaTier: 0,
+        activeNodeId: "", completedNodes: [], portalsLeft: 0, mapOpen: 0, pendingArea: "",
+      },
+      inventory: { cols: 12, rows: 5, items: [] },
+    }));
+
+    const { world } = makeWorld();
+    expect(await loadInto(kv, world)).toBe(true);
+    expect(world.get<EquipmentC>(sessionE(world), "equipment")!.slots).toEqual({});
+  });
+});

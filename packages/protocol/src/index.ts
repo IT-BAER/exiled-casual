@@ -15,9 +15,15 @@ export type Intent =
   /** Activate the map device with a chosen node + waystone. Sim re-validates both. */
   | { kind: "activateMap"; atlasNodeId: string; waystoneId: string }
   /** Pick up a ground item. Sim re-checks range + placement. */
-  | { kind: "pickupItem"; entityId: number };
+  | { kind: "pickupItem"; entityId: number }
+  /** Equip an item whose ORIGIN cell in the backpack grid is (x,y) into the given slot. */
+  | { kind: "equipItem"; x: number; y: number; slot: EquipSlotId }
+  /** Unequip a slot back into the backpack grid; no-op if empty or no room. */
+  | { kind: "unequipItem"; slot: EquipSlotId }
+  /** Drop a backpack item (by ORIGIN cell) as a ground entity at the player's feet. */
+  | { kind: "dropItem"; x: number; y: number };
 
-export type CommandType = "moveTo" | "moveDir" | "useSkill" | "stop" | "interact" | "activateMap" | "pickupItem";
+export type CommandType = "moveTo" | "moveDir" | "useSkill" | "stop" | "interact" | "activateMap" | "pickupItem" | "equipItem" | "unequipItem" | "dropItem";
 
 // ---------------------------------------------------------------------------
 // Run loop
@@ -38,6 +44,16 @@ export const MAP_PORTALS = 6;
 
 /** Rarity tint for a display-ready item. Protocol-local; no content-schema import. */
 export type ItemRarity = "normal" | "magic" | "rare" | "unique";
+
+export type EquipSlotId =
+  | "weapon1" | "weapon2" | "helmet" | "body" | "gloves" | "boots" | "belt" | "amulet" | "ring1" | "ring2";
+
+/** Display-ready item shape shared by inventory cells and equipped slots. */
+export interface DisplayItem {
+  rarity: ItemRarity; name: string; baseName?: string; itemClass?: string; lines: string[];
+  flavour?: string; icon?: string;
+  statLines?: ItemStatLine[]; reqLevel?: number; reqAttrValue?: number; reqAttr?: string;
+}
 
 /** Interaction range for picking up a ground item, Fixed-scaled (matches device/portal interact radius fp(2.5)). */
 export const PICKUP_RADIUS = fp(2.5);
@@ -128,15 +144,10 @@ export interface Snapshot {
   /** Grid inventory (session singleton), display-ready. Empty when no session. */
   inventory: {
     cols: number; rows: number;
-    items: {
-      x: number; y: number; w: number; h: number;
-      rarity: ItemRarity; name: string; baseName?: string; itemClass?: string; lines: string[];
-      flavour?: string;
-      /** Inventory art URL; absent means the cell falls back to the item name. */
-      icon?: string;
-      statLines?: ItemStatLine[]; reqLevel?: number; reqAttrValue?: number; reqAttr?: string;
-    }[];
+    items: (DisplayItem & { x: number; y: number; w: number; h: number })[];
   };
+  /** Equipped gear by slot. Absent keys mean an empty slot. Absent field means no session. */
+  equipment: Partial<Record<EquipSlotId, DisplayItem>>;
 }
 
 export interface FromWorker_Snapshot { type: "snapshot"; snapshot: Snapshot }
@@ -149,6 +160,10 @@ export type FromWorker = FromWorker_Snapshot | FromWorker_Ready | FromWorker_Are
 // ---------------------------------------------------------------------------
 // Codecs
 // ---------------------------------------------------------------------------
+
+const EQUIP_SLOT_IDS = new Set<string>([
+  "weapon1", "weapon2", "helmet", "body", "gloves", "boots", "belt", "amulet", "ring1", "ring2",
+]);
 
 // Validates and returns the Intent, or throws a descriptive Error.
 export function validateIntent(v: unknown): Intent {
@@ -205,6 +220,23 @@ export function validateIntent(v: unknown): Intent {
       if (!Number.isInteger(obj["entityId"]))
         throw new Error("validateIntent pickupItem: entityId must be an integer");
       return { kind: "pickupItem", entityId: obj["entityId"] as number };
+    }
+    case "equipItem": {
+      if (!Number.isInteger(obj["x"])) throw new Error("validateIntent equipItem: x must be an integer");
+      if (!Number.isInteger(obj["y"])) throw new Error("validateIntent equipItem: y must be an integer");
+      if (!EQUIP_SLOT_IDS.has(obj["slot"] as string))
+        throw new Error("validateIntent equipItem: slot must be a valid EquipSlotId");
+      return { kind: "equipItem", x: obj["x"] as number, y: obj["y"] as number, slot: obj["slot"] as EquipSlotId };
+    }
+    case "unequipItem": {
+      if (!EQUIP_SLOT_IDS.has(obj["slot"] as string))
+        throw new Error("validateIntent unequipItem: slot must be a valid EquipSlotId");
+      return { kind: "unequipItem", slot: obj["slot"] as EquipSlotId };
+    }
+    case "dropItem": {
+      if (!Number.isInteger(obj["x"])) throw new Error("validateIntent dropItem: x must be an integer");
+      if (!Number.isInteger(obj["y"])) throw new Error("validateIntent dropItem: y must be an integer");
+      return { kind: "dropItem", x: obj["x"] as number, y: obj["y"] as number };
     }
     default:
       throw new Error(`validateIntent: unknown kind: ${String(obj["kind"])}`);

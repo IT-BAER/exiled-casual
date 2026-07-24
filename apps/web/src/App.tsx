@@ -8,7 +8,7 @@ import { attachBindings } from "./input/bindings";
 import { Hud } from "./hud/Hud";
 import { PreparationPanel } from "./hud/PreparationPanel";
 import { InventoryPanel } from "./hud/InventoryPanel";
-import type { Snapshot, FromWorker } from "@exiled/protocol";
+import type { Snapshot, FromWorker, ToWorker } from "@exiled/protocol";
 
 const LAB_SEED = 42;
 // ponytail: fixed seed for the lab; M3 will thread seed from game state
@@ -145,7 +145,12 @@ export function App() {
         />
       )}
       {inventoryOpen && snapshot && (
-        <InventoryPanel inventory={snapshot.inventory} onClose={() => setInventoryOpen(false)} />
+        <InventoryPanel
+          inventory={snapshot.inventory}
+          equipment={snapshot.equipment}
+          onIntent={(intent) => workerRef.current?.postMessage({ type: "intent", intent } satisfies ToWorker)}
+          onClose={() => setInventoryOpen(false)}
+        />
       )}
     </div>
   );

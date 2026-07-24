@@ -55,11 +55,43 @@ describe("InventoryPanel", () => {
     expect(cell.textContent).toBe("Ember Wand");
   });
 
-  it("ships an art file for every base icon path", () => {
-    for (const base of ITEM_POOLS.bases) {
-      if (!base.icon) continue;
-      const file = resolve(__dirname, "../../public", base.icon.replace(/^\//, ""));
-      expect(existsSync(file), `${base.id} icon missing: ${file}`).toBe(true);
+  it("drags a backpack item onto a legal slot, ignores an illegal one, and drops to the ground outside the panel", () => {
+    const intents: unknown[] = [];
+    render(<InventoryPanel inventory={inv} equipment={{}} onIntent={(i) => intents.push(i)} onClose={() => {}} />);
+    const item = screen.getByTestId("inventory-item-0");
+
+    // wand -> weapon1 is legal
+    fireEvent.pointerDown(item, { clientX: 10, clientY: 10 });
+    expect(screen.getByTestId("drag-ghost")).toBeTruthy();
+    fireEvent.pointerUp(screen.getByTestId("equip-slot-weapon1"));
+    expect(intents).toEqual([{ kind: "equipItem", x: 0, y: 0, slot: "weapon1" }]);
+
+    // wand -> boots is not
+    fireEvent.pointerDown(item, { clientX: 10, clientY: 10 });
+    fireEvent.pointerUp(screen.getByTestId("equip-slot-boots"));
+    expect(intents).toHaveLength(1);
+
+    // released on the backdrop, i.e. over the world behind the panel
+    fireEvent.pointerDown(item, { clientX: 10, clientY: 10 });
+    fireEvent.pointerUp(screen.getByTestId("inventory-panel"));
+    expect(intents[1]).toEqual({ kind: "dropItem", x: 0, y: 0 });
+  });
+
+  it("drags an equipped item back to the grid to unequip it", () => {
+    const intents: unknown[] = [];
+    const equipped = { weapon1: { rarity: "magic" as const, name: "Ember Wand", itemClass: "wand", lines: [] } };
+    render(<InventoryPanel inventory={{ ...inv, items: [] }} equipment={equipped} onIntent={(i) => intents.push(i)} onClose={() => {}} />);
+
+    fireEvent.pointerDown(screen.getByTestId("equip-slot-weapon1"), { clientX: 10, clientY: 10 });
+    fireEvent.pointerUp(document.querySelector("[data-drop-grid]")!);
+    expect(intents).toEqual([{ kind: "unequipItem", slot: "weapon1" }]);
+  });
+
+  it("ships an art file for every base and unique icon path", () => {
+    for (const src of [...ITEM_POOLS.bases, ...(ITEM_POOLS.uniques ?? [])]) {
+      if (!src.icon) continue;
+      const file = resolve(__dirname, "../../public", src.icon.replace(/^\//, ""));
+      expect(existsSync(file), `${src.id} icon missing: ${file}`).toBe(true);
     }
   });
 });

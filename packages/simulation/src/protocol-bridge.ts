@@ -7,7 +7,7 @@ import type { World, Entity } from "./ecs";
 import type {
   Health, Mana, Position, Cooldowns, CastingC, MonsterC,
   AilmentC, ProjectileC, GroundAreaC, BossC, TelegraphC,
-  SessionC, InteractableC, ItemC, InventoryC,
+  SessionC, InteractableC, ItemC, InventoryC, EquipmentC,
 } from "./components";
 
 /**
@@ -46,6 +46,12 @@ export function intentToCommand(intent: Intent, player: Entity, tick: number): C
       };
     case "pickupItem":
       return { tick, entity: player, type: "pickupItem", data: { entityId: intent.entityId } };
+    case "equipItem":
+      return { tick, entity: player, type: "equipItem", data: { x: intent.x, y: intent.y }, slot: intent.slot };
+    case "unequipItem":
+      return { tick, entity: player, type: "unequipItem", slot: intent.slot };
+    case "dropItem":
+      return { tick, entity: player, type: "dropItem", data: { x: intent.x, y: intent.y } };
   }
 }
 
@@ -184,6 +190,20 @@ export function buildSnapshot(
     }),
   };
 
+  const equipC = sessionE !== undefined ? world.get<EquipmentC>(sessionE, "equipment") : undefined;
+  const equipment: Snapshot["equipment"] = {};
+  if (equipC) {
+    for (const [slot, item] of Object.entries(equipC.slots)) {
+      if (item === undefined) continue;
+      const d = describeItem(item);
+      equipment[slot as keyof typeof equipment] = {
+        rarity: d.rarity, name: d.name, baseName: d.baseName, itemClass: d.itemClass,
+        lines: d.lines, flavour: d.flavour, icon: d.icon,
+        statLines: d.statLines, reqLevel: d.reqLevel, reqAttrValue: d.reqAttrValue, reqAttr: d.reqAttr,
+      };
+    }
+  }
+
   return {
     tick,
     area: session?.area ?? "map",
@@ -206,5 +226,6 @@ export function buildSnapshot(
     },
     entities,
     inventory,
+    equipment,
   };
 }

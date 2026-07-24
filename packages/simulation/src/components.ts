@@ -134,3 +134,5 @@ export interface ItemC { item: Item; w: number; h: number }
 export interface PlacedItem { x: number; y: number; w: number; h: number; item: Item }
 /** Grid inventory on the session singleton. In-memory only this slice. */
 export interface InventoryC { cols: number; rows: number; items: PlacedItem[] }
+/** Equipped gear on the session singleton, keyed by slot id. */
+export interface EquipmentC { slots: Partial<Record<string, Item>> }

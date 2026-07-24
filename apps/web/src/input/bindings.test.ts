@@ -31,6 +31,7 @@ function makeSnap(entityOverrides: Partial<Snapshot["entities"][number]>[] = [])
     player: { id: 0, x: 0, y: 0, life: 100, maxLife: 100, mana: 60, maxMana: 60, cooldowns: {}, alive: true, casting: false },
     entities: entityOverrides as Snapshot["entities"],
     inventory: { cols: 12, rows: 5, items: [] },
+    equipment: {},
   };
 }
 
