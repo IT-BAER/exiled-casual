@@ -341,7 +341,8 @@ describe("buildSnapshot — ground items and inventory", () => {
     const gi = snap.entities.find((e) => e.kind === "groundItem");
     expect(gi).toBeDefined();
     expect(gi!.rarity).toBe(item.rarity);
-    expect(gi!.name).toBe(base.name);
+    // Magic and rare rolls carry their own name; only a normal item falls back to the base.
+    expect(gi!.name).toBe(item.name ?? base.name);
     expect(gi!.inRange).toBe(true);
     expect(snap.inventory).toEqual({ cols: 12, rows: 5, items: [] });
   });

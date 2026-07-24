@@ -18,7 +18,7 @@ describe("validateItemBase", () => {
 
 describe("validateAffix", () => {
   it("accepts a well-formed affix", () => {
-    const r = validateAffix({ id: "affix.life", kind: "prefix", stat: "maxLife", label: "to maximum Life", minItemLevel: 1, min: 5, max: 20 });
+    const r = validateAffix({ id: "affix.life", kind: "prefix", nameWord: "Hale", stat: "maxLife", label: "to maximum Life", minItemLevel: 1, min: 5, max: 20 });
     expect(r.ok).toBe(true);
   });
   it("rejects an affix that is neither prefix nor suffix", () => {

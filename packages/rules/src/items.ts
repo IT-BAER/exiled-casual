@@ -98,5 +98,12 @@ export function rollItem(
   const finalRarity = affixes.length === 0 ? "normal" : rarity;
   const item: Item = { baseId: base.id, rarity: finalRarity, itemLevel: ilvl, affixes };
   if (finalRarity === "rare") item.name = rareName(rnd);
+  // A magic item borrows its name from its own two mods: "[Prefix] [Base] [Suffix]".
+  if (finalRarity === "magic") {
+    const wordOf = (kind: "prefix" | "suffix") =>
+      affixes.map((ia) => pools.affixes.find((a) => a.id === ia.affixId))
+        .find((a) => a?.kind === kind)?.nameWord;
+    item.name = [wordOf("prefix"), base.name, wordOf("suffix")].filter(Boolean).join(" ");
+  }
   return item;
 }

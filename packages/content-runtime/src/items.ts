@@ -18,14 +18,16 @@ const ITEM_BASES: ItemBase[] = [
 ];
 
 // Prefix/suffix split follows PoE: raw power (life, mana, added damage, armour) is a
-// prefix, while resistances and speed hang off the suffix side.
+// prefix, while resistances and speed hang off the suffix side. The nameWord is the
+// part a magic item borrows, so "affix.life" + "affix.fire_res" on a wand reads
+// "Hale Wand of the Furnace"; the words are in PoE's idiom, not lifted from its tables.
 const AFFIXES: Affix[] = [
-  { id: "affix.life", kind: "prefix", stat: "maxLife", label: "to maximum Life", minItemLevel: 1, min: 5, max: 40 },
-  { id: "affix.mana", kind: "prefix", stat: "maxMana", label: "to maximum Mana", minItemLevel: 1, min: 4, max: 30 },
-  { id: "affix.fire_dmg", kind: "prefix", stat: "fireDamage", label: "to Fire Damage", minItemLevel: 1, min: 2, max: 18 },
-  { id: "affix.fire_res", kind: "suffix", stat: "fireResPct", label: "% to Fire Resistance", minItemLevel: 1, min: 5, max: 25 },
-  { id: "affix.armour", kind: "prefix", stat: "armour", label: "to Armour", minItemLevel: 8, min: 10, max: 60 },
-  { id: "affix.cast_speed", kind: "suffix", stat: "castSpeedPct", label: "% increased Cast Speed", minItemLevel: 12, min: 3, max: 12 },
+  { id: "affix.life", kind: "prefix", nameWord: "Hale", stat: "maxLife", label: "to maximum Life", minItemLevel: 1, min: 5, max: 40 },
+  { id: "affix.mana", kind: "prefix", nameWord: "Beryl", stat: "maxMana", label: "to maximum Mana", minItemLevel: 1, min: 4, max: 30 },
+  { id: "affix.fire_dmg", kind: "prefix", nameWord: "Smoldering", stat: "fireDamage", label: "to Fire Damage", minItemLevel: 1, min: 2, max: 18 },
+  { id: "affix.fire_res", kind: "suffix", nameWord: "of the Furnace", stat: "fireResPct", label: "% to Fire Resistance", minItemLevel: 1, min: 5, max: 25 },
+  { id: "affix.armour", kind: "prefix", nameWord: "Plated", stat: "armour", label: "to Armour", minItemLevel: 8, min: 10, max: 60 },
+  { id: "affix.cast_speed", kind: "suffix", nameWord: "of Casting", stat: "castSpeedPct", label: "% increased Cast Speed", minItemLevel: 12, min: 3, max: 12 },
 ];
 
 // Named items bound to one base each. Mod ranges are the unique's own and deliberately

@@ -8,9 +8,9 @@ const POOLS: ItemPools = {
     { id: "b1", name: "B1", itemClass: "focus", w: 2, h: 2 },
   ],
   affixes: [
-    { id: "a.low", kind: "prefix", stat: "maxLife", label: "life", minItemLevel: 1, min: 5, max: 20 },
-    { id: "a.mid", kind: "suffix", stat: "fireResPct", label: "res", minItemLevel: 1, min: 4, max: 10 },
-    { id: "a.high", kind: "prefix", stat: "armour", label: "armour", minItemLevel: 90, min: 10, max: 60 },
+    { id: "a.low", kind: "prefix", nameWord: "Hale", stat: "maxLife", label: "life", minItemLevel: 1, min: 5, max: 20 },
+    { id: "a.mid", kind: "suffix", nameWord: "of the Furnace", stat: "fireResPct", label: "res", minItemLevel: 1, min: 4, max: 10 },
+    { id: "a.high", kind: "prefix", nameWord: "Plated", stat: "armour", label: "armour", minItemLevel: 90, min: 10, max: 60 },
   ],
 };
 
@@ -19,10 +19,10 @@ const KINDED: ItemPools = {
   bases: [{ id: "b0", name: "B0", itemClass: "wand", w: 1, h: 2 }],
   affixes: [
     ...Array.from({ length: 4 }, (_, i) => ({
-      id: `p${i}`, kind: "prefix" as const, stat: "maxLife", label: "life", minItemLevel: 1, min: 1, max: 2,
+      id: `p${i}`, kind: "prefix" as const, nameWord: `P${i}`, stat: "maxLife", label: "life", minItemLevel: 1, min: 1, max: 2,
     })),
     ...Array.from({ length: 4 }, (_, i) => ({
-      id: `s${i}`, kind: "suffix" as const, stat: "fireResPct", label: "res", minItemLevel: 1, min: 1, max: 2,
+      id: `s${i}`, kind: "suffix" as const, nameWord: `of S${i}`, stat: "fireResPct", label: "res", minItemLevel: 1, min: 1, max: 2,
     })),
   ],
 };
@@ -33,7 +33,28 @@ function kindsOf(item: { affixes: { affixId: string }[] }) {
   return { prefixes, suffixes: item.affixes.length - prefixes };
 }
 
+// One word per side, so a magic roll can only ever produce three known names.
+const NAMED: ItemPools = {
+  bases: [{ id: "b0", name: "Wand", itemClass: "wand", w: 1, h: 2 }],
+  affixes: [
+    { id: "p", kind: "prefix", nameWord: "Hale", stat: "maxLife", label: "life", minItemLevel: 1, min: 1, max: 2 },
+    { id: "s", kind: "suffix", nameWord: "of the Furnace", stat: "fireResPct", label: "res", minItemLevel: 1, min: 1, max: 2 },
+  ],
+};
+
 describe("rollItem", () => {
+  it("names a magic item prefix-word, base, suffix-phrase", () => {
+    const names = new Set<string>();
+    for (let s = 1; s <= 120; s++) names.add(rollItem(NAMED, s, 80, 2, "magic").name!);
+    // Every reachable combination, and nothing else.
+    expect([...names].sort()).toEqual(["Hale Wand", "Hale Wand of the Furnace", "Wand of the Furnace"]);
+  });
+
+  it("leaves normal items unnamed so they show their base name", () => {
+    const it = rollItem(NAMED, 7, 80, 2, "normal");
+    expect(it.name).toBeUndefined();
+  });
+
   it("caps a rare at 3 prefixes and 3 suffixes, a magic at one of each", () => {
     for (let s = 1; s <= 300; s++) {
       for (const [rarity, cap] of [["magic", 1], ["rare", 3]] as const) {
@@ -95,7 +116,7 @@ describe("rollItem", () => {
   it("never returns a magic item with zero affixes when no affix is eligible", () => {
     const HIGH_ONLY: ItemPools = {
       bases: [{ id: "b0", name: "B0", itemClass: "wand", w: 1, h: 2 }],
-      affixes: [{ id: "a.high", kind: "prefix", stat: "armour", label: "armour", minItemLevel: 90, min: 10, max: 60 }],
+      affixes: [{ id: "a.high", kind: "prefix", nameWord: "Plated", stat: "armour", label: "armour", minItemLevel: 90, min: 10, max: 60 }],
     };
     for (let s = 1; s <= 200; s++) {
       const it = rollItem(HIGH_ONLY, s, 65, 2); // ilvl 65 < 90 => nothing eligible
@@ -120,7 +141,7 @@ describe("rollItem", () => {
     // Alternating, so 3 prefixes + 3 suffixes is still reachable.
     affixes: Array.from({ length: 8 }, (_, i) => ({
       id: `a${i}`, kind: (i % 2 === 0 ? "prefix" : "suffix") as "prefix" | "suffix",
-      stat: `s${i}`, label: `l${i}`, minItemLevel: 1, min: 1, max: 10,
+      nameWord: `w${i}`, stat: `s${i}`, label: `l${i}`, minItemLevel: 1, min: 1, max: 10,
     })),
   };
 
@@ -195,14 +216,14 @@ describe("rollItem", () => {
     }
   });
 
-  it("gives rare items a deterministic two-word name; others have none", () => {
+  it("gives rare items a deterministic two-word name; normal items have none", () => {
     for (let s = 1; s <= 400; s++) {
       const it = rollItem(RARE_POOLS, s, 82, 3);
       if (it.rarity === "rare") {
         expect(it.name).toBeDefined();
         expect(it.name!.trim().split(/\s+/).length).toBe(2);
         expect(rollItem(RARE_POOLS, s, 82, 3).name).toBe(it.name); // deterministic
-      } else {
+      } else if (it.rarity === "normal") {
         expect(it.name).toBeUndefined();
       }
     }

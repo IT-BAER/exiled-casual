@@ -349,6 +349,12 @@ export interface Affix {
   id: string;
   /** Which half of the mod pool this belongs to. PoE caps the two sides separately. */
   kind: "prefix" | "suffix";
+  /**
+   * Name part a magic item borrows from this mod: an adjective for a prefix
+   * ("Hale"), an of-phrase for a suffix ("of the Furnace"). PoE names a magic
+   * item "[Prefix] [Base] [Suffix]".
+   */
+  nameWord: string;
   stat: string;
   label: string;
   minItemLevel: number;
@@ -366,7 +372,7 @@ export interface Item {
   rarity: Rarity;
   itemLevel: number;
   affixes: ItemAffix[];
-  /** Generated display name for rare items, fixed name for uniques; magic/normal use the base name. */
+  /** Generated for rares and magic items ("Hale Wand of the Furnace"), fixed for uniques; normal items use the base name. */
   name?: string;
 }
 
@@ -436,6 +442,9 @@ export function validateAffix(v: unknown): ValidationResult {
   }
   if (v["kind"] !== "prefix" && v["kind"] !== "suffix") {
     errors.push('kind: must be "prefix" or "suffix"');
+  }
+  if (typeof v["nameWord"] !== "string" || v["nameWord"].length === 0) {
+    errors.push("nameWord: must be a non-empty string");
   }
   if (typeof v["stat"] !== "string" || v["stat"].length === 0) {
     errors.push("stat: must be a non-empty string");

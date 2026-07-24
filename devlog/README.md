@@ -98,4 +98,9 @@ The orbs stop being CSS.
 <td width="33%"><img src="screenshots/2026-07-25-ground-loot-labels.jpeg" alt="Ground loot labels" width="100%"><br><sub><b>Loot has names</b> - every drop wears a persistent plate with its name in its rarity colour, and the beacon under it takes the same tint. Drops that land on one tile stack into a readable column instead of hiding behind each other.</sub></td>
 <td width="33%"><img src="screenshots/2026-07-25-loot-beams.jpeg" alt="Loot beams" width="100%"><br><sub><b>Beams and a noise</b> - each drop stands a light beam in its rarity colour, dim for junk and bright for a unique, and clicking its plate walks you over and picks it up. The drop chime is tiered the way a NeverSink filter tiers alerts: a struck-metal body over a noise transient, with a sub gong under the good stuff.</sub></td>
 </tr>
+<tr>
+<td width="33%"><img src="screenshots/2026-07-25-magic-item-names.jpeg" alt="Magic item names" width="100%"><br><sub><b>Magic items get their names back</b> - every affix is now a prefix or a suffix, capped per side the way PoE does it (magic 1+1, rare 3+3), and a magic item borrows a word from each: "Smoldering Emberweave Robe of the Furnace" instead of a bare base name. The name is built once at roll time, so plates, tooltips and the backpack all agree.</sub></td>
+<td width="33%"></td>
+<td width="33%"></td>
+</tr>
 </table>
