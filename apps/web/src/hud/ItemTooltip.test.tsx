@@ -12,6 +12,14 @@ describe("ItemTooltip", () => {
     expect(screen.getByText("Ember Wand")).toBeTruthy();
   });
 
+  it("renders a unique's flavour line and omits it when absent", () => {
+    render(<ItemTooltip name="Ashmaw" baseName="Ember Wand" rarity="unique" lines={["+30 to Fire Damage"]} flavour="It was a torch, once." x={0} y={0} />);
+    expect(screen.getByText("It was a torch, once.")).toBeTruthy();
+    cleanup();
+    render(<ItemTooltip name="Ember Wand" rarity="normal" lines={[]} x={0} y={0} />);
+    expect(screen.queryByText("It was a torch, once.")).toBeNull();
+  });
+
   it("does not repeat the name when baseName equals name (normal item)", () => {
     render(<ItemTooltip name="Ember Wand" baseName="Ember Wand" rarity="normal" lines={[]} x={0} y={0} />);
     expect(screen.getAllByText("Ember Wand").length).toBe(1);

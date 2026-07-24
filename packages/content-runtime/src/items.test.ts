@@ -34,6 +34,31 @@ describe("describeItem", () => {
   });
 });
 
+describe("uniques", () => {
+  it("bind to a real base and only reference real affixes", () => {
+    const uniques = ITEM_POOLS.uniques ?? [];
+    expect(uniques.length).toBeGreaterThan(0);
+    for (const u of uniques) {
+      expect(() => baseOf(u.baseId)).not.toThrow();
+      expect(u.flavour.length).toBeGreaterThan(0);
+      for (const m of u.mods) {
+        expect(ITEM_POOLS.affixes.some((a) => a.id === m.affixId)).toBe(true);
+        expect(m.min).toBeLessThanOrEqual(m.max);
+      }
+    }
+  });
+
+  it("describeItem attaches the flavour line for a unique and nothing else", () => {
+    const u = ITEM_POOLS.uniques![0]!;
+    const d = describeItem({ baseId: u.baseId, rarity: "unique", itemLevel: 82, affixes: [], name: u.name });
+    expect(d.flavour).toBe(u.flavour);
+    expect(d.baseName).toBe(baseOf(u.baseId).name);
+
+    const rare = describeItem({ baseId: u.baseId, rarity: "rare", itemLevel: 82, affixes: [], name: u.name });
+    expect(rare.flavour).toBeUndefined();
+  });
+});
+
 describe("baseOf", () => {
   it("throws on an unknown base id", () => {
     expect(() => baseOf("base.nope")).toThrow();

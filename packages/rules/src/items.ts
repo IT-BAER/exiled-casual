@@ -25,13 +25,34 @@ function rarePercent(ilvl: number, monsterRarity: number): number {
   const pct = Math.trunc((ilvl - 70) / 6) + (monsterRarity - 1) * 12;
   return Math.max(0, Math.min(35, pct));
 }
+function uniquePercent(ilvl: number, monsterRarity: number): number {
+  const pct = Math.trunc((ilvl - 68) / 12) + (monsterRarity - 1) * 2;
+  return Math.max(0, Math.min(6, pct));
+}
 
 export function rollItem(pools: ItemPools, seed: number, ilvl: number, monsterRarity: number): Item {
   const rnd = mulberry32(seed);
   const base = pools.bases[rnd() % pools.bases.length]!;
   const roll = rnd() % 100;
+  const rarePct = rarePercent(ilvl, monsterRarity);
+
+  // A unique replaces the whole roll: it brings its own base, name and mod list.
+  // Its band is carved from below the rare band so rare always stays reachable.
+  const uniques = pools.uniques ?? [];
+  const uniquePct = Math.min(uniquePercent(ilvl, monsterRarity), Math.max(0, rarePct - 1));
+  if (uniques.length > 0 && roll < uniquePct) {
+    const u = uniques[rnd() % uniques.length]!;
+    return {
+      baseId: u.baseId,
+      rarity: "unique",
+      itemLevel: ilvl,
+      affixes: u.mods.map((m) => ({ affixId: m.affixId, value: m.min + (rnd() % (m.max - m.min + 1)) })),
+      name: u.name,
+    };
+  }
+
   let rarity: "normal" | "magic" | "rare" =
-    roll < rarePercent(ilvl, monsterRarity) ? "rare"
+    roll < rarePct ? "rare"
     : roll < magicPercent(ilvl, monsterRarity) ? "magic"
     : "normal";
 

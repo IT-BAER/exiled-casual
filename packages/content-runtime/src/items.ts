@@ -1,4 +1,4 @@
-import { validateItemBase, validateAffix, type ItemBase, type Affix, type Item, type ItemPools, type Rarity } from "@exiled/content-schema";
+import { validateItemBase, validateAffix, type ItemBase, type Affix, type Item, type ItemPools, type Rarity, type UniqueItem } from "@exiled/content-schema";
 
 // Tiny hand-authored pool for the First Loot slice. Grid dims (w×h) follow the
 // 12×5 inventory. Real 45-base / 120-affix content is Phase 4 proper.
@@ -25,6 +25,45 @@ const AFFIXES: Affix[] = [
   { id: "affix.cast_speed", stat: "castSpeedPct", label: "% increased Cast Speed", minItemLevel: 12, min: 3, max: 12 },
 ];
 
+// Named items bound to one base each. Mod ranges are the unique's own and deliberately
+// beat the shared affix pool's ranges; flavour is the italic orange line in the tooltip
+// (poe2-screenshots/item-unique.png).
+const UNIQUES: UniqueItem[] = [
+  {
+    id: "unique.ashmaw",
+    name: "Ashmaw",
+    baseId: "base.emberwand",
+    flavour: "It was a torch, once, before the ash learned to bite.",
+    mods: [
+      { affixId: "affix.fire_dmg", min: 22, max: 34 },
+      { affixId: "affix.cast_speed", min: 14, max: 20 },
+      { affixId: "affix.mana", min: 20, max: 30 },
+    ],
+  },
+  {
+    id: "unique.emberchoir",
+    name: "Emberchoir",
+    baseId: "base.ashen_focus",
+    flavour: "Every voice it kept is a voice that burned.",
+    mods: [
+      { affixId: "affix.fire_res", min: 30, max: 45 },
+      { affixId: "affix.mana", min: 35, max: 50 },
+      { affixId: "affix.life", min: 10, max: 20 },
+    ],
+  },
+  {
+    id: "unique.cinderveil",
+    name: "Cinderveil",
+    baseId: "base.emberweave_robe",
+    flavour: "The fire spared her. Nothing else did.",
+    mods: [
+      { affixId: "affix.life", min: 45, max: 70 },
+      { affixId: "affix.armour", min: 70, max: 110 },
+      { affixId: "affix.fire_res", min: 20, max: 30 },
+    ],
+  },
+];
+
 // Validate at module load; bad content is a programmer error, fail fast.
 for (const b of ITEM_BASES) {
   const r = validateItemBase(b);
@@ -34,11 +73,30 @@ for (const a of AFFIXES) {
   const r = validateAffix(a);
   if (!r.ok) throw new Error(`[content-runtime] Invalid affix "${a.id}": ${r.errors.join("; ")}`);
 }
+// Uniques are shape-checked by the compiler; what it cannot catch is a dangling id,
+// an inverted range, or two uniques sharing the display name describeItem looks them up by.
+{
+  const baseIds = new Set(ITEM_BASES.map((b) => b.id));
+  const affixIds = new Set(AFFIXES.map((a) => a.id));
+  const names = new Set<string>();
+  for (const u of UNIQUES) {
+    const bad = (msg: string) => { throw new Error(`[content-runtime] Invalid unique "${u.id}": ${msg}`); };
+    if (!baseIds.has(u.baseId)) bad(`unknown baseId "${u.baseId}"`);
+    if (u.mods.length === 0) bad("must have at least one mod");
+    if (names.has(u.name)) bad(`duplicate name "${u.name}"`);
+    names.add(u.name);
+    for (const m of u.mods) {
+      if (!affixIds.has(m.affixId)) bad(`unknown affixId "${m.affixId}"`);
+      if (m.min > m.max) bad(`mod "${m.affixId}" has min > max`);
+    }
+  }
+}
 
-export const ITEM_POOLS: ItemPools = { bases: ITEM_BASES, affixes: AFFIXES };
+export const ITEM_POOLS: ItemPools = { bases: ITEM_BASES, affixes: AFFIXES, uniques: UNIQUES };
 
 const BASE_BY_ID = new Map(ITEM_BASES.map((b) => [b.id, b]));
 const AFFIX_BY_ID = new Map(AFFIXES.map((a) => [a.id, a]));
+const UNIQUE_BY_NAME = new Map(UNIQUES.map((u) => [u.name, u]));
 
 export function baseOf(baseId: string): ItemBase {
   const b = BASE_BY_ID.get(baseId);
@@ -61,6 +119,8 @@ export interface ItemDescription {
   reqAttr?: string;
   /** affix lines */
   lines: string[];
+  /** unique only: italic flavour line below the mods. */
+  flavour?: string;
 }
 
 export function describeItem(item: Item): ItemDescription {
@@ -74,7 +134,7 @@ export function describeItem(item: Item): ItemDescription {
     const a = AFFIX_BY_ID.get(ia.affixId);
     return a ? `+${ia.value} ${a.label}` : `+${ia.value} ${ia.affixId}`;
   });
-  return {
+  const d: ItemDescription = {
     name: item.name ?? base.name,
     baseName: base.name,
     rarity: item.rarity,
@@ -85,4 +145,7 @@ export function describeItem(item: Item): ItemDescription {
     reqAttr: s?.reqAttr,
     lines,
   };
+  const flavour = item.rarity === "unique" ? UNIQUE_BY_NAME.get(d.name)?.flavour : undefined;
+  if (flavour) d.flavour = flavour;
+  return d;
 }

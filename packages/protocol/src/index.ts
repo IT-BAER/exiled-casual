@@ -86,6 +86,8 @@ export interface SnapshotEntity {
   /** groundItem only: base type, shown under a generated name for rares. */
   baseName?: string;
   lines?: string[];
+  /** groundItem only: unique flavour line, below the mods. */
+  flavour?: string;
   /** groundItem only: base item class label ("wand", "focus") for the tooltip. */
   itemClass?: string;
   /** groundItem only: tooltip base-stat block + requirements (poe2-screenshots/item-*.png). */
@@ -129,6 +131,7 @@ export interface Snapshot {
     items: {
       x: number; y: number; w: number; h: number;
       rarity: ItemRarity; name: string; baseName?: string; itemClass?: string; lines: string[];
+      flavour?: string;
       statLines?: ItemStatLine[]; reqLevel?: number; reqAttrValue?: number; reqAttr?: string;
     }[];
   };

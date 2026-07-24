@@ -18,8 +18,9 @@ const MAGIC = "#8aa6ff";
 const CELL = 40; // backpack grid cell
 const U = 46; // equipment paper-doll unit
 
-const RARITY_BORDER: Record<string, string> = { normal: "#6b6b6b", magic: "#5566b0" };
-const RARITY_TEXT: Record<string, string> = { normal: "#c8c8c8", magic: MAGIC };
+// Keyed by every Rarity; a missing key would render `border: 2px solid undefined`.
+const RARITY_BORDER: Record<string, string> = { normal: "#6b6b6b", magic: "#5566b0", rare: "#a3812f", unique: "#7f4a20" };
+const RARITY_TEXT: Record<string, string> = { normal: "#c8c8c8", magic: MAGIC, rare: "#e6d64a", unique: "#af6025" };
 
 // A single equipment slot: dark inset, gold-brown frame, ghosted type label.
 function slotStyle(): React.CSSProperties {
@@ -253,6 +254,7 @@ export function InventoryPanel({ inventory, onClose }: { inventory: Inventory; o
           reqAttrValue={items[hover.i]!.reqAttrValue}
           reqAttr={items[hover.i]!.reqAttr}
           lines={items[hover.i]!.lines}
+          flavour={items[hover.i]!.flavour}
           x={hover.x}
           y={hover.y}
         />

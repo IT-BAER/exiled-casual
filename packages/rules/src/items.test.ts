@@ -103,6 +103,47 @@ describe("rollItem", () => {
     expect(count("rare")).toBeLessThan(count("magic"));
   });
 
+  const UNIQUE_POOLS: ItemPools = {
+    ...RARE_POOLS,
+    bases: [...RARE_POOLS.bases, { id: "bu", name: "BU", itemClass: "focus", w: 2, h: 2 }],
+    uniques: [
+      { id: "u0", name: "Uno Test", baseId: "bu", flavour: "f0", mods: [{ affixId: "a0", min: 20, max: 30 }] },
+      { id: "u1", name: "Dos Test", baseId: "bu", flavour: "f1", mods: [{ affixId: "a1", min: 5, max: 5 }, { affixId: "a2", min: 1, max: 3 }] },
+    ],
+  };
+
+  it("rolls uniques only from the unique pool, with that unique's base and mods", () => {
+    let sawUnique = false;
+    for (let s = 1; s <= 800; s++) {
+      const it = rollItem(UNIQUE_POOLS, s, 95, 3);
+      if (it.rarity !== "unique") continue;
+      sawUnique = true;
+      const u = UNIQUE_POOLS.uniques!.find((x) => x.name === it.name)!;
+      expect(u).toBeDefined();
+      expect(it.baseId).toBe(u.baseId);
+      expect(it.affixes.map((a) => a.affixId)).toEqual(u.mods.map((m) => m.affixId));
+      for (let i = 0; i < u.mods.length; i++) {
+        expect(it.affixes[i]!.value).toBeGreaterThanOrEqual(u.mods[i]!.min);
+        expect(it.affixes[i]!.value).toBeLessThanOrEqual(u.mods[i]!.max);
+      }
+      expect(rollItem(UNIQUE_POOLS, s, 95, 3)).toEqual(it); // deterministic
+    }
+    expect(sawUnique).toBe(true);
+  });
+
+  it("unique is rarer than rare", () => {
+    const rarities = Array.from({ length: 1200 }, (_, s) => rollItem(UNIQUE_POOLS, s + 1, 95, 3).rarity);
+    const count = (r: string) => rarities.filter((x) => x === r).length;
+    expect(count("unique")).toBeGreaterThan(0);
+    expect(count("unique")).toBeLessThan(count("rare"));
+  });
+
+  it("never rolls a unique from a pool without uniques", () => {
+    for (let s = 1; s <= 800; s++) {
+      expect(rollItem(RARE_POOLS, s, 95, 3).rarity).not.toBe("unique");
+    }
+  });
+
   it("gives rare items a deterministic two-word name; others have none", () => {
     for (let s = 1; s <= 400; s++) {
       const it = rollItem(RARE_POOLS, s, 82, 3);

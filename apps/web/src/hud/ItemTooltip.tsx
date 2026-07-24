@@ -4,9 +4,8 @@ import type { ItemStatLine } from "@exiled/protocol";
 // PoE2 item tooltip. Matched to poe2-screenshots/item-{normal,magic,rare,unique}.png:
 // near-black panel, centered small-caps serif, a rarity-framed header band with
 // inward flourishes, an item-class line, then affix lines in augmented-blue.
-// The sim only rolls normal+magic today (see @exiled/content-schema Rarity), and it
-// does not model weapon base stats or requirements, so those tooltip rows are
-// honestly absent. rare/unique styling is latent for when itemization adds them.
+// All four rarities roll today; the sim still does not model weapon base stats or
+// requirements beyond what the base carries, so those rows are absent when unknown.
 const SERIF = '"Cinzel", "Trajan Pro", Georgia, "Times New Roman", serif';
 const AFFIX_BLUE = "#8f97ff";
 const CLASS_TAN = "#8a8065";
@@ -64,6 +63,7 @@ export function ItemTooltip({
   reqAttrValue,
   reqAttr,
   lines,
+  flavour,
   x,
   y,
 }: {
@@ -77,6 +77,8 @@ export function ItemTooltip({
   reqAttrValue?: number;
   reqAttr?: string;
   lines: string[];
+  /** unique only: italic flavour line closing the tooltip. */
+  flavour?: string;
   x: number;
   y: number;
 }) {
@@ -171,6 +173,15 @@ export function ItemTooltip({
                 {l}
               </div>
             ))}
+          </>
+        )}
+
+        {flavour && (
+          <>
+            <Rule />
+            <div style={{ color: r.text, fontSize: 12.5, fontStyle: "italic", letterSpacing: 0.4, lineHeight: 1.35, margin: "4px 2px 0" }}>
+              {flavour}
+            </div>
           </>
         )}
       </div>

@@ -362,13 +362,29 @@ export interface Item {
   rarity: Rarity;
   itemLevel: number;
   affixes: ItemAffix[];
-  /** Generated display name for rare (and later unique) items; magic/normal use the base name. */
+  /** Generated display name for rare items, fixed name for uniques; magic/normal use the base name. */
   name?: string;
+}
+
+/**
+ * A named one-off item bound to a single base, with a fixed mod list rolled inside
+ * per-unique ranges (poe2-screenshots/item-unique.png). Mods reference the shared affix
+ * pool for their label, but the ranges are the unique's own and may exceed the affix's.
+ */
+export interface UniqueItem {
+  id: string;
+  name: string;
+  baseId: string;
+  /** Italic orange line under the mods. */
+  flavour: string;
+  mods: { affixId: string; min: number; max: number }[];
 }
 
 export interface ItemPools {
   bases: ItemBase[];
   affixes: Affix[];
+  /** Absent means uniques never drop from this pool. */
+  uniques?: UniqueItem[];
 }
 
 function isPosInt(v: unknown): boolean {
