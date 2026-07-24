@@ -35,6 +35,7 @@ const UNIQUES: UniqueItem[] = [
     name: "Ashmaw",
     baseId: "base.emberwand",
     flavour: "It was a torch, once, before the ash learned to bite.",
+    icon: "/textures/items/unique_ashmaw.png",
     mods: [
       { affixId: "affix.fire_dmg", min: 22, max: 34 },
       { affixId: "affix.cast_speed", min: 14, max: 20 },
@@ -46,6 +47,7 @@ const UNIQUES: UniqueItem[] = [
     name: "Emberchoir",
     baseId: "base.ashen_focus",
     flavour: "Every voice it kept is a voice that burned.",
+    icon: "/textures/items/unique_emberchoir.png",
     mods: [
       { affixId: "affix.fire_res", min: 30, max: 45 },
       { affixId: "affix.mana", min: 35, max: 50 },
@@ -57,6 +59,7 @@ const UNIQUES: UniqueItem[] = [
     name: "Cinderveil",
     baseId: "base.emberweave_robe",
     flavour: "The fire spared her. Nothing else did.",
+    icon: "/textures/items/unique_cinderveil.png",
     mods: [
       { affixId: "affix.life", min: 45, max: 70 },
       { affixId: "affix.armour", min: 70, max: 110 },
@@ -159,8 +162,10 @@ export function describeItem(item: Item): ItemDescription {
     reqAttr: s?.reqAttr,
     lines,
   };
-  if (base.icon) d.icon = base.icon;
-  const flavour = item.rarity === "unique" ? UNIQUE_BY_NAME.get(d.name)?.flavour : undefined;
-  if (flavour) d.flavour = flavour;
+  // A unique is its own item, not a re-skin: its art overrides the base's.
+  const unique = item.rarity === "unique" ? UNIQUE_BY_NAME.get(d.name) : undefined;
+  if (unique?.flavour) d.flavour = unique.flavour;
+  const icon = unique?.icon ?? base.icon;
+  if (icon) d.icon = icon;
   return d;
 }

@@ -379,6 +379,8 @@ export interface UniqueItem {
   baseId: string;
   /** Italic orange line under the mods. */
   flavour: string;
+  /** Own inventory art, overriding the base's. Absent falls back to the base icon. */
+  icon?: string;
   mods: { affixId: string; min: number; max: number }[];
 }
 

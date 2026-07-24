@@ -66,6 +66,15 @@ describe("uniques", () => {
     const rare = describeItem({ baseId: u.baseId, rarity: "rare", itemLevel: 82, affixes: [], name: u.name });
     expect(rare.flavour).toBeUndefined();
   });
+
+  it("carry their own art instead of the base's", () => {
+    for (const u of ITEM_POOLS.uniques ?? []) {
+      const d = describeItem({ baseId: u.baseId, rarity: "unique", itemLevel: 82, affixes: [], name: u.name });
+      expect(u.icon).toBeTruthy();
+      expect(d.icon).toBe(u.icon);
+      expect(d.icon).not.toBe(baseOf(u.baseId).icon);
+    }
+  });
 });
 
 describe("baseOf", () => {
