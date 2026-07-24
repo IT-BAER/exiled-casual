@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
+import { ITEM_POOLS } from "@exiled/content-runtime";
 import { InventoryPanel } from "./InventoryPanel";
 
 afterEach(cleanup);
@@ -38,5 +41,25 @@ describe("InventoryPanel", () => {
 
     fireEvent.mouseLeave(item);
     expect(screen.queryByTestId("item-tooltip")).toBeNull();
+  });
+
+  it("renders base art in the cell when the item has an icon, and the name when it does not", () => {
+    const withIcon = { ...inv, items: [{ ...inv.items[0]!, icon: "/textures/items/emberwand.png" }] };
+    const { rerender } = render(<InventoryPanel inventory={withIcon} onClose={() => {}} />);
+    const img = screen.getByTestId("inventory-item-0").querySelector("img");
+    expect(img?.getAttribute("src")).toBe("/textures/items/emberwand.png");
+
+    rerender(<InventoryPanel inventory={inv} onClose={() => {}} />);
+    const cell = screen.getByTestId("inventory-item-0");
+    expect(cell.querySelector("img")).toBeNull();
+    expect(cell.textContent).toBe("Ember Wand");
+  });
+
+  it("ships an art file for every base icon path", () => {
+    for (const base of ITEM_POOLS.bases) {
+      if (!base.icon) continue;
+      const file = resolve(__dirname, "../../public", base.icon.replace(/^\//, ""));
+      expect(existsSync(file), `${base.id} icon missing: ${file}`).toBe(true);
+    }
   });
 });

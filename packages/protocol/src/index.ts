@@ -132,6 +132,8 @@ export interface Snapshot {
       x: number; y: number; w: number; h: number;
       rarity: ItemRarity; name: string; baseName?: string; itemClass?: string; lines: string[];
       flavour?: string;
+      /** Inventory art URL; absent means the cell falls back to the item name. */
+      icon?: string;
       statLines?: ItemStatLine[]; reqLevel?: number; reqAttrValue?: number; reqAttr?: string;
     }[];
   };

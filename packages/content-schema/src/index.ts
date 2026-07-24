@@ -341,6 +341,8 @@ export interface ItemBase {
   w: number;
   h: number;
   stats?: ItemStats;
+  /** Inventory art, a client-relative URL. Absent means the UI falls back to the name. */
+  icon?: string;
 }
 
 export interface Affix {
@@ -413,6 +415,9 @@ export function validateItemBase(v: unknown): ValidationResult {
   }
   if (v["stats"] !== undefined && !isObj(v["stats"])) {
     errors.push("stats: must be an object when present");
+  }
+  if (v["icon"] !== undefined && (typeof v["icon"] !== "string" || v["icon"].length === 0)) {
+    errors.push("icon: must be a non-empty string when present");
   }
   return { ok: errors.length === 0, errors };
 }

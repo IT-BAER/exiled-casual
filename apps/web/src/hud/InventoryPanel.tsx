@@ -237,7 +237,16 @@ export function InventoryPanel({ inventory, onClose }: { inventory: Inventory; o
                   boxShadow: `inset 0 0 8px ${RARITY_BORDER[it.rarity]}44`,
                 }}
               >
-                {it.name}
+                {it.icon ? (
+                  <img
+                    src={it.icon}
+                    alt={it.name}
+                    draggable={false}
+                    style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", pointerEvents: "none" }}
+                  />
+                ) : (
+                  it.name
+                )}
               </div>
             ))}
           </div>

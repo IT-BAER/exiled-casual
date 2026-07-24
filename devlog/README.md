@@ -12,66 +12,73 @@ implementation plans in [`../docs/plans/`](../docs/plans/).
 
 The box actor becomes a real rigged humanoid, animated and lit.
 
-**Rigged player** - a CC0 Quaternius character replaces the primitive box actor.
-![Rigged player](2026-07-20-rigged-player.jpeg)
-
-**Walk cycle** - animation clips from the Universal Animation Library retargeted onto the rig by bone name.
-![Walk cycle](2026-07-20-walk-cycle.jpeg)
-
-**Skinned actors under lighting** - multiple skinned actors, zoomed in to check shading.
-![Skinned actors, lighting](2026-07-20-skinned-actors-lighting-zoom.jpeg)
-
-**Cast shadows** - real-time shadows grounding the actors in the scene.
-![Cast shadows](2026-07-20-cast-shadows.jpeg)
-
-**Run loop and portals** - the map run loop with entry/exit portals.
-![Run loop, portals](2026-07-20-run-loop-portals.jpeg)
-
-**Boss telegraph** - a readable ground telegraph before a boss attack lands.
-![Boss telegraph](2026-07-20-boss-telegraph.jpeg)
+<table>
+<tr>
+<td width="33%"><img src="2026-07-20-rigged-player.jpeg" alt="Rigged player" width="100%"><br><sub><b>Rigged player</b> - a CC0 Quaternius character replaces the primitive box actor.</sub></td>
+<td width="33%"><img src="2026-07-20-walk-cycle.jpeg" alt="Walk cycle" width="100%"><br><sub><b>Walk cycle</b> - animation clips from the Universal Animation Library retargeted onto the rig by bone name.</sub></td>
+<td width="33%"><img src="2026-07-20-skinned-actors-lighting-zoom.jpeg" alt="Skinned actors, lighting" width="100%"><br><sub><b>Skinned actors under lighting</b> - multiple skinned actors, zoomed in to check shading.</sub></td>
+</tr>
+<tr>
+<td width="33%"><img src="2026-07-20-cast-shadows.jpeg" alt="Cast shadows" width="100%"><br><sub><b>Cast shadows</b> - real-time shadows grounding the actors in the scene.</sub></td>
+<td width="33%"><img src="2026-07-20-run-loop-portals.jpeg" alt="Run loop, portals" width="100%"><br><sub><b>Run loop and portals</b> - the map run loop with entry/exit portals.</sub></td>
+<td width="33%"><img src="2026-07-20-boss-telegraph.jpeg" alt="Boss telegraph" width="100%"><br><sub><b>Boss telegraph</b> - a readable ground telegraph before a boss attack lands.</sub></td>
+</tr>
+</table>
 
 ## 2026-07-21 - maps and a boss fight
 
 Procedural interiors get walls and textures, and the Warden encounter takes shape.
 
-**Indoor mapgen wired in** - procedural indoor generation connected to the client.
-![Indoor mapgen](2026-07-21-indoor-mapgen-wired.jpeg)
-
-**Textured dungeon walls** - the boundary walls get color and normal maps.
-![Textured dungeon walls](2026-07-21-textured-dungeon-walls.jpeg)
-
-**Casting slows movement** - casting applies a per-skill movement penalty instead of freezing the legs.
-![Cast slows movement](2026-07-21-cast-slows-movement.jpeg)
-
-**Warden phase 2, burning slam** - the Warden boss in its second phase.
-![Warden burning slam](2026-07-21-warden-phase2-burning-slam.jpeg)
+<table>
+<tr>
+<td width="33%"><img src="2026-07-21-indoor-mapgen-wired.jpeg" alt="Indoor mapgen" width="100%"><br><sub><b>Indoor mapgen wired in</b> - procedural indoor generation connected to the client.</sub></td>
+<td width="33%"><img src="2026-07-21-textured-dungeon-walls.jpeg" alt="Textured dungeon walls" width="100%"><br><sub><b>Textured dungeon walls</b> - the boundary walls get color and normal maps.</sub></td>
+<td width="33%"><img src="2026-07-21-cast-slows-movement.jpeg" alt="Cast slows movement" width="100%"><br><sub><b>Casting slows movement</b> - casting applies a per-skill movement penalty instead of freezing the legs.</sub></td>
+</tr>
+<tr>
+<td width="33%"><img src="2026-07-21-warden-phase2-burning-slam.jpeg" alt="Warden burning slam" width="100%"><br><sub><b>Warden phase 2, burning slam</b> - the Warden boss in its second phase.</sub></td>
+<td width="33%"></td>
+<td width="33%"></td>
+</tr>
+</table>
 
 ## 2026-07-22 - loot and preparation
 
 Items start dropping, and the pre-map screen appears.
 
-**First loot** - item drops as server-authored world entities.
-![First loot](2026-07-22-first-loot.jpeg)
-
-**Preparation panel** - the pre-run panel for setting up a map.
-![Preparation panel](2026-07-22-preparation-panel.jpeg)
+<table>
+<tr>
+<td width="33%"><img src="2026-07-22-first-loot.jpeg" alt="First loot" width="100%"><br><sub><b>First loot</b> - item drops as server-authored world entities.</sub></td>
+<td width="33%"><img src="2026-07-22-preparation-panel.jpeg" alt="Preparation panel" width="100%"><br><sub><b>Preparation panel</b> - the pre-run panel for setting up a map.</sub></td>
+<td width="33%"></td>
+</tr>
+</table>
 
 ## 2026-07-23 - the HUD comes together
 
 Matching the Path of Exile 2 HUD against the reference screenshots.
 
-**Life and mana orbs** - glossy framed orbs beside the skill bar.
-![HUD orbs](2026-07-23-hud-orbs.jpeg)
+<table>
+<tr>
+<td width="33%"><img src="2026-07-23-hud-orbs.jpeg" alt="HUD orbs" width="100%"><br><sub><b>Life and mana orbs</b> - glossy framed orbs beside the skill bar.</sub></td>
+<td width="33%"><img src="2026-07-23-hud-flasks.jpeg" alt="HUD flasks" width="100%"><br><sub><b>Flask row</b> - 3 life and 2 mana flasks next to the life orb, keys 1-5.</sub></td>
+<td width="33%"><img src="2026-07-23-orb-frames.jpeg" alt="Orb frames" width="100%"><br><sub><b>Ornate orb frames</b> - generated gold filigree frames replacing the CSS bevel.</sub></td>
+</tr>
+<tr>
+<td width="33%"><img src="2026-07-23-item-tooltip.png" alt="Item tooltip" width="100%"><br><sub><b>Item tooltip</b> - a full item tooltip with base stats and requirements.</sub></td>
+<td width="33%"></td>
+<td width="33%"></td>
+</tr>
+</table>
 
-**Flask row** - 3 life and 2 mana flasks next to the life orb, keys 1-5.
-![HUD flasks](2026-07-23-hud-flasks.jpeg)
+## 2026-07-24 - uniques and item art
 
-**Ornate orb frames** - generated gold filigree frames replacing the CSS bevel.
-![Orb frames](2026-07-23-orb-frames.jpeg)
+Named pool items land, and every base gets painted inventory art.
 
-**Item tooltip** - a full item tooltip with base stats and requirements.
-![Item tooltip](2026-07-23-item-tooltip.png)
-
-**Unique items** - Ashmaw, a named pool item with its own mods and flavour line. Numpad6 drops
-one debug item per press, cycling normal to magic to rare to unique.
-![Unique item](2026-07-24-unique-item.jpeg)
+<table>
+<tr>
+<td width="33%"><img src="2026-07-24-unique-item.jpeg" alt="Unique item" width="100%"><br><sub><b>Unique items</b> - Ashmaw, a named pool item with its own mods and flavour line. Numpad6 drops one debug item per press, cycling normal to magic to rare to unique.</sub></td>
+<td width="33%"><img src="2026-07-24-item-icons.jpeg" alt="Item icons" width="100%"><br><sub><b>Item art</b> - every base carries painted inventory art, sized to its grid footprint. The item name stays as the fallback for bases without an icon.</sub></td>
+<td width="33%"></td>
+</tr>
+</table>

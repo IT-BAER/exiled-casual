@@ -178,7 +178,7 @@ export function buildSnapshot(
       const d = describeItem(p.item);
       return {
         x: p.x, y: p.y, w: p.w, h: p.h,
-        rarity: d.rarity, name: d.name, baseName: d.baseName, itemClass: d.itemClass, lines: d.lines, flavour: d.flavour,
+        rarity: d.rarity, name: d.name, baseName: d.baseName, itemClass: d.itemClass, lines: d.lines, flavour: d.flavour, icon: d.icon,
         statLines: d.statLines, reqLevel: d.reqLevel, reqAttrValue: d.reqAttrValue, reqAttr: d.reqAttr,
       };
     }),

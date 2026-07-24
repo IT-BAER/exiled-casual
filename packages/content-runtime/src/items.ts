@@ -10,10 +10,11 @@ const ITEM_BASES: ItemBase[] = [
     w: 1,
     h: 2,
     stats: { physMin: 5, physMax: 10, critPct: 8, aps: 1.2, reqLevel: 8, reqAttrValue: 29, reqAttr: "Int" },
+    icon: "/textures/items/emberwand.png",
   },
-  { id: "base.ashen_focus", name: "Ashen Focus", itemClass: "focus", w: 2, h: 2 },
-  { id: "base.cinder_cap", name: "Cinder Cap", itemClass: "helmet", w: 2, h: 2 },
-  { id: "base.emberweave_robe", name: "Emberweave Robe", itemClass: "body", w: 2, h: 3 },
+  { id: "base.ashen_focus", name: "Ashen Focus", itemClass: "focus", w: 2, h: 2, icon: "/textures/items/ashen_focus.png" },
+  { id: "base.cinder_cap", name: "Cinder Cap", itemClass: "helmet", w: 2, h: 2, icon: "/textures/items/cinder_cap.png" },
+  { id: "base.emberweave_robe", name: "Emberweave Robe", itemClass: "body", w: 2, h: 3, icon: "/textures/items/emberweave_robe.png" },
 ];
 
 const AFFIXES: Affix[] = [
@@ -121,6 +122,8 @@ export interface ItemDescription {
   lines: string[];
   /** unique only: italic flavour line below the mods. */
   flavour?: string;
+  /** Inventory art from the base; absent means the UI falls back to the name. */
+  icon?: string;
 }
 
 /**
@@ -156,6 +159,7 @@ export function describeItem(item: Item): ItemDescription {
     reqAttr: s?.reqAttr,
     lines,
   };
+  if (base.icon) d.icon = base.icon;
   const flavour = item.rarity === "unique" ? UNIQUE_BY_NAME.get(d.name)?.flavour : undefined;
   if (flavour) d.flavour = flavour;
   return d;
