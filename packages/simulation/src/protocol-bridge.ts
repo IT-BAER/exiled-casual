@@ -156,6 +156,7 @@ export function buildSnapshot(
       x: toNumber(ip.x), y: toNumber(ip.y),
       rarity: d.rarity,
       name: d.name,
+      baseName: d.baseName,
       itemClass: d.itemClass,
       statLines: d.statLines,
       reqLevel: d.reqLevel,
@@ -176,7 +177,7 @@ export function buildSnapshot(
       const d = describeItem(p.item);
       return {
         x: p.x, y: p.y, w: p.w, h: p.h,
-        rarity: d.rarity, name: d.name, itemClass: d.itemClass, lines: d.lines,
+        rarity: d.rarity, name: d.name, baseName: d.baseName, itemClass: d.itemClass, lines: d.lines,
         statLines: d.statLines, reqLevel: d.reqLevel, reqAttrValue: d.reqAttrValue, reqAttr: d.reqAttr,
       };
     }),

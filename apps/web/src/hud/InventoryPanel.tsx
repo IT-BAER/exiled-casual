@@ -245,6 +245,7 @@ export function InventoryPanel({ inventory, onClose }: { inventory: Inventory; o
       {hover && items[hover.i] && (
         <ItemTooltip
           name={items[hover.i]!.name}
+          baseName={items[hover.i]!.baseName}
           rarity={items[hover.i]!.rarity}
           itemClass={items[hover.i]!.itemClass}
           statLines={items[hover.i]!.statLines}

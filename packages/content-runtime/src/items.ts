@@ -48,7 +48,10 @@ export function baseOf(baseId: string): ItemBase {
 
 // Render-ready projection: base name + one line per committed affix roll.
 export interface ItemDescription {
+  /** Display name: the item's generated name (rare/unique) or the base name. */
   name: string;
+  /** Base type, always the base name, shown under a generated name for rares. */
+  baseName: string;
   rarity: Rarity;
   itemClass: string;
   /** base-stat lines rendered "label: value" (empty for bases without stats) */
@@ -72,7 +75,8 @@ export function describeItem(item: Item): ItemDescription {
     return a ? `+${ia.value} ${a.label}` : `+${ia.value} ${ia.affixId}`;
   });
   return {
-    name: base.name,
+    name: item.name ?? base.name,
+    baseName: base.name,
     rarity: item.rarity,
     itemClass: base.itemClass,
     statLines,

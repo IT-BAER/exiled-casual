@@ -73,4 +73,46 @@ describe("rollItem", () => {
       }
     }
   });
+
+  // Pool with enough eligible affixes to exercise a full 3..6 rare roll.
+  const RARE_POOLS: ItemPools = {
+    bases: [{ id: "b0", name: "B0", itemClass: "wand", w: 1, h: 2 }],
+    affixes: Array.from({ length: 8 }, (_, i) => ({
+      id: `a${i}`, stat: `s${i}`, label: `l${i}`, minItemLevel: 1, min: 1, max: 10,
+    })),
+  };
+
+  it("rolls rare items with 3..6 affixes at high ilvl / monsterRarity", () => {
+    let sawRare = false;
+    for (let s = 1; s <= 400; s++) {
+      const it = rollItem(RARE_POOLS, s, 82, 3);
+      if (it.rarity === "rare") {
+        sawRare = true;
+        expect(it.affixes.length).toBeGreaterThanOrEqual(3);
+        expect(it.affixes.length).toBeLessThanOrEqual(6);
+      }
+    }
+    expect(sawRare).toBe(true);
+  });
+
+  it("rare is rarer than magic", () => {
+    const count = (r: string) =>
+      Array.from({ length: 800 }, (_, s) => rollItem(RARE_POOLS, s + 1, 82, 3).rarity)
+        .filter((x) => x === r).length;
+    expect(count("rare")).toBeGreaterThan(0);
+    expect(count("rare")).toBeLessThan(count("magic"));
+  });
+
+  it("gives rare items a deterministic two-word name; others have none", () => {
+    for (let s = 1; s <= 400; s++) {
+      const it = rollItem(RARE_POOLS, s, 82, 3);
+      if (it.rarity === "rare") {
+        expect(it.name).toBeDefined();
+        expect(it.name!.trim().split(/\s+/).length).toBe(2);
+        expect(rollItem(RARE_POOLS, s, 82, 3).name).toBe(it.name); // deterministic
+      } else {
+        expect(it.name).toBeUndefined();
+      }
+    }
+  });
 });

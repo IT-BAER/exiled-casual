@@ -56,6 +56,7 @@ function Rule() {
 
 export function ItemTooltip({
   name,
+  baseName,
   rarity,
   itemClass,
   statLines,
@@ -67,6 +68,8 @@ export function ItemTooltip({
   y,
 }: {
   name: string;
+  /** Base type; rendered as a second header line when it differs from the name (rare/unique). */
+  baseName?: string;
   rarity: string;
   itemClass?: string;
   statLines?: ItemStatLine[];
@@ -123,6 +126,11 @@ export function ItemTooltip({
           }}
         >
           {name}
+          {baseName && baseName !== name && (
+            <div style={{ fontSize: r.ornate ? 12 : 11, fontWeight: 600, letterSpacing: 1, opacity: 0.82, marginTop: 2 }}>
+              {baseName}
+            </div>
+          )}
         </div>
         <Flourish color={r.flourish} side="right" ornate={r.ornate} />
       </div>

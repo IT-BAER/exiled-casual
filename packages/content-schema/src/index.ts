@@ -317,7 +317,7 @@ export function validateMonsterDef(v: unknown): ValidationResult {
 }
 
 // ── Items (First Loot slice) ────────────────────────────────────────────────
-export type Rarity = "normal" | "magic";
+export type Rarity = "normal" | "magic" | "rare" | "unique";
 
 /** Tooltip base-stat block shown between the header and affixes (poe2-screenshots/item-*.png). */
 export interface ItemStats {
@@ -362,6 +362,8 @@ export interface Item {
   rarity: Rarity;
   itemLevel: number;
   affixes: ItemAffix[];
+  /** Generated display name for rare (and later unique) items; magic/normal use the base name. */
+  name?: string;
 }
 
 export interface ItemPools {

@@ -37,7 +37,7 @@ export const AREA_KINDS: readonly AreaKind[] = ["hideout", "map"];
 export const MAP_PORTALS = 6;
 
 /** Rarity tint for a display-ready item. Protocol-local; no content-schema import. */
-export type ItemRarity = "normal" | "magic";
+export type ItemRarity = "normal" | "magic" | "rare" | "unique";
 
 /** Interaction range for picking up a ground item, Fixed-scaled (matches device/portal interact radius fp(2.5)). */
 export const PICKUP_RADIUS = fp(2.5);
@@ -83,6 +83,8 @@ export interface SnapshotEntity {
   /** groundItem only: rarity tint, display name, and affix lines for hover. */
   rarity?: ItemRarity;
   name?: string;
+  /** groundItem only: base type, shown under a generated name for rares. */
+  baseName?: string;
   lines?: string[];
   /** groundItem only: base item class label ("wand", "focus") for the tooltip. */
   itemClass?: string;
@@ -126,7 +128,7 @@ export interface Snapshot {
     cols: number; rows: number;
     items: {
       x: number; y: number; w: number; h: number;
-      rarity: ItemRarity; name: string; itemClass?: string; lines: string[];
+      rarity: ItemRarity; name: string; baseName?: string; itemClass?: string; lines: string[];
       statLines?: ItemStatLine[]; reqLevel?: number; reqAttrValue?: number; reqAttr?: string;
     }[];
   };

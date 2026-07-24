@@ -26,6 +26,12 @@ describe("describeItem", () => {
     const d = describeItem({ baseId: base.id, rarity: "magic", itemLevel: 65, affixes: [{ affixId: affix.id, value: 12 }] });
     expect(d.lines).toEqual([`+12 ${affix.label}`]);
   });
+  it("shows a rare item's generated name and keeps the base type", () => {
+    const base = ITEM_POOLS.bases[0]!;
+    const d = describeItem({ baseId: base.id, rarity: "rare", itemLevel: 82, affixes: [], name: "Corpse Husk" });
+    expect(d.name).toBe("Corpse Husk");
+    expect(d.baseName).toBe(base.name);
+  });
 });
 
 describe("baseOf", () => {
