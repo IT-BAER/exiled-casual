@@ -35,7 +35,7 @@ PoE2 itemization actually works — do not invent mechanics or colors from memor
 
 ## Devlog — SCREENSHOT EACH VISIBLE STEP
 
-- After any step with a visible result, screenshot the running app into `devlog/` named
+- After any step with a visible result, screenshot the running app into `devlog/screenshots/` named
   `YYYY-MM-DD-<slug>.jpeg` (JPEG q75-80; use a small PNG only when transparency/fine detail needs it).
 - Add that shot to `devlog/README.md` under its date with a one-line caption. Chronological, one entry per slice.
 - Frame-accurate capture needs in-page timing plus a render freeze, not a loose sleep.
