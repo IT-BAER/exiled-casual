@@ -11,6 +11,7 @@ export interface StatBlock {
   armourFixed: Fixed;
   spellDamagePct: number;  // integer; skillCast scales a spell hit by it
   castSpeedPct: number;    // integer; skillCast shortens a spell's cast time by it
+  critChancePct: number;   // integer; increases a skill's own base crit chance
 }
 
 export const RES_CAP = 75;
@@ -61,6 +62,7 @@ export function baseCasterStats(): StatBlock {
     armourFixed: fp(0),
     spellDamagePct: 0,
     castSpeedPct: 0,
+    critChancePct: 0,
   };
 }
 
@@ -84,7 +86,7 @@ export interface ItemStatMod {
  */
 export function applyItemMods(base: StatBlock, mods: readonly ItemStatMod[]): StatBlock {
   const flat = { maxLife: 0, maxMana: 0, armour: 0, energyShield: 0 };
-  const pct = { manaRegen: 0, armour: 0, spellDamage: 0, energyShield: 0, castSpeed: 0 };
+  const pct = { manaRegen: 0, armour: 0, spellDamage: 0, energyShield: 0, castSpeed: 0, critChance: 0 };
   const res = resBlock();
   for (const m of mods) {
     const el = RES_STAT_ELEMENT[m.stat];
@@ -102,6 +104,7 @@ export function applyItemMods(base: StatBlock, mods: readonly ItemStatMod[]): St
       case "armourPct": pct.armour += m.value; break;
       case "spellDamagePct": pct.spellDamage += m.value; break;
       case "castSpeedPct": pct.castSpeed += m.value; break;
+      case "critChancePct": pct.critChance += m.value; break;
     }
   }
   const armourFlat = base.armourFixed + fp(flat.armour);
@@ -117,6 +120,7 @@ export function applyItemMods(base: StatBlock, mods: readonly ItemStatMod[]): St
     armourFixed: scalePct(armourFlat, pct.armour),
     spellDamagePct: base.spellDamagePct + pct.spellDamage,
     castSpeedPct: base.castSpeedPct + pct.castSpeed,
+    critChancePct: base.critChancePct + pct.critChance,
   };
 }
 

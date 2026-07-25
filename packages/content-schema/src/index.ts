@@ -67,6 +67,8 @@ export interface SkillDef {
   cooldownTicks: number;
   /** Post-cast movement recovery, in ticks. Omitted/0 = instant, no slow. */
   castTicks?: number;
+  /** The skill's own critical strike chance, whole percent. Omitted/0 = never crits. */
+  critChancePct?: number;
   effects: EffectNode[];
 }
 
@@ -244,6 +246,9 @@ export function validateSkillDef(v: unknown): ValidationResult {
   }
   if (v["castTicks"] !== undefined && !isNonNegInt(v["castTicks"])) {
     errors.push("castTicks: must be a non-negative integer");
+  }
+  if (v["critChancePct"] !== undefined && !isNonNegInt(v["critChancePct"])) {
+    errors.push("critChancePct: must be a non-negative integer");
   }
   const effects = v["effects"];
   if (!Array.isArray(effects) || effects.length === 0) {

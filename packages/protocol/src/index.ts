@@ -157,6 +157,8 @@ export interface PlayerStats {
   spellDamagePct: number;
   /** Increased cast speed from gear; the sheet prints it beside spell damage. */
   castSpeedPct: number;
+  /** Increased critical strike chance from gear; it scales each skill's own base. */
+  critChancePct: number;
 }
 
 /** One "label: value" row in an item tooltip's base-stat block. */

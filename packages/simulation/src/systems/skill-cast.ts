@@ -1,4 +1,5 @@
 import { fpClamp, fpStepToward } from "@exiled/fixed-point";
+import { createStream } from "../rng";
 import { scalePct } from "@exiled/rules";
 import type { SkillDef } from "@exiled/content-schema";
 import { Simulation } from "../loop";
@@ -11,7 +12,13 @@ export function registerSkillCast(
   sim: Simulation,
   skills: ReadonlyMap<string, SkillDef>,
   collisionRef?: CollisionRef,
+  seed = 0,
 ): void {
+  // One stream for every crit roll in the run. It is only drawn from when the
+  // skill has a base crit chance at all, so a kit that cannot crit consumes no
+  // randomness and replays from before crit existed still check out.
+  const critRolls = createStream(seed, "crit");
+
   sim.register("skillCast", (world, tick, commands) => {
     const collision = collisionRef?.active ?? undefined;
     for (const cmd of commands) {
@@ -67,6 +74,16 @@ export function registerSkillCast(
       // it, so Cinder Ground's burning dps below is deliberately left alone.
       const spellDamagePct = offense?.spellDamagePct ?? 0;
 
+      // PoE crit: the skill brings the base chance, gear's "% increased Critical
+      // Strike Chance" multiplies it rather than adding to it, so 8% with +25%
+      // is 10% and not 33%. Rolled in hundredths of a percent to keep that
+      // fraction, once per cast, and only for a skill that can crit at all.
+      // The bonus is PoE's own base 100% Critical Damage Bonus: a crit is 200%
+      // of the hit. Ailments below are left alone, as they are for spell damage.
+      const baseCritPct = skill.critChancePct ?? 0;
+      const didCrit = baseCritPct > 0
+        && critRolls.nextInt(0, 9999) < scalePct(baseCritPct * 100, offense?.critChancePct ?? 0);
+
       for (const effect of skill.effects) {
         if (effect.type === "spawnProjectile") {
           const speedPerTick = Math.trunc(effect.speedPerSecFixed / 30);
@@ -81,7 +98,7 @@ export function registerSkillCast(
             remainingRange: effect.maxRangeFixed,
             radius: effect.radiusFixed,
             damageType: damageCode(effect.damage.type),
-            damageAmount: scalePct(effect.damage.amountFixed, spellDamagePct),
+            damageAmount: scalePct(effect.damage.amountFixed, spellDamagePct) * (didCrit ? 2 : 1),
             ownerId: caster,
             team: casterTeam,
           });

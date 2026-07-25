@@ -103,6 +103,14 @@ describe("applyItemMods", () => {
     expect(s.spellDamagePct).toBe(37);
   });
 
+  it("collects increased critical strike chance", () => {
+    const s = applyItemMods(baseCasterStats(), [
+      { stat: "critChancePct", value: 12 },
+      { stat: "critChancePct", value: 13 },
+    ]);
+    expect(s.critChancePct).toBe(25); // increases add, then multiply the skill's own base
+  });
+
   it("collects cast speed percent", () => {
     const s = applyItemMods(baseCasterStats(), [
       { stat: "castSpeedPct", value: 9 },
@@ -114,7 +122,6 @@ describe("applyItemMods", () => {
   it("ignores stats the sim has no mechanic for", () => {
     const s = applyItemMods(baseCasterStats(), [
       { stat: "strength", value: 20 },
-      { stat: "critChancePct", value: 25 },
     ]);
     expect(s).toEqual(baseCasterStats());
   });

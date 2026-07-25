@@ -59,7 +59,7 @@ export function createCombatSim(
 
   // ── Register systems in canonical order ──────────────────────────────────
   registerResourceRegen(sim);
-  registerSkillCast(sim, SKILLS, collisionRef);
+  registerSkillCast(sim, SKILLS, collisionRef, seed);
   registerPlayerMovement(sim, collisionRef);
   registerMonsterAI(sim, collisionRef);
   registerBossAI(sim, MONSTERS, collisionRef);

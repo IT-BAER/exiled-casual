@@ -5,6 +5,7 @@ import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { vi } from "vitest";
 import { LootLabels } from "./LootLabels";
 import type { Snapshot } from "@exiled/protocol";
+import { testStats } from "../test-fixtures";
 
 afterEach(cleanup);
 
@@ -21,7 +22,7 @@ function snapWith(entities: Snapshot["entities"]): Snapshot {
       id: 0, x: 0, y: 0, life: 100, maxLife: 100, mana: 30, maxMana: 60,
       energyShield: 0, maxEnergyShield: 0,
       cooldowns: {}, alive: true, casting: false, level: 65, xp: 0, xpToNext: 60_000,
-      flasks: { lifeCharges: 7, lifeMax: 7, manaCharges: 7, manaMax: 7 }, stats: { armour: 0, armourPct: 0, res: { fire: 0, cold: 0, lightning: 0, chaos: 0 }, manaRegenPerSec: 6, spellDamagePct: 0, castSpeedPct: 0 },
+      flasks: { lifeCharges: 7, lifeMax: 7, manaCharges: 7, manaMax: 7 }, stats: testStats(),
     },
     entities,
     inventory: { cols: 12, rows: 5, items: [] },

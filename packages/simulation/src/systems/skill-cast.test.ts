@@ -97,7 +97,7 @@ describe("registerSkillCast", () => {
     const sim = new Simulation();
     registerSkillCast(sim, ALL_SKILLS);
     const caster = makeCaster(sim, fp(60));
-    sim.world.set<OffenseC>(caster, "offense", { spellDamagePct: 37, castSpeedPct: 0 });
+    sim.world.set<OffenseC>(caster, "offense", { spellDamagePct: 37, castSpeedPct: 0, critChancePct: 0 });
     sim.step([{
       tick: 0, entity: caster, type: "useSkill",
       skillId: "skill.ember_bolt.v1",
@@ -113,7 +113,7 @@ describe("registerSkillCast", () => {
     const emberSlow: SkillDef = { ...EMBER_BOLT, castTicks: 8 };
     registerSkillCast(sim, new Map([[emberSlow.id, emberSlow]]));
     const caster = makeCaster(sim, fp(60));
-    sim.world.set<OffenseC>(caster, "offense", { spellDamagePct: 0, castSpeedPct: 15 });
+    sim.world.set<OffenseC>(caster, "offense", { spellDamagePct: 0, castSpeedPct: 15, critChancePct: 0 });
     sim.step([{
       tick: 0, entity: caster, type: "useSkill",
       skillId: emberSlow.id,
@@ -124,11 +124,57 @@ describe("registerSkillCast", () => {
     expect(sim.world.get<CastingC>(caster, "casting")!.untilTick).toBe(6);
   });
 
+  it("a skill with no crit chance of its own never crits, whatever gear says", () => {
+    const sim = new Simulation();
+    registerSkillCast(sim, ALL_SKILLS, undefined, 1234);
+    const caster = makeCaster(sim, fp(60));
+    sim.world.set<OffenseC>(caster, "offense", { spellDamagePct: 0, castSpeedPct: 0, critChancePct: 500 });
+    sim.step([{
+      tick: 0, entity: caster, type: "useSkill",
+      skillId: EMBER_BOLT.id, data: { tx: fp(10), ty: 0 },
+    }]);
+
+    const proj = sim.world.get<ProjectileC>(sim.world.query("projectile")[0]!, "projectile")!;
+    expect(proj.damageAmount).toBe(fp(25)); // increases scale a base of zero, which is zero
+  });
+
+  it("a critical strike deals double, PoE's 100% base critical damage bonus", () => {
+    const sim = new Simulation();
+    const alwaysCrit: SkillDef = { ...EMBER_BOLT, critChancePct: 100 };
+    registerSkillCast(sim, new Map([[alwaysCrit.id, alwaysCrit]]), undefined, 1234);
+    const caster = makeCaster(sim, fp(60));
+    sim.step([{
+      tick: 0, entity: caster, type: "useSkill",
+      skillId: alwaysCrit.id, data: { tx: fp(10), ty: 0 },
+    }]);
+
+    const proj = sim.world.get<ProjectileC>(sim.world.query("projectile")[0]!, "projectile")!;
+    expect(proj.damageAmount).toBe(fp(50));
+  });
+
+  it("gear's increased crit multiplies the skill's own base, it does not add to it", () => {
+    // Base 8% with +25% increased is 10.00%, so a roll under 1000 of 10000 crits
+    // and one at or above it does not. Two seeds, picked to land either side.
+    const skill: SkillDef = { ...EMBER_BOLT, critChancePct: 8 };
+    const dmg = (seed: number): number => {
+      const sim = new Simulation();
+      registerSkillCast(sim, new Map([[skill.id, skill]]), undefined, seed);
+      const caster = makeCaster(sim, fp(60));
+      sim.world.set<OffenseC>(caster, "offense", { spellDamagePct: 0, castSpeedPct: 0, critChancePct: 25 });
+      sim.step([{ tick: 0, entity: caster, type: "useSkill", skillId: skill.id, data: { tx: fp(10), ty: 0 } }]);
+      return sim.world.get<ProjectileC>(sim.world.query("projectile")[0]!, "projectile")!.damageAmount;
+    };
+    // A 10% chance means the same cast crits under one seed and not under another.
+    const results = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].map(dmg);
+    expect(results).toContain(fp(50));  // some seed crits
+    expect(results).toContain(fp(25));  // most do not
+  });
+
   it("leaves an ailment's damage over time alone: spell damage scales hits only", () => {
     const sim = new Simulation();
     registerSkillCast(sim, ALL_SKILLS);
     const caster = makeCaster(sim, fp(60));
-    sim.world.set<OffenseC>(caster, "offense", { spellDamagePct: 50, castSpeedPct: 0 });
+    sim.world.set<OffenseC>(caster, "offense", { spellDamagePct: 50, castSpeedPct: 0, critChancePct: 0 });
     sim.step([{
       tick: 0, entity: caster, type: "useSkill",
       skillId: "skill.cinder_ground.v1",

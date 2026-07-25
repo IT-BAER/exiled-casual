@@ -8,6 +8,7 @@ const SKILL_DEFS: SkillDef[] = [
     manaCostFixed: fp(8),
     cooldownTicks: 6,
     castTicks: 8,
+    critChancePct: 7,
     effects: [
       {
         type: "spawnProjectile",

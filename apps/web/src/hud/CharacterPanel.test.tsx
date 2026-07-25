@@ -3,6 +3,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import type { Snapshot } from "@exiled/protocol";
 import { CharacterPanel } from "./CharacterPanel";
+import { testStats } from "../test-fixtures";
 
 afterEach(cleanup);
 
@@ -13,7 +14,7 @@ function player(over: Partial<Snapshot["player"]["stats"]> = {}): Snapshot["play
     energyShield: 0, maxEnergyShield: 0,
     cooldowns: {}, alive: true, casting: false, level: 65, xp: 0, xpToNext: 60_000,
     flasks: { lifeCharges: 7, lifeMax: 7, manaCharges: 7, manaMax: 7 },
-    stats: { armour: 50, armourPct: 83, res: { fire: 20, cold: 0, lightning: 0, chaos: 0 }, manaRegenPerSec: 8.7, spellDamagePct: 12, castSpeedPct: 0, ...over },
+    stats: testStats({ armour: 50, armourPct: 83, res: { fire: 20, cold: 0, lightning: 0, chaos: 0 }, manaRegenPerSec: 8.7, spellDamagePct: 12, ...over }),
   };
 }
 
