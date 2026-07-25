@@ -2,7 +2,7 @@
 import React from "react";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
-import { offerWaystones, areaLevel, atlasGraph, WAYSTONE_OFFER_COUNT, waystoneRarity, waystoneMods } from "@exiled/rules";
+import { offerWaystones, areaLevel, atlasGraph, WAYSTONE_OFFER_COUNT, waystoneRarity, waystoneMods, atlasNodeTier } from "@exiled/rules";
 import { PreparationPanel } from "./PreparationPanel.js";
 
 /** The three stones a fresh character owns, exactly as combat-sim seeds them. */
@@ -120,5 +120,58 @@ describe("a Waystone shows what it will do to the run", () => {
     render(<PreparationPanel atlasSeed={atlasSeed} waystones={ownedFor(atlasSeed)} completedNodes={[]} onClose={() => {}} onActivate={() => {}} />);
     expect(screen.getByTestId(`prep-ws-${ws.id}-rarity`).textContent).toBe("Waystone");
     expect(screen.getByTestId(`prep-ws-${ws.id}`).textContent).toContain("No modifiers");
+  });
+});
+
+describe("a place demands a Waystone of its own tier", () => {
+  afterEach(cleanup);
+  const atlasSeed = 42;
+  const graph = atlasGraph(atlasSeed);
+
+  /** The stock, plus one stone of exactly `tier` appended at a known id. */
+  function stockWith(tier: number) {
+    const owned = ownedFor(atlasSeed);
+    return [...owned, { id: `ws-${owned.length}`, seed: 4242, tier }];
+  }
+
+  it("stamps the tier it wants on the medallion", () => {
+    render(<PreparationPanel atlasSeed={atlasSeed} waystones={ownedFor(atlasSeed)} completedNodes={[]} onActivate={() => {}} onClose={() => {}} />);
+    expect(screen.getByTestId(`prep-node-${graph[0]!.id}-tier`).textContent).toBe("1");
+    const neighbour = graph[0]!.links[0]!;
+    expect(screen.getByTestId(`prep-node-${neighbour}-tier`).textContent).toBe(String(atlasNodeTier(graph, neighbour)));
+  });
+
+  it("refuses to activate when the stone is under the place's tier, and says which tier it wants", () => {
+    const neighbour = graph[0]!.links[0]!;
+    const need = atlasNodeTier(graph, neighbour);
+    const stock = stockWith(need - 1);
+    render(
+      <PreparationPanel
+        atlasSeed={atlasSeed} waystones={stock} completedNodes={[graph[0]!.id]}
+        onActivate={() => {}} onClose={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByTestId(`prep-node-${neighbour}`));
+    fireEvent.click(screen.getByTestId(`prep-ws-${stock[stock.length - 1]!.id}`));
+
+    expect((screen.getByTestId("prep-activate") as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByTestId("prep-undertier").textContent).toContain(String(need));
+  });
+
+  it("activates once the stone is good enough", () => {
+    const neighbour = graph[0]!.links[0]!;
+    const stock = stockWith(atlasNodeTier(graph, neighbour));
+    const onActivate = vi.fn();
+    render(
+      <PreparationPanel
+        atlasSeed={atlasSeed} waystones={stock} completedNodes={[graph[0]!.id]}
+        onActivate={onActivate} onClose={() => {}}
+      />,
+    );
+    const id = stock[stock.length - 1]!.id;
+    fireEvent.click(screen.getByTestId(`prep-node-${neighbour}`));
+    fireEvent.click(screen.getByTestId(`prep-ws-${id}`));
+    fireEvent.click(screen.getByTestId("prep-activate"));
+    expect(onActivate).toHaveBeenCalledWith(neighbour, id);
   });
 });

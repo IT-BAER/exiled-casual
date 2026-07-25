@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import {
-  atlasGraph, isNodeReachable, areaLevel,
+  atlasGraph, isNodeReachable, areaLevel, atlasNodeTier,
   waystoneRarity, waystoneMods, type WaystoneRarity,
 } from "@exiled/rules";
 import type { AtlasGraphNode } from "@exiled/rules";
@@ -60,6 +60,8 @@ const MAP_H = 300; // field height; width follows the panel
 const NODE = 26; // medallion diameter
 const CLEARED = "#7ea45c";
 const FOG = "#4c463a";
+/** Out of fog, but the stone in hand is too weak: a refusal, not a blank. */
+const UNDER_TIER = "#8a5a4a";
 
 /**
  * The world map, per atlas-maps.webp: places sit where the graph put them, routes
@@ -74,15 +76,21 @@ function AtlasMap(props: {
   nodes: AtlasGraphNode[];
   completedNodes: string[];
   selectedId: string | null;
+  /** Tier of the stone currently in hand, or null while none is chosen. */
+  stoneTier: number | null;
   onSelect: (id: string) => void;
 }) {
-  const { nodes, completedNodes, selectedId, onSelect } = props;
+  const { nodes, completedNodes, selectedId, stoneTier, onSelect } = props;
+  // Four states, not three: a place can be out of fog and still refuse the stone
+  // in your hand, which is a different problem to solve and has to look like one.
   const state = (n: AtlasGraphNode) =>
     completedNodes.includes(n.id)
       ? "cleared"
-      : isNodeReachable(nodes, completedNodes, n.id)
-      ? "open"
-      : "fog";
+      : !isNodeReachable(nodes, completedNodes, n.id)
+      ? "fog"
+      : stoneTier !== null && stoneTier < atlasNodeTier(nodes, n.id)
+      ? "underTier"
+      : "open";
 
   // Each undirected link once, keyed by its sorted pair.
   const routes: { key: string; a: AtlasGraphNode; b: AtlasGraphNode }[] = [];
@@ -136,14 +144,23 @@ function AtlasMap(props: {
         {nodes.map((n) => {
           const st = state(n);
           const selected = n.id === selectedId;
-          const accent = st === "cleared" ? CLEARED : st === "open" ? GOLD : FOG;
+          const tier = atlasNodeTier(nodes, n.id);
+          const accent =
+            st === "cleared" ? CLEARED : st === "open" ? GOLD : st === "underTier" ? UNDER_TIER : FOG;
+          // What the place is, in one line, because the medallion can only carry
+          // a colour and a number: PoE2's Atlas says the rest on hover.
+          const tip =
+            st === "cleared" ? `${n.name} — cleared`
+            : st === "fog" ? `${n.name} — no route yet`
+            : st === "underTier" ? `${n.name} — needs a Tier ${tier} Waystone`
+            : `${n.name} — Tier ${tier} or better, Area Level ${areaLevel(tier)}`;
           return (
             <button
               key={n.id}
               data-testid={`prep-node-${n.id}`}
               disabled={st !== "open"}
               onClick={() => onSelect(n.id)}
-              title={n.name}
+              title={tip}
               style={{
                 position: "absolute",
                 left: `${(n.x * 100).toFixed(2)}%`,
@@ -166,6 +183,22 @@ function AtlasMap(props: {
                 opacity: st === "fog" ? 0.62 : 1,
               }}
             >
+              {/* The tier the place demands, stamped in the medallion. A node's
+                  own difficulty is the one thing about it that is not a colour,
+                  and it is what decides which stone can open it. */}
+              <span
+                data-testid={`prep-node-${n.id}-tier`}
+                style={{
+                  fontFamily: SERIF,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: st === "fog" ? "#5f5a4e" : "#120f08",
+                  textShadow: st === "fog" ? "none" : "0 1px 0 rgba(255,255,255,0.25)",
+                  pointerEvents: "none",
+                }}
+              >
+                {tier}
+              </span>
               <span
                 style={{
                   position: "absolute",
@@ -176,6 +209,12 @@ function AtlasMap(props: {
                   fontFamily: SERIF,
                   fontSize: 11,
                   letterSpacing: 0.5,
+                  // A plate behind the label: with twelve places on a jittered
+                  // grid some seeds run a route straight through a name, and a
+                  // bare glyph on a dashed line is unreadable either way round.
+                  padding: "1px 5px",
+                  borderRadius: 3,
+                  background: "rgba(8,9,7,0.78)",
                   color: st === "fog" ? "#6a6459" : st === "cleared" ? CLEARED : PARCHMENT,
                   opacity: st === "fog" ? 0.7 : 1,
                   textShadow: "0 1px 3px #000",
@@ -197,7 +236,12 @@ export function PreparationPanel({ atlasSeed, completedNodes, waystones, onActiv
   const [nodeId, setNodeId] = useState<string | null>(null);
   const [wsId, setWsId] = useState<string | null>(null);
   const ws = waystones.find((w) => w.id === wsId);
-  const canActivate = nodeId !== null && ws !== undefined;
+  // The place has to accept the stone. Selecting a node and then a weaker stone
+  // is an easy way to end up here, so the button says no rather than firing an
+  // intent the sim would drop on the floor.
+  const requiredTier = nodeId === null ? null : atlasNodeTier(nodes, nodeId);
+  const underTier = ws !== undefined && requiredTier !== null && ws.tier < requiredTier;
+  const canActivate = nodeId !== null && ws !== undefined && !underTier;
 
   return (
     <div
@@ -271,6 +315,7 @@ export function PreparationPanel({ atlasSeed, completedNodes, waystones, onActiv
             nodes={nodes}
             completedNodes={completedNodes}
             selectedId={nodeId}
+            stoneTier={ws?.tier ?? null}
             onSelect={setNodeId}
           />
 
@@ -349,9 +394,15 @@ export function PreparationPanel({ atlasSeed, completedNodes, waystones, onActiv
                 {ws ? areaLevel(ws.tier) : "—"}
               </b>
             </span>
-            <span data-testid="prep-revives" style={{ letterSpacing: 0.5, color: "#b7ac8e" }}>
-              Portals <b style={{ color: MAGIC }}>{MAP_PORTALS}</b>
-            </span>
+            {underTier ? (
+              <span data-testid="prep-undertier" style={{ letterSpacing: 0.5, color: UNDER_TIER }}>
+                Needs a Tier <b>{requiredTier}</b> Waystone
+              </span>
+            ) : (
+              <span data-testid="prep-revives" style={{ letterSpacing: 0.5, color: "#b7ac8e" }}>
+                Portals <b style={{ color: MAGIC }}>{MAP_PORTALS}</b>
+              </span>
+            )}
           </div>
 
           <button

@@ -71,6 +71,37 @@ export function isNodeReachable(
 }
 
 /**
+ * The lowest Waystone tier a place will accept, by how far out it sits: hops
+ * from the first node, two tiers a hop.
+ *
+ * PoE2's Atlas gets harder the further from the start you push, and that is what
+ * turns a graph into progression rather than a set of doors. It could not exist
+ * before Waystones sustained themselves — gating a place behind a tier when the
+ * three starting stones were all a character would ever own was a way to
+ * hard-lock it. Now a cleared modified stone pays back a tier higher, so the far
+ * side of the world is reachable by playing toward it.
+ */
+export function atlasNodeTier(graph: readonly AtlasGraphNode[], nodeId: string): number {
+  const start = graph[0];
+  if (!start) return 1;
+  // Breadth-first, so "far" means hops along the routes rather than distance on
+  // the map — the fog rule walks the same edges.
+  const depth = new Map<string, number>([[start.id, 0]]);
+  const queue = [start.id];
+  while (queue.length > 0) {
+    const id = queue.shift()!;
+    const node = graph.find((n) => n.id === id);
+    if (!node) continue;
+    for (const l of node.links) {
+      if (depth.has(l)) continue;
+      depth.set(l, depth.get(id)! + 1);
+      queue.push(l);
+    }
+  }
+  return Math.min(WAYSTONE_MAX_TIER, 1 + 2 * (depth.get(nodeId) ?? 0));
+}
+
+/**
  * The seed a run draws its map from. Both halves matter: the Waystone, so two
  * stones are two different runs, and the place, so the same stone taken to two
  * nodes is not the same dungeon twice. FNV-1a, inlined to keep this leaf free of

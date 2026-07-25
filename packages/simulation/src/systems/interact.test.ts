@@ -1,9 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { fp } from "@exiled/fixed-point";
-import { offerWaystones, atlasGraph, WAYSTONE_OFFER_COUNT } from "@exiled/rules";
+import { offerWaystones, atlasGraph, WAYSTONE_OFFER_COUNT, atlasNodeTier, WAYSTONE_MAX_TIER } from "@exiled/rules";
 import { MAP_PORTALS } from "@exiled/protocol";
 import { Simulation } from "../loop";
 import { registerInteractSystem } from "./interact";
+import type { World } from "../ecs";
 import type { SessionC, Position, InteractableC } from "../components";
 
 function makeWorld() {
@@ -93,25 +94,49 @@ describe("registerInteractSystem", () => {
     expect(world.get<SessionC>(sessionE, "session")!.mapOpen).toBe(0);
   });
 
+  /** Append a stone of `tier` to the owned stock and return its positional id. */
+  function giveStone(world: World, sessionE: number, tier: number): string {
+    const s = world.get<SessionC>(sessionE, "session")!;
+    const waystones = [...s.waystones, { seed: 4242, tier }];
+    world.set<SessionC>(sessionE, "session", { ...s, waystones });
+    return `ws-${waystones.length - 1}`;
+  }
+
   it("activateMap opens a neighbour once its route is cleared", () => {
     const { sim, world, player, sessionE } = makeWorld();
     const graph = atlasGraph(0);
     const neighbour = graph[0]!.links[0]!;
     const s = world.get<SessionC>(sessionE, "session")!;
     world.set<SessionC>(sessionE, "session", { ...s, completedNodes: [graph[0]!.id] });
-    const ws = offerWaystones(0, WAYSTONE_OFFER_COUNT)[0]!;
-    sim.step([activateCmd(player, neighbour, ws.id)]);
+    // A neighbour of the start demands Tier 3; the opening stone is Tier 1.
+    const id = giveStone(world, sessionE, atlasNodeTier(graph, neighbour));
+    sim.step([activateCmd(player, neighbour, id)]);
     expect(world.get<SessionC>(sessionE, "session")!.mapOpen).toBe(1);
+  });
+
+  it("a place refuses a stone below its own tier", () => {
+    const { sim, world, player, sessionE } = makeWorld();
+    const graph = atlasGraph(0);
+    const neighbour = graph[0]!.links[0]!;
+    const s = world.get<SessionC>(sessionE, "session")!;
+    world.set<SessionC>(sessionE, "session", { ...s, completedNodes: [graph[0]!.id] });
+    const id = giveStone(world, sessionE, atlasNodeTier(graph, neighbour) - 1);
+    sim.step([activateCmd(player, neighbour, id)]);
+    const after = world.get<SessionC>(sessionE, "session")!;
+    expect(after.mapOpen).toBe(0);
+    // ...and the stone is still in the character's hand, not burnt on a refusal.
+    expect(after.waystones.some((w) => w.seed === 4242)).toBe(true);
   });
 
   it("the same waystone draws a different map at a different node", () => {
     const graph = atlasGraph(0);
-    const ws = offerWaystones(0, WAYSTONE_OFFER_COUNT)[0]!;
     const seedAt = (nodeId: string, completed: string[]) => {
       const { sim, world, player, sessionE } = makeWorld();
       const s = world.get<SessionC>(sessionE, "session")!;
       world.set<SessionC>(sessionE, "session", { ...s, completedNodes: completed });
-      sim.step([activateCmd(player, nodeId, ws.id)]);
+      // The same stone at both places, high enough for either to accept it.
+      const id = giveStone(world, sessionE, WAYSTONE_MAX_TIER);
+      sim.step([activateCmd(player, nodeId, id)]);
       return world.get<SessionC>(sessionE, "session")!.mapSeed;
     };
     const first = seedAt(graph[0]!.id, []);

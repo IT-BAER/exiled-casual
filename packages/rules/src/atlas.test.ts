@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   areaLevel, monsterTierScale, offerWaystones, WAYSTONE_OFFER_COUNT,
-  atlasGraph, ATLAS_NODE_COUNT, isNodeReachable,
+  atlasGraph, ATLAS_NODE_COUNT, isNodeReachable, atlasNodeTier, WAYSTONE_MAX_TIER,
 } from "./atlas.js";
 
 describe("atlas rules", () => {
@@ -116,5 +116,36 @@ describe("atlas fog", () => {
 
   it("is false for an id that is not on the graph", () => {
     expect(isNodeReachable(g, [], "node.nope")).toBe(false);
+  });
+});
+
+describe("atlasNodeTier", () => {
+  const graph = atlasGraph(2026);
+
+  it("the first place accepts the lowest stone there is", () => {
+    expect(atlasNodeTier(graph, graph[0]!.id)).toBe(1);
+  });
+
+  it("a neighbour of the start costs two tiers more", () => {
+    expect(atlasNodeTier(graph, graph[0]!.links[0]!)).toBe(3);
+  });
+
+  it("every place is reachable and inside the 1..15 band", () => {
+    for (const n of graph) {
+      const t = atlasNodeTier(graph, n.id);
+      expect(t).toBeGreaterThanOrEqual(1);
+      expect(t).toBeLessThanOrEqual(WAYSTONE_MAX_TIER);
+    }
+  });
+
+  it("is stable and rises with distance from the start", () => {
+    const first = atlasNodeTier(graph, graph[0]!.id);
+    const far = Math.max(...graph.map((n) => atlasNodeTier(graph, n.id)));
+    expect(far).toBeGreaterThan(first);
+    expect(atlasNodeTier(graph, graph[3]!.id)).toBe(atlasNodeTier(graph, graph[3]!.id));
+  });
+
+  it("an unknown place reads as the starting tier rather than throwing", () => {
+    expect(atlasNodeTier(graph, "node.nowhere")).toBe(1);
   });
 });

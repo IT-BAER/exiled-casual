@@ -1,5 +1,5 @@
 import { MAP_PORTALS } from "@exiled/protocol";
-import { atlasGraph, isNodeReachable, mapSeedFor } from "@exiled/rules";
+import { atlasGraph, isNodeReachable, mapSeedFor, atlasNodeTier } from "@exiled/rules";
 import { Simulation } from "../loop";
 import type { Position, InteractableC, SessionC } from "../components";
 import { spawnPortalRing } from "../areas";
@@ -29,13 +29,17 @@ export function registerInteractSystem(sim: Simulation): void {
         if (!atlasNodeId || !waystoneId) continue;
         if (session.completedNodes.includes(atlasNodeId)) continue;
         // Fog is a server rule, not a greyed-out button: the client is untrusted.
-        if (!isNodeReachable(atlasGraph(session.atlasSeed), session.completedNodes, atlasNodeId)) continue;
+        const graph = atlasGraph(session.atlasSeed);
+        if (!isNodeReachable(graph, session.completedNodes, atlasNodeId)) continue;
         // The id is the stone's index in the owned stock (see Waystone.id), so
         // the sim resolves it against its own list rather than trusting a client
         // to name a stone the character does not have.
         const index = waystoneIndex(waystoneId);
         const ws = index === null ? undefined : session.waystones[index];
         if (!ws) continue;
+        // A place further out demands a better stone. Server-side for the same
+        // reason the fog is: the greyed-out tile is a courtesy, not the rule.
+        if (ws.tier < atlasNodeTier(graph, atlasNodeId)) continue;
         world.set<SessionC>(sessionE, "session", {
           ...session,
           // Spent: opening the map consumes the stone, which is what makes
