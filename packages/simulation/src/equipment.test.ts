@@ -292,7 +292,7 @@ describe("derived player stats", () => {
 
     expect(world.get<Health>(playerEntity, "health")!.maxLife).toBe(fp(140));
     expect(world.get<DefensesC>(playerEntity, "defenses")!.armour).toBe(fp(50));
-    expect(world.get<DefensesC>(playerEntity, "defenses")!.fireResPct).toBe(20);
+    expect(world.get<DefensesC>(playerEntity, "defenses")!.res.fire).toBe(20);
   });
 
   it("the base implicit applies too: the robe's 45% mana regeneration", () => {
@@ -320,7 +320,7 @@ describe("derived player stats", () => {
 
     expect(world.get<Health>(playerEntity, "health")!.maxLife).toBe(fp(100));
     expect(world.get<DefensesC>(playerEntity, "defenses")!.armour).toBe(fp(0));
-    expect(world.get<DefensesC>(playerEntity, "defenses")!.fireResPct).toBe(0);
+    expect(world.get<DefensesC>(playerEntity, "defenses")!.res.fire).toBe(0);
   });
 
   it("keeps current life where it was, so equipping never heals", () => {
@@ -355,7 +355,7 @@ describe("derived player stats", () => {
     // Armour's share depends on the hit, so the sheet quotes SHEET_REFERENCE_HIT:
     // 50 / (50 + 10 * 6) = 45%.
     expect(s.armourPct).toBe(45);
-    expect(s.fireResPct).toBe(20);
+    expect(s.res.fire).toBe(20);
     // trunc(fp(8.7)/30) = 290 per tick, so the sheet reports 290*30 = fp(8.7)/s.
     expect(s.manaRegenPerSec).toBeCloseTo(8.7, 5);
     expect(s.spellDamagePct).toBe(0);
@@ -370,7 +370,7 @@ describe("derived player stats", () => {
     placeInInv(world, OVERCAP, 0, 0, 2, 3);
     sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "body" }, playerEntity, 0)]);
 
-    expect(buildSnapshot(world, sim, 1, CONTENT_VERSION).player.stats.fireResPct).toBe(80);
+    expect(buildSnapshot(world, sim, 1, CONTENT_VERSION).player.stats.res.fire).toBe(80);
   });
 
   it("restoring a save applies the saved gear and starts the session full", async () => {
@@ -383,7 +383,7 @@ describe("derived player stats", () => {
     expect(await loadInto(kv, w2)).toBe(true);
     expect(w2.get<Health>(p2, "health")!.maxLife).toBe(fp(140));
     expect(w2.get<Health>(p2, "health")!.life).toBe(fp(140));
-    expect(w2.get<DefensesC>(p2, "defenses")!.fireResPct).toBe(20);
+    expect(w2.get<DefensesC>(p2, "defenses")!.res.fire).toBe(20);
   });
 });
 

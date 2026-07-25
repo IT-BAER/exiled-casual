@@ -1,6 +1,7 @@
 import { applyDamage } from "@exiled/rules";
 import { Simulation } from "../loop";
 import type { Health, DefensesC } from "../components";
+import { damageTypeOf } from "../damage-types";
 
 export function registerDamageResolve(sim: Simulation): void {
   sim.register("damageResolve", (world) => {
@@ -19,8 +20,8 @@ export function registerDamageResolve(sim: Simulation): void {
       if (!health || !def) continue;
 
       const final = applyDamage(
-        { type: ev.type === 0 ? "fire" : "physical", amountFixed: ev.amountFixed },
-        { fireResPct: def.fireResPct, armourFixed: def.armour },
+        { type: damageTypeOf(ev.type), amountFixed: ev.amountFixed },
+        { resPct: def.res, armourFixed: def.armour },
       );
       world.set<Health>(ev.target, "health", {
         ...health,

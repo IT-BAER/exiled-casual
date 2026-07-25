@@ -1,5 +1,5 @@
 import { fp } from "@exiled/fixed-point";
-import { validateMonsterDef, type MonsterDef, type RareModifier } from "@exiled/content-schema";
+import { resBlock, validateMonsterDef, type MonsterDef, type RareModifier } from "@exiled/content-schema";
 
 const MONSTER_DEFS: MonsterDef[] = [
   {
@@ -11,7 +11,7 @@ const MONSTER_DEFS: MonsterDef[] = [
     attackDamage: { type: "physical", amountFixed: fp(6) },
     attackCooldownTicks: 45,
     radiusFixed: fp(0.5),
-    defenses: { fireResPct: 0, armourFixed: fp(0.5) },
+    defenses: { resPct: resBlock(), armourFixed: fp(0.5) },
   },
   {
     id: "monster.cinder_warden.v1",
@@ -22,7 +22,7 @@ const MONSTER_DEFS: MonsterDef[] = [
     attackDamage: { type: "physical", amountFixed: fp(10) },
     attackCooldownTicks: 60,
     radiusFixed: fp(1.4),
-    defenses: { fireResPct: 40, armourFixed: fp(3) },
+    defenses: { resPct: resBlock({ fire: 40 }), armourFixed: fp(3) },
     boss: {
       phase2AtLifePct: 50,
       slam: { windupTicks: 30, radiusFixed: fp(3.5), damageFixed: fp(28), cooldownTicks: 150, rangeFixed: fp(9) },
@@ -51,9 +51,36 @@ export const MONSTERS: ReadonlyMap<string, MonsterDef> = new Map(
   MONSTER_DEFS.map((d) => [d.id, d]),
 );
 
-export const RARE_TEMPLATE: RareModifier = {
+/**
+ * One rare template per element. PoE's rares carry rolled modifiers that force
+ * a different defence pack to pack; this is the cheapest honest version of
+ * that: the rare's hit converts to its element and it resists that element, so
+ * every resistance on the character sheet answers a monster that actually
+ * exists. The multipliers are shared — only the element, its resistance and the
+ * name differ.
+ */
+export const RARE_TEMPLATES: readonly RareModifier[] = (
+  [
+    ["fire", "Cinder-Touched"],
+    ["cold", "Frost-Touched"],
+    ["lightning", "Storm-Touched"],
+    ["chaos", "Blight-Touched"],
+  ] as const
+).map(([element, namePrefix]) => ({
   lifeMulPct: 250,
   moveSpeedMulPct: 120,
   damageMulPct: 150,
-  addedFireResPct: 30,
-};
+  element,
+  addedResPct: 30,
+  namePrefix,
+}));
+
+/**
+ * Pick a rare's elemental theme from any integer (a seed, a hash). Deterministic
+ * and total, so a replay picks the same rare twice; hashing is the caller's job
+ * because content must not depend on the sim's rng.
+ */
+export function rareTemplate(n: number): RareModifier {
+  const i = Math.abs(Math.trunc(n)) % RARE_TEMPLATES.length;
+  return RARE_TEMPLATES[i]!;
+}

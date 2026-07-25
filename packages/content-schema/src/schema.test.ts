@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { fp } from "@exiled/fixed-point";
+import { ELEMENTS, resBlock } from "./index.js";
 import {
   ID_PATTERN,
   validateSkillDef,
@@ -33,7 +34,7 @@ const validMonster: MonsterDef = {
   attackDamage: { type: "physical", amountFixed: fp(6) },
   attackCooldownTicks: 45,
   radiusFixed: fp(0.5),
-  defenses: { fireResPct: 0, armourFixed: fp(0.5) },
+  defenses: { resPct: resBlock(), armourFixed: fp(0.5) },
 };
 
 describe("ID_PATTERN", () => {
@@ -173,15 +174,22 @@ describe("validateMonsterDef", () => {
   it("rejects invalid attackDamage type", () => {
     const r = validateMonsterDef({
       ...validMonster,
-      attackDamage: { type: "lightning", amountFixed: fp(6) },
+      attackDamage: { type: "holy", amountFixed: fp(6) },
     });
     expect(r.ok).toBe(false);
+  });
+
+  it("accepts every element as an attackDamage type", () => {
+    for (const type of ELEMENTS) {
+      const r = validateMonsterDef({ ...validMonster, attackDamage: { type, amountFixed: fp(6) } });
+      expect(r.ok, type).toBe(true);
+    }
   });
 
   it("rejects fractional armourFixed", () => {
     const r = validateMonsterDef({
       ...validMonster,
-      defenses: { fireResPct: 0, armourFixed: 1.5 },
+      defenses: { resPct: resBlock(), armourFixed: 1.5 },
     });
     expect(r.ok).toBe(false);
   });
@@ -189,7 +197,7 @@ describe("validateMonsterDef", () => {
   it("rejects fireResPct above 100", () => {
     const r = validateMonsterDef({
       ...validMonster,
-      defenses: { fireResPct: 500, armourFixed: fp(0.5) },
+      defenses: { resPct: resBlock({ fire: 500 }), armourFixed: fp(0.5) },
     });
     expect(r.ok).toBe(false);
   });

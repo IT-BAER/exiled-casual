@@ -43,6 +43,13 @@ export const AREA_KINDS: readonly AreaKind[] = ["hideout", "map"];
  */
 export const MAP_PORTALS = 6;
 
+/**
+ * Resistances by element, integer percent. Protocol-local and structural, like
+ * ItemRarity: the sim's ResBlock assigns to it without the wire contract taking
+ * a dependency on content.
+ */
+export interface Resistances { fire: number; cold: number; lightning: number; chaos: number }
+
 /** Rarity tint for a display-ready item. Protocol-local; no content-schema import. */
 export type ItemRarity = "normal" | "magic" | "rare" | "unique";
 
@@ -119,8 +126,8 @@ export interface SnapshotEntity {
 /**
  * Everything the character sheet shows that the HUD globes do not already carry.
  * Only stats some equipped mod can actually move live here: attributes, energy
- * shield, evasion, block and the non-fire resistances have no mechanic yet, and
- * a zero row would advertise a system that does not exist.
+ * shield, evasion and block have no mechanic yet, and a zero row would
+ * advertise a system that does not exist.
  */
 export interface PlayerStats {
   /** Raw armour rating, the number gear adds to. */
@@ -131,8 +138,8 @@ export interface PlayerStats {
    * hit (the bridge's SHEET_REFERENCE_HIT), the way PoE2's sheet does it.
    */
   armourPct: number;
-  /** UNCAPPED total. The sheet renders it against RES_CAP so overcapping stays visible. */
-  fireResPct: number;
+  /** UNCAPPED totals, one per element. The sheet renders them against RES_CAP so overcapping stays visible. */
+  res: Resistances;
   /** What the player actually regenerates: the per-tick amount times 30, not the pre-truncation ideal. */
   manaRegenPerSec: number;
   spellDamagePct: number;

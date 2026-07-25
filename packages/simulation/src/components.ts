@@ -1,6 +1,6 @@
 import type { Entity } from "./ecs";
 import type { Fixed } from "@exiled/fixed-point";
-import type { Item } from "@exiled/content-schema";
+import type { Item, ResBlock } from "@exiled/content-schema";
 
 export type AreaKind = "hideout" | "map";
 
@@ -57,8 +57,8 @@ export interface MonsterC {
   attackCooldownTicks: number;
   /** amountFixed of the attack damage */
   attackDamage: Fixed;
-  /** 0 = fire, 1 = physical */
-  attackType: 0 | 1;
+  /** DAMAGE_TYPES index (see damage-types.ts) */
+  attackType: number;
   attackReadyTick: number;
   state: "idle" | "chase" | "attack";
   /** 1 = rare, 0 = normal */
@@ -66,7 +66,7 @@ export interface MonsterC {
   /** 1 = boss add, 0 = normal spawn */
   summoned: 0 | 1;
 }
-export interface DefensesC  { fireResPct: number; armour: Fixed }
+export interface DefensesC  { res: ResBlock; armour: Fixed }
 /**
  * Gear-derived offence. Only present while some equipped mod grants it, so an
  * ungeared world serializes exactly as it did before gear existed.
@@ -77,8 +77,8 @@ export interface ProjectileC {
   diry: Fixed;
   remainingRange: Fixed;
   radius: Fixed;
-  /** 0 = fire, 1 = physical */
-  damageType: 0 | 1;
+  /** DAMAGE_TYPES index (see damage-types.ts) */
+  damageType: number;
   damageAmount: Fixed;
   ownerId: Entity;
   team: number;
@@ -105,7 +105,7 @@ export interface TelegraphC {
   ownerId: Entity; team: number;
   radius: Fixed;
   startTick: number; impactTick: number;
-  damage: Fixed; damageType: 0 | 1;
+  damage: Fixed; damageType: number;
   leavesGroundTicks: number;
   /**
    * Burning-patch profile spawned at impact when leavesGroundTicks > 0. Field
@@ -129,8 +129,8 @@ export interface DamageEvent {
   target: Entity;
   source: Entity;
   amountFixed: Fixed;
-  /** 0 = fire, 1 = physical */
-  type: 0 | 1;
+  /** DAMAGE_TYPES index (see damage-types.ts) */
+  type: number;
 }
 
 /** Two utility flasks: life on Q, mana on E. Charges are plain integers, not Fixed. */

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { fp } from "@exiled/fixed-point";
 import { validateSkillDef, validateMonsterDef, ID_PATTERN } from "@exiled/content-schema";
-import { CONTENT_VERSION, SKILLS, MONSTERS, RARE_TEMPLATE } from "./index.js";
+import { CONTENT_VERSION, SKILLS, MONSTERS, RARE_TEMPLATES, rareTemplate } from "./index.js";
 
 describe("CONTENT_VERSION", () => {
   it('=== "slice1.v1"', () => {
@@ -9,14 +9,25 @@ describe("CONTENT_VERSION", () => {
   });
 });
 
-describe("RARE_TEMPLATE", () => {
-  it("has exact contract values", () => {
-    expect(RARE_TEMPLATE).toEqual({
-      lifeMulPct: 250,
-      moveSpeedMulPct: 120,
-      damageMulPct: 150,
-      addedFireResPct: 30,
-    });
+describe("RARE_TEMPLATES", () => {
+  it("carries one template per element, sharing the multipliers", () => {
+    expect(RARE_TEMPLATES.map((t) => t.element)).toEqual(["fire", "cold", "lightning", "chaos"]);
+    for (const t of RARE_TEMPLATES) {
+      expect(t).toMatchObject({
+        lifeMulPct: 250,
+        moveSpeedMulPct: 120,
+        damageMulPct: 150,
+        addedResPct: 30,
+      });
+      expect(t.namePrefix.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("rareTemplate picks deterministically and totally, negatives included", () => {
+    expect(rareTemplate(2)).toBe(RARE_TEMPLATES[2]);
+    expect(rareTemplate(6)).toBe(RARE_TEMPLATES[2]);
+    expect(rareTemplate(-6)).toBe(RARE_TEMPLATES[2]);
+    expect(rareTemplate(0x7fffffff)).toBeDefined();
   });
 });
 
@@ -111,9 +122,9 @@ describe("MONSTERS", () => {
     expect(def.attackDamage.amountFixed).toBe(fp(6));        // 6000
   });
 
-  it("cinder_imp defenses.fireResPct === 0 and armourFixed === fp(0.5)", () => {
+  it("cinder_imp has no resistances and armourFixed === fp(0.5)", () => {
     const def = MONSTERS.get("monster.cinder_imp.v1")!;
-    expect(def.defenses.fireResPct).toBe(0);
+    expect(def.defenses.resPct).toEqual({ fire: 0, cold: 0, lightning: 0, chaos: 0 });
     expect(def.defenses.armourFixed).toBe(fp(0.5));          // 500
   });
 

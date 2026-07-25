@@ -5,6 +5,7 @@ import { Simulation } from "../loop";
 import { WORLD_MIN, WORLD_MAX } from "../movement";
 import { type CollisionRef } from "../collision";
 import type { Position, PlayerC, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC, CastingC, OffenseC } from "../components";
+import { damageCode } from "../damage-types";
 
 export function registerSkillCast(
   sim: Simulation,
@@ -73,7 +74,7 @@ export function registerSkillCast(
             diry: step.dy,
             remainingRange: effect.maxRangeFixed,
             radius: effect.radiusFixed,
-            damageType: effect.damage.type === "fire" ? 0 : 1,
+            damageType: damageCode(effect.damage.type),
             damageAmount: scalePct(effect.damage.amountFixed, spellDamagePct),
             ownerId: caster,
             team: casterTeam,

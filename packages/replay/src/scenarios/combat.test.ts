@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { fp, toNumber } from "@exiled/fixed-point";
+import { resBlock } from "@exiled/content-schema";
 import { applyDamage } from "@exiled/rules";
 import { createCombatSim, intentToCommand, checksumWorld } from "@exiled/simulation";
 import { CONTENT_VERSION } from "@exiled/content-runtime";
@@ -21,7 +22,7 @@ describe("golden (a): Ember Bolt fire damage on a cinder imp", () => {
     }
     const expectedDamage = applyDamage(
       { type: "fire", amountFixed: fp(25) },
-      { fireResPct: 0, armourFixed: fp(0.5) },
+      { resPct: resBlock(), armourFixed: fp(0.5) },
     );
     expect(expectedDamage).toBe(fp(25));
 
@@ -68,8 +69,8 @@ describe("golden (b): Cinder Ground burning ailment", () => {
 describe("golden (c): fire resistance reduces damage", () => {
   it("rare imp (fireResPct=30) takes strictly less fire damage than normal (fireResPct=0)", () => {
     const hit = fp(25);
-    const normalDmg = applyDamage({ type: "fire", amountFixed: hit }, { fireResPct: 0, armourFixed: fp(0.5) });
-    const rareDmg = applyDamage({ type: "fire", amountFixed: hit }, { fireResPct: 30, armourFixed: fp(0.5) });
+    const normalDmg = applyDamage({ type: "fire", amountFixed: hit }, { resPct: resBlock(), armourFixed: fp(0.5) });
+    const rareDmg = applyDamage({ type: "fire", amountFixed: hit }, { resPct: resBlock({ fire: 30 }), armourFixed: fp(0.5) });
     expect(rareDmg).toBeLessThan(normalDmg);
     expect(rareDmg).toBe(Math.trunc(fp(25) * 70 / 100));
   });

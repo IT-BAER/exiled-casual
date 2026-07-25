@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { fp } from "@exiled/fixed-point";
+import { resBlock } from "@exiled/content-schema";
 import { Simulation } from "../loop";
 import { registerTelegraphResolve } from "./telegraph-resolve";
 import { registerDamageResolve } from "./damage-resolve";
@@ -225,11 +226,11 @@ describe("registerTelegraphResolve", () => {
 
     // target A: no defenses
     const tA = makePlayer(sim, fp(1), 0, 0);
-    sim.world.set<DefensesC>(tA, "defenses", { fireResPct: 0, armour: fp(0) });
+    sim.world.set<DefensesC>(tA, "defenses", { res: resBlock(), armour: fp(0) });
 
     // target B: 50% fire resistance
     const tB = makePlayer(sim, fp(0), fp(1), 0);
-    sim.world.set<DefensesC>(tB, "defenses", { fireResPct: 50, armour: fp(0) });
+    sim.world.set<DefensesC>(tB, "defenses", { res: resBlock({ fire: 50 }), armour: fp(0) });
 
     sim.step();
 

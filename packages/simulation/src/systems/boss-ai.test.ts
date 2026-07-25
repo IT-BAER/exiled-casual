@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { fp, fpDist2 } from "@exiled/fixed-point";
 import { MONSTERS } from "@exiled/content-runtime";
-import type { MonsterDef } from "@exiled/content-schema";
+import { resBlock, type MonsterDef } from "@exiled/content-schema";
 import { Simulation } from "../loop";
 import { World } from "../ecs";
 import type { Position, MonsterC, Faction, PlayerC, BossC, TelegraphC, Health } from "../components";
@@ -27,7 +27,7 @@ const testMonsters: ReadonlyMap<string, MonsterDef> = new Map([
       attackDamage: { amountFixed: fp(10), type: "physical" as const },
       attackCooldownTicks: 60,
       radiusFixed: fp(1),
-      defenses: { fireResPct: 0, armourFixed: 0 },
+      defenses: { resPct: resBlock(), armourFixed: 0 },
       boss: {
         phase2AtLifePct: 50,
         slam: {

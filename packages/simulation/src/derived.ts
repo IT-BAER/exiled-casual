@@ -46,7 +46,7 @@ export function recomputePlayerStats(world: World, opts: { refill?: boolean } = 
       regen: Math.trunc(s.manaRegenPerSecFixed / 30),
     });
   }
-  world.set<DefensesC>(player, "defenses", { fireResPct: s.fireResPct, armour: s.armourFixed });
+  world.set<DefensesC>(player, "defenses", { res: s.resPct, armour: s.armourFixed });
 
   // Removing at zero keeps the component out of a bare world entirely. The store
   // itself is only created once something grants spell damage, which is what

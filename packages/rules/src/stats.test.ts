@@ -23,7 +23,7 @@ describe("baseCasterStats", () => {
     expect(s.maxManaFixed).toBe(fp(60));          // 60000
     expect(s.manaRegenPerSecFixed).toBe(fp(6));   // 6000
     expect(s.moveSpeedFixed).toBe(fp(4.2));       // 4200
-    expect(s.fireResPct).toBe(0);
+    expect(s.resPct).toEqual({ fire: 0, cold: 0, lightning: 0, chaos: 0 });
     expect(s.armourFixed).toBe(fp(0));            // 0
   });
 
@@ -83,7 +83,16 @@ describe("applyItemMods", () => {
       { stat: "fireResPct", value: 25 },
       { stat: "fireResPct", value: 60 },
     ]);
-    expect(s.fireResPct).toBe(85); // RES_CAP is applied by applyDamage, not here
+    expect(s.resPct.fire).toBe(85); // RES_CAP is applied by applyDamage, not here
+  });
+
+  it("each element's mod lands on its own resistance and nowhere else", () => {
+    const s = applyItemMods(baseCasterStats(), [
+      { stat: "coldResPct", value: 12 },
+      { stat: "lightningResPct", value: 7 },
+      { stat: "chaosResPct", value: 5 },
+    ]);
+    expect(s.resPct).toEqual({ fire: 0, cold: 12, lightning: 7, chaos: 5 });
   });
 
   it("collects spell damage percent", () => {
@@ -97,7 +106,6 @@ describe("applyItemMods", () => {
   it("ignores stats the sim has no mechanic for", () => {
     const s = applyItemMods(baseCasterStats(), [
       { stat: "energyShield", value: 35 },
-      { stat: "coldResPct", value: 25 },
       { stat: "strength", value: 20 },
       { stat: "critChancePct", value: 25 },
     ]);

@@ -12,7 +12,7 @@ function player(over: Partial<Snapshot["player"]["stats"]> = {}): Snapshot["play
     life: 96, maxLife: 140, mana: 12, maxMana: 60,
     cooldowns: {}, alive: true, casting: false,
     flasks: { lifeCharges: 7, lifeMax: 7, manaCharges: 7, manaMax: 7 },
-    stats: { armour: 50, armourPct: 83, fireResPct: 20, manaRegenPerSec: 8.7, spellDamagePct: 12, ...over },
+    stats: { armour: 50, armourPct: 83, res: { fire: 20, cold: 0, lightning: 0, chaos: 0 }, manaRegenPerSec: 8.7, spellDamagePct: 12, ...over },
   };
 }
 
@@ -35,8 +35,21 @@ describe("CharacterPanel", () => {
     const { rerender } = render(<CharacterPanel player={player()} onClose={() => {}} />);
     expect(screen.getByTestId("char-res-fire").textContent).toContain("20% (20%)");
 
-    rerender(<CharacterPanel player={player({ fireResPct: 90 })} onClose={() => {}} />);
+    rerender(<CharacterPanel player={player({ res: { fire: 90, cold: 0, lightning: 0, chaos: 0 } })} onClose={() => {}} />);
     expect(screen.getByTestId("char-res-fire").textContent).toContain("75% (90%)");
+  });
+
+  it("shows all four resistances, as the reference's 2x2 grid does", () => {
+    render(
+      <CharacterPanel
+        player={player({ res: { fire: 20, cold: 41, lightning: 5, chaos: 60 } })}
+        onClose={() => {}}
+      />,
+    );
+    expect(screen.getByTestId("char-res-cold").textContent).toContain("41% (41%)");
+    expect(screen.getByTestId("char-res-lightning").textContent).toContain("5% (5%)");
+    expect(screen.getByTestId("char-res-chaos").textContent).toContain("60% (60%)");
+    expect(screen.getByTestId("char-detail").textContent).toContain("Chaos Resistance");
   });
 
   it("lists mana regeneration and spell damage in the detail block", () => {

@@ -1,6 +1,6 @@
 import { fp } from "@exiled/fixed-point";
 import { baseCasterStats, makeRare, rollItem, FLASK_MAX_CHARGES } from "@exiled/rules";
-import { SKILLS, MONSTERS, RARE_TEMPLATE, CONTENT_VERSION, ITEM_POOLS, baseOf } from "@exiled/content-runtime";
+import { SKILLS, MONSTERS, rareTemplate, CONTENT_VERSION, ITEM_POOLS, baseOf } from "@exiled/content-runtime";
 import { generateArea, type AreaLayout } from "@exiled/mapgen";
 import { gridCollision, type CollisionRef } from "./collision";
 import { fnv1a32 } from "./rng";
@@ -83,7 +83,7 @@ export function createCombatSim(
   });
   world.set<Cooldowns>(playerEntity, "cooldowns", {});
   world.set<DefensesC>(playerEntity, "defenses", {
-    fireResPct: s.fireResPct,
+    res: s.resPct,
     armour: s.armourFixed,
   });
   world.set<MoveTarget>(playerEntity, "moveTarget", { x: spawn.x, y: spawn.y, active: 0 });
@@ -133,7 +133,7 @@ export function createCombatSim(
         spawnMonster(world, impDef, x, y, false);
       }
 
-      const rareDef = makeRare(impDef, RARE_TEMPLATE);
+      const rareDef = makeRare(impDef, rareTemplate(seed));
       spawnMonster(world, rareDef, fp(8), fp(8), true);
     }
 
@@ -176,6 +176,7 @@ const PACK_RING: readonly [number, number][] = [
 // of this function, so it deliberately lives outside the world state.
 const LAB_ITEM_TIERS = ["normal", "magic", "rare", "unique"] as const;
 let labItemDrops = 0;
+let labRareSpawns = 0;
 
 export function spawnLabActors(
   world: World,
@@ -221,7 +222,9 @@ export function spawnLabActors(
       for (const [dx, dy] of PACK_RING) spawnMonster(world, impDef, cx + dx, cy + dy, false);
       break;
     case "rare":
-      spawnMonster(world, makeRare(impDef, RARE_TEMPLATE), cx, cy + fp(7), true);
+      // Lab-only: walk the elemental themes press by press, the way the item
+      // drop walks rarities, so all four are reachable without hunting seeds.
+      spawnMonster(world, makeRare(impDef, rareTemplate(labRareSpawns++)), cx, cy + fp(7), true);
       break;
     case "boss":
       spawnMonster(world, MONSTERS.get("monster.cinder_warden.v1")!, cx, cy + fp(10), false);

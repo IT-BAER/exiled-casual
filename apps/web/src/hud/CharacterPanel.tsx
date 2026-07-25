@@ -80,13 +80,47 @@ function Niche({ id, label, value, icon }: { id: string; label: string; value: s
  * The two numbers only differ once gear pushes past RES_CAP, which is the whole
  * point of showing both: the sheet is where wasted overcap becomes visible.
  */
+/**
+ * Cold, lightning and chaos glyphs. The icon sheet only carries fire (it was cut
+ * when fire was the only resistance), so these are drawn instead of shipping
+ * three more PNGs: a snowflake, a bolt and a spiral, tinted the way the
+ * reference tints them.
+ */
+const ELEMENT_GLYPH = {
+  cold: { tint: "#8fd0ef", d: "M12 2v20M4 7l16 10M20 7L4 17" },
+  lightning: { tint: "#f2d55a", d: "M13 2 5 13h5l-1 9 8-11h-5z" },
+  chaos: { tint: "#c98fdd", d: "M17 9a5 5 0 1 0-5 5 3 3 0 1 0 3-3" },
+} as const;
+
+function ElementGlyph({ of }: { of: keyof typeof ELEMENT_GLYPH }) {
+  const g = ELEMENT_GLYPH[of];
+  const filled = of === "lightning";
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      width={20}
+      height={20}
+      style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.9))" }}
+    >
+      <path
+        d={g.d}
+        fill={filled ? g.tint : "none"}
+        stroke={g.tint}
+        strokeWidth={filled ? 0 : 2}
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 function ResPill({ id, label, pct, icon }: { id: string; label: string; pct: number; icon: React.ReactNode }) {
   return (
     <div
       data-testid={`char-res-${id}`}
       style={{
-        display: "flex", alignItems: "center", gap: 11,
-        padding: "6px 14px 6px 6px",
+        display: "flex", alignItems: "center", gap: 8,
+        padding: "6px 12px 6px 6px",
         background: "linear-gradient(180deg,rgba(38,31,20,0.92),rgba(12,10,7,0.92))",
         border: "1px solid #3a2f1b",
         borderRadius: 22,
@@ -105,13 +139,19 @@ function ResPill({ id, label, pct, icon }: { id: string; label: string; pct: num
       >
         {icon}
       </span>
-      <span style={{ color: PARCHMENT, fontSize: 13, letterSpacing: 1, flex: 1 }}>{label}</span>
-      <span style={{ color: "#fff", fontSize: 14 }}>
+      {/* "Lightning" is the longest label; without nowrap its value breaks onto a second line. */}
+      <span style={{ color: PARCHMENT, fontSize: 13, letterSpacing: 0.5, flex: 1, minWidth: 0, whiteSpace: "nowrap" }}>{label}</span>
+      <span style={{ color: "#fff", fontSize: 14, whiteSpace: "nowrap" }}>
         {Math.min(pct, RES_CAP)}%{" "}
         <span style={{ color: "#7d7360", fontSize: 13 }}>({pct}%)</span>
       </span>
     </div>
   );
+}
+
+/** "45% (60%)" — what applies, then the uncapped total, as the reference does. */
+function resRow(pct: number): string {
+  return `${Math.min(pct, RES_CAP)}% (${pct}%)`;
 }
 
 function DetailSection({ title, rows }: { title: string; rows: [string, string][] }) {
@@ -227,7 +267,14 @@ export function CharacterPanel({ player, onClose }: { player: Snapshot["player"]
         </div>
 
         <BandLabel>Resistances</BandLabel>
-        <ResPill id="fire" label="Fire" pct={s.fireResPct} icon={<Icon of="fire" size={20} />} />
+        {/* 2x2, fire/cold over lightning/chaos — the reference's arrangement
+            (poe2-screenshots/character-stats.png). */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+          <ResPill id="fire" label="Fire" pct={s.res.fire} icon={<Icon of="fire" size={20} />} />
+          <ResPill id="cold" label="Cold" pct={s.res.cold} icon={<ElementGlyph of="cold" />} />
+          <ResPill id="lightning" label="Lightning" pct={s.res.lightning} icon={<ElementGlyph of="lightning" />} />
+          <ResPill id="chaos" label="Chaos" pct={s.res.chaos} icon={<ElementGlyph of="chaos" />} />
+        </div>
 
         {/* The reference drops the stone for a flat dark list at the bottom. */}
         <div
@@ -247,7 +294,10 @@ export function CharacterPanel({ player, onClose }: { player: Snapshot["player"]
             rows={[
               ["Armour", String(Math.round(s.armour))],
               ["Physical Damage Reduction", `${s.armourPct}%`],
-              ["Fire Resistance", `${Math.min(s.fireResPct, RES_CAP)}% (${s.fireResPct}%)`],
+              ["Fire Resistance", resRow(s.res.fire)],
+              ["Cold Resistance", resRow(s.res.cold)],
+              ["Lightning Resistance", resRow(s.res.lightning)],
+              ["Chaos Resistance", resRow(s.res.chaos)],
             ]}
           />
           <DetailSection title="Offence" rows={[["Increased Spell Damage", `${s.spellDamagePct}%`]]} />

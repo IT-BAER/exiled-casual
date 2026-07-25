@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { fp } from "@exiled/fixed-point";
-import type { MonsterDef, RareModifier } from "@exiled/content-schema";
+import { resBlock, type MonsterDef, type RareModifier } from "@exiled/content-schema";
 import { makeRare } from "./rare.js";
 
 const cinderImp: MonsterDef = {
@@ -12,14 +12,16 @@ const cinderImp: MonsterDef = {
   attackDamage: { type: "physical", amountFixed: fp(6) }, // 6000
   attackCooldownTicks: 45,
   radiusFixed: fp(0.5),        // 500
-  defenses: { fireResPct: 0, armourFixed: fp(0.5) }, // armour 500
+  defenses: { resPct: resBlock(), armourFixed: fp(0.5) }, // armour 500
 };
 
 const RARE_TEMPLATE: RareModifier = {
   lifeMulPct: 250,
   moveSpeedMulPct: 120,
   damageMulPct: 150,
-  addedFireResPct: 30,
+  element: "lightning",
+  addedResPct: 30,
+  namePrefix: "Storm-Touched",
 };
 
 describe("makeRare", () => {
@@ -38,28 +40,30 @@ describe("makeRare", () => {
     expect(rare.attackDamage.amountFixed).toBe(9000);
   });
 
-  it("adds fire res: 0 + 30 === 30", () => {
+  it("adds resistance to its own element only: 0 + 30 === 30 lightning", () => {
     const rare = makeRare(cinderImp, RARE_TEMPLATE);
-    expect(rare.defenses.fireResPct).toBe(30);
+    expect(rare.defenses.resPct).toEqual({ fire: 0, cold: 0, lightning: 30, chaos: 0 });
   });
 
-  it("preserves id and name unchanged", () => {
+  it("preserves id and prefixes the name with the theme", () => {
     const rare = makeRare(cinderImp, RARE_TEMPLATE);
     expect(rare.id).toBe(cinderImp.id);
-    expect(rare.name).toBe(cinderImp.name);
+    expect(rare.name).toBe("Storm-Touched Cinder Imp");
   });
 
-  it("preserves attackDamage.type unchanged", () => {
+  it("converts the attack to its element, so armour no longer answers it", () => {
     const rare = makeRare(cinderImp, RARE_TEMPLATE);
-    expect(rare.attackDamage.type).toBe("physical");
+    expect(rare.attackDamage.type).toBe("lightning");
   });
 
   it("does not mutate original def", () => {
     const originalLife = cinderImp.maxLifeFixed;
-    const originalFireRes = cinderImp.defenses.fireResPct;
+    const originalRes = { ...cinderImp.defenses.resPct };
+    const originalType = cinderImp.attackDamage.type;
     makeRare(cinderImp, RARE_TEMPLATE);
     expect(cinderImp.maxLifeFixed).toBe(originalLife);
-    expect(cinderImp.defenses.fireResPct).toBe(originalFireRes);
+    expect(cinderImp.defenses.resPct).toEqual(originalRes);
+    expect(cinderImp.attackDamage.type).toBe(originalType);
   });
 
   it("returns a new object (not same reference)", () => {

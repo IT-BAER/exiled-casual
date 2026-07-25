@@ -2,10 +2,32 @@ import type { Fixed } from "@exiled/fixed-point";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-export type DamageType = "fire" | "physical";
+/**
+ * The elemental damage types, in sheet order. Both PoE1 and PoE2 group fire,
+ * cold and lightning as "elemental" and keep chaos apart; the sheet shows all
+ * four as resistances, so one list drives resistances, the sheet grid and the
+ * validators.
+ */
+export const ELEMENTS = ["fire", "cold", "lightning", "chaos"] as const;
+export type Element = (typeof ELEMENTS)[number];
+
+export type DamageType = Element | "physical";
+
+/** One resistance per element, integer percent. Uncapped; RES_CAP applies on use. */
+export type ResBlock = Record<Element, number>;
+
+/** A ResBlock with the named elements set and the rest at zero. */
+export function resBlock(partial: Partial<ResBlock> = {}): ResBlock {
+  return {
+    fire: partial.fire ?? 0,
+    cold: partial.cold ?? 0,
+    lightning: partial.lightning ?? 0,
+    chaos: partial.chaos ?? 0,
+  };
+}
 
 export interface Defenses {
-  fireResPct: number;
+  resPct: ResBlock;
   armourFixed: Fixed;
 }
 
@@ -52,7 +74,16 @@ export interface RareModifier {
   lifeMulPct: number;
   moveSpeedMulPct: number;
   damageMulPct: number;
-  addedFireResPct: number;
+  /**
+   * The rare's elemental theme, PoE's way of making one pack demand a different
+   * defence: the monster's attack converts to this element and it resists that
+   * element by addedResPct. "fire" leaves a fire-themed rare on the element the
+   * base already used.
+   */
+  element: Element;
+  addedResPct: number;
+  /** Prefixed to the base name, e.g. "Storm-Touched Cinder Imp". */
+  namePrefix: string;
 }
 
 export interface BossSpec {
@@ -110,8 +141,8 @@ function validateDamageSpec(v: unknown, path: string, errors: string[]): boolean
     return false;
   }
   let ok = true;
-  if (v["type"] !== "fire" && v["type"] !== "physical") {
-    errors.push(`${path}.type: must be "fire" or "physical"`);
+  if (v["type"] !== "physical" && !ELEMENTS.includes(v["type"] as Element)) {
+    errors.push(`${path}.type: must be "physical" or one of ${ELEMENTS.join(", ")}`);
     ok = false;
   }
   if (!isNonNegInt(v["amountFixed"])) {
@@ -251,13 +282,16 @@ export function validateMonsterDef(v: unknown): ValidationResult {
     errors.push("defenses: required object");
   } else {
     const def = v["defenses"] as Record<string, unknown>;
-    if (
-      typeof def["fireResPct"] !== "number" ||
-      !Number.isInteger(def["fireResPct"]) ||
-      def["fireResPct"] < 0 ||
-      def["fireResPct"] > 100
-    ) {
-      errors.push("defenses.fireResPct: must be an integer 0..100");
+    if (!isObj(def["resPct"])) {
+      errors.push("defenses.resPct: required object");
+    } else {
+      const res = def["resPct"] as Record<string, unknown>;
+      for (const el of ELEMENTS) {
+        const r = res[el];
+        if (typeof r !== "number" || !Number.isInteger(r) || r < 0 || r > 100) {
+          errors.push(`defenses.resPct.${el}: must be an integer 0..100`);
+        }
+      }
     }
     if (!isNonNegInt(def["armourFixed"])) {
       errors.push("defenses.armourFixed: must be a non-negative integer");

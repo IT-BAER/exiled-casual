@@ -1,9 +1,10 @@
 import { fp, fpMul } from "@exiled/fixed-point";
 import { makeRare, monsterTierScale } from "@exiled/rules";
-import { MONSTERS, RARE_TEMPLATE } from "@exiled/content-runtime";
+import { MONSTERS, rareTemplate } from "@exiled/content-runtime";
 import type { MonsterDef } from "@exiled/content-schema";
 import type { AreaLayout } from "@exiled/mapgen";
 import type { World, Entity } from "./ecs";
+import { damageCode } from "./damage-types";
 import type {
   Position, Health, Faction, MonsterC, DefensesC, BossC,
   InteractableC, SessionC, AreaKind,
@@ -81,7 +82,9 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
     for (let i = 0; i < spawns.length; i++) {
       const s = spawns[i]!;
       const rare = i === spawns.length - 1;
-      const def = rare ? makeRare(impDef, RARE_TEMPLATE) : impDef;
+      // The map's own seed picks the rare's element, so a given map always
+      // demands the same resistance and a replay of it stays identical.
+      const def = rare ? makeRare(impDef, rareTemplate(session.mapSeed)) : impDef;
       spawnMonster(world, def, fp(s.x), fp(s.y), rare, scale);
     }
 
@@ -128,14 +131,14 @@ export function spawnMonster(
     attackRange: def.attackRangeFixed,
     attackCooldownTicks: def.attackCooldownTicks,
     attackDamage: scaledDmg,
-    attackType: def.attackDamage.type === "fire" ? 0 : 1,
+    attackType: damageCode(def.attackDamage.type),
     attackReadyTick: 0,
     state: "idle",
     rare: rare ? 1 : 0,
     summoned: 0,
   });
   world.set<DefensesC>(e, "defenses", {
-    fireResPct: def.defenses.fireResPct,
+    res: def.defenses.resPct,
     armour: def.defenses.armourFixed,
   });
   if (def.boss) {

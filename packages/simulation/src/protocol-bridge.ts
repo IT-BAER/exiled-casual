@@ -2,6 +2,7 @@ import { fp, toNumber, fpDist2 } from "@exiled/fixed-point";
 import { PICKUP_RADIUS } from "@exiled/protocol";
 import type { Intent, Snapshot, SnapshotEntity } from "@exiled/protocol";
 import { physicalMitigationPct } from "@exiled/rules";
+import { resBlock } from "@exiled/content-schema";
 import { describeItem } from "@exiled/content-runtime";
 import type { Command, Simulation } from "./loop";
 import type { World, Entity } from "./ecs";
@@ -250,7 +251,7 @@ export function buildSnapshot(
         return {
           armour: toNumber(armour),
           armourPct: physicalMitigationPct(armour, SHEET_REFERENCE_HIT),
-          fireResPct: d?.fireResPct ?? 0,
+          res: d?.res ?? resBlock(),
           manaRegenPerSec: toNumber(pm.regen * 30),
           spellDamagePct: world.get<OffenseC>(playerEntity, "offense")?.spellDamagePct ?? 0,
         };
