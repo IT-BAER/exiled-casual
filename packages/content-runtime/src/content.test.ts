@@ -14,9 +14,9 @@ describe("RARE_TEMPLATES", () => {
     expect(RARE_TEMPLATES.map((t) => t.element)).toEqual(["fire", "cold", "lightning", "chaos"]);
     for (const t of RARE_TEMPLATES) {
       expect(t).toMatchObject({
-        lifeMulPct: 250,
+        lifeMulPct: 600,
         moveSpeedMulPct: 120,
-        damageMulPct: 150,
+        damageMulPct: 300,
         addedResPct: 30,
       });
       expect(t.namePrefix.length).toBeGreaterThan(0);

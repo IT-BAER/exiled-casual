@@ -55,9 +55,8 @@ describe("createCombatSim", () => {
     const normalLife = lives.find(l => l.rare === 0)!.maxLife;
     const rareLife = lives.find(l => l.rare === 1)!.maxLife;
     expect(rareLife).toBeGreaterThan(normalLife);
-    // rare = trunc(fp(40)*250/100) = trunc(100000/100) = 1000 ???
-    // fp(40)=40000; 40000*250/100 = 100000 = fp(100). normal = fp(40)=40000.
-    expect(rareLife).toBe(Math.trunc(fp(40) * 250 / 100)); // fp(100)
+    // fp(40)=40000; 40000*600/100 = 240000 = fp(240). normal = fp(40)=40000.
+    expect(rareLife).toBe(Math.trunc(fp(40) * 600 / 100)); // fp(240)
   });
 
   it("running 30 ticks twice with the same seed produces identical checksum sequences (determinism)", () => {

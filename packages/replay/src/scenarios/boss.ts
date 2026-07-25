@@ -13,7 +13,7 @@ import {
   type MonsterC,
   type AreaLayout,
 } from "@exiled/simulation";
-import { CONTENT_VERSION } from "@exiled/content-runtime";
+import { CONTENT_VERSION, MONSTERS } from "@exiled/content-runtime";
 import type { Intent, Snapshot } from "@exiled/protocol";
 
 /**
@@ -63,9 +63,12 @@ const FLAT_LAYOUT: AreaLayout = {
  * Two deliberate, replay-safe fixture tunes (see task B3 notes):
  *  - `isolateBoss` prunes the map's imp swarm so the scenario is a clean 1:1
  *    boss encounter (side content is out of scope for a boss golden).
- *  - `wardenLife` seeds the warden near its phase-2 threshold. A full-life solo
- *    to 50% is infeasible under the caster's mana regen vs. slam damage, so the
- *    scripted bolts drive the *actual* transition from a tuned starting life.
+ *  - `nearPhase2` seeds the warden just above its phase-2 threshold. A full-life
+ *    solo to 50% is infeasible under the caster's mana regen vs. slam damage, so
+ *    the scripted bolts drive the *actual* transition from a tuned starting life.
+ *    Derived from the warden's own maxLife rather than written as a literal: an
+ *    absolute fp(400) silently stopped being "near the line" the moment the
+ *    balance pass moved the warden's life, and the transition never fired.
  * Both are construction-time and identical across runs, so determinism holds.
  */
 
@@ -91,15 +94,19 @@ export interface BossArena {
 /** Build the boss encounter on the area run loop, isolated and optionally near-threshold. */
 export function buildBossArena(
   seed: number = BOSS_SEED,
-  opts: { wardenLife?: number } = {},
+  opts: { nearPhase2?: boolean } = {},
 ): BossArena {
   const { sim, world, playerEntity } = createCombatSim(seed, { area: "map", layout: FLAT_LAYOUT });
   isolateBoss(world);
 
   const bossId = world.query("boss")[0]!;
-  if (opts.wardenLife !== undefined) {
+  if (opts.nearPhase2) {
     const h = world.get<Health>(bossId, "health")!;
-    world.set<Health>(bossId, "health", { ...h, life: opts.wardenLife });
+    const pct = MONSTERS.get("monster.cinder_warden.v1")!.boss!.phase2AtLifePct;
+    // Two Ember Bolts' worth above the line, so the scripted log still drives the
+    // transition however the warden's life, resistance or bolt damage is tuned.
+    const life = Math.trunc((h.maxLife * pct) / 100) + fp(30);
+    world.set<Health>(bossId, "health", { ...h, life: Math.min(life, h.maxLife) });
   }
 
   const portalId = world
@@ -123,7 +130,7 @@ export interface BossReplayResult {
 export function runBossReplay(
   commandsByTick: Command[][],
   ticks: number,
-  opts: { seed?: number; wardenLife?: number } = {},
+  opts: { seed?: number; nearPhase2?: boolean } = {},
 ): BossReplayResult {
   const { sim, world } = buildBossArena(opts.seed ?? BOSS_SEED, opts);
   const checksums: number[] = [];

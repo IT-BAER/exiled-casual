@@ -32,9 +32,9 @@ describe("boss golden (a): deterministic replay", () => {
 
 describe("boss golden (b): phase-2 transition is command-driven", () => {
   it("bolts drive the warden under the threshold; it flips to phase 2 and summons its adds", () => {
-    const { playerEntity } = buildBossArena(BOSS_SEED, { wardenLife: fp(400) });
+    const { playerEntity } = buildBossArena(BOSS_SEED, { nearPhase2: true });
     const cmds = boltSpamCommands(playerEntity, 90);
-    const r = runBossReplay(cmds, 90, { wardenLife: fp(400) });
+    const r = runBossReplay(cmds, 90, { nearPhase2: true });
 
     const boss = r.finalSnapshot.entities.find((e) => e.boss);
     expect(boss).toBeDefined();
@@ -61,7 +61,7 @@ describe("boss golden (c): slam telegraph deals damage on impact", () => {
 
 describe("boss golden (d): reset tears down the boss encounter", () => {
   it("activating the return portal removes the boss, its adds, and any telegraphs", () => {
-    const a = buildBossArena(BOSS_SEED, { wardenLife: fp(400) });
+    const a = buildBossArena(BOSS_SEED, { nearPhase2: true });
     const cmds = boltSpamCommands(a.playerEntity, 60);
     for (let t = 0; t < 60; t++) a.sim.step(cmds[t] ?? []);
 
