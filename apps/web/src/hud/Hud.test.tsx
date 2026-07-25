@@ -136,6 +136,20 @@ describe("Hud", () => {
     expect(row).toHaveTextContent("E");
   });
 
+  it("runs both bars to the screen edge and scales them off the globe", () => {
+    render(<Hud snapshot={makeSnap({})} />);
+    const flaskRow = screen.getByTestId("flask-row");
+    const skillRow = screen.getByTestId("skill-row");
+    // PoE1's lower bar reaches the screen side and the globe sits on top of its end.
+    // A bar that starts past the ring reads as a separate floating box instead.
+    expect(flaskRow).toHaveStyle({ left: "0px" });
+    expect(skillRow).toHaveStyle({ right: "0px" });
+    // Height in vw, like the globe: a fixed pixel bar shrinks against the globe as the
+    // window widens, which is exactly what made it look detached.
+    expect(flaskRow.style.height).toMatch(/vw$/);
+    expect(skillRow.style.height).toBe(flaskRow.style.height);
+  });
+
   it("a full flask shows no veil, an empty one is fully veiled", () => {
     render(<Hud snapshot={makeSnap({ flasks: { lifeCharges: 7, lifeMax: 7, manaCharges: 0, manaMax: 7 } })} />);
     expect(screen.getByTestId("flask-life-veil")).toHaveStyle({ height: "0%" });

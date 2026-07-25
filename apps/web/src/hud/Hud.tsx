@@ -20,11 +20,21 @@ const ORB_INSET = "0.39vw"; // sphere offset from the side; the ring overhangs o
 const ORB_BOTTOM = "2.1vh"; // sphere bottom above the screen edge
 const FIGURE_H = `${(ORB_VW * 1.08).toFixed(2)}vw`; // bronze figure height, same crop
 const FIGURE_OUT = "0.9vw"; // figure hangs off the screen side, covering ~30% of the globe
-// Where the bars butt up against the orb: past the sphere and its ring, less the bar art's
-// own transparent shoulder.
-const BAR_OFFSET = `calc(${ORB_INSET} + ${ORB} + ${RING_VW.toFixed(3)}vw - 16px)`;
-const BAR_H = 76; // flask / skill bar height, incl. the art's top and bottom rails
-const SLOT = 42; // flask + skill slot size, sized to the bar art's inner trough
+// The bars are a fraction of the globe, not a pixel size. On the same PoE1 crop the flask
+// panel stands 190px tall against the 263px sphere (0.72) with 68px slots (0.26), and both
+// panels run *under* the globe: the braided ring and its bronze figure cover the panel's
+// end, which is what makes the bottom of the screen read as one piece of furniture instead
+// of two boxes parked beside two globes. Ours sits at 0.55 of the globe rather than 0.72 —
+// PoE1 fills that height with five arched flask niches above two rows of skill slots, and
+// with two flasks and a single row we would be staring at empty stone.
+const BAR_H = `${(ORB_VW * 0.65).toFixed(2)}vw`;
+const SLOT = `${(ORB_VW * 0.38).toFixed(2)}vw`; // skill tile, square
+const FLASK_W = `${(ORB_VW * 0.24).toFixed(2)}vw`;
+const FLASK_H = `${(ORB_VW * 0.45).toFixed(2)}vw`;
+// Content clears the globe by padding, not by offsetting the whole bar: that way the art
+// keeps running behind the ring. 40px is the border-image's own side slice, which already
+// sits between the bar's edge and its first slot.
+const BAR_PAD = `calc(${ORB_INSET} + ${ORB} + ${RING_VW.toFixed(3)}vw - 40px)`;
 
 // Six skill slots on keys 1-6; only three skills exist, 4-6 render as empty sockets.
 // PoE2 itself puts skills on QWERT and flasks on the digits — we swap the two, so
@@ -54,8 +64,8 @@ function Flask(props: { kind: "life" | "mana"; hotkey: string; charges: number; 
       data-testid={`flask-${kind}`}
       style={{
         position: "relative",
-        width: 30,
-        height: SLOT,
+        width: FLASK_W,
+        height: FLASK_H,
         borderRadius: "3px 3px 8px 8px",
         background: "radial-gradient(circle at 50% 30%, #1a1e26, #05070a)",
         border: "1px solid #2a2013",
@@ -89,18 +99,19 @@ function Flask(props: { kind: "life" | "mana"; hotkey: string; charges: number; 
           pointerEvents: "none",
         }}
       />
+      {/* Hotkey at the vial's foot in the serif face, no plate behind it: PoE1 letters the
+          flask niches that way, and a filled label bar reads like a debug overlay. */}
       <span
         style={{
           position: "absolute",
-          bottom: 0,
+          bottom: "4%",
           left: 0,
           right: 0,
           textAlign: "center",
-          fontSize: 10,
-          fontWeight: 700,
-          color: "#c9cdd3",
-          background: "rgba(4,6,10,0.7)",
-          textShadow: "0 1px 3px #000",
+          fontFamily: SERIF,
+          fontSize: `clamp(10px, ${(ORB_VW * 0.085).toFixed(2)}vw, 18px)`,
+          color: "#e8e2d4",
+          textShadow: "0 1px 3px #000, 0 0 6px #000",
         }}
       >
         {hotkey}
@@ -123,7 +134,7 @@ const barStyle: React.CSSProperties = {
   boxSizing: "border-box",
   display: "flex",
   alignItems: "center",
-  gap: 5,
+  gap: "0.25vw",
   borderStyle: "solid",
   borderWidth: "16px 40px 18px 40px",
   borderImageSource: "url(/hud/bar-panel-v1.png)",
@@ -419,8 +430,8 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
         side="right"
       />
 
-      {/* Flask bar — tucked under the life orb frame, per boss-fight.png */}
-      <div data-testid="flask-row" style={{ ...barStyle, left: BAR_OFFSET, zIndex: 2 }}>
+      {/* Flask bar — runs off the screen side and under the life globe, per poe1-lower-bar.png */}
+      <div data-testid="flask-row" style={{ ...barStyle, left: 0, paddingLeft: BAR_PAD, zIndex: 2 }}>
         {FLASKS.map((f) => {
           const charges = f.kind === "life"
             ? snapshot.player.flasks.lifeCharges
@@ -432,8 +443,8 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
         })}
       </div>
 
-      {/* Skill bar — mirror of the flask bar, tucked under the mana orb frame */}
-      <div style={{ ...barStyle, right: BAR_OFFSET, zIndex: 2 }}>
+      {/* Skill bar — mirror of the flask bar, running under the mana globe */}
+      <div data-testid="skill-row" style={{ ...barStyle, right: 0, paddingRight: BAR_PAD, zIndex: 2 }}>
         {SKILL_SLOTS.map((slot, idx) => {
           const cd = slot.id ? cooldowns[slot.id] ?? 0 : 0;
           const ready = cd <= 0;
@@ -479,7 +490,7 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
                     alignItems: "center",
                     justifyContent: "center",
                     color: "#f4f0e6",
-                    fontSize: 13,
+                    fontSize: `clamp(11px, ${(ORB_VW * 0.095).toFixed(2)}vw, 20px)`,
                     fontWeight: 700,
                     textShadow: "0 1px 3px #000",
                   }}
@@ -495,7 +506,7 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
                   padding: "0 4px 1px",
                   borderTopRightRadius: 4,
                   background: "rgba(4,6,10,0.7)",
-                  fontSize: 10,
+                  fontSize: `clamp(9px, ${(ORB_VW * 0.075).toFixed(2)}vw, 16px)`,
                   fontWeight: 700,
                   color: "#c9cdd3",
                   textShadow: "0 1px 3px #000",

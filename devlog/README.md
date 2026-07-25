@@ -105,5 +105,6 @@ The orbs stop being CSS.
 </tr>
 <tr>
 <td width="33%"><img src="screenshots/2026-07-25-suffix-pool.jpeg" alt="Suffix pool" width="100%"><br><sub><b>The suffix side fills up</b> - a rare was capped at 3+2 because only two suffixes existed. Six more join them, worded the way poe2db lists PoE2's: cold, lightning and chaos resistance, Strength, mana regeneration rate and critical strike chance. Three are eligible from level 1, so a rare can now actually fill its 3+3, and magic names finally vary: of the Brute, of the Yeti, of Menace, of the Squall.</sub></td>
+<td width="33%"><img src="screenshots/2026-07-25-bar-behind-globes.jpeg" alt="Bars behind the globes" width="100%"><br><sub><b>The bars join the globes</b> - the flask and skill panels were fixed-pixel boxes parked beside the globes, so they shrank against them as the window widened. Both now run off the screen side and pass behind the braided ring, and their height and slots are fractions of the sphere (0.65 and 0.38 of its diameter) measured off the same PoE1 crop. Hotkeys sit at the vial's foot in the serif face instead of on a label plate.</sub></td>
 </tr>
 </table>
