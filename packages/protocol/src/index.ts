@@ -22,9 +22,11 @@ export type Intent =
   | { kind: "unequipItem"; slot: EquipSlotId }
   /** Drop a backpack item (by ORIGIN cell) as a ground entity at the player's feet. */
   | { kind: "dropItem"; x: number; y: number }
+  /** Move a backpack item from its (x, y) origin cell to another one. */
+  | { kind: "moveItem"; x: number; y: number; toX: number; toY: number }
   | { kind: "useFlask"; slot: "life" | "mana" };
 
-export type CommandType = "moveTo" | "moveDir" | "useSkill" | "stop" | "interact" | "activateMap" | "pickupItem" | "equipItem" | "unequipItem" | "dropItem" | "useFlask";
+export type CommandType = "moveTo" | "moveDir" | "useSkill" | "stop" | "interact" | "activateMap" | "pickupItem" | "equipItem" | "unequipItem" | "dropItem" | "moveItem" | "useFlask";
 
 // ---------------------------------------------------------------------------
 // Run loop
@@ -301,6 +303,16 @@ export function validateIntent(v: unknown): Intent {
       if (!Number.isInteger(obj["x"])) throw new Error("validateIntent dropItem: x must be an integer");
       if (!Number.isInteger(obj["y"])) throw new Error("validateIntent dropItem: y must be an integer");
       return { kind: "dropItem", x: obj["x"] as number, y: obj["y"] as number };
+    }
+    case "moveItem": {
+      for (const k of ["x", "y", "toX", "toY"] as const) {
+        if (!Number.isInteger(obj[k])) throw new Error(`validateIntent moveItem: ${k} must be an integer`);
+      }
+      return {
+        kind: "moveItem",
+        x: obj["x"] as number, y: obj["y"] as number,
+        toX: obj["toX"] as number, toY: obj["toY"] as number,
+      };
     }
     case "useFlask": {
       if (obj["slot"] !== "life" && obj["slot"] !== "mana")

@@ -1,6 +1,6 @@
 import { baseOf } from "@exiled/content-runtime";
 import { Simulation } from "../loop";
-import { placeFirstFit } from "../inventory";
+import { placeFirstFit, canPlaceAt } from "../inventory";
 import { canEquip } from "../equipment";
 import { recomputePlayerStats } from "../derived";
 import type { Position, ItemC, InventoryC, EquipmentC } from "../components";
@@ -78,6 +78,29 @@ export function registerEquipmentSystem(sim: Simulation): void {
           items: [...inv.items, { x: fit.x, y: fit.y, w: base.w, h: base.h, item }],
         });
         recomputePlayerStats(world);
+        continue;
+      }
+
+      // ── moveItem ───────────────────────────────────────────────────────────
+      if (cmd.type === "moveItem") {
+        const x = cmd.data?.["x"];
+        const y = cmd.data?.["y"];
+        const toX = cmd.data?.["toX"];
+        const toY = cmd.data?.["toY"];
+        if (x === undefined || y === undefined || toX === undefined || toY === undefined) continue;
+
+        const inv = world.get<InventoryC>(sessionE, "inventory")!;
+        const i = inv.items.findIndex((p) => p.x === x && p.y === y);
+        if (i < 0) continue;
+        const placed = inv.items[i]!;
+        // Ignoring itself, or nudging a 1x2 wand down one row would collide with
+        // the row it is currently standing on and every move would be refused.
+        if (!canPlaceAt(inv, placed.w, placed.h, toX, toY, i)) continue;
+
+        world.set<InventoryC>(sessionE, "inventory", {
+          ...inv,
+          items: inv.items.map((p, j) => (j === i ? { ...p, x: toX, y: toY } : p)),
+        });
         continue;
       }
 

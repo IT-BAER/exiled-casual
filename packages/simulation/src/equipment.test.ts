@@ -194,6 +194,52 @@ describe("equipment system — unequipItem", () => {
 });
 
 // ---------------------------------------------------------------------------
+// moveItem intent
+// ---------------------------------------------------------------------------
+
+describe("equipment system - moveItem", () => {
+  it("moves an item to a free rectangle", () => {
+    const { sim, world, playerEntity } = makeWorld();
+    placeInInv(world, WAND, 0, 0, 1, 2);
+
+    sim.step([intentToCommand({ kind: "moveItem", x: 0, y: 0, toX: 3, toY: 1 }, playerEntity, 0)]);
+
+    const items = getInv(world).items;
+    expect(items).toHaveLength(1);
+    expect({ x: items[0]!.x, y: items[0]!.y }).toEqual({ x: 3, y: 1 });
+  });
+
+  it("refuses a destination that collides with another item", () => {
+    const { sim, world, playerEntity } = makeWorld();
+    placeInInv(world, WAND, 0, 0, 1, 2);
+    placeInInv(world, WAND, 3, 1, 1, 2);
+
+    sim.step([intentToCommand({ kind: "moveItem", x: 0, y: 0, toX: 3, toY: 2 }, playerEntity, 0)]);
+
+    expect(getInv(world).items.map((p) => ({ x: p.x, y: p.y }))).toEqual([{ x: 0, y: 0 }, { x: 3, y: 1 }]);
+  });
+
+  it("allows a destination that only overlaps the item's own old footprint", () => {
+    const { sim, world, playerEntity } = makeWorld();
+    placeInInv(world, WAND, 0, 0, 1, 2);
+
+    sim.step([intentToCommand({ kind: "moveItem", x: 0, y: 0, toX: 0, toY: 1 }, playerEntity, 0)]);
+
+    expect(getInv(world).items[0]!.y).toBe(1);
+  });
+
+  it("refuses a destination that hangs off the grid", () => {
+    const { sim, world, playerEntity } = makeWorld();
+    const inv = getInv(world);
+    placeInInv(world, WAND, 0, 0, 1, 2);
+
+    sim.step([intentToCommand({ kind: "moveItem", x: 0, y: 0, toX: inv.cols - 1, toY: inv.rows - 1 }, playerEntity, 0)]);
+
+    expect({ x: getInv(world).items[0]!.x, y: getInv(world).items[0]!.y }).toEqual({ x: 0, y: 0 });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // dropItem intent
 // ---------------------------------------------------------------------------
 

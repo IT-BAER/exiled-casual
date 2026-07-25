@@ -65,6 +65,8 @@ export function intentToCommand(intent: Intent, player: Entity, tick: number): C
       return { tick, entity: player, type: "unequipItem", slot: intent.slot };
     case "dropItem":
       return { tick, entity: player, type: "dropItem", data: { x: intent.x, y: intent.y } };
+    case "moveItem":
+      return { tick, entity: player, type: "moveItem", data: { x: intent.x, y: intent.y, toX: intent.toX, toY: intent.toY } };
     case "useFlask":
       return { tick, entity: player, type: "useFlask", flask: intent.slot };
   }

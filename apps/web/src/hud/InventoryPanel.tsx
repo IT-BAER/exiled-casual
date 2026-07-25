@@ -163,8 +163,30 @@ export function InventoryPanel({
   // Keyed by the item, not a grid index, so equipped slots and backpack cells
   // share one hover path; an index could only ever address the backpack.
   const [hover, setHover] = React.useState<{ item: DisplayItem; x: number; y: number } | null>(null);
-  const [drag, setDrag] = React.useState<{ from: DragSource; item: DisplayItem; x: number; y: number } | null>(null);
+  // `w`/`h` are the held piece's footprint in cells, carried on the drag because
+  // DisplayItem itself has no size: only the backpack entry that wraps it does.
+  const [drag, setDrag] = React.useState<{ from: DragSource; item: DisplayItem; w: number; h: number; x: number; y: number } | null>(null);
   const boxRef = React.useRef<HTMLDivElement | null>(null);
+  const gridRef = React.useRef<HTMLDivElement | null>(null);
+
+  // Does a w x h piece fit with its top-left at (x, y)? Mirrors the sim's canPlaceAt,
+  // including ignoring the dragged item's own footprint, so the highlight cannot
+  // promise a placement the sim then refuses. The sim stays the authority.
+  const fitsAt = (self: DisplayItem, w: number, h: number, x: number, y: number): boolean =>
+    x >= 0 && y >= 0 && x + w <= cols && y + h <= rows &&
+    !items.some((p) => p !== self && x < p.x + p.w && x + w > p.x && y < p.y + p.h && y + h > p.y);
+
+  // The cell the held item would land on. PoE carries a piece by its centre rather
+  // than by the corner you grabbed, so the target is the item's centre rounded to
+  // the grid, not the cursor's own cell. Null while the cursor is off the grid.
+  const dropTarget = React.useMemo(() => {
+    const r = gridRef.current?.getBoundingClientRect();
+    if (!drag || drag.from.kind !== "grid" || !r) return null;
+    if (drag.x < r.left || drag.x >= r.right || drag.y < r.top || drag.y >= r.bottom) return null;
+    const x = Math.round((drag.x - r.left - (drag.w * CELL) / 2) / CELL);
+    const y = Math.round((drag.y - r.top - (drag.h * CELL) / 2) / CELL);
+    return { x, y, ok: fitsAt(drag.item, drag.w, drag.h, x, y) };
+  }, [drag]);
 
   // Pointer events, not HTML5 drag-and-drop: the release target can be the Babylon
   // canvas behind the panel (drop to ground), which native DnD does not reach.
@@ -187,6 +209,9 @@ export function InventoryPanel({
       }
       if (onGrid) {
         if (drag.from.kind === "slot") onIntent?.({ kind: "unequipItem", slot: drag.from.slot });
+        else if (dropTarget?.ok && (dropTarget.x !== drag.from.x || dropTarget.y !== drag.from.y)) {
+          onIntent?.({ kind: "moveItem", x: drag.from.x, y: drag.from.y, toX: dropTarget.x, toY: dropTarget.y });
+        }
         return;
       }
       // Released over the world behind the panel: the item goes back on the floor.
@@ -203,12 +228,12 @@ export function InventoryPanel({
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
     };
-  }, [drag, onIntent]);
+  }, [drag, dropTarget, onIntent]);
 
-  const grab = (from: DragSource, item: DisplayItem, e: React.PointerEvent) => {
+  const grab = (from: DragSource, item: DisplayItem, w: number, h: number, e: React.PointerEvent) => {
     e.preventDefault();
     setHover(null);
-    setDrag({ from, item, x: e.clientX, y: e.clientY });
+    setDrag({ from, item, w, h, x: e.clientX, y: e.clientY });
   };
   const slotHighlight = (slot: EquipSlotId): "legal" | "illegal" | "none" => {
     if (!drag || drag.from.kind === "slot") return "none";
@@ -227,13 +252,17 @@ export function InventoryPanel({
         position: "absolute",
         inset: 0,
         display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "radial-gradient(ellipse at center, rgba(0,0,0,0.55), rgba(0,0,0,0.8))",
-        pointerEvents: "auto",
-        // Same reason as the character sheet: the HUD sits at zIndex 3, so
-        // without this the globes and flask bar punch through the backdrop.
-        zIndex: 4,
+        // Docked to the bottom-right corner, the way inventory+equipment.png has it:
+        // the panel is a column against the screen edge, not a dialog floating in the
+        // middle, and its bottom-right corner runs behind the mana globe.
+        alignItems: "flex-end",
+        justifyContent: "flex-end",
+        // No dimming backdrop and no pointer capture: PoE leaves the world lit and
+        // playable with the inventory open. The box below takes its own events back.
+        pointerEvents: "none",
+        // Under the globes (zIndex 3) so the mana orb paints over the panel's corner,
+        // which is what makes it read as tucked behind rather than parked next to it.
+        zIndex: 2,
         fontFamily: SERIF,
         color: PARCHMENT,
       }}
@@ -241,8 +270,14 @@ export function InventoryPanel({
       <div
         ref={boxRef}
         style={{
-          maxHeight: "96vh",
+          pointerEvents: "auto",
+          // Clear of the bottom bar, which stands ORB_VW * 0.58 tall in Hud.tsx.
+          marginBottom: "6.2vw",
+          maxHeight: "calc(100vh - 6.2vw)",
           overflowY: "auto",
+          // The wheel still scrolls; PoE has no scrollbar chrome and a pale native
+          // one down the panel's gilt edge reads as a browser, not as the game.
+          scrollbarWidth: "none",
           background: "linear-gradient(180deg,#12100b 0%,#0b0a07 100%)",
           border: `1px solid ${GOLD_DIM}`,
           boxShadow: `0 0 0 1px #000, 0 0 0 4px #1b1710, 0 0 0 5px ${GOLD_DIM}, 0 14px 48px rgba(0,0,0,0.85)`,
@@ -282,7 +317,7 @@ export function InventoryPanel({
                 {...s}
                 item={equipment[s.slot]}
                 highlight={slotHighlight(s.slot)}
-                onGrab={(slot, e) => grab({ kind: "slot", slot }, equipment[slot]!, e)}
+                onGrab={(slot, e) => grab({ kind: "slot", slot }, equipment[slot]!, 1.5, 1.5, e)}
                 onHover={(item, e) => !drag && setHover({ item, x: e.clientX + 18, y: e.clientY + 18 })}
                 onLeave={(item) => setHover((h) => (h?.item === item ? null : h))}
               />
@@ -306,6 +341,7 @@ export function InventoryPanel({
           <SectionRule>Backpack</SectionRule>
           <div
             data-drop-grid=""
+            ref={gridRef}
             style={{
               position: "relative",
               width: gridW,
@@ -325,6 +361,24 @@ export function InventoryPanel({
                 />
               )),
             )}
+            {/* Where the held item would land: the whole footprint lit, not one cell,
+                because a 1x3 staff has to show all three. Green fits, red does not. */}
+            {dropTarget && (
+              <div
+                data-testid="drop-highlight"
+                style={{
+                  position: "absolute",
+                  left: dropTarget.x * CELL,
+                  top: dropTarget.y * CELL,
+                  width: (drag?.w ?? 1) * CELL,
+                  height: (drag?.h ?? 1) * CELL,
+                  background: dropTarget.ok ? "rgba(96,200,120,0.22)" : "rgba(200,70,60,0.22)",
+                  border: `1px solid ${dropTarget.ok ? "#6fd48a" : "#d05a4e"}`,
+                  boxShadow: `inset 0 0 12px ${dropTarget.ok ? "#6fd48a55" : "#d05a4e55"}`,
+                  pointerEvents: "none",
+                }}
+              />
+            )}
             {items.map((it, i) => (
               <div
                 key={i}
@@ -332,7 +386,7 @@ export function InventoryPanel({
                 onMouseEnter={(e) => !drag && setHover({ item: it, x: e.clientX + 18, y: e.clientY + 18 })}
                 onMouseMove={(e) => !drag && setHover({ item: it, x: e.clientX + 18, y: e.clientY + 18 })}
                 onMouseLeave={() => setHover((h) => (h?.item === it ? null : h))}
-                onPointerDown={(e) => grab({ kind: "grid", x: it.x, y: it.y }, it, e)}
+                onPointerDown={(e) => grab({ kind: "grid", x: it.x, y: it.y }, it, it.w, it.h, e)}
                 style={{
                   position: "absolute",
                   left: it.x * CELL + 2,
@@ -377,10 +431,10 @@ export function InventoryPanel({
           data-testid="drag-ghost"
           style={{
             position: "fixed",
-            left: drag.x - CELL / 2,
-            top: drag.y - CELL / 2,
-            width: CELL * 1.5,
-            height: CELL * 1.5,
+            left: drag.x - (drag.w * CELL) / 2,
+            top: drag.y - (drag.h * CELL) / 2,
+            width: drag.w * CELL,
+            height: drag.h * CELL,
             pointerEvents: "none",
             zIndex: 10,
             display: "flex",
