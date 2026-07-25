@@ -56,7 +56,6 @@ function tile(selected: boolean, disabled: boolean, accent: string): React.CSSPr
   };
 }
 
-const MAP_H = 300; // field height; width follows the panel
 const NODE = 26; // medallion diameter
 const CLEARED = "#7ea45c";
 const FOG = "#4c463a";
@@ -105,18 +104,21 @@ function AtlasMap(props: {
   return (
     <div
       style={{
-        position: "relative",
-        height: MAP_H,
-        marginBottom: 20,
+        position: "absolute",
+        inset: 0,
+        // Full-bleed painted world, per atlas-maps.webp: the map IS the screen,
+        // darkened at the edges so the docked bar and banner still read.
         backgroundImage:
-          "radial-gradient(ellipse at 50% 45%, rgba(52,64,46,0.55), rgba(10,12,10,0.92) 78%), url(/textures/ui/char_stone_v1.png)",
-        backgroundSize: "cover, 420px",
-        border: `1px solid ${GOLD_DIM}`,
-        boxShadow: "inset 0 0 26px rgba(0,0,0,0.85)",
+          "radial-gradient(ellipse at 50% 45%, rgba(0,0,0,0) 35%, rgba(6,8,8,0.88) 100%), url(/textures/ui/atlas_world_v1.png), url(/textures/ui/char_stone_v1.png)",
+        // Carved stone tiles under the painting, so a missing world art file
+        // degrades to the character sheet's surface rather than to black.
+        backgroundSize: "cover, cover, 420px",
+        backgroundPosition: "center, center, center",
       }}
     >
-      {/* Node field, inset so a medallion on the edge is not clipped. */}
-      <div style={{ position: "absolute", inset: 34 }}>
+      {/* Node field, inset so a medallion on the edge is not clipped and the
+          bottom dock does not sit on top of one. */}
+      <div style={{ position: "absolute", top: 96, left: 90, right: 90, bottom: 470 }}>
         <svg
           viewBox="0 0 100 100"
           preserveAspectRatio="none"
@@ -249,76 +251,88 @@ export function PreparationPanel({ atlasSeed, completedNodes, waystones, onActiv
       style={{
         position: "absolute",
         inset: 0,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "radial-gradient(ellipse at center, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.78) 100%)",
+        background: "#050606",
+        overflow: "hidden",
         pointerEvents: "auto",
         fontFamily: SERIF,
         color: PARCHMENT,
       }}
     >
+      <AtlasMap
+        nodes={nodes}
+        completedNodes={completedNodes}
+        selectedId={nodeId}
+        stoneTier={ws?.tier ?? null}
+        onSelect={setNodeId}
+      />
+
+      {/* Carved title banner, floating over the world as in atlas-maps.webp
+          rather than capping a card: the map has no frame to cap. */}
       <div
         style={{
-          width: 720, // the world map needs the room a tile list did not
-          background: "linear-gradient(180deg, #0e0f13 0%, #100d09 100%)",
+          position: "absolute",
+          top: 18,
+          left: "50%",
+          transform: "translateX(-50%)",
+          padding: "8px 46px",
+          textAlign: "center",
+          borderRadius: 4,
+          background: "linear-gradient(180deg, #4a1a13 0%, #6b2018 45%, #3a1310 100%)",
           border: `1px solid ${GOLD_DIM}`,
-          boxShadow: `0 0 0 1px #000, 0 0 0 4px #1b1710, 0 0 0 5px ${GOLD_DIM}, 0 14px 48px rgba(0,0,0,0.8)`,
-          padding: 0,
+          boxShadow: `inset 0 1px 0 ${GOLD}55, inset 0 -1px 0 #000, 0 6px 20px rgba(0,0,0,0.8)`,
         }}
       >
-        {/* Carved title banner (mirrors the atlas "WORLD" banner) */}
-        <div
+        <span
           style={{
-            position: "relative",
-            padding: "12px 0",
-            textAlign: "center",
-            background: "linear-gradient(180deg, #4a1a13 0%, #6b2018 45%, #3a1310 100%)",
-            borderBottom: `1px solid ${GOLD_DIM}`,
-            boxShadow: `inset 0 1px 0 ${GOLD}55, inset 0 -1px 0 #000`,
+            fontSize: 17,
+            fontWeight: 700,
+            letterSpacing: 3,
+            textTransform: "uppercase",
+            color: PARCHMENT,
+            textShadow: "0 1px 2px #000",
           }}
         >
-          <span
-            style={{
-              fontSize: 17,
-              fontWeight: 700,
-              letterSpacing: 3,
-              textTransform: "uppercase",
-              color: PARCHMENT,
-              textShadow: "0 1px 2px #000",
-            }}
-          >
-            Map Device
-          </span>
-          <button
-            data-testid="prep-close"
-            onClick={onClose}
-            style={{
-              position: "absolute",
-              top: 8,
-              right: 12,
-              background: "none",
-              border: "none",
-              color: "#c9b48a",
-              cursor: "pointer",
-              fontSize: 20,
-              lineHeight: 1,
-            }}
-          >
-            ×
-          </button>
-        </div>
+          Map Device
+        </span>
+      </div>
+      <button
+        data-testid="prep-close"
+        onClick={onClose}
+        style={{
+          position: "absolute",
+          top: 18,
+          right: 24,
+          width: 34,
+          height: 34,
+          borderRadius: "50%",
+          background: "radial-gradient(circle at 50% 35%, #3a1310, #140806)",
+          border: `1px solid ${GOLD_DIM}`,
+          color: "#c9b48a",
+          cursor: "pointer",
+          fontSize: 20,
+          lineHeight: 1,
+        }}
+      >
+        ×
+      </button>
 
-        <div style={{ padding: 22 }}>
-          <SectionLabel>Destination</SectionLabel>
-          <AtlasMap
-            nodes={nodes}
-            completedNodes={completedNodes}
-            selectedId={nodeId}
-            stoneTier={ws?.tier ?? null}
-            onSelect={setNodeId}
-          />
-
+      {/* Everything you choose FROM docks at the bottom, so the world keeps the
+          screen. Sized to sit above where the HUD orbs live. */}
+      <div
+        style={{
+          position: "absolute",
+          left: "50%",
+          bottom: 92, // clear of the HUD's flask row, skill bar and XP trough
+          transform: "translateX(-50%)",
+          width: 760,
+          maxWidth: "94%",
+          padding: "14px 18px 16px",
+          borderRadius: 4,
+          background: "linear-gradient(180deg, rgba(14,15,19,0.94) 0%, rgba(16,13,9,0.96) 100%)",
+          border: `1px solid ${GOLD_DIM}`,
+          boxShadow: `0 0 0 1px #000, 0 0 0 4px #1b1710, 0 -8px 34px rgba(0,0,0,0.85)`,
+        }}
+      >
           <SectionLabel>Waystone{waystones.length > 0 ? ` (${waystones.length})` : ""}</SectionLabel>
           {waystones.length === 0 && (
             <div
@@ -330,7 +344,7 @@ export function PreparationPanel({ atlasSeed, completedNodes, waystones, onActiv
           )}
           {/* The stock grows now, so the row scrolls rather than pushing ACTIVATE
               off the panel once a character is a dozen stones deep. */}
-          <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap", maxHeight: 260, overflowY: "auto" }}>
+          <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap", maxHeight: 168, overflowY: "auto" }}>
             {waystones.map((w) => {
               const selected = w.id === wsId;
               const rarity = waystoneRarity(w.seed);
@@ -381,7 +395,7 @@ export function PreparationPanel({ atlasSeed, completedNodes, waystones, onActiv
               justifyContent: "space-between",
               alignItems: "center",
               padding: "12px 14px",
-              marginBottom: 18,
+              marginBottom: 12,
               background: "rgba(0,0,0,0.35)",
               border: "1px solid #2a2517",
               borderRadius: 3,
@@ -434,7 +448,6 @@ export function PreparationPanel({ atlasSeed, completedNodes, waystones, onActiv
           >
             Activate
           </button>
-        </div>
       </div>
     </div>
   );
