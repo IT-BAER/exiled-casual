@@ -20,7 +20,7 @@ function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
       cooldowns: {},
       alive: true,
       casting: false,
-      flasks: { lifeCharges: 7, lifeMax: 7, manaCharges: 7, manaMax: 7 },
+      flasks: { lifeCharges: 7, lifeMax: 7, manaCharges: 7, manaMax: 7 }, stats: { armour: 0, armourPct: 0, fireResPct: 0, manaRegenPerSec: 6, spellDamagePct: 0 },
     },
     area: "map",
     portalsLeft: 0,
@@ -47,7 +47,7 @@ describe("SnapshotRenderer", () => {
     const { scene } = createScene(engine);
     const renderer = new SnapshotRenderer(scene);
 
-    const snap = makeSnapshot({ player: { id: 0, x: 2, y: 3, life: 100, maxLife: 100, mana: 60, maxMana: 60, cooldowns: {}, alive: true, casting: false, flasks: { lifeCharges: 7, lifeMax: 7, manaCharges: 7, manaMax: 7 } } });
+    const snap = makeSnapshot({ player: { id: 0, x: 2, y: 3, life: 100, maxLife: 100, mana: 60, maxMana: 60, cooldowns: {}, alive: true, casting: false, flasks: { lifeCharges: 7, lifeMax: 7, manaCharges: 7, manaMax: 7 }, stats: { armour: 0, armourPct: 0, fireResPct: 0, manaRegenPerSec: 6, spellDamagePct: 0 } } });
     renderer.apply(null, snap, 1);
 
     // Player mesh positioned at x=2, z=3
@@ -62,7 +62,7 @@ describe("SnapshotRenderer", () => {
     const { scene } = createScene(engine);
     const renderer = new SnapshotRenderer(scene);
 
-    const s0 = makeSnapshot({ player: { id: 0, x: 0, y: 0, life: 100, maxLife: 100, mana: 60, maxMana: 60, cooldowns: {}, alive: true, casting: false, flasks: { lifeCharges: 7, lifeMax: 7, manaCharges: 7, manaMax: 7 } } });
+    const s0 = makeSnapshot({ player: { id: 0, x: 0, y: 0, life: 100, maxLife: 100, mana: 60, maxMana: 60, cooldowns: {}, alive: true, casting: false, flasks: { lifeCharges: 7, lifeMax: 7, manaCharges: 7, manaMax: 7 }, stats: { armour: 0, armourPct: 0, fireResPct: 0, manaRegenPerSec: 6, spellDamagePct: 0 } } });
     renderer.apply(null, s0, 1);
     const mesh = scene.getMeshByName("entity-0")!;
     // Spawned facing south (toward the camera), holding that until it moves.
@@ -70,7 +70,7 @@ describe("SnapshotRenderer", () => {
 
     // Move +x (world +x). Heading yaw = atan2(dx=5, dz=0) = PI/2; the shortest
     // path from PI is -PI/2, eased by 0.25 → PI - PI/8.
-    const s1 = makeSnapshot({ player: { id: 0, x: 5, y: 0, life: 100, maxLife: 100, mana: 60, maxMana: 60, cooldowns: {}, alive: true, casting: false, flasks: { lifeCharges: 7, lifeMax: 7, manaCharges: 7, manaMax: 7 } } });
+    const s1 = makeSnapshot({ player: { id: 0, x: 5, y: 0, life: 100, maxLife: 100, mana: 60, maxMana: 60, cooldowns: {}, alive: true, casting: false, flasks: { lifeCharges: 7, lifeMax: 7, manaCharges: 7, manaMax: 7 }, stats: { armour: 0, armourPct: 0, fireResPct: 0, manaRegenPerSec: 6, spellDamagePct: 0 } } });
     renderer.apply(s0, s1, 1);
     expect(mesh.rotation.y).toBeCloseTo(Math.PI - Math.PI / 8, 4);
   });

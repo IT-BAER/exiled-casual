@@ -20,7 +20,7 @@ function snapWith(entities: Snapshot["entities"]): Snapshot {
     player: {
       id: 0, x: 0, y: 0, life: 100, maxLife: 100, mana: 30, maxMana: 60,
       cooldowns: {}, alive: true, casting: false,
-      flasks: { lifeCharges: 7, lifeMax: 7, manaCharges: 7, manaMax: 7 },
+      flasks: { lifeCharges: 7, lifeMax: 7, manaCharges: 7, manaMax: 7 }, stats: { armour: 0, armourPct: 0, fireResPct: 0, manaRegenPerSec: 6, spellDamagePct: 0 },
     },
     entities,
     inventory: { cols: 12, rows: 5, items: [] },

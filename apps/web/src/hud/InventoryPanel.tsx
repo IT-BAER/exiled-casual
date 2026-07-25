@@ -14,10 +14,12 @@ type DragSource = { kind: "grid"; x: number; y: number } | { kind: "slot"; slot:
 // flask row and currency strip are styled placeholders: equipping, flasks and
 // currency are not in the sim yet, so those slots are honestly empty.
 // Matches poe2-screenshots/inventory+equipment.png.
-const SERIF = '"Cinzel", "Trajan Pro", Georgia, "Times New Roman", serif';
-const GOLD = "#c8a44d";
-const GOLD_DIM = "#7a5c22";
-const PARCHMENT = "#e8dcc0";
+// Exported so the character sheet dresses in the same carved gold as this panel
+// rather than keeping a second copy of the palette that can drift from it.
+export const SERIF = '"Cinzel", "Trajan Pro", Georgia, "Times New Roman", serif';
+export const GOLD = "#c8a44d";
+export const GOLD_DIM = "#7a5c22";
+export const PARCHMENT = "#e8dcc0";
 const MAGIC = "#8aa6ff";
 
 const CELL = 40; // backpack grid cell
@@ -53,11 +55,13 @@ function slotStyle(): React.CSSProperties {
  * reading labels (poe2-screenshots/inventory+equipment.png).
  */
 function EquipSlot({
-  slot, x, y, w, h, label, item, highlight, onGrab,
+  slot, x, y, w, h, label, item, highlight, onGrab, onHover, onLeave,
 }: {
   slot: EquipSlotId; x: number; y: number; w: number; h: number; label: string;
   item?: DisplayItem; highlight: "legal" | "illegal" | "none";
   onGrab: (slot: EquipSlotId, e: React.PointerEvent) => void;
+  onHover: (item: DisplayItem, e: React.MouseEvent) => void;
+  onLeave: (item: DisplayItem) => void;
 }) {
   const border = highlight === "legal" ? GOLD : item ? RARITY_BORDER[item.rarity]! : "#3b2f18";
   return (
@@ -65,6 +69,9 @@ function EquipSlot({
       data-testid={`equip-slot-${slot}`}
       data-drop-slot={slot}
       onPointerDown={item ? (e) => onGrab(slot, e) : undefined}
+      onMouseEnter={item ? (e) => onHover(item, e) : undefined}
+      onMouseMove={item ? (e) => onHover(item, e) : undefined}
+      onMouseLeave={item ? () => onLeave(item) : undefined}
       style={{
         ...slotStyle(),
         left: x * U, top: y * U, width: w * U - 4, height: h * U - 4, margin: 2,
@@ -153,7 +160,9 @@ export function InventoryPanel({
   inventory: Inventory; equipment?: Equipment; onClose: () => void; onIntent?: (intent: Intent) => void;
 }) {
   const { cols, rows, items } = inventory;
-  const [hover, setHover] = React.useState<{ i: number; x: number; y: number } | null>(null);
+  // Keyed by the item, not a grid index, so equipped slots and backpack cells
+  // share one hover path; an index could only ever address the backpack.
+  const [hover, setHover] = React.useState<{ item: DisplayItem; x: number; y: number } | null>(null);
   const [drag, setDrag] = React.useState<{ from: DragSource; item: DisplayItem; x: number; y: number } | null>(null);
   const boxRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -181,7 +190,10 @@ export function InventoryPanel({
         return;
       }
       // Released over the world behind the panel: the item goes back on the floor.
-      if (!insidePanel && drag.from.kind === "grid") {
+      // Another open HUD panel is not the world — the character sheet overlaps
+      // this one, and releasing on it must not silently throw the item away.
+      const onOtherPanel = !!target?.closest("[data-hud-panel]");
+      if (!insidePanel && !onOtherPanel && drag.from.kind === "grid") {
         onIntent?.({ kind: "dropItem", x: drag.from.x, y: drag.from.y });
       }
     };
@@ -219,6 +231,9 @@ export function InventoryPanel({
         justifyContent: "center",
         background: "radial-gradient(ellipse at center, rgba(0,0,0,0.55), rgba(0,0,0,0.8))",
         pointerEvents: "auto",
+        // Same reason as the character sheet: the HUD sits at zIndex 3, so
+        // without this the globes and flask bar punch through the backdrop.
+        zIndex: 4,
         fontFamily: SERIF,
         color: PARCHMENT,
       }}
@@ -268,6 +283,8 @@ export function InventoryPanel({
                 item={equipment[s.slot]}
                 highlight={slotHighlight(s.slot)}
                 onGrab={(slot, e) => grab({ kind: "slot", slot }, equipment[slot]!, e)}
+                onHover={(item, e) => !drag && setHover({ item, x: e.clientX + 18, y: e.clientY + 18 })}
+                onLeave={(item) => setHover((h) => (h?.item === item ? null : h))}
               />
             ))}
           </div>
@@ -312,9 +329,9 @@ export function InventoryPanel({
               <div
                 key={i}
                 data-testid={`inventory-item-${i}`}
-                onMouseEnter={(e) => !drag && setHover({ i, x: e.clientX + 18, y: e.clientY + 18 })}
-                onMouseMove={(e) => !drag && setHover({ i, x: e.clientX + 18, y: e.clientY + 18 })}
-                onMouseLeave={() => setHover((h) => (h?.i === i ? null : h))}
+                onMouseEnter={(e) => !drag && setHover({ item: it, x: e.clientX + 18, y: e.clientY + 18 })}
+                onMouseMove={(e) => !drag && setHover({ item: it, x: e.clientX + 18, y: e.clientY + 18 })}
+                onMouseLeave={() => setHover((h) => (h?.item === it ? null : h))}
                 onPointerDown={(e) => grab({ kind: "grid", x: it.x, y: it.y }, it, e)}
                 style={{
                   position: "absolute",
@@ -354,23 +371,7 @@ export function InventoryPanel({
           </div>
         </div>
       </div>
-      {hover && items[hover.i] && (
-        <ItemTooltip
-          name={items[hover.i]!.name}
-          baseName={items[hover.i]!.baseName}
-          rarity={items[hover.i]!.rarity}
-          itemClass={items[hover.i]!.itemClass}
-          statLines={items[hover.i]!.statLines}
-          reqLevel={items[hover.i]!.reqLevel}
-          reqAttrValue={items[hover.i]!.reqAttrValue}
-          reqAttr={items[hover.i]!.reqAttr}
-          implicit={items[hover.i]!.implicit}
-          lines={items[hover.i]!.lines}
-          flavour={items[hover.i]!.flavour}
-          x={hover.x}
-          y={hover.y}
-        />
-      )}
+      {hover && <ItemTooltip {...hover.item} x={hover.x} y={hover.y} />}
       {drag && (
         <div
           data-testid="drag-ghost"

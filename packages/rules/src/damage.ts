@@ -18,3 +18,15 @@ export function applyDamage(pkt: DamageSpec, def: Defenses): Fixed {
   }
   return result < 0 ? 0 : result;
 }
+
+/**
+ * The share of a physical hit that armour actually stops, as an integer percent:
+ * the complement of applyDamage's physical branch. PoE2's character sheet shows
+ * armour this way (poe2-screenshots/character-stats.png reads "Armour 7%"), not
+ * as the raw rating, so the sheet reads it from here rather than re-deriving a
+ * curve that could drift from the one damage resolution uses.
+ */
+export function physicalMitigationPct(armourFixed: Fixed): number {
+  if (armourFixed <= 0) return 0;
+  return Math.round((100 * armourFixed) / (armourFixed + ARMOUR_K));
+}

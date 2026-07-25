@@ -1,13 +1,14 @@
 import { toNumber, fpDist2 } from "@exiled/fixed-point";
 import { PICKUP_RADIUS } from "@exiled/protocol";
 import type { Intent, Snapshot, SnapshotEntity } from "@exiled/protocol";
+import { physicalMitigationPct } from "@exiled/rules";
 import { describeItem } from "@exiled/content-runtime";
 import type { Command, Simulation } from "./loop";
 import type { World, Entity } from "./ecs";
 import type {
   Health, Mana, Position, Cooldowns, CastingC, MonsterC,
   AilmentC, ProjectileC, GroundAreaC, BossC, TelegraphC,
-  SessionC, InteractableC, ItemC, InventoryC, EquipmentC, FlasksC,
+  SessionC, InteractableC, ItemC, InventoryC, EquipmentC, FlasksC, DefensesC, OffenseC,
 } from "./components";
 
 /**
@@ -231,6 +232,19 @@ export function buildSnapshot(
         return f
           ? { lifeCharges: f.lifeCharges, lifeMax: f.lifeMax, manaCharges: f.manaCharges, manaMax: f.manaMax }
           : { lifeCharges: 0, lifeMax: 0, manaCharges: 0, manaMax: 0 };
+      })(),
+      stats: (() => {
+        // Read straight off the components recomputePlayerStats writes, so the
+        // sheet can never disagree with what the systems actually use.
+        const d = world.get<DefensesC>(playerEntity, "defenses");
+        const armour = d?.armour ?? 0;
+        return {
+          armour: toNumber(armour),
+          armourPct: physicalMitigationPct(armour),
+          fireResPct: d?.fireResPct ?? 0,
+          manaRegenPerSec: toNumber(pm.regen * 30),
+          spellDamagePct: world.get<OffenseC>(playerEntity, "offense")?.spellDamagePct ?? 0,
+        };
       })(),
     },
     entities,

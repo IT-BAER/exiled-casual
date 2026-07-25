@@ -116,6 +116,24 @@ export interface SnapshotEntity {
   reqAttr?: string;
 }
 
+/**
+ * Everything the character sheet shows that the HUD globes do not already carry.
+ * Only stats some equipped mod can actually move live here: attributes, energy
+ * shield, evasion, block and the non-fire resistances have no mechanic yet, and
+ * a zero row would advertise a system that does not exist.
+ */
+export interface PlayerStats {
+  /** Raw armour rating, the number gear adds to. */
+  armour: number;
+  /** Share of a physical hit armour stops, integer percent (rules.physicalMitigationPct). */
+  armourPct: number;
+  /** UNCAPPED total. The sheet renders it against RES_CAP so overcapping stays visible. */
+  fireResPct: number;
+  /** What the player actually regenerates: the per-tick amount times 30, not the pre-truncation ideal. */
+  manaRegenPerSec: number;
+  spellDamagePct: number;
+}
+
 /** One "label: value" row in an item tooltip's base-stat block. */
 export interface ItemStatLine {
   label: string;
@@ -144,6 +162,8 @@ export interface Snapshot {
     casting: boolean;
     /** Charge state for the two utility flasks (life on Q, mana on E). */
     flasks: { lifeCharges: number; lifeMax: number; manaCharges: number; manaMax: number };
+    /** Gear-derived totals for the character sheet. Life and mana stay above, where the HUD reads them. */
+    stats: PlayerStats;
   };
   entities: SnapshotEntity[];
   /** Grid inventory (session singleton), display-ready. Empty when no session. */

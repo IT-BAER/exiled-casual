@@ -87,6 +87,49 @@ describe("InventoryPanel", () => {
     expect(intents).toEqual([{ kind: "unequipItem", slot: "weapon1" }]);
   });
 
+  it("releasing a drag over another open HUD panel is a no-op, not a drop to the floor", () => {
+    const intents: unknown[] = [];
+    const sheet = document.createElement("div");
+    sheet.setAttribute("data-hud-panel", "");
+    document.body.appendChild(sheet);
+    render(<InventoryPanel inventory={inv} onIntent={(i) => intents.push(i)} onClose={() => {}} />);
+
+    fireEvent.pointerDown(screen.getByTestId("inventory-item-0"), { clientX: 10, clientY: 10 });
+    fireEvent.pointerUp(sheet);
+    expect(intents).toEqual([]);
+
+    sheet.remove();
+  });
+
+  it("hovers an equipped slot to read what that item is actually granting", () => {
+    const equipped = {
+      body: {
+        rarity: "rare" as const, name: "Cinderveil", baseName: "Emberweave Robe", itemClass: "body",
+        implicit: "45% increased Mana Regeneration Rate",
+        lines: ["+40 to maximum Life", "+20% to Fire Resistance"],
+      },
+    };
+    render(<InventoryPanel inventory={{ ...inv, items: [] }} equipment={equipped} onClose={() => {}} />);
+    const slot = screen.getByTestId("equip-slot-body");
+    expect(screen.queryByTestId("item-tooltip")).toBeNull();
+
+    fireEvent.mouseEnter(slot, { clientX: 40, clientY: 40 });
+    const tip = screen.getByTestId("item-tooltip");
+    expect(tip.textContent).toContain("Cinderveil");
+    expect(tip.textContent).toContain("Emberweave Robe");
+    expect(tip.textContent).toContain("45% increased Mana Regeneration Rate");
+    expect(tip.textContent).toContain("+40 to maximum Life");
+
+    fireEvent.mouseLeave(slot);
+    expect(screen.queryByTestId("item-tooltip")).toBeNull();
+  });
+
+  it("does not show a tooltip for an empty equipment slot", () => {
+    render(<InventoryPanel inventory={{ ...inv, items: [] }} equipment={{}} onClose={() => {}} />);
+    fireEvent.mouseEnter(screen.getByTestId("equip-slot-body"), { clientX: 40, clientY: 40 });
+    expect(screen.queryByTestId("item-tooltip")).toBeNull();
+  });
+
   it("ships an art file for every base and unique icon path", () => {
     for (const src of [...ITEM_POOLS.bases, ...(ITEM_POOLS.uniques ?? [])]) {
       if (!src.icon) continue;

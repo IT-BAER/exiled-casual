@@ -8,6 +8,7 @@ import { attachBindings } from "./input/bindings";
 import { Hud } from "./hud/Hud";
 import { PreparationPanel } from "./hud/PreparationPanel";
 import { InventoryPanel } from "./hud/InventoryPanel";
+import { CharacterPanel } from "./hud/CharacterPanel";
 import { LootLabels } from "./hud/LootLabels";
 import type { Projector } from "./hud/LootLabels";
 import type { Snapshot, FromWorker, ToWorker } from "@exiled/protocol";
@@ -22,6 +23,7 @@ export function App() {
   const [hoveredEntityId, setHoveredEntityId] = useState<number | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const [inventoryOpen, setInventoryOpen] = useState(false);
+  const [characterOpen, setCharacterOpen] = useState(false);
   const [project, setProject] = useState<Projector | null>(null);
   const [pick, setPick] = useState<((id: number, x: number, y: number) => void) | null>(null);
   const workerRef = useRef<Worker | null>(null);
@@ -126,9 +128,12 @@ export function App() {
 
     window.addEventListener("resize", () => engine.resize());
 
-    // i = toggle the inventory panel. Render-only, the sim never hears about it.
+    // i = inventory, c = character sheet. Both render-only; the sim never hears
+    // about either, and both can be open at once the way PoE2 has them.
     const onInvKey = (ev: KeyboardEvent) => {
-      if (ev.key.toLowerCase() === "i") setInventoryOpen((v) => !v);
+      const k = ev.key.toLowerCase();
+      if (k === "i") setInventoryOpen((v) => !v);
+      if (k === "c") setCharacterOpen((v) => !v);
     };
     window.addEventListener("keydown", onInvKey);
 
@@ -172,6 +177,10 @@ export function App() {
           onIntent={(intent) => workerRef.current?.postMessage({ type: "intent", intent } satisfies ToWorker)}
           onClose={() => setInventoryOpen(false)}
         />
+      )}
+      {/* After the inventory so it paints above that panel's backdrop when both are open. */}
+      {characterOpen && snapshot && (
+        <CharacterPanel player={snapshot.player} onClose={() => setCharacterOpen(false)} />
       )}
     </div>
   );

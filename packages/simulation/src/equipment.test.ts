@@ -345,6 +345,33 @@ describe("derived player stats", () => {
     expect(world.get<Health>(playerEntity, "health")!.life).toBe(fp(100));
   });
 
+  it("the snapshot carries the totals the character sheet reads", () => {
+    const { world, sim, playerEntity } = makeWorld();
+    placeInInv(world, GEARED_ROBE, 0, 0, 2, 3);
+    sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "body" }, playerEntity, 0)]);
+
+    const s = buildSnapshot(world, sim, 1, CONTENT_VERSION).player.stats;
+    expect(s.armour).toBe(50);
+    // fp(50) armour against ARMOUR_K = fp(10): 50/60 of a physical hit is stopped.
+    expect(s.armourPct).toBe(83);
+    expect(s.fireResPct).toBe(20);
+    // trunc(fp(8.7)/30) = 290 per tick, so the sheet reports 290*30 = fp(8.7)/s.
+    expect(s.manaRegenPerSec).toBeCloseTo(8.7, 5);
+    expect(s.spellDamagePct).toBe(0);
+  });
+
+  it("the sheet's fire resistance is the uncapped total, so overcapping is visible", () => {
+    const { world, sim, playerEntity } = makeWorld();
+    const OVERCAP: Item = {
+      baseId: "base.emberweave_robe", rarity: "rare", itemLevel: 80,
+      affixes: [{ affixId: "affix.fire_res", value: 80 }],
+    };
+    placeInInv(world, OVERCAP, 0, 0, 2, 3);
+    sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "body" }, playerEntity, 0)]);
+
+    expect(buildSnapshot(world, sim, 1, CONTENT_VERSION).player.stats.fireResPct).toBe(80);
+  });
+
   it("restoring a save applies the saved gear and starts the session full", async () => {
     const kv = new MemoryKv();
     const { world } = makeWorld();
