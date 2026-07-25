@@ -188,9 +188,17 @@ function Orb(props: {
             right: 0,
             bottom: 0,
             height: `${pct}%`,
-            backgroundImage: `url(${art})`,
-            backgroundSize: `${ORB} ${ORB}`,
-            backgroundPosition: "center bottom", // globe stays put, the level moves
+            // Two layers, both pinned to the well so neither moves with the level. The art is
+            // a lit sphere: its lower hemisphere falls to roughly 0.6 of the equator, so a
+            // half-full globe showed only that shadow and read as nearly empty however high
+            // the number above it said. The dodge ramp pays that shading back where the art
+            // loses it (identity against black, ~1.7x at the very bottom), which keeps the
+            // liquid one colour at every level — the sphere's roundness comes from the gloss
+            // layers below, not from the liquid.
+            backgroundImage: `linear-gradient(to top, rgba(102,102,102,1), rgba(0,0,0,1) 55%), url(${art})`,
+            backgroundBlendMode: "color-dodge, normal",
+            backgroundSize: `${ORB} ${ORB}, ${ORB} ${ORB}`,
+            backgroundPosition: "center bottom, center bottom", // globe stays put, the level moves
             boxShadow: "inset 0 3px 6px rgba(255,255,255,0.22)", // liquid meniscus highlight
             // the render came back a hotter red/blue than the shot's blood crimson and cobalt
             filter: "brightness(0.88) saturate(0.9)",
