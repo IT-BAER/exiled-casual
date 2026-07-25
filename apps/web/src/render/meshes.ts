@@ -101,6 +101,8 @@ interface ActorParts {
   limbs: { mesh: Mesh; offset: number; amp: number }[];
   /** How far the body rises on each step. */
   bob: number;
+  /** Rares only: the ground disc whose colour names their element. */
+  auraMat?: StandardMaterial;
 }
 
 /**
@@ -227,6 +229,66 @@ function buildImp(scene: Scene, root: Mesh, key: string, rock: [number, number, 
   tail.position.set(0, 0.36, -0.5);
   tail.rotation.x = 1.1;
   attach(root, tail, hide);
+}
+
+/**
+ * A rare's elemental theme, as a lit disc under its feet.
+ *
+ * Every rare in this game converts its whole hit to one element and resists
+ * that element, so the resistance a pack demands is fixed before it reaches
+ * you — and until now nothing said which. It was the same orange imp whether it
+ * was about to hit for fire or for chaos, which made the character sheet's four
+ * resistances a guess. PoE rings its rares in the colour of what they do; this
+ * is that, on the floor rather than in a shader, because a ground disc survives
+ * an isometric camera and a body glow does not.
+ *
+ * The material is per-entity (keyed on the mesh name, not through the shared
+ * `mat` cache) because two rares on screen must be able to disagree.
+ */
+function buildRareAura(scene: Scene, root: Mesh): void {
+  const auraMat = new StandardMaterial(`${root.name}-aura`, scene);
+  auraMat.diffuseColor = new Color3(0, 0, 0);
+  auraMat.emissiveColor = new Color3(1, 0.55, 0.15).scale(AURA_EMISSIVE); // fire until told otherwise
+  auraMat.specularColor = new Color3(0, 0, 0);
+  auraMat.alpha = 0.85;
+  auraMat.backFaceCulling = false;
+
+  // A ring, not a filled disc: a disc that size washes the monster out from
+  // above, and two of them overlapping blow straight to white. The torus is
+  // already built flat in XZ, so no rotation is needed. Radii are in the root's
+  // local space, which the rare scales by 1.7.
+  const ring = MeshBuilder.CreateTorus("rare-aura", { diameter: 1.05, thickness: 0.09, tessellation: 24 }, scene);
+  ring.position.y = 0.02; // just off the floor, or it z-fights the ground plane
+  ring.parent = root;
+  ring.material = auraMat;
+  ring.isPickable = false;
+
+  const parts = root.metadata as ActorParts | null;
+  if (parts) root.metadata = { ...parts, auraMat } satisfies ActorParts;
+}
+
+/**
+ * The scene runs a GlowLayer, and a ring emitting its colour at full strength
+ * bloomed straight past its own hue: every element read as the same white band.
+ * Held at 0.6 the bloom is still there and the colour survives it.
+ */
+const AURA_EMISSIVE = 0.6;
+
+/** Element → aura colour. Matches the character sheet's resistance glyph tints. */
+const ELEMENT_AURA: Record<string, [number, number, number]> = {
+  fire: [1.0, 0.45, 0.12],
+  cold: [0.56, 0.82, 0.94],
+  lightning: [0.95, 0.84, 0.35],
+  chaos: [0.79, 0.56, 0.87],
+  physical: [0.72, 0.7, 0.66],
+};
+
+/** Tint a rare's aura to the element its whole hit converts to. */
+export function updateRareElement(root: Mesh, element: string | undefined): void {
+  const auraMat = (root.metadata as ActorParts | null)?.auraMat;
+  if (!auraMat) return;
+  const [r, g, b] = ELEMENT_AURA[element ?? "fire"] ?? ELEMENT_AURA["fire"]!;
+  auraMat.emissiveColor.set(r * AURA_EMISSIVE, g * AURA_EMISSIVE, b * AURA_EMISSIVE);
 }
 
 /**
@@ -510,6 +572,7 @@ export function makeMesh(scene: Scene, kind: MeshKind, name: string): Mesh {
     } else if (kind === "rare") {
       buildImp(scene, root, "rare", [0.42, 0.19, 0.06], 0.7, [1.0, 0.55, 0.15]);
       root.scaling.setAll(1.7); // elite: bigger than the common imp
+      buildRareAura(scene, root);
     } else {
       buildImp(scene, root, "imp", [0.36, 0.11, 0.07], 0.5, [1.0, 0.85, 0.2]);
     }

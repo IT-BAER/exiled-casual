@@ -50,6 +50,12 @@ export const MAP_PORTALS = 6;
  */
 export interface Resistances { fire: number; cold: number; lightning: number; chaos: number }
 
+/**
+ * What a monster's hit is made of. Protocol-local for the same reason
+ * Resistances is: the wire contract must not depend on content.
+ */
+export type MonsterElement = "fire" | "cold" | "lightning" | "chaos" | "physical";
+
 /** Rarity tint for a display-ready item. Protocol-local; no content-schema import. */
 export type ItemRarity = "normal" | "magic" | "rare" | "unique";
 
@@ -92,6 +98,12 @@ export interface SnapshotEntity {
   radius?: number;
   life?: number; maxLife?: number;
   rare?: boolean;
+  /**
+   * A rare's elemental theme, so the renderer can say which resistance it is
+   * about to demand. Present only on rares; normals and bosses hit with what
+   * their content def says and have no theme to advertise.
+   */
+  element?: MonsterElement;
   remainingSeconds?: number;
   ailmentStacks?: number;
   /** true for the boss monster; kind stays "monster" so existing consumers keep working */

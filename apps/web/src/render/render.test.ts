@@ -247,3 +247,34 @@ describe("SnapshotRenderer — new kinds", () => {
     expect(mesh!.scaling.x).toBeCloseTo(2.0);
   });
 });
+
+describe("rare element aura", () => {
+  it("two rares of different elements light different colours", () => {
+    const engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const renderer = new SnapshotRenderer(scene);
+
+    const snap = makeSnapshot({
+      entities: [
+        { id: 1, kind: "monster", x: 0, y: 0, rare: true, element: "cold", life: 10, maxLife: 10 },
+        { id: 2, kind: "monster", x: 4, y: 0, rare: true, element: "chaos", life: 10, maxLife: 10 },
+      ],
+    });
+    renderer.apply(null, snap, 1);
+
+    const aura = (id: number) =>
+      scene.getMaterialByName(`entity-${id}-aura`) as StandardMaterial;
+    // Cold reads blue, chaos reads violet — and neither is the other.
+    expect(aura(1).emissiveColor.b).toBeGreaterThan(aura(1).emissiveColor.r);
+    expect(aura(2).emissiveColor.r).toBeGreaterThan(aura(1).emissiveColor.r);
+    expect(aura(2).emissiveColor.g).toBeLessThan(aura(1).emissiveColor.g);
+  });
+
+  it("an ordinary monster gets no aura at all", () => {
+    const engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const renderer = new SnapshotRenderer(scene);
+    renderer.apply(null, makeSnapshot({ entities: [{ id: 3, kind: "monster", x: 0, y: 0, life: 10, maxLife: 10 }] }), 1);
+    expect(scene.getMaterialByName("entity-3-aura")).toBeNull();
+  });
+});

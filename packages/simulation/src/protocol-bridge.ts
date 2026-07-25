@@ -1,6 +1,7 @@
 import { fp, toNumber, fpDist2 } from "@exiled/fixed-point";
 import { PICKUP_RADIUS } from "@exiled/protocol";
-import type { Intent, Snapshot, SnapshotEntity } from "@exiled/protocol";
+import type { Intent, Snapshot, SnapshotEntity, MonsterElement } from "@exiled/protocol";
+import { damageTypeOf } from "./damage-types";
 import { physicalMitigationPct, xpToNext, START_LEVEL } from "@exiled/rules";
 import { resBlock } from "@exiled/content-schema";
 import { describeItem } from "@exiled/content-runtime";
@@ -113,6 +114,9 @@ export function buildSnapshot(
       life: toNumber(mh.life), maxLife: toNumber(mh.maxLife),
       rare: mon.rare === 1,
     };
+    // Only a rare carries a theme; makeRare converts its whole hit to one
+    // element, so the attack type IS the theme and nothing has to be stored.
+    if (mon.rare === 1) entry.element = damageTypeOf(mon.attackType) as MonsterElement;
     if (ail !== undefined) entry.ailmentStacks = ail.stacks;
     if (world.has(e, "boss")) {
       const bc = world.get<BossC>(e, "boss")!;
