@@ -1,9 +1,10 @@
-import { fp, fpDist2, fpStepToward } from "@exiled/fixed-point";
+import { fp, fpDist2, fpMul, fpStepToward } from "@exiled/fixed-point";
 import type { MonsterDef } from "@exiled/content-schema";
+import { monsterTierScale } from "@exiled/rules";
 import { Simulation } from "../loop";
 import { slide, type CollisionRef } from "../collision";
 import { spawnMonster } from "../areas";
-import type { Position, MonsterC, Faction, BossC, TelegraphC, Health } from "../components";
+import type { Position, MonsterC, Faction, BossC, TelegraphC, Health, SessionC } from "../components";
 
 // Where phase-2 adds appear, as offsets from the boss. Hand-written literals in
 // the codebase's ring idiom (cf. PORTAL_RING / PACK_RING) — no runtime trig, so
@@ -24,6 +25,18 @@ export function registerBossAI(
 ): void {
   sim.register("bossAI", (world, tick) => {
     const collision = collisionRef?.active ?? undefined;
+
+    // A monster's life and basic attack are scaled by the map's tier at spawn
+    // (areas.spawnMonster), but a boss's abilities are read off the content def
+    // every time it casts, so they never saw the tier at all: a Tier 15 Warden
+    // was slamming for its Tier 1 number. Read the same knob here rather than
+    // baking it onto BossC, so a world without a session — the golden replays —
+    // serializes exactly as it always has.
+    const sessionE = world.query("session")[0];
+    const areaTier = sessionE === undefined
+      ? 0
+      : world.get<SessionC>(sessionE, "session")?.areaTier ?? 0;
+    const { dmgMilli } = monsterTierScale(areaTier);
     for (const e of world.query("boss", "monster", "position", "faction")) {
       const mon = world.get<MonsterC>(e, "monster")!;
       const def = monsters.get(mon.defId);
@@ -86,7 +99,7 @@ export function registerBossAI(
           radius: slam.radiusFixed,
           startTick: tick,
           impactTick: tick + slam.windupTicks,
-          damage: slam.damageFixed,
+          damage: fpMul(slam.damageFixed, dmgMilli),
           damageType: 1,
           leavesGroundTicks: boss.phase === 2 ? phase2.fireGroundDurationTicks : 0,
           ground:
@@ -94,7 +107,7 @@ export function registerBossAI(
               ? {
                   ailmentKind: phase2.fireGround.kind,
                   stacksPerApply: phase2.fireGround.stacksPerApply,
-                  dps: phase2.fireGround.dpsFixed,
+                  dps: fpMul(phase2.fireGround.dpsFixed, dmgMilli),
                   ailmentDuration: phase2.fireGround.durationTicks,
                   maxStacks: phase2.fireGround.maxStacks,
                 }
