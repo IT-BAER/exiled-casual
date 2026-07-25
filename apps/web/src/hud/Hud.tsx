@@ -27,14 +27,21 @@ const FIGURE_OUT = "0.9vw"; // figure hangs off the screen side, covering ~30% o
 // of two boxes parked beside two globes. Ours sits at 0.55 of the globe rather than 0.72 —
 // PoE1 fills that height with five arched flask niches above two rows of skill slots, and
 // with two flasks and a single row we would be staring at empty stone.
-const BAR_H = `${(ORB_VW * 0.65).toFixed(2)}vw`;
-const SLOT = `${(ORB_VW * 0.38).toFixed(2)}vw`; // skill tile, square
-const FLASK_W = `${(ORB_VW * 0.24).toFixed(2)}vw`;
-const FLASK_H = `${(ORB_VW * 0.45).toFixed(2)}vw`;
+const BAR_H = `${(ORB_VW * 0.58).toFixed(2)}vw`;
+const SLOT = `${(ORB_VW * 0.34).toFixed(2)}vw`; // skill tile, square
+const FLASK_W = `${(ORB_VW * 0.215).toFixed(2)}vw`;
+const FLASK_H = `${(ORB_VW * 0.40).toFixed(2)}vw`;
+// The border-image's own side slice. Named because the padding below has to
+// subtract exactly it, or the first slot drifts out from under the ring.
+const BAR_SIDE = 36;
+// The panel art is flush-cut at both image edges, crenellations included, so a
+// 9-slice ends it with a razor edge. The inner end fades over the last few
+// pixels instead, which reads as the bar receding rather than being sliced.
+const BAR_FADE = `${(ORB_VW * 0.42).toFixed(2)}vw`;
 // Content clears the globe by padding, not by offsetting the whole bar: that way the art
-// keeps running behind the ring. 40px is the border-image's own side slice, which already
-// sits between the bar's edge and its first slot.
-const BAR_PAD = `calc(${ORB_INSET} + ${ORB} + ${RING_VW.toFixed(3)}vw - 40px)`;
+// keeps running behind the ring. BAR_SIDE is the border-image's own side slice, which
+// already sits between the bar's edge and its first slot.
+const BAR_PAD = `calc(${ORB_INSET} + ${ORB} + ${RING_VW.toFixed(3)}vw - ${BAR_SIDE}px)`;
 
 // Six skill slots on keys 1-6; only three skills exist, 4-6 render as empty sockets.
 // PoE2 itself puts skills on QWERT and flasks on the digits — we swap the two, so
@@ -136,7 +143,7 @@ const barStyle: React.CSSProperties = {
   alignItems: "center",
   gap: "0.25vw",
   borderStyle: "solid",
-  borderWidth: "16px 40px 18px 40px",
+  borderWidth: `14px ${BAR_SIDE}px 16px ${BAR_SIDE}px`,
   borderImageSource: "url(/hud/bar-panel-v1.png)",
   borderImageSlice: "42 110 48 110 fill",
   filter: "drop-shadow(0 2px 8px rgba(0,0,0,0.7))",
@@ -526,7 +533,7 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
       </div>
 
       {/* Flask bar — runs off the screen side and under the life globe, per poe1-lower-bar.png */}
-      <div data-testid="flask-row" style={{ ...barStyle, left: 0, paddingLeft: BAR_PAD, zIndex: 2 }}>
+      <div data-testid="flask-row" style={{ ...barStyle, left: 0, paddingLeft: BAR_PAD, zIndex: 2, maskImage: `linear-gradient(to right, #000 calc(100% - ${BAR_FADE}), transparent)` }}>
         {FLASKS.map((f) => {
           const charges = f.kind === "life"
             ? snapshot.player.flasks.lifeCharges
@@ -539,7 +546,7 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
       </div>
 
       {/* Skill bar — mirror of the flask bar, running under the mana globe */}
-      <div data-testid="skill-row" style={{ ...barStyle, right: 0, paddingRight: BAR_PAD, zIndex: 2 }}>
+      <div data-testid="skill-row" style={{ ...barStyle, right: 0, paddingRight: BAR_PAD, zIndex: 2, maskImage: `linear-gradient(to left, #000 calc(100% - ${BAR_FADE}), transparent)` }}>
         {SKILL_SLOTS.map((slot, idx) => {
           const cd = slot.id ? cooldowns[slot.id] ?? 0 : 0;
           const ready = cd <= 0;
