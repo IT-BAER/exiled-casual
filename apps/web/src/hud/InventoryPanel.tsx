@@ -3,6 +3,7 @@ import type { DisplayItem, EquipSlotId, Intent, Snapshot } from "@exiled/protoco
 import { canEquip } from "@exiled/simulation";
 import { ItemTooltip } from "./ItemTooltip";
 import { BAR_H } from "./Hud";
+import { CELL, PANEL_PAD, PANEL_W } from "./layout";
 
 type Inventory = Snapshot["inventory"];
 type Equipment = Snapshot["equipment"];
@@ -23,7 +24,6 @@ export const GOLD_DIM = "#7a5c22";
 export const PARCHMENT = "#e8dcc0";
 const MAGIC = "#8aa6ff";
 
-const CELL = 40; // backpack grid cell
 const U = 46; // equipment paper-doll unit
 
 // Keyed by every Rarity; a missing key would render `border: 2px solid undefined`.
@@ -278,6 +278,8 @@ export function InventoryPanel({
           // the screen down to the bar and simply ends in empty panel below the
           // last grid row. A box that shrinks to its contents floats and reads wrong.
           height: `calc(100vh - ${BAR_H})`,
+          width: PANEL_W,
+          boxSizing: "border-box",
           display: "flex",
           flexDirection: "column",
           overflowY: "auto",
@@ -314,7 +316,7 @@ export function InventoryPanel({
           </button>
         </div>
 
-        <div style={{ padding: 20, width: contentW, boxSizing: "content-box", flex: 1, display: "flex", flexDirection: "column" }}>
+        <div style={{ padding: PANEL_PAD, width: contentW, boxSizing: "content-box", flex: 1, display: "flex", flexDirection: "column" }}>
           {/* Equipment paper-doll */}
           <div style={{ position: "relative", width: equipW, height: equipH, margin: "0 auto", flexShrink: 0 }}>
             {PAPER_DOLL.map((s) => (

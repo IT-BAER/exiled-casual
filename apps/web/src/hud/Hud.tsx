@@ -2,6 +2,7 @@ import React from "react";
 import type { Snapshot } from "@exiled/protocol";
 import { MAP_PORTALS } from "@exiled/protocol";
 import { SERIF } from "./ItemTooltip";
+import { PANEL_W } from "./layout";
 
 // Bottom HUD geometry, measured off poe2-screenshots/poe1-lower-bar.png, a 2558x388 crop
 // of Path of Exile **1**'s bottom bar (PoE1, not PoE2 — its globes are bigger and its ring
@@ -29,7 +30,7 @@ const FIGURE_OUT = "0.9vw"; // figure hangs off the screen side, covering ~30% o
 // above the numbered slots, it takes PoE1's full 0.72 and the tiles drop to its 0.22.
 // Exported because the inventory panel has to stop exactly where this starts.
 export const BAR_H = `${(ORB_VW * 0.72).toFixed(2)}vw`;
-const SLOT = `${(ORB_VW * 0.22).toFixed(2)}vw`; // skill tile, square
+const SLOT = `${(ORB_VW * 0.234).toFixed(2)}vw`; // skill tile, square
 const FLASK_W = `${(ORB_VW * 0.20).toFixed(2)}vw`;
 const FLASK_H = `${(ORB_VW * 0.50).toFixed(2)}vw`;
 // The border-image's own side slice. Named because the padding below has to
@@ -637,18 +638,23 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
           right: 0,
           paddingRight: BAR_PAD,
           zIndex: 2,
+          // Same width as the inventory panel, which docks to the same corner: the
+          // panel ran further left than the bar and the two left edges read as a
+          // misalignment rather than as two pieces of the same furniture. What is
+          // left after the globe's padding is what sizes the tiles.
+          width: PANEL_W,
           flexDirection: "column",
           alignItems: "flex-end",
           justifyContent: "center",
           gap: "0.2vw",
         }}
       >
-        <div style={{ display: "flex", gap: "0.25vw" }}>
+        <div style={{ display: "flex", gap: "0.2vw" }}>
           {SKILL_SLOTS.slice(5).map((slot, i) => (
             <SkillTile key={slot.key} slot={slot} n={i + 6} cooldowns={cooldowns} />
           ))}
         </div>
-        <div style={{ display: "flex", gap: "0.25vw" }}>
+        <div style={{ display: "flex", gap: "0.2vw" }}>
           {SKILL_SLOTS.slice(0, 5).map((slot, i) => (
             <SkillTile key={slot.key} slot={slot} n={i + 1} cooldowns={cooldowns} />
           ))}
