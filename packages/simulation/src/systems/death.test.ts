@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest";
 import { fp } from "@exiled/fixed-point";
 import { Simulation } from "../loop";
 import { registerDeath } from "./death";
-import type { SessionC } from "../components";
+import { START_LEVEL } from "@exiled/rules";
+import type { SessionC, ProgressC } from "../components";
 
 describe("registerDeath", () => {
   it("destroys a monster with life <= 0", () => {
@@ -179,6 +180,66 @@ describe("registerDeath", () => {
     const ic = w.get(groundItems[0]!, "item") as { item: { itemLevel: number }; w: number; h: number };
     expect(ic.item.itemLevel).toBe(69); // 64 + tier 5
     expect(ic.w).toBeGreaterThan(0);
+  });
+
+  // ── Experience ───────────────────────────────────────────────────────────
+
+  /** A world with a session at `area`/`areaTier`, a progress row, and one dead monster. */
+  function makeXpKill(opts: {
+    area: "hideout" | "map"; areaTier: number; xp: number; level?: number;
+    rare?: 0 | 1; boss?: boolean;
+  }) {
+    const sim = new Simulation();
+    registerDeath(sim);
+    const w = sim.world;
+
+    const p = w.create();
+    w.set(p, "player", { moveSpeed: 0, bodyRadius: fp(0.5) });
+    w.set(p, "health", { life: fp(100), maxLife: fp(100) });
+    w.set(p, "mana", { mana: fp(60), maxMana: fp(60), regen: 0 });
+
+    const sessionE = w.create();
+    w.set<SessionC>(sessionE, "session", {
+      area: opts.area, atlasSeed: 0, mapSeed: 0, areaTier: opts.areaTier,
+      activeNodeId: "", completedNodes: [], portalsLeft: 6, mapOpen: 1, pendingArea: "",
+    });
+    w.set<ProgressC>(sessionE, "progress", { level: opts.level ?? START_LEVEL, xp: opts.xp });
+    w.set(sessionE, "equipment", { slots: {} });
+
+    const m = w.create();
+    w.set(m, "monster", { defId: "d", moveSpeed: 0, bodyRadius: 0, attackRange: 0, attackCooldownTicks: 0, attackDamage: 0, attackType: 1, attackReadyTick: 0, state: "idle", rare: opts.rare ?? 0, summoned: 0 });
+    w.set(m, "health", { life: 0, maxLife: fp(10) });
+    if (opts.boss) w.set(m, "boss", { phase: 1, nextAbilityTick: 0, spawnX: 0, spawnY: 0, rootedUntilTick: 0 });
+
+    return { sim, world: w, sessionE, p };
+  }
+
+  it("a map kill banks the monster's experience", () => {
+    const { sim, world, sessionE } = makeXpKill({ area: "map", areaTier: 1, xp: 0 });
+    sim.step([]);
+    // areaLevel 65, character 65: no penalty, one normal monster.
+    expect(world.get<ProgressC>(sessionE, "progress")).toEqual({ level: 65, xp: 65 });
+  });
+
+  it("a boss is worth forty normals", () => {
+    const { sim, world, sessionE } = makeXpKill({ area: "map", areaTier: 1, xp: 0, boss: true });
+    sim.step([]);
+    expect(world.get<ProgressC>(sessionE, "progress")!.xp).toBe(65 * 40);
+  });
+
+  it("a hideout kill is worth nothing", () => {
+    const { sim, world, sessionE } = makeXpKill({ area: "hideout", areaTier: 0, xp: 0 });
+    sim.step([]);
+    expect(world.get<ProgressC>(sessionE, "progress")).toEqual({ level: 65, xp: 0 });
+  });
+
+  it("crossing the threshold levels up and re-derives the life pool", () => {
+    // areaLevel 64 boss = 2560, which is exactly what is missing from the level.
+    const { sim, world, sessionE, p } = makeXpKill({ area: "map", areaTier: 0, xp: 60_000 - 2560, boss: true });
+    sim.step([]);
+    expect(world.get<ProgressC>(sessionE, "progress")).toEqual({ level: 66, xp: 0 });
+    // One level = +6 life, granted as headroom rather than as a heal.
+    expect(world.get<{ maxLife: number; life: number }>(p, "health")).toEqual({ maxLife: fp(106), life: fp(100) });
   });
 
   it("killing a monster refills one charge on each flask and never exceeds max", () => {

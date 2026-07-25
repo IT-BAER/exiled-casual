@@ -175,6 +175,11 @@ export interface Snapshot {
     flasks: { lifeCharges: number; lifeMax: number; manaCharges: number; manaMax: number };
     /** Gear-derived totals for the character sheet. Life and mana stay above, where the HUD reads them. */
     stats: PlayerStats;
+    /** Character level. */
+    level: number;
+    /** Experience banked toward the next level, and what that level costs. `xpToNext` is 0 at the cap. */
+    xp: number;
+    xpToNext: number;
   };
   entities: SnapshotEntity[];
   /** Grid inventory (session singleton), display-ready. Empty when no session. */

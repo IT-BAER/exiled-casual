@@ -257,6 +257,23 @@ export function CharacterPanel({ player, onClose }: { player: Snapshot["player"]
           backgroundSize: "auto, 256px 256px",
         }}
       >
+        {/* The reference's identity row, minus the portrait, the class and the league:
+            "Level 80 Invoker" over a stone plate. There is one class and one league,
+            so only the number carries information. */}
+        <div
+          data-testid="char-level"
+          style={{
+            display: "flex", alignItems: "baseline", justifyContent: "center", gap: 8,
+            marginBottom: 8, padding: "5px 0",
+            background: "linear-gradient(180deg,rgba(38,31,20,0.9),rgba(10,8,6,0.9))",
+            border: "1px solid #3a2f1b",
+            boxShadow: "inset 0 1px 0 rgba(200,164,77,0.12)",
+          }}
+        >
+          <span style={{ color: "#d8b866", fontSize: 11, letterSpacing: 1.8, textTransform: "uppercase" }}>Level</span>
+          <span style={{ color: "#fff", fontSize: 19, textShadow: "0 1px 4px #000" }}>{player.level}</span>
+        </div>
+
         {/* Niches in a band abut, so their pilasters read as one carved plate rather than floating tiles. */}
         <div style={{ display: "flex", justifyContent: "center" }}>
           <Niche id="life" label="Life" value={String(Math.round(player.maxLife))} icon={<Icon of="life" />} />

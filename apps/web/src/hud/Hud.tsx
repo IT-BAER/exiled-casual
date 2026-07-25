@@ -276,6 +276,10 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
   const lifePct = maxLife > 0 ? Math.max(0, Math.min(100, (life / maxLife) * 100)) : 0;
   const manaPct = maxMana > 0 ? Math.max(0, Math.min(100, (mana / maxMana) * 100)) : 0;
 
+  // A capped character has nothing left to earn, so its bar reads full rather than empty.
+  const { xp, xpToNext } = snapshot.player;
+  const xpPct = xpToNext > 0 ? Math.max(0, Math.min(100, (xp / xpToNext) * 100)) : 100;
+
   const boss = snapshot.entities.find((e) => e.boss);
 
   // Hovered entity drives the name label — mouse proximity, not character proximity.
@@ -437,6 +441,56 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
         value={`${Math.round(mana)}/${Math.round(maxMana)}`}
         side="right"
       />
+
+      {/* Experience — a thin trough across the very bottom edge, which is where both
+          PoE games put it: it is the one bar you are never meant to look at directly,
+          only to notice out of the corner of your eye. Drawn above the two panels so
+          it runs unbroken from side to side, with the level printed in the gap between
+          them (PoE1 hides the number in a tooltip; we have no tooltip layer here). */}
+      <div
+        data-testid="xp-level"
+        style={{
+          position: "absolute",
+          bottom: 10,
+          left: "50%",
+          transform: "translateX(-50%)",
+          fontFamily: SERIF,
+          fontSize: 12,
+          letterSpacing: 2,
+          textTransform: "uppercase",
+          color: "#b6ab93",
+          textShadow: "0 1px 4px #000",
+          whiteSpace: "nowrap",
+          zIndex: 5,
+        }}
+      >
+        {`Level ${snapshot.player.level}`}
+        <span style={{ color: "#6f6757", marginLeft: 8 }}>{`${xpPct.toFixed(1)}%`}</span>
+      </div>
+      <div
+        data-testid="xp-bar"
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: 5,
+          background: "linear-gradient(180deg,#0a0805,#16110a)",
+          borderTop: "1px solid #2b2216",
+          zIndex: 5,
+        }}
+      >
+        <div
+          data-testid="xp-bar-fill"
+          style={{
+            height: "100%",
+            width: `${xpPct}%`,
+            background: "linear-gradient(180deg,#e8d18a,#9a7326)",
+            boxShadow: "0 0 8px rgba(220,180,90,0.45)",
+            transition: "width 200ms linear",
+          }}
+        />
+      </div>
 
       {/* Flask bar — runs off the screen side and under the life globe, per poe1-lower-bar.png */}
       <div data-testid="flask-row" style={{ ...barStyle, left: 0, paddingLeft: BAR_PAD, zIndex: 2 }}>

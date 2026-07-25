@@ -10,7 +10,7 @@ function player(over: Partial<Snapshot["player"]["stats"]> = {}): Snapshot["play
   return {
     id: 0, x: 0, y: 0,
     life: 96, maxLife: 140, mana: 12, maxMana: 60,
-    cooldowns: {}, alive: true, casting: false,
+    cooldowns: {}, alive: true, casting: false, level: 65, xp: 0, xpToNext: 60_000,
     flasks: { lifeCharges: 7, lifeMax: 7, manaCharges: 7, manaMax: 7 },
     stats: { armour: 50, armourPct: 83, res: { fire: 20, cold: 0, lightning: 0, chaos: 0 }, manaRegenPerSec: 8.7, spellDamagePct: 12, ...over },
   };

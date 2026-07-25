@@ -1,7 +1,7 @@
-import { baseCasterStats, applyItemMods } from "@exiled/rules";
+import { baseCasterStats, applyItemMods, levelBonus, START_LEVEL } from "@exiled/rules";
 import { itemStatMods } from "@exiled/content-runtime";
 import type { World } from "./ecs";
-import type { Health, Mana, DefensesC, OffenseC, EquipmentC } from "./components";
+import type { Health, Mana, DefensesC, OffenseC, EquipmentC, ProgressC } from "./components";
 
 /**
  * Recompute the player's gear-derived stats from scratch: base block + every
@@ -29,7 +29,18 @@ export function recomputePlayerStats(world: World, opts: { refill?: boolean } = 
       const item = equip!.slots[slot];
       return item ? itemStatMods(item) : [];
     });
-  const s = applyItemMods(baseCasterStats(), mods);
+
+  // What levelling grants enters as two flat mods rather than as a second base
+  // block, so a level and a chest piece are added by the same fold and cannot
+  // drift apart. At START_LEVEL both are zero and the block is byte-identical to
+  // the one an unlevelled character has always had.
+  const progress = sessionE === undefined ? undefined : world.get<ProgressC>(sessionE, "progress");
+  const bonus = levelBonus(progress?.level ?? START_LEVEL);
+  const s = applyItemMods(baseCasterStats(), [
+    { stat: "maxLife", value: bonus.maxLife },
+    { stat: "maxMana", value: bonus.maxMana },
+    ...mods,
+  ]);
 
   const h = world.get<Health>(player, "health");
   if (h) {

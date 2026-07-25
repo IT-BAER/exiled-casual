@@ -26,6 +26,13 @@ export interface SessionC {
   pendingArea: AreaKind | "";
 }
 
+/**
+ * Character progression. Lives on the session singleton beside inventory and
+ * equipment because it is durable in exactly the same way: it survives an area
+ * transition, and an abandoned map run does not roll it back.
+ */
+export interface ProgressC { level: number; xp: number }
+
 /** Something the player can activate with the `interact` intent. */
 export interface InteractableC {
   kind: "mapDevice" | "portal";

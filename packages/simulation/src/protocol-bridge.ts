@@ -1,7 +1,7 @@
 import { fp, toNumber, fpDist2 } from "@exiled/fixed-point";
 import { PICKUP_RADIUS } from "@exiled/protocol";
 import type { Intent, Snapshot, SnapshotEntity } from "@exiled/protocol";
-import { physicalMitigationPct } from "@exiled/rules";
+import { physicalMitigationPct, xpToNext, START_LEVEL } from "@exiled/rules";
 import { resBlock } from "@exiled/content-schema";
 import { describeItem } from "@exiled/content-runtime";
 import type { Command, Simulation } from "./loop";
@@ -9,7 +9,7 @@ import type { World, Entity } from "./ecs";
 import type {
   Health, Mana, Position, Cooldowns, CastingC, MonsterC,
   AilmentC, ProjectileC, GroundAreaC, BossC, TelegraphC,
-  SessionC, InteractableC, ItemC, InventoryC, EquipmentC, FlasksC, DefensesC, OffenseC,
+  SessionC, InteractableC, ItemC, InventoryC, EquipmentC, FlasksC, DefensesC, OffenseC, ProgressC,
 } from "./components";
 
 /**
@@ -93,6 +93,11 @@ export function buildSnapshot(
   const session = sessionE !== undefined
     ? world.get<SessionC>(sessionE, "session")
     : undefined;
+
+  // A legacy sim without a session has no progression to report; it reads as an
+  // unlevelled character rather than as level 0.
+  const progress = (sessionE !== undefined ? world.get<ProgressC>(sessionE, "progress") : undefined)
+    ?? { level: START_LEVEL, xp: 0 };
 
   const entities: SnapshotEntity[] = [];
 
@@ -243,6 +248,9 @@ export function buildSnapshot(
           ? { lifeCharges: f.lifeCharges, lifeMax: f.lifeMax, manaCharges: f.manaCharges, manaMax: f.manaMax }
           : { lifeCharges: 0, lifeMax: 0, manaCharges: 0, manaMax: 0 };
       })(),
+      level: progress.level,
+      xp: progress.xp,
+      xpToNext: xpToNext(progress.level),
       stats: (() => {
         // Read straight off the components recomputePlayerStats writes, so the
         // sheet can never disagree with what the systems actually use.

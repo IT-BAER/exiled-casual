@@ -19,6 +19,9 @@ function makeSnap(overrides: {
   mapOpen?: boolean;
   entities?: Snapshot["entities"];
   flasks?: Snapshot["player"]["flasks"];
+  level?: number;
+  xp?: number;
+  xpToNext?: number;
 }): Snapshot {
   return {
     tick: 1,
@@ -39,6 +42,9 @@ function makeSnap(overrides: {
       cooldowns: overrides.cooldowns ?? {},
       alive: true,
       casting: false,
+      level: overrides.level ?? 65,
+      xp: overrides.xp ?? 0,
+      xpToNext: overrides.xpToNext ?? 60_000,
       flasks: overrides.flasks ?? { lifeCharges: 7, lifeMax: 7, manaCharges: 7, manaMax: 7 },
       stats: { armour: 0, armourPct: 0, res: { fire: 0, cold: 0, lightning: 0, chaos: 0 }, manaRegenPerSec: 6, spellDamagePct: 0 },
     },
@@ -111,7 +117,7 @@ describe("Hud", () => {
       areaTier: 0,
       atlasSeed: 0,
       completedNodes: [],
-      player: { id: 0, x: 0, y: 0, life: 100, maxLife: 100, mana: 30, maxMana: 60, cooldowns: {}, alive: true, casting: false, flasks: { lifeCharges: 7, lifeMax: 7, manaCharges: 7, manaMax: 7 }, stats: { armour: 0, armourPct: 0, res: { fire: 0, cold: 0, lightning: 0, chaos: 0 }, manaRegenPerSec: 6, spellDamagePct: 0 } },
+      player: { id: 0, x: 0, y: 0, life: 100, maxLife: 100, mana: 30, maxMana: 60, cooldowns: {}, alive: true, casting: false, level: 65, xp: 0, xpToNext: 60_000, flasks: { lifeCharges: 7, lifeMax: 7, manaCharges: 7, manaMax: 7 }, stats: { armour: 0, armourPct: 0, res: { fire: 0, cold: 0, lightning: 0, chaos: 0 }, manaRegenPerSec: 6, spellDamagePct: 0 } },
       entities: [{ id: 10, kind: "monster", x: 0, y: 0, boss: true, bossPhase: 2, life: 600, maxLife: 1000 }],
       inventory: { cols: 12, rows: 5, items: [] },
       equipment: {},
@@ -239,5 +245,18 @@ describe("Hud", () => {
       />,
     );
     expect(screen.queryByTestId("interact-label")).toBeNull();
+  });
+});
+
+describe("experience bar", () => {
+  it("fills to the share of the level that is banked, and prints the level", () => {
+    render(<Hud snapshot={makeSnap({ level: 68, xp: 30_000, xpToNext: 120_000 })} />);
+    expect(screen.getByTestId("xp-bar-fill")).toHaveStyle({ width: "25%" });
+    expect(screen.getByTestId("xp-level").textContent).toContain("Level 68");
+  });
+
+  it("reads full at the level cap, where there is nothing left to earn", () => {
+    render(<Hud snapshot={makeSnap({ level: 100, xp: 0, xpToNext: 0 })} />);
+    expect(screen.getByTestId("xp-bar-fill")).toHaveStyle({ width: "100%" });
   });
 });

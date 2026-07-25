@@ -1,5 +1,5 @@
 import { fp } from "@exiled/fixed-point";
-import { baseCasterStats, makeRare, rollItem, FLASK_MAX_CHARGES } from "@exiled/rules";
+import { baseCasterStats, makeRare, rollItem, FLASK_MAX_CHARGES, START_LEVEL } from "@exiled/rules";
 import { SKILLS, MONSTERS, rareTemplate, CONTENT_VERSION, ITEM_POOLS, baseOf } from "@exiled/content-runtime";
 import { generateArea, type AreaLayout } from "@exiled/mapgen";
 import { gridCollision, type CollisionRef } from "./collision";
@@ -9,7 +9,7 @@ import { World } from "./ecs";
 import type { Entity } from "./ecs";
 import type {
   Position, Health, Mana, Faction, PlayerC, Cooldowns, DefensesC,
-  MoveTarget, MoveDir, SessionC, AreaKind, InventoryC, ItemC, EquipmentC, FlasksC,
+  MoveTarget, MoveDir, SessionC, AreaKind, InventoryC, ItemC, EquipmentC, FlasksC, ProgressC,
 } from "./components";
 import { registerResourceRegen } from "./systems/resource";
 import { registerSkillCast } from "./systems/skill-cast";
@@ -105,6 +105,7 @@ export function createCombatSim(
     };
     world.set<SessionC>(sessionE, "session", session);
     world.set<InventoryC>(sessionE, "inventory", { cols: 12, rows: 5, items: [] });
+    world.set<ProgressC>(sessionE, "progress", { level: START_LEVEL, xp: 0 });
     world.set<EquipmentC>(sessionE, "equipment", { slots: {} });
     world.set<FlasksC>(playerEntity, "flasks", {
       lifeCharges: FLASK_MAX_CHARGES, lifeMax: FLASK_MAX_CHARGES,

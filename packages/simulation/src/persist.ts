@@ -1,7 +1,8 @@
 import type { KvStore } from "@exiled/persistence";
 import type { World } from "./ecs";
-import type { SessionC, InventoryC, EquipmentC } from "./components";
+import type { SessionC, InventoryC, EquipmentC, ProgressC } from "./components";
 import { recomputePlayerStats } from "./derived";
+import { START_LEVEL } from "@exiled/rules";
 
 /**
  * Run-transaction persistence. The whole durable state (session + inventory) is
@@ -18,6 +19,8 @@ interface PersistedState {
   session: SessionC;
   inventory: InventoryC;
   equipment?: EquipmentC;
+  /** Optional so a save written before levels existed still loads, as a fresh START_LEVEL character. */
+  progress?: ProgressC;
 }
 
 /** Read the durable state off the session singleton, or null if there is none. */
@@ -28,7 +31,8 @@ export function snapshot(world: World): PersistedState | null {
   const inventory = world.get<InventoryC>(e, "inventory");
   if (!session || !inventory) return null;
   const equipment = world.get<EquipmentC>(e, "equipment") ?? { slots: {} };
-  return { version: VERSION, session, inventory, equipment };
+  const progress = world.get<ProgressC>(e, "progress") ?? { level: START_LEVEL, xp: 0 };
+  return { version: VERSION, session, inventory, equipment, progress };
 }
 
 /**
@@ -51,6 +55,7 @@ export function restore(world: World, state: PersistedState): void {
   world.set<SessionC>(e, "session", safe);
   world.set<InventoryC>(e, "inventory", state.inventory);
   world.set<EquipmentC>(e, "equipment", state.equipment ?? { slots: {} });
+  world.set<ProgressC>(e, "progress", state.progress ?? { level: START_LEVEL, xp: 0 });
   // Saved gear has to reach the player, not just the equipment panel. Life and
   // mana are not persisted, so a restored session starts full.
   recomputePlayerStats(world, { refill: true });

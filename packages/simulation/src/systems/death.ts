@@ -1,7 +1,8 @@
 import { Simulation } from "../loop";
-import type { Health, Mana, MoveTarget, MoveDir, SessionC, MonsterC, Position, ItemC, FlasksC } from "../components";
+import type { Health, Mana, MoveTarget, MoveDir, SessionC, MonsterC, Position, ItemC, FlasksC, ProgressC } from "../components";
 import { fnv1a32 } from "../rng";
-import { rollItem, areaLevel, FLASK_CHARGES_PER_KILL } from "@exiled/rules";
+import { rollItem, areaLevel, FLASK_CHARGES_PER_KILL, gainXp, xpAward } from "@exiled/rules";
+import { recomputePlayerStats } from "../derived";
 import { ITEM_POOLS, baseOf } from "@exiled/content-runtime";
 
 export function registerDeath(sim: Simulation): void {
@@ -29,6 +30,20 @@ export function registerDeath(sim: Simulation): void {
           const ge = world.create();
           world.set<Position>(ge, "position", { x: pos.x, y: pos.y });
           world.set<ItemC>(ge, "item", { item, w: base.w, h: base.h });
+        }
+      }
+
+      // Experience, on the same terms as the loot: only in a map, where the area
+      // level that prices the kill actually exists. A level-up re-derives the
+      // player's stats, because the new maximum life is granted the way a chest
+      // piece grants it — as headroom, not as a heal.
+      if (s && s.area === "map" && sessionE !== undefined) {
+        const prog = world.get<ProgressC>(sessionE, "progress");
+        if (prog) {
+          const kind = isBoss ? "boss" : isRare ? "rare" : "normal";
+          const next = gainXp(prog.level, prog.xp, xpAward(prog.level, areaLevel(s.areaTier), kind));
+          world.set<ProgressC>(sessionE, "progress", next);
+          if (next.level !== prog.level) recomputePlayerStats(world);
         }
       }
 
