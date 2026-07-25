@@ -35,7 +35,13 @@ import { buildArea, spawnMonster } from "./areas";
 
 export function createCombatSim(
   seed: number,
-  opts: { boss?: boolean; monsters?: boolean; area?: AreaKind; layout?: AreaLayout } = {},
+  opts: {
+    boss?: boolean; monsters?: boolean; area?: AreaKind; layout?: AreaLayout;
+    /** Map tier to build the area at. Only meaningful with `area: "map"`. */
+    tier?: number;
+    /** Waystone seed the run is on (0 = plain stone). Only with `area: "map"`. */
+    waystoneSeed?: number;
+  } = {},
 ): { sim: Simulation; world: World; playerEntity: Entity; layout: AreaLayout } {
   const sim = new Simulation();
   const { world } = sim;
@@ -99,11 +105,11 @@ export function createCombatSim(
       area: opts.area,
       atlasSeed: seed,
       mapSeed: seed,
-      waystoneSeed: 0,
+      waystoneSeed: opts.waystoneSeed ?? 0,
       // Opening stock: the three the atlas seed always offered, now owned rather
       // than conjured fresh at the device every time it is opened.
       waystones: offerWaystones(seed, WAYSTONE_OFFER_COUNT).map((w) => ({ seed: w.seed, tier: w.tier })),
-      areaTier: 0,
+      areaTier: opts.tier ?? 0,
       activeNodeId: "",
       completedNodes: [],
       portalsLeft: 0,

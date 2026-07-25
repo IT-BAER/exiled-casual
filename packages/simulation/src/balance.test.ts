@@ -8,7 +8,7 @@ import { spawnMonster } from "./areas";
 import { Simulation } from "./loop";
 import type { Command } from "./loop";
 import type { World, Entity } from "./ecs";
-import type { Health, Mana, Position } from "./components";
+import type { Health, Mana, Position, MonsterC } from "./components";
 
 /**
  * Encounter pacing, measured rather than asserted from arithmetic. Two slices
@@ -140,6 +140,55 @@ function forcePhase2(r: Rig): void {
   for (let i = 0; i < 3; i++) spawnLabActors(r.world, "hurtboss", 0, 0);
   r.sim.step([]); // bossAI reads the new life and transitions
 }
+
+/**
+ * The one measurement the lab rig above cannot make: what a real map does to you
+ * the moment you step out of the portal. It was measuring nothing while every
+ * monster in the area walked at the entrance from the tick it was built — seven
+ * of them, rare included, in contact within four seconds, at every tier. The lab
+ * never saw it because it places its own monsters six units away on purpose.
+ */
+describe("stepping out of the portal", () => {
+  const TIER = 3;
+
+  function mapEntry() {
+    const { sim, world, playerEntity } = createCombatSim(7, { area: "map", tier: TIER });
+    return { sim, world, player: playerEntity };
+  }
+
+  it("does not put the whole map on top of you", () => {
+    const { sim, world, player } = mapEntry();
+    const total = world.query("monster").length;
+    expect(total).toBeGreaterThan(4); // there is a map to be swarmed by
+    for (let t = 0; t < 8 * HZ; t++) sim.step([]);
+
+    const h = world.get<Health>(player, "health")!;
+    expect(h.life).toBe(h.maxLife);
+    const asleep = world.query("monster").filter(
+      (m) => world.get<MonsterC>(m, "monster")!.state === "idle",
+    ).length;
+    expect(asleep).toBeGreaterThanOrEqual(total - 1);
+  });
+
+  it("still lets a pack be pulled — one bolt is an invitation", () => {
+    const { sim, world, player } = mapEntry();
+    const pos = world.get<Position>(player, "position")!;
+    let target: Position | undefined;
+    let best = Infinity;
+    for (const m of world.query("monster", "position")) {
+      if (world.has(m, "boss")) continue;
+      const p = world.get<Position>(m, "position")!;
+      const d2 = (p.x - pos.x) ** 2 + (p.y - pos.y) ** 2;
+      if (d2 < best) { best = d2; target = p; }
+    }
+    sim.step(cast(sim, player, target!, BOLT));
+    for (let t = 0; t < 6 * HZ; t++) sim.step([]);
+    const awake = world.query("monster").filter(
+      (m) => world.get<MonsterC>(m, "monster")!.state !== "idle",
+    ).length;
+    expect(awake).toBeGreaterThan(0);
+  });
+});
 
 describe("time to kill", () => {
   it("a lone imp dies in under a second and a half", () => {

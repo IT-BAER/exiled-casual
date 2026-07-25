@@ -1,6 +1,6 @@
 import { applyDamage, bossChargeSteps, absorbWithEnergyShield, ES_RECHARGE_DELAY_TICKS } from "@exiled/rules";
 import { Simulation } from "../loop";
-import type { Health, DefensesC, FlasksC, EnergyShieldC } from "../components";
+import type { Health, DefensesC, FlasksC, EnergyShieldC, MonsterC } from "../components";
 import { damageTypeOf } from "../damage-types";
 
 export function registerDamageResolve(sim: Simulation): void {
@@ -40,6 +40,15 @@ export function registerDamageResolve(sim: Simulation): void {
 
       const after = Math.max(0, health.life - toLife);
       world.set<Health>(ev.target, "health", { ...health, life: after });
+
+      // Being shot is the other way to notice someone (monster-ai.ts owns the
+      // first: walking into earshot). Without this, a pack outside the aggro
+      // radius can be killed from off screen while it sleeps through it. The
+      // boss writes its own state every tick, so it is left alone.
+      const mon = world.get<MonsterC>(ev.target, "monster");
+      if (mon?.state === "idle" && !world.has(ev.target, "boss")) {
+        world.set<MonsterC>(ev.target, "monster", { ...mon, state: "chase" });
+      }
 
       // A boss pays flask charges as it bleeds, not when it dies: see
       // FLASK_BOSS_CHARGE_STEPS. Stateless — the hit knows both sides of itself.

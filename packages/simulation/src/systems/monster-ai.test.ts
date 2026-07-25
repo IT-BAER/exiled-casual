@@ -18,7 +18,7 @@ describe("registerMonsterAI", () => {
     world.set<PlayerC>(player, "player", { moveSpeed: 0, bodyRadius: fp(0.5) });
 
     const m = world.create();
-    world.set<Position>(m, "position", { x: fp(10), y: fp(0) });
+    world.set<Position>(m, "position", { x: fp(8), y: fp(0) });
     world.set<Faction>(m, "faction", { team: 1 });
     world.set<MonsterC>(m, "monster", {
       defId: "test", moveSpeed: fp(2), bodyRadius: fp(0.5),
@@ -27,10 +27,69 @@ describe("registerMonsterAI", () => {
       attackReadyTick: 0, state: "idle", rare: 0 as const, summoned: 0 as const,
     });
 
-    const before = fpDist2(fp(10), fp(0), fp(0), fp(0));
+    const before = fpDist2(fp(8), fp(0), fp(0), fp(0));
     sim.step();
     const mpos = world.get<Position>(m, "position")!;
     expect(fpDist2(mpos.x, mpos.y, fp(0), fp(0))).toBeLessThan(before);
+    expect(world.get<MonsterC>(m, "monster")!.state).toBe("chase");
+  });
+
+  /**
+   * Without this, opening a map is one fight against everything in it: every
+   * monster walks at the entrance from the tick the area is built, and the pack
+   * that meets you is the whole population rather than one room of it.
+   */
+  it("a monster outside the aggro radius stays asleep", () => {
+    const sim = new Simulation();
+    registerMonsterAI(sim);
+    const { world } = sim;
+
+    const player = world.create();
+    world.set<Position>(player, "position", { x: fp(0), y: fp(0) });
+    world.set<Faction>(player, "faction", { team: 0 });
+    world.set<PlayerC>(player, "player", { moveSpeed: 0, bodyRadius: fp(0.5) });
+
+    const m = world.create();
+    world.set<Position>(m, "position", { x: fp(20), y: fp(0) });
+    world.set<Faction>(m, "faction", { team: 1 });
+    world.set<MonsterC>(m, "monster", {
+      defId: "test", moveSpeed: fp(2), bodyRadius: fp(0.5),
+      attackRange: fp(1.2), attackCooldownTicks: 45,
+      attackDamage: fp(6), attackType: 1 as const,
+      attackReadyTick: 0, state: "idle", rare: 0 as const, summoned: 0 as const,
+    });
+
+    for (let i = 0; i < 30; i++) sim.step();
+    expect(world.get<Position>(m, "position")).toEqual({ x: fp(20), y: fp(0) });
+    expect(world.get<MonsterC>(m, "monster")!.state).toBe("idle");
+  });
+
+  it("waking is one-way — a pulled monster follows past the radius", () => {
+    const sim = new Simulation();
+    registerMonsterAI(sim);
+    const { world } = sim;
+
+    const player = world.create();
+    world.set<Position>(player, "position", { x: fp(0), y: fp(0) });
+    world.set<Faction>(player, "faction", { team: 0 });
+    world.set<PlayerC>(player, "player", { moveSpeed: 0, bodyRadius: fp(0.5) });
+
+    const m = world.create();
+    world.set<Position>(m, "position", { x: fp(5), y: fp(0) });
+    world.set<Faction>(m, "faction", { team: 1 });
+    world.set<MonsterC>(m, "monster", {
+      defId: "test", moveSpeed: fp(2), bodyRadius: fp(0.5),
+      attackRange: fp(1.2), attackCooldownTicks: 45,
+      attackDamage: fp(6), attackType: 1 as const,
+      attackReadyTick: 0, state: "idle", rare: 0 as const, summoned: 0 as const,
+    });
+
+    sim.step(); // woken: inside the radius
+    // The player runs well past the radius; the monster must still be coming.
+    world.set<Position>(player, "position", { x: fp(-40), y: fp(0) });
+    const before = world.get<Position>(m, "position")!.x;
+    sim.step();
+    expect(world.get<Position>(m, "position")!.x).toBeLessThan(before);
     expect(world.get<MonsterC>(m, "monster")!.state).toBe("chase");
   });
 
