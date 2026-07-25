@@ -1,14 +1,17 @@
 import React, { useState } from "react";
 import {
-  offerWaystones, atlasGraph, isNodeReachable, areaLevel, WAYSTONE_OFFER_COUNT,
+  atlasGraph, isNodeReachable, areaLevel,
   waystoneRarity, waystoneMods, type WaystoneRarity,
 } from "@exiled/rules";
 import type { AtlasGraphNode } from "@exiled/rules";
 import { MAP_PORTALS } from "@exiled/protocol";
+import type { Snapshot } from "@exiled/protocol";
 
 interface Props {
   atlasSeed: number;
   completedNodes: string[];
+  /** The stones the character actually owns, straight off the snapshot. */
+  waystones: Snapshot["waystones"];
   onActivate: (atlasNodeId: string, waystoneId: string) => void;
   onClose: () => void;
 }
@@ -189,9 +192,8 @@ function AtlasMap(props: {
   );
 }
 
-export function PreparationPanel({ atlasSeed, completedNodes, onActivate, onClose }: Props) {
+export function PreparationPanel({ atlasSeed, completedNodes, waystones, onActivate, onClose }: Props) {
   const nodes = atlasGraph(atlasSeed);
-  const waystones = offerWaystones(atlasSeed, WAYSTONE_OFFER_COUNT);
   const [nodeId, setNodeId] = useState<string | null>(null);
   const [wsId, setWsId] = useState<string | null>(null);
   const ws = waystones.find((w) => w.id === wsId);
@@ -272,8 +274,18 @@ export function PreparationPanel({ atlasSeed, completedNodes, onActivate, onClos
             onSelect={setNodeId}
           />
 
-          <SectionLabel>Waystone</SectionLabel>
-          <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
+          <SectionLabel>Waystone{waystones.length > 0 ? ` (${waystones.length})` : ""}</SectionLabel>
+          {waystones.length === 0 && (
+            <div
+              data-testid="prep-no-waystones"
+              style={{ padding: "14px 0 20px", color: "#8a7f66", fontSize: 13, fontStyle: "italic" }}
+            >
+              No Waystones. Clear a map to be given more.
+            </div>
+          )}
+          {/* The stock grows now, so the row scrolls rather than pushing ACTIVATE
+              off the panel once a character is a dozen stones deep. */}
+          <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap", maxHeight: 260, overflowY: "auto" }}>
             {waystones.map((w) => {
               const selected = w.id === wsId;
               const rarity = waystoneRarity(w.seed);

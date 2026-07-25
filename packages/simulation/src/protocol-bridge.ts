@@ -238,6 +238,7 @@ export function buildSnapshot(
     areaTier: session?.areaTier ?? 0,
     atlasSeed: session?.atlasSeed ?? 0,
     completedNodes: session?.completedNodes ?? [],
+    waystones: (session?.waystones ?? []).map((w, i) => ({ id: `ws-${i}`, seed: w.seed, tier: w.tier })),
     player: {
       id: playerEntity,
       x: toNumber(pp.x), y: toNumber(pp.y),

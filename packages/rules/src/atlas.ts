@@ -1,6 +1,13 @@
 // Pure, deterministic Waystone/Atlas rules. No @exiled imports so both the sim and
 // the client can compute identical offers from the same seed (replay-stable).
 
+/**
+ * A stone the character owns. `id` is POSITIONAL — assigned from the stone's
+ * index in the owned list when the snapshot is built, and re-resolved against
+ * that same list when the Map Device activates one. A stone has no identity of
+ * its own beyond its seed and its tier, and two identical stones are genuinely
+ * interchangeable, so an index is the honest key.
+ */
 export interface Waystone { id: string; seed: number; tier: number }
 export interface AtlasNode { id: string; name: string }
 
@@ -145,6 +152,32 @@ export function atlasGraph(atlasSeed: number): AtlasGraphNode[] {
     }
   }
   return nodes;
+}
+
+/** Waystone tiers run 1..15, as PoE2's do. */
+export const WAYSTONE_MAX_TIER = 15;
+
+/**
+ * What a cleared map hands back. Sustain is the whole point: without it a
+ * character owns exactly the stones it started with, every map is one of three
+ * forever, and nothing can be gated behind a tier because running out would
+ * hard-lock the character.
+ *
+ * A plain stone returns one, so a run of them is break-even and a character can
+ * farm the same tier indefinitely. A stone that carried modifiers returns two,
+ * one of them a tier higher — so the way to climb is to take the risk, which is
+ * the same trade PoE's Atlas is built on. Deterministic in the map's own seed.
+ */
+export function waystoneDrops(
+  mapSeed: number,
+  runTier: number,
+  stoneHadModifiers: boolean,
+): Waystone[] {
+  const rnd = mulberry32(mapSeed ^ 0xd0b5);
+  const clamp = (t: number) => Math.max(1, Math.min(WAYSTONE_MAX_TIER, t));
+  const out: Waystone[] = [{ id: "", seed: rnd(), tier: clamp(runTier) }];
+  if (stoneHadModifiers) out.push({ id: "", seed: rnd(), tier: clamp(runTier + 1) });
+  return out;
 }
 
 export function offerWaystones(atlasSeed: number, count: number): Waystone[] {

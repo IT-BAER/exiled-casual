@@ -28,7 +28,7 @@ function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
     mapOpen: false,
     areaTier: 0,
     atlasSeed: 0,
-    completedNodes: [],
+    completedNodes: [], waystones: [],
     entities: [],
     inventory: { cols: 12, rows: 5, items: [] },
     equipment: {},

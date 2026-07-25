@@ -16,7 +16,7 @@ function snapWith(entities: Snapshot["entities"]): Snapshot {
     mapOpen: false,
     areaTier: 0,
     atlasSeed: 0,
-    completedNodes: [],
+    completedNodes: [], waystones: [],
     player: {
       id: 0, x: 0, y: 0, life: 100, maxLife: 100, mana: 30, maxMana: 60,
       energyShield: 0, maxEnergyShield: 0,

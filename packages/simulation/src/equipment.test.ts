@@ -411,7 +411,7 @@ describe("persist — equipment", () => {
     await kv.save(JSON.stringify({
       version: 1,
       session: {
-        area: "hideout", atlasSeed: 0, mapSeed: 0, waystoneSeed: 0, areaTier: 0,
+        area: "hideout", atlasSeed: 0, mapSeed: 0, waystoneSeed: 0, waystones: [], areaTier: 0,
         activeNodeId: "", completedNodes: [], portalsLeft: 0, mapOpen: 0, pendingArea: "",
       },
       inventory: { cols: 12, rows: 5, items: [] },

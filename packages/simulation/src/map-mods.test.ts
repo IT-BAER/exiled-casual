@@ -1,7 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { generateArea } from "@exiled/mapgen";
 import { CONTENT_VERSION } from "@exiled/content-runtime";
-import { waystoneMods, monsterTierScale, waystoneScaleFor } from "@exiled/rules";
+import {
+  waystoneMods, monsterTierScale, waystoneScaleFor, waystoneDrops, atlasGraph,
+  WAYSTONE_OFFER_COUNT, WAYSTONE_MAX_TIER,
+} from "@exiled/rules";
 import { World } from "./ecs";
 import { createCombatSim } from "./combat-sim";
 import { buildArea, mapDangerScale } from "./areas";
@@ -15,7 +18,7 @@ function seedRolling(id: string): number {
 
 function mapSession(waystoneSeed: number, areaTier = 1): SessionC {
   return {
-    area: "map", atlasSeed: 1, mapSeed: 99, waystoneSeed, areaTier,
+    area: "map", atlasSeed: 1, mapSeed: 99, waystoneSeed, waystones: [], areaTier,
     activeNodeId: "node.ashen_glade", completedNodes: [], portalsLeft: 6, mapOpen: 1, pendingArea: "",
   };
 }
@@ -116,5 +119,45 @@ describe("the player's resistances are taxed only inside the map", () => {
     const { resOf, goTo } = runWith(0);
     goTo("map");
     expect(resOf()).toBe(0);
+  });
+});
+
+describe("Waystones sustain themselves", () => {
+  it("opening a map spends the stone that opened it", () => {
+    const { sim, world, playerEntity } = createCombatSim(7, { area: "hideout" });
+    const sessionE = world.query("session")[0]!;
+    const before = world.get<SessionC>(sessionE, "session")!.waystones;
+    expect(before.length).toBe(WAYSTONE_OFFER_COUNT);
+
+    sim.step([{ tick: 0, entity: playerEntity, type: "activateMap", atlasNodeId: atlasGraph(7)[0]!.id, waystoneId: "ws-1" }]);
+
+    const after = world.get<SessionC>(sessionE, "session")!;
+    expect(after.mapOpen).toBe(1);
+    expect(after.waystones).toEqual([before[0], before[2]]);
+    expect(after.waystoneSeed).toBe(before[1]!.seed);
+  });
+
+  it("a stone the character does not own opens nothing", () => {
+    const { sim, world, playerEntity } = createCombatSim(7, { area: "hideout" });
+    const sessionE = world.query("session")[0]!;
+    sim.step([{ tick: 0, entity: playerEntity, type: "activateMap", atlasNodeId: atlasGraph(7)[0]!.id, waystoneId: "ws-9" }]);
+    const s = world.get<SessionC>(sessionE, "session")!;
+    expect(s.mapOpen).toBe(0);
+    expect(s.waystones.length).toBe(WAYSTONE_OFFER_COUNT);
+  });
+
+  it("clearing a map hands stones back — one for a plain stone, two for a modified one", () => {
+    const plain = waystoneDrops(123, 4, false);
+    const modified = waystoneDrops(123, 4, true);
+    expect(plain).toHaveLength(1);
+    expect(plain[0]!.tier).toBe(4);
+    expect(modified).toHaveLength(2);
+    // The second is a tier higher, which is what makes risk the way to climb.
+    expect(modified[1]!.tier).toBe(5);
+  });
+
+  it("a drop never leaves the 1..15 band", () => {
+    expect(waystoneDrops(1, 15, true).every((w) => w.tier <= WAYSTONE_MAX_TIER)).toBe(true);
+    expect(waystoneDrops(1, 0, true).every((w) => w.tier >= 1)).toBe(true);
   });
 });

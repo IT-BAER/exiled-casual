@@ -1,5 +1,8 @@
 import { fp } from "@exiled/fixed-point";
-import { baseCasterStats, makeRare, rollItem, FLASK_MAX_CHARGES, START_LEVEL } from "@exiled/rules";
+import {
+  baseCasterStats, makeRare, rollItem, FLASK_MAX_CHARGES, START_LEVEL,
+  offerWaystones, WAYSTONE_OFFER_COUNT,
+} from "@exiled/rules";
 import { SKILLS, MONSTERS, rareTemplate, CONTENT_VERSION, ITEM_POOLS, baseOf } from "@exiled/content-runtime";
 import { generateArea, type AreaLayout } from "@exiled/mapgen";
 import { gridCollision, type CollisionRef } from "./collision";
@@ -97,6 +100,9 @@ export function createCombatSim(
       atlasSeed: seed,
       mapSeed: seed,
       waystoneSeed: 0,
+      // Opening stock: the three the atlas seed always offered, now owned rather
+      // than conjured fresh at the device every time it is opened.
+      waystones: offerWaystones(seed, WAYSTONE_OFFER_COUNT).map((w) => ({ seed: w.seed, tier: w.tier })),
       areaTier: 0,
       activeNodeId: "",
       completedNodes: [],

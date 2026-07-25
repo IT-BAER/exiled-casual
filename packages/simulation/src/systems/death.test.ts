@@ -76,7 +76,7 @@ describe("registerDeath", () => {
     const sessionE = world.create();
     world.set<SessionC>(sessionE, "session", {
       area, atlasSeed: 0, areaTier: 0, activeNodeId: "", completedNodes: [],
-      mapSeed: 0, waystoneSeed: 0, portalsLeft, mapOpen: 1, pendingArea: "",
+      mapSeed: 0, waystoneSeed: 0, waystones: [], portalsLeft, mapOpen: 1, pendingArea: "",
     });
 
     return { sim, world, p, sessionE };
@@ -130,7 +130,7 @@ describe("registerDeath", () => {
 
     const sessionE = world.create();
     world.set<SessionC>(sessionE, "session", {
-      area, atlasSeed: 0, mapSeed: 0, waystoneSeed: 0, areaTier: 5, activeNodeId, completedNodes,
+      area, atlasSeed: 0, mapSeed: 0, waystoneSeed: 0, waystones: [], areaTier: 5, activeNodeId, completedNodes,
       portalsLeft: 6, mapOpen: 1, pendingArea: "",
     });
 
@@ -169,7 +169,7 @@ describe("registerDeath", () => {
     registerDeath(sim);
     const w = sim.world;
     const s = w.create();
-    w.set(s, "session", { area: "map", atlasSeed: 1, mapSeed: 7, waystoneSeed: 0, areaTier: 5, activeNodeId: "node.ashen_glade", completedNodes: [], portalsLeft: 6, mapOpen: 1, pendingArea: "" });
+    w.set(s, "session", { area: "map", atlasSeed: 1, mapSeed: 7, waystoneSeed: 0, waystones: [], areaTier: 5, activeNodeId: "node.ashen_glade", completedNodes: [], portalsLeft: 6, mapOpen: 1, pendingArea: "" });
     const m = w.create();
     w.set(m, "position", { x: 100, y: 200 });
     w.set(m, "health", { life: 0, maxLife: 40 });
@@ -200,7 +200,7 @@ describe("registerDeath", () => {
 
     const sessionE = w.create();
     w.set<SessionC>(sessionE, "session", {
-      area: opts.area, atlasSeed: 0, mapSeed: 0, waystoneSeed: 0, areaTier: opts.areaTier,
+      area: opts.area, atlasSeed: 0, mapSeed: 0, waystoneSeed: 0, waystones: [], areaTier: opts.areaTier,
       activeNodeId: "", completedNodes: [], portalsLeft: 6, mapOpen: 1, pendingArea: "",
     });
     w.set<ProgressC>(sessionE, "progress", { level: opts.level ?? START_LEVEL, xp: opts.xp });
@@ -267,12 +267,47 @@ describe("registerDeath", () => {
     registerDeath(sim);
     const w = sim.world;
     const s = w.create();
-    w.set(s, "session", { area: "map", atlasSeed: 1, mapSeed: 7, waystoneSeed: 0, areaTier: 5, activeNodeId: "n", completedNodes: [], portalsLeft: 6, mapOpen: 1, pendingArea: "" });
+    w.set(s, "session", { area: "map", atlasSeed: 1, mapSeed: 7, waystoneSeed: 0, waystones: [], areaTier: 5, activeNodeId: "n", completedNodes: [], portalsLeft: 6, mapOpen: 1, pendingArea: "" });
     const m = w.create();
     w.set(m, "position", { x: 0, y: 0 });
     w.set(m, "health", { life: 0, maxLife: 40 });
     w.set(m, "monster", { defId: "d", moveSpeed: 0, bodyRadius: 0, attackRange: 0, attackCooldownTicks: 0, attackDamage: 0, attackType: 1, attackReadyTick: 0, state: "idle", rare: 0, summoned: 0 });
     sim.step([]);
     expect(w.query("item", "position").length).toBe(0);
+  });
+});
+
+describe("clearing a map hands Waystones back", () => {
+  /** A dying map boss on `activeNodeId`, with `completedNodes` already behind it. */
+  function makeBossDeath(area: "map", activeNodeId: string, completedNodes: string[]) {
+    const sim = new Simulation();
+    registerDeath(sim);
+    const { world } = sim;
+    const sessionE = world.create();
+    world.set<SessionC>(sessionE, "session", {
+      area, atlasSeed: 0, mapSeed: 0, waystoneSeed: 0, waystones: [], areaTier: 5,
+      activeNodeId, completedNodes, portalsLeft: 6, mapOpen: 1, pendingArea: "",
+    });
+    const boss = world.create();
+    world.set(boss, "monster", { defId: "boss", state: "idle", moveSpeed: 0, bodyRadius: 0,
+      attackRange: 0, attackCooldownTicks: 0, attackDamage: 0, attackType: 1, attackReadyTick: 0, rare: 0, summoned: 0 });
+    world.set(boss, "health", { life: 0, maxLife: fp(500) });
+    world.set(boss, "boss", { phase: 1, nextAbilityTick: 0, spawnX: 0, spawnY: 0, rootedUntilTick: 0 });
+    return { sim, world, sessionE };
+  }
+
+  it("the boss's death adds the run's drops to the owned stock", () => {
+    const { sim, world, sessionE } = makeBossDeath("map", "node.ashen_glade", []);
+    const before = world.get<SessionC>(sessionE, "session")!.waystones.length;
+    sim.step();
+    const after = world.get<SessionC>(sessionE, "session")!.waystones;
+    expect(after.length).toBeGreaterThan(before);
+    for (const w of after) expect(w.tier).toBeGreaterThanOrEqual(1);
+  });
+
+  it("a node already cleared pays nothing a second time", () => {
+    const { sim, world, sessionE } = makeBossDeath("map", "node.ashen_glade", ["node.ashen_glade"]);
+    sim.step();
+    expect(world.get<SessionC>(sessionE, "session")!.waystones).toEqual([]);
   });
 });

@@ -160,6 +160,7 @@ export function App() {
         <PreparationPanel
           atlasSeed={snapshot.atlasSeed}
           completedNodes={snapshot.completedNodes}
+          waystones={snapshot.waystones}
           onClose={() => setPanelOpen(false)}
           onActivate={(atlasNodeId, waystoneId) => {
             workerRef.current?.postMessage({

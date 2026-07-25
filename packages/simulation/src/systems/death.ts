@@ -1,7 +1,10 @@
 import { Simulation } from "../loop";
 import type { Health, Mana, MoveTarget, MoveDir, SessionC, MonsterC, Position, ItemC, FlasksC, ProgressC, EnergyShieldC } from "../components";
 import { fnv1a32 } from "../rng";
-import { rollItem, areaLevel, FLASK_CHARGES_PER_KILL, gainXp, xpAward, waystoneScaleFor } from "@exiled/rules";
+import {
+  rollItem, areaLevel, FLASK_CHARGES_PER_KILL, gainXp, xpAward,
+  waystoneScaleFor, waystoneDrops, waystoneMods,
+} from "@exiled/rules";
 import { recomputePlayerStats } from "../derived";
 import { ITEM_POOLS, baseOf } from "@exiled/content-runtime";
 
@@ -17,7 +20,15 @@ export function registerDeath(sim: Simulation): void {
 
       // A dying map boss completes the active Atlas node before it is destroyed.
       if (isBoss && s && s.area === "map" && s.activeNodeId !== "" && !s.completedNodes.includes(s.activeNodeId)) {
-        world.set<SessionC>(sessionE!, "session", { ...s, completedNodes: [...s.completedNodes, s.activeNodeId] });
+        // Clearing a map hands stones back — one for a plain run, two (the
+        // second a tier higher) for one taken on a stone that carried
+        // modifiers. This is the loop that keeps a character in maps.
+        const drops = waystoneDrops(s.mapSeed, s.areaTier, waystoneMods(s.waystoneSeed).length > 0);
+        world.set<SessionC>(sessionE!, "session", {
+          ...s,
+          completedNodes: [...s.completedNodes, s.activeNodeId],
+          waystones: [...s.waystones, ...drops.map((d) => ({ seed: d.seed, tier: d.tier }))],
+        });
       }
 
       // Boss and rare monsters drop one committed item where they die.

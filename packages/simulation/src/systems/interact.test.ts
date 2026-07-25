@@ -21,6 +21,8 @@ function makeWorld() {
     area: "hideout",
     atlasSeed: 0, areaTier: 0, activeNodeId: "", completedNodes: [],
     mapSeed: 0, waystoneSeed: 0,
+    // The opening stock a fresh character owns; "ws-0" is its first stone.
+    waystones: offerWaystones(0, WAYSTONE_OFFER_COUNT).map((w) => ({ seed: w.seed, tier: w.tier })),
     portalsLeft: 0,
     mapOpen: 0,
     pendingArea: "",
@@ -158,7 +160,7 @@ describe("registerInteractSystem", () => {
     // Set up: map is open with portals.
     world.set<SessionC>(sessionE, "session", {
       area: "hideout", atlasSeed: 0, areaTier: 0, activeNodeId: "", completedNodes: [],
-      mapSeed: 0, waystoneSeed: 0, portalsLeft: 6, mapOpen: 1, pendingArea: "",
+      mapSeed: 0, waystoneSeed: 0, waystones: [], portalsLeft: 6, mapOpen: 1, pendingArea: "",
     });
     const portal = world.create();
     world.set<Position>(portal, "position", { x: fp(0), y: fp(8) }); // at player
@@ -175,7 +177,7 @@ describe("registerInteractSystem", () => {
     const { sim, world, player, sessionE } = makeWorld();
     world.set<SessionC>(sessionE, "session", {
       area: "map", atlasSeed: 0, areaTier: 0, activeNodeId: "", completedNodes: [],
-      mapSeed: 0, waystoneSeed: 0, portalsLeft: 4, mapOpen: 1, pendingArea: "",
+      mapSeed: 0, waystoneSeed: 0, waystones: [], portalsLeft: 4, mapOpen: 1, pendingArea: "",
     });
     const portal = world.create();
     world.set<Position>(portal, "position", { x: fp(0), y: fp(8) }); // at player

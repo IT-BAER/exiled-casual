@@ -238,7 +238,7 @@ describe("buildSnapshot — session fields and interactables", () => {
     const { world, playerEntity } = makeMinimalWorld();
     const sessionE = world.create();
     world.set<SessionC>(sessionE, "session", {
-      area, atlasSeed: 0, areaTier: 0, activeNodeId: "", completedNodes: [],
+      area, atlasSeed: 0, areaTier: 0, activeNodeId: "", completedNodes: [], waystones: [],
       mapSeed: 0, waystoneSeed: 0, portalsLeft, mapOpen, pendingArea: "",
     });
     return { world, playerEntity };
@@ -264,7 +264,7 @@ describe("buildSnapshot — session fields and interactables", () => {
     const { world } = makeMinimalWorld();
     const sessionE = world.create();
     world.set<SessionC>(sessionE, "session", {
-      area: "map", atlasSeed: 42, mapSeed: 7, waystoneSeed: 0, areaTier: 3, activeNodeId: "node.emberfall",
+      area: "map", atlasSeed: 42, mapSeed: 7, waystoneSeed: 0, waystones: [], areaTier: 3, activeNodeId: "node.emberfall",
       completedNodes: ["node.emberfall"], portalsLeft: 6, mapOpen: 1, pendingArea: "",
     });
     const snap = buildSnapshot(world, {} as never, 0, "test");

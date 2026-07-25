@@ -26,6 +26,12 @@ export interface SessionC {
   activeNodeId: string;
   /** Atlas node ids completed this session (in-memory only). */
   completedNodes: string[];
+  /**
+   * The stones the character owns, in the order they were acquired. Activating a
+   * map SPENDS one; clearing a map hands back one or two. This is the durable
+   * stock — it is what makes tiers a resource rather than a menu.
+   */
+  waystones: { seed: number; tier: number }[];
   /** Retry budget for the open map. See MAP_PORTALS in @exiled/protocol. */
   portalsLeft: number;
   mapOpen: 0 | 1;

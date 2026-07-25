@@ -1,11 +1,15 @@
 import { MAP_PORTALS } from "@exiled/protocol";
-import {
-  offerWaystones, atlasGraph, isNodeReachable, mapSeedFor, WAYSTONE_OFFER_COUNT,
-} from "@exiled/rules";
+import { atlasGraph, isNodeReachable, mapSeedFor } from "@exiled/rules";
 import { Simulation } from "../loop";
 import type { Position, InteractableC, SessionC } from "../components";
 import { spawnPortalRing } from "../areas";
 import { inRangeOf } from "../protocol-bridge";
+
+/** "ws-3" -> 3, and null for anything that is not a positional stone id. */
+function waystoneIndex(id: string): number | null {
+  const m = /^ws-(\d+)$/.exec(id);
+  return m ? Number(m[1]) : null;
+}
 
 export function registerInteractSystem(sim: Simulation): void {
   sim.register("interact", (world, _tick, commands) => {
@@ -26,11 +30,17 @@ export function registerInteractSystem(sim: Simulation): void {
         if (session.completedNodes.includes(atlasNodeId)) continue;
         // Fog is a server rule, not a greyed-out button: the client is untrusted.
         if (!isNodeReachable(atlasGraph(session.atlasSeed), session.completedNodes, atlasNodeId)) continue;
-        const ws = offerWaystones(session.atlasSeed, WAYSTONE_OFFER_COUNT)
-          .find((w) => w.id === waystoneId);
+        // The id is the stone's index in the owned stock (see Waystone.id), so
+        // the sim resolves it against its own list rather than trusting a client
+        // to name a stone the character does not have.
+        const index = waystoneIndex(waystoneId);
+        const ws = index === null ? undefined : session.waystones[index];
         if (!ws) continue;
         world.set<SessionC>(sessionE, "session", {
           ...session,
+          // Spent: opening the map consumes the stone, which is what makes
+          // sustain a mechanic rather than a menu.
+          waystones: session.waystones.filter((_, i) => i !== index),
           // The place is half the seed: the same Waystone run at two nodes has to
           // draw two different maps, or the route decision buys nothing.
           mapSeed: mapSeedFor(ws.seed, atlasNodeId),

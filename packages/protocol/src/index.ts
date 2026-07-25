@@ -176,6 +176,11 @@ export interface Snapshot {
   atlasSeed: number;
   /** Atlas node ids already completed this session. */
   completedNodes: string[];
+  /**
+   * The stones the character owns. `id` is positional in this list and is what
+   * an `activateMap` intent names; the sim re-resolves it against its own copy.
+   */
+  waystones: { id: string; seed: number; tier: number }[];
   player: {
     id: number; x: number; y: number;
     life: number; maxLife: number; mana: number; maxMana: number;
