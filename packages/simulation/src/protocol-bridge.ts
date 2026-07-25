@@ -1,10 +1,10 @@
 import { fp, toNumber, fpDist2 } from "@exiled/fixed-point";
 import { PICKUP_RADIUS } from "@exiled/protocol";
-import type { Intent, Snapshot, SnapshotEntity, MonsterElement } from "@exiled/protocol";
+import type { DisplaySkill, Intent, Snapshot, SnapshotEntity, MonsterElement } from "@exiled/protocol";
 import { damageTypeOf } from "./damage-types";
-import { physicalMitigationPct, xpToNext, START_LEVEL } from "@exiled/rules";
+import { physicalMitigationPct, scalePct, xpToNext, START_LEVEL } from "@exiled/rules";
 import { resBlock } from "@exiled/content-schema";
-import { describeItem } from "@exiled/content-runtime";
+import { describeItem, SKILLS } from "@exiled/content-runtime";
 import type { Command, Simulation } from "./loop";
 import type { World, Entity } from "./ecs";
 import type {
@@ -70,6 +70,59 @@ export function intentToCommand(intent: Intent, player: Entity, tick: number): C
     case "useFlask":
       return { tick, entity: player, type: "useFlask", flask: intent.slot };
   }
+}
+
+const round1 = (n: number): number => Math.round(n * 10) / 10;
+const titleCase = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
+
+/**
+ * Every skill as its tooltip reads it. The numbers are recomputed here with the
+ * same formulas skillCast uses, and deliberately here rather than in the client:
+ * the tooltip has to promise exactly what the cast will do, and the client can
+ * see neither OffenseC nor the fixed-point content.
+ */
+function describeSkills(offense: OffenseC | undefined): DisplaySkill[] {
+  const castSpeedPct = offense?.castSpeedPct ?? 0;
+  const spellDamagePct = offense?.spellDamagePct ?? 0;
+  const out: DisplaySkill[] = [];
+  for (const def of SKILLS.values()) {
+    // Same floor skillCast applies: a cast never drops below one tick.
+    const castTicks = def.castTicks
+      ? Math.max(1, Math.trunc((def.castTicks * 100) / (100 + castSpeedPct)))
+      : 0;
+    const castTimeSec = castTicks / 30;
+    const lines: string[] = [];
+    let hitDamage = 0;
+    for (const effect of def.effects) {
+      if (effect.type === "spawnProjectile" && effect.damage) {
+        const dmg = toNumber(scalePct(effect.damage.amountFixed, spellDamagePct));
+        hitDamage += dmg;
+        lines.push(`Deals ${round1(dmg)} ${titleCase(effect.damage.type)} Damage`);
+      } else if (effect.type === "spawnGroundArea") {
+        if (effect.ailment) {
+          lines.push(
+            `Deals ${round1(toNumber(effect.ailment.dpsFixed))} ${titleCase(effect.ailment.kind)} Damage per Second`,
+          );
+        }
+        lines.push(`Base duration is ${round1(effect.durationTicks / 30)} seconds`);
+      } else if (effect.type === "teleport") {
+        lines.push(`Teleports ${round1(toNumber(effect.distanceFixed))} metres`);
+      }
+    }
+    const skill: DisplaySkill = {
+      id: def.id,
+      name: def.name,
+      description: def.description ?? "",
+      manaCost: toNumber(def.manaCostFixed),
+      castTimeSec,
+      cooldownSec: def.cooldownTicks / 30,
+      lines,
+    };
+    // No hit damage means no DPS column, the way PoE drops it for a movement skill.
+    if (hitDamage > 0 && castTimeSec > 0) skill.dps = hitDamage / castTimeSec;
+    out.push(skill);
+  }
+  return out;
 }
 
 // _contentVersion is part of the plan's declared signature but the Snapshot type
@@ -282,5 +335,6 @@ export function buildSnapshot(
     entities,
     inventory,
     equipment,
+    skills: describeSkills(world.get<OffenseC>(playerEntity, "offense")),
   };
 }

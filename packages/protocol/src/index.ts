@@ -214,6 +214,31 @@ export interface Snapshot {
   };
   /** Equipped gear by slot. Absent keys mean an empty slot. Absent field means no session. */
   equipment: Partial<Record<EquipSlotId, DisplayItem>>;
+  /** Skills as the tooltip shows them. Absent on a sim built without content. */
+  skills?: DisplaySkill[];
+}
+
+/**
+ * A skill the way its tooltip reads: the gem's own prose plus the numbers this
+ * character actually casts at, so the cast time already carries castSpeedPct and
+ * the damage lines carry spellDamagePct. PoE shows your numbers, not the gem's,
+ * and the client must not recompute any of them: sim math is fixed-point and the
+ * client would drift from it.
+ */
+export interface DisplaySkill {
+  id: string;
+  name: string;
+  description: string;
+  /** Mana per cast. */
+  manaCost: number;
+  /** Seconds of cast recovery after cast speed. 0 = instant. */
+  castTimeSec: number;
+  /** Seconds. 0 = no cooldown. */
+  cooldownSec: number;
+  /** Damage per second. Absent for a skill that deals none, which drops the column. */
+  dps?: number;
+  /** The blue block, one worded line per effect. */
+  lines: string[];
 }
 
 export interface FromWorker_Snapshot { type: "snapshot"; snapshot: Snapshot }

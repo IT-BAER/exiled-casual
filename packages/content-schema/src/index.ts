@@ -63,6 +63,8 @@ export type EffectNode =
 export interface SkillDef {
   id: string;
   name: string;
+  /** Prose for the tooltip's white block. Authored, never derived from effects. */
+  description?: string;
   manaCostFixed: Fixed;
   cooldownTicks: number;
   /** Post-cast movement recovery, in ticks. Omitted/0 = instant, no slow. */
@@ -243,6 +245,9 @@ export function validateSkillDef(v: unknown): ValidationResult {
   }
   if (!isNonNegInt(v["cooldownTicks"])) {
     errors.push("cooldownTicks: must be a non-negative integer");
+  }
+  if (v["description"] !== undefined && typeof v["description"] !== "string") {
+    errors.push("description: must be a string");
   }
   if (v["castTicks"] !== undefined && !isNonNegInt(v["castTicks"])) {
     errors.push("castTicks: must be a non-negative integer");

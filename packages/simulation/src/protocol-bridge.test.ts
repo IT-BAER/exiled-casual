@@ -364,3 +364,39 @@ describe("buildSnapshot — ground items and inventory", () => {
     expect(gi!.inRange).toBe(false);
   });
 });
+
+describe("buildSnapshot - skills", () => {
+  it("reports each skill with the numbers the character actually casts at", () => {
+    const { world, sim } = createCombatSim(42);
+    const snap = buildSnapshot(world, sim, 0, CONTENT_VERSION);
+    const bolt = snap.skills?.find((s) => s.id === "skill.ember_bolt.v1");
+    expect(bolt).toBeDefined();
+    expect(bolt!.name).toBe("Ember Bolt");
+    expect(bolt!.description.length).toBeGreaterThan(0);
+    expect(bolt!.manaCost).toBe(8);
+    // 8 cast ticks and 6 cooldown ticks at 30 Hz, with no cast speed on the base build.
+    expect(bolt!.castTimeSec).toBeCloseTo(8 / 30, 5);
+    expect(bolt!.cooldownSec).toBeCloseTo(6 / 30, 5);
+    // 25 fire damage over the cast, which is what its DPS column has to say.
+    expect(bolt!.dps).toBeCloseTo(25 / (8 / 30), 3);
+    expect(bolt!.lines).toContain("Deals 25 Fire Damage");
+  });
+
+  it("carries cast speed into the reported cast time", () => {
+    const { world, sim, playerEntity } = createCombatSim(42);
+    world.set(playerEntity, "offense", { spellDamagePct: 0, castSpeedPct: 100, critChancePct: 0 });
+    const snap = buildSnapshot(world, sim, 0, CONTENT_VERSION);
+    const bolt = snap.skills!.find((s) => s.id === "skill.ember_bolt.v1")!;
+    // Twice as fast: 8 ticks become 4, the same floor skillCast applies.
+    expect(bolt.castTimeSec).toBeCloseTo(4 / 30, 5);
+  });
+
+  it("omits DPS for a skill that deals no damage", () => {
+    const { world, sim } = createCombatSim(42);
+    const snap = buildSnapshot(world, sim, 0, CONTENT_VERSION);
+    const blink = snap.skills!.find((s) => s.id === "skill.blink.v1")!;
+    expect(blink.dps).toBeUndefined();
+    expect(blink.castTimeSec).toBe(0);
+  });
+});
+

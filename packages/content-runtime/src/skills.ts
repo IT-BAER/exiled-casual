@@ -5,6 +5,7 @@ const SKILL_DEFS: SkillDef[] = [
   {
     id: "skill.ember_bolt.v1",
     name: "Ember Bolt",
+    description: "Launches a bolt of fire that bursts on the first enemy it strikes.",
     manaCostFixed: fp(8),
     cooldownTicks: 6,
     castTicks: 8,
@@ -22,6 +23,7 @@ const SKILL_DEFS: SkillDef[] = [
   {
     id: "skill.cinder_ground.v1",
     name: "Cinder Ground",
+    description: "Scorches the ground at a location, burning enemies who stand in the cinders.",
     manaCostFixed: fp(20),
     cooldownTicks: 30,
     castTicks: 15,
@@ -43,6 +45,7 @@ const SKILL_DEFS: SkillDef[] = [
   {
     id: "skill.blink.v1",
     name: "Blink",
+    description: "Teleport a short distance. Shares a cooldown with other movement skills.",
     manaCostFixed: fp(15),
     cooldownTicks: 90,
     effects: [{ type: "teleport", distanceFixed: fp(5) }],
