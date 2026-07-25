@@ -97,7 +97,7 @@ describe("registerSkillCast", () => {
     const sim = new Simulation();
     registerSkillCast(sim, ALL_SKILLS);
     const caster = makeCaster(sim, fp(60));
-    sim.world.set<OffenseC>(caster, "offense", { spellDamagePct: 37 });
+    sim.world.set<OffenseC>(caster, "offense", { spellDamagePct: 37, castSpeedPct: 0 });
     sim.step([{
       tick: 0, entity: caster, type: "useSkill",
       skillId: "skill.ember_bolt.v1",
@@ -108,11 +108,27 @@ describe("registerSkillCast", () => {
     expect(proj.damageAmount).toBe(fp(34.25)); // trunc(25000 * 137 / 100)
   });
 
+  it("shortens the cast by the caster's increased cast speed", () => {
+    const sim = new Simulation();
+    const emberSlow: SkillDef = { ...EMBER_BOLT, castTicks: 8 };
+    registerSkillCast(sim, new Map([[emberSlow.id, emberSlow]]));
+    const caster = makeCaster(sim, fp(60));
+    sim.world.set<OffenseC>(caster, "offense", { spellDamagePct: 0, castSpeedPct: 15 });
+    sim.step([{
+      tick: 0, entity: caster, type: "useSkill",
+      skillId: emberSlow.id,
+      data: { tx: fp(10), ty: 0 },
+    }]);
+
+    // PoE: cast time is base / (1 + increases). 8 ticks at 15% is 6.95, floored to 6.
+    expect(sim.world.get<CastingC>(caster, "casting")!.untilTick).toBe(6);
+  });
+
   it("leaves an ailment's damage over time alone: spell damage scales hits only", () => {
     const sim = new Simulation();
     registerSkillCast(sim, ALL_SKILLS);
     const caster = makeCaster(sim, fp(60));
-    sim.world.set<OffenseC>(caster, "offense", { spellDamagePct: 50 });
+    sim.world.set<OffenseC>(caster, "offense", { spellDamagePct: 50, castSpeedPct: 0 });
     sim.step([{
       tick: 0, entity: caster, type: "useSkill",
       skillId: "skill.cinder_ground.v1",

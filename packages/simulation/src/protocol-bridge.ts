@@ -272,6 +272,7 @@ export function buildSnapshot(
           res: d?.res ?? resBlock(),
           manaRegenPerSec: toNumber(pm.regen * 30),
           spellDamagePct: world.get<OffenseC>(playerEntity, "offense")?.spellDamagePct ?? 0,
+          castSpeedPct: world.get<OffenseC>(playerEntity, "offense")?.castSpeedPct ?? 0,
         };
       })(),
     },

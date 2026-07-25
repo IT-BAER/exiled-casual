@@ -155,6 +155,8 @@ export interface PlayerStats {
   /** What the player actually regenerates: the per-tick amount times 30, not the pre-truncation ideal. */
   manaRegenPerSec: number;
   spellDamagePct: number;
+  /** Increased cast speed from gear; the sheet prints it beside spell damage. */
+  castSpeedPct: number;
 }
 
 /** One "label: value" row in an item tooltip's base-stat block. */

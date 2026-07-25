@@ -98,7 +98,7 @@ export interface EnergyShieldC { es: Fixed; maxEs: Fixed; rechargeAtTick: number
  * Gear-derived offence. Only present while some equipped mod grants it, so an
  * ungeared world serializes exactly as it did before gear existed.
  */
-export interface OffenseC   { spellDamagePct: number }
+export interface OffenseC   { spellDamagePct: number; castSpeedPct: number }
 export interface ProjectileC {
   dirx: Fixed;
   diry: Fixed;

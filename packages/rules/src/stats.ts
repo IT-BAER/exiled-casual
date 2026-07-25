@@ -10,6 +10,7 @@ export interface StatBlock {
   resPct: ResBlock;        // integers, capped at RES_CAP on use, so gear may exceed it
   armourFixed: Fixed;
   spellDamagePct: number;  // integer; skillCast scales a spell hit by it
+  castSpeedPct: number;    // integer; skillCast shortens a spell's cast time by it
 }
 
 export const RES_CAP = 75;
@@ -59,6 +60,7 @@ export function baseCasterStats(): StatBlock {
     resPct: resBlock(),
     armourFixed: fp(0),
     spellDamagePct: 0,
+    castSpeedPct: 0,
   };
 }
 
@@ -82,7 +84,7 @@ export interface ItemStatMod {
  */
 export function applyItemMods(base: StatBlock, mods: readonly ItemStatMod[]): StatBlock {
   const flat = { maxLife: 0, maxMana: 0, armour: 0, energyShield: 0 };
-  const pct = { manaRegen: 0, armour: 0, spellDamage: 0, energyShield: 0 };
+  const pct = { manaRegen: 0, armour: 0, spellDamage: 0, energyShield: 0, castSpeed: 0 };
   const res = resBlock();
   for (const m of mods) {
     const el = RES_STAT_ELEMENT[m.stat];
@@ -99,6 +101,7 @@ export function applyItemMods(base: StatBlock, mods: readonly ItemStatMod[]): St
       case "manaRegenPct": pct.manaRegen += m.value; break;
       case "armourPct": pct.armour += m.value; break;
       case "spellDamagePct": pct.spellDamage += m.value; break;
+      case "castSpeedPct": pct.castSpeed += m.value; break;
     }
   }
   const armourFlat = base.armourFixed + fp(flat.armour);
@@ -113,6 +116,7 @@ export function applyItemMods(base: StatBlock, mods: readonly ItemStatMod[]): St
     manaRegenPerSecFixed: scalePct(base.manaRegenPerSecFixed, pct.manaRegen),
     armourFixed: scalePct(armourFlat, pct.armour),
     spellDamagePct: base.spellDamagePct + pct.spellDamage,
+    castSpeedPct: base.castSpeedPct + pct.castSpeed,
   };
 }
 

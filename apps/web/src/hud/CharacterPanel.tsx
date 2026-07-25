@@ -368,7 +368,13 @@ export function CharacterPanel({ player, onClose }: { player: Snapshot["player"]
               ["Chaos Resistance", resRow(s.res.chaos)],
             ]}
           />
-          <DetailSection title="Offence" rows={[["Increased Spell Damage", `${s.spellDamagePct}%`]]} />
+          <DetailSection
+            title="Offence"
+            rows={[
+              ["Increased Spell Damage", `${s.spellDamagePct}%`],
+              ["Increased Cast Speed", `${s.castSpeedPct}%`],
+            ]}
+          />
         </div>
       </div>
     </div>

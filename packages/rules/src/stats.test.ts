@@ -103,6 +103,14 @@ describe("applyItemMods", () => {
     expect(s.spellDamagePct).toBe(37);
   });
 
+  it("collects cast speed percent", () => {
+    const s = applyItemMods(baseCasterStats(), [
+      { stat: "castSpeedPct", value: 9 },
+      { stat: "castSpeedPct", value: 6 },
+    ]);
+    expect(s.castSpeedPct).toBe(15); // PoE adds increases together, never multiplies them
+  });
+
   it("ignores stats the sim has no mechanic for", () => {
     const s = applyItemMods(baseCasterStats(), [
       { stat: "strength", value: 20 },

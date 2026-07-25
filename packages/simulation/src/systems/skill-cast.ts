@@ -23,6 +23,7 @@ export function registerSkillCast(
       const cds = world.get<Cooldowns>(caster, "cooldowns") ?? {};
       if ((cds[cmd.skillId] ?? 0) > tick) continue; // on cooldown
 
+      const offense = world.get<OffenseC>(caster, "offense");
       const manaComp = world.get<Mana>(caster, "mana");
       if (!manaComp || manaComp.mana < skill.manaCostFixed) continue; // insufficient mana
 
@@ -39,8 +40,13 @@ export function registerSkillCast(
 
       // Post-cast recovery: effect still fires this tick (below), but the caster
       // is slowed until untilTick. Instant skills (castTicks 0/absent) skip this.
+      // Gear's "% increased Cast Speed" shortens it the way PoE does — cast speed
+      // is 1/cast time, and increases add together before they divide — and the
+      // skill's cooldown is deliberately left alone, which is PoE's rule too.
       if (skill.castTicks && skill.castTicks > 0) {
-        world.set<CastingC>(caster, "casting", { untilTick: tick + skill.castTicks });
+        const castSpeedPct = offense?.castSpeedPct ?? 0;
+        const ticks = Math.max(1, Math.trunc((skill.castTicks * 100) / (100 + castSpeedPct)));
+        world.set<CastingC>(caster, "casting", { untilTick: tick + ticks });
       }
 
       // NOTE (ordering edge case): mana is spent and cooldown is set before the
@@ -59,7 +65,7 @@ export function registerSkillCast(
       // Gear's "% increased Spell Damage" scales the hit, and only the hit: in PoE
       // a damaging ailment scales off its own mods, not the spell damage that lit
       // it, so Cinder Ground's burning dps below is deliberately left alone.
-      const spellDamagePct = world.get<OffenseC>(caster, "offense")?.spellDamagePct ?? 0;
+      const spellDamagePct = offense?.spellDamagePct ?? 0;
 
       for (const effect of skill.effects) {
         if (effect.type === "spawnProjectile") {

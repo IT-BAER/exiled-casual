@@ -86,9 +86,12 @@ export function recomputePlayerStats(world: World, opts: { refill?: boolean } = 
   // Removing at zero keeps the component out of a bare world entirely. The store
   // itself is only created once something grants spell damage, which is what
   // holds the golden replays' serialized state byte-identical to before.
-  if (s.spellDamagePct === 0) {
+  if (s.spellDamagePct === 0 && s.castSpeedPct === 0) {
     if (world.has(player, "offense")) world.remove(player, "offense");
   } else {
-    world.set<OffenseC>(player, "offense", { spellDamagePct: s.spellDamagePct });
+    world.set<OffenseC>(player, "offense", {
+      spellDamagePct: s.spellDamagePct,
+      castSpeedPct: s.castSpeedPct,
+    });
   }
 }
