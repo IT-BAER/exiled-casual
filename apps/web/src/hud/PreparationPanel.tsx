@@ -109,7 +109,7 @@ function AtlasMap(props: {
         // Full-bleed painted world, per atlas-maps.webp: the map IS the screen,
         // darkened at the edges so the docked bar and banner still read.
         backgroundImage:
-          "radial-gradient(ellipse at 50% 45%, rgba(0,0,0,0) 35%, rgba(6,8,8,0.88) 100%), url(/textures/ui/atlas_world_v1.png), url(/textures/ui/char_stone_v1.png)",
+          "radial-gradient(ellipse at 50% 45%, rgba(4,6,6,0.3) 35%, rgba(6,8,8,0.9) 100%),url(/textures/ui/atlas_world_v1.jpg), url(/textures/ui/char_stone_v1.png)",
         // Carved stone tiles under the painting, so a missing world art file
         // degrades to the character sheet's surface rather than to black.
         backgroundSize: "cover, cover, 420px",
@@ -216,9 +216,10 @@ function AtlasMap(props: {
                   // bare glyph on a dashed line is unreadable either way round.
                   padding: "1px 5px",
                   borderRadius: 3,
-                  background: "rgba(8,9,7,0.78)",
-                  color: st === "fog" ? "#6a6459" : st === "cleared" ? CLEARED : PARCHMENT,
-                  opacity: st === "fog" ? 0.7 : 1,
+                  // Painted terrain under the plate now, and pale sand is the
+                  // worst case: a fogged name has to stay readable over it.
+                  background: "rgba(8,9,7,0.86)",
+                  color: st === "fog" ? "#8b8477" : st === "cleared" ? CLEARED : PARCHMENT,
                   textShadow: "0 1px 3px #000",
                   pointerEvents: "none",
                 }}
