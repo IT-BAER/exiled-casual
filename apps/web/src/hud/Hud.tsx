@@ -269,8 +269,10 @@ function Orb(props: {
         data-testid={readoutTestId}
         style={{
           position: "absolute",
-          // label clears the globe top by 0.24 of its diameter, as in the PoE1 shot
-          bottom: `${(ORB_VW + RING_VW + ORB_VW * 0.163).toFixed(2)}vw`,
+          // The label sits just off the ring rather than floating clear of it.
+          // PoE1's own bar (poe1-lower-bar.png) leaves about 0.26 of a globe
+          // diameter of air there, which reads as detached at this scale.
+          bottom: `${(ORB_VW + RING_VW + ORB_VW * 0.04).toFixed(2)}vw`,
           left: `${(-RING_VW).toFixed(3)}vw`,
           right: `${(-RING_VW).toFixed(3)}vw`,
           display: "flex",
