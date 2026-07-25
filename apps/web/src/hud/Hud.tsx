@@ -39,17 +39,16 @@ const SKILL_SLOTS: SkillSlot[] = [
   { id: null, key: "6" },
 ];
 
-// One life flask on Q, one mana flask on E. Charges aren't simulated yet, so these
-// are static HUD props and the keys do nothing.
-// ponytail: decorative flasks, wire to sim state when flask charges exist.
+// One life flask on Q, one mana flask on E.
 const FLASKS = [
   { kind: "life", key: "Q" },
   { kind: "mana", key: "E" },
 ] as const;
 
 /** A single flask: recessed PoE2 socket holding the painted vial, hotkey at its foot. */
-function Flask(props: { kind: "life" | "mana"; hotkey: string }) {
-  const { kind, hotkey } = props;
+function Flask(props: { kind: "life" | "mana"; hotkey: string; charges: number; max: number }) {
+  const { kind, hotkey, charges, max } = props;
+  const veilPct = max > 0 ? 100 - (charges / max) * 100 : 100;
   return (
     <div
       data-testid={`flask-${kind}`}
@@ -74,6 +73,20 @@ function Flask(props: { kind: "life" | "mana"; hotkey: string }) {
           height: "100%",
           objectFit: "contain",
           filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.8))",
+        }}
+      />
+      {/* Charges drain from the top, PoE-style: the spent part of the vial goes dark.
+          Painted over the vial, so it has to come after the image. */}
+      <div
+        data-testid={`flask-${kind}-veil`}
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          top: 0,
+          height: `${veilPct}%`,
+          background: "rgba(4,6,10,0.72)",
+          pointerEvents: "none",
         }}
       />
       <span
@@ -408,9 +421,15 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
 
       {/* Flask bar — tucked under the life orb frame, per boss-fight.png */}
       <div data-testid="flask-row" style={{ ...barStyle, left: BAR_OFFSET, zIndex: 2 }}>
-        {FLASKS.map((f) => (
-          <Flask key={f.key} kind={f.kind} hotkey={f.key} />
-        ))}
+        {FLASKS.map((f) => {
+          const charges = f.kind === "life"
+            ? snapshot.player.flasks.lifeCharges
+            : snapshot.player.flasks.manaCharges;
+          const max = f.kind === "life"
+            ? snapshot.player.flasks.lifeMax
+            : snapshot.player.flasks.manaMax;
+          return <Flask key={f.key} kind={f.kind} hotkey={f.key} charges={charges} max={max} />;
+        })}
       </div>
 
       {/* Skill bar — mirror of the flask bar, tucked under the mana orb frame */}

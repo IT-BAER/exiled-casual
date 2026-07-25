@@ -14,7 +14,7 @@ export type {
   Cooldowns, MonsterC, DefensesC, ProjectileC, GroundAreaC, AilmentC,
   DamageEvent, BossC, TelegraphC, SessionC, InteractableC, AreaKind,
 } from "./components";
-export type { ItemC, PlacedItem, InventoryC, EquipmentC } from "./components";
+export type { ItemC, PlacedItem, InventoryC, EquipmentC, FlasksC } from "./components";
 export { placeFirstFit } from "./inventory";
 export { canEquip, EQUIP_SLOTS_BY_CLASS } from "./equipment";
 export { registerResourceRegen } from "./systems/resource";
@@ -35,6 +35,7 @@ export type { AreaLayout, WalkableGrid, Socket } from "@exiled/mapgen";
 export { registerInteractSystem } from "./systems/interact";
 export { registerPickupSystem } from "./systems/pickup";
 export { registerAreaTransition } from "./systems/area-transition";
+export { registerFlaskSystem } from "./systems/flask";
 export { intentToCommand, buildSnapshot } from "./protocol-bridge";
 export { snapshot, restore, saveTo, loadInto } from "./persist";
 export { MemoryKv, IndexedDbKv } from "@exiled/persistence";

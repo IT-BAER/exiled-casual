@@ -129,6 +129,24 @@ describe("validateIntent — pickupItem", () => {
   });
 });
 
+describe("validateIntent — useFlask", () => {
+  test("valid life flask round-trips", () => {
+    expect(validateIntent({ kind: "useFlask", slot: "life" })).toEqual({ kind: "useFlask", slot: "life" });
+  });
+
+  test("valid mana flask round-trips", () => {
+    expect(validateIntent({ kind: "useFlask", slot: "mana" })).toEqual({ kind: "useFlask", slot: "mana" });
+  });
+
+  test("unknown slot throws", () => {
+    expect(() => validateIntent({ kind: "useFlask", slot: "stamina" })).toThrow();
+  });
+
+  test("missing slot throws", () => {
+    expect(() => validateIntent({ kind: "useFlask" })).toThrow();
+  });
+});
+
 describe("FromWorker area message", () => {
   // postMessage clones with the structured-clone algorithm; this guards against a
   // future "optimisation" (e.g. JSON) that would silently drop the Uint8Array grid.

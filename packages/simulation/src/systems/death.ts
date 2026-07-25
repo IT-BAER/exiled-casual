@@ -1,7 +1,7 @@
 import { Simulation } from "../loop";
-import type { Health, Mana, MoveTarget, MoveDir, SessionC, MonsterC, Position, ItemC } from "../components";
+import type { Health, Mana, MoveTarget, MoveDir, SessionC, MonsterC, Position, ItemC, FlasksC } from "../components";
 import { fnv1a32 } from "../rng";
-import { rollItem, areaLevel } from "@exiled/rules";
+import { rollItem, areaLevel, FLASK_CHARGES_PER_KILL } from "@exiled/rules";
 import { ITEM_POOLS, baseOf } from "@exiled/content-runtime";
 
 export function registerDeath(sim: Simulation): void {
@@ -30,6 +30,16 @@ export function registerDeath(sim: Simulation): void {
           world.set<Position>(ge, "position", { x: pos.x, y: pos.y });
           world.set<ItemC>(ge, "item", { item, w: base.w, h: base.h });
         }
+      }
+
+      // Grant flask charges to every player entity with flasks before destroy.
+      for (const pe of world.query("player", "flasks")) {
+        const f = world.get<FlasksC>(pe, "flasks")!;
+        world.set<FlasksC>(pe, "flasks", {
+          ...f,
+          lifeCharges: Math.min(f.lifeMax, f.lifeCharges + FLASK_CHARGES_PER_KILL),
+          manaCharges: Math.min(f.manaMax, f.manaCharges + FLASK_CHARGES_PER_KILL),
+        });
       }
 
       world.destroy(e);

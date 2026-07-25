@@ -128,6 +128,12 @@ export interface DamageEvent {
   type: 0 | 1;
 }
 
+/** Two utility flasks: life on Q, mana on E. Charges are plain integers, not Fixed. */
+export interface FlasksC {
+  lifeCharges: number; lifeMax: number;
+  manaCharges: number; manaMax: number;
+}
+
 /** A committed item lying on the ground; lives on an entity with Position. */
 export interface ItemC { item: Item; w: number; h: number }
 /** One placed stack in the grid inventory. */

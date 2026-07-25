@@ -101,6 +101,6 @@ The orbs stop being CSS.
 <tr>
 <td width="33%"><img src="screenshots/2026-07-25-magic-item-names.jpeg" alt="Magic item names" width="100%"><br><sub><b>Magic items get their names back</b> - every affix is now a prefix or a suffix, capped per side the way PoE does it (magic 1+1, rare 3+3), and a magic item borrows a word from each: "Smoldering Emberweave Robe of the Furnace" instead of a bare base name. The name is built once at roll time, so plates, tooltips and the backpack all agree.</sub></td>
 <td width="33%"><img src="screenshots/2026-07-25-poe1-globes.jpeg" alt="PoE1 globes" width="100%"><br><sub><b>Globes rebuilt from PoE 1</b> - this one borrows from PoE1, not PoE2: a sphere 10.3% of the screen wide inside a thin braided rope ring, a bronze statue leaning on its outer side, and the value as a label above the globe instead of a number floating inside it. Sizes, ring thickness and the liquid's brightness ramp were measured off the reference shot, not eyeballed, and the geometry is in vw so it holds at any resolution.</sub></td>
-<td width="33%"></td>
+<td width="33%"><img src="screenshots/2026-07-25-flask-charges.jpeg" alt="Flask charges" width="100%"><br><sub><b>Flasks stop being decoration</b> - Q and E now drink for real: seven charges each, a third of your life or mana back per swig, one charge returned per kill, and a full pool refuses the flask instead of wasting it. The spent part of the vial goes dark from the neck down, so the mana flask above is sitting at three charges of seven.</sub></td>
 </tr>
 </table>

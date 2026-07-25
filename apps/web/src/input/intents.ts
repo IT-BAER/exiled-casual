@@ -7,6 +7,11 @@ const SKILL_KEYS: Record<string, string> = {
   "3": "skill.blink.v1",
 };
 
+const FLASK_KEYS: Record<string, "life" | "mana"> = {
+  q: "life",
+  e: "mana",
+};
+
 const MOVE_KEYS: Record<string, { dx: -1 | 0 | 1; dy: -1 | 0 | 1 }> = {
   w: { dx: 0, dy: 1 },
   s: { dx: 0, dy: -1 },
@@ -24,8 +29,12 @@ export function keyToIntent(
   aim: { x: number; y: number },
 ): Intent | null {
   // Lower-case so CapsLock / Shift ("W") still map to WASD movement.
-  const move = MOVE_KEYS[key.toLowerCase()];
+  const k = key.toLowerCase();
+  const move = MOVE_KEYS[k];
   if (move) return { kind: "moveDir", ...move };
+
+  const slot = FLASK_KEYS[k];
+  if (slot) return { kind: "useFlask", slot };
 
   const skillId = SKILL_KEYS[key];
   if (skillId) {

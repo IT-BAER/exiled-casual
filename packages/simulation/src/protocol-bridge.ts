@@ -7,7 +7,7 @@ import type { World, Entity } from "./ecs";
 import type {
   Health, Mana, Position, Cooldowns, CastingC, MonsterC,
   AilmentC, ProjectileC, GroundAreaC, BossC, TelegraphC,
-  SessionC, InteractableC, ItemC, InventoryC, EquipmentC,
+  SessionC, InteractableC, ItemC, InventoryC, EquipmentC, FlasksC,
 } from "./components";
 
 /**
@@ -52,6 +52,8 @@ export function intentToCommand(intent: Intent, player: Entity, tick: number): C
       return { tick, entity: player, type: "unequipItem", slot: intent.slot };
     case "dropItem":
       return { tick, entity: player, type: "dropItem", data: { x: intent.x, y: intent.y } };
+    case "useFlask":
+      return { tick, entity: player, type: "useFlask", flask: intent.slot };
   }
 }
 
@@ -222,6 +224,12 @@ export function buildSnapshot(
       casting: (() => {
         const c = world.get<CastingC>(playerEntity, "casting");
         return c !== undefined && c.untilTick > tick;
+      })(),
+      flasks: (() => {
+        const f = world.get<FlasksC>(playerEntity, "flasks");
+        return f
+          ? { lifeCharges: f.lifeCharges, lifeMax: f.lifeMax, manaCharges: f.manaCharges, manaMax: f.manaMax }
+          : { lifeCharges: 0, lifeMax: 0, manaCharges: 0, manaMax: 0 };
       })(),
     },
     entities,

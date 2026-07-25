@@ -1,5 +1,5 @@
 import { fp } from "@exiled/fixed-point";
-import { baseCasterStats, makeRare, rollItem } from "@exiled/rules";
+import { baseCasterStats, makeRare, rollItem, FLASK_MAX_CHARGES } from "@exiled/rules";
 import { SKILLS, MONSTERS, RARE_TEMPLATE, CONTENT_VERSION, ITEM_POOLS, baseOf } from "@exiled/content-runtime";
 import { generateArea, type AreaLayout } from "@exiled/mapgen";
 import { gridCollision, type CollisionRef } from "./collision";
@@ -9,7 +9,7 @@ import { World } from "./ecs";
 import type { Entity } from "./ecs";
 import type {
   Position, Health, Mana, Faction, PlayerC, Cooldowns, DefensesC,
-  MoveTarget, MoveDir, SessionC, AreaKind, InventoryC, ItemC, EquipmentC,
+  MoveTarget, MoveDir, SessionC, AreaKind, InventoryC, ItemC, EquipmentC, FlasksC,
 } from "./components";
 import { registerResourceRegen } from "./systems/resource";
 import { registerSkillCast } from "./systems/skill-cast";
@@ -27,6 +27,7 @@ import { registerInteractSystem } from "./systems/interact";
 import { registerPickupSystem } from "./systems/pickup";
 import { registerEquipmentSystem } from "./systems/equipment";
 import { registerAreaTransition } from "./systems/area-transition";
+import { registerFlaskSystem } from "./systems/flask";
 import { buildArea, spawnMonster } from "./areas";
 
 export function createCombatSim(
@@ -105,6 +106,10 @@ export function createCombatSim(
     world.set<SessionC>(sessionE, "session", session);
     world.set<InventoryC>(sessionE, "inventory", { cols: 12, rows: 5, items: [] });
     world.set<EquipmentC>(sessionE, "equipment", { slots: {} });
+    world.set<FlasksC>(playerEntity, "flasks", {
+      lifeCharges: FLASK_MAX_CHARGES, lifeMax: FLASK_MAX_CHARGES,
+      manaCharges: FLASK_MAX_CHARGES, manaMax: FLASK_MAX_CHARGES,
+    });
     buildArea(world, opts.area, session, layout);
 
     // New systems only needed for area-based sims. Appended to preserve the
@@ -113,6 +118,7 @@ export function createCombatSim(
     registerPickupSystem(sim);
     registerEquipmentSystem(sim);
     registerAreaTransition(sim, collisionRef);
+    registerFlaskSystem(sim);
   } else {
     // ── Legacy path: no session, golden-replay–safe bootstrap ────────────
     if (opts.monsters !== false) {

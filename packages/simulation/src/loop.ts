@@ -15,6 +15,8 @@ export interface Command {
   waystoneId?: string;
   /** Set when type === "equipItem" | "unequipItem" */
   slot?: EquipSlotId;
+  /** Set when type === "useFlask" */
+  flask?: "life" | "mana";
 }
 
 export type System = (

@@ -18,6 +18,7 @@ function makeSnap(overrides: {
   portalsLeft?: number;
   mapOpen?: boolean;
   entities?: Snapshot["entities"];
+  flasks?: Snapshot["player"]["flasks"];
 }): Snapshot {
   return {
     tick: 1,
@@ -38,6 +39,7 @@ function makeSnap(overrides: {
       cooldowns: overrides.cooldowns ?? {},
       alive: true,
       casting: false,
+      flasks: overrides.flasks ?? { lifeCharges: 7, lifeMax: 7, manaCharges: 7, manaMax: 7 },
     },
     entities: overrides.entities ?? [],
     inventory: { cols: 12, rows: 5, items: [] },
@@ -108,7 +110,7 @@ describe("Hud", () => {
       areaTier: 0,
       atlasSeed: 0,
       completedNodes: [],
-      player: { id: 0, x: 0, y: 0, life: 100, maxLife: 100, mana: 30, maxMana: 60, cooldowns: {}, alive: true, casting: false },
+      player: { id: 0, x: 0, y: 0, life: 100, maxLife: 100, mana: 30, maxMana: 60, cooldowns: {}, alive: true, casting: false, flasks: { lifeCharges: 7, lifeMax: 7, manaCharges: 7, manaMax: 7 } },
       entities: [{ id: 10, kind: "monster", x: 0, y: 0, boss: true, bossPhase: 2, life: 600, maxLife: 1000 }],
       inventory: { cols: 12, rows: 5, items: [] },
       equipment: {},
@@ -132,6 +134,12 @@ describe("Hud", () => {
     expect(screen.getByTestId("flask-mana")).toBeInTheDocument();
     expect(row).toHaveTextContent("Q");
     expect(row).toHaveTextContent("E");
+  });
+
+  it("a full flask shows no veil, an empty one is fully veiled", () => {
+    render(<Hud snapshot={makeSnap({ flasks: { lifeCharges: 7, lifeMax: 7, manaCharges: 0, manaMax: 7 } })} />);
+    expect(screen.getByTestId("flask-life-veil")).toHaveStyle({ height: "0%" });
+    expect(screen.getByTestId("flask-mana-veil")).toHaveStyle({ height: "100%" });
   });
 
   // --- area label ---

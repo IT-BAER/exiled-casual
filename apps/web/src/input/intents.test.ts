@@ -48,8 +48,19 @@ describe("keyToIntent", () => {
   });
 
   it("unmapped key → null", () => {
-    expect(keyToIntent("q", aim)).toBeNull();
     expect(keyToIntent("Enter", aim)).toBeNull();
+  });
+
+  it("q → useFlask life", () => {
+    expect(keyToIntent("q", aim)).toEqual({ kind: "useFlask", slot: "life" });
+  });
+
+  it("e → useFlask mana", () => {
+    expect(keyToIntent("e", aim)).toEqual({ kind: "useFlask", slot: "mana" });
+  });
+
+  it("Q (uppercase) → useFlask life", () => {
+    expect(keyToIntent("Q", aim)).toEqual({ kind: "useFlask", slot: "life" });
   });
 });
 

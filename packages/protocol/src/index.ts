@@ -21,9 +21,10 @@ export type Intent =
   /** Unequip a slot back into the backpack grid; no-op if empty or no room. */
   | { kind: "unequipItem"; slot: EquipSlotId }
   /** Drop a backpack item (by ORIGIN cell) as a ground entity at the player's feet. */
-  | { kind: "dropItem"; x: number; y: number };
+  | { kind: "dropItem"; x: number; y: number }
+  | { kind: "useFlask"; slot: "life" | "mana" };
 
-export type CommandType = "moveTo" | "moveDir" | "useSkill" | "stop" | "interact" | "activateMap" | "pickupItem" | "equipItem" | "unequipItem" | "dropItem";
+export type CommandType = "moveTo" | "moveDir" | "useSkill" | "stop" | "interact" | "activateMap" | "pickupItem" | "equipItem" | "unequipItem" | "dropItem" | "useFlask";
 
 // ---------------------------------------------------------------------------
 // Run loop
@@ -139,6 +140,8 @@ export interface Snapshot {
     alive: boolean;
     /** In post-cast recovery this tick (moving slowed, cast pose held). */
     casting: boolean;
+    /** Charge state for the two utility flasks (life on Q, mana on E). */
+    flasks: { lifeCharges: number; lifeMax: number; manaCharges: number; manaMax: number };
   };
   entities: SnapshotEntity[];
   /** Grid inventory (session singleton), display-ready. Empty when no session. */
@@ -237,6 +240,11 @@ export function validateIntent(v: unknown): Intent {
       if (!Number.isInteger(obj["x"])) throw new Error("validateIntent dropItem: x must be an integer");
       if (!Number.isInteger(obj["y"])) throw new Error("validateIntent dropItem: y must be an integer");
       return { kind: "dropItem", x: obj["x"] as number, y: obj["y"] as number };
+    }
+    case "useFlask": {
+      if (obj["slot"] !== "life" && obj["slot"] !== "mana")
+        throw new Error("validateIntent useFlask: slot must be \"life\" or \"mana\"");
+      return { kind: "useFlask", slot: obj["slot"] as "life" | "mana" };
     }
     default:
       throw new Error(`validateIntent: unknown kind: ${String(obj["kind"])}`);
