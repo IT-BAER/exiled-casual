@@ -273,7 +273,10 @@ export function InventoryPanel({
           pointerEvents: "auto",
           // Clear of the bottom bar, which stands ORB_VW * 0.58 tall in Hud.tsx.
           marginBottom: "6.2vw",
-          maxHeight: "calc(100vh - 6.2vw)",
+          // Full height, not content height: PoE's inventory runs from the top of
+          // the screen down to the bar and simply ends in empty panel below the
+          // last grid row. A box that shrinks to its contents floats and reads wrong.
+          height: "calc(100vh - 6.2vw)",
           overflowY: "auto",
           // The wheel still scrolls; PoE has no scrollbar chrome and a pale native
           // one down the panel's gilt edge reads as a browser, not as the game.

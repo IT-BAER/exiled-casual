@@ -39,17 +39,21 @@ const BAR_SIDE = 28;
 // already sits between the bar's edge and its first slot.
 const BAR_PAD = `calc(${ORB_INSET} + ${ORB} + ${RING_VW.toFixed(3)}vw - ${BAR_SIDE}px)`;
 
-// Six skill slots on keys 1-6; only three skills exist, 4-6 render as empty sockets.
+// Five skill slots on keys 1-5, then the three mouse buttons, as PoE1's bar does:
+// left, middle and right click each hold a skill of their own. Only three skills
+// exist, the rest render as empty sockets.
 // PoE2 itself puts skills on QWERT and flasks on the digits — we swap the two, so
 // the movement hand keeps the flasks. Deliberate, not a parity miss.
-type SkillSlot = { id: string | null; key: string; icon?: string; glow?: string };
+type SkillSlot = { id: string | null; key: string; mouse?: boolean; icon?: string; glow?: string };
 const SKILL_SLOTS: SkillSlot[] = [
   { id: "skill.ember_bolt.v1", key: "1", icon: "/textures/skills/ember_bolt.png", glow: "#ff7a2f" },
   { id: "skill.cinder_ground.v1", key: "2", icon: "/textures/skills/cinder_ground.png", glow: "#e0492b" },
   { id: "skill.blink.v1", key: "3", icon: "/textures/skills/blink.png", glow: "#3fb6ff" },
   { id: null, key: "4" },
   { id: null, key: "5" },
-  { id: null, key: "6" },
+  { id: null, key: "L", mouse: true },
+  { id: null, key: "M", mouse: true },
+  { id: null, key: "R", mouse: true },
 ];
 
 // One life flask on Q, one mana flask on E.
@@ -557,6 +561,8 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
               style={{
                 width: SLOT,
                 height: SLOT,
+                // The mouse buttons are their own group, set off from the digits.
+                marginLeft: slot.key === "L" ? "0.55vw" : undefined,
                 position: "relative",
                 overflow: "hidden",
                 background: slot.icon
@@ -610,7 +616,7 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
                   background: "rgba(4,6,10,0.7)",
                   fontSize: `clamp(9px, ${(ORB_VW * 0.075).toFixed(2)}vw, 16px)`,
                   fontWeight: 700,
-                  color: "#c9cdd3",
+                  color: slot.mouse ? "#d9b04a" : "#c9cdd3",
                   textShadow: "0 1px 3px #000",
                 }}
               >

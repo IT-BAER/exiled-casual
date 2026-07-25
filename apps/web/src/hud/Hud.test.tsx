@@ -106,10 +106,13 @@ describe("Hud", () => {
     expect(screen.getByTestId("skill-slot-2")).toHaveTextContent("2.0s");
   });
 
-  it("renders six skill slots, keys 1-6", () => {
+  it("renders five keyed skill slots then the three mouse buttons", () => {
     render(<Hud snapshot={makeSnap({ cooldowns: {} })} />);
-    for (let i = 1; i <= 6; i++) {
+    for (let i = 1; i <= 5; i++) {
       expect(screen.getByTestId(`skill-slot-${i}`)).toHaveTextContent(String(i));
+    }
+    for (const [i, label] of [[6, "L"], [7, "M"], [8, "R"]] as const) {
+      expect(screen.getByTestId(`skill-slot-${i}`)).toHaveTextContent(label);
     }
   });
 
