@@ -157,6 +157,24 @@ export function baseOf(baseId: string): ItemBase {
   return b;
 }
 
+/**
+ * Sim-ready projection, the counterpart to describeItem: the same implicit and
+ * affix rolls, resolved to `(stat, value)` pairs for `applyItemMods`. Implicit
+ * first, then affixes in roll order. A dangling affix id is skipped rather than
+ * thrown on, matching describeItem's tolerance for content that moved on.
+ */
+export function itemStatMods(item: Item): { stat: string; value: number }[] {
+  const base = baseOf(item.baseId);
+  // Structural, not @exiled/rules' ItemStatMod: content must not depend on rules.
+  const mods: { stat: string; value: number }[] = [];
+  if (base.implicit) mods.push({ stat: base.implicit.stat, value: base.implicit.value });
+  for (const ia of item.affixes) {
+    const a = AFFIX_BY_ID.get(ia.affixId);
+    if (a) mods.push({ stat: a.stat, value: ia.value });
+  }
+  return mods;
+}
+
 // Render-ready projection: base name + one line per committed affix roll.
 export interface ItemDescription {
   /** Display name: the item's generated name (rare/unique) or the base name. */

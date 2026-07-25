@@ -2,6 +2,7 @@ import { baseOf } from "@exiled/content-runtime";
 import { Simulation } from "../loop";
 import { placeFirstFit } from "../inventory";
 import { canEquip } from "../equipment";
+import { recomputePlayerStats } from "../derived";
 import type { Position, ItemC, InventoryC, EquipmentC } from "../components";
 import type { Item } from "@exiled/content-schema";
 
@@ -51,6 +52,7 @@ export function registerEquipmentSystem(sim: Simulation): void {
         world.set<EquipmentC>(sessionE, "equipment", {
           slots: { ...equip.slots, [slot]: placed.item },
         });
+        recomputePlayerStats(world);
         continue;
       }
 
@@ -75,6 +77,7 @@ export function registerEquipmentSystem(sim: Simulation): void {
           ...inv,
           items: [...inv.items, { x: fit.x, y: fit.y, w: base.w, h: base.h, item }],
         });
+        recomputePlayerStats(world);
         continue;
       }
 

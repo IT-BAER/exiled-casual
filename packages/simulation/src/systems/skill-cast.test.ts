@@ -5,7 +5,7 @@ import { registerSkillCast } from "./skill-cast";
 import { gridCollision } from "../collision";
 import { makeGrid } from "../test-grid";
 import type { SkillDef } from "@exiled/content-schema";
-import type { Position, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC, CastingC } from "../components";
+import type { Position, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC, CastingC, OffenseC } from "../components";
 
 // Authored skill defs matching the contract tables exactly.
 const EMBER_BOLT: SkillDef = {
@@ -91,6 +91,36 @@ describe("registerSkillCast", () => {
     // starts at caster position
     expect(projPos.x).toBe(0);
     expect(projPos.y).toBe(0);
+  });
+
+  it("scales a spell's hit by the caster's increased spell damage", () => {
+    const sim = new Simulation();
+    registerSkillCast(sim, ALL_SKILLS);
+    const caster = makeCaster(sim, fp(60));
+    sim.world.set<OffenseC>(caster, "offense", { spellDamagePct: 37 });
+    sim.step([{
+      tick: 0, entity: caster, type: "useSkill",
+      skillId: "skill.ember_bolt.v1",
+      data: { tx: fp(10), ty: 0 },
+    }]);
+
+    const proj = sim.world.get<ProjectileC>(sim.world.query("projectile")[0]!, "projectile")!;
+    expect(proj.damageAmount).toBe(fp(34.25)); // trunc(25000 * 137 / 100)
+  });
+
+  it("leaves an ailment's damage over time alone: spell damage scales hits only", () => {
+    const sim = new Simulation();
+    registerSkillCast(sim, ALL_SKILLS);
+    const caster = makeCaster(sim, fp(60));
+    sim.world.set<OffenseC>(caster, "offense", { spellDamagePct: 50 });
+    sim.step([{
+      tick: 0, entity: caster, type: "useSkill",
+      skillId: "skill.cinder_ground.v1",
+      data: { tx: fp(3), ty: 0 },
+    }]);
+
+    const area = sim.world.get<GroundAreaC>(sim.world.query("groundArea")[0]!, "groundArea")!;
+    expect(area.dps).toBe(fp(8));
   });
 
   it("second cast while on cooldown spawns nothing and spends no mana", () => {

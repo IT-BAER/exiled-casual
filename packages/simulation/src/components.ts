@@ -67,6 +67,11 @@ export interface MonsterC {
   summoned: 0 | 1;
 }
 export interface DefensesC  { fireResPct: number; armour: Fixed }
+/**
+ * Gear-derived offence. Only present while some equipped mod grants it, so an
+ * ungeared world serializes exactly as it did before gear existed.
+ */
+export interface OffenseC   { spellDamagePct: number }
 export interface ProjectileC {
   dirx: Fixed;
   diry: Fixed;

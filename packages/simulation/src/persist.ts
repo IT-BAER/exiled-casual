@@ -1,6 +1,7 @@
 import type { KvStore } from "@exiled/persistence";
 import type { World } from "./ecs";
 import type { SessionC, InventoryC, EquipmentC } from "./components";
+import { recomputePlayerStats } from "./derived";
 
 /**
  * Run-transaction persistence. The whole durable state (session + inventory) is
@@ -50,6 +51,9 @@ export function restore(world: World, state: PersistedState): void {
   world.set<SessionC>(e, "session", safe);
   world.set<InventoryC>(e, "inventory", state.inventory);
   world.set<EquipmentC>(e, "equipment", state.equipment ?? { slots: {} });
+  // Saved gear has to reach the player, not just the equipment panel. Life and
+  // mana are not persisted, so a restored session starts full.
+  recomputePlayerStats(world, { refill: true });
 }
 
 /** Serialize `world`'s durable state to `kv`. No-op if there is no session. */

@@ -11,7 +11,7 @@ export type { Collision } from "./collision";
 export { bodyRadiusOf } from "./body";
 export type {
   Position, Health, Mana, Faction, PlayerC, MoveTarget, MoveDir,
-  Cooldowns, MonsterC, DefensesC, ProjectileC, GroundAreaC, AilmentC,
+  Cooldowns, MonsterC, DefensesC, OffenseC, ProjectileC, GroundAreaC, AilmentC,
   DamageEvent, BossC, TelegraphC, SessionC, InteractableC, AreaKind,
 } from "./components";
 export type { ItemC, PlacedItem, InventoryC, EquipmentC, FlasksC } from "./components";
@@ -38,5 +38,6 @@ export { registerAreaTransition } from "./systems/area-transition";
 export { registerFlaskSystem } from "./systems/flask";
 export { intentToCommand, buildSnapshot } from "./protocol-bridge";
 export { snapshot, restore, saveTo, loadInto } from "./persist";
+export { recomputePlayerStats } from "./derived";
 export { MemoryKv, IndexedDbKv } from "@exiled/persistence";
 export type { KvStore } from "@exiled/persistence";

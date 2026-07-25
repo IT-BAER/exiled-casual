@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ITEM_POOLS, baseOf, describeItem } from "./items.js";
+import { ITEM_POOLS, baseOf, describeItem, itemStatMods } from "./items.js";
 
 describe("ITEM_POOLS", () => {
   it("has bases and affixes with positive base dimensions", () => {
@@ -93,5 +93,35 @@ describe("uniques", () => {
 describe("baseOf", () => {
   it("throws on an unknown base id", () => {
     expect(() => baseOf("base.nope")).toThrow();
+  });
+});
+
+describe("itemStatMods", () => {
+  it("returns the base implicit even on a normal item", () => {
+    expect(itemStatMods({ baseId: "base.emberwand", rarity: "normal", itemLevel: 1, affixes: [] }))
+      .toEqual([{ stat: "spellDamagePct", value: 12 }]);
+  });
+
+  it("returns nothing for a base with no implicit and no affixes", () => {
+    expect(itemStatMods({ baseId: "base.ashen_focus", rarity: "normal", itemLevel: 1, affixes: [] }))
+      .toEqual([]);
+  });
+
+  it("resolves each affix to its stat id and rolled value, implicit first", () => {
+    expect(itemStatMods({
+      baseId: "base.emberweave_robe", rarity: "rare", itemLevel: 80,
+      affixes: [{ affixId: "affix.life", value: 33 }, { affixId: "affix.fire_res", value: 21 }],
+    })).toEqual([
+      { stat: "manaRegenPct", value: 45 },
+      { stat: "maxLife", value: 33 },
+      { stat: "fireResPct", value: 21 },
+    ]);
+  });
+
+  it("skips an affix id the pool no longer has", () => {
+    expect(itemStatMods({
+      baseId: "base.ashen_focus", rarity: "magic", itemLevel: 80,
+      affixes: [{ affixId: "affix.gone", value: 9 }, { affixId: "affix.mana", value: 12 }],
+    })).toEqual([{ stat: "maxMana", value: 12 }]);
   });
 });

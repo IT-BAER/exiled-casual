@@ -1,9 +1,10 @@
 import { fpClamp, fpStepToward } from "@exiled/fixed-point";
+import { scalePct } from "@exiled/rules";
 import type { SkillDef } from "@exiled/content-schema";
 import { Simulation } from "../loop";
 import { WORLD_MIN, WORLD_MAX } from "../movement";
 import { type CollisionRef } from "../collision";
-import type { Position, PlayerC, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC, CastingC } from "../components";
+import type { Position, PlayerC, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC, CastingC, OffenseC } from "../components";
 
 export function registerSkillCast(
   sim: Simulation,
@@ -54,6 +55,11 @@ export function registerSkillCast(
       const tx = cmd.data?.["tx"] ?? 0;
       const ty = cmd.data?.["ty"] ?? 0;
 
+      // Gear's "% increased Spell Damage" scales the hit, and only the hit: in PoE
+      // a damaging ailment scales off its own mods, not the spell damage that lit
+      // it, so Cinder Ground's burning dps below is deliberately left alone.
+      const spellDamagePct = world.get<OffenseC>(caster, "offense")?.spellDamagePct ?? 0;
+
       for (const effect of skill.effects) {
         if (effect.type === "spawnProjectile") {
           const speedPerTick = Math.trunc(effect.speedPerSecFixed / 30);
@@ -68,7 +74,7 @@ export function registerSkillCast(
             remainingRange: effect.maxRangeFixed,
             radius: effect.radiusFixed,
             damageType: effect.damage.type === "fire" ? 0 : 1,
-            damageAmount: effect.damage.amountFixed,
+            damageAmount: scalePct(effect.damage.amountFixed, spellDamagePct),
             ownerId: caster,
             team: casterTeam,
           });

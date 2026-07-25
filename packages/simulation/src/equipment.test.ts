@@ -7,7 +7,7 @@ import { intentToCommand, buildSnapshot } from "./protocol-bridge";
 import { saveTo, loadInto } from "./persist";
 import { canEquip, EQUIP_SLOTS_BY_CLASS } from "./equipment";
 import { CONTENT_VERSION } from "@exiled/content-runtime";
-import type { InventoryC, EquipmentC, Position } from "./components";
+import type { InventoryC, EquipmentC, Position, Health, Mana, DefensesC, OffenseC } from "./components";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -260,6 +260,102 @@ describe("buildSnapshot — equipment", () => {
     expect(snap.equipment["weapon1"]!.name).toBe("Ember Wand");
     expect(snap.equipment["weapon1"]!.rarity).toBe("normal");
     expect(snap.equipment["weapon1"]!.itemClass).toBe("wand");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Derived stats: an equipped mod has to reach the player, not just the tooltip
+// ---------------------------------------------------------------------------
+
+/** A robe (implicit 45% mana regen) carrying +40 life, +20 fire res and +50 armour. */
+const GEARED_ROBE: Item = {
+  baseId: "base.emberweave_robe", rarity: "rare", itemLevel: 80,
+  affixes: [
+    { affixId: "affix.life", value: 40 },
+    { affixId: "affix.fire_res", value: 20 },
+    { affixId: "affix.armour", value: 50 },
+  ],
+};
+
+describe("derived player stats", () => {
+  it("a bare player has exactly the base stat block", () => {
+    const { world, playerEntity } = makeWorld();
+    expect(world.get<Health>(playerEntity, "health")!.maxLife).toBe(fp(100));
+    expect(world.get<DefensesC>(playerEntity, "defenses")!.armour).toBe(fp(0));
+    expect(world.has(playerEntity, "offense")).toBe(false);
+  });
+
+  it("equipping raises maxLife, armour and fire resistance", () => {
+    const { world, sim, playerEntity } = makeWorld();
+    placeInInv(world, GEARED_ROBE, 0, 0, 2, 3);
+    sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "body" }, playerEntity, 0)]);
+
+    expect(world.get<Health>(playerEntity, "health")!.maxLife).toBe(fp(140));
+    expect(world.get<DefensesC>(playerEntity, "defenses")!.armour).toBe(fp(50));
+    expect(world.get<DefensesC>(playerEntity, "defenses")!.fireResPct).toBe(20);
+  });
+
+  it("the base implicit applies too: the robe's 45% mana regeneration", () => {
+    const { world, sim, playerEntity } = makeWorld();
+    placeInInv(world, GEARED_ROBE, 0, 0, 2, 3);
+    sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "body" }, playerEntity, 0)]);
+
+    // base fp(6)/s * 1.45 = fp(8.7)/s → trunc(8700 / 30) = 290 per tick
+    expect(world.get<Mana>(playerEntity, "mana")!.regen).toBe(290);
+  });
+
+  it("the wand implicit gives the player spell damage", () => {
+    const { world, sim, playerEntity } = makeWorld();
+    placeInInv(world, WAND, 0, 0, 1, 2);
+    sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "weapon1" }, playerEntity, 0)]);
+
+    expect(world.get<OffenseC>(playerEntity, "offense")!.spellDamagePct).toBe(12);
+  });
+
+  it("unequipping takes the mods back off", () => {
+    const { world, sim, playerEntity } = makeWorld();
+    placeInInv(world, GEARED_ROBE, 0, 0, 2, 3);
+    sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "body" }, playerEntity, 0)]);
+    sim.step([intentToCommand({ kind: "unequipItem", slot: "body" }, playerEntity, 1)]);
+
+    expect(world.get<Health>(playerEntity, "health")!.maxLife).toBe(fp(100));
+    expect(world.get<DefensesC>(playerEntity, "defenses")!.armour).toBe(fp(0));
+    expect(world.get<DefensesC>(playerEntity, "defenses")!.fireResPct).toBe(0);
+  });
+
+  it("keeps current life where it was, so equipping never heals", () => {
+    const { world, sim, playerEntity } = makeWorld();
+    const h = world.get<Health>(playerEntity, "health")!;
+    world.set<Health>(playerEntity, "health", { ...h, life: fp(30) });
+    placeInInv(world, GEARED_ROBE, 0, 0, 2, 3);
+    sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "body" }, playerEntity, 0)]);
+
+    expect(world.get<Health>(playerEntity, "health")!.life).toBe(fp(30));
+    expect(world.get<Health>(playerEntity, "health")!.maxLife).toBe(fp(140));
+  });
+
+  it("clamps current life down when the life mod comes off", () => {
+    const { world, sim, playerEntity } = makeWorld();
+    placeInInv(world, GEARED_ROBE, 0, 0, 2, 3);
+    sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "body" }, playerEntity, 0)]);
+    const h = world.get<Health>(playerEntity, "health")!;
+    world.set<Health>(playerEntity, "health", { ...h, life: h.maxLife });
+    sim.step([intentToCommand({ kind: "unequipItem", slot: "body" }, playerEntity, 1)]);
+
+    expect(world.get<Health>(playerEntity, "health")!.life).toBe(fp(100));
+  });
+
+  it("restoring a save applies the saved gear and starts the session full", async () => {
+    const kv = new MemoryKv();
+    const { world } = makeWorld();
+    world.set<EquipmentC>(sessionE(world), "equipment", { slots: { body: GEARED_ROBE } });
+    await saveTo(kv, world);
+
+    const { world: w2, playerEntity: p2 } = makeWorld();
+    expect(await loadInto(kv, w2)).toBe(true);
+    expect(w2.get<Health>(p2, "health")!.maxLife).toBe(fp(140));
+    expect(w2.get<Health>(p2, "health")!.life).toBe(fp(140));
+    expect(w2.get<DefensesC>(p2, "defenses")!.fireResPct).toBe(20);
   });
 });
 
