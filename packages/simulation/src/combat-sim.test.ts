@@ -23,7 +23,7 @@ describe("createCombatSim", () => {
     const mana = world.get<{ mana: number; maxMana: number; regen: number }>(playerEntity, "mana")!;
     expect(mana.mana).toBe(mana.maxMana);
     expect(mana.maxMana).toBe(fp(60));
-    expect(mana.regen).toBe(Math.trunc(fp(6) / 30)); // 200
+    expect(mana.regen).toBe(Math.trunc(fp(15) / 30)); // 500
 
     const faction = world.get<{ team: number }>(playerEntity, "faction")!;
     expect(faction.team).toBe(0);
@@ -55,8 +55,8 @@ describe("createCombatSim", () => {
     const normalLife = lives.find(l => l.rare === 0)!.maxLife;
     const rareLife = lives.find(l => l.rare === 1)!.maxLife;
     expect(rareLife).toBeGreaterThan(normalLife);
-    // fp(40)=40000; 40000*600/100 = 240000 = fp(240). normal = fp(40)=40000.
-    expect(rareLife).toBe(Math.trunc(fp(40) * 600 / 100)); // fp(240)
+    // fp(40)=40000; 40000*900/100 = 360000 = fp(360). normal = fp(40)=40000.
+    expect(rareLife).toBe(Math.trunc(fp(40) * 900 / 100)); // fp(360)
   });
 
   it("running 30 ticks twice with the same seed produces identical checksum sequences (determinism)", () => {

@@ -30,11 +30,27 @@ export const ARMOUR_DMG_MULT = 10;
 /** Physical damage reduction is hard-capped, at 90% in both PoE1 and PoE2. */
 export const PDR_CAP = 90;
 
+/**
+ * Both PoE games regenerate mana as a percentage of the pool — PoE2 4%/s, PoE1
+ * 1.75%/s — and this game does not, deliberately. That percentage only feels
+ * playable in PoE because the pool grows all game (level, intelligence, gear)
+ * while a skill's cost barely does, so a level-1 PoE2 caster with 34 mana really
+ * does regenerate one Fireball every six seconds and really is expected to stand
+ * there. Nothing here grows: one character, one pool, one cost. Copying the
+ * percentage would copy the act-1 starvation and never the endgame that pays it
+ * off, so what is matched is the outcome instead — roughly two casts a second
+ * sustained, which is where a PoE2 caster lands once its build comes online.
+ *
+ * fp(15) is the measured number for that: against the retuned Warden it reads
+ * 2.18 casts/s of a 3.75/s ceiling, where fp(6) read 1.05. It also divides
+ * exactly by the 30 Hz tick (500 per tick), so the pool grows at the same rate a
+ * player computing it on paper would expect. Held by `balance.test.ts`.
+ */
 export function baseCasterStats(): StatBlock {
   return {
     maxLifeFixed: fp(100),
     maxManaFixed: fp(60),
-    manaRegenPerSecFixed: fp(6),
+    manaRegenPerSecFixed: fp(15),
     moveSpeedFixed: fp(4.2),
     resPct: resBlock(),
     armourFixed: fp(0),

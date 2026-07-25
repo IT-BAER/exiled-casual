@@ -21,7 +21,7 @@ describe("baseCasterStats", () => {
     const s: StatBlock = baseCasterStats();
     expect(s.maxLifeFixed).toBe(fp(100));        // 100000
     expect(s.maxManaFixed).toBe(fp(60));          // 60000
-    expect(s.manaRegenPerSecFixed).toBe(fp(6));   // 6000
+    expect(s.manaRegenPerSecFixed).toBe(fp(15));  // 15000
     expect(s.moveSpeedFixed).toBe(fp(4.2));       // 4200
     expect(s.resPct).toEqual({ fire: 0, cold: 0, lightning: 0, chaos: 0 });
     expect(s.armourFixed).toBe(fp(0));            // 0
@@ -57,12 +57,12 @@ describe("applyItemMods", () => {
   });
 
   it("increases mana regeneration by percent of the base rate", () => {
-    // base fp(6)/s, +45% implicit + 10% suffix = 155% → 9.3/s
+    // base fp(15)/s, +45% implicit + 10% suffix = 155% → 23.25/s
     const s = applyItemMods(baseCasterStats(), [
       { stat: "manaRegenPct", value: 45 },
       { stat: "manaRegenPct", value: 10 },
     ]);
-    expect(s.manaRegenPerSecFixed).toBe(fp(9.3));
+    expect(s.manaRegenPerSecFixed).toBe(fp(23.25));
   });
 
   it("applies % increased Armour to flat armour, PoE order", () => {

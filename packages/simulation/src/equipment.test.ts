@@ -300,8 +300,8 @@ describe("derived player stats", () => {
     placeInInv(world, GEARED_ROBE, 0, 0, 2, 3);
     sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "body" }, playerEntity, 0)]);
 
-    // base fp(6)/s * 1.45 = fp(8.7)/s → trunc(8700 / 30) = 290 per tick
-    expect(world.get<Mana>(playerEntity, "mana")!.regen).toBe(290);
+    // base fp(15)/s * 1.45 = fp(21.75)/s → trunc(21750 / 30) = 725 per tick
+    expect(world.get<Mana>(playerEntity, "mana")!.regen).toBe(725);
   });
 
   it("the wand implicit gives the player spell damage", () => {
@@ -356,8 +356,8 @@ describe("derived player stats", () => {
     // 50 / (50 + 10 * 6) = 45%.
     expect(s.armourPct).toBe(45);
     expect(s.res.fire).toBe(20);
-    // trunc(fp(8.7)/30) = 290 per tick, so the sheet reports 290*30 = fp(8.7)/s.
-    expect(s.manaRegenPerSec).toBeCloseTo(8.7, 5);
+    // trunc(fp(21.75)/30) = 725 per tick, so the sheet reports 725*30 = fp(21.75)/s.
+    expect(s.manaRegenPerSec).toBeCloseTo(21.75, 5);
     expect(s.spellDamagePct).toBe(0);
   });
 

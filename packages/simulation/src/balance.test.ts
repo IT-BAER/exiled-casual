@@ -8,7 +8,7 @@ import { spawnMonster } from "./areas";
 import { Simulation } from "./loop";
 import type { Command } from "./loop";
 import type { World, Entity } from "./ecs";
-import type { Health, Position } from "./components";
+import type { Health, Mana, Position } from "./components";
 
 /**
  * Encounter pacing, measured rather than asserted from arithmetic. Two slices
@@ -22,18 +22,31 @@ import type { Health, Position } from "./components";
  * moment it is off cooldown, Ember Bolt with the mana left over — because the
  * mana pool, not the cast rate, is what caps its damage.
  *
- * Measured at the retune (Tier 0, no gear), so a future run has something to
+ * Measured at the mana retune (Tier 0, no gear), so a future run has something to
  * compare against rather than only a band to clear:
  *
- *   kill    imp 0.5s | pack of five 1.2s | rare 2.6s (6.7s vs its own element)
- *           Cinder Warden 20.1s
+ *   kill    imp 0.6s | pack of five 1.2s | rare 3.2s (6.4s vs its own element)
+ *           Cinder Warden 19.8s
  *   die     imp 26.0s | pack 6.6s | Warden phase 1 11.0s | phase 2 3.8s
+ *   act     2.18 casts/s against the Warden, of a 3.75/s ceiling
+ *
+ * The Warden's is the same 20-second fight it was before mana regeneration went
+ * from 6/s to 15/s — its life was raised to hold that. What changed is what the
+ * 20 seconds contain: 1.05 casts/s became 2.18.
  */
 
 const HZ = 30;
 const BOLT = "skill.ember_bolt.v1";
 const GROUND = "skill.cinder_ground.v1";
 const GROUND_CD = SKILLS.get(GROUND)!.cooldownTicks;
+/**
+ * Casts per second a player with a bottomless pool would land: the bolt's cast
+ * time, which is longer than its cooldown and so the thing that actually gates
+ * back-to-back casting. Mana is the only other thing in the way, which is what
+ * makes the measured rate below a reading of the mana economy and nothing else.
+ */
+const BOLT_DEF = SKILLS.get(BOLT)!;
+const CAST_CEILING = HZ / Math.max(BOLT_DEF.cooldownTicks, BOLT_DEF.castTicks ?? 0);
 /** Far enough that the monster has to close, near enough to be in every range. */
 const SPAWN_Y = fp(6);
 
@@ -77,20 +90,32 @@ function cast(sim: Simulation, player: Entity, at: Position, skillId: string): C
  * doing nothing to dodge, and a death would refill its mana (death.ts) and hand
  * the fight a second opening burst — which made time-to-kill move whenever a
  * defensive number changed. Offence is measured here, defence in ticksToDeath.
+ *
+ * `casts` counts the presses that actually landed. Mana is the only thing that
+ * can drop it below CAST_CEILING here, so casts per second is the fight's action
+ * density — the number the mana economy is tuned against, and one a fight of the
+ * right length can still fail: 20 seconds of watching a bar refill measures the
+ * same as 20 seconds of casting on every cooldown.
  */
 function ticksToClear(
   { sim, world, player }: Rig,
   opts: { ground?: boolean; maxSecs?: number } = {},
-): number {
+): { ticks: number; casts: number } {
   const max = (opts.maxSecs ?? 90) * HZ;
   world.set<Health>(player, "health", { life: fp(1e6), maxLife: fp(1e6) });
+  const mana = () => world.get<Mana>(player, "mana")!.mana;
+  let casts = 0;
   for (let t = 1; t <= max; t++) {
     const target = nearestMonster(world);
     const skill = opts.ground !== false && sim.tick % GROUND_CD === 0 ? GROUND : BOLT;
+    // Regen only ever adds, and it is smaller than the cheapest cost, so mana
+    // falling across a step means exactly one cast was paid for.
+    const before = mana();
     sim.step(target === undefined ? [] : cast(sim, player, target, skill));
-    if (world.query("monster").length === 0) return t;
+    if (mana() < before) casts++;
+    if (world.query("monster").length === 0) return { ticks: t, casts };
   }
-  return Infinity;
+  return { ticks: Infinity, casts };
 }
 
 /**
@@ -120,7 +145,7 @@ describe("time to kill", () => {
   it("a lone imp dies in under a second and a half", () => {
     const r = rig();
     spawnImp(r);
-    expect(ticksToClear(r, { ground: false }) / HZ).toBeLessThan(1.5);
+    expect(ticksToClear(r, { ground: false }).ticks / HZ).toBeLessThan(1.5);
   });
 
   it("a five-imp pack clears in under six seconds", () => {
@@ -128,7 +153,7 @@ describe("time to kill", () => {
     for (const [dx, dy] of [[-1.5, 0], [0, 0], [1.5, 0], [-0.75, 1.5], [0.75, 1.5]] as const) {
       spawnImp(r, fp(dx), fp(dy));
     }
-    expect(ticksToClear(r) / HZ).toBeLessThan(6);
+    expect(ticksToClear(r).ticks / HZ).toBeLessThan(6);
   });
 
   it.each(RARE_TEMPLATES.map((t) => [t.element, t] as const))(
@@ -136,7 +161,7 @@ describe("time to kill", () => {
     (_element, template) => {
       const r = rig();
       spawnMonster(r.world, makeRare(impDef(), template), fp(0), SPAWN_Y, true);
-      const secs = ticksToClear(r) / HZ;
+      const secs = ticksToClear(r).ticks / HZ;
       expect(secs).toBeGreaterThan(2);
       expect(secs).toBeLessThan(12);
     },
@@ -145,9 +170,20 @@ describe("time to kill", () => {
   it("the Cinder Warden takes between 15 and 40 seconds", () => {
     const r = rig();
     spawnWarden(r);
-    const secs = ticksToClear(r) / HZ;
+    const secs = ticksToClear(r).ticks / HZ;
     expect(secs).toBeGreaterThan(15);
     expect(secs).toBeLessThan(40);
+  });
+});
+
+describe("mana economy", () => {
+  // The Warden on purpose: it is the only fight long enough that the opening
+  // full pool stops flattering the number and regeneration alone is paying.
+  it("the Warden fight is spent casting, not waiting for the bar", () => {
+    const r = rig();
+    spawnWarden(r);
+    const { ticks, casts } = ticksToClear(r);
+    expect((casts * HZ) / ticks).toBeGreaterThan(CAST_CEILING / 2);
   });
 });
 

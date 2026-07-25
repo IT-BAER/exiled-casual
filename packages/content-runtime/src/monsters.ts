@@ -18,10 +18,15 @@ const MONSTER_DEFS: MonsterDef[] = [
     name: "Cinder Warden",
     // Life and fire resistance are one budget, because every skill the player
     // owns is fire: 750 life behind 40% res is 1250 effective, which measured at
-    // 56s of mana-starved poking (balance.test.ts). 420 behind 25% is 560, about
-    // 25s — PoE2's range for an act boss. The Warden stays fire-flavoured at 25;
-    // 40% against the only element in the game is a wall, not a choice.
-    maxLifeFixed: fp(420),
+    // 56s of mana-starved poking (balance.test.ts). The Warden stays
+    // fire-flavoured at 25; 40% against the only element in the game is a wall,
+    // not a choice.
+    //
+    // 840 is not a difficulty raise, it is the same 20-second fight bought back
+    // after the mana economy doubled what the player spends inside it: at the old
+    // 420 the retuned caster cleared this in 10.1s. Fight length is the design
+    // intent and life is the knob that holds it, so life follows player damage.
+    maxLifeFixed: fp(840),
     moveSpeedFixed: fp(1.8),
     attackRangeFixed: fp(2.2),
     attackDamage: { type: "physical", amountFixed: fp(10) },
@@ -71,9 +76,14 @@ export const MONSTERS: ReadonlyMap<string, MonsterDef> = new Map(
  * The life and damage multipliers are set by measurement, not by feel — see
  * `simulation/src/balance.test.ts`. At 250%/150% a rare died in 0.9s, faster
  * than a five-imp pack, and landed one 9-damage hit in its whole life: the
- * resistance it demands could never be felt. 600% life buys it past the
- * player's opening 60-mana burst, and 300% damage makes one hit ~18% of a base
- * life pool, which is the size at which halving it is worth a res roll.
+ * resistance it demands could never be felt. Life buys it past the player's
+ * opening burst, and 300% damage makes one hit ~18% of a base life pool, which
+ * is the size at which halving it is worth a res roll.
+ *
+ * 900%, up from 600%, is the mana retune reaching the small fights too: at 600 a
+ * non-fire rare fell in 1.63s, back under the pack it is supposed to outlast. At
+ * 900 it is 3.2s and its fire cousin 6.4s, so resisting the player's only
+ * element still roughly doubles the fight.
  */
 export const RARE_TEMPLATES: readonly RareModifier[] = (
   [
@@ -83,7 +93,7 @@ export const RARE_TEMPLATES: readonly RareModifier[] = (
     ["chaos", "Blight-Touched"],
   ] as const
 ).map(([element, namePrefix]) => ({
-  lifeMulPct: 600,
+  lifeMulPct: 900,
   moveSpeedMulPct: 120,
   damageMulPct: 300,
   element,
