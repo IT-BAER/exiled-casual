@@ -7,6 +7,11 @@
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
       html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+      /* A game, not a document: the HUD's labels and numbers must not turn the
+         pointer into an I-beam or let a drag paint "Life 100/100" blue. Both
+         properties inherit, so the panels' own cursor: pointer / grab still win.
+         There is no text input anywhere in the client to break. */
+      body { cursor: default; user-select: none; -webkit-user-select: none; }
       #root { width: 100%; height: 100%; }
     </style>
   </head>
