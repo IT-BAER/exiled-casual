@@ -52,6 +52,22 @@ describe("PreparationPanel", () => {
     expect((screen.getByTestId(`prep-node-${shut.id}`) as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it("draws the world map: a node sits at its own position and its routes are drawn", () => {
+    const graph = atlasGraph(atlasSeed);
+    render(
+      <PreparationPanel atlasSeed={atlasSeed} completedNodes={[]} onActivate={() => {}} onClose={() => {}} />,
+    );
+    const first = graph[0]!;
+    const tile = screen.getByTestId(`prep-node-${first.id}`);
+    // Left/top are a percentage of the map field, so a node's place on the world
+    // map is its graph position and not a slot in a list.
+    expect(tile.style.left).toBe(`${(first.x * 100).toFixed(2)}%`);
+    expect(tile.style.top).toBe(`${(first.y * 100).toFixed(2)}%`);
+    for (const other of first.links) {
+      expect(screen.getByTestId(`prep-route-${[first.id, other].sort().join("-")}`)).toBeTruthy();
+    }
+  });
+
   it("opens the neighbours of a cleared node", () => {
     const graph = atlasGraph(atlasSeed);
     render(

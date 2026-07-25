@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { offerWaystones, atlasGraph, isNodeReachable, areaLevel, WAYSTONE_OFFER_COUNT } from "@exiled/rules";
+import type { AtlasGraphNode } from "@exiled/rules";
 import { MAP_PORTALS } from "@exiled/protocol";
 
 interface Props {
@@ -40,6 +41,142 @@ function tile(selected: boolean, disabled: boolean, accent: string): React.CSSPr
   };
 }
 
+const MAP_H = 300; // field height; width follows the panel
+const NODE = 26; // medallion diameter
+const CLEARED = "#7ea45c";
+const FOG = "#4c463a";
+
+/**
+ * The world map, per atlas-maps.webp: places sit where the graph put them, routes
+ * are drawn between them, and what you have cleared is lit while the rest sits in
+ * fog. The reference paints a whole world under its nodes; this field is the same
+ * carved stone the character sheet uses, tinted and vignetted, because a painted
+ * region per node is art we do not have yet and a flat panel would read as a form.
+ * Routes to a cleared place are solid, the rest dashed, which is how the reference
+ * separates the road you have walked from the one you have not.
+ */
+function AtlasMap(props: {
+  nodes: AtlasGraphNode[];
+  completedNodes: string[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  const { nodes, completedNodes, selectedId, onSelect } = props;
+  const state = (n: AtlasGraphNode) =>
+    completedNodes.includes(n.id)
+      ? "cleared"
+      : isNodeReachable(nodes, completedNodes, n.id)
+      ? "open"
+      : "fog";
+
+  // Each undirected link once, keyed by its sorted pair.
+  const routes: { key: string; a: AtlasGraphNode; b: AtlasGraphNode }[] = [];
+  for (const a of nodes) {
+    for (const id of a.links) {
+      const b = nodes.find((n) => n.id === id);
+      if (!b || a.id > b.id) continue;
+      routes.push({ key: `${a.id}-${b.id}`, a, b });
+    }
+  }
+
+  return (
+    <div
+      style={{
+        position: "relative",
+        height: MAP_H,
+        marginBottom: 20,
+        backgroundImage:
+          "radial-gradient(ellipse at 50% 45%, rgba(52,64,46,0.55), rgba(10,12,10,0.92) 78%), url(/textures/ui/char_stone_v1.png)",
+        backgroundSize: "cover, 420px",
+        border: `1px solid ${GOLD_DIM}`,
+        boxShadow: "inset 0 0 26px rgba(0,0,0,0.85)",
+      }}
+    >
+      {/* Node field, inset so a medallion on the edge is not clipped. */}
+      <div style={{ position: "absolute", inset: 34 }}>
+        <svg
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", overflow: "visible" }}
+        >
+          {routes.map(({ key, a, b }) => {
+            const walked = completedNodes.includes(a.id) || completedNodes.includes(b.id);
+            return (
+              <line
+                key={key}
+                data-testid={`prep-route-${key}`}
+                x1={a.x * 100}
+                y1={a.y * 100}
+                x2={b.x * 100}
+                y2={b.y * 100}
+                stroke={walked ? CLEARED : "#6b6250"}
+                strokeOpacity={walked ? 0.85 : 0.4}
+                strokeWidth={walked ? 2 : 1.5}
+                strokeDasharray={walked ? undefined : "4 5"}
+                vectorEffect="non-scaling-stroke"
+              />
+            );
+          })}
+        </svg>
+        {nodes.map((n) => {
+          const st = state(n);
+          const selected = n.id === selectedId;
+          const accent = st === "cleared" ? CLEARED : st === "open" ? GOLD : FOG;
+          return (
+            <button
+              key={n.id}
+              data-testid={`prep-node-${n.id}`}
+              disabled={st !== "open"}
+              onClick={() => onSelect(n.id)}
+              title={n.name}
+              style={{
+                position: "absolute",
+                left: `${(n.x * 100).toFixed(2)}%`,
+                top: `${(n.y * 100).toFixed(2)}%`,
+                transform: "translate(-50%, -50%)",
+                width: NODE,
+                height: NODE,
+                padding: 0,
+                borderRadius: "50%",
+                cursor: st === "open" ? "pointer" : "default",
+                background:
+                  st === "fog"
+                    ? "radial-gradient(circle at 50% 35%, #23211b, #0c0b09)"
+                    : `radial-gradient(circle at 50% 35%, ${accent}, #17140c 78%)`,
+                border: `2px solid ${accent}`,
+                boxShadow:
+                  st === "fog"
+                    ? "inset 0 0 6px rgba(0,0,0,0.9)"
+                    : `0 0 ${selected ? 16 : 8}px ${accent}${selected ? "cc" : "66"}, inset 0 0 6px rgba(0,0,0,0.7)`,
+                opacity: st === "fog" ? 0.62 : 1,
+              }}
+            >
+              <span
+                style={{
+                  position: "absolute",
+                  top: NODE + 4,
+                  left: "50%",
+                  transform: "translateX(-50%)",
+                  whiteSpace: "nowrap",
+                  fontFamily: SERIF,
+                  fontSize: 11,
+                  letterSpacing: 0.5,
+                  color: st === "fog" ? "#6a6459" : st === "cleared" ? CLEARED : PARCHMENT,
+                  opacity: st === "fog" ? 0.7 : 1,
+                  textShadow: "0 1px 3px #000",
+                  pointerEvents: "none",
+                }}
+              >
+                {n.name}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function PreparationPanel({ atlasSeed, completedNodes, onActivate, onClose }: Props) {
   const nodes = atlasGraph(atlasSeed);
   const waystones = offerWaystones(atlasSeed, WAYSTONE_OFFER_COUNT);
@@ -65,7 +202,7 @@ export function PreparationPanel({ atlasSeed, completedNodes, onActivate, onClos
     >
       <div
         style={{
-          width: 560,
+          width: 720, // the world map needs the room a tile list did not
           background: "linear-gradient(180deg, #0e0f13 0%, #100d09 100%)",
           border: `1px solid ${GOLD_DIM}`,
           boxShadow: `0 0 0 1px #000, 0 0 0 4px #1b1710, 0 0 0 5px ${GOLD_DIM}, 0 14px 48px rgba(0,0,0,0.8)`,
@@ -116,34 +253,12 @@ export function PreparationPanel({ atlasSeed, completedNodes, onActivate, onClos
 
         <div style={{ padding: 22 }}>
           <SectionLabel>Destination</SectionLabel>
-          <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
-            {nodes.map((n) => {
-              const done = completedNodes.includes(n.id);
-              const shut = !done && !isNodeReachable(nodes, completedNodes, n.id);
-              const selected = n.id === nodeId;
-              return (
-                <button
-                  key={n.id}
-                  data-testid={`prep-node-${n.id}`}
-                  disabled={done || shut}
-                  onClick={() => setNodeId(n.id)}
-                  style={tile(selected, done || shut, GOLD)}
-                >
-                  <div style={{ fontSize: 14 }}>{n.name}</div>
-                  {done && (
-                    <div style={{ fontSize: 10, letterSpacing: 1, color: "#6f8a5a", marginTop: 3 }}>
-                      COMPLETED
-                    </div>
-                  )}
-                  {shut && (
-                    <div style={{ fontSize: 10, letterSpacing: 1, color: "#6a6257", marginTop: 3 }}>
-                      NO ROUTE
-                    </div>
-                  )}
-                </button>
-              );
-            })}
-          </div>
+          <AtlasMap
+            nodes={nodes}
+            completedNodes={completedNodes}
+            selectedId={nodeId}
+            onSelect={setNodeId}
+          />
 
           <SectionLabel>Waystone</SectionLabel>
           <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
