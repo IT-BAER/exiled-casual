@@ -21,16 +21,17 @@ const ORB_BOTTOM = "2.1vh"; // sphere bottom above the screen edge
 const FIGURE_H = `${(ORB_VW * 1.08).toFixed(2)}vw`; // bronze figure height, same crop
 const FIGURE_OUT = "0.9vw"; // figure hangs off the screen side, covering ~30% of the globe
 // The bars are a fraction of the globe, not a pixel size. On the same PoE1 crop the flask
-// panel stands 190px tall against the 263px sphere (0.72) with 68px slots (0.26), and both
-// panels run *under* the globe: the braided ring and its bronze figure cover the panel's
-// end, which is what makes the bottom of the screen read as one piece of furniture instead
-// of two boxes parked beside two globes. Ours sits at 0.55 of the globe rather than 0.72 —
-// PoE1 fills that height with five arched flask niches above two rows of skill slots, and
-// with two flasks and a single row we would be staring at empty stone.
-const BAR_H = `${(ORB_VW * 0.58).toFixed(2)}vw`;
-const SLOT = `${(ORB_VW * 0.34).toFixed(2)}vw`; // skill tile, square
-const FLASK_W = `${(ORB_VW * 0.215).toFixed(2)}vw`;
-const FLASK_H = `${(ORB_VW * 0.40).toFixed(2)}vw`;
+// panel stands 190px tall against the 263px sphere (0.72), its vials 134px (0.51), and the
+// skill tiles are 58px (0.22) in two rows; both panels run *under* the globe, the braided
+// ring and its bronze figure covering the panel's end, which is what makes the bottom of
+// the screen read as one piece of furniture instead of two boxes parked beside two globes.
+// Ours was 0.58 while the skill panel held a single row: now that the mouse buttons stack
+// above the numbered slots, it takes PoE1's full 0.72 and the tiles drop to its 0.22.
+// Exported because the inventory panel has to stop exactly where this starts.
+export const BAR_H = `${(ORB_VW * 0.72).toFixed(2)}vw`;
+const SLOT = `${(ORB_VW * 0.22).toFixed(2)}vw`; // skill tile, square
+const FLASK_W = `${(ORB_VW * 0.20).toFixed(2)}vw`;
+const FLASK_H = `${(ORB_VW * 0.50).toFixed(2)}vw`;
 // The border-image's own side slice. Named because the padding below has to
 // subtract exactly it, or the first slot drifts out from under the ring.
 const BAR_SIDE = 28;
@@ -55,6 +56,83 @@ const SKILL_SLOTS: SkillSlot[] = [
   { id: null, key: "M", mouse: true },
   { id: null, key: "R", mouse: true },
 ];
+
+/**
+ * One skill tile. Extracted because the bar is two rows now, as PoE1's is
+ * (poe2-screenshots/poe1-lower-bar.png): the mouse buttons sit in their own row
+ * above the numbered slots, and both rows draw the same tile.
+ */
+function SkillTile({ slot, n, cooldowns }: { slot: SkillSlot; n: number; cooldowns: Record<string, number> }) {
+  const cd = slot.id ? cooldowns[slot.id] ?? 0 : 0;
+  const ready = cd <= 0;
+  return (
+    <div
+      data-testid={`skill-slot-${n}`}
+      style={{
+        width: SLOT,
+        height: SLOT,
+        position: "relative",
+        overflow: "hidden",
+        background: slot.icon
+          ? "radial-gradient(circle at 50% 35%, #262c34, #0b0d11)"
+          : "radial-gradient(circle at 50% 35%, #14171d, #07090c)",
+        border: `2px solid ${slot.icon && ready ? "#9c7b3a" : "#3a4048"}`,
+        borderRadius: 6,
+        boxShadow: slot.icon && ready
+          ? `0 0 10px ${slot.glow}55, inset 0 0 8px rgba(0,0,0,0.6)`
+          : "inset 0 0 8px rgba(0,0,0,0.7)",
+      }}
+    >
+      {slot.icon && (
+        <img
+          src={slot.icon}
+          alt=""
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            filter: ready ? "none" : "grayscale(0.8) brightness(0.5)",
+          }}
+        />
+      )}
+      {/* cooldown veil, PoE-style: the tile darkens and counts down */}
+      {!ready && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: "rgba(4,6,10,0.55)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "#f4f0e6",
+            fontSize: `clamp(10px, ${(ORB_VW * 0.08).toFixed(2)}vw, 17px)`,
+            fontWeight: 700,
+            textShadow: "0 1px 3px #000",
+          }}
+        >
+          {`${cd.toFixed(1)}s`}
+        </div>
+      )}
+      <span
+        style={{
+          position: "absolute",
+          bottom: 0,
+          left: 0,
+          padding: "0 3px 1px",
+          borderTopRightRadius: 4,
+          background: "rgba(4,6,10,0.7)",
+          fontSize: `clamp(8px, ${(ORB_VW * 0.062).toFixed(2)}vw, 14px)`,
+          fontWeight: 700,
+          color: slot.mouse ? "#d9b04a" : "#c9cdd3",
+          textShadow: "0 1px 3px #000",
+        }}
+      >
+        {slot.key}
+      </span>
+    </div>
+  );
+}
 
 // One life flask on Q, one mana flask on E.
 const FLASKS = [
@@ -549,82 +627,32 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
         })}
       </div>
 
-      {/* Skill bar — mirror of the flask bar, running under the mana globe */}
-      <div data-testid="skill-row" style={{ ...barStyle, right: 0, paddingRight: BAR_PAD, zIndex: 2 }}>
-        {SKILL_SLOTS.map((slot, idx) => {
-          const cd = slot.id ? cooldowns[slot.id] ?? 0 : 0;
-          const ready = cd <= 0;
-          return (
-            <div
-              key={slot.key}
-              data-testid={`skill-slot-${idx + 1}`}
-              style={{
-                width: SLOT,
-                height: SLOT,
-                // The mouse buttons are their own group, set off from the digits.
-                marginLeft: slot.key === "L" ? "0.55vw" : undefined,
-                position: "relative",
-                overflow: "hidden",
-                background: slot.icon
-                  ? "radial-gradient(circle at 50% 35%, #262c34, #0b0d11)"
-                  : "radial-gradient(circle at 50% 35%, #14171d, #07090c)",
-                border: `2px solid ${slot.icon && ready ? "#9c7b3a" : "#3a4048"}`,
-                borderRadius: 6,
-                boxShadow: slot.icon && ready
-                  ? `0 0 10px ${slot.glow}55, inset 0 0 8px rgba(0,0,0,0.6)`
-                  : "inset 0 0 8px rgba(0,0,0,0.7)",
-              }}
-            >
-              {slot.icon && (
-                <img
-                  src={slot.icon}
-                  alt=""
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "cover",
-                    filter: ready ? "none" : "grayscale(0.8) brightness(0.5)",
-                  }}
-                />
-              )}
-              {/* cooldown veil, PoE-style: the tile darkens and counts down */}
-              {!ready && (
-                <div
-                  style={{
-                    position: "absolute",
-                    inset: 0,
-                    background: "rgba(4,6,10,0.55)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "#f4f0e6",
-                    fontSize: `clamp(11px, ${(ORB_VW * 0.095).toFixed(2)}vw, 20px)`,
-                    fontWeight: 700,
-                    textShadow: "0 1px 3px #000",
-                  }}
-                >
-                  {`${cd.toFixed(1)}s`}
-                </div>
-              )}
-              <span
-                style={{
-                  position: "absolute",
-                  bottom: 0,
-                  left: 0,
-                  padding: "0 4px 1px",
-                  borderTopRightRadius: 4,
-                  background: "rgba(4,6,10,0.7)",
-                  fontSize: `clamp(9px, ${(ORB_VW * 0.075).toFixed(2)}vw, 16px)`,
-                  fontWeight: 700,
-                  color: slot.mouse ? "#d9b04a" : "#c9cdd3",
-                  textShadow: "0 1px 3px #000",
-                }}
-              >
-                {slot.key}
-              </span>
-            </div>
-          );
-        })}
+      {/* Skill bar — two rows, as PoE1's lower bar has it: the three mouse buttons
+          above, the five numbered slots below, the whole panel running under the
+          mana globe the way the flask panel runs under the life globe. */}
+      <div
+        data-testid="skill-row"
+        style={{
+          ...barStyle,
+          right: 0,
+          paddingRight: BAR_PAD,
+          zIndex: 2,
+          flexDirection: "column",
+          alignItems: "flex-end",
+          justifyContent: "center",
+          gap: "0.2vw",
+        }}
+      >
+        <div style={{ display: "flex", gap: "0.25vw" }}>
+          {SKILL_SLOTS.slice(5).map((slot, i) => (
+            <SkillTile key={slot.key} slot={slot} n={i + 6} cooldowns={cooldowns} />
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: "0.25vw" }}>
+          {SKILL_SLOTS.slice(0, 5).map((slot, i) => (
+            <SkillTile key={slot.key} slot={slot} n={i + 1} cooldowns={cooldowns} />
+          ))}
+        </div>
       </div>
     </div>
   );

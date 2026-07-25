@@ -2,6 +2,7 @@ import React from "react";
 import type { DisplayItem, EquipSlotId, Intent, Snapshot } from "@exiled/protocol";
 import { canEquip } from "@exiled/simulation";
 import { ItemTooltip } from "./ItemTooltip";
+import { BAR_H } from "./Hud";
 
 type Inventory = Snapshot["inventory"];
 type Equipment = Snapshot["equipment"];
@@ -271,12 +272,14 @@ export function InventoryPanel({
         ref={boxRef}
         style={{
           pointerEvents: "auto",
-          // Clear of the bottom bar, which stands ORB_VW * 0.58 tall in Hud.tsx.
-          marginBottom: "6.2vw",
+          // Stops where the bottom bar starts, whatever height that bar is.
+          marginBottom: BAR_H,
           // Full height, not content height: PoE's inventory runs from the top of
           // the screen down to the bar and simply ends in empty panel below the
           // last grid row. A box that shrinks to its contents floats and reads wrong.
-          height: "calc(100vh - 6.2vw)",
+          height: `calc(100vh - ${BAR_H})`,
+          display: "flex",
+          flexDirection: "column",
           overflowY: "auto",
           // The wheel still scrolls; PoE has no scrollbar chrome and a pale native
           // one down the panel's gilt edge reads as a browser, not as the game.
@@ -311,9 +314,9 @@ export function InventoryPanel({
           </button>
         </div>
 
-        <div style={{ padding: 20, width: contentW, boxSizing: "content-box" }}>
+        <div style={{ padding: 20, width: contentW, boxSizing: "content-box", flex: 1, display: "flex", flexDirection: "column" }}>
           {/* Equipment paper-doll */}
-          <div style={{ position: "relative", width: equipW, height: equipH, margin: "0 auto" }}>
+          <div style={{ position: "relative", width: equipW, height: equipH, margin: "0 auto", flexShrink: 0 }}>
             {PAPER_DOLL.map((s) => (
               <EquipSlot
                 key={s.slot}
@@ -329,15 +332,12 @@ export function InventoryPanel({
 
           {/* Flasks + currency */}
           <SectionRule>Flasks</SectionRule>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
-            <div style={{ display: "flex", gap: 10 }}>
-              <Flask kind="life" hotkey="Q" />
-              <Flask kind="mana" hotkey="E" />
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
-              <Currency label="Gold" value={0} />
-              <Currency label="Shards" value={0} />
-            </div>
+          {/* Flasks sit in their own centred strip between the paper-doll and the
+              backpack, the way inventory.png has them. The currency moved out to
+              the strip at the foot of the panel. */}
+          <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+            <Flask kind="life" hotkey="Q" />
+            <Flask kind="mana" hotkey="E" />
           </div>
 
           {/* Backpack grid (functional) */}
@@ -350,6 +350,9 @@ export function InventoryPanel({
               width: gridW,
               height: rows * CELL,
               margin: "0 auto",
+              // A column flex would squeeze both of these on a short window; they
+              // have fixed pixel geometry the drag math reads, so they never shrink.
+              flexShrink: 0,
               background: "#0a0b0e",
               border: `1px solid ${GOLD_DIM}`,
               boxShadow: "inset 0 0 14px rgba(0,0,0,0.8)",
@@ -425,6 +428,28 @@ export function InventoryPanel({
                 )}
               </div>
             ))}
+          </div>
+
+          {/* Currency strip. PoE's inventory does not end at the last grid row: a
+              band of currency and charm sockets runs under it, which is what keeps
+              a 12x5 backpack from leaving dead panel below itself on a tall screen.
+              `marginTop: auto` pins it to the foot, so the slack lands between the
+              grid and the strip instead of below everything. */}
+          <div
+            data-testid="currency-strip"
+            style={{
+              marginTop: "auto",
+              display: "flex",
+              gap: 26,
+              alignItems: "center",
+              padding: "12px 16px",
+              background: "linear-gradient(180deg,#16130c,#0b0906)",
+              border: `1px solid ${GOLD_DIM}`,
+              boxShadow: "inset 0 0 16px rgba(0,0,0,0.85)",
+            }}
+          >
+            <Currency label="Gold" value={0} />
+            <Currency label="Shards" value={0} />
           </div>
         </div>
       </div>

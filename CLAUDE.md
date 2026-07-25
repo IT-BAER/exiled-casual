@@ -18,6 +18,8 @@ iterating so the result matches the original game exactly. Do not design from me
 - `atlas-maps.webp` — Atlas / waystone map screen
 - `item-normal.png`, `item-magic.png`, `item-rare.png`, `item-unique.png` — item hover/tooltip look per rarity (colors, header, stat lines)
 - `inventory+equipment.png` — full inventory screen: equipment paper-doll, flasks, currency, backpack grid
+- `inventory.png` — PoE1 inventory: full-height pane, 12x5 grid edge to edge, currency strip at its foot
+- `poe1-lower-bar.png` — PoE1 bottom bar: flask panel, and the skill panel's mouse row above its numbered row
 
 ## Itemization & rarity — RESEARCH BEFORE ITEM/LOOT WORK
 
