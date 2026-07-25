@@ -1,5 +1,7 @@
 import { MAP_PORTALS } from "@exiled/protocol";
-import { offerWaystones, atlasNodes, WAYSTONE_OFFER_COUNT } from "@exiled/rules";
+import {
+  offerWaystones, atlasGraph, isNodeReachable, mapSeedFor, WAYSTONE_OFFER_COUNT,
+} from "@exiled/rules";
 import { Simulation } from "../loop";
 import type { Position, InteractableC, SessionC } from "../components";
 import { spawnPortalRing } from "../areas";
@@ -21,14 +23,17 @@ export function registerInteractSystem(sim: Simulation): void {
         const atlasNodeId = cmd.atlasNodeId;
         const waystoneId = cmd.waystoneId;
         if (!atlasNodeId || !waystoneId) continue;
-        if (!atlasNodes().some((n) => n.id === atlasNodeId)) continue;
         if (session.completedNodes.includes(atlasNodeId)) continue;
+        // Fog is a server rule, not a greyed-out button: the client is untrusted.
+        if (!isNodeReachable(atlasGraph(session.atlasSeed), session.completedNodes, atlasNodeId)) continue;
         const ws = offerWaystones(session.atlasSeed, WAYSTONE_OFFER_COUNT)
           .find((w) => w.id === waystoneId);
         if (!ws) continue;
         world.set<SessionC>(sessionE, "session", {
           ...session,
-          mapSeed: ws.seed,
+          // The place is half the seed: the same Waystone run at two nodes has to
+          // draw two different maps, or the route decision buys nothing.
+          mapSeed: mapSeedFor(ws.seed, atlasNodeId),
           areaTier: ws.tier,
           activeNodeId: atlasNodeId,
           portalsLeft: MAP_PORTALS,

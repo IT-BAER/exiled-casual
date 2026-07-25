@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
-  areaLevel, monsterTierScale, offerWaystones, atlasNodes, WAYSTONE_OFFER_COUNT,
+  areaLevel, monsterTierScale, offerWaystones, WAYSTONE_OFFER_COUNT,
+  atlasGraph, ATLAS_NODE_COUNT, isNodeReachable,
 } from "./atlas.js";
 
 describe("atlas rules", () => {
@@ -39,9 +40,81 @@ describe("atlas rules", () => {
     expect(offerWaystones(1, 3)).not.toEqual(offerWaystones(2, 3));
   });
 
-  it("atlasNodes is a fixed non-empty list with unique ids", () => {
-    const n = atlasNodes();
-    expect(n.length).toBeGreaterThanOrEqual(3);
-    expect(new Set(n.map((x) => x.id)).size).toBe(n.length);
+});
+
+describe("atlas graph", () => {
+  it("is deterministic for a seed and differs between seeds", () => {
+    expect(atlasGraph(42)).toEqual(atlasGraph(42));
+    expect(atlasGraph(42)).not.toEqual(atlasGraph(43));
+  });
+
+  it("lays every node inside the unit square with a unique id", () => {
+    const g = atlasGraph(42);
+    expect(g).toHaveLength(ATLAS_NODE_COUNT);
+    expect(new Set(g.map((n) => n.id)).size).toBe(g.length);
+    for (const n of g) {
+      expect(n.x).toBeGreaterThanOrEqual(0);
+      expect(n.x).toBeLessThanOrEqual(1);
+      expect(n.y).toBeGreaterThanOrEqual(0);
+      expect(n.y).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it("links symmetrically — a route is walkable in both directions", () => {
+    for (const seed of [1, 42, 999, 0xdeadbeef]) {
+      const g = atlasGraph(seed);
+      const byId = new Map(g.map((n) => [n.id, n]));
+      for (const n of g) {
+        for (const other of n.links) {
+          expect(byId.get(other)?.links).toContain(n.id);
+        }
+      }
+    }
+  });
+
+  it("reaches every node from the first one, so no map is stranded", () => {
+    for (const seed of [1, 42, 999, 0xdeadbeef, 7, 123456]) {
+      const g = atlasGraph(seed);
+      const byId = new Map(g.map((n) => [n.id, n]));
+      const seen = new Set<string>([g[0]!.id]);
+      const queue = [g[0]!.id];
+      while (queue.length > 0) {
+        for (const next of byId.get(queue.pop()!)!.links) {
+          if (seen.has(next)) continue;
+          seen.add(next);
+          queue.push(next);
+        }
+      }
+      expect(seen.size).toBe(g.length);
+    }
+  });
+});
+
+describe("atlas fog", () => {
+  const g = atlasGraph(42);
+
+  it("opens the first node on a fresh atlas and nothing else", () => {
+    expect(isNodeReachable(g, [], g[0]!.id)).toBe(true);
+    const far = g.find((n) => n.id !== g[0]!.id && !g[0]!.links.includes(n.id))!;
+    expect(isNodeReachable(g, [], far.id)).toBe(false);
+  });
+
+  it("opens a node once a neighbour is completed", () => {
+    const first = g[0]!;
+    const neighbour = g.find((n) => n.id === first.links[0])!;
+    expect(isNodeReachable(g, [], neighbour.id)).toBe(false);
+    expect(isNodeReachable(g, [first.id], neighbour.id)).toBe(true);
+  });
+
+  it("does not open a node two routes away", () => {
+    const first = g[0]!;
+    const twoAway = g.find(
+      (n) => n.id !== first.id && !first.links.includes(n.id) && n.links.some((l) => first.links.includes(l)),
+    )!;
+    expect(isNodeReachable(g, [first.id], twoAway.id)).toBe(false);
+  });
+
+  it("is false for an id that is not on the graph", () => {
+    expect(isNodeReachable(g, [], "node.nope")).toBe(false);
   });
 });

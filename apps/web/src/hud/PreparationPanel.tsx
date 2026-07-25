@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { offerWaystones, atlasNodes, areaLevel, WAYSTONE_OFFER_COUNT } from "@exiled/rules";
+import { offerWaystones, atlasGraph, isNodeReachable, areaLevel, WAYSTONE_OFFER_COUNT } from "@exiled/rules";
 import { MAP_PORTALS } from "@exiled/protocol";
 
 interface Props {
@@ -41,7 +41,7 @@ function tile(selected: boolean, disabled: boolean, accent: string): React.CSSPr
 }
 
 export function PreparationPanel({ atlasSeed, completedNodes, onActivate, onClose }: Props) {
-  const nodes = atlasNodes();
+  const nodes = atlasGraph(atlasSeed);
   const waystones = offerWaystones(atlasSeed, WAYSTONE_OFFER_COUNT);
   const [nodeId, setNodeId] = useState<string | null>(null);
   const [wsId, setWsId] = useState<string | null>(null);
@@ -119,19 +119,25 @@ export function PreparationPanel({ atlasSeed, completedNodes, onActivate, onClos
           <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
             {nodes.map((n) => {
               const done = completedNodes.includes(n.id);
+              const shut = !done && !isNodeReachable(nodes, completedNodes, n.id);
               const selected = n.id === nodeId;
               return (
                 <button
                   key={n.id}
                   data-testid={`prep-node-${n.id}`}
-                  disabled={done}
+                  disabled={done || shut}
                   onClick={() => setNodeId(n.id)}
-                  style={tile(selected, done, GOLD)}
+                  style={tile(selected, done || shut, GOLD)}
                 >
                   <div style={{ fontSize: 14 }}>{n.name}</div>
                   {done && (
                     <div style={{ fontSize: 10, letterSpacing: 1, color: "#6f8a5a", marginTop: 3 }}>
                       COMPLETED
+                    </div>
+                  )}
+                  {shut && (
+                    <div style={{ fontSize: 10, letterSpacing: 1, color: "#6a6257", marginTop: 3 }}>
+                      NO ROUTE
                     </div>
                   )}
                 </button>

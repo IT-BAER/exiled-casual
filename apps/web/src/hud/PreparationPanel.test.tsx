@@ -2,7 +2,7 @@
 import React from "react";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
-import { offerWaystones, areaLevel, atlasNodes, WAYSTONE_OFFER_COUNT } from "@exiled/rules";
+import { offerWaystones, areaLevel, atlasGraph, WAYSTONE_OFFER_COUNT } from "@exiled/rules";
 import { PreparationPanel } from "./PreparationPanel.js";
 
 describe("PreparationPanel", () => {
@@ -15,7 +15,7 @@ describe("PreparationPanel", () => {
     render(
       <PreparationPanel atlasSeed={atlasSeed} completedNodes={[]} onActivate={onActivate} onClose={() => {}} />,
     );
-    const node = atlasNodes()[0]!;
+    const node = atlasGraph(atlasSeed)[0]!;
     const ws = offerWaystones(atlasSeed, WAYSTONE_OFFER_COUNT)[0]!;
 
     fireEvent.click(screen.getByTestId(`prep-node-${node.id}`));
@@ -35,10 +35,34 @@ describe("PreparationPanel", () => {
   });
 
   it("disables a completed node", () => {
-    const done = atlasNodes()[0]!.id;
+    const done = atlasGraph(atlasSeed)[0]!.id;
     render(
       <PreparationPanel atlasSeed={atlasSeed} completedNodes={[done]} onActivate={() => {}} onClose={() => {}} />,
     );
     expect((screen.getByTestId(`prep-node-${done}`) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("shows the fog: only the first node is enterable on a fresh atlas", () => {
+    const graph = atlasGraph(atlasSeed);
+    render(
+      <PreparationPanel atlasSeed={atlasSeed} completedNodes={[]} onActivate={() => {}} onClose={() => {}} />,
+    );
+    const shut = graph.find((n) => n.id !== graph[0]!.id && !graph[0]!.links.includes(n.id))!;
+    expect((screen.getByTestId(`prep-node-${graph[0]!.id}`) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByTestId(`prep-node-${shut.id}`) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("opens the neighbours of a cleared node", () => {
+    const graph = atlasGraph(atlasSeed);
+    render(
+      <PreparationPanel
+        atlasSeed={atlasSeed}
+        completedNodes={[graph[0]!.id]}
+        onActivate={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    const neighbour = graph[0]!.links[0]!;
+    expect((screen.getByTestId(`prep-node-${neighbour}`) as HTMLButtonElement).disabled).toBe(false);
   });
 });

@@ -3,7 +3,7 @@ import { WorkerCore } from "./worker-core";
 import type { Intent, Snapshot } from "@exiled/protocol";
 import { fp } from "@exiled/fixed-point";
 import { generateArea } from "@exiled/mapgen";
-import { offerWaystones, WAYSTONE_OFFER_COUNT } from "@exiled/rules";
+import { offerWaystones, mapSeedFor, WAYSTONE_OFFER_COUNT } from "@exiled/rules";
 import { CONTENT_VERSION } from "@exiled/content-runtime";
 
 function monsters(core: WorkerCore) {
@@ -116,7 +116,7 @@ describe("WorkerCore", () => {
     // floor blocks (the "walk through some walls, invisible walls elsewhere" bug).
     expect(core.consumeAreaChange()).toBe(true);
     expect(core.consumeAreaChange()).toBe(false); // one-shot
-    const mapSeed = offerWaystones(42, WAYSTONE_OFFER_COUNT)[0]!.seed;
+    const mapSeed = mapSeedFor(offerWaystones(42, WAYSTONE_OFFER_COUNT)[0]!.seed, "node.ashen_glade");
     expect(core.getAreaLayout().hash).toBe(generateArea(mapSeed, CONTENT_VERSION).hash);
   });
 });

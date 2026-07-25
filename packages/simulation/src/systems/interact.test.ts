@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { fp } from "@exiled/fixed-point";
-import { offerWaystones, WAYSTONE_OFFER_COUNT } from "@exiled/rules";
+import { offerWaystones, atlasGraph, WAYSTONE_OFFER_COUNT } from "@exiled/rules";
 import { MAP_PORTALS } from "@exiled/protocol";
 import { Simulation } from "../loop";
 import { registerInteractSystem } from "./interact";
@@ -51,7 +51,6 @@ describe("registerInteractSystem", () => {
 
     const session = world.get<SessionC>(sessionE, "session")!;
     expect(session.mapOpen).toBe(1);
-    expect(session.mapSeed).toBe(ws.seed);
     expect(session.areaTier).toBe(ws.tier);
     expect(session.activeNodeId).toBe("node.ashen_glade");
     expect(session.portalsLeft).toBe(MAP_PORTALS);
@@ -81,6 +80,42 @@ describe("registerInteractSystem", () => {
     const ws2 = offerWaystones(0, WAYSTONE_OFFER_COUNT)[1]!;
     sim.step([activateCmd(player, "node.emberfall", ws2.id)]); // ignored
     expect(world.get<SessionC>(sessionE, "session")!.mapSeed).toBe(seedAfterFirst);
+  });
+
+  it("activateMap is rejected for a node the fog has not opened", () => {
+    const { sim, world, player, sessionE } = makeWorld();
+    const graph = atlasGraph(0);
+    const shut = graph.find((n) => n.id !== graph[0]!.id && !graph[0]!.links.includes(n.id))!;
+    const ws = offerWaystones(0, WAYSTONE_OFFER_COUNT)[0]!;
+    sim.step([activateCmd(player, shut.id, ws.id)]);
+    expect(world.get<SessionC>(sessionE, "session")!.mapOpen).toBe(0);
+  });
+
+  it("activateMap opens a neighbour once its route is cleared", () => {
+    const { sim, world, player, sessionE } = makeWorld();
+    const graph = atlasGraph(0);
+    const neighbour = graph[0]!.links[0]!;
+    const s = world.get<SessionC>(sessionE, "session")!;
+    world.set<SessionC>(sessionE, "session", { ...s, completedNodes: [graph[0]!.id] });
+    const ws = offerWaystones(0, WAYSTONE_OFFER_COUNT)[0]!;
+    sim.step([activateCmd(player, neighbour, ws.id)]);
+    expect(world.get<SessionC>(sessionE, "session")!.mapOpen).toBe(1);
+  });
+
+  it("the same waystone draws a different map at a different node", () => {
+    const graph = atlasGraph(0);
+    const ws = offerWaystones(0, WAYSTONE_OFFER_COUNT)[0]!;
+    const seedAt = (nodeId: string, completed: string[]) => {
+      const { sim, world, player, sessionE } = makeWorld();
+      const s = world.get<SessionC>(sessionE, "session")!;
+      world.set<SessionC>(sessionE, "session", { ...s, completedNodes: completed });
+      sim.step([activateCmd(player, nodeId, ws.id)]);
+      return world.get<SessionC>(sessionE, "session")!.mapSeed;
+    };
+    const first = seedAt(graph[0]!.id, []);
+    const second = seedAt(graph[0]!.links[0]!, [graph[0]!.id]);
+    expect(first).not.toBe(second);
+    expect(seedAt(graph[0]!.id, [])).toBe(first); // and stays put for a place
   });
 
   it("activateMap is rejected for an already-completed node", () => {
