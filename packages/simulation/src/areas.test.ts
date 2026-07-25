@@ -8,7 +8,7 @@ import type { SessionC, Health, MonsterC } from "./components.js";
 
 function mapSessionAtTier(tier: number): SessionC {
   return {
-    area: "map", atlasSeed: 0, mapSeed: 7, areaTier: tier, activeNodeId: "node.ashen_glade",
+    area: "map", atlasSeed: 0, mapSeed: 7, waystoneSeed: 0, areaTier: tier, activeNodeId: "node.ashen_glade",
     completedNodes: [], portalsLeft: 6, mapOpen: 1, pendingArea: "",
   };
 }

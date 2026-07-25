@@ -34,6 +34,7 @@ export function registerInteractSystem(sim: Simulation): void {
           // The place is half the seed: the same Waystone run at two nodes has to
           // draw two different maps, or the route decision buys nothing.
           mapSeed: mapSeedFor(ws.seed, atlasNodeId),
+          waystoneSeed: ws.seed,
           areaTier: ws.tier,
           activeNodeId: atlasNodeId,
           portalsLeft: MAP_PORTALS,

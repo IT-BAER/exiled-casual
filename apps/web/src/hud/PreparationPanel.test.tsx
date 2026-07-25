@@ -2,7 +2,7 @@
 import React from "react";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
-import { offerWaystones, areaLevel, atlasGraph, WAYSTONE_OFFER_COUNT } from "@exiled/rules";
+import { offerWaystones, areaLevel, atlasGraph, WAYSTONE_OFFER_COUNT, waystoneRarity, waystoneMods } from "@exiled/rules";
 import { PreparationPanel } from "./PreparationPanel.js";
 
 describe("PreparationPanel", () => {
@@ -80,5 +80,40 @@ describe("PreparationPanel", () => {
     );
     const neighbour = graph[0]!.links[0]!;
     expect((screen.getByTestId(`prep-node-${neighbour}`) as HTMLButtonElement).disabled).toBe(false);
+  });
+});
+
+describe("a Waystone shows what it will do to the run", () => {
+  afterEach(cleanup);
+
+  // The offers come from the atlas seed, so a seed is picked whose first stone
+  // rolls modifiers — the panel's whole job is to make that legible before entry.
+  function seedWhoseFirstStoneIs(rarity: string): number {
+    for (let s = 1; s < 100_000; s++) {
+      const ws = offerWaystones(s, WAYSTONE_OFFER_COUNT)[0]!;
+      if (waystoneRarity(ws.seed) === rarity) return s;
+    }
+    throw new Error(`no atlas seed offers a ${rarity} first`);
+  }
+
+  it("names its rarity and prints every modifier it rolled", () => {
+    const atlasSeed = seedWhoseFirstStoneIs("rare");
+    const ws = offerWaystones(atlasSeed, WAYSTONE_OFFER_COUNT)[0]!;
+    render(<PreparationPanel atlasSeed={atlasSeed} completedNodes={[]} onClose={() => {}} onActivate={() => {}} />);
+
+    expect(screen.getByTestId(`prep-ws-${ws.id}-rarity`).textContent).toBe("Rare Waystone");
+    const mods = waystoneMods(ws.seed);
+    expect(mods.length).toBe(4);
+    for (const m of mods) {
+      expect(screen.getByTestId(`prep-ws-${ws.id}-mod-${m.id}`).textContent).toBe(m.label);
+    }
+  });
+
+  it("says so plainly when a stone has nothing on it", () => {
+    const atlasSeed = seedWhoseFirstStoneIs("normal");
+    const ws = offerWaystones(atlasSeed, WAYSTONE_OFFER_COUNT)[0]!;
+    render(<PreparationPanel atlasSeed={atlasSeed} completedNodes={[]} onClose={() => {}} onActivate={() => {}} />);
+    expect(screen.getByTestId(`prep-ws-${ws.id}-rarity`).textContent).toBe("Waystone");
+    expect(screen.getByTestId(`prep-ws-${ws.id}`).textContent).toContain("No modifiers");
   });
 });

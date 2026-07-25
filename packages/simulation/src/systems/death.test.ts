@@ -76,7 +76,7 @@ describe("registerDeath", () => {
     const sessionE = world.create();
     world.set<SessionC>(sessionE, "session", {
       area, atlasSeed: 0, areaTier: 0, activeNodeId: "", completedNodes: [],
-      mapSeed: 0, portalsLeft, mapOpen: 1, pendingArea: "",
+      mapSeed: 0, waystoneSeed: 0, portalsLeft, mapOpen: 1, pendingArea: "",
     });
 
     return { sim, world, p, sessionE };
@@ -130,7 +130,7 @@ describe("registerDeath", () => {
 
     const sessionE = world.create();
     world.set<SessionC>(sessionE, "session", {
-      area, atlasSeed: 0, mapSeed: 0, areaTier: 5, activeNodeId, completedNodes,
+      area, atlasSeed: 0, mapSeed: 0, waystoneSeed: 0, areaTier: 5, activeNodeId, completedNodes,
       portalsLeft: 6, mapOpen: 1, pendingArea: "",
     });
 
@@ -169,7 +169,7 @@ describe("registerDeath", () => {
     registerDeath(sim);
     const w = sim.world;
     const s = w.create();
-    w.set(s, "session", { area: "map", atlasSeed: 1, mapSeed: 7, areaTier: 5, activeNodeId: "node.ashen_glade", completedNodes: [], portalsLeft: 6, mapOpen: 1, pendingArea: "" });
+    w.set(s, "session", { area: "map", atlasSeed: 1, mapSeed: 7, waystoneSeed: 0, areaTier: 5, activeNodeId: "node.ashen_glade", completedNodes: [], portalsLeft: 6, mapOpen: 1, pendingArea: "" });
     const m = w.create();
     w.set(m, "position", { x: 100, y: 200 });
     w.set(m, "health", { life: 0, maxLife: 40 });
@@ -200,7 +200,7 @@ describe("registerDeath", () => {
 
     const sessionE = w.create();
     w.set<SessionC>(sessionE, "session", {
-      area: opts.area, atlasSeed: 0, mapSeed: 0, areaTier: opts.areaTier,
+      area: opts.area, atlasSeed: 0, mapSeed: 0, waystoneSeed: 0, areaTier: opts.areaTier,
       activeNodeId: "", completedNodes: [], portalsLeft: 6, mapOpen: 1, pendingArea: "",
     });
     w.set<ProgressC>(sessionE, "progress", { level: opts.level ?? START_LEVEL, xp: opts.xp });
@@ -267,7 +267,7 @@ describe("registerDeath", () => {
     registerDeath(sim);
     const w = sim.world;
     const s = w.create();
-    w.set(s, "session", { area: "map", atlasSeed: 1, mapSeed: 7, areaTier: 5, activeNodeId: "n", completedNodes: [], portalsLeft: 6, mapOpen: 1, pendingArea: "" });
+    w.set(s, "session", { area: "map", atlasSeed: 1, mapSeed: 7, waystoneSeed: 0, areaTier: 5, activeNodeId: "n", completedNodes: [], portalsLeft: 6, mapOpen: 1, pendingArea: "" });
     const m = w.create();
     w.set(m, "position", { x: 0, y: 0 });
     w.set(m, "health", { life: 0, maxLife: 40 });

@@ -1,7 +1,7 @@
 import { Simulation } from "../loop";
 import type { Health, Mana, MoveTarget, MoveDir, SessionC, MonsterC, Position, ItemC, FlasksC, ProgressC, EnergyShieldC } from "../components";
 import { fnv1a32 } from "../rng";
-import { rollItem, areaLevel, FLASK_CHARGES_PER_KILL, gainXp, xpAward } from "@exiled/rules";
+import { rollItem, areaLevel, FLASK_CHARGES_PER_KILL, gainXp, xpAward, waystoneScaleFor } from "@exiled/rules";
 import { recomputePlayerStats } from "../derived";
 import { ITEM_POOLS, baseOf } from "@exiled/content-runtime";
 
@@ -41,7 +41,11 @@ export function registerDeath(sim: Simulation): void {
         const prog = world.get<ProgressC>(sessionE, "progress");
         if (prog) {
           const kind = isBoss ? "boss" : isRare ? "rare" : "normal";
-          const next = gainXp(prog.level, prog.xp, xpAward(prog.level, areaLevel(s.areaTier), kind));
+          // The stone's experience modifier is the last thing applied, so it
+          // scales what the kill was actually worth after the level penalty.
+          const base = xpAward(prog.level, areaLevel(s.areaTier), kind);
+          const gain = Math.trunc((base * (100 + waystoneScaleFor(s.waystoneSeed).experiencePct)) / 100);
+          const next = gainXp(prog.level, prog.xp, gain);
           world.set<ProgressC>(sessionE, "progress", next);
           if (next.level !== prog.level) recomputePlayerStats(world);
         }

@@ -1,7 +1,7 @@
 import { fp, fpMul } from "@exiled/fixed-point";
-import { makeRare, monsterTierScale } from "@exiled/rules";
+import { makeRare, monsterTierScale, waystoneScaleFor } from "@exiled/rules";
 import { MONSTERS, rareTemplate } from "@exiled/content-runtime";
-import type { MonsterDef } from "@exiled/content-schema";
+import { ELEMENTS, type MonsterDef } from "@exiled/content-schema";
 import type { AreaLayout } from "@exiled/mapgen";
 import type { World, Entity } from "./ecs";
 import { damageCode } from "./damage-types";
@@ -59,6 +59,41 @@ export function spawnPortalRing(world: World, count: number): void {
   }
 }
 
+/**
+ * Where a pack-size extra stands relative to the socket it doubles. Literal
+ * fixed-point, in the same idiom as PORTAL_RING and the boss's SUMMON_RING.
+ */
+const PACK_SPREAD: readonly { dx: number; dy: number }[] = [
+  { dx: fp(0), dy: fp(0) },
+  { dx: fp(1.4), dy: fp(0.9) },
+  { dx: fp(-1.4), dy: fp(-0.9) },
+];
+
+/**
+ * How dangerous this run's monsters are: the map's tier, then the Waystone's
+ * own modifiers on top. One function so every spawner and the boss AI agree —
+ * the last time these were computed in two places, a Tier 15 Warden slammed for
+ * its Tier 1 number for weeks.
+ */
+export function mapDangerScale(session: SessionC): { lifeMilli: number; dmgMilli: number } {
+  const tier = monsterTierScale(session.areaTier);
+  const ws = waystoneScaleFor(session.waystoneSeed);
+  // Per-mille factors compose by multiplication, not by addition: "40% more
+  // life" on a Tier 10 map is 40% more than the tier already granted.
+  return {
+    lifeMilli: Math.trunc((tier.lifeMilli * ws.lifeMilli) / 1000),
+    dmgMilli: Math.trunc((tier.dmgMilli * ws.dmgMilli) / 1000),
+  };
+}
+
+/** The same monster, with a flat percent added to each of its elemental resistances. */
+function withMonsterRes(def: MonsterDef, add: number): MonsterDef {
+  if (add === 0) return def;
+  const resPct = { ...def.defenses.resPct };
+  for (const el of ELEMENTS) resPct[el] += add;
+  return { ...def, defenses: { ...def.defenses, resPct } };
+}
+
 export function buildArea(world: World, area: AreaKind, session: SessionC, layout: AreaLayout): void {
   if (area === "hideout") {
     // Map device
@@ -76,20 +111,32 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
     // Map: imps fill the spawn sockets (last one carries the rare), the warden
     // holds the boss room, and the return portal sits in the exit room. Every
     // position is a walkable socket from the generated layout.
-    const scale = monsterTierScale(session.areaTier);
-    const impDef = MONSTERS.get("monster.cinder_imp.v1")!;
+    const scale = mapDangerScale(session);
+    const ws = waystoneScaleFor(session.waystoneSeed);
+    const impDef = withMonsterRes(MONSTERS.get("monster.cinder_imp.v1")!, ws.monsterResAdd);
     const spawns = layout.spawnSockets;
-    for (let i = 0; i < spawns.length; i++) {
-      const s = spawns[i]!;
+    // Pack size adds monsters to the sockets the layout already has, one extra
+    // pass at a time: the generator owns where a fight can stand, and a modifier
+    // must not be able to put one inside a wall.
+    const total = spawns.length + Math.trunc((spawns.length * ws.packSizePct) / 100);
+    for (let i = 0; i < total; i++) {
+      const s = spawns[i % spawns.length]!;
+      // The last of the layout's own sockets carries the rare; the pack-size
+      // extras are ordinary monsters, so a big roll means more to kill rather
+      // than more rares to answer.
       const rare = i === spawns.length - 1;
       // The map's own seed picks the rare's element, so a given map always
       // demands the same resistance and a replay of it stays identical.
       const def = rare ? makeRare(impDef, rareTemplate(session.mapSeed)) : impDef;
-      spawnMonster(world, def, fp(s.x), fp(s.y), rare, scale);
+      // Extras are nudged off the socket centre so a doubled pack does not stand
+      // in one column. Literal offsets, never trig: the sim stays deterministic.
+      const ring = PACK_SPREAD[Math.trunc(i / spawns.length) % PACK_SPREAD.length]!;
+      spawnMonster(world, def, fp(s.x) + ring.dx, fp(s.y) + ring.dy, rare, scale);
     }
 
     const boss = anchor(layout, "boss");
-    spawnMonster(world, MONSTERS.get("monster.cinder_warden.v1")!, fp(boss.x), fp(boss.y), false, scale);
+    const bossDef = withMonsterRes(MONSTERS.get("monster.cinder_warden.v1")!, ws.monsterResAdd);
+    spawnMonster(world, bossDef, fp(boss.x), fp(boss.y), false, scale);
 
     // Return portal so the map can be exited without dying.
     const exit = anchor(layout, "exit");

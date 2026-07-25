@@ -13,6 +13,13 @@ export interface SessionC {
   /** Stable per-session seed that drives the Waystone offers. Never overwritten. */
   atlasSeed: number;
   mapSeed: number;
+  /**
+   * Seed of the Waystone the open map was opened with. Everything about the
+   * stone — its rarity and its rolled modifiers — derives from this one number,
+   * so the run's difficulty never has to be copied into the session and can
+   * never drift from what the Map Device showed.
+   */
+  waystoneSeed: number;
   /** Tier of the open map. 0 = no map open. areaLevel = 64 + areaTier. */
   areaTier: number;
   /** Atlas node the open map belongs to; "" when none. */

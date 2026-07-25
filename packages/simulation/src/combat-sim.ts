@@ -96,6 +96,7 @@ export function createCombatSim(
       area: opts.area,
       atlasSeed: seed,
       mapSeed: seed,
+      waystoneSeed: 0,
       areaTier: 0,
       activeNodeId: "",
       completedNodes: [],

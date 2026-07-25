@@ -12,7 +12,7 @@ function setup(playerXY: [number, number], itemXY: [number, number], invItems: u
   const player = w.create();
   w.set(player, "position", { x: playerXY[0], y: playerXY[1] });
   const s = w.create();
-  w.set(s, "session", { area: "map", atlasSeed: 1, mapSeed: 7, areaTier: 5, activeNodeId: "n", completedNodes: [], portalsLeft: 6, mapOpen: 1, pendingArea: "" });
+  w.set(s, "session", { area: "map", atlasSeed: 1, mapSeed: 7, waystoneSeed: 0, areaTier: 5, activeNodeId: "n", completedNodes: [], portalsLeft: 6, mapOpen: 1, pendingArea: "" });
   w.set(s, "inventory", { cols: 12, rows: 5, items: invItems });
   const ge = w.create();
   w.set(ge, "position", { x: itemXY[0], y: itemXY[1] });

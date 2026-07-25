@@ -5,6 +5,7 @@ import { Simulation } from "../loop";
 import { gridCollision, type CollisionRef } from "../collision";
 import type { SessionC, MoveTarget, MoveDir, Position } from "../components";
 import { buildArea, HIDEOUT_SPAWN } from "../areas";
+import { recomputePlayerStats } from "../derived";
 
 export function registerAreaTransition(sim: Simulation, collisionRef?: CollisionRef): void {
   sim.register("areaTransition", (world) => {
@@ -38,6 +39,11 @@ export function registerAreaTransition(sim: Simulation, collisionRef?: Collision
     if (collisionRef) {
       collisionRef.active = newArea === "map" ? gridCollision(layout.grid) : null;
     }
+
+    // A map modifier can tax the player's resistances, and that tax is a
+    // property of the area, so crossing a portal has to re-derive the block —
+    // in either direction. Nothing else about the player changes here.
+    recomputePlayerStats(world);
 
     // Move player(s) to the area's spawn and clear stale movement state. On the
     // map that is the generated "start" socket, not the (0,0) map origin.

@@ -1,9 +1,8 @@
 import { fp, fpDist2, fpMul, fpStepToward } from "@exiled/fixed-point";
 import type { MonsterDef } from "@exiled/content-schema";
-import { monsterTierScale } from "@exiled/rules";
 import { Simulation } from "../loop";
 import { slide, type CollisionRef } from "../collision";
-import { spawnMonster } from "../areas";
+import { spawnMonster, mapDangerScale } from "../areas";
 import type { Position, MonsterC, Faction, BossC, TelegraphC, Health, SessionC } from "../components";
 
 // Where phase-2 adds appear, as offsets from the boss. Hand-written literals in
@@ -33,10 +32,8 @@ export function registerBossAI(
     // baking it onto BossC, so a world without a session — the golden replays —
     // serializes exactly as it always has.
     const sessionE = world.query("session")[0];
-    const areaTier = sessionE === undefined
-      ? 0
-      : world.get<SessionC>(sessionE, "session")?.areaTier ?? 0;
-    const { dmgMilli } = monsterTierScale(areaTier);
+    const session = sessionE === undefined ? undefined : world.get<SessionC>(sessionE, "session");
+    const { dmgMilli } = session ? mapDangerScale(session) : { dmgMilli: 1000 };
     for (const e of world.query("boss", "monster", "position", "faction")) {
       const mon = world.get<MonsterC>(e, "monster")!;
       const def = monsters.get(mon.defId);

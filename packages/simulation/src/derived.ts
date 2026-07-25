@@ -1,7 +1,8 @@
-import { baseCasterStats, applyItemMods, levelBonus, START_LEVEL } from "@exiled/rules";
+import { baseCasterStats, applyItemMods, levelBonus, START_LEVEL, waystoneScaleFor } from "@exiled/rules";
 import { itemStatMods } from "@exiled/content-runtime";
+import { ELEMENTS } from "@exiled/content-schema";
 import type { World } from "./ecs";
-import type { Health, Mana, DefensesC, OffenseC, EquipmentC, ProgressC, EnergyShieldC } from "./components";
+import type { Health, Mana, DefensesC, OffenseC, EquipmentC, ProgressC, EnergyShieldC, SessionC } from "./components";
 
 /**
  * Recompute the player's gear-derived stats from scratch: base block + every
@@ -57,7 +58,16 @@ export function recomputePlayerStats(world: World, opts: { refill?: boolean } = 
       regen: Math.trunc(s.manaRegenPerSecFixed / 30),
     });
   }
-  world.set<DefensesC>(player, "defenses", { res: s.resPct, armour: s.armourFixed });
+  // A map modifier that takes resistances off the player applies only inside
+  // that map — walking back to the hideout gives them back, which is why this is
+  // folded here at the end rather than into the gear block: it is a property of
+  // where you are standing, not of what you are wearing. The character sheet
+  // reads these same numbers, so the penalty is visible while it is in force.
+  const session = sessionE === undefined ? undefined : world.get<SessionC>(sessionE, "session");
+  const penalty = session?.area === "map" ? waystoneScaleFor(session.waystoneSeed).playerResPenalty : 0;
+  const res = { ...s.resPct };
+  if (penalty !== 0) for (const el of ELEMENTS) res[el] -= penalty;
+  world.set<DefensesC>(player, "defenses", { res, armour: s.armourFixed });
 
   // Same rule as offense below: no shield, no component. A pool that grows keeps
   // its current value (clamped), so equipping a bigger focus hands you headroom

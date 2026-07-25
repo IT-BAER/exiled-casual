@@ -1,5 +1,8 @@
 import React, { useState } from "react";
-import { offerWaystones, atlasGraph, isNodeReachable, areaLevel, WAYSTONE_OFFER_COUNT } from "@exiled/rules";
+import {
+  offerWaystones, atlasGraph, isNodeReachable, areaLevel, WAYSTONE_OFFER_COUNT,
+  waystoneRarity, waystoneMods, type WaystoneRarity,
+} from "@exiled/rules";
 import type { AtlasGraphNode } from "@exiled/rules";
 import { MAP_PORTALS } from "@exiled/protocol";
 
@@ -19,6 +22,15 @@ const GOLD = "#c8a44d";
 const GOLD_DIM = "#7a5c22";
 const PARCHMENT = "#e8dcc0";
 const MAGIC = "#8aa6ff"; // waystone (magic item) tint, as in PoE rarity
+const AFFIX_BLUE = "#8f97ff"; // the tooltip's affix colour, for a modifier that pays
+const DANGER_RED = "#d2705f"; // ...and its opposite, for one that charges
+/** PoE's own item-rarity palette, the same one ItemTooltip tints a drop with. */
+const RARITY_TINT: Record<WaystoneRarity, string> = { normal: "#c8c8c8", magic: MAGIC, rare: "#e6d64a" };
+const RARITY_NAME: Record<WaystoneRarity, string> = {
+  normal: "Waystone",
+  magic: "Magic Waystone",
+  rare: "Rare Waystone",
+};
 
 function tile(selected: boolean, disabled: boolean, accent: string): React.CSSProperties {
   return {
@@ -264,15 +276,43 @@ export function PreparationPanel({ atlasSeed, completedNodes, onActivate, onClos
           <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
             {waystones.map((w) => {
               const selected = w.id === wsId;
+              const rarity = waystoneRarity(w.seed);
+              const mods = waystoneMods(w.seed);
+              const tint = RARITY_TINT[rarity];
               return (
                 <button
                   key={w.id}
                   data-testid={`prep-ws-${w.id}`}
                   onClick={() => setWsId(w.id)}
-                  style={tile(selected, false, MAGIC)}
+                  style={{ ...tile(selected, false, tint), flex: "1 1 0", textAlign: "left", minWidth: 190 }}
                 >
-                  <div style={{ fontSize: 13, color: MAGIC }}>Waystone</div>
-                  <div style={{ fontSize: 15, fontWeight: 700, marginTop: 2 }}>Tier {w.tier}</div>
+                  {/* Rarity in the name, tier under it, then what the stone will do
+                      to the run — the point of the panel is that risk is legible
+                      BEFORE the portal opens, not after the first pack. */}
+                  <div data-testid={`prep-ws-${w.id}-rarity`} style={{ fontSize: 13, color: tint, letterSpacing: 0.4 }}>
+                    {RARITY_NAME[rarity]}
+                  </div>
+                  <div style={{ fontSize: 15, fontWeight: 700, margin: "2px 0 6px" }}>Tier {w.tier}</div>
+                  {mods.length === 0 ? (
+                    <div style={{ fontSize: 11, color: "#6b6656", fontStyle: "italic" }}>No modifiers</div>
+                  ) : (
+                    mods.map((m) => (
+                      <div
+                        key={m.id}
+                        data-testid={`prep-ws-${w.id}-mod-${m.id}`}
+                        style={{
+                          fontSize: 11,
+                          lineHeight: 1.45,
+                          // A prefix pays and a suffix charges, so they are not the
+                          // same colour: PoE's affix blue for the reward, a warmer
+                          // red for the thing that will kill you.
+                          color: m.kind === "prefix" ? AFFIX_BLUE : DANGER_RED,
+                        }}
+                      >
+                        {m.label}
+                      </div>
+                    ))
+                  )}
                 </button>
               );
             })}

@@ -7,3 +7,4 @@ export * from "./items.js";
 export * from "./flasks.js";
 export * from "./xp.js";
 export * from "./energy-shield.js";
+export * from "./waystone.js";
