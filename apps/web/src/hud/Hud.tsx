@@ -33,11 +33,7 @@ const FLASK_W = `${(ORB_VW * 0.215).toFixed(2)}vw`;
 const FLASK_H = `${(ORB_VW * 0.40).toFixed(2)}vw`;
 // The border-image's own side slice. Named because the padding below has to
 // subtract exactly it, or the first slot drifts out from under the ring.
-const BAR_SIDE = 36;
-// The panel art is flush-cut at both image edges, crenellations included, so a
-// 9-slice ends it with a razor edge. The inner end fades over the last few
-// pixels instead, which reads as the bar receding rather than being sliced.
-const BAR_FADE = `${(ORB_VW * 0.42).toFixed(2)}vw`;
+const BAR_SIDE = 28;
 // Content clears the globe by padding, not by offsetting the whole bar: that way the art
 // keeps running behind the ring. BAR_SIDE is the border-image's own side slice, which
 // already sits between the bar's edge and its first slot.
@@ -143,9 +139,13 @@ const barStyle: React.CSSProperties = {
   alignItems: "center",
   gap: "0.25vw",
   borderStyle: "solid",
-  borderWidth: `14px ${BAR_SIDE}px 16px ${BAR_SIDE}px`,
-  borderImageSource: "url(/hud/bar-panel-v1.png)",
-  borderImageSlice: "42 110 48 110 fill",
+  borderWidth: `18px ${BAR_SIDE}px 16px ${BAR_SIDE}px`,
+  // bar-panel-v2.png, 1024x209: v1 was flush-cut at both image edges, so a 9-slice
+  // ended it on a straight vertical line mid-merlon. v2 closes both ends with a
+  // corner tower over a pilaster over a stepped end-block, all inside the 78px side
+  // slice, so the panel terminates in the art instead of in a CSS fade.
+  borderImageSource: "url(/hud/bar-panel-v2.png)",
+  borderImageSlice: "50 78 44 78 fill",
   filter: "drop-shadow(0 2px 8px rgba(0,0,0,0.7))",
 };
 
@@ -533,7 +533,7 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
       </div>
 
       {/* Flask bar — runs off the screen side and under the life globe, per poe1-lower-bar.png */}
-      <div data-testid="flask-row" style={{ ...barStyle, left: 0, paddingLeft: BAR_PAD, zIndex: 2, maskImage: `linear-gradient(to right, #000 calc(100% - ${BAR_FADE}), transparent)` }}>
+      <div data-testid="flask-row" style={{ ...barStyle, left: 0, paddingLeft: BAR_PAD, zIndex: 2 }}>
         {FLASKS.map((f) => {
           const charges = f.kind === "life"
             ? snapshot.player.flasks.lifeCharges
@@ -546,7 +546,7 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
       </div>
 
       {/* Skill bar — mirror of the flask bar, running under the mana globe */}
-      <div data-testid="skill-row" style={{ ...barStyle, right: 0, paddingRight: BAR_PAD, zIndex: 2, maskImage: `linear-gradient(to left, #000 calc(100% - ${BAR_FADE}), transparent)` }}>
+      <div data-testid="skill-row" style={{ ...barStyle, right: 0, paddingRight: BAR_PAD, zIndex: 2 }}>
         {SKILL_SLOTS.map((slot, idx) => {
           const cd = slot.id ? cooldowns[slot.id] ?? 0 : 0;
           const ready = cd <= 0;
