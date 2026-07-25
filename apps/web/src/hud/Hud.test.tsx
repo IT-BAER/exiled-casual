@@ -19,6 +19,8 @@ function makeSnap(overrides: {
   mapOpen?: boolean;
   entities?: Snapshot["entities"];
   flasks?: Snapshot["player"]["flasks"];
+  energyShield?: number;
+  maxEnergyShield?: number;
   level?: number;
   xp?: number;
   xpToNext?: number;
@@ -39,6 +41,8 @@ function makeSnap(overrides: {
       maxLife: overrides.maxLife ?? 100,
       mana: 30,
       maxMana: 60,
+      energyShield: overrides.energyShield ?? 0,
+      maxEnergyShield: overrides.maxEnergyShield ?? 0,
       cooldowns: overrides.cooldowns ?? {},
       alive: true,
       casting: false,
@@ -117,7 +121,7 @@ describe("Hud", () => {
       areaTier: 0,
       atlasSeed: 0,
       completedNodes: [],
-      player: { id: 0, x: 0, y: 0, life: 100, maxLife: 100, mana: 30, maxMana: 60, cooldowns: {}, alive: true, casting: false, level: 65, xp: 0, xpToNext: 60_000, flasks: { lifeCharges: 7, lifeMax: 7, manaCharges: 7, manaMax: 7 }, stats: { armour: 0, armourPct: 0, res: { fire: 0, cold: 0, lightning: 0, chaos: 0 }, manaRegenPerSec: 6, spellDamagePct: 0 } },
+      player: { id: 0, x: 0, y: 0, life: 100, maxLife: 100, mana: 30, maxMana: 60, energyShield: 0, maxEnergyShield: 0, cooldowns: {}, alive: true, casting: false, level: 65, xp: 0, xpToNext: 60_000, flasks: { lifeCharges: 7, lifeMax: 7, manaCharges: 7, manaMax: 7 }, stats: { armour: 0, armourPct: 0, res: { fire: 0, cold: 0, lightning: 0, chaos: 0 }, manaRegenPerSec: 6, spellDamagePct: 0 } },
       entities: [{ id: 10, kind: "monster", x: 0, y: 0, boss: true, bossPhase: 2, life: 600, maxLife: 1000 }],
       inventory: { cols: 12, rows: 5, items: [] },
       equipment: {},
@@ -258,5 +262,23 @@ describe("experience bar", () => {
   it("reads full at the level cap, where there is nothing left to earn", () => {
     render(<Hud snapshot={makeSnap({ level: 100, xp: 0, xpToNext: 0 })} />);
     expect(screen.getByTestId("xp-bar-fill")).toHaveStyle({ width: "100%" });
+  });
+});
+
+describe("energy shield on the life globe", () => {
+  it("shares the well with life and rides on top of it", () => {
+    // 100 life + 100 shield: the liquid is the bottom half, the shield the top.
+    render(<Hud snapshot={makeSnap({ life: 100, maxLife: 100, energyShield: 100, maxEnergyShield: 100 })} />);
+    expect(screen.getByTestId("life-orb-fill")).toHaveStyle({ height: "50%" });
+    const band = screen.getByTestId("life-orb-fill-shield");
+    expect(band).toHaveStyle({ height: "50%", bottom: "50%" });
+    expect(screen.getByTestId("life-readout")).toHaveTextContent("100/100 + 100");
+  });
+
+  it("is absent entirely without a shield, and the globe is the globe it was", () => {
+    render(<Hud snapshot={makeSnap({ life: 50, maxLife: 100 })} />);
+    expect(screen.getByTestId("life-orb-fill")).toHaveStyle({ height: "50%" });
+    expect(screen.queryByTestId("life-orb-fill-shield")).toBeNull();
+    expect(screen.getByTestId("life-readout")).toHaveTextContent("50/100");
   });
 });

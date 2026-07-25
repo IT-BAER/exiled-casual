@@ -3,6 +3,7 @@ import { ELEMENTS, resBlock, type Element, type ResBlock } from "@exiled/content
 
 export interface StatBlock {
   maxLifeFixed: Fixed;
+  maxEnergyShieldFixed: Fixed;
   maxManaFixed: Fixed;
   manaRegenPerSecFixed: Fixed;
   moveSpeedFixed: Fixed;   // units per second; systems derive per-tick
@@ -49,6 +50,9 @@ export const PDR_CAP = 90;
 export function baseCasterStats(): StatBlock {
   return {
     maxLifeFixed: fp(100),
+    // No base energy shield: it is entirely a gear stat, the way PoE2 has it —
+    // a character with no ES gear has none, and the pool simply does not exist.
+    maxEnergyShieldFixed: fp(0),
     maxManaFixed: fp(60),
     manaRegenPerSecFixed: fp(15),
     moveSpeedFixed: fp(4.2),
@@ -69,16 +73,16 @@ export interface ItemStatMod {
  * increases scale the sum, which is PoE's order: "+60 to Armour" and "30%
  * increased Armour" on the same chest give 78, never 60 + 18-of-nothing.
  *
- * Only the stats the sim actually has a mechanic for are honoured. Energy
- * shield, attributes, crit and cast speed roll and render but land here as
+ * Only the stats the sim actually has a mechanic for are honoured. Attributes,
+ * crit and cast speed roll and render but land here as
  * no-ops on purpose: each needs a mechanic that does not exist yet, and
  * silently mapping them onto a neighbouring stat would lie louder than showing
  * an inert line. Unknown ids are ignored, never thrown on, so content can add a
  * mod before the system that reads it.
  */
 export function applyItemMods(base: StatBlock, mods: readonly ItemStatMod[]): StatBlock {
-  const flat = { maxLife: 0, maxMana: 0, armour: 0 };
-  const pct = { manaRegen: 0, armour: 0, spellDamage: 0 };
+  const flat = { maxLife: 0, maxMana: 0, armour: 0, energyShield: 0 };
+  const pct = { manaRegen: 0, armour: 0, spellDamage: 0, energyShield: 0 };
   const res = resBlock();
   for (const m of mods) {
     const el = RES_STAT_ELEMENT[m.stat];
@@ -90,6 +94,8 @@ export function applyItemMods(base: StatBlock, mods: readonly ItemStatMod[]): St
       case "maxLife": flat.maxLife += m.value; break;
       case "maxMana": flat.maxMana += m.value; break;
       case "armour": flat.armour += m.value; break;
+      case "energyShield": flat.energyShield += m.value; break;
+      case "energyShieldPct": pct.energyShield += m.value; break;
       case "manaRegenPct": pct.manaRegen += m.value; break;
       case "armourPct": pct.armour += m.value; break;
       case "spellDamagePct": pct.spellDamage += m.value; break;
@@ -102,6 +108,7 @@ export function applyItemMods(base: StatBlock, mods: readonly ItemStatMod[]): St
     ...base,
     resPct,
     maxLifeFixed: base.maxLifeFixed + fp(flat.maxLife),
+    maxEnergyShieldFixed: scalePct(base.maxEnergyShieldFixed + fp(flat.energyShield), pct.energyShield),
     maxManaFixed: base.maxManaFixed + fp(flat.maxMana),
     manaRegenPerSecFixed: scalePct(base.manaRegenPerSecFixed, pct.manaRegen),
     armourFixed: scalePct(armourFlat, pct.armour),

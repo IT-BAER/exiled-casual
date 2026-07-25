@@ -151,6 +151,8 @@ const barStyle: React.CSSProperties = {
  */
 function Orb(props: {
   pct: number;
+  /** Energy shield's share of the same well, riding on top of the liquid. 0 = none. */
+  shieldPct?: number;
   fillTestId: string;
   readoutTestId: string;
   art: string;
@@ -159,7 +161,7 @@ function Orb(props: {
   value: string;
   side: "left" | "right";
 }) {
-  const { pct, fillTestId, readoutTestId, art, figure, label, value, side } = props;
+  const { pct, shieldPct = 0, fillTestId, readoutTestId, art, figure, label, value, side } = props;
   return (
     <div
       style={{
@@ -205,6 +207,25 @@ function Orb(props: {
             transition: "height 120ms linear",
           }}
         />
+        {/* Energy shield sits ON TOP of the liquid, the way PoE1 stacks it on the
+            life globe: the well holds life + shield together, and the pale band is
+            the part a hit eats first. With no shield the band is zero-height and the
+            globe is exactly the life globe it has always been. */}
+        {shieldPct > 0 && (
+          <div
+            data-testid={`${fillTestId}-shield`}
+            style={{
+              position: "absolute",
+              left: 0,
+              right: 0,
+              bottom: `${pct}%`,
+              height: `${shieldPct}%`,
+              background: "linear-gradient(to top, rgba(168,226,255,0.85), rgba(214,244,255,0.95))",
+              boxShadow: "inset 0 2px 5px rgba(255,255,255,0.35)",
+              transition: "height 120ms linear, bottom 120ms linear",
+            }}
+          />
+        )}
         {/* glass volume: edges fall to near-black so the disc reads as a sphere */}
         <div style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "radial-gradient(circle at 50% 50%, transparent 58%, rgba(0,0,0,0.30) 100%)" }} />
         {/* specular bloom, upper left — the liquid's brightest point in the PoE1 shot */}
@@ -272,8 +293,13 @@ function Orb(props: {
 export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
   if (!snapshot) return null;
 
-  const { life, maxLife, mana, maxMana, cooldowns } = snapshot.player;
-  const lifePct = maxLife > 0 ? Math.max(0, Math.min(100, (life / maxLife) * 100)) : 0;
+  const { life, maxLife, mana, maxMana, cooldowns, energyShield, maxEnergyShield } = snapshot.player;
+  // The life well holds both pools, so the waterline is still "how much is left
+  // before you die" — which is what the globe is for. Without a shield the
+  // denominator is maxLife and nothing moves.
+  const wellMax = maxLife + maxEnergyShield;
+  const lifePct = wellMax > 0 ? Math.max(0, Math.min(100, (life / wellMax) * 100)) : 0;
+  const shieldPct = wellMax > 0 ? Math.max(0, Math.min(100 - lifePct, (energyShield / wellMax) * 100)) : 0;
   const manaPct = maxMana > 0 ? Math.max(0, Math.min(100, (mana / maxMana) * 100)) : 0;
 
   // A capped character has nothing left to earn, so its bar reads full rather than empty.
@@ -423,12 +449,17 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
 
       <Orb
         pct={lifePct}
+        shieldPct={shieldPct}
         fillTestId="life-orb-fill"
         readoutTestId="life-readout"
         art="/hud/orb-life-v2.png"
         figure="/hud/orb-figure-life-v5.png"
         label="Life"
-        value={`${Math.round(life)}/${Math.round(maxLife)}`}
+        value={
+          maxEnergyShield > 0
+            ? `${Math.round(life)}/${Math.round(maxLife)} + ${Math.round(energyShield)}`
+            : `${Math.round(life)}/${Math.round(maxLife)}`
+        }
         side="left"
       />
       <Orb

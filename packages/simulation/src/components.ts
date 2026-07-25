@@ -75,6 +75,13 @@ export interface MonsterC {
 }
 export interface DefensesC  { res: ResBlock; armour: Fixed }
 /**
+ * The pool in front of life. Present only while some equipped mod grants it, so
+ * an ungeared world serializes exactly as it did before energy shield existed —
+ * the same rule OffenseC follows. `rechargeAtTick` is the tick the refill may
+ * resume; every hit pushes it out again.
+ */
+export interface EnergyShieldC { es: Fixed; maxEs: Fixed; rechargeAtTick: number }
+/**
  * Gear-derived offence. Only present while some equipped mod grants it, so an
  * ungeared world serializes exactly as it did before gear existed.
  */

@@ -1,10 +1,10 @@
-import { applyDamage, bossChargeSteps } from "@exiled/rules";
+import { applyDamage, bossChargeSteps, absorbWithEnergyShield, ES_RECHARGE_DELAY_TICKS } from "@exiled/rules";
 import { Simulation } from "../loop";
-import type { Health, DefensesC, FlasksC } from "../components";
+import type { Health, DefensesC, FlasksC, EnergyShieldC } from "../components";
 import { damageTypeOf } from "../damage-types";
 
 export function registerDamageResolve(sim: Simulation): void {
-  sim.register("damageResolve", (world) => {
+  sim.register("damageResolve", (world, tick) => {
     const q = sim.damageQueue
       .slice()
       .sort((a, b) =>
@@ -23,7 +23,22 @@ export function registerDamageResolve(sim: Simulation): void {
         { type: damageTypeOf(ev.type), amountFixed: ev.amountFixed },
         { resPct: def.res, armourFixed: def.armour },
       );
-      const after = Math.max(0, health.life - final);
+      // Energy shield stands in front of life and pays double for chaos. Every
+      // hit that touches the shield — even one it fully stops — pushes the
+      // recharge back, which is what makes the pool a reward for disengaging.
+      let toLife = final;
+      const shield = world.get<EnergyShieldC>(ev.target, "energyShield");
+      if (shield && shield.maxEs > 0) {
+        const split = absorbWithEnergyShield(final, shield.es, damageTypeOf(ev.type) === "chaos");
+        toLife = split.toLife;
+        world.set<EnergyShieldC>(ev.target, "energyShield", {
+          ...shield,
+          es: Math.max(0, shield.es - split.esCost),
+          rechargeAtTick: tick + ES_RECHARGE_DELAY_TICKS,
+        });
+      }
+
+      const after = Math.max(0, health.life - toLife);
       world.set<Health>(ev.target, "health", { ...health, life: after });
 
       // A boss pays flask charges as it bleeds, not when it dies: see

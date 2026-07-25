@@ -105,11 +105,19 @@ describe("applyItemMods", () => {
 
   it("ignores stats the sim has no mechanic for", () => {
     const s = applyItemMods(baseCasterStats(), [
-      { stat: "energyShield", value: 35 },
       { stat: "strength", value: 20 },
       { stat: "critChancePct", value: 25 },
     ]);
     expect(s).toEqual(baseCasterStats());
+  });
+
+  it("energy shield adds flat, then its percent scales the sum", () => {
+    const s = applyItemMods(baseCasterStats(), [
+      { stat: "energyShield", value: 35 },
+      { stat: "energyShield", value: 25 },
+      { stat: "energyShieldPct", value: 30 },
+    ]);
+    expect(s.maxEnergyShieldFixed).toBe(fp(78)); // (35 + 25) x 1.3
   });
 
   it("does not mutate the base block", () => {

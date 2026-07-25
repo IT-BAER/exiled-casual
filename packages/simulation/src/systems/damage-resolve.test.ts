@@ -3,7 +3,8 @@ import { fp } from "@exiled/fixed-point";
 import { resBlock } from "@exiled/content-schema";
 import { Simulation } from "../loop";
 import { registerDamageResolve } from "./damage-resolve";
-import type { Health, DefensesC, FlasksC } from "../components";
+import { ES_RECHARGE_DELAY_TICKS } from "@exiled/rules";
+import type { Health, DefensesC, FlasksC, EnergyShieldC } from "../components";
 
 it("applies two enqueued events, floored at 0", () => {
   const sim = new Simulation();
@@ -91,5 +92,49 @@ describe("a boss pays flask charges as it bleeds", () => {
     registerDamageResolve(sim);
     sim.step();
     expect(w.get<FlasksC>(p, "flasks")!.manaCharges).toBe(0);
+  });
+});
+
+describe("energy shield stands in front of life", () => {
+  function hitPlayer(opts: { es: number; maxEs: number; hit: number; type: number; tick?: number }) {
+    const sim = new Simulation();
+    const w = sim.world;
+    const p = w.create();
+    w.set<Health>(p, "health", { life: fp(100), maxLife: fp(100) });
+    w.set<DefensesC>(p, "defenses", { res: resBlock(), armour: 0 });
+    w.set<EnergyShieldC>(p, "energyShield", { es: opts.es, maxEs: opts.maxEs, rechargeAtTick: 0 });
+    sim.register("testProducer", () => {
+      sim.enqueueDamage({ target: p, source: 99, amountFixed: opts.hit, type: opts.type });
+    });
+    registerDamageResolve(sim);
+    sim.step();
+    return {
+      life: w.get<Health>(p, "health")!.life,
+      shield: w.get<EnergyShieldC>(p, "energyShield")!,
+    };
+  }
+
+  it("a hit the shield can absorb never reaches life", () => {
+    const r = hitPlayer({ es: fp(50), maxEs: fp(50), hit: fp(30), type: 1 });
+    expect(r.life).toBe(fp(100));
+    expect(r.shield.es).toBe(fp(20));
+  });
+
+  it("the overflow lands on life", () => {
+    const r = hitPlayer({ es: fp(10), maxEs: fp(50), hit: fp(30), type: 1 });
+    expect(r.shield.es).toBe(0);
+    expect(r.life).toBe(fp(80));
+  });
+
+  it("chaos drains the shield twice as fast", () => {
+    // DAMAGE_TYPES index 4 is chaos.
+    const r = hitPlayer({ es: fp(50), maxEs: fp(50), hit: fp(10), type: 4 });
+    expect(r.shield.es).toBe(fp(30));
+    expect(r.life).toBe(fp(100));
+  });
+
+  it("any hit pushes the recharge back by the full delay", () => {
+    const r = hitPlayer({ es: fp(50), maxEs: fp(50), hit: fp(1), type: 1 });
+    expect(r.shield.rechargeAtTick).toBe(ES_RECHARGE_DELAY_TICKS);
   });
 });

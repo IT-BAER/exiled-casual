@@ -1,5 +1,5 @@
 import { Simulation } from "../loop";
-import type { Health, Mana, MoveTarget, MoveDir, SessionC, MonsterC, Position, ItemC, FlasksC, ProgressC } from "../components";
+import type { Health, Mana, MoveTarget, MoveDir, SessionC, MonsterC, Position, ItemC, FlasksC, ProgressC, EnergyShieldC } from "../components";
 import { fnv1a32 } from "../rng";
 import { rollItem, areaLevel, FLASK_CHARGES_PER_KILL, gainXp, xpAward } from "@exiled/rules";
 import { recomputePlayerStats } from "../derived";
@@ -68,6 +68,8 @@ export function registerDeath(sim: Simulation): void {
       world.set<Health>(e, "health", { ...h, life: h.maxLife });
       const mn = world.get<Mana>(e, "mana");
       if (mn) world.set<Mana>(e, "mana", { ...mn, mana: mn.maxMana });
+      const es = world.get<EnergyShieldC>(e, "energyShield");
+      if (es) world.set<EnergyShieldC>(e, "energyShield", { ...es, es: es.maxEs, rechargeAtTick: 0 });
       const mt = world.get<MoveTarget>(e, "moveTarget");
       if (mt) world.set<MoveTarget>(e, "moveTarget", { ...mt, active: 0 });
       const md = world.get<MoveDir>(e, "moveDir");

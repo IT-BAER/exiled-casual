@@ -137,8 +137,8 @@ export interface SnapshotEntity {
 
 /**
  * Everything the character sheet shows that the HUD globes do not already carry.
- * Only stats some equipped mod can actually move live here: attributes, energy
- * shield, evasion and block have no mechanic yet, and a zero row would
+ * Only stats some equipped mod can actually move live here: attributes, evasion
+ * and block have no mechanic yet, and a zero row would
  * advertise a system that does not exist.
  */
 export interface PlayerStats {
@@ -179,6 +179,8 @@ export interface Snapshot {
   player: {
     id: number; x: number; y: number;
     life: number; maxLife: number; mana: number; maxMana: number;
+    /** The pool in front of life. Both are 0 when no equipped mod grants any. */
+    energyShield: number; maxEnergyShield: number;
     cooldowns: Record<string, number>;
     alive: boolean;
     /** In post-cast recovery this tick (moving slowed, cast pose held). */

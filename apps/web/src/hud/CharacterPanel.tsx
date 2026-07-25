@@ -1,6 +1,6 @@
 import React from "react";
 import type { Snapshot } from "@exiled/protocol";
-import { RES_CAP } from "@exiled/rules";
+import { RES_CAP, ES_RECHARGE_PCT_PER_SEC, ES_RECHARGE_DELAY_TICKS } from "@exiled/rules";
 import { SERIF, GOLD_DIM, PARCHMENT } from "./InventoryPanel";
 
 // PoE2's character sheet (C), matched to poe2-screenshots/character-stats.png.
@@ -109,6 +109,33 @@ function ElementGlyph({ of }: { of: keyof typeof ELEMENT_GLYPH }) {
         stroke={g.tint}
         strokeWidth={filled ? 0 : 2}
         strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/**
+ * The reference's energy-shield crest, drawn rather than sprited: the icon sheet
+ * is a fixed 2x2 of life/mana/armour/fire and a fifth stat would mean reflowing
+ * it for one glyph.
+ */
+function ShieldGlyph() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      width={34}
+      height={34}
+      // flex: none, like Icon: the niche is a fixed-height column and a flexible
+      // SVG child gets squashed to zero height by the label under it.
+      style={{ flex: "none", filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.9))" }}
+    >
+      <path
+        d="M12 2 4 5v7c0 5 3.5 8.4 8 10 4.5-1.6 8-5 8-10V5z"
+        fill="rgba(120,190,225,0.35)"
+        stroke="#8fd0ef"
+        strokeWidth={1.6}
+        strokeLinejoin="round"
       />
     </svg>
   );
@@ -279,6 +306,20 @@ export function CharacterPanel({ player, onClose }: { player: Snapshot["player"]
           <Niche id="life" label="Life" value={String(Math.round(player.maxLife))} icon={<Icon of="life" />} />
           <Niche id="mana" label="Mana" value={String(Math.round(player.maxMana))} icon={<Icon of="mana" />} />
         </div>
+        {/* The reference gives energy shield a niche of its own beside life. Ours
+            only appears once gear grants a pool: a row frozen at zero would say a
+            character has a shield mechanic switched off, which is not what a
+            character with no ES gear has. */}
+        {player.maxEnergyShield > 0 && (
+          <div style={{ display: "flex", marginTop: 6, justifyContent: "center" }}>
+            <Niche
+              id="energy-shield"
+              label="Energy Shield"
+              value={String(Math.round(player.maxEnergyShield))}
+              icon={<ShieldGlyph />}
+            />
+          </div>
+        )}
         <div style={{ display: "flex", marginTop: 6, justifyContent: "center" }}>
           <Niche id="armour" label="Armour" value={`${s.armourPct}%`} icon={<Icon of="armour" />} />
         </div>
@@ -299,6 +340,16 @@ export function CharacterPanel({ player, onClose }: { player: Snapshot["player"]
           style={{ marginTop: 16, padding: "12px 12px 2px", background: "rgba(4,3,2,0.82)", border: "1px solid #1e1810" }}
         >
           <DetailSection title="Life" rows={[["Maximum Life", String(Math.round(player.maxLife))]]} />
+          {player.maxEnergyShield > 0 && (
+            <DetailSection
+              title="Energy Shield"
+              rows={[
+                ["Maximum Energy Shield", String(Math.round(player.maxEnergyShield))],
+                ["Recharge Rate per second", (player.maxEnergyShield * ES_RECHARGE_PCT_PER_SEC / 1000).toFixed(1)],
+                ["Recharge Delay", `${(ES_RECHARGE_DELAY_TICKS / 30).toFixed(1)}s`],
+              ]}
+            />
+          )}
           <DetailSection
             title="Mana"
             rows={[

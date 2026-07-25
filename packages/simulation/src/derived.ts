@@ -1,7 +1,7 @@
 import { baseCasterStats, applyItemMods, levelBonus, START_LEVEL } from "@exiled/rules";
 import { itemStatMods } from "@exiled/content-runtime";
 import type { World } from "./ecs";
-import type { Health, Mana, DefensesC, OffenseC, EquipmentC, ProgressC } from "./components";
+import type { Health, Mana, DefensesC, OffenseC, EquipmentC, ProgressC, EnergyShieldC } from "./components";
 
 /**
  * Recompute the player's gear-derived stats from scratch: base block + every
@@ -58,6 +58,20 @@ export function recomputePlayerStats(world: World, opts: { refill?: boolean } = 
     });
   }
   world.set<DefensesC>(player, "defenses", { res: s.resPct, armour: s.armourFixed });
+
+  // Same rule as offense below: no shield, no component. A pool that grows keeps
+  // its current value (clamped), so equipping a bigger focus hands you headroom
+  // to recharge rather than an instant slab of effective health.
+  if (s.maxEnergyShieldFixed === 0) {
+    if (world.has(player, "energyShield")) world.remove(player, "energyShield");
+  } else {
+    const cur = world.get<EnergyShieldC>(player, "energyShield");
+    world.set<EnergyShieldC>(player, "energyShield", {
+      maxEs: s.maxEnergyShieldFixed,
+      es: opts.refill ? s.maxEnergyShieldFixed : Math.min(cur?.es ?? s.maxEnergyShieldFixed, s.maxEnergyShieldFixed),
+      rechargeAtTick: cur?.rechargeAtTick ?? 0,
+    });
+  }
 
   // Removing at zero keeps the component out of a bare world entirely. The store
   // itself is only created once something grants spell damage, which is what

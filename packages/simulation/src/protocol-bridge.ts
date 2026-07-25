@@ -11,6 +11,7 @@ import type {
   Health, Mana, Position, Cooldowns, CastingC, MonsterC,
   AilmentC, ProjectileC, GroundAreaC, BossC, TelegraphC,
   SessionC, InteractableC, ItemC, InventoryC, EquipmentC, FlasksC, DefensesC, OffenseC, ProgressC,
+  EnergyShieldC,
 } from "./components";
 
 /**
@@ -83,6 +84,8 @@ export function buildSnapshot(
   const pm = world.get<Mana>(playerEntity, "mana")!;
   const pp = world.get<Position>(playerEntity, "position")!;
   const rawCds = world.get<Cooldowns>(playerEntity, "cooldowns") ?? {};
+  // Absent until some equipped mod grants a shield; the HUD reads 0/0 as "none".
+  const pes = world.get<EnergyShieldC>(playerEntity, "energyShield");
 
   const cooldowns: Record<string, number> = {};
   for (const [skillId, readyTick] of Object.entries(rawCds)) {
@@ -240,6 +243,8 @@ export function buildSnapshot(
       x: toNumber(pp.x), y: toNumber(pp.y),
       life: toNumber(ph.life), maxLife: toNumber(ph.maxLife),
       mana: toNumber(pm.mana), maxMana: toNumber(pm.maxMana),
+      energyShield: toNumber(pes?.es ?? 0),
+      maxEnergyShield: toNumber(pes?.maxEs ?? 0),
       cooldowns,
       alive: ph.life > 0,
       casting: (() => {

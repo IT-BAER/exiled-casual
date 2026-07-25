@@ -10,6 +10,7 @@ function player(over: Partial<Snapshot["player"]["stats"]> = {}): Snapshot["play
   return {
     id: 0, x: 0, y: 0,
     life: 96, maxLife: 140, mana: 12, maxMana: 60,
+    energyShield: 0, maxEnergyShield: 0,
     cooldowns: {}, alive: true, casting: false, level: 65, xp: 0, xpToNext: 60_000,
     flasks: { lifeCharges: 7, lifeMax: 7, manaCharges: 7, manaMax: 7 },
     stats: { armour: 50, armourPct: 83, res: { fire: 20, cold: 0, lightning: 0, chaos: 0 }, manaRegenPerSec: 8.7, spellDamagePct: 12, ...over },
@@ -68,5 +69,23 @@ describe("CharacterPanel", () => {
     render(<CharacterPanel player={player()} onClose={() => { closed = true; }} />);
     fireEvent.click(screen.getByTestId("character-close"));
     expect(closed).toBe(true);
+  });
+});
+
+describe("energy shield", () => {
+  it("shows a niche and a detail block once gear grants a pool", () => {
+    render(<CharacterPanel player={{ ...player(), maxEnergyShield: 120 }} onClose={() => {}} />);
+    const niche = screen.getByTestId("char-stat-energy-shield");
+    expect(niche.textContent).toContain("120");
+    // The crest must keep its own size: a flexible SVG in the niche column gets
+    // squashed to zero height by the label beneath it.
+    expect(niche.querySelector("svg")!.getAttribute("style")).toContain("flex: 0 0 auto");
+    expect(screen.getByTestId("char-detail").textContent).toContain("Maximum Energy Shield");
+  });
+
+  it("says nothing at all without one", () => {
+    render(<CharacterPanel player={player()} onClose={() => {}} />);
+    expect(screen.queryByTestId("char-stat-energy-shield")).toBeNull();
+    expect(screen.getByTestId("char-detail").textContent).not.toContain("Energy Shield");
   });
 });
