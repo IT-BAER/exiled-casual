@@ -364,6 +364,7 @@ export function InventoryPanel({
           reqLevel={items[hover.i]!.reqLevel}
           reqAttrValue={items[hover.i]!.reqAttrValue}
           reqAttr={items[hover.i]!.reqAttr}
+          implicit={items[hover.i]!.implicit}
           lines={items[hover.i]!.lines}
           flavour={items[hover.i]!.flavour}
           x={hover.x}

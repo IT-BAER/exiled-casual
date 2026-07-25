@@ -71,7 +71,11 @@ export function rollItem(
 
   const affixes: ItemAffix[] = [];
   if (rarity !== "normal") {
-    const eligible = pools.affixes.filter((a) => a.minItemLevel <= ilvl);
+    // Two gates: item level, and the base's class pool. A mod that names no classes
+    // is universal (attributes, resistances); one that names them is bound to them.
+    const eligible = pools.affixes.filter(
+      (a) => a.minItemLevel <= ilvl && (a.itemClasses === undefined || a.itemClasses.includes(base.itemClass)),
+    );
     if (eligible.length > 0) {
       const want = rarity === "rare" ? 3 + (rnd() % 4) : 1 + (rnd() % 2); // rare 3..6, magic 1..2
       // Each side is capped on its own: magic 1+1, rare 3+3, same as PoE. A pool that

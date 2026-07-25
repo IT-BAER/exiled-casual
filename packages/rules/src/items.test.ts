@@ -76,6 +76,33 @@ describe("rollItem", () => {
     expect(seen.suffixes).toBeGreaterThan(0);
   });
 
+  // A mod that names item classes is bound to them; one that names none rolls anywhere.
+  // PoE keeps a separate mod pool per item class, so a wand can never roll body armour's mods.
+  const CLASSED: ItemPools = {
+    bases: [
+      { id: "b.wand", name: "Wand", itemClass: "wand", w: 1, h: 2 },
+      { id: "b.body", name: "Robe", itemClass: "body", w: 2, h: 3 },
+    ],
+    affixes: [
+      { id: "a.any", kind: "prefix", nameWord: "Any", stat: "s", label: "l", minItemLevel: 1, min: 1, max: 2 },
+      { id: "a.wand", kind: "suffix", nameWord: "of Wands", stat: "s", label: "l", minItemLevel: 1, min: 1, max: 2, itemClasses: ["wand"] },
+      { id: "a.body", kind: "suffix", nameWord: "of Robes", stat: "s", label: "l", minItemLevel: 1, min: 1, max: 2, itemClasses: ["body"] },
+    ],
+  };
+
+  it("only rolls affixes their base's item class is allowed to have", () => {
+    const seen = new Map<string, Set<string>>();
+    for (let s = 1; s <= 300; s++) {
+      const it = rollItem(CLASSED, s, 80, 3, "rare");
+      const cls = CLASSED.bases.find((b) => b.id === it.baseId)!.itemClass;
+      const got = seen.get(cls) ?? new Set<string>();
+      for (const ia of it.affixes) got.add(ia.affixId);
+      seen.set(cls, got);
+    }
+    expect([...seen.get("wand")!].sort()).toEqual(["a.any", "a.wand"]);
+    expect([...seen.get("body")!].sort()).toEqual(["a.any", "a.body"]);
+  });
+
   it("is deterministic for the same inputs", () => {
     const a = rollItem(POOLS, 12345, 70, 1);
     const b = rollItem(POOLS, 12345, 70, 1);

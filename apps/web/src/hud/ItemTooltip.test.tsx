@@ -20,6 +20,18 @@ describe("ItemTooltip", () => {
     expect(screen.queryByText("It was a torch, once.")).toBeNull();
   });
 
+  it("renders the implicit in its own block above the rolled mods", () => {
+    render(<ItemTooltip name="Ember Wand" rarity="normal" implicit="12% increased Spell Damage" lines={["+24 to maximum Mana"]} x={0} y={0} />);
+    // Own block, not folded into the mod list: poe2-screenshots/item-rare.png sets the
+    // implicit off from the explicits with its own gap.
+    const block = screen.getByTestId("item-implicit");
+    expect(block.textContent).toBe("12% increased Spell Damage");
+    expect(block.compareDocumentPosition(screen.getByText("+24 to maximum Mana")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    cleanup();
+    render(<ItemTooltip name="Cinder Cap" rarity="normal" lines={[]} x={0} y={0} />);
+    expect(screen.queryByTestId("item-implicit")).toBeNull();
+  });
+
   it("does not repeat the name when baseName equals name (normal item)", () => {
     render(<ItemTooltip name="Ember Wand" baseName="Ember Wand" rarity="normal" lines={[]} x={0} y={0} />);
     expect(screen.getAllByText("Ember Wand").length).toBe(1);

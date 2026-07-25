@@ -341,6 +341,13 @@ export interface ItemBase {
   w: number;
   h: number;
   stats?: ItemStats;
+  /**
+   * The base's own mod, above the rolled ones in the tooltip. Fixed, not rolled: every
+   * copy of the base carries the same value, so it lives here and never on the Item.
+   * PoE2 rolls implicits inside a range; ours are a single value. Absent is normal,
+   * most PoE2 bases (all helmets) have none.
+   */
+  implicit?: { stat: string; label: string; value: number };
   /** Inventory art, a client-relative URL. Absent means the UI falls back to the name. */
   icon?: string;
 }
@@ -360,6 +367,12 @@ export interface Affix {
   minItemLevel: number;
   min: number;
   max: number;
+  /**
+   * Item classes this mod can roll on, PoE's per-class mod pool: a wand never
+   * offers body armour's mods. Absent means every class, which is how a pool
+   * that does not care about classes stays valid.
+   */
+  itemClasses?: string[];
 }
 
 export interface ItemAffix {
@@ -426,6 +439,14 @@ export function validateItemBase(v: unknown): ValidationResult {
   if (v["stats"] !== undefined && !isObj(v["stats"])) {
     errors.push("stats: must be an object when present");
   }
+  const imp = v["implicit"];
+  if (imp !== undefined) {
+    if (!isObj(imp) || typeof imp["stat"] !== "string" || imp["stat"].length === 0 ||
+        typeof imp["label"] !== "string" || imp["label"].length === 0 ||
+        typeof imp["value"] !== "number" || !Number.isInteger(imp["value"])) {
+      errors.push("implicit: must be { stat, label, value } with non-empty strings and an integer value");
+    }
+  }
   if (v["icon"] !== undefined && (typeof v["icon"] !== "string" || v["icon"].length === 0)) {
     errors.push("icon: must be a non-empty string when present");
   }
@@ -471,6 +492,13 @@ export function validateAffix(v: unknown): ValidationResult {
     min > max
   ) {
     errors.push("min: must be <= max");
+  }
+  const classes = v["itemClasses"];
+  if (classes !== undefined) {
+    // An empty list would mean "rolls on nothing", which is only ever a typo.
+    if (!Array.isArray(classes) || classes.length === 0 || classes.some((c) => typeof c !== "string" || c.length === 0)) {
+      errors.push("itemClasses: must be a non-empty array of non-empty strings when present");
+    }
   }
   return { ok: errors.length === 0, errors };
 }

@@ -51,7 +51,7 @@ export type EquipSlotId =
 
 /** Display-ready item shape shared by inventory cells and equipped slots. */
 export interface DisplayItem {
-  rarity: ItemRarity; name: string; baseName?: string; itemClass?: string; lines: string[];
+  rarity: ItemRarity; name: string; baseName?: string; itemClass?: string; implicit?: string; lines: string[];
   flavour?: string; icon?: string;
   statLines?: ItemStatLine[]; reqLevel?: number; reqAttrValue?: number; reqAttr?: string;
 }
@@ -102,6 +102,8 @@ export interface SnapshotEntity {
   name?: string;
   /** groundItem only: base type, shown under a generated name for rares. */
   baseName?: string;
+  /** groundItem only: the base's fixed implicit, above the rolled mods. */
+  implicit?: string;
   lines?: string[];
   /** groundItem only: unique flavour line, below the mods. */
   flavour?: string;

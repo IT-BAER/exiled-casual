@@ -10,11 +10,27 @@ const ITEM_BASES: ItemBase[] = [
     w: 1,
     h: 2,
     stats: { physMin: 5, physMax: 10, critPct: 8, aps: 1.2, reqLevel: 8, reqAttrValue: 29, reqAttr: "Int" },
+    // PoE2 wand implicits all grant a skill ("Grants Skill: Power Siphon"), which nothing
+    // in the sim can honour, so this borrows the implicit of the base whose stat block the
+    // wand already copies: PoE1's Goat's Horn, (10-15)% increased Spell Damage.
+    implicit: { stat: "spellDamagePct", label: "% increased Spell Damage", value: 12 },
     icon: "/textures/items/emberwand.png",
   },
+  // Foci and helmets carry no implicit, which is how PoE2 has them: poe2db lists foci with
+  // energy shield alone, and body armour is the only armour slot with implicit bases at all.
   { id: "base.ashen_focus", name: "Ashen Focus", itemClass: "focus", w: 2, h: 2, icon: "/textures/items/ashen_focus.png" },
   { id: "base.cinder_cap", name: "Cinder Cap", itemClass: "helmet", w: 2, h: 2, icon: "/textures/items/cinder_cap.png" },
-  { id: "base.emberweave_robe", name: "Emberweave Robe", itemClass: "body", w: 2, h: 3, icon: "/textures/items/emberweave_robe.png" },
+  {
+    id: "base.emberweave_robe",
+    name: "Emberweave Robe",
+    itemClass: "body",
+    w: 2,
+    h: 3,
+    // An energy-shield robe, so it takes the implicit PoE2 puts on its Int body armour:
+    // Enlightened Robe's (40-50)% increased Mana Regeneration Rate.
+    implicit: { stat: "manaRegenPct", label: "% increased Mana Regeneration Rate", value: 45 },
+    icon: "/textures/items/emberweave_robe.png",
+  },
 ];
 
 // Prefix/suffix split follows PoE: raw power (life, mana, added damage, armour) is a
@@ -24,20 +40,29 @@ const ITEM_BASES: ItemBase[] = [
 // tables. Mod text follows PoE2's wording as poe2db lists it ("+(13-19)% to Chaos
 // Resistance", "(20-30)% increased Mana Regeneration Rate"), except crit, which stays
 // "Critical Strike Chance" to match poe2-screenshots/item-rare.png and the base-stat block.
-// The suffix side is deliberately the wider one: three suffixes are eligible from level 1
-// so a rare can fill its 3+3 at any item level, which two suffixes could never do.
+//
+// itemClasses is PoE's per-class mod pool: armour never rolls on a caster weapon, cast
+// speed never on a chest. Resistances, attributes and mana regeneration name no class and
+// so roll everywhere. Each class keeps four eligible prefixes and four suffixes at item
+// level 1, which is what lets a rare of any base fill its 3+3 at any level; gating a pool
+// that was wide only in total would have starved whichever class lost the coin flip.
 const AFFIXES: Affix[] = [
-  { id: "affix.life", kind: "prefix", nameWord: "Hale", stat: "maxLife", label: "to maximum Life", minItemLevel: 1, min: 5, max: 40 },
-  { id: "affix.mana", kind: "prefix", nameWord: "Beryl", stat: "maxMana", label: "to maximum Mana", minItemLevel: 1, min: 4, max: 30 },
-  { id: "affix.fire_dmg", kind: "prefix", nameWord: "Smoldering", stat: "fireDamage", label: "to Fire Damage", minItemLevel: 1, min: 2, max: 18 },
+  { id: "affix.life", kind: "prefix", nameWord: "Hale", stat: "maxLife", label: "to maximum Life", minItemLevel: 1, min: 5, max: 40, itemClasses: ["helmet", "body"] },
+  { id: "affix.mana", kind: "prefix", nameWord: "Beryl", stat: "maxMana", label: "to maximum Mana", minItemLevel: 1, min: 4, max: 30, itemClasses: ["wand", "focus", "helmet", "body"] },
+  { id: "affix.energy_shield", kind: "prefix", nameWord: "Ghostly", stat: "energyShield", label: "to maximum Energy Shield", minItemLevel: 1, min: 5, max: 35, itemClasses: ["focus", "helmet", "body"] },
+  { id: "affix.increased_armour", kind: "prefix", nameWord: "Reinforced", stat: "armourPct", label: "% increased Armour", minItemLevel: 1, min: 10, max: 30, itemClasses: ["helmet", "body"] },
+  { id: "affix.spell_damage", kind: "prefix", nameWord: "Runic", stat: "spellDamagePct", label: "% increased Spell Damage", minItemLevel: 1, min: 10, max: 25, itemClasses: ["wand", "focus"] },
+  { id: "affix.fire_dmg", kind: "prefix", nameWord: "Smoldering", stat: "fireDamage", label: "to Fire Damage", minItemLevel: 1, min: 2, max: 18, itemClasses: ["wand", "focus"] },
+  { id: "affix.cold_dmg", kind: "prefix", nameWord: "Glacial", stat: "coldDamage", label: "to Cold Damage", minItemLevel: 1, min: 2, max: 16, itemClasses: ["wand", "focus"] },
+  { id: "affix.armour", kind: "prefix", nameWord: "Plated", stat: "armour", label: "to Armour", minItemLevel: 8, min: 10, max: 60, itemClasses: ["helmet", "body"] },
+  { id: "affix.increased_es", kind: "prefix", nameWord: "Spectral", stat: "energyShieldPct", label: "% increased Energy Shield", minItemLevel: 8, min: 10, max: 30, itemClasses: ["focus", "helmet", "body"] },
   { id: "affix.fire_res", kind: "suffix", nameWord: "of the Furnace", stat: "fireResPct", label: "% to Fire Resistance", minItemLevel: 1, min: 5, max: 25 },
   { id: "affix.cold_res", kind: "suffix", nameWord: "of the Yeti", stat: "coldResPct", label: "% to Cold Resistance", minItemLevel: 1, min: 5, max: 25 },
   { id: "affix.lightning_res", kind: "suffix", nameWord: "of the Squall", stat: "lightningResPct", label: "% to Lightning Resistance", minItemLevel: 1, min: 5, max: 25 },
   { id: "affix.strength", kind: "suffix", nameWord: "of the Brute", stat: "strength", label: "to Strength", minItemLevel: 1, min: 5, max: 20 },
-  { id: "affix.armour", kind: "prefix", nameWord: "Plated", stat: "armour", label: "to Armour", minItemLevel: 8, min: 10, max: 60 },
-  { id: "affix.crit_chance", kind: "suffix", nameWord: "of Menace", stat: "critChancePct", label: "% increased Critical Strike Chance", minItemLevel: 8, min: 8, max: 25 },
   { id: "affix.mana_regen", kind: "suffix", nameWord: "of the Spring", stat: "manaRegenPct", label: "% increased Mana Regeneration Rate", minItemLevel: 4, min: 10, max: 35 },
-  { id: "affix.cast_speed", kind: "suffix", nameWord: "of Casting", stat: "castSpeedPct", label: "% increased Cast Speed", minItemLevel: 12, min: 3, max: 12 },
+  { id: "affix.crit_chance", kind: "suffix", nameWord: "of Menace", stat: "critChancePct", label: "% increased Critical Strike Chance", minItemLevel: 8, min: 8, max: 25, itemClasses: ["wand", "focus"] },
+  { id: "affix.cast_speed", kind: "suffix", nameWord: "of Casting", stat: "castSpeedPct", label: "% increased Cast Speed", minItemLevel: 12, min: 3, max: 12, itemClasses: ["wand", "focus"] },
   { id: "affix.chaos_res", kind: "suffix", nameWord: "of the Outcast", stat: "chaosResPct", label: "% to Chaos Resistance", minItemLevel: 15, min: 4, max: 15 },
 ];
 
@@ -88,9 +113,18 @@ for (const b of ITEM_BASES) {
   const r = validateItemBase(b);
   if (!r.ok) throw new Error(`[content-runtime] Invalid item base "${b.id}": ${r.errors.join("; ")}`);
 }
-for (const a of AFFIXES) {
-  const r = validateAffix(a);
-  if (!r.ok) throw new Error(`[content-runtime] Invalid affix "${a.id}": ${r.errors.join("; ")}`);
+{
+  // A class the bases do not have is a typo that costs nothing at load and silently makes
+  // the mod undroppable, so it is checked here rather than in the schema, which cannot see
+  // the base list.
+  const classes = new Set(ITEM_BASES.map((b) => b.itemClass));
+  for (const a of AFFIXES) {
+    const r = validateAffix(a);
+    if (!r.ok) throw new Error(`[content-runtime] Invalid affix "${a.id}": ${r.errors.join("; ")}`);
+    for (const c of a.itemClasses ?? []) {
+      if (!classes.has(c)) throw new Error(`[content-runtime] Invalid affix "${a.id}": no base has item class "${c}"`);
+    }
+  }
 }
 // Uniques are shape-checked by the compiler; what it cannot catch is a dangling id,
 // an inverted range, or two uniques sharing the display name describeItem looks them up by.
@@ -136,6 +170,8 @@ export interface ItemDescription {
   reqLevel?: number;
   reqAttrValue?: number;
   reqAttr?: string;
+  /** the base's fixed implicit, rendered above the affix lines; absent for bases without one */
+  implicit?: string;
   /** affix lines */
   lines: string[];
   /** unique only: italic flavour line below the mods. */
@@ -177,6 +213,7 @@ export function describeItem(item: Item): ItemDescription {
     reqAttr: s?.reqAttr,
     lines,
   };
+  if (base.implicit) d.implicit = affixLine(base.implicit.value, base.implicit.label);
   // A unique is its own item, not a re-skin: its art overrides the base's.
   const unique = item.rarity === "unique" ? UNIQUE_BY_NAME.get(d.name) : undefined;
   if (unique?.flavour) d.flavour = unique.flavour;

@@ -40,6 +40,14 @@ describe("describeItem", () => {
     expect(line("affix.mana_regen", 30)).toBe("30% increased Mana Regeneration Rate");
   });
 
+  it("renders a base's fixed implicit, and none for a base without one", () => {
+    const of = (baseId: string) => describeItem({ baseId, rarity: "normal", itemLevel: 65, affixes: [] }).implicit;
+    // Ember Wand copies Goat's Horn's stat block (poe2-screenshots/item-rare.png), so it
+    // carries that base's implicit too. Same value on every drop, unlike an affix.
+    expect(of("base.emberwand")).toBe("12% increased Spell Damage");
+    expect(of("base.cinder_cap")).toBeUndefined();
+  });
+
   it("shows a rare item's generated name and keeps the base type", () => {
     const base = ITEM_POOLS.bases[0]!;
     const d = describeItem({ baseId: base.id, rarity: "rare", itemLevel: 82, affixes: [], name: "Corpse Husk" });

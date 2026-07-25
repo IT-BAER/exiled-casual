@@ -62,6 +62,7 @@ export function ItemTooltip({
   reqLevel,
   reqAttrValue,
   reqAttr,
+  implicit,
   lines,
   flavour,
   x,
@@ -76,6 +77,8 @@ export function ItemTooltip({
   reqLevel?: number;
   reqAttrValue?: number;
   reqAttr?: string;
+  /** The base's own mod, above the rolled ones and set off from them. */
+  implicit?: string;
   lines: string[];
   /** unique only: italic flavour line closing the tooltip. */
   flavour?: string;
@@ -165,6 +168,18 @@ export function ItemTooltip({
                   <span style={{ color: LABEL_GREY }}>{reqAttr}</span>
                 </>
               )}
+            </div>
+          </>
+        )}
+
+        {/* Same blue as the rolled mods, its own block above them: in
+            poe2-screenshots/item-rare.png the Goat's Horn implicit is set off by a gap,
+            not by a colour or a heading. */}
+        {implicit && (
+          <>
+            <Rule />
+            <div data-testid="item-implicit" style={{ color: AFFIX_BLUE, fontSize: 13, letterSpacing: 0.4, margin: "4px 0" }}>
+              {implicit}
             </div>
           </>
         )}
