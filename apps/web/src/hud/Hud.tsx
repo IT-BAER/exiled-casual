@@ -1,15 +1,28 @@
 import React from "react";
 import type { Snapshot } from "@exiled/protocol";
 import { MAP_PORTALS } from "@exiled/protocol";
+import { SERIF } from "./ItemTooltip";
 
-// Bottom HUD geometry, measured off poe2-screenshots/floor#2.webp (2048x1152): the
-// liquid sphere is 8.4% of the screen width, the frame ring sits flush with the bottom
-// edge and about 1.2% of the width in from the side, and the bars butt up against it.
-const ORB = 136; // liquid sphere diameter
-const ORB_FRAME = Math.round(ORB / 0.716); // frame art: its hole is 0.716 of the file
-const ORB_RING = (ORB_FRAME - ORB) / 2; // ring band thickness
-const ORB_INSET = 24 + ORB_RING; // sphere offset from the side; ring keeps a 24px margin
-const ORB_BOTTOM = ORB_RING; // ring flush with the bottom edge, sphere sits on top of it
+// Bottom HUD geometry, measured off poe2-screenshots/poe1-lower-bar.png, a 2558x388 crop
+// of Path of Exile **1**'s bottom bar (PoE1, not PoE2 — its globes are bigger and its ring
+// far thinner than the PoE2 orbs we started from). Measured there: the liquid sphere is
+// 263px across = 10.3% of the screen width; the braided ring is a 19px band = 7.2% of the
+// sphere; the sphere's outer edge stops ~10px from the screen side and its bottom ~2% of
+// the screen height above the bottom edge; a bronze figure leans on the outer side.
+// The globe is a fraction of the screen, not a pixel size — PoE1 scales it with the
+// resolution, and at 2048px wide a fixed 160px globe reads a quarter too small.
+const ORB_HOLE = 0.869; // ring art: its transparent hole is this fraction of the file
+const ORB_VW = 10.3; // sphere diameter
+const ORB = `${ORB_VW}vw`;
+const ORB_FRAME = `${(ORB_VW / ORB_HOLE).toFixed(2)}vw`;
+const RING_VW = (ORB_VW / ORB_HOLE - ORB_VW) / 2; // ring band thickness
+const ORB_INSET = "0.39vw"; // sphere offset from the side; the ring overhangs off-screen
+const ORB_BOTTOM = "2.1vh"; // sphere bottom above the screen edge
+const FIGURE_H = `${(ORB_VW * 1.08).toFixed(2)}vw`; // bronze figure height, same crop
+const FIGURE_OUT = "0.9vw"; // figure hangs off the screen side, covering ~30% of the globe
+// Where the bars butt up against the orb: past the sphere and its ring, less the bar art's
+// own transparent shoulder.
+const BAR_OFFSET = `calc(${ORB_INSET} + ${ORB} + ${RING_VW.toFixed(3)}vw - 16px)`;
 const BAR_H = 76; // flask / skill bar height, incl. the art's top and bottom rails
 const SLOT = 42; // flask + skill slot size, sized to the bar art's inner trough
 
@@ -106,18 +119,23 @@ const barStyle: React.CSSProperties = {
 };
 
 /**
- * A PoE-style resource orb. The liquid is painted art, not a CSS gradient: the globe
- * image is pinned to the bottom of the well and revealed up to `pct`, so draining it
- * uncovers the dark well the way a real liquid level drops.
+ * A PoE1 resource globe. The liquid is painted art, not a CSS gradient: the image is
+ * pinned to the bottom of the well and revealed up to `pct`, so draining it uncovers the
+ * dark well the way a real liquid level drops. Over it sit the sphere's gloss, the braided
+ * ring, and a bronze figure leaning on the outer side. The value is a label above the
+ * globe — PoE1 prints it there, not inside the sphere.
  */
 function Orb(props: {
   pct: number;
   fillTestId: string;
+  readoutTestId: string;
   art: string;
+  figure: string;
+  label: string;
   value: string;
   side: "left" | "right";
 }) {
-  const { pct, fillTestId, art, value, side } = props;
+  const { pct, fillTestId, readoutTestId, art, figure, label, value, side } = props;
   return (
     <div
       style={{
@@ -147,45 +165,73 @@ function Orb(props: {
             bottom: 0,
             height: `${pct}%`,
             backgroundImage: `url(${art})`,
-            backgroundSize: `${ORB}px ${ORB}px`,
+            backgroundSize: `${ORB} ${ORB}`,
             backgroundPosition: "center bottom", // globe stays put, the level moves
             boxShadow: "inset 0 3px 6px rgba(255,255,255,0.22)", // liquid meniscus highlight
+            // the render came back a hotter red/blue than the shot's blood crimson and cobalt
+            filter: "brightness(0.88) saturate(0.9)",
             transition: "height 120ms linear",
           }}
         />
+        {/* glass volume: edges fall to near-black so the disc reads as a sphere */}
+        <div style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "radial-gradient(circle at 50% 50%, transparent 58%, rgba(0,0,0,0.30) 100%)" }} />
+        {/* specular bloom, upper left — the liquid's brightest point in the PoE1 shot */}
+        <div style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "radial-gradient(ellipse 54% 42% at 40% 38%, rgba(255,255,255,0.08), rgba(255,255,255,0) 74%)" }} />
+        {/* the faint swirl sigil suspended at the sphere's centre */}
+        <div style={{ position: "absolute", inset: 0, borderRadius: "50%", background: `radial-gradient(circle ${(ORB_VW * 0.076).toFixed(2)}vw at 50% 35%, rgba(255,255,255,0.42), rgba(255,255,255,0.07) 56%, rgba(255,255,255,0) 82%)` }} />
         {/* inner shadow cast by the ring onto the liquid */}
-        <div style={{ position: "absolute", inset: 0, borderRadius: "50%", boxShadow: "inset 0 0 14px rgba(0,0,0,0.85)" }} />
+        <div style={{ position: "absolute", inset: 0, borderRadius: "50%", boxShadow: "inset 0 0 8px rgba(0,0,0,0.6)" }} />
       </div>
-      {/* Orb frame (generated art). Its alpha is baked in: the hole is 0.716 of the
+      {/* Braided ring (generated art). Its alpha is baked in: the hole is ORB_HOLE of the
           file's width, so at ORB_FRAME the ring lands exactly on the liquid sphere. */}
       <img
-        src="/hud/orb-frame-v4.png"
+        src="/hud/orb-ring-v6.png"
         alt=""
         style={{
           position: "absolute",
           width: ORB_FRAME,
           height: ORB_FRAME,
-          left: (ORB - ORB_FRAME) / 2,
-          top: (ORB - ORB_FRAME) / 2,
-          filter: "drop-shadow(0 4px 10px rgba(0,0,0,0.7))",
+          left: `calc((${ORB} - ${ORB_FRAME}) / 2)`,
+          top: `calc((${ORB} - ${ORB_FRAME}) / 2)`,
+          // PoE1's ring is grimier than the render: sink it into shadow.
+          filter: "brightness(0.82) saturate(0.85) hue-rotate(-14deg) drop-shadow(0 4px 10px rgba(0,0,0,0.7))",
+          pointerEvents: "none",
+        }}
+      />
+      {/* Bronze figure leaning on the globe's outer side, overlapping ring and liquid. */}
+      <img
+        src={figure}
+        alt=""
+        style={{
+          position: "absolute",
+          height: FIGURE_H,
+          bottom: `calc(0px - ${ORB_BOTTOM})`, // stands on the screen edge, PoE1's plinth
+          [side]: `calc(0px - ${ORB_INSET} - ${FIGURE_OUT})`, // clipped by the screen side
+          // the statue in the shot sits in shadow, not lit like the render's studio bronze
+          filter: "brightness(0.62) saturate(0.85) drop-shadow(0 4px 12px rgba(0,0,0,0.8))",
           pointerEvents: "none",
         }}
       />
       <div
+        data-testid={readoutTestId}
         style={{
           position: "absolute",
-          bottom: 14,
-          left: 0,
-          right: 0,
-          textAlign: "center",
-          color: "#f4f0e6",
-          fontSize: 14,
-          fontWeight: 700,
-          letterSpacing: 0.3,
-          textShadow: "0 1px 3px #000",
+          // label clears the globe top by 0.24 of its diameter, as in the PoE1 shot
+          bottom: `${(ORB_VW + RING_VW + ORB_VW * 0.163).toFixed(2)}vw`,
+          left: `${(-RING_VW).toFixed(3)}vw`,
+          right: `${(-RING_VW).toFixed(3)}vw`,
+          display: "flex",
+          justifyContent: "center",
+          gap: "0.75vw",
+          fontFamily: SERIF,
+          fontSize: `clamp(13px, ${(ORB_VW * 0.099).toFixed(2)}vw, 26px)`,
+          letterSpacing: 0.5,
+          whiteSpace: "nowrap",
+          textShadow: "0 1px 4px #000",
         }}
       >
-        {value}
+        <span style={{ color: "#a9a49a" }}>{label}</span>
+        <span style={{ color: "#f4f0e6" }}>{value}</span>
       </div>
     </div>
   );
@@ -342,27 +388,33 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
       <Orb
         pct={lifePct}
         fillTestId="life-orb-fill"
-        art="/hud/orb-life-v1.png"
-        value={`${Math.round(life)}`}
+        readoutTestId="life-readout"
+        art="/hud/orb-life-v2.png"
+        figure="/hud/orb-figure-life-v5.png"
+        label="Life"
+        value={`${Math.round(life)}/${Math.round(maxLife)}`}
         side="left"
       />
       <Orb
         pct={manaPct}
         fillTestId="mana-orb-fill"
-        art="/hud/orb-mana-v1.png"
-        value={`${Math.round(mana)}`}
+        readoutTestId="mana-readout"
+        art="/hud/orb-mana-v2.png"
+        figure="/hud/orb-figure-mana-v5.png"
+        label="Mana"
+        value={`${Math.round(mana)}/${Math.round(maxMana)}`}
         side="right"
       />
 
       {/* Flask bar — tucked under the life orb frame, per boss-fight.png */}
-      <div data-testid="flask-row" style={{ ...barStyle, left: ORB_INSET + ORB + ORB_RING - 16, zIndex: 2 }}>
+      <div data-testid="flask-row" style={{ ...barStyle, left: BAR_OFFSET, zIndex: 2 }}>
         {FLASKS.map((f) => (
           <Flask key={f.key} kind={f.kind} hotkey={f.key} />
         ))}
       </div>
 
       {/* Skill bar — mirror of the flask bar, tucked under the mana orb frame */}
-      <div style={{ ...barStyle, right: ORB_INSET + ORB + ORB_RING - 16, zIndex: 2 }}>
+      <div style={{ ...barStyle, right: BAR_OFFSET, zIndex: 2 }}>
         {SKILL_SLOTS.map((slot, idx) => {
           const cd = slot.id ? cooldowns[slot.id] ?? 0 : 0;
           const ready = cd <= 0;

@@ -57,6 +57,21 @@ describe("Hud", () => {
     expect(fill).toHaveStyle({ height: "50%" });
   });
 
+  it("life readout labels the globe and shows current over max", () => {
+    // PoE1 prints the value as a label above the globe, not as a number inside it.
+    render(<Hud snapshot={makeSnap({ life: 50, maxLife: 100 })} />);
+    const readout = screen.getByTestId("life-readout");
+    expect(readout).toHaveTextContent("Life");
+    expect(readout).toHaveTextContent("50/100");
+  });
+
+  it("mana readout labels the globe and shows current over max", () => {
+    render(<Hud snapshot={makeSnap({})} />);
+    const readout = screen.getByTestId("mana-readout");
+    expect(readout).toHaveTextContent("Mana");
+    expect(readout).toHaveTextContent("30/60");
+  });
+
   it("skill with cooldown shows remaining seconds", () => {
     const snap = makeSnap({ cooldowns: { "skill.ember_bolt.v1": 1.5 } });
     render(<Hud snapshot={snap} />);
