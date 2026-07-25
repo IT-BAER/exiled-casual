@@ -18,16 +18,27 @@ const ITEM_BASES: ItemBase[] = [
 ];
 
 // Prefix/suffix split follows PoE: raw power (life, mana, added damage, armour) is a
-// prefix, while resistances and speed hang off the suffix side. The nameWord is the
-// part a magic item borrows, so "affix.life" + "affix.fire_res" on a wand reads
-// "Hale Wand of the Furnace"; the words are in PoE's idiom, not lifted from its tables.
+// prefix, while resistances, attributes, regeneration and speed hang off the suffix side.
+// The nameWord is the part a magic item borrows, so "affix.life" + "affix.fire_res" on a
+// wand reads "Hale Wand of the Furnace"; the words are in PoE's idiom, not lifted from its
+// tables. Mod text follows PoE2's wording as poe2db lists it ("+(13-19)% to Chaos
+// Resistance", "(20-30)% increased Mana Regeneration Rate"), except crit, which stays
+// "Critical Strike Chance" to match poe2-screenshots/item-rare.png and the base-stat block.
+// The suffix side is deliberately the wider one: three suffixes are eligible from level 1
+// so a rare can fill its 3+3 at any item level, which two suffixes could never do.
 const AFFIXES: Affix[] = [
   { id: "affix.life", kind: "prefix", nameWord: "Hale", stat: "maxLife", label: "to maximum Life", minItemLevel: 1, min: 5, max: 40 },
   { id: "affix.mana", kind: "prefix", nameWord: "Beryl", stat: "maxMana", label: "to maximum Mana", minItemLevel: 1, min: 4, max: 30 },
   { id: "affix.fire_dmg", kind: "prefix", nameWord: "Smoldering", stat: "fireDamage", label: "to Fire Damage", minItemLevel: 1, min: 2, max: 18 },
   { id: "affix.fire_res", kind: "suffix", nameWord: "of the Furnace", stat: "fireResPct", label: "% to Fire Resistance", minItemLevel: 1, min: 5, max: 25 },
+  { id: "affix.cold_res", kind: "suffix", nameWord: "of the Yeti", stat: "coldResPct", label: "% to Cold Resistance", minItemLevel: 1, min: 5, max: 25 },
+  { id: "affix.lightning_res", kind: "suffix", nameWord: "of the Squall", stat: "lightningResPct", label: "% to Lightning Resistance", minItemLevel: 1, min: 5, max: 25 },
+  { id: "affix.strength", kind: "suffix", nameWord: "of the Brute", stat: "strength", label: "to Strength", minItemLevel: 1, min: 5, max: 20 },
   { id: "affix.armour", kind: "prefix", nameWord: "Plated", stat: "armour", label: "to Armour", minItemLevel: 8, min: 10, max: 60 },
+  { id: "affix.crit_chance", kind: "suffix", nameWord: "of Menace", stat: "critChancePct", label: "% increased Critical Strike Chance", minItemLevel: 8, min: 8, max: 25 },
+  { id: "affix.mana_regen", kind: "suffix", nameWord: "of the Spring", stat: "manaRegenPct", label: "% increased Mana Regeneration Rate", minItemLevel: 4, min: 10, max: 35 },
   { id: "affix.cast_speed", kind: "suffix", nameWord: "of Casting", stat: "castSpeedPct", label: "% increased Cast Speed", minItemLevel: 12, min: 3, max: 12 },
+  { id: "affix.chaos_res", kind: "suffix", nameWord: "of the Outcast", stat: "chaosResPct", label: "% to Chaos Resistance", minItemLevel: 15, min: 4, max: 15 },
 ];
 
 // Named items bound to one base each. Mod ranges are the unique's own and deliberately

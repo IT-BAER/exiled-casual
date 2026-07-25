@@ -33,6 +33,11 @@ describe("describeItem", () => {
     expect(line("affix.cast_speed", 3)).toBe("3% increased Cast Speed");
     expect(line("affix.fire_res", 13)).toBe("+13% to Fire Resistance");
     expect(line("affix.life", 9)).toBe("+9 to maximum Life");
+    expect(line("affix.cold_res", 24)).toBe("+24% to Cold Resistance");
+    expect(line("affix.chaos_res", 7)).toBe("+7% to Chaos Resistance");
+    expect(line("affix.strength", 12)).toBe("+12 to Strength");
+    expect(line("affix.crit_chance", 18)).toBe("18% increased Critical Strike Chance");
+    expect(line("affix.mana_regen", 30)).toBe("30% increased Mana Regeneration Rate");
   });
 
   it("shows a rare item's generated name and keeps the base type", () => {
