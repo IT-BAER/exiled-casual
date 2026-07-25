@@ -352,8 +352,9 @@ describe("derived player stats", () => {
 
     const s = buildSnapshot(world, sim, 1, CONTENT_VERSION).player.stats;
     expect(s.armour).toBe(50);
-    // fp(50) armour against ARMOUR_K = fp(10): 50/60 of a physical hit is stopped.
-    expect(s.armourPct).toBe(83);
+    // Armour's share depends on the hit, so the sheet quotes SHEET_REFERENCE_HIT:
+    // 50 / (50 + 10 * 6) = 45%.
+    expect(s.armourPct).toBe(45);
     expect(s.fireResPct).toBe(20);
     // trunc(fp(8.7)/30) = 290 per tick, so the sheet reports 290*30 = fp(8.7)/s.
     expect(s.manaRegenPerSec).toBeCloseTo(8.7, 5);

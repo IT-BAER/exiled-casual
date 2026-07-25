@@ -125,7 +125,11 @@ export interface SnapshotEntity {
 export interface PlayerStats {
   /** Raw armour rating, the number gear adds to. */
   armour: number;
-  /** Share of a physical hit armour stops, integer percent (rules.physicalMitigationPct). */
+  /**
+   * Share of a physical hit armour stops, integer percent. Armour's curve
+   * depends on the size of the hit, so this is quoted against one reference
+   * hit (the bridge's SHEET_REFERENCE_HIT), the way PoE2's sheet does it.
+   */
   armourPct: number;
   /** UNCAPPED total. The sheet renders it against RES_CAP so overcapping stays visible. */
   fireResPct: number;

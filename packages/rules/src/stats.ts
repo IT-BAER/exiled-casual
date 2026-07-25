@@ -11,7 +11,16 @@ export interface StatBlock {
 }
 
 export const RES_CAP = 75;
-export const ARMOUR_K: Fixed = fp(10); // = 10000; armour == K halves a physical hit
+/**
+ * Armour's curve, borrowed from PoE2: DR = armour / (armour + MULT * hit). The
+ * hit is in the denominator on purpose — armour is a defence against many small
+ * hits, not against one large one. PoE1 uses the same shape with MULT = 5, a
+ * gentler curve; PoE2's 10 is the one this game takes. Scale-free, so it
+ * multiplies a Fixed without needing to be one.
+ */
+export const ARMOUR_DMG_MULT = 10;
+/** Physical damage reduction is hard-capped, at 90% in both PoE1 and PoE2. */
+export const PDR_CAP = 90;
 
 export function baseCasterStats(): StatBlock {
   return {

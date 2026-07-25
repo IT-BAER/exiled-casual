@@ -1,15 +1,18 @@
 import { describe, it, expect } from "vitest";
 import { fp } from "@exiled/fixed-point";
-import { StatBlock, baseCasterStats, applyItemMods, RES_CAP, ARMOUR_K } from "./stats.js";
+import { StatBlock, baseCasterStats, applyItemMods, RES_CAP, ARMOUR_DMG_MULT, PDR_CAP } from "./stats.js";
 
 describe("constants", () => {
   it("RES_CAP === 75", () => {
     expect(RES_CAP).toBe(75);
   });
 
-  it("ARMOUR_K === fp(10) === 10000", () => {
-    expect(ARMOUR_K).toBe(10000);
-    expect(ARMOUR_K).toBe(fp(10));
+  it("ARMOUR_DMG_MULT === 10 (PoE2's curve; PoE1 uses 5)", () => {
+    expect(ARMOUR_DMG_MULT).toBe(10);
+  });
+
+  it("PDR_CAP === 90", () => {
+    expect(PDR_CAP).toBe(90);
   });
 });
 

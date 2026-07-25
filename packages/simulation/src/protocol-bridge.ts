@@ -1,4 +1,4 @@
-import { toNumber, fpDist2 } from "@exiled/fixed-point";
+import { fp, toNumber, fpDist2 } from "@exiled/fixed-point";
 import { PICKUP_RADIUS } from "@exiled/protocol";
 import type { Intent, Snapshot, SnapshotEntity } from "@exiled/protocol";
 import { physicalMitigationPct } from "@exiled/rules";
@@ -10,6 +10,15 @@ import type {
   AilmentC, ProjectileC, GroundAreaC, BossC, TelegraphC,
   SessionC, InteractableC, ItemC, InventoryC, EquipmentC, FlasksC, DefensesC, OffenseC,
 } from "./components";
+
+/**
+ * Armour stops a different share of every hit size, so the character sheet's
+ * single "Armour %" has to be quoted against one. PoE2 quotes a hit sized to
+ * your level, which is why an endgame character there reads single digits; this
+ * game's everyday hit is the Cinder Imp's fp(6) attack. Kept as a literal rather
+ * than read from MONSTERS so removing a monster cannot silently move the sheet.
+ */
+const SHEET_REFERENCE_HIT = fp(6);
 
 /**
  * Shared range check: is (px,py) within `radius` of (tx,ty)?
@@ -240,7 +249,7 @@ export function buildSnapshot(
         const armour = d?.armour ?? 0;
         return {
           armour: toNumber(armour),
-          armourPct: physicalMitigationPct(armour),
+          armourPct: physicalMitigationPct(armour, SHEET_REFERENCE_HIT),
           fireResPct: d?.fireResPct ?? 0,
           manaRegenPerSec: toNumber(pm.regen * 30),
           spellDamagePct: world.get<OffenseC>(playerEntity, "offense")?.spellDamagePct ?? 0,
