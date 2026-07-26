@@ -8,7 +8,7 @@
  */
 
 /** Backpack grid cell. The drag math reads it, so it is a whole number of px. */
-export const CELL = 40;
+export const CELL = 48;
 
 /** Padding inside the panel frame, both sides. */
 export const PANEL_PAD = 20;

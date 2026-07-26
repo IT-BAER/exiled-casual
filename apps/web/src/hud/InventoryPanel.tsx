@@ -24,7 +24,7 @@ export const GOLD_DIM = "#7a5c22";
 export const PARCHMENT = "#e8dcc0";
 const MAGIC = "#8aa6ff";
 
-const U = 46; // equipment paper-doll unit
+const U = 54; // equipment paper-doll unit, kept in step with CELL
 
 // Keyed by every Rarity; a missing key would render `border: 2px solid undefined`.
 const RARITY_BORDER: Record<string, string> = { normal: "#6b6b6b", magic: "#5566b0", rare: "#a3812f", unique: "#7f4a20" };

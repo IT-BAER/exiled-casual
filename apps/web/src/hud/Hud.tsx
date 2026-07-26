@@ -35,7 +35,7 @@ const FIGURE_OUT = "0.9vw"; // figure hangs off the screen side, covering ~30% o
 // Ours was 0.58 while the skill panel held a single row: now that the mouse buttons stack
 // above the numbered slots, it takes PoE1's full 0.72 and the tiles drop to its 0.22.
 // Exported because the inventory panel has to stop exactly where this starts.
-export const BAR_H = `${(ORB_VW * 0.72).toFixed(2)}vw`;
+export const BAR_H = `${(ORB_VW * 0.80).toFixed(2)}vw`;
 const SLOT_GAP = 2; // px between tiles; PoE1 packs them against a hairline
 // The tiles fill the row instead of being their own fraction of the globe: the frame is
 // a fixed PANEL_W px wide while the globe padding beside it scales with the window, so a
