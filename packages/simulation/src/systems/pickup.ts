@@ -1,7 +1,7 @@
 import { PICKUP_RADIUS } from "@exiled/protocol";
 import { Simulation } from "../loop";
 import { inRangeOf } from "../protocol-bridge";
-import { isCurrency } from "@exiled/content-runtime";
+import { isCurrency, canonicalBaseId } from "@exiled/content-runtime";
 import { placeFirstFit } from "../inventory";
 import type { Position, ItemC, InventoryC } from "../components";
 
@@ -26,9 +26,12 @@ export function registerPickupSystem(sim: Simulation): void {
       const inv = world.get<InventoryC>(sessionE, "inventory")!;
 
       // Currency stacks: a scroll lands on the pile it belongs to, and only takes
-      // a cell of its own when there is no pile yet.
+      // a cell of its own when there is no pile yet. The comparison goes through
+      // `baseOf` so a stack saved under an older base id still counts as the same
+      // pile rather than sitting beside its own replacement.
       if (isCurrency(ic.item)) {
-        const at = inv.items.findIndex((p) => p.item.baseId === ic.item.baseId);
+        const id = canonicalBaseId(ic.item.baseId);
+        const at = inv.items.findIndex((p) => canonicalBaseId(p.item.baseId) === id);
         if (at >= 0) {
           const items = inv.items.slice();
           items[at] = { ...items[at]!, count: (items[at]!.count ?? 1) + 1 };

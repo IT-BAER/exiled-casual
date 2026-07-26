@@ -61,8 +61,11 @@ export function intentToCommand(intent: Intent, player: Entity, tick: number): C
       return { tick, entity: player, type: "pickupItem", data: { entityId: intent.entityId } };
     case "equipItem":
       return { tick, entity: player, type: "equipItem", data: { x: intent.x, y: intent.y }, slot: intent.slot };
-    case "identifyItem":
-      return { tick, entity: player, type: "identifyItem", data: { x: intent.x, y: intent.y } };
+    case "applyCurrency":
+      return {
+        tick, entity: player, type: "applyCurrency",
+        data: { fromX: intent.fromX, fromY: intent.fromY, x: intent.x, y: intent.y },
+      };
     case "unequipItem":
       return { tick, entity: player, type: "unequipItem", slot: intent.slot };
     case "dropItem":
@@ -268,7 +271,7 @@ export function buildSnapshot(
       const d = describeItem(p.item);
       return {
         x: p.x, y: p.y, w: p.w, h: p.h, count: p.count,
-        rarity: d.rarity, name: d.name, baseName: d.baseName, itemClass: d.itemClass, implicit: d.implicit, lines: d.lines, flavour: d.flavour, icon: d.icon, unidentified: d.unidentified,
+        rarity: d.rarity, name: d.name, baseName: d.baseName, itemClass: d.itemClass, implicit: d.implicit, lines: d.lines, flavour: d.flavour, icon: d.icon, unidentified: d.unidentified, baseId: p.item.baseId,
         statLines: d.statLines, reqLevel: d.reqLevel, reqAttrValue: d.reqAttrValue, reqAttr: d.reqAttr,
       };
     }),

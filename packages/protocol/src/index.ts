@@ -26,9 +26,9 @@ export type Intent =
   | { kind: "moveItem"; x: number; y: number; toX: number; toY: number }
   | { kind: "useFlask"; slot: "life" | "mana" }
   /** Spend one Scroll of Wisdom on the unidentified backpack item at its ORIGIN cell. */
-  | { kind: "identifyItem"; x: number; y: number };
+  | { kind: "applyCurrency"; fromX: number; fromY: number; x: number; y: number };
 
-export type CommandType = "moveTo" | "moveDir" | "useSkill" | "stop" | "interact" | "activateMap" | "pickupItem" | "equipItem" | "unequipItem" | "dropItem" | "moveItem" | "useFlask" | "identifyItem";
+export type CommandType = "moveTo" | "moveDir" | "useSkill" | "stop" | "interact" | "activateMap" | "pickupItem" | "equipItem" | "unequipItem" | "dropItem" | "moveItem" | "useFlask" | "applyCurrency";
 
 // ---------------------------------------------------------------------------
 // Run loop
@@ -70,6 +70,8 @@ export type EquipSlotId =
 export interface DisplayItem {
   rarity: ItemRarity; name: string; baseName?: string; itemClass?: string; implicit?: string; lines: string[];
   flavour?: string; icon?: string; unidentified?: boolean;
+  /** Which base this is. The client needs it to tell one currency from another. */
+  baseId?: string;
   statLines?: ItemStatLine[]; reqLevel?: number; reqAttrValue?: number; reqAttr?: string;
 }
 
@@ -328,10 +330,15 @@ export function validateIntent(v: unknown): Intent {
         throw new Error("validateIntent unequipItem: slot must be a valid EquipSlotId");
       return { kind: "unequipItem", slot: obj["slot"] as EquipSlotId };
     }
-    case "identifyItem": {
-      if (!Number.isInteger(obj["x"])) throw new Error("validateIntent identifyItem: x must be an integer");
-      if (!Number.isInteger(obj["y"])) throw new Error("validateIntent identifyItem: y must be an integer");
-      return { kind: "identifyItem", x: obj["x"] as number, y: obj["y"] as number };
+    case "applyCurrency": {
+      for (const k of ["fromX", "fromY", "x", "y"]) {
+        if (!Number.isInteger(obj[k])) throw new Error(`validateIntent applyCurrency: ${k} must be an integer`);
+      }
+      return {
+        kind: "applyCurrency",
+        fromX: obj["fromX"] as number, fromY: obj["fromY"] as number,
+        x: obj["x"] as number, y: obj["y"] as number,
+      };
     }
     case "dropItem": {
       if (!Number.isInteger(obj["x"])) throw new Error("validateIntent dropItem: x must be an integer");

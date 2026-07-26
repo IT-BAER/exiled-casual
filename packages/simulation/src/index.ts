@@ -34,7 +34,7 @@ export { buildArea } from "./areas";
 export type { AreaLayout, WalkableGrid, Socket } from "@exiled/mapgen";
 export { registerInteractSystem } from "./systems/interact";
 export { registerPickupSystem } from "./systems/pickup";
-export { registerIdentifySystem } from "./systems/identify";
+export { registerCurrencySystem } from "./systems/currency";
 export { registerAreaTransition } from "./systems/area-transition";
 export { registerFlaskSystem } from "./systems/flask";
 export { intentToCommand, buildSnapshot } from "./protocol-bridge";

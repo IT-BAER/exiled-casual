@@ -3,7 +3,7 @@ import {
   baseCasterStats, makeRare, rollItem, FLASK_MAX_CHARGES, START_LEVEL,
   offerWaystones, WAYSTONE_OFFER_COUNT,
 } from "@exiled/rules";
-import { SKILLS, MONSTERS, rareTemplate, CONTENT_VERSION, ITEM_POOLS, baseOf, wisdomScroll } from "@exiled/content-runtime";
+import { SKILLS, MONSTERS, rareTemplate, CONTENT_VERSION, ITEM_POOLS, baseOf, CURRENCY_DROPS, currencyItem } from "@exiled/content-runtime";
 import { generateArea, type AreaLayout } from "@exiled/mapgen";
 import { gridCollision, type CollisionRef } from "./collision";
 import { fnv1a32 } from "./rng";
@@ -29,7 +29,7 @@ import { registerExpiry } from "./systems/expiry";
 import { registerInteractSystem } from "./systems/interact";
 import { registerPickupSystem } from "./systems/pickup";
 import { registerEquipmentSystem } from "./systems/equipment";
-import { registerIdentifySystem } from "./systems/identify";
+import { registerCurrencySystem } from "./systems/currency";
 import { registerAreaTransition } from "./systems/area-transition";
 import { registerFlaskSystem } from "./systems/flask";
 import { buildArea, spawnMonster } from "./areas";
@@ -132,7 +132,7 @@ export function createCombatSim(
     registerInteractSystem(sim);
     registerPickupSystem(sim);
     registerEquipmentSystem(sim);
-    registerIdentifySystem(sim);
+    registerCurrencySystem(sim);
     registerAreaTransition(sim, collisionRef);
     registerFlaskSystem(sim);
   } else {
@@ -213,11 +213,13 @@ export function spawnLabActors(
     const ge = world.create();
     world.set<Position>(ge, "position", { x: cx, y: cy + fp(1) });
     world.set<ItemC>(ge, "item", { item, w: base.w, h: base.h });
-    // A scroll rides along with every lab drop, so the identify flow can be driven
-    // in the arena without farming a map for currency.
-    const se = world.create();
-    world.set<Position>(se, "position", { x: cx + fp(1), y: cy + fp(1) });
-    world.set<ItemC>(se, "item", { item: wisdomScroll(), w: 1, h: 1 });
+    // One of every currency rides along with each lab drop, so the whole crafting
+    // chain can be driven in the arena without farming a map for it.
+    CURRENCY_DROPS.forEach((c, k) => {
+      const se = world.create();
+      world.set<Position>(se, "position", { x: cx + fp(1 + k), y: cy + fp(1) });
+      world.set<ItemC>(se, "item", { item: currencyItem(c.baseId), w: 1, h: 1 });
+    });
     return;
   }
 

@@ -1,6 +1,7 @@
 import React from "react";
 import type { DisplayItem, EquipSlotId, Intent, Snapshot } from "@exiled/protocol";
 import { canEquip } from "@exiled/simulation";
+import { currencyAccepts, currencyResultRarity } from "@exiled/rules";
 import { ItemTooltip } from "./ItemTooltip";
 import { playDropSound } from "../audio/drop-sound";
 import { BAR_H } from "./Hud";
@@ -8,6 +9,18 @@ import { CELL, CELL_VW, PANEL_PAD, PANEL_W } from "./layout";
 
 type Inventory = Snapshot["inventory"];
 type Equipment = Snapshot["equipment"];
+/** An inventory entry: the display item plus where and how big it sits in the grid. */
+type GridItem = Inventory["items"][number];
+
+/**
+ * Would spending `currency` on `it` do anything? Legality is the sim's call; this is
+ * the cursor's guess at it, off the same table, so an illegal target reads as illegal
+ * before the click rather than after a silent refusal.
+ */
+function accepts(currency: GridItem, it: GridItem): boolean {
+  if (it.itemClass === "currency" || (it.x === currency.x && it.y === currency.y)) return false;
+  return currencyAccepts(currency.baseId ?? "", it.rarity, it.unidentified === true, it.lines.length);
+}
 
 /** Where a drag started, which decides the intent it turns into on release. */
 type DragSource = { kind: "grid"; x: number; y: number } | { kind: "slot"; slot: EquipSlotId };
@@ -169,10 +182,10 @@ export function InventoryPanel({
   // `w`/`h` are the held piece's footprint in cells, carried on the drag because
   // DisplayItem itself has no size: only the backpack entry that wraps it does.
   const [drag, setDrag] = React.useState<{ from: DragSource; item: DisplayItem; w: number; h: number; x: number; y: number } | null>(null);
-  // PoE's currency flow: right-click the scroll to take it onto the cursor, then
-  // left-click the item to spend it. Armed state lives here because nothing outside
-  // this panel can see it.
-  const [armed, setArmed] = React.useState(false);
+  // PoE's currency flow: right-click a currency to take it onto the cursor, then
+  // left-click the item to spend it on. Holds the currency itself rather than a flag,
+  // because which orb is on the cursor decides what every other cell will accept.
+  const [armed, setArmed] = React.useState<GridItem | null>(null);
   const boxRef = React.useRef<HTMLDivElement | null>(null);
   const gridRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -405,18 +418,20 @@ export function InventoryPanel({
                 onMouseLeave={() => setHover((h) => (h?.item === it ? null : h))}
                 onContextMenu={(e) => {
                   e.preventDefault();
-                  if (it.itemClass === "currency") setArmed((a) => !a);
-                  else setArmed(false); // right-clicking anything else puts the scroll back
+                  // Right-clicking the armed currency again, or anything that is not
+                  // currency at all, puts what is on the cursor back in the bag.
+                  setArmed((a) => (it.itemClass === "currency" && a?.x !== it.x ? it : null));
                 }}
                 onPointerDown={(e) => {
-                  if (armed && it.unidentified) {
+                  if (armed && accepts(armed, it)) {
                     e.preventDefault();
                     setHover(null);
-                    setArmed(false);
-                    // The reveal is the payoff, so it gets the drop chime again, at the
-                    // rarity that was visible all along (docs/09 rule 2).
-                    playDropSound(it.rarity);
-                    onIntent?.({ kind: "identifyItem", x: it.x, y: it.y });
+                    setArmed(null);
+                    // The outcome is the payoff, so it gets the drop chime at the rarity
+                    // the application lands on, which is audible before the new lines are
+                    // legible (docs/09 rule 2).
+                    playDropSound(currencyResultRarity(armed.baseId ?? "") ?? it.rarity);
+                    onIntent?.({ kind: "applyCurrency", fromX: armed.x, fromY: armed.y, x: it.x, y: it.y });
                     return;
                   }
                   grab({ kind: "grid", x: it.x, y: it.y }, it, it.w, it.h, e);
@@ -440,7 +455,7 @@ export function InventoryPanel({
                   padding: 2,
                   boxSizing: "border-box",
                   boxShadow: `inset 0 0 8px ${RARITY_BORDER[it.rarity]}44`,
-                  cursor: armed ? (it.unidentified ? "crosshair" : "not-allowed") : "grab",
+                  cursor: armed ? (accepts(armed, it) ? "crosshair" : "not-allowed") : "grab",
                   opacity: drag?.from.kind === "grid" && drag.from.x === it.x && drag.from.y === it.y ? 0.3 : 1,
                 }}
               >

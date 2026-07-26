@@ -34,24 +34,67 @@ const ITEM_BASES: ItemBase[] = [
 ];
 
 /**
+ * Base ids that content has since renamed. A saved inventory outlives the id it was
+ * written with, and `baseOf` throwing on load would cost the player the whole stash
+ * over a rename (docs/09: a save that corrupts destroys more than any drop created).
+ */
+const RENAMED_BASES: Record<string, string> = { "base.wisdom_scroll": "currency.wisdom" };
+
+/**
  * Currency is an item everywhere it matters (it lies on the ground, it sits in the
  * grid, `baseOf` resolves it) but it is not a droppable *equipment* base, so it stays
- * out of `ITEM_POOLS.bases` and rollItem can never hand one out as gear.
+ * out of `ITEM_POOLS.bases` and rollItem can never hand one out as gear. Ids match the
+ * transition table in `@exiled/rules` so a base id is all the sim has to carry.
  */
 const CURRENCY_BASES: ItemBase[] = [
-  { id: "base.wisdom_scroll", name: "Scroll of Wisdom", itemClass: "currency", w: 1, h: 1, icon: "/textures/items/wisdom_scroll.svg" },
+  { id: "currency.wisdom", name: "Scroll of Wisdom", itemClass: "currency", w: 1, h: 1, icon: "/textures/items/wisdom_scroll.svg" },
+  { id: "currency.transmutation", name: "Orb of Transmutation", itemClass: "currency", w: 1, h: 1, icon: "/textures/items/orb_transmutation.svg" },
+  { id: "currency.augmentation", name: "Orb of Augmentation", itemClass: "currency", w: 1, h: 1, icon: "/textures/items/orb_augmentation.svg" },
+  { id: "currency.elevation", name: "Orb of Elevation", itemClass: "currency", w: 1, h: 1, icon: "/textures/items/orb_elevation.svg" },
+  { id: "currency.alchemy", name: "Orb of Alchemy", itemClass: "currency", w: 1, h: 1, icon: "/textures/items/orb_alchemy.svg" },
+  { id: "currency.embers", name: "Orb of Embers", itemClass: "currency", w: 1, h: 1, icon: "/textures/items/orb_embers.svg" },
 ];
 
-export const WISDOM_SCROLL_BASE_ID = "base.wisdom_scroll";
+export const WISDOM_SCROLL_BASE_ID = "currency.wisdom";
 
-/** One Scroll of Wisdom, as it drops and as it stacks. */
+/** One unit of a currency, as it drops and as it stacks. */
+export function currencyItem(baseId: string): Item {
+  return { baseId, rarity: "normal", itemLevel: 1, affixes: [] };
+}
+
+/** One Scroll of Wisdom. */
 export function wisdomScroll(): Item {
-  return { baseId: WISDOM_SCROLL_BASE_ID, rarity: "normal", itemLevel: 1, affixes: [] };
+  return currencyItem(WISDOM_SCROLL_BASE_ID);
+}
+
+/**
+ * What drops, and how often relative to each other. Weights are a calibration knob
+ * (docs/09 §6), not a constant to guess once: the scroll is common because reading is
+ * a chore, and the Orb of Embers is the rarest because it is the one you save for.
+ */
+export const CURRENCY_DROPS: readonly { baseId: string; weight: number }[] = [
+  { baseId: "currency.wisdom", weight: 50 },
+  { baseId: "currency.transmutation", weight: 22 },
+  { baseId: "currency.augmentation", weight: 14 },
+  { baseId: "currency.alchemy", weight: 7 },
+  { baseId: "currency.elevation", weight: 5 },
+  { baseId: "currency.embers", weight: 2 },
+];
+
+/** Pick a currency for a drop from `roll` (0..99 from the caller's deterministic hash). */
+export function currencyForRoll(roll: number): string {
+  const total = CURRENCY_DROPS.reduce((n, c) => n + c.weight, 0);
+  let acc = roll % total;
+  for (const c of CURRENCY_DROPS) {
+    acc -= c.weight;
+    if (acc < 0) return c.baseId;
+  }
+  return CURRENCY_DROPS[0]!.baseId;
 }
 
 /** Currency stacks and is spent; equipment neither. A base the content no longer has is not currency. */
 export function isCurrency(item: Item): boolean {
-  return CURRENCY_BASES.some((b) => b.id === item.baseId);
+  return CURRENCY_BASES.some((b) => b.id === (RENAMED_BASES[item.baseId] ?? item.baseId));
 }
 
 // Prefix/suffix split follows PoE: raw power (life, mana, added damage, armour) is a
@@ -172,8 +215,13 @@ const BASE_BY_ID = new Map([...ITEM_BASES, ...CURRENCY_BASES].map((b) => [b.id, 
 const AFFIX_BY_ID = new Map(AFFIXES.map((a) => [a.id, a]));
 const UNIQUE_BY_NAME = new Map(UNIQUES.map((u) => [u.name, u]));
 
+/** The id a base is known by today, so a save written before a rename still matches. */
+export function canonicalBaseId(baseId: string): string {
+  return RENAMED_BASES[baseId] ?? baseId;
+}
+
 export function baseOf(baseId: string): ItemBase {
-  const b = BASE_BY_ID.get(baseId);
+  const b = BASE_BY_ID.get(RENAMED_BASES[baseId] ?? baseId);
   if (!b) throw new Error(`unknown item base: ${baseId}`);
   return b;
 }

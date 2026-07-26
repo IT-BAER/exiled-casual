@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Orb of Transmutation. Touch a plain item and it becomes magic;
+       a cold cyan spark, pale as hoarfrost, before the change catches. -->
+  <defs>
+    <radialGradient id="trans-body" cx="0.38" cy="0.35" r="0.65">
+      <stop offset="0" stop-color="#dff5fc"/>
+      <stop offset="0.6" stop-color="#6db8cc"/>
+      <stop offset="1" stop-color="#1e5e72"/>
+    </radialGradient>
+    <radialGradient id="trans-hi" cx="0.35" cy="0.3" r="0.4">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.85"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <!-- smooth round orb body -->
+  <circle cx="32" cy="33" r="21" fill="url(#trans-body)" stroke="#194f62" stroke-width="1.2"/>
+  <!-- specular highlight upper-left -->
+  <ellipse cx="24" cy="25" rx="9" ry="6" fill="url(#trans-hi)"/>
+  <!-- bounce light at bottom rim -->
+  <path d="M16 47 Q32 55 48 47" stroke="#a0dde8" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.55"/>
+  <!-- pooled shadow beneath -->
+  <ellipse cx="32" cy="57" rx="13" ry="3" fill="#000000" opacity="0.22"/>
+</svg>

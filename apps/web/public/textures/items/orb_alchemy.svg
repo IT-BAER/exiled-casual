@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Orb of Alchemy. Shatters what is and rebuilds it rare; verdigris over
+       tarnished copper, a colour that knows both oxidation and reinvention. -->
+  <defs>
+    <linearGradient id="alch-body" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#b8e8c0"/>
+      <stop offset="0.5" stop-color="#3a9a60"/>
+      <stop offset="1" stop-color="#1a4a2a"/>
+    </linearGradient>
+    <linearGradient id="alch-neck" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#8ac090"/>
+      <stop offset="1" stop-color="#2a6840"/>
+    </linearGradient>
+  </defs>
+  <!-- cork stopper -->
+  <rect x="27" y="8" width="10" height="7" rx="2" fill="#8b6a30" stroke="#4a3810" stroke-width="1"/>
+  <!-- narrow neck -->
+  <rect x="29" y="15" width="6" height="8" fill="url(#alch-neck)" stroke="#1a4a2a" stroke-width="1"/>
+  <!-- vial body with rounded bottom -->
+  <rect x="18" y="23" width="28" height="31" rx="6" fill="url(#alch-body)" stroke="#1a4a2a" stroke-width="1.2"/>
+  <!-- specular highlight upper-left on body -->
+  <rect x="21" y="26" width="7" height="16" rx="3" fill="#ffffff" opacity="0.25"/>
+  <!-- liquid meniscus line -->
+  <line x1="20" y1="38" x2="45" y2="38" stroke="#2a6840" stroke-width="0.8" opacity="0.5"/>
+  <!-- bounce light at bottom -->
+  <path d="M22 50 Q32 56 42 50" stroke="#80d098" stroke-width="1.2" fill="none" stroke-linecap="round" opacity="0.5"/>
+  <!-- pooled shadow beneath -->
+  <ellipse cx="32" cy="57" rx="12" ry="2.5" fill="#000000" opacity="0.22"/>
+</svg>

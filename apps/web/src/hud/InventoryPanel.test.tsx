@@ -162,11 +162,11 @@ describe("InventoryPanel", () => {
   });
 });
 
-describe("identifying with a Scroll of Wisdom", () => {
+describe("spending currency on an item", () => {
   const withScroll = {
     cols: 12, rows: 5,
     items: [
-      { x: 0, y: 0, w: 1, h: 1, rarity: "normal" as const, name: "Scroll of Wisdom", itemClass: "currency", lines: [], count: 4 },
+      { x: 0, y: 0, w: 1, h: 1, rarity: "normal" as const, name: "Scroll of Wisdom", itemClass: "currency", baseId: "currency.wisdom", lines: [], count: 4 },
       { x: 4, y: 0, w: 1, h: 2, rarity: "rare" as const, name: "Ember Wand", itemClass: "wand", lines: [], unidentified: true },
     ],
   };
@@ -182,7 +182,23 @@ describe("identifying with a Scroll of Wisdom", () => {
     render(<InventoryPanel inventory={withScroll} onClose={() => {}} onIntent={(i) => seen.push(i)} />);
     fireEvent.contextMenu(screen.getByTestId("inventory-item-0"));
     fireEvent.pointerDown(screen.getByTestId("inventory-item-1"));
-    expect(seen).toEqual([{ kind: "identifyItem", x: 4, y: 0 }]);
+    expect(seen).toEqual([{ kind: "applyCurrency", fromX: 0, fromY: 0, x: 4, y: 0 }]);
+  });
+
+  it("refuses a target the armed orb cannot legally change", () => {
+    const seen: unknown[] = [];
+    const withOrb = {
+      cols: 12, rows: 5,
+      items: [
+        { x: 0, y: 0, w: 1, h: 1, rarity: "normal" as const, name: "Orb of Embers", itemClass: "currency", baseId: "currency.embers", lines: [], count: 1 },
+        // Embers adds to a rare; a normal item is not something it can touch.
+        { x: 4, y: 0, w: 1, h: 2, rarity: "normal" as const, name: "Ember Wand", itemClass: "wand", lines: [] },
+      ],
+    };
+    render(<InventoryPanel inventory={withOrb} onClose={() => {}} onIntent={(i) => seen.push(i)} />);
+    fireEvent.contextMenu(screen.getByTestId("inventory-item-0"));
+    fireEvent.pointerDown(screen.getByTestId("inventory-item-1"));
+    expect(seen.some((i) => (i as { kind: string }).kind === "applyCurrency")).toBe(false);
   });
 
   it("does not arm off an ordinary item, so a click still picks it up", () => {

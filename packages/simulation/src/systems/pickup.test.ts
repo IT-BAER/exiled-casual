@@ -62,6 +62,17 @@ describe("currency stacking", () => {
     expect(inv.items[0]!.count).toBe(4);
   });
 
+  it("stacks onto a pile saved under the base id the scroll used to have", () => {
+    const { sim, w, player, sessionE, ge } = setup([1000, 1000], [1001, 1001], [
+      { x: 0, y: 0, w: 1, h: 1, item: { ...scroll, baseId: "base.wisdom_scroll" }, count: 3 },
+    ]);
+    w.set(ge, "item", { item: scroll, w: 1, h: 1 });
+    sim.step([pickup(player, ge)]);
+    const inv = w.get(sessionE, "inventory") as { items: { count?: number }[] };
+    expect(inv.items.length).toBe(1);
+    expect(inv.items[0]!.count).toBe(4);
+  });
+
   it("starts a stack of one when the grid has no scrolls", () => {
     const { sim, w, player, sessionE, ge } = setup([1000, 1000], [1001, 1001]);
     w.set(ge, "item", { item: scroll, w: 1, h: 1 });
