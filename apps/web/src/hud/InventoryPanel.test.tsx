@@ -156,6 +156,53 @@ describe("InventoryPanel", () => {
     expect(intents).toEqual([]);
   });
 
+
+  it("shift-clicks an item straight into the stash's first free cell", () => {
+    const intents: unknown[] = [];
+    // (0,0) is taken, so a 2x2 piece first fits at (2,0).
+    const stash = { cols: 12, rows: 12, items: [{ x: 0, y: 0, w: 2, h: 2, rarity: "normal" as const, name: "Old Wand", lines: [] }] };
+    render(<InventoryPanel inventory={inv} stash={stash} onIntent={(i) => intents.push(i)} onClose={() => {}} />);
+    // jsdom has no PointerEvent, so fireEvent.pointerDown drops shiftKey; a MouseEvent
+    // named pointerdown carries it, the way the browser's real pointer event does.
+    fireEvent(screen.getByTestId("inventory-item-0"), new MouseEvent("pointerdown", { bubbles: true, shiftKey: true, clientX: 10, clientY: 10 }));
+    expect(intents).toEqual([{ kind: "moveItem", x: 0, y: 0, toX: 2, toY: 0, to: "stash" }]);
+  });
+
+  it("shift-clicks a stash item back into the backpack", () => {
+    const intents: unknown[] = [];
+    const stash = { cols: 12, rows: 12, items: [{ x: 4, y: 4, w: 1, h: 1, rarity: "normal" as const, name: "Old Wand", lines: [] }] };
+    render(<InventoryPanel inventory={inv} stash={stash} onIntent={(i) => intents.push(i)} onClose={() => {}} />);
+    // The backpack's 2x2 item sits at (0,0), so a 1x1 first fits at (2,0).
+    fireEvent(screen.getByTestId("stash-item-0"), new MouseEvent("pointerdown", { bubbles: true, shiftKey: true, clientX: 10, clientY: 10 }));
+    expect(intents).toEqual([{ kind: "moveItem", x: 4, y: 4, toX: 2, toY: 0, from: "stash" }]);
+  });
+
+  it("shift-clicks a currency onto the stack it should merge with, not onto an empty cell", () => {
+    const intents: unknown[] = [];
+    const currency = {
+      cols: 12, rows: 5,
+      items: [{ x: 0, y: 0, w: 1, h: 1, rarity: "normal" as const, name: "Scroll of Wisdom", itemClass: "currency", baseId: "currency.wisdom", count: 3, lines: [] }],
+    };
+    const stash = {
+      cols: 12, rows: 12,
+      items: [{ x: 5, y: 6, w: 1, h: 1, rarity: "normal" as const, name: "Scroll of Wisdom", itemClass: "currency", baseId: "currency.wisdom", count: 4, lines: [] }],
+    };
+    render(<InventoryPanel inventory={currency} stash={stash} onIntent={(i) => intents.push(i)} onClose={() => {}} />);
+    // jsdom has no PointerEvent, so fireEvent.pointerDown drops shiftKey; a MouseEvent
+    // named pointerdown carries it, the way the browser's real pointer event does.
+    fireEvent(screen.getByTestId("inventory-item-0"), new MouseEvent("pointerdown", { bubbles: true, shiftKey: true, clientX: 10, clientY: 10 }));
+    expect(intents).toEqual([{ kind: "moveItem", x: 0, y: 0, toX: 5, toY: 6, to: "stash" }]);
+  });
+
+  it("does nothing on a shift-click while the stash is closed", () => {
+    const intents: unknown[] = [];
+    render(<InventoryPanel inventory={inv} onIntent={(i) => intents.push(i)} onClose={() => {}} />);
+    // jsdom has no PointerEvent, so fireEvent.pointerDown drops shiftKey; a MouseEvent
+    // named pointerdown carries it, the way the browser's real pointer event does.
+    fireEvent(screen.getByTestId("inventory-item-0"), new MouseEvent("pointerdown", { bubbles: true, shiftKey: true, clientX: 10, clientY: 10 }));
+    expect(intents).toEqual([]);
+  });
+
   it("hovers an equipped slot to read what that item is actually granting", () => {
     const equipped = {
       body: {

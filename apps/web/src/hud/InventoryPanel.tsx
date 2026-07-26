@@ -279,6 +279,34 @@ export function InventoryPanel({
     return canEquip(drag.item.itemClass ?? "", slot) ? "legal" : "illegal";
   };
 
+  // PoE's shift-click: send the piece to the other container without a drag. The
+  // destination cell is picked here rather than by a new intent, because the sim
+  // stays the authority — it re-checks the placement and simply refuses a bad one.
+  const quickTransfer = (container: ContainerId, it: GridItem) => {
+    const to: ContainerId = container === "backpack" ? "stash" : "backpack";
+    const dest = grids[to];
+    if (!dest) return; // stash closed: nothing to send it to
+    // Currency lands on the stack it merges with, so a shift-click does not
+    // scatter seven scrolls across seven cells.
+    const stack = it.itemClass === "currency" && it.baseId !== undefined
+      ? dest.items.find((p) => p.itemClass === "currency" && p.baseId === it.baseId)
+      : undefined;
+    // Same first-fit scan the sim runs: rows, then columns, top-left wins.
+    const fit = stack ?? (() => {
+      for (let y = 0; y <= dest.rows - it.h; y++) {
+        for (let x = 0; x <= dest.cols - it.w; x++) {
+          if (fitsAt(dest, it, it.w, it.h, x, y)) return { x, y };
+        }
+      }
+      return undefined;
+    })();
+    if (!fit) return; // no room over there; the item stays put
+    onIntent?.({
+      kind: "moveItem", x: it.x, y: it.y, toX: fit.x, toY: fit.y,
+      ...(container === "stash" ? { from: "stash" as const } : { to: "stash" as const }),
+    });
+  };
+
   // One grid, rendered for either container. Both share the drag, the hover
   // tooltip and the armed-currency cursor, so an item behaves the same in the
   // stash as in the bag rather than through a second copy of this markup.
@@ -343,6 +371,12 @@ export function InventoryPanel({
                   setArmed((a) => (container === "backpack" && it.itemClass === "currency" && a?.x !== it.x ? it : null));
                 }}
                 onPointerDown={(e) => {
+                  if (e.shiftKey) {
+                    e.preventDefault();
+                    setHover(null);
+                    quickTransfer(container, it);
+                    return;
+                  }
                   if (armed && container === "backpack" && accepts(armed, it)) {
                     e.preventDefault();
                     setHover(null);
