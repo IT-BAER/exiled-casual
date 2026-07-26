@@ -164,7 +164,11 @@ describe("Hud", () => {
     // Height in vw, like the globe: a fixed pixel bar shrinks against the globe as the
     // window widens, which is exactly what made it look detached.
     expect(flaskRow.style.height).toMatch(/vw$/);
-    expect(skillRow.style.height).toBe(flaskRow.style.height);
+    expect(skillRow.style.height).toMatch(/vw$/);
+    // The two are not the same height: on poe1-lower-bar.png the skill panel stands 190px
+    // against the flask panel's 162px, so the left one has to come out shorter.
+    const vw = (s: string) => parseFloat(s);
+    expect(vw(flaskRow.style.height)).toBeLessThan(vw(skillRow.style.height));
   });
 
   it("a full flask shows no veil, an empty one is fully veiled", () => {

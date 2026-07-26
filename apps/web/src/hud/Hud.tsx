@@ -34,8 +34,15 @@ const FIGURE_OUT = "0.9vw"; // figure hangs off the screen side, covering ~30% o
 // the screen read as one piece of furniture instead of two boxes parked beside two globes.
 // Ours was 0.58 while the skill panel held a single row: now that the mouse buttons stack
 // above the numbered slots, it takes PoE1's full 0.72 and the tiles drop to its 0.22.
+// That crop is a 16:9 fullscreen grab (2558 wide), so its pixels convert straight to vw:
+// the skill panel's 190px is 7.43vw and the flask panel's 162px is 6.33vw, which is where
+// these two fractions come from.
 // Exported because the inventory panel has to stop exactly where this starts.
-export const BAR_H = `${(ORB_VW * 0.80).toFixed(2)}vw`;
+export const BAR_H = `${(ORB_VW * 0.72).toFixed(2)}vw`;
+// PoE1's left panel stands shorter than the right one, and its bottom lip is thinner, or
+// the vials would not clear the frame at that height.
+const FLASK_BAR_H = `${(ORB_VW * 0.62).toFixed(2)}vw`;
+const FLASK_BAR_BOTTOM = 8;
 const SLOT_GAP = 2; // px between tiles; PoE1 packs them against a hairline
 // The tiles fill the row instead of being their own fraction of the globe: the frame is
 // a fixed PANEL_W px wide while the globe padding beside it scales with the window, so a
@@ -642,7 +649,17 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
       </div>
 
       {/* Flask bar — runs off the screen side and under the life globe, per poe1-lower-bar.png */}
-      <div data-testid="flask-row" style={{ ...barStyle, left: 0, paddingLeft: BAR_PAD, zIndex: 2 }}>
+      <div
+        data-testid="flask-row"
+        style={{
+          ...barStyle,
+          left: 0,
+          paddingLeft: BAR_PAD,
+          zIndex: 2,
+          height: FLASK_BAR_H,
+          borderBottomWidth: `${FLASK_BAR_BOTTOM}px`,
+        }}
+      >
         {FLASKS.map((f) => {
           const charges = f.kind === "life"
             ? snapshot.player.flasks.lifeCharges
