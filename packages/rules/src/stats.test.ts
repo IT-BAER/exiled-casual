@@ -121,9 +121,24 @@ describe("applyItemMods", () => {
 
   it("ignores stats the sim has no mechanic for", () => {
     const s = applyItemMods(baseCasterStats(), [
-      { stat: "strength", value: 20 },
+      { stat: "dexterity", value: 20 }, // no accuracy system to land on
     ]);
     expect(s).toEqual(baseCasterStats());
+  });
+
+  it("strength buys life at PoE2's two per point", () => {
+    const s = applyItemMods(baseCasterStats(), [
+      { stat: "strength", value: 20 },
+    ]);
+    expect(s.maxLifeFixed).toBe(fp(140)); // 100 + 20 x 2
+  });
+
+  it("strength stacks with a flat life roll on the same character", () => {
+    const s = applyItemMods(baseCasterStats(), [
+      { stat: "strength", value: 15 },
+      { stat: "maxLife", value: 40 },
+    ]);
+    expect(s.maxLifeFixed).toBe(fp(170)); // 100 + 30 + 40
   });
 
   it("energy shield adds flat, then its percent scales the sum", () => {

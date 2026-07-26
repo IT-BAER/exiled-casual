@@ -66,6 +66,13 @@ export function baseCasterStats(): StatBlock {
   };
 }
 
+/**
+ * Life per point of Strength, PoE2's current figure. Versioned by the same rule
+ * the spec puts on `accuracy_per_dexterity`: the number is patch-sensitive, so it
+ * lives here as a named constant rather than folded into the arithmetic.
+ */
+export const LIFE_PER_STRENGTH = 2;
+
 /** One resolved gear mod: the affix's (or implicit's) `stat` id and its rolled value. */
 export interface ItemStatMod {
   stat: string;
@@ -77,12 +84,13 @@ export interface ItemStatMod {
  * increases scale the sum, which is PoE's order: "+60 to Armour" and "30%
  * increased Armour" on the same chest give 78, never 60 + 18-of-nothing.
  *
- * Only the stats the sim actually has a mechanic for are honoured. Attributes,
- * crit and cast speed roll and render but land here as
- * no-ops on purpose: each needs a mechanic that does not exist yet, and
- * silently mapping them onto a neighbouring stat would lie louder than showing
- * an inert line. Unknown ids are ignored, never thrown on, so content can add a
- * mod before the system that reads it.
+ * Only the stats the sim actually has a mechanic for are honoured. Strength is
+ * one of them now: PoE2 spends it on Life at two per point, which is a rule this
+ * sim can carry exactly rather than a stand-in for one. Dexterity still lands as
+ * a no-op on purpose — it buys Accuracy, and there is no hit roll here to spend
+ * it on, so mapping it onto a neighbouring stat would lie louder than showing an
+ * inert line. Unknown ids are ignored, never thrown on, so content can add a mod
+ * before the system that reads it.
  */
 export function applyItemMods(base: StatBlock, mods: readonly ItemStatMod[]): StatBlock {
   const flat = { maxLife: 0, maxMana: 0, armour: 0, energyShield: 0 };
@@ -96,6 +104,9 @@ export function applyItemMods(base: StatBlock, mods: readonly ItemStatMod[]): St
     }
     switch (m.stat) {
       case "maxLife": flat.maxLife += m.value; break;
+      // PoE2's own conversion (spec 03: "maximum Life = 28 + 12 * level + 2 *
+      // Strength"), not a stand-in — a point of Strength is two Life there too.
+      case "strength": flat.maxLife += m.value * LIFE_PER_STRENGTH; break;
       case "maxMana": flat.maxMana += m.value; break;
       case "armour": flat.armour += m.value; break;
       case "energyShield": flat.energyShield += m.value; break;
