@@ -44,6 +44,15 @@ PoE2 itemization actually works — do not invent mechanics or colors from memor
 - Typecheck: `npm run typecheck` (tsc --noEmit; vitest strips types so this is mandatory).
 - Web build: `npm run build -w apps/web`.
 
+## 3D assets
+
+- Character packs in `apps/web/public/models/` all export the same 65-joint Unreal-named rig at the
+  same bind pose, so a mesh from one pack binds to another's skeleton by assignment, no retargeting.
+  `rig.test.ts` guards that invariant — a new pack must pass it or the wardrobe breaks.
+- Blender 5.2 is installed for asset authoring, driven headless:
+  `"/c/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background --factory-startup --python x.py`
+  Its glTF importer adds a 42-vert `Icosphere` as the bone display shape; the exporter drops it.
+
 ## Devlog — SCREENSHOT EACH VISIBLE STEP
 
 - After any step with a visible result, screenshot the running app into `devlog/screenshots/` named

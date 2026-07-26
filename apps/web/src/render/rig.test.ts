@@ -1,4 +1,6 @@
 // @vitest-environment node
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, it, expect, afterEach } from "vitest";
 import { NullEngine } from "@babylonjs/core";
 import { createScene } from "./engine";
@@ -91,5 +93,50 @@ describe("outfits", () => {
   it("offers more than one so the swap has somewhere to go", () => {
     expect(OUTFITS.length).toBeGreaterThan(1);
     expect(new Set(OUTFITS).size).toBe(OUTFITS.length);
+  });
+});
+
+/**
+ * The modular wardrobe rests entirely on the packs being skin-compatible: a mesh
+ * from one is bound to the other's live skeleton by assignment alone, with no
+ * retargeting. That holds only while every pack lists the same joints in the
+ * same order with the same inverse bind matrices. It is an asset invariant, not
+ * a code one, so it is checked against the files a new pack would have to join.
+ */
+describe("pack skin compatibility", () => {
+  const MODELS = fileURLToPath(new URL("../../public/models/", import.meta.url));
+
+  /** Joint names in skin order, plus the flat inverse bind matrix buffer. */
+  function readSkin(file: string): { joints: string[]; ibm: Float32Array } {
+    const gltf = JSON.parse(readFileSync(`${MODELS}${file}.gltf`, "utf8"));
+    const bin = readFileSync(`${MODELS}${file}.bin`);
+    const accessor = gltf.accessors[gltf.skins[0].inverseBindMatrices];
+    const view = gltf.bufferViews[accessor.bufferView];
+    const start = (view.byteOffset ?? 0) + (accessor.byteOffset ?? 0);
+    const ibm = new Float32Array(accessor.count * 16);
+    for (let i = 0; i < ibm.length; i++) ibm[i] = bin.readFloatLE(start + i * 4);
+    return { joints: gltf.skins[0].joints.map((j: number) => gltf.nodes[j].name), ibm };
+  }
+
+  const ranger = readSkin("Male_Ranger");
+  const peasant = readSkin("Male_Peasant");
+
+  it("lists the same joints in the same order", () => {
+    expect(ranger.joints).toHaveLength(65);
+    expect(peasant.joints).toEqual(ranger.joints);
+  });
+
+  it("binds those joints at the same rest pose", () => {
+    // Bit-identical in both packs today. Any drift here means a borrowed mesh
+    // would deform against the wrong bind pose, so exactness is the point.
+    expect(peasant.ibm).toEqual(ranger.ibm);
+  });
+
+  it("keeps the pieces the mixed outfit borrows", () => {
+    // Named in rig.ts; renaming a mesh in the pack would silently drop the piece.
+    const gltf = JSON.parse(readFileSync(`${MODELS}Male_Ranger.gltf`, "utf8"));
+    const names = gltf.meshes.map((m: { name: string }) => m.name);
+    expect(names).toContain("Male_Ranger_Head_Hood");
+    expect(names).toContain("Male_Ranger_Acc_Pauldron");
   });
 });

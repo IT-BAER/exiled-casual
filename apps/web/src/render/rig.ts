@@ -78,13 +78,46 @@ export function speedRatioFor(clip: RigClip, speed: number): number {
   return Math.min(MAX_RATIO, Math.max(MIN_RATIO, matched));
 }
 
-export type Outfit = "ranger" | "peasant";
+/** A source pack: one skeleton, one set of slot meshes, one texture set. */
+export type Pack = "ranger" | "peasant";
 
-export const OUTFITS: readonly Outfit[] = ["ranger", "peasant"];
-
-const OUTFIT_URL: Record<Outfit, string> = {
+const PACK_URL: Record<Pack, string> = {
   ranger: "/models/Male_Ranger.gltf",
   peasant: "/models/Male_Peasant.gltf",
+};
+
+/**
+ * Both packs export the same 65 joints in the same order with bit-identical
+ * inverse bind matrices, so a mesh authored on one binds to the other's skeleton
+ * with no re-rigging: clone the mesh, point it at the live skeleton, done. The
+ * 78x-124x rest-pose gap noted above is between the *animation library* and the
+ * outfits, not between the outfits themselves.
+ *
+ * That makes the wardrobe pure data. `mixed` exists to keep it honest — it is a
+ * peasant wearing the ranger's hood and pauldron, and it is the thing that
+ * breaks first if a future pack ships a different joint order.
+ */
+interface OutfitSpec {
+  /** Supplies the skeleton, and every mesh not listed in `borrow`. */
+  pack: Pack;
+  /** Meshes lifted from another pack and bound to this outfit's skeleton. */
+  borrow?: readonly { pack: Pack; mesh: string }[];
+}
+
+export type Outfit = "ranger" | "peasant" | "mixed";
+
+export const OUTFITS: readonly Outfit[] = ["ranger", "peasant", "mixed"];
+
+const OUTFIT: Record<Outfit, OutfitSpec> = {
+  ranger: { pack: "ranger" },
+  peasant: { pack: "peasant" },
+  mixed: {
+    pack: "peasant",
+    borrow: [
+      { pack: "ranger", mesh: "Male_Ranger_Head_Hood" },
+      { pack: "ranger", mesh: "Male_Ranger_Acc_Pauldron" },
+    ],
+  },
 };
 
 const ANIM_URL = "/models/anim-library.glb";
@@ -186,7 +219,7 @@ const RIG_YAW = 0;
 interface LoadedRig {
   scene: Scene;
   anims: AssetContainer;
-  outfits: Map<Outfit, AssetContainer>;
+  packs: Map<Pack, AssetContainer>;
 }
 
 let loaded: LoadedRig | null = null;
@@ -205,13 +238,13 @@ export function loadPlayerRig(scene: Scene): Promise<void> {
   pending = (async () => {
     const [anims, ranger, peasant] = await Promise.all([
       LoadAssetContainerAsync(ANIM_URL, scene),
-      LoadAssetContainerAsync(OUTFIT_URL.ranger, scene),
-      LoadAssetContainerAsync(OUTFIT_URL.peasant, scene),
+      LoadAssetContainerAsync(PACK_URL.ranger, scene),
+      LoadAssetContainerAsync(PACK_URL.peasant, scene),
     ]);
     loaded = {
       scene,
       anims,
-      outfits: new Map<Outfit, AssetContainer>([
+      packs: new Map<Pack, AssetContainer>([
         ["ranger", ranger],
         ["peasant", peasant],
       ]),
@@ -248,6 +281,7 @@ export class RigActor {
   private readonly groups = new Map<RigClip, AnimationGroup>();
 
   private entries: InstantiatedEntries | null = null;
+  private borrowed: Mesh[] = [];
   private active: AnimationGroup | null = null;
   private activeClip: RigClip | null = null;
   private locomotion: RigClip = "idle";
@@ -312,7 +346,8 @@ export class RigActor {
 
   private build(outfit: Outfit): void {
     this.teardown();
-    const container = loaded?.outfits.get(outfit);
+    const spec = OUTFIT[outfit];
+    const container = loaded?.packs.get(spec.pack);
     if (!container || !loaded) return;
 
     // doNotInstantiate: a skinned mesh needs its own skeleton, not a GPU instance.
@@ -326,6 +361,25 @@ export class RigActor {
       root.parent = this.pivot;
       byName.set(root.name, root);
       for (const child of root.getDescendants(false)) byName.set(child.name, child);
+    }
+
+    // Pieces from another pack. Same joint order, same inverse bind matrices, so
+    // pointing the clone at this skeleton is the whole of the "re-rig".
+    const skeleton = entries.skeletons[0];
+    if (spec.borrow && skeleton) {
+      // Hang the piece off whatever node already carries this pack's own skinned
+      // meshes, so it inherits the same armature transform.
+      const worn = [...byName.values()].find(
+        (n): n is Mesh => n instanceof Mesh && n.skeleton !== null,
+      );
+      for (const piece of spec.borrow) {
+        const source = loaded.packs.get(piece.pack)?.meshes.find((m) => m.name === piece.mesh);
+        if (!(source instanceof Mesh)) continue;
+        const clone = source.clone(`${this.host.name}-${piece.mesh}`, worn?.parent ?? this.pivot);
+        if (!clone) continue;
+        clone.skeleton = skeleton;
+        this.borrowed.push(clone);
+      }
     }
 
     // Read the hips rest pose before any clip starts and could move it.
@@ -380,6 +434,8 @@ export class RigActor {
   private teardown(): void {
     for (const group of this.groups.values()) group.dispose();
     this.groups.clear();
+    for (const mesh of this.borrowed) mesh.dispose();
+    this.borrowed = [];
     this.entries?.dispose();
     this.entries = null;
     this.active = null;
