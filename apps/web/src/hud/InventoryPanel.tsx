@@ -48,6 +48,13 @@ export const GOLD = "#c8a44d";
 export const GOLD_DIM = "#7a5c22";
 export const PARCHMENT = "#e8dcc0";
 const MAGIC = "#8aa6ff";
+/**
+ * Grid lattice, sampled off poe2-screenshots/stash.png: a 1px warm brown line
+ * over a cell floor that is nearly black. Reading it back off the reference,
+ * the separation comes from the floor being black rather than from the line
+ * being bright, which is why the tile under this is unlit almost everywhere.
+ */
+const LATTICE = "rgb(58,45,26)";
 
 const U_VW = +(CELL_VW * (54 / 48)).toFixed(3); // 2.363
 const U = `${U_VW}vw`; // equipment paper-doll unit, kept in step with CELL
@@ -358,8 +365,17 @@ export function InventoryPanel({
               // PoE draws the lattice and the faint crest in each empty cell as art,
               // not as borders: one tile repeated is both cheaper than a border per
               // cell and the only way to get the embossed ornament (stash.png).
-              background: "#0a0b0e url(/textures/ui/stash_cell_v2.png)",
-              backgroundSize: `${CELL} ${CELL}`,
+              backgroundColor: "#0a0b0e",
+              // The tile carries the floor and the crest; the lattice is drawn by
+              // gradients on top of it because a 256px tile scaled down to a ~42px
+              // cell turns its own 4px line into two thirds of a blurred pixel,
+              // while the reference's line is a crisp 1px at any cell size.
+              backgroundImage: [
+                `repeating-linear-gradient(to right, ${LATTICE} 0 1px, transparent 1px ${CELL})`,
+                `repeating-linear-gradient(to bottom, ${LATTICE} 0 1px, transparent 1px ${CELL})`,
+                "url(/textures/ui/stash_cell_v4.png)",
+              ].join(","),
+              backgroundSize: `auto, auto, ${CELL} ${CELL}`,
               border: `1px solid ${GOLD_DIM}`,
               boxShadow: "inset 0 0 14px rgba(0,0,0,0.8)",
             }}
@@ -547,7 +563,8 @@ export function InventoryPanel({
           <div
             style={{
               margin: `calc(-1 * ${PANEL_PAD}) calc(-1 * ${PANEL_PAD}) 10px`,
-              height: `calc(${stash.cols} * ${CELL} * 0.156)`,
+              // 12.8% of the pane's width, measured off the reference's band.
+              height: `calc(${stash.cols} * ${CELL} * 0.128)`,
               position: "relative",
               display: "flex", alignItems: "center", justifyContent: "center",
               backgroundImage: "url(/textures/ui/char_header_v1.png)",

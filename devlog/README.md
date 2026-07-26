@@ -180,6 +180,6 @@ The hideout gets storage, quick transfer, and a bench that turns leftovers into 
 <td width="33%"><img src="screenshots/2026-07-26-disenchanting-bench.jpeg" alt="The hideout with the disenchanting bench, an anvil and a glowing ember crucible, standing right of the stash" width="100%"><br><sub><b>The bench eats the leftovers</b> - ctrl-click a magic, rare or unique at the bench and it becomes currency shards, ten to an orb.</sub></td>
 </tr>
 <tr>
-<td width="33%"><img src="screenshots/2026-07-26-stash-cartouche.jpeg" alt="The stash under a gilt cartouche header, its grid lattice drawn as tiled art" width="100%"><br><sub><b>The stash gets its cartouche</b> - a flat red title bar and CSS cell borders, measured against the PoE1 stash, were the two things giving it away.</sub></td>
+<td width="33%"><img src="screenshots/2026-07-26-stash-cartouche.jpeg" alt="The stash under a gilt cartouche header, its grid lattice drawn as tiled art" width="100%"><br><sub><b>The stash gets its cartouche</b> - the real stash was sampled pixel by pixel: cell floors near black at luminance 1, a 1px warm lattice, an engraved crest in every empty square.</sub></td>
 </tr>
 </table>
