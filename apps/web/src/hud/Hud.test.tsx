@@ -171,6 +171,22 @@ describe("Hud", () => {
     expect(vw(flaskRow.style.height)).toBeLessThan(vw(skillRow.style.height));
   });
 
+  it("recesses a rail between the skill rows and sizes the frame's chrome off the window", () => {
+    render(<Hud snapshot={makeSnap({})} />);
+    const skillRow = screen.getByTestId("skill-row");
+    // The same 16:9 crop carries a heavy top edge (19px of its 2558px width), a thin
+    // bottom lip (7px), and an 18px recessed rail between the mouse row and the numbered
+    // row. Fixed pixels only hold that ratio at one window width.
+    const bw = /border-width:\s*([^;]+)/.exec(skillRow.getAttribute("style") ?? "")?.[1] ?? "";
+    const parts = bw.split(/\s+/);
+    const top = parts[0] ?? "";
+    const bottom = parts[2] ?? "";
+    expect(top).toMatch(/vw$/);
+    expect(bottom).toMatch(/vw$/);
+    expect(parseFloat(top)).toBeGreaterThan(parseFloat(bottom));
+    expect(screen.getByTestId("skill-rail").style.height).toMatch(/vw$/);
+  });
+
   it("a full flask shows no veil, an empty one is fully veiled", () => {
     render(<Hud snapshot={makeSnap({ flasks: { lifeCharges: 7, lifeMax: 7, manaCharges: 0, manaMax: 7 } })} />);
     expect(screen.getByTestId("flask-life-veil")).toHaveStyle({ height: "0%" });

@@ -20,9 +20,13 @@ const ORB_FRAME = `${(ORB_VW / ORB_HOLE).toFixed(2)}vw`;
 const RING_VW = (ORB_VW / ORB_HOLE - ORB_VW) / 2; // ring band thickness
 const ORB_INSET = "0.39vw"; // sphere offset from the side; the ring overhangs off-screen
 const BAR_SIDE = 28;
-// The border-image slices the frame art keeps for its own top and bottom edges.
-const BAR_TOP = 14;
-const BAR_BOTTOM = 16;
+// The border-image slices the frame art keeps for its own top and bottom edges, and the
+// rail between the two socket rows. On the 2558-wide reference these measure 19px, 7px and
+// 18px: a heavy cornice, a thin lip, a recessed rail. In px they only held that ratio at
+// one window width, and ours had them near enough backwards (14 top, 16 bottom, a 2px gap).
+const BAR_TOP = "0.74vw";
+const BAR_BOTTOM = "0.27vw";
+const BAR_RAIL = "0.70vw";
 const BAR_PAD_EXPR = `${ORB_INSET} + ${ORB} + ${RING_VW.toFixed(3)}vw - ${BAR_SIDE}px`;
 const ORB_BOTTOM = "2.1vh"; // sphere bottom above the screen edge
 const FIGURE_H = `${(ORB_VW * 1.08).toFixed(2)}vw`; // bronze figure height, same crop
@@ -39,10 +43,9 @@ const FIGURE_OUT = "0.9vw"; // figure hangs off the screen side, covering ~30% o
 // these two fractions come from.
 // Exported because the inventory panel has to stop exactly where this starts.
 export const BAR_H = `${(ORB_VW * 0.72).toFixed(2)}vw`;
-// PoE1's left panel stands shorter than the right one, and its bottom lip is thinner, or
-// the vials would not clear the frame at that height.
+// PoE1's left panel stands a step shorter than the right one: 162px against 190px on the
+// same crop. The vials clear the shorter frame because the bottom lip is thin.
 const FLASK_BAR_H = `${(ORB_VW * 0.62).toFixed(2)}vw`;
-const FLASK_BAR_BOTTOM = 8;
 const SLOT_GAP = 2; // px between tiles; PoE1 packs them against a hairline
 // The tiles fill the row instead of being their own fraction of the globe: the frame is
 // a fixed PANEL_W px wide while the globe padding beside it scales with the window, so a
@@ -50,11 +53,11 @@ const SLOT_GAP = 2; // px between tiles; PoE1 packs them against a hairline
 // A tile is as big as the smaller of the two budgets. Width: the frame is a fixed
 // PANEL_W px while the globe padding beside it scales with the window, so a tile that
 // was its own fraction of the globe only fitted at one window width and left dead frame
-// at every other. Height: two rows plus their gap have to stay inside the bar's own
-// content box, or the bottom row runs off the screen edge.
+// at every other. Height: two rows, the cornice, the lip and the rail between them all
+// have to stay inside the bar's own box, or the bottom row runs off the screen edge.
 const SLOT = `min(
   calc((${PANEL_W}px - ${2 * BAR_SIDE}px - (${BAR_PAD_EXPR}) - ${4 * SLOT_GAP}px) / 5),
-  calc((${BAR_H} - ${BAR_TOP + BAR_BOTTOM}px - ${SLOT_GAP}px) / 2)
+  calc((${BAR_H} - ${BAR_TOP} - ${BAR_BOTTOM} - ${BAR_RAIL}) / 2)
 )`;
 const FLASK_W = `${(ORB_VW * 0.20).toFixed(2)}vw`;
 const FLASK_H = `${(ORB_VW * 0.50).toFixed(2)}vw`;
@@ -253,7 +256,7 @@ const barStyle: React.CSSProperties = {
   alignItems: "center",
   gap: "0.25vw",
   borderStyle: "solid",
-  borderWidth: `${BAR_TOP}px ${BAR_SIDE}px ${BAR_BOTTOM}px ${BAR_SIDE}px`,
+  borderWidth: `${BAR_TOP} ${BAR_SIDE}px ${BAR_BOTTOM} ${BAR_SIDE}px`,
   // bar-panel-v3.png, 1024x185: v2 with its top 24 rows of merlons cut off. The
   // battlement squeezed into a 14px border read as a dashed checkerboard against the
   // world; PoE1's panel tops out in a plain stepped cornice over its gold rail, which
@@ -657,7 +660,6 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
           paddingLeft: BAR_PAD,
           zIndex: 2,
           height: FLASK_BAR_H,
-          borderBottomWidth: `${FLASK_BAR_BOTTOM}px`,
         }}
       >
         {FLASKS.map((f) => {
@@ -693,15 +695,31 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
           flexDirection: "column",
           alignItems: "flex-end",
           justifyContent: "center",
-          gap: `${SLOT_GAP}px`,
+          // barStyle's own gap spaces the flasks; here it would push the rail out of the
+          // frame's inner height and flexbox would shrink the rail to pay for it.
+          gap: 0,
         }}
       >
         <SkillTooltip skills={snapshot.skills} id={hoveredSkill} right={BAR_PAD} />
-        <div style={{ display: "flex", gap: `${SLOT_GAP}px` }}>
+        {/* The mouse row closes on a warm hairline, drawn as a shadow so it costs no height. */}
+        <div style={{ display: "flex", gap: `${SLOT_GAP}px`, boxShadow: "0 1px 0 rgba(101,81,49,0.85)" }}>
           {SKILL_SLOTS.slice(5).map((slot, i) => (
             <SkillTile key={slot.key} slot={slot} n={i + 6} cooldowns={cooldowns} onHover={setHoveredSkill} />
           ))}
         </div>
+        {/* PoE1 recesses a rail between the two rows rather than leaving a gap: 18px of
+            shadow on the reference, closed underneath by a brighter hairline that runs the
+            frame's full inner width, which is what separates the rows without a border. */}
+        <div
+          data-testid="skill-rail"
+          style={{
+            alignSelf: "stretch",
+            height: BAR_RAIL,
+            boxSizing: "border-box",
+            borderBottom: "1px solid #9b7751",
+            background: "linear-gradient(180deg,#2a231c,#101013)",
+          }}
+        />
         <div style={{ display: "flex", gap: `${SLOT_GAP}px` }}>
           {SKILL_SLOTS.slice(0, 5).map((slot, i) => (
             <SkillTile key={slot.key} slot={slot} n={i + 1} cooldowns={cooldowns} onHover={setHoveredSkill} />
