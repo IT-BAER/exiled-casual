@@ -19,6 +19,11 @@ const ORB = `${ORB_VW}vw`;
 const ORB_FRAME = `${(ORB_VW / ORB_HOLE).toFixed(2)}vw`;
 const RING_VW = (ORB_VW / ORB_HOLE - ORB_VW) / 2; // ring band thickness
 const ORB_INSET = "0.39vw"; // sphere offset from the side; the ring overhangs off-screen
+const BAR_SIDE = 28;
+// The border-image slices the frame art keeps for its own top and bottom edges.
+const BAR_TOP = 18;
+const BAR_BOTTOM = 16;
+const BAR_PAD_EXPR = `${ORB_INSET} + ${ORB} + ${RING_VW.toFixed(3)}vw - ${BAR_SIDE}px`;
 const ORB_BOTTOM = "2.1vh"; // sphere bottom above the screen edge
 const FIGURE_H = `${(ORB_VW * 1.08).toFixed(2)}vw`; // bronze figure height, same crop
 const FIGURE_OUT = "0.9vw"; // figure hangs off the screen side, covering ~30% of the globe
@@ -31,16 +36,30 @@ const FIGURE_OUT = "0.9vw"; // figure hangs off the screen side, covering ~30% o
 // above the numbered slots, it takes PoE1's full 0.72 and the tiles drop to its 0.22.
 // Exported because the inventory panel has to stop exactly where this starts.
 export const BAR_H = `${(ORB_VW * 0.72).toFixed(2)}vw`;
-const SLOT = `${(ORB_VW * 0.234).toFixed(2)}vw`; // skill tile, square
+const SLOT_GAP = 4; // px between tiles
+const MOUSE_RATIO = 0.55; // mouse tile, as a share of a numbered one
+// The tiles fill the row instead of being their own fraction of the globe: the frame is
+// a fixed PANEL_W px wide while the globe padding beside it scales with the window, so a
+// vw-sized tile only fitted the space at one window width and left dead frame at others.
+// A tile is as big as the smaller of the two budgets. Width: the frame is a fixed
+// PANEL_W px while the globe padding beside it scales with the window, so a tile that
+// was its own fraction of the globe only fitted at one window width and left dead frame
+// at every other. Height: two rows plus their gap have to stay inside the bar's own
+// content box, or the bottom row runs off the screen edge.
+const SLOT = `min(
+  calc((${PANEL_W}px - ${2 * BAR_SIDE}px - (${BAR_PAD_EXPR}) - ${4 * SLOT_GAP}px) / 5),
+  calc((${BAR_H} - ${BAR_TOP + BAR_BOTTOM}px - ${SLOT_GAP}px) / ${1 + MOUSE_RATIO})
+)`;
+/** PoE1 runs the mouse buttons as a thin strip over the full-size numbered slots. */
+const MOUSE_SLOT = `calc(${SLOT} * ${MOUSE_RATIO})`;
 const FLASK_W = `${(ORB_VW * 0.20).toFixed(2)}vw`;
 const FLASK_H = `${(ORB_VW * 0.50).toFixed(2)}vw`;
 // The border-image's own side slice. Named because the padding below has to
 // subtract exactly it, or the first slot drifts out from under the ring.
-const BAR_SIDE = 28;
 // Content clears the globe by padding, not by offsetting the whole bar: that way the art
 // keeps running behind the ring. BAR_SIDE is the border-image's own side slice, which
 // already sits between the bar's edge and its first slot.
-const BAR_PAD = `calc(${ORB_INSET} + ${ORB} + ${RING_VW.toFixed(3)}vw - ${BAR_SIDE}px)`;
+const BAR_PAD = `calc(${BAR_PAD_EXPR})`;
 
 // Five skill slots on keys 1-5, then the three mouse buttons, as PoE1's bar does:
 // left, middle and right click each hold a skill of their own. Only three skills
@@ -78,8 +97,8 @@ function SkillTile({ slot, n, cooldowns, onHover }: {
       onMouseEnter={() => onHover(slot.id)}
       onMouseLeave={() => onHover(null)}
       style={{
-        width: SLOT,
-        height: SLOT,
+        width: slot.mouse ? MOUSE_SLOT : SLOT,
+        height: slot.mouse ? MOUSE_SLOT : SLOT,
         position: "relative",
         overflow: "hidden",
         background: slot.icon
@@ -230,7 +249,7 @@ const barStyle: React.CSSProperties = {
   alignItems: "center",
   gap: "0.25vw",
   borderStyle: "solid",
-  borderWidth: `18px ${BAR_SIDE}px 16px ${BAR_SIDE}px`,
+  borderWidth: `${BAR_TOP}px ${BAR_SIDE}px ${BAR_BOTTOM}px ${BAR_SIDE}px`,
   // bar-panel-v2.png, 1024x209: v1 was flush-cut at both image edges, so a 9-slice
   // ended it on a straight vertical line mid-merlon. v2 closes both ends with a
   // corner tower over a pilaster over a stepped end-block, all inside the 78px side
@@ -659,16 +678,18 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
           flexDirection: "column",
           alignItems: "flex-end",
           justifyContent: "center",
-          gap: "0.2vw",
+          gap: `${SLOT_GAP}px`,
         }}
       >
         <SkillTooltip skills={snapshot.skills} id={hoveredSkill} right={BAR_PAD} />
-        <div style={{ display: "flex", gap: "0.2vw" }}>
+        <div style={{ display: "flex", gap: `${SLOT_GAP}px` }}>
           {SKILL_SLOTS.slice(5).map((slot, i) => (
             <SkillTile key={slot.key} slot={slot} n={i + 6} cooldowns={cooldowns} onHover={setHoveredSkill} />
           ))}
         </div>
-        <div style={{ display: "flex", gap: "0.2vw" }}>
+        {/* Spread edge to edge: the frame is as wide as the inventory panel, wider than
+            five tiles the bar's height allows, and the slack read as dead frame beside them. */}
+        <div style={{ display: "flex", gap: `${SLOT_GAP}px`, alignSelf: "stretch", justifyContent: "space-between" }}>
           {SKILL_SLOTS.slice(0, 5).map((slot, i) => (
             <SkillTile key={slot.key} slot={slot} n={i + 1} cooldowns={cooldowns} onHover={setHoveredSkill} />
           ))}
