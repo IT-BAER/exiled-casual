@@ -33,6 +33,27 @@ const ITEM_BASES: ItemBase[] = [
   },
 ];
 
+/**
+ * Currency is an item everywhere it matters (it lies on the ground, it sits in the
+ * grid, `baseOf` resolves it) but it is not a droppable *equipment* base, so it stays
+ * out of `ITEM_POOLS.bases` and rollItem can never hand one out as gear.
+ */
+const CURRENCY_BASES: ItemBase[] = [
+  { id: "base.wisdom_scroll", name: "Scroll of Wisdom", itemClass: "currency", w: 1, h: 1, icon: "/textures/items/wisdom_scroll.svg" },
+];
+
+export const WISDOM_SCROLL_BASE_ID = "base.wisdom_scroll";
+
+/** One Scroll of Wisdom, as it drops and as it stacks. */
+export function wisdomScroll(): Item {
+  return { baseId: WISDOM_SCROLL_BASE_ID, rarity: "normal", itemLevel: 1, affixes: [] };
+}
+
+/** Currency stacks and is spent; equipment neither. A base the content no longer has is not currency. */
+export function isCurrency(item: Item): boolean {
+  return CURRENCY_BASES.some((b) => b.id === item.baseId);
+}
+
 // Prefix/suffix split follows PoE: raw power (life, mana, added damage, armour) is a
 // prefix, while resistances, attributes, regeneration and speed hang off the suffix side.
 // The nameWord is the part a magic item borrows, so "affix.life" + "affix.fire_res" on a
@@ -109,7 +130,7 @@ const UNIQUES: UniqueItem[] = [
 ];
 
 // Validate at module load; bad content is a programmer error, fail fast.
-for (const b of ITEM_BASES) {
+for (const b of [...ITEM_BASES, ...CURRENCY_BASES]) {
   const r = validateItemBase(b);
   if (!r.ok) throw new Error(`[content-runtime] Invalid item base "${b.id}": ${r.errors.join("; ")}`);
 }
@@ -147,7 +168,7 @@ for (const b of ITEM_BASES) {
 
 export const ITEM_POOLS: ItemPools = { bases: ITEM_BASES, affixes: AFFIXES, uniques: UNIQUES };
 
-const BASE_BY_ID = new Map(ITEM_BASES.map((b) => [b.id, b]));
+const BASE_BY_ID = new Map([...ITEM_BASES, ...CURRENCY_BASES].map((b) => [b.id, b]));
 const AFFIX_BY_ID = new Map(AFFIXES.map((a) => [a.id, a]));
 const UNIQUE_BY_NAME = new Map(UNIQUES.map((u) => [u.name, u]));
 

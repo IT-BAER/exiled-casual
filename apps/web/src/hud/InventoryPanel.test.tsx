@@ -3,7 +3,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { ITEM_POOLS } from "@exiled/content-runtime";
+import { ITEM_POOLS, baseOf, WISDOM_SCROLL_BASE_ID } from "@exiled/content-runtime";
 import { InventoryPanel } from "./InventoryPanel";
 
 afterEach(cleanup);
@@ -154,10 +154,42 @@ describe("InventoryPanel", () => {
   });
 
   it("ships an art file for every base and unique icon path", () => {
-    for (const src of [...ITEM_POOLS.bases, ...(ITEM_POOLS.uniques ?? [])]) {
+    for (const src of [...ITEM_POOLS.bases, ...(ITEM_POOLS.uniques ?? []), baseOf(WISDOM_SCROLL_BASE_ID)]) {
       if (!src.icon) continue;
       const file = resolve(__dirname, "../../public", src.icon.replace(/^\//, ""));
       expect(existsSync(file), `${src.id} icon missing: ${file}`).toBe(true);
     }
+  });
+});
+
+describe("identifying with a Scroll of Wisdom", () => {
+  const withScroll = {
+    cols: 12, rows: 5,
+    items: [
+      { x: 0, y: 0, w: 1, h: 1, rarity: "normal" as const, name: "Scroll of Wisdom", itemClass: "currency", lines: [], count: 4 },
+      { x: 4, y: 0, w: 1, h: 2, rarity: "rare" as const, name: "Ember Wand", itemClass: "wand", lines: [], unidentified: true },
+    ],
+  };
+
+  it("shows the stack size and marks the unread item", () => {
+    render(<InventoryPanel inventory={withScroll} onClose={() => {}} />);
+    expect(screen.getByTestId("inventory-count-0").textContent).toBe("4");
+    expect(screen.getByTestId("inventory-unread-1")).toBeTruthy();
+  });
+
+  it("spends an armed scroll on the item the next click lands on", () => {
+    const seen: unknown[] = [];
+    render(<InventoryPanel inventory={withScroll} onClose={() => {}} onIntent={(i) => seen.push(i)} />);
+    fireEvent.contextMenu(screen.getByTestId("inventory-item-0"));
+    fireEvent.pointerDown(screen.getByTestId("inventory-item-1"));
+    expect(seen).toEqual([{ kind: "identifyItem", x: 4, y: 0 }]);
+  });
+
+  it("does not arm off an ordinary item, so a click still picks it up", () => {
+    const seen: unknown[] = [];
+    render(<InventoryPanel inventory={withScroll} onClose={() => {}} onIntent={(i) => seen.push(i)} />);
+    fireEvent.contextMenu(screen.getByTestId("inventory-item-1"));
+    fireEvent.pointerDown(screen.getByTestId("inventory-item-1"));
+    expect(seen).toEqual([]);
   });
 });

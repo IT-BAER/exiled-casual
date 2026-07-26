@@ -24,9 +24,11 @@ export type Intent =
   | { kind: "dropItem"; x: number; y: number }
   /** Move a backpack item from its (x, y) origin cell to another one. */
   | { kind: "moveItem"; x: number; y: number; toX: number; toY: number }
-  | { kind: "useFlask"; slot: "life" | "mana" };
+  | { kind: "useFlask"; slot: "life" | "mana" }
+  /** Spend one Scroll of Wisdom on the unidentified backpack item at its ORIGIN cell. */
+  | { kind: "identifyItem"; x: number; y: number };
 
-export type CommandType = "moveTo" | "moveDir" | "useSkill" | "stop" | "interact" | "activateMap" | "pickupItem" | "equipItem" | "unequipItem" | "dropItem" | "moveItem" | "useFlask";
+export type CommandType = "moveTo" | "moveDir" | "useSkill" | "stop" | "interact" | "activateMap" | "pickupItem" | "equipItem" | "unequipItem" | "dropItem" | "moveItem" | "useFlask" | "identifyItem";
 
 // ---------------------------------------------------------------------------
 // Run loop
@@ -212,7 +214,7 @@ export interface Snapshot {
   /** Grid inventory (session singleton), display-ready. Empty when no session. */
   inventory: {
     cols: number; rows: number;
-    items: (DisplayItem & { x: number; y: number; w: number; h: number })[];
+    items: (DisplayItem & { x: number; y: number; w: number; h: number; /** currency only: stack size */ count?: number })[];
   };
   /** Equipped gear by slot. Absent keys mean an empty slot. Absent field means no session. */
   equipment: Partial<Record<EquipSlotId, DisplayItem>>;
@@ -325,6 +327,11 @@ export function validateIntent(v: unknown): Intent {
       if (!EQUIP_SLOT_IDS.has(obj["slot"] as string))
         throw new Error("validateIntent unequipItem: slot must be a valid EquipSlotId");
       return { kind: "unequipItem", slot: obj["slot"] as EquipSlotId };
+    }
+    case "identifyItem": {
+      if (!Number.isInteger(obj["x"])) throw new Error("validateIntent identifyItem: x must be an integer");
+      if (!Number.isInteger(obj["y"])) throw new Error("validateIntent identifyItem: y must be an integer");
+      return { kind: "identifyItem", x: obj["x"] as number, y: obj["y"] as number };
     }
     case "dropItem": {
       if (!Number.isInteger(obj["x"])) throw new Error("validateIntent dropItem: x must be an integer");

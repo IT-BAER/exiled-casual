@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Scroll of Wisdom inventory icon. Hand-drawn rather than painted art: a rolled
+       vellum sheet lit from the upper left, tied with the dark red cord PoE puts on
+       its scrolls. Sized to one 1x1 inventory cell. -->
+  <defs>
+    <linearGradient id="vellum" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#e8d9b0"/>
+      <stop offset="0.55" stop-color="#c9b483"/>
+      <stop offset="1" stop-color="#8f7c52"/>
+    </linearGradient>
+    <linearGradient id="roll" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f0e3c0"/>
+      <stop offset="1" stop-color="#a48f60"/>
+    </linearGradient>
+  </defs>
+  <!-- the sheet -->
+  <rect x="20" y="9" width="24" height="46" rx="2" fill="url(#vellum)" stroke="#5c4a2a" stroke-width="1.2"/>
+  <!-- arcane script, suggested rather than written -->
+  <g stroke="#6b5836" stroke-width="1.4" stroke-linecap="round" opacity="0.75">
+    <path d="M24 22h16M24 27h13M24 32h16M24 37h11"/>
+  </g>
+  <!-- rolled top and bottom edges -->
+  <rect x="17" y="6" width="30" height="8" rx="4" fill="url(#roll)" stroke="#5c4a2a" stroke-width="1.2"/>
+  <rect x="17" y="50" width="30" height="8" rx="4" fill="url(#roll)" stroke="#5c4a2a" stroke-width="1.2"/>
+  <!-- cord and wax seal -->
+  <rect x="18" y="29" width="28" height="4" fill="#7c1d1d" stroke="#4a0f0f" stroke-width="0.8"/>
+  <circle cx="32" cy="31" r="5" fill="#9c2323" stroke="#4a0f0f" stroke-width="1"/>
+  <circle cx="30.5" cy="29.5" r="1.6" fill="#c95a4a" opacity="0.8"/>
+</svg>

@@ -3,8 +3,13 @@ import { fp } from "@exiled/fixed-point";
 import { Simulation } from "../loop";
 import { registerDeath, BOSS_DROP_COUNT } from "./death";
 import { START_LEVEL } from "@exiled/rules";
+import { WISDOM_SCROLL_BASE_ID } from "@exiled/content-runtime";
 import type { World } from "../ecs";
 import type { SessionC, ProgressC } from "../components";
+
+/** Ground equipment only: any kill can also pay a Scroll of Wisdom. */
+const equipmentDrops = (w: World) =>
+  w.query("item", "position").filter((e) => (w.get(e, "item") as { item: { baseId: string } }).item.baseId !== WISDOM_SCROLL_BASE_ID);
 
 describe("registerDeath", () => {
   it("destroys a monster with life <= 0", () => {
@@ -176,7 +181,7 @@ describe("registerDeath", () => {
     w.set(m, "health", { life: 0, maxLife: 40 });
     w.set(m, "monster", { defId: "d", moveSpeed: 0, bodyRadius: 0, attackRange: 0, attackCooldownTicks: 0, attackDamage: 0, attackType: 1, attackReadyTick: 0, state: "idle", rare: 1, summoned: 0 });
     sim.step([]);
-    const groundItems = w.query("item", "position");
+    const groundItems = equipmentDrops(w);
     expect(groundItems.length).toBe(1);
     const ic = w.get(groundItems[0]!, "item") as { item: { itemLevel: number }; w: number; h: number };
     expect(ic.item.itemLevel).toBe(69); // 64 + tier 5
@@ -199,7 +204,7 @@ describe("registerDeath", () => {
   }
 
   const dropped = (w: World) =>
-    w.query("item", "position").map((e) => w.get(e, "item") as { item: { rarity: string } });
+    equipmentDrops(w).map((e) => w.get(e, "item") as { item: { rarity: string } });
 
   it("a boss pays out a burst, not the single item a rare pays", () => {
     const { sim, w } = makeDrop({ boss: true });
@@ -219,7 +224,7 @@ describe("registerDeath", () => {
     const { sim, w } = makeDrop({ boss: true });
     sim.step([]);
     const seen = new Set(
-      w.query("item", "position").map((e) => {
+      equipmentDrops(w).map((e) => {
         const p = w.get(e, "position") as { x: number; y: number };
         return `${p.x},${p.y}`;
       }),
@@ -324,7 +329,49 @@ describe("registerDeath", () => {
     w.set(m, "health", { life: 0, maxLife: 40 });
     w.set(m, "monster", { defId: "d", moveSpeed: 0, bodyRadius: 0, attackRange: 0, attackCooldownTicks: 0, attackDamage: 0, attackType: 1, attackReadyTick: 0, state: "idle", rare: 0, summoned: 0 });
     sim.step([]);
-    expect(w.query("item", "position").length).toBe(0);
+    expect(equipmentDrops(w).length).toBe(0);
+  });
+
+  describe("scroll drops", () => {
+    /** `n` ordinary dead monsters in one tier-5 map, ready for a single step. */
+    function makeKills(n: number) {
+      const sim = new Simulation();
+      registerDeath(sim);
+      const w = sim.world;
+      const s = w.create();
+      w.set(s, "session", { area: "map", atlasSeed: 1, mapSeed: 7, waystoneSeed: 0, waystones: [], areaTier: 5, activeNodeId: "n", completedNodes: [], portalsLeft: 6, mapOpen: 1, pendingArea: "" });
+      for (let i = 0; i < n; i++) {
+        const m = w.create();
+        w.set(m, "position", { x: fp(i), y: fp(0) });
+        w.set(m, "health", { life: 0, maxLife: 40 });
+        w.set(m, "monster", { defId: "d", moveSpeed: 0, bodyRadius: 0, attackRange: 0, attackCooldownTicks: 0, attackDamage: 0, attackType: 1, attackReadyTick: 0, state: "idle", rare: 0, summoned: 0 });
+      }
+      return { sim, w };
+    }
+    const scrolls = (w: World) =>
+      w.query("item", "position").filter((e) => (w.get(e, "item") as { item: { baseId: string } }).item.baseId === WISDOM_SCROLL_BASE_ID);
+
+    it("pays scrolls off ordinary kills at roughly the advertised rate", () => {
+      const { sim, w } = makeKills(200);
+      sim.step([]);
+      const n = scrolls(w).length;
+      // A wide band: the point is that scrolls arrive steadily, not the exact count.
+      expect(n).toBeGreaterThan(200 * 0.12);
+      expect(n).toBeLessThan(200 * 0.40);
+    });
+
+    it("drops the same scrolls again for the same map and tick", () => {
+      const run = () => { const { sim, w } = makeKills(60); sim.step([]); return scrolls(w).length; };
+      expect(run()).toBe(run());
+    });
+
+    it("drops no scrolls in the hideout, where there is nothing to identify", () => {
+      const { sim, w } = makeKills(60);
+      const s = w.query("session")[0]!;
+      w.set(s, "session", { ...(w.get(s, "session") as object), area: "hideout" });
+      sim.step([]);
+      expect(scrolls(w).length).toBe(0);
+    });
   });
 });
 

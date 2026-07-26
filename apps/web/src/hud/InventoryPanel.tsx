@@ -2,6 +2,7 @@ import React from "react";
 import type { DisplayItem, EquipSlotId, Intent, Snapshot } from "@exiled/protocol";
 import { canEquip } from "@exiled/simulation";
 import { ItemTooltip } from "./ItemTooltip";
+import { playDropSound } from "../audio/drop-sound";
 import { BAR_H } from "./Hud";
 import { CELL, CELL_VW, PANEL_PAD, PANEL_W } from "./layout";
 
@@ -168,6 +169,10 @@ export function InventoryPanel({
   // `w`/`h` are the held piece's footprint in cells, carried on the drag because
   // DisplayItem itself has no size: only the backpack entry that wraps it does.
   const [drag, setDrag] = React.useState<{ from: DragSource; item: DisplayItem; w: number; h: number; x: number; y: number } | null>(null);
+  // PoE's currency flow: right-click the scroll to take it onto the cursor, then
+  // left-click the item to spend it. Armed state lives here because nothing outside
+  // this panel can see it.
+  const [armed, setArmed] = React.useState(false);
   const boxRef = React.useRef<HTMLDivElement | null>(null);
   const gridRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -398,7 +403,24 @@ export function InventoryPanel({
                 onMouseEnter={(e) => !drag && setHover({ item: it, x: e.clientX + 18, y: e.clientY + 18 })}
                 onMouseMove={(e) => !drag && setHover({ item: it, x: e.clientX + 18, y: e.clientY + 18 })}
                 onMouseLeave={() => setHover((h) => (h?.item === it ? null : h))}
-                onPointerDown={(e) => grab({ kind: "grid", x: it.x, y: it.y }, it, it.w, it.h, e)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  if (it.itemClass === "currency") setArmed((a) => !a);
+                  else setArmed(false); // right-clicking anything else puts the scroll back
+                }}
+                onPointerDown={(e) => {
+                  if (armed && it.unidentified) {
+                    e.preventDefault();
+                    setHover(null);
+                    setArmed(false);
+                    // The reveal is the payoff, so it gets the drop chime again, at the
+                    // rarity that was visible all along (docs/09 rule 2).
+                    playDropSound(it.rarity);
+                    onIntent?.({ kind: "identifyItem", x: it.x, y: it.y });
+                    return;
+                  }
+                  grab({ kind: "grid", x: it.x, y: it.y }, it, it.w, it.h, e);
+                }}
                 style={{
                   position: "absolute",
                   left: `calc(${it.x} * ${CELL} + 2px)`,
@@ -418,7 +440,7 @@ export function InventoryPanel({
                   padding: 2,
                   boxSizing: "border-box",
                   boxShadow: `inset 0 0 8px ${RARITY_BORDER[it.rarity]}44`,
-                  cursor: "grab",
+                  cursor: armed ? (it.unidentified ? "crosshair" : "not-allowed") : "grab",
                   opacity: drag?.from.kind === "grid" && drag.from.x === it.x && drag.from.y === it.y ? 0.3 : 1,
                 }}
               >
@@ -431,6 +453,25 @@ export function InventoryPanel({
                   />
                 ) : (
                   it.name
+                )}
+                {/* Stack size in the bottom-right of the cell, where PoE puts it. */}
+                {it.count !== undefined && it.count > 1 && (
+                  <span
+                    data-testid={`inventory-count-${i}`}
+                    style={{ position: "absolute", right: 2, bottom: 1, fontSize: 11, color: "#e8dfc4", textShadow: "0 1px 2px #000", pointerEvents: "none" }}
+                  >
+                    {it.count}
+                  </span>
+                )}
+                {/* An unread item wears a question mark, so the backpack shows what is
+                    still owed without a hover (docs/09 rule 2: unseen is unfelt). */}
+                {it.unidentified && (
+                  <span
+                    data-testid={`inventory-unread-${i}`}
+                    style={{ position: "absolute", left: 3, top: 1, fontSize: 12, fontWeight: 700, color: "#d02020", textShadow: "0 1px 2px #000", pointerEvents: "none" }}
+                  >
+                    ?
+                  </span>
                 )}
               </div>
             ))}

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { Simulation } from "../loop";
 import { registerPickupSystem } from "./pickup";
 import type { Item } from "@exiled/content-schema";
+import { wisdomScroll } from "@exiled/content-runtime";
 
 const ITEM: Item = { baseId: "b0", rarity: "normal", itemLevel: 65, affixes: [] };
 
@@ -44,5 +45,36 @@ describe("registerPickupSystem", () => {
     sim.step([pickup(player, ge)]);
     expect(w.alive.has(ge)).toBe(true);
     expect((w.get(sessionE, "inventory") as { items: unknown[] }).items.length).toBe(1);
+  });
+});
+
+describe("currency stacking", () => {
+  const scroll = wisdomScroll();
+
+  it("adds a picked-up scroll to the stack already in the grid", () => {
+    const { sim, w, player, sessionE, ge } = setup([1000, 1000], [1001, 1001], [
+      { x: 0, y: 0, w: 1, h: 1, item: scroll, count: 3 },
+    ]);
+    w.set(ge, "item", { item: scroll, w: 1, h: 1 });
+    sim.step([pickup(player, ge)]);
+    const inv = w.get(sessionE, "inventory") as { items: { count?: number }[] };
+    expect(inv.items.length).toBe(1);
+    expect(inv.items[0]!.count).toBe(4);
+  });
+
+  it("starts a stack of one when the grid has no scrolls", () => {
+    const { sim, w, player, sessionE, ge } = setup([1000, 1000], [1001, 1001]);
+    w.set(ge, "item", { item: scroll, w: 1, h: 1 });
+    sim.step([pickup(player, ge)]);
+    const inv = w.get(sessionE, "inventory") as { items: { count?: number }[] };
+    expect(inv.items[0]!.count).toBe(1);
+  });
+
+  it("never stacks equipment, however alike two pieces are", () => {
+    const { sim, w, player, sessionE, ge } = setup([1000, 1000], [1001, 1001], [
+      { x: 0, y: 0, w: 2, h: 2, item: ITEM },
+    ]);
+    sim.step([pickup(player, ge)]);
+    expect((w.get(sessionE, "inventory") as { items: unknown[] }).items.length).toBe(2);
   });
 });

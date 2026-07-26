@@ -169,7 +169,11 @@ export interface FlasksC {
 /** A committed item lying on the ground; lives on an entity with Position. */
 export interface ItemC { item: Item; w: number; h: number }
 /** One placed stack in the grid inventory. */
-export interface PlacedItem { x: number; y: number; w: number; h: number; item: Item }
+export interface PlacedItem {
+  x: number; y: number; w: number; h: number; item: Item;
+  /** Currency only: how many sit in this one cell. Absent on equipment, which never stacks. */
+  count?: number;
+}
 /** Grid inventory on the session singleton. In-memory only this slice. */
 export interface InventoryC { cols: number; rows: number; items: PlacedItem[] }
 /** Equipped gear on the session singleton, keyed by slot id. */

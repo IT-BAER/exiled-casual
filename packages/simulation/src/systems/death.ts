@@ -7,7 +7,7 @@ import {
   waystoneScaleFor, waystoneDrops, waystoneMods,
 } from "@exiled/rules";
 import { recomputePlayerStats } from "../derived";
-import { ITEM_POOLS, baseOf } from "@exiled/content-runtime";
+import { ITEM_POOLS, baseOf, wisdomScroll } from "@exiled/content-runtime";
 
 /**
  * How many items a map boss pays out. `docs/09-reward-psychology.md` rule 3:
@@ -18,6 +18,10 @@ import { ITEM_POOLS, baseOf } from "@exiled/content-runtime";
  * corpse and still be pickable without a stash trip.
  */
 export const BOSS_DROP_COUNT = 5;
+
+/** Percent of map kills that pay a Scroll of Wisdom. One in four keeps the reveal cheap
+ *  without making it free: a dry spell still has to be felt to be broken. */
+const SCROLL_DROP_PCT = 25;
 
 /**
  * Where each item of a burst lands relative to the corpse. Literal fixed-point
@@ -72,6 +76,18 @@ export function registerDeath(sim: Simulation): void {
             world.set<Position>(ge, "position", { x: pos.x + off.dx, y: pos.y + off.dy });
             world.set<ItemC>(ge, "item", { item, w: base.w, h: base.h });
           }
+        }
+      }
+
+      // Scrolls come off the volume kills, not the set pieces: an unread rare is only
+      // a tease if the reveal is affordable, so supply has to outrun the unidentified
+      // drops it pays for (docs/02 §24, docs/09 rule 1).
+      if (s && s.area === "map") {
+        const pos = world.get<Position>(e, "position");
+        if (pos && fnv1a32(`scroll:${s.mapSeed}:${tick}:${e}`) % 100 < SCROLL_DROP_PCT) {
+          const ge = world.create();
+          world.set<Position>(ge, "position", { x: pos.x, y: pos.y });
+          world.set<ItemC>(ge, "item", { item: wisdomScroll(), w: 1, h: 1 });
         }
       }
 
