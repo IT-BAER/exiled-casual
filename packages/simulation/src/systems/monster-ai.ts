@@ -12,8 +12,9 @@ import type { Position, MonsterC, Faction } from "../components";
  *
  * Waking is one-way (the state field carries it): a pulled pack follows you out
  * of the room, because a monster that gave up the chase at a line on the floor
- * would make every fight optional. PoE leashes bosses, not trash — and the boss
- * here is already leashed by its own AI.
+ * would make every fight optional. PoE leashes bosses, not trash; the boss has
+ * its own wider radius in boss-ai.ts (BOSS_AGGRO_RADIUS) but no leash either —
+ * BossC.spawnX/spawnY is recorded and never read back.
  */
 export const AGGRO_RADIUS: number = fp(9);
 

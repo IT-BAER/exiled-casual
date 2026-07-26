@@ -86,6 +86,11 @@ function makeBossEntity(world: World, x: number, y: number) {
   return e;
 }
 
+/** Pull the boss, so a test exercises a gate other than the aggro one. */
+function wake(world: World, boss: number) {
+  world.set<MonsterC>(boss, "monster", { ...world.get<MonsterC>(boss, "monster")!, state: "chase" });
+}
+
 function makePlayerEntity(world: World, x: number, y: number) {
   const p = world.create();
   world.set<Position>(p, "position", { x, y });
@@ -102,11 +107,41 @@ describe("registerBossAI", () => {
 
     makePlayerEntity(world, fp(0), fp(0));
     const boss = makeBossEntity(world, fp(10), fp(0));
+    wake(world, boss); // fp(10) sits exactly on BOSS_AGGRO_RADIUS — don't lean on the boundary
 
     const before = fpDist2(fp(10), fp(0), fp(0), fp(0));
     sim.step();
     const pos = world.get<Position>(boss, "position")!;
     expect(fpDist2(pos.x, pos.y, fp(0), fp(0))).toBeLessThan(before);
+    expect(world.get<MonsterC>(boss, "monster")!.state).toBe("chase");
+  });
+
+  it("an idle boss beyond BOSS_AGGRO_RADIUS holds its ground", () => {
+    const sim = new Simulation();
+    registerBossAI(sim, testMonsters);
+    const { world } = sim;
+
+    makePlayerEntity(world, fp(12), fp(0)); // outside BOSS_AGGRO_RADIUS fp(10)
+    const boss = makeBossEntity(world, fp(0), fp(0));
+
+    sim.step();
+
+    expect(world.get<Position>(boss, "position")).toEqual({ x: fp(0), y: fp(0) });
+    expect(world.get<MonsterC>(boss, "monster")!.state).toBe("idle");
+  });
+
+  it("a woken boss keeps chasing past BOSS_AGGRO_RADIUS", () => {
+    const sim = new Simulation();
+    registerBossAI(sim, testMonsters);
+    const { world } = sim;
+
+    makePlayerEntity(world, fp(12), fp(0));
+    const boss = makeBossEntity(world, fp(0), fp(0));
+    wake(world, boss); // waking is one-way, so distance no longer gates it
+
+    sim.step();
+
+    expect(world.get<Position>(boss, "position")!.x).toBeGreaterThan(fp(0));
     expect(world.get<MonsterC>(boss, "monster")!.state).toBe("chase");
   });
 
@@ -200,14 +235,15 @@ describe("registerBossAI", () => {
 
     // Player at fp(12), well beyond slam range fp(9)
     makePlayerEntity(world, fp(12), fp(0));
-    makeBossEntity(world, fp(0), fp(0)); // nextAbilityTick=0
+    const boss = makeBossEntity(world, fp(0), fp(0)); // nextAbilityTick=0
+    wake(world, boss); // isolate the slam gate from the aggro gate
 
     sim.step();
 
     // No telegraph spawned
     expect(world.entitiesWith("telegraph")).toHaveLength(0);
-    // Boss should be chasing instead
-    // (player is fp(12) away, attack range fp(1.5), so state = chase)
+    // Boss chases instead (player fp(12) away, attack range fp(1.5))
+    expect(world.get<MonsterC>(boss, "monster")!.state).toBe("chase");
   });
 
   it("chasing boss is blocked by a wall in collision", () => {

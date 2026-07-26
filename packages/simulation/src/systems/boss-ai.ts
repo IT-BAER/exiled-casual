@@ -17,6 +17,20 @@ const SUMMON_RING: readonly { dx: number; dy: number }[] = [
   { dx: fp(-1.8), dy: fp(-1.8) },
 ];
 
+/**
+ * How close the player has to come before the boss wakes. Matched to the half-extent
+ * mapgen carves the boss room to (`bossRoom` spans x 30..50, y cy±10), so the warden
+ * activates as you cross its threshold rather than marching the length of the map from
+ * tick 0 — PoE arms a boss when you enter its arena, not when you open the portal. The
+ * HUD raises the boss bar at the same 10 units, so the bar and the fight start together.
+ *
+ * A unit wider than `slam.rangeFixed` (9), which leaves the narrow band where a woken
+ * boss closes on foot instead of opening with a slam. Waking is one-way, carried by
+ * MonsterC.state exactly as trash carries it in monster-ai.ts — nothing leashes the boss
+ * back to `BossC.spawnX/spawnY` once it is pulled.
+ */
+export const BOSS_AGGRO_RADIUS: number = fp(10);
+
 export function registerBossAI(
   sim: Simulation,
   monsters: ReadonlyMap<string, MonsterDef>,
@@ -84,8 +98,14 @@ export function registerBossAI(
         continue;
       }
 
-      // 2. Slam: fire when off cooldown and player is within slam range.
+      // 2. Asleep and still outside its room: hold. Sits below the phase-2 check on
+      //    purpose — a boss being shot from off-screen still transitions, it just does
+      //    not walk. Nothing is written, so an unvisited boss room costs the checksum
+      //    nothing, same as monster-ai's sleeping packs.
       const dist2 = fpDist2(bpos.x, bpos.y, ppos.x, ppos.y);
+      if (mon.state === "idle" && dist2 > BOSS_AGGRO_RADIUS * BOSS_AGGRO_RADIUS) continue;
+
+      // 3. Slam: fire when off cooldown and player is within slam range.
       if (tick >= boss.nextAbilityTick && dist2 <= slam.rangeFixed * slam.rangeFixed) {
         const bossFaction = world.get<Faction>(e, "faction")!;
         const tele = world.create();
@@ -123,7 +143,7 @@ export function registerBossAI(
         continue;
       }
 
-      // 3. Chase / melee — mirrors monster-ai.ts exactly, sliding on collision.
+      // 4. Chase / melee — mirrors monster-ai.ts exactly, sliding on collision.
       const ar = mon.attackRange;
       if (dist2 <= ar * ar) {
         let { attackReadyTick } = mon;
