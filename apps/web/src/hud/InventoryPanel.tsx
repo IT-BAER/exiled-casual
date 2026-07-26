@@ -56,6 +56,80 @@ const MAGIC = "#8aa6ff";
  */
 const LATTICE = "rgb(58,45,26)";
 
+/**
+ * The pane the stash and the inventory are both cut from. PoE1 opens them as a
+ * matched pair: one width, one top line, one bottom line, mirrored against the
+ * left and right screen edges. Anything either pane sets for itself here drifts
+ * the moment the other changes, so they share the object.
+ *
+ * The frame rings are inset, not outset. Both panes sit flush against a screen
+ * edge, and an outset ring on a flush edge is simply cropped off, which is what
+ * made the stash read as sheared at the top.
+ */
+const PANE: React.CSSProperties = {
+  pointerEvents: "auto",
+  width: PANEL_W,
+  // Top of the screen down to the bar, ending in empty pane below the last row.
+  height: `calc(100vh - ${BAR_H})`,
+  marginBottom: BAR_H,
+  boxSizing: "border-box",
+  display: "flex",
+  flexDirection: "column",
+  // Carved stone inside a dark metal frame, not a flat gradient (stash.png).
+  backgroundImage:
+    "linear-gradient(180deg, rgba(8,7,5,0.55), rgba(8,7,5,0.78)), url(/textures/ui/char_stone_v1.png)",
+  backgroundSize: "auto, 256px 256px",
+  border: `1px solid ${GOLD_DIM}`,
+  boxShadow: "inset 0 0 0 4px #1b1710, inset 0 0 0 5px #000, 0 14px 48px rgba(0,0,0,0.85)",
+};
+
+/**
+ * The gilt cartouche flanked by carved wings that PoE1 titles both panes with:
+ * dark letters cut into the plaque and lit from below rather than printed in
+ * cream, and the round stud of a close button in the corner. `bleed` is the
+ * pane's own padding, which the band has to pull back over to reach the frame.
+ */
+function PaneHeader({ title, bleed, onClose, testId }: {
+  title: string; bleed?: string; onClose: () => void; testId: string;
+}) {
+  return (
+    <div
+      style={{
+        // The band keeps char_header_v1.png's 1024x160 or the relief shears.
+        margin: bleed ? `calc(-1 * ${bleed}) calc(-1 * ${bleed}) 10px` : "0 0 10px",
+        // 12.8% of the pane's width, measured off the reference's band.
+        height: `calc(12 * ${CELL} * 0.128)`,
+        flexShrink: 0,
+        position: "sticky",
+        top: 0,
+        zIndex: 2,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        backgroundImage: "url(/textures/ui/char_header_v1.png)",
+        backgroundSize: "100% 100%",
+        borderBottom: "1px solid #000",
+      }}
+    >
+      <span style={{ fontFamily: SERIF, fontSize: 17, letterSpacing: 5, textTransform: "uppercase", color: "#2b1e0c", textShadow: "0 1px 0 rgba(238,208,140,0.55)" }}>
+        {title}
+      </span>
+      <button
+        data-testid={testId}
+        onClick={onClose}
+        style={{
+          position: "absolute", top: 6, right: 8,
+          width: 22, height: 22, borderRadius: "50%",
+          background: "radial-gradient(circle at 35% 30%, #c74e35, #6d1d13 70%, #35100a)",
+          border: "1px solid #1d0906", color: "#f7ddd0",
+          boxShadow: "0 1px 4px rgba(0,0,0,0.9), inset 0 1px 0 rgba(255,180,150,0.4)",
+          fontSize: 13, lineHeight: 1, padding: 0,
+        }}
+      >
+        ×
+      </button>
+    </div>
+  );
+}
+
 const U_VW = +(CELL_VW * (54 / 48)).toFixed(3); // 2.363
 const U = `${U_VW}vw`; // equipment paper-doll unit, kept in step with CELL
 
@@ -519,71 +593,15 @@ export function InventoryPanel({
     <>
     {/* The stash gets its own layer only so it can dock left while the inventory
         docks right. It stays under the globes and the bar (zIndex 3), the way the
-        inventory does: the life orb is meant to sit on top of its lower corner.
-        zIndex 1, under the flask row and the skill row as well (both zIndex 2 and
-        both siblings of the HUD, not children of it), or the pane running past the
-        bar would bury the flasks it is supposed to slide behind. */}
+        inventory does: the life orb is meant to sit on top of its lower corner. */}
     {stash && (
-      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "flex-end", justifyContent: "flex-start", pointerEvents: "none", zIndex: 1, fontFamily: SERIF, color: PARCHMENT }}>
+      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "flex-end", justifyContent: "flex-start", pointerEvents: "none", zIndex: 2, fontFamily: SERIF, color: PARCHMENT }}>
         <div
           data-testid="stash-panel"
           data-hud-panel=""
-          style={{
-            pointerEvents: "auto",
-            // Off the screen edge on both sides, or the frame's outer gilt line is
-            // clipped away and the cartouche reads as sheared off at the top.
-            marginLeft: 12,
-            marginTop: 12,
-            // Runs past the bar instead of stopping at it: PoE1's stash pane ends
-            // behind the life orb and the flask panel, which is what gives the
-            // corner its depth (poe2-screenshots/inventory.png).
-            height: `calc(100vh - 12px)`,
-            boxSizing: "border-box",
-            display: "flex",
-            flexDirection: "column",
-            padding: PANEL_PAD,
-            // The reference pane is carved stone inside a dark metal frame, not a
-            // flat gradient (poe2-screenshots/stash.png).
-            backgroundImage:
-              "linear-gradient(180deg, rgba(8,7,5,0.55), rgba(8,7,5,0.78)), url(/textures/ui/char_stone_v1.png)",
-            backgroundSize: "auto, 256px 256px",
-            border: `1px solid ${GOLD_DIM}`,
-            boxShadow: `0 0 0 1px #000, 0 0 0 4px #1b1710, 0 0 0 5px ${GOLD_DIM}, 0 14px 48px rgba(0,0,0,0.85)`,
-          }}
+          style={{ ...PANE, padding: PANEL_PAD }}
         >
-          {/* Gilt cartouche flanked by carved wings, the way PoE1 titles the stash.
-              The band keeps char_header_v1.png's 1024x160 or the relief shears. */}
-          <div
-            style={{
-              margin: `calc(-1 * ${PANEL_PAD}) calc(-1 * ${PANEL_PAD}) 10px`,
-              // 12.8% of the pane's width, measured off the reference's band.
-              height: `calc(${stash.cols} * ${CELL} * 0.128)`,
-              position: "relative",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              backgroundImage: "url(/textures/ui/char_header_v1.png)",
-              backgroundSize: "100% 100%",
-              borderBottom: "1px solid #000",
-            }}
-          >
-            {/* Dark letters cut into the plaque, lit from below, the way the
-                reference engraves the word rather than printing it in cream. */}
-            <span style={{ fontFamily: SERIF, fontSize: 17, letterSpacing: 5, textTransform: "uppercase", color: "#2b1e0c", textShadow: "0 1px 0 rgba(238,208,140,0.55)" }}>
-              Stash
-            </span>
-            <button
-              data-testid="stash-close"
-              onClick={onCloseStash}
-              style={{
-                position: "absolute", top: 6, right: 8,
-                width: 22, height: 22, borderRadius: "50%",
-                background: "radial-gradient(circle at 35% 30%, #c74e35, #6d1d13 70%, #35100a)",
-                border: "1px solid #1d0906", color: "#f7ddd0",
-                boxShadow: "0 1px 4px rgba(0,0,0,0.9), inset 0 1px 0 rgba(255,180,150,0.4)",
-              }}
-            >
-              ×
-            </button>
-          </div>
+          <PaneHeader title="Stash" bleed={PANEL_PAD} onClose={() => onCloseStash?.()} testId="stash-close" />
           {renderGrid("stash")}
         </div>
       </div>
@@ -683,51 +701,11 @@ export function InventoryPanel({
       )}
       <div
         ref={boxRef}
-        style={{
-          pointerEvents: "auto",
-          // Stops where the bottom bar starts, whatever height that bar is.
-          marginBottom: BAR_H,
-          // Full height, not content height: PoE's inventory runs from the top of
-          // the screen down to the bar and simply ends in empty panel below the
-          // last grid row. A box that shrinks to its contents floats and reads wrong.
-          height: `calc(100vh - ${BAR_H})`,
-          width: PANEL_W,
-          boxSizing: "border-box",
-          display: "flex",
-          flexDirection: "column",
-          overflowY: "auto",
-          // The wheel still scrolls; PoE has no scrollbar chrome and a pale native
-          // one down the panel's gilt edge reads as a browser, not as the game.
-          scrollbarWidth: "none",
-          background: "linear-gradient(180deg,#12100b 0%,#0b0a07 100%)",
-          border: `1px solid ${GOLD_DIM}`,
-          boxShadow: `0 0 0 1px #000, 0 0 0 4px #1b1710, 0 0 0 5px ${GOLD_DIM}, 0 14px 48px rgba(0,0,0,0.85)`,
-        }}
+        // The wheel still scrolls; PoE has no scrollbar chrome and a pale native
+        // one down the pane's gilt edge reads as a browser, not as the game.
+        style={{ ...PANE, overflowY: "auto", scrollbarWidth: "none" }}
       >
-        {/* Carved title banner */}
-        <div
-          style={{
-            position: "sticky",
-            top: 0,
-            zIndex: 2,
-            padding: "12px 0",
-            textAlign: "center",
-            background: "linear-gradient(180deg,#4a1a13,#6b2018 45%,#3a1310)",
-            borderBottom: `1px solid ${GOLD_DIM}`,
-            boxShadow: `inset 0 1px 0 ${GOLD}55, inset 0 -1px 0 #000`,
-          }}
-        >
-          <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: 3, textTransform: "uppercase", color: PARCHMENT, textShadow: "0 1px 2px #000" }}>
-            Inventory
-          </span>
-          <button
-            data-testid="inventory-close"
-            onClick={onClose}
-            style={{ position: "absolute", top: 8, right: 12, background: "none", border: "none", color: "#c9b48a", fontSize: 20, lineHeight: 1 }}
-          >
-            ×
-          </button>
-        </div>
+        <PaneHeader title="Inventory" onClose={onClose} testId="inventory-close" />
 
         <div style={{ padding: PANEL_PAD, width: contentW, boxSizing: "content-box", flex: 1, display: "flex", flexDirection: "column" }}>
           {/* Equipment paper-doll */}
