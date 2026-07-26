@@ -5,7 +5,8 @@ import { resBlock, type MonsterDef } from "@exiled/content-schema";
 import { Simulation } from "../loop";
 import { World } from "../ecs";
 import type { Position, MonsterC, Faction, PlayerC, BossC, TelegraphC, Health, SessionC } from "../components";
-import { registerBossAI } from "./boss-ai";
+import { registerBossAI, BOSS_AGGRO_RADIUS } from "./boss-ai";
+import { createCombatSim } from "../combat-sim";
 import { gridCollision } from "../collision";
 import { makeGrid } from "../test-grid";
 
@@ -497,5 +498,47 @@ describe("boss abilities scale with the map's tier", () => {
     world.set<Health>(boss, "health", { life: fp(1000), maxLife: fp(1000) });
     sim.step();
     expect(world.get<TelegraphC>(world.query("telegraph")[0]!, "telegraph")!.damage).toBe(fp(28));
+  });
+});
+
+// The unit tests above run on a hand-built world. This block runs the real one:
+// generated layout, real collision, the warden spawned by buildArea at the "boss"
+// anchor, and the player at the "start" anchor the client actually spawns you on.
+// It is the check the browser was standing in for.
+describe("on a generated map", () => {
+  /** The warden buildArea placed, plus the distance the player starts at. */
+  function realMap() {
+    const { sim, world, playerEntity, layout } = createCombatSim(7, {
+      area: "map", boss: true, monsters: true,
+    });
+    const boss = world.query("boss")[0]!;
+    return { sim, world, playerEntity, layout, boss };
+  }
+
+  it("spawns the player far enough out that the gate is load-bearing", () => {
+    const { world, playerEntity, boss } = realMap();
+    const p = world.get<Position>(playerEntity, "position")!;
+    const b = world.get<Position>(boss, "position")!;
+    // If the anchors ever drift within aggro range this whole block goes green
+    // for the wrong reason, so assert the premise rather than trust the layout.
+    expect(fpDist2(p.x, p.y, b.x, b.y)).toBeGreaterThan(BOSS_AGGRO_RADIUS * BOSS_AGGRO_RADIUS);
+  });
+
+  it("leaves the boss in its room while the player stands at the entrance", () => {
+    const { sim, world, boss } = realMap();
+    const spawn = world.get<Position>(boss, "position")!;
+    for (let i = 0; i < 300; i++) sim.step(); // 10s at 30 Hz
+    expect(world.get<Position>(boss, "position")).toEqual(spawn);
+    expect(world.get<MonsterC>(boss, "monster")!.state).toBe("idle");
+  });
+
+  it("wakes the boss once the player crosses into the room", () => {
+    const { sim, world, playerEntity, boss } = realMap();
+    const b = world.get<Position>(boss, "position")!;
+    // Walk-in is what the client does; place the player on the threshold instead
+    // so the assertion is about the gate, not about pathing round the geometry.
+    world.set<Position>(playerEntity, "position", { x: b.x, y: b.y - BOSS_AGGRO_RADIUS });
+    sim.step();
+    expect(world.get<MonsterC>(boss, "monster")!.state).not.toBe("idle");
   });
 });
