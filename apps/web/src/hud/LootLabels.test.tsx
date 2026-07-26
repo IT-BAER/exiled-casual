@@ -28,6 +28,7 @@ function snapWith(entities: Snapshot["entities"]): Snapshot {
     inventory: { cols: 12, rows: 5, items: [] },
     stash: { cols: 12, rows: 12, items: [] },
     equipment: {},
+    shards: {},
   };
 }
 

@@ -9,3 +9,4 @@ export * from "./xp.js";
 export * from "./energy-shield.js";
 export * from "./waystone.js";
 export * from "./currency.js";
+export * from "./disenchant.js";

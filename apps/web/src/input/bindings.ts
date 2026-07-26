@@ -65,6 +65,7 @@ export function attachBindings(
   onHoverInteractable?: (entityId: number | null) => void,
   onOpenPanel?: () => void,
   onOpenStash?: () => void,
+  onOpenVendor?: () => void,
 ): {
   detach: () => void;
   onSnapshot: (snap: Snapshot) => void;
@@ -235,6 +236,8 @@ export function attachBindings(
           onOpenPanel?.();
         } else if (entity.kind === "stash") {
           onOpenStash?.();
+        } else if (entity.kind === "vendor") {
+          onOpenVendor?.();
         } else if (entity.kind === "groundItem") {
           post({ kind: "pickupItem", entityId: pendingInteractId });
         } else {

@@ -11,7 +11,7 @@ import type {
   Health, Mana, Position, Cooldowns, CastingC, MonsterC,
   AilmentC, ProjectileC, GroundAreaC, BossC, TelegraphC,
   SessionC, InteractableC, ItemC, InventoryC, StashC, EquipmentC, FlasksC, DefensesC, OffenseC, ProgressC,
-  EnergyShieldC,
+  EnergyShieldC, ShardsC,
 } from "./components";
 
 /**
@@ -83,6 +83,16 @@ export function intentToCommand(intent: Intent, player: Entity, tick: number): C
       };
     case "useFlask":
       return { tick, entity: player, type: "useFlask", flask: intent.slot };
+    case "sellItem":
+      return {
+        tick, entity: player, type: "sellItem",
+        data: {
+          x: intent.x, y: intent.y,
+          // Omitting `from` for backpack so a sell recorded before stash existed
+          // replays byte-identically, mirroring moveItem's convention.
+          ...(intent.from === "stash" ? { from: 1 } : {}),
+        },
+      };
   }
 }
 
@@ -352,6 +362,7 @@ export function buildSnapshot(
     inventory,
     stash,
     equipment,
+    shards: (sessionE !== undefined ? world.get<ShardsC>(sessionE, "shards") : undefined)?.counts ?? {},
     skills: describeSkills(world.get<OffenseC>(playerEntity, "offense")),
   };
 }

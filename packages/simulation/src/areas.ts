@@ -20,6 +20,11 @@ const MAP_DEVICE_X: number = fp(0);
 const MAP_DEVICE_Y: number = fp(4);
 const STASH_X: number = fp(-5);
 const STASH_Y: number = fp(2);
+// Mirror of the stash on the opposite side of the map device, so the two
+// vendors flank it the way PoE2's camp keeps the stash and the crafting bench
+// on either side of the fire.
+const VENDOR_X: number = fp(5);
+const VENDOR_Y: number = fp(2);
 
 /**
  * Offsets from the map device, plus the render yaw that angles each portal outward.
@@ -113,6 +118,16 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
     world.set<Position>(stashE, "position", { x: STASH_X, y: STASH_Y });
     world.set<InteractableC>(stashE, "interactable", {
       kind: "stash",
+      radius: fp(2.5),
+      yaw: 0,
+    });
+
+    // Disenchanter vendor, mirroring the stash on the right side so items can
+    // be sold without crossing the map-device traffic lane.
+    const vendorE = world.create();
+    world.set<Position>(vendorE, "position", { x: VENDOR_X, y: VENDOR_Y });
+    world.set<InteractableC>(vendorE, "interactable", {
+      kind: "vendor",
       radius: fp(2.5),
       yaw: 0,
     });

@@ -1,6 +1,6 @@
 import type { KvStore } from "@exiled/persistence";
 import type { World } from "./ecs";
-import type { SessionC, InventoryC, StashC, EquipmentC, ProgressC } from "./components";
+import type { SessionC, InventoryC, StashC, EquipmentC, ProgressC, ShardsC } from "./components";
 import { recomputePlayerStats } from "./derived";
 import { START_LEVEL } from "@exiled/rules";
 
@@ -26,6 +26,8 @@ interface PersistedState {
   equipment?: EquipmentC;
   /** Optional so a save written before levels existed still loads, as a fresh START_LEVEL character. */
   progress?: ProgressC;
+  /** Optional so a save written before the disenchanter existed still loads, with no shards. */
+  shards?: ShardsC;
 }
 
 /** Read the durable state off the session singleton, or null if there is none. */
@@ -38,7 +40,8 @@ export function snapshot(world: World): PersistedState | null {
   const equipment = world.get<EquipmentC>(e, "equipment") ?? { slots: {} };
   const progress = world.get<ProgressC>(e, "progress") ?? { level: START_LEVEL, xp: 0 };
   const stash = world.get<StashC>(e, "stash") ?? EMPTY_STASH;
-  return { version: VERSION, session, inventory, stash, equipment, progress };
+  const shards = world.get<ShardsC>(e, "shards") ?? { counts: {} };
+  return { version: VERSION, session, inventory, stash, equipment, progress, shards };
 }
 
 /**
@@ -63,6 +66,7 @@ export function restore(world: World, state: PersistedState): void {
   world.set<StashC>(e, "stash", state.stash ?? EMPTY_STASH);
   world.set<EquipmentC>(e, "equipment", state.equipment ?? { slots: {} });
   world.set<ProgressC>(e, "progress", state.progress ?? { level: START_LEVEL, xp: 0 });
+  world.set<ShardsC>(e, "shards", state.shards ?? { counts: {} });
   // Saved gear has to reach the player, not just the equipment panel. Life and
   // mana are not persisted, so a restored session starts full.
   recomputePlayerStats(world, { refill: true });

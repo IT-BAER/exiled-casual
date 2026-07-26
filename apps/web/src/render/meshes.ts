@@ -9,7 +9,7 @@ import {
 } from "@babylonjs/core";
 import { attachRig, rigOf, type RigParts } from "./rig";
 
-export type MeshKind = "player" | "monster" | "rare" | "boss" | "projectile" | "groundArea" | "telegraph" | "portal" | "mapDevice" | "stash" | "groundItem";
+export type MeshKind = "player" | "monster" | "rare" | "boss" | "projectile" | "groundArea" | "telegraph" | "portal" | "mapDevice" | "stash" | "vendor" | "groundItem";
 
 /**
  * Y-lift off the ground plane per kind (render only). The authored actors
@@ -29,6 +29,7 @@ const Y_LIFT: Record<MeshKind, number> = {
   // map device cylinder base already starts at y=0 (children lift themselves)
   mapDevice: 0,
   stash: 0,
+  vendor: 0,
   // small floor-level beacon marker
   groundItem: 0.15,
 };
@@ -597,6 +598,87 @@ export function updateStash(root: Mesh, hovered: boolean): void {
   parts.iron.emissiveColor.set(e, e * 0.72, e * 0.3);
 }
 
+/**
+ * Disenchanting bench: a low wooden workbench with an iron anvil and a crucible
+ * of embers on it. The camp in `poe2-screenshots/closeup-hideout-zoom.jpg` keeps
+ * its craft props exactly like this, a bench and tools sitting in the firelight
+ * rather than an NPC standing behind a counter, which is also the cheaper build.
+ */
+function buildVendor(scene: Scene, root: Mesh): void {
+  const wood = new StandardMaterial(`${root.name}-vn-wood`, scene);
+  wood.diffuseColor = new Color3(0.19, 0.12, 0.06);
+  wood.emissiveColor = new Color3(0.03, 0.02, 0.01);
+  wood.specularColor = new Color3(0.16, 0.12, 0.08);
+  wood.specularPower = 32;
+
+  const iron = new StandardMaterial(`${root.name}-vn-iron`, scene);
+  iron.diffuseColor = new Color3(0.15, 0.14, 0.14);
+  iron.emissiveColor = new Color3(0.03, 0.03, 0.03);
+  iron.specularColor = new Color3(0.7, 0.68, 0.6);
+  iron.specularPower = 96;
+
+  const stone = new StandardMaterial(`${root.name}-vn-stone`, scene);
+  stone.diffuseColor = new Color3(0.17, 0.16, 0.15);
+  stone.specularColor = new Color3(0.1, 0.1, 0.1);
+
+  // The embers in the crucible are the one thing on this prop that emits: it is
+  // what tells you at a glance which bench eats items and which one stores them.
+  const ember = new StandardMaterial(`${root.name}-vn-ember`, scene);
+  ember.diffuseColor = new Color3(0.35, 0.11, 0.03);
+  ember.emissiveColor = new Color3(0.9, 0.34, 0.08);
+  ember.specularColor = new Color3(0, 0, 0);
+
+  const step = MeshBuilder.CreateBox(`${root.name}-vn-step`, { width: 1.6, depth: 1.15, height: 0.12 }, scene);
+  step.position.y = 0.06;
+  step.parent = root;
+  step.material = stone;
+
+  const top = MeshBuilder.CreateBox(`${root.name}-vn-top`, { width: 1.4, depth: 0.8, height: 0.14 }, scene);
+  top.position.y = 0.66;
+  top.parent = root;
+  top.material = wood;
+
+  for (const [dx, dz] of [[-0.6, -0.3], [0.6, -0.3], [-0.6, 0.3], [0.6, 0.3]] as const) {
+    const leg = MeshBuilder.CreateBox(`${root.name}-vn-leg`, { width: 0.11, depth: 0.11, height: 0.47 }, scene);
+    leg.position.set(dx, 0.36, dz);
+    leg.parent = root;
+    leg.material = wood;
+  }
+
+  // Anvil on the left half: block plus the horn hanging off its end.
+  const anvil = MeshBuilder.CreateBox(`${root.name}-vn-anvil`, { width: 0.44, depth: 0.24, height: 0.17 }, scene);
+  anvil.position.set(-0.36, 0.81, 0);
+  anvil.parent = root;
+  anvil.material = iron;
+  const horn = MeshBuilder.CreateCylinder(`${root.name}-vn-horn`, { diameterTop: 0.03, diameterBottom: 0.13, height: 0.22, tessellation: 10 }, scene);
+  horn.rotation.z = Math.PI / 2;
+  horn.position.set(-0.68, 0.81, 0);
+  horn.parent = root;
+  horn.material = iron;
+
+  // Crucible on the right half, filled to the brim with embers.
+  const pot = MeshBuilder.CreateCylinder(`${root.name}-vn-pot`, { diameterTop: 0.34, diameterBottom: 0.26, height: 0.2, tessellation: 14 }, scene);
+  pot.position.set(0.42, 0.83, 0);
+  pot.parent = root;
+  pot.material = iron;
+  const coals = MeshBuilder.CreateCylinder(`${root.name}-vn-coals`, { diameter: 0.28, height: 0.03, tessellation: 14 }, scene);
+  coals.position.set(0.42, 0.93, 0);
+  coals.parent = root;
+  coals.material = ember;
+
+  root.metadata = { iron, ember, interactKind: "vendor" };
+}
+
+/** Blow on the coals when the cursor is over the bench, and warm its ironwork. */
+export function updateVendor(root: Mesh, hovered: boolean): void {
+  const parts = root.metadata as { iron: StandardMaterial; ember: StandardMaterial } | null;
+  if (!parts?.iron) return;
+  const e = hovered ? 0.26 : 0.03;
+  parts.iron.emissiveColor.set(e, e * 0.72, e * 0.3);
+  const g = hovered ? 1.35 : 0.9;
+  parts.ember.emissiveColor.set(g, g * 0.38, g * 0.09);
+}
+
 /** Brighten the device emissive on mouse hover so it reads as interactive. */
 export function updateMapDevice(root: Mesh, hovered: boolean): void {
   const parts = root.metadata as { brassBody: StandardMaterial; brassRim: StandardMaterial } | null;
@@ -664,6 +746,12 @@ export function makeMesh(scene: Scene, kind: MeshKind, name: string): Mesh {
   if (kind === "stash") {
     const root = new Mesh(name, scene);
     buildStash(scene, root);
+    return root;
+  }
+
+  if (kind === "vendor") {
+    const root = new Mesh(name, scene);
+    buildVendor(scene, root);
     return root;
   }
 

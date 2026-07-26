@@ -59,6 +59,7 @@ function makeSnap(overrides: {
     inventory: { cols: 12, rows: 5, items: [] },
     stash: { cols: 12, rows: 12, items: [] },
     equipment: {},
+    shards: {},
   };
 }
 
@@ -133,6 +134,7 @@ describe("Hud", () => {
       inventory: { cols: 12, rows: 5, items: [] },
     stash: { cols: 12, rows: 12, items: [] },
       equipment: {},
+      shards: {},
     };
     render(<Hud snapshot={snap} />);
     expect(screen.getByTestId("boss-bar")).toBeInTheDocument();

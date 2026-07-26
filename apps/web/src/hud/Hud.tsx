@@ -450,12 +450,14 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
   const hoveredEntity =
     hoveredEntityId !== null
       ? snapshot.entities.find(
-          (e) => e.id === hoveredEntityId && (e.kind === "portal" || e.kind === "mapDevice" || e.kind === "stash"),
+          (e) => e.id === hoveredEntityId && (e.kind === "portal" || e.kind === "mapDevice" || e.kind === "stash" || e.kind === "vendor"),
         )
       : undefined;
   const hoverLabel = hoveredEntity
     ? hoveredEntity.kind === "stash"
       ? "Stash"
+      : hoveredEntity.kind === "vendor"
+      ? "Disenchanting Bench"
       : hoveredEntity.kind === "mapDevice"
       ? "Map Device"
       : snapshot.area === "hideout"

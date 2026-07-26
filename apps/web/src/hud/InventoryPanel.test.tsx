@@ -157,6 +157,34 @@ describe("InventoryPanel", () => {
   });
 
 
+  it("ctrl-clicks an item onto the bench once it is open", () => {
+    const intents: unknown[] = [];
+    render(<InventoryPanel inventory={inv} vendorOpen shards={{}} onIntent={(i) => intents.push(i)} onClose={() => {}} />);
+    fireEvent(screen.getByTestId("inventory-item-0"), new MouseEvent("pointerdown", { bubbles: true, ctrlKey: true, clientX: 10, clientY: 10 }));
+    expect(intents).toEqual([{ kind: "sellItem", x: 0, y: 0 }]);
+  });
+
+  it("ignores ctrl-click while the bench is closed, so nothing is destroyed by a stray modifier", () => {
+    const intents: unknown[] = [];
+    render(<InventoryPanel inventory={inv} onIntent={(i) => intents.push(i)} onClose={() => {}} />);
+    fireEvent(screen.getByTestId("inventory-item-0"), new MouseEvent("pointerdown", { bubbles: true, ctrlKey: true, clientX: 10, clientY: 10 }));
+    expect(intents).toEqual([]);
+  });
+
+  it("ctrl-clicks a stash item to the bench with the container named", () => {
+    const intents: unknown[] = [];
+    const stash = { cols: 12, rows: 12, items: [{ x: 4, y: 4, w: 1, h: 1, rarity: "rare" as const, name: "Old Wand", lines: [] }] };
+    render(<InventoryPanel inventory={inv} stash={stash} vendorOpen shards={{}} onIntent={(i) => intents.push(i)} onClose={() => {}} />);
+    fireEvent(screen.getByTestId("stash-item-0"), new MouseEvent("pointerdown", { bubbles: true, ctrlKey: true, clientX: 10, clientY: 10 }));
+    expect(intents).toEqual([{ kind: "sellItem", x: 4, y: 4, from: "stash" }]);
+  });
+
+  it("shows the banked shards as a count out of ten", () => {
+    render(<InventoryPanel inventory={inv} vendorOpen shards={{ "currency.elevation": 7 }} onClose={() => {}} />);
+    expect(screen.getByTestId("shard-currency.elevation").textContent).toContain("7 / 10");
+    expect(screen.getByTestId("shard-currency.transmutation").textContent).toContain("0 / 10");
+  });
+
   it("shift-clicks an item straight into the stash's first free cell", () => {
     const intents: unknown[] = [];
     // (0,0) is taken, so a 2x2 piece first fits at (2,0).

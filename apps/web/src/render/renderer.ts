@@ -1,7 +1,7 @@
 import type { Scene } from "@babylonjs/core";
 import type { Mesh } from "@babylonjs/core";
 import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
-import { animateActor, makeMesh, updateTelegraph, updatePortal, updateMapDevice, updateStash, updateGroundItem, updateRareElement, Y_LIFT } from "./meshes";
+import { animateActor, makeMesh, updateTelegraph, updatePortal, updateMapDevice, updateStash, updateVendor, updateGroundItem, updateRareElement, Y_LIFT } from "./meshes";
 import type { MeshKind } from "./meshes";
 import { OUTFITS, rigOf } from "./rig";
 import { lerp, lerpAngle } from "./interp";
@@ -32,6 +32,7 @@ function kindOf(e: SnapshotEntity): MeshKind {
   if (e.kind === "portal") return "portal";
   if (e.kind === "mapDevice") return "mapDevice";
   if (e.kind === "stash") return "stash";
+  if (e.kind === "vendor") return "vendor";
   if (e.kind === "groundItem") return "groundItem";
   return "groundArea";
 }
@@ -119,6 +120,9 @@ export class SnapshotRenderer {
       }
       if (e.kind === "stash") {
         updateStash(mesh, this.hoveredEntityId === e.id);
+      }
+      if (e.kind === "vendor") {
+        updateVendor(mesh, this.hoveredEntityId === e.id);
       }
       if (e.kind === "groundItem") {
         updateGroundItem(mesh, e.rarity);

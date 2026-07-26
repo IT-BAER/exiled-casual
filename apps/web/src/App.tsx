@@ -25,6 +25,8 @@ export function App() {
   const [inventoryOpen, setInventoryOpen] = useState(false);
   // PoE opens the stash beside the inventory, never on its own.
   const [stashOpen, setStashOpen] = useState(false);
+  // The bench takes the same left-hand slot as the stash, so one closes the other.
+  const [vendorOpen, setVendorOpen] = useState(false);
   const [characterOpen, setCharacterOpen] = useState(false);
   const [project, setProject] = useState<Projector | null>(null);
   const [pick, setPick] = useState<((id: number, x: number, y: number) => void) | null>(null);
@@ -78,7 +80,8 @@ export function App() {
       // The sim already no-ops activateMap while a run is open; without this the
       // panel still opened, offered stones, and closed itself on the next snapshot.
       () => { if (!curSnap?.mapOpen) setPanelOpen(true); },
-      () => { setStashOpen(true); setInventoryOpen(true); },
+      () => { setStashOpen(true); setVendorOpen(false); setInventoryOpen(true); },
+      () => { setVendorOpen(true); setStashOpen(false); setInventoryOpen(true); },
     );
 
     // Loot plates are DOM, so their click has to reach the same approach-then-act
@@ -181,9 +184,12 @@ export function App() {
           inventory={snapshot.inventory}
           {...(stashOpen ? { stash: snapshot.stash } : {})}
           onCloseStash={() => setStashOpen(false)}
+          shards={snapshot.shards}
+          vendorOpen={vendorOpen}
+          onCloseVendor={() => setVendorOpen(false)}
           equipment={snapshot.equipment}
           onIntent={(intent) => workerRef.current?.postMessage({ type: "intent", intent } satisfies ToWorker)}
-          onClose={() => { setInventoryOpen(false); setStashOpen(false); }}
+          onClose={() => { setInventoryOpen(false); setStashOpen(false); setVendorOpen(false); }}
         />
       )}
       {/* After the inventory so it paints above that panel's backdrop when both are open. */}

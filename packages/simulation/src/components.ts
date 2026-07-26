@@ -48,7 +48,7 @@ export interface ProgressC { level: number; xp: number }
 
 /** Something the player can activate with the `interact` intent. */
 export interface InteractableC {
-  kind: "mapDevice" | "portal" | "stash";
+  kind: "mapDevice" | "portal" | "stash" | "vendor";
   /** Activation range, Fixed. */
   radius: Fixed;
   /** Render-only fixed yaw in radians. A literal constant, never computed. */
@@ -183,3 +183,9 @@ export interface InventoryC { cols: number; rows: number; items: PlacedItem[] }
 export type StashC = InventoryC;
 /** Equipped gear on the session singleton, keyed by slot id. */
 export interface EquipmentC { slots: Partial<Record<string, Item>> }
+/**
+ * Loose disenchant shards on the session singleton. Ten matching shards convert
+ * to their orb (SHARDS_PER_ORB from @exiled/rules). Kept separate from inventory
+ * so the count can accumulate silently without occupying a grid cell.
+ */
+export interface ShardsC { counts: Record<string, number> }

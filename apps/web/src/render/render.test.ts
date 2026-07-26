@@ -33,6 +33,7 @@ function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
     entities: [],
     inventory: { cols: 12, rows: 5, items: [] },
     stash: { cols: 12, rows: 12, items: [] },
+    shards: {},
     equipment: {},
     ...overrides,
   };

@@ -1,9 +1,10 @@
-import { baseOf, isCurrency, canonicalBaseId } from "@exiled/content-runtime";
+import { baseOf, isCurrency, canonicalBaseId, currencyItem } from "@exiled/content-runtime";
+import { disenchantYield, SHARDS_PER_ORB } from "@exiled/rules";
 import { Simulation } from "../loop";
 import { placeFirstFit, canPlaceAt } from "../inventory";
 import { canEquip } from "../equipment";
 import { recomputePlayerStats } from "../derived";
-import type { Position, ItemC, InventoryC, EquipmentC } from "../components";
+import type { Position, ItemC, InventoryC, EquipmentC, ShardsC } from "../components";
 import type { Item } from "@exiled/content-schema";
 
 export function registerEquipmentSystem(sim: Simulation): void {
@@ -134,6 +135,58 @@ export function registerEquipmentSystem(sim: Simulation): void {
           world.set<InventoryC>(sessionE, fromComp, { ...src, items: src.items.filter((_, j) => j !== i) });
           world.set<InventoryC>(sessionE, toComp, { ...dst, items: [...dst.items, { ...placed, x: toX, y: toY }] });
         }
+        continue;
+      }
+
+      // ── sellItem ───────────────────────────────────────────────────────────
+      if (cmd.type === "sellItem") {
+        const x = cmd.data?.["x"];
+        const y = cmd.data?.["y"];
+        if (x === undefined || y === undefined) continue;
+
+        // 0 (or absent) = backpack, 1 = stash — mirrors moveItem's encoding.
+        const comp = cmd.data?.["from"] === 1 ? "stash" : "inventory";
+        const container = world.get<InventoryC>(sessionE, comp);
+        if (!container) continue;
+
+        const placed = container.items.find((p) => p.x === x && p.y === y);
+        if (!placed) continue;
+
+        const yld = disenchantYield(placed.item);
+        if (yld === null) continue; // item refused; nothing consumed
+
+        // Remove from container.
+        world.set<InventoryC>(sessionE, comp, {
+          ...container,
+          items: container.items.filter((p) => !(p.x === x && p.y === y)),
+        });
+
+        // Accumulate shards and mint any complete orbs into the backpack.
+        const shardsC = world.get<ShardsC>(sessionE, "shards")!;
+        const counts = { ...shardsC.counts };
+        counts[yld.orbBaseId] = (counts[yld.orbBaseId] ?? 0) + yld.shards;
+
+        while ((counts[yld.orbBaseId] ?? 0) >= SHARDS_PER_ORB) {
+          // Try merging into an existing stack, else place a fresh 1x1 cell.
+          const inv = world.get<InventoryC>(sessionE, "inventory")!;
+          const canonId = canonicalBaseId(yld.orbBaseId);
+          const stackIdx = inv.items.findIndex((p) => canonicalBaseId(p.item.baseId) === canonId);
+          if (stackIdx >= 0) {
+            const items = inv.items.slice();
+            items[stackIdx] = { ...items[stackIdx]!, count: (items[stackIdx]!.count ?? 1) + 1 };
+            world.set<InventoryC>(sessionE, "inventory", { ...inv, items });
+          } else {
+            const slot = placeFirstFit(inv, 1, 1);
+            if (slot === null) break; // no room; bank the shards for a later sale
+            world.set<InventoryC>(sessionE, "inventory", {
+              ...inv,
+              items: [...inv.items, { x: slot.x, y: slot.y, w: 1, h: 1, item: currencyItem(yld.orbBaseId), count: 1 }],
+            });
+          }
+          counts[yld.orbBaseId]! -= SHARDS_PER_ORB;
+        }
+
+        world.set<ShardsC>(sessionE, "shards", { counts });
         continue;
       }
 

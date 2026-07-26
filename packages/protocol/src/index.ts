@@ -33,9 +33,14 @@ export type Intent =
   | { kind: "moveItem"; x: number; y: number; toX: number; toY: number; from?: ContainerId; to?: ContainerId }
   | { kind: "useFlask"; slot: "life" | "mana" }
   /** Spend one Scroll of Wisdom on the unidentified backpack item at its ORIGIN cell. */
-  | { kind: "applyCurrency"; fromX: number; fromY: number; x: number; y: number };
+  | { kind: "applyCurrency"; fromX: number; fromY: number; x: number; y: number }
+  /**
+   * Sell the item whose ORIGIN cell is (x,y) to the disenchanter. `from` defaults
+   * to the backpack, matching moveItem's convention so the two share a read path.
+   */
+  | { kind: "sellItem"; x: number; y: number; from?: ContainerId };
 
-export type CommandType = "moveTo" | "moveDir" | "useSkill" | "stop" | "interact" | "activateMap" | "pickupItem" | "equipItem" | "unequipItem" | "dropItem" | "moveItem" | "useFlask" | "applyCurrency";
+export type CommandType = "moveTo" | "moveDir" | "useSkill" | "stop" | "interact" | "activateMap" | "pickupItem" | "equipItem" | "unequipItem" | "dropItem" | "moveItem" | "useFlask" | "applyCurrency" | "sellItem";
 
 // ---------------------------------------------------------------------------
 // Run loop
@@ -106,7 +111,7 @@ export type ToWorker = ToWorker_Init | ToWorker_Intent | ToWorker_Reset | ToWork
 
 export interface SnapshotEntity {
   id: number;
-  kind: "monster" | "projectile" | "groundArea" | "telegraph" | "portal" | "mapDevice" | "stash" | "groundItem";
+  kind: "monster" | "projectile" | "groundArea" | "telegraph" | "portal" | "mapDevice" | "stash" | "vendor" | "groundItem";
   x: number; y: number;
   radius?: number;
   life?: number; maxLife?: number;
@@ -232,6 +237,8 @@ export interface Snapshot {
   };
   /** Equipped gear by slot. Absent keys mean an empty slot. Absent field means no session. */
   equipment: Partial<Record<EquipSlotId, DisplayItem>>;
+  /** Loose disenchant shards on the session singleton, orb baseId -> count. Empty when none. */
+  shards: Record<string, number>;
   /** Skills as the tooltip shows them. Absent on a sim built without content. */
   skills?: DisplaySkill[];
 }
@@ -377,6 +384,17 @@ export function validateIntent(v: unknown): Intent {
       if (obj["slot"] !== "life" && obj["slot"] !== "mana")
         throw new Error("validateIntent useFlask: slot must be \"life\" or \"mana\"");
       return { kind: "useFlask", slot: obj["slot"] as "life" | "mana" };
+    }
+    case "sellItem": {
+      if (!Number.isInteger(obj["x"])) throw new Error("validateIntent sellItem: x must be an integer");
+      if (!Number.isInteger(obj["y"])) throw new Error("validateIntent sellItem: y must be an integer");
+      if (obj["from"] !== undefined && obj["from"] !== "backpack" && obj["from"] !== "stash")
+        throw new Error("validateIntent sellItem: from must be \"backpack\" or \"stash\"");
+      return {
+        kind: "sellItem",
+        x: obj["x"] as number, y: obj["y"] as number,
+        ...(obj["from"] !== undefined ? { from: obj["from"] as ContainerId } : {}),
+      };
     }
     default:
       throw new Error(`validateIntent: unknown kind: ${String(obj["kind"])}`);

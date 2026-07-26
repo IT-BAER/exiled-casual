@@ -1,11 +1,22 @@
 import React from "react";
 import type { ContainerId, DisplayItem, EquipSlotId, Intent, Snapshot } from "@exiled/protocol";
 import { canEquip } from "@exiled/simulation";
-import { currencyAccepts, currencyResultRarity } from "@exiled/rules";
+import { currencyAccepts, currencyResultRarity, SHARDS_PER_ORB } from "@exiled/rules";
 import { ItemTooltip } from "./ItemTooltip";
 import { playDropSound } from "../audio/drop-sound";
 import { BAR_H } from "./Hud";
 import { CELL, CELL_VW, PANEL_PAD, PANEL_W } from "./layout";
+
+/**
+ * The three shard piles the bench can pay into, in the order the rarities that
+ * produce them climb. Names only: shards are a counter rather than an item, so
+ * there is no icon to look up the way a backpack cell has one.
+ */
+const SHARD_ROWS: readonly { orbBaseId: string; label: string }[] = [
+  { orbBaseId: "currency.transmutation", label: "Transmutation" },
+  { orbBaseId: "currency.elevation", label: "Elevation" },
+  { orbBaseId: "currency.embers", label: "Embers" },
+];
 
 type Inventory = Snapshot["inventory"];
 type Equipment = Snapshot["equipment"];
@@ -171,16 +182,35 @@ function SectionRule({ children }: { children?: React.ReactNode }) {
 }
 
 export function InventoryPanel({
-  inventory, stash, equipment = {}, onClose, onCloseStash, onIntent,
+  inventory, stash, equipment = {}, shards = {}, vendorOpen = false,
+  onClose, onCloseStash, onCloseVendor, onIntent,
 }: {
   inventory: Inventory; stash?: Inventory; equipment?: Equipment;
-  onClose: () => void; onCloseStash?: () => void; onIntent?: (intent: Intent) => void;
+  /** Loose shards banked at the bench, orb base id to count. Always known, so the
+      backpack's Shards counter can read it whether or not the bench is open. */
+  shards?: Record<string, number>;
+  vendorOpen?: boolean;
+  onClose: () => void; onCloseStash?: () => void; onCloseVendor?: () => void;
+  onIntent?: (intent: Intent) => void;
 }) {
   const { cols, rows } = inventory;
   // Both grids are owned by this one component so a single drag can cross between
   // them: the drop target is resolved against whichever grid the cursor is over,
   // never against a remembered one.
   const grids: Partial<Record<ContainerId, Inventory>> = { backpack: inventory, ...(stash ? { stash } : {}) };
+
+  // Sound the bench off the shard count rather than off the click, so the two
+  // outcomes are audibly different: banking a shard ticks, and the tenth one
+  // spends the pile on an orb, which drops the total and rings like a unique.
+  // docs/09 rule 2 - a reward the player cannot hear did not happen.
+  const shardTotal = Object.values(shards).reduce((a, b) => a + b, 0);
+  const lastShardTotal = React.useRef<number | null>(null);
+  React.useEffect(() => {
+    const prev = lastShardTotal.current;
+    lastShardTotal.current = shardTotal;
+    if (prev === null || prev === shardTotal) return;
+    playDropSound(shardTotal > prev ? "normal" : "unique");
+  }, [shardTotal]);
   // Keyed by the item, not a grid index, so equipped slots and backpack cells
   // share one hover path; an index could only ever address the backpack.
   const [hover, setHover] = React.useState<{ item: DisplayItem; x: number; y: number } | null>(null);
@@ -371,6 +401,17 @@ export function InventoryPanel({
                   setArmed((a) => (container === "backpack" && it.itemClass === "currency" && a?.x !== it.x ? it : null));
                 }}
                 onPointerDown={(e) => {
+                  // Ctrl-click breaks an item down, but only while the bench is open:
+                  // a destructive gesture must never be one stray modifier away.
+                  if (e.ctrlKey && vendorOpen) {
+                    e.preventDefault();
+                    setHover(null);
+                    onIntent?.({
+                      kind: "sellItem", x: it.x, y: it.y,
+                      ...(container === "stash" ? { from: "stash" as const } : {}),
+                    });
+                    return;
+                  }
                   if (e.shiftKey) {
                     e.preventDefault();
                     setHover(null);
@@ -518,6 +559,78 @@ export function InventoryPanel({
           {renderGrid("stash")}
         </div>
       )}
+      {/* Disenchanting bench. It holds no grid: what you get back is shards, which
+          docs/02 §5 says never occupy inventory, so the panel is the bank sheet and
+          the ten pips are the countdown to the orb they turn into. */}
+      {vendorOpen && (
+        <div
+          data-testid="vendor-panel"
+          data-hud-panel=""
+          style={{
+            pointerEvents: "auto",
+            marginRight: "auto",
+            marginLeft: 12,
+            marginBottom: BAR_H,
+            padding: PANEL_PAD,
+            width: 300,
+            background: "linear-gradient(180deg,#12100b 0%,#0b0a07 100%)",
+            border: `1px solid ${GOLD_DIM}`,
+            boxShadow: `0 0 0 1px #000, 0 0 0 4px #1b1710, 0 0 0 5px ${GOLD_DIM}, 0 14px 48px rgba(0,0,0,0.85)`,
+          }}
+        >
+          <div
+            style={{
+              margin: `calc(-1 * ${PANEL_PAD}) calc(-1 * ${PANEL_PAD}) 10px`,
+              padding: "10px 0",
+              textAlign: "center",
+              position: "relative",
+              background: "linear-gradient(180deg,#4a1a13,#6b2018 45%,#3a1310)",
+              borderBottom: `1px solid ${GOLD_DIM}`,
+              boxShadow: `inset 0 1px 0 ${GOLD}55, inset 0 -1px 0 #000`,
+            }}
+          >
+            <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: 3, textTransform: "uppercase", color: PARCHMENT, textShadow: "0 1px 2px #000" }}>
+              Disenchant
+            </span>
+            <button
+              data-testid="vendor-close"
+              onClick={onCloseVendor}
+              style={{ position: "absolute", top: 6, right: 10, background: "none", border: "none", color: "#c9b48a", cursor: "pointer", fontSize: 18, lineHeight: 1 }}
+            >
+              ×
+            </button>
+          </div>
+          {SHARD_ROWS.map(({ orbBaseId, label }) => {
+            const n = shards[orbBaseId] ?? 0;
+            return (
+              <div key={orbBaseId} data-testid={`shard-${orbBaseId}`} style={{ marginBottom: 10 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: PARCHMENT, letterSpacing: 1 }}>
+                  <span>{label} Shards</span>
+                  <span style={{ color: n > 0 ? GOLD : "#6b6152" }}>{n} / {SHARDS_PER_ORB}</span>
+                </div>
+                <div style={{ display: "flex", gap: 3, marginTop: 4 }}>
+                  {Array.from({ length: SHARDS_PER_ORB }, (_, k) => (
+                    <div
+                      key={k}
+                      style={{
+                        flex: 1,
+                        height: 6,
+                        border: "1px solid #000",
+                        background: k < n ? "linear-gradient(180deg,#e0a13c,#8a5410)" : "#171410",
+                        boxShadow: k < n ? `0 0 5px ${GOLD}66` : "none",
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+          <div style={{ fontSize: 11, color: "#8c8069", lineHeight: 1.5, marginTop: 12 }}>
+            Ctrl-click a magic, rare or unique item to break it down. Ten shards
+            become their orb, straight into the backpack.
+          </div>
+        </div>
+      )}
       <div
         ref={boxRef}
         style={{
@@ -615,7 +728,7 @@ export function InventoryPanel({
             }}
           >
             <Currency label="Gold" value={0} />
-            <Currency label="Shards" value={0} />
+            <Currency label="Shards" value={shardTotal} />
           </div>
         </div>
       </div>
