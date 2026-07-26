@@ -1,5 +1,10 @@
 // @vitest-environment jsdom
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
+
+// The banner's other half is the sound. jsdom has no WebAudio, and the assertion
+// worth making is "the reward was announced", not what it sounded like.
+vi.mock("../audio/drop-sound", () => ({ playDropSound: vi.fn() }));
+import { playDropSound } from "../audio/drop-sound";
 import "@testing-library/jest-dom/vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { Hud } from "./Hud";
@@ -10,6 +15,9 @@ import { testPlayer, testStats } from "../test-fixtures";
 // No globals:true in this repo, so @testing-library/react does not auto-register
 // its afterEach cleanup — do it explicitly or renders leak across tests.
 afterEach(cleanup);
+// The module mock's spy is created once for the file, so its call log survives
+// cleanup and a later test would inherit an earlier test's ring.
+afterEach(() => vi.mocked(playDropSound).mockClear());
 
 function makeSnap(overrides: {
   life?: number;
@@ -26,6 +34,7 @@ function makeSnap(overrides: {
   xp?: number;
   xpToNext?: number;
   skills?: Snapshot["skills"];
+  waystones?: Snapshot["waystones"];
 }): Snapshot {
   return {
     tick: 1,
@@ -34,8 +43,9 @@ function makeSnap(overrides: {
     mapOpen: overrides.mapOpen ?? false,
     areaTier: 0,
     atlasSeed: 0,
-    completedNodes: [], waystones: [],
+    completedNodes: [],
     skills: overrides.skills,
+    waystones: overrides.waystones ?? [],
     player: {
       id: 0,
       x: 0,
@@ -368,3 +378,42 @@ describe("Hud skill tooltip", () => {
   });
 });
 
+
+describe("Hud reward banner", () => {
+  const stone = (id: string) => ({ id, seed: 1, tier: 1 });
+
+  it("says nothing on the first snapshot it ever sees", () => {
+    render(<Hud snapshot={makeSnap({ level: 12, waystones: [stone("a")] })} />);
+    expect(screen.queryByTestId("reward-banner")).toBeNull();
+    expect(playDropSound).not.toHaveBeenCalled();
+  });
+
+  it("rings and names the level the fixed track just paid", () => {
+    const { rerender } = render(<Hud snapshot={makeSnap({ level: 12 })} />);
+    rerender(<Hud snapshot={makeSnap({ level: 13 })} />);
+    expect(screen.getByTestId("reward-banner")).toHaveTextContent("Level 13");
+    expect(playDropSound).toHaveBeenCalled();
+  });
+
+  it("rings and counts the stones a cleared map hands back", () => {
+    const { rerender } = render(<Hud snapshot={makeSnap({ waystones: [stone("a")] })} />);
+    rerender(<Hud snapshot={makeSnap({ waystones: [stone("a"), stone("b"), stone("c")] })} />);
+    expect(screen.getByTestId("reward-banner")).toHaveTextContent("Waystone x2");
+    expect(playDropSound).toHaveBeenCalled();
+  });
+
+  it("spends a boss kill that pays both on one line, not two banners", () => {
+    const { rerender } = render(<Hud snapshot={makeSnap({ level: 12, waystones: [] })} />);
+    rerender(<Hud snapshot={makeSnap({ level: 13, waystones: [stone("a")] })} />);
+    const banner = screen.getByTestId("reward-banner");
+    expect(banner).toHaveTextContent("Level 13");
+    expect(banner).toHaveTextContent("Waystone");
+  });
+
+  it("stays quiet when a stone is spent rather than won", () => {
+    const { rerender } = render(<Hud snapshot={makeSnap({ waystones: [stone("a")] })} />);
+    rerender(<Hud snapshot={makeSnap({ waystones: [] })} />);
+    expect(screen.queryByTestId("reward-banner")).toBeNull();
+    expect(playDropSound).not.toHaveBeenCalled();
+  });
+});

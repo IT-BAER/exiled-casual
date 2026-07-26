@@ -186,5 +186,6 @@ The hideout gets storage, quick transfer, and a bench that turns leftovers into 
 </tr>
 <tr>
 <td width="33%"><img src="screenshots/2026-07-26-panes-aligned.jpeg" alt="Stash and inventory open together, mirrored against the left and right screen edges" width="100%"><br><sub><b>One pane, cut twice</b> - stash and inventory now share a width, a top line and a bottom line, mirrored the way PoE1 opens the pair, with the flask frame raised to the bar's full height so no sliver of floor shows under the stash.</sub></td>
+<td width="33%"><img src="screenshots/2026-07-27-reward-banner.jpeg" alt="A gold serif line reading LEVEL 66 · WAYSTONE X2 high over the character" width="100%"><br><sub><b>The silent payouts get a voice</b> - a level and the stones a cleared map hands back both used to land with no sound and nothing on screen, which docs/09 rule 1 says means they did not happen.</sub></td>
 </tr>
 </table>

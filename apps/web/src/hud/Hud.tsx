@@ -4,6 +4,7 @@ import { MAP_PORTALS } from "@exiled/protocol";
 import { SERIF } from "./ItemTooltip";
 import { PANEL_W } from "./layout";
 import { SkillTooltip } from "./SkillTooltip";
+import { playDropSound } from "../audio/drop-sound";
 
 // Bottom HUD geometry, measured off poe2-screenshots/poe1-lower-bar.png, a 2558x388 crop
 // of Path of Exile **1**'s bottom bar (PoE1, not PoE2 — its globes are bigger and its ring
@@ -421,6 +422,38 @@ function Orb(props: {
 
 export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
   const [hoveredSkill, setHoveredSkill] = React.useState<string | null>(null);
+
+  // docs/09 rule 1: a reward the player cannot hear and see did not happen. Two
+  // guaranteed payouts used to land in total silence — the level the fixed track
+  // pays on a dry session (rule 7), and the stones a cleared map hands back, which
+  // is rule 4's whole "the map must not be able to pay zero" moment. Both were only
+  // discoverable later, by reading a number in a panel.
+  const [banner, setBanner] = React.useState<string | null>(null);
+  const level = snapshot?.player.level ?? null;
+  const stones = snapshot?.waystones.length ?? null;
+  const last = React.useRef<{ level: number; stones: number } | null>(null);
+  React.useEffect(() => {
+    if (level === null || stones === null) return;
+    const was = last.current;
+    last.current = { level, stones };
+    // The first snapshot is the baseline, not a win; a reload would otherwise
+    // congratulate the player on the level they already had.
+    if (!was) return;
+    const won = stones - was.stones;
+    const lines = [
+      ...(level > was.level ? [`Level ${level}`] : []),
+      // Spending a stone on a map is not a payout, so only a rise counts.
+      ...(won > 0 ? [`Waystone${won > 1 ? ` x${won}` : ""}`] : []),
+    ];
+    if (lines.length === 0) return;
+    // A boss kill can pay both at once. Rule 3 says concentrate rather than spread,
+    // so they share one banner and one sound instead of queueing two.
+    setBanner(lines.join("   ·   "));
+    playDropSound(level > was.level ? "unique" : "rare");
+    const t = setTimeout(() => setBanner(null), 2400);
+    return () => clearTimeout(t);
+  }, [level, stones]);
+
   if (!snapshot) return null;
 
   const { life, maxLife, mana, maxMana, cooldowns, energyShield, maxEnergyShield } = snapshot.player;
@@ -524,6 +557,30 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
           >
             {boss.bossPhase === 2 ? "II" : "I"}
           </div>
+        </div>
+      )}
+
+      {/* The reward banner: high, centred, over the fight rather than beside it, and
+          gone in 2.4s. PoE announces a level with a sound first and text second, so
+          the text here is only what the ear already heard. */}
+      {banner && (
+        <div
+          data-testid="reward-banner"
+          style={{
+            position: "absolute",
+            top: "16%",
+            left: 0,
+            right: 0,
+            textAlign: "center",
+            fontFamily: SERIF,
+            fontSize: 30,
+            letterSpacing: 4,
+            textTransform: "uppercase",
+            color: "#f2d79a",
+            textShadow: "0 0 18px rgba(201,168,76,0.55), 0 2px 6px #000",
+          }}
+        >
+          {banner}
         </div>
       )}
 
