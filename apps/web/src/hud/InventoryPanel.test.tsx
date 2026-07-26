@@ -124,6 +124,38 @@ describe("InventoryPanel", () => {
     expect(intents).toEqual([{ kind: "moveItem", x: 0, y: 0, toX: 9, toY: 3 }]);
   });
 
+
+  it("drags an item across into the stash, resolving the cell against the stash's own grid", () => {
+    // The two grids have different column counts, so the drop must be measured on
+    // whichever grid the cursor is over. A shared cell size lands a cell out.
+    const CELL = 43.008;
+    const intents: unknown[] = [];
+    const stash = { cols: 12, rows: 12, items: [] };
+    render(<InventoryPanel inventory={inv} stash={stash} onIntent={(i) => intents.push(i)} onClose={() => {}} />);
+
+    const [stashGrid, packGrid] = Array.from(document.querySelectorAll("[data-drop-grid]")) as HTMLElement[];
+    // jsdom hands out zero rects; give each grid a real one, side by side.
+    stashGrid!.getBoundingClientRect = () =>
+      ({ left: 0, top: 100, width: 12 * CELL, height: 12 * CELL, right: 12 * CELL, bottom: 100 + 12 * CELL }) as DOMRect;
+    packGrid!.getBoundingClientRect = () =>
+      ({ left: 1000, top: 500, width: 12 * CELL, height: 5 * CELL, right: 1000 + 12 * CELL, bottom: 500 + 5 * CELL }) as DOMRect;
+
+    fireEvent.pointerDown(screen.getByTestId("inventory-item-0"), { clientX: 10, clientY: 10 });
+    // Centre of the 2x2 piece over the stash's (3,6)..(4,7) corner.
+    fireEvent(stashGrid!, new MouseEvent("pointermove", { bubbles: true, clientX: 4 * CELL, clientY: 100 + 7 * CELL }));
+    fireEvent.pointerUp(stashGrid!);
+    expect(intents).toEqual([{ kind: "moveItem", x: 0, y: 0, toX: 3, toY: 6, to: "stash" }]);
+  });
+
+  it("does not drop an item on the floor when it is released over the stash panel", () => {
+    const intents: unknown[] = [];
+    const stash = { cols: 12, rows: 12, items: [] };
+    render(<InventoryPanel inventory={inv} stash={stash} onIntent={(i) => intents.push(i)} onClose={() => {}} />);
+    fireEvent.pointerDown(screen.getByTestId("inventory-item-0"), { clientX: 10, clientY: 10 });
+    fireEvent.pointerUp(screen.getByTestId("stash-panel"));
+    expect(intents).toEqual([]);
+  });
+
   it("hovers an equipped slot to read what that item is actually granting", () => {
     const equipped = {
       body: {

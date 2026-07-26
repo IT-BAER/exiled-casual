@@ -118,13 +118,18 @@ export class WorkerCore {
     return out;
   }
 
-  /** Cheap fingerprint of the durable state — node progress + inventory size. */
+  /** Cheap fingerprint of the durable state — node progress + both grids' contents. */
   private durableSig(): string {
     const e = this.world.query("session")[0];
     if (e === undefined) return "";
     const s = this.world.get<SessionC>(e, "session");
     const inv = this.world.get<InventoryC>(e, "inventory");
-    return `${s?.completedNodes.join(",") ?? ""}|${inv?.items.length ?? 0}`;
+    const stash = this.world.get<InventoryC>(e, "stash");
+    // Positions, not just counts: rearranging the stash changes nothing about how
+    // many items it holds, and a count-only fingerprint would never save the move.
+    const cells = (g: InventoryC | undefined) =>
+      (g?.items ?? []).reduce((a, p) => a + p.x * 31 + p.y * 7 + (p.count ?? 1), g?.items.length ?? 0);
+    return `${s?.completedNodes.join(",") ?? ""}|${cells(inv)}|${cells(stash)}`;
   }
 
   /**

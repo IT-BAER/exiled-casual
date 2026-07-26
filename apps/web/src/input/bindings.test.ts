@@ -32,6 +32,7 @@ function makeSnap(entityOverrides: Partial<Snapshot["entities"][number]>[] = [])
     player: testPlayer(),
     entities: entityOverrides as Snapshot["entities"],
     inventory: { cols: 12, rows: 5, items: [] },
+    stash: { cols: 12, rows: 12, items: [] },
     equipment: {},
   };
 }

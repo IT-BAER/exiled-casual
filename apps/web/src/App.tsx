@@ -23,6 +23,8 @@ export function App() {
   const [hoveredEntityId, setHoveredEntityId] = useState<number | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const [inventoryOpen, setInventoryOpen] = useState(false);
+  // PoE opens the stash beside the inventory, never on its own.
+  const [stashOpen, setStashOpen] = useState(false);
   const [characterOpen, setCharacterOpen] = useState(false);
   const [project, setProject] = useState<Projector | null>(null);
   const [pick, setPick] = useState<((id: number, x: number, y: number) => void) | null>(null);
@@ -76,6 +78,7 @@ export function App() {
       // The sim already no-ops activateMap while a run is open; without this the
       // panel still opened, offered stones, and closed itself on the next snapshot.
       () => { if (!curSnap?.mapOpen) setPanelOpen(true); },
+      () => { setStashOpen(true); setInventoryOpen(true); },
     );
 
     // Loot plates are DOM, so their click has to reach the same approach-then-act
@@ -134,7 +137,7 @@ export function App() {
     // about either, and both can be open at once the way PoE2 has them.
     const onInvKey = (ev: KeyboardEvent) => {
       const k = ev.key.toLowerCase();
-      if (k === "i") setInventoryOpen((v) => !v);
+      if (k === "i") { setInventoryOpen((v) => !v); setStashOpen(false); }
       if (k === "c") setCharacterOpen((v) => !v);
     };
     window.addEventListener("keydown", onInvKey);
@@ -176,9 +179,11 @@ export function App() {
       {inventoryOpen && snapshot && (
         <InventoryPanel
           inventory={snapshot.inventory}
+          {...(stashOpen ? { stash: snapshot.stash } : {})}
+          onCloseStash={() => setStashOpen(false)}
           equipment={snapshot.equipment}
           onIntent={(intent) => workerRef.current?.postMessage({ type: "intent", intent } satisfies ToWorker)}
-          onClose={() => setInventoryOpen(false)}
+          onClose={() => { setInventoryOpen(false); setStashOpen(false); }}
         />
       )}
       {/* After the inventory so it paints above that panel's backdrop when both are open. */}

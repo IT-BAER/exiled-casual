@@ -57,6 +57,7 @@ function makeSnap(overrides: {
     },
     entities: overrides.entities ?? [],
     inventory: { cols: 12, rows: 5, items: [] },
+    stash: { cols: 12, rows: 12, items: [] },
     equipment: {},
   };
 }
@@ -130,6 +131,7 @@ describe("Hud", () => {
       player: testPlayer({ mana: 30 }),
       entities: [{ id: 10, kind: "monster", x: 0, y: 0, boss: true, bossPhase: 2, life: 600, maxLife: 1000 }],
       inventory: { cols: 12, rows: 5, items: [] },
+    stash: { cols: 12, rows: 12, items: [] },
       equipment: {},
     };
     render(<Hud snapshot={snap} />);

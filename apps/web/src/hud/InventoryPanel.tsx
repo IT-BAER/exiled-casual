@@ -1,5 +1,5 @@
 import React from "react";
-import type { DisplayItem, EquipSlotId, Intent, Snapshot } from "@exiled/protocol";
+import type { ContainerId, DisplayItem, EquipSlotId, Intent, Snapshot } from "@exiled/protocol";
 import { canEquip } from "@exiled/simulation";
 import { currencyAccepts, currencyResultRarity } from "@exiled/rules";
 import { ItemTooltip } from "./ItemTooltip";
@@ -23,7 +23,7 @@ function accepts(currency: GridItem, it: GridItem): boolean {
 }
 
 /** Where a drag started, which decides the intent it turns into on release. */
-type DragSource = { kind: "grid"; x: number; y: number } | { kind: "slot"; slot: EquipSlotId };
+type DragSource = { kind: "grid"; container: ContainerId; x: number; y: number } | { kind: "slot"; slot: EquipSlotId };
 
 // PoE2 inventory+equipment screen. The 12x5 backpack grid is functional (fed by
 // snapshot.inventory, the real drop->pickup path). The equipment paper-doll,
@@ -171,11 +171,16 @@ function SectionRule({ children }: { children?: React.ReactNode }) {
 }
 
 export function InventoryPanel({
-  inventory, equipment = {}, onClose, onIntent,
+  inventory, stash, equipment = {}, onClose, onCloseStash, onIntent,
 }: {
-  inventory: Inventory; equipment?: Equipment; onClose: () => void; onIntent?: (intent: Intent) => void;
+  inventory: Inventory; stash?: Inventory; equipment?: Equipment;
+  onClose: () => void; onCloseStash?: () => void; onIntent?: (intent: Intent) => void;
 }) {
-  const { cols, rows, items } = inventory;
+  const { cols, rows } = inventory;
+  // Both grids are owned by this one component so a single drag can cross between
+  // them: the drop target is resolved against whichever grid the cursor is over,
+  // never against a remembered one.
+  const grids: Partial<Record<ContainerId, Inventory>> = { backpack: inventory, ...(stash ? { stash } : {}) };
   // Keyed by the item, not a grid index, so equipped slots and backpack cells
   // share one hover path; an index could only ever address the backpack.
   const [hover, setHover] = React.useState<{ item: DisplayItem; x: number; y: number } | null>(null);
@@ -187,26 +192,32 @@ export function InventoryPanel({
   // because which orb is on the cursor decides what every other cell will accept.
   const [armed, setArmed] = React.useState<GridItem | null>(null);
   const boxRef = React.useRef<HTMLDivElement | null>(null);
-  const gridRef = React.useRef<HTMLDivElement | null>(null);
+  const gridRefs = React.useRef<Partial<Record<ContainerId, HTMLDivElement | null>>>({});
 
   // Does a w x h piece fit with its top-left at (x, y)? Mirrors the sim's canPlaceAt,
   // including ignoring the dragged item's own footprint, so the highlight cannot
   // promise a placement the sim then refuses. The sim stays the authority.
-  const fitsAt = (self: DisplayItem, w: number, h: number, x: number, y: number): boolean =>
-    x >= 0 && y >= 0 && x + w <= cols && y + h <= rows &&
-    !items.some((p) => p !== self && x < p.x + p.w && x + w > p.x && y < p.y + p.h && y + h > p.y);
+  const fitsAt = (g: Inventory, self: DisplayItem, w: number, h: number, x: number, y: number): boolean =>
+    x >= 0 && y >= 0 && x + w <= g.cols && y + h <= g.rows &&
+    !g.items.some((p) => p !== self && x < p.x + p.w && x + w > p.x && y < p.y + p.h && y + h > p.y);
 
   // The cell the held item would land on. PoE carries a piece by its centre rather
   // than by the corner you grabbed, so the target is the item's centre rounded to
   // the grid, not the cursor's own cell. Null while the cursor is off the grid.
   const dropTarget = React.useMemo(() => {
-    const r = gridRef.current?.getBoundingClientRect();
-    if (!drag || drag.from.kind !== "grid" || !r) return null;
-    if (drag.x < r.left || drag.x >= r.right || drag.y < r.top || drag.y >= r.bottom) return null;
-    const c = r.width / cols;
-    const x = Math.round((drag.x - r.left - (drag.w * c) / 2) / c);
-    const y = Math.round((drag.y - r.top - (drag.h * c) / 2) / c);
-    return { x, y, ok: fitsAt(drag.item, drag.w, drag.h, x, y) };
+    if (!drag || drag.from.kind !== "grid") return null;
+    for (const [id, g] of Object.entries(grids) as [ContainerId, Inventory][]) {
+      const r = gridRefs.current[id]?.getBoundingClientRect();
+      if (!r) continue;
+      if (drag.x < r.left || drag.x >= r.right || drag.y < r.top || drag.y >= r.bottom) continue;
+      // Each grid measures its OWN width: the two have different column counts, so
+      // one shared cell size would land the drop a cell out in the other grid.
+      const c = r.width / g.cols;
+      const x = Math.round((drag.x - r.left - (drag.w * c) / 2) / c);
+      const y = Math.round((drag.y - r.top - (drag.h * c) / 2) / c);
+      return { container: id, x, y, ok: fitsAt(g, drag.item, drag.w, drag.h, x, y) };
+    }
+    return null;
   }, [drag]);
 
   // Pointer events, not HTML5 drag-and-drop: the release target can be the Babylon
@@ -223,15 +234,22 @@ export function InventoryPanel({
       const onGrid = !!target?.closest("[data-drop-grid]");
       const insidePanel = !!boxRef.current && !!target && boxRef.current.contains(target);
       if (slot) {
-        if (drag.from.kind === "grid" && canEquip(drag.item.itemClass ?? "", slot)) {
+        if (drag.from.kind === "grid" && drag.from.container === "backpack" && canEquip(drag.item.itemClass ?? "", slot)) {
           onIntent?.({ kind: "equipItem", x: drag.from.x, y: drag.from.y, slot });
         }
         return;
       }
       if (onGrid) {
+        // Unequipping always lands in the backpack — the sim has no stash path for it.
         if (drag.from.kind === "slot") onIntent?.({ kind: "unequipItem", slot: drag.from.slot });
-        else if (dropTarget?.ok && (dropTarget.x !== drag.from.x || dropTarget.y !== drag.from.y)) {
-          onIntent?.({ kind: "moveItem", x: drag.from.x, y: drag.from.y, toX: dropTarget.x, toY: dropTarget.y });
+        else if (dropTarget?.ok && (dropTarget.container !== drag.from.container || dropTarget.x !== drag.from.x || dropTarget.y !== drag.from.y)) {
+          // The container fields are omitted for a plain backpack move, so the
+          // intent stays exactly the shape it had before the stash existed.
+          onIntent?.({
+            kind: "moveItem", x: drag.from.x, y: drag.from.y, toX: dropTarget.x, toY: dropTarget.y,
+            ...(drag.from.container === "stash" ? { from: "stash" as const } : {}),
+            ...(dropTarget.container === "stash" ? { to: "stash" as const } : {}),
+          });
         }
         return;
       }
@@ -239,7 +257,7 @@ export function InventoryPanel({
       // Another open HUD panel is not the world — the character sheet overlaps
       // this one, and releasing on it must not silently throw the item away.
       const onOtherPanel = !!target?.closest("[data-hud-panel]");
-      if (!insidePanel && !onOtherPanel && drag.from.kind === "grid") {
+      if (!insidePanel && !onOtherPanel && drag.from.kind === "grid" && drag.from.container === "backpack") {
         onIntent?.({ kind: "dropItem", x: drag.from.x, y: drag.from.y });
       }
     };
@@ -261,9 +279,143 @@ export function InventoryPanel({
     return canEquip(drag.item.itemClass ?? "", slot) ? "legal" : "illegal";
   };
 
+  // One grid, rendered for either container. Both share the drag, the hover
+  // tooltip and the armed-currency cursor, so an item behaves the same in the
+  // stash as in the bag rather than through a second copy of this markup.
+  const renderGrid = (container: ContainerId) => {
+    const g = grids[container]!;
+    return (
+          <div
+            data-drop-grid={container}
+            ref={(el) => { gridRefs.current[container] = el; }}
+            style={{
+              position: "relative",
+              width: `calc(${g.cols} * ${CELL})`,
+              height: `calc(${g.rows} * ${CELL})`,
+              margin: "0 auto",
+              // A column flex would squeeze both of these on a short window, and the
+              // drag math divides this box's measured width by the column count, so a
+              // squeezed grid would place items in the wrong cell. Never shrink.
+              flexShrink: 0,
+              background: "#0a0b0e",
+              border: `1px solid ${GOLD_DIM}`,
+              boxShadow: "inset 0 0 14px rgba(0,0,0,0.8)",
+            }}
+          >
+            {Array.from({ length: g.rows }).map((_, y) =>
+              Array.from({ length: g.cols }).map((__, x) => (
+                <div
+                  key={`${x}-${y}`}
+                  data-testid={`${container === "stash" ? "stash" : "inventory"}-cell-${x}-${y}`}
+                  style={{ position: "absolute", left: `calc(${x} * ${CELL})`, top: `calc(${y} * ${CELL})`, width: CELL, height: CELL, border: "1px solid #2c2415", boxShadow: "inset 0 0 4px rgba(0,0,0,0.5)" }}
+                />
+              )),
+            )}
+            {/* Where the held item would land: the whole footprint lit, not one cell,
+                because a 1x3 staff has to show all three. Green fits, red does not. */}
+            {dropTarget?.container === container && (
+              <div
+                data-testid="drop-highlight"
+                style={{
+                  position: "absolute",
+                  left: `calc(${dropTarget.x} * ${CELL})`,
+                  top: `calc(${dropTarget.y} * ${CELL})`,
+                  width: `calc(${drag?.w ?? 1} * ${CELL})`,
+                  height: `calc(${drag?.h ?? 1} * ${CELL})`,
+                  background: dropTarget.ok ? "rgba(96,200,120,0.22)" : "rgba(200,70,60,0.22)",
+                  border: `1px solid ${dropTarget.ok ? "#6fd48a" : "#d05a4e"}`,
+                  boxShadow: `inset 0 0 12px ${dropTarget.ok ? "#6fd48a55" : "#d05a4e55"}`,
+                  pointerEvents: "none",
+                }}
+              />
+            )}
+            {g.items.map((it, i) => (
+              <div
+                key={i}
+                data-testid={`${container === "stash" ? "stash" : "inventory"}-item-${i}`}
+                onMouseEnter={(e) => !drag && setHover({ item: it, x: e.clientX + 18, y: e.clientY + 18 })}
+                onMouseMove={(e) => !drag && setHover({ item: it, x: e.clientX + 18, y: e.clientY + 18 })}
+                onMouseLeave={() => setHover((h) => (h?.item === it ? null : h))}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  // Right-clicking the armed currency again, or anything that is not
+                  // currency at all, puts what is on the cursor back in the bag.
+                  setArmed((a) => (container === "backpack" && it.itemClass === "currency" && a?.x !== it.x ? it : null));
+                }}
+                onPointerDown={(e) => {
+                  if (armed && container === "backpack" && accepts(armed, it)) {
+                    e.preventDefault();
+                    setHover(null);
+                    setArmed(null);
+                    // The outcome is the payoff, so it gets the drop chime at the rarity
+                    // the application lands on, which is audible before the new lines are
+                    // legible (docs/09 rule 2).
+                    playDropSound(currencyResultRarity(armed.baseId ?? "") ?? it.rarity);
+                    onIntent?.({ kind: "applyCurrency", fromX: armed.x, fromY: armed.y, x: it.x, y: it.y });
+                    return;
+                  }
+                  grab({ kind: "grid", container, x: it.x, y: it.y }, it, it.w, it.h, e);
+                }}
+                style={{
+                  position: "absolute",
+                  left: `calc(${it.x} * ${CELL} + 2px)`,
+                  top: `calc(${it.y} * ${CELL} + 2px)`,
+                  width: `calc(${it.w} * ${CELL} - 4px)`,
+                  height: `calc(${it.h} * ${CELL} - 4px)`,
+                  border: `2px solid ${RARITY_BORDER[it.rarity]}`,
+                  background: "linear-gradient(180deg, rgba(20,26,42,0.9), rgba(8,10,18,0.9))",
+                  color: RARITY_TEXT[it.rarity],
+                  fontFamily: SERIF,
+                  fontSize: 10,
+                  letterSpacing: 0.3,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  textAlign: "center",
+                  padding: 2,
+                  boxSizing: "border-box",
+                  boxShadow: `inset 0 0 8px ${RARITY_BORDER[it.rarity]}44`,
+                  cursor: armed ? (accepts(armed, it) ? "crosshair" : "not-allowed") : "grab",
+                  opacity: drag?.from.kind === "grid" && drag.from.container === container && drag.from.x === it.x && drag.from.y === it.y ? 0.3 : 1,
+                }}
+              >
+                {it.icon ? (
+                  <img
+                    src={it.icon}
+                    alt={it.name}
+                    draggable={false}
+                    style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", pointerEvents: "none" }}
+                  />
+                ) : (
+                  it.name
+                )}
+                {/* Stack size in the bottom-right of the cell, where PoE puts it. */}
+                {it.count !== undefined && it.count > 1 && (
+                  <span
+                    data-testid={`${container === "stash" ? "stash" : "inventory"}-count-${i}`}
+                    style={{ position: "absolute", right: 2, bottom: 1, fontSize: 11, color: "#e8dfc4", textShadow: "0 1px 2px #000", pointerEvents: "none" }}
+                  >
+                    {it.count}
+                  </span>
+                )}
+                {/* An unread item wears a question mark, so the backpack shows what is
+                    still owed without a hover (docs/09 rule 2: unseen is unfelt). */}
+                {it.unidentified && (
+                  <span
+                    data-testid={`${container === "stash" ? "stash" : "inventory"}-unread-${i}`}
+                    style={{ position: "absolute", left: 3, top: 1, fontSize: 12, fontWeight: 700, color: "#d02020", textShadow: "0 1px 2px #000", pointerEvents: "none" }}
+                  >
+                    ?
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+    );
+  };
+
   const equipW = `calc(10 * ${U})`; // paper-doll spans 10 units wide
   const equipH = `calc(6 * ${U})`;
-  const gridW = `calc(${cols} * ${CELL})`;
   // The grid is the wider of the two, so it is what sets the content width.
   const contentW = `${Math.max(10 * U_VW, cols * CELL_VW).toFixed(2)}vw`;
 
@@ -289,6 +441,49 @@ export function InventoryPanel({
         color: PARCHMENT,
       }}
     >
+      {/* Stash box, docked bottom-left. PoE opens the stash beside the inventory
+          rather than instead of it, so both grids are reachable in one drag. */}
+      {stash && (
+        <div
+          data-testid="stash-panel"
+          data-hud-panel=""
+          style={{
+            pointerEvents: "auto",
+            marginRight: "auto",
+            // Off the screen edge, or the panel's outer gilt line is clipped away.
+            marginLeft: 12,
+            marginBottom: BAR_H,
+            padding: PANEL_PAD,
+            background: "linear-gradient(180deg,#12100b 0%,#0b0a07 100%)",
+            border: `1px solid ${GOLD_DIM}`,
+            boxShadow: `0 0 0 1px #000, 0 0 0 4px #1b1710, 0 0 0 5px ${GOLD_DIM}, 0 14px 48px rgba(0,0,0,0.85)`,
+          }}
+        >
+          <div
+            style={{
+              margin: `calc(-1 * ${PANEL_PAD}) calc(-1 * ${PANEL_PAD}) 10px`,
+              padding: "10px 0",
+              textAlign: "center",
+              position: "relative",
+              background: "linear-gradient(180deg,#4a1a13,#6b2018 45%,#3a1310)",
+              borderBottom: `1px solid ${GOLD_DIM}`,
+              boxShadow: `inset 0 1px 0 ${GOLD}55, inset 0 -1px 0 #000`,
+            }}
+          >
+            <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: 3, textTransform: "uppercase", color: PARCHMENT, textShadow: "0 1px 2px #000" }}>
+              Stash
+            </span>
+            <button
+              data-testid="stash-close"
+              onClick={onCloseStash}
+              style={{ position: "absolute", top: 6, right: 10, background: "none", border: "none", color: "#c9b48a", cursor: "pointer", fontSize: 18, lineHeight: 1 }}
+            >
+              ×
+            </button>
+          </div>
+          {renderGrid("stash")}
+        </div>
+      )}
       <div
         ref={boxRef}
         style={{
@@ -365,132 +560,7 @@ export function InventoryPanel({
 
           {/* Backpack grid (functional) */}
           <SectionRule>Backpack</SectionRule>
-          <div
-            data-drop-grid=""
-            ref={gridRef}
-            style={{
-              position: "relative",
-              width: gridW,
-              height: `calc(${rows} * ${CELL})`,
-              margin: "0 auto",
-              // A column flex would squeeze both of these on a short window, and the
-              // drag math divides this box's measured width by the column count, so a
-              // squeezed grid would place items in the wrong cell. Never shrink.
-              flexShrink: 0,
-              background: "#0a0b0e",
-              border: `1px solid ${GOLD_DIM}`,
-              boxShadow: "inset 0 0 14px rgba(0,0,0,0.8)",
-            }}
-          >
-            {Array.from({ length: rows }).map((_, y) =>
-              Array.from({ length: cols }).map((__, x) => (
-                <div
-                  key={`${x}-${y}`}
-                  data-testid={`inventory-cell-${x}-${y}`}
-                  style={{ position: "absolute", left: `calc(${x} * ${CELL})`, top: `calc(${y} * ${CELL})`, width: CELL, height: CELL, border: "1px solid #2c2415", boxShadow: "inset 0 0 4px rgba(0,0,0,0.5)" }}
-                />
-              )),
-            )}
-            {/* Where the held item would land: the whole footprint lit, not one cell,
-                because a 1x3 staff has to show all three. Green fits, red does not. */}
-            {dropTarget && (
-              <div
-                data-testid="drop-highlight"
-                style={{
-                  position: "absolute",
-                  left: `calc(${dropTarget.x} * ${CELL})`,
-                  top: `calc(${dropTarget.y} * ${CELL})`,
-                  width: `calc(${drag?.w ?? 1} * ${CELL})`,
-                  height: `calc(${drag?.h ?? 1} * ${CELL})`,
-                  background: dropTarget.ok ? "rgba(96,200,120,0.22)" : "rgba(200,70,60,0.22)",
-                  border: `1px solid ${dropTarget.ok ? "#6fd48a" : "#d05a4e"}`,
-                  boxShadow: `inset 0 0 12px ${dropTarget.ok ? "#6fd48a55" : "#d05a4e55"}`,
-                  pointerEvents: "none",
-                }}
-              />
-            )}
-            {items.map((it, i) => (
-              <div
-                key={i}
-                data-testid={`inventory-item-${i}`}
-                onMouseEnter={(e) => !drag && setHover({ item: it, x: e.clientX + 18, y: e.clientY + 18 })}
-                onMouseMove={(e) => !drag && setHover({ item: it, x: e.clientX + 18, y: e.clientY + 18 })}
-                onMouseLeave={() => setHover((h) => (h?.item === it ? null : h))}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  // Right-clicking the armed currency again, or anything that is not
-                  // currency at all, puts what is on the cursor back in the bag.
-                  setArmed((a) => (it.itemClass === "currency" && a?.x !== it.x ? it : null));
-                }}
-                onPointerDown={(e) => {
-                  if (armed && accepts(armed, it)) {
-                    e.preventDefault();
-                    setHover(null);
-                    setArmed(null);
-                    // The outcome is the payoff, so it gets the drop chime at the rarity
-                    // the application lands on, which is audible before the new lines are
-                    // legible (docs/09 rule 2).
-                    playDropSound(currencyResultRarity(armed.baseId ?? "") ?? it.rarity);
-                    onIntent?.({ kind: "applyCurrency", fromX: armed.x, fromY: armed.y, x: it.x, y: it.y });
-                    return;
-                  }
-                  grab({ kind: "grid", x: it.x, y: it.y }, it, it.w, it.h, e);
-                }}
-                style={{
-                  position: "absolute",
-                  left: `calc(${it.x} * ${CELL} + 2px)`,
-                  top: `calc(${it.y} * ${CELL} + 2px)`,
-                  width: `calc(${it.w} * ${CELL} - 4px)`,
-                  height: `calc(${it.h} * ${CELL} - 4px)`,
-                  border: `2px solid ${RARITY_BORDER[it.rarity]}`,
-                  background: "linear-gradient(180deg, rgba(20,26,42,0.9), rgba(8,10,18,0.9))",
-                  color: RARITY_TEXT[it.rarity],
-                  fontFamily: SERIF,
-                  fontSize: 10,
-                  letterSpacing: 0.3,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  textAlign: "center",
-                  padding: 2,
-                  boxSizing: "border-box",
-                  boxShadow: `inset 0 0 8px ${RARITY_BORDER[it.rarity]}44`,
-                  cursor: armed ? (accepts(armed, it) ? "crosshair" : "not-allowed") : "grab",
-                  opacity: drag?.from.kind === "grid" && drag.from.x === it.x && drag.from.y === it.y ? 0.3 : 1,
-                }}
-              >
-                {it.icon ? (
-                  <img
-                    src={it.icon}
-                    alt={it.name}
-                    draggable={false}
-                    style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", pointerEvents: "none" }}
-                  />
-                ) : (
-                  it.name
-                )}
-                {/* Stack size in the bottom-right of the cell, where PoE puts it. */}
-                {it.count !== undefined && it.count > 1 && (
-                  <span
-                    data-testid={`inventory-count-${i}`}
-                    style={{ position: "absolute", right: 2, bottom: 1, fontSize: 11, color: "#e8dfc4", textShadow: "0 1px 2px #000", pointerEvents: "none" }}
-                  >
-                    {it.count}
-                  </span>
-                )}
-                {/* An unread item wears a question mark, so the backpack shows what is
-                    still owed without a hover (docs/09 rule 2: unseen is unfelt). */}
-                {it.unidentified && (
-                  <span
-                    data-testid={`inventory-unread-${i}`}
-                    style={{ position: "absolute", left: 3, top: 1, fontSize: 12, fontWeight: 700, color: "#d02020", textShadow: "0 1px 2px #000", pointerEvents: "none" }}
-                  >
-                    ?
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
+          {renderGrid("backpack")}
 
           {/* Currency strip. PoE's inventory does not end at the last grid row: a
               band of currency and charm sockets runs under it, which is what keeps

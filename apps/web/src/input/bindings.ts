@@ -64,6 +64,7 @@ export function attachBindings(
   onCycleOutfit?: () => void,
   onHoverInteractable?: (entityId: number | null) => void,
   onOpenPanel?: () => void,
+  onOpenStash?: () => void,
 ): {
   detach: () => void;
   onSnapshot: (snap: Snapshot) => void;
@@ -232,6 +233,8 @@ export function attachBindings(
         // activateMap intent sent from the panel); everything else interacts.
         if (entity.kind === "mapDevice") {
           onOpenPanel?.();
+        } else if (entity.kind === "stash") {
+          onOpenStash?.();
         } else if (entity.kind === "groundItem") {
           post({ kind: "pickupItem", entityId: pendingInteractId });
         } else {

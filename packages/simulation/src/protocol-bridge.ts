@@ -10,7 +10,7 @@ import type { World, Entity } from "./ecs";
 import type {
   Health, Mana, Position, Cooldowns, CastingC, MonsterC,
   AilmentC, ProjectileC, GroundAreaC, BossC, TelegraphC,
-  SessionC, InteractableC, ItemC, InventoryC, EquipmentC, FlasksC, DefensesC, OffenseC, ProgressC,
+  SessionC, InteractableC, ItemC, InventoryC, StashC, EquipmentC, FlasksC, DefensesC, OffenseC, ProgressC,
   EnergyShieldC,
 } from "./components";
 
@@ -71,7 +71,16 @@ export function intentToCommand(intent: Intent, player: Entity, tick: number): C
     case "dropItem":
       return { tick, entity: player, type: "dropItem", data: { x: intent.x, y: intent.y } };
     case "moveItem":
-      return { tick, entity: player, type: "moveItem", data: { x: intent.x, y: intent.y, toX: intent.toX, toY: intent.toY } };
+      return {
+        tick, entity: player, type: "moveItem",
+        data: {
+          x: intent.x, y: intent.y, toX: intent.toX, toY: intent.toY,
+          // `data` is numbers-only; 0 = backpack, 1 = stash. Omitted when the move
+          // stays in the backpack, so an older recording produces the same command.
+          ...(intent.from === "stash" ? { from: 1 } : {}),
+          ...(intent.to === "stash" ? { to: 1 } : {}),
+        },
+      };
     case "useFlask":
       return { tick, entity: player, type: "useFlask", flask: intent.slot };
   }
@@ -263,11 +272,10 @@ export function buildSnapshot(
 
   entities.sort((a, b) => a.id - b.id);
 
-  const invC = sessionE !== undefined ? world.get<InventoryC>(sessionE, "inventory") : undefined;
-  const inventory = {
-    cols: invC?.cols ?? 12,
-    rows: invC?.rows ?? 5,
-    items: (invC?.items ?? []).map((p) => {
+  const describeGrid = (g: InventoryC | undefined, cols: number, rows: number): Snapshot["inventory"] => ({
+    cols: g?.cols ?? cols,
+    rows: g?.rows ?? rows,
+    items: (g?.items ?? []).map((p) => {
       const d = describeItem(p.item);
       return {
         x: p.x, y: p.y, w: p.w, h: p.h, count: p.count,
@@ -275,7 +283,9 @@ export function buildSnapshot(
         statLines: d.statLines, reqLevel: d.reqLevel, reqAttrValue: d.reqAttrValue, reqAttr: d.reqAttr,
       };
     }),
-  };
+  });
+  const inventory = describeGrid(sessionE !== undefined ? world.get<InventoryC>(sessionE, "inventory") : undefined, 12, 5);
+  const stash = describeGrid(sessionE !== undefined ? world.get<StashC>(sessionE, "stash") : undefined, 12, 12);
 
   const equipC = sessionE !== undefined ? world.get<EquipmentC>(sessionE, "equipment") : undefined;
   const equipment: Snapshot["equipment"] = {};
@@ -340,6 +350,7 @@ export function buildSnapshot(
     },
     entities,
     inventory,
+    stash,
     equipment,
     skills: describeSkills(world.get<OffenseC>(playerEntity, "offense")),
   };

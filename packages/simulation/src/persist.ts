@@ -1,6 +1,6 @@
 import type { KvStore } from "@exiled/persistence";
 import type { World } from "./ecs";
-import type { SessionC, InventoryC, EquipmentC, ProgressC } from "./components";
+import type { SessionC, InventoryC, StashC, EquipmentC, ProgressC } from "./components";
 import { recomputePlayerStats } from "./derived";
 import { START_LEVEL } from "@exiled/rules";
 
@@ -14,10 +14,15 @@ import { START_LEVEL } from "@exiled/rules";
  */
 const VERSION = 1;
 
+/** Shape a stash-less save restores to; also the shape a fresh world is built with. */
+const EMPTY_STASH: StashC = { cols: 12, rows: 12, items: [] };
+
 interface PersistedState {
   version: number;
   session: SessionC;
   inventory: InventoryC;
+  /** Optional so a save written before the stash existed still loads, with an empty stash. */
+  stash?: StashC;
   equipment?: EquipmentC;
   /** Optional so a save written before levels existed still loads, as a fresh START_LEVEL character. */
   progress?: ProgressC;
@@ -32,7 +37,8 @@ export function snapshot(world: World): PersistedState | null {
   if (!session || !inventory) return null;
   const equipment = world.get<EquipmentC>(e, "equipment") ?? { slots: {} };
   const progress = world.get<ProgressC>(e, "progress") ?? { level: START_LEVEL, xp: 0 };
-  return { version: VERSION, session, inventory, equipment, progress };
+  const stash = world.get<StashC>(e, "stash") ?? EMPTY_STASH;
+  return { version: VERSION, session, inventory, stash, equipment, progress };
 }
 
 /**
@@ -54,6 +60,7 @@ export function restore(world: World, state: PersistedState): void {
   };
   world.set<SessionC>(e, "session", safe);
   world.set<InventoryC>(e, "inventory", state.inventory);
+  world.set<StashC>(e, "stash", state.stash ?? EMPTY_STASH);
   world.set<EquipmentC>(e, "equipment", state.equipment ?? { slots: {} });
   world.set<ProgressC>(e, "progress", state.progress ?? { level: START_LEVEL, xp: 0 });
   // Saved gear has to reach the player, not just the equipment panel. Life and

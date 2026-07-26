@@ -12,7 +12,7 @@ import { World } from "./ecs";
 import type { Entity } from "./ecs";
 import type {
   Position, Health, Mana, Faction, PlayerC, Cooldowns, DefensesC,
-  MoveTarget, MoveDir, SessionC, AreaKind, InventoryC, ItemC, EquipmentC, FlasksC, ProgressC,
+  MoveTarget, MoveDir, SessionC, AreaKind, InventoryC, StashC, ItemC, EquipmentC, FlasksC, ProgressC,
 } from "./components";
 import { registerResourceRegen } from "./systems/resource";
 import { registerSkillCast } from "./systems/skill-cast";
@@ -119,6 +119,7 @@ export function createCombatSim(
     };
     world.set<SessionC>(sessionE, "session", session);
     world.set<InventoryC>(sessionE, "inventory", { cols: 12, rows: 5, items: [] });
+    world.set<StashC>(sessionE, "stash", { cols: 12, rows: 12, items: [] });
     world.set<ProgressC>(sessionE, "progress", { level: START_LEVEL, xp: 0 });
     world.set<EquipmentC>(sessionE, "equipment", { slots: {} });
     world.set<FlasksC>(playerEntity, "flasks", {

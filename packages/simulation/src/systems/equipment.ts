@@ -1,4 +1,4 @@
-import { baseOf } from "@exiled/content-runtime";
+import { baseOf, isCurrency, canonicalBaseId } from "@exiled/content-runtime";
 import { Simulation } from "../loop";
 import { placeFirstFit, canPlaceAt } from "../inventory";
 import { canEquip } from "../equipment";
@@ -89,18 +89,51 @@ export function registerEquipmentSystem(sim: Simulation): void {
         const toY = cmd.data?.["toY"];
         if (x === undefined || y === undefined || toX === undefined || toY === undefined) continue;
 
-        const inv = world.get<InventoryC>(sessionE, "inventory")!;
-        const i = inv.items.findIndex((p) => p.x === x && p.y === y);
+        // 0 (or absent) = backpack, 1 = stash — see protocol-bridge.
+        const fromComp = cmd.data?.["from"] === 1 ? "stash" : "inventory";
+        const toComp = cmd.data?.["to"] === 1 ? "stash" : "inventory";
+
+        const src = world.get<InventoryC>(sessionE, fromComp);
+        const dst = world.get<InventoryC>(sessionE, toComp);
+        if (!src || !dst) continue;
+
+        const i = src.items.findIndex((p) => p.x === x && p.y === y);
         if (i < 0) continue;
-        const placed = inv.items[i]!;
+        const placed = src.items[i]!;
+
+        // Same currency already sitting on the target cell: pour one stack into
+        // the other rather than refusing the move as a collision.
+        const target = dst.items.findIndex((p, j) =>
+          !(fromComp === toComp && j === i) && p.x === toX && p.y === toY);
+        if (target >= 0) {
+          const hit = dst.items[target]!;
+          if (!isCurrency(placed.item) || canonicalBaseId(hit.item.baseId) !== canonicalBaseId(placed.item.baseId)) continue;
+          const merged = { ...hit, count: (hit.count ?? 1) + (placed.count ?? 1) };
+          if (fromComp === toComp) {
+            world.set<InventoryC>(sessionE, toComp, {
+              ...dst,
+              items: dst.items.map((p, j) => (j === target ? merged : p)).filter((_, j) => j !== i),
+            });
+          } else {
+            world.set<InventoryC>(sessionE, fromComp, { ...src, items: src.items.filter((_, j) => j !== i) });
+            world.set<InventoryC>(sessionE, toComp, { ...dst, items: dst.items.map((p, j) => (j === target ? merged : p)) });
+          }
+          continue;
+        }
+
         // Ignoring itself, or nudging a 1x2 wand down one row would collide with
         // the row it is currently standing on and every move would be refused.
-        if (!canPlaceAt(inv, placed.w, placed.h, toX, toY, i)) continue;
+        if (!canPlaceAt(dst, placed.w, placed.h, toX, toY, fromComp === toComp ? i : -1)) continue;
 
-        world.set<InventoryC>(sessionE, "inventory", {
-          ...inv,
-          items: inv.items.map((p, j) => (j === i ? { ...p, x: toX, y: toY } : p)),
-        });
+        if (fromComp === toComp) {
+          world.set<InventoryC>(sessionE, toComp, {
+            ...dst,
+            items: dst.items.map((p, j) => (j === i ? { ...p, x: toX, y: toY } : p)),
+          });
+        } else {
+          world.set<InventoryC>(sessionE, fromComp, { ...src, items: src.items.filter((_, j) => j !== i) });
+          world.set<InventoryC>(sessionE, toComp, { ...dst, items: [...dst.items, { ...placed, x: toX, y: toY }] });
+        }
         continue;
       }
 

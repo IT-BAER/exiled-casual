@@ -48,7 +48,7 @@ export interface ProgressC { level: number; xp: number }
 
 /** Something the player can activate with the `interact` intent. */
 export interface InteractableC {
-  kind: "mapDevice" | "portal";
+  kind: "mapDevice" | "portal" | "stash";
   /** Activation range, Fixed. */
   radius: Fixed;
   /** Render-only fixed yaw in radians. A literal constant, never computed. */
@@ -176,5 +176,10 @@ export interface PlacedItem {
 }
 /** Grid inventory on the session singleton. In-memory only this slice. */
 export interface InventoryC { cols: number; rows: number; items: PlacedItem[] }
+/**
+ * Persistent hideout storage. Same grid shape as the backpack, so every placement
+ * helper works on both; it is a separate component only so the two never share cells.
+ */
+export type StashC = InventoryC;
 /** Equipped gear on the session singleton, keyed by slot id. */
 export interface EquipmentC { slots: Partial<Record<string, Item>> }

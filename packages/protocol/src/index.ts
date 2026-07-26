@@ -5,6 +5,9 @@ import type { AreaLayout } from "@exiled/mapgen";
 // Intent — client-side input, coords are Fixed integers (client calls fp())
 // ---------------------------------------------------------------------------
 
+/** Which grid a moveItem reads from or writes to. */
+export type ContainerId = "backpack" | "stash";
+
 export type Intent =
   | { kind: "moveTo"; x: Fixed; y: Fixed }
   | { kind: "moveDir"; dx: -1 | 0 | 1; dy: -1 | 0 | 1 }
@@ -22,8 +25,12 @@ export type Intent =
   | { kind: "unequipItem"; slot: EquipSlotId }
   /** Drop a backpack item (by ORIGIN cell) as a ground entity at the player's feet. */
   | { kind: "dropItem"; x: number; y: number }
-  /** Move a backpack item from its (x, y) origin cell to another one. */
-  | { kind: "moveItem"; x: number; y: number; toX: number; toY: number }
+  /**
+   * Move an item from its (x, y) origin cell to another one. `from`/`to` name the
+   * container and both default to the backpack, so a move recorded before the stash
+   * existed replays byte-identically.
+   */
+  | { kind: "moveItem"; x: number; y: number; toX: number; toY: number; from?: ContainerId; to?: ContainerId }
   | { kind: "useFlask"; slot: "life" | "mana" }
   /** Spend one Scroll of Wisdom on the unidentified backpack item at its ORIGIN cell. */
   | { kind: "applyCurrency"; fromX: number; fromY: number; x: number; y: number };
@@ -99,7 +106,7 @@ export type ToWorker = ToWorker_Init | ToWorker_Intent | ToWorker_Reset | ToWork
 
 export interface SnapshotEntity {
   id: number;
-  kind: "monster" | "projectile" | "groundArea" | "telegraph" | "portal" | "mapDevice" | "groundItem";
+  kind: "monster" | "projectile" | "groundArea" | "telegraph" | "portal" | "mapDevice" | "stash" | "groundItem";
   x: number; y: number;
   radius?: number;
   life?: number; maxLife?: number;
@@ -215,6 +222,11 @@ export interface Snapshot {
   entities: SnapshotEntity[];
   /** Grid inventory (session singleton), display-ready. Empty when no session. */
   inventory: {
+    cols: number; rows: number;
+    items: (DisplayItem & { x: number; y: number; w: number; h: number; /** currency only: stack size */ count?: number })[];
+  };
+  /** Persistent hideout storage, same display shape as the backpack. */
+  stash: {
     cols: number; rows: number;
     items: (DisplayItem & { x: number; y: number; w: number; h: number; /** currency only: stack size */ count?: number })[];
   };
@@ -349,10 +361,16 @@ export function validateIntent(v: unknown): Intent {
       for (const k of ["x", "y", "toX", "toY"] as const) {
         if (!Number.isInteger(obj[k])) throw new Error(`validateIntent moveItem: ${k} must be an integer`);
       }
+      for (const k of ["from", "to"] as const) {
+        if (obj[k] !== undefined && obj[k] !== "backpack" && obj[k] !== "stash")
+          throw new Error(`validateIntent moveItem: ${k} must be "backpack" or "stash"`);
+      }
       return {
         kind: "moveItem",
         x: obj["x"] as number, y: obj["y"] as number,
         toX: obj["toX"] as number, toY: obj["toY"] as number,
+        ...(obj["from"] !== undefined ? { from: obj["from"] as ContainerId } : {}),
+        ...(obj["to"] !== undefined ? { to: obj["to"] as ContainerId } : {}),
       };
     }
     case "useFlask": {

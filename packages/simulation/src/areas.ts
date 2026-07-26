@@ -18,6 +18,8 @@ export const HIDEOUT_SPAWN = { x: fp(0), y: fp(0) } as const;
 // arrive: the ortho camera only shows ~9.5 world units vertically.
 const MAP_DEVICE_X: number = fp(0);
 const MAP_DEVICE_Y: number = fp(4);
+const STASH_X: number = fp(-5);
+const STASH_Y: number = fp(2);
 
 /**
  * Offsets from the map device, plus the render yaw that angles each portal outward.
@@ -101,6 +103,16 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
     world.set<Position>(deviceE, "position", { x: MAP_DEVICE_X, y: MAP_DEVICE_Y });
     world.set<InteractableC>(deviceE, "interactable", {
       kind: "mapDevice",
+      radius: fp(2.5),
+      yaw: 0,
+    });
+
+    // Stash, off to the side of the map device the way PoE2's camp keeps its
+    // chest at the edge of the fire rather than in the traffic lane.
+    const stashE = world.create();
+    world.set<Position>(stashE, "position", { x: STASH_X, y: STASH_Y });
+    world.set<InteractableC>(stashE, "interactable", {
+      kind: "stash",
       radius: fp(2.5),
       yaw: 0,
     });

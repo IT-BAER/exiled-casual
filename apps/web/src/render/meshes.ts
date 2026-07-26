@@ -9,7 +9,7 @@ import {
 } from "@babylonjs/core";
 import { attachRig, rigOf, type RigParts } from "./rig";
 
-export type MeshKind = "player" | "monster" | "rare" | "boss" | "projectile" | "groundArea" | "telegraph" | "portal" | "mapDevice" | "groundItem";
+export type MeshKind = "player" | "monster" | "rare" | "boss" | "projectile" | "groundArea" | "telegraph" | "portal" | "mapDevice" | "stash" | "groundItem";
 
 /**
  * Y-lift off the ground plane per kind (render only). The authored actors
@@ -28,6 +28,7 @@ const Y_LIFT: Record<MeshKind, number> = {
   portal: 0,
   // map device cylinder base already starts at y=0 (children lift themselves)
   mapDevice: 0,
+  stash: 0,
   // small floor-level beacon marker
   groundItem: 0.15,
 };
@@ -533,6 +534,69 @@ function buildMapDevice(scene: Scene, root: Mesh): void {
   root.metadata = { brassBody, brassRim, interactKind: "mapDevice" };
 }
 
+/**
+ * Iron-banded wooden chest on a low stone step, the way PoE2's camp stash sits at
+ * the edge of the firelight (poe2-screenshots/closeup-hideout-zoom.jpg): dark
+ * timber, cold iron straps, a domed lid. Hover warms the iron so it reads clickable.
+ */
+function buildStash(scene: Scene, root: Mesh): void {
+  const wood = new StandardMaterial(`${root.name}-st-wood`, scene);
+  wood.diffuseColor = new Color3(0.20, 0.13, 0.07);
+  wood.emissiveColor = new Color3(0.03, 0.02, 0.01);
+  wood.specularColor = new Color3(0.18, 0.14, 0.09);
+  wood.specularPower = 32;
+
+  const iron = new StandardMaterial(`${root.name}-st-iron`, scene);
+  iron.diffuseColor = new Color3(0.16, 0.15, 0.15);
+  iron.emissiveColor = new Color3(0.03, 0.03, 0.03);
+  iron.specularColor = new Color3(0.7, 0.68, 0.6);
+  iron.specularPower = 96;
+
+  const stone = new StandardMaterial(`${root.name}-st-stone`, scene);
+  stone.diffuseColor = new Color3(0.17, 0.16, 0.15);
+  stone.specularColor = new Color3(0.1, 0.1, 0.1);
+
+  // Stone step it stands on, so the chest does not read as floating on the dirt.
+  const step = MeshBuilder.CreateBox(`${root.name}-st-step`, { width: 1.6, depth: 1.15, height: 0.12 }, scene);
+  step.position.y = 0.06;
+  step.parent = root;
+  step.material = stone;
+
+  const body = MeshBuilder.CreateBox(`${root.name}-st-body`, { width: 1.35, depth: 0.85, height: 0.62 }, scene);
+  body.position.y = 0.12 + 0.31;
+  body.parent = root;
+  body.material = wood;
+
+  // Domed lid: a half cylinder lying along the chest's width.
+  const lid = MeshBuilder.CreateCylinder(`${root.name}-st-lid`, { diameter: 0.85, height: 1.35, tessellation: 16, arc: 0.5 }, scene);
+  lid.rotation.z = Math.PI / 2;
+  lid.position.y = 0.74;
+  lid.parent = root;
+  lid.material = wood;
+
+  // Two vertical iron straps over body and lid, plus the lock plate between them.
+  for (const dx of [-0.42, 0.42]) {
+    const strap = MeshBuilder.CreateBox(`${root.name}-st-strap`, { width: 0.09, depth: 0.9, height: 0.66 }, scene);
+    strap.position.set(dx, 0.43, 0);
+    strap.parent = root;
+    strap.material = iron;
+  }
+  const lock = MeshBuilder.CreateBox(`${root.name}-st-lock`, { width: 0.2, depth: 0.08, height: 0.24 }, scene);
+  lock.position.set(0, 0.6, -0.44);
+  lock.parent = root;
+  lock.material = iron;
+
+  root.metadata = { iron, interactKind: "stash" };
+}
+
+/** Warm the chest's ironwork on hover, the same affordance the map device uses. */
+export function updateStash(root: Mesh, hovered: boolean): void {
+  const parts = root.metadata as { iron: StandardMaterial } | null;
+  if (!parts?.iron) return;
+  const e = hovered ? 0.26 : 0.03;
+  parts.iron.emissiveColor.set(e, e * 0.72, e * 0.3);
+}
+
 /** Brighten the device emissive on mouse hover so it reads as interactive. */
 export function updateMapDevice(root: Mesh, hovered: boolean): void {
   const parts = root.metadata as { brassBody: StandardMaterial; brassRim: StandardMaterial } | null;
@@ -594,6 +658,12 @@ export function makeMesh(scene: Scene, kind: MeshKind, name: string): Mesh {
   if (kind === "mapDevice") {
     const root = new Mesh(name, scene);
     buildMapDevice(scene, root);
+    return root;
+  }
+
+  if (kind === "stash") {
+    const root = new Mesh(name, scene);
+    buildStash(scene, root);
     return root;
   }
 
