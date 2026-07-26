@@ -11,6 +11,7 @@ const AFFIX_BLUE = "#8f97ff";
 const CLASS_TAN = "#8a8065";
 const LABEL_GREY = "#7b7b74"; // stat/requirement words
 const VALUE_LIGHT = "#d2d2c8"; // stat/requirement numbers
+const UNID_RED = "#d02020"; // the unread marker
 
 type Look = { text: string; headBg: string; frame: string; flourish: string; ornate: boolean };
 export const RARITY = {
@@ -65,6 +66,7 @@ export function ItemTooltip({
   implicit,
   lines,
   flavour,
+  unidentified,
   x,
   y,
 }: {
@@ -82,6 +84,8 @@ export function ItemTooltip({
   lines: string[];
   /** unique only: italic flavour line closing the tooltip. */
   flavour?: string;
+  /** Unread drop: the mods exist but stay hidden until a Scroll of Wisdom is used. */
+  unidentified?: boolean;
   x: number;
   y: number;
 }) {
@@ -192,6 +196,17 @@ export function ItemTooltip({
                 {l}
               </div>
             ))}
+          </>
+        )}
+
+        {/* PoE puts the unread marker where the mods would be, in the same red it
+            uses for a failed requirement: the gap is the point. */}
+        {unidentified && (
+          <>
+            <Rule />
+            <div data-testid="item-unidentified" style={{ color: UNID_RED, fontSize: 13, letterSpacing: 0.4, margin: "4px 0" }}>
+              Unidentified
+            </div>
           </>
         )}
 

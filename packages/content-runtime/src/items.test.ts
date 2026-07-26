@@ -125,3 +125,31 @@ describe("itemStatMods", () => {
     })).toEqual([{ stat: "maxMana", value: 12 }]);
   });
 });
+
+describe("unidentified items", () => {
+  const rare = {
+    baseId: "base.emberwand", rarity: "rare" as const, itemLevel: 82,
+    affixes: [{ affixId: "affix.life", value: 33 }], name: "Corpse Husk", unidentified: true,
+  };
+
+  it("shows the base name and no affix lines until identified", () => {
+    const d = describeItem(rare);
+    expect(d.unidentified).toBe(true);
+    expect(d.name).toBe(d.baseName);
+    expect(d.lines).toEqual([]);
+  });
+
+  it("still shows rarity, the base stat block and the implicit", () => {
+    const d = describeItem(rare);
+    expect(d.rarity).toBe("rare");
+    expect(d.implicit).toBe("12% increased Spell Damage");
+    expect(d.statLines.length).toBeGreaterThan(0);
+  });
+
+  it("reveals the generated name and its mods once identified", () => {
+    const d = describeItem({ ...rare, unidentified: undefined });
+    expect(d.name).toBe("Corpse Husk");
+    expect(d.lines).toEqual(["+33 to maximum Life"]);
+    expect(d.unidentified).toBeUndefined();
+  });
+});

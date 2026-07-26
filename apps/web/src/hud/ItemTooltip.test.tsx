@@ -37,3 +37,15 @@ describe("ItemTooltip", () => {
     expect(screen.getAllByText("Ember Wand").length).toBe(1);
   });
 });
+
+describe("unidentified items", () => {
+  it("marks an unread drop with a red Unidentified line", () => {
+    render(<ItemTooltip name="Ember Wand" rarity="rare" lines={[]} unidentified x={0} y={0} />);
+    expect(screen.getByTestId("item-unidentified").textContent).toBe("Unidentified");
+  });
+
+  it("says nothing on an identified item", () => {
+    render(<ItemTooltip name="Corpse Husk" rarity="rare" lines={["+33 to maximum Life"]} x={0} y={0} />);
+    expect(screen.queryByTestId("item-unidentified")).toBeNull();
+  });
+});

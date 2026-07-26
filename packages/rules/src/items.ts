@@ -58,6 +58,7 @@ export function rollItem(
       itemLevel: ilvl,
       affixes: u.mods.map((m) => ({ affixId: m.affixId, value: m.min + (rnd() % (m.max - m.min + 1)) })),
       name: u.name,
+      unidentified: true,
     };
   }
 
@@ -101,6 +102,8 @@ export function rollItem(
   // An item with no affixes cannot be magic or rare.
   const finalRarity = affixes.length === 0 ? "normal" : rarity;
   const item: Item = { baseId: base.id, rarity: finalRarity, itemLevel: ilvl, affixes };
+  // Only an item with something to reveal drops unidentified.
+  if (finalRarity !== "normal") item.unidentified = true;
   if (finalRarity === "rare") item.name = rareName(rnd);
   // A magic item borrows its name from its own two mods: "[Prefix] [Base] [Suffix]".
   if (finalRarity === "magic") {

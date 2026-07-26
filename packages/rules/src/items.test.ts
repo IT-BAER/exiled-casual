@@ -256,3 +256,15 @@ describe("rollItem", () => {
     }
   });
 });
+
+describe("unidentified drops", () => {
+  it("drops magic, rare and unique items unidentified", () => {
+    for (const r of ["magic", "rare"] as const) {
+      expect(rollItem(POOLS, 3, 80, 2, r).unidentified).toBe(true);
+    }
+  });
+
+  it("leaves normal items identified, since they have nothing to reveal", () => {
+    expect(rollItem(POOLS, 3, 80, 2, "normal").unidentified).toBeUndefined();
+  });
+});

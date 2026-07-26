@@ -431,6 +431,13 @@ export interface Item {
   affixes: ItemAffix[];
   /** Generated for rares and magic items ("Hale Wand of the Furnace"), fixed for uniques; normal items use the base name. */
   name?: string;
+  /**
+   * Set on magic/rare/unique drops until a Scroll of Wisdom reveals them. Absent
+   * means identified, so normal items and items persisted before the flag existed
+   * need no migration. Mods are rolled at drop time either way (docs/02 §2); this
+   * only hides them (docs/09 rule 1: the spike fires on anticipation).
+   */
+  unidentified?: boolean;
 }
 
 /**

@@ -196,6 +196,8 @@ export interface ItemDescription {
   flavour?: string;
   /** Inventory art from the base; absent means the UI falls back to the name. */
   icon?: string;
+  /** True while the item is unread: name, mods and flavour are withheld above. */
+  unidentified?: boolean;
 }
 
 /**
@@ -216,12 +218,15 @@ export function describeItem(item: Item): ItemDescription {
   if (s?.physMin !== undefined && s.physMax !== undefined) statLines.push({ label: "Physical Damage", value: `${s.physMin}-${s.physMax}` });
   if (s?.critPct !== undefined) statLines.push({ label: "Critical Strike Chance", value: `${s.critPct.toFixed(2)}%` });
   if (s?.aps !== undefined) statLines.push({ label: "Attacks per Second", value: s.aps.toFixed(2) });
-  const lines = item.affixes.map((ia) => {
+  // An unidentified item is a shape, not a promise: its rolled name and mods stay
+  // hidden until a Scroll of Wisdom reads them. The base, its stats and its implicit
+  // are visible either way, exactly as PoE shows an unread drop.
+  const lines = item.unidentified === true ? [] : item.affixes.map((ia) => {
     const a = AFFIX_BY_ID.get(ia.affixId);
     return a ? affixLine(ia.value, a.label) : `+${ia.value} ${ia.affixId}`;
   });
   const d: ItemDescription = {
-    name: item.name ?? base.name,
+    name: item.unidentified === true ? base.name : item.name ?? base.name,
     baseName: base.name,
     rarity: item.rarity,
     itemClass: base.itemClass,
@@ -233,8 +238,10 @@ export function describeItem(item: Item): ItemDescription {
   };
   if (base.implicit) d.implicit = affixLine(base.implicit.value, base.implicit.label);
   // A unique is its own item, not a re-skin: its art overrides the base's.
-  const unique = item.rarity === "unique" ? UNIQUE_BY_NAME.get(d.name) : undefined;
-  if (unique?.flavour) d.flavour = unique.flavour;
+  // Looked up by the item's true name, so an unidentified unique still shows its own art.
+  const unique = item.rarity === "unique" ? UNIQUE_BY_NAME.get(item.name ?? "") : undefined;
+  if (unique?.flavour && item.unidentified !== true) d.flavour = unique.flavour;
+  if (item.unidentified === true) d.unidentified = true;
   const icon = unique?.icon ?? base.icon;
   if (icon) d.icon = icon;
   return d;

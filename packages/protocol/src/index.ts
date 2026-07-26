@@ -67,7 +67,7 @@ export type EquipSlotId =
 /** Display-ready item shape shared by inventory cells and equipped slots. */
 export interface DisplayItem {
   rarity: ItemRarity; name: string; baseName?: string; itemClass?: string; implicit?: string; lines: string[];
-  flavour?: string; icon?: string;
+  flavour?: string; icon?: string; unidentified?: boolean;
   statLines?: ItemStatLine[]; reqLevel?: number; reqAttrValue?: number; reqAttr?: string;
 }
 
@@ -128,6 +128,8 @@ export interface SnapshotEntity {
   lines?: string[];
   /** groundItem only: unique flavour line, below the mods. */
   flavour?: string;
+  /** groundItem only: true while the drop is unread, so name and mods stay hidden. */
+  unidentified?: boolean;
   /** groundItem only: base item class label ("wand", "focus") for the tooltip. */
   itemClass?: string;
   /** groundItem only: tooltip base-stat block + requirements (poe2-screenshots/item-*.png). */
