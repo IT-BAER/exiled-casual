@@ -5,6 +5,15 @@ either where they differ, and say which one a borrowed mechanic or look comes fr
 npm workspaces. ECS sim (30 Hz, fixed-point) in `packages/`, React + Babylon client in `apps/web`.
 Tests: Vitest.
 
+## NUMBER ONE PRIORITY IS DOPAMINE
+
+`docs/09-reward-psychology.md` outranks every other spec. Read it before any loot, drop, reward,
+progression or feedback work, and re-read it when a change would make rewards more predictable.
+The short version: the spike fires on *anticipation*, not receipt, so variance is the mechanism and
+must never be flattened to be kind; a reward the player cannot hear and see did not happen; and
+intensity beats density (one loud moment over six quiet ones). Correctness and determinism still
+win where they conflict.
+
 ## Visual reference — ALWAYS CHECK BEFORE UI/RENDER/ART WORK
 
 Real Path of Exile 2 screenshots live in `poe2-screenshots/`. They are the look source-of-truth.
