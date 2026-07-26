@@ -355,7 +355,11 @@ export function InventoryPanel({
               // drag math divides this box's measured width by the column count, so a
               // squeezed grid would place items in the wrong cell. Never shrink.
               flexShrink: 0,
-              background: "#0a0b0e",
+              // PoE draws the lattice and the faint crest in each empty cell as art,
+              // not as borders: one tile repeated is both cheaper than a border per
+              // cell and the only way to get the embossed ornament (stash.png).
+              background: "#0a0b0e url(/textures/ui/stash_cell_v2.png)",
+              backgroundSize: `${CELL} ${CELL}`,
               border: `1px solid ${GOLD_DIM}`,
               boxShadow: "inset 0 0 14px rgba(0,0,0,0.8)",
             }}
@@ -365,7 +369,7 @@ export function InventoryPanel({
                 <div
                   key={`${x}-${y}`}
                   data-testid={`${container === "stash" ? "stash" : "inventory"}-cell-${x}-${y}`}
-                  style={{ position: "absolute", left: `calc(${x} * ${CELL})`, top: `calc(${y} * ${CELL})`, width: CELL, height: CELL, border: "1px solid #2c2415", boxShadow: "inset 0 0 4px rgba(0,0,0,0.5)" }}
+                  style={{ position: "absolute", left: `calc(${x} * ${CELL})`, top: `calc(${y} * ${CELL})`, width: CELL, height: CELL }}
                 />
               )),
             )}
@@ -529,29 +533,44 @@ export function InventoryPanel({
             marginLeft: 12,
             marginBottom: BAR_H,
             padding: PANEL_PAD,
-            background: "linear-gradient(180deg,#12100b 0%,#0b0a07 100%)",
+            // The reference pane is carved stone inside a dark metal frame, not a
+            // flat gradient (poe2-screenshots/stash.png).
+            backgroundImage:
+              "linear-gradient(180deg, rgba(8,7,5,0.55), rgba(8,7,5,0.78)), url(/textures/ui/char_stone_v1.png)",
+            backgroundSize: "auto, 256px 256px",
             border: `1px solid ${GOLD_DIM}`,
             boxShadow: `0 0 0 1px #000, 0 0 0 4px #1b1710, 0 0 0 5px ${GOLD_DIM}, 0 14px 48px rgba(0,0,0,0.85)`,
           }}
         >
+          {/* Gilt cartouche flanked by carved wings, the way PoE1 titles the stash.
+              The band keeps char_header_v1.png's 1024x160 or the relief shears. */}
           <div
             style={{
               margin: `calc(-1 * ${PANEL_PAD}) calc(-1 * ${PANEL_PAD}) 10px`,
-              padding: "10px 0",
-              textAlign: "center",
+              height: `calc(${stash.cols} * ${CELL} * 0.156)`,
               position: "relative",
-              background: "linear-gradient(180deg,#4a1a13,#6b2018 45%,#3a1310)",
-              borderBottom: `1px solid ${GOLD_DIM}`,
-              boxShadow: `inset 0 1px 0 ${GOLD}55, inset 0 -1px 0 #000`,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              backgroundImage: "url(/textures/ui/char_header_v1.png)",
+              backgroundSize: "100% 100%",
+              borderBottom: "1px solid #000",
             }}
           >
-            <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: 3, textTransform: "uppercase", color: PARCHMENT, textShadow: "0 1px 2px #000" }}>
+            {/* Dark letters cut into the plaque, lit from below, the way the
+                reference engraves the word rather than printing it in cream. */}
+            <span style={{ fontFamily: SERIF, fontSize: 17, letterSpacing: 5, textTransform: "uppercase", color: "#2b1e0c", textShadow: "0 1px 0 rgba(238,208,140,0.55)" }}>
               Stash
             </span>
             <button
               data-testid="stash-close"
               onClick={onCloseStash}
-              style={{ position: "absolute", top: 6, right: 10, background: "none", border: "none", color: "#c9b48a", cursor: "pointer", fontSize: 18, lineHeight: 1 }}
+              style={{
+                position: "absolute", top: 6, right: 8,
+                width: 22, height: 22, borderRadius: "50%",
+                background: "radial-gradient(circle at 35% 30%, #c74e35, #6d1d13 70%, #35100a)",
+                border: "1px solid #1d0906", color: "#f7ddd0",
+                boxShadow: "0 1px 4px rgba(0,0,0,0.9), inset 0 1px 0 rgba(255,180,150,0.4)",
+                cursor: "pointer", fontSize: 13, lineHeight: 1, padding: 0,
+              }}
             >
               ×
             </button>
