@@ -296,6 +296,65 @@ describe("attachBindings map device", () => {
   });
 });
 
+describe("attachBindings proximity close", () => {
+  it("closes the stash again once the player walks out of its range", () => {
+    const canvas = document.createElement("canvas");
+    document.body.appendChild(canvas);
+    const worker = { postMessage: vi.fn() };
+    const onStash = vi.fn();
+    const { detach, onSnapshot } = attachBindings(
+      canvas,
+      worker as unknown as Worker,
+      fakeMapDeviceScene(7),
+      undefined,
+      undefined,
+      undefined,
+      onStash,
+    );
+
+    canvas.dispatchEvent(new MouseEvent("pointerdown", { button: 0, clientX: 50, clientY: 50, bubbles: true }));
+    onSnapshot(makeSnap([{ id: 7, kind: "stash", inRange: true }]));
+    expect(onStash).toHaveBeenLastCalledWith(true);
+
+    // Standing there is not a reason to keep re-opening it: the player may have
+    // shut the panel with its X while still at the stash.
+    onSnapshot(makeSnap([{ id: 7, kind: "stash", inRange: true }]));
+    expect(onStash).toHaveBeenCalledTimes(1);
+
+    // Walked off: the panel goes with the character, once.
+    onSnapshot(makeSnap([{ id: 7, kind: "stash", inRange: false }]));
+    expect(onStash).toHaveBeenLastCalledWith(false);
+    onSnapshot(makeSnap([{ id: 7, kind: "stash", inRange: false }]));
+    expect(onStash).toHaveBeenCalledTimes(2);
+
+    detach();
+    canvas.remove();
+  });
+
+  it("leaves a panel it never opened alone", () => {
+    const canvas = document.createElement("canvas");
+    document.body.appendChild(canvas);
+    const worker = { postMessage: vi.fn() };
+    const onOpenPanel = vi.fn();
+    const { detach, onSnapshot } = attachBindings(
+      canvas,
+      worker as unknown as Worker,
+      fakeMapDeviceScene(7),
+      undefined,
+      undefined,
+      onOpenPanel,
+    );
+
+    // No map device anywhere near, and none was ever opened: pressing I for the
+    // inventory must not be undone by a device the player has not visited.
+    onSnapshot(makeSnap([{ id: 7, kind: "stash", inRange: false }]));
+    expect(onOpenPanel).not.toHaveBeenCalled();
+
+    detach();
+    canvas.remove();
+  });
+});
+
 describe("attachBindings hover", () => {
   function move(canvas: HTMLCanvasElement) {
     canvas.dispatchEvent(new MouseEvent("pointermove", { clientX: 50, clientY: 50, bubbles: true }));

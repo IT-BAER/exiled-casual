@@ -63,9 +63,9 @@ export function attachBindings(
   scene: Scene,
   onCycleOutfit?: () => void,
   onHoverInteractable?: (entityId: number | null) => void,
-  onOpenPanel?: () => void,
-  onOpenStash?: () => void,
-  onOpenVendor?: () => void,
+  onOpenPanel?: (open: boolean) => void,
+  onOpenStash?: (open: boolean) => void,
+  onOpenVendor?: (open: boolean) => void,
 ): {
   detach: () => void;
   onSnapshot: (snap: Snapshot) => void;
@@ -87,6 +87,9 @@ export function attachBindings(
   // nothing is pending. Cleared on interact fire, entity disappearance, or a
   // subsequent non-interactable click (so clicking away cancels the approach).
   let pendingInteractId: number | null = null;
+  // Kinds of furniture whose panel is open because the player walked up to it,
+  // so the walk away can close it again.
+  const openedNear = new Set<"mapDevice" | "stash" | "vendor">();
 
   // Currently hovered interactable entity id; null when the cursor is over ground.
   // Tracked here so we only fire the callback on actual changes.
@@ -233,11 +236,14 @@ export function attachBindings(
         // The map device opens the preparation panel (activation is a separate
         // activateMap intent sent from the panel); everything else interacts.
         if (entity.kind === "mapDevice") {
-          onOpenPanel?.();
+          onOpenPanel?.(true);
+          openedNear.add("mapDevice");
         } else if (entity.kind === "stash") {
-          onOpenStash?.();
+          onOpenStash?.(true);
+          openedNear.add("stash");
         } else if (entity.kind === "vendor") {
-          onOpenVendor?.();
+          onOpenVendor?.(true);
+          openedNear.add("vendor");
         } else if (entity.kind === "groundItem") {
           post({ kind: "pickupItem", entityId: pendingInteractId });
         } else {
@@ -250,6 +256,21 @@ export function attachBindings(
         pendingInteractId = null;
       }
     }
+
+    // The furniture holds the panel open. Walk off and it shuts behind you, the
+    // way PoE closes the stash, the vendor and the map device the moment the
+    // character steps out of range: a panel left hanging covers the screen the
+    // player just walked back into. Only what proximity opened is closed this
+    // way, and only on the crossing, so shutting the stash with its X while
+    // still standing at it stays shut instead of springing back open.
+    for (const kind of openedNear) {
+      if (snap.entities.some((e) => e.kind === kind && e.inRange)) continue;
+      openedNear.delete(kind);
+      if (kind === "mapDevice") onOpenPanel?.(false);
+      else if (kind === "stash") onOpenStash?.(false);
+      else onOpenVendor?.(false);
+    }
+
     // Clear hover if the hovered entity left the snapshot.
     if (hoveredEntityId !== null) {
       const stillExists = snap.entities.some((e) => e.id === hoveredEntityId);

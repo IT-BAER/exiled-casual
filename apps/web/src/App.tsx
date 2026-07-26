@@ -79,9 +79,11 @@ export function App() {
       },
       // The sim already no-ops activateMap while a run is open; without this the
       // panel still opened, offered stones, and closed itself on the next snapshot.
-      () => { if (!curSnap?.mapOpen) setPanelOpen(true); },
-      () => { setStashOpen(true); setVendorOpen(false); setInventoryOpen(true); },
-      () => { setVendorOpen(true); setStashOpen(false); setInventoryOpen(true); },
+      (open) => setPanelOpen(open && !curSnap?.mapOpen),
+      // Walking off closes the stash but leaves the inventory: it is the player's
+      // own panel, not the furniture's, and PoE keeps it up until I says otherwise.
+      (open) => { setStashOpen(open); if (open) { setVendorOpen(false); setInventoryOpen(true); } },
+      (open) => { setVendorOpen(open); if (open) { setStashOpen(false); setInventoryOpen(true); } },
     );
 
     // Loot plates are DOM, so their click has to reach the same approach-then-act
