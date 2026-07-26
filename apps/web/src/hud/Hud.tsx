@@ -47,16 +47,16 @@ export const BAR_H = `${(ORB_VW * 0.72).toFixed(2)}vw`;
 // same crop. The vials clear the shorter frame because the bottom lip is thin.
 const FLASK_BAR_H = `${(ORB_VW * 0.62).toFixed(2)}vw`;
 const SLOT_GAP = 2; // px between tiles; PoE1 packs them against a hairline
-// The tiles fill the row instead of being their own fraction of the globe: the frame is
-// a fixed PANEL_W px wide while the globe padding beside it scales with the window, so a
-// vw-sized tile only fitted the space at one window width and left dead frame at others.
-// A tile is as big as the smaller of the two budgets. Width: the frame is a fixed
-// PANEL_W px while the globe padding beside it scales with the window, so a tile that
-// was its own fraction of the globe only fitted at one window width and left dead frame
-// at every other. Height: two rows, the cornice, the lip and the rail between them all
-// have to stay inside the bar's own box, or the bottom row runs off the screen edge.
+// A tile is as big as the smaller of two budgets. Width: what is left of the frame once
+// the globe's padding and the frame's own sides are taken off it. Height: two rows, the
+// cornice, the lip and the rail between them all have to stay inside the bar's own box,
+// or the bottom row runs off the screen edge.
+// Both are vw now that PANEL_W is (layout.ts), so the same budget wins at every window
+// width and the numbered row runs flush to the frame. While PANEL_W was fixed px the
+// width budget outgrew the height one as the window narrowed, and the leftover — 54px at
+// 2048 — sat as bare stone to the left of the row, which PoE1 never shows.
 const SLOT = `min(
-  calc((${PANEL_W}px - ${2 * BAR_SIDE}px - (${BAR_PAD_EXPR}) - ${4 * SLOT_GAP}px) / 5),
+  calc((${PANEL_W} - ${2 * BAR_SIDE}px - (${BAR_PAD_EXPR}) - ${4 * SLOT_GAP}px) / 5),
   calc((${BAR_H} - ${BAR_TOP} - ${BAR_BOTTOM} - ${BAR_RAIL}) / 2)
 )`;
 const FLASK_W = `${(ORB_VW * 0.20).toFixed(2)}vw`;

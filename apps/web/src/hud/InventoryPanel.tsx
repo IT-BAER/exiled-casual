@@ -3,7 +3,7 @@ import type { DisplayItem, EquipSlotId, Intent, Snapshot } from "@exiled/protoco
 import { canEquip } from "@exiled/simulation";
 import { ItemTooltip } from "./ItemTooltip";
 import { BAR_H } from "./Hud";
-import { CELL, PANEL_PAD, PANEL_W } from "./layout";
+import { CELL, CELL_VW, PANEL_PAD, PANEL_W } from "./layout";
 
 type Inventory = Snapshot["inventory"];
 type Equipment = Snapshot["equipment"];
@@ -24,7 +24,8 @@ export const GOLD_DIM = "#7a5c22";
 export const PARCHMENT = "#e8dcc0";
 const MAGIC = "#8aa6ff";
 
-const U = 54; // equipment paper-doll unit, kept in step with CELL
+const U_VW = +(CELL_VW * (54 / 48)).toFixed(3); // 2.363
+const U = `${U_VW}vw`; // equipment paper-doll unit, kept in step with CELL
 
 // Keyed by every Rarity; a missing key would render `border: 2px solid undefined`.
 const RARITY_BORDER: Record<string, string> = { normal: "#6b6b6b", magic: "#5566b0", rare: "#a3812f", unique: "#7f4a20" };
@@ -75,7 +76,7 @@ function EquipSlot({
       onMouseLeave={item ? () => onLeave(item) : undefined}
       style={{
         ...slotStyle(),
-        left: x * U, top: y * U, width: w * U - 4, height: h * U - 4, margin: 2,
+        left: `calc(${x} * ${U})`, top: `calc(${y} * ${U})`, width: `calc(${w} * ${U} - 4px)`, height: `calc(${h} * ${U} - 4px)`, margin: 2,
         border: `${highlight === "legal" ? 2 : 1}px solid ${border}`,
         boxShadow: highlight === "legal"
           ? `inset 0 0 10px rgba(0,0,0,0.75), 0 0 10px ${GOLD}88`
@@ -114,8 +115,8 @@ function Flask({ kind, hotkey }: { kind: "life" | "mana"; hotkey: string }) {
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
       <div
         style={{
-          width: U - 4,
-          height: U * 1.35,
+          width: `calc(${U} - 4px)`,
+          height: `calc(${U} * 1.35)`,
           borderRadius: "6px 6px 8px 8px",
           border: "1px solid #4a3a1c",
           background: "#0b0906",
@@ -184,8 +185,9 @@ export function InventoryPanel({
     const r = gridRef.current?.getBoundingClientRect();
     if (!drag || drag.from.kind !== "grid" || !r) return null;
     if (drag.x < r.left || drag.x >= r.right || drag.y < r.top || drag.y >= r.bottom) return null;
-    const x = Math.round((drag.x - r.left - (drag.w * CELL) / 2) / CELL);
-    const y = Math.round((drag.y - r.top - (drag.h * CELL) / 2) / CELL);
+    const c = r.width / cols;
+    const x = Math.round((drag.x - r.left - (drag.w * c) / 2) / c);
+    const y = Math.round((drag.y - r.top - (drag.h * c) / 2) / c);
     return { x, y, ok: fitsAt(drag.item, drag.w, drag.h, x, y) };
   }, [drag]);
 
@@ -241,10 +243,11 @@ export function InventoryPanel({
     return canEquip(drag.item.itemClass ?? "", slot) ? "legal" : "illegal";
   };
 
-  const equipW = 10 * U; // paper-doll spans 10 units wide
-  const equipH = 6 * U;
-  const gridW = cols * CELL;
-  const contentW = Math.max(equipW, gridW);
+  const equipW = `calc(10 * ${U})`; // paper-doll spans 10 units wide
+  const equipH = `calc(6 * ${U})`;
+  const gridW = `calc(${cols} * ${CELL})`;
+  // The grid is the wider of the two, so it is what sets the content width.
+  const contentW = `${Math.max(10 * U_VW, cols * CELL_VW).toFixed(2)}vw`;
 
   return (
     <div
@@ -350,10 +353,11 @@ export function InventoryPanel({
             style={{
               position: "relative",
               width: gridW,
-              height: rows * CELL,
+              height: `calc(${rows} * ${CELL})`,
               margin: "0 auto",
-              // A column flex would squeeze both of these on a short window; they
-              // have fixed pixel geometry the drag math reads, so they never shrink.
+              // A column flex would squeeze both of these on a short window, and the
+              // drag math divides this box's measured width by the column count, so a
+              // squeezed grid would place items in the wrong cell. Never shrink.
               flexShrink: 0,
               background: "#0a0b0e",
               border: `1px solid ${GOLD_DIM}`,
@@ -365,7 +369,7 @@ export function InventoryPanel({
                 <div
                   key={`${x}-${y}`}
                   data-testid={`inventory-cell-${x}-${y}`}
-                  style={{ position: "absolute", left: x * CELL, top: y * CELL, width: CELL, height: CELL, border: "1px solid #2c2415", boxShadow: "inset 0 0 4px rgba(0,0,0,0.5)" }}
+                  style={{ position: "absolute", left: `calc(${x} * ${CELL})`, top: `calc(${y} * ${CELL})`, width: CELL, height: CELL, border: "1px solid #2c2415", boxShadow: "inset 0 0 4px rgba(0,0,0,0.5)" }}
                 />
               )),
             )}
@@ -376,10 +380,10 @@ export function InventoryPanel({
                 data-testid="drop-highlight"
                 style={{
                   position: "absolute",
-                  left: dropTarget.x * CELL,
-                  top: dropTarget.y * CELL,
-                  width: (drag?.w ?? 1) * CELL,
-                  height: (drag?.h ?? 1) * CELL,
+                  left: `calc(${dropTarget.x} * ${CELL})`,
+                  top: `calc(${dropTarget.y} * ${CELL})`,
+                  width: `calc(${drag?.w ?? 1} * ${CELL})`,
+                  height: `calc(${drag?.h ?? 1} * ${CELL})`,
                   background: dropTarget.ok ? "rgba(96,200,120,0.22)" : "rgba(200,70,60,0.22)",
                   border: `1px solid ${dropTarget.ok ? "#6fd48a" : "#d05a4e"}`,
                   boxShadow: `inset 0 0 12px ${dropTarget.ok ? "#6fd48a55" : "#d05a4e55"}`,
@@ -397,10 +401,10 @@ export function InventoryPanel({
                 onPointerDown={(e) => grab({ kind: "grid", x: it.x, y: it.y }, it, it.w, it.h, e)}
                 style={{
                   position: "absolute",
-                  left: it.x * CELL + 2,
-                  top: it.y * CELL + 2,
-                  width: it.w * CELL - 4,
-                  height: it.h * CELL - 4,
+                  left: `calc(${it.x} * ${CELL} + 2px)`,
+                  top: `calc(${it.y} * ${CELL} + 2px)`,
+                  width: `calc(${it.w} * ${CELL} - 4px)`,
+                  height: `calc(${it.h} * ${CELL} - 4px)`,
                   border: `2px solid ${RARITY_BORDER[it.rarity]}`,
                   background: "linear-gradient(180deg, rgba(20,26,42,0.9), rgba(8,10,18,0.9))",
                   color: RARITY_TEXT[it.rarity],
@@ -461,10 +465,10 @@ export function InventoryPanel({
           data-testid="drag-ghost"
           style={{
             position: "fixed",
-            left: drag.x - (drag.w * CELL) / 2,
-            top: drag.y - (drag.h * CELL) / 2,
-            width: drag.w * CELL,
-            height: drag.h * CELL,
+            left: `calc(${drag.x}px - ${drag.w} * ${CELL} / 2)`,
+            top: `calc(${drag.y}px - ${drag.h} * ${CELL} / 2)`,
+            width: `calc(${drag.w} * ${CELL})`,
+            height: `calc(${drag.h} * ${CELL})`,
             pointerEvents: "none",
             zIndex: 10,
             display: "flex",

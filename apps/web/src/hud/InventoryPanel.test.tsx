@@ -101,6 +101,29 @@ describe("InventoryPanel", () => {
     sheet.remove();
   });
 
+  it("lands a dragged item on the cell under its centre, at whatever size the grid renders", () => {
+    // The cell is a vw fraction now, so the drag math divides the grid's measured width by
+    // the column count instead of trusting a px constant. jsdom hands out zero rects, so the
+    // grid gets a real one: 12 columns of 43.008px, which is what 2.1vw is on a 2048 window.
+    const CELL = 43.008;
+    const intents: unknown[] = [];
+    render(<InventoryPanel inventory={inv} onIntent={(i) => intents.push(i)} onClose={() => {}} />);
+    const grid = document.querySelector("[data-drop-grid]") as HTMLElement;
+    grid.getBoundingClientRect = () =>
+      ({ left: 1000, top: 500, width: 12 * CELL, height: 5 * CELL, right: 1000 + 12 * CELL, bottom: 500 + 5 * CELL }) as DOMRect;
+
+    // PoE carries a piece by its centre: the 2x2 wand's centre goes on the corner cells
+    // (9,3)..(10,4) share, so its top-left has to land on (9,3), not on the cursor's cell.
+    // Far along the row on purpose — near the origin a wrong cell size still rounds to the
+    // right cell, and the old hardcoded 48 would pass.
+    fireEvent.pointerDown(screen.getByTestId("inventory-item-0"), { clientX: 10, clientY: 10 });
+    // jsdom has no PointerEvent, so fireEvent.pointerMove would drop clientX/clientY and
+    // the drag would sit at NaN. A MouseEvent named pointermove carries the coordinates.
+    fireEvent(grid, new MouseEvent("pointermove", { bubbles: true, clientX: 1000 + 10 * CELL, clientY: 500 + 4 * CELL }));
+    fireEvent.pointerUp(grid);
+    expect(intents).toEqual([{ kind: "moveItem", x: 0, y: 0, toX: 9, toY: 3 }]);
+  });
+
   it("hovers an equipped slot to read what that item is actually granting", () => {
     const equipped = {
       body: {
