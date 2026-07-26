@@ -3,6 +3,7 @@ import type { Snapshot } from "@exiled/protocol";
 import { MAP_PORTALS } from "@exiled/protocol";
 import { SERIF } from "./ItemTooltip";
 import { PANEL_W } from "./layout";
+import { SkillTooltip } from "./SkillTooltip";
 
 // Bottom HUD geometry, measured off poe2-screenshots/poe1-lower-bar.png, a 2558x388 crop
 // of Path of Exile **1**'s bottom bar (PoE1, not PoE2 — its globes are bigger and its ring
@@ -63,12 +64,19 @@ const SKILL_SLOTS: SkillSlot[] = [
  * (poe2-screenshots/poe1-lower-bar.png): the mouse buttons sit in their own row
  * above the numbered slots, and both rows draw the same tile.
  */
-function SkillTile({ slot, n, cooldowns }: { slot: SkillSlot; n: number; cooldowns: Record<string, number> }) {
+function SkillTile({ slot, n, cooldowns, onHover }: {
+  slot: SkillSlot;
+  n: number;
+  cooldowns: Record<string, number>;
+  onHover: (id: string | null) => void;
+}) {
   const cd = slot.id ? cooldowns[slot.id] ?? 0 : 0;
   const ready = cd <= 0;
   return (
     <div
       data-testid={`skill-slot-${n}`}
+      onMouseEnter={() => onHover(slot.id)}
+      onMouseLeave={() => onHover(null)}
       style={{
         width: SLOT,
         height: SLOT,
@@ -383,6 +391,7 @@ function Orb(props: {
 }
 
 export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
+  const [hoveredSkill, setHoveredSkill] = React.useState<string | null>(null);
   if (!snapshot) return null;
 
   const { life, maxLife, mana, maxMana, cooldowns, energyShield, maxEnergyShield } = snapshot.player;
@@ -649,14 +658,15 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
           gap: "0.2vw",
         }}
       >
+        <SkillTooltip skills={snapshot.skills} id={hoveredSkill} right={BAR_PAD} />
         <div style={{ display: "flex", gap: "0.2vw" }}>
           {SKILL_SLOTS.slice(5).map((slot, i) => (
-            <SkillTile key={slot.key} slot={slot} n={i + 6} cooldowns={cooldowns} />
+            <SkillTile key={slot.key} slot={slot} n={i + 6} cooldowns={cooldowns} onHover={setHoveredSkill} />
           ))}
         </div>
         <div style={{ display: "flex", gap: "0.2vw" }}>
           {SKILL_SLOTS.slice(0, 5).map((slot, i) => (
-            <SkillTile key={slot.key} slot={slot} n={i + 1} cooldowns={cooldowns} />
+            <SkillTile key={slot.key} slot={slot} n={i + 1} cooldowns={cooldowns} onHover={setHoveredSkill} />
           ))}
         </div>
       </div>

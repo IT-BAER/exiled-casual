@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach } from "vitest";
 import "@testing-library/jest-dom/vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { Hud } from "./Hud";
 import type { Snapshot } from "@exiled/protocol";
 import { MAP_PORTALS } from "@exiled/protocol";
@@ -25,6 +25,7 @@ function makeSnap(overrides: {
   level?: number;
   xp?: number;
   xpToNext?: number;
+  skills?: Snapshot["skills"];
 }): Snapshot {
   return {
     tick: 1,
@@ -34,6 +35,7 @@ function makeSnap(overrides: {
     areaTier: 0,
     atlasSeed: 0,
     completedNodes: [], waystones: [],
+    skills: overrides.skills,
     player: {
       id: 0,
       x: 0,
@@ -286,3 +288,41 @@ describe("energy shield on the life globe", () => {
     expect(screen.getByTestId("life-readout")).toHaveTextContent("50/100");
   });
 });
+
+describe("Hud skill tooltip", () => {
+  const emberBolt = {
+    id: "skill.ember_bolt.v1",
+    name: "Ember Bolt",
+    description: "Launches a bolt of fire that bursts on the first enemy it strikes.",
+    manaCost: 8,
+    castTimeSec: 8 / 30,
+    cooldownSec: 0.2,
+    dps: 93.75,
+    lines: ["Deals 25 Fire Damage"],
+  };
+
+  it("shows the hovered skill's name, cost and effect lines", async () => {
+    render(<Hud snapshot={makeSnap({ skills: [emberBolt] })} />);
+    fireEvent.mouseEnter(screen.getByTestId("skill-slot-1"));
+    const tip = await screen.findByTestId("skill-tooltip");
+    expect(tip).toHaveTextContent("Ember Bolt");
+    expect(tip).toHaveTextContent("8 Mana");
+    expect(tip).toHaveTextContent("0.27 sec");
+    expect(tip).toHaveTextContent("Deals 25 Fire Damage");
+    expect(tip).toHaveTextContent("bursts on the first enemy");
+  });
+
+  it("hides the tooltip again when the pointer leaves", () => {
+    render(<Hud snapshot={makeSnap({ skills: [emberBolt] })} />);
+    fireEvent.mouseEnter(screen.getByTestId("skill-slot-1"));
+    fireEvent.mouseLeave(screen.getByTestId("skill-slot-1"));
+    expect(screen.queryByTestId("skill-tooltip")).toBeNull();
+  });
+
+  it("has nothing to say about an empty socket", () => {
+    render(<Hud snapshot={makeSnap({ skills: [emberBolt] })} />);
+    fireEvent.mouseEnter(screen.getByTestId("skill-slot-4"));
+    expect(screen.queryByTestId("skill-tooltip")).toBeNull();
+  });
+});
+
