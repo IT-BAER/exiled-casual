@@ -647,6 +647,10 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
           right: 0,
           paddingRight: BAR_PAD,
           zIndex: 2,
+          // The HUD overlay is inert so clicks reach the world; the skill panel has
+          // to opt back in or a real pointer never hits a tile and the tooltip only
+          // ever appears for synthetic events.
+          pointerEvents: "auto",
           // Same width as the inventory panel, which docks to the same corner: the
           // panel ran further left than the bar and the two left edges read as a
           // misalignment rather than as two pieces of the same furniture. What is

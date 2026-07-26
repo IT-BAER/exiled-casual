@@ -319,6 +319,11 @@ describe("Hud skill tooltip", () => {
     expect(screen.queryByTestId("skill-tooltip")).toBeNull();
   });
 
+  it("takes pointer events, which the inert HUD overlay otherwise swallows", () => {
+    render(<Hud snapshot={makeSnap({ skills: [emberBolt] })} />);
+    expect(screen.getByTestId("skill-row")).toHaveStyle({ pointerEvents: "auto" });
+  });
+
   it("has nothing to say about an empty socket", () => {
     render(<Hud snapshot={makeSnap({ skills: [emberBolt] })} />);
     fireEvent.mouseEnter(screen.getByTestId("skill-slot-4"));
