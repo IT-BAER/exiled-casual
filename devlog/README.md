@@ -181,7 +181,7 @@ The hideout gets storage, quick transfer, and a bench that turns leftovers into 
 </tr>
 <tr>
 <td width="33%"><img src="screenshots/2026-07-26-stash-cartouche.jpeg" alt="The stash under a gilt cartouche header, its grid lattice drawn as tiled art" width="100%"><br><sub><b>The stash gets its cartouche</b> - the real stash was sampled pixel by pixel: cell floors near black at luminance 1, a 1px warm lattice, an engraved crest in every empty square.</sub></td>
-<td width="33%"><img src="screenshots/2026-07-26-stash-full-height.jpeg" alt="The stash pane running from the top of the screen down to the bottom bar" width="100%"><br><sub><b>The stash runs the full height</b> - it rides its own layer over the life orb now, top of the screen to the bar, the way PoE1 opens it.</sub></td>
+<td width="33%"><img src="screenshots/2026-07-26-stash-full-height.jpeg" alt="The stash pane running from the top of the screen down to the bottom bar" width="100%"><br><sub><b>The stash runs the full height</b> - top of the screen down past the bar, its lower corner sliding behind the life orb and the flask panel.</sub></td>
 <td width="33%"><img src="screenshots/2026-07-26-cursor.jpeg" alt="The gilt cursor blade at three sizes and its red-iron refusal variant" width="100%"><br><sub><b>Our own pointer</b> - a gilt blade retires every Windows cursor, cooled to red iron over an item the armed orb cannot touch.</sub></td>
 </tr>
 </table>

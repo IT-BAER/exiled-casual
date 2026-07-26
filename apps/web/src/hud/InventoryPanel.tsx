@@ -517,22 +517,27 @@ export function InventoryPanel({
 
   return (
     <>
-    {/* The stash rides its own layer above the globes (zIndex 3). It docks into the
-        corner the life orb sits in, and PoE1 never lets the orb clip the pane. */}
+    {/* The stash gets its own layer only so it can dock left while the inventory
+        docks right. It stays under the globes and the bar (zIndex 3), the way the
+        inventory does: the life orb is meant to sit on top of its lower corner.
+        zIndex 1, under the flask row and the skill row as well (both zIndex 2 and
+        both siblings of the HUD, not children of it), or the pane running past the
+        bar would bury the flasks it is supposed to slide behind. */}
     {stash && (
-      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "flex-end", justifyContent: "flex-start", pointerEvents: "none", zIndex: 4, fontFamily: SERIF, color: PARCHMENT }}>
+      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "flex-end", justifyContent: "flex-start", pointerEvents: "none", zIndex: 1, fontFamily: SERIF, color: PARCHMENT }}>
         <div
           data-testid="stash-panel"
           data-hud-panel=""
           style={{
             pointerEvents: "auto",
-            // Off the screen edge, or the panel's outer gilt line is clipped away.
+            // Off the screen edge on both sides, or the frame's outer gilt line is
+            // clipped away and the cartouche reads as sheared off at the top.
             marginLeft: 12,
-            marginBottom: BAR_H,
-            // Full height, the way the inventory runs: PoE1's stash is a pane from
-            // the top of the screen down to the bar (poe2-screenshots/inventory.png),
-            // and the grid simply sits at its head with empty pane below.
-            height: `calc(100vh - ${BAR_H})`,
+            marginTop: 12,
+            // Runs past the bar instead of stopping at it: PoE1's stash pane ends
+            // behind the life orb and the flask panel, which is what gives the
+            // corner its depth (poe2-screenshots/inventory.png).
+            height: `calc(100vh - 12px)`,
             boxSizing: "border-box",
             display: "flex",
             flexDirection: "column",
