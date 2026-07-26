@@ -13,6 +13,7 @@ import { SkillTooltip } from "./SkillTooltip";
 // the screen height above the bottom edge; a bronze figure leans on the outer side.
 // The globe is a fraction of the screen, not a pixel size — PoE1 scales it with the
 // resolution, and at 2048px wide a fixed 160px globe reads a quarter too small.
+const BOSS_ENGAGE_RANGE = 10; // world units; boss bar appears once you are this close
 const ORB_HOLE = 0.869; // ring art: its transparent hole is this fraction of the file
 const ORB_VW = 10.3; // sphere diameter
 const ORB = `${ORB_VW}vw`;
@@ -434,7 +435,15 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
   const { xp, xpToNext } = snapshot.player;
   const xpPct = xpToNext > 0 ? Math.max(0, Math.min(100, (xp / xpToNext) * 100)) : 100;
 
-  const boss = snapshot.entities.find((e) => e.boss);
+  // PoE2 raises the boss bar when you enter the arena, not the moment the map
+  // loads. The sim has no aggro state to read, so proximity stands in for it:
+  // the boss room's half-extent (mapgen carves it 20 cells across), which is
+  // also one unit outside the Warden's slam range — inside it, you are in the fight.
+  const bossEntity = snapshot.entities.find((e) => e.boss);
+  const boss =
+    bossEntity && Math.hypot(bossEntity.x - snapshot.player.x, bossEntity.y - snapshot.player.y) <= BOSS_ENGAGE_RANGE
+      ? bossEntity
+      : undefined;
 
   // Hovered entity drives the name label — mouse proximity, not character proximity.
   // inRange (character distance) only drives the auto-interact fire; never shown.

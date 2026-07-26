@@ -73,7 +73,9 @@ export function App() {
         renderer.setHoveredEntity(id);
         setHoveredEntityId(id);
       },
-      () => setPanelOpen(true),
+      // The sim already no-ops activateMap while a run is open; without this the
+      // panel still opened, offered stones, and closed itself on the next snapshot.
+      () => { if (!curSnap?.mapOpen) setPanelOpen(true); },
     );
 
     // Loot plates are DOM, so their click has to reach the same approach-then-act

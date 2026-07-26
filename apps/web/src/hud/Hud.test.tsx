@@ -142,6 +142,17 @@ describe("Hud", () => {
     expect(screen.queryByTestId("boss-bar")).toBeNull();
   });
 
+  it("renders no boss bar while the boss is across the map, unengaged", () => {
+    render(
+      <Hud
+        snapshot={makeSnap({
+          entities: [{ id: 10, kind: "monster", x: 60, y: 0, boss: true, bossPhase: 1, life: 1000, maxLife: 1000 }],
+        })}
+      />,
+    );
+    expect(screen.queryByTestId("boss-bar")).toBeNull();
+  });
+
   // --- flask row ---
 
   it("renders one life flask on Q and one mana flask on E", () => {
