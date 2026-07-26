@@ -12,9 +12,9 @@ type Skill = NonNullable<Snapshot["skills"]>[number];
 /** One right-hand stat column: label over value, like PoE1's gem header. */
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div style={{ padding: "0 12px", borderLeft: `1px solid ${GOLD_DIM}`, textAlign: "center", minWidth: 62 }}>
+    <div style={{ padding: "0 12px", borderLeft: `1px solid ${GOLD_DIM}`, textAlign: "center" }}>
       <div style={{ fontSize: 10, color: PARCHMENT, opacity: 0.75, letterSpacing: 0.5 }}>{label}</div>
-      <div style={{ fontSize: 13, color: "#fff" }}>{value}</div>
+      <div style={{ fontSize: 13, color: "#fff", whiteSpace: "nowrap" }}>{value}</div>
     </div>
   );
 }

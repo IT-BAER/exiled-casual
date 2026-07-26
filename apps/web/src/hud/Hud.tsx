@@ -21,7 +21,7 @@ const RING_VW = (ORB_VW / ORB_HOLE - ORB_VW) / 2; // ring band thickness
 const ORB_INSET = "0.39vw"; // sphere offset from the side; the ring overhangs off-screen
 const BAR_SIDE = 28;
 // The border-image slices the frame art keeps for its own top and bottom edges.
-const BAR_TOP = 18;
+const BAR_TOP = 14;
 const BAR_BOTTOM = 16;
 const BAR_PAD_EXPR = `${ORB_INSET} + ${ORB} + ${RING_VW.toFixed(3)}vw - ${BAR_SIDE}px`;
 const ORB_BOTTOM = "2.1vh"; // sphere bottom above the screen edge
@@ -36,8 +36,7 @@ const FIGURE_OUT = "0.9vw"; // figure hangs off the screen side, covering ~30% o
 // above the numbered slots, it takes PoE1's full 0.72 and the tiles drop to its 0.22.
 // Exported because the inventory panel has to stop exactly where this starts.
 export const BAR_H = `${(ORB_VW * 0.72).toFixed(2)}vw`;
-const SLOT_GAP = 4; // px between tiles
-const MOUSE_RATIO = 0.55; // mouse tile, as a share of a numbered one
+const SLOT_GAP = 2; // px between tiles; PoE1 packs them against a hairline
 // The tiles fill the row instead of being their own fraction of the globe: the frame is
 // a fixed PANEL_W px wide while the globe padding beside it scales with the window, so a
 // vw-sized tile only fitted the space at one window width and left dead frame at others.
@@ -48,10 +47,8 @@ const MOUSE_RATIO = 0.55; // mouse tile, as a share of a numbered one
 // content box, or the bottom row runs off the screen edge.
 const SLOT = `min(
   calc((${PANEL_W}px - ${2 * BAR_SIDE}px - (${BAR_PAD_EXPR}) - ${4 * SLOT_GAP}px) / 5),
-  calc((${BAR_H} - ${BAR_TOP + BAR_BOTTOM}px - ${SLOT_GAP}px) / ${1 + MOUSE_RATIO})
+  calc((${BAR_H} - ${BAR_TOP + BAR_BOTTOM}px - ${SLOT_GAP}px) / 2)
 )`;
-/** PoE1 runs the mouse buttons as a thin strip over the full-size numbered slots. */
-const MOUSE_SLOT = `calc(${SLOT} * ${MOUSE_RATIO})`;
 const FLASK_W = `${(ORB_VW * 0.20).toFixed(2)}vw`;
 const FLASK_H = `${(ORB_VW * 0.50).toFixed(2)}vw`;
 // The border-image's own side slice. Named because the padding below has to
@@ -97,18 +94,18 @@ function SkillTile({ slot, n, cooldowns, onHover }: {
       onMouseEnter={() => onHover(slot.id)}
       onMouseLeave={() => onHover(null)}
       style={{
-        width: slot.mouse ? MOUSE_SLOT : SLOT,
-        height: slot.mouse ? MOUSE_SLOT : SLOT,
+        width: SLOT,
+        height: SLOT,
         position: "relative",
         overflow: "hidden",
         background: slot.icon
           ? "radial-gradient(circle at 50% 35%, #262c34, #0b0d11)"
           : "radial-gradient(circle at 50% 35%, #14171d, #07090c)",
-        border: `2px solid ${slot.icon && ready ? "#9c7b3a" : "#3a4048"}`,
-        borderRadius: 6,
+        border: `1px solid ${slot.icon && ready ? "#6b5a34" : "#2b3038"}`,
+        borderRadius: 2,
         boxShadow: slot.icon && ready
-          ? `0 0 10px ${slot.glow}55, inset 0 0 8px rgba(0,0,0,0.6)`
-          : "inset 0 0 8px rgba(0,0,0,0.7)",
+          ? `0 0 6px ${slot.glow}33, inset 0 0 10px rgba(0,0,0,0.75)`
+          : "inset 0 0 10px rgba(0,0,0,0.85)",
       }}
     >
       {slot.icon && (
@@ -250,12 +247,13 @@ const barStyle: React.CSSProperties = {
   gap: "0.25vw",
   borderStyle: "solid",
   borderWidth: `${BAR_TOP}px ${BAR_SIDE}px ${BAR_BOTTOM}px ${BAR_SIDE}px`,
-  // bar-panel-v2.png, 1024x209: v1 was flush-cut at both image edges, so a 9-slice
-  // ended it on a straight vertical line mid-merlon. v2 closes both ends with a
-  // corner tower over a pilaster over a stepped end-block, all inside the 78px side
-  // slice, so the panel terminates in the art instead of in a CSS fade.
-  borderImageSource: "url(/hud/bar-panel-v2.png)",
-  borderImageSlice: "50 78 44 78 fill",
+  // bar-panel-v3.png, 1024x185: v2 with its top 24 rows of merlons cut off. The
+  // battlement squeezed into a 14px border read as a dashed checkerboard against the
+  // world; PoE1's panel tops out in a plain stepped cornice over its gold rail, which
+  // is what is left underneath. Both ends still close in the art, inside the 78px side
+  // slice, rather than in a CSS fade.
+  borderImageSource: "url(/hud/bar-panel-v3.png)",
+  borderImageSlice: "26 78 44 78 fill",
   filter: "drop-shadow(0 2px 8px rgba(0,0,0,0.7))",
 };
 
@@ -687,9 +685,7 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
             <SkillTile key={slot.key} slot={slot} n={i + 6} cooldowns={cooldowns} onHover={setHoveredSkill} />
           ))}
         </div>
-        {/* Spread edge to edge: the frame is as wide as the inventory panel, wider than
-            five tiles the bar's height allows, and the slack read as dead frame beside them. */}
-        <div style={{ display: "flex", gap: `${SLOT_GAP}px`, alignSelf: "stretch", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", gap: `${SLOT_GAP}px` }}>
           {SKILL_SLOTS.slice(0, 5).map((slot, i) => (
             <SkillTile key={slot.key} slot={slot} n={i + 1} cooldowns={cooldowns} onHover={setHoveredSkill} />
           ))}
