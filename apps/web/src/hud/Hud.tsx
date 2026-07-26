@@ -709,7 +709,6 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
           gap: 0,
         }}
       >
-        <SkillTooltip skills={snapshot.skills} id={hoveredSkill} right={BAR_PAD} />
         {/* The mouse row closes on a warm hairline, drawn as a shadow so it costs no height. */}
         <div style={{ display: "flex", gap: `${SLOT_GAP}px`, boxShadow: "0 1px 0 rgba(101,81,49,0.85)" }}>
           {SKILL_SLOTS.slice(5).map((slot, i) => (
@@ -735,6 +734,12 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
           ))}
         </div>
       </div>
+
+      {/* Outside the skill row on purpose. barStyle puts a drop-shadow filter on that
+          row, and a filter makes its own stacking context whatever the z-index says, so
+          a tooltip nested inside it can never rise above the inventory panel it opens
+          into. Out here it is a plain sibling and its own zIndex settles the order. */}
+      <SkillTooltip skills={snapshot.skills} id={hoveredSkill} right={BAR_PAD} bottom={`calc(${BAR_H} + 8px)`} />
     </div>
   );
 }

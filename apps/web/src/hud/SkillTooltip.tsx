@@ -23,7 +23,9 @@ function Stat({ label, value }: { label: string; value: string }) {
  * PoE1 anchors the skill tooltip to the bar, not the cursor: it sits above the
  * slot row and stays put while you sweep across the sockets.
  */
-export function SkillTooltip({ skills, id, right }: { skills: Skill[] | undefined; id: string | null; right: string }) {
+export function SkillTooltip(
+  { skills, id, right, bottom }: { skills: Skill[] | undefined; id: string | null; right: string; bottom: string },
+) {
   const skill = skills?.find((s) => s.id === id);
   if (!skill) return null;
   return (
@@ -31,9 +33,8 @@ export function SkillTooltip({ skills, id, right }: { skills: Skill[] | undefine
       data-testid="skill-tooltip"
       style={{
         position: "absolute",
-        bottom: "100%",
+        bottom,
         right,
-        marginBottom: 8,
         width: 430,
         zIndex: 5,
         pointerEvents: "none",
