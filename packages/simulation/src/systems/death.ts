@@ -1,5 +1,6 @@
 import { Simulation } from "../loop";
 import type { Health, Mana, MoveTarget, MoveDir, SessionC, MonsterC, Position, ItemC, FlasksC, ProgressC, EnergyShieldC } from "../components";
+import { fp } from "@exiled/fixed-point";
 import { fnv1a32 } from "../rng";
 import {
   rollItem, areaLevel, FLASK_CHARGES_PER_KILL, gainXp, xpAward,
@@ -7,6 +8,29 @@ import {
 } from "@exiled/rules";
 import { recomputePlayerStats } from "../derived";
 import { ITEM_POOLS, baseOf } from "@exiled/content-runtime";
+
+/**
+ * How many items a map boss pays out. `docs/09-reward-psychology.md` rule 3:
+ * intensity beats density, so the same loot budget spent in one burst reads far
+ * louder than the same items trickling off five monsters. One item made the
+ * warden pay exactly what a rare pays, which is the flat ending PoE2's own
+ * 0.2.0g patch went and fixed. Five is enough to cover the ground around the
+ * corpse and still be pickable without a stash trip.
+ */
+export const BOSS_DROP_COUNT = 5;
+
+/**
+ * Where each item of a burst lands relative to the corpse. Literal fixed-point
+ * in the same idiom as areas.ts's PACK_SPREAD: never trig, so the sim stays
+ * deterministic, and distinct per index so five plates do not overlap into one.
+ */
+const DROP_SPREAD: readonly { dx: number; dy: number }[] = [
+  { dx: fp(0), dy: fp(0) },
+  { dx: fp(1.3), dy: fp(0.8) },
+  { dx: fp(-1.3), dy: fp(0.8) },
+  { dx: fp(1.3), dy: fp(-0.8) },
+  { dx: fp(-1.3), dy: fp(-0.8) },
+];
 
 export function registerDeath(sim: Simulation): void {
   sim.register("death", (world, tick) => {
@@ -31,16 +55,23 @@ export function registerDeath(sim: Simulation): void {
         });
       }
 
-      // Boss and rare monsters drop one committed item where they die.
+      // A rare drops one committed item; a boss drops the burst (see below).
       if (s && s.area === "map" && (isBoss || isRare)) {
         const pos = world.get<Position>(e, "position");
         if (pos) {
-          const seed = fnv1a32(`${s.mapSeed}:${tick}:${e}`);
-          const item = rollItem(ITEM_POOLS, seed, areaLevel(s.areaTier), isBoss ? 2 : 1);
-          const base = baseOf(item.baseId);
-          const ge = world.create();
-          world.set<Position>(ge, "position", { x: pos.x, y: pos.y });
-          world.set<ItemC>(ge, "item", { item, w: base.w, h: base.h });
+          const count = isBoss ? BOSS_DROP_COUNT : 1;
+          for (let i = 0; i < count; i++) {
+            const seed = fnv1a32(`${s.mapSeed}:${tick}:${e}:${i}`);
+            // The boss's first item is the guaranteed one. Everything after it
+            // rolls normally, so the floor rises without the variance narrowing.
+            const forced = isBoss && i === 0 ? "rare" : undefined;
+            const item = rollItem(ITEM_POOLS, seed, areaLevel(s.areaTier), isBoss ? 2 : 1, forced);
+            const base = baseOf(item.baseId);
+            const off = DROP_SPREAD[i % DROP_SPREAD.length]!;
+            const ge = world.create();
+            world.set<Position>(ge, "position", { x: pos.x + off.dx, y: pos.y + off.dy });
+            world.set<ItemC>(ge, "item", { item, w: base.w, h: base.h });
+          }
         }
       }
 

@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { fp } from "@exiled/fixed-point";
 import { Simulation } from "../loop";
-import { registerDeath } from "./death";
+import { registerDeath, BOSS_DROP_COUNT } from "./death";
 import { START_LEVEL } from "@exiled/rules";
+import type { World } from "../ecs";
 import type { SessionC, ProgressC } from "../components";
 
 describe("registerDeath", () => {
@@ -180,6 +181,56 @@ describe("registerDeath", () => {
     const ic = w.get(groundItems[0]!, "item") as { item: { itemLevel: number }; w: number; h: number };
     expect(ic.item.itemLevel).toBe(69); // 64 + tier 5
     expect(ic.w).toBeGreaterThan(0);
+  });
+
+  /** A dead monster in a tier-5 map, boss or rare, ready for one `sim.step`. */
+  function makeDrop(opts: { boss: boolean }) {
+    const sim = new Simulation();
+    registerDeath(sim);
+    const w = sim.world;
+    const s = w.create();
+    w.set(s, "session", { area: "map", atlasSeed: 1, mapSeed: 7, waystoneSeed: 0, waystones: [], areaTier: 5, activeNodeId: "node.ashen_glade", completedNodes: ["node.ashen_glade"], portalsLeft: 6, mapOpen: 1, pendingArea: "" });
+    const m = w.create();
+    w.set(m, "position", { x: fp(3), y: fp(-2) });
+    w.set(m, "health", { life: 0, maxLife: 40 });
+    w.set(m, "monster", { defId: "d", moveSpeed: 0, bodyRadius: 0, attackRange: 0, attackCooldownTicks: 0, attackDamage: 0, attackType: 1, attackReadyTick: 0, state: "idle", rare: opts.boss ? 0 : 1, summoned: 0 });
+    if (opts.boss) w.set(m, "boss", { phase: 1, nextAbilityTick: 0, spawnX: 0, spawnY: 0, rootedUntilTick: 0 });
+    return { sim, w };
+  }
+
+  const dropped = (w: World) =>
+    w.query("item", "position").map((e) => w.get(e, "item") as { item: { rarity: string } });
+
+  it("a boss pays out a burst, not the single item a rare pays", () => {
+    const { sim, w } = makeDrop({ boss: true });
+    sim.step([]);
+    expect(dropped(w).length).toBe(BOSS_DROP_COUNT);
+  });
+
+  it("a boss cannot pay out an all-normal burst", () => {
+    // Rule 4 of docs/09: the map closes on a guaranteed payout. The other items
+    // stay fully variable, so this raises the floor without narrowing variance.
+    const { sim, w } = makeDrop({ boss: true });
+    sim.step([]);
+    expect(dropped(w).some((d) => d.item.rarity !== "normal")).toBe(true);
+  });
+
+  it("scatters the burst instead of stacking it on the corpse", () => {
+    const { sim, w } = makeDrop({ boss: true });
+    sim.step([]);
+    const seen = new Set(
+      w.query("item", "position").map((e) => {
+        const p = w.get(e, "position") as { x: number; y: number };
+        return `${p.x},${p.y}`;
+      }),
+    );
+    expect(seen.size).toBe(BOSS_DROP_COUNT);
+  });
+
+  it("leaves the rare's single drop alone", () => {
+    const { sim, w } = makeDrop({ boss: false });
+    sim.step([]);
+    expect(dropped(w).length).toBe(1);
   });
 
   // ── Experience ───────────────────────────────────────────────────────────
