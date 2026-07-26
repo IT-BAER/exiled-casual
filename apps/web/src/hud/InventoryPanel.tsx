@@ -114,7 +114,6 @@ function EquipSlot({
           ? `inset 0 0 10px rgba(0,0,0,0.75), 0 0 10px ${GOLD}88`
           : "inset 0 0 10px rgba(0,0,0,0.75), inset 0 1px 0 rgba(200,164,77,0.08)",
         opacity: highlight === "illegal" ? 0.35 : 1,
-        cursor: item ? "grab" : "default",
       }}
     >
       {item?.icon ? (
@@ -411,6 +410,9 @@ export function InventoryPanel({
               <div
                 key={i}
                 data-testid={`${container === "stash" ? "stash" : "inventory"}-item-${i}`}
+                // Refusal is the cursor's job now (index.html): red iron blade over
+                // an item the armed orb cannot touch, gilt blade everywhere else.
+                data-cursor={armed && !accepts(armed, it) ? "deny" : undefined}
                 onMouseEnter={(e) => !drag && setHover({ item: it, x: e.clientX + 18, y: e.clientY + 18 })}
                 onMouseMove={(e) => !drag && setHover({ item: it, x: e.clientX + 18, y: e.clientY + 18 })}
                 onMouseLeave={() => setHover((h) => (h?.item === it ? null : h))}
@@ -470,7 +472,6 @@ export function InventoryPanel({
                   padding: 2,
                   boxSizing: "border-box",
                   boxShadow: `inset 0 0 8px ${RARITY_BORDER[it.rarity]}44`,
-                  cursor: armed ? (accepts(armed, it) ? "crosshair" : "not-allowed") : "grab",
                   opacity: drag?.from.kind === "grid" && drag.from.container === container && drag.from.x === it.x && drag.from.y === it.y ? 0.3 : 1,
                 }}
               >
@@ -515,39 +516,26 @@ export function InventoryPanel({
   const contentW = `${Math.max(10 * U_VW, cols * CELL_VW).toFixed(2)}vw`;
 
   return (
-    <div
-      data-testid="inventory-panel"
-      style={{
-        position: "absolute",
-        inset: 0,
-        display: "flex",
-        // Docked to the bottom-right corner, the way inventory+equipment.png has it:
-        // the panel is a column against the screen edge, not a dialog floating in the
-        // middle, and its bottom-right corner runs behind the mana globe.
-        alignItems: "flex-end",
-        justifyContent: "flex-end",
-        // No dimming backdrop and no pointer capture: PoE leaves the world lit and
-        // playable with the inventory open. The box below takes its own events back.
-        pointerEvents: "none",
-        // Under the globes (zIndex 3) so the mana orb paints over the panel's corner,
-        // which is what makes it read as tucked behind rather than parked next to it.
-        zIndex: 2,
-        fontFamily: SERIF,
-        color: PARCHMENT,
-      }}
-    >
-      {/* Stash box, docked bottom-left. PoE opens the stash beside the inventory
-          rather than instead of it, so both grids are reachable in one drag. */}
-      {stash && (
+    <>
+    {/* The stash rides its own layer above the globes (zIndex 3). It docks into the
+        corner the life orb sits in, and PoE1 never lets the orb clip the pane. */}
+    {stash && (
+      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "flex-end", justifyContent: "flex-start", pointerEvents: "none", zIndex: 4, fontFamily: SERIF, color: PARCHMENT }}>
         <div
           data-testid="stash-panel"
           data-hud-panel=""
           style={{
             pointerEvents: "auto",
-            marginRight: "auto",
             // Off the screen edge, or the panel's outer gilt line is clipped away.
             marginLeft: 12,
             marginBottom: BAR_H,
+            // Full height, the way the inventory runs: PoE1's stash is a pane from
+            // the top of the screen down to the bar (poe2-screenshots/inventory.png),
+            // and the grid simply sits at its head with empty pane below.
+            height: `calc(100vh - ${BAR_H})`,
+            boxSizing: "border-box",
+            display: "flex",
+            flexDirection: "column",
             padding: PANEL_PAD,
             // The reference pane is carved stone inside a dark metal frame, not a
             // flat gradient (poe2-screenshots/stash.png).
@@ -586,7 +574,6 @@ export function InventoryPanel({
                 background: "radial-gradient(circle at 35% 30%, #c74e35, #6d1d13 70%, #35100a)",
                 border: "1px solid #1d0906", color: "#f7ddd0",
                 boxShadow: "0 1px 4px rgba(0,0,0,0.9), inset 0 1px 0 rgba(255,180,150,0.4)",
-                cursor: "pointer", fontSize: 13, lineHeight: 1, padding: 0,
               }}
             >
               ×
@@ -594,7 +581,29 @@ export function InventoryPanel({
           </div>
           {renderGrid("stash")}
         </div>
-      )}
+      </div>
+    )}
+    <div
+      data-testid="inventory-panel"
+      style={{
+        position: "absolute",
+        inset: 0,
+        display: "flex",
+        // Docked to the bottom-right corner, the way inventory+equipment.png has it:
+        // the panel is a column against the screen edge, not a dialog floating in the
+        // middle, and its bottom-right corner runs behind the mana globe.
+        alignItems: "flex-end",
+        justifyContent: "flex-end",
+        // No dimming backdrop and no pointer capture: PoE leaves the world lit and
+        // playable with the inventory open. The box below takes its own events back.
+        pointerEvents: "none",
+        // Under the globes (zIndex 3) so the mana orb paints over the panel's corner,
+        // which is what makes it read as tucked behind rather than parked next to it.
+        zIndex: 2,
+        fontFamily: SERIF,
+        color: PARCHMENT,
+      }}
+    >
       {/* Disenchanting bench. It holds no grid: what you get back is shards, which
           docs/02 §5 says never occupy inventory, so the panel is the bank sheet and
           the ten pips are the countdown to the orb they turn into. */}
@@ -631,7 +640,7 @@ export function InventoryPanel({
             <button
               data-testid="vendor-close"
               onClick={onCloseVendor}
-              style={{ position: "absolute", top: 6, right: 10, background: "none", border: "none", color: "#c9b48a", cursor: "pointer", fontSize: 18, lineHeight: 1 }}
+              style={{ position: "absolute", top: 6, right: 10, background: "none", border: "none", color: "#c9b48a", fontSize: 18, lineHeight: 1 }}
             >
               ×
             </button>
@@ -709,7 +718,7 @@ export function InventoryPanel({
           <button
             data-testid="inventory-close"
             onClick={onClose}
-            style={{ position: "absolute", top: 8, right: 12, background: "none", border: "none", color: "#c9b48a", cursor: "pointer", fontSize: 20, lineHeight: 1 }}
+            style={{ position: "absolute", top: 8, right: 12, background: "none", border: "none", color: "#c9b48a", fontSize: 20, lineHeight: 1 }}
           >
             ×
           </button>
@@ -768,6 +777,10 @@ export function InventoryPanel({
           </div>
         </div>
       </div>
+    </div>
+    {/* The tooltip and the drag ghost ride over every panel, the stash layer
+        included, or an item picked up in the bag vanishes behind the stash. */}
+    <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 60, fontFamily: SERIF, color: PARCHMENT }}>
       {hover && <ItemTooltip {...hover.item} x={hover.x} y={hover.y} />}
       {drag && (
         <div
@@ -795,5 +808,6 @@ export function InventoryPanel({
         </div>
       )}
     </div>
+    </>
   );
 }

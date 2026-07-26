@@ -41,7 +41,6 @@ function tile(selected: boolean, disabled: boolean, accent: string): React.CSSPr
     minWidth: 132,
     padding: "10px 12px",
     borderRadius: 3,
-    cursor: disabled ? "default" : "pointer",
     textAlign: "center",
     fontFamily: SERIF,
     letterSpacing: 0.5,
@@ -172,7 +171,6 @@ function AtlasMap(props: {
                 height: NODE,
                 padding: 0,
                 borderRadius: "50%",
-                cursor: st === "open" ? "pointer" : "default",
                 background:
                   st === "fog"
                     ? "radial-gradient(circle at 50% 35%, #23211b, #0c0b09)"
@@ -309,7 +307,6 @@ export function PreparationPanel({ atlasSeed, completedNodes, waystones, onActiv
           background: "radial-gradient(circle at 50% 35%, #3a1310, #140806)",
           border: `1px solid ${GOLD_DIM}`,
           color: "#c9b48a",
-          cursor: "pointer",
           fontSize: 20,
           lineHeight: 1,
         }}
@@ -435,7 +432,6 @@ export function PreparationPanel({ atlasSeed, completedNodes, waystones, onActiv
               fontSize: 15,
               letterSpacing: 2,
               textTransform: "uppercase",
-              cursor: canActivate ? "pointer" : "default",
               color: canActivate ? "#1a1408" : "#5a564a",
               background: canActivate
                 ? "linear-gradient(180deg, #e6c366 0%, #b8923c 50%, #8a6a24 100%)"

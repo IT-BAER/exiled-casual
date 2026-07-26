@@ -268,7 +268,6 @@ export function CharacterPanel({ player, onClose }: { player: Snapshot["player"]
             background: "radial-gradient(circle at 35% 30%, #c74e35, #6d1d13 70%, #35100a)",
             border: "1px solid #1d0906", color: "#f7ddd0",
             boxShadow: "0 1px 4px rgba(0,0,0,0.9), inset 0 1px 0 rgba(255,180,150,0.4)",
-            cursor: "pointer", fontSize: 13, lineHeight: 1, padding: 0,
           }}
         >
           ×

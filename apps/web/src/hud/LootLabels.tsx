@@ -129,7 +129,6 @@ export function LootLabels({ snapshot, project, onPick }: LootLabelsProps) {
               whiteSpace: "nowrap",
               textShadow: "0 1px 2px #000",
               pointerEvents: "auto", // the wrapper is inert; the plates are clickable
-              cursor: "pointer",
             }}
           >
             {e.name ?? "Item"}

@@ -8,10 +8,20 @@
       * { margin: 0; padding: 0; box-sizing: border-box; }
       html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
       /* A game, not a document: the HUD's labels and numbers must not turn the
-         pointer into an I-beam or let a drag paint "Life 100/100" blue. Both
-         properties inherit, so the panels' own cursor: pointer / grab still win.
+         pointer into an I-beam or let a drag paint "Life 100/100" blue.
          There is no text input anywhere in the client to break. */
-      body { cursor: default; user-select: none; -webkit-user-select: none; }
+      body { user-select: none; -webkit-user-select: none; }
+      /* One cursor, ours, everywhere. PoE never shows a Windows pointer: the arrow
+         is a piece of the art, gilt and carved like the panel frames, so an OS
+         hand or I-beam appearing over a button breaks the frame instantly. The
+         !important is what retires the panels' inline pointer / grab / crosshair.
+         Hotspot 1 1: the blade's tip sits one pixel in from the corner. */
+      * { cursor: url(/textures/ui/cursor_40.png) 1 1, default !important; }
+      * { cursor: image-set(url(/textures/ui/cursor_40.png) 1x, url(/textures/ui/cursor_80.png) 2x) 1 1, default !important; }
+      /* Illegal target for whatever is armed on the cursor: the same blade, cooled
+         to red iron, so the refusal is legible without leaving the art. */
+      [data-cursor="deny"] { cursor: url(/textures/ui/cursor_deny_40.png) 1 1, not-allowed !important; }
+      [data-cursor="deny"] { cursor: image-set(url(/textures/ui/cursor_deny_40.png) 1x, url(/textures/ui/cursor_deny_80.png) 2x) 1 1, not-allowed !important; }
       #root { width: 100%; height: 100%; }
     </style>
   </head>
