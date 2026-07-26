@@ -185,6 +185,6 @@ The hideout gets storage, quick transfer, and a bench that turns leftovers into 
 <td width="33%"><img src="screenshots/2026-07-26-cursor.jpeg" alt="The gilt cursor blade at three sizes and its red-iron refusal variant" width="100%"><br><sub><b>Our own pointer</b> - a gilt blade retires every Windows cursor, cooled to red iron over an item the armed orb cannot touch.</sub></td>
 </tr>
 <tr>
-<td width="33%"><img src="screenshots/2026-07-26-panes-aligned.jpeg" alt="Stash and inventory open together, mirrored against the left and right screen edges" width="100%"><br><sub><b>One pane, cut twice</b> - stash and inventory now share a width, a top line and a bottom line, mirrored the way PoE1 opens the pair.</sub></td>
+<td width="33%"><img src="screenshots/2026-07-26-panes-aligned.jpeg" alt="Stash and inventory open together, mirrored against the left and right screen edges" width="100%"><br><sub><b>One pane, cut twice</b> - stash and inventory now share a width, a top line and a bottom line, mirrored the way PoE1 opens the pair, with the flask frame raised to the bar's full height so no sliver of floor shows under the stash.</sub></td>
 </tr>
 </table>

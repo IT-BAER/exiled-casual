@@ -180,10 +180,12 @@ describe("Hud", () => {
     // window widens, which is exactly what made it look detached.
     expect(flaskRow.style.height).toMatch(/vw$/);
     expect(skillRow.style.height).toMatch(/vw$/);
-    // The two are not the same height: on poe1-lower-bar.png the skill panel stands 190px
-    // against the flask panel's 162px, so the left one has to come out shorter.
+    // Both frames start on the line where the stash and the inventory end. PoE1's
+    // flask panel is the shorter of the two on poe1-lower-bar.png, but stealing
+    // those 28px back opens a strip of floor under the stash's foot, and the pane
+    // meeting the bar cleanly is worth more than the step between the frames.
     const vw = (s: string) => parseFloat(s);
-    expect(vw(flaskRow.style.height)).toBeLessThan(vw(skillRow.style.height));
+    expect(vw(flaskRow.style.height)).toBe(vw(skillRow.style.height));
   });
 
   it("recesses a rail between the skill rows and sizes the frame's chrome off the window", () => {

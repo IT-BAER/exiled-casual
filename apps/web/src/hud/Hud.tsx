@@ -44,9 +44,10 @@ const FIGURE_OUT = "0.9vw"; // figure hangs off the screen side, covering ~30% o
 // these two fractions come from.
 // Exported because the inventory panel has to stop exactly where this starts.
 export const BAR_H = `${(ORB_VW * 0.72).toFixed(2)}vw`;
-// PoE1's left panel stands a step shorter than the right one: 162px against 190px on the
-// same crop. The vials clear the shorter frame because the bottom lip is thin.
-const FLASK_BAR_H = `${(ORB_VW * 0.62).toFixed(2)}vw`;
+// PoE1's left panel stands a step shorter than the right one, 162px against 190px on the
+// same crop, but that step leaves a strip of bare world between the flask frame and the
+// foot of the stash pane, which stops on BAR_H the way the inventory does. The panes'
+// shared bottom line wins over the step: both frames start where both panes end.
 const SLOT_GAP = 2; // px between tiles; PoE1 packs them against a hairline
 // A tile is as big as the smaller of two budgets. Width: what is left of the frame once
 // the globe's padding and the frame's own sides are taken off it. Height: two rows, the
@@ -672,7 +673,6 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
           left: 0,
           paddingLeft: BAR_PAD,
           zIndex: 2,
-          height: FLASK_BAR_H,
         }}
       >
         {FLASKS.map((f) => {
