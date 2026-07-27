@@ -29,6 +29,6 @@ Created for this project (AI-generated or hand-made), all rights reserved:
 
 ## Visual reference
 
-Path of Exile 2 screenshots are used locally as a visual reference only. They are
+Path of Exile 1 and 2 screenshots are used locally as a visual reference only. They are
 copyright Grinding Gear Games, are not redistributed, and are excluded from this
 repository (see `.gitignore`).

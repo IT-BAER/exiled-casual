@@ -1,6 +1,7 @@
 # Exiled Casual
 
-A browser-native action RPG in the spirit of Path of Exile 2, built spec-first with
+A browser-native action RPG in the spirit of Path of Exile 1 and 2, taking the best of
+either where they differ rather than cloning one of them, built spec-first with
 [Claude Code](https://claude.com/claude-code) as a public devlog experiment: how far a
 deterministic ARPG can get in a handful of days when the design is written down before
 any code is.
@@ -70,5 +71,5 @@ CI runs typecheck, tests, and the web build on every push (see
 This is an unofficial fan project. It is not affiliated with, endorsed by, or connected to
 Grinding Gear Games. It reproduces observable design and mechanics through original code,
 original art, and CC0 (public-domain) third-party assets (see [`CREDITS.md`](CREDITS.md)). It ships none of the game's art, audio, data, or other protected
-content. The real Path of Exile 2 screenshots used locally as a visual reference are kept
+content. The real Path of Exile 1 and 2 screenshots used locally as a visual reference are kept
 out of this repository (gitignored) and are not distributed.

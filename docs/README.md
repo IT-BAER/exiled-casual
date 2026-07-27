@@ -4,6 +4,11 @@ Version lock: Path of Exile 2 Early Access 0.5.4b, researched 2026-07-19
 Primary rules baseline: Content Update 0.5.0, Return of the Ancients  
 Purpose: an implementation specification for a mechanically faithful, browser-native action RPG
 
+Scope note: this pack is version-locked to PoE2 because that is what was researched here, but the
+game it feeds draws on Path of Exile 1 and 2 both, taking the better of the two where they differ
+(PoE1's inventory pane and bottom bar, for instance). Where a mechanic or look is borrowed, the
+spec that borrows it names which game it came from.
+
 ## Read this first
 
 A literal "perfect clone" is neither technically knowable from public information nor a safe product target. Hidden drop weights, proprietary map-generation parameters, server tick details, internal AI, exact collision shapes, unreleased content, assets, names, lore, audio, and source code are not public. Grinding Gear Games' terms also prohibit modifying or reverse engineering the client, its data, technical processes, and communications protocols, and claim broad rights over the game's audiovisual and world content.

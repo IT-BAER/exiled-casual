@@ -16,7 +16,8 @@ win where they conflict.
 
 ## Visual reference — ALWAYS CHECK BEFORE UI/RENDER/ART WORK
 
-Real Path of Exile 2 screenshots live in `poe2-screenshots/`. They are the look source-of-truth.
+Real Path of Exile 1 and 2 screenshots live in `poe2-screenshots/` (the folder name predates the
+PoE1 additions). They are the look source-of-truth, and each entry below says which game it is.
 Consult the relevant one BEFORE any UI, render, HUD, panel, or art change, and re-check while
 iterating so the result matches the original game exactly. Do not design from memory.
 
