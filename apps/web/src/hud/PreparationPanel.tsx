@@ -236,12 +236,16 @@ function AtlasMap(props: {
   );
 }
 
-/** atlas_node_header_v1.png is 1024x144; the band keeps that ratio or the filigree shears. */
+/** atlas_node_header_v1.png is 512x72; the band keeps that ratio or the filigree shears. */
 const POPUP_W = 340;
-const HEADER_H = Math.round((POPUP_W * 144) / 1024);
-/** atlas_node_socket_v1.png is 1024x820, and its empty slot is centred on the disc. */
-const SOCKET_W = 190;
-const SOCKET_H = Math.round((SOCKET_W * 820) / 1024);
+const HEADER_H = Math.round((POPUP_W * 72) / 512);
+/**
+ * atlas_node_socket_v2.png is 512x464 and its disc fills 76% of that width, so this
+ * puts the disc at 40% of the panel, which is the ratio in poe2-atlas-node-popup.png.
+ * v1 was scrapped for an oval ring: it measured 802 wide by 668 tall.
+ */
+const SOCKET_W = 180;
+const SOCKET_H = Math.round((SOCKET_W * 464) / 512);
 
 /**
  * A place, opened. PoE2's Atlas answers a click on a node with a small panel
@@ -322,6 +326,9 @@ function NodePopup(props: {
         </span>
       </div>
 
+      {/* The lore sits between two hairlines in the reference, not under one. */}
+      <div style={{ height: 1, margin: "0 18px", background: `${GOLD}22` }} />
+
       {/* The rumour, in the reference's amber. It is the only line here that is
           not a number, and it is what makes a node a destination. */}
       <div
@@ -353,18 +360,18 @@ function NodePopup(props: {
           position: "relative",
           padding: 0,
           border: "none",
-          background: "url(/textures/ui/atlas_node_socket_v1.png) center/100% 100% no-repeat",
+          background: "url(/textures/ui/atlas_node_socket_v2.png) center/100% 100% no-repeat",
         }}
       >
         {stone && (
           <span
             style={{
               position: "absolute",
-              // Measured off the art: the empty slot spans x 376..649, y 223..477
-              // of 1024x820, so its centre is high of the image's middle because
+              // Measured off the art: the empty slot spans x 189..322, y 125..264
+              // of 512x464, so its centre is high of the image's middle because
               // the disc stands on a plinth.
               left: "50%",
-              top: "42.7%",
+              top: "41.9%",
               transform: "translate(-50%, -50%)",
               fontFamily: SERIF,
               // Sized to the slot: it is 273x254 of the art, so at this width the
