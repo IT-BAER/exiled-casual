@@ -77,9 +77,15 @@ export function wisdomScroll(): Item {
  * What drops, and how often relative to each other. Weights are a calibration knob
  * (docs/09 §6), not a constant to guess once: the scroll is common because reading is
  * a chore, and the Orb of Embers is the rarest because it is the one you save for.
+ *
+ * The scroll is twice as common as the reveal costs, because PoE1's other two taps are
+ * not built yet: there scrolls also arrive as stacks and as Scroll Fragments from
+ * vendoring the junk you just identified. Until a vendor exists, the drop table is the
+ * only source, so it carries the whole reveal economy on its own. The guard is
+ * `death.test.ts` "pays out roughly one scroll per unidentified item it drops".
  */
 export const CURRENCY_DROPS: readonly { baseId: string; weight: number }[] = [
-  { baseId: "currency.wisdom", weight: 60 },
+  { baseId: "currency.wisdom", weight: 120 },
   { baseId: "currency.transmutation", weight: 22 },
   { baseId: "currency.augmentation", weight: 14 },
   { baseId: "currency.alchemy", weight: 7 },

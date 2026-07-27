@@ -410,6 +410,11 @@ describe("registerDeath", () => {
       // docs/09 rule 1 and docs/02 24: an unread rare is only a tease if the
       // reveal is affordable. The reveal economy has to be self-financing, so
       // this fires if a tuning pass makes upgrades cheap or scrolls scarce.
+      // The floor sits above 1 on purpose. Break-even is not affordable: the
+      // player who spends every scroll the instant it lands is one unlucky map
+      // from holding a rare he cannot read, and that is the one item that must
+      // never wait. The ceiling is the other half of the band, because a scroll
+      // the player steps over is clutter and clutter is what makes a drop cheap.
       let paid = 0, owed = 0;
       for (let seed = 1; seed <= 100; seed++) {
         const { sim, w } = makeMapKills(seed);
@@ -418,8 +423,8 @@ describe("registerDeath", () => {
         owed += w.query("item", "position")
           .filter((e) => (w.get(e, "item") as { item: { unidentified?: boolean } }).item.unidentified === true).length;
       }
-      expect(paid / owed).toBeGreaterThan(0.8);
-      expect(paid / owed).toBeLessThan(1.5);
+      expect(paid / owed).toBeGreaterThan(1.15);
+      expect(paid / owed).toBeLessThan(1.6);
     });
 
     it("drops the same scrolls again for the same map and tick", () => {

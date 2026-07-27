@@ -553,6 +553,15 @@ The one number that must not be copied is the base rate. PoE's ~8% per normal mo
 against 200-600 monsters per map and we run six, so it is solved from a target payout per map
 instead (14% at the time of writing).
 
+The reveal economy is solved the same way. Every drop above normal is unidentified, so the map has to
+pay for reading itself, and it pays at **1.35 scrolls per unidentified item** (weight 120 of 170 in
+`CURRENCY_DROPS`, guarded by a 1.15-1.6 band in `death.test.ts`). Break-even was the first cut and it
+is not enough: the player who spends each scroll as it lands is one bad map from holding a rare he
+cannot read. PoE1 buys that headroom without spending it on the drop table, because scrolls arrive
+there in stacks and as Scroll Fragments from vendoring what you just identified. We have neither tap
+yet, so the weight carries it alone, and the price is paid by the orbs, whose share of currency
+drops falls from 45% to 29%. When the vendor lands, take the weight back down.
+
 ### Gold
 
 Reference: [Gold](https://www.poe2wiki.net/wiki/Gold).
