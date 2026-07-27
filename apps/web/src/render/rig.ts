@@ -1,13 +1,16 @@
 import {
   Animation,
   AnimationGroup,
+  Color3,
   Mesh,
+  PBRMaterial,
   TransformNode,
   Vector3,
   LoadAssetContainerAsync,
   type AssetContainer,
   type IAnimationKey,
   type InstantiatedEntries,
+  type Material,
   type Node,
   type Scene,
 } from "@babylonjs/core";
@@ -99,8 +102,48 @@ export const COSMETIC_SLOTS: readonly CosmeticSlot[] = [
   "helmet", "body", "gloves", "boots", "belt",
 ];
 
-/** A look per slot, or null for "wearing nothing there". */
+/**
+ * A look per slot, or null for "wearing nothing there".
+ *
+ * A look is `<mesh look>` optionally followed by `#<variant>`: the mesh look
+ * picks the geometry, the variant recolours it (see `RARITY_TINT`). Only the
+ * part before the `#` ever appears in a mesh name.
+ */
 export type Looks = Record<CosmeticSlot, string | null>;
+
+/** The geometry half of a look value — what `slot.<this>.part` is named after. */
+export function meshLook(look: string): string {
+  return look.split("#")[0]!;
+}
+
+/**
+ * Armour tiers that recolour the armoured look instead of replacing it.
+ *
+ * There is exactly one authored armoured set per slot and no second source pack
+ * to cut a second one from, so a rare and a normal helmet are the same hood. But
+ * a drop the player cannot *see* on their character did not really pay out
+ * (docs/09 rule: a reward you can't hear and see didn't happen), and the tier
+ * that matters is rarity, not which base rolled. So the same geometry is tinted
+ * toward the rarity colour the HUD already uses for the item's frame and ground
+ * label — the worn gear and the label that sold it agree.
+ *
+ * Applied as *emissive*, not as an albedo multiply. Multiplying was tried first
+ * and cannot work: albedo multiplies the authored texture, and that texture is a
+ * saturated green, so a gold factor moved the rendered hood by about 3% — under
+ * the play camera, nothing. Emissive adds, so it shifts the hue whatever the
+ * texture underneath is baked to, and the faint glow reads as "this piece is
+ * special" on its own.
+ *
+ * Eye-tuned against the hood at the play camera, and the useful range is narrow
+ * because the scene's glow layer picks emissive up and blooms it: at 0.34 the
+ * character rendered as a featureless glowing man, so these sit near 0.1, where
+ * the hue reads and the armour's own shading survives. Normal and magic wear the
+ * authored colours untouched.
+ */
+const RARITY_TINT: Record<string, Color3> = {
+  rare: new Color3(0.042, 0.032, 0.008),
+  unique: new Color3(0.048, 0.021, 0.007),
+};
 
 /**
  * What the character wears with the slot empty. Body and boots are never bare:
@@ -121,8 +164,18 @@ const EQUIPPED: Looks = {
   helmet: "hood", body: "ranger", gloves: "bracers", boots: "ranger", belt: "ranger",
 };
 
-/** Parts shown only when nothing covers the head. */
 const HEAD_PREFIX = "base.head.";
+
+/**
+ * The hair cap, which is the one head part a helmet really does replace.
+ *
+ * The rest of the head stays on under a helmet. The wardrobe's only helmet look
+ * is the ranger's hood, and that hood is an open-faced cowl, not a closed shape:
+ * hiding the whole head under it left the character looking out of an empty
+ * hood. Hair is different — it sits proud of the skull and would push through
+ * the cowl — so it is the only part that comes off.
+ */
+const HAIR_PART = `${HEAD_PREFIX}hair`;
 
 const ANIM_URL = "/models/anim-library.glb";
 
@@ -286,6 +339,11 @@ export class RigActor {
   private readonly headParts: Mesh[] = [];
   private looks: Looks = { ...UNEQUIPPED };
 
+  /** The material each part was exported with, before any rarity tint. */
+  private readonly baseMaterials = new Map<Mesh, Material | null>();
+  /** Tinted clones, `<source material id>#<variant>` -> clone. Cloned once, reused. */
+  private readonly tints = new Map<string, PBRMaterial>();
+
   constructor(scene: Scene, host: Mesh) {
     this.scene = scene;
     this.host = host;
@@ -318,15 +376,51 @@ export class RigActor {
   private applyLooks(): void {
     for (const [slot, byLook] of this.parts) {
       const wanted = this.looks[slot as CosmeticSlot] ?? null;
+      const wantedLook = wanted === null ? null : meshLook(wanted);
+      const variant = wanted === null ? undefined : wanted.split("#")[1];
       for (const [look, meshes] of byLook) {
-        const on = look === wanted;
-        for (const mesh of meshes) mesh.setEnabled(on);
+        const on = look === wantedLook;
+        for (const mesh of meshes) {
+          mesh.setEnabled(on);
+          // Only the visible look pays for a material swap; the hidden ones keep
+          // whatever they last wore and get re-tinted when they come back.
+          if (on) mesh.material = this.tinted(mesh, variant);
+        }
       }
     }
-    // A helmet replaces the head outright; there is no partial hiding to do
-    // because each look is a complete set for its slot.
+    // A helmet takes the hair off, not the head: see `HAIR_PART`.
     const bare = this.looks.helmet === null;
-    for (const mesh of this.headParts) mesh.setEnabled(bare);
+    for (const mesh of this.headParts) {
+      mesh.setEnabled(bare || !mesh.name.startsWith(HAIR_PART));
+    }
+  }
+
+  /**
+   * The material `mesh` should wear for a rarity variant: its own, or a tinted
+   * clone of it. Clones are per rig actor because the source materials are
+   * shared with the read-only asset container, which must not be recoloured out
+   * from under anything else instantiated from it.
+   */
+  private tinted(mesh: Mesh, variant: string | undefined): Material | null {
+    let base = this.baseMaterials.get(mesh);
+    if (base === undefined) this.baseMaterials.set(mesh, (base = mesh.material));
+
+    const tint = variant === undefined ? undefined : RARITY_TINT[variant];
+    // Non-PBR materials have no albedo to push, so they render untinted rather
+    // than not at all — a missing tint is a smaller bug than a missing limb.
+    if (!tint || !(base instanceof PBRMaterial)) return base;
+
+    const key = `${base.uniqueId}#${variant}`;
+    let clone = this.tints.get(key);
+    if (!clone) {
+      clone = base.clone(`${base.name}#${variant}`);
+      // Babylon multiplies emissiveColor by emissiveTexture, so a black emissive
+      // map (which is what these packs ship) would swallow the tint entirely.
+      clone.emissiveTexture = null;
+      clone.emissiveColor = tint;
+      this.tints.set(key, clone);
+    }
+    return clone;
   }
 
   /** Pick and pace the locomotion clip from the actor's real ground speed. */
@@ -453,6 +547,9 @@ export class RigActor {
     this.groups.clear();
     this.parts.clear();
     this.headParts.length = 0;
+    for (const clone of this.tints.values()) clone.dispose();
+    this.tints.clear();
+    this.baseMaterials.clear();
     this.entries?.dispose();
     this.entries = null;
     this.active = null;
@@ -482,12 +579,17 @@ export function rigOf(root: Mesh): RigActor | null {
 /**
  * Which look each slot should wear, given what is equipped. Any item in a slot
  * shows that slot's armoured look; an empty slot falls back to the commoner
- * clothes, so the character is never rendered bare.
+ * clothes, so the character is never rendered bare. A rare or unique item adds
+ * its rarity tint on top of that look, so the tier is visible on the character
+ * and not only in the tooltip.
  */
 export function looksForEquipment(equipped: Partial<Record<CosmeticSlot, unknown>>): Looks {
   const out = { ...UNEQUIPPED };
   for (const slot of COSMETIC_SLOTS) {
-    if (equipped[slot] !== undefined) out[slot] = EQUIPPED[slot];
+    const item = equipped[slot];
+    if (item === undefined) continue;
+    const rarity = (item as { rarity?: string } | null)?.rarity;
+    out[slot] = EQUIPPED[slot] + (rarity !== undefined && rarity in RARITY_TINT ? `#${rarity}` : "");
   }
   return out;
 }

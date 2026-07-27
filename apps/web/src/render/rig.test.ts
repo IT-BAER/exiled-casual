@@ -12,6 +12,7 @@ import {
   resetPlayerRig,
   speedRatioFor,
   looksForEquipment,
+  meshLook,
   COSMETIC_SLOTS,
 } from "./rig";
 
@@ -115,6 +116,24 @@ describe("looksForEquipment", () => {
     expect(worn.body).toBe(bare.body);
     expect(worn.boots).toBe(bare.boots);
   });
+
+  it("tints a rare or unique piece without changing which geometry it wears", () => {
+    const plain = looksForEquipment({ body: { rarity: "normal" } }).body!;
+    for (const rarity of ["rare", "unique"]) {
+      const tinted = looksForEquipment({ body: { rarity } }).body!;
+      // Same look, different variant: the tier shows as colour, not as a new mesh.
+      expect(meshLook(tinted)).toBe(meshLook(plain));
+      expect(tinted).toBe(`${meshLook(plain)}#${rarity}`);
+    }
+  });
+
+  it("leaves normal and magic gear in its authored colours", () => {
+    const plain = looksForEquipment({ body: {} }).body!;
+    for (const rarity of ["normal", "magic"]) {
+      expect(looksForEquipment({ body: { rarity } }).body).toBe(plain);
+    }
+    expect(plain).toBe(meshLook(plain));
+  });
 });
 
 /**
@@ -145,9 +164,15 @@ describe("wardrobe asset", () => {
     for (const looks of [
       looksForEquipment({}),
       looksForEquipment(Object.fromEntries(COSMETIC_SLOTS.map((s) => [s, {}]))),
+      // Rarity variants must resolve to geometry that exists too: they only
+      // recolour a look, so a tint must never invent a mesh name.
+      ...["magic", "rare", "unique"].map((rarity) =>
+        looksForEquipment(Object.fromEntries(COSMETIC_SLOTS.map((s) => [s, { rarity }]))),
+      ),
     ]) {
       for (const slot of COSMETIC_SLOTS) {
-        if (looks[slot] !== null) asked.add(`${slot}.${looks[slot]}.`);
+        const look = looks[slot];
+        if (look !== null) asked.add(`${slot}.${meshLook(look)}.`);
       }
     }
     expect(asked.size).toBeGreaterThan(0);

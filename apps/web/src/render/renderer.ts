@@ -17,6 +17,12 @@ const TICKS_PER_SEC = 30;
  */
 const SPAWN_YAW = Math.PI;
 
+/**
+ * Rarities the outfit preview walks once every slot is armoured, so the rarity
+ * tints are reachable in the lab without first finding a rare in a slot.
+ */
+const PREVIEW_RARITY = ["normal", "rare", "unique"] as const;
+
 /** Rising edge of the sim's casting flag, i.e. a cast just started this tick. */
 function didCast(prev: Snapshot, next: Snapshot): boolean {
   return next.player.casting && !prev.player.casting;
@@ -69,14 +75,19 @@ export class SnapshotRenderer {
    * Render-only either way: the sim never hears about it.
    */
   cyclePlayerOutfit(): void {
-    this.previewStep = (this.previewStep + 1) % (COSMETIC_SLOTS.length + 2);
+    this.previewStep = (this.previewStep + 1) % (COSMETIC_SLOTS.length + PREVIEW_RARITY.length + 1);
   }
 
   /** The look set to draw this frame: equipment, unless a preview is stepped in. */
   private looksFor(next: Snapshot): Looks {
     if (this.previewStep === 0) return looksForEquipment(next.equipment ?? {});
-    const shown = COSMETIC_SLOTS.slice(0, this.previewStep - 1);
-    return looksForEquipment(Object.fromEntries(shown.map((s) => [s, true])));
+    // Dress one more slot per step, then, once fully armoured, walk the rarity
+    // tints — those need a rare drop to see otherwise, which is exactly the wait
+    // the lab preview exists to skip.
+    const step = this.previewStep - 1;
+    const shown = COSMETIC_SLOTS.slice(0, Math.min(step, COSMETIC_SLOTS.length));
+    const rarity = PREVIEW_RARITY[Math.max(0, step - COSMETIC_SLOTS.length)] ?? "normal";
+    return looksForEquipment(Object.fromEntries(shown.map((s) => [s, { rarity }])));
   }
 
   apply(prev: Snapshot | null, next: Snapshot, alpha: number): void {
