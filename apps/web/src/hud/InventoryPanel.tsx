@@ -4,7 +4,7 @@ import { canEquip } from "@exiled/simulation";
 import { currencyAccepts, currencyResultRarity, SHARDS_PER_ORB } from "@exiled/rules";
 import { ItemTooltip } from "./ItemTooltip";
 import { playDropSound } from "../audio/drop-sound";
-import { BAR_H } from "./Hud";
+import { BAR_H, ORB_RISE } from "./Hud";
 import { CELL, CELL_VW, PANEL_PAD, PANEL_W } from "./layout";
 
 /**
@@ -109,7 +109,13 @@ function PaneHeader({ title, bleed, onClose, testId }: {
         borderBottom: "1px solid #000",
       }}
     >
-      <span style={{ fontFamily: SERIF, fontSize: 17, letterSpacing: 5, textTransform: "uppercase", color: "#2b1e0c", textShadow: "0 1px 0 rgba(238,208,140,0.55)" }}>
+      {/* Lit letters standing on the plaque, not cut into it. The engraved
+          version (near-black on the gilt, with a pale rim under it) is a real
+          PoE1 treatment, but it only survives at the size PoE1 draws it: at 17px
+          over a band this busy the strokes went to mud. inventory+equipment.png
+          has PoE2's cartouche lettering pale for the same reason, so brightening
+          it is the reference reading too, not a departure from it. */}
+      <span style={{ fontFamily: SERIF, fontSize: 19, fontWeight: 700, letterSpacing: 5, textTransform: "uppercase", color: "#f2dfae", textShadow: "0 1px 1px rgba(0,0,0,0.85), 0 0 6px rgba(0,0,0,0.6)" }}>
         {title}
       </span>
       <button
@@ -707,9 +713,29 @@ export function InventoryPanel({
       >
         <PaneHeader title="Inventory" onClose={onClose} testId="inventory-close" />
 
-        <div style={{ padding: PANEL_PAD, width: contentW, boxSizing: "content-box", flex: 1, display: "flex", flexDirection: "column" }}>
-          {/* Equipment paper-doll */}
+        {/* The extra foot of padding is the band the mana globe rises into: the
+            strip below is pinned to the bottom of this column, so without it the
+            globe lands squarely on the currency and on the backpack's last row. */}
+        <div style={{ padding: PANEL_PAD, paddingBottom: `calc(${PANEL_PAD} + ${ORB_RISE})`, width: contentW, boxSizing: "content-box", flex: 1, display: "flex", flexDirection: "column" }}>
+          {/* Equipment paper-doll. The flasks live inside it, in the block the
+              right-hand weapon leaves empty below itself, rather than in a strip
+              of their own under the whole doll: that strip cost a full row of
+              panel height and pushed the backpack down into the mana globe.
+              PoE2's own screen centres them under the doll (inventory+equipment
+              .png), but its doll fills its box and ours does not — two columns of
+              bare panel beside the boots is the more obvious wrong. */}
           <div style={{ position: "relative", width: equipW, height: equipH, margin: "0 auto", flexShrink: 0 }}>
+            <div
+              style={{
+                position: "absolute",
+                left: `calc(8 * ${U})`, top: `calc(4 * ${U})`,
+                width: `calc(2 * ${U})`, height: `calc(2 * ${U})`,
+                display: "flex", gap: 4, justifyContent: "center", alignItems: "flex-start",
+              }}
+            >
+              <Flask kind="life" hotkey="Q" />
+              <Flask kind="mana" hotkey="E" />
+            </div>
             {PAPER_DOLL.map((s) => (
               <EquipSlot
                 key={s.slot}
@@ -721,16 +747,6 @@ export function InventoryPanel({
                 onLeave={(item) => setHover((h) => (h?.item === item ? null : h))}
               />
             ))}
-          </div>
-
-          {/* Flasks + currency */}
-          <SectionRule>Flasks</SectionRule>
-          {/* Flasks sit in their own centred strip between the paper-doll and the
-              backpack, the way inventory.png has them. The currency moved out to
-              the strip at the foot of the panel. */}
-          <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
-            <Flask kind="life" hotkey="Q" />
-            <Flask kind="mana" hotkey="E" />
           </div>
 
           {/* Backpack grid (functional) */}

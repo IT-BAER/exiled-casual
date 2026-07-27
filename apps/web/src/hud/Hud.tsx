@@ -45,6 +45,17 @@ const FIGURE_OUT = "0.9vw"; // figure hangs off the screen side, covering ~30% o
 // these two fractions come from.
 // Exported because the inventory panel has to stop exactly where this starts.
 export const BAR_H = `${(ORB_VW * 0.72).toFixed(2)}vw`;
+/**
+ * How far the globe and its braided ring rise above the bar, i.e. above the foot
+ * of the panes. The globe is *meant* to overlap the pane's lower corner — that
+ * is what tucks the panel behind the furniture instead of parking it alongside.
+ * What it is not meant to overlap is anything the player has to read or click,
+ * and the inventory pins its currency strip to that foot, so the mana globe was
+ * sitting on the strip and on the last row of the backpack. The inventory keeps
+ * its content clear of this band; the corner it leaves bare is the overlap.
+ */
+export const ORB_RISE =
+  `calc(${ORB_BOTTOM} + ${(ORB_VW + RING_VW).toFixed(2)}vw - ${(ORB_VW * 0.72).toFixed(2)}vw)`;
 // PoE1's left panel stands a step shorter than the right one, 162px against 190px on the
 // same crop, but that step leaves a strip of bare world between the flask frame and the
 // foot of the stash pane, which stops on BAR_H the way the inventory does. The panes'
