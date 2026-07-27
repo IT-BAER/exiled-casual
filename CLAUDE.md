@@ -58,6 +58,9 @@ PoE2 itemization actually works — do not invent mechanics or colors from memor
 - `body.ranger.coat` is generated too: the ranger's body stops at the hip and every body base is
   drawn as a long coat. Its UVs are copied from the nearest tunic vertex by angle and height, never
   projected into a box on the atlas (any box wide enough also clips a boot buckle into the cloth).
+- `helmet.hood.helm` is generated from the cowl: its crown is duplicated, cut at the brow and pushed
+  outward onto a dome, so it inherits the cloth's skin weights and can only ever cap the head it was
+  cut from. Outward-only (the cowl points forward; a shrink-wrap is a hood in iron) and flat-shaded.
 - The coat hangs on 8 two-joint `skirt_<i>_<n>` chains the builder adds under `pelvis`, driven at
   runtime by the verlet solver in `skirt.ts` (spring toward the bind pose, no gravity; capsule
   colliders down both legs). Skinning it to the thighs instead makes the hem sweep in phase with

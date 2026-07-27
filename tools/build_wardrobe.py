@@ -22,12 +22,14 @@ show every mesh whose name starts with `<slot>.<look>.` and hide the rest of tha
 slot. Each look is a complete set for its slot, so nothing needs a hide mask
 except the head, which any helmet replaces.
 
-Two parts are generated here rather than cut from a pack: the head (neither pack
-has one) and the coat (the body item art is a floor-length coat and the ranger
-wears a hip-length tunic, which no amount of re-texturing can fix).
+Three parts are generated here rather than cut from a pack: the head (neither
+pack has one), the coat (the body item art is a floor-length coat and the ranger
+wears a hip-length tunic, which no amount of re-texturing can fix) and the helm
+(every helmet base is drawn as iron over cloth, and the pack only has the cloth).
 """
 import math
 import sys
+import bmesh
 import bpy
 from mathutils import Vector
 
@@ -52,6 +54,34 @@ HEAD_UV = (0.7891, 1.0 - 0.4492)
 # different pixel rather than a different shader, or it renders skin-coloured and
 # the character reads as bald.
 HAIR_UV = (0.7656, 0.4727)
+
+# And again for the helm, pinned this time to the flattest *bright* texel in the
+# ranger atlas (rgb 152,159,150, luminance 155 against cloth's ~60). The gear
+# textures are a luminance -> icon-palette lookup, so a bright texel is what puts
+# the helm at the light end of the cinder cap's own ramp: plate grey where the
+# cowl under it lands in the same icon's charcoal.
+HELM_UV = (0.2363, 1.0 - 0.1035)
+
+# Where the iron stops and the cloth starts. Measured on the cowl: the skull sits
+# at z 1.688, so this is a brow line just above the eyes, and everything the helm
+# leaves alone (the face opening, the drape down the neck) is the icon's tail.
+HELM_CUT = 1.720
+
+# The dome the cowl's crown is pushed out onto: centre and half-extents. The cowl
+# is a hood with a forward point, not a helmet, so the shell is clamped to a
+# minimum radius rather than shrink-wrapped - it keeps the cowl's front peak
+# where the cowl is wider, and rounds out the sides and crown, which is 0.02
+# wider than the cloth and reads as a hard cap from the play camera.
+HELM_C = (0.0, 0.030, 1.700)
+HELM_HALF = (0.118, 0.150, 0.178)
+
+# How far the iron stands off the cloth everywhere, so no cowl vertex pokes
+# through its own shell.
+HELM_CLEAR = 0.006
+
+# The brow band: the bottom of the shell flares out over this height, which is
+# the one edge of a helmet that still catches light at ten pixels a head.
+HELM_LIP, HELM_LIP_H = 0.014, 0.035
 
 # The coat's profile, waist first: (z, radius) around the body axis. Measured
 # against the ranger's own silhouette rather than guessed - his torso peaks at
@@ -274,6 +304,74 @@ def build_head(armature, skin_material):
     return made
 
 
+def build_helm(armature, hood):
+    """An iron cap over the ranger cowl, because helmets are drawn as iron.
+
+    The pack's only head covering is a soft hood, and every helmet base in the
+    item art is a riveted shell with a ragged cloth tail hanging out from under
+    it. The cowl is already the tail; what is missing is the shell.
+
+    So the shell is made *out of* the cowl: its crown is duplicated, cut off at
+    the brow, and pushed outward onto a dome. Copying the cloth carries its skin
+    weights along with it, which is the whole reason to do it this way - a
+    hand-built dome would need its own weight painting to follow the head, and
+    this one cannot drift from the cloth it caps by construction.
+
+    Pushed *outward only*: the cowl points forward over the face, and a shell
+    shrink-wrapped onto it would be a pointed hood in iron. Clamping to a dome
+    keeps that point where the cloth is wider than the dome and rounds out the
+    sides and crown, where it is not. Flat-shaded, unlike everything else here:
+    at ten pixels a head, facets catching light are what say plate rather than
+    cloth.
+    """
+    bpy.context.view_layer.update()
+    obj = hood.copy()
+    obj.data = hood.data.copy()
+    obj.name = obj.data.name = "helmet.hood.helm"
+    bpy.context.scene.collection.objects.link(obj)
+
+    mw = obj.matrix_world
+    to_local = mw.inverted()
+    centre, half = Vector(HELM_C), Vector(HELM_HALF)
+
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    bmesh.ops.delete(
+        bm, geom=[v for v in bm.verts if (mw @ v.co).z < HELM_CUT], context="VERTS",
+    )
+    if not bm.faces:
+        raise SystemExit(f"helm: the cowl has no faces above z {HELM_CUT}")
+
+    for v in bm.verts:
+        p = mw @ v.co
+        d = p - centre
+        k = Vector((d.x / half.x, d.y / half.y, d.z / half.z)).length
+        if 0.0 < k < 1.0:
+            p = centre + d / k
+            d = p - centre
+        p += d.normalized() * HELM_CLEAR
+        # The brow band flares straight out from the head's axis, not along the
+        # dome, so it reads as a rim rather than as a slightly fatter helmet.
+        lip = (HELM_CUT + HELM_LIP_H - p.z) / HELM_LIP_H
+        flat = Vector((d.x, d.y, 0.0))
+        if lip > 0.0 and flat.length > 1e-6:
+            p += flat.normalized() * (HELM_LIP * min(1.0, lip))
+        v.co = to_local @ p
+
+    bm.to_mesh(obj.data)
+    bm.free()
+
+    for loop in obj.data.uv_layers[0].data:
+        loop.uv = HELM_UV
+    for poly in obj.data.polygons:
+        poly.use_smooth = False
+    rebind(obj, armature)
+
+    log(f"built helm: {len(obj.data.vertices)}v of cowl above z {HELM_CUT}, "
+        f"mat={obj.data.materials[0].name}")
+    return obj
+
+
 def coat_point(theta, z, radius):
     """A point on the coat's surface: elliptical around the body's own axis."""
     return (
@@ -480,6 +578,7 @@ def main():
     generated = {o.name for o in build_head(armature, skin_material)}
     build_skirt_bones(armature)
     generated.add(build_coat(armature, bpy.data.objects["Male_Ranger_Body"]).name)
+    generated.add(build_helm(armature, bpy.data.objects["Male_Ranger_Head_Hood"]).name)
 
     dropped = []
     for obj in meshes():

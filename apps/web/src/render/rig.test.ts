@@ -15,6 +15,7 @@ import {
   meshLook,
   COSMETIC_SLOTS,
   GEAR_TEXTURE_BASES,
+  SKIRT_CHAINS,
 } from "./rig";
 import { ITEM_POOLS } from "@exiled/content-runtime";
 
@@ -200,7 +201,10 @@ describe("wardrobe asset", () => {
     // Every borrowed mesh binds by joint order, so the pack joints must still be
     // all of the skeleton except what the builder adds for cloth.
     expect(joints.length - skirt.length).toBe(65);
-    expect(skirt.length).toBe(16);
+    // Against the constant, not against 16: the chain count lives in the builder
+    // and in `rig.ts`, and a rebuild with one of them changed drops chains out of
+    // the coat silently.
+    expect(skirt.length).toBe(SKIRT_CHAINS * 2);
   });
 
   it("hangs every skirt chain on effectively one segment length", () => {
@@ -212,7 +216,7 @@ describe("wardrobe asset", () => {
     const lengths = json.nodes
       .filter((n) => /^skirt_\d+_02$/.test(n.name))
       .map((n) => Math.hypot(...(n.translation ?? [0, 0, 0])));
-    expect(lengths).toHaveLength(8);
+    expect(lengths).toHaveLength(SKIRT_CHAINS);
     expect(lengths[0]).toBeGreaterThan(0.1);
     for (const length of lengths) {
       expect(Math.abs(length - lengths[0]!) / lengths[0]!).toBeLessThan(0.01);
@@ -229,6 +233,14 @@ describe("wardrobe asset", () => {
     // rebuild and the character silently goes back to wearing a tunic, which
     // the look-prefix tests above would not notice.
     expect(skinned).toContain("body.ranger.coat");
+  });
+
+  it("carries the helm, which is the iron half of a helmet", () => {
+    // Generated from the cowl's own crown: the pack ships cloth and every helmet
+    // base is drawn as a riveted shell over it. Lose this part in a rebuild and
+    // the character goes back to a soft hood under charred-iron item art, which
+    // the look-prefix test below would not notice - the hood is still there.
+    expect(skinned).toContain("helmet.hood.helm");
   });
 
   it("carries every look the code can ask for", () => {

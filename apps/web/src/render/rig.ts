@@ -131,9 +131,10 @@ export function meshLook(look: string): string {
  * `albedoTexture` is swapped at runtime.
  *
  * Shape is not something a texture can fix, and it is not this table's job: the
- * armoured body carries a generated coat (`body.ranger.coat`) so the silhouette
- * agrees with the art too. That coat is one shape for the whole slot, though, so
- * what still does not vary per base is the cut - only the colour.
+ * armoured body carries a generated coat (`body.ranger.coat`) and the helmet a
+ * generated iron cap (`helmet.hood.helm`) so the silhouette agrees with the art
+ * too. Both are one shape for their whole slot, though, so what still does not
+ * vary per base is the cut - only the colour.
  *
  * Keys are item base ids. A base with no entry keeps the authored look, so an
  * unmapped base renders as green ranger gear rather than as nothing.
@@ -229,7 +230,7 @@ const HAIR_PART = `${HEAD_PREFIX}hair`;
  * `SkirtSim` is what puts them somewhere; see `skirt.ts` for why the coat is not
  * simply skinned to the legs.
  */
-const SKIRT_CHAINS = 8;
+export const SKIRT_CHAINS = 8;
 const skirtJointName = (chain: number, joint: number): string =>
   `skirt_${chain}_${String(joint).padStart(2, "0")}`;
 
