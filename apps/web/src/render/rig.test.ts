@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect, afterEach } from "vitest";
 import { NullEngine } from "@babylonjs/core";
@@ -12,8 +12,13 @@ import {
   resetPlayerRig,
   speedRatioFor,
   looksForEquipment,
+  meshLook,
   COSMETIC_SLOTS,
+  GEAR_TEXTURE_BASES,
 } from "./rig";
+import { ITEM_POOLS } from "@exiled/content-runtime";
+
+const ITEM_BASES = ITEM_POOLS.bases;
 
 let engine: InstanceType<typeof NullEngine>;
 
@@ -124,6 +129,50 @@ describe("looksForEquipment", () => {
     for (const rarity of ["normal", "magic", "rare", "unique"]) {
       expect(looksForEquipment({ body: { rarity } }).body).toBe(plain);
     }
+  });
+
+  it("wears the equipped base's armour texture, and only for a base that has one", () => {
+    const plain = looksForEquipment({ body: {} }).body!;
+    const geared = looksForEquipment({ body: { baseId: "base.emberweave_robe" } }).body!;
+    // The texture rides along with the look; the geometry it names is unchanged.
+    expect(geared).toBe(`${plain}#base.emberweave_robe`);
+    expect(meshLook(geared)).toBe(plain);
+    // An unmapped base keeps the authored look rather than asking for a missing file.
+    expect(looksForEquipment({ body: { baseId: "base.nonexistent" } }).body).toBe(plain);
+  });
+});
+
+/**
+ * The armour textures are baked offline from the item icons, so nothing at build
+ * time connects the base ids in `items.ts`, the files in `public/textures/gear/`
+ * and the table in `rig.ts`. A base renamed in content would silently go back to
+ * wearing green linen. This pins all three together.
+ */
+describe("gear textures", () => {
+  const GEAR = fileURLToPath(new URL("../../public/textures/gear/", import.meta.url));
+
+  it("ships a texture file for every base the rig can ask for", () => {
+    expect(GEAR_TEXTURE_BASES.length).toBeGreaterThan(0);
+    for (const baseId of GEAR_TEXTURE_BASES) {
+      const slug = baseId.split(".", 2)[1]!;
+      expect(existsSync(`${GEAR}${slug}.png`)).toBe(true);
+    }
+  });
+
+  it("names bases that content actually defines", () => {
+    const defined = new Set(ITEM_BASES.map((b) => b.id));
+    for (const baseId of GEAR_TEXTURE_BASES) expect(defined).toContain(baseId);
+  });
+
+  it("covers every base that can fill a cosmetic slot", () => {
+    // Any equippable armour base without a texture renders as green ranger gear
+    // next to charred-iron item art, which is the mismatch this whole pipeline
+    // exists to remove.
+    const cosmetic = new Set<string>(COSMETIC_SLOTS);
+    const missing = ITEM_BASES.filter(
+      (b) => b.itemClass !== undefined && cosmetic.has(b.itemClass) && !GEAR_TEXTURE_BASES.includes(b.id),
+    );
+    expect(missing.map((b) => b.id)).toEqual([]);
   });
 });
 

@@ -307,6 +307,9 @@ export function buildSnapshot(
         rarity: d.rarity, name: d.name, baseName: d.baseName, itemClass: d.itemClass,
         implicit: d.implicit, lines: d.lines, flavour: d.flavour, icon: d.icon, unidentified: d.unidentified,
         statLines: d.statLines, reqLevel: d.reqLevel, reqAttrValue: d.reqAttrValue, reqAttr: d.reqAttr,
+        // The renderer dresses the character from this: each base has its own
+        // armour texture, baked from that base's inventory icon.
+        baseId: item.baseId,
       };
     }
   }

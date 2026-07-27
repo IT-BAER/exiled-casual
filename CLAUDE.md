@@ -62,6 +62,11 @@ PoE2 itemization actually works — do not invent mechanics or colors from memor
   Its glTF importer adds a 42-vert `Icosphere` as the bone display shape; the exporter drops it.
 - Raster UI/item art goes through `/codex-imagegen`, never hand-authored SVG: the quality gap is
   large and visible. Generated masters are cropped to their alpha bounds before downscaling.
+- Worn armour is textured per item base by `tools/build_gear_textures.py`, which re-palettizes the
+  ranger atlas to each base's inventory icon (luminance -> a ramp sampled from that icon). Rerun it
+  after adding an armour base or changing an icon, and add the base to `GEAR_TEXTURE` in `rig.ts`;
+  `rig.test.ts` fails if the two lists or the files disagree. It is a pixel transform on the real
+  atlas, so UVs stay correct. The silhouette stays the ranger's; only geometry can change that.
 
 ## Devlog — SCREENSHOT EACH VISIBLE STEP
 

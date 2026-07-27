@@ -3,7 +3,7 @@ import type { Mesh } from "@babylonjs/core";
 import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
 import { animateActor, makeMesh, updateTelegraph, updatePortal, updateMapDevice, updateStash, updateVendor, updateGroundItem, updateRareElement, Y_LIFT } from "./meshes";
 import type { MeshKind } from "./meshes";
-import { COSMETIC_SLOTS, looksForEquipment, rigOf, type Looks } from "./rig";
+import { COSMETIC_SLOTS, looksForEquipment, previewItemFor, rigOf, type Looks } from "./rig";
 import { lerp, lerpAngle } from "./interp";
 
 /** Sim rate. Consecutive snapshots are one tick apart, which is what turns a
@@ -76,7 +76,7 @@ export class SnapshotRenderer {
   private looksFor(next: Snapshot): Looks {
     if (this.previewStep === 0) return looksForEquipment(next.equipment ?? {});
     const shown = COSMETIC_SLOTS.slice(0, this.previewStep - 1);
-    return looksForEquipment(Object.fromEntries(shown.map((s) => [s, true])));
+    return looksForEquipment(Object.fromEntries(shown.map((s) => [s, previewItemFor(s)])));
   }
 
   apply(prev: Snapshot | null, next: Snapshot, alpha: number): void {

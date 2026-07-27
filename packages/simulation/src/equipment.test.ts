@@ -307,6 +307,16 @@ describe("buildSnapshot — equipment", () => {
     expect(snap.equipment["weapon1"]!.rarity).toBe("normal");
     expect(snap.equipment["weapon1"]!.itemClass).toBe("wand");
   });
+
+  it("carries the base id, which is what the renderer dresses the character from", () => {
+    const { world, sim } = makeWorld();
+    world.set<EquipmentC>(sessionE(world), "equipment", { slots: { body: GEARED_ROBE } });
+
+    const snap = buildSnapshot(world, sim, 0, CONTENT_VERSION);
+    // Each armour base has its own baked texture, so an equipped slot that
+    // reaches the client without its base id renders as the authored outfit.
+    expect(snap.equipment["body"]!.baseId).toBe("base.emberweave_robe");
+  });
 });
 
 // ---------------------------------------------------------------------------

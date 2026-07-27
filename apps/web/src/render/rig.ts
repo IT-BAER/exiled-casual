@@ -2,12 +2,15 @@ import {
   Animation,
   AnimationGroup,
   Mesh,
+  PBRMaterial,
+  Texture,
   TransformNode,
   Vector3,
   LoadAssetContainerAsync,
   type AssetContainer,
   type IAnimationKey,
   type InstantiatedEntries,
+  type Material,
   type Node,
   type Scene,
 } from "@babylonjs/core";
@@ -99,8 +102,66 @@ export const COSMETIC_SLOTS: readonly CosmeticSlot[] = [
   "helmet", "body", "gloves", "boots", "belt",
 ];
 
-/** A look per slot, or null for "wearing nothing there". */
+/**
+ * A look per slot, or null for "wearing nothing there".
+ *
+ * A look is `<mesh look>`, optionally followed by `#<base id>`: the mesh look
+ * picks the geometry, the base id picks the armour texture that geometry wears
+ * (see `GEAR_TEXTURE`). Only the part before the `#` ever names a mesh.
+ */
 export type Looks = Record<CosmeticSlot, string | null>;
+
+/** The geometry half of a look value — what `slot.<this>.part` is named after. */
+export function meshLook(look: string): string {
+  return look.split("#")[0]!;
+}
+
+/**
+ * Armour texture per item base, baked by `tools/build_gear_textures.py`.
+ *
+ * The character wears one authored outfit and the item art is charred iron with
+ * ember in the seams, so equipping an Emberweave Robe used to leave him in green
+ * linen — the inventory and the world looked like two different games. New
+ * geometry per base is out of reach, so the material is what changes: each base
+ * gets the ranger atlas re-palettized to that icon's own colours, and only
+ * `albedoTexture` is swapped at runtime.
+ *
+ * The silhouette is still the ranger's, and that is the honest limit of this
+ * approach: the robe icon is a long jagged coat and the character wears a tunic.
+ * Colour, material and tone match; shape does not.
+ *
+ * Keys are item base ids. A base with no entry keeps the authored look, so an
+ * unmapped base renders as green ranger gear rather than as nothing.
+ */
+const GEAR_TEXTURE: Record<string, string> = {
+  "base.cinder_cap": "/textures/gear/cinder_cap.png",
+  "base.emberweave_robe": "/textures/gear/emberweave_robe.png",
+  "base.ember_gauntlets": "/textures/gear/ember_gauntlets.png",
+  "base.ashen_treads": "/textures/gear/ashen_treads.png",
+  "base.cinderchain_sash": "/textures/gear/cinderchain_sash.png",
+};
+
+/** Base ids the character has a baked armour texture for. Pinned by `rig.test.ts`. */
+export const GEAR_TEXTURE_BASES: readonly string[] = Object.keys(GEAR_TEXTURE);
+
+/**
+ * What the lab preview puts in each slot. The preview exists so the wardrobe can
+ * be checked without farming five drops, and a preview that skipped the base ids
+ * would show the authored green outfit — the one thing the armour textures are
+ * there to replace.
+ */
+const PREVIEW_BASE: Record<CosmeticSlot, string> = {
+  helmet: "base.cinder_cap",
+  body: "base.emberweave_robe",
+  gloves: "base.ember_gauntlets",
+  boots: "base.ashen_treads",
+  belt: "base.cinderchain_sash",
+};
+
+/** A stand-in equipped item for the lab preview, shaped like the snapshot's. */
+export function previewItemFor(slot: CosmeticSlot): { baseId: string } {
+  return { baseId: PREVIEW_BASE[slot] };
+}
 
 /*
  * Rarity used to recolour these looks, and it is deliberately gone.
@@ -316,6 +377,11 @@ export class RigActor {
   private readonly headParts: Mesh[] = [];
   private looks: Looks = { ...UNEQUIPPED };
 
+  /** The material each part was exported with, before any gear texture. */
+  private readonly baseMaterials = new Map<Mesh, Material | null>();
+  /** Re-textured clones, `<source material id>#<base id>` -> clone. Built once, reused. */
+  private readonly gearedMaterials = new Map<string, PBRMaterial>();
+
   constructor(scene: Scene, host: Mesh) {
     this.scene = scene;
     this.host = host;
@@ -348,9 +414,16 @@ export class RigActor {
   private applyLooks(): void {
     for (const [slot, byLook] of this.parts) {
       const wanted = this.looks[slot as CosmeticSlot] ?? null;
+      const wantedLook = wanted === null ? null : meshLook(wanted);
+      const baseId = wanted === null ? undefined : wanted.split("#")[1];
       for (const [look, meshes] of byLook) {
-        const on = look === wanted;
-        for (const mesh of meshes) mesh.setEnabled(on);
+        const on = look === wantedLook;
+        for (const mesh of meshes) {
+          mesh.setEnabled(on);
+          // Only the visible look pays for the swap; a hidden one is re-dressed
+          // when it comes back.
+          if (on) mesh.material = this.geared(mesh, baseId);
+        }
       }
     }
     // A helmet takes the hair off, not the head: see `HAIR_PART`.
@@ -358,6 +431,44 @@ export class RigActor {
     for (const mesh of this.headParts) {
       mesh.setEnabled(bare || !mesh.name.startsWith(HAIR_PART));
     }
+  }
+
+  /**
+   * The material `mesh` should wear for an equipped base: its own, or a clone of
+   * it carrying that base's armour texture.
+   *
+   * Clones are per rig actor, and the source material is never touched, because
+   * it belongs to the read-only asset container every instance is built from —
+   * re-texturing it in place would dress the disenchanter in the player's gear.
+   *
+   * The texture is *cloned from the material's own* and then pointed at a new
+   * URL rather than constructed fresh. A new `Texture` would default to Babylon's
+   * own invertY and UV set, and the glTF loader does not use those, so a
+   * hand-built one lands upside down on a hand-authored atlas.
+   */
+  private geared(mesh: Mesh, baseId: string | undefined): Material | null {
+    let base = this.baseMaterials.get(mesh);
+    if (base === undefined) this.baseMaterials.set(mesh, (base = mesh.material));
+
+    const url = baseId === undefined ? undefined : GEAR_TEXTURE[baseId];
+    // An unmapped base, or a material with no albedo to replace, keeps the
+    // authored look: wrong-coloured armour beats an invisible limb.
+    if (!url || !(base instanceof PBRMaterial) || !(base.albedoTexture instanceof Texture)) {
+      return base;
+    }
+
+    const key = `${base.uniqueId}#${baseId}`;
+    let clone = this.gearedMaterials.get(key);
+    if (!clone) {
+      clone = base.clone(`${base.name}#${baseId}`);
+      const texture = base.albedoTexture.clone();
+      if (texture) {
+        texture.updateURL(url);
+        clone.albedoTexture = texture;
+      }
+      this.gearedMaterials.set(key, clone);
+    }
+    return clone;
   }
 
   /** Pick and pace the locomotion clip from the actor's real ground speed. */
@@ -484,6 +595,12 @@ export class RigActor {
     this.groups.clear();
     this.parts.clear();
     this.headParts.length = 0;
+    for (const clone of this.gearedMaterials.values()) {
+      clone.albedoTexture?.dispose();
+      clone.dispose();
+    }
+    this.gearedMaterials.clear();
+    this.baseMaterials.clear();
     this.entries?.dispose();
     this.entries = null;
     this.active = null;
@@ -513,13 +630,18 @@ export function rigOf(root: Mesh): RigActor | null {
 /**
  * Which look each slot should wear, given what is equipped. Any item in a slot
  * shows that slot's armoured look; an empty slot falls back to the commoner
- * clothes, so the character is never rendered bare. Rarity does not enter into
- * it: every item in a slot wears the same look, whatever it rolled.
+ * clothes, so the character is never rendered bare. The item's *base* picks the
+ * armour texture that look wears; its rarity is deliberately not consulted,
+ * because recolouring a whole slot by tier washes the silhouette one colour
+ * instead of pointing at the piece that is special.
  */
 export function looksForEquipment(equipped: Partial<Record<CosmeticSlot, unknown>>): Looks {
   const out = { ...UNEQUIPPED };
   for (const slot of COSMETIC_SLOTS) {
-    if (equipped[slot] !== undefined) out[slot] = EQUIPPED[slot];
+    const item = equipped[slot];
+    if (item === undefined) continue;
+    const baseId = (item as { baseId?: string } | null)?.baseId;
+    out[slot] = EQUIPPED[slot] + (baseId !== undefined && baseId in GEAR_TEXTURE ? `#${baseId}` : "");
   }
   return out;
 }
