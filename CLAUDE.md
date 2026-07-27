@@ -109,6 +109,13 @@ PoE2 itemization actually works — do not invent mechanics or colors from memor
   after adding an armour base or changing an icon, and add the base to `GEAR_TEXTURE` in `rig.ts`;
   `rig.test.ts` fails if the two lists or the files disagree. It is a pixel transform on the real
   atlas, so UVs stay correct. The silhouette stays the ranger's; only geometry can change that.
+- The hideout props (map device, stash chest) are `props.glb`, built by `tools/build_props.py` from
+  the texture masters in `assets/props/` (generated via `/codex-imagegen`; `assets/props/build/` is
+  derived and gitignored). Rebuild the glb after touching either. `props.ts` fetches it once and
+  `meshes.ts` falls back to its old primitives when it has not loaded, so headless tests still run;
+  `props.test.ts` pins the node and material names the runtime looks up. Two traps: glTF base colour
+  is linear, so a flat colour needs squaring to look like the Babylon value it replaces, and a prop
+  built facing -Y in Blender ends up facing away from the camera after the two axis conversions.
 
 ## Devlog — SCREENSHOT EACH VISIBLE STEP
 

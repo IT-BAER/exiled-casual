@@ -7,6 +7,7 @@ import {
   Texture,
   type Scene,
 } from "@babylonjs/core";
+import { attachProp } from "./props";
 import { attachRig, rigOf, type RigParts } from "./rig";
 
 export type MeshKind = "player" | "monster" | "rare" | "boss" | "projectile" | "groundArea" | "telegraph" | "portal" | "mapDevice" | "stash" | "vendor" | "groundItem";
@@ -491,8 +492,23 @@ export function updatePortal(root: Mesh, hovered: boolean): void {
  * Low brass/gold ceremonial basin — cylindrical pedestal with a wider decorative rim.
  * Warm metallic gold with specular so it catches key light; faint emissive stays
  * readable in dark scenes. inRange pulses the emissive for the interact affordance.
+ *
+ * This is the greybox now: `props.glb` carries the turned, textured device, and
+ * the primitives below stand in only when it has not loaded. Both hand the hover
+ * code the same two materials under the same names, so nothing downstream cares
+ * which one it got.
  */
 function buildMapDevice(scene: Scene, root: Mesh): void {
+  const asset = attachProp(scene, root, "mapDevice");
+  if (asset) {
+    root.metadata = {
+      brassBody: asset["brass_side"],
+      brassRim: asset["brass_top"],
+      interactKind: "mapDevice",
+    };
+    return;
+  }
+
   // Dark antique brass — lower diffuse, high specular so the directional key light
   // creates a visible metallic catch rather than flat painted-yellow plastic.
   const brassBody = new StandardMaterial(`${root.name}-md-body`, scene);
@@ -541,6 +557,12 @@ function buildMapDevice(scene: Scene, root: Mesh): void {
  * timber, cold iron straps, a domed lid. Hover warms the iron so it reads clickable.
  */
 function buildStash(scene: Scene, root: Mesh): void {
+  const asset = attachProp(scene, root, "stash");
+  if (asset) {
+    root.metadata = { iron: asset["iron"], interactKind: "stash" };
+    return;
+  }
+
   const wood = new StandardMaterial(`${root.name}-st-wood`, scene);
   wood.diffuseColor = new Color3(0.20, 0.13, 0.07);
   wood.emissiveColor = new Color3(0.03, 0.02, 0.01);
