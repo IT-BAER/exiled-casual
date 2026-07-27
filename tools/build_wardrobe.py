@@ -78,17 +78,30 @@ COAT_SEG = 24
 COAT_CY = 0.03
 COAT_DEPTH = 0.88
 
-# Where the coat stops following the hips and starts following the legs. Above
-# the top it is rigid to the pelvis; below the bottom each side is carried
-# entirely by its own thigh, which is what keeps a striding knee inside its own
-# panel instead of through the front of the coat.
-COAT_PELVIS_Z = 1.02
-COAT_LEG_Z = 0.80
+# The coat hangs off a ring of two-joint chains rather than off the legs. Riding
+# the thighs was the first attempt and it looks wrong for a good reason: a thigh
+# rotation is rigid about the hip, so the hem sweeps a wide arc exactly in phase
+# with the knee and the coat reads as two stiff blades. These bones carry no
+# animation at all - `skirt.ts` swings them - so what is baked here is only where
+# they hang and how far apart they are.
+SKIRT_CHAINS = 8
 
-# How far off centre a vertex has to be before it belongs wholly to one leg.
-# Narrower than this and the two panels tear apart at the seam; wider and the
-# whole coat goes stiff.
-COAT_SPLIT_X = 0.16
+# Both joints in a chain are deliberately the same length: the runtime reads one
+# segment length off the asset and uses it for both, so there is no second copy
+# of these numbers to drift. `rig.test.ts` pins it.
+SKIRT_JOINT = "skirt_{i}_{n:02d}"
+
+# Where the chain hangs from and reaches to. Taken from the coat's own profile so
+# the bones cannot drift away from the cloth they carry.
+SKIRT_TOP_Z, SKIRT_TOP_R = COAT_RINGS[0]
+SKIRT_HEM_Z = sum(z for z, _ in COAT_HEM) / len(COAT_HEM)
+SKIRT_HEM_R = sum(r for _, r in COAT_HEM) / len(COAT_HEM)
+
+# Height along the chain (0 at the waist, 1 at the hem) where the cloth stops
+# being pinned to the body and where it hands over to the lower joint. The top
+# band keeps the waist crisp under the belt; everything below swings.
+SKIRT_PINNED = 0.20
+SKIRT_LOWER = 0.45
 
 # Band of the tunic the coat borrows its uvs from: its own hem (z 0.909) up to
 # mid-chest. Stretched down the coat, so the tunic's hem trim lands on the hem.
@@ -261,6 +274,54 @@ def build_head(armature, skin_material):
     return made
 
 
+def coat_point(theta, z, radius):
+    """A point on the coat's surface: elliptical around the body's own axis."""
+    return (
+        radius * math.cos(theta),
+        COAT_CY + radius * COAT_DEPTH * math.sin(theta),
+        z,
+    )
+
+
+def build_skirt_bones(armature):
+    """A ring of two-joint chains hanging from the pelvis, for the coat to swing on.
+
+    They are added to the rig rather than borrowed from it because the packs have
+    no cloth bones - 65 joints of body and nothing that hangs. Nothing animates
+    them: every clip in the library predates them and drives bones by name, so
+    they sit in their rest pose until `skirt.ts` puts them somewhere.
+    """
+    to_local = armature.matrix_world.inverted()
+    bpy.ops.object.select_all(action="DESELECT")
+    bpy.context.view_layer.objects.active = armature
+    armature.select_set(True)
+    bpy.ops.object.mode_set(mode="EDIT")
+
+    bones = armature.data.edit_bones
+    pelvis = bones["pelvis"]
+    made = []
+    for i in range(SKIRT_CHAINS):
+        theta = 2.0 * math.pi * i / SKIRT_CHAINS
+        top = Vector(coat_point(theta, SKIRT_TOP_Z, SKIRT_TOP_R))
+        hem = Vector(coat_point(theta, SKIRT_HEM_Z, SKIRT_HEM_R))
+        mid = (top + hem) * 0.5
+
+        upper = bones.new(SKIRT_JOINT.format(i=i, n=1))
+        upper.head, upper.tail = to_local @ top, to_local @ mid
+        upper.parent, upper.use_connect = pelvis, False
+
+        lower = bones.new(SKIRT_JOINT.format(i=i, n=2))
+        lower.head, lower.tail = to_local @ mid, to_local @ hem
+        lower.parent, lower.use_connect = upper, True
+
+        made += [upper.name, lower.name]
+
+    bpy.ops.object.mode_set(mode="OBJECT")
+    log(f"built {SKIRT_CHAINS} skirt chains ({len(made)} joints), "
+        f"z {SKIRT_TOP_Z:.3f} -> {SKIRT_HEM_Z:.3f}")
+    return made
+
+
 def torso_uvs(torso):
     """The tunic's own (angle, height, uv) samples, for the coat to borrow from.
 
@@ -290,13 +351,11 @@ def build_coat(armature, torso):
     authored body ends at the hip. So this adds the missing half of the
     silhouette as a lofted skirt hanging from under his belt.
 
-    It is skinned across three bones rather than pinned to the pelvis. A skirt
-    rigid to the hips is a bell that a running knee walks straight through; here
-    each side below `COAT_LEG_Z` is carried by its own thigh, so the panel swings
-    with the leg it covers and the leg stays inside it. The seam down the middle
-    is shared between both thighs, which is where the small amount of pinching
-    that linear blend skinning gives you ends up - at the character's ~12% of
-    frame height, under a coat, that is invisible.
+    It hangs off the skirt chains (see `build_skirt_bones`), not off the body. It
+    was skinned to the thighs first, and that is worth not repeating: a thigh
+    rotation is rigid about the hip, so the hem swept a wide arc exactly in phase
+    with the knee and the coat read as two stiff blades. Cloth needs to lag, and
+    a bone that a clip drives cannot lag anything.
 
     UVs are borrowed from the tunic by nearest (angle, height) match instead of
     being projected into a box on the atlas. The atlas is a packed character
@@ -311,11 +370,7 @@ def build_coat(armature, torso):
         for s in range(COAT_SEG):
             z, radius = COAT_HEM[s % len(COAT_HEM)] if ring is None else ring
             theta = 2.0 * math.pi * s / COAT_SEG
-            verts.append((
-                radius * math.cos(theta),
-                COAT_CY + radius * COAT_DEPTH * math.sin(theta),
-                z,
-            ))
+            verts.append(coat_point(theta, z, radius))
             meta.append((theta if theta <= math.pi else theta - 2.0 * math.pi, z))
         if r == 0:
             continue
@@ -359,15 +414,35 @@ def build_coat(armature, torso):
     for loop in mesh.loops:
         uv_layer.data[loop.index].uv = per_vertex[loop.vertex_index]
 
-    g_pelvis = obj.vertex_groups.new(name="pelvis")
-    g_left = obj.vertex_groups.new(name="thigh_l")
-    g_right = obj.vertex_groups.new(name="thigh_r")
-    for v in mesh.vertices:
-        legs = min(1.0, max(0.0, (COAT_PELVIS_Z - v.co.z) / (COAT_PELVIS_Z - COAT_LEG_Z)))
-        left = min(1.0, max(0.0, 0.5 + v.co.x / COAT_SPLIT_X))
-        g_pelvis.add([v.index], 1.0 - legs, "REPLACE")
-        g_left.add([v.index], legs * left, "REPLACE")
-        g_right.add([v.index], legs * (1.0 - left), "REPLACE")
+    # Four influences per vertex and not one more: two neighbouring chains, and
+    # within each the two joints its height falls between. glTF's fifth influence
+    # costs a whole extra attribute set on every vertex of the mesh.
+    pelvis = obj.vertex_groups.new(name="pelvis")
+    chains = [
+        (obj.vertex_groups.new(name=SKIRT_JOINT.format(i=i, n=1)),
+         obj.vertex_groups.new(name=SKIRT_JOINT.format(i=i, n=2)))
+        for i in range(SKIRT_CHAINS)
+    ]
+    step = 2.0 * math.pi / SKIRT_CHAINS
+    for v, (theta, z) in zip(mesh.vertices, meta):
+        t = min(1.0, max(0.0, (SKIRT_TOP_Z - z) / (SKIRT_TOP_Z - SKIRT_HEM_Z)))
+        pinned = min(1.0, max(0.0, (SKIRT_PINNED - t) / SKIRT_PINNED))
+        lower = min(1.0, max(0.0, (t - SKIRT_LOWER) / (1.0 - SKIRT_LOWER)))
+        upper = 1.0 - pinned - lower
+
+        # Split between the two chains the vertex sits between, so a panel that
+        # swings takes its neighbour's edge with it instead of tearing off it.
+        exact = theta / step
+        near = math.floor(exact)
+        blend = exact - near
+        pelvis.add([v.index], pinned, "REPLACE")
+        for chain, share in ((near % SKIRT_CHAINS, 1.0 - blend),
+                             ((near + 1) % SKIRT_CHAINS, blend)):
+            if share <= 0.0:
+                continue
+            g_upper, g_lower = chains[chain]
+            g_upper.add([v.index], upper * share, "REPLACE")
+            g_lower.add([v.index], lower * share, "REPLACE")
     rebind(obj, armature)
 
     log(f"built coat: {len(mesh.vertices)}v, {len(mesh.polygons)} faces, "
@@ -403,6 +478,7 @@ def main():
         m for o in meshes() for m in o.data.materials if m and m.name == SKIN_MAT
     )
     generated = {o.name for o in build_head(armature, skin_material)}
+    build_skirt_bones(armature)
     generated.add(build_coat(armature, bpy.data.objects["Male_Ranger_Body"]).name)
 
     dropped = []

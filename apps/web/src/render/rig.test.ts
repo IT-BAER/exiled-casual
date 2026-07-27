@@ -187,12 +187,36 @@ describe("wardrobe asset", () => {
   const glb = readFileSync(`${MODELS}wardrobe.glb`);
   const json = JSON.parse(
     glb.subarray(20, 20 + glb.readUInt32LE(12)).toString("utf8"),
-  ) as { nodes: { name: string; skin?: number }[]; skins: { joints: number[] }[] };
+  ) as {
+    nodes: { name: string; skin?: number; translation?: [number, number, number] }[];
+    skins: { joints: number[] }[];
+  };
   const skinned = json.nodes.filter((n) => n.skin !== undefined).map((n) => n.name);
 
-  it("rides the same single 65-joint skeleton as the source packs", () => {
+  it("rides one skeleton: the packs' 65 joints plus the coat's chains", () => {
     expect(json.skins).toHaveLength(1);
-    expect(json.skins[0]!.joints).toHaveLength(65);
+    const joints = json.skins[0]!.joints.map((j) => json.nodes[j]!.name);
+    const skirt = joints.filter((n) => n.startsWith("skirt_"));
+    // Every borrowed mesh binds by joint order, so the pack joints must still be
+    // all of the skeleton except what the builder adds for cloth.
+    expect(joints.length - skirt.length).toBe(65);
+    expect(skirt.length).toBe(16);
+  });
+
+  it("hangs every skirt chain on effectively one segment length", () => {
+    // `rig.ts` measures one chain and solves all eight against it. They are not
+    // bit-identical, because the coat is an ellipse and a chain at the hip
+    // travels further out than one at the belly, but that spread is 0.2% - a
+    // millimetre on this character. A ring that drifted past 1% would render as
+    // cloth of the wrong length on seven chains out of eight.
+    const lengths = json.nodes
+      .filter((n) => /^skirt_\d+_02$/.test(n.name))
+      .map((n) => Math.hypot(...(n.translation ?? [0, 0, 0])));
+    expect(lengths).toHaveLength(8);
+    expect(lengths[0]).toBeGreaterThan(0.1);
+    for (const length of lengths) {
+      expect(Math.abs(length - lengths[0]!) / lengths[0]!).toBeLessThan(0.01);
+    }
   });
 
   it("carries a head, because neither source pack has one", () => {

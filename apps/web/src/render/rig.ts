@@ -1,8 +1,10 @@
 import {
   Animation,
   AnimationGroup,
+  Matrix,
   Mesh,
   PBRMaterial,
+  Quaternion,
   Texture,
   TransformNode,
   Vector3,
@@ -12,9 +14,11 @@ import {
   type InstantiatedEntries,
   type Material,
   type Node,
+  type Observer,
   type Scene,
 } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
+import { SkirtSim, type SkirtCollider } from "./skirt";
 
 /**
  * Skinned player actor: one CC0 humanoid skeleton, animation clips retargeted
@@ -205,6 +209,9 @@ const EQUIPPED: Looks = {
 
 const HEAD_PREFIX = "base.head.";
 
+/** The part of a look that the cloth solver drives, if the look has one. */
+const COAT_PART = ".coat";
+
 /**
  * The hair cap, which is the one head part a helmet really does replace.
  *
@@ -215,6 +222,59 @@ const HEAD_PREFIX = "base.head.";
  * the cowl — so it is the only part that comes off.
  */
 const HAIR_PART = `${HEAD_PREFIX}hair`;
+
+/**
+ * The bones the coat hangs from, baked by `tools/build_wardrobe.py`: a ring of
+ * chains under the pelvis, each two joints deep, carrying no animation at all.
+ * `SkirtSim` is what puts them somewhere; see `skirt.ts` for why the coat is not
+ * simply skinned to the legs.
+ */
+const SKIRT_CHAINS = 8;
+const skirtJointName = (chain: number, joint: number): string =>
+  `skirt_${chain}_${String(joint).padStart(2, "0")}`;
+
+/**
+ * What the cloth is pushed out of: a capsule down each bone of both legs.
+ *
+ * Every one of them earns its place. Spheres at the knee and the ankle left the
+ * shin bare between them, and the hem hangs at exactly that height, so a stride
+ * ran the boot straight through the coat. The foot needs its own because a boot
+ * reaches a long way forward of the ankle it pivots on.
+ *
+ * Radii are the leg's real half-width plus nothing: each capsule clears the
+ * coat's rest radius by 0.01-0.08, so a standing character's coat hangs in its
+ * exact bind pose and only a moving limb ever touches it.
+ */
+const SKIRT_COLLIDERS: readonly { from: string; to: string; radius: number }[] = [
+  { from: "thigh_l", to: "calf_l", radius: 0.11 },
+  { from: "thigh_r", to: "calf_r", radius: 0.11 },
+  { from: "calf_l", to: "foot_l", radius: 0.11 },
+  { from: "calf_r", to: "foot_r", radius: 0.11 },
+  { from: "foot_l", to: "ball_l", radius: 0.1 },
+  { from: "foot_r", to: "ball_r", radius: 0.1 },
+];
+
+/** Down the bone: glTF joints out of Blender point along their own +Y. */
+const BONE_AXIS = new Vector3(0, 1, 0);
+
+/**
+ * Everything about one skirt chain that never changes, read off the asset once
+ * so no measurement lives in two places.
+ */
+interface SkirtChain {
+  upper: TransformNode;
+  lower: TransformNode;
+  /** Bind rotations, so a solved direction can be applied without losing roll. */
+  bindUpper: Quaternion;
+  bindLower: Quaternion;
+  /** Bind directions: the upper in pelvis space, the lower in the upper's. */
+  bindDirUpper: Vector3;
+  bindDirLower: Vector3;
+  /** Bind positions in pelvis space: waist, joint, hem tip. */
+  anchor: Vector3;
+  mid: Vector3;
+  tip: Vector3;
+}
 
 const ANIM_URL = "/models/anim-library.glb";
 
@@ -383,6 +443,25 @@ export class RigActor {
   /** Re-textured clones, `<source material id>#<base id>` -> clone. Built once, reused. */
   private readonly gearedMaterials = new Map<string, PBRMaterial>();
 
+  /** Coat cloth. Null when the wardrobe has no skirt chains (an older asset). */
+  private skirt: SkirtSim | null = null;
+  private skirtChains: SkirtChain[] = [];
+  private pelvis: TransformNode | null = null;
+  private colliders: (SkirtCollider & { head: TransformNode; tail: TransformNode })[] = [];
+  private cloth: Observer<Scene> | null = null;
+  /** Solving cloth nobody can see is the one cost worth a flag. */
+  private coatVisible = false;
+
+  // Per-frame scratch, so the cloth does not allocate 300 vectors a frame.
+  private readonly anchorsWorld: Vector3[] = [];
+  private readonly restsWorld: Vector3[] = [];
+  private readonly toPelvis = new Matrix();
+  private readonly solved = new Vector3();
+  private readonly local = new Vector3();
+  private readonly relative = new Vector3();
+  private readonly delta = new Quaternion();
+  private readonly aimed = new Quaternion();
+
   constructor(scene: Scene, host: Mesh) {
     this.scene = scene;
     this.host = host;
@@ -413,6 +492,7 @@ export class RigActor {
   }
 
   private applyLooks(): void {
+    let coat = false;
     for (const [slot, byLook] of this.parts) {
       const wanted = this.looks[slot as CosmeticSlot] ?? null;
       const wantedLook = wanted === null ? null : meshLook(wanted);
@@ -421,12 +501,17 @@ export class RigActor {
         const on = look === wantedLook;
         for (const mesh of meshes) {
           mesh.setEnabled(on);
+          if (on && mesh.name.includes(COAT_PART)) coat = true;
           // Only the visible look pays for the swap; a hidden one is re-dressed
           // when it comes back.
           if (on) mesh.material = this.geared(mesh, baseId);
         }
       }
     }
+    // Cloth that was hidden has been swinging nowhere; drop it back onto the
+    // bind pose so it does not snap into place in front of the player.
+    if (coat && !this.coatVisible) this.skirt?.unsettle();
+    this.coatVisible = coat;
     // A helmet takes the hair off, not the head: see `HAIR_PART`.
     const bare = this.looks.helmet === null;
     for (const mesh of this.headParts) {
@@ -546,6 +631,10 @@ export class RigActor {
     const hipsNode = byName.get(HIPS_BONE);
     const hipsRest = hipsNode instanceof TransformNode ? hipsNode.position.clone() : null;
 
+    // Same window: the coat's bind pose has to be measured before an animation
+    // has moved anything, because it is the shape the cloth springs back to.
+    if (hipsNode instanceof TransformNode) this.buildSkirt(hipsNode, byName);
+
     for (const clip of Object.keys(CLIP_NAME) as RigClip[]) {
       const source = loaded.anims.animationGroups.find((g) => g.name === CLIP_NAME[clip]);
       if (!source) continue;
@@ -591,7 +680,149 @@ export class RigActor {
     this.switchTo(this.locomotion);
   }
 
+  /**
+   * Measure the coat's bind pose off the loaded asset and hang cloth on it.
+   *
+   * Nothing here is a constant: the chain count is the only number the code
+   * knows, and the segment length, the rest positions and the joints' bind
+   * rotations all come out of the glb. A wardrobe without the chains (an older
+   * asset, or a load that fell back) simply leaves `skirt` null and the coat
+   * rides the waist as plain skinned geometry.
+   */
+  private buildSkirt(pelvis: TransformNode, byName: Map<string, Node>): void {
+    pelvis.computeWorldMatrix(true);
+    const toPelvis = Matrix.Invert(pelvis.getWorldMatrix());
+    const chains: SkirtChain[] = [];
+
+    for (let i = 0; i < SKIRT_CHAINS; i++) {
+      const upper = byName.get(skirtJointName(i, 1));
+      const lower = byName.get(skirtJointName(i, 2));
+      if (!(upper instanceof TransformNode) || !(lower instanceof TransformNode)) return;
+      upper.computeWorldMatrix(true);
+      lower.computeWorldMatrix(true);
+
+      // The joints arrive with a rotation quaternion from the glTF loader; the
+      // euler fallback is only there so a hand-edited asset cannot crash this.
+      const bindUpper = (upper.rotationQuaternion ?? Quaternion.FromEulerVector(upper.rotation)).clone();
+      const bindLower = (lower.rotationQuaternion ?? Quaternion.FromEulerVector(lower.rotation)).clone();
+      const segment = lower.position.length();
+      const tipLocal = BONE_AXIS.scale(segment);
+
+      chains.push({
+        upper,
+        lower,
+        bindUpper,
+        bindLower,
+        bindDirUpper: BONE_AXIS.applyRotationQuaternion(bindUpper),
+        bindDirLower: BONE_AXIS.applyRotationQuaternion(bindLower),
+        anchor: Vector3.TransformCoordinates(upper.absolutePosition, toPelvis),
+        mid: Vector3.TransformCoordinates(lower.absolutePosition, toPelvis),
+        tip: Vector3.TransformCoordinates(
+          Vector3.TransformCoordinates(tipLocal, lower.getWorldMatrix()),
+          toPelvis,
+        ),
+      });
+      this.anchorsWorld.push(new Vector3());
+      this.restsWorld.push(new Vector3(), new Vector3());
+    }
+
+    for (const { from, to, radius } of SKIRT_COLLIDERS) {
+      const head = byName.get(from);
+      const tail = byName.get(to);
+      if (head instanceof TransformNode && tail instanceof TransformNode) {
+        this.colliders.push({ head, tail, a: new Vector3(), b: new Vector3(), radius });
+      }
+    }
+
+    this.pelvis = pelvis;
+    this.skirtChains = chains;
+    // Both joints of a chain are baked to the same length, so one number drives
+    // every constraint in the solver.
+    this.skirt = new SkirtSim(chains.length, chains[0]!.lower.position.length());
+    this.cloth = this.scene.onBeforeRenderObservable.add(() => this.solveCloth());
+  }
+
+  /**
+   * Swing the coat, once per frame.
+   *
+   * The cloth is solved in world space and the result is written back as joint
+   * rotations, which means the order is: read where the body put the waist this
+   * frame, integrate, then aim each joint down the segment the solver produced.
+   * World matrices are forced rather than assumed current — this runs alongside
+   * the animation update and must not depend on which of them Babylon ran first.
+   */
+  private solveCloth(): void {
+    const sim = this.skirt;
+    const pelvis = this.pelvis;
+    if (!sim || !pelvis || !this.coatVisible) return;
+
+    pelvis.computeWorldMatrix(true);
+    const world = pelvis.getWorldMatrix();
+    for (let i = 0; i < this.skirtChains.length; i++) {
+      const chain = this.skirtChains[i]!;
+      Vector3.TransformCoordinatesToRef(chain.anchor, world, this.anchorsWorld[i]!);
+      Vector3.TransformCoordinatesToRef(chain.mid, world, this.restsWorld[i * 2]!);
+      Vector3.TransformCoordinatesToRef(chain.tip, world, this.restsWorld[i * 2 + 1]!);
+    }
+    for (const collider of this.colliders) {
+      collider.head.computeWorldMatrix(true);
+      collider.tail.computeWorldMatrix(true);
+      collider.a.copyFrom(collider.head.absolutePosition);
+      collider.b.copyFrom(collider.tail.absolutePosition);
+    }
+
+    sim.step(
+      this.scene.getEngine().getDeltaTime() / 1000,
+      this.anchorsWorld,
+      this.restsWorld,
+      this.colliders,
+    );
+
+    // Through the inverse matrix, not through the world rotation: Babylon's glTF
+    // loader mirrors the scene to convert handedness, so the pelvis's world
+    // matrix has determinant -1 and `decompose` hands back a rotation with an
+    // axis flipped. Solved directions came back Y-inverted and the coat folded up
+    // over the character's head. The matrix carries the mirror correctly; joint
+    // rotations below then stay in un-mirrored local space, where they belong.
+    world.invertToRef(this.toPelvis);
+
+    for (let i = 0; i < this.skirtChains.length; i++) {
+      const chain = this.skirtChains[i]!;
+      const anchor = this.anchorsWorld[i]!;
+
+      // Upper joint: its parent is the pelvis, so the solved world direction is
+      // aimed in pelvis space. Composing onto the bind rotation rather than
+      // replacing it is what keeps the cloth's texture from spinning on the bone.
+      sim.direction(i, 0, anchor, this.solved);
+      Vector3.TransformNormalToRef(this.solved, this.toPelvis, this.local);
+      this.local.normalize();
+      Quaternion.FromUnitVectorsToRef(chain.bindDirUpper, this.local, this.delta);
+      this.delta.multiplyToRef(chain.bindUpper, this.aimed);
+      (chain.upper.rotationQuaternion ??= new Quaternion()).copyFrom(this.aimed);
+
+      // Lower joint: its parent is the upper one, which the line above just
+      // moved, so the target has to come back out of pelvis space through it.
+      sim.direction(i, 1, anchor, this.solved);
+      Vector3.TransformNormalToRef(this.solved, this.toPelvis, this.local);
+      this.local.normalize();
+      this.aimed.conjugateToRef(this.delta);
+      this.local.applyRotationQuaternionToRef(this.delta, this.relative);
+      Quaternion.FromUnitVectorsToRef(chain.bindDirLower, this.relative, this.delta);
+      this.delta.multiplyToRef(chain.bindLower, this.aimed);
+      (chain.lower.rotationQuaternion ??= new Quaternion()).copyFrom(this.aimed);
+    }
+  }
+
   private teardown(): void {
+    if (this.cloth) this.scene.onBeforeRenderObservable.remove(this.cloth);
+    this.cloth = null;
+    this.skirt = null;
+    this.skirtChains = [];
+    this.colliders = [];
+    this.pelvis = null;
+    this.anchorsWorld.length = 0;
+    this.restsWorld.length = 0;
+    this.coatVisible = false;
     for (const group of this.groups.values()) group.dispose();
     this.groups.clear();
     this.parts.clear();

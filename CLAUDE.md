@@ -56,9 +56,13 @@ PoE2 itemization actually works — do not invent mechanics or colors from memor
   generated, rigid-weighted to `Head`/`neck_01`, and pinned to a flat skin texel of the hands'
   own material. Bone names are lowercase except `Head`.
 - `body.ranger.coat` is generated too: the ranger's body stops at the hip and every body base is
-  drawn as a long coat. Skinned `pelvis` + both thighs so a stride does not push a knee through it,
-  and its UVs are copied from the nearest tunic vertex by angle and height, never projected into a
-  box on the atlas (any box wide enough also clips a boot buckle into the cloth).
+  drawn as a long coat. Its UVs are copied from the nearest tunic vertex by angle and height, never
+  projected into a box on the atlas (any box wide enough also clips a boot buckle into the cloth).
+- The coat hangs on 8 two-joint `skirt_<i>_<n>` chains the builder adds under `pelvis`, driven at
+  runtime by the verlet solver in `skirt.ts` (spring toward the bind pose, no gravity; capsule
+  colliders down both legs). Skinning it to the thighs instead makes the hem sweep in phase with
+  the knee and reads as two rigid blades. Rebuild the glb after changing `SKIRT_CHAINS`; `rig.ts`
+  has the same count.
 - All packs export the same 65 joints at the same bind pose, so a mesh from one binds to another's
   skeleton by assignment. `rig.test.ts` guards that and that every look the code asks for exists.
 - Blender 5.2 is installed for asset authoring, driven headless:
