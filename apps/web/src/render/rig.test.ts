@@ -16,6 +16,7 @@ import {
   COSMETIC_SLOTS,
   GEAR_TEXTURE_BASES,
   SKIRT_CHAINS,
+  SKIRT_JOINTS,
 } from "./rig";
 import { ITEM_POOLS } from "@exiled/content-runtime";
 
@@ -235,22 +236,24 @@ describe("wardrobe asset", () => {
     // Every borrowed mesh binds by joint order, so the pack joints must still be
     // all of the skeleton except what the builder adds for cloth.
     expect(joints.length - skirt.length).toBe(65);
-    // Against the constant, not against 16: the chain count lives in the builder
-    // and in `rig.ts`, and a rebuild with one of them changed drops chains out of
-    // the coat silently.
-    expect(skirt.length).toBe(SKIRT_CHAINS * 2);
+    // Against the constants, not against a literal: both the chain count and the
+    // joints per chain live in the builder and in `rig.ts`, and a rebuild with
+    // either of them changed drops bones out of the coat silently.
+    expect(skirt.length).toBe(SKIRT_CHAINS * SKIRT_JOINTS);
   });
 
   it("hangs every skirt chain on effectively one segment length", () => {
-    // `rig.ts` measures one chain and solves all eight against it. They are not
-    // bit-identical, because the coat is an ellipse and a chain at the hip
+    // `rig.ts` measures one bone of one chain and solves every bone of every
+    // chain against it, so this covers all of them below the first — the first
+    // carries its offset from the pelvis rather than a segment length. They are
+    // not bit-identical, because the coat is an ellipse and a chain at the hip
     // travels further out than one at the belly, but that spread is 0.2% - a
     // millimetre on this character. A ring that drifted past 1% would render as
     // cloth of the wrong length on seven chains out of eight.
     const lengths = json.nodes
-      .filter((n) => /^skirt_\d+_02$/.test(n.name))
+      .filter((n) => /^skirt_\d+_\d+$/.test(n.name) && !/_01$/.test(n.name))
       .map((n) => Math.hypot(...(n.translation ?? [0, 0, 0])));
-    expect(lengths).toHaveLength(SKIRT_CHAINS);
+    expect(lengths).toHaveLength(SKIRT_CHAINS * (SKIRT_JOINTS - 1));
     expect(lengths[0]).toBeGreaterThan(0.1);
     for (const length of lengths) {
       expect(Math.abs(length - lengths[0]!) / lengths[0]!).toBeLessThan(0.01);
@@ -258,8 +261,8 @@ describe("wardrobe asset", () => {
   });
 
   it("binds every coat vertex to a single chain, so collision can reach it", () => {
-    // The solver collides the chains and nothing else: two particles per chain,
-    // pushed out of the leg capsules. A vertex weighted half to one chain and
+    // The solver collides the chains and nothing else: `SKIRT_JOINTS` particles
+    // per chain, pushed out of the leg capsules. A vertex weighted half to one chain and
     // half to its neighbour is skinned to the average of the two, which lies on
     // neither of them — it hangs in the gap *between* the collided lines, and no
     // capsule can ever push it. Measured on the running character, those split

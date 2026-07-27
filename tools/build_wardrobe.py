@@ -129,9 +129,23 @@ COAT_DEPTH = 0.88
 # columns and kept the ratio, so it doubled the resolution *and* the blind spot.
 SKIRT_CHAINS = COAT_SEG
 
-# Both joints in a chain are deliberately the same length: the runtime reads one
-# segment length off the asset and uses it for both, so there is no second copy
-# of these numbers to drift. `rig.test.ts` pins it.
+# Joints per chain, which is how many places the cloth is allowed to fold on its
+# way down. Two was not enough and the reason is a ratio: each bone was 0.464
+# long against a thigh capsule of radius 0.088, so a single bar five times the
+# leg's width had to answer for a whole leg's worth of contact. It cannot dent -
+# it can only pivot about its one joint - so a leg pressing into the middle of a
+# panel had nowhere to put the cloth and went through it instead. Measured over a
+# captured run cycle, frames showing more than 2cm of leg through the coat: 17.6%
+# at two joints, 0.3% at three.
+#
+# Three and not more. Four was worse on every penetration measure and cost more,
+# because a finer chain moves less per collision pass and needs passes back to
+# keep up: the win is having somewhere to fold, not having many somewheres.
+#
+# Every joint in a chain is deliberately the same length: the runtime reads one
+# segment length off the asset and uses it for all of them, so there is no second
+# copy of these numbers to drift. `rig.test.ts` pins it.
+SKIRT_JOINTS = 3
 SKIRT_JOINT = "skirt_{i}_{n:02d}"
 
 # Where the chain hangs from and reaches to. Taken from the coat's own profile so
@@ -146,10 +160,9 @@ SKIRT_TOP_Z, SKIRT_TOP_R = COAT_RINGS[0]
 SKIRT_HEM_Z, SKIRT_HEM_R = min(COAT_HEM)
 
 # Height along the chain (0 at the waist, 1 at the hem) where the cloth stops
-# being pinned to the body and where it hands over to the lower joint. The top
-# band keeps the waist crisp under the belt; everything below swings.
+# being pinned to the body. The top band keeps the waist crisp under the belt;
+# everything below is shared out between the chain's joints and swings.
 SKIRT_PINNED = 0.20
-SKIRT_LOWER = 0.45
 
 # Band of the tunic the coat borrows its uvs from: its own hem (z 0.909) up to
 # mid-chest. Stretched down the coat, so the tunic's hem trim lands on the hem.
@@ -420,17 +433,21 @@ def build_skirt_bones(armature):
         theta = 2.0 * math.pi * i / SKIRT_CHAINS
         top = Vector(coat_point(theta, SKIRT_TOP_Z, SKIRT_TOP_R))
         hem = Vector(coat_point(theta, SKIRT_HEM_Z, SKIRT_HEM_R))
-        mid = (top + hem) * 0.5
 
-        upper = bones.new(SKIRT_JOINT.format(i=i, n=1))
-        upper.head, upper.tail = to_local @ top, to_local @ mid
-        upper.parent, upper.use_connect = pelvis, False
-
-        lower = bones.new(SKIRT_JOINT.format(i=i, n=2))
-        lower.head, lower.tail = to_local @ mid, to_local @ hem
-        lower.parent, lower.use_connect = upper, True
-
-        made += [upper.name, lower.name]
+        # Evenly down the waist-to-hem line, so every bone in the chain is the
+        # same length and the runtime's single segment number stays true.
+        knots = [top.lerp(hem, n / SKIRT_JOINTS) for n in range(SKIRT_JOINTS + 1)]
+        parent = pelvis
+        for n in range(SKIRT_JOINTS):
+            bone = bones.new(SKIRT_JOINT.format(i=i, n=n + 1))
+            bone.head = to_local @ knots[n]
+            bone.tail = to_local @ knots[n + 1]
+            bone.parent = parent
+            # The first hangs off the pelvis and must not be welded to it; the
+            # rest are a chain and are.
+            bone.use_connect = n > 0
+            parent = bone
+            made.append(bone.name)
 
     bpy.ops.object.mode_set(mode="OBJECT")
     log(f"built {SKIRT_CHAINS} skirt chains ({len(made)} joints), "
@@ -532,19 +549,35 @@ def build_coat(armature, torso):
 
     # Four influences per vertex and not one more: two neighbouring chains, and
     # within each the two joints its height falls between. glTF's fifth influence
-    # costs a whole extra attribute set on every vertex of the mesh.
+    # costs a whole extra attribute set on every vertex of the mesh. Adding a
+    # third joint does not spend any of that budget, because a vertex still only
+    # ever lands between two consecutive joints of a chain however many there are.
     pelvis = obj.vertex_groups.new(name="pelvis")
     chains = [
-        (obj.vertex_groups.new(name=SKIRT_JOINT.format(i=i, n=1)),
-         obj.vertex_groups.new(name=SKIRT_JOINT.format(i=i, n=2)))
+        [obj.vertex_groups.new(name=SKIRT_JOINT.format(i=i, n=n + 1))
+         for n in range(SKIRT_JOINTS)]
         for i in range(SKIRT_CHAINS)
     ]
+    # Each joint owns the height of its own tail; below the pinned band the cloth
+    # is handed from one joint to the next by a linear blend between those.
+    knots = [SKIRT_PINNED + (1.0 - SKIRT_PINNED) * (n + 1) / SKIRT_JOINTS
+             for n in range(SKIRT_JOINTS)]
     step = 2.0 * math.pi / SKIRT_CHAINS
     for v, (theta, z) in zip(mesh.vertices, meta):
         t = min(1.0, max(0.0, (SKIRT_TOP_Z - z) / (SKIRT_TOP_Z - SKIRT_HEM_Z)))
         pinned = min(1.0, max(0.0, (SKIRT_PINNED - t) / SKIRT_PINNED))
-        lower = min(1.0, max(0.0, (t - SKIRT_LOWER) / (1.0 - SKIRT_LOWER)))
-        upper = 1.0 - pinned - lower
+
+        # Which two joints this height falls between, and how far along.
+        weights = [0.0] * SKIRT_JOINTS
+        if t <= knots[0]:
+            weights[0] = 1.0
+        elif t >= knots[-1]:
+            weights[-1] = 1.0
+        else:
+            n = next(k for k in range(SKIRT_JOINTS - 1) if t < knots[k + 1])
+            f = (t - knots[n]) / (knots[n + 1] - knots[n])
+            weights[n], weights[n + 1] = 1.0 - f, f
+        weights = [w * (1.0 - pinned) for w in weights]
 
         # Split between the two chains the vertex sits between, so a panel that
         # swings takes its neighbour's edge with it instead of tearing off it.
@@ -556,9 +589,9 @@ def build_coat(armature, torso):
                              ((near + 1) % SKIRT_CHAINS, blend)):
             if share <= 0.0:
                 continue
-            g_upper, g_lower = chains[chain]
-            g_upper.add([v.index], upper * share, "REPLACE")
-            g_lower.add([v.index], lower * share, "REPLACE")
+            for group, w in zip(chains[chain], weights):
+                if w > 0.0:
+                    group.add([v.index], w * share, "REPLACE")
     rebind(obj, armature)
 
     log(f"built coat: {len(mesh.vertices)}v, {len(mesh.polygons)} faces, "

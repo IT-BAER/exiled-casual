@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
 import { Vector3 } from "@babylonjs/core";
-import { SkirtSim } from "./skirt";
+import { SkirtSim, MAX_CONTACT_PUSH } from "./skirt";
 
 const SEGMENT = 0.5;
 const FRAME = 1 / 60;
@@ -32,13 +32,13 @@ describe("SkirtSim", () => {
     // Nothing pulls the cloth off its authored shape on its own: the spring is
     // toward the bind pose, not toward straight down, so a standing character's
     // coat renders exactly as it was modelled.
-    const sim = new SkirtSim(1, SEGMENT);
+    const sim = new SkirtSim(1, 2, SEGMENT);
     run(sim, 0, 120);
     expect(tip(sim, 0).subtract(pose(0).rests[1]!).length()).toBeLessThan(1e-6);
   });
 
   it("lags behind the body it hangs off, then catches up", () => {
-    const sim = new SkirtSim(1, SEGMENT);
+    const sim = new SkirtSim(1, 2, SEGMENT);
     run(sim, 0, 30);
 
     // One frame of a stride. The hem must not teleport with the hips — that lag
@@ -53,7 +53,7 @@ describe("SkirtSim", () => {
   });
 
   it("is pushed off a knee that walks into it", () => {
-    const sim = new SkirtSim(1, SEGMENT);
+    const sim = new SkirtSim(1, 2, SEGMENT);
     run(sim, 0, 30);
 
     // A shin: a segment, not a ball. It overlaps the cloth's rest position by
@@ -79,7 +79,7 @@ describe("SkirtSim", () => {
     // away) and cuts through its midpoint (0.1 against a radius of 0.11). Test
     // the two particles alone and it reports no contact at all while the leg
     // passes through the surface in plain sight.
-    const sim = new SkirtSim(1, SEGMENT);
+    const sim = new SkirtSim(1, 2, SEGMENT);
     run(sim, 0, 30);
 
     const knee = {
@@ -103,7 +103,14 @@ describe("SkirtSim", () => {
     // spring pulled it back the next. That reads as rubber, and it is the
     // complaint this bound exists to answer. A leg does not move this fast, so
     // neither may the cloth it is pushing.
-    const sim = new SkirtSim(1, SEGMENT);
+    //
+    // The bound is written against the solver's own speed limit rather than as a
+    // number, because the limit is a tuning knob and a literal here would have to
+    // be re-guessed every time it moved — which is how a guard quietly stops
+    // guarding. Each bone may spend the step's whole push budget, and the hem is
+    // carried by every bone above it, so `joints * MAX_CONTACT_PUSH` is the
+    // geometry's ceiling. The 4x amplification this catches blew through 4x that.
+    const sim = new SkirtSim(1, 2, SEGMENT);
     const { anchors, rests } = pose(0);
     const step = 1 / 240;
     for (let i = 0; i < 240; i++) sim.step(step, anchors, rests, []);
@@ -119,18 +126,69 @@ describe("SkirtSim", () => {
       worst = Math.max(worst, Vector3.Distance(now, previous));
       previous = now;
     }
-    expect(worst).toBeLessThan(0.12);
+    expect(worst).toBeLessThan(2 * MAX_CONTACT_PUSH);
+  });
+
+  it("keeps a leg out of the cloth at the speed a leg actually moves", () => {
+    // The regression. The escape speed was set from a guess that a limb tops out
+    // at 3 units/s; the instrumented rig runs one at 18, so the leg outran the
+    // only mechanism that could move the coat and went through it instead — 25%
+    // of frames of a captured run showed more than 2cm of leg through the cloth.
+    //
+    // A thigh is swept across the panel here at that measured 18 units/s, which
+    // is the condition the shipped tuning failed. Penetration is measured against
+    // the cloth *segments* rather than its particles, because the leg went
+    // through the surface drawn between them while both ends reported clear.
+    const sim = new SkirtSim(1, 2, SEGMENT);
+    const { anchors, rests } = pose(0);
+    const step = 1 / 240;
+    for (let i = 0; i < 240; i++) sim.step(step, anchors, rests, []);
+
+    // Below the waist, because the anchor is pinned: a capsule laid over it
+    // reports a penetration no solver can fix and measures nothing. On the real
+    // rig the chain ring clears the leg axis by 0.174 for exactly this reason.
+    const radius = 0.11;
+    const top = 0.75;
+    const bottom = 0.1;
+    // 18 units/s is the speed measured off the real rig, so the sweep is short:
+    // 0.6 of travel at that speed is over in 33ms, which is eight solver steps.
+    // Spreading the same travel across a lazier sweep is what makes this look
+    // fine at any tuning — the whole defect is the leg being faster than the
+    // cloth is allowed to be.
+    const speed = 18;
+    const steps = Math.round(0.6 / (speed * step));
+    let worst = 0;
+    for (let i = 0; i <= steps; i++) {
+      const x = -0.3 + i * speed * step;
+      const leg = { a: new Vector3(x, top, 0), b: new Vector3(x, bottom, 0), radius };
+      sim.step(step, anchors, rests, [leg]);
+
+      const mid = anchors[0]!.add(sim.direction(0, 0, anchors[0]!, new Vector3()).scale(SEGMENT));
+      const end = mid.add(sim.direction(0, 1, anchors[0]!, new Vector3()).scale(SEGMENT));
+      for (const [p, q] of [[anchors[0]!, mid], [mid, end]] as [Vector3, Vector3][]) {
+        // Distance from the leg's axis to the nearest point of this cloth bone.
+        let near = Infinity;
+        for (let k = 0; k <= 40; k++) {
+          const s = p.add(q.subtract(p).scale(k / 40));
+          near = Math.min(near, Math.hypot(s.x - x, Math.max(0, bottom - s.y, s.y - top)));
+        }
+        worst = Math.max(worst, radius - near);
+      }
+    }
+    // 2cm on a character 1.8 units tall is the point a leg reads as showing
+    // through. The shipped 6 units/s left 0.05 here — half the leg's radius.
+    expect(worst).toBeLessThan(0.02);
   });
 
   it("snaps home on a teleport instead of streaking across the map", () => {
-    const sim = new SkirtSim(1, SEGMENT);
+    const sim = new SkirtSim(1, 2, SEGMENT);
     run(sim, 0, 30);
     run(sim, 40, 1);
     expect(tip(sim, 40).subtract(pose(40).rests[1]!).length()).toBeLessThan(1e-6);
   });
 
   it("reports unit directions, so a joint can be aimed down one", () => {
-    const sim = new SkirtSim(1, SEGMENT);
+    const sim = new SkirtSim(1, 2, SEGMENT);
     run(sim, 0, 30);
     const anchor = pose(0).anchors[0]!;
     for (const segment of [0, 1]) {

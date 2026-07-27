@@ -72,10 +72,38 @@ const DAMPING = 0.9 ** PER_OLD_STEP;
  * once the legs stopped caging it (see `SKIRT_COLLIDERS`) — with the cloth free
  * to swing, the spring is what decides how much it does. Rescaled like the
  * damping above: it is the error that survives a step that compounds.
+ *
+ * 0.06 bought its tidiness by not moving: over a captured run cycle the hem sat
+ * a mean 0.11 off its bind pose, which is the "stiff" complaint measured. This
+ * is the one knob that trades the two symptoms against each other rather than
+ * fixing both — at 24 units/s of escape speed and three joints, dropping it
+ * moves the hem 0.11 -> 0.20 -> 0.29 -> 0.35 (0.06, 0.03, 0.015, 0.01) and
+ * costs frames showing more than 2cm of leg 1.7% -> 4.3% -> 3.7% -> 4.0%.
+ * 0.015 is the far end of that curve: 2.7x the swing for the least penetration
+ * of any setting soft enough to read as cloth.
  */
-const STIFFNESS = 1 - (1 - 0.06) ** PER_OLD_STEP;
+const STIFFNESS = 1 - (1 - 0.015) ** PER_OLD_STEP;
 /** Length-constraint passes. Two is visibly stretchy at a sprint, three is not. */
 const ITERATIONS = 3;
+
+/**
+ * Collision passes per step.
+ *
+ * One pass resolves each limb against the *current* cloth, in order, so the last
+ * capsule applied can shove a particle back into one an earlier capsule had
+ * already cleared. The coat hangs between two legs, which is exactly that pinch.
+ * A second pass answers it and is worth having: frames showing more than 2cm of
+ * leg fall from 3.2% to 1.7%.
+ *
+ * Two and no more, because passes do not buy escape *travel* — `budget` below is
+ * shared across them on purpose. A sweep that let each pass spend the full push
+ * cap looked like it was solving the problem and was really just raising the
+ * speed limit eight-fold; once the budget was shared, everything past the second
+ * pass was noise. It is also cheap: `collide` reports whether it moved anything
+ * and the loop stops on the first quiet pass, so a frame with no leg near the
+ * cloth — most of them — pays for exactly one.
+ */
+const COLLIDE_PASSES = 2;
 
 /**
  * How far a segment may swing off its bind direction. This is the coat's body:
@@ -108,12 +136,23 @@ const MIN_CONTACT = 0.25;
  * above means one landing near the base is multiplied by four. Unbounded, that
  * put half a unit of travel into a single 1/240 step — a third of the
  * character's height, in 4ms. Nothing about a leg justifies that speed, and the
- * eye reads the snap-and-return as rubber rather than as contact. A limb tops
- * out around 3 units/s at a sprint; twice that is enough headroom for the cloth
- * to stay ahead of one without ever being visibly thrown by it.
+ * eye reads the snap-and-return as rubber rather than as contact.
+ *
+ * The number this was first set from — "a limb tops out around 3 units/s at a
+ * sprint" — was a guess, and it was wrong by six-fold. Instrumenting the real
+ * rig over a run cycle puts a joint at 18 units/s, so a cloth escape speed of 6
+ * meant the leg simply outran the only mechanism that could get the coat out of
+ * its way, and walked through it instead. This is the single biggest term in the
+ * whole file: at three joints, frames showing more than 2cm of leg go 16.6% ->
+ * 6.0% -> 3.8% -> 2.3% as it goes 6 -> 12 -> 18 -> 24.
+ *
+ * 24 and not more. It is the measured limb speed plus a third, which is the most
+ * the evidence supports; the rubber this bound exists to prevent is real, and
+ * `skirt.test.ts` still pins the hem to a bounded travel per step.
  */
-const MAX_CONTACT_SPEED = 6;
-const MAX_CONTACT_PUSH = MAX_CONTACT_SPEED * FIXED_STEP;
+const MAX_CONTACT_SPEED = 24;
+/** Travel one particle may be given by contact in one step, shared by the passes. */
+export const MAX_CONTACT_PUSH = MAX_CONTACT_SPEED * FIXED_STEP;
 
 /**
  * How much of a contact push is taken out of the cloth's velocity again.
@@ -127,8 +166,14 @@ const MAX_CONTACT_PUSH = MAX_CONTACT_SPEED * FIXED_STEP;
  * absorption left a particle 0.120 deep against a 0.12 collider and in contact
  * three times as often as half absorption. Half keeps enough of the leg's
  * motion for the cloth to stay ahead of it without being thrown by it.
+ *
+ * Half turned out to be more than the cloth needs once the escape speed above
+ * was right: over the captured run it costs frames showing more than 2cm of leg
+ * 25.5% against 19.5% at a quarter, for no loss of swing. Full absorption is
+ * still wrong for the reason it always was — at 1.0 every frame reports contact
+ * and the mean depth quadruples.
  */
-const CONTACT_ABSORB = 0.5;
+const CONTACT_ABSORB = 0.25;
 
 const scratch = new Vector3();
 const scratchPerp = new Vector3();
@@ -223,19 +268,33 @@ function closestOnSegment(
  * there is no inertia to lag behind.
  */
 export class SkirtSim {
-  /** Particle positions, two per chain: `[mid, tip, mid, tip, …]`. */
+  /** Particle positions, `joints` per chain, chain-major and top-down. */
   private readonly points: Vector3[];
   private readonly previous: Vector3[];
   private readonly anchors: Vector3[];
+  /**
+   * Contact travel already spent by each particle this step. The push cap is a
+   * speed limit, so iterating to resolve two limbs at once must not buy the
+   * cloth extra travel: the passes share one budget instead of each taking one.
+   */
+  private readonly budget: Float64Array;
   private readonly segment: number;
+  private readonly perChain: number;
   private carry = 0;
   private settled = false;
 
-  constructor(chains: number, segment: number) {
+  constructor(chains: number, joints: number, segment: number) {
     this.segment = segment;
-    this.points = Array.from({ length: chains * 2 }, () => new Vector3());
-    this.previous = Array.from({ length: chains * 2 }, () => new Vector3());
+    this.perChain = joints;
+    this.points = Array.from({ length: chains * joints }, () => new Vector3());
+    this.previous = Array.from({ length: chains * joints }, () => new Vector3());
     this.anchors = Array.from({ length: chains }, () => new Vector3());
+    this.budget = new Float64Array(chains * joints);
+  }
+
+  /** Particles per chain. One more joint is one more place the cloth may fold. */
+  get joints(): number {
+    return this.perChain;
   }
 
   get chains(): number {
@@ -282,7 +341,10 @@ export class SkirtSim {
       this.carry -= FIXED_STEP;
       this.integrate(rests);
       for (let pass = 0; pass < ITERATIONS; pass++) this.constrain(anchors, rests);
-      this.collide(anchors, colliders);
+      this.budget.fill(MAX_CONTACT_PUSH);
+      for (let pass = 0; pass < COLLIDE_PASSES; pass++) {
+        if (!this.collide(anchors, colliders)) break;
+      }
     }
   }
 
@@ -304,15 +366,18 @@ export class SkirtSim {
 
   /** Hold each segment at its baked length, and inside its cone. */
   private constrain(anchors: readonly Vector3[], rests: readonly Vector3[]): void {
+    const n = this.perChain;
     for (let chain = 0; chain < this.anchors.length; chain++) {
-      const anchor = anchors[chain]!;
-      const mid = this.points[chain * 2]!;
-      const tip = this.points[chain * 2 + 1]!;
-      const restMid = rests[chain * 2]!;
-      const restTip = rests[chain * 2 + 1]!;
-
-      this.place(mid, anchor, restMid, anchor);
-      this.place(tip, mid, restTip, restMid);
+      // Top down: each joint is placed against the one above it, which this
+      // pass has already put where it belongs.
+      for (let j = 0; j < n; j++) {
+        const i = chain * n + j;
+        const base = j === 0 ? anchors[chain]! : this.points[i - 1]!;
+        // The anchor is its own rest position — the body drives it — so it is
+        // both the live base and the bind-pose base for the first segment.
+        const restBase = j === 0 ? anchors[chain]! : rests[i - 1]!;
+        this.place(this.points[i]!, base, rests[i]!, restBase);
+      }
     }
   }
 
@@ -342,13 +407,17 @@ export class SkirtSim {
    * clear. Sampling along each segment is the same lesson the collider side
    * already learned: a limb is a segment, and so is the cloth hanging past it.
    */
-  private collide(anchors: readonly Vector3[], colliders: readonly SkirtCollider[]): void {
+  private collide(anchors: readonly Vector3[], colliders: readonly SkirtCollider[]): boolean {
+    const n = this.perChain;
+    let moved = false;
     for (let chain = 0; chain < this.anchors.length; chain++) {
-      const mid = this.points[chain * 2]!;
-      const tip = this.points[chain * 2 + 1]!;
-      this.collideSegment(anchors[chain]!, mid, this.previous[chain * 2]!, colliders);
-      this.collideSegment(mid, tip, this.previous[chain * 2 + 1]!, colliders);
+      for (let j = 0; j < n; j++) {
+        const i = chain * n + j;
+        const base = j === 0 ? anchors[chain]! : this.points[i - 1]!;
+        if (this.collideSegment(base, this.points[i]!, this.previous[i]!, i, colliders)) moved = true;
+      }
     }
+    return moved;
   }
 
   /**
@@ -368,9 +437,12 @@ export class SkirtSim {
     base: Vector3,
     end: Vector3,
     previous: Vector3,
+    index: number,
     colliders: readonly SkirtCollider[],
-  ): void {
+  ): boolean {
+    let moved = false;
     for (const collider of colliders) {
+      if (this.budget[index]! <= 0) return moved;
       // Closest approach of the two segments outright, rather than sampling
       // points along the cloth: any fixed set of samples leaves gaps between
       // them exactly the size of the thing being kept out, which is how a knee
@@ -385,17 +457,21 @@ export class SkirtSim {
       // and the next frame of body motion moves one of the two off it.
       if (distance < 1e-6) continue;
       const reach = Math.max(t, MIN_CONTACT);
-      const push = Math.min((collider.radius - distance) / reach, MAX_CONTACT_PUSH);
+      const push = Math.min((collider.radius - distance) / reach, this.budget[index]!);
+      this.budget[index]! -= push;
       scratch.scaleInPlace(push / distance);
       end.addInPlace(scratch);
       previous.addInPlace(scratch.scaleInPlace(CONTACT_ABSORB));
+      moved = true;
     }
+    return moved;
   }
 
-  /** Unit direction of a chain's upper (`0`) or lower (`1`) segment. */
+  /** Unit direction of a chain's `segment`-th bone, counting down from the waist. */
   direction(chain: number, segment: number, anchor: Vector3, out: Vector3): Vector3 {
-    const base = segment === 0 ? anchor : this.points[chain * 2]!;
-    out.copyFrom(this.points[chain * 2 + segment]!).subtractInPlace(base);
+    const i = chain * this.perChain + segment;
+    const base = segment === 0 ? anchor : this.points[i - 1]!;
+    out.copyFrom(this.points[i]!).subtractInPlace(base);
     const length = out.length();
     if (length < 1e-6) return out.set(0, -1, 0);
     return out.scaleInPlace(1 / length);

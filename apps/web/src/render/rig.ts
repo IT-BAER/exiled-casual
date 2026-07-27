@@ -240,6 +240,17 @@ const HAIR_PART = `${HEAD_PREFIX}hair`;
  * derives it from `COAT_SEG`; `rig.test.ts` pins the pair and the binding.
  */
 export const SKIRT_CHAINS = 32;
+
+/**
+ * Bones per chain, and how many places the coat may fold on its way down.
+ *
+ * Two could not fold at all where it mattered: each bone was 0.464 long against
+ * a thigh capsule of radius 0.088, and a bar five times the leg's width can only
+ * pivot about its one joint, never dent. A leg pressing into the middle of a
+ * panel had nowhere to put the cloth and went through it. Must match
+ * `SKIRT_JOINTS` in `tools/build_wardrobe.py`; `rig.test.ts` pins the pair.
+ */
+export const SKIRT_JOINTS = 3;
 const skirtJointName = (chain: number, joint: number): string =>
   `skirt_${chain}_${String(joint).padStart(2, "0")}`;
 
@@ -280,18 +291,16 @@ const BONE_AXIS = new Vector3(0, 1, 0);
  * so no measurement lives in two places.
  */
 interface SkirtChain {
-  upper: TransformNode;
-  lower: TransformNode;
+  /** The chain's bones, waist first. */
+  joints: TransformNode[];
   /** Bind rotations, so a solved direction can be applied without losing roll. */
-  bindUpper: Quaternion;
-  bindLower: Quaternion;
-  /** Bind directions: the upper in pelvis space, the lower in the upper's. */
-  bindDirUpper: Vector3;
-  bindDirLower: Vector3;
-  /** Bind positions in pelvis space: waist, joint, hem tip. */
+  bind: Quaternion[];
+  /** Bind direction of each bone, in its own parent's space. */
+  bindDir: Vector3[];
+  /** Where the chain hangs from, in pelvis space. */
   anchor: Vector3;
-  mid: Vector3;
-  tip: Vector3;
+  /** Bind position of each joint's tail, in pelvis space. */
+  rests: Vector3[];
 }
 
 const ANIM_URL = "/models/anim-library.glb";
@@ -479,6 +488,8 @@ export class RigActor {
   private readonly relative = new Vector3();
   private readonly delta = new Quaternion();
   private readonly aimed = new Quaternion();
+  /** Rotation of the current bone's parent, relative to the pelvis. */
+  private readonly cumulative = new Quaternion();
 
   constructor(scene: Scene, host: Mesh) {
     this.scene = scene;
@@ -713,35 +724,42 @@ export class RigActor {
     const chains: SkirtChain[] = [];
 
     for (let i = 0; i < SKIRT_CHAINS; i++) {
-      const upper = byName.get(skirtJointName(i, 1));
-      const lower = byName.get(skirtJointName(i, 2));
-      if (!(upper instanceof TransformNode) || !(lower instanceof TransformNode)) return;
-      upper.computeWorldMatrix(true);
-      lower.computeWorldMatrix(true);
+      const joints: TransformNode[] = [];
+      for (let j = 1; j <= SKIRT_JOINTS; j++) {
+        const bone = byName.get(skirtJointName(i, j));
+        if (!(bone instanceof TransformNode)) return;
+        bone.computeWorldMatrix(true);
+        joints.push(bone);
+      }
 
       // The joints arrive with a rotation quaternion from the glTF loader; the
       // euler fallback is only there so a hand-edited asset cannot crash this.
-      const bindUpper = (upper.rotationQuaternion ?? Quaternion.FromEulerVector(upper.rotation)).clone();
-      const bindLower = (lower.rotationQuaternion ?? Quaternion.FromEulerVector(lower.rotation)).clone();
-      const segment = lower.position.length();
-      const tipLocal = BONE_AXIS.scale(segment);
+      const bind = joints.map((b) =>
+        (b.rotationQuaternion ?? Quaternion.FromEulerVector(b.rotation)).clone(),
+      );
+      // Every bone in a chain is baked to the same length, so one number drives
+      // every constraint in the solver.
+      const segment = joints[1]!.position.length();
+      const last = joints[SKIRT_JOINTS - 1]!;
 
-      chains.push({
-        upper,
-        lower,
-        bindUpper,
-        bindLower,
-        bindDirUpper: BONE_AXIS.applyRotationQuaternion(bindUpper),
-        bindDirLower: BONE_AXIS.applyRotationQuaternion(bindLower),
-        anchor: Vector3.TransformCoordinates(upper.absolutePosition, toPelvis),
-        mid: Vector3.TransformCoordinates(lower.absolutePosition, toPelvis),
-        tip: Vector3.TransformCoordinates(
-          Vector3.TransformCoordinates(tipLocal, lower.getWorldMatrix()),
+      // Each joint's rest point is the *next* joint's head, and the last one's
+      // is its own tail, which is the hem.
+      const rests = joints.map((b, j) =>
+        Vector3.TransformCoordinates(
+          j + 1 < SKIRT_JOINTS ? joints[j + 1]!.absolutePosition : Vector3.TransformCoordinates(BONE_AXIS.scale(segment), last.getWorldMatrix()),
           toPelvis,
         ),
+      );
+
+      chains.push({
+        joints,
+        bind,
+        bindDir: bind.map((q) => BONE_AXIS.applyRotationQuaternion(q)),
+        anchor: Vector3.TransformCoordinates(joints[0]!.absolutePosition, toPelvis),
+        rests,
       });
       this.anchorsWorld.push(new Vector3());
-      this.restsWorld.push(new Vector3(), new Vector3());
+      for (let j = 0; j < SKIRT_JOINTS; j++) this.restsWorld.push(new Vector3());
     }
 
     for (const { from, to, radius } of SKIRT_COLLIDERS) {
@@ -754,9 +772,7 @@ export class RigActor {
 
     this.pelvis = pelvis;
     this.skirtChains = chains;
-    // Both joints of a chain are baked to the same length, so one number drives
-    // every constraint in the solver.
-    this.skirt = new SkirtSim(chains.length, chains[0]!.lower.position.length());
+    this.skirt = new SkirtSim(chains.length, SKIRT_JOINTS, chains[0]!.joints[1]!.position.length());
     this.cloth = this.scene.onBeforeRenderObservable.add(() => this.solveCloth());
   }
 
@@ -779,8 +795,9 @@ export class RigActor {
     for (let i = 0; i < this.skirtChains.length; i++) {
       const chain = this.skirtChains[i]!;
       Vector3.TransformCoordinatesToRef(chain.anchor, world, this.anchorsWorld[i]!);
-      Vector3.TransformCoordinatesToRef(chain.mid, world, this.restsWorld[i * 2]!);
-      Vector3.TransformCoordinatesToRef(chain.tip, world, this.restsWorld[i * 2 + 1]!);
+      for (let j = 0; j < SKIRT_JOINTS; j++) {
+        Vector3.TransformCoordinatesToRef(chain.rests[j]!, world, this.restsWorld[i * SKIRT_JOINTS + j]!);
+      }
     }
     for (const collider of this.colliders) {
       collider.head.computeWorldMatrix(true);
@@ -808,26 +825,30 @@ export class RigActor {
       const chain = this.skirtChains[i]!;
       const anchor = this.anchorsWorld[i]!;
 
-      // Upper joint: its parent is the pelvis, so the solved world direction is
-      // aimed in pelvis space. Composing onto the bind rotation rather than
-      // replacing it is what keeps the cloth's texture from spinning on the bone.
-      sim.direction(i, 0, anchor, this.solved);
-      Vector3.TransformNormalToRef(this.solved, this.toPelvis, this.local);
-      this.local.normalize();
-      Quaternion.FromUnitVectorsToRef(chain.bindDirUpper, this.local, this.delta);
-      this.delta.multiplyToRef(chain.bindUpper, this.aimed);
-      (chain.upper.rotationQuaternion ??= new Quaternion()).copyFrom(this.aimed);
+      // Down the chain, because each bone's parent is the one above it and this
+      // loop has already moved that: the target has to come back out of pelvis
+      // space through every rotation applied so far, which `cumulative` carries.
+      for (let j = 0; j < SKIRT_JOINTS; j++) {
+        sim.direction(i, j, anchor, this.solved);
+        Vector3.TransformNormalToRef(this.solved, this.toPelvis, this.local);
+        this.local.normalize();
 
-      // Lower joint: its parent is the upper one, which the line above just
-      // moved, so the target has to come back out of pelvis space through it.
-      sim.direction(i, 1, anchor, this.solved);
-      Vector3.TransformNormalToRef(this.solved, this.toPelvis, this.local);
-      this.local.normalize();
-      this.aimed.conjugateToRef(this.delta);
-      this.local.applyRotationQuaternionToRef(this.delta, this.relative);
-      Quaternion.FromUnitVectorsToRef(chain.bindDirLower, this.relative, this.delta);
-      this.delta.multiplyToRef(chain.bindLower, this.aimed);
-      (chain.lower.rotationQuaternion ??= new Quaternion()).copyFrom(this.aimed);
+        if (j > 0) {
+          // Into the parent's frame, then aim within it.
+          this.cumulative.conjugateToRef(this.delta);
+          this.local.applyRotationQuaternionToRef(this.delta, this.relative);
+          this.local.copyFrom(this.relative);
+        }
+        // Composing onto the bind rotation rather than replacing it is what
+        // keeps the cloth's texture from spinning on the bone.
+        Quaternion.FromUnitVectorsToRef(chain.bindDir[j]!, this.local, this.delta);
+        this.delta.multiplyToRef(chain.bind[j]!, this.aimed);
+        (chain.joints[j]!.rotationQuaternion ??= new Quaternion()).copyFrom(this.aimed);
+
+        // The parent frame the next bone will be aimed inside of.
+        if (j === 0) this.cumulative.copyFrom(this.aimed);
+        else this.cumulative.multiplyInPlace(this.aimed);
+      }
     }
   }
 
