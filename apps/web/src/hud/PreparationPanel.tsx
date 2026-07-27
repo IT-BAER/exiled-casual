@@ -246,6 +246,9 @@ const HEADER_H = Math.round((POPUP_W * 72) / 512);
  */
 const SOCKET_W = 180;
 const SOCKET_H = Math.round((SOCKET_W * 464) / 512);
+/** The empty slot in that art: x 189..322, y 125..264, so the stone fills the hole. */
+const SLOT_W = Math.round((SOCKET_W * (322 - 189)) / 512);
+const SLOT_H = Math.round((SOCKET_H * (264 - 125)) / 464);
 
 /**
  * A place, opened. PoE2's Atlas answers a click on a node with a small panel
@@ -364,26 +367,26 @@ function NodePopup(props: {
         }}
       >
         {stone && (
+          // Seated a shade over the beaded moulding rather than inside it: at the
+          // slot's own 47px the icon's sigil goes to a smudge, and a stone resting
+          // on the frame is what "placed" looks like. The tier is a number and
+          // lives with the other numbers below, as it does in the reference.
           <span
+            data-testid="prep-socket-stone"
             style={{
               position: "absolute",
-              // Measured off the art: the empty slot spans x 189..322, y 125..264
-              // of 512x464, so its centre is high of the image's middle because
-              // the disc stands on a plinth.
-              left: "50%",
+              left: "49.9%",
               top: "41.9%",
               transform: "translate(-50%, -50%)",
-              fontFamily: SERIF,
-              // Sized to the slot: it is 273x254 of the art, so at this width the
-              // opening is only ~50px across and a larger glyph climbs the moulding.
-              fontSize: 17,
-              fontWeight: 700,
-              color: RARITY_TINT[waystoneRarity(stone.seed)],
-              textShadow: `0 0 8px ${RARITY_TINT[waystoneRarity(stone.seed)]}66, 0 1px 2px #000`,
+              width: Math.round(SLOT_W * 1.15),
+              height: Math.round(SLOT_H * 1.15),
+              backgroundImage: "url(/textures/ui/waystone_icon_v1.png)",
+              backgroundSize: "contain",
+              backgroundPosition: "center",
+              backgroundRepeat: "no-repeat",
+              filter: `drop-shadow(0 0 6px ${RARITY_TINT[waystoneRarity(stone.seed)]}55)`,
             }}
-          >
-            T{stone.tier}
-          </span>
+          />
         )}
       </button>
 
@@ -394,6 +397,12 @@ function NodePopup(props: {
           </span>
         ) : (
           <span data-testid="prep-arealevel" style={{ color: "#b7ac8e" }}>
+            {stone && (
+              <span style={{ color: RARITY_TINT[waystoneRarity(stone.seed)] }}>
+                Tier <b>{stone.tier}</b>
+                <span style={{ color: "#7c7361" }}>{"  ·  "}</span>
+              </span>
+            )}
             Area Level{" "}
             <b style={{ color: stone ? GOLD : "#5a564a" }}>{stone ? areaLevel(stone.tier) : "—"}</b>
             {stone && <span style={{ color: "#7c7361" }}>{"  ·  "}Portals <b style={{ color: MAGIC }}>{MAP_PORTALS}</b></span>}

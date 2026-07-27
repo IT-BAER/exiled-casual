@@ -55,7 +55,7 @@ describe("PreparationPanel", () => {
     // Anchored to the node it belongs to, not to the middle of the screen.
     expect(popup.style.left).toContain(`${(node.x * 100).toFixed(2)}%`);
     // Empty until a stone goes in, and the button says no while it is.
-    expect(screen.getByTestId("prep-socket").textContent).toBe("");
+    expect(screen.queryByTestId("prep-socket-stone")).toBeNull();
     expect((screen.getByTestId("prep-activate") as HTMLButtonElement).disabled).toBe(true);
   });
 
@@ -67,10 +67,13 @@ describe("PreparationPanel", () => {
     const ws = offerWaystones(atlasSeed, WAYSTONE_OFFER_COUNT)[0]!;
     fireEvent.click(screen.getByTestId(`prep-node-${node.id}`));
     fireEvent.click(screen.getByTestId(`prep-ws-${ws.id}`));
-    expect(screen.getByTestId("prep-socket").textContent).toContain(`T${ws.tier}`);
+    // The stone shows as its own item art in the slot; the tier it brings reads
+    // off the line under it, with the numbers.
+    expect(screen.getByTestId("prep-socket-stone")).toBeTruthy();
+    expect(screen.getByTestId("prep-arealevel").textContent).toContain(`Tier ${ws.tier}`);
 
     fireEvent.click(screen.getByTestId("prep-socket"));
-    expect(screen.getByTestId("prep-socket").textContent).toBe("");
+    expect(screen.queryByTestId("prep-socket-stone")).toBeNull();
     expect((screen.getByTestId("prep-activate") as HTMLButtonElement).disabled).toBe(true);
   });
 
