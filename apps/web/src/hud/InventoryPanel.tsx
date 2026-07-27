@@ -86,7 +86,7 @@ const LATTICE = "rgb(58,45,26)";
  * edge, and an outset ring on a flush edge is simply cropped off, which is what
  * made the stash read as sheared at the top.
  */
-const PANE: React.CSSProperties = {
+export const PANE: React.CSSProperties = {
   pointerEvents: "auto",
   width: PANEL_W,
   // Top of the screen down to the bar, ending in empty pane below the last row.
@@ -109,7 +109,7 @@ const PANE: React.CSSProperties = {
  * cream, and the round stud of a close button in the corner. `bleed` is the
  * pane's own padding, which the band has to pull back over to reach the frame.
  */
-function PaneHeader({ title, bleed, onClose, testId }: {
+export function PaneHeader({ title, bleed, onClose, testId }: {
   title: string; bleed?: string; onClose: () => void; testId: string;
 }) {
   return (
