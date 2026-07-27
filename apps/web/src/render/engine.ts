@@ -71,15 +71,21 @@ const MAX_HALF_HEIGHT = ORTHO_HALF_HEIGHT;
  *
  * The direction is a trap worth stating: shallower shows *more* ground
  * front-to-back at a fixed box height (the floor is stretched by 1/cos(beta)),
- * which is the "now I can see further up the map" that this must not do. It
- * does not, because the box shrinks about seven times faster than the stretch
- * grows — a full zoom in cuts the visible depth by ~30% even while tilting. The
- * ratio is the load-bearing part and `render.test.ts` pins it rather than the
- * two numbers, so retuning the pitch cannot quietly reintroduce it.
+ * which is the "now I can see further up the map" that this must not do. The
+ * box shrinking is what pays for it, and the two cancel at a computable place:
+ * the visible depth stops falling once `|BETA_PER_UNIT| >= 1 / (half·tan(beta))`,
+ * which at the wide end is about 0.24. That is the real ceiling on this number
+ * and it is roughly 3x the value set here — the first pass ran at 0.03, an
+ * eighth of it, and the arc was too timid to see. A full zoom in now tilts
+ * ~7 degrees and still cuts the visible depth ~24%.
+ *
+ * `render.test.ts` pins the *ratio* rather than either number, so this can be
+ * pushed further by eye without anyone having to remember the algebra above —
+ * the test fails the moment the tilt starts outrunning the box.
  */
 const BETA_AT_DEFAULT = 0.72;
-const BETA_PER_UNIT = -0.03;
-const BETA_LIMIT = { min: BETA_AT_DEFAULT, max: 0.8 };
+const BETA_PER_UNIT = -0.08;
+const BETA_LIMIT = { min: BETA_AT_DEFAULT, max: 0.88 };
 
 /** Seconds-ish smoothing on the zoom, so a notch glides instead of snapping. */
 const ZOOM_EASE = 0.18;
