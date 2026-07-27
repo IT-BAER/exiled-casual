@@ -282,3 +282,67 @@ describe("rare element aura", () => {
     expect(scene.getMaterialByName("entity-3-aura")).toBeNull();
   });
 });
+
+describe("wheel zoom", () => {
+  /**
+   * How much ground the screen shows front-to-back. The camera looks down at
+   * `90° - beta`, so a vertical span of `2 * orthoTop` lands on the floor
+   * stretched by `1 / cos(beta)`.
+   */
+  const groundDepth = (camera: { orthoTop: number | null; beta: number }): number =>
+    (2 * camera.orthoTop!) / Math.cos(camera.beta);
+
+  it("zooming in shows less of the map ahead, not more", () => {
+    const engine = new NullEngine();
+    const { camera, setZoom } = createScene(engine);
+    const wide = groundDepth(camera);
+    const wideBeta = camera.beta;
+
+    // Every notch in has to shrink the forward view. The pitch shallows as it
+    // goes — that is the curve — and shallowing alone would show *more* ground,
+    // so this is the guard that the curve never outruns the zoom.
+    let previous = wide;
+    for (let notch = 0; notch < 12; notch++) {
+      setZoom(-1);
+      const depth = groundDepth(camera);
+      expect(depth).toBeLessThan(previous);
+      previous = depth;
+    }
+    expect(camera.beta).toBeGreaterThan(wideBeta); // shallower up close, as PoE
+    expect(groundDepth(camera)).toBeLessThan(wide * 0.85);
+  });
+
+  it("holds the shipped framing until the wheel is touched", () => {
+    const engine = new NullEngine();
+    const { camera } = createScene(engine);
+    expect(camera.orthoTop).toBeCloseTo(4.75, 6);
+    expect(camera.beta).toBeCloseTo(0.72, 6);
+  });
+
+  it("clamps at both ends", () => {
+    const engine = new NullEngine();
+    const { camera, setZoom } = createScene(engine);
+    // Scrolling past a stop must settle on it rather than creep through: the
+    // clamp is on the target, so the eased position approaches and never passes.
+    for (let i = 0; i < 40; i++) setZoom(-1);
+    expect(camera.orthoTop).toBeCloseTo(3.2, 2);
+    expect(camera.orthoTop).toBeGreaterThanOrEqual(3.2);
+
+    for (let i = 0; i < 80; i++) setZoom(1);
+    expect(camera.orthoTop).toBeCloseTo(6.8, 2);
+    expect(camera.orthoTop).toBeLessThanOrEqual(6.8);
+  });
+
+  it("keeps the shadow frustum around the visible floor at full zoom out", () => {
+    const engine = new NullEngine();
+    const { scene, camera, setZoom } = createScene(engine);
+    for (let i = 0; i < 40; i++) setZoom(1);
+    const sun = scene.getLightByName("sun") as unknown as { orthoRight: number };
+    // Half the screen diagonal on the floor: the corner is the part that falls
+    // off a frustum sized for the middle.
+    const aspect = engine.getRenderWidth() / engine.getRenderHeight();
+    const halfWidth = camera.orthoTop! * aspect;
+    const halfDepth = camera.orthoTop! / Math.cos(camera.beta);
+    expect(sun.orthoRight).toBeGreaterThan(Math.hypot(halfWidth, halfDepth));
+  });
+});

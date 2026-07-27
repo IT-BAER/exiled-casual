@@ -50,7 +50,7 @@ export function App() {
 
     // Babylon engine + render loop
     const engine = new Engine(canvas, true);
-    const { scene, camera } = createScene(engine);
+    const { scene, camera, detachZoom } = createScene(engine);
     const renderer = new SnapshotRenderer(scene);
 
     // Ground-item name plates live in the DOM, so they need the camera's
@@ -150,6 +150,7 @@ export function App() {
     return () => {
       unmounted = true;
       detach();
+      detachZoom(); // the canvas outlives the engine, so its listener must go
       window.removeEventListener("keydown", onInvKey);
       resetPlayerRig(); // containers belong to the scene we are about to dispose
       engine.dispose();
