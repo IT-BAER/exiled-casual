@@ -297,7 +297,7 @@ describe("registerDeath", () => {
       area: opts.area, atlasSeed: 0, mapSeed: 0, waystoneSeed: 0, waystones: [], areaTier: opts.areaTier,
       activeNodeId: "", completedNodes: [], portalsLeft: 6, mapOpen: 1, pendingArea: "",
     });
-    w.set<ProgressC>(sessionE, "progress", { level: opts.level ?? START_LEVEL, xp: opts.xp });
+    w.set<ProgressC>(sessionE, "progress", { level: opts.level ?? START_LEVEL, xp: opts.xp, gold: 0 });
     w.set(sessionE, "equipment", { slots: {} });
 
     const m = w.create();
@@ -312,7 +312,7 @@ describe("registerDeath", () => {
     const { sim, world, sessionE } = makeXpKill({ area: "map", areaTier: 1, xp: 0 });
     sim.step([]);
     // areaLevel 65, character 65: no penalty, one normal monster.
-    expect(world.get<ProgressC>(sessionE, "progress")).toEqual({ level: 65, xp: 65 });
+    expect(world.get<ProgressC>(sessionE, "progress")).toEqual({ level: 65, xp: 65, gold: 0 });
   });
 
   it("a boss is worth forty normals", () => {
@@ -324,14 +324,14 @@ describe("registerDeath", () => {
   it("a hideout kill is worth nothing", () => {
     const { sim, world, sessionE } = makeXpKill({ area: "hideout", areaTier: 0, xp: 0 });
     sim.step([]);
-    expect(world.get<ProgressC>(sessionE, "progress")).toEqual({ level: 65, xp: 0 });
+    expect(world.get<ProgressC>(sessionE, "progress")).toEqual({ level: 65, xp: 0, gold: 0 });
   });
 
   it("crossing the threshold levels up and re-derives the life pool", () => {
     // areaLevel 64 boss = 2560, which is exactly what is missing from the level.
     const { sim, world, sessionE, p } = makeXpKill({ area: "map", areaTier: 0, xp: 60_000 - 2560, boss: true });
     sim.step([]);
-    expect(world.get<ProgressC>(sessionE, "progress")).toEqual({ level: 66, xp: 0 });
+    expect(world.get<ProgressC>(sessionE, "progress")).toEqual({ level: 66, xp: 0, gold: 0 });
     // One level = +6 life, granted as headroom rather than as a heal.
     expect(world.get<{ maxLife: number; life: number }>(p, "health")).toEqual({ maxLife: fp(106), life: fp(100) });
   });

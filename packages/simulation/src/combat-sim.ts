@@ -7,12 +7,13 @@ import { SKILLS, MONSTERS, rareTemplate, CONTENT_VERSION, ITEM_POOLS, baseOf, CU
 import { generateArea, type AreaLayout } from "@exiled/mapgen";
 import { gridCollision, type CollisionRef } from "./collision";
 import { fnv1a32 } from "./rng";
+import { stockVendor } from "./vendor";
 import { Simulation } from "./loop";
 import { World } from "./ecs";
 import type { Entity } from "./ecs";
 import type {
   Position, Health, Mana, Faction, PlayerC, Cooldowns, DefensesC,
-  MoveTarget, MoveDir, SessionC, AreaKind, InventoryC, StashC, ItemC, EquipmentC, FlasksC, ProgressC, ShardsC,
+  MoveTarget, MoveDir, SessionC, AreaKind, InventoryC, StashC, VendorC, ItemC, EquipmentC, FlasksC, ProgressC, ShardsC,
 } from "./components";
 import { registerResourceRegen } from "./systems/resource";
 import { registerSkillCast } from "./systems/skill-cast";
@@ -121,7 +122,8 @@ export function createCombatSim(
     world.set<InventoryC>(sessionE, "inventory", { cols: 12, rows: 5, items: [] });
     world.set<StashC>(sessionE, "stash", { cols: 12, rows: 12, items: [] });
     world.set<ShardsC>(sessionE, "shards", { counts: {} });
-    world.set<ProgressC>(sessionE, "progress", { level: START_LEVEL, xp: 0 });
+    world.set<ProgressC>(sessionE, "progress", { level: START_LEVEL, xp: 0, gold: 0 });
+    world.set<VendorC>(sessionE, "vendor", stockVendor(seed, START_LEVEL));
     world.set<EquipmentC>(sessionE, "equipment", { slots: {} });
     world.set<FlasksC>(playerEntity, "flasks", {
       lifeCharges: FLASK_MAX_CHARGES, lifeMax: FLASK_MAX_CHARGES,

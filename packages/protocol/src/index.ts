@@ -5,8 +5,12 @@ import type { AreaLayout } from "@exiled/mapgen";
 // Intent — client-side input, coords are Fixed integers (client calls fp())
 // ---------------------------------------------------------------------------
 
-/** Which grid a moveItem reads from or writes to. */
-export type ContainerId = "backpack" | "stash";
+/**
+ * Which grid a read addresses. `vendor` is the shop's shelf: it can be read from
+ * and bought out of, but never moved into or out of — goods change hands through
+ * `buyItem`, which is the only path that charges for them.
+ */
+export type ContainerId = "backpack" | "stash" | "vendor";
 
 export type Intent =
   | { kind: "moveTo"; x: Fixed; y: Fixed }
@@ -38,9 +42,15 @@ export type Intent =
    * Sell the item whose ORIGIN cell is (x,y) to the disenchanter. `from` defaults
    * to the backpack, matching moveItem's convention so the two share a read path.
    */
-  | { kind: "sellItem"; x: number; y: number; from?: ContainerId };
+  | { kind: "sellItem"; x: number; y: number; from?: ContainerId }
+  /**
+   * Buy the vendor's stock item whose ORIGIN cell on the shelf is (x,y). The sim
+   * re-checks the price against the purse and the backpack for room, so a client
+   * that shows a piece it cannot afford can still only ever be told no.
+   */
+  | { kind: "buyItem"; x: number; y: number };
 
-export type CommandType = "moveTo" | "moveDir" | "useSkill" | "stop" | "interact" | "activateMap" | "pickupItem" | "equipItem" | "unequipItem" | "dropItem" | "moveItem" | "useFlask" | "applyCurrency" | "sellItem";
+export type CommandType = "moveTo" | "moveDir" | "useSkill" | "stop" | "interact" | "activateMap" | "pickupItem" | "equipItem" | "unequipItem" | "dropItem" | "moveItem" | "useFlask" | "applyCurrency" | "sellItem" | "buyItem";
 
 // ---------------------------------------------------------------------------
 // Run loop
@@ -223,6 +233,8 @@ export interface Snapshot {
     /** Experience banked toward the next level, and what that level costs. `xpToNext` is 0 at the cap. */
     xp: number;
     xpToNext: number;
+    /** Gold on hand. Account-bound and never in the grid (docs/02), so it rides here. */
+    gold: number;
   };
   entities: SnapshotEntity[];
   /** Grid inventory (session singleton), display-ready. Empty when no session. */
@@ -234,6 +246,14 @@ export interface Snapshot {
   stash: {
     cols: number; rows: number;
     items: (DisplayItem & { x: number; y: number; w: number; h: number; /** currency only: stack size */ count?: number })[];
+  };
+  /**
+   * The vendor's shelf, same display shape again. Each entry carries the gold it
+   * costs, so the purchase window never has to re-derive a price the sim owns.
+   */
+  vendor: {
+    cols: number; rows: number;
+    items: (DisplayItem & { x: number; y: number; w: number; h: number; count?: number; price: number })[];
   };
   /** Equipped gear by slot. Absent keys mean an empty slot. Absent field means no session. */
   equipment: Partial<Record<EquipSlotId, DisplayItem>>;
@@ -395,6 +415,11 @@ export function validateIntent(v: unknown): Intent {
         x: obj["x"] as number, y: obj["y"] as number,
         ...(obj["from"] !== undefined ? { from: obj["from"] as ContainerId } : {}),
       };
+    }
+    case "buyItem": {
+      if (!Number.isInteger(obj["x"])) throw new Error("validateIntent buyItem: x must be an integer");
+      if (!Number.isInteger(obj["y"])) throw new Error("validateIntent buyItem: y must be an integer");
+      return { kind: "buyItem", x: obj["x"] as number, y: obj["y"] as number };
     }
     default:
       throw new Error(`validateIntent: unknown kind: ${String(obj["kind"])}`);

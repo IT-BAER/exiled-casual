@@ -22,6 +22,14 @@ type Inventory = Snapshot["inventory"];
 type Equipment = Snapshot["equipment"];
 /** An inventory entry: the display item plus where and how big it sits in the grid. */
 type GridItem = Inventory["items"][number];
+/** A shelf entry is a grid entry that also knows its price. */
+type ShelfItem = Snapshot["vendor"]["items"][number];
+
+/** What the window shows before a snapshot has a shelf in it: the frame, no goods. */
+const EMPTY_SHELF: Snapshot["vendor"] = { cols: 12, rows: 8, items: [] };
+
+/** The testid prefix a container's cells and items carry. */
+const TID: Record<ContainerId, string> = { backpack: "inventory", stash: "stash", vendor: "vendor" };
 
 /**
  * Would spending `currency` on `it` do anything? Legality is the sim's call; this is
@@ -31,6 +39,18 @@ type GridItem = Inventory["items"][number];
 function accepts(currency: GridItem, it: GridItem): boolean {
   if (it.itemClass === "currency" || (it.x === currency.x && it.y === currency.y)) return false;
   return currencyAccepts(currency.baseId ?? "", it.rarity, it.unidentified === true, it.lines.length);
+}
+
+/**
+ * Does a shelf piece answer to the keyword box? PoE matches the whole printed
+ * item — its name, its base and its mod lines — rather than the name alone, which
+ * is what makes "life" a usable search there.
+ */
+function matchesHighlight(it: GridItem, keyword: string): boolean {
+  const needle = keyword.trim().toLowerCase();
+  if (needle === "") return true;
+  return [it.name, it.baseName, it.itemClass, ...it.lines, ...(it.statLines ?? []).map((l) => l.label)]
+    .some((s) => s !== undefined && s.toLowerCase().includes(needle));
 }
 
 /** Where a drag started, which decides the intent it turns into on release. */
@@ -101,7 +121,10 @@ function PaneHeader({ title, bleed, onClose, testId }: {
         height: `calc(12 * ${CELL} * 0.128)`,
         flexShrink: 0,
         position: "sticky",
-        top: 0,
+        // Sticky measures `top` from the scrollport's PADDING edge, so pinning at 0
+        // parks the band `bleed` lower than the negative margin just put it and it
+        // eats that much of the next child. Pin it where the flow already has it.
+        top: bleed ? `calc(-1 * ${bleed})` : 0,
         zIndex: 2,
         display: "flex", alignItems: "center", justifyContent: "center",
         backgroundImage: "url(/textures/ui/char_header_v1.png)",
@@ -268,10 +291,14 @@ function SectionRule({ children }: { children?: React.ReactNode }) {
 }
 
 export function InventoryPanel({
-  inventory, stash, equipment = {}, shards = {}, vendorOpen = false,
+  inventory, stash, vendor = EMPTY_SHELF, gold = 0, equipment = {}, shards = {}, vendorOpen = false,
   onClose, onCloseStash, onCloseVendor, onIntent,
 }: {
   inventory: Inventory; stash?: Inventory; equipment?: Equipment;
+  /** The vendor's shelf, priced per cell. Absent on a snapshot built without a session. */
+  vendor?: Snapshot["vendor"];
+  /** Gold on hand, which is what decides whether a shelf cell reads as affordable. */
+  gold?: number;
   /** Loose shards banked at the bench, orb base id to count. Always known, so the
       backpack's Shards counter can read it whether or not the bench is open. */
   shards?: Record<string, number>;
@@ -283,7 +310,16 @@ export function InventoryPanel({
   // Both grids are owned by this one component so a single drag can cross between
   // them: the drop target is resolved against whichever grid the cursor is over,
   // never against a remembered one.
-  const grids: Partial<Record<ContainerId, Inventory>> = { backpack: inventory, ...(stash ? { stash } : {}) };
+  const grids: Partial<Record<ContainerId, Inventory>> = {
+    backpack: inventory,
+    ...(stash ? { stash } : {}),
+    // Only while the shop is open: the shelf must not be a drag target sitting
+    // invisibly under the cursor when the window is shut.
+    ...(vendorOpen ? { vendor } : {}),
+  };
+  /** What the shop is charging for the piece in this cell, or 0 if it is not a shelf cell. */
+  const priceOf = (container: ContainerId, it: GridItem): number =>
+    container === "vendor" ? (it as ShelfItem).price : 0;
 
   // Sound the bench off the shard count rather than off the click, so the two
   // outcomes are audibly different: banking a shard ticks, and the tenth one
@@ -300,6 +336,13 @@ export function InventoryPanel({
   // Keyed by the item, not a grid index, so equipped slots and backpack cells
   // share one hover path; an index could only ever address the backpack.
   const [hover, setHover] = React.useState<{ item: DisplayItem; x: number; y: number } | null>(null);
+  // A tooltip outlives the cell it came from: removing an element fires no
+  // mouseleave, and the tooltip is painted by this component rather than by the
+  // pane that closed, so walking away from the stash or the vendor left it hanging
+  // over the world. Whenever a container comes or goes, the hover goes with it.
+  const shelfOpen = vendorOpen;
+  const stashShown = stash !== undefined;
+  React.useEffect(() => { setHover(null); }, [shelfOpen, stashShown]);
   // `w`/`h` are the held piece's footprint in cells, carried on the drag because
   // DisplayItem itself has no size: only the backpack entry that wraps it does.
   const [drag, setDrag] = React.useState<{ from: DragSource; item: DisplayItem; w: number; h: number; x: number; y: number } | null>(null);
@@ -307,6 +350,8 @@ export function InventoryPanel({
   // left-click the item to spend it on. Holds the currency itself rather than a flag,
   // because which orb is on the cursor decides what every other cell will accept.
   const [armed, setArmed] = React.useState<GridItem | null>(null);
+  /** The vendor window's keyword box. Local: it dims the shelf, nothing else. */
+  const [highlight, setHighlight] = React.useState("");
   const boxRef = React.useRef<HTMLDivElement | null>(null);
   const gridRefs = React.useRef<Partial<Record<ContainerId, HTMLDivElement | null>>>({});
 
@@ -323,6 +368,9 @@ export function InventoryPanel({
   const dropTarget = React.useMemo(() => {
     if (!drag || drag.from.kind !== "grid") return null;
     for (const [id, g] of Object.entries(grids) as [ContainerId, Inventory][]) {
+      // The shelf is never a drop target. Goods leave it by being bought, and a
+      // drop onto it would be a way to hand an item over without being paid.
+      if (id === "vendor") continue;
       const r = gridRefs.current[id]?.getBoundingClientRect();
       if (!r) continue;
       if (drag.x < r.left || drag.x >= r.right || drag.y < r.top || drag.y >= r.bottom) continue;
@@ -463,7 +511,7 @@ export function InventoryPanel({
               Array.from({ length: g.cols }).map((__, x) => (
                 <div
                   key={`${x}-${y}`}
-                  data-testid={`${container === "stash" ? "stash" : "inventory"}-cell-${x}-${y}`}
+                  data-testid={`${TID[container]}-cell-${x}-${y}`}
                   style={{ position: "absolute", left: `calc(${x} * ${CELL})`, top: `calc(${y} * ${CELL})`, width: CELL, height: CELL }}
                 />
               )),
@@ -489,7 +537,7 @@ export function InventoryPanel({
             {g.items.map((it, i) => (
               <div
                 key={i}
-                data-testid={`${container === "stash" ? "stash" : "inventory"}-item-${i}`}
+                data-testid={`${TID[container]}-item-${i}`}
                 // Refusal is the cursor's job now (index.html): red iron blade over
                 // an item the armed orb cannot touch, gilt blade everywhere else.
                 data-cursor={armed && !accepts(armed, it) ? "deny" : undefined}
@@ -503,6 +551,18 @@ export function InventoryPanel({
                   setArmed((a) => (container === "backpack" && it.itemClass === "currency" && a?.x !== it.x ? it : null));
                 }}
                 onPointerDown={(e) => {
+                  // A shelf cell is bought, never dragged: one click is the whole
+                  // transaction, and the sim re-checks the price and the room.
+                  if (container === "vendor") {
+                    e.preventDefault();
+                    if (priceOf(container, it) > gold) return;
+                    setHover(null);
+                    // The purchase sounds at the rarity it lands at, so the loud
+                    // ones are loud here too (docs/09 rule 2).
+                    playDropSound(it.rarity);
+                    onIntent?.({ kind: "buyItem", x: it.x, y: it.y });
+                    return;
+                  }
                   // Ctrl-click breaks an item down, but only while the bench is open:
                   // a destructive gesture must never be one stray modifier away.
                   if (e.ctrlKey && vendorOpen) {
@@ -552,7 +612,14 @@ export function InventoryPanel({
                   padding: 2,
                   boxSizing: "border-box",
                   boxShadow: `inset 0 0 8px ${RARITY_BORDER[it.rarity]}44`,
-                  opacity: drag?.from.kind === "grid" && drag.from.container === container && drag.from.x === it.x && drag.from.y === it.y ? 0.3 : 1,
+                  opacity: drag?.from.kind === "grid" && drag.from.container === container && drag.from.x === it.x && drag.from.y === it.y ? 0.3
+                    // PoE's keyword box HIGHLIGHTS rather than filters: the goods
+                    // stay where they are and everything else falls back, so the
+                    // shelf never reshuffles under a half-typed word.
+                    : container === "vendor" && highlight !== "" && !matchesHighlight(it, highlight) ? 0.18
+                    : container === "vendor" && priceOf(container, it) > gold ? 0.45
+                    : 1,
+                  cursor: container === "vendor" && priceOf(container, it) > gold ? "not-allowed" : undefined,
                 }}
               >
                 {it.icon ? (
@@ -568,17 +635,31 @@ export function InventoryPanel({
                 {/* Stack size in the bottom-right of the cell, where PoE puts it. */}
                 {it.count !== undefined && it.count > 1 && (
                   <span
-                    data-testid={`${container === "stash" ? "stash" : "inventory"}-count-${i}`}
+                    data-testid={`${TID[container]}-count-${i}`}
                     style={{ position: "absolute", right: 2, bottom: 1, fontSize: 11, color: "#e8dfc4", textShadow: "0 1px 2px #000", pointerEvents: "none" }}
                   >
                     {it.count}
+                  </span>
+                )}
+                {/* The price rides in the cell's bottom-left, opposite the stack
+                    count, and turns red when the purse cannot cover it. */}
+                {container === "vendor" && (
+                  <span
+                    data-testid={`vendor-price-${i}`}
+                    style={{
+                      position: "absolute", left: 2, bottom: 1, fontSize: 10,
+                      color: priceOf(container, it) > gold ? "#d05a4e" : "#f0d789",
+                      textShadow: "0 1px 2px #000", pointerEvents: "none",
+                    }}
+                  >
+                    {priceOf(container, it)}
                   </span>
                 )}
                 {/* An unread item wears a question mark, so the backpack shows what is
                     still owed without a hover (docs/09 rule 2: unseen is unfelt). */}
                 {it.unidentified && (
                   <span
-                    data-testid={`${container === "stash" ? "stash" : "inventory"}-unread-${i}`}
+                    data-testid={`${TID[container]}-unread-${i}`}
                     style={{ position: "absolute", left: 3, top: 1, fontSize: 12, fontWeight: 700, color: "#d02020", textShadow: "0 1px 2px #000", pointerEvents: "none" }}
                   >
                     ?
@@ -612,72 +693,77 @@ export function InventoryPanel({
         </div>
       </div>
     )}
-    <div
-      data-testid="inventory-panel"
-      style={{
-        position: "absolute",
-        inset: 0,
-        display: "flex",
-        // Docked to the bottom-right corner, the way inventory+equipment.png has it:
-        // the panel is a column against the screen edge, not a dialog floating in the
-        // middle, and its bottom-right corner runs behind the mana globe.
-        alignItems: "flex-end",
-        justifyContent: "flex-end",
-        // No dimming backdrop and no pointer capture: PoE leaves the world lit and
-        // playable with the inventory open. The box below takes its own events back.
-        pointerEvents: "none",
-        // Under the globes (zIndex 3) so the mana orb paints over the panel's corner,
-        // which is what makes it read as tucked behind rather than parked next to it.
-        zIndex: 2,
-        fontFamily: SERIF,
-        color: PARCHMENT,
-      }}
-    >
-      {/* Disenchanting bench. It holds no grid: what you get back is shards, which
-          docs/02 §5 says never occupy inventory, so the panel is the bank sheet and
-          the ten pips are the countdown to the orb they turn into. */}
-      {vendorOpen && (
+    {/* The vendor's purchase window, borrowed from PoE1 (poe1-vendor-purchase.png):
+        the shelf as a grid under a gilt cartouche, a keyword box along its foot,
+        and the price printed in the cell rather than hidden behind a hover. It
+        docks left where the stash does, and the two never open together. */}
+    {vendorOpen && (
+      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "flex-end", justifyContent: "flex-start", pointerEvents: "none", zIndex: 2, fontFamily: SERIF, color: PARCHMENT }}>
         <div
           data-testid="vendor-panel"
           data-hud-panel=""
-          style={{
-            pointerEvents: "auto",
-            marginRight: "auto",
-            marginLeft: 12,
-            marginBottom: BAR_H,
-            padding: PANEL_PAD,
-            width: 300,
-            background: "linear-gradient(180deg,#12100b 0%,#0b0a07 100%)",
-            border: `1px solid ${GOLD_DIM}`,
-            boxShadow: `0 0 0 1px #000, 0 0 0 4px #1b1710, 0 0 0 5px ${GOLD_DIM}, 0 14px 48px rgba(0,0,0,0.85)`,
-          }}
+          style={{ ...PANE, padding: PANEL_PAD, overflowY: "auto", scrollbarWidth: "none" }}
         >
-          <div
-            style={{
-              margin: `calc(-1 * ${PANEL_PAD}) calc(-1 * ${PANEL_PAD}) 10px`,
-              padding: "10px 0",
-              textAlign: "center",
-              position: "relative",
-              background: "linear-gradient(180deg,#4a1a13,#6b2018 45%,#3a1310)",
-              borderBottom: `1px solid ${GOLD_DIM}`,
-              boxShadow: `inset 0 1px 0 ${GOLD}55, inset 0 -1px 0 #000`,
-            }}
-          >
-            <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: 3, textTransform: "uppercase", color: PARCHMENT, textShadow: "0 1px 2px #000" }}>
-              Disenchant
-            </span>
-            <button
-              data-testid="vendor-close"
-              onClick={onCloseVendor}
-              style={{ position: "absolute", top: 6, right: 10, background: "none", border: "none", color: "#c9b48a", fontSize: 18, lineHeight: 1 }}
+          <PaneHeader title="Purchase" bleed={PANEL_PAD} onClose={() => onCloseVendor?.()} testId="vendor-close" />
+
+          {/* The reference labels the shelf and then tabs it. One shelf is one
+              page, so the tab is a single chip: PoE1 draws it that way too when a
+              vendor's stock does not overflow. */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+            <span style={{ fontSize: 11, letterSpacing: 1.5, color: "#b7ac8e" }}>Select Items To Buy</span>
+            <span
+              data-testid="vendor-tab"
+              style={{
+                fontSize: 10, letterSpacing: 1, color: GOLD, padding: "1px 10px",
+                background: "linear-gradient(180deg,#221c11,#12100a)",
+                border: `1px solid ${GOLD_DIM}`, borderBottom: "none",
+              }}
             >
-              ×
-            </button>
+              -1-
+            </span>
           </div>
+
+          {renderGrid("vendor")}
+
+          {/* Highlight, not filter — see matchesHighlight. */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
+            <span style={{ fontSize: 11, letterSpacing: 1, color: GOLD, whiteSpace: "nowrap" }}>Highlight Items</span>
+            <div style={{ position: "relative", flex: 1 }}>
+              <input
+                data-testid="vendor-highlight"
+                value={highlight}
+                onChange={(e) => setHighlight(e.target.value)}
+                placeholder="Type keywords here..."
+                style={{
+                  width: "100%", boxSizing: "border-box", padding: "4px 22px 4px 8px",
+                  background: "#0a0906", border: `1px solid ${GOLD_DIM}`, borderRadius: 2,
+                  color: PARCHMENT, fontFamily: SERIF, fontSize: 11, letterSpacing: 0.5,
+                  outline: "none",
+                }}
+              />
+              {highlight !== "" && (
+                <button
+                  data-testid="vendor-highlight-clear"
+                  onClick={() => setHighlight("")}
+                  style={{
+                    position: "absolute", right: 4, top: "50%", transform: "translateY(-50%)",
+                    background: "none", border: "none", color: "#8c8069", fontSize: 12, lineHeight: 1, padding: 0,
+                  }}
+                >
+                  ⊗
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* The sell half. Gold is paid for anything the counter takes; these pips
+              are the extra a magic or better piece breaks down into, and they stay
+              on the same window because it is one counter, not two services. */}
+          <SectionRule>Sell</SectionRule>
           {SHARD_ROWS.map(({ orbBaseId, label }) => {
             const n = shards[orbBaseId] ?? 0;
             return (
-              <div key={orbBaseId} data-testid={`shard-${orbBaseId}`} style={{ marginBottom: 10 }}>
+              <div key={orbBaseId} data-testid={`shard-${orbBaseId}`} style={{ marginBottom: 6 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: PARCHMENT, letterSpacing: 1 }}>
                   <span>{label} Shards</span>
                   <span style={{ color: n > 0 ? GOLD : "#6b6152" }}>{n} / {SHARDS_PER_ORB}</span>
@@ -699,12 +785,34 @@ export function InventoryPanel({
               </div>
             );
           })}
-          <div style={{ fontSize: 11, color: "#8c8069", lineHeight: 1.5, marginTop: 12 }}>
-            Ctrl-click a magic, rare or unique item to break it down. Ten shards
-            become their orb, straight into the backpack.
+          <div style={{ fontSize: 11, color: "#8c8069", lineHeight: 1.45, marginTop: 2 }}>
+            Click the shelf to buy. Ctrl-click your own to sell: all of it pays gold,
+            magic and better also break into shards.
           </div>
         </div>
-      )}
+      </div>
+    )}
+    <div
+      data-testid="inventory-panel"
+      style={{
+        position: "absolute",
+        inset: 0,
+        display: "flex",
+        // Docked to the bottom-right corner, the way inventory+equipment.png has it:
+        // the panel is a column against the screen edge, not a dialog floating in the
+        // middle, and its bottom-right corner runs behind the mana globe.
+        alignItems: "flex-end",
+        justifyContent: "flex-end",
+        // No dimming backdrop and no pointer capture: PoE leaves the world lit and
+        // playable with the inventory open. The box below takes its own events back.
+        pointerEvents: "none",
+        // Under the globes (zIndex 3) so the mana orb paints over the panel's corner,
+        // which is what makes it read as tucked behind rather than parked next to it.
+        zIndex: 2,
+        fontFamily: SERIF,
+        color: PARCHMENT,
+      }}
+    >
       <div
         ref={boxRef}
         // The wheel still scrolls; PoE has no scrollbar chrome and a pale native
@@ -771,7 +879,7 @@ export function InventoryPanel({
               boxShadow: "inset 0 0 16px rgba(0,0,0,0.85)",
             }}
           >
-            <Currency label="Gold" value={0} />
+            <Currency label="Gold" value={gold} />
             <Currency label="Shards" value={shardTotal} />
           </div>
         </div>

@@ -62,12 +62,14 @@ function makeSnap(overrides: {
       level: overrides.level ?? 65,
       xp: overrides.xp ?? 0,
       xpToNext: overrides.xpToNext ?? 60_000,
+      gold: 0,
       flasks: overrides.flasks ?? { lifeCharges: 7, lifeMax: 7, manaCharges: 7, manaMax: 7 },
       stats: testStats(),
     },
     entities: overrides.entities ?? [],
     inventory: { cols: 12, rows: 5, items: [] },
     stash: { cols: 12, rows: 12, items: [] },
+    vendor: { cols: 12, rows: 12, items: [] },
     equipment: {},
     shards: {},
   };
@@ -143,6 +145,7 @@ describe("Hud", () => {
       entities: [{ id: 10, kind: "monster", x: 0, y: 0, boss: true, bossPhase: 2, life: 600, maxLife: 1000 }],
       inventory: { cols: 12, rows: 5, items: [] },
     stash: { cols: 12, rows: 12, items: [] },
+    vendor: { cols: 12, rows: 12, items: [] },
       equipment: {},
       shards: {},
     };

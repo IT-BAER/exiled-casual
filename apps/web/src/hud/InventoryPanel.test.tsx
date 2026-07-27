@@ -316,3 +316,83 @@ describe("spending currency on an item", () => {
     expect(seen).toEqual([]);
   });
 });
+
+const shelf = {
+  cols: 12,
+  rows: 12,
+  items: [
+    { x: 0, y: 0, w: 1, h: 2, rarity: "normal" as const, name: "Iron Hat", itemClass: "helmet", lines: [], price: 40 },
+    { x: 2, y: 0, w: 2, h: 2, rarity: "rare" as const, name: "Doom Shroud", itemClass: "body", lines: ["+50 to maximum Life"], price: 900 },
+  ],
+};
+
+describe("InventoryPanel - purchase window", () => {
+  it("shows the shelf with a price in every cell", () => {
+    render(<InventoryPanel inventory={inv} vendorOpen vendor={shelf} gold={500} onClose={() => {}} />);
+    expect(screen.getByTestId("vendor-panel").textContent).toContain("Select Items To Buy");
+    expect(screen.getByTestId("vendor-price-0").textContent).toBe("40");
+    expect(screen.getByTestId("vendor-price-1").textContent).toBe("900");
+  });
+
+  it("buys the piece that was clicked", () => {
+    const intents: unknown[] = [];
+    render(<InventoryPanel inventory={inv} vendorOpen vendor={shelf} gold={500} onIntent={(i) => intents.push(i)} onClose={() => {}} />);
+    fireEvent.pointerDown(screen.getByTestId("vendor-item-0"));
+    expect(intents).toEqual([{ kind: "buyItem", x: 0, y: 0 }]);
+  });
+
+  it("refuses to send a purchase the purse cannot cover", () => {
+    const intents: unknown[] = [];
+    render(<InventoryPanel inventory={inv} vendorOpen vendor={shelf} gold={500} onIntent={(i) => intents.push(i)} onClose={() => {}} />);
+    fireEvent.pointerDown(screen.getByTestId("vendor-item-1"));
+    expect(intents).toEqual([]);
+  });
+
+  it("never drags a piece off the shelf, because that would be taking it", () => {
+    const intents: unknown[] = [];
+    render(<InventoryPanel inventory={inv} vendorOpen vendor={shelf} gold={5000} onIntent={(i) => intents.push(i)} onClose={() => {}} />);
+    fireEvent.pointerDown(screen.getByTestId("vendor-item-0"), { clientX: 10, clientY: 10 });
+    expect(screen.queryByTestId("drag-ghost")).toBeNull();
+    expect(intents).toEqual([{ kind: "buyItem", x: 0, y: 0 }]);
+  });
+
+  it("dims the shelf down to what the keyword box names", () => {
+    render(<InventoryPanel inventory={inv} vendorOpen vendor={shelf} gold={5000} onClose={() => {}} />);
+    fireEvent.change(screen.getByTestId("vendor-highlight"), { target: { value: "maximum life" } });
+    expect(screen.getByTestId("vendor-item-0").style.opacity).toBe("0.18");
+    expect(screen.getByTestId("vendor-item-1").style.opacity).toBe("1");
+  });
+
+  it("clears the keyword box back to the whole shelf", () => {
+    render(<InventoryPanel inventory={inv} vendorOpen vendor={shelf} gold={5000} onClose={() => {}} />);
+    fireEvent.change(screen.getByTestId("vendor-highlight"), { target: { value: "nothing matches this" } });
+    fireEvent.click(screen.getByTestId("vendor-highlight-clear"));
+    expect(screen.getByTestId("vendor-item-0").style.opacity).toBe("1");
+  });
+
+  it("shows the gold the purse is actually carrying, where PoE1 keeps it", () => {
+    render(<InventoryPanel inventory={inv} vendorOpen vendor={shelf} gold={1234} onClose={() => {}} />);
+    expect(screen.getByTestId("currency-strip").textContent).toContain("1234");
+  });
+});
+
+describe("InventoryPanel - panels that close take their tooltip with them", () => {
+  it("drops the tooltip when the shelf closes under it", () => {
+    const { rerender } = render(<InventoryPanel inventory={inv} vendorOpen vendor={shelf} gold={5000} onClose={() => {}} />);
+    fireEvent.mouseEnter(screen.getByTestId("vendor-item-0"), { clientX: 100, clientY: 100 });
+    expect(screen.getByTestId("item-tooltip")).toBeTruthy();
+
+    rerender(<InventoryPanel inventory={inv} vendorOpen={false} gold={5000} onClose={() => {}} />);
+    expect(screen.queryByTestId("item-tooltip")).toBeNull();
+  });
+
+  it("drops the tooltip when the stash closes under it", () => {
+    const stash = { cols: 12, rows: 12, items: [{ x: 4, y: 4, w: 1, h: 1, rarity: "rare" as const, name: "Old Wand", lines: [] }] };
+    const { rerender } = render(<InventoryPanel inventory={inv} stash={stash} onClose={() => {}} />);
+    fireEvent.mouseEnter(screen.getByTestId("stash-item-0"), { clientX: 100, clientY: 100 });
+    expect(screen.getByTestId("item-tooltip")).toBeTruthy();
+
+    rerender(<InventoryPanel inventory={inv} onClose={() => {}} />);
+    expect(screen.queryByTestId("item-tooltip")).toBeNull();
+  });
+});

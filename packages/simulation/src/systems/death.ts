@@ -1,5 +1,6 @@
 import { Simulation } from "../loop";
-import type { Health, Mana, MoveTarget, MoveDir, SessionC, MonsterC, Position, ItemC, FlasksC, ProgressC, EnergyShieldC } from "../components";
+import type { Health, Mana, MoveTarget, MoveDir, SessionC, MonsterC, Position, ItemC, FlasksC, ProgressC, EnergyShieldC, VendorC } from "../components";
+import { stockVendor } from "../vendor";
 import { fp } from "@exiled/fixed-point";
 import { fnv1a32 } from "../rng";
 import {
@@ -108,8 +109,14 @@ export function registerDeath(sim: Simulation): void {
           const base = xpAward(prog.level, areaLevel(s.areaTier), kind);
           const gain = Math.trunc((base * (100 + waystoneScaleFor(s.waystoneSeed).experiencePct)) / 100);
           const next = gainXp(prog.level, prog.xp, gain);
-          world.set<ProgressC>(sessionE, "progress", next);
-          if (next.level !== prog.level) recomputePlayerStats(world);
+          world.set<ProgressC>(sessionE, "progress", { ...next, gold: prog.gold });
+          if (next.level !== prog.level) {
+            recomputePlayerStats(world);
+            // A level-up restocks the shelf (docs/02 §17). It is also the one moment
+            // the shop is worth walking back to, so the new level and the new goods
+            // land together rather than the goods arriving unannounced.
+            world.set<VendorC>(sessionE, "vendor", stockVendor(s.atlasSeed, next.level));
+          }
         }
       }
 

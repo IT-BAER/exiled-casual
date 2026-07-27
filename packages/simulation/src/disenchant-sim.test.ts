@@ -115,11 +115,13 @@ describe("disenchant - shard-to-orb conversion", () => {
 });
 
 describe("disenchant - refused items", () => {
-  it("leaves a normal item in place and banks no shards", () => {
+  // The counter takes a normal item for gold since the vendor landed, but there is
+  // still nothing in a white item to break down, so the shard bank stays empty.
+  it("takes a normal item without banking a shard", () => {
     const { sim, world, playerEntity } = makeWorld();
     setInv(world, [{ x: 0, y: 0, w: 1, h: 2, item: NORMAL_WAND }]);
     sim.step([intentToCommand({ kind: "sellItem", x: 0, y: 0 }, playerEntity, 0)]);
-    expect(getInv(world).items).toHaveLength(1);
+    expect(getInv(world).items).toHaveLength(0);
     expect(getShards(world).counts).toEqual({});
   });
 

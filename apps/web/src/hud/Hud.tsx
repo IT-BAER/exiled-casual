@@ -502,7 +502,7 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
     ? hoveredEntity.kind === "stash"
       ? "Stash"
       : hoveredEntity.kind === "vendor"
-      ? "Disenchanting Bench"
+      ? "Vendor"
       : hoveredEntity.kind === "mapDevice"
       ? "Map Device"
       : snapshot.area === "hideout"

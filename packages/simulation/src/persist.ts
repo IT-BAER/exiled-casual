@@ -1,6 +1,7 @@
 import type { KvStore } from "@exiled/persistence";
 import type { World } from "./ecs";
-import type { SessionC, InventoryC, StashC, EquipmentC, ProgressC, ShardsC } from "./components";
+import type { SessionC, InventoryC, StashC, VendorC, EquipmentC, ProgressC, ShardsC } from "./components";
+import { stockVendor } from "./vendor";
 import { recomputePlayerStats } from "./derived";
 import { START_LEVEL } from "@exiled/rules";
 
@@ -28,6 +29,11 @@ interface PersistedState {
   progress?: ProgressC;
   /** Optional so a save written before the disenchanter existed still loads, with no shards. */
   shards?: ShardsC;
+  /**
+   * The shelf, holes and all. Persisted rather than re-rolled on load: the roll is
+   * deterministic, so a fresh roll would silently restock whatever was just bought.
+   */
+  vendor?: VendorC;
 }
 
 /** Read the durable state off the session singleton, or null if there is none. */
@@ -38,10 +44,11 @@ export function snapshot(world: World): PersistedState | null {
   const inventory = world.get<InventoryC>(e, "inventory");
   if (!session || !inventory) return null;
   const equipment = world.get<EquipmentC>(e, "equipment") ?? { slots: {} };
-  const progress = world.get<ProgressC>(e, "progress") ?? { level: START_LEVEL, xp: 0 };
+  const progress = world.get<ProgressC>(e, "progress") ?? { level: START_LEVEL, xp: 0, gold: 0 };
   const stash = world.get<StashC>(e, "stash") ?? EMPTY_STASH;
   const shards = world.get<ShardsC>(e, "shards") ?? { counts: {} };
-  return { version: VERSION, session, inventory, stash, equipment, progress, shards };
+  const vendor = world.get<VendorC>(e, "vendor");
+  return { version: VERSION, session, inventory, stash, equipment, progress, shards, ...(vendor ? { vendor } : {}) };
 }
 
 /**
@@ -65,8 +72,12 @@ export function restore(world: World, state: PersistedState): void {
   world.set<InventoryC>(e, "inventory", state.inventory);
   world.set<StashC>(e, "stash", state.stash ?? EMPTY_STASH);
   world.set<EquipmentC>(e, "equipment", state.equipment ?? { slots: {} });
-  world.set<ProgressC>(e, "progress", state.progress ?? { level: START_LEVEL, xp: 0 });
+  // A save written before gold existed carries a progress with no `gold` key, so
+  // the field is defaulted on its own rather than only when progress is missing.
+  const progress = state.progress ?? { level: START_LEVEL, xp: 0, gold: 0 };
+  world.set<ProgressC>(e, "progress", { ...progress, gold: progress.gold ?? 0 });
   world.set<ShardsC>(e, "shards", state.shards ?? { counts: {} });
+  world.set<VendorC>(e, "vendor", state.vendor ?? stockVendor(state.session.atlasSeed, progress.level));
   // Saved gear has to reach the player, not just the equipment panel. Life and
   // mana are not persisted, so a restored session starts full.
   recomputePlayerStats(world, { refill: true });

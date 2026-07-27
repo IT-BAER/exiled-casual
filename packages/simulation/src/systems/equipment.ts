@@ -1,10 +1,10 @@
 import { baseOf, isCurrency, canonicalBaseId, currencyItem } from "@exiled/content-runtime";
-import { disenchantYield, SHARDS_PER_ORB } from "@exiled/rules";
+import { disenchantYield, SHARDS_PER_ORB, vendorBuyPrice, vendorSellPrice } from "@exiled/rules";
 import { Simulation } from "../loop";
 import { placeFirstFit, canPlaceAt } from "../inventory";
 import { canEquip } from "../equipment";
 import { recomputePlayerStats } from "../derived";
-import type { Position, ItemC, InventoryC, EquipmentC, ShardsC } from "../components";
+import type { Position, ItemC, InventoryC, VendorC, EquipmentC, ShardsC, ProgressC } from "../components";
 import type { Item } from "@exiled/content-schema";
 
 export function registerEquipmentSystem(sim: Simulation): void {
@@ -152,14 +152,23 @@ export function registerEquipmentSystem(sim: Simulation): void {
         const placed = container.items.find((p) => p.x === x && p.y === y);
         if (!placed) continue;
 
+        // Gold is what the counter always pays; shards are the extra a magic or
+        // better piece breaks down into. A refusal is a refusal on both — the two
+        // agree on currency and on unread items, which is why one guard covers it.
+        const gold = vendorSellPrice(placed.item);
+        if (gold === 0) continue; // item refused; nothing consumed
         const yld = disenchantYield(placed.item);
-        if (yld === null) continue; // item refused; nothing consumed
 
         // Remove from container.
         world.set<InventoryC>(sessionE, comp, {
           ...container,
           items: container.items.filter((p) => !(p.x === x && p.y === y)),
         });
+
+        const prog = world.get<ProgressC>(sessionE, "progress")!;
+        world.set<ProgressC>(sessionE, "progress", { ...prog, gold: prog.gold + gold });
+
+        if (yld === null) continue; // paid in gold only; nothing to break down
 
         // Accumulate shards and mint any complete orbs into the backpack.
         const shardsC = world.get<ShardsC>(sessionE, "shards")!;
@@ -187,6 +196,39 @@ export function registerEquipmentSystem(sim: Simulation): void {
         }
 
         world.set<ShardsC>(sessionE, "shards", { counts });
+        continue;
+      }
+
+      // ── buyItem ────────────────────────────────────────────────────────────
+      if (cmd.type === "buyItem") {
+        const x = cmd.data?.["x"];
+        const y = cmd.data?.["y"];
+        if (x === undefined || y === undefined) continue;
+
+        const shelf = world.get<VendorC>(sessionE, "vendor");
+        if (!shelf) continue;
+        const stocked = shelf.items.find((p) => p.x === x && p.y === y);
+        if (!stocked) continue;
+
+        const prog = world.get<ProgressC>(sessionE, "progress")!;
+        const price = vendorBuyPrice(stocked.item);
+        if (prog.gold < price) continue; // cannot afford it; the shelf keeps the piece
+
+        // Room before money: a purchase that cannot be carried must not be charged
+        // for, and there is no cursor to hold the goods on the way out.
+        const inv = world.get<InventoryC>(sessionE, "inventory")!;
+        const fit = placeFirstFit(inv, stocked.w, stocked.h);
+        if (fit === null) continue;
+
+        world.set<InventoryC>(sessionE, "inventory", {
+          ...inv,
+          items: [...inv.items, { x: fit.x, y: fit.y, w: stocked.w, h: stocked.h, item: stocked.item }],
+        });
+        world.set<VendorC>(sessionE, "vendor", {
+          ...shelf,
+          items: shelf.items.filter((p) => !(p.x === x && p.y === y)),
+        });
+        world.set<ProgressC>(sessionE, "progress", { ...prog, gold: prog.gold - price });
         continue;
       }
 

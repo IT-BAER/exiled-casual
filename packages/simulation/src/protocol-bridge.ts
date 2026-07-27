@@ -2,7 +2,8 @@ import { fp, toNumber, fpDist2 } from "@exiled/fixed-point";
 import { PICKUP_RADIUS } from "@exiled/protocol";
 import type { DisplaySkill, Intent, Snapshot, SnapshotEntity, MonsterElement } from "@exiled/protocol";
 import { damageTypeOf } from "./damage-types";
-import { physicalMitigationPct, scalePct, xpToNext, START_LEVEL } from "@exiled/rules";
+import { VENDOR_COLS, VENDOR_ROWS } from "./vendor";
+import { physicalMitigationPct, scalePct, xpToNext, START_LEVEL, vendorBuyPrice } from "@exiled/rules";
 import { resBlock } from "@exiled/content-schema";
 import { describeItem, SKILLS } from "@exiled/content-runtime";
 import type { Command, Simulation } from "./loop";
@@ -10,7 +11,7 @@ import type { World, Entity } from "./ecs";
 import type {
   Health, Mana, Position, Cooldowns, CastingC, MonsterC,
   AilmentC, ProjectileC, GroundAreaC, BossC, TelegraphC,
-  SessionC, InteractableC, ItemC, InventoryC, StashC, EquipmentC, FlasksC, DefensesC, OffenseC, ProgressC,
+  SessionC, InteractableC, ItemC, InventoryC, StashC, VendorC, EquipmentC, FlasksC, DefensesC, OffenseC, ProgressC,
   EnergyShieldC, ShardsC,
 } from "./components";
 
@@ -93,6 +94,8 @@ export function intentToCommand(intent: Intent, player: Entity, tick: number): C
           ...(intent.from === "stash" ? { from: 1 } : {}),
         },
       };
+    case "buyItem":
+      return { tick, entity: player, type: "buyItem", data: { x: intent.x, y: intent.y } };
   }
 }
 
@@ -180,7 +183,7 @@ export function buildSnapshot(
   // A legacy sim without a session has no progression to report; it reads as an
   // unlevelled character rather than as level 0.
   const progress = (sessionE !== undefined ? world.get<ProgressC>(sessionE, "progress") : undefined)
-    ?? { level: START_LEVEL, xp: 0 };
+    ?? { level: START_LEVEL, xp: 0, gold: 0 };
 
   const entities: SnapshotEntity[] = [];
 
@@ -296,6 +299,16 @@ export function buildSnapshot(
   });
   const inventory = describeGrid(sessionE !== undefined ? world.get<InventoryC>(sessionE, "inventory") : undefined, 12, 5);
   const stash = describeGrid(sessionE !== undefined ? world.get<StashC>(sessionE, "stash") : undefined, 12, 12);
+  // The shelf carries its price per cell: the client shows the number, the sim
+  // owns it, and the two can never disagree about what a piece costs.
+  const shelf = sessionE !== undefined ? world.get<VendorC>(sessionE, "vendor") : undefined;
+  const shelfGrid = describeGrid(shelf, VENDOR_COLS, VENDOR_ROWS);
+  const vendor: Snapshot["vendor"] = {
+    cols: shelfGrid.cols,
+    rows: shelfGrid.rows,
+    // describeGrid preserves order, so index i is the same placed item in both.
+    items: shelfGrid.items.map((d, i) => ({ ...d, price: vendorBuyPrice(shelf!.items[i]!.item) })),
+  };
 
   const equipC = sessionE !== undefined ? world.get<EquipmentC>(sessionE, "equipment") : undefined;
   const equipment: Snapshot["equipment"] = {};
@@ -345,6 +358,7 @@ export function buildSnapshot(
       level: progress.level,
       xp: progress.xp,
       xpToNext: xpToNext(progress.level),
+      gold: progress.gold,
       stats: (() => {
         // Read straight off the components recomputePlayerStats writes, so the
         // sheet can never disagree with what the systems actually use.
@@ -364,6 +378,7 @@ export function buildSnapshot(
     entities,
     inventory,
     stash,
+    vendor,
     equipment,
     shards: (sessionE !== undefined ? world.get<ShardsC>(sessionE, "shards") : undefined)?.counts ?? {},
     skills: describeSkills(world.get<OffenseC>(playerEntity, "offense")),

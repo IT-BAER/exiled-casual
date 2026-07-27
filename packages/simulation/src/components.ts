@@ -44,7 +44,12 @@ export interface SessionC {
  * equipment because it is durable in exactly the same way: it survives an area
  * transition, and an abandoned map run does not roll it back.
  */
-export interface ProgressC { level: number; xp: number }
+/**
+ * `gold` lives here rather than in a component of its own because docs/02 says it
+ * is account-bound and never occupies inventory: it is something the character has
+ * accumulated, exactly like the level and the xp beside it.
+ */
+export interface ProgressC { level: number; xp: number; gold: number }
 
 /** Something the player can activate with the `interact` intent. */
 export interface InteractableC {
@@ -181,6 +186,12 @@ export interface InventoryC { cols: number; rows: number; items: PlacedItem[] }
  * helper works on both; it is a separate component only so the two never share cells.
  */
 export type StashC = InventoryC;
+/**
+ * The vendor's shelf. Same grid shape again, so the placement helpers and the
+ * client's grid renderer both work on it unchanged; it is a container rather than
+ * a derived list because buying has to take a piece off it and leave a hole.
+ */
+export type VendorC = InventoryC;
 /** Equipped gear on the session singleton, keyed by slot id. */
 export interface EquipmentC { slots: Partial<Record<string, Item>> }
 /**

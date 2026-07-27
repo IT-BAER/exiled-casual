@@ -11,3 +11,4 @@ export * from "./waystone.js";
 export * from "./currency.js";
 export * from "./disenchant.js";
 export * from "./loot.js";
+export * from "./vendor.js";

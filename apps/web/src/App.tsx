@@ -80,10 +80,12 @@ export function App() {
       // The sim already no-ops activateMap while a run is open; without this the
       // panel still opened, offered stones, and closed itself on the next snapshot.
       (open) => setPanelOpen(open && !curSnap?.mapOpen),
-      // Walking off closes the stash but leaves the inventory: it is the player's
-      // own panel, not the furniture's, and PoE keeps it up until I says otherwise.
-      (open) => { setStashOpen(open); if (open) { setVendorOpen(false); setInventoryOpen(true); } },
-      (open) => { setVendorOpen(open); if (open) { setStashOpen(false); setInventoryOpen(true); } },
+      // Walking up to the furniture opens the inventory with it, so walking off has
+      // to take it away again: a panel the player never asked for cannot outlive the
+      // thing that raised it. Closing with the X is a different path and still leaves
+      // the inventory up, which is the case where it IS the player's own panel.
+      (open) => { setStashOpen(open); setInventoryOpen(open); if (open) setVendorOpen(false); },
+      (open) => { setVendorOpen(open); setInventoryOpen(open); if (open) setStashOpen(false); },
     );
 
     // Loot plates are DOM, so their click has to reach the same approach-then-act
@@ -189,6 +191,8 @@ export function App() {
           onCloseStash={() => setStashOpen(false)}
           shards={snapshot.shards}
           vendorOpen={vendorOpen}
+          vendor={snapshot.vendor}
+          gold={snapshot.player.gold}
           onCloseVendor={() => setVendorOpen(false)}
           equipment={snapshot.equipment}
           onIntent={(intent) => workerRef.current?.postMessage({ type: "intent", intent } satisfies ToWorker)}
