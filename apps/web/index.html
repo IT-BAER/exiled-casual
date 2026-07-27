@@ -15,13 +15,21 @@
          is a piece of the art, gilt and carved like the panel frames, so an OS
          hand or I-beam appearing over a button breaks the frame instantly. The
          !important is what retires the panels' inline pointer / grab / crosshair.
-         Hotspot 1 1: the blade's tip sits one pixel in from the corner. */
-      * { cursor: url(/textures/ui/cursor_40.png) 1 1, default !important; }
-      * { cursor: image-set(url(/textures/ui/cursor_40.png) 1x, url(/textures/ui/cursor_80.png) 2x) 1 1, default !important; }
+         Hotspot 1 1: the blade's tip sits one pixel in from the corner.
+
+         32 CSS px, and not a pixel more, however much better 40 looked. Chromium
+         drops any custom cursor larger than 32 DIP the moment its bitmap touches
+         native UI, falling back to the Windows arrow. With the hotspot at the top
+         left the bitmap hangs down and to the right of the pointer, so at 40 it
+         crossed the bottom edge of the viewport about 50px early and the blade
+         vanished over the flask row. Only the bottom and right edges showed it —
+         towards the top the bitmap extends into the page and touches nothing. */
+      * { cursor: url(/textures/ui/cursor_32.png) 1 1, default !important; }
+      * { cursor: image-set(url(/textures/ui/cursor_32.png) 1x, url(/textures/ui/cursor_64.png) 2x) 1 1, default !important; }
       /* Illegal target for whatever is armed on the cursor: the same blade, cooled
          to red iron, so the refusal is legible without leaving the art. */
-      [data-cursor="deny"] { cursor: url(/textures/ui/cursor_deny_40.png) 1 1, not-allowed !important; }
-      [data-cursor="deny"] { cursor: image-set(url(/textures/ui/cursor_deny_40.png) 1x, url(/textures/ui/cursor_deny_80.png) 2x) 1 1, not-allowed !important; }
+      [data-cursor="deny"] { cursor: url(/textures/ui/cursor_deny_32.png) 1 1, not-allowed !important; }
+      [data-cursor="deny"] { cursor: image-set(url(/textures/ui/cursor_deny_32.png) 1x, url(/textures/ui/cursor_deny_64.png) 2x) 1 1, not-allowed !important; }
       #root { width: 100%; height: 100%; }
     </style>
   </head>
