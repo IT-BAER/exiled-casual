@@ -3,6 +3,7 @@ import { Engine, Matrix, Vector3 } from "@babylonjs/core";
 import { createScene } from "./render/engine";
 import { buildLevel } from "./render/level";
 import { SnapshotRenderer } from "./render/renderer";
+import { loadProps, resetProps } from "./render/props";
 import { loadPlayerRig, resetPlayerRig } from "./render/rig";
 import { attachBindings } from "./input/bindings";
 import { Hud } from "./hud/Hud";
@@ -84,8 +85,8 @@ export function App() {
       // to take it away again: a panel the player never asked for cannot outlive the
       // thing that raised it. Closing with the X is a different path and still leaves
       // the inventory up, which is the case where it IS the player's own panel.
-      (open) => { setStashOpen(open); setInventoryOpen(open); if (open) setVendorOpen(false); },
-      (open) => { setVendorOpen(open); setInventoryOpen(open); if (open) setStashOpen(false); },
+      (open) => { setStashOpen(open); setInventoryOpen(open); if (open) { setVendorOpen(false); setCharacterOpen(false); } },
+      (open) => { setVendorOpen(open); setInventoryOpen(open); if (open) { setStashOpen(false); setCharacterOpen(false); } },
     );
 
     // Loot plates are DOM, so their click has to reach the same approach-then-act
@@ -130,11 +131,12 @@ export function App() {
       scene.render();
     };
 
-    // Wait for the humanoid before the first frame, so the player is never built
-    // as a primitive actor and then swapped for a skinned one mid-run. A failed
-    // load resolves too and leaves the primitive fallback in place.
+    // Wait for the humanoid and the hideout props before the first frame, so
+    // nothing is ever built as a greybox and then swapped for its real asset
+    // mid-run. A failed load resolves too and leaves the primitive fallback in
+    // place.
     let unmounted = false;
-    void loadPlayerRig(scene).then(() => {
+    void Promise.all([loadPlayerRig(scene), loadProps(scene)]).then(() => {
       if (!unmounted) engine.runRenderLoop(renderFrame);
     });
 
@@ -142,10 +144,22 @@ export function App() {
 
     // i = inventory, c = character sheet. Both render-only; the sim never hears
     // about either, and both can be open at once the way PoE2 has them.
+    // Escape clears the screen: every overlay at once, not just the topmost. A player
+    // who wants the world back should not have to count the panels they opened.
     const onInvKey = (ev: KeyboardEvent) => {
       const k = ev.key.toLowerCase();
       if (k === "i") { setInventoryOpen((v) => !v); setStashOpen(false); }
-      if (k === "c") setCharacterOpen((v) => !v);
+      // The sheet is cut from the stash's pane and docks where the stash docks, so
+      // the three take turns in that slot. Unconditional: the only way the stash is
+      // up when `c` is pressed is if the sheet was already down.
+      if (k === "c") { setCharacterOpen((v) => !v); setStashOpen(false); setVendorOpen(false); }
+      if (k === "escape") {
+        setPanelOpen(false);
+        setInventoryOpen(false);
+        setStashOpen(false);
+        setVendorOpen(false);
+        setCharacterOpen(false);
+      }
     };
     window.addEventListener("keydown", onInvKey);
 
@@ -155,6 +169,7 @@ export function App() {
       detachZoom(); // the canvas outlives the engine, so its listener must go
       window.removeEventListener("keydown", onInvKey);
       resetPlayerRig(); // containers belong to the scene we are about to dispose
+      resetProps();
       engine.dispose();
       worker.terminate();
       workerRef.current = null;
