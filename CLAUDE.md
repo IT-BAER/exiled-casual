@@ -90,6 +90,12 @@ PoE2 itemization actually works — do not invent mechanics or colors from memor
   *depth at a visible threshold*, never bare contact count — the latter rises with particle count
   and made a finer chain look worse. `COLLIDE_PASSES` share one push budget on purpose: let each
   pass spend the full cap and iteration silently becomes an 8x speed limit that looks like progress.
+  **Score oscillation separately from travel, or rubber ships.** Depth plus mean hem offset cannot
+  tell a coat that swings from one that shakes: both rose together and the fix read as "flutters too
+  quick, like rubber". The metric that sees it is hem direction *reversals* per chain-frame (rubber
+  0.006 vs stiff 0.003). Mean offset from the bind pose is lag as much as swing, so it keeps rising
+  as the cloth gets heavier — it is not a "more is better" axis. `DAMPING` is the frequency knob;
+  `CONTACT_ABSORB` does nothing measurable anywhere in 0.3-0.6 and is not where to fix ringing.
 - All packs export the same 65 joints at the same bind pose, so a mesh from one binds to another's
   skeleton by assignment. `rig.test.ts` guards that and that every look the code asks for exists.
 - Blender 5.2 is installed for asset authoring, driven headless:

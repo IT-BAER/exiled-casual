@@ -63,8 +63,22 @@ const PER_OLD_STEP = FIXED_STEP * 60;
  * keeps exactly the per-second feel it was tuned for at any step rate: a factor
  * applied four times as often has to be four times as gentle, or raising the
  * rate would silently starch the coat.
+ *
+ * This is the frequency knob, and it is the one that fixes rubber. Raising the
+ * escape speed to 24 gave the coat the travel it needed and made it ring: over
+ * the captured run the hem reversed direction on 0.6% of chain-frames against
+ * 0.3% for the old stiff coat, which is what "flutters too quick" measures as.
+ * Nothing else moved it — absorption between 0.3 and 0.6 changes the reversal
+ * rate not at all, and stiffness only trades swing for penetration. Damping
+ * 0.9 -> 0.75 halves the reversals back to the stiff coat's number and cuts
+ * per-frame hem jitter 0.047 -> 0.033, while frames showing more than 2cm of
+ * leg *improve* 4.7% -> 2.0%: a heavier hem that is shoved aside stays aside.
+ *
+ * 0.75 and not lower because the mean offset from the bind pose keeps climbing
+ * past it (0.33 at 0.9, 0.38 at 0.75, 0.53 at 0.6) and that number is lag, not
+ * swing — below 0.75 the coat visibly trails the body instead of hanging on it.
  */
-const DAMPING = 0.9 ** PER_OLD_STEP;
+const DAMPING = 0.75 ** PER_OLD_STEP;
 /**
  * Pull toward the bind pose per step. Higher is starched: at 0.14 the coat held
  * a rigid bell through a whole jog and only translated, which is the same
@@ -167,13 +181,14 @@ export const MAX_CONTACT_PUSH = MAX_CONTACT_SPEED * FIXED_STEP;
  * three times as often as half absorption. Half keeps enough of the leg's
  * motion for the cloth to stay ahead of it without being thrown by it.
  *
- * Half turned out to be more than the cloth needs once the escape speed above
- * was right: over the captured run it costs frames showing more than 2cm of leg
- * 25.5% against 19.5% at a quarter, for no loss of swing. Full absorption is
- * still wrong for the reason it always was — at 1.0 every frame reports contact
- * and the mean depth quadruples.
+ * Once the escape speed above was right this knob stopped mattering: swept
+ * against the captured run at 0.3, 0.4, 0.5 and 0.6 it moves frames showing
+ * more than 2cm of leg by less than the noise between neighbouring cells, and
+ * moves hem jitter not at all. It is kept at the low end of that window because
+ * the failure at the top is sharp and known — at 1.0 the cloth keeps none of
+ * the limb's momentum, rides *inside* it, and every frame reports contact.
  */
-const CONTACT_ABSORB = 0.25;
+const CONTACT_ABSORB = 0.3;
 
 const scratch = new Vector3();
 const scratchPerp = new Vector3();
