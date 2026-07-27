@@ -17,32 +17,40 @@ import {
 
 /**
  * Half-height of the orthographic view in world units (smaller = more zoomed in).
- * Where the wheel starts, and where it stays until the wheel is touched.
+ * This is both where the wheel starts and as far out as it goes: the widest shot
+ * is the authored one, and the wheel only ever brings the player closer.
  *
  * Calibrated against `poe2-screenshots/article-1280x720`, where the player fills
  * ~12% of the frame height. Measure at 16:9, never ultrawide: an ortho camera
  * keeps the vertical span fixed, so a wider window only adds world sideways and
  * makes the character read smaller than this number suggests.
  *
- * The old tension here — the Warden's slam telegraph is 7 units across against
- * the 9.5 units this shows, so it covers ~74% of the field — is now the player's
- * to resolve. An earlier pass held this at 6 for exactly that reason and lost to
- * two requests for a larger character; the wheel gives the boss its room back
- * without costing the hideout its framing.
+ * KNOWN TENSION: the Warden's slam telegraph is 7 units across, and this value
+ * shows only 9.5 units vertically, so the telegraph covers ~74% of the field
+ * during that fight. An earlier pass held this at 6 for exactly that reason and
+ * the user has since asked twice for a larger character, so framing parity won.
+ * The wheel does not answer this — it only zooms in, so the widest view the
+ * player can reach during the slam is still this one. Revisit against the boss,
+ * not against the hideout, if it reads badly.
  */
 const ORTHO_HALF_HEIGHT = 4.75;
 
 /**
- * Zoom limits, and the step one wheel notch takes.
+ * The near stop, and the step one wheel notch takes.
  *
  * Multiplicative, because a fixed number of units per notch is coarse at the
  * near end and imperceptible at the far one — the eye reads zoom as a ratio.
- * 1.12 puts ~3 notches between the default and either stop, which is about
- * PoE's travel: its zoom is a nudge, not a strategy camera.
+ * 1.12 puts ~3.5 notches between the default and the stop, which is about PoE's
+ * travel: its zoom is a nudge, not a strategy camera.
+ *
+ * There is no far stop of its own. Zooming out past the authored framing would
+ * mean shipping a second widest shot that nothing was composed for — the ortho
+ * height is calibrated against a screenshot, the shadow frustum is sized from
+ * it, and the boss telegraph is already large in the frame at this distance.
  */
 const ZOOM_STEP = 1.12;
 const MIN_HALF_HEIGHT = 3.2;
-const MAX_HALF_HEIGHT = 6.8;
+const MAX_HALF_HEIGHT = ORTHO_HALF_HEIGHT;
 
 /**
  * Camera pitch, as Babylon's beta: the angle down from straight overhead, so
@@ -57,9 +65,9 @@ const MAX_HALF_HEIGHT = 6.8;
  * huntress reads as a near-upright portrait, while the NPCs in the wider
  * `hideout.jpg` are seen from further above. Close in is *shallower*.
  *
- * Anchored on the default half-height rather than on the range, so the framing
- * at rest is exactly the one that shipped and the pitch only ever moves as a
- * consequence of the player's own scrolling.
+ * Anchored on the default half-height, which is also the far stop, so the
+ * framing at rest is exactly the one that shipped and the pitch only ever
+ * shallows from there as a consequence of the player's own scrolling.
  *
  * The direction is a trap worth stating: shallower shows *more* ground
  * front-to-back at a fixed box height (the floor is stretched by 1/cos(beta)),
@@ -71,7 +79,7 @@ const MAX_HALF_HEIGHT = 6.8;
  */
 const BETA_AT_DEFAULT = 0.72;
 const BETA_PER_UNIT = -0.03;
-const BETA_LIMIT = { min: 0.64, max: 0.8 };
+const BETA_LIMIT = { min: BETA_AT_DEFAULT, max: 0.8 };
 
 /** Seconds-ish smoothing on the zoom, so a notch glides instead of snapping. */
 const ZOOM_EASE = 0.18;
@@ -142,9 +150,9 @@ export function createScene(engine: Engine): SceneHandle {
       Math.max(BETA_LIMIT.min, BETA_AT_DEFAULT + BETA_PER_UNIT * (half - ORTHO_HALF_HEIGHT)),
     );
     // The shadow frustum is sized to the visible floor, not to the world, so it
-    // has to grow with the zoom or the corners of a zoomed-out view fall outside
-    // it and read as unlit. Scaled rather than pinned at the widest, which would
-    // spend the same 2048 texels on 2x the floor at every zoom level.
+    // tracks the zoom. Since the wheel only zooms in this never has to grow —
+    // it just stops spending 2048 texels on floor that is no longer on screen,
+    // and the shadows sharpen as the character gets closer.
     const extent = SHADOW_EXTENT * (half / ORTHO_HALF_HEIGHT);
     sun.orthoLeft = -extent;
     sun.orthoRight = extent;

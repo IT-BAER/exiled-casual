@@ -319,7 +319,7 @@ describe("wheel zoom", () => {
     expect(camera.beta).toBeCloseTo(0.72, 6);
   });
 
-  it("clamps at both ends", () => {
+  it("clamps at the near stop", () => {
     const engine = new NullEngine();
     const { camera, setZoom } = createScene(engine);
     // Scrolling past a stop must settle on it rather than creep through: the
@@ -327,22 +327,38 @@ describe("wheel zoom", () => {
     for (let i = 0; i < 40; i++) setZoom(-1);
     expect(camera.orthoTop).toBeCloseTo(3.2, 2);
     expect(camera.orthoTop).toBeGreaterThanOrEqual(3.2);
-
-    for (let i = 0; i < 80; i++) setZoom(1);
-    expect(camera.orthoTop).toBeCloseTo(6.8, 2);
-    expect(camera.orthoTop).toBeLessThanOrEqual(6.8);
   });
 
-  it("keeps the shadow frustum around the visible floor at full zoom out", () => {
+  it("never zooms out past the authored framing", () => {
+    const engine = new NullEngine();
+    const { camera, setZoom } = createScene(engine);
+    // The widest shot is the composed one. Scrolling out from rest must do
+    // nothing at all, and scrolling out after zooming in must stop there.
+    for (let i = 0; i < 20; i++) setZoom(1);
+    expect(camera.orthoTop).toBeCloseTo(4.75, 6);
+    expect(camera.beta).toBeCloseTo(0.72, 6);
+
+    setZoom(-4);
+    for (let i = 0; i < 80; i++) setZoom(1);
+    expect(camera.orthoTop).toBeCloseTo(4.75, 2);
+    expect(camera.orthoTop).toBeLessThanOrEqual(4.75);
+  });
+
+  it("keeps the shadow frustum around the visible floor at every zoom", () => {
     const engine = new NullEngine();
     const { scene, camera, setZoom } = createScene(engine);
-    for (let i = 0; i < 40; i++) setZoom(1);
     const sun = scene.getLightByName("sun") as unknown as { orthoRight: number };
+    const aspect = engine.getRenderWidth() / engine.getRenderHeight();
     // Half the screen diagonal on the floor: the corner is the part that falls
     // off a frustum sized for the middle.
-    const aspect = engine.getRenderWidth() / engine.getRenderHeight();
-    const halfWidth = camera.orthoTop! * aspect;
-    const halfDepth = camera.orthoTop! / Math.cos(camera.beta);
-    expect(sun.orthoRight).toBeGreaterThan(Math.hypot(halfWidth, halfDepth));
+    const covered = () =>
+      sun.orthoRight >
+      Math.hypot(camera.orthoTop! * aspect, camera.orthoTop! / Math.cos(camera.beta));
+
+    expect(covered()).toBe(true);
+    for (let i = 0; i < 20; i++) {
+      setZoom(-1);
+      expect(covered()).toBe(true);
+    }
   });
 });
