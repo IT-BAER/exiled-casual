@@ -11,6 +11,11 @@
 export interface Waystone { id: string; seed: number; tier: number }
 export interface AtlasNode { id: string; name: string }
 
+/** One line of lore, shown when the place is opened on the Atlas. */
+export function atlasNodeFlavour(index: number): string {
+  return NODE_FLAVOUR[index] ?? "No one who went in has said what is there.";
+}
+
 /**
  * A node on the Atlas graph: a *place*, with a position on the world map and the
  * routes leading out of it. PoE2's Atlas is generated per account, so this one is
@@ -25,6 +30,13 @@ export interface AtlasGraphNode extends AtlasNode {
   y: number;
   /** Ids of the nodes a route runs to. Always symmetric. */
   links: string[];
+  /**
+   * The line of lore the Atlas prints when you open the place. PoE2 puts one
+   * under every node's name, and it is the only thing on that panel that is
+   * neither a number nor a colour: a place with a rumour attached is somewhere
+   * you want to go, a tier number is a chore.
+   */
+  flavour: string;
 }
 
 export const WAYSTONE_OFFER_COUNT = 3;
@@ -127,6 +139,23 @@ const NODE_NAMES: readonly string[] = [
   "Gallowsmoor", "Vault of Cinders",
 ];
 
+// Fixed per index alongside the name, for the same reason: the layout is seeded
+// per account, the place is not.
+const NODE_FLAVOUR: readonly string[] = [
+  "Nothing grew back after the burning, and nothing was meant to.",
+  "The rain fell hot for a week, and the town drank all of it.",
+  "They sealed the door from the inside. Ask yourself why.",
+  "The mud keeps every step, and gives none of them back.",
+  "Its bells still ring, six fathoms under.",
+  "Every stair was somebody once. Climb kindly.",
+  "Drink here, and the river takes its iron back out of you.",
+  "Past the last cairn the cold does the killing for him.",
+  "It was raised to fire bricks. It fires other things now.",
+  "The hedge grew inward until there was no village left to fence.",
+  "Twelve ropes, twelve winters, one patient wind.",
+  "What burned here was kept, not buried.",
+];
+
 /**
  * The world map. Nodes land on a jittered 4x3 grid — a grid alone reads as a
  * spreadsheet and pure random clumps, and the reference's world is loose but
@@ -150,6 +179,7 @@ export function atlasGraph(atlasSeed: number): AtlasGraphNode[] {
       x: (col + 0.5 + jx) / cols,
       y: (row + 0.5 + jy) / rows,
       links: [],
+      flavour: atlasNodeFlavour(i),
     });
   }
 

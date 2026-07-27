@@ -32,11 +32,56 @@ describe("PreparationPanel", () => {
     expect(onActivate).toHaveBeenCalledWith(node.id, ws.id);
   });
 
-  it("disables activate until both a node and a waystone are chosen", () => {
+  it("says nothing about a place until one is clicked", () => {
     render(
       <PreparationPanel atlasSeed={atlasSeed} waystones={ownedFor(atlasSeed)} completedNodes={[]} onActivate={() => {}} onClose={() => {}} />,
     );
+    // The Atlas is the world first: no place is open, so there is no panel and
+    // nothing to activate.
+    expect(screen.queryByTestId("prep-popup")).toBeNull();
+    expect(screen.queryByTestId("prep-activate")).toBeNull();
+  });
+
+  it("opens the place over its own node, with its name, its lore and an empty socket", () => {
+    render(
+      <PreparationPanel atlasSeed={atlasSeed} waystones={ownedFor(atlasSeed)} completedNodes={[]} onActivate={() => {}} onClose={() => {}} />,
+    );
+    const node = atlasGraph(atlasSeed)[0]!;
+    fireEvent.click(screen.getByTestId(`prep-node-${node.id}`));
+
+    const popup = screen.getByTestId("prep-popup");
+    expect(screen.getByTestId("prep-popup-name").textContent).toBe(node.name);
+    expect(popup.textContent).toContain(node.flavour);
+    // Anchored to the node it belongs to, not to the middle of the screen.
+    expect(popup.style.left).toContain(`${(node.x * 100).toFixed(2)}%`);
+    // Empty until a stone goes in, and the button says no while it is.
+    expect(screen.getByTestId("prep-socket").textContent).toBe("");
     expect((screen.getByTestId("prep-activate") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("shows the stone in the socket, and clicking the socket takes it back out", () => {
+    render(
+      <PreparationPanel atlasSeed={atlasSeed} waystones={ownedFor(atlasSeed)} completedNodes={[]} onActivate={() => {}} onClose={() => {}} />,
+    );
+    const node = atlasGraph(atlasSeed)[0]!;
+    const ws = offerWaystones(atlasSeed, WAYSTONE_OFFER_COUNT)[0]!;
+    fireEvent.click(screen.getByTestId(`prep-node-${node.id}`));
+    fireEvent.click(screen.getByTestId(`prep-ws-${ws.id}`));
+    expect(screen.getByTestId("prep-socket").textContent).toContain(`T${ws.tier}`);
+
+    fireEvent.click(screen.getByTestId("prep-socket"));
+    expect(screen.getByTestId("prep-socket").textContent).toBe("");
+    expect((screen.getByTestId("prep-activate") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("closes the place when its node is clicked again", () => {
+    render(
+      <PreparationPanel atlasSeed={atlasSeed} waystones={ownedFor(atlasSeed)} completedNodes={[]} onActivate={() => {}} onClose={() => {}} />,
+    );
+    const node = atlasGraph(atlasSeed)[0]!;
+    fireEvent.click(screen.getByTestId(`prep-node-${node.id}`));
+    fireEvent.click(screen.getByTestId(`prep-node-${node.id}`));
+    expect(screen.queryByTestId("prep-popup")).toBeNull();
   });
 
   it("disables a completed node", () => {

@@ -27,6 +27,7 @@ const PARCHMENT = "#e8dcc0";
 const MAGIC = "#8aa6ff"; // waystone (magic item) tint, as in PoE rarity
 const AFFIX_BLUE = "#8f97ff"; // the tooltip's affix colour, for a modifier that pays
 const DANGER_RED = "#d2705f"; // ...and its opposite, for one that charges
+const FLAVOUR = "#c98a3e"; // the Atlas panel's amber lore line
 /** PoE's own item-rarity palette, the same one ItemTooltip tints a drop with. */
 const RARITY_TINT: Record<WaystoneRarity, string> = { normal: "#c8c8c8", magic: MAGIC, rare: "#e6d64a" };
 const RARITY_NAME: Record<WaystoneRarity, string> = {
@@ -77,8 +78,10 @@ function AtlasMap(props: {
   /** Tier of the stone currently in hand, or null while none is chosen. */
   stoneTier: number | null;
   onSelect: (id: string) => void;
+  /** The open place's panel, drawn in the node field so it can anchor to a node. */
+  popup: React.ReactNode;
 }) {
-  const { nodes, completedNodes, selectedId, stoneTier, onSelect } = props;
+  const { nodes, completedNodes, selectedId, stoneTier, onSelect, popup } = props;
   // Four states, not three: a place can be out of fog and still refuse the stone
   // in your hand, which is a different problem to solve and has to look like one.
   const state = (n: AtlasGraphNode) =>
@@ -227,7 +230,199 @@ function AtlasMap(props: {
             </button>
           );
         })}
+        {popup}
       </div>
+    </div>
+  );
+}
+
+/** atlas_node_header_v1.png is 1024x144; the band keeps that ratio or the filigree shears. */
+const POPUP_W = 340;
+const HEADER_H = Math.round((POPUP_W * 144) / 1024);
+/** atlas_node_socket_v1.png is 1024x820, and its empty slot is centred on the disc. */
+const SOCKET_W = 190;
+const SOCKET_H = Math.round((SOCKET_W * 820) / 1024);
+
+/**
+ * A place, opened. PoE2's Atlas answers a click on a node with a small panel
+ * standing on the node itself — name, a line of lore, one socket for the stone
+ * and the button — rather than with a form somewhere else on the screen. That
+ * anchoring is the whole point: what you are about to commit to is drawn on the
+ * spot on the map you are committing to, so the choice stays a choice about a
+ * place. Reference: the PoE2 Atlas node panel (dark plate, gilt filigree band,
+ * amber lore, carved socket over the medallion).
+ */
+function NodePopup(props: {
+  node: AtlasGraphNode;
+  requiredTier: number;
+  stone: Snapshot["waystones"][number] | undefined;
+  underTier: boolean;
+  onEject: () => void;
+  onActivate: () => void;
+}) {
+  const { node, requiredTier, stone, underTier, onEject, onActivate } = props;
+  const canActivate = stone !== undefined && !underTier;
+  // Above the medallion where there is room, below it near the top edge: the
+  // panel must never cover the node it belongs to, which is what tells you
+  // which place is open.
+  // Below has further to fall than above has to rise: the medallion wears its
+  // name plate underneath, and covering the name of the place you just opened is
+  // the one thing this panel must not do.
+  const below = node.y < 0.42;
+  const anchorY = below
+    ? { top: `calc(${(node.y * 100).toFixed(2)}% + ${NODE + 26}px)` }
+    : { bottom: `calc(${(100 - node.y * 100).toFixed(2)}% + ${NODE}px)` };
+  // Nodes can sit within half a panel of the field's edge; the anchor is pulled
+  // in so the panel stays on screen rather than half off it.
+  const ax = Math.min(88, Math.max(12, node.x * 100));
+
+  return (
+    <div
+      data-testid="prep-popup"
+      style={{
+        position: "absolute",
+        left: `${ax.toFixed(2)}%`,
+        ...anchorY,
+        transform: "translateX(-50%)",
+        width: POPUP_W,
+        zIndex: 3,
+        textAlign: "center",
+        // Straight sides, no bottom edge, no border: the reference's panel hangs
+        // off its header band and fades into the ground under the node, so the map
+        // and the panel stay one picture instead of a dialog dropped on top.
+        background:
+          "linear-gradient(180deg, rgba(7,8,10,0.94) 0%, rgba(7,8,10,0.9) 62%, rgba(7,8,10,0) 100%)",
+        paddingBottom: 14,
+      }}
+    >
+      <div
+        style={{
+          height: HEADER_H,
+          backgroundImage: "url(/textures/ui/atlas_node_header_v1.png)",
+          backgroundSize: "100% 100%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <span
+          data-testid="prep-popup-name"
+          style={{
+            fontSize: 17,
+            letterSpacing: 1.2,
+            color: GOLD,
+            textShadow: "0 1px 3px #000",
+            padding: "0 44px",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {node.name}
+        </span>
+      </div>
+
+      {/* The rumour, in the reference's amber. It is the only line here that is
+          not a number, and it is what makes a node a destination. */}
+      <div
+        style={{
+          padding: "12px 26px 14px",
+          fontSize: 13,
+          lineHeight: 1.5,
+          color: FLAVOUR,
+          textShadow: "0 1px 3px #000",
+        }}
+      >
+        {node.flavour}
+      </div>
+
+      <div style={{ height: 1, margin: "0 18px", background: `${GOLD}22` }} />
+
+      {/* One socket, because a run takes one stone. Clicking it takes the stone
+          back out, which is the only way to change your mind without closing
+          the place and losing your place on the map. */}
+      <button
+        data-testid="prep-socket"
+        onClick={onEject}
+        title={stone ? "Take the Waystone back out" : "Choose a Waystone below"}
+        style={{
+          width: SOCKET_W,
+          height: SOCKET_H,
+          margin: "10px auto 6px",
+          display: "block",
+          position: "relative",
+          padding: 0,
+          border: "none",
+          background: "url(/textures/ui/atlas_node_socket_v1.png) center/100% 100% no-repeat",
+        }}
+      >
+        {stone && (
+          <span
+            style={{
+              position: "absolute",
+              // Measured off the art: the empty slot spans x 376..649, y 223..477
+              // of 1024x820, so its centre is high of the image's middle because
+              // the disc stands on a plinth.
+              left: "50%",
+              top: "42.7%",
+              transform: "translate(-50%, -50%)",
+              fontFamily: SERIF,
+              // Sized to the slot: it is 273x254 of the art, so at this width the
+              // opening is only ~50px across and a larger glyph climbs the moulding.
+              fontSize: 17,
+              fontWeight: 700,
+              color: RARITY_TINT[waystoneRarity(stone.seed)],
+              textShadow: `0 0 8px ${RARITY_TINT[waystoneRarity(stone.seed)]}66, 0 1px 2px #000`,
+            }}
+          >
+            T{stone.tier}
+          </span>
+        )}
+      </button>
+
+      <div style={{ fontSize: 12, letterSpacing: 0.6, marginBottom: 10 }}>
+        {underTier ? (
+          <span data-testid="prep-undertier" style={{ color: UNDER_TIER }}>
+            Needs a Tier <b>{requiredTier}</b> Waystone
+          </span>
+        ) : (
+          <span data-testid="prep-arealevel" style={{ color: "#b7ac8e" }}>
+            Area Level{" "}
+            <b style={{ color: stone ? GOLD : "#5a564a" }}>{stone ? areaLevel(stone.tier) : "—"}</b>
+            {stone && <span style={{ color: "#7c7361" }}>{"  ·  "}Portals <b style={{ color: MAGIC }}>{MAP_PORTALS}</b></span>}
+          </span>
+        )}
+      </div>
+
+      <button
+        data-testid="prep-activate"
+        disabled={!canActivate}
+        onClick={onActivate}
+        style={{
+          display: "block",
+          width: 168,
+          margin: "0 auto",
+          padding: "8px 0",
+          borderRadius: 2,
+          fontFamily: SERIF,
+          fontSize: 13,
+          letterSpacing: 2.5,
+          textTransform: "uppercase",
+          // Dark slate plate with a gilt bevel, per the reference: the button is
+          // trim on the panel, not a gold slab that outshouts the lore.
+          background: canActivate
+            ? "linear-gradient(180deg, #2b3038 0%, #171a20 55%, #0f1116 100%)"
+            : "linear-gradient(180deg, #191b1f 0%, #0e0f13 100%)",
+          border: `1px solid ${canActivate ? GOLD_DIM : "#241f14"}`,
+          boxShadow: canActivate
+            ? `inset 0 1px 0 ${GOLD}44, inset 0 0 12px rgba(0,0,0,0.7), 0 0 10px rgba(0,0,0,0.6)`
+            : "inset 0 0 8px rgba(0,0,0,0.7)",
+          color: canActivate ? "#e2cb92" : "#5a564a",
+          textShadow: canActivate ? `0 0 8px ${GOLD}66, 0 1px 2px #000` : "none",
+        }}
+      >
+        Activate
+      </button>
     </div>
   );
 }
@@ -240,9 +435,10 @@ export function PreparationPanel({ atlasSeed, completedNodes, waystones, onActiv
   // The place has to accept the stone. Selecting a node and then a weaker stone
   // is an easy way to end up here, so the button says no rather than firing an
   // intent the sim would drop on the floor.
-  const requiredTier = nodeId === null ? null : atlasNodeTier(nodes, nodeId);
+  const node = nodes.find((n) => n.id === nodeId);
+  const requiredTier = node === undefined ? null : atlasNodeTier(nodes, node.id);
   const underTier = ws !== undefined && requiredTier !== null && ws.tier < requiredTier;
-  const canActivate = nodeId !== null && ws !== undefined && !underTier;
+  const canActivate = node !== undefined && ws !== undefined && !underTier;
 
   return (
     <div
@@ -262,7 +458,23 @@ export function PreparationPanel({ atlasSeed, completedNodes, waystones, onActiv
         completedNodes={completedNodes}
         selectedId={nodeId}
         stoneTier={ws?.tier ?? null}
-        onSelect={setNodeId}
+        // Clicking the open place again shuts it, so the map can be read without
+        // a panel standing on it.
+        onSelect={(id) => setNodeId((cur) => (cur === id ? null : id))}
+        popup={
+          node !== undefined && requiredTier !== null ? (
+            <NodePopup
+              node={node}
+              requiredTier={requiredTier}
+              stone={ws}
+              underTier={underTier}
+              onEject={() => setWsId(null)}
+              onActivate={() => {
+                if (canActivate && ws) onActivate(node.id, ws.id);
+              }}
+            />
+          ) : null
+        }
       />
 
       {/* Carved title banner, floating over the world as in atlas-maps.webp
@@ -387,64 +599,6 @@ export function PreparationPanel({ atlasSeed, completedNodes, waystones, onActiv
             })}
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              padding: "12px 14px",
-              marginBottom: 12,
-              background: "rgba(0,0,0,0.35)",
-              border: "1px solid #2a2517",
-              borderRadius: 3,
-              fontSize: 14,
-            }}
-          >
-            <span data-testid="prep-arealevel" style={{ letterSpacing: 0.5 }}>
-              Area Level{" "}
-              <b style={{ color: ws ? GOLD : "#5a564a", fontSize: 16 }}>
-                {ws ? areaLevel(ws.tier) : "—"}
-              </b>
-            </span>
-            {underTier ? (
-              <span data-testid="prep-undertier" style={{ letterSpacing: 0.5, color: UNDER_TIER }}>
-                Needs a Tier <b>{requiredTier}</b> Waystone
-              </span>
-            ) : (
-              <span data-testid="prep-revives" style={{ letterSpacing: 0.5, color: "#b7ac8e" }}>
-                Portals <b style={{ color: MAGIC }}>{MAP_PORTALS}</b>
-              </span>
-            )}
-          </div>
-
-          <button
-            data-testid="prep-activate"
-            disabled={!canActivate}
-            onClick={() => {
-              if (canActivate && nodeId && ws) onActivate(nodeId, ws.id);
-            }}
-            style={{
-              width: "100%",
-              padding: "12px 0",
-              borderRadius: 3,
-              fontFamily: SERIF,
-              fontWeight: 700,
-              fontSize: 15,
-              letterSpacing: 2,
-              textTransform: "uppercase",
-              color: canActivate ? "#1a1408" : "#5a564a",
-              background: canActivate
-                ? "linear-gradient(180deg, #e6c366 0%, #b8923c 50%, #8a6a24 100%)"
-                : "linear-gradient(180deg, #1a1b20 0%, #101116 100%)",
-              border: `1px solid ${canActivate ? GOLD : "#2a2517"}`,
-              boxShadow: canActivate
-                ? `inset 0 1px 0 #ffe9a8, 0 0 10px ${GOLD}55`
-                : "inset 0 0 8px rgba(0,0,0,0.6)",
-              textShadow: canActivate ? "0 1px 0 #f6e2a0" : "none",
-            }}
-          >
-            Activate
-          </button>
       </div>
     </div>
   );

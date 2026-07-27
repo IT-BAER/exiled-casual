@@ -60,6 +60,19 @@ describe("atlas graph", () => {
     }
   });
 
+  it("gives every place a name and a line of lore, fixed to its index", () => {
+    const g = atlasGraph(42);
+    const other = atlasGraph(43);
+    for (let i = 0; i < g.length; i++) {
+      expect(g[i]!.flavour.length).toBeGreaterThan(10);
+      // Lore rides on the index with the name, so a place reads the same in
+      // every account's world even though the layout is seeded per account.
+      expect(other[i]!.flavour).toBe(g[i]!.flavour);
+      expect(other[i]!.name).toBe(g[i]!.name);
+    }
+    expect(new Set(g.map((n) => n.flavour)).size).toBe(g.length);
+  });
+
   it("links symmetrically — a route is walkable in both directions", () => {
     for (const seed of [1, 42, 999, 0xdeadbeef]) {
       const g = atlasGraph(seed);
