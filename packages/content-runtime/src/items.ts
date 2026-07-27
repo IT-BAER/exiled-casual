@@ -79,7 +79,7 @@ export function wisdomScroll(): Item {
  * a chore, and the Orb of Embers is the rarest because it is the one you save for.
  */
 export const CURRENCY_DROPS: readonly { baseId: string; weight: number }[] = [
-  { baseId: "currency.wisdom", weight: 50 },
+  { baseId: "currency.wisdom", weight: 60 },
   { baseId: "currency.transmutation", weight: 22 },
   { baseId: "currency.augmentation", weight: 14 },
   { baseId: "currency.alchemy", weight: 7 },

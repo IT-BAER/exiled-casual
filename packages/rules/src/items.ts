@@ -2,6 +2,7 @@
 // a leaf (matches rare.ts). PRNG inlined like atlas.ts so there is no @exiled dep.
 import type { ItemPools, Item, ItemAffix, Rarity } from "@exiled/content-schema";
 import { rareName } from "./item-names.js";
+import { rarityScaleMilli } from "./loot.js";
 
 function mulberry32(seed: number): () => number {
   let s = seed >>> 0;
@@ -14,20 +15,36 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-// ponytail: rarity odds are a calibration placeholder (docs/01:780 says empirical).
-// One formula per tier, monotonic in ilvl and monsterRarity; tune here only. The rare
-// band is carved from below the magic band, so magicPercent always dominates rarePercent.
-function magicPercent(ilvl: number, monsterRarity: number): number {
-  const pct = 20 + Math.trunc(ilvl / 4) + monsterRarity * 15;
-  return Math.max(0, Math.min(90, pct));
-}
-function rarePercent(ilvl: number, monsterRarity: number): number {
-  const pct = Math.trunc((ilvl - 70) / 6) + (monsterRarity - 1) * 12;
-  return Math.max(0, Math.min(35, pct));
-}
-function uniquePercent(ilvl: number, monsterRarity: number): number {
-  const pct = Math.trunc((ilvl - 68) / 12) + (monsterRarity - 1) * 2;
-  return Math.max(0, Math.min(6, pct));
+/**
+ * Base chance of each upgrade before any Item Rarity, in parts per million.
+ * PoE has never published its own, and the monster channel there is enormous
+ * (a rare monster carries 1000% increased rarity, an 11x multiplier), so the
+ * bases have to be small for the ladder to survive being multiplied. These
+ * three are ours and are the calibration knob: against a rare monster's 11x they
+ * pay 22% magic, 5.5% rare, 0.165% unique. Most of what a monster drops is
+ * still white, which is both how PoE reads and what keeps the Scroll of Wisdom
+ * economy solvable — `death.test.ts` pins that supply outruns demand.
+ *
+ * Item level is deliberately absent. PoE's rarity roll does not read it — a
+ * level 2 monster and a level 84 one use identical odds — and a high map only
+ * feels richer because its area and monster rarity are larger.
+ */
+const MAGIC_PPM = 20_000;
+const RARE_PPM = 5_000;
+const UNIQUE_PPM = 150;
+
+/** Ceilings, so a stacked map can never make a white or a magic item unreachable. */
+const MAGIC_CAP_PPM = 900_000;
+const RARE_CAP_PPM = 350_000;
+const UNIQUE_CAP_PPM = 60_000;
+
+/**
+ * `kPct` per tier: patch 0.9.9 says the player channel's diminishing returns
+ * hit the rarer tiers harder, so unique saturates first.
+ */
+function tierPpm(basePpm: number, capPpm: number, monsterRarity: number, areaPct: number, kPct: number): number {
+  const scaled = Math.trunc((basePpm * rarityScaleMilli(monsterRarity, areaPct, 0, kPct)) / 1000);
+  return Math.min(capPpm, scaled);
 }
 
 /**
@@ -108,6 +125,8 @@ export function magicName(pools: ItemPools, baseName: string, affixes: readonly 
 /**
  * @param forceRarity debug/lab only: skip the rarity roll and produce this tier.
  *   Best-effort: asking for "unique" on a pool without uniques yields a normal item.
+ * @param areaRarityPct the area channel (waystone modifiers). Linear, unlike the
+ *   player channel: PoE only diminishes what the player carries.
  */
 export function rollItem(
   pools: ItemPools,
@@ -115,16 +134,20 @@ export function rollItem(
   ilvl: number,
   monsterRarity: number,
   forceRarity?: Rarity,
+  areaRarityPct = 0,
 ): Item {
   const rnd = mulberry32(seed);
   const base = pools.bases[rnd() % pools.bases.length]!;
-  const roll = rnd() % 100;
-  const rarePct = rarePercent(ilvl, monsterRarity);
+  const roll = rnd() % 1_000_000;
+  const rarePpm = tierPpm(RARE_PPM, RARE_CAP_PPM, monsterRarity, areaRarityPct, 90);
 
   // A unique replaces the whole roll: it brings its own base, name and mod list.
   // Its band is carved from below the rare band so rare always stays reachable.
+  // PoE checks unique before it even picks a category, which is why absurd
+  // rarity there eats your currency drops; we check it inside the equipment
+  // roll instead, so rarity can never cost you an orb.
   const uniques = pools.uniques ?? [];
-  const uniquePct = Math.min(uniquePercent(ilvl, monsterRarity), Math.max(0, rarePct - 1));
+  const uniquePct = Math.min(tierPpm(UNIQUE_PPM, UNIQUE_CAP_PPM, monsterRarity, areaRarityPct, 60), Math.max(0, rarePpm - 1));
   if (uniques.length > 0 && (forceRarity === "unique" || (forceRarity === undefined && roll < uniquePct))) {
     const u = uniques[rnd() % uniques.length]!;
     return {
@@ -141,8 +164,8 @@ export function rollItem(
   let rarity: "normal" | "magic" | "rare" =
     forceRarity !== undefined
     ? (forceRarity === "unique" ? "normal" : forceRarity)
-    : roll < rarePct ? "rare"
-    : roll < magicPercent(ilvl, monsterRarity) ? "magic"
+    : roll < rarePpm ? "rare"
+    : roll < Math.max(rarePpm, tierPpm(MAGIC_PPM, MAGIC_CAP_PPM, monsterRarity, areaRarityPct, 125)) ? "magic"
     : "normal";
 
   let affixes: ItemAffix[] = [];

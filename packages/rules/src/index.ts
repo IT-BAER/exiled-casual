@@ -10,3 +10,4 @@ export * from "./energy-shield.js";
 export * from "./waystone.js";
 export * from "./currency.js";
 export * from "./disenchant.js";
+export * from "./loot.js";

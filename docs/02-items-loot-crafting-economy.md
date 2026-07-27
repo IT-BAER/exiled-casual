@@ -513,6 +513,46 @@ Separate RNG streams:
 
 Keep economy seeds secret. Diagnostics retain stream IDs and ordinals or committed choice records so a run can be audited without exposing future rolls.
 
+### Drop scaling, reverse-engineered from PoE1
+
+PoE1's drop tables are server-side and were never shipped, so this is datamined stat blocks plus
+GGG's documented order of operations, not decompilation. Implemented in `packages/rules/src/loot.ts`.
+
+Four channels. Within a channel increases add; between channels they multiply. **Only the player
+channel diminishes** — which is why map quantity is worth so much more than gear ever was, and why
+GGG eventually deleted quantity from equipment (3.25.0).
+
+Monster rarity is a channel, not a special case. PoE's hidden blocks, exact:
+
+| Monster | inc. Quantity | inc. Rarity | dropped ilvl | quantity multiplier |
+|---|---|---|---|---|
+| Normal | – | – | area level | 1.0x |
+| Magic | +600% | +200% | +1 | 7.0x |
+| Rare | +1400% | +1000% | +2 | 15.0x |
+| Unique / boss | +2850% | +1000% | +2 | 29.5x |
+
+Fractional counts resolve as PoE resolves them: the whole part is guaranteed, the remainder is one
+coin flip. Scaling a monster past 100% gives it a chance at a *second* item, never a bigger first one.
+
+The player channel's diminishing returns are unpublished. Fitted to the only two data points the
+wiki gives (50% -> 1.35x, 200% -> 1.77x): `DR(x) = 1 + x/(1 + x/1.25)`, hard asymptote 2.25x. One
+free parameter against two points, so the constant is a knob; the shape is the part worth keeping.
+Patch 0.9.9 says rarity's returns bite harder on the rarer tiers, so each tier passes its own `kPct`.
+
+The rarity roll **does not read item level**. A level 2 monster and a level 84 one use identical
+odds; a high map only feels richer because its area and monster rarity are larger. Item level gates
+the affix pool and (once bases carry a drop level) which bases can appear — nothing else.
+
+Two deliberate deviations from PoE1:
+
+- **Unique is rolled after the category, not before.** PoE checks unique first, which is why
+  extreme rarity there cannibalises currency drops. That is a wart, not a feature.
+- **Normal monsters pay mostly currency.** 3.28 moved PoE the same way; a white base is noise.
+
+The one number that must not be copied is the base rate. PoE's ~8% per normal monster is calibrated
+against 200-600 monsters per map and we run six, so it is solved from a target payout per map
+instead (14% at the time of writing).
+
 ### Gold
 
 Reference: [Gold](https://www.poe2wiki.net/wiki/Gold).

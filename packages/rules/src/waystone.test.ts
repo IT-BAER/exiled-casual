@@ -14,6 +14,30 @@ describe("waystoneRarity", () => {
   });
 });
 
+describe("waystone loot modifiers", () => {
+  it("folds quantity and rarity into the scale", () => {
+    const s = waystoneScale([
+      { id: "quantity", kind: "prefix", value: 40, label: "" },
+      { id: "rarity", kind: "prefix", value: 60, label: "" },
+    ]);
+    expect(s.quantityPct).toBe(40);
+    expect(s.rarityPct).toBe(60);
+  });
+
+  it("defaults to none", () => {
+    const s = waystoneScale([]);
+    expect(s.quantityPct).toBe(0);
+    expect(s.rarityPct).toBe(0);
+  });
+
+  it("both are reachable from a rolled stone", () => {
+    const seen = new Set<string>();
+    for (let s = 1; s < 2000; s++) for (const m of waystoneMods(s)) seen.add(m.id);
+    expect(seen.has("quantity")).toBe(true);
+    expect(seen.has("rarity")).toBe(true);
+  });
+});
+
 describe("waystoneMods", () => {
   function seedOfRarity(rarity: string): number {
     for (let s = 1; s < 100_000; s++) if (waystoneRarity(s) === rarity) return s;
@@ -60,6 +84,7 @@ describe("waystoneScale", () => {
     expect(waystoneScale([])).toEqual({
       lifeMilli: 1000, dmgMilli: 1000,
       monsterResAdd: 0, playerResPenalty: 0, packSizePct: 0, experiencePct: 0,
+      quantityPct: 0, rarityPct: 0,
     });
   });
 
@@ -75,6 +100,7 @@ describe("waystoneScale", () => {
     expect(s).toEqual({
       lifeMilli: 1400, dmgMilli: 1250,
       monsterResAdd: 30, playerResPenalty: 20, packSizePct: 30, experiencePct: 15,
+      quantityPct: 0, rarityPct: 0,
     });
   });
 });

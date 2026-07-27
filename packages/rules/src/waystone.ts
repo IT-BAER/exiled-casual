@@ -36,6 +36,11 @@ interface ModDef {
 const MOD_DEFS: readonly ModDef[] = [
   { id: "packSize", kind: "prefix", min: 15, max: 45, text: "%d% increased Monster pack size" },
   { id: "experience", kind: "prefix", min: 10, max: 30, text: "%d% increased Experience gain" },
+  // The area channel, and in PoE it is the strong one: the player's own
+  // quantity and rarity are the only channel that diminishes, so a map's
+  // numbers stay worth their face value however many you stack.
+  { id: "quantity", kind: "prefix", min: 20, max: 60, text: "%d% increased Quantity of Items found" },
+  { id: "rarity", kind: "prefix", min: 30, max: 90, text: "%d% increased Rarity of Items found" },
   { id: "monsterLife", kind: "suffix", min: 20, max: 60, text: "Monsters have %d% more Life" },
   { id: "monsterDamage", kind: "suffix", min: 15, max: 40, text: "Monsters deal %d% more Damage" },
   { id: "monsterElementalRes", kind: "suffix", min: 15, max: 40, text: "Monsters have %d% increased Elemental Resistances" },
@@ -116,12 +121,16 @@ export interface WaystoneScale {
   packSizePct: number;
   /** Extra experience per kill, integer percent. */
   experiencePct: number;
+  /** The area quantity and rarity channels, integer percent. Linear, never diminished. */
+  quantityPct: number;
+  rarityPct: number;
 }
 
 export function waystoneScale(mods: readonly WaystoneMod[]): WaystoneScale {
   const s: WaystoneScale = {
     lifeMilli: 1000, dmgMilli: 1000,
     monsterResAdd: 0, playerResPenalty: 0, packSizePct: 0, experiencePct: 0,
+    quantityPct: 0, rarityPct: 0,
   };
   for (const m of mods) {
     switch (m.id) {
@@ -131,6 +140,8 @@ export function waystoneScale(mods: readonly WaystoneMod[]): WaystoneScale {
       case "playerResPenalty": s.playerResPenalty += m.value; break;
       case "packSize": s.packSizePct += m.value; break;
       case "experience": s.experiencePct += m.value; break;
+      case "quantity": s.quantityPct += m.value; break;
+      case "rarity": s.rarityPct += m.value; break;
     }
   }
   return s;

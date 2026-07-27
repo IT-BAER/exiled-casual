@@ -5,23 +5,21 @@ import { fnv1a32 } from "../rng";
 import {
   rollItem, areaLevel, FLASK_CHARGES_PER_KILL, gainXp, xpAward,
   waystoneScaleFor, waystoneDrops, waystoneMods,
+  dropCount, dropCategory, quantityScaleMilli, MONSTER_ILVL_OFFSET, DROP_POOL, BOSS_DROP_POOL,
 } from "@exiled/rules";
 import { recomputePlayerStats } from "../derived";
 import { ITEM_POOLS, baseOf, currencyItem, currencyForRoll } from "@exiled/content-runtime";
 
 /**
- * How many items a map boss pays out. `docs/09-reward-psychology.md` rule 3:
- * intensity beats density, so the same loot budget spent in one burst reads far
- * louder than the same items trickling off five monsters. One item made the
- * warden pay exactly what a rare pays, which is the flat ending PoE2's own
- * 0.2.0g patch went and fixed. Five is enough to cover the ground around the
- * corpse and still be pickable without a stash trip.
+ * Monster rarity as the loot math indexes it: 0..3 normal, magic, rare, unique.
+ * We have no magic monsters yet; the index exists so adding them is data.
+ * A boss is unique, which is 29.5x a normal monster's quantity — that burst is
+ * docs/09 rule 3 (intensity beats density) falling out of PoE's own numbers
+ * rather than a hardcoded count.
  */
-export const BOSS_DROP_COUNT = 5;
-
-/** Percent of map kills that pay a Scroll of Wisdom. One in four keeps the reveal cheap
- *  without making it free: a dry spell still has to be felt to be broken. */
-const CURRENCY_DROP_PCT = 25;
+const MR_NORMAL = 0;
+const MR_RARE = 2;
+const MR_UNIQUE = 3;
 
 /**
  * Where each item of a burst lands relative to the corpse. Literal fixed-point
@@ -59,38 +57,41 @@ export function registerDeath(sim: Simulation): void {
         });
       }
 
-      // A rare drops one committed item; a boss drops the burst (see below).
-      if (s && s.area === "map" && (isBoss || isRare)) {
-        const pos = world.get<Position>(e, "position");
-        if (pos) {
-          const count = isBoss ? BOSS_DROP_COUNT : 1;
-          for (let i = 0; i < count; i++) {
-            const seed = fnv1a32(`${s.mapSeed}:${tick}:${e}:${i}`);
-            // The boss's first item is the guaranteed one. Everything after it
-            // rolls normally, so the floor rises without the variance narrowing.
-            const forced = isBoss && i === 0 ? "rare" : undefined;
-            const item = rollItem(ITEM_POOLS, seed, areaLevel(s.areaTier), isBoss ? 2 : 1, forced);
-            const base = baseOf(item.baseId);
-            const off = DROP_SPREAD[i % DROP_SPREAD.length]!;
-            const ge = world.create();
-            world.set<Position>(ge, "position", { x: pos.x + off.dx, y: pos.y + off.dy });
-            world.set<ItemC>(ge, "item", { item, w: base.w, h: base.h });
-          }
-        }
-      }
-
-      // Scrolls come off the volume kills, not the set pieces: an unread rare is only
-      // a tease if the reveal is affordable, so supply has to outrun the unidentified
-      // drops it pays for (docs/02 §24, docs/09 rule 1).
+      // What the kill pays. Every monster is on the same math now, PoE's own:
+      // its rarity is a quantity multiplier rather than a special case, the
+      // stone is a second and linear channel on top of it, and the whole part
+      // of the result is guaranteed while the remainder is one coin flip.
       if (s && s.area === "map") {
         const pos = world.get<Position>(e, "position");
-        const roll = fnv1a32(`currency:${s.mapSeed}:${tick}:${e}`);
-        if (pos && roll % 100 < CURRENCY_DROP_PCT) {
-          // Which currency is a second, independent draw off the same hash, so the
-          // orb you wanted is its own uncertainty on top of whether anything dropped.
-          const ge = world.create();
-          world.set<Position>(ge, "position", { x: pos.x, y: pos.y });
-          world.set<ItemC>(ge, "item", { item: currencyItem(currencyForRoll(roll >>> 8)), w: 1, h: 1 });
+        if (pos) {
+          const mr = isBoss ? MR_UNIQUE : isRare ? MR_RARE : MR_NORMAL;
+          const ws = waystoneScaleFor(s.waystoneSeed);
+          const area = quantityScaleMilli(MR_NORMAL, ws.quantityPct, 0);
+          // A boss can never pay nothing: docs/09 rule 4, the map closes on a
+          // guaranteed payout. Everything above the floor stays fully variable.
+          const count = Math.max(dropCount(fnv1a32(`count:${s.mapSeed}:${tick}:${e}`), mr, area), isBoss ? 1 : 0);
+          const ilvl = areaLevel(s.areaTier) + MONSTER_ILVL_OFFSET[mr]!;
+          const pool = isBoss ? BOSS_DROP_POOL : DROP_POOL;
+
+          for (let i = 0; i < count; i++) {
+            const seed = fnv1a32(`${s.mapSeed}:${tick}:${e}:${i}`);
+            // Category is its own stream (docs/02 §13), so what a drop is stays
+            // independent of what it rolled. The boss's first item is the
+            // guaranteed one and skips the pool: it is always a rare.
+            const forced = isBoss && i === 0;
+            const equipment = forced || dropCategory(fnv1a32(`cat:${s.mapSeed}:${tick}:${e}:${i}`), pool) === "equipment";
+            const item = equipment
+              ? rollItem(ITEM_POOLS, seed, ilvl, mr, forced ? "rare" : undefined, ws.rarityPct)
+              : currencyItem(currencyForRoll(seed >>> 8));
+            const base = equipment ? baseOf(item.baseId) : { w: 1, h: 1 };
+            // Second and further rings, so a stone that doubles the payout does
+            // not stack two plates on one tile.
+            const off = DROP_SPREAD[i % DROP_SPREAD.length]!;
+            const ring = Math.trunc(i / DROP_SPREAD.length) * fp(0.5);
+            const ge = world.create();
+            world.set<Position>(ge, "position", { x: pos.x + off.dx + ring, y: pos.y + off.dy + ring });
+            world.set<ItemC>(ge, "item", { item, w: base.w, h: base.h });
+          }
         }
       }
 

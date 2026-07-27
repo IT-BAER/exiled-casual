@@ -114,12 +114,17 @@ describe("rollItem", () => {
     expect(items.size).toBeGreaterThan(1);
   });
 
-  it("magic items have 1..2 affixes, normal have 0", () => {
+  it("magic items have 1..2 affixes, rare 3..6, normal have 0", () => {
     for (let s = 1; s <= 200; s++) {
       const it = rollItem(POOLS, s, 70, 1);
       if (it.rarity === "magic") {
         expect(it.affixes.length).toBeGreaterThanOrEqual(1);
         expect(it.affixes.length).toBeLessThanOrEqual(2);
+      } else if (it.rarity === "rare") {
+        // Only two affixes in this pool are eligible at ilvl 70, and a short
+        // pool yields fewer mods rather than overfilling one side.
+        expect(it.affixes.length).toBeGreaterThanOrEqual(1);
+        expect(it.affixes.length).toBeLessThanOrEqual(6);
       } else {
         expect(it.affixes.length).toBe(0);
       }
@@ -133,11 +138,24 @@ describe("rollItem", () => {
     }
   });
 
-  it("rolls more magic at higher ilvl / monsterRarity", () => {
-    const magicAt = (ilvl: number, mr: number) =>
-      Array.from({ length: 400 }, (_, s) => rollItem(POOLS, s + 1, ilvl, mr))
-        .filter((x) => x.rarity === "magic").length;
-    expect(magicAt(79, 2)).toBeGreaterThan(magicAt(65, 1));
+  const upgradedAt = (ilvl: number, mr: number, areaPct = 0) =>
+    Array.from({ length: 400 }, (_, s) => rollItem(POOLS, s + 1, ilvl, mr, undefined, areaPct))
+      .filter((x) => x.rarity !== "normal").length;
+
+  it("rolls more upgrades from a rarer monster", () => {
+    expect(upgradedAt(70, 2)).toBeGreaterThan(upgradedAt(70, 1));
+    expect(upgradedAt(70, 1)).toBeGreaterThan(upgradedAt(70, 0));
+  });
+
+  // PoE's rarity roll does not read item level at all: a level 2 zombie and a
+  // level 84 rare use the same odds, and high maps only feel richer because
+  // their area and monster rarity are larger.
+  it("does not read item level", () => {
+    expect(upgradedAt(20, 2)).toBe(upgradedAt(84, 2));
+  });
+
+  it("answers area rarity", () => {
+    expect(upgradedAt(70, 1, 200)).toBeGreaterThan(upgradedAt(70, 1));
   });
 
   it("never returns a magic item with zero affixes when no affix is eligible", () => {

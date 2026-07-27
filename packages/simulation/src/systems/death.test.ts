@@ -1,15 +1,18 @@
 import { describe, it, expect } from "vitest";
 import { fp } from "@exiled/fixed-point";
 import { Simulation } from "../loop";
-import { registerDeath, BOSS_DROP_COUNT } from "./death";
-import { START_LEVEL } from "@exiled/rules";
-import { WISDOM_SCROLL_BASE_ID } from "@exiled/content-runtime";
+import { registerDeath } from "./death";
+import { START_LEVEL, waystoneMods } from "@exiled/rules";
+import { WISDOM_SCROLL_BASE_ID, isCurrency } from "@exiled/content-runtime";
 import type { World } from "../ecs";
 import type { SessionC, ProgressC } from "../components";
 
-/** Ground equipment only: any kill can also pay a Scroll of Wisdom. */
+/** Ground equipment only: any kill can also pay currency. */
 const equipmentDrops = (w: World) =>
-  w.query("item", "position").filter((e) => (w.get(e, "item") as { item: { baseId: string } }).item.baseId !== WISDOM_SCROLL_BASE_ID);
+  w.query("item", "position").filter((e) => !isCurrency((w.get(e, "item") as { item: { baseId: string } }).item as never));
+
+/** Everything a kill put on the ground, currency included. */
+const allDrops = (w: World) => w.query("item", "position");
 
 describe("registerDeath", () => {
   it("destroys a monster with life <= 0", () => {
@@ -184,21 +187,27 @@ describe("registerDeath", () => {
     const groundItems = equipmentDrops(w);
     expect(groundItems.length).toBe(1);
     const ic = w.get(groundItems[0]!, "item") as { item: { itemLevel: number }; w: number; h: number };
-    expect(ic.item.itemLevel).toBe(69); // 64 + tier 5
+    expect(ic.item.itemLevel).toBe(71); // 64 + tier 5, +2 because a rare monster drops gear two levels above itself
     expect(ic.w).toBeGreaterThan(0);
   });
 
+  /** First seed whose stone carries the area quantity prefix. */
+  const QUANTITY_STONE = (() => {
+    for (let s = 1; s < 100_000; s++) if (waystoneMods(s).some((m) => m.id === "quantity")) return s;
+    throw new Error("no stone rolls quantity");
+  })();
+
   /** A dead monster in a tier-5 map, boss or rare, ready for one `sim.step`. */
-  function makeDrop(opts: { boss: boolean }) {
+  function makeDrop(opts: { boss: boolean; rare?: boolean; mapSeed?: number; waystoneSeed?: number }) {
     const sim = new Simulation();
     registerDeath(sim);
     const w = sim.world;
     const s = w.create();
-    w.set(s, "session", { area: "map", atlasSeed: 1, mapSeed: 7, waystoneSeed: 0, waystones: [], areaTier: 5, activeNodeId: "node.ashen_glade", completedNodes: ["node.ashen_glade"], portalsLeft: 6, mapOpen: 1, pendingArea: "" });
+    w.set(s, "session", { area: "map", atlasSeed: 1, mapSeed: opts.mapSeed ?? 7, waystoneSeed: opts.waystoneSeed ?? 0, waystones: [], areaTier: 5, activeNodeId: "node.ashen_glade", completedNodes: ["node.ashen_glade"], portalsLeft: 6, mapOpen: 1, pendingArea: "" });
     const m = w.create();
     w.set(m, "position", { x: fp(3), y: fp(-2) });
     w.set(m, "health", { life: 0, maxLife: 40 });
-    w.set(m, "monster", { defId: "d", moveSpeed: 0, bodyRadius: 0, attackRange: 0, attackCooldownTicks: 0, attackDamage: 0, attackType: 1, attackReadyTick: 0, state: "idle", rare: opts.boss ? 0 : 1, summoned: 0 });
+    w.set(m, "monster", { defId: "d", moveSpeed: 0, bodyRadius: 0, attackRange: 0, attackCooldownTicks: 0, attackDamage: 0, attackType: 1, attackReadyTick: 0, state: "idle", rare: opts.boss || opts.rare === false ? 0 : 1, summoned: 0 });
     if (opts.boss) w.set(m, "boss", { phase: 1, nextAbilityTick: 0, spawnX: 0, spawnY: 0, rootedUntilTick: 0 });
     return { sim, w };
   }
@@ -206,10 +215,13 @@ describe("registerDeath", () => {
   const dropped = (w: World) =>
     equipmentDrops(w).map((e) => w.get(e, "item") as { item: { rarity: string } });
 
-  it("a boss pays out a burst, not the single item a rare pays", () => {
+  it("a boss pays a burst sized by the quantity channels", () => {
+    // 2850% increased quantity against a 14% base is 4.13 expected items, so
+    // PoE's overflow rule pays four every time and five 13% of the time.
     const { sim, w } = makeDrop({ boss: true });
     sim.step([]);
-    expect(dropped(w).length).toBe(BOSS_DROP_COUNT);
+    expect(allDrops(w).length).toBeGreaterThanOrEqual(4);
+    expect(allDrops(w).length).toBeLessThanOrEqual(5);
   });
 
   it("a boss cannot pay out an all-normal burst", () => {
@@ -224,18 +236,44 @@ describe("registerDeath", () => {
     const { sim, w } = makeDrop({ boss: true });
     sim.step([]);
     const seen = new Set(
-      equipmentDrops(w).map((e) => {
+      allDrops(w).map((e) => {
         const p = w.get(e, "position") as { x: number; y: number };
         return `${p.x},${p.y}`;
       }),
     );
-    expect(seen.size).toBe(BOSS_DROP_COUNT);
+    expect(seen.size).toBe(allDrops(w).length);
   });
 
-  it("leaves the rare's single drop alone", () => {
+  it("a rare pays two items, and sometimes three", () => {
+    // 1400% increased quantity: 2.1 expected, so two guaranteed plus a coin flip.
     const { sim, w } = makeDrop({ boss: false });
     sim.step([]);
-    expect(dropped(w).length).toBe(1);
+    expect(allDrops(w).length).toBeGreaterThanOrEqual(2);
+    expect(allDrops(w).length).toBeLessThanOrEqual(3);
+  });
+
+  it("a normal monster usually pays nothing, and sometimes pays once", () => {
+    const counts = Array.from({ length: 60 }, (_, i) => {
+      const { sim, w } = makeDrop({ boss: false, rare: false, mapSeed: i + 1 });
+      sim.step([]);
+      return allDrops(w).length;
+    });
+    expect(Math.max(...counts)).toBe(1);
+    expect(counts.filter((c) => c === 0).length).toBeGreaterThan(counts.length / 2);
+  });
+
+  it("a richer stone pays more", () => {
+    const lean = Array.from({ length: 40 }, (_, i) => {
+      const { sim, w } = makeDrop({ boss: false, mapSeed: i + 1 });
+      sim.step([]);
+      return allDrops(w).length;
+    }).reduce((a, b) => a + b, 0);
+    const rich = Array.from({ length: 40 }, (_, i) => {
+      const { sim, w } = makeDrop({ boss: false, mapSeed: i + 1, waystoneSeed: QUANTITY_STONE });
+      sim.step([]);
+      return allDrops(w).length;
+    }).reduce((a, b) => a + b, 0);
+    expect(rich).toBeGreaterThan(lean);
   });
 
   // ── Experience ───────────────────────────────────────────────────────────
@@ -351,13 +389,37 @@ describe("registerDeath", () => {
     const scrolls = (w: World) =>
       w.query("item", "position").filter((e) => (w.get(e, "item") as { item: { baseId: string } }).item.baseId === WISDOM_SCROLL_BASE_ID);
 
-    it("pays scrolls off ordinary kills at roughly the advertised rate", () => {
-      const { sim, w } = makeKills(200);
-      sim.step([]);
-      const n = scrolls(w).length;
-      // A wide band: the point is that scrolls arrive steadily, not the exact count.
-      expect(n).toBeGreaterThan(200 * 0.12);
-      expect(n).toBeLessThan(200 * 0.40);
+    /** One map's worth of corpses: five ordinary monsters, the rare, the boss. */
+    function makeMapKills(mapSeed: number) {
+      const sim = new Simulation();
+      registerDeath(sim);
+      const w = sim.world;
+      const s = w.create();
+      w.set(s, "session", { area: "map", atlasSeed: 1, mapSeed, waystoneSeed: 0, waystones: [], areaTier: 5, activeNodeId: "n", completedNodes: [], portalsLeft: 6, mapOpen: 1, pendingArea: "" });
+      for (let i = 0; i < 7; i++) {
+        const m = w.create();
+        w.set(m, "position", { x: fp(i), y: fp(0) });
+        w.set(m, "health", { life: 0, maxLife: 40 });
+        w.set(m, "monster", { defId: "d", moveSpeed: 0, bodyRadius: 0, attackRange: 0, attackCooldownTicks: 0, attackDamage: 0, attackType: 1, attackReadyTick: 0, state: "idle", rare: i === 5 ? 1 : 0, summoned: 0 });
+        if (i === 6) w.set(m, "boss", { phase: 1, nextAbilityTick: 0, spawnX: 0, spawnY: 0, rootedUntilTick: 0 });
+      }
+      return { sim, w };
+    }
+
+    it("pays out roughly one scroll per unidentified item it drops", () => {
+      // docs/09 rule 1 and docs/02 24: an unread rare is only a tease if the
+      // reveal is affordable. The reveal economy has to be self-financing, so
+      // this fires if a tuning pass makes upgrades cheap or scrolls scarce.
+      let paid = 0, owed = 0;
+      for (let seed = 1; seed <= 100; seed++) {
+        const { sim, w } = makeMapKills(seed);
+        sim.step([]);
+        paid += scrolls(w).length;
+        owed += w.query("item", "position")
+          .filter((e) => (w.get(e, "item") as { item: { unidentified?: boolean } }).item.unidentified === true).length;
+      }
+      expect(paid / owed).toBeGreaterThan(0.8);
+      expect(paid / owed).toBeLessThan(1.5);
     });
 
     it("drops the same scrolls again for the same map and tick", () => {
