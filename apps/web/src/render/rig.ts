@@ -229,8 +229,14 @@ const HAIR_PART = `${HEAD_PREFIX}hair`;
  * chains under the pelvis, each two joints deep, carrying no animation at all.
  * `SkirtSim` is what puts them somewhere; see `skirt.ts` for why the coat is not
  * simply skinned to the legs.
+ *
+ * This count is the cloth's spatial resolution, not a budget: a chain's two
+ * particles are the only points collision can act on, so anything narrower than
+ * the gap between neighbouring chains passes through the coat untouched. Eight
+ * left 0.23 between hem tips against a 0.088-wide leg. Must match
+ * `SKIRT_CHAINS` in `tools/build_wardrobe.py`; `rig.test.ts` pins the pair.
  */
-export const SKIRT_CHAINS = 8;
+export const SKIRT_CHAINS = 16;
 const skirtJointName = (chain: number, joint: number): string =>
   `skirt_${chain}_${String(joint).padStart(2, "0")}`;
 

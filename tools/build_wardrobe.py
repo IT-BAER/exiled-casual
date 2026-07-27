@@ -100,7 +100,9 @@ COAT_RINGS = [
 # floor-length so the boots still read as boots.
 COAT_HEM = [(0.330, 0.300), (0.200, 0.312)]
 
-COAT_SEG = 24
+# Two coat segments per skirt chain. The chains are what bend, so a ring coarser
+# than the chain ring cannot show one panel swinging away from its neighbour.
+COAT_SEG = 32
 
 # The body's axis is not x=0,y=0: the torso is centred a little forward of the
 # origin, and a *circular* skirt around it reads as a traffic cone from the play
@@ -114,7 +116,15 @@ COAT_DEPTH = 0.88
 # with the knee and the coat reads as two stiff blades. These bones carry no
 # animation at all - `skirt.ts` swings them - so what is baked here is only where
 # they hang and how far apart they are.
-SKIRT_CHAINS = 8
+#
+# Sixteen, not eight. Each chain is two particles and those particles are the
+# only places the cloth can be collided or pushed, so the chain count *is* the
+# solver's spatial resolution. At eight the tips sit 0.23 apart around a hem of
+# radius 0.3 while a leg is 0.088 wide: a boot passes cleanly between two chains,
+# displaces neither, and the mesh between them is straight skinning, so the coat
+# visibly ignores the leg inside it. At sixteen the gap is 0.12, narrower than
+# the limb, so nothing fits through untouched.
+SKIRT_CHAINS = 16
 
 # Both joints in a chain are deliberately the same length: the runtime reads one
 # segment length off the asset and uses it for both, so there is no second copy

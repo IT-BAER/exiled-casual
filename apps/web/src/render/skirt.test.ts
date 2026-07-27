@@ -73,6 +73,28 @@ describe("SkirtSim", () => {
     expect(mid.x).toBeLessThan(0);
   });
 
+  it("is pushed off a knee that touches only the middle of a panel", () => {
+    // The cloth is drawn between its particles, and a knee lands squarely
+    // between them: this capsule clears both ends of the lower segment (0.269
+    // away) and cuts through its midpoint (0.1 against a radius of 0.11). Test
+    // the two particles alone and it reports no contact at all while the leg
+    // passes through the surface in plain sight.
+    const sim = new SkirtSim(1, SEGMENT);
+    run(sim, 0, 30);
+
+    const knee = {
+      a: new Vector3(0.1, 1 - SEGMENT * 1.5, -0.3),
+      b: new Vector3(0.1, 1 - SEGMENT * 1.5, 0.3),
+      radius: 0.11,
+    };
+    const { anchors, rests } = pose(0);
+    const before = tip(sim, 0);
+    for (let i = 0; i < 60; i++) sim.step(FRAME, anchors, rests, [knee]);
+
+    // Away from the limb, not merely disturbed.
+    expect(tip(sim, 0).x).toBeLessThan(before.x - 0.01);
+  });
+
   it("snaps home on a teleport instead of streaking across the map", () => {
     const sim = new SkirtSim(1, SEGMENT);
     run(sim, 0, 30);

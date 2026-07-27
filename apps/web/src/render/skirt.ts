@@ -57,9 +57,12 @@ const ITERATIONS = 3;
 /**
  * How far a segment may swing off its bind direction. This is the coat's body:
  * without it the chains fold up over the hips at a sprint and the character
- * appears to be wearing an umbrella.
+ * appears to be wearing an umbrella. It is also the hard ceiling on how far a
+ * leg can push a panel, so it caps how much of a collision is allowed to show:
+ * at 50 degrees a knee driving into the cloth ran out of travel mid-stride and
+ * the coat stopped moving while the leg kept going.
  */
-const MAX_DEVIATION = Math.cos((50 * Math.PI) / 180);
+const MAX_DEVIATION = Math.cos((70 * Math.PI) / 180);
 
 /**
  * An anchor jump this big in one step is a teleport, not a stride — respawn, or
@@ -67,10 +70,18 @@ const MAX_DEVIATION = Math.cos((50 * Math.PI) / 180);
  */
 const SNAP_DISTANCE = 1.5;
 
+/**
+ * How far along a cloth segment a contact has to be before it is allowed to move
+ * the far end. A touch right at the base needs an enormous swing to clear, since
+ * the end travels 1/t as far as the contact does; below this the segment is
+ * treated as pinned there and the joint above deals with it.
+ */
+const MIN_CONTACT = 0.25;
+
 const scratch = new Vector3();
 const scratchPerp = new Vector3();
-const scratchAxis = new Vector3();
 const scratchNear = new Vector3();
+const scratchSample = new Vector3();
 
 /**
  * Rotate `dir` toward `rest` until it is within `cosLimit` of it. Both are unit
@@ -90,6 +101,66 @@ function clampToCone(dir: Vector3, rest: Vector3, cosLimit: number): void {
   scratchPerp.scaleInPlace(1 / length);
   const sinLimit = Math.sqrt(Math.max(0, 1 - cosLimit * cosLimit));
   dir.copyFrom(rest).scaleInPlace(cosLimit).addInPlace(scratchPerp.scaleInPlace(sinLimit));
+}
+
+const scratchD1 = new Vector3();
+const scratchD2 = new Vector3();
+const scratchR = new Vector3();
+
+const clamp01 = (v: number): number => Math.min(1, Math.max(0, v));
+
+/**
+ * Closest approach between the segment `p1`->`q1` and the segment `p2`->`q2`.
+ *
+ * Returns how far along the first segment that happens, and writes the matching
+ * point on the second into `out`. Standard segment-segment solve: the pair of
+ * parameters is found for the infinite lines, then each is clamped back onto its
+ * own segment and the other re-solved against the clamped one, which is what
+ * makes a parallel or degenerate pair behave.
+ */
+function closestOnSegment(
+  p1: Vector3,
+  q1: Vector3,
+  p2: Vector3,
+  q2: Vector3,
+  out: Vector3,
+): number {
+  scratchD1.copyFrom(q1).subtractInPlace(p1);
+  scratchD2.copyFrom(q2).subtractInPlace(p2);
+  scratchR.copyFrom(p1).subtractInPlace(p2);
+
+  const a = Vector3.Dot(scratchD1, scratchD1);
+  const e = Vector3.Dot(scratchD2, scratchD2);
+  const f = Vector3.Dot(scratchD2, scratchR);
+
+  let s = 0;
+  let t = 0;
+  if (a < 1e-12 && e < 1e-12) {
+    out.copyFrom(p2);
+    return 0;
+  }
+  if (a < 1e-12) {
+    t = clamp01(f / e);
+  } else {
+    const c = Vector3.Dot(scratchD1, scratchR);
+    if (e < 1e-12) {
+      s = clamp01(-c / a);
+    } else {
+      const b = Vector3.Dot(scratchD1, scratchD2);
+      const denom = a * e - b * b;
+      s = denom > 1e-12 ? clamp01((b * f - c * e) / denom) : 0;
+      t = (b * s + f) / e;
+      if (t < 0) {
+        t = 0;
+        s = clamp01(-c / a);
+      } else if (t > 1) {
+        t = 1;
+        s = clamp01((b - c) / a);
+      }
+    }
+  }
+  out.copyFrom(p2).addInPlace(scratchD2.scaleInPlace(t));
+  return s;
 }
 
 /**
@@ -159,7 +230,7 @@ export class SkirtSim {
       this.carry -= FIXED_STEP;
       this.integrate(rests);
       for (let pass = 0; pass < ITERATIONS; pass++) this.constrain(anchors, rests);
-      this.collide(colliders);
+      this.collide(anchors, colliders);
     }
   }
 
@@ -209,32 +280,54 @@ export class SkirtSim {
     point.copyFrom(base).addInPlace(direction.scaleInPlace(this.segment));
   }
 
-  private collide(colliders: readonly SkirtCollider[]): void {
-    for (const collider of colliders) {
-      scratchAxis.copyFrom(collider.b).subtractInPlace(collider.a);
-      const axisLength = scratchAxis.lengthSquared();
-      for (const point of this.points) {
-        // Nearest point on the limb's own segment, so a capsule costs one dot
-        // product more than the sphere it replaces.
-        scratch.copyFrom(point).subtractInPlace(collider.a);
-        const along =
-          axisLength < 1e-9
-            ? 0
-            : Math.min(1, Math.max(0, Vector3.Dot(scratch, scratchAxis) / axisLength));
-        scratchNear.copyFrom(collider.a).addInPlace(
-          scratchAxis.scale(along),
-        );
+  /**
+   * Push the cloth out of the limbs.
+   *
+   * The cloth is tested as segments, not as its two particles. A particle test
+   * only knows about the cloth at two heights — the joint and the hem — and a
+   * knee sits squarely between them, so it drove straight through the surface
+   * that is drawn between the two while both endpoints reported themselves
+   * clear. Sampling along each segment is the same lesson the collider side
+   * already learned: a limb is a segment, and so is the cloth hanging past it.
+   */
+  private collide(anchors: readonly Vector3[], colliders: readonly SkirtCollider[]): void {
+    for (let chain = 0; chain < this.anchors.length; chain++) {
+      const mid = this.points[chain * 2]!;
+      const tip = this.points[chain * 2 + 1]!;
+      this.collideSegment(anchors[chain]!, mid, colliders);
+      this.collideSegment(mid, tip, colliders);
+    }
+  }
 
-        scratch.copyFrom(point).subtractInPlace(scratchNear);
-        const distance = scratch.length();
-        if (distance >= collider.radius) continue;
-        // Exactly on the axis gives no direction to push along. Measure-zero,
-        // and the next frame of body motion moves one of the two off it.
-        if (distance < 1e-6) continue;
-        point.copyFrom(scratchNear).addInPlace(
-          scratch.scaleInPlace(collider.radius / distance),
-        );
-      }
+  /**
+   * Move `end` until nothing along `base` -> `end` is inside a collider.
+   *
+   * Only the far end moves: the base is either the waist, which the body owns,
+   * or the joint above, which this has already handled. A penetration found part
+   * way along is therefore fixed by swinging the segment about its base, which
+   * takes a bigger move at the end than at the sample — hence the divide by `t`.
+   */
+  private collideSegment(
+    base: Vector3,
+    end: Vector3,
+    colliders: readonly SkirtCollider[],
+  ): void {
+    for (const collider of colliders) {
+      // Closest approach of the two segments outright, rather than sampling
+      // points along the cloth: any fixed set of samples leaves gaps between
+      // them exactly the size of the thing being kept out, which is how a knee
+      // gets through in the first place.
+      const t = closestOnSegment(base, end, collider.a, collider.b, scratchNear);
+      scratchSample.copyFrom(end).subtractInPlace(base).scaleInPlace(t).addInPlace(base);
+      scratch.copyFrom(scratchSample).subtractInPlace(scratchNear);
+
+      const distance = scratch.length();
+      if (distance >= collider.radius) continue;
+      // Exactly on the axis gives no direction to push along. Measure-zero,
+      // and the next frame of body motion moves one of the two off it.
+      if (distance < 1e-6) continue;
+      const reach = Math.max(t, MIN_CONTACT);
+      end.addInPlace(scratch.scaleInPlace((collider.radius / distance - 1) / reach));
     }
   }
 
