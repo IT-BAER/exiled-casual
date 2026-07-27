@@ -101,6 +101,35 @@ const SNAP_DISTANCE = 1.5;
  */
 const MIN_CONTACT = 0.25;
 
+/**
+ * How fast, in units per second, a contact is allowed to move cloth.
+ *
+ * The push out of a limb is a positional correction, and the divide by `t`
+ * above means one landing near the base is multiplied by four. Unbounded, that
+ * put half a unit of travel into a single 1/240 step — a third of the
+ * character's height, in 4ms. Nothing about a leg justifies that speed, and the
+ * eye reads the snap-and-return as rubber rather than as contact. A limb tops
+ * out around 3 units/s at a sprint; twice that is enough headroom for the cloth
+ * to stay ahead of one without ever being visibly thrown by it.
+ */
+const MAX_CONTACT_SPEED = 6;
+const MAX_CONTACT_PUSH = MAX_CONTACT_SPEED * FIXED_STEP;
+
+/**
+ * How much of a contact push is taken out of the cloth's velocity again.
+ *
+ * Moving only `end` makes the push an impulse — in Verlet the gap between the
+ * two positions *is* the velocity — so every touch fired the cloth off the limb
+ * and the bind spring hauled it back: ringing, which is the rubber. Moving
+ * `previous` the whole way instead costs nothing and looks worse, because then
+ * a leg imparts no momentum at all: the cloth is nudged aside, springs straight
+ * back, and rides *inside* the limb. Swept against a sweeping thigh, full
+ * absorption left a particle 0.120 deep against a 0.12 collider and in contact
+ * three times as often as half absorption. Half keeps enough of the leg's
+ * motion for the cloth to stay ahead of it without being thrown by it.
+ */
+const CONTACT_ABSORB = 0.5;
+
 const scratch = new Vector3();
 const scratchPerp = new Vector3();
 const scratchNear = new Vector3();
@@ -317,8 +346,8 @@ export class SkirtSim {
     for (let chain = 0; chain < this.anchors.length; chain++) {
       const mid = this.points[chain * 2]!;
       const tip = this.points[chain * 2 + 1]!;
-      this.collideSegment(anchors[chain]!, mid, colliders);
-      this.collideSegment(mid, tip, colliders);
+      this.collideSegment(anchors[chain]!, mid, this.previous[chain * 2]!, colliders);
+      this.collideSegment(mid, tip, this.previous[chain * 2 + 1]!, colliders);
     }
   }
 
@@ -329,10 +358,16 @@ export class SkirtSim {
    * or the joint above, which this has already handled. A penetration found part
    * way along is therefore fixed by swinging the segment about its base, which
    * takes a bigger move at the end than at the sample — hence the divide by `t`.
+   *
+   * That divide is also why the push is bounded and partly absorbed: see
+   * `MAX_CONTACT_PUSH` and `CONTACT_ABSORB`. Left raw, a touch near the base was
+   * multiplied by four and went straight into the Verlet velocity, moving the
+   * hem half a unit in one 4ms step and ringing afterwards. That is the rubber.
    */
   private collideSegment(
     base: Vector3,
     end: Vector3,
+    previous: Vector3,
     colliders: readonly SkirtCollider[],
   ): void {
     for (const collider of colliders) {
@@ -350,7 +385,10 @@ export class SkirtSim {
       // and the next frame of body motion moves one of the two off it.
       if (distance < 1e-6) continue;
       const reach = Math.max(t, MIN_CONTACT);
-      end.addInPlace(scratch.scaleInPlace((collider.radius / distance - 1) / reach));
+      const push = Math.min((collider.radius - distance) / reach, MAX_CONTACT_PUSH);
+      scratch.scaleInPlace(push / distance);
+      end.addInPlace(scratch);
+      previous.addInPlace(scratch.scaleInPlace(CONTACT_ABSORB));
     }
   }
 

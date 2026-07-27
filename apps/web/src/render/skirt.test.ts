@@ -95,6 +95,33 @@ describe("SkirtSim", () => {
     expect(tip(sim, 0).x).toBeLessThan(before.x - 0.01);
   });
 
+  it("never flings a particle faster than a limb could carry it", () => {
+    // The rubber test. A contact used to be a positional correction applied in
+    // full and divided by how far along the segment it landed, so a touch near
+    // the base was amplified 4x and thrown into the Verlet velocity: one step
+    // moved the hem half a unit — a third of the character's height — and the
+    // spring pulled it back the next. That reads as rubber, and it is the
+    // complaint this bound exists to answer. A leg does not move this fast, so
+    // neither may the cloth it is pushing.
+    const sim = new SkirtSim(1, SEGMENT);
+    const { anchors, rests } = pose(0);
+    const step = 1 / 240;
+    for (let i = 0; i < 240; i++) sim.step(step, anchors, rests, []);
+
+    let worst = 0;
+    let previous = tip(sim, 0);
+    // A thigh sweeping across the cloth low down, where the amplification bit.
+    for (let i = 0; i < 240; i++) {
+      const x = -0.3 + (i / 240) * 0.6;
+      const leg = { a: new Vector3(x, 1, 0), b: new Vector3(x, 0.2, 0), radius: 0.12 };
+      sim.step(step, anchors, rests, [leg]);
+      const now = tip(sim, 0);
+      worst = Math.max(worst, Vector3.Distance(now, previous));
+      previous = now;
+    }
+    expect(worst).toBeLessThan(0.12);
+  });
+
   it("snaps home on a teleport instead of streaking across the map", () => {
     const sim = new SkirtSim(1, SEGMENT);
     run(sim, 0, 30);
