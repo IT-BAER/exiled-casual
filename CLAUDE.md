@@ -46,12 +46,21 @@ PoE2 itemization actually works — do not invent mechanics or colors from memor
 
 ## 3D assets
 
-- Character packs in `apps/web/public/models/` all export the same 65-joint Unreal-named rig at the
-  same bind pose, so a mesh from one pack binds to another's skeleton by assignment, no retargeting.
-  `rig.test.ts` guards that invariant — a new pack must pass it or the wardrobe breaks.
+- The character is `wardrobe.glb`: one 65-joint rig carrying every slot's geometry, built offline by
+  `tools/build_wardrobe.py` (Blender). Parts are named `slot.look.part`; the runtime dresses the
+  character by showing one look per slot and hiding the rest, so gear changes cost visibility only
+  and never restart the animation. Rebuild the glb after touching that script.
+- The source packs are NOT modular: each welds its sleeves to its own bare forearms, and neither
+  ships a head — the ranger only looks finished because his hood is his head. `base.head.*` is
+  generated, rigid-weighted to `Head`/`neck_01`, and pinned to a flat skin texel of the hands'
+  own material. Bone names are lowercase except `Head`.
+- All packs export the same 65 joints at the same bind pose, so a mesh from one binds to another's
+  skeleton by assignment. `rig.test.ts` guards that and that every look the code asks for exists.
 - Blender 5.2 is installed for asset authoring, driven headless:
   `"/c/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background --factory-startup --python x.py`
   Its glTF importer adds a 42-vert `Icosphere` as the bone display shape; the exporter drops it.
+- Raster UI/item art goes through `/codex-imagegen`, never hand-authored SVG: the quality gap is
+  large and visible. Generated masters are cropped to their alpha bounds before downscaling.
 
 ## Devlog — SCREENSHOT EACH VISIBLE STEP
 

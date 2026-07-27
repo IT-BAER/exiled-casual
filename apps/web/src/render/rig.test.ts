@@ -11,7 +11,8 @@ import {
   loadPlayerRig,
   resetPlayerRig,
   speedRatioFor,
-  OUTFITS,
+  looksForEquipment,
+  COSMETIC_SLOTS,
 } from "./rig";
 
 let engine: InstanceType<typeof NullEngine>;
@@ -89,10 +90,75 @@ describe("rig fallback", () => {
   });
 });
 
-describe("outfits", () => {
-  it("offers more than one so the swap has somewhere to go", () => {
-    expect(OUTFITS.length).toBeGreaterThan(1);
-    expect(new Set(OUTFITS).size).toBe(OUTFITS.length);
+describe("looksForEquipment", () => {
+  it("dresses an empty character as a commoner, never bare", () => {
+    const bare = looksForEquipment({});
+    // Body and boots must always render something: a naked character is a bug,
+    // and the packs have no naked body to fall back to anyway.
+    expect(bare.body).not.toBeNull();
+    expect(bare.boots).not.toBeNull();
+    expect(bare.helmet).toBeNull();
+  });
+
+  it("shows an armoured look for any item in a slot", () => {
+    const bare = looksForEquipment({});
+    for (const slot of COSMETIC_SLOTS) {
+      const worn = looksForEquipment({ [slot]: {} });
+      expect(worn[slot]).not.toBeNull();
+      expect(worn[slot]).not.toBe(bare[slot]);
+    }
+  });
+
+  it("leaves the other slots alone when one is filled", () => {
+    const worn = looksForEquipment({ helmet: {} });
+    const bare = looksForEquipment({});
+    expect(worn.body).toBe(bare.body);
+    expect(worn.boots).toBe(bare.boots);
+  });
+});
+
+/**
+ * The runtime dresses the character by name: it shows every mesh prefixed
+ * `<slot>.<look>.` and hides the rest of that slot. Nothing checks that spelling
+ * at build time, so a renamed part in `tools/build_wardrobe.py` would surface
+ * only as an invisible limb in the running game. This pins the two together.
+ */
+describe("wardrobe asset", () => {
+  const MODELS = fileURLToPath(new URL("../../public/models/", import.meta.url));
+  const glb = readFileSync(`${MODELS}wardrobe.glb`);
+  const json = JSON.parse(
+    glb.subarray(20, 20 + glb.readUInt32LE(12)).toString("utf8"),
+  ) as { nodes: { name: string; skin?: number }[]; skins: { joints: number[] }[] };
+  const skinned = json.nodes.filter((n) => n.skin !== undefined).map((n) => n.name);
+
+  it("rides the same single 65-joint skeleton as the source packs", () => {
+    expect(json.skins).toHaveLength(1);
+    expect(json.skins[0]!.joints).toHaveLength(65);
+  });
+
+  it("carries a head, because neither source pack has one", () => {
+    expect(skinned.filter((n) => n.startsWith("base.head.")).length).toBeGreaterThan(0);
+  });
+
+  it("carries every look the code can ask for", () => {
+    const asked = new Set<string>();
+    for (const looks of [
+      looksForEquipment({}),
+      looksForEquipment(Object.fromEntries(COSMETIC_SLOTS.map((s) => [s, {}]))),
+    ]) {
+      for (const slot of COSMETIC_SLOTS) {
+        if (looks[slot] !== null) asked.add(`${slot}.${looks[slot]}.`);
+      }
+    }
+    expect(asked.size).toBeGreaterThan(0);
+    for (const prefix of asked) {
+      expect(skinned.some((n) => n.startsWith(prefix))).toBe(true);
+    }
+  });
+
+  it("skins every part, so no piece floats free of the rig", () => {
+    const meshNodes = json.nodes.filter((n) => n.name.includes("."));
+    expect(meshNodes.length).toBe(skinned.length);
   });
 });
 
@@ -104,12 +170,12 @@ describe("outfits", () => {
  * a code one, so it is checked against the files a new pack would have to join.
  */
 describe("pack skin compatibility", () => {
-  const MODELS = fileURLToPath(new URL("../../public/models/", import.meta.url));
+  const PACKS = fileURLToPath(new URL("../../../../assets/characters/", import.meta.url));
 
   /** Joint names in skin order, plus the flat inverse bind matrix buffer. */
   function readSkin(file: string): { joints: string[]; ibm: Float32Array } {
-    const gltf = JSON.parse(readFileSync(`${MODELS}${file}.gltf`, "utf8"));
-    const bin = readFileSync(`${MODELS}${file}.bin`);
+    const gltf = JSON.parse(readFileSync(`${PACKS}${file}.gltf`, "utf8"));
+    const bin = readFileSync(`${PACKS}${file}.bin`);
     const accessor = gltf.accessors[gltf.skins[0].inverseBindMatrices];
     const view = gltf.bufferViews[accessor.bufferView];
     const start = (view.byteOffset ?? 0) + (accessor.byteOffset ?? 0);
@@ -134,7 +200,7 @@ describe("pack skin compatibility", () => {
 
   it("keeps the pieces the mixed outfit borrows", () => {
     // Named in rig.ts; renaming a mesh in the pack would silently drop the piece.
-    const gltf = JSON.parse(readFileSync(`${MODELS}Male_Ranger.gltf`, "utf8"));
+    const gltf = JSON.parse(readFileSync(`${PACKS}Male_Ranger.gltf`, "utf8"));
     const names = gltf.meshes.map((m: { name: string }) => m.name);
     expect(names).toContain("Male_Ranger_Head_Hood");
     expect(names).toContain("Male_Ranger_Acc_Pauldron");

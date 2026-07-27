@@ -599,18 +599,19 @@ export function updateStash(root: Mesh, hovered: boolean): void {
 }
 
 /**
- * Disenchanting bench: a low wooden workbench with an iron anvil and a crucible
- * of embers on it. The camp in `poe2-screenshots/closeup-hideout-zoom.jpg` keeps
- * its craft props exactly like this, a bench and tools sitting in the firelight
- * rather than an NPC standing behind a counter, which is also the cheaper build.
+ * The disenchanter: a hooded figure standing over a brazier, not a bench.
+ *
+ * PoE2 gives every hideout service a person to talk to, and a service you walk
+ * up to and *ask* is worth more than furniture you rummage in — the shards are
+ * the same either way, but someone handing them over is an event. The NPC is the
+ * same wardrobe rig the player wears, dressed as a hooded commoner so he reads
+ * as a townsman rather than a second adventurer.
+ *
+ * The brazier stays, and carries all the hover feedback. It has to: the rig's
+ * materials come from the shared glTF and are common to every instance, so
+ * warming them on hover would light the player up too.
  */
 function buildVendor(scene: Scene, root: Mesh): void {
-  const wood = new StandardMaterial(`${root.name}-vn-wood`, scene);
-  wood.diffuseColor = new Color3(0.19, 0.12, 0.06);
-  wood.emissiveColor = new Color3(0.03, 0.02, 0.01);
-  wood.specularColor = new Color3(0.16, 0.12, 0.08);
-  wood.specularPower = 32;
-
   const iron = new StandardMaterial(`${root.name}-vn-iron`, scene);
   iron.diffuseColor = new Color3(0.15, 0.14, 0.14);
   iron.emissiveColor = new Color3(0.03, 0.03, 0.03);
@@ -621,55 +622,42 @@ function buildVendor(scene: Scene, root: Mesh): void {
   stone.diffuseColor = new Color3(0.17, 0.16, 0.15);
   stone.specularColor = new Color3(0.1, 0.1, 0.1);
 
-  // The embers in the crucible are the one thing on this prop that emits: it is
-  // what tells you at a glance which bench eats items and which one stores them.
+  // The embers are the one thing here that emits: it is what tells you at a
+  // glance which service eats items and which one stores them.
   const ember = new StandardMaterial(`${root.name}-vn-ember`, scene);
   ember.diffuseColor = new Color3(0.35, 0.11, 0.03);
   ember.emissiveColor = new Color3(0.9, 0.34, 0.08);
   ember.specularColor = new Color3(0, 0, 0);
 
-  const step = MeshBuilder.CreateBox(`${root.name}-vn-step`, { width: 1.6, depth: 1.15, height: 0.12 }, scene);
-  step.position.y = 0.06;
-  step.parent = root;
-  step.material = stone;
+  // Brazier at his side: a stone foot, an iron bowl, coals filled to the brim.
+  const foot = MeshBuilder.CreateCylinder(`${root.name}-vn-foot`, { diameterTop: 0.2, diameterBottom: 0.34, height: 0.52, tessellation: 14 }, scene);
+  foot.position.set(0.62, 0.26, 0.06);
+  foot.parent = root;
+  foot.material = stone;
 
-  const top = MeshBuilder.CreateBox(`${root.name}-vn-top`, { width: 1.4, depth: 0.8, height: 0.14 }, scene);
-  top.position.y = 0.66;
-  top.parent = root;
-  top.material = wood;
+  const bowl = MeshBuilder.CreateCylinder(`${root.name}-vn-bowl`, { diameterTop: 0.46, diameterBottom: 0.26, height: 0.2, tessellation: 16 }, scene);
+  bowl.position.set(0.62, 0.6, 0.06);
+  bowl.parent = root;
+  bowl.material = iron;
 
-  for (const [dx, dz] of [[-0.6, -0.3], [0.6, -0.3], [-0.6, 0.3], [0.6, 0.3]] as const) {
-    const leg = MeshBuilder.CreateBox(`${root.name}-vn-leg`, { width: 0.11, depth: 0.11, height: 0.47 }, scene);
-    leg.position.set(dx, 0.36, dz);
-    leg.parent = root;
-    leg.material = wood;
-  }
-
-  // Anvil on the left half: block plus the horn hanging off its end.
-  const anvil = MeshBuilder.CreateBox(`${root.name}-vn-anvil`, { width: 0.44, depth: 0.24, height: 0.17 }, scene);
-  anvil.position.set(-0.36, 0.81, 0);
-  anvil.parent = root;
-  anvil.material = iron;
-  const horn = MeshBuilder.CreateCylinder(`${root.name}-vn-horn`, { diameterTop: 0.03, diameterBottom: 0.13, height: 0.22, tessellation: 10 }, scene);
-  horn.rotation.z = Math.PI / 2;
-  horn.position.set(-0.68, 0.81, 0);
-  horn.parent = root;
-  horn.material = iron;
-
-  // Crucible on the right half, filled to the brim with embers.
-  const pot = MeshBuilder.CreateCylinder(`${root.name}-vn-pot`, { diameterTop: 0.34, diameterBottom: 0.26, height: 0.2, tessellation: 14 }, scene);
-  pot.position.set(0.42, 0.83, 0);
-  pot.parent = root;
-  pot.material = iron;
-  const coals = MeshBuilder.CreateCylinder(`${root.name}-vn-coals`, { diameter: 0.28, height: 0.03, tessellation: 14 }, scene);
-  coals.position.set(0.42, 0.93, 0);
+  const coals = MeshBuilder.CreateCylinder(`${root.name}-vn-coals`, { diameter: 0.4, height: 0.03, tessellation: 16 }, scene);
+  coals.position.set(0.62, 0.7, 0.06);
   coals.parent = root;
   coals.material = ember;
 
-  root.metadata = { iron, ember, interactKind: "vendor" };
+  // The man himself. Null when the models have not loaded (headless tests, a
+  // failed fetch), which leaves the brazier standing alone — still visible,
+  // still interactable, still obviously the place where things are burnt down.
+  const rig = attachRig(scene, root);
+  if (rig) {
+    rig.setLooks({ helmet: "hood", body: "commoner", gloves: null, boots: "commoner", belt: null });
+    rig.setLocomotion(0); // stand and breathe; he never goes anywhere
+  }
+
+  root.metadata = { iron, ember, interactKind: "vendor", ...(rig ? { rig } : {}) };
 }
 
-/** Blow on the coals when the cursor is over the bench, and warm its ironwork. */
+/** Blow on the coals when the cursor is over him, and warm the brazier's iron. */
 export function updateVendor(root: Mesh, hovered: boolean): void {
   const parts = root.metadata as { iron: StandardMaterial; ember: StandardMaterial } | null;
   if (!parts?.iron) return;

@@ -3,7 +3,7 @@ import type { Mesh } from "@babylonjs/core";
 import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
 import { animateActor, makeMesh, updateTelegraph, updatePortal, updateMapDevice, updateStash, updateVendor, updateGroundItem, updateRareElement, Y_LIFT } from "./meshes";
 import type { MeshKind } from "./meshes";
-import { OUTFITS, rigOf } from "./rig";
+import { COSMETIC_SLOTS, looksForEquipment, rigOf, type Looks } from "./rig";
 import { lerp, lerpAngle } from "./interp";
 
 /** Sim rate. Consecutive snapshots are one tick apart, which is what turns a
@@ -48,6 +48,7 @@ export class SnapshotRenderer {
    *  work (like firing a cast animation) is gated on this. */
   private lastTick = -1;
   private playerId: number | null = null;
+  private previewStep = 0;
   /** Entity id the mouse is hovering; drives mesh highlight, NOT inRange. */
   private hoveredEntityId: number | null = null;
 
@@ -60,13 +61,22 @@ export class SnapshotRenderer {
     this.hoveredEntityId = id;
   }
 
-  /** Try on the next outfit. Render-only: the sim never hears about it. */
+  /**
+   * Lab preview of the wardrobe. Step 0 is the truth — whatever the character
+   * actually has equipped. The rest walk the armoured looks on one slot at a
+   * time, because seeing all five slots from real drops means finding five
+   * pieces of armour, and this shows the same thing in five keypresses.
+   * Render-only either way: the sim never hears about it.
+   */
   cyclePlayerOutfit(): void {
-    const mesh = this.playerId === null ? undefined : this.meshes.get(this.playerId);
-    const rig = mesh ? rigOf(mesh) : null;
-    if (!rig) return;
-    const next = OUTFITS[(OUTFITS.indexOf(rig.outfit) + 1) % OUTFITS.length]!;
-    rig.setOutfit(next);
+    this.previewStep = (this.previewStep + 1) % (COSMETIC_SLOTS.length + 2);
+  }
+
+  /** The look set to draw this frame: equipment, unless a preview is stepped in. */
+  private looksFor(next: Snapshot): Looks {
+    if (this.previewStep === 0) return looksForEquipment(next.equipment ?? {});
+    const shown = COSMETIC_SLOTS.slice(0, this.previewStep - 1);
+    return looksForEquipment(Object.fromEntries(shown.map((s) => [s, true])));
   }
 
   apply(prev: Snapshot | null, next: Snapshot, alpha: number): void {
@@ -85,6 +95,11 @@ export class SnapshotRenderer {
       next.player.y,
       alpha,
     );
+
+    // Dress the character from what it is wearing. Visibility only, so this is
+    // cheap enough to reassert every frame and self-heals if a mesh was rebuilt.
+    const playerMesh = this.meshes.get(next.player.id);
+    if (playerMesh) rigOf(playerMesh)?.setLooks(this.looksFor(next));
 
     // Entities
     for (const e of next.entities) {

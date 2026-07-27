@@ -78,47 +78,51 @@ export function speedRatioFor(clip: RigClip, speed: number): number {
   return Math.min(MAX_RATIO, Math.max(MIN_RATIO, matched));
 }
 
-/** A source pack: one skeleton, one set of slot meshes, one texture set. */
-export type Pack = "ranger" | "peasant";
+/**
+ * The character is one asset, `wardrobe.glb`, carrying every slot's geometry on
+ * a single 65-joint skeleton. `tools/build_wardrobe.py` cuts it out of the two
+ * source packs offline, because neither pack is modular on its own: each welds
+ * its sleeves to its bare forearms, and neither ships a head at all — the ranger
+ * only looks finished because his hood *is* his head.
+ *
+ * Every part is named `slot.look.part`, so dressing the character is pure
+ * visibility: show the meshes of the chosen look, hide the rest of that slot.
+ * Nothing is instantiated or rebuilt when gear changes, which is what keeps a
+ * mid-stride armour swap from restarting the walk cycle.
+ */
+const WARDROBE_URL = "/models/wardrobe.glb";
 
-const PACK_URL: Record<Pack, string> = {
-  ranger: "/models/Male_Ranger.gltf",
-  peasant: "/models/Male_Peasant.gltf",
+/** Equipment slots that change how the character looks. */
+export type CosmeticSlot = "helmet" | "body" | "gloves" | "boots" | "belt";
+
+export const COSMETIC_SLOTS: readonly CosmeticSlot[] = [
+  "helmet", "body", "gloves", "boots", "belt",
+];
+
+/** A look per slot, or null for "wearing nothing there". */
+export type Looks = Record<CosmeticSlot, string | null>;
+
+/**
+ * What the character wears with the slot empty. Body and boots are never bare:
+ * an unequipped character is a commoner in shirt and shoes, the way PoE2 starts
+ * you clothed rather than naked.
+ */
+const UNEQUIPPED: Looks = {
+  helmet: null, body: "commoner", gloves: null, boots: "commoner", belt: null,
 };
 
 /**
- * Both packs export the same 65 joints in the same order with bit-identical
- * inverse bind matrices, so a mesh authored on one binds to the other's skeleton
- * with no re-rigging: clone the mesh, point it at the live skeleton, done. The
- * 78x-124x rest-pose gap noted above is between the *animation library* and the
- * outfits, not between the outfits themselves.
- *
- * That makes the wardrobe pure data. `mixed` exists to keep it honest — it is a
- * peasant wearing the ranger's hood and pauldron, and it is the thing that
- * breaks first if a future pack ships a different joint order.
+ * What the character wears with *something* in the slot. Deliberately one look
+ * per slot rather than a per-base table: with a single armoured set authored so
+ * far, mapping every base onto it means any new item is visible the day it is
+ * added instead of silently rendering as commoner cloth.
  */
-interface OutfitSpec {
-  /** Supplies the skeleton, and every mesh not listed in `borrow`. */
-  pack: Pack;
-  /** Meshes lifted from another pack and bound to this outfit's skeleton. */
-  borrow?: readonly { pack: Pack; mesh: string }[];
-}
-
-export type Outfit = "ranger" | "peasant" | "mixed";
-
-export const OUTFITS: readonly Outfit[] = ["ranger", "peasant", "mixed"];
-
-const OUTFIT: Record<Outfit, OutfitSpec> = {
-  ranger: { pack: "ranger" },
-  peasant: { pack: "peasant" },
-  mixed: {
-    pack: "peasant",
-    borrow: [
-      { pack: "ranger", mesh: "Male_Ranger_Head_Hood" },
-      { pack: "ranger", mesh: "Male_Ranger_Acc_Pauldron" },
-    ],
-  },
+const EQUIPPED: Looks = {
+  helmet: "hood", body: "ranger", gloves: "bracers", boots: "ranger", belt: "ranger",
 };
+
+/** Parts shown only when nothing covers the head. */
+const HEAD_PREFIX = "base.head.";
 
 const ANIM_URL = "/models/anim-library.glb";
 
@@ -219,7 +223,7 @@ const RIG_YAW = 0;
 interface LoadedRig {
   scene: Scene;
   anims: AssetContainer;
-  packs: Map<Pack, AssetContainer>;
+  wardrobe: AssetContainer;
 }
 
 let loaded: LoadedRig | null = null;
@@ -236,19 +240,11 @@ export function loadPlayerRig(scene: Scene): Promise<void> {
   if (pending) return pending;
 
   pending = (async () => {
-    const [anims, ranger, peasant] = await Promise.all([
+    const [anims, wardrobe] = await Promise.all([
       LoadAssetContainerAsync(ANIM_URL, scene),
-      LoadAssetContainerAsync(PACK_URL.ranger, scene),
-      LoadAssetContainerAsync(PACK_URL.peasant, scene),
+      LoadAssetContainerAsync(WARDROBE_URL, scene),
     ]);
-    loaded = {
-      scene,
-      anims,
-      packs: new Map<Pack, AssetContainer>([
-        ["ranger", ranger],
-        ["peasant", peasant],
-      ]),
-    };
+    loaded = { scene, anims, wardrobe };
   })()
     .catch(() => {
       loaded = null;
@@ -281,32 +277,56 @@ export class RigActor {
   private readonly groups = new Map<RigClip, AnimationGroup>();
 
   private entries: InstantiatedEntries | null = null;
-  private borrowed: Mesh[] = [];
   private active: AnimationGroup | null = null;
   private activeClip: RigClip | null = null;
   private locomotion: RigClip = "idle";
 
-  private currentOutfit: Outfit;
+  /** Every wardrobe part, grouped `slot` -> `look` -> meshes. */
+  private readonly parts = new Map<string, Map<string, Mesh[]>>();
+  private readonly headParts: Mesh[] = [];
+  private looks: Looks = { ...UNEQUIPPED };
 
-  constructor(scene: Scene, host: Mesh, outfit: Outfit) {
+  constructor(scene: Scene, host: Mesh) {
     this.scene = scene;
     this.host = host;
-    this.currentOutfit = outfit;
     this.pivot = new TransformNode(`${host.name}-rig`, scene);
     this.pivot.parent = host;
     this.pivot.rotation.y = RIG_YAW;
-    this.build(outfit);
+    this.build();
+    this.applyLooks();
   }
 
-  get outfit(): Outfit {
-    return this.currentOutfit;
+  get currentLooks(): Looks {
+    return { ...this.looks };
   }
 
-  /** Swap armour. The skeleton and the clip set are rebuilt from the new pack. */
-  setOutfit(outfit: Outfit): void {
-    if (outfit === this.currentOutfit) return;
-    this.currentOutfit = outfit;
-    this.build(outfit); // re-enters the current locomotion clip itself
+  /**
+   * Dress the character. Only visibility moves, so this is safe to call every
+   * frame from the snapshot without disturbing the animation.
+   */
+  setLooks(looks: Looks): void {
+    let changed = false;
+    for (const slot of COSMETIC_SLOTS) {
+      if (this.looks[slot] !== looks[slot]) {
+        this.looks[slot] = looks[slot];
+        changed = true;
+      }
+    }
+    if (changed) this.applyLooks();
+  }
+
+  private applyLooks(): void {
+    for (const [slot, byLook] of this.parts) {
+      const wanted = this.looks[slot as CosmeticSlot] ?? null;
+      for (const [look, meshes] of byLook) {
+        const on = look === wanted;
+        for (const mesh of meshes) mesh.setEnabled(on);
+      }
+    }
+    // A helmet replaces the head outright; there is no partial hiding to do
+    // because each look is a complete set for its slot.
+    const bare = this.looks.helmet === null;
+    for (const mesh of this.headParts) mesh.setEnabled(bare);
   }
 
   /** Pick and pace the locomotion clip from the actor's real ground speed. */
@@ -344,14 +364,12 @@ export class RigActor {
     this.activeClip = clip;
   }
 
-  private build(outfit: Outfit): void {
+  private build(): void {
     this.teardown();
-    const spec = OUTFIT[outfit];
-    const container = loaded?.packs.get(spec.pack);
-    if (!container || !loaded) return;
+    if (!loaded) return;
 
     // doNotInstantiate: a skinned mesh needs its own skeleton, not a GPU instance.
-    const entries = container.instantiateModelsToScene((n) => n, false, {
+    const entries = loaded.wardrobe.instantiateModelsToScene((n) => n, false, {
       doNotInstantiate: true,
     });
     this.entries = entries;
@@ -363,23 +381,22 @@ export class RigActor {
       for (const child of root.getDescendants(false)) byName.set(child.name, child);
     }
 
-    // Pieces from another pack. Same joint order, same inverse bind matrices, so
-    // pointing the clone at this skeleton is the whole of the "re-rig".
-    const skeleton = entries.skeletons[0];
-    if (spec.borrow && skeleton) {
-      // Hang the piece off whatever node already carries this pack's own skinned
-      // meshes, so it inherits the same armature transform.
-      const worn = [...byName.values()].find(
-        (n): n is Mesh => n instanceof Mesh && n.skeleton !== null,
-      );
-      for (const piece of spec.borrow) {
-        const source = loaded.packs.get(piece.pack)?.meshes.find((m) => m.name === piece.mesh);
-        if (!(source instanceof Mesh)) continue;
-        const clone = source.clone(`${this.host.name}-${piece.mesh}`, worn?.parent ?? this.pivot);
-        if (!clone) continue;
-        clone.skeleton = skeleton;
-        this.borrowed.push(clone);
+    // Index the parts by the `slot.look.part` names the builder emits. Cloned
+    // instances keep the source name plus a Babylon suffix, so the slot and look
+    // are read off the first two dot-separated fields and nothing else.
+    for (const node of byName.values()) {
+      if (!(node instanceof Mesh)) continue;
+      const [slot, look] = node.name.split(".");
+      if (slot === undefined || look === undefined) continue;
+      if (node.name.startsWith(HEAD_PREFIX)) {
+        this.headParts.push(node);
+        continue;
       }
+      let byLook = this.parts.get(slot);
+      if (!byLook) this.parts.set(slot, (byLook = new Map()));
+      const list = byLook.get(look);
+      if (list) list.push(node);
+      else byLook.set(look, [node]);
     }
 
     // Read the hips rest pose before any clip starts and could move it.
@@ -434,8 +451,8 @@ export class RigActor {
   private teardown(): void {
     for (const group of this.groups.values()) group.dispose();
     this.groups.clear();
-    for (const mesh of this.borrowed) mesh.dispose();
-    this.borrowed = [];
+    this.parts.clear();
+    this.headParts.length = 0;
     this.entries?.dispose();
     this.entries = null;
     this.active = null;
@@ -452,12 +469,25 @@ export interface RigParts {
  * Build a skinned player under `host`, or return null when the assets are not
  * loaded (headless tests, a failed fetch) so the caller can fall back.
  */
-export function attachRig(scene: Scene, host: Mesh, outfit: Outfit = "ranger"): RigActor | null {
+export function attachRig(scene: Scene, host: Mesh): RigActor | null {
   if (!isRigReady(scene)) return null;
-  return new RigActor(scene, host, outfit);
+  return new RigActor(scene, host);
 }
 
 /** The rig on an actor root, if it has one. */
 export function rigOf(root: Mesh): RigActor | null {
   return (root.metadata as RigParts | null)?.rig ?? null;
+}
+
+/**
+ * Which look each slot should wear, given what is equipped. Any item in a slot
+ * shows that slot's armoured look; an empty slot falls back to the commoner
+ * clothes, so the character is never rendered bare.
+ */
+export function looksForEquipment(equipped: Partial<Record<CosmeticSlot, unknown>>): Looks {
+  const out = { ...UNEQUIPPED };
+  for (const slot of COSMETIC_SLOTS) {
+    if (equipped[slot] !== undefined) out[slot] = EQUIPPED[slot];
+  }
+  return out;
 }

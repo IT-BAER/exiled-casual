@@ -128,8 +128,11 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
     world.set<Position>(vendorE, "position", { x: VENDOR_X, y: VENDOR_Y });
     world.set<InteractableC>(vendorE, "interactable", {
       kind: "vendor",
+      // Turned to face the camera. This was 0 while the disenchanter was a
+      // bench, which reads the same from either side; he is a man now, and at
+      // yaw 0 the player walks up to talk to the back of his hood.
       radius: fp(2.5),
-      yaw: 0,
+      yaw: 3.14159,
     });
 
     // Portals equal to the current portal budget (0 if map not open or exhausted).
