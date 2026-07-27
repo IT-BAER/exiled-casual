@@ -230,13 +230,16 @@ const HAIR_PART = `${HEAD_PREFIX}hair`;
  * `SkirtSim` is what puts them somewhere; see `skirt.ts` for why the coat is not
  * simply skinned to the legs.
  *
- * This count is the cloth's spatial resolution, not a budget: a chain's two
- * particles are the only points collision can act on, so anything narrower than
- * the gap between neighbouring chains passes through the coat untouched. Eight
- * left 0.23 between hem tips against a 0.088-wide leg. Must match
- * `SKIRT_CHAINS` in `tools/build_wardrobe.py`; `rig.test.ts` pins the pair.
+ * One chain per coat column, which is the ratio that matters rather than the
+ * number. The chains are the only geometry collision acts on, so a column with
+ * no chain of its own is skinned to the average of its two neighbours, lies on
+ * neither, and hangs in the gap between the collided lines where no capsule can
+ * reach it — 0.088 out at the hem, wider than the thigh capsule that is supposed
+ * to be pushing it. Raising the count alone does nothing if the coat's ring is
+ * raised with it. Must match `SKIRT_CHAINS` in `tools/build_wardrobe.py`, which
+ * derives it from `COAT_SEG`; `rig.test.ts` pins the pair and the binding.
  */
-export const SKIRT_CHAINS = 16;
+export const SKIRT_CHAINS = 32;
 const skirtJointName = (chain: number, joint: number): string =>
   `skirt_${chain}_${String(joint).padStart(2, "0")}`;
 

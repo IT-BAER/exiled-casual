@@ -189,10 +189,44 @@ describe("wardrobe asset", () => {
   const json = JSON.parse(
     glb.subarray(20, 20 + glb.readUInt32LE(12)).toString("utf8"),
   ) as {
-    nodes: { name: string; skin?: number; translation?: [number, number, number] }[];
+    nodes: { name: string; mesh?: number; skin?: number; translation?: [number, number, number] }[];
     skins: { joints: number[] }[];
+    meshes: { primitives: { attributes: Record<string, number> }[] }[];
+    accessors: {
+      bufferView: number;
+      byteOffset?: number;
+      componentType: number;
+      count: number;
+      type: string;
+    }[];
+    bufferViews: { byteOffset?: number; byteStride?: number }[];
   };
   const skinned = json.nodes.filter((n) => n.skin !== undefined).map((n) => n.name);
+
+  /** The glb's binary chunk: past the header, the json chunk, and its own header. */
+  const bin = 20 + glb.readUInt32LE(12) + 8;
+
+  /** One vertex attribute, read out of the binary chunk as a flat array. */
+  function attribute(mesh: string, name: string): { data: number[]; stride: number } {
+    const node = json.nodes.find((n) => n.name === mesh && n.mesh !== undefined)!;
+    const accessor = json.accessors[json.meshes[node.mesh!]!.primitives[0]!.attributes[name]!]!;
+    const view = json.bufferViews[accessor.bufferView]!;
+    const stride = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4 }[accessor.type]!;
+    // Only the component types glTF allows for JOINTS_0 and WEIGHTS_0.
+    const read: Record<number, [number, (o: number) => number]> = {
+      5121: [1, (o) => glb.readUInt8(o)],
+      5123: [2, (o) => glb.readUInt16LE(o)],
+      5126: [4, (o) => glb.readFloatLE(o)],
+    };
+    const [size, readAt] = read[accessor.componentType]!;
+    const start = bin + (view.byteOffset ?? 0) + (accessor.byteOffset ?? 0);
+    const step = view.byteStride ?? size * stride;
+    const data: number[] = [];
+    for (let i = 0; i < accessor.count; i++) {
+      for (let c = 0; c < stride; c++) data.push(readAt(start + i * step + c * size));
+    }
+    return { data, stride };
+  }
 
   it("rides one skeleton: the packs' 65 joints plus the coat's chains", () => {
     expect(json.skins).toHaveLength(1);
@@ -221,6 +255,38 @@ describe("wardrobe asset", () => {
     for (const length of lengths) {
       expect(Math.abs(length - lengths[0]!) / lengths[0]!).toBeLessThan(0.01);
     }
+  });
+
+  it("binds every coat vertex to a single chain, so collision can reach it", () => {
+    // The solver collides the chains and nothing else: two particles per chain,
+    // pushed out of the leg capsules. A vertex weighted half to one chain and
+    // half to its neighbour is skinned to the average of the two, which lies on
+    // neither of them — it hangs in the gap *between* the collided lines, and no
+    // capsule can ever push it. Measured on the running character, those split
+    // vertices sat up to 0.088 off the nearest chain, wider than the whole thigh
+    // capsule (0.088), so a leg swinging between two chains passed through the
+    // coat while the solver reported every particle clear.
+    //
+    // The fix is a chain per coat column, and this is what pins it: one ring
+    // coarser than the other silently re-opens the gap. It is a weight test
+    // rather than a count test because the counts live in two languages.
+    const joints = json.skins[0]!.joints.map((j) => json.nodes[j]!.name);
+    const chainOf = joints.map((n) => /^skirt_(\d+)_/.exec(n)?.[1] ?? null);
+    const { data: index } = attribute("body.ranger.coat", "JOINTS_0");
+    const { data: weight } = attribute("body.ranger.coat", "WEIGHTS_0");
+
+    let worst = 0;
+    for (let v = 0; v < weight.length / 4; v++) {
+      const perChain = new Map<string, number>();
+      for (let k = 0; k < 4; k++) {
+        const chain = chainOf[index[v * 4 + k]!] ?? null;
+        if (chain === null) continue; // the pelvis holds the pinned waist band
+        perChain.set(chain, (perChain.get(chain) ?? 0) + weight[v * 4 + k]!);
+      }
+      const shares = [...perChain.values()].sort((a, b) => b - a);
+      worst = Math.max(worst, shares[1] ?? 0);
+    }
+    expect(worst).toBeLessThan(0.01);
   });
 
   it("carries a head, because neither source pack has one", () => {

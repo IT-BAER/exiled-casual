@@ -36,21 +36,44 @@ export interface SkirtCollider {
 /**
  * Solved at a fixed rate, because Verlet integration with a variable step
  * changes stiffness with the frame rate: a hitch would fling the hem.
+ *
+ * Fast enough to outrun the display, which is the whole reason for the number.
+ * At 1/60 against a 165 Hz monitor the solver ran on barely a third of the
+ * frames: on the other two the legs advanced and the cloth did not move at all,
+ * so a knee slid into stationary cloth and the coat popped out afterwards.
+ * Measured over a jog, frames that skipped the solve were three times as likely
+ * to have a particle inside a leg as frames that ran it. Collision only happens
+ * inside a step, so the step rate *is* how often the coat is allowed to notice a
+ * leg.
  */
-const FIXED_STEP = 1 / 60;
-/** Frames of catch-up after a hitch. Beyond this the cloth just skips ahead. */
-const MAX_STEPS = 3;
+const FIXED_STEP = 1 / 240;
+/**
+ * Catch-up after a hitch, in steps. Held at the same 50ms of wall clock the 1/60
+ * solver allowed, so a background tab still resumes rather than fast-forwards.
+ */
+const MAX_STEPS = 12;
 
-/** Velocity kept per step. Lower is heavier, wetter cloth. */
-const DAMPING = 0.9;
+/** Steps that used to happen in the time one now does; keeps the tuning below. */
+const PER_OLD_STEP = FIXED_STEP * 60;
+
+/**
+ * Velocity kept per step. Lower is heavier, wetter cloth.
+ *
+ * Written as the value tuned against a 1/60 step and rescaled, so the cloth
+ * keeps exactly the per-second feel it was tuned for at any step rate: a factor
+ * applied four times as often has to be four times as gentle, or raising the
+ * rate would silently starch the coat.
+ */
+const DAMPING = 0.9 ** PER_OLD_STEP;
 /**
  * Pull toward the bind pose per step. Higher is starched: at 0.14 the coat held
  * a rigid bell through a whole jog and only translated, which is the same
  * complaint as the skinned version wearing a softer face. 0.09 was still stiff
  * once the legs stopped caging it (see `SKIRT_COLLIDERS`) — with the cloth free
- * to swing, the spring is what decides how much it does.
+ * to swing, the spring is what decides how much it does. Rescaled like the
+ * damping above: it is the error that survives a step that compounds.
  */
-const STIFFNESS = 0.06;
+const STIFFNESS = 1 - (1 - 0.06) ** PER_OLD_STEP;
 /** Length-constraint passes. Two is visibly stretchy at a sprint, three is not. */
 const ITERATIONS = 3;
 

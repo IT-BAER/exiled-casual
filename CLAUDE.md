@@ -61,15 +61,23 @@ PoE2 itemization actually works — do not invent mechanics or colors from memor
 - `helmet.hood.helm` is generated from the cowl: its crown is duplicated, cut at the brow and pushed
   outward onto a dome, so it inherits the cloth's skin weights and can only ever cap the head it was
   cut from. Outward-only (the cowl points forward; a shrink-wrap is a hood in iron) and flat-shaded.
-- The coat hangs on 16 two-joint `skirt_<i>_<n>` chains the builder adds under `pelvis`, driven at
+- The coat hangs on two-joint `skirt_<i>_<n>` chains the builder adds under `pelvis`, driven at
   runtime by the verlet solver in `skirt.ts` (spring toward the bind pose, no gravity; capsule
   colliders down both legs, each sized to that limb's *median* half-width). Size a capsule to the
   limb's widest slice and it caged the coat in permanent contact, which reads as stiff cloth that
-  never seems to touch the legs. The chain count is the solver's spatial resolution, not a budget:
-  cloth is collided segment-vs-capsule, so anything narrower than the gap between chains passes
-  through untouched. Skinning it to the thighs instead makes the hem sweep in phase with
-  the knee and reads as two rigid blades. Rebuild the glb after changing `SKIRT_CHAINS`; `rig.ts`
-  has the same count.
+  never seems to touch the legs. **One chain per coat column — `SKIRT_CHAINS = COAT_SEG` — and the
+  ratio is what matters, not the count.** The chains are the only geometry collision touches, so a
+  column without its own chain is skinned half to each neighbour, lies on neither, and hangs in the
+  gap between the collided lines where no capsule can reach it (0.088 out at the hem, wider than the
+  thigh capsule). Raising both rings together, as 8→16 chains with 24→32 columns did, doubles the
+  resolution and the blind spot at once. Chains run to the *deepest* hem ring, not the average: cloth
+  below the last collided point is cloth a leg walks through. Skinning it to the thighs instead makes
+  the hem sweep in phase with the knee and reads as two rigid blades. Rebuild the glb after changing
+  `SKIRT_CHAINS`; `rig.ts` has the same count and `rig.test.ts` pins the single-chain binding.
+- `skirt.ts` solves at 240Hz so it outruns the display: collision only happens inside a step, so the
+  step rate is how often the coat may notice a leg. At 1/60 against a 165Hz monitor two frames in
+  three moved the legs and not the cloth. `DAMPING` and `STIFFNESS` are written as the values tuned
+  against a 1/60 step and rescaled by `PER_OLD_STEP`, so the rate can change without restarching it.
 - All packs export the same 65 joints at the same bind pose, so a mesh from one binds to another's
   skeleton by assignment. `rig.test.ts` guards that and that every look the code asks for exists.
 - Blender 5.2 is installed for asset authoring, driven headless:

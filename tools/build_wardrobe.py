@@ -117,14 +117,17 @@ COAT_DEPTH = 0.88
 # animation at all - `skirt.ts` swings them - so what is baked here is only where
 # they hang and how far apart they are.
 #
-# Sixteen, not eight. Each chain is two particles and those particles are the
-# only places the cloth can be collided or pushed, so the chain count *is* the
-# solver's spatial resolution. At eight the tips sit 0.23 apart around a hem of
-# radius 0.3 while a leg is 0.088 wide: a boot passes cleanly between two chains,
-# displaces neither, and the mesh between them is straight skinning, so the coat
-# visibly ignores the leg inside it. At sixteen the gap is 0.12, narrower than
-# the limb, so nothing fits through untouched.
-SKIRT_CHAINS = 16
+# One chain per coat column, and that ratio is the whole point - not the absolute
+# count. The chains are the only geometry the solver collides, so a column with no
+# chain of its own is skinned to the average of its two neighbours and lies on
+# neither: it hangs in the gap *between* the collided lines, where no capsule can
+# reach it. Measured on the running character at 16 chains against 32 columns,
+# those split columns sat 0.04 off the nearest chain at the waist and 0.088 at the
+# hem - wider than the entire thigh capsule (0.088). The leg went through the coat
+# while the solver correctly reported every particle clear, which is why raising
+# the count alone never fixed it: 8 -> 16 chains shipped alongside 24 -> 32
+# columns and kept the ratio, so it doubled the resolution *and* the blind spot.
+SKIRT_CHAINS = COAT_SEG
 
 # Both joints in a chain are deliberately the same length: the runtime reads one
 # segment length off the asset and uses it for both, so there is no second copy
@@ -133,9 +136,14 @@ SKIRT_JOINT = "skirt_{i}_{n:02d}"
 
 # Where the chain hangs from and reaches to. Taken from the coat's own profile so
 # the bones cannot drift away from the cloth they carry.
+#
+# The hem is the *deepest* tatter, not the average of the two. Averaging stopped
+# every chain 0.065 above the long tatters, and cloth below the last collided
+# point is cloth a leg walks through: the hem measured 0.088 off the nearest chain
+# there. Running every chain to the bottom costs the short tatters a stretch of
+# bone with no cloth on it, which only ever over-reports a contact by a hair.
 SKIRT_TOP_Z, SKIRT_TOP_R = COAT_RINGS[0]
-SKIRT_HEM_Z = sum(z for z, _ in COAT_HEM) / len(COAT_HEM)
-SKIRT_HEM_R = sum(r for _, r in COAT_HEM) / len(COAT_HEM)
+SKIRT_HEM_Z, SKIRT_HEM_R = min(COAT_HEM)
 
 # Height along the chain (0 at the waist, 1 at the hem) where the cloth stops
 # being pinned to the body and where it hands over to the lower joint. The top
