@@ -63,7 +63,9 @@ PoE2 itemization actually works — do not invent mechanics or colors from memor
   cut from. Outward-only (the cowl points forward; a shrink-wrap is a hood in iron) and flat-shaded.
 - The coat hangs on 8 two-joint `skirt_<i>_<n>` chains the builder adds under `pelvis`, driven at
   runtime by the verlet solver in `skirt.ts` (spring toward the bind pose, no gravity; capsule
-  colliders down both legs). Skinning it to the thighs instead makes the hem sweep in phase with
+  colliders down both legs, each sized to that limb's *median* half-width). Size a capsule to the
+  limb's widest slice and it caged the coat in permanent contact, which reads as stiff cloth that
+  never seems to touch the legs. Skinning it to the thighs instead makes the hem sweep in phase with
   the knee and reads as two rigid blades. Rebuild the glb after changing `SKIRT_CHAINS`; `rig.ts`
   has the same count.
 - All packs export the same 65 joints at the same bind pose, so a mesh from one binds to another's

@@ -242,17 +242,25 @@ const skirtJointName = (chain: number, joint: number): string =>
  * ran the boot straight through the coat. The foot needs its own because a boot
  * reaches a long way forward of the ankle it pivots on.
  *
- * Radii are the leg's real half-width plus nothing: each capsule clears the
- * coat's rest radius by 0.01-0.08, so a standing character's coat hangs in its
- * exact bind pose and only a moving limb ever touches it.
+ * Radii are each limb's *median* half-width, measured off the ranger's own legs
+ * and boots about these very segments (thigh 0.088, calf and boot 0.074, foot
+ * 0.068). They were its widest slice before — 0.11 is the thigh's 99th
+ * percentile — and a capsule has one radius for its whole length, so sizing it
+ * to the fattest point made the entire leg that fat. The measured cost of that:
+ * the leg surface overlapped the coat's rest pose by up to 7cm *while standing
+ * still*, roughly a third of the cloth's rest points in contact every frame.
+ * Permanent contact is not collision, it is a cage — the coat was held out in a
+ * fixed bell, which is exactly why it read as stiff and why a stride never
+ * looked like it touched anything. Nothing can push cloth that is already
+ * pushed.
  */
 const SKIRT_COLLIDERS: readonly { from: string; to: string; radius: number }[] = [
-  { from: "thigh_l", to: "calf_l", radius: 0.11 },
-  { from: "thigh_r", to: "calf_r", radius: 0.11 },
-  { from: "calf_l", to: "foot_l", radius: 0.11 },
-  { from: "calf_r", to: "foot_r", radius: 0.11 },
-  { from: "foot_l", to: "ball_l", radius: 0.1 },
-  { from: "foot_r", to: "ball_r", radius: 0.1 },
+  { from: "thigh_l", to: "calf_l", radius: 0.088 },
+  { from: "thigh_r", to: "calf_r", radius: 0.088 },
+  { from: "calf_l", to: "foot_l", radius: 0.074 },
+  { from: "calf_r", to: "foot_r", radius: 0.074 },
+  { from: "foot_l", to: "ball_l", radius: 0.068 },
+  { from: "foot_r", to: "ball_r", radius: 0.068 },
 ];
 
 /** Down the bone: glTF joints out of Blender point along their own +Y. */

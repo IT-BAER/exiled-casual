@@ -46,9 +46,11 @@ const DAMPING = 0.9;
 /**
  * Pull toward the bind pose per step. Higher is starched: at 0.14 the coat held
  * a rigid bell through a whole jog and only translated, which is the same
- * complaint as the skinned version wearing a softer face.
+ * complaint as the skinned version wearing a softer face. 0.09 was still stiff
+ * once the legs stopped caging it (see `SKIRT_COLLIDERS`) — with the cloth free
+ * to swing, the spring is what decides how much it does.
  */
-const STIFFNESS = 0.09;
+const STIFFNESS = 0.06;
 /** Length-constraint passes. Two is visibly stretchy at a sprint, three is not. */
 const ITERATIONS = 3;
 
