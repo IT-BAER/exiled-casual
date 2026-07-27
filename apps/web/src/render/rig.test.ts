@@ -199,6 +199,14 @@ describe("wardrobe asset", () => {
     expect(skinned.filter((n) => n.startsWith("base.head.")).length).toBeGreaterThan(0);
   });
 
+  it("carries the coat, which is the armoured body's silhouette", () => {
+    // Generated, not cut from a pack: every body base is drawn as a long coat
+    // and the ranger's authored body stops at the hip. Lose this part in a
+    // rebuild and the character silently goes back to wearing a tunic, which
+    // the look-prefix tests above would not notice.
+    expect(skinned).toContain("body.ranger.coat");
+  });
+
   it("carries every look the code can ask for", () => {
     const asked = new Set<string>();
     for (const looks of [

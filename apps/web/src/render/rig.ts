@@ -126,9 +126,10 @@ export function meshLook(look: string): string {
  * gets the ranger atlas re-palettized to that icon's own colours, and only
  * `albedoTexture` is swapped at runtime.
  *
- * The silhouette is still the ranger's, and that is the honest limit of this
- * approach: the robe icon is a long jagged coat and the character wears a tunic.
- * Colour, material and tone match; shape does not.
+ * Shape is not something a texture can fix, and it is not this table's job: the
+ * armoured body carries a generated coat (`body.ranger.coat`) so the silhouette
+ * agrees with the art too. That coat is one shape for the whole slot, though, so
+ * what still does not vary per base is the cut - only the colour.
  *
  * Keys are item base ids. A base with no entry keeps the authored look, so an
  * unmapped base renders as green ranger gear rather than as nothing.

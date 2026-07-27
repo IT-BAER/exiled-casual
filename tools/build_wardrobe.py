@@ -21,7 +21,12 @@ Output naming is `slot.look.part`, which is the contract the runtime toggles on:
 show every mesh whose name starts with `<slot>.<look>.` and hide the rest of that
 slot. Each look is a complete set for its slot, so nothing needs a hide mask
 except the head, which any helmet replaces.
+
+Two parts are generated here rather than cut from a pack: the head (neither pack
+has one) and the coat (the body item art is a floor-length coat and the ranger
+wears a hip-length tunic, which no amount of re-texturing can fix).
 """
+import math
 import sys
 import bpy
 from mathutils import Vector
@@ -47,6 +52,47 @@ HEAD_UV = (0.7891, 1.0 - 0.4492)
 # different pixel rather than a different shader, or it renders skin-coloured and
 # the character reads as bald.
 HAIR_UV = (0.7656, 0.4727)
+
+# The coat's profile, waist first: (z, radius) around the body axis. Measured
+# against the ranger's own silhouette rather than guessed - his torso peaks at
+# r=0.192 over the hips, his belt at 0.177 and his legs at 0.193, so the coat
+# starts at 0.195 and flares from there and never has to fight them for space.
+COAT_RINGS = [
+    (1.120, 0.195),  # just under the belt (z 1.125), so the belt stays on top
+    (0.980, 0.215),
+    (0.800, 0.243),
+    (0.600, 0.268),
+    (0.400, 0.292),
+]
+
+# The hem alternates between these two, giving the icon's row of hanging tatters
+# for free: same vertex count, zigzag bottom edge. Ankle-length rather than
+# floor-length so the boots still read as boots.
+COAT_HEM = [(0.330, 0.300), (0.200, 0.312)]
+
+COAT_SEG = 24
+
+# The body's axis is not x=0,y=0: the torso is centred a little forward of the
+# origin, and a *circular* skirt around it reads as a traffic cone from the play
+# camera, so the coat is squashed front-to-back.
+COAT_CY = 0.03
+COAT_DEPTH = 0.88
+
+# Where the coat stops following the hips and starts following the legs. Above
+# the top it is rigid to the pelvis; below the bottom each side is carried
+# entirely by its own thigh, which is what keeps a striding knee inside its own
+# panel instead of through the front of the coat.
+COAT_PELVIS_Z = 1.02
+COAT_LEG_Z = 0.80
+
+# How far off centre a vertex has to be before it belongs wholly to one leg.
+# Narrower than this and the two panels tear apart at the seam; wider and the
+# whole coat goes stiff.
+COAT_SPLIT_X = 0.16
+
+# Band of the tunic the coat borrows its uvs from: its own hem (z 0.909) up to
+# mid-chest. Stretched down the coat, so the tunic's hem trim lands on the hem.
+COAT_UV_Z = (0.909, 1.45)
 
 # Source mesh -> output name. Anything not listed is dropped.
 RENAME = {
@@ -215,6 +261,120 @@ def build_head(armature, skin_material):
     return made
 
 
+def torso_uvs(torso):
+    """The tunic's own (angle, height, uv) samples, for the coat to borrow from.
+
+    One uv per vertex - a seam vertex carries several and any of them is on the
+    right island, which is all this needs.
+    """
+    uv_layer = torso.data.uv_layers[0].data
+    seen = {}
+    for poly in torso.data.polygons:
+        for li in poly.loop_indices:
+            vi = torso.data.loops[li].vertex_index
+            if vi in seen:
+                continue
+            co = torso.data.vertices[vi].co
+            if not (COAT_UV_Z[0] <= co.z <= COAT_UV_Z[1]):
+                continue
+            zn = (co.z - COAT_UV_Z[0]) / (COAT_UV_Z[1] - COAT_UV_Z[0])
+            seen[vi] = (math.atan2(co.y - COAT_CY, co.x), zn, tuple(uv_layer[li].uv))
+    return list(seen.values())
+
+
+def build_coat(armature, torso):
+    """A long coat for the ranger body look, because the item art is not a tunic.
+
+    The one thing a re-palettized texture cannot buy is shape: every body base so
+    far is drawn as a floor-length coat with a ragged hem, and the ranger's
+    authored body ends at the hip. So this adds the missing half of the
+    silhouette as a lofted skirt hanging from under his belt.
+
+    It is skinned across three bones rather than pinned to the pelvis. A skirt
+    rigid to the hips is a bell that a running knee walks straight through; here
+    each side below `COAT_LEG_Z` is carried by its own thigh, so the panel swings
+    with the leg it covers and the leg stays inside it. The seam down the middle
+    is shared between both thighs, which is where the small amount of pinching
+    that linear blend skinning gives you ends up - at the character's ~12% of
+    frame height, under a coat, that is invisible.
+
+    UVs are borrowed from the tunic by nearest (angle, height) match instead of
+    being projected into a box on the atlas. The atlas is a packed character
+    sheet, so any box big enough to hold a coat also clips a boot buckle or a
+    strip of skin into it; sampling the tunic's real vertices cannot leave the
+    cloth island, and it lands the tunic's own hem trim on the coat's hem.
+    """
+    verts, faces, meta = [], [], []
+    rings = COAT_RINGS + [None]  # the hem ring alternates, so it is built inline
+
+    for r, ring in enumerate(rings):
+        for s in range(COAT_SEG):
+            z, radius = COAT_HEM[s % len(COAT_HEM)] if ring is None else ring
+            theta = 2.0 * math.pi * s / COAT_SEG
+            verts.append((
+                radius * math.cos(theta),
+                COAT_CY + radius * COAT_DEPTH * math.sin(theta),
+                z,
+            ))
+            meta.append((theta if theta <= math.pi else theta - 2.0 * math.pi, z))
+        if r == 0:
+            continue
+        top, bottom = (r - 1) * COAT_SEG, r * COAT_SEG
+        for s in range(COAT_SEG):
+            n = (s + 1) % COAT_SEG
+            faces.append((top + s, top + n, bottom + n, bottom + s))
+
+    mesh = bpy.data.meshes.new("body.ranger.coat")
+    mesh.from_pydata(verts, [], faces)
+    mesh.update()
+    for poly in mesh.polygons:
+        poly.use_smooth = True
+    mesh.materials.append(torso.data.materials[0])
+
+    obj = bpy.data.objects.new("body.ranger.coat", mesh)
+    bpy.context.scene.collection.objects.link(obj)
+
+    samples = torso_uvs(torso)
+    if not samples:
+        raise SystemExit("coat: the torso has no vertices in the uv sampling band")
+    z_hem = min(z for z, _ in COAT_HEM)
+    z_top = COAT_RINGS[0][0]
+
+    uv_layer = mesh.uv_layers.new(name="UVMap")
+    per_vertex = []
+    for theta, z in meta:
+        zn = (z - z_hem) / (z_top - z_hem)
+        best, best_cost = samples[0][2], None
+        for s_theta, s_zn, uv in samples:
+            d = abs(theta - s_theta)
+            if d > math.pi:
+                d = 2.0 * math.pi - d
+            # Height mismatch is weighted up to radians so one axis cannot be
+            # traded away for the other: a coat texel from the wrong height is a
+            # stretched hem, from the wrong angle only a rotated fold.
+            cost = d * d + (3.0 * (zn - s_zn)) ** 2
+            if best_cost is None or cost < best_cost:
+                best, best_cost = uv, cost
+        per_vertex.append(best)
+    for loop in mesh.loops:
+        uv_layer.data[loop.index].uv = per_vertex[loop.vertex_index]
+
+    g_pelvis = obj.vertex_groups.new(name="pelvis")
+    g_left = obj.vertex_groups.new(name="thigh_l")
+    g_right = obj.vertex_groups.new(name="thigh_r")
+    for v in mesh.vertices:
+        legs = min(1.0, max(0.0, (COAT_PELVIS_Z - v.co.z) / (COAT_PELVIS_Z - COAT_LEG_Z)))
+        left = min(1.0, max(0.0, 0.5 + v.co.x / COAT_SPLIT_X))
+        g_pelvis.add([v.index], 1.0 - legs, "REPLACE")
+        g_left.add([v.index], legs * left, "REPLACE")
+        g_right.add([v.index], legs * (1.0 - left), "REPLACE")
+    rebind(obj, armature)
+
+    log(f"built coat: {len(mesh.vertices)}v, {len(mesh.polygons)} faces, "
+        f"mat={mesh.materials[0].name}")
+    return obj
+
+
 def main():
     bpy.ops.wm.read_factory_settings(use_empty=True)
 
@@ -242,11 +402,12 @@ def main():
     skin_material = next(
         m for o in meshes() for m in o.data.materials if m and m.name == SKIN_MAT
     )
-    build_head(armature, skin_material)
+    generated = {o.name for o in build_head(armature, skin_material)}
+    generated.add(build_coat(armature, bpy.data.objects["Male_Ranger_Body"]).name)
 
     dropped = []
     for obj in meshes():
-        if obj.name.startswith("base.head."):
+        if obj.name in generated:
             continue
         new = RENAME.get(obj.name)
         if new is None:

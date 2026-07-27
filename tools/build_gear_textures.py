@@ -10,10 +10,11 @@ linen and brown leather. The item art is charred iron with ember in the seams.
 Equipping an Emberweave Robe and watching the character stay green makes the
 inventory and the world look like two different games.
 
-New geometry per base is out of reach (the packs are whole authored outfits and
-hand-modelled armour would look worse than they do), so the *material* is what
-changes: the ranger's 512 atlas is re-palettized once per base, offline, and the
-runtime swaps only `albedoTexture` on that slot's material.
+Geometry per base is out of reach - the packs are whole authored outfits, and one
+generated shape can serve a slot (see the coat in `build_wardrobe.py`) but not one
+per base. So the *material* is what varies: the ranger's 512 atlas is
+re-palettized once per base, offline, and the runtime swaps only `albedoTexture`
+on that slot's material.
 
 Doing it as a pixel transform on the authored atlas is what keeps it UV-correct.
 The islands never move, so every seam the artist placed still lines up; only the
