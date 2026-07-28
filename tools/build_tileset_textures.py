@@ -62,8 +62,16 @@ NORMAL_STRENGTH = 2.2
 # So this is a FLOOR, not a target: lift the plates that are too dark to play on,
 # and leave the bright ones alone, because a bright desert is a desert and a
 # character reads even better against it.
-FLOOR_MIN_LUMA = 55.0
-WALL_MIN_LUMA = 95.0
+#
+# 55/95 was too timid and it showed: forest and swamp landed exactly ON the
+# minimum, which is the tell that the clamp, not the art, was setting the level.
+# In the frame that ground read 42 luma against a reference whose ground runs
+# 120-180, and the desert, the one biome whose master was already bright at
+# 162/191, was also the only one that looked right. The floor is the largest
+# surface on screen and it has to be the BRIGHT thing, or near-black actors have
+# nothing to read against and every biome collapses to the same brown murk.
+FLOOR_MIN_LUMA = 95.0
+WALL_MIN_LUMA = 120.0
 
 
 def mean_luma(a: np.ndarray) -> float:
