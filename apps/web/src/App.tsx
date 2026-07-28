@@ -11,7 +11,9 @@ import { PreparationPanel } from "./hud/PreparationPanel";
 import { InventoryPanel } from "./hud/InventoryPanel";
 import { CharacterPanel } from "./hud/CharacterPanel";
 import { LootLabels } from "./hud/LootLabels";
+import { Minimap } from "./hud/Minimap";
 import type { Projector } from "./hud/LootLabels";
+import type { AreaLayout } from "@exiled/mapgen";
 import type { Snapshot, FromWorker, ToWorker } from "@exiled/protocol";
 
 const LAB_SEED = 42;
@@ -29,6 +31,8 @@ export function App() {
   // The bench takes the same left-hand slot as the stash, so one closes the other.
   const [vendorOpen, setVendorOpen] = useState(false);
   const [characterOpen, setCharacterOpen] = useState(false);
+  // The map's layout, kept for the minimap. Null in the hideout, which has none.
+  const [areaLayout, setAreaLayout] = useState<AreaLayout | null>(null);
   const [project, setProject] = useState<Projector | null>(null);
   const [pick, setPick] = useState<((id: number, x: number, y: number) => void) | null>(null);
   const workerRef = useRef<Worker | null>(null);
@@ -109,6 +113,7 @@ export function App() {
         // empty grid so buildLevel clears any stale walls and draws none.
         const grid = msg.area === "map" ? msg.layout.grid : null;
         buildLevel(scene, grid);
+        setAreaLayout(msg.area === "map" ? msg.layout : null);
       }
     };
 
@@ -184,6 +189,7 @@ export function App() {
       />
       <LootLabels snapshot={snapshot} project={project} onPick={pick ?? undefined} />
       <Hud snapshot={snapshot} hoveredEntityId={hoveredEntityId} />
+      <Minimap layout={areaLayout} player={snapshot?.player ?? null} />
       {panelOpen && snapshot && (
         <PreparationPanel
           atlasSeed={snapshot.atlasSeed}
