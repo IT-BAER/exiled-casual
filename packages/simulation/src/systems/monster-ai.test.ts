@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { Simulation } from "../loop";
 import { fp, fpDist2 } from "@exiled/fixed-point";
-import type { Position, MonsterC, Faction, PlayerC, BossC, Health, ProjectileC, DefensesC, TelegraphC } from "../components";
+import type { Position, MonsterC, Faction, PlayerC, BossC, Health, ProjectileC, DefensesC, TelegraphC, SessionC } from "../components";
 import { registerMonsterAI } from "./monster-ai";
 import { registerDamageResolve } from "./damage-resolve";
 import { registerTelegraphResolve } from "./telegraph-resolve";
@@ -30,7 +30,7 @@ describe("registerMonsterAI", () => {
       defId: "test", moveSpeed: fp(2), bodyRadius: fp(0.5),
       attackRange: fp(1.2), attackCooldownTicks: 45,
       attackDamage: fp(6), attackType: 1 as const,
-      attackReadyTick: 0, rootedUntilTick: 0, state: "idle", rare: 0 as const, summoned: 0 as const,
+      attackReadyTick: 0, slamReadyTick: 0, rootedUntilTick: 0, state: "idle", rare: 0 as const, summoned: 0 as const,
     });
 
     const before = fpDist2(fp(8), fp(0), fp(0), fp(0));
@@ -62,7 +62,7 @@ describe("registerMonsterAI", () => {
       defId: "test", moveSpeed: fp(2), bodyRadius: fp(0.5),
       attackRange: fp(1.2), attackCooldownTicks: 45,
       attackDamage: fp(6), attackType: 1 as const,
-      attackReadyTick: 0, rootedUntilTick: 0, state: "idle", rare: 0 as const, summoned: 0 as const,
+      attackReadyTick: 0, slamReadyTick: 0, rootedUntilTick: 0, state: "idle", rare: 0 as const, summoned: 0 as const,
     });
 
     for (let i = 0; i < 30; i++) sim.step();
@@ -87,7 +87,7 @@ describe("registerMonsterAI", () => {
       defId: "test", moveSpeed: fp(2), bodyRadius: fp(0.5),
       attackRange: fp(1.2), attackCooldownTicks: 45,
       attackDamage: fp(6), attackType: 1 as const,
-      attackReadyTick: 0, rootedUntilTick: 0, state: "idle", rare: 0 as const, summoned: 0 as const,
+      attackReadyTick: 0, slamReadyTick: 0, rootedUntilTick: 0, state: "idle", rare: 0 as const, summoned: 0 as const,
     });
 
     sim.step(); // woken: inside the radius
@@ -117,7 +117,7 @@ describe("registerMonsterAI", () => {
       defId: "test", moveSpeed: fp(2), bodyRadius: fp(0.5),
       attackRange: fp(1.2), attackCooldownTicks: 45,
       attackDamage: fp(6), attackType: 1 as const,
-      attackReadyTick: 0, rootedUntilTick: 0, state: "idle", rare: 0 as const, summoned: 0 as const,
+      attackReadyTick: 0, slamReadyTick: 0, rootedUntilTick: 0, state: "idle", rare: 0 as const, summoned: 0 as const,
     });
 
     // tick=0, attackReadyTick=0 → enqueue
@@ -146,7 +146,7 @@ describe("registerMonsterAI", () => {
       defId: "boss.test", moveSpeed: fp(2), bodyRadius: fp(1),
       attackRange: fp(1.5), attackCooldownTicks: 60,
       attackDamage: fp(10), attackType: 1 as const,
-      attackReadyTick: 0, rootedUntilTick: 0, state: "idle", rare: 0 as const, summoned: 0 as const,
+      attackReadyTick: 0, slamReadyTick: 0, rootedUntilTick: 0, state: "idle", rare: 0 as const, summoned: 0 as const,
     });
     // Give it a boss component so the guard fires.
     world.set<BossC>(boss, "boss", {
@@ -171,7 +171,7 @@ describe("registerMonsterAI", () => {
       defId: "test", moveSpeed: fp(2), bodyRadius: fp(0.5),
       attackRange: fp(1.2), attackCooldownTicks: 45,
       attackDamage: fp(6), attackType: 1 as const,
-      attackReadyTick: 0, rootedUntilTick: 0, state: "chase", rare: 0 as const, summoned: 0 as const,
+      attackReadyTick: 0, slamReadyTick: 0, rootedUntilTick: 0, state: "chase", rare: 0 as const, summoned: 0 as const,
     });
 
     sim.step();
@@ -207,7 +207,7 @@ describe("registerMonsterAI", () => {
       defId: "test", moveSpeed: fp(2), bodyRadius: 0,
       attackRange: fp(1.2), attackCooldownTicks: 45,
       attackDamage: fp(6), attackType: 1 as const,
-      attackReadyTick: 0, rootedUntilTick: 0, state: "idle", rare: 0 as const, summoned: 0 as const,
+      attackReadyTick: 0, slamReadyTick: 0, rootedUntilTick: 0, state: "idle", rare: 0 as const, summoned: 0 as const,
     });
 
     for (let i = 0; i < 5; i++) sim.step();
@@ -274,8 +274,9 @@ describe("shooters", () => {
       playerAt: { x: fp(5), y: fp(0) },
     });
     for (let i = 0; i < 10; i++) sim.step();
-    // 70-tick cooldown: ten ticks is one bolt, however many have expired.
-    expect(world.query("projectile").length).toBeLessThanOrEqual(1);
+    // 70-tick cooldown: ten ticks is exactly one bolt. Zero would mean it never
+    // fired; more than one would mean the cooldown is not being applied.
+    expect(world.query("projectile").length).toBe(1);
   });
 
   it("does not fire while the player is out of range", () => {
@@ -349,6 +350,58 @@ describe("heavies", () => {
     for (let i = 0; i < 32; i++) sim.step();      // windupTicks 30, plus slack
     expect(world.get<Health>(player, "health")!.life).toBeLessThan(before);
     expect(world.query("telegraph").length).toBe(0);   // resolved and destroyed
+  });
+
+  it("auto-attacks fire in the gap between slams (slamReadyTick independent of attackReadyTick)", () => {
+    // Player at fp(1): inside melee range (1.8) AND slam range (6.5).
+    // Tick 0 -> slam, slamReadyTick=150, attackReadyTick stays 0.
+    // Ticks 1..30 -> rooted (windupTicks=30).
+    // Tick 31 -> first auto fires (attackReadyTick=0 < 31); if timers were shared
+    //            this would never fire because attackReadyTick would be 150.
+    // Ticks 32..149 -> more autos; life keeps dropping before the second slam.
+    const { sim, world, player } = aiFixture({
+      def: sentinel(),
+      monsterAt: { x: fp(0), y: fp(0) },
+      playerAt: { x: fp(1), y: fp(0) },
+      withTelegraphResolve: true,
+    });
+    for (let i = 0; i < 32; i++) sim.step(); // slam lands at tick 30, first auto at tick 31
+    const lifeAfterSlamAndFirstAuto = world.get<Health>(player, "health")!.life;
+    // Between ticks 32..149 no second slam (slamReadyTick=150), only melee autos.
+    for (let i = 32; i < 149; i++) sim.step();
+    expect(world.get<Health>(player, "health")!.life).toBeLessThan(lifeAfterSlamAndFirstAuto);
+  });
+
+  it("slam damage scales with the map's tier (dmgMilli applied)", () => {
+    // Sessionless world: dmgMilli defaults to 1000, damage = heavy.damageFixed * 1 = base.
+    const noSession = aiFixture({
+      def: sentinel(),
+      monsterAt: { x: fp(0), y: fp(0) },
+      playerAt: { x: fp(4), y: fp(0) },
+    });
+    noSession.sim.step();
+    const baseDmg = noSession.world.get<TelegraphC>(
+      noSession.world.query("telegraph")[0]!, "telegraph",
+    )!.damage;
+
+    // High-tier session: monsterTierScale(15).dmgMilli >> 1000.
+    const withSession = aiFixture({
+      def: sentinel(),
+      monsterAt: { x: fp(0), y: fp(0) },
+      playerAt: { x: fp(4), y: fp(0) },
+    });
+    const sessionE = withSession.world.create();
+    withSession.world.set<SessionC>(sessionE, "session", {
+      area: "map", atlasSeed: 0, mapSeed: 0, waystoneSeed: 0, waystones: [],
+      areaTier: 15, activeNodeId: "", completedNodes: [], portalsLeft: 6,
+      mapOpen: 1, pendingArea: "",
+    });
+    withSession.sim.step();
+    const scaledDmg = withSession.world.get<TelegraphC>(
+      withSession.world.query("telegraph")[0]!, "telegraph",
+    )!.damage;
+
+    expect(scaledDmg).toBeGreaterThan(baseDmg);
   });
 
   it("a player who steps out of the ring takes nothing", () => {

@@ -86,6 +86,12 @@ export interface MonsterC {
   attackType: number;
   attackReadyTick: number;
   /**
+   * Cooldown for the heavy-slam ability, separate from `attackReadyTick` so
+   * the auto-attack timer is unaffected by a slam and fires in the gap.
+   * Non-heavy monsters carry this as 0 and never read it.
+   */
+  slamReadyTick: number;
+  /**
    * Rooted through a heavy's wind-up: no move, no melee. Trash reads this;
    * a boss reads BossC.rootedUntilTick and the two systems never cross.
    */

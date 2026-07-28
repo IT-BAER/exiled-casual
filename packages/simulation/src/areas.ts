@@ -1,4 +1,5 @@
 import { fp, fpDist2, fpMul } from "@exiled/fixed-point";
+import { gridCollision } from "./collision";
 import { makeRare, mapBaseIdForNode, monsterTierScale, waystoneScaleFor } from "@exiled/rules";
 import { MONSTERS, PACK_COUNT, mapBase, pickPack, rareTemplate } from "@exiled/content-runtime";
 import { ELEMENTS, type MonsterDef } from "@exiled/content-schema";
@@ -185,6 +186,11 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
     // pack can never wake on its own the moment the player steps off the portal.
     const startAnchor = anchor(layout, "start");
     const startX = fp(startAnchor.x), startY = fp(startAnchor.y);
+    // Build collision once so every spread position can be validated against
+    // the grid before use. Sockets are guaranteed on floor cells by mapgen;
+    // the ring offsets are not, so a member could embed in a thick wall and
+    // be stuck for the entire run without this guard.
+    const col = gridCollision(layout.grid);
     for (let i = 0; i < spawns.length; i++) {
       const s = spawns[i]!;
       const sx = fp(s.x), sy = fp(s.y);
@@ -205,8 +211,15 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
         const nearX = sx + ring.dx, nearY = sy + ring.dy;
         const farX = sx - ring.dx, farY = sy - ring.dy;
         const useFar = fpDist2(startX, startY, farX, farY) > fpDist2(startX, startY, nearX, nearY);
-        const x = useFar ? farX : nearX, y = useFar ? farY : nearY;
-        spawnMonster(world, def, x, y, rare, scale);
+        // Entrance-mirroring preference is first; fall back to the socket centre
+        // (never the nearer offset) so no fallback moves a member closer to the
+        // entrance than the socket itself — the alternate side is closer and
+        // could land within AGGRO_RADIUS where the preferred was safely a wall.
+        const preferred = useFar ? { x: farX, y: farY } : { x: nearX, y: nearY };
+        const pos = col.isWalkable(preferred.x, preferred.y, def.radiusFixed)
+          ? preferred
+          : { x: sx, y: sy };
+        spawnMonster(world, def, pos.x, pos.y, rare, scale);
       }
     }
 
@@ -256,6 +269,7 @@ export function spawnMonster(
     attackDamage: scaledDmg,
     attackType: damageCode(def.attackDamage.type),
     attackReadyTick: 0,
+    slamReadyTick: 0,
     rootedUntilTick: 0,
     state: "idle",
     rare: rare ? 1 : 0,

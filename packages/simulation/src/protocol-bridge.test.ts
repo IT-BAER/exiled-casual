@@ -134,7 +134,7 @@ function addMonster(world: World, x: number, y: number): number {
     moveSpeed: fp(2), bodyRadius: fp(1),
     attackRange: fp(1.5), attackCooldownTicks: 60,
     attackDamage: fp(10), attackType: 1 as const,
-    attackReadyTick: 0, rootedUntilTick: 0, state: "idle",
+    attackReadyTick: 0, slamReadyTick: 0, rootedUntilTick: 0, state: "idle",
     rare: 0 as const, summoned: 0 as const,
   });
   return e;

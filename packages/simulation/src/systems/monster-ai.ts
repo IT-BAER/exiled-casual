@@ -1,8 +1,9 @@
-import { fp, fpDist2, fpStepToward, fpClamp } from "@exiled/fixed-point";
+import { fp, fpDist2, fpMul, fpStepToward, fpClamp } from "@exiled/fixed-point";
 import { WORLD_MIN, WORLD_MAX } from "../movement";
 import { slide, type CollisionRef } from "../collision";
 import { Simulation } from "../loop";
-import type { Position, MonsterC, Faction, ProjectileC, TelegraphC } from "../components";
+import type { Position, MonsterC, Faction, ProjectileC, TelegraphC, SessionC } from "../components";
+import { mapDangerScale } from "../areas";
 import { MONSTERS } from "@exiled/content-runtime";
 
 /**
@@ -22,6 +23,11 @@ export const AGGRO_RADIUS: number = fp(9);
 export function registerMonsterAI(sim: Simulation, collisionRef?: CollisionRef): void {
   sim.register("monsterAI", (world, tick) => {
     const collision = collisionRef?.active ?? undefined;
+    // Mirror the boss's tier-scaling idiom: read the session once per system run
+    // so a world without a session (golden replays) serializes byte-identically.
+    const sessionE = world.query("session")[0];
+    const session = sessionE === undefined ? undefined : world.get<SessionC>(sessionE, "session");
+    const { dmgMilli } = session ? mapDangerScale(session) : { dmgMilli: 1000 };
     const players = world
       .query("player", "faction", "position")
       .filter((e) => (world.get<Faction>(e, "faction")?.team ?? -1) === 0);
@@ -67,7 +73,9 @@ export function registerMonsterAI(sim: Simulation, collisionRef?: CollisionRef):
       }
 
       const heavy = MONSTERS.get(mon.defId)?.heavy;
-      if (heavy && tick >= mon.attackReadyTick && nearestD2 <= heavy.rangeFixed * heavy.rangeFixed) {
+      // Gate on slamReadyTick, not attackReadyTick, so the auto-attack timer
+      // survives a slam and the heavy keeps swinging in the cooldown gap.
+      if (heavy && tick >= mon.slamReadyTick && nearestD2 <= heavy.rangeFixed * heavy.rangeFixed) {
         const faction = world.get<Faction>(m, "faction")!;
         const tele = world.create();
         world.set<Position>(tele, "position", { x: ppos.x, y: ppos.y });
@@ -79,7 +87,8 @@ export function registerMonsterAI(sim: Simulation, collisionRef?: CollisionRef):
           impactTick: tick + heavy.windupTicks,
           // Trash leaves no burning patch. That stays the boss's, and it is the
           // difference between a fight you walk out of and one you must leave.
-          damage: heavy.damageFixed,
+          // Scale by dmgMilli so a high-tier slam hits harder, same as the boss.
+          damage: fpMul(heavy.damageFixed, dmgMilli),
           damageType: mon.attackType,
           leavesGroundTicks: 0,
         });
@@ -87,7 +96,9 @@ export function registerMonsterAI(sim: Simulation, collisionRef?: CollisionRef):
           ...mon,
           state: "attack",
           rootedUntilTick: tick + heavy.windupTicks,
-          attackReadyTick: tick + heavy.cooldownTicks,
+          // Only slamReadyTick advances; attackReadyTick is deliberately left
+          // alone so melee auto-attacks fire freely during the slam cooldown.
+          slamReadyTick: tick + heavy.cooldownTicks,
         });
         continue;
       }
