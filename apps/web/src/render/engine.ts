@@ -6,6 +6,8 @@ import {
   DirectionalLight,
   GlowLayer,
   HemisphericLight,
+  Light,
+  PointLight,
   ImageProcessingConfiguration,
   MeshBuilder,
   PBRMaterial,
@@ -42,6 +44,35 @@ import { ROCK_MESH_PREFIX } from "./rocks";
  */
 const SUN_INTENSITY = 6.0;
 const FILL_INTENSITY = 0.45;
+
+/**
+ * The player's own light: PoE1's "light radius" made literal, a warm pool that
+ * travels with the character and picks detail out of the ground around them.
+ *
+ * It only ever ADDS. The sun and fill above are untouched by it, deliberately —
+ * a torch raises the contrast between inside and outside the pool, so trimming
+ * ambient to "balance" it lands straight back on the black-rooms regression.
+ *
+ * Intensity is large because a PBR point light falls off with the square of the
+ * distance: at 2.5 up and 5 out the floor is already 31 units² away, so a value
+ * near 1 does nothing visible. Tuned by looking at the frame, not computed.
+ */
+const TORCH_INTENSITY = 260;
+/** Where the pool stops. GLTF falloff windows the inverse square to this, so the
+ *  edge is defined instead of trailing off across the whole map.
+ *
+ *  8 and not 11 because the camera only shows 9.5 world units of height: at 11
+ *  the pool covered the entire frame, which is a global brightness change, not a
+ *  light the player carries. At 8 it reaches about two thirds of the way out and
+ *  there is cold stone outside it to read the warm edge against. */
+const TORCH_RANGE = 8;
+/** Above the floor, not at the feet: at 0 the pool is a hot spot under the
+ *  character, and the falloff eats the whole radius within a step. */
+const TORCH_HEIGHT = 2.5;
+/** Firelight, not a flashlight. */
+const TORCH_COLOR = new Color3(1.0, 0.72, 0.42);
+/** Flicker depth. Two detuned sines, because a single one reads as a pulse. */
+const TORCH_FLICKER = 0.035;
 
 /** Name of the single merged wall mesh `buildLevel` produces.
  *
@@ -191,6 +222,18 @@ export function createScene(engine: Engine): SceneHandle {
   // than to overhead. Declared before the zoom below, which resizes its frustum.
   const sun = new DirectionalLight("sun", new Vector3(-0.62, -0.38, -0.45), scene);
   sun.intensity = SUN_INTENSITY;
+  // ...and the light the player carries. Declared here with the others, not when
+  // a map loads: adding a light forces every PBR material to recompile, and doing
+  // that on an area change is a hitch exactly where the frame budget is tightest.
+  // It never casts a shadow — a second generator doubles the shadow cost and
+  // gives every object two shadows pointing different ways. PoE's light radius
+  // does not cast either.
+  const torch = new PointLight("torch", new Vector3(0, TORCH_HEIGHT, 0), scene);
+  torch.diffuse = TORCH_COLOR;
+  torch.specular = TORCH_COLOR;
+  torch.intensity = TORCH_INTENSITY;
+  torch.range = TORCH_RANGE;
+  torch.falloffType = Light.FALLOFF_GLTF;
 
   // Where the wheel has asked to be, and where the camera has eased to so far.
   let targetHalf = ORTHO_HALF_HEIGHT;
@@ -402,6 +445,21 @@ export function createScene(engine: Engine): SceneHandle {
   } catch {
     /* no render targets under NullEngine — lit but unshadowed is fine in tests */
   }
+
+  // Ride the torch on the camera target. That target IS the player, interpolated:
+  // App.tsx sets it from the snapshot every frame, so this needs no handle on the
+  // entity system and cannot drift out of step with the character mesh.
+  //
+  // Outside the shadow block above on purpose — that one is inside a try that
+  // NullEngine throws out of, and a light that follows needs no render target.
+  scene.onBeforeRenderObservable.add(() => {
+    torch.position.set(camera.target.x, TORCH_HEIGHT, camera.target.z);
+    // Render-side only. Never read the sim clock here: the flicker must not be
+    // able to reach a replay checksum.
+    const t = performance.now() / 1000;
+    const wobble = Math.sin(t * 6.3) * 0.6 + Math.sin(t * 11.7) * 0.4;
+    torch.intensity = TORCH_INTENSITY * (1 + wobble * TORCH_FLICKER);
+  });
 
   return { scene, camera, setZoom, detachZoom };
 }

@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect, afterEach } from "vitest";
-import { NullEngine, Scene, StandardMaterial } from "@babylonjs/core";
+import { NullEngine, PointLight, Scene, StandardMaterial, Vector3 } from "@babylonjs/core";
 import { createScene } from "./engine";
 import { SnapshotRenderer } from "./renderer";
 import { makeMesh, updateTelegraph } from "./meshes";
@@ -44,6 +44,33 @@ let engine: InstanceType<typeof NullEngine>;
 
 afterEach(() => {
   engine?.dispose();
+});
+
+describe("torch", () => {
+  it("rides the camera target, so the pool cannot drift off the player", () => {
+    engine = new NullEngine();
+    const { scene, camera } = createScene(engine);
+    const torch = scene.getLightByName("torch") as PointLight;
+    expect(torch).toBeTruthy();
+
+    camera.setTarget(new Vector3(7, 0, -3), false, false, true);
+    scene.render();
+
+    expect(torch.position.x).toBeCloseTo(7);
+    expect(torch.position.z).toBeCloseTo(-3);
+    // Lifted off the floor: at y=0 the pool is a hot spot under the feet and the
+    // inverse square eats the whole radius inside one step.
+    expect(torch.position.y).toBeGreaterThan(1);
+  });
+
+  it("never casts a shadow", () => {
+    // A second generator doubles the shadow cost and gives every object two
+    // shadows pointing different ways. PoE's light radius does not cast either.
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+
+    expect(scene.getLightByName("torch")!.getShadowGenerator()).toBeFalsy();
+  });
 });
 
 describe("SnapshotRenderer", () => {
