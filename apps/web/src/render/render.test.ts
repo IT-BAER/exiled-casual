@@ -270,14 +270,16 @@ describe("SnapshotRenderer", () => {
     const s0 = makeSnapshot({ player: testPlayer() });
     renderer.apply(null, s0, 1);
     const mesh = scene.getMeshByName("entity-0")!;
-    // Spawned facing south (toward the camera), holding that until it moves.
-    expect(mesh.rotation.y).toBeCloseTo(Math.PI, 6);
+    // Spawned facing the camera, holding that until it moves. The camera leans
+    // 45 degrees off the grid, so that is 3PI/4 and not the due-south PI.
+    const spawnYaw = (Math.PI * 3) / 4;
+    expect(mesh.rotation.y).toBeCloseTo(spawnYaw, 6);
 
     // Move +x (world +x). Heading yaw = atan2(dx=5, dz=0) = PI/2; the shortest
-    // path from PI is -PI/2, eased by 0.25 → PI - PI/8.
+    // path from 3PI/4 is -PI/4, eased by 0.25 → 3PI/4 - PI/16.
     const s1 = makeSnapshot({ player: testPlayer({ x: 5 }) });
     renderer.apply(s0, s1, 1);
-    expect(mesh.rotation.y).toBeCloseTo(Math.PI - Math.PI / 8, 4);
+    expect(mesh.rotation.y).toBeCloseTo(spawnYaw - Math.PI / 16, 4);
   });
 
   it("swings a monster's legs while it walks and rests them when it stops", () => {
@@ -437,6 +439,26 @@ describe("SnapshotRenderer — new kinds", () => {
     const mesh = scene.getMeshByName("entity-6");
     expect(mesh).not.toBeNull();
     expect(mesh!.scaling.x).toBeCloseTo(3.5);
+  });
+
+  // The hideout props are authored square to a camera due south (yaw PI). The
+  // camera does not stand there any more, so the check is against the lens
+  // itself rather than against the number the sim sends.
+  it("a prop's fixed yaw turns it to face the camera", () => {
+    engine = new NullEngine();
+    const { scene, camera } = createScene(engine);
+    const renderer = new SnapshotRenderer(scene);
+    const snap = makeSnapshot({
+      entities: [{ id: 9, kind: "vendor", x: 0, y: 0, yaw: Math.PI, inRange: false }],
+    });
+    renderer.apply(null, snap, 1);
+    camera.getViewMatrix(); // ArcRotateCamera only derives .position on demand
+    const mesh = scene.getMeshByName("entity-9");
+    expect(mesh).not.toBeNull();
+    const forward = new Vector3(Math.sin(mesh!.rotation.y), 0, Math.cos(mesh!.rotation.y));
+    const toCamera = camera.position.subtract(mesh!.position);
+    toCamera.y = 0;
+    expect(Vector3.Dot(forward, toCamera.normalize())).toBeCloseTo(1, 2);
   });
 
   it("boss:true monster entity gets boss mesh (scaling ~2.0)", () => {

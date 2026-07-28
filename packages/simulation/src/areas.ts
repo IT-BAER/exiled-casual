@@ -16,16 +16,24 @@ import type {
 export const HIDEOUT_SPAWN = { x: fp(0), y: fp(0) } as const;
 
 // Close enough to the (0,0) spawn that the device is on screen the moment you
-// arrive: the ortho camera only shows ~9.5 world units vertically.
-const MAP_DEVICE_X: number = fp(0);
-const MAP_DEVICE_Y: number = fp(4);
-const STASH_X: number = fp(-5);
-const STASH_Y: number = fp(2);
+// arrive: the camera only shows ~9.5 world units vertically.
+//
+// The literals below are the composed frame — device straight ahead, stash to
+// the left, vendor to the right — turned 45 degrees clockwise, because the
+// camera is. It looks past the grid diagonally (`CAMERA_ALPHA`), so a device
+// placed on +y alone lands up-and-right of the player instead of above him and
+// the vendor walks off the bottom-right corner. The turn is rigid and about the
+// (0,0) spawn: (x,y) -> ((x-y)/sqrt2, (x+y)/sqrt2), which is why the numbers are
+// no longer round. Re-derive them if `CAMERA_ALPHA` ever moves again.
+const MAP_DEVICE_X: number = fp(-2.828);
+const MAP_DEVICE_Y: number = fp(2.828);
+const STASH_X: number = fp(-4.95);
+const STASH_Y: number = fp(-2.121);
 // Mirror of the stash on the opposite side of the map device, so the two
 // vendors flank it the way PoE2's camp keeps the stash and the crafting bench
 // on either side of the fire.
-const VENDOR_X: number = fp(5);
-const VENDOR_Y: number = fp(2);
+const VENDOR_X: number = fp(2.121);
+const VENDOR_Y: number = fp(4.95);
 
 /**
  * Offsets from the map device, plus the render yaw that angles each portal outward.
@@ -34,14 +42,18 @@ const VENDOR_Y: number = fp(2);
  * An arc behind the device rather than a full ring, for two reasons: it frames the
  * way the PoE reference does (portals cluster on the far side, not surrounding you),
  * and a full ring would drop a portal on top of the player's spawn point.
+ *
+ * The offsets carry the same 45-degree turn as the props above — an arc composed
+ * across the screen reads as a line running off the corner without it. The yaws
+ * do not: the renderer turns every fixed yaw by the camera's own lean.
  */
 const PORTAL_RING: readonly { dx: number; dy: number; yaw: number }[] = [
-  { dx: fp(-3.5), dy: fp(0),   yaw: -1.4 },
-  { dx: fp(-3),   dy: fp(1.8), yaw: -0.8 },
-  { dx: fp(-1.1), dy: fp(3.3), yaw: -0.25 },
-  { dx: fp(1.1),  dy: fp(3.3), yaw: 0.25 },
-  { dx: fp(3),    dy: fp(1.8), yaw: 0.8 },
-  { dx: fp(3.5),  dy: fp(0),   yaw: 1.4 },
+  { dx: fp(-2.475), dy: fp(-2.475), yaw: -1.4 },
+  { dx: fp(-3.394), dy: fp(-0.849), yaw: -0.8 },
+  { dx: fp(-3.111), dy: fp(1.556),  yaw: -0.25 },
+  { dx: fp(-1.556), dy: fp(3.111),  yaw: 0.25 },
+  { dx: fp(0.849),  dy: fp(3.394),  yaw: 0.8 },
+  { dx: fp(2.475),  dy: fp(2.475),  yaw: 1.4 },
 ];
 
 /**

@@ -246,6 +246,14 @@ const MAX_HALF_HEIGHT = ORTHO_HALF_HEIGHT;
  * the test fails the moment the tilt starts outrunning the box.
  */
 export const BETA_AT_DEFAULT = 0.65;
+
+/**
+ * Camera yaw, as Babylon's alpha. Exported because the hideout props carry fixed
+ * yaws that only mean anything relative to where the lens is: `renderer.ts` turns
+ * them by whatever this differs from the -PI/2 (camera on -z) they were written
+ * against.
+ */
+export const CAMERA_ALPHA = -Math.PI / 4;
 const BETA_PER_UNIT = -0.08;
 const BETA_LIMIT = { min: BETA_AT_DEFAULT, max: 0.88 };
 
@@ -313,7 +321,7 @@ export function createScene(engine: Engine): SceneHandle {
   // zoom arc, so the camera starts exactly where the arc's clamp holds it.
   const camera = new ArcRotateCamera(
     "cam",
-    -Math.PI / 4,
+    CAMERA_ALPHA,
     BETA_AT_DEFAULT,
     40,
     Vector3.Zero(),

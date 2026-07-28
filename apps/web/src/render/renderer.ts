@@ -6,6 +6,7 @@ import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
 import { animateActor, makeMesh, updateTelegraph, updatePortal, updateMapDevice, updateStash, updateVendor, updateGroundItem, updateRareElement, Y_LIFT } from "./meshes";
 import type { MeshKind } from "./meshes";
 import { COSMETIC_SLOTS, looksForEquipment, previewItemFor, rigOf, type Looks } from "./rig";
+import { CAMERA_ALPHA } from "./engine";
 import { lerp, lerpAngle } from "./interp";
 
 /** Sim rate. Consecutive snapshots are one tick apart, which is what turns a
@@ -13,11 +14,27 @@ import { lerp, lerpAngle } from "./interp";
 const TICKS_PER_SEC = 30;
 
 /**
- * Heading a freshly spawned actor holds until it first moves. South (-Z) faces
- * the camera, so an actor that has not moved yet shows its front rather than
- * its back — the difference between a usable screenshot and a shot of a hood.
+ * Yaw that turns a mesh authored facing +z toward the lens. It is the camera's
+ * own yaw, not a literal: alpha used to be -PI/2 (camera due south) and PI was
+ * the answer, but the camera leans 45 degrees now and anything still written as
+ * PI shows the player a shoulder.
  */
-const SPAWN_YAW = Math.PI;
+const FACE_CAMERA_YAW = Math.PI / 2 - CAMERA_ALPHA;
+
+/**
+ * Heading a freshly spawned actor holds until it first moves: facing the camera,
+ * so an actor that has not moved yet shows its front rather than its back — the
+ * difference between a usable screenshot and a shot of a hood.
+ */
+const SPAWN_YAW = FACE_CAMERA_YAW;
+
+/**
+ * The sim's fixed yaws (the portal arc, the stash, the vendor) are authored for
+ * a camera due south, where square to the screen meant PI. Turn every one of
+ * them by however far the lens has moved since, so a prop that was composed
+ * square to the frame stays square to it.
+ */
+const PROP_YAW_SHIFT = FACE_CAMERA_YAW - Math.PI;
 
 /**
  * Distance the player has to cover in ONE tick for the move to be a teleport.
@@ -135,7 +152,7 @@ export class SnapshotRenderer {
       // Portals and map devices carry a fixed yaw from the sim so a ring of portals
       // reads correctly (some face the camera, others turn nearly edge-on).
       if (e.yaw !== undefined) {
-        mesh.rotation.y = e.yaw;
+        mesh.rotation.y = e.yaw + PROP_YAW_SHIFT;
       }
       // Highlight is driven by mouse hover, not by sim inRange. inRange only
       // triggers the interact intent once the player has walked close enough.
