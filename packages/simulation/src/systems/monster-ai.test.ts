@@ -1,10 +1,15 @@
 import { describe, it, expect } from "vitest";
 import { Simulation } from "../loop";
 import { fp, fpDist2 } from "@exiled/fixed-point";
-import type { Position, MonsterC, Faction, PlayerC, BossC } from "../components";
+import type { Position, MonsterC, Faction, PlayerC, BossC, Health, ProjectileC, DefensesC } from "../components";
 import { registerMonsterAI } from "./monster-ai";
+import { registerDamageResolve } from "./damage-resolve";
 import { gridCollision } from "../collision";
 import { makeGrid } from "../test-grid";
+import { MONSTERS } from "@exiled/content-runtime";
+import { spawnMonster } from "../areas";
+import type { MonsterDef } from "@exiled/content-schema";
+import { resBlock } from "@exiled/content-schema";
 
 describe("registerMonsterAI", () => {
   it("monster far from player chases — squared distance strictly decreases", () => {
@@ -208,5 +213,87 @@ describe("registerMonsterAI", () => {
     // Never crosses the wall to reach the player's side.
     expect(world.get<Position>(m, "position")!.x).toBeLessThan(fp(3));
     expect(world.get<MonsterC>(m, "monster")!.state).toBe("chase");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Shared fixture for shooter tests
+// ---------------------------------------------------------------------------
+function aiFixture(opts: {
+  def: MonsterDef;
+  monsterAt: { x: number; y: number };
+  playerAt: { x: number; y: number };
+}) {
+  const sim = new Simulation();
+  registerMonsterAI(sim);
+  registerDamageResolve(sim);
+  const { world } = sim;
+
+  const player = world.create();
+  world.set<Position>(player, "position", opts.playerAt);
+  world.set<Faction>(player, "faction", { team: 0 });
+  world.set<PlayerC>(player, "player", { moveSpeed: 0, bodyRadius: fp(0.5) });
+  world.set<Health>(player, "health", { life: fp(100), maxLife: fp(100) });
+  // damageResolve skips targets without defenses; 0 armour / 0 res passes full damage.
+  world.set<DefensesC>(player, "defenses", { res: resBlock(), armour: fp(0) });
+
+  const monster = spawnMonster(world, opts.def, opts.monsterAt.x, opts.monsterAt.y, false);
+  // Force awake so we test firing logic, not aggro.
+  const mon = world.get<MonsterC>(monster, "monster")!;
+  world.set<MonsterC>(monster, "monster", { ...mon, state: "chase" });
+
+  return { sim, world, monster, player };
+}
+
+describe("shooters", () => {
+  it("fires a bolt instead of hitting, and the bolt is on its team", () => {
+    const { sim, world, monster, player } = aiFixture({
+      def: MONSTERS.get("monster.dune_spitter.v1")!,
+      monsterAt: { x: fp(0), y: fp(0) },
+      playerAt: { x: fp(5), y: fp(0) },   // inside range 7.5
+    });
+    const before = world.get<Health>(player, "health")!.life;
+
+    sim.step();
+
+    const bolts = world.query("projectile");
+    expect(bolts.length).toBe(1);
+    expect(world.get<ProjectileC>(bolts[0]!, "projectile")!.team).toBe(1);
+    expect(world.get<ProjectileC>(bolts[0]!, "projectile")!.ownerId).toBe(monster);
+    // The bolt has to travel; the shot itself does no damage.
+    expect(world.get<Health>(player, "health")!.life).toBe(before);
+  });
+
+  it("respects its attack cooldown", () => {
+    const { sim, world } = aiFixture({
+      def: MONSTERS.get("monster.dune_spitter.v1")!,
+      monsterAt: { x: fp(0), y: fp(0) },
+      playerAt: { x: fp(5), y: fp(0) },
+    });
+    for (let i = 0; i < 10; i++) sim.step();
+    // 70-tick cooldown: ten ticks is one bolt, however many have expired.
+    expect(world.query("projectile").length).toBeLessThanOrEqual(1);
+  });
+
+  it("does not fire while the player is out of range", () => {
+    const { sim, world } = aiFixture({
+      def: MONSTERS.get("monster.dune_spitter.v1")!,
+      monsterAt: { x: fp(0), y: fp(0) },
+      playerAt: { x: fp(8.5), y: fp(0) },  // awake (< AGGRO_RADIUS 9), out of range (> 7.5)
+    });
+    sim.step();
+    expect(world.query("projectile").length).toBe(0);
+  });
+
+  it("a melee monster still enqueues damage and spawns no bolt", () => {
+    const { sim, world, player } = aiFixture({
+      def: MONSTERS.get("monster.vaal_husk.v1")!,
+      monsterAt: { x: fp(0), y: fp(0) },
+      playerAt: { x: fp(1), y: fp(0) },
+    });
+    const before = world.get<Health>(player, "health")!.life;
+    sim.step();
+    expect(world.query("projectile").length).toBe(0);
+    expect(world.get<Health>(player, "health")!.life).toBeLessThan(before);
   });
 });

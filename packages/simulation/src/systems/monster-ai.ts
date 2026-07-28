@@ -2,7 +2,8 @@ import { fp, fpDist2, fpStepToward, fpClamp } from "@exiled/fixed-point";
 import { WORLD_MIN, WORLD_MAX } from "../movement";
 import { slide, type CollisionRef } from "../collision";
 import { Simulation } from "../loop";
-import type { Position, MonsterC, Faction } from "../components";
+import type { Position, MonsterC, Faction, ProjectileC } from "../components";
+import { MONSTERS } from "@exiled/content-runtime";
 
 /**
  * How close the player has to come before a sleeping monster notices. Just under
@@ -61,13 +62,43 @@ export function registerMonsterAI(sim: Simulation, collisionRef?: CollisionRef):
       if (nearestD2 <= ar * ar) {
         let { attackReadyTick } = mon;
         if (tick >= attackReadyTick) {
-          sim.enqueueDamage({
-            target: nearest,
-            source: m,
-            amountFixed: mon.attackDamage,
-            type: mon.attackType,
-          });
-          attackReadyTick = tick + mon.attackCooldownTicks;
+          const def = MONSTERS.get(mon.defId);
+          if (def?.ranged) {
+            // A shooter's range is its attack range, so chase already stops it
+            // where it should stand: no kiting AI, and none needed.
+            // ponytail: no line of sight — a bolt crosses walls, as every
+            // projectile in this game already does. Range 7.5 under an aggro
+            // radius of 9 keeps it close to honest; real LOS is its own pass
+            // over collision.ts, for the player's projectiles as much as these.
+            const speedPerTick = Math.trunc(def.ranged.speedFixed / 30);
+            const step = fpStepToward(mpos.x, mpos.y, ppos.x, ppos.y, speedPerTick);
+            // Standing exactly on the player: nothing to aim at, so fall through
+            // to next tick rather than emitting a bolt with no direction.
+            if (step.dx !== 0 || step.dy !== 0) {
+              const faction = world.get<Faction>(m, "faction")!;
+              const bolt = world.create();
+              world.set<Position>(bolt, "position", { x: mpos.x, y: mpos.y });
+              world.set<ProjectileC>(bolt, "projectile", {
+                dirx: step.dx,
+                diry: step.dy,
+                remainingRange: mon.attackRange,
+                radius: def.ranged.radiusFixed,
+                damageType: mon.attackType,
+                damageAmount: mon.attackDamage,
+                ownerId: m,
+                team: faction.team,
+              });
+              attackReadyTick = tick + mon.attackCooldownTicks;
+            }
+          } else {
+            sim.enqueueDamage({
+              target: nearest,
+              source: m,
+              amountFixed: mon.attackDamage,
+              type: mon.attackType,
+            });
+            attackReadyTick = tick + mon.attackCooldownTicks;
+          }
         }
         world.set<MonsterC>(m, "monster", { ...mon, state: "attack", attackReadyTick });
       } else {
