@@ -60,39 +60,37 @@ const CLIP_LOOPS: Record<RigClip, boolean> = {
 const CLIP_SPEED: Record<"walk" | "run", number> = { walk: 1.4, run: 4.0 };
 
 /**
- * Cadence trim. 1.0 matches the stride exactly to the actor's ground speed, so
- * the foot that is planted stays planted. It was 1.2 on the jog, bought as "a
- * stride that does not look sluggish" against "slide not visible at this zoom"
- * — it was visible: 20 percent of every stride is the ground moving under a
- * foot that is not pushing it. Pace is the animator's problem, not the
- * playback rate's.
+ * Cadence trim. 1.0 paces a clip at exactly its own authored speed, so the
+ * planted foot stays planted; anything above it turns the legs over faster
+ * than the ground and buys shorter, quicker steps with a little slide.
+ *
+ * The jog is the compromise line. Its clip depicts 4.0 u/s (measured, see
+ * CLIP_SPEED) and the player runs at 3.5, so a literal 1.0 would play it at
+ * 0.875 and every step would be a bound. 1.25 lands the playback just over
+ * 1.0 — a run, at a run's cadence, for about a tenth of a stride of slide.
+ * The alternative was the short-stride walk clip driven to 2.5x, which is a
+ * power-walk and was rejected on sight.
  */
-const CADENCE: Record<"walk" | "run", number> = { walk: 1, run: 1 };
+const CADENCE: Record<"walk" | "run", number> = { walk: 1, run: 1.25 };
 
 const MIN_RATIO = 0.5;
-// 2.6, because a run at player pace is now the WALK clip driven to 2.5x.
-const MAX_RATIO = 2.6;
+const MAX_RATIO = 1.8;
 
 /** Below this the actor counts as standing still. */
 const IDLE_SPEED = 0.15;
 /**
- * Above this the jog reads better than the walk — and it now sits ABOVE the
- * player's own 3.5, which is the whole change: the jog clip covers 4 units a
- * second in long bounds, and driving it at player pace is what made running
- * look like leaping. The walk clip has a short stride, so the same 3.5 u/s
- * comes out as quick small steps with the feet still planted, which is what
- * running at this camera distance should look like.
- *
- * Drop this back under 3.5 to hand normal running back to the jog.
+ * Above this the jog reads better than the walk. Player base speed is 3.5, and
+ * it must land on the jog: pushing the threshold above it handed normal running
+ * to the walk clip at 2.5x, which is a power-walk, not a run.
  */
-const RUN_SPEED = 4.2;
+const RUN_SPEED = 2.2;
 /**
  * ...and below THIS a runner drops back to a walk. The gap is not decoration:
  * the sim sheds speed through a corner (down to 62 percent of the run), which
  * lands right on a single threshold and made the character flick between jog
  * and walk for the three ticks of every turn.
  */
-const WALK_SPEED = 3.6;
+const WALK_SPEED = 1.7;
 
 /**
  * Which locomotion clip suits a ground speed, in units/sec. `current` is the

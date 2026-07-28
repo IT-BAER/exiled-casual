@@ -35,14 +35,12 @@ describe("clipForSpeed", () => {
     expect(clipForSpeed(0.1)).toBe("idle");
   });
 
-  it("keeps the short-stride clip at player pace and saves the jog for faster", () => {
+  it("walks at a stroll and jogs at the player's base speed", () => {
     expect(clipForSpeed(1.0)).toBe("walk");
     expect(clipForSpeed(2.1)).toBe("walk");
-    // baseCasterStats moveSpeed is 3.5 u/s. The jog clip covers 4 u/s in long
-    // bounds, so driving it at 3.5 is what read as leaping; the walk clip's
-    // short stride at 2.5x is the same ground speed in quick small steps.
-    expect(clipForSpeed(3.5)).toBe("walk");
-    expect(clipForSpeed(5)).toBe("run");
+    // baseCasterStats moveSpeed is 3.5 u/s, and it must read as a jog. Handing
+    // that speed to the walk clip played fast is a power-walk, not a run.
+    expect(clipForSpeed(3.5)).toBe("run");
   });
 });
 
@@ -52,30 +50,31 @@ describe("speedRatioFor", () => {
     expect(speedRatioFor("walk", 2.1)).toBeCloseTo(1.5, 5);
   });
 
-  it("paces each clip at exactly its own authored speed, so nothing slides", () => {
-    // Measured off the rig, not guessed: any trim on top of these is the ground
-    // moving under a planted foot.
-    expect(speedRatioFor("run", 4.0)).toBeCloseTo(1, 5);
-    // Player pace on the short-stride clip: 2.5 steps' worth of turnover.
-    expect(speedRatioFor("walk", 3.5)).toBeCloseTo(2.5, 5);
+  it("paces the walk on its own stride and turns the jog over a little quicker", () => {
+    // The walk is literal: 1.0 keeps its planted foot planted.
+    expect(speedRatioFor("walk", 1.4)).toBeCloseTo(1, 5);
+    // The jog trades about a tenth of a stride of slide for steps that are not
+    // bounds — its clip depicts 4 u/s and the player only covers 3.5.
+    expect(speedRatioFor("run", 3.5)).toBeGreaterThan(1);
+    expect(speedRatioFor("run", 3.5)).toBeLessThan(1.2);
   });
 
   it("holds the jog through a corner instead of flicking to a walk", () => {
     // The sim sheds speed into a turn; a single threshold sat inside that dip.
-    expect(clipForSpeed(3.8, "run")).toBe("run");
-    expect(clipForSpeed(3.8, "walk")).toBe("walk");
+    expect(clipForSpeed(2.0, "run")).toBe("run");
+    expect(clipForSpeed(2.0, "walk")).toBe("walk");
     // Far enough down and it really is a walk again, whatever it was doing.
-    expect(clipForSpeed(3.0, "run")).toBe("walk");
+    expect(clipForSpeed(1.5, "run")).toBe("walk");
   });
 
   it("still scales with speed so the legs track the movement", () => {
     // Both ends inside the clamp, so the doubling has to show through.
-    expect(speedRatioFor("run", 4.0)).toBeCloseTo(2 * speedRatioFor("run", 2.0), 5);
+    expect(speedRatioFor("run", 3.4)).toBeCloseTo(2 * speedRatioFor("run", 1.7), 5);
   });
 
   it("clamps extremes and leaves one-shots alone", () => {
     expect(speedRatioFor("run", 0.01)).toBe(0.5);
-    expect(speedRatioFor("walk", 100)).toBe(2.6);
+    expect(speedRatioFor("walk", 100)).toBe(1.8);
     expect(speedRatioFor("cast", 3.5)).toBe(1);
     expect(speedRatioFor("idle", 0)).toBe(1);
   });
