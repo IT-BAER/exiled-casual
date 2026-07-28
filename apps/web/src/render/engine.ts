@@ -64,7 +64,7 @@ const FILL_INTENSITY = 0.45;
 // bulb. At 3.8 the head sits 2.1 away, so its share drops ~2.5x while the floor
 // is unchanged. Do not raise it further: 5.5 flattens the floor and the pool
 // stops being a pool.
-const TORCH_INTENSITY = 600;
+const TORCH_INTENSITY = 420;
 /** Where the pool stops. GLTF falloff windows the inverse square to this, so the
  *  edge is defined instead of trailing off across the whole map.
  *
@@ -88,6 +88,47 @@ const TORCH_FLICKER = 0.035;
  *  along with the characters. */
 const isWardrobePart = (name: string): boolean =>
   /^(base|body|belt|boots|gloves|helmet)\./.test(name);
+
+/** The colour past the last wall. Fog is tinted TO this, so distance dissolves
+ *  into the void instead of meeting it at a hard cliff at the map edge. */
+export const VOID_COLOR = new Color3(0.09, 0.1, 0.12);
+
+/**
+ * How far the edge darkening goes. Two presets and not one number because the
+ * rooms have already gone to unplayable black once (see `applyBiomeTint`), and
+ * the only honest way to pick is to look at both in the same room.
+ *
+ * `soft` ships. `heavy` is reachable from the devtools console in a dev build:
+ * `__atmos("heavy")`.
+ */
+export type AtmospherePreset = "soft" | "heavy";
+
+const ATMOSPHERE: Record<AtmospherePreset, { fog: number; vignette: number }> = {
+  // EXP2 density, not a distance: the camera sees ~19 units across, so 0.012
+  // costs the far corner about a fifth of its light and the near floor nothing.
+  soft: { fog: 0.012, vignette: 1.6 },
+  heavy: { fog: 0.028, vignette: 3.2 },
+};
+
+/** Fog + vignette. Both are frame-edge effects: they push the eye to the middle
+ *  of the screen, which is where the player and the torch pool already are. */
+export function applyAtmosphere(scene: Scene, preset: AtmospherePreset): void {
+  const { fog, vignette } = ATMOSPHERE[preset];
+  scene.fogMode = Scene.FOGMODE_EXP2;
+  scene.fogDensity = fog;
+  // Colour is NOT set here: `applyBiomeTint` owns it, and Babylon ships a
+  // non-null default, so a "only if unset" guard here never fires and toggling
+  // the preset would silently throw the biome's hue away.
+  const ip = scene.imageProcessingConfiguration;
+  ip.vignetteEnabled = true;
+  ip.vignetteWeight = vignette;
+  // Multiply and not the default opaque blend: opaque paints a flat black ring
+  // over the corners, multiply darkens what is already drawn there, so a lit
+  // wall in the corner stays a lit wall and only loses some of its light.
+  ip.vignetteBlendMode = ImageProcessingConfiguration.VIGNETTEMODE_MULTIPLY;
+  ip.vignetteColor = new Color4(0, 0, 0, 0);
+  ip.vignetteStretch = 0.4; // the frame is 16:9; a round vignette on it crops the sides
+}
 
 /** Name of the single merged wall mesh `buildLevel` produces.
  *
@@ -205,10 +246,17 @@ export function createScene(engine: Engine): SceneHandle {
   const scene = new Scene(engine);
   // Reaching the scene from the devtools console is the only way to inspect what
   // the renderer actually built; Babylon is bundled, so there is no other handle.
-  if (import.meta.env.DEV) (globalThis as { __scene?: Scene }).__scene = scene;
+  if (import.meta.env.DEV) {
+    const g = globalThis as { __scene?: Scene; __atmos?: (p: AtmospherePreset) => void };
+    g.__scene = scene;
+    // A/B the edge darkening in the room you are standing in: __atmos("heavy").
+    g.__atmos = (p) => applyAtmosphere(scene, p);
+  }
   // Dark background so the greybox arena reads against the page (default is white,
   // which made a white ground plane invisible on a white page).
-  scene.clearColor = new Color4(0.09, 0.1, 0.12, 1);
+  scene.clearColor = new Color4(VOID_COLOR.r, VOID_COLOR.g, VOID_COLOR.b, 1);
+  scene.fogColor = VOID_COLOR.clone();
+  applyAtmosphere(scene, "soft");
 
   // Top-down-ish camera: positioned above the origin, looking down at the
   // ground plane (xz). Alpha=0, beta=π/4 gives a comfortable isometric feel.

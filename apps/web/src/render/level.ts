@@ -8,7 +8,7 @@ import {
   VertexBuffer,
   type Scene,
 } from "@babylonjs/core";
-import { FLOOR_TILES, GROUND_SIZE, WALL_MESH_NAME } from "./engine";
+import { FLOOR_TILES, GROUND_SIZE, VOID_COLOR, WALL_MESH_NAME } from "./engine";
 import {
   DEBRIS_MESH_PREFIX,
   RAMPART_MESH_PREFIX,
@@ -415,4 +415,9 @@ export function applyBiomeTint(scene: Scene, tint: readonly [number, number, num
   // The key light takes a half-strength version, so the tint reads without the
   // lit faces losing the contrast that makes the walls legible.
   if (sun) sun.diffuse = new Color3((1 + nr) / 2, (1 + ng) / 2, (1 + nb) / 2);
+  // Per-biome fog for free: the tint is already normalised to mean 1.0, so the
+  // void keeps its brightness and only takes the biome's hue. No second table to
+  // fall out of step with the first — a swamp's distance goes green because the
+  // swamp is green, and the hideout's goes back to neutral with everything else.
+  scene.fogColor = new Color3(VOID_COLOR.r * nr, VOID_COLOR.g * ng, VOID_COLOR.b * nb);
 }

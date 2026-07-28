@@ -1,7 +1,16 @@
 // @vitest-environment node
 import { describe, it, expect, afterEach } from "vitest";
-import { NullEngine, PointLight, Scene, StandardMaterial, Vector3 } from "@babylonjs/core";
-import { createScene } from "./engine";
+import {
+  ImageProcessingConfiguration,
+  NullEngine,
+  PointLight,
+  Scene,
+  StandardMaterial,
+  Vector3,
+} from "@babylonjs/core";
+import { applyAtmosphere, createScene, VOID_COLOR } from "./engine";
+import { applyBiomeTint } from "./level";
+import { BIOMES } from "@exiled/content-runtime";
 import { SnapshotRenderer } from "./renderer";
 import { makeMesh, updateTelegraph } from "./meshes";
 import type { Snapshot } from "@exiled/protocol";
@@ -82,6 +91,61 @@ describe("torch", () => {
     const torch = scene.getLightByName("torch") as PointLight;
 
     expect(torch.position.y).toBeGreaterThan(2.6);
+  });
+});
+
+describe("atmosphere", () => {
+  it("fogs to the void colour, so distance dissolves instead of hitting a cliff", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+
+    expect(scene.fogMode).toBe(Scene.FOGMODE_EXP2);
+    expect(scene.fogDensity).toBeGreaterThan(0);
+    expect(scene.fogColor.equals(VOID_COLOR)).toBe(true);
+  });
+
+  it("darkens the edges by multiply, so a lit corner stays lit", () => {
+    // Opaque blend paints a flat black ring over the corners. The rooms have
+    // already gone to unplayable black once; this may dim, never paint.
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const ip = scene.imageProcessingConfiguration;
+
+    expect(ip.vignetteEnabled).toBe(true);
+    expect(ip.vignetteBlendMode).toBe(ImageProcessingConfiguration.VIGNETTEMODE_MULTIPLY);
+  });
+
+  it("ships soft, and heavy is strictly more of both", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const soft = { fog: scene.fogDensity, v: scene.imageProcessingConfiguration.vignetteWeight };
+
+    applyAtmosphere(scene, "heavy");
+
+    expect(scene.fogDensity).toBeGreaterThan(soft.fog);
+    expect(scene.imageProcessingConfiguration.vignetteWeight).toBeGreaterThan(soft.v);
+  });
+
+  it("takes each biome's hue into the fog without taking its brightness", () => {
+    // Same rule as the lights: a biome is a colour, not a dimmer. Approximately
+    // and not exactly, because the void is not grey — multiplying (0.09, 0.1,
+    // 0.12) by a mean-1 tint moves the mean by a fraction of a percent, since
+    // mean(V·t) only equals mean(V)·mean(t) when one of them is flat. Two
+    // decimal places is the honest bound; anything tighter is asserting maths
+    // that is not true.
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const voidMean = (VOID_COLOR.r + VOID_COLOR.g + VOID_COLOR.b) / 3;
+
+    for (const biome of Object.values(BIOMES)) {
+      applyBiomeTint(scene, biome.tint);
+      const f = scene.fogColor;
+      expect((f.r + f.g + f.b) / 3, `${biome.id} fog mean`).toBeCloseTo(voidMean, 2);
+      expect(f.equals(VOID_COLOR), `${biome.id} fog is actually tinted`).toBe(false);
+    }
+
+    applyBiomeTint(scene, null);
+    expect(scene.fogColor.equals(VOID_COLOR)).toBe(true);
   });
 });
 
