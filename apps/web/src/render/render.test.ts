@@ -11,7 +11,7 @@ import {
 } from "@babylonjs/core";
 import { applyAtmosphere, createScene, VOID_COLOR } from "./engine";
 import { applyBiomeTint } from "./level";
-import { HAZE_HEIGHT, HAZE_MAX_SIZE, HAZE_NAME } from "./haze";
+import { HAZE_HEIGHT, HAZE_MAX_SIZE, HAZE_NAME, MOTES_NAME } from "./haze";
 import { BIOMES } from "@exiled/content-runtime";
 import { SnapshotRenderer } from "./renderer";
 import { makeMesh, updateTelegraph } from "./meshes";
@@ -174,6 +174,31 @@ describe("atmosphere", () => {
     // plane and the quad ends in a dead-straight horizontal line — at alpha 0.35
     // the frame was banded with them. Height must beat half the largest sprite.
     expect(HAZE_HEIGHT).toBeGreaterThan(HAZE_MAX_SIZE / 2);
+  });
+
+  it("floats motes in the torchlight, warm and fading in at both ends", () => {
+    engine = new NullEngine();
+    const { scene, camera } = createScene(engine);
+    const motes = scene.particleSystems.find((p) => p.name === MOTES_NAME)! as ParticleSystem;
+
+    expect(motes).toBeTruthy();
+    // Rising, or they are snow.
+    expect(motes.gravity.y).toBeGreaterThan(0);
+
+    const stops = motes.getColorGradients()!;
+    expect(stops[0]!.color1.a).toBe(0);
+    expect(stops[stops.length - 1]!.color1.a).toBe(0);
+    // Lit by the lamp, not by the room: the biome never recolours these.
+    const lit = stops[1]!.color1;
+    expect(lit.r).toBeGreaterThan(lit.b);
+    applyBiomeTint(scene, BIOMES.swamp.tint);
+    expect(motes.getColorGradients()![1]!.color1.r).toBe(lit.r);
+
+    camera.setTarget(new Vector3(-3, 0, 6), false, false, true);
+    scene.render();
+    const at = motes.emitter as Vector3;
+    expect(at.x).toBeCloseTo(-3);
+    expect(at.z).toBeCloseTo(6);
   });
 
   it("tints the haze with the biome and never lets it go opaque", () => {

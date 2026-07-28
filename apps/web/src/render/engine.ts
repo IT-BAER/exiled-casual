@@ -20,7 +20,7 @@ import {
   type Engine,
 } from "@babylonjs/core";
 import { ROCK_MESH_PREFIX } from "./rocks";
-import { createHaze } from "./haze";
+import { createHaze, createMotes } from "./haze";
 
 /**
  * Light intensities for a PBR scene. Roughly PI times the values the old
@@ -614,6 +614,7 @@ export function createScene(engine: Engine): SceneHandle {
   });
 
   createHaze(scene, camera);
+  createMotes(scene, camera);
 
   return { scene, camera, setZoom, detachZoom };
 }

@@ -123,6 +123,73 @@ function setHazeColor(ps: ParticleSystem, nr: number, ng: number, nb: number): v
   }
 }
 
+/** Motes are looked up by name too, but only by the tests: they take no tint. */
+export const MOTES_NAME = "motes";
+
+/** Small enough to read as a speck and no smaller. The camera shows about 19
+ *  world units across a ~2000px canvas, so one world unit is ~100px and this
+ *  range lands at 5 to 12 pixels. Below about 0.04 they alias into a flicker. */
+const MOTE_SIZE = { min: 0.05, max: 0.12 };
+/** Warm, because the only light down here that could catch a speck of dust is
+ *  the torch. Deliberately NOT biome-tinted for the same reason: the haze is the
+ *  room's air and takes the room's colour, a mote is lit by the lamp. */
+const MOTE_COLOR: [number, number, number] = [1.0, 0.78, 0.5];
+
+/**
+ * Ambient motes: dust caught in the torchlight, rising slowly.
+ *
+ * Emitted in a column around the player rather than across the floor, because
+ * the ones that read are the ones crossing a dark background at head height. On
+ * the floor they land on lit stone and disappear into its texture.
+ */
+export function createMotes(scene: Scene, camera: ArcRotateCamera): ParticleSystem {
+  const ps = new ParticleSystem(MOTES_NAME, 90, scene);
+  ps.particleTexture = new Texture("/textures/fx/haze.png", scene);
+  ps.blendMode = ParticleSystem.BLENDMODE_ADD;
+
+  // Inside the visible box, unlike the haze: a mote that spawns off screen has
+  // spent most of its short life before anyone could see it.
+  ps.emitter = new Vector3(0, 0, 0);
+  ps.minEmitBox = new Vector3(-7, 0.2, -7);
+  ps.maxEmitBox = new Vector3(7, 3, 7);
+
+  // Same alpha-on-both-ends rule as the haze, and for the same reason: a
+  // particle starts AT color1, so without a gradient every speck pops on.
+  const [r, g, b] = MOTE_COLOR;
+  for (const [at, a] of [
+    [0, 0],
+    [0.25, 0.9],
+    [0.7, 0.9],
+    [1, 0],
+  ] as const) {
+    ps.addColorGradient(at, new Color4(r, g, b, a));
+  }
+
+  ps.minSize = MOTE_SIZE.min;
+  ps.maxSize = MOTE_SIZE.max;
+  ps.minLifeTime = 5;
+  ps.maxLifeTime = 11;
+  ps.emitRate = 11;
+
+  // Rising, barely. Convection off a torch, not sparks off a fire: anything
+  // faster puts a burning thing in the room that the player cannot find.
+  ps.gravity = new Vector3(0, 0.035, 0);
+  ps.direction1 = new Vector3(-0.04, 0.02, -0.04);
+  ps.direction2 = new Vector3(0.04, 0.08, 0.04);
+  ps.minEmitPower = 0.1;
+  ps.maxEmitPower = 0.35;
+
+  ps.preWarmCycles = 120;
+  ps.preWarmStepOffset = 3;
+  ps.start();
+
+  scene.onBeforeRenderObservable.add(() => {
+    (ps.emitter as Vector3).set(camera.target.x, 0, camera.target.z);
+  });
+
+  return ps;
+}
+
 /**
  * Recolour the haze for a biome. Takes the same already-normalised tint the
  * lights take, so a swamp's air goes green without the room going darker.
