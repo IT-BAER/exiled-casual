@@ -49,11 +49,18 @@ describe("speedRatioFor", () => {
     expect(speedRatioFor("walk", 2.1)).toBeCloseTo(1.5, 5);
   });
 
-  it("runs the jog above a literal speed match, which reads better", () => {
-    // 3.4 is the clip's authored speed; the cadence trim trades a little foot
-    // slide for a stride that does not look sluggish.
-    expect(speedRatioFor("run", 3.4)).toBeGreaterThan(1);
-    expect(speedRatioFor("run", 3.4)).toBeLessThan(1.35);
+  it("paces the jog at exactly its own authored speed, so nothing slides", () => {
+    // 3.4 is the clip's authored ground speed. Any trim on top of that is the
+    // ground moving under a planted foot.
+    expect(speedRatioFor("run", 3.4)).toBeCloseTo(1, 5);
+  });
+
+  it("holds the jog through a corner instead of flicking to a walk", () => {
+    // The sim sheds speed into a turn; a single threshold sat inside that dip.
+    expect(clipForSpeed(2.0, "run")).toBe("run");
+    expect(clipForSpeed(2.0, "walk")).toBe("walk");
+    // Far enough down and it really is a walk again, whatever it was doing.
+    expect(clipForSpeed(1.5, "run")).toBe("walk");
   });
 
   it("still scales with speed so the legs track the movement", () => {

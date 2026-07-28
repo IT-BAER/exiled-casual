@@ -52,12 +52,14 @@ const CLIP_LOOPS: Record<RigClip, boolean> = {
 const CLIP_SPEED: Record<"walk" | "run", number> = { walk: 1.4, run: 3.4 };
 
 /**
- * Cadence trim. 1.0 matches the stride exactly to the actor's ground speed;
- * above that the legs turn over faster than strictly correct. The jog reads
- * sluggish at a literal 1.0 under this camera, and the small amount of foot
- * slide the trim introduces is not visible at this zoom.
+ * Cadence trim. 1.0 matches the stride exactly to the actor's ground speed, so
+ * the foot that is planted stays planted. It was 1.2 on the jog, bought as "a
+ * stride that does not look sluggish" against "slide not visible at this zoom"
+ * — it was visible: 20 percent of every stride is the ground moving under a
+ * foot that is not pushing it. Pace is the animator's problem, not the
+ * playback rate's.
  */
-const CADENCE: Record<"walk" | "run", number> = { walk: 1, run: 1.2 };
+const CADENCE: Record<"walk" | "run", number> = { walk: 1, run: 1 };
 
 const MIN_RATIO = 0.5;
 const MAX_RATIO = 1.8;
@@ -66,11 +68,23 @@ const MAX_RATIO = 1.8;
 const IDLE_SPEED = 0.15;
 /** Above this the jog reads better than the walk. Player base speed is 3.5. */
 const RUN_SPEED = 2.2;
+/**
+ * ...and below THIS a runner drops back to a walk. The gap is not decoration:
+ * the sim sheds speed through a corner (down to 62 percent of the run), which
+ * lands right on a single threshold and made the character flick between jog
+ * and walk for the three ticks of every turn.
+ */
+const WALK_SPEED = 1.7;
 
-/** Which locomotion clip suits a ground speed, in units/sec. */
-export function clipForSpeed(speed: number): RigClip {
+/**
+ * Which locomotion clip suits a ground speed, in units/sec. `current` is the
+ * clip already playing, which is what makes the two thresholds a hysteresis
+ * band rather than two ways to say the same thing.
+ */
+export function clipForSpeed(speed: number, current?: RigClip): RigClip {
   // Written so a NaN speed falls to idle rather than sprinting on the spot.
   if (!(speed >= IDLE_SPEED)) return "idle";
+  if (current === "run") return speed < WALK_SPEED ? "walk" : "run";
   return speed < RUN_SPEED ? "walk" : "run";
 }
 
@@ -588,7 +602,7 @@ export class RigActor {
 
   /** Pick and pace the locomotion clip from the actor's real ground speed. */
   setLocomotion(speed: number): void {
-    const clip = clipForSpeed(speed);
+    const clip = clipForSpeed(speed, this.locomotion);
     this.locomotion = clip;
     const group = this.groups.get(clip);
     if (group) group.speedRatio = speedRatioFor(clip, speed);
