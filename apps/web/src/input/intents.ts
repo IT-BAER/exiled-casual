@@ -12,11 +12,14 @@ const FLASK_KEYS: Record<string, "life" | "mana"> = {
   e: "mana",
 };
 
+// Rotated 45° to match the camera yaw (engine.ts, alpha=-π/4): screen-up is
+// world (-1,+1), screen-right is (+1,+1). The sim already normalises a diagonal
+// (player-movement.ts), so W does not outrun the old axis-aligned W.
 const MOVE_KEYS: Record<string, { dx: -1 | 0 | 1; dy: -1 | 0 | 1 }> = {
-  w: { dx: 0, dy: 1 },
-  s: { dx: 0, dy: -1 },
-  a: { dx: -1, dy: 0 },
-  d: { dx: 1, dy: 0 },
+  w: { dx: -1, dy: 1 },
+  s: { dx: 1, dy: -1 },
+  a: { dx: -1, dy: -1 },
+  d: { dx: 1, dy: 1 },
 };
 
 /**

@@ -5,25 +5,28 @@ import { fp } from "@exiled/fixed-point";
 describe("keyToIntent", () => {
   const aim = { x: 0, y: 0 };
 
-  it("w → moveDir north (+y)", () => {
+  // The camera is yawed 45° (engine.ts, alpha=-π/4), so each key is a diagonal
+  // in world terms and screen-up is world (-1,+1). Keys that read as opposites
+  // must stay exact opposites, or strafing drifts.
+  it("w → moveDir up-screen (-x,+y)", () => {
     const i = keyToIntent("w", aim);
-    expect(i).toEqual({ kind: "moveDir", dx: 0, dy: 1 });
+    expect(i).toEqual({ kind: "moveDir", dx: -1, dy: 1 });
   });
-  it("s → moveDir south (-y)", () => {
+  it("s → moveDir down-screen (+x,-y)", () => {
     const i = keyToIntent("s", aim);
-    expect(i).toEqual({ kind: "moveDir", dx: 0, dy: -1 });
+    expect(i).toEqual({ kind: "moveDir", dx: 1, dy: -1 });
   });
-  it("a → moveDir west (-x)", () => {
+  it("a → moveDir left-screen (-x,-y)", () => {
     const i = keyToIntent("a", aim);
-    expect(i).toEqual({ kind: "moveDir", dx: -1, dy: 0 });
+    expect(i).toEqual({ kind: "moveDir", dx: -1, dy: -1 });
   });
-  it("d → moveDir east (+x)", () => {
+  it("d → moveDir right-screen (+x,+y)", () => {
     const i = keyToIntent("d", aim);
-    expect(i).toEqual({ kind: "moveDir", dx: 1, dy: 0 });
+    expect(i).toEqual({ kind: "moveDir", dx: 1, dy: 1 });
   });
 
-  it("uppercase W (CapsLock/Shift) → moveDir north (+y)", () => {
-    expect(keyToIntent("W", aim)).toEqual({ kind: "moveDir", dx: 0, dy: 1 });
+  it("uppercase W (CapsLock/Shift) → moveDir up-screen", () => {
+    expect(keyToIntent("W", aim)).toEqual({ kind: "moveDir", dx: -1, dy: 1 });
   });
 
   it("1 → useSkill ember_bolt aimed at aim point", () => {

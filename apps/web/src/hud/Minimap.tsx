@@ -139,9 +139,19 @@ function makeFog(grid: WalkableGrid): HTMLCanvasElement {
 }
 
 /**
- * World point to canvas pixel. The camera sits at `alpha = -PI/2` (`engine.ts`),
- * so world +y is up the screen — while canvas y counts down. Without the flip
- * the marker walks south when the player walks north.
+ * The camera yaw, in canvas terms. `engine.ts` sits at `alpha = -PI/4`, so the
+ * map has to lean the same 45° or it stops agreeing with the view. A square
+ * turned 45° needs sqrt(2) more room, so `FIT` gives it back.
+ */
+const YAW = Math.PI / 4;
+const YAW_COS = Math.cos(YAW);
+const YAW_SIN = Math.sin(YAW);
+const FIT = Math.SQRT1_2;
+
+/**
+ * World point to canvas pixel: flip, then yaw. World +y is up the screen while
+ * canvas y counts down, and without that flip the marker walks south when the
+ * player walks north.
  */
 export function toCanvas(
   grid: WalkableGrid,
@@ -150,9 +160,13 @@ export function toCanvas(
   w: number,
   h: number,
 ): [number, number] {
+  const x = ((wx - grid.originX) / grid.cellSize / grid.cols) * w;
+  const y = h - ((wy - grid.originY) / grid.cellSize / grid.rows) * h;
+  const dx = (x - w / 2) * FIT;
+  const dy = (y - h / 2) * FIT;
   return [
-    ((wx - grid.originX) / grid.cellSize / grid.cols) * w,
-    h - ((wy - grid.originY) / grid.cellSize / grid.rows) * h,
+    w / 2 + dx * YAW_COS - dy * YAW_SIN,
+    h / 2 + dx * YAW_SIN + dy * YAW_COS,
   ];
 }
 
@@ -228,6 +242,10 @@ export function Minimap({ layout, player }: MinimapProps): React.JSX.Element | n
     // to the box, and the fog comes up, so neither edge shows its cells. Both
     // are flipped, for the reason `toCanvas` gives.
     ctx.save();
+    ctx.translate(w / 2, h / 2);
+    ctx.rotate(YAW);
+    ctx.scale(FIT, FIT);
+    ctx.translate(-w / 2, -h / 2);
     ctx.translate(0, h);
     ctx.scale(1, -1);
     ctx.imageSmoothingEnabled = true;

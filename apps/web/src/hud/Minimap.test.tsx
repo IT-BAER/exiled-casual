@@ -32,19 +32,19 @@ describe("Minimap", () => {
     ).not.toThrow();
   });
 
-  it("puts north up and east right, as the camera does", () => {
-    // The camera looks from -z (engine.ts, alpha = -PI/2), so world +y is up the
-    // screen. Canvas y counts the other way, so walking north must LOWER the
-    // marker's canvas y — that flip is what the marker gets wrong when it walks
-    // backwards on the minimap.
+  it("leans 45°, as the camera does", () => {
+    // The camera is yawed (engine.ts, alpha = -PI/4), so world +y runs UP-RIGHT
+    // the screen and world +x DOWN-RIGHT. Canvas y counts down, which is the
+    // flip the marker gets wrong when it walks backwards on the minimap.
     const g = layout.grid;
     const mid = { x: g.originX + 20, y: g.originY + 20 };
-    const [, southY] = toCanvas(g, mid.x, mid.y, 100, 100);
-    const [, northY] = toCanvas(g, mid.x, mid.y + 8, 100, 100);
-    expect(northY).toBeLessThan(southY);
-    const [westX] = toCanvas(g, mid.x, mid.y, 100, 100);
-    const [eastX] = toCanvas(g, mid.x + 8, mid.y, 100, 100);
-    expect(eastX).toBeGreaterThan(westX);
+    const [ox, oy] = toCanvas(g, mid.x, mid.y, 100, 100);
+    const [nx, ny] = toCanvas(g, mid.x, mid.y + 8, 100, 100);
+    expect(ny).toBeLessThan(oy);
+    expect(nx).toBeGreaterThan(ox);
+    const [ex, ey] = toCanvas(g, mid.x + 8, mid.y, 100, 100);
+    expect(ex).toBeGreaterThan(ox);
+    expect(ey).toBeGreaterThan(oy);
   });
 
   it("keeps its own explored state per area, not across areas", () => {

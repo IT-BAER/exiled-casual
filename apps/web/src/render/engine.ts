@@ -119,12 +119,14 @@ export function createScene(engine: Engine): SceneHandle {
 
   // Top-down-ish camera: positioned above the origin, looking down at the
   // ground plane (xz). Alpha=0, beta=π/4 gives a comfortable isometric feel.
-  // alpha=-π/2 puts the camera on the -Z side looking toward +Z, so world +x =
-  // screen-right and world +z (sim +y) = screen-up — WASD then matches the view.
+  // alpha=-π/4 yaws the view 45° off the grid, the diagonal PoE reads at: world
+  // +x goes down-right and world +z (sim +y) up-right, so a room's walls run as
+  // two receding diagonals instead of a flat box. WASD is rotated to match in
+  // `intents.ts`, and the minimap by the same angle in `Minimap.tsx`.
   // beta ~0.72 (≈49° elevation) is the isometric tilt.
   const camera = new ArcRotateCamera(
     "cam",
-    -Math.PI / 2,
+    -Math.PI / 4,
     0.72,
     40,
     Vector3.Zero(),
