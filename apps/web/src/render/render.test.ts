@@ -282,6 +282,45 @@ describe("SnapshotRenderer", () => {
     expect(mesh.rotation.y).toBeCloseTo(spawnYaw - Math.PI / 16, 4);
   });
 
+  it("banks into a turn and stands back up on the straight", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const renderer = new SnapshotRenderer(scene);
+
+    // Running +x, then cornering into +y for a while.
+    let prev = makeSnapshot({ player: testPlayer() });
+    renderer.apply(null, prev, 1);
+    const mesh = scene.getMeshByName("entity-0")!;
+    // Long enough to have finished turning onto the run itself: the spawn
+    // heading faces the camera, and leaving it IS a corner.
+    for (let i = 1; i <= 40; i++) {
+      const next = makeSnapshot({ player: testPlayer({ x: i * 0.1 }) });
+      renderer.apply(prev, next, 1);
+      prev = next;
+    }
+    expect(Math.abs(mesh.rotation.z)).toBeLessThan(0.01); // straight line, no bank
+    const corner = { x: 4, y: 0 };
+    for (let i = 1; i <= 6; i++) {
+      corner.y += 0.1;
+      const next = makeSnapshot({ player: testPlayer({ ...corner }) });
+      renderer.apply(prev, next, 1);
+      prev = next;
+    }
+    const banked = mesh.rotation.z;
+    expect(Math.abs(banked)).toBeGreaterThan(0.02);
+    // Leaning INTO the corner: a right-hand turn (yaw falling) rolls one way.
+    expect(Math.sign(banked)).toBe(1);
+
+    // Out of the corner, the body comes back up on its own.
+    for (let i = 1; i <= 30; i++) {
+      corner.y += 0.1;
+      const next = makeSnapshot({ player: testPlayer({ ...corner }) });
+      renderer.apply(prev, next, 1);
+      prev = next;
+    }
+    expect(Math.abs(mesh.rotation.z)).toBeLessThan(Math.abs(banked) / 2);
+  });
+
   it("swings a monster's legs while it walks and rests them when it stops", () => {
     engine = new NullEngine();
     const { scene } = createScene(engine);

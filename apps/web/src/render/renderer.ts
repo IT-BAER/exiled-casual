@@ -46,6 +46,27 @@ const TELEPORT_STEP = 2;
 /** Chest height, where the character actually vanishes from. */
 const BLINK_Y = 0.9;
 
+/**
+ * Only bodies lean. A portal or a chest carries a fixed yaw and no weight, and
+ * a rolled map device is furniture someone knocked over.
+ */
+const TILTS = new Set<MeshKind>(["player", "monster", "rare", "boss"]);
+
+/**
+ * Radians of roll per radian-per-second of turn, and the stop it runs into.
+ * A hard corner turns ~7 rad/s, which at these numbers banks about 9 degrees:
+ * enough to read as weight at this camera distance, short of the motorcycle
+ * lean that a walking animation cannot sell.
+ */
+const ROLL_PER_TURN_RATE = 0.022;
+const MAX_ROLL = 0.16;
+/** Forward lean at a full run. Small: the gait already sells the pace. */
+const RUN_PITCH = 0.05;
+/** Sim units per second that count as a full run, for scaling both tilts. */
+const RUN_SPEED = 3;
+/** Per-frame ease onto the target tilt, so the body settles rather than snaps. */
+const TILT_EASE = 0.12;
+
 /** Rising edge of the sim's casting flag, i.e. a cast just started this tick. */
 function didCast(prev: Snapshot, next: Snapshot): boolean {
   return next.player.casting && !prev.player.casting;
@@ -72,6 +93,8 @@ export class SnapshotRenderer {
   private readonly meshes = new Map<number, Mesh>();
   /** Walk-cycle position per entity, advanced by distance walked (radians/unit). */
   private readonly gait = new Map<number, number>();
+  /** Current [roll, pitch] per entity, eased toward the lean the run asks for. */
+  private readonly tilt = new Map<number, [number, number]>();
   private static readonly GAIT_PER_UNIT = 3.2;
   /** apply() runs several times per snapshot while interpolating; once-per-tick
    *  work (like firing a cast animation) is gated on this. */
@@ -184,6 +207,7 @@ export class SnapshotRenderer {
         mesh.dispose();
         this.meshes.delete(id);
         this.gait.delete(id);
+        this.tilt.delete(id);
       }
     }
 
@@ -262,7 +286,38 @@ export class SnapshotRenderer {
     const dx = nextX - prevX;
     const dz = nextY - prevY;
     if (dx * dx + dz * dz > 1e-6) {
-      mesh.rotation.y = lerpAngle(mesh.rotation.y, Math.atan2(dx, dz), 0.25);
+      const wasYaw = mesh.rotation.y;
+      mesh.rotation.y = lerpAngle(wasYaw, Math.atan2(dx, dz), 0.25);
+      this.lean(id, mesh, kind, mesh.rotation.y - wasYaw, speed);
     }
+  }
+
+  /**
+   * Bank into the corner, and lead with the chest down the straight.
+   *
+   * Both are one rotation of the root, which pivots on the feet, so the lean
+   * comes out of the ground the way a runner's does rather than about his
+   * navel. Roll is read off how fast the actor is TURNING and pitch off how
+   * fast it is going, and both are eased rather than set, so the body arrives
+   * in the lean after the turn has started and leaves it after the turn ends —
+   * which is the whole reason it reads as weight and not as a tilted sprite.
+   */
+  private lean(id: number, mesh: Mesh, kind: MeshKind, yawStep: number, speed: number): void {
+    if (!TILTS.has(kind)) return;
+    // Per second, not per frame: a 165Hz display turns in smaller bites than a
+    // 60Hz one and would otherwise lean a third as far for the same corner.
+    const dt = Math.max(this.scene.getEngine().getDeltaTime(), 1) / 1000;
+    const runFrac = Math.min(1, speed / RUN_SPEED);
+    // Negated: a positive roll about the facing axis drops the OUTSIDE shoulder,
+    // which is a runner falling out of his own corner.
+    const raw = -(yawStep / dt) * ROLL_PER_TURN_RATE * runFrac;
+    const rollTo = Math.max(-MAX_ROLL, Math.min(MAX_ROLL, raw));
+    const pitchTo = RUN_PITCH * runFrac;
+    const [roll, pitch] = this.tilt.get(id) ?? [0, 0];
+    const nextRoll = lerp(roll, rollTo, TILT_EASE);
+    const nextPitch = lerp(pitch, pitchTo, TILT_EASE);
+    this.tilt.set(id, [nextRoll, nextPitch]);
+    mesh.rotation.z = nextRoll;
+    mesh.rotation.x = nextPitch;
   }
 }
