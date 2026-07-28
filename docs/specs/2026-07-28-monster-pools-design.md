@@ -175,8 +175,9 @@ because it is the loudest, and three per map is a fight, ten is a chore.
 field.
 
 Per socket: roll an archetype, then spawn **that archetype's count** at the socket, spread by
-`PACK_SPREAD`. That constant grows from 3 entries to 5, because a swarm of 4 plus a pack-size
-extra pass needs 5 distinct offsets and today's third entry would be reused on top of itself.
+`PACK_SPREAD`. That constant grows from 3 entries to 8: the largest pack is a swarm of 4, a 100%
+pack-size roll doubles it, and at anything under 8 the extras land back on top of the first three
+and a doubled swarm reads as four monsters rather than eight.
 
 **The socket contract is unchanged**: the generator owns where a fight may stand, and content may
 never place a monster the layout did not sanction. Pack-size from the Waystone keeps working as it
