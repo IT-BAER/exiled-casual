@@ -1,4 +1,4 @@
-import { fp, fpMul } from "@exiled/fixed-point";
+import { fp, fpDist2, fpMul } from "@exiled/fixed-point";
 import { makeRare, mapBaseIdForNode, monsterTierScale, waystoneScaleFor } from "@exiled/rules";
 import { MONSTERS, PACK_COUNT, mapBase, pickPack, rareTemplate } from "@exiled/content-runtime";
 import { ELEMENTS, type MonsterDef } from "@exiled/content-schema";
@@ -179,8 +179,15 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
     const rnd = mulberry32(session.mapSeed ^ 0x9e37);
     const frac = () => rnd() / 0x100000000;
     const spawns = layout.spawnSockets;
+    // The socket itself is a sanctioned distance from the entrance; the ring
+    // offset is not. Mirroring an offset that would land closer to "start" onto
+    // the far side keeps every member at least as far out as its socket, so a
+    // pack can never wake on its own the moment the player steps off the portal.
+    const startAnchor = anchor(layout, "start");
+    const startX = fp(startAnchor.x), startY = fp(startAnchor.y);
     for (let i = 0; i < spawns.length; i++) {
       const s = spawns[i]!;
+      const sx = fp(s.x), sy = fp(s.y);
       const base = withMonsterRes(pickPack(biomeId, frac()), ws.monsterResAdd);
       // Pack size adds to the pack the socket already has. The generator owns
       // where a fight can stand, so a modifier adds bodies to a sanctioned
@@ -195,7 +202,11 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
         // demands the same resistance and a replay of it stays identical.
         const def = rare ? makeRare(base, rareTemplate(session.mapSeed)) : base;
         const ring = PACK_SPREAD[j % PACK_SPREAD.length]!;
-        spawnMonster(world, def, fp(s.x) + ring.dx, fp(s.y) + ring.dy, rare, scale);
+        const nearX = sx + ring.dx, nearY = sy + ring.dy;
+        const farX = sx - ring.dx, farY = sy - ring.dy;
+        const useFar = fpDist2(startX, startY, farX, farY) > fpDist2(startX, startY, nearX, nearY);
+        const x = useFar ? farX : nearX, y = useFar ? farY : nearY;
+        spawnMonster(world, def, x, y, rare, scale);
       }
     }
 
