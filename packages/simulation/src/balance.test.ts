@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { fp } from "@exiled/fixed-point";
 import { baseCasterStats, burningTickDamage, AILMENT_TICK_INTERVAL } from "@exiled/rules";
-import { MONSTERS, SKILLS, RARE_TEMPLATES } from "@exiled/content-runtime";
+import { MONSTERS, SKILLS, RARE_TEMPLATES, MONSTER_POOLS, PACK_COUNT } from "@exiled/content-runtime";
+import type { BiomeId, MonsterDef } from "@exiled/content-schema";
 import { makeRare } from "@exiled/rules";
 import { createCombatSim, spawnLabActors } from "./combat-sim";
 import { spawnMonster } from "./areas";
@@ -282,4 +283,61 @@ describe("time to death, player standing still and doing nothing", () => {
     const dps = (perTick * HZ) / AILMENT_TICK_INTERVAL;
     expect(baseCasterStats().maxLifeFixed / dps).toBeGreaterThan(4);
   });
+});
+
+/**
+ * Spawn `count` monsters of `def` in a spread line at SPAWN_Y and return the
+ * seconds until the reference player clears them all. Player is unkillable
+ * (offence only), matching the contract of ticksToClear.
+ */
+function secondsToClearPack(def: MonsterDef, count: number): number {
+  const r = rig();
+  for (let i = 0; i < count; i++) {
+    spawnMonster(r.world, def, fp((i - Math.floor(count / 2)) * 1.4), SPAWN_Y, false);
+  }
+  return ticksToClear(r).ticks / HZ;
+}
+
+/**
+ * Spawn one socket of every species in the biome (PACK_COUNT per archetype)
+ * and return the seconds until an idle, non-casting player dies. Models the
+ * "worst pack room" for the biome at Tier 1 with no gear.
+ */
+function secondsToKillIdlePlayer(biomeId: BiomeId): number {
+  const r = rig();
+  let offset = 0;
+  for (const entry of MONSTER_POOLS[biomeId]) {
+    const def = MONSTERS.get(entry.defId)!;
+    const count = PACK_COUNT[def.archetype];
+    for (let i = 0; i < count; i++) {
+      spawnMonster(r.world, def, fp((offset + i) * 1.5 - 2), SPAWN_Y, false);
+    }
+    offset += count;
+  }
+  return ticksToDeath(r) / HZ;
+}
+
+describe("archetype time-to-kill (Tier 1, reference character)", () => {
+  const bands: Record<string, { defId: string; min: number; max: number }> = {
+    swarm:   { defId: "monster.vaal_husk.v1",      min: 2, max: 4 },
+    brute:   { defId: "monster.vaal_construct.v1", min: 4, max: 7 },
+    shooter: { defId: "monster.dune_spitter.v1",   min: 2, max: 5 },
+    heavy:   { defId: "monster.blood_sentinel.v1", min: 3, max: 6 },
+  };
+
+  for (const [archetype, band] of Object.entries(bands)) {
+    it(`${archetype} dies in ${band.min}-${band.max}s`, () => {
+      const def = MONSTERS.get(band.defId)!;
+      const count = PACK_COUNT[def.archetype];
+      const seconds = secondsToClearPack(def, count);
+      expect(seconds).toBeGreaterThanOrEqual(band.min);
+      expect(seconds).toBeLessThanOrEqual(band.max);
+    });
+  }
+});
+
+it("a full biome pack kills a stationary reference character in under 12s", () => {
+  // One socket of each of Vaal Stone's three archetypes (swarm+brute+heavy), no dodge.
+  const seconds = secondsToKillIdlePlayer("vaal_stone");
+  expect(seconds).toBeLessThan(12);
 });

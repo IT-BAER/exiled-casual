@@ -63,21 +63,32 @@ const MONSTER_DEFS: MonsterDef[] = [
   // constructs and one thing that swings something too big for a corridor.
   {
     id: "monster.vaal_husk.v1", name: "Vaal Husk", archetype: "swarm",
-    maxLifeFixed: fp(24), moveSpeedFixed: fp(3.0), attackRangeFixed: fp(1.1),
+    // 88 is the measured number: at 24, four husks fell in 0.83s — faster than
+    // a lone imp, which is the wrong feel for a pack. 88 scales that to ~3s,
+    // inside the 2-4s swarm band. See balance.test.ts "swarm dies in 2-4s".
+    maxLifeFixed: fp(88), moveSpeedFixed: fp(3.0), attackRangeFixed: fp(1.1),
     attackDamage: { type: "physical", amountFixed: fp(4) },
     attackCooldownTicks: 40, radiusFixed: fp(0.42),
     defenses: { resPct: resBlock(), armourFixed: fp(0) },
   },
   {
     id: "monster.vaal_construct.v1", name: "Vaal Construct", archetype: "brute",
-    maxLifeFixed: fp(140), moveSpeedFixed: fp(1.45), attackRangeFixed: fp(1.6),
+    // 460 is the measured number: at 140, the construct fell in 1.1s — faster
+    // than the swarm pack it is supposed to outlast. At 700 it took 9.1s (over
+    // band); at 420 it took 3.77s (under band). Armour makes the curve non-linear:
+    // marginal rate 52 life/s between those points, so +38 life → 458, rounded to
+    // 460. Targets ~4.5s inside the 4-7s brute band. See balance.test.ts "brute dies in 4-7s".
+    maxLifeFixed: fp(460), moveSpeedFixed: fp(1.45), attackRangeFixed: fp(1.6),
     attackDamage: { type: "physical", amountFixed: fp(13) },
     attackCooldownTicks: 75, radiusFixed: fp(0.85),
     defenses: { resPct: resBlock(), armourFixed: fp(4) },
   },
   {
     id: "monster.blood_sentinel.v1", name: "Blood Sentinel", archetype: "heavy",
-    maxLifeFixed: fp(88), moveSpeedFixed: fp(1.8), attackRangeFixed: fp(1.8),
+    // 480 is the measured number: at 88, the sentinel fell in 0.83s — same as
+    // a swarm, which drains the telegraph of all meaning. 480 targets ~4.5s,
+    // inside the 3-6s heavy band. See balance.test.ts "heavy dies in 3-6s".
+    maxLifeFixed: fp(480), moveSpeedFixed: fp(1.8), attackRangeFixed: fp(1.8),
     attackDamage: { type: "chaos", amountFixed: fp(8) },
     attackCooldownTicks: 45, radiusFixed: fp(0.8),
     defenses: { resPct: resBlock({ chaos: 30 }), armourFixed: fp(2) },
@@ -87,14 +98,20 @@ const MONSTER_DEFS: MonsterDef[] = [
   // --- Desert: swarm, shooter, heavy. Nothing here holds a line; it circles.
   {
     id: "monster.sand_skitterer.v1", name: "Sand Skitterer", archetype: "swarm",
-    maxLifeFixed: fp(24), moveSpeedFixed: fp(3.0), attackRangeFixed: fp(1.1),
+    // Same archetype life budget as vaal_husk (88): swarm band is 2-4s regardless
+    // of biome — only the element and flavour differ. Measured via vaal_husk at
+    // 0.83s/24, scaled to 3s target. See balance.test.ts "swarm dies in 2-4s".
+    maxLifeFixed: fp(88), moveSpeedFixed: fp(3.0), attackRangeFixed: fp(1.1),
     attackDamage: { type: "physical", amountFixed: fp(4) },
     attackCooldownTicks: 40, radiusFixed: fp(0.42),
     defenses: { resPct: resBlock({ fire: 20 }), armourFixed: fp(0) },
   },
   {
     id: "monster.dune_spitter.v1", name: "Dune Spitter", archetype: "shooter",
-    maxLifeFixed: fp(32), moveSpeedFixed: fp(2.15), attackRangeFixed: fp(7.5),
+    // 108 is the measured number: at 32, two spitters fell in 1.03s — well short
+    // of the 2-5s shooter band. 108 scales that to ~3.5s target. See
+    // balance.test.ts "shooter dies in 2-5s".
+    maxLifeFixed: fp(108), moveSpeedFixed: fp(2.15), attackRangeFixed: fp(7.5),
     attackDamage: { type: "chaos", amountFixed: fp(8) },
     attackCooldownTicks: 70, radiusFixed: fp(0.5),
     defenses: { resPct: resBlock({ chaos: 25 }), armourFixed: fp(0.5) },
@@ -102,10 +119,10 @@ const MONSTER_DEFS: MonsterDef[] = [
   },
   {
     id: "monster.sunbaked_colossus.v1", name: "Sunbaked Colossus", archetype: "heavy",
-    maxLifeFixed: fp(88), moveSpeedFixed: fp(1.8), attackRangeFixed: fp(1.8),
-    // 25 and not 40: fire is the only element the player owns, and 40% against
-    // it is a wall rather than a choice — the same reasoning that set the
-    // Warden's fire resistance below.
+    // 480: same heavy budget as blood_sentinel, measured via that species at 0.83s/88
+    // and scaled to 3-6s band. 25% fire res not 40% for the same reason as the Warden:
+    // fire is the only element the player owns.
+    maxLifeFixed: fp(480), moveSpeedFixed: fp(1.8), attackRangeFixed: fp(1.8),
     attackDamage: { type: "fire", amountFixed: fp(8) },
     attackCooldownTicks: 45, radiusFixed: fp(0.8),
     defenses: { resPct: resBlock({ fire: 25 }), armourFixed: fp(2) },
@@ -115,14 +132,19 @@ const MONSTER_DEFS: MonsterDef[] = [
   // --- Swamp: brute, shooter, heavy. Slow, wet, and nothing you can outrun in a line.
   {
     id: "monster.bog_drowned.v1", name: "Bog Drowned", archetype: "brute",
-    maxLifeFixed: fp(140), moveSpeedFixed: fp(1.45), attackRangeFixed: fp(1.6),
+    // 460: same brute budget as vaal_construct; measured at 1.1s/140, 9.1s/700,
+    // 3.77s/420. Marginal rate 52 life/s, target 4.5s → 460. One armour less
+    // (3 vs 4) means marginally faster — still inside 4-7s band.
+    maxLifeFixed: fp(460), moveSpeedFixed: fp(1.45), attackRangeFixed: fp(1.6),
     attackDamage: { type: "physical", amountFixed: fp(13) },
     attackCooldownTicks: 75, radiusFixed: fp(0.85),
     defenses: { resPct: resBlock({ cold: 20 }), armourFixed: fp(3) },
   },
   {
     id: "monster.fen_wisp.v1", name: "Fen Wisp", archetype: "shooter",
-    maxLifeFixed: fp(32), moveSpeedFixed: fp(2.15), attackRangeFixed: fp(7.5),
+    // 108: same shooter budget as dune_spitter, measured at 1.03s/32 and scaled
+    // to 2-5s band (target 3.5s). See balance.test.ts "shooter dies in 2-5s".
+    maxLifeFixed: fp(108), moveSpeedFixed: fp(2.15), attackRangeFixed: fp(7.5),
     attackDamage: { type: "lightning", amountFixed: fp(8) },
     attackCooldownTicks: 70, radiusFixed: fp(0.5),
     defenses: { resPct: resBlock({ lightning: 30 }), armourFixed: fp(0.5) },
@@ -130,7 +152,9 @@ const MONSTER_DEFS: MonsterDef[] = [
   },
   {
     id: "monster.rotting_behemoth.v1", name: "Rotting Behemoth", archetype: "heavy",
-    maxLifeFixed: fp(88), moveSpeedFixed: fp(1.8), attackRangeFixed: fp(1.8),
+    // 480: same heavy budget as blood_sentinel, measured at 0.83s/88 and scaled
+    // to 3-6s band (target 4.5s).
+    maxLifeFixed: fp(480), moveSpeedFixed: fp(1.8), attackRangeFixed: fp(1.8),
     attackDamage: { type: "physical", amountFixed: fp(8) },
     attackCooldownTicks: 45, radiusFixed: fp(0.8),
     defenses: { resPct: resBlock({ chaos: 20 }), armourFixed: fp(2) },
@@ -141,21 +165,28 @@ const MONSTER_DEFS: MonsterDef[] = [
   // and the only one that never lets you stand still.
   {
     id: "monster.bramble_whelp.v1", name: "Bramble Whelp", archetype: "swarm",
-    maxLifeFixed: fp(24), moveSpeedFixed: fp(3.0), attackRangeFixed: fp(1.1),
+    // 88: same swarm budget as vaal_husk, measured at 0.83s/24 and scaled to
+    // 2-4s band (target 3s). See balance.test.ts "swarm dies in 2-4s".
+    maxLifeFixed: fp(88), moveSpeedFixed: fp(3.0), attackRangeFixed: fp(1.1),
     attackDamage: { type: "physical", amountFixed: fp(4) },
     attackCooldownTicks: 40, radiusFixed: fp(0.42),
     defenses: { resPct: resBlock(), armourFixed: fp(0) },
   },
   {
     id: "monster.thornhide_boar.v1", name: "Thornhide Boar", archetype: "brute",
-    maxLifeFixed: fp(140), moveSpeedFixed: fp(1.45), attackRangeFixed: fp(1.6),
+    // 460: same brute budget as vaal_construct; measured at 1.1s/140, 9.1s/700,
+    // 3.77s/420. Marginal rate 52 life/s, target 4.5s → 460. See balance.test.ts
+    // "brute dies in 4-7s".
+    maxLifeFixed: fp(460), moveSpeedFixed: fp(1.45), attackRangeFixed: fp(1.6),
     attackDamage: { type: "physical", amountFixed: fp(13) },
     attackCooldownTicks: 75, radiusFixed: fp(0.85),
     defenses: { resPct: resBlock({ cold: 15 }), armourFixed: fp(3) },
   },
   {
     id: "monster.hoarfrost_spitter.v1", name: "Hoarfrost Spitter", archetype: "shooter",
-    maxLifeFixed: fp(32), moveSpeedFixed: fp(2.15), attackRangeFixed: fp(7.5),
+    // 108: same shooter budget as dune_spitter, measured at 1.03s/32 and scaled
+    // to 2-5s band (target 3.5s). See balance.test.ts "shooter dies in 2-5s".
+    maxLifeFixed: fp(108), moveSpeedFixed: fp(2.15), attackRangeFixed: fp(7.5),
     attackDamage: { type: "cold", amountFixed: fp(8) },
     attackCooldownTicks: 70, radiusFixed: fp(0.5),
     defenses: { resPct: resBlock({ cold: 30 }), armourFixed: fp(0.5) },
