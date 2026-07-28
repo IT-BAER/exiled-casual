@@ -63,12 +63,16 @@ function bulge(loop: TileXY[], rng: RandomStream): void {
   }
 }
 
+function openEdge(masks: Uint8Array, tx: number, ty: number, d: number): void {
+  masks[idx(tx, ty)] = masks[idx(tx, ty)]! | (1 << d);
+}
+
 function connect(masks: Uint8Array, a: TileXY, b: TileXY): void {
   const dx = b.tx - a.tx, dy = b.ty - a.ty;
   const d = DIR_VEC.findIndex(([vx, vy]) => vx === dx && vy === dy);
   if (d < 0) return;
-  masks[idx(a.tx, a.ty)] |= 1 << d;
-  masks[idx(b.tx, b.ty)] |= 1 << ((d + 2) % 4);
+  openEdge(masks, a.tx, a.ty, d);
+  openEdge(masks, b.tx, b.ty, (d + 2) % 4);
 }
 
 function bfs(masks: Uint8Array, start: TileXY): Uint8Array {
@@ -151,7 +155,7 @@ export function generateSkeleton(rng: RandomStream, branchCount: number): Skelet
     }
   }
   if (!placed) return null; // no legal boss block; the caller falls back
-  masks[idx(placed.anchor.tx, placed.anchor.ty)] |= 1 << placed.dir;
+  openEdge(masks, placed.anchor.tx, placed.anchor.ty, placed.dir);
   const bossBlock: number[] = [];
   for (let k = 0; k < 4; k++) {
     const i = idx(placed.bx + (k % 2), placed.by + (k < 2 ? 0 : 1));
