@@ -26,14 +26,14 @@ const AREA = 14;
  * The cost is that this is not literally ground-hugging mist any more. At a 45°
  * camera it is indistinguishable, and a visible straight cut is not.
  */
-export const HAZE_HEIGHT = 3.4;
-/** Kept small for the reason above, not for fill rate: bigger sprites are what
- *  forced the height up in the first place. */
-export const HAZE_MAX_SIZE = 6;
+export const HAZE_HEIGHT = 4.6;
+/** Grows with the size gradient below (x1.25 at end of life), so the height has
+ *  to clear half of `MAX_SIZE * 1.25`, not half of this. */
+export const HAZE_MAX_SIZE = 7;
 /** Additive, so this is intensity and not opacity. The torch pool is the thing
  *  the frame is built around; haze thick enough to be noticed on its own has
  *  already washed the pool out. */
-const ALPHA = 0.22;
+const ALPHA = 0.15;
 
 /**
  * Slow-drifting ground haze centred on the player.
@@ -57,12 +57,15 @@ export function createHaze(scene: Scene, camera: ArcRotateCamera): ParticleSyste
   ps.minEmitBox = new Vector3(-AREA, -0.2, -AREA);
   ps.maxEmitBox = new Vector3(AREA, 0.3, AREA);
 
-  ps.color1 = new Color4(0.62, 0.68, 0.78, ALPHA);
-  ps.color2 = new Color4(0.75, 0.76, 0.8, ALPHA);
-  ps.colorDead = new Color4(0.6, 0.66, 0.76, 0);
+  setHazeColor(ps, 1, 1, 1);
 
-  ps.minSize = 3;
+  ps.minSize = 3.8;
   ps.maxSize = HAZE_MAX_SIZE;
+  // Grow across the life. A sprite that appears at its final size announces the
+  // moment it appeared even when its alpha ramps; drifting outward as it fades
+  // in is what makes the arrival read as movement instead of as a spawn.
+  ps.addSizeGradient(0, 0.7);
+  ps.addSizeGradient(1, 1.25);
   // Long, because the fade in and out IS the effect: a short life makes the
   // field visibly repopulate, which the eye catches as blinking.
   ps.minLifeTime = 14;
@@ -94,13 +97,37 @@ export function createHaze(scene: Scene, camera: ArcRotateCamera): ParticleSyste
 }
 
 /**
+ * Alpha over the particle's life, as a gradient and NOT as color1/colorDead.
+ *
+ * Babylon starts a particle AT `color1` and only interpolates toward `colorDead`
+ * from there, so a system built that way fades every sprite out and pops every
+ * sprite in at full intensity — which is what the field visibly did. A gradient
+ * is the only way to get the ramp on both ends. The plateau is deliberately
+ * short at each end (0.18 / 0.82) so most of the life is spent at full value and
+ * the fade is never slow enough to look like a dimmer being turned.
+ *
+ * Colour gradients OVERRIDE color1/color2/colorDead entirely; setting both is
+ * how you get a system that ignores half its own configuration.
+ */
+const STOPS: readonly [number, number][] = [
+  [0, 0],
+  [0.18, ALPHA],
+  [0.82, ALPHA],
+  [1, 0],
+];
+
+function setHazeColor(ps: ParticleSystem, nr: number, ng: number, nb: number): void {
+  for (const [at] of STOPS) ps.removeColorGradient(at);
+  for (const [at, a] of STOPS) {
+    ps.addColorGradient(at, new Color4(0.68 * nr, 0.71 * ng, 0.79 * nb, a));
+  }
+}
+
+/**
  * Recolour the haze for a biome. Takes the same already-normalised tint the
  * lights take, so a swamp's air goes green without the room going darker.
  */
 export function tintHaze(scene: Scene, nr: number, ng: number, nb: number): void {
   const ps = scene.particleSystems.find((p) => p.name === HAZE_NAME) as ParticleSystem | undefined;
-  if (!ps) return;
-  ps.color1 = new Color4(0.62 * nr, 0.68 * ng, 0.78 * nb, ALPHA);
-  ps.color2 = new Color4(0.75 * nr, 0.76 * ng, 0.8 * nb, ALPHA);
-  ps.colorDead = new Color4(0.6 * nr, 0.66 * ng, 0.76 * nb, 0);
+  if (ps) setHazeColor(ps, nr, ng, nb);
 }

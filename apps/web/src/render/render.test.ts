@@ -182,11 +182,20 @@ describe("atmosphere", () => {
     const haze = scene.particleSystems.find((p) => p.name === HAZE_NAME)! as ParticleSystem;
 
     applyBiomeTint(scene, BIOMES.desert.tint);
+    const stops = haze.getColorGradients()!;
 
-    expect(haze.color1.r).toBeGreaterThan(haze.color1.b); // desert is warm
+    // Read from the GRADIENTS, not color1/colorDead: gradients override those
+    // entirely, so a system carrying both is ignoring half its configuration.
+    expect(stops.length).toBeGreaterThan(2);
+    const mid = stops[1]!.color1;
+    expect(mid.r).toBeGreaterThan(mid.b); // desert is warm
     // Additive, so alpha is intensity. Thick enough to notice on its own has
     // already washed out the torch pool the frame is built around.
-    expect(haze.color1.a).toBeLessThan(0.4);
+    expect(mid.a).toBeLessThan(0.4);
+    // Both ends at zero. Babylon starts a particle AT color1, so a system built
+    // on color1/colorDead fades every sprite out and POPS every one in.
+    expect(stops[0]!.color1.a).toBe(0);
+    expect(stops[stops.length - 1]!.color1.a).toBe(0);
   });
 });
 
