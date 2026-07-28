@@ -22,6 +22,7 @@ const testMonsters: ReadonlyMap<string, MonsterDef> = new Map([
     {
       id: "boss.test",
       name: "Test Boss",
+      archetype: "brute",
       maxLifeFixed: fp(1000),
       moveSpeedFixed: fp(3) * 30,
       attackRangeFixed: ATTACK_RANGE,

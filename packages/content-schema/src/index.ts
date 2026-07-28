@@ -90,15 +90,39 @@ export interface RareModifier {
   namePrefix: string;
 }
 
+/**
+ * What a monster asks of the player. The number of an archetype is a statement
+ * about the monster, so the archetype and not the layout decides how many stand
+ * at a socket (see PACK_COUNT in content-runtime).
+ *
+ * `swarm` punishes fighting one at a time, `brute` punishes trading hits,
+ * `shooter` punishes standing still, `heavy` punishes standing close.
+ */
+export const MONSTER_ARCHETYPES = ["swarm", "brute", "shooter", "heavy"] as const;
+export type MonsterArchetype = (typeof MONSTER_ARCHETYPES)[number];
+
+/**
+ * A wind-up, a radius, a hit. Extracted verbatim from what BossSpec.slam already
+ * was: the boss's slam and a heavy's slam are the same five numbers and must not
+ * become two types that drift apart.
+ */
+export interface SlamSpec {
+  windupTicks: number;
+  radiusFixed: Fixed;
+  damageFixed: Fixed;
+  cooldownTicks: number;
+  rangeFixed: Fixed;
+}
+
+/** A shooter's bolt. `speedFixed` is per second; the sim divides by 30, as it does for moveSpeed. */
+export interface RangedSpec {
+  speedFixed: Fixed;
+  radiusFixed: Fixed;
+}
+
 export interface BossSpec {
   phase2AtLifePct: number;
-  slam: {
-    windupTicks: number;
-    radiusFixed: Fixed;
-    damageFixed: Fixed;
-    cooldownTicks: number;
-    rangeFixed: Fixed;
-  };
+  slam: SlamSpec;
   phase2: {
     fireGroundDurationTicks: number;
     addCount: number;
@@ -119,6 +143,12 @@ export interface MonsterDef {
   attackCooldownTicks: number;
   radiusFixed: Fixed;
   defenses: Defenses;
+  archetype: MonsterArchetype;
+  /** Required iff archetype === "shooter", forbidden otherwise. */
+  ranged?: RangedSpec;
+  /** Required iff archetype === "heavy", forbidden otherwise. Distinct from
+   *  BossSpec.slam: `boss` being present is what makes a monster a boss. */
+  heavy?: SlamSpec;
   boss?: BossSpec;
 }
 
@@ -308,6 +338,22 @@ export function validateMonsterDef(v: unknown): ValidationResult {
     }
   }
   validateDamageSpec(v["attackDamage"], "attackDamage", errors);
+  const archetype = v["archetype"];
+  const knownArchetype =
+    typeof archetype === "string" &&
+    (MONSTER_ARCHETYPES as readonly string[]).includes(archetype);
+  if (!knownArchetype) {
+    errors.push(
+      `archetype: must be one of ${MONSTER_ARCHETYPES.join(", ")}, got "${String(archetype)}"`,
+    );
+  }
+  // A spec and its archetype are one statement, so each implies the other: a
+  // shooter with no bolt would silently melee, and a bolt on a brute would never
+  // fire. Both are content bugs that only show up in play.
+  validateSubSpec(v["ranged"], archetype === "shooter", "ranged",
+    ["speedFixed", "radiusFixed"], errors);
+  validateSubSpec(v["heavy"], archetype === "heavy", "heavy",
+    ["windupTicks", "radiusFixed", "damageFixed", "cooldownTicks", "rangeFixed"], errors);
   if (v["boss"] !== undefined) {
     const b = v["boss"];
     if (!isObj(b)) {
@@ -358,6 +404,29 @@ export function validateMonsterDef(v: unknown): ValidationResult {
     }
   }
   return { ok: errors.length === 0, errors };
+}
+
+/** Present-iff-required check for an all-non-negative-integer sub-spec. */
+function validateSubSpec(
+  v: unknown, required: boolean, field: string,
+  numericFields: readonly string[], errors: string[],
+): void {
+  if (v === undefined) {
+    if (required) errors.push(`${field}: required for this archetype`);
+    return;
+  }
+  if (!required) {
+    errors.push(`${field}: only valid on its own archetype`);
+    return;
+  }
+  if (!isObj(v)) {
+    errors.push(`${field}: must be an object`);
+    return;
+  }
+  const o = v as Record<string, unknown>;
+  for (const f of numericFields) {
+    if (!isNonNegInt(o[f])) errors.push(`${field}.${f}: must be a non-negative integer`);
+  }
 }
 
 // ── Items (First Loot slice) ────────────────────────────────────────────────

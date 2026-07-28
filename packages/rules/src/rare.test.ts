@@ -6,6 +6,7 @@ import { makeRare } from "./rare.js";
 const cinderImp: MonsterDef = {
   id: "monster.cinder_imp.v1",
   name: "Cinder Imp",
+  archetype: "swarm",
   maxLifeFixed: fp(40),        // 40000
   moveSpeedFixed: fp(2.4),     // 2400
   attackRangeFixed: fp(1.2),   // 1200

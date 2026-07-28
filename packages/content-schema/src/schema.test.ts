@@ -28,6 +28,7 @@ const validSkill: SkillDef = {
 const validMonster: MonsterDef = {
   id: "monster.cinder_imp.v1",
   name: "Cinder Imp",
+  archetype: "swarm",
   maxLifeFixed: fp(40),
   moveSpeedFixed: fp(2.4),
   attackRangeFixed: fp(1.2),
@@ -337,5 +338,79 @@ describe("Fixed field integer enforcement", () => {
       ],
     });
     expect(r.ok).toBe(false);
+  });
+});
+
+describe("validateMonsterDef archetypes", () => {
+  const base = {
+    id: "monster.test_thing.v1",
+    name: "Test Thing",
+    archetype: "swarm" as const,
+    maxLifeFixed: fp(40), moveSpeedFixed: fp(2.4), attackRangeFixed: fp(1.2),
+    attackDamage: { type: "physical" as const, amountFixed: fp(6) },
+    attackCooldownTicks: 45, radiusFixed: fp(0.5),
+    defenses: { resPct: resBlock(), armourFixed: fp(0.5) },
+  };
+
+  it("accepts a valid swarm", () => {
+    expect(validateMonsterDef(base).ok).toBe(true);
+  });
+
+  it("rejects a missing archetype", () => {
+    const { archetype, ...noArch } = base;
+    const r = validateMonsterDef(noArch);
+    expect(r.ok).toBe(false);
+    expect(r.errors.join(" ")).toMatch(/archetype/);
+  });
+
+  it("rejects an unknown archetype", () => {
+    const r = validateMonsterDef({ ...base, archetype: "sniper" });
+    expect(r.ok).toBe(false);
+    expect(r.errors.join(" ")).toMatch(/archetype/);
+  });
+
+  it("rejects a shooter with no ranged spec", () => {
+    const r = validateMonsterDef({ ...base, archetype: "shooter" });
+    expect(r.ok).toBe(false);
+    expect(r.errors.join(" ")).toMatch(/ranged/);
+  });
+
+  it("accepts a shooter with a ranged spec", () => {
+    const r = validateMonsterDef({
+      ...base, archetype: "shooter",
+      ranged: { speedFixed: fp(9), radiusFixed: fp(0.22) },
+    });
+    expect(r.ok).toBe(true);
+  });
+
+  it("rejects a ranged spec on a non-shooter", () => {
+    const r = validateMonsterDef({
+      ...base, ranged: { speedFixed: fp(9), radiusFixed: fp(0.22) },
+    });
+    expect(r.ok).toBe(false);
+    expect(r.errors.join(" ")).toMatch(/ranged/);
+  });
+
+  it("rejects a heavy with no slam", () => {
+    const r = validateMonsterDef({ ...base, archetype: "heavy" });
+    expect(r.ok).toBe(false);
+    expect(r.errors.join(" ")).toMatch(/heavy/);
+  });
+
+  it("accepts a heavy with a slam", () => {
+    const r = validateMonsterDef({
+      ...base, archetype: "heavy",
+      heavy: { windupTicks: 30, radiusFixed: fp(2.6), damageFixed: fp(22), cooldownTicks: 150, rangeFixed: fp(6.5) },
+    });
+    expect(r.ok).toBe(true);
+  });
+
+  it("rejects a slam on a non-heavy", () => {
+    const r = validateMonsterDef({
+      ...base,
+      heavy: { windupTicks: 30, radiusFixed: fp(2.6), damageFixed: fp(22), cooldownTicks: 150, rangeFixed: fp(6.5) },
+    });
+    expect(r.ok).toBe(false);
+    expect(r.errors.join(" ")).toMatch(/heavy/);
   });
 });

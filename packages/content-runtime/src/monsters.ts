@@ -5,6 +5,7 @@ const MONSTER_DEFS: MonsterDef[] = [
   {
     id: "monster.cinder_imp.v1",
     name: "Cinder Imp",
+    archetype: "swarm",
     maxLifeFixed: fp(40),
     moveSpeedFixed: fp(2.4),
     attackRangeFixed: fp(1.2),
@@ -16,6 +17,7 @@ const MONSTER_DEFS: MonsterDef[] = [
   {
     id: "monster.cinder_warden.v1",
     name: "Cinder Warden",
+    archetype: "brute",
     // Life and fire resistance are one budget, because every skill the player
     // owns is fire: 750 life behind 40% res is 1250 effective, which measured at
     // 56s of mana-starved poking (balance.test.ts). The Warden stays
