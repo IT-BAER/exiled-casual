@@ -6,25 +6,32 @@ import { SERIF } from "./ItemTooltip";
  * Top-right minimap, the instrument that makes the layout variation legible: a
  * player who cannot see the route cannot tell one assembly from another.
  *
- * NOTE: neither `poe2-screenshots/inside-map.jpg` nor `inside-map-battle.webp`
- * has the minimap on screen, so there is no in-repo reference for this one. It
- * follows PoE's own conventions — top-right, translucent, walkable area picked
- * out warm against near-black, unexplored ground hidden — and wants a real
- * reference shot before it is called finished.
+ * Reference: `poe2-screenshots/minimap-poe1.png` (PoE1) for the drawing itself —
+ * the explored area is ONE smooth dark silhouette under a thin lavender contour,
+ * with no panel, border or backdrop, floating over the world. Drawing the cells
+ * as walls and floor instead (as `minimap.png`, PoE2, does at its much closer
+ * zoom) turns into masonry noise at this size.
  *
- * Drawing is split across three layers so a frame costs three blits and not
- * 12544 fills: the terrain is painted once per area, the fog is an opaque sheet
- * that the player punches holes in, and only the icons are redrawn per frame.
+ * Layers: the terrain is painted once per area, the fog is an opaque sheet that
+ * the player punches holes in, and only the icons are redrawn per frame.
  */
 
 /** Minimap box, a fraction of the viewport as the rest of the HUD is. */
 const MAP_VW = 15;
 /** World units the player reveals around themselves. */
 const REVEAL_RADIUS = 9;
-/** Screen pixels per world unit, before the box clamps it. */
-const FLOOR = "#c9b48a";
-const FLOOR_EDGE = "#6f6047";
-const GROUND = "rgba(6,8,12,0.72)";
+/**
+ * Terrain pixels per grid cell. The terrain layer is drawn at this resolution
+ * and downscaled smoothly into the box, which is what keeps the walls looking
+ * like geometry instead of like upscaled pixel art.
+ */
+const CELL_PX = 4;
+const FLOOR = "rgba(38,41,54,0.88)";
+/** The contour, PoE1's lavender rather than PoE2's cyan. */
+const WALL = "#8b8fb8";
+/** Contour thickness and corner rounding, in terrain pixels. */
+const EDGE_PX = 3;
+const ROUNDING = 3;
 
 const ANCHOR_COLOR: Record<string, string> = {
   start: "#6fb2e8",
@@ -38,33 +45,83 @@ function anchorColor(id: string): string {
   return ANCHOR_COLOR[id] ?? "#cfc6b0";
 }
 
-/** Paint the walkable cells once. Walls stay transparent so the ground shows. */
+/**
+ * Paint the walkable area once, as one silhouette: the cells are stamped into a
+ * mask, blurred and thresholded, so corners come out rounded and organic rather
+ * than as a staircase of 0.5-unit squares. The rounding is the blur radius, so
+ * a tight corner rounds harder than a long wall — which is what makes it read
+ * as a drawn map instead of a grid.
+ *
+ * The contour is the same silhouette minus itself nudged one step each way. A
+ * marching-squares outline would be exact; this is two blits and looks the same
+ * at 384px.
+ */
 function paintTerrain(grid: WalkableGrid): HTMLCanvasElement {
+  const w = grid.cols * CELL_PX, h = grid.rows * CELL_PX;
+  const mask = document.createElement("canvas");
+  mask.width = w;
+  mask.height = h;
+  const mctx = mask.getContext("2d");
   const c = document.createElement("canvas");
-  c.width = grid.cols;
-  c.height = grid.rows;
+  c.width = w;
+  c.height = h;
   const ctx = c.getContext("2d");
-  if (!ctx) return c;
-  const img = ctx.createImageData(grid.cols, grid.rows);
+  if (!mctx || !ctx) return c;
+
+  mctx.fillStyle = "#fff";
   for (let i = 0; i < grid.cols * grid.rows; i++) {
-    const walk = grid.cells[i] === 1;
-    if (!walk) continue;
-    // An edge cell — one with a wall neighbour — is drawn darker, which is what
-    // gives the shape a readable outline at this size instead of a warm blob.
+    if (grid.cells[i] !== 1) continue;
     const x = i % grid.cols, y = (i - (i % grid.cols)) / grid.cols;
-    let edge = false;
-    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
-      const nx = x + dx, ny = y + dy;
-      if (nx < 0 || ny < 0 || nx >= grid.cols || ny >= grid.rows) { edge = true; break; }
-      if (grid.cells[ny * grid.cols + nx] !== 1) { edge = true; break; }
-    }
-    const hex = edge ? FLOOR_EDGE : FLOOR;
-    img.data[i * 4] = parseInt(hex.slice(1, 3), 16);
-    img.data[i * 4 + 1] = parseInt(hex.slice(3, 5), 16);
-    img.data[i * 4 + 2] = parseInt(hex.slice(5, 7), 16);
-    img.data[i * 4 + 3] = 255;
+    mctx.fillRect(x * CELL_PX - 0.5, y * CELL_PX - 0.5, CELL_PX + 1, CELL_PX + 1);
   }
-  ctx.putImageData(img, 0, 0);
+
+  // Blur, then cut at half alpha: the blur is what rounds the corners and the
+  // cut is what stops the shape fading out into a smudge.
+  const blurred = document.createElement("canvas");
+  blurred.width = w;
+  blurred.height = h;
+  const bctx = blurred.getContext("2d");
+  if (!bctx) return c;
+  bctx.filter = `blur(${ROUNDING}px)`;
+  bctx.drawImage(mask, 0, 0);
+  bctx.filter = "none";
+  const img = bctx.getImageData(0, 0, w, h);
+  for (let i = 3; i < img.data.length; i += 4) img.data[i] = (img.data[i] ?? 0) > 128 ? 255 : 0;
+  bctx.putImageData(img, 0, 0);
+
+  // Floor, then the contour on top of it.
+  ctx.drawImage(blurred, 0, 0);
+  ctx.globalCompositeOperation = "source-in";
+  ctx.fillStyle = FLOOR;
+  ctx.fillRect(0, 0, w, h);
+  ctx.globalCompositeOperation = "source-over";
+
+  // Erode the silhouette — the INTERSECTION of it nudged each way, which is
+  // `destination-in`; the union (`destination-out`, the obvious spelling) eats
+  // the whole shape, because a pixel on the left edge is covered by the copy
+  // nudged left and no contour survives at all.
+  const eroded = document.createElement("canvas");
+  eroded.width = w;
+  eroded.height = h;
+  const rctx = eroded.getContext("2d");
+  const outline = document.createElement("canvas");
+  outline.width = w;
+  outline.height = h;
+  const octx = outline.getContext("2d");
+  if (rctx && octx) {
+    rctx.drawImage(blurred, 0, 0);
+    rctx.globalCompositeOperation = "destination-in";
+    for (const [dx, dy] of [[EDGE_PX, 0], [-EDGE_PX, 0], [0, EDGE_PX], [0, -EDGE_PX]] as const) {
+      rctx.drawImage(blurred, dx, dy);
+    }
+    octx.drawImage(blurred, 0, 0);
+    octx.globalCompositeOperation = "destination-out";
+    octx.drawImage(eroded, 0, 0);
+    octx.globalCompositeOperation = "source-in";
+    octx.fillStyle = WALL;
+    octx.fillRect(0, 0, w, h);
+    ctx.drawImage(outline, 0, 0);
+  }
   return c;
 }
 
@@ -79,6 +136,24 @@ function makeFog(grid: WalkableGrid): HTMLCanvasElement {
     ctx.fillRect(0, 0, c.width, c.height);
   }
   return c;
+}
+
+/**
+ * World point to canvas pixel. The camera sits at `alpha = -PI/2` (`engine.ts`),
+ * so world +y is up the screen — while canvas y counts down. Without the flip
+ * the marker walks south when the player walks north.
+ */
+export function toCanvas(
+  grid: WalkableGrid,
+  wx: number,
+  wy: number,
+  w: number,
+  h: number,
+): [number, number] {
+  return [
+    ((wx - grid.originX) / grid.cellSize / grid.cols) * w,
+    h - ((wy - grid.originY) / grid.cellSize / grid.rows) * h,
+  ];
 }
 
 export interface MinimapProps {
@@ -124,7 +199,14 @@ export function Minimap({ layout, player }: MinimapProps): React.JSX.Element | n
     const rCells = REVEAL_RADIUS / grid.cellSize;
     const fogCtx = fog.getContext("2d");
     if (fogCtx) {
+      // Feathered, not a hard disc: an unexplored edge that is a clean arc reads
+      // as the map having been sliced. The partial erase compounds frame over
+      // frame, so ground the player stays near firms up anyway.
+      const g = fogCtx.createRadialGradient(cx, cy, rCells * 0.62, cx, cy, rCells);
+      g.addColorStop(0, "rgba(0,0,0,1)");
+      g.addColorStop(1, "rgba(0,0,0,0)");
       fogCtx.globalCompositeOperation = "destination-out";
+      fogCtx.fillStyle = g;
       fogCtx.beginPath();
       fogCtx.arc(cx, cy, rCells, 0, Math.PI * 2);
       fogCtx.fill();
@@ -141,20 +223,22 @@ export function Minimap({ layout, player }: MinimapProps): React.JSX.Element | n
     if (!ctx) return;
     const w = canvas.width, h = canvas.height;
     ctx.clearRect(0, 0, w, h);
-    ctx.fillStyle = GROUND;
-    ctx.fillRect(0, 0, w, h);
 
-    // Nearest-neighbour: a cell grid scaled up smoothly turns to mush.
-    ctx.imageSmoothingEnabled = false;
+    // Smoothed on purpose: the terrain layer is drawn oversized and comes down
+    // to the box, and the fog comes up, so neither edge shows its cells. Both
+    // are flipped, for the reason `toCanvas` gives.
+    ctx.save();
+    ctx.translate(0, h);
+    ctx.scale(1, -1);
+    ctx.imageSmoothingEnabled = true;
     ctx.drawImage(terrain, 0, 0, w, h);
     ctx.globalCompositeOperation = "destination-out";
     ctx.drawImage(fog, 0, 0, w, h);
     ctx.globalCompositeOperation = "source-over";
+    ctx.restore();
 
-    const toScreen = (wx: number, wy: number): [number, number] => [
-      ((wx - grid.originX) / grid.cellSize / grid.cols) * w,
-      ((wy - grid.originY) / grid.cellSize / grid.rows) * h,
-    ];
+    const toScreen = (wx: number, wy: number): [number, number] =>
+      toCanvas(grid, wx, wy, w, h);
     const explored = (wx: number, wy: number): boolean => {
       const ax = Math.round((wx - grid.originX) / grid.cellSize);
       const ay = Math.round((wy - grid.originY) / grid.cellSize);
@@ -169,7 +253,7 @@ export function Minimap({ layout, player }: MinimapProps): React.JSX.Element | n
       const [sx, sy] = toScreen(a.x, a.y);
       ctx.fillStyle = anchorColor(a.id);
       ctx.beginPath();
-      ctx.arc(sx, sy, 3.5, 0, Math.PI * 2);
+      ctx.arc(sx, sy, 5, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = "rgba(0,0,0,0.8)";
       ctx.lineWidth = 1;
@@ -177,10 +261,16 @@ export function Minimap({ layout, player }: MinimapProps): React.JSX.Element | n
     }
 
     // The player last, so nothing paints over them.
+    // The player is a diamond, as PoE2's is, so it reads apart from the round
+    // objective pips at this size.
     const [px, py] = toScreen(player.x, player.y);
-    ctx.fillStyle = "#fff6e0";
+    ctx.fillStyle = "#f5d34a";
     ctx.beginPath();
-    ctx.arc(px, py, 3, 0, Math.PI * 2);
+    ctx.moveTo(px, py - 6);
+    ctx.lineTo(px + 6, py);
+    ctx.lineTo(px, py + 6);
+    ctx.lineTo(px - 6, py);
+    ctx.closePath();
     ctx.fill();
     ctx.strokeStyle = "rgba(0,0,0,0.9)";
     ctx.lineWidth = 1.5;
@@ -199,15 +289,16 @@ export function Minimap({ layout, player }: MinimapProps): React.JSX.Element | n
         width: `${MAP_VW}vw`,
         height: `${MAP_VW}vw`,
         pointerEvents: "none",
-        border: "1px solid rgba(140,120,84,0.55)",
-        boxShadow: "0 2px 10px rgba(0,0,0,0.6)",
+        // No panel, no border: the reference has the shape floating over the
+        // world, and a frame around it is the tell that it is not PoE's.
+        filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.75))",
         fontFamily: SERIF,
       }}
     >
       <canvas
         ref={canvasRef}
-        width={256}
-        height={256}
+        width={384}
+        height={384}
         style={{ width: "100%", height: "100%", display: "block" }}
       />
     </div>
