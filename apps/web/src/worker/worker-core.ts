@@ -13,6 +13,7 @@ import type { Simulation, World, Entity, Position, SessionC, InventoryC, KvStore
 import type { Intent, Snapshot, SpawnKind, AreaKind } from "@exiled/protocol";
 import { CONTENT_VERSION } from "@exiled/content-runtime";
 import { generateArea, type AreaLayout } from "@exiled/mapgen";
+import { mapBaseIdForNode } from "@exiled/rules";
 
 // Wall-clock pacing constant (client-side only) — never fed into the sim.
 // ponytail: float constant is intentional; the accumulator drives integer tick steps.
@@ -31,6 +32,10 @@ export class WorkerCore {
   private readonly playerEntity: Entity;
   private readonly seed: number;
   private areaLayout: AreaLayout;
+  // The base the open map is built from; "" in the hideout. Set beside the
+  // layout, from the same node, so the tileset can never describe a different
+  // map than the one the walls were generated for.
+  private mapBaseId = "";
   private area: AreaKind;
   // Set when the session's area flips mid-run (portal transition); the glue reads
   // it via consumeAreaChange() to re-send the `area` message so walls rebuild.
@@ -77,6 +82,11 @@ export class WorkerCore {
   /** The area layout, sent to the renderer once so it can build floor + walls. */
   getAreaLayout(): AreaLayout {
     return this.areaLayout;
+  }
+
+  /** The map base the open area is built from; "" in the hideout. */
+  getMapBaseId(): string {
+    return this.mapBaseId;
   }
 
   /**
@@ -169,6 +179,7 @@ export class WorkerCore {
       CONTENT_VERSION,
       grammarForNode(session.activeNodeId),
     );
+    this.mapBaseId = this.area === "map" ? mapBaseIdForNode(session.activeNodeId) : "";
     this.areaDirty = true;
   }
 

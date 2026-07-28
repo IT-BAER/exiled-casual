@@ -19,7 +19,7 @@ self.onmessage = (e: MessageEvent) => {
     // Restore any saved run first, THEN send the (possibly restored) layout once
     // so the renderer builds floor + walls, then ready.
     void c.hydrate().then(() => {
-      const area: FromWorker = { type: "area", area: c.getArea(), layout: c.getAreaLayout() };
+      const area: FromWorker = { type: "area", area: c.getArea(), layout: c.getAreaLayout(), mapBaseId: c.getMapBaseId() };
       self.postMessage(area);
       const ready: FromWorker = { type: "ready" };
       self.postMessage(ready);
@@ -44,7 +44,7 @@ setInterval(() => {
   // A portal transition swaps the level; re-send `area` before the snapshots so
   // the renderer rebuilds (or clears) walls before drawing the new positions.
   if (core.consumeAreaChange()) {
-    const area: FromWorker = { type: "area", area: core.getArea(), layout: core.getAreaLayout() };
+    const area: FromWorker = { type: "area", area: core.getArea(), layout: core.getAreaLayout(), mapBaseId: core.getMapBaseId() };
     self.postMessage(area);
   }
   for (const snapshot of snaps) {

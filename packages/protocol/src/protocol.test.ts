@@ -152,7 +152,7 @@ describe("FromWorker area message", () => {
   // future "optimisation" (e.g. JSON) that would silently drop the Uint8Array grid.
   test("survives a structured-clone round-trip with grid.cells intact", () => {
     const layout = generateArea(42, "slice1.v1");
-    const msg: FromWorker = { type: "area", area: "map", layout };
+    const msg: FromWorker = { type: "area", area: "map", layout, mapBaseId: "map.vaal_stone" };
     const clone = structuredClone(msg);
     expect(clone.type).toBe("area");
     if (clone.type !== "area") throw new Error("unreachable");

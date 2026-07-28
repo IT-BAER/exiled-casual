@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Engine, Matrix, Vector3 } from "@babylonjs/core";
 import { createScene } from "./render/engine";
-import { buildLevel } from "./render/level";
+import { buildLevel, applyBiomeTint } from "./render/level";
 import { SnapshotRenderer } from "./render/renderer";
 import { loadProps, resetProps } from "./render/props";
 import { loadPlayerRig, resetPlayerRig } from "./render/rig";
@@ -14,6 +14,7 @@ import { LootLabels } from "./hud/LootLabels";
 import { Minimap } from "./hud/Minimap";
 import type { Projector } from "./hud/LootLabels";
 import type { AreaLayout } from "@exiled/mapgen";
+import { BIOMES, mapBase } from "@exiled/content-runtime";
 import type { Snapshot, FromWorker, ToWorker } from "@exiled/protocol";
 
 const LAB_SEED = 42;
@@ -112,7 +113,12 @@ export function App() {
         // Dungeon walls belong to the "map". The hideout is an open lab: pass an
         // empty grid so buildLevel clears any stale walls and draws none.
         const grid = msg.area === "map" ? msg.layout.grid : null;
-        buildLevel(scene, grid);
+        // The base says what the place is made of: which stone the walls take,
+        // and what colour its light is. The hideout has no base, so it gets the
+        // neutral rig back rather than keeping the last map's mood.
+        const base = msg.mapBaseId ? mapBase(msg.mapBaseId) : null;
+        buildLevel(scene, grid, base?.tilesetId);
+        applyBiomeTint(scene, base ? BIOMES[base.biomeId].tint : null);
         setAreaLayout(msg.area === "map" ? msg.layout : null);
       }
     };
