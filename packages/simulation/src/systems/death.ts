@@ -157,7 +157,7 @@ export function registerDeath(sim: Simulation): void {
       const mt = world.get<MoveTarget>(e, "moveTarget");
       if (mt) world.set<MoveTarget>(e, "moveTarget", { ...mt, active: 0 });
       const md = world.get<MoveDir>(e, "moveDir");
-      if (md) world.set<MoveDir>(e, "moveDir", { dx: 0, dy: 0 });
+      if (md) world.set<MoveDir>(e, "moveDir", { dx: 0, dy: 0, hx: 0, hy: 0 });
       world.remove(e, "ailment");
 
       const sessionEntities = world.query("session");

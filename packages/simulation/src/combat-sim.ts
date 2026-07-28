@@ -98,7 +98,7 @@ export function createCombatSim(
     armour: s.armourFixed,
   });
   world.set<MoveTarget>(playerEntity, "moveTarget", { x: spawn.x, y: spawn.y, active: 0 });
-  world.set<MoveDir>(playerEntity, "moveDir", { dx: 0, dy: 0 });
+  world.set<MoveDir>(playerEntity, "moveDir", { dx: 0, dy: 0, hx: 0, hy: 0 });
 
   if (opts.area !== undefined) {
     // ── Area-based path: session singleton + buildArea ────────────────────

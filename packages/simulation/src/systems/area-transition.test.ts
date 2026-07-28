@@ -96,7 +96,7 @@ describe("registerAreaTransition", () => {
     sim.step();
 
     expect(world.get<{ active: number }>(player, "moveTarget")!.active).toBe(0);
-    expect(world.get<{ dx: number; dy: number }>(player, "moveDir")).toEqual({ dx: 0, dy: 0 });
+    expect(world.get<{ dx: number; dy: number }>(player, "moveDir")).toEqual({ dx: 0, dy: 0, hx: 0, hy: 0 });
   });
 
   it("does nothing when pendingArea is empty", () => {

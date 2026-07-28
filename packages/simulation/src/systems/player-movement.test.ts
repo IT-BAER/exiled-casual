@@ -66,6 +66,69 @@ describe("registerPlayerMovement", () => {
     expect(pos.y).toBe(diagStep);
   });
 
+  // Movement steers; it does not switch. A key change that snapped the velocity
+  // read as the character being teleported onto a new rail.
+  it("turns through the corner instead of switching to the new direction", () => {
+    const sim = new Simulation();
+    registerPlayerMovement(sim);
+    const speed = fp(3);
+    const p = makePlayer(sim, 0, 0, speed);
+
+    sim.step([{ tick: 0, entity: p, type: "moveDir", data: { dx: 1, dy: 0 } }]);
+    for (let t = 1; t < 4; t++) sim.step();
+    const before = { ...sim.world.get<Position>(p, "position")! };
+
+    // Hard 90 degrees: +x to +y.
+    sim.step([{ tick: 4, entity: p, type: "moveDir", data: { dx: 0, dy: 1 } }]);
+    const after = sim.world.get<Position>(p, "position")!;
+    const stepX = after.x - before.x;
+    const stepY = after.y - before.y;
+
+    // Mid-turn: still carrying the old direction, already taking the new one.
+    expect(stepX).toBeGreaterThan(0);
+    expect(stepY).toBeGreaterThan(0);
+    // ...and paying for it in speed, the way a runner cutting a corner does.
+    // Not braking to a walk, though: the corner costs a bite, not the run.
+    const cutSpeed = Math.sqrt(stepX * stepX + stepY * stepY);
+    expect(cutSpeed).toBeLessThan(speed * 0.95);
+    expect(cutSpeed).toBeGreaterThan(speed * 0.55);
+    // The turn is a corner, not a lap: a right angle inside a third of a second.
+    for (let t = 5; t < 14; t++) sim.step();
+    const settling = { ...sim.world.get<Position>(p, "position")! };
+    sim.step();
+    const settled = sim.world.get<Position>(p, "position")!;
+    expect(settled.x - settling.x).toBe(0);
+    expect(settled.y - settling.y).toBe(speed);
+  });
+
+  it("reverses out of a dead-on flip, which has no side to turn to", () => {
+    const sim = new Simulation();
+    registerPlayerMovement(sim);
+    const speed = fp(3);
+    const p = makePlayer(sim, 0, 0, speed);
+    sim.step([{ tick: 0, entity: p, type: "moveDir", data: { dx: 1, dy: 0 } }]);
+    sim.step([{ tick: 1, entity: p, type: "moveDir", data: { dx: -1, dy: 0 } }]);
+    for (let t = 2; t < 16; t++) sim.step();
+    const before = { ...sim.world.get<Position>(p, "position")! };
+    sim.step();
+    const after = sim.world.get<Position>(p, "position")!;
+    // Whichever way it went around, it must arrive: a heading that steps
+    // straight at its own opposite shrinks to nothing and never turns.
+    expect(after.x - before.x).toBe(-speed);
+    expect(after.y - before.y).toBe(0);
+  });
+
+  it("starts on the pressed direction, so the first step is never a curve", () => {
+    const sim = new Simulation();
+    registerPlayerMovement(sim);
+    const speed = fp(3);
+    const p = makePlayer(sim, 0, 0, speed);
+    sim.step([{ tick: 0, entity: p, type: "moveDir", data: { dx: 0, dy: 1 } }]);
+    const pos = sim.world.get<Position>(p, "position")!;
+    expect(pos.x).toBe(0);
+    expect(pos.y).toBe(speed);
+  });
+
   it("stop command halts movement", () => {
     const sim = new Simulation();
     registerPlayerMovement(sim);

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { keyToIntent, pointerToWorld } from "./intents";
+import { heldToMoveIntent, keyToIntent, pointerToWorld } from "./intents";
 import { fp } from "@exiled/fixed-point";
 
 describe("keyToIntent", () => {
@@ -64,6 +64,40 @@ describe("keyToIntent", () => {
 
   it("Q (uppercase) → useFlask life", () => {
     expect(keyToIntent("Q", aim)).toEqual({ kind: "useFlask", slot: "life" });
+  });
+});
+
+describe("heldToMoveIntent", () => {
+  // Every key is already a world diagonal, so two of them read as the direction
+  // between the two — which on screen is the cardinal the player pressed for.
+  it("w+d → straight up-right on screen, i.e. world +y", () => {
+    expect(heldToMoveIntent(["w", "d"])).toEqual({ kind: "moveDir", dx: 0, dy: 1 });
+  });
+
+  it("a+s → the opposite of w+d", () => {
+    expect(heldToMoveIntent(["a", "s"])).toEqual({ kind: "moveDir", dx: 0, dy: -1 });
+  });
+
+  it("w+a → world -x", () => {
+    expect(heldToMoveIntent(["w", "a"])).toEqual({ kind: "moveDir", dx: -1, dy: 0 });
+  });
+
+  it("one key still gives that key's own diagonal", () => {
+    expect(heldToMoveIntent(["d"])).toEqual({ kind: "moveDir", dx: 1, dy: 1 });
+  });
+
+  // Both hands on the keyboard beats a lockout: opposing keys cancel to a stop
+  // rather than letting whichever was pressed last win.
+  it("w+s cancel out → stop", () => {
+    expect(heldToMoveIntent(["w", "s"])).toEqual({ kind: "stop" });
+  });
+
+  it("nothing held → stop", () => {
+    expect(heldToMoveIntent([])).toEqual({ kind: "stop" });
+  });
+
+  it("three keys sum, so w+a+d is w", () => {
+    expect(heldToMoveIntent(["w", "a", "d"])).toEqual({ kind: "moveDir", dx: -1, dy: 1 });
   });
 });
 

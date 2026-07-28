@@ -60,7 +60,7 @@ export function registerAreaTransition(sim: Simulation, collisionRef?: Collision
       const mt = world.get<MoveTarget>(p, "moveTarget");
       if (mt) world.set<MoveTarget>(p, "moveTarget", { ...mt, active: 0 });
       const md = world.get<MoveDir>(p, "moveDir");
-      if (md) world.set<MoveDir>(p, "moveDir", { dx: 0, dy: 0 });
+      if (md) world.set<MoveDir>(p, "moveDir", { dx: 0, dy: 0, hx: 0, hy: 0 });
     }
   });
 }

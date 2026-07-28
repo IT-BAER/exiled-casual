@@ -67,8 +67,15 @@ export interface Faction    { team: number }
 /** moveSpeed is per-tick Fixed; bodyRadius in Fixed units */
 export interface PlayerC    { moveSpeed: Fixed; bodyRadius: Fixed }
 export interface MoveTarget { x: Fixed; y: Fixed; active: 0 | 1 }
-/** dx/dy are each -1 | 0 | 1 (WASD direction) */
-export interface MoveDir    { dx: number; dy: number }
+/**
+ * dx/dy are each -1 | 0 | 1: the direction the keys are ASKING for.
+ *
+ * hx/hy are where the player is actually going, a unit vector in Fixed that
+ * steers toward dx/dy a bounded amount per tick — the keys are a request, the
+ * heading is the answer. Zero while standing still, which is also what makes
+ * the first step off a standstill instant instead of a curve out of nowhere.
+ */
+export interface MoveDir    { dx: number; dy: number; hx: Fixed; hy: Fixed }
 /** keys are skillId strings; values are the tick at which the skill becomes ready */
 export interface Cooldowns  { [skillId: string]: number }
 /** Post-cast recovery: caster is "casting" (and moves slower) while tick < untilTick. */

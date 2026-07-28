@@ -1,5 +1,5 @@
 import type { Intent, Snapshot, SpawnKind, ToWorker } from "@exiled/protocol";
-import { keyToIntent, pointerToWorld } from "./intents";
+import { heldToMoveIntent, keyToIntent, pointerToWorld } from "./intents";
 import type { Node, Scene } from "@babylonjs/core";
 
 // ponytail: thin DOM glue — all key→intent mapping lives in intents.ts
@@ -162,7 +162,13 @@ export function attachBindings(
       }
       return;
     }
-    if (MOVE_KEYS.has(k) && !held.includes(k)) held.push(k);
+    // Movement is the sum of everything held, so W+D is the diagonal between
+    // them rather than whichever key was struck last.
+    if (MOVE_KEYS.has(k)) {
+      if (!held.includes(k)) held.push(k);
+      post(heldToMoveIntent(held));
+      return;
+    }
     const intent = keyToIntent(e.key, aimWorld);
     if (intent) post(intent);
   }
@@ -172,15 +178,9 @@ export function attachBindings(
     if (!MOVE_KEYS.has(k)) return;
     const i = held.indexOf(k);
     if (i !== -1) held.splice(i, 1);
-    const last = held[held.length - 1];
-    if (last) {
-      // Resume the most-recent still-held direction so multi-key movement
-      // doesn't stall when one key is released.
-      const resume = keyToIntent(last, aimWorld);
-      if (resume) post(resume);
-    } else {
-      post({ kind: "stop" });
-    }
+    // Re-sum what is left, so releasing one key of a diagonal walks the player
+    // on the other instead of stalling or snapping to the last press.
+    post(heldToMoveIntent(held));
   }
 
   function onPointerMove(e: PointerEvent) {

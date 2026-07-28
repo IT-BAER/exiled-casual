@@ -62,7 +62,7 @@ describe("registerDeath", () => {
     world.set(p, "ailment", { kind: "burning", stacks: 3, dps: fp(8), expiryTick: 999 });
     sim.step();
     expect(world.get<{ active: number }>(p, "moveTarget")!.active).toBe(0);
-    expect(world.get<{ dx: number; dy: number }>(p, "moveDir")).toEqual({ dx: 0, dy: 0 });
+    expect(world.get<{ dx: number; dy: number }>(p, "moveDir")).toEqual({ dx: 0, dy: 0, hx: 0, hy: 0 });
     expect(world.get(p, "ailment")).toBeUndefined();
     // existing respawn guarantees still hold:
     expect(world.get<{ life: number }>(p, "health")!.life).toBe(fp(100));

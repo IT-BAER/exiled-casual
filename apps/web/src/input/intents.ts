@@ -23,6 +23,31 @@ const MOVE_KEYS: Record<string, { dx: -1 | 0 | 1; dy: -1 | 0 | 1 }> = {
 };
 
 /**
+ * Pure: every movement key currently held, as one direction.
+ *
+ * Summed, not last-one-wins. Each key is a world diagonal (the camera is yawed
+ * 45 degrees), so W+D sums to world +y, which is the screen diagonal between
+ * them — the whole reason two keys are held. Opposing pairs cancel to a stop
+ * instead of leaving the player walking on whichever key was pressed last.
+ *
+ * The sum is reduced to its signs because that is what the sim's moveDir takes;
+ * it normalises the length itself, so W+A+D is exactly as fast as W.
+ */
+export function heldToMoveIntent(held: readonly string[]): Intent {
+  let dx = 0;
+  let dy = 0;
+  for (const k of held) {
+    const m = MOVE_KEYS[k.toLowerCase()];
+    if (m) {
+      dx += m.dx;
+      dy += m.dy;
+    }
+  }
+  if (dx === 0 && dy === 0) return { kind: "stop" };
+  return { kind: "moveDir", dx: Math.sign(dx) as -1 | 0 | 1, dy: Math.sign(dy) as -1 | 0 | 1 };
+}
+
+/**
  * Pure: map a KeyboardEvent.key + current world-space aim point to an Intent.
  * Returns null for unmapped keys.
  * `aim` is in world-space floats (already converted from screen via pointerToWorld).
