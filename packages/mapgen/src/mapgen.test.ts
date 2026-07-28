@@ -102,16 +102,48 @@ describe("generateArea", () => {
     expect(3 * CELL_SIZE).toBeGreaterThanOrEqual(MIN_ROUTE_WIDTH);
   });
 
-  // Open-map spec: a big open field with walls on the outer boundary and a
-  // single central ruin — NOT a maze of scattered rooms and corridors.
-  it("is an open field: over half the grid is walkable", () => {
-    for (const s of [0, 5, 42, 99, 777]) {
-      const { grid } = generateArea(s, V);
-      let walk = 0;
-      for (const c of grid.cells) if (c === 1) walk++;
-      const frac = walk / (grid.cols * grid.rows);
-      expect(frac, `seed ${s} walkable fraction ${frac.toFixed(3)}`).toBeGreaterThan(0.5);
+  // The generator assembles authored chunks on a 7x7 tile lattice, so an area is
+  // a route through rooms, not a disc. Map SIZE is meant to vary — a short loop
+  // is a fast map — so this pins the middle of the distribution rather than every
+  // seed. Measured over 200 seeds: loop runs 0.13-0.39 (median 0.32), open-field
+  // 0.13-0.71 (median 0.56). A per-seed floor would only pin the thinnest loop.
+  it("is a routed area: the typical map is a healthy fraction walkable", () => {
+    for (const [grammar, lo, hi] of [["loop", 0.22, 0.45], ["open-field", 0.40, 0.70]] as const) {
+      const fracs: number[] = [];
+      for (let s = 0; s < 60; s++) {
+        const { grid } = generateArea(s, V, grammar);
+        let walk = 0;
+        for (const c of grid.cells) if (c === 1) walk++;
+        fracs.push(walk / (grid.cols * grid.rows));
+      }
+      fracs.sort((a, b) => a - b);
+      const median = fracs[Math.floor(fracs.length / 2)]!;
+      expect(median, `${grammar} median walkable ${median.toFixed(3)}`).toBeGreaterThan(lo);
+      expect(median, `${grammar} median walkable ${median.toFixed(3)}`).toBeLessThan(hi);
+      // No seed may produce a degenerate area, whatever its size.
+      expect(fracs[0]!, `${grammar} thinnest ${fracs[0]!.toFixed(3)}`).toBeGreaterThan(0.08);
     }
+  });
+
+  it("falls back only rarely, and the fallback is still a valid area", () => {
+    let fallbacks = 0;
+    for (let s = 0; s < 200; s++) if (generateArea(s, V).usedFallback) fallbacks++;
+    expect(fallbacks, `${fallbacks}/200 seeds fell back`).toBeLessThan(12);
+  });
+
+  it("builds the open-field grammar as readily as the loop", () => {
+    for (let s = 0; s < 50; s++) {
+      const layout = generateArea(s, V, "open-field");
+      expect(layout.validationChecks.every((c) => c.passed), `seed ${s}`).toBe(true);
+    }
+  });
+
+  it("gives the two grammars genuinely different areas from one seed", () => {
+    const loop = generateArea(9, V, "loop");
+    const field = generateArea(9, V, "open-field");
+    expect(loop.hash).not.toBe(field.hash);
+    expect(loop.chosenVariantIds.some((id) => id.includes("loop."))).toBe(true);
+    expect(field.chosenVariantIds.some((id) => id.includes("field."))).toBe(true);
   });
 
   it("walls the whole outer boundary so the player can't leave the field", () => {
@@ -141,21 +173,23 @@ describe("generateArea", () => {
     }
   });
 
-  it("has a central ruin: a wall cluster near the middle of the open field", () => {
+  it("has cover: wall inside the area, not only around it", () => {
+    // A field with nothing to stand behind is not a place. Count wall cells
+    // that have a walkable neighbour — the boundary ring alone would not.
     for (const s of [0, 5, 42, 99, 777]) {
       const { grid } = generateArea(s, V);
       const { cols, rows, cells } = grid;
-      const midX = (cols - 1) / 2, midY = (rows - 1) / 2;
-      let central = 0;
-      for (let y = 0; y < rows; y++) {
-        for (let x = 0; x < cols; x++) {
+      let interiorWall = 0;
+      for (let y = 1; y < rows - 1; y++) {
+        for (let x = 1; x < cols - 1; x++) {
           if (cells[y * cols + x] !== 0) continue;
-          if (Math.abs(x - midX) <= 8 && Math.abs(y - midY) <= 8) central++;
+          const touchesFloor =
+            cells[y * cols + x + 1] === 1 || cells[y * cols + x - 1] === 1 ||
+            cells[(y + 1) * cols + x] === 1 || cells[(y - 1) * cols + x] === 1;
+          if (touchesFloor) interiorWall++;
         }
       }
-      // The ruin block occupies a chunk of the central window; a bare open
-      // field or a maze whose rooms happen to miss the centre would score ~0.
-      expect(central, `seed ${s} central wall cells`).toBeGreaterThanOrEqual(20);
+      expect(interiorWall, `seed ${s} wall cells touching floor`).toBeGreaterThan(200);
     }
   });
 });

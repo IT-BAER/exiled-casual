@@ -184,6 +184,29 @@ export function validateChunk(chunk: Chunk): string[] {
   return problems;
 }
 
+/**
+ * Import-time guard for an authored library: every chunk must be structurally
+ * valid AND derive the mask it was authored for. It reports every problem at
+ * once, because fixing 16x16 ASCII one thrown error per run is miserable.
+ */
+export function assertAuthored(
+  canonical: readonly (readonly [Chunk, number])[],
+  boss: Chunk,
+): void {
+  const problems: string[] = [];
+  for (const [chunk, mask] of canonical) {
+    problems.push(...validateChunk(chunk));
+    const got = deriveMask(chunk.rows);
+    if (got !== mask) problems.push(`${chunk.id}: derived mask ${got}, authored for ${mask}`);
+  }
+  problems.push(...validateChunk(boss));
+  const bossPorts = derivePorts(boss.rows);
+  if (bossPorts.length !== 1) {
+    problems.push(`${boss.id}: ${bossPorts.length} ports, want exactly 1`);
+  }
+  if (problems.length > 0) throw new Error(`chunk library:\n  ${problems.join("\n  ")}`);
+}
+
 /** Every distinct rotate/mirror of a chunk. Symmetric chunks collapse, so a
  *  symmetric piece does not get extra weight when one is picked at random. */
 export function orientations(chunk: Chunk): Oriented[] {

@@ -5,7 +5,7 @@
 //
 // Every open edge is cells 6..9 of that border — see the opening invariant in
 // chunks.ts. Caps are the dead ends, so they carry the reward markers.
-import { deriveMask, type Chunk } from "./chunks";
+import { assertAuthored, type Chunk } from "./chunks";
 
 export interface Grammar {
   id: string;
@@ -15,6 +15,13 @@ export interface Grammar {
   bossChunk: Chunk;
   /** Dead-end spurs hung off the loop. */
   branchCount: number;
+  /**
+   * Carve the tiles the route does not use with a wobbly disc, so the area's
+   * boundary is organic instead of a 7x7 square. A lattice of open ground reads
+   * as a grid far more readily than a lattice of rooms does, which is why the
+   * field grammar asks for this and the loop grammar does not.
+   */
+  organicRim?: boolean;
 }
 
 export type MaskClass = "solid" | "cap" | "straight" | "corner" | "tee" | "cross";
@@ -448,8 +455,4 @@ const CANONICAL: readonly [Chunk, number][] = [
   [CROSS_COURT, 0b1111],
   [CROSS_ISLAND, 0b1111],
 ];
-for (const [chunk, mask] of CANONICAL) {
-  if (deriveMask(chunk.rows) !== mask) {
-    throw new Error(`${chunk.id}: derived mask ${deriveMask(chunk.rows)}, authored for ${mask}`);
-  }
-}
+assertAuthored(CANONICAL, BOSS_HALL);

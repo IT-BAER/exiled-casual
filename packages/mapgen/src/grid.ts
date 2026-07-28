@@ -3,7 +3,8 @@
 // assembler can use one implementation without importing each other.
 import { fnv1a32 } from "./rng";
 
-export const ALGORITHM_VERSION = 2;
+/** 2 = the wobbly-disc open field. 3 = chunks assembled on a 7x7 tile lattice. */
+export const ALGORITHM_VERSION = 3;
 
 /** Cell edge length in world units. Player body radius is 0.5, so a 3-cell
  *  corridor is 1.5 world units wide — player diameter (1.0) plus margin. */

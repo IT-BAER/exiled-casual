@@ -3,10 +3,11 @@
 //
 // Each stage draws from its own named RNG sub-stream, so adding a chunk to the
 // library cannot shift the boss position chosen by a different stage.
-import { fallbackLayout } from "./mapgen";
-import { createStream } from "./rng";
+import { fallbackLayout } from "./fallback";
+import { createStream, type RandomStream } from "./rng";
 import {
   SPAWN_TARGET,
+  bfsReachable,
   buildLayout,
   cellCentre,
   worldToCell,
@@ -59,6 +60,43 @@ function tileCentreCell(cells: Uint8Array, tx: number, ty: number): { cx: number
     }
   }
   return best;
+}
+
+/**
+ * Carve the tiles the route does not use with an irregular disc, so the area's
+ * outer boundary is organic instead of the edge of a 7x7 lattice. Only mask-0
+ * tiles are touched — carving a routed tile would sever the route it carries.
+ *
+ * The disc is the same sinusoidal wobble the old open-field generator used; it
+ * was the one part of that generator worth keeping.
+ */
+function carveOrganicRim(cells: Uint8Array, masks: Uint8Array, rng: RandomStream): void {
+  const mid = (ASSEMBLED_CELLS - 1) / 2;
+  // 0.38 of the grid, plus at most 10 cells of wobble, keeps the carve inside
+  // the 55.5-cell half-width with room to spare: the outer ring must stay wall.
+  const radius = ASSEMBLED_CELLS * 0.38;
+  const a1 = rng.nextInt(3, 6), a2 = rng.nextInt(2, 4);
+  const p1 = (rng.nextU32() / 0x1_0000_0000) * Math.PI * 2;
+  const p2 = (rng.nextU32() / 0x1_0000_0000) * Math.PI * 2;
+  for (let y = 0; y < ASSEMBLED_CELLS; y++) {
+    for (let x = 0; x < ASSEMBLED_CELLS; x++) {
+      const tile = Math.floor(y / TILE_CELLS) * AREA_TILES + Math.floor(x / TILE_CELLS);
+      if (masks[tile] !== 0) continue; // a stamped chunk owns this cell
+      const dx = x - mid, dy = y - mid;
+      const ang = Math.atan2(dy, dx);
+      const r = radius + a1 * Math.sin(3 * ang + p1) + a2 * Math.sin(5 * ang + p2);
+      if (Math.hypot(dx, dy) <= r) cells[y * ASSEMBLED_CELLS + x] = 1;
+    }
+  }
+}
+
+/**
+ * Erase floor the player can never stand on. The rim carve can leave a pocket
+ * cut off from the route, which would read as open ground behind a wall.
+ */
+function pruneUnreachable(cells: Uint8Array, start: { cx: number; cy: number }): void {
+  const reached = bfsReachable(cells, ASSEMBLED_CELLS, start);
+  for (let i = 0; i < cells.length; i++) if (cells[i] === 1 && reached[i] !== 1) cells[i] = 0;
 }
 
 /** Rotate the grid 90 degrees clockwise: (cx,cy) -> (size-1-cy, cx). */
@@ -135,12 +173,22 @@ export function assembleArea(seed: number, contentVersion: string, grammar: Gram
   markers.push(...bossMarkers);
   chosenVariantIds.push(`${skeleton.bossTile.tx},${skeleton.bossTile.ty}:${bossFit.id}`);
 
+  // Break up the lattice: carve the unused tiles with a wobbly disc so the
+  // boundary is not the edge of a 7x7 square. Route tiles are never touched.
+  if (grammar.organicRim) {
+    carveOrganicRim(cells, skeleton.masks, createStream(seed, `${contentVersion}.layout.rim`));
+  }
+
   // Stage 3: anchors. The player arrives by portal, so the start is a point
   // inside a rim tile, not a door in the outer wall.
   const startCell = tileCentreCell(cells, skeleton.startTile.tx, skeleton.startTile.ty);
   const bossMarker = markers.find((m) => m.ch === "b");
   const exitMarker = markers.find((m) => m.ch === "e");
   if (!startCell || !bossMarker || !exitMarker) return fallbackLayout(seed, contentVersion);
+
+  // The rim carve can strand a pocket of floor behind the route. Open ground
+  // the player can never reach reads as a bug, so erase it.
+  if (grammar.organicRim) pruneUnreachable(cells, startCell);
 
   let objectiveAnchors: Socket[] = [
     { id: "start", ...cellCentre(ASSEMBLED_CELLS, startCell.cx, startCell.cy) },
@@ -149,25 +197,54 @@ export function assembleArea(seed: number, contentVersion: string, grammar: Gram
   ];
   const start = objectiveAnchors[0]!;
 
-  // Stage 4: spawns, one per tile in descending route order so they spread out
-  // and land far from the entrance. Later passes take extra points from the
-  // same tiles if the first pass came up short.
   const farthestFirst = [...markersByTile.keys()].sort((a, b) => {
     const d = (skeleton.routeDist[b] ?? UNREACHED) - (skeleton.routeDist[a] ?? UNREACHED);
     return d !== 0 ? d : a - b;
   });
-  const spawnSockets: Socket[] = [];
+
+  // Stage 4: spawns spread ALONG the route, not piled at the end of it. Taking
+  // the N farthest tiles put every monster 40+ units away in a 56-unit map and
+  // left the first half of the route empty: nothing to pull, nothing to fight
+  // until the boss. Walk the route in order instead and take evenly spaced
+  // tiles, so the pack density is even from just outside the safe wedge to the
+  // far end.
   const farEnough = (m: Marker): boolean => {
     const p = cellCentre(ASSEMBLED_CELLS, m.cx, m.cy);
     return Math.hypot(p.x - start.x, p.y - start.y) >= SPAWN_SAFE_RADIUS;
   };
-  for (let perTile = 1; perTile <= 4 && spawnSockets.length < SPAWN_TARGET; perTile++) {
-    for (const tile of farthestFirst) {
+  const nearestFirst = [...farthestFirst].reverse().filter((tile) =>
+    (markersByTile.get(tile) ?? []).some((m) => m.ch === "s" && farEnough(m)),
+  );
+  const spawnSockets: Socket[] = [];
+  const taken = new Set<number>();
+  const push = (tile: number): void => {
+    const m = (markersByTile.get(tile) ?? []).find((k) => k.ch === "s" && farEnough(k));
+    if (!m || taken.has(tile)) return;
+    taken.add(tile);
+    spawnSockets.push({ id: `spawn.${spawnSockets.length}`, ...cellCentre(ASSEMBLED_CELLS, m.cx, m.cy) });
+  };
+  if (nearestFirst.length > 0) {
+    for (let i = 0; i < SPAWN_TARGET; i++) {
+      // SPAWN_TARGET > 1, so this spans 0..length-1 inclusive.
+      const at = Math.round((i * (nearestFirst.length - 1)) / (SPAWN_TARGET - 1));
+      push(nearestFirst[at]!);
+    }
+    // Evenly spaced indices collide when there are fewer eligible tiles than
+    // spawns; top up from whatever is left, still in route order.
+    for (const tile of nearestFirst) {
       if (spawnSockets.length >= SPAWN_TARGET) break;
-      const candidates = (markersByTile.get(tile) ?? []).filter((m) => m.ch === "s" && farEnough(m));
-      const m = candidates[perTile - 1];
-      if (!m) continue;
-      spawnSockets.push({ id: `spawn.${spawnSockets.length}`, ...cellCentre(ASSEMBLED_CELLS, m.cx, m.cy) });
+      push(tile);
+    }
+    // Still short: a tile may hold several spawn points, so take its spares.
+    for (const tile of nearestFirst) {
+      if (spawnSockets.length >= SPAWN_TARGET) break;
+      for (const m of (markersByTile.get(tile) ?? [])) {
+        if (spawnSockets.length >= SPAWN_TARGET) break;
+        if (m.ch !== "s" || !farEnough(m)) continue;
+        const p = cellCentre(ASSEMBLED_CELLS, m.cx, m.cy);
+        if (spawnSockets.some((s) => s.x === p.x && s.y === p.y)) continue;
+        spawnSockets.push({ id: `spawn.${spawnSockets.length}`, ...p });
+      }
     }
   }
 
