@@ -553,7 +553,7 @@ function buildMapDevice(scene: Scene, root: Mesh): void {
 
 /**
  * Iron-banded wooden chest on a low stone step, the way PoE2's camp stash sits at
- * the edge of the firelight (poe2-screenshots/closeup-hideout-zoom.jpg): dark
+ * the edge of the firelight (reference-screenshots/closeup-hideout-zoom.jpg): dark
  * timber, cold iron straps, a domed lid. Hover warms the iron so it reads clickable.
  */
 function buildStash(scene: Scene, root: Mesh): void {

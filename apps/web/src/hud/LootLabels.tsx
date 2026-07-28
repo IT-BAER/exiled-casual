@@ -31,7 +31,7 @@ export interface LootLabelsProps {
 
 /**
  * Persistent rarity-coloured name plate over every ground item, the way PoE
- * shows drops (poe2-screenshots/ground-loot*.png): a dark plate with a thin
+ * shows drops (reference-screenshots/ground-loot*.png): a dark plate with a thin
  * rarity border and small-caps serif text in the rarity colour.
  *
  * Content is React's; position is not. The camera moves every frame while the

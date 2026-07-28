@@ -136,7 +136,7 @@ reproducible and reviewable.
 
 Straight from `WalkableGrid`: walkable cells drawn to an offscreen canvas once per area, revealed
 by an explored mask the client updates from player position. Anchors (entrance, boss, exit) and
-rewards as icons. **Check `poe2-screenshots/inside-map.jpg` before building it**, per the
+rewards as icons. **Check `reference-screenshots/inside-map.jpg` before building it**, per the
 workspace visual-reference rule.
 
 It is second in the slice order on purpose: layout variation the player cannot perceive is

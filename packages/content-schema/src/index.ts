@@ -432,7 +432,7 @@ function validateSubSpec(
 // ── Items (First Loot slice) ────────────────────────────────────────────────
 export type Rarity = "normal" | "magic" | "rare" | "unique";
 
-/** Tooltip base-stat block shown between the header and affixes (poe2-screenshots/item-*.png). */
+/** Tooltip base-stat block shown between the header and affixes (reference-screenshots/item-*.png). */
 export interface ItemStats {
   /** weapon physical damage range (rendered "min-max") */
   physMin?: number;
@@ -518,7 +518,7 @@ export interface Item {
 
 /**
  * A named one-off item bound to a single base, with a fixed mod list rolled inside
- * per-unique ranges (poe2-screenshots/item-unique.png). Mods reference the shared affix
+ * per-unique ranges (reference-screenshots/item-unique.png). Mods reference the shared affix
  * pool for their label, but the ranges are the unique's own and may exceed the affix's.
  */
 export interface UniqueItem {

@@ -31,7 +31,7 @@ interface Props {
 
 // PoE2 map-device look: aged near-black panel behind an ornate gold frame, a
 // carved red-brown title banner, engraved small-caps serif, item-tile choices.
-// Matches poe2-screenshots/atlas-maps.webp (banner + gilt frame) and
+// Matches reference-screenshots/atlas-maps.webp (banner + gilt frame) and
 // portals-map-device.webp (Map Device / waystone naming).
 const SERIF = '"Cinzel", "Trajan Pro", Georgia, "Times New Roman", serif';
 const GOLD = "#c8a44d";

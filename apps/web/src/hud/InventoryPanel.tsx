@@ -60,7 +60,7 @@ type DragSource = { kind: "grid"; container: ContainerId; x: number; y: number }
 // snapshot.inventory, the real drop->pickup path). The equipment paper-doll,
 // flask row and currency strip are styled placeholders: equipping, flasks and
 // currency are not in the sim yet, so those slots are honestly empty.
-// Matches poe2-screenshots/inventory+equipment.png.
+// Matches reference-screenshots/inventory+equipment.png.
 // Exported so the character sheet dresses in the same carved gold as this panel
 // rather than keeping a second copy of the palette that can drift from it.
 export const SERIF = '"Cinzel", "Trajan Pro", Georgia, "Times New Roman", serif';
@@ -69,7 +69,7 @@ export const GOLD_DIM = "#7a5c22";
 export const PARCHMENT = "#e8dcc0";
 const MAGIC = "#8aa6ff";
 /**
- * Grid lattice, sampled off poe2-screenshots/stash.png: a 1px warm brown line
+ * Grid lattice, sampled off reference-screenshots/stash.png: a 1px warm brown line
  * over a cell floor that is nearly black. Reading it back off the reference,
  * the separation comes from the floor being black rather than from the line
  * being bright, which is why the tile under this is unlit almost everywhere.
@@ -189,7 +189,7 @@ function slotStyle(): React.CSSProperties {
 /**
  * One paper-doll slot. `highlight` is driven by the in-flight drag: legal targets
  * glow gold, illegal ones fade back, so the eye lands on the right slot without
- * reading labels (poe2-screenshots/inventory+equipment.png).
+ * reading labels (reference-screenshots/inventory+equipment.png).
  */
 function EquipSlot({
   slot, x, y, w, h, label, item, highlight, onGrab, onHover, onLeave,
@@ -228,7 +228,7 @@ function EquipSlot({
   );
 }
 
-// Paper-doll layout in equipment units, matching poe2-screenshots/inventory+equipment.png.
+// Paper-doll layout in equipment units, matching reference-screenshots/inventory+equipment.png.
 const PAPER_DOLL: { slot: EquipSlotId; x: number; y: number; w: number; h: number; label: string }[] = [
   { slot: "weapon1", x: 0, y: 0, w: 2, h: 4, label: "Weapon" },
   { slot: "weapon2", x: 8, y: 0, w: 2, h: 4, label: "Weapon" },

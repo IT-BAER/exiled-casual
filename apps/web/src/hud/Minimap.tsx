@@ -6,7 +6,7 @@ import { SERIF } from "./ItemTooltip";
  * Top-right minimap, the instrument that makes the layout variation legible: a
  * player who cannot see the route cannot tell one assembly from another.
  *
- * Reference: `poe2-screenshots/minimap-poe1.png` (PoE1) for the drawing itself —
+ * Reference: `reference-screenshots/minimap-poe1.png` (PoE1) for the drawing itself —
  * the explored area is ONE smooth dark silhouette under a thin lavender contour,
  * over a square of dimmed world, with no panel or border. Drawing the cells
  * as walls and floor instead (as `minimap.png`, PoE2, does at its much closer

@@ -134,7 +134,7 @@ first-fit scans top-left → bottom-right for the first free `w×h` rectangle (`
 - Inventory panel (toggle key, default `I`): draws the 12×5 grid; each item occupies its `w×h`
   footprint, rarity-colored; hover shows a tooltip built from the base name + affix lines derived
   from the committed integer rolls. No drag / no manual placement this slice.
-- Consult `poe2-screenshots/` for the inventory look before building (per workspace CLAUDE.md).
+- Consult `reference-screenshots/` for the inventory look before building (per workspace CLAUDE.md).
 
 ## 6. Determinism / invariants (hold from day one)
 

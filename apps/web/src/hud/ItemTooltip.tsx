@@ -1,7 +1,7 @@
 import React from "react";
 import type { ItemStatLine } from "@exiled/protocol";
 
-// PoE2 item tooltip. Matched to poe2-screenshots/item-{normal,magic,rare,unique}.png:
+// PoE2 item tooltip. Matched to reference-screenshots/item-{normal,magic,rare,unique}.png:
 // near-black panel, centered small-caps serif, a rarity-framed header band with
 // inward flourishes, an item-class line, then affix lines in augmented-blue.
 // All four rarities roll today; the sim still does not model weapon base stats or
@@ -177,7 +177,7 @@ export function ItemTooltip({
         )}
 
         {/* Same blue as the rolled mods, its own block above them: in
-            poe2-screenshots/item-rare.png the Goat's Horn implicit is set off by a gap,
+            reference-screenshots/item-rare.png the Goat's Horn implicit is set off by a gap,
             not by a colour or a heading. */}
         {implicit && (
           <>

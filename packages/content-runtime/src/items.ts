@@ -140,7 +140,7 @@ export function isCurrency(item: Item): boolean {
 // wand reads "Hale Wand of the Furnace"; the words are in PoE's idiom, not lifted from its
 // tables. Mod text follows PoE2's wording as poe2db lists it ("+(13-19)% to Chaos
 // Resistance", "(20-30)% increased Mana Regeneration Rate"), except crit, which stays
-// "Critical Strike Chance" to match poe2-screenshots/item-rare.png and the base-stat block.
+// "Critical Strike Chance" to match reference-screenshots/item-rare.png and the base-stat block.
 //
 // itemClasses is PoE's per-class mod pool: armour never rolls on a caster weapon, cast
 // speed never on a chest. Resistances, attributes and mana regeneration name no class and
@@ -169,7 +169,7 @@ const AFFIXES: Affix[] = [
 
 // Named items bound to one base each. Mod ranges are the unique's own and deliberately
 // beat the shared affix pool's ranges; flavour is the italic orange line in the tooltip
-// (poe2-screenshots/item-unique.png).
+// (reference-screenshots/item-unique.png).
 const UNIQUES: UniqueItem[] = [
   {
     id: "unique.ashmaw",
@@ -309,7 +309,7 @@ export interface ItemDescription {
 }
 
 /**
- * Affix line exactly as poe2-screenshots/item-*.png renders it: a percent label
+ * Affix line exactly as reference-screenshots/item-*.png renders it: a percent label
  * hugs its number ("13% to Fire Resistance", not "13 % ..."), and increased/reduced
  * mods carry no sign, while flat and resistance mods do ("+9 to maximum Life").
  */

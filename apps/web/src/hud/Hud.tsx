@@ -6,7 +6,7 @@ import { PANEL_W } from "./layout";
 import { SkillTooltip } from "./SkillTooltip";
 import { playDropSound } from "../audio/drop-sound";
 
-// Bottom HUD geometry, measured off poe2-screenshots/poe1-lower-bar.png, a 2558x388 crop
+// Bottom HUD geometry, measured off reference-screenshots/poe1-lower-bar.png, a 2558x388 crop
 // of Path of Exile **1**'s bottom bar (PoE1, not PoE2 — its globes are bigger and its ring
 // far thinner than the PoE2 orbs we started from). Measured there: the liquid sphere is
 // 263px across = 10.3% of the screen width; the braided ring is a 19px band = 7.2% of the
@@ -101,7 +101,7 @@ const SKILL_SLOTS: SkillSlot[] = [
 
 /**
  * One skill tile. Extracted because the bar is two rows now, as PoE1's is
- * (poe2-screenshots/poe1-lower-bar.png): the mouse buttons sit in their own row
+ * (reference-screenshots/poe1-lower-bar.png): the mouse buttons sit in their own row
  * above the numbered slots, and both rows draw the same tile.
  */
 function SkillTile({ slot, n, cooldowns, onHover }: {

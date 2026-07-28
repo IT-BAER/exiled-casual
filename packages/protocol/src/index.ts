@@ -167,7 +167,7 @@ export interface SnapshotEntity {
   unidentified?: boolean;
   /** groundItem only: base item class label ("wand", "focus") for the tooltip. */
   itemClass?: string;
-  /** groundItem only: tooltip base-stat block + requirements (poe2-screenshots/item-*.png). */
+  /** groundItem only: tooltip base-stat block + requirements (reference-screenshots/item-*.png). */
   statLines?: ItemStatLine[];
   reqLevel?: number;
   reqAttrValue?: number;

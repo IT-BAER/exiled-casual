@@ -23,7 +23,7 @@ export function applyDamage(pkt: DamageSpec, def: Defenses): Fixed {
  * Warden's slam.
  *
  * PoE2's character sheet shows armour as one such percent
- * (poe2-screenshots/character-stats.png reads "Armour 7%", quoted against a
+ * (reference-screenshots/character-stats.png reads "Armour 7%", quoted against a
  * level-appropriate hit) rather than as the raw rating, so display reads it
  * from here and applyDamage resolves through it — one curve, no drift.
  */

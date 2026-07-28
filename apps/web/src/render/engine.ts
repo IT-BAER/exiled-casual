@@ -175,7 +175,7 @@ const CAMERA_FOV = 0.5;
  * This is both where the wheel starts and as far out as it goes: the widest shot
  * is the authored one, and the wheel only ever brings the player closer.
  *
- * Calibrated against `poe2-screenshots/article-1280x720`, where the player fills
+ * Calibrated against `reference-screenshots/article-1280x720`, where the player fills
  * ~12% of the frame height. Measure at 16:9, never ultrawide: an ortho camera
  * keeps the vertical span fixed, so a wider window only adds world sideways and
  * makes the character read smaller than this number suggests.

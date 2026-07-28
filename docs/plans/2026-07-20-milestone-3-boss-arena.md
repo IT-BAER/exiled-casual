@@ -238,6 +238,6 @@ and is left unedited:
 - **Monster pathing is naive** — chase + slide, no A*. Acceptable for one arena and short
   corridors; revisit if monsters visibly stick on corners.
 - **Telegraph readability under the orthographic camera** — the disc must stay visible under
-  the boss mesh; check against `poe2-screenshots/` before committing A7.
+  the boss mesh; check against `reference-screenshots/` before committing A7.
 - **Determinism**: every new system reads only `world`/`tick`/content — no `Math.random`, no
   wall-clock. `resetBoss` mutates inside a system, never from the client.

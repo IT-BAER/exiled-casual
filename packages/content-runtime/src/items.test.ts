@@ -42,7 +42,7 @@ describe("describeItem", () => {
 
   it("renders a base's fixed implicit, and none for a base without one", () => {
     const of = (baseId: string) => describeItem({ baseId, rarity: "normal", itemLevel: 65, affixes: [] }).implicit;
-    // Ember Wand copies Goat's Horn's stat block (poe2-screenshots/item-rare.png), so it
+    // Ember Wand copies Goat's Horn's stat block (reference-screenshots/item-rare.png), so it
     // carries that base's implicit too. Same value on every drop, unlike an affix.
     expect(of("base.emberwand")).toBe("12% increased Spell Damage");
     expect(of("base.cinder_cap")).toBeUndefined();

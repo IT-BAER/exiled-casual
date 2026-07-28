@@ -1320,7 +1320,7 @@ Expected: rc=0.
 
 - [ ] **Step 2: Manual run (per the run skill or `npm run dev -w apps/web`)**
 
-Walk to the map device, open the Preparation Panel, activate a mid/high-tier waystone, enter the map, kill the rare imp and the boss, confirm ground-item markers appear, press `g` near one to pick it up, press `i` to open the inventory and confirm the item sits in the grid with a tooltip. Reload with chrome-devtools `ignoreCache: true` (the sim worker changed). Kill stray vite ports (5173-5177) afterward. Consult `poe2-screenshots/` for the inventory look and adjust `InventoryPanel` styling to match before the screenshot.
+Walk to the map device, open the Preparation Panel, activate a mid/high-tier waystone, enter the map, kill the rare imp and the boss, confirm ground-item markers appear, press `g` near one to pick it up, press `i` to open the inventory and confirm the item sits in the grid with a tooltip. Reload with chrome-devtools `ignoreCache: true` (the sim worker changed). Kill stray vite ports (5173-5177) afterward. Consult `reference-screenshots/` for the inventory look and adjust `InventoryPanel` styling to match before the screenshot.
 
 - [ ] **Step 3: Devlog screenshot**
 

@@ -22,7 +22,7 @@ describe("ItemTooltip", () => {
 
   it("renders the implicit in its own block above the rolled mods", () => {
     render(<ItemTooltip name="Ember Wand" rarity="normal" implicit="12% increased Spell Damage" lines={["+24 to maximum Mana"]} x={0} y={0} />);
-    // Own block, not folded into the mod list: poe2-screenshots/item-rare.png sets the
+    // Own block, not folded into the mod list: reference-screenshots/item-rare.png sets the
     // implicit off from the explicits with its own gap.
     const block = screen.getByTestId("item-implicit");
     expect(block.textContent).toBe("12% increased Spell Damage");

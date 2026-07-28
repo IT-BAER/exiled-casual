@@ -5,7 +5,7 @@ import { SERIF, PARCHMENT, PANE, PaneHeader } from "./InventoryPanel";
 import { PANEL_PAD, CELL_VW } from "./layout";
 import { ORB_RISE } from "./Hud";
 
-// PoE2's character sheet (C), matched to poe2-screenshots/character-stats.png.
+// PoE2's character sheet (C), matched to reference-screenshots/character-stats.png.
 // The stone, the carved header band with its gold cartouche, the arch niches
 // and the stat icons are generated art under /textures/ui/char_*.png rather
 // than CSS approximations, because the reference's weight comes almost entirely
@@ -284,7 +284,7 @@ export function CharacterPanel({ player, onClose }: { player: Snapshot["player"]
 
         <BandLabel>Resistances</BandLabel>
         {/* 2x2, fire/cold over lightning/chaos — the reference's arrangement
-            (poe2-screenshots/character-stats.png). */}
+            (reference-screenshots/character-stats.png). */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
           <ResPill id="fire" label="Fire" pct={s.res.fire} icon={<Icon of="fire" size={20} />} />
           <ResPill id="cold" label="Cold" pct={s.res.cold} icon={<ElementGlyph of="cold" />} />
