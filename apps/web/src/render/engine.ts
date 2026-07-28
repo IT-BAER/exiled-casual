@@ -234,6 +234,14 @@ export const GROUND_SIZE = 200;
  */
 const SHADOW_EXTENT = 16;
 
+/**
+ * How far back along its own direction the sun is parked, world units. A
+ * directional light has no position of its own, but its shadow map does, and the
+ * near/far planes below are written as this plus or minus a margin — so the
+ * distance has to be a number both places share rather than a literal in one.
+ */
+const SUN_DISTANCE = 60;
+
 export interface SceneHandle {
   scene: Scene;
   camera: ArcRotateCamera;
@@ -450,11 +458,38 @@ export function createScene(engine: Engine): SceneHandle {
     sun.orthoRight = SHADOW_EXTENT;
     sun.orthoBottom = -SHADOW_EXTENT;
     sun.orthoTop = SHADOW_EXTENT;
-    sun.shadowMinZ = 1;
-    sun.shadowMaxZ = 140;
+    // Bracketed TIGHTLY around the scene, and that is what makes the softening
+    // below work at all. The light sits `SUN_DISTANCE` back along its own
+    // direction, the visible box reaches about 20 units either side of that
+    // along the ray and 3.5 up, so everything that can cast lives in roughly
+    // 40..80. Spanning 1..140 instead spreads that band across a quarter of the
+    // depth range, and PCSS measures the blocker-to-receiver gap in NORMALISED
+    // depth — at that scale a boulder and the floor under it differ by ~0.01 and
+    // every shadow comes out uniformly hard. Tightening the range is the fix,
+    // not a larger light.
+    sun.shadowMinZ = SUN_DISTANCE - 35;
+    sun.shadowMaxZ = SUN_DISTANCE + 35;
 
     const shadows = new ShadowGenerator(2048, sun);
-    shadows.usePercentageCloserFiltering = true; // soft, and lit outside the frustum
+    // Contact hardening (PCSS): sharp where an object meets the floor, widening
+    // with the gap to its caster. A single blur radius is the thing that reads
+    // as CG — a boulder's shadow is crisp at its base and diffuse at the far end
+    // of the smear, and at this raking sun that difference runs the length of
+    // every shadow in the frame. Supersedes PCF; setting both is last-one-wins.
+    shadows.useContactHardeningShadow = true;
+    // Light size in shadow-map UV, and this number is sharper than it looks.
+    // The frustum is 2*SHADOW_EXTENT across, so 0.07 is a sun about 2.2 units
+    // wide — physically absurd, and the point: a real sun's penumbra is under a
+    // degree and invisible here, while a readable "softens with distance" needs
+    // a source with size.
+    //
+    // It also sets the BLOCKER SEARCH radius, which is why it cannot simply be
+    // turned up. At 0.2 the search swept ~3 world units, wider than the props
+    // themselves, so most samples found no blocker, every penumbra estimate came
+    // out enormous and the frame lost its shadows entirely — verified against a
+    // PCF frame of the same hideout, chest and map device both bare. 0.07 is the
+    // largest value where the shadows are still there.
+    shadows.contactHardeningLightSizeUVRatio = 0.07;
     shadows.filteringQuality = ShadowGenerator.QUALITY_MEDIUM;
     shadows.darkness = 0.12; // deep, but the flagstones still read through them
     // Every actor part the renderer spawns later becomes a caster on its own, so
@@ -535,7 +570,9 @@ export function createScene(engine: Engine): SceneHandle {
     // Walk the light along with the camera so the frustum always brackets what
     // the player can see. Backwards along the light direction, and high enough
     // that nothing on screen falls behind shadowMinZ.
-    const back = sun.direction.negate().scaleInPlace(70);
+    // Normalised first: the authored direction is 0.855 long, so scaling it raw
+    // put the light 60 units back only by accident and any re-aim would move it.
+    const back = sun.direction.normalizeToNew().negateInPlace().scaleInPlace(SUN_DISTANCE);
     scene.onBeforeRenderObservable.add(() => {
       sun.position.copyFrom(camera.target).addInPlace(back);
     });
