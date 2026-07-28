@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Engine, Matrix, Vector3 } from "@babylonjs/core";
 import { createScene } from "./render/engine";
-import { buildLevel, applyBiomeTint } from "./render/level";
+import { buildLevel, applyBiomeTint, applyTilesetFloor } from "./render/level";
 import { SnapshotRenderer } from "./render/renderer";
 import { loadProps, resetProps } from "./render/props";
 import { loadPlayerRig, resetPlayerRig } from "./render/rig";
@@ -118,6 +118,7 @@ export function App() {
         // neutral rig back rather than keeping the last map's mood.
         const base = msg.mapBaseId ? mapBase(msg.mapBaseId) : null;
         buildLevel(scene, grid, base?.tilesetId);
+        applyTilesetFloor(scene, base?.tilesetId ?? null);
         applyBiomeTint(scene, base ? BIOMES[base.biomeId].tint : null);
         setAreaLayout(msg.area === "map" ? msg.layout : null);
       }

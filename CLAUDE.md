@@ -117,6 +117,40 @@ PoE2 itemization actually works — do not invent mechanics or colors from memor
   is linear, so a flat colour needs squaring to look like the Babylon value it replaces, and a prop
   built facing -Y in Blender ends up facing away from the camera after the two axis conversions.
 
+## Maps & biomes
+
+- An area is **assembled from authored chunks**, not carved: a 7x7 lattice of 16-cell tiles
+  (112x112 cells = 56x56 world units). `skeleton.ts` decides a route (loop + dead-end spurs +
+  a reserved 2x2 boss block) and hands out a 4-bit open-edge mask per tile; `assemble-area.ts`
+  stamps a chunk onto each mask. Masks come first, so chunk choice is a lookup that cannot fail
+  to edge-match. Each stage draws from its own named RNG sub-stream.
+- Chunks are 16x16 ASCII in `loop-grammar.ts` / `field-grammar.ts` (`#` wall, `.` floor, `s`
+  spawn, `r` reward, `b` boss, `e` exit). **The edge mask is DERIVED from the border, never
+  declared**, and an open edge is exactly cells 6..9 of that edge — that window is symmetric
+  about the tile centre, which is the only reason rotate and mirror are closed operations on the
+  mask. Off-centre openings stop matching the moment a chunk is mirrored. `assertAuthored` runs
+  at import and reports every bad chunk at once.
+- A **grammar is a chunk library plus a branch count**, never a second code path. `loop` (Vaal
+  Stone, Swamp) and `open-field` (Desert, Forest), 15 chunks each: 5 mask classes x 3 variants,
+  plus one 2x2 boss arena — a single 8x8-unit tile cannot hold a boss when the camera sees 19x9.5.
+- **Spawns spread ALONG the route, not at the end of it.** Taking the N farthest tiles put every
+  monster 40+ units away in a 56-unit map and left the first half empty.
+- Map bases live in `content-runtime/maps.ts`; `@exiled/rules` is a pure leaf so it holds only
+  the id strings, and `simulation/maps.test.ts` fails if the two lists disagree. The Atlas node
+  picks the base, the base picks the grammar and tileset. **The client must resolve the same
+  grammar as the sim** or it draws a different dungeon than the one it collides against.
+- Biome textures are generated (`/codex-imagegen`) into `assets/tilesets/<biome>/`, then made
+  tiling by `tools/build_tileset_textures.py`. Generated art does not tile and has no normal map,
+  so that script is not optional: it cross-fades the wrap, derives the normal, and **lifts plates
+  that are too dark to play on** (floors to 55, walls to 95). The renderer is calibrated against
+  a 57-luma floor and a 132-luma wall, and engine.ts boosts the floor because actors are
+  near-black and only read against a floor brighter than they are.
+- A biome tint is a **colour, not a dimmer**: `applyBiomeTint` normalises to mean 1.0. Applied
+  raw it took a third out of the ambient and the rooms went to unplayable black.
+- **Level walls must never be shadow casters** (`engine.ts` excludes `wallrun-*`). A 3.5-unit wall
+  under that low sun throws a ~9-unit shadow, longer than a room is wide, and the per-run boxes
+  are disposed by the merge but stayed in the shadow render list — 817 dead meshes after one map.
+
 ## Devlog — SCREENSHOT EACH VISIBLE STEP
 
 - **Ask the user to confirm the screen before you capture it.** Say what is on it and wait; a devlog

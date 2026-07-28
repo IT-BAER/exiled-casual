@@ -91,7 +91,9 @@ const BETA_LIMIT = { min: BETA_AT_DEFAULT, max: 0.88 };
 const ZOOM_EASE = 0.18;
 
 /** Flagstone texture repeats across the 200u floor (25 → ~8u per tile). */
-const FLOOR_TILES = 25;
+/** Ground-plane texture repeats. Exported because level.ts re-plates the same
+ *  mesh per biome and must not change the scale of the stone underfoot. */
+export const FLOOR_TILES = 25;
 
 /**
  * Half-size of the shadow frustum, in world units. Needs to cover the visible
@@ -265,8 +267,23 @@ export function createScene(engine: Engine): SceneHandle {
     // only mesh alive at this point, and it only receives.
     // Telegraph meshes (fill disc + rim torus, named "telegraph-*") must not cast
     // shadows — they are unlit VFX decals and a shadow from them would look wrong.
+    //
+    // Neither may level walls ("wallrun-*", and the merged mesh Babylon names
+    // "<first source>_merged"). Two reasons, both found by running an assembled
+    // map rather than the old disc:
+    //  - A 3.5-unit wall under this low sun throws a ~9-unit shadow, longer than
+    //    a room is wide, so at darkness 0.12 every room went to unplayable black.
+    //    The disc had almost no walls, which is why it never showed before.
+    //  - buildLevel makes one box per wall run and merges them, disposing the
+    //    sources; the render list kept every disposed box, 817 of them after one
+    //    map, and grew again on each area change.
+    // The cost is that walls no longer darken the floor beside them. Their own
+    // faces are still shaded by the sun, and legibility of the route is worth
+    // more here than contact shadow on a wall the camera looks down on.
+    const isLevelGeometry = (name: string): boolean => name.startsWith("wallrun-");
     scene.onNewMeshAddedObservable.add((mesh) => {
-      if (!mesh.name.startsWith("telegraph-")) shadows.addShadowCaster(mesh);
+      if (mesh.name.startsWith("telegraph-") || isLevelGeometry(mesh.name)) return;
+      shadows.addShadowCaster(mesh);
     });
 
     // Walk the light along with the camera so the frustum always brackets what

@@ -9,9 +9,11 @@ Run after adding or regenerating a master:
 
     python tools/build_tileset_textures.py
 
-Masters:  assets/tilesets/<biome>/wall_master_v1.png   (committed)
+Masters:  assets/tilesets/<biome>/wall_master_v1.png    (committed)
+          assets/tilesets/<biome>/floor_master_v1.png
 Output:   apps/web/public/textures/tilesets/<biome>/wall_color.jpg
           apps/web/public/textures/tilesets/<biome>/wall_normal.jpg
+          apps/web/public/textures/tilesets/<biome>/floor_color.jpg
 
 `level.ts` looks these up by tileset id, and `level.test.ts` fails if a biome in
 MAP_BASES has no files here.
@@ -32,8 +34,10 @@ OUT = ROOT / "apps" / "web" / "public" / "textures" / "tilesets"
 BIOMES = ["vaal_stone", "desert", "swamp", "forest"]
 
 # Shipped size. The old CC0 stone wall was 1024x512 and read fine at the game's
-# 2-world-unit repeat; matching it keeps the memory cost where it was.
+# 2-world-unit repeat; matching it keeps the memory cost where it was. The floor
+# matches the old floor.png at 1024 square.
 SHIP_W, SHIP_H = 1024, 512
+FLOOR_SHIP = 1024
 
 # Fraction of each axis spent cross-fading the wrap. Wide enough to hide a hard
 # mismatch, narrow enough that the blended band is not a visible smear: at 0.12
@@ -44,6 +48,48 @@ BLEND = 0.12
 # so luminance stands in for it; past ~3 the mortar lines start to look inflated
 # rather than recessed.
 NORMAL_STRENGTH = 2.2
+
+# Minimum mean luminance, 0-255. The renderer is calibrated against two specific
+# plates: the hideout floor at 57 and the CC0 wall at 132, and engine.ts lifts the
+# floor above 1.0 precisely because "the actors are near-black, and they only read
+# as silhouettes if the floor is clearly brighter than they are".
+#
+# The generated art does not respect that. Straight from the model the floors ran
+# 37 (forest) to 162 (desert) and the walls 41 (swamp) to 191 — a swamp floor at
+# 47 swallowed the character whole, and a swamp wall at 41 read as a black void
+# with no masonry in it at all.
+#
+# So this is a FLOOR, not a target: lift the plates that are too dark to play on,
+# and leave the bright ones alone, because a bright desert is a desert and a
+# character reads even better against it.
+FLOOR_MIN_LUMA = 55.0
+WALL_MIN_LUMA = 95.0
+
+
+def mean_luma(a: np.ndarray) -> float:
+    return float((0.299 * a[:, :, 0] + 0.587 * a[:, :, 1] + 0.114 * a[:, :, 2]).mean())
+
+
+def lift_luma(a: np.ndarray, target: float) -> tuple[np.ndarray, float, float]:
+    """Raise mean luminance to `target` by gamma, leaving brighter plates alone.
+
+    Gamma rather than a multiply: a 3x multiply on a dark plate clips every
+    highlight to white and the masonry turns to paste, while x**g cannot leave
+    0..1 and keeps the midtone detail that makes stone look like stone.
+    """
+    before = mean_luma(a)
+    if before >= target:
+        return a, before, before
+    x = a / 255.0
+    lo, hi = 0.05, 1.0
+    for _ in range(40):  # bisect on gamma; mean is monotonic in it
+        g = (lo + hi) / 2
+        if mean_luma((x**g) * 255.0) < target:
+            hi = g
+        else:
+            lo = g
+    out = (x ** ((lo + hi) / 2)) * 255.0
+    return out, before, mean_luma(out)
 
 
 def make_seamless(a: np.ndarray) -> np.ndarray:
@@ -86,35 +132,52 @@ def normal_map(rgb: np.ndarray) -> np.ndarray:
     return ((out * 0.5 + 0.5) * 255.0).clip(0, 255).astype(np.uint8)
 
 
-def build(biome: str) -> bool:
-    src = MASTERS / biome / "wall_master_v1.png"
+def plate(
+    src: pathlib.Path, size: tuple[int, int], min_luma: float
+) -> tuple[Image.Image, str] | None:
+    """Load a master, make it tile, lift it if it is too dark to play on, and
+    downscale it to its shipped size."""
     if not src.exists():
-        print(f"  {biome:11s} MISSING {src.relative_to(ROOT)}")
-        return False
-
+        print(f"    MISSING {src.relative_to(ROOT)}")
+        return None
     a = np.asarray(Image.open(src).convert("RGB")).astype(np.float32)
     before = seam_error(a)
     a = make_seamless(a)
     after = seam_error(a)
-
-    img = Image.fromarray(a.clip(0, 255).astype(np.uint8)).resize(
-        (SHIP_W, SHIP_H), Image.LANCZOS
+    a, luma_before, luma_after = lift_luma(a, min_luma)
+    img = Image.fromarray(a.clip(0, 255).astype(np.uint8)).resize(size, Image.LANCZOS)
+    note = (
+        f"seam L-R {before[0]:5.2f}->{after[0]:4.2f}  T-B {before[1]:5.2f}->{after[1]:4.2f}"
+        f"  luma {luma_before:5.1f}->{luma_after:5.1f}"
     )
+    return img, note
+
+
+def build(biome: str) -> bool:
     dst = OUT / biome
     dst.mkdir(parents=True, exist_ok=True)
-    img.save(dst / "wall_color.jpg", quality=92)
-    Image.fromarray(normal_map(np.asarray(img).astype(np.float32))).save(
+
+    wall = plate(MASTERS / biome / "wall_master_v1.png", (SHIP_W, SHIP_H), WALL_MIN_LUMA)
+    if wall is None:
+        return False
+    wall_img, wall_note = wall
+    wall_img.save(dst / "wall_color.jpg", quality=92)
+    Image.fromarray(normal_map(np.asarray(wall_img).astype(np.float32))).save(
         dst / "wall_normal.jpg", quality=92
     )
-    print(
-        f"  {biome:11s} seam L-R {before[0]:5.2f}->{after[0]:4.2f}  "
-        f"T-B {before[1]:5.2f}->{after[1]:4.2f}  ->  {dst.relative_to(ROOT)}"
-    )
+    print(f"  {biome:11s} wall   {wall_note}")
+
+    floor = plate(MASTERS / biome / "floor_master_v1.png", (FLOOR_SHIP, FLOOR_SHIP), FLOOR_MIN_LUMA)
+    if floor is None:
+        return False
+    floor_img, floor_note = floor
+    floor_img.save(dst / "floor_color.jpg", quality=92)
+    print(f"  {biome:11s} floor  {floor_note}  ->  {dst.relative_to(ROOT)}")
     return True
 
 
 def main() -> int:
-    print(f"building biome wall textures -> {OUT.relative_to(ROOT)}")
+    print(f"building biome tileset textures -> {OUT.relative_to(ROOT)}")
     ok = all([build(b) for b in BIOMES])
     if not ok:
         print("FAILED: a master is missing", file=sys.stderr)

@@ -7,6 +7,7 @@ import {
   Vector4,
   type Scene,
 } from "@babylonjs/core";
+import { FLOOR_TILES } from "./engine";
 import type { WalkableGrid } from "@exiled/mapgen";
 
 /** Wall height in world units — tall enough to read as walls, not kerbs, under
@@ -18,6 +19,7 @@ const WALL_MESH_NAME = "level-walls";
 const WALL_MAT_NAME = "level-wall-mat";
 /** The tileset a map with no base named falls back to. */
 const DEFAULT_TILESET = "tileset.vaal_stone";
+
 /** World units per texture repeat, applied via per-box faceUV so bricks keep a
  *  constant size no matter how many cells a merged wall run spans. */
 const TILE = 2;
@@ -141,9 +143,41 @@ export function buildLevel(
   if (merged) {
     merged.name = WALL_MESH_NAME;
     merged.material = wallMaterial(scene, tilesetId);
+    // Walls receive shadows (actors crossing them read correctly) but never cast
+    // one — engine.ts excludes "wallrun-*" from the shadow casters, and Babylon
+    // names the merged mesh after its first source, so this mesh is excluded too
+    // until the rename below. See engine.ts for why walls must not cast.
     merged.receiveShadows = true;
   }
   return { walls: merged, wallCells };
+}
+
+/**
+ * The floor plate of the shared ground plane. The ground is one 200-unit mesh
+ * that outlives every area (click-to-move raycasts against it anywhere), so a
+ * biome swaps its texture rather than its geometry. `null` restores the
+ * hideout's own flagstones.
+ *
+ * The floor is the largest surface on screen by far, so this — not the walls —
+ * is what actually makes a swamp look like a swamp from an overhead camera.
+ */
+export function applyTilesetFloor(scene: Scene, tilesetId: string | null): void {
+  const mat = scene.getMaterialByName("groundMat") as StandardMaterial | null;
+  if (!mat) return;
+  const url = tilesetId ? `${tilesetDir(tilesetId)}/floor_color.jpg` : "/textures/floor.png";
+  const current = mat.diffuseTexture as Texture | null;
+  if (current?.url === url) return;
+  try {
+    const tex = new Texture(url, scene);
+    // Same repeat as the hideout's plate, so a biome never changes the SCALE of
+    // the ground under the player — only what it is made of.
+    tex.uScale = FLOOR_TILES;
+    tex.vScale = FLOOR_TILES;
+    mat.diffuseTexture = tex;
+    current?.dispose();
+  } catch {
+    /* no canvas under NullEngine; the unloaded texture is fine in tests */
+  }
 }
 
 /**
@@ -155,13 +189,20 @@ export function buildLevel(
  * rather than leaving the last map's colour on the lab.
  */
 export function applyBiomeTint(scene: Scene, tint: readonly [number, number, number] | null): void {
-  const [r, g, b] = tint ?? [1, 1, 1];
   const fill = scene.getLightByName("fill");
   const sun = scene.getLightByName("sun");
+  // Normalised to mean 1.0, so a tint shifts HUE and never brightness. Applied
+  // raw, Vaal Stone's [0.62,0.70,0.68] took a third out of the ambient term, and
+  // an assembled map is mostly corridor floor lying in a wall's shadow — the
+  // rooms went to unplayable black. A biome is a colour, not a dimmer.
+  const [r, g, b] = tint ?? [1, 1, 1];
+  const mean = (r + g + b) / 3;
+  const k = mean > 0 ? 1 / mean : 1;
+  const nr = r * k, ng = g * k, nb = b * k;
   // The sky fill carries most of it: it is the ambient term, so tinting it
   // colours the shadows, which is where a place's mood actually lives.
-  if (fill) fill.diffuse = new Color3(r, g, b);
+  if (fill) fill.diffuse = new Color3(nr, ng, nb);
   // The key light takes a half-strength version, so the tint reads without the
   // lit faces losing the contrast that makes the walls legible.
-  if (sun) sun.diffuse = new Color3((1 + r) / 2, (1 + g) / 2, (1 + b) / 2);
+  if (sun) sun.diffuse = new Color3((1 + nr) / 2, (1 + ng) / 2, (1 + nb) / 2);
 }

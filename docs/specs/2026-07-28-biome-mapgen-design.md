@@ -1,6 +1,7 @@
 # Exiled Casual — Slice: "Biomes & Layout Grammar"
 
-Design spec. Status: approved for planning, 2026-07-28.
+Design spec. Status: **built, 2026-07-28.** See "As built" at the foot for where the
+implementation departed from this document and what it turned up.
 Baseline research: `docs/01-atlas-and-map-running.md` §5 (biomes, layout families, `MapBase`)
 and §6 (generation pipeline).
 Position: follows "First Loot" (`docs/specs/2026-07-22-first-loot-design.md`). Replaces the
@@ -206,3 +207,57 @@ matching `assets/props/`.
 3. Map bases and biomes through the Atlas and the Preparation panel.
 4. Per-biome tilesets, materials, ambient tint.
 5. `open-field` chunk library + the organic outer mask.
+
+---
+
+## As built
+
+All five slices shipped. 996 tests pass, typecheck and the web build are clean, and the
+result was driven in the browser: a Vaal Stone loop map, a Swamp loop map and a Forest
+open-field map were each entered through a portal and inspected.
+
+**Departures from the plan above**
+
+- The slice order changed. `generateArea` could not switch to the assembler without the
+  open-field grammar existing (the grammar table needs both entries), so slice 5 was pulled
+  forward and landed with slice 3. `fallbackLayout` moved to its own `fallback.ts` to break
+  the import cycle that created.
+- `ALGORITHM_VERSION` went 2 → 3 as predicted, but **no replay golden needed regenerating**:
+  `packages/replay` builds its own hand-made grid rather than calling `generateArea`.
+- Rewards ride in `objectiveAnchors` as `reward.N`, as planned, so `AreaLayout` is unchanged.
+
+**Things only running it could find**
+
+- **Spawn placement was wrong.** Taking the N farthest tiles by route distance put every
+  monster 40-58 units away in a 56-unit map and left the first half of the route empty —
+  a balance test caught it ("one bolt is an invitation" had nothing in range). Spawns now
+  walk the route in order and take evenly spaced tiles; they run ~10 to ~45 units out.
+- **A biome tint is not a dimmer.** Multiplying the ambient by Vaal Stone's [0.62,0.70,0.68]
+  took a third out of it, and an assembled map is mostly floor near a wall. Tints are now
+  normalised to mean 1.0, so they shift hue and never brightness.
+- **Walls must not cast shadows.** At `WALL_HEIGHT` 3.5 under this low sun a wall throws a
+  ~9-unit shadow, longer than a room is wide, so at `darkness` 0.12 every room was black.
+  The old disc had almost no walls, which is why it never showed. Fixing it also fixed a
+  leak: the per-run boxes are disposed by the merge but stayed in the shadow render list
+  forever — 817 dead meshes after a single map, growing on every area change.
+- **Generated plates ignore the renderer's calibration.** Floors came out 37 (forest) to 162
+  (desert) and walls 41 (swamp) to 191, against a renderer tuned for a 57-luma floor and a
+  132-luma wall. The build script now lifts anything too dark by gamma; a swamp wall at 41
+  was a black void with no masonry in it, and a forest floor at 37 swallowed the character.
+- The seam metric in the first draft was wrong: it demanded that opposite edges be *identical*,
+  which is mirror symmetry, not seamlessness. The right question is whether the wrap differs
+  about as much as any other adjacent column. One master (Vaal Stone) scored a perfect 0.00
+  only because the generator had mirrored it.
+
+**Still open**
+
+- **Four biomes will still fight identically.** There are 2 monster definitions in the game.
+  This was flagged in the risks above, is unchanged, and is the next thing worth doing.
+- Only walls and floors are per-biome. No props, no decals, no per-biome ambient audio.
+- The lattice is still legible in the `loop` grammar, where rooms meet on tile boundaries.
+  The organic rim helps `open-field` only, exactly as predicted.
+- Near-black actors read poorly on the darker biomes even after the luminance lift. The
+  floors now match the hideout's own calibrated value, so going further would mean
+  re-tuning the character material rather than the ground.
+- No devlog screenshots were captured: the workspace rule requires the user to confirm each
+  screen before it is shot, and this ran unattended.

@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { NullEngine, Color3 } from "@babylonjs/core";
 import { createScene } from "./engine";
-import { buildLevel, applyBiomeTint, tilesetDir } from "./level";
+import { buildLevel, applyBiomeTint, applyTilesetFloor, tilesetDir } from "./level";
 import { MAP_BASES, BIOMES } from "@exiled/content-runtime";
 import type { WalkableGrid } from "@exiled/mapgen";
 
@@ -57,6 +57,26 @@ describe("buildLevel", () => {
     expect(scene.getMeshByName("level-walls")).toBeNull();
   });
 
+  it("never makes level geometry a shadow caster", () => {
+    // Two bugs in one, both invisible until an assembled map replaced the disc:
+    // a wall casts a shadow longer than a room is wide and blacked every room
+    // out, and the per-run boxes are disposed by the merge but stayed in the
+    // render list forever — 817 dead meshes after a single map.
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const sun = scene.getLightByName("sun");
+    const shadows = sun?.getShadowGenerator();
+    if (!shadows) return; // NullEngine has no render targets; nothing to assert
+
+    buildLevel(scene, roomGrid());
+    buildLevel(scene, roomGrid()); // a second area must not pile up more
+
+    const list = shadows.getShadowMap()?.renderList ?? [];
+    expect(list.filter((m) => m.name.startsWith("wallrun-"))).toHaveLength(0);
+    expect(list.filter((m) => m.name === "level-walls")).toHaveLength(0);
+    expect(list.filter((m) => m.isDisposed())).toHaveLength(0);
+  });
+
   it("gives each tileset its own material, so a new biome cannot inherit the last one's stone", () => {
     engine = new NullEngine();
     const { scene } = createScene(engine);
@@ -79,12 +99,28 @@ describe("buildLevel", () => {
 describe("biome tilesets", () => {
   const publicDir = fileURLToPath(new URL("../../public", import.meta.url));
 
-  it("every map base's tileset has its colour and normal plates on disk", () => {
+  it("every map base's tileset has its wall and floor plates on disk", () => {
     for (const base of Object.values(MAP_BASES)) {
       const dir = `${publicDir}${tilesetDir(base.tilesetId)}`;
-      expect(existsSync(`${dir}/wall_color.jpg`), `${base.id}: ${dir}/wall_color.jpg`).toBe(true);
-      expect(existsSync(`${dir}/wall_normal.jpg`), `${base.id}: ${dir}/wall_normal.jpg`).toBe(true);
+      for (const plate of ["wall_color.jpg", "wall_normal.jpg", "floor_color.jpg"]) {
+        expect(existsSync(`${dir}/${plate}`), `${base.id}: ${dir}/${plate}`).toBe(true);
+      }
     }
+  });
+
+  it("re-plates the ground per biome and gives the hideout its own back", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const mat = scene.getMaterialByName("groundMat") as { diffuseTexture?: { url?: string } };
+
+    applyTilesetFloor(scene, "tileset.swamp");
+    expect(mat.diffuseTexture?.url).toContain("swamp/floor_color.jpg");
+
+    applyTilesetFloor(scene, "tileset.desert");
+    expect(mat.diffuseTexture?.url).toContain("desert/floor_color.jpg");
+
+    applyTilesetFloor(scene, null);
+    expect(mat.diffuseTexture?.url).toContain("floor.png");
   });
 
   it("every biome carries a usable tint", () => {
@@ -103,9 +139,25 @@ describe("biome tilesets", () => {
     const fill = scene.getLightByName("fill")!;
 
     applyBiomeTint(scene, BIOMES.desert.tint);
-    expect(fill.diffuse.equals(new Color3(...BIOMES.desert.tint))).toBe(true);
+    // Desert is warm, so red leads and blue trails.
+    expect(fill.diffuse.r).toBeGreaterThan(fill.diffuse.b);
 
     applyBiomeTint(scene, null);
     expect(fill.diffuse.equals(new Color3(1, 1, 1))).toBe(true);
+  });
+
+  it("shifts hue without dimming: every tint averages to full brightness", () => {
+    // Applied raw, a tint darker than 1.0 doubles as a dimmer, and an assembled
+    // map is mostly floor in a wall's shadow — the rooms went black. Normalising
+    // to mean 1.0 is what keeps a biome a colour instead of a brightness cut.
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const fill = scene.getLightByName("fill")!;
+
+    for (const biome of Object.values(BIOMES)) {
+      applyBiomeTint(scene, biome.tint);
+      const mean = (fill.diffuse.r + fill.diffuse.g + fill.diffuse.b) / 3;
+      expect(mean, `${biome.id} mean tint`).toBeCloseTo(1, 5);
+    }
   });
 });
