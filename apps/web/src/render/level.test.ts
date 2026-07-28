@@ -15,13 +15,21 @@ afterEach(() => {
 });
 
 // 5×5 grid with a centred 3×3 walkable room (cells (1..3, 1..3)). A wall cell (0)
-// is "boundary" when ANY of its 8 neighbours is floor (diagonals included, so room
-// corners fill and walls meet flush). Every one of the 16 wall cells here is within
-// a Chebyshev step of the room, so all 16 qualify. 16 is the independent expected value.
+// is drawn when floor lies within WALL_THICK_CELLS of it (diagonals included, so
+// room corners fill and walls meet flush). Every one of the 16 wall cells here is
+// one step from the room, so all 16 qualify whatever that thickness is.
 function roomGrid(): WalkableGrid {
   const cells = new Uint8Array(25);
   for (let y = 1; y <= 3; y++) for (let x = 1; x <= 3; x++) cells[y * 5 + x] = 1;
   return { cols: 5, rows: 5, cellSize: 0.5, originX: 0, originY: 0, cells };
+}
+
+/** 11×11 with a 3×3 room at cells (4..6): room enough for the wall band to have
+ *  an outer edge, which the 5×5 above is too small to show. */
+function roomyGrid(): WalkableGrid {
+  const cells = new Uint8Array(121);
+  for (let y = 4; y <= 6; y++) for (let x = 4; x <= 6; x++) cells[y * 11 + x] = 1;
+  return { cols: 11, rows: 11, cellSize: 0.5, originX: 0, originY: 0, cells };
 }
 
 describe("buildLevel", () => {
@@ -33,6 +41,32 @@ describe("buildLevel", () => {
 
     expect(result.wallCells).toBe(16);
     expect(scene.getMeshByName("level-walls")).not.toBeNull();
+  });
+
+  it("draws a wall band 3 cells deep, so a doorway has a reveal", () => {
+    // One cell deep gave a 0.5u jamb against a 3.5u wall. Floor sits in 4..6, so
+    // reaching 3 cells out covers 1..9 in both axes: 81 cells, less the 9 floor.
+    // The 40 cells beyond that stay undrawn — a band, not a filled square.
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+
+    expect(buildLevel(scene, roomyGrid()).wallCells).toBe(72);
+  });
+
+  it("shrinks the ground plane to the area, so past the outer wall is black", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+
+    buildLevel(scene, roomGrid()); // 5 cells × 0.5 = 2.5 units square
+    const ground = scene.getMeshByName("ground")!;
+    expect(ground.scaling.x).toBeCloseTo(2.5 / 200, 6);
+    expect(ground.scaling.z).toBeCloseTo(2.5 / 200, 6);
+    // Cell (0,0) is centred on the origin, so the middle is half a cell short.
+    expect(ground.position.x).toBeCloseTo(1, 6);
+
+    buildLevel(scene, null); // the hideout is open ground again
+    expect(ground.scaling.x).toBe(1);
+    expect(ground.position.x).toBe(0);
   });
 
   it("replaces the prior walls when a new area arrives (no mesh leak)", () => {

@@ -95,6 +95,12 @@ const ZOOM_EASE = 0.18;
  *  mesh per biome and must not change the scale of the stone underfoot. */
 export const FLOOR_TILES = 25;
 
+/** Side of the ground plane, in world units. `buildLevel` shrinks it to the
+ *  area's own rect so the world ENDS at the outer wall, as PoE's does: past the
+ *  last wall there is nothing to light, so the frame falls to black instead of
+ *  running out into lit ground the player can never reach. */
+export const GROUND_SIZE = 200;
+
 /**
  * Half-size of the shadow frustum, in world units. Needs to cover the visible
  * area (ORTHO_HALF_HEIGHT by that times the aspect ratio) plus enough margin for
@@ -207,7 +213,7 @@ export function createScene(engine: Engine): SceneHandle {
   // bump this if WORLD bounds grow.
   const ground = MeshBuilder.CreateGround(
     "ground",
-    { width: 200, height: 200 },
+    { width: GROUND_SIZE, height: GROUND_SIZE },
     scene,
   );
   const groundMat = new StandardMaterial("groundMat", scene);

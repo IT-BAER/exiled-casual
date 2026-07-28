@@ -7,7 +7,7 @@ import {
   Vector4,
   type Scene,
 } from "@babylonjs/core";
-import { FLOOR_TILES } from "./engine";
+import { FLOOR_TILES, GROUND_SIZE } from "./engine";
 import type { WalkableGrid } from "@exiled/mapgen";
 
 /** Wall height in world units — tall enough to read as walls, not kerbs, under
@@ -15,6 +15,13 @@ import type { WalkableGrid } from "@exiled/mapgen";
  *  At 2 the short boxes read as flat dark floor-patches from this near-top-down
  *  ortho angle; 3.5 gives a lit brick side face that reads as a real barrier. */
 const WALL_HEIGHT = 3.5;
+
+/** How many cells of wall are drawn outward from the floor. At one cell a door
+ *  jamb was 0.5 units deep against a 3.5-unit wall — 14% as thick as it was
+ *  tall, where PoE1's reads about 40% and gives the doorway a real reveal.
+ *  Only NON-floor cells ever qualify, so thickening the band can never eat
+ *  walkable ground, and collision (which reads the raw grid) is untouched. */
+const WALL_THICK_CELLS = 3;
 const WALL_MESH_NAME = "level-walls";
 const WALL_MAT_NAME = "level-wall-mat";
 /** The tileset a map with no base named falls back to. */
@@ -77,6 +84,46 @@ function wallMaterial(scene: Scene, tilesetId: string): StandardMaterial {
  * into ONE mesh: an 80×80 dungeon has thousands of wall cells, and both the box
  * count and the draw count decide whether it renders smooth or as a slideshow.
  */
+/**
+ * Cut the ground plane down to the area it is the ground OF. The plane is 200
+ * units square because `scene.pick` once needed a mesh under every reachable
+ * pixel; the cursor now meets the floor plane analytically (`bindings.ts`), so
+ * nothing needs ground where the player cannot go, and lit grass stretching
+ * past the outer wall was the one thing that said "greybox" loudest.
+ *
+ * Scaling, not rebuilding: the mesh keeps its UVs, so the texture repeat is
+ * scaled with it to hold the tile size constant (`applyTilesetFloor` reads the
+ * same scaling back when it swaps a biome's plate in).
+ */
+function fitGround(scene: Scene, grid: WalkableGrid | null): void {
+  const ground = scene.getMeshByName("ground");
+  if (!ground) return;
+  if (!grid) {
+    ground.scaling.set(1, 1, 1);
+    ground.position.set(0, 0, 0);
+  } else {
+    const { cols, rows, cellSize, originX, originY } = grid;
+    ground.scaling.set((cols * cellSize) / GROUND_SIZE, 1, (rows * cellSize) / GROUND_SIZE);
+    // Cell (0,0) is CENTRED on the origin, so the rect runs half a cell further
+    // out at each edge and its middle sits half a cell short of the far corner.
+    ground.position.set(
+      originX + ((cols - 1) * cellSize) / 2,
+      0,
+      originY + ((rows - 1) * cellSize) / 2,
+    );
+  }
+  scaleFloorTexture(scene, ground.scaling.x, ground.scaling.z);
+}
+
+/** Hold the flagstone size constant however big the ground plane is. */
+function scaleFloorTexture(scene: Scene, sx: number, sz: number): void {
+  const mat = scene.getMaterialByName("groundMat") as StandardMaterial | null;
+  const tex = mat?.diffuseTexture as Texture | null;
+  if (!tex) return;
+  tex.uScale = FLOOR_TILES * sx;
+  tex.vScale = FLOOR_TILES * sz;
+}
+
 export function buildLevel(
   scene: Scene,
   grid: WalkableGrid | null,
@@ -84,6 +131,7 @@ export function buildLevel(
 ): LevelResult {
   // Area swaps (and the open hideout) call this again; drop the previous walls.
   scene.getMeshByName(WALL_MESH_NAME)?.dispose();
+  fitGround(scene, grid);
   if (!grid) return { walls: null, wallCells: 0 };
 
   const { cols, rows, cellSize, originX, originY, cells } = grid;
@@ -94,8 +142,9 @@ export function buildLevel(
   // -only leaves a notch at every corner). Render-only; collision uses the raw grid.
   const isBoundaryWall = (x: number, y: number): boolean => {
     if (cells[y * cols + x] !== 0) return false;
-    for (let dy = -1; dy <= 1; dy++)
-      for (let dx = -1; dx <= 1; dx++)
+    const n = WALL_THICK_CELLS;
+    for (let dy = -n; dy <= n; dy++)
+      for (let dx = -n; dx <= n; dx++)
         if ((dx || dy) && isFloor(x + dx, y + dy)) return true;
     return false;
   };
@@ -169,12 +218,13 @@ export function applyTilesetFloor(scene: Scene, tilesetId: string | null): void 
   if (current?.url === url) return;
   try {
     const tex = new Texture(url, scene);
-    // Same repeat as the hideout's plate, so a biome never changes the SCALE of
-    // the ground under the player — only what it is made of.
-    tex.uScale = FLOOR_TILES;
-    tex.vScale = FLOOR_TILES;
     mat.diffuseTexture = tex;
     current?.dispose();
+    // Same repeat as the hideout's plate, so a biome never changes the SCALE of
+    // the ground under the player — only what it is made of. The plane is
+    // shrunk to the area, so the repeat follows it or the flagstones grow.
+    const ground = scene.getMeshByName("ground");
+    scaleFloorTexture(scene, ground?.scaling.x ?? 1, ground?.scaling.z ?? 1);
   } catch {
     /* no canvas under NullEngine; the unloaded texture is fine in tests */
   }
