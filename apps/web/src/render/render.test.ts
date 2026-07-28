@@ -63,13 +63,25 @@ describe("torch", () => {
     expect(torch.position.y).toBeGreaterThan(1);
   });
 
-  it("never casts a shadow", () => {
-    // A second generator doubles the shadow cost and gives every object two
-    // shadows pointing different ways. PoE's light radius does not cast either.
+  it("carries no specular, so it cannot put a bulb on the character's hair", () => {
+    // The lamp rides ~0.8 units off the skull, and a point light that close
+    // lands its highlight lobe on the shiniest thing on the rig: the hair lit
+    // up like a bulb. The sun still gives every actor its specular.
     engine = new NullEngine();
     const { scene } = createScene(engine);
+    const torch = scene.getLightByName("torch") as PointLight;
 
-    expect(scene.getLightByName("torch")!.getShadowGenerator()).toBeFalsy();
+    expect(torch.specular.r + torch.specular.g + torch.specular.b).toBe(0);
+  });
+
+  it("hangs above head height, so the head is not the nearest thing to the lamp", () => {
+    // Inverse square: at 2.5 the lamp was 0.8 off the skull and the character
+    // went white. Intensity must track h² or the floor pool goes with it.
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const torch = scene.getLightByName("torch") as PointLight;
+
+    expect(torch.position.y).toBeGreaterThan(2.6);
   });
 });
 

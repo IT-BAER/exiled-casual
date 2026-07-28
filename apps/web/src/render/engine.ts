@@ -57,7 +57,14 @@ const FILL_INTENSITY = 0.45;
  * distance: at 2.5 up and 5 out the floor is already 31 units² away, so a value
  * near 1 does nothing visible. Tuned by looking at the frame, not computed.
  */
-const TORCH_INTENSITY = 260;
+// Lamp height and intensity move together: irradiance on the floor goes as
+// 1/h², so raising the lamp only holds the pool if intensity goes as h². It was
+// 2.5/260, which put the light 0.8 units off the skull and blew the character
+// white — inverse square hammers whatever is nearest, and the hair read as a
+// bulb. At 3.8 the head sits 2.1 away, so its share drops ~2.5x while the floor
+// is unchanged. Do not raise it further: 5.5 flattens the floor and the pool
+// stops being a pool.
+const TORCH_INTENSITY = 600;
 /** Where the pool stops. GLTF falloff windows the inverse square to this, so the
  *  edge is defined instead of trailing off across the whole map.
  *
@@ -65,14 +72,22 @@ const TORCH_INTENSITY = 260;
  *  the pool covered the entire frame, which is a global brightness change, not a
  *  light the player carries. At 8 it reaches about two thirds of the way out and
  *  there is cold stone outside it to read the warm edge against. */
-const TORCH_RANGE = 8;
+const TORCH_RANGE = 9.3;
 /** Above the floor, not at the feet: at 0 the pool is a hot spot under the
- *  character, and the falloff eats the whole radius within a step. */
-const TORCH_HEIGHT = 2.5;
+ *  character, and the falloff eats the whole radius within a step. Kept above
+ *  head height for the reason in TORCH_INTENSITY. */
+const TORCH_HEIGHT = 3.8;
 /** Firelight, not a flashlight. */
 const TORCH_COLOR = new Color3(1.0, 0.72, 0.42);
 /** Flicker depth. Two detuned sines, because a single one reads as a pulse. */
 const TORCH_FLICKER = 0.035;
+/** A part of a dressed character, from `wardrobe.glb`'s `slot.look.part` naming.
+ *
+ *  Matched on the part name and NOT on having an `entity-` root: the hideout
+ *  props are entities too, so a root test takes the map device and the stash out
+ *  along with the characters. */
+const isWardrobePart = (name: string): boolean =>
+  /^(base|body|belt|boots|gloves|helmet)\./.test(name);
 
 /** Name of the single merged wall mesh `buildLevel` produces.
  *
@@ -230,7 +245,11 @@ export function createScene(engine: Engine): SceneHandle {
   // does not cast either.
   const torch = new PointLight("torch", new Vector3(0, TORCH_HEIGHT, 0), scene);
   torch.diffuse = TORCH_COLOR;
-  torch.specular = TORCH_COLOR;
+  // No specular. The lamp rides ~0.8 units off the skull, and a point light that
+  // close puts its highlight lobe on the shiniest thing on the rig — the hair,
+  // which then reads as a lit bulb sitting on the character's head. The sun
+  // still gives every actor its specular; only this one may not.
+  torch.specular = Color3.Black();
   torch.intensity = TORCH_INTENSITY;
   torch.range = TORCH_RANGE;
   torch.falloffType = Light.FALLOFF_GLTF;
@@ -420,6 +439,34 @@ export function createScene(engine: Engine): SceneHandle {
     const isLevelGeometry = (name: string): boolean =>
       (name.startsWith("wallrun-") && !name.startsWith(ROCK_MESH_PREFIX)) ||
       name === WALL_MESH_NAME;
+    // The torch throws its own shadows, and it is the only light that may throw
+    // them off a wall: the sun's problem was a 3.5-unit run smearing one 9-unit
+    // band across a whole room, but the torch stands INSIDE the room at the
+    // player's height, so a wall's shadow is short, radial, and moves with the
+    // player. That is the light-radius read in PoE — the pool ends where a wall
+    // or a boulder eats it. A point light means a cube map, so it stays at 1024
+    // (six faces) and covers only the pool.
+    torch.shadowMinZ = 0.4;
+    torch.shadowMaxZ = TORCH_RANGE;
+    const torchShadows = new ShadowGenerator(1024, torch);
+    torchShadows.usePercentageCloserFiltering = true;
+    torchShadows.filteringQuality = ShadowGenerator.QUALITY_LOW; // x6 faces
+    torchShadows.darkness = 0.35; // softer than the sun's: fill still reaches in
+    // An actor may not cast from the torch. The lamp rides the player, so the
+    // player's own shadow lands directly under the player as a blob that follows
+    // the feet and reads as a stain on the floor, not as light. Actor parts share
+    // their names across entities (every rig is the same 40 `slot.look.part`
+    // meshes under an `entity-N` root), so there is no way to tell the carrier's
+    // rig from a monster's here — the whole class stays out. The sun still gives
+    // every actor the shadow that matters.
+    //
+    // A predicate and not the add-time filter the sun uses: that one sees a name
+    // ONCE, when the mesh is added, so anything renamed afterwards is already
+    // registered under whatever it was called first — 40 actor parts got in that
+    // way. `renderListPredicate` is re-evaluated every frame against the current
+    // name, so a rename cannot smuggle a caster past it.
+    torchShadows.getShadowMap()!.renderListPredicate = (mesh) =>
+      mesh !== ground && !mesh.name.startsWith("telegraph-") && !isWardrobePart(mesh.name);
     scene.onNewMeshAddedObservable.add((mesh) => {
       if (mesh.name.startsWith("telegraph-") || mesh === ground || isLevelGeometry(mesh.name)) {
         return;
@@ -434,6 +481,7 @@ export function createScene(engine: Engine): SceneHandle {
     // shadow map's texel pitch, which no bias tuning fixes as cheaply as simply
     // not casting. It still receives.
     shadows.removeShadowCaster(ground);
+    torchShadows.removeShadowCaster(ground);
 
     // Walk the light along with the camera so the frustum always brackets what
     // the player can see. Backwards along the light direction, and high enough
@@ -452,8 +500,26 @@ export function createScene(engine: Engine): SceneHandle {
   //
   // Outside the shadow block above on purpose — that one is inside a try that
   // NullEngine throws out of, and a light that follows needs no render target.
+  //
+  // The torch lights the FLOOR, never a character. A point light riding the
+  // player is always nearest to the top of that player's head, and inverse
+  // square then blows the head white whatever the height and intensity — the
+  // hair read as a lit bulb. Turn the torch off and the sun alone renders the
+  // character correctly, so the carrier loses nothing by being excluded. This
+  // costs the monsters their brightening inside the radius; the pool on the
+  // floor is what reads as a light radius at this camera, and a blown-out
+  // player is a worse trade.
+  //
+  // Rebuilt only when the mesh count moves, and matched on the CURRENT name: an
+  // add-time filter sees a name once and loses to anything renamed afterwards,
+  // which is how 40 actor parts got into the shadow list.
+  let lastMeshCount = -1;
   scene.onBeforeRenderObservable.add(() => {
     torch.position.set(camera.target.x, TORCH_HEIGHT, camera.target.z);
+    if (scene.meshes.length !== lastMeshCount) {
+      lastMeshCount = scene.meshes.length;
+      torch.excludedMeshes = scene.meshes.filter((m) => isWardrobePart(m.name));
+    }
     // Render-side only. Never read the sim clock here: the flicker must not be
     // able to reach a replay checksum.
     const t = performance.now() / 1000;
