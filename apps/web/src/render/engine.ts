@@ -378,9 +378,19 @@ export function createScene(engine: Engine): SceneHandle {
       (name.startsWith("wallrun-") && !name.startsWith(ROCK_MESH_PREFIX)) ||
       name === WALL_MESH_NAME;
     scene.onNewMeshAddedObservable.add((mesh) => {
-      if (mesh.name.startsWith("telegraph-") || isLevelGeometry(mesh.name)) return;
+      if (mesh.name.startsWith("telegraph-") || mesh === ground || isLevelGeometry(mesh.name)) {
+        return;
+      }
       shadows.addShadowCaster(mesh);
     });
+    // And the floor itself, belt and braces: it is registered by the time the
+    // first frame runs even though it is created above this block, so the filter
+    // alone does not clear it. A flat plane with nothing under it can only ever
+    // cast onto ITSELF, and at this sun angle that self-shadow landed as a faint
+    // diagonal stripe across every lit surface in the frame — shadow acne at the
+    // shadow map's texel pitch, which no bias tuning fixes as cheaply as simply
+    // not casting. It still receives.
+    shadows.removeShadowCaster(ground);
 
     // Walk the light along with the camera so the frustum always brackets what
     // the player can see. Backwards along the light direction, and high enough

@@ -126,6 +126,14 @@ describe("buildLevel", () => {
     expect(list.filter((m) => m.name.startsWith("wallrun-"))).toHaveLength(0);
     expect(list.filter((m) => m.name === "level-walls")).toHaveLength(0);
     expect(list.filter((m) => m.isDisposed())).toHaveLength(0);
+    // The floor may not cast either. It is a flat plane with nothing under it,
+    // so its shadow can only ever land on itself, and at this sun angle that
+    // self-shadowing striped the whole frame with faint diagonal acne.
+    // Weak guard, deliberately: under NullEngine the floor never gets registered
+    // in the first place, so this passes with OR without the fix in engine.ts.
+    // The bug only reproduces in a real browser and was verified there by A/B
+    // (add the floor back as a caster, diff the frame: the diff IS the stripes).
+    expect(list.filter((m) => m.name === "ground")).toHaveLength(0);
   });
 
   it("gives each tileset its own material, so a new biome cannot inherit the last one's stone", () => {
