@@ -48,8 +48,16 @@ const CLIP_LOOPS: Record<RigClip, boolean> = {
   cast: false,
 };
 
-/** Ground speed (units/sec) each locomotion clip was authored at. */
-const CLIP_SPEED: Record<"walk" | "run", number> = { walk: 1.4, run: 3.4 };
+/**
+ * Ground speed (units/sec) each locomotion clip was authored at.
+ *
+ * The jog's 3.4 was a guess and it was low. Measured instead, by walking the
+ * leg chain of `anim-library.glb` and taking each foot's travel per cycle:
+ * the walk sweeps 0.002 rig units in 1.333s and the jog 0.004 in 0.933, so the
+ * jog depicts 2.86x the walk's pace. Anchored on the walk's 1.4, that is 4.0 —
+ * which is why the jog looked like it was bounding at the player's 3.5.
+ */
+const CLIP_SPEED: Record<"walk" | "run", number> = { walk: 1.4, run: 4.0 };
 
 /**
  * Cadence trim. 1.0 matches the stride exactly to the actor's ground speed, so
@@ -62,19 +70,29 @@ const CLIP_SPEED: Record<"walk" | "run", number> = { walk: 1.4, run: 3.4 };
 const CADENCE: Record<"walk" | "run", number> = { walk: 1, run: 1 };
 
 const MIN_RATIO = 0.5;
-const MAX_RATIO = 1.8;
+// 2.6, because a run at player pace is now the WALK clip driven to 2.5x.
+const MAX_RATIO = 2.6;
 
 /** Below this the actor counts as standing still. */
 const IDLE_SPEED = 0.15;
-/** Above this the jog reads better than the walk. Player base speed is 3.5. */
-const RUN_SPEED = 2.2;
+/**
+ * Above this the jog reads better than the walk — and it now sits ABOVE the
+ * player's own 3.5, which is the whole change: the jog clip covers 4 units a
+ * second in long bounds, and driving it at player pace is what made running
+ * look like leaping. The walk clip has a short stride, so the same 3.5 u/s
+ * comes out as quick small steps with the feet still planted, which is what
+ * running at this camera distance should look like.
+ *
+ * Drop this back under 3.5 to hand normal running back to the jog.
+ */
+const RUN_SPEED = 4.2;
 /**
  * ...and below THIS a runner drops back to a walk. The gap is not decoration:
  * the sim sheds speed through a corner (down to 62 percent of the run), which
  * lands right on a single threshold and made the character flick between jog
  * and walk for the three ticks of every turn.
  */
-const WALK_SPEED = 1.7;
+const WALK_SPEED = 3.6;
 
 /**
  * Which locomotion clip suits a ground speed, in units/sec. `current` is the
