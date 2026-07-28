@@ -11,10 +11,12 @@ import {
 import { FLOOR_TILES, GROUND_SIZE } from "./engine";
 import {
   DEBRIS_MESH_PREFIX,
+  RAMPART_MESH_PREFIX,
   buildRocks,
   clearRocks,
   isRocksReady,
   scatterDebris,
+  scatterRampart,
   scatterRocks,
   type RockCell,
 } from "./rocks";
@@ -253,7 +255,18 @@ export function buildLevel(
   const boxes: Mesh[] = [];
   const rockCells: RockCell[] = [];
   const floorCells: RockCell[] = [];
+  const edgeCells: RockCell[] = [];
   let wallCells = 0;
+
+  // The outermost ring of the grid, floor-adjacent or not. `isBoundaryWall` only
+  // sees wall that touches floor, so wherever a map's edge is a thick block of
+  // dead cells it drew no rock at all and the ground plate — which is sized to
+  // exactly this ring — ended as a lip of bare dirt against the void.
+  const isOuterEdge = (x: number, y: number): boolean =>
+    x < WALL_THICK_CELLS ||
+    y < WALL_THICK_CELLS ||
+    x >= cols - WALL_THICK_CELLS ||
+    y >= rows - WALL_THICK_CELLS;
   // ponytail: horizontal-run greedy only; add vertical/2D rectangle merging if a
   // profile shows the per-cell vertical walls still cost.
   for (let y = 0; y < rows; y++) {
@@ -303,8 +316,17 @@ export function buildLevel(
   const merged = Mesh.MergeMeshes(boxes, true, true, undefined, false, false);
   const material = wallMaterial(scene, tilesetId);
   if (rocky) {
+    // Walked as a ring rather than folded into the sweep above: that sweep scans
+    // horizontal runs and skips ahead past them, so it cannot see a single cell
+    // on a left or right edge without breaking the run merge it exists to do.
+    for (let y = 0; y < rows; y++)
+      for (let x = 0; x < cols; x++)
+        if (isOuterEdge(x, y))
+          edgeCells.push({ x: originX + x * cellSize, z: originY + y * cellSize });
+
     buildRocks(scene, scatterRocks(rockCells), material);
     buildRocks(scene, scatterDebris(floorCells), material, DEBRIS_MESH_PREFIX);
+    buildRocks(scene, scatterRampart(edgeCells), material, RAMPART_MESH_PREFIX);
   }
   if (merged) {
     merged.name = WALL_MESH_NAME;

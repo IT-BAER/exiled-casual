@@ -118,6 +118,36 @@ const DEBRIS: ScatterConfig = {
   sink: 0.35,
 };
 
+/**
+ * The map's outer rim, and the only stone allowed to be tall.
+ *
+ * Everything else on the grid has the player walking behind it, so its height is
+ * capped by his head. Nothing is ever behind this ring — it IS the edge of the
+ * world — so the cap does not apply, and it has to be tall because the ground
+ * plate stops exactly here and past it is the void. A single row of 1.5-unit
+ * boulders left a lip of bare dirt ending in black, which is the one thing the
+ * reference frames never show: in PoE the floor runs to every edge and the world
+ * never visibly stops.
+ *
+ * Wider spacing than the boulders on purpose. These are big enough to close the
+ * ring on their own, and packing them as tightly turns a rampart into gravel.
+ */
+const RAMPART: ScatterConfig = {
+  spacing: 1,
+  minWidth: 1.9,
+  maxWidth: 2.6,
+  minAspect: 1.05,
+  maxAspect: 1.25,
+  maxTilt: 0.12,
+  /** Bedrock, not scree: the rim should look like it comes out of the ground. */
+  sink: 0.08,
+};
+
+/** Same shadow-caster exclusion as the rest — and doubly so here, since a 3-unit
+ *  rock under this sun throws a shadow longer than a room is wide. */
+const RAMPART_MESH_PREFIX = "wallrun-rampart-";
+export { RAMPART_MESH_PREFIX };
+
 interface LoadedRocks {
   scene: Scene;
   container: AssetContainer;
@@ -231,6 +261,11 @@ export function scatterRocks(
 /** Sparse stone across the open floor — see DEBRIS for why it exists. */
 export function scatterDebris(cells: readonly RockCell[]): RockPlacement[] {
   return scatter(cells, DEBRIS);
+}
+
+/** The tall ring that closes the map's edge — see RAMPART. */
+export function scatterRampart(cells: readonly RockCell[]): RockPlacement[] {
+  return scatter(cells, RAMPART);
 }
 
 function scatter(cells: readonly RockCell[], cfg: ScatterConfig): RockPlacement[] {

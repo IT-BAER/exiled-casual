@@ -67,6 +67,7 @@ describe("buildRocks geometry ownership", () => {
     // mesh keeps: the mesh-side copy stayed correct all through the bug.
     const buf = boulders![0]!.geometry!.getVertexBuffer("world0");
     expect(buf).toBeTruthy();
-    expect(buf!.getData()![0]).toBeCloseTo(1.8, 5);
+    const data = buf!.getData() as ArrayLike<number>;
+    expect(data[0]).toBeCloseTo(1.8, 5);
   });
 });

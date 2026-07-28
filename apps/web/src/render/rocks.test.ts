@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { ROCK_SPACING, scatterDebris, scatterRocks, type RockCell } from "./rocks";
+import {
+  ROCK_SPACING, scatterDebris, scatterRampart, scatterRocks, type RockCell,
+} from "./rocks";
 
 /** A straight run of wall cells, at the mapgen cell size of 0.5 world units. */
 function line(count: number, z = 0): RockCell[] {
@@ -82,5 +84,22 @@ describe("scatterDebris", () => {
 
   it("is deterministic, like the boulders", () => {
     expect(scatterDebris(field(20))).toEqual(scatterDebris(field(20)));
+  });
+});
+
+describe("scatterRampart", () => {
+  it("clears the boulder height cap, which is the whole reason it exists", () => {
+    // Boulders are capped at the character's head (MAX_WIDTH * MAX_ASPECT = 1.52)
+    // because he walks behind them. Nothing is behind the map's outer ring, and a
+    // rock no taller than a boulder cannot hide the void the ground plate ends in.
+    const edge = Array.from({ length: 60 }, (_, i) => ({ x: i * 0.5, z: 0 }));
+    const heights = scatterRampart(edge).map((p) => p.height);
+    expect(heights.length).toBeGreaterThan(10);
+    expect(Math.min(...heights)).toBeGreaterThan(1.52);
+  });
+
+  it("is deterministic, like the boulders", () => {
+    const edge = Array.from({ length: 40 }, (_, i) => ({ x: i * 0.5, z: 0 }));
+    expect(scatterRampart(edge)).toEqual(scatterRampart(edge));
   });
 });
