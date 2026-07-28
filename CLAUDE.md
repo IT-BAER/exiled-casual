@@ -153,12 +153,16 @@ PoE2 itemization actually works — do not invent mechanics or colors from memor
 
 ## Devlog — SCREENSHOT EACH VISIBLE STEP
 
-- **Ask the user to confirm the screen before you capture it.** Say what is on it and wait; a devlog
-  shot of the wrong state, or of a state the user has not signed off, is worse than no shot.
+- **Drive and capture the state yourself, with exact timings.** Anything transient (a skill FX, an
+  impact, a projectile in flight) is over before a human can be asked to hold it, so asking the user
+  to pose the screen is not a workflow. Script it: dispatch the input, wait a measured delay, then
+  `scene.render()` and `drawImage` into an offscreen canvas inside the SAME in-page script. Aim with
+  a canvas `pointermove` first or a cast is a no-op (aim defaults to the player's own feet).
+- Stage every capture in `review/` (gitignored) under a plain name and get sign-off BEFORE it enters
+  `devlog/`. What needs confirming is the frame, not the moment. Scratchpad paths are not reviewable.
 - After any step with a visible result, screenshot the running app into `devlog/screenshots/` named
   `YYYY-MM-DD-<slug>.jpeg` (JPEG q75-80; use a small PNG only when transparency/fine detail needs it).
 - Add that shot to `devlog/README.md` under its date with a one-line caption. Chronological, one entry per slice.
-- Frame-accurate capture needs in-page timing plus a render freeze, not a loose sleep.
 
 ## Conventions
 

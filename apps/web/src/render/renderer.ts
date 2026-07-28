@@ -1,5 +1,7 @@
+import { Vector3 } from "@babylonjs/core";
 import type { Scene } from "@babylonjs/core";
 import type { Mesh } from "@babylonjs/core";
+import { blinkBurst } from "./skill-fx";
 import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
 import { animateActor, makeMesh, updateTelegraph, updatePortal, updateMapDevice, updateStash, updateVendor, updateGroundItem, updateRareElement, Y_LIFT } from "./meshes";
 import type { MeshKind } from "./meshes";
@@ -16,6 +18,16 @@ const TICKS_PER_SEC = 30;
  * its back — the difference between a usable screenshot and a shot of a hood.
  */
 const SPAWN_YAW = Math.PI;
+
+/**
+ * Distance the player has to cover in ONE tick for the move to be a teleport.
+ * Blink is instant (no castTicks) and raises no flag the client can watch, so
+ * the jump itself is the event: walking covers well under a unit per tick and
+ * blink covers 5, so anything past this is unambiguous.
+ */
+const TELEPORT_STEP = 2;
+/** Chest height, where the character actually vanishes from. */
+const BLINK_Y = 0.9;
 
 /** Rising edge of the sim's casting flag, i.e. a cast just started this tick. */
 function didCast(prev: Snapshot, next: Snapshot): boolean {
@@ -165,6 +177,17 @@ export class SnapshotRenderer {
       if (prev && didCast(prev, next)) {
         const playerMesh = this.meshes.get(next.player.id);
         if (playerMesh) rigOf(playerMesh)?.playCast();
+      }
+      if (prev) {
+        const dx = next.player.x - prev.player.x;
+        const dy = next.player.y - prev.player.y;
+        if (dx * dx + dy * dy > TELEPORT_STEP * TELEPORT_STEP) {
+          blinkBurst(
+            this.scene,
+            new Vector3(prev.player.x, BLINK_Y, prev.player.y),
+            new Vector3(next.player.x, BLINK_Y, next.player.y),
+          );
+        }
       }
     }
   }

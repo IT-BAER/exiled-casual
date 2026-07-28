@@ -8,6 +8,7 @@ import {
   type Scene,
 } from "@babylonjs/core";
 import { attachProp } from "./props";
+import { attachBoltTrail, attachCinderFX, cinderGlow } from "./skill-fx";
 import { attachRig, rigOf, type RigParts } from "./rig";
 
 export type MeshKind = "player" | "monster" | "rare" | "boss" | "projectile" | "groundArea" | "telegraph" | "portal" | "mapDevice" | "stash" | "vendor" | "groundItem";
@@ -22,7 +23,9 @@ const Y_LIFT: Record<MeshKind, number> = {
   monster: 0,
   rare: 0,
   boss: 0,
-  projectile: 0.3,
+  // Chest height, not ankle height: a bolt that skims the floor reads as a ball
+  // rolling, and its spark trail is cut in half by the ground plane.
+  projectile: 0.8,
   groundArea: 0.05,
   telegraph: 0.06,
   // portal children self-position (inner disc at y=1.75 in local space); root sits on ground
@@ -700,8 +703,16 @@ export function updateMapDevice(root: Mesh, hovered: boolean): void {
   parts.brassRim.emissiveColor.set(e * 1.4, e, e * 0.25);
 }
 
-const GREYBOX_COLOR: Record<"projectile" | "groundArea", [number, number, number]> = {
-  projectile: [1.0, 0.9, 0.25], // yellow — ember bolt
+/**
+ * Both of these are fire, so both are emissive and neither is lit. The colour
+ * here is only the part of the effect that has geometry: the bolt's head is
+ * white-hot and everything orange about it lives in its particle tail
+ * (`skill-fx.ts`), and the disc is the hit area first and a glow second.
+ */
+const FIRE_COLOR: Record<"projectile" | "groundArea", [number, number, number]> = {
+  // Small and amber, not white: at 0.16 across with full emissive the GlowLayer
+  // blew it into a white ball that beat its own flame tail.
+  projectile: [1.0, 0.72, 0.34],
   groundArea: [1.0, 0.42, 0.12], // ember — cinder ground disc
 };
 
@@ -794,18 +805,35 @@ export function makeMesh(scene: Scene, kind: MeshKind, name: string): Mesh {
   const matName = `mat-${kind}`;
   let m = scene.getMaterialByName(matName) as StandardMaterial | null;
   if (!m) {
-    const [r, g, b] = GREYBOX_COLOR[kind];
+    const [r, g, b] = FIRE_COLOR[kind];
     m = new StandardMaterial(matName, scene);
     m.diffuseColor = new Color3(r, g, b);
-    m.emissiveColor = new Color3(r * 0.35, g * 0.35, b * 0.35);
     m.specularColor = new Color3(0, 0, 0);
-    if (kind === "groundArea") m.alpha = 0.45; // see the floor through the disc
+    m.disableLighting = true;
+    if (kind === "projectile") {
+      // Full emissive so the GlowLayer blooms the head instead of tinting it.
+      m.emissiveColor = new Color3(r, g, b);
+    } else {
+      // Additive, radially masked, and crawling: the patch reads as ground
+      // burning rather than as a translucent decal ending on a hard rim. The
+      // dim diffuse under it is the hit area, which has to stay readable
+      // between the cracks — it is gameplay information first.
+      m.diffuseColor = new Color3(r * 0.22, g * 0.22, b * 0.22);
+      m.alpha = 0.9;
+      m.alphaMode = 1; // ALPHA_ADD
+      cinderGlow(scene, m);
+    }
   }
   // groundArea built at diameter=2 (radius=1); renderer scales x/z to entity.radius.
   const mesh =
     kind === "projectile"
-      ? MeshBuilder.CreateSphere(name, { diameter: 0.3 }, scene)
-      : MeshBuilder.CreateCylinder(name, { diameter: 2, height: 0.1, tessellation: 24 }, scene);
+      ? MeshBuilder.CreateSphere(name, { diameter: 0.1, segments: 8 }, scene)
+      : // Flat enough that the additive side wall never shows: with a falloff on
+        // the cap, a visible rim is the one thing that gives the decal away.
+        MeshBuilder.CreateCylinder(name, { diameter: 2, height: 0.04, tessellation: 24 }, scene);
   mesh.material = m;
+  mesh.isPickable = false;
+  if (kind === "projectile") attachBoltTrail(scene, mesh);
+  else attachCinderFX(scene, mesh);
   return mesh;
 }

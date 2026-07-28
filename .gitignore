@@ -34,3 +34,6 @@ reference-screenshots/
 .claude/
 .agents/
 .superpowers/
+
+# Screenshots staged for the user to review; only approved ones move to devlog/
+review/
