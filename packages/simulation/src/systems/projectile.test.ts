@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { fp } from "@exiled/fixed-point";
 import { Simulation } from "../loop";
 import { registerProjectileMove } from "./projectile";
-import type { Position, ProjectileC, MonsterC, Faction, DamageEvent } from "../components";
+import type { Position, ProjectileC, MonsterC, Health, PlayerC, Faction, DamageEvent } from "../components";
 
 function makeProjectile(sim: Simulation, px: number, py: number, dirx: number, diry: number, range = fp(20)) {
   const e = sim.world.create();
@@ -22,6 +22,9 @@ function makeProjectile(sim: Simulation, px: number, py: number, dirx: number, d
 function makeMonster(sim: Simulation, mx: number, my: number) {
   const e = sim.world.create();
   sim.world.set<Position>(e, "position", { x: mx, y: my });
+  // Collision now keys off "health", not "monster" (see registerProjectileMove) —
+  // a monster fixture without it is invisible to the widened query.
+  sim.world.set<Health>(e, "health", { life: fp(40), maxLife: fp(40) });
   sim.world.set<MonsterC>(e, "monster", {
     defId: "monster.cinder_imp.v1",
     moveSpeed: 0, bodyRadius: fp(0.5),
@@ -114,5 +117,53 @@ describe("registerProjectileMove", () => {
     const afterSecond = sim.world.get<Position>(proj, "position")!;
     expect(afterSecond.x).toBe(afterHit.x);
     expect(afterSecond.y).toBe(afterHit.y);
+  });
+
+  it("a monster-team bolt damages the player", () => {
+    const sim = new Simulation();
+    registerProjectileMove(sim);
+    const world = sim.world;
+
+    const player = world.create();
+    world.set<Position>(player, "position", { x: fp(2), y: fp(0) });
+    world.set<Health>(player, "health", { life: fp(100), maxLife: fp(100) });
+    world.set<Faction>(player, "faction", { team: 0 });
+    world.set<PlayerC>(player, "player", { moveSpeed: 0, bodyRadius: fp(0.5) });
+
+    const shooter = world.create();
+    const proj = world.create();
+    world.set<Position>(proj, "position", { x: fp(1), y: fp(0) });
+    world.set<ProjectileC>(proj, "projectile", {
+      dirx: fp(1), diry: 0, remainingRange: fp(5), radius: fp(0.2),
+      damageType: 0, damageAmount: fp(9), ownerId: shooter, team: 1,
+    });
+
+    // This file registers only projectileMove, so a hit lands in sim.damageQueue,
+    // not on health.life directly — damage-resolve.test.ts owns applying it.
+    sim.step();
+    expect(sim.damageQueue).toHaveLength(1);
+    expect(sim.damageQueue[0]!.target).toBe(player);
+  });
+
+  it("a bolt does not damage its own team", () => {
+    const sim = new Simulation();
+    registerProjectileMove(sim);
+    const world = sim.world;
+
+    const ally = world.create();
+    world.set<Position>(ally, "position", { x: fp(2), y: fp(0) });
+    world.set<Health>(ally, "health", { life: fp(100), maxLife: fp(100) });
+    world.set<Faction>(ally, "faction", { team: 1 });
+
+    const shooter = world.create();
+    const proj = world.create();
+    world.set<Position>(proj, "position", { x: fp(1), y: fp(0) });
+    world.set<ProjectileC>(proj, "projectile", {
+      dirx: fp(1), diry: 0, remainingRange: fp(5), radius: fp(0.2),
+      damageType: 0, damageAmount: fp(9), ownerId: shooter, team: 1,
+    });
+
+    sim.step();
+    expect(sim.damageQueue).toHaveLength(0);
   });
 });

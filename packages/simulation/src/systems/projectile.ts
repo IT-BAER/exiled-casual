@@ -1,6 +1,7 @@
 import { isqrt, fpDist2 } from "@exiled/fixed-point";
 import { Simulation } from "../loop";
-import type { Position, ProjectileC, MonsterC, Faction } from "../components";
+import { bodyRadiusOf } from "../body";
+import type { Position, ProjectileC, Faction } from "../components";
 
 export function registerProjectileMove(sim: Simulation): void {
   sim.register("projectileMove", (world) => {
@@ -16,18 +17,20 @@ export function registerProjectileMove(sim: Simulation): void {
       const traveled = isqrt(proj.dirx * proj.dirx + proj.diry * proj.diry);
       let newRange = proj.remainingRange - traveled;
 
-      // Collision: find first monster (ascending id) within combined radius.
+      // Anything damageable on another team, not just monsters: the player has
+      // no `monster` component, which is the only reason a monster's bolt used
+      // to pass straight through. Body radius comes from body.ts so a projectile
+      // and a telegraph agree about how wide a target is.
       const combinedR2Fn = (bodyRadius: number) => {
         const r = proj.radius + bodyRadius;
         return r * r;
       };
-      for (const m of world.query("position", "monster", "faction")) {
+      for (const m of world.query("position", "health", "faction")) {
         const mFaction = world.get<Faction>(m, "faction")!;
         if (mFaction.team === proj.team) continue; // same team
         const mPos = world.get<Position>(m, "position")!;
-        const mMon = world.get<MonsterC>(m, "monster")!;
         const dist2 = fpDist2(nx, ny, mPos.x, mPos.y);
-        if (dist2 <= combinedR2Fn(mMon.bodyRadius)) {
+        if (dist2 <= combinedR2Fn(bodyRadiusOf(world, m))) {
           sim.enqueueDamage({
             target: m,
             source: proj.ownerId,
@@ -35,7 +38,7 @@ export function registerProjectileMove(sim: Simulation): void {
             type: proj.damageType,
           });
           newRange = 0; // spent
-          break; // first monster only
+          break; // first target only
         }
       }
 
