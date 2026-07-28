@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { generateArea } from "@exiled/mapgen";
-import { CONTENT_VERSION } from "@exiled/content-runtime";
+import { CONTENT_VERSION, MONSTERS, rareTemplate } from "@exiled/content-runtime";
+import { ELEMENTS } from "@exiled/content-schema";
 import {
   waystoneMods, monsterTierScale, waystoneScaleFor, waystoneDrops, atlasGraph,
   WAYSTONE_OFFER_COUNT, WAYSTONE_MAX_TIER,
@@ -62,19 +63,24 @@ describe("map modifiers reach the monsters", () => {
   });
 
   it("elemental resistance raises every element on every monster", () => {
-    const seed = seedRolling("monsterElementalRes");
-    const add = waystoneScaleFor(seed).monsterResAdd;
-    const world = buildMap(mapSession(seed));
+    // Each biome now fields three species, not one imp that resists nothing on
+    // its own — Blood Sentinel, in this map's pool, carries a chaos resistance
+    // by content. So the modifier has to be checked as a stack on top of
+    // whatever the species already has, not against an assumed-zero baseline.
+    const session = mapSession(seedRolling("monsterElementalRes"));
+    const add = waystoneScaleFor(session.waystoneSeed).monsterResAdd;
+    const world = buildMap(session);
+    const rareEl = rareTemplate(session.mapSeed).element;
     for (const e of world.query("monster", "defenses")) {
       const d = world.get<DefensesC>(e, "defenses")!;
-      if (world.get<MonsterC>(e, "monster")!.rare === 1) {
-        // A rare already resists its own element by 30; the modifier stacks on top.
-        expect(Math.max(d.res.fire, d.res.cold, d.res.lightning, d.res.chaos)).toBe(add + 30);
-        continue;
+      const m = world.get<MonsterC>(e, "monster")!;
+      const base = MONSTERS.get(m.defId)!.defenses.resPct;
+      for (const el of ELEMENTS) {
+        // A rare adds its own +30 on top, but only on the element its attack
+        // converted to.
+        const rareBump = m.rare === 1 && el === rareEl ? 30 : 0;
+        expect(d.res[el], `${m.defId} ${el}`).toBe(base[el] + add + rareBump);
       }
-      // The plain imp resists nothing on its own, so what is left is the modifier.
-      expect(d.res.cold).toBe(add);
-      expect(d.res.chaos).toBe(add);
     }
   });
 

@@ -1,6 +1,6 @@
 import { fp, fpMul } from "@exiled/fixed-point";
-import { makeRare, monsterTierScale, waystoneScaleFor } from "@exiled/rules";
-import { MONSTERS, rareTemplate } from "@exiled/content-runtime";
+import { makeRare, mapBaseIdForNode, monsterTierScale, waystoneScaleFor } from "@exiled/rules";
+import { MONSTERS, PACK_COUNT, mapBase, pickPack, rareTemplate } from "@exiled/content-runtime";
 import { ELEMENTS, type MonsterDef } from "@exiled/content-schema";
 import type { AreaLayout } from "@exiled/mapgen";
 import type { World, Entity } from "./ecs";
@@ -67,14 +67,37 @@ export function spawnPortalRing(world: World, count: number): void {
 }
 
 /**
- * Where a pack-size extra stands relative to the socket it doubles. Literal
- * fixed-point, in the same idiom as PORTAL_RING and the boss's SUMMON_RING.
+ * Where the members of one pack stand relative to the socket they share. Literal
+ * fixed-point, never trig: the sim stays deterministic.
+ *
+ * Eight entries, because the largest pack is a swarm of 4 and a 100% pack-size
+ * roll doubles it. At five entries the extras landed back on top of the first
+ * three and a doubled swarm read as four monsters, not eight.
  */
 const PACK_SPREAD: readonly { dx: number; dy: number }[] = [
   { dx: fp(0), dy: fp(0) },
   { dx: fp(1.4), dy: fp(0.9) },
   { dx: fp(-1.4), dy: fp(-0.9) },
+  { dx: fp(1.5), dy: fp(-0.8) },
+  { dx: fp(-1.5), dy: fp(0.8) },
+  { dx: fp(0), dy: fp(1.7) },
+  { dx: fp(0), dy: fp(-1.7) },
+  { dx: fp(2.2), dy: fp(0) },
 ];
+
+// Same idiom as rules/items.ts and rules/vendor.ts: every consumer of
+// mulberry32 keeps its own file-local copy rather than sharing one, so this
+// leaf never has to import a stream generator from elsewhere.
+function mulberry32(seed: number): () => number {
+  let s = seed >>> 0;
+  return () => {
+    s = (s + 0x6d2b79f5) | 0;
+    let t = s;
+    t = Math.imul(t ^ (t >>> 15), 1 | t);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return (t ^ (t >>> 14)) >>> 0;
+  };
+}
 
 /**
  * How dangerous this run's monsters are: the map's tier, then the Waystone's
@@ -138,30 +161,42 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
     // Portals equal to the current portal budget (0 if map not open or exhausted).
     spawnPortalRing(world, session.portalsLeft);
   } else {
-    // Map: imps fill the spawn sockets (last one carries the rare), the warden
-    // holds the boss room, and the return portal sits in the exit room. Every
-    // position is a walkable socket from the generated layout.
+    // Map: the active node's biome pool fills the spawn sockets (last one
+    // carries the rare), the warden holds the boss room, and the return portal
+    // sits in the exit room. Every position is a walkable socket from the
+    // generated layout.
     const scale = mapDangerScale(session);
     const ws = waystoneScaleFor(session.waystoneSeed);
-    const impDef = withMonsterRes(MONSTERS.get("monster.cinder_imp.v1")!, ws.monsterResAdd);
+    // Which biome this is decides what lives in it. Same route the layout
+    // grammar takes (systems/area-transition.ts): the Atlas node picks the base,
+    // the base picks the biome.
+    const biomeId = mapBase(mapBaseIdForNode(session.activeNodeId)).biomeId;
+    // One stream, walked once per socket in socket order, so the same map seed
+    // always fields the same bestiary. Same idiom as rules/items.ts. mulberry32
+    // returns a raw uint32, so pickPack (which wants a 0..1 roll) needs it
+    // normalised the same way atlas.ts's frac() does, or every roll clamps to
+    // the top of the pool and every socket fields the same species.
+    const rnd = mulberry32(session.mapSeed ^ 0x9e37);
+    const frac = () => rnd() / 0x100000000;
     const spawns = layout.spawnSockets;
-    // Pack size adds monsters to the sockets the layout already has, one extra
-    // pass at a time: the generator owns where a fight can stand, and a modifier
-    // must not be able to put one inside a wall.
-    const total = spawns.length + Math.trunc((spawns.length * ws.packSizePct) / 100);
-    for (let i = 0; i < total; i++) {
-      const s = spawns[i % spawns.length]!;
-      // The last of the layout's own sockets carries the rare; the pack-size
-      // extras are ordinary monsters, so a big roll means more to kill rather
-      // than more rares to answer.
-      const rare = i === spawns.length - 1;
-      // The map's own seed picks the rare's element, so a given map always
-      // demands the same resistance and a replay of it stays identical.
-      const def = rare ? makeRare(impDef, rareTemplate(session.mapSeed)) : impDef;
-      // Extras are nudged off the socket centre so a doubled pack does not stand
-      // in one column. Literal offsets, never trig: the sim stays deterministic.
-      const ring = PACK_SPREAD[Math.trunc(i / spawns.length) % PACK_SPREAD.length]!;
-      spawnMonster(world, def, fp(s.x) + ring.dx, fp(s.y) + ring.dy, rare, scale);
+    for (let i = 0; i < spawns.length; i++) {
+      const s = spawns[i]!;
+      const base = withMonsterRes(pickPack(biomeId, frac()), ws.monsterResAdd);
+      // Pack size adds to the pack the socket already has. The generator owns
+      // where a fight can stand, so a modifier adds bodies to a sanctioned
+      // socket and never invents a new one.
+      const packed = PACK_COUNT[base.archetype];
+      const count = packed + Math.trunc((packed * ws.packSizePct) / 100);
+      for (let j = 0; j < count; j++) {
+        // The first member of the last socket carries the rare, so a big pack-size
+        // roll means more to kill rather than more rares to answer.
+        const rare = i === spawns.length - 1 && j === 0;
+        // The map's own seed picks the rare's element, so a given map always
+        // demands the same resistance and a replay of it stays identical.
+        const def = rare ? makeRare(base, rareTemplate(session.mapSeed)) : base;
+        const ring = PACK_SPREAD[j % PACK_SPREAD.length]!;
+        spawnMonster(world, def, fp(s.x) + ring.dx, fp(s.y) + ring.dy, rare, scale);
+      }
     }
 
     const boss = anchor(layout, "boss");
