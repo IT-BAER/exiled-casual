@@ -9,6 +9,7 @@ import {
   type Scene,
 } from "@babylonjs/core";
 import { FLOOR_TILES, GROUND_SIZE, VOID_COLOR, WALL_MESH_NAME } from "./engine";
+import { tintHaze } from "./haze";
 import {
   DEBRIS_MESH_PREFIX,
   RAMPART_MESH_PREFIX,
@@ -420,4 +421,6 @@ export function applyBiomeTint(scene: Scene, tint: readonly [number, number, num
   // fall out of step with the first — a swamp's distance goes green because the
   // swamp is green, and the hideout's goes back to neutral with everything else.
   scene.fogColor = new Color3(VOID_COLOR.r * nr, VOID_COLOR.g * ng, VOID_COLOR.b * nb);
+  // The air in the room is part of the room's colour, so it takes the same tint.
+  tintHaze(scene, nr, ng, nb);
 }

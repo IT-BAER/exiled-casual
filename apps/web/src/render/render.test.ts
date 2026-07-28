@@ -3,6 +3,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import {
   ImageProcessingConfiguration,
   NullEngine,
+  ParticleSystem,
   PointLight,
   Scene,
   StandardMaterial,
@@ -10,6 +11,7 @@ import {
 } from "@babylonjs/core";
 import { applyAtmosphere, createScene, VOID_COLOR } from "./engine";
 import { applyBiomeTint } from "./level";
+import { HAZE_HEIGHT, HAZE_MAX_SIZE, HAZE_NAME } from "./haze";
 import { BIOMES } from "@exiled/content-runtime";
 import { SnapshotRenderer } from "./renderer";
 import { makeMesh, updateTelegraph } from "./meshes";
@@ -146,6 +148,45 @@ describe("atmosphere", () => {
 
     applyBiomeTint(scene, null);
     expect(scene.fogColor.equals(VOID_COLOR)).toBe(true);
+  });
+
+  it("hazes the ground around the player and drifts it there in world space", () => {
+    // The emitter follows; the particles must not. Parent them to the view and
+    // the whole field slides with the camera, which reads as a dirty lens.
+    engine = new NullEngine();
+    const { scene, camera } = createScene(engine);
+    const haze = scene.particleSystems.find((p) => p.name === HAZE_NAME)!;
+
+    expect(haze).toBeTruthy();
+    expect(haze.blendMode).toBe(ParticleSystem.BLENDMODE_ADD);
+
+    camera.setTarget(new Vector3(9, 0, -4), false, false, true);
+    scene.render();
+
+    const at = haze.emitter as Vector3;
+    expect(at.x).toBeCloseTo(9);
+    expect(at.z).toBeCloseTo(-4);
+  });
+
+  it("hangs every haze quad clear of the floor, or the floor slices it", () => {
+    // The sprites are camera-facing quads standing `size` tall about their
+    // centre. Any part below the floor loses the depth test to the opaque ground
+    // plane and the quad ends in a dead-straight horizontal line — at alpha 0.35
+    // the frame was banded with them. Height must beat half the largest sprite.
+    expect(HAZE_HEIGHT).toBeGreaterThan(HAZE_MAX_SIZE / 2);
+  });
+
+  it("tints the haze with the biome and never lets it go opaque", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const haze = scene.particleSystems.find((p) => p.name === HAZE_NAME)! as ParticleSystem;
+
+    applyBiomeTint(scene, BIOMES.desert.tint);
+
+    expect(haze.color1.r).toBeGreaterThan(haze.color1.b); // desert is warm
+    // Additive, so alpha is intensity. Thick enough to notice on its own has
+    // already washed out the torch pool the frame is built around.
+    expect(haze.color1.a).toBeLessThan(0.4);
   });
 });
 
