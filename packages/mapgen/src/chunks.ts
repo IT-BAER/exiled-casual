@@ -4,15 +4,18 @@
 // Alphabet: '#' wall, '.' floor, 's' spawn, 'r' reward, 'b' boss, 'e' exit.
 // Everything that is not '#' is walkable.
 //
-// Opening invariant: an open tile edge is exactly cells OPENING_LO..OPENING_HI
-// of that edge and every other border cell is wall. That window is symmetric
-// about the tile centre, which is what makes rotation and mirroring closed
-// operations on the mask — an off-centre opening would stop matching the
-// moment a chunk is mirrored.
+// Opening invariant: an open tile edge is a single contiguous window centred
+// on the tile, either OPENING_LO..OPENING_HI (width 4) or 2..13 (width 12), and
+// every other border cell is wall. Both widths are symmetric about the tile
+// centre, which is what makes rotation and mirroring closed operations on the
+// mask — an off-centre opening would stop matching the moment a chunk is
+// mirrored. Corners (cells 0, 1, 14, 15) stay wall on every edge under both
+// widths, which is why the wide window stops at 12 rather than going to 16.
 
 export const TILE_CELLS = 16;
 export const OPENING_LO = 6;
 export const OPENING_HI = 9;
+const OPEN_WIDTHS = [4, 12] as const;
 
 /** N, E, S, W. The grid is row-major with y increasing southward, so N is y-1. */
 export type Dir = 0 | 1 | 2 | 3;
@@ -123,23 +126,26 @@ export function validateChunk(chunk: Chunk): string[] {
   }
   if (problems.length) return problems;
 
-  // Border: wall everywhere except inside a fully-open 6..9 window.
+  // Border: wall everywhere except inside a single contiguous, centred window
+  // of an allowed width. Every allowed window contains 6..9, so checking which
+  // width (if any) matches the open cells is enough to validate the edge.
   const tiles = n / TILE_CELLS;
   for (let side = 0 as Dir; side < 4; side = (side + 1) as Dir) {
     for (let t = 0; t < tiles; t++) {
       const base = t * TILE_CELLS;
-      let open = 0;
-      for (let k = OPENING_LO; k <= OPENING_HI; k++) {
-        if (!isWall(borderChar(rows, side, base + k))) open++;
-      }
-      if (open !== 0 && open !== OPENING_HI - OPENING_LO + 1) {
-        problems.push(`${chunk.id}: side ${side} tile ${t} has a partial opening (${open}/4)`);
-      }
+      const openAt: number[] = [];
       for (let k = 0; k < TILE_CELLS; k++) {
-        if (k >= OPENING_LO && k <= OPENING_HI) continue;
-        if (!isWall(borderChar(rows, side, base + k))) {
-          problems.push(`${chunk.id}: side ${side} tile ${t} has floor outside the 6..9 window at ${k}`);
-        }
+        if (!isWall(borderChar(rows, side, base + k))) openAt.push(k);
+      }
+      if (openAt.length === 0) continue;
+      const width = OPEN_WIDTHS.find((w) => w === openAt.length);
+      const lo = (TILE_CELLS - (width ?? 0)) / 2;
+      const hi = lo + (width ?? 0) - 1;
+      const centred = width !== undefined && openAt[0] === lo && openAt[openAt.length - 1] === hi;
+      if (!centred) {
+        problems.push(
+          `${chunk.id}: side ${side} tile ${t} opening is not a centred 4- or 12-wide window (open at ${openAt.join(",")})`,
+        );
       }
     }
   }
