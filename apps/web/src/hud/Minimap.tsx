@@ -8,7 +8,7 @@ import { SERIF } from "./ItemTooltip";
  *
  * Reference: `poe2-screenshots/minimap-poe1.png` (PoE1) for the drawing itself —
  * the explored area is ONE smooth dark silhouette under a thin lavender contour,
- * with no panel, border or backdrop, floating over the world. Drawing the cells
+ * over a square of dimmed world, with no panel or border. Drawing the cells
  * as walls and floor instead (as `minimap.png`, PoE2, does at its much closer
  * zoom) turns into masonry noise at this size.
  *
@@ -307,8 +307,11 @@ export function Minimap({ layout, player }: MinimapProps): React.JSX.Element | n
         width: `${MAP_VW}vw`,
         height: `${MAP_VW}vw`,
         pointerEvents: "none",
-        // No panel, no border: the reference has the shape floating over the
-        // world, and a frame around it is the tell that it is not PoE's.
+        // A tinted square, still no border. PoE darkens the world under the map
+        // so the contour has something to read against over bright ground, but
+        // it is a tint and not a panel: no frame line, no rounding, and the
+        // world stays visible through it.
+        background: "rgba(0,0,0,0.34)",
         filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.75))",
         fontFamily: SERIF,
       }}

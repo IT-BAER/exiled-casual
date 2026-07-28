@@ -2,7 +2,7 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { NullEngine, Color3 } from "@babylonjs/core";
+import { NullEngine, Color3, VertexBuffer } from "@babylonjs/core";
 import { createScene } from "./engine";
 import { buildLevel, applyBiomeTint, applyTilesetFloor, tilesetDir } from "./level";
 import { MAP_BASES, BIOMES } from "@exiled/content-runtime";
@@ -43,14 +43,31 @@ describe("buildLevel", () => {
     expect(scene.getMeshByName("level-walls")).not.toBeNull();
   });
 
-  it("draws a wall band 3 cells deep, so a doorway has a reveal", () => {
-    // One cell deep gave a 0.5u jamb against a 3.5u wall. Floor sits in 4..6, so
-    // reaching 3 cells out covers 1..9 in both axes: 81 cells, less the 9 floor.
-    // The 40 cells beyond that stay undrawn — a band, not a filled square.
+  it("keeps the wall band one cell deep, so walls stay walls and not bars", () => {
+    // Three cells was tried and reverted: the band grows by a Chebyshev
+    // neighbourhood, so a deeper band fattens EVERY wall and steps every corner
+    // into a staircase — the frame became grey bars with floor in the gaps.
+    // Floor sits in 4..6, so one cell out covers 3..7: 25 cells, less the 9
+    // floor. The 96 cells beyond stay undrawn — a band, not a filled square.
     engine = new NullEngine();
     const { scene } = createScene(engine);
 
-    expect(buildLevel(scene, roomyGrid()).wallCells).toBe(72);
+    expect(buildLevel(scene, roomyGrid()).wallCells).toBe(16);
+  });
+
+  it("shades the wall tops down, so they never out-bright the floor", () => {
+    // The loudest "this is Minecraft" pixel: a lit plateau on every wall top,
+    // brighter than the ground. PoE's rock goes near-black off the floor plane.
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+
+    const walls = buildLevel(scene, roomGrid()).walls!;
+    const normals = walls.getVerticesData(VertexBuffer.NormalKind)!;
+    const colors = walls.getVerticesData(VertexBuffer.ColorKind);
+    expect(colors, "wall colours survive the merge").not.toBeNull();
+    for (let n = 0, c = 0; n < normals.length; n += 3, c += 4) {
+      expect(colors![c]).toBeCloseTo((normals[n + 1] ?? 0) > 0.5 ? 0.22 : 1, 5);
+    }
   });
 
   it("shrinks the ground plane to the area, so past the outer wall is black", () => {

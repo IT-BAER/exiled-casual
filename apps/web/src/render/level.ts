@@ -5,23 +5,38 @@ import {
   StandardMaterial,
   Texture,
   Vector4,
+  VertexBuffer,
   type Scene,
 } from "@babylonjs/core";
 import { FLOOR_TILES, GROUND_SIZE } from "./engine";
 import type { WalkableGrid } from "@exiled/mapgen";
 
-/** Wall height in world units — tall enough to read as walls, not kerbs, under
- *  the ~9.5u-tall isometric view; greybox, tune against the boss framing later.
- *  At 2 the short boxes read as flat dark floor-patches from this near-top-down
- *  ortho angle; 3.5 gives a lit brick side face that reads as a real barrier. */
-const WALL_HEIGHT = 3.5;
+/** Wall height in world units, capped at roughly the player's own 1.8. At 3.5 a
+ *  wall cell was seven times taller than it was thick and every isolated one
+ *  stood up as a tower; worse, the camera sits ~49 degrees above the horizon, so
+ *  a wall of height h hides h/tan(49) ≈ 0.87h of world behind it, and 3.5 hid
+ *  three units — the character disappeared behind any wall he walked south of.
+ *  At 1.8 his head clears the wall he is directly behind. Raise this and you owe
+ *  the frame an occlusion fade, not just a taller box. */
+const WALL_HEIGHT = 1.8;
 
-/** How many cells of wall are drawn outward from the floor. At one cell a door
- *  jamb was 0.5 units deep against a 3.5-unit wall — 14% as thick as it was
- *  tall, where PoE1's reads about 40% and gives the doorway a real reveal.
- *  Only NON-floor cells ever qualify, so thickening the band can never eat
- *  walkable ground, and collision (which reads the raw grid) is untouched. */
-const WALL_THICK_CELLS = 3;
+/** How many cells of wall are drawn outward from the floor. ONE. Three was an
+ *  attempt to give a doorway the reveal PoE1's has, and it was the wrong read of
+ *  the reference: the band is grown by a Chebyshev neighbourhood, so widening it
+ *  fattens every wall in the map at once and turns each corner into a 3-cell
+ *  staircase. The frame went to grey bars with floor in the channels between
+ *  them. In the reference the ground holds ~70% of the frame and the rock is a
+ *  dark border, so depth at a door has to come from the wall's face, never from
+ *  extruding the whole band. */
+const WALL_THICK_CELLS = 1;
+
+/** How much of the wall texture reaches the TOP face. The single loudest thing
+ *  saying "box" was that at this camera the wall tops were the brightest pixels
+ *  on screen, brighter than the floor: a lit plateau on every wall, which is
+ *  exactly the read Minecraft has and exactly what PoE never shows — its rock
+ *  goes to near-black the moment it turns away from the ground. Darkening the
+ *  cap turns a lit box back into a silhouetted mass. */
+const TOP_SHADE = 0.22;
 const WALL_MESH_NAME = "level-walls";
 const WALL_MAT_NAME = "level-wall-mat";
 /** The tileset a map with no base named falls back to. */
@@ -124,6 +139,29 @@ function scaleFloorTexture(scene: Scene, sx: number, sz: number): void {
   tex.vScale = FLOOR_TILES * sz;
 }
 
+/**
+ * Shade a wall box's top face down. Per-vertex rather than per-material because
+ * the runs are merged into ONE mesh (a second material would mean a second draw
+ * per wall, and the merge exists precisely to avoid that); colour rides along in
+ * the merge, and `useVertexColors` is on by default.
+ *
+ * Keyed off the normal, not the face index, so it cannot silently paint the
+ * wrong side if Babylon reorders CreateBox's faces.
+ */
+function shadeTopFace(box: Mesh): void {
+  const normals = box.getVerticesData(VertexBuffer.NormalKind);
+  if (!normals) return;
+  const colors = new Float32Array((normals.length / 3) * 4);
+  for (let n = 0, c = 0; n < normals.length; n += 3, c += 4) {
+    const k = (normals[n + 1] ?? 0) > 0.5 ? TOP_SHADE : 1;
+    colors[c] = k;
+    colors[c + 1] = k;
+    colors[c + 2] = k;
+    colors[c + 3] = 1;
+  }
+  box.setVerticesData(VertexBuffer.ColorKind, colors);
+}
+
 export function buildLevel(
   scene: Scene,
   grid: WalkableGrid | null,
@@ -181,6 +219,7 @@ export function buildLevel(
         WALL_HEIGHT / 2,
         originY + y * cellSize,
       );
+      shadeTopFace(box);
       boxes.push(box);
     }
   }
