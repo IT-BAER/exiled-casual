@@ -6,6 +6,7 @@ import {
   StandardMaterial,
   Texture,
   type Scene,
+  type Vector3,
 } from "@babylonjs/core";
 import { attachProp } from "./props";
 import { attachBoltTrail, attachCinderFX, cinderGlow } from "./skill-fx";
@@ -716,7 +717,14 @@ const FIRE_COLOR: Record<"projectile" | "groundArea", [number, number, number]> 
   groundArea: [1.0, 0.42, 0.12], // ember — cinder ground disc
 };
 
-export function makeMesh(scene: Scene, kind: MeshKind, name: string): Mesh {
+/**
+ * `at` is where the entity is being born, and it is not a convenience: a trail
+ * seeds every one of its sections at wherever its generator stands when it is
+ * built, so a bolt whose mesh is still at the origin gets a ribbon strung from
+ * the origin to the caster's hand that then peels away over the next ~30 frames.
+ * Position first, attach the effects second.
+ */
+export function makeMesh(scene: Scene, kind: MeshKind, name: string, at?: Vector3): Mesh {
   // ponytail: each actor is assembled from ~10 primitive parts per instance
   // (shared materials, but geometry is not GPU-instanced). Fine for a lab-sized
   // fight; if a large imp swarm tanks FPS, build one template per kind and
@@ -833,6 +841,10 @@ export function makeMesh(scene: Scene, kind: MeshKind, name: string): Mesh {
         MeshBuilder.CreateCylinder(name, { diameter: 2, height: 0.04, tessellation: 24 }, scene);
   mesh.material = m;
   mesh.isPickable = false;
+  if (at) {
+    mesh.position.copyFrom(at);
+    mesh.computeWorldMatrix(true); // the trail reads the bounding box, not the position
+  }
   if (kind === "projectile") attachBoltTrail(scene, mesh);
   else attachCinderFX(scene, mesh);
   return mesh;

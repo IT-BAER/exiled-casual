@@ -221,15 +221,19 @@ export class SnapshotRenderer {
   ): void {
     let mesh = this.meshes.get(id);
     const fresh = !mesh;
+    const x = lerp(prevX, nextX, alpha);
+    const z = lerp(prevY, nextY, alpha);
     if (!mesh) {
-      mesh = makeMesh(this.scene, kind, `entity-${id}`);
+      // Born where it belongs. A mesh built at the origin and moved afterwards
+      // drags any trail it owns across the level on its first frames.
+      mesh = makeMesh(this.scene, kind, `entity-${id}`, new Vector3(x, Y_LIFT[kind], z));
       mesh.rotation.y = SPAWN_YAW;
       this.meshes.set(id, mesh);
     }
     const wasX = mesh.position.x;
     const wasZ = mesh.position.z;
-    mesh.position.x = lerp(prevX, nextX, alpha);
-    mesh.position.z = lerp(prevY, nextY, alpha);
+    mesh.position.x = x;
+    mesh.position.z = z;
     mesh.position.y = Y_LIFT[kind];
 
     // Scale telegraph and groundArea on x/z only to match their world radius.

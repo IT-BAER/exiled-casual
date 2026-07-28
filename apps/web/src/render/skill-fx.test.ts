@@ -41,6 +41,23 @@ describe("ember bolt", () => {
     expect(trail!.blendMode).toBe(ParticleSystem.BLENDMODE_ADD);
   });
 
+  it("strings its ribbon at the bolt, never back to the world origin", () => {
+    const scene = newScene();
+    const at = new Vector3(12, 0.8, -9);
+    makeMesh(scene, "projectile", "entity-7", at);
+
+    const ribbon = scene.getMeshByName(`${BOLT_TRAIL_NAME}-ribbon`);
+    expect(ribbon).not.toBeNull();
+    // A trail seeds every section where its generator stands at build time, in
+    // world space. One section left at (0,0,0) is a beam across the level.
+    const pos = ribbon!.getVerticesData("position")!;
+    let farthest = 0;
+    for (let i = 0; i < pos.length; i += 3) {
+      farthest = Math.max(farthest, Math.hypot(pos[i]! - at.x, pos[i + 2]! - at.z));
+    }
+    expect(farthest).toBeLessThan(1);
+  });
+
   it("burns each spark through the flipbook over its own lifetime", () => {
     const scene = newScene();
     makeMesh(scene, "projectile", "entity-7");
