@@ -139,6 +139,57 @@ const NODE_NAMES: readonly string[] = [
   "Gallowsmoor", "Vault of Cinders",
 ];
 
+/**
+ * Map base ids. This module is a pure leaf — no `@exiled` imports — so it may
+ * hold only the ids; the DEFINITIONS (biome, tileset, layout grammar) live in
+ * `@exiled/content-runtime`, and a test there fails if the two lists disagree.
+ * Same arrangement as `GEAR_TEXTURE` in the renderer.
+ */
+export const MAP_BASE_IDS = [
+  "map.vaal_stone", "map.desert", "map.swamp", "map.forest",
+] as const;
+export type MapBaseId = (typeof MAP_BASE_IDS)[number];
+
+/**
+ * Which base each Atlas node is built from, fixed per index alongside its name
+ * and its flavour: what a place is made of is part of the place, not of the
+ * seed. Three nodes per base, so no biome is a novelty.
+ */
+const NODE_MAP_BASES: readonly MapBaseId[] = [
+  "map.forest",      // Ashen Glade
+  "map.desert",      // Emberfall
+  "map.vaal_stone",  // Cinder Vault
+  "map.swamp",       // Blackmire
+  "map.swamp",       // Sunken Chapel
+  "map.vaal_stone",  // Ossuary Steps
+  "map.swamp",       // Rustwater
+  "map.desert",      // The Pale Reach
+  "map.desert",      // Kiln of Ash
+  "map.forest",      // Thornwake
+  "map.forest",      // Gallowsmoor
+  "map.vaal_stone",  // Vault of Cinders
+];
+
+/** The base an Atlas node runs, by its index in the fixed name table. */
+export function mapBaseIdForIndex(index: number): MapBaseId {
+  return NODE_MAP_BASES[index] ?? "map.vaal_stone";
+}
+
+/** Node ids are derived from the fixed names, so this resolves without a graph. */
+export function atlasNodeIndex(nodeId: string): number {
+  return NODE_NAMES.findIndex((n) => nodeIdFor(n) === nodeId);
+}
+
+/** The base an Atlas node runs. Unknown nodes fall back to the first base. */
+export function mapBaseIdForNode(nodeId: string): MapBaseId {
+  const i = atlasNodeIndex(nodeId);
+  return i < 0 ? "map.vaal_stone" : mapBaseIdForIndex(i);
+}
+
+function nodeIdFor(name: string): string {
+  return `node.${name.toLowerCase().replace(/[^a-z0-9]+/g, "_")}`;
+}
+
 // Fixed per index alongside the name, for the same reason: the layout is seeded
 // per account, the place is not.
 const NODE_FLAVOUR: readonly string[] = [
@@ -174,7 +225,7 @@ export function atlasGraph(atlasSeed: number): AtlasGraphNode[] {
     const jx = (frac() - 0.5) * 0.7, jy = (frac() - 0.5) * 0.7;
     const name = NODE_NAMES[i] ?? `Region ${i}`;
     nodes.push({
-      id: `node.${name.toLowerCase().replace(/[^a-z0-9]+/g, "_")}`,
+      id: nodeIdFor(name),
       name,
       x: (col + 0.5 + jx) / cols,
       y: (row + 0.5 + jy) / rows,

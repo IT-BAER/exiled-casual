@@ -553,3 +553,40 @@ export function validateAffix(v: unknown): ValidationResult {
   }
   return { ok: errors.length === 0, errors };
 }
+
+// ---------------------------------------------------------------------------
+// Maps: biomes and bases
+// ---------------------------------------------------------------------------
+
+/**
+ * The four biomes this game ships. PoE2's own list is longer (docs/01 §5) and a
+ * map can count as more than one; these are the four we have art and layouts
+ * for. Vaal Stone is a city identity rather than a primary biome, and is here
+ * because a ruined stone city is the look the Atlas is built around.
+ */
+export const BIOME_IDS = ["vaal_stone", "desert", "swamp", "forest"] as const;
+export type BiomeId = (typeof BIOME_IDS)[number];
+
+/** Which chunk library and branch count an area is assembled from. */
+export const LAYOUT_GRAMMAR_IDS = ["loop", "open-field"] as const;
+export type LayoutGrammarId = (typeof LAYOUT_GRAMMAR_IDS)[number];
+
+export interface Biome {
+  id: BiomeId;
+  name: string;
+  /** Ambient light tint, linear 0..1 RGB. The mood of the place in one triple. */
+  tint: readonly [number, number, number];
+}
+
+/**
+ * An original map base: what a place is made of. The Atlas node brings the
+ * name and the position, the Waystone brings the tier, and this brings the
+ * look and the shape. See docs/01-atlas-and-map-running.md:196.
+ */
+export interface MapBase {
+  id: string;
+  biomeId: BiomeId;
+  /** Material set the renderer dresses the walls and floor with. */
+  tilesetId: string;
+  layoutGrammarId: LayoutGrammarId;
+}

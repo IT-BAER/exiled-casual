@@ -3,6 +3,7 @@ import {
   intentToCommand,
   buildSnapshot,
   spawnLabActors,
+  grammarForNode,
   loadInto,
   saveTo,
   IndexedDbKv,
@@ -161,7 +162,13 @@ export class WorkerCore {
     // the collision grid (area-transition installs gridCollision(generateArea(
     // mapSeed))). Using this.seed here drew a different dungeon than the one the
     // player collided against: walkable rendered walls, invisible blocking floor.
-    this.areaLayout = generateArea(session.mapSeed, CONTENT_VERSION);
+    // The grammar has to match for the same reason, and it comes from the same
+    // place the sim gets it: the Atlas node the session has open.
+    this.areaLayout = generateArea(
+      session.mapSeed,
+      CONTENT_VERSION,
+      grammarForNode(session.activeNodeId),
+    );
     this.areaDirty = true;
   }
 

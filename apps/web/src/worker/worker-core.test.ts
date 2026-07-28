@@ -5,6 +5,7 @@ import { fp } from "@exiled/fixed-point";
 import { generateArea } from "@exiled/mapgen";
 import { offerWaystones, mapSeedFor, WAYSTONE_OFFER_COUNT } from "@exiled/rules";
 import { CONTENT_VERSION } from "@exiled/content-runtime";
+import { grammarForNode } from "@exiled/simulation";
 
 function monsters(core: WorkerCore) {
   return core.snapshot()!.entities.filter((e) => e.kind === "monster");
@@ -116,7 +117,13 @@ describe("WorkerCore", () => {
     // floor blocks (the "walk through some walls, invisible walls elsewhere" bug).
     expect(core.consumeAreaChange()).toBe(true);
     expect(core.consumeAreaChange()).toBe(false); // one-shot
+    // The grammar is part of that identity: the Atlas node picks the map base,
+    // the base picks the layout grammar, and generating with the wrong one draws
+    // a different dungeon just as surely as the wrong seed does.
     const mapSeed = mapSeedFor(offerWaystones(42, WAYSTONE_OFFER_COUNT)[0]!.seed, "node.ashen_glade");
-    expect(core.getAreaLayout().hash).toBe(generateArea(mapSeed, CONTENT_VERSION).hash);
+    const grammar = grammarForNode("node.ashen_glade");
+    expect(grammar).toBe("open-field"); // Ashen Glade is a forest
+    expect(core.getAreaLayout().hash).toBe(generateArea(mapSeed, CONTENT_VERSION, grammar).hash);
+    expect(core.getAreaLayout().hash).not.toBe(generateArea(mapSeed, CONTENT_VERSION, "loop").hash);
   });
 });

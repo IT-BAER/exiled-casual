@@ -1,6 +1,7 @@
 import { fp } from "@exiled/fixed-point";
 import { generateArea } from "@exiled/mapgen";
-import { CONTENT_VERSION } from "@exiled/content-runtime";
+import { CONTENT_VERSION, mapBase } from "@exiled/content-runtime";
+import { mapBaseIdForNode } from "@exiled/rules";
 import { Simulation } from "../loop";
 import { gridCollision, type CollisionRef } from "../collision";
 import type { SessionC, MoveTarget, MoveDir, Position } from "../components";
@@ -32,7 +33,13 @@ export function registerAreaTransition(sim: Simulation, collisionRef?: Collision
     world.set<SessionC>(sessionE, "session", newSession);
 
     // The map is placed against its generated layout; the hideout ignores it.
-    const layout = generateArea(newSession.mapSeed, CONTENT_VERSION);
+    // The Atlas node decides which base is being run, and the base decides the
+    // layout grammar — so a swamp is a loop and a desert is an open field.
+    const layout = generateArea(
+      newSession.mapSeed,
+      CONTENT_VERSION,
+      grammarForNode(newSession.activeNodeId),
+    );
     buildArea(world, newArea, newSession, layout);
 
     // Swap the shared level collision: walls on inside the map, off in the hideout.
@@ -56,6 +63,15 @@ export function registerAreaTransition(sim: Simulation, collisionRef?: Collision
       if (md) world.set<MoveDir>(p, "moveDir", { dx: 0, dy: 0 });
     }
   });
+}
+
+/**
+ * The layout grammar an Atlas node's map base is built from. Exported because
+ * the client has to generate the identical layout to draw it, and any drift
+ * between the two would put walls where the sim has none.
+ */
+export function grammarForNode(atlasNodeId: string): "loop" | "open-field" {
+  return mapBase(mapBaseIdForNode(atlasNodeId)).layoutGrammarId;
 }
 
 /** The map's "start" objective anchor, as fixed-point spawn coordinates. */
