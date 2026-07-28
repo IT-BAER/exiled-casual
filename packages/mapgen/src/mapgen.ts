@@ -2,61 +2,29 @@
 // (seed, contentVersion) always yields an identical AreaLayout (same hash).
 // World coordinates are plain numbers in sim world units; the caller converts
 // to fixed-point at the sim boundary. The walkable grid is integer cells.
-import { createStream, fnv1a32, type RandomStream } from "./rng";
+import { createStream, type RandomStream } from "./rng";
+import {
+  CELL_SIZE,
+  CORRIDOR_WIDTH_CELLS,
+  SPAWN_TARGET,
+  buildLayout,
+  cellCentre as cellCentreAt,
+  type AreaLayout,
+  type Socket,
+} from "./grid";
 
-export const ALGORITHM_VERSION = 2;
-
-/** Cell edge length in world units. Player body radius is 0.5, so a 3-cell
- *  corridor is 1.5 world units wide — player diameter (1.0) plus margin. */
-export const CELL_SIZE = 0.5;
-export const CORRIDOR_WIDTH_CELLS = 3;
-/** Required clear width for any mandatory route: player diameter + safety margin. */
-export const MIN_ROUTE_WIDTH = 1.0 + 0.25;
+// Re-exported so existing importers of "./mapgen" keep working unchanged.
+export {
+  ALGORITHM_VERSION,
+  CELL_SIZE,
+  CORRIDOR_WIDTH_CELLS,
+  MIN_ROUTE_WIDTH,
+  SPAWN_TARGET,
+} from "./grid";
+export type { AreaLayout, WalkableGrid, Socket, ValidationCheck } from "./grid";
 
 /** Dungeon grid extent in cells (square, centred on the world origin). */
 export const GRID_CELLS = 80; // 80 * 0.5 = 40 world units across
-
-export interface WalkableGrid {
-  cols: number;
-  rows: number;
-  cellSize: number;
-  /** World coordinate of the (0,0) cell's centre. */
-  originX: number;
-  originY: number;
-  /** rows*cols, row-major; 1 = walkable, 0 = wall. */
-  cells: Uint8Array;
-}
-
-export interface Socket {
-  id: string;
-  x: number;
-  y: number;
-}
-
-export interface ValidationCheck {
-  name: string;
-  passed: boolean;
-  detail?: string;
-}
-
-export interface AreaLayout {
-  algorithmVersion: number;
-  contentVersion: string;
-  seed: number;
-  chosenVariantIds: string[];
-  /** start, boss, exit (+ objectives) in world units. */
-  objectiveAnchors: Socket[];
-  /** Monster/encounter spawn points in world units. */
-  spawnSockets: Socket[];
-  grid: WalkableGrid;
-  /** Walkable world area (cell count * cellSize^2). */
-  walkableArea: number;
-  validationChecks: ValidationCheck[];
-  usedFallback: boolean;
-  hash: number;
-}
-
-const SPAWN_TARGET = 6;
 
 const TAU = Math.PI * 2;
 /** Open-field radius in cells before per-seed wobble. Leaves a wall margin to
@@ -79,13 +47,8 @@ interface Room {
   y1: number; // inclusive cell bounds
 }
 
-function gridOrigin(): number {
-  return -((GRID_CELLS - 1) / 2) * CELL_SIZE;
-}
-
 function cellCentre(cx: number, cy: number): { x: number; y: number } {
-  const o = gridOrigin();
-  return { x: o + cx * CELL_SIZE, y: o + cy * CELL_SIZE };
+  return cellCentreAt(GRID_CELLS, cx, cy);
 }
 
 function roomCentre(r: Room): { cx: number; cy: number } {
@@ -116,114 +79,6 @@ function carveCorridor(cells: Uint8Array, ax: number, ay: number, bx: number, by
   }
 }
 
-function bfsReachable(cells: Uint8Array, start: { cx: number; cy: number }): Uint8Array {
-  const seen = new Uint8Array(GRID_CELLS * GRID_CELLS);
-  const i0 = start.cy * GRID_CELLS + start.cx;
-  if (cells[i0] !== 1) return seen;
-  seen[i0] = 1;
-  const stack = [start];
-  while (stack.length) {
-    const { cx, cy } = stack.pop()!;
-    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
-      const nx = cx + dx, ny = cy + dy;
-      if (nx < 0 || ny < 0 || nx >= GRID_CELLS || ny >= GRID_CELLS) continue;
-      const i = ny * GRID_CELLS + nx;
-      if (seen[i] || cells[i] !== 1) continue;
-      seen[i] = 1;
-      stack.push({ cx: nx, cy: ny });
-    }
-  }
-  return seen;
-}
-
-function worldToCell(x: number, y: number): { cx: number; cy: number } {
-  const o = gridOrigin();
-  return { cx: Math.round((x - o) / CELL_SIZE), cy: Math.round((y - o) / CELL_SIZE) };
-}
-
-function hashLayout(l: Omit<AreaLayout, "hash">): number {
-  let h = fnv1a32(
-    JSON.stringify({
-      algorithmVersion: l.algorithmVersion,
-      contentVersion: l.contentVersion,
-      seed: l.seed,
-      usedFallback: l.usedFallback,
-      objectiveAnchors: l.objectiveAnchors,
-      spawnSockets: l.spawnSockets,
-      walkableArea: l.walkableArea,
-      validationChecks: l.validationChecks,
-      cols: l.grid.cols,
-      rows: l.grid.rows,
-      cellSize: l.grid.cellSize,
-      originX: l.grid.originX,
-      originY: l.grid.originY,
-    }),
-  );
-  const cells = l.grid.cells;
-  for (let i = 0; i < cells.length; i++) h = Math.imul(h ^ cells[i]!, 0x01000193) >>> 0;
-  return h >>> 0;
-}
-
-function assemble(
-  seed: number,
-  contentVersion: string,
-  usedFallback: boolean,
-  cells: Uint8Array,
-  objectiveAnchors: Socket[],
-  spawnSockets: Socket[],
-  chosenVariantIds: string[],
-): AreaLayout {
-  let walkableCells = 0;
-  for (let i = 0; i < cells.length; i++) if (cells[i] === 1) walkableCells++;
-  const walkableArea = walkableCells * CELL_SIZE * CELL_SIZE;
-
-  const start = objectiveAnchors.find((a) => a.id === "start")!;
-  const reached = bfsReachable(cells, worldToCell(start.x, start.y));
-  const targets = [...objectiveAnchors, ...spawnSockets];
-  const allReached = targets.every((t) => {
-    const c = worldToCell(t.x, t.y);
-    if (c.cx < 0 || c.cy < 0 || c.cx >= GRID_CELLS || c.cy >= GRID_CELLS) return false;
-    return reached[c.cy * GRID_CELLS + c.cx] === 1;
-  });
-
-  const validationChecks: ValidationCheck[] = [
-    { name: "reachability", passed: allReached, detail: "all anchors + spawns reachable from start" },
-    {
-      name: "minCorridorWidth",
-      passed: CORRIDOR_WIDTH_CELLS * CELL_SIZE >= MIN_ROUTE_WIDTH,
-      detail: `${CORRIDOR_WIDTH_CELLS * CELL_SIZE} >= ${MIN_ROUTE_WIDTH}`,
-    },
-    {
-      name: "spawnBudget",
-      passed: spawnSockets.length >= Math.ceil(SPAWN_TARGET * 0.85) &&
-        spawnSockets.length <= Math.floor(SPAWN_TARGET * 1.15),
-      detail: `${spawnSockets.length} spawns`,
-    },
-  ];
-
-  const grid: WalkableGrid = {
-    cols: GRID_CELLS,
-    rows: GRID_CELLS,
-    cellSize: CELL_SIZE,
-    originX: gridOrigin(),
-    originY: gridOrigin(),
-    cells,
-  };
-  const withoutHash: Omit<AreaLayout, "hash"> = {
-    algorithmVersion: ALGORITHM_VERSION,
-    contentVersion,
-    seed,
-    chosenVariantIds,
-    objectiveAnchors,
-    spawnSockets,
-    grid,
-    walkableArea,
-    validationChecks,
-    usedFallback,
-  };
-  return { ...withoutHash, hash: hashLayout(withoutHash) };
-}
-
 /** A hand-built three-room dungeon that always passes every gate. Used when a
  *  seeded generation fails validation, so generateArea never returns a bad map. */
 export function fallbackLayout(seed: number, contentVersion: string): AreaLayout {
@@ -244,7 +99,16 @@ export function fallbackLayout(seed: number, contentVersion: string): AreaLayout
     { id: "exit", ...cellCentre(ec.cx, ec.cy) },
   ];
   const spawns: Socket[] = spawnPointsFor([bossRoom, exitRoom], SPAWN_TARGET);
-  return assemble(seed, contentVersion, true, cells, anchors, spawns, ["fallback"]);
+  return buildLayout({
+    size: GRID_CELLS,
+    seed,
+    contentVersion,
+    usedFallback: true,
+    cells,
+    objectiveAnchors: anchors,
+    spawnSockets: spawns,
+    chosenVariantIds: ["fallback"],
+  });
 }
 
 // Deterministic spawn placement: SPAWN_TARGET points spread over the given rooms,
@@ -361,7 +225,16 @@ export function generateArea(seed: number, contentVersion: string): AreaLayout {
     spawns.push({ id: `spawn.${k}`, ...cellCentre(c.cx, c.cy) });
   }
 
-  const layout = assemble(seed, contentVersion, false, cells, anchors, spawns, ["open.field"]);
+  const layout = buildLayout({
+    size: GRID_CELLS,
+    seed,
+    contentVersion,
+    usedFallback: false,
+    cells,
+    objectiveAnchors: anchors,
+    spawnSockets: spawns,
+    chosenVariantIds: ["open.field"],
+  });
   // Any gate failing (e.g. a socket stranded off the walkable net) → safe fallback.
   if (!layout.validationChecks.every((c) => c.passed)) {
     return fallbackLayout(seed, contentVersion);
