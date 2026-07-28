@@ -4,6 +4,7 @@ import { createScene } from "./render/engine";
 import { buildLevel, applyBiomeTint, applyTilesetFloor } from "./render/level";
 import { SnapshotRenderer } from "./render/renderer";
 import { loadProps, resetProps } from "./render/props";
+import { loadRocks, resetRocks } from "./render/rocks";
 import { loadPlayerRig, resetPlayerRig } from "./render/rig";
 import { attachBindings } from "./input/bindings";
 import { Hud } from "./hud/Hud";
@@ -148,7 +149,7 @@ export function App() {
     // mid-run. A failed load resolves too and leaves the primitive fallback in
     // place.
     let unmounted = false;
-    void Promise.all([loadPlayerRig(scene), loadProps(scene)]).then(() => {
+    void Promise.all([loadPlayerRig(scene), loadProps(scene), loadRocks(scene)]).then(() => {
       if (!unmounted) engine.runRenderLoop(renderFrame);
     });
 
@@ -182,6 +183,7 @@ export function App() {
       window.removeEventListener("keydown", onInvKey);
       resetPlayerRig(); // containers belong to the scene we are about to dispose
       resetProps();
+      resetRocks();
       engine.dispose();
       worker.terminate();
       workerRef.current = null;

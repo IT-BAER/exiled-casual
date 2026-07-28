@@ -9,6 +9,7 @@ import {
   type Scene,
 } from "@babylonjs/core";
 import { FLOOR_TILES, GROUND_SIZE } from "./engine";
+import { buildRocks, clearRocks, isRocksReady, scatterRocks, type RockCell } from "./rocks";
 import type { WalkableGrid } from "@exiled/mapgen";
 
 /** Wall height in world units, capped at roughly the player's own 1.8. At 3.5 a
@@ -19,6 +20,17 @@ import type { WalkableGrid } from "@exiled/mapgen";
  *  At 1.8 his head clears the wall he is directly behind. Raise this and you owe
  *  the frame an occlusion fade, not just a taller box. */
 const WALL_HEIGHT = 1.8;
+
+/** Height of the box band once rocks are carrying the silhouette. The band stops
+ *  being the wall and becomes the thing that stops daylight showing BETWEEN the
+ *  boulders — a kerb the rocks sit in, not a wall.
+ *
+ *  It has to stay SHORT. The scatter drops a cell whose neighbours already have a
+ *  rock, which happens most at an inside corner where two runs meet, and whatever
+ *  the band is tall it shows there as a bare rectangular slab with two right
+ *  angles — the one shape this whole pass exists to get off the screen. At 0.55
+ *  those slabs were the loudest thing left in the frame. */
+const BAND_HEIGHT = 0.3;
 
 /** How many cells of wall are drawn outward from the floor. ONE. Three was an
  *  attempt to give a doorway the reveal PoE1's has, and it was the wrong read of
@@ -37,6 +49,16 @@ const WALL_THICK_CELLS = 1;
  *  goes to near-black the moment it turns away from the ground. Darkening the
  *  cap turns a lit box back into a silhouetted mass. */
 const TOP_SHADE = 0.22;
+
+/** Albedo the wall stone is lit at. This was 1.15 — nearly the floor's own 1.45 —
+ *  and that was correct while a wall was a box: its faces were all vertical, they
+ *  only ever caught the sun at a grazing angle, and at 0.62 the masonry crushed to
+ *  mud. A rock is not a box. Half its facets point at the sky, they take the key
+ *  light square on, and at 1.15 the boundary came out brighter than the ground it
+ *  borders — the exact inversion of the reference, where rock is the dark frame
+ *  around a bright floor. The plate itself is already lifted to 120 luma by
+ *  `tools/build_tileset_textures.py`, so the exposure has to come back down here. */
+const ROCK_ALBEDO = 0.5;
 const WALL_MESH_NAME = "level-walls";
 const WALL_MAT_NAME = "level-wall-mat";
 /** The tileset a map with no base named falls back to. */
@@ -82,7 +104,7 @@ function wallMaterial(scene: Scene, tilesetId: string): StandardMaterial {
   // a wall at 0.62 was ~2.3x darker and crushed the light masonry texture to a
   // muddy near-black. Lift close to the floor, kept a touch cooler+darker so the
   // walls still read as distinct from the ground rather than merging into it.
-  mat.diffuseColor = new Color3(1.15, 1.15, 1.25);
+  mat.diffuseColor = new Color3(ROCK_ALBEDO, ROCK_ALBEDO, ROCK_ALBEDO * 1.06);
   mat.specularColor = new Color3(0, 0, 0);
   return mat;
 }
@@ -169,6 +191,7 @@ export function buildLevel(
 ): LevelResult {
   // Area swaps (and the open hideout) call this again; drop the previous walls.
   scene.getMeshByName(WALL_MESH_NAME)?.dispose();
+  clearRocks();
   fitGround(scene, grid);
   if (!grid) return { walls: null, wallCells: 0 };
 
@@ -187,9 +210,16 @@ export function buildLevel(
     return false;
   };
 
-  const uH = WALL_HEIGHT / TILE;
+  // Rocks carry the wall's silhouette when the glb is up; the box band drops to a
+  // plinth under them. Without it (headless tests, a failed fetch) the band is
+  // the wall again at full height, which is the look this replaced and still plays.
+  const rocky = isRocksReady(scene);
+  const bandHeight = rocky ? BAND_HEIGHT : WALL_HEIGHT;
+
+  const uH = bandHeight / TILE;
   const uD = cellSize / TILE;
   const boxes: Mesh[] = [];
+  const rockCells: RockCell[] = [];
   let wallCells = 0;
   // ponytail: horizontal-run greedy only; add vertical/2D rectangle merging if a
   // profile shows the per-cell vertical walls still cost.
@@ -201,6 +231,9 @@ export function buildLevel(
       while (x < cols && isBoundaryWall(x, y)) x++;
       const runLen = x - runStart;
       wallCells += runLen;
+      if (rocky)
+        for (let i = 0; i < runLen; i++)
+          rockCells.push({ x: originX + (runStart + i) * cellSize, z: originY + y * cellSize });
 
       const width = runLen * cellSize;
       const uW = width / TILE;
@@ -211,12 +244,12 @@ export function buildLevel(
       ];
       const box = MeshBuilder.CreateBox(
         `wallrun-${runStart}-${y}`,
-        { width, depth: cellSize, height: WALL_HEIGHT, faceUV },
+        { width, depth: cellSize, height: bandHeight, faceUV },
         scene,
       );
       box.position.set(
         originX + (runStart + (runLen - 1) / 2) * cellSize,
-        WALL_HEIGHT / 2,
+        bandHeight / 2,
         originY + y * cellSize,
       );
       shadeTopFace(box);
@@ -228,9 +261,11 @@ export function buildLevel(
 
   // disposeSource + 32-bit indices: thousands of boxes can exceed the 16-bit vertex limit.
   const merged = Mesh.MergeMeshes(boxes, true, true, undefined, false, false);
+  const material = wallMaterial(scene, tilesetId);
+  if (rocky) buildRocks(scene, scatterRocks(rockCells), material);
   if (merged) {
     merged.name = WALL_MESH_NAME;
-    merged.material = wallMaterial(scene, tilesetId);
+    merged.material = material;
     // Walls receive shadows (actors crossing them read correctly) but never cast
     // one — engine.ts excludes "wallrun-*" from the shadow casters, and Babylon
     // names the merged mesh after its first source, so this mesh is excluded too

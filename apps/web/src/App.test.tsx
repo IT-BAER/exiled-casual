@@ -37,6 +37,7 @@ vi.mock("./render/renderer", () => ({
 }));
 vi.mock("./render/rig", () => ({ loadPlayerRig: () => Promise.resolve(), resetPlayerRig: vi.fn() }));
 vi.mock("./render/props", () => ({ loadProps: () => Promise.resolve(), resetProps: vi.fn() }));
+vi.mock("./render/rocks", () => ({ loadRocks: () => Promise.resolve(), resetRocks: vi.fn() }));
 vi.mock("./render/level", () => ({ buildLevel: vi.fn() }));
 vi.mock("./input/bindings", () => ({
   attachBindings: (
