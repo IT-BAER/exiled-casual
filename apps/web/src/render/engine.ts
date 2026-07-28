@@ -104,19 +104,33 @@ export const VOID_COLOR = new Color3(0.09, 0.1, 0.12);
  */
 export type AtmospherePreset = "soft" | "heavy";
 
-const ATMOSPHERE: Record<AtmospherePreset, { fog: number; vignette: number }> = {
-  // EXP2 density, not a distance: the camera sees ~19 units across, so 0.012
-  // costs the far corner about a fifth of its light and the near floor nothing.
-  soft: { fog: 0.012, vignette: 1.6 },
-  heavy: { fog: 0.028, vignette: 3.2 },
+/**
+ * Fog start and end, in units from the CAMERA, plus the vignette weight.
+ *
+ * Distances and not an EXP2 density, and that is the whole point. The camera is
+ * ORTHOGRAPHIC and parked 40 units back, so the entire visible floor lies in a
+ * measured 36.3..44.2 band — 8 units wide around 40. Exponential fog over a band
+ * that narrow and that far out is nearly constant: at density 0.012 the near
+ * edge of the screen kept 0.827 of its light and the far edge 0.755, a 7%
+ * gradient across the whole frame. That is not depth, it is a flat 20% dimmer,
+ * which is exactly how it read.
+ *
+ * Linear fog lets the band be placed instead of derived. `start` sits just
+ * behind the near edge so the floor at the player's feet is untouched, and `end`
+ * is close enough that the top of the screen visibly drinks the void colour.
+ */
+const ATMOSPHERE: Record<AtmospherePreset, { start: number; end: number; vignette: number }> = {
+  soft: { start: 38, end: 55, vignette: 1.6 },
+  heavy: { start: 36, end: 47, vignette: 3.2 },
 };
 
 /** Fog + vignette. Both are frame-edge effects: they push the eye to the middle
  *  of the screen, which is where the player and the torch pool already are. */
 export function applyAtmosphere(scene: Scene, preset: AtmospherePreset): void {
-  const { fog, vignette } = ATMOSPHERE[preset];
-  scene.fogMode = Scene.FOGMODE_EXP2;
-  scene.fogDensity = fog;
+  const { start, end, vignette } = ATMOSPHERE[preset];
+  scene.fogMode = Scene.FOGMODE_LINEAR;
+  scene.fogStart = start;
+  scene.fogEnd = end;
   // Colour is NOT set here: `applyBiomeTint` owns it, and Babylon ships a
   // non-null default, so a "only if unset" guard here never fires and toggling
   // the preset would silently throw the biome's hue away.

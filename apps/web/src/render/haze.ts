@@ -52,6 +52,11 @@ export function createHaze(scene: Scene, camera: ArcRotateCamera): ParticleSyste
   const ps = new ParticleSystem(HAZE_NAME, CAPACITY, scene);
   ps.particleTexture = new Texture("/textures/fx/haze.png", scene);
   ps.blendMode = ParticleSystem.BLENDMODE_ADD;
+  // Off by default in Babylon, and leaving it off is what made the field flat:
+  // every sprite came back at the same brightness whether it was at the player's
+  // feet or at the top of the screen. Additive plus a dark fog colour means the
+  // far ones simply lose intensity, which is the aerial perspective.
+  ps.applyFog = true;
 
   ps.emitter = new Vector3(0, HAZE_HEIGHT, 0);
   ps.minEmitBox = new Vector3(-AREA, -0.2, -AREA);
@@ -146,6 +151,7 @@ export function createMotes(scene: Scene, camera: ArcRotateCamera): ParticleSyst
   const ps = new ParticleSystem(MOTES_NAME, 90, scene);
   ps.particleTexture = new Texture("/textures/fx/haze.png", scene);
   ps.blendMode = ParticleSystem.BLENDMODE_ADD;
+  ps.applyFog = true; // same reason as the haze: distance has to cost brightness
 
   // Inside the visible box, unlike the haze: a mote that spawns off screen has
   // spent most of its short life before anyone could see it.

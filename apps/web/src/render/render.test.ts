@@ -101,9 +101,16 @@ describe("atmosphere", () => {
     engine = new NullEngine();
     const { scene } = createScene(engine);
 
-    expect(scene.fogMode).toBe(Scene.FOGMODE_EXP2);
-    expect(scene.fogDensity).toBeGreaterThan(0);
+    // LINEAR, not EXP2. The camera is orthographic and 40 units back, so the
+    // whole visible floor sits in a measured 36.3..44.2 band; exponential fog
+    // across 8 units at that range varies by 7% and reads as a flat dimmer.
+    expect(scene.fogMode).toBe(Scene.FOGMODE_LINEAR);
     expect(scene.fogColor.equals(VOID_COLOR)).toBe(true);
+    // The band has to straddle the visible floor: clear at the near edge, biting
+    // before the far one. Outside that it is either invisible or a wall.
+    expect(scene.fogStart).toBeGreaterThan(36.3);
+    expect(scene.fogStart).toBeLessThan(44.2);
+    expect(scene.fogEnd).toBeGreaterThan(44.2);
   });
 
   it("darkens the edges by multiply, so a lit corner stays lit", () => {
@@ -120,11 +127,12 @@ describe("atmosphere", () => {
   it("ships soft, and heavy is strictly more of both", () => {
     engine = new NullEngine();
     const { scene } = createScene(engine);
-    const soft = { fog: scene.fogDensity, v: scene.imageProcessingConfiguration.vignetteWeight };
+    const soft = { fog: scene.fogEnd, v: scene.imageProcessingConfiguration.vignetteWeight };
 
     applyAtmosphere(scene, "heavy");
 
-    expect(scene.fogDensity).toBeGreaterThan(soft.fog);
+    // A NEARER end is thicker fog: the band closes in on the camera.
+    expect(scene.fogEnd).toBeLessThan(soft.fog);
     expect(scene.imageProcessingConfiguration.vignetteWeight).toBeGreaterThan(soft.v);
   });
 
