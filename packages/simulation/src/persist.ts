@@ -13,7 +13,9 @@ import { START_LEVEL } from "@exiled/rules";
  * (like a disconnect mid-map in PoE): completed nodes and inventory survive, a
  * half-run map rolls back. That roll-back IS the anti-duplication guarantee.
  */
-const VERSION = 1;
+// 2: waystones left SessionC and became 1x1 grid items. A v1 blob restores with
+// no stones at all, which is a session that can never open a map.
+export const VERSION = 2;
 
 /** Shape a stash-less save restores to; also the shape a fresh world is built with. */
 const EMPTY_STASH: StashC = { cols: 12, rows: 12, items: [] };

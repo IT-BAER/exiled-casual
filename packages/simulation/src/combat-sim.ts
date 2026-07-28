@@ -3,7 +3,7 @@ import {
   baseCasterStats, makeRare, rollItem, FLASK_MAX_CHARGES, START_LEVEL,
   offerWaystones, WAYSTONE_OFFER_COUNT,
 } from "@exiled/rules";
-import { SKILLS, MONSTERS, rareTemplate, CONTENT_VERSION, ITEM_POOLS, baseOf, CURRENCY_DROPS, currencyItem } from "@exiled/content-runtime";
+import { SKILLS, MONSTERS, rareTemplate, CONTENT_VERSION, ITEM_POOLS, baseOf, CURRENCY_DROPS, currencyItem, waystoneItem } from "@exiled/content-runtime";
 import { generateArea, type AreaLayout } from "@exiled/mapgen";
 import { gridCollision, type CollisionRef } from "./collision";
 import { fnv1a32 } from "./rng";
@@ -108,9 +108,7 @@ export function createCombatSim(
       atlasSeed: seed,
       mapSeed: seed,
       waystoneSeed: opts.waystoneSeed ?? 0,
-      // Opening stock: the three the atlas seed always offered, now owned rather
-      // than conjured fresh at the device every time it is opened.
-      waystones: offerWaystones(seed, WAYSTONE_OFFER_COUNT).map((w) => ({ seed: w.seed, tier: w.tier })),
+
       areaTier: opts.tier ?? 0,
       activeNodeId: "",
       completedNodes: [],
@@ -119,7 +117,16 @@ export function createCombatSim(
       pendingArea: "",
     };
     world.set<SessionC>(sessionE, "session", session);
-    world.set<InventoryC>(sessionE, "inventory", { cols: 12, rows: 5, items: [] });
+    // Opening stock: the stones the atlas seed always offered, now real 1x1 grid
+    // items in the backpack rather than a parallel list only the map device knew
+    // about. They start in a row along the top so the first one is under the
+    // cursor when the device asks for a stone.
+    world.set<InventoryC>(sessionE, "inventory", {
+      cols: 12, rows: 5,
+      items: offerWaystones(seed, WAYSTONE_OFFER_COUNT).map((w, i) => ({
+        x: i, y: 0, w: 1, h: 1, item: waystoneItem(w.seed, w.tier),
+      })),
+    });
     world.set<StashC>(sessionE, "stash", { cols: 12, rows: 12, items: [] });
     world.set<ShardsC>(sessionE, "shards", { counts: {} });
     world.set<ProgressC>(sessionE, "progress", { level: START_LEVEL, xp: 0, gold: 0 });

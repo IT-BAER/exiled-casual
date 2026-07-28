@@ -2,10 +2,11 @@ import { describe, it, expect } from "vitest";
 import { fp } from "@exiled/fixed-point";
 import { offerWaystones, atlasGraph, WAYSTONE_OFFER_COUNT, atlasNodeTier, WAYSTONE_MAX_TIER } from "@exiled/rules";
 import { MAP_PORTALS } from "@exiled/protocol";
+import { waystoneItem } from "@exiled/content-runtime";
 import { Simulation } from "../loop";
 import { registerInteractSystem } from "./interact";
 import type { World } from "../ecs";
-import type { SessionC, Position, InteractableC } from "../components";
+import type { SessionC, Position, InteractableC, InventoryC } from "../components";
 
 function makeWorld() {
   const sim = new Simulation();
@@ -22,13 +23,18 @@ function makeWorld() {
     area: "hideout",
     atlasSeed: 0, areaTier: 0, activeNodeId: "", completedNodes: [],
     mapSeed: 0, waystoneSeed: 0,
-    // The opening stock a fresh character owns; "ws-0" is its first stone.
-    waystones: offerWaystones(0, WAYSTONE_OFFER_COUNT).map((w) => ({ seed: w.seed, tier: w.tier })),
     portalsLeft: 0,
     mapOpen: 0,
     pendingArea: "",
   };
   world.set<SessionC>(sessionE, "session", session);
+  // Opening stock: 1x1 waystone items in backpack, one per offer slot.
+  world.set<InventoryC>(sessionE, "inventory", {
+    cols: 12, rows: 5,
+    items: offerWaystones(0, WAYSTONE_OFFER_COUNT).map((w, i) => ({
+      x: i, y: 0, w: 1, h: 1, item: waystoneItem(w.seed, w.tier),
+    })),
+  });
 
   const device = world.create();
   world.set<Position>(device, "position", { x: fp(0), y: fp(8) });
@@ -41,8 +47,8 @@ function interactCmd(player: number, targetId: number) {
   return { tick: 0, entity: player, type: "interact", data: { targetId } };
 }
 
-function activateCmd(player: number, atlasNodeId: string, waystoneId: string) {
-  return { tick: 0, entity: player, type: "activateMap", atlasNodeId, waystoneId };
+function activateCmd(player: number, atlasNodeId: string, pos: { x: number; y: number }) {
+  return { tick: 0, entity: player, type: "activateMap", atlasNodeId, data: pos };
 }
 
 describe("registerInteractSystem", () => {
@@ -50,7 +56,7 @@ describe("registerInteractSystem", () => {
     const { sim, world, player, sessionE } = makeWorld();
     const ws = offerWaystones(0, WAYSTONE_OFFER_COUNT)[0]!;
 
-    sim.step([activateCmd(player, "node.ashen_glade", ws.id)]);
+    sim.step([activateCmd(player, "node.ashen_glade", { x: 0, y: 0 })]);
 
     const session = world.get<SessionC>(sessionE, "session")!;
     expect(session.mapOpen).toBe(1);
@@ -64,24 +70,21 @@ describe("registerInteractSystem", () => {
 
   it("activateMap is rejected for an unknown node", () => {
     const { sim, world, player, sessionE } = makeWorld();
-    const ws = offerWaystones(0, WAYSTONE_OFFER_COUNT)[0]!;
-    sim.step([activateCmd(player, "node.nope", ws.id)]);
+    sim.step([activateCmd(player, "node.nope", { x: 0, y: 0 })]);
     expect(world.get<SessionC>(sessionE, "session")!.mapOpen).toBe(0);
   });
 
-  it("activateMap is rejected for a waystone not in the offers", () => {
+  it("activateMap is rejected when no stone sits at the specified cell", () => {
     const { sim, world, player, sessionE } = makeWorld();
-    sim.step([activateCmd(player, "node.ashen_glade", "ws-999")]);
+    sim.step([activateCmd(player, "node.ashen_glade", { x: 99, y: 0 })]);
     expect(world.get<SessionC>(sessionE, "session")!.mapOpen).toBe(0);
   });
 
   it("activateMap is a no-op when a map is already open", () => {
     const { sim, world, player, sessionE } = makeWorld();
-    const ws = offerWaystones(0, WAYSTONE_OFFER_COUNT)[0]!;
-    sim.step([activateCmd(player, "node.ashen_glade", ws.id)]); // open once
+    sim.step([activateCmd(player, "node.ashen_glade", { x: 0, y: 0 })]); // open once
     const seedAfterFirst = world.get<SessionC>(sessionE, "session")!.mapSeed;
-    const ws2 = offerWaystones(0, WAYSTONE_OFFER_COUNT)[1]!;
-    sim.step([activateCmd(player, "node.emberfall", ws2.id)]); // ignored
+    sim.step([activateCmd(player, "node.emberfall", { x: 1, y: 0 })]); // ignored
     expect(world.get<SessionC>(sessionE, "session")!.mapSeed).toBe(seedAfterFirst);
   });
 
@@ -89,17 +92,19 @@ describe("registerInteractSystem", () => {
     const { sim, world, player, sessionE } = makeWorld();
     const graph = atlasGraph(0);
     const shut = graph.find((n) => n.id !== graph[0]!.id && !graph[0]!.links.includes(n.id))!;
-    const ws = offerWaystones(0, WAYSTONE_OFFER_COUNT)[0]!;
-    sim.step([activateCmd(player, shut.id, ws.id)]);
+    sim.step([activateCmd(player, shut.id, { x: 0, y: 0 })]);
     expect(world.get<SessionC>(sessionE, "session")!.mapOpen).toBe(0);
   });
 
-  /** Append a stone of `tier` to the owned stock and return its positional id. */
-  function giveStone(world: World, sessionE: number, tier: number): string {
-    const s = world.get<SessionC>(sessionE, "session")!;
-    const waystones = [...s.waystones, { seed: 4242, tier }];
-    world.set<SessionC>(sessionE, "session", { ...s, waystones });
-    return `ws-${waystones.length - 1}`;
+  /** Append a stone of `tier` to the inventory and return its grid position. */
+  function giveStone(world: World, sessionE: number, tier: number): { x: number; y: number } {
+    const inv = world.get<InventoryC>(sessionE, "inventory")!;
+    const pos = { x: inv.items.length, y: 0 };
+    world.set<InventoryC>(sessionE, "inventory", {
+      ...inv,
+      items: [...inv.items, { x: pos.x, y: pos.y, w: 1, h: 1, item: waystoneItem(4242, tier) }],
+    });
+    return pos;
   }
 
   it("activateMap opens a neighbour once its route is cleared", () => {
@@ -109,8 +114,8 @@ describe("registerInteractSystem", () => {
     const s = world.get<SessionC>(sessionE, "session")!;
     world.set<SessionC>(sessionE, "session", { ...s, completedNodes: [graph[0]!.id] });
     // A neighbour of the start demands Tier 3; the opening stone is Tier 1.
-    const id = giveStone(world, sessionE, atlasNodeTier(graph, neighbour));
-    sim.step([activateCmd(player, neighbour, id)]);
+    const pos = giveStone(world, sessionE, atlasNodeTier(graph, neighbour));
+    sim.step([activateCmd(player, neighbour, pos)]);
     expect(world.get<SessionC>(sessionE, "session")!.mapOpen).toBe(1);
   });
 
@@ -120,12 +125,13 @@ describe("registerInteractSystem", () => {
     const neighbour = graph[0]!.links[0]!;
     const s = world.get<SessionC>(sessionE, "session")!;
     world.set<SessionC>(sessionE, "session", { ...s, completedNodes: [graph[0]!.id] });
-    const id = giveStone(world, sessionE, atlasNodeTier(graph, neighbour) - 1);
-    sim.step([activateCmd(player, neighbour, id)]);
+    const pos = giveStone(world, sessionE, atlasNodeTier(graph, neighbour) - 1);
+    sim.step([activateCmd(player, neighbour, pos)]);
     const after = world.get<SessionC>(sessionE, "session")!;
     expect(after.mapOpen).toBe(0);
     // ...and the stone is still in the character's hand, not burnt on a refusal.
-    expect(after.waystones.some((w) => w.seed === 4242)).toBe(true);
+    const inv = world.get<InventoryC>(sessionE, "inventory")!;
+    expect(inv.items.some((p) => p.item.waystone?.seed === 4242)).toBe(true);
   });
 
   it("the same waystone draws a different map at a different node", () => {
@@ -135,8 +141,8 @@ describe("registerInteractSystem", () => {
       const s = world.get<SessionC>(sessionE, "session")!;
       world.set<SessionC>(sessionE, "session", { ...s, completedNodes: completed });
       // The same stone at both places, high enough for either to accept it.
-      const id = giveStone(world, sessionE, WAYSTONE_MAX_TIER);
-      sim.step([activateCmd(player, nodeId, id)]);
+      const pos = giveStone(world, sessionE, WAYSTONE_MAX_TIER);
+      sim.step([activateCmd(player, nodeId, pos)]);
       return world.get<SessionC>(sessionE, "session")!.mapSeed;
     };
     const first = seedAt(graph[0]!.id, []);
@@ -149,8 +155,7 @@ describe("registerInteractSystem", () => {
     const { sim, world, player, sessionE } = makeWorld();
     const s = world.get<SessionC>(sessionE, "session")!;
     world.set<SessionC>(sessionE, "session", { ...s, completedNodes: ["node.ashen_glade"] });
-    const ws = offerWaystones(0, WAYSTONE_OFFER_COUNT)[0]!;
-    sim.step([activateCmd(player, "node.ashen_glade", ws.id)]);
+    sim.step([activateCmd(player, "node.ashen_glade", { x: 0, y: 0 })]);
     expect(world.get<SessionC>(sessionE, "session")!.mapOpen).toBe(0);
   });
 
@@ -185,7 +190,7 @@ describe("registerInteractSystem", () => {
     // Set up: map is open with portals.
     world.set<SessionC>(sessionE, "session", {
       area: "hideout", atlasSeed: 0, areaTier: 0, activeNodeId: "", completedNodes: [],
-      mapSeed: 0, waystoneSeed: 0, waystones: [], portalsLeft: 6, mapOpen: 1, pendingArea: "",
+      mapSeed: 0, waystoneSeed: 0, portalsLeft: 6, mapOpen: 1, pendingArea: "",
     });
     const portal = world.create();
     world.set<Position>(portal, "position", { x: fp(0), y: fp(8) }); // at player
@@ -202,7 +207,7 @@ describe("registerInteractSystem", () => {
     const { sim, world, player, sessionE } = makeWorld();
     world.set<SessionC>(sessionE, "session", {
       area: "map", atlasSeed: 0, areaTier: 0, activeNodeId: "", completedNodes: [],
-      mapSeed: 0, waystoneSeed: 0, waystones: [], portalsLeft: 4, mapOpen: 1, pendingArea: "",
+      mapSeed: 0, waystoneSeed: 0, portalsLeft: 4, mapOpen: 1, pendingArea: "",
     });
     const portal = world.create();
     world.set<Position>(portal, "position", { x: fp(0), y: fp(8) }); // at player

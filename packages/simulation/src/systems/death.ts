@@ -9,7 +9,7 @@ import {
   dropCount, dropCategory, quantityScaleMilli, MONSTER_ILVL_OFFSET, DROP_POOL, BOSS_DROP_POOL,
 } from "@exiled/rules";
 import { recomputePlayerStats } from "../derived";
-import { ITEM_POOLS, baseOf, currencyItem, currencyForRoll } from "@exiled/content-runtime";
+import { ITEM_POOLS, baseOf, currencyItem, currencyForRoll, waystoneItem } from "@exiled/content-runtime";
 
 /**
  * Monster rarity as the loot math indexes it: 0..3 normal, magic, rare, unique.
@@ -54,8 +54,19 @@ export function registerDeath(sim: Simulation): void {
         world.set<SessionC>(sessionE!, "session", {
           ...s,
           completedNodes: [...s.completedNodes, s.activeNodeId],
-          waystones: [...s.waystones, ...drops.map((d) => ({ seed: d.seed, tier: d.tier }))],
         });
+        // On the floor, not into the bag. A stone is a 1x1 grid item now, and a
+        // full backpack must never be able to eat the one reward the whole map
+        // was run for (docs/09: the payout has to be seen to have happened).
+        const bossPos = world.get<Position>(e, "position");
+        if (bossPos) {
+          for (const [i, d] of drops.entries()) {
+            const off = DROP_SPREAD[i % DROP_SPREAD.length]!;
+            const ge = world.create();
+            world.set<Position>(ge, "position", { x: bossPos.x + off.dx, y: bossPos.y + off.dy });
+            world.set<ItemC>(ge, "item", { item: waystoneItem(d.seed, d.tier), w: 1, h: 1 });
+          }
+        }
       }
 
       // What the kill pays. Every monster is on the same math now, PoE's own:

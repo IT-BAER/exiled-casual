@@ -60,6 +60,7 @@ describe("stash - moveItem containers", () => {
 
   it("moves an item from the stash back into the backpack", () => {
     const { sim, world, playerEntity } = makeWorld();
+    setInv(world, []);
     setStash(world, [{ x: 4, y: 7, w: 1, h: 2, item: WAND }]);
     sim.step([intentToCommand(
       { kind: "moveItem", x: 4, y: 7, toX: 0, toY: 0, from: "stash", to: "backpack" }, playerEntity, 0)]);

@@ -19,8 +19,9 @@ export type Intent =
   | { kind: "stop" }
   /** Activate a clicked interactable (map device, portal). Sim re-checks range. */
   | { kind: "interact"; targetId: number }
-  /** Activate the map device with a chosen node + waystone. Sim re-validates both. */
-  | { kind: "activateMap"; atlasNodeId: string; waystoneId: string }
+  /** Activate the map device with a chosen node and the backpack cell holding the
+   *  waystone. Sim re-validates both: a cell is a claim, not a stone. */
+  | { kind: "activateMap"; atlasNodeId: string; x: number; y: number }
   /** Pick up a ground item. Sim re-checks range + placement. */
   | { kind: "pickupItem"; entityId: number }
   /** Equip an item whose ORIGIN cell in the backpack grid is (x,y) into the given slot. */
@@ -95,6 +96,8 @@ export interface DisplayItem {
   /** Which base this is. The client needs it to tell one currency from another. */
   baseId?: string;
   statLines?: ItemStatLine[]; reqLevel?: number; reqAttrValue?: number; reqAttr?: string;
+  /** Present only on map.waystone items: the client sockets one into an Atlas node. */
+  waystone?: { seed: number; tier: number };
 }
 
 /** Interaction range for picking up a ground item, Fixed-scaled (matches device/portal interact radius fp(2.5)). */
@@ -216,11 +219,6 @@ export interface Snapshot {
   atlasSeed: number;
   /** Atlas node ids already completed this session. */
   completedNodes: string[];
-  /**
-   * The stones the character owns. `id` is positional in this list and is what
-   * an `activateMap` intent names; the sim re-resolves it against its own copy.
-   */
-  waystones: { id: string; seed: number; tier: number }[];
   player: {
     id: number; x: number; y: number;
     life: number; maxLife: number; mana: number; maxMana: number;
@@ -352,12 +350,13 @@ export function validateIntent(v: unknown): Intent {
     case "activateMap": {
       if (typeof obj["atlasNodeId"] !== "string" || obj["atlasNodeId"].length === 0)
         throw new Error("validateIntent activateMap: atlasNodeId must be a non-empty string");
-      if (typeof obj["waystoneId"] !== "string" || obj["waystoneId"].length === 0)
-        throw new Error("validateIntent activateMap: waystoneId must be a non-empty string");
+      if (!Number.isInteger(obj["x"]) || !Number.isInteger(obj["y"]))
+        throw new Error("validateIntent activateMap: x and y must be integers");
       return {
         kind: "activateMap",
         atlasNodeId: obj["atlasNodeId"] as string,
-        waystoneId: obj["waystoneId"] as string,
+        x: obj["x"] as number,
+        y: obj["y"] as number,
       };
     }
     case "pickupItem": {

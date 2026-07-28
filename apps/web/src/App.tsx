@@ -28,6 +28,8 @@ export function App() {
   const [hoveredEntityId, setHoveredEntityId] = useState<number | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const [inventoryOpen, setInventoryOpen] = useState(false);
+  // Backpack cell holding the waystone seated in the map-device socket, null while empty.
+  const [socketedCell, setSocketedCell] = useState<{ x: number; y: number } | null>(null);
   // PoE opens the stash beside the inventory, never on its own.
   const [stashOpen, setStashOpen] = useState(false);
   // The bench takes the same left-hand slot as the stash, so one closes the other.
@@ -38,6 +40,21 @@ export function App() {
   const [project, setProject] = useState<Projector | null>(null);
   const [pick, setPick] = useState<((id: number, x: number, y: number) => void) | null>(null);
   const workerRef = useRef<Worker | null>(null);
+
+  // Resolve the socketed item on each render; clear the cell when the item is gone.
+  const socketedItem = socketedCell && snapshot
+    ? snapshot.inventory.items.find(
+        (i) => i.x === socketedCell.x && i.y === socketedCell.y && i.baseId === "map.waystone",
+      ) ?? null
+    : null;
+  // ponytail: derive socketedStone inline; a separate useEffect would re-render twice per snapshot.
+  const socketedStone = socketedItem?.waystone
+    ? { ...socketedCell!, ...socketedItem.waystone }
+    : null;
+  // Clear the cell reference once the item moves away (consumed, moved, or picked up).
+  useEffect(() => {
+    if (socketedCell && !socketedItem) setSocketedCell(null);
+  }, [snapshot]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -86,7 +103,12 @@ export function App() {
       },
       // The sim already no-ops activateMap while a run is open; without this the
       // panel still opened, offered stones, and closed itself on the next snapshot.
-      (open) => setPanelOpen(open && !curSnap?.mapOpen),
+      (open) => {
+        const willOpen = open && !curSnap?.mapOpen;
+        setPanelOpen(willOpen);
+        // Opening the device also opens the inventory so the player can drag a waystone.
+        if (willOpen) setInventoryOpen(true);
+      },
       // Walking up to the furniture opens the inventory with it, so walking off has
       // to take it away again: a panel the player never asked for cannot outlive the
       // thing that raised it. Closing with the X is a different path and still leaves
@@ -203,14 +225,17 @@ export function App() {
         <PreparationPanel
           atlasSeed={snapshot.atlasSeed}
           completedNodes={snapshot.completedNodes}
-          waystones={snapshot.waystones}
-          onClose={() => setPanelOpen(false)}
-          onActivate={(atlasNodeId, waystoneId) => {
+          socketedStone={socketedStone}
+          onEject={() => setSocketedCell(null)}
+          onNodeSelect={() => setInventoryOpen(true)}
+          onClose={() => { setPanelOpen(false); setSocketedCell(null); }}
+          onActivate={(atlasNodeId, x, y) => {
             workerRef.current?.postMessage({
               type: "intent",
-              intent: { kind: "activateMap", atlasNodeId, waystoneId },
+              intent: { kind: "activateMap", atlasNodeId, x, y },
             });
             setPanelOpen(false);
+            setSocketedCell(null);
           }}
         />
       )}
@@ -225,6 +250,9 @@ export function App() {
           gold={snapshot.player.gold}
           onCloseVendor={() => setVendorOpen(false)}
           equipment={snapshot.equipment}
+          // socketWanted: panel is open and the socket is empty, so ctrl+click / drag sockets a stone.
+          socketWanted={panelOpen && socketedStone === null}
+          onSocketWaystone={(x, y) => setSocketedCell({ x, y })}
           onIntent={(intent) => workerRef.current?.postMessage({ type: "intent", intent } satisfies ToWorker)}
           onClose={() => { setInventoryOpen(false); setStashOpen(false); setVendorOpen(false); }}
         />

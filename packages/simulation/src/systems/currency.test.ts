@@ -11,7 +11,7 @@ function bench(items: PlacedItem[]): { sim: Simulation; world: World; inv: () =>
   const { world } = sim;
   const e = world.create();
   world.set<SessionC>(e, "session", {
-    area: "map", atlasSeed: 1, mapSeed: 1, waystoneSeed: 0, waystones: [], areaTier: 1,
+    area: "map", atlasSeed: 1, mapSeed: 1, waystoneSeed: 0, areaTier: 1,
     activeNodeId: "", completedNodes: [], portalsLeft: 1, mapOpen: 0, pendingArea: "",
   });
   world.set<InventoryC>(e, "inventory", { cols: 12, rows: 5, items });

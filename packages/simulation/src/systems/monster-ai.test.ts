@@ -392,7 +392,7 @@ describe("heavies", () => {
     });
     const sessionE = withSession.world.create();
     withSession.world.set<SessionC>(sessionE, "session", {
-      area: "map", atlasSeed: 0, mapSeed: 0, waystoneSeed: 0, waystones: [],
+      area: "map", atlasSeed: 0, mapSeed: 0, waystoneSeed: 0,
       areaTier: 15, activeNodeId: "", completedNodes: [], portalsLeft: 6,
       mapOpen: 1, pendingArea: "",
     });

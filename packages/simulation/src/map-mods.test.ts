@@ -1,11 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { generateArea } from "@exiled/mapgen";
-import { CONTENT_VERSION, MONSTERS, rareTemplate } from "@exiled/content-runtime";
+import { CONTENT_VERSION, MONSTERS, rareTemplate, waystoneItem } from "@exiled/content-runtime";
 import { ELEMENTS } from "@exiled/content-schema";
 import {
   waystoneMods, monsterTierScale, waystoneScaleFor, waystoneDrops, atlasGraph,
-  WAYSTONE_OFFER_COUNT, WAYSTONE_MAX_TIER,
+  WAYSTONE_OFFER_COUNT, WAYSTONE_MAX_TIER, offerWaystones,
 } from "@exiled/rules";
+import type { InventoryC } from "./components";
 import { World } from "./ecs";
 import { createCombatSim } from "./combat-sim";
 import { buildArea, mapDangerScale } from "./areas";
@@ -19,7 +20,7 @@ function seedRolling(id: string): number {
 
 function mapSession(waystoneSeed: number, areaTier = 1): SessionC {
   return {
-    area: "map", atlasSeed: 1, mapSeed: 99, waystoneSeed, waystones: [], areaTier,
+    area: "map", atlasSeed: 1, mapSeed: 99, waystoneSeed, areaTier,
     activeNodeId: "node.ashen_glade", completedNodes: [], portalsLeft: 6, mapOpen: 1, pendingArea: "",
   };
 }
@@ -132,24 +133,29 @@ describe("Waystones sustain themselves", () => {
   it("opening a map spends the stone that opened it", () => {
     const { sim, world, playerEntity } = createCombatSim(7, { area: "hideout" });
     const sessionE = world.query("session")[0]!;
-    const before = world.get<SessionC>(sessionE, "session")!.waystones;
-    expect(before.length).toBe(WAYSTONE_OFFER_COUNT);
+    const beforeInv = world.get<InventoryC>(sessionE, "inventory")!;
+    expect(beforeInv.items.length).toBe(WAYSTONE_OFFER_COUNT);
+    // Stone at (1,0) — second offer; record its seed so we can verify waystoneSeed.
+    const stone1Seed = beforeInv.items.find((p) => p.x === 1 && p.y === 0)!.item.waystone!.seed;
 
-    sim.step([{ tick: 0, entity: playerEntity, type: "activateMap", atlasNodeId: atlasGraph(7)[0]!.id, waystoneId: "ws-1" }]);
+    sim.step([{ tick: 0, entity: playerEntity, type: "activateMap", atlasNodeId: atlasGraph(7)[0]!.id, data: { x: 1, y: 0 } }]);
 
     const after = world.get<SessionC>(sessionE, "session")!;
     expect(after.mapOpen).toBe(1);
-    expect(after.waystones).toEqual([before[0], before[2]]);
-    expect(after.waystoneSeed).toBe(before[1]!.seed);
+    const afterInv = world.get<InventoryC>(sessionE, "inventory")!;
+    expect(afterInv.items.length).toBe(WAYSTONE_OFFER_COUNT - 1);
+    expect(afterInv.items.find((p) => p.x === 1 && p.y === 0)).toBeUndefined();
+    expect(after.waystoneSeed).toBe(stone1Seed);
   });
 
   it("a stone the character does not own opens nothing", () => {
     const { sim, world, playerEntity } = createCombatSim(7, { area: "hideout" });
     const sessionE = world.query("session")[0]!;
-    sim.step([{ tick: 0, entity: playerEntity, type: "activateMap", atlasNodeId: atlasGraph(7)[0]!.id, waystoneId: "ws-9" }]);
+    // Cell (9,0) holds no item.
+    sim.step([{ tick: 0, entity: playerEntity, type: "activateMap", atlasNodeId: atlasGraph(7)[0]!.id, data: { x: 9, y: 0 } }]);
     const s = world.get<SessionC>(sessionE, "session")!;
     expect(s.mapOpen).toBe(0);
-    expect(s.waystones.length).toBe(WAYSTONE_OFFER_COUNT);
+    expect(world.get<InventoryC>(sessionE, "inventory")!.items.length).toBe(WAYSTONE_OFFER_COUNT);
   });
 
   it("clearing a map hands stones back — one for a plain stone, two for a modified one", () => {

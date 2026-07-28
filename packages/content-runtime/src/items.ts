@@ -1,4 +1,5 @@
 import { validateItemBase, validateAffix, type ItemBase, type Affix, type Item, type ItemPools, type Rarity, type UniqueItem } from "@exiled/content-schema";
+import { waystoneRarity, waystoneMods } from "@exiled/rules";
 
 // Tiny hand-authored pool for the First Loot slice. Grid dims (w×h) follow the
 // 12×5 inventory. Real 45-base / 120-affix content is Phase 4 proper.
@@ -62,6 +63,30 @@ const CURRENCY_BASES: ItemBase[] = [
 ];
 
 export const WISDOM_SCROLL_BASE_ID = "currency.wisdom";
+
+/**
+ * The waystone, on the same footing as currency: a 1x1 grid item that is not
+ * droppable *gear*, so it stays out of `ITEM_POOLS.bases` and `rollItem` can
+ * never hand one out. Its mods do NOT come from the affix pool — they come from
+ * `waystoneMods(seed)` in `@exiled/rules`, which is what every monster-scaling
+ * call site already reads, so the stone carries its seed and tier on the item
+ * (`Item.waystone`) rather than being re-rolled as affixes.
+ */
+export const WAYSTONE_BASE_ID = "map.waystone";
+
+const WAYSTONE_BASE: ItemBase = {
+  id: WAYSTONE_BASE_ID, name: "Waystone", itemClass: "waystone", w: 1, h: 1,
+  icon: "/textures/ui/waystone_icon_v1.png",
+};
+
+/** One waystone, as it drops and as it sits in the grid. */
+export function waystoneItem(seed: number, tier: number): Item {
+  return { baseId: WAYSTONE_BASE_ID, rarity: "normal", itemLevel: 1, affixes: [], waystone: { seed, tier } };
+}
+
+export function isWaystone(item: Item): boolean {
+  return item.baseId === WAYSTONE_BASE_ID;
+}
 
 /** One unit of a currency, as it drops and as it stacks. */
 export function currencyItem(baseId: string): Item {
@@ -185,7 +210,7 @@ const UNIQUES: UniqueItem[] = [
 ];
 
 // Validate at module load; bad content is a programmer error, fail fast.
-for (const b of [...ITEM_BASES, ...CURRENCY_BASES]) {
+for (const b of [...ITEM_BASES, ...CURRENCY_BASES, WAYSTONE_BASE]) {
   const r = validateItemBase(b);
   if (!r.ok) throw new Error(`[content-runtime] Invalid item base "${b.id}": ${r.errors.join("; ")}`);
 }
@@ -223,7 +248,7 @@ for (const b of [...ITEM_BASES, ...CURRENCY_BASES]) {
 
 export const ITEM_POOLS: ItemPools = { bases: ITEM_BASES, affixes: AFFIXES, uniques: UNIQUES };
 
-const BASE_BY_ID = new Map([...ITEM_BASES, ...CURRENCY_BASES].map((b) => [b.id, b]));
+const BASE_BY_ID = new Map([...ITEM_BASES, ...CURRENCY_BASES, WAYSTONE_BASE].map((b) => [b.id, b]));
 const AFFIX_BY_ID = new Map(AFFIXES.map((a) => [a.id, a]));
 const UNIQUE_BY_NAME = new Map(UNIQUES.map((u) => [u.name, u]));
 
@@ -279,6 +304,8 @@ export interface ItemDescription {
   icon?: string;
   /** True while the item is unread: name, mods and flavour are withheld above. */
   unidentified?: boolean;
+  /** Waystone only: what the socket and the ACTIVATE gate need from the stone. */
+  waystone?: { seed: number; tier: number };
 }
 
 /**
@@ -294,6 +321,22 @@ function affixLine(value: number, label: string): string {
 
 export function describeItem(item: Item): ItemDescription {
   const base = baseOf(item.baseId);
+  // A waystone reads nothing like gear: its rarity and its mods are both derived
+  // from the seed by `@exiled/rules`, which is also what scales the monsters, so
+  // rendering them from anywhere else would let the tooltip drift off the map.
+  if (item.waystone) {
+    const { seed, tier } = item.waystone;
+    return {
+      rarity: waystoneRarity(seed),
+      name: `${base.name} (Tier ${tier})`,
+      baseName: base.name,
+      itemClass: base.itemClass,
+      lines: waystoneMods(seed).map((m) => m.label),
+      statLines: [],
+      icon: base.icon,
+      waystone: { seed, tier },
+    };
+  }
   const s = base.stats;
   const statLines: { label: string; value: string }[] = [];
   if (s?.physMin !== undefined && s.physMax !== undefined) statLines.push({ label: "Physical Damage", value: `${s.physMin}-${s.physMax}` });

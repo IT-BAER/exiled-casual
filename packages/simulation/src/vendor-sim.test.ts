@@ -92,6 +92,7 @@ describe("buyItem", () => {
 
   it("refuses when the purse is one coin short, and takes nothing", () => {
     const { sim, world, playerEntity } = makeWorld();
+    setInv(world, []);
     const shelf = getVendor(world).items[0]!;
     setGold(world, vendorBuyPrice(shelf.item) - 1);
 
@@ -120,6 +121,7 @@ describe("buyItem", () => {
 
   it("ignores an empty shelf cell", () => {
     const { sim, world, playerEntity } = makeWorld();
+    setInv(world, []);
     setGold(world, 999_999);
     sim.step([intentToCommand({ kind: "buyItem", x: 11, y: 11 }, playerEntity, 0)]);
     expect(getGold(world)).toBe(999_999);

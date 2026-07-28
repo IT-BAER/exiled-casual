@@ -28,7 +28,7 @@ function addSession(world: ReturnType<typeof makeWorld>["world"], pendingArea: "
   const session: SessionC = {
     area: pendingArea === "hideout" ? "map" : "hideout",
     atlasSeed: 0, areaTier: 0, activeNodeId: "", completedNodes: [],
-    mapSeed: 0, waystoneSeed: 0, waystones: [],
+    mapSeed: 0, waystoneSeed: 0,
     portalsLeft: 0,
     mapOpen: 0,
     pendingArea,
@@ -105,7 +105,7 @@ describe("registerAreaTransition", () => {
     world.set<SessionC>(sessionE, "session", {
       area: "hideout",
       atlasSeed: 0, areaTier: 0, activeNodeId: "", completedNodes: [],
-      mapSeed: 0, waystoneSeed: 0, waystones: [],
+      mapSeed: 0, waystoneSeed: 0,
       portalsLeft: 0,
       mapOpen: 0,
       pendingArea: "",
@@ -153,7 +153,7 @@ describe("registerAreaTransition — map entry (collision + start socket)", () =
     const sessionE = world.create();
     world.set<SessionC>(sessionE, "session", {
       area: "hideout", atlasSeed: 0, areaTier: 0, activeNodeId: "", completedNodes: [],
-      mapSeed: seed, waystoneSeed: 0, waystones: [], portalsLeft: 0, mapOpen: 1, pendingArea: "map",
+      mapSeed: seed, waystoneSeed: 0, portalsLeft: 0, mapOpen: 1, pendingArea: "map",
     });
 
     sim.step();
@@ -175,7 +175,7 @@ describe("registerAreaTransition — map entry (collision + start socket)", () =
     const sessionE = world.create();
     world.set<SessionC>(sessionE, "session", {
       area: "map", atlasSeed: 0, areaTier: 0, activeNodeId: "", completedNodes: [],
-      mapSeed: 1, waystoneSeed: 0, waystones: [], portalsLeft: 0, mapOpen: 1, pendingArea: "hideout",
+      mapSeed: 1, waystoneSeed: 0, portalsLeft: 0, mapOpen: 1, pendingArea: "hideout",
     });
 
     sim.step();

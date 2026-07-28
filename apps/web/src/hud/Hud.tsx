@@ -441,7 +441,7 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
   // discoverable later, by reading a number in a panel.
   const [banner, setBanner] = React.useState<string | null>(null);
   const level = snapshot?.player.level ?? null;
-  const stones = snapshot?.waystones.length ?? null;
+  const stones = snapshot?.inventory.items.filter((i) => i.baseId === "map.waystone").length ?? null;
   const last = React.useRef<{ level: number; stones: number } | null>(null);
   React.useEffect(() => {
     if (level === null || stones === null) return;

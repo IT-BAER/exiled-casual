@@ -34,8 +34,17 @@ function makeSnap(overrides: {
   xp?: number;
   xpToNext?: number;
   skills?: Snapshot["skills"];
-  waystones?: Snapshot["waystones"];
+  /** Waystone items to seed into inventory.items for the reward-banner tests. */
+  waystoneItems?: number;
 }): Snapshot {
+  // Build a minimal inventory with `waystoneItems` 1x1 waystone cells, if any.
+  const waystoneInv = overrides.waystoneItems
+    ? Array.from({ length: overrides.waystoneItems }, (_, i) => ({
+        x: i, y: 0, w: 1, h: 1,
+        rarity: "magic" as const, name: "Waystone", lines: [],
+        baseId: "map.waystone",
+      }))
+    : [];
   return {
     tick: 1,
     area: overrides.area ?? "hideout",
@@ -45,7 +54,6 @@ function makeSnap(overrides: {
     atlasSeed: 0,
     completedNodes: [],
     skills: overrides.skills,
-    waystones: overrides.waystones ?? [],
     player: {
       id: 0,
       x: 0,
@@ -67,7 +75,7 @@ function makeSnap(overrides: {
       stats: testStats(),
     },
     entities: overrides.entities ?? [],
-    inventory: { cols: 12, rows: 5, items: [] },
+    inventory: { cols: 12, rows: 5, items: waystoneInv },
     stash: { cols: 12, rows: 12, items: [] },
     vendor: { cols: 12, rows: 12, items: [] },
     equipment: {},
@@ -140,7 +148,7 @@ describe("Hud", () => {
       mapOpen: true,
       areaTier: 0,
       atlasSeed: 0,
-      completedNodes: [], waystones: [],
+      completedNodes: [],
       player: testPlayer({ mana: 30 }),
       entities: [{ id: 10, kind: "monster", x: 0, y: 0, boss: true, bossPhase: 2, life: 600, maxLife: 1000 }],
       inventory: { cols: 12, rows: 5, items: [] },
@@ -383,10 +391,8 @@ describe("Hud skill tooltip", () => {
 
 
 describe("Hud reward banner", () => {
-  const stone = (id: string) => ({ id, seed: 1, tier: 1 });
-
   it("says nothing on the first snapshot it ever sees", () => {
-    render(<Hud snapshot={makeSnap({ level: 12, waystones: [stone("a")] })} />);
+    render(<Hud snapshot={makeSnap({ level: 12, waystoneItems: 1 })} />);
     expect(screen.queryByTestId("reward-banner")).toBeNull();
     expect(playDropSound).not.toHaveBeenCalled();
   });
@@ -399,23 +405,23 @@ describe("Hud reward banner", () => {
   });
 
   it("rings and counts the stones a cleared map hands back", () => {
-    const { rerender } = render(<Hud snapshot={makeSnap({ waystones: [stone("a")] })} />);
-    rerender(<Hud snapshot={makeSnap({ waystones: [stone("a"), stone("b"), stone("c")] })} />);
+    const { rerender } = render(<Hud snapshot={makeSnap({ waystoneItems: 1 })} />);
+    rerender(<Hud snapshot={makeSnap({ waystoneItems: 3 })} />);
     expect(screen.getByTestId("reward-banner")).toHaveTextContent("Waystone x2");
     expect(playDropSound).toHaveBeenCalled();
   });
 
   it("spends a boss kill that pays both on one line, not two banners", () => {
-    const { rerender } = render(<Hud snapshot={makeSnap({ level: 12, waystones: [] })} />);
-    rerender(<Hud snapshot={makeSnap({ level: 13, waystones: [stone("a")] })} />);
+    const { rerender } = render(<Hud snapshot={makeSnap({ level: 12 })} />);
+    rerender(<Hud snapshot={makeSnap({ level: 13, waystoneItems: 1 })} />);
     const banner = screen.getByTestId("reward-banner");
     expect(banner).toHaveTextContent("Level 13");
     expect(banner).toHaveTextContent("Waystone");
   });
 
   it("stays quiet when a stone is spent rather than won", () => {
-    const { rerender } = render(<Hud snapshot={makeSnap({ waystones: [stone("a")] })} />);
-    rerender(<Hud snapshot={makeSnap({ waystones: [] })} />);
+    const { rerender } = render(<Hud snapshot={makeSnap({ waystoneItems: 1 })} />);
+    rerender(<Hud snapshot={makeSnap({ waystoneItems: 0 })} />);
     expect(screen.queryByTestId("reward-banner")).toBeNull();
     expect(playDropSound).not.toHaveBeenCalled();
   });

@@ -292,7 +292,8 @@ function SectionRule({ children }: { children?: React.ReactNode }) {
 
 export function InventoryPanel({
   inventory, stash, vendor = EMPTY_SHELF, gold = 0, equipment = {}, shards = {}, vendorOpen = false,
-  onClose, onCloseStash, onCloseVendor, onIntent,
+  socketWanted = false,
+  onClose, onCloseStash, onCloseVendor, onIntent, onSocketWaystone,
 }: {
   inventory: Inventory; stash?: Inventory; equipment?: Equipment;
   /** The vendor's shelf, priced per cell. Absent on a snapshot built without a session. */
@@ -303,8 +304,12 @@ export function InventoryPanel({
       backpack's Shards counter can read it whether or not the bench is open. */
   shards?: Record<string, number>;
   vendorOpen?: boolean;
+  /** True while an Atlas node is selected and its socket is empty; enables ctrl+click socketing. */
+  socketWanted?: boolean;
   onClose: () => void; onCloseStash?: () => void; onCloseVendor?: () => void;
   onIntent?: (intent: Intent) => void;
+  /** Called when a waystone from the backpack is placed into the map-device socket. */
+  onSocketWaystone?: (x: number, y: number) => void;
 }) {
   const { cols, rows } = inventory;
   // Both grids are owned by this one component so a single drag can cross between
@@ -400,6 +405,13 @@ export function InventoryPanel({
       if (slot) {
         if (drag.from.kind === "grid" && drag.from.container === "backpack" && canEquip(drag.item.itemClass ?? "", slot)) {
           onIntent?.({ kind: "equipItem", x: drag.from.x, y: drag.from.y, slot });
+        }
+        return;
+      }
+      // Drop onto the map-device socket: seats a waystone from the backpack.
+      if (target?.closest("[data-drop-socket]")) {
+        if (drag.from.kind === "grid" && drag.from.container === "backpack" && drag.item.baseId === "map.waystone") {
+          onSocketWaystone?.(drag.from.x, drag.from.y);
         }
         return;
       }
@@ -572,6 +584,14 @@ export function InventoryPanel({
                       kind: "sellItem", x: it.x, y: it.y,
                       ...(container === "stash" ? { from: "stash" as const } : {}),
                     });
+                    return;
+                  }
+                  // Ctrl+click a waystone into the map-device socket when the panel
+                  // is waiting for one. Vendor wins if both are somehow true (checked above).
+                  if (e.ctrlKey && socketWanted && container === "backpack" && it.baseId === "map.waystone") {
+                    e.preventDefault();
+                    setHover(null);
+                    onSocketWaystone?.(it.x, it.y);
                     return;
                   }
                   if (e.shiftKey) {

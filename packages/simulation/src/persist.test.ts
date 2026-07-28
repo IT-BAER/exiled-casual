@@ -17,13 +17,14 @@ function setSession(world: ReturnType<typeof createCombatSim>["world"], patch: P
   world.set<SessionC>(e, "session", { ...world.get<SessionC>(e, "session")!, ...patch });
 }
 
-/** A real committed item placed in the inventory, so loot survival is genuine. */
+/** A real committed item placed in the inventory, so loot survival is genuine.
+ *  Replaces inventory contents so the count is always exactly 1 after this call. */
 function stashLoot(world: ReturnType<typeof createCombatSim>["world"]): void {
   const item = rollItem(ITEM_POOLS, 12345, areaLevel(1), 2);
   const base = baseOf(item.baseId);
   const e = sessionEntity(world);
   const inv = world.get<InventoryC>(e, "inventory")!;
-  world.set<InventoryC>(e, "inventory", { ...inv, items: [...inv.items, { x: 0, y: 0, w: base.w, h: base.h, item }] });
+  world.set<InventoryC>(e, "inventory", { ...inv, items: [{ x: 0, y: 1, w: base.w, h: base.h, item }] });
 }
 
 describe("persist: snapshot/restore round-trip", () => {

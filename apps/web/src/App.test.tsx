@@ -57,7 +57,7 @@ import { App } from "./App";
 
 const makeSnap = (): Snapshot => ({
   tick: 1, area: "hideout", portalsLeft: 0, mapOpen: false, areaTier: 0,
-  atlasSeed: 0, completedNodes: [], waystones: [],
+  atlasSeed: 0, completedNodes: [],
   player: testPlayer(),
   entities: [],
   inventory: { cols: 12, rows: 5, items: [] },

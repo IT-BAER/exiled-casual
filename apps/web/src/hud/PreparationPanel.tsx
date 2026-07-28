@@ -1,19 +1,31 @@
 import React, { useState } from "react";
 import {
   atlasGraph, isNodeReachable, areaLevel, atlasNodeTier, mapBaseIdForNode,
-  waystoneRarity, waystoneMods, type WaystoneRarity,
+  waystoneRarity, type WaystoneRarity,
 } from "@exiled/rules";
+// protocol-augment.d.ts ensures DisplayItem.waystone is typed; no import needed.
 import type { AtlasGraphNode } from "@exiled/rules";
 import { biomeOf } from "@exiled/content-runtime";
 import { MAP_PORTALS } from "@exiled/protocol";
-import type { Snapshot } from "@exiled/protocol";
+
+/** Stone currently placed in the socket: the inventory cell it came from plus its rolled stats. */
+export interface SocketedStone {
+  seed: number;
+  tier: number;
+  /** Backpack grid cell the stone was dragged from — carried on activate. */
+  x: number;
+  y: number;
+}
 
 interface Props {
   atlasSeed: number;
   completedNodes: string[];
-  /** The stones the character actually owns, straight off the snapshot. */
-  waystones: Snapshot["waystones"];
-  onActivate: (atlasNodeId: string, waystoneId: string) => void;
+  /** Stone currently seated in the socket, null while empty. Managed by the parent. */
+  socketedStone: SocketedStone | null;
+  onEject: () => void;
+  onActivate: (atlasNodeId: string, x: number, y: number) => void;
+  /** Called when the player clicks a reachable atlas node (to let the parent open the inventory). */
+  onNodeSelect?: () => void;
   onClose: () => void;
 }
 
@@ -26,36 +38,9 @@ const GOLD = "#c8a44d";
 const GOLD_DIM = "#7a5c22";
 const PARCHMENT = "#e8dcc0";
 const MAGIC = "#8aa6ff"; // waystone (magic item) tint, as in PoE rarity
-const AFFIX_BLUE = "#8f97ff"; // the tooltip's affix colour, for a modifier that pays
-const DANGER_RED = "#d2705f"; // ...and its opposite, for one that charges
 const FLAVOUR = "#c98a3e"; // the Atlas panel's amber lore line
 /** PoE's own item-rarity palette, the same one ItemTooltip tints a drop with. */
 const RARITY_TINT: Record<WaystoneRarity, string> = { normal: "#c8c8c8", magic: MAGIC, rare: "#e6d64a" };
-const RARITY_NAME: Record<WaystoneRarity, string> = {
-  normal: "Waystone",
-  magic: "Magic Waystone",
-  rare: "Rare Waystone",
-};
-
-function tile(selected: boolean, disabled: boolean, accent: string): React.CSSProperties {
-  return {
-    position: "relative",
-    minWidth: 132,
-    padding: "10px 12px",
-    borderRadius: 3,
-    textAlign: "center",
-    fontFamily: SERIF,
-    letterSpacing: 0.5,
-    background: selected
-      ? "linear-gradient(180deg, #241f14 0%, #14110a 100%)"
-      : "linear-gradient(180deg, #17181d 0%, #0d0e12 100%)",
-    border: `1px solid ${selected ? accent : "#33301f"}`,
-    boxShadow: selected ? `inset 0 0 12px ${accent}55, 0 0 6px ${accent}44` : "inset 0 0 8px rgba(0,0,0,0.6)",
-    color: disabled ? "#5a564a" : PARCHMENT,
-    opacity: disabled ? 0.55 : 1,
-    transition: "border-color 120ms, box-shadow 120ms",
-  };
-}
 
 const NODE = 26; // medallion diameter
 const CLEARED = "#7ea45c";
@@ -263,7 +248,7 @@ const SLOT_H = Math.round((SOCKET_H * (264 - 125)) / 464);
 function NodePopup(props: {
   node: AtlasGraphNode;
   requiredTier: number;
-  stone: Snapshot["waystones"][number] | undefined;
+  stone: { seed: number; tier: number } | undefined;
   underTier: boolean;
   onEject: () => void;
   onActivate: () => void;
@@ -373,8 +358,9 @@ function NodePopup(props: {
           the place and losing your place on the map. */}
       <button
         data-testid="prep-socket"
+        data-drop-socket=""
         onClick={onEject}
-        title={stone ? "Take the Waystone back out" : "Choose a Waystone below"}
+        title={stone ? "Take the Waystone back out" : "Drag a Waystone here from your inventory"}
         style={{
           width: SOCKET_W,
           height: SOCKET_H,
@@ -463,18 +449,16 @@ function NodePopup(props: {
   );
 }
 
-export function PreparationPanel({ atlasSeed, completedNodes, waystones, onActivate, onClose }: Props) {
+export function PreparationPanel({ atlasSeed, completedNodes, socketedStone, onEject, onActivate, onNodeSelect, onClose }: Props) {
   const nodes = atlasGraph(atlasSeed);
   const [nodeId, setNodeId] = useState<string | null>(null);
-  const [wsId, setWsId] = useState<string | null>(null);
-  const ws = waystones.find((w) => w.id === wsId);
   // The place has to accept the stone. Selecting a node and then a weaker stone
   // is an easy way to end up here, so the button says no rather than firing an
   // intent the sim would drop on the floor.
   const node = nodes.find((n) => n.id === nodeId);
   const requiredTier = node === undefined ? null : atlasNodeTier(nodes, node.id);
-  const underTier = ws !== undefined && requiredTier !== null && ws.tier < requiredTier;
-  const canActivate = node !== undefined && ws !== undefined && !underTier;
+  const underTier = socketedStone !== null && requiredTier !== null && socketedStone.tier < requiredTier;
+  const canActivate = node !== undefined && socketedStone !== null && !underTier;
 
   return (
     <div
@@ -493,20 +477,24 @@ export function PreparationPanel({ atlasSeed, completedNodes, waystones, onActiv
         nodes={nodes}
         completedNodes={completedNodes}
         selectedId={nodeId}
-        stoneTier={ws?.tier ?? null}
+        stoneTier={socketedStone?.tier ?? null}
         // Clicking the open place again shuts it, so the map can be read without
         // a panel standing on it.
-        onSelect={(id) => setNodeId((cur) => (cur === id ? null : id))}
+        onSelect={(id) => {
+          const opening = id !== nodeId;
+          setNodeId((cur) => (cur === id ? null : id));
+          if (opening) onNodeSelect?.();
+        }}
         popup={
           node !== undefined && requiredTier !== null ? (
             <NodePopup
               node={node}
               requiredTier={requiredTier}
-              stone={ws}
+              stone={socketedStone ?? undefined}
               underTier={underTier}
-              onEject={() => setWsId(null)}
+              onEject={onEject}
               onActivate={() => {
-                if (canActivate && ws) onActivate(node.id, ws.id);
+                if (canActivate && socketedStone) onActivate(node.id, socketedStone.x, socketedStone.y);
               }}
             />
           ) : null
@@ -562,98 +550,6 @@ export function PreparationPanel({ atlasSeed, completedNodes, waystones, onActiv
         ×
       </button>
 
-      {/* Everything you choose FROM docks at the bottom, so the world keeps the
-          screen. Sized to sit above where the HUD orbs live. */}
-      <div
-        style={{
-          position: "absolute",
-          left: "50%",
-          bottom: 92, // clear of the HUD's flask row, skill bar and XP trough
-          transform: "translateX(-50%)",
-          width: 760,
-          maxWidth: "94%",
-          padding: "14px 18px 16px",
-          borderRadius: 4,
-          background: "linear-gradient(180deg, rgba(14,15,19,0.94) 0%, rgba(16,13,9,0.96) 100%)",
-          border: `1px solid ${GOLD_DIM}`,
-          boxShadow: `0 0 0 1px #000, 0 0 0 4px #1b1710, 0 -8px 34px rgba(0,0,0,0.85)`,
-        }}
-      >
-          <SectionLabel>Waystone{waystones.length > 0 ? ` (${waystones.length})` : ""}</SectionLabel>
-          {waystones.length === 0 && (
-            <div
-              data-testid="prep-no-waystones"
-              style={{ padding: "14px 0 20px", color: "#8a7f66", fontSize: 13, fontStyle: "italic" }}
-            >
-              No Waystones. Clear a map to be given more.
-            </div>
-          )}
-          {/* The stock grows now, so the row scrolls rather than pushing ACTIVATE
-              off the panel once a character is a dozen stones deep. */}
-          <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap", maxHeight: 168, overflowY: "auto" }}>
-            {waystones.map((w) => {
-              const selected = w.id === wsId;
-              const rarity = waystoneRarity(w.seed);
-              const mods = waystoneMods(w.seed);
-              const tint = RARITY_TINT[rarity];
-              return (
-                <button
-                  key={w.id}
-                  data-testid={`prep-ws-${w.id}`}
-                  onClick={() => setWsId(w.id)}
-                  style={{ ...tile(selected, false, tint), flex: "1 1 0", textAlign: "left", minWidth: 190 }}
-                >
-                  {/* Rarity in the name, tier under it, then what the stone will do
-                      to the run — the point of the panel is that risk is legible
-                      BEFORE the portal opens, not after the first pack. */}
-                  <div data-testid={`prep-ws-${w.id}-rarity`} style={{ fontSize: 13, color: tint, letterSpacing: 0.4 }}>
-                    {RARITY_NAME[rarity]}
-                  </div>
-                  <div style={{ fontSize: 15, fontWeight: 700, margin: "2px 0 6px" }}>Tier {w.tier}</div>
-                  {mods.length === 0 ? (
-                    <div style={{ fontSize: 11, color: "#6b6656", fontStyle: "italic" }}>No modifiers</div>
-                  ) : (
-                    mods.map((m) => (
-                      <div
-                        key={m.id}
-                        data-testid={`prep-ws-${w.id}-mod-${m.id}`}
-                        style={{
-                          fontSize: 11,
-                          lineHeight: 1.45,
-                          // A prefix pays and a suffix charges, so they are not the
-                          // same colour: PoE's affix blue for the reward, a warmer
-                          // red for the thing that will kill you.
-                          color: m.kind === "prefix" ? AFFIX_BLUE : DANGER_RED,
-                        }}
-                      >
-                        {m.label}
-                      </div>
-                    ))
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-      </div>
-    </div>
-  );
-}
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        fontSize: 11,
-        letterSpacing: 2,
-        textTransform: "uppercase",
-        color: GOLD,
-        marginBottom: 8,
-        borderBottom: "1px solid #2a2517",
-        paddingBottom: 4,
-      }}
-    >
-      {children}
     </div>
   );
 }

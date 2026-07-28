@@ -507,6 +507,13 @@ export interface Item {
    * only hides them (docs/09 rule 1: the spike fires on anticipation).
    */
   unidentified?: boolean;
+  /**
+   * Present only on a waystone. The stone's mods are NOT affixes: every
+   * monster-scaling call site reads `waystoneMods(seed)` from `@exiled/rules`,
+   * so the seed IS the stone and the item only has to carry it. Optional so no
+   * other item and no persisted inventory needs migrating.
+   */
+  waystone?: { seed: number; tier: number };
 }
 
 /**

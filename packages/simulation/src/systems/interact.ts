@@ -1,15 +1,10 @@
 import { MAP_PORTALS } from "@exiled/protocol";
 import { atlasGraph, isNodeReachable, mapSeedFor, atlasNodeTier } from "@exiled/rules";
 import { Simulation } from "../loop";
-import type { Position, InteractableC, SessionC } from "../components";
+import type { Position, InteractableC, SessionC, InventoryC } from "../components";
 import { spawnPortalRing } from "../areas";
 import { inRangeOf } from "../protocol-bridge";
 
-/** "ws-3" -> 3, and null for anything that is not a positional stone id. */
-function waystoneIndex(id: string): number | null {
-  const m = /^ws-(\d+)$/.exec(id);
-  return m ? Number(m[1]) : null;
-}
 
 export function registerInteractSystem(sim: Simulation): void {
   sim.register("interact", (world, _tick, commands) => {
@@ -25,26 +20,30 @@ export function registerInteractSystem(sim: Simulation): void {
         if (session.mapOpen !== 0) continue;      // already open
         if (session.area !== "hideout") continue; // only from the hideout device
         const atlasNodeId = cmd.atlasNodeId;
-        const waystoneId = cmd.waystoneId;
-        if (!atlasNodeId || !waystoneId) continue;
+        if (!atlasNodeId) continue;
         if (session.completedNodes.includes(atlasNodeId)) continue;
         // Fog is a server rule, not a greyed-out button: the client is untrusted.
         const graph = atlasGraph(session.atlasSeed);
         if (!isNodeReachable(graph, session.completedNodes, atlasNodeId)) continue;
-        // The id is the stone's index in the owned stock (see Waystone.id), so
-        // the sim resolves it against its own list rather than trusting a client
-        // to name a stone the character does not have.
-        const index = waystoneIndex(waystoneId);
-        const ws = index === null ? undefined : session.waystones[index];
+        // The stone is a grid item now, named by where it sits: the client sends
+        // a cell, the sim reads its own inventory. It never trusts a client to
+        // name a stone, and a cell holding anything but a waystone is a no-op.
+        const inv = world.get<InventoryC>(sessionE, "inventory");
+        const index = inv ? inv.items.findIndex((p) => p.x === cmd.data?.["x"] && p.y === cmd.data?.["y"]) : -1;
+        const placed = index === -1 ? undefined : inv!.items[index]!;
+        const ws = placed?.item.waystone;
         if (!ws) continue;
         // A place further out demands a better stone. Server-side for the same
         // reason the fog is: the greyed-out tile is a courtesy, not the rule.
         if (ws.tier < atlasNodeTier(graph, atlasNodeId)) continue;
+        // Spent: opening the map consumes the stone, which is what makes sustain
+        // a mechanic rather than a menu.
+        world.set<InventoryC>(sessionE, "inventory", {
+          ...inv!,
+          items: inv!.items.filter((_, i) => i !== index),
+        });
         world.set<SessionC>(sessionE, "session", {
           ...session,
-          // Spent: opening the map consumes the stone, which is what makes
-          // sustain a mechanic rather than a menu.
-          waystones: session.waystones.filter((_, i) => i !== index),
           // The place is half the seed: the same Waystone run at two nodes has to
           // draw two different maps, or the route decision buys nothing.
           mapSeed: mapSeedFor(ws.seed, atlasNodeId),

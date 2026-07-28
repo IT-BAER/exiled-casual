@@ -456,7 +456,7 @@ describe("boss abilities scale with the map's tier", () => {
 
     const s = world.create();
     world.set<SessionC>(s, "session", {
-      area: "map", atlasSeed: 0, mapSeed: 0, waystoneSeed: 0, waystones: [], areaTier,
+      area: "map", atlasSeed: 0, mapSeed: 0, waystoneSeed: 0, areaTier,
       activeNodeId: "", completedNodes: [], portalsLeft: 6, mapOpen: 1, pendingArea: "",
     });
 
@@ -480,7 +480,7 @@ describe("boss abilities scale with the map's tier", () => {
     const { world } = sim;
     const s = world.create();
     world.set<SessionC>(s, "session", {
-      area: "map", atlasSeed: 0, mapSeed: 0, waystoneSeed: 0, waystones: [], areaTier: 10,
+      area: "map", atlasSeed: 0, mapSeed: 0, waystoneSeed: 0, areaTier: 10,
       activeNodeId: "", completedNodes: [], portalsLeft: 6, mapOpen: 1, pendingArea: "",
     });
     makePlayerEntity(world, fp(0), fp(0));

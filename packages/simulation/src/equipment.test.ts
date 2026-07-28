@@ -4,7 +4,7 @@ import { MemoryKv } from "@exiled/persistence";
 import type { Item } from "@exiled/content-schema";
 import { createCombatSim } from "./combat-sim";
 import { intentToCommand, buildSnapshot } from "./protocol-bridge";
-import { saveTo, loadInto } from "./persist";
+import { saveTo, loadInto, VERSION } from "./persist";
 import { canEquip, EQUIP_SLOTS_BY_CLASS } from "./equipment";
 import { CONTENT_VERSION } from "@exiled/content-runtime";
 import type { InventoryC, EquipmentC, Position, Health, Mana, DefensesC, OffenseC } from "./components";
@@ -47,6 +47,11 @@ function placeInInv(
   });
 }
 
+function clearInv(world: ReturnType<typeof makeWorld>["world"]) {
+  const inv = getInv(world);
+  world.set<InventoryC>(sessionE(world), "inventory", { ...inv, items: [] });
+}
+
 // ---------------------------------------------------------------------------
 // canEquip / EQUIP_SLOTS_BY_CLASS unit tests
 // ---------------------------------------------------------------------------
@@ -84,6 +89,7 @@ describe("canEquip", () => {
 describe("equipment system — equipItem", () => {
   it("equips a wand from the grid into weapon1: removes from grid, fills slot", () => {
     const { sim, world, playerEntity } = makeWorld();
+    clearInv(world);
     placeInInv(world, WAND, 0, 0, 1, 2);
 
     sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "weapon1" }, playerEntity, 0)]);
@@ -94,6 +100,7 @@ describe("equipment system — equipItem", () => {
 
   it("rejects equipping a helmet into weapon1 (illegal class/slot pair)", () => {
     const { sim, world, playerEntity } = makeWorld();
+    clearInv(world);
     placeInInv(world, HELMET, 0, 0, 2, 2);
 
     sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "weapon1" }, playerEntity, 0)]);
@@ -112,6 +119,7 @@ describe("equipment system — equipItem", () => {
 
   it("equipping into an occupied slot swaps the occupant back into the grid", () => {
     const { sim, world, playerEntity } = makeWorld();
+    clearInv(world);
 
     // Equip first wand
     placeInInv(world, WAND, 0, 0, 1, 2);
@@ -157,6 +165,7 @@ describe("equipment system — equipItem", () => {
 describe("equipment system — unequipItem", () => {
   it("unequip returns item to the grid", () => {
     const { sim, world, playerEntity } = makeWorld();
+    clearInv(world);
 
     placeInInv(world, WAND, 0, 0, 1, 2);
     sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "weapon1" }, playerEntity, 0)]);
@@ -171,6 +180,7 @@ describe("equipment system — unequipItem", () => {
 
   it("no-op when the slot is already empty", () => {
     const { sim, world, playerEntity } = makeWorld();
+    clearInv(world);
 
     sim.step([intentToCommand({ kind: "unequipItem", slot: "weapon1" }, playerEntity, 0)]);
 
@@ -200,6 +210,7 @@ describe("equipment system — unequipItem", () => {
 describe("equipment system - moveItem", () => {
   it("moves an item to a free rectangle", () => {
     const { sim, world, playerEntity } = makeWorld();
+    clearInv(world);
     placeInInv(world, WAND, 0, 0, 1, 2);
 
     sim.step([intentToCommand({ kind: "moveItem", x: 0, y: 0, toX: 3, toY: 1 }, playerEntity, 0)]);
@@ -211,6 +222,7 @@ describe("equipment system - moveItem", () => {
 
   it("refuses a destination that collides with another item", () => {
     const { sim, world, playerEntity } = makeWorld();
+    clearInv(world);
     placeInInv(world, WAND, 0, 0, 1, 2);
     placeInInv(world, WAND, 3, 1, 1, 2);
 
@@ -221,6 +233,7 @@ describe("equipment system - moveItem", () => {
 
   it("allows a destination that only overlaps the item's own old footprint", () => {
     const { sim, world, playerEntity } = makeWorld();
+    clearInv(world);
     placeInInv(world, WAND, 0, 0, 1, 2);
 
     sim.step([intentToCommand({ kind: "moveItem", x: 0, y: 0, toX: 0, toY: 1 }, playerEntity, 0)]);
@@ -230,6 +243,7 @@ describe("equipment system - moveItem", () => {
 
   it("refuses a destination that hangs off the grid", () => {
     const { sim, world, playerEntity } = makeWorld();
+    clearInv(world);
     const inv = getInv(world);
     placeInInv(world, WAND, 0, 0, 1, 2);
 
@@ -246,6 +260,7 @@ describe("equipment system - moveItem", () => {
 describe("equipment system — dropItem", () => {
   it("removes item from grid and spawns a groundItem entity at the player position", () => {
     const { sim, world, playerEntity } = makeWorld();
+    clearInv(world);
     placeInInv(world, WAND, 0, 0, 1, 2);
 
     const playerPos = world.get<Position>(playerEntity, "position")!;
@@ -262,6 +277,7 @@ describe("equipment system — dropItem", () => {
 
   it("no-op when no item at the given origin cell", () => {
     const { sim, world, playerEntity } = makeWorld();
+    clearInv(world);
 
     sim.step([intentToCommand({ kind: "dropItem", x: 3, y: 2 }, playerEntity, 0)]);
 
@@ -271,6 +287,7 @@ describe("equipment system — dropItem", () => {
 
   it("dropped item is pickup-able by the existing pickup path", () => {
     const { sim, world, playerEntity } = makeWorld();
+    clearInv(world);
     placeInInv(world, WAND, 0, 0, 1, 2);
 
     // Drop it (player at origin, item spawns at origin).
@@ -343,6 +360,7 @@ describe("derived player stats", () => {
 
   it("equipping raises maxLife, armour and fire resistance", () => {
     const { world, sim, playerEntity } = makeWorld();
+    clearInv(world);
     placeInInv(world, GEARED_ROBE, 0, 0, 2, 3);
     sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "body" }, playerEntity, 0)]);
 
@@ -353,6 +371,7 @@ describe("derived player stats", () => {
 
   it("the base implicit applies too: the robe's 45% mana regeneration", () => {
     const { world, sim, playerEntity } = makeWorld();
+    clearInv(world);
     placeInInv(world, GEARED_ROBE, 0, 0, 2, 3);
     sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "body" }, playerEntity, 0)]);
 
@@ -362,6 +381,7 @@ describe("derived player stats", () => {
 
   it("the wand implicit gives the player spell damage", () => {
     const { world, sim, playerEntity } = makeWorld();
+    clearInv(world);
     placeInInv(world, WAND, 0, 0, 1, 2);
     sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "weapon1" }, playerEntity, 0)]);
 
@@ -370,6 +390,7 @@ describe("derived player stats", () => {
 
   it("unequipping takes the mods back off", () => {
     const { world, sim, playerEntity } = makeWorld();
+    clearInv(world);
     placeInInv(world, GEARED_ROBE, 0, 0, 2, 3);
     sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "body" }, playerEntity, 0)]);
     sim.step([intentToCommand({ kind: "unequipItem", slot: "body" }, playerEntity, 1)]);
@@ -381,6 +402,7 @@ describe("derived player stats", () => {
 
   it("keeps current life where it was, so equipping never heals", () => {
     const { world, sim, playerEntity } = makeWorld();
+    clearInv(world);
     const h = world.get<Health>(playerEntity, "health")!;
     world.set<Health>(playerEntity, "health", { ...h, life: fp(30) });
     placeInInv(world, GEARED_ROBE, 0, 0, 2, 3);
@@ -392,6 +414,7 @@ describe("derived player stats", () => {
 
   it("clamps current life down when the life mod comes off", () => {
     const { world, sim, playerEntity } = makeWorld();
+    clearInv(world);
     placeInInv(world, GEARED_ROBE, 0, 0, 2, 3);
     sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "body" }, playerEntity, 0)]);
     const h = world.get<Health>(playerEntity, "health")!;
@@ -403,6 +426,7 @@ describe("derived player stats", () => {
 
   it("the snapshot carries the totals the character sheet reads", () => {
     const { world, sim, playerEntity } = makeWorld();
+    clearInv(world);
     placeInInv(world, GEARED_ROBE, 0, 0, 2, 3);
     sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "body" }, playerEntity, 0)]);
 
@@ -419,6 +443,7 @@ describe("derived player stats", () => {
 
   it("the sheet's fire resistance is the uncapped total, so overcapping is visible", () => {
     const { world, sim, playerEntity } = makeWorld();
+    clearInv(world);
     const OVERCAP: Item = {
       baseId: "base.emberweave_robe", rarity: "rare", itemLevel: 80,
       affixes: [{ affixId: "affix.fire_res", value: 80 }],
@@ -463,11 +488,11 @@ describe("persist — equipment", () => {
 
   it("old save without equipment field loads as empty slots (backwards compat)", async () => {
     const kv = new MemoryKv();
-    // Manually write a v1 save with no equipment field.
+    // Manually write a current-version save with no equipment field.
     await kv.save(JSON.stringify({
-      version: 1,
+      version: VERSION,
       session: {
-        area: "hideout", atlasSeed: 0, mapSeed: 0, waystoneSeed: 0, waystones: [], areaTier: 0,
+        area: "hideout", atlasSeed: 0, mapSeed: 0, waystoneSeed: 0, areaTier: 0,
         activeNodeId: "", completedNodes: [], portalsLeft: 0, mapOpen: 0, pendingArea: "",
       },
       inventory: { cols: 12, rows: 5, items: [] },

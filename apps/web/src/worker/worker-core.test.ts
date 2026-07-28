@@ -101,7 +101,7 @@ describe("WorkerCore", () => {
 
     // Open the portal ring by activating a map (T5: activateMap opens it, not a
     // device interact — that is now a no-op). ws-0 resolves against the session seed.
-    core.pushIntent({ kind: "activateMap", atlasNodeId: "node.ashen_glade", waystoneId: "ws-0" });
+    core.pushIntent({ kind: "activateMap", atlasNodeId: "node.ashen_glade", x: 0, y: 0 });
     advanceUntil(core, (s) => s.entities.some((e) => e.kind === "portal"));
 
     // Step through a portal into the dungeon.

@@ -7,6 +7,7 @@
   "exports": { ".": "./src/index.ts" },
   "dependencies": {
     "@exiled/fixed-point": "*",
-    "@exiled/content-schema": "*"
+    "@exiled/content-schema": "*",
+    "@exiled/rules": "*"
   }
 }

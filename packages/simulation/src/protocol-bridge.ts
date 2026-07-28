@@ -56,7 +56,7 @@ export function intentToCommand(intent: Intent, player: Entity, tick: number): C
     case "activateMap":
       return {
         tick, entity: player, type: "activateMap",
-        atlasNodeId: intent.atlasNodeId, waystoneId: intent.waystoneId,
+        atlasNodeId: intent.atlasNodeId, data: { x: intent.x, y: intent.y },
       };
     case "pickupItem":
       return { tick, entity: player, type: "pickupItem", data: { entityId: intent.entityId } };
@@ -295,6 +295,7 @@ export function buildSnapshot(
         x: p.x, y: p.y, w: p.w, h: p.h, count: p.count,
         rarity: d.rarity, name: d.name, baseName: d.baseName, itemClass: d.itemClass, implicit: d.implicit, lines: d.lines, flavour: d.flavour, icon: d.icon, unidentified: d.unidentified, baseId: p.item.baseId,
         statLines: d.statLines, reqLevel: d.reqLevel, reqAttrValue: d.reqAttrValue, reqAttr: d.reqAttr,
+        waystone: d.waystone,
       };
     }),
   });
@@ -336,7 +337,6 @@ export function buildSnapshot(
     areaTier: session?.areaTier ?? 0,
     atlasSeed: session?.atlasSeed ?? 0,
     completedNodes: session?.completedNodes ?? [],
-    waystones: (session?.waystones ?? []).map((w, i) => ({ id: `ws-${i}`, seed: w.seed, tier: w.tier })),
     player: {
       id: playerEntity,
       x: toNumber(pp.x), y: toNumber(pp.y),

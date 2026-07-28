@@ -41,7 +41,7 @@ function makeSnap(entityOverrides: Partial<Snapshot["entities"][number]>[] = [])
     mapOpen: false,
     areaTier: 0,
     atlasSeed: 0,
-    completedNodes: [], waystones: [],
+    completedNodes: [],
     player: testPlayer(),
     entities: entityOverrides as Snapshot["entities"],
     inventory: { cols: 12, rows: 5, items: [] },

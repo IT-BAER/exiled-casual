@@ -2,12 +2,13 @@
 import React from "react";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
-import { offerWaystones, areaLevel, atlasGraph, WAYSTONE_OFFER_COUNT, waystoneRarity, waystoneMods, atlasNodeTier } from "@exiled/rules";
+import { areaLevel, atlasGraph, atlasNodeTier } from "@exiled/rules";
 import { PreparationPanel } from "./PreparationPanel.js";
+import type { SocketedStone } from "./PreparationPanel.js";
 
-/** The three stones a fresh character owns, exactly as combat-sim seeds them. */
-function ownedFor(seed: number) {
-  return offerWaystones(seed, WAYSTONE_OFFER_COUNT).map((w, i) => ({ id: `ws-${i}`, seed: w.seed, tier: w.tier }));
+/** A tier-1 stone at grid cell (0,0) — the minimum needed to enter node 0. */
+function stone(overrides?: Partial<SocketedStone>): SocketedStone {
+  return { seed: 42, tier: 1, x: 0, y: 0, ...overrides };
 }
 
 describe("PreparationPanel", () => {
@@ -17,24 +18,29 @@ describe("PreparationPanel", () => {
 
   it("activates with the selected node and waystone, and shows its area level", () => {
     const onActivate = vi.fn();
+    const s = stone();
     render(
-      <PreparationPanel atlasSeed={atlasSeed} waystones={ownedFor(atlasSeed)} completedNodes={[]} onActivate={onActivate} onClose={() => {}} />,
+      <PreparationPanel
+        atlasSeed={atlasSeed} completedNodes={[]} socketedStone={s}
+        onEject={() => {}} onActivate={onActivate} onClose={() => {}}
+      />,
     );
     const node = atlasGraph(atlasSeed)[0]!;
-    const ws = offerWaystones(atlasSeed, WAYSTONE_OFFER_COUNT)[0]!;
 
     fireEvent.click(screen.getByTestId(`prep-node-${node.id}`));
-    fireEvent.click(screen.getByTestId(`prep-ws-${ws.id}`));
 
-    expect(screen.getByTestId("prep-arealevel").textContent).toContain(String(areaLevel(ws.tier)));
+    expect(screen.getByTestId("prep-arealevel").textContent).toContain(String(areaLevel(s.tier)));
 
     fireEvent.click(screen.getByTestId("prep-activate"));
-    expect(onActivate).toHaveBeenCalledWith(node.id, ws.id);
+    expect(onActivate).toHaveBeenCalledWith(node.id, s.x, s.y);
   });
 
   it("says nothing about a place until one is clicked", () => {
     render(
-      <PreparationPanel atlasSeed={atlasSeed} waystones={ownedFor(atlasSeed)} completedNodes={[]} onActivate={() => {}} onClose={() => {}} />,
+      <PreparationPanel
+        atlasSeed={atlasSeed} completedNodes={[]} socketedStone={null}
+        onEject={() => {}} onActivate={() => {}} onClose={() => {}}
+      />,
     );
     // The Atlas is the world first: no place is open, so there is no panel and
     // nothing to activate.
@@ -44,7 +50,10 @@ describe("PreparationPanel", () => {
 
   it("opens the place over its own node, with its name, its lore and an empty socket", () => {
     render(
-      <PreparationPanel atlasSeed={atlasSeed} waystones={ownedFor(atlasSeed)} completedNodes={[]} onActivate={() => {}} onClose={() => {}} />,
+      <PreparationPanel
+        atlasSeed={atlasSeed} completedNodes={[]} socketedStone={null}
+        onEject={() => {}} onActivate={() => {}} onClose={() => {}}
+      />,
     );
     const node = atlasGraph(atlasSeed)[0]!;
     fireEvent.click(screen.getByTestId(`prep-node-${node.id}`));
@@ -59,27 +68,32 @@ describe("PreparationPanel", () => {
     expect((screen.getByTestId("prep-activate") as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("shows the stone in the socket, and clicking the socket takes it back out", () => {
+  it("shows the stone in the socket; clicking the socket ejects it", () => {
+    const onEject = vi.fn();
+    const s = stone();
     render(
-      <PreparationPanel atlasSeed={atlasSeed} waystones={ownedFor(atlasSeed)} completedNodes={[]} onActivate={() => {}} onClose={() => {}} />,
+      <PreparationPanel
+        atlasSeed={atlasSeed} completedNodes={[]} socketedStone={s}
+        onEject={onEject} onActivate={() => {}} onClose={() => {}}
+      />,
     );
     const node = atlasGraph(atlasSeed)[0]!;
-    const ws = offerWaystones(atlasSeed, WAYSTONE_OFFER_COUNT)[0]!;
     fireEvent.click(screen.getByTestId(`prep-node-${node.id}`));
-    fireEvent.click(screen.getByTestId(`prep-ws-${ws.id}`));
     // The stone shows as its own item art in the slot; the tier it brings reads
     // off the line under it, with the numbers.
     expect(screen.getByTestId("prep-socket-stone")).toBeTruthy();
-    expect(screen.getByTestId("prep-arealevel").textContent).toContain(`Tier ${ws.tier}`);
+    expect(screen.getByTestId("prep-arealevel").textContent).toContain(`Tier ${s.tier}`);
 
     fireEvent.click(screen.getByTestId("prep-socket"));
-    expect(screen.queryByTestId("prep-socket-stone")).toBeNull();
-    expect((screen.getByTestId("prep-activate") as HTMLButtonElement).disabled).toBe(true);
+    expect(onEject).toHaveBeenCalledTimes(1);
   });
 
   it("closes the place when its node is clicked again", () => {
     render(
-      <PreparationPanel atlasSeed={atlasSeed} waystones={ownedFor(atlasSeed)} completedNodes={[]} onActivate={() => {}} onClose={() => {}} />,
+      <PreparationPanel
+        atlasSeed={atlasSeed} completedNodes={[]} socketedStone={null}
+        onEject={() => {}} onActivate={() => {}} onClose={() => {}}
+      />,
     );
     const node = atlasGraph(atlasSeed)[0]!;
     fireEvent.click(screen.getByTestId(`prep-node-${node.id}`));
@@ -90,7 +104,10 @@ describe("PreparationPanel", () => {
   it("disables a completed node", () => {
     const done = atlasGraph(atlasSeed)[0]!.id;
     render(
-      <PreparationPanel atlasSeed={atlasSeed} waystones={ownedFor(atlasSeed)} completedNodes={[done]} onActivate={() => {}} onClose={() => {}} />,
+      <PreparationPanel
+        atlasSeed={atlasSeed} completedNodes={[done]} socketedStone={null}
+        onEject={() => {}} onActivate={() => {}} onClose={() => {}}
+      />,
     );
     expect((screen.getByTestId(`prep-node-${done}`) as HTMLButtonElement).disabled).toBe(true);
   });
@@ -98,7 +115,10 @@ describe("PreparationPanel", () => {
   it("shows the fog: only the first node is enterable on a fresh atlas", () => {
     const graph = atlasGraph(atlasSeed);
     render(
-      <PreparationPanel atlasSeed={atlasSeed} waystones={ownedFor(atlasSeed)} completedNodes={[]} onActivate={() => {}} onClose={() => {}} />,
+      <PreparationPanel
+        atlasSeed={atlasSeed} completedNodes={[]} socketedStone={null}
+        onEject={() => {}} onActivate={() => {}} onClose={() => {}}
+      />,
     );
     const shut = graph.find((n) => n.id !== graph[0]!.id && !graph[0]!.links.includes(n.id))!;
     expect((screen.getByTestId(`prep-node-${graph[0]!.id}`) as HTMLButtonElement).disabled).toBe(false);
@@ -108,7 +128,10 @@ describe("PreparationPanel", () => {
   it("draws the world map: a node sits at its own position and its routes are drawn", () => {
     const graph = atlasGraph(atlasSeed);
     render(
-      <PreparationPanel atlasSeed={atlasSeed} waystones={ownedFor(atlasSeed)} completedNodes={[]} onActivate={() => {}} onClose={() => {}} />,
+      <PreparationPanel
+        atlasSeed={atlasSeed} completedNodes={[]} socketedStone={null}
+        onEject={() => {}} onActivate={() => {}} onClose={() => {}}
+      />,
     );
     const first = graph[0]!;
     const tile = screen.getByTestId(`prep-node-${first.id}`);
@@ -125,8 +148,10 @@ describe("PreparationPanel", () => {
     const graph = atlasGraph(atlasSeed);
     render(
       <PreparationPanel
-        atlasSeed={atlasSeed} waystones={ownedFor(atlasSeed)}
+        atlasSeed={atlasSeed}
         completedNodes={[graph[0]!.id]}
+        socketedStone={null}
+        onEject={() => {}}
         onActivate={() => {}}
         onClose={() => {}}
       />,
@@ -136,54 +161,18 @@ describe("PreparationPanel", () => {
   });
 });
 
-describe("a Waystone shows what it will do to the run", () => {
-  afterEach(cleanup);
-
-  // The offers come from the atlas seed, so a seed is picked whose first stone
-  // rolls modifiers — the panel's whole job is to make that legible before entry.
-  function seedWhoseFirstStoneIs(rarity: string): number {
-    for (let s = 1; s < 100_000; s++) {
-      const ws = offerWaystones(s, WAYSTONE_OFFER_COUNT)[0]!;
-      if (waystoneRarity(ws.seed) === rarity) return s;
-    }
-    throw new Error(`no atlas seed offers a ${rarity} first`);
-  }
-
-  it("names its rarity and prints every modifier it rolled", () => {
-    const atlasSeed = seedWhoseFirstStoneIs("rare");
-    const ws = offerWaystones(atlasSeed, WAYSTONE_OFFER_COUNT)[0]!;
-    render(<PreparationPanel atlasSeed={atlasSeed} waystones={ownedFor(atlasSeed)} completedNodes={[]} onClose={() => {}} onActivate={() => {}} />);
-
-    expect(screen.getByTestId(`prep-ws-${ws.id}-rarity`).textContent).toBe("Rare Waystone");
-    const mods = waystoneMods(ws.seed);
-    expect(mods.length).toBe(4);
-    for (const m of mods) {
-      expect(screen.getByTestId(`prep-ws-${ws.id}-mod-${m.id}`).textContent).toBe(m.label);
-    }
-  });
-
-  it("says so plainly when a stone has nothing on it", () => {
-    const atlasSeed = seedWhoseFirstStoneIs("normal");
-    const ws = offerWaystones(atlasSeed, WAYSTONE_OFFER_COUNT)[0]!;
-    render(<PreparationPanel atlasSeed={atlasSeed} waystones={ownedFor(atlasSeed)} completedNodes={[]} onClose={() => {}} onActivate={() => {}} />);
-    expect(screen.getByTestId(`prep-ws-${ws.id}-rarity`).textContent).toBe("Waystone");
-    expect(screen.getByTestId(`prep-ws-${ws.id}`).textContent).toContain("No modifiers");
-  });
-});
-
 describe("a place demands a Waystone of its own tier", () => {
   afterEach(cleanup);
   const atlasSeed = 42;
   const graph = atlasGraph(atlasSeed);
 
-  /** The stock, plus one stone of exactly `tier` appended at a known id. */
-  function stockWith(tier: number) {
-    const owned = ownedFor(atlasSeed);
-    return [...owned, { id: `ws-${owned.length}`, seed: 4242, tier }];
-  }
-
   it("stamps the tier it wants on the medallion", () => {
-    render(<PreparationPanel atlasSeed={atlasSeed} waystones={ownedFor(atlasSeed)} completedNodes={[]} onActivate={() => {}} onClose={() => {}} />);
+    render(
+      <PreparationPanel
+        atlasSeed={atlasSeed} completedNodes={[]} socketedStone={null}
+        onEject={() => {}} onActivate={() => {}} onClose={() => {}}
+      />,
+    );
     expect(screen.getByTestId(`prep-node-${graph[0]!.id}-tier`).textContent).toBe("1");
     const neighbour = graph[0]!.links[0]!;
     expect(screen.getByTestId(`prep-node-${neighbour}-tier`).textContent).toBe(String(atlasNodeTier(graph, neighbour)));
@@ -192,15 +181,23 @@ describe("a place demands a Waystone of its own tier", () => {
   it("refuses to activate when the stone is under the place's tier, and says which tier it wants", () => {
     const neighbour = graph[0]!.links[0]!;
     const need = atlasNodeTier(graph, neighbour);
-    const stock = stockWith(need - 1);
-    render(
+    // Open the popup with no stone (node is "open"), then seat an under-tier stone.
+    const { rerender } = render(
       <PreparationPanel
-        atlasSeed={atlasSeed} waystones={stock} completedNodes={[graph[0]!.id]}
-        onActivate={() => {}} onClose={() => {}}
+        atlasSeed={atlasSeed} completedNodes={[graph[0]!.id]}
+        socketedStone={null}
+        onEject={() => {}} onActivate={() => {}} onClose={() => {}}
       />,
     );
     fireEvent.click(screen.getByTestId(`prep-node-${neighbour}`));
-    fireEvent.click(screen.getByTestId(`prep-ws-${stock[stock.length - 1]!.id}`));
+    // Re-render with an under-tier stone: the popup stays open (nodeId is internal state).
+    rerender(
+      <PreparationPanel
+        atlasSeed={atlasSeed} completedNodes={[graph[0]!.id]}
+        socketedStone={stone({ tier: need - 1 })}
+        onEject={() => {}} onActivate={() => {}} onClose={() => {}}
+      />,
+    );
 
     expect((screen.getByTestId("prep-activate") as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByTestId("prep-undertier").textContent).toContain(String(need));
@@ -208,19 +205,19 @@ describe("a place demands a Waystone of its own tier", () => {
 
   it("activates once the stone is good enough", () => {
     const neighbour = graph[0]!.links[0]!;
-    const stock = stockWith(atlasNodeTier(graph, neighbour));
+    const need = atlasNodeTier(graph, neighbour);
+    const goodStone = stone({ tier: need, x: 3, y: 5 });
     const onActivate = vi.fn();
     render(
       <PreparationPanel
-        atlasSeed={atlasSeed} waystones={stock} completedNodes={[graph[0]!.id]}
-        onActivate={onActivate} onClose={() => {}}
+        atlasSeed={atlasSeed} completedNodes={[graph[0]!.id]}
+        socketedStone={goodStone}
+        onEject={() => {}} onActivate={onActivate} onClose={() => {}}
       />,
     );
-    const id = stock[stock.length - 1]!.id;
     fireEvent.click(screen.getByTestId(`prep-node-${neighbour}`));
-    fireEvent.click(screen.getByTestId(`prep-ws-${id}`));
     fireEvent.click(screen.getByTestId("prep-activate"));
-    expect(onActivate).toHaveBeenCalledWith(neighbour, id);
+    expect(onActivate).toHaveBeenCalledWith(neighbour, goodStone.x, goodStone.y);
   });
 });
 
@@ -230,7 +227,8 @@ describe("the place's biome", () => {
       <PreparationPanel
         atlasSeed={7}
         completedNodes={[]}
-        waystones={[{ id: "ws-0", seed: 1, tier: 1 }]}
+        socketedStone={null}
+        onEject={() => {}}
         onActivate={() => {}}
         onClose={() => {}}
       />,
