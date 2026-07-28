@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ROCK_SPACING, scatterRocks, type RockCell } from "./rocks";
+import { ROCK_SPACING, scatterDebris, scatterRocks, type RockCell } from "./rocks";
 
 /** A straight run of wall cells, at the mapgen cell size of 0.5 world units. */
 function line(count: number, z = 0): RockCell[] {
@@ -47,5 +47,40 @@ describe("scatterRocks", () => {
     const rocks = scatterRocks(line(400));
     expect(rocks.length).toBeLessThan(260);
     expect(rocks.length).toBeGreaterThan(170);
+  });
+});
+
+describe("scatterDebris", () => {
+  /** A patch of open floor, `n` x `n` cells at the mapgen cell size. */
+  function field(n: number): RockCell[] {
+    const out: RockCell[] = [];
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) out.push({ x: x * 0.5, z: y * 0.5 });
+    return out;
+  }
+
+  it("stays sparse: debris dresses the floor, it does not pave it", () => {
+    // 40x40 cells is 20x20 units. At 2.1 spacing that is room for on the order of
+    // a hundred pebbles, not sixteen hundred — dense debris is a gravel pit, and
+    // it would also cost more matrices than the boulders do.
+    const bits = scatterDebris(field(40));
+    expect(bits.length).toBeGreaterThan(30);
+    expect(bits.length).toBeLessThan(140);
+  });
+
+  it("keeps every piece small enough to walk over", () => {
+    // The floor is walkable and debris is decoration with no collision, so a
+    // piece the player visibly wades through is a bug the sim cannot see.
+    for (const b of scatterDebris(field(30))) {
+      expect(b.width).toBeLessThanOrEqual(0.42);
+      expect(b.height).toBeLessThan(0.3);
+    }
+  });
+
+  it("sinks each piece into the ground rather than resting it on top", () => {
+    for (const b of scatterDebris(field(20))) expect(b.y).toBeLessThan(0);
+  });
+
+  it("is deterministic, like the boulders", () => {
+    expect(scatterDebris(field(20))).toEqual(scatterDebris(field(20)));
   });
 });

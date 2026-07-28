@@ -9,7 +9,15 @@ import {
   type Scene,
 } from "@babylonjs/core";
 import { FLOOR_TILES, GROUND_SIZE } from "./engine";
-import { buildRocks, clearRocks, isRocksReady, scatterRocks, type RockCell } from "./rocks";
+import {
+  DEBRIS_MESH_PREFIX,
+  buildRocks,
+  clearRocks,
+  isRocksReady,
+  scatterDebris,
+  scatterRocks,
+  type RockCell,
+} from "./rocks";
 import type { WalkableGrid } from "@exiled/mapgen";
 
 /** Wall height in world units, capped at roughly the player's own 1.8. At 3.5 a
@@ -58,7 +66,18 @@ const TOP_SHADE = 0.22;
  *  borders — the exact inversion of the reference, where rock is the dark frame
  *  around a bright floor. The plate itself is already lifted to 120 luma by
  *  `tools/build_tileset_textures.py`, so the exposure has to come back down here. */
-const ROCK_ALBEDO = 0.5;
+/** Albedo multiplier on the biome's wall plate.
+ *
+ *  Near 1.0 and NOT the 0.5 the StandardMaterial rig used. That 0.5 was a
+ *  brightness trim on a diffuse term; under PBR it is a reflectance, and the
+ *  plate already carries its own value, so halving it again crushed every rock
+ *  facet to the same near-black. The boulders were still drawing — 109 thin
+ *  instances a variant, material ready, in the active list — they had simply
+ *  lost the shading that makes a silhouette, and the whole boundary read as one
+ *  flat slab. Stone reflects about a fifth to a third of the light that hits
+ *  it, and that is what the plate is measuring; the material must not re-apply
+ *  it. */
+const ROCK_ALBEDO = 0.95;
 
 /** Weathered stone. Lower than the ground's 0.92 on purpose: a rock face is
  *  smoother than loose dirt, and the small sheen difference is what separates
@@ -229,13 +248,21 @@ export function buildLevel(
   const uD = cellSize / TILE;
   const boxes: Mesh[] = [];
   const rockCells: RockCell[] = [];
+  const floorCells: RockCell[] = [];
   let wallCells = 0;
   // ponytail: horizontal-run greedy only; add vertical/2D rectangle merging if a
   // profile shows the per-cell vertical walls still cost.
   for (let y = 0; y < rows; y++) {
     let x = 0;
     while (x < cols) {
-      if (!isBoundaryWall(x, y)) { x++; continue; }
+      if (!isBoundaryWall(x, y)) {
+        // Open floor: a debris candidate. Collected in the same sweep because the
+        // walls already cost a full pass over the grid.
+        if (rocky && isFloor(x, y))
+          floorCells.push({ x: originX + x * cellSize, z: originY + y * cellSize });
+        x++;
+        continue;
+      }
       const runStart = x;
       while (x < cols && isBoundaryWall(x, y)) x++;
       const runLen = x - runStart;
@@ -271,7 +298,10 @@ export function buildLevel(
   // disposeSource + 32-bit indices: thousands of boxes can exceed the 16-bit vertex limit.
   const merged = Mesh.MergeMeshes(boxes, true, true, undefined, false, false);
   const material = wallMaterial(scene, tilesetId);
-  if (rocky) buildRocks(scene, scatterRocks(rockCells), material);
+  if (rocky) {
+    buildRocks(scene, scatterRocks(rockCells), material);
+    buildRocks(scene, scatterDebris(floorCells), material, DEBRIS_MESH_PREFIX);
+  }
   if (merged) {
     merged.name = WALL_MESH_NAME;
     merged.material = material;

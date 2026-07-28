@@ -34,6 +34,10 @@ const GLTF_ROOT = "__root__";
  */
 const ROCK_MESH_PREFIX = "wallrun-rock-";
 
+/** Floor debris. Same exclusion, same reason, and a pebble lying on the ground
+ *  has nothing to cast a useful shadow onto anyway. */
+const DEBRIS_MESH_PREFIX = "wallrun-debris-";
+
 /** Smallest gap between two rock centres, in world units.
  *
  *  Not a density knob on its own: it sets the WIDEST gap too, and that is the
@@ -44,6 +48,8 @@ const ROCK_MESH_PREFIX = "wallrun-rock-";
  *  has to cover or the boulders stop overlapping and the void shows between
  *  them. 0.85 put the worst gap at 1.62 and wanted 1.7-wide rocks to close it. */
 export const ROCK_SPACING = 0.6;
+
+export { DEBRIS_MESH_PREFIX };
 
 /** Positional jitter as a fraction of the spacing. Capped by MIN_WIDTH — see
  *  where it is used; this is not a free taste knob. */
@@ -65,6 +71,51 @@ const MAX_ASPECT = 0.95;
  *  of visibly tipped boulders reads as debris rather than as bedrock. */
 const MAX_TILT = 0.16;
 
+/** Everything the scatter needs to know about one kind of stone. Boulders and
+ *  floor debris are the same six meshes at different sizes, so the difference
+ *  between them is data, not a second code path. */
+interface ScatterConfig {
+  spacing: number;
+  minWidth: number;
+  maxWidth: number;
+  minAspect: number;
+  maxAspect: number;
+  maxTilt: number;
+  /** How far below the floor the shape sits, as a fraction of its height. A
+   *  pebble resting exactly on y=0 reads as placed on the ground; sunk a little
+   *  it reads as part of it. */
+  sink: number;
+}
+
+const BOULDERS: ScatterConfig = {
+  spacing: ROCK_SPACING,
+  minWidth: MIN_WIDTH,
+  maxWidth: MAX_WIDTH,
+  minAspect: MIN_ASPECT,
+  maxAspect: MAX_ASPECT,
+  maxTilt: MAX_TILT,
+  sink: 0,
+};
+
+/**
+ * Floor debris: the same boulders at a tenth the size, thrown across the open
+ * floor. The tiling plate is the largest thing on screen and its repeat is the
+ * loudest artifact left in a frame — a plate cannot hide that on its own, but
+ * scattered stone breaking the grid line does, and it costs no new asset.
+ *
+ * Free to tilt hard, unlike the boulders: a pebble lying on its side is a
+ * pebble, while a tipped boulder reads as debris rather than as bedrock.
+ */
+const DEBRIS: ScatterConfig = {
+  spacing: 2.1,
+  minWidth: 0.12,
+  maxWidth: 0.42,
+  minAspect: 0.3,
+  maxAspect: 0.6,
+  maxTilt: 0.9,
+  sink: 0.35,
+};
+
 interface LoadedRocks {
   scene: Scene;
   container: AssetContainer;
@@ -72,21 +123,38 @@ interface LoadedRocks {
 
 let loaded: LoadedRocks | null = null;
 let pending: Promise<void> | null = null;
-let placed: Mesh[] = [];
+/**
+ * Which load is the current one. A fetch that was started for a scene that has
+ * since gone away must not be allowed to land: React's StrictMode mounts the
+ * effect, tears it down and mounts it again, so in dev there are routinely two
+ * loads in flight and the FIRST one resolves last about half the time. When it
+ * did, it wrote its dead scene into `loaded`, `isRocksReady` went false against
+ * the live scene, and the map silently fell back to the box walls — which is
+ * exactly the "the rocks were there yesterday" bug.
+ */
+let generation = 0;
+const placed = new Map<string, Mesh[]>();
 
 export function loadRocks(scene: Scene): Promise<void> {
   if (loaded?.scene === scene) return Promise.resolve();
-  if (pending) return pending;
 
+  // No "return the in-flight promise" shortcut: that promise may belong to a
+  // scene that is already gone, and handing it back would report the NEW scene
+  // ready when nothing was ever loaded into it.
+  const gen = ++generation;
   pending = LoadAssetContainerAsync(ROCKS_URL, scene)
     .then((container) => {
+      if (gen !== generation) {
+        container.dispose();
+        return;
+      }
       loaded = { scene, container };
     })
     .catch(() => {
-      loaded = null;
+      if (gen === generation) loaded = null;
     })
     .finally(() => {
-      pending = null;
+      if (gen === generation) pending = null;
     });
 
   return pending;
@@ -100,7 +168,10 @@ export function isRocksReady(scene: Scene): boolean {
 export function resetRocks(): void {
   loaded = null;
   pending = null;
-  placed = [];
+  // Retire any load still in flight for the scene being torn down, or it lands
+  // after the next scene has already started its own and wins the race.
+  generation++;
+  placed.clear();
 }
 
 export interface RockCell {
@@ -110,6 +181,8 @@ export interface RockCell {
 
 export interface RockPlacement {
   x: number;
+  /** Below the floor by `sink` of the height; see ScatterConfig. */
+  y: number;
   z: number;
   /** Footprint in world units; the rock mesh is authored inside a unit box. */
   width: number;
@@ -150,6 +223,16 @@ export function scatterRocks(
   cells: readonly RockCell[],
   spacing: number = ROCK_SPACING,
 ): RockPlacement[] {
+  return scatter(cells, { ...BOULDERS, spacing });
+}
+
+/** Sparse stone across the open floor — see DEBRIS for why it exists. */
+export function scatterDebris(cells: readonly RockCell[]): RockPlacement[] {
+  return scatter(cells, DEBRIS);
+}
+
+function scatter(cells: readonly RockCell[], cfg: ScatterConfig): RockPlacement[] {
+  const spacing = cfg.spacing;
   const out: RockPlacement[] = [];
   const buckets = new Map<string, RockPlacement[]>();
   const key = (cx: number, cz: number): string => `${cx},${cz}`;
@@ -180,15 +263,17 @@ export function scatterRocks(
     }
     if (blocked) continue;
 
-    const width = MIN_WIDTH + r2 * (MAX_WIDTH - MIN_WIDTH);
+    const width = cfg.minWidth + r2 * (cfg.maxWidth - cfg.minWidth);
+    const height = width * (cfg.minAspect + r3 * (cfg.maxAspect - cfg.minAspect));
     const rock: RockPlacement = {
       x,
+      y: -height * cfg.sink,
       z,
       width,
-      height: width * (MIN_ASPECT + r3 * (MAX_ASPECT - MIN_ASPECT)),
+      height,
       yaw: hash01(i * 4 + 5) * Math.PI * 2,
-      tiltX: (hash01(i * 4 + 6) - 0.5) * 2 * MAX_TILT,
-      tiltZ: (hash01(i * 4 + 7) - 0.5) * 2 * MAX_TILT,
+      tiltX: (hash01(i * 4 + 6) - 0.5) * 2 * cfg.maxTilt,
+      tiltZ: (hash01(i * 4 + 7) - 0.5) * 2 * cfg.maxTilt,
       variant: Math.floor(hash01(i * 4 + 8) * 64),
     };
     out.push(rock);
@@ -208,8 +293,8 @@ function sourceMeshes(container: AssetContainer): AbstractMesh[] {
 
 /** Drop the previous area's rocks. Safe to call when there were none. */
 export function clearRocks(): void {
-  for (const mesh of placed) mesh.dispose();
-  placed = [];
+  for (const meshes of placed.values()) for (const mesh of meshes) mesh.dispose();
+  placed.clear();
 }
 
 /**
@@ -227,8 +312,10 @@ export function buildRocks(
   scene: Scene,
   placements: readonly RockPlacement[],
   material: Material,
+  prefix: string = ROCK_MESH_PREFIX,
 ): Mesh[] | null {
-  clearRocks();
+  for (const mesh of placed.get(prefix) ?? []) mesh.dispose();
+  placed.delete(prefix);
   if (!loaded || loaded.scene !== scene) return null;
   const sources = sourceMeshes(loaded.container);
   if (sources.length === 0) return null;
@@ -240,7 +327,7 @@ export function buildRocks(
   const matrix = Matrix.Identity();
   for (const p of placements) {
     scale.set(p.width, p.height, p.width);
-    translation.set(p.x, 0, p.z);
+    translation.set(p.x, p.y, p.z);
     Quaternion.RotationYawPitchRollToRef(p.yaw, p.tiltX, p.tiltZ, rotation);
     Matrix.ComposeToRef(scale, rotation, translation, matrix);
     const bucket = matrices[p.variant % sources.length]!;
@@ -251,7 +338,7 @@ export function buildRocks(
   for (let i = 0; i < sources.length; i++) {
     const data = matrices[i]!;
     if (data.length === 0) continue;
-    const mesh = (sources[i] as Mesh).clone(`${ROCK_MESH_PREFIX}${i}`, null);
+    const mesh = (sources[i] as Mesh).clone(`${prefix}${i}`, null);
     if (!mesh) continue;
     // Out of the glTF root and back to identity: the vertices are already in the
     // pose the exporter baked, and staying parented would hand the whole band the
@@ -268,6 +355,6 @@ export function buildRocks(
     mesh.thinInstanceRefreshBoundingInfo(true);
     meshes.push(mesh);
   }
-  placed = meshes;
+  placed.set(prefix, meshes);
   return meshes.length > 0 ? meshes : null;
 }
