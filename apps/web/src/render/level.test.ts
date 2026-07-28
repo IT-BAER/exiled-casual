@@ -162,16 +162,16 @@ describe("biome tilesets", () => {
   it("re-plates the ground per biome and gives the hideout its own back", () => {
     engine = new NullEngine();
     const { scene } = createScene(engine);
-    const mat = scene.getMaterialByName("groundMat") as { diffuseTexture?: { url?: string } };
+    const mat = scene.getMaterialByName("groundMat") as { albedoTexture?: { url?: string } };
 
     applyTilesetFloor(scene, "tileset.swamp");
-    expect(mat.diffuseTexture?.url).toContain("swamp/floor_color.jpg");
+    expect(mat.albedoTexture?.url).toContain("swamp/floor_color.jpg");
 
     applyTilesetFloor(scene, "tileset.desert");
-    expect(mat.diffuseTexture?.url).toContain("desert/floor_color.jpg");
+    expect(mat.albedoTexture?.url).toContain("desert/floor_color.jpg");
 
     applyTilesetFloor(scene, null);
-    expect(mat.diffuseTexture?.url).toContain("floor.png");
+    expect(mat.albedoTexture?.url).toContain("floor.png");
   });
 
   it("every biome carries a usable tint", () => {

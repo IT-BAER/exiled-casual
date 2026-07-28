@@ -2,7 +2,7 @@ import {
   Color3,
   Mesh,
   MeshBuilder,
-  StandardMaterial,
+  PBRMaterial,
   Texture,
   Vector4,
   VertexBuffer,
@@ -59,6 +59,11 @@ const TOP_SHADE = 0.22;
  *  around a bright floor. The plate itself is already lifted to 120 luma by
  *  `tools/build_tileset_textures.py`, so the exposure has to come back down here. */
 const ROCK_ALBEDO = 0.5;
+
+/** Weathered stone. Lower than the ground's 0.92 on purpose: a rock face is
+ *  smoother than loose dirt, and the small sheen difference is what separates
+ *  the two materials now that both are lit by the same physical model. */
+const ROCK_ROUGHNESS = 0.78;
 const WALL_MESH_NAME = "level-walls";
 const WALL_MAT_NAME = "level-wall-mat";
 /** The tileset a map with no base named falls back to. */
@@ -92,20 +97,24 @@ export function tilesetDir(tilesetId: string): string {
  * `tools/build_tileset_textures.py` — see that script for why the seam pass
  * exists at all.
  */
-function wallMaterial(scene: Scene, tilesetId: string): StandardMaterial {
+function wallMaterial(scene: Scene, tilesetId: string): PBRMaterial {
   const name = `${WALL_MAT_NAME}-${tilesetId}`;
-  const existing = scene.getMaterialByName(name) as StandardMaterial | null;
+  const existing = scene.getMaterialByName(name) as PBRMaterial | null;
   if (existing) return existing;
   const dir = tilesetDir(tilesetId);
-  const mat = new StandardMaterial(name, scene);
-  mat.diffuseTexture = new Texture(`${dir}/wall_color.jpg`, scene);
+  // PBR, same reason as the floor (engine.ts): the boulders are the one surface
+  // in the frame with facets at every angle, and only a roughness term makes the
+  // sun break across them instead of shading each facet by its normal alone.
+  const mat = new PBRMaterial(name, scene);
+  mat.metallic = 0;
+  mat.roughness = ROCK_ROUGHNESS;
+  mat.albedoTexture = new Texture(`${dir}/wall_color.jpg`, scene);
   mat.bumpTexture = new Texture(`${dir}/wall_normal.jpg`, scene);
   // The floor albedo is boosted to 1.45 (engine.ts) so near-black actors read;
   // a wall at 0.62 was ~2.3x darker and crushed the light masonry texture to a
   // muddy near-black. Lift close to the floor, kept a touch cooler+darker so the
   // walls still read as distinct from the ground rather than merging into it.
-  mat.diffuseColor = new Color3(ROCK_ALBEDO, ROCK_ALBEDO, ROCK_ALBEDO * 1.06);
-  mat.specularColor = new Color3(0, 0, 0);
+  mat.albedoColor = new Color3(ROCK_ALBEDO, ROCK_ALBEDO, ROCK_ALBEDO * 1.06);
   return mat;
 }
 
@@ -154,8 +163,8 @@ function fitGround(scene: Scene, grid: WalkableGrid | null): void {
 
 /** Hold the flagstone size constant however big the ground plane is. */
 function scaleFloorTexture(scene: Scene, sx: number, sz: number): void {
-  const mat = scene.getMaterialByName("groundMat") as StandardMaterial | null;
-  const tex = mat?.diffuseTexture as Texture | null;
+  const mat = scene.getMaterialByName("groundMat") as PBRMaterial | null;
+  const tex = mat?.albedoTexture as Texture | null;
   if (!tex) return;
   tex.uScale = FLOOR_TILES * sx;
   tex.vScale = FLOOR_TILES * sz;
@@ -285,14 +294,14 @@ export function buildLevel(
  * is what actually makes a swamp look like a swamp from an overhead camera.
  */
 export function applyTilesetFloor(scene: Scene, tilesetId: string | null): void {
-  const mat = scene.getMaterialByName("groundMat") as StandardMaterial | null;
+  const mat = scene.getMaterialByName("groundMat") as PBRMaterial | null;
   if (!mat) return;
   const url = tilesetId ? `${tilesetDir(tilesetId)}/floor_color.jpg` : "/textures/floor.png";
-  const current = mat.diffuseTexture as Texture | null;
+  const current = mat.albedoTexture as Texture | null;
   if (current?.url === url) return;
   try {
     const tex = new Texture(url, scene);
-    mat.diffuseTexture = tex;
+    mat.albedoTexture = tex;
     current?.dispose();
     // Same repeat as the hideout's plate, so a biome never changes the SCALE of
     // the ground under the player — only what it is made of. The plane is

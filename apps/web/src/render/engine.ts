@@ -6,7 +6,10 @@ import {
   DirectionalLight,
   GlowLayer,
   HemisphericLight,
+  ImageProcessingConfiguration,
   MeshBuilder,
+  PBRMaterial,
+  SSAO2RenderingPipeline,
   Scene,
   ShadowGenerator,
   StandardMaterial,
@@ -14,6 +17,18 @@ import {
   Vector3,
   type Engine,
 } from "@babylonjs/core";
+
+/**
+ * Light intensities for a PBR scene. Roughly PI times the values the old
+ * StandardMaterial rig used, because PBR's diffuse term is energy-conserving
+ * (it divides by PI) while Standard's is not — port the old numbers straight
+ * across and the whole map lands about three times too dark.
+ */
+const SUN_INTENSITY = 3.0;
+const FILL_INTENSITY = 1.55;
+
+/** Dirt and flagstone are rough; anything under ~0.7 puts a wet sheen on them. */
+const GROUND_ROUGHNESS = 0.92;
 
 /**
  * Half-height of the orthographic view in world units (smaller = more zoomed in).
@@ -144,12 +159,12 @@ export function createScene(engine: Engine): SceneHandle {
 
   // Dim sky fill so shadowed sides stay readable instead of going black...
   const fill = new HemisphericLight("fill", new Vector3(0, 1, 0), scene);
-  fill.intensity = 0.5;
+  fill.intensity = FILL_INTENSITY;
   // ...and a low key light raking across the arena. The long shadows it throws
   // are what sell the ground plane, so it is deliberately closer to the horizon
   // than to overhead. Declared before the zoom below, which resizes its frustum.
   const sun = new DirectionalLight("sun", new Vector3(-0.62, -0.38, -0.45), scene);
-  sun.intensity = 0.95;
+  sun.intensity = SUN_INTENSITY;
 
   // Where the wheel has asked to be, and where the camera has eased to so far.
   let targetHalf = ORTHO_HALF_HEIGHT;
@@ -216,27 +231,62 @@ export function createScene(engine: Engine): SceneHandle {
     { width: GROUND_SIZE, height: GROUND_SIZE },
     scene,
   );
-  const groundMat = new StandardMaterial("groundMat", scene);
+  const groundMat = new PBRMaterial("groundMat", scene);
+  // PBR and not StandardMaterial: a diffuse-only material lights dirt and stone
+  // identically, and that flat uniform response is most of why the frame reads
+  // as a toy. Roughness gives the sun a real grazing sheen off the floor and
+  // lets the normal map actually shape it.
+  groundMat.metallic = 0;
+  groundMat.roughness = GROUND_ROUGHNESS;
   try {
     // Real flagstone floor, tiled across the plane. Texture load is async and
     // non-fatal under NullEngine (no canvas), so tests keep the unloaded texture.
     const floor = new Texture("/textures/floor.png", scene);
     floor.uScale = FLOOR_TILES;
     floor.vScale = FLOOR_TILES;
-    groundMat.diffuseTexture = floor;
-    // Lift the flagstones above 1.0: the actors are near-black, and they only
-    // read as silhouettes if the floor is clearly brighter than they are.
-    groundMat.diffuseColor = new Color3(1.45, 1.45, 1.45);
+    groundMat.albedoTexture = floor;
+    groundMat.albedoColor = new Color3(1, 1, 1);
   } catch {
-    groundMat.diffuseColor = new Color3(0.2, 0.22, 0.27); // headless fallback
+    groundMat.albedoColor = new Color3(0.2, 0.22, 0.27); // headless fallback
   }
-  groundMat.specularColor = new Color3(0, 0, 0); // matte, no hotspot
   ground.material = groundMat;
   ground.receiveShadows = true;
 
   // The dungeon walls are no longer a fixed arena ring — they come from the
   // generated area's walkable grid, built by buildLevel() when the worker sends
   // the "area" message. The ground plane above stays as the floor + pick target.
+
+  try {
+    // Filmic tone map, not a straight clamp. PBR outputs real radiance and the
+    // sun's lit faces run well past 1.0; clipped, they flatten into flat white
+    // patches on exactly the rock facets the shading pass exists to show. ACES
+    // rolls those off instead, and the contrast lift puts back the punch the
+    // roll-off costs.
+    const ip = scene.imageProcessingConfiguration;
+    ip.toneMappingEnabled = true;
+    ip.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES;
+    ip.exposure = 1.15;
+    ip.contrast = 1.2;
+  } catch {
+    /* no image processing under NullEngine */
+  }
+
+  try {
+    // Ambient occlusion. Contact is the cue the frame was missing most: without
+    // it a rock and the floor it sits on meet at a hard seam with no darkening,
+    // which is why the boulders read as stickers laid on the ground rather than
+    // as stone resting on it. The sun's shadow map cannot do this — it is one
+    // direction, and a rock's own underside never faces it.
+    const ssao = new SSAO2RenderingPipeline("ssao", scene, { ssaoRatio: 0.75, blurRatio: 1 }, [
+      camera,
+    ]);
+    ssao.radius = 0.9; // world units: about half a rock, so it reads at the base
+    ssao.totalStrength = 1.1;
+    ssao.expensiveBlur = true;
+    ssao.samples = 16;
+  } catch {
+    /* SSAO2 needs WebGL2 + a depth renderer; skipped headless and on WebGL1 */
+  }
 
   try {
     // Glow bloom: emissive materials above a threshold bloom outward, which is how
