@@ -150,6 +150,25 @@ describe("loop grammar library", () => {
     }
   });
 
+  it("carries three variants of every mask class", () => {
+    const counts = new Map<string, number>();
+    for (const c of LOOP_GRAMMAR.chunks) {
+      const cls = maskClass(deriveMask(c.rows));
+      counts.set(cls, (counts.get(cls) ?? 0) + 1);
+    }
+    for (const cls of ["cap", "straight", "corner", "tee", "cross"]) {
+      expect(counts.get(cls), `${cls} variants`).toBe(3);
+    }
+    expect(LOOP_GRAMMAR.chunks.length).toBe(15);
+  });
+
+  it("gives every chunk a distinct id and distinct geometry", () => {
+    const ids = LOOP_GRAMMAR.chunks.map((c) => c.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    const shapes = LOOP_GRAMMAR.chunks.map((c) => c.rows.join("\n"));
+    expect(new Set(shapes).size).toBe(shapes.length);
+  });
+
   it("every cap carries a reward point, because caps are the dead ends", () => {
     for (const c of LOOP_GRAMMAR.chunks) {
       if (maskClass(deriveMask(c.rows)) !== "cap") continue;

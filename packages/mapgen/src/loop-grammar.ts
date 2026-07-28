@@ -52,6 +52,52 @@ const CAP_ALCOVE: Chunk = {
   ],
 };
 
+/** cap, north-open: a rectangular strongroom, reward against the back wall. */
+const CAP_VAULT: Chunk = {
+  id: "loop.cap.vault",
+  rows: [
+    "######....######",
+    "######....######",
+    "######....######",
+    "##..........####",
+    "##..........####",
+    "##..........####",
+    "##....##....####",
+    "##....##....####",
+    "##..........####",
+    "##..........####",
+    "##.......r..####",
+    "##..........####",
+    "################",
+    "################",
+    "################",
+    "################",
+  ],
+};
+
+/** cap, north-open: a walled inner chamber open only to the south. */
+const CAP_SHRINE: Chunk = {
+  id: "loop.cap.shrine",
+  rows: [
+    "######....######",
+    "#####......#####",
+    "####........####",
+    "###..........###",
+    "##............##",
+    "##...######...##",
+    "##...#....#...##",
+    "##...#.rr.#...##",
+    "##...#....#...##",
+    "##...#....#...##",
+    "##............##",
+    "###..........###",
+    "####........####",
+    "#####......#####",
+    "################",
+    "################",
+  ],
+};
+
 /** straight, north/south-open: a long gallery, the loop's main run. */
 const STRAIGHT_GALLERY: Chunk = {
   id: "loop.straight.gallery",
@@ -68,6 +114,52 @@ const STRAIGHT_GALLERY: Chunk = {
     "###...s..s...###",
     "###..........###",
     "###..........###",
+    "###..........###",
+    "####........####",
+    "######....######",
+    "######....######",
+  ],
+};
+
+/** straight, north/south-open: two rows of pillars, cover the whole run. */
+const STRAIGHT_COLONNADE: Chunk = {
+  id: "loop.straight.colonnade",
+  rows: [
+    "######....######",
+    "######....######",
+    "####........####",
+    "###..........###",
+    "###..........###",
+    "###.##....##.###",
+    "###.##.s..##.###",
+    "###.##....##.###",
+    "###.##....##.###",
+    "###.##.s..##.###",
+    "###.##....##.###",
+    "###..........###",
+    "###..........###",
+    "####........####",
+    "######....######",
+    "######....######",
+  ],
+};
+
+/** straight, north/south-open: pinched to the bare corridor at its middle. */
+const STRAIGHT_NARROWS: Chunk = {
+  id: "loop.straight.narrows",
+  rows: [
+    "######....######",
+    "######....######",
+    "####........####",
+    "###..........###",
+    "###...s......###",
+    "####........####",
+    "######....######",
+    "######....######",
+    "######....######",
+    "######....######",
+    "####........####",
+    "###......s...###",
     "###..........###",
     "####........####",
     "######....######",
@@ -98,6 +190,53 @@ const CORNER_BEND: Chunk = {
   ],
 };
 
+/** corner, north/east-open: a wide rounded turn with no cover at all. */
+const CORNER_SWEEP: Chunk = {
+  id: "loop.corner.sweep",
+  rows: [
+    "######....######",
+    "######....######",
+    "#####.....######",
+    "####.......#####",
+    "###.........####",
+    "##...........###",
+    "##..............",
+    "##..............",
+    "##..............",
+    "##..............",
+    "##...........###",
+    "###.....s...####",
+    "####.......#####",
+    "#####.....######",
+    "################",
+    "################",
+  ],
+};
+
+/** corner, north/east-open: a wall block on the inside of the turn, so the
+ *  approach is blind until you are committed to it. */
+const CORNER_BUTTRESS: Chunk = {
+  id: "loop.corner.buttress",
+  rows: [
+    "######....######",
+    "######....######",
+    "######....######",
+    "###.......######",
+    "###.......######",
+    "###..........###",
+    "###....##.......",
+    "###....##.......",
+    "###....##.......",
+    "###.......s.....",
+    "###..........###",
+    "###..........###",
+    "####........####",
+    "######..########",
+    "################",
+    "################",
+  ],
+};
+
 /** tee, north/east/south-open: where a spur leaves the loop. */
 const TEE_CROSSING: Chunk = {
   id: "loop.tee.crossing",
@@ -121,6 +260,52 @@ const TEE_CROSSING: Chunk = {
   ],
 };
 
+/** tee, north/east/south-open: the junction opens into a room on the branch side. */
+const TEE_LANDING: Chunk = {
+  id: "loop.tee.landing",
+  rows: [
+    "######....######",
+    "######....######",
+    "####........####",
+    "###.........####",
+    "###.........####",
+    "###.........####",
+    "###.............",
+    "###....s........",
+    "###.............",
+    "###.............",
+    "###.........####",
+    "###.........####",
+    "###.........####",
+    "####........####",
+    "######....######",
+    "######....######",
+  ],
+};
+
+/** tee, north/east/south-open: the branch leaves through a gap in a spine wall. */
+const TEE_GATE: Chunk = {
+  id: "loop.tee.gate",
+  rows: [
+    "######....######",
+    "######....######",
+    "####........####",
+    "###.......#..###",
+    "###.......#..###",
+    "###.......#..###",
+    "###..s..........",
+    "###.............",
+    "###.............",
+    "###....s........",
+    "###.......#..###",
+    "###.......#..###",
+    "###.......#..###",
+    "####........####",
+    "######....######",
+    "######....######",
+  ],
+};
+
 /** cross, all four sides open: an open plaza where routes meet. */
 const CROSS_PLAZA: Chunk = {
   id: "loop.cross.plaza",
@@ -137,6 +322,52 @@ const CROSS_PLAZA: Chunk = {
     "................",
     "##............##",
     "##.....s......##",
+    "##............##",
+    "###.........####",
+    "######....######",
+    "######....######",
+  ],
+};
+
+/** cross, all four sides open: a square court with four corner blocks. */
+const CROSS_COURT: Chunk = {
+  id: "loop.cross.court",
+  rows: [
+    "######....######",
+    "######....######",
+    "###.........####",
+    "##..##....##..##",
+    "##..##....##..##",
+    "##............##",
+    "................",
+    ".....s..........",
+    "..........s.....",
+    "................",
+    "##............##",
+    "##..##....##..##",
+    "##..##....##..##",
+    "###.........####",
+    "######....######",
+    "######....######",
+  ],
+};
+
+/** cross, all four sides open: a solid block dead centre, so the plaza is a ring. */
+const CROSS_ISLAND: Chunk = {
+  id: "loop.cross.island",
+  rows: [
+    "######....######",
+    "######....######",
+    "###.........####",
+    "##............##",
+    "##............##",
+    "##............##",
+    "......s.........",
+    "......####......",
+    "......####......",
+    ".........s......",
+    "##............##",
+    "##............##",
     "##............##",
     "###.........####",
     "######....######",
@@ -187,7 +418,13 @@ const BOSS_HALL: Chunk = {
 
 export const LOOP_GRAMMAR: Grammar = {
   id: "loop",
-  chunks: [CAP_ALCOVE, STRAIGHT_GALLERY, CORNER_BEND, TEE_CROSSING, CROSS_PLAZA],
+  chunks: [
+    CAP_ALCOVE, CAP_VAULT, CAP_SHRINE,
+    STRAIGHT_GALLERY, STRAIGHT_COLONNADE, STRAIGHT_NARROWS,
+    CORNER_BEND, CORNER_SWEEP, CORNER_BUTTRESS,
+    TEE_CROSSING, TEE_LANDING, TEE_GATE,
+    CROSS_PLAZA, CROSS_COURT, CROSS_ISLAND,
+  ],
   bossChunk: BOSS_HALL,
   branchCount: 3,
 };
@@ -196,10 +433,20 @@ export const LOOP_GRAMMAR: Grammar = {
 // A typo in a row would otherwise surface much later as an unmatchable tile.
 const CANONICAL: readonly [Chunk, number][] = [
   [CAP_ALCOVE, 0b0001],
+  [CAP_VAULT, 0b0001],
+  [CAP_SHRINE, 0b0001],
   [STRAIGHT_GALLERY, 0b0101],
+  [STRAIGHT_COLONNADE, 0b0101],
+  [STRAIGHT_NARROWS, 0b0101],
   [CORNER_BEND, 0b0011],
+  [CORNER_SWEEP, 0b0011],
+  [CORNER_BUTTRESS, 0b0011],
   [TEE_CROSSING, 0b0111],
+  [TEE_LANDING, 0b0111],
+  [TEE_GATE, 0b0111],
   [CROSS_PLAZA, 0b1111],
+  [CROSS_COURT, 0b1111],
+  [CROSS_ISLAND, 0b1111],
 ];
 for (const [chunk, mask] of CANONICAL) {
   if (deriveMask(chunk.rows) !== mask) {
