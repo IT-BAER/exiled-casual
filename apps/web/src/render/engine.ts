@@ -107,21 +107,23 @@ export type AtmospherePreset = "soft" | "heavy";
 /**
  * Fog start and end, in units from the CAMERA, plus the vignette weight.
  *
- * Distances and not an EXP2 density, and that is the whole point. The camera is
- * ORTHOGRAPHIC and parked 40 units back, so the entire visible floor lies in a
- * measured 36.3..44.2 band — 8 units wide around 40. Exponential fog over a band
- * that narrow and that far out is nearly constant: at density 0.012 the near
- * edge of the screen kept 0.827 of its light and the far edge 0.755, a 7%
- * gradient across the whole frame. That is not depth, it is a flat 20% dimmer,
- * which is exactly how it read.
+ * Distances and not an EXP2 density, and that is the whole point. The visible
+ * floor lies in a MEASURED band from the camera — 15.8 at the bottom of the
+ * screen to 24.4 at the top — and exponential fog across a band that narrow is
+ * nearly constant. Under the old 40-unit orthographic camera it was worse still:
+ * 36.3..44.2, where density 0.012 left the near edge at 0.827 of its light and
+ * the far edge at 0.755. A 7% gradient across the whole frame is not depth, it
+ * is a flat 20% dimmer, which is exactly how it read.
  *
  * Linear fog lets the band be placed instead of derived. `start` sits just
  * behind the near edge so the floor at the player's feet is untouched, and `end`
- * is close enough that the top of the screen visibly drinks the void colour.
+ * is close enough that the top of the screen visibly drinks the void colour
+ * (~44% of it at `soft`). Re-measure both if `CAMERA_FOV` moves: the radius is
+ * derived from it, so the whole band travels with the lens.
  */
 const ATMOSPHERE: Record<AtmospherePreset, { start: number; end: number; vignette: number }> = {
-  soft: { start: 38, end: 55, vignette: 1.6 },
-  heavy: { start: 36, end: 47, vignette: 3.2 },
+  soft: { start: 17, end: 34, vignette: 1.6 },
+  heavy: { start: 16, end: 28, vignette: 3.2 },
 };
 
 /** Fog + vignette. Both are frame-edge effects: they push the eye to the middle
@@ -154,6 +156,19 @@ export const WALL_MESH_NAME = "level-walls";
 
 /** Dirt and flagstone are rough; anything under ~0.7 puts a wet sheen on them. */
 const GROUND_ROUGHNESS = 0.92;
+
+/**
+ * Vertical field of view, radians. The one number that decides how much depth
+ * the projection has, and it is a trade rather than a maximum: wider gives more
+ * parallax and more of a look down the sides of things, but also leans the
+ * verticals out from the screen centre and pulls the camera in close enough that
+ * scenery starts crossing in front of the player.
+ *
+ * 0.50 rad (~28.6°) is a long lens. It puts the camera ~18 units back for the
+ * authored framing instead of 40, which is where the parallax comes from, while
+ * a wall at the frame edge still leans only a few degrees.
+ */
+const CAMERA_FOV = 0.5;
 
 /**
  * Half-height of the orthographic view in world units (smaller = more zoomed in).
@@ -296,9 +311,24 @@ export function createScene(engine: Engine): SceneHandle {
     Vector3.Zero(),
     scene,
   );
-  // Orthographic projection: no perspective vanishing point, so grid lines stay
-  // parallel — a flat high-isometric ARPG look, not a wide receding "CCTV" plane.
-  camera.mode = Camera.ORTHOGRAPHIC_CAMERA;
+  // PERSPECTIVE, and this was orthographic until it was played rather than
+  // screenshotted. Ortho keeps grid lines parallel, which flatters a still frame
+  // and is why it was chosen — but it also has literally zero parallax: near
+  // ground and far ground move at the same screen rate, every box shows the same
+  // faces wherever it sits, and running around reads as sliding a 2D map. PoE 1
+  // and 2 are both perspective. No amount of fog, haze or shadow work can put
+  // depth back into a projection that has none, which is what three passes of
+  // atmosphere tuning proved the expensive way.
+  //
+  // A LONG lens, not a wide one: `CAMERA_FOV` is narrow enough that verticals
+  // stay near-parallel and the look is still high-isometric rather than the wide
+  // receding "CCTV" plane the old comment rightly warned about.
+  camera.mode = Camera.PERSPECTIVE_CAMERA;
+  camera.fov = CAMERA_FOV;
+  // Tight clip planes, since the whole scene lives in a shallow band: the depth
+  // buffer is precious once SSAO and two shadow maps are reading it.
+  camera.minZ = 2;
+  camera.maxZ = 90;
 
   // Dim sky fill so shadowed sides stay readable instead of going black...
   const fill = new HemisphericLight("fill", new Vector3(0, 1, 0), scene);
@@ -329,12 +359,18 @@ export function createScene(engine: Engine): SceneHandle {
   let targetHalf = ORTHO_HALF_HEIGHT;
   let half = ORTHO_HALF_HEIGHT;
 
-  const applyOrtho = () => {
+  const applyFraming = () => {
     const aspect = engine.getRenderWidth() / engine.getRenderHeight();
+    // Still written even though the projection no longer reads them: `half` is
+    // the authored framing (half the visible height AT THE PLAYER'S PLANE) and
+    // these are the record of it, which the zoom tests and the shadow extent
+    // below both work from. The radius is DERIVED from it, so the same wheel
+    // notch frames the same amount of floor it always did.
     camera.orthoTop = half;
     camera.orthoBottom = -half;
     camera.orthoLeft = -half * aspect;
     camera.orthoRight = half * aspect;
+    camera.radius = half / Math.tan(CAMERA_FOV / 2);
     camera.beta = Math.min(
       BETA_LIMIT.max,
       Math.max(BETA_LIMIT.min, BETA_AT_DEFAULT + BETA_PER_UNIT * (half - ORTHO_HALF_HEIGHT)),
@@ -349,8 +385,8 @@ export function createScene(engine: Engine): SceneHandle {
     sun.orthoBottom = -extent;
     sun.orthoTop = extent;
   };
-  applyOrtho();
-  engine.onResizeObservable.add(applyOrtho);
+  applyFraming();
+  engine.onResizeObservable.add(applyFraming);
 
   const setZoom = (notches: number): void => {
     targetHalf = Math.min(
@@ -360,7 +396,7 @@ export function createScene(engine: Engine): SceneHandle {
     // Tests and the first notch want the effect without waiting for a frame;
     // the easing below only has to cover the distance that is left.
     half += (targetHalf - half) * ZOOM_EASE;
-    applyOrtho();
+    applyFraming();
   };
 
   const onWheel = (ev: WheelEvent) => {
@@ -377,7 +413,7 @@ export function createScene(engine: Engine): SceneHandle {
   scene.onBeforeRenderObservable.add(() => {
     if (Math.abs(targetHalf - half) < 1e-4) return;
     half += (targetHalf - half) * ZOOM_EASE;
-    applyOrtho();
+    applyFraming();
   });
 
   // Pickable greybox floor. bindings.ts resolves click-to-move and pointer aim

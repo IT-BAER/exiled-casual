@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect, afterEach } from "vitest";
 import {
+  Camera,
   ImageProcessingConfiguration,
   NullEngine,
   ParticleSystem,
@@ -101,16 +102,30 @@ describe("atmosphere", () => {
     engine = new NullEngine();
     const { scene } = createScene(engine);
 
-    // LINEAR, not EXP2. The camera is orthographic and 40 units back, so the
-    // whole visible floor sits in a measured 36.3..44.2 band; exponential fog
-    // across 8 units at that range varies by 7% and reads as a flat dimmer.
+    // LINEAR, not EXP2: the visible floor sits in a measured 15.8..24.4 band
+    // from the camera, and exponential fog across 8.6 units varies too little to
+    // read as anything but a flat dimmer (it was 7% under the old ortho camera).
     expect(scene.fogMode).toBe(Scene.FOGMODE_LINEAR);
     expect(scene.fogColor.equals(VOID_COLOR)).toBe(true);
     // The band has to straddle the visible floor: clear at the near edge, biting
     // before the far one. Outside that it is either invisible or a wall.
-    expect(scene.fogStart).toBeGreaterThan(36.3);
-    expect(scene.fogStart).toBeLessThan(44.2);
-    expect(scene.fogEnd).toBeGreaterThan(44.2);
+    expect(scene.fogStart).toBeGreaterThan(15.8);
+    expect(scene.fogStart).toBeLessThan(24.4);
+    expect(scene.fogEnd).toBeGreaterThan(24.4);
+  });
+
+  it("projects in perspective, or running reads as sliding a 2D map", () => {
+    // Orthographic has literally zero parallax: near and far ground move at the
+    // same screen rate and every box shows the same faces wherever it stands. No
+    // amount of fog or haze puts depth into a projection that has none.
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const camera = scene.activeCamera as { mode: number; fov: number; radius: number; orthoTop: number | null };
+
+    expect(camera.mode).toBe(Camera.PERSPECTIVE_CAMERA);
+    // Radius is DERIVED from the authored framing, so a wheel notch still frames
+    // the same amount of floor it did under the old ortho camera.
+    expect(camera.radius).toBeCloseTo(camera.orthoTop! / Math.tan(camera.fov / 2), 4);
   });
 
   it("darkens the edges by multiply, so a lit corner stays lit", () => {
