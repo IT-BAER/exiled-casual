@@ -209,8 +209,14 @@ const MAX_HALF_HEIGHT = ORTHO_HALF_HEIGHT;
 
 /**
  * Camera pitch, as Babylon's beta: the angle down from straight overhead, so
- * larger is shallower. 0.72 (~49 degrees of elevation) is the isometric tilt the
- * whole look was built around.
+ * larger is shallower. 0.52 (~60 degrees of elevation) is the isometric tilt.
+ *
+ * It sat at 0.72 (~49 degrees) for as long as the projection was orthographic,
+ * where pitch was the *only* thing giving the frame any sense of a third
+ * dimension and a shallow angle was the cheapest way to buy it. Under a real
+ * perspective camera the parallax does that job, and the shallow pitch is left
+ * reading as a flat, side-on view of the floor. Steepening it is only affordable
+ * because the projection now pays for the depth.
  *
  * Zoom is not a straight dolly. Scaling the ortho box alone is a flat
  * magnification with no arc to it at all — nothing in an orthographic
@@ -238,7 +244,7 @@ const MAX_HALF_HEIGHT = ORTHO_HALF_HEIGHT;
  * pushed further by eye without anyone having to remember the algebra above —
  * the test fails the moment the tilt starts outrunning the box.
  */
-const BETA_AT_DEFAULT = 0.72;
+export const BETA_AT_DEFAULT = 0.52;
 const BETA_PER_UNIT = -0.08;
 const BETA_LIMIT = { min: BETA_AT_DEFAULT, max: 0.88 };
 
@@ -302,11 +308,12 @@ export function createScene(engine: Engine): SceneHandle {
   // +x goes down-right and world +z (sim +y) up-right, so a room's walls run as
   // two receding diagonals instead of a flat box. WASD is rotated to match in
   // `intents.ts`, and the minimap by the same angle in `Minimap.tsx`.
-  // beta ~0.72 (≈49° elevation) is the isometric tilt.
+  // `BETA_AT_DEFAULT` is the isometric tilt; it is also the steep end of the
+  // zoom arc, so the camera starts exactly where the arc's clamp holds it.
   const camera = new ArcRotateCamera(
     "cam",
     -Math.PI / 4,
-    0.72,
+    BETA_AT_DEFAULT,
     40,
     Vector3.Zero(),
     scene,

@@ -10,7 +10,7 @@ import {
   StandardMaterial,
   Vector3,
 } from "@babylonjs/core";
-import { applyAtmosphere, createScene, VOID_COLOR } from "./engine";
+import { applyAtmosphere, BETA_AT_DEFAULT, createScene, VOID_COLOR } from "./engine";
 import { applyBiomeTint } from "./level";
 import { HAZE_HEIGHT, HAZE_MAX_SIZE, HAZE_NAME, MOTES_NAME } from "./haze";
 import { BIOMES } from "@exiled/content-runtime";
@@ -119,8 +119,7 @@ describe("atmosphere", () => {
     // same screen rate and every box shows the same faces wherever it stands. No
     // amount of fog or haze puts depth into a projection that has none.
     engine = new NullEngine();
-    const { scene } = createScene(engine);
-    const camera = scene.activeCamera as { mode: number; fov: number; radius: number; orthoTop: number | null };
+    const { camera } = createScene(engine);
 
     expect(camera.mode).toBe(Camera.PERSPECTIVE_CAMERA);
     // Radius is DERIVED from the authored framing, so a wheel notch still frames
@@ -518,7 +517,7 @@ describe("wheel zoom", () => {
     const engine = new NullEngine();
     const { camera } = createScene(engine);
     expect(camera.orthoTop).toBeCloseTo(4.75, 6);
-    expect(camera.beta).toBeCloseTo(0.72, 6);
+    expect(camera.beta).toBeCloseTo(BETA_AT_DEFAULT, 6);
   });
 
   it("clamps at the near stop", () => {
@@ -538,7 +537,7 @@ describe("wheel zoom", () => {
     // nothing at all, and scrolling out after zooming in must stop there.
     for (let i = 0; i < 20; i++) setZoom(1);
     expect(camera.orthoTop).toBeCloseTo(4.75, 6);
-    expect(camera.beta).toBeCloseTo(0.72, 6);
+    expect(camera.beta).toBeCloseTo(BETA_AT_DEFAULT, 6);
 
     setZoom(-4);
     for (let i = 0; i < 80; i++) setZoom(1);
