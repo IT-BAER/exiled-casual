@@ -2,11 +2,12 @@ import { describe, it, expect } from "vitest";
 import { fp, toNumber } from "@exiled/fixed-point";
 import { createCombatSim } from "./combat-sim";
 import { intentToCommand, buildSnapshot } from "./protocol-bridge";
-import { CONTENT_VERSION } from "@exiled/content-runtime";
+import { CONTENT_VERSION, MONSTERS } from "@exiled/content-runtime";
 import { ITEM_POOLS, baseOf } from "@exiled/content-runtime";
 import { rollItem } from "@exiled/rules";
 import type { Intent } from "@exiled/protocol";
 import { World } from "./ecs";
+import { spawnMonster } from "./areas";
 import type {
   Position, Health, Mana, MonsterC, BossC, TelegraphC, SessionC, InteractableC,
 } from "./components";
@@ -364,6 +365,17 @@ describe("buildSnapshot — ground items and inventory", () => {
     const gi = snap.entities.find((e) => e.kind === "groundItem");
     expect(gi).toBeDefined();
     expect(gi!.inRange).toBe(false);
+  });
+});
+
+describe("buildSnapshot — species on monster snapshots", () => {
+  it("a monster snapshot carries its species so the client can pick a mesh", () => {
+    const { world } = makeMinimalWorld();
+    const def = MONSTERS.get("monster.fen_wisp.v1")!;
+    const e = spawnMonster(world, def, fp(1), fp(2), false);
+    const snap = buildSnapshot(world, {} as never, 0, "test");
+    const entry = snap.entities.find((x) => x.id === e)!;
+    expect(entry.species).toBe("monster.fen_wisp.v1");
   });
 });
 

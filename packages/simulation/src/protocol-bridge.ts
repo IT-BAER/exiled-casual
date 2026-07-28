@@ -198,6 +198,7 @@ export function buildSnapshot(
       x: toNumber(mp.x), y: toNumber(mp.y),
       life: toNumber(mh.life), maxLife: toNumber(mh.maxLife),
       rare: mon.rare === 1,
+      species: mon.defId,
     };
     // Only a rare carries a theme; makeRare converts its whole hit to one
     // element, so the attack type IS the theme and nothing has to be stored.

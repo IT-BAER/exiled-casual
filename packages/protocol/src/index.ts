@@ -132,6 +132,12 @@ export interface SnapshotEntity {
    * their content def says and have no theme to advertise.
    */
   element?: MonsterElement;
+  /**
+   * Which monster def this is, so the renderer can pick a mesh. A plain string:
+   * the wire contract must not depend on content, the same reason `element` and
+   * `rarity` are protocol-local types.
+   */
+  species?: string;
   remainingSeconds?: number;
   ailmentStacks?: number;
   /** true for the boss monster; kind stays "monster" so existing consumers keep working */
