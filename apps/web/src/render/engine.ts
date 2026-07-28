@@ -134,6 +134,9 @@ export interface SceneHandle {
 
 export function createScene(engine: Engine): SceneHandle {
   const scene = new Scene(engine);
+  // Reaching the scene from the devtools console is the only way to inspect what
+  // the renderer actually built; Babylon is bundled, so there is no other handle.
+  if (import.meta.env.DEV) (globalThis as { __scene?: Scene }).__scene = scene;
   // Dark background so the greybox arena reads against the page (default is white,
   // which made a white ground plane invisible on a white page).
   scene.clearColor = new Color4(0.09, 0.1, 0.12, 1);

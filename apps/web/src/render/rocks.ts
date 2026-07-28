@@ -61,12 +61,14 @@ const JITTER = 0.32;
  *  the pebbles a smaller number gives. */
 const MIN_WIDTH = 1.35;
 const MAX_WIDTH = 1.95;
-/** Height as a multiple of width. Chosen so the tallest rock lands at about the
- *  1.85 the box wall used to be: past that the camera sits ~49 degrees up and a
- *  rock starts hiding the character behind it, which is the bug this art pass
- *  began with. Under ~0.6 they read as flat slabs seen from above. */
+/** Height as a multiple of width. The ceiling is the character, not the box wall
+ *  it replaced: at 0.95 the tallest rock matched the old 1.85 wall, which put it
+ *  level with his head, and under a camera ~49 degrees up a boulder that tall
+ *  hides the man walking behind it — the bug this art pass began with. 0.78 caps
+ *  the tallest at ~1.52 so his head clears every rock on the map. Under ~0.6 they
+ *  read as flat slabs seen from above. */
 const MIN_ASPECT = 0.62;
-const MAX_ASPECT = 0.95;
+const MAX_ASPECT = 0.78;
 /** Off-vertical lean. Small on purpose — a rock is heavy, and a whole boundary
  *  of visibly tipped boulders reads as debris rather than as bedrock. */
 const MAX_TILT = 0.16;
@@ -343,6 +345,13 @@ export function buildRocks(
     // Out of the glTF root and back to identity: the vertices are already in the
     // pose the exporter baked, and staying parented would hand the whole band the
     // root's handedness flip a second time.
+    // A clone SHARES its source's Geometry, and thinInstanceSetBuffer writes the
+    // instanced attributes onto the geometry while the matrices it reports back
+    // stay on the mesh. Boulders and debris clone the same six sources, so the
+    // debris build silently overwrote what every boulder drew: the boundary
+    // rendered as pebbles on open floor while every probe -- instance count,
+    // bounding box, matrix buffer -- still read as correct boulders.
+    mesh.makeGeometryUnique();
     mesh.setParent(null);
     mesh.position.setAll(0);
     mesh.rotationQuaternion = null;

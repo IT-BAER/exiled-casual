@@ -68,16 +68,20 @@ const TOP_SHADE = 0.22;
  *  `tools/build_tileset_textures.py`, so the exposure has to come back down here. */
 /** Albedo multiplier on the biome's wall plate.
  *
- *  Near 1.0 and NOT the 0.5 the StandardMaterial rig used. That 0.5 was a
- *  brightness trim on a diffuse term; under PBR it is a reflectance, and the
- *  plate already carries its own value, so halving it again crushed every rock
- *  facet to the same near-black. The boulders were still drawing — 109 thin
- *  instances a variant, material ready, in the active list — they had simply
- *  lost the shading that makes a silhouette, and the whole boundary read as one
- *  flat slab. Stone reflects about a fifth to a third of the light that hits
- *  it, and that is what the plate is measuring; the material must not re-apply
- *  it. */
-const ROCK_ALBEDO = 0.95;
+ *  NOT the 0.5 the StandardMaterial rig used: that was a brightness trim on a
+ *  diffuse term, while under PBR it is a reflectance and the plate already
+ *  carries its own value, so halving it twice crushed every rock facet to the
+ *  same near-black.
+ *
+ *  Not 0.95 either, which was the correction overshooting. It was chosen while
+ *  the boulders were drawing the debris matrix buffer, so the only stone on
+ *  screen was pebble-sized and pale rock looked like the fix; with real
+ *  boulders it made the walls brighter than the ground and inverted the rule
+ *  the tint pass exists to hold. Stone reflects about a fifth to a third of
+ *  what hits it, the plate is already lifted to 120 luma by
+ *  `tools/build_tileset_textures.py`, and the ground has to stay the bright
+ *  thing. */
+const ROCK_ALBEDO = 0.62;
 
 /** Weathered stone. Lower than the ground's 0.92 on purpose: a rock face is
  *  smoother than loose dirt, and the small sheen difference is what separates
