@@ -4,10 +4,22 @@ import { attachBindings } from "./bindings";
 import type { Scene } from "@babylonjs/core";
 import type { Snapshot } from "@exiled/protocol";
 import { testPlayer } from "../test-fixtures";
+import { fp } from "@exiled/fixed-point";
 
-// Minimal fake scene: every pick hits the ground at a fixed world point.
+/**
+ * A ray straight down from above `(x, z)`, so the floor intersection at y=0 is
+ * exactly that point. Movement reads the floor plane, never the picked mesh.
+ */
+function downRay(x: number, z: number) {
+  return { origin: { x, y: 10, z }, direction: { x: 0, y: -1, z: 0 } };
+}
+
+// Minimal fake scene: the floor under the cursor is a fixed world point.
 function fakeScene(): Scene {
-  return { pick: () => ({ hit: true, pickedPoint: { x: 1, z: 2 }, pickedMesh: null }) } as unknown as Scene;
+  return {
+    createPickingRay: () => downRay(1, 2),
+    pick: () => ({ hit: true, pickedPoint: { x: 1, z: 2 }, pickedMesh: null }),
+  } as unknown as Scene;
 }
 
 // Fake scene where every pick hits a portal child mesh (entity-42).
@@ -16,6 +28,7 @@ function fakeInteractScene(entityId = 42): Scene {
   const root = { name: `entity-${entityId}`, metadata: { interactKind: "portal" }, parent: null };
   const childMesh = { name: `entity-${entityId}-pi`, metadata: null, parent: root };
   return {
+    createPickingRay: () => downRay(5, 7),
     pick: () => ({ hit: true, pickedPoint: { x: 5, z: 7 }, pickedMesh: childMesh }),
   } as unknown as Scene;
 }
@@ -71,6 +84,26 @@ describe("attachBindings hold-to-move", () => {
   it("moves to the cursor on left pointer down", () => {
     pointer("pointerdown");
     expect(moveToCount(worker.postMessage)).toBe(1);
+  });
+
+  it("walks to the floor under the cursor, not to the wall top the ray hit first", () => {
+    // A wall's top face stands 3.5 units up, and `scene.pick` reports THAT
+    // surface, whose x/z is nowhere near the floor the player can stand on.
+    const c = document.createElement("canvas");
+    document.body.appendChild(c);
+    const w = { postMessage: vi.fn() };
+    const wallScene = {
+      createPickingRay: () => downRay(9, 9),
+      pick: () => ({ hit: true, pickedPoint: { x: 3, y: 3.5, z: 3 }, pickedMesh: null }),
+    } as unknown as Scene;
+    const { detach } = attachBindings(c, w as unknown as Worker, wallScene);
+    c.dispatchEvent(new MouseEvent("pointerdown", { button: 0, clientX: 50, clientY: 50, bubbles: true }));
+    expect(w.postMessage).toHaveBeenCalledWith({
+      type: "intent",
+      intent: { kind: "moveTo", x: fp(9), y: fp(9) },
+    });
+    detach();
+    c.remove();
   });
 
   it("keeps re-targeting while the button is held and the cursor moves", () => {
@@ -235,6 +268,7 @@ function fakeMapDeviceScene(entityId = 7): Scene {
   const root = { name: `entity-${entityId}`, metadata: { interactKind: "mapDevice" }, parent: null };
   const childMesh = { name: `entity-${entityId}-pi`, metadata: null, parent: root };
   return {
+    createPickingRay: () => downRay(5, 7),
     pick: () => ({ hit: true, pickedPoint: { x: 5, z: 7 }, pickedMesh: childMesh }),
   } as unknown as Scene;
 }
@@ -409,6 +443,7 @@ describe("attachBindings hover", () => {
     // Start over an interactable, then switch to a ground scene
     let useInteract = true;
     const switchingScene = {
+      createPickingRay: () => (useInteract ? downRay(1, 1) : downRay(2, 2)),
       pick: () =>
         useInteract
           ? { hit: true, pickedPoint: { x: 1, z: 1 }, pickedMesh: { name: "entity-7-pi", metadata: null, parent: { name: "entity-7", metadata: { interactKind: "portal" }, parent: null } } }

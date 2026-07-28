@@ -28,6 +28,29 @@ let aimWorld = { x: 0, y: 0 };
 const MOVE_KEYS = new Set(["w", "a", "s", "d"]);
 
 /**
+ * The point on the FLOOR under a screen pixel. `scene.pick` returns the first
+ * mesh the ray meets, and a wall's top face stands 3.5 units up, so a click on
+ * a wall resolved to that top corner: the player walked to a spot well short of
+ * the cursor, and the further the wall, the bigger the lie. The floor is one
+ * flat plane at y=0 (`engine.ts`), so meet it analytically instead — cheaper
+ * than a second pick, and it cannot miss the way a mesh pick can.
+ */
+function groundPoint(
+  scene: Scene,
+  sx: number,
+  sy: number,
+): { x: number; z: number } | null {
+  const ray = scene.createPickingRay(sx, sy, null, null);
+  // Looking up or along the plane: there is no ground under that pixel.
+  if (ray.direction.y >= -1e-6) return null;
+  const t = -ray.origin.y / ray.direction.y;
+  return {
+    x: ray.origin.x + ray.direction.x * t,
+    z: ray.origin.z + ray.direction.z * t,
+  };
+}
+
+/**
  * Walk the parent chain of a picked node to find an interactable root.
  * Portal and mapDevice roots carry `metadata.interactKind` set by their builders;
  * child geometry meshes do not, so the walk always terminates at the root or null.
@@ -162,19 +185,20 @@ export function attachBindings(
 
   function onPointerMove(e: PointerEvent) {
     lastScreen = { x: e.clientX, y: e.clientY };
-    // Single pick drives both the aim vector AND hover detection — no second raycast.
-    const pick = scene.pick(e.clientX, e.clientY);
-    if (pick.hit && pick.pickedPoint) {
+    const floor = groundPoint(scene, e.clientX, e.clientY);
+    if (floor) {
       // Raw world floats; keyToIntent applies fp() when building the skill target.
-      aimWorld = { x: pick.pickedPoint.x, y: pick.pickedPoint.z };
+      aimWorld = { x: floor.x, y: floor.z };
       // Hold-to-move: while the button is held, re-target toward the cursor so
-      // dragging steers the player continuously (reuse this pick's world point).
+      // dragging steers the player continuously.
       if (pointerHeld) {
-        const world = pointerToWorld({ x: pick.pickedPoint.x, z: pick.pickedPoint.z });
+        const world = pointerToWorld(floor);
         post({ kind: "moveTo", x: world.x, y: world.y });
       }
     }
-    // Resolve hovered interactable from the same pick result.
+    // Hover still asks the meshes — that question really is "what is under the
+    // cursor", walls and all.
+    const pick = scene.pick(e.clientX, e.clientY);
     const interactable = pick.pickedMesh ? findInteractRoot(pick.pickedMesh) : null;
     setHover(interactable ? interactable.entityId : null);
   }
@@ -185,10 +209,10 @@ export function attachBindings(
 
   function onPointerDown(e: PointerEvent) {
     if (e.button !== 0) return; // left button drives movement
-    // Single pick per pointerdown — shared between the interactable and ground paths.
+    const floor = groundPoint(scene, e.clientX, e.clientY);
+    if (!floor) return;
+    const world = pointerToWorld(floor);
     const pick = scene.pick(e.clientX, e.clientY);
-    if (!pick.hit || !pick.pickedPoint) return;
-    const world = pointerToWorld({ x: pick.pickedPoint.x, z: pick.pickedPoint.z });
     // PoE-style: clicking directly on a portal or map device auto-walks to it and
     // queues an interact. Do NOT start hold-to-move steering for this case.
     const interactable = pick.pickedMesh ? findInteractRoot(pick.pickedMesh) : null;
@@ -221,9 +245,9 @@ export function attachBindings(
     // that point drifts as the player advances, so the player keeps moving in the
     // cursor's direction even when the mouse is perfectly still.
     if (pointerHeld && lastScreen) {
-      const pick = scene.pick(lastScreen.x, lastScreen.y);
-      if (pick.hit && pick.pickedPoint) {
-        const world = pointerToWorld({ x: pick.pickedPoint.x, z: pick.pickedPoint.z });
+      const floor = groundPoint(scene, lastScreen.x, lastScreen.y);
+      if (floor) {
+        const world = pointerToWorld(floor);
         post({ kind: "moveTo", x: world.x, y: world.y });
       }
     }
