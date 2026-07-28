@@ -17,15 +17,38 @@ import {
   Vector3,
   type Engine,
 } from "@babylonjs/core";
+import { ROCK_MESH_PREFIX } from "./rocks";
 
 /**
  * Light intensities for a PBR scene. Roughly PI times the values the old
  * StandardMaterial rig used, because PBR's diffuse term is energy-conserving
  * (it divides by PI) while Standard's is not — port the old numbers straight
  * across and the whole map lands about three times too dark.
+ *
+ * The RATIO is the shadow contrast, and it is the whole reason shadows read as
+ * absent at 3.0/1.55. `ShadowGenerator.darkness` only attenuates the SUN's
+ * occluded term; a hemispheric light is ambient and relights every shadowed
+ * pixel at full strength, shadow map or not. The sun rakes in at y=-0.38, so a
+ * flat lit floor takes fill + sun*0.38 = 2.69 and a shadowed one takes
+ * fill + sun*0.38*darkness = 1.69 — a shadow that removes 37% of the light and
+ * duly reads as "pretty hard to see".
+ *
+ * 0.45/6.0 holds that lit floor at ~2.7 and drops the shadowed one to ~0.72, so
+ * a shadow is a quarter of its surroundings instead of two thirds. That is the
+ * floor in `inside-map-battle.webp`, where the long hard shadows carry most of
+ * the depth. Verified in the running app, not computed: at fill 0 the boulders
+ * threw big correct shadows the whole time, which is what proved the casters
+ * were never the problem and the ambient was.
  */
-const SUN_INTENSITY = 3.0;
-const FILL_INTENSITY = 1.55;
+const SUN_INTENSITY = 6.0;
+const FILL_INTENSITY = 0.45;
+
+/** Name of the single merged wall mesh `buildLevel` produces.
+ *
+ *  Lives in engine.ts rather than level.ts because the shadow filter below has
+ *  to know it and level.ts already imports from here — the other direction is a
+ *  cycle. */
+export const WALL_MESH_NAME = "level-walls";
 
 /** Dirt and flagstone are rough; anything under ~0.7 puts a wet sheen on them. */
 const GROUND_ROUGHNESS = 0.92;
@@ -338,10 +361,22 @@ export function createScene(engine: Engine): SceneHandle {
     //  - buildLevel makes one box per wall run and merges them, disposing the
     //    sources; the render list kept every disposed box, 817 of them after one
     //    map, and grew again on each area change.
-    // The cost is that walls no longer darken the floor beside them. Their own
-    // faces are still shaded by the sun, and legibility of the route is worth
-    // more here than contact shadow on a wall the camera looks down on.
-    const isLevelGeometry = (name: string): boolean => name.startsWith("wallrun-");
+    // The boulders are the exception, cast back in: what made a room unplayable
+    // was a 3.5-unit run throwing ONE CONTINUOUS 9-unit band, and the boulders
+    // that replaced those runs are capped at 1.52 and stand apart, so they throw
+    // separated ~4-unit smears with lit floor between them. That is exactly the
+    // floor in `inside-map-battle.webp`, where the long hard shadows carry most
+    // of the depth. The rampart stays out — 3.2 units in an unbroken ring is the
+    // continuous band again, and it rings the map where nothing needs to read.
+    // This sees a mesh's name ONCE, when it is added, so a mesh renamed later is
+    // already registered under whatever it was called first. That is how the
+    // merged wall mesh has been casting all along: it used to be renamed to
+    // WALL_MESH_NAME after the merge, so this filter only ever saw Babylon's
+    // default. `buildLevel` now merges INTO a mesh already called that, which is
+    // the only reason matching on it here works.
+    const isLevelGeometry = (name: string): boolean =>
+      (name.startsWith("wallrun-") && !name.startsWith(ROCK_MESH_PREFIX)) ||
+      name === WALL_MESH_NAME;
     scene.onNewMeshAddedObservable.add((mesh) => {
       if (mesh.name.startsWith("telegraph-") || isLevelGeometry(mesh.name)) return;
       shadows.addShadowCaster(mesh);

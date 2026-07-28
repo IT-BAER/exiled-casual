@@ -28,11 +28,13 @@ const ROCKS_URL = "/models/rocks.glb";
 const GLTF_ROOT = "__root__";
 
 /**
- * Rocks share the `wallrun-` prefix deliberately: engine.ts excludes that prefix
- * from the shadow casters, and a 1.8-unit rock under this low sun throws the same
- * 4-unit smear across the floor that got the walls excluded in the first place.
+ * Rocks share the `wallrun-` prefix so the merge and disposal paths treat them as
+ * level geometry, but engine.ts shadow-casts THIS prefix back in. The 4-unit smear
+ * that got the box walls excluded is the whole look in `inside-map-battle.webp`:
+ * what made a room unplayable was a 3.5-unit run casting one CONTINUOUS band, and
+ * discrete boulders throw discrete smears with lit floor between them.
  */
-const ROCK_MESH_PREFIX = "wallrun-rock-";
+export const ROCK_MESH_PREFIX = "wallrun-rock-";
 
 /** Floor debris. Same exclusion, same reason, and a pebble lying on the ground
  *  has nothing to cast a useful shadow onto anyway. */

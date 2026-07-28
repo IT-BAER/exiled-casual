@@ -8,7 +8,7 @@ import {
   VertexBuffer,
   type Scene,
 } from "@babylonjs/core";
-import { FLOOR_TILES, GROUND_SIZE } from "./engine";
+import { FLOOR_TILES, GROUND_SIZE, WALL_MESH_NAME } from "./engine";
 import {
   DEBRIS_MESH_PREFIX,
   RAMPART_MESH_PREFIX,
@@ -82,14 +82,22 @@ const TOP_SHADE = 0.22;
  *  the tint pass exists to hold. Stone reflects about a fifth to a third of
  *  what hits it, the plate is already lifted to 120 luma by
  *  `tools/build_tileset_textures.py`, and the ground has to stay the bright
- *  thing. */
-const ROCK_ALBEDO = 0.62;
+ *  thing.
+ *
+ *  And 0.62 did not implement that: it is ABOVE the fifth-to-a-third the line
+ *  above argues for, and 0.62x120 lands on the floor's 1.45x55 — dead level in
+ *  albedo, then the boulders win outright because a faceted rock catches the low
+ *  sun head-on where the flat floor only takes it at a graze. That is why the
+ *  screenshot has the stone as the brightest thing in frame. In
+ *  `inside-map-battle.webp` the cliffs are the DARKEST thing, near silhouette,
+ *  and the saturated floor is what the eye reads. 0.30 is a third of the way
+ *  through the physical range and puts the stone back under the ground. */
+const ROCK_ALBEDO = 0.3;
 
 /** Weathered stone. Lower than the ground's 0.92 on purpose: a rock face is
  *  smoother than loose dirt, and the small sheen difference is what separates
  *  the two materials now that both are lit by the same physical model. */
 const ROCK_ROUGHNESS = 0.78;
-const WALL_MESH_NAME = "level-walls";
 const WALL_MAT_NAME = "level-wall-mat";
 /** The tileset a map with no base named falls back to. */
 const DEFAULT_TILESET = "tileset.vaal_stone";
@@ -135,11 +143,13 @@ function wallMaterial(scene: Scene, tilesetId: string): PBRMaterial {
   mat.roughness = ROCK_ROUGHNESS;
   mat.albedoTexture = new Texture(`${dir}/wall_color.jpg`, scene);
   mat.bumpTexture = new Texture(`${dir}/wall_normal.jpg`, scene);
-  // The floor albedo is boosted to 1.45 (engine.ts) so near-black actors read;
-  // a wall at 0.62 was ~2.3x darker and crushed the light masonry texture to a
-  // muddy near-black. Lift close to the floor, kept a touch cooler+darker so the
-  // walls still read as distinct from the ground rather than merging into it.
-  mat.albedoColor = new Color3(ROCK_ALBEDO, ROCK_ALBEDO, ROCK_ALBEDO * 1.06);
+  // Cool, and harder than the 1.06 blue bias this carried while it was trying to
+  // sit next to the floor in value. Hue is the other half of the separation: the
+  // reference puts cold desaturated rock against warm saturated ground, while
+  // ours had one grey-green doing both. applyBiomeTint drives the LIGHTS, so it
+  // moves rock and floor together and can never make this distinction — it has
+  // to live in the material.
+  mat.albedoColor = new Color3(ROCK_ALBEDO * 0.94, ROCK_ALBEDO, ROCK_ALBEDO * 1.14);
   return mat;
 }
 
@@ -313,7 +323,21 @@ export function buildLevel(
   if (wallCells === 0) return { walls: null, wallCells: 0 };
 
   // disposeSource + 32-bit indices: thousands of boxes can exceed the 16-bit vertex limit.
-  const merged = Mesh.MergeMeshes(boxes, true, true, undefined, false, false);
+  //
+  // Merged INTO a mesh that already carries the final name, rather than merging
+  // and renaming after. engine.ts filters shadow casters on
+  // onNewMeshAddedObservable, which reads a name once and never again, so a mesh
+  // renamed after the merge stays registered under Babylon's default — that is
+  // why these 3.5-unit runs have been casting despite the filter meant to stop
+  // them. Being born with the name is what lets the filter see it.
+  const merged = Mesh.MergeMeshes(
+    boxes,
+    true,
+    true,
+    new Mesh(WALL_MESH_NAME, scene),
+    false,
+    false,
+  );
   const material = wallMaterial(scene, tilesetId);
   if (rocky) {
     // Walked as a ring rather than folded into the sweep above: that sweep scans
@@ -329,12 +353,9 @@ export function buildLevel(
     buildRocks(scene, scatterRampart(edgeCells), material, RAMPART_MESH_PREFIX);
   }
   if (merged) {
-    merged.name = WALL_MESH_NAME;
     merged.material = material;
     // Walls receive shadows (actors crossing them read correctly) but never cast
-    // one — engine.ts excludes "wallrun-*" from the shadow casters, and Babylon
-    // names the merged mesh after its first source, so this mesh is excluded too
-    // until the rename below. See engine.ts for why walls must not cast.
+    // one — see engine.ts for why a 3.5-unit run must not.
     merged.receiveShadows = true;
   }
   return { walls: merged, wallCells };
