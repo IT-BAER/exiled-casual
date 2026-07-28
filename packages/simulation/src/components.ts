@@ -85,6 +85,11 @@ export interface MonsterC {
   /** DAMAGE_TYPES index (see damage-types.ts) */
   attackType: number;
   attackReadyTick: number;
+  /**
+   * Rooted through a heavy's wind-up: no move, no melee. Trash reads this;
+   * a boss reads BossC.rootedUntilTick and the two systems never cross.
+   */
+  rootedUntilTick: number;
   state: "idle" | "chase" | "attack";
   /** 1 = rare, 0 = normal */
   rare: 0 | 1;

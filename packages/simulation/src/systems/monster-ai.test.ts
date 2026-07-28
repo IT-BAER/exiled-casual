@@ -1,9 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { Simulation } from "../loop";
 import { fp, fpDist2 } from "@exiled/fixed-point";
-import type { Position, MonsterC, Faction, PlayerC, BossC, Health, ProjectileC, DefensesC } from "../components";
+import type { Position, MonsterC, Faction, PlayerC, BossC, Health, ProjectileC, DefensesC, TelegraphC } from "../components";
 import { registerMonsterAI } from "./monster-ai";
 import { registerDamageResolve } from "./damage-resolve";
+import { registerTelegraphResolve } from "./telegraph-resolve";
 import { gridCollision } from "../collision";
 import { makeGrid } from "../test-grid";
 import { MONSTERS } from "@exiled/content-runtime";
@@ -29,7 +30,7 @@ describe("registerMonsterAI", () => {
       defId: "test", moveSpeed: fp(2), bodyRadius: fp(0.5),
       attackRange: fp(1.2), attackCooldownTicks: 45,
       attackDamage: fp(6), attackType: 1 as const,
-      attackReadyTick: 0, state: "idle", rare: 0 as const, summoned: 0 as const,
+      attackReadyTick: 0, rootedUntilTick: 0, state: "idle", rare: 0 as const, summoned: 0 as const,
     });
 
     const before = fpDist2(fp(8), fp(0), fp(0), fp(0));
@@ -61,7 +62,7 @@ describe("registerMonsterAI", () => {
       defId: "test", moveSpeed: fp(2), bodyRadius: fp(0.5),
       attackRange: fp(1.2), attackCooldownTicks: 45,
       attackDamage: fp(6), attackType: 1 as const,
-      attackReadyTick: 0, state: "idle", rare: 0 as const, summoned: 0 as const,
+      attackReadyTick: 0, rootedUntilTick: 0, state: "idle", rare: 0 as const, summoned: 0 as const,
     });
 
     for (let i = 0; i < 30; i++) sim.step();
@@ -86,7 +87,7 @@ describe("registerMonsterAI", () => {
       defId: "test", moveSpeed: fp(2), bodyRadius: fp(0.5),
       attackRange: fp(1.2), attackCooldownTicks: 45,
       attackDamage: fp(6), attackType: 1 as const,
-      attackReadyTick: 0, state: "idle", rare: 0 as const, summoned: 0 as const,
+      attackReadyTick: 0, rootedUntilTick: 0, state: "idle", rare: 0 as const, summoned: 0 as const,
     });
 
     sim.step(); // woken: inside the radius
@@ -116,7 +117,7 @@ describe("registerMonsterAI", () => {
       defId: "test", moveSpeed: fp(2), bodyRadius: fp(0.5),
       attackRange: fp(1.2), attackCooldownTicks: 45,
       attackDamage: fp(6), attackType: 1 as const,
-      attackReadyTick: 0, state: "idle", rare: 0 as const, summoned: 0 as const,
+      attackReadyTick: 0, rootedUntilTick: 0, state: "idle", rare: 0 as const, summoned: 0 as const,
     });
 
     // tick=0, attackReadyTick=0 → enqueue
@@ -145,7 +146,7 @@ describe("registerMonsterAI", () => {
       defId: "boss.test", moveSpeed: fp(2), bodyRadius: fp(1),
       attackRange: fp(1.5), attackCooldownTicks: 60,
       attackDamage: fp(10), attackType: 1 as const,
-      attackReadyTick: 0, state: "idle", rare: 0 as const, summoned: 0 as const,
+      attackReadyTick: 0, rootedUntilTick: 0, state: "idle", rare: 0 as const, summoned: 0 as const,
     });
     // Give it a boss component so the guard fires.
     world.set<BossC>(boss, "boss", {
@@ -170,7 +171,7 @@ describe("registerMonsterAI", () => {
       defId: "test", moveSpeed: fp(2), bodyRadius: fp(0.5),
       attackRange: fp(1.2), attackCooldownTicks: 45,
       attackDamage: fp(6), attackType: 1 as const,
-      attackReadyTick: 0, state: "chase", rare: 0 as const, summoned: 0 as const,
+      attackReadyTick: 0, rootedUntilTick: 0, state: "chase", rare: 0 as const, summoned: 0 as const,
     });
 
     sim.step();
@@ -206,7 +207,7 @@ describe("registerMonsterAI", () => {
       defId: "test", moveSpeed: fp(2), bodyRadius: 0,
       attackRange: fp(1.2), attackCooldownTicks: 45,
       attackDamage: fp(6), attackType: 1 as const,
-      attackReadyTick: 0, state: "idle", rare: 0 as const, summoned: 0 as const,
+      attackReadyTick: 0, rootedUntilTick: 0, state: "idle", rare: 0 as const, summoned: 0 as const,
     });
 
     for (let i = 0; i < 5; i++) sim.step();
@@ -223,9 +224,11 @@ function aiFixture(opts: {
   def: MonsterDef;
   monsterAt: { x: number; y: number };
   playerAt: { x: number; y: number };
+  withTelegraphResolve?: boolean;
 }) {
   const sim = new Simulation();
   registerMonsterAI(sim);
+  if (opts.withTelegraphResolve) registerTelegraphResolve(sim);
   registerDamageResolve(sim);
   const { world } = sim;
 
@@ -295,5 +298,71 @@ describe("shooters", () => {
     sim.step();
     expect(world.query("projectile").length).toBe(0);
     expect(world.get<Health>(player, "health")!.life).toBeLessThan(before);
+  });
+});
+
+describe("heavies", () => {
+  const sentinel = () => MONSTERS.get("monster.blood_sentinel.v1")!;
+
+  it("telegraphs on the player's position instead of hitting", () => {
+    const { sim, world, monster, player } = aiFixture({
+      def: sentinel(),
+      monsterAt: { x: fp(0), y: fp(0) },
+      playerAt: { x: fp(4), y: fp(0) },   // inside slam range 6.5, outside melee 1.8
+    });
+    const before = world.get<Health>(player, "health")!.life;
+
+    sim.step();
+
+    const teles = world.query("telegraph");
+    expect(teles.length).toBe(1);
+    const tg = world.get<TelegraphC>(teles[0]!, "telegraph")!;
+    expect(tg.ownerId).toBe(monster);
+    expect(tg.team).toBe(1);
+    expect(tg.leavesGroundTicks).toBe(0);  // a burning patch stays a boss privilege
+    expect(world.get<Position>(teles[0]!, "position")!.x).toBe(fp(4));
+    expect(world.get<Health>(player, "health")!.life).toBe(before);
+  });
+
+  it("does not move or melee while rooted in the wind-up", () => {
+    const { sim, world, monster, player } = aiFixture({
+      def: sentinel(),
+      monsterAt: { x: fp(0), y: fp(0) },
+      playerAt: { x: fp(4), y: fp(0) },
+    });
+    sim.step();                                   // starts the wind-up
+    const at = { ...world.get<Position>(monster, "position")! };
+    const life = world.get<Health>(player, "health")!.life;
+    for (let i = 0; i < 10; i++) sim.step();      // still inside 30 ticks
+    expect(world.get<Position>(monster, "position")).toEqual(at);
+    expect(world.get<Health>(player, "health")!.life).toBe(life);
+  });
+
+  it("the slam lands where it was telegraphed, on the wind-up tick", () => {
+    const { sim, world, player } = aiFixture({
+      def: sentinel(),
+      monsterAt: { x: fp(0), y: fp(0) },
+      playerAt: { x: fp(4), y: fp(0) },
+      withTelegraphResolve: true,
+    });
+    const before = world.get<Health>(player, "health")!.life;
+    for (let i = 0; i < 32; i++) sim.step();      // windupTicks 30, plus slack
+    expect(world.get<Health>(player, "health")!.life).toBeLessThan(before);
+    expect(world.query("telegraph").length).toBe(0);   // resolved and destroyed
+  });
+
+  it("a player who steps out of the ring takes nothing", () => {
+    const { sim, world, player } = aiFixture({
+      def: sentinel(),
+      monsterAt: { x: fp(0), y: fp(0) },
+      playerAt: { x: fp(4), y: fp(0) },
+      withTelegraphResolve: true,
+    });
+    const before = world.get<Health>(player, "health")!.life;
+    sim.step();                                    // telegraph placed at (4,0)
+    // Radius 2.6 plus the player's body: 9 units away is unambiguously clear.
+    world.set<Position>(player, "position", { x: fp(13), y: fp(0) });
+    for (let i = 0; i < 32; i++) sim.step();
+    expect(world.get<Health>(player, "health")!.life).toBe(before);
   });
 });

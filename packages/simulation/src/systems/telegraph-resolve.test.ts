@@ -66,7 +66,7 @@ function makeMonster(sim: Simulation, x = fp(1), y = 0, team = 0, bodyRadius = f
     moveSpeed: 0, bodyRadius,
     attackRange: fp(1.2), attackCooldownTicks: 45,
     attackDamage: fp(6), attackType: 1,
-    attackReadyTick: 0, state: "idle", rare: 0, summoned: 0,
+    attackReadyTick: 0, rootedUntilTick: 0, state: "idle", rare: 0, summoned: 0,
   });
   sim.world.set<Faction>(e, "faction", { team });
   return e;

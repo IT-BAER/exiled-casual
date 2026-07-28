@@ -11,7 +11,7 @@ describe("bodyRadiusOf", () => {
     w.set<MonsterC>(e, "monster", {
       defId: "test", moveSpeed: 0, bodyRadius: fp(0.7),
       attackRange: 0, attackCooldownTicks: 0, attackDamage: 0,
-      attackType: 1, attackReadyTick: 0, state: "idle", rare: 0, summoned: 0,
+      attackType: 1, attackReadyTick: 0, rootedUntilTick: 0, state: "idle", rare: 0, summoned: 0,
     });
     expect(bodyRadiusOf(w, e)).toBe(fp(0.7));
   });

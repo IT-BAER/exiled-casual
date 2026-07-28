@@ -2,7 +2,7 @@ import { fp, fpDist2, fpStepToward, fpClamp } from "@exiled/fixed-point";
 import { WORLD_MIN, WORLD_MAX } from "../movement";
 import { slide, type CollisionRef } from "../collision";
 import { Simulation } from "../loop";
-import type { Position, MonsterC, Faction, ProjectileC } from "../components";
+import type { Position, MonsterC, Faction, ProjectileC, TelegraphC } from "../components";
 import { MONSTERS } from "@exiled/content-runtime";
 
 /**
@@ -57,6 +57,41 @@ export function registerMonsterAI(sim: Simulation, collisionRef?: CollisionRef):
       if (mon.state === "idle" && nearestD2 > AGGRO_RADIUS * AGGRO_RADIUS) continue;
 
       const ppos = world.get<Position>(nearest, "position")!;
+
+      // Rooted mid-wind-up: hold. Sits above the slam and the melee checks so a
+      // heavy cannot re-aim what it has already committed to — the dodge is only
+      // real if the ring stays where it was drawn.
+      if (tick < mon.rootedUntilTick) {
+        world.set<MonsterC>(m, "monster", { ...mon, state: "attack" });
+        continue;
+      }
+
+      const heavy = MONSTERS.get(mon.defId)?.heavy;
+      if (heavy && tick >= mon.attackReadyTick && nearestD2 <= heavy.rangeFixed * heavy.rangeFixed) {
+        const faction = world.get<Faction>(m, "faction")!;
+        const tele = world.create();
+        world.set<Position>(tele, "position", { x: ppos.x, y: ppos.y });
+        world.set<TelegraphC>(tele, "telegraph", {
+          ownerId: m,
+          team: faction.team,
+          radius: heavy.radiusFixed,
+          startTick: tick,
+          impactTick: tick + heavy.windupTicks,
+          // Trash leaves no burning patch. That stays the boss's, and it is the
+          // difference between a fight you walk out of and one you must leave.
+          damage: heavy.damageFixed,
+          damageType: mon.attackType,
+          leavesGroundTicks: 0,
+        });
+        world.set<MonsterC>(m, "monster", {
+          ...mon,
+          state: "attack",
+          rootedUntilTick: tick + heavy.windupTicks,
+          attackReadyTick: tick + heavy.cooldownTicks,
+        });
+        continue;
+      }
+
       const ar = mon.attackRange;
 
       if (nearestD2 <= ar * ar) {

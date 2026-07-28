@@ -256,6 +256,7 @@ export function spawnMonster(
     attackDamage: scaledDmg,
     attackType: damageCode(def.attackDamage.type),
     attackReadyTick: 0,
+    rootedUntilTick: 0,
     state: "idle",
     rare: rare ? 1 : 0,
     summoned: 0,
