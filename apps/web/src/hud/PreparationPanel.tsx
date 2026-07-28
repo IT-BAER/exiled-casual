@@ -1,9 +1,10 @@
 import React, { useState } from "react";
 import {
-  atlasGraph, isNodeReachable, areaLevel, atlasNodeTier,
+  atlasGraph, isNodeReachable, areaLevel, atlasNodeTier, mapBaseIdForNode,
   waystoneRarity, waystoneMods, type WaystoneRarity,
 } from "@exiled/rules";
 import type { AtlasGraphNode } from "@exiled/rules";
+import { biomeOf } from "@exiled/content-runtime";
 import { MAP_PORTALS } from "@exiled/protocol";
 import type { Snapshot } from "@exiled/protocol";
 
@@ -327,6 +328,25 @@ function NodePopup(props: {
         >
           {node.name}
         </span>
+      </div>
+
+      {/* What the place is made of, directly under its name. The reference has
+          no such line — PoE2 lets the node's icon carry it — but our nodes have
+          no icons yet, and a player choosing between two names deserves to know
+          one is a swamp. Small, muted, and above the hairline so it reads as
+          part of the name rather than as a stat. */}
+      <div
+        data-testid="prep-popup-biome"
+        style={{
+          textAlign: "center",
+          fontSize: 10,
+          letterSpacing: 2.4,
+          textTransform: "uppercase",
+          color: GOLD_DIM,
+          padding: "5px 0 1px",
+        }}
+      >
+        {biomeOf(mapBaseIdForNode(node.id)).name}
       </div>
 
       {/* The lore sits between two hairlines in the reference, not under one. */}

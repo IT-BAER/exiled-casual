@@ -223,3 +223,21 @@ describe("a place demands a Waystone of its own tier", () => {
     expect(onActivate).toHaveBeenCalledWith(neighbour, id);
   });
 });
+
+describe("the place's biome", () => {
+  it("names what the node is made of, under its name", () => {
+    render(
+      <PreparationPanel
+        atlasSeed={7}
+        completedNodes={[]}
+        waystones={[{ id: "ws-0", seed: 1, tier: 1 }]}
+        onActivate={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    // Ashen Glade is node 0, and node 0 is always reachable, so its popup opens.
+    fireEvent.click(screen.getByTestId(`prep-node-${atlasGraph(7)[0]!.id}`));
+    expect(screen.getByTestId("prep-popup-name").textContent).toBe("Ashen Glade");
+    expect(screen.getByTestId("prep-popup-biome").textContent).toBe("Forest");
+  });
+});
