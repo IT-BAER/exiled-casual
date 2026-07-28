@@ -209,14 +209,15 @@ const MAX_HALF_HEIGHT = ORTHO_HALF_HEIGHT;
 
 /**
  * Camera pitch, as Babylon's beta: the angle down from straight overhead, so
- * larger is shallower. 0.52 (~60 degrees of elevation) is the isometric tilt.
+ * larger is shallower. 0.65 is ~53 degrees of elevation, landed by eye against
+ * `inside-map.jpg` from both sides: 0.52 (the textbook isometric 60 degrees)
+ * read as a plan view of a floor rather than a camera standing behind the
+ * player, and 0.78 overshot into a side-on view. PoE sits between them.
  *
- * It sat at 0.72 (~49 degrees) for as long as the projection was orthographic,
- * where pitch was the *only* thing giving the frame any sense of a third
- * dimension and a shallow angle was the cheapest way to buy it. Under a real
- * perspective camera the parallax does that job, and the shallow pitch is left
- * reading as a flat, side-on view of the floor. Steepening it is only affordable
- * because the projection now pays for the depth.
+ * Perspective is what makes that affordable. Under the old orthographic
+ * projection pitch was the *only* thing giving the frame a third dimension, so
+ * the number was a compromise between depth and legibility; parallax does that
+ * job now, and the pitch is free to go where the reference actually puts it.
  *
  * Zoom is not a straight dolly. Scaling the ortho box alone is a flat
  * magnification with no arc to it at all — nothing in an orthographic
@@ -235,7 +236,7 @@ const MAX_HALF_HEIGHT = ORTHO_HALF_HEIGHT;
  * which is the "now I can see further up the map" that this must not do. The
  * box shrinking is what pays for it, and the two cancel at a computable place:
  * the visible depth stops falling once `|BETA_PER_UNIT| >= 1 / (half·tan(beta))`,
- * which at the wide end is about 0.24. That is the real ceiling on this number
+ * which at the wide end is about 0.28. That is the real ceiling on this number
  * and it is roughly 3x the value set here — the first pass ran at 0.03, an
  * eighth of it, and the arc was too timid to see. A full zoom in now tilts
  * ~7 degrees and still cuts the visible depth ~24%.
@@ -244,7 +245,7 @@ const MAX_HALF_HEIGHT = ORTHO_HALF_HEIGHT;
  * pushed further by eye without anyone having to remember the algebra above —
  * the test fails the moment the tilt starts outrunning the box.
  */
-export const BETA_AT_DEFAULT = 0.52;
+export const BETA_AT_DEFAULT = 0.65;
 const BETA_PER_UNIT = -0.08;
 const BETA_LIMIT = { min: BETA_AT_DEFAULT, max: 0.88 };
 
