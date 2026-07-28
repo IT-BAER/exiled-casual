@@ -1,7 +1,22 @@
 import { describe, it, expect } from "vitest";
 import { fp } from "@exiled/fixed-point";
-import { validateSkillDef, validateMonsterDef, ID_PATTERN } from "@exiled/content-schema";
-import { CONTENT_VERSION, SKILLS, MONSTERS, RARE_TEMPLATES, rareTemplate } from "./index.js";
+import {
+  validateSkillDef,
+  validateMonsterDef,
+  ID_PATTERN,
+  BIOME_IDS,
+  MONSTER_ARCHETYPES,
+  ELEMENTS,
+} from "@exiled/content-schema";
+import {
+  CONTENT_VERSION,
+  SKILLS,
+  MONSTERS,
+  RARE_TEMPLATES,
+  rareTemplate,
+  MONSTER_POOLS,
+  pickPack,
+} from "./index.js";
 
 describe("CONTENT_VERSION", () => {
   it('=== "slice1.v1"', () => {
@@ -138,5 +153,85 @@ describe("MONSTERS", () => {
     const def = MONSTERS.get("monster.cinder_warden.v1")!;
     const addId = def.boss?.phase2.addDefId ?? "";
     expect(MONSTERS.has(addId)).toBe(true);
+  });
+});
+
+describe("monster pools", () => {
+  it("every biome has exactly three species", () => {
+    for (const id of BIOME_IDS) {
+      expect(MONSTER_POOLS[id].length, id).toBe(3);
+    }
+  });
+
+  it("every pool entry resolves in MONSTERS", () => {
+    for (const id of BIOME_IDS) {
+      for (const entry of MONSTER_POOLS[id]) {
+        expect(MONSTERS.has(entry.defId), `${id}: ${entry.defId}`).toBe(true);
+      }
+    }
+  });
+
+  it("no biome repeats an archetype", () => {
+    for (const id of BIOME_IDS) {
+      const kinds = MONSTER_POOLS[id].map((e) => MONSTERS.get(e.defId)!.archetype);
+      expect(new Set(kinds).size, id).toBe(3);
+    }
+  });
+
+  it("no two biomes field the same three archetypes", () => {
+    const sigs = BIOME_IDS.map((id) =>
+      MONSTER_POOLS[id].map((e) => MONSTERS.get(e.defId)!.archetype).sort().join(","),
+    );
+    expect(new Set(sigs).size).toBe(BIOME_IDS.length);
+  });
+
+  it("every archetype appears in some biome", () => {
+    const seen = new Set(
+      BIOME_IDS.flatMap((id) => MONSTER_POOLS[id].map((e) => MONSTERS.get(e.defId)!.archetype)),
+    );
+    expect(seen.size).toBe(MONSTER_ARCHETYPES.length);
+  });
+
+  it("every element is answered by an ordinary monster somewhere", () => {
+    const types = new Set(
+      BIOME_IDS.flatMap((id) =>
+        MONSTER_POOLS[id].map((e) => MONSTERS.get(e.defId)!.attackDamage.type),
+      ),
+    );
+    for (const el of ELEMENTS) expect(types.has(el), el).toBe(true);
+  });
+
+  it("pickPack is total and deterministic across the whole 0..1 range", () => {
+    for (const id of BIOME_IDS) {
+      for (let i = 0; i <= 100; i++) {
+        const roll = i / 100;
+        const a = pickPack(id, roll);
+        const b = pickPack(id, roll);
+        expect(a.id).toBe(b.id);
+        expect(MONSTER_POOLS[id].some((e) => e.defId === a.id)).toBe(true);
+      }
+    }
+  });
+
+  it("pickPack reaches every species in its pool", () => {
+    for (const id of BIOME_IDS) {
+      const hit = new Set<string>();
+      for (let i = 0; i < 1000; i++) hit.add(pickPack(id, i / 1000).id);
+      expect(hit.size, id).toBe(3);
+    }
+  });
+
+  it("a shooter's range is inside AGGRO_RADIUS so a woken shooter can reach the player", () => {
+    for (const def of MONSTERS.values()) {
+      if (def.archetype !== "shooter") continue;
+      expect(def.attackRangeFixed, def.id).toBeLessThan(fp(9));
+    }
+  });
+
+  it("a heavy's wind-up is long enough to be a decision, not a reflex test", () => {
+    for (const def of MONSTERS.values()) {
+      if (def.archetype !== "heavy") continue;
+      expect(def.heavy!.windupTicks / 30, def.id).toBeGreaterThanOrEqual(0.75);
+    }
   });
 });

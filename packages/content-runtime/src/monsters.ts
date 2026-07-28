@@ -1,5 +1,12 @@
 import { fp } from "@exiled/fixed-point";
-import { resBlock, validateMonsterDef, type MonsterDef, type RareModifier } from "@exiled/content-schema";
+import {
+  resBlock,
+  validateMonsterDef,
+  type BiomeId,
+  type MonsterArchetype,
+  type MonsterDef,
+  type RareModifier,
+} from "@exiled/content-schema";
 
 const MONSTER_DEFS: MonsterDef[] = [
   {
@@ -50,6 +57,109 @@ const MONSTER_DEFS: MonsterDef[] = [
         fireGround: { kind: "burning", stacksPerApply: 1, dpsFixed: fp(4), durationTicks: 60, maxStacks: 5 },
       },
     },
+  },
+
+  // --- Vaal Stone: swarm, brute, heavy. A dead city fields foot soldiers,
+  // constructs and one thing that swings something too big for a corridor.
+  {
+    id: "monster.vaal_husk.v1", name: "Vaal Husk", archetype: "swarm",
+    maxLifeFixed: fp(24), moveSpeedFixed: fp(3.0), attackRangeFixed: fp(1.1),
+    attackDamage: { type: "physical", amountFixed: fp(4) },
+    attackCooldownTicks: 40, radiusFixed: fp(0.42),
+    defenses: { resPct: resBlock(), armourFixed: fp(0) },
+  },
+  {
+    id: "monster.vaal_construct.v1", name: "Vaal Construct", archetype: "brute",
+    maxLifeFixed: fp(140), moveSpeedFixed: fp(1.45), attackRangeFixed: fp(1.6),
+    attackDamage: { type: "physical", amountFixed: fp(13) },
+    attackCooldownTicks: 75, radiusFixed: fp(0.85),
+    defenses: { resPct: resBlock(), armourFixed: fp(4) },
+  },
+  {
+    id: "monster.blood_sentinel.v1", name: "Blood Sentinel", archetype: "heavy",
+    maxLifeFixed: fp(88), moveSpeedFixed: fp(1.8), attackRangeFixed: fp(1.8),
+    attackDamage: { type: "chaos", amountFixed: fp(8) },
+    attackCooldownTicks: 45, radiusFixed: fp(0.8),
+    defenses: { resPct: resBlock({ chaos: 30 }), armourFixed: fp(2) },
+    heavy: { windupTicks: 30, radiusFixed: fp(2.6), damageFixed: fp(22), cooldownTicks: 150, rangeFixed: fp(6.5) },
+  },
+
+  // --- Desert: swarm, shooter, heavy. Nothing here holds a line; it circles.
+  {
+    id: "monster.sand_skitterer.v1", name: "Sand Skitterer", archetype: "swarm",
+    maxLifeFixed: fp(24), moveSpeedFixed: fp(3.0), attackRangeFixed: fp(1.1),
+    attackDamage: { type: "physical", amountFixed: fp(4) },
+    attackCooldownTicks: 40, radiusFixed: fp(0.42),
+    defenses: { resPct: resBlock({ fire: 20 }), armourFixed: fp(0) },
+  },
+  {
+    id: "monster.dune_spitter.v1", name: "Dune Spitter", archetype: "shooter",
+    maxLifeFixed: fp(32), moveSpeedFixed: fp(2.15), attackRangeFixed: fp(7.5),
+    attackDamage: { type: "chaos", amountFixed: fp(8) },
+    attackCooldownTicks: 70, radiusFixed: fp(0.5),
+    defenses: { resPct: resBlock({ chaos: 25 }), armourFixed: fp(0.5) },
+    ranged: { speedFixed: fp(9), radiusFixed: fp(0.22) },
+  },
+  {
+    id: "monster.sunbaked_colossus.v1", name: "Sunbaked Colossus", archetype: "heavy",
+    maxLifeFixed: fp(88), moveSpeedFixed: fp(1.8), attackRangeFixed: fp(1.8),
+    // 25 and not 40: fire is the only element the player owns, and 40% against
+    // it is a wall rather than a choice — the same reasoning that set the
+    // Warden's fire resistance below.
+    attackDamage: { type: "fire", amountFixed: fp(8) },
+    attackCooldownTicks: 45, radiusFixed: fp(0.8),
+    defenses: { resPct: resBlock({ fire: 25 }), armourFixed: fp(2) },
+    heavy: { windupTicks: 30, radiusFixed: fp(2.6), damageFixed: fp(22), cooldownTicks: 150, rangeFixed: fp(6.5) },
+  },
+
+  // --- Swamp: brute, shooter, heavy. Slow, wet, and nothing you can outrun in a line.
+  {
+    id: "monster.bog_drowned.v1", name: "Bog Drowned", archetype: "brute",
+    maxLifeFixed: fp(140), moveSpeedFixed: fp(1.45), attackRangeFixed: fp(1.6),
+    attackDamage: { type: "physical", amountFixed: fp(13) },
+    attackCooldownTicks: 75, radiusFixed: fp(0.85),
+    defenses: { resPct: resBlock({ cold: 20 }), armourFixed: fp(3) },
+  },
+  {
+    id: "monster.fen_wisp.v1", name: "Fen Wisp", archetype: "shooter",
+    maxLifeFixed: fp(32), moveSpeedFixed: fp(2.15), attackRangeFixed: fp(7.5),
+    attackDamage: { type: "lightning", amountFixed: fp(8) },
+    attackCooldownTicks: 70, radiusFixed: fp(0.5),
+    defenses: { resPct: resBlock({ lightning: 30 }), armourFixed: fp(0.5) },
+    ranged: { speedFixed: fp(9), radiusFixed: fp(0.22) },
+  },
+  {
+    id: "monster.rotting_behemoth.v1", name: "Rotting Behemoth", archetype: "heavy",
+    maxLifeFixed: fp(88), moveSpeedFixed: fp(1.8), attackRangeFixed: fp(1.8),
+    attackDamage: { type: "physical", amountFixed: fp(8) },
+    attackCooldownTicks: 45, radiusFixed: fp(0.8),
+    defenses: { resPct: resBlock({ chaos: 20 }), armourFixed: fp(2) },
+    heavy: { windupTicks: 30, radiusFixed: fp(2.6), damageFixed: fp(22), cooldownTicks: 150, rangeFixed: fp(6.5) },
+  },
+
+  // --- Forest: swarm, brute, shooter. The only biome with nothing to dodge,
+  // and the only one that never lets you stand still.
+  {
+    id: "monster.bramble_whelp.v1", name: "Bramble Whelp", archetype: "swarm",
+    maxLifeFixed: fp(24), moveSpeedFixed: fp(3.0), attackRangeFixed: fp(1.1),
+    attackDamage: { type: "physical", amountFixed: fp(4) },
+    attackCooldownTicks: 40, radiusFixed: fp(0.42),
+    defenses: { resPct: resBlock(), armourFixed: fp(0) },
+  },
+  {
+    id: "monster.thornhide_boar.v1", name: "Thornhide Boar", archetype: "brute",
+    maxLifeFixed: fp(140), moveSpeedFixed: fp(1.45), attackRangeFixed: fp(1.6),
+    attackDamage: { type: "physical", amountFixed: fp(13) },
+    attackCooldownTicks: 75, radiusFixed: fp(0.85),
+    defenses: { resPct: resBlock({ cold: 15 }), armourFixed: fp(3) },
+  },
+  {
+    id: "monster.hoarfrost_spitter.v1", name: "Hoarfrost Spitter", archetype: "shooter",
+    maxLifeFixed: fp(32), moveSpeedFixed: fp(2.15), attackRangeFixed: fp(7.5),
+    attackDamage: { type: "cold", amountFixed: fp(8) },
+    attackCooldownTicks: 70, radiusFixed: fp(0.5),
+    defenses: { resPct: resBlock({ cold: 30 }), armourFixed: fp(0.5) },
+    ranged: { speedFixed: fp(9), radiusFixed: fp(0.22) },
   },
 ];
 
@@ -111,4 +221,72 @@ export const RARE_TEMPLATES: readonly RareModifier[] = (
 export function rareTemplate(n: number): RareModifier {
   const i = Math.abs(Math.trunc(n)) % RARE_TEMPLATES.length;
   return RARE_TEMPLATES[i]!;
+}
+
+/**
+ * How many of an archetype stand at one spawn socket. Content's number, not the
+ * generator's: "a swarm is four" is a fact about the monster. The layout still
+ * owns *where* a fight may stand — a modifier must never be able to put a
+ * monster inside a wall.
+ */
+export const PACK_COUNT: Record<MonsterArchetype, number> = {
+  swarm: 4, brute: 1, shooter: 2, heavy: 1,
+};
+
+export interface PoolEntry { defId: string; weight: number }
+
+/**
+ * Three species per biome, and each biome a different three-of-four, so no two
+ * biomes ask the same question. A heavy is the rarest roll in any pool because
+ * it is the loudest: three in a map is a fight, ten is a chore.
+ */
+export const MONSTER_POOLS: Record<BiomeId, readonly PoolEntry[]> = {
+  vaal_stone: [
+    { defId: "monster.vaal_husk.v1", weight: 3 },
+    { defId: "monster.vaal_construct.v1", weight: 2 },
+    { defId: "monster.blood_sentinel.v1", weight: 1 },
+  ],
+  desert: [
+    { defId: "monster.sand_skitterer.v1", weight: 3 },
+    { defId: "monster.dune_spitter.v1", weight: 2 },
+    { defId: "monster.sunbaked_colossus.v1", weight: 1 },
+  ],
+  swamp: [
+    { defId: "monster.bog_drowned.v1", weight: 2 },
+    { defId: "monster.fen_wisp.v1", weight: 2 },
+    { defId: "monster.rotting_behemoth.v1", weight: 1 },
+  ],
+  forest: [
+    { defId: "monster.bramble_whelp.v1", weight: 3 },
+    { defId: "monster.thornhide_boar.v1", weight: 2 },
+    { defId: "monster.hoarfrost_spitter.v1", weight: 2 },
+  ],
+};
+
+// Referential integrity at module load, beside the def validation above: a pool
+// naming a monster that does not exist is a programmer error, not a runtime one.
+for (const [biome, pool] of Object.entries(MONSTER_POOLS)) {
+  for (const entry of pool) {
+    if (!MONSTERS.has(entry.defId)) {
+      throw new Error(`[content-runtime] Pool "${biome}" names unknown monster "${entry.defId}"`);
+    }
+  }
+}
+
+/**
+ * Which species fills one spawn socket. Total and deterministic; the caller
+ * supplies the randomness, exactly as `rareTemplate` takes an integer, so
+ * content never depends on the sim's rng. `roll` is clamped, so an out-of-range
+ * value picks an end of the pool rather than throwing mid-run.
+ */
+export function pickPack(biomeId: BiomeId, roll: number): MonsterDef {
+  const pool = MONSTER_POOLS[biomeId];
+  const total = pool.reduce((sum, e) => sum + e.weight, 0);
+  const clamped = roll < 0 ? 0 : roll >= 1 ? 0.999999 : roll;
+  let n = clamped * total;
+  for (const entry of pool) {
+    n -= entry.weight;
+    if (n < 0) return MONSTERS.get(entry.defId)!;
+  }
+  return MONSTERS.get(pool[pool.length - 1]!.defId)!;
 }
