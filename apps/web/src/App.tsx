@@ -15,14 +15,27 @@ import React from "react";
 import type { RosterBlob } from "@exiled/persistence";
 import { emptyRoster, headers } from "@exiled/persistence";
 import { DEFAULT_CLASS_ID } from "@exiled/rules";
-import { GameView } from "./GameView";
 import { MainMenu } from "./menu/MainMenu";
 import { ModeDialog } from "./menu/ModeDialog";
 import { CharacterSelect } from "./menu/CharacterSelect";
 import { CreateCharacter } from "./menu/CreateCharacter";
-import { MenuStage } from "./menu/MenuStage";
+import { LoadingScreen, LOADING_ART } from "./LoadingScreen";
+import { pickTip } from "./tips";
 import { InfoScreen, CREDITS_TEXT } from "./menu/InfoScreen";
 import { OptionsPanel } from "./menu/OptionsPanel";
+
+/**
+ * The two screens that own a Babylon engine, split out of the entry bundle.
+ *
+ * They were the only things dragging `@babylonjs/core` into it, and it was one
+ * chunk: 5.5 MB had to arrive before the main menu could paint its title. Now
+ * the menu's own art is the first thing down the wire and Babylon follows only
+ * when a screen that needs it is actually reached.
+ *
+ * `lazy` wants a default export and both of these are named, hence the unwrap.
+ */
+const GameView = React.lazy(() => import("./GameView").then((m) => ({ default: m.GameView })));
+const MenuStage = React.lazy(() => import("./menu/MenuStage").then((m) => ({ default: m.MenuStage })));
 import { DEFAULT_SETTINGS, type Settings } from "./settings";
 import { setSoundLevel } from "./audio/drop-sound";
 import {
@@ -99,14 +112,31 @@ export function App(): React.ReactElement {
    */
   const selectedClassId = rows.find((c) => c.id === selectedId)?.classId ?? null;
 
+  /**
+   * The line the Suspense plate reads while the game's chunk arrives. Held in
+   * state rather than picked in the render body: App re-renders on every roster
+   * and settings change, and a tip that reshuffles mid-sentence is unreadable.
+   */
+  const [bootTip] = React.useState(() => pickTip());
+
   if (screen.kind === "game") {
     return (
-      <GameView
-        characterId={screen.characterId}
-        settings={settings}
-        onSettingsChange={changeSettings}
-        onExit={() => setScreen({ kind: "select" })}
-      />
+      // The plate covers the chunk arriving as well as the world being built:
+      // GameView raises its own the moment it mounts, so the two are continuous
+      // and the player sees one screen rather than a gap and then a screen.
+      // "Hideout" is not a guess — a session always begins standing in it.
+      <React.Suspense
+        fallback={
+          <LoadingScreen areaName="Hideout" tip={bootTip} wallpaper={`${LOADING_ART}/hideout.jpg`} />
+        }
+      >
+        <GameView
+          characterId={screen.characterId}
+          settings={settings}
+          onSettingsChange={changeSettings}
+          onExit={() => setScreen({ kind: "select" })}
+        />
+      </React.Suspense>
     );
   }
 
@@ -125,7 +155,12 @@ export function App(): React.ReactElement {
             select screen would be torn down and rebuilt (engine, wardrobe fetch,
             idle restart) the moment CREATE swapped one screen for the other.
             It layers by z-index, not by document order — see menu/MenuStage. */}
-        <MenuStage classId={screen.kind === "create" ? newClassId : selectedClassId} />
+        {/* No fallback worth drawing: the hall is painted art and the stage only
+            adds the figure standing in it. A spinner over a backdrop would be a
+            worse wait than an empty hall that fills in. */}
+        <React.Suspense fallback={null}>
+          <MenuStage classId={screen.kind === "create" ? newClassId : selectedClassId} />
+        </React.Suspense>
         {screen.kind === "select" ? (
           <CharacterSelect
             characters={rows}
