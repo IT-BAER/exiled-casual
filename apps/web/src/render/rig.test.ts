@@ -15,6 +15,7 @@ import {
   meshLook,
   COSMETIC_SLOTS,
   GEAR_TEXTURE_BASES,
+  HIPS_BOB,
   SKIRT_CHAINS,
   SKIRT_JOINTS,
 } from "./rig";
@@ -458,5 +459,171 @@ describe("pack skin compatibility", () => {
     const names = gltf.meshes.map((m: { name: string }) => m.name);
     expect(names).toContain("Male_Ranger_Head_Hood");
     expect(names).toContain("Male_Ranger_Acc_Pauldron");
+  });
+});
+
+/**
+ * A standing man must stand ON something.
+ *
+ * `Idle_Loop` is authored foot-planted: the hips breathe, and the knees and
+ * ankles counter-rotate exactly enough to leave the soles where they are. Only
+ * the hips curve is retargeted onto this rig (`remapHips`); the legs get their
+ * rotations raw. So any scaling of that one curve breaks the bargain, and the
+ * error has nowhere to go but the feet — the character rises and sinks off the
+ * painted floor, which is what `HIPS_BOB` at the jog's 0.65 was doing to him.
+ *
+ * This replays the clip onto `wardrobe.glb`'s own skeleton and measures how far
+ * the ankle travels. It is deliberately NOT a check that the constant is 1: it
+ * measures the consequence, so it also catches a new anim library, a rebuilt
+ * wardrobe, or a change to the remap itself. The runtime path cannot be used —
+ * there is no HTTP server here, so the loader always falls back.
+ */
+describe("the idle clip leaves the soles planted", () => {
+  const MODELS = fileURLToPath(new URL("../../public/models/", import.meta.url));
+
+  /** A glb's json chunk plus a reader for any accessor in it, by index. */
+  function open(file: string) {
+    const glb = readFileSync(`${MODELS}${file}`);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const json = JSON.parse(glb.subarray(20, 20 + glb.readUInt32LE(12)).toString("utf8")) as any;
+    const bin = 20 + glb.readUInt32LE(12) + 8;
+    const width: Record<string, number> = { SCALAR: 1, VEC3: 3, VEC4: 4 };
+    const accessor = (i: number): number[][] => {
+      const a = json.accessors[i];
+      const view = json.bufferViews[a.bufferView];
+      const n = width[a.type as string]!;
+      const start = bin + (view.byteOffset ?? 0) + (a.byteOffset ?? 0);
+      const step = view.byteStride ?? n * 4;
+      const out: number[][] = [];
+      for (let k = 0; k < a.count; k++) {
+        const row: number[] = [];
+        for (let c = 0; c < n; c++) row.push(glb.readFloatLE(start + k * step + c * 4));
+        out.push(row);
+      }
+      return out;
+    };
+    return { json, accessor };
+  }
+
+  type Track = { t: number[]; v: number[][] };
+
+  const lib = open("anim-library.glb");
+  const clip = lib.json.animations.find((a: { name: string }) => a.name === "Rig|Idle_Loop");
+  const tracks = new Map<string, Record<string, Track>>();
+  for (const channel of clip.channels) {
+    const sampler = clip.samplers[channel.sampler];
+    const name = lib.json.nodes[channel.target.node].name as string;
+    if (!tracks.has(name)) tracks.set(name, {});
+    tracks.get(name)![channel.target.path as string] = {
+      t: lib.accessor(sampler.input).map((row) => row[0]!),
+      v: lib.accessor(sampler.output),
+    };
+  }
+  const duration = Math.max(
+    ...clip.samplers.flatMap((s: { input: number }) => lib.accessor(s.input).map((r) => r[0]!)),
+  );
+
+  /** Linear sample, which is what these takes are baked with. */
+  function at(track: Track, time: number): number[] {
+    if (time <= track.t[0]!) return track.v[0]!;
+    const last = track.t.length - 1;
+    if (time >= track.t[last]!) return track.v[last]!;
+    let i = 0;
+    while (track.t[i + 1]! < time) i++;
+    const a = track.v[i]!;
+    const b = track.v[i + 1]!;
+    const f = (time - track.t[i]!) / (track.t[i + 1]! - track.t[i]!);
+    return a.map((x, k) => x + (b[k]! - x) * f);
+  }
+
+  const rig = open("wardrobe.glb");
+  const parent = new Map<number, number>();
+  rig.json.nodes.forEach((n: { children?: number[] }, i: number) =>
+    (n.children ?? []).forEach((c) => parent.set(c, i)),
+  );
+  const nodeOf = (name: string): number =>
+    rig.json.nodes.findIndex((n: { name: string }) => n.name === name);
+
+  /** Column-major TRS, and "apply a, then b". */
+  function trs(t: number[], q: number[], s: number[]): number[] {
+    const [x, y, z, w] = q as [number, number, number, number];
+    const m = [
+      1 - 2 * (y * y + z * z), 2 * (x * y + z * w), 2 * (x * z - y * w), 0,
+      2 * (x * y - z * w), 1 - 2 * (x * x + z * z), 2 * (y * z + x * w), 0,
+      2 * (x * z + y * w), 2 * (y * z - x * w), 1 - 2 * (x * x + y * y), 0,
+      t[0]!, t[1]!, t[2]!, 1,
+    ];
+    for (let c = 0; c < 3; c++) for (let r = 0; r < 3; r++) m[c * 4 + r]! *= s[c]!;
+    return m;
+  }
+  function mul(a: number[], b: number[]): number[] {
+    const o = new Array<number>(16).fill(0);
+    for (let c = 0; c < 4; c++)
+      for (let r = 0; r < 4; r++)
+        for (let k = 0; k < 4; k++) o[c * 4 + r]! += b[k * 4 + r]! * a[c * 4 + k]!;
+    return o;
+  }
+
+  // The hips remap, re-derived rather than imported: the point is the outcome,
+  // so a mistake shared with the runtime should not cancel itself out here.
+  const HIPS = "pelvis";
+  const animRest = lib.json.nodes[
+    lib.json.nodes.findIndex((n: { name: string }) => n.name === HIPS)
+  ].translation as number[];
+  const outfitRest = rig.json.nodes[nodeOf(HIPS)].translation as number[];
+  const length = (v: number[]): number => Math.hypot(v[0]!, v[1]!, v[2]!);
+  const scale = length(outfitRest) / length(animRest);
+  const hipsTrack = tracks.get(HIPS)!.translation!;
+  const low = [0, 1, 2].map((k) => Math.min(...hipsTrack.v.map((v) => v[k]!)));
+
+  /** World Y of one joint at one time, for a given share of the hips curve. */
+  function worldY(name: string, time: number, bob: number): number {
+    let m: number[] | null = null;
+    let i = nodeOf(name);
+    while (i !== undefined && i >= 0) {
+      const node = rig.json.nodes[i];
+      const track = tracks.get(node.name as string) ?? {};
+      const hips = node.name === HIPS && track.translation;
+      const t = hips
+        ? [0, 1, 2].map(
+            (k) =>
+              outfitRest[k]! +
+              (low[k]! + (at(track.translation!, time)[k]! - low[k]!) * bob - animRest[k]!) * scale,
+          )
+        : ((node.translation as number[] | undefined) ?? [0, 0, 0]);
+      const q = track.rotation
+        ? at(track.rotation, time)
+        : ((node.rotation as number[] | undefined) ?? [0, 0, 0, 1]);
+      const local = trs(t, q, (node.scale as number[] | undefined) ?? [1, 1, 1]);
+      m = m ? mul(m, local) : local;
+      i = parent.get(i)!;
+    }
+    return m![13]!;
+  }
+
+  /** Peak-to-peak travel of a joint across the whole clip, in metres. */
+  function travel(name: string, bob: number): number {
+    const ys: number[] = [];
+    for (let k = 0; k <= 40; k++) ys.push(worldY(name, (k / 40) * duration, bob));
+    return Math.max(...ys) - Math.min(...ys);
+  }
+
+  it("plays a clip that actually moves the hips", () => {
+    // Guards the two tests below against passing because nothing was applied.
+    expect(travel(HIPS, HIPS_BOB.idle)).toBeGreaterThan(0.005);
+  });
+
+  it("holds both ankles within a millimetre or two of still", () => {
+    // 1.76mm at the settled value. What is left is the anim rig's legs being
+    // ~7% shorter than this one's, which no single scalar takes out.
+    expect(travel("foot_l", HIPS_BOB.idle)).toBeLessThan(0.0025);
+    expect(travel("foot_r", HIPS_BOB.idle)).toBeLessThan(0.0025);
+  });
+
+  it("floats him again if the hips curve is compressed", () => {
+    // The mechanism, pinned: the jog's 0.65 put 4.7mm of rise and fall into the
+    // soles, and dropping the curve entirely puts the hips' whole 10.4mm there.
+    expect(travel("foot_l", 0.65)).toBeGreaterThan(0.004);
+    expect(travel("foot_l", 0)).toBeGreaterThan(0.01);
   });
 });

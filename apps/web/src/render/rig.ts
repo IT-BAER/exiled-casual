@@ -375,16 +375,27 @@ const LOWER_BODY: ReadonlySet<string> = new Set([
 const UPPER_BODY_CLIPS: ReadonlySet<RigClip> = new Set<RigClip>(["cast"]);
 
 /**
- * How much of a clip's hips bounce to keep. The jog is authored with 26% of hip
- * height of vertical travel, which on this character is a 0.25-unit hop and
- * reads as bounding rather than running. The curve is compressed toward its
- * lowest point rather than toward the rest pose, so the bottom of the stride —
- * where the foot is planted — stays exactly where it was and only the peak
- * comes down.
+ * How much of a clip's hips bounce to keep, PER CLIP. The jog is authored with
+ * 26% of hip height of vertical travel, which on this character is a 0.25-unit
+ * hop and reads as bounding rather than running. The curve is compressed toward
+ * its lowest point rather than toward the rest pose, so the bottom of the stride
+ * — where the foot is planted — stays exactly where it was and only the peak
+ * comes down. Tuned by eye against the jog: 1.0 bounds like a hop, 0.4 lifeless.
  *
- * Tuned by eye against the jog: 1.0 bounds like a hop, 0.4 goes lifeless.
+ * **A standing clip must keep all of it.** Only the legs are retargeted raw;
+ * the hips are the one curve this rig rewrites, so shrinking it silently breaks
+ * whatever the legs were counter-rotating against. `Idle_Loop` is authored
+ * foot-planted — the hips breathe 10.4mm and the knees and ankles hold the soles
+ * still — so taking a third of that away leaves the legs over-rotated and the
+ * residual comes out at the FEET, which is what the character floating on the
+ * menu plate was. Replaying the clip onto `wardrobe.glb` offline and measuring
+ * the lowest 2% of `boots.ranger.boots`: 0.65 travels 4.68mm, 1.0 travels
+ * 1.76mm — the rest is the anim rig's legs being ~7% shorter than this one's,
+ * which no single scalar fixes.
+ *
+ * Locomotion is exempt on purpose: those clips slide the feet anyway.
  */
-const HIPS_BOB = 0.65;
+export const HIPS_BOB: Record<RigClip, number> = { idle: 1, walk: 0.65, run: 0.65, cast: 1 };
 
 /**
  * Re-express a hips translation curve in the target rig's proportions: keep the
@@ -392,7 +403,12 @@ const HIPS_BOB = 0.65;
  * scaled by how much bigger this rig's hips offset is. The bounce is then
  * compressed toward the curve's lowest point (see `HIPS_BOB`).
  */
-function remapHips(source: Animation, animRest: Vector3, outfitRest: Vector3): Animation {
+function remapHips(
+  source: Animation,
+  animRest: Vector3,
+  outfitRest: Vector3,
+  bob: number,
+): Animation {
   const scale = outfitRest.length() / Math.max(animRest.length(), 1e-9);
   const keys = source.getKeys();
 
@@ -405,7 +421,7 @@ function remapHips(source: Animation, animRest: Vector3, outfitRest: Vector3): A
 
   const convert = (v: Vector3): Vector3 =>
     outfitRest.add(
-      floor.add(v.subtract(floor).scale(HIPS_BOB)).subtract(animRest).scale(scale),
+      floor.add(v.subtract(floor).scale(bob)).subtract(animRest).scale(scale),
     );
 
   const remapped = source.clone();
@@ -413,7 +429,7 @@ function remapHips(source: Animation, animRest: Vector3, outfitRest: Vector3): A
     keys.map((key) => {
       const out: IAnimationKey = { frame: key.frame, value: convert(key.value as Vector3) };
       // Tangents are deltas: they take the same scaling, never the offset.
-      const tangentScale = scale * HIPS_BOB;
+      const tangentScale = scale * bob;
       if (key.inTangent) out.inTangent = (key.inTangent as Vector3).scale(tangentScale);
       if (key.outTangent) out.outTangent = (key.outTangent as Vector3).scale(tangentScale);
       if (key.interpolation !== undefined) out.interpolation = key.interpolation;
@@ -754,7 +770,7 @@ export class RigActor {
           sourceNode instanceof TransformNode
         ) {
           group.addTargetedAnimation(
-            remapHips(targeted.animation, sourceNode.position, hipsRest),
+            remapHips(targeted.animation, sourceNode.position, hipsRest, HIPS_BOB[clip]),
             target,
           );
         }
