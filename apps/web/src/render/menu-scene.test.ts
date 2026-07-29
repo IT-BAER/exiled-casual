@@ -5,6 +5,7 @@ import { NullEngine, Scene } from "@babylonjs/core";
 import { CLASS_IDS } from "@exiled/rules";
 import { CLASSES } from "@exiled/content-runtime";
 import { COSMETIC_SLOTS, meshLook, resetPlayerRig } from "./rig";
+import { floorScreenY, shadowReachScreenY } from "./menu-scene";
 import { looksForClass } from "../menu/class-looks";
 
 let engine: InstanceType<typeof NullEngine> | undefined;
@@ -76,6 +77,35 @@ describe("class looks", () => {
   it("an unknown class still dresses somebody", () => {
     const looks = looksForClass("class.nope");
     expect(looks.body).not.toBeNull();
+  });
+
+  /**
+   * Where the soles land is a matter of pixels, and nothing else can see it: the
+   * scene needs WebGL and the floor it stands on is a JPEG. Every knob that moves
+   * the figure (camera height, distance, look-at, fov, the floor's own height)
+   * moves it silently.
+   *
+   * The painted hall's floor runs from about 0.73 of the canvas down to the
+   * bottom edge; its far edge is where it meets the throne's plinth. Above 0.73
+   * is wall, and soles against a wall is exactly what floating looked like.
+   */
+  it("stands the character on the painted floor, not above its far edge", () => {
+    const y = floorScreenY();
+    expect(y).toBeGreaterThan(0.73);
+    expect(y).toBeLessThan(0.82);
+  });
+
+  /**
+   * The shadow starts at the soles and runs forward, so the failure left is the
+   * one the eye cannot argue with: too short to see. The floor is nearly edge-on
+   * at this camera, where world units buy very little canvas — three units of
+   * ground is a twentieth of the frame — so the length has to be checked where it
+   * is actually looked at, on screen, not in the scene.
+   */
+  it("throws the shadow far enough forward to clear the boots", () => {
+    const reach = shadowReachScreenY() - floorScreenY();
+    expect(reach).toBeGreaterThan(0.04); // forward, and past his own feet
+    expect(reach).toBeLessThan(0.2); // still a shadow, not a runway
   });
 
   it("builds a scene without a wardrobe rather than throwing", async () => {

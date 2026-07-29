@@ -13,12 +13,10 @@
 import React from "react";
 import { createMenuStage, type MenuStage as Stage } from "../render/menu-scene";
 import { looksForClass } from "./class-looks";
-import { usePointerLean } from "./atmos";
 
 export function MenuStage({ classId }: { classId: string }): React.ReactElement {
   const ref = React.useRef<HTMLCanvasElement>(null);
   const stageRef = React.useRef<Stage | null>(null);
-  const lean = usePointerLean();
 
   React.useEffect(() => {
     const canvas = ref.current;
@@ -45,10 +43,6 @@ export function MenuStage({ classId }: { classId: string }): React.ReactElement 
   React.useEffect(() => {
     stageRef.current?.setLooks(looksForClass(classId));
   }, [classId]);
-
-  React.useEffect(() => {
-    stageRef.current?.setLean(lean.x, lean.y);
-  }, [lean.x, lean.y]);
 
   return (
     <canvas

@@ -23,9 +23,14 @@ import { Atmosphere, type BrazierSpot } from "./atmos";
 import { Divider, FramedPanel, GOLD, GOLD_DIM, MENU_ART, MenuButton, PARCHMENT, SERIF } from "./frames";
 
 /** The braziers painted into `select_backdrop.jpg`, as fractions of the viewport. */
+/**
+ * The hall's two braziers, as fractions of `select_backdrop.jpg`. `flame: 0`:
+ * the painting draws its own fire and these two are thirty pixels tall across
+ * the room, so all this layer owes them is the flicker.
+ */
 const BRAZIERS: readonly BrazierSpot[] = [
-  { x: 0.228, y: 0.622, r: 0.052, phase: 0 },
-  { x: 0.772, y: 0.619, r: 0.052, phase: 3.1 },
+  { x: 0.224, y: 0.611, r: 0.052, flame: 0, phase: 0 },
+  { x: 0.776, y: 0.615, r: 0.052, flame: 0, phase: 3.1 },
 ];
 
 export interface CharacterSelectProps {

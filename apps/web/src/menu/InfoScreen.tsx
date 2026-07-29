@@ -11,9 +11,10 @@ import { CONTENT_VERSION } from "@exiled/content-runtime";
 import { Atmosphere, type BrazierSpot } from "./atmos";
 import { Divider, FramedPanel, GOLD, MENU_ART, MenuButton, PARCHMENT, SERIF } from "./frames";
 
+/** Same painting as the main menu, so the same two fires. */
 const BRAZIERS: readonly BrazierSpot[] = [
-  { x: 0.549, y: 0.792, r: 0.045, phase: 0 },
-  { x: 0.783, y: 0.800, r: 0.070, phase: 2.4 },
+  { x: 0.525, y: 0.819, r: 0.045, flame: 0.024, phase: 0 },
+  { x: 0.750, y: 0.816, r: 0.075, flame: 0.048, phase: 2.4 },
 ];
 
 export const OPTIONS_TEXT = [
@@ -25,7 +26,8 @@ export const OPTIONS_TEXT = [
 export const CREDITS_TEXT = [
   "Exiled Casual is an original fan project, built in the open with Claude Code.",
   "It draws on Path of Exile 1 and 2 for its shape and its feel, and takes the better of the two wherever they differ. No game data, art or branding from either is used or shipped.",
-  "Characters and animation are CC0 assets from Quaternius and the Universal Animation Library. Environment, interface and item art are generated for this project.",
+  "The character's body and its animation are CC0 packs by Quaternius: Modular Character Outfits and the Universal Animation Library. The wardrobe is rebuilt from them here, and its head, coat and hood are generated.",
+  "Everything else is made for this project: the environments, the props, the interface, the item art and the maps.",
   `Content version ${CONTENT_VERSION}.`,
 ];
 

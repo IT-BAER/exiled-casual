@@ -41,18 +41,28 @@ OUT = MODELS + "wardrobe.glb"
 
 SKIN_MAT = "MI_Regular_Male"
 
-# A flat, perfectly uniform skin texel in T_Regular_Male_Dark_BaseColor.png
-# (found by scanning for the lowest-variance skin-toned window). Pinning the
-# generated head's UVs here gives it the hands' exact tone under the hands' own
-# material, instead of inventing a second skin shader that would drift from them.
-# Blender's V runs bottom-up where the image runs top-down, hence 1 - v.
-HEAD_UV = (0.7891, 1.0 - 0.4492)
+# The base male's own material names, as the head pack ships them.
+BASE_SKIN_MAT = "MI_Superhero_Male"
+EYE_MAT = "MI_Eyes"
+BROW_MAT = "MI_Hair_1"
 
-# Same trick for the hair cap, pinned instead to the flattest near-black texel in
-# the same atlas (rgb 46,46,46). Sharing the skin material is the whole point -
-# one material, one draw setup - so the hair has to get its colour from a
-# different pixel rather than a different shader, or it renders skin-coloured and
-# the character reads as bald.
+# Where the head stops being a head. The base male is one welded body mesh, so
+# the head has to be cut out of it, and the honest place to cut is by weight
+# rather than by height: keep a vertex only if `Head` and `neck_01` own this much
+# of it between them. 0.70 puts the seam at z 1.545 with a neck radius of 0.079,
+# which is under the collar line at 1.559 and inside every torso in the wardrobe.
+# Cutting by a z plane instead takes the shoulders with it at the front and loses
+# the nape at the back, because a neck does not meet a body at one height.
+HEAD_JOINTS = ("Head", "neck_01")
+HEAD_WEIGHT = 0.70
+
+# The flattest near-black texel in T_Regular_Male_Dark_BaseColor.png (rgb
+# 46,46,46). Hair and eyebrows are pinned to it rather than given the pack's own
+# hair texture, which is a 2048 greyscale authored to be tinted by an engine that
+# has a hair shader. We do not have one, so untinted it renders white-haired.
+# Pinning shares the skin material instead - one material, one draw setup - and
+# costs only the strand detail, which at a head this size is under a pixel.
+# Blender's V runs bottom-up where the image runs top-down, hence 1 - v.
 HAIR_UV = (0.7656, 0.4727)
 
 # And again for the helm, pinned this time to the flattest *bright* texel in the
@@ -198,7 +208,10 @@ def only(pred):
 
 
 def meshes():
-    return [o for o in bpy.context.scene.objects if o.type == "MESH" and o.name != "Icosphere"]
+    return [
+        o for o in bpy.context.scene.objects
+        if o.type == "MESH" and not o.name.startswith("Icosphere")
+    ]
 
 
 def split_arms(name):
@@ -263,72 +276,98 @@ def dedupe_materials():
         log(f"deduped {dropped} duplicate material(s) imported with the second pack")
 
 
-def build_head(armature, skin_material):
-    """A head, because neither pack ships one.
+def import_parts(path):
+    """Import a glTF and keep only its meshes, dropping its armature.
 
-    Deliberately a plain skull-and-hair pair rather than a sculpted face: the
-    character stands about 12% of frame height under this camera, which puts the
-    head near ten pixels across, and a misaligned generated face reads as a bug
-    at that size where a clean silhouette reads as a head. Rigid-weighted, so no
-    weight painting is involved - the skull rides `Head`, the neck `neck_01`.
+    Every source file here carries its own copy of the same 65 joints, and only
+    the first one imported is kept as the canonical rig; the rest are re-parented
+    onto it by name. Also drops the 42-vertex `Icosphere` the glTF importer adds
+    as the bone display shape, which is otherwise counted as a part.
     """
-    made = []
+    before = set(bpy.context.scene.objects)
+    bpy.ops.import_scene.gltf(filepath=path)
+    new = [o for o in bpy.context.scene.objects if o not in before]
+    keep = [o for o in new if o.type == "MESH" and not o.name.startswith("Icosphere")]
+    for obj in new:
+        if obj not in keep:
+            bpy.data.objects.remove(obj, do_unlink=True)
+    return keep
 
-    bpy.ops.mesh.primitive_uv_sphere_add(segments=20, ring_count=12, radius=1.0)
-    skull = bpy.context.active_object
-    skull.name = "base.head.skull"
-    skull.scale = (0.093, 0.101, 0.115)
-    skull.location = (0.0, 0.012, 1.688)
-    made.append(skull)
 
-    # Neck, bridging the collar (z 1.559) up into the skull.
-    bpy.ops.mesh.primitive_cylinder_add(vertices=14, radius=0.049, depth=0.16)
-    neck = bpy.context.active_object
-    neck.name = "base.head.neck"
-    neck.location = (0.0, 0.030, 1.565)
-    made.append(neck)
+def cut_to_head(obj):
+    """Delete everything the head and neck joints do not own."""
+    group = {g.index: g.name for g in obj.vertex_groups}
+    kept = {
+        v.index for v in obj.data.vertices
+        if sum(g.weight for g in v.groups if group.get(g.group) in HEAD_JOINTS) >= HEAD_WEIGHT
+    }
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    bm.verts.ensure_lookup_table()
+    bmesh.ops.delete(
+        bm, geom=[v for v in bm.verts if v.index not in kept], context="VERTS",
+    )
+    if not bm.faces:
+        raise SystemExit(f"head: nothing survived a {HEAD_WEIGHT} weight cut on {obj.name}")
+    bm.to_mesh(obj.data)
+    bm.free()
 
-    # Hair: a slightly larger cap, cut to the top half, so the bald sphere reads
-    # as a head rather than a mannequin ball.
-    bpy.ops.mesh.primitive_uv_sphere_add(segments=20, ring_count=12, radius=1.0)
-    hair = bpy.context.active_object
+
+def build_head(armature, skin_material):
+    """A head, because neither outfit pack ships one.
+
+    The outfit packs are outfits: each one welds its sleeves to its own bare
+    forearms and stops at the collar, and the ranger only looks finished because
+    his hood is his head. What they do carry is the *texture* for a head -
+    `T_Regular_Male_Dark_BaseColor.png` has a painted face in its top-left
+    corner, referenced by both packs and used by neither, because the head it was
+    unwrapped for lives in the author's separate base-character pack.
+
+    So the head is cut out of that base male rather than modelled here. It is one
+    welded body mesh, so `cut_to_head` takes the part the head and neck joints
+    own and throws the body away; what survives keeps the pack's own UVs and its
+    own skin weights, which is the entire reason to do it this way. A generated
+    skull can only ever be pinned to a flat texel - a correctly shaped, correctly
+    animated blank - because there is no way to guess UVs that land a painted eye
+    on a sphere.
+
+    The two males are different proportions (this one is the `Superhero` build,
+    the outfits are `Regular`) and that does not matter for a head: they share one
+    UV unwrap, and `Head`, `neck_01`, `spine_03` and `pelvis` have bit-identical
+    inverse bind matrices in both files. Only the thumbs, fingers, hands and feet
+    differ, and none of those are above the collar. `rig.test.ts` pins it.
+
+    Eyes are geometry, not paint, so they come across as their own part with the
+    pack's own eye texture. Hair and eyebrows are pinned to a dark skin texel; see
+    `HAIR_UV`.
+    """
+    parts = {o.data.materials[0].name: o for o in import_parts(SRC + "Base_Male.gltf")}
+    head, eyes, brows = parts[BASE_SKIN_MAT], parts[EYE_MAT], parts[BROW_MAT]
+    hair = import_parts(SRC + "Hair_SimpleParted.gltf")[0]
+
+    before = len(head.data.vertices)
+    cut_to_head(head)
+    log(f"cut the head off the base male: {before}v -> {len(head.data.vertices)}v")
+
+    head.name = "base.head.head"
+    eyes.name = "base.head.eyes"
+    brows.name = "base.head.brows"
     hair.name = "base.head.hair"
-    hair.scale = (0.098, 0.104, 0.118)
-    hair.location = (0.0, 0.012, 1.690)
-    made.append(hair)
 
-    bpy.ops.object.select_all(action="DESELECT")
-    bpy.context.view_layer.objects.active = hair
-    hair.select_set(True)
-    bpy.ops.object.mode_set(mode="EDIT")
-    bpy.ops.mesh.select_all(action="DESELECT")
-    bpy.ops.object.mode_set(mode="OBJECT")
-    for v in hair.data.vertices:
-        # Keep the crown and the back; drop where the face would be.
-        v.select = (v.co.z > -0.15) and not (v.co.y < -0.45 and v.co.z < 0.55)
-    bpy.ops.object.mode_set(mode="EDIT")
-    bpy.ops.mesh.select_all(action="INVERT")
-    bpy.ops.mesh.delete(type="VERT")
-    bpy.ops.object.mode_set(mode="OBJECT")
+    # The head joins the hands' material rather than keeping the base pack's own.
+    # Both name the same image now, so this is one draw setup instead of two, and
+    # the face cannot drift in tone from the forearms under it.
+    head.data.materials.clear()
+    head.data.materials.append(skin_material)
 
-    for obj in made:
-        bpy.ops.object.select_all(action="DESELECT")
-        obj.select_set(True)
-        bpy.context.view_layer.objects.active = obj
-        bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
-
+    for obj in (brows, hair):
         obj.data.materials.clear()
         obj.data.materials.append(skin_material)
-        uv = obj.data.uv_layers.new(name="UVMap") if not obj.data.uv_layers else obj.data.uv_layers[0]
-        pinned = HAIR_UV if obj.name.endswith(".hair") else HEAD_UV
-        for loop in uv.data:
-            loop.uv = pinned
+        for loop in obj.data.uv_layers[0].data:
+            loop.uv = HAIR_UV
 
-        # Rigid weights: everything below the jaw follows the neck, the rest the head.
-        g_head = obj.vertex_groups.new(name="Head")
-        g_neck = obj.vertex_groups.new(name="neck_01")
-        for v in obj.data.vertices:
-            (g_neck if v.co.z < 1.632 else g_head).add([v.index], 1.0, "REPLACE")
+    made = [head, eyes, brows, hair]
+    for obj in made:
         rebind(obj, armature)
 
     log(f"built head: {', '.join(o.name + ' ' + str(len(o.data.vertices)) + 'v' for o in made)}")
@@ -648,8 +687,8 @@ def main():
     if missing:
         raise SystemExit(f"missing expected parts: {sorted(missing)}")
 
-    for o in bpy.context.scene.objects:
-        if o.type == "MESH" and o.name == "Icosphere":
+    for o in list(bpy.context.scene.objects):
+        if o.type == "MESH" and o.name.startswith("Icosphere"):
             bpy.data.objects.remove(o, do_unlink=True)
 
     log(f"exporting {len(meshes())} parts")

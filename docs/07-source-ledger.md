@@ -228,7 +228,10 @@ Assets that ship inside the product, as opposed to research references. Every ro
 | Asset | Source | Licence | Used as |
 |---|---|---|---|
 | `apps/web/public/models/anim-library.glb` | [Universal Animation Library](https://quaternius.com/packs/universalanimationlibrary.html) by Quaternius (Standard) | CC0 1.0 Universal | 45 humanoid clips on a 65-bone Unreal-named rig. Idle, walk, jog and spell-cast drive the player |
-| `apps/web/public/models/Male_Ranger.*`, `Male_Peasant.*`, `T_*.png` | [Modular Character Outfits - Fantasy](https://quaternius.com/packs/modularcharacteroutfitsfantasy.html) by Quaternius (Standard) | CC0 1.0 Universal | The player character and its swappable outfits, rigged to the same skeleton |
+| `assets/characters/Male_Ranger.*`, `Male_Peasant.*`, `T_*.png`, baked into `apps/web/public/models/wardrobe.glb` | [Modular Character Outfits - Fantasy](https://quaternius.com/packs/modularcharacteroutfitsfantasy.html) by Quaternius (Standard) | CC0 1.0 Universal | The player character and its swappable outfits, rigged to the same skeleton. The packs themselves are no longer served: `tools/build_wardrobe.py` welds them into one glb, and generates the ranger's coat and the hood cap, which no pack ships |
+| `assets/characters/Base_Male.*`, `Hair_SimpleParted.*`, `T_Eye_*.png`, baked into `apps/web/public/models/wardrobe.glb` | [Universal Base Characters](https://quaternius.com/packs/universalbasecharacters.html) by Quaternius (Standard) | CC0 1.0 Universal | The head, neck, eyes and eyebrows, cut out of the base male, plus one hairstyle. The outfit pack above ships no head but references the face painted in `T_Regular_Male_Dark_BaseColor.png`; this is the pack that head belongs to |
+
+Everything else that ships is made for this project: `props.glb` and `rocks.glb` are built in Blender, and every texture in `apps/web/public/textures/` (tilesets, items, interface, menu art, FX) is generated. `apps/web/public/models/` is the only directory with third-party geometry in it.
 
 CC0 is a public-domain dedication, so there is no attribution obligation and no share-alike clause; the credit above is courtesy, not a licence term. Neither pack is derived from any Path of Exile material.
 
@@ -236,6 +239,7 @@ Preparation applied before check-in, reproducible from the untouched downloads:
 
 - The animation pack ships glTF only for Godot, and that export carries a Rigify `DEF-*` skeleton that does not match the outfits' Unreal-named one. The Unreal `AL_Standard.fbx` does match, so it was converted with [FBX2glTF](https://github.com/godotengine/FBX2glTF) v0.13.1 (Apache-2.0, a build tool, not shipped): `FBX2glTF --binary -i AL_Standard.fbx -o anim-library`.
 - Source textures are 4K PNGs up to 14 MB each. Downscaled to 512 px for base colour and 256 px for normal and ORM, which is generous for an actor about 150 px tall on screen. Total shipped model payload is ~7 MB, from ~300 MB of source.
+- The base-character pack's free tier ships the `Superhero` proportion, and its glTF names `T_Superhero_Male_*.png`. Those image URIs were repointed to the `T_Regular_Male_*` textures already checked in (`Superhero_Male_FullBody.gltf` copied to `Base_Male.gltf`, buffer uri renamed to match). That is a rename, not a re-map: both males share one UV unwrap, so the Regular atlas is the correct texture for this mesh, and it is the reason the head matches the outfits' bare forearms exactly. The hairstyle's `T_Hair_*` uris are repointed the same way and go unused, because `build_wardrobe.py` pins hair and eyebrow uvs to a dark skin texel instead.
 
 ### Clean-room classification
 

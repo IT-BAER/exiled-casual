@@ -8,18 +8,16 @@ Tests: Vitest.
 ## NUMBER ONE PRIORITY IS DOPAMINE
 
 `docs/09-reward-psychology.md` outranks every other spec. Read it before any loot, drop, reward,
-progression or feedback work, and re-read it when a change would make rewards more predictable.
-The short version: the spike fires on *anticipation*, not receipt, so variance is the mechanism and
-must never be flattened to be kind; a reward the player cannot hear and see did not happen; and
-intensity beats density (one loud moment over six quiet ones). Correctness and determinism still
-win where they conflict.
+progression or feedback work, and re-read it when a change would make rewards more predictable. The
+short version: the spike fires on *anticipation*, not receipt, so variance is the mechanism and must
+never be flattened to be kind; a reward the player cannot hear and see did not happen; intensity
+beats density. Correctness and determinism still win where they conflict.
 
 ## Visual reference — ALWAYS CHECK BEFORE UI/RENDER/ART WORK
 
 Real Path of Exile 1 and 2 screenshots live in `reference-screenshots/`. They are the look
-source-of-truth, and each entry below says which game it is. Consult the relevant one BEFORE any UI,
-render, HUD, panel, or art change, and re-check while iterating so the result matches the original
-game exactly. Do not design from memory.
+source-of-truth and each entry says which game it is. Consult the relevant one BEFORE any UI, render,
+HUD, panel or art change, and re-check while iterating. Never design from memory.
 
 - `hideout.jpg`, `closeup-hideout-zoom.jpg` — hideout look/camera
 - `portals-map-device.webp` — map device + portal ring
@@ -30,21 +28,19 @@ game exactly. Do not design from memory.
 - `item-normal.png`, `item-magic.png`, `item-rare.png`, `item-unique.png` — item hover/tooltip look per rarity (colors, header, stat lines)
 - `inventory+equipment.png`, `inventory.png` — inventory screens: paper-doll, flasks, currency, and PoE1's full-height 12x5 grid with the currency strip at its foot
 - `poe1-lower-bar.png` — PoE1 bottom bar: flask panel, and the skill panel's mouse row above its numbered row
-- `main-menu.png`, `character-selection.png` — PoE1 main menu and character select: statue hall, title emblem, roster rows
+- `main-menu.png`, `character-selection.png` — PoE1 main menu and character select. Borrow the LAYOUT (title emblem, panel, roster rows), never the painting: the first menu backdrop was PoE1's statue hall redrawn and had to be replaced
 
 ## Itemization & rarity — RESEARCH BEFORE ITEM/LOOT WORK
 
-Before designing or changing item generation, rarity, affixes, or item tooltips, research how
-PoE2 itemization actually works — do not invent mechanics or colors from memory. Sources:
-`https://poe2db.tw/` (up-to-date PoE2 bases/affixes/mods) and `https://www.poewiki.net/`
-(mechanics). Match the tooltip look (rarity colors, name header, affix line format) to the
-`item-*.png` screenshots above.
+Before designing or changing item generation, rarity, affixes, or item tooltips, research how PoE2
+itemization actually works — never invent mechanics or colors from memory. Sources: `https://poe2db.tw/`
+(bases/affixes/mods) and `https://www.poewiki.net/` (mechanics). Match the tooltip look (rarity
+colors, name header, affix line format) to the `item-*.png` screenshots above.
 
 ## Build / test
 
-- Test: `npx vitest run [scope]` from repo root.
+- Test: `npx vitest run [scope]` from repo root. Web build: `npm run build -w apps/web`.
 - Typecheck: `npm run typecheck` (tsc --noEmit; vitest strips types so this is mandatory).
-- Web build: `npm run build -w apps/web`.
 
 ## 3D assets
 
@@ -52,68 +48,63 @@ PoE2 itemization actually works — do not invent mechanics or colors from memor
   `tools/build_wardrobe.py` (Blender). Parts are named `slot.look.part`; the runtime dresses the
   character by showing one look per slot and hiding the rest, so gear changes cost visibility only
   and never restart the animation. Rebuild the glb after touching that script.
-- The source packs are NOT modular: each welds its sleeves to its own bare forearms, and neither
-  ships a head — the ranger only looks finished because his hood is his head. `base.head.*` is
-  generated, rigid-weighted to `Head`/`neck_01`, and pinned to a flat skin texel of the hands'
-  own material. Bone names are lowercase except `Head`.
+- The outfit packs are NOT modular: each welds its sleeves to its own bare forearms, and neither
+  ships a head — but both ship the *texture* for one, a face painted top-left of
+  `T_Regular_Male_Dark_BaseColor.png`. So `base.head.*` is **cut out of the author's separate base
+  male** (`Base_Male.gltf`) keeping its own UVs and weights, the only way a painted eye lands on an
+  eye. **Never go back to a texel-pinned skull**: a correctly shaped, correctly animated blank
+  passes every name test, so `rig.test.ts` pins UV *spread*. Different proportions do not matter —
+  one unwrap, and `Head`/`neck_01` have bit-identical inverse binds. Hair and brows stay pinned (the
+  pack hair texture is a 2048 greyscale wanting a tint shader we lack). Bones lowercase but `Head`.
 - `body.ranger.coat` is generated too: the ranger's body stops at the hip and every body base is
   drawn as a long coat. Its UVs are copied from the nearest tunic vertex by angle and height, never
   projected into a box on the atlas (any box wide enough also clips a boot buckle into the cloth).
 - `helmet.hood.helm` is generated from the cowl: its crown is duplicated, cut at the brow and pushed
   outward onto a dome, so it inherits the cloth's skin weights and can only ever cap the head it was
   cut from. Outward-only (the cowl points forward; a shrink-wrap is a hood in iron) and flat-shaded.
-- The coat hangs on `SKIRT_JOINTS`-joint `skirt_<i>_<n>` chains the builder adds under `pelvis`, driven at
-  runtime by the verlet solver in `skirt.ts` (spring toward the bind pose, no gravity; capsule
-  colliders down both legs, each sized to that limb's *median* half-width). Size a capsule to the
-  limb's widest slice and it caged the coat in permanent contact, which reads as stiff cloth that
-  never seems to touch the legs. **One chain per coat column — `SKIRT_CHAINS = COAT_SEG` — and the
-  ratio is what matters, not the count.** The chains are the only geometry collision touches, so a
-  column without its own chain is skinned half to each neighbour, lies on neither, and hangs in the
-  gap between the collided lines where no capsule can reach it (0.088 out at the hem, wider than the
-  thigh capsule). Raising both rings together, as 8→16 chains with 24→32 columns did, doubles the
-  resolution and the blind spot at once. Chains run to the *deepest* hem ring, not the average: cloth
-  below the last collided point is cloth a leg walks through. Skinning it to the thighs instead makes
-  the hem sweep in phase with the knee and reads as two rigid blades. Rebuild the glb after changing
-  `SKIRT_CHAINS` or `SKIRT_JOINTS`; `rig.ts` has both and `rig.test.ts` pins them and the binding.
-- The chain also needs joints *down* its length, not just chains around the ring: at two joints a
-  bone was 0.464 against a 0.088 thigh, and a bar that long can only pivot, never dent. Three halves
-  the penetration; four is worse and dearer — the win is somewhere to fold, not many somewheres.
-- `skirt.ts` solves at 240Hz so it outruns the display: collision only happens inside a step, so the
-  step rate is how often the coat may notice a leg, and at 1/60 against a 165Hz monitor two frames in
-  three moved the legs and not the cloth. `DAMPING` and `STIFFNESS` are written as the values tuned
-  against a 1/60 step and rescaled by `PER_OLD_STEP`, so the rate can change without restarching it.
-- **Measure the rig before tuning the cloth.** `MAX_CONTACT_SPEED` sat at 6 units/s on a comment's
-  guess that "a limb tops out around 3"; the instrumented joint runs at 18, so the leg outran the
-  only mechanism that moves the coat and went through it. It is the largest term in `skirt.ts`. The
-  method that found it: capture anchors, rests and collider positions per frame from the live app,
-  replay them through `SkirtSim` headlessly, and score frames showing >1cm and >2cm of leg. Score
-  *depth at a visible threshold*, never bare contact count — the latter rises with particle count
-  and made a finer chain look worse. `COLLIDE_PASSES` share one push budget on purpose: let each
-  pass spend the full cap and iteration silently becomes an 8x speed limit that looks like progress.
-  **Score oscillation separately from travel, or rubber ships.** Depth plus mean hem offset cannot
-  tell a coat that swings from one that shakes; the metric that sees it is hem direction *reversals*
-  per chain-frame (rubber 0.006 vs stiff 0.003). Mean offset from the bind pose is lag as much as
-  swing, so it is not a "more is better" axis. `DAMPING` is the frequency knob; `CONTACT_ABSORB`
-  does nothing measurable anywhere in 0.3-0.6 and is not where to fix ringing.
+- The coat hangs on `SKIRT_JOINTS`-joint `skirt_<i>_<n>` chains the builder adds under `pelvis`,
+  driven by the verlet solver in `skirt.ts` (spring toward bind pose, no gravity; capsule colliders
+  down both legs, each sized to that limb's *median* half-width — size to its widest slice and the
+  coat is caged in permanent contact, which reads as stiff cloth that never touches the legs).
+  **One chain per coat column — `SKIRT_CHAINS = COAT_SEG` — the ratio matters, not the count.** The
+  chains are the only geometry collision touches, so a column without one is skinned half to each
+  neighbour and hangs in the gap where no capsule reaches (0.088 at the hem, wider than the thigh
+  capsule); raising both rings together doubles resolution and blind spot at once. Chains run to the
+  *deepest* hem ring: cloth below the last collided point is cloth a leg walks through. Rebuild the
+  glb after changing `SKIRT_CHAINS` or `SKIRT_JOINTS`; `rig.ts` has both, `rig.test.ts` pins them.
+- The chain needs joints *down* its length, not just chains around the ring: a 0.464 bone against a
+  0.088 thigh can only pivot, never dent. `SKIRT_JOINTS` 3 — four is worse on every measure and dearer.
+- `skirt.ts` solves at 240Hz so it outruns the display: collision only happens inside a step, and at
+  1/60 against a 165Hz monitor two frames in three moved the legs and not the cloth. `DAMPING` and
+  `STIFFNESS` are the 1/60-tuned values rescaled by `PER_OLD_STEP`, so the rate can change freely.
+- **Measure the rig before tuning the cloth.** `MAX_CONTACT_SPEED` is the largest term in
+  `skirt.ts`; it sat at 6 units/s on a guess while the instrumented joint runs at 18, so the leg
+  outran the only mechanism that moves the coat. Method: capture anchors, rests and colliders per
+  frame from the live app, replay through `SkirtSim` headlessly, and score *depth at a visible
+  threshold* (>1cm, >2cm) — never bare contact count, which rises with particle count and made a
+  finer chain look worse. `COLLIDE_PASSES` share one push budget on purpose, or iteration becomes an
+  8x speed limit that looks like progress. **Score oscillation separately from travel, or rubber
+  ships**: hem direction *reversals* per chain-frame (rubber 0.006 vs stiff 0.003) sees it, where
+  mean hem offset is lag as much as swing. `DAMPING` is the frequency knob; `CONTACT_ABSORB` does
+  nothing measurable in 0.3-0.6.
 - All packs export the same 65 joints at the same bind pose, so a mesh from one binds to another's
   skeleton by assignment; `rig.test.ts` guards that, and that every look the code asks for exists.
-- Blender 5.2 is installed for asset authoring, driven headless:
-  `"/c/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background --factory-startup --python x.py`
+- Blender 5.2 is installed, driven headless: `"/c/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background --factory-startup --python x.py`.
   Its glTF importer adds a 42-vert `Icosphere` as the bone display shape; the exporter drops it.
 - Raster UI/item art goes through `/codex-imagegen`, never hand-authored SVG: the quality gap is
-  large and visible. Masters are cropped to their alpha bounds before downscaling.
+  large and visible. Masters are cropped to their alpha bounds before downscaling. Renders run long,
+  so launch them as background agents and do other work while they draw.
 - Worn armour is textured per item base by `tools/build_gear_textures.py`, which re-palettizes the
   ranger atlas to each base's inventory icon (luminance -> a ramp sampled from that icon). Rerun it
   after adding an armour base or changing an icon, and add the base to `GEAR_TEXTURE` in `rig.ts`;
-  `rig.test.ts` fails if the two lists or the files disagree. A pixel transform on the real atlas,
-  so UVs stay correct — but the silhouette stays the ranger's; only geometry can change that.
+  `rig.test.ts` fails if the two lists or the files disagree. UVs stay correct (it is a pixel
+  transform on the real atlas) but the silhouette stays the ranger's: only geometry changes that.
 - The hideout props (map device, stash chest) are `props.glb`, built by `tools/build_props.py` from
-  the texture masters in `assets/props/` (generated via `/codex-imagegen`; `assets/props/build/` is
-  derived and gitignored). Rebuild the glb after touching either. `props.ts` fetches it once and
-  `meshes.ts` falls back to its old primitives when it has not loaded, so headless tests still run;
-  `props.test.ts` pins the node and material names the runtime looks up. Two traps: glTF base colour
-  is linear, so a flat colour needs squaring to look like the Babylon value it replaces, and a prop
-  built facing -Y in Blender ends up facing away from the camera after the two axis conversions.
+  masters in `assets/props/` (via `/codex-imagegen`; `assets/props/build/` is derived, gitignored).
+  Rebuild the glb after touching either. `props.ts` fetches it once and `meshes.ts` falls back to its
+  old primitives when it has not loaded, so headless tests still run; `props.test.ts` pins the node
+  and material names the runtime looks up. Two traps: glTF base colour is linear (a flat colour needs
+  squaring to match Babylon), and a prop built facing -Y faces away after the two axis conversions.
 
 ## Maps & biomes
 
@@ -133,20 +124,19 @@ PoE2 itemization actually works — do not invent mechanics or colors from memor
   plus one 2x2 boss arena — a single 8x8-unit tile cannot hold a boss when the camera sees 19x9.5.
 - **Spawns spread ALONG the route, not at the end of it.** Taking the N farthest tiles put every
   monster 40+ units away in a 56-unit map and left the first half empty.
-- Map bases live in `content-runtime/maps.ts`; `@exiled/rules` is a pure leaf so it holds only
-  the id strings, and `simulation/maps.test.ts` fails if the two lists disagree. The Atlas node
+- Map bases live in `content-runtime/maps.ts`; `@exiled/rules` is a pure leaf so it holds only the
+  id strings, and `simulation/maps.test.ts` fails if the two lists disagree. The Atlas node
   picks the base, the base picks the grammar and tileset. **The client must resolve the same
   grammar as the sim** or it draws a different dungeon than the one it collides against.
 - Biome textures are generated (`/codex-imagegen`) into `assets/tilesets/<biome>/`, then made
   tiling by `tools/build_tileset_textures.py`; generated art does not tile and has no normal map,
   so that script is not optional. It cross-fades the wrap, derives the normal, and **lifts plates
-  too dark to play on** (floors to 55, walls to 95). The renderer is calibrated against a 57-luma
-  floor and a 132-luma wall, and engine.ts boosts the floor because actors are near-black and only
-  read against a floor brighter than they are. A biome tint is a **colour, not a dimmer**:
-  `applyBiomeTint` normalises to mean 1.0, and applied raw it took a third out of the ambient.
+  too dark to play on** (floors to 55, walls to 95); the renderer is calibrated against a 57-luma
+  floor and a 132-luma wall, and engine.ts boosts the floor because actors are near-black. A biome
+  tint is a **colour, not a dimmer**: `applyBiomeTint` normalises to mean 1.0.
 - **Level walls must never be shadow casters** (`engine.ts` excludes `wallrun-*`). A 3.5-unit wall
-  under that low sun throws a ~9-unit shadow, longer than a room is wide, and the per-run boxes
-  are disposed by the merge but stayed in the shadow render list — 817 dead meshes after one map.
+  under that low sun throws a ~9-unit shadow, and the per-run boxes stayed in the shadow render
+  list after the merge disposed them — 817 dead meshes after one map.
 
 ## Devlog — SCREENSHOT EACH VISIBLE STEP
 
@@ -157,10 +147,9 @@ PoE2 itemization actually works — do not invent mechanics or colors from memor
   full-page capture is fine for anything that holds still). Aim with a canvas `pointermove` first or
   a cast is a no-op (aim defaults to the player's own feet).
 - Stage every capture in `review/` (gitignored) under a plain name and get sign-off BEFORE it enters
-  `devlog/`. What needs confirming is the frame, not the moment. Scratchpad paths are not reviewable.
-- Once signed off, the shot goes to `devlog/screenshots/YYYY-MM-DD-<slug>.jpeg` (JPEG q75-80; a
-  small PNG only when transparency or fine detail needs it) and gets a one-line caption under its
-  date in `devlog/README.md`. Chronological, one entry per slice.
+  `devlog/`. What needs confirming is the frame, not the moment; scratchpad paths are not reviewable.
+  Once signed off it goes to `devlog/screenshots/YYYY-MM-DD-<slug>.jpeg` (JPEG q75-80; PNG only for
+  transparency or fine detail) with a one-line caption under its date in `devlog/README.md`.
 
 ## Menus & characters
 
@@ -175,10 +164,10 @@ PoE2 itemization actually works — do not invent mechanics or colors from memor
   `ROSTER_VERSION` (3) the blob wrapping them; `migrateSingleSave` upgrades a v2 blob on READ and
   does not commit it, so an untouched menu visit leaves the old save on disk.
 - **Local mode holds one character** (`LOCAL_CHARACTER_CAP`), passed in by the caller so online
-  passes `Infinity` and no shape changes. `PLAY` asks local-or-online BEFORE the roster, because
-  the two pools never mix and that is only fair said in advance.
+  passes `Infinity` and no shape changes. `PLAY` asks local-or-online BEFORE the roster: the two
+  pools never mix, and that is only fair said in advance.
 - **Classes are cosmetic and one body.** Ids in `@exiled/rules/classes.ts`, definitions in
-  `content-runtime/classes.ts`, pinned together by `simulation/characters.test.ts`. One male rig,
+  `content-runtime/classes.ts`, pinned together by `simulation/characters.test.ts`. One male rig and
   two looks per slot, so a class can only change the OUTFIT: each gets its own body base out of
   `STARTER_BASES` (kept out of the drop pool) whose baked `GEAR_TEXTURE` palette is the only thing
   making three classes read as three people.
@@ -189,11 +178,23 @@ PoE2 itemization actually works — do not invent mechanics or colors from memor
   life (three under StrictMode). A load in flight for one scene must never be handed to another:
   its containers belong to the first, `isRigReady` answers false, and the character silently fails
   to appear. Same for `resetPlayerRig(scene)` — an abandoned scene must not wipe a live one's cache.
-- `base.head.*` has **no facial features**, so the menu rig stands turned, hooded and lit from
-  behind. `index.html`'s "no text input anywhere" is also stale: name fields need `user-select`.
+- The menu rig has a FACE now, so `FACING` is staging, not concealment, and `FILL_INTENSITY` (0.15)
+  is the knob for how much of it you get — low because the plate is lit by fire, not because the
+  head is blank. `index.html`'s "no text input anywhere" is stale too: name fields need `user-select`.
+- **Never construct a `Texture` on the menu scene before `loadPlayerRig`.** A texture download
+  across the wardrobe's glTF import leaves every wardrobe material sampling flat white: a correctly
+  shaped, correctly animated white silhouette, and a green test suite. Bisected to the texture
+  alone; the mesh and the material are harmless either side of the load.
+- The painted floor is NOT the scene's y=0 (`FLOOR_Y`); `floorScreenY()` says where the soles land
+  on the canvas and `menu-scene.test.ts` pins it against the painting. His shadow is cast FORWARD,
+  because the plate's one shaft falls from the dome behind.
+- **`BrazierSpot` coordinates are fractions of the BACKDROP IMAGE, not the viewport** — the backdrop
+  is drawn `cover`, so viewport fractions hold in one window only. `flame: 0` keeps the painting's
+  own fire and adds flicker alone; a drawn flame over a painted one is two fires in one bowl, which
+  is why `menu_backdrop` is authored with cold coals. Nothing in the menus moves with the pointer.
 
 ## Conventions
 
-- Sim math is deterministic fixed-point integers; keep replay checksums stable.
-- `@exiled/rules` is a pure leaf: no imports from other `@exiled` packages.
+- Sim math is deterministic fixed-point integers; keep replay checksums stable. `@exiled/rules` is a
+  pure leaf: no imports from other `@exiled` packages.
 - Commit workflow: direct-to-main, one commit per task. No attribution trailers, no emdashes in messages.

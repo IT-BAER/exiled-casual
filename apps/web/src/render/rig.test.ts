@@ -342,8 +342,40 @@ describe("wardrobe asset", () => {
     expect(worst).toBeLessThan(0.01);
   });
 
-  it("carries a head, because neither source pack has one", () => {
-    expect(skinned.filter((n) => n.startsWith("base.head.")).length).toBeGreaterThan(0);
+  it("carries a head that is unwrapped onto the painted face, not pinned to one texel", () => {
+    // Neither outfit pack ships a head, but both ship the *texture* for one: a
+    // face painted into the top-left of `T_Regular_Male_Dark_BaseColor.png` that
+    // each pack references and neither uses, because the head it was unwrapped
+    // for lives in the author's separate base-character pack. The head is cut
+    // out of that base male so it arrives already carrying those uvs.
+    //
+    // What this pins is that the head is UNWRAPPED, which a name test cannot
+    // see. The head this replaced was a uv sphere with every loop pinned to one
+    // flat skin texel — correctly shaped, correctly animated, and completely
+    // blank — so "a part called base.head.* exists" passed all the way through
+    // it. Hair is still pinned on purpose, which makes it the control: if the
+    // pin ever came back for the head, hair is what it would look like.
+    for (const part of ["base.head.head", "base.head.eyes", "base.head.brows", "base.head.hair"]) {
+      expect(skinned).toContain(part);
+    }
+
+    const uvSpread = (part: string) => {
+      const { data } = attribute(part, "TEXCOORD_0");
+      const lo = [Infinity, Infinity];
+      const hi = [-Infinity, -Infinity];
+      for (let i = 0; i < data.length; i += 2) {
+        for (const k of [0, 1]) {
+          lo[k] = Math.min(lo[k]!, data[i + k]!);
+          hi[k] = Math.max(hi[k]!, data[i + k]!);
+        }
+      }
+      return Math.min(hi[0]! - lo[0]!, hi[1]! - lo[1]!);
+    };
+
+    // A face island is a good fraction of the atlas in both directions.
+    expect(uvSpread("base.head.head")).toBeGreaterThan(0.1);
+    expect(uvSpread("base.head.eyes")).toBeGreaterThan(0.1);
+    expect(uvSpread("base.head.hair")).toBe(0);
   });
 
   it("carries the coat, which is the armoured body's silhouette", () => {

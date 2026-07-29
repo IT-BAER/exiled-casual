@@ -1,12 +1,18 @@
 /**
  * The main menu.
  *
- * Composed from PoE1's own (reference-screenshots/main-menu.png): a colossal
- * seated statue in a dim domed hall, the title emblem hung in the quiet air
- * above it, a framed panel low in the frame carrying the buttons, and a boot log
- * whispering away in the bottom left. What is deliberately NOT borrowed is the
- * gateway dropdown and the LOG IN column: there is no server yet, and a dead
- * control that implies one is a lie the first player would catch.
+ * The LAYOUT is composed from PoE1's own (reference-screenshots/main-menu.png):
+ * the title emblem hung in quiet air up top, a framed panel low in the frame
+ * carrying the buttons, a boot log whispering away in the bottom left, and the
+ * art's weight on the right. What is deliberately NOT borrowed is the gateway
+ * dropdown and the LOG IN column: there is no server yet, and a dead control
+ * that implies one is a lie the first player would catch.
+ *
+ * The PAINTING is not borrowed either, and the first one was. It was a colossal
+ * seated god in a domed rotunda, which is PoE1's main menu redrawn rather than
+ * answered — close enough to be recognised, which is the one thing this screen
+ * must not be. It is now a toppled god's head half-sunk in a flooded ruin: the
+ * same hour of the same world, from outside the hall you are chosen in.
  *
  * PLAY does not start a game. It asks which world the character lives in, which
  * is the one question that cannot be changed afterwards (local and online
@@ -18,13 +24,14 @@ import { Atmosphere, type BrazierSpot } from "./atmos";
 import { Divider, FramedPanel, GOLD, GOLD_DIM, MENU_ART, MenuButton, PARCHMENT, SERIF } from "./frames";
 
 /**
- * The two braziers painted into `menu_backdrop.jpg`, as fractions of the
- * viewport. Measured off the art: a warm glow that misses its own fire is a
- * lamp with no bulb.
+ * The two braziers painted into `menu_backdrop.jpg`, as fractions of THAT IMAGE
+ * (see `BrazierSpot`). Found by thresholding the art for warm pixels rather than
+ * by eye, and the reflection in the flood water had to be excluded from the
+ * cluster or every flame sat half a bowl too low.
  */
 const BRAZIERS: readonly BrazierSpot[] = [
-  { x: 0.549, y: 0.792, r: 0.045, phase: 0 },
-  { x: 0.783, y: 0.800, r: 0.070, phase: 2.4 },
+  { x: 0.525, y: 0.819, r: 0.045, flame: 0.024, phase: 0 },
+  { x: 0.750, y: 0.816, r: 0.075, flame: 0.048, phase: 2.4 },
 ];
 
 export interface MainMenuProps {
