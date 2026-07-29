@@ -32,12 +32,22 @@ export const RAIL_H = 4;
  * carries a calc(), so neither `.style` nor the style attribute can be read back
  * in a test — the string itself is the only thing left to pin.
  */
-export const TICK_BACKGROUND =
+const studs = (pip: string, edge: string) =>
   `repeating-linear-gradient(90deg,` +
   `rgba(0,0,0,0) 0 calc(${SEGMENT_PCT}% - 3px),` +
-  `rgba(0,0,0,0.5) calc(${SEGMENT_PCT}% - 3px) calc(${SEGMENT_PCT}% - 2px),` +
-  `rgba(255,214,140,0.9) calc(${SEGMENT_PCT}% - 2px) calc(${SEGMENT_PCT}% - 1px),` +
-  `rgba(0,0,0,0.5) calc(${SEGMENT_PCT}% - 1px) ${SEGMENT_PCT}%)`;
+  `${edge} calc(${SEGMENT_PCT}% - 3px) calc(${SEGMENT_PCT}% - 2px),` +
+  `${pip} calc(${SEGMENT_PCT}% - 2px) calc(${SEGMENT_PCT}% - 1px),` +
+  `${edge} calc(${SEGMENT_PCT}% - 1px) ${SEGMENT_PCT}%)`;
+
+export const TICK_BACKGROUND = studs("rgba(255,214,140,0.9)", "rgba(0,0,0,0.5)");
+
+/**
+ * The same studs unlit, running the WHOLE rail. Without them the empty part is
+ * a plain dark line that says nothing, and a player who has never seen the bar
+ * full cannot tell it is a track at all: the studs are what make the trough read
+ * as measured-out distance still to go rather than as a border.
+ */
+export const TICK_BACKGROUND_EMPTY = studs("rgba(150,132,96,0.5)", "rgba(0,0,0,0.55)");
 
 /**
  * Pale core between two darker rims, the way the reference line is lit — a flat
@@ -141,13 +151,22 @@ export function XpBar({ level, xp, xpToNext }: { level: number; xp: number; xpTo
           }}
         />
         <div
+          data-testid="xp-bar-ticks-empty"
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: TICK_BACKGROUND_EMPTY,
+            pointerEvents: "none",
+          }}
+        />
+        <div
           data-testid="xp-bar-ticks"
           style={{
             position: "absolute",
             inset: 0,
             background: TICK_BACKGROUND,
-            // Studs sit on the line, so they stop where the line does; past the
-            // fill PoE1's rail is plain dark trough. Clipped rather than resized,
+            // The LIT studs stop where the line does; past the fill the unlit
+            // layer beneath shows through instead. Clipped rather than resized,
             // because the gradient's 5% steps have to keep measuring the whole
             // rail and not whatever is filled so far.
             clipPath: `inset(0 ${100 - pct}% 0 0)`,

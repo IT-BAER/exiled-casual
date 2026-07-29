@@ -8,7 +8,7 @@ import { playDropSound } from "../audio/drop-sound";
 import "@testing-library/jest-dom/vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { Hud } from "./Hud";
-import { xpPerHour, TICK_BACKGROUND, RAIL_H } from "./XpBar";
+import { xpPerHour, TICK_BACKGROUND, TICK_BACKGROUND_EMPTY, RAIL_H } from "./XpBar";
 import type { Snapshot } from "@exiled/protocol";
 import { MAP_PORTALS } from "@exiled/protocol";
 import { testPlayer, testStats } from "../test-fixtures";
@@ -382,8 +382,14 @@ describe("experience bar", () => {
     expect(TICK_BACKGROUND).toContain("rgba(255,214,140,0.9)");
     expect(TICK_BACKGROUND).not.toContain("rgba(0,0,0,0.62)");
     expect(RAIL_H).toBeLessThan(6);
-    // The studs stop where the fill does, so the empty trough stays plain.
+    // The LIT studs stop where the fill does.
     expect(ticks.style.clipPath).toBe("inset(0 75% 0 0)");
+    // But the studs themselves run the whole rail, unlit, or an empty bar is a
+    // plain dark line nobody would read as an experience track.
+    const empty = screen.getByTestId("xp-bar-ticks-empty");
+    expect(empty.style.clipPath).toBe("");
+    expect(TICK_BACKGROUND_EMPTY).toContain("rgba(150,132,96,0.5)");
+    expect(TICK_BACKGROUND_EMPTY).not.toContain("rgba(255,214,140,0.9)");
   });
 });
 
