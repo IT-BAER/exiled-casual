@@ -47,6 +47,14 @@ export interface RosterBlob {
   characters: CharacterRecord[];
   /** Shared across every character, as PoE shares a stash account-wide. Opaque. */
   stash?: unknown;
+  /**
+   * Client settings, global rather than per character, and opaque for the same
+   * reason the stash is: this leaf must not learn what a shadow quality is.
+   * OPTIONAL, so a v3 blob written before settings existed still parses and the
+   * version does not have to move. `asRoster` rejects a version that is not
+   * current, so bumping it would discard the player's roster to buy nothing.
+   */
+  settings?: unknown;
   lastPlayedId?: string;
 }
 
@@ -151,6 +159,11 @@ export function touchLastPlayed(roster: RosterBlob, id: string): RosterBlob {
 /** Replace the shared stash. */
 export function putStash(roster: RosterBlob, stash: unknown): RosterBlob {
   return { ...roster, stash };
+}
+
+/** Replace the client settings. */
+export function putSettings(roster: RosterBlob, settings: unknown): RosterBlob {
+  return { ...roster, settings };
 }
 
 /**

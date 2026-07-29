@@ -13,11 +13,13 @@ import {
   putCharacterState,
   touchLastPlayed,
   putStash,
+  putSettings,
   loadRoster,
   saveRoster,
   readBlob,
   asRoster,
   type CharacterRecord,
+  type RosterBlob,
 } from "./roster";
 
 function rec(name: string, id = name.toLowerCase()): CharacterRecord {
@@ -136,5 +138,29 @@ describe("roster", () => {
       // ...but the raw blob is still readable, which is what migration needs.
       expect(await readBlob(kv)).toMatchObject({ version: 2 });
     });
+  });
+});
+
+describe("settings on the roster", () => {
+  it("puts settings without touching the characters or the stash", () => {
+    const base: RosterBlob = { ...emptyRoster(), stash: { grid: [] } };
+    const next = putSettings(base, { sound: { muted: true } });
+    expect(next.settings).toEqual({ sound: { muted: true } });
+    expect(next.stash).toEqual(base.stash);
+    expect(next.characters).toBe(base.characters);
+    expect(base.settings).toBeUndefined(); // the input is not mutated
+  });
+
+  it("does not change the blob version, so an old save still loads", () => {
+    const next = putSettings(emptyRoster(), { graphics: { bloom: false } });
+    expect(next.version).toBe(ROSTER_VERSION);
+    expect(ROSTER_VERSION).toBe(3);
+  });
+
+  it("reads a v3 blob that has no settings key at all", () => {
+    const old = { version: 3, characters: [] };
+    const parsed = asRoster(old);
+    expect(parsed).not.toBeNull();
+    expect(parsed!.settings).toBeUndefined();
   });
 });

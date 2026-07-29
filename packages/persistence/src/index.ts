@@ -15,10 +15,13 @@ export interface KvStore {
 /** In-memory adapter — deterministic and fault-injectable, for tests. */
 export class MemoryKv implements KvStore {
   private blob: string | null = null;
+  /** How many times save() was called. Lets a test see a debounce actually debouncing. */
+  writes = 0;
   load(): Promise<string | null> {
     return Promise.resolve(this.blob);
   }
   save(value: string): Promise<void> {
+    this.writes++;
     this.blob = value;
     return Promise.resolve();
   }
