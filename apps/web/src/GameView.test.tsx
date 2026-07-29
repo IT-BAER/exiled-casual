@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeAll, afterEach } from "vitest";
 import { render, screen, fireEvent, act, cleanup } from "@testing-library/react";
 import { testPlayer } from "./test-fixtures";
+import { DEFAULT_SETTINGS } from "./settings";
 import type { Snapshot } from "@exiled/protocol";
 
 // The GameView effect instantiates a real Babylon Engine (WebGL) + Worker, neither of
@@ -83,11 +84,18 @@ beforeAll(() => {
 });
 
 /** Mount GameView and push one snapshot in, which is what gates every panel's render. */
-function mountWithSnapshot() {
-  const utils = render(<GameView />);
-  act(() => { hoisted.worker?.onmessage?.({ data: { type: "snapshot", snapshot: makeSnap() } }); });
+function mountWithSnapshot(props: Partial<React.ComponentProps<typeof GameView>> = {}) {
+  const utils = render(<GameView {...props} />);
+  act(() => {
+    hoisted.worker?.onmessage?.({
+      data: { type: "snapshot", snapshot: { ...makeSnap(), entities: [DROP] } },
+    });
+  });
   return utils;
 }
+
+/** One drop on the ground, which is what makes a loot plate exist to hide. */
+const DROP = { id: 7, kind: "groundItem" as const, x: 1, y: 1, rarity: "normal" as const };
 
 // Every case here mounts its own GameView, and its keydown listener is on `window`:
 // a mount left standing answers the next test's key presses too.
@@ -97,6 +105,17 @@ describe("GameView", () => {
   it("renders a canvas element", () => {
     const { container } = render(<GameView />);
     expect(container.querySelector("canvas")).not.toBeNull();
+  });
+
+  it("draws the loot plates by default and not when the UI tab turns them off", () => {
+    mountWithSnapshot();
+    expect(screen.getByTestId(`loot-label-${DROP.id}`)).toBeTruthy();
+    cleanup();
+
+    mountWithSnapshot({
+      settings: { ...DEFAULT_SETTINGS, ui: { ...DEFAULT_SETTINGS.ui, lootLabels: false } },
+    });
+    expect(screen.queryByTestId(`loot-label-${DROP.id}`)).toBeNull();
   });
 
   it("Escape closes every open overlay at once", () => {

@@ -27,6 +27,12 @@ export interface LootLabelsProps {
   project: Projector | null;
   /** Clicking a plate walks to the drop and picks it up once in range. */
   onPick?: (entityId: number, x: number, y: number) => void;
+  /**
+   * Draw the name plates at all. False hides the HUD but keeps this component
+   * mounted, because the drop cue is announced from here: the setting is "do
+   * not show me the plates", never "do not tell me something dropped".
+   */
+  plates?: boolean;
 }
 
 /**
@@ -38,7 +44,7 @@ export interface LootLabelsProps {
  * snapshot only changes at 30 Hz, so a rAF loop writes transforms straight to
  * the plate nodes instead of re-rendering the tree.
  */
-export function LootLabels({ snapshot, project, onPick }: LootLabelsProps) {
+export function LootLabels({ snapshot, project, onPick, plates = true }: LootLabelsProps) {
   const nodes = useRef(new Map<number, HTMLDivElement>());
   const positions = useRef(new Map<number, { x: number; y: number }>());
   /** Ids already announced. Null until the first snapshot, so items lying on the
@@ -99,7 +105,7 @@ export function LootLabels({ snapshot, project, onPick }: LootLabelsProps) {
 
   return (
     <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
-      {items.map((e) => {
+      {(plates ? items : []).map((e) => {
         const look = RARITY[(e.rarity ?? "normal") as keyof typeof RARITY] ?? RARITY.normal;
         return (
           <div

@@ -36,9 +36,16 @@ export interface SoundSettings {
   muted: boolean;
 }
 
+/** What the HUD draws. Both default on: a HUD you have to switch on is a HUD nobody finds. */
+export interface UiSettings {
+  minimap: boolean;
+  lootLabels: boolean;
+}
+
 export interface Settings {
   graphics: GraphicsSettings;
   sound: SoundSettings;
+  ui: UiSettings;
 }
 
 /** Half resolution. Lower is legible as a bug rather than as a setting. */
@@ -53,6 +60,7 @@ export const DEFAULT_SETTINGS: Settings = {
     resolutionScale: 1,
   },
   sound: { master: 0.8, muted: false },
+  ui: { minimap: true, lootLabels: true },
 };
 
 const SHADOW_QUALITIES: readonly ShadowQuality[] = ["off", "low", "high"];
@@ -84,6 +92,7 @@ export function sanitize(raw: unknown): Settings {
   const root = obj(raw);
   const g = obj(root["graphics"]);
   const s = obj(root["sound"]);
+  const u = obj(root["ui"]);
   const d = DEFAULT_SETTINGS;
   return {
     graphics: {
@@ -101,6 +110,10 @@ export function sanitize(raw: unknown): Settings {
     sound: {
       master: num(s["master"], 0, 1, d.sound.master),
       muted: bool(s["muted"], d.sound.muted),
+    },
+    ui: {
+      minimap: bool(u["minimap"], d.ui.minimap),
+      lootLabels: bool(u["lootLabels"], d.ui.lootLabels),
     },
   };
 }

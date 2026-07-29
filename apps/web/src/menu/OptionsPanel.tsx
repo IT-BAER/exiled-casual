@@ -27,10 +27,11 @@ import {
 } from "./frames";
 import { MIN_RESOLUTION_SCALE, type Settings, type ShadowQuality } from "../settings";
 
-type TabId = "graphics" | "sound";
+type TabId = "graphics" | "sound" | "ui";
 const TABS: readonly { id: TabId; label: string }[] = [
   { id: "graphics", label: "Graphics" },
   { id: "sound", label: "Sound" },
+  { id: "ui", label: "UI" },
 ];
 
 export function OptionsPanel({
@@ -54,6 +55,8 @@ export function OptionsPanel({
     onChange({ ...settings, graphics: { ...settings.graphics, ...patch } });
   const setSound = (patch: Partial<Settings["sound"]>): void =>
     onChange({ ...settings, sound: { ...settings.sound, ...patch } });
+  const setUi = (patch: Partial<Settings["ui"]>): void =>
+    onChange({ ...settings, ui: { ...settings.ui, ...patch } });
 
   return (
     <div
@@ -141,7 +144,7 @@ export function OptionsPanel({
                 />
               </Row>
             </>
-          ) : (
+          ) : tab === "sound" ? (
             <>
               <Group>Volume</Group>
               <Row label="Master Volume">
@@ -174,6 +177,24 @@ export function OptionsPanel({
                 One cue per drop is every sound the game has. Music gets its own slider when there
                 is music.
               </p>
+            </>
+          ) : (
+            <>
+              <Group>Heads-up Display</Group>
+              <Row label="Show Minimap" note="The corner map of the area you are in.">
+                <Gem
+                  label="Show Minimap"
+                  on={settings.ui.minimap}
+                  onToggle={(minimap) => setUi({ minimap })}
+                />
+              </Row>
+              <Row label="Show Loot Labels" note="Drops still chime, and still hover.">
+                <Gem
+                  label="Show Loot Labels"
+                  on={settings.ui.lootLabels}
+                  onToggle={(lootLabels) => setUi({ lootLabels })}
+                />
+              </Row>
             </>
           )}
         </div>

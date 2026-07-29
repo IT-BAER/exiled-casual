@@ -16,6 +16,12 @@ describe("sanitize", () => {
     expect(got.sound.master).toBe(DEFAULT_SETTINGS.sound.master);
   });
 
+  it("carries the HUD toggles, defaulting them on", () => {
+    expect(sanitize(null).ui).toEqual({ minimap: true, lootLabels: true });
+    expect(sanitize({ ui: { minimap: false } }).ui).toEqual({ minimap: false, lootLabels: true });
+    expect(sanitize({ ui: { lootLabels: "no" } }).ui.lootLabels).toBe(true);
+  });
+
   it("refuses an enum member it has never heard of", () => {
     const got = sanitize({ graphics: { shadows: "ultra", atmosphere: "swamp" } });
     expect(got.graphics.shadows).toBe(DEFAULT_SETTINGS.graphics.shadows);
@@ -39,7 +45,7 @@ describe("sanitize", () => {
   it("drops keys it does not know rather than passing them through", () => {
     const got = sanitize({ graphics: { shadows: "off", raytracing: true }, mods: ["a"] }) as
       unknown as Record<string, unknown>;
-    expect(Object.keys(got).sort()).toEqual(["graphics", "sound"]);
+    expect(Object.keys(got).sort()).toEqual(["graphics", "sound", "ui"]);
     expect(Object.keys(got["graphics"] as object).sort()).toEqual(
       Object.keys(DEFAULT_SETTINGS.graphics).sort(),
     );

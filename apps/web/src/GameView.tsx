@@ -277,9 +277,19 @@ export function GameView({
         ref={canvasRef}
         style={{ width: "100%", height: "100%", display: "block" }}
       />
-      <LootLabels snapshot={snapshot} project={project} onPick={pick ?? undefined} />
+      {/* Stays mounted with the plates off: the drop CUE is played from inside
+          LootLabels, and a HUD toggle that also silenced every drop would be a
+          bug wearing a setting's clothes. */}
+      <LootLabels
+        snapshot={snapshot}
+        project={project}
+        onPick={pick ?? undefined}
+        plates={settings.ui.lootLabels}
+      />
       <Hud snapshot={snapshot} hoveredEntityId={hoveredEntityId} />
-      <Minimap layout={areaLayout} player={snapshot?.player ?? null} />
+      {settings.ui.minimap && (
+        <Minimap layout={areaLayout} player={snapshot?.player ?? null} />
+      )}
       {panelOpen && snapshot && (
         <PreparationPanel
           atlasSeed={snapshot.atlasSeed}

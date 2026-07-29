@@ -17,18 +17,29 @@ function setup(over: Partial<Settings> = {}) {
   const settings: Settings = {
     graphics: { ...DEFAULT_SETTINGS.graphics, ...(over.graphics ?? {}) },
     sound: { ...DEFAULT_SETTINGS.sound, ...(over.sound ?? {}) },
+    ui: { ...DEFAULT_SETTINGS.ui, ...(over.ui ?? {}) },
   };
   render(<OptionsPanel settings={settings} onChange={onChange} onClose={onClose} />);
   return { onChange, onClose };
 }
 
 describe("OptionsPanel", () => {
-  it("opens on Graphics and offers Sound", () => {
+  it("opens on Graphics and offers Sound and UI", () => {
     setup();
     expect(screen.getByRole("tab", { name: /graphics/i }).getAttribute("aria-selected")).toBe("true");
     expect(screen.getByRole("tab", { name: /sound/i }).getAttribute("aria-selected")).toBe("false");
-    // Increment 1 ships two tabs. An empty UI tab would be a lie.
-    expect(screen.queryByRole("tab", { name: /^ui$/i })).toBeNull();
+    expect(screen.getByRole("tab", { name: /^ui$/i }).getAttribute("aria-selected")).toBe("false");
+  });
+
+  it("the UI tab toggles the two HUD pieces and reports the whole settings object", () => {
+    const { onChange } = setup();
+    fireEvent.click(screen.getByRole("tab", { name: /^ui$/i }));
+    expect(screen.getByRole("checkbox", { name: /minimap/i }).getAttribute("aria-checked")).toBe("true");
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /loot labels/i }));
+    const next = onChange.mock.calls[0]![0] as Settings;
+    expect(next.ui).toEqual({ minimap: true, lootLabels: false });
+    expect(next.graphics).toEqual(DEFAULT_SETTINGS.graphics);
   });
 
   it("switches tabs", () => {
