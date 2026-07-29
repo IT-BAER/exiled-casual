@@ -54,8 +54,15 @@ export function App(): React.ReactElement {
   }, []);
 
   const rows = React.useMemo(() => headers(roster), [roster]);
-  const selectedClassId =
-    rows.find((c) => c.id === selectedId)?.classId ?? DEFAULT_CLASS_ID;
+  /**
+   * Null when nobody is selected, and NOT a default class.
+   *
+   * Falling back to `DEFAULT_CLASS_ID` here reads as harmless and is not: it
+   * turns "no character" into "some character", so an empty roster still stood
+   * a full figure in the hall and deleting your last one left him behind, wearing
+   * a class nobody owned. `MenuStage` takes the null and empties the hall.
+   */
+  const selectedClassId = rows.find((c) => c.id === selectedId)?.classId ?? null;
 
   if (screen.kind === "game") {
     return <GameView characterId={screen.characterId} onExit={() => setScreen({ kind: "select" })} />;

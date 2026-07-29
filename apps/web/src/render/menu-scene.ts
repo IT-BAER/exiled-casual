@@ -31,6 +31,7 @@ import {
   Vector3,
 } from "@babylonjs/core";
 import { attachRig, loadPlayerRig, resetPlayerRig, type Looks, type RigActor } from "./rig";
+import { dissolveAway, primeDissolve } from "./dissolve";
 
 /**
  * The painted floor is BELOW the scene's own origin, and by half a unit.
@@ -263,8 +264,18 @@ function shadowFalloff(scene: Scene): DynamicTexture {
 }
 
 export interface MenuStage {
-  /** Dress the character. Visibility only, so it never restarts the idle. */
-  setLooks(looks: Looks): void;
+  /**
+   * Dress the character, or empty the hall with null.
+   *
+   * Null is a real state and not an absence of one: with no character selected
+   * there is nobody to draw, and defaulting to some class instead stands a
+   * stranger in the hall wearing gear nobody owns.
+   *
+   * Visibility only, so it never restarts the idle.
+   */
+  setLooks(looks: Looks | null): void;
+  /** Dust the character away, resolving when the hall is empty. */
+  dissolve(): Promise<void>;
   dispose(): void;
 }
 
@@ -374,9 +385,38 @@ export async function createMenuStage(canvas: HTMLCanvasElement): Promise<MenuSt
   const onResize = () => engine.resize();
   window.addEventListener("resize", onResize);
 
+  /** The rig's own geometry: every descendant of the host that has any. */
+  const worn = () => host.getChildMeshes().filter((m) => m.getTotalVertices() > 0) as Mesh[];
+
+  /** Show or empty the hall. The shadow goes with him: it is a separate unlit
+   *  quad, so left alone it stays as a stain on the floor under nobody. */
+  const stand = (there: boolean) => {
+    host.setEnabled(there);
+    shadow.setEnabled(there);
+    shadowMat.alpha = SHADOW_STRENGTH;
+  };
+
   return {
     setLooks(looks) {
+      if (looks === null) {
+        stand(false);
+        return;
+      }
+      stand(true);
       rig?.setLooks(looks);
+      // After dressing, not before: re-texturing a slot for a gear base CLONES
+      // its material, and a clone does not carry the plugin (it is deliberately
+      // not serialized), so the thing that needs compiling only exists once the
+      // character is wearing it.
+      void primeDissolve(worn());
+    },
+    async dissolve() {
+      await dissolveAway(scene, worn(), (gone) => {
+        // Squared, so the stain is mostly gone by the time the body is, rather
+        // than lingering under someone who is no longer there to cast it.
+        shadowMat.alpha = SHADOW_STRENGTH * (1 - gone) * (1 - gone);
+      });
+      stand(false);
     },
     dispose() {
       window.removeEventListener("resize", onResize);

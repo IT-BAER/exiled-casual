@@ -14,9 +14,11 @@ import React from "react";
 import { createMenuStage, type MenuStage as Stage } from "../render/menu-scene";
 import { looksForClass } from "./class-looks";
 
-export function MenuStage({ classId }: { classId: string }): React.ReactElement {
+export function MenuStage({ classId }: { classId: string | null }): React.ReactElement {
   const ref = React.useRef<HTMLCanvasElement>(null);
   const stageRef = React.useRef<Stage | null>(null);
+  /** What was standing here last, so a departure can be told from an empty hall. */
+  const wasThere = React.useRef<string | null>(classId);
 
   React.useEffect(() => {
     const canvas = ref.current;
@@ -26,7 +28,7 @@ export function MenuStage({ classId }: { classId: string }): React.ReactElement 
       .then((stage) => {
         if (dead) { stage?.dispose(); return; }
         stageRef.current = stage;
-        stage?.setLooks(looksForClass(classId));
+        stage?.setLooks(classId === null ? null : looksForClass(classId));
       })
       // No WebGL, no wardrobe, no stage. The screen is still a screen.
       .catch(() => undefined);
@@ -41,7 +43,22 @@ export function MenuStage({ classId }: { classId: string }): React.ReactElement 
   }, []);
 
   React.useEffect(() => {
-    stageRef.current?.setLooks(looksForClass(classId));
+    const stage = stageRef.current;
+    const leaving = classId === null && wasThere.current !== null;
+    wasThere.current = classId;
+    if (classId !== null) {
+      stage?.setLooks(looksForClass(classId));
+      return;
+    }
+    // Somebody was here and now is not: that is a deletion, and it gets the
+    // frames it takes to watch him go. An empty hall that was already empty just
+    // stays empty — a dissolve with nothing to dissolve is a stall on a screen
+    // that has never had anyone in it.
+    if (!leaving) {
+      stage?.setLooks(null);
+      return;
+    }
+    void stage?.dissolve().catch(() => stage?.setLooks(null));
   }, [classId]);
 
   return (

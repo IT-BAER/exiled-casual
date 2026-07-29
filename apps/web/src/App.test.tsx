@@ -122,6 +122,31 @@ describe("App routing", () => {
     expect((await screen.findByTestId("menu-stage")).textContent).toBe("class.stalker");
   });
 
+  it("stands nobody in the hall when there is nobody to stand there", async () => {
+    // The class the stage wears used to fall back to `DEFAULT_CLASS_ID` whenever
+    // nothing was selected, which quietly turned "no character" into "some
+    // character": an empty roster still had a full figure standing in the hall,
+    // and deleting your last one left him behind. The empty roster is the same
+    // state, so it is what this pins — no delete needed to catch the regression.
+    await toSelect();
+    expect(screen.queryByTestId("row-vess")).toBeNull();
+    expect((await screen.findByTestId("menu-stage")).textContent).toBe("");
+  });
+
+  it("takes the figure out of the hall when the last character is deleted", async () => {
+    await withCharacter();
+    await toSelect();
+    expect((await screen.findByTestId("menu-stage")).textContent).toBe("class.stalker");
+    fireEvent.click(screen.getByRole("button", { name: /^delete$/i }));
+    fireEvent.change(screen.getByTestId("confirm-name"), { target: { value: "Vess" } });
+    fireEvent.click(
+      Array.from(screen.getByTestId("confirm-delete").querySelectorAll("button")).find((b) =>
+        /delete/i.test(b.textContent ?? ""),
+      )!,
+    );
+    await waitFor(() => expect(screen.getByTestId("menu-stage").textContent).toBe(""));
+  });
+
   it("options and credits are real screens with a way back", async () => {
     render(<App />);
     await screen.findByTestId("main-menu");

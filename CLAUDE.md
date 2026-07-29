@@ -60,8 +60,8 @@ colors, name header, affix line format) to the `item-*.png` screenshots above.
   drawn as a long coat. Its UVs are copied from the nearest tunic vertex by angle and height, never
   projected into a box on the atlas (any box wide enough also clips a boot buckle into the cloth).
 - `helmet.hood.helm` is generated from the cowl: its crown is duplicated, cut at the brow and pushed
-  outward onto a dome, so it inherits the cloth's skin weights and can only ever cap the head it was
-  cut from. Outward-only (the cowl points forward; a shrink-wrap is a hood in iron) and flat-shaded.
+  outward onto a dome, inheriting the cloth's weights so it can only cap the head it was cut from.
+  Outward-only (the cowl points forward; a shrink-wrap is a hood in iron) and flat-shaded.
 - The coat hangs on `SKIRT_JOINTS`-joint `skirt_<i>_<n>` chains the builder adds under `pelvis`,
   driven by the verlet solver in `skirt.ts` (spring toward bind pose, no gravity; capsule colliders
   down both legs, each sized to that limb's *median* half-width — size to its widest slice and the
@@ -72,8 +72,8 @@ colors, name header, affix line format) to the `item-*.png` screenshots above.
   capsule); raising both rings together doubles resolution and blind spot at once. Chains run to the
   *deepest* hem ring: cloth below the last collided point is cloth a leg walks through. Rebuild the
   glb after changing `SKIRT_CHAINS` or `SKIRT_JOINTS`; `rig.ts` has both, `rig.test.ts` pins them.
-- The chain needs joints *down* its length, not just chains around the ring: a 0.464 bone against a
-  0.088 thigh can only pivot, never dent. `SKIRT_JOINTS` 3 — four is worse on every measure and dearer.
+- The chain needs joints *down* its length too: a 0.464 bone against a 0.088 thigh can only pivot,
+  never dent. `SKIRT_JOINTS` 3; four is worse on every measure and dearer.
 - `skirt.ts` solves at 240Hz so it outruns the display: collision only happens inside a step, and at
   1/60 against a 165Hz monitor two frames in three moved the legs and not the cloth. `DAMPING` and
   `STIFFNESS` are the 1/60-tuned values rescaled by `PER_OLD_STEP`, so the rate can change freely.
@@ -82,18 +82,16 @@ colors, name header, affix line format) to the `item-*.png` screenshots above.
   outran the only mechanism that moves the coat. Method: capture anchors, rests and colliders per
   frame from the live app, replay through `SkirtSim` headlessly, and score *depth at a visible
   threshold* (>1cm, >2cm) — never bare contact count, which rises with particle count and made a
-  finer chain look worse. `COLLIDE_PASSES` share one push budget on purpose, or iteration becomes an
-  8x speed limit that looks like progress. **Score oscillation separately from travel, or rubber
-  ships**: hem direction *reversals* per chain-frame (rubber 0.006 vs stiff 0.003) sees it, where
-  mean hem offset is lag as much as swing. `DAMPING` is the frequency knob; `CONTACT_ABSORB` does
-  nothing measurable in 0.3-0.6.
+  finer chain look worse. `COLLIDE_PASSES` share one push budget, or iteration becomes an 8x speed
+  limit that looks like progress. **Score oscillation separately from travel, or rubber ships**: hem
+  *reversals* per chain-frame (rubber 0.006 vs stiff 0.003) sees it; mean offset is lag as much as
+  swing. `DAMPING` is the frequency knob; `CONTACT_ABSORB` does nothing measurable in 0.3-0.6.
 - All packs export the same 65 joints at the same bind pose, so a mesh from one binds to another's
   skeleton by assignment; `rig.test.ts` guards that, and that every look the code asks for exists.
 - Blender 5.2 is installed, driven headless: `"/c/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background --factory-startup --python x.py`.
   Its glTF importer adds a 42-vert `Icosphere` as the bone display shape; the exporter drops it.
-- Raster UI/item art goes through `/codex-imagegen`, never hand-authored SVG: the quality gap is
-  large and visible. Masters are cropped to their alpha bounds before downscaling. Renders run long,
-  so launch them as background agents and do other work while they draw.
+- Raster UI/item art goes through `/codex-imagegen`, never hand-authored SVG (the gap is visible).
+  Masters crop to alpha before downscaling; renders run long, so launch them as background agents.
 - Worn armour is textured per item base by `tools/build_gear_textures.py`, which re-palettizes the
   ranger atlas to each base's inventory icon (luminance -> a ramp sampled from that icon). Rerun it
   after adding an armour base or changing an icon, and add the base to `GEAR_TEXTURE` in `rig.ts`;
@@ -160,17 +158,19 @@ colors, name header, affix line format) to the `item-*.png` screenshots above.
   (id, name, class, level, league) plus a **shared stash**, and treats each character's save as an
   OPAQUE `state`; that leaf must never learn what a session is. `simulation/roster-io.ts` parses
   the roster without a World — the menu imports THAT, never `characters.ts`, or the whole sim lands
-  in the main bundle. Two versions, not one: `persist.VERSION` (2) versions one character's save,
-  `ROSTER_VERSION` (3) the blob wrapping them; `migrateSingleSave` upgrades a v2 blob on READ and
-  does not commit it, so an untouched menu visit leaves the old save on disk.
+  in the main bundle. Two versions: `persist.VERSION` (2) for one character's save, `ROSTER_VERSION`
+  (3) for the blob wrapping them; `migrateSingleSave` upgrades a v2 blob on READ without committing
+  it, so an untouched menu visit leaves the old save on disk.
 - **Local mode holds one character** (`LOCAL_CHARACTER_CAP`), passed in by the caller so online
-  passes `Infinity` and no shape changes. `PLAY` asks local-or-online BEFORE the roster: the two
-  pools never mix, and that is only fair said in advance.
+  passes `Infinity`. `PLAY` asks local-or-online BEFORE the roster: the pools never mix, and that
+  is only fair said in advance.
 - **Classes are cosmetic and one body.** Ids in `@exiled/rules/classes.ts`, definitions in
-  `content-runtime/classes.ts`, pinned together by `simulation/characters.test.ts`. One male rig and
-  two looks per slot, so a class can only change the OUTFIT: each gets its own body base out of
-  `STARTER_BASES` (kept out of the drop pool) whose baked `GEAR_TEXTURE` palette is the only thing
-  making three classes read as three people.
+  `content-runtime/classes.ts`, pinned by `simulation/characters.test.ts`. One male rig, two looks
+  per slot, so a class only changes the OUTFIT: each gets a body base out of `STARTER_BASES` (kept
+  out of the drop pool) whose baked `GEAR_TEXTURE` palette makes three classes read as three people.
+- **Nobody is a state**: `MenuStage` takes `classId: string | null`; defaulting to a class stood a
+  stranger in an empty hall. Delete dissolves him (`dissolve.ts`), PRIMED at dress time — a material
+  plugin recompiles the shader and a compiling mesh is not drawn. Needs `doNotSerialize` (rig clones).
 - Menu art is generated (`/codex-imagegen`) into `assets/menu/`, cropped to alpha and scaled by
   `tools/build_menu_textures.py`, which also MEASURES the frame's `border-image-slice` off the alpha
   (a guessed inset shears a nine-slice). Plates are authored EMPTY; hover and pressed are filters.
