@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { fp } from "@exiled/fixed-point";
 import { offerWaystones, atlasGraph, WAYSTONE_OFFER_COUNT, atlasNodeTier, WAYSTONE_MAX_TIER } from "@exiled/rules";
 import { MAP_PORTALS } from "@exiled/protocol";
-import { waystoneItem } from "@exiled/content-runtime";
+import { waystoneItem, permanentWaystone, isPermanentWaystone, describeItem } from "@exiled/content-runtime";
 import { Simulation } from "../loop";
 import { registerInteractSystem } from "./interact";
 import type { World } from "../ecs";
@@ -218,6 +218,55 @@ describe("registerInteractSystem", () => {
     const session = world.get<SessionC>(sessionE, "session")!;
     expect(session.pendingArea).toBe("hideout");
     expect(session.portalsLeft).toBe(4); // unchanged
+  });
+
+  /**
+   * The floor under sustain. Stones are spent on activation and only come back
+   * off a dead map boss, so before this a character who abandoned a run on the
+   * last one could never enter a map again — every one of these three rules is
+   * load-bearing for that, and all three are invisible in the client.
+   */
+  describe("the permanent waystone", () => {
+    /** Nothing but the permanent stone in the bag, at a known cell. */
+    function onlyPermanent(world: World, sessionE: number) {
+      const inv = world.get<InventoryC>(sessionE, "inventory")!;
+      world.set<InventoryC>(sessionE, "inventory", {
+        ...inv, items: [{ x: 3, y: 2, w: 1, h: 1, item: permanentWaystone() }],
+      });
+    }
+
+    it("opens a map without being consumed", () => {
+      const { sim, world, player, sessionE } = makeWorld();
+      onlyPermanent(world, sessionE);
+
+      sim.step([activateCmd(player, "node.ashen_glade", { x: 3, y: 2 })]);
+
+      const session = world.get<SessionC>(sessionE, "session")!;
+      expect(session.mapOpen, "the map opened").toBe(1);
+      // Tier 1 with no modifiers, so what it buys is the right to keep playing
+      // and never a better run than a stone the Atlas actually paid out.
+      expect(session.areaTier).toBe(1);
+      expect(session.waystoneSeed).toBe(0);
+      const after = world.get<InventoryC>(sessionE, "inventory")!.items;
+      expect(after, "still in the bag").toHaveLength(1);
+      expect(isPermanentWaystone(after[0]!.item)).toBe(true);
+    });
+
+    it("stays white: normal rarity, no modifiers, and says so", () => {
+      const described = describeItem(permanentWaystone());
+      expect(described.rarity).toBe("normal");
+      expect(described.lines).toEqual(["Not consumed on use", "Cannot be modified"]);
+    });
+
+    it("cannot open a node that outranks Tier 1", () => {
+      const { sim, world, player, sessionE } = makeWorld();
+      onlyPermanent(world, sessionE);
+      const graph = atlasGraph(0);
+      const steep = graph.find((n) => atlasNodeTier(graph, n.id) > 1);
+      if (!steep) return; // no such node on this seed
+      sim.step([activateCmd(player, steep.id, { x: 3, y: 2 })]);
+      expect(world.get<SessionC>(sessionE, "session")!.mapOpen).toBe(0);
+    });
   });
 
   it("no-op when there is no session entity (legacy sim)", () => {

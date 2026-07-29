@@ -134,7 +134,8 @@ describe("Waystones sustain themselves", () => {
     const { sim, world, playerEntity } = createCombatSim(7, { area: "hideout" });
     const sessionE = world.query("session")[0]!;
     const beforeInv = world.get<InventoryC>(sessionE, "inventory")!;
-    expect(beforeInv.items.length).toBe(WAYSTONE_OFFER_COUNT);
+    // The offers, plus the permanent stone every character owns.
+    expect(beforeInv.items.length).toBe(WAYSTONE_OFFER_COUNT + 1);
     // Stone at (1,0) — second offer; record its seed so we can verify waystoneSeed.
     const stone1Seed = beforeInv.items.find((p) => p.x === 1 && p.y === 0)!.item.waystone!.seed;
 
@@ -143,7 +144,7 @@ describe("Waystones sustain themselves", () => {
     const after = world.get<SessionC>(sessionE, "session")!;
     expect(after.mapOpen).toBe(1);
     const afterInv = world.get<InventoryC>(sessionE, "inventory")!;
-    expect(afterInv.items.length).toBe(WAYSTONE_OFFER_COUNT - 1);
+    expect(afterInv.items.length).toBe(WAYSTONE_OFFER_COUNT);  // one spent, the permanent one kept
     expect(afterInv.items.find((p) => p.x === 1 && p.y === 0)).toBeUndefined();
     expect(after.waystoneSeed).toBe(stone1Seed);
   });
@@ -155,7 +156,7 @@ describe("Waystones sustain themselves", () => {
     sim.step([{ tick: 0, entity: playerEntity, type: "activateMap", atlasNodeId: atlasGraph(7)[0]!.id, data: { x: 9, y: 0 } }]);
     const s = world.get<SessionC>(sessionE, "session")!;
     expect(s.mapOpen).toBe(0);
-    expect(world.get<InventoryC>(sessionE, "inventory")!.items.length).toBe(WAYSTONE_OFFER_COUNT);
+    expect(world.get<InventoryC>(sessionE, "inventory")!.items.length).toBe(WAYSTONE_OFFER_COUNT + 1);
   });
 
   it("clearing a map hands stones back — one for a plain stone, two for a modified one", () => {

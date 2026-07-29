@@ -2,6 +2,7 @@ import type { KvStore } from "@exiled/persistence";
 import type { World } from "./ecs";
 import type { SessionC, InventoryC, StashC, VendorC, EquipmentC, ProgressC, ShardsC } from "./components";
 import { stockVendor } from "./vendor";
+import { withPermanentWaystone } from "./inventory";
 import { recomputePlayerStats } from "./derived";
 import { START_LEVEL } from "@exiled/rules";
 
@@ -71,7 +72,9 @@ export function restore(world: World, state: PersistedState): void {
     areaTier: 0,
   };
   world.set<SessionC>(e, "session", safe);
-  world.set<InventoryC>(e, "inventory", state.inventory);
+  // Every load, not only new characters: a save written before the permanent
+  // stone existed is exactly the save most likely to be out of stones.
+  world.set<InventoryC>(e, "inventory", withPermanentWaystone(state.inventory));
   world.set<StashC>(e, "stash", state.stash ?? EMPTY_STASH);
   world.set<EquipmentC>(e, "equipment", state.equipment ?? { slots: {} });
   // A save written before gold existed carries a progress with no `gold` key, so

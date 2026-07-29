@@ -512,8 +512,13 @@ export interface Item {
    * monster-scaling call site reads `waystoneMods(seed)` from `@exiled/rules`,
    * so the seed IS the stone and the item only has to carry it. Optional so no
    * other item and no persisted inventory needs migrating.
+   *
+   * `permanent` marks the one stone every character always owns: it is not
+   * consumed when a map opens and currency cannot touch it. Also optional, and
+   * for the same reason — a stone persisted before the flag existed is an
+   * ordinary stone, which is exactly what it was.
    */
-  waystone?: { seed: number; tier: number };
+  waystone?: { seed: number; tier: number; permanent?: boolean };
 }
 
 /**

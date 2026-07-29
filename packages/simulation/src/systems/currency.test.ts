@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { currencyItem } from "@exiled/content-runtime";
+import { currencyItem, permanentWaystone } from "@exiled/content-runtime";
 import { World } from "../ecs";
 import { Simulation } from "../loop";
 import { registerCurrencySystem } from "./currency";
@@ -86,6 +86,21 @@ describe("currency system", () => {
     const { sim, inv } = bench([cell(0, 0, wand()), cell(2, 0, wand())]);
     apply(sim, [0, 0], [2, 0]);
     expect(inv().items.every((p) => p.item.rarity === "normal")).toBe(true);
+  });
+
+  /**
+   * The permanent stone is never consumed, so a modifier rolled onto it would
+   * be a modifier the player keeps forever — the floor under sustain would
+   * quietly become the best stone anyone owns. It stays white.
+   */
+  it("refuses to modify the permanent waystone, and keeps the currency", () => {
+    const { sim, inv } = bench([
+      cell(0, 0, currencyItem("currency.alchemy"), 2),
+      cell(2, 0, permanentWaystone()),
+    ]);
+    apply(sim, [0, 0], [2, 0]);
+    expect(inv().items[1]!.item).toEqual(permanentWaystone());
+    expect(inv().items[0]!.count, "the orb is not spent on a refusal").toBe(2);
   });
 
   it("is deterministic: the same tick and cells craft the same item", () => {

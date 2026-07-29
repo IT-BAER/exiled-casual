@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { isPermanentWaystone } from "@exiled/content-runtime";
 import { MemoryKv } from "@exiled/persistence";
 import { rollItem, areaLevel } from "@exiled/rules";
 import { ITEM_POOLS, baseOf } from "@exiled/content-runtime";
@@ -38,7 +39,9 @@ describe("persist: snapshot/restore round-trip", () => {
     const reboot = createCombatSim(7, { area: "hideout" });
     expect(await loadInto(kv, reboot.world)).toBe(true);
     expect(getSession(reboot.world).completedNodes).toEqual(["node-a"]);
-    expect(reboot.world.get<InventoryC>(sessionEntity(reboot.world), "inventory")!.items).toHaveLength(1);
+    // The stashed loot, plus the permanent waystone `restore` puts back into
+    // every bag it loads — including saves written before that stone existed.
+    expect(reboot.world.get<InventoryC>(sessionEntity(reboot.world), "inventory")!.items).toHaveLength(2);
   });
 
   it("loadInto returns false when nothing was ever saved", async () => {
@@ -82,7 +85,11 @@ describe("persist: run-transaction fault injection", () => {
     expect(await loadInto(kv, reboot)).toBe(true);
     const s = getSession(reboot);
     expect(s.completedNodes).toEqual(["node-x"]);                                    // progression kept, not duplicated
-    expect(reboot.get<InventoryC>(sessionEntity(reboot), "inventory")!.items).toHaveLength(1); // loot kept, not duplicated
+    // Loot kept, not duplicated — and neither is the permanent waystone, which
+    // the second restore has to recognise rather than hand out again.
+    const bag = reboot.get<InventoryC>(sessionEntity(reboot), "inventory")!.items;
+    expect(bag).toHaveLength(2);
+    expect(bag.filter((p) => isPermanentWaystone(p.item))).toHaveLength(1);
   });
 
   it("snapshot is null with no session singleton", () => {

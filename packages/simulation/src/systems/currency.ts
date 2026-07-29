@@ -1,5 +1,5 @@
 import { applyCurrency } from "@exiled/rules";
-import { ITEM_POOLS, isCurrency, baseOf } from "@exiled/content-runtime";
+import { ITEM_POOLS, isCurrency, baseOf, isPermanentWaystone } from "@exiled/content-runtime";
 import { fnv1a32 } from "../rng";
 import { Simulation } from "../loop";
 import type { InventoryC } from "../components";
@@ -29,6 +29,10 @@ export function registerCurrencySystem(sim: Simulation): void {
       const target = inv.items[dst]!;
       // Currency on currency is never a craft, whatever the transition table says.
       if (!isCurrency(currency.item) || isCurrency(target.item)) continue;
+      // The permanent waystone is the one item in the game that stays white. It
+      // is never consumed, so a rolled modifier on it would be a permanent one —
+      // the floor under sustain would become the best stone anybody owns.
+      if (isPermanentWaystone(target.item)) continue;
 
       // The base id is the currency id: content and rules agree on the namespace, so
       // nothing has to carry a second identifier through the wire.

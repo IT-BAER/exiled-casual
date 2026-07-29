@@ -133,6 +133,35 @@ export function waystoneItem(seed: number, tier: number): Item {
   return { baseId: WAYSTONE_BASE_ID, rarity: "normal", itemLevel: 1, affixes: [], waystone: { seed, tier } };
 }
 
+/**
+ * The stone every character always owns, and the reason nobody can be locked
+ * out of the game.
+ *
+ * Stones are spent to open a map and only come back off a dead map boss, so a
+ * run abandoned on the last one used to end the character: no vendor sells
+ * them, no recipe makes them, and the device has nothing to offer. This one is
+ * never consumed, so the bottom rung of the Atlas is always open.
+ *
+ * It is deliberately the *worst* stone in the game and stays that way. Seed 0
+ * is not a placeholder: `waystoneRarity(0)` is normal and `waystoneMods(0)` is
+ * empty, so it is a white Tier 1 with no modifiers — the least experience, the
+ * least quantity, and `waystoneDrops` hands back exactly one stone for a
+ * modless run. Currency cannot touch it either. Nothing about it competes with
+ * a stone the Atlas actually paid out, which is what keeps it a floor rather
+ * than a reward: `docs/09-reward-psychology.md` is about the spike on the way
+ * up, and every stone worth wanting is still earned.
+ */
+export function permanentWaystone(): Item {
+  return {
+    baseId: WAYSTONE_BASE_ID, rarity: "normal", itemLevel: 1, affixes: [],
+    waystone: { seed: 0, tier: 1, permanent: true },
+  };
+}
+
+export function isPermanentWaystone(item: Item): boolean {
+  return item.waystone?.permanent === true;
+}
+
 export function isWaystone(item: Item): boolean {
   return item.baseId === WAYSTONE_BASE_ID;
 }
@@ -354,7 +383,7 @@ export interface ItemDescription {
   /** True while the item is unread: name, mods and flavour are withheld above. */
   unidentified?: boolean;
   /** Waystone only: what the socket and the ACTIVATE gate need from the stone. */
-  waystone?: { seed: number; tier: number };
+  waystone?: { seed: number; tier: number; permanent?: boolean };
 }
 
 /**
@@ -380,7 +409,11 @@ export function describeItem(item: Item): ItemDescription {
       name: `${base.name} (Tier ${tier})`,
       baseName: base.name,
       itemClass: base.itemClass,
-      lines: waystoneMods(seed).map((m) => m.label),
+      // The permanent stone says so on the item, or the one rule that makes it
+      // different from the white stone beside it is invisible.
+      lines: item.waystone.permanent
+        ? ["Not consumed on use", "Cannot be modified"]
+        : waystoneMods(seed).map((m) => m.label),
       statLines: [],
       icon: base.icon,
       waystone: { seed, tier },

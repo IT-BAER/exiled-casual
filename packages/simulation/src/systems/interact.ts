@@ -1,5 +1,6 @@
 import { MAP_PORTALS } from "@exiled/protocol";
 import { atlasGraph, isNodeReachable, mapSeedFor, atlasNodeTier } from "@exiled/rules";
+import { isPermanentWaystone } from "@exiled/content-runtime";
 import { Simulation } from "../loop";
 import type { Position, InteractableC, SessionC, InventoryC } from "../components";
 import { spawnPortalRing } from "../areas";
@@ -37,11 +38,15 @@ export function registerInteractSystem(sim: Simulation): void {
         // reason the fog is: the greyed-out tile is a courtesy, not the rule.
         if (ws.tier < atlasNodeTier(graph, atlasNodeId)) continue;
         // Spent: opening the map consumes the stone, which is what makes sustain
-        // a mechanic rather than a menu.
-        world.set<InventoryC>(sessionE, "inventory", {
-          ...inv!,
-          items: inv!.items.filter((_, i) => i !== index),
-        });
+        // a mechanic rather than a menu. The permanent stone is the exception
+        // and the only one — it is Tier 1 with no modifiers, so what it buys is
+        // the right to keep playing, never a better run than an earned stone.
+        if (!isPermanentWaystone(placed.item)) {
+          world.set<InventoryC>(sessionE, "inventory", {
+            ...inv!,
+            items: inv!.items.filter((_, i) => i !== index),
+          });
+        }
         world.set<SessionC>(sessionE, "session", {
           ...session,
           // The place is half the seed: the same Waystone run at two nodes has to
