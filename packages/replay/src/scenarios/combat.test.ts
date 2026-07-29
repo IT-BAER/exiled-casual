@@ -3,7 +3,7 @@ import { fp, toNumber } from "@exiled/fixed-point";
 import { resBlock } from "@exiled/content-schema";
 import { applyDamage } from "@exiled/rules";
 import { createCombatSim, intentToCommand, checksumWorld } from "@exiled/simulation";
-import { CONTENT_VERSION } from "@exiled/content-runtime";
+import { CONTENT_VERSION, SKILLS } from "@exiled/content-runtime";
 import { firstDifference } from "../index";
 import { runCombat } from "./combat";
 import type { Intent } from "@exiled/protocol";
@@ -21,10 +21,10 @@ describe("golden (a): Ember Bolt fire damage on a cinder imp", () => {
       sim.step(t === 0 ? [cmd] : []);
     }
     const expectedDamage = applyDamage(
-      { type: "fire", amountFixed: fp(25) },
+      { type: "fire", amountFixed: fp(36) },
       { resPct: resBlock(), armourFixed: fp(0.5) },
     );
-    expect(expectedDamage).toBe(fp(25));
+    expect(expectedDamage).toBe(fp(36));
 
     const damagedImps = world.query("monster", "health").filter(e => {
       const h = world.get<{ life: number; maxLife: number }>(e, "health")!;
@@ -79,9 +79,13 @@ describe("golden (c): fire resistance reduces damage", () => {
 describe("golden (d): monster death removes entity", () => {
   it("a monster overkilled to 0 life is absent from the world after the tick", () => {
     const { sim, world, playerEntity } = createCombatSim(42);
+    // Second cast off the skill's OWN cooldown rather than a literal: at a fixed
+    // tick 10 this test quietly stopped firing twice the day the cooldown passed
+    // it, and a one-bolt run does not overkill anything.
+    const second = SKILLS.get("skill.ember_bolt.v1")!.cooldownTicks;
     const cmds: [number, ReturnType<typeof fireSkill>][] = [
       [0, fireSkill(playerEntity, "skill.ember_bolt.v1", fp(5), fp(0), 0)],
-      [10, fireSkill(playerEntity, "skill.ember_bolt.v1", fp(5), fp(0), 10)],
+      [second, fireSkill(playerEntity, "skill.ember_bolt.v1", fp(5), fp(0), second)],
     ];
     const cmdMap = new Map(cmds);
     let impEntityAliveAtSome = false;
@@ -89,7 +93,7 @@ describe("golden (d): monster death removes entity", () => {
       const tickCmds = cmdMap.get(t) ? [cmdMap.get(t)!] : [];
       sim.step(tickCmds);
       const alive = world.query("monster").length;
-      if (t < 10) impEntityAliveAtSome = alive > 0;
+      if (t < second) impEntityAliveAtSome = alive > 0;
     }
     expect(impEntityAliveAtSome).toBe(true);
     const allMonsters = world.query("monster");

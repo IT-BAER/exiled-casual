@@ -72,7 +72,7 @@ describe("buildSnapshot", () => {
     const cmd = intentToCommand(intent, playerEntity, 0);
     sim.step([cmd]);
     const snap = buildSnapshot(world, sim, sim.tick, CONTENT_VERSION);
-    expect(snap.player.cooldowns["skill.ember_bolt.v1"]).toBeCloseTo(5 / 30, 5);
+    expect(snap.player.cooldowns["skill.ember_bolt.v1"]).toBeCloseTo(11 / 30, 5);
   });
 
   it("monster entities appear in snapshot sorted by id with life/maxLife/rare", () => {
@@ -392,13 +392,13 @@ describe("buildSnapshot - skills", () => {
     expect(bolt).toBeDefined();
     expect(bolt!.name).toBe("Ember Bolt");
     expect(bolt!.description.length).toBeGreaterThan(0);
-    expect(bolt!.manaCost).toBe(8);
-    // 8 cast ticks and 6 cooldown ticks at 30 Hz, with no cast speed on the base build.
-    expect(bolt!.castTimeSec).toBeCloseTo(8 / 30, 5);
-    expect(bolt!.cooldownSec).toBeCloseTo(6 / 30, 5);
-    // 25 fire damage over the cast, which is what its DPS column has to say.
-    expect(bolt!.dps).toBeCloseTo(25 / (8 / 30), 3);
-    expect(bolt!.lines).toContain("Deals 25 Fire Damage");
+    expect(bolt!.manaCost).toBe(12);
+    // 14 cast ticks and 12 cooldown ticks at 30 Hz, with no cast speed on the base build.
+    expect(bolt!.castTimeSec).toBeCloseTo(14 / 30, 5);
+    expect(bolt!.cooldownSec).toBeCloseTo(12 / 30, 5);
+    // 36 fire damage over the cast, which is what its DPS column has to say.
+    expect(bolt!.dps).toBeCloseTo(36 / (14 / 30), 3);
+    expect(bolt!.lines).toContain("Deals 36 Fire Damage");
   });
 
   it("carries cast speed into the reported cast time", () => {
@@ -406,8 +406,8 @@ describe("buildSnapshot - skills", () => {
     world.set(playerEntity, "offense", { spellDamagePct: 0, castSpeedPct: 100, critChancePct: 0 });
     const snap = buildSnapshot(world, sim, 0, CONTENT_VERSION);
     const bolt = snap.skills!.find((s) => s.id === "skill.ember_bolt.v1")!;
-    // Twice as fast: 8 ticks become 4, the same floor skillCast applies.
-    expect(bolt.castTimeSec).toBeCloseTo(4 / 30, 5);
+    // Twice as fast: 14 ticks become 7, the same floor skillCast applies.
+    expect(bolt.castTimeSec).toBeCloseTo(7 / 30, 5);
   });
 
   it("omits DPS for a skill that deals no damage", () => {

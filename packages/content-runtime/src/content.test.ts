@@ -66,20 +66,31 @@ describe("SKILLS", () => {
     expect(SKILLS.has("skill.blink.v1")).toBe(true);
   });
 
-  it("ember_bolt has a spawnProjectile effect with damage.amountFixed === fp(25)", () => {
+  it("ember_bolt has a spawnProjectile effect with damage.amountFixed === fp(36)", () => {
     const def = SKILLS.get("skill.ember_bolt.v1")!;
     const effect = def.effects.find((e) => e.type === "spawnProjectile");
     expect(effect).toBeDefined();
     if (effect?.type === "spawnProjectile") {
-      expect(effect.damage.amountFixed).toBe(fp(25));       // 25000
+      expect(effect.damage.amountFixed).toBe(fp(36));       // 36000
       expect(effect.maxRangeFixed).toBe(fp(20));             // 20000
     }
   });
 
-  it("ember_bolt manaCostFixed === fp(8) and cooldownTicks === 6", () => {
+  it("ember_bolt manaCostFixed === fp(12) and cooldownTicks === 12", () => {
     const def = SKILLS.get("skill.ember_bolt.v1")!;
-    expect(def.manaCostFixed).toBe(fp(8));
-    expect(def.cooldownTicks).toBe(6);
+    expect(def.manaCostFixed).toBe(fp(12));
+    expect(def.cooldownTicks).toBe(12);
+  });
+
+  /**
+   * The cast is the rate limiter and the cooldown sits under it, which is what
+   * makes "% increased Cast Speed" the stat that speeds this skill up. Swap the
+   * two and gear can never give the rate back — see the note on the def.
+   */
+  it("ember_bolt is limited by its cast, not its cooldown", () => {
+    const def = SKILLS.get("skill.ember_bolt.v1")!;
+    expect(def.castTicks).toBe(14);
+    expect(def.cooldownTicks).toBeLessThan(def.castTicks!);
   });
 
   it("cinder_ground has a spawnGroundArea effect with burning ailment maxStacks=5 dpsFixed=fp(8)", () => {
