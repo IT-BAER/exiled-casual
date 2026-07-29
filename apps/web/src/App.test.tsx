@@ -1,148 +1,150 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeAll, afterEach } from "vitest";
-import { render, screen, fireEvent, act, cleanup } from "@testing-library/react";
-import { testPlayer } from "./test-fixtures";
-import type { Snapshot } from "@exiled/protocol";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
+import { MemoryKv, emptyRoster, addCharacter, saveRoster, loadRoster } from "@exiled/persistence";
+import { setKv } from "./save/roster";
 
-// The App effect instantiates a real Babylon Engine (WebGL) + Worker, neither of
-// which exists in jsdom. Mock the WebGL/worker-touching pieces so App can mount;
-// the real Babylon + Worker integration is verified manually in Task 23.
-// `render/rig` and `render/level` are mocked for their imports as much as their
-// behaviour: rig pulls in skirt.ts, which builds Vector3 scratch vectors at module
-// scope, so leaving it real drags the whole solver through this stub.
-const hoisted = vi.hoisted(() => ({
-  worker: null as { onmessage: ((e: { data: unknown }) => void) | null } | null,
-  openPanel: null as ((open: boolean) => void) | null,
-  openStash: null as ((open: boolean) => void) | null,
-  openVendor: null as ((open: boolean) => void) | null,
+// The game and the 3D stage both build a Babylon engine on mount, and neither
+// exists in jsdom. Stubbing them is also the assertion this file cares about:
+// the router either mounted the game or it did not.
+vi.mock("./GameView", () => ({
+  GameView: ({ characterId }: { characterId?: string }) => (
+    <div data-testid="game-view">{characterId}</div>
+  ),
 }));
-
-vi.mock("@babylonjs/core", () => ({
-  Engine: vi.fn(() => ({
-    runRenderLoop: vi.fn(), resize: vi.fn(), dispose: vi.fn(),
-    getRenderWidth: () => 1920, getRenderHeight: () => 1080,
-  })),
-  Vector3: class { static Project = vi.fn(() => ({ x: 0, y: 0, z: 0.5 })); },
-  Matrix: { Identity: vi.fn() },
-}));
-vi.mock("./render/engine", () => ({
-  createScene: () => ({
-    scene: { render: vi.fn(), getTransformMatrix: vi.fn() },
-    camera: { viewport: { toGlobal: vi.fn() }, setTarget: vi.fn() },
-    detachZoom: vi.fn(),
-  }),
-}));
-vi.mock("./render/renderer", () => ({
-  SnapshotRenderer: vi.fn(() => ({ apply: vi.fn(), cyclePlayerOutfit: vi.fn(), setHoveredEntity: vi.fn() })),
-}));
-vi.mock("./render/rig", () => ({ loadPlayerRig: () => Promise.resolve(), resetPlayerRig: vi.fn() }));
-vi.mock("./render/props", () => ({ loadProps: () => Promise.resolve(), resetProps: vi.fn() }));
-vi.mock("./render/rocks", () => ({ loadRocks: () => Promise.resolve(), resetRocks: vi.fn() }));
-vi.mock("./render/level", () => ({ buildLevel: vi.fn() }));
-vi.mock("./input/bindings", () => ({
-  attachBindings: (
-    _canvas: unknown, _worker: unknown, _scene: unknown, _cycle: unknown, _hover: unknown,
-    onPanel: (open: boolean) => void,
-    onStash: (open: boolean) => void,
-    onVendor: (open: boolean) => void,
-  ) => {
-    hoisted.openPanel = onPanel;
-    hoisted.openStash = onStash;
-    hoisted.openVendor = onVendor;
-    return { detach: () => {}, onSnapshot: () => {}, approach: () => {} };
-  },
+vi.mock("./menu/MenuStage", () => ({
+  MenuStage: ({ classId }: { classId: string }) => <div data-testid="menu-stage">{classId}</div>,
 }));
 
 import { App } from "./App";
 
-const makeSnap = (): Snapshot => ({
-  tick: 1, area: "hideout", portalsLeft: 0, mapOpen: false, areaTier: 0,
-  atlasSeed: 0, completedNodes: [],
-  player: testPlayer(),
-  entities: [],
-  inventory: { cols: 12, rows: 5, items: [] },
-  stash: { cols: 12, rows: 12, items: [] },
-  vendor: { cols: 12, rows: 12, items: [] },
-  equipment: {},
-  shards: {},
+let kv: MemoryKv;
+
+beforeEach(() => {
+  kv = new MemoryKv();
+  setKv(kv);
+});
+afterEach(() => {
+  cleanup();
+  setKv(null);
 });
 
-beforeAll(() => {
-  vi.stubGlobal(
-    "Worker",
-    vi.fn(() => {
-      const w = {
-        postMessage: vi.fn(), onmessage: null, terminate: vi.fn(),
-        addEventListener: vi.fn(), removeEventListener: vi.fn(),
-      };
-      hoisted.worker = w;
-      return w;
-    }),
-  );
-});
-
-/** Mount App and push one snapshot in, which is what gates every panel's render. */
-function mountWithSnapshot() {
-  const utils = render(<App />);
-  act(() => { hoisted.worker?.onmessage?.({ data: { type: "snapshot", snapshot: makeSnap() } }); });
-  return utils;
+/** Walk from the main menu into the roster, which is behind the world choice. */
+async function toSelect() {
+  render(<App />);
+  await screen.findByTestId("main-menu");
+  fireEvent.click(screen.getByRole("button", { name: /^play$/i }));
+  fireEvent.click(await screen.findByRole("button", { name: /play local/i }));
+  return screen.findByTestId("character-select");
 }
 
-// Every case here mounts its own App, and App's keydown listener is on `window`:
-// a mount left standing answers the next test's key presses too.
-afterEach(cleanup);
+async function withCharacter() {
+  await saveRoster(
+    kv,
+    addCharacter(
+      emptyRoster(),
+      { id: "vess", name: "Vess", classId: "class.stalker", level: 7, league: "Local", createdAt: 1, state: null },
+      8,
+    ),
+  );
+}
 
-describe("App", () => {
-  it("renders a canvas element", () => {
-    const { container } = render(<App />);
-    expect(container.querySelector("canvas")).not.toBeNull();
+describe("App routing", () => {
+  it("boots to the menu, not into the game", async () => {
+    render(<App />);
+    expect(await screen.findByTestId("main-menu")).toBeTruthy();
+    // The whole point of the split: no engine, no worker, until a character is chosen.
+    expect(screen.queryByTestId("game-view")).toBeNull();
   });
 
-  it("Escape closes every open overlay at once", () => {
-    mountWithSnapshot();
-    act(() => {
-      fireEvent.keyDown(window, { key: "i" });
-      hoisted.openStash?.(true);
-      hoisted.openPanel?.(true);
-    });
-    expect(screen.getByTestId("inventory-panel")).toBeTruthy();
-    expect(screen.getByTestId("stash-panel")).toBeTruthy();
-    expect(screen.getByTestId("prep-panel")).toBeTruthy();
-
-    act(() => { fireEvent.keyDown(window, { key: "Escape" }); });
-
-    expect(screen.queryByTestId("inventory-panel")).toBeNull();
-    expect(screen.queryByTestId("stash-panel")).toBeNull();
-    expect(screen.queryByTestId("prep-panel")).toBeNull();
+  it("play asks which world before it shows anyone", async () => {
+    render(<App />);
+    await screen.findByTestId("main-menu");
+    fireEvent.click(screen.getByRole("button", { name: /^play$/i }));
+    expect(await screen.findByTestId("mode-dialog")).toBeTruthy();
+    expect(screen.queryByTestId("character-select")).toBeNull();
   });
 
-  it("Escape closes the character sheet and the vendor too", () => {
-    mountWithSnapshot();
-    act(() => { hoisted.openVendor?.(true); });
-    expect(screen.getByTestId("vendor-panel")).toBeTruthy();
-    act(() => { fireEvent.keyDown(window, { key: "Escape" }); });
-    expect(screen.queryByTestId("vendor-panel")).toBeNull();
-    expect(screen.queryByTestId("inventory-panel")).toBeNull();
-
-    act(() => { fireEvent.keyDown(window, { key: "c" }); });
-    expect(screen.getByTestId("character-panel")).toBeTruthy();
-    act(() => { fireEvent.keyDown(window, { key: "Escape" }); });
-    expect(screen.queryByTestId("character-panel")).toBeNull();
+  it("local mode leads to the roster", async () => {
+    expect(await toSelect()).toBeTruthy();
   });
 
-  // The sheet is cut from the stash's pane and docks in the same place, so two of
-  // them up at once is one pane hidden exactly behind the other.
-  it("the left dock holds one of stash, vendor and character sheet", () => {
-    mountWithSnapshot();
-    act(() => { fireEvent.keyDown(window, { key: "c" }); });
-    expect(screen.getByTestId("character-panel")).toBeTruthy();
+  it("lists a saved character and enters the game with its id", async () => {
+    await withCharacter();
+    await toSelect();
+    expect((await screen.findByTestId("row-vess")).textContent).toMatch(/Level 7 Stalker/);
+    fireEvent.click(screen.getByRole("button", { name: /^play$/i }));
+    expect((await screen.findByTestId("game-view")).textContent).toBe("vess");
+  });
 
-    act(() => { hoisted.openStash?.(true); });
-    expect(screen.getByTestId("stash-panel")).toBeTruthy();
-    expect(screen.queryByTestId("character-panel")).toBeNull();
+  it("creates a character, saves it, and comes back to the roster", async () => {
+    await toSelect();
+    fireEvent.click(screen.getByRole("button", { name: /create/i }));
+    await screen.findByTestId("create-character");
+    fireEvent.click(screen.getByTestId("class-class.emberbound"));
+    fireEvent.change(screen.getByTestId("name-input"), { target: { value: "Toren" } });
+    fireEvent.click(screen.getByRole("button", { name: /^create$/i }));
 
-    act(() => { fireEvent.keyDown(window, { key: "c" }); });
-    expect(screen.getByTestId("character-panel")).toBeTruthy();
-    expect(screen.queryByTestId("stash-panel")).toBeNull();
+    await screen.findByTestId("character-select");
+    expect(screen.getByTestId("roster").textContent).toMatch(/Toren/);
+    // ...and it is on disk, not just on screen.
+    const saved = await loadRoster(kv);
+    expect(saved?.characters.map((c) => c.name)).toEqual(["Toren"]);
+    expect(saved?.characters[0]?.classId).toBe("class.emberbound");
+  });
+
+  it("deleting takes the character off the roster and out of the save", async () => {
+    await withCharacter();
+    await toSelect();
+    await screen.findByTestId("row-vess");
+    fireEvent.click(screen.getByRole("button", { name: /^delete$/i }));
+    fireEvent.change(screen.getByTestId("confirm-name"), { target: { value: "Vess" } });
+    fireEvent.click(
+      Array.from(screen.getByTestId("confirm-delete").querySelectorAll("button")).find((b) =>
+        /delete/i.test(b.textContent ?? ""),
+      )!,
+    );
+    await waitFor(() => expect(screen.queryByTestId("row-vess")).toBeNull());
+    expect((await loadRoster(kv))?.characters).toEqual([]);
+  });
+
+  it("local mode holds one character, and the roster says why", async () => {
+    await withCharacter();
+    await toSelect();
+    const create = (await screen.findByRole("button", { name: /create/i })) as HTMLButtonElement;
+    expect(create.disabled).toBe(true);
+    expect(create.title).toMatch(/online mode/i);
+  });
+
+  it("the stage wears the selected character's class", async () => {
+    await withCharacter();
+    await toSelect();
+    expect((await screen.findByTestId("menu-stage")).textContent).toBe("class.stalker");
+  });
+
+  it("options and credits are real screens with a way back", async () => {
+    render(<App />);
+    await screen.findByTestId("main-menu");
+    fireEvent.click(screen.getByRole("button", { name: /credits/i }));
+    const info = await screen.findByTestId("info-screen");
+    expect(info.textContent).toMatch(/original fan project/i);
+    fireEvent.click(screen.getByRole("button", { name: /back/i }));
+    expect(await screen.findByTestId("main-menu")).toBeTruthy();
+  });
+
+  it("a pre-roster save is migrated into a listed character", async () => {
+    // The exact shape `saveTo` wrote before the roster existed.
+    await kv.save(
+      JSON.stringify({
+        version: 2,
+        session: { area: "hideout", atlasSeed: 1, completedNodes: [] },
+        inventory: { cols: 12, rows: 5, items: [] },
+        progress: { level: 21, xp: 0, gold: 0 },
+      }),
+    );
+    await toSelect();
+    const row = await screen.findByTestId("row-migrated-1");
+    expect(row.textContent).toMatch(/Exile/);
+    expect(row.textContent).toMatch(/Level 21/);
   });
 });

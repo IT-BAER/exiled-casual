@@ -175,6 +175,13 @@ const GEAR_TEXTURE: Record<string, string> = {
   "base.ember_gauntlets": "/textures/gear/ember_gauntlets.png",
   "base.ashen_treads": "/textures/gear/ashen_treads.png",
   "base.cinderchain_sash": "/textures/gear/cinderchain_sash.png",
+  // The three class starter bodies. These are what make a class visible: the
+  // coat geometry is the same either way, so the base id picking a different
+  // palette is the ONLY thing separating an Ironsworn from an Emberbound on a
+  // wardrobe with one male rig and two looks per slot.
+  "base.ironsworn_plate": "/textures/gear/ironsworn_plate.png",
+  "base.stalker_leathers": "/textures/gear/stalker_leathers.png",
+  "base.emberbound_robe": "/textures/gear/emberbound_robe.png",
 };
 
 /** Base ids the character has a baked armour texture for. Pinned by `rig.test.ts`. */
@@ -436,43 +443,71 @@ interface LoadedRig {
 }
 
 let loaded: LoadedRig | null = null;
-let pending: Promise<void> | null = null;
+/**
+ * The load in flight, AND the scene it is loading into.
+ *
+ * Both halves matter. An asset container belongs to the scene it was loaded
+ * with, so a second scene asking while the first is still loading cannot be
+ * handed that promise: it would resolve with `loaded.scene` pointing at somebody
+ * else's scene, `isRigReady` would answer false, and `attachRig` would return
+ * null for a character nobody could see. That is not hypothetical — it is the
+ * menu and the game, and in dev it is one screen twice, because StrictMode
+ * mounts, unmounts and remounts every effect.
+ */
+let pending: { scene: Scene; promise: Promise<void> } | null = null;
 
 /**
- * Fetch the humanoid assets once, before the render loop starts.
+ * Fetch the humanoid assets once per scene, before the render loop starts.
  *
  * Failure is not fatal: headless tests and offline loads leave `loaded` null and
  * every caller falls back to the primitive actor, so the lab still runs.
  */
 export function loadPlayerRig(scene: Scene): Promise<void> {
   if (loaded?.scene === scene) return Promise.resolve();
-  if (pending) return pending;
+  if (pending?.scene === scene) return pending.promise;
 
-  pending = (async () => {
-    const [anims, wardrobe] = await Promise.all([
-      LoadAssetContainerAsync(ANIM_URL, scene),
-      LoadAssetContainerAsync(WARDROBE_URL, scene),
-    ]);
-    loaded = { scene, anims, wardrobe };
-  })()
+  // A load already running for a DIFFERENT scene is queued behind rather than
+  // shared, so the containers this caller ends up with are its own.
+  const prior = pending?.promise ?? Promise.resolve();
+  const promise = prior
+    .catch(() => undefined)
+    .then(async () => {
+      if (loaded?.scene === scene) return;
+      const [anims, wardrobe] = await Promise.all([
+        LoadAssetContainerAsync(ANIM_URL, scene),
+        LoadAssetContainerAsync(WARDROBE_URL, scene),
+      ]);
+      loaded = { scene, anims, wardrobe };
+    })
     .catch(() => {
       loaded = null;
     })
     .finally(() => {
-      pending = null;
+      if (pending?.promise === promise) pending = null;
     });
 
-  return pending;
+  pending = { scene, promise };
+  return promise;
 }
 
 export function isRigReady(scene: Scene): boolean {
   return loaded !== null && loaded.scene === scene;
 }
 
-/** Drop the cached containers — the scene that owns them is going away. */
-export function resetPlayerRig(): void {
+/**
+ * Drop the cached containers — the scene that owns them is going away.
+ *
+ * Pass the scene being disposed and the cache is only cleared if it actually
+ * belongs to it. Without that, an abandoned scene tearing down (a fast
+ * navigation, or StrictMode's discarded first mount) wipes the cache the LIVE
+ * scene is about to read, and the character silently fails to appear. Called
+ * with no argument it still clears everything, which is what a full teardown
+ * wants.
+ */
+export function resetPlayerRig(scene?: Scene): void {
+  if (scene !== undefined && loaded !== null && loaded.scene !== scene) return;
   loaded = null;
-  pending = null;
+  if (scene === undefined || pending?.scene === scene) pending = null;
 }
 
 /**

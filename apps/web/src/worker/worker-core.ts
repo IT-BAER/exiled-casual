@@ -6,6 +6,8 @@ import {
   grammarForNode,
   loadInto,
   saveTo,
+  loadCharacterInto,
+  saveCharacterTo,
   IndexedDbKv,
   MemoryKv,
 } from "@exiled/simulation";
@@ -46,14 +48,21 @@ export class WorkerCore {
   // atomic blob; we only write when it changes (see maybePersist). In node tests
   // there is no indexedDB, so a MemoryKv keeps the calls harmless no-ops.
   private readonly kv: KvStore;
+  /**
+   * The roster entry this session plays, or "" for the pre-roster single save.
+   * The lab and the unit tests boot without one, which is why the old path has
+   * to keep working rather than being replaced.
+   */
+  private readonly characterId: string;
   private lastSig = "";
 
-  constructor(seed: number, kv?: KvStore) {
+  constructor(seed: number, kv?: KvStore, characterId = "") {
     // The lab starts empty. Monsters and the boss arrive on the numpad spawn
     // keys, so a model, an animation, or an effect can be looked at in peace.
     this.seed = seed;
     this.area = "hideout";
     this.kv = kv ?? (typeof indexedDB !== "undefined" ? new IndexedDbKv() : new MemoryKv());
+    this.characterId = characterId;
     const { sim, world, playerEntity, layout } = createCombatSim(seed, { area: this.area });
     this.sim = sim;
     this.world = world;
@@ -70,7 +79,8 @@ export class WorkerCore {
    * rebuild is needed. Idempotent: re-hydrating never duplicates progress.
    */
   async hydrate(): Promise<void> {
-    await loadInto(this.kv, this.world);
+    if (this.characterId === "") await loadInto(this.kv, this.world);
+    else await loadCharacterInto(this.kv, this.world, this.characterId);
     this.lastSig = this.durableSig();
   }
 
@@ -153,7 +163,8 @@ export class WorkerCore {
     const sig = this.durableSig();
     if (sig === this.lastSig) return;
     this.lastSig = sig;
-    void saveTo(this.kv, this.world);
+    if (this.characterId === "") void saveTo(this.kv, this.world);
+    else void saveCharacterTo(this.kv, this.world, this.characterId);
   }
 
   /**

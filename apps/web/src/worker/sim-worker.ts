@@ -14,7 +14,7 @@ self.onmessage = (e: MessageEvent) => {
   if (!isToWorker(raw)) return;
   const msg = raw;
   if (msg.type === "init") {
-    const c = new WorkerCore(msg.seed);
+    const c = new WorkerCore(msg.seed, undefined, msg.characterId);
     core = c;
     // Restore any saved run first, THEN send the (possibly restored) layout once
     // so the renderer builds floor + walls, then ready.

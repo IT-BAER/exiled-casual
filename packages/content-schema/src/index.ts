@@ -666,3 +666,36 @@ export interface MapBase {
   tilesetId: string;
   layoutGrammarId: LayoutGrammarId;
 }
+
+/** The attribute a class leans on. Display-only until stats read it. */
+export const CLASS_ARCHETYPES = ["strength", "dexterity", "intellect"] as const;
+export type ClassArchetype = (typeof CLASS_ARCHETYPES)[number];
+
+/**
+ * A playable class.
+ *
+ * Cosmetic in this slice: it picks a name, a portrait and an outfit, never a
+ * number. The wardrobe is one 65-joint male rig with two looks per slot, so
+ * "class" can only ever mean which item bases the character is created wearing
+ * — and it is the baked armour texture on those bases (`GEAR_TEXTURE` in the
+ * renderer) that makes three characters read as three people rather than one
+ * man in three hats.
+ *
+ * Borrowed from PoE1's character select, where every roster row carries a class
+ * name under it. The names and fiction here are original.
+ */
+export interface CharacterClass {
+  id: string;
+  name: string;
+  /** One line of flavour, shown under the name while creating a character. */
+  blurb: string;
+  archetype: ClassArchetype;
+  /**
+   * Item bases the character is created wearing, keyed by equipment slot id.
+   * An absent slot means the character starts with that slot empty, which the
+   * renderer draws as commoner cloth — a deliberate silhouette choice, not a gap.
+   */
+  startingGear: Readonly<Record<string, string>>;
+  /** Portrait art for the roster row and the class picker. */
+  portrait: string;
+}

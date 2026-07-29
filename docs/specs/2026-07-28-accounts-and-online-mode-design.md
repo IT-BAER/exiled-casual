@@ -1,6 +1,7 @@
 # Accounts and online mode
 
-Status: design, not implemented. Written 2026-07-28, before any account code exists.
+Status: design. Written 2026-07-28, before any account code existed. Partly implemented since —
+see **What has shipped** below; nothing about the architecture choice has changed.
 
 The game goes public and playable at **exiledcasual.com**, in two modes: **local** (browser
 storage, no account, works offline) and **online** (login, account, database). This document
@@ -81,13 +82,23 @@ changing this decision.
 
 ## Save migration
 
-`persist.VERSION` currently discards any blob whose version does not match, and
-`persist.ts` says so plainly: "nothing is live yet, no migration path". That is correct today
-and unacceptable the day a stranger has a character.
+`persist.VERSION` used to discard any blob whose version did not match, and `persist.ts` said so
+plainly: "nothing is live yet, no migration path". That was correct then and unacceptable the day
+a stranger has a character.
 
-**Before public launch:** replace the discard with a migration chain, one pure function per
-version step, each with a test that loads a real captured blob of the previous version. The
-discard behaviour stays only as the final fallback for a blob older than the oldest migration.
+**Done, 2026-07-29.** The first migration exists: `migrateSingleSave` in
+`packages/simulation/src/roster-io.ts` turns a `version: 2` single save into a one-character v3
+roster, hoisting its stash up to the roster on the way. It is deliberately narrow — only v2 is
+understood — and the discard behaviour survives as the final fallback for anything older, which
+is exactly the shape this section asked for. `characters.test.ts` runs it against a blob captured
+from the real `saveTo`, not a hand-written fixture.
+
+Two versions are now in play and they are not the same number: `persist.VERSION` (2) versions ONE
+character's save and did not move, because its shape did not change; `ROSTER_VERSION` (3) versions
+the blob that wraps those saves.
+
+Migration is applied on read and **not committed on read**: a player who only opens the menu still
+has their old blob on disk untouched. The new shape lands on the first save.
 
 ## Auth, database, hosting
 
@@ -116,10 +127,34 @@ and undistributed. Revisit before the first public link, not after.
 Nothing here blocks gameplay work, and none of it should start before there is a game worth an
 account. Rough order when it does start:
 
-1. Migration chain replacing the `VERSION` discard (the only item that is a bug the day it is
-   needed, and the cheapest to do while nothing is live).
+1. ~~Migration chain replacing the `VERSION` discard~~ **done 2026-07-29**, see Save migration.
 2. Run submission format: `{ seed, commandLog, checksum }` and the durable boundaries that
    trigger it.
 3. Server verification endpoint re-simulating the log.
 4. Auth, accounts, rows.
-5. Mode selection in the client, and the separation notice.
+5. ~~Mode selection in the client, and the separation notice~~ **done 2026-07-29** — the UI half
+   of it, see below. The online branch is present and refused.
+
+## What has shipped
+
+2026-07-29, with the main menu and character select:
+
+- **A roster.** `packages/persistence/src/roster.ts` holds a record per character (id, name,
+  class, level, league) plus a shared stash, and treats each character's save as an OPAQUE
+  `state`. The storage leaf still knows nothing about sessions or inventories;
+  `packages/simulation/src/roster-io.ts` and `characters.ts` are the only places that parse it.
+- **The local cap is one character** (`LOCAL_CHARACTER_CAP`). Not a technical limit — the shape
+  holds any number — but the honest one: without a server there is no account for several
+  characters to belong to. The cap is passed in by the caller, so online passes `Infinity` and
+  nothing about the shape changes when it lands.
+- **The separation notice is a choice, not a footnote.** `PLAY` opens a dialog asking which world
+  the character lives in, before the roster is ever shown, because "no import in either
+  direction" is only fair if it is said before the character exists rather than after.
+- **The stash moved up.** It used to sit inside the single save; it now sits on the roster,
+  shared by every character, the way PoE shares a stash account-wide.
+- **Gold and shards did not.** They stay per-character even though `protocol/index.ts` calls gold
+  "account-bound", because sharing them means threading roster state through vendor buy and sell,
+  and with the cap at one character nothing is observable until online exists. Decide it there.
+
+Still absent, deliberately: any account, any login, any network call. The client has never once
+tried to reach a server.

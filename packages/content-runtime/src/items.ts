@@ -41,6 +41,55 @@ const ITEM_BASES: ItemBase[] = [
 ];
 
 /**
+ * The body armour each class is created wearing.
+ *
+ * Out of `ITEM_POOLS.bases` on purpose, the way currency and the waystone are:
+ * these exist so a new character has a silhouette, not so the loot table grows
+ * three entries and every drop-rate test shifts underneath it. `baseOf` still
+ * resolves them, so they hover, equip and sit in the grid like any other piece.
+ *
+ * One per class because armour variety in the renderer is texture-only
+ * (`GEAR_TEXTURE`): the geometry is the same coat either way, and the base id is
+ * the only thing that can pick a different palette for it.
+ */
+const STARTER_BASES: ItemBase[] = [
+  {
+    id: "base.ironsworn_plate",
+    name: "Ironsworn Plate",
+    itemClass: "body",
+    w: 2,
+    h: 3,
+    // Armour body armour, so it takes PoE2's armour-base implicit rather than the robe's:
+    // +(10-20) to Strength on the Str body bases.
+    implicit: { stat: "strength", label: "to Strength", value: 12 },
+    icon: "/textures/items/ironsworn_plate.png",
+  },
+  {
+    id: "base.stalker_leathers",
+    name: "Stalker Leathers",
+    itemClass: "body",
+    w: 2,
+    h: 3,
+    // No implicit. PoE2's Dex body armour is an evasion base, and there is no
+    // evasion stat here; inventing one on an item nobody can drop would be a
+    // balance surface opened for a cosmetic. Foci and helmets carry none either.
+    icon: "/textures/items/stalker_leathers.png",
+  },
+  {
+    id: "base.emberbound_robe",
+    name: "Emberbound Robe",
+    itemClass: "body",
+    w: 2,
+    h: 3,
+    implicit: { stat: "manaRegenPct", label: "% increased Mana Regeneration Rate", value: 30 },
+    icon: "/textures/items/emberbound_robe.png",
+  },
+];
+
+/** The starter bases, so the class table can be checked against real content. */
+export const STARTER_BASE_IDS: readonly string[] = STARTER_BASES.map((b) => b.id);
+
+/**
  * Base ids that content has since renamed. A saved inventory outlives the id it was
  * written with, and `baseOf` throwing on load would cost the player the whole stash
  * over a rename (docs/09: a save that corrupts destroys more than any drop created).
@@ -210,7 +259,7 @@ const UNIQUES: UniqueItem[] = [
 ];
 
 // Validate at module load; bad content is a programmer error, fail fast.
-for (const b of [...ITEM_BASES, ...CURRENCY_BASES, WAYSTONE_BASE]) {
+for (const b of [...ITEM_BASES, ...CURRENCY_BASES, ...STARTER_BASES, WAYSTONE_BASE]) {
   const r = validateItemBase(b);
   if (!r.ok) throw new Error(`[content-runtime] Invalid item base "${b.id}": ${r.errors.join("; ")}`);
 }
@@ -248,7 +297,7 @@ for (const b of [...ITEM_BASES, ...CURRENCY_BASES, WAYSTONE_BASE]) {
 
 export const ITEM_POOLS: ItemPools = { bases: ITEM_BASES, affixes: AFFIXES, uniques: UNIQUES };
 
-const BASE_BY_ID = new Map([...ITEM_BASES, ...CURRENCY_BASES, WAYSTONE_BASE].map((b) => [b.id, b]));
+const BASE_BY_ID = new Map([...ITEM_BASES, ...CURRENCY_BASES, ...STARTER_BASES, WAYSTONE_BASE].map((b) => [b.id, b]));
 const AFFIX_BY_ID = new Map(AFFIXES.map((a) => [a.id, a]));
 const UNIQUE_BY_NAME = new Map(UNIQUES.map((u) => [u.name, u]));
 

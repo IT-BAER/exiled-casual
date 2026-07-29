@@ -4,7 +4,10 @@
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
-  "exports": { ".": "./src/index.ts" },
+  "exports": {
+    ".": "./src/index.ts",
+    "./roster-io": "./src/roster-io.ts"
+  },
   "dependencies": {
     "@exiled/fixed-point": "*",
     "@exiled/mapgen": "*",

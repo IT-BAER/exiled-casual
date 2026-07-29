@@ -62,3 +62,5 @@ export class IndexedDbKv implements KvStore {
     });
   }
 }
+
+export * from "./roster.js";

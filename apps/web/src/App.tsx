@@ -1,266 +1,173 @@
-import React, { useEffect, useRef, useState } from "react";
-import { Engine, Matrix, Vector3 } from "@babylonjs/core";
-import { createScene } from "./render/engine";
-import { buildLevel, applyBiomeTint, applyTilesetFloor } from "./render/level";
-import { SnapshotRenderer } from "./render/renderer";
-import { loadProps, resetProps } from "./render/props";
-import { loadRocks, resetRocks } from "./render/rocks";
-import { loadPlayerRig, resetPlayerRig } from "./render/rig";
-import { attachBindings } from "./input/bindings";
-import { Hud } from "./hud/Hud";
-import { PreparationPanel } from "./hud/PreparationPanel";
-import { InventoryPanel } from "./hud/InventoryPanel";
-import { CharacterPanel } from "./hud/CharacterPanel";
-import { LootLabels } from "./hud/LootLabels";
-import { Minimap } from "./hud/Minimap";
-import type { Projector } from "./hud/LootLabels";
-import type { AreaLayout } from "@exiled/mapgen";
-import { BIOMES, mapBase } from "@exiled/content-runtime";
-import type { Snapshot, FromWorker, ToWorker } from "@exiled/protocol";
+/**
+ * Which screen the client is on.
+ *
+ * Everything the game itself does lives in `GameView`, unchanged; this file's
+ * only job is to decide whether that component exists yet. That matters more
+ * than routing usually does here: `GameView` builds a Babylon engine and spawns
+ * the simulation worker on mount, so keeping it unmounted is the difference
+ * between a menu and a menu with a whole ARPG running behind it.
+ *
+ * The roster is loaded once, up front, and held here. Both the select screen and
+ * the create screen read from it and hand back the version they wrote, so there
+ * is one copy in the client and it is never re-read behind a screen's back.
+ */
+import React from "react";
+import type { RosterBlob } from "@exiled/persistence";
+import { emptyRoster, headers } from "@exiled/persistence";
+import { DEFAULT_CLASS_ID } from "@exiled/rules";
+import { GameView } from "./GameView";
+import { MainMenu } from "./menu/MainMenu";
+import { ModeDialog } from "./menu/ModeDialog";
+import { CharacterSelect } from "./menu/CharacterSelect";
+import { CreateCharacter } from "./menu/CreateCharacter";
+import { MenuStage } from "./menu/MenuStage";
+import { InfoScreen, OPTIONS_TEXT, CREDITS_TEXT } from "./menu/InfoScreen";
+import { capFor, createCharacter, deleteCharacter, readRoster, type Mode } from "./save/roster";
 
-const LAB_SEED = 42;
-// ponytail: fixed seed for the lab; M3 will thread seed from game state
-const MS_PER_TICK = 1000 / 30;
+type Screen =
+  | { kind: "menu" }
+  | { kind: "mode" }
+  | { kind: "select" }
+  | { kind: "create" }
+  | { kind: "info"; which: "options" | "credits" }
+  | { kind: "game"; characterId: string };
 
-export function App() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
-  const [hoveredEntityId, setHoveredEntityId] = useState<number | null>(null);
-  const [panelOpen, setPanelOpen] = useState(false);
-  const [inventoryOpen, setInventoryOpen] = useState(false);
-  // Backpack cell holding the waystone seated in the map-device socket, null while empty.
-  const [socketedCell, setSocketedCell] = useState<{ x: number; y: number } | null>(null);
-  // PoE opens the stash beside the inventory, never on its own.
-  const [stashOpen, setStashOpen] = useState(false);
-  // The bench takes the same left-hand slot as the stash, so one closes the other.
-  const [vendorOpen, setVendorOpen] = useState(false);
-  const [characterOpen, setCharacterOpen] = useState(false);
-  // The map's layout, kept for the minimap. Null in the hideout, which has none.
-  const [areaLayout, setAreaLayout] = useState<AreaLayout | null>(null);
-  const [project, setProject] = useState<Projector | null>(null);
-  const [pick, setPick] = useState<((id: number, x: number, y: number) => void) | null>(null);
-  const workerRef = useRef<Worker | null>(null);
+export function App(): React.ReactElement {
+  const [screen, setScreen] = React.useState<Screen>({ kind: "menu" });
+  const [roster, setRoster] = React.useState<RosterBlob>(emptyRoster);
+  const [mode, setMode] = React.useState<Mode>("local");
+  const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const [newClassId, setNewClassId] = React.useState<string>(DEFAULT_CLASS_ID);
+  const [error, setError] = React.useState<string | null>(null);
 
-  // Resolve the socketed item on each render; clear the cell when the item is gone.
-  const socketedItem = socketedCell && snapshot
-    ? snapshot.inventory.items.find(
-        (i) => i.x === socketedCell.x && i.y === socketedCell.y && i.baseId === "map.waystone",
-      ) ?? null
-    : null;
-  // ponytail: derive socketedStone inline; a separate useEffect would re-render twice per snapshot.
-  const socketedStone = socketedItem?.waystone
-    ? { ...socketedCell!, ...socketedItem.waystone }
-    : null;
-  // Clear the cell reference once the item moves away (consumed, moved, or picked up).
-  useEffect(() => {
-    if (socketedCell && !socketedItem) setSocketedCell(null);
-  }, [snapshot]);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    // Spawn sim worker
-    const worker = new Worker(
-      new URL("./worker/sim-worker.ts", import.meta.url),
-      { type: "module" },
-    );
-    workerRef.current = worker;
-    worker.postMessage({ type: "init", seed: LAB_SEED });
-
-    let prevSnap: Snapshot | null = null;
-    let curSnap: Snapshot | null = null;
-    let prevTickTime = performance.now();
-
-    // Babylon engine + render loop
-    const engine = new Engine(canvas, true);
-    const { scene, camera, detachZoom } = createScene(engine);
-    const renderer = new SnapshotRenderer(scene);
-
-    // Ground-item name plates live in the DOM, so they need the camera's
-    // world -> canvas projection. Sim (x, y) maps to world (x, z).
-    setProject(() => (x: number, y: number) => {
-      const p = Vector3.Project(
-        new Vector3(x, 0, y),
-        Matrix.Identity(),
-        scene.getTransformMatrix(),
-        camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight()),
-      );
-      return { x: p.x, y: p.y, visible: p.z > 0 && p.z < 1 };
+  // One read at boot. Migration of a pre-roster save happens inside openRoster,
+  // but it is not COMMITTED here: the first save writes the new shape, so a
+  // player who only looks at the menu still has their old blob intact.
+  React.useEffect(() => {
+    let live = true;
+    void readRoster().then((r) => {
+      if (!live) return;
+      setRoster(r);
+      setSelectedId(r.lastPlayedId ?? r.characters[0]?.id ?? null);
     });
-
-    // Bindings need the scene for ground picking, and must be attached before the
-    // onmessage handler below so onSnapshot exists when the worker starts sending.
-    const { detach, onSnapshot, approach } = attachBindings(
-      canvas,
-      worker,
-      scene,
-      () => renderer.cyclePlayerOutfit(),
-      (id) => {
-        // Both the renderer (mesh highlight) and React (HUD label) must update.
-        renderer.setHoveredEntity(id);
-        setHoveredEntityId(id);
-      },
-      // The sim already no-ops activateMap while a run is open; without this the
-      // panel still opened, offered stones, and closed itself on the next snapshot.
-      (open) => {
-        const willOpen = open && !curSnap?.mapOpen;
-        setPanelOpen(willOpen);
-        // Opening the device also opens the inventory so the player can drag a waystone.
-        if (willOpen) setInventoryOpen(true);
-      },
-      // Walking up to the furniture opens the inventory with it, so walking off has
-      // to take it away again: a panel the player never asked for cannot outlive the
-      // thing that raised it. Closing with the X is a different path and still leaves
-      // the inventory up, which is the case where it IS the player's own panel.
-      (open) => { setStashOpen(open); setInventoryOpen(open); if (open) { setVendorOpen(false); setCharacterOpen(false); } },
-      (open) => { setVendorOpen(open); setInventoryOpen(open); if (open) { setStashOpen(false); setCharacterOpen(false); } },
-    );
-
-    // Loot plates are DOM, so their click has to reach the same approach-then-act
-    // path the canvas picker uses for portals and devices.
-    setPick(() => approach);
-
-    worker.onmessage = (e: MessageEvent<FromWorker>) => {
-      const msg = e.data;
-      if (msg.type === "snapshot") {
-        prevSnap = curSnap;
-        curSnap = msg.snapshot;
-        prevTickTime = performance.now();
-        setSnapshot(msg.snapshot);
-        // Activation opened the map — the panel's job is done, close it.
-        if (msg.snapshot.mapOpen) setPanelOpen(false);
-        // Let bindings fire the interact intent once the pending target is inRange.
-        onSnapshot(msg.snapshot);
-      } else if (msg.type === "area") {
-        // Dungeon walls belong to the "map". The hideout is an open lab: pass an
-        // empty grid so buildLevel clears any stale walls and draws none.
-        const grid = msg.area === "map" ? msg.layout.grid : null;
-        // The base says what the place is made of: which stone the walls take,
-        // and what colour its light is. The hideout has no base, so it gets the
-        // neutral rig back rather than keeping the last map's mood.
-        const base = msg.mapBaseId ? mapBase(msg.mapBaseId) : null;
-        buildLevel(scene, grid, base?.tilesetId);
-        applyTilesetFloor(scene, base?.tilesetId ?? null);
-        applyBiomeTint(scene, base ? BIOMES[base.biomeId].tint : null);
-        setAreaLayout(msg.area === "map" ? msg.layout : null);
-      }
-    };
-
-    const renderFrame = () => {
-      if (!curSnap) return;
-      // ponytail: float alpha for lerp — never fed into sim
-      const alpha = Math.min(1, (performance.now() - prevTickTime) / MS_PER_TICK);
-      renderer.apply(prevSnap, curSnap, alpha);
-      // Camera follows the player (interpolated) so they stay centred like an ARPG.
-      // The 4th arg (cloneAlphaBetaRadius=true) keeps the orbit fixed and moves the
-      // camera WITH the target; the default recomputes the angles and drifts.
-      const p = curSnap.player;
-      const pp = prevSnap?.player ?? p;
-      camera.setTarget(
-        new Vector3(pp.x + (p.x - pp.x) * alpha, 0, pp.y + (p.y - pp.y) * alpha),
-        false,
-        false,
-        true,
-      );
-      scene.render();
-    };
-
-    // Wait for the humanoid and the hideout props before the first frame, so
-    // nothing is ever built as a greybox and then swapped for its real asset
-    // mid-run. A failed load resolves too and leaves the primitive fallback in
-    // place.
-    let unmounted = false;
-    void Promise.all([loadPlayerRig(scene), loadProps(scene), loadRocks(scene)]).then(() => {
-      if (!unmounted) engine.runRenderLoop(renderFrame);
-    });
-
-    window.addEventListener("resize", () => engine.resize());
-
-    // i = inventory, c = character sheet. Both render-only; the sim never hears
-    // about either, and both can be open at once the way PoE2 has them.
-    // Escape clears the screen: every overlay at once, not just the topmost. A player
-    // who wants the world back should not have to count the panels they opened.
-    const onInvKey = (ev: KeyboardEvent) => {
-      const k = ev.key.toLowerCase();
-      if (k === "i") { setInventoryOpen((v) => !v); setStashOpen(false); }
-      // The sheet is cut from the stash's pane and docks where the stash docks, so
-      // the three take turns in that slot. Unconditional: the only way the stash is
-      // up when `c` is pressed is if the sheet was already down.
-      if (k === "c") { setCharacterOpen((v) => !v); setStashOpen(false); setVendorOpen(false); }
-      if (k === "escape") {
-        setPanelOpen(false);
-        setInventoryOpen(false);
-        setStashOpen(false);
-        setVendorOpen(false);
-        setCharacterOpen(false);
-      }
-    };
-    window.addEventListener("keydown", onInvKey);
-
-    return () => {
-      unmounted = true;
-      detach();
-      detachZoom(); // the canvas outlives the engine, so its listener must go
-      window.removeEventListener("keydown", onInvKey);
-      resetPlayerRig(); // containers belong to the scene we are about to dispose
-      resetProps();
-      resetRocks();
-      engine.dispose();
-      worker.terminate();
-      workerRef.current = null;
-    };
+    return () => { live = false; };
   }, []);
 
-  return (
-    <div style={{ position: "relative", width: "100vw", height: "100vh" }}>
-      <canvas
-        ref={canvasRef}
-        style={{ width: "100%", height: "100%", display: "block" }}
+  const rows = React.useMemo(() => headers(roster), [roster]);
+  const selectedClassId =
+    rows.find((c) => c.id === selectedId)?.classId ?? DEFAULT_CLASS_ID;
+
+  if (screen.kind === "game") {
+    return <GameView characterId={screen.characterId} onExit={() => setScreen({ kind: "select" })} />;
+  }
+
+  if (screen.kind === "info") {
+    return (
+      <InfoScreen
+        title={screen.which === "options" ? "Options" : "Credits"}
+        body={screen.which === "options" ? OPTIONS_TEXT : CREDITS_TEXT}
+        onBack={() => setScreen({ kind: "menu" })}
       />
-      <LootLabels snapshot={snapshot} project={project} onPick={pick ?? undefined} />
-      <Hud snapshot={snapshot} hoveredEntityId={hoveredEntityId} />
-      <Minimap layout={areaLayout} player={snapshot?.player ?? null} />
-      {panelOpen && snapshot && (
-        <PreparationPanel
-          atlasSeed={snapshot.atlasSeed}
-          completedNodes={snapshot.completedNodes}
-          socketedStone={socketedStone}
-          onEject={() => setSocketedCell(null)}
-          onNodeSelect={() => setInventoryOpen(true)}
-          onClose={() => { setPanelOpen(false); setSocketedCell(null); }}
-          onActivate={(atlasNodeId, x, y) => {
-            workerRef.current?.postMessage({
-              type: "intent",
-              intent: { kind: "activateMap", atlasNodeId, x, y },
-            });
-            setPanelOpen(false);
-            setSocketedCell(null);
+    );
+  }
+
+  if (screen.kind === "select" || screen.kind === "create") {
+    const cap = capFor(mode);
+    return (
+      <>
+        {/* One stage for both screens. Rendered here rather than inside either,
+            because React reconciles by tree position: a stage owned by the
+            select screen would be torn down and rebuilt (engine, wardrobe fetch,
+            idle restart) the moment CREATE swapped one screen for the other.
+            It layers by z-index, not by document order — see menu/MenuStage. */}
+        <MenuStage classId={screen.kind === "create" ? newClassId : selectedClassId} />
+        {screen.kind === "select" ? (
+          <CharacterSelect
+            characters={rows}
+            selectedId={selectedId}
+            cap={cap}
+            onSelect={setSelectedId}
+            onPlay={(id) => setScreen({ kind: "game", characterId: id })}
+            onCreate={() => setScreen({ kind: "create" })}
+            onDelete={(id) => {
+              void deleteCharacter(roster, id).then((next) => {
+                setRoster(next);
+                setSelectedId(next.lastPlayedId ?? next.characters[0]?.id ?? null);
+              });
+            }}
+            onBack={() => setScreen({ kind: "menu" })}
+          />
+        ) : (
+          <CreateCharacter
+            roster={roster}
+            classId={newClassId}
+            onClassChange={setNewClassId}
+            onCancel={() => setScreen({ kind: "select" })}
+            onCreate={(name, classId) => {
+              void createCharacter(roster, { name, classId }, mode)
+                .then(({ roster: next, record }) => {
+                  setRoster(next);
+                  setSelectedId(record.id);
+                  setScreen({ kind: "select" });
+                })
+                // A failed write must not look like a created character. The only
+                // ways here are a full roster or storage the browser refused.
+                .catch((e: unknown) => setError(String(e instanceof Error ? e.message : e)));
+            }}
+          />
+        )}
+        {error !== null && <Toast text={error} onDismiss={() => setError(null)} />}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <MainMenu
+        characterCount={rows.length}
+        onPlay={() => setScreen({ kind: "mode" })}
+        onOptions={() => setScreen({ kind: "info", which: "options" })}
+        onCredits={() => setScreen({ kind: "info", which: "credits" })}
+      />
+      {screen.kind === "mode" && (
+        <ModeDialog
+          onCancel={() => setScreen({ kind: "menu" })}
+          onPick={(picked) => {
+            setMode(picked);
+            setScreen({ kind: "select" });
           }}
         />
       )}
-      {inventoryOpen && snapshot && (
-        <InventoryPanel
-          inventory={snapshot.inventory}
-          {...(stashOpen ? { stash: snapshot.stash } : {})}
-          onCloseStash={() => setStashOpen(false)}
-          shards={snapshot.shards}
-          vendorOpen={vendorOpen}
-          vendor={snapshot.vendor}
-          gold={snapshot.player.gold}
-          onCloseVendor={() => setVendorOpen(false)}
-          equipment={snapshot.equipment}
-          // socketWanted: panel is open and the socket is empty, so ctrl+click / drag sockets a stone.
-          socketWanted={panelOpen && socketedStone === null}
-          onSocketWaystone={(x, y) => setSocketedCell({ x, y })}
-          onIntent={(intent) => workerRef.current?.postMessage({ type: "intent", intent } satisfies ToWorker)}
-          onClose={() => { setInventoryOpen(false); setStashOpen(false); setVendorOpen(false); }}
-        />
-      )}
-      {/* After the inventory so it paints above that panel's backdrop when both are open. */}
-      {characterOpen && snapshot && (
-        <CharacterPanel player={snapshot.player} onClose={() => setCharacterOpen(false)} />
-      )}
+    </>
+  );
+}
+
+/** A write that failed has to say so somewhere the player is already looking. */
+function Toast({ text, onDismiss }: { text: string; onDismiss: () => void }): React.ReactElement {
+  React.useEffect(() => {
+    const t = setTimeout(onDismiss, 6000);
+    return () => clearTimeout(t);
+  }, [onDismiss]);
+  return (
+    <div
+      role="alert"
+      data-testid="menu-toast"
+      onClick={onDismiss}
+      style={{
+        position: "absolute",
+        left: "50%",
+        bottom: "6vh",
+        transform: "translateX(-50%)",
+        padding: "10px 18px",
+        background: "rgba(24,8,6,0.94)",
+        border: "1px solid #7a3524",
+        color: "#e8b7a2",
+        fontFamily: '"Cinzel", Georgia, serif',
+        fontSize: 13,
+        letterSpacing: 1.2,
+      }}
+    >
+      {text}
     </div>
   );
 }

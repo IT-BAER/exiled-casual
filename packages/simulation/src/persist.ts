@@ -18,9 +18,9 @@ import { START_LEVEL } from "@exiled/rules";
 export const VERSION = 2;
 
 /** Shape a stash-less save restores to; also the shape a fresh world is built with. */
-const EMPTY_STASH: StashC = { cols: 12, rows: 12, items: [] };
+export const EMPTY_STASH: StashC = { cols: 12, rows: 12, items: [] };
 
-interface PersistedState {
+export interface PersistedState {
   version: number;
   session: SessionC;
   inventory: InventoryC;

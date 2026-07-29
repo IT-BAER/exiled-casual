@@ -18,9 +18,17 @@ import {
   SKIRT_CHAINS,
   SKIRT_JOINTS,
 } from "./rig";
-import { ITEM_POOLS } from "@exiled/content-runtime";
+import { ITEM_POOLS, STARTER_BASE_IDS, baseOf } from "@exiled/content-runtime";
 
-const ITEM_BASES = ITEM_POOLS.bases;
+/**
+ * Every base that can end up in an equipment slot, droppable or not.
+ *
+ * `ITEM_POOLS.bases` is the DROP pool, and the class starter armours are
+ * deliberately outside it (they exist so a new character has a silhouette, not
+ * so the loot table grows three entries). They are still worn, so they still
+ * owe the rig a texture.
+ */
+const ITEM_BASES = [...ITEM_POOLS.bases, ...STARTER_BASE_IDS.map((id) => baseOf(id))];
 
 let engine: InstanceType<typeof NullEngine>;
 
@@ -94,6 +102,37 @@ describe("rig fallback", () => {
     // still run, on the primitive actor.
     await loadPlayerRig(scene);
     expect(isRigReady(scene)).toBe(false);
+  });
+
+  /**
+   * The menu stage and the game are two Babylon scenes in one page's lifetime,
+   * and in dev StrictMode makes even one screen two. An asset container belongs
+   * to the scene it was loaded with, so handing a second scene the first's
+   * in-flight load leaves `isRigReady` false for the scene that is actually on
+   * screen — which showed up as a character select with nobody standing in it.
+   */
+  it("does not hand two scenes the same load", () => {
+    engine = new NullEngine();
+    const a = createScene(engine).scene;
+    const b = createScene(engine).scene;
+    const first = loadPlayerRig(a);
+    // The same scene asking twice shares, which is what the cache is for...
+    expect(loadPlayerRig(a)).toBe(first);
+    // ...and a different scene never does.
+    expect(loadPlayerRig(b)).not.toBe(first);
+  });
+
+  it("an abandoned scene's teardown leaves another scene's load alone", async () => {
+    engine = new NullEngine();
+    const a = createScene(engine).scene;
+    const b = createScene(engine).scene;
+    const pending = loadPlayerRig(b);
+    // `a` never loaded anything; tearing it down must not cancel b's load.
+    resetPlayerRig(a);
+    await pending;
+    // Headless there is no server, so neither is ready — what is being pinned
+    // is that resetting `a` did not throw away `b`'s in-flight work.
+    expect(isRigReady(a)).toBe(false);
   });
 
   it("builds the primitive caster when the rig is unavailable", () => {

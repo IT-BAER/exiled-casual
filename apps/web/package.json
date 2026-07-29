@@ -13,6 +13,7 @@
     "@babylonjs/loaders": "^7.54.3",
     "@exiled/content-runtime": "*",
     "@exiled/fixed-point": "*",
+    "@exiled/persistence": "*",
     "@exiled/protocol": "*",
     "@exiled/rules": "*",
     "@exiled/simulation": "*",

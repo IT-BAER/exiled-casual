@@ -39,6 +39,16 @@ export { registerAreaTransition, grammarForNode } from "./systems/area-transitio
 export { registerFlaskSystem } from "./systems/flask";
 export { intentToCommand, buildSnapshot } from "./protocol-bridge";
 export { snapshot, restore, saveTo, loadInto } from "./persist";
+export { loadCharacterInto, saveCharacterTo, equipStartingGear, LOCAL_CHARACTER_CAP } from "./characters";
+export {
+  openRoster, makeCharacterRecord, migrateSingleSave,
+  LOCAL_LEAGUE, MIGRATED_CHARACTER_ID, MIGRATED_CHARACTER_NAME,
+} from "./roster-io";
+export type { NewCharacter } from "./roster-io";
 export { recomputePlayerStats } from "./derived";
 export { MemoryKv, IndexedDbKv } from "@exiled/persistence";
-export type { KvStore } from "@exiled/persistence";
+export type { KvStore, RosterBlob, CharacterHeader, CharacterRecord } from "@exiled/persistence";
+export {
+  ROSTER_VERSION, emptyRoster, headers, findCharacter, addCharacter, removeCharacter,
+  nameError, isNameTaken, saveRoster, loadRoster, NAME_MIN, NAME_MAX,
+} from "@exiled/persistence";

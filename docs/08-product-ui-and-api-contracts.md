@@ -28,6 +28,21 @@ Proposed minimum combat viewport: 1280 by 720 CSS pixels. Below it, show an expl
 
 The browser sends build, protocol, content cache, GPU/API, locale, and accessibility capabilities before entering play. It does not send unnecessary device fingerprint data.
 
+**As built, 2026-07-29.** The rows above are the target; this is what exists, and where it deliberately differs.
+
+| Surface | Built | Notes |
+|---|---|---|
+| Boot/update | no | The client boots straight to the main menu. No manifest check, no progress bar. |
+| Main menu | yes | Title emblem, `PLAY` / `OPTIONS` / `CREDITS`, and a boot log reporting what the save holds. **No sign-in and no region select**, because there is no server: a disabled control implying one is a lie the first player would catch. |
+| World choice | yes | `PLAY` opens a dialog: **Local** or **Online**. Asked before the roster because local and online characters are separate pools with no import (see the accounts design doc), which cannot be changed after a character exists. Online is shown, explained and disabled. |
+| Character select | yes | Empty state, selection, delete confirmation, `CREATE` / `DELETE` / `PLAY`, arrow-key and Enter navigation. No rename, no league filter. Local mode caps the roster at one character and says why on the disabled `CREATE`. |
+| Character create | yes | Three original cosmetic classes and a validated name (3-20, letters/digits/underscore, unique, case-insensitive). **No appearance options and no accessibility preset**: the wardrobe is a single rig. The screen states that class does not change stats yet. |
+| Region select | no | Nothing to select between. |
+
+Both select and create render the live wardrobe rig standing in a painted hall, dressed in the chosen class's starting gear by the same code the game dresses the player with. A preview drawn any other way drifts from what the player gets.
+
+Deleting a character requires typing its name. The save is one atomic blob, so a confirmed delete is final the moment it is written.
+
 ### Hub / hideout
 
 Required interactables:

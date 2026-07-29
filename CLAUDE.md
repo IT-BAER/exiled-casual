@@ -28,9 +28,9 @@ game exactly. Do not design from memory.
 - `atlas-maps.webp` — Atlas / waystone map screen
 - `poe2-atlas-node-popup.png` — PoE2 Atlas: the panel one node opens (name band, lore, socket, ACTIVATE)
 - `item-normal.png`, `item-magic.png`, `item-rare.png`, `item-unique.png` — item hover/tooltip look per rarity (colors, header, stat lines)
-- `inventory+equipment.png` — full inventory screen: equipment paper-doll, flasks, currency, backpack grid
-- `inventory.png` — PoE1 inventory: full-height pane, 12x5 grid edge to edge, currency strip at its foot
+- `inventory+equipment.png`, `inventory.png` — inventory screens: paper-doll, flasks, currency, and PoE1's full-height 12x5 grid with the currency strip at its foot
 - `poe1-lower-bar.png` — PoE1 bottom bar: flask panel, and the skill panel's mouse row above its numbered row
+- `main-menu.png`, `character-selection.png` — PoE1 main menu and character select: statue hall, title emblem, roster rows
 
 ## Itemization & rarity — RESEARCH BEFORE ITEM/LOOT WORK
 
@@ -75,12 +75,11 @@ PoE2 itemization actually works — do not invent mechanics or colors from memor
   below the last collided point is cloth a leg walks through. Skinning it to the thighs instead makes
   the hem sweep in phase with the knee and reads as two rigid blades. Rebuild the glb after changing
   `SKIRT_CHAINS` or `SKIRT_JOINTS`; `rig.ts` has both and `rig.test.ts` pins them and the binding.
-- The chain also needs joints *down* its length, not just chains around the ring: at two joints each
-  bone was 0.464 against a 0.088 thigh, and a bar that long can only pivot, never dent, so a leg
-  pressing mid-panel had nowhere to put the cloth. Three halves the penetration; four is worse and
-  dearer — the win is having somewhere to fold, not many somewheres.
+- The chain also needs joints *down* its length, not just chains around the ring: at two joints a
+  bone was 0.464 against a 0.088 thigh, and a bar that long can only pivot, never dent. Three halves
+  the penetration; four is worse and dearer — the win is somewhere to fold, not many somewheres.
 - `skirt.ts` solves at 240Hz so it outruns the display: collision only happens inside a step, so the
-  step rate is how often the coat may notice a leg. At 1/60 against a 165Hz monitor two frames in
+  step rate is how often the coat may notice a leg, and at 1/60 against a 165Hz monitor two frames in
   three moved the legs and not the cloth. `DAMPING` and `STIFFNESS` are written as the values tuned
   against a 1/60 step and rescaled by `PER_OLD_STEP`, so the rate can change without restarching it.
 - **Measure the rig before tuning the cloth.** `MAX_CONTACT_SPEED` sat at 6 units/s on a comment's
@@ -92,23 +91,22 @@ PoE2 itemization actually works — do not invent mechanics or colors from memor
   and made a finer chain look worse. `COLLIDE_PASSES` share one push budget on purpose: let each
   pass spend the full cap and iteration silently becomes an 8x speed limit that looks like progress.
   **Score oscillation separately from travel, or rubber ships.** Depth plus mean hem offset cannot
-  tell a coat that swings from one that shakes: both rose together and the fix read as "flutters too
-  quick, like rubber". The metric that sees it is hem direction *reversals* per chain-frame (rubber
-  0.006 vs stiff 0.003). Mean offset from the bind pose is lag as much as swing, so it keeps rising
-  as the cloth gets heavier — it is not a "more is better" axis. `DAMPING` is the frequency knob;
-  `CONTACT_ABSORB` does nothing measurable anywhere in 0.3-0.6 and is not where to fix ringing.
+  tell a coat that swings from one that shakes; the metric that sees it is hem direction *reversals*
+  per chain-frame (rubber 0.006 vs stiff 0.003). Mean offset from the bind pose is lag as much as
+  swing, so it is not a "more is better" axis. `DAMPING` is the frequency knob; `CONTACT_ABSORB`
+  does nothing measurable anywhere in 0.3-0.6 and is not where to fix ringing.
 - All packs export the same 65 joints at the same bind pose, so a mesh from one binds to another's
-  skeleton by assignment. `rig.test.ts` guards that and that every look the code asks for exists.
+  skeleton by assignment; `rig.test.ts` guards that, and that every look the code asks for exists.
 - Blender 5.2 is installed for asset authoring, driven headless:
   `"/c/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background --factory-startup --python x.py`
   Its glTF importer adds a 42-vert `Icosphere` as the bone display shape; the exporter drops it.
 - Raster UI/item art goes through `/codex-imagegen`, never hand-authored SVG: the quality gap is
-  large and visible. Generated masters are cropped to their alpha bounds before downscaling.
+  large and visible. Masters are cropped to their alpha bounds before downscaling.
 - Worn armour is textured per item base by `tools/build_gear_textures.py`, which re-palettizes the
   ranger atlas to each base's inventory icon (luminance -> a ramp sampled from that icon). Rerun it
   after adding an armour base or changing an icon, and add the base to `GEAR_TEXTURE` in `rig.ts`;
-  `rig.test.ts` fails if the two lists or the files disagree. It is a pixel transform on the real
-  atlas, so UVs stay correct. The silhouette stays the ranger's; only geometry can change that.
+  `rig.test.ts` fails if the two lists or the files disagree. A pixel transform on the real atlas,
+  so UVs stay correct — but the silhouette stays the ranger's; only geometry can change that.
 - The hideout props (map device, stash chest) are `props.glb`, built by `tools/build_props.py` from
   the texture masters in `assets/props/` (generated via `/codex-imagegen`; `assets/props/build/` is
   derived and gitignored). Rebuild the glb after touching either. `props.ts` fetches it once and
@@ -140,13 +138,12 @@ PoE2 itemization actually works — do not invent mechanics or colors from memor
   picks the base, the base picks the grammar and tileset. **The client must resolve the same
   grammar as the sim** or it draws a different dungeon than the one it collides against.
 - Biome textures are generated (`/codex-imagegen`) into `assets/tilesets/<biome>/`, then made
-  tiling by `tools/build_tileset_textures.py`. Generated art does not tile and has no normal map,
-  so that script is not optional: it cross-fades the wrap, derives the normal, and **lifts plates
-  that are too dark to play on** (floors to 55, walls to 95). The renderer is calibrated against
-  a 57-luma floor and a 132-luma wall, and engine.ts boosts the floor because actors are
-  near-black and only read against a floor brighter than they are.
-- A biome tint is a **colour, not a dimmer**: `applyBiomeTint` normalises to mean 1.0. Applied
-  raw it took a third out of the ambient and the rooms went to unplayable black.
+  tiling by `tools/build_tileset_textures.py`; generated art does not tile and has no normal map,
+  so that script is not optional. It cross-fades the wrap, derives the normal, and **lifts plates
+  too dark to play on** (floors to 55, walls to 95). The renderer is calibrated against a 57-luma
+  floor and a 132-luma wall, and engine.ts boosts the floor because actors are near-black and only
+  read against a floor brighter than they are. A biome tint is a **colour, not a dimmer**:
+  `applyBiomeTint` normalises to mean 1.0, and applied raw it took a third out of the ambient.
 - **Level walls must never be shadow casters** (`engine.ts` excludes `wallrun-*`). A 3.5-unit wall
   under that low sun throws a ~9-unit shadow, longer than a room is wide, and the per-run boxes
   are disposed by the merge but stayed in the shadow render list — 817 dead meshes after one map.
@@ -156,13 +153,44 @@ PoE2 itemization actually works — do not invent mechanics or colors from memor
 - **Drive and capture the state yourself, with exact timings.** Anything transient (a skill FX, an
   impact, a projectile in flight) is over before a human can be asked to hold it, so asking the user
   to pose the screen is not a workflow. Script it: dispatch the input, wait a measured delay, then
-  `scene.render()` and `drawImage` into an offscreen canvas inside the SAME in-page script. Aim with
-  a canvas `pointermove` first or a cast is a no-op (aim defaults to the player's own feet).
+  `scene.render()` and `drawImage` into an offscreen canvas inside the SAME in-page script (a plain
+  full-page capture is fine for anything that holds still). Aim with a canvas `pointermove` first or
+  a cast is a no-op (aim defaults to the player's own feet).
 - Stage every capture in `review/` (gitignored) under a plain name and get sign-off BEFORE it enters
   `devlog/`. What needs confirming is the frame, not the moment. Scratchpad paths are not reviewable.
-- After any step with a visible result, screenshot the running app into `devlog/screenshots/` named
-  `YYYY-MM-DD-<slug>.jpeg` (JPEG q75-80; use a small PNG only when transparency/fine detail needs it).
-- Add that shot to `devlog/README.md` under its date with a one-line caption. Chronological, one entry per slice.
+- Once signed off, the shot goes to `devlog/screenshots/YYYY-MM-DD-<slug>.jpeg` (JPEG q75-80; a
+  small PNG only when transparency or fine detail needs it) and gets a one-line caption under its
+  date in `devlog/README.md`. Chronological, one entry per slice.
+
+## Menus & characters
+
+- The client is a **screen router** (`App.tsx`): `menu | mode | select | create | info | game`.
+  The game lives in `GameView.tsx`, which builds the Babylon engine and spawns the sim worker ON
+  MOUNT — keeping it unmounted is the point, and no menu screen may import it.
+- The save is a **roster**: `packages/persistence/src/roster.ts` holds a record per character
+  (id, name, class, level, league) plus a **shared stash**, and treats each character's save as an
+  OPAQUE `state`; that leaf must never learn what a session is. `simulation/roster-io.ts` parses
+  the roster without a World — the menu imports THAT, never `characters.ts`, or the whole sim lands
+  in the main bundle. Two versions, not one: `persist.VERSION` (2) versions one character's save,
+  `ROSTER_VERSION` (3) the blob wrapping them; `migrateSingleSave` upgrades a v2 blob on READ and
+  does not commit it, so an untouched menu visit leaves the old save on disk.
+- **Local mode holds one character** (`LOCAL_CHARACTER_CAP`), passed in by the caller so online
+  passes `Infinity` and no shape changes. `PLAY` asks local-or-online BEFORE the roster, because
+  the two pools never mix and that is only fair said in advance.
+- **Classes are cosmetic and one body.** Ids in `@exiled/rules/classes.ts`, definitions in
+  `content-runtime/classes.ts`, pinned together by `simulation/characters.test.ts`. One male rig,
+  two looks per slot, so a class can only change the OUTFIT: each gets its own body base out of
+  `STARTER_BASES` (kept out of the drop pool) whose baked `GEAR_TEXTURE` palette is the only thing
+  making three classes read as three people.
+- Menu art is generated (`/codex-imagegen`) into `assets/menu/`, cropped to alpha and scaled by
+  `tools/build_menu_textures.py`, which also MEASURES the frame's `border-image-slice` off the alpha
+  (a guessed inset shears a nine-slice). Plates are authored EMPTY; hover and pressed are filters.
+- `loadPlayerRig` caches per SCENE, and the menu stage and the game are two scenes in one page's
+  life (three under StrictMode). A load in flight for one scene must never be handed to another:
+  its containers belong to the first, `isRigReady` answers false, and the character silently fails
+  to appear. Same for `resetPlayerRig(scene)` — an abandoned scene must not wipe a live one's cache.
+- `base.head.*` has **no facial features**, so the menu rig stands turned, hooded and lit from
+  behind. `index.html`'s "no text input anywhere" is also stale: name fields need `user-select`.
 
 ## Conventions
 

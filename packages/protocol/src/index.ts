@@ -112,7 +112,13 @@ export type SpawnKind = "imp" | "pack" | "rare" | "boss" | "clear" | "hurtboss" 
 
 export const SPAWN_KINDS: readonly SpawnKind[] = ["imp", "pack", "rare", "boss", "clear", "hurtboss", "item"];
 
-export interface ToWorker_Init   { type: "init"; seed: number }
+/**
+ * `characterId` names the roster entry this session plays. Optional so the lab
+ * (and every test that drives WorkerCore directly) can still boot a bare world
+ * with no roster behind it; when it IS present the worker loads and saves that
+ * character rather than the single pre-roster blob.
+ */
+export interface ToWorker_Init   { type: "init"; seed: number; characterId?: string }
 export interface ToWorker_Intent { type: "intent"; intent: Intent }
 export interface ToWorker_Reset  { type: "reset" }
 export interface ToWorker_Spawn  { type: "spawn"; what: SpawnKind }
@@ -441,7 +447,8 @@ export function isToWorker(v: unknown): v is ToWorker {
   const obj = v as Record<string, unknown>;
   if (!TO_WORKER_TYPES.has(obj["type"] as string)) return false;
   switch (obj["type"]) {
-    case "init":   return typeof obj["seed"] === "number";
+    case "init":   return typeof obj["seed"] === "number"
+      && (obj["characterId"] === undefined || typeof obj["characterId"] === "string");
     case "intent": return typeof obj["intent"] === "object" && obj["intent"] !== null;
     case "reset":  return true;
     case "spawn":  return SPAWN_KINDS.includes(obj["what"] as SpawnKind);

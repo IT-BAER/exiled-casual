@@ -50,6 +50,12 @@ BASES = {
     "base.ember_gauntlets": "ember_gauntlets.png",
     "base.ashen_treads": "ashen_treads.png",
     "base.cinderchain_sash": "cinderchain_sash.png",
+    # The three class starter bodies. Same coat geometry, three palettes: cold
+    # iron, mossy leather, charcoal and crimson. Without these a character select
+    # offering three classes shows the same green ranger three times.
+    "base.ironsworn_plate": "ironsworn_plate.png",
+    "base.stalker_leathers": "stalker_leathers.png",
+    "base.emberbound_robe": "emberbound_robe.png",
 }
 
 # The character is roughly 12% of frame height, so the atlas is downscaled on the
