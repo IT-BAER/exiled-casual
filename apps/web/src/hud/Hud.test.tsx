@@ -8,7 +8,7 @@ import { playDropSound } from "../audio/drop-sound";
 import "@testing-library/jest-dom/vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { Hud } from "./Hud";
-import { xpPerHour } from "./XpBar";
+import { xpPerHour, TICK_BACKGROUND, RAIL_H } from "./XpBar";
 import type { Snapshot } from "@exiled/protocol";
 import { MAP_PORTALS } from "@exiled/protocol";
 import { testPlayer, testStats } from "../test-fixtures";
@@ -365,6 +365,15 @@ describe("experience bar", () => {
   it("stays behind the bar panels, the way PoE1's rail runs under the stone", () => {
     render(<Hud snapshot={makeSnap({ level: 68, xp: 30_000, xpToNext: 120_000 })} />);
     expect(screen.getByTestId("xp-bar")).toHaveStyle({ zIndex: "1" });
+  });
+
+  it("ticks the rail every 5% of the level, so the segments say something", () => {
+    render(<Hud snapshot={makeSnap({ level: 68, xp: 30_000, xpToNext: 120_000 })} />);
+    expect(screen.getByTestId("xp-bar-ticks")).toBeTruthy();
+    // Percent, not pixels: 20 segments however wide the screen is. jsdom cannot
+    // read the applied gradient back, so the string is pinned at the source.
+    expect(TICK_BACKGROUND).toContain("calc(5% - 2px) 5%");
+    expect(RAIL_H).toBeLessThan(6);
   });
 });
 

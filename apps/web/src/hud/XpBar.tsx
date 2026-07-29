@@ -12,8 +12,25 @@ const PARCHMENT = "#c8c2b4";
  */
 export const XP_RATE_WINDOW_MS = 60_000;
 
-/** A tick every this many pixels, the way PoE1's rail is chopped into segments. */
-const SEGMENT_PX = 26;
+/**
+ * The rail is chopped into segments the way PoE1's is, but on the SHARE of the
+ * level rather than on pixels: a tick every 5% means the ticks say something —
+ * you can count how far the gold has to go without asking for the number.
+ */
+const SEGMENT_PCT = 5;
+
+/** Thin enough to be noticed sideways and never looked at. */
+export const RAIL_H = 4;
+
+/**
+ * Exported because jsdom's CSS parser drops a repeating-linear-gradient that
+ * carries a calc(), so neither `.style` nor the style attribute can be read back
+ * in a test — the string itself is the only thing left to pin.
+ */
+export const TICK_BACKGROUND =
+  `repeating-linear-gradient(90deg,` +
+  `rgba(0,0,0,0) 0 calc(${SEGMENT_PCT}% - 2px),` +
+  `rgba(0,0,0,0.62) calc(${SEGMENT_PCT}% - 2px) ${SEGMENT_PCT}%)`;
 
 export type XpSample = { t: number; total: number };
 
@@ -87,7 +104,7 @@ export function XpBar({ level, xp, xpToNext }: { level: number; xp: number; xpTo
           left: 0,
           right: 0,
           bottom: 0,
-          height: 6,
+          height: RAIL_H,
           background: "linear-gradient(180deg,#0a0805,#16110a)",
           borderTop: "1px solid #2b2216",
           // Below the two panels (zIndex 2) but above the connector band, which is
@@ -110,10 +127,7 @@ export function XpBar({ level, xp, xpToNext }: { level: number; xp: number; xpTo
           style={{
             position: "absolute",
             inset: 0,
-            background:
-              `repeating-linear-gradient(90deg,` +
-              `rgba(0,0,0,0) 0 ${SEGMENT_PX - 2}px,` +
-              `rgba(0,0,0,0.62) ${SEGMENT_PX - 2}px ${SEGMENT_PX}px)`,
+            background: TICK_BACKGROUND,
             pointerEvents: "none",
           }}
         />
