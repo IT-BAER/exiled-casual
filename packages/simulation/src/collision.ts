@@ -102,14 +102,37 @@ export function gridCollision(grid: WalkableGrid): Collision {
     return grid.cells[cy * grid.cols + cx] === 1;
   };
 
-  const isWalkable = (x: Fixed, y: Fixed, bodyRadius: Fixed): boolean =>
-    // Sample the disc centre plus its four cardinal rim points: cheap and
-    // enough to keep a body out of a wall on the greybox cell grid.
-    walkableAt(x, y) &&
-    walkableAt(x + bodyRadius, y) &&
-    walkableAt(x - bodyRadius, y) &&
-    walkableAt(x, y + bodyRadius) &&
-    walkableAt(x, y - bodyRadius);
+  const half = Math.trunc(cs / 2);
+
+  /**
+   * True when no wall cell overlaps the body disc. Every cell the disc can reach
+   * is tested, not five sample points: at 0.5-unit cells a rim point sits almost
+   * two cells out, so sampling skipped the cells in between and let 0.6 of a
+   * 0.85 brute sit inside a wall. Out-of-grid counts as wall.
+   */
+  const isWalkable = (x: Fixed, y: Fixed, bodyRadius: Fixed): boolean => {
+    if (!walkableAt(x, y)) return false;
+    const r = bodyRadius;
+    if (r <= 0) return true;
+    const loX = Math.floor((x - r - ox) / cs);
+    const hiX = Math.ceil((x + r - ox) / cs);
+    const loY = Math.floor((y - r - oy) / cs);
+    const hiY = Math.ceil((y + r - oy) / cs);
+    const r2 = r * r;
+    for (let cy = loY; cy <= hiY; cy++) {
+      for (let cx = loX; cx <= hiX; cx++) {
+        const solid =
+          cx < 0 || cy < 0 || cx >= grid.cols || cy >= grid.rows ||
+          grid.cells[cy * grid.cols + cx] !== 1;
+        if (!solid) continue;
+        // Squared distance from the disc centre to that cell's box.
+        const gx = Math.max(0, Math.abs(x - (ox + cx * cs)) - half);
+        const gy = Math.max(0, Math.abs(y - (oy + cy * cs)) - half);
+        if (gx * gx + gy * gy < r2) return false;
+      }
+    }
+    return true;
+  };
 
   return { isWalkable, nav: gridNav(grid, ox, oy, cs, isWalkable) };
 }

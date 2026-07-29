@@ -47,6 +47,35 @@ describe("gridCollision.isWalkable", () => {
   });
 });
 
+// The game's real geometry: 0.5-unit cells against bodies of radius 0.42 to 1.4.
+// A rim point that far out lands almost two cells away, so sampling the centre
+// and four rim points skips every cell in between.
+describe("gridCollision.isWalkable on 0.5-unit cells", () => {
+  const cells = new Uint8Array(11 * 11).fill(1);
+  cells[3 * 11 + 4] = 0; // wall at cell (4,3) = world (2.0, 1.5)
+  const c = gridCollision({ cols: 11, rows: 11, cellSize: 0.5, originX: 0, originY: 0, cells });
+
+  it("a wall one cell away is inside the body, not outside it", () => {
+    // The wall spans x 1.75..2.25. A radius-0.85 brute centred at x=1.5 reaches
+    // x=2.35, so 0.6 of it is buried — while its +x rim sample at 2.35 lands in
+    // the floor cell beyond the wall and reports clear.
+    expect(c.isWalkable(fp(1.5), fp(1.5), fp(0.85))).toBe(false);
+  });
+
+  it("the same body clears once its rim stops reaching the wall", () => {
+    // Wall face at x=1.75, so a 0.85 body needs its centre at 0.9 or less.
+    expect(c.isWalkable(fp(0.75), fp(1.5), fp(0.85))).toBe(true);
+    expect(c.isWalkable(fp(1.0), fp(1.5), fp(0.85))).toBe(false);
+  });
+
+  it("a small body beside that wall still fits", () => {
+    // A 0.42 swarm body at x=1.5 reaches 1.92... which is inside the wall.
+    expect(c.isWalkable(fp(1.5), fp(1.5), fp(0.42))).toBe(false);
+    // Half a cell further back it clears with room to spare.
+    expect(c.isWalkable(fp(1.25), fp(1.5), fp(0.42))).toBe(true);
+  });
+});
+
 describe("slide", () => {
   const wall = gridCollision(
     makeGrid([
