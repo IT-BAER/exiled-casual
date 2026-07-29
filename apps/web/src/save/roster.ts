@@ -18,9 +18,11 @@ import {
   addCharacter,
   emptyRoster,
   headers,
+  putSettings,
   removeCharacter,
   saveRoster,
 } from "@exiled/persistence";
+import { sanitize, type Settings } from "../settings";
 import { makeCharacterRecord, openRoster, type NewCharacter } from "@exiled/simulation/roster-io";
 
 export type Mode = "local" | "online";
@@ -71,6 +73,45 @@ export async function deleteCharacter(roster: RosterBlob, id: string): Promise<R
 }
 
 export { headers };
+
+/** What the player has set, proven safe. A roster with no settings reads as defaults. */
+export function settingsOf(roster: RosterBlob): Settings {
+  return sanitize(roster.settings);
+}
+
+/**
+ * How long a burst of changes is allowed to run before it costs a write.
+ *
+ * Dragging a slider fires per pointer event, and each write is a JSON.stringify
+ * of the WHOLE blob (every character's save rides in it) plus an IndexedDB
+ * round trip. 400ms is a guess, and the only one in this file.
+ */
+export const SETTINGS_DEBOUNCE_MS = 400;
+
+let settingsTimer: ReturnType<typeof setTimeout> | null = null;
+let settingsWrite: Promise<void> = Promise.resolve();
+
+/**
+ * Write settings at most once per burst; the last call wins.
+ *
+ * ponytail: the roster is captured per call, so a write scheduled here and a
+ * character created before it fires would save the older roster. Settings only
+ * change from the Options panel, where no character can be created, so the
+ * window does not exist today. Re-read the roster here if that ever stops being
+ * true.
+ */
+export function saveSettingsSoon(roster: RosterBlob, settings: Settings): void {
+  if (settingsTimer !== null) clearTimeout(settingsTimer);
+  settingsTimer = setTimeout(() => {
+    settingsTimer = null;
+    settingsWrite = saveRoster(kv(), putSettings(roster, settings));
+  }, SETTINGS_DEBOUNCE_MS);
+}
+
+/** Wait for the pending settings write. Test seam, and how a caller forces the flush. */
+export function flushSettingsSave(): Promise<void> {
+  return settingsWrite;
+}
 
 /** crypto.randomUUID is not in every context (http origins, old Safari); fall back. */
 function newId(): string {
