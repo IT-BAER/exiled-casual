@@ -28,11 +28,26 @@ export const LOADING_ART = "/textures/loading";
  */
 const BAND_H = "clamp(76px, 12vh, 136px)";
 
+/**
+ * How long the plate takes to dissolve off the finished world, and how long its
+ * owner must therefore keep it mounted past ready. Exported so the two cannot
+ * drift: a fade longer than the mount is a plate that vanishes mid-dissolve.
+ */
+export const FADE_MS = 260;
+
 export interface LoadingScreenProps {
   /** Printed on the right. The place being entered, already resolved to a name. */
   areaName: string;
   /** Printed on the left. One line, picked by the caller so a re-render cannot reshuffle it. */
   tip: string;
+  /**
+   * The game behind it is ready and the plate is dissolving off it.
+   *
+   * This is still not the plate deciding to go: the owner sets it on the same
+   * signal it would have unmounted on, and unmounts `FADE_MS` later. The plate
+   * has no clock of its own either way.
+   */
+  leaving?: boolean;
   /**
    * Plate to show behind it. Absent (or a file that 404s) falls back to the dark
    * ground the band sits on, which is a plain screen rather than a broken one —
@@ -41,14 +56,17 @@ export interface LoadingScreenProps {
   wallpaper?: string;
 }
 
-export function LoadingScreen({ areaName, tip, wallpaper }: LoadingScreenProps): React.ReactElement {
+export function LoadingScreen({ areaName, tip, wallpaper, leaving }: LoadingScreenProps): React.ReactElement {
   const [artFailed, setArtFailed] = React.useState(false);
   return (
     <div
       data-testid="loading-screen"
+      data-leaving={leaving ? "" : undefined}
       style={{
         position: "absolute",
         inset: 0,
+        opacity: leaving ? 0 : 1,
+        transition: `opacity ${FADE_MS}ms ease-out`,
         // Over the canvas, the HUD and every pane. The whole point is that
         // nothing behind it is worth looking at yet.
         zIndex: 100,
@@ -153,16 +171,45 @@ export function LoadingScreen({ areaName, tip, wallpaper }: LoadingScreenProps):
 }
 
 /**
- * PLACEHOLDER. The shipped animation is a pre-rendered frame sequence
- * (`tools/build_loading_spinner.py`, Blender) played by `steps()` on
- * `background-position`, for one reason worth keeping: `buildLevel` is
- * synchronous, so anything driven by `requestAnimationFrame` freezes exactly
- * when the player is most likely to be watching it. A CSS keyframe animation on
- * a composited property keeps turning through a blocked main thread; a JS one
- * does not.
+ * The ring, as a pre-rendered sprite sheet.
  *
- * This ring holds the position and the size until that sheet exists.
+ * 48 frames of a gilt ring with an ember travelling round it, built by
+ * `tools/build_loading_spinner.py` (Blender 5.2, Cycles) into an 8x6 grid.
+ * The ember carries a real point light, so the metal it passes actually lights
+ * up — the one thing a CSS ring cannot do, and the reason this is rendered.
+ *
+ * Walked by TWO stepped animations rather than one, because the sheet is a grid
+ * and not a strip: x steps 8 times per turn, y steps 6 times across 8 turns of
+ * x. A 48-frame strip would be 6144px wide, which is past the safe texture
+ * width on some mobile GPUs.
+ *
+ * Both are CSS keyframes on `background-position`, deliberately. `buildLevel`
+ * is synchronous, so the main thread is blocked for exactly the stretch the
+ * player is most likely to be watching this; a `requestAnimationFrame` loop
+ * would freeze there and a frozen spinner reads as a hung game.
  */
+const FRAME_COLS = 8;
+const FRAME_ROWS = 6;
+/** One turn of the ring. 48 frames at 60fps would be 0.8s; this is a shade statelier. */
+const SPIN_SEC = 1.05;
+
+/**
+ * Where the last frame of an axis sits, as a `background-position` percentage.
+ *
+ * This is the trap in every percentage sprite sheet and it is worth the four
+ * lines. `background-position: p%` does NOT offset the image by p% of its own
+ * width — it aligns the p% point OF THE IMAGE with the p% point OF THE BOX. So
+ * across a sheet `n` cells wide, cell `i` lands at `i / (n - 1)`, not at `i / n`:
+ * the last cell is at 100%, the first at 0%, and there are only `n - 1` gaps
+ * between them.
+ *
+ * `steps(n)` over `0 → end` yields `k * end / n` for k in 0..n-1, so `end` has
+ * to be `n / (n - 1) * 100` for those to land on the cells. Use a plain 100%
+ * with `steps(8)` — which is what every sprite-sheet snippet on the web does —
+ * and every frame after the first is a sliver of two cells at once.
+ */
+export const axisEnd = (cells: number): number => (cells / (cells - 1)) * 100;
+
 function Spinner(): React.ReactElement {
   const size = "clamp(34px, 3.2vw, 58px)";
   return (
@@ -174,13 +221,18 @@ function Spinner(): React.ReactElement {
         width: size,
         height: size,
         flex: "0 0 auto",
-        borderRadius: "50%",
-        border: "2px solid rgba(200,164,77,0.18)",
-        borderTopColor: GOLD,
-        animation: "exiled-spin 1.05s linear infinite",
+        backgroundImage: `url(${LOADING_ART}/spinner.png)`,
+        // The sheet is scaled so ONE cell fills the box.
+        backgroundSize: `${FRAME_COLS * 100}% ${FRAME_ROWS * 100}%`,
+        backgroundRepeat: "no-repeat",
+        animation: `exiled-spin-x ${SPIN_SEC}s steps(${FRAME_COLS}) infinite,`
+          + ` exiled-spin-y ${SPIN_SEC * FRAME_ROWS}s steps(${FRAME_ROWS}) infinite`,
       }}
     >
-      <style>{"@keyframes exiled-spin{to{transform:rotate(360deg)}}"}</style>
+      <style>
+        {`@keyframes exiled-spin-x{from{background-position-x:0%}to{background-position-x:${axisEnd(FRAME_COLS)}%}}`
+          + `@keyframes exiled-spin-y{from{background-position-y:0%}to{background-position-y:${axisEnd(FRAME_ROWS)}%}}`}
+      </style>
     </div>
   );
 }

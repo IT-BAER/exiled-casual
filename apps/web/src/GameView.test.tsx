@@ -73,6 +73,7 @@ vi.mock("./input/bindings", () => ({
 }));
 
 import { GameView } from "./GameView";
+import { FADE_MS } from "./LoadingScreen";
 
 const makeSnap = (): Snapshot => ({
   tick: 1, area: "hideout", portalsLeft: 0, mapOpen: false, areaTier: 0,
@@ -225,6 +226,15 @@ describe("GameView", () => {
     act(() => { hoisted.frame?.(); });
   }
 
+  /**
+   * Let the plate finish dissolving. It stays mounted at opacity 0 for FADE_MS
+   * after the world is ready, so "gone" is a state the test has to wait for
+   * rather than one that arrives with the frame.
+   */
+  async function finishFade() {
+    await act(async () => { await new Promise((r) => setTimeout(r, FADE_MS + 40)); });
+  }
+
   it("covers the screen from mount and stays up until a frame is actually painted", async () => {
     await mountGame();
     // Up before anything: the canvas at this point is a black rectangle.
@@ -238,6 +248,10 @@ describe("GameView", () => {
     becomeReady();
     expect(screen.getByTestId("loading-screen")).toBeTruthy();
     paintFrame();
+    // Ready means it starts dissolving, not that it vanishes: a cut from a
+    // painting to a game reads as a glitch.
+    expect(screen.getByTestId("loading-screen").getAttribute("data-leaving")).toBe("");
+    await finishFade();
     expect(screen.queryByTestId("loading-screen")).toBeNull();
   });
 
@@ -252,6 +266,7 @@ describe("GameView", () => {
 
     becomeReady();
     paintFrame();
+    await finishFade();
     expect(screen.queryByTestId("loading-screen")).toBeNull();
   });
 
@@ -260,6 +275,7 @@ describe("GameView", () => {
     sendArea("map.desert");
     becomeReady();
     paintFrame();
+    await finishFade();
     expect(screen.queryByTestId("loading-screen")).toBeNull();
 
     // Back to the hideout: no map base, so it falls back to the one area that is
@@ -267,8 +283,11 @@ describe("GameView", () => {
     sendArea("");
     expect(screen.getByTestId("loading-screen")).toBeTruthy();
     expect(screen.getByTestId("loading-area-name").textContent).toBe("Hideout");
+    // And it is back at full opacity, not still carrying the last dissolve.
+    expect(screen.getByTestId("loading-screen").getAttribute("data-leaving")).toBeNull();
     becomeReady();
     paintFrame();
+    await finishFade();
     expect(screen.queryByTestId("loading-screen")).toBeNull();
   });
 });

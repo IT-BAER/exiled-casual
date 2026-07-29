@@ -52,17 +52,24 @@
       }
       #boot[hidden] { display: none; }
       #boot.gone { opacity: 0; pointer-events: none; }
-      /* Same ring the React plate draws, in the same place, so the handover does
-         not move it. A CSS animation keeps turning while the main thread parses
-         5 MB of JavaScript; anything driven by a frame callback would not. */
+      /* The same rendered ring the React plate draws, in the same place, so the
+         handover does not move it. A CSS animation keeps turning while the main
+         thread parses megabytes of JavaScript; a frame callback would not.
+
+         The percentages are not arbitrary: `background-position: p%` aligns the
+         p% point of the image with the p% point of the box, so across 8 cells
+         the last one sits at 100% and there are only 7 gaps. `steps(8)` over
+         0 -> 114.2857% is what lands each step on a cell. Same reasoning gives
+         120% for the 6 rows. See the note in LoadingScreen.tsx. */
       #boot-ring {
         width: clamp(34px, 3.2vw, 58px); height: clamp(34px, 3.2vw, 58px);
         margin-bottom: calc(clamp(76px, 12vh, 136px) / 2 - clamp(17px, 1.6vw, 29px));
-        border-radius: 50%;
-        border: 2px solid rgba(200, 164, 77, 0.18); border-top-color: #c8a44d;
-        animation: exiled-spin 1.05s linear infinite;
+        background: url(/textures/loading/spinner.png) 0% 0% / 800% 600% no-repeat;
+        animation: exiled-spin-x 1.05s steps(8) infinite,
+                   exiled-spin-y 6.3s steps(6) infinite;
       }
-      @keyframes exiled-spin { to { transform: rotate(360deg); } }
+      @keyframes exiled-spin-x { from { background-position-x: 0%; } to { background-position-x: 114.2857%; } }
+      @keyframes exiled-spin-y { from { background-position-y: 0%; } to { background-position-y: 120%; } }
     </style>
   </head>
   <body>

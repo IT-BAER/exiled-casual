@@ -15,7 +15,7 @@ import { CharacterPanel } from "./hud/CharacterPanel";
 import { LootLabels } from "./hud/LootLabels";
 import { Minimap } from "./hud/Minimap";
 import { Divider, FramedPanel, GOLD, MenuButton, SERIF } from "./menu/frames";
-import { LoadingScreen, LOADING_ART } from "./LoadingScreen";
+import { LoadingScreen, LOADING_ART, FADE_MS } from "./LoadingScreen";
 import { pickTip } from "./tips";
 import { OptionsPanel } from "./menu/OptionsPanel";
 import { DEFAULT_SETTINGS, type Settings } from "./settings";
@@ -91,6 +91,8 @@ export function GameView({
    * draw one black frame, which is the frame the player would have seen.
    */
   const [loading, setLoading] = useState(true);
+  /** The world is ready and the plate is dissolving off it. Cleared by the next area. */
+  const [leaving, setLeaving] = useState(false);
   /** Where we are going, already resolved. The plate names the destination, not the origin. */
   const [area, setArea] = useState<{ name: string; art: string | undefined }>({
     name: "Hideout",
@@ -137,6 +139,8 @@ export function GameView({
      * for it, StrictMode's second mount included.
      */
     let needsPaint = false;
+    /** Pending unmount of the plate, one fade after ready. Cancelled by a new area. */
+    let fadeTimer: ReturnType<typeof setTimeout> | undefined;
 
     // Babylon engine + render loop
     const engine = new Engine(canvas, true);
@@ -212,7 +216,11 @@ export function GameView({
         // already in flight for the OLD area must not be allowed to report the
         // new one ready.
         needsPaint = false;
+        // A place that arrives mid-dissolve takes the plate back at full
+        // opacity, and the unmount that dissolve had queued must not fire on it.
+        clearTimeout(fadeTimer);
         setLoading(true);
+        setLeaving(false);
         setTip(pickTip());
         const biome = base ? BIOMES[base.biomeId] : null;
         setArea({
@@ -252,7 +260,11 @@ export function GameView({
       // so this costs one boolean read per frame and sets React state once.
       if (needsPaint) {
         needsPaint = false;
-        setLoading(false);
+        // Dissolve rather than cut. The world under it is finished either way —
+        // this fade costs the player nothing, because the frame behind it is
+        // already the one they were waiting for.
+        setLeaving(true);
+        fadeTimer = setTimeout(() => setLoading(false), FADE_MS);
       }
     };
 
@@ -298,6 +310,7 @@ export function GameView({
 
     return () => {
       unmounted = true;
+      clearTimeout(fadeTimer);
       detach();
       detachZoom(); // the canvas outlives the engine, so its listener must go
       window.removeEventListener("keydown", onInvKey);
@@ -333,7 +346,12 @@ export function GameView({
           being built, and the HUD below is reading a snapshot from the area the
           player just left. */}
       {loading && (
-        <LoadingScreen areaName={area.name} tip={tip} {...(area.art ? { wallpaper: area.art } : {})} />
+        <LoadingScreen
+          areaName={area.name}
+          tip={tip}
+          leaving={leaving}
+          {...(area.art ? { wallpaper: area.art } : {})}
+        />
       )}
       {/* Stays mounted with the plates off: the drop CUE is played from inside
           LootLabels, and a HUD toggle that also silenced every drop would be a

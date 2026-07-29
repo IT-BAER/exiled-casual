@@ -37,3 +37,6 @@ reference-screenshots/
 
 # Screenshots staged for the user to review; only approved ones move to devlog/
 review/
+
+# Derived spinner frames; the sheet in public/ is what ships
+assets/loading/build/
