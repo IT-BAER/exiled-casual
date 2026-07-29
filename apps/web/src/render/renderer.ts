@@ -166,6 +166,7 @@ export class SnapshotRenderer {
         e.y,
         alpha,
         e.radius,
+        e.species,
       );
       const mesh = this.meshes.get(e.id);
       if (!mesh) continue;
@@ -242,6 +243,7 @@ export class SnapshotRenderer {
     nextY: number,
     alpha: number,
     radius?: number,
+    species?: string,
   ): void {
     let mesh = this.meshes.get(id);
     const fresh = !mesh;
@@ -250,7 +252,7 @@ export class SnapshotRenderer {
     if (!mesh) {
       // Born where it belongs. A mesh built at the origin and moved afterwards
       // drags any trail it owns across the level on its first frames.
-      mesh = makeMesh(this.scene, kind, `entity-${id}`, new Vector3(x, Y_LIFT[kind], z));
+      mesh = makeMesh(this.scene, kind, `entity-${id}`, new Vector3(x, Y_LIFT[kind], z), species);
       mesh.rotation.y = SPAWN_YAW;
       this.meshes.set(id, mesh);
     }

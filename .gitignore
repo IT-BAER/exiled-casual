@@ -34,9 +34,13 @@ reference-screenshots/
 .claude/
 .agents/
 .superpowers/
+docs/todo/
 
 # Screenshots staged for the user to review; only approved ones move to devlog/
 review/
 
 # Derived spinner frames; the sheet in public/ is what ships
 assets/loading/build/
+
+# Downscaled hides and their derived normals; monsters.glb embeds them
+assets/monsters/build/

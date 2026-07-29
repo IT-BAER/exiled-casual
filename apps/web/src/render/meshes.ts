@@ -9,6 +9,7 @@ import {
   type Vector3,
 } from "@babylonjs/core";
 import { attachProp } from "./props";
+import { attachCreature, type CreatureRig } from "./monsters";
 import { attachBoltTrail, attachCinderFX, cinderGlow } from "./skill-fx";
 import { attachRig, rigOf, type RigParts } from "./rig";
 
@@ -105,7 +106,9 @@ function attach(root: Mesh, part: Mesh, material: StandardMaterial): Mesh {
  */
 interface ActorParts {
   /** Limbs that swing back and forth, each with its own offset in the cycle. */
-  limbs: { mesh: Mesh; offset: number; amp: number }[];
+  limbs?: { mesh: Mesh; offset: number; amp: number }[];
+  /** An authored creature: it runs clips instead, off its own skeleton. */
+  creature?: CreatureRig;
   /** How far the body rises on each step. */
   bob: number;
   /** Rares only: the ground disc whose colour names their element. */
@@ -132,6 +135,12 @@ export function animateActor(
   }
 
   const parts = root.metadata as ActorParts | null;
+  // An authored creature is skinned too: its legs bend at the knee and its feet
+  // plant, which no amount of swinging a rigid limb about one hip can do.
+  if (parts?.creature) {
+    parts.creature.setLocomotion(moving ? speed : 0);
+    return;
+  }
   // Not every mesh with metadata is an actor — telegraphs park their materials
   // there too, so check for limbs rather than for metadata.
   if (!parts?.limbs) return;
@@ -724,7 +733,20 @@ const FIRE_COLOR: Record<"projectile" | "groundArea", [number, number, number]> 
  * the origin to the caster's hand that then peels away over the next ~30 frames.
  * Position first, attach the effects second.
  */
-export function makeMesh(scene: Scene, kind: MeshKind, name: string, at?: Vector3): Mesh {
+/**
+ * A rare is the same species standing a head taller. It used to be a different
+ * creature entirely — the generic imp at 1.7 — which quietly told the player
+ * that the elite in a swamp was a fire imp.
+ */
+const RARE_SCALE = 1.3;
+
+export function makeMesh(
+  scene: Scene,
+  kind: MeshKind,
+  name: string,
+  at?: Vector3,
+  species?: string,
+): Mesh {
   // ponytail: each actor is assembled from ~10 primitive parts per instance
   // (shared materials, but geometry is not GPU-instanced). Fine for a lab-sized
   // fight; if a large imp swarm tanks FPS, build one template per kind and
@@ -737,7 +759,23 @@ export function makeMesh(scene: Scene, kind: MeshKind, name: string, at?: Vector
       const rig = attachRig(scene, root);
       if (rig) root.metadata = { rig } satisfies RigParts;
       else buildCaster(scene, root);
-    } else if (kind === "boss") {
+      return root;
+    }
+
+    // The authored creature when `monsters.glb` has it and has loaded. It is
+    // skinned and carries its own walk and idle, so nothing here bobs it: the
+    // clip already does, against feet that stay on the floor.
+    const creature = species ? attachCreature(scene, root, species) : null;
+    if (creature) {
+      root.metadata = { creature, bob: 0 } satisfies ActorParts;
+      if (kind === "rare") {
+        root.scaling.setAll(RARE_SCALE);
+        buildRareAura(scene, root);
+      }
+      return root;
+    }
+
+    if (kind === "boss") {
       // Darker charcoal rock, hotter lava glow, bright near-white eye.
       // Reuses rare_skin.png (boss_skin.png does not exist in public/textures/).
       // Low emissive on purpose: the reference look is a dark silhouette with hot

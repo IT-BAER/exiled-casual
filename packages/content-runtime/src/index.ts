@@ -1,6 +1,6 @@
 export const CONTENT_VERSION = "slice1.v1";
 export { SKILLS } from "./skills.js";
-export { MONSTERS, RARE_TEMPLATES, rareTemplate, MONSTER_POOLS, PACK_COUNT, pickPack } from "./monsters.js";
+export { MONSTERS, RARE_TEMPLATES, rareTemplate, MONSTER_POOLS, PACK_COUNT, pickPack, BOSSES, bossFor } from "./monsters.js";
 export { BIOMES, MAP_BASES, mapBase, biomeOf } from "./maps.js";
 export { CLASSES, CLASS_LIST, characterClass } from "./classes.js";
 export {

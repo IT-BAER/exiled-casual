@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { generateArea } from "@exiled/mapgen";
 import { fp } from "@exiled/fixed-point";
-import { CONTENT_VERSION, MONSTERS, MONSTER_POOLS, PACK_COUNT, mapBase } from "@exiled/content-runtime";
+import { CONTENT_VERSION, MONSTERS, MONSTER_POOLS, PACK_COUNT, bossFor, mapBase } from "@exiled/content-runtime";
 import { mapBaseIdForNode, monsterTierScale } from "@exiled/rules";
 import type { MonsterDef } from "@exiled/content-schema";
 import { World, type Entity } from "./ecs.js";
@@ -79,7 +79,7 @@ describe("pool-driven spawning", () => {
     buildArea(world, "map", session, layout);
     const biome = mapBase(mapBaseIdForNode(session.activeNodeId)).biomeId;
     const allowed = new Set(MONSTER_POOLS[biome].map((e) => e.defId));
-    allowed.add("monster.cinder_warden.v1"); // the boss is not from the pool
+    allowed.add(bossFor(biome).id); // the boss is the biome's, and not from its pool
     for (const id of speciesIn(world)) expect(allowed.has(id), id).toBe(true);
   });
 

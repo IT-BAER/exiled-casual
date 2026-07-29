@@ -5,6 +5,7 @@ import { applyGraphics, createScene } from "./render/engine";
 import { buildLevel, applyBiomeTint, applyTilesetFloor } from "./render/level";
 import { SnapshotRenderer } from "./render/renderer";
 import { loadProps, resetProps } from "./render/props";
+import { loadMonsters, resetMonsters } from "./render/monsters";
 import { loadRocks, resetRocks } from "./render/rocks";
 import { loadPlayerRig, resetPlayerRig } from "./render/rig";
 import { attachBindings } from "./input/bindings";
@@ -85,7 +86,7 @@ export function GameView({
    * There is no timer anywhere in this path on purpose (`docs/09` rule 8). The
    * three other facts — assets loaded, level built, textures ready — are all
    * upstream of the painted frame, so one signal covers them: the render loop
-   * only starts after `loadPlayerRig`/`loadProps`/`loadRocks` resolve, and the
+   * only starts after `loadPlayerRig`/`loadProps`/`loadRocks`/`loadMonsters` resolve, and the
    * paint is only armed once `scene.executeWhenReady` says the new area's
    * materials are in. A scene can report every other kind of ready and still
    * draw one black frame, which is the frame the player would have seen.
@@ -273,7 +274,7 @@ export function GameView({
     // mid-run. A failed load resolves too and leaves the primitive fallback in
     // place.
     let unmounted = false;
-    void Promise.all([loadPlayerRig(scene), loadProps(scene), loadRocks(scene)]).then(() => {
+    void Promise.all([loadPlayerRig(scene), loadProps(scene), loadRocks(scene), loadMonsters(scene)]).then(() => {
       if (!unmounted) engine.runRenderLoop(renderFrame);
     });
 
@@ -316,6 +317,7 @@ export function GameView({
       window.removeEventListener("keydown", onInvKey);
       resetPlayerRig(); // containers belong to the scene we are about to dispose
       resetProps();
+      resetMonsters();
       resetRocks();
       sceneRef.current = null;
       engineRef.current = null;

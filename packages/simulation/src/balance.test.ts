@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { fp } from "@exiled/fixed-point";
 import { baseCasterStats, burningTickDamage, AILMENT_TICK_INTERVAL } from "@exiled/rules";
-import { MONSTERS, SKILLS, RARE_TEMPLATES, MONSTER_POOLS, PACK_COUNT } from "@exiled/content-runtime";
+import { MONSTERS, SKILLS, RARE_TEMPLATES, MONSTER_POOLS, PACK_COUNT, BOSSES } from "@exiled/content-runtime";
 import type { BiomeId, MonsterDef } from "@exiled/content-schema";
 import { makeRare } from "@exiled/rules";
 import { createCombatSim, spawnLabActors } from "./combat-sim";
@@ -27,7 +27,14 @@ import type { Health, Mana, Position, MonsterC } from "./components";
  * compare against rather than only a band to clear:
  *
  *   kill    imp 0.6s | pack of five 1.2s | rare 3.2s (6.4s vs its own element)
- *           Cinder Warden 19.8s
+ *           Cinder Warden 19.2s | Ghaltrek 17.7s | Mother Vhal 19.7s | Sirrath 26.7s
+ *
+ * The four bosses share one life pool and still measure 9 seconds apart, because
+ * what is timed is the FIGHT and not the boss: Sirrath's phase two brings four
+ * skitterers where the Warden's brings two imps, and the clear is not over until
+ * the brood is. That is the intended shape of a swarm boss and it stays inside
+ * the band; if a future add count pushes it past 40s, raise the count's cost,
+ * not the band.
  *   die     imp 26.0s | pack 6.6s | Warden phase 1 11.0s | phase 2 3.8s
  *   act     2.18 casts/s against the Warden, of a 3.75/s ceiling
  *
@@ -217,9 +224,16 @@ describe("time to kill", () => {
     },
   );
 
-  it("the Cinder Warden takes between 15 and 40 seconds", () => {
+  /**
+   * Every map ends on its biome's boss, and a map boss is a ~20 second fight —
+   * that is the design intent, and it is the same intent in all four biomes. The
+   * three added with the models are not tuned to their own bands: they share the
+   * Warden's life and are held to the Warden's band, so a biome cannot quietly
+   * become the fast one to farm.
+   */
+  it.each(Object.entries(BOSSES))("the %s boss takes between 15 and 40 seconds", (_biome, defId) => {
     const r = rig();
-    spawnWarden(r);
+    spawnMonster(r.world, MONSTERS.get(defId)!, fp(0), SPAWN_Y, false);
     const secs = ticksToClear(r).ticks / HZ;
     expect(secs).toBeGreaterThan(15);
     expect(secs).toBeLessThan(40);

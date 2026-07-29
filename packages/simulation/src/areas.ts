@@ -1,7 +1,7 @@
 import { fp, fpDist2, fpMul } from "@exiled/fixed-point";
 import { gridCollision } from "./collision";
 import { makeRare, mapBaseIdForNode, monsterTierScale, waystoneScaleFor } from "@exiled/rules";
-import { MONSTERS, PACK_COUNT, mapBase, pickPack, rareTemplate } from "@exiled/content-runtime";
+import { PACK_COUNT, bossFor, mapBase, pickPack, rareTemplate } from "@exiled/content-runtime";
 import { ELEMENTS, type MonsterDef } from "@exiled/content-schema";
 import type { AreaLayout } from "@exiled/mapgen";
 import type { World, Entity } from "./ecs";
@@ -235,8 +235,11 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
       }
     }
 
+    // The boss is the biome's, not a constant. Boss death is what completes an
+    // Atlas node, so a hard-coded id here meant every map in the game — four
+    // biomes, four monster pools, four tilesets — ended on the same warden.
     const boss = anchor(layout, "boss");
-    const bossDef = withMonsterRes(MONSTERS.get("monster.cinder_warden.v1")!, ws.monsterResAdd);
+    const bossDef = withMonsterRes(bossFor(biomeId), ws.monsterResAdd);
     spawnMonster(world, bossDef, fp(boss.x), fp(boss.y), false, scale);
 
     // Return portal so the map can be exited without dying.

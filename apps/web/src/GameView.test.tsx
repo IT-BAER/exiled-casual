@@ -54,6 +54,7 @@ vi.mock("./render/renderer", () => ({
 }));
 vi.mock("./render/rig", () => ({ loadPlayerRig: () => Promise.resolve(), resetPlayerRig: vi.fn() }));
 vi.mock("./render/props", () => ({ loadProps: () => Promise.resolve(), resetProps: vi.fn() }));
+vi.mock("./render/monsters", () => ({ loadMonsters: () => Promise.resolve(), resetMonsters: vi.fn(), attachCreature: () => null }));
 vi.mock("./render/rocks", () => ({ loadRocks: () => Promise.resolve(), resetRocks: vi.fn() }));
 vi.mock("./render/level", () => ({
   buildLevel: vi.fn(), applyTilesetFloor: vi.fn(), applyBiomeTint: vi.fn(),

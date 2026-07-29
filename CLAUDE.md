@@ -19,11 +19,9 @@ Real Path of Exile 1 and 2 screenshots live in `reference-screenshots/`. They ar
 source-of-truth and each entry says which game it is. Consult the relevant one BEFORE any UI, render,
 HUD, panel or art change, and re-check while iterating. Never design from memory.
 
-- `hideout.jpg`, `closeup-hideout-zoom.jpg` — hideout look/camera
-- `portals-map-device.webp` — map device + portal ring
+- `hideout.jpg`, `closeup-hideout-zoom.jpg` — hideout look/camera; `portals-map-device.webp` — map
+  device + portal ring; `boss-fight.png` — boss encounter; `atlas-maps.webp` — Atlas/waystone screen
 - `inside-map.jpg`, `inside-map-battle.webp` — in-map areas + combat
-- `boss-fight.png` — boss encounter
-- `atlas-maps.webp` — Atlas / waystone map screen
 - `poe2-atlas-node-popup.png` — PoE2 Atlas: the panel one node opens (name band, lore, socket, ACTIVATE)
 - `item-normal.png`, `item-magic.png`, `item-rare.png`, `item-unique.png` — item hover/tooltip look per rarity (colors, header, stat lines)
 - `inventory+equipment.png`, `inventory.png` — inventory screens: paper-doll, flasks, currency, and PoE1's full-height 12x5 grid with the currency strip at its foot
@@ -34,13 +32,13 @@ HUD, panel or art change, and re-check while iterating. Never design from memory
 
 Before designing or changing item generation, rarity, affixes, or item tooltips, research how PoE2
 itemization actually works — never invent mechanics or colors from memory. Sources: `https://poe2db.tw/`
-(bases/affixes/mods) and `https://www.poewiki.net/` (mechanics). Match the tooltip look (rarity
-colors, name header, affix line format) to the `item-*.png` screenshots above.
+(bases/affixes/mods), `https://www.poewiki.net/` (mechanics). Match the tooltip look (rarity colors,
+name header, affix lines) to the `item-*.png` screenshots above.
 
 ## Build / test
 
-- Test: `npx vitest run [scope]` from repo root. Web build: `npm run build -w apps/web`.
-- Typecheck: `npm run typecheck` (tsc --noEmit; vitest strips types so this is mandatory).
+- Test: `npx vitest run [scope]` from repo root. Web build: `npm run build -w apps/web`. Typecheck:
+  `npm run typecheck` (tsc --noEmit; vitest strips types so this is mandatory).
 
 ## 3D assets
 
@@ -59,21 +57,24 @@ colors, name header, affix line format) to the `item-*.png` screenshots above.
 - `body.ranger.coat` is generated too: the ranger's body stops at the hip and every body base is
   drawn as a long coat. Its UVs are copied from the nearest tunic vertex by angle and height, never
   projected into a box on the atlas (any box wide enough also clips a boot buckle into the cloth).
-- `helmet.hood.helm` is generated from the cowl: its crown is duplicated, cut at the brow and pushed
-  outward onto a dome, inheriting the cloth's weights so it can only cap the head it was cut from.
-  Outward-only (the cowl points forward; a shrink-wrap is a hood in iron) and flat-shaded.
+- `helmet.hood.helm` is the cowl's crown duplicated, cut at the brow, pushed OUTWARD onto a dome (a
+  shrink-wrap is a hood in iron) and flat-shaded; it inherits the cloth's weights, so it caps only
+  the head it was cut from.
+- Creatures are `monsters.glb` (`build_monsters.py`; `preview_monsters.py` renders the deformation
+  sheet): one skinned mesh per species, armature grown from the SAME node graph as the hulls, `walk`
+  and `idle` as NLA tracks `<species>|<clip>`. Legs are hip/knee/ankle/toe and the trunk crouches
+  through the walk, or a leg authored straight to the floor strides with its foot off the ground.
 - The coat hangs on `SKIRT_JOINTS`-joint `skirt_<i>_<n>` chains the builder adds under `pelvis`,
   driven by the verlet solver in `skirt.ts` (spring toward bind pose, no gravity; capsule colliders
   down both legs, each sized to that limb's *median* half-width — size to its widest slice and the
   coat is caged in permanent contact, which reads as stiff cloth that never touches the legs).
-  **One chain per coat column — `SKIRT_CHAINS = COAT_SEG` — the ratio matters, not the count.** The
-  chains are the only geometry collision touches, so a column without one is skinned half to each
-  neighbour and hangs in the gap where no capsule reaches (0.088 at the hem, wider than the thigh
-  capsule); raising both rings together doubles resolution and blind spot at once. Chains run to the
-  *deepest* hem ring: cloth below the last collided point is cloth a leg walks through. Rebuild the
-  glb after changing `SKIRT_CHAINS` or `SKIRT_JOINTS`; `rig.ts` has both, `rig.test.ts` pins them.
-- The chain needs joints *down* its length too: a 0.464 bone against a 0.088 thigh can only pivot,
-  never dent. `SKIRT_JOINTS` 3; four is worse on every measure and dearer.
+  **One chain per coat column — `SKIRT_CHAINS = COAT_SEG` — the ratio matters, not the count.** Only
+  the chains are collided, so a column without one is skinned half to each neighbour and hangs in the
+  gap no capsule reaches (0.088 at the hem, wider than the thigh capsule); raising both rings doubles
+  resolution and blind spot at once. Chains run to the *deepest* hem ring: cloth below the last
+  collided point is cloth a leg walks through. Rebuild after changing either; `rig.test.ts` pins both.
+- The chain needs joints *down* its length: a 0.464 bone against a 0.088 thigh can only pivot, never
+  dent. `SKIRT_JOINTS` 3, four is worse on every measure and dearer.
 - `skirt.ts` solves at 240Hz so it outruns the display: collision only happens inside a step, and at
   1/60 against a 165Hz monitor two frames in three moved the legs and not the cloth. `DAMPING` and
   `STIFFNESS` are the 1/60-tuned values rescaled by `PER_OLD_STEP`, so the rate can change freely.
@@ -138,16 +139,15 @@ colors, name header, affix line format) to the `item-*.png` screenshots above.
 
 ## Devlog — SCREENSHOT EACH VISIBLE STEP
 
-- **Drive and capture the state yourself, with exact timings.** Anything transient (a skill FX, an
-  impact, a projectile in flight) is over before a human can be asked to hold it, so asking the user
-  to pose the screen is not a workflow. Script it: dispatch the input, wait a measured delay, then
-  `scene.render()` and `drawImage` into an offscreen canvas inside the SAME in-page script (a plain
-  full-page capture is fine for anything that holds still). Aim with a canvas `pointermove` first or
-  a cast is a no-op (aim defaults to the player's own feet).
+- **Drive and capture the state yourself.** Anything transient (a skill FX, an impact, a bolt in
+  flight) is over before a human can hold it, so asking the user to pose the screen is not a
+  workflow. Script it: dispatch the input, wait a measured delay, then `scene.render()` and
+  `drawImage` into an offscreen canvas in the SAME in-page script (a full-page capture is fine for
+  anything still). Aim with a canvas `pointermove` first or a cast is a no-op (aim = player's feet).
 - Stage every capture in `review/` (gitignored) under a plain name and get sign-off BEFORE it enters
   `devlog/`. What needs confirming is the frame, not the moment; scratchpad paths are not reviewable.
-  Once signed off it goes to `devlog/screenshots/YYYY-MM-DD-<slug>.jpeg` (JPEG q75-80; PNG only for
-  transparency or fine detail) with a one-line caption under its date in `devlog/README.md`.
+  Signed off, it becomes `devlog/screenshots/YYYY-MM-DD-<slug>.jpeg` (JPEG q75-80; PNG only for
+  transparency) with a one-line caption under its date in `devlog/README.md`.
 
 ## Menus & characters
 
@@ -195,6 +195,5 @@ colors, name header, affix line format) to the `item-*.png` screenshots above.
 
 ## Conventions
 
-- Sim math is deterministic fixed-point integers; keep replay checksums stable. `@exiled/rules` is a
-  pure leaf: no imports from other `@exiled` packages.
-- Commit workflow: direct-to-main, one commit per task. No attribution trailers, no emdashes in messages.
+- Sim math is deterministic fixed-point; keep replay checksums stable. `@exiled/rules` is a pure leaf: it imports no other `@exiled` package.
+- Commit: direct-to-main, one per task. No attribution trailers, no emdashes in messages.

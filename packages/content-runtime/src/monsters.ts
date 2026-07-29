@@ -59,6 +59,97 @@ const MONSTER_DEFS: MonsterDef[] = [
     },
   },
 
+  // --- One boss per map base. Every ordinary map ends on a boss kill, so until
+  // now every map in the game ended on the SAME fight: the Warden, whichever
+  // biome you were standing in. These three are the other biomes' own.
+  //
+  // They share the Warden's life budget on purpose — a map boss is a ~20 second
+  // fight and that is the design intent, not a per-species number — and differ
+  // in the shape of the question they ask. `balance.test.ts` measures all four
+  // against the same band, and the numbers below are what it measured.
+  {
+    id: "monster.sirrath.v1",
+    name: "Sirrath, Sun-Priest of the Kiln",
+    archetype: "brute",
+    // Desert. Asks: can you close? It never stops dropping motes, but each one
+    // is small and slow to land. The long range is the whole fight — standing
+    // where you killed the last pack is not a plan.
+    maxLifeFixed: fp(840),
+    moveSpeedFixed: fp(1.5),
+    attackRangeFixed: fp(2.0),
+    attackDamage: { type: "fire", amountFixed: fp(9) },
+    attackCooldownTicks: 60,
+    radiusFixed: fp(1.4),
+    defenses: { resPct: resBlock({ fire: 25 }), armourFixed: fp(2) },
+    boss: {
+      phase2AtLifePct: 50,
+      // Half the Warden's radius at nearly twice its cadence and range: the same
+      // pressure spread thinner, so it punishes standing rather than misreading.
+      slam: { windupTicks: 26, radiusFixed: fp(2.3), damageFixed: fp(20), cooldownTicks: 96, rangeFixed: fp(12) },
+      phase2: {
+        fireGroundDurationTicks: 150,
+        addCount: 4,
+        addDefId: "monster.sand_skitterer.v1",
+        cadenceMulPct: 62,
+        fireGround: { kind: "burning", stacksPerApply: 1, dpsFixed: fp(3), durationTicks: 60, maxStacks: 5 },
+      },
+    },
+  },
+  {
+    id: "monster.mother_vhal.v1",
+    name: "Mother Vhal, the Drowned",
+    archetype: "brute",
+    // Swamp. Asks: do you kill the adds or the mother? One enormous, slow,
+    // unmissable circle, and a brood that keeps arriving while you decide.
+    maxLifeFixed: fp(840),
+    moveSpeedFixed: fp(1.2),
+    attackRangeFixed: fp(2.6),
+    attackDamage: { type: "chaos", amountFixed: fp(11) },
+    attackCooldownTicks: 66,
+    radiusFixed: fp(1.4),
+    defenses: { resPct: resBlock({ chaos: 30 }), armourFixed: fp(3) },
+    boss: {
+      phase2AtLifePct: 55,
+      // 5 units across with a 48-tick wind-up: it cannot be dodged by reaction
+      // and does not need to be. It is a question about where you were standing
+      // a second and a half ago.
+      slam: { windupTicks: 48, radiusFixed: fp(5.0), damageFixed: fp(32), cooldownTicks: 186, rangeFixed: fp(8) },
+      phase2: {
+        fireGroundDurationTicks: 180,
+        addCount: 3,
+        addDefId: "monster.fen_wisp.v1",
+        cadenceMulPct: 80,
+        fireGround: { kind: "burning", stacksPerApply: 1, dpsFixed: fp(5), durationTicks: 60, maxStacks: 5 },
+      },
+    },
+  },
+  {
+    id: "monster.ghaltrek.v1",
+    name: "Ghaltrek, the Bramble King",
+    archetype: "brute",
+    // Forest. Asks: can you keep moving? The fastest thing with a boss bar in
+    // the game, on the shortest wind-up, and it does not leave ground you can
+    // read — the danger is where it IS, not where it was.
+    maxLifeFixed: fp(840),
+    moveSpeedFixed: fp(2.6),
+    attackRangeFixed: fp(2.4),
+    attackDamage: { type: "physical", amountFixed: fp(12) },
+    attackCooldownTicks: 52,
+    radiusFixed: fp(1.4),
+    defenses: { resPct: resBlock({ cold: 20 }), armourFixed: fp(4) },
+    boss: {
+      phase2AtLifePct: 45,
+      slam: { windupTicks: 21, radiusFixed: fp(3.0), damageFixed: fp(23), cooldownTicks: 108, rangeFixed: fp(7) },
+      phase2: {
+        fireGroundDurationTicks: 90,
+        addCount: 3,
+        addDefId: "monster.bramble_whelp.v1",
+        cadenceMulPct: 70,
+        fireGround: { kind: "burning", stacksPerApply: 1, dpsFixed: fp(4), durationTicks: 60, maxStacks: 5 },
+      },
+    },
+  },
+
   // --- Vaal Stone: swarm, brute, heavy. A dead city fields foot soldiers,
   // constructs and one thing that swings something too big for a corridor.
   {
@@ -294,6 +385,28 @@ export const MONSTER_POOLS: Record<BiomeId, readonly PoolEntry[]> = {
   ],
 };
 
+/**
+ * Which boss holds the end of a map, by biome. Boss death is what completes an
+ * Atlas node, so this is the payoff of every run — and it used to be one hard
+ * coded id in `areas.ts`, which meant four biomes with their own monster pools
+ * all ended on the same warden.
+ *
+ * The Warden keeps Vaal Stone rather than moving to a molten biome it would
+ * match better: it is the fight every character has already learned, and the
+ * first map anyone runs is worth leaving alone.
+ */
+export const BOSSES: Record<BiomeId, string> = {
+  vaal_stone: "monster.cinder_warden.v1",
+  desert: "monster.sirrath.v1",
+  swamp: "monster.mother_vhal.v1",
+  forest: "monster.ghaltrek.v1",
+};
+
+/** The boss for a biome. Total, so an unknown biome cannot end a run bossless. */
+export function bossFor(biomeId: BiomeId): MonsterDef {
+  return MONSTERS.get(BOSSES[biomeId] ?? BOSSES.vaal_stone)!;
+}
+
 // Referential integrity at module load, beside the def validation above: a pool
 // naming a monster that does not exist is a programmer error, not a runtime one.
 for (const [biome, pool] of Object.entries(MONSTER_POOLS)) {
@@ -302,6 +415,11 @@ for (const [biome, pool] of Object.entries(MONSTER_POOLS)) {
       throw new Error(`[content-runtime] Pool "${biome}" names unknown monster "${entry.defId}"`);
     }
   }
+}
+for (const [biome, defId] of Object.entries(BOSSES)) {
+  const def = MONSTERS.get(defId);
+  if (!def) throw new Error(`[content-runtime] Biome "${biome}" names unknown boss "${defId}"`);
+  if (!def.boss) throw new Error(`[content-runtime] Biome "${biome}" boss "${defId}" has no boss spec`);
 }
 
 /**
