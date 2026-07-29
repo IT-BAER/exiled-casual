@@ -1,6 +1,6 @@
 import { fp, fpDist2, fpMul, fpStepToward, fpClamp } from "@exiled/fixed-point";
 import { WORLD_MIN, WORLD_MAX } from "../movement";
-import { slide, type CollisionRef } from "../collision";
+import { chaseStep, type CollisionRef } from "../collision";
 import { Simulation } from "../loop";
 import type { Position, MonsterC, Faction, ProjectileC, TelegraphC, SessionC } from "../components";
 import { mapDangerScale } from "../areas";
@@ -148,10 +148,9 @@ export function registerMonsterAI(sim: Simulation, collisionRef?: CollisionRef):
         }
         world.set<MonsterC>(m, "monster", { ...mon, state: "attack", attackReadyTick });
       } else {
-        const { dx, dy } = fpStepToward(mpos.x, mpos.y, ppos.x, ppos.y, mon.moveSpeed);
-        const moved = collision
-          ? slide(collision, mpos.x, mpos.y, dx, dy, mon.bodyRadius)
-          : { x: mpos.x + dx, y: mpos.y + dy };
+        const moved = chaseStep(
+          collision, mpos.x, mpos.y, ppos.x, ppos.y, mon.moveSpeed, mon.bodyRadius,
+        );
         world.set<Position>(m, "position", {
           x: fpClamp(moved.x, WORLD_MIN, WORLD_MAX),
           y: fpClamp(moved.y, WORLD_MIN, WORLD_MAX),

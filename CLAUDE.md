@@ -108,16 +108,14 @@ colors, name header, affix lines) to the `item-*.png` screenshots above.
 ## Maps & biomes
 
 - An area is **assembled from authored chunks**, not carved: a 7x7 lattice of 16-cell tiles
-  (112x112 cells = 56x56 world units). `skeleton.ts` decides a route (loop + dead-end spurs +
-  a reserved 2x2 boss block) and hands out a 4-bit open-edge mask per tile; `assemble-area.ts`
-  stamps a chunk onto each mask. Masks come first, so chunk choice is a lookup that cannot fail
-  to edge-match. Each stage draws from its own named RNG sub-stream.
-- Chunks are 16x16 ASCII in `loop-grammar.ts` / `field-grammar.ts` (`#` wall, `.` floor, `s`
-  spawn, `r` reward, `b` boss, `e` exit). **The edge mask is DERIVED from the border, never
-  declared**, and an open edge is exactly cells 6..9 of that edge — that window is symmetric
-  about the tile centre, which is the only reason rotate and mirror are closed operations on the
-  mask. Off-centre openings stop matching the moment a chunk is mirrored. `assertAuthored` runs
-  at import and reports every bad chunk at once.
+  (112x112 cells = 56x56 world units). `skeleton.ts` routes (loop + dead-end spurs + a reserved 2x2
+  boss block) and hands out a 4-bit open-edge mask per tile; `assemble-area.ts` stamps a chunk onto
+  each mask, so chunk choice is a lookup that cannot fail to edge-match. Own RNG sub-stream per stage.
+- Chunks are 16x16 ASCII in `loop-grammar.ts` / `field-grammar.ts` (`#` wall, `.` floor, `s` spawn,
+  `r` reward, `b` boss, `e` exit). **The edge mask is DERIVED from the border, never declared**, and
+  an open edge is exactly cells 6..9 — symmetric about the tile centre, the only reason rotate and
+  mirror are closed on the mask, and off-centre openings stop matching the moment one is mirrored.
+  `assertAuthored` runs at import and reports every bad chunk at once.
 - A **grammar is a chunk library plus a branch count**, never a second code path. `loop` (Vaal
   Stone, Swamp) and `open-field` (Desert, Forest), 15 chunks each: 5 mask classes x 3 variants,
   plus one 2x2 boss arena — a single 8x8-unit tile cannot hold a boss when the camera sees 19x9.5.
@@ -127,15 +125,18 @@ colors, name header, affix lines) to the `item-*.png` screenshots above.
   id strings, and `simulation/maps.test.ts` fails if the two lists disagree. The Atlas node
   picks the base, the base picks the grammar and tileset. **The client must resolve the same
   grammar as the sim** or it draws a different dungeon than the one it collides against.
-- Biome textures are generated (`/codex-imagegen`) into `assets/tilesets/<biome>/`, then made
-  tiling by `tools/build_tileset_textures.py`; generated art does not tile and has no normal map,
-  so that script is not optional. It cross-fades the wrap, derives the normal, and **lifts plates
-  too dark to play on** (floors to 55, walls to 95); the renderer is calibrated against a 57-luma
-  floor and a 132-luma wall, and engine.ts boosts the floor because actors are near-black. A biome
-  tint is a **colour, not a dimmer**: `applyBiomeTint` normalises to mean 1.0.
-- **Level walls must never be shadow casters** (`engine.ts` excludes `wallrun-*`). A 3.5-unit wall
-  under that low sun throws a ~9-unit shadow, and the per-run boxes stayed in the shadow render
-  list after the merge disposed them — 817 dead meshes after one map.
+- Biome textures are generated (`/codex-imagegen`) into `assets/tilesets/<biome>/`, then made tiling
+  by `tools/build_tileset_textures.py` — not optional: it cross-fades the wrap, derives the absent
+  normal, and **lifts plates too dark to play on** (floors to 55, walls to 95, against a renderer
+  calibrated to a 57-luma floor and a 132-luma wall; engine.ts lifts the floor again because actors
+  are near-black). A biome tint is a **colour, not a dimmer**: `applyBiomeTint` normalises to mean 1.0.
+- **Level walls must never be shadow casters** (`engine.ts` excludes `wallrun-*`): a 3.5-unit wall
+  under that low sun throws a ~9-unit shadow, and the per-run boxes outlived the merge that disposed
+  them in the shadow render list — 817 dead meshes after one map.
+- **Monsters route, they do not steer.** `chaseStep` (`collision.ts`) takes the direct step and reads
+  the nav field only when a wall cancelled it, so open ground stays byte-identical. One BFS flood per
+  body radius over the cells `isWalkable` accepts AT it — what fits a 0.85 brute through a 4-cell
+  opening, and why widening a body silently re-cuts its map. Both AI systems share the seam.
 
 ## Devlog — SCREENSHOT EACH VISIBLE STEP
 

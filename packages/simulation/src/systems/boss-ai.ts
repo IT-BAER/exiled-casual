@@ -1,7 +1,7 @@
-import { fp, fpDist2, fpMul, fpStepToward } from "@exiled/fixed-point";
+import { fp, fpDist2, fpMul } from "@exiled/fixed-point";
 import type { MonsterDef } from "@exiled/content-schema";
 import { Simulation } from "../loop";
-import { slide, type CollisionRef } from "../collision";
+import { chaseStep, type CollisionRef } from "../collision";
 import { spawnMonster, mapDangerScale } from "../areas";
 import type { Position, MonsterC, Faction, BossC, TelegraphC, Health, SessionC } from "../components";
 
@@ -143,7 +143,7 @@ export function registerBossAI(
         continue;
       }
 
-      // 4. Chase / melee — mirrors monster-ai.ts exactly, sliding on collision.
+      // 4. Chase / melee — mirrors monster-ai.ts exactly, routing on collision.
       const ar = mon.attackRange;
       if (dist2 <= ar * ar) {
         let { attackReadyTick } = mon;
@@ -158,10 +158,9 @@ export function registerBossAI(
         }
         world.set<MonsterC>(e, "monster", { ...mon, state: "attack", attackReadyTick });
       } else {
-        const { dx, dy } = fpStepToward(bpos.x, bpos.y, ppos.x, ppos.y, mon.moveSpeed);
-        const moved = collision
-          ? slide(collision, bpos.x, bpos.y, dx, dy, mon.bodyRadius)
-          : { x: bpos.x + dx, y: bpos.y + dy };
+        const moved = chaseStep(
+          collision, bpos.x, bpos.y, ppos.x, ppos.y, mon.moveSpeed, mon.bodyRadius,
+        );
         world.set<Position>(e, "position", moved);
         world.set<MonsterC>(e, "monster", { ...mon, state: "chase" });
       }

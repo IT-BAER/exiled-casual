@@ -215,6 +215,45 @@ describe("registerMonsterAI", () => {
     expect(world.get<Position>(m, "position")!.x).toBeLessThan(fp(3));
     expect(world.get<MonsterC>(m, "monster")!.state).toBe("chase");
   });
+
+  it("a chasing monster walks around a wall that has a way past it", () => {
+    // Same wall as above, open along the bottom row. Greedy chase grinds on it
+    // forever; the nav field routes down, across and back up.
+    const collision = gridCollision(
+      makeGrid([
+        "...#...",
+        "...#...",
+        "...#...",
+        "...#...",
+        ".......",
+      ]),
+    );
+    const sim = new Simulation();
+    registerMonsterAI(sim, { active: collision });
+    const { world } = sim;
+
+    const player = world.create();
+    world.set<Position>(player, "position", { x: fp(5), y: fp(1) });
+    world.set<Faction>(player, "faction", { team: 0 });
+    world.set<PlayerC>(player, "player", { moveSpeed: 0, bodyRadius: fp(0.5) });
+
+    const m = world.create();
+    world.set<Position>(m, "position", { x: fp(1), y: fp(1) });
+    world.set<Faction>(m, "faction", { team: 1 });
+    world.set<MonsterC>(m, "monster", {
+      defId: "test", moveSpeed: fp(0.2), bodyRadius: 0,
+      attackRange: fp(1.2), attackCooldownTicks: 45,
+      attackDamage: fp(6), attackType: 1 as const,
+      attackReadyTick: 0, slamReadyTick: 0, rootedUntilTick: 0, state: "idle", rare: 0 as const, summoned: 0 as const,
+    });
+
+    for (let i = 0; i < 150; i++) sim.step();
+    const mpos = world.get<Position>(m, "position")!;
+    expect(mpos.x).toBeGreaterThan(fp(3));
+    expect(fpDist2(mpos.x, mpos.y, fp(5), fp(1))).toBeLessThan(fp(1.5) * fp(1.5));
+    // In range and swinging, not merely nearby.
+    expect(world.get<MonsterC>(m, "monster")!.state).toBe("attack");
+  });
 });
 
 // ---------------------------------------------------------------------------
