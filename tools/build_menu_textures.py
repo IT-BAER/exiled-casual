@@ -39,6 +39,16 @@ PLAN: dict[str, tuple[str, int | None, int | None]] = {
     "portrait_emberbound_v1": ("portrait_emberbound.png", 256, None),
     "fog_sheet_v1": ("fog_sheet.png", 512, None),
     "divider_v1": ("divider.png", 512, None),
+    # The Options panel's controls. The gems are one plate each rather than a
+    # tint of the other: an unlit gem and a lit one differ in more than
+    # brightness, and the bezel picks up the glow.
+    "gem_check_off_v1": ("gem_check_off.png", 128, None),
+    "gem_check_on_v1": ("gem_check_on.png", 128, None),
+    "slider_track_v1": ("slider_track.png", 512, None),
+    "slider_handle_v1": ("slider_handle.png", 64, None),
+    # One tab plate, tinted by CSS for active/inactive, the same rule the button
+    # follows: two renders of the same tab are never quite the same tab.
+    "tab_plate_v1": ("tab_plate.png", 384, None),
 }
 
 ALPHA_FLOOR = 8
