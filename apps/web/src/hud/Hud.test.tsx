@@ -217,14 +217,18 @@ describe("Hud", () => {
     expect(band).toHaveStyle({ left: "0px", right: "0px", bottom: "0px" });
     // Behind the panels (2) and the globes (3), in front of nothing but the world.
     expect(band.style.zIndex).toBe("1");
-    // Shorter than the panels: they stay the raised ends, and a full-height strip
-    // would cost a sixth of the viewport in playfield.
+    // Trim, not a slab: the panels stay the raised ends, and every vw of stretched
+    // middle is playfield spent on a plain dark block.
     const vw = (s: string) => parseFloat(/(-?[\d.]+)vw/.exec(s)?.[1] ?? "NaN");
     const skillRow = screen.getByTestId("skill-row");
     const ratio = vw(band.style.height) / vw(screen.getByTestId("skill-row").style.height);
     expect(vw(skillRow.style.height)).toBeGreaterThan(0);
-    expect(ratio).toBeGreaterThan(0.2);
-    expect(ratio).toBeLessThan(0.6);
+    expect(ratio).toBeLessThan(0.25);
+    // But never shorter than its own carved edges, or the nine-slice crushes them
+    // into each other. jsdom folds the calc, so the band's height is comparable.
+    const edges = /border-width:\s*([^;]+)/.exec(band.getAttribute("style") ?? "")?.[1] ?? "";
+    const [top, , bottom] = edges.split(/\s+/);
+    expect(vw(band.style.height)).toBeGreaterThan(vw(top ?? "") + vw(bottom ?? ""));
   });
 
   it("recesses a rail between the skill rows and sizes the frame's chrome off the window", () => {

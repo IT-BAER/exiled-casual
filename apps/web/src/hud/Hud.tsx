@@ -271,8 +271,14 @@ interface HudProps {
  * A fraction of the bar, not the whole of it: the panels have to stay the raised
  * ends, and an opaque strip at BAR_H would take a sixth of the viewport height
  * of playfield with it. This is the knob for how tall the band reads.
+ *
+ * It is TRIM, not a slab: at 0.38 the nine-slice's own edges (BAR_TOP + BAR_BOTTOM,
+ * about 1.01vw) were only a third of it and the rest was stretched middle — a
+ * plain dark block under a gilt line. 0.15 leaves the carved edges and almost
+ * nothing between them. Do not drop below BAR_TOP + BAR_BOTTOM or the slices
+ * crush into each other.
  */
-const CONNECT_H = `calc(${BAR_H} * 0.38)`;
+const CONNECT_H = `calc(${BAR_H} * 0.15)`;
 
 /**
  * Same art as the panels — one material, so the top rail lands on one line all
