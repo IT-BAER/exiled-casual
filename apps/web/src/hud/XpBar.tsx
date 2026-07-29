@@ -13,9 +13,9 @@ const PARCHMENT = "#c8c2b4";
 export const XP_RATE_WINDOW_MS = 60_000;
 
 /**
- * The rail is chopped into segments the way PoE1's is, but on the SHARE of the
- * level rather than on pixels: a tick every 5% means the ticks say something —
- * you can count how far the gold has to go without asking for the number.
+ * A divider every this share of the level. PoE1's own studs sit about every 2%,
+ * which is decoration; on 5% you can count what is left without asking for the
+ * number, which is why the owner asked for that step.
  */
 const SEGMENT_PCT = 5;
 
@@ -23,14 +23,32 @@ const SEGMENT_PCT = 5;
 export const RAIL_H = 4;
 
 /**
+ * PoE1's rail is an UNBROKEN orange line with small gold studs set on it, not a
+ * row of separate blocks (reference-screenshots/poe1-lower-bar.png, zoomed). A
+ * black gap every segment is the thing it is not — so the divider is a stud:
+ * a dark hairline, a bright pip, a dark hairline, all sitting on top of the line.
+ *
  * Exported because jsdom's CSS parser drops a repeating-linear-gradient that
  * carries a calc(), so neither `.style` nor the style attribute can be read back
  * in a test — the string itself is the only thing left to pin.
  */
 export const TICK_BACKGROUND =
   `repeating-linear-gradient(90deg,` +
-  `rgba(0,0,0,0) 0 calc(${SEGMENT_PCT}% - 2px),` +
-  `rgba(0,0,0,0.62) calc(${SEGMENT_PCT}% - 2px) ${SEGMENT_PCT}%)`;
+  `rgba(0,0,0,0) 0 calc(${SEGMENT_PCT}% - 3px),` +
+  `rgba(0,0,0,0.5) calc(${SEGMENT_PCT}% - 3px) calc(${SEGMENT_PCT}% - 2px),` +
+  `rgba(255,214,140,0.9) calc(${SEGMENT_PCT}% - 2px) calc(${SEGMENT_PCT}% - 1px),` +
+  `rgba(0,0,0,0.5) calc(${SEGMENT_PCT}% - 1px) ${SEGMENT_PCT}%)`;
+
+/**
+ * Pale core between two darker rims, the way the reference line is lit — a flat
+ * gold gradient top-to-bottom read as a bar, not as a line.
+ */
+const FILL_BACKGROUND =
+  `linear-gradient(180deg,` +
+  `#5a3a10 0 12%,` +
+  `#ffd98f 12% 42%,` +
+  `#e08a1c 42% 80%,` +
+  `#4a2c0a 80% 100%)`;
 
 export type XpSample = { t: number; total: number };
 
@@ -117,8 +135,8 @@ export function XpBar({ level, xp, xpToNext }: { level: number; xp: number; xpTo
           style={{
             height: "100%",
             width: `${pct}%`,
-            background: "linear-gradient(180deg,#f0d795,#c99b3a 55%,#7d5c1c)",
-            boxShadow: "0 0 8px rgba(220,180,90,0.45)",
+            background: FILL_BACKGROUND,
+            boxShadow: "0 0 8px rgba(220,140,50,0.45)",
             transition: "width 200ms linear",
           }}
         />
@@ -128,6 +146,12 @@ export function XpBar({ level, xp, xpToNext }: { level: number; xp: number; xpTo
             position: "absolute",
             inset: 0,
             background: TICK_BACKGROUND,
+            // Studs sit on the line, so they stop where the line does; past the
+            // fill PoE1's rail is plain dark trough. Clipped rather than resized,
+            // because the gradient's 5% steps have to keep measuring the whole
+            // rail and not whatever is filled so far.
+            clipPath: `inset(0 ${100 - pct}% 0 0)`,
+            transition: "clip-path 200ms linear",
             pointerEvents: "none",
           }}
         />

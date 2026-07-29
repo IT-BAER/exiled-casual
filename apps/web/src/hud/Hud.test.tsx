@@ -373,11 +373,17 @@ describe("experience bar", () => {
 
   it("ticks the rail every 5% of the level, so the segments say something", () => {
     render(<Hud snapshot={makeSnap({ level: 68, xp: 30_000, xpToNext: 120_000 })} />);
-    expect(screen.getByTestId("xp-bar-ticks")).toBeTruthy();
+    const ticks = screen.getByTestId("xp-bar-ticks");
     // Percent, not pixels: 20 segments however wide the screen is. jsdom cannot
     // read the applied gradient back, so the string is pinned at the source.
-    expect(TICK_BACKGROUND).toContain("calc(5% - 2px) 5%");
+    expect(TICK_BACKGROUND).toContain("calc(5% - 1px) 5%");
+    // A stud on an unbroken line, never a gap in it: the divider carries a lit
+    // pip, and nothing in it is opaque black.
+    expect(TICK_BACKGROUND).toContain("rgba(255,214,140,0.9)");
+    expect(TICK_BACKGROUND).not.toContain("rgba(0,0,0,0.62)");
     expect(RAIL_H).toBeLessThan(6);
+    // The studs stop where the fill does, so the empty trough stays plain.
+    expect(ticks.style.clipPath).toBe("inset(0 75% 0 0)");
   });
 });
 
