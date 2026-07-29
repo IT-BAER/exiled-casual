@@ -40,18 +40,21 @@ export function OptionsPanel({
   settings,
   onChange,
   onClose,
-  bottomInset = "0px",
+  dock,
 }: {
   settings: Settings;
   onChange: (next: Settings) => void;
   onClose: () => void;
   /**
-   * How much screen the window has to keep clear at its foot. The game passes
-   * the bottom bar's height, which is what makes this pane the same pane as the
-   * character sheet; the menu has no bar and passes nothing.
+   * Where the game's furniture leaves room. `bottom` is the bottom bar's height,
+   * which is what makes this pane the same pane as the character sheet; `clear`
+   * is how far the globes rise over that foot, which the footer has to stay
+   * above. Undefined means there is no bar, and so no game: this one prop is
+   * what tells the window which of its two lives it is living.
    */
-  bottomInset?: string;
+  dock?: { bottom: string; clear: string };
 }): React.ReactElement {
+  const inGame = dock !== undefined;
   const [tab, setTab] = React.useState<TabId>("graphics");
 
   React.useEffect(() => {
@@ -79,7 +82,12 @@ export function OptionsPanel({
         // so nothing behind it can be clicked while it is open.
         alignItems: "flex-end",
         justifyContent: "flex-start",
-        zIndex: 40,
+        // In the game it is furniture, so it sits with the other panes at 2 and
+        // the globes and the bar (3) paint over its corner, exactly as they do
+        // over the inventory and the character sheet. In the menu it is a
+        // dialog: above everything, over a wash dark enough that it reads.
+        zIndex: inGame ? 2 : 40,
+        ...(inGame ? {} : { background: "rgba(0,0,0,0.55)" }),
       }}
     >
       <FramedPanel
@@ -91,8 +99,8 @@ export function OptionsPanel({
           // The character sheet's pane, to the pixel: same width, same top line,
           // same foot on the bottom bar (hud/layout.ts, hud/InventoryPanel.tsx).
           width: PANEL_W,
-          height: `calc(100vh - ${bottomInset})`,
-          marginBottom: bottomInset,
+          height: dock ? `calc(100vh - ${dock.bottom})` : "100vh",
+          marginBottom: dock?.bottom,
           padding: "14px 20px 16px",
           boxSizing: "border-box",
           display: "flex",
@@ -218,7 +226,9 @@ export function OptionsPanel({
         </div>
 
         <Divider style={{ margin: "12px 0 10px" }} />
-        <div style={{ display: "flex", justifyContent: "center" }}>
+        {/* The globes rise over the pane's foot, and may cover only the bare
+            corner: CLOSE is the one control down here (see ORB_RISE in Hud.tsx). */}
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: dock?.clear }}>
           <MenuButton height={40} style={{ minWidth: 200 }} onClick={onClose} autoFocus>
             Close
           </MenuButton>

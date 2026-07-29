@@ -23,6 +23,18 @@ function setup(over: Partial<Settings> = {}) {
   return { onChange, onClose };
 }
 
+/** The panel as the game mounts it: docked on the bar, content clear of the globes. */
+function renderDocked() {
+  render(
+    <OptionsPanel
+      settings={DEFAULT_SETTINGS}
+      onChange={vi.fn()}
+      onClose={() => {}}
+      dock={{ bottom: "7vw", clear: "2vw" }}
+    />,
+  );
+}
+
 describe("OptionsPanel", () => {
   it("opens on Graphics and offers Sound and UI", () => {
     setup();
@@ -111,19 +123,34 @@ describe("OptionsPanel", () => {
     expect(screen.getByTestId("options-panel").style.justifyContent).toBe("flex-start");
   });
 
+  it("off the game it is a dialog: dimmed backdrop, over everything", () => {
+    setup();
+    const back = screen.getByTestId("options-panel");
+    expect(back.style.background).toMatch(/rgba\(0, ?0, ?0/);
+    expect(back.style.zIndex).toBe("40");
+  });
+
+  it("in the game it is furniture: no dim, and under the globes at 3", () => {
+    renderDocked();
+    const back = screen.getByTestId("options-panel");
+    expect(back.style.background).toBe("");
+    expect(Number(back.style.zIndex)).toBeLessThan(3);
+  });
+
   it("in the game it stops on the bottom bar, as the character sheet does", () => {
-    const onChange = vi.fn();
-    render(
-      <OptionsPanel
-        settings={DEFAULT_SETTINGS}
-        onChange={onChange}
-        onClose={() => {}}
-        bottomInset="7vw"
-      />,
-    );
+    renderDocked();
     const panel = screen.getByTestId("options-panel").firstElementChild as HTMLElement;
     expect(panel.style.height).toBe("calc(100vh - 7vw)");
     expect(panel.style.marginBottom).toBe("7vw");
+  });
+
+  // The globe rises over the pane's foot on purpose, but it may cover only the
+  // bare corner: CLOSE is the one control down there and it has to stay whole.
+  it("lifts CLOSE clear of the globe that paints over the pane", () => {
+    renderDocked();
+    const close = screen.getByRole("button", { name: /^close$/i });
+    const footer = close.parentElement as HTMLElement;
+    expect(footer.style.marginBottom).toBe("2vw");
   });
 
   it("says what resolution scale costs, since a soft frame reads as a bug", () => {
