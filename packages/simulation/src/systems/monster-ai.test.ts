@@ -256,6 +256,112 @@ describe("registerMonsterAI", () => {
   });
 });
 
+/**
+ * A pack all walking at the same point converges on it, so without a push they
+ * arrive as one silhouette with one health bar's worth of readable geometry.
+ */
+describe("pack separation", () => {
+  const trash = (world: Simulation["world"], x: number, y: number, r = fp(0.5)) => {
+    const m = world.create();
+    world.set<Position>(m, "position", { x, y });
+    world.set<Faction>(m, "faction", { team: 1 });
+    world.set<MonsterC>(m, "monster", {
+      defId: "test", moveSpeed: fp(2), bodyRadius: r,
+      attackRange: fp(1.2), attackCooldownTicks: 45,
+      attackDamage: fp(6), attackType: 1 as const,
+      attackReadyTick: 0, slamReadyTick: 0, rootedUntilTick: 0,
+      state: "chase", rare: 0 as const, summoned: 0 as const,
+    });
+    return m;
+  };
+  const playerAt = (world: Simulation["world"], x: number, y: number) => {
+    const p = world.create();
+    world.set<Position>(p, "position", { x, y });
+    world.set<Faction>(p, "faction", { team: 0 });
+    world.set<PlayerC>(p, "player", { moveSpeed: 0, bodyRadius: fp(0.5) });
+    return p;
+  };
+
+  it("two bodies on exactly the same point split apart", () => {
+    const sim = new Simulation();
+    registerMonsterAI(sim);
+    const { world } = sim;
+    playerAt(world, fp(0), fp(0));
+    const a = trash(world, fp(6), fp(0));
+    const b = trash(world, fp(6), fp(0));
+
+    sim.step();
+    const pa = world.get<Position>(a, "position")!;
+    const pb = world.get<Position>(b, "position")!;
+    expect(fpDist2(pa.x, pa.y, pb.x, pb.y)).toBeGreaterThan(0);
+  });
+
+  it("a chasing pack stops overlapping within a few ticks", () => {
+    const sim = new Simulation();
+    registerMonsterAI(sim);
+    const { world } = sim;
+    playerAt(world, fp(0), fp(0));
+    const ids = [
+      trash(world, fp(6), fp(0)),
+      trash(world, fp(6.1), fp(0)),
+      trash(world, fp(6.2), fp(0.05)),
+    ];
+
+    for (let i = 0; i < 60; i++) sim.step();
+    // 80% of contact distance: the push only fires below contact, so the pack
+    // settles just inside it rather than exactly on it.
+    const floor = Math.trunc((fp(1) * 8) / 10);
+    for (let i = 0; i < ids.length; i++) {
+      for (let j = i + 1; j < ids.length; j++) {
+        const p = world.get<Position>(ids[i]!, "position")!;
+        const q = world.get<Position>(ids[j]!, "position")!;
+        expect(fpDist2(p.x, p.y, q.x, q.y)).toBeGreaterThanOrEqual(floor * floor);
+      }
+    }
+  });
+
+  it("a lone monster's chase is untouched by the pass", () => {
+    const run = () => {
+      const sim = new Simulation();
+      registerMonsterAI(sim);
+      const { world } = sim;
+      playerAt(world, fp(0), fp(0));
+      const m = trash(world, fp(6), fp(0));
+      for (let i = 0; i < 10; i++) sim.step();
+      return world.get<Position>(m, "position")!;
+    };
+    // Straight line in, snapped to attack range: no neighbour, so no push.
+    const p = run();
+    expect(p.y).toBe(fp(0));
+    expect(p).toEqual(run());
+  });
+
+  it("the push never shoves a body into a wall", () => {
+    // One-cell corridor along row 2; two bodies crammed into it.
+    const collision = gridCollision(
+      makeGrid([
+        "#######",
+        "#######",
+        ".......",
+        "#######",
+        "#######",
+      ]),
+    );
+    const sim = new Simulation();
+    registerMonsterAI(sim, { active: collision });
+    const { world } = sim;
+    playerAt(world, fp(0), fp(2));
+    const a = trash(world, fp(4), fp(2), fp(0.2));
+    const b = trash(world, fp(4.1), fp(2), fp(0.2));
+
+    for (let i = 0; i < 40; i++) sim.step();
+    for (const m of [a, b]) {
+      const p = world.get<Position>(m, "position")!;
+      expect(collision.isWalkable(p.x, p.y, fp(0.2))).toBe(true);
+    }
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Shared fixture for shooter tests
 // ---------------------------------------------------------------------------

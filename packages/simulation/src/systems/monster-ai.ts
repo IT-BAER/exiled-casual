@@ -1,6 +1,6 @@
-import { fp, fpDist2, fpMul, fpStepToward, fpClamp } from "@exiled/fixed-point";
+import { fp, fpDist2, fpMul, fpStepToward, fpClamp, isqrt, type Fixed } from "@exiled/fixed-point";
 import { WORLD_MIN, WORLD_MAX } from "../movement";
-import { chaseStep, type CollisionRef } from "../collision";
+import { chaseStep, slide, type Collision, type CollisionRef } from "../collision";
 import { Simulation } from "../loop";
 import type { Position, MonsterC, Faction, ProjectileC, TelegraphC, SessionC } from "../components";
 import { mapDangerScale } from "../areas";
@@ -20,6 +20,73 @@ import { MONSTERS } from "@exiled/content-runtime";
  */
 export const AGGRO_RADIUS: number = fp(9);
 
+/** One body in the separation pass. */
+export interface PackBody { e: number; x: Fixed; y: Fixed; r: Fixed }
+
+/**
+ * How far apart overlapping bodies shove each other. Half the overlap each, so a
+ * pair settles exactly at contact rather than trading pushes forever, and capped
+ * at a fraction of the mover's own step so separation can never outrun the chase
+ * that drove them together (a swarm would orbit the player instead of reaching).
+ */
+const PUSH_NUM = 1;
+const PUSH_DEN = 2;
+
+/**
+ * The vector that takes `self` out of every body it overlaps. Deterministic:
+ * integer math throughout, and a pair standing on exactly the same point splits
+ * along X by entity id, since there is no separating axis to read.
+ *
+ * ponytail: O(n²) over the awake pack, ~60 bodies a map. A grid goes here if a
+ * map ever holds hundreds.
+ */
+export function packPush(
+  pack: readonly PackBody[],
+  self: number,
+  x: Fixed,
+  y: Fixed,
+  r: Fixed,
+  maxPush: Fixed,
+): { dx: Fixed; dy: Fixed } {
+  let px = 0;
+  let py = 0;
+  for (const o of pack) {
+    if (o.e === self) continue;
+    const dx = x - o.x;
+    const dy = y - o.y;
+    const min = r + o.r;
+    const d2 = dx * dx + dy * dy;
+    if (d2 >= min * min) continue;
+    if (d2 === 0) {
+      px += self < o.e ? -min : min;
+      continue;
+    }
+    const d = isqrt(d2);
+    const overlap = min - d;
+    px += Math.trunc((dx * overlap) / d);
+    py += Math.trunc((dy * overlap) / d);
+  }
+  if (px === 0 && py === 0) return { dx: 0, dy: 0 };
+  px = Math.trunc((px * PUSH_NUM) / PUSH_DEN);
+  py = Math.trunc((py * PUSH_NUM) / PUSH_DEN);
+  const len = isqrt(px * px + py * py);
+  if (len <= maxPush || len === 0) return { dx: px, dy: py };
+  return { dx: Math.trunc((px * maxPush) / len), dy: Math.trunc((py * maxPush) / len) };
+}
+
+/** Offset a body that has already taken its own step, without entering a wall. */
+function shove(
+  collision: Collision | undefined,
+  x: Fixed,
+  y: Fixed,
+  push: { dx: Fixed; dy: Fixed },
+  r: Fixed,
+): { x: Fixed; y: Fixed } {
+  if (push.dx === 0 && push.dy === 0) return { x, y };
+  if (!collision) return { x: x + push.dx, y: y + push.dy };
+  return slide(collision, x, y, push.dx, push.dy, r);
+}
+
 export function registerMonsterAI(sim: Simulation, collisionRef?: CollisionRef): void {
   sim.register("monsterAI", (world, tick) => {
     const collision = collisionRef?.active ?? undefined;
@@ -31,6 +98,14 @@ export function registerMonsterAI(sim: Simulation, collisionRef?: CollisionRef):
     const players = world
       .query("player", "faction", "position")
       .filter((e) => (world.get<Faction>(e, "faction")?.team ?? -1) === 0);
+
+    // Snapshotted before anything moves, so a body's shove does not depend on how
+    // far through the loop its neighbour happens to be. Bosses are in here as
+    // pushers (trash gets shouldered off them) but never move: boss-ai owns them.
+    const pack: PackBody[] = world.query("monster", "position").map((e) => {
+      const p = world.get<Position>(e, "position")!;
+      return { e, x: p.x, y: p.y, r: world.get<MonsterC>(e, "monster")!.bodyRadius };
+    });
 
     for (const m of world.query("monster", "position")) {
       // Boss entities have their own system (boss-ai.ts); skip them here.
@@ -104,6 +179,14 @@ export function registerMonsterAI(sim: Simulation, collisionRef?: CollisionRef):
       }
 
       const ar = mon.attackRange;
+      // Half a step: enough to unstack a pack over a few ticks, never enough to
+      // shove a monster backwards faster than it walks in. Read off the snapshot
+      // at the body's own pre-step position, not where its step landed — two
+      // bodies on one point take the same step, so measuring after it hides the
+      // stack the tiebreak exists to break.
+      const push = packPush(
+        pack, m, mpos.x, mpos.y, mon.bodyRadius, Math.trunc(mon.moveSpeed / 2),
+      );
 
       if (nearestD2 <= ar * ar) {
         let { attackReadyTick } = mon;
@@ -147,13 +230,21 @@ export function registerMonsterAI(sim: Simulation, collisionRef?: CollisionRef):
           }
         }
         world.set<MonsterC>(m, "monster", { ...mon, state: "attack", attackReadyTick });
+        const out = shove(collision, mpos.x, mpos.y, push, mon.bodyRadius);
+        if (out.x !== mpos.x || out.y !== mpos.y) {
+          world.set<Position>(m, "position", {
+            x: fpClamp(out.x, WORLD_MIN, WORLD_MAX),
+            y: fpClamp(out.y, WORLD_MIN, WORLD_MAX),
+          });
+        }
       } else {
         const moved = chaseStep(
           collision, mpos.x, mpos.y, ppos.x, ppos.y, mon.moveSpeed, mon.bodyRadius,
         );
+        const out = shove(collision, moved.x, moved.y, push, mon.bodyRadius);
         world.set<Position>(m, "position", {
-          x: fpClamp(moved.x, WORLD_MIN, WORLD_MAX),
-          y: fpClamp(moved.y, WORLD_MIN, WORLD_MAX),
+          x: fpClamp(out.x, WORLD_MIN, WORLD_MAX),
+          y: fpClamp(out.y, WORLD_MIN, WORLD_MAX),
         });
         world.set<MonsterC>(m, "monster", { ...mon, state: "chase" });
       }
