@@ -35,8 +35,15 @@ import { MaterialPluginBase } from "@babylonjs/core/Materials/materialPluginBase
 import { ParticleSystem } from "@babylonjs/core/Particles/particleSystem";
 import { Texture } from "@babylonjs/core/Materials/Textures/texture";
 
-/** How long the whole thing takes. Slow is the effect; hurried, it is a glitch. */
-export const DISSOLVE_SECONDS = 4.5;
+/**
+ * How long the whole thing takes. Slow is the effect; hurried, it is a glitch.
+ *
+ * 3.0 is the length the owner watched and liked. It went to 4.5 on the strength
+ * of a separate "nice slow", which was a guess at what he meant rather than
+ * anything he saw, so it is back at the judged value: a number nobody has
+ * watched is not a tuned number.
+ */
+export const DISSOLVE_SECONDS = 3.0;
 
 /**
  * How much of the erosion is spent sweeping up the body rather than eating in
