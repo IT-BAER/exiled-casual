@@ -8,7 +8,7 @@ import { loadProps, resetProps } from "./render/props";
 import { loadRocks, resetRocks } from "./render/rocks";
 import { loadPlayerRig, resetPlayerRig } from "./render/rig";
 import { attachBindings } from "./input/bindings";
-import { Hud } from "./hud/Hud";
+import { Hud, BAR_H } from "./hud/Hud";
 import { PreparationPanel } from "./hud/PreparationPanel";
 import { InventoryPanel } from "./hud/InventoryPanel";
 import { CharacterPanel } from "./hud/CharacterPanel";
@@ -344,6 +344,7 @@ export function GameView({
           settings={settings}
           onChange={onSettingsChange ?? (() => {})}
           onClose={() => setOptionsOpen(false)}
+          bottomInset={BAR_H}
         />
       )}
     </div>

@@ -26,6 +26,8 @@ import {
   SERIF,
 } from "./frames";
 import { MIN_RESOLUTION_SCALE, type Settings, type ShadowQuality } from "../settings";
+// hud/layout.ts imports nothing, so the menu bundle gains two numbers, not the HUD.
+import { PANEL_W } from "../hud/layout";
 
 type TabId = "graphics" | "sound" | "ui";
 const TABS: readonly { id: TabId; label: string }[] = [
@@ -38,10 +40,17 @@ export function OptionsPanel({
   settings,
   onChange,
   onClose,
+  bottomInset = "0px",
 }: {
   settings: Settings;
   onChange: (next: Settings) => void;
   onClose: () => void;
+  /**
+   * How much screen the window has to keep clear at its foot. The game passes
+   * the bottom bar's height, which is what makes this pane the same pane as the
+   * character sheet; the menu has no bar and passes nothing.
+   */
+  bottomInset?: string;
 }): React.ReactElement {
   const [tab, setTab] = React.useState<TabId>("graphics");
 
@@ -64,18 +73,28 @@ export function OptionsPanel({
       style={{
         position: "absolute",
         inset: 0,
-        display: "grid",
-        placeItems: "center",
-        // Over whatever is behind it, and dark enough that the panel reads.
-        background: "rgba(0,0,0,0.55)",
+        display: "flex",
+        // Left edge, foot on the bar: PoE docks this window, it does not float
+        // it (reference-screenshots/options.png). Still a full-screen catcher,
+        // so nothing behind it can be clicked while it is open.
+        alignItems: "flex-end",
+        justifyContent: "flex-start",
         zIndex: 40,
       }}
     >
       <FramedPanel
+        // The character sheet's own stone. The default fill is 94% dark, which
+        // let the life globe's "100/100" read straight through the window.
+        fill="linear-gradient(180deg, rgba(8,7,5,0.55), rgba(8,7,5,0.78)), url(/textures/ui/char_stone_v1.png)"
         style={{
-          width: "min(46vw, 620px)",
-          maxHeight: "84vh",
+          backgroundSize: "auto, 256px 256px",
+          // The character sheet's pane, to the pixel: same width, same top line,
+          // same foot on the bottom bar (hud/layout.ts, hud/InventoryPanel.tsx).
+          width: PANEL_W,
+          height: `calc(100vh - ${bottomInset})`,
+          marginBottom: bottomInset,
           padding: "14px 20px 16px",
+          boxSizing: "border-box",
           display: "flex",
           flexDirection: "column",
         }}
@@ -84,10 +103,9 @@ export function OptionsPanel({
         <Tabs current={tab} onPick={setTab} />
         <Divider style={{ margin: "8px 0 12px" }} />
 
-        {/* A floor under the body, or the whole window jumps height when the
-            short tab is picked. The plate's body is one fixed box with a
-            scrollbar, and a window that resizes under the pointer reads wrong. */}
-        <div style={{ overflowY: "auto", flex: 1, paddingRight: 6, minHeight: 300 }}>
+        {/* The window's height is the screen's, so the short tab no longer
+            resizes it under the pointer; the body just scrolls inside it. */}
+        <div style={{ overflowY: "auto", flex: 1, paddingRight: 6 }}>
           {tab === "graphics" ? (
             <>
               <Group>Detail</Group>

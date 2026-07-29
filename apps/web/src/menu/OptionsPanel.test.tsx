@@ -104,6 +104,28 @@ describe("OptionsPanel", () => {
     expect(next.sound.master).toBeCloseTo(0.25);
   });
 
+  it("stands full height against the left edge, the way the plate does", () => {
+    setup();
+    const panel = screen.getByTestId("options-panel").firstElementChild as HTMLElement;
+    expect(panel.style.height).toContain("100vh");
+    expect(screen.getByTestId("options-panel").style.justifyContent).toBe("flex-start");
+  });
+
+  it("in the game it stops on the bottom bar, as the character sheet does", () => {
+    const onChange = vi.fn();
+    render(
+      <OptionsPanel
+        settings={DEFAULT_SETTINGS}
+        onChange={onChange}
+        onClose={() => {}}
+        bottomInset="7vw"
+      />,
+    );
+    const panel = screen.getByTestId("options-panel").firstElementChild as HTMLElement;
+    expect(panel.style.height).toBe("calc(100vh - 7vw)");
+    expect(panel.style.marginBottom).toBe("7vw");
+  });
+
   it("says what resolution scale costs, since a soft frame reads as a bug", () => {
     setup();
     expect(screen.getByTestId("options-panel").textContent).toMatch(/sharpness/i);
