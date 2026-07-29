@@ -37,8 +37,7 @@ colors, name header, affix lines) to the `item-*.png` screenshots above.
 
 ## Build / test
 
-- Test: `npx vitest run [scope]` from repo root. Web build: `npm run build -w apps/web`. Typecheck:
-  `npm run typecheck` (tsc --noEmit; vitest strips types so this is mandatory).
+- Test `npx vitest run [scope]` from repo root; build `npm run build -w apps/web`; typecheck `npm run typecheck` (tsc --noEmit, mandatory because vitest strips types).
 
 ## 3D assets
 
@@ -72,10 +71,10 @@ colors, name header, affix lines) to the `item-*.png` screenshots above.
   down both legs, each sized to that limb's *median* half-width — size to its widest slice and the
   coat is caged in permanent contact, which reads as stiff cloth that never touches the legs).
   **One chain per coat column — `SKIRT_CHAINS = COAT_SEG` — the ratio matters, not the count.** Only
-  the chains are collided, so a column without one hangs in the gap no capsule reaches (0.088 at the
-  hem, wider than the thigh capsule); raising both rings doubles resolution and blind spot at once.
-  Chains run to the *deepest* hem ring, or cloth below the last collided point is cloth a leg walks
-  through. Rebuild after changing either; `rig.test.ts` pins both.
+  chains are collided, so a column without one hangs in the gap no capsule reaches (0.088 at the hem,
+  wider than the thigh capsule); raising both rings doubles resolution and blind spot at once. Chains
+  run to the *deepest* hem ring or cloth below the last collided point is cloth a leg walks through.
+  Rebuild after changing either; `rig.test.ts` pins both.
 - The chain needs joints *down* its length, or a 0.464 bone against a 0.088 thigh only pivots and never dents: `SKIRT_JOINTS` 3, four is worse on every measure and dearer.
 - `skirt.ts` solves at 240Hz so it outruns the display: collision only happens inside a step, and at
   1/60 against a 165Hz monitor two frames in three moved the legs and not the cloth. `DAMPING` and
@@ -141,10 +140,10 @@ colors, name header, affix lines) to the `item-*.png` screenshots above.
 ## Devlog — SCREENSHOT EACH VISIBLE STEP
 
 - **Drive and capture the state yourself.** Anything transient (a skill FX, an impact, a bolt in
-  flight) is over before a human can hold it, so asking the user to pose the screen is not a
-  workflow. Script it: dispatch the input, wait a measured delay, then `scene.render()` and
-  `drawImage` into an offscreen canvas in the SAME in-page script (a full-page capture is fine for
-  anything still). Aim with a canvas `pointermove` first or a cast is a no-op (aim = player's feet).
+  flight) is over before a human can hold it, so asking the user to pose the screen is not a workflow.
+  Script it: dispatch the input, wait a measured delay, then `scene.render()` and `drawImage` into an
+  offscreen canvas in the SAME in-page script (full-page is fine for anything still). Aim with a
+  canvas `pointermove` first or a cast is a no-op (aim = player's feet).
 - Stage every capture in `review/` (gitignored) under a plain name and get sign-off BEFORE it enters
   `devlog/`. What needs confirming is the frame, not the moment; scratchpad paths are not reviewable.
   Signed off, it becomes `devlog/screenshots/YYYY-MM-DD-<slug>.jpeg` (JPEG q75-80; PNG only for
@@ -155,20 +154,18 @@ colors, name header, affix lines) to the `item-*.png` screenshots above.
 - The client is a **screen router** (`App.tsx`): `menu | mode | select | create | info | game`.
   The game lives in `GameView.tsx`, which builds the Babylon engine and spawns the sim worker ON
   MOUNT — keeping it unmounted is the point, and no menu screen may import it.
-- The save is a **roster**: `packages/persistence/src/roster.ts` holds a record per character
-  (id, name, class, level, league) plus a **shared stash**, and treats each character's save as an
-  OPAQUE `state`; that leaf must never learn what a session is. `simulation/roster-io.ts` parses
-  the roster without a World — the menu imports THAT, never `characters.ts`, or the whole sim lands
-  in the main bundle. Two versions: `persist.VERSION` (2) for one character's save, `ROSTER_VERSION`
-  (3) for the blob wrapping them; `migrateSingleSave` upgrades a v2 blob on READ without committing
-  it, so an untouched menu visit leaves the old save on disk.
-- **Local mode holds one character** (`LOCAL_CHARACTER_CAP`), passed in by the caller so online
-  passes `Infinity`. `PLAY` asks local-or-online BEFORE the roster: the pools never mix, and that
-  is only fair said in advance.
+- The save is a **roster**: `packages/persistence/src/roster.ts` holds a record per character (id,
+  name, class, level, league) plus a **shared stash**, treating each save as an OPAQUE `state`: that
+  leaf must never learn what a session is. `simulation/roster-io.ts` parses it without a World and
+  the menu imports THAT, never `characters.ts`, or the whole sim lands in the main bundle.
+  `persist.VERSION` (2) versions one save, `ROSTER_VERSION` (3) the blob wrapping them;
+  `migrateSingleSave` upgrades v2 on READ only, so an untouched visit leaves the old save on disk.
+- **Local mode holds one character** (`LOCAL_CHARACTER_CAP`), passed in by the caller so online passes
+  `Infinity`. `PLAY` asks local-or-online BEFORE the roster: the pools never mix, said in advance.
 - **Classes are cosmetic and one body.** Ids in `@exiled/rules/classes.ts`, definitions in
-  `content-runtime/classes.ts`, pinned by `simulation/characters.test.ts`. One male rig, two looks
-  per slot, so a class only changes the OUTFIT: each gets a body base out of `STARTER_BASES` (kept
-  out of the drop pool) whose baked `GEAR_TEXTURE` palette makes three classes read as three people.
+  `content-runtime/classes.ts`, pinned by `simulation/characters.test.ts`. One male rig, two looks per
+  slot, so a class only changes the OUTFIT: each gets a body base out of `STARTER_BASES` (kept out of
+  the drop pool) whose baked `GEAR_TEXTURE` palette makes three classes read as three people.
 - **Nobody is a state**: `MenuStage` takes `classId: string | null`; defaulting to a class stood a
   stranger in an empty hall. Delete dissolves him (`dissolve.ts`), PRIMED at dress time — a material
   plugin recompiles the shader and a compiling mesh is not drawn. Needs `doNotSerialize` (rig clones).
@@ -179,9 +176,9 @@ colors, name header, affix lines) to the `item-*.png` screenshots above.
   life (three under StrictMode). A load in flight for one scene must never be handed to another:
   its containers belong to the first, `isRigReady` answers false, and the character silently fails
   to appear. Same for `resetPlayerRig(scene)` — an abandoned scene must not wipe a live one's cache.
-- The menu rig has a FACE now, so `FACING` is staging, not concealment, and `FILL_INTENSITY` (0.15)
-  is the knob for how much of it you get — low because the plate is lit by fire, not because the
-  head is blank. `index.html`'s "no text input anywhere" is stale too: name fields need `user-select`.
+- The menu rig has a FACE now, so `FACING` is staging and `FILL_INTENSITY` (0.15) is how much of it you
+  get: low because the plate is lit by fire, not because the head is blank. Name fields need
+  `user-select`, so `index.html`'s "no text input anywhere" comment is stale.
 - **Never construct a `Texture` on the menu scene before `loadPlayerRig`.** A texture download
   across the wardrobe's glTF import leaves every wardrobe material sampling flat white: a correctly
   shaped, correctly animated white silhouette, and a green test suite. Bisected to the texture
@@ -198,3 +195,6 @@ colors, name header, affix lines) to the `item-*.png` screenshots above.
 
 - Sim math is deterministic fixed-point; keep replay checksums stable. `@exiled/rules` is a pure leaf: it imports no other `@exiled` package.
 - Commit: direct-to-main, one per task. No attribution trailers, no emdashes in messages.
+- **`docs/todo/TODO.md` is his, edited continuously** (gitignored, so re-read it each session). New
+  items land under `## SORT`: rate each and move it into Low / Mid / High, ranked inside the tier so
+  the last line is the most important. Tick `[x]` when it ships. Never reword or drop his items.
