@@ -195,10 +195,10 @@ export function registerMonsterAI(sim: Simulation, collisionRef?: CollisionRef):
           if (def?.ranged) {
             // A shooter's range is its attack range, so chase already stops it
             // where it should stand: no kiting AI, and none needed.
-            // ponytail: no line of sight — a bolt crosses walls, as every
-            // projectile in this game already does. Range 7.5 under an aggro
-            // radius of 9 keeps it close to honest; real LOS is its own pass
-            // over collision.ts, for the player's projectiles as much as these.
+            // ponytail: it fires with no line-of-sight check, but the bolt now
+            // dies on the wall (projectile.ts), so a shooter behind rock wastes
+            // its shot instead of hitting through it. Not checking here costs one
+            // wasted cooldown; checking would need the ray at aim time too.
             const speedPerTick = Math.trunc(def.ranged.speedFixed / 30);
             const step = fpStepToward(mpos.x, mpos.y, ppos.x, ppos.y, speedPerTick);
             // Standing exactly on the player: nothing to aim at, so fall through

@@ -5,6 +5,7 @@ import { MONSTERS, SKILLS, RARE_TEMPLATES, MONSTER_POOLS, PACK_COUNT, BOSSES } f
 import type { BiomeId, MonsterDef } from "@exiled/content-schema";
 import { makeRare } from "@exiled/rules";
 import { createCombatSim, spawnLabActors } from "./combat-sim";
+import { gridCollision, sweep } from "./collision";
 import { spawnMonster } from "./areas";
 import { Simulation } from "./loop";
 import type { Command } from "./loop";
@@ -55,6 +56,9 @@ const GROUND_CD = SKILLS.get(GROUND)!.cooldownTicks;
  */
 const BOLT_DEF = SKILLS.get(BOLT)!;
 const CAST_CEILING = HZ / Math.max(BOLT_DEF.cooldownTicks, BOLT_DEF.castTicks ?? 0);
+const BOLT_RADIUS = BOLT_DEF.effects.reduce(
+  (r, e) => (e.type === "spawnProjectile" ? e.radiusFixed : r), 0,
+);
 /** Far enough that the monster has to close, near enough to be in every range. */
 const SPAWN_Y = fp(6);
 
@@ -160,8 +164,8 @@ describe("stepping out of the portal", () => {
   const TIER = 3;
 
   function mapEntry() {
-    const { sim, world, playerEntity } = createCombatSim(7, { area: "map", tier: TIER });
-    return { sim, world, player: playerEntity };
+    const { sim, world, playerEntity, layout } = createCombatSim(7, { area: "map", tier: TIER });
+    return { sim, world, player: playerEntity, collision: gridCollision(layout.grid) };
   }
 
   it("does not put the whole map on top of you", () => {
@@ -179,16 +183,23 @@ describe("stepping out of the portal", () => {
   });
 
   it("still lets a pack be pulled — one bolt is an invitation", () => {
-    const { sim, world, player } = mapEntry();
+    const { sim, world, player, collision } = mapEntry();
     const pos = world.get<Position>(player, "position")!;
     let target: Position | undefined;
     let best = Infinity;
     for (const m of world.query("monster", "position")) {
       if (world.has(m, "boss")) continue;
       const p = world.get<Position>(m, "position")!;
+      // Nearest monster the bolt can actually REACH: a wall stops it now, so the
+      // nearest by straight-line distance is regularly one the shot cannot make.
+      // Swept at the bolt's own radius, not as a point — at this entrance the
+      // nearest monster is clear to a hairline ray and blocked to the real bolt.
+      const reach = sweep(collision, pos.x, pos.y, p.x - pos.x, p.y - pos.y, BOLT_RADIUS);
+      if (reach.dx !== p.x - pos.x || reach.dy !== p.y - pos.y) continue;
       const d2 = (p.x - pos.x) ** 2 + (p.y - pos.y) ** 2;
       if (d2 < best) { best = d2; target = p; }
     }
+    expect(target, "no monster in line of sight of the entrance").toBeDefined();
     sim.step(cast(sim, player, target!, BOLT));
     for (let t = 0; t < 6 * HZ; t++) sim.step([]);
     const awake = world.query("monster").filter(

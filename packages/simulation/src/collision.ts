@@ -1,4 +1,4 @@
-import { fp, fpStepToward, type Fixed } from "@exiled/fixed-point";
+import { fp, fpStepToward, isqrt, type Fixed } from "@exiled/fixed-point";
 import type { WalkableGrid } from "@exiled/mapgen";
 
 /**
@@ -58,6 +58,44 @@ export function slide(
   if (dx !== 0 && collision.isWalkable(x + dx, y, bodyRadius)) nx = x + dx;
   if (dy !== 0 && collision.isWalkable(nx, y + dy, bodyRadius)) ny = y + dy;
   return { x: nx, y: ny };
+}
+
+/**
+ * Longest gap `sweep` leaves between two samples. Half a mapgen cell: sample any
+ * coarser and a segment steps clean over a one-cell wall, which is exactly what
+ * picking the farthest walkable fraction used to do.
+ */
+const SWEEP_QUANTUM: Fixed = fp(0.25);
+
+/**
+ * The farthest point along (dx, dy) a body of `bodyRadius` can reach from (x, y)
+ * without ever passing through a wall. Returns a delta, zero when even the first
+ * sample is blocked.
+ *
+ * This is the difference between "does the landing spot happen to be clear" and
+ * "is there a way there": the first admits a teleport — or an area effect — across
+ * a wall as long as the far side is floor. Sample count comes off the length, so
+ * a 5-unit blink and a 20-unit aim are checked at the same resolution.
+ */
+export function sweep(
+  collision: Collision,
+  x: Fixed,
+  y: Fixed,
+  dx: Fixed,
+  dy: Fixed,
+  bodyRadius: Fixed,
+): { dx: Fixed; dy: Fixed } {
+  const steps = Math.max(1, Math.ceil(isqrt(dx * dx + dy * dy) / SWEEP_QUANTUM));
+  let okx = 0;
+  let oky = 0;
+  for (let i = 1; i <= steps; i++) {
+    const sx = Math.trunc((dx * i) / steps);
+    const sy = Math.trunc((dy * i) / steps);
+    if (!collision.isWalkable(x + sx, y + sy, bodyRadius)) break;
+    okx = sx;
+    oky = sy;
+  }
+  return { dx: okx, dy: oky };
 }
 
 /**

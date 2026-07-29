@@ -4,7 +4,7 @@ import { scalePct } from "@exiled/rules";
 import type { SkillDef } from "@exiled/content-schema";
 import { Simulation } from "../loop";
 import { WORLD_MIN, WORLD_MAX } from "../movement";
-import { type CollisionRef } from "../collision";
+import { sweep, type CollisionRef } from "../collision";
 import type { Position, PlayerC, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC, CastingC, OffenseC } from "../components";
 import { damageCode } from "../damage-types";
 
@@ -103,8 +103,19 @@ export function registerSkillCast(
             team: casterTeam,
           });
         } else if (effect.type === "spawnGroundArea") {
-          const gx = fpClamp(tx, WORLD_MIN, WORLD_MAX);
-          const gy = fpClamp(ty, WORLD_MIN, WORLD_MAX);
+          // Aimed past a wall, the patch lands on the wall instead of in the room
+          // behind it — the same rule the bolt and the blink follow. The centre is
+          // swept as a point: the burning circle is allowed to lick over the rock,
+          // it is only forbidden to be placed through it.
+          let ax = tx;
+          let ay = ty;
+          if (collision) {
+            const reach = sweep(collision, pos.x, pos.y, tx - pos.x, ty - pos.y, 0);
+            ax = pos.x + reach.dx;
+            ay = pos.y + reach.dy;
+          }
+          const gx = fpClamp(ax, WORLD_MIN, WORLD_MAX);
+          const gy = fpClamp(ay, WORLD_MIN, WORLD_MAX);
           const area = world.create();
           world.set<Position>(area, "position", { x: gx, y: gy });
           world.set<GroundAreaC>(area, "groundArea", {
@@ -123,16 +134,14 @@ export function registerSkillCast(
           let dx = step.dx;
           let dy = step.dy;
           if (collision) {
-            // Blink must not land inside a wall: shorten the hop along its own
-            // vector to the farthest walkable point, or stay put if none is.
+            // Blink must not land inside a wall AND must not cross one. Trying a
+            // few fractions and taking the first that was clear did the first
+            // only: a one-cell wall with floor behind it was a free teleport
+            // through it, which is the "skills go through walls" report.
             const body = world.get<PlayerC>(caster, "player")?.bodyRadius ?? 0;
-            dx = 0;
-            dy = 0;
-            for (const [num, den] of [[1, 1], [3, 4], [1, 2], [1, 4]] as const) {
-              const cx = pos.x + Math.trunc((step.dx * num) / den);
-              const cy = pos.y + Math.trunc((step.dy * num) / den);
-              if (collision.isWalkable(cx, cy, body)) { dx = cx - pos.x; dy = cy - pos.y; break; }
-            }
+            const reach = sweep(collision, pos.x, pos.y, step.dx, step.dy, body);
+            dx = reach.dx;
+            dy = reach.dy;
           }
           world.set<Position>(caster, "position", {
             x: fpClamp(pos.x + dx, WORLD_MIN, WORLD_MAX),

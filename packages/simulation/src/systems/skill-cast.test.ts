@@ -287,4 +287,25 @@ describe("registerSkillCast", () => {
     expect(pos.x).toBeLessThan(fp(4));     // but stopped short of the wall
     expect(collision.isWalkable(pos.x, pos.y, 0)).toBe(true);
   });
+
+  it("blink does not cross a wall it could clear", () => {
+    // One column of wall at cx4 with open floor behind it. Picking the farthest
+    // walkable fraction lands at cx5 and calls it legal; that is a free teleport
+    // through the wall, and the whole "skills go through walls" report.
+    const collision = gridCollision(
+      makeGrid([
+        "....#...",
+        "....#...",
+        "....#...",
+      ]),
+    );
+    const sim = new Simulation();
+    registerSkillCast(sim, ALL_SKILLS, { active: collision });
+    const caster = makeCaster(sim, fp(60));
+    sim.step([{
+      tick: 0, entity: caster, type: "useSkill",
+      skillId: "skill.blink.v1", data: { tx: fp(10), ty: 0 },
+    }]);
+    expect(sim.world.get<Position>(caster, "position")!.x).toBeLessThan(fp(4));
+  });
 });

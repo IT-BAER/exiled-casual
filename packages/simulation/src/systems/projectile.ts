@@ -1,10 +1,12 @@
 import { isqrt, fpDist2 } from "@exiled/fixed-point";
 import { Simulation } from "../loop";
 import { bodyRadiusOf } from "../body";
+import type { CollisionRef } from "../collision";
 import type { Position, ProjectileC, Faction } from "../components";
 
-export function registerProjectileMove(sim: Simulation): void {
+export function registerProjectileMove(sim: Simulation, collisionRef?: CollisionRef): void {
   sim.register("projectileMove", (world) => {
+    const collision = collisionRef?.active ?? undefined;
     for (const e of world.query("projectile", "position")) {
       const proj = world.get<ProjectileC>(e, "projectile")!;
       if (proj.remainingRange <= 0) continue; // spent last tick; inert until the expiry system despawns it
@@ -16,6 +18,15 @@ export function registerProjectileMove(sim: Simulation): void {
       const ny = pos.y + proj.diry;
       const traveled = isqrt(proj.dirx * proj.dirx + proj.diry * proj.diry);
       let newRange = proj.remainingRange - traveled;
+
+      // A wall stops a bolt where its own body touches the rock, and it stays
+      // where it was rather than one step inside: the impact belongs on the face.
+      // Tested per tick, not swept — a bolt covers 0.4 units a tick against a
+      // half-unit cell, so the disc always overlaps the cell it would enter.
+      if (collision && !collision.isWalkable(nx, ny, proj.radius)) {
+        world.set<ProjectileC>(e, "projectile", { ...proj, remainingRange: 0 });
+        continue;
+      }
 
       // Anything damageable on another team, not just monsters: the player has
       // no `monster` component, which is the only reason a monster's bolt used

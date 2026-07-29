@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import { fp } from "@exiled/fixed-point";
 import { Simulation } from "../loop";
 import { registerProjectileMove } from "./projectile";
+import { gridCollision } from "../collision";
+import { makeGrid } from "../test-grid";
 import type { Position, ProjectileC, MonsterC, Health, PlayerC, Faction, DamageEvent } from "../components";
 
 function makeProjectile(sim: Simulation, px: number, py: number, dirx: number, diry: number, range = fp(20)) {
@@ -165,5 +167,50 @@ describe("registerProjectileMove", () => {
 
     sim.step();
     expect(sim.damageQueue).toHaveLength(0);
+  });
+
+  /**
+   * A bolt that crosses rock is a fight the player cannot take cover in, and it
+   * cuts both ways: his Ember Bolt used to hit through a wall exactly as a dune
+   * spitter's did through the same wall.
+   */
+  describe("walls", () => {
+    // Floor on cx0..3, wall from cx4 out. A bolt fired east from x=0 must die at
+    // the face, and the radius means it dies before its centre reaches the cell.
+    const walled = () => gridCollision(makeGrid([
+      "....####",
+      "....####",
+      "....####",
+    ]));
+
+    it("a bolt stops at the wall and is spent", () => {
+      const collision = walled();
+      const sim = new Simulation();
+      registerProjectileMove(sim, { active: collision });
+      const proj = makeProjectile(sim, 0, fp(1), fp(0.4), 0);
+      for (let i = 0; i < 20; i++) sim.step();
+      const p = sim.world.get<ProjectileC>(proj, "projectile")!;
+      const pos = sim.world.get<Position>(proj, "position")!;
+      expect(p.remainingRange).toBe(0);
+      expect(pos.x).toBeLessThan(fp(3.5));
+      expect(collision.isWalkable(pos.x, pos.y, p.radius)).toBe(true);
+    });
+
+    it("cannot reach a target on the far side of the wall", () => {
+      const sim = new Simulation();
+      registerProjectileMove(sim, { active: walled() });
+      makeMonster(sim, fp(6), fp(1));
+      makeProjectile(sim, 0, fp(1), fp(0.4), 0);
+      for (let i = 0; i < 40; i++) sim.step();
+      expect(sim.damageQueue).toHaveLength(0);
+    });
+
+    it("without collision nothing changes — the hideout has no walls", () => {
+      const sim = new Simulation();
+      registerProjectileMove(sim, { active: null });
+      const proj = makeProjectile(sim, 0, fp(1), fp(0.4), 0);
+      for (let i = 0; i < 20; i++) sim.step();
+      expect(sim.world.get<Position>(proj, "position")!.x).toBe(fp(8));
+    });
   });
 });
