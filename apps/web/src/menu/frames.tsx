@@ -34,7 +34,24 @@ export const FRAME_SLICE = "44 45 44 45";
 /** Drawn at half the source inset, so the frame reads crisp rather than chunky. */
 export const FRAME_BORDER = 22;
 
-/** A panel wearing the ornate frame, with a dark fill inside it. */
+/**
+ * How much of the gilt a dialog's frame keeps. The art is painted at full
+ * brightness so a *frame* render can be judged on its own, but a window is not
+ * the thing the player came to read: at 1.0 the border out-shouted the rows
+ * inside it. The knob is here rather than in the PNG because prominence is a
+ * taste that gets retuned, and a baked-in dimming cannot be turned back up.
+ */
+export const FRAME_DIM = "brightness(0.68) saturate(0.85)";
+
+/**
+ * A panel wearing the ornate frame, with a dark fill inside it.
+ *
+ * The frame is drawn TWICE over: once as this element's own transparent border,
+ * which is what reserves the space and keeps the padding box honest, and once as
+ * an inert overlay carrying the art at `FRAME_DIM`. A filter cannot be aimed at
+ * a border alone — put it on the element and it dims every row inside as well —
+ * so the border and the thing that dims it have to be two boxes.
+ */
 export function FramedPanel({
   children,
   style,
@@ -45,19 +62,35 @@ export function FramedPanel({
     <div
       {...rest}
       style={{
+        position: "relative",
         borderStyle: "solid",
         borderWidth: FRAME_BORDER,
-        borderImageSource: `url(${MENU_ART}/panel_frame.png)`,
-        borderImageSlice: FRAME_SLICE,
-        borderImageRepeat: "round",
+        borderColor: "transparent",
         // Without this the fill paints under the frame's transparent gaps and
         // the ornament sits on a solid block instead of on the scene.
         backgroundClip: "padding-box",
         background: fill,
-        boxShadow: "0 18px 60px rgba(0,0,0,0.7)",
+        boxShadow: "0 14px 46px rgba(0,0,0,0.62)",
         ...style,
       }}
     >
+      <div
+        aria-hidden
+        data-testid="frame-gilt"
+        style={{
+          position: "absolute",
+          // Absolute insets are measured from the padding box, so backing out by
+          // the border width is what makes this overlay the border box exactly.
+          inset: -FRAME_BORDER,
+          pointerEvents: "none",
+          borderStyle: "solid",
+          borderWidth: FRAME_BORDER,
+          borderImageSource: `url(${MENU_ART}/panel_frame.png)`,
+          borderImageSlice: FRAME_SLICE,
+          borderImageRepeat: "round",
+          filter: FRAME_DIM,
+        }}
+      />
       {children}
     </div>
   );

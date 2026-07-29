@@ -209,6 +209,23 @@ describe("Hud", () => {
     expect(vw(flaskRow.style.height)).toBe(vw(skillRow.style.height));
   });
 
+  it("carries the bar's stone across the gap between the two panels, behind them", () => {
+    render(<Hud snapshot={makeSnap({})} />);
+    const band = screen.getByTestId("bar-connector");
+    // Edge to edge, or the lit floor shows through beside the panels again.
+    expect(band).toHaveStyle({ left: "0px", right: "0px", bottom: "0px" });
+    // Behind the panels (2) and the globes (3), in front of nothing but the world.
+    expect(band.style.zIndex).toBe("1");
+    // Shorter than the panels: they stay the raised ends, and a full-height strip
+    // would cost a sixth of the viewport in playfield.
+    const vw = (s: string) => parseFloat(/(-?[\d.]+)vw/.exec(s)?.[1] ?? "NaN");
+    const skillRow = screen.getByTestId("skill-row");
+    const ratio = vw(band.style.height) / vw(screen.getByTestId("skill-row").style.height);
+    expect(vw(skillRow.style.height)).toBeGreaterThan(0);
+    expect(ratio).toBeGreaterThan(0.2);
+    expect(ratio).toBeLessThan(0.6);
+  });
+
   it("recesses a rail between the skill rows and sizes the frame's chrome off the window", () => {
     render(<Hud snapshot={makeSnap({})} />);
     const skillRow = screen.getByTestId("skill-row");

@@ -153,6 +153,18 @@ describe("OptionsPanel", () => {
     expect(footer.style.marginBottom).toBe("2vw");
   });
 
+  it("dims its gilt with an overlay that cannot swallow a click", () => {
+    const { onClose } = setup();
+    const gilt = screen.getByTestId("frame-gilt");
+    // The whole reason the frame is a second box: the dimming filter would take
+    // every row inside the window with it if it sat on the panel itself.
+    expect(gilt.style.filter).toMatch(/brightness\(0\.\d+\)/);
+    // And a box laid over the frame is a box laid over the controls under it.
+    expect(gilt.style.pointerEvents).toBe("none");
+    fireEvent.click(screen.getByRole("button", { name: /^close$/i }));
+    expect(onClose).toHaveBeenCalled();
+  });
+
   it("says what resolution scale costs, since a soft frame reads as a bug", () => {
     setup();
     expect(screen.getByTestId("options-panel").textContent).toMatch(/sharpness/i);

@@ -260,6 +260,37 @@ interface HudProps {
   hoveredEntityId?: number | null;
 }
 
+/**
+ * The carved band that runs between the two panels, so the bottom of the screen
+ * is one piece of furniture rather than two boxes parked on a lit floor.
+ * Per reference-screenshots/options.png, where a frieze crosses the full width
+ * under the docked window; ours had the map's own stone reading bright and flat
+ * across that whole span, with the level readout floating on it.
+ *
+ * A fraction of the bar, not the whole of it: the panels have to stay the raised
+ * ends, and an opaque strip at BAR_H would take a sixth of the viewport height
+ * of playfield with it. This is the knob for how tall the band reads.
+ */
+const CONNECT_H = `calc(${BAR_H} * 0.38)`;
+
+/**
+ * Same art as the panels — one material, so the top rail lands on one line all
+ * the way across. No side slices: the gilt corners belong to the panels, and a
+ * second pair of them at the screen edges would read as three separate boxes.
+ */
+const connectStyle: React.CSSProperties = {
+  position: "absolute",
+  left: 0,
+  right: 0,
+  bottom: 0,
+  height: CONNECT_H,
+  borderStyle: "solid",
+  borderWidth: `${BAR_TOP} 0 ${BAR_BOTTOM} 0`,
+  borderImageSource: "url(/hud/bar-panel-v3.png)",
+  borderImageSlice: "26 0 44 0 fill",
+  zIndex: 1,
+};
+
 /** Ornate bar backing, 9-sliced so the corner brackets never stretch. */
 const barStyle: React.CSSProperties = {
   position: "absolute",
@@ -732,6 +763,8 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
           }}
         />
       </div>
+
+      <div data-testid="bar-connector" style={connectStyle} />
 
       {/* Flask bar — runs off the screen side and under the life globe, per poe1-lower-bar.png */}
       <div
