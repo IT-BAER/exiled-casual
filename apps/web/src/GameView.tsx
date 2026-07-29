@@ -15,6 +15,8 @@ import { CharacterPanel } from "./hud/CharacterPanel";
 import { LootLabels } from "./hud/LootLabels";
 import { Minimap } from "./hud/Minimap";
 import { Divider, FramedPanel, GOLD, MenuButton, SERIF } from "./menu/frames";
+import { LoadingScreen, LOADING_ART } from "./LoadingScreen";
+import { pickTip } from "./tips";
 import { OptionsPanel } from "./menu/OptionsPanel";
 import { DEFAULT_SETTINGS, type Settings } from "./settings";
 import type { Projector } from "./hud/LootLabels";
@@ -76,6 +78,26 @@ export function GameView({
   const [project, setProject] = useState<Projector | null>(null);
   const [pick, setPick] = useState<((id: number, x: number, y: number) => void) | null>(null);
   const workerRef = useRef<Worker | null>(null);
+  /**
+   * The loading plate. True from mount, and true again from the moment an `area`
+   * message lands until a frame has actually been PAINTED for that area.
+   *
+   * There is no timer anywhere in this path on purpose (`docs/09` rule 8). The
+   * three other facts — assets loaded, level built, textures ready — are all
+   * upstream of the painted frame, so one signal covers them: the render loop
+   * only starts after `loadPlayerRig`/`loadProps`/`loadRocks` resolve, and the
+   * paint is only armed once `scene.executeWhenReady` says the new area's
+   * materials are in. A scene can report every other kind of ready and still
+   * draw one black frame, which is the frame the player would have seen.
+   */
+  const [loading, setLoading] = useState(true);
+  /** Where we are going, already resolved. The plate names the destination, not the origin. */
+  const [area, setArea] = useState<{ name: string; art: string | undefined }>({
+    name: "Hideout",
+    art: `${LOADING_ART}/hideout.jpg`,
+  });
+  /** Chosen when a load STARTS, so a re-render mid-load cannot swap the line being read. */
+  const [tip, setTip] = useState(() => pickTip());
 
   // Resolve the socketed item on each render; clear the cell when the item is gone.
   const socketedItem = socketedCell && snapshot
@@ -107,6 +129,14 @@ export function GameView({
     let prevSnap: Snapshot | null = null;
     let curSnap: Snapshot | null = null;
     let prevTickTime = performance.now();
+    /**
+     * Armed by an `area` message once the scene reports ready, cleared by the
+     * first frame painted after it. A local rather than a ref because it is only
+     * ever read and written inside this effect, and it must die with the scene
+     * it describes — this component's own cleanup is the only correct lifetime
+     * for it, StrictMode's second mount included.
+     */
+    let needsPaint = false;
 
     // Babylon engine + render loop
     const engine = new Engine(canvas, true);
@@ -178,10 +208,25 @@ export function GameView({
         // and what colour its light is. The hideout has no base, so it gets the
         // neutral rig back rather than keeping the last map's mood.
         const base = msg.mapBaseId ? mapBase(msg.mapBaseId) : null;
+        // Cover the swap before it starts. Disarming first matters: a frame
+        // already in flight for the OLD area must not be allowed to report the
+        // new one ready.
+        needsPaint = false;
+        setLoading(true);
+        setTip(pickTip());
+        const biome = base ? BIOMES[base.biomeId] : null;
+        setArea({
+          name: biome?.name ?? "Hideout",
+          art: `${LOADING_ART}/${base?.biomeId ?? "hideout"}.jpg`,
+        });
         buildLevel(scene, grid, base?.tilesetId);
         applyTilesetFloor(scene, base?.tilesetId ?? null);
         applyBiomeTint(scene, base ? BIOMES[base.biomeId].tint : null);
         setAreaLayout(msg.area === "map" ? msg.layout : null);
+        // Arms the paint only once this area's materials and textures are in.
+        // Babylon defers this through a timeout even when nothing is pending, so
+        // the plate always gets at least one render to appear in.
+        scene.executeWhenReady(() => { needsPaint = true; });
       }
     };
 
@@ -202,6 +247,13 @@ export function GameView({
         true,
       );
       scene.render();
+      // The one place the loading plate is allowed to come down: a frame for
+      // this area is now on the glass. Guarded by the flag rather than by state,
+      // so this costs one boolean read per frame and sets React state once.
+      if (needsPaint) {
+        needsPaint = false;
+        setLoading(false);
+      }
     };
 
     // Wait for the humanoid and the hideout props before the first frame, so
@@ -277,6 +329,12 @@ export function GameView({
         ref={canvasRef}
         style={{ width: "100%", height: "100%", display: "block" }}
       />
+      {/* First in the tree and highest in z: the canvas underneath it is still
+          being built, and the HUD below is reading a snapshot from the area the
+          player just left. */}
+      {loading && (
+        <LoadingScreen areaName={area.name} tip={tip} {...(area.art ? { wallpaper: area.art } : {})} />
+      )}
       {/* Stays mounted with the plates off: the drop CUE is played from inside
           LootLabels, and a HUD toggle that also silenced every drop would be a
           bug wearing a setting's clothes. */}
