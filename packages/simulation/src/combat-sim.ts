@@ -34,6 +34,7 @@ import { registerEquipmentSystem } from "./systems/equipment";
 import { registerCurrencySystem } from "./systems/currency";
 import { registerAreaTransition } from "./systems/area-transition";
 import { registerFlaskSystem } from "./systems/flask";
+import { registerRevive } from "./systems/revive";
 import { buildArea, spawnMonster } from "./areas";
 
 export function createCombatSim(
@@ -116,6 +117,9 @@ export function createCombatSim(
       portalsLeft: 0,
       mapOpen: 0,
       pendingArea: "",
+      // A sim started straight on a map (the balance rig, the boss golden) has an
+      // entrance too, and dying on it must be able to send him back to it.
+      ...(opts.area === "map" ? { checkpointX: spawn.x, checkpointY: spawn.y } : {}),
     };
     world.set<SessionC>(sessionE, "session", session);
     // Opening stock: the stones the atlas seed always offered, now real 1x1 grid
@@ -147,6 +151,10 @@ export function createCombatSim(
     registerCurrencySystem(sim);
     registerAreaTransition(sim, collisionRef);
     registerFlaskSystem(sim);
+    // After areaTransition: a revive that chose the hideout sets pendingArea, and
+    // the transition that reads it runs on the NEXT tick either way, so ordering
+    // here only decides whether the walk out costs one tick or two.
+    registerRevive(sim);
   } else {
     // ── Legacy path: no session, golden-replay–safe bootstrap ────────────
     if (opts.monsters !== false) {

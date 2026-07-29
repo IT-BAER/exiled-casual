@@ -5,7 +5,7 @@ import type { SkillDef } from "@exiled/content-schema";
 import { Simulation } from "../loop";
 import { WORLD_MIN, WORLD_MAX } from "../movement";
 import { sweep, type CollisionRef } from "../collision";
-import type { Position, PlayerC, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC, CastingC, OffenseC } from "../components";
+import type { Position, PlayerC, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC, CastingC, OffenseC, Health } from "../components";
 import { damageCode } from "../damage-types";
 
 export function registerSkillCast(
@@ -26,6 +26,9 @@ export function registerSkillCast(
       const caster = cmd.entity;
       const skill = skills.get(cmd.skillId);
       if (!skill) continue;
+      // A corpse does not cast, same rule movement follows. Absent health reads
+      // as alive so the health-less test casters are untouched.
+      if ((world.get<Health>(caster, "health")?.life ?? 1) <= 0) continue;
 
       const cds = world.get<Cooldowns>(caster, "cooldowns") ?? {};
       if ((cds[cmd.skillId] ?? 0) > tick) continue; // on cooldown

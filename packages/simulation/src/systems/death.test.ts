@@ -5,7 +5,7 @@ import { registerDeath } from "./death";
 import { START_LEVEL, waystoneMods } from "@exiled/rules";
 import { WISDOM_SCROLL_BASE_ID, isCurrency } from "@exiled/content-runtime";
 import type { World } from "../ecs";
-import type { SessionC, ProgressC, Position } from "../components";
+import type { SessionC, ProgressC, Position, Health } from "../components";
 
 /** Ground equipment only: any kill can also pay currency. */
 const equipmentDrops = (w: World) =>
@@ -91,27 +91,37 @@ describe("registerDeath", () => {
     return { sim, world, p, sessionE };
   }
 
-  it("map death decrements portalsLeft and sets pendingArea='hideout'", () => {
+  /**
+   * Death is now a question, not an outcome: it raises the screen and spends
+   * nothing. The portal, the map closing and the walk out all moved to the answer
+   * — see revive.test.ts.
+   */
+  it("map death raises the death screen and spends nothing", () => {
+    const { sim, world, sessionE, p } = makePlayerWithSession("map", 6);
+    sim.step();
+    const session = world.get<SessionC>(sessionE, "session")!;
+    expect(session.dead).toBe(1);
+    expect(session.portalsLeft).toBe(6);
+    expect(session.mapOpen).toBe(1);
+    expect(session.pendingArea).toBe("");
+    // Still a corpse where it fell: no free heal, no teleport.
+    expect(world.get<Health>(p, "health")!.life).toBe(0);
+    expect(world.get<Position>(p, "position")).toEqual({ x: fp(3), y: fp(3) });
+  });
+
+  it("holds there — a second tick does not re-raise or change anything", () => {
     const { sim, world, sessionE } = makePlayerWithSession("map", 6);
     sim.step();
-    const session = world.get<SessionC>(sessionE, "session")!;
-    expect(session.portalsLeft).toBe(5);
-    expect(session.pendingArea).toBe("hideout");
+    const first = world.get<SessionC>(sessionE, "session")!;
+    for (let i = 0; i < 30; i++) sim.step();
+    expect(world.get<SessionC>(sessionE, "session")).toEqual(first);
   });
 
-  it("6th map death drives portalsLeft to 0 and sets mapOpen=0", () => {
-    const { sim, world, sessionE } = makePlayerWithSession("map", 1);
-    sim.step();
-    const session = world.get<SessionC>(sessionE, "session")!;
-    expect(session.portalsLeft).toBe(0);
-    expect(session.mapOpen).toBe(0);
-    expect(session.pendingArea).toBe("hideout");
-  });
-
-  it("hideout death does NOT decrement portalsLeft", () => {
+  it("dying in the hideout raises the same screen and still spends nothing", () => {
     const { sim, world, sessionE } = makePlayerWithSession("hideout", 6);
     sim.step();
     const session = world.get<SessionC>(sessionE, "session")!;
+    expect(session.dead).toBe(1);
     expect(session.portalsLeft).toBe(6);
     expect(session.pendingArea).toBe("");
   });

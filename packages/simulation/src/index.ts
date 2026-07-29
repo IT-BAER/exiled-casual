@@ -37,6 +37,7 @@ export { registerPickupSystem } from "./systems/pickup";
 export { registerCurrencySystem } from "./systems/currency";
 export { registerAreaTransition, grammarForNode } from "./systems/area-transition";
 export { registerFlaskSystem } from "./systems/flask";
+export { registerRevive } from "./systems/revive";
 export { intentToCommand, buildSnapshot } from "./protocol-bridge";
 export { snapshot, restore, saveTo, loadInto } from "./persist";
 export { loadCharacterInto, saveCharacterTo, equipStartingGear, LOCAL_CHARACTER_CAP } from "./characters";

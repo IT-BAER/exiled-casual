@@ -34,6 +34,24 @@ export interface SessionC {
   /** Retry budget for the open map. See MAP_PORTALS in @exiled/protocol. */
   portalsLeft: number;
   mapOpen: 0 | 1;
+  /**
+   * The player is down and the death screen is up. Nothing has been healed and no
+   * portal has been spent yet, because WHERE he comes back is his choice: the
+   * revive system spends and places on his answer, not on the hit that killed him.
+   * A world with no session never sees this, so golden replays keep their old
+   * respawn-at-origin path.
+   *
+   * Optional, like every other field added to a shape that is written to disk and
+   * hashed: absent and 0 are the same state to a reader, and absent is what an
+   * older save and an older checksum both already say.
+   */
+  dead?: 0 | 1;
+  /**
+   * Where "resurrect at checkpoint" puts him: the entrance of the open map,
+   * recorded when the area was built. Absent outside a map.
+   */
+  checkpointX?: Fixed;
+  checkpointY?: Fixed;
   /** Area to build at the end of this tick; "" means stay put. */
   pendingArea: AreaKind | "";
 }

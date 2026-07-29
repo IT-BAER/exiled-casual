@@ -159,6 +159,37 @@ describe("registerMonsterAI", () => {
     expect(sim.damageQueue).toHaveLength(0);
   });
 
+  /** The death screen is a decision, not a fight the pack keeps having with a body. */
+  it("a dead player is not a target — the pack goes idle over the corpse", () => {
+    const sim = new Simulation();
+    registerMonsterAI(sim);
+    const { world } = sim;
+
+    const player = world.create();
+    world.set<Position>(player, "position", { x: fp(0), y: fp(0) });
+    world.set<Faction>(player, "faction", { team: 0 });
+    world.set<PlayerC>(player, "player", { moveSpeed: 0, bodyRadius: fp(0.5) });
+    world.set<Health>(player, "health", { life: fp(100), maxLife: fp(100) });
+
+    const m = world.create();
+    world.set<Position>(m, "position", { x: fp(1), y: fp(0) });
+    world.set<Faction>(m, "faction", { team: 1 });
+    world.set<MonsterC>(m, "monster", {
+      defId: "test", moveSpeed: fp(2), bodyRadius: fp(0.5),
+      attackRange: fp(1.2), attackCooldownTicks: 45,
+      attackDamage: fp(6), attackType: 1 as const,
+      attackReadyTick: 0, slamReadyTick: 0, rootedUntilTick: 0, state: "idle", rare: 0 as const, summoned: 0 as const,
+    });
+
+    sim.step();
+    expect(sim.damageQueue).toHaveLength(1);   // alive: it swings
+
+    world.set<Health>(player, "health", { life: 0, maxLife: fp(100) });
+    for (let i = 0; i < 60; i++) sim.step();
+    expect(sim.damageQueue).toHaveLength(0);
+    expect(world.get<MonsterC>(m, "monster")!.state).toBe("idle");
+  });
+
   it("no players → idle, position unchanged", () => {
     const sim = new Simulation();
     registerMonsterAI(sim);

@@ -12,7 +12,10 @@ import type { Snapshot } from "@exiled/protocol";
 // behaviour: rig pulls in skirt.ts, which builds Vector3 scratch vectors at module
 // scope, so leaving it real drags the whole solver through this stub.
 const hoisted = vi.hoisted(() => ({
-  worker: null as { onmessage: ((e: { data: unknown }) => void) | null } | null,
+  worker: null as {
+    onmessage: ((e: { data: unknown }) => void) | null;
+    postMessage: (msg: unknown) => void;
+  } | null,
   openPanel: null as ((open: boolean) => void) | null,
   openStash: null as ((open: boolean) => void) | null,
   openVendor: null as ((open: boolean) => void) | null,
@@ -290,5 +293,71 @@ describe("GameView", () => {
     paintFrame();
     await finishFade();
     expect(screen.queryByTestId("loading-screen")).toBeNull();
+  });
+
+  // ── Death screen ─────────────────────────────────────────────────────────
+
+  /** Push a snapshot whose player is a corpse, in a map with `portalsLeft` left. */
+  function die(portalsLeft: number, area: Snapshot["area"] = "map") {
+    act(() => {
+      hoisted.worker?.onmessage?.({
+        data: {
+          type: "snapshot",
+          snapshot: {
+            ...makeSnap(), area, mapOpen: area === "map", portalsLeft,
+            player: testPlayer({ life: 0, alive: false }),
+          },
+        },
+      });
+    });
+  }
+
+  it("the death screen comes up on a corpse and offers both ways back", () => {
+    mountWithSnapshot();
+    expect(screen.queryByTestId("death-screen")).toBeNull();
+    die(6);
+    expect(screen.getByTestId("death-screen")).toBeTruthy();
+    expect(screen.getByText("Resurrect at Checkpoint")).toBeTruthy();
+    expect(screen.getByText("Resurrect in Hideout")).toBeTruthy();
+  });
+
+  it("sends the revive intent it was clicked for", () => {
+    mountWithSnapshot();
+    die(6);
+    act(() => { fireEvent.click(screen.getByText("Resurrect at Checkpoint")); });
+    expect(hoisted.worker?.postMessage).toHaveBeenCalledWith({
+      type: "intent", intent: { kind: "revive", where: "checkpoint" },
+    });
+    act(() => { fireEvent.click(screen.getByText("Resurrect in Hideout")); });
+    expect(hoisted.worker?.postMessage).toHaveBeenCalledWith({
+      type: "intent", intent: { kind: "revive", where: "hideout" },
+    });
+  });
+
+  /** Spending the last portal closes the map, so there is no door to come back to. */
+  it("the last portal cannot buy a checkpoint", () => {
+    mountWithSnapshot();
+    die(1);
+    expect(screen.getByText("Resurrect at Checkpoint")).toHaveProperty("disabled", true);
+    expect(screen.getByText("Resurrect in Hideout")).toHaveProperty("disabled", false);
+  });
+
+  it("dying in the hideout offers only the hideout", () => {
+    mountWithSnapshot();
+    die(0, "hideout");
+    expect(screen.getByText("Resurrect at Checkpoint")).toHaveProperty("disabled", true);
+  });
+
+  it("no hotkey opens anything while he is down", () => {
+    mountWithSnapshot();
+    die(6);
+    act(() => {
+      fireEvent.keyDown(window, { key: "i" });
+      fireEvent.keyDown(window, { key: "c" });
+      fireEvent.keyDown(window, { key: "Escape" });
+    });
+    expect(screen.queryByTestId("inventory-panel")).toBeNull();
+    expect(screen.queryByTestId("game-menu")).toBeNull();
+    expect(screen.getByTestId("death-screen")).toBeTruthy();
   });
 });

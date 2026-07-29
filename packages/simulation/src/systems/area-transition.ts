@@ -31,6 +31,7 @@ export function registerAreaTransition(sim: Simulation, collisionRef?: Collision
     // spawnPortalRing reads the correct portalsLeft.
     const newSession: SessionC = { ...session, area: newArea, pendingArea: "" };
     world.set<SessionC>(sessionE, "session", newSession);
+    // Layout is generated below, so the checkpoint is written after it — see there.
 
     // The map is placed against its generated layout; the hideout ignores it.
     // The Atlas node decides which base is being run, and the base decides the
@@ -55,6 +56,14 @@ export function registerAreaTransition(sim: Simulation, collisionRef?: Collision
     // Move player(s) to the area's spawn and clear stale movement state. On the
     // map that is the generated "start" socket, not the (0,0) map origin.
     const spawnPt = newArea === "map" ? mapStart(layout) : HIDEOUT_SPAWN;
+    // The map's entrance is also the checkpoint a death can send him back to
+    // (systems/revive.ts). Recorded here rather than re-derived on revive, so
+    // coming back never has to regenerate a layout to find one anchor.
+    if (newArea === "map") {
+      world.set<SessionC>(sessionE, "session", {
+        ...newSession, checkpointX: spawnPt.x, checkpointY: spawnPt.y,
+      });
+    }
     for (const p of world.query("player")) {
       world.set<Position>(p, "position", { x: spawnPt.x, y: spawnPt.y });
       const mt = world.get<MoveTarget>(p, "moveTarget");

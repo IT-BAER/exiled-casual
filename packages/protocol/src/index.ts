@@ -49,9 +49,16 @@ export type Intent =
    * re-checks the price against the purse and the backpack for room, so a client
    * that shows a piece it cannot afford can still only ever be told no.
    */
-  | { kind: "buyItem"; x: number; y: number };
+  | { kind: "buyItem"; x: number; y: number }
+  /**
+   * Answer the death screen. `where` is the only decision death leaves the
+   * player: "checkpoint" wakes him at the map's entrance, "hideout" walks him
+   * out. Both spend one of the map's portals — see systems/revive.ts — and the
+   * sim refuses a checkpoint when spending it would close the map.
+   */
+  | { kind: "revive"; where: "checkpoint" | "hideout" };
 
-export type CommandType = "moveTo" | "moveDir" | "useSkill" | "stop" | "interact" | "activateMap" | "pickupItem" | "equipItem" | "unequipItem" | "dropItem" | "moveItem" | "useFlask" | "applyCurrency" | "sellItem" | "buyItem";
+export type CommandType = "moveTo" | "moveDir" | "useSkill" | "stop" | "interact" | "activateMap" | "pickupItem" | "equipItem" | "unequipItem" | "dropItem" | "moveItem" | "useFlask" | "applyCurrency" | "sellItem" | "buyItem" | "revive";
 
 // ---------------------------------------------------------------------------
 // Run loop

@@ -1,4 +1,5 @@
 import { Simulation } from "../loop";
+import type { World } from "../ecs";
 import type { Health, Mana, MoveTarget, MoveDir, SessionC, MonsterC, Position, ItemC, FlasksC, ProgressC, EnergyShieldC, VendorC } from "../components";
 import { stockVendor } from "../vendor";
 import { fp } from "@exiled/fixed-point";
@@ -148,37 +149,44 @@ export function registerDeath(sim: Simulation): void {
       const h = world.get<Health>(e, "health")!;
       if (h.life > 0) continue;
 
-      // Restore vitals and clear movement/ailment regardless of path.
-      world.set<Health>(e, "health", { ...h, life: h.maxLife });
-      const mn = world.get<Mana>(e, "mana");
-      if (mn) world.set<Mana>(e, "mana", { ...mn, mana: mn.maxMana });
-      const es = world.get<EnergyShieldC>(e, "energyShield");
-      if (es) world.set<EnergyShieldC>(e, "energyShield", { ...es, es: es.maxEs, rechargeAtTick: 0 });
-      const mt = world.get<MoveTarget>(e, "moveTarget");
-      if (mt) world.set<MoveTarget>(e, "moveTarget", { ...mt, active: 0 });
-      const md = world.get<MoveDir>(e, "moveDir");
-      if (md) world.set<MoveDir>(e, "moveDir", { dx: 0, dy: 0, hx: 0, hy: 0 });
-      world.remove(e, "ailment");
-
-      const sessionEntities = world.query("session");
-      const sessionE = sessionEntities[0];
+      const sessionE = world.query("session")[0];
 
       if (sessionE === undefined) {
-        // Legacy path: no session. Teleport to origin so golden-replay checksums match.
+        // Legacy path: no session, so no screen to put up. Heal, clear and
+        // teleport to origin, all in one tick, so golden checksums still match.
+        reviveVitals(world, e);
         world.set(e, "position", { x: 0, y: 0 });
-      } else {
-        // Session path: only spend a portal when dying in the map.
-        const session = world.get<SessionC>(sessionE, "session")!;
-        if (session.area === "map") {
-          const newPortals = Math.max(0, session.portalsLeft - 1);
-          world.set<SessionC>(sessionE, "session", {
-            ...session,
-            portalsLeft: newPortals,
-            mapOpen: newPortals === 0 ? 0 : session.mapOpen,
-            pendingArea: "hideout",
-          });
-        }
+        continue;
       }
+
+      // Session path: he stays down. The corpse keeps its life at zero and its
+      // place on the floor, and NOTHING is spent until he answers the screen —
+      // see systems/revive.ts. Movement is cleared here so a queued click does
+      // not walk the body while the choice is open.
+      const session = world.get<SessionC>(sessionE, "session")!;
+      if (session.dead === 1) continue;
+      clearMovement(world, e);
+      world.remove(e, "ailment");
+      world.set<SessionC>(sessionE, "session", { ...session, dead: 1 });
     }
   });
+}
+
+/** Full life, mana and shield, and no ailment left over from the fight. */
+export function reviveVitals(world: World, e: number): void {
+  const h = world.get<Health>(e, "health");
+  if (h) world.set<Health>(e, "health", { ...h, life: h.maxLife });
+  const mn = world.get<Mana>(e, "mana");
+  if (mn) world.set<Mana>(e, "mana", { ...mn, mana: mn.maxMana });
+  const es = world.get<EnergyShieldC>(e, "energyShield");
+  if (es) world.set<EnergyShieldC>(e, "energyShield", { ...es, es: es.maxEs, rechargeAtTick: 0 });
+  world.remove(e, "ailment");
+  clearMovement(world, e);
+}
+
+function clearMovement(world: World, e: number): void {
+  const mt = world.get<MoveTarget>(e, "moveTarget");
+  if (mt) world.set<MoveTarget>(e, "moveTarget", { ...mt, active: 0 });
+  const md = world.get<MoveDir>(e, "moveDir");
+  if (md) world.set<MoveDir>(e, "moveDir", { dx: 0, dy: 0, hx: 0, hy: 0 });
 }

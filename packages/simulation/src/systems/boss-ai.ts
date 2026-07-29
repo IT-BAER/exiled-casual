@@ -53,7 +53,12 @@ export function registerBossAI(
       const def = monsters.get(mon.defId);
       if (!def?.boss) continue;
 
-      const players = world.query("player", "position");
+      // A corpse is not a target — same rule as monster-ai, so the boss holds
+      // still while the death screen is up instead of slamming the body. Missing
+      // health reads as alive, which keeps every health-less fixture identical.
+      const players = world
+        .query("player", "position")
+        .filter((p) => (world.get<Health>(p, "health")?.life ?? 1) > 0);
       const playerEntity = players[0];
       if (playerEntity === undefined) continue;
 

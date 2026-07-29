@@ -70,6 +70,8 @@ export function restore(world: World, state: PersistedState): void {
     activeNodeId: "",
     portalsLeft: 0,
     areaTier: 0,
+    // A run abandoned mid-death must not come back with the death screen up.
+    dead: 0,
   };
   world.set<SessionC>(e, "session", safe);
   // Every load, not only new characters: a save written before the permanent

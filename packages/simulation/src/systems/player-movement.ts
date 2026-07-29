@@ -2,7 +2,7 @@ import { FP_SCALE, fp, fpClamp, fpStepToward, isqrt, type Fixed } from "@exiled/
 import { Simulation } from "../loop";
 import { WORLD_MIN, WORLD_MAX } from "../movement";
 import { slide, type CollisionRef } from "../collision";
-import type { Position, PlayerC, MoveTarget, MoveDir, CastingC } from "../components";
+import type { Position, PlayerC, MoveTarget, MoveDir, CastingC, Health } from "../components";
 
 /** Player moves at this percent of moveSpeed during post-cast recovery. */
 export const CASTING_MOVE_PCT = 40;
@@ -64,6 +64,10 @@ export function registerPlayerMovement(sim: Simulation, collisionRef?: Collision
     for (const cmd of commands) {
       if (cmd.entity === undefined) continue;
       if (!world.has(cmd.entity, "player")) continue;
+      // A corpse does not take orders. Without this, a click behind the death
+      // screen walks the body around while the screen asks where to come back.
+      // Absent health reads as alive, so every legacy fixture is unchanged.
+      if ((world.get<Health>(cmd.entity, "health")?.life ?? 1) <= 0) continue;
       const e = cmd.entity;
       if (cmd.type === "moveTo") {
         const x = fpClamp(cmd.data?.["x"] ?? 0, WORLD_MIN, WORLD_MAX);

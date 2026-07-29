@@ -2,7 +2,7 @@ import { fp, fpDist2, fpMul, fpStepToward, fpClamp, isqrt, type Fixed } from "@e
 import { WORLD_MIN, WORLD_MAX } from "../movement";
 import { chaseStep, slide, type Collision, type CollisionRef } from "../collision";
 import { Simulation } from "../loop";
-import type { Position, MonsterC, Faction, ProjectileC, TelegraphC, SessionC } from "../components";
+import type { Position, MonsterC, Faction, Health, ProjectileC, TelegraphC, SessionC } from "../components";
 import { mapDangerScale } from "../areas";
 import { MONSTERS } from "@exiled/content-runtime";
 
@@ -95,9 +95,14 @@ export function registerMonsterAI(sim: Simulation, collisionRef?: CollisionRef):
     const sessionE = world.query("session")[0];
     const session = sessionE === undefined ? undefined : world.get<SessionC>(sessionE, "session");
     const { dmgMilli } = session ? mapDangerScale(session) : { dmgMilli: 1000 };
+    // A corpse is not a target. Without this the pack stands over the body
+    // swinging while the death screen is up, and the screen is a decision, not a
+    // fight. A player with no health component counts as alive, so every legacy
+    // world reads exactly as it did.
     const players = world
       .query("player", "faction", "position")
-      .filter((e) => (world.get<Faction>(e, "faction")?.team ?? -1) === 0);
+      .filter((e) => (world.get<Faction>(e, "faction")?.team ?? -1) === 0)
+      .filter((e) => (world.get<Health>(e, "health")?.life ?? 1) > 0);
 
     // Snapshotted before anything moves, so a body's shove does not depend on how
     // far through the loop its neighbour happens to be. Bosses are in here as

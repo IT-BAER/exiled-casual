@@ -74,6 +74,14 @@ export function GameView({
   const overlayOpenRef = useRef(false);
   overlayOpenRef.current =
     panelOpen || inventoryOpen || stashOpen || vendorOpen || characterOpen || optionsOpen;
+  /**
+   * Down and waiting on the death screen. Same mirror-ref trick as above, and for
+   * the same reason: the keydown listener is attached once. While it is set, no
+   * hotkey opens anything — the screen has exactly two answers and neither of them
+   * is the inventory.
+   */
+  const deadRef = useRef(false);
+  deadRef.current = snapshot !== null && !snapshot.player.alive;
   // The map's layout, kept for the minimap. Null in the hideout, which has none.
   const [areaLayout, setAreaLayout] = useState<AreaLayout | null>(null);
   const [project, setProject] = useState<Projector | null>(null);
@@ -285,6 +293,7 @@ export function GameView({
     // Escape clears the screen: every overlay at once, not just the topmost. A player
     // who wants the world back should not have to count the panels they opened.
     const onInvKey = (ev: KeyboardEvent) => {
+      if (deadRef.current) return;
       const k = ev.key.toLowerCase();
       if (k === "i") { setInventoryOpen((v) => !v); setStashOpen(false); }
       // The sheet is cut from the stash's pane and docks where the stash docks, so
@@ -425,6 +434,109 @@ export function GameView({
           dock={{ bottom: BAR_H, clear: ORB_RISE }}
         />
       )}
+      {/* Last in the tree, so it paints over every other overlay: nothing behind
+          it is a decision the player can still act on. */}
+      {snapshot && !snapshot.player.alive && (
+        <DeathScreen
+          portalsLeft={snapshot.portalsLeft}
+          inMap={snapshot.area === "map" && snapshot.mapOpen}
+          onRevive={(where) => {
+            workerRef.current?.postMessage({
+              type: "intent", intent: { kind: "revive", where },
+            } satisfies ToWorker);
+            // Every overlay goes with the body: coming back is a fresh screen.
+            setPanelOpen(false);
+            setInventoryOpen(false);
+            setStashOpen(false);
+            setVendorOpen(false);
+            setCharacterOpen(false);
+            setGameMenuOpen(false);
+            setOptionsOpen(false);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * The death screen.
+ *
+ * PoE2's choice, PoE1's price. You pick where to come back — the checkpoint you
+ * came in at, or the hideout — and either answer spends one of the map's six
+ * portals, because the map's retry budget is the only thing dying has ever cost
+ * in this game. Nothing is spent until a button is pressed, so the screen can sit
+ * there as long as he likes.
+ *
+ * The last portal cannot buy a checkpoint: spending it closes the map, and there
+ * is no walking back into a closed map to stand at its door. That is a sim rule
+ * (systems/revive.ts) and this only greys the button to say so in advance.
+ *
+ * No timer, no auto-revive: docs/09 rule 8. The screen after a death is where the
+ * player decides whether the run is worth another portal, and taking the decision
+ * off him is what turns a loss into an interruption.
+ */
+function DeathScreen({
+  portalsLeft,
+  inMap,
+  onRevive,
+}: {
+  portalsLeft: number;
+  inMap: boolean;
+  onRevive: (where: "checkpoint" | "hideout") => void;
+}) {
+  const canCheckpoint = inMap && portalsLeft > 1;
+  return (
+    <div
+      data-testid="death-screen"
+      role="dialog"
+      aria-modal="true"
+      aria-label="You have died"
+      style={{
+        position: "absolute", inset: 0, display: "grid", placeItems: "center",
+        // Heavier than the pause menu's veil: the world behind this one is a
+        // corpse on the floor, and the screen is not asking to be dismissed.
+        background: "rgba(2,2,3,0.82)",
+      }}
+    >
+      <FramedPanel style={{ padding: "20px 30px 24px", minWidth: 360 }}>
+        <div style={{
+          fontFamily: SERIF, fontSize: 22, letterSpacing: 5,
+          textTransform: "uppercase", color: "#c1443a", textAlign: "center",
+        }}>
+          You have died
+        </div>
+        <Divider style={{ margin: "12px 0 14px" }} />
+        <div style={{
+          fontFamily: SERIF, fontSize: 13, color: "#9a9187",
+          textAlign: "center", marginBottom: 16,
+        }}>
+          {inMap
+            ? `${portalsLeft} ${portalsLeft === 1 ? "portal" : "portals"} left in this map`
+            : "No map open"}
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <MenuButton
+            tone="primary"
+            onClick={() => onRevive("checkpoint")}
+            disabled={!canCheckpoint}
+            autoFocus={canCheckpoint}
+          >
+            Resurrect at Checkpoint
+          </MenuButton>
+          <MenuButton onClick={() => onRevive("hideout")} autoFocus={!canCheckpoint}>
+            Resurrect in Hideout
+          </MenuButton>
+        </div>
+        {inMap && !canCheckpoint && (
+          <div style={{
+            fontFamily: SERIF, fontSize: 12, color: "#7d7469",
+            textAlign: "center", marginTop: 12,
+          }}>
+            Your last portal closes the map behind you.
+          </div>
+        )}
+      </FramedPanel>
     </div>
   );
 }
