@@ -89,6 +89,21 @@ interface ScatterConfig {
    *  pebble resting exactly on y=0 reads as placed on the ground; sunk a little
    *  it reads as part of it. */
   sink: number;
+  /**
+   * Half the depth of the wall cell a rock is centred on, when the rock is meant
+   * to line up with that cell's inner FACE. Boulders are 1.35-1.95 wide on a
+   * 0.5-unit cell, so centred they bulge up to 0.72 units into floor the sim
+   * happily walks on — and since collision stops a body at the cell face, what
+   * you see is monsters standing inside rock, worst of all now that they route
+   * along walls. Set here, each rock is pushed out along its cell's outward
+   * normal by exactly its own overhang, putting the face he sees on the face the
+   * sim collides against.
+   *
+   * ponytail: needs a normal, so a wall cell with floor on opposite sides (a
+   * one-cell partition) and an isolated pillar both get no offset — no direction
+   * is out. Fixing those means geometry per cell, not a nudge.
+   */
+  outwardHalfCell?: number;
 }
 
 const BOULDERS: ScatterConfig = {
@@ -211,6 +226,13 @@ export function resetRocks(): void {
 export interface RockCell {
   x: number;
   z: number;
+  /**
+   * Unit vector pointing away from the floor this cell borders, or absent/zero
+   * where there is no such direction. Only read when the config sets
+   * `outwardHalfCell` — see there.
+   */
+  nx?: number;
+  nz?: number;
 }
 
 export interface RockPlacement {
@@ -255,9 +277,9 @@ function hash01(seed: number): number {
  */
 export function scatterRocks(
   cells: readonly RockCell[],
-  spacing: number = ROCK_SPACING,
+  cellSize = 0.5,
 ): RockPlacement[] {
-  return scatter(cells, { ...BOULDERS, spacing });
+  return scatter(cells, { ...BOULDERS, outwardHalfCell: cellSize / 2 });
 }
 
 /** Sparse stone across the open floor — see DEBRIS for why it exists. */
@@ -285,8 +307,19 @@ function scatter(cells: readonly RockCell[], cfg: ScatterConfig): RockPlacement[
     // Jitter widens the worst-case gap one for one, so it is bounded by what the
     // narrowest rock can bridge (see ROCK_SPACING), not by how much scatter looks
     // good. 0.19 units of play on a 0.5-unit cell grid already hides the lattice.
-    const x = cell.x + (r0 - 0.5) * spacing * JITTER;
-    const z = cell.z + (r1 - 0.5) * spacing * JITTER;
+    let x = cell.x + (r0 - 0.5) * spacing * JITTER;
+    let z = cell.z + (r1 - 0.5) * spacing * JITTER;
+
+    const width = cfg.minWidth + r2 * (cfg.maxWidth - cfg.minWidth);
+    const height = width * (cfg.minAspect + r3 * (cfg.maxAspect - cfg.minAspect));
+
+    // Applied before the rejection test, so spacing is enforced where the rocks
+    // actually end up rather than where their cells were.
+    if (cfg.outwardHalfCell !== undefined) {
+      const out = Math.max(0, width / 2 - cfg.outwardHalfCell);
+      x += (cell.nx ?? 0) * out;
+      z += (cell.nz ?? 0) * out;
+    }
 
     const cx = Math.floor(x / spacing);
     const cz = Math.floor(z / spacing);
@@ -302,8 +335,6 @@ function scatter(cells: readonly RockCell[], cfg: ScatterConfig): RockPlacement[
     }
     if (blocked) continue;
 
-    const width = cfg.minWidth + r2 * (cfg.maxWidth - cfg.minWidth);
-    const height = width * (cfg.minAspect + r3 * (cfg.maxAspect - cfg.minAspect));
     const rock: RockPlacement = {
       x,
       y: -height * cfg.sink,

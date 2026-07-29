@@ -255,6 +255,22 @@ export function buildLevel(
     return false;
   };
 
+  /**
+   * Which way is "further into the wall" from this cell: away from every floor
+   * cell it borders. Zero where the floors cancel — a one-cell partition with a
+   * room on each side, or a pillar standing in the open — and a boulder on one of
+   * those has no direction it could be pushed. See `outwardHalfCell` in rocks.ts.
+   */
+  const outward = (x: number, y: number): { nx: number; nz: number } => {
+    let nx = 0;
+    let nz = 0;
+    for (let dy = -1; dy <= 1; dy++)
+      for (let dx = -1; dx <= 1; dx++)
+        if ((dx || dy) && isFloor(x + dx, y + dy)) { nx -= dx; nz -= dy; }
+    const len = Math.hypot(nx, nz);
+    return len === 0 ? { nx: 0, nz: 0 } : { nx: nx / len, nz: nz / len };
+  };
+
   // Rocks carry the wall's silhouette when the glb is up; the box band drops to a
   // plinth under them. Without it (headless tests, a failed fetch) the band is
   // the wall again at full height, which is the look this replaced and still plays.
@@ -297,7 +313,11 @@ export function buildLevel(
       wallCells += runLen;
       if (rocky)
         for (let i = 0; i < runLen; i++)
-          rockCells.push({ x: originX + (runStart + i) * cellSize, z: originY + y * cellSize });
+          rockCells.push({
+            x: originX + (runStart + i) * cellSize,
+            z: originY + y * cellSize,
+            ...outward(runStart + i, y),
+          });
 
       const width = runLen * cellSize;
       const uW = width / TILE;
@@ -349,7 +369,7 @@ export function buildLevel(
         if (isOuterEdge(x, y))
           edgeCells.push({ x: originX + x * cellSize, z: originY + y * cellSize });
 
-    buildRocks(scene, scatterRocks(rockCells), material);
+    buildRocks(scene, scatterRocks(rockCells, cellSize), material);
     buildRocks(scene, scatterDebris(floorCells), material, DEBRIS_MESH_PREFIX);
     buildRocks(scene, scatterRampart(edgeCells), material, RAMPART_MESH_PREFIX);
   }

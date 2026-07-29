@@ -52,6 +52,36 @@ describe("scatterRocks", () => {
   });
 });
 
+describe("boulders line up with the face the sim collides against", () => {
+  /** A wall run along z=0 with the room to the south (+z), so out is -z. */
+  const wall = (count: number, normals: boolean): RockCell[] =>
+    Array.from({ length: count }, (_, i) => ({
+      x: i * 0.5, z: 0, ...(normals ? { nx: 0, nz: -1 } : {}),
+    }));
+
+  /** Deepest reach of any rock into the room, measured at its own half-width. */
+  const deepest = (cells: RockCell[]): number =>
+    Math.max(...scatterRocks(cells, 0.5).map((r) => r.z + r.width / 2));
+
+  it("a rock on a cell with a known outward normal stops at the cell face", () => {
+    // The cell's inner face is at z = +0.25 and that is exactly where collision
+    // stops a body. Jitter is the only thing allowed past it (±0.096 — see JITTER).
+    expect(deepest(wall(200, true))).toBeLessThan(0.25 + 0.1);
+  });
+
+  it("without a normal it still bulges — the pillar case, documented not fixed", () => {
+    // Centred on a 0.5-unit cell, a 1.35-1.95 rock reaches 0.42-0.72 past the face.
+    expect(deepest(wall(200, false))).toBeGreaterThan(0.6);
+  });
+
+  it("the offset does not open the band up: gaps along the run are unchanged", () => {
+    const rocks = scatterRocks(wall(400, true), 0.5).sort((a, b) => a.x - b.x);
+    for (let i = 1; i < rocks.length; i++) {
+      expect(rocks[i]!.x - rocks[i - 1]!.x, `gap after rock ${i - 1}`).toBeLessThan(1.35);
+    }
+  });
+});
+
 describe("scatterDebris", () => {
   /** A patch of open floor, `n` x `n` cells at the mapgen cell size. */
   function field(n: number): RockCell[] {
