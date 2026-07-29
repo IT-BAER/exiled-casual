@@ -1437,25 +1437,32 @@ def cinder_imp():
 def vaal_husk():
     """Hauls itself on long forelimbs; the hind legs are stubs that drag."""
     c = Creature("monster.vaal_husk.v1", "vaal", 0.25, 0.9)
+    # Wide flat haunches, a narrow deep waist, and a chest wider than either: the
+    # cross-section has to change down the trunk or a hauler is a bean with arms.
     spine = c.body.chain(
         [(0, -0.30, 0.30), (0, -0.06, 0.42), (0, 0.16, 0.52), (0, 0.28, 0.52)],
-        [0.11, 0.20, 0.25, 0.21])
-    neck = c.body.chain([(0, 0.34, 0.62), (0, 0.42, 0.74)], [0.11, 0.14], parent=spine[-1])
+        [(0.20, 0.10), (0.17, 0.22), (0.30, 0.20), (0.25, 0.17)])
+    neck = c.body.chain([(0, 0.34, 0.62), (0, 0.42, 0.74)], [(0.10, 0.12), (0.15, 0.13)],
+                        parent=spine[-1])
     c.body.chain([(0, 0.54, 0.74)], [0.08], parent=neck[-1])
     # The split chest is what says "hollow" from above.
     c.body.add(slab((0, 0.26, 0.52), (0.12, 0.11, 0.30), tilt=0.30), GLOWS)
     for side in (-1, 1):
         c.body.add(ellipsoid((side * 0.06, 0.52, 0.78), (0.033, 0.033, 0.033), 6, 4), GLOWS)
-        c.body.add(horn([(side * 0.12, 0.40, 0.86), (side * 0.22, 0.28, 1.02)],
+        c.body.add(horn([(side * 0.12, 0.40, 0.86), (side * 0.34, 0.30, 0.94)],
                         [0.05, 0.0]), BONES)
         # A shoulder blade broken out through the hide, one side bent further.
-        c.body.add(horn([(side * 0.14, 0.06, 0.46), (side * 0.24, 0.02, 0.66),
-                         (side * (0.28 + side * 0.05), -0.08, 0.78)],
+        # It leans OUT rather than up: from 53 degrees of elevation a blade that
+        # rises is a dot, and the same blade laid over the flank is a fin.
+        c.body.add(horn([(side * 0.14, 0.06, 0.46), (side * 0.30, 0.02, 0.60),
+                         (side * (0.42 + side * 0.06), -0.12, 0.60)],
                         [0.09, 0.06, 0.0], 5), BONES)
     for i, side in enumerate((-1, 1)):
-        c.leg(i, (side * 0.21, 0.14, 0.50), (side * 0.30, 0.44, 0.0), 0.072, 0.048, bend=0.11)
+        c.leg(i, (side * 0.26, 0.14, 0.50), (side * 0.36, 0.44, 0.0), 0.072, 0.048, bend=0.11)
     for i, side in enumerate((-1, 1), start=2):
-        c.leg(i, (side * 0.17, -0.22, 0.32), (side * 0.24, -0.34, 0.0), 0.062, 0.04)
+        # Not wider than the rump is: a hip further out than the hull reaches is a
+        # stub standing beside the animal with daylight between them.
+        c.leg(i, (side * 0.18, -0.22, 0.32), (side * 0.25, -0.34, 0.0), 0.062, 0.04)
     return c
 
 
@@ -1463,16 +1470,16 @@ def sand_skitterer():
     """Wider than it is long: a flat carapace on six splayed legs."""
     c = Creature("monster.sand_skitterer.v1", "desert", 0.25, 0.6)
     spine = c.body.chain([(0, -0.30, 0.34), (0, -0.04, 0.36), (0, 0.26, 0.34)],
-                         [0.16, 0.30, 0.20])
-    c.body.chain([(0, 0.44, 0.30), (0, 0.56, 0.27)], [0.13, 0.08], parent=spine[-1])
-    c.body.add(slab((0, -0.10, 0.46), (0.38, 0.50, 0.07), tilt=-0.12))
+                         [(0.22, 0.11), (0.44, 0.17), (0.28, 0.13)])
+    c.body.chain([(0, 0.44, 0.30), (0, 0.56, 0.27)], [(0.15, 0.10), 0.08], parent=spine[-1])
+    c.body.add(slab((0, -0.10, 0.46), (0.56, 0.52, 0.06), tilt=-0.12))
     for side in (-1, 1):
         c.body.add(ellipsoid((side * 0.07, 0.50, 0.36), (0.038, 0.042, 0.033), 6, 4), GLOWS)
         # Mandibles: the only thing out front, so they carry the facing.
         c.body.add(horn([(side * 0.09, 0.56, 0.24), (side * 0.20, 0.78, 0.28),
                          (side * 0.09, 0.92, 0.22)], [0.044, 0.03, 0.0]), BONES)
-    for i, (x, y) in enumerate([(-0.22, 0.24), (0.22, 0.24), (-0.24, -0.02), (0.24, -0.02),
-                                (-0.22, -0.28), (0.22, -0.28)]):
+    for i, (x, y) in enumerate([(-0.28, 0.24), (0.28, 0.24), (-0.30, -0.02), (0.30, -0.02),
+                                (-0.28, -0.28), (0.28, -0.28)]):
         # Knee ABOVE the body: a spider's stance, and the reason the outline is
         # legs first and carapace second.
         c.leg(i, (x, y, 0.36), (x * 2.4, y * 1.25, 0.0), 0.05, 0.026, bend=0.0)
@@ -1484,20 +1491,25 @@ def bramble_whelp():
     c = Creature("monster.bramble_whelp.v1", "forest", 0.25, 0.95)
     spine = c.body.chain(
         [(0, -0.38, 0.54), (0, -0.12, 0.60), (0, 0.14, 0.62), (0, 0.32, 0.58)],
-        [0.11, 0.21, 0.23, 0.18])
-    neck = c.body.chain([(0, 0.48, 0.54), (0, 0.62, 0.50)], [0.13, 0.16], parent=spine[-1])
+        [(0.10, 0.13), (0.24, 0.18), (0.26, 0.20), (0.20, 0.16)])
+    neck = c.body.chain([(0, 0.48, 0.54), (0, 0.62, 0.50)], [(0.12, 0.14), (0.17, 0.15)],
+                        parent=spine[-1])
     c.body.chain([(0, 0.78, 0.44), (0, 0.88, 0.42)], [0.10, 0.055], parent=neck[-1])
     c.body.chain([(0, -0.52, 0.56), (0, -0.70, 0.62), (0, -0.86, 0.46)],
                  [0.07, 0.045, 0.018], parent=spine[0])
     for side in (-1, 1):
         c.body.add(ellipsoid((side * 0.07, 0.74, 0.54), (0.036, 0.036, 0.036), 6, 4), GLOWS)
-    # The ridge: six thorns down the spine, shrinking aft. This is its outline.
-    for i in range(6):
-        t = i / 5.0
-        c.body.add(horn([(0, 0.28 - t * 0.68, 0.70 - t * 0.05),
-                         (0, 0.20 - t * 0.68, 0.98 - t * 0.20)],
-                        [0.05 - t * 0.022, 0.0]), BONES)
-    for i, (x, y) in enumerate([(-0.18, 0.18), (0.18, 0.18), (-0.18, -0.22), (0.18, -0.22)]):
+    # The thorns. Six of them stood along the spine at x=0 and could not be seen
+    # at all: a comb aimed straight up is edge-on to this camera and lands inside
+    # the body's own outline. The same six rooted in the flanks and swept out and
+    # back are the whole animal from above, and cost not one extra face.
+    for i in range(3):
+        y = 0.24 - i * 0.34
+        for side in (-1, 1):
+            c.body.add(horn([(side * 0.10, y + 0.06, 0.64), (side * 0.30, y - 0.06, 0.80),
+                             (side * 0.42, y - 0.22, 0.74)],
+                            [0.055 - i * 0.008, 0.036, 0.0], 5), BONES)
+    for i, (x, y) in enumerate([(-0.22, 0.18), (0.22, 0.18), (-0.22, -0.22), (0.22, -0.22)]):
         c.leg(i, (x, y, 0.56), (x * 1.2, y, 0.0), 0.075, 0.044, bend=0.08)
     return c
 
@@ -1510,8 +1522,9 @@ def dune_spitter():
     """A sac carried high on four stilts, with a spout aimed forward."""
     c = Creature("monster.dune_spitter.v1", "desert", 0.3, 1.4)
     body = c.body.chain([(0, -0.18, 1.04), (0, 0.02, 1.10), (0, 0.22, 1.12)],
-                        [0.12, 0.25, 0.19])
-    head = c.body.chain([(0, 0.40, 1.14), (0, 0.52, 1.12)], [0.14, 0.11], parent=body[-1])
+                        [(0.11, 0.14), (0.31, 0.20), (0.22, 0.16)])
+    head = c.body.chain([(0, 0.40, 1.14), (0, 0.52, 1.12)], [(0.15, 0.12), 0.11],
+                        parent=body[-1])
     c.body.chain([(0, 0.70, 1.06), (0, 0.82, 1.02)], [0.07, 0.03], parent=head[-1])
     c.body.add(ellipsoid((0, -0.04, 0.94), (0.17, 0.19, 0.13), 10, 6), GLOWS)
     for side in (-1, 1):
@@ -1533,7 +1546,7 @@ def fen_wisp():
     asymmetry is what turns a prop into a thing that is looking at you."""
     c = Creature("monster.fen_wisp.v1", "swamp", 0.225, 1.2)
     skull = c.body.chain([(0, -0.14, 1.14), (0, 0.06, 1.10), (0, 0.22, 1.02)],
-                         [0.15, 0.17, 0.11])
+                         [(0.19, 0.13), (0.21, 0.15), (0.13, 0.10)])
     c.body.chain([(0, -0.24, 1.24), (0, -0.30, 1.34)], [0.10, 0.05], parent=skull[0])
     c.body.add(ellipsoid((0, 0.02, 1.08), (0.12, 0.14, 0.12), 12, 7), GLOWS)
     for side in (-1, 1):
@@ -1558,12 +1571,14 @@ def fen_wisp():
 def hoarfrost_spitter():
     """Antlered biped, frost in every crack, arms long enough to throw with."""
     c = Creature("monster.hoarfrost_spitter.v1", "forest", 0.275, 2.0)
+    # An upright chain takes its pair as (across, front-to-back), so a torso that
+    # is wide and shallow is one number apart from the barrel it used to be.
     spine = c.body.chain(
         [(0, -0.04, 0.72), (0, 0.06, 1.06), (0, 0.02, 1.36), (0, -0.02, 1.52)],
-        [0.17, 0.27, 0.28, 0.16])
+        [(0.16, 0.18), (0.31, 0.21), (0.33, 0.20), (0.18, 0.14)])
     # Shoulders swept out of the spine, or a thrower has nothing to throw with.
     for side in (-1, 1):
-        c.body.chain([(side * 0.22, 0.0, 1.40), (side * 0.30, 0.0, 1.30)],
+        c.body.chain([(side * 0.24, 0.0, 1.40), (side * 0.34, 0.0, 1.30)],
                      [0.15, 0.11], parent=spine[-2])
     neck = c.body.chain([(0, 0.06, 1.60)], [0.10], parent=spine[-1])
     c.body.chain([(0, 0.12, 1.72), (0, 0.24, 1.68)], [0.16, 0.09], parent=neck[-1])
@@ -1572,17 +1587,19 @@ def hoarfrost_spitter():
         c.body.add(ellipsoid((side * 0.07, 0.26, 1.72), (0.032, 0.032, 0.032), 6, 4), GLOWS)
         # The rack is the outline: a swept beam with three tines, reaching half
         # the skull's height again above it and a third of the body out sideways.
-        beam = [(side * 0.11, 0.04, 1.82), (side * 0.38, -0.10, 2.14), (side * 0.60, 0.08, 2.34)]
-        c.body.add(horn(beam, [0.055, 0.034, 0.0]), BONES)
-        c.body.add(horn([(side * 0.24, -0.04, 1.98), (side * 0.38, -0.30, 2.14)],
-                        [0.03, 0.0]), BONES)
-        c.body.add(horn([(side * 0.46, -0.02, 2.22), (side * 0.52, -0.24, 2.42)],
-                        [0.026, 0.0]), BONES)
+        # Thicker than it looks right in the sculpt: a 0.055 beam on a 2-unit
+        # creature is under three percent of its height and renders as a scratch.
+        beam = [(side * 0.11, 0.04, 1.82), (side * 0.40, -0.10, 2.10), (side * 0.66, 0.08, 2.24)]
+        c.body.add(horn(beam, [0.075, 0.05, 0.0]), BONES)
+        c.body.add(horn([(side * 0.26, -0.04, 1.96), (side * 0.44, -0.32, 2.06)],
+                        [0.042, 0.0]), BONES)
+        c.body.add(horn([(side * 0.50, -0.02, 2.16), (side * 0.62, -0.26, 2.28)],
+                        [0.036, 0.0]), BONES)
     for i, side in enumerate((-1, 1)):
-        c.arm(i, [(side * 0.30, 0.0, 1.28), (side * 0.40, 0.14, 0.90), (side * 0.32, 0.32, 0.54)],
+        c.arm(i, [(side * 0.34, 0.0, 1.28), (side * 0.44, 0.14, 0.90), (side * 0.36, 0.32, 0.54)],
               [0.075, 0.055, 0.036])
     for i, side in enumerate((-1, 1)):
-        c.leg(i, (side * 0.14, 0.0, 0.74), (side * 0.19, 0.0, 0.0), 0.09, 0.05, bend=0.09)
+        c.leg(i, (side * 0.17, 0.0, 0.74), (side * 0.22, 0.0, 0.0), 0.09, 0.05, bend=0.09)
     return c
 
 
@@ -1596,25 +1613,29 @@ def vaal_construct():
     stuck on the outside of one — a shoulder that is a box floating beside a
     torso is the single loudest amateur tell on this whole roster."""
     c = Creature("monster.vaal_construct.v1", "vaal", 0.375, 1.9)
+    # Wider across than it is deep at every height, and widest at the shoulder:
+    # "carved wider than the waist" was written in the docstring and then built
+    # as a round column, which is the whole reason this one read as a box.
     spine = c.body.chain([(0, 0, 0.76), (0, 0.03, 1.08), (0, 0.02, 1.42), (0, 0, 1.62)],
-                         [0.26, 0.24, 0.34, 0.30])
+                         [(0.29, 0.22), (0.23, 0.21), (0.45, 0.26), (0.38, 0.23)])
     for side in (-1, 1):
-        c.body.chain([(side * 0.30, 0.0, 1.58), (side * 0.46, 0.0, 1.46)],
+        c.body.chain([(side * 0.34, 0.0, 1.58), (side * 0.52, 0.0, 1.46)],
                      [0.24, 0.19], parent=spine[-1])
         # Sunk to HALF its thickness: a plate is set into the stone, not resting
         # on it, and the shadow line where it enters is what sells it.
-        c.body.add(slab((side * 0.30, 0.20, 1.20), (0.20, 0.07, 0.62), tilt=0.05))
-        c.body.add(horn([(side * 0.30, -0.14, 1.70), (side * 0.40, -0.30, 2.06)],
+        c.body.add(slab((side * 0.34, 0.20, 1.20), (0.20, 0.07, 0.62), tilt=0.05))
+        # The crown spikes rake back over the shoulders instead of standing up.
+        c.body.add(horn([(side * 0.30, -0.14, 1.70), (side * 0.66, -0.40, 1.82)],
                         [0.07, 0.0]), BONES)
     # The socket: a recessed collar with the glyph burning at the bottom of it,
     # so the light has somewhere to come FROM.
     c.body.add(slab((0, 0.08, 1.70), (0.34, 0.30, 0.16), tilt=0.10))
     c.body.add(ellipsoid((0, 0.14, 1.76), (0.13, 0.11, 0.11), 10, 6), GLOWS)
     for i, side in enumerate((-1, 1)):
-        c.arm(i, [(side * 0.50, 0.0, 1.42), (side * 0.60, 0.14, 1.02), (side * 0.56, 0.24, 0.66)],
+        c.arm(i, [(side * 0.58, 0.0, 1.42), (side * 0.68, 0.14, 1.02), (side * 0.64, 0.24, 0.66)],
               [0.15, 0.12, 0.17])
     for i, side in enumerate((-1, 1)):
-        c.leg(i, (side * 0.20, 0.0, 0.78), (side * 0.28, 0.0, 0.0), 0.16, 0.11, bend=0.06)
+        c.leg(i, (side * 0.26, 0.0, 0.78), (side * 0.34, 0.0, 0.0), 0.16, 0.11, bend=0.06)
     return c
 
 
@@ -1623,7 +1644,7 @@ def bog_drowned():
     c = Creature("monster.bog_drowned.v1", "swamp", 0.325, 1.7)
     spine = c.body.chain(
         [(0, -0.04, 0.70), (0, 0.02, 1.00), (0, 0.06, 1.26), (0, 0.04, 1.42)],
-        [0.24, 0.34, 0.30, 0.20])
+        [(0.26, 0.22), (0.40, 0.28), (0.35, 0.23), (0.23, 0.18)])
     neck = c.body.chain([(0.05, 0.14, 1.50)], [0.11], parent=spine[-1])
     c.body.chain([(0.12, 0.30, 1.54), (0.14, 0.42, 1.50)], [0.15, 0.09], parent=neck[-1])
     # Ribs split open on the left — the asymmetry is what stops it reading human.
@@ -1631,13 +1652,15 @@ def bog_drowned():
     c.body.add(slab((-0.17, 0.32, 1.10), (0.10, 0.06, 0.30), tilt=0.22), GLOWS)
     for side in (-1, 1):
         c.body.add(ellipsoid((0.12 + side * 0.06, 0.42, 1.56), (0.03, 0.03, 0.03), 6, 4), GLOWS)
-        c.body.add(slab((side * 0.30, -0.08, 1.28), (0.11, 0.30, 0.28), tilt=0.25))
+        # A paddle off each flank, laid nearly flat: from overhead this is what
+        # the shoulders are, and a thin upright fin at the same place is nothing.
+        c.body.add(slab((side * 0.38, -0.08, 1.26), (0.28, 0.34, 0.11), tilt=0.25))
     for i, side in enumerate((-1, 1)):
         # Knuckles nearly on the floor: the whole reason it reads as drowned.
-        c.arm(i, [(side * 0.31, 0.0, 1.30), (side * 0.44, 0.16, 0.82), (side * 0.38, 0.34, 0.26)],
+        c.arm(i, [(side * 0.37, 0.0, 1.30), (side * 0.50, 0.16, 0.82), (side * 0.44, 0.34, 0.26)],
               [0.095, 0.076, 0.06])
     for i, side in enumerate((-1, 1)):
-        c.leg(i, (side * 0.18, 0.0, 0.72), (side * 0.24, 0.02, 0.0), 0.115, 0.075, bend=0.07)
+        c.leg(i, (side * 0.22, 0.0, 0.72), (side * 0.28, 0.02, 0.0), 0.115, 0.075, bend=0.07)
     return c
 
 
@@ -1646,8 +1669,8 @@ def thornhide_boar():
     c = Creature("monster.thornhide_boar.v1", "forest", 0.35, 1.4)
     spine = c.body.chain(
         [(0, -0.58, 0.88), (0, -0.24, 0.96), (0, 0.16, 1.02), (0, 0.44, 0.92)],
-        [0.18, 0.34, 0.40, 0.32])
-    neck = c.body.chain([(0, 0.68, 0.78)], [0.26], parent=spine[-1])
+        [(0.22, 0.15), (0.40, 0.28), (0.48, 0.33), (0.37, 0.27)])
+    neck = c.body.chain([(0, 0.68, 0.78)], [(0.30, 0.24)], parent=spine[-1])
     c.body.chain([(0, 0.92, 0.66), (0, 1.06, 0.62)], [0.19, 0.11], parent=neck[-1])
     c.body.chain([(0, -0.72, 0.94), (0, -0.88, 1.02)], [0.07, 0.028], parent=spine[0])
     for side in (-1, 1):
@@ -1667,7 +1690,7 @@ def thornhide_boar():
                             [0.10, 0.075, 0.0], 5), BONES)
         c.body.add(horn([(0, y + 0.08, 1.02), (0, y - 0.04, 1.36), (0, y - 0.18, 1.54)],
                         [0.12, 0.09, 0.0], 5), BONES)
-    for i, (x, y) in enumerate([(-0.26, 0.28), (0.26, 0.28), (-0.26, -0.36), (0.26, -0.36)]):
+    for i, (x, y) in enumerate([(-0.32, 0.28), (0.32, 0.28), (-0.32, -0.36), (0.32, -0.36)]):
         c.leg(i, (x, y, 0.78), (x * 1.15, y, 0.0), 0.125, 0.072, bend=0.08)
     return c
 
@@ -1680,7 +1703,7 @@ def blood_sentinel():
     """A statue with a mantle and one blade too big for the arm holding it."""
     c = Creature("monster.blood_sentinel.v1", "vaal", 0.4, 2.1)
     spine = c.body.chain([(0, 0, 0.86), (0, 0.03, 1.22), (0, 0.02, 1.62), (0, 0, 1.82)],
-                         [0.24, 0.22, 0.32, 0.26])
+                         [(0.27, 0.21), (0.25, 0.19), (0.40, 0.25), (0.32, 0.21)])
     # The mantle is BUILT, not bolted: two shoulder masses swept out of the neck,
     # with a thin ridge over them. A 1.08-wide board across the back was a shelf.
     for side in (-1, 1):
@@ -1701,7 +1724,7 @@ def blood_sentinel():
     blade.add(slab((0.72, 0.42, 0.98), (0.11, 1.10, 0.34), tilt=0.22), BONES)
     c.arm(1, [(-0.46, 0.0, 1.62), (-0.56, 0.16, 1.14), (-0.50, 0.28, 0.84)], [0.10, 0.08, 0.062])
     for i, side in enumerate((-1, 1)):
-        c.leg(i, (side * 0.20, 0.0, 0.86), (side * 0.26, 0.0, 0.0), 0.145, 0.10, bend=0.05)
+        c.leg(i, (side * 0.24, 0.0, 0.86), (side * 0.30, 0.0, 0.0), 0.145, 0.10, bend=0.05)
     return c
 
 
@@ -1710,11 +1733,11 @@ def sunbaked_colossus():
     c = Creature("monster.sunbaked_colossus.v1", "desert", 0.425, 1.8)
     spine = c.body.chain(
         [(0, -0.76, 1.02), (0, -0.34, 1.08), (0, 0.14, 1.24), (0, 0.44, 1.18)],
-        [0.20, 0.38, 0.50, 0.42])
+        [(0.24, 0.16), (0.48, 0.31), (0.62, 0.40), (0.50, 0.34)])
     # The hump: a bull's mass sits over the FRONT legs, which is what makes the
     # head look small instead of the body look long.
-    c.body.chain([(0, 0.24, 1.52)], [0.34], parent=spine[2])
-    neck = c.body.chain([(0, 0.66, 1.04)], [0.28], parent=spine[-1])
+    c.body.chain([(0, 0.24, 1.52)], [(0.44, 0.30)], parent=spine[2])
+    neck = c.body.chain([(0, 0.66, 1.04)], [(0.32, 0.26)], parent=spine[-1])
     c.body.chain([(0, 0.94, 0.88), (0, 1.12, 0.84)], [0.21, 0.13], parent=neck[-1])
     c.body.chain([(0, -0.90, 1.06), (0, -1.12, 0.92), (0, -1.24, 0.68)],
                  [0.09, 0.06, 0.024], parent=spine[0])
@@ -1722,10 +1745,14 @@ def sunbaked_colossus():
         c.body.add(ellipsoid((side * 0.11, 1.00, 0.96), (0.048, 0.048, 0.048), 6, 4), GLOWS)
         c.body.add(horn([(side * 0.18, 0.92, 1.02), (side * 0.52, 0.98, 1.22),
                          (side * 0.62, 1.18, 1.06)], [0.075, 0.048, 0.0]), BONES)
-        # Shoulder armour swept out of the hump itself.
-        c.body.add(horn([(side * 0.14, 0.30, 1.36), (side * 0.42, 0.26, 1.60),
-                         (side * 0.50, 0.10, 1.66)], [0.20, 0.14, 0.0], 5))
-    for i, (x, y) in enumerate([(-0.30, 0.28), (0.30, 0.28), (-0.30, -0.46), (0.30, -0.46)]):
+        # Shoulder armour swept out of the hump itself, and a second, smaller
+        # plate over the haunch: two masses per flank give the plan view a waist
+        # between them, which one continuous barrel never has.
+        c.body.add(horn([(side * 0.14, 0.30, 1.36), (side * 0.54, 0.24, 1.52),
+                         (side * 0.68, 0.06, 1.44)], [0.20, 0.14, 0.0], 5))
+        c.body.add(horn([(side * 0.16, -0.52, 1.16), (side * 0.48, -0.58, 1.26),
+                         (side * 0.58, -0.74, 1.18)], [0.15, 0.10, 0.0], 5))
+    for i, (x, y) in enumerate([(-0.38, 0.28), (0.38, 0.28), (-0.38, -0.46), (0.38, -0.46)]):
         c.leg(i, (x, y, 0.96), (x * 1.15, y, 0.0), 0.15, 0.10, bend=0.07)
     return c
 
@@ -1735,28 +1762,32 @@ def rotting_behemoth():
     c = Creature("monster.rotting_behemoth.v1", "swamp", 0.4, 2.0)
     spine = c.body.chain(
         [(0, -0.70, 1.08), (0, -0.28, 1.20), (0, 0.24, 1.24), (0, 0.58, 1.08)],
-        [0.22, 0.48, 0.54, 0.38])
-    neck = c.body.chain([(0, 0.82, 0.94)], [0.28], parent=spine[-1])
+        [(0.28, 0.17), (0.60, 0.34), (0.68, 0.37), (0.46, 0.27)])
+    neck = c.body.chain([(0, 0.82, 0.94)], [(0.32, 0.25)], parent=spine[-1])
     c.body.chain([(0, 1.06, 0.84), (0, 1.20, 0.80)], [0.20, 0.12], parent=neck[-1])
     for side in (-1, 1):
         c.body.add(ellipsoid((side * 0.10, 1.12, 0.90), (0.042, 0.042, 0.042), 6, 4), GLOWS)
     # The back has split, and what is inside is lit. Two bone lips hold the wound
     # open and the light sits BETWEEN them, below the skin line — a bar laid on
     # top of the spine was a glowstick taped to a pig.
+    # The lips ride OUT along the shoulder of the back instead of standing up
+    # beside the split. Held near the spine they were a two-centimetre bump on a
+    # body 1.3 across; carried onto the flank they are the row of teeth that makes
+    # a potato into something that has been opened.
     for side in (-1, 1):
         for k in range(5):
             y = 0.44 - k * 0.28
-            c.body.add(horn([(side * 0.05, y, 1.30), (side * 0.16, y - 0.02, 1.58),
-                             (side * 0.13, y - 0.08, 1.70)], [0.09, 0.07, 0.0], 5), BONES)
+            c.body.add(horn([(side * 0.08, y, 1.36), (side * 0.42, y - 0.02, 1.46),
+                             (side * 0.54, y - 0.10, 1.36)], [0.11, 0.08, 0.0], 5), BONES)
     for k in range(5):
         y = 0.44 - k * 0.28
-        c.body.add(ellipsoid((0, y, 1.50), (0.09, 0.13, 0.10), 10, 6), GLOWS)
+        c.body.add(ellipsoid((0, y, 1.44), (0.11, 0.13, 0.10), 10, 6), GLOWS)
     # Sacs swelling out of the flank, half inside it, hide-coloured: growths are
     # part of the animal, and a grey cap on a stalk is a mushroom.
-    for i, (x, y, r) in enumerate(((0.30, 0.24, 0.20), (-0.34, -0.10, 0.24),
-                                   (0.26, -0.46, 0.17), (-0.22, 0.52, 0.15))):
-        c.body.add(ellipsoid((x, y, 1.36 + r * 0.3), (r, r * 1.15, r * 0.85), 12, 7))
-    for i, (x, y) in enumerate([(-0.34, 0.30), (0.34, 0.30), (-0.34, -0.42), (0.34, -0.42)]):
+    for i, (x, y, r) in enumerate(((0.56, 0.24, 0.22), (-0.62, -0.10, 0.26),
+                                   (0.48, -0.46, 0.18), (-0.40, 0.52, 0.16))):
+        c.body.add(ellipsoid((x, y, 1.20 + r * 0.3), (r, r * 1.15, r * 0.85), 12, 7))
+    for i, (x, y) in enumerate([(-0.44, 0.30), (0.44, 0.30), (-0.44, -0.42), (0.44, -0.42)]):
         c.leg(i, (x, y, 0.88), (x * 1.2, y, 0.0), 0.155, 0.10, bend=0.05)
     return c
 
@@ -1768,15 +1799,18 @@ def rotting_behemoth():
 def cinder_warden():
     """Vaal Stone. A furnace on two legs, carrying the slab it slams with."""
     c = Creature("monster.cinder_warden.v1", "cinder", 0.5, 2.9)
-    spine = c.body.chain([(0, 0, 1.16), (0, 0.04, 1.74), (0, 0, 2.30)], [0.40, 0.46, 0.40])
+    spine = c.body.chain([(0, 0, 1.16), (0, 0.04, 1.74), (0, 0, 2.30)],
+                         [(0.44, 0.33), (0.54, 0.36), (0.48, 0.31)])
     c.body.chain([(0, 0.06, 2.52), (0, 0.14, 2.72)], [0.20, 0.26], parent=spine[-1])
     c.body.add(ellipsoid((0, 0.30, 1.86), (0.38, 0.22, 0.44), 12, 7), GLOWS)
     c.body.add(slab((0, 0, 2.42), (1.46, 0.78, 0.30), tilt=0.10))
     for side in (-1, 1):
         c.body.add(ellipsoid((side * 0.11, 0.36, 2.78), (0.055, 0.055, 0.055), 6, 4), GLOWS)
-        for dx, dz in ((0.10, 0.42), (0.34, 0.32), (0.54, 0.14)):
+        # The crown rakes outward as much as up: the tips end up over the
+        # shoulders, where the plan view still has them.
+        for dx, dz in ((0.16, 0.40), (0.46, 0.28), (0.72, 0.10)):
             c.body.add(horn([(side * (0.14 + dx * 0.5), 0.02, 2.76),
-                             (side * (0.28 + dx), -0.12, 2.76 + dz)], [0.08, 0.0]), BONES)
+                             (side * (0.28 + dx), -0.16, 2.76 + dz)], [0.08, 0.0]), BONES)
     # The slab arm is the tell: it is what the telegraph is about to come from.
     hammer = c.limb("arm0", (0.70, 0.0, 2.22))
     hammer.chain([(0.70, 0.0, 2.22), (1.02, 0.16, 1.52)], [0.22, 0.18])
@@ -1784,7 +1818,7 @@ def cinder_warden():
     hammer.add(slab((1.12, 0.24, 1.08), (0.58, 0.24, 0.14)), GLOWS)
     c.arm(1, [(-0.70, 0.0, 2.22), (-0.90, 0.20, 1.62), (-0.82, 0.38, 1.16)], [0.17, 0.14, 0.12])
     for i, side in enumerate((-1, 1)):
-        c.leg(i, (side * 0.32, 0.0, 1.16), (side * 0.42, 0.0, 0.0), 0.24, 0.16, bend=0.09)
+        c.leg(i, (side * 0.38, 0.0, 1.16), (side * 0.48, 0.0, 0.0), 0.24, 0.16, bend=0.09)
     return c
 
 
@@ -1797,7 +1831,7 @@ def sirrath():
     information a player wants about a thing that is winding up a volley."""
     c = Creature("monster.sirrath.v1", "desert", 0.45, 2.8)
     spine = c.body.chain([(0, -0.04, 1.42), (0, 0.06, 1.82), (0, 0.02, 2.16), (0, -0.02, 2.32)],
-                         [0.22, 0.40, 0.36, 0.26])
+                         [(0.26, 0.18), (0.46, 0.30), (0.42, 0.26), (0.30, 0.20)])
     c.body.shape((0.82, 1.0, 1.0), pivot=(0, 0, 1.4))
     c.body.chain([(0, 0.22, 2.24), (0, 0.36, 2.20)], [0.15, 0.18], parent=spine[-2])
     for dx, dy in ((0.0, 0.30), (-0.40, 0.02), (0.40, 0.02)):
@@ -1811,11 +1845,12 @@ def sirrath():
                             [0.075, 0.085, 0.045]), BONES)
     for side in (-1, 1):
         c.body.add(ellipsoid((side * 0.08, 0.48, 2.24), (0.04, 0.04, 0.04), 6, 4), GLOWS)
-        # Robe: a long shell down each flank, half sunk into the body.
-        c.body.add(slab((side * 0.34, 0.02, 1.80), (0.14, 0.40, 0.86), tilt=0.08))
-    for i, (x, y) in enumerate([(-0.24, 0.24), (0.24, 0.24), (-0.28, 0.0), (0.28, 0.0),
-                                (-0.24, -0.26), (0.24, -0.26)]):
-        c.leg(i, (x, y, 1.46), (x * 3.6, y * 2.4, 0.0), 0.11, 0.046,
+        # Robe: a long shell down each flank, half sunk into the body and now
+        # standing clear of it, so the plan outline is three masses and not one.
+        c.body.add(slab((side * 0.46, 0.02, 1.80), (0.22, 0.44, 0.86), tilt=0.08))
+    for i, (x, y) in enumerate([(-0.30, 0.24), (0.30, 0.24), (-0.34, 0.0), (0.34, 0.0),
+                                (-0.30, -0.26), (0.30, -0.26)]):
+        c.leg(i, (x, y, 1.46), (x * 3.4, y * 2.4, 0.0), 0.11, 0.046,
               bend=0.26 if y > 0 else -0.26)
     return c
 
@@ -1862,9 +1897,9 @@ def ghaltrek():
     c = Creature("monster.ghaltrek.v1", "forest", 0.45, 2.5)
     spine = c.body.chain(
         [(0, -1.10, 1.38), (0, -0.52, 1.50), (0, 0.24, 1.64), (0, 0.78, 1.54)],
-        [0.26, 0.52, 0.66, 0.56])
-    c.body.chain([(0, 0.42, 1.94)], [0.44], parent=spine[2])
-    neck = c.body.chain([(0, 1.08, 1.30)], [0.32], parent=spine[-1])
+        [(0.30, 0.21), (0.60, 0.42), (0.76, 0.52), (0.64, 0.44)])
+    c.body.chain([(0, 0.42, 1.94)], [(0.52, 0.36)], parent=spine[2])
+    neck = c.body.chain([(0, 1.08, 1.30)], [(0.36, 0.29)], parent=spine[-1])
     c.body.chain([(0, 1.46, 1.10), (0, 1.70, 1.02)], [0.24, 0.15], parent=neck[-1])
     c.body.chain([(0, -1.24, 1.44), (0, -1.48, 1.56)], [0.10, 0.035], parent=spine[0])
     for side in (-1, 1):
@@ -1876,21 +1911,21 @@ def ghaltrek():
         # only thing about this fight anybody will describe afterwards.
         beam = [(side * 0.24, 1.24, 1.58), (side * 0.72, 1.10, 2.12),
                 (side * 1.14, 0.66, 2.38), (side * 1.30, 0.10, 2.32)]
-        c.body.add(horn(beam, [0.10, 0.072, 0.05, 0.0], 7), BONES)
+        c.body.add(horn(beam, [0.135, 0.10, 0.068, 0.0], 7), BONES)
         for t, out, up in ((0.35, 0.10, 0.42), (0.75, 0.16, 0.46), (1.15, 0.20, 0.38),
                            (1.60, 0.16, 0.34), (2.30, 0.14, 0.30)):
             i0 = min(int(t), len(beam) - 2)
             f = t - i0
             p = [beam[i0][k] + (beam[i0 + 1][k] - beam[i0][k]) * f for k in range(3)]
             c.body.add(horn([tuple(p), (p[0] + side * out, p[1] - 0.14, p[2] + up)],
-                            [0.05, 0.0]), BONES)
+                            [0.072, 0.0]), BONES)
         # Bark ridges growing out of the flank, rooted well inside it.
         for k in range(4):
             y = 0.42 - k * 0.44
             c.body.add(horn([(side * 0.24, y + 0.06, 1.62), (side * 0.58, y, 1.92),
                              (side * 0.66, y - 0.12, 2.06)],
                             [0.13, 0.09, 0.0], 5), BONES)
-    for i, (x, y) in enumerate([(-0.40, 0.42), (0.40, 0.42), (-0.40, -0.68), (0.40, -0.68)]):
+    for i, (x, y) in enumerate([(-0.50, 0.42), (0.50, 0.42), (-0.50, -0.68), (0.50, -0.68)]):
         c.leg(i, (x, y, 1.20), (x * 1.15, y, 0.0), 0.185, 0.115, bend=0.10)
     return c
 

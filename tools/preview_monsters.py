@@ -3,7 +3,8 @@
 Run:
   "/c/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background \
       --factory-startup --python tools/preview_monsters.py -- \
-      [--species a,b,c] [--clip walk] [--out review/creature-walk.png]
+      [--species a,b,c] [--clip walk] [--view quarter|game] [--frames 6] \
+      [--tile 256] [--out review/creature-walk.png]
 
 Why it reads the GLB and not the build scene
 --------------------------------------------
@@ -37,14 +38,24 @@ DEFAULT = [
 COLUMNS = 6
 TILE = 256
 
+# "quarter" is the rig view: low and in front, where a knee that tears off a hip
+# is obvious. "game" is Babylon's own lens (BETA_AT_DEFAULT 0.65 down from
+# overhead, CAMERA_ALPHA -PI/4), converted out of glTF y-up into Blender z-up.
+# Only the second one can answer whether a shape survives to the player: at 53
+# degrees of elevation everything upright foreshortens to a line, so silhouette
+# means the plan view and a detail is only real if it spreads sideways.
+VIEWS = {"quarter": (0.85, -1.0, 0.42), "game": (0.428, 0.428, 0.796)}
+
 
 def args():
     tail = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
-    out = {"species": DEFAULT, "clip": "walk", "tile": TILE,
-           "out": os.path.join(ROOT, "review", "creature-walk.png")}
+    out = {"species": DEFAULT, "clip": "walk", "tile": TILE, "view": "quarter",
+           "frames": COLUMNS, "out": os.path.join(ROOT, "review", "creature-walk.png")}
     for i in range(0, len(tail) - 1, 2):
         key, value = tail[i].lstrip("-"), tail[i + 1]
         out[key] = value.split(",") if key == "species" else value
+    if out["view"] not in VIEWS:
+        sys.exit("unknown view %r, want one of %s" % (out["view"], sorted(VIEWS)))
     return out
 
 
@@ -73,8 +84,8 @@ def setup(scene):
     return cam
 
 
-def frame_camera(cam, arm, mesh):
-    """Three-quarter front, framed on the creature's own bounding box.
+def frame_camera(cam, arm, mesh, view):
+    """Framed on the creature's own bounding box, from `view`.
 
     A fixed camera cannot serve a 0.85-unit imp and a 3.1-unit boss, and a rig
     error is only ever visible at the scale where the limb fills the frame.
@@ -86,8 +97,8 @@ def frame_camera(cam, arm, mesh):
     centre = [(lo[k] + hi[k]) / 2 for k in range(3)]
     size = max(hi[k] - lo[k] for k in range(3))
 
-    from mathutils import Euler, Vector
-    direction = Vector((0.85, -1.0, 0.42)).normalized()
+    from mathutils import Vector
+    direction = Vector(VIEWS[view]).normalized()
     cam.location = Vector(centre) + direction * (size * 4.0)
     # Point at the centre: track the vector rather than a constraint, so nothing
     # has to be evaluated before the render.
@@ -141,13 +152,14 @@ def main():
             if other.type in {"MESH", "ARMATURE"} and other.name != "floor":
                 other.hide_render = True
         arm.hide_render = mesh.hide_render = False
-        frame_camera(cam, arm, mesh)
+        frame_camera(cam, arm, mesh, opts["view"])
 
         start, end = (int(v) for v in action.frame_range)
         span = max(end - start, 1)
+        frames = int(opts["frames"])
         tiles = []
-        for i in range(COLUMNS):
-            scene.frame_set(start + round(span * i / COLUMNS))
+        for i in range(frames):
+            scene.frame_set(start + round(span * i / frames))
             tiles.append(render_tile(scene, tmp))
         rows.append(numpy.concatenate(tiles, axis=1))
         print("rendered", species, "frames", start, "-", end)

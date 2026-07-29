@@ -32,8 +32,8 @@ HUD, panel or art change, and re-check while iterating. Never design from memory
 
 Before designing or changing item generation, rarity, affixes, or item tooltips, research how PoE2
 itemization actually works — never invent mechanics or colors from memory. Sources: `https://poe2db.tw/`
-(bases/affixes/mods), `https://www.poewiki.net/` (mechanics). Match the tooltip look (rarity colors,
-name header, affix lines) to the `item-*.png` screenshots above.
+(bases/affixes/mods) and `https://www.poewiki.net/` (mechanics). Match the tooltip look (rarity
+colors, name header, affix lines) to the `item-*.png` screenshots above.
 
 ## Build / test
 
@@ -43,56 +43,56 @@ name header, affix lines) to the `item-*.png` screenshots above.
 ## 3D assets
 
 - The character is `wardrobe.glb`: one 65-joint rig carrying every slot's geometry, built offline by
-  `tools/build_wardrobe.py` (Blender). Parts are named `slot.look.part`; the runtime dresses the
-  character by showing one look per slot and hiding the rest, so gear changes cost visibility only
-  and never restart the animation. Rebuild the glb after touching that script.
+  `tools/build_wardrobe.py` (Blender; rebuild the glb after touching it). Parts are named
+  `slot.look.part`, and the runtime dresses the character by showing one look per slot and hiding the
+  rest, so gear changes cost visibility only and never restart the animation.
 - The outfit packs are NOT modular: each welds its sleeves to its own bare forearms, and neither
   ships a head — but both ship the *texture* for one, a face painted top-left of
   `T_Regular_Male_Dark_BaseColor.png`. So `base.head.*` is **cut out of the author's separate base
   male** (`Base_Male.gltf`) keeping its own UVs and weights, the only way a painted eye lands on an
-  eye. **Never go back to a texel-pinned skull**: a correctly shaped, correctly animated blank
-  passes every name test, so `rig.test.ts` pins UV *spread*. Different proportions do not matter —
-  one unwrap, and `Head`/`neck_01` have bit-identical inverse binds. Hair and brows stay pinned (the
-  pack hair texture is a 2048 greyscale wanting a tint shader we lack). Bones lowercase but `Head`.
+  eye; proportions do not matter, because there is one unwrap and `Head`/`neck_01` have bit-identical
+  inverse binds. **Never go back to a texel-pinned skull**: a correctly shaped, correctly animated
+  blank passes every name test, so `rig.test.ts` pins UV *spread*. Hair and brows stay pinned (2048
+  greyscale, wants a tint shader we lack). Bones lowercase but `Head`.
 - `body.ranger.coat` is generated too: the ranger's body stops at the hip and every body base is
   drawn as a long coat. Its UVs are copied from the nearest tunic vertex by angle and height, never
   projected into a box on the atlas (any box wide enough also clips a boot buckle into the cloth).
 - `helmet.hood.helm` is the cowl's crown duplicated, cut at the brow, pushed OUTWARD onto a dome (a
-  shrink-wrap is a hood in iron) and flat-shaded; it inherits the cloth's weights, so it caps only
-  the head it was cut from.
-- Creatures are `monsters.glb` (`build_monsters.py`; `preview_monsters.py` renders the deformation
-  sheet): one skinned mesh per species, armature grown from the SAME node graph as the hulls, `walk`
-  and `idle` as NLA tracks `<species>|<clip>`. Legs are hip/knee/ankle/toe and the trunk crouches
-  through the walk, or a leg authored straight to the floor strides with its foot off the ground.
+  shrink-wrap is a hood in iron), flat-shaded, inheriting the cloth's weights so it caps only that head.
+- Creatures are `monsters.glb` (`build_monsters.py`; `preview_monsters.py --view game|quarter`): one
+  skinned mesh per species, armature grown from the SAME node graph as the hulls, `walk` and `idle`
+  as NLA tracks `<species>|<clip>`. Legs are hip/knee/ankle/toe and the trunk crouches through the
+  walk, or a leg authored straight to the floor strides with its foot off the ground. **Shape is
+  judged at `--view game` only**: at beta 0.65 silhouette means the PLAN, so a comb up the midline is
+  invisible while the same spikes off the flanks are the animal, and a skin node's TWO radii (the two
+  axes its chain does not run along) are what stop a species being a bean. Widening a stance widens
+  the trunk with it: a hip further out than the hull reaches is a stub with daylight around it.
 - The coat hangs on `SKIRT_JOINTS`-joint `skirt_<i>_<n>` chains the builder adds under `pelvis`,
   driven by the verlet solver in `skirt.ts` (spring toward bind pose, no gravity; capsule colliders
   down both legs, each sized to that limb's *median* half-width — size to its widest slice and the
   coat is caged in permanent contact, which reads as stiff cloth that never touches the legs).
   **One chain per coat column — `SKIRT_CHAINS = COAT_SEG` — the ratio matters, not the count.** Only
-  the chains are collided, so a column without one is skinned half to each neighbour and hangs in the
-  gap no capsule reaches (0.088 at the hem, wider than the thigh capsule); raising both rings doubles
-  resolution and blind spot at once. Chains run to the *deepest* hem ring: cloth below the last
-  collided point is cloth a leg walks through. Rebuild after changing either; `rig.test.ts` pins both.
-- The chain needs joints *down* its length: a 0.464 bone against a 0.088 thigh can only pivot, never
-  dent. `SKIRT_JOINTS` 3, four is worse on every measure and dearer.
+  the chains are collided, so a column without one hangs in the gap no capsule reaches (0.088 at the
+  hem, wider than the thigh capsule); raising both rings doubles resolution and blind spot at once.
+  Chains run to the *deepest* hem ring, or cloth below the last collided point is cloth a leg walks
+  through. Rebuild after changing either; `rig.test.ts` pins both.
+- The chain needs joints *down* its length, or a 0.464 bone against a 0.088 thigh only pivots and never dents: `SKIRT_JOINTS` 3, four is worse on every measure and dearer.
 - `skirt.ts` solves at 240Hz so it outruns the display: collision only happens inside a step, and at
   1/60 against a 165Hz monitor two frames in three moved the legs and not the cloth. `DAMPING` and
   `STIFFNESS` are the 1/60-tuned values rescaled by `PER_OLD_STEP`, so the rate can change freely.
-- **Measure the rig before tuning the cloth.** `MAX_CONTACT_SPEED` is the largest term in
-  `skirt.ts`; it sat at 6 units/s on a guess while the instrumented joint runs at 18, so the leg
-  outran the only mechanism that moves the coat. Method: capture anchors, rests and colliders per
-  frame from the live app, replay through `SkirtSim` headlessly, and score *depth at a visible
-  threshold* (>1cm, >2cm) — never bare contact count, which rises with particle count and made a
-  finer chain look worse. `COLLIDE_PASSES` share one push budget, or iteration becomes an 8x speed
-  limit that looks like progress. **Score oscillation separately from travel, or rubber ships**: hem
-  *reversals* per chain-frame (rubber 0.006 vs stiff 0.003) sees it; mean offset is lag as much as
-  swing. `DAMPING` is the frequency knob; `CONTACT_ABSORB` does nothing measurable in 0.3-0.6.
+- **Measure the rig before tuning the cloth.** `MAX_CONTACT_SPEED`, the largest term in `skirt.ts`,
+  sat at 6 units/s on a guess while the instrumented joint runs at 18, so the leg outran the only
+  mechanism that moves the coat. Method: capture anchors, rests and colliders per frame from the live
+  app, replay through `SkirtSim` headlessly, and score *depth at a visible threshold* (>1cm, >2cm),
+  never bare contact count (it rises with particle count, and made a finer chain look worse).
+  **Score oscillation apart from travel or rubber ships**: hem *reversals* per chain-frame, 0.006
+  rubber vs 0.003 stiff; mean offset is lag as much as swing. `COLLIDE_PASSES` share one push budget
+  or iteration is an 8x speed limit. `DAMPING` is the frequency knob; `CONTACT_ABSORB` does nothing.
 - All packs export the same 65 joints at the same bind pose, so a mesh from one binds to another's
   skeleton by assignment; `rig.test.ts` guards that, and that every look the code asks for exists.
 - Blender 5.2 is installed, driven headless: `"/c/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background --factory-startup --python x.py`.
-  Its glTF importer adds a 42-vert `Icosphere` as the bone display shape; the exporter drops it.
-- Raster UI/item art goes through `/codex-imagegen`, never hand-authored SVG (the gap is visible).
-  Masters crop to alpha before downscaling; renders run long, so launch them as background agents.
+- Raster UI/item art goes through `/codex-imagegen`, never hand-authored SVG (the gap is visible);
+  masters crop to alpha before downscaling, and renders run long, so launch them as background agents.
 - Worn armour is textured per item base by `tools/build_gear_textures.py`, which re-palettizes the
   ranger atlas to each base's inventory icon (luminance -> a ramp sampled from that icon). Rerun it
   after adding an armour base or changing an icon, and add the base to `GEAR_TEXTURE` in `rig.ts`;
