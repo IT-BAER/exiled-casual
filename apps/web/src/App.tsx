@@ -21,15 +21,26 @@ import { ModeDialog } from "./menu/ModeDialog";
 import { CharacterSelect } from "./menu/CharacterSelect";
 import { CreateCharacter } from "./menu/CreateCharacter";
 import { MenuStage } from "./menu/MenuStage";
-import { InfoScreen, OPTIONS_TEXT, CREDITS_TEXT } from "./menu/InfoScreen";
-import { capFor, createCharacter, deleteCharacter, readRoster, type Mode } from "./save/roster";
+import { InfoScreen, CREDITS_TEXT } from "./menu/InfoScreen";
+import { OptionsPanel } from "./menu/OptionsPanel";
+import { DEFAULT_SETTINGS, type Settings } from "./settings";
+import { setSoundLevel } from "./audio/drop-sound";
+import {
+  capFor,
+  createCharacter,
+  deleteCharacter,
+  readRoster,
+  saveSettingsSoon,
+  settingsOf,
+  type Mode,
+} from "./save/roster";
 
 type Screen =
   | { kind: "menu" }
   | { kind: "mode" }
   | { kind: "select" }
   | { kind: "create" }
-  | { kind: "info"; which: "options" | "credits" }
+  | { kind: "info"; which: "credits" }
   | { kind: "game"; characterId: string };
 
 export function App(): React.ReactElement {
@@ -39,6 +50,9 @@ export function App(): React.ReactElement {
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const [newClassId, setNewClassId] = React.useState<string>(DEFAULT_CLASS_ID);
   const [error, setError] = React.useState<string | null>(null);
+  const [settings, setSettings] = React.useState<Settings>(DEFAULT_SETTINGS);
+  // An overlay, not a screen: the plate draws Options OVER what is behind it.
+  const [optionsOpen, setOptionsOpen] = React.useState(false);
 
   // One read at boot. Migration of a pre-roster save happens inside openRoster,
   // but it is not COMMITTED here: the first save writes the new shape, so a
@@ -48,10 +62,31 @@ export function App(): React.ReactElement {
     void readRoster().then((r) => {
       if (!live) return;
       setRoster(r);
+      setSettings(settingsOf(r));
       setSelectedId(r.lastPlayedId ?? r.characters[0]?.id ?? null);
     });
     return () => { live = false; };
   }, []);
+
+  /**
+   * Applies live and writes debounced, which is what buys the panel its missing
+   * SAVE button. Sound is module state on the audio module, so setting it here
+   * covers the menu and the game at once; graphics need a scene and are applied
+   * by whoever owns one.
+   */
+  const changeSettings = React.useCallback(
+    (next: Settings) => {
+      setSettings(next);
+      setSoundLevel(next.sound.master, next.sound.muted);
+      saveSettingsSoon(roster, next);
+    },
+    [roster],
+  );
+
+  // The saved volume has to reach the audio module even if Options is never opened.
+  React.useEffect(() => {
+    setSoundLevel(settings.sound.master, settings.sound.muted);
+  }, [settings.sound.master, settings.sound.muted]);
 
   const rows = React.useMemo(() => headers(roster), [roster]);
   /**
@@ -65,16 +100,19 @@ export function App(): React.ReactElement {
   const selectedClassId = rows.find((c) => c.id === selectedId)?.classId ?? null;
 
   if (screen.kind === "game") {
-    return <GameView characterId={screen.characterId} onExit={() => setScreen({ kind: "select" })} />;
+    return (
+      <GameView
+        characterId={screen.characterId}
+        settings={settings}
+        onSettingsChange={changeSettings}
+        onExit={() => setScreen({ kind: "select" })}
+      />
+    );
   }
 
   if (screen.kind === "info") {
     return (
-      <InfoScreen
-        title={screen.which === "options" ? "Options" : "Credits"}
-        body={screen.which === "options" ? OPTIONS_TEXT : CREDITS_TEXT}
-        onBack={() => setScreen({ kind: "menu" })}
-      />
+      <InfoScreen title="Credits" body={CREDITS_TEXT} onBack={() => setScreen({ kind: "menu" })} />
     );
   }
 
@@ -133,7 +171,7 @@ export function App(): React.ReactElement {
       <MainMenu
         characterCount={rows.length}
         onPlay={() => setScreen({ kind: "mode" })}
-        onOptions={() => setScreen({ kind: "info", which: "options" })}
+        onOptions={() => setOptionsOpen(true)}
         onCredits={() => setScreen({ kind: "info", which: "credits" })}
       />
       {screen.kind === "mode" && (
@@ -143,6 +181,13 @@ export function App(): React.ReactElement {
             setMode(picked);
             setScreen({ kind: "select" });
           }}
+        />
+      )}
+      {optionsOpen && (
+        <OptionsPanel
+          settings={settings}
+          onChange={changeSettings}
+          onClose={() => setOptionsOpen(false)}
         />
       )}
     </>

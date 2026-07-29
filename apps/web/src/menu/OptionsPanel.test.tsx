@@ -6,6 +6,11 @@ import { DEFAULT_SETTINGS, type Settings } from "../settings";
 
 afterEach(cleanup);
 
+// The route test below renders App, which imports GameView, which imports
+// Babylon. Loading the renderer to click a menu button cost five seconds and
+// timed out under a full suite run; the route does not need it to exist.
+vi.mock("../GameView", () => ({ GameView: () => null }));
+
 function setup(over: Partial<Settings> = {}) {
   const onChange = vi.fn();
   const onClose = vi.fn();
@@ -92,4 +97,22 @@ describe("OptionsPanel", () => {
     setup();
     expect(screen.getByTestId("options-panel").textContent).toMatch(/sharpness/i);
   });
+});
+
+describe("the Options route", () => {
+  it("the main menu opens the panel, not the old prose screen", async () => {
+    // Imported here rather than at the top: App pulls in GameView's module
+    // graph, and that would drag Babylon into every test in this file.
+    const { App } = await import("../App");
+    const { setKv } = await import("../save/roster");
+    const { MemoryKv } = await import("@exiled/persistence");
+    setKv(new MemoryKv());
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /options/i }));
+    expect(screen.getByTestId("options-panel")).toBeTruthy();
+    expect(screen.queryByText(/there is nothing to set yet/i)).toBeNull();
+    setKv(null);
+    // 20s, not the default 5: this is the only test that boots the whole client
+    // module graph, and it passes in 3.6s alone but not against a loaded machine.
+  }, 20000);
 });

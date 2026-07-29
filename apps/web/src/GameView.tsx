@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Engine, Matrix, Vector3 } from "@babylonjs/core";
-import { createScene } from "./render/engine";
+import type { Scene } from "@babylonjs/core";
+import { applyGraphics, createScene } from "./render/engine";
 import { buildLevel, applyBiomeTint, applyTilesetFloor } from "./render/level";
 import { SnapshotRenderer } from "./render/renderer";
 import { loadProps, resetProps } from "./render/props";
@@ -14,6 +15,8 @@ import { CharacterPanel } from "./hud/CharacterPanel";
 import { LootLabels } from "./hud/LootLabels";
 import { Minimap } from "./hud/Minimap";
 import { Divider, FramedPanel, GOLD, MenuButton, SERIF } from "./menu/frames";
+import { OptionsPanel } from "./menu/OptionsPanel";
+import { DEFAULT_SETTINGS, type Settings } from "./settings";
 import type { Projector } from "./hud/LootLabels";
 import type { AreaLayout } from "@exiled/mapgen";
 import { BIOMES, mapBase } from "@exiled/content-runtime";
@@ -31,9 +34,18 @@ export interface GameViewProps {
   characterId?: string;
   /** Leave the game and go back to character select. */
   onExit?: () => void;
+  /** What the player has set. Defaulted so the lab and the tests can boot bare. */
+  settings?: Settings;
+  /** Report a change up; App is what applies sound and persists. */
+  onSettingsChange?: (next: Settings) => void;
 }
 
-export function GameView({ characterId = "", onExit }: GameViewProps = {}) {
+export function GameView({
+  characterId = "",
+  onExit,
+  settings = DEFAULT_SETTINGS,
+  onSettingsChange,
+}: GameViewProps = {}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [hoveredEntityId, setHoveredEntityId] = useState<number | null>(null);
@@ -48,12 +60,17 @@ export function GameView({ characterId = "", onExit }: GameViewProps = {}) {
   const [characterOpen, setCharacterOpen] = useState(false);
   // The Escape menu: the only way back out to character select.
   const [gameMenuOpen, setGameMenuOpen] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  // The Options panel applies graphics to the LIVE scene, and the scene is built
+  // inside the mount effect where nothing else can reach it.
+  const sceneRef = useRef<Scene | null>(null);
+  const engineRef = useRef<Engine | null>(null);
   // The keydown listener is attached once, so it cannot read these flags
   // directly without reading them as they were on mount. One mirror ref is
   // cheaper than five functional updates that also have to decide something.
   const overlayOpenRef = useRef(false);
   overlayOpenRef.current =
-    panelOpen || inventoryOpen || stashOpen || vendorOpen || characterOpen;
+    panelOpen || inventoryOpen || stashOpen || vendorOpen || characterOpen || optionsOpen;
   // The map's layout, kept for the minimap. Null in the hideout, which has none.
   const [areaLayout, setAreaLayout] = useState<AreaLayout | null>(null);
   const [project, setProject] = useState<Projector | null>(null);
@@ -94,6 +111,8 @@ export function GameView({ characterId = "", onExit }: GameViewProps = {}) {
     // Babylon engine + render loop
     const engine = new Engine(canvas, true);
     const { scene, camera, detachZoom } = createScene(engine);
+    sceneRef.current = scene;
+    engineRef.current = engine;
     const renderer = new SnapshotRenderer(scene);
 
     // Ground-item name plates live in the DOM, so they need the camera's
@@ -217,6 +236,7 @@ export function GameView({ characterId = "", onExit }: GameViewProps = {}) {
           setStashOpen(false);
           setVendorOpen(false);
           setCharacterOpen(false);
+          setOptionsOpen(false);
         } else {
           setGameMenuOpen((open) => !open);
         }
@@ -232,11 +252,24 @@ export function GameView({ characterId = "", onExit }: GameViewProps = {}) {
       resetPlayerRig(); // containers belong to the scene we are about to dispose
       resetProps();
       resetRocks();
+      sceneRef.current = null;
+      engineRef.current = null;
       engine.dispose();
       worker.terminate();
       workerRef.current = null;
     };
   }, []);
+
+  /**
+   * Graphics apply to the scene the mount effect built. Declared AFTER it on
+   * purpose: effects run in declaration order, so the refs are already set on
+   * the first pass, which is also what applies the SAVED settings at boot.
+   */
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (scene === null) return;
+    applyGraphics(scene, engineRef.current, settings.graphics);
+  }, [settings.graphics]);
 
   return (
     <div style={{ position: "relative", width: "100vw", height: "100vh" }}>
@@ -290,7 +323,17 @@ export function GameView({ characterId = "", onExit }: GameViewProps = {}) {
       {gameMenuOpen && (
         <GameMenu
           onResume={() => setGameMenuOpen(false)}
+          // Closing the menu first is this file's existing rule: overlays do not
+          // stack, they take turns.
+          onOptions={() => { setGameMenuOpen(false); setOptionsOpen(true); }}
           onExit={onExit}
+        />
+      )}
+      {optionsOpen && (
+        <OptionsPanel
+          settings={settings}
+          onChange={onSettingsChange ?? (() => {})}
+          onClose={() => setOptionsOpen(false)}
         />
       )}
     </div>
@@ -305,7 +348,15 @@ export function GameView({ characterId = "", onExit }: GameViewProps = {}) {
  * saved on every durable change (`WorkerCore.maybePersist`), so leaving here
  * costs nothing and needs no confirmation.
  */
-function GameMenu({ onResume, onExit }: { onResume: () => void; onExit?: () => void }) {
+function GameMenu({
+  onResume,
+  onOptions,
+  onExit,
+}: {
+  onResume: () => void;
+  onOptions: () => void;
+  onExit?: () => void;
+}) {
   return (
     <div
       data-testid="game-menu"
@@ -321,6 +372,7 @@ function GameMenu({ onResume, onExit }: { onResume: () => void; onExit?: () => v
         <Divider style={{ margin: "10px 0 16px" }} />
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <MenuButton tone="primary" onClick={onResume} autoFocus>Resume</MenuButton>
+          <MenuButton onClick={onOptions}>Options</MenuButton>
           <MenuButton onClick={onExit} disabled={onExit === undefined}>Characters</MenuButton>
         </div>
       </FramedPanel>

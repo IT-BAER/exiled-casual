@@ -31,6 +31,7 @@ vi.mock("./render/engine", () => ({
     camera: { viewport: { toGlobal: vi.fn() }, setTarget: vi.fn() },
     detachZoom: vi.fn(),
   }),
+  applyGraphics: vi.fn(),
 }));
 vi.mock("./render/renderer", () => ({
   SnapshotRenderer: vi.fn(() => ({ apply: vi.fn(), cyclePlayerOutfit: vi.fn(), setHoveredEntity: vi.fn() })),

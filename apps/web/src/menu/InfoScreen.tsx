@@ -1,10 +1,9 @@
 /**
- * Options and Credits.
+ * Credits.
  *
- * The reference has both as buttons on the main menu, so both exist here rather
- * than as buttons that do nothing. Options is honest about holding nothing yet:
- * every setting the client has is currently a constant in the source, and a
- * screen of sliders that write to nowhere is worse than a screen that says so.
+ * Options used to live here too, as prose saying there was nothing to set. There
+ * is now: it moved to `OptionsPanel`, which draws over what is behind it rather
+ * than replacing the screen, so this is the one plain page left.
  */
 import React from "react";
 import { CONTENT_VERSION } from "@exiled/content-runtime";
@@ -15,12 +14,6 @@ import { Divider, FramedPanel, GOLD, MENU_ART, MenuButton, PARCHMENT, SERIF } fr
 const BRAZIERS: readonly BrazierSpot[] = [
   { x: 0.525, y: 0.819, r: 0.045, flame: 0.024, phase: 0 },
   { x: 0.750, y: 0.816, r: 0.075, flame: 0.048, phase: 2.4 },
-];
-
-export const OPTIONS_TEXT = [
-  "There is nothing to set yet.",
-  "Resolution follows the window, and the camera keeps its own zoom between runs. Audio is a single drop cue and no bed to balance it against.",
-  "When there are settings worth keeping, they will be saved beside the characters, not in a separate file.",
 ];
 
 export const CREDITS_TEXT = [
