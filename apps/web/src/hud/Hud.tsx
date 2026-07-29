@@ -4,6 +4,7 @@ import { MAP_PORTALS } from "@exiled/protocol";
 import { SERIF } from "./ItemTooltip";
 import { PANEL_W } from "./layout";
 import { SkillTooltip } from "./SkillTooltip";
+import { XpBar } from "./XpBar";
 import { playDropSound } from "../audio/drop-sound";
 
 // Bottom HUD geometry, measured off reference-screenshots/poe1-lower-bar.png, a 2558x388 crop
@@ -507,9 +508,7 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
   const shieldPct = wellMax > 0 ? Math.max(0, Math.min(100 - lifePct, (energyShield / wellMax) * 100)) : 0;
   const manaPct = maxMana > 0 ? Math.max(0, Math.min(100, (mana / maxMana) * 100)) : 0;
 
-  // A capped character has nothing left to earn, so its bar reads full rather than empty.
   const { xp, xpToNext } = snapshot.player;
-  const xpPct = xpToNext > 0 ? Math.max(0, Math.min(100, (xp / xpToNext) * 100)) : 100;
 
   // PoE2 raises the boss bar when you enter the arena, not the moment the map
   // loads. The sim has no aggro state to read, so proximity stands in for it:
@@ -714,57 +713,9 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
         side="right"
       />
 
-      {/* Experience — a thin trough across the very bottom edge, which is where both
-          PoE games put it: it is the one bar you are never meant to look at directly,
-          only to notice out of the corner of your eye. Drawn above the two panels so
-          it runs unbroken from side to side, with the level printed in the gap between
-          them (PoE1 hides the number in a tooltip; we have no tooltip layer here). */}
-      <div
-        data-testid="xp-level"
-        style={{
-          position: "absolute",
-          bottom: 10,
-          left: "50%",
-          transform: "translateX(-50%)",
-          fontFamily: SERIF,
-          fontSize: 12,
-          letterSpacing: 2,
-          textTransform: "uppercase",
-          color: "#b6ab93",
-          textShadow: "0 1px 4px #000",
-          whiteSpace: "nowrap",
-          zIndex: 5,
-        }}
-      >
-        {`Level ${snapshot.player.level}`}
-        <span style={{ color: "#6f6757", marginLeft: 8 }}>{`${xpPct.toFixed(1)}%`}</span>
-      </div>
-      <div
-        data-testid="xp-bar"
-        style={{
-          position: "absolute",
-          left: 0,
-          right: 0,
-          bottom: 0,
-          height: 5,
-          background: "linear-gradient(180deg,#0a0805,#16110a)",
-          borderTop: "1px solid #2b2216",
-          zIndex: 5,
-        }}
-      >
-        <div
-          data-testid="xp-bar-fill"
-          style={{
-            height: "100%",
-            width: `${xpPct}%`,
-            background: "linear-gradient(180deg,#e8d18a,#9a7326)",
-            boxShadow: "0 0 8px rgba(220,180,90,0.45)",
-            transition: "width 200ms linear",
-          }}
-        />
-      </div>
-
       <div data-testid="bar-connector" style={connectStyle} />
+
+      <XpBar level={snapshot.player.level} xp={xp} xpToNext={xpToNext} />
 
       {/* Flask bar — runs off the screen side and under the life globe, per poe1-lower-bar.png */}
       <div

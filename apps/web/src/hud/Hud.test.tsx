@@ -8,6 +8,7 @@ import { playDropSound } from "../audio/drop-sound";
 import "@testing-library/jest-dom/vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { Hud } from "./Hud";
+import { xpPerHour } from "./XpBar";
 import type { Snapshot } from "@exiled/protocol";
 import { MAP_PORTALS } from "@exiled/protocol";
 import { testPlayer, testStats } from "../test-fixtures";
@@ -334,15 +335,49 @@ describe("Hud", () => {
 });
 
 describe("experience bar", () => {
-  it("fills to the share of the level that is banked, and prints the level", () => {
+  it("fills to the share of the level that is banked", () => {
     render(<Hud snapshot={makeSnap({ level: 68, xp: 30_000, xpToNext: 120_000 })} />);
     expect(screen.getByTestId("xp-bar-fill")).toHaveStyle({ width: "25%" });
-    expect(screen.getByTestId("xp-level").textContent).toContain("Level 68");
   });
 
   it("reads full at the level cap, where there is nothing left to earn", () => {
     render(<Hud snapshot={makeSnap({ level: 100, xp: 0, xpToNext: 0 })} />);
     expect(screen.getByTestId("xp-bar-fill")).toHaveStyle({ width: "100%" });
+  });
+
+  it("prints no number until asked: the rail carries no text", () => {
+    render(<Hud snapshot={makeSnap({ level: 68, xp: 30_000, xpToNext: 120_000 })} />);
+    expect(screen.getByTestId("xp-bar").textContent).toBe("");
+    expect(screen.queryByTestId("xp-tooltip")).toBeNull();
+  });
+
+  it("hands over level, experience and experience per hour on hover", async () => {
+    render(<Hud snapshot={makeSnap({ level: 68, xp: 30_000, xpToNext: 120_000 })} />);
+    fireEvent.pointerEnter(screen.getByTestId("xp-bar"));
+    const tip = screen.getByTestId("xp-tooltip").textContent ?? "";
+    expect(tip).toContain("Level 68");
+    expect(tip).toContain("30,000 / 120,000");
+    expect(tip).toContain("Exp/Hour");
+    fireEvent.pointerLeave(screen.getByTestId("xp-bar"));
+    expect(screen.queryByTestId("xp-tooltip")).toBeNull();
+  });
+
+  it("stays behind the bar panels, the way PoE1's rail runs under the stone", () => {
+    render(<Hud snapshot={makeSnap({ level: 68, xp: 30_000, xpToNext: 120_000 })} />);
+    expect(screen.getByTestId("xp-bar")).toHaveStyle({ zIndex: "1" });
+  });
+});
+
+describe("experience per hour", () => {
+  it("is withheld until the window is wide enough to mean anything", () => {
+    expect(xpPerHour([])).toBeNull();
+    expect(xpPerHour([{ t: 0, total: 0 }])).toBeNull();
+    expect(xpPerHour([{ t: 0, total: 0 }, { t: 500, total: 900 }])).toBeNull();
+  });
+
+  it("extrapolates the window's gain to an hour", () => {
+    // 6000 experience banked over a minute is 360k an hour.
+    expect(xpPerHour([{ t: 1000, total: 200 }, { t: 61_000, total: 6200 }])).toBe(360_000);
   });
 });
 
