@@ -41,6 +41,7 @@ export interface CharacterSelectProps {
   onCreate: () => void;
   onDelete: (id: string) => void;
   onBack: () => void;
+  onOptions: () => void;
   /** How many characters this world holds. Local is one; online is uncapped. */
   cap: number;
 }
@@ -53,6 +54,7 @@ export function CharacterSelect({
   onCreate,
   onDelete,
   onBack,
+  onOptions,
   cap,
 }: CharacterSelectProps): React.ReactElement {
   const [confirming, setConfirming] = React.useState<CharacterHeader | null>(null);
@@ -102,7 +104,7 @@ export function CharacterSelect({
           <MenuButton height={36} style={{ flex: 1, minWidth: 0 }} onClick={onBack}>
             Back
           </MenuButton>
-          <MenuButton height={36} style={{ flex: 1, minWidth: 0 }} disabled title="Options are not built yet.">
+          <MenuButton height={36} style={{ flex: 1, minWidth: 0 }} onClick={onOptions}>
             Options
           </MenuButton>
         </div>

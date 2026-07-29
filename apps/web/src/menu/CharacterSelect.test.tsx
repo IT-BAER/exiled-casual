@@ -23,6 +23,7 @@ function view(over: Partial<React.ComponentProps<typeof CharacterSelect>> = {}) 
     onCreate: vi.fn(),
     onDelete: vi.fn(),
     onBack: vi.fn(),
+    onOptions: vi.fn(),
     cap: 8,
     ...over,
   };
@@ -31,6 +32,16 @@ function view(over: Partial<React.ComponentProps<typeof CharacterSelect>> = {}) 
 }
 
 describe("CharacterSelect", () => {
+  it("offers Options for real, because the panel exists now", () => {
+    const props = view();
+    const options = screen.getByRole("button", { name: /options/i }) as HTMLButtonElement;
+    // It used to be disabled with "Options are not built yet." Leaving that
+    // there once the panel shipped would be a button telling the player a lie.
+    expect(options.disabled).toBe(false);
+    fireEvent.click(options);
+    expect(props.onOptions).toHaveBeenCalledTimes(1);
+  });
+
   it("shows a row per character with its name, level and class", () => {
     view();
     const row = screen.getByTestId("row-vess");

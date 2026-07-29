@@ -81,7 +81,10 @@ export function OptionsPanel({
         <Tabs current={tab} onPick={setTab} />
         <Divider style={{ margin: "8px 0 12px" }} />
 
-        <div style={{ overflowY: "auto", flex: 1, paddingRight: 6 }}>
+        {/* A floor under the body, or the whole window jumps height when the
+            short tab is picked. The plate's body is one fixed box with a
+            scrollbar, and a window that resizes under the pointer reads wrong. */}
+        <div style={{ overflowY: "auto", flex: 1, paddingRight: 6, minHeight: 300 }}>
           {tab === "graphics" ? (
             <>
               <Group>Detail</Group>
@@ -442,11 +445,12 @@ function Slider({
           aria-hidden
           style={{
             position: "absolute",
-            top: -6,
-            height: 32,
-            // Inset by half a handle at each end so the block stays on the track.
-            left: `calc(${pct}% - ${pct * 0.1}px)`,
-            width: 10,
+            top: -7,
+            height: 34,
+            // Inset by a whole handle across the travel so the block stays on
+            // the track at both ends rather than hanging off them.
+            left: `calc(${pct}% - ${pct * 0.16}px)`,
+            width: 16,
             backgroundImage: `url(${MENU_ART}/slider_handle.png)`,
             backgroundSize: "100% 100%",
             backgroundRepeat: "no-repeat",

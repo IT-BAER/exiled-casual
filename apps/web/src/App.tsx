@@ -141,6 +141,7 @@ export function App(): React.ReactElement {
               });
             }}
             onBack={() => setScreen({ kind: "menu" })}
+            onOptions={() => setOptionsOpen(true)}
           />
         ) : (
           <CreateCharacter
@@ -162,6 +163,13 @@ export function App(): React.ReactElement {
           />
         )}
         {error !== null && <Toast text={error} onDismiss={() => setError(null)} />}
+        {optionsOpen && (
+          <OptionsPanel
+            settings={settings}
+            onChange={changeSettings}
+            onClose={() => setOptionsOpen(false)}
+          />
+        )}
       </>
     );
   }
