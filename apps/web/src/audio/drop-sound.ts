@@ -40,6 +40,27 @@ const VOICES: Record<string, Voice> = {
 let ctx: AudioContext | null = null;
 let dry: GainNode | null = null;
 let wet: GainNode | null = null;
+/**
+ * The one node everything passes through, so there is somewhere to put a volume.
+ *
+ * Both busses used to reach `ctx.destination` directly, which meant the Options
+ * panel had no gain to hold. It also has to exist as a NUMBER before it exists
+ * as a node: the menu sets a volume long before the first drop creates a context.
+ */
+let master: GainNode | null = null;
+let level = 0.8;
+
+/** The gain actually being applied. Muted is zero, and the volume is remembered. */
+export function soundLevel(): number {
+  return level;
+}
+
+/** Set the output volume. Safe before any AudioContext exists. */
+export function setSoundLevel(volume: number, muted: boolean): void {
+  const clamped = Number.isFinite(volume) ? Math.min(1, Math.max(0, volume)) : 0;
+  level = muted ? 0 : clamped;
+  if (master && ctx) master.gain.setTargetAtTime(level, ctx.currentTime, 0.01);
+}
 
 /** Small room, built from decaying noise — cheaper and more controllable than
  *  shipping an impulse response file. */
@@ -70,10 +91,13 @@ function audio(): AudioContext | null {
   ctx = new Ctor();
   dry = ctx.createGain();
   wet = ctx.createGain();
+  master = ctx.createGain();
+  master.gain.value = level;
+  master.connect(ctx.destination);
   const verb = ctx.createConvolver();
   verb.buffer = impulse(ctx);
-  wet.connect(verb).connect(ctx.destination);
-  dry.connect(ctx.destination);
+  wet.connect(verb).connect(master);
+  dry.connect(master);
   // Autoplay policy parks the context until a gesture; the game is click-driven,
   // so resuming on the first drop is enough.
   if (ctx.state === "suspended") void ctx.resume();
