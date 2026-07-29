@@ -19,6 +19,7 @@ import {
   Vector3,
   type Engine,
 } from "@babylonjs/core";
+import type { GraphicsSettings } from "../settings";
 import { ROCK_MESH_PREFIX } from "./rocks";
 import { createHaze, createMotes } from "./haze";
 
@@ -145,6 +146,51 @@ export function applyAtmosphere(scene: Scene, preset: AtmospherePreset): void {
   ip.vignetteBlendMode = ImageProcessingConfiguration.VIGNETTEMODE_MULTIPLY;
   ip.vignetteColor = new Color4(0, 0, 0, 0);
   ip.vignetteStretch = 0.4; // the frame is 16:9; a round vignette on it crops the sides
+}
+
+/**
+ * Push the player's graphics settings onto a scene that is already running.
+ *
+ * Every row here is a property flip, never a rebuild, which is what makes the
+ * Options panel's "applies live, no SAVE button" an honest promise rather than a
+ * reload in disguise.
+ *
+ * Targets are looked up BY NAME rather than handed in, because `createScene`
+ * builds each of them inside its own try/catch: under `NullEngine` and on WebGL1
+ * there is legitimately no SSAO pipeline, no glow layer and no shadow generator,
+ * and a missing piece must be a no-op rather than a crash. That is also what
+ * makes this testable headless.
+ *
+ * `engine` is nullable so a caller that has settings before it has a renderer
+ * can still apply the rest.
+ */
+export function applyGraphics(scene: Scene, engine: Engine | null, g: GraphicsSettings): void {
+  applyAtmosphere(scene, g.atmosphere);
+
+  // Shadows. `shadowEnabled` and NOT disposing the generator: disposing is a
+  // one-way door, and the whole point of a live setting is that it comes back.
+  const sun = scene.getLightByName("sun");
+  if (sun) sun.shadowEnabled = g.shadows !== "off";
+  // The torch is a POINT light, so its shadow map is a cube: six faces for one
+  // pool of light. It is the first thing to drop and the last to restore.
+  const torch = scene.getLightByName("torch");
+  if (torch) torch.shadowEnabled = g.shadows === "high";
+
+  const pipelines = scene.postProcessRenderPipelineManager?.supportedPipelines;
+  const ssao = pipelines?.find((p) => p.name === "ssao");
+  if (ssao && scene.activeCamera) {
+    if (g.ambientOcclusion) {
+      scene.postProcessRenderPipelineManager.attachCamerasToRenderPipeline("ssao", scene.activeCamera);
+    } else {
+      scene.postProcessRenderPipelineManager.detachCamerasFromRenderPipeline("ssao", scene.activeCamera);
+    }
+  }
+
+  const glow = scene.effectLayers?.find((l) => l.name === "glow");
+  if (glow) glow.isEnabled = g.bloom;
+
+  // Babylon's number is the INVERSE: 2 renders at half width and height.
+  if (engine) engine.setHardwareScalingLevel(1 / g.resolutionScale);
 }
 
 /** Name of the single merged wall mesh `buildLevel` produces.
