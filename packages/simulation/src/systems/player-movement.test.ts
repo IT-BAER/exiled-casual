@@ -241,3 +241,81 @@ describe("registerPlayerMovement", () => {
     expect(pos.y).toBeGreaterThan(fp(2)); // slid parallel to the wall
   });
 });
+
+/**
+ * The mouse and the keys used to disagree about whether changing direction costs
+ * anything. WASD swings the heading a bounded amount per tick; click-to-move wrote
+ * the heading straight off the step, so a click behind the character spun him on
+ * the spot. The renderer takes the facing off how far the mesh actually MOVED, so
+ * only steering the movement itself could fix it.
+ */
+describe("click-to-move turns like the keys do", () => {
+  /** A player with the heading component the real sim always gives it. */
+  function walker(sim: Simulation, moveSpeed = fp(3)) {
+    const e = makePlayer(sim, 0, 0, moveSpeed);
+    sim.world.set<MoveDir>(e, "moveDir", { dx: 0, dy: 0, hx: 0, hy: 0 });
+    return e;
+  }
+
+  it("a straight walk from a standstill is untouched", () => {
+    const sim = new Simulation();
+    registerPlayerMovement(sim);
+    const p = walker(sim);
+    sim.step([{ tick: 0, entity: p, type: "moveTo", data: { x: fp(10), y: 0 } }]);
+    expect(sim.world.get<Position>(p, "position")).toEqual({ x: fp(3), y: 0 });
+  });
+
+  it("a click behind him takes several ticks to come about", () => {
+    const sim = new Simulation();
+    registerPlayerMovement(sim);
+    const p = walker(sim);
+    // Running east.
+    sim.step([{ tick: 0, entity: p, type: "moveTo", data: { x: fp(30), y: 0 } }]);
+    sim.step([]);
+    const headingBefore = sim.world.get<MoveDir>(p, "moveDir")!;
+    expect(headingBefore.hx).toBeGreaterThan(0);
+
+    // Now click well behind him.
+    const at = sim.world.get<Position>(p, "position")!;
+    sim.step([{ tick: 2, entity: p, type: "moveTo", data: { x: at.x - fp(20), y: 0 } }]);
+    // One tick later he is NOT already running west: the heading is mid-turn.
+    const after = sim.world.get<MoveDir>(p, "moveDir")!;
+    expect(after.hx).toBeGreaterThan(-fp(1));
+    expect(Math.abs(after.hy)).toBeGreaterThan(0); // came about through a side
+    // And he has kept going forward for at least one more tick.
+    expect(sim.world.get<Position>(p, "position")!.x).toBeGreaterThan(at.x);
+  });
+
+  it("but he does come about, and gets there", () => {
+    const sim = new Simulation();
+    registerPlayerMovement(sim);
+    const p = walker(sim);
+    sim.step([{ tick: 0, entity: p, type: "moveTo", data: { x: fp(30), y: 0 } }]);
+    for (let i = 0; i < 5; i++) sim.step([]);
+    const at = sim.world.get<Position>(p, "position")!;
+    const goal = { x: at.x - fp(8), y: fp(0) };
+    sim.step([{ tick: 6, entity: p, type: "moveTo", data: goal }]);
+    for (let i = 0; i < 200; i++) sim.step([]);
+    expect(sim.world.get<MoveTarget>(p, "moveTarget")!.active).toBe(0);
+    const end = sim.world.get<Position>(p, "position")!;
+    expect(fpDist2(end.x, end.y, goal.x, goal.y)).toBeLessThan(fp(0.2) * fp(0.2));
+  });
+
+  /**
+   * Inside a unit there is nothing worth banking into, and the tightest circle the
+   * turn can make is about 0.8 units across — a target inside that could be
+   * orbited rather than reached.
+   */
+  it("a nudge of half a unit is walked straight at, not arced into", () => {
+    const sim = new Simulation();
+    registerPlayerMovement(sim);
+    const p = walker(sim, fp(3));
+    sim.step([{ tick: 0, entity: p, type: "moveTo", data: { x: fp(10), y: 0 } }]);
+    for (let i = 0; i < 3; i++) sim.step([]);
+    const at = sim.world.get<Position>(p, "position")!;
+    sim.step([{ tick: 4, entity: p, type: "moveTo", data: { x: at.x - fp(0.5), y: 0 } }]);
+    // Snapped onto it in one step, exactly as it did before any of this.
+    expect(sim.world.get<Position>(p, "position")).toEqual({ x: at.x - fp(0.5), y: 0 });
+    expect(sim.world.get<MoveTarget>(p, "moveTarget")!.active).toBe(0);
+  });
+});

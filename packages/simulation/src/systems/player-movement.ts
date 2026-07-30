@@ -29,6 +29,42 @@ const TURN_CHORD = fp(0.35);
  */
 const TURN_SPEED_FLOOR_PCT = 62;
 
+/**
+ * How far a click has to be before the walk to it is steered rather than aimed.
+ *
+ * Comfortably past the turn's own diameter (about 0.8 units at TURN_CHORD and a
+ * walk's speed), so a target inside this can always be reached in a straight line
+ * instead of circled. It is also the honest read of the input: a click half a unit
+ * away is a nudge, not a corner.
+ */
+const TURN_FOR_DISTANCE: Fixed = fp(1);
+
+/**
+ * The step a body takes while its heading `held` is still swinging toward `want`.
+ *
+ * Shared by the keys and the mouse, which is the whole point: the two used to
+ * disagree about whether a change of direction costs anything.
+ */
+function corner(
+  held: { x: Fixed; y: Fixed }, want: { x: Fixed; y: Fixed }, speed: Fixed,
+): { dx: Fixed; dy: Fixed } {
+  // dot is in Fixed² because both vectors are unit Fixed, so it lands in
+  // [-FP_SCALE, FP_SCALE].
+  const dot = Math.trunc((held.x * want.x + held.y * want.y) / FP_SCALE);
+  // Rounded, not truncated: a unit vector is only unit to the nearest thousandth,
+  // so a heading dead on its key reads 999 and would forfeit a percent of the run
+  // forever after every turn.
+  const pct = TURN_SPEED_FLOOR_PCT
+    + Math.trunc(((100 - TURN_SPEED_FLOOR_PCT) * (dot + FP_SCALE) + FP_SCALE) / (2 * FP_SCALE));
+  const cornered = Math.trunc((speed * pct) / 100);
+  // The heading is a unit vector, so one multiply is the whole step and the
+  // diagonal is exactly as fast as the cardinal it was built from.
+  return {
+    dx: Math.trunc((held.x * cornered) / FP_SCALE),
+    dy: Math.trunc((held.y * cornered) / FP_SCALE),
+  };
+}
+
 /** A vector rescaled to length 1 (Fixed). Zero in, zero out. */
 function unit(x: Fixed, y: Fixed): { x: Fixed; y: Fixed } {
   const len = isqrt(x * x + y * y);
@@ -112,28 +148,43 @@ export function registerPlayerMovement(sim: Simulation, collisionRef?: Collision
           ? want
           : steer({ x: moveDir.hx, y: moveDir.hy }, want);
         world.set<MoveDir>(e, "moveDir", { dx: moveDir.dx, dy: moveDir.dy, hx: held.x, hy: held.y });
-        // What is left of the run after the corner. dot is in Fixed² because
-        // both vectors are unit Fixed, so it lands in [-FP_SCALE, FP_SCALE].
-        const dot = Math.trunc((held.x * want.x + held.y * want.y) / FP_SCALE);
-        // Rounded, not truncated: a unit vector is only unit to the nearest
-        // thousandth, so a heading dead on its key reads 999 and would forfeit
-        // a percent of the run forever after every turn.
-        const pct = TURN_SPEED_FLOOR_PCT
-          + Math.trunc(((100 - TURN_SPEED_FLOOR_PCT) * (dot + FP_SCALE) + FP_SCALE) / (2 * FP_SCALE));
-        const cornered = Math.trunc((speed * pct) / 100);
-        // The heading is a unit vector, so one multiply is the whole step and
-        // the diagonal is exactly as fast as the cardinal it was built from.
-        ddx = Math.trunc((held.x * cornered) / FP_SCALE);
-        ddy = Math.trunc((held.y * cornered) / FP_SCALE);
-      } else if (moveTarget?.active === 1) {
-        const step = fpStepToward(pos.x, pos.y, moveTarget.x, moveTarget.y, speed);
+        const step = corner(held, want, speed);
         ddx = step.dx;
         ddy = step.dy;
-        // Click-to-move sets the heading too, so a WASD key pressed at the end
-        // of a walk steers from where the player is going, not from a stale one.
-        if (moveDir) {
-          const h = unit(ddx, ddy);
-          world.set<MoveDir>(e, "moveDir", { dx: moveDir.dx, dy: moveDir.dy, hx: h.x, hy: h.y });
+      } else if (moveTarget?.active === 1) {
+        const toX = moveTarget.x - pos.x;
+        const toY = moveTarget.y - pos.y;
+        const far = isqrt(toX * toX + toY * toY) > TURN_FOR_DISTANCE;
+        // A click far enough away is steered exactly as the keys are: the mouse
+        // asks for a direction, the heading answers it a bounded amount per tick.
+        // Before this, click-to-move wrote the heading straight from the step, so
+        // a click behind the character spun him on the spot — and since the
+        // renderer takes the facing off how far the mesh actually MOVED, limiting
+        // the heading alone would have changed nothing on screen.
+        //
+        // Near enough, it walks straight in. Two reasons: a nudge of half a unit
+        // is not a corner worth banking into, and the turn is tight but not free —
+        // the tightest circle it can make is about 0.8 units across, so a target
+        // inside that could be orbited rather than reached.
+        if (far && moveDir) {
+          const want = unit(toX, toY);
+          const held = moveDir.hx === 0 && moveDir.hy === 0
+            ? want
+            : steer({ x: moveDir.hx, y: moveDir.hy }, want);
+          world.set<MoveDir>(e, "moveDir", { dx: moveDir.dx, dy: moveDir.dy, hx: held.x, hy: held.y });
+          const step = corner(held, want, speed);
+          ddx = step.dx;
+          ddy = step.dy;
+        } else {
+          const step = fpStepToward(pos.x, pos.y, moveTarget.x, moveTarget.y, speed);
+          ddx = step.dx;
+          ddy = step.dy;
+          // Click-to-move sets the heading too, so a WASD key pressed at the end
+          // of a walk steers from where the player is going, not from a stale one.
+          if (moveDir) {
+            const h = unit(ddx, ddy);
+            world.set<MoveDir>(e, "moveDir", { dx: moveDir.dx, dy: moveDir.dy, hx: h.x, hy: h.y });
+          }
         }
       }
 
