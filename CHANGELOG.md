@@ -10,6 +10,17 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+### Added
+
+- The braziers burn. Every bowl in the hideout and out on the maps now stands a
+  real flame in it, built out of geometry rather than painted on a card, with a
+  white-hot core, a tongue that tears at the top and sparks that leave it.
+
+### Changed
+
+- The fire in the main menu is many small embers instead of a few fat ones, so
+  it reads as flame rather than as a lamp behind glass.
+
 ## [0.1.0] - 2026-07-30
 
 Alpha. A save may not survive an update yet.

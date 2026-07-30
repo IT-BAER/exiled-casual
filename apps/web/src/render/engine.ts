@@ -22,6 +22,7 @@ import {
 import { DEFAULT_SETTINGS, type GraphicsSettings } from "../settings";
 import { ROCK_MESH_PREFIX } from "./rocks";
 import { createHaze, createMotes } from "./haze";
+import { FLAME_MESH } from "./flames";
 import { createFireLights, updateFireLights } from "./lights";
 
 /**
@@ -737,11 +738,16 @@ export function createScene(engine: Engine): SceneHandle {
     // way. `renderListPredicate` is re-evaluated every frame against the current
     // name, so a rename cannot smuggle a caster past it.
     torchShadows.getShadowMap()!.renderListPredicate = (mesh) =>
-      mesh !== ground && !mesh.name.startsWith("telegraph-") && !isWardrobePart(mesh.name);
+      mesh !== ground && !mesh.name.startsWith("telegraph-") && mesh.name !== FLAME_MESH
+      && !isWardrobePart(mesh.name);
     scene.onNewMeshAddedObservable.add((mesh) => {
       if (mesh.name.startsWith("telegraph-") || mesh === ground || isLevelGeometry(mesh.name)) {
         return;
       }
+      // The fire is light, not a thing standing in light: an ember that cast
+      // would put a flicker of shadow under every brazier in the room, and
+      // there are a thousand of them in a frame.
+      if (mesh.name === FLAME_MESH) return;
       shadows.addShadowCaster(mesh);
     });
     // And the floor itself, belt and braces: it is registered by the time the
@@ -804,6 +810,19 @@ export function createScene(engine: Engine): SceneHandle {
   });
 
   createFireLights(scene);
+  // The fire, into the bloom on its own terms.
+  //
+  // GlowLayer re-renders every emissive mesh through a shader of its OWN that
+  // reads the material's emissive colour and nothing else — not the blend mode,
+  // not the alpha, not the per-instance colour. An ember is white emissive at
+  // an alpha of a few percent, so the glow pass drew six hundred opaque white
+  // solids and the fire came back as a clipped white egg that ignored every
+  // knob on it. Referencing the mesh makes the glow map render it with the
+  // material it actually has, which is the only way an additive particle can be
+  // in a bloom at all.
+  const flame = scene.getMeshByName(FLAME_MESH);
+  const bloom = scene.effectLayers?.find((l) => l.name === "glow") as GlowLayer | undefined;
+  if (flame && bloom) bloom.referenceMeshToUseItsOwnMaterial(flame);
   createHaze(scene, camera);
   createMotes(scene, camera);
 

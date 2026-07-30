@@ -164,9 +164,15 @@ const FLAME_OF_GLOW = 0.62;
  * and fat (44 at 0.20) is a cluster of orange bubbles: every particle is legible
  * as a disc, and a flame is never legible as anything. Many and thin, each one
  * faint enough that only the pile-up is bright, is a tongue.
+ *
+ * 120 at 0.10 was still countable — you could pick out the ellipses in a
+ * screenshot, which is the whole difference between fire and a lava lamp. The
+ * count is affordable now only because a particle is a pre-rendered dot blitted
+ * with `drawImage` rather than a `createRadialGradient` built per particle per
+ * frame, which is the expensive half of what this loop used to do.
  */
-const EMBERS = 120;
-const EMBER_WIDTH = 0.1;
+const EMBERS = 560;
+const EMBER_WIDTH = 0.045;
 /**
  * The sparks that leave the flame altogether.
  *
@@ -179,8 +185,62 @@ const EMBER_WIDTH = 0.1;
 const SPARKS = 14;
 const SPARK_RISE = 2.4;
 /** Embers are drawn as ellipses this much taller than wide: rising stretches a
- *  parcel of flame vertically, and round ones read as sparks instead. */
-const EMBER_STRETCH = 2.1;
+ *  parcel of flame vertically, and round ones read as sparks instead. Applied
+ *  hardest at the lip, where the gas is moving fastest, and relaxing as it
+ *  slows — a constant stretch draws the same lozenge at every height. */
+const EMBER_STRETCH = 2.6;
+
+/**
+ * How many colours of the ember ramp get their own pre-rendered dot, and how
+ * many pixels one is drawn at.
+ *
+ * A particle is a `drawImage` of one of these, scaled. Sixteen steps is below
+ * what the eye can band on a body this small, and every dot is built once per
+ * mount rather than 560 times per frame.
+ */
+const RAMP_STEPS = 16;
+const DOT_PX = 64;
+
+/**
+ * Turbulence, as a closed form rather than a noise table.
+ *
+ * Fire is laminar for the first inch out of the coals and vortex-shedding above
+ * it, and that transition is most of what the eye checks. Two sines whose
+ * periods share no small multiple, one folded through the other, give a field
+ * smooth enough to advect a particle through without ever repeating on a count.
+ */
+function swirl(x: number, y: number): number {
+  return Math.sin(x * 2.7 + Math.sin(y * 1.9) * 1.3) * 0.62
+    + Math.sin(x * 5.3 - y * 3.1) * 0.38;
+}
+
+/**
+ * The ember, drawn once per colour of the ramp instead of once per particle.
+ *
+ * The falloff is deliberately not linear: a straight ramp reads as a disc with a
+ * soft edge, and a disc is exactly what a parcel of flame must never read as.
+ * The steep tail also means the sprite's own square never shows, which the old
+ * per-particle `fillRect` did — the top of the flame carried visible boxes.
+ */
+function emberDots(): HTMLCanvasElement[] {
+  return Array.from({ length: RAMP_STEPS }, (_, i) => {
+    const c = document.createElement("canvas");
+    c.width = DOT_PX;
+    c.height = DOT_PX;
+    const g = c.getContext("2d");
+    if (!g) return c;
+    const [r, gg, b] = emberColour(i / (RAMP_STEPS - 1));
+    const half = DOT_PX / 2;
+    const grad = g.createRadialGradient(half, half, 0, half, half, half);
+    for (let k = 0; k <= 8; k++) {
+      const t = k / 8;
+      grad.addColorStop(t, `rgba(${r | 0},${gg | 0},${b | 0},${(1 - t) ** 2.6})`);
+    }
+    g.fillStyle = grad;
+    g.fillRect(0, 0, DOT_PX, DOT_PX);
+    return c;
+  });
+}
 
 /** Colour of an ember at `u` of its life, white-hot at the bowl to soot at the tip. */
 function emberColour(u: number): [number, number, number] {
@@ -264,6 +324,8 @@ export function Braziers({
       seed = (seed * 1664525 + 1013904223) >>> 0;
       return seed / 0x100000000;
     };
+    const dots = emberDots();
+
     /** Each ember carries its whole trajectory, so a frame is a pure function of `t`. */
     const embers = spots.map((_, i) =>
       Array.from({ length: EMBERS }, (_, k) => ({
@@ -274,10 +336,19 @@ export function Braziers({
         // twice as long climbs at half the pace for the same height, and the
         // eye reads the pace, not the particle.
         life: 0.95 + rnd() * 0.8,
-        lane: rnd() * 2 - 1, // -1..1 across the bowl's lip
+        // Biased to the middle rather than flat across the lip: a uniform lane
+        // fills the bowl edge to edge and burns as a wall. Two samples averaged
+        // is a triangle distribution, which is a fire.
+        lane: (rnd() + rnd()) - 1, // -1..1, densest at 0
         sway: rnd() * Math.PI * 2,
         size: 0.7 + rnd() * 0.6,
         lean: (rnd() * 2 - 1) * 0.35,
+        // Where this parcel sits in the turbulence field. Without a per-particle
+        // offset the whole cohort shears together and the flame waves like a flag.
+        curl: rnd() * 6.28,
+        // A third of them burn out low. Real fire is mostly short tongues with a
+        // few that carry: one uniform lifetime draws a plume with a flat top.
+        reach: rnd() < 0.34 ? 0.45 + rnd() * 0.25 : 0.8 + rnd() * 0.35,
       })),
     );
 
@@ -341,28 +412,33 @@ export function Braziers({
         for (const e of embers[i]!) {
           const u = (((t - e.born) / e.life) % 1 + 1) % 1;
           // Fast off the coals, slowing as it cools and spreads.
-          const rise = u * (1.55 - 0.55 * u);
+          const rise = u * (1.55 - 0.55 * u) * e.reach;
           const y = base - flame * rise;
-          // Drawn toward the centre line as it climbs: that convergence is the
-          // whole silhouette of a flame, and without it this is a smoke plume.
+          // Three terms, and the order of them is the flame's shape. The lane
+          // converges on the centre line as it climbs, which is the silhouette;
+          // the turbulence is scaled by height, so the base stays laminar and
+          // only the top tears; the lean is the whole fire's drift.
+          const turb = swirl(e.lane * 2.4 + e.curl, rise * 3.6 - p * 1.15);
           const x =
             cx +
-            e.lane * flame * 0.3 * (1 - u * 0.8) +
-            Math.sin(u * 5.5 + e.sway) * flame * 0.07 +
+            e.lane * flame * 0.55 * (1 - u * 0.66) +
+            turb * flame * 0.20 * rise +
+            Math.sin(u * 5.5 + e.sway) * flame * 0.04 +
             e.lean * flame * u * 0.25;
-          const rad = flame * EMBER_WIDTH * e.size * (1 - 0.3 * u);
-          const [r, gg, b] = emberColour(u);
-          const a = (1 - u) ** 1.4 * 0.34;
-          ctx.save();
-          ctx.translate(x, y);
-          ctx.scale(1, EMBER_STRETCH);
-          const gr = ctx.createRadialGradient(0, 0, 0, 0, 0, rad);
-          gr.addColorStop(0, `rgba(${r | 0},${gg | 0},${b | 0},${a})`);
-          gr.addColorStop(1, `rgba(${r | 0},${(gg * 0.5) | 0},0,0)`);
-          ctx.fillStyle = gr;
-          ctx.fillRect(-rad, -rad, rad * 2, rad * 2);
-          ctx.restore();
+          // Widening, not narrowing: a parcel of burning gas diffuses as it
+          // cools. The silhouette still comes to a point because the alpha falls
+          // faster than the radius grows, so the tips go to filigree instead of
+          // to a solid cone with a rounded cap.
+          const rad = flame * EMBER_WIDTH * e.size * (1 + 0.9 * u);
+          // Hot at the lip, hot in the middle: an ember two thirds out across the
+          // bowl is at the edge of the burn and never was white.
+          const cool = Math.min(1, u ** 1.15 + Math.abs(e.lane) * 0.24);
+          const dot = dots[Math.round(cool * (RAMP_STEPS - 1))]!;
+          const stretch = 1.25 + (EMBER_STRETCH - 1.25) * (1 - u);
+          ctx.globalAlpha = (1 - u) ** 1.5 * 0.50 * flicker;
+          ctx.drawImage(dot, x - rad, y - rad * stretch, rad * 2, rad * 2 * stretch);
         }
+        ctx.globalAlpha = 1;
 
         // ...and the few that get away, over the top of the flame.
         for (const k of sparks[i]!) {

@@ -1,4 +1,5 @@
 import { Color3, PointLight, Vector3, type AbstractMesh, type Scene } from "@babylonjs/core";
+import { createFireFlames, FLAME_RANGE, resetFireFlames, updateFireFlames } from "./flames";
 
 /**
  * The fires the world is lit by, as opposed to the one the player carries.
@@ -99,6 +100,11 @@ export function createFireLights(scene: Scene): PointLight[] {
     light.setEnabled(false);
     pool.push(light);
   }
+  // ...and the fire the light is coming out of. Built here rather than beside
+  // the haze in engine.ts so the two halves of a brazier cannot be set up
+  // separately: a pool of light with nothing burning in it is the bug this
+  // whole file used to have.
+  createFireFlames(scene);
   return pool;
 }
 
@@ -108,6 +114,7 @@ export function resetFireLights(): void {
   spots = [];
   clock = 0;
   lastMeshCount = -1;
+  resetFireFlames();
 }
 
 /**
@@ -158,8 +165,16 @@ export function updateFireLights(scene: Scene, at: Vector3, deltaMs: number): vo
   // partial selection would cost more to read than it saves to run.
   const near = [...spots]
     .map((s) => ({ s, d: (s.x - at.x) ** 2 + (s.z - at.z) ** 2 }))
-    .sort((a, b) => a.d - b.d)
-    .slice(0, pool.length);
+    .sort((a, b) => a.d - b.d);
+
+  // The flame is drawn for more bowls than the pool can light, and it has to
+  // be: the four-light cap is a shader limit, not a limit on what is on screen,
+  // and a fifth bowl in frame with a lit pool and no fire in it is worse than
+  // a fifth bowl that burns without throwing light.
+  updateFireFlames(
+    near.filter((n) => n.d <= FLAME_RANGE * FLAME_RANGE).map((n) => n.s),
+    clock,
+  );
 
   for (let i = 0; i < pool.length; i++) {
     const light = pool[i]!;
