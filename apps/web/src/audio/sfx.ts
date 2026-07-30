@@ -42,12 +42,19 @@ const VOICES: Record<string, Voice> = {
   "skill-ember-bolt-cast":    { gain: 0.28, wet: 0.14, vary: 0.06 },
   "skill-ember-bolt-impact":  { gain: 0.34, wet: 0.18, vary: 0.08 },
   "skill-cinder-ground-cast": { gain: 0.32, wet: 0.22, vary: 0.04 },
-  // The two sustained voices (`startSfxLoop`). Both sit well under their one-shot:
-  // a bed that holds for seconds at the level of the transient that opened it is
-  // the loudest thing in the mix for as long as the skill lasts. `vary` is per
-  // voice and set once, so two bolts in the air are not one doubled bolt.
-  "skill-ember-bolt-flight":  { gain: 0.11, wet: 0.10, vary: 0.05 },
-  "skill-cinder-ground-loop": { gain: 0.13, wet: 0.24, vary: 0.03 },
+  // The two sustained voices (`startSfxLoop`). These numbers are MEASURED against
+  // the one-shot they play under, not guessed: the masters are levelled apart (a
+  // bed is normalised to -23 LUFS, an event by the trimmer to far louder), so equal
+  // gains are not equal loudness. At 0.11 the flight bed landed 18.3 dB under the
+  // cast, which is inaudible beside it — the cast ended at 0.90s, the bolt flew for
+  // 1.7s, and what that sounds like is the sound stopping mid-flight. About 7 dB
+  // under the cast is a bed you hear without it competing. `vary` is per voice and
+  // set once, so two bolts in the air are not one doubled bolt.
+  "skill-ember-bolt-flight":  { gain: 0.40, wet: 0.10, vary: 0.05 },
+  // Higher still: the burning ground IS the skill for its whole duration, so its
+  // bed is the event and the cast is only the whoomp that opens it. Held down by
+  // the master's peaks, which are cracks rather than body.
+  "skill-cinder-ground-loop": { gain: 0.45, wet: 0.24, vary: 0.03 },
   "skill-blink":              { gain: 0.30, wet: 0.12, vary: 0.05 },
   "monster-melee-hit":        { gain: 0.17, wet: 0.16, vary: 0.10 },
   // The generic pair is the fallback for a species with no material (soundscape.ts),
@@ -192,6 +199,22 @@ export function playSfx(name: string, volume = 1): void {
  */
 const loops = new Map<string, { src: AudioBufferSourceNode; gain: GainNode; peak: number }>();
 
+/**
+ * What the sustained voices are doing, for the console. DEV only, like
+ * `window.__scene`: a loop is inaudible to a test and unhearable from a driven
+ * page (Chrome parks the context until a real gesture), so the only way to see
+ * one start or refuse to start is to ask.
+ */
+const debug = { started: 0, refused: {} as Record<string, number>, live: [] as string[] };
+function note(reason: string): void {
+  debug.refused[reason] = (debug.refused[reason] ?? 0) + 1;
+}
+function publish(): void {
+  if (typeof window === "undefined" || !import.meta.env?.DEV) return;
+  debug.live = [...loops.keys()];
+  (window as unknown as { __sfx?: typeof debug }).__sfx = debug;
+}
+
 /** Seconds to reach level on start and to reach silence on stop. A loop that
  *  begins or ends on a step is heard as a click, which is worse than no loop. */
 const LOOP_FADE_IN = 0.05;
@@ -211,11 +234,12 @@ const LOOP_FADE_OUT = 0.14;
 export function startSfxLoop(name: string, key: string, volume = 1): void {
   if (loops.has(key)) return;
   const voice = VOICES[name];
-  if (!voice || dead.has(name)) return;
+  if (!voice || dead.has(name)) { note(`novoice:${name}`); publish(); return; }
   const b = bus();
-  if (!b) return;
+  if (!b) { note("nobus"); publish(); return; }
   const buf = buffers.get(name);
-  if (!buf) { void load(name); return; } // the flight is over before a fetch lands
+  // The flight is over before a fetch lands, so this one is a miss, not a wait.
+  if (!buf) { note(`unloaded:${name}`); publish(); void load(name); return; }
 
   const src = b.ctx.createBufferSource();
   src.buffer = buf;
@@ -230,6 +254,8 @@ export function startSfxLoop(name: string, key: string, volume = 1): void {
   send(b, g, voice.wet);
   src.start();
   loops.set(key, { src, gain: g, peak });
+  debug.started++;
+  publish();
 }
 
 /** Follow a live loop's source as it moves relative to the player. */
@@ -245,6 +271,7 @@ export function stopSfxLoop(key: string): void {
   const live = loops.get(key);
   if (!live) return;
   loops.delete(key);
+  publish();
   const b = bus();
   if (!b) { try { live.src.stop(); } catch { /* already stopped */ } return; }
   const now = b.ctx.currentTime;
