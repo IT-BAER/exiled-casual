@@ -617,8 +617,18 @@ function buildPortal(scene: Scene, root: Mesh): void {
   root.metadata = { rimMat, voidMat, haloMat, shardMat, shards, interactKind: "portal" };
 }
 
-/** World height of the loot beam, in the same units as the actors (~1.8 tall). */
-const BEAM_H = 7;
+/**
+ * World height of the loot beam, in the same units as the actors (~1.8 tall).
+ *
+ * Shorter than the 7 it was, and shorter again than the 4.2 that replaced it.
+ * The camera shows 9.5 units of height and looks DOWN, so a vertical shaft is
+ * raked hard across the screen by the projection and runs a lot further than its
+ * height: at 4.2 it still left the top of the frame. A beam with no visible END
+ * reads as a column holding up the sky rather than as a marker standing on a
+ * drop, and the fade cannot be seen at all if it happens off screen. At 2.9 the
+ * top of every beam is in the frame, which is the whole point of having one.
+ */
+const BEAM_H = 2.9;
 /**
  * Screen-space lean of the shaft, in radians. PoE2's loot columns are raked, not
  * plumb (`docs/todo/image-2.png`): a leaning shaft crosses more of the frame than
@@ -651,7 +661,11 @@ function beamGradient(scene: Scene): DynamicTexture {
   const ctx = tex.getContext() as unknown as CanvasRenderingContext2D;
   const grad = ctx.createLinearGradient(0, 0, 0, 64);
   grad.addColorStop(0, "#000"); // top of the image = top of the beam
-  grad.addColorStop(0.35, "#4a4a4a"); // a tall shaft has to be gone well before its top
+  // Gone by half way, not merely dim. The old ramp still had a fifth of its
+  // alpha at two thirds of the height, which is exactly the band the eye reads
+  // as "this keeps going" — the shaft has to run out inside the frame.
+  grad.addColorStop(0.55, "#141414");
+  grad.addColorStop(0.85, "#9a9a9a");
   grad.addColorStop(1, "#fff"); // floor end stays bright
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, 4, 64);
@@ -680,7 +694,17 @@ export function updateGroundItem(mesh: Mesh, rarity: string | undefined): void {
     beamMat.emissiveColor = new Color3(r, g, b);
     // Junk barely glows, a unique is visible across the room. Same idea as a
     // NeverSink filter turning the beam up with the tier.
-    beamMat.alpha = BEAM_ALPHA[rarity ?? "normal"] ?? BEAM_ALPHA["normal"]!;
+    const lit = BEAM_ALPHA[rarity ?? "normal"] ?? BEAM_ALPHA["normal"]!;
+    // ...and it breathes, shallowly, on a phase of its own.
+    //
+    // A shaft of light that does not move is a prop. Fifteen percent at about
+    // two thirds of a hertz is under what reads as flashing and over what reads
+    // as static, and the phase comes off the mesh's own id so a floor covered in
+    // drops never pulses in unison, which is the thing that WOULD be
+    // distracting.
+    const t = Date.now() / 1000;
+    const phase = (mesh.uniqueId ?? 0) * 1.7;
+    beamMat.alpha = lit * (0.86 + 0.14 * Math.sin(t * 4.2 + phase));
   }
 }
 
