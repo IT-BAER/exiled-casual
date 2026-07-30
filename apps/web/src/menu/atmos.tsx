@@ -167,6 +167,17 @@ const FLAME_OF_GLOW = 0.62;
  */
 const EMBERS = 120;
 const EMBER_WIDTH = 0.1;
+/**
+ * The sparks that leave the flame altogether.
+ *
+ * A fire is two populations, not one: the body of it, which is the parcels of
+ * burning gas above, and the few specks that break off the top and travel until
+ * they cool. The body alone reads as a lamp with a shape. These are deliberately
+ * few, small and slow — a dozen per bowl, rising two flame-heights, drifting
+ * sideways as they go out.
+ */
+const SPARKS = 14;
+const SPARK_RISE = 2.4;
 /** Embers are drawn as ellipses this much taller than wide: rising stretches a
  *  parcel of flame vertically, and round ones read as sparks instead. */
 const EMBER_STRETCH = 2.1;
@@ -259,11 +270,27 @@ export function Braziers({
         // Spread births evenly over one lifetime, or the flame pulses as a whole
         // cohort dies together.
         born: (k / EMBERS) * 0.8 + i * 0.13,
-        life: 0.42 + rnd() * 0.5,
+        // Slower than it was (0.42 + up to 0.5): a parcel of flame that lives
+        // twice as long climbs at half the pace for the same height, and the
+        // eye reads the pace, not the particle.
+        life: 0.95 + rnd() * 0.8,
         lane: rnd() * 2 - 1, // -1..1 across the bowl's lip
         sway: rnd() * Math.PI * 2,
         size: 0.7 + rnd() * 0.6,
         lean: (rnd() * 2 - 1) * 0.35,
+      })),
+    );
+
+    /** The specks that leave the top. Same shape as an ember, longer lived. */
+    const sparks = spots.map((_, i) =>
+      Array.from({ length: SPARKS }, (_, k) => ({
+        born: (k / SPARKS) * 1.6 + i * 0.21,
+        life: 1.7 + rnd() * 1.6,
+        lane: rnd() * 2 - 1,
+        sway: rnd() * Math.PI * 2,
+        drift: (rnd() * 2 - 1) * 0.5,
+        size: 0.5 + rnd() * 0.7,
+        twinkle: 6 + rnd() * 7,
       })),
     );
 
@@ -284,7 +311,10 @@ export function Braziers({
         const p = t + s.phase;
         // Two sines whose periods share no small common multiple: the light
         // never repeats on a count, which is what separates fire from a blinker.
-        const flicker = 0.72 + 0.2 * Math.sin(p * 5.3) + 0.1 * Math.sin(p * 2.11 + 1.7);
+        // Slower than it was (5.3 and 2.11): a real fire breathes at a couple of
+        // hertz and only its sparks are quick. Still two periods with no small
+        // common multiple, so the light never repeats on a count.
+        const flicker = 0.72 + 0.2 * Math.sin(p * 3.1) + 0.1 * Math.sin(p * 1.27 + 1.7);
         const cx = fit.ox + s.x * fit.dw;
         const cy = fit.oy + s.y * fit.dh;
         const glow = s.r * fit.dw;
@@ -332,6 +362,28 @@ export function Braziers({
           ctx.fillStyle = gr;
           ctx.fillRect(-rad, -rad, rad * 2, rad * 2);
           ctx.restore();
+        }
+
+        // ...and the few that get away, over the top of the flame.
+        for (const k of sparks[i]!) {
+          const u = (((t - k.born) / k.life) % 1 + 1) % 1;
+          const rise = u * (1.35 - 0.35 * u);
+          const y = base - flame * SPARK_RISE * rise;
+          const x = cx
+            + k.lane * flame * 0.26
+            + k.drift * flame * u
+            + Math.sin(u * 3.1 + k.sway) * flame * 0.05;
+          // A spark is a point of light that gutters, not a parcel that fades:
+          // the twinkle is the whole reason it reads as a spark and not as dust.
+          const gutter = 0.55 + 0.45 * Math.sin(t * k.twinkle + k.sway);
+          const a = (1 - u) ** 2 * 0.5 * gutter;
+          const rad = flame * 0.013 * k.size * (1 - 0.35 * u);
+          const [r, gg, b] = emberColour(Math.min(1, 0.35 + u * 0.65));
+          const gr = ctx.createRadialGradient(x, y, 0, x, y, rad * 3);
+          gr.addColorStop(0, `rgba(${r | 0},${gg | 0},${b | 0},${a})`);
+          gr.addColorStop(1, `rgba(${r | 0},${(gg * 0.4) | 0},0,0)`);
+          ctx.fillStyle = gr;
+          ctx.fillRect(x - rad * 3, y - rad * 3, rad * 6, rad * 6);
         }
       }
 
@@ -402,12 +454,23 @@ export function Dust({ count = 80 }: { count?: number }): React.ReactElement {
     const motes = Array.from({ length: count }, () => ({
       x: rnd(), y: rnd(),
       r: 0.4 + rnd() * 1.5,
-      rise: 3 + rnd() * 9,          // px/s upward
+      // Signed, and one in three falls.
+      //
+      // Every speck rising at once is not air, it is a parallax layer: dust in a
+      // real room is doing whatever the last person to walk through it left it
+      // doing, so some of it settles, some hangs, and only the part near a fire
+      // climbs. A third of them fall at about half the speed of the risers,
+      // which is what dust does under its own weight.
+      rise: (3 + rnd() * 9) * (rnd() < 0.34 ? -0.55 : 1),
+      // ...and everything drifts sideways as well, at its own pace and its own
+      // direction. The sway below is the wobble on top of this.
+      drift: (rnd() * 2 - 1) * 7,
       swayAmp: 4 + rnd() * 16,
       swayHz: 0.05 + rnd() * 0.15,
       phase: rnd() * Math.PI * 2,
       alpha: 0.08 + rnd() * 0.3,
     }));
+
 
     let raf = 0;
     const draw = (now: number) => {
@@ -415,9 +478,11 @@ export function Dust({ count = 80 }: { count?: number }): React.ReactElement {
       const t = (now - MENU_CLOCK_START) / 1000;
       ctx.clearRect(0, 0, w, h);
       for (const m of motes) {
-        // Wrap in normalised space so a resize never strands a mote off-screen.
+        // Wrap in normalised space on BOTH axes so a resize never strands a mote
+        // off-screen and a sideways drift never runs out of room.
         const y = ((m.y - (t * m.rise) / Math.max(h, 1)) % 1 + 1) % 1;
-        const x = m.x * w + Math.sin(t * m.swayHz * Math.PI * 2 + m.phase) * m.swayAmp;
+        const wrapX = ((m.x + (t * m.drift) / Math.max(w, 1)) % 1 + 1) % 1;
+        const x = wrapX * w + Math.sin(t * m.swayHz * Math.PI * 2 + m.phase) * m.swayAmp;
         ctx.globalAlpha = m.alpha * (0.55 + 0.45 * Math.sin(t * 0.7 + m.phase));
         ctx.fillStyle = "#d8e2ea";
         ctx.beginPath();

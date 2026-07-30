@@ -7,13 +7,13 @@ import { ModeDialog } from "./ModeDialog";
 afterEach(cleanup);
 
 describe("MainMenu", () => {
-  const props = { characterCount: 0, onPlay: vi.fn(), onOptions: vi.fn(), onCredits: vi.fn() };
+  const props = { characterCount: 0, onPlay: vi.fn(), onOptions: vi.fn(), onAbout: vi.fn() };
 
   it("offers play, options and credits and nothing that needs a server", () => {
     render(<MainMenu {...props} />);
     expect(screen.getByRole("button", { name: /play/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /options/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /credits/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /about/i })).toBeTruthy();
     // The reference's gateway row and LOG IN column are deliberately absent.
     expect(screen.queryByText(/log in/i)).toBeNull();
     expect(screen.queryByText(/gateway/i)).toBeNull();

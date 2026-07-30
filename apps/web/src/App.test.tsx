@@ -150,7 +150,7 @@ describe("App routing", () => {
   it("options and credits are real screens with a way back", async () => {
     render(<App />);
     await screen.findByTestId("main-menu");
-    fireEvent.click(screen.getByRole("button", { name: /credits/i }));
+    fireEvent.click(screen.getByRole("button", { name: /about/i }));
     const info = await screen.findByTestId("info-screen");
     expect(info.textContent).toMatch(/original fan project/i);
     fireEvent.click(screen.getByRole("button", { name: /back/i }));

@@ -54,7 +54,7 @@ type Screen =
   | { kind: "mode" }
   | { kind: "select" }
   | { kind: "create" }
-  | { kind: "info"; which: "credits" }
+  | { kind: "info"; which: "about" }
   | { kind: "game"; characterId: string };
 
 export function App(): React.ReactElement {
@@ -126,7 +126,7 @@ export function App(): React.ReactElement {
     const where: Partial<Record<Screen["kind"], string>> = {
       select: "Characters",
       create: "New Character",
-      info: "Credits",
+      info: "About",
     };
     if (screen.kind !== "game") setTitle(where[screen.kind] ?? null);
   }, [screen.kind]);
@@ -154,7 +154,7 @@ export function App(): React.ReactElement {
 
   if (screen.kind === "info") {
     return (
-      <InfoScreen title="Credits" body={CREDITS_TEXT} onBack={() => setScreen({ kind: "menu" })} />
+      <InfoScreen title="About" body={CREDITS_TEXT} onBack={() => setScreen({ kind: "menu" })} />
     );
   }
 
@@ -227,7 +227,7 @@ export function App(): React.ReactElement {
         characterCount={rows.length}
         onPlay={() => setScreen({ kind: "mode" })}
         onOptions={() => setOptionsOpen(true)}
-        onCredits={() => setScreen({ kind: "info", which: "credits" })}
+        onAbout={() => setScreen({ kind: "info", which: "about" })}
       />
       {screen.kind === "mode" && (
         <ModeDialog

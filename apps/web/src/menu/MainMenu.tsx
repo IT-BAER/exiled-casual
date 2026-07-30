@@ -19,7 +19,8 @@
  * characters are separate pools by design, see the accounts spec).
  */
 import React from "react";
-import { CONTENT_VERSION } from "@exiled/content-runtime";
+import { GAME_VERSION } from "../version";
+import { NEWS_ENTRIES } from "../news.generated";
 import { Atmosphere, type BrazierSpot } from "./atmos";
 import { Divider, FramedPanel, GOLD, GOLD_DIM, MENU_ART, MenuButton, PARCHMENT, DISPLAY, SERIF } from "./frames";
 
@@ -39,14 +40,14 @@ export interface MainMenuProps {
   characterCount: number;
   onPlay: () => void;
   onOptions: () => void;
-  onCredits: () => void;
+  onAbout: () => void;
 }
 
 export function MainMenu({
   characterCount,
   onPlay,
   onOptions,
-  onCredits,
+  onAbout,
 }: MainMenuProps): React.ReactElement {
   return (
     <div data-testid="main-menu" style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
@@ -86,7 +87,7 @@ export function MainMenu({
             Play
           </MenuButton>
           <MenuButton onClick={onOptions}>Options</MenuButton>
-          <MenuButton onClick={onCredits}>Credits</MenuButton>
+          <MenuButton onClick={onAbout}>About</MenuButton>
         </div>
       </FramedPanel>
 
@@ -104,7 +105,7 @@ export function MainMenu({
           color: GOLD_DIM,
         }}
       >
-        Exiled Casual {CONTENT_VERSION}
+        {GAME_VERSION}
       </div>
     </div>
   );
@@ -139,13 +140,17 @@ function LatestPanel(): React.ReactElement {
         Latest
       </div>
       <Divider style={{ margin: "2px 0 6px" }} />
+      {/* Straight out of CHANGELOG.md, via tools/changelog_to_news.mjs: the
+          menu cannot advertise a build that was never released, and nobody has
+          to remember to copy anything. The first line is the headline. */}
       <div style={{ fontFamily: SERIF, fontSize: 14, color: PARCHMENT, lineHeight: 1.45 }}>
-        Characters have names now, and a hall to be chosen in.
+        {NEWS_ENTRIES[0]}
       </div>
-      <div style={{ fontFamily: SERIF, fontSize: 12, color: GOLD_DIM, lineHeight: 1.5 }}>
-        Maps are assembled from authored chunks across four biomes. Loot rolls
-        prefixes and suffixes, and the stash is shared by everyone you make.
-      </div>
+      {NEWS_ENTRIES.slice(1).map((line) => (
+        <div key={line} style={{ fontFamily: SERIF, fontSize: 12, color: GOLD_DIM, lineHeight: 1.5 }}>
+          {line}
+        </div>
+      ))}
     </div>
   );
 }
