@@ -295,6 +295,62 @@ describe("GameView", () => {
     expect(screen.queryByTestId("loading-screen")).toBeNull();
   });
 
+  /**
+   * The device used to refuse to open while a run was open, which left the Atlas
+   * unreachable until the map was finished or lost.
+   */
+  it("the map device opens with a run already open, and says it replaces it", () => {
+    mountWithSnapshot();
+    act(() => {
+      hoisted.worker?.onmessage?.({
+        data: { type: "snapshot", snapshot: { ...makeSnap(), mapOpen: true, portalsLeft: 6 } },
+      });
+    });
+    act(() => { hoisted.openPanel?.(true); });
+    expect(screen.getByTestId("prep-panel")).toBeTruthy();
+    // And it survives the next snapshot, which is what a flat `if (mapOpen)` broke.
+    act(() => {
+      hoisted.worker?.onmessage?.({
+        data: { type: "snapshot", snapshot: { ...makeSnap(), tick: 3, mapOpen: true } },
+      });
+    });
+    expect(screen.getByTestId("prep-panel")).toBeTruthy();
+  });
+
+  it("opening a map puts the device and the bag away", () => {
+    mountWithSnapshot();
+    act(() => { hoisted.openPanel?.(true); });
+    expect(screen.getByTestId("prep-panel")).toBeTruthy();
+    expect(screen.getByTestId("inventory-panel")).toBeTruthy();
+    // mapOpen rising is the activation.
+    act(() => {
+      hoisted.worker?.onmessage?.({
+        data: { type: "snapshot", snapshot: { ...makeSnap(), tick: 3, mapOpen: true } },
+      });
+    });
+    expect(screen.queryByTestId("prep-panel")).toBeNull();
+    expect(screen.queryByTestId("inventory-panel")).toBeNull();
+  });
+
+  it("crossing into a place closes everything the last one had open", () => {
+    mountWithSnapshot();
+    act(() => {
+      fireEvent.keyDown(window, { key: "i" });
+      fireEvent.keyDown(window, { key: "c" });
+    });
+    expect(screen.getByTestId("inventory-panel")).toBeTruthy();
+    act(() => {
+      hoisted.worker?.onmessage?.({
+        data: {
+          type: "area", area: "map",
+          layout: { grid: { w: 1, h: 1, cells: [0] } }, mapBaseId: "map.swamp",
+        },
+      });
+    });
+    expect(screen.queryByTestId("inventory-panel")).toBeNull();
+    expect(screen.queryByTestId("character-panel")).toBeNull();
+  });
+
   // ── Death screen ─────────────────────────────────────────────────────────
 
   /** Push a snapshot whose player is a corpse, in a map with `portalsLeft` left. */

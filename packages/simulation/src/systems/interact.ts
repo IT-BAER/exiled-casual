@@ -18,8 +18,12 @@ export function registerInteractSystem(sim: Simulation): void {
       // ── Map activation: pick a node + waystone from the preparation panel ──
       if (cmd.type === "activateMap") {
         const session = world.get<SessionC>(sessionE, "session")!;
-        if (session.mapOpen !== 0) continue;      // already open
-        if (session.area !== "hideout") continue; // only from the hideout device
+        // An open map does NOT block this any more: standing at the device with a
+        // run already open, activating a different place abandons the old one and
+        // opens the new. Refusing was the reason the Atlas could not even be
+        // looked at mid-run. What still refuses is doing it from inside the map,
+        // because there is no device in there and the ring is rebuilt here.
+        if (session.area !== "hideout") continue;
         const atlasNodeId = cmd.atlasNodeId;
         if (!atlasNodeId) continue;
         if (session.completedNodes.includes(atlasNodeId)) continue;

@@ -192,13 +192,14 @@ export function GameView({
         renderer.setHoveredEntity(id);
         setHoveredEntityId(id);
       },
-      // The sim already no-ops activateMap while a run is open; without this the
-      // panel still opened, offered stones, and closed itself on the next snapshot.
+      // The device opens with a run already open now: activating a different place
+      // abandons the old run and starts the new one (systems/interact.ts). This
+      // used to refuse, back when the sim refused too, and the result was that an
+      // open map made the Atlas unreachable until you finished or died in it.
       (open) => {
-        const willOpen = open && !curSnap?.mapOpen;
-        setPanelOpen(willOpen);
+        setPanelOpen(open);
         // Opening the device also opens the inventory so the player can drag a waystone.
-        if (willOpen) setInventoryOpen(true);
+        if (open) setInventoryOpen(true);
       },
       // Walking up to the furniture opens the inventory with it, so walking off has
       // to take it away again: a panel the player never asked for cannot outlive the
@@ -220,8 +221,13 @@ export function GameView({
         prevTickTime = performance.now();
         soundscape.observe(msg.snapshot);
         setSnapshot(msg.snapshot);
-        // Activation opened the map — the panel's job is done, close it.
-        if (msg.snapshot.mapOpen) setPanelOpen(false);
+        // The RISING edge, not the state: the device opens with a run already
+        // running now, and a flat `if (mapOpen)` closed that panel again on the
+        // very next snapshot.
+        if (msg.snapshot.mapOpen && !(prevSnap?.mapOpen ?? false)) {
+          setPanelOpen(false);
+          setInventoryOpen(false);
+        }
         // Let bindings fire the interact intent once the pending target is inRange.
         onSnapshot(msg.snapshot);
       } else if (msg.type === "area") {
@@ -241,6 +247,14 @@ export function GameView({
         // start over or the whole old population would be reported dead.
         playSfx("portal-enter");
         soundscape.reset();
+        // Nothing the player had open belongs to the place they just left. The
+        // inventory in particular: opening a map from the device leaves it up, and
+        // stepping through the portal used to land you in the map reading a bag.
+        setPanelOpen(false);
+        setInventoryOpen(false);
+        setStashOpen(false);
+        setVendorOpen(false);
+        setCharacterOpen(false);
         // A place that arrives mid-dissolve takes the plate back at full
         // opacity, and the unmount that dissolve had queued must not fire on it.
         clearTimeout(fadeTimer);
@@ -413,6 +427,7 @@ export function GameView({
           atlasSeed={snapshot.atlasSeed}
           completedNodes={snapshot.completedNodes}
           socketedStone={socketedStone}
+          mapOpen={snapshot.mapOpen}
           onEject={() => setSocketedCell(null)}
           onNodeSelect={() => setInventoryOpen(true)}
           onClose={() => { setPanelOpen(false); setSocketedCell(null); }}

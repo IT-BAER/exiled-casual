@@ -68,6 +68,12 @@ const PORTAL_RING: readonly { dx: number; dy: number; yaw: number }[] = [
  * Shared by buildArea (hideout path) and the interact system (device activation).
  */
 export function spawnPortalRing(world: World, count: number): void {
+  // Idempotent: activating the device with a run already open replaces that run,
+  // and a ring that appended would leave twelve doorways round a device that owns
+  // six. buildArea calls this into a world with none, so it costs nothing there.
+  for (const e of [...world.alive]) {
+    if (world.get<InteractableC>(e, "interactable")?.kind === "portal") world.destroy(e);
+  }
   // Clamped: map affixes are specced to change the revive count (docs/01 §8), and
   // a budget larger than the ring would otherwise index past the end.
   const n = Math.min(count, PORTAL_RING.length);

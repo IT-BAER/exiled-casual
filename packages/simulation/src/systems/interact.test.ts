@@ -80,12 +80,47 @@ describe("registerInteractSystem", () => {
     expect(world.get<SessionC>(sessionE, "session")!.mapOpen).toBe(0);
   });
 
-  it("activateMap is a no-op when a map is already open", () => {
+  /**
+   * The device used to refuse while a run was open, which meant an open map made
+   * the Atlas unreachable until you finished it or died in it. It replaces now.
+   */
+  it("activateMap with a run already open replaces it", () => {
     const { sim, world, player, sessionE } = makeWorld();
-    sim.step([activateCmd(player, "node.ashen_glade", { x: 0, y: 0 })]); // open once
-    const seedAfterFirst = world.get<SessionC>(sessionE, "session")!.mapSeed;
-    sim.step([activateCmd(player, "node.emberfall", { x: 1, y: 0 })]); // ignored
-    expect(world.get<SessionC>(sessionE, "session")!.mapSeed).toBe(seedAfterFirst);
+    sim.step([activateCmd(player, "node.ashen_glade", { x: 0, y: 0 })]);
+    const first = world.get<SessionC>(sessionE, "session")!;
+    expect(first.mapOpen).toBe(1);
+    // Spend some of the first run's budget, so a fresh six is visible as a reset.
+    world.set<SessionC>(sessionE, "session", { ...first, portalsLeft: 2 });
+
+    const at = giveStone(world, sessionE, WAYSTONE_MAX_TIER);
+    sim.step([activateCmd(player, "node.ashen_glade", at)]);
+
+    const second = world.get<SessionC>(sessionE, "session")!;
+    expect(second.mapSeed).not.toBe(first.mapSeed);
+    expect(second.portalsLeft).toBe(MAP_PORTALS);
+    expect(second.mapOpen).toBe(1);
+  });
+
+  it("replacing a run leaves six portals round the device, not twelve", () => {
+    const { sim, world, player, sessionE } = makeWorld();
+    sim.step([activateCmd(player, "node.ashen_glade", { x: 0, y: 0 })]);
+    const ring = () => world
+      .query("interactable")
+      .filter((e) => world.get<InteractableC>(e, "interactable")!.kind === "portal").length;
+    expect(ring()).toBe(MAP_PORTALS);
+    const at = giveStone(world, sessionE, WAYSTONE_MAX_TIER);
+    sim.step([activateCmd(player, "node.ashen_glade", at)]);
+    expect(ring()).toBe(MAP_PORTALS);
+  });
+
+  it("but not from inside the map, where there is no device", () => {
+    const { sim, world, player, sessionE } = makeWorld();
+    sim.step([activateCmd(player, "node.ashen_glade", { x: 0, y: 0 })]);
+    const first = world.get<SessionC>(sessionE, "session")!;
+    world.set<SessionC>(sessionE, "session", { ...first, area: "map" });
+    const at = giveStone(world, sessionE, WAYSTONE_MAX_TIER);
+    sim.step([activateCmd(player, "node.ashen_glade", at)]);
+    expect(world.get<SessionC>(sessionE, "session")!.mapSeed).toBe(first.mapSeed);
   });
 
   it("activateMap is rejected for a node the fog has not opened", () => {

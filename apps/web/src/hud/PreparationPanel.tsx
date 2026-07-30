@@ -26,6 +26,12 @@ interface Props {
   onActivate: (atlasNodeId: string, x: number, y: number) => void;
   /** Called when the player clicks a reachable atlas node (to let the parent open the inventory). */
   onNodeSelect?: () => void;
+  /**
+   * A run is already open. The device still works — activating a different place
+   * abandons the open one — but that is not something to find out afterwards, so
+   * the button says REPLACE MAP and the panel says what it costs.
+   */
+  mapOpen?: boolean;
   onClose: () => void;
 }
 
@@ -250,10 +256,11 @@ function NodePopup(props: {
   requiredTier: number;
   stone: { seed: number; tier: number } | undefined;
   underTier: boolean;
+  replaces: boolean;
   onEject: () => void;
   onActivate: () => void;
 }) {
-  const { node, requiredTier, stone, underTier, onEject, onActivate } = props;
+  const { node, requiredTier, stone, underTier, replaces, onEject, onActivate } = props;
   const canActivate = stone !== undefined && !underTier;
   // Above the medallion where there is room, below it near the top edge: the
   // panel must never cover the node it belongs to, which is what tells you
@@ -443,13 +450,21 @@ function NodePopup(props: {
           textShadow: canActivate ? `0 0 8px ${GOLD}66, 0 1px 2px #000` : "none",
         }}
       >
-        Activate
+        {replaces ? "Replace Map" : "Activate"}
       </button>
+      {replaces && (
+        <div style={{
+          marginTop: 8, textAlign: "center", fontFamily: SERIF, fontSize: 11,
+          letterSpacing: 0.4, color: "#a8794f",
+        }}>
+          Abandons the map you have open.
+        </div>
+      )}
     </div>
   );
 }
 
-export function PreparationPanel({ atlasSeed, completedNodes, socketedStone, onEject, onActivate, onNodeSelect, onClose }: Props) {
+export function PreparationPanel({ atlasSeed, completedNodes, socketedStone, onEject, onActivate, onNodeSelect, mapOpen = false, onClose }: Props) {
   const nodes = atlasGraph(atlasSeed);
   const [nodeId, setNodeId] = useState<string | null>(null);
   // The place has to accept the stone. Selecting a node and then a weaker stone
@@ -492,6 +507,7 @@ export function PreparationPanel({ atlasSeed, completedNodes, socketedStone, onE
               requiredTier={requiredTier}
               stone={socketedStone ?? undefined}
               underTier={underTier}
+              replaces={mapOpen}
               onEject={onEject}
               onActivate={() => {
                 if (canActivate && socketedStone) onActivate(node.id, socketedStone.x, socketedStone.y);
