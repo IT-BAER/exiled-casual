@@ -527,20 +527,22 @@ export function PreparationPanel({ atlasSeed, completedNodes, socketedStone, onE
         }
       />
 
-      {/* Carved title banner, floating over the world as in atlas-maps.webp
-          rather than capping a card: the map has no frame to cap. */}
+      {/* A title over the world, not a plaque on it.
+          It used to be a red gradient in a gold box with an inset highlight,
+          which is the exact recipe for a boss health bar — the eye read it as a
+          gauge with something's life in it and went looking for the number.
+          A name needs no chrome: dark behind the letters, dissolving to nothing
+          left and right, so the words sit ON the map rather than in a frame. */}
       <div
         style={{
           position: "absolute",
           top: 18,
           left: "50%",
           transform: "translateX(-50%)",
-          padding: "8px 46px",
+          padding: "6px 90px",
           textAlign: "center",
-          borderRadius: 4,
-          background: "linear-gradient(180deg, #4a1a13 0%, #6b2018 45%, #3a1310 100%)",
-          border: `1px solid ${GOLD_DIM}`,
-          boxShadow: `inset 0 1px 0 ${GOLD}55, inset 0 -1px 0 #000, 0 6px 20px rgba(0,0,0,0.8)`,
+          background:
+            "linear-gradient(90deg, rgba(10,7,6,0) 0%, rgba(10,7,6,0.72) 28%, rgba(10,7,6,0.72) 72%, rgba(10,7,6,0) 100%)",
         }}
       >
         <span
@@ -550,7 +552,7 @@ export function PreparationPanel({ atlasSeed, completedNodes, socketedStone, onE
             letterSpacing: 3,
             textTransform: "uppercase",
             color: PARCHMENT,
-            textShadow: "0 1px 2px #000",
+            textShadow: "0 1px 3px #000, 0 0 14px rgba(0,0,0,0.9)",
           }}
         >
           Map Device
