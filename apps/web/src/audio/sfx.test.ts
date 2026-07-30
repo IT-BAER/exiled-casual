@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { readFileSync } from "node:fs";
+import { MONSTERS } from "@exiled/content-runtime";
 import { CORE_SFX, distanceGain, playSfx } from "./sfx";
 
 const DIR = resolve(__dirname, "../../public/audio");
@@ -39,6 +40,28 @@ describe("sfx assets", () => {
     const cast = [...body.matchAll(/"skill\.[a-z_.0-9]+":\s*"([a-z0-9-]+)"/g)].map((m) => m[1]!);
     expect(emitted.length).toBeGreaterThan(5);
     for (const name of [...emitted, ...cast]) expect(voices.has(name), name).toBe(true);
+  });
+
+  /**
+   * `play(cueFor(...))` is invisible to the literal scan above, so the species cues
+   * need their own pin — and the interesting half is the other direction: a monster
+   * added to the bestiary with no material silently falls back to the generic cue,
+   * which is exactly the "sounds generic" complaint this work exists to fix.
+   */
+  it("every material has both cues, and every monster has a material", () => {
+    const body = readFileSync(resolve(__dirname, "soundscape.ts"), "utf8");
+    const table = body.slice(body.indexOf("const MATERIAL"), body.indexOf("function cueFor"));
+    const entries = [...table.matchAll(/"(monster\.[a-z_0-9.]+)":\s*"([a-z]+)"/g)];
+    const voices = new Set(voiceNames());
+
+    for (const material of new Set(entries.map((m) => m[2]!))) {
+      expect(voices.has(`monster-hurt-${material}`), `hurt ${material}`).toBe(true);
+      expect(voices.has(`monster-death-${material}`), `death ${material}`).toBe(true);
+    }
+
+    const mapped = new Set(entries.map((m) => m[1]!));
+    const unmapped = [...MONSTERS.keys()].filter((id) => !mapped.has(id));
+    expect(unmapped).toEqual([]);
   });
 
   /**

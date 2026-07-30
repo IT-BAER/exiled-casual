@@ -41,6 +41,43 @@ const MAX_PER_KIND = 3;
 /** Inside this distance a hit on the player is something's hands, not something's spell. */
 const MELEE_RANGE = 2.4;
 
+/**
+ * What a monster is MADE of, because that is what a hit on it sounds like.
+ *
+ * One `monster-hurt` served a carved stone construct, a desiccated husk, wet chitin
+ * and meat under iron, and it was written for none of them. The fix is not one sample
+ * per species — that is 32 files to tell a husk from a skitterer, which are the same
+ * dry thing — it is one per material, which is the axis the ear actually hears.
+ *
+ * A species with no entry keeps the generic cue, so a monster added tomorrow is
+ * quietly ordinary rather than silent.
+ */
+const MATERIAL: Record<string, string> = {
+  "monster.vaal_construct.v1": "stone",
+  "monster.sunbaked_colossus.v1": "stone",
+  "monster.vaal_husk.v1": "husk",
+  "monster.sand_skitterer.v1": "husk",
+  "monster.dune_spitter.v1": "husk",
+  "monster.bog_drowned.v1": "bog",
+  "monster.rotting_behemoth.v1": "bog",
+  "monster.mother_vhal.v1": "bog",
+  "monster.blood_sentinel.v1": "beast",
+  "monster.thornhide_boar.v1": "beast",
+  "monster.bramble_whelp.v1": "beast",
+  "monster.ghaltrek.v1": "beast",
+  "monster.cinder_imp.v1": "ember",
+  "monster.cinder_warden.v1": "ember",
+  "monster.sirrath.v1": "ember",
+  "monster.fen_wisp.v1": "spirit",
+  "monster.hoarfrost_spitter.v1": "spirit",
+};
+
+/** `monster-death` for a stranger, `monster-death-stone` for something carved. */
+function cueFor(base: string, species: string | undefined): string {
+  const material = species === undefined ? undefined : MATERIAL[species];
+  return material === undefined ? base : `${base}-${material}`;
+}
+
 /** Which cue a skill's own cast makes. A skill with no entry casts silently. */
 const CAST_SFX: Record<string, string> = {
   "skill.ember_bolt.v1": "skill-ember-bolt-cast",
@@ -97,7 +134,7 @@ export function createSoundscape(opts: Options = {}): Soundscape {
         if (now.has(id)) continue;
         if (e.kind === "monster" && deaths < MAX_PER_KIND) {
           deaths++;
-          play("monster-death", at(e));
+          play(cueFor("monster-death", e.species), at(e));
         } else if (e.kind === "telegraph") {
           // A ring only ever leaves the world by landing.
           play("monster-slam-impact", at(e));
@@ -126,7 +163,7 @@ export function createSoundscape(opts: Options = {}): Soundscape {
         if (hurts >= MAX_PER_KIND) continue;
         hurts++;
         lastHurt.set(id, snap.tick);
-        play("monster-hurt", at(e));
+        play(cueFor("monster-hurt", e.species), at(e));
       }
 
       // The player taking a hit: something's hands if anything is standing on him,

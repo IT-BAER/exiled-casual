@@ -42,6 +42,40 @@ describe("createSoundscape", () => {
     ])).toEqual(["monster-death"]);
   });
 
+  /**
+   * Four unrelated species shared one hit and one death: a carved construct, a
+   * desiccated husk, chitin, and meat under iron. What the ear hears is the
+   * MATERIAL, so that is the axis the cue is keyed on.
+   */
+  it("a construct dies as stone and a bog thing dies wet", () => {
+    const of = (id: number, species: string): SnapshotEntity => ({ ...monster(id, 3), species });
+    expect(run([
+      snap({ tick: 1, entities: [of(1, "monster.vaal_construct.v1")] }),
+      snap({ tick: 2, entities: [] }),
+    ])).toEqual(["monster-death-stone"]);
+    expect(run([
+      snap({ tick: 1, entities: [of(1, "monster.rotting_behemoth.v1"), of(2, "monster.fen_wisp.v1")] }),
+      snap({ tick: 2, entities: [] }),
+    ])).toEqual(["monster-death-bog", "monster-death-spirit"]);
+  });
+
+  /** A species nobody has written a material for must fall back, never go silent. */
+  it("an unknown species keeps the generic cue", () => {
+    const stranger: SnapshotEntity = { ...monster(1, 3), species: "monster.not_yet.v1" };
+    expect(run([
+      snap({ tick: 1, entities: [stranger] }),
+      snap({ tick: 2, entities: [] }),
+    ])).toEqual(["monster-death"]);
+  });
+
+  it("a hurt cue is keyed on material too", () => {
+    const husk: SnapshotEntity = { ...monster(1, 3, 40), species: "monster.vaal_husk.v1" };
+    expect(run([
+      snap({ tick: 1, entities: [husk] }),
+      snap({ tick: 2, entities: [{ ...husk, life: 30 }] }),
+    ])).toEqual(["monster-hurt-husk"]);
+  });
+
   it("a monster that lost life grunts, but not again on the next tick", () => {
     const heard = run([
       snap({ tick: 1, entities: [monster(1, 3, 40)] }),
