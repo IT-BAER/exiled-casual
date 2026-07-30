@@ -358,13 +358,33 @@ describe("experience bar", () => {
 
   it("hands over level, experience and experience per hour on hover", async () => {
     render(<Hud snapshot={makeSnap({ level: 68, xp: 30_000, xpToNext: 120_000 })} />);
-    fireEvent.pointerEnter(screen.getByTestId("xp-bar"));
+    fireEvent.pointerEnter(screen.getByTestId("xp-bar-hit"));
     const tip = screen.getByTestId("xp-tooltip").textContent ?? "";
     expect(tip).toContain("Level 68");
     expect(tip).toContain("30,000 / 120,000");
     expect(tip).toContain("Exp/Hour");
-    fireEvent.pointerLeave(screen.getByTestId("xp-bar"));
+    fireEvent.pointerLeave(screen.getByTestId("xp-bar-hit"));
     expect(screen.queryByTestId("xp-tooltip")).toBeNull();
+  });
+
+  /**
+   * The hover above passed for months while the tooltip was UNREACHABLE in the real
+   * app: fireEvent dispatches straight at the node, but the HUD root is
+   * `pointerEvents: none` so the canvas won the hit test at every pixel of the rail
+   * and no pointer event was ever generated. jsdom does not hit-test, so the closest
+   * honest check is the one thing hit-testing depends on: whether the nearest
+   * declaration up the tree lets the pointer land at all.
+   */
+  it("the rail is reachable by a pointer, and is a target a hand can actually hit", () => {
+    render(<Hud snapshot={makeSnap({ level: 68, xp: 30_000, xpToNext: 120_000 })} />);
+    const hit = screen.getByTestId("xp-bar-hit");
+    let declared: string | null = null;
+    for (let n: HTMLElement | null = hit; n && declared === null; n = n.parentElement) {
+      declared = n.style.pointerEvents || null;
+    }
+    expect(declared).toBe("auto");
+    // The rail is a hairline by design, so the pointer target is taller than it.
+    expect(Number.parseInt(hit.style.height, 10)).toBeGreaterThan(RAIL_H * 2);
   });
 
   it("stays behind the bar panels, the way PoE1's rail runs under the stone", () => {
@@ -377,20 +397,23 @@ describe("experience bar", () => {
     const ticks = screen.getByTestId("xp-bar-ticks");
     // Percent, not pixels: 20 segments however wide the screen is. jsdom cannot
     // read the applied gradient back, so the string is pinned at the source.
-    expect(TICK_BACKGROUND).toContain("calc(5% - 1px) 5%");
+    expect(TICK_BACKGROUND).toContain("calc(5% - 2px) 5%");
     // A stud on an unbroken line, never a gap in it: the divider carries a lit
     // pip, and nothing in it is opaque black.
-    expect(TICK_BACKGROUND).toContain("rgba(255,214,140,0.9)");
+    expect(TICK_BACKGROUND).toContain("rgba(255,244,214,0.95)");
     expect(TICK_BACKGROUND).not.toContain("rgba(0,0,0,0.62)");
     expect(RAIL_H).toBeLessThan(6);
+    // The pip has to out-brighten the fill's own pale core (#ffd98f) or the studs
+    // vanish on the lit half of the rail, which is the half being measured.
+    expect(TICK_BACKGROUND).toContain("244");
     // The LIT studs stop where the fill does.
     expect(ticks.style.clipPath).toBe("inset(0 75% 0 0)");
     // But the studs themselves run the whole rail, unlit, or an empty bar is a
     // plain dark line nobody would read as an experience track.
     const empty = screen.getByTestId("xp-bar-ticks-empty");
     expect(empty.style.clipPath).toBe("");
-    expect(TICK_BACKGROUND_EMPTY).toContain("rgba(150,132,96,0.5)");
-    expect(TICK_BACKGROUND_EMPTY).not.toContain("rgba(255,214,140,0.9)");
+    expect(TICK_BACKGROUND_EMPTY).toContain("rgba(178,158,116,0.7)");
+    expect(TICK_BACKGROUND_EMPTY).not.toContain("rgba(255,244,214,0.95)");
   });
 });
 

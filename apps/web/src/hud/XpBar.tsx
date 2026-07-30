@@ -23,10 +23,29 @@ const SEGMENT_PCT = 5;
 export const RAIL_H = 4;
 
 /**
- * PoE1's rail is an UNBROKEN orange line with small gold studs set on it, not a
- * row of separate blocks (reference-screenshots/poe1-lower-bar.png, zoomed). A
- * black gap every segment is the thing it is not — so the divider is a stud:
- * a dark hairline, a bright pip, a dark hairline, all sitting on top of the line.
+ * A hairline is not a hover target. The rail keeps PoE1's thickness, so the thing
+ * that catches the pointer is a taller invisible strip over it — and it costs the
+ * bottom of the screen for world clicks, which is the same deal PoE makes.
+ */
+const HOVER_H = 12;
+
+/**
+ * How wide the divider is, in px, measured OFF the reference rather than guessed:
+ * PoE1's notch runs about 8px on a 2558px-wide capture, so a bit over 0.3% of the
+ * width, which is 6px on this HUD (poe1-lower-bar.png rows 375-382, one period at
+ * x=892..901). At 3px, which is what this was, the studs measured a perfect 5.0%
+ * apart and still did not read AS steps, which is the whole job.
+ */
+const DIVIDER_W = 6;
+
+/**
+ * PoE1's rail is an UNBROKEN orange line with gold studs set on it, not a row of
+ * separate blocks (reference-screenshots/poe1-lower-bar.png, zoomed). A black gap
+ * every segment is the thing it is not — so the divider is a stud: a dark notch
+ * with a bright pip in the middle of it, sitting on top of the line.
+ *
+ * The pip has to be brighter than the FILL's own pale core, or every stud on the
+ * lit half of the bar disappears into the line it is meant to be dividing.
  *
  * Exported because jsdom's CSS parser drops a repeating-linear-gradient that
  * carries a calc(), so neither `.style` nor the style attribute can be read back
@@ -34,12 +53,12 @@ export const RAIL_H = 4;
  */
 const studs = (pip: string, edge: string) =>
   `repeating-linear-gradient(90deg,` +
-  `rgba(0,0,0,0) 0 calc(${SEGMENT_PCT}% - 3px),` +
-  `${edge} calc(${SEGMENT_PCT}% - 3px) calc(${SEGMENT_PCT}% - 2px),` +
-  `${pip} calc(${SEGMENT_PCT}% - 2px) calc(${SEGMENT_PCT}% - 1px),` +
-  `${edge} calc(${SEGMENT_PCT}% - 1px) ${SEGMENT_PCT}%)`;
+  `rgba(0,0,0,0) 0 calc(${SEGMENT_PCT}% - ${DIVIDER_W}px),` +
+  `${edge} calc(${SEGMENT_PCT}% - ${DIVIDER_W}px) calc(${SEGMENT_PCT}% - ${DIVIDER_W - 2}px),` +
+  `${pip} calc(${SEGMENT_PCT}% - ${DIVIDER_W - 2}px) calc(${SEGMENT_PCT}% - 2px),` +
+  `${edge} calc(${SEGMENT_PCT}% - 2px) ${SEGMENT_PCT}%)`;
 
-export const TICK_BACKGROUND = studs("rgba(255,214,140,0.9)", "rgba(0,0,0,0.5)");
+export const TICK_BACKGROUND = studs("rgba(255,244,214,0.95)", "rgba(0,0,0,0.55)");
 
 /**
  * The same studs unlit, running the WHOLE rail. Without them the empty part is
@@ -47,7 +66,7 @@ export const TICK_BACKGROUND = studs("rgba(255,214,140,0.9)", "rgba(0,0,0,0.5)")
  * full cannot tell it is a track at all: the studs are what make the trough read
  * as measured-out distance still to go rather than as a border.
  */
-export const TICK_BACKGROUND_EMPTY = studs("rgba(150,132,96,0.5)", "rgba(0,0,0,0.55)");
+export const TICK_BACKGROUND_EMPTY = studs("rgba(178,158,116,0.7)", "rgba(0,0,0,0.55)");
 
 /**
  * Pale core between two darker rims, the way the reference line is lit — a flat
@@ -125,8 +144,6 @@ export function XpBar({ level, xp, xpToNext }: { level: number; xp: number; xpTo
     <>
       <div
         data-testid="xp-bar"
-        onPointerEnter={() => setHover(true)}
-        onPointerLeave={() => setHover(false)}
         style={{
           position: "absolute",
           left: 0,
@@ -175,6 +192,30 @@ export function XpBar({ level, xp, xpToNext }: { level: number; xp: number; xpTo
           }}
         />
       </div>
+
+      {/*
+        The pointer target, and the reason the tooltip works at all: the HUD root is
+        `pointerEvents: none` so its clicks reach the canvas, which means every child
+        that wants a pointer has to opt back in — the rail never did, so the canvas
+        won the hit test at every pixel of it and no enter event was ever generated.
+        Taller than the rail because 4px at the very edge of the screen is not a
+        target, and above it in the DOM so it catches first; still under the two bar
+        panels (zIndex 2), which is why hovering the stone does not open this.
+      */}
+      <div
+        data-testid="xp-bar-hit"
+        onPointerEnter={() => setHover(true)}
+        onPointerLeave={() => setHover(false)}
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: HOVER_H,
+          pointerEvents: "auto",
+          zIndex: 1,
+        }}
+      />
 
       {hover && (
         <div
