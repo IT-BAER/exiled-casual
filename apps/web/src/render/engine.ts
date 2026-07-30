@@ -19,7 +19,7 @@ import {
   Vector3,
   type Engine,
 } from "@babylonjs/core";
-import type { GraphicsSettings } from "../settings";
+import { DEFAULT_SETTINGS, type GraphicsSettings } from "../settings";
 import { ROCK_MESH_PREFIX } from "./rocks";
 import { createHaze, createMotes } from "./haze";
 
@@ -79,8 +79,22 @@ const TORCH_RANGE = 9.3;
  *  character, and the falloff eats the whole radius within a step. Kept above
  *  head height for the reason in TORCH_INTENSITY. */
 const TORCH_HEIGHT = 3.8;
-/** Firelight, not a flashlight. */
-const TORCH_COLOR = new Color3(1.0, 0.72, 0.42);
+/**
+ * Firelight, not a flashlight — and how far either way the player may push it.
+ *
+ * The two ends are a pale flame and a deep ember, and the default sits nearer
+ * the ember than the middle. It used to be a fixed (1, 0.72, 0.42), which is a
+ * yellow: raising the blue with the red takes the sulphur out of it and leaves
+ * something closer to a real fire, which is warmer while being less yellow.
+ */
+const TORCH_COOL = new Color3(1.0, 0.86, 0.74);
+const TORCH_WARM = new Color3(1.0, 0.55, 0.30);
+
+/** The colour a warmth of `w` (0..1) asks for. */
+export function torchColor(w: number): Color3 {
+  const t = Math.min(1, Math.max(0, w));
+  return Color3.Lerp(TORCH_COOL, TORCH_WARM, t);
+}
 /** Flicker depth. Two detuned sines, because a single one reads as a pulse. */
 const TORCH_FLICKER = 0.035;
 /** A part of a dressed character, from `wardrobe.glb`'s `slot.look.part` naming.
@@ -174,7 +188,10 @@ export function applyGraphics(scene: Scene, engine: Engine | null, g: GraphicsSe
   // The torch is a POINT light, so its shadow map is a cube: six faces for one
   // pool of light. It is the first thing to drop and the last to restore.
   const torch = scene.getLightByName("torch");
-  if (torch) torch.shadowEnabled = g.shadows === "high";
+  if (torch) {
+    torch.shadowEnabled = g.shadows === "high";
+    torch.diffuse = torchColor(g.torchWarmth);
+  }
 
   const pipelines = scene.postProcessRenderPipelineManager?.supportedPipelines;
   const ssao = pipelines?.find((p) => p.name === "ssao");
@@ -245,15 +262,16 @@ const ORTHO_HALF_HEIGHT = 4.75;
  *
  * Multiplicative, because a fixed number of units per notch is coarse at the
  * near end and imperceptible at the far one — the eye reads zoom as a ratio.
- * 1.12 puts ~3.5 notches between the default and the stop, which is about PoE's
- * travel: its zoom is a nudge, not a strategy camera.
+ * 1.07 puts ~6 notches between the default and the stop, which is about PoE's
+ * travel: its zoom is a nudge, not a strategy camera. It was 1.12, which crossed
+ * the whole range in three clicks and read as a jump rather than a move.
  *
  * There is no far stop of its own. Zooming out past the authored framing would
  * mean shipping a second widest shot that nothing was composed for — the ortho
  * height is calibrated against a screenshot, the shadow frustum is sized from
  * it, and the boss telegraph is already large in the frame at this distance.
  */
-const ZOOM_STEP = 1.12;
+const ZOOM_STEP = 1.07;
 const MIN_HALF_HEIGHT = 3.2;
 const MAX_HALF_HEIGHT = ORTHO_HALF_HEIGHT;
 
@@ -308,7 +326,17 @@ const BETA_PER_UNIT = -0.08;
 const BETA_LIMIT = { min: BETA_AT_DEFAULT, max: 0.88 };
 
 /** Seconds-ish smoothing on the zoom, so a notch glides instead of snapping. */
-const ZOOM_EASE = 0.18;
+const ZOOM_EASE = 0.11;
+
+/**
+ * Shortest gap between two notches the wheel is allowed to spend.
+ *
+ * A mouse wheel sends one event per detent and never approaches this. A
+ * trackpad sends a stream of them, and without a floor a two-finger swipe
+ * crosses the entire zoom range in a flick — the same gesture, wildly different
+ * speeds, on the two devices people actually play with.
+ */
+const ZOOM_MIN_GAP_MS = 70;
 
 /** Flagstone texture repeats across the 200u floor (25 → ~8u per tile). */
 /** Ground-plane texture repeats. Exported because level.ts re-plates the same
@@ -411,7 +439,7 @@ export function createScene(engine: Engine): SceneHandle {
   // gives every object two shadows pointing different ways. PoE's light radius
   // does not cast either.
   const torch = new PointLight("torch", new Vector3(0, TORCH_HEIGHT, 0), scene);
-  torch.diffuse = TORCH_COLOR;
+  torch.diffuse = torchColor(DEFAULT_SETTINGS.graphics.torchWarmth);
   // No specular. The lamp rides ~0.8 units off the skull, and a point light that
   // close puts its highlight lobe on the shiniest thing on the rig — the hair,
   // which then reads as a lit bulb sitting on the character's head. The sun
@@ -465,10 +493,14 @@ export function createScene(engine: Engine): SceneHandle {
     applyFraming();
   };
 
+  let lastNotch = 0;
   const onWheel = (ev: WheelEvent) => {
     // The wheel still scrolls the inventory and stash: this is on the canvas,
     // and an event over a HUD panel never reaches it.
     ev.preventDefault();
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    if (now - lastNotch < ZOOM_MIN_GAP_MS) return;
+    lastNotch = now;
     setZoom(Math.sign(ev.deltaY));
   };
   const canvas = engine.getRenderingCanvas();

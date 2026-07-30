@@ -28,6 +28,12 @@ export interface GraphicsSettings {
   atmosphere: AtmosphereName;
   /** 1 is native. Below that the canvas renders small and is scaled up. */
   resolutionScale: number;
+  /**
+   * Colour of the light the player carries, 0 is a pale cold flame and 1 is a
+   * deep ember. Everyone reads "warm" differently on their own panel, so this is
+   * a taste knob rather than a quality one, and it changes nothing but a colour.
+   */
+  torchWarmth: number;
 }
 
 export interface SoundSettings {
@@ -68,6 +74,7 @@ export const DEFAULT_SETTINGS: Settings = {
     bloom: true,
     atmosphere: "soft",
     resolutionScale: 1,
+    torchWarmth: 0.55,
   },
   sound: { master: 0.8, muted: false },
   ui: {
@@ -142,6 +149,7 @@ export function sanitize(raw: unknown): Settings {
         1,
         d.graphics.resolutionScale,
       ),
+      torchWarmth: num(g["torchWarmth"], 0, 1, d.graphics.torchWarmth),
     },
     sound: {
       master: num(s["master"], 0, 1, d.sound.master),

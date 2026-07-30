@@ -16,6 +16,7 @@
  */
 import React from "react";
 import {
+  BODY_SERIF,
   Divider,
   FramedPanel,
   GOLD,
@@ -25,7 +26,7 @@ import {
   PARCHMENT,
   SERIF,
 } from "./frames";
-import { MIN_RESOLUTION_SCALE, type Settings, type ShadowQuality } from "../settings";
+import { DEFAULT_SETTINGS, MIN_RESOLUTION_SCALE, type Settings, type ShadowQuality } from "../settings";
 // hud/layout.ts imports nothing, so the menu bundle gains two numbers, not the HUD.
 import { PANEL_W } from "../hud/layout";
 
@@ -157,6 +158,18 @@ export function OptionsPanel({
                 />
               </Row>
 
+              <Row label="Torch Warmth" note="The colour of the light you carry.">
+                <Slider
+                  label="Torch Warmth"
+                  value={settings.graphics.torchWarmth}
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  format={(v) => `${Math.round(v * 100)}%`}
+                  onSet={(torchWarmth) => setGraphics({ torchWarmth })}
+                />
+              </Row>
+
               <Group>Performance</Group>
               <Row label="Resolution Scale" note="Buys frames with sharpness.">
                 <Slider
@@ -169,6 +182,16 @@ export function OptionsPanel({
                   onSet={(resolutionScale) => setGraphics({ resolutionScale })}
                 />
               </Row>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
+                <MenuButton
+                  height={34}
+                  style={{ minWidth: 190 }}
+                  onClick={() => onChange({ ...settings, graphics: { ...DEFAULT_SETTINGS.graphics } })}
+                >
+                  Reset to Default
+                </MenuButton>
+              </div>
             </>
           ) : tab === "sound" ? (
             <>
@@ -193,8 +216,8 @@ export function OptionsPanel({
               </Row>
               <p
                 style={{
-                  fontFamily: SERIF,
-                  fontSize: 12,
+                  fontFamily: BODY_SERIF,
+                  fontSize: 13.5,
                   color: GOLD_DIM,
                   lineHeight: 1.6,
                   marginTop: 14,

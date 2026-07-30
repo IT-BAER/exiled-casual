@@ -126,10 +126,20 @@ function paintTerrain(grid: WalkableGrid): HTMLCanvasElement {
 }
 
 /** An opaque sheet the player erases by walking. Same cell resolution as the grid. */
+/**
+ * Fog pixels per map cell.
+ *
+ * One pixel per cell is what made the reveal edge steppy: the disc is only a
+ * few cells across, so its feather had three pixels to happen in and the
+ * upscale to the widget smeared those three into bands. Four times the cells
+ * costs a 448x448 alpha canvas per area and gives the gradient room to be one.
+ */
+const FOG_SS = 4;
+
 function makeFog(grid: WalkableGrid): HTMLCanvasElement {
   const c = document.createElement("canvas");
-  c.width = grid.cols;
-  c.height = grid.rows;
+  c.width = grid.cols * FOG_SS;
+  c.height = grid.rows * FOG_SS;
   const ctx = c.getContext("2d");
   if (ctx) {
     ctx.fillStyle = "#000";
@@ -216,13 +226,20 @@ export function Minimap({ layout, player }: MinimapProps): React.JSX.Element | n
       // Feathered, not a hard disc: an unexplored edge that is a clean arc reads
       // as the map having been sliced. The partial erase compounds frame over
       // frame, so ground the player stays near firms up anyway.
-      const g = fogCtx.createRadialGradient(cx, cy, rCells * 0.62, cx, cy, rCells);
+      //
+      // The feather starts at 40% of the radius and eases rather than ramps: a
+      // linear alpha over a short distance still reads as an edge, because the
+      // eye finds the discontinuity in the SLOPE, not in the value.
+      const fx = cx * FOG_SS, fy = cy * FOG_SS, fr = rCells * FOG_SS;
+      const g = fogCtx.createRadialGradient(fx, fy, fr * 0.4, fx, fy, fr);
       g.addColorStop(0, "rgba(0,0,0,1)");
+      g.addColorStop(0.35, "rgba(0,0,0,0.82)");
+      g.addColorStop(0.7, "rgba(0,0,0,0.38)");
       g.addColorStop(1, "rgba(0,0,0,0)");
       fogCtx.globalCompositeOperation = "destination-out";
       fogCtx.fillStyle = g;
       fogCtx.beginPath();
-      fogCtx.arc(cx, cy, rCells, 0, Math.PI * 2);
+      fogCtx.arc(fx, fy, fr, 0, Math.PI * 2);
       fogCtx.fill();
       fogCtx.globalCompositeOperation = "source-over";
     }

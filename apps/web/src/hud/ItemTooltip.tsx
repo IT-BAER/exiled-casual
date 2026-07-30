@@ -6,7 +6,25 @@ import type { ItemStatLine } from "@exiled/protocol";
 // inward flourishes, an item-class line, then affix lines in augmented-blue.
 // All four rarities roll today; the sim still does not model weapon base stats or
 // requirements beyond what the base carries, so those rows are absent when unknown.
+/**
+ * The display face: titles, labels, numbers, everything short.
+ *
+ * Cinzel is a Trajan, which is the letter PoE's own furniture is carved in. It
+ * is shipped with the client (`/fonts`, declared in index.html) rather than
+ * merely named, which it was until now — the fallback everyone actually saw was
+ * Georgia.
+ */
 export const SERIF = '"Cinzel", "Trajan Pro", Georgia, "Times New Roman", serif';
+
+/**
+ * The reading face, for anything longer than a label: flavour text, tips,
+ * the paragraph under a setting.
+ *
+ * A Trajan has no lower case worth reading — it is capitals with small caps
+ * pretending — so a sentence set in it is stately and slow. EB Garamond is the
+ * same century and reads at speed.
+ */
+export const BODY_SERIF = '"EB Garamond", "Cinzel", Georgia, "Times New Roman", serif';
 const AFFIX_BLUE = "#8f97ff";
 const CLASS_TAN = "#8a8065";
 const LABEL_GREY = "#7b7b74"; // stat/requirement words
@@ -213,7 +231,7 @@ export function ItemTooltip({
         {flavour && (
           <>
             <Rule />
-            <div style={{ color: r.text, fontSize: 12.5, fontStyle: "italic", letterSpacing: 0.4, lineHeight: 1.35, margin: "4px 2px 0" }}>
+            <div style={{ fontFamily: BODY_SERIF, color: r.text, fontSize: 13.5, fontStyle: "italic", letterSpacing: 0.3, lineHeight: 1.4, margin: "4px 2px 0" }}>
               {flavour}
             </div>
           </>

@@ -15,7 +15,7 @@
  * hairline the skill rows are split by, and the type is the HUD serif.
  */
 import React from "react";
-import { SERIF } from "./hud/ItemTooltip";
+import { BODY_SERIF, SERIF } from "./hud/ItemTooltip";
 import { GOLD, PARCHMENT } from "./menu/frames";
 
 /** Where a biome's plate lives. Built by `tools/build_loading_textures.py`. */
@@ -88,6 +88,24 @@ export function LoadingScreen({ areaName, tip, wallpaper, leaving }: LoadingScre
             style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }}
           />
         )}
+        {/* PoE's loading plates are painted, then darkened at the corners so the
+            eye lands in the middle and the band reads. A rendered vignette, not
+            a CSS radial: the falloff is uneven on purpose, heavier in the upper
+            corners, which a symmetric gradient cannot be. */}
+        <img
+          data-testid="loading-vignette"
+          src="/textures/ui/menu/loading_vignette.png"
+          alt=""
+          aria-hidden
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            pointerEvents: "none",
+          }}
+        />
         {/* The art is authored with a calm lower fifth, but a painting is not a
             guarantee: this seats the rule on darkness whatever the plate does. */}
         <div
@@ -133,8 +151,10 @@ export function LoadingScreen({ areaName, tip, wallpaper, leaving }: LoadingScre
           style={{
             flex: 1,
             minWidth: 0,
-            fontFamily: SERIF,
-            fontSize: "clamp(11px, 0.85vw, 17px)",
+            // A tip is a sentence, so it gets the reading face rather than the
+            // carved one, a size up from where the capitals sat.
+            fontFamily: BODY_SERIF,
+            fontSize: "clamp(12px, 0.95vw, 19px)",
             lineHeight: 1.45,
             letterSpacing: 0.4,
             color: PARCHMENT,

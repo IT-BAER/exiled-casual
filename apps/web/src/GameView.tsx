@@ -660,7 +660,10 @@ function GameMenu({
         </div>
         <Divider style={{ margin: "10px 0 16px" }} />
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <MenuButton tone="primary" onClick={onResume} autoFocus>Resume</MenuButton>
+          {/* No autoFocus: the pause menu opens on Escape, and a white focus ring
+              around the first button is the browser answering a question nobody
+              asked. Tab still reaches it. */}
+          <MenuButton tone="primary" onClick={onResume}>Resume</MenuButton>
           <MenuButton onClick={onOptions}>Options</MenuButton>
           <MenuButton onClick={onExit} disabled={onExit === undefined}>Characters</MenuButton>
         </div>

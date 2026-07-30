@@ -38,6 +38,9 @@ PLAN: dict[str, tuple[str, int | None, int | None]] = {
     "portrait_stalker_v1": ("portrait_stalker.png", 256, None),
     "portrait_emberbound_v1": ("portrait_emberbound.png", 256, None),
     "fog_sheet_v1": ("fog_sheet.png", 512, None),
+    # Drawn over the loading plate, never over the game: PoE darkens the corners
+    # of a wallpaper so the band and the tip are what the eye lands on.
+    "loading_vignette_v1": ("loading_vignette.png", 1280, None),
     "divider_v1": ("divider.png", 512, None),
     # The Options panel's controls. The gems are one plate each rather than a
     # tint of the other: an unlit gem and a lit one differ in more than

@@ -420,7 +420,13 @@ function Orb(props: {
             // loses it (identity against black, ~1.7x at the very bottom), which keeps the
             // liquid one colour at every level — the sphere's roundness comes from the gloss
             // layers below, not from the liquid.
-            backgroundImage: `linear-gradient(to top, rgba(102,102,102,1), rgba(0,0,0,1) 55%), url(${art})`,
+            // The ramp runs all the way to the top instead of hitting black at 55%
+            // and staying there. Two stops with a stop position is a kink in the
+            // slope, and a kink in a dodge ramp is a hairline straight across the
+            // middle of a full globe — which is what it drew.
+            backgroundImage: "linear-gradient(to top,"
+              + " rgba(102,102,102,1) 0%, rgba(74,74,74,1) 20%, rgba(45,45,45,1) 40%,"
+              + ` rgba(20,20,20,1) 62%, rgba(5,5,5,1) 82%, rgba(0,0,0,1) 100%), url(${art})`,
             backgroundBlendMode: "color-dodge, normal",
             backgroundSize: `${ORB} ${ORB}, ${ORB} ${ORB}`,
             backgroundPosition: "center bottom, center bottom", // globe stays put, the level moves

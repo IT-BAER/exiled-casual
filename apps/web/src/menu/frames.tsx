@@ -19,6 +19,9 @@ export const MENU_ART = "/textures/ui/menu";
 
 /** Matches the HUD, so a menu button and an inventory header are the same voice. */
 export const SERIF = '"Cinzel", "Trajan Pro", Georgia, "Times New Roman", serif';
+/** The reading face, for sentences. Same pair as the HUD's, re-declared for the
+ *  same reason the display one is: this file may not import the HUD. */
+export const BODY_SERIF = '"EB Garamond", "Cinzel", Georgia, "Times New Roman", serif';
 export const GOLD = "#c8a44d";
 export const GOLD_DIM = "#7a5c22";
 export const PARCHMENT = "#e8dcc0";

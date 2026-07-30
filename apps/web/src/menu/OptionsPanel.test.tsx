@@ -189,3 +189,21 @@ describe("the Options route", () => {
     // module graph, and it passes in 3.6s alone but not against a loaded machine.
   }, 20000);
 });
+
+describe("graphics defaults", () => {
+  it("puts every graphics setting back, and touches nothing else", () => {
+    const { onChange } = setup({
+      graphics: { ...DEFAULT_SETTINGS.graphics, shadows: "off", torchWarmth: 0.1 },
+      sound: { ...DEFAULT_SETTINGS.sound, master: 0.2 },
+    });
+    fireEvent.click(screen.getByText("Reset to Default"));
+    const next = onChange.mock.calls[0]![0] as Settings;
+    expect(next.graphics).toEqual(DEFAULT_SETTINGS.graphics);
+    expect(next.sound.master).toBe(0.2);
+  });
+
+  it("offers the torch warmth as a slider", () => {
+    setup();
+    expect(screen.getByLabelText("Torch Warmth")).toBeTruthy();
+  });
+});

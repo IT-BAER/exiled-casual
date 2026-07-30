@@ -70,6 +70,10 @@ describe("UI_ART", () => {
       "/textures/ui/menu/portrait_ironsworn.png",
       "/textures/ui/menu/portrait_stalker.png",
       "/textures/ui/menu/portrait_emberbound.png",
+      // The loading plate's vignette is an <img>, not a CSS background, so the
+      // browser starts it with the plate itself. There is nothing earlier to
+      // warm it at: the plate IS the wait.
+      "/textures/ui/menu/loading_vignette.png",
     ]);
     const missed = [...used].filter((u) => !listed.has(u) && !menuOnly.has(u));
     expect(missed).toEqual([]);

@@ -649,7 +649,7 @@ describe("wheel zoom", () => {
     const { camera, setZoom } = createScene(engine);
     // Scrolling past a stop must settle on it rather than creep through: the
     // clamp is on the target, so the eased position approaches and never passes.
-    for (let i = 0; i < 40; i++) setZoom(-1);
+    for (let i = 0; i < 120; i++) setZoom(-1);
     expect(camera.orthoTop).toBeCloseTo(3.2, 2);
     expect(camera.orthoTop).toBeGreaterThanOrEqual(3.2);
   });

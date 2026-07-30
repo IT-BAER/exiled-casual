@@ -6,7 +6,28 @@
     <link rel="icon" href="/favicon.ico" sizes="48x48 32x32 16x16" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <title>Exiled Casual — Combat Lab</title>
+    <link rel="preload" href="/fonts/cinzel-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/ebgaramond-latin.woff2" as="font" type="font/woff2" crossorigin />
     <style>
+      /* The two faces the whole game is set in, self-hosted.
+         Both were NAMED in the CSS from the start and neither was ever shipped,
+         so every screen actually rendered in Georgia — a document font, which is
+         what made the UI read like a web page. Local files rather than a Google
+         Fonts link: an offline-first client must not have a third party between
+         it and its own typeface, and the two latin subsets are 68kB together.
+         SIL Open Font License 1.1, see /fonts/OFL.txt. */
+      @font-face {
+        font-family: "Cinzel";
+        src: url(/fonts/cinzel-latin.woff2) format("woff2");
+        font-weight: 400 700;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: "EB Garamond";
+        src: url(/fonts/ebgaramond-latin.woff2) format("woff2");
+        font-weight: 400 700;
+        font-display: swap;
+      }
       * { margin: 0; padding: 0; box-sizing: border-box; }
       html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
       /* A game, not a document: the HUD's labels and numbers must not turn the
