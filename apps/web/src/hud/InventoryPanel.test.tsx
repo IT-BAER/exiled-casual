@@ -308,6 +308,28 @@ describe("spending currency on an item", () => {
     expect(seen.some((i) => (i as { kind: string }).kind === "applyCurrency")).toBe(false);
   });
 
+  /**
+   * The Portal Scroll has no target to be armed at, so right-clicking it IS the
+   * use. Nothing here checks whether that is legal: the sim refuses it outside a
+   * map and keeps the scroll, and a client that guessed would be guessing twice.
+   */
+  it("right-clicking a Portal Scroll spends it instead of arming it", () => {
+    const seen: unknown[] = [];
+    const withPortal = {
+      cols: 12, rows: 5,
+      items: [
+        { x: 0, y: 0, w: 1, h: 1, rarity: "normal" as const, name: "Portal Scroll", itemClass: "currency", baseId: "currency.portal", lines: [], count: 3 },
+        { x: 4, y: 0, w: 1, h: 2, rarity: "rare" as const, name: "Ember Wand", itemClass: "wand", lines: [] },
+      ],
+    };
+    render(<InventoryPanel inventory={withPortal} onClose={() => {}} onIntent={(i) => seen.push(i)} />);
+    fireEvent.contextMenu(screen.getByTestId("inventory-item-0"));
+    expect(seen).toEqual([{ kind: "usePortalScroll" }]);
+    // Nothing was armed, so the next click is an ordinary grab, not an application.
+    fireEvent.pointerDown(screen.getByTestId("inventory-item-1"));
+    expect(seen).toEqual([{ kind: "usePortalScroll" }]);
+  });
+
   it("does not arm off an ordinary item, so a click still picks it up", () => {
     const seen: unknown[] = [];
     render(<InventoryPanel inventory={withScroll} onClose={() => {}} onIntent={(i) => seen.push(i)} />);

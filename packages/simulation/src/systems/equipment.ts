@@ -1,6 +1,7 @@
 import { baseOf, isCurrency, canonicalBaseId, currencyItem } from "@exiled/content-runtime";
 import { disenchantYield, SHARDS_PER_ORB, vendorBuyPrice, vendorSellPrice } from "@exiled/rules";
 import { Simulation } from "../loop";
+import { isStaple } from "../vendor";
 import { placeFirstFit, canPlaceAt } from "../inventory";
 import { canEquip } from "../equipment";
 import { recomputePlayerStats } from "../derived";
@@ -224,10 +225,14 @@ export function registerEquipmentSystem(sim: Simulation): void {
           ...inv,
           items: [...inv.items, { x: fit.x, y: fit.y, w: stocked.w, h: stocked.h, item: stocked.item }],
         });
-        world.set<VendorC>(sessionE, "vendor", {
-          ...shelf,
-          items: shelf.items.filter((p) => !(p.x === x && p.y === y)),
-        });
+        // A staple's cell is a price tag, not a unit: buying one leaves it on the
+        // shelf, because the shop is where the way home comes from (vendor.ts).
+        if (!isStaple(stocked.item)) {
+          world.set<VendorC>(sessionE, "vendor", {
+            ...shelf,
+            items: shelf.items.filter((p) => !(p.x === x && p.y === y)),
+          });
+        }
         world.set<ProgressC>(sessionE, "progress", { ...prog, gold: prog.gold - price });
         continue;
       }

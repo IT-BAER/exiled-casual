@@ -29,8 +29,14 @@ const TRANSITIONS: Record<string, { from: readonly Item["rarity"][]; to: "magic"
   "currency.embers": { from: ["rare"], to: "rare", add: 1 },
 };
 
-/** Every currency base this module knows how to spend, including the Scroll of Wisdom. */
-export const CURRENCY_IDS: readonly string[] = ["currency.wisdom", ...Object.keys(TRANSITIONS)];
+/**
+ * Every currency base the game ships. The Scroll of Wisdom is spent by this module;
+ * the Portal Scroll is spent by the sim (systems/interact.ts) and appears here so
+ * the shop refuses to buy it back like any other currency.
+ */
+export const CURRENCY_IDS: readonly string[] = [
+  "currency.wisdom", "currency.portal", ...Object.keys(TRANSITIONS),
+];
 
 /**
  * Could this currency plausibly apply, judged from what a client can see? The sim

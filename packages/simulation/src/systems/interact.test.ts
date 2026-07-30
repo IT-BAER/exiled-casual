@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { fp } from "@exiled/fixed-point";
 import { offerWaystones, atlasGraph, WAYSTONE_OFFER_COUNT, atlasNodeTier, WAYSTONE_MAX_TIER } from "@exiled/rules";
 import { MAP_PORTALS } from "@exiled/protocol";
-import { waystoneItem, permanentWaystone, isPermanentWaystone, describeItem } from "@exiled/content-runtime";
+import { waystoneItem, permanentWaystone, isPermanentWaystone, describeItem, currencyItem, isPortalScroll, PORTAL_SCROLL_BASE_ID } from "@exiled/content-runtime";
 import { Simulation } from "../loop";
 import { registerInteractSystem } from "./interact";
 import type { World } from "../ecs";
@@ -203,7 +203,12 @@ describe("registerInteractSystem", () => {
     expect(session.portalsLeft).toBe(6); // unchanged
   });
 
-  it("portal click in the map sets pendingArea='hideout' without changing portalsLeft", () => {
+  /**
+   * Walking out closes one portal behind you, which is PoE1's rule and the second
+   * half of the Portal Scroll ask: a way home that costs nothing would make the
+   * budget meaningless.
+   */
+  it("portal click in the map sets pendingArea='hideout' and closes one portal", () => {
     const { sim, world, player, sessionE } = makeWorld();
     world.set<SessionC>(sessionE, "session", {
       area: "map", atlasSeed: 0, areaTier: 0, activeNodeId: "", completedNodes: [],
@@ -217,7 +222,25 @@ describe("registerInteractSystem", () => {
 
     const session = world.get<SessionC>(sessionE, "session")!;
     expect(session.pendingArea).toBe("hideout");
-    expect(session.portalsLeft).toBe(4); // unchanged
+    expect(session.portalsLeft).toBe(3);
+    expect(session.mapOpen).toBe(1);
+  });
+
+  it("walking out on the last portal closes the map behind him", () => {
+    const { sim, world, player, sessionE } = makeWorld();
+    world.set<SessionC>(sessionE, "session", {
+      area: "map", atlasSeed: 0, areaTier: 0, activeNodeId: "", completedNodes: [],
+      mapSeed: 0, waystoneSeed: 0, portalsLeft: 1, mapOpen: 1, pendingArea: "",
+    });
+    const portal = world.create();
+    world.set<Position>(portal, "position", { x: fp(0), y: fp(8) });
+    world.set<InteractableC>(portal, "interactable", { kind: "portal", radius: fp(2.5), yaw: 0 });
+
+    sim.step([interactCmd(player, portal)]);
+
+    const session = world.get<SessionC>(sessionE, "session")!;
+    expect(session.portalsLeft).toBe(0);
+    expect(session.mapOpen).toBe(0);
   });
 
   /**
@@ -284,5 +307,88 @@ describe("registerInteractSystem", () => {
     expect(() => sim.step([interactCmd(player, device)])).not.toThrow();
     // No session means no interactable effects; world should remain stable.
     expect(world.alive.has(player)).toBe(true);
+  });
+});
+
+/**
+ * The Portal Scroll: a way home from where you are standing, for a bag that filled
+ * up two rooms from the exit.
+ */
+describe("Portal Scroll", () => {
+  function inMap(portalsLeft = 6, scrolls = 1) {
+    const w = makeWorld();
+    w.world.set<SessionC>(w.sessionE, "session", {
+      area: "map", atlasSeed: 0, areaTier: 3, activeNodeId: "", completedNodes: [],
+      mapSeed: 0, waystoneSeed: 0, portalsLeft, mapOpen: 1, pendingArea: "",
+    });
+    w.world.set<InventoryC>(w.sessionE, "inventory", {
+      cols: 12, rows: 5,
+      items: scrolls > 0
+        ? [{ x: 0, y: 0, w: 1, h: 1, item: currencyItem(PORTAL_SCROLL_BASE_ID), count: scrolls }]
+        : [],
+    });
+    return w;
+  }
+  const useScroll = (player: number) => [{ tick: 0, entity: player, type: "usePortalScroll" }];
+  const portals = (world: World) => world
+    .query("interactable", "position")
+    .filter((e) => world.get<InteractableC>(e, "interactable")!.kind === "portal");
+  const scrollsLeft = (world: World, sessionE: number) => {
+    const held = world.get<InventoryC>(sessionE, "inventory")!.items.find((p) => isPortalScroll(p.item));
+    return held === undefined ? 0 : held.count ?? 1;
+  };
+
+  it("opens a portal at the player's feet and spends one scroll", () => {
+    const { sim, world, player, sessionE } = inMap(6, 3);
+    sim.step(useScroll(player));
+    const open = portals(world);
+    expect(open).toHaveLength(1);
+    expect(world.get<Position>(open[0]!, "position")).toEqual({ x: fp(0), y: fp(8) });
+    expect(scrollsLeft(world, sessionE)).toBe(2);
+    // Opening it is not walking through it: the portal budget is untouched.
+    expect(world.get<SessionC>(sessionE, "session")!.portalsLeft).toBe(6);
+  });
+
+  it("the last scroll leaves the cell rather than a stack of zero", () => {
+    const { sim, world, player, sessionE } = inMap(6, 1);
+    sim.step(useScroll(player));
+    expect(world.get<InventoryC>(sessionE, "inventory")!.items).toHaveLength(0);
+    expect(portals(world)).toHaveLength(1);
+  });
+
+  it("no scroll, no portal", () => {
+    const { sim, world, player } = inMap(6, 0);
+    sim.step(useScroll(player));
+    expect(portals(world)).toHaveLength(0);
+  });
+
+  it("does nothing in the hideout, where there is nothing to leave", () => {
+    const { sim, world, player, sessionE } = makeWorld();
+    world.set<InventoryC>(sessionE, "inventory", {
+      cols: 12, rows: 5,
+      items: [{ x: 0, y: 0, w: 1, h: 1, item: currencyItem(PORTAL_SCROLL_BASE_ID) }],
+    });
+    sim.step(useScroll(player));
+    expect(portals(world)).toHaveLength(0);
+    expect(scrollsLeft(world, sessionE)).toBe(1);
+  });
+
+  /** A scroll spent on a doorway that is already there buys nothing, so it is kept. */
+  it("refuses to spend a scroll where a portal already stands", () => {
+    const { sim, world, player, sessionE } = inMap(6, 2);
+    sim.step(useScroll(player));
+    sim.step(useScroll(player));
+    expect(portals(world)).toHaveLength(1);
+    expect(scrollsLeft(world, sessionE)).toBe(1);
+  });
+
+  it("the portal it opens is a real way out: taking it spends a portal", () => {
+    const { sim, world, player, sessionE } = inMap(4, 1);
+    sim.step(useScroll(player));
+    const portal = portals(world)[0]!;
+    sim.step([interactCmd(player, portal)]);
+    const session = world.get<SessionC>(sessionE, "session")!;
+    expect(session.pendingArea).toBe("hideout");
+    expect(session.portalsLeft).toBe(3);
   });
 });

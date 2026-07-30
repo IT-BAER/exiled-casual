@@ -3,7 +3,7 @@ import type { Item } from "@exiled/content-schema";
 import { vendorBuyPrice, vendorSellPrice, VENDOR_STOCK } from "@exiled/rules";
 import { createCombatSim } from "./combat-sim";
 import { intentToCommand } from "./protocol-bridge";
-import { stockVendor } from "./vendor";
+import { stockVendor, STAPLE_COUNT } from "./vendor";
 import { saveTo, loadInto } from "./persist";
 import { MemoryKv } from "@exiled/persistence";
 import type { InventoryC, VendorC, ProgressC } from "./components";
@@ -27,6 +27,14 @@ const sessionE = (world: W) => world.query("session")[0]!;
 const getInv = (world: W) => world.get<InventoryC>(sessionE(world), "inventory")!;
 const getVendor = (world: W) => world.get<VendorC>(sessionE(world), "vendor")!;
 const getGold = (world: W) => world.get<ProgressC>(sessionE(world), "progress")!.gold;
+/** The whole shelf: the always-stocked staples plus the rolled goods. */
+const SHELF = VENDOR_STOCK + STAPLE_COUNT;
+/**
+ * The first cell that is actually sold OUT of stock. The staples sit at the front
+ * of the shelf and never leave it, so a test about a purchase emptying a cell has
+ * to shop past them.
+ */
+const firstRolled = (world: W) => getVendor(world).items[STAPLE_COUNT]!;
 
 function setInv(world: W, items: InventoryC["items"]) {
   world.set<InventoryC>(sessionE(world), "inventory", { ...getInv(world), items });
@@ -39,7 +47,7 @@ function setGold(world: W, gold: number) {
 describe("vendor stock", () => {
   it("stands a shelf up with the session", () => {
     const { world } = makeWorld();
-    expect(getVendor(world).items).toHaveLength(VENDOR_STOCK);
+    expect(getVendor(world).items).toHaveLength(SHELF);
   });
 
   it("stocks the same shelf for the same world seed", () => {
@@ -58,7 +66,7 @@ describe("vendor stock", () => {
 
   it("keeps the holes a purchase left across a save and load", async () => {
     const { sim, world, playerEntity } = makeWorld();
-    const shelf = getVendor(world).items[0]!;
+    const shelf = firstRolled(world);
     setGold(world, vendorBuyPrice(shelf.item));
     sim.step([intentToCommand({ kind: "buyItem", x: shelf.x, y: shelf.y }, playerEntity, 0)]);
 
@@ -67,7 +75,7 @@ describe("vendor stock", () => {
     const fresh = makeWorld();
     await loadInto(kv, fresh.world);
 
-    expect(getVendor(fresh.world).items).toHaveLength(VENDOR_STOCK - 1);
+    expect(getVendor(fresh.world).items).toHaveLength(SHELF - 1);
   });
 
   it("stocks a different shelf for a different world seed", () => {
@@ -79,7 +87,7 @@ describe("vendor stock", () => {
 describe("buyItem", () => {
   it("takes the gold and hands over the goods", () => {
     const { sim, world, playerEntity } = makeWorld();
-    const shelf = getVendor(world).items[0]!;
+    const shelf = firstRolled(world);
     const price = vendorBuyPrice(shelf.item);
     setGold(world, price + 5);
 
@@ -93,19 +101,19 @@ describe("buyItem", () => {
   it("refuses when the purse is one coin short, and takes nothing", () => {
     const { sim, world, playerEntity } = makeWorld();
     setInv(world, []);
-    const shelf = getVendor(world).items[0]!;
+    const shelf = firstRolled(world);
     setGold(world, vendorBuyPrice(shelf.item) - 1);
 
     sim.step([intentToCommand({ kind: "buyItem", x: shelf.x, y: shelf.y }, playerEntity, 0)]);
 
     expect(getGold(world)).toBe(vendorBuyPrice(shelf.item) - 1);
-    expect(getVendor(world).items).toHaveLength(VENDOR_STOCK);
+    expect(getVendor(world).items).toHaveLength(SHELF);
     expect(getInv(world).items).toHaveLength(0);
   });
 
   it("refuses when the backpack has no room, and keeps the gold", () => {
     const { sim, world, playerEntity } = makeWorld();
-    const shelf = getVendor(world).items[0]!;
+    const shelf = firstRolled(world);
     setGold(world, 999_999);
     // Wall the backpack off with 1x1 junk in every cell.
     const inv = getInv(world);
@@ -116,7 +124,7 @@ describe("buyItem", () => {
     sim.step([intentToCommand({ kind: "buyItem", x: shelf.x, y: shelf.y }, playerEntity, 0)]);
 
     expect(getGold(world)).toBe(999_999);
-    expect(getVendor(world).items).toHaveLength(VENDOR_STOCK);
+    expect(getVendor(world).items).toHaveLength(SHELF);
   });
 
   it("ignores an empty shelf cell", () => {

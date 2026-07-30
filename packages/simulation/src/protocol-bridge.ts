@@ -96,6 +96,8 @@ export function intentToCommand(intent: Intent, player: Entity, tick: number): C
       };
     case "buyItem":
       return { tick, entity: player, type: "buyItem", data: { x: intent.x, y: intent.y } };
+    case "usePortalScroll":
+      return { tick, entity: player, type: "usePortalScroll" };
     case "revive":
       // `data` is numbers-only, so the choice rides as a flag rather than a word.
       return {

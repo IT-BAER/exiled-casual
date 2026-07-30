@@ -558,6 +558,15 @@ export function InventoryPanel({
                 onMouseLeave={() => setHover((h) => (h?.item === it ? null : h))}
                 onContextMenu={(e) => {
                   e.preventDefault();
+                  // A Portal Scroll has no target to be armed at: right-clicking it
+                  // IS the use, which is how PoE reads one too. The sim refuses it
+                  // outside a map and keeps the scroll, so no check belongs here.
+                  if (container === "backpack" && it.baseId === "currency.portal") {
+                    setHover(null);
+                    setArmed(null);
+                    onIntent?.({ kind: "usePortalScroll" });
+                    return;
+                  }
                   // Right-clicking the armed currency again, or anything that is not
                   // currency at all, puts what is on the cursor back in the bag.
                   setArmed((a) => (container === "backpack" && it.itemClass === "currency" && a?.x !== it.x ? it : null));

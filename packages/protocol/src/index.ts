@@ -56,9 +56,15 @@ export type Intent =
    * out. Both spend one of the map's portals — see systems/revive.ts — and the
    * sim refuses a checkpoint when spending it would close the map.
    */
-  | { kind: "revive"; where: "checkpoint" | "hideout" };
+  | { kind: "revive"; where: "checkpoint" | "hideout" }
+  /**
+   * Spend one Portal Scroll to open a way home where the player is standing. Only
+   * ever inside an open map; the sim finds the scroll in its own inventory, so the
+   * client never names one.
+   */
+  | { kind: "usePortalScroll" };
 
-export type CommandType = "moveTo" | "moveDir" | "useSkill" | "stop" | "interact" | "activateMap" | "pickupItem" | "equipItem" | "unequipItem" | "dropItem" | "moveItem" | "useFlask" | "applyCurrency" | "sellItem" | "buyItem" | "revive";
+export type CommandType = "moveTo" | "moveDir" | "useSkill" | "stop" | "interact" | "activateMap" | "pickupItem" | "equipItem" | "unequipItem" | "dropItem" | "moveItem" | "useFlask" | "applyCurrency" | "sellItem" | "buyItem" | "revive" | "usePortalScroll";
 
 // ---------------------------------------------------------------------------
 // Run loop
@@ -70,10 +76,14 @@ export type AreaKind = "hideout" | "map";
 export const AREA_KINDS: readonly AreaKind[] = ["hideout", "map"];
 
 /**
- * Portals a freshly-opened map grants. Per docs/01 §8 this is the retry budget,
- * not an entry charge: entering and leaving is free, each death spends one, and
- * the map closes at zero. Starting at 6 and decrementing on death yields exactly
- * "six total lives including the initial entry".
+ * Portals a freshly-opened map grants: the number of times the player may be
+ * standing outside it and still get back in.
+ *
+ * Two things spend one — answering the death screen (systems/revive.ts) and
+ * walking out through a portal (systems/interact.ts) — and the map closes at zero,
+ * which is PoE1's rule rather than the "deaths only" reading this started with.
+ * Entering is free, because the portal you came through is the one already paid
+ * for; that is what makes six trips out of six portals instead of three.
  */
 export const MAP_PORTALS = 6;
 

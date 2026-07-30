@@ -15,6 +15,13 @@ import type {
 // "start" socket instead — see area-transition.ts / combat-sim.ts.
 export const HIDEOUT_SPAWN = { x: fp(0), y: fp(0) } as const;
 
+/**
+ * How close the player has to be to take a portal. Shared by the ring, the map's
+ * exit and a Portal Scroll's own doorway, because the scroll's guard against being
+ * spent on a spot that is already covered reads this same number.
+ */
+export const PORTAL_RADIUS: number = fp(2.5);
+
 // Close enough to the (0,0) spawn that the device is on screen the moment you
 // arrive: the camera only shows ~9.5 world units vertically.
 //
@@ -73,7 +80,7 @@ export function spawnPortalRing(world: World, count: number): void {
     });
     world.set<InteractableC>(e, "interactable", {
       kind: "portal",
-      radius: fp(2.5),
+      radius: PORTAL_RADIUS,
       yaw: slot.yaw,
     });
   }
@@ -248,7 +255,7 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
     world.set<Position>(portalE, "position", { x: fp(exit.x), y: fp(exit.y) });
     world.set<InteractableC>(portalE, "interactable", {
       kind: "portal",
-      radius: fp(2.5),
+      radius: PORTAL_RADIUS,
       yaw: 3.1416,
     });
   }

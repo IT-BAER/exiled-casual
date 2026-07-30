@@ -109,9 +109,26 @@ const CURRENCY_BASES: ItemBase[] = [
   { id: "currency.elevation", name: "Orb of Elevation", itemClass: "currency", w: 1, h: 1, icon: "/textures/items/orb_elevation.png" },
   { id: "currency.alchemy", name: "Orb of Alchemy", itemClass: "currency", w: 1, h: 1, icon: "/textures/items/orb_alchemy.png" },
   { id: "currency.embers", name: "Orb of Embers", itemClass: "currency", w: 1, h: 1, icon: "/textures/items/orb_embers.png" },
+  { id: "currency.portal", name: "Portal Scroll", itemClass: "currency", w: 1, h: 1, icon: "/textures/items/portal_scroll.png" },
 ];
 
 export const WISDOM_SCROLL_BASE_ID = "currency.wisdom";
+
+/**
+ * The scroll that opens a way home from where you are standing.
+ *
+ * Deliberately NOT in `CURRENCY_DROPS`: the drop table hands out a fixed number of
+ * currency items per kill, so anything added to it is taken out of something else,
+ * and what it would have taken from is the reveal economy the band in
+ * `death.test.ts` exists to hold. It is stocked by the disenchanter instead
+ * (simulation/vendor.ts), which is also where PoE gets its scrolls, and which
+ * finally gives gold something to be for.
+ */
+export const PORTAL_SCROLL_BASE_ID = "currency.portal";
+
+export function isPortalScroll(item: Item): boolean {
+  return item.baseId === PORTAL_SCROLL_BASE_ID;
+}
 
 /**
  * The waystone, on the same footing as currency: a 1x1 grid item that is not
@@ -397,6 +414,21 @@ function affixLine(value: number, label: string): string {
   return `${signed ? "+" : ""}${value}${pct ? "" : " "}${label}`;
 }
 
+/**
+ * What a currency does, on the item, for the ones whose gesture is not obvious.
+ *
+ * The orbs are dragged onto a piece and the cursor already refuses the ones that
+ * do not fit, so they need no line. The Portal Scroll has no target at all — it is
+ * right-clicked and a doorway appears — and a consumable nobody can work out how to
+ * spend is a consumable that sits in the bag forever.
+ */
+const CURRENCY_LINES: Record<string, readonly string[]> = {
+  [PORTAL_SCROLL_BASE_ID]: [
+    "Right click to open a portal to your hideout",
+    "Only usable inside a map",
+  ],
+};
+
 export function describeItem(item: Item): ItemDescription {
   const base = baseOf(item.baseId);
   // A waystone reads nothing like gear: its rarity and its mods are both derived
@@ -427,10 +459,11 @@ export function describeItem(item: Item): ItemDescription {
   // An unidentified item is a shape, not a promise: its rolled name and mods stay
   // hidden until a Scroll of Wisdom reads them. The base, its stats and its implicit
   // are visible either way, exactly as PoE shows an unread drop.
-  const lines = item.unidentified === true ? [] : item.affixes.map((ia) => {
-    const a = AFFIX_BY_ID.get(ia.affixId);
-    return a ? affixLine(ia.value, a.label) : `+${ia.value} ${ia.affixId}`;
-  });
+  const lines = CURRENCY_LINES[canonicalBaseId(item.baseId)]?.slice()
+    ?? (item.unidentified === true ? [] : item.affixes.map((ia) => {
+      const a = AFFIX_BY_ID.get(ia.affixId);
+      return a ? affixLine(ia.value, a.label) : `+${ia.value} ${ia.affixId}`;
+    }));
   const d: ItemDescription = {
     name: item.unidentified === true ? base.name : item.name ?? base.name,
     baseName: base.name,
