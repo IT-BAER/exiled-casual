@@ -103,7 +103,7 @@ const RENAMED_BASES: Record<string, string> = { "base.wisdom_scroll": "currency.
  * transition table in `@exiled/rules` so a base id is all the sim has to carry.
  */
 const CURRENCY_BASES: ItemBase[] = [
-  { id: "currency.wisdom", name: "Scroll of Wisdom", itemClass: "currency", w: 1, h: 1, icon: "/textures/items/wisdom_scroll.svg" },
+  { id: "currency.wisdom", name: "Scroll of Wisdom", itemClass: "currency", w: 1, h: 1, icon: "/textures/items/wisdom_scroll.png" },
   { id: "currency.transmutation", name: "Orb of Transmutation", itemClass: "currency", w: 1, h: 1, icon: "/textures/items/orb_transmutation.png" },
   { id: "currency.augmentation", name: "Orb of Augmentation", itemClass: "currency", w: 1, h: 1, icon: "/textures/items/orb_augmentation.png" },
   { id: "currency.elevation", name: "Orb of Elevation", itemClass: "currency", w: 1, h: 1, icon: "/textures/items/orb_elevation.png" },

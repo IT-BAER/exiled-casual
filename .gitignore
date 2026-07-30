@@ -44,3 +44,6 @@ assets/loading/build/
 
 # Downscaled hides and their derived normals; monsters.glb embeds them
 assets/monsters/build/
+
+# Bytecode from the tools/ scripts
+tools/__pycache__/
