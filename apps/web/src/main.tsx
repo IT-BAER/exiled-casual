@@ -33,3 +33,26 @@ if (boot) {
     });
   });
 }
+
+/**
+ * Install the service worker, in a real build only.
+ *
+ * It is what makes the game installable from the browser's own menu and what
+ * makes the second visit come off the disk. Under Vite's dev server it would
+ * serve yesterday's modules back to a developer editing today's, so it is not
+ * registered there — and any worker left over from a production build on the
+ * same origin is torn out instead.
+ */
+if ("serviceWorker" in navigator) {
+  if (import.meta.env.PROD) {
+    window.addEventListener("load", () => {
+      void navigator.serviceWorker.register("/sw.js").catch(() => {
+        /* An install that fails costs the offline cache and nothing else. */
+      });
+    });
+  } else {
+    void navigator.serviceWorker.getRegistrations?.()
+      .then((regs) => regs.forEach((r) => void r.unregister()))
+      .catch(() => {});
+  }
+}

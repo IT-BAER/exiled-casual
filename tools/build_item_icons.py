@@ -83,6 +83,9 @@ ICONS: list[tuple[str, str, int, int]] = [
 FAVICON_MASTER = "logo_mark_badge_v1"
 FAVICON_SIZES = (48, 32, 16)
 APPLE_TOUCH = 180
+# The two sizes a browser wants before it will offer to install the game: 192 for
+# the launcher tile, 512 for the splash it draws while the client boots.
+PWA_SIZES = (192, 512)
 
 
 def build(master: Path, out: Path, cells_w: int, cells_h: int, cell: int = ICON_CELL) -> str:
@@ -126,8 +129,11 @@ def build_favicon() -> str:
     root = ROOT / "apps" / "web" / "public"
     im.resize((APPLE_TOUCH, APPLE_TOUCH), Image.LANCZOS).save(root / "apple-touch-icon.png")
     im.save(root / "favicon.ico", sizes=[(s, s) for s in FAVICON_SIZES])
+    for px in PWA_SIZES:
+        im.resize((px, px), Image.LANCZOS).save(root / f"icon-{px}.png")
     return (f"{master.name} {side}x{side} squared -> favicon.ico "
-            f"{'/'.join(str(s) for s in FAVICON_SIZES)} + apple-touch-icon.png {APPLE_TOUCH}")
+            f"{'/'.join(str(s) for s in FAVICON_SIZES)} + apple-touch-icon.png {APPLE_TOUCH}"
+            f" + icon-{'/'.join(str(s) for s in PWA_SIZES)}.png")
 
 
 def main() -> None:

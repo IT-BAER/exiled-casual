@@ -14,6 +14,7 @@ import { attachBindings } from "./input/bindings";
 import { CORE_SFX, playSfx, preloadSfx } from "./audio/sfx";
 import { createSoundscape } from "./audio/soundscape";
 import { preloadUiArt } from "./ui-art";
+import { FeedbackDialog, type FeedbackKind } from "./menu/FeedbackDialog";
 import { Hud, BAR_H, ORB_RISE } from "./hud/Hud";
 import { PreparationPanel } from "./hud/PreparationPanel";
 import { InventoryPanel } from "./hud/InventoryPanel";
@@ -69,6 +70,8 @@ export function GameView({
   const [characterOpen, setCharacterOpen] = useState(false);
   // The Escape menu: the only way back out to character select.
   const [gameMenuOpen, setGameMenuOpen] = useState(false);
+  /** Which report dialog is open, if any. Overlays take turns here too. */
+  const [feedback, setFeedback] = useState<FeedbackKind | null>(null);
   const [optionsOpen, setOptionsOpen] = useState(false);
   // The Options panel applies graphics to the LIVE scene, and the scene is built
   // inside the mount effect where nothing else can reach it.
@@ -504,9 +507,11 @@ export function GameView({
           // Closing the menu first is this file's existing rule: overlays do not
           // stack, they take turns.
           onOptions={() => { setGameMenuOpen(false); setOptionsOpen(true); }}
+          onReport={(kind) => { setGameMenuOpen(false); setFeedback(kind); }}
           onExit={onExit}
         />
       )}
+      {feedback && <FeedbackDialog kind={feedback} onClose={() => setFeedback(null)} />}
       {optionsOpen && (
         <OptionsPanel
           settings={settings}
@@ -640,10 +645,12 @@ function DeathScreen({
 function GameMenu({
   onResume,
   onOptions,
+  onReport,
   onExit,
 }: {
   onResume: () => void;
   onOptions: () => void;
+  onReport: (kind: FeedbackKind) => void;
   onExit?: () => void;
 }) {
   return (
@@ -666,6 +673,19 @@ function GameMenu({
           <MenuButton tone="primary" onClick={onResume}>Resume</MenuButton>
           <MenuButton onClick={onOptions}>Options</MenuButton>
           <MenuButton onClick={onExit} disabled={onExit === undefined}>Characters</MenuButton>
+        </div>
+        <Divider style={{ margin: "16px 0 12px" }} />
+        {/* Under the rule and shorter than the three above: these are the way to
+            talk back, not two more ways to leave. Full width and stacked, because
+            the plate does not shrink its label — side by side, "REPORT A BUG" ran
+            straight through the button next to it. */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <MenuButton height={34} style={{ width: "100%" }} onClick={() => onReport("bug")}>
+            Report a Bug
+          </MenuButton>
+          <MenuButton height={34} style={{ width: "100%" }} onClick={() => onReport("idea")}>
+            Feedback
+          </MenuButton>
         </div>
       </FramedPanel>
     </div>

@@ -21,6 +21,22 @@
 import React from "react";
 import { MENU_ART } from "./frames";
 
+/**
+ * One clock for the whole menu, started when the module is first loaded.
+ *
+ * Every layer here is timed against THIS rather than against its own mount, and
+ * that is the whole reason it exists: the menu screens are separate components
+ * over the same painting, so opening Credits unmounts one Atmosphere and mounts
+ * another. Timed per mount, the fog jumped back to its first frame and the dust
+ * teleported to its seeded start — the "abrupt shift" on the Credits click. On a
+ * shared clock the air simply carries on behind the new screen.
+ */
+const MENU_CLOCK_START = typeof performance !== "undefined" ? performance.now() : 0;
+
+function menuElapsed(): number {
+  return ((typeof performance !== "undefined" ? performance.now() : 0) - MENU_CLOCK_START) / 1000;
+}
+
 /** The matte painting. */
 export function Backdrop({ src }: { src: string }): React.ReactElement {
   return (
@@ -45,6 +61,10 @@ export function Backdrop({ src }: { src: string }): React.ReactElement {
  * nothing and only the vapour lands.
  */
 export function Fog(): React.ReactElement {
+  // Read ONCE per mount: a delay that changed on a re-render would restart the
+  // phase, which is the jump this is here to remove.
+  const [phase] = React.useState(() => menuElapsed());
+  const resume = { animationDelay: `-${phase.toFixed(2)}s` };
   return (
     <div aria-hidden style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
       <style>{FOG_KEYFRAMES}</style>
@@ -54,10 +74,19 @@ export function Fog(): React.ReactElement {
           inset: "-20%",
           backgroundImage: `url(${MENU_ART}/fog_sheet.png)`,
           backgroundRepeat: "repeat",
-          backgroundSize: "56% auto",
+          // Sized in PIXELS, not in a percentage of the element.
+          //
+          // The loop is only seamless if the sheet travels a whole number of
+          // tiles, and with a percentage size the tile is however many pixels
+          // the window happens to make it — so the 1000px the keyframe travelled
+          // landed mid-tile at nearly every width, and the sheet snapped back at
+          // the end of every cycle. A fixed tile also keeps the fog's grain the
+          // same on a laptop and on a 4K panel, which is what grain should do.
+          backgroundSize: `${FOG_FAR_TILE}px auto`,
           mixBlendMode: "screen",
           opacity: 0.26,
           animation: "menu-fog-far 121s linear infinite",
+          ...resume,
         }}
       />
       <div
@@ -66,19 +95,24 @@ export function Fog(): React.ReactElement {
           inset: "-30%",
           backgroundImage: `url(${MENU_ART}/fog_sheet.png)`,
           backgroundRepeat: "repeat",
-          backgroundSize: "104% auto",
+          backgroundSize: `${FOG_NEAR_TILE}px auto`,
           mixBlendMode: "screen",
           opacity: 0.16,
           animation: "menu-fog-near 67s linear infinite reverse",
+          ...resume,
         }}
       />
     </div>
   );
 }
 
+/** Tile size of each sheet, in CSS pixels. The keyframes travel exactly one. */
+const FOG_FAR_TILE = 760;
+const FOG_NEAR_TILE = 1180;
+
 const FOG_KEYFRAMES = `
-@keyframes menu-fog-far  { from { background-position: 0 0; }   to { background-position: 1000px -60px; } }
-@keyframes menu-fog-near { from { background-position: 0 0; }   to { background-position: 1400px 40px; } }
+@keyframes menu-fog-far  { from { background-position: 0 0; }   to { background-position: ${FOG_FAR_TILE}px 0; } }
+@keyframes menu-fog-near { from { background-position: 0 0; }   to { background-position: ${FOG_NEAR_TILE}px 0; } }
 @media (prefers-reduced-motion: reduce) {
   [data-atmos] * { animation: none !important; }
 }
@@ -234,9 +268,10 @@ export function Braziers({
     );
 
     let raf = 0;
-    const start = performance.now();
     const draw = (now: number) => {
-      const t = still ? 1.7 : (now - start) / 1000;
+      // Shared clock again: a fire that restarts on a navigation is a fire that
+      // gutters exactly when the screen changes.
+      const t = still ? 1.7 : (now - MENU_CLOCK_START) / 1000;
       ctx.clearRect(0, 0, w, h);
       const fit = cover();
       if (!fit) {
@@ -375,9 +410,9 @@ export function Dust({ count = 80 }: { count?: number }): React.ReactElement {
     }));
 
     let raf = 0;
-    const start = performance.now();
     const draw = (now: number) => {
-      const t = (now - start) / 1000;
+      // The shared menu clock, so a navigation does not rewind the dust.
+      const t = (now - MENU_CLOCK_START) / 1000;
       ctx.clearRect(0, 0, w, h);
       for (const m of motes) {
         // Wrap in normalised space so a resize never strands a mote off-screen.
