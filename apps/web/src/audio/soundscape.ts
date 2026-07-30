@@ -6,15 +6,20 @@ import { distanceGain, playSfx } from "./sfx";
  *
  * The client is given snapshots, not events, so every sound here is a DIFFERENCE
  * between two of them: a monster that was in the last one and is not in this one
- * died, a telegraph that vanished landed, a portal that appeared opened. That is
+ * died, a telegraph that vanished landed, a flask charge spent was drunk. That is
  * the only honest source available — the sim never says "a claw connected" — and it
  * has the useful property that a sound can never fire for something that did not
  * actually happen in the world.
  *
- * The UI clicks are the exception and fire at their own dispatch sites, because a
- * button press is not a change to the world. Casts are NOT: they are read off the
- * cooldown that a successful cast set, which costs a frame and buys the guarantee
- * that a bolt refused for mana never makes the noise of one that flew.
+ * Two exceptions. The UI clicks fire at their own dispatch sites, because a button
+ * press is not a change to the world. And the portals belong to the renderer
+ * (meshes.ts): the snapshot says all six arrived on one tick, but they open a
+ * quarter-second apart, and only the thing staggering them knows when each one is
+ * meant to be heard.
+ *
+ * Casts are NOT an exception: they are read off the cooldown a successful cast set,
+ * which costs a frame and buys the guarantee that a bolt refused for mana never
+ * makes the noise of one that flew.
  *
  * Timing is measured in TICKS off the snapshot, never in wall-clock milliseconds:
  * the sim is the clock, so a stall cannot make footsteps run while the player is
@@ -96,8 +101,6 @@ export function createSoundscape(opts: Options = {}): Soundscape {
         } else if (e.kind === "telegraph") {
           // A ring only ever leaves the world by landing.
           play("monster-slam-impact", at(e));
-        } else if (e.kind === "portal") {
-          play("portal-close", at(e));
         } else if (e.kind === "projectile" && (e.team ?? 0) === 0) {
           // His own bolt, spent: it either hit something or ran out of range, and
           // both are the same burst as far as the ear is concerned.
@@ -110,7 +113,6 @@ export function createSoundscape(opts: Options = {}): Soundscape {
       for (const [id, e] of now) {
         if (was.has(id)) continue;
         if (e.kind === "telegraph") play("monster-slam-windup", at(e));
-        else if (e.kind === "portal") play("portal-open", at(e));
         else if (e.kind === "projectile" && (e.team ?? 0) !== 0) play("monster-spit", at(e));
       }
 

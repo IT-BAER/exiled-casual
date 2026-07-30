@@ -12,6 +12,7 @@ import { attachProp } from "./props";
 import { attachCreature, type CreatureRig } from "./monsters";
 import { attachBoltTrail, attachCinderFX, cinderGlow } from "./skill-fx";
 import { attachRig, rigOf, type RigParts } from "./rig";
+import { playSfx } from "../audio/sfx";
 
 export type MeshKind = "player" | "monster" | "rare" | "boss" | "projectile" | "groundArea" | "telegraph" | "portal" | "mapDevice" | "stash" | "vendor" | "groundItem";
 
@@ -478,6 +479,95 @@ const BEAM_ALPHA: Record<string, number> = {
   rare: 0.48,
   unique: 0.62,
 };
+
+/**
+ * How long after the portal before it a portal opens. His number: six doorways
+ * arriving on one tick is a pop, and the same six a quarter-second apart is the
+ * device working through them.
+ */
+export const PORTAL_STAGGER_MS = 250;
+/** How long one portal takes to iris open, and to close again. */
+const PORTAL_OPEN_MS = 320;
+const PORTAL_CLOSE_MS = 220;
+
+/**
+ * Drive a portal's root scale from 0 to 1 (or back), then hand off.
+ *
+ * Scaling the ROOT and not the parts is what makes it grow out of the floor: the
+ * void, the rim and the ground bloom are all positioned in local space, so the
+ * whole doorway rises and widens together instead of a full-size ellipse fading in
+ * where there was nothing.
+ *
+ * Guarded on `isDisposed` every tick: a scene torn down mid-animation (leaving an
+ * area is exactly when portals are closing) disposes the mesh underneath us.
+ */
+function scalePortal(
+  scene: Scene, root: Mesh, ms: number, from: number, to: number, onDone?: () => void,
+): void {
+  root.scaling.setAll(from);
+  let t = 0;
+  const tick = scene.onBeforeRenderObservable.add(() => {
+    if (root.isDisposed()) { scene.onBeforeRenderObservable.remove(tick); return; }
+    t += scene.getEngine().getDeltaTime();
+    const k = Math.min(1, t / ms);
+    // easeOutBack: overshoots a little and settles, which is a door being pushed
+    // rather than a value being lerped. Opening only — a close that overshot would
+    // grow before it went.
+    const e = to > from ? 1 + 2.2 * Math.pow(k - 1, 3) + 1.2 * Math.pow(k - 1, 2) : k;
+    root.scaling.setAll(from + (to - from) * e);
+    if (k >= 1) {
+      scene.onBeforeRenderObservable.remove(tick);
+      root.scaling.setAll(to);
+      onDone?.();
+    }
+  });
+}
+
+/**
+ * A portal opening: hidden for `delayMs`, then irised open with its own cue.
+ *
+ * The sound lives here rather than in the soundscape because the stagger does: the
+ * snapshot says all six arrived on one tick, and only this module knows which
+ * quarter-second each of them is actually meant to appear in.
+ */
+export function portalAppear(scene: Scene, root: Mesh, delayMs: number): void {
+  root.setEnabled(false);
+  root.scaling.setAll(0.001);
+  if (delayMs <= 0) {
+    root.setEnabled(true);
+    playSfx("portal-open");
+    scalePortal(scene, root, PORTAL_OPEN_MS, 0.001, 1);
+    return;
+  }
+  let t = 0;
+  const wait = scene.onBeforeRenderObservable.add(() => {
+    if (root.isDisposed()) { scene.onBeforeRenderObservable.remove(wait); return; }
+    t += scene.getEngine().getDeltaTime();
+    if (t < delayMs) return;
+    scene.onBeforeRenderObservable.remove(wait);
+    root.setEnabled(true);
+    playSfx("portal-open");
+    scalePortal(scene, root, PORTAL_OPEN_MS, 0.001, 1);
+  });
+}
+
+/**
+ * A portal closing: collapses, then disposes itself.
+ *
+ * The caller has already forgotten this mesh, so nothing else will ever dispose
+ * it — which is exactly why the animation owns that.
+ */
+export function portalVanish(scene: Scene, root: Mesh): void {
+  playSfx("portal-close");
+  scalePortal(scene, root, PORTAL_CLOSE_MS, root.scaling.x, 0.001, () => {
+    if (!root.isDisposed()) root.dispose();
+  });
+}
+
+/** Is this root a portal? Read off the metadata the builder already stamps. */
+export function isPortalMesh(root: Mesh): boolean {
+  return (root.metadata as { interactKind?: string } | null)?.interactKind === "portal";
+}
 
 /**
  * Pulse the portal rim and indicate inRange affordance.

@@ -624,3 +624,60 @@ describe("wheel zoom", () => {
     }
   });
 });
+
+describe("portals arrive one at a time", () => {
+  /** Six portals on one tick with the entity ids the sim's ring order gives them. */
+  const ring = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({ id: 100 + i, kind: "portal" as const, x: i, y: 0, yaw: 0 }));
+
+  it("holds every portal but the first shut, and opens them in ring order", () => {
+    const scene = new Scene(new NullEngine());
+    const renderer = new SnapshotRenderer(scene);
+    renderer.apply(null, makeSnapshot({ entities: ring(4) }), 1);
+
+    const meshes = [100, 101, 102, 103].map((id) => scene.getMeshByName(`entity-${id}`)!);
+    for (const m of meshes) expect(m).not.toBeNull();
+    // The first is already opening; the rest are waiting their quarter-second and
+    // must not be standing there at full size in the meantime.
+    expect(meshes[0]!.isEnabled(false)).toBe(true);
+    for (const m of meshes.slice(1)) expect(m.isEnabled(false)).toBe(false);
+    for (const m of meshes) expect(m.scaling.x).toBeLessThan(0.5);
+  });
+
+  it("a portal already standing is not re-opened by the next frame", () => {
+    const scene = new Scene(new NullEngine());
+    const renderer = new SnapshotRenderer(scene);
+    const snap = makeSnapshot({ entities: ring(2) });
+    renderer.apply(null, snap, 1);
+    const second = scene.getMeshByName("entity-101")!;
+    second.setEnabled(true);
+    second.scaling.setAll(1);
+    // apply() runs several times per snapshot while interpolating.
+    renderer.apply(snap, snap, 0.5);
+    expect(second.isEnabled(false)).toBe(true);
+    expect(second.scaling.x).toBe(1);
+  });
+
+  /**
+   * Leaving an area takes the whole hideout with it. Those portals were not closed,
+   * and six collapses plus six cues under the loading plate is noise.
+   */
+  it("an area change takes its portals instantly, with no collapse", () => {
+    const scene = new Scene(new NullEngine());
+    const renderer = new SnapshotRenderer(scene);
+    const before = makeSnapshot({ area: "hideout", entities: ring(3) });
+    renderer.apply(null, before, 1);
+    renderer.apply(before, makeSnapshot({ area: "map", entities: [] }), 1);
+    for (const id of [100, 101, 102]) expect(scene.getMeshByName(`entity-${id}`)).toBeNull();
+  });
+
+  it("a portal closing inside the area collapses before it goes", () => {
+    const scene = new Scene(new NullEngine());
+    const renderer = new SnapshotRenderer(scene);
+    const before = makeSnapshot({ entities: ring(1) });
+    renderer.apply(null, before, 1);
+    renderer.apply(before, makeSnapshot({ entities: [] }), 1);
+    // Still in the scene, mid-collapse, and no longer the renderer's to move.
+    expect(scene.getMeshByName("entity-100")).not.toBeNull();
+  });
+});

@@ -80,13 +80,14 @@ describe("createSoundscape", () => {
     ])).toEqual(["monster-spit", "skill-ember-bolt-impact"]);
   });
 
-  it("a portal opens and closes", () => {
+  /** The portals are the renderer's: it staggers them, so it sounds them. */
+  it("says nothing about portals", () => {
     const portal: SnapshotEntity = { id: 7, kind: "portal", x: 0, y: 1 };
     expect(run([
       snap({ tick: 1, entities: [] }),
       snap({ tick: 2, entities: [portal] }),
       snap({ tick: 3, entities: [] }),
-    ])).toEqual(["portal-open", "portal-close"]);
+    ])).toEqual([]);
   });
 
   /**
@@ -96,7 +97,7 @@ describe("createSoundscape", () => {
    */
   it("says nothing across an area change", () => {
     expect(run([
-      snap({ tick: 40, area: "map", entities: [monster(1, 3), { id: 2, kind: "portal", x: 0, y: 0 }] }),
+      snap({ tick: 40, area: "map", entities: [monster(1, 3), { id: 2, kind: "telegraph", x: 0, y: 0 }] }),
       snap({ tick: 41, area: "hideout", entities: [] }),
       snap({ tick: 42, area: "hideout", entities: [] }),
     ])).toEqual([]);

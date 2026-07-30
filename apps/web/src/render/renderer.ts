@@ -3,7 +3,7 @@ import type { Scene } from "@babylonjs/core";
 import type { Mesh } from "@babylonjs/core";
 import { blinkBurst } from "./skill-fx";
 import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
-import { animateActor, makeMesh, updateTelegraph, updatePortal, updateMapDevice, updateStash, updateVendor, updateGroundItem, updateRareElement, Y_LIFT } from "./meshes";
+import { animateActor, makeMesh, updateTelegraph, updatePortal, updateMapDevice, updateStash, updateVendor, updateGroundItem, updateRareElement, portalAppear, portalVanish, isPortalMesh, PORTAL_STAGGER_MS, Y_LIFT } from "./meshes";
 import type { MeshKind } from "./meshes";
 import { COSMETIC_SLOTS, looksForEquipment, previewItemFor, rigOf, type Looks } from "./rig";
 import { CAMERA_ALPHA } from "./engine";
@@ -153,6 +153,14 @@ export class SnapshotRenderer {
     const playerMesh = this.meshes.get(next.player.id);
     if (playerMesh) rigOf(playerMesh)?.setLooks(this.looksFor(next));
 
+    // Portals arriving this snapshot, in ring order (spawnPortalRing creates them
+    // in that order, so ascending entity id IS the arc). Their index is what the
+    // stagger is measured in — see portalAppear.
+    const arrivingPortals = next.entities
+      .filter((e) => e.kind === "portal" && !this.meshes.has(e.id))
+      .map((e) => e.id)
+      .sort((a, b) => a - b);
+
     // Entities
     for (const e of next.entities) {
       liveIds.add(e.id);
@@ -170,6 +178,9 @@ export class SnapshotRenderer {
       );
       const mesh = this.meshes.get(e.id);
       if (!mesh) continue;
+      // Born this snapshot: hold it shut and open it in its turn.
+      const arriving = arrivingPortals.indexOf(e.id);
+      if (arriving >= 0) portalAppear(this.scene, mesh, arriving * PORTAL_STAGGER_MS);
       if (e.kind === "telegraph") {
         updateTelegraph(mesh, e.progress ?? 0);
       }
@@ -200,12 +211,20 @@ export class SnapshotRenderer {
       }
     }
 
+    // Crossing an area replaces the whole population at once. A portal that went
+    // away because the hideout did was not closed, so it gets no collapse and no
+    // cue — six of those under the loading plate is just noise.
+    const areaChanged = prev !== null && prev.area !== next.area;
+
     // Dispose meshes for entities that no longer exist. A rig owns scene-level
     // animation groups that mesh.dispose() would leave behind.
     for (const [id, mesh] of this.meshes) {
       if (!liveIds.has(id)) {
         rigOf(mesh)?.dispose();
-        mesh.dispose();
+        // A closing portal outlives the entity that was it: nothing else holds a
+        // reference any more, so the collapse disposes it when it finishes.
+        if (!areaChanged && isPortalMesh(mesh)) portalVanish(this.scene, mesh);
+        else mesh.dispose();
         this.meshes.delete(id);
         this.gait.delete(id);
         this.tilt.delete(id);
