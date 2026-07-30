@@ -1,4 +1,5 @@
-"""Build the hideout props as one glTF: the map device and the stash chest.
+"""Build the hideout props as one glTF: the map device, the stash chest, the
+decor set and the standing brazier that lights a room.
 
 Run:
   "/c/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background \
@@ -62,6 +63,10 @@ TEXTURES = {
     # to the shape it was painted at.
     "rug": "rug_v1.png",
     "pillar_stone": "pillar_stone_v1.png",
+    # The coals in the brazier bowl. The one texture in here that is meant to
+    # look lit rather than shaded, so it goes on a material that emits most of
+    # its own albedo (see `coal_material`).
+    "brazier_coal": "brazier_coal_v1.png",
 }
 TEX_SIZE = 512
 TEX_QUALITY = 88
@@ -75,7 +80,10 @@ TEX_QUALITY = 88
 # grey floor - the brightest thing in the hideout, for a threadbare carpet - and its
 # worn patches blew out to white speckle. 0.7 puts it back to the oxblood it was
 # painted as, sitting under the floor's value the way cloth on stone does.
-TEX_GAIN = {"chest_wood": 1.5, "iron": 1.25, "rug": 0.7, "pillar_stone": 1.15}
+TEX_GAIN = {"chest_wood": 1.5, "iron": 1.25, "rug": 0.7, "pillar_stone": 1.15,
+            # The coal master is painted with its own glow already; lifting it
+            # further just clips the embers to white.
+            "brazier_coal": 1.0}
 
 # Albedo emitted back at this fraction, so an unlit corner of a map still shows
 # the prop. The runtime multiplies this by its own hover colour.
@@ -343,6 +351,28 @@ def textured_material(name, path, roughness):
     return mat
 
 
+def coal_material(name, path):
+    """Burning coals: albedo-as-emission, at nearly full strength.
+
+    Everything else in this file emits 6% of its albedo so a prop stays readable
+    in an unlit corner. Coals are the opposite case — they ARE the light source,
+    and the renderer puts a real point light in the same bowl, so the surface has
+    to be brighter than anything that light falls on or the fire looks painted on
+    a cold dish.
+    """
+    mat = bpy.data.materials.new(name)
+    mat.use_nodes = True
+    bsdf = mat.node_tree.nodes["Principled BSDF"]
+    tex = mat.node_tree.nodes.new("ShaderNodeTexImage")
+    tex.image = bpy.data.images.load(path)
+    mat.node_tree.links.new(bsdf.inputs["Base Color"], tex.outputs["Color"])
+    mat.node_tree.links.new(bsdf.inputs["Emission Color"], tex.outputs["Color"])
+    bsdf.inputs["Emission Strength"].default_value = 1.6
+    bsdf.inputs["Metallic"].default_value = 0.0
+    bsdf.inputs["Roughness"].default_value = 0.9
+    return mat
+
+
 def flat_material(name, rgb, roughness):
     mat = bpy.data.materials.new(name)
     mat.use_nodes = True
@@ -602,6 +632,82 @@ def build_pillar(mats):
     return _finish(parts, root)
 
 
+# How tall the bowl's rim stands. The renderer puts the point light just above
+# this, so the number is shared: `BRAZIER_FLAME_Y` in render/lights.ts.
+BRAZIER_RIM_Z = 1.02
+
+
+def build_brazier(mats):
+    """A standing iron brazier: three splayed legs, a ring, a bowl of coals.
+
+    The one prop in here built to be a LIGHT rather than furniture. Two things
+    follow from that. The bowl is shallow and wide so the coals are visible from
+    the game camera, which looks down at 45 degrees and would otherwise see an
+    iron rim and a shadow. And the coal disc sits a little proud of the rim, so
+    the glow reads from every side instead of only from above.
+
+    Legs lean rather than stand: a tripod of vertical posts is a stool, and the
+    splay is most of what says "iron" at this size.
+    """
+    root = _root("brazier")
+    parts = []
+
+    # Bowl: a lathe from the rim down to the foot it sits on.
+    bowl = mesh_object("brazier_bowl", *lathe([
+        (0.000, BRAZIER_RIM_Z - 0.10),   # inner floor
+        (0.300, BRAZIER_RIM_Z - 0.12),
+        (0.380, BRAZIER_RIM_Z),          # rim
+        (0.400, BRAZIER_RIM_Z),
+        (0.330, BRAZIER_RIM_Z - 0.16),   # outer wall, back under itself
+        (0.150, BRAZIER_RIM_Z - 0.26),
+        (0.000, BRAZIER_RIM_Z - 0.28),
+    ], 20))
+    parts.append((bowl, mats["iron"], 0.5))
+
+    # Three legs, splayed out and down from under the bowl.
+    for i in range(3):
+        a = 2.0 * math.pi * i / 3 + math.radians(20)
+        leg = box(f"brazier_leg_{i}", (0, 0, 0), (0.07, 0.07, BRAZIER_RIM_Z - 0.18))
+        leg.rotation_euler = (math.radians(11.0), 0.0, 0.0)
+        leg.location = (
+            math.cos(a) * 0.20,
+            math.sin(a) * 0.20,
+            (BRAZIER_RIM_Z - 0.18) / 2,
+        )
+        # Turn the lean outward: rotate the whole leg about the axis, then tip it.
+        leg.rotation_euler = (math.radians(11.0) * math.sin(a), -math.radians(11.0) * math.cos(a), a)
+        parts.append((leg, mats["iron"], 0.3))
+
+    # A ring tying the legs together, the way a real one is braced.
+    brace = mesh_object("brazier_brace", *lathe([
+        (0.235, 0.30), (0.275, 0.30), (0.275, 0.24), (0.235, 0.24), (0.235, 0.30),
+    ], 16))
+    parts.append((brace, mats["iron"], 0.4))
+
+    root = _finish(parts, root)
+
+    # The coals, added after `_finish` because they must NOT be bevelled,
+    # box-mapped or smoothed: it is a flat disc showing one painted texture, and
+    # every one of those steps would either round its edge into the bowl or
+    # replace the painting with a projection of it.
+    coals = mesh_object("brazier_coals", *lathe([
+        (0.000, BRAZIER_RIM_Z - 0.045), (0.315, BRAZIER_RIM_Z - 0.075),
+    ], 20))
+    _disc_uv(coals, 0.315)
+    coals.data.materials.append(mats["brazier_coal"])
+    coals.parent = root
+    return root
+
+
+def _disc_uv(obj, radius):
+    """Map a disc so the texture lands on it as a disc, centre to centre."""
+    me = obj.data
+    uv = me.uv_layers.new(name="UVMap")
+    for loop in me.loops:
+        x, y, _ = me.vertices[loop.vertex_index].co
+        uv.data[loop.index].uv = (0.5 + x / (2 * radius), 0.5 + y / (2 * radius))
+
+
 def main():
     for obj in list(bpy.data.objects):
         bpy.data.objects.remove(obj, do_unlink=True)
@@ -621,6 +727,7 @@ def main():
         # (a carpet has no sheen at all) and the stone rougher still.
         "rug": textured_material("rug", built["rug"], 0.96),
         "pillar_stone": textured_material("pillar_stone", built["pillar_stone"], 0.92),
+        "brazier_coal": coal_material("brazier_coal", built["brazier_coal"]),
     }
 
     build_map_device(mats)
@@ -631,6 +738,7 @@ def main():
     build_crate(mats)
     build_barrel(mats)
     build_pillar(mats)
+    build_brazier(mats)
 
     bpy.ops.export_scene.gltf(
         filepath=OUT,

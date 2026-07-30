@@ -700,6 +700,22 @@ export function createScene(engine: Engine): SceneHandle {
     torchShadows.usePercentageCloserFiltering = true;
     torchShadows.filteringQuality = ShadowGenerator.QUALITY_LOW; // x6 faces
     torchShadows.darkness = 0.35; // softer than the sun's: fill still reaches in
+    // Depth bias, and the reason the floor used to ripple.
+    //
+    // The torch is a POINT light, so its shadow map is a cube, and the floor it
+    // stands over is sampled at a grazing angle across six faces at 1024. At the
+    // stock bias that surface shadows ITSELF in rings — concentric, centred on
+    // the lamp, and therefore travelling with the player, which is what made it
+    // look like a texture stuck to the character rather than an artefact of the
+    // light. The tiled floor art hid it; a plain surface (the DEV debug plates
+    // in hideout.ts) shows it immediately.
+    //
+    // `normalBias` is the one that fixes it: it offsets the lookup ALONG THE
+    // SURFACE NORMAL, which is exactly the axis the error grows on as the light
+    // flattens out. `bias` alone cannot — raise it far enough to clear the rings
+    // and every contact shadow in the room detaches from its object.
+    torchShadows.bias = 0.0002;
+    torchShadows.normalBias = 0.03;
     // An actor may not cast from the torch. The lamp rides the player, so the
     // player's own shadow lands directly under the player as a blob that follows
     // the feet and reads as a stain on the floor, not as light. Actor parts share
