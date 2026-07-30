@@ -47,3 +47,7 @@ assets/monsters/build/
 
 # Bytecode from the tools/ scripts
 tools/__pycache__/
+
+# The house rules for the agent working in here. Local only: the repo does not
+# hand a contributor a list of instructions written for someone else.
+CLAUDE.md
