@@ -58,6 +58,16 @@
          vanished over the flask row. Only the bottom and right edges showed it —
          towards the top the bitmap extends into the page and touches nothing. */
       * { cursor: url(/textures/ui/cursor_32.png) 1 1, default !important; }
+
+      /* Chrome draws its own focus ring as a WHITE inner line with a dark outer
+         one, whatever colour the page asks for, and on gilt plates over a dark
+         hall that reads as a white border nobody meant to leave there. It cannot
+         simply be switched off — a keyboard player has to be able to see where
+         they are — so it is replaced with a gilt one that belongs to the frame.
+         `:focus-visible` and not `:focus`: it appears for the keyboard and never
+         for the mouse, which is the case the white line kept showing up in. */
+      :focus { outline: none; }
+      :focus-visible { outline: 2px solid #c8a44d; outline-offset: 3px; }
       * { cursor: image-set(url(/textures/ui/cursor_32.png) 1x, url(/textures/ui/cursor_64.png) 2x) 1 1, default !important; }
       /* Illegal target for whatever is armed on the cursor: the same blade, cooled
          to red iron, so the refusal is legible without leaving the art. */
