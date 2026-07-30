@@ -149,6 +149,54 @@ SOURCES: dict[str, str] = {
 }
 
 
+# cue name -> `path@start:duration`, for the SUSTAINED voices (`startSfxLoop` in
+# sfx.ts). These do not go through the trimmer and must not: it finds a take and
+# shapes it with fades, which is exactly right for an event and exactly wrong for a
+# bed — a fade at each edge is a dip to silence once per cycle, heard as pumping.
+#
+# `duration` is the loop LENGTH; CROSSFADE seconds beyond it are consumed making the
+# seam, so the source has to hold that much more material after the region.
+LOOP_SOURCES: dict[str, str] = {
+    # A fireball in flight is a rocket, the way it has always been done: the middle of
+    # a blast-off, after the ignition transient and before it thins out. The bolt's own
+    # cast whoosh still fires over the top of this.
+    "skill-ember-bolt-flight": "344 Audio - Air Designed/AEROJet_Blast Off Clean_344 Audio_Air Designed.wav@3.10:2.00",
+    # Not the cast sample looped: that one is cut to its loudest 1.4s, so looping it is
+    # the same crackle over and over. Chosen by EVENNESS rather than by the word fire:
+    # scored as the spread of 100ms block levels across the region, the woodstove that
+    # was here first came out at 0.98 (near-silence with one crack in it, which loops as
+    # a pop every 2.4 seconds) against this one's 0.24.
+    "skill-cinder-ground-loop": "344 Audio - Haunting Ambiences Vol. 5/FIRECrkl_Fire Crackling, Popping, Witch's Cauldron_344 Audio_Haunting Ambiences Vol 5.wav@0.50:2.40",
+}
+
+# Seconds of the tail folded back over the head to hide the seam.
+CROSSFADE = 0.5
+
+
+def to_loop(src: str, dst: str, start: float, duration: float) -> None:
+    """Cut a seamless loop of exactly `duration` seconds.
+
+    The tail is crossfaded over the head rather than butt-joined: two points of one
+    recording never match sample for sample, and the step between them is a click at
+    the loop rate. Taking the body from `start + CROSSFADE` and fading the material
+    at `start` back in under it means the end of the output runs into what its own
+    beginning already is.
+    """
+    body_from = start + CROSSFADE
+    cmd = [
+        "ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", src,
+        "-filter_complex",
+        f"[0:a]atrim={body_from:.3f}:{body_from + duration:.3f},asetpts=PTS-STARTPTS[a];"
+        f"[0:a]atrim={start:.3f}:{start + CROSSFADE:.3f},asetpts=PTS-STARTPTS[b];"
+        f"[a][b]acrossfade=d={CROSSFADE}:c1=tri:c2=tri,"
+        # One-pass loudnorm: a bed is held for seconds under one-shots, so it is
+        # levelled well below the trimmer's target for events and trimmed of peaks.
+        "loudnorm=I=-23:TP=-3.0,aformat=sample_fmts=s16:sample_rates=48000:channel_layouts=mono",
+        "-c:a", "pcm_s16le", dst,
+    ]
+    subprocess.run(cmd, check=True)
+
+
 def to_mono48(src: str, dst: str, start: float, duration: float) -> None:
     """Downmix and resample the window we care about, without touching level.
 
@@ -183,7 +231,8 @@ def main() -> None:
     ap.add_argument("--keep-wav", default="", help="also write the shaped WAV here, for auditioning")
     args = ap.parse_args()
 
-    wanted = {c: s for c, s in SOURCES.items() if not args.only or c in args.only}
+    every = {**SOURCES, **LOOP_SOURCES}
+    wanted = {c: s for c, s in every.items() if not args.only or c in args.only}
     if not wanted:
         sys.exit("nothing to do: --only matched no cue in SOURCES")
     os.makedirs(args.out, exist_ok=True)
@@ -201,11 +250,15 @@ def main() -> None:
             missing += 1
             continue
         with tempfile.TemporaryDirectory() as tmp:
-            staged = os.path.join(tmp, cue + ".wav")
-            to_mono48(src, staged, float(start or 0), float(dur or 0))
-            shaped = os.path.join(tmp, "out")
-            subprocess.run([sys.executable, trimmer, staged, "--out", shaped], check=True)
-            done = os.path.join(shaped, cue + ".wav")
+            if cue in LOOP_SOURCES:
+                done = os.path.join(tmp, cue + ".wav")
+                to_loop(src, done, float(start or 0), float(dur or 0))
+            else:
+                staged = os.path.join(tmp, cue + ".wav")
+                to_mono48(src, staged, float(start or 0), float(dur or 0))
+                shaped = os.path.join(tmp, "out")
+                subprocess.run([sys.executable, trimmer, staged, "--out", shaped], check=True)
+                done = os.path.join(shaped, cue + ".wav")
             to_opus(done, os.path.join(args.out, cue + ".webm"))
             if args.keep_wav:
                 # shutil, not os.replace: the temp dir is on C: and the repo is on D:.

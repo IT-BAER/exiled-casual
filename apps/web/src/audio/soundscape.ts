@@ -1,5 +1,8 @@
 import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
-import { distanceGain, playSfx, preloadSfx } from "./sfx";
+import {
+  distanceGain, playSfx, preloadSfx,
+  startSfxLoop, setSfxLoopVolume, stopSfxLoop, stopAllSfxLoops,
+} from "./sfx";
 
 /**
  * The fight, heard rather than described.
@@ -152,10 +155,32 @@ export interface Soundscape {
 
 interface Options {
   play?: (name: string, volume?: number) => void;
+  loop?: (name: string, key: string, volume?: number) => void;
+  loopVolume?: (key: string, volume: number) => void;
+  stopLoop?: (key: string) => void;
+  stopAllLoops?: () => void;
+}
+
+/**
+ * The sustained cue an entity carries while it exists, and nothing for the kinds
+ * that carry none. A player bolt burns all the way to whatever it hits; cinder
+ * ground burns for its whole duration. Both were a single one-shot at the cast,
+ * which is over long before the thing it described is.
+ */
+function sustainedCue(e: SnapshotEntity): string | null {
+  if (e.kind === "projectile") return (e.team ?? 0) === 0 ? "skill-ember-bolt-flight" : null;
+  if (e.kind === "groundArea") return "skill-cinder-ground-loop";
+  return null;
 }
 
 export function createSoundscape(opts: Options = {}): Soundscape {
   const play = opts.play ?? playSfx;
+  const loop = opts.loop ?? startSfxLoop;
+  const loopVolume = opts.loopVolume ?? setSfxLoopVolume;
+  const stopLoop = opts.stopLoop ?? stopSfxLoop;
+  const stopAllLoops = opts.stopAllLoops ?? stopAllSfxLoops;
+  /** Entity id -> loop key, for everything currently sounding. */
+  const sustained = new Map<number, string>();
   let prev: Snapshot | null = null;
   /**
    * One gate for the whole pack, not one per monster: eight monsters each heard
@@ -171,6 +196,10 @@ export function createSoundscape(opts: Options = {}): Soundscape {
 
   const reset = (biomeId?: string | null): void => {
     prev = null;
+    // Before the ids are gone: the next area reuses them, and a voice left running
+    // would be stopped by whatever inherits its number, or by nothing at all.
+    stopAllLoops();
+    sustained.clear();
     dealt = hitGate();
     taken = hitGate();
     lastStepTick = 0;
@@ -215,6 +244,9 @@ export function createSoundscape(opts: Options = {}): Soundscape {
           // both are the same burst as far as the ear is concerned.
           play("skill-ember-bolt-impact", at(e));
         }
+        // Whatever it was, it is not sounding any more.
+        const key = sustained.get(id);
+        if (key !== undefined) { sustained.delete(id); stopLoop(key); }
       }
 
       // ── Arrived ─────────────────────────────────────────────────────────────
@@ -222,6 +254,20 @@ export function createSoundscape(opts: Options = {}): Soundscape {
         if (was.has(id)) continue;
         if (e.kind === "telegraph") play("monster-slam-windup", at(e));
         else if (e.kind === "projectile" && (e.team ?? 0) !== 0) play("monster-spit", at(e));
+        const cue = sustainedCue(e);
+        if (cue) {
+          const key = `${cue}#${id}`;
+          sustained.set(id, key);
+          loop(cue, key, at(e));
+        }
+      }
+
+      // A voice already running follows its source: a bolt crossing the screen and a
+      // fire the player walks away from both have to move in the mix, or the level
+      // they started at is the level they keep until they stop.
+      for (const [id, key] of sustained) {
+        const e = now.get(id);
+        if (e) loopVolume(key, at(e));
       }
 
       // ── Hurt ────────────────────────────────────────────────────────────────

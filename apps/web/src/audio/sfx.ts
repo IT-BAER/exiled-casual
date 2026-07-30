@@ -42,6 +42,12 @@ const VOICES: Record<string, Voice> = {
   "skill-ember-bolt-cast":    { gain: 0.28, wet: 0.14, vary: 0.06 },
   "skill-ember-bolt-impact":  { gain: 0.34, wet: 0.18, vary: 0.08 },
   "skill-cinder-ground-cast": { gain: 0.32, wet: 0.22, vary: 0.04 },
+  // The two sustained voices (`startSfxLoop`). Both sit well under their one-shot:
+  // a bed that holds for seconds at the level of the transient that opened it is
+  // the loudest thing in the mix for as long as the skill lasts. `vary` is per
+  // voice and set once, so two bolts in the air are not one doubled bolt.
+  "skill-ember-bolt-flight":  { gain: 0.11, wet: 0.10, vary: 0.05 },
+  "skill-cinder-ground-loop": { gain: 0.13, wet: 0.24, vary: 0.03 },
   "skill-blink":              { gain: 0.30, wet: 0.12, vary: 0.05 },
   "monster-melee-hit":        { gain: 0.17, wet: 0.16, vary: 0.10 },
   // The generic pair is the fallback for a species with no material (soundscape.ts),
@@ -147,6 +153,10 @@ export function preloadSfx(names: readonly string[]): Promise<void> {
 export const CORE_SFX: readonly string[] = [
   "ui-click", "ui-hover", "ui-panel-open",
   "skill-ember-bolt-cast", "skill-ember-bolt-impact", "skill-cinder-ground-cast", "skill-blink",
+  // The sustained pair especially: a loop that arrives after the bolt has landed is
+  // a loop that never plays, because `startSfxLoop` will not start what it cannot
+  // hear now — there is no queue, the flight is over.
+  "skill-ember-bolt-flight", "skill-cinder-ground-loop",
   "monster-melee-hit", "monster-hurt", "monster-death", "player-hurt",
   "footstep-stone-1", "footstep-stone-2", "footstep-stone-3", "flask-drink",
 ];
@@ -174,6 +184,84 @@ export function playSfx(name: string, volume = 1): void {
   src.connect(g);
   send(b, g, voice.wet);
   src.start();
+}
+
+/**
+ * Sustained voices, keyed by whatever the caller uses to say "this one again":
+ * the entity id of the bolt in the air or the patch of ground still burning.
+ */
+const loops = new Map<string, { src: AudioBufferSourceNode; gain: GainNode; peak: number }>();
+
+/** Seconds to reach level on start and to reach silence on stop. A loop that
+ *  begins or ends on a step is heard as a click, which is worse than no loop. */
+const LOOP_FADE_IN = 0.05;
+const LOOP_FADE_OUT = 0.14;
+
+/**
+ * Start a sound and hold it until `stopSfxLoop(key)`.
+ *
+ * This is what makes a skill last as long as it is running: a one-shot at the cast
+ * is over while the bolt is still in the air and long over while the ground burns.
+ * The sample loops, so its master has to be a texture (fire, air) and not an event
+ * with a decay — a transient looped is a stutter, which is the failure this is
+ * meant to avoid rather than cause.
+ *
+ * Calling it twice for one key is a no-op, so a caller may say it every tick.
+ */
+export function startSfxLoop(name: string, key: string, volume = 1): void {
+  if (loops.has(key)) return;
+  const voice = VOICES[name];
+  if (!voice || dead.has(name)) return;
+  const b = bus();
+  if (!b) return;
+  const buf = buffers.get(name);
+  if (!buf) { void load(name); return; } // the flight is over before a fetch lands
+
+  const src = b.ctx.createBufferSource();
+  src.buffer = buf;
+  src.loop = true;
+  // Pitch is set once and held: a rate that wandered mid-loop is a siren.
+  if (voice.vary > 0) src.playbackRate.value = 1 + (Math.random() * 2 - 1) * voice.vary;
+  const g = b.ctx.createGain();
+  const peak = voice.gain;
+  g.gain.value = 0;
+  g.gain.setTargetAtTime(peak * clamp(volume), b.ctx.currentTime, LOOP_FADE_IN);
+  src.connect(g);
+  send(b, g, voice.wet);
+  src.start();
+  loops.set(key, { src, gain: g, peak });
+}
+
+/** Follow a live loop's source as it moves relative to the player. */
+export function setSfxLoopVolume(key: string, volume: number): void {
+  const live = loops.get(key);
+  const b = bus();
+  if (!live || !b) return;
+  live.gain.gain.setTargetAtTime(live.peak * clamp(volume), b.ctx.currentTime, LOOP_FADE_IN);
+}
+
+/** Fade a loop out and let it go. Unknown keys are silently ignored. */
+export function stopSfxLoop(key: string): void {
+  const live = loops.get(key);
+  if (!live) return;
+  loops.delete(key);
+  const b = bus();
+  if (!b) { try { live.src.stop(); } catch { /* already stopped */ } return; }
+  const now = b.ctx.currentTime;
+  live.gain.gain.setTargetAtTime(0, now, LOOP_FADE_OUT);
+  // setTargetAtTime is asymptotic, so the stop is scheduled past several time
+  // constants rather than at one: cutting at the constant is still audible.
+  try { live.src.stop(now + LOOP_FADE_OUT * 5); } catch { /* already stopped */ }
+}
+
+/** Every sustained voice, gone. What a new area needs: the next world does not
+ *  inherit this one's fire, and its entity ids are about to be reused. */
+export function stopAllSfxLoops(): void {
+  for (const key of [...loops.keys()]) stopSfxLoop(key);
+}
+
+function clamp(v: number): number {
+  return Math.max(0, Math.min(1, v));
 }
 
 /**

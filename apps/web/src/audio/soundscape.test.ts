@@ -294,3 +294,76 @@ describe("createSoundscape", () => {
     expect(run(dead).filter((n) => n.startsWith("footstep"))).toEqual([]);
   });
 });
+
+/**
+ * A skill that lasts has to be HEARD lasting. A one-shot at the cast is over before
+ * the bolt is halfway there and long over while the ground still burns, so anything
+ * with a duration holds a sustained voice keyed to the entity that carries it.
+ */
+describe("sustained skills", () => {
+  const projectile = (id: number, x: number): SnapshotEntity =>
+    ({ id, kind: "projectile", x, y: 0, team: 0 });
+  const burning = (id: number, x: number): SnapshotEntity =>
+    ({ id, kind: "groundArea", x, y: 0, remainingSeconds: 3 });
+
+  /** Drive snapshots and collect [event, cue, key] for the loop seams. */
+  function runLoops(seq: Snapshot[]): [string, string, string][] {
+    const log: [string, string, string][] = [];
+    const s = createSoundscape({
+      play: () => {},
+      loop: (name, key) => log.push(["start", name, key]),
+      stopLoop: (key) => log.push(["stop", "", key]),
+    });
+    s.reset(null);
+    for (const it of seq) s.observe(it);
+    return log;
+  }
+
+  it("the bolt is heard for as long as it is in the air", () => {
+    const log = runLoops([
+      snap({ tick: 1 }),
+      snap({ tick: 2, entities: [projectile(9, 1)] }),
+      snap({ tick: 3, entities: [projectile(9, 3)] }),
+      snap({ tick: 4, entities: [] }),
+    ]);
+    expect(log[0]?.[0]).toBe("start");
+    expect(log[0]?.[1]).toBe("skill-ember-bolt-flight");
+    // Started once for the whole flight, not once per tick it is alive.
+    expect(log.filter(([e]) => e === "start")).toHaveLength(1);
+    expect(log.at(-1)?.[0]).toBe("stop");
+    expect(log.at(-1)?.[2]).toBe(log[0]?.[2]);
+  });
+
+  it("the burning ground is heard until it burns out", () => {
+    const log = runLoops([
+      snap({ tick: 1 }),
+      snap({ tick: 2, entities: [burning(4, 0)] }),
+      snap({ tick: 3, entities: [burning(4, 0)] }),
+      snap({ tick: 4, entities: [] }),
+    ]);
+    expect(log.map(([e, n]) => [e, n])).toEqual([
+      ["start", "skill-cinder-ground-loop"],
+      ["stop", ""],
+    ]);
+  });
+
+  it("a monster's spit is not the player's skill", () => {
+    const spit: SnapshotEntity = { id: 2, kind: "projectile", x: 1, y: 0, team: 1 };
+    const log = runLoops([snap({ tick: 1 }), snap({ tick: 2, entities: [spit] })]);
+    expect(log).toEqual([]);
+  });
+
+  /** Leaving the area kills every voice: the next world does not inherit this one's fire. */
+  it("a new area silences what was still sounding", () => {
+    const stopped: string[] = [];
+    const s = createSoundscape({
+      play: () => {}, loop: () => {}, stopLoop: () => {},
+      stopAllLoops: () => stopped.push("all"),
+    });
+    s.reset(null);
+    stopped.length = 0; // the first reset is the setup, not the journey
+    s.observe(snap({ tick: 1, entities: [projectile(9, 1)] }));
+    s.reset("swamp");
+    expect(stopped).toEqual(["all"]);
+  });
+});
