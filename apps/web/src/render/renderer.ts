@@ -306,7 +306,11 @@ export class SnapshotRenderer {
     // Crossing an area replaces the whole population at once. A portal that went
     // away because the hideout did was not closed, so it gets no collapse and no
     // cue — six of those under the loading plate is just noise.
-    const areaChanged = prev !== null && prev.area !== next.area;
+    // No previous snapshot counts as a change too, and that is the one that
+    // mattered: crossing into the hideout hands the first snapshot of the new
+    // area with `prev` null, so the map's six portals were reported gone one by
+    // one and each of them played its closing cue over the loading plate.
+    const areaChanged = prev === null || prev.area !== next.area;
 
     // Dispose meshes for entities that no longer exist. A rig owns scene-level
     // animation groups that mesh.dispose() would leave behind.

@@ -752,6 +752,18 @@ describe("portals arrive one at a time", () => {
     for (const id of [100, 101, 102]) expect(scene.getMeshByName(`entity-${id}`)).toBeNull();
   });
 
+  it("takes them instantly on a restart too, which is how the crossing arrives", () => {
+    // Entering the hideout hands the first snapshot of the new area with no
+    // previous one to diff against. Read as "everything vanished at once", that
+    // path collapsed the map's portals and played six closing cues over the
+    // loading plate — the sound he heard walking into his own hideout.
+    const scene = new Scene(new NullEngine());
+    const renderer = new SnapshotRenderer(scene);
+    renderer.apply(null, makeSnapshot({ area: "map", entities: ring(3) }), 1);
+    renderer.apply(null, makeSnapshot({ area: "hideout", entities: [] }), 1);
+    for (const id of [100, 101, 102]) expect(scene.getMeshByName(`entity-${id}`)).toBeNull();
+  });
+
   it("a portal closing inside the area collapses before it goes", () => {
     const scene = new Scene(new NullEngine());
     const renderer = new SnapshotRenderer(scene);

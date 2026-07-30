@@ -303,6 +303,8 @@ interface HudProps {
   hoveredEntityId?: number | null;
   /** Which skill sits in which numbered socket. Defaulted so the lab can boot bare. */
   skillBar?: (string | null)[];
+  /** Draw `Life 100/100` over the globes at all. */
+  orbNumbers?: boolean;
   /** A skill was dragged to another socket. The caller owns and persists the bar. */
   onSkillBarChange?: (next: (string | null)[]) => void;
 }
@@ -383,8 +385,11 @@ function Orb(props: {
   label: string;
   value: string;
   side: "left" | "right";
+  /** False draws the globe alone. The liquid is the reading; the numbers are a
+   *  second opinion, and PoE lets you turn them off. */
+  numbers?: boolean;
 }) {
-  const { pct, shieldPct = 0, fillTestId, readoutTestId, art, figure, label, value, side } = props;
+  const { pct, shieldPct = 0, fillTestId, readoutTestId, art, figure, label, value, side, numbers = true } = props;
   return (
     <div
       style={{
@@ -494,7 +499,7 @@ function Orb(props: {
           pointerEvents: "none",
         }}
       />
-      <div
+      {numbers && <div
         data-testid={readoutTestId}
         style={{
           position: "absolute",
@@ -508,7 +513,10 @@ function Orb(props: {
           justifyContent: "center",
           gap: "0.75vw",
           fontFamily: SERIF,
-          fontSize: `clamp(13px, ${(ORB_VW * 0.099).toFixed(2)}vw, 26px)`,
+          // Two thirds of what it was: at the old size the pair of readouts was
+          // the largest type on the screen, over the one gauge that is already
+          // legible as a shape from the corner of the eye.
+          fontSize: `clamp(11px, ${(ORB_VW * 0.066).toFixed(2)}vw, 18px)`,
           letterSpacing: 0.5,
           whiteSpace: "nowrap",
           textShadow: "0 1px 4px #000",
@@ -516,7 +524,7 @@ function Orb(props: {
       >
         <span style={{ color: "#a9a49a" }}>{label}</span>
         <span style={{ color: "#f4f0e6" }}>{value}</span>
-      </div>
+      </div>}
     </div>
   );
 }
@@ -525,6 +533,7 @@ export function Hud({
   snapshot,
   hoveredEntityId = null,
   skillBar = DEFAULT_SETTINGS.ui.skillBar,
+  orbNumbers = DEFAULT_SETTINGS.ui.orbNumbers,
   onSkillBarChange,
 }: HudProps) {
   const [hoveredSkill, setHoveredSkill] = React.useState<string | null>(null);
@@ -784,6 +793,7 @@ export function Hud({
             : `${Math.round(life)}/${Math.round(maxLife)}`
         }
         side="left"
+        numbers={orbNumbers}
       />
       <Orb
         pct={manaPct}
@@ -794,6 +804,7 @@ export function Hud({
         label="Mana"
         value={`${Math.round(mana)}/${Math.round(maxMana)}`}
         side="right"
+        numbers={orbNumbers}
       />
 
       <div data-testid="bar-connector" style={connectStyle} />

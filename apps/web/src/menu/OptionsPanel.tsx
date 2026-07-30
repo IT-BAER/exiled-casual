@@ -227,6 +227,13 @@ export function OptionsPanel({
                   onToggle={(minimap) => setUi({ minimap })}
                 />
               </Row>
+              <Row label="Show Life and Mana Numbers" note="The globes still show the level.">
+                <Gem
+                  label="Show Life and Mana Numbers"
+                  on={settings.ui.orbNumbers}
+                  onToggle={(orbNumbers) => setUi({ orbNumbers })}
+                />
+              </Row>
               <Row label="Show Loot Labels" note="Drops still chime, and still hover.">
                 <Gem
                   label="Show Loot Labels"

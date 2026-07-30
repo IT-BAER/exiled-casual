@@ -486,6 +486,7 @@ export function GameView({
         snapshot={snapshot}
         hoveredEntityId={hoveredEntityId}
         skillBar={settings.ui.skillBar}
+        orbNumbers={settings.ui.orbNumbers}
         onSkillBarChange={(skillBar) => onSettingsChange?.({
           ...settings, ui: { ...settings.ui, skillBar },
         })}

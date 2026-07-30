@@ -46,6 +46,8 @@ export interface SoundSettings {
 export interface UiSettings {
   minimap: boolean;
   lootLabels: boolean;
+  /** The `Life 100/100` readouts over the globes. The globes say it too. */
+  orbNumbers: boolean;
   /**
    * Which skill sits in which numbered socket of the skill bar, in bar order.
    * `null` is an empty socket. A setting rather than sim state because it is a
@@ -80,6 +82,7 @@ export const DEFAULT_SETTINGS: Settings = {
   ui: {
     minimap: true,
     lootLabels: true,
+    orbNumbers: true,
     skillBar: ["skill.ember_bolt.v1", "skill.cinder_ground.v1", "skill.blink.v1", null, null],
   },
 };
@@ -158,6 +161,7 @@ export function sanitize(raw: unknown): Settings {
     ui: {
       minimap: bool(u["minimap"], d.ui.minimap),
       lootLabels: bool(u["lootLabels"], d.ui.lootLabels),
+      orbNumbers: bool(u["orbNumbers"], d.ui.orbNumbers),
       skillBar: skillBar(u["skillBar"], d.ui.skillBar),
     },
   };

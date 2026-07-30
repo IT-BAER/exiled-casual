@@ -7,6 +7,7 @@ import {
   type Scene,
 } from "@babylonjs/core";
 import { addRim } from "./rim";
+import { idleRatio } from "./rig";
 
 /**
  * Every creature in the game as one authored glTF.
@@ -128,8 +129,12 @@ const MOVING = 0.05;
 export class CreatureRig {
   private readonly groups = new Map<Clip, AnimationGroup>();
   private playing: Clip | null = null;
+  /** Seconds stood still, so the breath can settle the way the player's does. */
+  private standing = 0;
+  private readonly scene: Scene | null;
 
-  constructor(groups: AnimationGroup[], species: string) {
+  constructor(groups: AnimationGroup[], species: string, scene: Scene | null = null) {
+    this.scene = scene;
     for (const group of groups) {
       const clip = group.name.endsWith("walk") ? "walk" : group.name.endsWith("idle") ? "idle" : null;
       // Babylon clones every group in the container, and a group whose targets
@@ -143,14 +148,21 @@ export class CreatureRig {
       group.blendingSpeed = 0.1;
       this.groups.set(clip, group);
     }
+    // The first breath after being built is the arrival one; the settle starts
+    // from there, exactly as it does when a creature stops walking.
     this.play("idle", IDLE_RATIO);
   }
 
   setLocomotion(speed: number): void {
     if (speed <= MOVING) {
-      this.play("idle", IDLE_RATIO);
+      // Same settle as the player rig, off the same clock: a creature that has
+      // been standing in a corner since the map opened should not be breathing
+      // at the rate it arrived at. See idleRatio in rig.ts.
+      this.standing += (this.scene?.getEngine?.()?.getDeltaTime?.() ?? 16) / 1000;
+      this.play("idle", IDLE_RATIO * idleRatio(this.standing));
       return;
     }
+    this.standing = 0;
     const ratio = speed / WALK_SPEED;
     this.play("walk", Math.min(RATIO_RANGE[1], Math.max(RATIO_RANGE[0], ratio)));
   }
@@ -193,7 +205,7 @@ export function attachCreature(scene: Scene, root: Mesh, species: string): Creat
     node.parent = root;
     for (const mesh of node.getChildMeshes()) mesh.isPickable = false;
   }
-  return new CreatureRig(entries.animationGroups, species);
+  return new CreatureRig(entries.animationGroups, species, scene);
 }
 
 function hasChild(node: Node, name: string): boolean {

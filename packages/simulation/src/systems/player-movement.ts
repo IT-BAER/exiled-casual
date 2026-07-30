@@ -26,8 +26,15 @@ const TURN_CHORD = fp(0.35);
  * angle in between reads off the dot product — so the cost is continuous, which
  * is the difference between a runner and a turret. The recovery is free: the
  * percentage climbs by itself as the heading closes on the key.
+ *
+ * 88 and not the 62 it shipped at. At 62 a straight reversal — the commonest
+ * thing a mouse asks for, left then right along the same line — dropped the
+ * character to a trudge for the third of a second the turn takes, and what that
+ * reads as on screen is the game hesitating rather than the body leaning. The
+ * cost is still there and still continuous; it is a lean now, not a brake. The
+ * turn RATE (TURN_CHORD) is what stops a spin, and it is untouched.
  */
-const TURN_SPEED_FLOOR_PCT = 62;
+const TURN_SPEED_FLOOR_PCT = 88;
 
 /**
  * How far a click has to be before the walk to it is steered rather than aimed.

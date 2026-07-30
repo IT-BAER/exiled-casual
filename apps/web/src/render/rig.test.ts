@@ -7,6 +7,9 @@ import { createScene } from "./engine";
 import { makeMesh } from "./meshes";
 import {
   clipForSpeed,
+  idleRatio,
+  IDLE_SETTLE_SEC,
+  IDLE_SETTLED,
   isRigReady,
   loadPlayerRig,
   resetPlayerRig,
@@ -646,5 +649,16 @@ describe("the idle clip leaves the soles planted", () => {
     // soles, and dropping the curve entirely puts the hips' whole 10.4mm there.
     expect(travel("foot_l", 0.65)).toBeGreaterThan(0.004);
     expect(travel("foot_l", 0)).toBeGreaterThan(0.01);
+  });
+});
+
+describe("idleRatio", () => {
+  it("starts at the authored rate and settles slower, once", () => {
+    expect(idleRatio(0)).toBe(1);
+    expect(idleRatio(IDLE_SETTLE_SEC / 2)).toBeCloseTo((1 + IDLE_SETTLED) / 2, 6);
+    expect(idleRatio(IDLE_SETTLE_SEC)).toBeCloseTo(IDLE_SETTLED, 6);
+    // It does not keep slowing forever: a body stood still for a minute is
+    // breathing, not dying.
+    expect(idleRatio(600)).toBeCloseTo(IDLE_SETTLED, 6);
   });
 });

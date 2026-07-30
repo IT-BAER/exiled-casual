@@ -109,6 +109,24 @@ export function clipForSpeed(speed: number, current?: RigClip): RigClip {
  * driven by how fast the actor is really moving, the same principle the
  * primitive walk cycle uses. Clamped so extremes still read as a stride.
  */
+/**
+ * How the idle breath slows the longer a body stands still.
+ *
+ * A loop played at one rate is a machine: watch anyone stood waiting and the
+ * first few breaths are the ones that still belong to the walk, and the rest
+ * settle. `IDLE_SETTLE_SEC` is how long that takes and `IDLE_SETTLED` is where
+ * it lands — three quarters speed, which is slower than the eye can name and
+ * exactly what makes a standing character look alive rather than paused.
+ */
+export const IDLE_SETTLE_SEC = 6;
+export const IDLE_SETTLED = 0.75;
+
+/** Playback rate for an idle that has been standing for `seconds`. */
+export function idleRatio(seconds: number): number {
+  const t = Math.min(1, Math.max(0, seconds / IDLE_SETTLE_SEC));
+  return 1 + (IDLE_SETTLED - 1) * t;
+}
+
 export function speedRatioFor(clip: RigClip, speed: number): number {
   if (clip !== "walk" && clip !== "run") return 1;
   const matched = (speed / CLIP_SPEED[clip]) * CADENCE[clip];
@@ -574,6 +592,8 @@ export class RigActor {
   private active: AnimationGroup | null = null;
   private activeClip: RigClip | null = null;
   private locomotion: RigClip = "idle";
+  /** Seconds this body has been standing still, for the breath to settle over. */
+  private standing = 0;
 
   /** Every wardrobe part, grouped `slot` -> `look` -> meshes. */
   private readonly parts = new Map<string, Map<string, Mesh[]>>();
@@ -708,7 +728,15 @@ export class RigActor {
     const clip = clipForSpeed(speed, this.locomotion);
     this.locomotion = clip;
     const group = this.groups.get(clip);
-    if (group) group.speedRatio = speedRatioFor(clip, speed);
+    if (clip === "idle") {
+      // Real seconds off the engine, not a tick count: this is a render-side
+      // flourish and the sim never hears about it.
+      this.standing += (this.scene.getEngine?.()?.getDeltaTime?.() ?? 16) / 1000;
+      if (group) group.speedRatio = idleRatio(this.standing);
+    } else {
+      this.standing = 0;
+      if (group) group.speedRatio = speedRatioFor(clip, speed);
+    }
     this.switchTo(clip);
   }
 

@@ -88,10 +88,12 @@ describe("registerPlayerMovement", () => {
     expect(stepX).toBeGreaterThan(0);
     expect(stepY).toBeGreaterThan(0);
     // ...and paying for it in speed, the way a runner cutting a corner does.
-    // Not braking to a walk, though: the corner costs a bite, not the run.
+    // A lean, not a brake: the floor is 88% now, so a right angle costs a few
+    // percent and a full reversal an eighth. It used to cost a third, and a
+    // mouse reversing along one line looked like the game had stalled.
     const cutSpeed = Math.sqrt(stepX * stepX + stepY * stepY);
-    expect(cutSpeed).toBeLessThan(speed * 0.95);
-    expect(cutSpeed).toBeGreaterThan(speed * 0.55);
+    expect(cutSpeed).toBeLessThan(speed * 0.99);
+    expect(cutSpeed).toBeGreaterThan(speed * 0.85);
     // The turn is a corner, not a lap: a right angle inside a third of a second.
     for (let t = 5; t < 14; t++) sim.step();
     const settling = { ...sim.world.get<Position>(p, "position")! };
