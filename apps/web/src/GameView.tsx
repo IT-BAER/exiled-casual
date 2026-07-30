@@ -11,6 +11,7 @@ import { loadPlayerRig, resetPlayerRig } from "./render/rig";
 import { attachBindings } from "./input/bindings";
 import { CORE_SFX, playSfx, preloadSfx } from "./audio/sfx";
 import { createSoundscape } from "./audio/soundscape";
+import { preloadUiArt } from "./ui-art";
 import { Hud, BAR_H, ORB_RISE } from "./hud/Hud";
 import { PreparationPanel } from "./hud/PreparationPanel";
 import { InventoryPanel } from "./hud/InventoryPanel";
@@ -324,6 +325,11 @@ export function GameView({
     let unmounted = false;
     void Promise.all([loadPlayerRig(scene), loadProps(scene), loadRocks(scene), loadMonsters(scene)]).then(() => {
       if (!unmounted) engine.runRenderLoop(renderFrame);
+      // AFTER the models, never before: these are panels nobody has asked for yet,
+      // and the first frame is what the player is actually waiting on. Warming them
+      // here is why the first Escape no longer draws a frameless panel — see
+      // ui-art.ts for why the request, not the art, was the slow part.
+      preloadUiArt();
     });
 
     window.addEventListener("resize", () => engine.resize());
