@@ -17,7 +17,15 @@ import { SERIF } from "./ItemTooltip";
  */
 
 /** Minimap box, a fraction of the viewport as the rest of the HUD is. */
-const MAP_VW = 15;
+const MAP_VW = 13;
+/**
+ * Gap to the top-right corner, in the same viewport units.
+ *
+ * Tight on purpose. The minimap is the one HUD element with nothing outboard of
+ * it, so a generous inset just floats it in the middle of a corner instead of
+ * anchoring it to one, and the space it leaves is world the player cannot use.
+ */
+const MAP_INSET_VW = 0.6;
 /** World units the player reveals around themselves. */
 const REVEAL_RADIUS = 9;
 /**
@@ -319,8 +327,8 @@ export function Minimap({ layout, player }: MinimapProps): React.JSX.Element | n
       data-testid="minimap"
       style={{
         position: "absolute",
-        top: "1.2vw",
-        right: "1.2vw",
+        top: `${MAP_INSET_VW}vw`,
+        right: `${MAP_INSET_VW}vw`,
         width: `${MAP_VW}vw`,
         height: `${MAP_VW}vw`,
         pointerEvents: "none",

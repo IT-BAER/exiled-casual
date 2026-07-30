@@ -104,12 +104,13 @@ const VOICES: Record<string, Voice> = {
   "footstep-mud-1":           { gain: 0.014, wet: 0.04, vary: 0.16 },
   "footstep-mud-2":           { gain: 0.014, wet: 0.04, vary: 0.16 },
   "footstep-mud-3":           { gain: 0.014, wet: 0.04, vary: 0.16 },
-  // Both are 6 dB under where they started: a UI cue is a confirmation, not an event,
-  // and at the old level the menu was the loudest screen in the game.
-  "ui-click":                 { gain: 0.15, wet: 0.05, vary: 0.03 },
+  // Twelve dB under where they started, in two passes of six, because the first
+  // pass was still audibly the loudest thing on the screen. A UI cue is a
+  // confirmation that a press landed, not an event in its own right.
+  "ui-click":                 { gain: 0.075, wet: 0.05, vary: 0.03 },
   // A hover fires on every pixel of travel across a menu, so it sits under the click
   // by a lot. Anything that competes with the click is a menu that buzzes.
-  "ui-hover":                 { gain: 0.025, wet: 0.04, vary: 0.05 },
+  "ui-hover":                 { gain: 0.012, wet: 0.04, vary: 0.05 },
   "ui-panel-open":            { gain: 0.24, wet: 0.10, vary: 0.04 },
 };
 
