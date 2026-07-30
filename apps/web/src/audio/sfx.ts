@@ -1,4 +1,4 @@
-import { bus, send } from "./bus";
+import { bus, send, type Bus } from "./bus";
 
 /**
  * Sampled sound effects: skills, monsters, portals, flasks, footsteps and the UI.
@@ -104,10 +104,12 @@ const VOICES: Record<string, Voice> = {
   "footstep-mud-1":           { gain: 0.014, wet: 0.04, vary: 0.16 },
   "footstep-mud-2":           { gain: 0.014, wet: 0.04, vary: 0.16 },
   "footstep-mud-3":           { gain: 0.014, wet: 0.04, vary: 0.16 },
-  "ui-click":                 { gain: 0.30, wet: 0.05, vary: 0.03 },
+  // Both are 6 dB under where they started: a UI cue is a confirmation, not an event,
+  // and at the old level the menu was the loudest screen in the game.
+  "ui-click":                 { gain: 0.15, wet: 0.05, vary: 0.03 },
   // A hover fires on every pixel of travel across a menu, so it sits under the click
   // by a lot. Anything that competes with the click is a menu that buzzes.
-  "ui-hover":                 { gain: 0.05, wet: 0.04, vary: 0.05 },
+  "ui-hover":                 { gain: 0.025, wet: 0.04, vary: 0.05 },
   "ui-panel-open":            { gain: 0.24, wet: 0.10, vary: 0.04 },
 };
 
@@ -175,7 +177,7 @@ export const CORE_SFX: readonly string[] = [
  * `volume` scales the voice's own gain, which is how a distant monster is quieter
  * than one at the player's feet without a spatial graph nobody asked for.
  */
-export function playSfx(name: string, volume = 1): void {
+export function playSfx(name: string, volume = 1, distance = 0): void {
   const voice = VOICES[name];
   if (!voice || dead.has(name)) return;
   const b = bus();
@@ -187,9 +189,11 @@ export function playSfx(name: string, volume = 1): void {
   src.buffer = buf;
   if (voice.vary > 0) src.playbackRate.value = 1 + (Math.random() * 2 - 1) * voice.vary;
   const g = b.ctx.createGain();
-  g.gain.value = voice.gain * Math.max(0, Math.min(1, volume));
+  g.gain.value = voice.gain * clamp(volume);
   src.connect(g);
-  send(b, g, voice.wet);
+  // Room grows with distance as well: what reaches the ear from across a hall is
+  // mostly the hall.
+  send(b, muffle(b, g, distance), voice.wet * (1 + distance / AUDIBLE));
   src.start();
 }
 
@@ -197,7 +201,12 @@ export function playSfx(name: string, volume = 1): void {
  * Sustained voices, keyed by whatever the caller uses to say "this one again":
  * the entity id of the bolt in the air or the patch of ground still burning.
  */
-const loops = new Map<string, { src: AudioBufferSourceNode; gain: GainNode; peak: number }>();
+const loops = new Map<string, {
+  src: AudioBufferSourceNode; gain: GainNode; peak: number;
+  /** Always present, unlike a one-shot's: a bolt crosses the screen while it
+   *  sounds, so its muffling has to be swept and not decided at the start. */
+  lp: BiquadFilterNode;
+}>();
 
 /**
  * What the sustained voices are doing, for the console. DEV only, like
@@ -231,7 +240,7 @@ const LOOP_FADE_OUT = 0.14;
  *
  * Calling it twice for one key is a no-op, so a caller may say it every tick.
  */
-export function startSfxLoop(name: string, key: string, volume = 1): void {
+export function startSfxLoop(name: string, key: string, volume = 1, distance = 0): void {
   if (loops.has(key)) return;
   const voice = VOICES[name];
   if (!voice || dead.has(name)) { note(`novoice:${name}`); publish(); return; }
@@ -251,19 +260,25 @@ export function startSfxLoop(name: string, key: string, volume = 1): void {
   g.gain.value = 0;
   g.gain.setTargetAtTime(peak * clamp(volume), b.ctx.currentTime, LOOP_FADE_IN);
   src.connect(g);
-  send(b, g, voice.wet);
+  const lp = b.ctx.createBiquadFilter();
+  lp.type = "lowpass";
+  lp.frequency.value = distanceCutoff(distance);
+  g.connect(lp);
+  send(b, lp, voice.wet);
   src.start();
-  loops.set(key, { src, gain: g, peak });
+  loops.set(key, { src, gain: g, peak, lp });
   debug.started++;
   publish();
 }
 
 /** Follow a live loop's source as it moves relative to the player. */
-export function setSfxLoopVolume(key: string, volume: number): void {
+export function setSfxLoopVolume(key: string, volume: number, distance = 0): void {
   const live = loops.get(key);
   const b = bus();
   if (!live || !b) return;
   live.gain.gain.setTargetAtTime(live.peak * clamp(volume), b.ctx.currentTime, LOOP_FADE_IN);
+  // Same constant as the level: a filter that jumped per snapshot is a zipper.
+  live.lp.frequency.setTargetAtTime(distanceCutoff(distance), b.ctx.currentTime, LOOP_FADE_IN);
 }
 
 /** Fade a loop out and let it go. Unknown keys are silently ignored. */
@@ -300,9 +315,41 @@ function clamp(v: number): number {
  * silent, which is also what stops a map's worth of monsters mixing into mud.
  */
 export function distanceGain(distance: number): number {
-  const AUDIBLE = 14;
   if (distance >= AUDIBLE) return 0;
   return 1 - (distance / AUDIBLE) * 0.8;
+}
+
+const AUDIBLE = 14;
+/** Inside this, air has taken nothing off the top yet. */
+const NEAR = 2.5;
+const OPEN_HZ = 20000;
+const FAR_HZ = 900;
+
+/**
+ * Corner frequency for something `distance` units away.
+ *
+ * Distance does not only make a thing quieter, it makes it duller: air and
+ * everything in the way eat the top octaves first, which is the cue the ear
+ * actually reads as far. Geometric between the two ends, because pitch is.
+ */
+export function distanceCutoff(distance: number): number {
+  if (distance <= NEAR) return OPEN_HZ;
+  const t = Math.min(1, (distance - NEAR) / (AUDIBLE - NEAR));
+  return OPEN_HZ * Math.pow(FAR_HZ / OPEN_HZ, t);
+}
+
+/**
+ * The muffling filter for a voice, or the voice itself when it is close enough
+ * that a filter would be a node per sound for nothing.
+ */
+function muffle(b: Bus, node: AudioNode, distance: number): AudioNode {
+  const hz = distanceCutoff(distance);
+  if (hz >= OPEN_HZ) return node;
+  const f = b.ctx.createBiquadFilter();
+  f.type = "lowpass";
+  f.frequency.value = hz;
+  node.connect(f);
+  return f;
 }
 
 /** Test seam: forget every decoded buffer and failure. */
