@@ -269,6 +269,13 @@ export interface Snapshot {
     xpToNext: number;
     /** Gold on hand. Account-bound and never in the grid (docs/02), so it rides here. */
     gold: number;
+    /**
+     * Unit heading the body is turned to, which the sim rate-limits. The renderer
+     * faces the player by this rather than by the step, because the two differ
+     * whenever a target inside the turning circle is walked at in a straight line.
+     * Absent before the player has moved.
+     */
+    heading?: { x: number; y: number };
   };
   entities: SnapshotEntity[];
   /** Grid inventory (session singleton), display-ready. Empty when no session. */

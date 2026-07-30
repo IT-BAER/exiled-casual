@@ -12,7 +12,7 @@ import type {
   Health, Mana, Position, Cooldowns, CastingC, MonsterC,
   AilmentC, ProjectileC, GroundAreaC, BossC, TelegraphC,
   SessionC, InteractableC, ItemC, InventoryC, StashC, VendorC, EquipmentC, FlasksC, DefensesC, OffenseC, ProgressC,
-  EnergyShieldC, ShardsC,
+  EnergyShieldC, ShardsC, MoveDir,
 } from "./components";
 
 /**
@@ -366,6 +366,10 @@ export function buildSnapshot(
         return f
           ? { lifeCharges: f.lifeCharges, lifeMax: f.lifeMax, manaCharges: f.manaCharges, manaMax: f.manaMax }
           : { lifeCharges: 0, lifeMax: 0, manaCharges: 0, manaMax: 0 };
+      })(),
+      heading: (() => {
+        const d = world.get<MoveDir>(playerEntity, "moveDir");
+        return d && (d.hx !== 0 || d.hy !== 0) ? { x: toNumber(d.hx), y: toNumber(d.hy) } : undefined;
       })(),
       level: progress.level,
       xp: progress.xp,

@@ -284,6 +284,24 @@ describe("SnapshotRenderer", () => {
     expect(mesh.rotation.y).toBeCloseTo(spawnYaw - Math.PI / 16, 4);
   });
 
+  it("faces the player by the sim's heading, not by the step it took", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const renderer = new SnapshotRenderer(scene);
+
+    const s0 = makeSnapshot({ player: testPlayer() });
+    renderer.apply(null, s0, 1);
+    const mesh = scene.getMeshByName("entity-0")!;
+    const spawnYaw = (Math.PI * 3) / 4;
+
+    // Side-stepping +x onto a target inside his turning circle while the body is
+    // still turned +y. Facing the step would put him at PI/2; facing the heading
+    // holds him near 0, which is what stops the cursor pivoting him on the spot.
+    const s1 = makeSnapshot({ player: testPlayer({ x: 0.2, heading: { x: 0, y: 1 } }) });
+    renderer.apply(s0, s1, 1);
+    expect(mesh.rotation.y).toBeCloseTo(spawnYaw + 0.25 * (0 - spawnYaw), 4);
+  });
+
   it("banks into a turn and stands back up on the straight", () => {
     engine = new NullEngine();
     const { scene } = createScene(engine);

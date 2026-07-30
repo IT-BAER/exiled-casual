@@ -181,8 +181,16 @@ export function registerPlayerMovement(sim: Simulation, collisionRef?: Collision
           ddy = step.dy;
           // Click-to-move sets the heading too, so a WASD key pressed at the end
           // of a walk steers from where the player is going, not from a stale one.
+          // Steered, never snapped: a held mouse re-issues this target every tick,
+          // and a heading written straight off the step let the cursor spin the
+          // body as fast as it could be circled. The step itself still aims (a
+          // nudge inside the turning circle has to be reachable in a line), so the
+          // body turns at its own rate while it side-steps the last half unit.
           if (moveDir) {
-            const h = unit(ddx, ddy);
+            const want = unit(ddx, ddy);
+            const h = moveDir.hx === 0 && moveDir.hy === 0
+              ? want
+              : steer({ x: moveDir.hx, y: moveDir.hy }, want);
             world.set<MoveDir>(e, "moveDir", { dx: moveDir.dx, dy: moveDir.dy, hx: h.x, hy: h.y });
           }
         }

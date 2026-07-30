@@ -146,6 +146,9 @@ export class SnapshotRenderer {
       next.player.x,
       next.player.y,
       alpha,
+      undefined,
+      undefined,
+      next.player.heading,
     );
 
     // Dress the character from what it is wearing. Visibility only, so this is
@@ -263,6 +266,7 @@ export class SnapshotRenderer {
     alpha: number,
     radius?: number,
     species?: string,
+    heading?: { x: number; y: number },
   ): void {
     let mesh = this.meshes.get(id);
     const fresh = !mesh;
@@ -308,7 +312,12 @@ export class SnapshotRenderer {
     const dz = nextY - prevY;
     if (dx * dx + dz * dz > 1e-6) {
       const wasYaw = mesh.rotation.y;
-      mesh.rotation.y = lerpAngle(wasYaw, Math.atan2(dx, dz), 0.25);
+      // The step is the heading for everything that steers into its own movement.
+      // The player does not, quite: a target inside his turning circle is walked
+      // at in a straight line while the body comes about at its own rate, so the
+      // sim sends the heading and this follows THAT or he pivots with the cursor.
+      const aim = heading ? Math.atan2(heading.x, heading.y) : Math.atan2(dx, dz);
+      mesh.rotation.y = lerpAngle(wasYaw, aim, 0.25);
       this.lean(id, mesh, kind, mesh.rotation.y - wasYaw, speed);
     }
   }

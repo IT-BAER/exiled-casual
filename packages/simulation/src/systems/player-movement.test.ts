@@ -318,4 +318,38 @@ describe("click-to-move turns like the keys do", () => {
     expect(sim.world.get<Position>(p, "position")).toEqual({ x: at.x - fp(0.5), y: 0 });
     expect(sim.world.get<MoveTarget>(p, "moveTarget")!.active).toBe(0);
   });
+
+  /**
+   * A held mouse re-issues the target every tick, and inside TURN_FOR_DISTANCE the
+   * walk is aimed rather than steered, so the heading used to be written straight
+   * off the step: the cursor could spin the body as fast as it could be circled.
+   * The step still aims (a nudge inside the turning circle has to be reachable in
+   * a line); the heading is what the renderer faces the player by.
+   */
+  it("a held mouse circling close to him does not spin him", () => {
+    const sim = new Simulation();
+    registerPlayerMovement(sim);
+    // A real player's per-tick step: 3 units a second at 30 Hz.
+    const p = walker(sim, Math.trunc(fp(3) / 30));
+    let prev: { hx: number; hy: number } | null = null;
+    let worstDeg = 0;
+    for (let t = 0; t < 24; t++) {
+      const at = sim.world.get<Position>(p, "position")!;
+      const ang = (t * Math.PI) / 2; // the cursor jumps a quarter turn each tick
+      sim.step([{
+        tick: t, entity: p, type: "moveTo",
+        data: { x: at.x + Math.trunc(fp(0.6) * Math.cos(ang)), y: at.y + Math.trunc(fp(0.6) * Math.sin(ang)) },
+      }]);
+      const h = sim.world.get<MoveDir>(p, "moveDir")!;
+      if (h.hx === 0 && h.hy === 0) continue;
+      if (prev) {
+        const cross = prev.hx * h.hy - prev.hy * h.hx;
+        const dot = prev.hx * h.hx + prev.hy * h.hy;
+        worstDeg = Math.max(worstDeg, Math.abs((Math.atan2(cross, dot) * 180) / Math.PI));
+      }
+      prev = { hx: h.hx, hy: h.hy };
+    }
+    // TURN_CHORD is a touch over 20 degrees a tick; the slack is fixed-point rounding.
+    expect(worstDeg).toBeLessThan(30);
+  });
 });
