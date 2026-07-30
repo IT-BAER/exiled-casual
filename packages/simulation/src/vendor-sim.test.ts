@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { Item } from "@exiled/content-schema";
-import { vendorBuyPrice, vendorSellPrice, VENDOR_STOCK } from "@exiled/rules";
+import { vendorBuyPrice, vendorSellPrice, VENDOR_STOCK, START_GOLD } from "@exiled/rules";
 import { createCombatSim } from "./combat-sim";
 import { intentToCommand } from "./protocol-bridge";
 import { stockVendor, STAPLE_COUNT } from "./vendor";
@@ -143,14 +143,14 @@ describe("sellItem pays gold", () => {
     setInv(world, [{ x: 0, y: 0, w: 1, h: 2, item: NORMAL_WAND }]);
     sim.step([intentToCommand({ kind: "sellItem", x: 0, y: 0 }, playerEntity, 0)]);
     expect(getInv(world).items).toHaveLength(0);
-    expect(getGold(world)).toBe(vendorSellPrice(NORMAL_WAND));
+    expect(getGold(world)).toBe(START_GOLD + vendorSellPrice(NORMAL_WAND));
   });
 
   it("pays gold and shards for one rare, because the bench and the till are one counter", () => {
     const { sim, world, playerEntity } = makeWorld();
     setInv(world, [{ x: 0, y: 0, w: 1, h: 2, item: RARE_WAND }]);
     sim.step([intentToCommand({ kind: "sellItem", x: 0, y: 0 }, playerEntity, 0)]);
-    expect(getGold(world)).toBe(vendorSellPrice(RARE_WAND));
+    expect(getGold(world)).toBe(START_GOLD + vendorSellPrice(RARE_WAND));
     expect(world.get<{ counts: Record<string, number> }>(sessionE(world), "shards")!.counts["currency.elevation"]).toBe(1);
   });
 
@@ -165,7 +165,15 @@ describe("sellItem pays gold", () => {
       intentToCommand({ kind: "sellItem", x: 2, y: 0 }, playerEntity, 1),
     ]);
     expect(getInv(world).items).toHaveLength(2);
-    expect(getGold(world)).toBe(0);
+    expect(getGold(world)).toBe(START_GOLD);
+  });
+});
+
+describe("starting gold", () => {
+  it("gives a fresh character enough to open the shop with", () => {
+    const { world } = makeWorld();
+    expect(getGold(world)).toBe(START_GOLD);
+    expect(START_GOLD).toBeGreaterThan(0);
   });
 });
 

@@ -58,6 +58,15 @@ export function vendorSellPrice(item: Item): number {
   return Math.max(1, Math.trunc((vendorBuyPrice(item) * VENDOR_MARGIN_PCT) / 100));
 }
 
+/**
+ * Gold a fresh character starts with.
+ *
+ * Enough for two magic pieces off the opening shelf (256 each at the starting
+ * level) and short of a rare, so the shop is worth opening on the first day
+ * without answering the question the first map is there to answer.
+ */
+export const START_GOLD = 500;
+
 /** How many pieces stand on the shelf at once. One page of the purchase grid. */
 export const VENDOR_STOCK = 12;
 

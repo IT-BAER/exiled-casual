@@ -1,7 +1,7 @@
 import { fp } from "@exiled/fixed-point";
 import {
   baseCasterStats, makeRare, rollItem, FLASK_MAX_CHARGES, START_LEVEL,
-  offerWaystones, WAYSTONE_OFFER_COUNT,
+  offerWaystones, WAYSTONE_OFFER_COUNT, START_GOLD,
 } from "@exiled/rules";
 import { SKILLS, MONSTERS, rareTemplate, CONTENT_VERSION, ITEM_POOLS, baseOf, CURRENCY_DROPS, currencyItem, waystoneItem } from "@exiled/content-runtime";
 import { generateArea, type AreaLayout } from "@exiled/mapgen";
@@ -134,7 +134,7 @@ export function createCombatSim(
     }));
     world.set<StashC>(sessionE, "stash", { cols: 12, rows: 12, items: [] });
     world.set<ShardsC>(sessionE, "shards", { counts: {} });
-    world.set<ProgressC>(sessionE, "progress", { level: START_LEVEL, xp: 0, gold: 0 });
+    world.set<ProgressC>(sessionE, "progress", { level: START_LEVEL, xp: 0, gold: START_GOLD });
     world.set<VendorC>(sessionE, "vendor", stockVendor(seed, START_LEVEL));
     world.set<EquipmentC>(sessionE, "equipment", { slots: {} });
     world.set<FlasksC>(playerEntity, "flasks", {
