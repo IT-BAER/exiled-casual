@@ -18,6 +18,7 @@ import { PreparationPanel } from "./hud/PreparationPanel";
 import { InventoryPanel } from "./hud/InventoryPanel";
 import { CharacterPanel } from "./hud/CharacterPanel";
 import { LootLabels } from "./hud/LootLabels";
+import { NpcLabels } from "./hud/NpcLabels";
 import { Minimap } from "./hud/Minimap";
 import { Divider, FramedPanel, GOLD, MenuButton, SERIF } from "./menu/frames";
 import { LoadingScreen, LOADING_ART, FADE_MS } from "./LoadingScreen";
@@ -439,6 +440,7 @@ export function GameView({
         onPick={pick ?? undefined}
         plates={settings.ui.lootLabels}
       />
+      <NpcLabels snapshot={snapshot} project={project} />
       <Hud
         snapshot={snapshot}
         hoveredEntityId={hoveredEntityId}
