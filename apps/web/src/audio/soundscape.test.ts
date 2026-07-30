@@ -84,13 +84,46 @@ describe("createSoundscape", () => {
     ])).toEqual(["monster-hurt-husk"]);
   });
 
-  it("a monster that lost life grunts, but not again on the next tick", () => {
-    const heard = run([
-      snap({ tick: 1, entities: [monster(1, 3, 40)] }),
-      snap({ tick: 2, entities: [monster(1, 3, 30)] }),
-      snap({ tick: 3, entities: [monster(1, 3, 20)] }),
-    ]);
-    expect(heard).toEqual(["monster-hurt"]);
+  /**
+   * A grunt on every connect is a rattle, not a fight, so one hit in five to ten
+   * is heard. Counted in HITS rather than in ticks: a fast weapon and a slow one
+   * should sound equally sparse. The first hit always lands, or the opening of a
+   * fight is the one part of it that is silent.
+   */
+  it("hears one hit in five to ten, and always the first", () => {
+    const gaps = (played: (i: number) => boolean, hits = 60): number[] => {
+      const at: number[] = [];
+      for (let i = 0; i < hits; i++) if (played(i)) at.push(i);
+      expect(at[0]).toBe(0);
+      return at.slice(1).map((v, i) => v - (at[i] ?? 0));
+    };
+
+    const heard: string[] = [];
+    const s = createSoundscape({ play: (n) => heard.push(n) });
+    s.reset(null);
+    s.observe(snap({ tick: 1, entities: [monster(1, 3, 200)] }));
+    const monsterGaps = gaps((i) => {
+      const before = heard.length;
+      s.observe(snap({ tick: i + 2, entities: [monster(1, 3, 199 - i)] }));
+      return heard.length > before;
+    });
+
+    const mine: string[] = [];
+    const p = createSoundscape({ play: (n) => mine.push(n) });
+    p.reset(null);
+    p.observe(snap({ tick: 1, player: testPlayer({ life: 200 }) }));
+    const playerGaps = gaps((i) => {
+      const before = mine.length;
+      p.observe(snap({ tick: i + 2, player: testPlayer({ life: 199 - i }) }));
+      return mine.length > before;
+    });
+
+    for (const g of [...monsterGaps, ...playerGaps]) {
+      expect(g).toBeGreaterThanOrEqual(5);
+      expect(g).toBeLessThanOrEqual(10);
+    }
+    expect(monsterGaps.length).toBeGreaterThan(4);
+    expect(playerGaps.length).toBeGreaterThan(4);
   });
 
   /** A ground area over a pack would otherwise fire one sample per body. */

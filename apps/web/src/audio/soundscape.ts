@@ -30,8 +30,33 @@ import { distanceGain, playSfx, preloadSfx } from "./sfx";
 const STEP_TICKS = 10;
 /** How far the player must have moved between snapshots to count as walking. */
 const STEP_MIN_MOVE = 0.02;
-/** Ticks a single monster has to wait before it may grunt again. */
-const HURT_COOLDOWN_TICKS = 7;
+/**
+ * How many hits apart two hit cues are, at the least and at the most.
+ *
+ * A grunt on every connect is a rattle rather than a fight: at three attacks a
+ * second the cue stops being an event and becomes the texture of combat, and the
+ * ear filters it out. So one hit in five to ten is heard. Counted in HITS, not in
+ * ticks, which is the unit that survives attack speed: a fast weapon and a slow one
+ * sound equally sparse. Deaths stay ungated — that one is the reward.
+ */
+const HIT_GATE_MIN = 5;
+const HIT_GATE_MAX = 10;
+
+/**
+ * A counter that says yes once per five-to-ten calls, and on the first.
+ *
+ * The first is deliberate: a fight whose opening connect is the silent one reads as
+ * a hit that did not register.
+ */
+function hitGate(): () => boolean {
+  let skip = 0;
+  return () => {
+    if (skip > 0) { skip--; return false; }
+    skip = HIT_GATE_MIN - 1 + Math.floor(Math.random() * (HIT_GATE_MAX - HIT_GATE_MIN + 1));
+    return true;
+  };
+}
+
 /**
  * Most sounds of one kind in a single snapshot. A Cinder Ground over eight bodies
  * would otherwise fire eight samples on one tick, which is not eight hits — it is
@@ -132,8 +157,13 @@ interface Options {
 export function createSoundscape(opts: Options = {}): Soundscape {
   const play = opts.play ?? playSfx;
   let prev: Snapshot | null = null;
-  /** Last tick each monster was heard taking a hit, so a swarm does not roar. */
-  const lastHurt = new Map<number, number>();
+  /**
+   * One gate for the whole pack, not one per monster: eight monsters each heard
+   * every seventh hit is a roar, and what he asked to thin out is the RATE at the
+   * ear, which only a shared counter controls.
+   */
+  let dealt = hitGate();
+  let taken = hitGate();
   let lastStepTick = 0;
   /** 0-based index of the sample the last footfall used, so the next one differs. */
   let stepVariant = 0;
@@ -141,7 +171,8 @@ export function createSoundscape(opts: Options = {}): Soundscape {
 
   const reset = (biomeId?: string | null): void => {
     prev = null;
-    lastHurt.clear();
+    dealt = hitGate();
+    taken = hitGate();
     lastStepTick = 0;
     if (biomeId === undefined) return;
     ground = GROUND[biomeId ?? ""] ?? DEFAULT_GROUND;
@@ -184,7 +215,6 @@ export function createSoundscape(opts: Options = {}): Soundscape {
           // both are the same burst as far as the ear is concerned.
           play("skill-ember-bolt-impact", at(e));
         }
-        lastHurt.delete(id);
       }
 
       // ── Arrived ─────────────────────────────────────────────────────────────
@@ -195,22 +225,21 @@ export function createSoundscape(opts: Options = {}): Soundscape {
       }
 
       // ── Hurt ────────────────────────────────────────────────────────────────
-      let hurts = 0;
       for (const [id, e] of now) {
         if (e.kind !== "monster" || e.life === undefined) continue;
         const old = was.get(id);
         if (old?.life === undefined || e.life >= old.life) continue;
-        if (snap.tick - (lastHurt.get(id) ?? -999) < HURT_COOLDOWN_TICKS) continue;
-        if (hurts >= MAX_PER_KIND) continue;
-        hurts++;
-        lastHurt.set(id, snap.tick);
+        // Every hit is counted, one in five to ten is heard, so the gate must be
+        // asked about all of them and never short-circuited past.
+        if (!dealt()) continue;
         play(cueFor("monster-hurt", e.species), at(e));
       }
 
       // The player taking a hit: something's hands if anything is standing on him,
       // and something's spell otherwise. Two samples for one event reads as variety
       // rather than as a double hit, because only one of them ever plays.
-      if (snap.player.life < before.player.life || snap.player.energyShield < before.player.energyShield) {
+      if ((snap.player.life < before.player.life
+        || snap.player.energyShield < before.player.energyShield) && taken()) {
         const adjacent = snap.entities.some((e) =>
           e.kind === "monster"
           && Math.hypot(e.x - snap.player.x, e.y - snap.player.y) <= MELEE_RANGE);
