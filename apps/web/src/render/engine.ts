@@ -604,6 +604,17 @@ export function createScene(engine: Engine): SceneHandle {
     shadows.contactHardeningLightSizeUVRatio = 0.07;
     shadows.filteringQuality = ShadowGenerator.QUALITY_MEDIUM;
     shadows.darkness = 0.12; // deep, but the flagstones still read through them
+    // Offset the shadow lookup along the receiving surface's own normal, which is
+    // what stops a lit face shadowing ITSELF. A prop is both caster and receiver,
+    // and where this sun rakes a flat top the depth it stored and the depth it
+    // tests differ by less than a texel: the tabletop came out ringed with
+    // concentric moire that swam across the wood as the player moved, because the
+    // frustum is dragged along behind the camera every frame. Proved by turning
+    // reception off on that one mesh, which cleared it while SSAO and the torch's
+    // own shadows were already ruled out. Along the normal and not a flat depth
+    // bias: a plain bias big enough for this detaches every contact shadow from
+    // the thing casting it.
+    shadows.normalBias = 0.02;
     // Every actor part the renderer spawns later becomes a caster on its own, so
     // the renderer never has to know a shadow generator exists. The ground is the
     // only mesh alive at this point, and it only receives.
