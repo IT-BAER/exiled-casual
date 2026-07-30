@@ -3,15 +3,20 @@ import { bus, send } from "./bus";
 /**
  * Sampled sound effects: skills, monsters, portals, flasks, footsteps and the UI.
  *
- * The masters are 48 kHz mono WAVs generated locally with MOSS-SoundEffect v2 (see
- * `.claude/skills/generate-game-audio`), cut down by `tools/trim_sfx.py`, and shipped
- * as Opus in WebM — 21 sounds in 360 KB. They share the bus with the synthesised drop
- * cue, so the Options volume covers everything and nothing fights it for a context.
+ * Every master is a commercial library recording, curated rather than generated:
+ * `tools/import_sfx.py` names the source file per cue and runs it through
+ * `tools/trim_sfx.py` to Opus in WebM — 33 sounds in 470 KB. They share the bus with
+ * the synthesised drop cue, so the Options volume covers everything and nothing
+ * fights it for a context.
  *
- * Every one of them is peak-normalised by the trimmer and opens on its own transient,
- * which is what makes the gain table below the ONLY thing setting level. The first
- * pass shipped without that step: ten cues were silent or near-silent, and the ones
- * that were not started up to a second late and were cut off. See trim_sfx.py.
+ * Nothing here is model-rendered any more. The first two passes were, and generation
+ * is what made everything sound like the same soft object: a stone construct and a bog
+ * thing died the same way, and no prompt separated them. The library also fixes the
+ * level problem outright — a 24-bit recording peaking 23 dB down still has 70+ dB
+ * under it, so bringing it to the loudness target lifts nothing audible with it.
+ *
+ * Every one of them is loudness-matched by the trimmer and opens on its own transient,
+ * which is what makes the gain table below the ONLY thing setting level.
  *
  * Every path here is silent-on-failure by design. A missing file, a browser with no
  * WebAudio, a jsdom test: all of them end with nothing playing and nothing thrown,

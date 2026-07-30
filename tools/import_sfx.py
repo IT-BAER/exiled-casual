@@ -66,6 +66,52 @@ SOURCES: dict[str, str] = {
     # Wants a fire layer under it; nothing in 2023/2024/2026 holds a fire IMPACT.
     "monster-hurt-ember": "Epic Stock Media - Humanoid Creatures Vol 4 - Monstrous and Undead Creature Vocalization Sound Sets/HMNBrth_Construction Kit Male Screeching Breath Inhale Weak Squeal 05_ESM_HC4.wav",
     "monster-death-ember": "Epic Stock Media - Humanoid Creatures Vol 4 - Monstrous and Undead Creature Vocalization Sound Sets/VOXReac_Construction Kit Male Flutter Death Vocal Stuttered Long 05_ESM_HC4.wav",
+
+    # ── The generic pair ────────────────────────────────────────────────────────
+    # Only reachable for a species with no MATERIAL, which the test forbids — so
+    # these are the safety net and are deliberately non-specific: a body, a throat.
+    "monster-hurt": "SoundBits - Vox Bestiae - Source Elements/CREAHmn_Violent Humanoid Creature Exhale Short 4_SNDBTS_VB-SE.wav",
+    "monster-death": "David Dumais Audio - Monster Sound FX Pack 2/MonsterPack2_LargeMonster11_Roar03.wav",
+
+    # ── Monster attacks ─────────────────────────────────────────────────────────
+    # `monster-melee-hit` is the PLAYER being hit at close range (soundscape.ts), so
+    # it is the impact, not the swing: a designed transient with a body under it.
+    "monster-melee-hit": "Epic Stock Media - Halloween Game - Haunted House and Horror Audio Scare Kit/GORESplt_Gore Designed Transient Heavy Impact Smash 01_ESM_HALG.wav",
+    "monster-spit": "Epic Stock Media - Tower Defense Game/WOODImpt_Hit Blood Spill Splat Wood Impact Light Hit Squelch Small Thump 03_ESM_TDG.wav",
+    # The windup has to be heard as *coming*, so it is a low whoosh rather than a
+    # riser: a riser has a pitch that promises a downbeat the sim may never deliver.
+    "monster-slam-windup": "Justsoundeffects - Transition Whooshes Vol. 1/WHSH_Whoosh Low 07_JSE_TW1.wav",
+    "monster-slam-impact": "344 Audio - Epic Impacts Vol. 1/Impact 038.wav",
+    # The other half of the same event: a spell landing on the player from range.
+    "player-hurt": "344 Audio - Screaming/VOXScrm_Male in Shock 4_344 Audio_Screaming.wav",
+
+    # ── Skills ──────────────────────────────────────────────────────────────────
+    "skill-ember-bolt-cast": "Epic Stock Media - Elemental Mutation Whooshes and Impacts/FIREWhsh_Whoosh Fire Deep Growl Monster Saturated Crisp 03_ESM_EMWI.wav",
+    "skill-ember-bolt-impact": "DavidDumais - Explosion SFX Pack/EXPLReal_Medium Realistic Explosion 15_DDUMAIS_NONE.wav",
+    # Cinder ground burns for its whole duration, so this one is a fire LOOP cut to
+    # its loudest 1.4s rather than a one-shot with a decay.
+    "skill-cinder-ground-cast": "Epic Stock Media - Synthesized Nature Loops and Sounds/FIREBurn_Loop Elements Fire Crackling Crunchy Flame Burn 03_ESM_SNLS.wav",
+    "skill-blink": "CB Sound Design - Whoosh And Push/W_a_P_Spell_Whoosh_19.wav",
+
+    # ── Portals and the map device ──────────────────────────────────────────────
+    "portal-open": "CB_Sounddesign - Applicable Sounds - Organic UI and Building Games SFX/GAMEMisc_Magic Creation 23_CB Sounddesign_APPlicable Sounds.wav",
+    "portal-enter": "Chupapsound - Essential Scifi/DSGN VORTEX IN.wav",
+    # A pitch collapsing, not a power-down: every "downer" in the bundle is a trailer
+    # synth, and a guitar dive bomb is the same falling gesture with a body to it.
+    "portal-close": "Rogue Waves - Metal Tensions/MUSCStngr_Open String Dive Bomb Down, Whammy bar, Low_RogueWaves_MetalTensions_13.wav",
+    "waystone-activate": "Alexander Kopeikin - Emotion and Magic/magic, action gesture, evil presence, onslaught-004.wav",
+
+    # ── Flask, feet, UI ─────────────────────────────────────────────────────────
+    "flask-drink": "Eiravaein Works - Flask/OBJCont_Flask,glass,figuredbottle,realcork,liquid,remove,squeak,slosh,alt4_EWKR.wav",
+    # Two feet, two materials: the maps are earth, and a single step and a step out
+    # of a walking loop differ enough that the pair does not read as one sample.
+    "footstep-dirt-a": "RYK-Sounds - Footstep/grass 3 single step 3.wav",
+    "footstep-dirt-b": "RYK-Sounds - Footstep/mud 1 loop.wav",
+    "ui-click": "Cinematic Sound Design - Interface & Infographics/Interface Percussion Snap.wav",
+    "ui-hover": "Cinematic Sound Design - Interface & Infographics/Interface Pop High Short.wav",
+    # Not the sci-fi window slide: a panel in this game is leather and canvas, and the
+    # fantasy kit ships the inventory-open it was recorded for.
+    "ui-panel-open": "Epic Stock Media - Fantasy Game 2 - Sound Kit for Enchanted Realms/CLOTHFlp_Action Inventory Open Flip Cloth Canvas Bag Slide Light 02_ESM_FG2.wav",
 }
 
 

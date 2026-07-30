@@ -1,4 +1,8 @@
-"""Cut one usable game one-shot out of a five-second MOSS render.
+"""Cut one usable game one-shot out of a longer recording, and set its level.
+
+Nothing shipped is model-rendered any more — every master now comes from a commercial
+library through `import_sfx.py`, which resamples it and calls this. The history below
+is why the shaping exists at all; the shaping itself is source-agnostic.
 
 Why this exists
 ---------------
