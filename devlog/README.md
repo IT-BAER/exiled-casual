@@ -118,6 +118,9 @@ The hideout, map boundaries, and starter skills received their first production-
 <td width="50%"><img src="screenshots/2026-07-28-hideout-props.jpeg" alt="Hideout with modeled stash, map device, and disenchanter props" width="100%"><br><sub>Modeled props replace the hideout’s placeholder primitives.</sub></td>
 <td width="50%"><img src="screenshots/2026-07-28-rock-walls.jpeg" alt="Outdoor map enclosed by irregular rock walls" width="100%"><br><sub>Natural rock walls give generated maps a believable edge.</sub></td>
 </tr>
+</table>
+
+<table>
 <tr>
 <td width="33%"><img src="screenshots/2026-07-28-ember-bolt.jpeg" alt="Bright Ember Bolt projectile streaking across the hideout" width="100%"><br><sub>Ember Bolt becomes a fast, white-hot projectile streak.</sub></td>
 <td width="33%"><img src="screenshots/2026-07-28-cinder-ground.jpeg" alt="Circular patch of glowing cracked burning ground" width="100%"><br><sub>Cinder Ground burns through animated cracks and embers.</sub></td>
@@ -138,6 +141,9 @@ Menus, character selection, loading screens, options, and the experience rail co
 <td width="50%"><img src="screenshots/2026-07-29-loading-hideout.jpeg" alt="Hideout loading screen with tip and animated emblem" width="100%"><br><sub>Area transitions wait behind a painted loading plate.</sub></td>
 <td width="50%"><img src="screenshots/2026-07-29-options-docked.jpeg" alt="Options panel docked beside the live game scene" width="100%"><br><sub>Graphics, sound, and UI settings apply live in-game.</sub></td>
 </tr>
+</table>
+
+<table>
 <tr>
 <td width="100%"><img src="screenshots/2026-07-29-experience-rail.jpeg" alt="Thin experience rail along the bottom of the HUD" width="100%"><br><sub>Experience moves into a quiet rail beneath the HUD.</sub></td>
 </tr>

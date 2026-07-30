@@ -41,4 +41,23 @@ describe("devlog", () => {
       expect(existsSync(resolve("devlog/screenshots", screenshot)), screenshot).toBe(true);
     }
   });
+
+  it("keeps every row in a screenshot table on the same column grid", () => {
+    const tables = [...devlog.matchAll(/<table>(.*?)<\/table>/gs)];
+
+    for (const tableMatch of tables) {
+      const table = tableMatch[1];
+      expect(table).toBeDefined();
+      if (table === undefined) continue;
+
+      const columnCounts = [...table.matchAll(/<tr>(.*?)<\/tr>/gs)].map((rowMatch) => {
+        const row = rowMatch[1];
+        expect(row).toBeDefined();
+        if (row === undefined) return 0;
+        return [...row.matchAll(/<td\b/g)].length;
+      });
+
+      expect(new Set(columnCounts).size, columnCounts.join(",")).toBe(1);
+    }
+  });
 });
