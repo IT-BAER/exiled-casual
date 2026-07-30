@@ -1,10 +1,21 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { Y_LIFT, updateGroundItem } from "./meshes";
+import { Y_LIFT, updateGroundItem, beamTransform } from "./meshes";
 
 describe("ground item mesh", () => {
   it("has a Y_LIFT entry so it renders on the floor", () => {
     expect(typeof Y_LIFT["groundItem"]).toBe("number");
+  });
+
+  it("keeps the raked beam's foot on the drop", () => {
+    const { x, y, rz } = beamTransform();
+    expect(rz).toBeGreaterThan(0); // raked, not plumb
+    // Rotating the cylinder about its centre by rz must land its base at (0, 0).
+    const half = y / Math.cos(rz);
+    const baseX = x + Math.sin(rz) * half;
+    const baseY = y - Math.cos(rz) * half;
+    expect(baseX).toBeCloseTo(0);
+    expect(baseY).toBeCloseTo(0);
   });
 
   it("tints the beacon per rarity and falls back for unknown ones", () => {

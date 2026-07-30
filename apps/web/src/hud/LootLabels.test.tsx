@@ -95,6 +95,32 @@ describe("LootLabels", () => {
     expect(Math.abs(ys[0]! - ys[1]!)).toBeGreaterThan(10);
   });
 
+  it("gives a rare its base type on a second line, and hides it while unread", () => {
+    render(
+      <LootLabels
+        project={null}
+        snapshot={snapWith([
+          { id: 4, kind: "groundItem", x: 0, y: 0, rarity: "rare", name: "Doom Gaze", baseName: "Iron Wand" },
+          { id: 5, kind: "groundItem", x: 0, y: 0, rarity: "unique", name: "Ashmaw", baseName: "Ashmaw", unidentified: true },
+        ])}
+      />,
+    );
+    expect(screen.getByTestId("loot-label-4")).toHaveTextContent("Iron Wand");
+    expect(screen.getByTestId("loot-label-5")).not.toHaveTextContent("Ashmaw Ashmaw");
+  });
+
+  it("keeps a normal drop to one line, since a normal item is its own base", () => {
+    render(
+      <LootLabels
+        project={null}
+        snapshot={snapWith([
+          { id: 6, kind: "groundItem", x: 0, y: 0, rarity: "normal", name: "Waystone (Tier 1)", baseName: "Waystone" },
+        ])}
+      />,
+    );
+    expect(screen.getByTestId("loot-label-6")).not.toHaveTextContent("Waystone (Tier 1)Waystone");
+  });
+
   it("asks to pick the item up when its plate is clicked", () => {
     const onPick = vi.fn();
     render(

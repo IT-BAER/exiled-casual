@@ -426,7 +426,26 @@ function buildPortal(scene: Scene, root: Mesh): void {
 }
 
 /** World height of the loot beam, in the same units as the actors (~1.8 tall). */
-const BEAM_H = 2.4;
+const BEAM_H = 7;
+/**
+ * Screen-space lean of the shaft, in radians. PoE2's loot columns are raked, not
+ * plumb (`docs/todo/image-2.png`): a leaning shaft crosses more of the frame than
+ * a vertical one of the same height, so it reads from further away.
+ */
+const BEAM_TILT = 0.2;
+
+/**
+ * Where a tilted beam cylinder has to sit for its FOOT to stay on the drop.
+ * Babylon rotates a mesh about its own centre, so a raked shaft otherwise plants
+ * its base half a beam-height away from the item it marks.
+ */
+export function beamTransform(): { x: number; y: number; rz: number } {
+  return {
+    x: -Math.sin(BEAM_TILT) * (BEAM_H / 2),
+    y: Math.cos(BEAM_TILT) * (BEAM_H / 2),
+    rz: BEAM_TILT,
+  };
+}
 
 /**
  * Vertical falloff for the loot beam: solid where it meets the floor, gone at the
@@ -440,7 +459,7 @@ function beamGradient(scene: Scene): DynamicTexture {
   const ctx = tex.getContext() as unknown as CanvasRenderingContext2D;
   const grad = ctx.createLinearGradient(0, 0, 0, 64);
   grad.addColorStop(0, "#000"); // top of the image = top of the beam
-  grad.addColorStop(0.55, "#555");
+  grad.addColorStop(0.35, "#4a4a4a"); // a tall shaft has to be gone well before its top
   grad.addColorStop(1, "#fff"); // floor end stays bright
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, 4, 64);
@@ -473,11 +492,14 @@ export function updateGroundItem(mesh: Mesh, rarity: string | undefined): void {
   }
 }
 
+// Intensity, not density (docs/09-reward-psychology.md 3): the gap between a junk
+// shaft and a unique one is what makes the unique an event, so the tiers spread
+// rather than sitting evenly.
 const BEAM_ALPHA: Record<string, number> = {
-  normal: 0.18,
-  magic: 0.34,
-  rare: 0.48,
-  unique: 0.62,
+  normal: 0.09,
+  magic: 0.24,
+  rare: 0.45,
+  unique: 0.7,
 };
 
 /**
@@ -913,9 +935,11 @@ export function makeMesh(
     // Light beam standing on the drop, the way PoE marks loot from across a room.
     // Additive so it glows over the floor instead of masking it, and unlit so it
     // keeps its rarity colour in a dark map.
-    const beam = MeshBuilder.CreateCylinder(`${name}-beam`, { diameter: 0.2, height: BEAM_H, tessellation: 10 }, scene);
+    const beam = MeshBuilder.CreateCylinder(`${name}-beam`, { diameter: 0.12, height: BEAM_H, tessellation: 10 }, scene);
     beam.parent = m;
-    beam.position.y = BEAM_H / 2;
+    const at = beamTransform();
+    beam.position.set(at.x, at.y, 0);
+    beam.rotation.z = at.rz;
     beam.isPickable = false;
     const beamMat = new StandardMaterial(`${name}-beam-mat`, scene);
     beamMat.diffuseColor = new Color3(0, 0, 0);

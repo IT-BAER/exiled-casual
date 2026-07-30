@@ -20,6 +20,20 @@ const PLATE_LIFT = 26;
 /** Row pitch and horizontal tolerance used to unstack co-located plates. */
 const PLATE_ROW = 22;
 const PLATE_SPREAD_X = 120;
+/** Gap between two stacked plates, on top of the taller one's own height. */
+const PLATE_GAP = 4;
+
+/**
+ * Plate fill per rarity. PoE2 tints the plate itself (`docs/todo/image-2.png`):
+ * a unique sits on dark maroon, a rare on dark gold, so the tier reads before a
+ * single letter does.
+ */
+const PLATE_BG: Record<string, string> = {
+  normal: "rgba(10,10,10,0.78)",
+  magic: "rgba(14,20,42,0.82)",
+  rare: "rgba(34,25,8,0.82)",
+  unique: "rgba(38,17,7,0.86)",
+};
 
 export interface LootLabelsProps {
   snapshot: Snapshot | null;
@@ -90,8 +104,11 @@ export function LootLabels({ snapshot, project, onPick, plates = true }: LootLab
       for (let i = 1; i < placed.length; i++) {
         const cur = placed[i]!;
         const prev = placed[i - 1]!;
-        if (Math.abs(cur.x - prev.x) < PLATE_SPREAD_X && cur.y - prev.y < PLATE_ROW) {
-          cur.y = prev.y + PLATE_ROW;
+        // Plates are one or two lines tall, so the pitch is the plate above's own
+        // height; a fixed pitch overlaps a two-line rare with the plate under it.
+        const pitch = (prev.node.offsetHeight || PLATE_ROW) + PLATE_GAP;
+        if (Math.abs(cur.x - prev.x) < PLATE_SPREAD_X && cur.y - prev.y < pitch) {
+          cur.y = prev.y + pitch;
         }
       }
       for (const { node, x, y } of placed) {
@@ -106,7 +123,15 @@ export function LootLabels({ snapshot, project, onPick, plates = true }: LootLab
   return (
     <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
       {(plates ? items : []).map((e) => {
-        const look = RARITY[(e.rarity ?? "normal") as keyof typeof RARITY] ?? RARITY.normal;
+        const rarity = (e.rarity ?? "normal") as keyof typeof RARITY;
+        const look = RARITY[rarity] ?? RARITY.normal;
+        // The base type only earns its own line where PoE2 gives it one: under a
+        // rolled name, on a magic or better drop. A normal item IS its base, and a
+        // currency plate saying "Waystone (Tier 1) / Waystone" is one line of noise.
+        const base =
+          rarity !== "normal" && !e.unidentified && e.baseName && e.baseName !== e.name
+            ? e.baseName
+            : null;
         return (
           <div
             key={e.id}
@@ -125,19 +150,35 @@ export function LootLabels({ snapshot, project, onPick, plates = true }: LootLab
               left: 0,
               top: 0,
               visibility: "hidden", // until the first projection places it
-              padding: "2px 10px 3px",
-              background: "rgba(0,0,0,0.72)",
-              border: `1px solid ${look.frame}`,
+              padding: base ? "3px 12px 4px" : "2px 12px 3px",
+              background: PLATE_BG[rarity] ?? PLATE_BG["normal"],
+              border: `1px solid ${look.frame}66`, // the reference plate is filled, not outlined
               color: look.text,
-              font: `13px ${SERIF}`,
+              font: `14px ${SERIF}`,
               fontVariant: "small-caps",
               letterSpacing: "0.04em",
+              lineHeight: 1.25,
+              textAlign: "center",
               whiteSpace: "nowrap",
               textShadow: "0 1px 2px #000",
               pointerEvents: "auto", // the wrapper is inert; the plates are clickable
             }}
           >
             {e.name ?? "Item"}
+            {base ? <div style={{ fontSize: 12, opacity: 0.85 }}>{base}</div> : null}
+            {/* Stem down to the drop, so a plate lifted out of a stack still says
+                which item on the floor it belongs to. */}
+            <span
+              aria-hidden
+              style={{
+                position: "absolute",
+                left: "50%",
+                top: "100%",
+                width: 1,
+                height: PLATE_LIFT - 6,
+                background: `linear-gradient(180deg, ${look.frame}99, transparent)`,
+              }}
+            />
           </div>
         );
       })}
