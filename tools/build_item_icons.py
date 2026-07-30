@@ -65,7 +65,9 @@ ICONS: list[tuple[str, str, int, int]] = [
     ("cinderhide_strap_v1", "cinderhide_strap", 2, 1),
     ("ashen_bracers_v1", "ashen_bracers", 2, 2),
     ("cinderplate_gauntlets_v1", "cinderplate_gauntlets", 2, 2),
-    ("emberstep_shoes_v1", "emberstep_shoes", 2, 2),
+    # v2: v1 came back as modern low-cut dress shoes, which is not a slot this game
+    # has, and at 1.79 wide to tall it also filled a 2x2 to only 56%.
+    ("emberstep_shoes_v2", "emberstep_shoes", 2, 2),
     ("ashen_sabatons_v1", "ashen_sabatons", 2, 2),
     # The scroll replaces the one hand-authored SVG in the pool.
     ("wisdom_scroll_v1", "wisdom_scroll", 1, 1),
