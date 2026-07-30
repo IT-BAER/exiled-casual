@@ -179,10 +179,14 @@ export function applyGraphics(scene: Scene, engine: Engine | null, g: GraphicsSe
   const pipelines = scene.postProcessRenderPipelineManager?.supportedPipelines;
   const ssao = pipelines?.find((p) => p.name === "ssao");
   if (ssao && scene.activeCamera) {
+    // Detach unconditionally first, so this ends in exactly ONE attachment however
+    // often it runs. Attaching an already-attached pipeline appends its post
+    // processes to the camera a second time, which Babylon reports as "trying to
+    // reuse a post process not defined as reusable" and then renders twice; and this
+    // runs on every graphics change, on mount, and again on StrictMode's remount.
+    scene.postProcessRenderPipelineManager.detachCamerasFromRenderPipeline("ssao", scene.activeCamera);
     if (g.ambientOcclusion) {
       scene.postProcessRenderPipelineManager.attachCamerasToRenderPipeline("ssao", scene.activeCamera);
-    } else {
-      scene.postProcessRenderPipelineManager.detachCamerasFromRenderPipeline("ssao", scene.activeCamera);
     }
   }
 
