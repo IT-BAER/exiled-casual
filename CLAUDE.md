@@ -141,9 +141,9 @@ colors, name header, affix lines) to the `item-*.png` screenshots above.
 
 - **Drive and capture the state yourself.** Anything transient (a skill FX, an impact, a bolt in
   flight) is over before a human can hold it, so asking the user to pose the screen is not a workflow.
-  Script it: dispatch the input, wait a measured delay, then `scene.render()` and `drawImage` into an
-  offscreen canvas in the SAME in-page script (full-page is fine for anything still). Aim with a
-  canvas `pointermove` first or a cast is a no-op (aim = player's feet).
+  Wrap `requestAnimationFrame` and `drawImage` the canvas INSIDE that callback: without
+  preserveDrawingBuffer it is the only moment the drawn frame is still readable, and the same copy from
+  a `setTimeout` comes back solid black. Aim with a canvas `pointermove` or a cast is a no-op.
 - Stage every capture in `review/` (gitignored) under a plain name and get sign-off BEFORE it enters
   `devlog/`. What needs confirming is the frame, not the moment; scratchpad paths are not reviewable.
   Signed off, it becomes `devlog/screenshots/YYYY-MM-DD-<slug>.jpeg` (JPEG q75-80; PNG only for
@@ -154,14 +154,13 @@ colors, name header, affix lines) to the `item-*.png` screenshots above.
 - The client is a **screen router** (`App.tsx`): `menu | mode | select | create | info | game`.
   The game lives in `GameView.tsx`, which builds the Babylon engine and spawns the sim worker ON
   MOUNT — keeping it unmounted is the point, and no menu screen may import it.
-- The save is a **roster**: `packages/persistence/src/roster.ts` holds a record per character (id,
-  name, class, level, league) plus a **shared stash**, treating each save as an OPAQUE `state`: that
-  leaf must never learn what a session is. `simulation/roster-io.ts` parses it without a World and
-  the menu imports THAT, never `characters.ts`, or the whole sim lands in the main bundle.
-  `persist.VERSION` (2) versions one save, `ROSTER_VERSION` (3) the blob wrapping them;
-  `migrateSingleSave` upgrades v2 on READ only, so an untouched visit leaves the old save on disk.
-- **Local mode holds one character** (`LOCAL_CHARACTER_CAP`), passed in by the caller so online passes
-  `Infinity`. `PLAY` asks local-or-online BEFORE the roster: the pools never mix, said in advance.
+- The save is a **roster**: `packages/persistence/src/roster.ts` holds a record per character plus a
+  **shared stash**, treating each save as an OPAQUE `state` — that leaf must never learn what a session
+  is. `simulation/roster-io.ts` parses it without a World and the menu imports THAT, never
+  `characters.ts`, or the whole sim lands in the main bundle. `persist.VERSION` (2) versions one save,
+  `ROSTER_VERSION` (3) the blob; `migrateSingleSave` upgrades v2 on READ only.
+- **Local mode holds one character** (`LOCAL_CHARACTER_CAP`), passed in so online passes `Infinity`.
+  `PLAY` asks local-or-online BEFORE the roster: the pools never mix, said in advance.
 - **Classes are cosmetic and one body.** Ids in `@exiled/rules/classes.ts`, definitions in
   `content-runtime/classes.ts`, pinned by `simulation/characters.test.ts`. One male rig, two looks per
   slot, so a class only changes the OUTFIT: each gets a body base out of `STARTER_BASES` (kept out of
@@ -178,7 +177,7 @@ colors, name header, affix lines) to the `item-*.png` screenshots above.
   to appear. Same for `resetPlayerRig(scene)` — an abandoned scene must not wipe a live one's cache.
 - The menu rig has a FACE now, so `FACING` is staging and `FILL_INTENSITY` (0.15) is how much of it you
   get: low because the plate is lit by fire, not because the head is blank. Name fields need
-  `user-select`, so `index.html`'s "no text input anywhere" comment is stale.
+  `user-select`.
 - **Never construct a `Texture` on the menu scene before `loadPlayerRig`.** A texture download
   across the wardrobe's glTF import leaves every wardrobe material sampling flat white: a correctly
   shaped, correctly animated white silhouette, and a green test suite. Bisected to the texture
@@ -193,8 +192,7 @@ colors, name header, affix lines) to the `item-*.png` screenshots above.
 
 ## Conventions
 
+- **Sound is a snapshot DIFF** (`audio/soundscape.ts`), never a call at the dispatch site: a cue fired on the press lies whenever the sim refuses the cast. One bus (`audio/bus.ts`), or the volume slider covers half the game. Masters come from the `generate-game-audio` skill and ship as Opus in `public/audio/`.
 - Sim math is deterministic fixed-point; keep replay checksums stable. `@exiled/rules` is a pure leaf: it imports no other `@exiled` package.
 - Commit: direct-to-main, one per task. No attribution trailers, no emdashes in messages.
-- **`docs/todo/TODO.md` is his, edited continuously** (gitignored, so re-read it each session). New
-  items land under `## SORT`: rate each and move it into Low / Mid / High, ranked inside the tier so
-  the last line is the most important. Tick `[x]` when it ships. Never reword or drop his items.
+- **`docs/todo/TODO.md` is his, edited continuously** (gitignored, so re-read it each session). New items land under `## SORT`: rate each and move it into Low / Mid / High, ranked inside the tier so the last line is the most important. Tick `[x]` when it ships. Never reword or drop his items.
