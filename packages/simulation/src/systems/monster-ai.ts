@@ -1,6 +1,6 @@
 import { fp, fpDist2, fpMul, fpStepToward, fpClamp, isqrt, type Fixed } from "@exiled/fixed-point";
 import { WORLD_MIN, WORLD_MAX } from "../movement";
-import { chaseStep, slide, type Collision, type CollisionRef } from "../collision";
+import { chaseStep, hasLineOfSight, slide, type Collision, type CollisionRef } from "../collision";
 import { Simulation } from "../loop";
 import type { Position, MonsterC, Faction, Health, ProjectileC, TelegraphC, SessionC } from "../components";
 import { mapDangerScale } from "../areas";
@@ -138,11 +138,20 @@ export function registerMonsterAI(sim: Simulation, collisionRef?: CollisionRef):
         if (d2 < nearestD2) { nearest = p; nearestD2 = d2; }
       }
 
-      // Asleep and still out of earshot: nothing to do, and nothing written, so
-      // an untouched room costs the checksum nothing either.
-      if (mon.state === "idle" && nearestD2 > AGGRO_RADIUS * AGGRO_RADIUS) continue;
-
       const ppos = world.get<Position>(nearest, "position")!;
+
+      // Asleep and still out of earshot, or in earshot with a wall in the way:
+      // nothing to do, and nothing written, so an untouched room costs the
+      // checksum nothing either. The sight test runs only for a sleeper already
+      // inside the radius, which is what keeps a ray off every idle monster.
+      //
+      // Sight gates the WAKE alone. A monster already chasing keeps coming when
+      // it loses sight, or every wall in the map would be a place to shake a
+      // pack off by stepping behind it. Being shot still wakes it regardless
+      // (damage-resolve.ts), because an arrow out of the dark is a fine reason.
+      if (mon.state === "idle"
+        && (nearestD2 > AGGRO_RADIUS * AGGRO_RADIUS
+          || !hasLineOfSight(collision, mpos.x, mpos.y, ppos.x, ppos.y))) continue;
 
       // Rooted mid-wind-up: hold. Sits above the slam and the melee checks so a
       // heavy cannot re-aim what it has already committed to — the dodge is only

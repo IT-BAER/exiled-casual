@@ -100,8 +100,20 @@ export function sweep(
 
 /**
  * One step of a chase: toward the target, around whatever stands in the way.
- * The nav field is consulted only for a step a wall actually cancelled, so open
- * ground stays byte-identical to the bare `slide` this replaces (golden replays).
+ *
+ * ONE controller per tick, chosen by the layout rather than by the moment.
+ * Consulting the field only for a step a wall had already cancelled is what made
+ * a monster grind on a wall's rim: greedy is unblocked a body-width off the wall,
+ * so it pushed in until the rim cancelled it, the field pointed back at the cell
+ * it came from, greedy freed up again, and the two alternated — 397 direction
+ * reversals in 400 ticks, which is the shake seen in game.
+ *
+ * Anything that flips per tick reproduces that, including "did the step lower the
+ * route cost" — that one flips as the body crosses a cell boundary, and measured
+ * 12 reversals. The question has to be geometric and it has to be about the whole
+ * journey: is the line to the target clear for this body? That answer changes once,
+ * when the body rounds the corner, so the two controllers never trade ticks. Open
+ * ground answers yes and stays byte-identical, because yes is the same old slide.
  */
 export function chaseStep(
   collision: Collision | undefined,
@@ -116,13 +128,41 @@ export function chaseStep(
   if (!collision) return { x: x + direct.dx, y: y + direct.dy };
 
   const slid = slide(collision, x, y, direct.dx, direct.dy, bodyRadius);
-  if (slid.x === x + direct.dx && slid.y === y + direct.dy) return slid;
+  const nav = collision.nav;
+  if (!nav) return slid;
 
-  const wp = collision.nav?.waypoint(x, y, targetX, targetY, bodyRadius);
-  if (wp === null || wp === undefined) return slid;
+  if (hasLineOfSight(collision, x, y, targetX, targetY, bodyRadius)) return slid;
+
+  const wp = nav.waypoint(x, y, targetX, targetY, bodyRadius);
+  if (wp === null) return slid;
 
   const leg = fpStepToward(x, y, wp.x, wp.y, speedFixed);
   return slide(collision, x, y, leg.dx, leg.dy, bodyRadius);
+}
+
+/**
+ * Whether a body of `bodyRadius` can travel the straight line from (x, y) to
+ * (tx, ty) without meeting a wall.
+ *
+ * Two callers want two radii and both are right. `chaseStep` passes the body's
+ * own, because it is asking whether it can walk there. Aggro passes 0, because
+ * it is asking whether it can SEE there, and an eye has no width — a monster
+ * that only woke when its shoulders fit through would sleep behind every pillar
+ * it could plainly see past.
+ */
+export function hasLineOfSight(
+  collision: Collision | undefined,
+  x: Fixed,
+  y: Fixed,
+  tx: Fixed,
+  ty: Fixed,
+  bodyRadius: Fixed = 0,
+): boolean {
+  if (!collision) return true;
+  const dx = tx - x;
+  const dy = ty - y;
+  const reach = sweep(collision, x, y, dx, dy, bodyRadius);
+  return reach.dx === dx && reach.dy === dy;
 }
 
 /** Adapt a mapgen walkable grid into a Collision (fixed-point → cell lookup). */

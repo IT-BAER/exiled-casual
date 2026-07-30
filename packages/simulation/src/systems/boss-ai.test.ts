@@ -540,10 +540,29 @@ describe("on a generated map", () => {
   it("wakes the boss once the player crosses into the room", () => {
     const { sim, world, playerEntity, boss } = realMap();
     const b = world.get<Position>(boss, "position")!;
-    // Walk-in is what the client does; place the player on the threshold instead
+    // Walk-in is what the client does; place the player inside the arena instead
     // so the assertion is about the gate, not about pathing round the geometry.
-    world.set<Position>(playerEntity, "position", { x: b.x, y: b.y - BOSS_AGGRO_RADIUS });
+    // It has to be a spot the player could actually stand: this used to drop him
+    // a full BOSS_AGGRO_RADIUS north, which on this layout is INSIDE the arena
+    // wall, and the boss woke through it. That was the bug, pinned as a test.
+    world.set<Position>(playerEntity, "position", { x: b.x + fp(6), y: b.y });
     sim.step();
     expect(world.get<MonsterC>(boss, "monster")!.state).not.toBe("idle");
+  });
+
+  it("does not wake the boss through the arena wall", () => {
+    const { sim, world, playerEntity, layout, boss } = realMap();
+    const b = world.get<Position>(boss, "position")!;
+    const spot = { x: b.x, y: b.y - BOSS_AGGRO_RADIUS };
+    // The premise, asserted rather than trusted: this spot is inside aggro range
+    // AND is the arena wall itself. Without both, the test passes for the wrong
+    // reason the moment the layout shifts.
+    expect(fpDist2(spot.x, spot.y, b.x, b.y))
+      .toBeLessThanOrEqual(BOSS_AGGRO_RADIUS * BOSS_AGGRO_RADIUS);
+    expect(gridCollision(layout!.grid).isWalkable(spot.x, spot.y, fp(0.5))).toBe(false);
+
+    world.set<Position>(playerEntity, "position", spot);
+    for (let i = 0; i < 30; i++) sim.step();
+    expect(world.get<MonsterC>(boss, "monster")!.state).toBe("idle");
   });
 });

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { Simulation } from "../loop";
 import { fp, fpDist2 } from "@exiled/fixed-point";
 import type { Position, MonsterC, Faction, PlayerC, BossC, Health, ProjectileC, DefensesC, TelegraphC, SessionC } from "../components";
-import { registerMonsterAI } from "./monster-ai";
+import { registerMonsterAI, AGGRO_RADIUS } from "./monster-ai";
 import { registerDamageResolve } from "./damage-resolve";
 import { registerTelegraphResolve } from "./telegraph-resolve";
 import { gridCollision } from "../collision";
@@ -238,13 +238,91 @@ describe("registerMonsterAI", () => {
       defId: "test", moveSpeed: fp(2), bodyRadius: 0,
       attackRange: fp(1.2), attackCooldownTicks: 45,
       attackDamage: fp(6), attackType: 1 as const,
-      attackReadyTick: 0, slamReadyTick: 0, rootedUntilTick: 0, state: "idle", rare: 0 as const, summoned: 0 as const,
+      // Starts pulled. This wall is solid top to bottom, so an idle monster
+      // behind it can no longer see the player to wake at all — which is its
+      // own test below. The subject here is movement, not noticing.
+      attackReadyTick: 0, slamReadyTick: 0, rootedUntilTick: 0, state: "chase", rare: 0 as const, summoned: 0 as const,
     });
 
     for (let i = 0; i < 5; i++) sim.step();
     // Never crosses the wall to reach the player's side.
     expect(world.get<Position>(m, "position")!.x).toBeLessThan(fp(3));
     expect(world.get<MonsterC>(m, "monster")!.state).toBe("chase");
+  });
+
+  it("does not wake a monster on the far side of a wall", () => {
+    // Solid column between the two, well inside AGGRO_RADIUS. Distance alone used
+    // to wake it, so a pack woke through the rock it was standing behind and came
+    // round before the player had seen any of it.
+    const collision = gridCollision(
+      makeGrid([
+        "...#...",
+        "...#...",
+        "...#...",
+        "...#...",
+        "...#...",
+      ]),
+    );
+    const sim = new Simulation();
+    registerMonsterAI(sim, { active: collision });
+    const { world } = sim;
+
+    const player = world.create();
+    world.set<Position>(player, "position", { x: fp(5), y: fp(2) });
+    world.set<Faction>(player, "faction", { team: 0 });
+    world.set<PlayerC>(player, "player", { moveSpeed: 0, bodyRadius: fp(0.5) });
+
+    const m = world.create();
+    const start = { x: fp(1), y: fp(2) };
+    world.set<Position>(m, "position", start);
+    world.set<Faction>(m, "faction", { team: 1 });
+    world.set<MonsterC>(m, "monster", {
+      defId: "test", moveSpeed: fp(2), bodyRadius: 0,
+      attackRange: fp(1.2), attackCooldownTicks: 45,
+      attackDamage: fp(6), attackType: 1 as const,
+      attackReadyTick: 0, slamReadyTick: 0, rootedUntilTick: 0, state: "idle", rare: 0 as const, summoned: 0 as const,
+    });
+    // Premise: close enough that only the wall can be keeping it asleep.
+    expect(fpDist2(start.x, start.y, fp(5), fp(2))).toBeLessThan(AGGRO_RADIUS * AGGRO_RADIUS);
+
+    for (let i = 0; i < 60; i++) sim.step();
+    expect(world.get<MonsterC>(m, "monster")!.state).toBe("idle");
+    expect(world.get<Position>(m, "position")).toEqual(start);
+  });
+
+  it("wakes a monster with a clear line to the player at the same distance", () => {
+    // Same geometry and the same 4-unit gap, wall removed: proves the test above
+    // is measuring the wall and not the distance.
+    const collision = gridCollision(
+      makeGrid([
+        ".......",
+        ".......",
+        ".......",
+        ".......",
+        ".......",
+      ]),
+    );
+    const sim = new Simulation();
+    registerMonsterAI(sim, { active: collision });
+    const { world } = sim;
+
+    const player = world.create();
+    world.set<Position>(player, "position", { x: fp(5), y: fp(2) });
+    world.set<Faction>(player, "faction", { team: 0 });
+    world.set<PlayerC>(player, "player", { moveSpeed: 0, bodyRadius: fp(0.5) });
+
+    const m = world.create();
+    world.set<Position>(m, "position", { x: fp(1), y: fp(2) });
+    world.set<Faction>(m, "faction", { team: 1 });
+    world.set<MonsterC>(m, "monster", {
+      defId: "test", moveSpeed: fp(2), bodyRadius: 0,
+      attackRange: fp(1.2), attackCooldownTicks: 45,
+      attackDamage: fp(6), attackType: 1 as const,
+      attackReadyTick: 0, slamReadyTick: 0, rootedUntilTick: 0, state: "idle", rare: 0 as const, summoned: 0 as const,
+    });
+
+    sim.step();
+    expect(world.get<MonsterC>(m, "monster")!.state).not.toBe("idle");
   });
 
   it("a chasing monster walks around a wall that has a way past it", () => {
@@ -275,7 +353,9 @@ describe("registerMonsterAI", () => {
       defId: "test", moveSpeed: fp(0.2), bodyRadius: 0,
       attackRange: fp(1.2), attackCooldownTicks: 45,
       attackDamage: fp(6), attackType: 1 as const,
-      attackReadyTick: 0, slamReadyTick: 0, rootedUntilTick: 0, state: "idle", rare: 0 as const, summoned: 0 as const,
+      // Pulled, for the same reason as the test above: the way past this wall is
+      // the bottom row, and the sight line to the player runs through the wall.
+      attackReadyTick: 0, slamReadyTick: 0, rootedUntilTick: 0, state: "chase", rare: 0 as const, summoned: 0 as const,
     });
 
     for (let i = 0; i < 150; i++) sim.step();

@@ -95,7 +95,10 @@ SOURCES: dict[str, str] = {
 
     # ── Portals and the map device ──────────────────────────────────────────────
     "portal-open": "CB_Sounddesign - Applicable Sounds - Organic UI and Building Games SFX/GAMEMisc_Magic Creation 23_CB Sounddesign_APPlicable Sounds.wav",
-    "portal-enter": "Chupapsound - Essential Scifi/DSGN VORTEX IN.wav",
+    # Same trap as the UI pair: the one file in the bundle actually called a vortex is
+    # in a pack called Essential Scifi, and it sounded like one. A whoosh made of glass
+    # shards is the same gesture with a material behind it.
+    "portal-enter": "Epic Stock Media - Elemental Mutation Whooshes and Impacts/GLASMvmt_Whoosh Glass Crystal Fragments Sharp Shards Dry 05_ESM_EMWI.wav",
     # A pitch collapsing, not a power-down: every "downer" in the bundle is a trailer
     # synth, and a guitar dive bomb is the same falling gesture with a body to it.
     "portal-close": "Rogue Waves - Metal Tensions/MUSCStngr_Open String Dive Bomb Down, Whammy bar, Low_RogueWaves_MetalTensions_13.wav",
@@ -103,12 +106,18 @@ SOURCES: dict[str, str] = {
 
     # ── Flask, feet, UI ─────────────────────────────────────────────────────────
     "flask-drink": "Eiravaein Works - Flask/OBJCont_Flask,glass,figuredbottle,realcork,liquid,remove,squeak,slosh,alt4_EWKR.wav",
-    # Two feet, two materials: the maps are earth, and a single step and a step out
-    # of a walking loop differ enough that the pair does not read as one sample.
-    "footstep-dirt-a": "RYK-Sounds - Footstep/grass 3 single step 3.wav",
-    "footstep-dirt-b": "RYK-Sounds - Footstep/mud 1 loop.wav",
-    "ui-click": "Cinematic Sound Design - Interface & Infographics/Interface Percussion Snap.wav",
-    "ui-hover": "Cinematic Sound Design - Interface & Infographics/Interface Pop High Short.wav",
+    # Two consecutive steps out of ONE walk, windowed to the 0.88s and 1.64s falls,
+    # which are within 0.8 dB of each other. The first cut took one foot off a grass
+    # single-step and the other off this mud loop, and two materials alternating is
+    # heard as a limp: the pair has to be the same ground, only a different fall.
+    "footstep-dirt-a": "RYK-Sounds - Footstep/mud 1 loop.wav@0.80:0.55",
+    "footstep-dirt-b": "RYK-Sounds - Footstep/mud 1 loop.wav@1.56:0.55",
+    # NEVER take a UI cue from a pack labelled UI. Every one of them in this bundle is
+    # synthesised, so picking on the word "UIClick" and on crest factor got a menu that
+    # sounded like a spaceship. These menus are iron: a lock tinkers under the pointer
+    # and a latch drops when you commit. Physical foley, one material, two weights.
+    "ui-click": "Epic Stock Media - HD Lock And Mechanism Sound Design Kit/MECHLtch_Click Deep Mechanism Latch Button Nearfield Thunk 02_ESM_HDLM.wav",
+    "ui-hover": "344 Audio - Antique Small Metals/METLMvmt_  Tinkering Antique Lock_344 Audio_Antique Small Metals.wav",
     # Not the sci-fi window slide: a panel in this game is leather and canvas, and the
     # fantasy kit ships the inventory-open it was recorded for.
     "ui-panel-open": "Epic Stock Media - Fantasy Game 2 - Sound Kit for Enchanted Realms/CLOTHFlp_Action Inventory Open Flip Cloth Canvas Bag Slide Light 02_ESM_FG2.wav",

@@ -70,10 +70,14 @@ const VOICES: Record<string, Voice> = {
   "portal-enter":             { gain: 0.34, wet: 0.24, vary: 0 },
   "waystone-activate":        { gain: 0.36, wet: 0.28, vary: 0 },
   "flask-drink":              { gain: 0.30, wet: 0.08, vary: 0.05 },
-  "footstep-dirt-a":          { gain: 0.13, wet: 0.06, vary: 0.09 },
-  "footstep-dirt-b":          { gain: 0.13, wet: 0.06, vary: 0.09 },
-  "ui-click":                 { gain: 0.26, wet: 0.05, vary: 0.03 },
-  "ui-hover":                 { gain: 0.14, wet: 0.04, vary: 0.05 },
+  // Feet are meant to be felt, not listened to: PoE barely gives the player any, and
+  // at anything above this the walk is the loudest thing in a quiet hideout.
+  "footstep-dirt-a":          { gain: 0.045, wet: 0.06, vary: 0.09 },
+  "footstep-dirt-b":          { gain: 0.045, wet: 0.06, vary: 0.09 },
+  "ui-click":                 { gain: 0.30, wet: 0.05, vary: 0.03 },
+  // A hover fires on every pixel of travel across a menu, so it sits under the click
+  // by a lot. Anything that competes with the click is a menu that buzzes.
+  "ui-hover":                 { gain: 0.05, wet: 0.04, vary: 0.05 },
   "ui-panel-open":            { gain: 0.24, wet: 0.10, vary: 0.04 },
 };
 

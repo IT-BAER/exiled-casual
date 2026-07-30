@@ -1,7 +1,7 @@
 import { fp, fpDist2, fpMul } from "@exiled/fixed-point";
 import type { MonsterDef } from "@exiled/content-schema";
 import { Simulation } from "../loop";
-import { chaseStep, type CollisionRef } from "../collision";
+import { chaseStep, hasLineOfSight, type CollisionRef } from "../collision";
 import { spawnMonster, mapDangerScale } from "../areas";
 import type { Position, MonsterC, Faction, BossC, TelegraphC, Health, SessionC } from "../components";
 
@@ -107,8 +107,12 @@ export function registerBossAI(
       //    purpose — a boss being shot from off-screen still transitions, it just does
       //    not walk. Nothing is written, so an unvisited boss room costs the checksum
       //    nothing, same as monster-ai's sleeping packs.
+      //    A wall counts the same as distance here: the arena door is a wall, and a
+      //    boss that woke through it walks its whole room before the player arrives.
       const dist2 = fpDist2(bpos.x, bpos.y, ppos.x, ppos.y);
-      if (mon.state === "idle" && dist2 > BOSS_AGGRO_RADIUS * BOSS_AGGRO_RADIUS) continue;
+      if (mon.state === "idle"
+        && (dist2 > BOSS_AGGRO_RADIUS * BOSS_AGGRO_RADIUS
+          || !hasLineOfSight(collision, bpos.x, bpos.y, ppos.x, ppos.y))) continue;
 
       // 3. Slam: fire when off cooldown and player is within slam range.
       if (tick >= boss.nextAbilityTick && dist2 <= slam.rangeFixed * slam.rangeFixed) {
