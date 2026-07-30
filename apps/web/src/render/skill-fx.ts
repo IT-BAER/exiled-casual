@@ -127,6 +127,39 @@ function glowMaterial(scene: Scene, name: string, color: Color3): StandardMateri
 }
 
 /**
+ * Fade a mesh out over `seconds` while thinning it, WITHOUT moving either end.
+ *
+ * `playOnce` below scales uniformly, which is right for a ring and wrong for
+ * anything pinned between two points: a streak scaled to 0.15 pulls both of its
+ * ends in toward its own centre, so the smear that was supposed to join where he
+ * left to where he arrived visibly lets go of both while you watch. Here only the
+ * radius moves, so the trail dissipates in place.
+ */
+function thinOut(
+  scene: Scene, mesh: Mesh, seconds: number, alpha: number, from: number, to: number,
+): void {
+  const mat = mesh.material as StandardMaterial;
+  // Set before the first tick, not inside it: a material born at alpha 1 is opaque
+  // for however many frames pass before the observable first fires, and one
+  // full-brightness frame of a five-unit additive bar is the flash being avoided.
+  mat.alpha = alpha;
+  mesh.scaling.set(from, 1, from);
+  let t = 0;
+  const tick = scene.onBeforeRenderObservable.add(() => {
+    t += scene.getEngine().getDeltaTime() / 1000;
+    const k = Math.min(1, t / seconds);
+    const r = from + (to - from) * k;
+    mesh.scaling.set(r, 1, r);
+    mat.alpha = alpha * (1 - k) * (1 - k);
+    if (k >= 1) {
+      scene.onBeforeRenderObservable.remove(tick);
+      mesh.dispose();
+      mat.dispose();
+    }
+  });
+}
+
+/**
  * Drive a one-shot mesh: grow it and fade it out over `seconds`, then dispose
  * it and its material. Driven off the engine's delta time rather than a frame
  * count, so it lasts the same 0.25s at 60Hz and at 165Hz.
@@ -394,6 +427,13 @@ export const BLINK_NAME = "fx-blink";
 export const BLINK_STREAK_NAME = "fx-blink-streak";
 
 /**
+ * Peak alpha of the streak. Additive over a lit floor, five units long and wider
+ * than the character: anything near opaque washes the room out and reads brighter
+ * than the fire skills that actually hurt. Exported so the test can hold it.
+ */
+export const BLINK_ALPHA = 0.3;
+
+/**
  * Blink: a streak along the path travelled, a collapsing puff where the
  * character left and an expanding one where it arrived.
  *
@@ -426,13 +466,17 @@ export function blinkBurst(scene: Scene, from: Vector3, to: Vector3): void {
       streak.rotationQuaternion = Quaternion.RotationAxis(axis.normalize(), Math.acos(Vector3.Dot(Vector3.Up(), dir)));
     }
     const mat = glowMaterial(scene, `${BLINK_STREAK_NAME}-mat`, new Color3(0.34, 0.3, 0.78));
-    // Additive over a lit floor: 0.8 alpha on a bar this long washed the whole
-    // room out and read brighter than the fire skills that actually hurt.
-    mat.alpha = 0.3;
     streak.material = mat;
     streak.isPickable = false;
-    // Collapses inward instead of expanding: the trail is closing behind them.
-    playOnce(scene, streak, 0.22, 1, 0.15, 0.85);
+    // Thins in place rather than shrinking: a uniform scale drags both ends to the
+    // middle, and the streak's whole job is to still be touching them.
+    //
+    // BLINK_ALPHA and not the 0.85 this used to hand playOnce. The note beside the
+    // old `mat.alpha = 0.3` was right about the wash and never took effect, because
+    // playOnce overwrites the material's alpha on its first frame: what actually
+    // shipped was a near-opaque additive bar five units long, and at peak it
+    // clipped to white and lost the violet that says which skill it was.
+    thinOut(scene, streak, 0.22, BLINK_ALPHA, 1, 0.35);
   }
   // No impact flash. A teleport lands nothing, and the shared 900-intensity
   // white light lit the whole floor for a skill that does no damage.

@@ -6,6 +6,7 @@ import {
   blinkBurst,
   BLINK_NAME,
   BLINK_STREAK_NAME,
+  BLINK_ALPHA,
   BOLT_BURST_NAME,
   BOLT_TRAIL_NAME,
   CINDER_NAME,
@@ -195,5 +196,40 @@ describe("blink", () => {
     }
     // And no impact flash: nothing landed, and that light floods the floor.
     expect(scene.getLightByName(FLASH_NAME)).toBeNull();
+  });
+
+  /**
+   * Both halves of what made this read as a lightsaber. The alpha the code
+   * documented was overwritten on the streak's first frame by playOnce, so what
+   * shipped was a near-opaque additive bar five units long that clipped to white;
+   * and the uniform scale-down dragged both ends toward the middle, so the one
+   * thing joining where he left to where he arrived let go of both while fading.
+   */
+  it("the streak stays violet rather than clipping to white", () => {
+    const scene = newScene();
+    blinkBurst(scene, new Vector3(0, 0.9, 0), new Vector3(5, 0.9, 0));
+    const streak = scene.getMeshByName(BLINK_STREAK_NAME)!;
+    const mat = streak.material as StandardMaterial;
+    expect(mat.alpha).toBeLessThanOrEqual(BLINK_ALPHA);
+    expect(BLINK_ALPHA).toBeLessThan(0.5);
+    // Additive, so the colour only survives if the alpha leaves room for it.
+    expect(mat.emissiveColor.b).toBeGreaterThan(mat.emissiveColor.r);
+  });
+
+  it("fades without letting go of either end", () => {
+    const scene = newScene();
+    blinkBurst(scene, new Vector3(0, 0.9, 0), new Vector3(5, 0.9, 0));
+    const streak = scene.getMeshByName(BLINK_STREAK_NAME)!;
+    const at = streak.position.clone();
+    // Drive the fade directly: a NullEngine scene has no camera to render with,
+    // and the observable is what the one-shot animations actually hang off.
+    for (let i = 0; i < 40; i++) scene.onBeforeRenderObservable.notifyObservers(scene);
+    // Either still standing at full length, or gone. Never a short bar hanging
+    // between the two points it was supposed to be touching.
+    const still = scene.getMeshByName(BLINK_STREAK_NAME);
+    if (still) {
+      expect(still.scaling.y).toBe(1);
+      expect(still.position.equals(at)).toBe(true);
+    }
   });
 });
