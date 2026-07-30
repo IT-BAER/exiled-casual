@@ -572,7 +572,9 @@ function DeathScreen({
         background: "rgba(2,2,3,0.82)",
       }}
     >
-      <FramedPanel style={{ padding: "20px 30px 24px", minWidth: 360 }}>
+      {/* Wide enough for its own longest label. The buttons are the widest thing
+          in here and they carry the two longest strings in the game. */}
+      <FramedPanel style={{ padding: "20px 30px 24px", minWidth: 420 }}>
         <div style={{
           fontFamily: SERIF, fontSize: 22, letterSpacing: 5,
           textTransform: "uppercase", color: "#c1443a", textAlign: "center",
@@ -591,13 +593,18 @@ function DeathScreen({
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <MenuButton
             tone="primary"
+            style={{ width: "100%" }}
             onClick={() => onRevive("checkpoint")}
             disabled={!canCheckpoint}
             autoFocus={canCheckpoint}
           >
             Resurrect at Checkpoint
           </MenuButton>
-          <MenuButton onClick={() => onRevive("hideout")} autoFocus={!canCheckpoint}>
+          <MenuButton
+            style={{ width: "100%" }}
+            onClick={() => onRevive("hideout")}
+            autoFocus={!canCheckpoint}
+          >
             Resurrect in Hideout
           </MenuButton>
         </div>

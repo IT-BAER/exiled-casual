@@ -142,7 +142,14 @@ export function MenuButton({
       style={{
         appearance: "none",
         border: "none",
-        padding: 0,
+        // The plate's gilt end-caps take about 7% of its width each, and the art is
+        // stretched to whatever the button is, so the caps scale with it. With no
+        // padding a long label runs straight into them — which is what
+        // "RESURRECT AT CHECKPOINT" did on the death screen. border-box so this
+        // eats inward and every existing button keeps the size it had.
+        boxSizing: "border-box",
+        padding: "0 7%",
+        whiteSpace: "nowrap",
         height,
         minWidth: 180,
         backgroundColor: "transparent",
