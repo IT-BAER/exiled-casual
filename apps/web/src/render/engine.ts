@@ -23,7 +23,7 @@ import { DEFAULT_SETTINGS, type GraphicsSettings } from "../settings";
 import { ROCK_MESH_PREFIX } from "./rocks";
 import { createHaze, createMotes } from "./haze";
 import { FLAME_MESH } from "./flames";
-import { createFireLights, updateFireLights } from "./lights";
+import { createFireLights, setFireLightZoom, updateFireLights } from "./lights";
 
 /**
  * Light intensities for a PBR scene. Roughly PI times the values the old
@@ -488,11 +488,30 @@ export function createScene(engine: Engine): SceneHandle {
     // tracks the zoom. Since the wheel only zooms in this never has to grow —
     // it just stops spending 2048 texels on floor that is no longer on screen,
     // and the shadows sharpen as the character gets closer.
-    const extent = SHADOW_EXTENT * (half / ORTHO_HALF_HEIGHT);
+    const zoom = half / ORTHO_HALF_HEIGHT;
+    const extent = SHADOW_EXTENT * zoom;
     sun.orthoLeft = -extent;
     sun.orthoRight = extent;
     sun.orthoBottom = -extent;
     sun.orthoTop = extent;
+    // The pool travels with the framing, or zooming in turns the lights up.
+    //
+    // Nothing about the torch changes on a wheel notch and the screen still
+    // gets brighter: a pool of fixed WORLD size covers more of a frame that
+    // shows less floor. Measured at the middle of the image, zooming all the
+    // way in took it from 93 luma to 125.
+    //
+    // Only the reach scales. Scaling the lamp's HEIGHT and its intensity with
+    // it as well is the geometrically pure version — similar triangles at every
+    // zoom — and it measured WORSE (121 against 111), because dropping the lamp
+    // concentrates the pool into a tighter, hotter core exactly where the frame
+    // is now looking. Reach alone removes about half the rise. The rest is not
+    // the torch at all: with every light in the room switched off the same zoom
+    // still lifts the frame from 29 to 37, which is the floor texture coming off
+    // its minified mip levels and the fog letting go of the near ground.
+    torch.range = TORCH_RANGE * zoom;
+    // ...and the fires in the room, which are the same argument.
+    setFireLightZoom(zoom);
   };
   applyFraming();
   engine.onResizeObservable.add(applyFraming);

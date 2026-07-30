@@ -78,6 +78,15 @@ let pool: PointLight[] = [];
 let clock = 0;
 /** Rebuilt whenever the scene's mesh count moves. See `excludeBowls`. */
 let lastMeshCount = -1;
+/**
+ * The camera's framing, as a fraction of the authored one.
+ *
+ * A pool of fixed WORLD size covers more of a frame that shows less floor, so
+ * zooming in turns every light in the room up without touching one of them.
+ * `engine.ts` hands the framing here for the same reason it scales the torch's
+ * reach with it: the fires are composed for the shot, not for the metre.
+ */
+let zoom = 1;
 
 /**
  * Build the pool. Call once per scene, with the other lights.
@@ -114,6 +123,7 @@ export function resetFireLights(): void {
   spots = [];
   clock = 0;
   lastMeshCount = -1;
+  zoom = 1;
   resetFireFlames();
 }
 
@@ -133,6 +143,11 @@ function excludeBowls(scene: Scene): void {
   lastMeshCount = scene.meshes.length;
   const bowls: AbstractMesh[] = scene.meshes.filter((m) => m.name.includes("brazier"));
   for (const light of pool) light.excludedMeshes = bowls;
+}
+
+/** How much of the authored framing the camera is showing. See `zoom`. */
+export function setFireLightZoom(k: number): void {
+  zoom = k;
 }
 
 /** The fires in the area that has just been built. Replaces the last set. */
@@ -167,10 +182,9 @@ export function updateFireLights(scene: Scene, at: Vector3, deltaMs: number): vo
     .map((s) => ({ s, d: (s.x - at.x) ** 2 + (s.z - at.z) ** 2 }))
     .sort((a, b) => a.d - b.d);
 
-  // The flame is drawn for more bowls than the pool can light, and it has to
-  // be: the four-light cap is a shader limit, not a limit on what is on screen,
-  // and a fifth bowl in frame with a lit pool and no fire in it is worse than
-  // a fifth bowl that burns without throwing light.
+  // The same list the pool is about to be pointed at, cut at the distance a
+  // bowl leaves the frame. The flame's own cap is `LIGHT_POOL` too, so a bowl
+  // is never lit with nothing burning in it or alight with no pool under it.
   updateFireFlames(
     near.filter((n) => n.d <= FLAME_RANGE * FLAME_RANGE).map((n) => n.s),
     clock,
@@ -188,7 +202,7 @@ export function updateFireLights(scene: Scene, at: Vector3, deltaMs: number): vo
     const t = clock + s.phase;
     const wobble = Math.sin(t * 3.1) * 0.66 + Math.sin(t * 1.27 + 1.7) * 0.34;
     light.intensity = FIRE_INTENSITY * (1 + FLICKER_INTENSITY * wobble);
-    light.range = FIRE_RANGE * (1 + FLICKER_RANGE * wobble);
+    light.range = FIRE_RANGE * zoom * (1 + FLICKER_RANGE * wobble);
     light.setEnabled(true);
   }
 }
