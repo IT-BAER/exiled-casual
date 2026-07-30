@@ -1,6 +1,6 @@
 # Devlog
 
-A visual record of Exiled Casual’s first ten days, from prototype combat to a complete game shell.
+A visual record of Exiled Casual’s first eleven days, from prototype combat to a complete game shell.
 Design notes and implementation details live in [`../docs/`](../docs/).
 
 ## 2026-07-20 · First playable combat
@@ -111,12 +111,11 @@ Equipment became visible on the character, while the Atlas and disenchanter gain
 
 ## 2026-07-28 · World art and distinct skills
 
-The hideout, map boundaries, and starter skills received their first production-style visual pass.
+Map boundaries and starter skills received their first production-style visual pass.
 
 <table>
 <tr>
-<td width="50%"><img src="screenshots/2026-07-28-hideout-props.jpeg" alt="Hideout with modeled stash, map device, and disenchanter props" width="100%"><br><sub>Modeled props replace the hideout’s placeholder primitives.</sub></td>
-<td width="50%"><img src="screenshots/2026-07-28-rock-walls.jpeg" alt="Outdoor map enclosed by irregular rock walls" width="100%"><br><sub>Natural rock walls give generated maps a believable edge.</sub></td>
+<td width="100%"><img src="screenshots/2026-07-28-rock-walls.jpeg" alt="Outdoor map enclosed by irregular rock walls" width="100%"><br><sub>Natural rock walls give generated maps a believable edge.</sub></td>
 </tr>
 </table>
 
@@ -124,7 +123,7 @@ The hideout, map boundaries, and starter skills received their first production-
 <tr>
 <td width="33%"><img src="screenshots/2026-07-28-ember-bolt.jpeg" alt="Bright Ember Bolt projectile streaking across the hideout" width="100%"><br><sub>Ember Bolt becomes a fast, white-hot projectile streak.</sub></td>
 <td width="33%"><img src="screenshots/2026-07-28-cinder-ground.jpeg" alt="Circular patch of glowing cracked burning ground" width="100%"><br><sub>Cinder Ground burns through animated cracks and embers.</sub></td>
-<td width="33%"><img src="screenshots/2026-07-28-blink.jpeg" alt="Violet teleport trail left behind by Blink" width="100%"><br><sub>Blink leaves a cool violet displacement trail.</sub></td>
+<td width="33%"><img src="screenshots/2026-07-28-blink.jpeg" alt="Soft violet smoke trail left behind by Blink" width="100%"><br><sub>Blink leaves a soft violet smoke trail.</sub></td>
 </tr>
 </table>
 
@@ -146,5 +145,20 @@ Menus, character selection, loading screens, options, and the experience rail co
 <table>
 <tr>
 <td width="100%"><img src="screenshots/2026-07-29-experience-rail.jpeg" alt="Thin experience rail along the bottom of the HUD" width="100%"><br><sub>Experience moves into a quiet rail beneath the HUD.</sub></td>
+</tr>
+</table>
+
+## 2026-07-30 · Combat rules and a lived-in hideout
+
+Combat, death, and the hideout received a finishing pass.
+
+<table>
+<tr>
+<td width="50%"><img src="screenshots/2026-07-30-hideout-furnished.jpeg" alt="Furnished hideout with benches, storage, rugs, and work areas" width="100%"><br><sub>Furniture makes the hideout feel inhabited.</sub></td>
+<td width="50%"><img src="screenshots/2026-07-30-death-resurrection.jpeg" alt="Death panel offering resurrection in the hideout" width="100%"><br><sub>Death asks where to resurrect.</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="screenshots/2026-07-30-skills-stop-at-walls.jpeg" alt="Ember Bolt stopping against a rock wall" width="100%"><br><sub>Walls stop projectiles and ground skills.</sub></td>
+<td width="50%"><img src="screenshots/2026-07-30-monster-pack-separation.jpeg" alt="Monster pack spreading around the player and rock walls" width="100%"><br><sub>Monster packs spread out instead of stacking.</sub></td>
 </tr>
 </table>
