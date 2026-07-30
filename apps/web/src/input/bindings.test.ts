@@ -97,6 +97,22 @@ describe("attachBindings hold-to-move", () => {
     expect(moveToCount(worker.postMessage)).toBe(1);
   });
 
+  it("does not walk when a piece is riding the cursor: that click is placing it", () => {
+    // The inventory carries a piece with no button held, so the click that puts it
+    // down lands on the canvas rather than on the panel. Without this the player
+    // both drops the item and sets off walking to where it fell.
+    const ghost = document.createElement("div");
+    ghost.setAttribute("data-carrying", "");
+    document.body.appendChild(ghost);
+
+    pointer("pointerdown");
+    expect(moveToCount(worker.postMessage)).toBe(0);
+
+    ghost.remove();
+    pointer("pointerdown");
+    expect(moveToCount(worker.postMessage)).toBe(1);
+  });
+
   it("walks to the floor under the cursor, not to the wall top the ray hit first", () => {
     // A wall's top face stands 3.5 units up, and `scene.pick` reports THAT
     // surface, whose x/z is nowhere near the floor the player can stand on.

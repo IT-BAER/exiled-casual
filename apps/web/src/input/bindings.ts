@@ -300,6 +300,13 @@ export function attachBindings(
 
   function onPointerDown(e: PointerEvent) {
     if (e.button !== 0) return; // left button drives movement
+    // A piece is riding the cursor with no button held, so this press is the one
+    // that puts it down. The inventory's drop-to-ground path reads the RELEASE,
+    // which means without this the same click both drops the item and sets the
+    // player walking to where it landed. Read off the ghost element rather than
+    // plumbed through three components: the ghost IS the carried piece, and this
+    // is a one-way signal from the panel to the world, not shared state.
+    if (document.querySelector("[data-carrying]")) return;
     const floor = groundPoint(scene, e.clientX, e.clientY);
     if (!floor) return;
     const world = pointerToWorld(floor);

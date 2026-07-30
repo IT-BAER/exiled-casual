@@ -163,6 +163,15 @@ export function PaneHeader({ title, bleed, onClose, testId }: {
 const U_VW = +(CELL_VW * (54 / 48)).toFixed(3); // 2.363
 const U = `${U_VW}vw`; // equipment paper-doll unit, kept in step with CELL
 
+/**
+ * How far the pointer may travel between press and release and still count as a
+ * click that PICKS THE PIECE UP rather than a drag that placed it. 6 px is the
+ * slop a browser itself allows before a press becomes a drag; smaller and a
+ * shaky hand loses the pickup, larger and a short deliberate drag is read as a
+ * pickup and needs a second click nobody expects.
+ */
+const CARRY_SLOP = 6;
+
 // Keyed by every Rarity; a missing key would render `border: 2px solid undefined`.
 const RARITY_BORDER: Record<string, string> = { normal: "#6b6b6b", magic: "#5566b0", rare: "#a3812f", unique: "#7f4a20" };
 const RARITY_TEXT: Record<string, string> = { normal: "#c8c8c8", magic: MAGIC, rare: "#e6d64a", unique: "#af6025" };
@@ -351,7 +360,11 @@ export function InventoryPanel({
   React.useEffect(() => { setHover(null); }, [shelfOpen, stashShown]);
   // `w`/`h` are the held piece's footprint in cells, carried on the drag because
   // DisplayItem itself has no size: only the backpack entry that wraps it does.
-  const [drag, setDrag] = React.useState<{ from: DragSource; item: DisplayItem; w: number; h: number; x: number; y: number } | null>(null);
+  // `ox`/`oy` are where the press landed and `carried` says the piece is riding the
+  // cursor with no button held, which is the difference between PoE's two gestures.
+  const [drag, setDrag] = React.useState<
+    { from: DragSource; item: DisplayItem; w: number; h: number; x: number; y: number; ox: number; oy: number; carried: boolean } | null
+  >(null);
   // PoE's currency flow: right-click a currency to take it onto the cursor, then
   // left-click the item to spend it on. Holds the currency itself rather than a flag,
   // because which orb is on the cursor decides what every other cell will accept.
@@ -396,6 +409,23 @@ export function InventoryPanel({
     if (!drag) return;
     const move = (e: PointerEvent) => setDrag((d) => (d ? { ...d, x: e.clientX, y: e.clientY } : d));
     const up = (e: PointerEvent) => {
+      // A press released without travelling is a PICKUP, not a drag that ended
+      // where it began: the piece rides the cursor and the NEXT release commits
+      // it. Both of PoE's gestures therefore work, and which one you used is
+      // decided by the pointer rather than by a timer. Travel is measured from
+      // the press against `drag.x/y`, which only `pointermove` writes, so a
+      // release event's own coordinates -- absent on a synthetic one, and 0,0 on
+      // a click fired at an element rather than a point -- cannot decide it.
+      const travel = Math.hypot(drag.x - drag.ox, drag.y - drag.oy);
+      // `!(travel >= SLOP)` rather than `travel < SLOP`, because travel is NaN
+      // whenever the press carried no coordinates -- every synthetic pointerdown
+      // in jsdom, and any event source that omits them. NaN loses both
+      // comparisons, so the strict form would silently make the pickup
+      // unreachable; unknown travel has to read as the click it was.
+      if (!drag.carried && !(travel >= CARRY_SLOP)) {
+        setDrag((d) => (d ? { ...d, carried: true } : d));
+        return;
+      }
       setDrag(null);
       // e.target is the topmost element under the pointer (nothing captures it, and
       // the drag ghost is pointer-transparent); elementFromPoint covers synthetic events.
@@ -448,8 +478,11 @@ export function InventoryPanel({
 
   const grab = (from: DragSource, item: DisplayItem, w: number, h: number, e: React.PointerEvent) => {
     e.preventDefault();
+    // Every grab funnels through here, so one guard covers the equipment slots too:
+    // a press while a piece is already carried is part of placing it, never a grab.
+    if (drag) return;
     setHover(null);
-    setDrag({ from, item, w, h, x: e.clientX, y: e.clientY });
+    setDrag({ from, item, w, h, x: e.clientX, y: e.clientY, ox: e.clientX, oy: e.clientY, carried: false });
   };
   const slotHighlight = (slot: EquipSlotId): "legal" | "illegal" | "none" => {
     if (!drag || drag.from.kind === "slot") return "none";
@@ -573,6 +606,11 @@ export function InventoryPanel({
                   setArmed((a) => (container === "backpack" && it.itemClass === "currency" && a?.x !== it.x ? it : null));
                 }}
                 onPointerDown={(e) => {
+                  // The hand is already full. This press belongs to the release that
+                  // will place what is held, so nothing else may read it: grabbing
+                  // would silently swap the piece on the cursor, and the vendor and
+                  // ctrl paths below would buy or destroy on the way past.
+                  if (drag) { e.preventDefault(); return; }
                   // A shelf cell is bought, never dragged: one click is the whole
                   // transaction, and the sim re-checks the price and the room.
                   if (container === "vendor") {
@@ -923,6 +961,9 @@ export function InventoryPanel({
       {drag && (
         <div
           data-testid="drag-ghost"
+          // The world's pointer handling reads this to know a press is placing the
+          // piece rather than commanding a walk. See `bindings.ts` onPointerDown.
+          data-carrying=""
           style={{
             position: "fixed",
             left: `calc(${drag.x}px - ${drag.w} * ${CELL} / 2)`,

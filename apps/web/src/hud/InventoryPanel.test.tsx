@@ -9,6 +9,21 @@ import { VENDOR_NAME, VENDOR_TITLE } from "../npc";
 
 afterEach(cleanup);
 
+// jsdom has no PointerEvent, so `fireEvent.pointerDown` drops clientX/clientY and the
+// press lands at undefined. A MouseEvent under the pointer event's name carries them,
+// which is what the panel needs to tell a hold-drag from a click that picks the piece
+// up: without real coordinates on BOTH the press and the move, travel is NaN and every
+// gesture reads as a click.
+const press = (el: Element, x: number, y: number) =>
+  fireEvent(el, new MouseEvent("pointerdown", { bubbles: true, clientX: x, clientY: y }));
+const moveTo = (el: Element, x: number, y: number) =>
+  fireEvent(el, new MouseEvent("pointermove", { bubbles: true, clientX: x, clientY: y }));
+/** Press on `el`, travel well past `CARRY_SLOP`, so the release resolves as a drag. */
+const dragFrom = (el: Element, x = 10, y = 10) => {
+  press(el, x, y);
+  moveTo(el, x + 40, y + 40);
+};
+
 const inv = {
   cols: 12,
   rows: 5,
@@ -56,24 +71,60 @@ describe("InventoryPanel", () => {
     expect(cell.textContent).toBe("Ember Wand");
   });
 
+  it("a click lifts the piece onto the cursor and holds it there, and the next click places it", () => {
+    const intents: unknown[] = [];
+    render(<InventoryPanel inventory={inv} equipment={{}} onIntent={(i) => intents.push(i)} onClose={() => {}} />);
+
+    // Press and release without moving: PoE reads that as picking the piece up,
+    // not as a drag that ended where it started. Nothing has been decided yet.
+    fireEvent.pointerDown(screen.getByTestId("inventory-item-0"), { clientX: 10, clientY: 10 });
+    fireEvent.pointerUp(screen.getByTestId("equip-slot-weapon1"));
+    expect(intents).toEqual([]);
+    expect(screen.getByTestId("drag-ghost")).toBeTruthy();
+
+    // Still on the cursor a release later, and the SECOND click is the one that
+    // commits it.
+    fireEvent.pointerUp(screen.getByTestId("equip-slot-weapon1"));
+    expect(intents).toEqual([{ kind: "equipItem", x: 0, y: 0, slot: "weapon1" }]);
+    expect(screen.queryByTestId("drag-ghost")).toBeNull();
+  });
+
+  it("a click on another item while one is already carried does not swap what is on the cursor", () => {
+    const two = {
+      ...inv,
+      items: [inv.items[0]!, { ...inv.items[0]!, x: 4, y: 0, name: "Second Wand" }],
+    };
+    const intents: unknown[] = [];
+    render(<InventoryPanel inventory={two} equipment={{}} onIntent={(i) => intents.push(i)} onClose={() => {}} />);
+
+    fireEvent.pointerDown(screen.getByTestId("inventory-item-0"), { clientX: 10, clientY: 10 });
+    fireEvent.pointerUp(screen.getByTestId("inventory-item-0"));
+    expect(screen.getByTestId("drag-ghost").textContent).toContain("Ember Wand");
+
+    // Pressing on the other item must not grab it: the hand is full, and this
+    // press belongs to the release that places what is already held.
+    fireEvent.pointerDown(screen.getByTestId("inventory-item-1"), { clientX: 10, clientY: 10 });
+    expect(screen.getByTestId("drag-ghost").textContent).toContain("Ember Wand");
+  });
+
   it("drags a backpack item onto a legal slot, ignores an illegal one, and drops to the ground outside the panel", () => {
     const intents: unknown[] = [];
     render(<InventoryPanel inventory={inv} equipment={{}} onIntent={(i) => intents.push(i)} onClose={() => {}} />);
     const item = screen.getByTestId("inventory-item-0");
 
     // wand -> weapon1 is legal
-    fireEvent.pointerDown(item, { clientX: 10, clientY: 10 });
+    dragFrom(item);
     expect(screen.getByTestId("drag-ghost")).toBeTruthy();
     fireEvent.pointerUp(screen.getByTestId("equip-slot-weapon1"));
     expect(intents).toEqual([{ kind: "equipItem", x: 0, y: 0, slot: "weapon1" }]);
 
     // wand -> boots is not
-    fireEvent.pointerDown(item, { clientX: 10, clientY: 10 });
+    dragFrom(item);
     fireEvent.pointerUp(screen.getByTestId("equip-slot-boots"));
     expect(intents).toHaveLength(1);
 
     // released on the backdrop, i.e. over the world behind the panel
-    fireEvent.pointerDown(item, { clientX: 10, clientY: 10 });
+    dragFrom(item);
     fireEvent.pointerUp(screen.getByTestId("inventory-panel"));
     expect(intents[1]).toEqual({ kind: "dropItem", x: 0, y: 0 });
   });
@@ -83,7 +134,7 @@ describe("InventoryPanel", () => {
     const equipped = { weapon1: { rarity: "magic" as const, name: "Ember Wand", itemClass: "wand", lines: [] } };
     render(<InventoryPanel inventory={{ ...inv, items: [] }} equipment={equipped} onIntent={(i) => intents.push(i)} onClose={() => {}} />);
 
-    fireEvent.pointerDown(screen.getByTestId("equip-slot-weapon1"), { clientX: 10, clientY: 10 });
+    dragFrom(screen.getByTestId("equip-slot-weapon1"));
     fireEvent.pointerUp(document.querySelector("[data-drop-grid]")!);
     expect(intents).toEqual([{ kind: "unequipItem", slot: "weapon1" }]);
   });
@@ -95,7 +146,7 @@ describe("InventoryPanel", () => {
     document.body.appendChild(sheet);
     render(<InventoryPanel inventory={inv} onIntent={(i) => intents.push(i)} onClose={() => {}} />);
 
-    fireEvent.pointerDown(screen.getByTestId("inventory-item-0"), { clientX: 10, clientY: 10 });
+    dragFrom(screen.getByTestId("inventory-item-0"));
     fireEvent.pointerUp(sheet);
     expect(intents).toEqual([]);
 
@@ -117,9 +168,7 @@ describe("InventoryPanel", () => {
     // (9,3)..(10,4) share, so its top-left has to land on (9,3), not on the cursor's cell.
     // Far along the row on purpose — near the origin a wrong cell size still rounds to the
     // right cell, and the old hardcoded 48 would pass.
-    fireEvent.pointerDown(screen.getByTestId("inventory-item-0"), { clientX: 10, clientY: 10 });
-    // jsdom has no PointerEvent, so fireEvent.pointerMove would drop clientX/clientY and
-    // the drag would sit at NaN. A MouseEvent named pointermove carries the coordinates.
+    press(screen.getByTestId("inventory-item-0"), 10, 10);
     fireEvent(grid, new MouseEvent("pointermove", { bubbles: true, clientX: 1000 + 10 * CELL, clientY: 500 + 4 * CELL }));
     fireEvent.pointerUp(grid);
     expect(intents).toEqual([{ kind: "moveItem", x: 0, y: 0, toX: 9, toY: 3 }]);
@@ -141,7 +190,7 @@ describe("InventoryPanel", () => {
     packGrid!.getBoundingClientRect = () =>
       ({ left: 1000, top: 500, width: 12 * CELL, height: 5 * CELL, right: 1000 + 12 * CELL, bottom: 500 + 5 * CELL }) as DOMRect;
 
-    fireEvent.pointerDown(screen.getByTestId("inventory-item-0"), { clientX: 10, clientY: 10 });
+    press(screen.getByTestId("inventory-item-0"), 10, 10);
     // Centre of the 2x2 piece over the stash's (3,6)..(4,7) corner.
     fireEvent(stashGrid!, new MouseEvent("pointermove", { bubbles: true, clientX: 4 * CELL, clientY: 100 + 7 * CELL }));
     fireEvent.pointerUp(stashGrid!);
@@ -152,7 +201,7 @@ describe("InventoryPanel", () => {
     const intents: unknown[] = [];
     const stash = { cols: 12, rows: 12, items: [] };
     render(<InventoryPanel inventory={inv} stash={stash} onIntent={(i) => intents.push(i)} onClose={() => {}} />);
-    fireEvent.pointerDown(screen.getByTestId("inventory-item-0"), { clientX: 10, clientY: 10 });
+    dragFrom(screen.getByTestId("inventory-item-0"));
     fireEvent.pointerUp(screen.getByTestId("stash-panel"));
     expect(intents).toEqual([]);
   });
