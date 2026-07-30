@@ -3,6 +3,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import {
   Camera,
   ImageProcessingConfiguration,
+  Matrix,
   NullEngine,
   ParticleSystem,
   PointLight,
@@ -18,6 +19,7 @@ import { SnapshotRenderer } from "./renderer";
 import { makeMesh, updateTelegraph } from "./meshes";
 import type { Snapshot } from "@exiled/protocol";
 import { testPlayer, testStats } from "../test-fixtures";
+import { columnHit } from "../input/bindings";
 
 function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
   return {
@@ -498,6 +500,49 @@ describe("SnapshotRenderer — new kinds", () => {
     const toCamera = camera.position.subtract(mesh!.position);
     toCamera.y = 0;
     expect(Vector3.Dot(forward, toCamera.normalize())).toBeCloseTo(1, 2);
+  });
+
+  /**
+   * The forgiving pick, measured against the real camera rather than against the
+   * algebra that implements it: Babylon projects a point on the NPC's chest to a
+   * pixel, Babylon builds the picking ray back out of that pixel, and the column
+   * has to be standing where the ray goes. Headless is the exact failure case —
+   * the rig never loads, so the mesh pick finds only the torus ring with the hole
+   * in it, which is what a click between his legs sees in the real game too.
+   */
+  it("a ray at an NPC's chest meets his column, one 1.5 units aside does not", () => {
+    engine = new NullEngine();
+    const { scene, camera } = createScene(engine);
+    const renderer = new SnapshotRenderer(scene);
+    renderer.apply(null, makeSnapshot({
+      entities: [{ id: 9, kind: "vendor", x: 4, y: -2, inRange: false }],
+    }), 1);
+    scene.render(); // the camera only derives its matrices once it has drawn
+
+    const width = engine.getRenderWidth();
+    const height = engine.getRenderHeight();
+    const toPixel = (p: Vector3) => Vector3.Project(
+      p,
+      Matrix.Identity(),
+      scene.getTransformMatrix(),
+      camera.viewport.toGlobal(width, height),
+    );
+    // Straight at his chest, which is the parallax case: the ray carries on to
+    // the floor a metre BEHIND him, so only the column's height catches it.
+    const chest = toPixel(new Vector3(4, 1.2, -2));
+    expect(columnHit(scene.createPickingRay(chest.x, chest.y, null, camera), 4, -2)).not.toBeNull();
+    // And across his shoulder, which is the radius.
+    const shoulder = toPixel(new Vector3(4.4, 1.2, -2));
+    expect(columnHit(scene.createPickingRay(shoulder.x, shoulder.y, null, camera), 4, -2))
+      .not.toBeNull();
+
+    // And the pick it has to defer to: with no rig loaded, the only thing under
+    // that pixel is the floor, so nothing carrying `interactKind` is picked.
+    const picked = scene.pick(chest.x, chest.y).pickedMesh;
+    expect((picked?.metadata as { interactKind?: string } | null)?.interactKind).toBeUndefined();
+
+    const aside = toPixel(new Vector3(5.5, 1.2, -2));
+    expect(columnHit(scene.createPickingRay(aside.x, aside.y, null, camera), 4, -2)).toBeNull();
   });
 
   it("boss:true monster entity gets boss mesh (scaling ~2.0)", () => {

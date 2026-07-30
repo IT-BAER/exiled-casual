@@ -480,6 +480,81 @@ describe("attachBindings hover", () => {
     canvas.remove();
   });
 
+  /**
+   * The disenchanter stands on a thin torus ring (`meshes.ts`), so a click between
+   * his legs goes through the hole in it and lands on the floor: the man reads as
+   * bare ground. The forgiving pick is a column at his position, tested only when
+   * the mesh pick found no interactable.
+   */
+  it("a pick that slips between an NPC's legs still finds him", () => {
+    const canvas = document.createElement("canvas");
+    document.body.appendChild(canvas);
+    const onHover = vi.fn();
+    // Mesh pick misses everything; the ray goes straight down through (1, 2).
+    const { detach, onSnapshot } = attachBindings(
+      canvas,
+      { postMessage: vi.fn() } as unknown as Worker,
+      fakeScene(),
+      undefined,
+      onHover,
+    );
+
+    onSnapshot(makeSnap([{ id: 5, kind: "vendor", x: 1.15, y: 2.2, inRange: false }]));
+    move(canvas);
+    expect(onHover).toHaveBeenCalledWith(5);
+
+    detach();
+    canvas.remove();
+  });
+
+  it("does not find him from a stride away", () => {
+    const canvas = document.createElement("canvas");
+    document.body.appendChild(canvas);
+    const onHover = vi.fn();
+    const { detach, onSnapshot } = attachBindings(
+      canvas,
+      { postMessage: vi.fn() } as unknown as Worker,
+      fakeScene(),
+      undefined,
+      onHover,
+    );
+
+    onSnapshot(makeSnap([{ id: 5, kind: "vendor", x: 3, y: 2, inRange: false }]));
+    move(canvas);
+    expect(onHover).not.toHaveBeenCalledWith(5);
+
+    detach();
+    canvas.remove();
+  });
+
+  /**
+   * A portal is the one interactable whose stolen click costs something: it ends
+   * the map and spends one of the six. Loot is the other exclusion, for the
+   * opposite reason — a column round every dropped item would eat the movement
+   * clicks in the middle of a fight.
+   */
+  it("forgives furniture and people, never a portal or an item", () => {
+    for (const kind of ["portal", "groundItem"] as const) {
+      const canvas = document.createElement("canvas");
+      document.body.appendChild(canvas);
+      const onHover = vi.fn();
+      const { detach, onSnapshot } = attachBindings(
+        canvas,
+        { postMessage: vi.fn() } as unknown as Worker,
+        fakeScene(),
+        undefined,
+        onHover,
+      );
+
+      onSnapshot(makeSnap([{ id: 5, kind, x: 1, y: 2, inRange: false }]));
+      move(canvas);
+      expect(onHover).not.toHaveBeenCalledWith(5);
+
+      detach();
+      canvas.remove();
+    }
+  });
+
   it("pointerleave on the canvas fires callback with null", () => {
     const canvas = document.createElement("canvas");
     document.body.appendChild(canvas);

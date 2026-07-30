@@ -51,6 +51,69 @@ function groundPoint(
 }
 
 /**
+ * The column a click on an interactable is really tested against, in world units:
+ * a man's width and a man's height, standing at his feet.
+ *
+ * The disenchanter is a rig on a torus ring (`meshes.ts` `buildVendor`), and both
+ * of those have holes in them — a click between his legs passes through the gap AND
+ * through the middle of the ring, meets the floor, and reads as bare ground. The
+ * ring cannot be widened out of the problem, because the hole is exactly where he
+ * stands. So the volume is intersected analytically here rather than built as an
+ * invisible proxy mesh: `engine.ts` makes every new mesh a sun shadow caster on
+ * sight, and a 2-unit invisible cylinder would throw a 2-unit shadow.
+ *
+ * A shade wider than his shoulders. Wider than this and it starts eating the
+ * movement click that was meant to walk PAST him.
+ */
+const PICK_RADIUS = 0.55;
+const PICK_HEIGHT = 2.0;
+
+/**
+ * Which kinds get the forgiving column.
+ *
+ * Furniture and people, because a stolen click on those costs a panel that closes
+ * itself when the player walks away. A portal is excluded: it ends the map and
+ * spends one of the six, so it may only be entered on purpose. So is a ground
+ * item — a column round every drop would eat the movement clicks in the middle of
+ * the fight that made the drops.
+ */
+const FORGIVING_KINDS: ReadonlySet<string> = new Set(["mapDevice", "stash", "vendor"]);
+
+/**
+ * Where a picking ray enters the column at `(cx, cz)`, or null if it misses.
+ *
+ * Distance along the ray rather than a bare boolean, so two overlapping
+ * interactables resolve to the nearer one instead of to whichever the snapshot
+ * happened to list first.
+ */
+export function columnHit(
+  ray: { origin: { x: number; y: number; z: number }; direction: { x: number; y: number; z: number } },
+  cx: number,
+  cz: number,
+): number | null {
+  const ox = ray.origin.x - cx;
+  const oz = ray.origin.z - cz;
+  const dx = ray.direction.x;
+  const dz = ray.direction.z;
+  const a = dx * dx + dz * dz;
+  const b = 2 * (ox * dx + oz * dz);
+  const c = ox * ox + oz * oz - PICK_RADIUS * PICK_RADIUS;
+  // Straight down the axis: inside the disc or nowhere near it.
+  if (a < 1e-9) return c <= 0 ? -ray.origin.y / ray.direction.y : null;
+  const disc = b * b - 4 * a * c;
+  if (disc < 0) return null;
+  const root = Math.sqrt(disc);
+  // Both roots, near one first: the near one is behind the camera when the cursor
+  // is inside the column, and then the far wall of it is the honest hit.
+  for (const t of [(-b - root) / (2 * a), (-b + root) / (2 * a)]) {
+    if (t < 0) continue;
+    const y = ray.origin.y + ray.direction.y * t;
+    if (y >= 0 && y <= PICK_HEIGHT) return t;
+  }
+  return null;
+}
+
+/**
  * Walk the parent chain of a picked node to find an interactable root.
  * Portal and mapDevice roots carry `metadata.interactKind` set by their builders;
  * child geometry meshes do not, so the walk always terminates at the root or null.
@@ -128,6 +191,30 @@ export function attachBindings(
   // nearest in-range ground item without waiting on a dedicated intent round-trip.
   let latestSnap: Snapshot | null = null;
 
+  /**
+   * The interactable under a screen pixel, forgiving the holes in a body.
+   *
+   * The meshes are asked first, so an exact hit on the map device's brass or on the
+   * disenchanter's hood answers as it always did; the columns are consulted only
+   * when that found nothing. Hover and click both come through here, or the ring at
+   * his feet would light up on a pixel the click then refuses.
+   */
+  function interactAt(sx: number, sy: number): number | null {
+    const pick = scene.pick(sx, sy);
+    const exact = pick.pickedMesh ? findInteractRoot(pick.pickedMesh) : null;
+    if (exact) return exact.entityId;
+    if (!latestSnap) return null;
+    const ray = scene.createPickingRay(sx, sy, null, null);
+    let best: { id: number; t: number } | null = null;
+    for (const e of latestSnap.entities) {
+      if (!FORGIVING_KINDS.has(e.kind)) continue;
+      // Snapshot y is the world's z: the sim is 2D and the floor is its plane.
+      const t = columnHit(ray, e.x, e.y);
+      if (t !== null && (best === null || t < best.t)) best = { id: e.id, t };
+    }
+    return best === null ? null : best.id;
+  }
+
   function setHover(id: number | null) {
     if (id === hoveredEntityId) return; // no change — avoid spurious re-renders
     hoveredEntityId = id;
@@ -202,11 +289,9 @@ export function attachBindings(
         post({ kind: "moveTo", x: world.x, y: world.y });
       }
     }
-    // Hover still asks the meshes — that question really is "what is under the
-    // cursor", walls and all.
-    const pick = scene.pick(e.clientX, e.clientY);
-    const interactable = pick.pickedMesh ? findInteractRoot(pick.pickedMesh) : null;
-    setHover(interactable ? interactable.entityId : null);
+    // Hover still asks the meshes first — that question really is "what is under
+    // the cursor", walls and all — and the columns only after they say nothing.
+    setHover(interactAt(e.clientX, e.clientY));
   }
 
   function onPointerLeave() {
@@ -218,13 +303,12 @@ export function attachBindings(
     const floor = groundPoint(scene, e.clientX, e.clientY);
     if (!floor) return;
     const world = pointerToWorld(floor);
-    const pick = scene.pick(e.clientX, e.clientY);
     // PoE-style: clicking directly on a portal or map device auto-walks to it and
     // queues an interact. Do NOT start hold-to-move steering for this case.
-    const interactable = pick.pickedMesh ? findInteractRoot(pick.pickedMesh) : null;
-    if (interactable) {
+    const interactable = interactAt(e.clientX, e.clientY);
+    if (interactable !== null) {
       post({ kind: "moveTo", x: world.x, y: world.y });
-      pendingInteractId = interactable.entityId;
+      pendingInteractId = interactable;
       return;
     }
     // Ground or other non-interactable click: normal move + cancel any queued interact.
