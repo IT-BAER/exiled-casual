@@ -59,6 +59,12 @@ vi.mock("./render/rig", () => ({ loadPlayerRig: () => Promise.resolve(), resetPl
 vi.mock("./render/props", () => ({ loadProps: () => Promise.resolve(), resetProps: vi.fn() }));
 vi.mock("./render/monsters", () => ({ loadMonsters: () => Promise.resolve(), resetMonsters: vi.fn(), attachCreature: () => null }));
 vi.mock("./render/rocks", () => ({ loadRocks: () => Promise.resolve(), resetRocks: vi.fn() }));
+// The hideout's furniture builds real Babylon meshes and instantiates the prop
+// container. Same reason the level and the rig are mocked: none of it is what this
+// file is about, and render/hideout.test.ts owns the placements.
+vi.mock("./render/hideout", () => ({
+  buildHideoutDecor: vi.fn(), clearHideoutDecor: vi.fn(),
+}));
 vi.mock("./render/level", () => ({
   buildLevel: vi.fn(), applyTilesetFloor: vi.fn(), applyBiomeTint: vi.fn(),
 }));

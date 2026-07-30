@@ -8,7 +8,7 @@ import {
 } from "@babylonjs/core";
 
 /**
- * The hideout props — the map device and the stash chest — as one authored glTF.
+ * The hideout props — the two interactables and the furniture — as one authored glTF.
  *
  * Both used to be stacks of Babylon primitives painted with flat colours, which
  * is a greybox no matter how many cylinders it is made of. `tools/build_props.py`
@@ -28,7 +28,16 @@ const PROPS_URL = "/models/props.glb";
  */
 const GLTF_ROOT = "__root__";
 
-export type PropKind = "mapDevice" | "stash";
+/**
+ * Every root `props.glb` carries. The first two are interactables the sim spawns;
+ * the rest are the hideout's furniture, placed by render/hideout.ts.
+ */
+export const PROP_KINDS = [
+  "mapDevice", "stash",
+  "rug", "table", "bench", "crate", "barrel", "pillar",
+] as const;
+
+export type PropKind = (typeof PROP_KINDS)[number];
 
 interface LoadedProps {
   scene: Scene;

@@ -57,6 +57,11 @@ TEXTURES = {
     "brass_side": "brass_side_v2.png",
     "chest_wood": "chest_wood_v1.png",
     "iron": "iron_band_v2.png",
+    # The decor set. The rug master is 2:1 and is squashed to square here like
+    # every other texture; the rug quad is 2:1 with a unit UV, so it stretches back
+    # to the shape it was painted at.
+    "rug": "rug_v1.png",
+    "pillar_stone": "pillar_stone_v1.png",
 }
 TEX_SIZE = 512
 TEX_QUALITY = 88
@@ -66,7 +71,11 @@ TEX_QUALITY = 88
 # the sun a screenshot has: on this floor the chest came out a black blob with a
 # chest-shaped outline. The art stays the master; this is the exposure the game
 # needs, and it lives here so the reason is written down next to the number.
-TEX_GAIN = {"chest_wood": 1.5, "iron": 1.25}
+# The rug goes the other way. At 1.35 it came out a glowing salmon slab on a cold
+# grey floor - the brightest thing in the hideout, for a threadbare carpet - and its
+# worn patches blew out to white speckle. 0.7 puts it back to the oxblood it was
+# painted as, sitting under the floor's value the way cloth on stone does.
+TEX_GAIN = {"chest_wood": 1.5, "iron": 1.25, "rug": 0.7, "pillar_stone": 1.15}
 
 # Albedo emitted back at this fraction, so an unlit corner of a map still shows
 # the prop. The runtime multiplies this by its own hover colour.
@@ -221,6 +230,28 @@ def bevel(obj, width=0.008, segments=2):
     m.angle_limit = math.radians(30)
     bpy.context.view_layer.objects.active = obj
     bpy.ops.object.modifier_apply(modifier=m.name)
+
+
+def plane(name, w, d, z):
+    """One upward-facing rectangle. The rug, and nothing else so far."""
+    hw, hd = w / 2.0, d / 2.0
+    verts = [(-hw, -hd, z), (hw, -hd, z), (hw, hd, z), (-hw, hd, z)]
+    return mesh_object(name, verts, [[0, 1, 2, 3]])
+
+
+def uv_unit(obj, w, d):
+    """Map the object's XY extent onto the whole texture, once.
+
+    `uv_box` tiles by world size, which is right for timber and masonry and wrong
+    for anything whose art IS the object: a rug painted with one medallion and one
+    border has to land as one medallion and one border, whatever size the quad is.
+    """
+    me = obj.data
+    uvs = me.uv_layers.new(name="UVMap")
+    for poly in me.polygons:
+        for li in poly.loop_indices:
+            co = me.vertices[me.loops[li].vertex_index].co
+            uvs.data[li].uv = (co[0] / w + 0.5, co[1] / d + 0.5)
 
 
 def uv_box(obj, tile):
@@ -443,6 +474,134 @@ def build_stash(mats):
     return root
 
 
+# --------------------------------------------------------------------------
+# the decor set
+# --------------------------------------------------------------------------
+#
+# Six pieces of furniture, placed by the client (render/hideout.ts) rather than by
+# the sim: none of them is interactable and the hideout carries no collision, so
+# they are scenery in the strict sense.
+#
+# Every one of them is capped at roughly a metre. The wall pass already paid for
+# this lesson: the camera sits about 49 degrees above the horizon, so anything of
+# height h hides ~0.87h of world behind it, and the 1.8-unit box wall was hiding
+# the character whenever he walked south of one. A hideout you cannot see yourself
+# in is worse than an empty one, so the tallest thing here is a broken column at
+# 1.12 and the table tops out at 0.83.
+
+
+def _finish(parts, root, smooth=40):
+    for obj, mat, tile in parts:
+        bevel(obj)
+        obj.data.materials.append(mat)
+        uv_box(obj, tile)
+        smooth_by_angle(obj, smooth)
+        obj.parent = root
+    return root
+
+
+def _root(name):
+    root = bpy.data.objects.new(name, None)
+    bpy.context.scene.collection.objects.link(root)
+    return root
+
+
+RUG_W, RUG_D = 2.6, 1.3
+
+
+def build_rug(mats):
+    """A worn carpet, and the one prop that is only its texture.
+
+    Lifted 12mm off the floor rather than laid on it: the ground plate is at y=0
+    and two coplanar surfaces at this camera z-fight in a band right across the
+    middle of the frame.
+    """
+    root = _root("rug")
+    face = plane("rug_face", RUG_W, RUG_D, 0.012)
+    face.data.materials.append(mats["rug"])
+    uv_unit(face, RUG_W, RUG_D)
+    face.parent = root
+    return root
+
+
+def build_table(mats):
+    """Trestle table: a plank top on two solid ends, tied by a stretcher."""
+    root = _root("table")
+    parts = []
+    parts.append((box("table_top", (0, 0, 0.79), (2.2, 0.95, 0.08)), mats["chest_wood"], 0.9))
+    for i, x in enumerate((-0.82, 0.82)):
+        parts.append((box(f"table_leg_{i}", (x, 0, 0.375), (0.14, 0.82, 0.75)), mats["chest_wood"], 0.7))
+        # A foot under each end, so the table stands on timber rather than ending
+        # in a cut edge where it meets the floor.
+        parts.append((box(f"table_foot_{i}", (x, 0, 0.035), (0.24, 0.92, 0.07)), mats["chest_wood"], 0.7))
+    parts.append((box("table_rail", (0, 0, 0.24), (1.7, 0.12, 0.09)), mats["chest_wood"], 0.7))
+    return _finish(parts, root)
+
+
+def build_bench(mats):
+    root = _root("bench")
+    parts = [
+        (box("bench_seat", (0, 0, 0.44), (1.15, 0.36, 0.07)), mats["chest_wood"], 0.7),
+    ]
+    for i, x in enumerate((-0.42, 0.42)):
+        parts.append((box(f"bench_leg_{i}", (x, 0, 0.205), (0.10, 0.30, 0.41)), mats["chest_wood"], 0.6))
+    return _finish(parts, root)
+
+
+def build_crate(mats):
+    """A crate, banded rather than nailed: two irons read at fifty pixels, a
+    hundred nail heads do not."""
+    root = _root("crate")
+    parts = [(box("crate_body", (0, 0, 0.31), (0.62, 0.62, 0.62)), mats["chest_wood"], 0.55)]
+    for i, z in enumerate((0.14, 0.48)):
+        parts.append((box(f"crate_band_x_{i}", (0, 0, z), (0.66, 0.09, 0.09)), mats["iron"], 0.4))
+        parts.append((box(f"crate_band_y_{i}", (0, 0, z), (0.09, 0.66, 0.09)), mats["iron"], 0.4))
+    return _finish(parts, root)
+
+
+def build_barrel(mats):
+    """Staved barrel: one lathe for the timber, two short cylinders for the hoops.
+
+    The profile bulges at the waist because a barrel that does not is a bin, and
+    the bulge is the whole silhouette from above.
+    """
+    root = _root("barrel")
+    profile = [
+        (0.0, 0.80), (0.20, 0.80),
+        (0.255, 0.66), (0.285, 0.40), (0.255, 0.14),
+        (0.20, 0.0), (0.0, 0.0),
+    ]
+    staves = mesh_object("barrel_staves", *lathe(profile, 18))
+    parts = [(staves, mats["chest_wood"], 0.7)]
+    for i, z in enumerate((0.20, 0.60)):
+        hoop = cone(f"barrel_hoop_{i}", (0, 0, z), 0.272, 0.272, 0.08, "z")
+        parts.append((hoop, mats["iron"], 0.35))
+    return _finish(parts, root)
+
+
+def build_pillar(mats):
+    """A broken column, not a whole one.
+
+    A standing pillar tall enough to read as architecture is tall enough to hide
+    the player, and a short whole one reads as a bollard. Snapped off at chest
+    height it is both: masonry in the silhouette and nothing in the way. The break
+    is a slab set at an angle across the top, because a lathe is rotationally
+    symmetric and a symmetric break is a machined cut.
+    """
+    root = _root("pillar")
+    parts = [(box("pillar_plinth", (0, 0, 0.09), (0.74, 0.74, 0.18)), mats["pillar_stone"], 1.0)]
+    drum = mesh_object("pillar_drum", *lathe([
+        (0.0, 1.00), (0.255, 1.00),
+        (0.265, 0.62), (0.285, 0.24), (0.30, 0.18),
+        (0.0, 0.18),
+    ], 20))
+    parts.append((drum, mats["pillar_stone"], 1.0))
+    break_slab = box("pillar_break", (0.03, -0.02, 1.04), (0.50, 0.46, 0.12))
+    break_slab.rotation_euler = (math.radians(7.0), math.radians(-5.0), math.radians(12.0))
+    parts.append((break_slab, mats["pillar_stone"], 1.0))
+    return _finish(parts, root)
+
+
 def main():
     for obj in list(bpy.data.objects):
         bpy.data.objects.remove(obj, do_unlink=True)
@@ -458,10 +617,20 @@ def main():
         # 0.45 here, a poured-concrete slab under a chest made of real timber art.
         # 0.023 linear is that same 0.17 on screen.
         "stone": flat_material("stone", (0.023, 0.022, 0.020), 0.95),
+        # Cloth and masonry for the decor set. The rug is rougher than the timber
+        # (a carpet has no sheen at all) and the stone rougher still.
+        "rug": textured_material("rug", built["rug"], 0.96),
+        "pillar_stone": textured_material("pillar_stone", built["pillar_stone"], 0.92),
     }
 
     build_map_device(mats)
     build_stash(mats)
+    build_rug(mats)
+    build_table(mats)
+    build_bench(mats)
+    build_crate(mats)
+    build_barrel(mats)
+    build_pillar(mats)
 
     bpy.ops.export_scene.gltf(
         filepath=OUT,
