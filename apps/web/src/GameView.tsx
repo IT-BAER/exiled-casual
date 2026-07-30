@@ -84,6 +84,13 @@ export function GameView({
    */
   const deadRef = useRef(false);
   deadRef.current = snapshot !== null && !snapshot.player.alive;
+  /**
+   * The skill bar, mirrored for the same reason: `attachBindings` is called once on
+   * mount and its key handler has to fire whatever is in the socket NOW, not
+   * whatever was in it when the game started.
+   */
+  const skillBarRef = useRef(settings.ui.skillBar);
+  skillBarRef.current = settings.ui.skillBar;
   // The map's layout, kept for the minimap. Null in the hideout, which has none.
   const [areaLayout, setAreaLayout] = useState<AreaLayout | null>(null);
   const [project, setProject] = useState<Projector | null>(null);
@@ -207,6 +214,9 @@ export function GameView({
       // the inventory up, which is the case where it IS the player's own panel.
       (open) => { setStashOpen(open); setInventoryOpen(open); if (open) { setVendorOpen(false); setCharacterOpen(false); } },
       (open) => { setVendorOpen(open); setInventoryOpen(open); if (open) { setStashOpen(false); setCharacterOpen(false); } },
+      // The key row IS the bar's order: `1` fires the first socket, whatever the
+      // player last dragged into it.
+      (key) => skillBarRef.current[Number(key) - 1] ?? null,
     );
 
     // Loot plates are DOM, so their click has to reach the same approach-then-act
@@ -418,7 +428,14 @@ export function GameView({
         onPick={pick ?? undefined}
         plates={settings.ui.lootLabels}
       />
-      <Hud snapshot={snapshot} hoveredEntityId={hoveredEntityId} />
+      <Hud
+        snapshot={snapshot}
+        hoveredEntityId={hoveredEntityId}
+        skillBar={settings.ui.skillBar}
+        onSkillBarChange={(skillBar) => onSettingsChange?.({
+          ...settings, ui: { ...settings.ui, skillBar },
+        })}
+      />
       {settings.ui.minimap && (
         <Minimap layout={areaLayout} player={snapshot?.player ?? null} />
       )}

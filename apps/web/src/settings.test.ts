@@ -17,8 +17,11 @@ describe("sanitize", () => {
   });
 
   it("carries the HUD toggles, defaulting them on", () => {
-    expect(sanitize(null).ui).toEqual({ minimap: true, lootLabels: true });
-    expect(sanitize({ ui: { minimap: false } }).ui).toEqual({ minimap: false, lootLabels: true });
+    expect(sanitize(null).ui).toEqual(DEFAULT_SETTINGS.ui);
+    expect(sanitize(null).ui.minimap).toBe(true);
+    expect(sanitize(null).ui.lootLabels).toBe(true);
+    expect(sanitize({ ui: { minimap: false } }).ui)
+      .toEqual({ ...DEFAULT_SETTINGS.ui, minimap: false });
     expect(sanitize({ ui: { lootLabels: "no" } }).ui.lootLabels).toBe(true);
   });
 
@@ -56,5 +59,35 @@ describe("sanitize", () => {
     a.sound.master = 0.01;
     expect(DEFAULT_SETTINGS.sound.master).not.toBe(0.01);
     expect(sanitize(null).sound.master).toBe(DEFAULT_SETTINGS.sound.master);
+  });
+});
+
+describe("the skill bar rides in the settings", () => {
+  const bar = (raw: unknown) => sanitize({ ui: { skillBar: raw } }).ui.skillBar;
+
+  it("defaults to the three starting skills in the first three sockets", () => {
+    expect(sanitize(null).ui.skillBar).toEqual([
+      "skill.ember_bolt.v1", "skill.cinder_ground.v1", "skill.blink.v1", null, null,
+    ]);
+  });
+
+  it("keeps a saved order", () => {
+    expect(bar([null, "skill.blink.v1", null, null, "skill.ember_bolt.v1"]))
+      .toEqual([null, "skill.blink.v1", null, null, "skill.ember_bolt.v1"]);
+  });
+
+  it("is always exactly five sockets, however long the save was", () => {
+    expect(bar(["a"]).length).toBe(5);
+    expect(bar(["a", "b", "c", "d", "e", "f", "g"]).length).toBe(5);
+    expect(bar("not an array").length).toBe(5);
+  });
+
+  /** One skill in two sockets would fire twice off one press and read as a dupe. */
+  it("refuses the same skill in two sockets", () => {
+    expect(bar(["a", "a", "b", null, null])).toEqual(["a", null, "b", null, null]);
+  });
+
+  it("throws nothing at junk inside the array", () => {
+    expect(bar([1, {}, "", null, "ok"])).toEqual([null, null, null, null, "ok"]);
   });
 });

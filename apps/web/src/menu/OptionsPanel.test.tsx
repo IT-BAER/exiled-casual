@@ -50,7 +50,8 @@ describe("OptionsPanel", () => {
 
     fireEvent.click(screen.getByRole("checkbox", { name: /loot labels/i }));
     const next = onChange.mock.calls[0]![0] as Settings;
-    expect(next.ui).toEqual({ minimap: true, lootLabels: false });
+    expect(next.ui.minimap).toBe(true);
+    expect(next.ui.lootLabels).toBe(false);
     expect(next.graphics).toEqual(DEFAULT_SETTINGS.graphics);
   });
 

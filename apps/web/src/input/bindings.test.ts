@@ -5,6 +5,14 @@ import type { Scene } from "@babylonjs/core";
 import type { Snapshot } from "@exiled/protocol";
 import { testPlayer } from "../test-fixtures";
 import { fp } from "@exiled/fixed-point";
+import { DEFAULT_SETTINGS } from "../settings";
+
+/**
+ * The skill row's mapping, which the bar owns now: `1` fires whatever sits in the
+ * first socket. Passed in here so a cast test is exercising the real path.
+ */
+const defaultSkillForKey = (key: string): string | null =>
+  DEFAULT_SETTINGS.ui.skillBar[Number(key) - 1] ?? null;
 
 /**
  * A ray straight down from above `(x, z)`, so the floor intersection at y=0 is
@@ -67,7 +75,10 @@ describe("attachBindings hold-to-move", () => {
     canvas = document.createElement("canvas");
     document.body.appendChild(canvas);
     worker = { postMessage: vi.fn() };
-    ({ detach } = attachBindings(canvas, worker as unknown as Worker, fakeScene()));
+    ({ detach } = attachBindings(
+      canvas, worker as unknown as Worker, fakeScene(),
+      undefined, undefined, undefined, undefined, undefined, defaultSkillForKey,
+    ));
   });
 
   afterEach(() => {

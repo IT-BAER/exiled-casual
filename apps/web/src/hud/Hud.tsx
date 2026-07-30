@@ -6,6 +6,7 @@ import { PANEL_W } from "./layout";
 import { SkillTooltip } from "./SkillTooltip";
 import { XpBar } from "./XpBar";
 import { playDropSound } from "../audio/drop-sound";
+import { DEFAULT_SETTINGS, SKILL_SLOT_COUNT } from "../settings";
 
 // Bottom HUD geometry, measured off reference-screenshots/poe1-lower-bar.png, a 2558x388 crop
 // of Path of Exile **1**'s bottom bar (PoE1, not PoE2 — its globes are bigger and its ring
@@ -89,35 +90,73 @@ const BAR_PAD = `calc(${BAR_PAD_EXPR})`;
 // PoE2 itself puts skills on QWERT and flasks on the digits — we swap the two, so
 // the movement hand keeps the flasks. Deliberate, not a parity miss.
 type SkillSlot = { id: string | null; key: string; mouse?: boolean; icon?: string; glow?: string };
-const SKILL_SLOTS: SkillSlot[] = [
-  { id: "skill.ember_bolt.v1", key: "1", icon: "/textures/skills/ember_bolt.png", glow: "#ff7a2f" },
-  { id: "skill.cinder_ground.v1", key: "2", icon: "/textures/skills/cinder_ground.png", glow: "#e0492b" },
-  { id: "skill.blink.v1", key: "3", icon: "/textures/skills/blink.png", glow: "#3fb6ff" },
-  { id: null, key: "4" },
-  { id: null, key: "5" },
-  { id: null, key: "L", mouse: true },
-  { id: null, key: "M", mouse: true },
-  { id: null, key: "R", mouse: true },
-];
+
+/**
+ * A skill's face, keyed by id rather than baked into a socket.
+ *
+ * Split apart when the sockets became reorderable: the art belongs to the skill and
+ * the key belongs to the socket, and a bar that carries both cannot be shuffled
+ * without the icons walking off with the numbers.
+ */
+export const SKILL_ART: Record<string, { icon: string; glow: string }> = {
+  "skill.ember_bolt.v1": { icon: "/textures/skills/ember_bolt.png", glow: "#ff7a2f" },
+  "skill.cinder_ground.v1": { icon: "/textures/skills/cinder_ground.png", glow: "#e0492b" },
+  "skill.blink.v1": { icon: "/textures/skills/blink.png", glow: "#3fb6ff" },
+};
+
+/** The mouse row. PoE1 gives left, middle and right a skill each; ours hold none yet. */
+const MOUSE_KEYS: readonly string[] = ["L", "M", "R"];
+
+/** Socket `i` of the numbered row, dressed from whatever skill the bar puts there. */
+function socketFor(bar: (string | null)[], i: number): SkillSlot {
+  const id = bar[i] ?? null;
+  const art = id ? SKILL_ART[id] : undefined;
+  return { id, key: String(i + 1), ...(art ? { icon: art.icon, glow: art.glow } : {}) };
+}
 
 /**
  * One skill tile. Extracted because the bar is two rows now, as PoE1's is
  * (reference-screenshots/poe1-lower-bar.png): the mouse buttons sit in their own row
  * above the numbered slots, and both rows draw the same tile.
  */
-function SkillTile({ slot, n, cooldowns, onHover }: {
+function SkillTile({ slot, n, cooldowns, onHover, drag }: {
   slot: SkillSlot;
   n: number;
   cooldowns: Record<string, number>;
   onHover: (id: string | null) => void;
+  /**
+   * Reordering, for the numbered row only. `index` is the socket's place in the
+   * bar; a tile with no `drag` is a fixed socket (the mouse row), which is exactly
+   * what stops a skill being dropped somewhere nothing would ever fire it.
+   */
+  drag?: { index: number; onDrop: (from: number, to: number) => void };
 }) {
   const cd = slot.id ? cooldowns[slot.id] ?? 0 : 0;
   const ready = cd <= 0;
+  const [over, setOver] = React.useState(false);
   return (
     <div
       data-testid={`skill-slot-${n}`}
       onMouseEnter={() => onHover(slot.id)}
       onMouseLeave={() => onHover(null)}
+      // Only a socket with something in it can be picked up; every socket in the
+      // row can be dropped on, including an empty one, which is how a skill is
+      // moved to 4 rather than only swapped with 2.
+      draggable={drag !== undefined && slot.id !== null}
+      onDragStart={(ev) => {
+        if (!drag || slot.id === null) return;
+        ev.dataTransfer.setData("text/plain", String(drag.index));
+        ev.dataTransfer.effectAllowed = "move";
+      }}
+      onDragOver={(ev) => { if (drag) { ev.preventDefault(); setOver(true); } }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(ev) => {
+        setOver(false);
+        if (!drag) return;
+        ev.preventDefault();
+        const from = Number(ev.dataTransfer.getData("text/plain"));
+        if (Number.isInteger(from) && from !== drag.index) drag.onDrop(from, drag.index);
+      }}
       style={{
         width: SLOT,
         height: SLOT,
@@ -126,11 +165,13 @@ function SkillTile({ slot, n, cooldowns, onHover }: {
         background: slot.icon
           ? "radial-gradient(circle at 50% 35%, #262c34, #0b0d11)"
           : "radial-gradient(circle at 50% 35%, #14171d, #07090c)",
-        border: `1px solid ${slot.icon && ready ? "#6b5a34" : "#2b3038"}`,
+        border: `1px solid ${over ? "#d9b04a" : slot.icon && ready ? "#6b5a34" : "#2b3038"}`,
         borderRadius: 2,
-        boxShadow: slot.icon && ready
-          ? `0 0 6px ${slot.glow}33, inset 0 0 10px rgba(0,0,0,0.75)`
-          : "inset 0 0 10px rgba(0,0,0,0.85)",
+        boxShadow: over
+          ? "0 0 8px rgba(217,176,74,0.55), inset 0 0 10px rgba(0,0,0,0.6)"
+          : slot.icon && ready
+            ? `0 0 6px ${slot.glow}33, inset 0 0 10px rgba(0,0,0,0.75)`
+            : "inset 0 0 10px rgba(0,0,0,0.85)",
       }}
     >
       {slot.icon && (
@@ -259,6 +300,10 @@ interface HudProps {
   snapshot: Snapshot | null;
   /** Entity id the mouse is hovering — drives the name label. Null = no label. */
   hoveredEntityId?: number | null;
+  /** Which skill sits in which numbered socket. Defaulted so the lab can boot bare. */
+  skillBar?: (string | null)[];
+  /** A skill was dragged to another socket. The caller owns and persists the bar. */
+  onSkillBarChange?: (next: (string | null)[]) => void;
 }
 
 /**
@@ -469,8 +514,32 @@ function Orb(props: {
   );
 }
 
-export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
+export function Hud({
+  snapshot,
+  hoveredEntityId = null,
+  skillBar = DEFAULT_SETTINGS.ui.skillBar,
+  onSkillBarChange,
+}: HudProps) {
   const [hoveredSkill, setHoveredSkill] = React.useState<string | null>(null);
+  // Length-normalised here rather than trusted: the bar rides in the save, and a
+  // row drawn from a short array would silently lose its last sockets.
+  const bar = React.useMemo(() => {
+    const out: (string | null)[] = [];
+    for (let i = 0; i < SKILL_SLOT_COUNT; i++) out.push(skillBar[i] ?? null);
+    return out;
+  }, [skillBar]);
+  /**
+   * Swap two sockets. A swap and not an insert: five sockets and three skills
+   * means dragging onto an occupied one has to put something back, and pushing the
+   * row along would move a skill the player never touched.
+   */
+  const swapSockets = React.useCallback((from: number, to: number) => {
+    const next = [...bar];
+    const held = next[from] ?? null;
+    next[from] = next[to] ?? null;
+    next[to] = held;
+    onSkillBarChange?.(next);
+  }, [bar, onSkillBarChange]);
 
   // docs/09 rule 1: a reward the player cannot hear and see did not happen. Two
   // guaranteed payouts used to land in total silence — the level the fixed track
@@ -773,8 +842,14 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
       >
         {/* The mouse row closes on a warm hairline, drawn as a shadow so it costs no height. */}
         <div style={{ display: "flex", gap: `${SLOT_GAP}px`, boxShadow: "0 1px 0 rgba(101,81,49,0.85)" }}>
-          {SKILL_SLOTS.slice(5).map((slot, i) => (
-            <SkillTile key={slot.key} slot={slot} n={i + 6} cooldowns={cooldowns} onHover={setHoveredSkill} />
+          {MOUSE_KEYS.map((key, i) => (
+            <SkillTile
+              key={key}
+              slot={{ id: null, key, mouse: true }}
+              n={i + 6}
+              cooldowns={cooldowns}
+              onHover={setHoveredSkill}
+            />
           ))}
         </div>
         {/* PoE1 recesses a rail between the two rows rather than leaving a gap: 18px of
@@ -791,8 +866,15 @@ export function Hud({ snapshot, hoveredEntityId = null }: HudProps) {
           }}
         />
         <div style={{ display: "flex", gap: `${SLOT_GAP}px` }}>
-          {SKILL_SLOTS.slice(0, 5).map((slot, i) => (
-            <SkillTile key={slot.key} slot={slot} n={i + 1} cooldowns={cooldowns} onHover={setHoveredSkill} />
+          {bar.map((_, i) => (
+            <SkillTile
+              key={i}
+              slot={socketFor(bar, i)}
+              n={i + 1}
+              cooldowns={cooldowns}
+              onHover={setHoveredSkill}
+              drag={{ index: i, onDrop: swapSockets }}
+            />
           ))}
         </div>
       </div>

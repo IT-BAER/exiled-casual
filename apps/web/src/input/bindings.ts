@@ -89,6 +89,12 @@ export function attachBindings(
   onOpenPanel?: (open: boolean) => void,
   onOpenStash?: (open: boolean) => void,
   onOpenVendor?: (open: boolean) => void,
+  /**
+   * Which skill the key row fires, read fresh on every press: the bar is
+   * reorderable and this listener is attached once, so a snapshot of the mapping
+   * taken at mount would go stale the first time a skill was dragged.
+   */
+  skillForKey?: (key: string) => string | null,
 ): {
   detach: () => void;
   onSnapshot: (snap: Snapshot) => void;
@@ -169,7 +175,7 @@ export function attachBindings(
       post(heldToMoveIntent(held));
       return;
     }
-    const intent = keyToIntent(e.key, aimWorld);
+    const intent = keyToIntent(e.key, aimWorld, skillForKey);
     if (intent) post(intent);
   }
 

@@ -503,3 +503,68 @@ describe("Hud reward banner", () => {
     expect(playDropSound).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * Dragging a skill from one socket to another. A swap and not an insert: five
+ * sockets and three skills means dropping onto an occupied one has to put
+ * something back, and pushing the row along would move a skill nobody touched.
+ */
+describe("skill bar drag and drop", () => {
+  const BAR = ["skill.ember_bolt.v1", "skill.cinder_ground.v1", "skill.blink.v1", null, null];
+
+  /** One HTML5 drag, start to drop, with the dataTransfer the handlers read. */
+  function drag(fromSlot: number, toSlot: number) {
+    const data = new Map<string, string>();
+    const dataTransfer = {
+      setData: (k: string, v: string) => { data.set(k, v); },
+      getData: (k: string) => data.get(k) ?? "",
+      effectAllowed: "",
+    };
+    fireEvent.dragStart(screen.getByTestId(`skill-slot-${fromSlot}`), { dataTransfer });
+    fireEvent.dragOver(screen.getByTestId(`skill-slot-${toSlot}`), { dataTransfer });
+    fireEvent.drop(screen.getByTestId(`skill-slot-${toSlot}`), { dataTransfer });
+  }
+
+  it("moves a skill into an empty socket", () => {
+    const seen: (string | null)[][] = [];
+    render(<Hud snapshot={makeSnap({})} skillBar={BAR} onSkillBarChange={(b) => seen.push(b)} />);
+    drag(1, 4);
+    expect(seen).toEqual([[null, "skill.cinder_ground.v1", "skill.blink.v1", "skill.ember_bolt.v1", null]]);
+  });
+
+  it("swaps two occupied sockets", () => {
+    const seen: (string | null)[][] = [];
+    render(<Hud snapshot={makeSnap({})} skillBar={BAR} onSkillBarChange={(b) => seen.push(b)} />);
+    drag(1, 3);
+    expect(seen).toEqual([["skill.blink.v1", "skill.cinder_ground.v1", "skill.ember_bolt.v1", null, null]]);
+  });
+
+  it("dropping a socket on itself changes nothing", () => {
+    const seen: (string | null)[][] = [];
+    render(<Hud snapshot={makeSnap({})} skillBar={BAR} onSkillBarChange={(b) => seen.push(b)} />);
+    drag(2, 2);
+    expect(seen).toEqual([]);
+  });
+
+  it("an empty socket cannot be picked up", () => {
+    render(<Hud snapshot={makeSnap({})} skillBar={BAR} />);
+    expect(screen.getByTestId("skill-slot-1").getAttribute("draggable")).toBe("true");
+    expect(screen.getByTestId("skill-slot-4").getAttribute("draggable")).toBe("false");
+  });
+
+  /** Nothing fires off a mouse socket yet, so a skill dropped there would vanish. */
+  it("the mouse row takes no drops", () => {
+    render(<Hud snapshot={makeSnap({})} skillBar={BAR} />);
+    expect(screen.getByTestId("skill-slot-6").getAttribute("draggable")).toBe("false");
+  });
+
+  it("draws the icon of whatever the bar puts in a socket", () => {
+    const { container } = render(
+      <Hud snapshot={makeSnap({})} skillBar={[null, null, null, null, "skill.ember_bolt.v1"]} />,
+    );
+    const imgs = [...container.querySelectorAll("img")].map((i) => i.getAttribute("src"));
+    expect(imgs.filter((src) => src?.includes("ember_bolt"))).toHaveLength(1);
+    expect(screen.getByTestId("skill-slot-5").querySelector("img")).not.toBeNull();
+    expect(screen.getByTestId("skill-slot-1").querySelector("img")).toBeNull();
+  });
+});

@@ -1,11 +1,6 @@
 import type { Intent } from "@exiled/protocol";
 import { fp } from "@exiled/fixed-point";
 
-const SKILL_KEYS: Record<string, string> = {
-  "1": "skill.ember_bolt.v1",
-  "2": "skill.cinder_ground.v1",
-  "3": "skill.blink.v1",
-};
 
 const FLASK_KEYS: Record<string, "life" | "mana"> = {
   q: "life",
@@ -55,6 +50,13 @@ export function heldToMoveIntent(held: readonly string[]): Intent {
 export function keyToIntent(
   key: string,
   aim: { x: number; y: number },
+  /**
+   * Which skill the numbered keys fire. Passed in rather than a table in here,
+   * because the bar is reorderable now (Hud.tsx) and the key row is the bar's own
+   * order: a fixed 1-to-3 map would have gone on firing Ember Bolt off the socket
+   * the player had just dragged it out of.
+   */
+  skillForKey?: (key: string) => string | null,
 ): Intent | null {
   // Lower-case so CapsLock / Shift ("W") still map to WASD movement.
   const k = key.toLowerCase();
@@ -64,7 +66,7 @@ export function keyToIntent(
   const slot = FLASK_KEYS[k];
   if (slot) return { kind: "useFlask", slot };
 
-  const skillId = SKILL_KEYS[key];
+  const skillId = skillForKey?.(key);
   if (skillId) {
     return { kind: "useSkill", skillId, tx: fp(aim.x), ty: fp(aim.y) };
   }

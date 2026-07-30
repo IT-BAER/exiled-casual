@@ -40,7 +40,17 @@ export interface SoundSettings {
 export interface UiSettings {
   minimap: boolean;
   lootLabels: boolean;
+  /**
+   * Which skill sits in which numbered socket of the skill bar, in bar order.
+   * `null` is an empty socket. A setting rather than sim state because it is a
+   * preference about the screen, not about the character: nothing the sim owns
+   * changes when a skill moves from 1 to 4.
+   */
+  skillBar: (string | null)[];
 }
+
+/** Numbered sockets on the bar. The three mouse buttons are not reorderable yet. */
+export const SKILL_SLOT_COUNT = 5;
 
 export interface Settings {
   graphics: GraphicsSettings;
@@ -60,7 +70,11 @@ export const DEFAULT_SETTINGS: Settings = {
     resolutionScale: 1,
   },
   sound: { master: 0.8, muted: false },
-  ui: { minimap: true, lootLabels: true },
+  ui: {
+    minimap: true,
+    lootLabels: true,
+    skillBar: ["skill.ember_bolt.v1", "skill.cinder_ground.v1", "skill.blink.v1", null, null],
+  },
 };
 
 const SHADOW_QUALITIES: readonly ShadowQuality[] = ["off", "low", "high"];
@@ -86,6 +100,28 @@ function member<T extends string>(raw: unknown, allowed: readonly T[], fallback:
   return typeof raw === "string" && (allowed as readonly string[]).includes(raw)
     ? (raw as T)
     : fallback;
+}
+
+/**
+ * A saved skill bar, proven rather than trusted: exactly SKILL_SLOT_COUNT entries,
+ * each a string or null, and no skill in two sockets at once. A bar written by a
+ * build that shipped a different skill list still parses — a skill that no longer
+ * exists simply draws as an empty socket and fires nothing.
+ */
+function skillBar(raw: unknown, fallback: (string | null)[]): (string | null)[] {
+  if (!Array.isArray(raw)) return [...fallback];
+  const seen = new Set<string>();
+  const out: (string | null)[] = [];
+  for (let i = 0; i < SKILL_SLOT_COUNT; i++) {
+    const v = raw[i];
+    if (typeof v === "string" && v.length > 0 && !seen.has(v)) {
+      seen.add(v);
+      out.push(v);
+    } else {
+      out.push(null);
+    }
+  }
+  return out;
 }
 
 export function sanitize(raw: unknown): Settings {
@@ -114,6 +150,7 @@ export function sanitize(raw: unknown): Settings {
     ui: {
       minimap: bool(u["minimap"], d.ui.minimap),
       lootLabels: bool(u["lootLabels"], d.ui.lootLabels),
+      skillBar: skillBar(u["skillBar"], d.ui.skillBar),
     },
   };
 }
