@@ -31,6 +31,8 @@ import array
 import glob
 import math
 import os
+import re
+import subprocess
 import sys
 import wave
 
@@ -56,9 +58,38 @@ MIN_RELEASE_MS = 140
 # enough that the cue still lands on the frame it is asked for.
 PRE_ROLL_MS = 12
 FADE_OUT_MS = 40
-# Peak the trimmed file is normalised to. Not 1.0: Opus is lossy and can overshoot
-# the sample values it was given, and a clipped encode is audible as a crackle.
-TARGET_PEAK = 0.89
+# Ceiling the shaped file may reach. Not 0: Opus is lossy and DOES overshoot the
+# sample values it was given — measured through the browser's own decoder, -1 dB came
+# back at +0.3 dBFS and -2 dB still clipped the sharpest footstep. That is a crackle
+# on the transient; -2.5 is what actually held for all 21.
+TARGET_PEAK_DB = -2.5
+# Loudness every cue is brought to, as the whole-file RMS in dBFS. The unshaped set
+# spanned -8.8 to -28.9, a 20 dB spread, which is why some were inaudible and others
+# shouted at the same gain. One target makes the table in `sfx.ts` a mix rather than
+# a pile of compensation.
+TARGET_RMS_DB = -16.0
+
+# Where each cue is high-passed. MOSS puts a great deal of energy under 100 Hz in
+# almost everything, and on a cue that is not MEANT to be felt in the chest it is
+# rumble: it eats the headroom the body of the sound should have had. The ones with a
+# low number here are the ones whose weight is the point.
+HIGHPASS_HZ: dict[str, int] = {
+    "monster-slam-impact": 45,
+    "monster-death": 70,
+    "waystone-activate": 70,
+    "portal-open": 80,
+    "portal-close": 90,
+    "monster-hurt": 90,
+    "player-hurt": 90,
+    "monster-melee-hit": 100,
+}
+DEFAULT_HIGHPASS_HZ = 130
+# A gentle octave-wide lift where detail lives. The model is short of 2-5 kHz on most
+# of these — a leather tap measured 24 dB down at 500-2k — and while EQ cannot invent
+# what was never rendered, it does recover the difference between a dull thud and one
+# you can hear the material of.
+PRESENCE_HZ = 3000
+PRESENCE_GAIN_DB = 3.5
 # Shortest take worth keeping; below this the render found nothing.
 MIN_TAKE_MS = 40
 
@@ -168,12 +199,69 @@ def trim(a: array.array, rate: int, max_s: float) -> tuple[array.array, dict]:
     for i in range(lead):
         cut[i] = int(cut[i] * (i / lead))
 
-    loud = max(abs(x) for x in cut) / 32768.0
-    if loud > 0:
-        g = TARGET_PEAK / loud
-        for i, x in enumerate(cut):
-            cut[i] = max(-32768, min(32767, int(x * g)))
+    # Deliberately NOT normalised here. Peak-normalising was the mistake: when a
+    # cue's peak is a sub-bass thump — and nine of these measured within 4 dB of
+    # their whole spectrum below 100 Hz — scaling by that peak leaves everything
+    # audible 20 dB down, which is what "muddy and quiet" actually was. `shape()`
+    # high-passes first and then sets level by LOUDNESS.
     return cut, {"peak": peak, "start": start_i / rate, "len": len(cut) / rate}
+
+
+def highpass_for(name: str) -> int:
+    best, hit = 0, None
+    for prefix, hz in HIGHPASS_HZ.items():
+        if name.startswith(prefix) and len(prefix) > best:
+            best, hit = len(prefix), hz
+    return hit if hit is not None else DEFAULT_HIGHPASS_HZ
+
+
+def _measure(path: str, chain: str) -> tuple[float, float]:
+    """mean (RMS) and max level in dBFS after `chain`, via ffmpeg's volumedetect."""
+    out = subprocess.run(
+        ["ffmpeg", "-hide_banner", "-nostats", "-i", path, "-af", chain + "volumedetect",
+         "-f", "null", "-"],
+        capture_output=True, text=True, errors="ignore",
+    ).stderr
+    mean = re.search(r"mean_volume:\s*([-0-9.]+)", out)
+    peak = re.search(r"max_volume:\s*([-0-9.]+)", out)
+    if not mean or not peak:
+        sys.exit(f"{path}: could not measure level -- is ffmpeg on PATH?")
+    return float(mean.group(1)), float(peak.group(1))
+
+
+def shape(path: str, name: str) -> dict:
+    """High-pass, lift the presence band, and bring the cue to one loudness.
+
+    In that order, and the order is the point: measuring level before the high-pass
+    measures the rumble, which is how the first pass ended up with the audible part of
+    a body hit sitting 20 dB below its own peak.
+    """
+    hp = highpass_for(name)
+    chain = (
+        f"highpass=f={hp}:poles=2,"
+        f"equalizer=f={PRESENCE_HZ}:width_type=o:width=1.4:g={PRESENCE_GAIN_DB},"
+    )
+    mean, peak = _measure(path, chain)
+    gain = TARGET_RMS_DB - mean
+    # Whichever binds first: a cue with a huge transient and little body is limited by
+    # its peak, and pushing it to the loudness target would clip.
+    if peak + gain > TARGET_PEAK_DB:
+        gain = TARGET_PEAK_DB - peak
+    # A real limiter on the end rather than a lower and lower target. Chasing the
+    # ceiling down by measurement was whack-a-mole: one footstep's transient is a
+    # near-single-sample spike, and Opus overshot it by more than 2 dB however much
+    # headroom the file was given. A limiter ROUNDS that spike, which both guarantees
+    # the ceiling and leaves the encoder something it can represent.
+    limit = 10 ** (TARGET_PEAK_DB / 20)
+    tmp = path + ".tmp.wav"
+    subprocess.run(
+        ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", path,
+         "-af", chain + f"volume={gain:.2f}dB,alimiter=level_in=1:level_out=1:limit={limit:.3f}:level=disabled",
+         "-c:a", "pcm_s16le", tmp],
+        check=True,
+    )
+    os.replace(tmp, path)
+    return {"hp": hp, "rms": mean, "gain": gain}
 
 
 def main() -> None:
@@ -198,8 +286,12 @@ def main() -> None:
             print(f"{name:30} EMPTY (peak {info['peak']:.3f}) -- regenerate this one")
             bad += 1
             continue
-        write_wav(os.path.join(args.out, name), cut, rate)
-        print(f"{name:30} take at {info['start']:5.2f}s, {info['len']:4.2f}s, source peak {info['peak']:.3f}")
+        dst = os.path.join(args.out, name)
+        write_wav(dst, cut, rate)
+        sh = shape(dst, name[:-4])
+        print(f"{name:30} take {info['start']:5.2f}s +{info['len']:4.2f}s  "
+              f"src peak {info['peak']:.3f}  hp {sh['hp']:>3}Hz  "
+              f"rms {sh['rms']:6.1f} -> {TARGET_RMS_DB:.0f} ({sh['gain']:+.1f} dB)")
     if bad:
         sys.exit(f"{bad} render(s) had nothing in them")
 
