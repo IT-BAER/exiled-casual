@@ -3,6 +3,7 @@ import {
   distanceGain, playSfx, preloadSfx,
   startSfxLoop, setSfxLoopVolume, stopSfxLoop, stopAllSfxLoops,
 } from "./sfx";
+import { setRoom } from "./bus";
 
 /**
  * The fight, heard rather than described.
@@ -121,6 +122,22 @@ const GROUND: Record<string, string> = {
   forest: "grass",
 };
 const DEFAULT_GROUND = "stone";
+
+/**
+ * How much of each cue's own reverb the place gives back, as a multiplier.
+ *
+ * The axis is enclosure, not biome: a stone hall and a cave return almost
+ * everything, open sand returns nearly nothing, and trees sit between because
+ * they scatter what they do not swallow. The hideout is a vault with a roof, so
+ * it is wetter than one, and it is what an unlisted area falls back to.
+ */
+const ROOM: Record<string, number> = {
+  vaal_stone: 1.6,
+  swamp: 0.7,
+  forest: 0.55,
+  desert: 0.3,
+};
+const HIDEOUT_ROOM = 1.15;
 /** Falls per ground on disk, `footstep-<ground>-1..N`. */
 const GROUND_VARIANTS = 3;
 /**
@@ -154,9 +171,10 @@ export interface Soundscape {
 }
 
 interface Options {
-  play?: (name: string, volume?: number) => void;
-  loop?: (name: string, key: string, volume?: number) => void;
-  loopVolume?: (key: string, volume: number) => void;
+  play?: (name: string, volume?: number, distance?: number) => void;
+  loop?: (name: string, key: string, volume?: number, distance?: number) => void;
+  loopVolume?: (key: string, volume: number, distance?: number) => void;
+  room?: (amount: number) => void;
   stopLoop?: (key: string) => void;
   stopAllLoops?: () => void;
 }
@@ -179,6 +197,7 @@ export function createSoundscape(opts: Options = {}): Soundscape {
   const loopVolume = opts.loopVolume ?? setSfxLoopVolume;
   const stopLoop = opts.stopLoop ?? stopSfxLoop;
   const stopAllLoops = opts.stopAllLoops ?? stopAllSfxLoops;
+  const room = opts.room ?? setRoom;
   /** Entity id -> loop key, for everything currently sounding. */
   const sustained = new Map<number, string>();
   let prev: Snapshot | null = null;
@@ -205,6 +224,7 @@ export function createSoundscape(opts: Options = {}): Soundscape {
     lastStepTick = 0;
     if (biomeId === undefined) return;
     ground = GROUND[biomeId ?? ""] ?? DEFAULT_GROUND;
+    room(biomeId === null ? HIDEOUT_ROOM : ROOM[biomeId] ?? HIDEOUT_ROOM);
     // Ahead of the first step rather than on it: an area message arrives well
     // before the player has walked anywhere in the place it describes.
     void preloadSfx(Array.from(
@@ -226,8 +246,12 @@ export function createSoundscape(opts: Options = {}): Soundscape {
       const now = new Map<number, SnapshotEntity>();
       for (const e of snap.entities) now.set(e.id, e);
 
-      const at = (e: SnapshotEntity): number =>
-        distanceGain(Math.hypot(e.x - snap.player.x, e.y - snap.player.y));
+      // Level AND distance, spread into the call: how loud a thing is and how far
+      // it sounds are two different questions, and only the second one muffles.
+      const at = (e: SnapshotEntity): [number, number] => {
+        const d = Math.hypot(e.x - snap.player.x, e.y - snap.player.y);
+        return [distanceGain(d), d];
+      };
 
       // ── Gone ────────────────────────────────────────────────────────────────
       let deaths = 0;
@@ -235,14 +259,14 @@ export function createSoundscape(opts: Options = {}): Soundscape {
         if (now.has(id)) continue;
         if (e.kind === "monster" && deaths < MAX_PER_KIND) {
           deaths++;
-          play(cueFor("monster-death", e.species), at(e));
+          play(cueFor("monster-death", e.species), ...at(e));
         } else if (e.kind === "telegraph") {
           // A ring only ever leaves the world by landing.
-          play("monster-slam-impact", at(e));
+          play("monster-slam-impact", ...at(e));
         } else if (e.kind === "projectile" && (e.team ?? 0) === 0) {
           // His own bolt, spent: it either hit something or ran out of range, and
           // both are the same burst as far as the ear is concerned.
-          play("skill-ember-bolt-impact", at(e));
+          play("skill-ember-bolt-impact", ...at(e));
         }
         // Whatever it was, it is not sounding any more.
         const key = sustained.get(id);
@@ -252,13 +276,13 @@ export function createSoundscape(opts: Options = {}): Soundscape {
       // ── Arrived ─────────────────────────────────────────────────────────────
       for (const [id, e] of now) {
         if (was.has(id)) continue;
-        if (e.kind === "telegraph") play("monster-slam-windup", at(e));
-        else if (e.kind === "projectile" && (e.team ?? 0) !== 0) play("monster-spit", at(e));
+        if (e.kind === "telegraph") play("monster-slam-windup", ...at(e));
+        else if (e.kind === "projectile" && (e.team ?? 0) !== 0) play("monster-spit", ...at(e));
         const cue = sustainedCue(e);
         if (cue) {
           const key = `${cue}#${id}`;
           sustained.set(id, key);
-          loop(cue, key, at(e));
+          loop(cue, key, ...at(e));
         }
       }
 
@@ -267,7 +291,7 @@ export function createSoundscape(opts: Options = {}): Soundscape {
       // they started at is the level they keep until they stop.
       for (const [id, key] of sustained) {
         const e = now.get(id);
-        if (e) loopVolume(key, at(e));
+        if (e) loopVolume(key, ...at(e));
       }
 
       // ── Hurt ────────────────────────────────────────────────────────────────
@@ -278,7 +302,7 @@ export function createSoundscape(opts: Options = {}): Soundscape {
         // Every hit is counted, one in five to ten is heard, so the gate must be
         // asked about all of them and never short-circuited past.
         if (!dealt()) continue;
-        play(cueFor("monster-hurt", e.species), at(e));
+        play(cueFor("monster-hurt", e.species), ...at(e));
       }
 
       // The player taking a hit: something's hands if anything is standing on him,

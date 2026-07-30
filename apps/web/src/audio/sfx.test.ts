@@ -3,7 +3,7 @@ import { existsSync, readdirSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { readFileSync } from "node:fs";
 import { MONSTERS } from "@exiled/content-runtime";
-import { CORE_SFX, distanceGain, playSfx } from "./sfx";
+import { CORE_SFX, distanceCutoff, distanceGain, playSfx } from "./sfx";
 
 const DIR = resolve(__dirname, "../../public/audio");
 const SRC = resolve(__dirname, "sfx.ts");
@@ -127,5 +127,18 @@ describe("playSfx without WebAudio", () => {
   it("is silent and safe, which is what every headless test relies on", () => {
     expect(() => playSfx("ui-click")).not.toThrow();
     expect(() => playSfx("not-a-sound")).not.toThrow();
+  });
+});
+
+describe("distanceCutoff", () => {
+  it("keeps a close sound whole and takes the top off a far one", () => {
+    expect(distanceCutoff(0)).toBe(20000);
+    expect(distanceCutoff(2)).toBe(20000);
+    expect(distanceCutoff(8)).toBeLessThan(20000);
+    expect(distanceCutoff(14)).toBeCloseTo(900, 0);
+  });
+
+  it("never rises with distance", () => {
+    for (let d = 0; d < 20; d++) expect(distanceCutoff(d + 1)).toBeLessThanOrEqual(distanceCutoff(d));
   });
 });

@@ -367,3 +367,31 @@ describe("sustained skills", () => {
     expect(stopped).toEqual(["all"]);
   });
 });
+
+describe("environment", () => {
+  /** Every reset's room amount, in order. */
+  function rooms(biomeId: string | null): number[] {
+    const seen: number[] = [];
+    createSoundscape({ room: (a) => seen.push(a) }).reset(biomeId);
+    return seen;
+  }
+
+  it("gives an enclosed biome more room than an open one, and the hideout something between", () => {
+    const [stone] = rooms("vaal_stone");
+    const [sand] = rooms("desert");
+    const [hideout] = rooms(null);
+    expect(stone).toBeGreaterThan(hideout);
+    expect(hideout).toBeGreaterThan(sand);
+  });
+
+  it("reports how far a cue was as well as how loud, so it can be muffled", () => {
+    const calls: [string, number | undefined, number | undefined][] = [];
+    const s = createSoundscape({ play: (n, v, d) => calls.push([n, v, d]) });
+    s.reset(null);
+    s.observe(snap({ tick: 1, entities: [monster(1, 9)] }));
+    s.observe(snap({ tick: 2, entities: [] }));
+    const death = calls.find((c) => c[0].startsWith("monster-death"))!;
+    expect(death[2]).toBeCloseTo(9, 5);
+    expect(death[1]!).toBeLessThan(1);
+  });
+});

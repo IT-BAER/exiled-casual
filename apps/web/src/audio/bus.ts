@@ -15,6 +15,16 @@ let dryBus: GainNode | null = null;
 let wetBus: GainNode | null = null;
 let master: GainNode | null = null;
 let level = 0.8;
+let room = 1;
+
+/**
+ * How reverberant the place the player is standing in is, as a multiplier on every
+ * voice's own `wet`. A cue keeps its relative room (a wisp is always wetter than a
+ * boot) while the whole mix moves with the walls: a cave rings, a desert does not.
+ */
+export function setRoom(amount: number): void {
+  room = Number.isFinite(amount) ? Math.min(3, Math.max(0, amount)) : 1;
+}
 
 /** The gain actually being applied. Muted is zero, and the volume is remembered. */
 export function soundLevel(): number {
@@ -81,10 +91,11 @@ export function bus(): Bus | null {
 
 /** Route one voice into both the direct and the reverb path. */
 export function send(b: Bus, node: AudioNode, wetAmount: number): void {
+  const wet = Math.min(1, wetAmount * room);
   const d = b.ctx.createGain();
-  d.gain.value = 1 - wetAmount * 0.5;
+  d.gain.value = 1 - wet * 0.5;
   node.connect(d).connect(b.dry);
   const w = b.ctx.createGain();
-  w.gain.value = wetAmount;
+  w.gain.value = wet;
   node.connect(w).connect(b.wet);
 }
