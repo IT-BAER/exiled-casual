@@ -1,15 +1,21 @@
 import React, { useEffect, useRef } from "react";
 import type { Snapshot } from "@exiled/protocol";
 import { SERIF } from "./ItemTooltip";
-import type { Projector } from "./LootLabels";
+import type { FrameHook, Projector } from "./LootLabels";
 import { VENDOR_NAME } from "../npc";
 
 /**
- * Pixels the name floats above the NPC's ground position. Measured, not guessed:
- * at the game camera a standing figure is about 120 css pixels tall from sole to
- * crown, and a lift shorter than that prints his name across his chest.
+ * WORLD units the name floats above the NPC's feet — his height plus a little,
+ * measured against the wardrobe rig, whose crown is about 1.8 up.
+ *
+ * A world height rather than a pixel one, which is what this was. A fixed lift
+ * in pixels is only right at the zoom it was measured at, and it is placed with
+ * a projection of the FLOOR, so the name and the man agreed only while the
+ * camera held still: zoom in and the head grew past the label, run and it
+ * trailed him. Both are the same mistake, which is measuring the world in
+ * screen units.
  */
-const NAME_LIFT = 140;
+const NAME_HEIGHT = 2.15;
 
 /** Who each NPC entity kind is. One name per kind: the hideout holds one of each. */
 const NPC_NAME: Partial<Record<Snapshot["entities"][number]["kind"], string>> = {
@@ -20,6 +26,8 @@ export interface NpcLabelsProps {
   snapshot: Snapshot | null;
   /** Null until the Babylon scene exists; names then hold their last position. */
   project: Projector | null;
+  /** Placement runs on this when it exists, and on rAF when it does not. */
+  afterFrame?: FrameHook | null;
 }
 
 /**
@@ -34,7 +42,7 @@ export interface NpcLabelsProps {
  * frame and the snapshot only lands at 30 Hz, so a rAF loop writes the transform
  * instead of re-rendering.
  */
-export function NpcLabels({ snapshot, project }: NpcLabelsProps) {
+export function NpcLabels({ snapshot, project, afterFrame }: NpcLabelsProps) {
   const nodes = useRef(new Map<number, HTMLDivElement>());
   const positions = useRef(new Map<number, { x: number; y: number }>());
 
@@ -43,23 +51,23 @@ export function NpcLabels({ snapshot, project }: NpcLabelsProps) {
 
   useEffect(() => {
     if (!project) return;
-    let raf = 0;
-    const tick = () => {
+    const place = () => {
       for (const [id, node] of nodes.current) {
         const at = positions.current.get(id);
         if (!at) continue;
-        const p = project(at.x, at.y);
+        const p = project(at.x, at.y, NAME_HEIGHT);
         node.style.visibility = p.visible ? "visible" : "hidden";
         if (p.visible) {
-          node.style.transform =
-            `translate(${p.x}px, ${p.y - NAME_LIFT}px) translate(-50%, -100%)`;
+          node.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, -100%)`;
         }
       }
-      raf = requestAnimationFrame(tick);
     };
+    if (afterFrame) return afterFrame(place);
+    let raf = 0;
+    const tick = () => { place(); raf = requestAnimationFrame(tick); };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [project]);
+  }, [project, afterFrame]);
 
   return (
     <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>

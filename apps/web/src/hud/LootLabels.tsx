@@ -11,9 +11,28 @@ export interface ScreenPoint {
   visible: boolean;
 }
 
-/** Projects a sim (x, y) ground position to canvas pixels. Supplied by App,
- *  which owns the Babylon camera. */
-export type Projector = (x: number, y: number) => ScreenPoint;
+/**
+ * Projects a sim (x, y) position to canvas pixels, optionally at a height above
+ * the floor. Supplied by App, which owns the Babylon camera.
+ *
+ * `worldY` is what keeps a label over a head at every zoom: a fixed pixel lift is
+ * only correct at the distance it was measured at, because the camera's
+ * pixels-per-unit changes with the wheel.
+ */
+export type Projector = (x: number, y: number, worldY?: number) => ScreenPoint;
+
+/**
+ * Run `cb` after every frame the scene draws, and stop when the returned
+ * function is called.
+ *
+ * Labels are DOM and the world is canvas, so the two only agree if the label is
+ * placed with the SAME camera the frame was drawn with. A plain
+ * `requestAnimationFrame` is a different callback in the same frame and may run
+ * before Babylon has moved the camera to follow the player, which puts every
+ * label one frame behind — a lag that is invisible standing still and reads as
+ * the name sliding off the NPC while running.
+ */
+export type FrameHook = (cb: () => void) => () => void;
 
 /** Pixels the plate floats above the item's ground position. */
 const PLATE_LIFT = 26;
@@ -39,6 +58,8 @@ export interface LootLabelsProps {
   snapshot: Snapshot | null;
   /** Null until the Babylon scene exists; plates then hold their last position. */
   project: Projector | null;
+  /** Placement runs on this when it exists, and on rAF when it does not. */
+  afterFrame?: FrameHook | null;
   /** Clicking a plate walks to the drop and picks it up once in range. */
   onPick?: (entityId: number, x: number, y: number) => void;
   /**
@@ -58,7 +79,7 @@ export interface LootLabelsProps {
  * snapshot only changes at 30 Hz, so a rAF loop writes transforms straight to
  * the plate nodes instead of re-rendering the tree.
  */
-export function LootLabels({ snapshot, project, onPick, plates = true }: LootLabelsProps) {
+export function LootLabels({ snapshot, project, afterFrame, onPick, plates = true }: LootLabelsProps) {
   const nodes = useRef(new Map<number, HTMLDivElement>());
   const positions = useRef(new Map<number, { x: number; y: number }>());
   /** Ids already announced. Null until the first snapshot, so items lying on the
@@ -88,8 +109,7 @@ export function LootLabels({ snapshot, project, onPick, plates = true }: LootLab
 
   useEffect(() => {
     if (!project) return;
-    let raf = 0;
-    const tick = () => {
+    const place = () => {
       const placed: { node: HTMLDivElement; x: number; y: number }[] = [];
       for (const [id, node] of nodes.current) {
         const at = positions.current.get(id);
@@ -114,11 +134,13 @@ export function LootLabels({ snapshot, project, onPick, plates = true }: LootLab
       for (const { node, x, y } of placed) {
         node.style.transform = `translate(${x}px, ${y}px) translate(-50%, -100%)`;
       }
-      raf = requestAnimationFrame(tick);
     };
+    if (afterFrame) return afterFrame(place);
+    let raf = 0;
+    const tick = () => { place(); raf = requestAnimationFrame(tick); };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [project]);
+  }, [project, afterFrame]);
 
   return (
     <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>

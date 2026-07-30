@@ -14,6 +14,7 @@ import { attachBindings } from "./input/bindings";
 import { CORE_SFX, playSfx, preloadSfx } from "./audio/sfx";
 import { createSoundscape } from "./audio/soundscape";
 import { preloadUiArt } from "./ui-art";
+import { setTitle } from "./title";
 import { FeedbackDialog, type FeedbackKind } from "./menu/FeedbackDialog";
 import { Hud, BAR_H, ORB_RISE } from "./hud/Hud";
 import { PreparationPanel } from "./hud/PreparationPanel";
@@ -27,7 +28,7 @@ import { LoadingScreen, LOADING_ART, FADE_MS } from "./LoadingScreen";
 import { pickTip } from "./tips";
 import { OptionsPanel } from "./menu/OptionsPanel";
 import { DEFAULT_SETTINGS, type Settings } from "./settings";
-import type { Projector } from "./hud/LootLabels";
+import type { FrameHook, Projector } from "./hud/LootLabels";
 import type { AreaLayout } from "@exiled/mapgen";
 import { BIOMES, mapBase } from "@exiled/content-runtime";
 import type { Snapshot, FromWorker, ToWorker } from "@exiled/protocol";
@@ -72,6 +73,22 @@ export function GameView({
   const [gameMenuOpen, setGameMenuOpen] = useState(false);
   /** Which report dialog is open, if any. Overlays take turns here too. */
   const [feedback, setFeedback] = useState<FeedbackKind | null>(null);
+
+  /**
+   * Escape stops the world.
+   *
+   * The panel said "Paused" and nothing was: monsters kept walking in behind the
+   * menu and a burning ground kept burning while the player read it. The sim
+   * lives in a worker with its own clock, so pausing is one message and the
+   * clock stops — no tick is skipped and the run resumes exactly where it was.
+   *
+   * Only the pause menu pauses. The inventory, the Atlas and the character sheet
+   * are all things PoE leaves the world running behind, and a game that freezes
+   * whenever a panel is open is a game you can stand still in to think.
+   */
+  useEffect(() => {
+    workerRef.current?.postMessage({ type: "pause", paused: gameMenuOpen } satisfies ToWorker);
+  }, [gameMenuOpen]);
   const [optionsOpen, setOptionsOpen] = useState(false);
   // The Options panel applies graphics to the LIVE scene, and the scene is built
   // inside the mount effect where nothing else can reach it.
@@ -101,6 +118,7 @@ export function GameView({
   // The map's layout, kept for the minimap. Null in the hideout, which has none.
   const [areaLayout, setAreaLayout] = useState<AreaLayout | null>(null);
   const [project, setProject] = useState<Projector | null>(null);
+  const [afterFrame, setAfterFrame] = useState<FrameHook | null>(null);
   const [pick, setPick] = useState<((id: number, x: number, y: number) => void) | null>(null);
   const workerRef = useRef<Worker | null>(null);
   /**
@@ -123,6 +141,9 @@ export function GameView({
     name: "Hideout",
     art: `${LOADING_ART}/hideout.jpg`,
   });
+
+  // The tab names the place the character is standing in.
+  useEffect(() => { setTitle(area.name); }, [area.name]);
   /** Chosen when a load STARTS, so a re-render mid-load cannot swap the line being read. */
   const [tip, setTip] = useState(() => pickTip());
 
@@ -184,15 +205,26 @@ export function GameView({
 
     // Ground-item name plates live in the DOM, so they need the camera's
     // world -> canvas projection. Sim (x, y) maps to world (x, z).
-    setProject(() => (x: number, y: number) => {
+    setProject(() => (x: number, y: number, worldY = 0) => {
       const p = Vector3.Project(
-        new Vector3(x, 0, y),
+        new Vector3(x, worldY, y),
         Matrix.Identity(),
         scene.getTransformMatrix(),
         camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight()),
       );
       return { x: p.x, y: p.y, visible: p.z > 0 && p.z < 1 };
     });
+
+    // Labels are placed after the frame is drawn, never on their own rAF: see
+    // FrameHook in hud/LootLabels.tsx for what a frame of lag looks like.
+    // Guarded: a test's stub scene has no observables, and the labels fall back
+    // to their own frame callback when this stays null.
+    if (scene.onAfterRenderObservable) {
+      setAfterFrame(() => (cb: () => void) => {
+        const observer = scene.onAfterRenderObservable.add(cb);
+        return () => { scene.onAfterRenderObservable.remove(observer); };
+      });
+    }
 
     // Bindings need the scene for ground picking, and must be attached before the
     // onmessage handler below so onSnapshot exists when the worker starts sending.
@@ -445,10 +477,11 @@ export function GameView({
       <LootLabels
         snapshot={snapshot}
         project={project}
+        afterFrame={afterFrame}
         onPick={pick ?? undefined}
         plates={settings.ui.lootLabels}
       />
-      <NpcLabels snapshot={snapshot} project={project} />
+      <NpcLabels snapshot={snapshot} project={project} afterFrame={afterFrame} />
       <Hud
         snapshot={snapshot}
         hoveredEntityId={hoveredEntityId}

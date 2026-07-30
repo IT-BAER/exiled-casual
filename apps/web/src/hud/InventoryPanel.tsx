@@ -218,7 +218,8 @@ function EquipSlot({
   item?: DisplayItem; highlight: "legal" | "illegal" | "none";
   onGrab: (slot: EquipSlotId, e: React.PointerEvent) => void;
   onHover: (item: DisplayItem, e: React.MouseEvent) => void;
-  onLeave: (item: DisplayItem) => void;
+  /** Takes no argument on purpose: see the cell's own onMouseLeave. */
+  onLeave: () => void;
 }) {
   const border = highlight === "legal" ? GOLD : item ? RARITY_BORDER[item.rarity]! : "#3b2f18";
   return (
@@ -228,7 +229,7 @@ function EquipSlot({
       onPointerDown={item ? (e) => onGrab(slot, e) : undefined}
       onMouseEnter={item ? (e) => onHover(item, e) : undefined}
       onMouseMove={item ? (e) => onHover(item, e) : undefined}
-      onMouseLeave={item ? () => onLeave(item) : undefined}
+      onMouseLeave={item ? () => onLeave() : undefined}
       style={{
         ...slotStyle(),
         left: `calc(${x} * ${U})`, top: `calc(${y} * ${U})`, width: `calc(${w} * ${U} - 4px)`, height: `calc(${h} * ${U} - 4px)`, margin: 2,
@@ -599,7 +600,15 @@ export function InventoryPanel({
                 data-cursor={armed && !accepts(armed, it) ? "deny" : undefined}
                 onMouseEnter={(e) => !drag && setHover({ item: it, x: e.clientX + 18, y: e.clientY + 18 })}
                 onMouseMove={(e) => !drag && setHover({ item: it, x: e.clientX + 18, y: e.clientY + 18 })}
-                onMouseLeave={() => setHover((h) => (h?.item === it ? null : h))}
+                // Unconditional: the guard used to be "clear it only if the
+                // tooltip is still MINE", compared by object identity, and a
+                // snapshot arriving while the cursor sat on a cell rebuilt every
+                // DisplayItem — so the item held by the tooltip and the item this
+                // cell was rendered with stopped being the same object and the
+                // leave stopped clearing anything. That is the tooltip that
+                // sticks. The DOM fires leave on the old cell before enter on the
+                // new one, so clearing outright cannot blank a fresh hover.
+                onMouseLeave={() => setHover(null)}
                 onContextMenu={(e) => {
                   e.preventDefault();
                   // A Portal Scroll has no target to be armed at: right-clicking it
@@ -931,7 +940,7 @@ export function InventoryPanel({
                 highlight={slotHighlight(s.slot)}
                 onGrab={(slot, e) => grab({ kind: "slot", slot }, equipment[slot]!, 1.5, 1.5, e)}
                 onHover={(item, e) => !drag && setHover({ item, x: e.clientX + 18, y: e.clientY + 18 })}
-                onLeave={(item) => setHover((h) => (h?.item === item ? null : h))}
+                onLeave={() => setHover(null)}
               />
             ))}
           </div>

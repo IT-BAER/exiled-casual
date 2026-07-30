@@ -7,6 +7,8 @@ import type { FromWorker } from "@exiled/protocol";
 const MS_PER_TICK = 1000 / 30;
 
 let core: WorkerCore | null = null;
+/** True while the pause menu is open. The clock stops; nothing else changes. */
+let paused = false;
 
 self.onmessage = (e: MessageEvent) => {
   const raw: unknown = e.data;
@@ -29,17 +31,20 @@ self.onmessage = (e: MessageEvent) => {
     core.pushIntent(validateIntent(msg.intent));
   } else if (msg.type === "spawn" && core) {
     core.spawn(msg.what);
+  } else if (msg.type === "pause") {
+    paused = msg.paused;
   } else if (msg.type === "reset") {
     // seed preserved across reset is not in the protocol — recreate with seed 42
     // (lab default). Full seed-carry requires a ToWorker_Reset extension in M3+.
     // ponytail: hard-coded lab seed; parameterise reset in M3 when needed
     core = new WorkerCore(42);
+    paused = false;
   }
 };
 
 // Drive the sim at MS_PER_TICK regardless of message rate.
 setInterval(() => {
-  if (!core) return;
+  if (!core || paused) return;
   const snaps = core.advance(MS_PER_TICK);
   // A portal transition swaps the level; re-send `area` before the snapshots so
   // the renderer rebuilds (or clears) walls before drawing the new positions.

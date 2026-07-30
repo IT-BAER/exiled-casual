@@ -68,6 +68,13 @@ describe("isToWorker", () => {
     expect(isToWorker({ type: "init", seed: 12345 })).toBe(true);
   });
 
+  test("pause carries a boolean and nothing else will do", () => {
+    expect(isToWorker({ type: "pause", paused: true })).toBe(true);
+    expect(isToWorker({ type: "pause", paused: false })).toBe(true);
+    expect(isToWorker({ type: "pause" })).toBe(false);
+    expect(isToWorker({ type: "pause", paused: "yes" })).toBe(false);
+  });
+
   test("valid intent message", () => {
     expect(
       isToWorker({ type: "intent", intent: { kind: "stop" } }),

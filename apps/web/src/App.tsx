@@ -37,6 +37,7 @@ import { OptionsPanel } from "./menu/OptionsPanel";
 const GameView = React.lazy(() => import("./GameView").then((m) => ({ default: m.GameView })));
 const MenuStage = React.lazy(() => import("./menu/MenuStage").then((m) => ({ default: m.MenuStage })));
 import { DEFAULT_SETTINGS, type Settings } from "./settings";
+import { setTitle } from "./title";
 import { setSoundLevel } from "./audio/drop-sound";
 import {
   capFor,
@@ -118,6 +119,17 @@ export function App(): React.ReactElement {
    * and settings change, and a tip that reshuffles mid-sentence is unreadable.
    */
   const [bootTip] = React.useState(() => pickTip());
+
+  // The tab follows the screen. The game screen sets its own, from the area it
+  // is standing in, so it is left alone here.
+  React.useEffect(() => {
+    const where: Partial<Record<Screen["kind"], string>> = {
+      select: "Characters",
+      create: "New Character",
+      info: "Credits",
+    };
+    if (screen.kind !== "game") setTitle(where[screen.kind] ?? null);
+  }, [screen.kind]);
 
   if (screen.kind === "game") {
     return (

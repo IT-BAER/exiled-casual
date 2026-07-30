@@ -59,6 +59,21 @@ describe("InventoryPanel", () => {
     expect(screen.queryByTestId("item-tooltip")).toBeNull();
   });
 
+  it("lets go of the tooltip after a snapshot rebuilt the item under the cursor", () => {
+    // The sim sends a whole new inventory 30 times a second, so the object the
+    // tooltip is holding stops being the object the cell was drawn with while
+    // the cursor has not moved at all. Leaving has to clear it anyway — this is
+    // the tooltip that used to stick to the screen until something else opened.
+    const { rerender } = render(<InventoryPanel inventory={inv} onClose={() => {}} />);
+    fireEvent.mouseEnter(screen.getByTestId("inventory-item-0"), { clientX: 100, clientY: 100 });
+    expect(screen.queryByTestId("item-tooltip")).not.toBeNull();
+
+    const rebuilt = { ...inv, items: inv.items.map((i) => ({ ...i })) };
+    rerender(<InventoryPanel inventory={rebuilt} onClose={() => {}} />);
+    fireEvent.mouseLeave(screen.getByTestId("inventory-item-0"));
+    expect(screen.queryByTestId("item-tooltip")).toBeNull();
+  });
+
   it("renders base art in the cell when the item has an icon, and the name when it does not", () => {
     const withIcon = { ...inv, items: [{ ...inv.items[0]!, icon: "/textures/items/emberwand.png" }] };
     const { rerender } = render(<InventoryPanel inventory={withIcon} onClose={() => {}} />);
