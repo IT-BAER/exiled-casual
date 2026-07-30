@@ -116,6 +116,11 @@ interface ActorParts {
   auraMat?: StandardMaterial;
 }
 
+/** The authored creature on an actor root, if it has one. */
+export function creatureOf(root: Mesh): CreatureRig | null {
+  return (root.metadata as ActorParts | null)?.creature ?? null;
+}
+
 /**
  * Advance one actor's walk cycle. `phase` is driven by distance travelled, not
  * by wall time, so the legs always keep up with the feet and never skate.

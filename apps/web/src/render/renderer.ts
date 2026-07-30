@@ -6,6 +6,8 @@ import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
 import { animateActor, makeMesh, setHitFlash, updateTelegraph, updatePortal, updateMapDevice, updateStash, updateVendor, updateGroundItem, updateRareElement, portalAppear, portalVanish, isPortalMesh, PORTAL_STAGGER_MS, Y_LIFT } from "./meshes";
 import type { MeshKind } from "./meshes";
 import { COSMETIC_SLOTS, looksForEquipment, previewItemFor, rigOf, type Looks } from "./rig";
+import { creatureOf } from "./meshes";
+import { CORPSE_SECONDS, disposeRagdoll, dropDead } from "./ragdoll";
 import { CAMERA_ALPHA } from "./engine";
 import { lerp, lerpAngle } from "./interp";
 
@@ -52,6 +54,24 @@ const BLINK_Y = 0.9;
  * rhythm of hits rather than a monster that is permanently white.
  */
 const HIT_FLASH_TICKS = 3;
+
+/**
+ * Ticks a projectile takes to slide from the casting hand onto its true path.
+ * Three: any longer and the offset is still visible when the bolt is halfway
+ * across the room, which reads as a bolt flying crooked rather than as one
+ * thrown by an arm.
+ */
+const HAND_BLEND_TICKS = 3;
+
+/** How long a corpse lies there, in ticks. */
+const CORPSE_TICKS = Math.round(CORPSE_SECONDS * TICKS_PER_SEC);
+
+/** Kinds that fall over when they die. Everything else just stops existing. */
+const BODIES = new Set<MeshKind>(["player", "monster", "rare", "boss"]);
+
+/** Height the death impulse is aimed above the floor, so a body topples rather
+ *  than slides. */
+const DEATH_LIFT = 0.35;
 
 /**
  * Only bodies lean. A portal or a chest carries a fixed yaw and no weight, and
@@ -104,6 +124,12 @@ export class SnapshotRenderer {
   private readonly tilt = new Map<number, [number, number]>();
   /** The tick each entity was last struck on. Absent means it is not lit. */
   private readonly hit = new Map<number, number>();
+  /** Newborn bolts still being drawn out of the hand, and when they were cast. */
+  private readonly fromHand = new Map<number, { offset: Vector3; tick: number }>();
+  /** What each entity is drawn as, so a dead one can be told from a closed portal. */
+  private readonly kinds = new Map<number, MeshKind>();
+  /** Bodies the sim has forgotten, still falling. Disposed when their time is up. */
+  private readonly corpses: { mesh: Mesh; until: number }[] = [];
   private static readonly GAIT_PER_UNIT = 3.2;
   /** apply() runs several times per snapshot while interpolating; once-per-tick
    *  work (like firing a cast animation) is gated on this. */
@@ -112,9 +138,26 @@ export class SnapshotRenderer {
   private previewStep = 0;
   /** Entity id the mouse is hovering; drives mesh highlight, NOT inRange. */
   private hoveredEntityId: number | null = null;
+  /** The last snapshot applied, for the DEV handles alone. */
+  private lastSnapshot: Snapshot | null = null;
 
   constructor(scene: Scene) {
     this.scene = scene;
+    // DEV handle, like `window.__sfx` and `window.__scene`: a death is the one
+    // thing that cannot be staged from a driven page (it needs a fight), and a
+    // ragdoll that never falls looks exactly like one that was never asked to.
+    if (typeof window !== "undefined" && import.meta.env?.DEV) {
+      (window as unknown as { __fell?: (id?: number) => boolean }).__fell = (id) => {
+        const snap = this.lastSnapshot;
+        if (!snap) return false;
+        const target = id ?? snap.player.id;
+        const mesh = this.meshes.get(target);
+        if (!mesh || !this.fell(mesh, snap)) return false;
+        this.meshes.delete(target);
+        this.kinds.delete(target);
+        return true;
+      };
+    }
   }
 
   /** Set the entity the mouse is hovering; drives portal/device highlight visuals. */
@@ -146,11 +189,22 @@ export class SnapshotRenderer {
     // apply() runs several times per snapshot while interpolating, so anything
     // that reacts to a CHANGE has to know which of those frames is the first.
     const newTick = next.tick !== this.lastTick;
+    this.lastSnapshot = next;
 
     // Player
     this.playerId = next.player.id;
     liveIds.add(next.player.id);
-    this.syncMesh(
+    // He falls like anything else does. The mesh leaves the live set the moment
+    // he dies, so nothing walks it about the floor while it is a corpse, and the
+    // revive builds a new one — standing, at the checkpoint, which is the point.
+    const playerCorpse = this.meshes.get(next.player.id);
+    if (!next.player.alive && playerCorpse) {
+      if (this.fell(playerCorpse, next)) {
+        this.meshes.delete(next.player.id);
+        this.kinds.delete(next.player.id);
+      }
+    }
+    if (next.player.alive) this.syncMesh(
       next.player.id,
       "player",
       prev?.player.x ?? next.player.x,
@@ -180,6 +234,14 @@ export class SnapshotRenderer {
     for (const e of next.entities) {
       liveIds.add(e.id);
       const prevE = prev?.entities.find((p) => p.id === e.id);
+      // A bolt the sim spawned at the body centre, caught before it is drawn there.
+      if (e.kind === "projectile" && (e.team ?? 0) === 0 && !this.meshes.has(e.id)) {
+        const hand = playerMesh ? rigOf(playerMesh)?.castPoint() ?? null : null;
+        if (hand) this.fromHand.set(e.id, {
+          offset: hand.subtract(new Vector3(e.x, Y_LIFT.projectile, e.y)),
+          tick: next.tick,
+        });
+      }
       this.syncMesh(
         e.id,
         kindOf(e),
@@ -193,6 +255,16 @@ export class SnapshotRenderer {
       );
       const mesh = this.meshes.get(e.id);
       if (!mesh) continue;
+      // Draw the first tenth of a second of a bolt's flight bent out of the hand
+      // that cast it and back onto the line the sim put it on. Render only: the
+      // sim's own position is what everything collides against, and moving that
+      // would change where a spell lands to fix where it looks like it started.
+      const hand = this.fromHand.get(e.id);
+      if (hand) {
+        const age = next.tick - hand.tick + alpha;
+        if (age >= HAND_BLEND_TICKS) this.fromHand.delete(e.id);
+        else mesh.position.addInPlace(hand.offset.scale(1 - age / HAND_BLEND_TICKS));
+      }
       // Struck: life is the only report of a hit the client gets, and it is the
       // honest one — a swing that missed or was absorbed never moves it.
       if (newTick && e.life !== undefined && prevE?.life !== undefined && e.life < prevE.life) {
@@ -240,16 +312,38 @@ export class SnapshotRenderer {
     // animation groups that mesh.dispose() would leave behind.
     for (const [id, mesh] of this.meshes) {
       if (!liveIds.has(id)) {
-        rigOf(mesh)?.dispose();
         // A closing portal outlives the entity that was it: nothing else holds a
         // reference any more, so the collapse disposes it when it finishes.
-        if (!areaChanged && isPortalMesh(mesh)) portalVanish(this.scene, mesh);
-        else mesh.dispose();
+        if (!areaChanged && isPortalMesh(mesh)) {
+          rigOf(mesh)?.dispose();
+          portalVanish(this.scene, mesh);
+        } else if (!areaChanged && BODIES.has(this.kinds.get(id) ?? "groundArea")
+          && this.fell(mesh, next)) {
+          // Kept: it is a corpse now, and owned by `corpses` rather than by the
+          // entity id, which the sim is free to hand to something else.
+        } else {
+          rigOf(mesh)?.dispose();
+          mesh.dispose();
+        }
         this.meshes.delete(id);
+        this.kinds.delete(id);
         this.gait.delete(id);
         this.tilt.delete(id);
         this.hit.delete(id);
+        this.fromHand.delete(id);
       }
+    }
+
+    // Corpses whose time is up. Nothing fades them out: at this camera a body
+    // sinking through the floor is more visible than one that is simply gone by
+    // the time the player has looked away from it.
+    for (let i = this.corpses.length - 1; i >= 0; i--) {
+      const corpse = this.corpses[i]!;
+      if (next.tick < corpse.until) continue;
+      this.corpses.splice(i, 1);
+      disposeRagdoll(corpse.mesh);
+      rigOf(corpse.mesh)?.dispose();
+      corpse.mesh.dispose();
     }
 
     // Faded on the sim's clock, like every other timing in the client: a wall
@@ -288,6 +382,29 @@ export class SnapshotRenderer {
     }
   }
 
+  /**
+   * Turn a mesh the sim has stopped reporting into a body on the floor.
+   *
+   * False when the physics is not up (the wasm is still compiling, a headless
+   * test, a browser that refused it), which leaves the caller on the old path
+   * where a dead thing simply vanishes.
+   */
+  private fell(mesh: Mesh, next: Snapshot): boolean {
+    // Away from whatever killed it. The client is never told who did, but the
+    // player is who it was fighting, and a body thrown at its killer is wrong in
+    // a way anyone can see while thrown away from it is right often enough.
+    const push = mesh.position
+      .subtract(new Vector3(next.player.x, 0, next.player.y));
+    push.y = 0;
+    if (push.lengthSquared() < 1e-4) push.set(0, 0, 1);
+    push.normalize().y = DEATH_LIFT;
+    if (!dropDead(this.scene, mesh, push)) return false;
+    rigOf(mesh)?.stopForDeath();
+    creatureOf(mesh)?.stopForDeath();
+    this.corpses.push({ mesh, until: next.tick + CORPSE_TICKS });
+    return true;
+  }
+
   private syncMesh(
     id: number,
     kind: MeshKind,
@@ -310,6 +427,7 @@ export class SnapshotRenderer {
       mesh = makeMesh(this.scene, kind, `entity-${id}`, new Vector3(x, Y_LIFT[kind], z), species);
       mesh.rotation.y = SPAWN_YAW;
       this.meshes.set(id, mesh);
+      this.kinds.set(id, kind);
     }
     const wasX = mesh.position.x;
     const wasZ = mesh.position.z;

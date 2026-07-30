@@ -155,6 +155,13 @@ export class CreatureRig {
     this.play("walk", Math.min(RATIO_RANGE[1], Math.max(RATIO_RANGE[0], ratio)));
   }
 
+  /** Let go of the body. A clip still running would drive the bones the physics
+   *  is trying to own, and the corpse would twitch through its walk. */
+  stopForDeath(): void {
+    for (const group of this.groups.values()) group.stop();
+    this.playing = null;
+  }
+
   private play(clip: Clip, ratio: number): void {
     const group = this.groups.get(clip);
     if (!group) return;

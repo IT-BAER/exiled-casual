@@ -7,6 +7,7 @@ import { buildHideoutDecor, clearHideoutDecor } from "./render/hideout";
 import { SnapshotRenderer } from "./render/renderer";
 import { loadProps, resetProps } from "./render/props";
 import { loadMonsters, resetMonsters } from "./render/monsters";
+import { enablePhysics, resetPhysics } from "./render/ragdoll";
 import { loadRocks, resetRocks } from "./render/rocks";
 import { loadPlayerRig, resetPlayerRig } from "./render/rig";
 import { attachBindings } from "./input/bindings";
@@ -336,6 +337,9 @@ export function GameView({
       // here is why the first Escape no longer draws a frameless panel — see
       // ui-art.ts for why the request, not the art, was the slow part.
       preloadUiArt();
+      // Two megabytes of wasm, and nothing waits on it: the first body to die
+      // before it lands simply vanishes the way it always did.
+      void enablePhysics(scene);
     });
 
     window.addEventListener("resize", () => engine.resize());
@@ -379,6 +383,7 @@ export function GameView({
       resetPlayerRig(); // containers belong to the scene we are about to dispose
       resetProps();
       resetMonsters();
+      resetPhysics();
       resetRocks();
       sceneRef.current = null;
       engineRef.current = null;

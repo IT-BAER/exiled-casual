@@ -392,6 +392,9 @@ const TRANSLATION = "position";
 /** The one bone these clips translate. Everything else is pure rotation. */
 const HIPS_BONE = "pelvis";
 
+/** Where a spell leaves the body: the weapon hand, the same one `weapon1` skins to. */
+const HAND_BONE = "hand_r";
+
 /**
  * Bones a layered clip must not touch, so it can play over locomotion without
  * fighting it for the legs. Leaf tips are included by name from both packs.
@@ -586,6 +589,8 @@ export class RigActor {
   private skirt: SkirtSim | null = null;
   private skirtChains: SkirtChain[] = [];
   private pelvis: TransformNode | null = null;
+  /** The casting hand, so a spell can be drawn leaving it. */
+  private hand: TransformNode | null = null;
   private colliders: (SkirtCollider & { head: TransformNode; tail: TransformNode })[] = [];
   private cloth: Observer<Scene> | null = null;
   /** Solving cloth nobody can see is the one cost worth a flag. */
@@ -767,6 +772,9 @@ export class RigActor {
       if (list) list.push(node);
       else byLook.set(look, [node]);
     }
+
+    const handNode = byName.get(HAND_BONE);
+    this.hand = handNode instanceof TransformNode ? handNode : null;
 
     // Read the hips rest pose before any clip starts and could move it.
     const hipsNode = byName.get(HIPS_BONE);
@@ -964,6 +972,32 @@ export class RigActor {
     }
   }
 
+  /**
+   * Where the casting hand is this frame, in world space, or null on a rig that
+   * fell back to primitives.
+   *
+   * Read live rather than cached: the arm is mid-animation at the moment of the
+   * cast, which is the entire reason the body centre was the wrong answer.
+   */
+  castPoint(): Vector3 | null {
+    if (!this.hand) return null;
+    this.hand.computeWorldMatrix(true);
+    return this.hand.getAbsolutePosition().clone();
+  }
+
+  /**
+   * Hand the skeleton over to the physics: every clip stopped, and the coat
+   * solver taken off the render loop. Both would otherwise keep writing bones
+   * that a ragdoll now owns, and the loser of that fight is whichever runs first.
+   */
+  stopForDeath(): void {
+    for (const group of this.groups.values()) group.stop();
+    this.active = null;
+    this.activeClip = null;
+    if (this.cloth) this.scene.onBeforeRenderObservable.remove(this.cloth);
+    this.cloth = null;
+  }
+
   private teardown(): void {
     if (this.cloth) this.scene.onBeforeRenderObservable.remove(this.cloth);
     this.cloth = null;
@@ -971,6 +1005,7 @@ export class RigActor {
     this.skirtChains = [];
     this.colliders = [];
     this.pelvis = null;
+    this.hand = null;
     this.anchorsWorld.length = 0;
     this.restsWorld.length = 0;
     this.coatVisible = false;
