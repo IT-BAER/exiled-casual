@@ -45,14 +45,17 @@ colors, name header, affix lines) to the `item-*.png` screenshots above.
   `tools/build_wardrobe.py` (Blender; rebuild the glb after touching it). Parts are named
   `slot.look.part`, and the runtime dresses the character by showing one look per slot and hiding the
   rest, so gear changes cost visibility only and never restart the animation.
-- The outfit packs are NOT modular: each welds its sleeves to its own bare forearms, and neither
-  ships a head — but both ship the *texture* for one, a face painted top-left of
-  `T_Regular_Male_Dark_BaseColor.png`. So `base.head.*` is **cut out of the author's separate base
-  male** (`Base_Male.gltf`) keeping its own UVs and weights, the only way a painted eye lands on an
-  eye; proportions do not matter, because there is one unwrap and `Head`/`neck_01` have bit-identical
-  inverse binds. **Never go back to a texel-pinned skull**: a correctly shaped, correctly animated
-  blank passes every name test, so `rig.test.ts` pins UV *spread*. Hair and brows stay pinned (2048
-  greyscale, wants a tint shader we lack). Bones lowercase but `Head`.
+- **Held gear is a slot like any other**: `weapon1.*` skins 1.0 to `hand_r`, `weapon2.*` to `hand_l`,
+  authored in `hand_frame`'s bone space, never in world space; the hands are the one slot where a
+  *base* picks its own mesh (`LOOK_BY_BASE`). Judge it with `tools/preview_wardrobe.py` against a
+  **clip**, never the bind pose: that is the one frame the arms are not where they will be.
+- The outfit packs are NOT modular: each welds sleeves to bare forearms, and neither ships a head, but
+  both ship the *texture* for one, a face painted top-left of `T_Regular_Male_Dark_BaseColor.png`. So
+  `base.head.*` is **cut out of the author's separate base male** (`Base_Male.gltf`) keeping its UVs
+  and weights, the only way a painted eye lands on an eye; proportions do not matter (one unwrap, and
+  `Head`/`neck_01` have bit-identical inverse binds). **Never go back to a texel-pinned skull**: a
+  correct blank passes every name test, so `rig.test.ts` pins UV *spread*. Hair/brows stay pinned
+  (2048 greyscale, wants a tint shader we lack); bones lowercase but `Head`.
 - `body.ranger.coat` is generated too: the ranger's body stops at the hip and every body base is
   drawn as a long coat. Its UVs are copied from the nearest tunic vertex by angle and height, never
   projected into a box on the atlas (any box wide enough also clips a boot buckle into the cloth).
@@ -87,16 +90,14 @@ colors, name header, affix lines) to the `item-*.png` screenshots above.
   **Score oscillation apart from travel or rubber ships**: hem *reversals* per chain-frame, 0.006
   rubber vs 0.003 stiff; mean offset is lag as much as swing. `COLLIDE_PASSES` share one push budget
   or iteration is an 8x speed limit. `DAMPING` is the frequency knob; `CONTACT_ABSORB` does nothing.
-- All packs export the same 65 joints at the same bind pose, so a mesh from one binds to another's
-  skeleton by assignment; `rig.test.ts` guards that, and that every look the code asks for exists.
+- All packs export the same 65 joints at the same bind pose, so a mesh from one binds to another's skeleton by assignment; `rig.test.ts` guards that, and that every look the code asks for exists.
 - Blender 5.2 is installed, driven headless: `"/c/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background --factory-startup --python x.py`.
-- Raster UI/item art goes through `/codex-imagegen`, never hand-authored SVG (the gap is visible);
-  masters crop to alpha before downscaling, and renders run long, so launch them as background agents.
+- Raster UI/item art goes through `/codex-imagegen`, never hand-authored SVG (the gap is visible); masters crop to alpha before downscaling, and renders run long, so launch them as background agents.
 - Worn armour is textured per item base by `tools/build_gear_textures.py`, which re-palettizes the
   ranger atlas to each base's inventory icon (luminance -> a ramp sampled from that icon). Rerun it
   after adding an armour base or changing an icon, and add the base to `GEAR_TEXTURE` in `rig.ts`;
-  `rig.test.ts` fails if the two lists or the files disagree. UVs stay correct (it is a pixel
-  transform on the real atlas) but the silhouette stays the ranger's: only geometry changes that.
+  `rig.test.ts` fails if the two lists or the files disagree. UVs stay correct (a pixel transform on
+  the real atlas), but the silhouette stays the ranger's: only geometry changes that.
 - The hideout props (map device, stash chest) are `props.glb`, built by `tools/build_props.py` from
   masters in `assets/props/` (via `/codex-imagegen`; `assets/props/build/` is derived, gitignored).
   Rebuild the glb after touching either. `props.ts` fetches it once and `meshes.ts` falls back to its

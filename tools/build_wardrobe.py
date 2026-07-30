@@ -31,7 +31,7 @@ import math
 import sys
 import bmesh
 import bpy
-from mathutils import Vector
+from mathutils import Matrix, Vector
 
 # Build inputs live outside `public/`: they are cut up offline and never fetched
 # by the browser, so shipping them would double the character payload.
@@ -92,6 +92,58 @@ HELM_CLEAR = 0.006
 # The brow band: the bottom of the shell flares out over this height, which is
 # the one edge of a helmet that still catches light at ten pixels a head.
 HELM_LIP, HELM_LIP_H = 0.014, 0.035
+
+# Held gear, all of it in the hand frame `hand_frame` returns: x runs out to the
+# fingertips, y out of the back of the hand, z along the axis a held stick lies
+# on. The character is 1.68 units tall and the hands sit at 1.4555, so these are
+# metres and a 0.36 wand is a wand rather than a broom.
+
+# Each piece is modelled around its own origin along +z and then placed by one
+# matrix, because both of the first attempt's faults were orientation and not
+# size: the shield came out edge-on to the front and the wand stuck straight
+# forward like a lance. Measured, not eyeballed - the deformed bounding box of
+# each piece under Idle_Loop says which world axis it actually runs along.
+
+# The wand, as (distance along its own axis, radius). Butt behind the fist, a
+# swell at the head: a constant-radius rod is a dowel, and the one silhouette cue
+# that survives the play camera is that the far end is fatter than the near one.
+WAND_PROFILE = [
+    (-0.100, 0.010), (-0.060, 0.014), (0.000, 0.014), (0.100, 0.011),
+    (0.190, 0.013), (0.235, 0.023), (0.260, 0.013),
+]
+WAND_SIDES = 8
+# Swung 65 degrees off the fist axis and onto the arm's, so at rest it hangs down
+# the thigh the way PoE holds a wand between casts. Level, it was a lance on a
+# hip; straight down the arm, it is the forearm with a knob on the end.
+WAND_TILT = math.radians(78.0)
+WAND_AT = (0.055, -0.015, 0.010)
+
+# The focus: a stone carried just off the palm. PoE2's foci hang rather than
+# being gripped, which is also the only way to hold one on a rig whose fingers
+# never open.
+FOCUS_R = 0.070
+FOCUS_AT = (0.100, -0.030, 0.020)
+
+# The shield, on the forearm rather than in the fist. Half-extents: along its own
+# length (LEN scales the taper's -1..1), across its width, and through its face.
+SHIELD_LEN, SHIELD_WIDE, SHIELD_THICK = 0.210, 0.150, 0.018
+# Its face is normal to the *grip* axis, not to the palm. Built the other way up
+# it presented its edge to whatever the character was walking towards, and a
+# shield seen edge-on is a plank; the deformed bounding box measured the fault.
+#
+# The last 26 degrees are the arm's own roll. A board strapped rigidly to a
+# forearm faces wherever that forearm has rolled to, which under Idle_Loop is 38
+# degrees off the front; a real shield is gripped square to the threat instead.
+# So the plate is counter-rolled by what the *posed* arm measures, not by what
+# the bind pose suggests - the bind pose is a T and has no opinion about it.
+SHIELD_ROLL = math.radians(-26.0)
+SHIELD_AT = (-0.050, 0.000, 0.055)
+# (position along the shield in -1..1, how wide that slice is). Straight-sided
+# through the middle, rounded off at both ends.
+SHIELD_TAPER = [
+    (-1.00, 0.30), (-0.86, 0.72), (-0.40, 1.00),
+    (0.40, 1.00), (0.86, 0.78), (1.00, 0.36),
+]
 
 # The coat's profile, waist first: (z, radius) around the body axis. Measured
 # against the ranger's own silhouette rather than guessed - his torso peaks at
@@ -442,6 +494,131 @@ def build_helm(armature, hood):
     return obj
 
 
+def hand_frame(armature, bone_name, mirror):
+    """The frame held gear is authored in: (origin, out, palm, grip).
+
+    Everything here is expressed against the *bone*, never against the world, and
+    that is the whole reason a weapon follows the arm without a single line of
+    runtime code: the mesh is skinned 1.0 to this bone, so wherever the animation
+    puts the hand, the weapon has already been there.
+
+    `out` runs to the fingertips, `grip` is the axis a held stick lies along, and
+    `palm` points out of the back of the hand. The two hands are mirror images in
+    bone space - `hand_l`'s X is world *down* where `hand_r`'s is world up - so
+    the left one's palm axis is flipped and both hands can share one set of
+    numbers instead of two hand-tuned copies that drift apart.
+    """
+    m = armature.matrix_world @ armature.data.bones[bone_name].matrix_local
+    out = m.col[1].xyz.normalized()
+    palm = m.col[0].xyz.normalized() * (-1.0 if mirror else 1.0)
+    grip = m.col[2].xyz.normalized()
+    return m.translation.copy(), out, palm, grip
+
+
+def place(obj, armature, bone_name, frame, material, fit):
+    """Move `obj` from its authored frame into the hand's, and skin it to it.
+
+    `fit` is the piece's own placement inside that frame - where it sits in the
+    fist and which way round it is held. One vertex group at weight 1.0: held
+    gear is rigid, so a blended influence would only let the shaft bend when the
+    wrist did.
+    """
+    origin, out, palm, grip = frame
+    obj.data.transform(fit)
+    basis = Matrix((
+        (out.x, palm.x, grip.x, origin.x),
+        (out.y, palm.y, grip.y, origin.y),
+        (out.z, palm.z, grip.z, origin.z),
+        (0.0, 0.0, 0.0, 1.0),
+    ))
+    obj.data.transform(basis)
+
+    if obj.data.materials:
+        obj.data.materials[0] = material
+    else:
+        obj.data.materials.append(material)
+    if not obj.data.uv_layers:
+        obj.data.uv_layers.new()
+    for loop in obj.data.uv_layers[0].data:
+        loop.uv = HELM_UV
+    # Flat, for the same reason the helm is: facets catching light are what read
+    # as forged iron at the size the play camera draws a hand.
+    for poly in obj.data.polygons:
+        poly.use_smooth = False
+
+    group = obj.vertex_groups.new(name=bone_name)
+    group.add(range(len(obj.data.vertices)), 1.0, "REPLACE")
+    rebind(obj, armature)
+    return obj
+
+
+def new_mesh(name):
+    mesh = bpy.data.meshes.new(name)
+    obj = bpy.data.objects.new(name, mesh)
+    bpy.context.scene.collection.objects.link(obj)
+    return obj
+
+
+def build_wand(armature, material):
+    """A tapered shaft through the main-hand fist, heavier at the head."""
+    obj = new_mesh("weapon1.wand.shaft")
+    bm = bmesh.new()
+    for t, r in WAND_PROFILE:
+        bmesh.ops.create_circle(
+            bm, cap_ends=True, segments=WAND_SIDES, radius=r,
+            matrix=Matrix.Translation((0.0, 0.0, t)),
+        )
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-5)
+    # The rings are separate discs until they are bridged; loft them into a shaft.
+    bmesh.ops.bridge_loops(bm, edges=[e for e in bm.edges if len(e.link_faces) < 2])
+    bm.to_mesh(obj.data)
+    bm.free()
+    fit = Matrix.Translation(WAND_AT) @ Matrix.Rotation(WAND_TILT, 4, "Y")
+    return place(obj, armature, "hand_r", hand_frame(armature, "hand_r", False), material, fit)
+
+
+def build_focus(armature, material):
+    """A stone the off hand carries rather than grips: PoE2's foci are held, not wielded."""
+    obj = new_mesh("weapon2.focus.stone")
+    bm = bmesh.new()
+    bmesh.ops.create_icosphere(bm, subdivisions=2, radius=FOCUS_R)
+    bm.to_mesh(obj.data)
+    bm.free()
+    fit = Matrix.Translation(FOCUS_AT)
+    return place(obj, armature, "hand_l", hand_frame(armature, "hand_l", True), material, fit)
+
+
+def build_shield(armature, material):
+    """A slab on the off arm, face forward, tapered at both ends so it is not a door."""
+    obj = new_mesh("weapon2.shield.plate")
+    bm = bmesh.new()
+    # Stacked cross sections up the arm, each a rectangle across the grip axis and
+    # a slab thick along the palm. The taper narrows the top and bottom: a plain
+    # box at this size reads as cargo strapped to an arm, not as armour.
+    #
+    # It is authored lying in the arm's own plane, which looks wrong in the T-pose
+    # and is right everywhere else - the forearm is horizontal only while the
+    # character is standing in the bind pose, and stands upright the moment any
+    # clip runs, taking the face round to the front with it.
+    rings = []
+    for t, k in SHIELD_TAPER:
+        x = t * SHIELD_LEN
+        rings.append([
+            bm.verts.new((x, sy * SHIELD_WIDE * k, sz * SHIELD_THICK))
+            for sy, sz in ((-1, -1), (1, -1), (1, 1), (-1, 1))
+        ])
+    for a, b in zip(rings, rings[1:]):
+        for i in range(4):
+            bm.faces.new((a[i], a[(i + 1) % 4], b[(i + 1) % 4], b[i]))
+    bm.faces.new(tuple(reversed(rings[0])))
+    bm.faces.new(tuple(rings[-1]))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.to_mesh(obj.data)
+    bm.free()
+    fit = Matrix.Translation(SHIELD_AT) @ Matrix.Rotation(SHIELD_ROLL, 4, "X")
+    return place(obj, armature, "hand_l", hand_frame(armature, "hand_l", True), material, fit)
+
+
 def coat_point(theta, z, radius):
     """A point on the coat's surface: elliptical around the body's own axis."""
     return (
@@ -668,7 +845,15 @@ def main():
     generated = {o.name for o in build_head(armature, skin_material)}
     build_skirt_bones(armature)
     generated.add(build_coat(armature, bpy.data.objects["Male_Ranger_Body"]).name)
-    generated.add(build_helm(armature, bpy.data.objects["Male_Ranger_Head_Hood"]).name)
+    hood = bpy.data.objects["Male_Ranger_Head_Hood"]
+    generated.add(build_helm(armature, hood).name)
+
+    # Held gear shares the hood's material, so the whole character is still two
+    # draw setups and a weapon can be re-palettized by `build_gear_textures.py`
+    # the same way a helmet is.
+    iron = hood.data.materials[0]
+    for build in (build_wand, build_focus, build_shield):
+        generated.add(build(armature, iron).name)
 
     dropped = []
     for obj in meshes():

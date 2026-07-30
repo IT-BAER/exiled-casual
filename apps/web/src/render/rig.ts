@@ -129,11 +129,20 @@ export function speedRatioFor(clip: RigClip, speed: number): number {
  */
 const WARDROBE_URL = "/models/wardrobe.glb";
 
-/** Equipment slots that change how the character looks. */
-export type CosmeticSlot = "helmet" | "body" | "gloves" | "boots" | "belt";
+/**
+ * Equipment slots that change how the character looks.
+ *
+ * The two hands are slots like any other, which is the whole trick: a weapon is
+ * a `weapon1.<look>.part` mesh skinned 100% to `hand_r` and an off-hand piece is
+ * skinned to `hand_l`, so showing one is the same visibility flip that puts a
+ * hood on a head. Nothing is parented, attached or driven per frame, and a
+ * weapon swap costs exactly what an armour swap costs: nothing.
+ */
+export type CosmeticSlot =
+  | "weapon1" | "weapon2" | "helmet" | "body" | "gloves" | "boots" | "belt";
 
 export const COSMETIC_SLOTS: readonly CosmeticSlot[] = [
-  "helmet", "body", "gloves", "boots", "belt",
+  "weapon1", "weapon2", "helmet", "body", "gloves", "boots", "belt",
 ];
 
 /**
@@ -194,6 +203,8 @@ export const GEAR_TEXTURE_BASES: readonly string[] = Object.keys(GEAR_TEXTURE);
  * there to replace.
  */
 const PREVIEW_BASE: Record<CosmeticSlot, string> = {
+  weapon1: "base.emberwand",
+  weapon2: "base.ember_buckler",
   helmet: "base.cinder_cap",
   body: "base.emberweave_robe",
   gloves: "base.ember_gauntlets",
@@ -232,6 +243,7 @@ export function previewItemFor(slot: CosmeticSlot): { baseId: string } {
  * you clothed rather than naked.
  */
 const UNEQUIPPED: Looks = {
+  weapon1: null, weapon2: null,
   helmet: null, body: "commoner", gloves: null, boots: "commoner", belt: null,
 };
 
@@ -242,7 +254,26 @@ const UNEQUIPPED: Looks = {
  * added instead of silently rendering as commoner cloth.
  */
 const EQUIPPED: Looks = {
+  weapon1: "wand", weapon2: "focus",
   helmet: "hood", body: "ranger", gloves: "bracers", boots: "ranger", belt: "ranger",
+};
+
+/**
+ * Bases whose geometry is not their slot's default one.
+ *
+ * The armour slots get away with a single look each because a robe and a plate
+ * are both a coat; a hand does not, because the off hand holds either a floating
+ * orb or a slab of iron and picking the wrong one is not a wrong colour, it is
+ * the wrong object. So the hands are the one place a base names its own mesh,
+ * and everything absent here keeps `EQUIPPED`'s default.
+ *
+ * Still one look per *kind*: the buckler and the tower shield share `shield`,
+ * the way every body armour shares the coat. Their icons differ, their held
+ * silhouette does not, and that is a geometry job, not a table entry.
+ */
+const LOOK_BY_BASE: Record<string, string> = {
+  "base.ember_buckler": "shield",
+  "base.ashwall_tower_shield": "shield",
 };
 
 const HEAD_PREFIX = "base.head.";
@@ -993,7 +1024,8 @@ export function looksForEquipment(equipped: Partial<Record<CosmeticSlot, unknown
     const item = equipped[slot];
     if (item === undefined) continue;
     const baseId = (item as { baseId?: string } | null)?.baseId;
-    out[slot] = EQUIPPED[slot] + (baseId !== undefined && baseId in GEAR_TEXTURE ? `#${baseId}` : "");
+    const look = (baseId !== undefined ? LOOK_BY_BASE[baseId] : undefined) ?? EQUIPPED[slot];
+    out[slot] = look + (baseId !== undefined && baseId in GEAR_TEXTURE ? `#${baseId}` : "");
   }
   return out;
 }

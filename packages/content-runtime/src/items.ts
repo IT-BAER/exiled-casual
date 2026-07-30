@@ -20,6 +20,11 @@ const ITEM_BASES: ItemBase[] = [
   // Foci and helmets carry no implicit, which is how PoE2 has them: poe2db lists foci with
   // energy shield alone, and body armour is the only armour slot with implicit bases at all.
   { id: "base.ashen_focus", name: "Ashen Focus", itemClass: "focus", w: 2, h: 2, icon: "/textures/items/ashen_focus.png" },
+  // The off hand's other half. PoE2 gives every shield an implicit block chance and
+  // nothing in the sim blocks yet, so these take the armour side of the base instead
+  // and roll armour and life like the rest of the armour classes.
+  { id: "base.ember_buckler", name: "Ember Buckler", itemClass: "shield", w: 2, h: 2, icon: "/textures/items/ember_buckler.png" },
+  { id: "base.ashwall_tower_shield", name: "Ashwall Tower Shield", itemClass: "shield", w: 2, h: 3, icon: "/textures/items/ashwall_tower_shield.png" },
   { id: "base.cinder_cap", name: "Cinder Cap", itemClass: "helmet", w: 2, h: 2, icon: "/textures/items/cinder_cap.png" },
   // The other three armour slots. Each exists so its equipment slot can actually
   // be filled: the character's wardrobe has a look per slot, and a look nothing
@@ -243,15 +248,15 @@ export function isCurrency(item: Item): boolean {
 // level 1, which is what lets a rare of any base fill its 3+3 at any level; gating a pool
 // that was wide only in total would have starved whichever class lost the coin flip.
 const AFFIXES: Affix[] = [
-  { id: "affix.life", kind: "prefix", nameWord: "Hale", stat: "maxLife", label: "to maximum Life", minItemLevel: 1, min: 5, max: 40, itemClasses: ["helmet", "body", "gloves", "boots", "belt"] },
-  { id: "affix.mana", kind: "prefix", nameWord: "Beryl", stat: "maxMana", label: "to maximum Mana", minItemLevel: 1, min: 4, max: 30, itemClasses: ["wand", "focus", "helmet", "body", "gloves", "boots", "belt"] },
-  { id: "affix.energy_shield", kind: "prefix", nameWord: "Ghostly", stat: "energyShield", label: "to maximum Energy Shield", minItemLevel: 1, min: 5, max: 35, itemClasses: ["focus", "helmet", "body", "gloves", "boots"] },
-  { id: "affix.increased_armour", kind: "prefix", nameWord: "Reinforced", stat: "armourPct", label: "% increased Armour", minItemLevel: 1, min: 10, max: 30, itemClasses: ["helmet", "body", "gloves", "boots", "belt"] },
+  { id: "affix.life", kind: "prefix", nameWord: "Hale", stat: "maxLife", label: "to maximum Life", minItemLevel: 1, min: 5, max: 40, itemClasses: ["shield", "helmet", "body", "gloves", "boots", "belt"] },
+  { id: "affix.mana", kind: "prefix", nameWord: "Beryl", stat: "maxMana", label: "to maximum Mana", minItemLevel: 1, min: 4, max: 30, itemClasses: ["shield", "wand", "focus", "helmet", "body", "gloves", "boots", "belt"] },
+  { id: "affix.energy_shield", kind: "prefix", nameWord: "Ghostly", stat: "energyShield", label: "to maximum Energy Shield", minItemLevel: 1, min: 5, max: 35, itemClasses: ["shield", "focus", "helmet", "body", "gloves", "boots"] },
+  { id: "affix.increased_armour", kind: "prefix", nameWord: "Reinforced", stat: "armourPct", label: "% increased Armour", minItemLevel: 1, min: 10, max: 30, itemClasses: ["shield", "helmet", "body", "gloves", "boots", "belt"] },
   { id: "affix.spell_damage", kind: "prefix", nameWord: "Runic", stat: "spellDamagePct", label: "% increased Spell Damage", minItemLevel: 1, min: 10, max: 25, itemClasses: ["wand", "focus"] },
   { id: "affix.fire_dmg", kind: "prefix", nameWord: "Smoldering", stat: "fireDamage", label: "to Fire Damage", minItemLevel: 1, min: 2, max: 18, itemClasses: ["wand", "focus"] },
   { id: "affix.cold_dmg", kind: "prefix", nameWord: "Glacial", stat: "coldDamage", label: "to Cold Damage", minItemLevel: 1, min: 2, max: 16, itemClasses: ["wand", "focus"] },
-  { id: "affix.armour", kind: "prefix", nameWord: "Plated", stat: "armour", label: "to Armour", minItemLevel: 8, min: 10, max: 60, itemClasses: ["helmet", "body", "gloves", "boots", "belt"] },
-  { id: "affix.increased_es", kind: "prefix", nameWord: "Spectral", stat: "energyShieldPct", label: "% increased Energy Shield", minItemLevel: 8, min: 10, max: 30, itemClasses: ["focus", "helmet", "body", "gloves", "boots"] },
+  { id: "affix.armour", kind: "prefix", nameWord: "Plated", stat: "armour", label: "to Armour", minItemLevel: 8, min: 10, max: 60, itemClasses: ["shield", "helmet", "body", "gloves", "boots", "belt"] },
+  { id: "affix.increased_es", kind: "prefix", nameWord: "Spectral", stat: "energyShieldPct", label: "% increased Energy Shield", minItemLevel: 8, min: 10, max: 30, itemClasses: ["shield", "focus", "helmet", "body", "gloves", "boots"] },
   { id: "affix.fire_res", kind: "suffix", nameWord: "of the Furnace", stat: "fireResPct", label: "% to Fire Resistance", minItemLevel: 1, min: 5, max: 25 },
   { id: "affix.cold_res", kind: "suffix", nameWord: "of the Yeti", stat: "coldResPct", label: "% to Cold Resistance", minItemLevel: 1, min: 5, max: 25 },
   { id: "affix.lightning_res", kind: "suffix", nameWord: "of the Squall", stat: "lightningResPct", label: "% to Lightning Resistance", minItemLevel: 1, min: 5, max: 25 },

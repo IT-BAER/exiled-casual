@@ -20,6 +20,7 @@ import {
   SKIRT_JOINTS,
 } from "./rig";
 import { ITEM_POOLS, STARTER_BASE_IDS, baseOf } from "@exiled/content-runtime";
+import { EQUIP_SLOTS_BY_CLASS } from "@exiled/simulation";
 
 /**
  * Every base that can end up in an equipment slot, droppable or not.
@@ -408,6 +409,26 @@ describe("wardrobe asset", () => {
     expect(asked.size).toBeGreaterThan(0);
     for (const prefix of asked) {
       expect(skinned.some((n) => n.startsWith(prefix))).toBe(true);
+    }
+  });
+
+  it("carries a look for every base that can be held", () => {
+    // The hands are the one place a *base* names its own mesh rather than
+    // inheriting its slot's, so a mistyped look here is not a wrong colour, it
+    // is an empty fist - and the test above cannot see it, because it only ever
+    // asks for the slot default.
+    const held: string[] = [];
+    for (const base of ITEM_BASES) {
+      for (const slot of EQUIP_SLOTS_BY_CLASS[base.itemClass ?? ""] ?? []) {
+        if (slot !== "weapon1" && slot !== "weapon2") continue;
+        const look = looksForEquipment({ [slot]: { baseId: base.id } })[slot];
+        expect(look, `${base.id} has no look`).not.toBeNull();
+        held.push(`${slot}.${meshLook(look!)}.`);
+      }
+    }
+    expect(held.length).toBeGreaterThan(0);
+    for (const prefix of held) {
+      expect(skinned.some((n) => n.startsWith(prefix)), `${prefix} missing`).toBe(true);
     }
   });
 

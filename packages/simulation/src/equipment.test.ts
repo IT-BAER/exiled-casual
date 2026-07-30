@@ -57,9 +57,16 @@ function clearInv(world: ReturnType<typeof makeWorld>["world"]) {
 // ---------------------------------------------------------------------------
 
 describe("canEquip", () => {
-  it("allows wand in weapon1 and weapon2", () => {
+  it("holds a wand in the main hand and never in the off hand", () => {
     expect(canEquip("wand", "weapon1")).toBe(true);
-    expect(canEquip("wand", "weapon2")).toBe(true);
+    expect(canEquip("wand", "weapon2")).toBe(false);
+  });
+
+  it("holds a focus and a shield in the off hand and never in the main hand", () => {
+    expect(canEquip("focus", "weapon2")).toBe(true);
+    expect(canEquip("focus", "weapon1")).toBe(false);
+    expect(canEquip("shield", "weapon2")).toBe(true);
+    expect(canEquip("shield", "weapon1")).toBe(false);
   });
 
   it("rejects wand in helmet slot", () => {
@@ -76,9 +83,10 @@ describe("canEquip", () => {
     expect(canEquip("helmet", "weapon1")).toBe(false);
   });
 
-  it("EQUIP_SLOTS_BY_CLASS wand entry contains weapon1 and weapon2", () => {
-    expect(EQUIP_SLOTS_BY_CLASS["wand"]).toContain("weapon1");
-    expect(EQUIP_SLOTS_BY_CLASS["wand"]).toContain("weapon2");
+  it("gives every hand class exactly one hand", () => {
+    for (const cls of ["wand", "focus", "shield"]) {
+      expect(EQUIP_SLOTS_BY_CLASS[cls]).toHaveLength(1);
+    }
   });
 });
 

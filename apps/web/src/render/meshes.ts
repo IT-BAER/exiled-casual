@@ -763,7 +763,12 @@ function buildVendor(scene: Scene, root: Mesh): void {
   // failed fetch), which leaves the ring standing on its own.
   const rig = attachRig(scene, root);
   if (rig) {
-    rig.setLooks({ helmet: "hood", body: "commoner", gloves: null, boots: "commoner", belt: null });
+    // Empty-handed on purpose: he is a disenchanter behind a counter, and a
+    // shopkeeper holding a wand reads as another adventurer.
+    rig.setLooks({
+      weapon1: null, weapon2: null,
+      helmet: "hood", body: "commoner", gloves: null, boots: "commoner", belt: null,
+    });
     rig.setLocomotion(0); // stand and breathe; he never goes anywhere
   }
 
