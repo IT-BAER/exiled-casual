@@ -166,6 +166,13 @@ export interface SnapshotEntity {
   species?: string;
   remainingSeconds?: number;
   ailmentStacks?: number;
+  /**
+   * Which side owns this entity: 0 is the player's, anything else is not. Present
+   * on projectiles, where nothing else in the snapshot says whose a bolt is — the
+   * client needs it to tell the player's own cast from a spitter's answer, for the
+   * sound if nothing else.
+   */
+  team?: number;
   /** true for the boss monster; kind stays "monster" so existing consumers keep working */
   boss?: boolean;
   /** boss phase, present only when boss === true */

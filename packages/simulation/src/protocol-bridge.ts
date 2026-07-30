@@ -227,6 +227,9 @@ export function buildSnapshot(
       id: e, kind: "projectile",
       x: toNumber(pp2.x), y: toNumber(pp2.y),
       radius: toNumber(pr.radius),
+      // Nothing else in the snapshot says whose a bolt is, and the client has to
+      // tell his own cast from a spitter's answer to sound either of them.
+      team: pr.team,
     });
   }
 

@@ -9,6 +9,8 @@ import { loadMonsters, resetMonsters } from "./render/monsters";
 import { loadRocks, resetRocks } from "./render/rocks";
 import { loadPlayerRig, resetPlayerRig } from "./render/rig";
 import { attachBindings } from "./input/bindings";
+import { CORE_SFX, playSfx, preloadSfx } from "./audio/sfx";
+import { createSoundscape } from "./audio/soundscape";
 import { Hud, BAR_H, ORB_RISE } from "./hud/Hud";
 import { PreparationPanel } from "./hud/PreparationPanel";
 import { InventoryPanel } from "./hud/InventoryPanel";
@@ -150,6 +152,14 @@ export function GameView({
     let needsPaint = false;
     /** Pending unmount of the plate, one fade after ready. Cancelled by a new area. */
     let fadeTimer: ReturnType<typeof setTimeout> | undefined;
+    /**
+     * The fight, heard. Fed every snapshot and reset on every area, since it
+     * works by diffing consecutive ones and a rebuilt area shares no entity ids
+     * with the one before it. Loading starts here rather than on first use so the
+     * opening bolt of a session is not the one that fires in silence.
+     */
+    const soundscape = createSoundscape();
+    void preloadSfx(CORE_SFX);
 
     // Babylon engine + render loop
     const engine = new Engine(canvas, true);
@@ -208,6 +218,7 @@ export function GameView({
         prevSnap = curSnap;
         curSnap = msg.snapshot;
         prevTickTime = performance.now();
+        soundscape.observe(msg.snapshot);
         setSnapshot(msg.snapshot);
         // Activation opened the map — the panel's job is done, close it.
         if (msg.snapshot.mapOpen) setPanelOpen(false);
@@ -225,6 +236,11 @@ export function GameView({
         // already in flight for the OLD area must not be allowed to report the
         // new one ready.
         needsPaint = false;
+        // The one sound the player makes and never hears an entity for: the
+        // crossing itself. Every id in the new area is new, so the diff has to
+        // start over or the whole old population would be reported dead.
+        playSfx("portal-enter");
+        soundscape.reset();
         // A place that arrives mid-dissolve takes the plate back at full
         // opacity, and the unmount that dissolve had queued must not fire on it.
         clearTimeout(fadeTimer);
@@ -346,6 +362,21 @@ export function GameView({
     if (scene === null) return;
     applyGraphics(scene, engineRef.current, settings.graphics);
   }, [settings.graphics]);
+
+  /**
+   * A panel coming up gets one rustle of leather and parchment.
+   *
+   * Watched as a count rather than hooked at each call site: these open from the
+   * keyboard, from walking up to the furniture, and from each other's buttons, and
+   * the one thing they all have in common is that there is now one more of them.
+   */
+  const panelsOpen =
+    [panelOpen, inventoryOpen, stashOpen, vendorOpen, characterOpen].filter(Boolean).length;
+  const panelsWere = useRef(0);
+  useEffect(() => {
+    if (panelsOpen > panelsWere.current) playSfx("ui-panel-open");
+    panelsWere.current = panelsOpen;
+  }, [panelsOpen]);
 
   return (
     <div style={{ position: "relative", width: "100vw", height: "100vh" }}>

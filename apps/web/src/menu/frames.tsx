@@ -13,6 +13,7 @@
  * object, and a button that changes shape under the pointer reads as a glitch.
  */
 import React from "react";
+import { playSfx } from "../audio/sfx";
 
 export const MENU_ART = "/textures/ui/menu";
 
@@ -130,7 +131,11 @@ export function MenuButton({
     <button
       type="button"
       {...rest}
-      onMouseEnter={(e) => { setHover(true); rest.onMouseEnter?.(e); }}
+      // Every button in the game is this one, so the click and the hover tick
+      // live here rather than at twenty call sites. A dead button stays silent:
+      // the sound is confirmation, and there is nothing to confirm.
+      onClick={(e) => { if (!off) playSfx("ui-click"); rest.onClick?.(e); }}
+      onMouseEnter={(e) => { setHover(true); if (!off) playSfx("ui-hover"); rest.onMouseEnter?.(e); }}
       onMouseLeave={(e) => { setHover(false); setDown(false); rest.onMouseLeave?.(e); }}
       onMouseDown={(e) => { setDown(true); rest.onMouseDown?.(e); }}
       onMouseUp={(e) => { setDown(false); rest.onMouseUp?.(e); }}
