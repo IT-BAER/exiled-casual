@@ -353,3 +353,63 @@ describe("click-to-move turns like the keys do", () => {
     expect(worstDeg).toBeLessThan(30);
   });
 });
+
+/**
+ * Monsters route (chaseStep reads the nav field once the straight line is
+ * blocked); the player only ever slid. A click on the far side of a wall left him
+ * pressed against it, because a slide cancels the blocked axis and the other axis
+ * was zero.
+ */
+describe("click-to-move routes around what it cannot walk through", () => {
+  /** Wall across the middle with one gap, so arriving means going around. */
+  const WALLED = [
+    ".........",
+    ".........",
+    "####.####",
+    ".........",
+    ".........",
+  ];
+
+  function walledSim() {
+    const sim = new Simulation();
+    registerPlayerMovement(sim, { active: gridCollision(makeGrid(WALLED)) });
+    const p = sim.world.create();
+    sim.world.set<Position>(p, "position", { x: fp(1), y: fp(1) });
+    sim.world.set<PlayerC>(p, "player", { moveSpeed: Math.trunc(fp(3) / 30), bodyRadius: fp(0.2) });
+    sim.world.set<Faction>(p, "faction", { team: 0 });
+    sim.world.set<MoveDir>(p, "moveDir", { dx: 0, dy: 0, hx: 0, hy: 0 });
+    return { sim, p };
+  }
+
+  it("walks through the gap to reach a target behind the wall", () => {
+    const { sim, p } = walledSim();
+    const goal = { x: fp(1), y: fp(4) };
+    sim.step([{ tick: 0, entity: p, type: "moveTo", data: goal }]);
+    // Reversals as well as arrival: the monsters reached their target too, while
+    // juddering the whole way, and the judder is the thing actually seen.
+    let prev: { dx: number; dy: number } | null = null;
+    let reversals = 0;
+    for (let t = 1; t < 400; t++) {
+      const was = sim.world.get<Position>(p, "position")!;
+      sim.step([]);
+      const now = sim.world.get<Position>(p, "position")!;
+      const d = { dx: now.x - was.x, dy: now.y - was.y };
+      if (d.dx === 0 && d.dy === 0) continue;
+      if (prev && prev.dx * d.dx + prev.dy * d.dy < 0) reversals++;
+      prev = d;
+    }
+    const end = sim.world.get<Position>(p, "position")!;
+    expect(fpDist2(end.x, end.y, goal.x, goal.y)).toBeLessThan(fp(0.5) * fp(0.5));
+    expect(reversals).toBe(0);
+  });
+
+  it("still walks a clear line straight, with no detour", () => {
+    const { sim, p } = walledSim();
+    // Same side of the wall, nothing in between.
+    sim.step([{ tick: 0, entity: p, type: "moveTo", data: { x: fp(6), y: fp(1) } }]);
+    for (let t = 1; t < 60; t++) sim.step([]);
+    const end = sim.world.get<Position>(p, "position")!;
+    expect(end.y).toBe(fp(1)); // never left the line
+    expect(end.x).toBeGreaterThan(fp(5));
+  });
+});

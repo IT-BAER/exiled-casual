@@ -1,7 +1,7 @@
 import { FP_SCALE, fp, fpClamp, fpStepToward, isqrt, type Fixed } from "@exiled/fixed-point";
 import { Simulation } from "../loop";
 import { WORLD_MIN, WORLD_MAX } from "../movement";
-import { slide, type CollisionRef } from "../collision";
+import { slide, hasLineOfSight, type Collision, type CollisionRef } from "../collision";
 import type { Position, PlayerC, MoveTarget, MoveDir, CastingC, Health } from "../components";
 
 /** Player moves at this percent of moveSpeed during post-cast recovery. */
@@ -38,6 +38,27 @@ const TURN_SPEED_FLOOR_PCT = 62;
  * away is a nudge, not a corner.
  */
 const TURN_FOR_DISTANCE: Fixed = fp(1);
+
+/**
+ * Where to walk THIS tick to end up at (tx, ty): the target itself while the line
+ * to it is clear, and the next waypoint of the route around otherwise.
+ *
+ * The same one-controller-per-journey rule the monsters use (`chaseStep`): the
+ * question is geometric and about the whole trip, so its answer changes once, when
+ * the body rounds the corner. Anything that flips per tick makes a body judder
+ * against the wall it is passing. An open floor answers "the target" every tick
+ * and is byte-identical to the walk that shipped before routing existed.
+ */
+function aimAt(
+  collision: Collision | undefined,
+  x: Fixed, y: Fixed, tx: Fixed, ty: Fixed, bodyRadius: Fixed,
+): { x: Fixed; y: Fixed } {
+  if (!collision?.nav) return { x: tx, y: ty };
+  if (hasLineOfSight(collision, x, y, tx, ty, bodyRadius)) return { x: tx, y: ty };
+  // No route at all (a click inside solid rock with no mouth to stand in) hands
+  // the walk back to the straight line, which the slide then stops at the wall.
+  return collision.nav.waypoint(x, y, tx, ty, bodyRadius) ?? { x: tx, y: ty };
+}
 
 /**
  * The step a body takes while its heading `held` is still swinging toward `want`.
@@ -167,7 +188,8 @@ export function registerPlayerMovement(sim: Simulation, collisionRef?: Collision
         // the tightest circle it can make is about 0.8 units across, so a target
         // inside that could be orbited rather than reached.
         if (far && moveDir) {
-          const want = unit(toX, toY);
+          const aim = aimAt(collision, pos.x, pos.y, moveTarget.x, moveTarget.y, player.bodyRadius);
+          const want = unit(aim.x - pos.x, aim.y - pos.y);
           const held = moveDir.hx === 0 && moveDir.hy === 0
             ? want
             : steer({ x: moveDir.hx, y: moveDir.hy }, want);
