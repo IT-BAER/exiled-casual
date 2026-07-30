@@ -23,11 +23,19 @@ const monster = (id: number, x: number, life = 40): SnapshotEntity =>
   ({ id, kind: "monster", x, y: 0, life, maxLife: 40 });
 
 /** Drive a sequence of snapshots and collect the cue names in order. */
-function run(seq: Snapshot[]): string[] {
+function run(seq: Snapshot[], biomeId: string | null = null): string[] {
   const heard: string[] = [];
   const s = createSoundscape({ play: (n) => heard.push(n) });
+  s.reset(biomeId);
   for (const it of seq) s.observe(it);
   return heard;
+}
+
+/** Forty ticks of walking, which is four footfalls at the ten-tick cadence. */
+function walk(ticks = 40): Snapshot[] {
+  const seq: Snapshot[] = [];
+  for (let t = 1; t <= ticks; t++) seq.push(snap({ tick: t, player: testPlayer({ x: t * 0.1 }) }));
+  return seq;
 }
 
 describe("createSoundscape", () => {
@@ -176,20 +184,73 @@ describe("createSoundscape", () => {
     ])).toEqual(["waystone-activate"]);
   });
 
-  it("walking alternates feet on a cadence, and standing still is silent", () => {
-    const walking: Snapshot[] = [];
-    for (let t = 1; t <= 40; t++) {
-      walking.push(snap({ tick: t, player: testPlayer({ x: t * 0.1 }) }));
-    }
-    const steps = run(walking).filter((n) => n.startsWith("footstep"));
+  it("walking makes footfalls on a cadence, and standing still is silent", () => {
     // 39 ticks of walking at one step per ten ticks.
+    const steps = run(walk()).filter((n) => n.startsWith("footstep"));
     expect(steps.length).toBeGreaterThanOrEqual(3);
     expect(steps.length).toBeLessThanOrEqual(5);
-    expect(new Set(steps).size).toBe(2);
 
     const still: Snapshot[] = [];
     for (let t = 1; t <= 40; t++) still.push(snap({ tick: t }));
     expect(run(still).filter((n) => n.startsWith("footstep"))).toEqual([]);
+  });
+
+  /**
+   * A step is the one cue the player hears thousands of times, so it is the one that
+   * has to know what it is standing on. The ground comes from the biome, which the
+   * client is told once per area, and nothing else in the snapshot describes it.
+   */
+  it("feet take the ground the biome is made of", () => {
+    const groundOf = (biome: string | null): Set<string> =>
+      new Set(run(walk(), biome).filter((n) => n.startsWith("footstep"))
+        .map((n) => n.replace(/-\d+$/, "")));
+    expect(groundOf("swamp")).toEqual(new Set(["footstep-mud"]));
+    expect(groundOf("forest")).toEqual(new Set(["footstep-grass"]));
+    expect(groundOf("desert")).toEqual(new Set(["footstep-dirt"]));
+    expect(groundOf("vaal_stone")).toEqual(new Set(["footstep-stone"]));
+    // The hideout has no map base, and a biome added tomorrow has no entry: both
+    // are a floor rather than a silence.
+    expect(groundOf(null)).toEqual(new Set(["footstep-stone"]));
+    expect(groundOf("not_a_biome")).toEqual(new Set(["footstep-stone"]));
+  });
+
+  /**
+   * The complaint this exists to answer is not that a step was wrong, it is that it
+   * was the SAME: two samples alternating is a rhythm, and a rhythm is heard as one
+   * repeating sound however good the sample is. Three things differ per footfall —
+   * which fall, its pitch (`vary`, sfx.ts) and its level — and two of them are
+   * observable here.
+   */
+  it("no footfall repeats the one before it, and each one lands at its own level", () => {
+    const heard: Array<[string, number | undefined]> = [];
+    const s = createSoundscape({ play: (n, v) => heard.push([n, v]) });
+    s.reset("forest");
+    for (const snapshot of walk(400)) s.observe(snapshot);
+
+    const steps = heard.filter(([n]) => n.startsWith("footstep"));
+    expect(steps.length).toBeGreaterThan(30);
+    for (let i = 1; i < steps.length; i++) expect(steps[i]![0]).not.toBe(steps[i - 1]![0]);
+    // Every fall on disk gets used, so a mistyped index is a sample nobody hears.
+    expect(new Set(steps.map(([n]) => n))).toEqual(
+      new Set(["footstep-grass-1", "footstep-grass-2", "footstep-grass-3"]));
+
+    const levels = steps.map(([, v]) => v!);
+    for (const v of levels) expect(v).toBeGreaterThan(0.6);
+    // A ceiling of 1: playSfx clamps above it, so any louder jitter is a silent no-op.
+    for (const v of levels) expect(v).toBeLessThanOrEqual(1);
+    expect(new Set(levels).size).toBeGreaterThan(steps.length / 2);
+  });
+
+  /**
+   * The area-rebuild reset inside observe() is not a new AREA — it fires when a
+   * snapshot cannot be diffed against the last one — so it must not throw away the
+   * ground and put the player back on stone in the middle of a swamp.
+   */
+  it("a mid-area rebuild keeps the ground", () => {
+    const rebuilt = [...walk(20), ...walk(20)]; // second half restarts at tick 1
+    const steps = run(rebuilt, "swamp").filter((n) => n.startsWith("footstep"));
+    expect(steps.length).toBeGreaterThan(2);
+    for (const s of steps) expect(s).toMatch(/^footstep-mud-\d$/);
   });
 
   it("a corpse does not walk", () => {

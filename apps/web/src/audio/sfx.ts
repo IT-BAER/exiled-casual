@@ -5,7 +5,7 @@ import { bus, send } from "./bus";
  *
  * Every master is a commercial library recording, curated rather than generated:
  * `tools/import_sfx.py` names the source file per cue and runs it through
- * `tools/trim_sfx.py` to Opus in WebM — 33 sounds in 470 KB. They share the bus with
+ * `tools/trim_sfx.py` to Opus in WebM — 43 sounds in 490 KB. They share the bus with
  * the synthesised drop cue, so the Options volume covers everything and nothing
  * fights it for a context.
  *
@@ -71,9 +71,26 @@ const VOICES: Record<string, Voice> = {
   "waystone-activate":        { gain: 0.36, wet: 0.28, vary: 0 },
   "flask-drink":              { gain: 0.30, wet: 0.08, vary: 0.05 },
   // Feet are meant to be felt, not listened to: PoE barely gives the player any, and
-  // at anything above this the walk is the loudest thing in a quiet hideout.
-  "footstep-dirt-a":          { gain: 0.045, wet: 0.06, vary: 0.09 },
-  "footstep-dirt-b":          { gain: 0.045, wet: 0.06, vary: 0.09 },
+  // 0.045 was still the loudest thing in a quiet hideout. This is a third of that —
+  // under a fight it disappears, which is the point.
+  //
+  // One ground per biome, three falls each (soundscape.ts picks). `vary` is nearly
+  // twice what the rest of the table uses, because a footstep fires every third of a
+  // second for the whole game and is the one cue with no headroom for repetition;
+  // level jitter comes from the caller, since only it knows a step from a hit.
+  // `wet` is the ROOM the ground implies: a flagstone hall rings, a bog swallows.
+  "footstep-stone-1":         { gain: 0.014, wet: 0.14, vary: 0.16 },
+  "footstep-stone-2":         { gain: 0.014, wet: 0.14, vary: 0.16 },
+  "footstep-stone-3":         { gain: 0.014, wet: 0.14, vary: 0.16 },
+  "footstep-dirt-1":          { gain: 0.014, wet: 0.06, vary: 0.16 },
+  "footstep-dirt-2":          { gain: 0.014, wet: 0.06, vary: 0.16 },
+  "footstep-dirt-3":          { gain: 0.014, wet: 0.06, vary: 0.16 },
+  "footstep-grass-1":         { gain: 0.014, wet: 0.05, vary: 0.16 },
+  "footstep-grass-2":         { gain: 0.014, wet: 0.05, vary: 0.16 },
+  "footstep-grass-3":         { gain: 0.014, wet: 0.05, vary: 0.16 },
+  "footstep-mud-1":           { gain: 0.014, wet: 0.04, vary: 0.16 },
+  "footstep-mud-2":           { gain: 0.014, wet: 0.04, vary: 0.16 },
+  "footstep-mud-3":           { gain: 0.014, wet: 0.04, vary: 0.16 },
   "ui-click":                 { gain: 0.30, wet: 0.05, vary: 0.03 },
   // A hover fires on every pixel of travel across a menu, so it sits under the click
   // by a lot. Anything that competes with the click is a menu that buzzes.
@@ -120,12 +137,18 @@ export function preloadSfx(names: readonly string[]): Promise<void> {
   return Promise.all(names.filter((n) => !buffers.has(n) && !dead.has(n)).map(load)).then(() => undefined);
 }
 
-/** Everything that has to be ready before the player's first click. */
+/**
+ * Everything that has to be ready before the player's first click.
+ *
+ * Stone is here and the other three grounds are not: the hideout is where every
+ * session starts, and the soundscape preloads a biome's ground when its area
+ * arrives, which is earlier than the first step in it either way.
+ */
 export const CORE_SFX: readonly string[] = [
   "ui-click", "ui-hover", "ui-panel-open",
   "skill-ember-bolt-cast", "skill-ember-bolt-impact", "skill-cinder-ground-cast", "skill-blink",
   "monster-melee-hit", "monster-hurt", "monster-death", "player-hurt",
-  "footstep-dirt-a", "footstep-dirt-b", "flask-drink",
+  "footstep-stone-1", "footstep-stone-2", "footstep-stone-3", "flask-drink",
 ];
 
 /**

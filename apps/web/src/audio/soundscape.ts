@@ -1,5 +1,5 @@
 import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
-import { distanceGain, playSfx } from "./sfx";
+import { distanceGain, playSfx, preloadSfx } from "./sfx";
 
 /**
  * The fight, heard rather than described.
@@ -78,6 +78,33 @@ function cueFor(base: string, species: string | undefined): string {
   return material === undefined ? base : `${base}-${material}`;
 }
 
+/**
+ * What the floor of a biome is MADE of, because that is what a boot on it sounds
+ * like. Same argument as `MATERIAL` above, and the same shape: keyed on the axis the
+ * ear hears rather than on the place, so two biomes over the same ground share it.
+ *
+ * A biome with no entry — and the hideout, which has no map base at all — walks on
+ * stone, because the one floor in the game that is definitely paved is his.
+ */
+const GROUND: Record<string, string> = {
+  vaal_stone: "stone",
+  desert: "dirt",
+  swamp: "mud",
+  forest: "grass",
+};
+const DEFAULT_GROUND = "stone";
+/** Falls per ground on disk, `footstep-<ground>-1..N`. */
+const GROUND_VARIANTS = 3;
+/**
+ * Quietest a footfall may be, as a fraction of its voice's own level.
+ *
+ * Three samples is not enough variety on its own for a cue that fires every third
+ * of a second all game: the sample is only one of three things that differ per step,
+ * the other two being pitch (`vary` in sfx.ts) and this. Down-only, because the
+ * voice's gain is a ceiling that `playSfx` clamps to.
+ */
+const STEP_LEVEL_FLOOR = 0.65;
+
 /** Which cue a skill's own cast makes. A skill with no entry casts silently. */
 const CAST_SFX: Record<string, string> = {
   "skill.ember_bolt.v1": "skill-ember-bolt-cast",
@@ -88,8 +115,14 @@ const CAST_SFX: Record<string, string> = {
 export interface Soundscape {
   /** Called once per snapshot, in arrival order. */
   observe(snap: Snapshot): void;
-  /** New area: the next snapshot is a different world, so nothing carries over. */
-  reset(): void;
+  /**
+   * New area: the next snapshot is a different world, so nothing carries over.
+   *
+   * `biomeId` is what the area is made of, `null` for the hideout. Omitting it keeps
+   * the current ground, which is what the rebuild path inside `observe` needs — that
+   * is one area failing to diff against itself, not a journey.
+   */
+  reset(biomeId?: string | null): void;
 }
 
 interface Options {
@@ -102,12 +135,20 @@ export function createSoundscape(opts: Options = {}): Soundscape {
   /** Last tick each monster was heard taking a hit, so a swarm does not roar. */
   const lastHurt = new Map<number, number>();
   let lastStepTick = 0;
-  let stepFoot = 0;
+  /** 0-based index of the sample the last footfall used, so the next one differs. */
+  let stepVariant = 0;
+  let ground = DEFAULT_GROUND;
 
-  const reset = (): void => {
+  const reset = (biomeId?: string | null): void => {
     prev = null;
     lastHurt.clear();
     lastStepTick = 0;
+    if (biomeId === undefined) return;
+    ground = GROUND[biomeId ?? ""] ?? DEFAULT_GROUND;
+    // Ahead of the first step rather than on it: an area message arrives well
+    // before the player has walked anywhere in the place it describes.
+    void preloadSfx(Array.from(
+      { length: GROUND_VARIANTS }, (_, i) => `footstep-${ground}-${i + 1}`));
   };
 
   return {
@@ -197,8 +238,14 @@ export function createSoundscape(opts: Options = {}): Soundscape {
       if (moved > STEP_MIN_MOVE && snap.player.alive) {
         if (snap.tick - lastStepTick >= STEP_TICKS) {
           lastStepTick = snap.tick;
-          stepFoot ^= 1;
-          play(stepFoot === 0 ? "footstep-dirt-a" : "footstep-dirt-b");
+          // Advance by one or two, never by zero: uniform over the OTHER samples,
+          // with no loop and no chance of the same one twice running. Strict
+          // alternation of a pair — what this used to do — is a rhythm the ear locks
+          // onto by the third step, and then every step after it is the same step.
+          stepVariant = (stepVariant + 1 + Math.floor(Math.random() * (GROUND_VARIANTS - 1)))
+            % GROUND_VARIANTS;
+          play(`footstep-${ground}-${stepVariant + 1}`,
+            STEP_LEVEL_FLOOR + Math.random() * (1 - STEP_LEVEL_FLOOR));
         }
       } else {
         // Standing still re-arms the next footfall, so the first step off a stop

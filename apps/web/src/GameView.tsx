@@ -258,7 +258,8 @@ export function GameView({
         // crossing itself. Every id in the new area is new, so the diff has to
         // start over or the whole old population would be reported dead.
         playSfx("portal-enter");
-        soundscape.reset();
+        // The base also says what the floor is, which is what his boots land on.
+        soundscape.reset(base?.biomeId ?? null);
         // Nothing the player had open belongs to the place they just left. The
         // inventory in particular: opening a map from the device leaves it up, and
         // stepping through the portal used to land you in the map reading a bag.

@@ -65,6 +65,32 @@ describe("sfx assets", () => {
   });
 
   /**
+   * Footstep cues are built from the ground and a random fall, so they are invisible
+   * to the literal scan above — the same blind spot as `cueFor`. A ground one file
+   * short would not be silent, it would quietly stop varying.
+   */
+  it("every ground has all of its falls, and the fallback ground is one of them", () => {
+    const body = readFileSync(resolve(__dirname, "soundscape.ts"), "utf8");
+    const table = body.slice(body.indexOf("const GROUND:"), body.indexOf("const DEFAULT_GROUND"));
+    const grounds = [...table.matchAll(/:\s*"([a-z]+)",/g)].map((m) => m[1]!);
+    const variants = Number(/const GROUND_VARIANTS = (\d+)/.exec(body)?.[1]);
+    const fallback = /const DEFAULT_GROUND = "([a-z]+)"/.exec(body)?.[1];
+    const voices = new Set(voiceNames());
+
+    expect(grounds.length).toBeGreaterThan(1);
+    expect(variants).toBeGreaterThan(1);
+    expect(grounds).toContain(fallback);
+    for (const ground of grounds) {
+      for (let i = 1; i <= variants; i++) {
+        expect(voices.has(`footstep-${ground}-${i}`), `footstep-${ground}-${i}`).toBe(true);
+      }
+    }
+    // And nothing else: a leftover from a renamed ground ships bytes nobody plays.
+    const shipped = [...voices].filter((n) => n.startsWith("footstep"));
+    expect(shipped.length).toBe(grounds.length * variants);
+  });
+
+  /**
    * The exact failure the first audio pass shipped: ten of these files held silence
    * or near-silence, and nothing in the codebase could tell. Opus spends almost no
    * bytes on silence, so size IS the signal - the shortest real cue here is a 0.17s

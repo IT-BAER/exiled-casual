@@ -106,12 +106,37 @@ SOURCES: dict[str, str] = {
 
     # ── Flask, feet, UI ─────────────────────────────────────────────────────────
     "flask-drink": "Eiravaein Works - Flask/OBJCont_Flask,glass,figuredbottle,realcork,liquid,remove,squeak,slosh,alt4_EWKR.wav",
-    # Two consecutive steps out of ONE walk, windowed to the 0.88s and 1.64s falls,
-    # which are within 0.8 dB of each other. The first cut took one foot off a grass
-    # single-step and the other off this mud loop, and two materials alternating is
-    # heard as a limp: the pair has to be the same ground, only a different fall.
-    "footstep-dirt-a": "RYK-Sounds - Footstep/mud 1 loop.wav@0.80:0.55",
-    "footstep-dirt-b": "RYK-Sounds - Footstep/mud 1 loop.wav@1.56:0.55",
+    # ── Feet, four grounds, three falls each ────────────────────────────────────
+    # Every variant of one ground comes out of ONE recording — same ground, same mic,
+    # a different fall — because two materials alternating is heard as a limp, not as
+    # variety. What varies per play is pitch and level (sfx.ts, soundscape.ts), which
+    # is what the ear reads as "another step" rather than "the sample again".
+    #
+    # The library has human footsteps on exactly four grounds: grass, mud, snow and a
+    # wooden floor. No stone, no sand, no gravel — so the two hard/dry grounds this
+    # game needs are a HORSE, and that substitution is deliberate rather than lazy:
+    # on hard ground the surface makes the sound and the shoe only excites it, so a
+    # shod hoof on pavement is the classic Foley stand-in for a boot on flagstone.
+    # Falls were chosen by spectral centroid, which is the axis that separates them:
+    # the dullest hits of the trot (2.1-2.3 kHz, no ring) read as a boot rather than
+    # as a horseshoe, and inside the one grass-and-dirt walk the bright crunches
+    # (6.7-8.4 kHz) are the vegetation and the dull thuds (3.1-4.2 kHz) are the bare
+    # dirt under it.
+    "footstep-stone-1": "Dramatic Cat - Horse Carriage - Draft Horse/FEETHors_Draft Horse Trot On Concrete 03 STEREO_DRCA_HOCA_UsiPro.wav@2.26:0.30",
+    "footstep-stone-2": "Dramatic Cat - Horse Carriage - Draft Horse/FEETHors_Draft Horse Trot On Concrete 03 STEREO_DRCA_HOCA_UsiPro.wav@5.39:0.30",
+    "footstep-stone-3": "Dramatic Cat - Horse Carriage - Draft Horse/FEETHors_Draft Horse Trot On Concrete 03 STEREO_DRCA_HOCA_UsiPro.wav@5.97:0.30",
+    "footstep-grass-1": "Dramatic Cat - Horse Carriage - Draft Horse/FEETHors_Draft Horse Walk On On Grass And Dirt MONO_DRCA_HOCA_MKH416.wav@2.67:0.35",
+    # Both of these replaced a quieter fall: the trimmer normalises to a loudness
+    # target, so a take 15 dB down is asked for +12 dB and brings the field
+    # recording's own noise floor up with it — 22 dB under the peak instead of 40.
+    "footstep-grass-2": "Dramatic Cat - Horse Carriage - Draft Horse/FEETHors_Draft Horse Walk On On Grass And Dirt MONO_DRCA_HOCA_MKH416.wav@8.40:0.35",
+    "footstep-grass-3": "Dramatic Cat - Horse Carriage - Draft Horse/FEETHors_Draft Horse Walk On On Grass And Dirt MONO_DRCA_HOCA_MKH416.wav@10.37:0.40",
+    "footstep-dirt-1": "Dramatic Cat - Horse Carriage - Draft Horse/FEETHors_Draft Horse Walk On On Grass And Dirt MONO_DRCA_HOCA_MKH416.wav@0.94:0.30",
+    "footstep-dirt-2": "Dramatic Cat - Horse Carriage - Draft Horse/FEETHors_Draft Horse Walk On On Grass And Dirt MONO_DRCA_HOCA_MKH416.wav@2.11:0.35",
+    "footstep-dirt-3": "Dramatic Cat - Horse Carriage - Draft Horse/FEETHors_Draft Horse Walk On On Grass And Dirt MONO_DRCA_HOCA_MKH416.wav@5.62:0.32",
+    "footstep-mud-1": "RYK-Sounds - Footstep/mud 1 loop.wav@0.03:0.55",
+    "footstep-mud-2": "RYK-Sounds - Footstep/mud 1 loop.wav@0.80:0.55",
+    "footstep-mud-3": "RYK-Sounds - Footstep/mud 1 loop.wav@1.56:0.55",
     # NEVER take a UI cue from a pack labelled UI. Every one of them in this bundle is
     # synthesised, so picking on the word "UIClick" and on crest factor got a menu that
     # sounded like a spaceship. These menus are iron: a lock tinkers under the pointer
