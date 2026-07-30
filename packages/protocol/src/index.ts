@@ -458,6 +458,13 @@ export function validateIntent(v: unknown): Intent {
       if (!Number.isInteger(obj["y"])) throw new Error("validateIntent buyItem: y must be an integer");
       return { kind: "buyItem", x: obj["x"] as number, y: obj["y"] as number };
     }
+    case "revive": {
+      if (obj["where"] !== "checkpoint" && obj["where"] !== "hideout")
+        throw new Error("validateIntent revive: where must be \"checkpoint\" or \"hideout\"");
+      return { kind: "revive", where: obj["where"] as "checkpoint" | "hideout" };
+    }
+    case "usePortalScroll":
+      return { kind: "usePortalScroll" };
     default:
       throw new Error(`validateIntent: unknown kind: ${String(obj["kind"])}`);
   }

@@ -1,4 +1,5 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, it, test } from "vitest";
+import { readFileSync } from "node:fs";
 import { validateIntent, isToWorker } from "./index.js";
 import type { FromWorker } from "./index.js";
 import { fp } from "@exiled/fixed-point";
@@ -160,5 +161,58 @@ describe("FromWorker area message", () => {
     expect(clone.layout.grid.cells).toBeInstanceOf(Uint8Array);
     expect(clone.layout.grid.cells).toEqual(layout.grid.cells);
     expect(clone.layout.hash).toBe(layout.hash);
+  });
+});
+
+/**
+ * The trust boundary is also a silent one.
+ *
+ * `sim-worker.ts` hands every inbound intent to `validateIntent` and does not catch:
+ * an unknown kind throws inside the message handler, the intent is dropped, and the
+ * page sees nothing at all. Both `revive` and `usePortalScroll` shipped that way -
+ * every unit test green, both features dead in the browser, found only by pressing
+ * the button in the running game.
+ *
+ * So this is a source scan and not a list of samples. A list has to be remembered;
+ * the whole failure was that something was not.
+ */
+describe("validateIntent covers every intent kind", () => {
+  const src = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
+
+  /** Kinds declared on the `Intent` union. */
+  const declared = (): Set<string> => {
+    const body = src.slice(src.indexOf("export type Intent ="), src.indexOf("export type CommandType"));
+    return new Set([...body.matchAll(/kind:\s*"([a-zA-Z]+)"/g)].map((m) => m[1]!));
+  };
+
+  /** Kinds `validateIntent` has a case for. */
+  const handled = (): Set<string> => {
+    const body = src.slice(src.indexOf("export function validateIntent"));
+    const end = body.indexOf("const TO_WORKER_TYPES");
+    return new Set([...body.slice(0, end).matchAll(/case\s+"([a-zA-Z]+)":/g)].map((m) => m[1]!));
+  };
+
+  it("finds the union and the validator", () => {
+    expect(declared().size).toBeGreaterThan(10);
+    expect(handled().size).toBeGreaterThan(10);
+  });
+
+  it("validates every kind the client can send", () => {
+    const missing = [...declared()].filter((k) => !handled().has(k));
+    expect(missing).toEqual([]);
+  });
+
+  it("and validates nothing that is not an intent", () => {
+    const extra = [...handled()].filter((k) => !declared().has(k));
+    expect(extra).toEqual([]);
+  });
+
+  it("passes the two that were dropped", () => {
+    expect(validateIntent({ kind: "revive", where: "checkpoint" }))
+      .toEqual({ kind: "revive", where: "checkpoint" });
+    expect(validateIntent({ kind: "revive", where: "hideout" }))
+      .toEqual({ kind: "revive", where: "hideout" });
+    expect(validateIntent({ kind: "usePortalScroll" })).toEqual({ kind: "usePortalScroll" });
+    expect(() => validateIntent({ kind: "revive", where: "somewhere else" })).toThrow();
   });
 });
