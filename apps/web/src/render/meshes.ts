@@ -737,59 +737,46 @@ export function updateStash(root: Mesh, hovered: boolean): void {
  * warming them on hover would light the player up too.
  */
 function buildVendor(scene: Scene, root: Mesh): void {
-  const iron = new StandardMaterial(`${root.name}-vn-iron`, scene);
-  iron.diffuseColor = new Color3(0.15, 0.14, 0.14);
-  iron.emissiveColor = new Color3(0.03, 0.03, 0.03);
-  iron.specularColor = new Color3(0.7, 0.68, 0.6);
-  iron.specularPower = 96;
+  // A ring worn into the floor where he stands, and the whole hover cue.
+  //
+  // It is the ring and not the man because the man is the PLAYER's rig: his
+  // materials come out of the same wardrobe containers, so tinting him to say
+  // "clickable" would tint the character too. It is also what a headless build or
+  // a failed fetch is left with — something at his position that can still be
+  // picked, which is the difference between a hideout with no disenchanter and a
+  // hideout where the disenchanter cannot be reached.
+  const markMat = new StandardMaterial(`${root.name}-vn-mark`, scene);
+  markMat.diffuseColor = new Color3(0, 0, 0);
+  markMat.emissiveColor = new Color3(0.18, 0.12, 0.05);
+  markMat.specularColor = new Color3(0, 0, 0);
+  markMat.alpha = 0.5;
 
-  const stone = new StandardMaterial(`${root.name}-vn-stone`, scene);
-  stone.diffuseColor = new Color3(0.17, 0.16, 0.15);
-  stone.specularColor = new Color3(0.1, 0.1, 0.1);
-
-  // The embers are the one thing here that emits: it is what tells you at a
-  // glance which service eats items and which one stores them.
-  const ember = new StandardMaterial(`${root.name}-vn-ember`, scene);
-  ember.diffuseColor = new Color3(0.35, 0.11, 0.03);
-  ember.emissiveColor = new Color3(0.9, 0.34, 0.08);
-  ember.specularColor = new Color3(0, 0, 0);
-
-  // Brazier at his side: a stone foot, an iron bowl, coals filled to the brim.
-  const foot = MeshBuilder.CreateCylinder(`${root.name}-vn-foot`, { diameterTop: 0.2, diameterBottom: 0.34, height: 0.52, tessellation: 14 }, scene);
-  foot.position.set(0.62, 0.26, 0.06);
-  foot.parent = root;
-  foot.material = stone;
-
-  const bowl = MeshBuilder.CreateCylinder(`${root.name}-vn-bowl`, { diameterTop: 0.46, diameterBottom: 0.26, height: 0.2, tessellation: 16 }, scene);
-  bowl.position.set(0.62, 0.6, 0.06);
-  bowl.parent = root;
-  bowl.material = iron;
-
-  const coals = MeshBuilder.CreateCylinder(`${root.name}-vn-coals`, { diameter: 0.4, height: 0.03, tessellation: 16 }, scene);
-  coals.position.set(0.62, 0.7, 0.06);
-  coals.parent = root;
-  coals.material = ember;
+  const mark = MeshBuilder.CreateTorus(
+    `${root.name}-vn-mark`, { diameter: 1.35, thickness: 0.055, tessellation: 32 }, scene,
+  );
+  mark.position.y = 0.02;
+  mark.parent = root;
+  mark.material = markMat;
+  mark.receiveShadows = false;
 
   // The man himself. Null when the models have not loaded (headless tests, a
-  // failed fetch), which leaves the brazier standing alone — still visible,
-  // still interactable, still obviously the place where things are burnt down.
+  // failed fetch), which leaves the ring standing on its own.
   const rig = attachRig(scene, root);
   if (rig) {
     rig.setLooks({ helmet: "hood", body: "commoner", gloves: null, boots: "commoner", belt: null });
     rig.setLocomotion(0); // stand and breathe; he never goes anywhere
   }
 
-  root.metadata = { iron, ember, interactKind: "vendor", ...(rig ? { rig } : {}) };
+  root.metadata = { markMat, interactKind: "vendor", ...(rig ? { rig } : {}) };
 }
 
-/** Blow on the coals when the cursor is over him, and warm the brazier's iron. */
+/** Warm the ring at his feet when the cursor is on him. */
 export function updateVendor(root: Mesh, hovered: boolean): void {
-  const parts = root.metadata as { iron: StandardMaterial; ember: StandardMaterial } | null;
-  if (!parts?.iron) return;
-  const e = hovered ? 0.26 : 0.03;
-  parts.iron.emissiveColor.set(e, e * 0.72, e * 0.3);
-  const g = hovered ? 1.35 : 0.9;
-  parts.ember.emissiveColor.set(g, g * 0.38, g * 0.09);
+  const parts = root.metadata as { markMat?: StandardMaterial } | null;
+  if (!parts?.markMat) return;
+  const e = hovered ? 0.85 : 0.18;
+  parts.markMat.emissiveColor.set(e, e * 0.68, e * 0.28);
+  parts.markMat.alpha = hovered ? 0.85 : 0.5;
 }
 
 /** Brighten the device emissive on mouse hover so it reads as interactive. */

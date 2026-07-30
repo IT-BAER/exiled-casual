@@ -8,6 +8,7 @@ import { playDropSound } from "../audio/drop-sound";
 import "@testing-library/jest-dom/vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { Hud } from "./Hud";
+import { VENDOR_NAME, VENDOR_TITLE } from "../npc";
 import { xpPerHour, TICK_BACKGROUND, TICK_BACKGROUND_EMPTY, RAIL_H } from "./XpBar";
 import type { Snapshot } from "@exiled/protocol";
 import { MAP_PORTALS } from "@exiled/protocol";
@@ -566,5 +567,23 @@ describe("skill bar drag and drop", () => {
     expect(imgs.filter((src) => src?.includes("ember_bolt"))).toHaveLength(1);
     expect(screen.getByTestId("skill-slot-5").querySelector("img")).not.toBeNull();
     expect(screen.getByTestId("skill-slot-1").querySelector("img")).toBeNull();
+  });
+});
+
+/**
+ * The disenchanter is a man now, not a brazier with a job title. His label carries
+ * his name because "Vendor" is a form field, and PoE's vendors are Nessa and
+ * Tarkleigh before they are a shop.
+ */
+describe("the disenchanter has a name", () => {
+  it("hovering him reads his name and his trade", () => {
+    const snap = makeSnap({});
+    const withVendor: Snapshot = {
+      ...snap,
+      entities: [...snap.entities, { id: 42, kind: "vendor", x: 2, y: 2 }],
+    };
+    render(<Hud snapshot={withVendor} hoveredEntityId={42} />);
+    expect(screen.getByTestId("interact-label").textContent).toContain(VENDOR_NAME);
+    expect(screen.getByTestId("interact-label").textContent).toContain(VENDOR_TITLE);
   });
 });

@@ -7,6 +7,7 @@ import { SkillTooltip } from "./SkillTooltip";
 import { XpBar } from "./XpBar";
 import { playDropSound } from "../audio/drop-sound";
 import { DEFAULT_SETTINGS, SKILL_SLOT_COUNT } from "../settings";
+import { VENDOR_NAME, VENDOR_TITLE } from "../npc";
 
 // Bottom HUD geometry, measured off reference-screenshots/poe1-lower-bar.png, a 2558x388 crop
 // of Path of Exile **1**'s bottom bar (PoE1, not PoE2 — its globes are bigger and its ring
@@ -607,7 +608,8 @@ export function Hud({
     ? hoveredEntity.kind === "stash"
       ? "Stash"
       : hoveredEntity.kind === "vendor"
-      ? "Vendor"
+      // A person, not a service. "Vendor" is a job title on a form.
+      ? `${VENDOR_NAME}, ${VENDOR_TITLE}`
       : hoveredEntity.kind === "mapDevice"
       ? "Map Device"
       : snapshot.area === "hideout"

@@ -4,6 +4,7 @@ import { canEquip } from "@exiled/simulation";
 import { currencyAccepts, currencyResultRarity, SHARDS_PER_ORB } from "@exiled/rules";
 import { ItemTooltip } from "./ItemTooltip";
 import { playDropSound } from "../audio/drop-sound";
+import { VENDOR_NAME, VENDOR_TITLE } from "../npc";
 import { BAR_H, ORB_RISE } from "./Hud";
 import { CELL, CELL_VW, PANEL_PAD, PANEL_W } from "./layout";
 
@@ -733,13 +734,14 @@ export function InventoryPanel({
           data-hud-panel=""
           style={{ ...PANE, padding: PANEL_PAD, overflowY: "auto", scrollbarWidth: "none" }}
         >
-          <PaneHeader title="Purchase" bleed={PANEL_PAD} onClose={() => onCloseVendor?.()} testId="vendor-close" />
+          {/* His name, not the transaction: the window belongs to a person. */}
+          <PaneHeader title={VENDOR_NAME} bleed={PANEL_PAD} onClose={() => onCloseVendor?.()} testId="vendor-close" />
 
           {/* The reference labels the shelf and then tabs it. One shelf is one
               page, so the tab is a single chip: PoE1 draws it that way too when a
               vendor's stock does not overflow. */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-            <span style={{ fontSize: 11, letterSpacing: 1.5, color: "#b7ac8e" }}>Select Items To Buy</span>
+            <span style={{ fontSize: 11, letterSpacing: 1.5, color: "#b7ac8e" }}>{VENDOR_TITLE}</span>
             <span
               data-testid="vendor-tab"
               style={{

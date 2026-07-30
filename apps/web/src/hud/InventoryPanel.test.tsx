@@ -5,6 +5,7 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { ITEM_POOLS, baseOf, WISDOM_SCROLL_BASE_ID } from "@exiled/content-runtime";
 import { InventoryPanel } from "./InventoryPanel";
+import { VENDOR_NAME, VENDOR_TITLE } from "../npc";
 
 afterEach(cleanup);
 
@@ -351,7 +352,9 @@ const shelf = {
 describe("InventoryPanel - purchase window", () => {
   it("shows the shelf with a price in every cell", () => {
     render(<InventoryPanel inventory={inv} vendorOpen vendor={shelf} gold={500} onClose={() => {}} />);
-    expect(screen.getByTestId("vendor-panel").textContent).toContain("Select Items To Buy");
+    // His name on the band, his trade under it: the window belongs to a person.
+    expect(screen.getByTestId("vendor-panel").textContent).toContain(VENDOR_NAME);
+    expect(screen.getByTestId("vendor-panel").textContent).toContain(VENDOR_TITLE);
     expect(screen.getByTestId("vendor-price-0").textContent).toBe("40");
     expect(screen.getByTestId("vendor-price-1").textContent).toBe("900");
   });
