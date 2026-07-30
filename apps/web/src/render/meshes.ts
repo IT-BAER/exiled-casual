@@ -309,6 +309,32 @@ export function updateRareElement(root: Mesh, element: string | undefined): void
 }
 
 /**
+ * Whitewash a body for the moment it is struck. `t` runs 1 at the hit to 0 when
+ * it is over; anything at or below 0 clears it.
+ *
+ * An overlay rather than a material change: monsters share cached materials by
+ * species, so tinting one emissive would light up every imp on the screen. The
+ * overlay is per mesh, costs no material, and survives a skinned mesh that has
+ * its own shader — the two things that rule out every other way of doing this.
+ *
+ * Deliberately small (docs/09 rule 3: intensity beats density). A hit lands
+ * several times a second all fight; anything that reads as a flash from across
+ * the room becomes a strobe by the second pack.
+ */
+const HIT_TINT = new Color3(1, 0.93, 0.86);
+const HIT_ALPHA = 0.3;
+
+export function setHitFlash(root: Mesh, t: number): void {
+  const on = t > 0;
+  for (const m of [root, ...root.getChildMeshes(false)]) {
+    if (!on) { m.renderOverlay = false; continue; }
+    m.overlayColor = HIT_TINT;
+    m.overlayAlpha = HIT_ALPHA * Math.min(1, t);
+    m.renderOverlay = true;
+  }
+}
+
+/**
  * Flat disc + bright rim ring for a boss telegraph.
  * Built at radius=1 so the renderer can scale it to any real radius.
  * Material refs stored in root.metadata so updateTelegraph can animate them

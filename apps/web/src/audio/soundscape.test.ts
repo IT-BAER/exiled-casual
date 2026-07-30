@@ -380,8 +380,8 @@ describe("environment", () => {
     const [stone] = rooms("vaal_stone");
     const [sand] = rooms("desert");
     const [hideout] = rooms(null);
-    expect(stone).toBeGreaterThan(hideout);
-    expect(hideout).toBeGreaterThan(sand);
+    expect(stone!).toBeGreaterThan(hideout!);
+    expect(hideout!).toBeGreaterThan(sand!);
   });
 
   it("reports how far a cue was as well as how loud, so it can be muffled", () => {
@@ -391,7 +391,7 @@ describe("environment", () => {
     s.observe(snap({ tick: 1, entities: [monster(1, 9)] }));
     s.observe(snap({ tick: 2, entities: [] }));
     const death = calls.find((c) => c[0].startsWith("monster-death"))!;
-    expect(death[2]).toBeCloseTo(9, 5);
+    expect(death[2]!).toBeCloseTo(9, 5);
     expect(death[1]!).toBeLessThan(1);
   });
 });

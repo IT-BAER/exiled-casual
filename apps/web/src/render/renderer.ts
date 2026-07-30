@@ -3,7 +3,7 @@ import type { Scene } from "@babylonjs/core";
 import type { Mesh } from "@babylonjs/core";
 import { blinkBurst } from "./skill-fx";
 import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
-import { animateActor, makeMesh, updateTelegraph, updatePortal, updateMapDevice, updateStash, updateVendor, updateGroundItem, updateRareElement, portalAppear, portalVanish, isPortalMesh, PORTAL_STAGGER_MS, Y_LIFT } from "./meshes";
+import { animateActor, makeMesh, setHitFlash, updateTelegraph, updatePortal, updateMapDevice, updateStash, updateVendor, updateGroundItem, updateRareElement, portalAppear, portalVanish, isPortalMesh, PORTAL_STAGGER_MS, Y_LIFT } from "./meshes";
 import type { MeshKind } from "./meshes";
 import { COSMETIC_SLOTS, looksForEquipment, previewItemFor, rigOf, type Looks } from "./rig";
 import { CAMERA_ALPHA } from "./engine";
@@ -45,6 +45,13 @@ const PROP_YAW_SHIFT = FACE_CAMERA_YAW - Math.PI;
 const TELEPORT_STEP = 2;
 /** Chest height, where the character actually vanishes from. */
 const BLINK_Y = 0.9;
+
+/**
+ * Ticks a body stays lit after it is hit. Three is a tenth of a second: long
+ * enough to survive a dropped frame, short enough that a fast weapon reads as a
+ * rhythm of hits rather than a monster that is permanently white.
+ */
+const HIT_FLASH_TICKS = 3;
 
 /**
  * Only bodies lean. A portal or a chest carries a fixed yaw and no weight, and
@@ -95,6 +102,8 @@ export class SnapshotRenderer {
   private readonly gait = new Map<number, number>();
   /** Current [roll, pitch] per entity, eased toward the lean the run asks for. */
   private readonly tilt = new Map<number, [number, number]>();
+  /** The tick each entity was last struck on. Absent means it is not lit. */
+  private readonly hit = new Map<number, number>();
   private static readonly GAIT_PER_UNIT = 3.2;
   /** apply() runs several times per snapshot while interpolating; once-per-tick
    *  work (like firing a cast animation) is gated on this. */
@@ -134,6 +143,9 @@ export class SnapshotRenderer {
   apply(prev: Snapshot | null, next: Snapshot, alpha: number): void {
     // Collect the full set of ids that should exist after this call
     const liveIds = new Set<number>();
+    // apply() runs several times per snapshot while interpolating, so anything
+    // that reacts to a CHANGE has to know which of those frames is the first.
+    const newTick = next.tick !== this.lastTick;
 
     // Player
     this.playerId = next.player.id;
@@ -181,6 +193,11 @@ export class SnapshotRenderer {
       );
       const mesh = this.meshes.get(e.id);
       if (!mesh) continue;
+      // Struck: life is the only report of a hit the client gets, and it is the
+      // honest one — a swing that missed or was absorbed never moves it.
+      if (newTick && e.life !== undefined && prevE?.life !== undefined && e.life < prevE.life) {
+        this.hit.set(e.id, next.tick);
+      }
       // Born this snapshot: hold it shut and open it in its turn.
       const arriving = arrivingPortals.indexOf(e.id);
       if (arriving >= 0) portalAppear(this.scene, mesh, arriving * PORTAL_STAGGER_MS);
@@ -231,7 +248,22 @@ export class SnapshotRenderer {
         this.meshes.delete(id);
         this.gait.delete(id);
         this.tilt.delete(id);
+        this.hit.delete(id);
       }
+    }
+
+    // Faded on the sim's clock, like every other timing in the client: a wall
+    // clock would also have to survive a paused engine reporting no time passing,
+    // and a body left permanently white is a worse bug than a flash one tick long.
+    for (const [id, hitTick] of this.hit) {
+      const mesh = this.meshes.get(id);
+      const left = HIT_FLASH_TICKS - (next.tick - hitTick);
+      if (!mesh || left <= 0) {
+        if (mesh) setHitFlash(mesh, 0);
+        this.hit.delete(id);
+        continue;
+      }
+      setHitFlash(mesh, left / HIT_FLASH_TICKS);
     }
 
     if (next.tick !== this.lastTick) {

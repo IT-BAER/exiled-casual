@@ -744,3 +744,30 @@ describe("portals arrive one at a time", () => {
     expect(scene.getMeshByName("entity-100")).not.toBeNull();
   });
 });
+
+describe("hit flash", () => {
+  it("lights a monster the tick its life drops, and clears it again", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const renderer = new SnapshotRenderer(scene);
+
+    const s0 = makeSnapshot({ tick: 1, entities: [{ id: 1, kind: "monster", x: 0, y: 0, life: 40, maxLife: 40 }] });
+    renderer.apply(null, s0, 1);
+    const mesh = scene.getMeshByName("entity-1")!;
+    expect(mesh.renderOverlay).toBeFalsy();
+
+    const s1 = makeSnapshot({ tick: 2, entities: [{ id: 1, kind: "monster", x: 0, y: 0, life: 22, maxLife: 40 }] });
+    renderer.apply(s0, s1, 1);
+    expect(mesh.renderOverlay).toBe(true);
+    expect(mesh.overlayAlpha).toBeGreaterThan(0);
+
+    // Unhurt for long enough (a NullEngine frame is 16ms, so ten of them).
+    let prev = s1;
+    for (let t = 3; t < 13; t++) {
+      const next = makeSnapshot({ tick: t, entities: [{ id: 1, kind: "monster", x: 0, y: 0, life: 22, maxLife: 40 }] });
+      renderer.apply(prev, next, 1);
+      prev = next;
+    }
+    expect(mesh.renderOverlay).toBe(false);
+  });
+});
