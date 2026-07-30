@@ -22,7 +22,7 @@ import { CharacterPanel } from "./hud/CharacterPanel";
 import { LootLabels } from "./hud/LootLabels";
 import { NpcLabels } from "./hud/NpcLabels";
 import { Minimap } from "./hud/Minimap";
-import { Divider, FramedPanel, GOLD, MenuButton, SERIF } from "./menu/frames";
+import { Divider, FramedPanel, GOLD, MenuButton, DISPLAY, SERIF } from "./menu/frames";
 import { LoadingScreen, LOADING_ART, FADE_MS } from "./LoadingScreen";
 import { pickTip } from "./tips";
 import { OptionsPanel } from "./menu/OptionsPanel";
@@ -589,7 +589,7 @@ function DeathScreen({
           in here and they carry the two longest strings in the game. */}
       <FramedPanel style={{ padding: "20px 30px 24px", minWidth: 420 }}>
         <div style={{
-          fontFamily: SERIF, fontSize: 22, letterSpacing: 5,
+          fontFamily: DISPLAY, fontSize: 22, letterSpacing: 5,
           textTransform: "uppercase", color: "#c1443a", textAlign: "center",
         }}>
           You have died
@@ -662,7 +662,7 @@ function GameMenu({
       style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", background: "rgba(3,4,6,0.7)" }}
     >
       <FramedPanel style={{ padding: "18px 26px 20px", minWidth: 320 }}>
-        <div style={{ fontFamily: SERIF, fontSize: 18, letterSpacing: 4, textTransform: "uppercase", color: GOLD, textAlign: "center" }}>
+        <div style={{ fontFamily: DISPLAY, fontSize: 18, letterSpacing: 4, textTransform: "uppercase", color: GOLD, textAlign: "center" }}>
           Paused
         </div>
         <Divider style={{ margin: "10px 0 16px" }} />

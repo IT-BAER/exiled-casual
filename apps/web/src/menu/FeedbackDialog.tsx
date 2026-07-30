@@ -13,7 +13,7 @@
  * is the whole difference at this stage.
  */
 import React from "react";
-import { BODY_SERIF, Divider, FramedPanel, GOLD, GOLD_DIM, MenuButton, PARCHMENT, SERIF } from "./frames";
+import { DISPLAY, SERIF, Divider, FramedPanel, GOLD, GOLD_DIM, MenuButton, PARCHMENT } from "./frames";
 
 const REPO = "https://github.com/IT-BAER/exiled-casual";
 
@@ -101,7 +101,7 @@ export function FeedbackDialog({
     >
       <FramedPanel style={{ padding: "18px 26px 20px", width: "min(560px, 86vw)" }}>
         <div style={{
-          fontFamily: SERIF, fontSize: 18, letterSpacing: 4,
+          fontFamily: DISPLAY, fontSize: 18, letterSpacing: 4,
           textTransform: "uppercase", color: GOLD, textAlign: "center",
         }}>
           {c.title}
@@ -109,7 +109,7 @@ export function FeedbackDialog({
         <Divider style={{ margin: "10px 0 14px" }} />
         <label
           htmlFor="feedback-text"
-          style={{ display: "block", fontFamily: BODY_SERIF, fontSize: 14, color: GOLD_DIM, marginBottom: 8 }}
+          style={{ display: "block", fontFamily: SERIF, fontSize: 14, color: GOLD_DIM, marginBottom: 8 }}
         >
           {c.prompt}
         </label>
@@ -127,7 +127,7 @@ export function FeedbackDialog({
             // into selection: the body turns it off everywhere (index.html).
             userSelect: "text",
             WebkitUserSelect: "text",
-            fontFamily: BODY_SERIF,
+            fontFamily: SERIF,
             fontSize: 15,
             lineHeight: 1.5,
             color: PARCHMENT,
@@ -139,7 +139,7 @@ export function FeedbackDialog({
           }}
         />
         <div style={{
-          fontFamily: BODY_SERIF, fontSize: 12.5, color: "#7d7469", margin: "10px 2px 14px",
+          fontFamily: SERIF, fontSize: 12.5, color: "#7d7469", margin: "10px 2px 14px",
         }}>
           Opens a GitHub issue with your build and platform attached. Nothing is sent from here.
         </div>

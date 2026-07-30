@@ -21,7 +21,7 @@
 import React from "react";
 import { CONTENT_VERSION } from "@exiled/content-runtime";
 import { Atmosphere, type BrazierSpot } from "./atmos";
-import { Divider, FramedPanel, GOLD, GOLD_DIM, MENU_ART, MenuButton, PARCHMENT, SERIF } from "./frames";
+import { Divider, FramedPanel, GOLD, GOLD_DIM, MENU_ART, MenuButton, PARCHMENT, DISPLAY, SERIF } from "./frames";
 
 /**
  * The two braziers painted into `menu_backdrop.jpg`, as fractions of THAT IMAGE
@@ -129,7 +129,7 @@ function LatestPanel(): React.ReactElement {
     >
       <div
         style={{
-          fontFamily: SERIF,
+          fontFamily: DISPLAY,
           fontSize: 13,
           letterSpacing: 3,
           textTransform: "uppercase",

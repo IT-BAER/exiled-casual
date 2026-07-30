@@ -18,10 +18,17 @@ import { playSfx } from "../audio/sfx";
 export const MENU_ART = "/textures/ui/menu";
 
 /** Matches the HUD, so a menu button and an inventory header are the same voice. */
-export const SERIF = '"Cinzel", "Trajan Pro", Georgia, "Times New Roman", serif';
-/** The reading face, for sentences. Same pair as the HUD's, re-declared for the
- *  same reason the display one is: this file may not import the HUD. */
-export const BODY_SERIF = '"EB Garamond", "Cinzel", Georgia, "Times New Roman", serif';
+/**
+ * The reading face: everything that is a word rather than a title.
+ *
+ * Cinzel, which used to be this, is a Trajan — a capitals-only alphabet
+ * whose "lower case" is small capitals. Set a sentence in it and the
+ * sentence comes out shouting, which is what every panel here was doing.
+ * It is still the face of every title; see DISPLAY.
+ */
+export const SERIF = '"EB Garamond", Georgia, "Times New Roman", serif';
+/** The carved face, for titles, labels and anything already uppercase. */
+export const DISPLAY = '"Cinzel", "Trajan Pro", Georgia, "Times New Roman", serif';
 export const GOLD = "#c8a44d";
 export const GOLD_DIM = "#7a5c22";
 export const PARCHMENT = "#e8dcc0";
@@ -159,7 +166,7 @@ export function MenuButton({
         backgroundImage: `url(${MENU_ART}/button_plate.png)`,
         backgroundSize: "100% 100%",
         backgroundRepeat: "no-repeat",
-        fontFamily: SERIF,
+        fontFamily: DISPLAY,
         fontSize: Math.round(height * 0.34),
         letterSpacing: 2.5,
         textTransform: "uppercase",
@@ -208,7 +215,7 @@ export function Label({ children, style }: { children: React.ReactNode; style?: 
   return (
     <span
       style={{
-        fontFamily: SERIF,
+        fontFamily: DISPLAY,
         fontSize: 11,
         letterSpacing: 2,
         textTransform: "uppercase",

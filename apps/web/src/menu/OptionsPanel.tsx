@@ -15,17 +15,7 @@
  * that. The plate has a SAVE, drawn dark; ours is the lit CLOSE alone.
  */
 import React from "react";
-import {
-  BODY_SERIF,
-  Divider,
-  FramedPanel,
-  GOLD,
-  GOLD_DIM,
-  MENU_ART,
-  MenuButton,
-  PARCHMENT,
-  SERIF,
-} from "./frames";
+import { DISPLAY, SERIF, Divider, FramedPanel, GOLD, GOLD_DIM, MENU_ART, MenuButton, PARCHMENT } from "./frames";
 import { DEFAULT_SETTINGS, MIN_RESOLUTION_SCALE, type Settings, type ShadowQuality } from "../settings";
 // hud/layout.ts imports nothing, so the menu bundle gains two numbers, not the HUD.
 import { PANEL_W } from "../hud/layout";
@@ -216,7 +206,7 @@ export function OptionsPanel({
               </Row>
               <p
                 style={{
-                  fontFamily: BODY_SERIF,
+                  fontFamily: SERIF,
                   fontSize: 13.5,
                   color: GOLD_DIM,
                   lineHeight: 1.6,
@@ -267,7 +257,7 @@ function Header({ onClose }: { onClose: () => void }): React.ReactElement {
     <div style={{ position: "relative", display: "grid", placeItems: "center", marginBottom: 8 }}>
       <div
         style={{
-          fontFamily: SERIF,
+          fontFamily: DISPLAY,
           fontSize: 20,
           letterSpacing: 5,
           textTransform: "uppercase",
@@ -329,7 +319,7 @@ function Tabs({
               backgroundImage: `url(${MENU_ART}/tab_plate.png)`,
               backgroundSize: "100% 100%",
               backgroundRepeat: "no-repeat",
-              fontFamily: SERIF,
+              fontFamily: DISPLAY,
               fontSize: 13,
               letterSpacing: 2,
               textTransform: "uppercase",
@@ -353,7 +343,7 @@ function Group({ children }: { children: React.ReactNode }): React.ReactElement 
   return (
     <div
       style={{
-        fontFamily: SERIF,
+        fontFamily: DISPLAY,
         fontSize: 13,
         letterSpacing: 3,
         textTransform: "uppercase",

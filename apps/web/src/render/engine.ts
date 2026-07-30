@@ -325,23 +325,30 @@ export const CAMERA_ALPHA = -Math.PI / 4;
 const BETA_PER_UNIT = -0.08;
 const BETA_LIMIT = { min: BETA_AT_DEFAULT, max: 0.88 };
 
-/** Seconds-ish smoothing on the zoom, so a notch glides instead of snapping. */
-const ZOOM_EASE = 0.11;
-
 /**
- * Shortest gap between two notches the wheel is allowed to spend.
+ * The fastest the view may travel, in half-height units per second.
  *
- * A mouse wheel sends one event per detent and never approaches this. A
- * trackpad sends a stream of them, and without a floor a two-finger swipe
- * crosses the entire zoom range in a flick — the same gesture, wildly different
- * speeds, on the two devices people actually play with.
+ * A SPEED LIMIT, not a brake: every notch of the wheel still counts and still
+ * moves the target, and a flick of a trackpad simply takes longer to arrive
+ * rather than being thrown away. Dropping notches was the first attempt and it
+ * is the thing that feels like the wheel is sticking — the input disappears.
+ * The whole range is 1.55 units, so at this rate a full sweep takes about a
+ * second however fast it was asked for.
  */
-const ZOOM_MIN_GAP_MS = 70;
+const MAX_ZOOM_SPEED = 1.6;
+/** The nudge a single notch is allowed before the limiter takes over: one frame's
+ *  worth, so the first click of the wheel is felt immediately. */
+const ZOOM_KICK = MAX_ZOOM_SPEED / 60;
 
 /** Flagstone texture repeats across the 200u floor (25 → ~8u per tile). */
 /** Ground-plane texture repeats. Exported because level.ts re-plates the same
  *  mesh per biome and must not change the scale of the stone underfoot. */
 export const FLOOR_TILES = 25;
+
+/** `d`, but no further than `limit` in either direction. */
+function clampStep(d: number, limit: number): number {
+  return Math.max(-limit, Math.min(limit, d));
+}
 
 /** Side of the ground plane, in world units. `buildLevel` shrinks it to the
  *  area's own rect so the world ENDS at the outer wall, as PoE's does: past the
@@ -488,19 +495,15 @@ export function createScene(engine: Engine): SceneHandle {
       Math.max(MIN_HALF_HEIGHT, targetHalf * ZOOM_STEP ** notches),
     );
     // Tests and the first notch want the effect without waiting for a frame;
-    // the easing below only has to cover the distance that is left.
-    half += (targetHalf - half) * ZOOM_EASE;
+    // the limiter below only has to cover the distance that is left.
+    half += clampStep(targetHalf - half, ZOOM_KICK);
     applyFraming();
   };
 
-  let lastNotch = 0;
   const onWheel = (ev: WheelEvent) => {
     // The wheel still scrolls the inventory and stash: this is on the canvas,
     // and an event over a HUD panel never reaches it.
     ev.preventDefault();
-    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
-    if (now - lastNotch < ZOOM_MIN_GAP_MS) return;
-    lastNotch = now;
     setZoom(Math.sign(ev.deltaY));
   };
   const canvas = engine.getRenderingCanvas();
@@ -510,7 +513,9 @@ export function createScene(engine: Engine): SceneHandle {
 
   scene.onBeforeRenderObservable.add(() => {
     if (Math.abs(targetHalf - half) < 1e-4) return;
-    half += (targetHalf - half) * ZOOM_EASE;
+    // Real seconds, so the travel is the same on a 60Hz panel and a 165Hz one.
+    const dt = Math.min(0.1, (engine.getDeltaTime?.() || 16) / 1000);
+    half += clampStep(targetHalf - half, MAX_ZOOM_SPEED * dt);
     applyFraming();
   });
 

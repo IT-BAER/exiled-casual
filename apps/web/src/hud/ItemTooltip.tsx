@@ -14,17 +14,18 @@ import type { ItemStatLine } from "@exiled/protocol";
  * merely named, which it was until now — the fallback everyone actually saw was
  * Georgia.
  */
-export const SERIF = '"Cinzel", "Trajan Pro", Georgia, "Times New Roman", serif';
-
 /**
- * The reading face, for anything longer than a label: flavour text, tips,
- * the paragraph under a setting.
+ * The reading face: everything that is a word rather than a title.
  *
- * A Trajan has no lower case worth reading — it is capitals with small caps
- * pretending — so a sentence set in it is stately and slow. EB Garamond is the
- * same century and reads at speed.
+ * Cinzel, which used to be this, is a Trajan — a capitals-only alphabet
+ * whose "lower case" is small capitals. Set a sentence in it and the
+ * sentence comes out shouting, which is what every panel here was doing.
+ * It is still the face of every title; see DISPLAY.
  */
-export const BODY_SERIF = '"EB Garamond", "Cinzel", Georgia, "Times New Roman", serif';
+export const SERIF = '"EB Garamond", Georgia, "Times New Roman", serif';
+/** The carved face, for titles, labels and anything already uppercase. */
+export const DISPLAY = '"Cinzel", "Trajan Pro", Georgia, "Times New Roman", serif';
+
 const AFFIX_BLUE = "#8f97ff";
 const CLASS_TAN = "#8a8065";
 const LABEL_GREY = "#7b7b74"; // stat/requirement words
@@ -231,7 +232,7 @@ export function ItemTooltip({
         {flavour && (
           <>
             <Rule />
-            <div style={{ fontFamily: BODY_SERIF, color: r.text, fontSize: 13.5, fontStyle: "italic", letterSpacing: 0.3, lineHeight: 1.4, margin: "4px 2px 0" }}>
+            <div style={{ fontFamily: SERIF, color: r.text, fontSize: 13.5, fontStyle: "italic", letterSpacing: 0.3, lineHeight: 1.4, margin: "4px 2px 0" }}>
               {flavour}
             </div>
           </>

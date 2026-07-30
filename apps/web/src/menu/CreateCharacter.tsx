@@ -12,7 +12,7 @@ import { CLASS_LIST } from "@exiled/content-runtime";
 import { NAME_MAX, nameError, type RosterBlob } from "@exiled/persistence";
 import { Atmosphere, type BrazierSpot } from "./atmos";
 import { INPUT_STYLE } from "./CharacterSelect";
-import { Divider, FramedPanel, GOLD, GOLD_DIM, MENU_ART, MenuButton, PARCHMENT, SERIF } from "./frames";
+import { Divider, FramedPanel, GOLD, GOLD_DIM, MENU_ART, MenuButton, PARCHMENT, DISPLAY, SERIF } from "./frames";
 
 /**
  * The hall's two braziers, as fractions of `select_backdrop.jpg`. `flame: 0`:
@@ -73,7 +73,7 @@ export function CreateCharacter({
           zIndex: 2,
         }}
       >
-        <div style={{ fontFamily: SERIF, fontSize: 18, letterSpacing: 3.5, textTransform: "uppercase", color: GOLD, textAlign: "center" }}>
+        <div style={{ fontFamily: DISPLAY, fontSize: 18, letterSpacing: 3.5, textTransform: "uppercase", color: GOLD, textAlign: "center" }}>
           New character
         </div>
         <Divider />
@@ -108,7 +108,7 @@ export function CreateCharacter({
               <img src={c.portrait} alt="" style={{ width: 46, height: 46, marginLeft: 6, objectFit: "cover", flex: "0 0 auto" }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontFamily: SERIF, fontSize: 15, letterSpacing: 1.4, color: PARCHMENT }}>{c.name}</div>
-                <div style={{ fontFamily: SERIF, fontSize: 11, letterSpacing: 1.4, textTransform: "uppercase", color: GOLD_DIM }}>
+                <div style={{ fontFamily: DISPLAY, fontSize: 11, letterSpacing: 1.4, textTransform: "uppercase", color: GOLD_DIM }}>
                   {c.archetype}
                 </div>
               </div>
@@ -126,7 +126,7 @@ export function CreateCharacter({
 
         <div style={{ flex: 1 }} />
 
-        <label style={{ fontFamily: SERIF, fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: GOLD_DIM }}>
+        <label style={{ fontFamily: DISPLAY, fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: GOLD_DIM }}>
           Name
           <input
             data-testid="name-input"

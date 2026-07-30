@@ -14,7 +14,7 @@
 import React from "react";
 import { LOCAL_CHARACTER_CAP } from "@exiled/persistence";
 import type { Mode } from "../save/roster";
-import { Divider, FramedPanel, GOLD, GOLD_DIM, MenuButton, PARCHMENT, SERIF } from "./frames";
+import { Divider, FramedPanel, GOLD, GOLD_DIM, MenuButton, PARCHMENT, DISPLAY, SERIF } from "./frames";
 
 export function ModeDialog({
   onPick,
@@ -50,7 +50,7 @@ export function ModeDialog({
       <FramedPanel style={{ width: "min(52vw, 720px)", padding: "16px 22px 20px" }}>
         <div
           style={{
-            fontFamily: SERIF,
+            fontFamily: DISPLAY,
             fontSize: 20,
             letterSpacing: 4,
             textTransform: "uppercase",
@@ -120,7 +120,7 @@ function Choice({
       <div style={{ flex: 1, minWidth: 0 }}>
         <div
           style={{
-            fontFamily: SERIF,
+            fontFamily: DISPLAY,
             fontSize: 16,
             letterSpacing: 2.5,
             textTransform: "uppercase",

@@ -8,7 +8,7 @@
 import React from "react";
 import { CONTENT_VERSION } from "@exiled/content-runtime";
 import { Atmosphere, type BrazierSpot } from "./atmos";
-import { Divider, FramedPanel, GOLD, MENU_ART, MenuButton, PARCHMENT, SERIF } from "./frames";
+import { Divider, FramedPanel, GOLD, MENU_ART, MenuButton, PARCHMENT, DISPLAY, SERIF } from "./frames";
 
 /** Same painting as the main menu, so the same two fires. */
 const BRAZIERS: readonly BrazierSpot[] = [
@@ -44,7 +44,7 @@ export function InfoScreen({
       <Atmosphere backdrop={`${MENU_ART}/menu_backdrop.jpg`} braziers={BRAZIERS} />
       <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", zIndex: 2 }}>
         <FramedPanel style={{ width: "min(52vw, 700px)", padding: "18px 26px 20px" }}>
-          <div style={{ fontFamily: SERIF, fontSize: 20, letterSpacing: 4, textTransform: "uppercase", color: GOLD, textAlign: "center" }}>
+          <div style={{ fontFamily: DISPLAY, fontSize: 20, letterSpacing: 4, textTransform: "uppercase", color: GOLD, textAlign: "center" }}>
             {title}
           </div>
           <Divider style={{ margin: "10px 0 16px" }} />

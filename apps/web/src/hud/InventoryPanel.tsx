@@ -64,7 +64,17 @@ type DragSource = { kind: "grid"; container: ContainerId; x: number; y: number }
 // Matches reference-screenshots/inventory+equipment.png.
 // Exported so the character sheet dresses in the same carved gold as this panel
 // rather than keeping a second copy of the palette that can drift from it.
-export const SERIF = '"Cinzel", "Trajan Pro", Georgia, "Times New Roman", serif';
+/**
+ * The reading face: everything that is a word rather than a title.
+ *
+ * Cinzel, which used to be this, is a Trajan — a capitals-only alphabet
+ * whose "lower case" is small capitals. Set a sentence in it and the
+ * sentence comes out shouting, which is what every panel here was doing.
+ * It is still the face of every title; see DISPLAY.
+ */
+export const SERIF = '"EB Garamond", Georgia, "Times New Roman", serif';
+/** The carved face, for titles, labels and anything already uppercase. */
+export const DISPLAY = '"Cinzel", "Trajan Pro", Georgia, "Times New Roman", serif';
 export const GOLD = "#c8a44d";
 export const GOLD_DIM = "#7a5c22";
 export const PARCHMENT = "#e8dcc0";
@@ -139,7 +149,7 @@ export function PaneHeader({ title, bleed, onClose, testId }: {
           over a band this busy the strokes went to mud. inventory+equipment.png
           has PoE2's cartouche lettering pale for the same reason, so brightening
           it is the reference reading too, not a departure from it. */}
-      <span style={{ fontFamily: SERIF, fontSize: 19, fontWeight: 700, letterSpacing: 5, textTransform: "uppercase", color: "#f2dfae", textShadow: "0 1px 1px rgba(0,0,0,0.85), 0 0 6px rgba(0,0,0,0.6)" }}>
+      <span style={{ fontFamily: DISPLAY, fontSize: 19, fontWeight: 700, letterSpacing: 5, textTransform: "uppercase", color: "#f2dfae", textShadow: "0 1px 1px rgba(0,0,0,0.85), 0 0 6px rgba(0,0,0,0.6)" }}>
         {title}
       </span>
       <button

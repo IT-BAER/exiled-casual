@@ -1,7 +1,7 @@
 import React from "react";
 import type { Snapshot } from "@exiled/protocol";
 import { MAP_PORTALS } from "@exiled/protocol";
-import { SERIF } from "./ItemTooltip";
+import { DISPLAY, SERIF } from "./ItemTooltip";
 import { PANEL_W } from "./layout";
 import { SkillTooltip } from "./SkillTooltip";
 import { XpBar } from "./XpBar";
@@ -696,7 +696,7 @@ export function Hud({
             left: 0,
             right: 0,
             textAlign: "center",
-            fontFamily: SERIF,
+            fontFamily: DISPLAY,
             fontSize: 30,
             letterSpacing: 4,
             textTransform: "uppercase",

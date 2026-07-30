@@ -15,7 +15,7 @@
  * hairline the skill rows are split by, and the type is the HUD serif.
  */
 import React from "react";
-import { BODY_SERIF, SERIF } from "./hud/ItemTooltip";
+import { DISPLAY, SERIF } from "./hud/ItemTooltip";
 import { GOLD, PARCHMENT } from "./menu/frames";
 
 /** Where a biome's plate lives. Built by `tools/build_loading_textures.py`. */
@@ -153,7 +153,7 @@ export function LoadingScreen({ areaName, tip, wallpaper, leaving }: LoadingScre
             minWidth: 0,
             // A tip is a sentence, so it gets the reading face rather than the
             // carved one, a size up from where the capitals sat.
-            fontFamily: BODY_SERIF,
+            fontFamily: SERIF,
             fontSize: "clamp(12px, 0.95vw, 19px)",
             lineHeight: 1.45,
             letterSpacing: 0.4,
@@ -174,7 +174,7 @@ export function LoadingScreen({ areaName, tip, wallpaper, leaving }: LoadingScre
             flex: 1,
             minWidth: 0,
             textAlign: "right",
-            fontFamily: SERIF,
+            fontFamily: DISPLAY,
             fontSize: "clamp(14px, 1.15vw, 24px)",
             letterSpacing: 3,
             textTransform: "uppercase",

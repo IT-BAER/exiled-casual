@@ -39,7 +39,17 @@ interface Props {
 // carved red-brown title banner, engraved small-caps serif, item-tile choices.
 // Matches reference-screenshots/atlas-maps.webp (banner + gilt frame) and
 // portals-map-device.webp (Map Device / waystone naming).
-const SERIF = '"Cinzel", "Trajan Pro", Georgia, "Times New Roman", serif';
+/**
+ * The reading face: everything that is a word rather than a title.
+ *
+ * Cinzel, which used to be this, is a Trajan — a capitals-only alphabet
+ * whose "lower case" is small capitals. Set a sentence in it and the
+ * sentence comes out shouting, which is what every panel here was doing.
+ * It is still the face of every title; see DISPLAY.
+ */
+const SERIF = '"EB Garamond", Georgia, "Times New Roman", serif';
+/** The carved face, for titles, labels and anything already uppercase. */
+const DISPLAY = '"Cinzel", "Trajan Pro", Georgia, "Times New Roman", serif';
 const GOLD = "#c8a44d";
 const GOLD_DIM = "#7a5c22";
 const PARCHMENT = "#e8dcc0";
@@ -433,7 +443,7 @@ function NodePopup(props: {
           margin: "0 auto",
           padding: "8px 0",
           borderRadius: 2,
-          fontFamily: SERIF,
+          fontFamily: DISPLAY,
           fontSize: 13,
           letterSpacing: 2.5,
           textTransform: "uppercase",

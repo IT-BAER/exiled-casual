@@ -32,6 +32,11 @@
         src: url(/fonts/ebgaramond-latin.woff2) format("woff2");
         font-weight: 400 700;
         font-display: swap;
+        /* A Garamond has a small x-height, so it reads a size down from every
+           other face at the same font-size. This puts the height back in the
+           FONT rather than in a hundred call sites, and leaves the display face
+           (Cinzel, set at the same numbers) exactly where it was. */
+        size-adjust: 112%;
       }
       * { margin: 0; padding: 0; box-sizing: border-box; }
       html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }

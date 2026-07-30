@@ -20,7 +20,7 @@ import React from "react";
 import type { CharacterHeader } from "@exiled/persistence";
 import { characterClass } from "@exiled/content-runtime";
 import { Atmosphere, type BrazierSpot } from "./atmos";
-import { Divider, FramedPanel, GOLD, GOLD_DIM, MENU_ART, MenuButton, PARCHMENT, SERIF } from "./frames";
+import { Divider, FramedPanel, GOLD, GOLD_DIM, MENU_ART, MenuButton, PARCHMENT, DISPLAY, SERIF } from "./frames";
 
 /** The braziers painted into `select_backdrop.jpg`, as fractions of the viewport. */
 /**
@@ -261,11 +261,11 @@ function Row({
         >
           {character.name}
         </div>
-        <div style={{ fontFamily: SERIF, fontSize: 11, letterSpacing: 1.4, textTransform: "uppercase", color: GOLD_DIM }}>
+        <div style={{ fontFamily: DISPLAY, fontSize: 11, letterSpacing: 1.4, textTransform: "uppercase", color: GOLD_DIM }}>
           Level {character.level} {klass.name}
         </div>
       </div>
-      <div style={{ fontFamily: SERIF, fontSize: 10, letterSpacing: 1.6, textTransform: "uppercase", color: GOLD_DIM }}>
+      <div style={{ fontFamily: DISPLAY, fontSize: 10, letterSpacing: 1.6, textTransform: "uppercase", color: GOLD_DIM }}>
         {character.league}
       </div>
     </div>
@@ -302,7 +302,7 @@ function ConfirmDelete({
       style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", background: "rgba(3,4,6,0.76)", zIndex: 3 }}
     >
       <FramedPanel style={{ width: "min(44vw, 560px)", padding: "16px 22px 18px" }}>
-        <div style={{ fontFamily: SERIF, fontSize: 18, letterSpacing: 3, textTransform: "uppercase", color: "#e8b7a2", textAlign: "center" }}>
+        <div style={{ fontFamily: DISPLAY, fontSize: 18, letterSpacing: 3, textTransform: "uppercase", color: "#e8b7a2", textAlign: "center" }}>
           Delete {character.name}
         </div>
         <Divider style={{ margin: "10px 0 14px" }} />

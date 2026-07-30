@@ -617,6 +617,18 @@ describe("wheel zoom", () => {
   const groundDepth = (camera: { orthoTop: number | null; beta: number }): number =>
     (2 * camera.orthoTop!) / Math.cos(camera.beta);
 
+  /**
+   * Let the camera arrive.
+   *
+   * The wheel sets a TARGET and the render loop walks to it at a fixed speed, so
+   * a single notch is not a single jump any more. `setZoom(0)` moves the target
+   * nowhere and takes one step toward it, which is exactly a frame of that walk
+   * without a NullEngine having to render one.
+   */
+  const settle = (setZoom: (n: number) => void, frames = 60) => {
+    for (let i = 0; i < frames; i++) setZoom(0);
+  };
+
   it("zooming in shows less of the map ahead, not more", () => {
     const engine = new NullEngine();
     const { camera, setZoom } = createScene(engine);
@@ -627,8 +639,11 @@ describe("wheel zoom", () => {
     // goes — that is the curve — and shallowing alone would show *more* ground,
     // so this is the guard that the curve never outruns the zoom.
     let previous = wide;
-    for (let notch = 0; notch < 12; notch++) {
+    // Five, not twelve: the range is about 5.6 notches wide now, and a notch
+    // past the near stop moves nothing, which is not a shrinking view.
+    for (let notch = 0; notch < 5; notch++) {
       setZoom(-1);
+      settle(setZoom);
       const depth = groundDepth(camera);
       expect(depth).toBeLessThan(previous);
       previous = depth;
@@ -650,6 +665,7 @@ describe("wheel zoom", () => {
     // Scrolling past a stop must settle on it rather than creep through: the
     // clamp is on the target, so the eased position approaches and never passes.
     for (let i = 0; i < 120; i++) setZoom(-1);
+    settle(setZoom, 200);
     expect(camera.orthoTop).toBeCloseTo(3.2, 2);
     expect(camera.orthoTop).toBeGreaterThanOrEqual(3.2);
   });
@@ -665,6 +681,7 @@ describe("wheel zoom", () => {
 
     setZoom(-4);
     for (let i = 0; i < 80; i++) setZoom(1);
+    settle(setZoom, 200);
     expect(camera.orthoTop).toBeCloseTo(4.75, 2);
     expect(camera.orthoTop).toBeLessThanOrEqual(4.75);
   });
@@ -683,6 +700,7 @@ describe("wheel zoom", () => {
     expect(covered()).toBe(true);
     for (let i = 0; i < 20; i++) {
       setZoom(-1);
+      settle(setZoom);
       expect(covered()).toBe(true);
     }
   });
