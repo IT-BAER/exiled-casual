@@ -12,8 +12,10 @@ export const CELL_SIZE = 0.5;
 export const CORRIDOR_WIDTH_CELLS = 3;
 /** Required clear width for any mandatory route: player diameter + safety margin. */
 export const MIN_ROUTE_WIDTH = 1.0 + 0.25;
-/** Monster spawn points every generator aims for. */
-export const SPAWN_TARGET = 6;
+/** Monster spawn points every generator aims for. Raised with the lattice
+ *  (7x7 -> 9x9 tiles): a map 65% larger on the same budget is a sparser map,
+ *  and empty ground between fights is the one thing a bigger area must not buy. */
+export const SPAWN_TARGET = 10;
 
 export interface WalkableGrid {
   cols: number;

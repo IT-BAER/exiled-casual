@@ -174,6 +174,36 @@ const STRAIGHT_NARROWS: Chunk = {
   ],
 };
 
+/**
+ * straight, north/south-open: a walled side room off the run, its mouth at the
+ * far end, its reward at the near one — so the player has to walk PAST it, turn
+ * back and come up the length of the room to take it. The camera is close
+ * enough (19x9.5 units at beta 0.65) that a chamber one wall away is genuinely
+ * out of sight until the mouth is reached; a "secret" here is a rewarded detour,
+ * not an invisible door.
+ */
+const STRAIGHT_CACHE: Chunk = {
+  id: "loop.straight.cache",
+  rows: [
+    "######....######",
+    "######....######",
+    "##....#.......##",
+    "##....#.......##",
+    "##....#.......##",
+    "##..r.#...s...##",
+    "##....#.......##",
+    "##....#.......##",
+    "##....#.......##",
+    "##....#.......##",
+    "##....#.......##",
+    "##............##",
+    "##............##",
+    "##....s.......##",
+    "######....######",
+    "######....######",
+  ],
+};
+
 /** corner, north/east-open: the loop turns. */
 const CORNER_BEND: Chunk = {
   id: "loop.corner.bend",
@@ -359,6 +389,30 @@ const CROSS_COURT: Chunk = {
   ],
 };
 
+/** tee, north/east/south-open: a strongroom walled into the junction's west
+ *  side, its mouth turned away from all three ways through. */
+const TEE_STRONGROOM: Chunk = {
+  id: "loop.tee.strongroom",
+  rows: [
+    "######....######",
+    "######....######",
+    "######......####",
+    "##...#....######",
+    "##...#....######",
+    "##...#....######",
+    "##...#..........",
+    "##.r.#....s.....",
+    "##...#..........",
+    "##...#..........",
+    "##........######",
+    "##........######",
+    "##........######",
+    "####........####",
+    "######....######",
+    "######....######",
+  ],
+};
+
 /** cross, all four sides open: a solid block dead centre, so the plaza is a ring. */
 const CROSS_ISLAND: Chunk = {
   id: "loop.cross.island",
@@ -427,13 +481,13 @@ export const LOOP_GRAMMAR: Grammar = {
   id: "loop",
   chunks: [
     CAP_ALCOVE, CAP_VAULT, CAP_SHRINE,
-    STRAIGHT_GALLERY, STRAIGHT_COLONNADE, STRAIGHT_NARROWS,
+    STRAIGHT_GALLERY, STRAIGHT_COLONNADE, STRAIGHT_NARROWS, STRAIGHT_CACHE,
     CORNER_BEND, CORNER_SWEEP, CORNER_BUTTRESS,
-    TEE_CROSSING, TEE_LANDING, TEE_GATE,
+    TEE_CROSSING, TEE_LANDING, TEE_GATE, TEE_STRONGROOM,
     CROSS_PLAZA, CROSS_COURT, CROSS_ISLAND,
   ],
   bossChunk: BOSS_HALL,
-  branchCount: 3,
+  branchCount: 5,
 };
 
 // Authoring guard: the canonical masks must be what the borders actually say.
@@ -445,12 +499,14 @@ const CANONICAL: readonly [Chunk, number][] = [
   [STRAIGHT_GALLERY, 0b0101],
   [STRAIGHT_COLONNADE, 0b0101],
   [STRAIGHT_NARROWS, 0b0101],
+  [STRAIGHT_CACHE, 0b0101],
   [CORNER_BEND, 0b0011],
   [CORNER_SWEEP, 0b0011],
   [CORNER_BUTTRESS, 0b0011],
   [TEE_CROSSING, 0b0111],
   [TEE_LANDING, 0b0111],
   [TEE_GATE, 0b0111],
+  [TEE_STRONGROOM, 0b0111],
   [CROSS_PLAZA, 0b1111],
   [CROSS_COURT, 0b1111],
   [CROSS_ISLAND, 0b1111],

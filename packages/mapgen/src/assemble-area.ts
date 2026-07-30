@@ -18,7 +18,7 @@ import { TILE_CELLS, isWall, orientations, type Oriented } from "./chunks";
 import { maskClass, type Grammar } from "./loop-grammar";
 import { AREA_TILES, UNREACHED, generateSkeleton } from "./skeleton";
 
-export const ASSEMBLED_CELLS = AREA_TILES * TILE_CELLS; // 112
+export const ASSEMBLED_CELLS = AREA_TILES * TILE_CELLS; // 144
 
 /** World units of breathing room the player gets around the start. */
 const SPAWN_SAFE_RADIUS = 10;
@@ -45,26 +45,47 @@ function stamp(cells: Uint8Array, rows: string[], ox: number, oy: number): Marke
   return markers;
 }
 
-/** The floor cell nearest a tile's centre — a chunk may have a pillar there. */
+/** Every cell of the 3x3 block centred here is floor. A body of the player's
+ *  radius (0.5 units = one cell) only fits where that holds: collision refuses
+ *  a step whose footprint touches a wall, so a start cell with a pillar against
+ *  it is a player who portals in and cannot move in ANY direction. */
+function bodyFits(cells: Uint8Array, cx: number, cy: number): boolean {
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      const x = cx + dx, y = cy + dy;
+      if (x < 0 || y < 0 || x >= ASSEMBLED_CELLS || y >= ASSEMBLED_CELLS) return false;
+      if (cells[y * ASSEMBLED_CELLS + x] !== 1) return false;
+    }
+  }
+  return true;
+}
+
+/** The floor cell nearest a tile's centre that a body fits in — a chunk may
+ *  have a pillar there, and the cell beside a pillar is floor but unusable.
+ *  Falls back to bare floor only if the tile has no room at all. */
 function tileCentreCell(cells: Uint8Array, tx: number, ty: number): { cx: number; cy: number } | null {
   const ox = tx * TILE_CELLS, oy = ty * TILE_CELLS;
   const mid = (TILE_CELLS - 1) / 2;
   let best: { cx: number; cy: number } | null = null;
   let bestD = Infinity;
+  let anyFloor: { cx: number; cy: number } | null = null;
+  let anyD = Infinity;
   for (let y = 0; y < TILE_CELLS; y++) {
     for (let x = 0; x < TILE_CELLS; x++) {
       const cx = ox + x, cy = oy + y;
       if (cells[cy * ASSEMBLED_CELLS + cx] !== 1) continue;
       const d = (x - mid) * (x - mid) + (y - mid) * (y - mid);
+      if (d < anyD) { anyD = d; anyFloor = { cx, cy }; }
+      if (!bodyFits(cells, cx, cy)) continue;
       if (d < bestD) { bestD = d; best = { cx, cy }; }
     }
   }
-  return best;
+  return best ?? anyFloor;
 }
 
 /**
  * Carve the tiles the route does not use with an irregular disc, so the area's
- * outer boundary is organic instead of the edge of a 7x7 lattice. Only mask-0
+ * outer boundary is organic instead of the edge of a 9x9 lattice. Only mask-0
  * tiles are touched — carving a routed tile would sever the route it carries.
  *
  * The disc is the same sinusoidal wobble the old open-field generator used; it
@@ -72,9 +93,12 @@ function tileCentreCell(cells: Uint8Array, tx: number, ty: number): { cx: number
  */
 function carveOrganicRim(cells: Uint8Array, masks: Uint8Array, rng: RandomStream): void {
   const mid = (ASSEMBLED_CELLS - 1) / 2;
-  // 0.38 of the grid, plus at most 10 cells of wobble, keeps the carve inside
-  // the 55.5-cell half-width with room to spare: the outer ring must stay wall.
-  const radius = ASSEMBLED_CELLS * 0.38;
+  // 0.32 of the grid, plus at most 10 cells of wobble, keeps the carve inside
+  // the 71.5-cell half-width with room to spare: the outer ring must stay wall.
+  // It was 0.38 on the 7x7 lattice; the same fraction of a 9x9 one carved the
+  // open-field median past 70% walkable, which is a bigger map bought with more
+  // undifferentiated ground — the opposite of what enlarging it was for.
+  const radius = ASSEMBLED_CELLS * 0.32;
   const a1 = rng.nextInt(3, 6), a2 = rng.nextInt(2, 4);
   const p1 = (rng.nextU32() / 0x1_0000_0000) * Math.PI * 2;
   const p2 = (rng.nextU32() / 0x1_0000_0000) * Math.PI * 2;
@@ -174,7 +198,7 @@ export function assembleArea(seed: number, contentVersion: string, grammar: Gram
   chosenVariantIds.push(`${skeleton.bossTile.tx},${skeleton.bossTile.ty}:${bossFit.id}`);
 
   // Break up the lattice: carve the unused tiles with a wobbly disc so the
-  // boundary is not the edge of a 7x7 square. Route tiles are never touched.
+  // boundary is not the edge of a 9x9 square. Route tiles are never touched.
   if (grammar.organicRim) {
     carveOrganicRim(cells, skeleton.masks, createStream(seed, `${contentVersion}.layout.rim`));
   }
@@ -248,14 +272,24 @@ export function assembleArea(seed: number, contentVersion: string, grammar: Gram
     }
   }
 
-  // Stage 5: rewards at the dead ends, then one rotation of the whole area.
-  // Per-tile rotation cannot turn the skeleton; only this can.
+  // Stage 5: rewards, then one rotation of the whole area. Per-tile rotation
+  // cannot turn the skeleton; only this can.
+  //
+  // EVERY 'r' marker pays, not only the ones in the dead-end caps: a chunk may
+  // wall a pocket off its own run, and that pocket is worth more than the spur
+  // it is not on precisely because nothing about the route says it is there.
+  // Route order still, so the ids walk the map outward.
   let rewardCount = 0;
   for (const tile of farthestFirst) {
-    if (maskClass(skeleton.masks[tile]!) !== "cap") continue;
-    const m = (markersByTile.get(tile) ?? []).find((k) => k.ch === "r");
-    if (!m) continue;
-    objectiveAnchors.push({ id: `reward.${rewardCount++}`, ...cellCentre(ASSEMBLED_CELLS, m.cx, m.cy) });
+    for (const m of markersByTile.get(tile) ?? []) {
+      if (m.ch !== "r") continue;
+      const p = cellCentre(ASSEMBLED_CELLS, m.cx, m.cy);
+      // Nothing pays inside the safe wedge, the same radius the spawns respect.
+      // A cache the player can see while still standing on the portal is loot
+      // that cost nothing to find, and a find that costs nothing is not one.
+      if (Math.hypot(p.x - start.x, p.y - start.y) < SPAWN_SAFE_RADIUS) continue;
+      objectiveAnchors.push({ id: `reward.${rewardCount++}`, ...p });
+    }
   }
 
   const turns = createStream(seed, `${contentVersion}.layout.dressing`).nextInt(0, 3);

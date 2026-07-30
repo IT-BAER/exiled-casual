@@ -151,6 +151,31 @@ const STRAIGHT_FLATS: Chunk = {
   ],
 };
 
+/** straight: a walled compound standing in the open, its one gap facing away
+ *  from the crossing. Open ground can hide nothing by shape, so out here a
+ *  secret is a thing you have to walk around to get into. */
+const STRAIGHT_COMPOUND: Chunk = {
+  id: "field.straight.compound",
+  rows: [
+    "##............##",
+    "#..............#",
+    "#..............#",
+    "#...#######....#",
+    "#...#.....#....#",
+    "#...#..r..#....#",
+    "#...#.....#....#",
+    "#...#.....#....#",
+    "#...#.....#....#",
+    "#...#...###....#",
+    "#..............#",
+    "#.......s......#",
+    "#..............#",
+    "#..............#",
+    "#..............#",
+    "##............##",
+  ],
+};
+
 /** corner: a wide sweep of open ground with one island on the inside. */
 const CORNER_SPUR: Chunk = {
   id: "field.corner.spur",
@@ -402,7 +427,7 @@ export const FIELD_GRAMMAR: Grammar = {
   id: "open-field",
   chunks: [
     CAP_BAY, CAP_HOLLOW, CAP_PAN,
-    STRAIGHT_DRIFT, STRAIGHT_BOULDERS, STRAIGHT_FLATS,
+    STRAIGHT_DRIFT, STRAIGHT_BOULDERS, STRAIGHT_FLATS, STRAIGHT_COMPOUND,
     CORNER_SPUR, CORNER_BANK, CORNER_ELBOW,
     TEE_CLEARING, TEE_FORK, TEE_ISLE,
     CROSS_PLAIN, CROSS_STONE, CROSS_OPEN,
@@ -410,7 +435,7 @@ export const FIELD_GRAMMAR: Grammar = {
   bossChunk: BOSS_BASIN,
   // More branches than the loop: open ground should offer somewhere to wander,
   // and a dead end in the open costs the player far less than one in a corridor.
-  branchCount: 4,
+  branchCount: 6,
   organicRim: true,
 };
 
@@ -422,6 +447,7 @@ const CANONICAL: readonly [Chunk, number][] = [
   [STRAIGHT_DRIFT, 0b0101],
   [STRAIGHT_BOULDERS, 0b0101],
   [STRAIGHT_FLATS, 0b0101],
+  [STRAIGHT_COMPOUND, 0b0101],
   [CORNER_SPUR, 0b0011],
   [CORNER_BANK, 0b0011],
   [CORNER_ELBOW, 0b0011],

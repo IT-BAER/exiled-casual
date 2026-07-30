@@ -59,6 +59,9 @@ const CAST_CEILING = HZ / Math.max(BOLT_DEF.cooldownTicks, BOLT_DEF.castTicks ??
 const BOLT_RADIUS = BOLT_DEF.effects.reduce(
   (r, e) => (e.type === "spawnProjectile" ? e.radiusFixed : r), 0,
 );
+const BOLT_RANGE = BOLT_DEF.effects.reduce(
+  (r, e) => (e.type === "spawnProjectile" ? e.maxRangeFixed : r), 0,
+);
 /** Far enough that the monster has to close, near enough to be in every range. */
 const SPAWN_Y = fp(6);
 
@@ -163,9 +166,33 @@ function forcePhase2(r: Rig): void {
 describe("stepping out of the portal", () => {
   const TIER = 3;
 
-  function mapEntry() {
-    const { sim, world, playerEntity, layout } = createCombatSim(7, { area: "map", tier: TIER });
+  function mapEntry(seed = 7) {
+    const { sim, world, playerEntity, layout } = createCombatSim(seed, { area: "map", tier: TIER });
     return { sim, world, player: playerEntity, collision: gridCollision(layout.grid) };
+  }
+
+  /** The nearest monster the bolt can actually REACH from where the player is:
+   *  a wall stops it now, so the nearest by straight-line distance is regularly
+   *  one the shot cannot make. Swept at the bolt's own radius, not as a point —
+   *  a monster clear to a hairline ray is regularly blocked to the real bolt. */
+  function shootable(
+    world: World,
+    player: Entity,
+    collision: ReturnType<typeof gridCollision>,
+  ): Position | undefined {
+    const pos = world.get<Position>(player, "position")!;
+    let target: Position | undefined;
+    let best = Infinity;
+    for (const m of world.query("monster", "position")) {
+      if (world.has(m, "boss")) continue;
+      const p = world.get<Position>(m, "position")!;
+      const d2 = (p.x - pos.x) ** 2 + (p.y - pos.y) ** 2;
+      if (d2 > BOLT_RANGE * BOLT_RANGE) continue; // the bolt expires short of it
+      const reach = sweep(collision, pos.x, pos.y, p.x - pos.x, p.y - pos.y, BOLT_RADIUS);
+      if (reach.dx !== p.x - pos.x || reach.dy !== p.y - pos.y) continue;
+      if (d2 < best) { best = d2; target = p; }
+    }
+    return target;
   }
 
   it("does not put the whole map on top of you", () => {
@@ -183,29 +210,29 @@ describe("stepping out of the portal", () => {
   });
 
   it("still lets a pack be pulled — one bolt is an invitation", () => {
-    const { sim, world, player, collision } = mapEntry();
-    const pos = world.get<Position>(player, "position")!;
+    // Whether the portal cell itself has a firing line is chunk geometry, and it
+    // changes with every layout change (it held on the 7x7 lattice and does not
+    // on seed 7 of the 9x9 one). That is the SETUP; the assertion is what the
+    // bolt does once a shot exists, so take the first map that offers one. If
+    // entrances with a shot ever became rare, this loop is what would say so.
+    let entry: ReturnType<typeof mapEntry> | undefined;
     let target: Position | undefined;
-    let best = Infinity;
-    for (const m of world.query("monster", "position")) {
-      if (world.has(m, "boss")) continue;
-      const p = world.get<Position>(m, "position")!;
-      // Nearest monster the bolt can actually REACH: a wall stops it now, so the
-      // nearest by straight-line distance is regularly one the shot cannot make.
-      // Swept at the bolt's own radius, not as a point — at this entrance the
-      // nearest monster is clear to a hairline ray and blocked to the real bolt.
-      const reach = sweep(collision, pos.x, pos.y, p.x - pos.x, p.y - pos.y, BOLT_RADIUS);
-      if (reach.dx !== p.x - pos.x || reach.dy !== p.y - pos.y) continue;
-      const d2 = (p.x - pos.x) ** 2 + (p.y - pos.y) ** 2;
-      if (d2 < best) { best = d2; target = p; }
+    for (let seed = 0; seed < 20 && target === undefined; seed++) {
+      const candidate = mapEntry(seed);
+      const shot = shootable(candidate.world, candidate.player, candidate.collision);
+      if (shot) { entry = candidate; target = shot; }
     }
-    expect(target, "no monster in line of sight of the entrance").toBeDefined();
+    expect(target, "no map in 20 offered a shot from its entrance").toBeDefined();
+    const { sim, world, player } = entry!;
+    const total = world.query("monster").length;
     sim.step(cast(sim, player, target!, BOLT));
     for (let t = 0; t < 6 * HZ; t++) sim.step([]);
     const awake = world.query("monster").filter(
       (m) => world.get<MonsterC>(m, "monster")!.state !== "idle",
     ).length;
     expect(awake).toBeGreaterThan(0);
+    // One pack answers, not the map: the invitation has to stay an invitation.
+    expect(awake).toBeLessThan(total);
   });
 });
 

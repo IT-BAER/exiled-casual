@@ -344,7 +344,9 @@ describe("buildSnapshot — ground items and inventory", () => {
     world.set(ge, "item", { item, w: base.w, h: base.h });
 
     const snap = buildSnapshot(world, sim, 1, "test");
-    const gi = snap.entities.find((e) => e.kind === "groundItem");
+    // By id, not "the first ground item": a map lays its reward caches on the
+    // floor as it is built, so there is other loot in the world already.
+    const gi = snap.entities.find((e) => e.kind === "groundItem" && e.id === ge);
     expect(gi).toBeDefined();
     expect(gi!.rarity).toBe(item.rarity);
     // Magic and rare rolls drop unidentified, so the plate reads the base name and
@@ -367,7 +369,9 @@ describe("buildSnapshot — ground items and inventory", () => {
     world.set(ge, "item", { item, w: base.w, h: base.h });
 
     const snap = buildSnapshot(world, sim, 1, "test");
-    const gi = snap.entities.find((e) => e.kind === "groundItem");
+    // By id, not "the first ground item": a map lays its reward caches on the
+    // floor as it is built, so there is other loot in the world already.
+    const gi = snap.entities.find((e) => e.kind === "groundItem" && e.id === ge);
     expect(gi).toBeDefined();
     expect(gi!.inRange).toBe(false);
   });

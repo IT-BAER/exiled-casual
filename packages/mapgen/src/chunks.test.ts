@@ -150,16 +150,19 @@ describe("loop grammar library", () => {
     }
   });
 
-  it("carries three variants of every mask class", () => {
+  it("carries at least three variants of every mask class", () => {
     const counts = new Map<string, number>();
     for (const c of LOOP_GRAMMAR.chunks) {
       const cls = maskClass(deriveMask(c.rows));
       counts.set(cls, (counts.get(cls) ?? 0) + 1);
     }
+    // Three is the floor, not the shape: a class with two variants repeats
+    // itself down a corridor. Classes carrying a walled-pocket variant hold
+    // more, and the pocket is only a find while it is not the only option.
     for (const cls of ["cap", "straight", "corner", "tee", "cross"]) {
-      expect(counts.get(cls), `${cls} variants`).toBe(3);
+      expect(counts.get(cls) ?? 0, `${cls} variants`).toBeGreaterThanOrEqual(3);
     }
-    expect(LOOP_GRAMMAR.chunks.length).toBe(15);
+    expect(LOOP_GRAMMAR.chunks.length).toBeGreaterThanOrEqual(15);
   });
 
   it("gives every chunk a distinct id and distinct geometry", () => {

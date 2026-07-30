@@ -68,7 +68,8 @@ describe("generateSkeleton", () => {
   it("puts the start on the outermost ring the loop reaches", () => {
     // Spurs (exactly one open edge) can poke further out than the loop; the
     // start is a loop tile, so measure against tiles with two or more edges.
-    const rim = (t: { tx: number; ty: number }) => Math.max(Math.abs(t.tx - 3), Math.abs(t.ty - 3));
+    const mid = (AREA_TILES - 1) / 2;
+    const rim = (t: { tx: number; ty: number }) => Math.max(Math.abs(t.tx - mid), Math.abs(t.ty - mid));
     for (let seed = 0; seed < 50; seed++) {
       const s = build(seed);
       if (!s) continue;

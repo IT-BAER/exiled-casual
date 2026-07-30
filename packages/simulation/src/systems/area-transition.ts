@@ -9,7 +9,7 @@ import { buildArea, HIDEOUT_SPAWN } from "../areas";
 import { recomputePlayerStats } from "../derived";
 
 export function registerAreaTransition(sim: Simulation, collisionRef?: CollisionRef): void {
-  sim.register("areaTransition", (world) => {
+  sim.register("areaTransition", (world, tick) => {
     const sessionEntities = world.query("session");
     if (sessionEntities.length === 0) return;
     const sessionE = sessionEntities[0]!;
@@ -41,7 +41,7 @@ export function registerAreaTransition(sim: Simulation, collisionRef?: Collision
       CONTENT_VERSION,
       grammarForNode(newSession.activeNodeId),
     );
-    buildArea(world, newArea, newSession, layout);
+    buildArea(world, newArea, newSession, layout, tick);
 
     // Swap the shared level collision: walls on inside the map, off in the hideout.
     if (collisionRef) {

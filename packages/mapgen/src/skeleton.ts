@@ -7,7 +7,7 @@
 import { DIR_VEC, type Dir, type Port } from "./chunks";
 import type { RandomStream } from "./rng";
 
-export const AREA_TILES = 7;
+export const AREA_TILES = 9;
 /** routeDist value for a tile that is not on the route. */
 export const UNREACHED = 255;
 

@@ -538,14 +538,28 @@ describe("on a generated map", () => {
   });
 
   it("wakes the boss once the player crosses into the room", () => {
-    const { sim, world, playerEntity, boss } = realMap();
+    const { sim, world, playerEntity, layout, boss } = realMap();
     const b = world.get<Position>(boss, "position")!;
     // Walk-in is what the client does; place the player inside the arena instead
     // so the assertion is about the gate, not about pathing round the geometry.
-    // It has to be a spot the player could actually stand: this used to drop him
-    // a full BOSS_AGGRO_RADIUS north, which on this layout is INSIDE the arena
-    // wall, and the boss woke through it. That was the bug, pinned as a test.
-    world.set<Position>(playerEntity, "position", { x: b.x + fp(6), y: b.y });
+    // It has to be a spot the player could actually stand, and a FIXED offset is
+    // not one: a full BOSS_AGGRO_RADIUS north is inside the arena wall on some
+    // layouts (the boss woke through it — that bug is the test below), and six
+    // units east is inside one of the hall's pillars on others. So search the
+    // real grid for the farthest standable spot still inside aggro range.
+    const col = gridCollision(layout!.grid);
+    let spot: Position | undefined;
+    for (let d = BOSS_AGGRO_RADIUS - fp(0.5); d >= fp(2) && !spot; d -= fp(0.5)) {
+      for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1]] as const) {
+        const p = { x: b.x + dx * d, y: b.y + dy * d };
+        if (col.isWalkable(p.x, p.y, fp(0.5))) { spot = p; break; }
+      }
+    }
+    expect(spot, "no standable spot inside the arena").toBeDefined();
+    expect(fpDist2(spot!.x, spot!.y, b.x, b.y))
+      .toBeLessThanOrEqual(BOSS_AGGRO_RADIUS * BOSS_AGGRO_RADIUS);
+
+    world.set<Position>(playerEntity, "position", spot!);
     sim.step();
     expect(world.get<MonsterC>(boss, "monster")!.state).not.toBe("idle");
   });

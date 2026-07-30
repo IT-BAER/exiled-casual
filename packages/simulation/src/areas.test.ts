@@ -118,6 +118,56 @@ describe("pool-driven spawning", () => {
     }
   });
 
+  it("every reward anchor is standing loot, not a pip on the minimap", () => {
+    const { world, session, layout } = mapFixture({ mapSeed: 7 });
+    buildArea(world, "map", session, layout);
+    const rewards = layout.objectiveAnchors.filter((a) => a.id.startsWith("reward."));
+    expect(rewards.length).toBeGreaterThan(0);
+    const ground = world.query("item", "position").map((e) => world.get<Position>(e, "position")!);
+    for (const r of rewards) {
+      const near = ground.some((p) =>
+        Math.abs(p.x - fp(r.x)) <= fp(2) && Math.abs(p.y - fp(r.y)) <= fp(2));
+      expect(near, `${r.id} pays nothing`).toBe(true);
+    }
+  });
+
+  it("pays the caches out with variance, not the same handful every time", () => {
+    const counts = new Set<number>();
+    for (let seed = 1; seed <= 25; seed++) {
+      const f = mapFixture({ mapSeed: seed });
+      buildArea(f.world, "map", f.session, f.layout);
+      counts.add(f.world.query("item").length);
+    }
+    // docs/09: a cache that always pays the same amount is a vending machine.
+    expect(counts.size, "every map paid the same number of items").toBeGreaterThan(2);
+  });
+
+  const groundItems = (w: World) => w.query("item", "position").map((e) =>
+    JSON.stringify([w.get<Position>(e, "position"), w.get(e, "item")]));
+
+  it("replays identically: the same map, entered on the same tick, lays out the same loot", () => {
+    const a = mapFixture({ mapSeed: 99 });
+    const b = mapFixture({ mapSeed: 99 });
+    buildArea(a.world, "map", a.session, a.layout, 240);
+    buildArea(b.world, "map", b.session, b.layout, 240);
+    expect(groundItems(a.world)).toEqual(groundItems(b.world));
+  });
+
+  it("re-rolls the caches on every entry — loot is not a property of the map", () => {
+    // PoE rolls a drop when it drops: a kill uses the killing blow's own state,
+    // and a strongbox rolls its contents when it is opened. Ours is seeded off
+    // the tick the area is built on for the same reason. mapSeedFor(stone, node)
+    // is a pure function, so seeding the caches off the map alone would hand the
+    // same stone the same floor forever, and the find is only a find once.
+    const seen = new Set<string>();
+    for (const tick of [0, 97, 1000, 54321]) {
+      const f = mapFixture({ mapSeed: 99 });
+      buildArea(f.world, "map", f.session, f.layout, tick);
+      seen.add(groundItems(f.world).join("|"));
+    }
+    expect(seen.size, "every entry laid out the same loot").toBe(4);
+  });
+
   it("exactly one rare, and it is still on the last layout socket", () => {
     const { world, session, layout } = mapFixture({ mapSeed: 21 });
     buildArea(world, "map", session, layout);

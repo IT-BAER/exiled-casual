@@ -1,15 +1,28 @@
 import { fp, fpDist2, fpMul } from "@exiled/fixed-point";
 import { gridCollision } from "./collision";
-import { makeRare, mapBaseIdForNode, monsterTierScale, waystoneScaleFor } from "@exiled/rules";
-import { PACK_COUNT, bossFor, mapBase, pickPack, rareTemplate } from "@exiled/content-runtime";
+import {
+  makeRare, mapBaseIdForNode, monsterTierScale, waystoneScaleFor,
+  areaLevel, dropCount, dropCategory, quantityScaleMilli, rollItem,
+  MONSTER_ILVL_OFFSET, DROP_POOL,
+} from "@exiled/rules";
+import {
+  PACK_COUNT, bossFor, mapBase, pickPack, rareTemplate,
+  ITEM_POOLS, baseOf, currencyItem, currencyForRoll,
+} from "@exiled/content-runtime";
 import { ELEMENTS, type MonsterDef } from "@exiled/content-schema";
 import type { AreaLayout } from "@exiled/mapgen";
 import type { World, Entity } from "./ecs";
 import { damageCode } from "./damage-types";
+import { fnv1a32 } from "./rng";
 import type {
   Position, Health, Faction, MonsterC, DefensesC, BossC,
-  InteractableC, SessionC, AreaKind,
+  InteractableC, SessionC, AreaKind, ItemC,
 } from "./components";
+
+/** What a cache pays as the loot math indexes rarity: 2 = rare. A found room is
+ *  worth a rare monster's burst, which is where the number comes from rather
+ *  than a table of its own. */
+const REWARD_RARITY = 2;
 
 // Hideout player spawn (the origin). The map spawns the player on its generated
 // "start" socket instead — see area-transition.ts / combat-sim.ts.
@@ -150,7 +163,16 @@ function withMonsterRes(def: MonsterDef, add: number): MonsterDef {
   return { ...def, defenses: { ...def.defenses, resPct } };
 }
 
-export function buildArea(world: World, area: AreaKind, session: SessionC, layout: AreaLayout): void {
+/**
+ * @param tick the sim tick the area is being built on. It is the live half of
+ *   every loot roll here: PoE rolls a drop when it drops (a kill reads the
+ *   killing blow's own state, a strongbox rolls when it is opened), so nothing
+ *   the player can walk back to may be a pure function of the map. `mapSeed` is
+ *   `mapSeedFor(waystoneSeed, nodeId)` — the same stone on the same node forever
+ *   — so the tick is what stops a second entry from laying out the same floor.
+ *   Replay stays exact: the same command log rebuilds the area on the same tick.
+ */
+export function buildArea(world: World, area: AreaKind, session: SessionC, layout: AreaLayout, tick = 0): void {
   if (area === "hideout") {
     // Map device
     const deviceE = world.create();
@@ -254,6 +276,43 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
     const boss = anchor(layout, "boss");
     const bossDef = withMonsterRes(bossFor(biomeId), ws.monsterResAdd);
     spawnMonster(world, bossDef, fp(boss.x), fp(boss.y), false, scale);
+
+    // Every reward anchor is a cache lying on the floor. They were minimap pips
+    // and nothing else: the generator walled a pocket, the player found it, and
+    // the room was empty. A cache pays on the same math a rare kill does, so a
+    // pocket is worth the detour without being a second currency system.
+    //
+    // Variance is the point (docs/09): the count is rolled per cache, so the
+    // one at the end of the longest spur can pay one plate or five, and the
+    // player never learns a rate. Seeded off the map, so a replay of it lays
+    // out the same floor.
+    const cacheIlvl = areaLevel(session.areaTier) + MONSTER_ILVL_OFFSET[REWARD_RARITY]!;
+    // The AREA channel only — dropCount folds the rarity channel in itself, and
+    // passing a rare-scaled multiplier here scales it twice: 14 items a cache.
+    const cacheArea = quantityScaleMilli(0, ws.quantityPct, 0);
+    for (const a of layout.objectiveAnchors) {
+      if (!a.id.startsWith("reward.")) continue;
+      const ax = fp(a.x), ay = fp(a.y);
+      // At least one: a room the player had to find must never be empty.
+      const count = Math.max(1, dropCount(fnv1a32(`cache:${session.mapSeed}:${tick}:${a.id}`), REWARD_RARITY, cacheArea));
+      for (let i = 0; i < count; i++) {
+        const seed = fnv1a32(`cache:${session.mapSeed}:${tick}:${a.id}:${i}`);
+        const equipment = dropCategory(fnv1a32(`cachecat:${session.mapSeed}:${tick}:${a.id}:${i}`), DROP_POOL) === "equipment";
+        const item = equipment
+          ? rollItem(ITEM_POOLS, seed, cacheIlvl, REWARD_RARITY, undefined, ws.rarityPct)
+          : currencyItem(currencyForRoll(seed >>> 8));
+        const base = equipment ? baseOf(item.baseId) : { w: 1, h: 1 };
+        // Same spread idiom as a death burst, so a five-item cache is a pile on
+        // the floor rather than five plates stacked on one tile.
+        const off = PACK_SPREAD[i % PACK_SPREAD.length]!;
+        const ring = Math.trunc(i / PACK_SPREAD.length) * fp(0.5);
+        const px = ax + off.dx + ring, py = ay + off.dy + ring;
+        const on = col.isWalkable(px, py, fp(0.3)) ? { x: px, y: py } : { x: ax, y: ay };
+        const ge = world.create();
+        world.set<Position>(ge, "position", on);
+        world.set<ItemC>(ge, "item", { item, w: base.w, h: base.h });
+      }
+    }
 
     // Return portal so the map can be exited without dying.
     const exit = anchor(layout, "exit");
