@@ -20,6 +20,8 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 - The fire in the main menu is many small embers instead of a few fat ones, so
   it reads as flame rather than as a lamp behind glass.
+- Portals are a tear rather than a lit oval: a ragged cyan arc round a hole that
+  goes black in the middle, with broken shards turning slowly inside it.
 
 ## [0.1.0] - 2026-07-30
 

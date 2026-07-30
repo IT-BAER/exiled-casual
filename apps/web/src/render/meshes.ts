@@ -5,6 +5,7 @@ import {
   MeshBuilder,
   StandardMaterial,
   Texture,
+  VertexBuffer,
   type Scene,
   type Vector3,
 } from "@babylonjs/core";
@@ -396,6 +397,111 @@ export function updateTelegraph(root: Mesh, progress: number): void {
 }
 
 /**
+ * The colour a tear in the world burns at.
+ *
+ * Cyan, not the blue-white it used to be. A white rim is a lamp in a frame; the
+ * reference this is drawn from (`review/portal-ref.jpg`, a CC0 procedural portal
+ * by Nicolai Prodromov) burns at the colour an arc does, and it is the one thing
+ * that stops a glowing oval reading as decoration.
+ */
+const PORTAL_CYAN = new Color3(0.34, 0.93, 1.0);
+
+/**
+ * How far the rim wanders off a perfect ellipse, as a fraction of its radius.
+ *
+ * A torus is a machined part. A hole torn between two places is not, and the
+ * ragged edge is most of what separates the two at a glance — so the ring is
+ * displaced by three sines of the angle around it that share no common period,
+ * baked once at build. Cheap, and it never animates into a visible cycle
+ * because it never animates at all.
+ */
+const RIM_WOBBLE = 0.14;
+
+/** How many shards hang in the void, and how many specks drift with them. */
+const SHARDS = 16;
+const SPECKS = 44;
+
+/**
+ * Push a ring off round, in place.
+ *
+ * Scales each vertex away from the ring's axis, so the tube travels with the
+ * ring rather than being sheared across it. Normals are not rebuilt on purpose:
+ * everything this is used on is unlit and emissive, so a normal has no vote.
+ */
+function roughenRing(mesh: Mesh, amount: number, seed: number): void {
+  const pos = mesh.getVerticesData(VertexBuffer.PositionKind);
+  if (!pos) return;
+  for (let i = 0; i < pos.length; i += 3) {
+    const x = pos[i]!;
+    const z = pos[i + 2]!;
+    const a = Math.atan2(z, x) + seed;
+    const n = Math.sin(a * 7 + 0.7) * 0.5 + Math.sin(a * 13 - 1.9) * 0.32 + Math.sin(a * 23 + 2.6) * 0.18;
+    const k = 1 + n * amount;
+    pos[i] = x * k;
+    pos[i + 2] = z * k;
+  }
+  mesh.updateVerticesData(VertexBuffer.PositionKind, pos);
+}
+
+/**
+ * Paint the void black in the middle and lit at its edge.
+ *
+ * Per-vertex, not per-material: a cylinder cap is one vertex at the centre and a
+ * ring of them at the rim, which is exactly a radial gradient once the colours
+ * differ. The emissive is multiplied by this, so the middle of the portal goes
+ * to almost nothing and only the last of it near the rim carries any colour —
+ * which is what makes the hole read as depth rather than as painted glass.
+ */
+function shadeVoid(mesh: Mesh, radius: number): void {
+  const pos = mesh.getVerticesData(VertexBuffer.PositionKind);
+  if (!pos) return;
+  const colours = new Float32Array((pos.length / 3) * 4);
+  for (let i = 0, c = 0; i < pos.length; i += 3, c += 4) {
+    const r = Math.min(1, Math.hypot(pos[i]!, pos[i + 2]!) / radius);
+    // Fourth power: the blue clings to the rim instead of washing the middle.
+    const k = 0.05 + 0.95 * r ** 4;
+    colours[c] = k; colours[c + 1] = k; colours[c + 2] = k; colours[c + 3] = 1;
+  }
+  mesh.setVerticesData(VertexBuffer.ColorKind, colours);
+}
+
+/**
+ * The debris hanging in the hole: angular shards and specks, as one mesh.
+ *
+ * Merged rather than kept apart, because they never move relative to each other
+ * — the whole field turns slowly about the portal's own axis, which reads as a
+ * slow churn and costs one draw call instead of sixty. Tetrahedra, so a shard
+ * has edges: the reference's fragments are broken glass, not gravel.
+ */
+function buildShards(scene: Scene, name: string, halfW: number, halfH: number, midY: number): Mesh | null {
+  let seed = 0x2545f491;
+  const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 0x100000000; };
+  const parts: Mesh[] = [];
+  for (let i = 0; i < SHARDS + SPECKS; i++) {
+    const shard = i < SHARDS;
+    // Rejection sampling into the ellipse, kept off the rim so nothing pokes
+    // through the ring: the debris belongs to the hole, not to its edge.
+    // Polar rather than rejected: a rejection loop that runs out of tries has to
+    // keep whatever it last drew, and one shard left outside the ellipse hangs
+    // in the room beside the portal where it reads as a bug.
+    const a = rnd() * Math.PI * 2;
+    const r = Math.sqrt(rnd()) * 0.82;
+    const x = Math.cos(a) * r * halfW;
+    const y = Math.sin(a) * r * halfH;
+    const size = shard ? 0.030 + rnd() * 0.045 : 0.008 + rnd() * 0.013;
+    const p = MeshBuilder.CreatePolyhedron(`${name}-${i}`, { type: 0, size }, scene);
+    p.position.set(x, midY + y, (rnd() * 2 - 1) * 0.06);
+    p.rotation.set(rnd() * 6.28, rnd() * 6.28, rnd() * 6.28);
+    // Flakes, not pebbles, and flattened along local Z because that is the
+    // portal's NORMAL: stretched the other way a shard grows out through the
+    // opening and hangs in the room as a spike beside it.
+    if (shard) p.scaling.set(1 + rnd() * 0.9, 0.28 + rnd() * 0.5, 0.12);
+    parts.push(p);
+  }
+  return Mesh.MergeMeshes(parts, true, true, undefined, false, false);
+}
+
+/**
  * Standing elliptical portal — a vertical void framed by a blazing rim.
  * The disc + torus are rotated 90° on X so they stand upright in world space;
  * scaling.z stretches them from circular to elliptical (local Z → world Y
@@ -405,7 +511,9 @@ function buildPortal(scene: Scene, root: Mesh): void {
   // per-instance so each portal can pulse and hover-highlight independently
   const voidMat = new StandardMaterial(`${root.name}-portal-void`, scene);
   voidMat.diffuseColor = new Color3(0, 0, 0);
-  voidMat.emissiveColor = new Color3(0.02, 0.02, 0.10); // deep near-black navy void
+  // Brighter than it looks: `shadeVoid` multiplies this down to almost nothing
+  // across the middle of the disc and leaves it only at the rim.
+  voidMat.emissiveColor = new Color3(0.02, 0.09, 0.17);
   voidMat.specularColor = new Color3(0, 0, 0);
   voidMat.backFaceCulling = false; // visible from both sides; it's a window into void
 
@@ -413,14 +521,38 @@ function buildPortal(scene: Scene, root: Mesh): void {
   rimMat.diffuseColor = new Color3(0, 0, 0);
   // Starting value; updatePortal drives this each frame. Set high so the GlowLayer
   // has enough emissive energy to produce a real bloom halo.
-  rimMat.emissiveColor = new Color3(0.85, 0.92, 1.0);
+  rimMat.emissiveColor = PORTAL_CYAN.scale(0.45);
   rimMat.specularColor = new Color3(0, 0, 0);
+
+  // The plasma that feathers off the ring. Additive and unlit, so it adds light
+  // to whatever is behind it rather than painting a second, fatter ring: a hard
+  // outline round a hard outline is a decal, and the reference's edge has no
+  // outline at all, only a place where the arc runs out.
+  const haloMat = new StandardMaterial(`${root.name}-portal-halo`, scene);
+  haloMat.diffuseColor = new Color3(0, 0, 0);
+  haloMat.emissiveColor = PORTAL_CYAN.scale(0.4);
+  haloMat.specularColor = new Color3(0, 0, 0);
+  haloMat.disableLighting = true;
+  haloMat.alpha = 0.14;
+  haloMat.alphaMode = 1; // ALPHA_ADD
+  haloMat.backFaceCulling = false;
+  haloMat.disableDepthWrite = true;
+
+  // The debris in the hole, lit by nothing and adding its own light.
+  const shardMat = new StandardMaterial(`${root.name}-portal-shard`, scene);
+  shardMat.diffuseColor = new Color3(0, 0, 0);
+  shardMat.emissiveColor = PORTAL_CYAN.scale(0.55);
+  shardMat.specularColor = new Color3(0, 0, 0);
+  shardMat.disableLighting = true;
+  shardMat.alpha = 0.28;
+  shardMat.alphaMode = 1; // ALPHA_ADD
+  shardMat.disableDepthWrite = true;
 
   // Tight warm-blue ground pool — soft and transparent so the stone reads through.
   // alpha + additive rendering produces a light-bleed look rather than opaque paint.
   const bloomMat = new StandardMaterial(`${root.name}-portal-bloom`, scene);
   bloomMat.diffuseColor = new Color3(0, 0, 0);
-  bloomMat.emissiveColor = new Color3(0.08, 0.12, 0.45); // cool blue, not violet
+  bloomMat.emissiveColor = PORTAL_CYAN.scale(0.30); // the same arc, spilled on the floor
   bloomMat.specularColor = new Color3(0, 0, 0);
   bloomMat.alpha = 0.18; // subtle — readable stone beneath; standard alpha-blend is the default
 
@@ -428,6 +560,8 @@ function buildPortal(scene: Scene, root: Mesh): void {
   // Six portals on a ~3.5u-radius arc have ~3.7u spacing; 1.2u wide avoids overlap.
   // After rotation.x=π/2, local-Z→world-Y; position.y = half-height = 0.6×1.75 = 1.05.
   const inner = MeshBuilder.CreateCylinder(`${root.name}-pi`, { diameter: 1.2, height: 0.02, tessellation: 36 }, scene);
+  roughenRing(inner, RIM_WOBBLE, 0);
+  shadeVoid(inner, 0.6);
   inner.rotation.x = Math.PI / 2;
   inner.scaling.z = 1.75;
   inner.position.y = 1.05; // 0.6 * 1.75 — bottom flush with ground
@@ -435,15 +569,42 @@ function buildPortal(scene: Scene, root: Mesh): void {
   inner.material = voidMat;
   inner.receiveShadows = false;
 
-  // Blazing rim: torus matches the inner ellipse dimensions.
+  // Blazing rim: torus matches the inner ellipse dimensions, roughened by the
+  // SAME wobble as the disc it edges — a straight ring round a ragged hole
+  // shows daylight on one side and buries itself on the other.
   // ponytail: non-uniform torus scale distorts tube cross-section slightly; fine at this size.
-  const rim = MeshBuilder.CreateTorus(`${root.name}-pr`, { diameter: 1.2, thickness: 0.15, tessellation: 48 }, scene);
+  const rim = MeshBuilder.CreateTorus(`${root.name}-pr`, { diameter: 1.2, thickness: 0.075, tessellation: 72 }, scene);
+  roughenRing(rim, RIM_WOBBLE, 0);
   rim.rotation.x = Math.PI / 2;
   rim.scaling.z = 1.75;
   rim.position.y = 1.05;
   rim.parent = root;
   rim.material = rimMat;
   rim.receiveShadows = false;
+
+  // ...and the arc bleeding off it. Fatter, dimmer, additive, and wobbled on a
+  // different phase so the two edges never agree and the rim never reads as one
+  // clean line.
+  const halo = MeshBuilder.CreateTorus(`${root.name}-ph`, { diameter: 1.2, thickness: 0.30, tessellation: 40 }, scene);
+  roughenRing(halo, RIM_WOBBLE * 1.5, 1.3);
+  halo.rotation.x = Math.PI / 2;
+  halo.scaling.z = 1.75;
+  halo.position.y = 1.05;
+  halo.parent = root;
+  halo.material = haloMat;
+  halo.receiveShadows = false;
+  halo.isPickable = false;
+
+  // The debris, in the plane of the hole. Local Z is the portal's normal after
+  // the disc's rotation, so turning the field about Z swirls it in the opening
+  // rather than tipping it out of one.
+  const shards = buildShards(scene, `${root.name}-ps`, 0.6, 1.05, 1.05);
+  if (shards) {
+    shards.parent = root;
+    shards.material = shardMat;
+    shards.receiveShadows = false;
+    shards.isPickable = false;
+  }
 
   // Small ground bloom disc — 1.4u diameter (just wider than the portal), very faint.
   const bloom = MeshBuilder.CreateCylinder(`${root.name}-pb`, { diameter: 1.4, height: 0.02, tessellation: 24 }, scene);
@@ -453,7 +614,7 @@ function buildPortal(scene: Scene, root: Mesh): void {
   bloom.receiveShadows = false;
 
   // interactKind lets bindings.ts identify a picked portal child without the snapshot
-  root.metadata = { rimMat, voidMat, interactKind: "portal" };
+  root.metadata = { rimMat, voidMat, haloMat, shardMat, shards, interactKind: "portal" };
 }
 
 /** World height of the loot beam, in the same units as the actors (~1.8 tall). */
@@ -628,20 +789,34 @@ export function isPortalMesh(root: Mesh): boolean {
  * a render-timestamp parameter. Mutates material properties only — no allocs.
  */
 export function updatePortal(root: Mesh, hovered: boolean): void {
-  const parts = root.metadata as { rimMat: StandardMaterial } | null;
+  const parts = root.metadata as {
+    rimMat: StandardMaterial;
+    haloMat?: StandardMaterial;
+    shardMat?: StandardMaterial;
+    shards?: Mesh | null;
+  } | null;
   if (!parts?.rimMat) return;
   // ponytail: Date.now() as animation clock — cheap and always available; upgrade
   // to a passed render-time argument if sub-frame precision ever matters.
   const t = Date.now() / 1000;
-  const pulse = 0.88 + 0.12 * Math.sin(t * 1.8);
+  // Two periods with no small common multiple, so the arc never settles into a
+  // countable beat. The old single sine read as a breathing lamp.
+  const pulse = 0.86 + 0.10 * Math.sin(t * 1.8) + 0.06 * Math.sin(t * 4.3 + 1.1);
   // Base brightness: high so the GlowLayer has enough energy for real bloom.
-  // Hovered: push into near-white so the pickup is unmistakable.
-  const base = hovered ? 1.0 : 0.78;
-  parts.rimMat.emissiveColor.set(
-    pulse * base * 0.85,  // slight blue-white tint
-    pulse * base * 0.92,
-    pulse * base * 1.0,
-  );
+  // Hovered: push it up so the pickup is unmistakable.
+  const base = hovered ? 0.62 : 0.45;
+  const k = pulse * base;
+  parts.rimMat.emissiveColor.set(PORTAL_CYAN.r * k, PORTAL_CYAN.g * k, PORTAL_CYAN.b * k);
+  // The halo runs on the OPPOSITE beat, so the edge is never uniformly bright
+  // and the arc looks like it is moving through the tear rather than round it.
+  if (parts.haloMat) parts.haloMat.alpha = 0.14 * (1.9 - pulse) * (hovered ? 1.4 : 1);
+  if (parts.shards) {
+    // A slow turn about the portal's own normal, and a slower counter-drift on
+    // the shards' own tilt: a field that only spins reads as a wheel.
+    parts.shards.rotation.z = t * 0.11;
+    parts.shards.rotation.y = Math.sin(t * 0.23) * 0.16;
+  }
+  if (parts.shardMat) parts.shardMat.alpha = 0.22 + 0.10 * Math.sin(t * 0.9 + 2.0);
 }
 
 /**
