@@ -1,5 +1,6 @@
 import { Mesh, type Scene } from "@babylonjs/core";
 import { attachProp, type PropKind } from "./props";
+import { setFireSpots, type FireSpot } from "./lights";
 import { CAMERA_ALPHA } from "./engine";
 
 /**
@@ -17,7 +18,7 @@ import { CAMERA_ALPHA } from "./engine";
  */
 
 /** Kinds `props.glb` carries beyond the two interactables. */
-export type DecorKind = Extract<PropKind, "rug" | "table" | "bench" | "crate" | "barrel" | "pillar">;
+export type DecorKind = Extract<PropKind, "rug" | "table" | "bench" | "crate" | "barrel" | "pillar" | "brazier">;
 
 /** Prefix every decor root takes, so a rebuild can find and drop the last set. */
 const DECOR_PREFIX = "hideout-decor-";
@@ -95,7 +96,18 @@ export const HIDEOUT_DECOR: readonly Decor[] = [
   { kind: "pillar", ...at(8.8, 3.4), yaw: -0.9 },
   { kind: "pillar", ...at(-9.0, -1.5), yaw: 2.6 },
   { kind: "pillar", ...at(9.0, -1.5), yaw: 1.7 },
+  // Fire. Two bowls out at the flanks and one down at the foot of the frame, so
+  // the room is lit from its own corners instead of only from the lamp the
+  // player carries — see render/lights.ts for what actually lights them.
+  { kind: "brazier", ...at(-4.2, 4.4), yaw: 0 },
+  { kind: "brazier", ...at(7.4, 3.2), yaw: 0 },
+  { kind: "brazier", ...at(0, -4.0), yaw: 0 },
 ];
+
+/** Where the hideout's fires stand, for the light pool. */
+export const HIDEOUT_FIRES: readonly FireSpot[] = HIDEOUT_DECOR
+  .filter((d) => d.kind === "brazier")
+  .map((d, i) => ({ x: d.x, z: d.z, phase: i * 2.3 }));
 
 /** Drop the last set. Safe on a scene that never had one. */
 export function clearHideoutDecor(scene: Scene): void {
@@ -114,6 +126,7 @@ export function clearHideoutDecor(scene: Scene): void {
  */
 export function buildHideoutDecor(scene: Scene): void {
   clearHideoutDecor(scene);
+  setFireSpots(HIDEOUT_FIRES);
   for (let i = 0; i < HIDEOUT_DECOR.length; i++) {
     const d = HIDEOUT_DECOR[i]!;
     const root = new Mesh(`${DECOR_PREFIX}${i}`, scene);

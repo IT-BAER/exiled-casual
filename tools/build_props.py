@@ -367,7 +367,12 @@ def coal_material(name, path):
     tex.image = bpy.data.images.load(path)
     mat.node_tree.links.new(bsdf.inputs["Base Color"], tex.outputs["Color"])
     mat.node_tree.links.new(bsdf.inputs["Emission Color"], tex.outputs["Color"])
-    bsdf.inputs["Emission Strength"].default_value = 1.6
+    # 0.3, not the 1.6 this started at. The scene tone-maps at 1.15 exposure, and
+    # a coal texture that is already painted glowing came back off the screen as
+    # a flat white saucer sitting in an iron ring — the fire read as a lamp shade.
+    # This is the value at which the embers are the brightest thing in the frame
+    # while still being embers.
+    bsdf.inputs["Emission Strength"].default_value = 0.3
     bsdf.inputs["Metallic"].default_value = 0.0
     bsdf.inputs["Roughness"].default_value = 0.9
     return mat
@@ -690,8 +695,11 @@ def build_brazier(mats):
     # box-mapped or smoothed: it is a flat disc showing one painted texture, and
     # every one of those steps would either round its edge into the bowl or
     # replace the painting with a projection of it.
+    # Domed, not flat: coals heap up in the middle, and a disc reads as a plate.
     coals = mesh_object("brazier_coals", *lathe([
-        (0.000, BRAZIER_RIM_Z - 0.045), (0.315, BRAZIER_RIM_Z - 0.075),
+        (0.000, BRAZIER_RIM_Z - 0.030),
+        (0.170, BRAZIER_RIM_Z - 0.055),
+        (0.315, BRAZIER_RIM_Z - 0.090),
     ], 20))
     _disc_uv(coals, 0.315)
     coals.data.materials.append(mats["brazier_coal"])

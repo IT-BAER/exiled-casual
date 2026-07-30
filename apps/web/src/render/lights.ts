@@ -1,0 +1,179 @@
+import { Color3, PointLight, Vector3, type AbstractMesh, type Scene } from "@babylonjs/core";
+
+/**
+ * The fires the world is lit by, as opposed to the one the player carries.
+ *
+ * A hideout and a map lit only by the torch on the character's belt look like a
+ * torchlit character on a dark plate: every room is the same brightness, every
+ * shadow points at the player, and nothing in the place has a reason to be seen.
+ * A brazier standing in a corner is what makes a corner a corner.
+ *
+ * ## Why a pool
+ *
+ * Every light a material can see is a branch in its shader, and Babylon caps a
+ * material at four by default. A map with twenty braziers on it does not want
+ * twenty lights: it wants the FOUR NEAREST to be lit, because the camera only
+ * shows nineteen units across and a fire past that edge contributes nothing but
+ * a shader recompile.
+ *
+ * So this owns a fixed pool of point lights, created once with the scene (adding
+ * a light later forces every PBR material to recompile, which is a visible hitch
+ * mid-run), and every frame it hands the pool to whichever bowls are closest to
+ * the camera. A light that has nothing to do is switched off rather than
+ * disposed, which costs nothing and keeps the shader permutations stable.
+ *
+ * ## Flicker
+ *
+ * Two detuned sines per light, on both intensity and range, each seeded off the
+ * bowl's own position: fires near each other must not breathe together, and a
+ * single sine is a pulse rather than a flame. The same argument as the menu's
+ * painted braziers (`menu/atmos.tsx`), which is where the numbers came from.
+ */
+
+/** How many bowls may be lit at once. Babylon's default per-material cap. */
+export const LIGHT_POOL = 4;
+
+/** Name every pooled light takes, so a rebuild can find them again. */
+const POOL_PREFIX = "firelight-";
+
+/** Height above the prop's origin the flame sits at: `BRAZIER_RIM_Z` plus a hand. */
+export const BRAZIER_FLAME_Y = 1.12;
+
+/**
+ * Colour of a coal fire. Warmer and redder than the torch, which is a flame.
+ *
+ * Built on demand rather than at import: GameView's test partially mocks
+ * `@babylonjs/core`, and a module-level `new Color3` makes importing this file
+ * at all depend on the mock carrying that export.
+ */
+const fireColour = (): Color3 => new Color3(1.0, 0.52, 0.22);
+
+/** Intensity and reach of one bowl. Both are flickered around these. */
+const FIRE_INTENSITY = 120;
+const FIRE_RANGE = 7.4;
+
+/** How deep the flicker cuts, as a fraction of each. */
+const FLICKER_INTENSITY = 0.18;
+const FLICKER_RANGE = 0.06;
+
+/** A bowl that could be lit: where it is, and the phase its flame is at. */
+export interface FireSpot {
+  x: number;
+  z: number;
+  /** Seconds of offset, so two fires never breathe together. */
+  phase: number;
+}
+
+/**
+ * Where the fires are, in world units. Rebuilt per area by `setFireSpots`.
+ *
+ * Kept here rather than read off the scene every frame: the props are meshes
+ * under an instantiated glTF root and finding them by name is a walk of the
+ * whole node list, which is not a per-frame question when the answer only
+ * changes when an area does.
+ */
+let spots: FireSpot[] = [];
+let pool: PointLight[] = [];
+let clock = 0;
+/** Rebuilt whenever the scene's mesh count moves. See `excludeBowls`. */
+let lastMeshCount = -1;
+
+/**
+ * Build the pool. Call once per scene, with the other lights.
+ *
+ * Idempotent per scene: a second call finds the lights it made the first time.
+ */
+export function createFireLights(scene: Scene): PointLight[] {
+  pool = [];
+  for (let i = 0; i < LIGHT_POOL; i++) {
+    const existing = scene.getLightByName(`${POOL_PREFIX}${i}`);
+    const light = (existing as PointLight | null) ?? new PointLight(
+      `${POOL_PREFIX}${i}`, new Vector3(0, BRAZIER_FLAME_Y, 0), scene);
+    light.diffuse = fireColour();
+    light.specular = new Color3(0, 0, 0);
+    light.range = FIRE_RANGE;
+    light.intensity = 0;
+    // Never: a fire that casts is a second shadow on every object in the room,
+    // pointing a different way from the sun's, and six cube faces per bowl.
+    light.shadowEnabled = false;
+    light.setEnabled(false);
+    pool.push(light);
+  }
+  return pool;
+}
+
+/** Forget the pool. The scene that owned it is going away. */
+export function resetFireLights(): void {
+  pool = [];
+  spots = [];
+  clock = 0;
+  lastMeshCount = -1;
+}
+
+/**
+ * Keep the fire out of its own bowl.
+ *
+ * The light sits a hand above the coals, so at inverse square the coals get an
+ * order more of it than anything else in the room and come back off the screen
+ * as a white saucer — the fire looked like a lamp with the shade off. Their own
+ * emissive texture is what they are lit by; this is what stops the pool adding
+ * to it. Same mechanism the player torch uses to stay out of the character's
+ * hair (`excludedMeshes` in engine.ts), and re-run on the same signal: a change
+ * in the scene's mesh count, which is an area being built.
+ */
+function excludeBowls(scene: Scene): void {
+  if (scene.meshes.length === lastMeshCount) return;
+  lastMeshCount = scene.meshes.length;
+  const bowls: AbstractMesh[] = scene.meshes.filter((m) => m.name.includes("brazier"));
+  for (const light of pool) light.excludedMeshes = bowls;
+}
+
+/** The fires in the area that has just been built. Replaces the last set. */
+export function setFireSpots(next: readonly FireSpot[]): void {
+  spots = [...next];
+}
+
+/** What the lights are doing, for tests: name, whether lit, and where. */
+export function fireLightState(): { on: boolean; x: number; z: number; intensity: number }[] {
+  return pool.map((l) => ({
+    on: l.isEnabled(),
+    x: l.position.x,
+    z: l.position.z,
+    intensity: l.intensity,
+  }));
+}
+
+/**
+ * Point the pool at the nearest bowls and flicker them. Call once per frame.
+ *
+ * `at` is the point to measure from — the camera's target, which is the player,
+ * because that is what the frame is composed around.
+ */
+export function updateFireLights(scene: Scene, at: Vector3, deltaMs: number): void {
+  if (pool.length === 0) return;
+  excludeBowls(scene);
+  clock += deltaMs / 1000;
+
+  // Nearest first. A plain sort: this list is per area and a dozen long, and a
+  // partial selection would cost more to read than it saves to run.
+  const near = [...spots]
+    .map((s) => ({ s, d: (s.x - at.x) ** 2 + (s.z - at.z) ** 2 }))
+    .sort((a, b) => a.d - b.d)
+    .slice(0, pool.length);
+
+  for (let i = 0; i < pool.length; i++) {
+    const light = pool[i]!;
+    const found = near[i];
+    if (!found) {
+      light.setEnabled(false);
+      continue;
+    }
+    const { s } = found;
+    light.position.set(s.x, BRAZIER_FLAME_Y, s.z);
+    const t = clock + s.phase;
+    const wobble = Math.sin(t * 3.1) * 0.66 + Math.sin(t * 1.27 + 1.7) * 0.34;
+    light.intensity = FIRE_INTENSITY * (1 + FLICKER_INTENSITY * wobble);
+    light.range = FIRE_RANGE * (1 + FLICKER_RANGE * wobble);
+    light.setEnabled(true);
+  }
+}

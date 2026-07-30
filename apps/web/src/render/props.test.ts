@@ -28,7 +28,7 @@ describe("props asset", () => {
     const roots = json.nodes.filter((n) => n.mesh === undefined && (n.children?.length ?? 0) > 0);
     // The two the sim spawns, then the furniture render/hideout.ts places.
     expect(roots.map((n) => n.name)).toEqual(expect.arrayContaining([
-      "mapDevice", "stash", "rug", "table", "bench", "crate", "barrel", "pillar",
+      "mapDevice", "stash", "rug", "table", "bench", "crate", "barrel", "pillar", "brazier",
     ]));
   });
 
@@ -49,6 +49,7 @@ describe("props asset", () => {
     const names = json.materials.map((m) => m.name);
     for (const wanted of [
       "brass_top", "brass_side", "chest_wood", "iron", "stone", "rug", "pillar_stone",
+      "brazier_coal",
     ]) {
       expect(names).toContain(wanted);
     }

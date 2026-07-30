@@ -21,6 +21,8 @@ import {
   scatterRocks,
   type RockCell,
 } from "./rocks";
+import { attachProp } from "./props";
+import { setFireSpots, type FireSpot } from "./lights";
 import type { WalkableGrid } from "@exiled/mapgen";
 
 /** Wall height in world units, capped at roughly the player's own 1.8. At 3.5 a
@@ -229,6 +231,86 @@ function shadeTopFace(box: Mesh): void {
   box.setVerticesData(VertexBuffer.ColorKind, colors);
 }
 
+/** Prefix every brazier root an area stands up. Cleared on the next build. */
+const AREA_BRAZIER_PREFIX = "area-brazier-";
+
+/**
+ * How far apart two fires must stand, in world units, and how many an area gets.
+ *
+ * The camera shows about nineteen units across, so this spacing puts at most a
+ * couple in frame at once — which is the point. A corridor lit end to end is a
+ * corridor with no dark in it, and dark is what makes the lit part worth walking
+ * toward (docs/09: anticipation is the mechanism).
+ */
+const FIRE_SPACING = 11;
+const FIRE_MAX = 10;
+
+/**
+ * Stand a brazier against a wall every so often, and tell the light pool where
+ * they are.
+ *
+ * Deterministic and RNG-free: the candidates are taken in grid order and kept
+ * whenever they clear the spacing, so the same map always lights the same way —
+ * a replay and a screenshot both need that, and neither wants a seed threaded
+ * through the renderer.
+ */
+function standBraziers(
+  scene: Scene,
+  grid: WalkableGrid,
+  isFloor: (x: number, y: number) => boolean,
+): void {
+  for (const node of [...scene.meshes, ...scene.transformNodes]) {
+    if (node.name.startsWith(AREA_BRAZIER_PREFIX)) node.dispose(false, false);
+  }
+
+  const { cols, rows, cellSize, originX, originY } = grid;
+  const spots: FireSpot[] = [];
+  for (let y = 1; y < rows - 1 && spots.length < FIRE_MAX; y++) {
+    for (let x = 1; x < cols - 1 && spots.length < FIRE_MAX; x++) {
+      if (!isFloor(x, y)) continue;
+      // Against a wall, and only where the wall is one flat side: a cell in a
+      // corner takes a bowl that reads as jammed into the masonry.
+      const wallN = !isFloor(x, y - 1);
+      const wallS = !isFloor(x, y + 1);
+      const wallW = !isFloor(x - 1, y);
+      const wallE = !isFloor(x + 1, y);
+      const sides = Number(wallN) + Number(wallS) + Number(wallW) + Number(wallE);
+      if (sides !== 1) continue;
+      const wx = originX + x * cellSize;
+      const wz = originY + y * cellSize;
+      if (spots.some((s) => Math.hypot(s.x - wx, s.z - wz) < FIRE_SPACING)) continue;
+      // Nudged into the wall it stands against, so it hugs the masonry instead
+      // of standing a cell out in the walking lane.
+      const push = cellSize * 0.3;
+      spots.push({
+        x: wx + (wallE ? push : wallW ? -push : 0),
+        z: wz + (wallS ? push : wallN ? -push : 0),
+        // Seconds of offset, spread so no two flames breathe together.
+        phase: spots.length * 1.7,
+      });
+    }
+  }
+
+  for (let i = 0; i < spots.length; i++) {
+    const s = spots[i]!;
+    const root = new Mesh(`${AREA_BRAZIER_PREFIX}${i}`, scene);
+    root.position.set(s.x, 0, s.z);
+    root.isPickable = false;
+    if (attachProp(scene, root, "brazier") === null) {
+      // No props asset (headless, or a failed fetch). The light still stands:
+      // an unlit room with an invisible brazier is worse than a lit one with a
+      // missing bowl, and the fallback is the same one every prop here takes.
+      root.dispose(false, false);
+      continue;
+    }
+    for (const mesh of root.getChildMeshes()) {
+      mesh.isPickable = false;
+      mesh.receiveShadows = true;
+    }
+  }
+  setFireSpots(spots);
+}
+
 export function buildLevel(
   scene: Scene,
   grid: WalkableGrid | null,
@@ -340,6 +422,11 @@ export function buildLevel(
       boxes.push(box);
     }
   }
+
+  // Fires along the walls, before the merge: `floorCells` is already the list of
+  // open cells this sweep collected, and a brazier wants one that has a wall to
+  // stand against.
+  standBraziers(scene, grid, isFloor);
 
   if (wallCells === 0) return { walls: null, wallCells: 0 };
 

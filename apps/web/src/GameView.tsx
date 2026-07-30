@@ -8,6 +8,7 @@ import { SnapshotRenderer } from "./render/renderer";
 import { loadProps, resetProps } from "./render/props";
 import { loadMonsters, resetMonsters } from "./render/monsters";
 import { enablePhysics, resetPhysics } from "./render/ragdoll";
+import { resetFireLights } from "./render/lights";
 import { loadRocks, resetRocks } from "./render/rocks";
 import { loadPlayerRig, resetPlayerRig } from "./render/rig";
 import { attachBindings } from "./input/bindings";
@@ -417,6 +418,7 @@ export function GameView({
       window.removeEventListener("keydown", onInvKey);
       resetPlayerRig(); // containers belong to the scene we are about to dispose
       resetProps();
+      resetFireLights();
       resetMonsters();
       resetPhysics();
       resetRocks();

@@ -22,6 +22,7 @@ import {
 import { DEFAULT_SETTINGS, type GraphicsSettings } from "../settings";
 import { ROCK_MESH_PREFIX } from "./rocks";
 import { createHaze, createMotes } from "./haze";
+import { createFireLights, updateFireLights } from "./lights";
 
 /**
  * Light intensities for a PBR scene. Roughly PI times the values the old
@@ -66,7 +67,13 @@ const FILL_INTENSITY = 0.45;
 // bulb. At 3.8 the head sits 2.1 away, so its share drops ~2.5x while the floor
 // is unchanged. Do not raise it further: 5.5 flattens the floor and the pool
 // stops being a pool.
-const TORCH_INTENSITY = 420;
+//
+// 300 and not the 420 it was tuned to alone. The place lights itself now — the
+// braziers in render/lights.ts stand in the room and throw their own pools — so
+// the lamp on the belt no longer has to be the only reason anything is visible.
+// It is a pool the player carries between other people's fires, which is what it
+// reads as in PoE, and turning it down is what lets a brazier be seen at all.
+const TORCH_INTENSITY = 300;
 /** Where the pool stops. GLTF falloff windows the inverse square to this, so the
  *  edge is defined instead of trailing off across the whole map.
  *
@@ -791,8 +798,12 @@ export function createScene(engine: Engine): SceneHandle {
     const t = performance.now() / 1000;
     const wobble = Math.sin(t * 6.3) * 0.6 + Math.sin(t * 11.7) * 0.4;
     torch.intensity = TORCH_INTENSITY * (1 + wobble * TORCH_FLICKER);
+    // ...and the fires that belong to the PLACE, pointed at whichever bowls are
+    // nearest the camera. Same clock argument: render-side only.
+    updateFireLights(scene, camera.target, engine.getDeltaTime?.() ?? 16);
   });
 
+  createFireLights(scene);
   createHaze(scene, camera);
   createMotes(scene, camera);
 
