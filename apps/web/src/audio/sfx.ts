@@ -4,9 +4,14 @@ import { bus, send } from "./bus";
  * Sampled sound effects: skills, monsters, portals, flasks, footsteps and the UI.
  *
  * The masters are 48 kHz mono WAVs generated locally with MOSS-SoundEffect v2 (see
- * `.claude/skills/generate-game-audio`) and shipped as Opus in WebM — 21 sounds in
- * 212 KB, against 2 MB of WAV. They share the bus with the synthesised drop cue, so
- * the Options volume covers everything and nothing fights it for a context.
+ * `.claude/skills/generate-game-audio`), cut down by `tools/trim_sfx.py`, and shipped
+ * as Opus in WebM — 21 sounds in 360 KB. They share the bus with the synthesised drop
+ * cue, so the Options volume covers everything and nothing fights it for a context.
+ *
+ * Every one of them is peak-normalised by the trimmer and opens on its own transient,
+ * which is what makes the gain table below the ONLY thing setting level. The first
+ * pass shipped without that step: ten cues were silent or near-silent, and the ones
+ * that were not started up to a second late and were cut off. See trim_sfx.py.
  *
  * Every path here is silent-on-failure by design. A missing file, a browser with no
  * WebAudio, a jsdom test: all of them end with nothing playing and nothing thrown,

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { readFileSync } from "node:fs";
 import { CORE_SFX, distanceGain, playSfx } from "./sfx";
@@ -39,6 +39,20 @@ describe("sfx assets", () => {
     const cast = [...body.matchAll(/"skill\.[a-z_.0-9]+":\s*"([a-z0-9-]+)"/g)].map((m) => m[1]!);
     expect(emitted.length).toBeGreaterThan(5);
     for (const name of [...emitted, ...cast]) expect(voices.has(name), name).toBe(true);
+  });
+
+  /**
+   * The exact failure the first audio pass shipped: ten of these files held silence
+   * or near-silence, and nothing in the codebase could tell. Opus spends almost no
+   * bytes on silence, so size IS the signal - the shortest real cue here is a 0.17s
+   * transient at 4.4 KB, while 0.2s of quiet encodes to well under one.
+   */
+  it("no shipped sound is silence", () => {
+    const thin = readdirSync(DIR)
+      .filter((f) => f.endsWith(".webm"))
+      .map((f) => ({ f, bytes: statSync(resolve(DIR, f)).size }))
+      .filter((r) => r.bytes < 2500);
+    expect(thin).toEqual([]);
   });
 
   it("the masters exist as WAV nowhere in the shipped app", () => {

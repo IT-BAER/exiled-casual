@@ -192,7 +192,7 @@ colors, name header, affix lines) to the `item-*.png` screenshots above.
 
 ## Conventions
 
-- **Sound is a snapshot DIFF** (`audio/soundscape.ts`), never a call at the dispatch site: a cue fired on the press lies whenever the sim refuses the cast. One bus (`audio/bus.ts`), or the volume slider covers half the game. Masters come from the `generate-game-audio` skill and ship as Opus in `public/audio/`.
+- **Sound is a snapshot DIFF** (`audio/soundscape.ts`), never a call at the dispatch site: a cue fired on the press lies whenever the sim refuses the cast. One bus (`audio/bus.ts`), or the volume slider covers half the game. Masters come from the `generate-game-audio` skill, ALWAYS rendered at 5s and cut down by `tools/trim_sfx.py` — MOSS is conditioned on the length you ask for and a short request comes back silent — then Opus into `public/audio/`. Ask for loud: "soft", "quiet" and "light" in a prompt are obeyed, and normalising a 0.03-peak render is amplified hiss.
 - Sim math is deterministic fixed-point; keep replay checksums stable. `@exiled/rules` is a pure leaf: it imports no other `@exiled` package.
 - Commit: direct-to-main, one per task. No attribution trailers, no emdashes in messages.
 - **`docs/todo/TODO.md` is his, edited continuously** (gitignored, so re-read it each session). New items land under `## SORT`: rate each and move it into Low / Mid / High, ranked inside the tier so the last line is the most important. Tick `[x]` when it ships. Never reword or drop his items.
