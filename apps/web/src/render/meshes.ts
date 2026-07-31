@@ -7,9 +7,9 @@ import {
   ShaderMaterial,
   StandardMaterial,
   Texture,
+  Vector3,
   VertexBuffer,
   type Scene,
-  type Vector3,
 } from "@babylonjs/core";
 import { attachProp } from "./props";
 import { attachCreature, type CreatureRig } from "./monsters";
@@ -429,6 +429,57 @@ const PORTAL_CYAN = new Color3(0.34, 0.93, 1.0);
  */
 const PORTAL_SHADER = "ecPortal";
 
+/** One look for the tear: arc colour, depth colour, and how it burns. */
+export interface PortalStyle {
+  /** Which DESIGN the shader draws: 0 vortex, 1 torn void, 2 storm ring,
+   *  3 nebula window, 4 runic gate. Different geometry of light, not a hue. */
+  variant: number;
+  /** Colour of the rim, filaments and feather. */
+  rim: [number, number, number];
+  /** Colour of the glow inside the void. */
+  deep: [number, number, number];
+  /** How hard ridged noise bites notches out of the edge. 0 is a smooth oval. */
+  jag: number;
+  /** Width of the white-hot core line. */
+  coreW: number;
+  /** Width of the coloured band under it. */
+  bodyW: number;
+  /** How far the plasma feathers off the rim. */
+  featherLen: number;
+}
+
+/**
+ * The candidate looks, side by side. `PORTAL_STYLE` picks the shipped one; the
+ * rest stay because they are data, not code, and re-auditioning them costs a
+ * string.
+ */
+export const PORTAL_STYLES: Record<string, PortalStyle> = {
+  /** A whirlpool: spiral arms twisting into a bright eye. The D2 read. */
+  vortex: { variant: 0, rim: [0.18, 0.55, 1.0], deep: [0.03, 0.10, 0.34], jag: 0, coreW: 0.04, bodyW: 0.09, featherLen: 0.10 },
+  /** The blenderkit reference: ragged rim, cracked starred dark. */
+  torn: { variant: 1, rim: [0.12, 0.50, 1.0], deep: [0.01, 0.10, 0.36], jag: 0.5, coreW: 0.04, bodyW: 0.09, featherLen: 0.12 },
+  /** A ring of discrete lightning arcs round a near-black hole. */
+  storm: { variant: 2, rim: [0.45, 0.70, 1.0], deep: [0.02, 0.08, 0.28], jag: 0, coreW: 0.04, bodyW: 0.08, featherLen: 0.12 },
+  /** Barely a rim; the hole is a window onto nebula clouds and stars. */
+  nebula: { variant: 3, rim: [0.30, 0.45, 1.0], deep: [0.10, 0.08, 0.40], jag: 0, coreW: 0.035, bodyW: 0.07, featherLen: 0.08 },
+  /** A built gate: counter-rotating dashed glyph rings over a still depth. */
+  gate: { variant: 4, rim: [0.25, 0.60, 1.0], deep: [0.02, 0.06, 0.26], jag: 0, coreW: 0.03, bodyW: 0.06, featherLen: 0.08 },
+};
+
+/** The look the game ships with. His pick, 2026-07-31. */
+export const PORTAL_STYLE = "nebula";
+
+/** Write one style into a portal's material. Exposed so a probe can audition. */
+export function setPortalStyle(mat: ShaderMaterial, s: PortalStyle): void {
+  mat.setFloat("uVariant", s.variant);
+  mat.setVector3("uRim", new Vector3(...s.rim));
+  mat.setVector3("uDeep", new Vector3(...s.deep));
+  mat.setFloat("uJag", s.jag);
+  mat.setFloat("uCoreW", s.coreW);
+  mat.setFloat("uBodyW", s.bodyW);
+  mat.setFloat("uFeatherLen", s.featherLen);
+}
+
 function registerPortalShader(): void {
   if (Effect.ShadersStore[`${PORTAL_SHADER}VertexShader`]) return;
   Effect.ShadersStore[`${PORTAL_SHADER}VertexShader`] = `
@@ -436,16 +487,40 @@ function registerPortalShader(): void {
     attribute vec3 position;
     attribute vec2 uv;
     uniform mat4 worldViewProjection;
+    uniform mat4 world;
+    uniform vec3 uCam;
     varying vec2 vUV;
+    varying vec2 vPar;
     void main(void) {
       vUV = uv;
+      vec4 wp = world * vec4(position, 1.0);
+      // The view direction, expressed in the quad's own XY. Multiplying the
+      // row vector by mat3(world) is R^T * v for a rotation, which is exactly
+      // "into local space" — and it is what lets the fragment shader slide the
+      // void's layers against each other as the camera moves. That parallax is
+      // the whole difference between a hole and a sticker.
+      vec3 vd = normalize(wp.xyz - uCam) * mat3(world);
+      vPar = vd.xy;
       gl_Position = worldViewProjection * vec4(position, 1.0);
     }`;
   Effect.ShadersStore[`${PORTAL_SHADER}FragmentShader`] = `
     precision highp float;
     varying vec2 vUV;
+    varying vec2 vPar;
     uniform float uTime;
     uniform float uHover;
+    // The tear's look, as data: colour of the arc, colour of the deep glow,
+    // how jagged the edge tears, how wide core and body burn, how far the
+    // plasma feathers. One shader, every variant.
+    uniform vec3 uRim;
+    uniform vec3 uDeep;
+    uniform float uJag;
+    uniform float uCoreW;
+    uniform float uBodyW;
+    uniform float uFeatherLen;
+    // Which DESIGN this portal is, not merely which palette: 0 vortex,
+    // 1 torn void, 2 storm ring, 3 nebula window, 4 runic gate.
+    uniform float uVariant;
 
     float hash(vec2 p) {
       return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -460,60 +535,128 @@ function registerPortalShader(): void {
       return 0.5 * vnoise(p) + 0.25 * vnoise(p * 2.03) + 0.125 * vnoise(p * 4.11);
     }
 
+    // Stars: one speck per grid cell, twinkling on the cell's own phase.
+    float stars(vec2 q, float t) {
+      vec2 cell = floor(q * 9.0);
+      vec2 cuv = fract(q * 9.0) - 0.5;
+      vec2 off = vec2(hash(cell), hash(cell + 19.7)) - 0.5;
+      return exp(-dot(cuv - off * 0.6, cuv - off * 0.6) * 260.0)
+           * step(hash(cell + 7.3), 0.55)
+           * (0.5 + 0.5 * sin(t * (2.0 + 4.0 * hash(cell + 3.1)) + hash(cell) * 6.28));
+    }
+
     void main(void) {
       // -1..1 across the quad; the quad itself is stretched to the ellipse, so
       // this space is circular and the maths never needs the aspect.
       vec2 p = vUV * 2.0 - 1.0;
       float ang = atan(p.y, p.x);
       float t = uTime;
+      int v = int(uVariant + 0.5);
+      float boost = 1.0 + 0.6 * uHover;
 
-      // The tear's edge: off-round by three sines with no common period, each
-      // crawling at its own speed. This is the reference's "glitch" group.
-      float wob = 0.035 * sin(ang * 5.0 + t * 0.6)
-                + 0.026 * sin(ang * 9.0 - t * 0.9)
-                + 0.018 * sin(ang * 17.0 + t * 1.5);
+      // The void's layers slide against each other with the camera (vPar), each
+      // at its own depth. A quad whose interior does not move is a sticker; one
+      // whose stars sit deeper than its cracks is a hole.
+      vec2 pMid = p + vPar * 0.10;
+      vec2 pStar = p + vPar * 0.26;
+      vec2 pGlow = p + vPar * 0.40;
+
+      // ---- The edge. Each design draws a different KIND of boundary. ----
+      // Calm by default: a portal's edge drifts, it does not jiggle. The two
+      // base sines are a few percent of radius and crawl slowly.
+      float wob = 0.014 * sin(ang * 3.0 + t * 0.4)
+                + 0.010 * sin(ang * 7.0 - t * 0.55);
+      if (v == 1) {
+        // Torn: ridged noise bites notches inward, slowly.
+        wob -= uJag * pow(fbm(vec2(ang * 3.0, 3.7 + t * 0.10)), 2.0) * 0.16;
+      }
+      if (v == 2) {
+        // Storm: a finer live jitter, still gentle at the silhouette.
+        wob += (fbm(vec2(ang * 8.0, t * 1.6)) - 0.5) * 0.05;
+      }
+      if (v == 4) wob = 0.0; // a built gate is machined, not torn
       float r = length(p) / (0.80 + wob);
-
-      // Rim: a tight white-hot core over a wider cyan body, both flickering
-      // against noise carried around the edge so no arc burns steadily.
-      float flick = 0.85 + 0.45 * fbm(vec2(ang * 2.2, t * 0.55));
-      float core = exp(-pow((r - 1.0) / 0.045, 2.0)) * flick;
-      float body = exp(-pow((r - 1.0) / 0.10, 2.0)) * flick;
-      // Plasma feathering outward only, torn by the same noise field.
-      float feather = exp(-max(r - 1.0, 0.0) / 0.12)
-                    * step(r, 1.6) * (0.35 + 0.65 * fbm(vec2(ang * 3.1 + 7.0, t * 0.4)));
-
-      // Inside: black void, blue clinging to the rim (the old vertex ramp).
       float inside = 1.0 - smoothstep(0.96, 1.02, r);
       float cling = exp(-max(1.0 - r, 0.0) / 0.22);
+      float flick = 0.85 + 0.45 * fbm(vec2(ang * 2.2, t * 0.55));
 
-      // Filaments: ridges of the noise field, thin where the contour is thin.
-      // Contour lines of an fbm branch and rejoin, which is what the painted
-      // cracks in the reference do; they fade toward the centre with the cling.
-      float f = fbm(p * 2.6 + vec2(0.0, t * 0.05));
-      float ridge = pow(1.0 - abs(2.0 * fract(f * 3.0) - 1.0), 24.0);
-      float crack = ridge * inside * (0.06 + 0.94 * cling * cling);
+      float core = exp(-pow((r - 1.0) / uCoreW, 2.0)) * flick;
+      float body = exp(-pow((r - 1.0) / uBodyW, 2.0)) * flick;
+      float feather = exp(-max(r - 1.0, 0.0) / uFeatherLen)
+                    * step(r, 1.6) * (0.35 + 0.65 * fbm(vec2(ang * 3.1 + 7.0, t * 0.4)));
 
-      // Stars: one speck per grid cell, twinkling on the cell's own phase.
-      vec2 cell = floor(p * 9.0);
-      vec2 cuv = fract(p * 9.0) - 0.5;
-      vec2 off = vec2(hash(cell), hash(cell + 19.7)) - 0.5;
-      float star = exp(-dot(cuv - off * 0.6, cuv - off * 0.6) * 260.0)
-                 * step(hash(cell + 7.3), 0.55)
-                 * (0.5 + 0.5 * sin(t * (2.0 + 4.0 * hash(cell + 3.1)) + hash(cell) * 6.28))
-                 * inside;
-
-      vec3 cyan = vec3(0.15, 0.75, 1.0);
-      vec3 deep = vec3(0.02, 0.16, 0.38);
-      float boost = 1.0 + 0.6 * uHover;
-      vec3 col = deep * cling * inside * 0.7
-               + cyan * crack * 1.6
-               + vec3(0.75, 0.95, 1.0) * star * 1.6
-               + cyan * body * 2.3 * boost
-               + vec3(0.85, 0.99, 1.0) * core * 3.2 * boost
-               + cyan * feather * 0.8 * boost;
-
+      vec3 col = vec3(0.0);
       float alpha = clamp(inside * 0.96 + body + feather * 0.7, 0.0, 1.0);
+
+      if (v == 0) {
+        // ---- Vortex: the void is a whirlpool. Spiral arms twist harder ----
+        // toward the centre and pour over the lip, the D2 town-portal read.
+        float tw = ang + (1.0 - r) * 5.5 - t * 1.4;
+        float arm = fbm(vec2(tw * 1.6, r * 3.0 - t * 0.35));
+        float spiral = pow(arm, 2.2) * inside;
+        float eye = exp(-r * r * 6.0);
+        col = uDeep * inside * (0.25 + 0.5 * cling)
+            + uRim * spiral * 2.2
+            + vec3(0.9, 0.97, 1.0) * eye * 1.4
+            + uRim * body * 1.8 * boost
+            + vec3(0.85, 0.99, 1.0) * core * 2.4 * boost
+            + uRim * feather * 0.6 * boost;
+      } else if (v == 2) {
+        // ---- Storm ring: no soft band at all. The boundary is discrete ----
+        // lightning segments racing round a nearly black hole.
+        float b = fbm(vec2(ang * 6.0 + sin(t) * 0.5, t * 1.9));
+        float seg = smoothstep(0.52, 0.62, b);
+        float arc = seg * exp(-pow((r - 1.0) / 0.05, 2.0));
+        float halo = seg * exp(-abs(r - 1.0) / 0.18) * 0.7;
+        float sparkNear = stars(p * 1.6 + vec2(0.0, t * 0.4), t * 3.0)
+                        * smoothstep(0.55, 0.95, r) * inside;
+        col = uDeep * inside * 0.35 * cling
+            + vec3(1.0) * arc * 3.4 * boost
+            + uRim * halo * 1.6 * boost
+            + vec3(0.9, 0.97, 1.0) * sparkNear * 2.0;
+        alpha = clamp(inside * 0.97 + arc + halo * 0.6, 0.0, 1.0);
+      } else if (v == 3) {
+        // ---- Nebula window: barely any rim. The event is what you see ----
+        // THROUGH the hole: parallax clouds lit from within, and stars.
+        float n1 = fbm(pGlow * 2.2 + vec2(t * 0.04, -t * 0.03));
+        float n2 = fbm(pMid * 3.6 + vec2(-t * 0.02, t * 0.05) + 11.0);
+        vec3 cloud = uDeep * n1 * 1.6 + uRim * pow(n2, 2.4) * 1.5;
+        float star = stars(pStar, t);
+        col = cloud * inside
+            + vec3(0.85, 0.95, 1.0) * star * 2.0 * inside
+            + uRim * body * 0.9 * boost
+            + vec3(0.9, 0.99, 1.0) * core * 1.2 * boost;
+      } else if (v == 4) {
+        // ---- Runic gate: a MADE thing. Two counter-rotating dashed ----
+        // rings of glyph light frame a still black depth that ripples.
+        float dash1 = step(0.45, fract(ang / 6.2832 * 18.0 + t * 0.06));
+        float dash2 = step(0.40, fract(-ang / 6.2832 * 12.0 + t * 0.045));
+        float ring1 = dash1 * exp(-pow((r - 0.97) / 0.035, 2.0));
+        float ring2 = dash2 * exp(-pow((r - 0.78) / 0.028, 2.0));
+        float ripple = exp(-r * 2.2) * (0.5 + 0.5 * sin(r * 16.0 - t * 2.2)) * inside;
+        col = uDeep * inside * (0.2 + 0.4 * cling)
+            + uRim * ring1 * 2.6 * boost
+            + uRim * ring2 * 1.7 * boost
+            + uDeep * ripple * 1.4
+            + vec3(0.9, 0.99, 1.0) * core * 0.8 * boost;
+        alpha = clamp(inside * 0.96 + ring1 + feather * 0.3, 0.0, 1.0);
+      } else {
+        // ---- Torn void (the reference): ragged blazing rim, cracked ----
+        // starred dark behind it.
+        float f = fbm(pMid * 2.6 + vec2(0.0, t * 0.05));
+        float ridge = pow(1.0 - abs(2.0 * fract(f * 3.0) - 1.0), 24.0);
+        float crack = ridge * inside * (0.06 + 0.94 * cling * cling);
+        float star = stars(pStar, t) * inside;
+        float depthGlow = fbm(pGlow * 1.8 + vec2(t * 0.03, -t * 0.02)) * inside;
+        col = uDeep * cling * inside * 0.7
+            + uDeep * depthGlow * 0.55
+            + uRim * crack * 1.6
+            + vec3(0.75, 0.95, 1.0) * star * 1.6
+            + uRim * body * 2.3 * boost
+            + vec3(0.85, 0.99, 1.0) * core * 3.2 * boost
+            + uRim * feather * 0.8 * boost;
+      }
+
       if (alpha < 0.01) discard;
       gl_FragColor = vec4(col, alpha);
     }`;
@@ -527,18 +670,21 @@ function registerPortalShader(): void {
 function buildPortal(scene: Scene, root: Mesh): void {
   registerPortalShader();
 
-  // The whole portal. Wider than the old 1.2 ellipse by the feather's reach:
-  // the shader draws the tear at 80% of the quad and bleeds plasma over the
-  // rest, and a quad cut at the rim clips the bleed into a straight edge.
-  // The reference's tear is nearly round — 1.3 tall for its width, not the old
-  // ellipse's 1.75. Six portals on the hideout arc sit ~3.7u apart, so 1.9 of
-  // quad (1.5 of actual tear) still clears its neighbours.
-  const face = MeshBuilder.CreatePlane(`${root.name}-pi`, { width: 1.9, height: 2.5 }, scene);
-  face.position.y = 1.06;
+  // The whole portal. Wider than the tear itself by the feather's reach: the
+  // shader draws the tear at 80% of the quad and bleeds plasma over the rest,
+  // and a quad cut at the rim clips the bleed into a straight edge. The UV
+  // space stays circular; the QUAD's aspect is what makes the tear an oval —
+  // 1.2 x 2.16 of actual tear, the standing-doorway proportion he asked for,
+  // and six portals on the hideout arc (~3.7u apart) still clear each other.
+  const face = MeshBuilder.CreatePlane(`${root.name}-pi`, { width: 1.5, height: 2.7 }, scene);
+  face.position.y = 1.12;
   face.parent = root;
   const mat = new ShaderMaterial(`${root.name}-portal`, scene, PORTAL_SHADER, {
     attributes: ["position", "uv"],
-    uniforms: ["worldViewProjection", "uTime", "uHover"],
+    uniforms: [
+      "worldViewProjection", "world", "uCam", "uTime", "uHover",
+      "uRim", "uDeep", "uJag", "uCoreW", "uBodyW", "uFeatherLen", "uVariant",
+    ],
     needAlphaBlending: true,
   });
   mat.backFaceCulling = false; // a window into void is a window from both sides
@@ -548,6 +694,8 @@ function buildPortal(scene: Scene, root: Mesh): void {
   mat.disableDepthWrite = true;
   mat.setFloat("uTime", 0);
   mat.setFloat("uHover", 0);
+  mat.setVector3("uCam", scene.activeCamera?.position ?? new Vector3(0, 8, -8));
+  setPortalStyle(mat, PORTAL_STYLES[PORTAL_STYLE]!);
   face.material = mat;
   face.receiveShadows = false;
 
@@ -790,6 +938,10 @@ export function updatePortal(root: Mesh, hovered: boolean): void {
   // to a passed render-time argument if sub-frame precision ever matters.
   parts.portalMat.setFloat("uTime", (Date.now() % 3600000) / 1000);
   parts.portalMat.setFloat("uHover", hovered ? 1 : 0);
+  // The camera, for the void's parallax. Zoom moves it every frame, so this is
+  // per-frame data like the clock, not build-time data like the style.
+  const cam = parts.portalMat.getScene().activeCamera;
+  if (cam) parts.portalMat.setVector3("uCam", cam.position);
 }
 
 /**
