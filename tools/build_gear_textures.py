@@ -56,6 +56,14 @@ BASES = {
     "base.ironsworn_plate": "ironsworn_plate.png",
     "base.stalker_leathers": "stalker_leathers.png",
     "base.emberbound_robe": "emberbound_robe.png",
+    # The off hand. Held gear is pinned to a single bright texel of the atlas, so
+    # a shield with no bake of its own is not merely the wrong colour, it is a
+    # white slab: the one texel it samples is the helm's light grey and there is
+    # no second texel to break it up. Through a ramp that texel becomes the light
+    # end of the icon's own palette, while each shield's geometry supplies its
+    # distinct silhouette.
+    "base.ember_buckler": "ember_buckler.png",
+    "base.ashwall_tower_shield": "ashwall_tower_shield.png",
 }
 
 # The character is roughly 12% of frame height, so the atlas is downscaled on the

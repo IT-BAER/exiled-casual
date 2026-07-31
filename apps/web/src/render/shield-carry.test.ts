@@ -1,11 +1,32 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
-import { Quaternion } from "@babylonjs/core";
-import { applyShieldCarry, type ShieldCarryJoint } from "./shield-carry";
+import { Matrix, Quaternion, Vector3 } from "@babylonjs/core";
+import {
+  applyShieldCarry,
+  shieldCarryRootRotation,
+  type ShieldCarryJoint,
+} from "./shield-carry";
 
 const q = (x: number, y: number, z: number, w: number) => new Quaternion(x, y, z, w);
 
 describe("shield carry pose", () => {
+  it("counter-rotates the shoulder against the locomotion torso", () => {
+    const hold = Matrix.RotationYawPitchRoll(0.2, -0.1, 0.05);
+    const runParent = Matrix.RotationYawPitchRoll(-0.7, 0.45, -0.25);
+    const local = Matrix.Compose(
+      Vector3.One(),
+      shieldCarryRootRotation(hold, runParent),
+      Vector3.Zero(),
+    );
+    const resolved = local.multiply(runParent);
+
+    for (const axis of [Vector3.Right(), Vector3.Up(), Vector3.Forward()]) {
+      const expected = Vector3.TransformNormal(axis, hold);
+      const actual = Vector3.TransformNormal(axis, resolved);
+      expect(Vector3.Distance(actual, expected)).toBeLessThan(1e-6);
+    }
+  });
+
   it.each([
     "shield#base.ashwall_tower_shield",
     "tower#base.ashwall_tower_shield",

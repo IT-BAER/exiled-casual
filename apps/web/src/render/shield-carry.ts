@@ -1,4 +1,4 @@
-import { Quaternion } from "@babylonjs/core";
+import { Matrix, Quaternion } from "@babylonjs/core";
 
 /** The small surface the carry-pose policy needs from a Babylon bone node. */
 export interface ShieldCarryNode {
@@ -12,6 +12,26 @@ export interface ShieldCarryJoint {
 }
 
 const SHIELD_LOOKS = new Set(["shield", "buckler", "tower"]);
+
+/**
+ * Local shoulder rotation that preserves an authored carry orientation while
+ * the shoulder's torso parent follows a different animation.
+ *
+ * Babylon composes node matrices local-first (`local * parent`), hence the
+ * desired local transform is `hold * inverse(current parent)`.
+ */
+export function shieldCarryRootRotation(
+  holdFromRig: Matrix,
+  parentFromRig: Matrix,
+  result = new Quaternion(),
+  inverseParent = new Matrix(),
+  local = new Matrix(),
+): Quaternion {
+  parentFromRig.invertToRef(inverseParent);
+  holdFromRig.multiplyToRef(inverseParent, local);
+  local.decompose(undefined, result, undefined);
+  return result.normalize();
+}
 
 /**
  * Restore the left arm's shield hold after the active locomotion clip runs.

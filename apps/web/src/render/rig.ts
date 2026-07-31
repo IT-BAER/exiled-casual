@@ -18,7 +18,11 @@ import {
   type Scene,
 } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
-import { applyShieldCarry, type ShieldCarryJoint } from "./shield-carry";
+import {
+  applyShieldCarry,
+  shieldCarryRootRotation,
+  type ShieldCarryJoint,
+} from "./shield-carry";
 import { SkirtSim, type SkirtCollider } from "./skirt";
 
 /**
@@ -217,6 +221,11 @@ const GEAR_TEXTURE: Record<string, string> = {
   "base.ironsworn_plate": "/textures/gear/ironsworn_plate.png",
   "base.stalker_leathers": "/textures/gear/stalker_leathers.png",
   "base.emberbound_robe": "/textures/gear/emberbound_robe.png",
+  // The shields. Held gear samples one texel, and untextured that texel is the
+  // helm's bright grey, which renders the plate as a white slab. The bake is
+  // what gives each shield its own iron, leather and ember palette.
+  "base.ember_buckler": "/textures/gear/ember_buckler.png",
+  "base.ashwall_tower_shield": "/textures/gear/ashwall_tower_shield.png",
 };
 
 /** Base ids the character has a baked armour texture for. Pinned by `rig.test.ts`. */
@@ -293,13 +302,15 @@ const EQUIPPED: Looks = {
  * the wrong object. So the hands are the one place a base names its own mesh,
  * and everything absent here keeps `EQUIPPED`'s default.
  *
- * Still one look per *kind*: the buckler and the tower shield share `shield`,
- * the way every body armour shares the coat. Their icons differ, their held
- * silhouette does not, and that is a geometry job, not a table entry.
+ * One mesh per shield, not one shared plate: a buckler and a tower shield are
+ * different objects in the icons and at arm's length, and the palette bake alone
+ * could only make one shape two colours. Both are modelled where they sit on a
+ * standing character (`tools/build_wardrobe.py`), so the hold is the same and the
+ * silhouette is not.
  */
 const LOOK_BY_BASE: Record<string, string> = {
-  "base.ember_buckler": "shield",
-  "base.ashwall_tower_shield": "shield",
+  "base.ember_buckler": "buckler",
+  "base.ashwall_tower_shield": "tower",
 };
 
 const HEAD_PREFIX = "base.head.";
@@ -423,6 +434,7 @@ const HAND_BONE = "hand_r";
 
 /** The idle frame whose left arm is the authored shield-carry pose. */
 const SHIELD_HOLD_FRAME = 35;
+const SHIELD_ROOT_BONE = "clavicle_l";
 const SHIELD_HOLD_BONES = ["upperarm_l", "lowerarm_l", "hand_l"] as const;
 
 /**
@@ -628,6 +640,9 @@ export class RigActor {
   /** Reasserts the shield-carry arm after locomotion has animated it. */
   private shieldHold: Observer<Scene> | null = null;
   private shieldCarry: ShieldCarryJoint[] = [];
+  private shieldRoot: TransformNode | null = null;
+  /** Authored clavicle transform relative to the rig pivot at the carry frame. */
+  private shieldRootHold: Matrix | null = null;
   /** Solving cloth nobody can see is the one cost worth a flag. */
   private coatVisible = false;
 
@@ -642,6 +657,11 @@ export class RigActor {
   private readonly aimed = new Quaternion();
   /** Rotation of the current bone's parent, relative to the pelvis. */
   private readonly cumulative = new Quaternion();
+  private readonly shieldRigInverse = new Matrix();
+  private readonly shieldParentFromRig = new Matrix();
+  private readonly shieldInverseParent = new Matrix();
+  private readonly shieldRootLocal = new Matrix();
+  private readonly shieldRootRotation = new Quaternion();
 
   constructor(scene: Scene, host: Mesh) {
     this.scene = scene;
@@ -829,10 +849,34 @@ export class RigActor {
 
     // A running clip swings and rolls the hands as if they were empty. That is
     // fine for a focus and wrong for a shield: the plate turns flat and the fist
-    // leaves its grip. Capture one authored idle hold, then restore those three
-    // local rotations after the active clip has evaluated each frame.
+    // leaves its grip. Capture one authored idle hold, then preserve it after
+    // the active clip has evaluated each frame. The clavicle is counter-rotated
+    // against the moving torso before the three arm joints are restored.
     const idleSource = loaded.anims.animationGroups.find((g) => g.name === CLIP_NAME.idle);
     if (idleSource) {
+      const savedRotations = new Map<TransformNode, Quaternion | null>();
+      for (const targeted of idleSource.targetedAnimations) {
+        if (targeted.animation.targetProperty !== ROTATION) continue;
+        const node = byName.get((targeted.target as Node).name);
+        const pose = targeted.animation.evaluate(SHIELD_HOLD_FRAME);
+        if (!(node instanceof TransformNode) || !(pose instanceof Quaternion)) continue;
+        if (!savedRotations.has(node)) {
+          savedRotations.set(node, node.rotationQuaternion?.clone() ?? null);
+        }
+        (node.rotationQuaternion ??= new Quaternion()).copyFrom(pose);
+      }
+
+      const shieldRoot = byName.get(SHIELD_ROOT_BONE);
+      if (shieldRoot instanceof TransformNode) {
+        this.pivot.computeWorldMatrix(true);
+        shieldRoot.computeWorldMatrix(true);
+        this.pivot.getWorldMatrix().invertToRef(this.shieldRigInverse);
+        this.shieldRootHold = shieldRoot
+          .getWorldMatrix()
+          .multiply(this.shieldRigInverse);
+        this.shieldRoot = shieldRoot;
+      }
+
       for (const bone of SHIELD_HOLD_BONES) {
         const node = byName.get(bone);
         const targeted = idleSource.targetedAnimations.find((entry) =>
@@ -843,9 +887,37 @@ export class RigActor {
           this.shieldCarry.push({ node, hold: hold.clone() });
         }
       }
-      if (this.shieldCarry.length === SHIELD_HOLD_BONES.length) {
+
+      for (const [node, rotation] of savedRotations) {
+        node.rotationQuaternion = rotation;
+        node.computeWorldMatrix(true);
+      }
+
+      if (
+        this.shieldRoot &&
+        this.shieldRootHold &&
+        this.shieldCarry.length === SHIELD_HOLD_BONES.length
+      ) {
         this.shieldHold = this.scene.onAfterAnimationsObservable.add(() => {
-          applyShieldCarry(this.looks.weapon2, this.shieldCarry);
+          const applied = applyShieldCarry(this.looks.weapon2, this.shieldCarry);
+          const parent = this.shieldRoot?.parent;
+          if (applied && this.shieldRoot && parent instanceof TransformNode) {
+            this.pivot.computeWorldMatrix(true);
+            parent.computeWorldMatrix(true);
+            this.pivot.getWorldMatrix().invertToRef(this.shieldRigInverse);
+            parent
+              .getWorldMatrix()
+              .multiplyToRef(this.shieldRigInverse, this.shieldParentFromRig);
+            (this.shieldRoot.rotationQuaternion ??= new Quaternion()).copyFrom(
+              shieldCarryRootRotation(
+                this.shieldRootHold!,
+                this.shieldParentFromRig,
+                this.shieldRootRotation,
+                this.shieldInverseParent,
+                this.shieldRootLocal,
+              ),
+            );
+          }
         });
       }
     }
@@ -1072,6 +1144,8 @@ export class RigActor {
     if (this.shieldHold) this.scene.onAfterAnimationsObservable.remove(this.shieldHold);
     this.shieldHold = null;
     this.shieldCarry = [];
+    this.shieldRoot = null;
+    this.shieldRootHold = null;
     this.skirt = null;
     this.skirtChains = [];
     this.colliders = [];

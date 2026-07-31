@@ -3,7 +3,7 @@
 Run:
   "/c/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background \
       --factory-startup --python tools/preview_wardrobe.py -- \
-      [--looks weapon1.wand,weapon2.shield,body.ranger] [--clip Idle_Loop] \
+      [--looks weapon1.wand,weapon2.buckler,body.ranger] [--clip Idle_Loop] \
       [--view quarter|game|front] [--frames 4] [--tile 384] \
       [--out review/wardrobe.png]
 
@@ -31,7 +31,7 @@ ANIMS = os.path.join(MODELS, "anim-library.glb")
 # One look per slot, matching rig.ts's EQUIPPED. Held gear first, because it is
 # what a preview is usually being run for.
 DEFAULT_LOOKS = [
-    "weapon1.wand", "weapon2.shield", "helmet.hood", "body.ranger",
+    "weapon1.wand", "weapon2.buckler", "helmet.hood", "body.ranger",
     "gloves.bracers", "boots.ranger", "belt.ranger", "base.head",
 ]
 
