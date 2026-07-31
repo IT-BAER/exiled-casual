@@ -201,7 +201,12 @@ export function GameView({
     void preloadSfx(CORE_SFX);
 
     // Babylon engine + render loop
-    const engine = new Engine(canvas, true);
+    // Ask for the discrete GPU on dual-GPU laptops; context-loss recovery is a
+    // reload anyway, so skip the bookkeeping Babylon does to support it.
+    const engine = new Engine(canvas, true, {
+      powerPreference: "high-performance",
+      doNotHandleContextLost: true,
+    });
     const { scene, camera, detachZoom } = createScene(engine);
     sceneRef.current = scene;
     engineRef.current = engine;

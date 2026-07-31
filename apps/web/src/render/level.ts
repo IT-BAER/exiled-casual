@@ -153,6 +153,10 @@ function wallMaterial(scene: Scene, tilesetId: string): PBRMaterial {
   // moves rock and floor together and can never make this distinction — it has
   // to live in the material.
   mat.albedoColor = new Color3(ROCK_ALBEDO * 0.94, ROCK_ALBEDO, ROCK_ALBEDO * 1.14);
+  // Nothing mutates this material after this line (biome mood is done through
+  // the LIGHTS, see applyBiomeTint), so skip its per-frame dirty checks.
+  // checkReadyOnlyOnce still waits for the textures before caching the effect.
+  mat.freeze();
   return mat;
 }
 
@@ -197,6 +201,9 @@ function fitGround(scene: Scene, grid: WalkableGrid | null): void {
     );
   }
   scaleFloorTexture(scene, ground.scaling.x, ground.scaling.z);
+  // Static between area builds; freezeWorldMatrix recomputes from the scaling
+  // just set, so calling it again on the next build picks the new fit up.
+  ground.freezeWorldMatrix();
 }
 
 /** Hold the flagstone size constant however big the ground plane is. */
@@ -465,6 +472,11 @@ export function buildLevel(
     // Walls receive shadows (actors crossing them read correctly) but never cast
     // one — see engine.ts for why a 3.5-unit run must not.
     merged.receiveShadows = true;
+    // The walls never move for the life of the area: skip the per-frame world
+    // matrix and bounding sync. Disposed and rebuilt on area swap, so nothing
+    // ever needs to unfreeze them.
+    merged.freezeWorldMatrix();
+    merged.doNotSyncBoundingInfo = true;
   }
   return { walls: merged, wallCells };
 }

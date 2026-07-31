@@ -430,6 +430,10 @@ export function buildRocks(
     mesh.isPickable = false;
     mesh.thinInstanceSetBuffer("matrix", new Float32Array(data), 16, true);
     mesh.thinInstanceRefreshBoundingInfo(true);
+    // The host sits at identity and the instances never move; the bounding info
+    // was just refreshed from the final buffer, so neither needs a per-frame sync.
+    mesh.freezeWorldMatrix();
+    mesh.doNotSyncBoundingInfo = true;
     meshes.push(mesh);
   }
   placed.set(prefix, meshes);
