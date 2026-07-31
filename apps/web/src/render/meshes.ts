@@ -1,8 +1,10 @@
 import {
   Color3,
   DynamicTexture,
+  Effect,
   Mesh,
   MeshBuilder,
+  ShaderMaterial,
   StandardMaterial,
   Texture,
   VertexBuffer,
@@ -407,206 +409,154 @@ export function updateTelegraph(root: Mesh, progress: number): void {
 const PORTAL_CYAN = new Color3(0.34, 0.93, 1.0);
 
 /**
- * How far the rim wanders off a perfect ellipse, as a fraction of its radius.
+ * The portal, as the thing it is copied from actually is.
  *
- * A torus is a machined part. A hole torn between two places is not, and the
- * ragged edge is most of what separates the two at a glance — so the ring is
- * displaced by three sines of the angle around it that share no common period,
- * baked once at build. Cheap, and it never animates into a visible cycle
- * because it never animates at all.
- */
-const RIM_WOBBLE = 0.14;
-
-/** How many shards hang in the void, and how many specks drift with them. */
-const SHARDS = 16;
-const SPECKS = 44;
-
-/**
- * Push a ring off round, in place.
+ * The reference (`review/portal-ref.jpg`, Nicolai Prodromov's CC0 "procedural
+ * portal" on BlenderKit) is not a model: inspected in Blender it is FOUR
+ * VERTICES and a node shader. Its whole look — the ragged plasma rim, the
+ * starred void, the branching filaments — is procedural texture on one quad,
+ * which is why every attempt to rebuild it out of tori and merged tetrahedra
+ * came back as rings and gravel. Its Cycles node graph cannot cross glTF, so
+ * this is that graph re-said in GLSL: same parts, same layering, one quad.
  *
- * Scales each vertex away from the ring's axis, so the tube travels with the
- * ring rather than being sheared across it. Normals are not rebuilt on purpose:
- * everything this is used on is unlit and emissive, so a normal has no vote.
+ * Layers, back to front, all in the fragment shader:
+ *  - a void that goes to black at the centre and holds a faint blue at the rim;
+ *  - a star field of specks that twinkle on their own phases;
+ *  - thin filaments — ridges of a noise field — clinging inside the edge;
+ *  - the rim: a white-hot core arc over a cyan body, wobbled around the ellipse
+ *    by sines that share no period, crawling slowly so the tear is alive;
+ *  - a plasma feather bleeding outward, flickering against the same noise.
  */
-function roughenRing(mesh: Mesh, amount: number, seed: number): void {
-  const pos = mesh.getVerticesData(VertexBuffer.PositionKind);
-  if (!pos) return;
-  for (let i = 0; i < pos.length; i += 3) {
-    const x = pos[i]!;
-    const z = pos[i + 2]!;
-    const a = Math.atan2(z, x) + seed;
-    const n = Math.sin(a * 7 + 0.7) * 0.5 + Math.sin(a * 13 - 1.9) * 0.32 + Math.sin(a * 23 + 2.6) * 0.18;
-    const k = 1 + n * amount;
-    pos[i] = x * k;
-    pos[i + 2] = z * k;
-  }
-  mesh.updateVerticesData(VertexBuffer.PositionKind, pos);
+const PORTAL_SHADER = "ecPortal";
+
+function registerPortalShader(): void {
+  if (Effect.ShadersStore[`${PORTAL_SHADER}VertexShader`]) return;
+  Effect.ShadersStore[`${PORTAL_SHADER}VertexShader`] = `
+    precision highp float;
+    attribute vec3 position;
+    attribute vec2 uv;
+    uniform mat4 worldViewProjection;
+    varying vec2 vUV;
+    void main(void) {
+      vUV = uv;
+      gl_Position = worldViewProjection * vec4(position, 1.0);
+    }`;
+  Effect.ShadersStore[`${PORTAL_SHADER}FragmentShader`] = `
+    precision highp float;
+    varying vec2 vUV;
+    uniform float uTime;
+    uniform float uHover;
+
+    float hash(vec2 p) {
+      return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+    }
+    float vnoise(vec2 p) {
+      vec2 i = floor(p), f = fract(p);
+      vec2 u = f * f * (3.0 - 2.0 * f);
+      return mix(mix(hash(i), hash(i + vec2(1, 0)), u.x),
+                 mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), u.x), u.y);
+    }
+    float fbm(vec2 p) {
+      return 0.5 * vnoise(p) + 0.25 * vnoise(p * 2.03) + 0.125 * vnoise(p * 4.11);
+    }
+
+    void main(void) {
+      // -1..1 across the quad; the quad itself is stretched to the ellipse, so
+      // this space is circular and the maths never needs the aspect.
+      vec2 p = vUV * 2.0 - 1.0;
+      float ang = atan(p.y, p.x);
+      float t = uTime;
+
+      // The tear's edge: off-round by three sines with no common period, each
+      // crawling at its own speed. This is the reference's "glitch" group.
+      float wob = 0.035 * sin(ang * 5.0 + t * 0.6)
+                + 0.026 * sin(ang * 9.0 - t * 0.9)
+                + 0.018 * sin(ang * 17.0 + t * 1.5);
+      float r = length(p) / (0.80 + wob);
+
+      // Rim: a tight white-hot core over a wider cyan body, both flickering
+      // against noise carried around the edge so no arc burns steadily.
+      float flick = 0.85 + 0.45 * fbm(vec2(ang * 2.2, t * 0.55));
+      float core = exp(-pow((r - 1.0) / 0.045, 2.0)) * flick;
+      float body = exp(-pow((r - 1.0) / 0.10, 2.0)) * flick;
+      // Plasma feathering outward only, torn by the same noise field.
+      float feather = exp(-max(r - 1.0, 0.0) / 0.12)
+                    * step(r, 1.6) * (0.35 + 0.65 * fbm(vec2(ang * 3.1 + 7.0, t * 0.4)));
+
+      // Inside: black void, blue clinging to the rim (the old vertex ramp).
+      float inside = 1.0 - smoothstep(0.96, 1.02, r);
+      float cling = exp(-max(1.0 - r, 0.0) / 0.22);
+
+      // Filaments: ridges of the noise field, thin where the contour is thin.
+      // Contour lines of an fbm branch and rejoin, which is what the painted
+      // cracks in the reference do; they fade toward the centre with the cling.
+      float f = fbm(p * 2.6 + vec2(0.0, t * 0.05));
+      float ridge = pow(1.0 - abs(2.0 * fract(f * 3.0) - 1.0), 24.0);
+      float crack = ridge * inside * (0.06 + 0.94 * cling * cling);
+
+      // Stars: one speck per grid cell, twinkling on the cell's own phase.
+      vec2 cell = floor(p * 9.0);
+      vec2 cuv = fract(p * 9.0) - 0.5;
+      vec2 off = vec2(hash(cell), hash(cell + 19.7)) - 0.5;
+      float star = exp(-dot(cuv - off * 0.6, cuv - off * 0.6) * 260.0)
+                 * step(hash(cell + 7.3), 0.55)
+                 * (0.5 + 0.5 * sin(t * (2.0 + 4.0 * hash(cell + 3.1)) + hash(cell) * 6.28))
+                 * inside;
+
+      vec3 cyan = vec3(0.15, 0.75, 1.0);
+      vec3 deep = vec3(0.02, 0.16, 0.38);
+      float boost = 1.0 + 0.6 * uHover;
+      vec3 col = deep * cling * inside * 0.7
+               + cyan * crack * 1.6
+               + vec3(0.75, 0.95, 1.0) * star * 1.6
+               + cyan * body * 2.3 * boost
+               + vec3(0.85, 0.99, 1.0) * core * 3.2 * boost
+               + cyan * feather * 0.8 * boost;
+
+      float alpha = clamp(inside * 0.96 + body + feather * 0.7, 0.0, 1.0);
+      if (alpha < 0.01) discard;
+      gl_FragColor = vec4(col, alpha);
+    }`;
 }
 
 /**
- * Paint the void black in the middle and lit at its edge.
- *
- * Per-vertex, not per-material: a cylinder cap is one vertex at the centre and a
- * ring of them at the rim, which is exactly a radial gradient once the colours
- * differ. The emissive is multiplied by this, so the middle of the portal goes
- * to almost nothing and only the last of it near the rim carries any colour —
- * which is what makes the hole read as depth rather than as painted glass.
- */
-function shadeVoid(mesh: Mesh, radius: number): void {
-  const pos = mesh.getVerticesData(VertexBuffer.PositionKind);
-  if (!pos) return;
-  const colours = new Float32Array((pos.length / 3) * 4);
-  for (let i = 0, c = 0; i < pos.length; i += 3, c += 4) {
-    const r = Math.min(1, Math.hypot(pos[i]!, pos[i + 2]!) / radius);
-    // Fourth power: the blue clings to the rim instead of washing the middle.
-    const k = 0.05 + 0.95 * r ** 4;
-    colours[c] = k; colours[c + 1] = k; colours[c + 2] = k; colours[c + 3] = 1;
-  }
-  mesh.setVerticesData(VertexBuffer.ColorKind, colours);
-}
-
-/**
- * The debris hanging in the hole: angular shards and specks, as one mesh.
- *
- * Merged rather than kept apart, because they never move relative to each other
- * — the whole field turns slowly about the portal's own axis, which reads as a
- * slow churn and costs one draw call instead of sixty. Tetrahedra, so a shard
- * has edges: the reference's fragments are broken glass, not gravel.
- */
-function buildShards(scene: Scene, name: string, halfW: number, halfH: number, midY: number): Mesh | null {
-  let seed = 0x2545f491;
-  const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 0x100000000; };
-  const parts: Mesh[] = [];
-  for (let i = 0; i < SHARDS + SPECKS; i++) {
-    const shard = i < SHARDS;
-    // Rejection sampling into the ellipse, kept off the rim so nothing pokes
-    // through the ring: the debris belongs to the hole, not to its edge.
-    // Polar rather than rejected: a rejection loop that runs out of tries has to
-    // keep whatever it last drew, and one shard left outside the ellipse hangs
-    // in the room beside the portal where it reads as a bug.
-    const a = rnd() * Math.PI * 2;
-    const r = Math.sqrt(rnd()) * 0.82;
-    const x = Math.cos(a) * r * halfW;
-    const y = Math.sin(a) * r * halfH;
-    const size = shard ? 0.030 + rnd() * 0.045 : 0.008 + rnd() * 0.013;
-    const p = MeshBuilder.CreatePolyhedron(`${name}-${i}`, { type: 0, size }, scene);
-    p.position.set(x, midY + y, (rnd() * 2 - 1) * 0.06);
-    p.rotation.set(rnd() * 6.28, rnd() * 6.28, rnd() * 6.28);
-    // Flakes, not pebbles, and flattened along local Z because that is the
-    // portal's NORMAL: stretched the other way a shard grows out through the
-    // opening and hangs in the room as a spike beside it.
-    if (shard) p.scaling.set(1 + rnd() * 0.9, 0.28 + rnd() * 0.5, 0.12);
-    parts.push(p);
-  }
-  return Mesh.MergeMeshes(parts, true, true, undefined, false, false);
-}
-
-/**
- * Standing elliptical portal — a vertical void framed by a blazing rim.
- * The disc + torus are rotated 90° on X so they stand upright in world space;
- * scaling.z stretches them from circular to elliptical (local Z → world Y
- * after the rotation). entity.yaw is applied by the renderer post-syncMesh.
+ * Standing elliptical portal — one upright quad wearing the portal shader, and
+ * a faint pool of the same light on the floor. entity.yaw is applied by the
+ * renderer post-syncMesh, so the quad only has to stand up in local space.
  */
 function buildPortal(scene: Scene, root: Mesh): void {
-  // per-instance so each portal can pulse and hover-highlight independently
-  const voidMat = new StandardMaterial(`${root.name}-portal-void`, scene);
-  voidMat.diffuseColor = new Color3(0, 0, 0);
-  // Brighter than it looks: `shadeVoid` multiplies this down to almost nothing
-  // across the middle of the disc and leaves it only at the rim.
-  voidMat.emissiveColor = new Color3(0.02, 0.09, 0.17);
-  voidMat.specularColor = new Color3(0, 0, 0);
-  voidMat.backFaceCulling = false; // visible from both sides; it's a window into void
+  registerPortalShader();
 
-  const rimMat = new StandardMaterial(`${root.name}-portal-rim`, scene);
-  rimMat.diffuseColor = new Color3(0, 0, 0);
-  // Starting value; updatePortal drives this each frame. Set high so the GlowLayer
-  // has enough emissive energy to produce a real bloom halo.
-  rimMat.emissiveColor = PORTAL_CYAN.scale(0.45);
-  rimMat.specularColor = new Color3(0, 0, 0);
-
-  // The plasma that feathers off the ring. Additive and unlit, so it adds light
-  // to whatever is behind it rather than painting a second, fatter ring: a hard
-  // outline round a hard outline is a decal, and the reference's edge has no
-  // outline at all, only a place where the arc runs out.
-  const haloMat = new StandardMaterial(`${root.name}-portal-halo`, scene);
-  haloMat.diffuseColor = new Color3(0, 0, 0);
-  haloMat.emissiveColor = PORTAL_CYAN.scale(0.4);
-  haloMat.specularColor = new Color3(0, 0, 0);
-  haloMat.disableLighting = true;
-  haloMat.alpha = 0.14;
-  haloMat.alphaMode = 1; // ALPHA_ADD
-  haloMat.backFaceCulling = false;
-  haloMat.disableDepthWrite = true;
-
-  // The debris in the hole, lit by nothing and adding its own light.
-  const shardMat = new StandardMaterial(`${root.name}-portal-shard`, scene);
-  shardMat.diffuseColor = new Color3(0, 0, 0);
-  shardMat.emissiveColor = PORTAL_CYAN.scale(0.55);
-  shardMat.specularColor = new Color3(0, 0, 0);
-  shardMat.disableLighting = true;
-  shardMat.alpha = 0.28;
-  shardMat.alphaMode = 1; // ALPHA_ADD
-  shardMat.disableDepthWrite = true;
+  // The whole portal. Wider than the old 1.2 ellipse by the feather's reach:
+  // the shader draws the tear at 80% of the quad and bleeds plasma over the
+  // rest, and a quad cut at the rim clips the bleed into a straight edge.
+  // The reference's tear is nearly round — 1.3 tall for its width, not the old
+  // ellipse's 1.75. Six portals on the hideout arc sit ~3.7u apart, so 1.9 of
+  // quad (1.5 of actual tear) still clears its neighbours.
+  const face = MeshBuilder.CreatePlane(`${root.name}-pi`, { width: 1.9, height: 2.5 }, scene);
+  face.position.y = 1.06;
+  face.parent = root;
+  const mat = new ShaderMaterial(`${root.name}-portal`, scene, PORTAL_SHADER, {
+    attributes: ["position", "uv"],
+    uniforms: ["worldViewProjection", "uTime", "uHover"],
+    needAlphaBlending: true,
+  });
+  mat.backFaceCulling = false; // a window into void is a window from both sides
+  // The void must hide what is behind it, so this is ordinary alpha blend, not
+  // additive — but it must not write depth, or the feather's invisible corners
+  // occlude the next portal along the arc.
+  mat.disableDepthWrite = true;
+  mat.setFloat("uTime", 0);
+  mat.setFloat("uHover", 0);
+  face.material = mat;
+  face.receiveShadows = false;
 
   // Tight warm-blue ground pool — soft and transparent so the stone reads through.
-  // alpha + additive rendering produces a light-bleed look rather than opaque paint.
   const bloomMat = new StandardMaterial(`${root.name}-portal-bloom`, scene);
   bloomMat.diffuseColor = new Color3(0, 0, 0);
   bloomMat.emissiveColor = PORTAL_CYAN.scale(0.30); // the same arc, spilled on the floor
   bloomMat.specularColor = new Color3(0, 0, 0);
   bloomMat.alpha = 0.18; // subtle — readable stone beneath; standard alpha-blend is the default
-
-  // Void face: diameter=1.2, scaling.z=1.75 → 1.2 units wide × 2.1 units tall ellipse.
-  // Six portals on a ~3.5u-radius arc have ~3.7u spacing; 1.2u wide avoids overlap.
-  // After rotation.x=π/2, local-Z→world-Y; position.y = half-height = 0.6×1.75 = 1.05.
-  const inner = MeshBuilder.CreateCylinder(`${root.name}-pi`, { diameter: 1.2, height: 0.02, tessellation: 36 }, scene);
-  roughenRing(inner, RIM_WOBBLE, 0);
-  shadeVoid(inner, 0.6);
-  inner.rotation.x = Math.PI / 2;
-  inner.scaling.z = 1.75;
-  inner.position.y = 1.05; // 0.6 * 1.75 — bottom flush with ground
-  inner.parent = root;
-  inner.material = voidMat;
-  inner.receiveShadows = false;
-
-  // Blazing rim: torus matches the inner ellipse dimensions, roughened by the
-  // SAME wobble as the disc it edges — a straight ring round a ragged hole
-  // shows daylight on one side and buries itself on the other.
-  // ponytail: non-uniform torus scale distorts tube cross-section slightly; fine at this size.
-  const rim = MeshBuilder.CreateTorus(`${root.name}-pr`, { diameter: 1.2, thickness: 0.075, tessellation: 72 }, scene);
-  roughenRing(rim, RIM_WOBBLE, 0);
-  rim.rotation.x = Math.PI / 2;
-  rim.scaling.z = 1.75;
-  rim.position.y = 1.05;
-  rim.parent = root;
-  rim.material = rimMat;
-  rim.receiveShadows = false;
-
-  // ...and the arc bleeding off it. Fatter, dimmer, additive, and wobbled on a
-  // different phase so the two edges never agree and the rim never reads as one
-  // clean line.
-  const halo = MeshBuilder.CreateTorus(`${root.name}-ph`, { diameter: 1.2, thickness: 0.30, tessellation: 40 }, scene);
-  roughenRing(halo, RIM_WOBBLE * 1.5, 1.3);
-  halo.rotation.x = Math.PI / 2;
-  halo.scaling.z = 1.75;
-  halo.position.y = 1.05;
-  halo.parent = root;
-  halo.material = haloMat;
-  halo.receiveShadows = false;
-  halo.isPickable = false;
-
-  // The debris, in the plane of the hole. Local Z is the portal's normal after
-  // the disc's rotation, so turning the field about Z swirls it in the opening
-  // rather than tipping it out of one.
-  const shards = buildShards(scene, `${root.name}-ps`, 0.6, 1.05, 1.05);
-  if (shards) {
-    shards.parent = root;
-    shards.material = shardMat;
-    shards.receiveShadows = false;
-    shards.isPickable = false;
-  }
-
-  // Small ground bloom disc — 1.4u diameter (just wider than the portal), very faint.
   const bloom = MeshBuilder.CreateCylinder(`${root.name}-pb`, { diameter: 1.4, height: 0.02, tessellation: 24 }, scene);
   bloom.position.y = 0.01;
   bloom.parent = root;
@@ -614,7 +564,7 @@ function buildPortal(scene: Scene, root: Mesh): void {
   bloom.receiveShadows = false;
 
   // interactKind lets bindings.ts identify a picked portal child without the snapshot
-  root.metadata = { rimMat, voidMat, haloMat, shardMat, shards, interactKind: "portal" };
+  root.metadata = { portalMat: mat, interactKind: "portal" };
 }
 
 /**
@@ -630,11 +580,16 @@ function buildPortal(scene: Scene, root: Mesh): void {
  */
 const BEAM_H = 2.9;
 /**
- * Screen-space lean of the shaft, in radians. PoE2's loot columns are raked, not
- * plumb (`docs/todo/image-2.png`): a leaning shaft crosses more of the frame than
- * a vertical one of the same height, so it reads from further away.
+ * Screen-space lean of the shaft, in radians. Zero, and it stays zero.
+ *
+ * PoE's loot columns look raked in a screenshot (`docs/todo/image-2.png`) and
+ * they are not: they are plumb, and a perspective camera that is not overhead
+ * splays every vertical in the frame away from its centre. Authoring a lean ON
+ * TOP of that gives a floor of beams that all lean the SAME way, which is the
+ * one thing a perspective camera can never produce, and reads instantly as
+ * broken rather than as depth.
  */
-const BEAM_TILT = 0.2;
+const BEAM_TILT = 0;
 
 /**
  * Where a tilted beam cylinder has to sit for its FOOT to stay on the drop.
@@ -661,11 +616,13 @@ function beamGradient(scene: Scene): DynamicTexture {
   const ctx = tex.getContext() as unknown as CanvasRenderingContext2D;
   const grad = ctx.createLinearGradient(0, 0, 0, 64);
   grad.addColorStop(0, "#000"); // top of the image = top of the beam
-  // Gone by half way, not merely dim. The old ramp still had a fifth of its
-  // alpha at two thirds of the height, which is exactly the band the eye reads
-  // as "this keeps going" — the shaft has to run out inside the frame.
-  grad.addColorStop(0.55, "#141414");
-  grad.addColorStop(0.85, "#9a9a9a");
+  // A long taper rather than a short one that stops. The shaft still has to run
+  // out inside the frame, but "runs out" has to be something the eye can watch
+  // happen: gone by half way reads as a beam someone cut, which is the same
+  // complaint as a beam with no end at all.
+  grad.addColorStop(0.22, "#0d0d0d");
+  grad.addColorStop(0.58, "#5a5a5a");
+  grad.addColorStop(0.86, "#c8c8c8");
   grad.addColorStop(1, "#fff"); // floor end stays bright
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, 4, 64);
@@ -691,7 +648,6 @@ export function updateGroundItem(mesh: Mesh, rarity: string | undefined): void {
   mat.emissiveColor = new Color3(r, g, b);
   const beamMat = mesh.getChildMeshes()[0]?.material as StandardMaterial | null;
   if (beamMat) {
-    beamMat.emissiveColor = new Color3(r, g, b);
     // Junk barely glows, a unique is visible across the room. Same idea as a
     // NeverSink filter turning the beam up with the tier.
     const lit = BEAM_ALPHA[rarity ?? "normal"] ?? BEAM_ALPHA["normal"]!;
@@ -704,7 +660,21 @@ export function updateGroundItem(mesh: Mesh, rarity: string | undefined): void {
     // distracting.
     const t = Date.now() / 1000;
     const phase = (mesh.uniqueId ?? 0) * 1.7;
-    beamMat.alpha = lit * (0.86 + 0.14 * Math.sin(t * 4.2 + phase));
+    const k = lit * (0.86 + 0.14 * Math.sin(t * 4.2 + phase));
+    // Through the EMISSIVE, not through the alpha, and that is the whole reason
+    // every beam used to be the same blazing white column whatever it stood on.
+    //
+    // The scene has a GlowLayer, and its shader reads a material's emissive
+    // colour, its opacity TEXTURE and its vertex alpha — never `material.alpha`.
+    // So the tier scaling and the breathing were applied in the lit pass and
+    // thrown away in the bloom pass, which then drew all four tiers at full
+    // energy and blurred that over the top of the ramp: a junk shaft and a
+    // unique one differed by nothing, and the fade at the top was buried under
+    // its own halo. Driving brightness through the emissive makes both passes
+    // agree, and leaves the opacity ramp alone to do the one job it CAN do in
+    // both, which is the shape.
+    beamMat.emissiveColor.set(r * k, g * k, b * k);
+    beamMat.alpha = 1;
   }
 }
 
@@ -808,39 +778,18 @@ export function isPortalMesh(root: Mesh): boolean {
 }
 
 /**
- * Pulse the portal rim and indicate inRange affordance.
+ * Drive the portal shader's clock and the inRange affordance.
  * Called every apply() so the animation is driven off real time without needing
- * a render-timestamp parameter. Mutates material properties only — no allocs.
+ * a render-timestamp parameter. Everything that MOVES lives in the fragment
+ * shader; this only hands it the time and how hard to burn.
  */
 export function updatePortal(root: Mesh, hovered: boolean): void {
-  const parts = root.metadata as {
-    rimMat: StandardMaterial;
-    haloMat?: StandardMaterial;
-    shardMat?: StandardMaterial;
-    shards?: Mesh | null;
-  } | null;
-  if (!parts?.rimMat) return;
+  const parts = root.metadata as { portalMat?: ShaderMaterial } | null;
+  if (!parts?.portalMat) return;
   // ponytail: Date.now() as animation clock — cheap and always available; upgrade
   // to a passed render-time argument if sub-frame precision ever matters.
-  const t = Date.now() / 1000;
-  // Two periods with no small common multiple, so the arc never settles into a
-  // countable beat. The old single sine read as a breathing lamp.
-  const pulse = 0.86 + 0.10 * Math.sin(t * 1.8) + 0.06 * Math.sin(t * 4.3 + 1.1);
-  // Base brightness: high so the GlowLayer has enough energy for real bloom.
-  // Hovered: push it up so the pickup is unmistakable.
-  const base = hovered ? 0.62 : 0.45;
-  const k = pulse * base;
-  parts.rimMat.emissiveColor.set(PORTAL_CYAN.r * k, PORTAL_CYAN.g * k, PORTAL_CYAN.b * k);
-  // The halo runs on the OPPOSITE beat, so the edge is never uniformly bright
-  // and the arc looks like it is moving through the tear rather than round it.
-  if (parts.haloMat) parts.haloMat.alpha = 0.14 * (1.9 - pulse) * (hovered ? 1.4 : 1);
-  if (parts.shards) {
-    // A slow turn about the portal's own normal, and a slower counter-drift on
-    // the shards' own tilt: a field that only spins reads as a wheel.
-    parts.shards.rotation.z = t * 0.11;
-    parts.shards.rotation.y = Math.sin(t * 0.23) * 0.16;
-  }
-  if (parts.shardMat) parts.shardMat.alpha = 0.22 + 0.10 * Math.sin(t * 0.9 + 2.0);
+  parts.portalMat.setFloat("uTime", (Date.now() % 3600000) / 1000);
+  parts.portalMat.setFloat("uHover", hovered ? 1 : 0);
 }
 
 /**
@@ -1174,7 +1123,9 @@ export function makeMesh(
     const beamMat = new StandardMaterial(`${name}-beam-mat`, scene);
     beamMat.diffuseColor = new Color3(0, 0, 0);
     beamMat.specularColor = new Color3(0, 0, 0);
-    beamMat.alpha = 0.45;
+    // The ramp texture carries the whole shape and `updateGroundItem` carries
+    // the brightness in the emissive; the flat alpha stays out of both.
+    beamMat.alpha = 1;
     beamMat.alphaMode = 1; // ALPHA_ADD
     beamMat.disableLighting = true;
     beamMat.backFaceCulling = false;
