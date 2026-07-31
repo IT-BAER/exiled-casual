@@ -1,4 +1,4 @@
-import { bus, send, type Bus } from "./bus";
+import { bus, send, type Bus, type SoundCategory } from "./bus";
 
 /**
  * Sampled sound effects: skills, monsters, portals, flasks, footsteps and the UI.
@@ -117,6 +117,12 @@ const VOICES: Record<string, Voice> = {
 
 export type SfxName = keyof typeof VOICES & string;
 
+export function sfxCategory(name: string): SoundCategory {
+  if (name.startsWith("skill-")) return "skills";
+  if (name.startsWith("ui-")) return "interface";
+  return "environment";
+}
+
 /** Decoded buffers, and the in-flight fetches, keyed by name. */
 const buffers = new Map<string, AudioBuffer>();
 const loading = new Map<string, Promise<void>>();
@@ -195,7 +201,14 @@ export function playSfx(name: string, volume = 1, distance = 0, pan = 0): void {
   src.connect(g);
   // Room grows with distance as well: what reaches the ear from across a hall is
   // mostly the hall.
-  send(b, muffle(b, g, distance), voice.wet * (1 + distance / AUDIBLE), pan);
+  send(
+    b,
+    muffle(b, g, distance),
+    voice.wet * (1 + distance / AUDIBLE),
+    pan,
+    false,
+    sfxCategory(name),
+  );
   src.start();
 }
 
@@ -268,7 +281,7 @@ export function startSfxLoop(name: string, key: string, volume = 1, distance = 0
   lp.type = "lowpass";
   lp.frequency.value = distanceCutoff(distance);
   g.connect(lp);
-  const panNode = send(b, lp, voice.wet, pan, true);
+  const panNode = send(b, lp, voice.wet, pan, true, sfxCategory(name));
   src.start();
   loops.set(key, { src, gain: g, peak, lp, pan: panNode });
   debug.started++;

@@ -37,7 +37,10 @@ describe("saveSettingsSoon", () => {
   it("writes once for a burst, with the last value", async () => {
     const roster = emptyRoster();
     for (let i = 1; i <= 10; i++) {
-      saveSettingsSoon(roster, { ...DEFAULT_SETTINGS, sound: { master: i / 10, muted: false } });
+      saveSettingsSoon(roster, {
+        ...DEFAULT_SETTINGS,
+        sound: { ...DEFAULT_SETTINGS.sound, master: i / 10, muted: false },
+      });
     }
     expect(store.writes).toBe(0); // nothing yet: the burst is still inside the window
     await vi.advanceTimersByTimeAsync(SETTINGS_DEBOUNCE_MS + 10);

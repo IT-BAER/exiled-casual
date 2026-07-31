@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { setSoundLevel, soundLevel } from "./drop-sound";
+import { setSoundLevel, setSoundMix, soundLevel, soundMix } from "./drop-sound";
 
 beforeEach(() => setSoundLevel(0.8, false));
 
@@ -33,5 +33,27 @@ describe("setSoundLevel", () => {
     expect(soundLevel()).toBe(0);
     setSoundLevel(NaN, false);
     expect(soundLevel()).toBe(0);
+  });
+});
+
+describe("setSoundMix", () => {
+  it("keeps category levels independent and clamps untrusted values", () => {
+    setSoundMix({
+      master: 0.7,
+      muted: false,
+      music: 0.1,
+      interface: 0.2,
+      skills: 0.3,
+      loot: 2,
+      environment: -1,
+    });
+    expect(soundLevel()).toBeCloseTo(0.7);
+    expect(soundMix()).toEqual({
+      music: 0.1,
+      interface: 0.2,
+      skills: 0.3,
+      loot: 1,
+      environment: 0,
+    });
   });
 });

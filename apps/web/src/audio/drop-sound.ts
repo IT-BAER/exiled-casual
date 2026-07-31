@@ -53,7 +53,7 @@ function mode(
   g.gain.linearRampToValueAtTime(peak, at + 0.004); // near-instant attack = struck, not bowed
   g.gain.exponentialRampToValueAtTime(0.0001, at + decay);
   osc.connect(g);
-  send(b, g, wetAmount, pan);
+  send(b, g, wetAmount, pan, false, "loot");
   osc.start(at);
   osc.stop(at + decay + 0.05);
 }
@@ -78,7 +78,7 @@ function strike(
   const g = ac.createGain();
   g.gain.value = peak;
   src.connect(bp).connect(g);
-  send(b, g, wetAmount, pan);
+  send(b, g, wetAmount, pan, false, "loot");
   src.start(at);
 }
 
@@ -108,4 +108,4 @@ export function playDropSound(rarity: string | undefined, volume = 1, pan = 0): 
 
 // Re-exported so App.tsx and the tests keep one import for "the game's volume",
 // even though the gain itself now lives on the shared bus.
-export { soundLevel, setSoundLevel } from "./bus";
+export { soundLevel, soundMix, setSoundLevel, setSoundMix } from "./bus";

@@ -38,7 +38,7 @@ const GameView = React.lazy(() => import("./GameView").then((m) => ({ default: m
 const MenuStage = React.lazy(() => import("./menu/MenuStage").then((m) => ({ default: m.MenuStage })));
 import { DEFAULT_SETTINGS, type Settings } from "./settings";
 import { setTitle } from "./title";
-import { setSoundLevel } from "./audio/drop-sound";
+import { setSoundMix } from "./audio/drop-sound";
 import {
   capFor,
   createCharacter,
@@ -91,7 +91,7 @@ export function App(): React.ReactElement {
   const changeSettings = React.useCallback(
     (next: Settings) => {
       setSettings(next);
-      setSoundLevel(next.sound.master, next.sound.muted);
+      setSoundMix(next.sound);
       saveSettingsSoon(roster, next);
     },
     [roster],
@@ -99,8 +99,8 @@ export function App(): React.ReactElement {
 
   // The saved volume has to reach the audio module even if Options is never opened.
   React.useEffect(() => {
-    setSoundLevel(settings.sound.master, settings.sound.muted);
-  }, [settings.sound.master, settings.sound.muted]);
+    setSoundMix(settings.sound);
+  }, [settings.sound]);
 
   const rows = React.useMemo(() => headers(roster), [roster]);
   /**

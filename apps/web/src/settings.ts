@@ -39,6 +39,11 @@ export interface GraphicsSettings {
 export interface SoundSettings {
   /** 0..1, linear on the slider and on the gain. */
   master: number;
+  music: number;
+  interface: number;
+  skills: number;
+  loot: number;
+  environment: number;
   muted: boolean;
 }
 
@@ -78,7 +83,15 @@ export const DEFAULT_SETTINGS: Settings = {
     resolutionScale: 1,
     torchWarmth: 0.55,
   },
-  sound: { master: 0.8, muted: false },
+  sound: {
+    master: 0.8,
+    music: 1,
+    interface: 1,
+    skills: 1,
+    loot: 1,
+    environment: 1,
+    muted: false,
+  },
   ui: {
     minimap: true,
     lootLabels: true,
@@ -156,6 +169,11 @@ export function sanitize(raw: unknown): Settings {
     },
     sound: {
       master: num(s["master"], 0, 1, d.sound.master),
+      music: num(s["music"], 0, 1, d.sound.music),
+      interface: num(s["interface"], 0, 1, d.sound.interface),
+      skills: num(s["skills"], 0, 1, d.sound.skills),
+      loot: num(s["loot"], 0, 1, d.sound.loot),
+      environment: num(s["environment"], 0, 1, d.sound.environment),
       muted: bool(s["muted"], d.sound.muted),
     },
     ui: {

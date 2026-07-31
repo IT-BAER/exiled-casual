@@ -3,7 +3,7 @@ import { existsSync, readdirSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { readFileSync } from "node:fs";
 import { MONSTERS } from "@exiled/content-runtime";
-import { CORE_SFX, distanceCutoff, distanceGain, playSfx, worldSfxMix } from "./sfx";
+import { CORE_SFX, distanceCutoff, distanceGain, playSfx, sfxCategory, worldSfxMix } from "./sfx";
 
 const DIR = resolve(__dirname, "../../public/audio");
 const SRC = resolve(__dirname, "sfx.ts");
@@ -139,6 +139,15 @@ describe("worldSfxMix", () => {
     expect(near).toBeLessThan(0.1);
     expect(middle).toBeGreaterThan(near);
     expect(edge).toBeGreaterThan(middle);
+  });
+
+  it("routes every sampled cue into one player-facing volume category", () => {
+    for (const name of voiceNames()) {
+      const expected = name.startsWith("skill-")
+        ? "skills"
+        : name.startsWith("ui-") ? "interface" : "environment";
+      expect(sfxCategory(name), name).toBe(expected);
+    }
   });
 
   it("keeps the Ember Bolt cast transient below the travelling skill", () => {

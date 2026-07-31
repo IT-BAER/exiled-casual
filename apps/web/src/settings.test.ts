@@ -45,6 +45,27 @@ describe("sanitize", () => {
     expect(sanitize({ sound: { master: "0.5" } }).sound.master).toBe(DEFAULT_SETTINGS.sound.master);
   });
 
+  it("keeps every saved sound category and defaults older saves", () => {
+    expect(sanitize({ sound: {
+      music: 0.1,
+      interface: 0.2,
+      skills: 0.3,
+      loot: 0.4,
+      environment: 0.5,
+    } }).sound).toEqual({
+      ...DEFAULT_SETTINGS.sound,
+      music: 0.1,
+      interface: 0.2,
+      skills: 0.3,
+      loot: 0.4,
+      environment: 0.5,
+    });
+    expect(sanitize({ sound: { master: 0.6 } }).sound).toEqual({
+      ...DEFAULT_SETTINGS.sound,
+      master: 0.6,
+    });
+  });
+
   it("drops keys it does not know rather than passing them through", () => {
     const got = sanitize({ graphics: { shadows: "off", raytracing: true }, mods: ["a"] }) as
       unknown as Record<string, unknown>;

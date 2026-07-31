@@ -1,10 +1,20 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { playSoundPreview } from "../audio/bus";
 import { OptionsPanel } from "./OptionsPanel";
 import { DEFAULT_SETTINGS, type Settings } from "../settings";
 
-afterEach(cleanup);
+vi.mock("../audio/bus", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../audio/bus")>(),
+  playSoundPreview: vi.fn(),
+}));
+
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+  vi.mocked(playSoundPreview).mockClear();
+});
 
 // The route test below renders App, which imports GameView, which imports
 // Babylon. Loading the renderer to click a menu button cost five seconds and
@@ -59,7 +69,9 @@ describe("OptionsPanel", () => {
     setup();
     fireEvent.click(screen.getByRole("tab", { name: /sound/i }));
     expect(screen.getByRole("tab", { name: /sound/i }).getAttribute("aria-selected")).toBe("true");
-    expect(screen.getByLabelText(/master volume/i)).toBeTruthy();
+    for (const label of ["Master", "Music", "Interface", "Skills", "Loot", "Environment"]) {
+      expect(screen.getByLabelText(`${label} Volume`)).toBeTruthy();
+    }
   });
 
   it("has no SAVE button, because it applies live", () => {
@@ -115,6 +127,27 @@ describe("OptionsPanel", () => {
     fireEvent.change(slider, { target: { value: "0.25" } });
     const next = onChange.mock.calls[0]![0] as Settings;
     expect(next.sound.master).toBeCloseTo(0.25);
+  });
+
+  it("a category slider changes only its own mix", () => {
+    const { onChange } = setup();
+    fireEvent.click(screen.getByRole("tab", { name: /sound/i }));
+    fireEvent.change(screen.getByLabelText("Skills Volume"), { target: { value: "0.35" } });
+    const next = onChange.mock.calls[0]![0] as Settings;
+    expect(next.sound).toEqual({ ...DEFAULT_SETTINGS.sound, skills: 0.35 });
+  });
+
+  it("previews the category after the player finishes moving its slider", () => {
+    vi.useFakeTimers();
+    setup();
+    fireEvent.click(screen.getByRole("tab", { name: /sound/i }));
+    const slider = screen.getByLabelText("Skills Volume");
+    fireEvent.change(slider, { target: { value: "0.35" } });
+    fireEvent.change(slider, { target: { value: "0.4" } });
+    expect(playSoundPreview).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(80);
+    expect(playSoundPreview).toHaveBeenCalledOnce();
+    expect(playSoundPreview).toHaveBeenCalledWith("skills");
   });
 
   it("stands full height against the left edge, the way the plate does", () => {

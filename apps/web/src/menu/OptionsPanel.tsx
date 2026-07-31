@@ -17,6 +17,7 @@
 import React from "react";
 import { DISPLAY, SERIF, Divider, FramedPanel, GOLD, GOLD_DIM, MENU_ART, MenuButton, PARCHMENT } from "./frames";
 import { DEFAULT_SETTINGS, MIN_RESOLUTION_SCALE, type Settings, type ShadowQuality } from "../settings";
+import { playSoundPreview, type SoundPreviewCategory } from "../audio/bus";
 // hud/layout.ts imports nothing, so the menu bundle gains two numbers, not the HUD.
 import { PANEL_W } from "../hud/layout";
 
@@ -47,6 +48,7 @@ export function OptionsPanel({
 }): React.ReactElement {
   const inGame = dock !== undefined;
   const [tab, setTab] = React.useState<TabId>("graphics");
+  const previewTimer = React.useRef<number | null>(null);
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -54,12 +56,23 @@ export function OptionsPanel({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  React.useEffect(() => () => {
+    if (previewTimer.current !== null) window.clearTimeout(previewTimer.current);
+  }, []);
+
   const setGraphics = (patch: Partial<Settings["graphics"]>): void =>
     onChange({ ...settings, graphics: { ...settings.graphics, ...patch } });
   const setSound = (patch: Partial<Settings["sound"]>): void =>
     onChange({ ...settings, sound: { ...settings.sound, ...patch } });
   const setUi = (patch: Partial<Settings["ui"]>): void =>
     onChange({ ...settings, ui: { ...settings.ui, ...patch } });
+  const preview = (category: SoundPreviewCategory): void => {
+    if (previewTimer.current !== null) window.clearTimeout(previewTimer.current);
+    previewTimer.current = window.setTimeout(() => {
+      previewTimer.current = null;
+      playSoundPreview(category);
+    }, 80);
+  };
 
   return (
     <div
@@ -194,9 +207,28 @@ export function OptionsPanel({
                   max={1}
                   step={0.05}
                   format={(v) => `${Math.round(v * 100)}%`}
-                  onSet={(master) => setSound({ master })}
+                  onSet={(master) => { setSound({ master }); preview("master"); }}
                 />
               </Row>
+              {([
+                ["Music", "music"],
+                ["Interface", "interface"],
+                ["Skills", "skills"],
+                ["Loot", "loot"],
+                ["Environment", "environment"],
+              ] as const).map(([label, key]) => (
+                <Row key={key} label={`${label} Volume`}>
+                  <Slider
+                    label={`${label} Volume`}
+                    value={settings.sound[key]}
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    format={(v) => `${Math.round(v * 100)}%`}
+                    onSet={(value) => { setSound({ [key]: value }); preview(key); }}
+                  />
+                </Row>
+              ))}
               <Row label="Mute">
                 <Gem
                   label="Mute"
@@ -204,18 +236,6 @@ export function OptionsPanel({
                   onToggle={(muted) => setSound({ muted })}
                 />
               </Row>
-              <p
-                style={{
-                  fontFamily: SERIF,
-                  fontSize: 13.5,
-                  color: GOLD_DIM,
-                  lineHeight: 1.6,
-                  marginTop: 14,
-                }}
-              >
-                One cue per drop is every sound the game has. Music gets its own slider when there
-                is music.
-              </p>
             </>
           ) : (
             <>
