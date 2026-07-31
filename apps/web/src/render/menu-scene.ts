@@ -107,6 +107,31 @@ const SHADOW_CAST = { x: 0.28, z: 1 };
 const SHADOW_CONTACT = 0.18;
 
 /**
+ * The occlusion pool under the boots: how big, and how dark at its middle.
+ *
+ * Deliberately smaller than a stride is wide. This is not a shadow standing in
+ * for the cast one — that would be the disc the comment above rules out — it is
+ * the ambient the floor cannot see because a body is sitting on it, and that
+ * patch is about the size of the thing's footprint. Wider than the boots by
+ * half so it is not a rectangle of dark with two boots on it, and no wider,
+ * because past that it stops being contact and starts being a stain.
+ */
+const CONTACT_SIZE = { width: 1.61, depth: 0.59 };
+const CONTACT_STRENGTH = 0.8;
+/**
+ * Where it sits against the rig's origin.
+ *
+ * Not zero, and neither number is arbitrary. The x is because the stance is not
+ * centred on the root — he stands with his weight off to one side — and a pool
+ * centred on the root leaves one boot with daylight under it, which is the exact
+ * thing being fixed. The z is because this camera is nearly level with the
+ * floor, so half a ground quad centred on the soles is BEHIND them and hidden by
+ * the body: pushing it toward the viewer is what puts the visible half where the
+ * boots meet the tiles rather than out the far side.
+ */
+const CONTACT_OFFSET = { x: -0.09, z: 0.12 };
+
+/**
  * A slight turn off square-on.
  *
  * This used to be a hard three-quarter turn, and it was not a stylistic choice:
@@ -227,6 +252,34 @@ export function shadowReachScreenY(): number {
  * quad. Half an ellipse, its centre on the edge that meets the boots, narrow
  * across and long down the cast.
  */
+/**
+ * The occlusion pool's falloff: symmetric, because occlusion is.
+ *
+ * A single radial ramp with no hard stop anywhere near the quad's edge, so the
+ * patch has no boundary of its own to catch the eye. The steep tail is what
+ * keeps it reading as dirt in the seam between boot and tile rather than as a
+ * grey oval painted on the floor.
+ */
+function contactFalloff(scene: Scene): DynamicTexture {
+  const size = 128;
+  const tex = new DynamicTexture("menu-contact-falloff", { width: size, height: size }, scene, false);
+  const ctx = tex.getContext() as CanvasRenderingContext2D;
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, size, size);
+  const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  g.addColorStop(0, "#ffffff");
+  g.addColorStop(0.30, "#c8c8c8");
+  g.addColorStop(0.62, "#4a4a4a");
+  g.addColorStop(1, "#000000");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, size, size);
+  tex.update();
+  tex.getAlphaFromRGB = true;
+  tex.wrapU = Texture.CLAMP_ADDRESSMODE;
+  tex.wrapV = Texture.CLAMP_ADDRESSMODE;
+  return tex;
+}
+
 function shadowFalloff(scene: Scene): DynamicTexture {
   const size = 256;
   const tex = new DynamicTexture("menu-shadow-falloff", { width: size, height: size }, scene, false);
@@ -378,6 +431,36 @@ export async function createMenuStage(canvas: HTMLCanvasElement): Promise<MenuSt
   shadowMat.alpha = SHADOW_STRENGTH;
   shadow.material = shadowMat;
 
+  // ...and the dark directly under him, which is a different thing.
+  //
+  // The cast above is the shaft's shadow and it is thrown forward and out, so
+  // by construction none of it is under the boots. That is correct for a light
+  // and wrong for a body: what says an object is ON a floor is the ambient the
+  // floor CANNOT get, and that patch sits under the object whatever the light
+  // is doing. Without it the soles showed daylight and he read as a cut-out
+  // hung over the plate — which is exactly what a cast shadow cannot fix,
+  // because moving the cast onto the feet only takes the cast off its own
+  // direction.
+  //
+  // Small, soft, and centred on the soles rather than offset by anything.
+  const contact = MeshBuilder.CreateGround(
+    "menu-contact",
+    { width: CONTACT_SIZE.width, height: CONTACT_SIZE.depth },
+    scene,
+  );
+  // Above the cast by a hair so the two add rather than fight for the same
+  // depth, and still under the soles.
+  contact.position.set(FEET.x + CONTACT_OFFSET.x, FEET.y - 0.005, FEET.z + CONTACT_OFFSET.z);
+  contact.isPickable = false;
+  const contactMat = new StandardMaterial("menu-contact-mat", scene);
+  contactMat.disableLighting = true;
+  contactMat.diffuseColor = Color3.Black();
+  contactMat.emissiveColor = Color3.Black();
+  contactMat.specularColor = Color3.Black();
+  contactMat.opacityTexture = contactFalloff(scene);
+  contactMat.alpha = CONTACT_STRENGTH;
+  contact.material = contactMat;
+
 
   const render = () => scene.render();
   engine.runRenderLoop(render);
@@ -393,7 +476,9 @@ export async function createMenuStage(canvas: HTMLCanvasElement): Promise<MenuSt
   const stand = (there: boolean) => {
     host.setEnabled(there);
     shadow.setEnabled(there);
+    contact.setEnabled(there);
     shadowMat.alpha = SHADOW_STRENGTH;
+    contactMat.alpha = CONTACT_STRENGTH;
   };
 
   return {
@@ -415,6 +500,7 @@ export async function createMenuStage(canvas: HTMLCanvasElement): Promise<MenuSt
         // Squared, so the stain is mostly gone by the time the body is, rather
         // than lingering under someone who is no longer there to cast it.
         shadowMat.alpha = SHADOW_STRENGTH * (1 - gone) * (1 - gone);
+        contactMat.alpha = CONTACT_STRENGTH * (1 - gone) * (1 - gone);
       });
       stand(false);
     },
