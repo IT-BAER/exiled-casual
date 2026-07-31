@@ -171,7 +171,13 @@ function castFrom(scene: Scene, light: PointLight | undefined): void {
     gen.getShadowMap()!.renderListPredicate = (mesh) =>
       mesh.name !== "ground"
       && mesh.name !== FLAME_MESH
-      && !mesh.name.startsWith("telegraph-");
+      && !mesh.name.startsWith("telegraph-")
+      // The stand may not cast from its own fire: the light sits a hand above
+      // the coals, so the rim, brace and legs threw wedge shadows radiating
+      // from the bowl — a cross stamped into the pool. Partner rule to
+      // `excludeBowls`, which keeps the light off those meshes; this keeps
+      // their shadows out of it. The sun still shadows the brazier itself.
+      && !mesh.name.includes("brazier");
     // Rendered on demand only: `updateFireLights` re-arms ONE map per frame,
     // round-robin. Four cube maps every frame were half the whole frame budget
     // (54 -> 110 fps in the hideout, measured live); staggered at a third of the
