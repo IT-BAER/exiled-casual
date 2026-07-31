@@ -115,11 +115,18 @@ export function clipForSpeed(speed: number, current?: RigClip): RigClip {
  * A loop played at one rate is a machine: watch anyone stood waiting and the
  * first few breaths are the ones that still belong to the walk, and the rest
  * settle. `IDLE_SETTLE_SEC` is how long that takes and `IDLE_SETTLED` is where
- * it lands — three quarters speed, which is slower than the eye can name and
- * exactly what makes a standing character look alive rather than paused.
+ * it lands.
+ *
+ * It lands lower and takes longer than it did (0.75 over six seconds). At three
+ * quarters the settle was over before anyone stood still long enough to notice
+ * one had happened, which is the same as not having it: the point is that a
+ * character left alone keeps getting calmer, so the arc has to run past the
+ * span of attention rather than inside it. Not lower than this — under about
+ * half speed the chest stops moving between frames and a standing body reads as
+ * paused, which is the thing the breath is there to prevent.
  */
-export const IDLE_SETTLE_SEC = 6;
-export const IDLE_SETTLED = 0.75;
+export const IDLE_SETTLE_SEC = 14;
+export const IDLE_SETTLED = 0.58;
 
 /** Playback rate for an idle that has been standing for `seconds`. */
 export function idleRatio(seconds: number): number {
