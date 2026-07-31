@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   generateArea,
+  GRAMMARS,
   fallbackLayout,
   ALGORITHM_VERSION,
   CELL_SIZE,
@@ -102,7 +103,7 @@ describe("generateArea", () => {
     expect(3 * CELL_SIZE).toBeGreaterThanOrEqual(MIN_ROUTE_WIDTH);
   });
 
-  // The generator assembles authored chunks on a 7x7 tile lattice, so an area is
+  // The generator assembles authored chunks on a 9x9 tile lattice, so an area is
   // a route through rooms, not a disc. Map SIZE is meant to vary — a short loop
   // is a fast map — so this pins the middle of the distribution rather than every
   // seed. Measured over 200 seeds: loop runs 0.13-0.39 (median 0.32), open-field
@@ -144,6 +145,44 @@ describe("generateArea", () => {
     expect(loop.hash).not.toBe(field.hash);
     expect(loop.chosenVariantIds.some((id) => id.includes("loop."))).toBe(true);
     expect(field.chosenVariantIds.some((id) => id.includes("field."))).toBe(true);
+  });
+
+  it("ships at least three comprehensive map profiles", () => {
+    const profiles = Object.keys(GRAMMARS) as Array<keyof typeof GRAMMARS>;
+    expect(profiles.length).toBeGreaterThanOrEqual(3);
+
+    const layouts = profiles.map((profile) => generateArea(17, V, profile));
+    expect(new Set(layouts.map((layout) => layout.hash)).size).toBe(layouts.length);
+    for (const layout of layouts) {
+      expect(layout.usedFallback).toBe(false);
+      expect(layout.grid.cols * layout.grid.cellSize).toBeGreaterThanOrEqual(72);
+      expect(layout.chosenVariantIds.length).toBeGreaterThanOrEqual(24);
+      expect(layout.spawnSockets.length).toBeGreaterThanOrEqual(14);
+      expect(layout.objectiveAnchors.filter((a) => a.id.startsWith("reward.")).length)
+        .toBeGreaterThanOrEqual(6);
+    }
+  });
+
+  it("keeps every comprehensive profile valid across seeded runs", () => {
+    for (const profile of Object.keys(GRAMMARS) as Array<keyof typeof GRAMMARS>) {
+      let fallbacks = 0;
+      for (let seed = 0; seed < 80; seed++) {
+        const layout = generateArea(seed, V, profile);
+        expect(allChecksPass(layout), `${profile} seed ${seed}`).toBe(true);
+        expect(allSocketsReachable(layout), `${profile} seed ${seed}`).toBe(true);
+        expect(layout.spawnSockets.length, `${profile} seed ${seed} encounters`)
+          .toBeGreaterThanOrEqual(14);
+        if (layout.usedFallback) {
+          fallbacks++;
+        } else {
+          expect(
+            layout.objectiveAnchors.filter((a) => a.id.startsWith("reward.")).length,
+            `${profile} seed ${seed} rewards`,
+          ).toBeGreaterThanOrEqual(6);
+        }
+      }
+      expect(fallbacks, `${profile} fallbacks`).toBeLessThan(8);
+    }
   });
 
   it("walls the whole outer boundary so the player can't leave the field", () => {

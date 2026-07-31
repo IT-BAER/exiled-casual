@@ -6,6 +6,7 @@
 // Every open edge is cells 6..9 of that border — see the opening invariant in
 // chunks.ts. Caps are the dead ends, so they carry the reward markers.
 import { assertAuthored, type Chunk } from "./chunks";
+import { SPAWN_TARGET } from "./grid";
 
 export interface Grammar {
   id: string;
@@ -15,9 +16,11 @@ export interface Grammar {
   bossChunk: Chunk;
   /** Dead-end spurs hung off the loop. */
   branchCount: number;
+  /** Encounter sockets distributed along the traversable route. */
+  spawnTarget: number;
   /**
    * Carve the tiles the route does not use with a wobbly disc, so the area's
-   * boundary is organic instead of a 7x7 square. A lattice of open ground reads
+   * boundary is organic instead of a 9x9 square. A lattice of open ground reads
    * as a grid far more readily than a lattice of rooms does, which is why the
    * field grammar asks for this and the loop grammar does not.
    */
@@ -487,7 +490,8 @@ export const LOOP_GRAMMAR: Grammar = {
     CROSS_PLAZA, CROSS_COURT, CROSS_ISLAND,
   ],
   bossChunk: BOSS_HALL,
-  branchCount: 5,
+  branchCount: 7,
+  spawnTarget: SPAWN_TARGET,
 };
 
 // Authoring guard: the canonical masks must be what the borders actually say.

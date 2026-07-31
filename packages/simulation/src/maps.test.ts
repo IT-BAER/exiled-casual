@@ -64,11 +64,11 @@ describe("map bases", () => {
     expect(biomeOf("map.not_a_base").id).toBeTruthy();
   });
 
-  it("both grammars are actually reachable from the Atlas", () => {
+  it("at least three distinct layout profiles are reachable from the Atlas", () => {
     const grammars = new Set(
       Array.from({ length: ATLAS_NODE_COUNT }, (_, i) =>
         mapBase(mapBaseIdForIndex(i)).layoutGrammarId),
     );
-    expect([...grammars].sort()).toEqual(["loop", "open-field"]);
+    expect(grammars.size).toBeGreaterThanOrEqual(3);
   });
 });

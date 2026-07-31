@@ -9,7 +9,7 @@
 // It also asks for the organic rim: a tile lattice of open ground reads as a
 // grid far more readily than a lattice of rooms does, so the unused tiles
 // outside the route are carved by a wobbly disc and the boundary stops being a
-// 7x7 square. See `organicRim` in assemble-area.ts.
+// 9x9 square. See `organicRim` in assemble-area.ts.
 import { assertAuthored, type Chunk } from "./chunks";
 import type { Grammar } from "./loop-grammar";
 
@@ -435,7 +435,8 @@ export const FIELD_GRAMMAR: Grammar = {
   bossChunk: BOSS_BASIN,
   // More branches than the loop: open ground should offer somewhere to wander,
   // and a dead end in the open costs the player far less than one in a corridor.
-  branchCount: 6,
+  branchCount: 8,
+  spawnTarget: 16,
   organicRim: true,
 };
 

@@ -1,5 +1,5 @@
 import { fp } from "@exiled/fixed-point";
-import { generateArea } from "@exiled/mapgen";
+import { generateArea, type GrammarId } from "@exiled/mapgen";
 import { CONTENT_VERSION, mapBase } from "@exiled/content-runtime";
 import { mapBaseIdForNode } from "@exiled/rules";
 import { Simulation } from "../loop";
@@ -79,7 +79,7 @@ export function registerAreaTransition(sim: Simulation, collisionRef?: Collision
  * the client has to generate the identical layout to draw it, and any drift
  * between the two would put walls where the sim has none.
  */
-export function grammarForNode(atlasNodeId: string): "loop" | "open-field" {
+export function grammarForNode(atlasNodeId: string): GrammarId {
   return mapBase(mapBaseIdForNode(atlasNodeId)).layoutGrammarId;
 }
 

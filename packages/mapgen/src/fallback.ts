@@ -55,7 +55,7 @@ function carveCorridor(cells: Uint8Array, ax: number, ay: number, bx: number, by
   }
 }
 
-// Deterministic spawn placement: SPAWN_TARGET points spread over the given rooms,
+// Deterministic spawn placement: the profile's target spread over the given rooms,
 // each offset from the room centre so they don't stack on an anchor.
 function spawnPointsFor(rooms: Room[], count: number): Socket[] {
   const out: Socket[] = [];
@@ -75,7 +75,11 @@ function spawnPointsFor(rooms: Room[], count: number): Socket[] {
   return out;
 }
 
-export function fallbackLayout(seed: number, contentVersion: string): AreaLayout {
+export function fallbackLayout(
+  seed: number,
+  contentVersion: string,
+  spawnTarget = SPAWN_TARGET,
+): AreaLayout {
   const cells = new Uint8Array(GRID_CELLS * GRID_CELLS);
   // start (left), boss (centre, larger), exit (right), on a horizontal spine.
   const cy = Math.floor(GRID_CELLS / 2);
@@ -99,7 +103,8 @@ export function fallbackLayout(seed: number, contentVersion: string): AreaLayout
     usedFallback: true,
     cells,
     objectiveAnchors: anchors,
-    spawnSockets: spawnPointsFor([bossRoom, exitRoom], SPAWN_TARGET),
+    spawnSockets: spawnPointsFor([bossRoom, exitRoom], spawnTarget),
     chosenVariantIds: ["fallback"],
+    spawnTarget,
   });
 }

@@ -3,8 +3,8 @@
 // assembler can use one implementation without importing each other.
 import { fnv1a32 } from "./rng";
 
-/** 2 = the wobbly-disc open field. 3 = chunks assembled on a 7x7 tile lattice. */
-export const ALGORITHM_VERSION = 3;
+/** 4 = profile-specific encounter budgets and the hybrid sunken-ruins layout. */
+export const ALGORITHM_VERSION = 4;
 
 /** Cell edge length in world units. Player body radius is 0.5, so a 3-cell
  *  corridor is 1.5 world units wide — player diameter (1.0) plus margin. */
@@ -15,7 +15,7 @@ export const MIN_ROUTE_WIDTH = 1.0 + 0.25;
 /** Monster spawn points every generator aims for. Raised with the lattice
  *  (7x7 -> 9x9 tiles): a map 65% larger on the same budget is a sparser map,
  *  and empty ground between fights is the one thing a bigger area must not buy. */
-export const SPAWN_TARGET = 10;
+export const SPAWN_TARGET = 14;
 
 export interface WalkableGrid {
   cols: number;
@@ -129,11 +129,14 @@ export interface BuildLayoutParams {
   objectiveAnchors: Socket[];
   spawnSockets: Socket[];
   chosenVariantIds: string[];
+  /** Expected encounter sockets for this layout profile. */
+  spawnTarget?: number;
 }
 
 /** Run the shared validation gates over a finished cell grid and hash it. */
 export function buildLayout(p: BuildLayoutParams): AreaLayout {
   const { size, cells } = p;
+  const spawnTarget = p.spawnTarget ?? SPAWN_TARGET;
   let walkableCells = 0;
   for (let i = 0; i < cells.length; i++) if (cells[i] === 1) walkableCells++;
   const walkableArea = walkableCells * CELL_SIZE * CELL_SIZE;
@@ -156,8 +159,8 @@ export function buildLayout(p: BuildLayoutParams): AreaLayout {
     },
     {
       name: "spawnBudget",
-      passed: p.spawnSockets.length >= Math.ceil(SPAWN_TARGET * 0.85) &&
-        p.spawnSockets.length <= Math.floor(SPAWN_TARGET * 1.15),
+      passed: p.spawnSockets.length >= Math.ceil(spawnTarget * 0.85) &&
+        p.spawnSockets.length <= Math.floor(spawnTarget * 1.15),
       detail: `${p.spawnSockets.length} spawns`,
     },
   ];

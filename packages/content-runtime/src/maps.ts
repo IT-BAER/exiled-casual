@@ -38,8 +38,8 @@ export const BIOMES: Record<BiomeId, Biome> = {
  * places — the map seed is per node and per Waystone — they are just built from
  * the same stone and the same layout grammar.
  *
- * Grammar per the design: the built biomes take the loop (a city and a drowned
- * one both read as corridors and rooms), the wild ones take the open field.
+ * Grammar per the design: the city takes the loop, the dry and wooded wilds
+ * take the open field, and the swamp breaks a denser ruin loop across open fen.
  */
 export const MAP_BASES: Record<string, MapBase> = {
   "map.vaal_stone": {
@@ -58,7 +58,7 @@ export const MAP_BASES: Record<string, MapBase> = {
     id: "map.swamp",
     biomeId: "swamp",
     tilesetId: "tileset.swamp",
-    layoutGrammarId: "loop",
+    layoutGrammarId: "sunken-ruins",
   },
   "map.forest": {
     id: "map.forest",

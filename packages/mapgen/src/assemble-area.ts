@@ -6,7 +6,6 @@
 import { fallbackLayout } from "./fallback";
 import { createStream, type RandomStream } from "./rng";
 import {
-  SPAWN_TARGET,
   bfsReachable,
   buildLayout,
   cellCentre,
@@ -146,7 +145,7 @@ export function assembleArea(seed: number, contentVersion: string, grammar: Gram
     createStream(seed, `${contentVersion}.layout.skeleton`),
     grammar.branchCount,
   );
-  if (!skeleton) return fallbackLayout(seed, contentVersion);
+  if (!skeleton) return fallbackLayout(seed, contentVersion, grammar.spawnTarget);
 
   // Stage 2: one chunk per routed tile, oriented onto the mask the skeleton set.
   const chunkRng = createStream(seed, `${contentVersion}.layout.chunks`);
@@ -168,10 +167,12 @@ export function assembleArea(seed: number, contentVersion: string, grammar: Gram
       const mask = skeleton.masks[ty * AREA_TILES + tx]!;
       if (mask === 0) continue; // solid filler, or a tile the boss block covers
       const variants = byClass.get(maskClass(mask));
-      if (!variants || variants.length === 0) return fallbackLayout(seed, contentVersion);
+      if (!variants || variants.length === 0) {
+        return fallbackLayout(seed, contentVersion, grammar.spawnTarget);
+      }
       const variant = variants[chunkRng.nextInt(0, variants.length - 1)]!;
       const fits = variant.filter((o) => o.mask === mask);
-      if (fits.length === 0) return fallbackLayout(seed, contentVersion);
+      if (fits.length === 0) return fallbackLayout(seed, contentVersion, grammar.spawnTarget);
       const pick = fits[chunkRng.nextInt(0, fits.length - 1)]!;
       const got = stamp(cells, pick.rows, tx * TILE_CELLS, ty * TILE_CELLS);
       markers.push(...got);
@@ -187,7 +188,7 @@ export function assembleArea(seed: number, contentVersion: string, grammar: Gram
       o.ports[0]!.side === skeleton.bossPort.side &&
       o.ports[0]!.index === skeleton.bossPort.index,
   );
-  if (!bossFit) return fallbackLayout(seed, contentVersion);
+  if (!bossFit) return fallbackLayout(seed, contentVersion, grammar.spawnTarget);
   const bossMarkers = stamp(
     cells,
     bossFit.rows,
@@ -208,7 +209,9 @@ export function assembleArea(seed: number, contentVersion: string, grammar: Gram
   const startCell = tileCentreCell(cells, skeleton.startTile.tx, skeleton.startTile.ty);
   const bossMarker = markers.find((m) => m.ch === "b");
   const exitMarker = markers.find((m) => m.ch === "e");
-  if (!startCell || !bossMarker || !exitMarker) return fallbackLayout(seed, contentVersion);
+  if (!startCell || !bossMarker || !exitMarker) {
+    return fallbackLayout(seed, contentVersion, grammar.spawnTarget);
+  }
 
   // The rim carve can strand a pocket of floor behind the route. Open ground
   // the player can never reach reads as a bug, so erase it.
@@ -248,22 +251,22 @@ export function assembleArea(seed: number, contentVersion: string, grammar: Gram
     spawnSockets.push({ id: `spawn.${spawnSockets.length}`, ...cellCentre(ASSEMBLED_CELLS, m.cx, m.cy) });
   };
   if (nearestFirst.length > 0) {
-    for (let i = 0; i < SPAWN_TARGET; i++) {
-      // SPAWN_TARGET > 1, so this spans 0..length-1 inclusive.
-      const at = Math.round((i * (nearestFirst.length - 1)) / (SPAWN_TARGET - 1));
+    for (let i = 0; i < grammar.spawnTarget; i++) {
+      // spawnTarget > 1, so this spans 0..length-1 inclusive.
+      const at = Math.round((i * (nearestFirst.length - 1)) / (grammar.spawnTarget - 1));
       push(nearestFirst[at]!);
     }
     // Evenly spaced indices collide when there are fewer eligible tiles than
     // spawns; top up from whatever is left, still in route order.
     for (const tile of nearestFirst) {
-      if (spawnSockets.length >= SPAWN_TARGET) break;
+      if (spawnSockets.length >= grammar.spawnTarget) break;
       push(tile);
     }
     // Still short: a tile may hold several spawn points, so take its spares.
     for (const tile of nearestFirst) {
-      if (spawnSockets.length >= SPAWN_TARGET) break;
+      if (spawnSockets.length >= grammar.spawnTarget) break;
       for (const m of (markersByTile.get(tile) ?? [])) {
-        if (spawnSockets.length >= SPAWN_TARGET) break;
+        if (spawnSockets.length >= grammar.spawnTarget) break;
         if (m.ch !== "s" || !farEnough(m)) continue;
         const p = cellCentre(ASSEMBLED_CELLS, m.cx, m.cy);
         if (spawnSockets.some((s) => s.x === p.x && s.y === p.y)) continue;
@@ -306,7 +309,10 @@ export function assembleArea(seed: number, contentVersion: string, grammar: Gram
     objectiveAnchors,
     spawnSockets: spawnSockets.map(spun),
     chosenVariantIds,
+    spawnTarget: grammar.spawnTarget,
   });
-  if (!layout.validationChecks.every((c) => c.passed)) return fallbackLayout(seed, contentVersion);
+  if (!layout.validationChecks.every((c) => c.passed)) {
+    return fallbackLayout(seed, contentVersion, grammar.spawnTarget);
+  }
   return layout;
 }
