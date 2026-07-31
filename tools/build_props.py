@@ -641,6 +641,13 @@ def build_pillar(mats):
 # this, so the number is shared: `BRAZIER_FLAME_Y` in render/lights.ts.
 BRAZIER_RIM_Z = 1.02
 
+# Where the legs stand under the bowl, and how far they lean out doing it. The
+# foot lands at LEG_RING + half a leg-length of tan(splay) ~= 0.36, just inside
+# the bowl's 0.40 rim: a tripod whose feet are narrower than what it carries
+# reads as a stool someone balanced a dish on.
+LEG_RING = 0.24
+LEG_SPLAY = math.radians(16.0)
+
 
 def build_brazier(mats):
     """A standing iron brazier: three splayed legs, a ring, a bowl of coals.
@@ -670,22 +677,38 @@ def build_brazier(mats):
     parts.append((bowl, mats["iron"], 0.5))
 
     # Three legs, splayed out and down from under the bowl.
+    #
+    # The lean is ONE tilt turned to the leg's own bearing, and the order those
+    # two happen in is the whole thing. Blender's default euler is XYZ, which
+    # composes as Rz @ Ry @ Rx — the Z term rotates the tilt that the X and Y
+    # terms already applied. Feeding it a tilt that was itself built out of
+    # sin(a) and cos(a) therefore turned each leg through TWICE its own bearing:
+    # the three legs leaned in three directions unrelated to where they stood,
+    # one of them straight through the middle. A tripod of crossed wire.
+    #
+    # So: tip once about Y, negative, which drops the foot outward and tucks the
+    # head in under the bowl, and let the Z term carry that single lean round to
+    # the bearing. Nothing to cancel and nothing to compose.
     for i in range(3):
         a = 2.0 * math.pi * i / 3 + math.radians(20)
         leg = box(f"brazier_leg_{i}", (0, 0, 0), (0.07, 0.07, BRAZIER_RIM_Z - 0.18))
-        leg.rotation_euler = (math.radians(11.0), 0.0, 0.0)
         leg.location = (
-            math.cos(a) * 0.20,
-            math.sin(a) * 0.20,
+            math.cos(a) * LEG_RING,
+            math.sin(a) * LEG_RING,
             (BRAZIER_RIM_Z - 0.18) / 2,
         )
-        # Turn the lean outward: rotate the whole leg about the axis, then tip it.
-        leg.rotation_euler = (math.radians(11.0) * math.sin(a), -math.radians(11.0) * math.cos(a), a)
+        leg.rotation_euler = (0.0, -LEG_SPLAY, a)
         parts.append((leg, mats["iron"], 0.3))
 
-    # A ring tying the legs together, the way a real one is braced.
+    # A ring tying the legs together, the way a real one is braced. Its radius is
+    # DERIVED from where the legs actually are at its own height: a hand-typed
+    # ring is a hoop floating beside the iron the moment the splay changes.
+    brace_z = 0.27
+    brace_r = LEG_RING + ((BRAZIER_RIM_Z - 0.18) / 2 - brace_z) * math.tan(LEG_SPLAY)
     brace = mesh_object("brazier_brace", *lathe([
-        (0.235, 0.30), (0.275, 0.30), (0.275, 0.24), (0.235, 0.24), (0.235, 0.30),
+        (brace_r - 0.022, brace_z + 0.03), (brace_r + 0.022, brace_z + 0.03),
+        (brace_r + 0.022, brace_z - 0.03), (brace_r - 0.022, brace_z - 0.03),
+        (brace_r - 0.022, brace_z + 0.03),
     ], 16))
     parts.append((brace, mats["iron"], 0.4))
 

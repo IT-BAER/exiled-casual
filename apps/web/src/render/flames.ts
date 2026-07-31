@@ -76,9 +76,15 @@ export const FLAME_RANGE = 14;
  * The flame, in world units, against the brazier `tools/build_props.py` builds:
  * its rim is at 1.02 and the coals mound just under it, so the fire starts at
  * the coal face and stands about knee-high on the player.
+ *
+ * Shorter than the 1.2 it was: at that height the plume stood taller than the
+ * brazier it burned in, which is a bonfire in a dish rather than a bowl of
+ * coals. `EMBER_WIDTH` carries most of the difference back, because the ember
+ * radius is a fraction of THIS, and a shorter flame of proportionally thinner
+ * embers is a sparser flame rather than a smaller one.
  */
 const BASE_Y = 0.95;
-const FLAME_H = 1.2;
+const FLAME_H = 0.82;
 /** Radius of the lip the embers are born across: the bowl's inner floor. */
 const LIP_R = 0.3;
 
@@ -92,7 +98,7 @@ const LIP_R = 0.3;
  * through a mass the eye cannot pick individual pieces out of, which is the only
  * softness geometry gets for free.
  */
-const EMBER_WIDTH = 0.026;
+const EMBER_WIDTH = 0.035;
 const EMBER_STRETCH = 2.6;
 
 /**
@@ -112,8 +118,13 @@ const BRIGHT = 0.7;
  * screen to itself. This camera looks down it, so height is foreshortened into
  * the bowl and a fast fade leaves a glowing dish with nothing standing out of
  * it. Slower here, so the tongue survives the projection.
+ *
+ * But not as slow as 0.8. The last third of the ramp is soot-red, and holding
+ * an ember's alpha up through it paints that red across the top of the plume:
+ * what makes the tip of a real flame vanish is that it stops emitting, not that
+ * it turns crimson.
  */
-const FADE = 0.8;
+const FADE = 1.15;
 
 /**
  * Where on the heat ramp an ember is born.
@@ -392,17 +403,25 @@ function updateParticle(p: SolidParticle): SolidParticle {
   // cool. The body alone reads as a lamp with a shape.
   const q = sparks[b * SPARKS + (k - EMBERS)]!;
   const u = (((t - q.born) / q.life) % 1 + 1) % 1;
-  const rise = u * (1.35 - 0.35 * u) * 2.4;
+  // Barely over the flame, not two flames above it. At 2.4 a spark climbed to
+  // nearly three units off the coals and spent most of that climb at the soot
+  // end of the ramp, so the brazier wore a column of red diamonds twice the
+  // height of the fire — the single loudest thing in the frame, and it was the
+  // part that is supposed to be an occasional speck.
+  const rise = u * (1.35 - 0.35 * u) * 1.15;
   p.position.x = s.x + q.laneX * LIP_R * 0.9 + q.driftX * FLAME_H * u
     + Math.sin(u * 3.1 + q.sway) * FLAME_H * 0.05;
   p.position.z = s.z + q.laneZ * LIP_R * 0.9 + q.driftZ * FLAME_H * u
     + Math.cos(u * 3.1 + q.sway) * FLAME_H * 0.05;
   p.position.y = BASE_Y + FLAME_H * rise;
-  const rad = FLAME_H * 0.014 * q.size * (1 - 0.35 * u);
+  const rad = FLAME_H * 0.018 * q.size * (1 - 0.35 * u);
   p.scaling.setAll(rad);
-  emberColour(Math.min(1, 0.35 + u * 0.65), p.color!);
+  // Kept in the yellow-to-orange half of the ramp. A spark is a fleck of fuel
+  // still BURNING; it is the coldest thing in the plume that reaches the soot
+  // end, and a dozen of those over one bowl paint the air above it red.
+  emberColour(Math.min(1, 0.18 + u * 0.42), p.color!);
   // A spark is a point of light that gutters, not a parcel that fades: the
   // twinkle is the whole reason it reads as a spark and not as dust.
-  p.color!.a = (1 - u) ** 2 * BRIGHT * 1.6 * (0.55 + 0.45 * Math.sin(t * q.twinkle + q.sway));
+  p.color!.a = (1 - u) ** 2 * BRIGHT * 0.9 * (0.55 + 0.45 * Math.sin(t * q.twinkle + q.sway));
   return p;
 }

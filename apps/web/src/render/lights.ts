@@ -1,5 +1,18 @@
-import { Color3, PointLight, Vector3, type AbstractMesh, type Scene } from "@babylonjs/core";
-import { createFireFlames, FLAME_RANGE, resetFireFlames, updateFireFlames } from "./flames";
+import {
+  Color3,
+  PointLight,
+  ShadowGenerator,
+  Vector3,
+  type AbstractMesh,
+  type Scene,
+} from "@babylonjs/core";
+import {
+  createFireFlames,
+  FLAME_MESH,
+  FLAME_RANGE,
+  resetFireFlames,
+  updateFireFlames,
+} from "./flames";
 
 /**
  * The fires the world is lit by, as opposed to the one the player carries.
@@ -49,9 +62,15 @@ export const BRAZIER_FLAME_Y = 1.12;
  */
 const fireColour = (): Color3 => new Color3(1.0, 0.52, 0.22);
 
-/** Intensity and reach of one bowl. Both are flickered around these. */
+/**
+ * Intensity and reach of one bowl. Both are flickered around these.
+ *
+ * The reach is what a brazier is FOR. At 7.4 the pool stopped about two body
+ * lengths from the stand, so a fire lit its own feet and the room around it was
+ * still the torch's; a standing brazier has to own the corner it is in.
+ */
 const FIRE_INTENSITY = 120;
-const FIRE_RANGE = 7.4;
+const FIRE_RANGE = 11;
 
 /** How deep the flicker cuts, as a fraction of each. */
 const FLICKER_INTENSITY = 0.18;
@@ -103,18 +122,61 @@ export function createFireLights(scene: Scene): PointLight[] {
     light.specular = new Color3(0, 0, 0);
     light.range = FIRE_RANGE;
     light.intensity = 0;
-    // Never: a fire that casts is a second shadow on every object in the room,
-    // pointing a different way from the sun's, and six cube faces per bowl.
-    light.shadowEnabled = false;
     light.setEnabled(false);
     pool.push(light);
   }
+  castFrom(scene, pool[0]);
   // ...and the fire the light is coming out of. Built here rather than beside
   // the haze in engine.ts so the two halves of a brazier cannot be set up
   // separately: a pool of light with nothing burning in it is the bug this
   // whole file used to have.
   createFireFlames(scene);
   return pool;
+}
+
+/**
+ * Give the nearest bowl real shadows.
+ *
+ * One light of the four, and always the same one, because `updateFireLights`
+ * hands the pool out nearest-first: `pool[0]` is by construction the fire the
+ * player is standing next to, which is the only one whose shadows can be read
+ * at this camera. A point light means a CUBE map — six faces every frame — so
+ * four of these is four times a cost that buys nothing at the edge of the
+ * frame.
+ *
+ * ponytail: one caster of four. If a room ever wants two fires throwing at
+ * once, give pool[1] its own generator at half the resolution; the pool order
+ * already guarantees which two they would be.
+ */
+function castFrom(scene: Scene, light: PointLight | undefined): void {
+  if (!light || light.getShadowGenerator()) return;
+  try {
+    light.shadowMinZ = 0.35;
+    light.shadowMaxZ = FIRE_RANGE;
+    const gen = new ShadowGenerator(512, light);
+    gen.usePercentageCloserFiltering = true;
+    gen.filteringQuality = ShadowGenerator.QUALITY_LOW; // x6 faces
+    // Lighter than the sun's: a fire is one source in a room the sun and the
+    // torch are also in, and a black shadow from it reads as a hole.
+    gen.darkness = 0.45;
+    // The same pair the torch needs, for the same reason: a point light over a
+    // floor samples that floor at a grazing angle across six faces, and at the
+    // stock bias the surface shadows ITSELF in rings centred on the lamp.
+    gen.bias = 0.0002;
+    gen.normalBias = 0.03;
+    // Evaluated per frame against the CURRENT name, so a mesh renamed after it
+    // was created cannot smuggle itself in. The floor only receives; the fire
+    // is light rather than a thing standing in light; a telegraph decal is
+    // paint on the floor. Everything else in the room casts, actors included —
+    // that is the whole difference between this and the torch, which rides the
+    // player and would only ever draw a blob under his own feet.
+    gen.getShadowMap()!.renderListPredicate = (mesh) =>
+      mesh.name !== "ground"
+      && mesh.name !== FLAME_MESH
+      && !mesh.name.startsWith("telegraph-");
+  } catch {
+    /* no render targets under NullEngine — lit but unshadowed is fine in tests */
+  }
 }
 
 /** Forget the pool. The scene that owned it is going away. */
