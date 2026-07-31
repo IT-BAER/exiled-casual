@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { Mesh, NullEngine, Scene, Vector3 } from "@babylonjs/core";
+import { Color3, Constants, Mesh, NullEngine, Scene, StandardMaterial, Vector3 } from "@babylonjs/core";
 import { FLAME_MESH, flameParticleCount } from "./flames";
 import {
   BRAZIER_FLAME_Y, BRAZIER_RIM_R, BRAZIER_RIM_Y, LIGHT_POOL,
@@ -90,14 +90,35 @@ describe("the fires a place is lit by", () => {
 });
 
 describe("the fire in the bowl", () => {
+  it("plays the Blender flipbook over each burning bowl", () => {
+    const s = scene();
+    createFireLights(s);
+    const mesh = s.getMeshByName(FLAME_MESH) as Mesh;
+    const material = mesh.material as StandardMaterial;
+
+    expect(material.emissiveTexture?.name).toContain("/textures/effects/brazier-fire.png");
+    expect(material.emissiveColor).toEqual(Color3.Black());
+    setFireSpots([{ x: 2, z: 3, phase: 0 }]);
+    updateFireLights(s, new Vector3(2, 0, 3), 16);
+    const first = mesh.getVerticesData("uv")!;
+    const firstU = [first[0]!, first[2]!, first[4]!, first[6]!];
+    const firstV = [first[1]!, first[3]!, first[5]!, first[7]!];
+    expect(Math.max(...firstU) - Math.min(...firstU)).toBeLessThan(0.1);
+    expect(Math.max(...firstV) - Math.min(...firstV)).toBeLessThan(0.15);
+    updateFireLights(s, new Vector3(2, 0, 3), 100);
+    expect(mesh.getVerticesData("uv")).not.toEqual(first);
+  });
+
   it("burns over the bowl and nowhere else, and stops burning off screen", () => {
     const s = scene();
     createFireLights(s);
     const mesh = s.getMeshByName(FLAME_MESH) as Mesh;
     expect(mesh).toBeTruthy();
-    // Without this the material's own alpha decides the pass, and a fire drawn
-    // opaque is a cloud of grey pebbles.
-    expect(mesh.hasVertexAlpha).toBe(true);
+    // The RGB atlas has a black background, which disappears only in Babylon's
+    // additive transparent pass.
+    const material = mesh.material as StandardMaterial;
+    expect(material.alphaMode).toBe(Constants.ALPHA_ADD);
+    expect(material.needAlphaBlending()).toBe(true);
 
     setFireSpots([{ x: 8, z: -3, phase: 0 }]);
     updateFireLights(s, new Vector3(8, 0, -3), 16);
