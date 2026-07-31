@@ -756,9 +756,19 @@ export function createScene(engine: Engine): SceneHandle {
     // registered under whatever it was called first — 40 actor parts got in that
     // way. `renderListPredicate` is re-evaluated every frame against the current
     // name, so a rename cannot smuggle a caster past it.
-    torchShadows.getShadowMap()!.renderListPredicate = (mesh) =>
-      mesh !== ground && !mesh.name.startsWith("telegraph-") && mesh.name !== FLAME_MESH
-      && !isWardrobePart(mesh.name);
+    torchShadows.getShadowMap()!.renderListPredicate = (mesh) => {
+      if (mesh === ground || mesh.name.startsWith("telegraph-") || mesh.name === FLAME_MESH
+        || isWardrobePart(mesh.name)) return false;
+      // Range cull: nothing past the torch's own reach can receive its light, so
+      // nothing there can cast a visible shadow from it either. This is a third
+      // of the cube map's draw calls, measured live in the hideout.
+      const bs = mesh.getBoundingInfo().boundingSphere;
+      const dx = bs.centerWorld.x - torch.position.x;
+      const dy = bs.centerWorld.y - torch.position.y;
+      const dz = bs.centerWorld.z - torch.position.z;
+      const reach = torch.range + bs.radiusWorld;
+      return dx * dx + dy * dy + dz * dz <= reach * reach;
+    };
     scene.onNewMeshAddedObservable.add((mesh) => {
       if (mesh.name.startsWith("telegraph-") || mesh === ground || isLevelGeometry(mesh.name)) {
         return;

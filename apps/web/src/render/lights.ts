@@ -1,6 +1,7 @@
 import {
   Color3,
   PointLight,
+  RenderTargetTexture,
   ShadowGenerator,
   Vector3,
   type AbstractMesh,
@@ -106,6 +107,8 @@ let lastMeshCount = -1;
  * reach with it: the fires are composed for the shot, not for the metre.
  */
 let zoom = 1;
+/** Which lit bowl re-renders its shadow cube this frame. See `castFrom`. */
+let robin = 0;
 
 /**
  * Build the pool. Call once per scene, with the other lights.
@@ -169,6 +172,12 @@ function castFrom(scene: Scene, light: PointLight | undefined): void {
       mesh.name !== "ground"
       && mesh.name !== FLAME_MESH
       && !mesh.name.startsWith("telegraph-");
+    // Rendered on demand only: `updateFireLights` re-arms ONE map per frame,
+    // round-robin. Four cube maps every frame were half the whole frame budget
+    // (54 -> 110 fps in the hideout, measured live); staggered at a third of the
+    // frame rate each, firelight shadows are soft and flickering anyway and the
+    // lag is not readable.
+    gen.getShadowMap()!.refreshRate = RenderTargetTexture.REFRESHRATE_RENDER_ONCE;
   } catch {
     /* no render targets under NullEngine — lit but unshadowed is fine in tests */
   }
@@ -181,6 +190,7 @@ export function resetFireLights(): void {
   clock = 0;
   lastMeshCount = -1;
   zoom = 1;
+  robin = 0;
   resetFireFlames();
 }
 
@@ -262,4 +272,10 @@ export function updateFireLights(scene: Scene, at: Vector3, deltaMs: number): vo
     light.range = FIRE_RANGE * zoom * (1 + FLICKER_RANGE * wobble);
     light.setEnabled(true);
   }
+
+  // One shadow cube per frame, rotating through the lit bowls. The maps are
+  // RENDER_ONCE; this is the only thing that re-arms them.
+  const lit = pool.filter((l) => l.isEnabled());
+  if (lit.length > 0)
+    lit[robin++ % lit.length]!.getShadowGenerator()?.getShadowMap()?.resetRefreshCounter();
 }
