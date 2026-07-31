@@ -15,7 +15,7 @@ import { attachProp } from "./props";
 import { attachCreature, type CreatureRig } from "./monsters";
 import { attachBoltTrail, attachCinderFX, cinderGlow } from "./skill-fx";
 import { attachRig, rigOf, type RigParts } from "./rig";
-import { playSfx } from "../audio/sfx";
+import { playSfx, worldSfxMix } from "../audio/sfx";
 
 export type MeshKind = "player" | "monster" | "rare" | "boss" | "projectile" | "groundArea" | "telegraph" | "portal" | "mapDevice" | "stash" | "vendor" | "groundItem";
 
@@ -891,7 +891,7 @@ export function portalAppear(scene: Scene, root: Mesh, delayMs: number): void {
   root.scaling.setAll(0.001);
   if (delayMs <= 0) {
     root.setEnabled(true);
-    playSfx("portal-open");
+    playPortalSfx(scene, root, "portal-open");
     scalePortal(scene, root, PORTAL_OPEN_MS, 0.001, 1);
     return;
   }
@@ -902,7 +902,7 @@ export function portalAppear(scene: Scene, root: Mesh, delayMs: number): void {
     if (t < delayMs) return;
     scene.onBeforeRenderObservable.remove(wait);
     root.setEnabled(true);
-    playSfx("portal-open");
+    playPortalSfx(scene, root, "portal-open");
     scalePortal(scene, root, PORTAL_OPEN_MS, 0.001, 1);
   });
 }
@@ -914,10 +914,19 @@ export function portalAppear(scene: Scene, root: Mesh, delayMs: number): void {
  * it — which is exactly why the animation owns that.
  */
 export function portalVanish(scene: Scene, root: Mesh): void {
-  playSfx("portal-close");
+  playPortalSfx(scene, root, "portal-close");
   scalePortal(scene, root, PORTAL_CLOSE_MS, root.scaling.x, 0.001, () => {
     if (!root.isDisposed()) root.dispose();
   });
+}
+
+/** Portals live in the world, unlike menu cues. The camera target follows the
+ * player, so it is the listener position already available at this render seam. */
+function playPortalSfx(scene: Scene, root: Mesh, name: "portal-open" | "portal-close"): void {
+  const target = (scene.activeCamera as { target?: Vector3 } | null)?.target;
+  if (!target) { playSfx(name); return; }
+  const source = root.getAbsolutePosition();
+  playSfx(name, ...worldSfxMix(source.x - target.x, source.z - target.z));
 }
 
 /** Is this root a portal? Read off the metadata the builder already stamps. */

@@ -89,13 +89,32 @@ export function bus(): Bus | null {
   return { ctx, dry: dryBus, wet: wetBus };
 }
 
-/** Route one voice into both the direct and the reverb path. */
-export function send(b: Bus, node: AudioNode, wetAmount: number): void {
+/** Route one voice into the direct and reverb paths. The direct sound keeps its
+ * bearing while the room return stays diffuse and centered. */
+export function send(
+  b: Bus,
+  node: AudioNode,
+  wetAmount: number,
+  panAmount = 0,
+  moving = false,
+): StereoPannerNode | null {
   const wet = Math.min(1, wetAmount * room);
   const d = b.ctx.createGain();
   d.gain.value = 1 - wet * 0.5;
-  node.connect(d).connect(b.dry);
+  const pan = Number.isFinite(panAmount) ? Math.max(-1, Math.min(1, panAmount)) : 0;
+  const create = (b.ctx as AudioContext & {
+    createStereoPanner?: () => StereoPannerNode;
+  }).createStereoPanner;
+  let panner: StereoPannerNode | null = null;
+  if ((moving || pan !== 0) && typeof create === "function") {
+    panner = create.call(b.ctx);
+    panner.pan.value = pan;
+    node.connect(panner).connect(d).connect(b.dry);
+  } else {
+    node.connect(d).connect(b.dry);
+  }
   const w = b.ctx.createGain();
   w.gain.value = wet;
   node.connect(w).connect(b.wet);
+  return panner;
 }

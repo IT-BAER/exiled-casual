@@ -41,7 +41,9 @@ const VOICES: Record<string, Voice> = {
 
 /** One ringing mode: a sine with its own decay, detuned a touch so stacked modes
  *  beat against each other instead of phasing into a pure tone. */
-function mode(b: Bus, freq: number, at: number, peak: number, decay: number, wetAmount: number) {
+function mode(
+  b: Bus, freq: number, at: number, peak: number, decay: number, wetAmount: number, pan: number,
+) {
   const ac = b.ctx;
   const osc = ac.createOscillator();
   const g = ac.createGain();
@@ -51,14 +53,16 @@ function mode(b: Bus, freq: number, at: number, peak: number, decay: number, wet
   g.gain.linearRampToValueAtTime(peak, at + 0.004); // near-instant attack = struck, not bowed
   g.gain.exponentialRampToValueAtTime(0.0001, at + decay);
   osc.connect(g);
-  send(b, g, wetAmount);
+  send(b, g, wetAmount, pan);
   osc.start(at);
   osc.stop(at + decay + 0.05);
 }
 
 /** The contact click: 25 ms of bandpassed noise. Without it a modal body sounds
  *  synthetic, because nothing ever starts ringing from silence. */
-function strike(b: Bus, centre: number, at: number, peak: number, wetAmount: number) {
+function strike(
+  b: Bus, centre: number, at: number, peak: number, wetAmount: number, pan: number,
+) {
   const ac = b.ctx;
   const len = Math.floor(ac.sampleRate * 0.025);
   const buf = ac.createBuffer(1, len, ac.sampleRate);
@@ -74,17 +78,18 @@ function strike(b: Bus, centre: number, at: number, peak: number, wetAmount: num
   const g = ac.createGain();
   g.gain.value = peak;
   src.connect(bp).connect(g);
-  send(b, g, wetAmount);
+  send(b, g, wetAmount, pan);
   src.start(at);
 }
 
 /** Play the drop sound for one item. Silent (and safe) without WebAudio. */
-export function playDropSound(rarity: string | undefined): void {
+export function playDropSound(rarity: string | undefined, volume = 1, pan = 0): void {
   const b = bus();
   if (!b) return;
   const v = VOICES[rarity ?? "normal"] ?? VOICES["normal"]!;
+  const level = Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : 0;
   const now = b.ctx.currentTime + 0.01;
-  strike(b, v.strike, now, v.gain * 0.9, v.wet);
+  strike(b, v.strike, now, v.gain * level * 0.9, v.wet, pan);
   for (let i = 0; i < v.modes; i++) {
     // Higher modes are quieter and die sooner, which is what stops a stack of
     // sines reading as a chord.
@@ -92,12 +97,13 @@ export function playDropSound(rarity: string | undefined): void {
       b,
       v.base * MODES[i]!,
       now + i * 0.0015,
-      (v.gain / (i * 1.5 + 1)) * 0.8,
+      (v.gain * level / (i * 1.5 + 1)) * 0.8,
       v.decay / (i * 0.8 + 1),
       v.wet,
+      pan,
     );
   }
-  if (v.sub) mode(b, v.sub[0], now, 0.34, v.sub[1], v.wet * 0.6);
+  if (v.sub) mode(b, v.sub[0], now, 0.34 * level, v.sub[1], v.wet * 0.6, pan);
 }
 
 // Re-exported so App.tsx and the tests keep one import for "the game's volume",

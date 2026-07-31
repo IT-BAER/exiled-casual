@@ -394,4 +394,36 @@ describe("environment", () => {
     expect(death[2]!).toBeCloseTo(9, 5);
     expect(death[1]!).toBeLessThan(1);
   });
+
+  it("reports which side of the fixed isometric camera a world cue comes from", () => {
+    const calls: Array<[string, number | undefined]> = [];
+    const s = createSoundscape({ play: (name, _volume, _distance, pan) => calls.push([name, pan]) });
+    s.reset(null);
+    s.observe(snap({ tick: 1, entities: [
+      { ...monster(1, 6), y: 0 },
+      { ...monster(2, -6), y: 0 },
+    ] }));
+    s.observe(snap({ tick: 2, entities: [] }));
+
+    const deaths = calls.filter(([name]) => name.startsWith("monster-death"));
+    expect(deaths).toHaveLength(2);
+    expect(deaths[0]![1]).toBeGreaterThan(0);
+    expect(deaths[1]![1]).toBeLessThan(0);
+  });
+
+  it("updates a sustained cue's stereo side as its source crosses the player", () => {
+    const pans: number[] = [];
+    const s = createSoundscape({
+      play: () => {},
+      loop: () => {},
+      loopVolume: (_key, _volume, _distance, pan) => { if (pan !== undefined) pans.push(pan); },
+    });
+    s.reset(null);
+    s.observe(snap({ tick: 1 }));
+    s.observe(snap({ tick: 2, entities: [{ id: 9, kind: "projectile", x: -5, y: 0, team: 0 }] }));
+    s.observe(snap({ tick: 3, entities: [{ id: 9, kind: "projectile", x: 5, y: 0, team: 0 }] }));
+
+    expect(pans.some((pan) => pan < 0)).toBe(true);
+    expect(pans.at(-1)).toBeGreaterThan(0);
+  });
 });

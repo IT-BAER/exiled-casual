@@ -175,10 +175,10 @@ export const CORE_SFX: readonly string[] = [
  * Play one sound. First call for a name starts the fetch and returns silently, so
  * an unpreloaded sound costs its first occurrence and nothing after it.
  *
- * `volume` scales the voice's own gain, which is how a distant monster is quieter
- * than one at the player's feet without a spatial graph nobody asked for.
+ * `volume` scales the voice's own gain, `distance` muffles it, and `pan` places
+ * world cues across the fixed isometric view. Player and UI cues stay centered.
  */
-export function playSfx(name: string, volume = 1, distance = 0): void {
+export function playSfx(name: string, volume = 1, distance = 0, pan = 0): void {
   const voice = VOICES[name];
   if (!voice || dead.has(name)) return;
   const b = bus();
@@ -194,7 +194,7 @@ export function playSfx(name: string, volume = 1, distance = 0): void {
   src.connect(g);
   // Room grows with distance as well: what reaches the ear from across a hall is
   // mostly the hall.
-  send(b, muffle(b, g, distance), voice.wet * (1 + distance / AUDIBLE));
+  send(b, muffle(b, g, distance), voice.wet * (1 + distance / AUDIBLE), pan);
   src.start();
 }
 
@@ -207,6 +207,8 @@ const loops = new Map<string, {
   /** Always present, unlike a one-shot's: a bolt crosses the screen while it
    *  sounds, so its muffling has to be swept and not decided at the start. */
   lp: BiquadFilterNode;
+  /** Stereo position follows moving sources without rebuilding their graph. */
+  pan: StereoPannerNode | null;
 }>();
 
 /**
@@ -241,7 +243,7 @@ const LOOP_FADE_OUT = 0.14;
  *
  * Calling it twice for one key is a no-op, so a caller may say it every tick.
  */
-export function startSfxLoop(name: string, key: string, volume = 1, distance = 0): void {
+export function startSfxLoop(name: string, key: string, volume = 1, distance = 0, pan = 0): void {
   if (loops.has(key)) return;
   const voice = VOICES[name];
   if (!voice || dead.has(name)) { note(`novoice:${name}`); publish(); return; }
@@ -265,21 +267,22 @@ export function startSfxLoop(name: string, key: string, volume = 1, distance = 0
   lp.type = "lowpass";
   lp.frequency.value = distanceCutoff(distance);
   g.connect(lp);
-  send(b, lp, voice.wet);
+  const panNode = send(b, lp, voice.wet, pan, true);
   src.start();
-  loops.set(key, { src, gain: g, peak, lp });
+  loops.set(key, { src, gain: g, peak, lp, pan: panNode });
   debug.started++;
   publish();
 }
 
 /** Follow a live loop's source as it moves relative to the player. */
-export function setSfxLoopVolume(key: string, volume: number, distance = 0): void {
+export function setSfxLoopVolume(key: string, volume: number, distance = 0, pan = 0): void {
   const live = loops.get(key);
   const b = bus();
   if (!live || !b) return;
   live.gain.gain.setTargetAtTime(live.peak * clamp(volume), b.ctx.currentTime, LOOP_FADE_IN);
   // Same constant as the level: a filter that jumped per snapshot is a zipper.
   live.lp.frequency.setTargetAtTime(distanceCutoff(distance), b.ctx.currentTime, LOOP_FADE_IN);
+  live.pan?.pan.setTargetAtTime(clampPan(pan), b.ctx.currentTime, LOOP_FADE_IN);
 }
 
 /** Fade a loop out and let it go. Unknown keys are silently ignored. */
@@ -305,6 +308,10 @@ export function stopAllSfxLoops(): void {
 
 function clamp(v: number): number {
   return Math.max(0, Math.min(1, v));
+}
+
+function clampPan(v: number): number {
+  return Number.isFinite(v) ? Math.max(-1, Math.min(1, v)) : 0;
 }
 
 /**
@@ -351,6 +358,15 @@ function muffle(b: Bus, node: AudioNode, distance: number): AudioNode {
   f.frequency.value = hz;
   node.connect(f);
   return f;
+}
+
+/** Volume, distance, and stereo bearing for a source offset in simulation space. */
+export function worldSfxMix(dx: number, dy: number): [number, number, number] {
+  const distance = Math.hypot(dx, dy);
+  if (distance === 0) return [1, 0, 0];
+  // The fixed camera projects both world +X and sim +Y toward screen-right.
+  const pan = Math.max(-1, Math.min(1, (dx + dy) / (Math.SQRT2 * distance)));
+  return [distanceGain(distance), distance, pan];
 }
 
 /** Test seam: forget every decoded buffer and failure. */

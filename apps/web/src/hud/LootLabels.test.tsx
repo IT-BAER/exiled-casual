@@ -1,13 +1,17 @@
 // @vitest-environment jsdom
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import "@testing-library/jest-dom/vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
-import { vi } from "vitest";
+vi.mock("../audio/drop-sound", () => ({ playDropSound: vi.fn() }));
 import { LootLabels } from "./LootLabels";
+import { playDropSound } from "../audio/drop-sound";
 import type { Snapshot } from "@exiled/protocol";
 import { testStats } from "../test-fixtures";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.mocked(playDropSound).mockClear();
+});
 
 function snapWith(entities: Snapshot["entities"]): Snapshot {
   return {
@@ -34,6 +38,18 @@ function snapWith(entities: Snapshot["entities"]): Snapshot {
 }
 
 describe("LootLabels", () => {
+  it("positions a new ground-item cue relative to the player", () => {
+    const { rerender } = render(<LootLabels project={null} snapshot={snapWith([])} />);
+    rerender(<LootLabels project={null} snapshot={snapWith([
+      { id: 11, kind: "groundItem", x: 6, y: 0, rarity: "rare", name: "Doom Gaze" },
+    ])} />);
+
+    expect(playDropSound).toHaveBeenCalledOnce();
+    const [, volume, pan] = vi.mocked(playDropSound).mock.calls[0]!;
+    expect(volume).toBeLessThan(1);
+    expect(pan).toBeGreaterThan(0);
+  });
+
   it("plates every ground item and skips other entities", () => {
     render(
       <LootLabels

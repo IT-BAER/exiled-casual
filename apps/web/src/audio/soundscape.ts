@@ -1,7 +1,8 @@
 import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
 import {
-  distanceGain, playSfx, preloadSfx,
+  playSfx, preloadSfx,
   startSfxLoop, setSfxLoopVolume, stopSfxLoop, stopAllSfxLoops,
+  worldSfxMix,
 } from "./sfx";
 import { setRoom } from "./bus";
 
@@ -171,9 +172,9 @@ export interface Soundscape {
 }
 
 interface Options {
-  play?: (name: string, volume?: number, distance?: number) => void;
-  loop?: (name: string, key: string, volume?: number, distance?: number) => void;
-  loopVolume?: (key: string, volume: number, distance?: number) => void;
+  play?: (name: string, volume?: number, distance?: number, pan?: number) => void;
+  loop?: (name: string, key: string, volume?: number, distance?: number, pan?: number) => void;
+  loopVolume?: (key: string, volume: number, distance?: number, pan?: number) => void;
   room?: (amount: number) => void;
   stopLoop?: (key: string) => void;
   stopAllLoops?: () => void;
@@ -246,11 +247,12 @@ export function createSoundscape(opts: Options = {}): Soundscape {
       const now = new Map<number, SnapshotEntity>();
       for (const e of snap.entities) now.set(e.id, e);
 
-      // Level AND distance, spread into the call: how loud a thing is and how far
-      // it sounds are two different questions, and only the second one muffles.
-      const at = (e: SnapshotEntity): [number, number] => {
-        const d = Math.hypot(e.x - snap.player.x, e.y - snap.player.y);
-        return [distanceGain(d), d];
+      // Level, distance and direction are spread into the call: volume, muffling,
+      // and stereo bearing are related but independent parts of world position.
+      const at = (e: SnapshotEntity): [number, number, number] => {
+        const dx = e.x - snap.player.x;
+        const dy = e.y - snap.player.y;
+        return worldSfxMix(dx, dy);
       };
 
       // ── Gone ────────────────────────────────────────────────────────────────
