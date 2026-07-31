@@ -880,18 +880,18 @@ function scalePortal(
 }
 
 /**
- * A portal opening: hidden for `delayMs`, then irised open with its own cue.
+ * A portal opening: hidden for `delayMs`, then irised open.
  *
- * The sound lives here rather than in the soundscape because the stagger does: the
- * snapshot says all six arrived on one tick, and only this module knows which
- * quarter-second each of them is actually meant to appear in.
+ * The sound lives here rather than in the soundscape because the renderer owns the
+ * six-portal sequence. Only its first portal gets `withCue`; the rest keep their
+ * visual stagger without stacking six copies of the same opening sound.
  */
-export function portalAppear(scene: Scene, root: Mesh, delayMs: number): void {
+export function portalAppear(scene: Scene, root: Mesh, delayMs: number, withCue: boolean): void {
   root.setEnabled(false);
   root.scaling.setAll(0.001);
   if (delayMs <= 0) {
     root.setEnabled(true);
-    playPortalSfx(scene, root, "portal-open");
+    if (withCue) playPortalSfx(scene, root, "portal-open");
     scalePortal(scene, root, PORTAL_OPEN_MS, 0.001, 1);
     return;
   }
@@ -902,7 +902,7 @@ export function portalAppear(scene: Scene, root: Mesh, delayMs: number): void {
     if (t < delayMs) return;
     scene.onBeforeRenderObservable.remove(wait);
     root.setEnabled(true);
-    playPortalSfx(scene, root, "portal-open");
+    if (withCue) playPortalSfx(scene, root, "portal-open");
     scalePortal(scene, root, PORTAL_OPEN_MS, 0.001, 1);
   });
 }

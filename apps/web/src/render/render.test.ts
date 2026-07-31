@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import {
   Camera,
   ImageProcessingConfiguration,
@@ -21,6 +21,12 @@ import { makeMesh, updateTelegraph } from "./meshes";
 import type { Snapshot } from "@exiled/protocol";
 import { testPlayer, testStats } from "../test-fixtures";
 import { columnHit } from "../input/bindings";
+import { playSfx } from "../audio/sfx";
+
+vi.mock("../audio/sfx", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../audio/sfx")>(),
+  playSfx: vi.fn(),
+}));
 
 function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
   return {
@@ -59,6 +65,7 @@ let engine: InstanceType<typeof NullEngine>;
 
 afterEach(() => {
   engine?.dispose();
+  vi.mocked(playSfx).mockClear();
 });
 
 describe("torch", () => {
@@ -760,6 +767,18 @@ describe("portals arrive one at a time", () => {
     expect(meshes[0]!.isEnabled(false)).toBe(true);
     for (const m of meshes.slice(1)) expect(m.isEnabled(false)).toBe(false);
     for (const m of meshes) expect(m.scaling.x).toBeLessThan(0.5);
+  });
+
+  it("plays one opening cue for the whole six-portal sequence", () => {
+    engine = new NullEngine();
+    vi.spyOn(engine, "getDeltaTime").mockReturnValue(250);
+    const scene = new Scene(engine);
+    const renderer = new SnapshotRenderer(scene);
+    renderer.apply(null, makeSnapshot({ entities: ring(6) }), 1);
+
+    for (let i = 0; i < 6; i++) scene.onBeforeRenderObservable.notifyObservers(scene);
+
+    expect(vi.mocked(playSfx).mock.calls.map(([name]) => name)).toEqual(["portal-open"]);
   });
 
   it("a portal already standing is not re-opened by the next frame", () => {

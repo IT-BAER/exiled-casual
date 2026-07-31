@@ -94,10 +94,11 @@ SOURCES: dict[str, str] = {
     "skill-blink": "CB Sound Design - Whoosh And Push/W_a_P_Spell_Whoosh_19.wav",
 
     # ── Portals and the map device ──────────────────────────────────────────────
-    "portal-open": "CB_Sounddesign - Applicable Sounds - Organic UI and Building Games SFX/GAMEMisc_Magic Creation 23_CB Sounddesign_APPlicable Sounds.wav",
-    # Same trap as the UI pair: the one file in the bundle actually called a vortex is
-    # in a pack called Essential Scifi, and it sounded like one. A whoosh made of glass
-    # shards is the same gesture with a material behind it.
+    # Short inward vortex. The full 5.5-second tail is deliberately capped by
+    # trim_sfx.py: one map-device sequence needs an accent, not an ambience bed.
+    "portal-open": "Chupapsound - Essential Scifi/DSGN VORTEX IN.wav",
+    # Keep crossing distinct from the opening vortex above: a glass-shard whoosh is
+    # the same inward gesture with a material behind it.
     "portal-enter": "Epic Stock Media - Elemental Mutation Whooshes and Impacts/GLASMvmt_Whoosh Glass Crystal Fragments Sharp Shards Dry 05_ESM_EMWI.wav",
     # A pitch collapsing, not a power-down: every "downer" in the bundle is a trailer
     # synth, and a guitar dive bomb is the same falling gesture with a body to it.

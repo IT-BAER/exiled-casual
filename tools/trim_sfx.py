@@ -121,7 +121,7 @@ MAX_SECONDS: dict[str, float] = {
     "portal-close": 1.40,
     "monster-death": 1.60,
     "waystone-activate": 1.80,
-    "portal-open": 2.00,
+    "portal-open": 1.25,
 }
 
 

@@ -270,9 +270,10 @@ export class SnapshotRenderer {
       if (newTick && e.life !== undefined && prevE?.life !== undefined && e.life < prevE.life) {
         this.hit.set(e.id, next.tick);
       }
-      // Born this snapshot: hold it shut and open it in its turn.
+      // Born this snapshot: hold it shut and open it in its turn. The group is one
+      // map-device event, so its first portal carries the shared opening cue.
       const arriving = arrivingPortals.indexOf(e.id);
-      if (arriving >= 0) portalAppear(this.scene, mesh, arriving * PORTAL_STAGGER_MS);
+      if (arriving >= 0) portalAppear(this.scene, mesh, arriving * PORTAL_STAGGER_MS, arriving === 0);
       if (e.kind === "telegraph") {
         updateTelegraph(mesh, e.progress ?? 0);
       }
