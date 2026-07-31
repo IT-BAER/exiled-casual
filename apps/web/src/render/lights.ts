@@ -125,7 +125,7 @@ export function createFireLights(scene: Scene): PointLight[] {
     light.setEnabled(false);
     pool.push(light);
   }
-  castFrom(scene, pool[0]);
+  for (const light of pool) castFrom(scene, light);
   // ...and the fire the light is coming out of. Built here rather than beside
   // the haze in engine.ts so the two halves of a brazier cannot be set up
   // separately: a pool of light with nothing burning in it is the bug this
@@ -135,18 +135,13 @@ export function createFireLights(scene: Scene): PointLight[] {
 }
 
 /**
- * Give the nearest bowl real shadows.
+ * Give a bowl real shadows.
  *
- * One light of the four, and always the same one, because `updateFireLights`
- * hands the pool out nearest-first: `pool[0]` is by construction the fire the
- * player is standing next to, which is the only one whose shadows can be read
- * at this camera. A point light means a CUBE map — six faces every frame — so
- * four of these is four times a cost that buys nothing at the edge of the
- * frame.
- *
- * ponytail: one caster of four. If a room ever wants two fires throwing at
- * once, give pool[1] its own generator at half the resolution; the pool order
- * already guarantees which two they would be.
+ * Every pooled light casts: one caster popped its shadow to whichever fire was
+ * nearest, so a lit brazier at the frame's edge threw nothing. A point light
+ * means a CUBE map, six faces every frame, so this is the expensive choice made
+ * knowingly; a disabled light's map is not rendered, so only bowls actually lit
+ * pay it.
  */
 function castFrom(scene: Scene, light: PointLight | undefined): void {
   if (!light || light.getShadowGenerator()) return;
