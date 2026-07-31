@@ -146,6 +146,21 @@ describe("GameView", () => {
     expect(screen.queryByTestId(`loot-label-${DROP.id}`)).toBeNull();
   });
 
+  it("F3 toggles the performance readout, even while down", () => {
+    mountWithSnapshot();
+    expect(screen.queryByTestId("debug-stats")).toBeNull();
+    act(() => { fireEvent.keyDown(window, { key: "F3" }); });
+    expect(screen.getByTestId("debug-stats")).toBeTruthy();
+    // Dead: the diagnostics gate sits before the death gate.
+    act(() => {
+      hoisted.worker?.onmessage?.({
+        data: { type: "snapshot", snapshot: { ...makeSnap(), player: { ...testPlayer(), alive: false } } },
+      });
+      fireEvent.keyDown(window, { key: "F3" });
+    });
+    expect(screen.queryByTestId("debug-stats")).toBeNull();
+  });
+
   it("Escape closes every open overlay at once", () => {
     mountWithSnapshot();
     act(() => {

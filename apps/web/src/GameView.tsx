@@ -24,6 +24,7 @@ import { CharacterPanel } from "./hud/CharacterPanel";
 import { LootLabels } from "./hud/LootLabels";
 import { NpcLabels } from "./hud/NpcLabels";
 import { Minimap } from "./hud/Minimap";
+import { DebugStats } from "./hud/DebugStats";
 import { Divider, FramedPanel, GOLD, MenuButton, DISPLAY, SERIF } from "./menu/frames";
 import { LoadingScreen, LOADING_ART, FADE_MS } from "./LoadingScreen";
 import { pickTip } from "./tips";
@@ -91,6 +92,8 @@ export function GameView({
     workerRef.current?.postMessage({ type: "pause", paused: gameMenuOpen } satisfies ToWorker);
   }, [gameMenuOpen]);
   const [optionsOpen, setOptionsOpen] = useState(false);
+  // F3 performance readout. Render-only; toggleable even on the death screen.
+  const [statsOpen, setStatsOpen] = useState(false);
   // The Options panel applies graphics to the LIVE scene, and the scene is built
   // inside the mount effect where nothing else can reach it.
   const sceneRef = useRef<Scene | null>(null);
@@ -385,6 +388,12 @@ export function GameView({
     // Escape clears the screen: every overlay at once, not just the topmost. A player
     // who wants the world back should not have to count the panels they opened.
     const onInvKey = (ev: KeyboardEvent) => {
+      // Before the death gate: a perf readout is diagnostics, not play.
+      if (ev.key === "F3") {
+        ev.preventDefault();
+        setStatsOpen((v) => !v);
+        return;
+      }
       if (deadRef.current) return;
       const k = ev.key.toLowerCase();
       if (k === "i") { setInventoryOpen((v) => !v); setStashOpen(false); }
@@ -496,6 +505,7 @@ export function GameView({
       {settings.ui.minimap && (
         <Minimap layout={areaLayout} player={snapshot?.player ?? null} />
       )}
+      {statsOpen && <DebugStats engineRef={engineRef} sceneRef={sceneRef} />}
       {panelOpen && snapshot && (
         <PreparationPanel
           atlasSeed={snapshot.atlasSeed}
