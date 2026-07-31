@@ -29,7 +29,7 @@ export const CREDITS_TEXT = [
   "Exiled Casual is a browser ARPG: you take a waystone, open a map, kill what is in it and come home richer. It is an original fan project, built in the open with Claude Code.",
   "It draws on Path of Exile 1 and 2 for its shape and its feel, and takes the better of the two wherever they differ. No game data, art or branding from either is used or shipped.",
   "The character's body and its animation are CC0 packs by Quaternius: Modular Character Outfits and the Universal Animation Library. The wardrobe is rebuilt from them here, and its head, coat and hood are generated.",
-  "The brazier flames are baked from Matthew Ames's royalty-free Animated Fire Sprite on Blendkit. The environments, props, interface, item art and maps are made for this project.",
+  "Everything else is made for this project: the environments, the props, the interface, the item art and the maps.",
   `This build is ${GAME_VERSION}, on content ${CONTENT_VERSION}. Alpha means a save may not survive an update.`,
 ];
 

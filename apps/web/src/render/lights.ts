@@ -80,8 +80,9 @@ export const rimShadowRadius = (h: number): number =>
  *
  * Clearing the rim killed the quadrants but left the bowl's own shadow far too
  * wide (see `rimShadowRadius`): the disc shrinks as the lamp rises, so this sits
- * in the upper flame column rather than down in the bowl. Above the tip the
- * pool goes flat and stops reading as a fire; below it the stain comes back.
+ * at the TOP of the flame column the fire mesh draws (`BASE_Y + FLAME_H` = 1.77
+ * in flames.ts) rather than in the middle of it. Above the tip the pool goes
+ * flat and stops reading as a fire in a bowl; below it the stain comes back.
  *
  * Do not lower this to make the pool brighter: irradiance goes as 1/h², so
  * `FIRE_INTENSITY` is what pays for the height.

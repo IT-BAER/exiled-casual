@@ -19,19 +19,12 @@ is a courtesy. Neither pack is derived from any Path of Exile material.
 Build tooling (not shipped): the animation pack's matching Unreal FBX was converted with
 [FBX2glTF](https://github.com/godotengine/FBX2glTF) v0.13.1 (Apache-2.0).
 
-## Third-party assets (royalty-free)
-
-- **[Animated Fire Sprite](https://www.blendkit.com/asset-gallery-detail/8ff79865-5467-43b7-bdb1-8f821f839bb8/)**
-  by Matthew Ames, used under the Blendkit royalty-free license for the brazier
-  flame atlas. The procedural source is baked by `tools/render_brazier_fire.py`;
-  only the derived runtime texture ships.
-
 ## Original assets
 
 Created for this project (AI-generated or hand-made), all rights reserved:
 
 - `apps/web/public/hud/orb-frame-v1.png`
-- Project-authored files in `apps/web/public/textures/` (floor, walls, skins, cloth)
+- `apps/web/public/textures/` (floor, walls, skins, cloth)
 - `art/concepts/` (caster, imp, rare)
 
 ## Visual reference
