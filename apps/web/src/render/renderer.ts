@@ -464,6 +464,7 @@ export class SnapshotRenderer {
     // their last heading instead of snapping back to +z.
     const dx = nextX - prevX;
     const dz = nextY - prevY;
+    let yawStep = 0;
     if (dx * dx + dz * dz > 1e-6) {
       const wasYaw = mesh.rotation.y;
       // The step is the heading for everything that steers into its own movement.
@@ -472,8 +473,11 @@ export class SnapshotRenderer {
       // sim sends the heading and this follows THAT or he pivots with the cursor.
       const aim = heading ? Math.atan2(heading.x, heading.y) : Math.atan2(dx, dz);
       mesh.rotation.y = lerpAngle(wasYaw, aim, 0.25);
-      this.lean(id, mesh, kind, mesh.rotation.y - wasYaw, speed);
+      yawStep = mesh.rotation.y - wasYaw;
     }
+    // A stopped actor still needs frames to settle back upright. Skipping this
+    // call used to freeze the last running bank indefinitely.
+    this.lean(id, mesh, kind, yawStep, speed);
   }
 
   /**

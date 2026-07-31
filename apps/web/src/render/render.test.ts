@@ -360,6 +360,24 @@ describe("SnapshotRenderer", () => {
     expect(Math.abs(mesh.rotation.z)).toBeLessThan(Math.abs(banked) / 2);
   });
 
+  it("stands upright after stopping in the middle of a turn", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const renderer = new SnapshotRenderer(scene);
+
+    const stopped = makeSnapshot({ player: testPlayer() });
+    renderer.apply(null, stopped, 1);
+    const mesh = scene.getMeshByName("entity-0")!;
+    const turning = makeSnapshot({ player: testPlayer({ x: 0.1 }) });
+    renderer.apply(stopped, turning, 1);
+    const banked = Math.abs(mesh.rotation.z);
+    expect(banked).toBeGreaterThan(0.01);
+
+    for (let frame = 0; frame < 30; frame++) renderer.apply(turning, turning, 1);
+    expect(Math.abs(mesh.rotation.z)).toBeLessThan(banked / 2);
+    expect(Math.abs(mesh.rotation.x)).toBeLessThan(0.002);
+  });
+
   it("swings a monster's legs while it walks and rests them when it stops", () => {
     engine = new NullEngine();
     const { scene } = createScene(engine);
