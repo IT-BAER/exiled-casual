@@ -51,8 +51,26 @@ export const LIGHT_POOL = 4;
 /** Name every pooled light takes, so a rebuild can find them again. */
 const POOL_PREFIX = "firelight-";
 
-/** Height above the prop's origin the flame sits at: `BRAZIER_RIM_Z` plus a hand. */
-export const BRAZIER_FLAME_Y = 1.12;
+/** How tall the bowl's rim stands. Authored in `tools/build_props.py`. */
+export const BRAZIER_RIM_Y = 1.02;
+
+/**
+ * Height the point light hangs at, and it must stand CLEAR of the rim.
+ *
+ * At 1.12 it sat level with the bowl's lip, so the disc blocked its own light
+ * going outward and threw a shadow across the entire floor. A point light is a
+ * CUBE map, and its four side faces meet on the diagonals: that floor-wide
+ * shadow edge landed at a slightly different radius on each face, which read as
+ * four dark quadrants with bright bands between them — a cross stamped into the
+ * pool around every brazier. Raising the light above the rim shrinks the bowl's
+ * shadow to the soft spot under the stand, which is what it should have been,
+ * and the quadrants go with it (a 90-degree brightness swing of 5.0 luma at the
+ * old height, 1.15 at this one, against 0.45 with no casters at all).
+ *
+ * Do not lower this back toward the rim to make the pool brighter: irradiance
+ * goes as 1/h², so `FIRE_INTENSITY` is what pays for the height.
+ */
+export const BRAZIER_FLAME_Y = 1.45;
 
 /**
  * Colour of a coal fire. Warmer and redder than the torch, which is a flame.
@@ -70,7 +88,10 @@ const fireColour = (): Color3 => new Color3(1.0, 0.52, 0.22);
  * lengths from the stand, so a fire lit its own feet and the room around it was
  * still the torch's; a standing brazier has to own the corner it is in.
  */
-const FIRE_INTENSITY = 120;
+// 200 and not the 120 this was tuned to at 1.12: the lamp moved up to clear the
+// rim (see BRAZIER_FLAME_Y) and irradiance on the floor goes as 1/h², so holding
+// the same pool costs (1.45/1.12)² = 1.68 of the old number.
+const FIRE_INTENSITY = 200;
 const FIRE_RANGE = 11;
 
 /** How deep the flicker cuts, as a fraction of each. */
@@ -171,14 +192,7 @@ function castFrom(scene: Scene, light: PointLight | undefined): void {
     gen.getShadowMap()!.renderListPredicate = (mesh) =>
       mesh.name !== "ground"
       && mesh.name !== FLAME_MESH
-      && !mesh.name.startsWith("telegraph-")
-      // The legs and brace may not cast from their own fire: the light sits a
-      // hand above the coals, so they threw wedge shadows radiating from the
-      // stand — a cross stamped into the pool. The BOWL still casts: it hangs
-      // directly under the light, and its shadow is the soft dark spot that
-      // seats the brazier on the floor. Partner rule to `excludeBowls`, which
-      // keeps the light off these meshes; the sun still shadows all of them.
-      && !/brazier_(leg|brace|coals)/.test(mesh.name);
+      && !mesh.name.startsWith("telegraph-");
     // Rendered on demand only: `updateFireLights` re-arms ONE map per frame,
     // round-robin. Four cube maps every frame were half the whole frame budget
     // (54 -> 110 fps in the hideout, measured live); staggered at a third of the

@@ -637,8 +637,9 @@ def build_pillar(mats):
     return _finish(parts, root)
 
 
-# How tall the bowl's rim stands. The renderer puts the point light just above
-# this, so the number is shared: `BRAZIER_FLAME_Y` in render/lights.ts.
+# How tall the bowl's rim stands. The renderer hangs the point light CLEAR above
+# this (level with the lip, the bowl shadows the whole floor), so the number is
+# shared: `BRAZIER_RIM_Y` and `BRAZIER_FLAME_Y` in render/lights.ts.
 BRAZIER_RIM_Z = 1.02
 
 # Where the legs stand under the bowl, and how far they lean out doing it. The

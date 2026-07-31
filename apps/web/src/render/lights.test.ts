@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { Mesh, NullEngine, Scene, Vector3 } from "@babylonjs/core";
 import { FLAME_MESH, flameParticleCount } from "./flames";
 import {
-  BRAZIER_FLAME_Y, LIGHT_POOL,
+  BRAZIER_FLAME_Y, BRAZIER_RIM_Y, LIGHT_POOL,
   createFireLights, fireLightState, resetFireLights, setFireSpots, updateFireLights,
 } from "./lights";
 
@@ -67,6 +67,14 @@ describe("the fires a place is lit by", () => {
     setFireSpots([{ x: 0, z: 0, phase: 0 }]);
     updateFireLights(s, Vector3.Zero(), 16);
     expect(pool[0]!.position.y).toBe(BRAZIER_FLAME_Y);
+  });
+
+  it("hangs the light clear of the rim it stands in", () => {
+    // Not decoration: level with the lip, the bowl blocks its own light going
+    // outward and shadows the whole floor, which a cube shadow map splits along
+    // its four face diagonals into dark quadrants around every brazier. A third
+    // of the rim's height of clearance is what measured clean in the app.
+    expect(BRAZIER_FLAME_Y - BRAZIER_RIM_Y).toBeGreaterThan(BRAZIER_RIM_Y / 3);
   });
 });
 
