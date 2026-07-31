@@ -347,14 +347,14 @@ function materialsOf(meshes: AbstractMesh[]): Material[] {
  * Also resets `amount`, so whoever stands here next does not inherit the last
  * one's erosion.
  */
-export async function primeDissolve(meshes: AbstractMesh[]): Promise<void> {
+export async function primeDissolve(meshes: AbstractMesh[], amount = 0): Promise<void> {
   const first = new Map<Material, AbstractMesh>();
   for (const mesh of meshes) {
     if (mesh.material && !first.has(mesh.material)) first.set(mesh.material, mesh);
   }
   await Promise.all(
     [...first].map(async ([material, mesh]) => {
-      pluginOf(material).amount = 0;
+      pluginOf(material).amount = amount;
       // Needs a mesh that actually wears it: compilation is per material AND the
       // defines its meshes bring (skinning, here).
       await material.forceCompilationAsync(mesh);
@@ -377,6 +377,48 @@ export function dissolveAway(
   /** Anything the shader does not own: the contact shadow, chiefly. */
   fade: (gone: number) => void,
   seconds = DISSOLVE_SECONDS,
+): Promise<void> {
+  return sweep(scene, meshes, fade, seconds, 1);
+}
+
+/**
+ * ...and the same thing backwards: a character condensing out of the ash.
+ *
+ * The one place a body arrives on this stage is the select screen, where the
+ * wardrobe is a fetch and a dress, and until both land there is nothing there at
+ * all. Popping a finished man into the hall is the giveaway that it was loading;
+ * assembling him out of the same dust he leaves in says the hall did it on
+ * purpose. Same shader, same ash, same easing, run from gone to solid.
+ *
+ * Callers must `primeDissolve(meshes, 1)` and AWAIT it first. Attaching the
+ * plugin invalidates the material's shader and a compiling mesh is not drawn, so
+ * priming late shows a solid character for a few frames and then starts eroding
+ * him, which reads as a glitch rather than as an arrival.
+ */
+export function dissolveIn(
+  scene: Scene,
+  meshes: Mesh[],
+  fade: (gone: number) => void,
+  seconds = DISSOLVE_SECONDS,
+): Promise<void> {
+  return sweep(scene, meshes, fade, seconds, -1);
+}
+
+/**
+ * One erosion sweep. `way` is +1 for leaving and -1 for arriving.
+ *
+ * The head is the one thing that is not symmetric. On the way out he looks UP
+ * first and leaves second, which is what makes it read as being taken rather
+ * than destroyed; on the way in he arrives already looking up and lowers his
+ * chin as he solidifies, which is the same gesture finishing rather than the
+ * same gesture rewound.
+ */
+function sweep(
+  scene: Scene,
+  meshes: Mesh[],
+  fade: (gone: number) => void,
+  seconds: number,
+  way: 1 | -1,
 ): Promise<void> {
   const alive = meshes.filter((m) => m.isEnabled() && m.isVisible);
   if (alive.length === 0) return Promise.resolve();
@@ -413,12 +455,14 @@ export function dissolveAway(
     let elapsed = 0;
     const observer = scene.onBeforeRenderObservable.add(() => {
       elapsed += scene.getEngine().getDeltaTime() / 1000;
-      const gone = ease(Math.min(1, elapsed / seconds));
+      const t = ease(Math.min(1, elapsed / seconds));
+      const gone = way === 1 ? t : 1 - t;
       for (const plugin of plugins) plugin.amount = gone;
       // Head back on its own curve, and ahead of the erosion: he looks up first
       // and leaves second, which is the order that makes it read as being taken
       // rather than as being destroyed.
-      const look = LOOK_UP * ease(Math.min(1, elapsed / (seconds * 0.55)));
+      const tilt = ease(Math.min(1, elapsed / (seconds * 0.55)));
+      const look = LOOK_UP * (way === 1 ? tilt : 1 - tilt);
       for (const joint of neck) {
         joint.node.rotationQuaternion = joint.base.multiply(
           Quaternion.RotationAxis(LOOK_AXIS, look * joint.share),

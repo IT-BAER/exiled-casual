@@ -31,7 +31,7 @@ import {
   Vector3,
 } from "@babylonjs/core";
 import { attachRig, loadPlayerRig, resetPlayerRig, type Looks, type RigActor } from "./rig";
-import { dissolveAway, primeDissolve } from "./dissolve";
+import { dissolveAway, dissolveIn, primeDissolve } from "./dissolve";
 
 /**
  * The painted floor is BELOW the scene's own origin, and by half a unit.
@@ -473,6 +473,11 @@ export async function createMenuStage(canvas: HTMLCanvasElement): Promise<MenuSt
 
   /** Show or empty the hall. The shadow goes with him: it is a separate unlit
    *  quad, so left alone it stays as a stain on the floor under nobody. */
+  /** Has anyone finished condensing on this stage yet? Only the FIRST character
+   *  to stand here builds up; arrowing along a roster must not restage the
+   *  arrival every time the selection moves. */
+  let arrived = false;
+
   const stand = (there: boolean) => {
     host.setEnabled(there);
     shadow.setEnabled(there);
@@ -485,6 +490,7 @@ export async function createMenuStage(canvas: HTMLCanvasElement): Promise<MenuSt
     setLooks(looks) {
       if (looks === null) {
         stand(false);
+        arrived = false;
         return;
       }
       stand(true);
@@ -493,7 +499,29 @@ export async function createMenuStage(canvas: HTMLCanvasElement): Promise<MenuSt
       // its material, and a clone does not carry the plugin (it is deliberately
       // not serialized), so the thing that needs compiling only exists once the
       // character is wearing it.
-      void primeDissolve(worn());
+      //
+      // Primed to GONE the first time, and the character then condenses out of
+      // the ash he would leave in. Standing in an empty hall waiting for a
+      // wardrobe to arrive and then having a finished man appear is the moment
+      // that says "that was loading"; building him is the same wait spent
+      // saying the hall meant to do it.
+      const dressed = worn();
+      if (arrived) {
+        void primeDissolve(dressed);
+        return;
+      }
+      arrived = true;
+      // Nothing to see until the shader is compiled, which is the whole reason
+      // the prime is awaited rather than fired off: with the plugin attached
+      // late he is drawn solid for a few frames and only then starts eroding.
+      void primeDissolve(dressed, 1).then(() => {
+        shadowMat.alpha = 0;
+        contactMat.alpha = 0;
+        return dissolveIn(scene, dressed, (gone) => {
+          shadowMat.alpha = SHADOW_STRENGTH * (1 - gone) * (1 - gone);
+          contactMat.alpha = CONTACT_STRENGTH * (1 - gone) * (1 - gone);
+        });
+      });
     },
     async dissolve() {
       await dissolveAway(scene, worn(), (gone) => {
