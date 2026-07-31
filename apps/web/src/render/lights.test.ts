@@ -2,8 +2,9 @@ import { describe, it, expect, afterEach } from "vitest";
 import { Mesh, NullEngine, Scene, Vector3 } from "@babylonjs/core";
 import { FLAME_MESH, flameParticleCount } from "./flames";
 import {
-  BRAZIER_FLAME_Y, BRAZIER_RIM_Y, LIGHT_POOL,
-  createFireLights, fireLightState, resetFireLights, setFireSpots, updateFireLights,
+  BRAZIER_FLAME_Y, BRAZIER_RIM_R, BRAZIER_RIM_Y, LIGHT_POOL,
+  createFireLights, fireLightState, resetFireLights, rimShadowRadius, setFireSpots,
+  updateFireLights,
 } from "./lights";
 
 afterEach(() => resetFireLights());
@@ -75,6 +76,16 @@ describe("the fires a place is lit by", () => {
     // its four face diagonals into dark quadrants around every brazier. A third
     // of the rim's height of clearance is what measured clean in the app.
     expect(BRAZIER_FLAME_Y - BRAZIER_RIM_Y).toBeGreaterThan(BRAZIER_RIM_Y / 3);
+  });
+
+  it("keeps the bowl's own shadow near the size of the bowl", () => {
+    // The clearance above is necessary and was not sufficient: at 1.45 the rim
+    // still threw a 1.35-unit disc, a stain three times the width of the prop
+    // standing in it. Held under 2.5 rim radii, the shadow seats the brazier on
+    // the floor instead of painting a ring round it. Falls as the lamp rises.
+    expect(rimShadowRadius(BRAZIER_FLAME_Y)).toBeLessThan(BRAZIER_RIM_R * 2.5);
+    expect(rimShadowRadius(BRAZIER_FLAME_Y + 0.2))
+      .toBeLessThan(rimShadowRadius(BRAZIER_FLAME_Y));
   });
 });
 

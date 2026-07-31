@@ -13,6 +13,7 @@ import {
 } from "@babylonjs/core";
 import { applyAtmosphere, BETA_AT_DEFAULT, createScene, VOID_COLOR } from "./engine";
 import { applyBiomeTint } from "./level";
+import { LIGHT_POOL } from "./lights";
 import { HAZE_HEIGHT, HAZE_MAX_SIZE, HAZE_NAME, MOTES_NAME } from "./haze";
 import { BIOMES } from "@exiled/content-runtime";
 import { SnapshotRenderer } from "./renderer";
@@ -96,6 +97,24 @@ describe("torch", () => {
     const torch = scene.getLightByName("torch") as PointLight;
 
     expect(torch.position.y).toBeGreaterThan(2.6);
+  });
+});
+
+describe("how many lights a surface may take", () => {
+  it("raises the cap past Babylon's four, or the far braziers light nothing", () => {
+    // Babylon drops everything past the fourth light on a material without a
+    // word. Fill + sun + torch left ONE slot for a pool of four fires, and
+    // `updateFireLights` hands that pool out nearest first, so every brazier but
+    // the closest stopped lighting the floor until the player walked up to it.
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const probe = new StandardMaterial("cap-probe", scene);
+    scene.render(); // the sweep runs before a frame, not at construction
+
+    expect(probe.maxSimultaneousLights).toBeGreaterThanOrEqual(3 + LIGHT_POOL);
+    // ...and the scene really does stand that many up, so the cap is not just a
+    // number that happens to be big enough today.
+    expect(scene.lights.length).toBe(3 + LIGHT_POOL);
   });
 });
 

@@ -639,7 +639,9 @@ def build_pillar(mats):
 
 # How tall the bowl's rim stands. The renderer hangs the point light CLEAR above
 # this (level with the lip, the bowl shadows the whole floor), so the number is
-# shared: `BRAZIER_RIM_Y` and `BRAZIER_FLAME_Y` in render/lights.ts.
+# shared: `BRAZIER_RIM_Y` and `BRAZIER_FLAME_Y` in render/lights.ts. The rim's
+# RADIUS is shared too, as `BRAZIER_RIM_R` — the two together are the size of the
+# shadow the bowl throws on the floor, which is most of how a brazier reads.
 BRAZIER_RIM_Z = 1.02
 
 # Where the legs stand under the bowl, and how far they lean out doing it. The

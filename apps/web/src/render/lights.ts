@@ -54,23 +54,40 @@ const POOL_PREFIX = "firelight-";
 /** How tall the bowl's rim stands. Authored in `tools/build_props.py`. */
 export const BRAZIER_RIM_Y = 1.02;
 
+/** ...and how wide it is there. Same source. It is the widest thing on the prop. */
+export const BRAZIER_RIM_R = 0.4;
+
 /**
- * Height the point light hangs at, and it must stand CLEAR of the rim.
+ * The disc the bowl throws on the floor from the fire burning in it.
+ *
+ * A point light `h` above a rim of radius `r` at height `y` casts that rim as a
+ * circle of `r * h / (h - y)`, and at this scale that number is the whole look
+ * of a brazier: at 1.45 it was 1.35 units, a stain three times the width of the
+ * prop standing in it. It is why the lamp hangs where it does.
+ */
+export const rimShadowRadius = (h: number): number =>
+  BRAZIER_RIM_R * h / (h - BRAZIER_RIM_Y);
+
+/**
+ * Height the point light hangs at, and it must stand WELL clear of the rim.
  *
  * At 1.12 it sat level with the bowl's lip, so the disc blocked its own light
  * going outward and threw a shadow across the entire floor. A point light is a
  * CUBE map, and its four side faces meet on the diagonals: that floor-wide
  * shadow edge landed at a slightly different radius on each face, which read as
  * four dark quadrants with bright bands between them — a cross stamped into the
- * pool around every brazier. Raising the light above the rim shrinks the bowl's
- * shadow to the soft spot under the stand, which is what it should have been,
- * and the quadrants go with it (a 90-degree brightness swing of 5.0 luma at the
- * old height, 1.15 at this one, against 0.45 with no casters at all).
+ * pool around every brazier.
  *
- * Do not lower this back toward the rim to make the pool brighter: irradiance
- * goes as 1/h², so `FIRE_INTENSITY` is what pays for the height.
+ * Clearing the rim killed the quadrants but left the bowl's own shadow far too
+ * wide (see `rimShadowRadius`): the disc shrinks as the lamp rises, so this sits
+ * at the TOP of the flame column the fire mesh draws (`BASE_Y + FLAME_H` = 1.77
+ * in flames.ts) rather than in the middle of it. Above the tip the pool goes
+ * flat and stops reading as a fire in a bowl; below it the stain comes back.
+ *
+ * Do not lower this to make the pool brighter: irradiance goes as 1/h², so
+ * `FIRE_INTENSITY` is what pays for the height.
  */
-export const BRAZIER_FLAME_Y = 1.45;
+export const BRAZIER_FLAME_Y = 1.8;
 
 /**
  * Colour of a coal fire. Warmer and redder than the torch, which is a flame.
@@ -88,10 +105,10 @@ const fireColour = (): Color3 => new Color3(1.0, 0.52, 0.22);
  * lengths from the stand, so a fire lit its own feet and the room around it was
  * still the torch's; a standing brazier has to own the corner it is in.
  */
-// 200 and not the 120 this was tuned to at 1.12: the lamp moved up to clear the
+// 310 and not the 120 this was tuned to at 1.12: the lamp moved up to clear the
 // rim (see BRAZIER_FLAME_Y) and irradiance on the floor goes as 1/h², so holding
-// the same pool costs (1.45/1.12)² = 1.68 of the old number.
-const FIRE_INTENSITY = 200;
+// the same pool costs (1.8/1.12)² = 2.58 of the old number.
+const FIRE_INTENSITY = 310;
 const FIRE_RANGE = 11;
 
 /** How deep the flicker cuts, as a fraction of each. */
@@ -176,8 +193,10 @@ function castFrom(scene: Scene, light: PointLight | undefined): void {
     gen.usePercentageCloserFiltering = true;
     gen.filteringQuality = ShadowGenerator.QUALITY_LOW; // x6 faces
     // Lighter than the sun's: a fire is one source in a room the sun and the
-    // torch are also in, and a black shadow from it reads as a hole.
-    gen.darkness = 0.45;
+    // torch are also in, and a black shadow from it reads as a hole. Lighter
+    // again since the bowl's disc got measured (`rimShadowRadius`): what is left
+    // of it should seat the brazier on the floor, not paint a ring round it.
+    gen.darkness = 0.6;
     // The same pair the torch needs, for the same reason: a point light over a
     // floor samples that floor at a grazing angle across six faces, and at the
     // stock bias the surface shadows ITSELF in rings centred on the lamp.

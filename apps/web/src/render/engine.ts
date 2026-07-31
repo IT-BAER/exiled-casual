@@ -23,7 +23,7 @@ import { DEFAULT_SETTINGS, type GraphicsSettings } from "../settings";
 import { ROCK_MESH_PREFIX } from "./rocks";
 import { createHaze, createMotes } from "./haze";
 import { FLAME_MESH } from "./flames";
-import { createFireLights, setFireLightZoom, updateFireLights } from "./lights";
+import { createFireLights, LIGHT_POOL, setFireLightZoom, updateFireLights } from "./lights";
 
 /**
  * Light intensities for a PBR scene. Roughly PI times the values the old
@@ -75,6 +75,10 @@ const FILL_INTENSITY = 0.45;
 // It is a pool the player carries between other people's fires, which is what it
 // reads as in PoE, and turning it down is what lets a brazier be seen at all.
 const TORCH_INTENSITY = 300;
+/** Every light that can stand in a room at once: the fill, the sun, the torch,
+ *  and the whole brazier pool. Materials are capped to exactly this, see
+ *  `createScene` — Babylon's own default of four drops the rest without a word. */
+const SCENE_LIGHTS = 3 + LIGHT_POOL;
 /** Where the pool stops. GLTF falloff windows the inverse square to this, so the
  *  edge is defined instead of trailing off across the whole map.
  *
@@ -398,6 +402,33 @@ export function createScene(engine: Engine): SceneHandle {
     // A/B the edge darkening in the room you are standing in: __atmos("heavy").
     g.__atmos = (p) => applyAtmosphere(scene, p);
   }
+  // Every material must be able to see every light in the room.
+  //
+  // Babylon caps a material at FOUR lights and silently drops the rest: with the
+  // fill, the sun, the torch and a pool of four fires standing in the scene, a
+  // floor tile was lit by the fill, the sun, the torch and ONE brazier. Which one
+  // is the first the sort lands on, and `updateFireLights` hands the pool out
+  // NEAREST FIRST — so the fires past the closest lit nothing at all, and a
+  // brazier's pool appeared on the floor only once the player walked up to it.
+  // (`LIGHT_POOL` being four is unrelated: that is the cap on how many bowls may
+  // be lit at once, not on how many lights a surface may take.)
+  //
+  // Swept on the scene rather than set at every material site: props, the
+  // wardrobe and the monsters all arrive as glTF materials nothing here
+  // constructs. A sweep and not `onNewMaterialAddedObservable`, which fires from
+  // inside `Material`'s constructor — the subclass field initialiser assigns its
+  // own 4 straight over whatever the handler just wrote. Guarded on the material
+  // count, the way the torch's exclusion list is guarded on the mesh count.
+  let lastMaterialCount = -1;
+  scene.onBeforeRenderObservable.add(() => {
+    if (scene.materials.length === lastMaterialCount) return;
+    lastMaterialCount = scene.materials.length;
+    for (const m of scene.materials) {
+      if ("maxSimultaneousLights" in m) {
+        (m as unknown as { maxSimultaneousLights: number }).maxSimultaneousLights = SCENE_LIGHTS;
+      }
+    }
+  });
   // Dark background so the greybox arena reads against the page (default is white,
   // which made a white ground plane invisible on a white page).
   scene.clearColor = new Color4(VOID_COLOR.r, VOID_COLOR.g, VOID_COLOR.b, 1);

@@ -98,8 +98,11 @@ export const HIDEOUT_DECOR: readonly Decor[] = [
   { kind: "pillar", ...at(9.0, -1.5), yaw: 1.7 },
   // Fire. Two bowls out at the flanks and one down at the foot of the frame, so
   // the room is lit from its own corners instead of only from the lamp the
-  // player carries — see render/lights.ts for what actually lights them.
-  { kind: "brazier", ...at(-4.2, 4.4), yaw: 0 },
+  // player carries — see render/lights.ts for what actually lights them. The
+  // left one stands out by the broken column at (-8.8, 3.4) rather than in the
+  // middle of the flank: from there its pool reaches the dead stone in the
+  // corner, which nothing else was lighting.
+  { kind: "brazier", ...at(-7.4, 3.4), yaw: 0 },
   { kind: "brazier", ...at(7.4, 3.2), yaw: 0 },
   { kind: "brazier", ...at(0, -4.0), yaw: 0 },
 ];
