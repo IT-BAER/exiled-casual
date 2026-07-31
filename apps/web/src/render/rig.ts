@@ -18,11 +18,6 @@ import {
   type Scene,
 } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
-import {
-  applyShieldCarry,
-  shieldCarryRootRotation,
-  type ShieldCarryJoint,
-} from "./shield-carry";
 import { SkirtSim, type SkirtCollider } from "./skirt";
 
 /**
@@ -432,11 +427,6 @@ const HIPS_BONE = "pelvis";
 /** Where a spell leaves the body: the weapon hand, the same one `weapon1` skins to. */
 const HAND_BONE = "hand_r";
 
-/** The idle frame whose left arm is the authored shield-carry pose. */
-const SHIELD_HOLD_FRAME = 35;
-const SHIELD_ROOT_BONE = "clavicle_l";
-const SHIELD_HOLD_BONES = ["upperarm_l", "lowerarm_l", "hand_l"] as const;
-
 /**
  * Bones a layered clip must not touch, so it can play over locomotion without
  * fighting it for the legs. Leaf tips are included by name from both packs.
@@ -637,12 +627,6 @@ export class RigActor {
   private hand: TransformNode | null = null;
   private colliders: (SkirtCollider & { head: TransformNode; tail: TransformNode })[] = [];
   private cloth: Observer<Scene> | null = null;
-  /** Reasserts the shield-carry arm after locomotion has animated it. */
-  private shieldHold: Observer<Scene> | null = null;
-  private shieldCarry: ShieldCarryJoint[] = [];
-  private shieldRoot: TransformNode | null = null;
-  /** Authored clavicle transform relative to the rig pivot at the carry frame. */
-  private shieldRootHold: Matrix | null = null;
   /** Solving cloth nobody can see is the one cost worth a flag. */
   private coatVisible = false;
 
@@ -657,12 +641,6 @@ export class RigActor {
   private readonly aimed = new Quaternion();
   /** Rotation of the current bone's parent, relative to the pelvis. */
   private readonly cumulative = new Quaternion();
-  private readonly shieldRigInverse = new Matrix();
-  private readonly shieldParentFromRig = new Matrix();
-  private readonly shieldInverseParent = new Matrix();
-  private readonly shieldRootLocal = new Matrix();
-  private readonly shieldRootRotation = new Quaternion();
-
   constructor(scene: Scene, host: Mesh) {
     this.scene = scene;
     this.host = host;
@@ -846,81 +824,6 @@ export class RigActor {
     // Same window: the coat's bind pose has to be measured before an animation
     // has moved anything, because it is the shape the cloth springs back to.
     if (hipsNode instanceof TransformNode) this.buildSkirt(hipsNode, byName);
-
-    // A running clip swings and rolls the hands as if they were empty. That is
-    // fine for a focus and wrong for a shield: the plate turns flat and the fist
-    // leaves its grip. Capture one authored idle hold, then preserve it after
-    // the active clip has evaluated each frame. The clavicle is counter-rotated
-    // against the moving torso before the three arm joints are restored.
-    const idleSource = loaded.anims.animationGroups.find((g) => g.name === CLIP_NAME.idle);
-    if (idleSource) {
-      const savedRotations = new Map<TransformNode, Quaternion | null>();
-      for (const targeted of idleSource.targetedAnimations) {
-        if (targeted.animation.targetProperty !== ROTATION) continue;
-        const node = byName.get((targeted.target as Node).name);
-        const pose = targeted.animation.evaluate(SHIELD_HOLD_FRAME);
-        if (!(node instanceof TransformNode) || !(pose instanceof Quaternion)) continue;
-        if (!savedRotations.has(node)) {
-          savedRotations.set(node, node.rotationQuaternion?.clone() ?? null);
-        }
-        (node.rotationQuaternion ??= new Quaternion()).copyFrom(pose);
-      }
-
-      const shieldRoot = byName.get(SHIELD_ROOT_BONE);
-      if (shieldRoot instanceof TransformNode) {
-        this.pivot.computeWorldMatrix(true);
-        shieldRoot.computeWorldMatrix(true);
-        this.pivot.getWorldMatrix().invertToRef(this.shieldRigInverse);
-        this.shieldRootHold = shieldRoot
-          .getWorldMatrix()
-          .multiply(this.shieldRigInverse);
-        this.shieldRoot = shieldRoot;
-      }
-
-      for (const bone of SHIELD_HOLD_BONES) {
-        const node = byName.get(bone);
-        const targeted = idleSource.targetedAnimations.find((entry) =>
-          (entry.target as Node).name === bone && entry.animation.targetProperty === ROTATION,
-        );
-        const hold = targeted?.animation.evaluate(SHIELD_HOLD_FRAME);
-        if (node instanceof TransformNode && hold instanceof Quaternion) {
-          this.shieldCarry.push({ node, hold: hold.clone() });
-        }
-      }
-
-      for (const [node, rotation] of savedRotations) {
-        node.rotationQuaternion = rotation;
-        node.computeWorldMatrix(true);
-      }
-
-      if (
-        this.shieldRoot &&
-        this.shieldRootHold &&
-        this.shieldCarry.length === SHIELD_HOLD_BONES.length
-      ) {
-        this.shieldHold = this.scene.onAfterAnimationsObservable.add(() => {
-          const applied = applyShieldCarry(this.looks.weapon2, this.shieldCarry);
-          const parent = this.shieldRoot?.parent;
-          if (applied && this.shieldRoot && parent instanceof TransformNode) {
-            this.pivot.computeWorldMatrix(true);
-            parent.computeWorldMatrix(true);
-            this.pivot.getWorldMatrix().invertToRef(this.shieldRigInverse);
-            parent
-              .getWorldMatrix()
-              .multiplyToRef(this.shieldRigInverse, this.shieldParentFromRig);
-            (this.shieldRoot.rotationQuaternion ??= new Quaternion()).copyFrom(
-              shieldCarryRootRotation(
-                this.shieldRootHold!,
-                this.shieldParentFromRig,
-                this.shieldRootRotation,
-                this.shieldInverseParent,
-                this.shieldRootLocal,
-              ),
-            );
-          }
-        });
-      }
-    }
 
     for (const clip of Object.keys(CLIP_NAME) as RigClip[]) {
       const source = loaded.anims.animationGroups.find((g) => g.name === CLIP_NAME[clip]);
@@ -1134,18 +1037,11 @@ export class RigActor {
     this.activeClip = null;
     if (this.cloth) this.scene.onBeforeRenderObservable.remove(this.cloth);
     this.cloth = null;
-    if (this.shieldHold) this.scene.onAfterAnimationsObservable.remove(this.shieldHold);
-    this.shieldHold = null;
   }
 
   private teardown(): void {
     if (this.cloth) this.scene.onBeforeRenderObservable.remove(this.cloth);
     this.cloth = null;
-    if (this.shieldHold) this.scene.onAfterAnimationsObservable.remove(this.shieldHold);
-    this.shieldHold = null;
-    this.shieldCarry = [];
-    this.shieldRoot = null;
-    this.shieldRootHold = null;
     this.skirt = null;
     this.skirtChains = [];
     this.colliders = [];

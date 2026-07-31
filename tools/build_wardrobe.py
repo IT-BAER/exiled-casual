@@ -128,16 +128,17 @@ FOCUS_AT = (0.100, -0.030, 0.020)
 #
 # A shield is strapped across the forearm and aimed, while the fist under it can
 # roll freely. Its mesh is authored around its own origin, then `shield_fit`
-# expresses the measured carry pose inside `hand_frame` just like every other
-# held item. Runtime preserves that carry pose while locomotion moves the torso.
+# expresses the measured carry pose inside `lowerarm_l`. The ordinary animation
+# remains entirely in charge of the arm while the rigid shield follows it.
 #
-# This measured matrix is used only to derive that hand-local fit. It is
-# `bind * pose^-1` for `hand_l` at frame 35 of `Idle_Loop`, measured off
+# This measured matrix is used only to derive that forearm-local fit. It is
+# `bind * pose^-1` for `lowerarm_l` at frame 35 of `Idle_Loop`, measured off
 # wardrobe.glb driven by anim-library.glb. Remeasure it if the idle changes.
-HAND_L_BIND_FROM_POSE = Matrix((
-    (0.02616723, -0.49055937, -0.87101448, 1.52410638),
-    (0.45986065, 0.77955413, -0.42523333, 0.38122958),
-    (0.88760579, -0.38941821, 0.24598789, 0.90296990),
+SHIELD_BONE = "lowerarm_l"
+SHIELD_BIND_FROM_POSE = Matrix((
+    (0.17406628, -0.31860599, -0.93176740, 1.54562294),
+    (0.42496106, 0.87787241, -0.22078922, 0.19232447),
+    (0.88831854, -0.35753304, 0.28820324, 0.86196965),
     (0.00000000, 0.00000000, 0.00000000, 1.00000000),
 ))
 
@@ -162,10 +163,13 @@ BUCKLER_AT = (0.355, FOREARM_FRONT - SHIELD_CLEAR, 1.045)
 # its top sits just under the elbow, so the boards fall towards the knee and stay
 # clear of the pauldron at 1.43. Centred at the forearm it reached the shoulder,
 # which is a door carried at chest height.
-TOWER_AT = (0.340, FOREARM_FRONT - SHIELD_CLEAR, 0.960)
-# How far the outer edge is canted forward. A shield hanging dead flat against the
-# body is a signboard; the cant is what makes it read as carried.
-TOWER_YAW = math.radians(14.0)
+# Once the plate faces left, its width runs along the character's forward axis.
+# Shift that span back until the hand lands behind its middle, not past its edge.
+TOWER_FOREARM_SHIFT = 0.220
+TOWER_AT = (0.340, FOREARM_FRONT - SHIELD_CLEAR + TOWER_FOREARM_SHIFT, 0.960)
+# Face left with a small forward bias. The shield hangs beside the character;
+# pointing mainly forward puts it ahead of the arm instead of on the forearm.
+TOWER_YAW = math.radians(-75.0)
 
 # The buckler, matched to ember_buckler.png: a round riveted plate, domed, with a
 # raised rim and a proud central boss. 0.36 across, so it covers a shoulder and no
@@ -581,8 +585,13 @@ def place(obj, armature, bone_name, frame, material, fit):
     gear is rigid, so a blended influence would only let the shaft bend when the
     wrist did.
     """
+    return place_in_basis(obj, armature, bone_name, material, frame_basis(frame), fit)
+
+
+def place_in_basis(obj, armature, bone_name, material, basis, fit):
+    """Place rigid gear through one bone's bind basis and skin it to that bone."""
     obj.data.transform(fit)
-    obj.data.transform(frame_basis(frame))
+    obj.data.transform(basis)
     return skin_to(obj, armature, bone_name, material)
 
 
@@ -670,11 +679,10 @@ def rest_against_arm(obj):
 
 
 def shield_fit(armature, anchor):
-    """Express the measured shield carry anchor inside `hand_l`'s bind frame."""
-    frame = hand_frame(armature, "hand_l", True)
-    fit = (frame_basis(frame).inverted() @ HAND_L_BIND_FROM_POSE
-           @ Matrix.Translation(anchor))
-    return frame, fit
+    """Express the measured shield carry anchor inside the forearm bind frame."""
+    basis = armature.matrix_world @ armature.data.bones[SHIELD_BONE].matrix_local
+    fit = (basis.inverted() @ SHIELD_BIND_FROM_POSE @ Matrix.Translation(anchor))
+    return basis, fit
 
 
 def build_buckler(armature, material):
@@ -715,8 +723,8 @@ def build_buckler(armature, material):
     bm.free()
     rest_against_arm(obj)
     log(f"built buckler: {len(obj.data.vertices)}v, {BUCKLER_R * 2:.2f} across")
-    frame, fit = shield_fit(armature, BUCKLER_AT)
-    return place(obj, armature, "hand_l", frame, material, fit)
+    basis, fit = shield_fit(armature, BUCKLER_AT)
+    return place_in_basis(obj, armature, SHIELD_BONE, material, basis, fit)
 
 
 def build_tower(armature, material):
@@ -749,8 +757,8 @@ def build_tower(armature, material):
             top = cz + TOWER_H * 0.5 - TOWER_ARCH * u * u
             z = (cz - TOWER_H * 0.5) + v * (top - (cz - TOWER_H * 0.5))
             bow = TOWER_BOW * (1.0 - u * u)
-            # Cant the plate about its own vertical axis: the outer edge comes
-            # forward, the inner edge tucks towards the hip.
+            # Cant the plate about its own vertical axis towards the character's
+            # left, rather than pointing it straight forward.
             px = u * TOWER_W * 0.5
             py = -(bow + relief(u, v))
             sin, cos = math.sin(TOWER_YAW), math.cos(TOWER_YAW)
@@ -772,8 +780,8 @@ def build_tower(armature, material):
     bm.free()
     rest_against_arm(obj)
     log(f"built tower shield: {len(obj.data.vertices)}v, {TOWER_W:.2f} x {TOWER_H:.2f}")
-    frame, fit = shield_fit(armature, TOWER_AT)
-    return place(obj, armature, "hand_l", frame, material, fit)
+    basis, fit = shield_fit(armature, TOWER_AT)
+    return place_in_basis(obj, armature, SHIELD_BONE, material, basis, fit)
 
 
 def coat_point(theta, z, radius):
