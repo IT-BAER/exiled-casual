@@ -39,7 +39,7 @@ const DIR = "/audio";
 interface Voice { gain: number; wet: number; vary: number }
 
 const VOICES: Record<string, Voice> = {
-  "skill-ember-bolt-cast":    { gain: 0.28, wet: 0.14, vary: 0.06 },
+  "skill-ember-bolt-cast":    { gain: 0.18, wet: 0.14, vary: 0.06 },
   "skill-ember-bolt-impact":  { gain: 0.34, wet: 0.18, vary: 0.08 },
   "skill-cinder-ground-cast": { gain: 0.32, wet: 0.22, vary: 0.04 },
   // The two sustained voices (`startSfxLoop`). These numbers are MEASURED against
@@ -47,9 +47,10 @@ const VOICES: Record<string, Voice> = {
   // bed is normalised to -23 LUFS, an event by the trimmer to far louder), so equal
   // gains are not equal loudness. At 0.11 the flight bed landed 18.3 dB under the
   // cast, which is inaudible beside it — the cast ended at 0.90s, the bolt flew for
-  // 1.7s, and what that sounds like is the sound stopping mid-flight. About 7 dB
-  // under the cast is a bed you hear without it competing. `vary` is per voice and
-  // set once, so two bolts in the air are not one doubled bolt.
+  // 1.7s, and what that sounds like is the sound stopping mid-flight. The cast is
+  // now deliberately quieter than the travelling bed, so direction follows the
+  // projectile instead of the transient masking it. `vary` is per voice and set
+  // once, so two bolts in the air are not one doubled bolt.
   "skill-ember-bolt-flight":  { gain: 0.40, wet: 0.10, vary: 0.05 },
   // Higher still: the burning ground IS the skill for its whole duration, so its
   // bed is the event and the cast is only the whoomp that opens it. Held down by
@@ -364,8 +365,10 @@ function muffle(b: Bus, node: AudioNode, distance: number): AudioNode {
 export function worldSfxMix(dx: number, dy: number): [number, number, number] {
   const distance = Math.hypot(dx, dy);
   if (distance === 0) return [1, 0, 0];
-  // The fixed camera projects both world +X and sim +Y toward screen-right.
-  const pan = Math.max(-1, Math.min(1, (dx + dy) / (Math.SQRT2 * distance)));
+  // The fixed camera projects both world +X and sim +Y toward screen-right. Divide
+  // by the audible radius, not by source distance: normalizing the direction made
+  // a bolt one metre away sound as far sideways as one at the edge of the screen.
+  const pan = Math.max(-1, Math.min(1, (dx + dy) / (Math.SQRT2 * AUDIBLE)));
   return [distanceGain(distance), distance, pan];
 }
 

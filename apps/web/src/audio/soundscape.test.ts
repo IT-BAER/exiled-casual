@@ -411,7 +411,7 @@ describe("environment", () => {
     expect(deaths[1]![1]).toBeLessThan(0);
   });
 
-  it("updates a sustained cue's stereo side as its source crosses the player", () => {
+  it("keeps a sustained cue bound to the source as it travels away", () => {
     const pans: number[] = [];
     const s = createSoundscape({
       play: () => {},
@@ -420,10 +420,11 @@ describe("environment", () => {
     });
     s.reset(null);
     s.observe(snap({ tick: 1 }));
-    s.observe(snap({ tick: 2, entities: [{ id: 9, kind: "projectile", x: -5, y: 0, team: 0 }] }));
-    s.observe(snap({ tick: 3, entities: [{ id: 9, kind: "projectile", x: 5, y: 0, team: 0 }] }));
+    s.observe(snap({ tick: 2, entities: [{ id: 9, kind: "projectile", x: 1, y: 0, team: 0 }] }));
+    s.observe(snap({ tick: 3, entities: [{ id: 9, kind: "projectile", x: 8, y: 0, team: 0 }] }));
 
-    expect(pans.some((pan) => pan < 0)).toBe(true);
-    expect(pans.at(-1)).toBeGreaterThan(0);
+    expect(pans[0]).toBeGreaterThan(0);
+    expect(pans[0]).toBeLessThan(0.1);
+    expect(pans.at(-1)).toBeGreaterThan(pans[0]!);
   });
 });

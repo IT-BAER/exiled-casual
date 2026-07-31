@@ -3,7 +3,7 @@ import { existsSync, readdirSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { readFileSync } from "node:fs";
 import { MONSTERS } from "@exiled/content-runtime";
-import { CORE_SFX, distanceCutoff, distanceGain, playSfx } from "./sfx";
+import { CORE_SFX, distanceCutoff, distanceGain, playSfx, worldSfxMix } from "./sfx";
 
 const DIR = resolve(__dirname, "../../public/audio");
 const SRC = resolve(__dirname, "sfx.ts");
@@ -13,6 +13,12 @@ function voiceNames(): string[] {
   const body = readFileSync(SRC, "utf8");
   const table = body.slice(body.indexOf("const VOICES"), body.indexOf("export type SfxName"));
   return [...table.matchAll(/"([a-z0-9-]+)":\s*\{/g)].map((m) => m[1]!);
+}
+
+function voiceGain(name: string): number {
+  const body = readFileSync(SRC, "utf8");
+  const match = new RegExp(`"${name}":\\s*\\{\\s*gain:\\s*([\\d.]+)`).exec(body);
+  return Number(match?.[1]);
 }
 
 describe("sfx assets", () => {
@@ -120,6 +126,26 @@ describe("distanceGain", () => {
 
   it("falls off monotonically", () => {
     for (let d = 1; d < 14; d++) expect(distanceGain(d)).toBeLessThan(distanceGain(d - 1));
+  });
+});
+
+describe("worldSfxMix", () => {
+  it("moves across stereo space as the source actually travels", () => {
+    const near = worldSfxMix(1, 0)[2];
+    const middle = worldSfxMix(7, 0)[2];
+    const edge = worldSfxMix(14, 0)[2];
+
+    expect(near).toBeGreaterThan(0);
+    expect(near).toBeLessThan(0.1);
+    expect(middle).toBeGreaterThan(near);
+    expect(edge).toBeGreaterThan(middle);
+  });
+
+  it("keeps the Ember Bolt cast transient below the travelling skill", () => {
+    expect(voiceGain("skill-ember-bolt-cast")).toBeLessThanOrEqual(0.2);
+    expect(voiceGain("skill-ember-bolt-cast")).toBeLessThan(
+      voiceGain("skill-ember-bolt-flight"),
+    );
   });
 });
 
