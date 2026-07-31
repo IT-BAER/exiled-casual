@@ -759,6 +759,11 @@ export function createScene(engine: Engine): SceneHandle {
     torchShadows.getShadowMap()!.renderListPredicate = (mesh) => {
       if (mesh === ground || mesh.name.startsWith("telegraph-") || mesh.name === FLAME_MESH
         || isWardrobePart(mesh.name)) return false;
+      // Same rule as the fire lights (lights.ts): a point light standing next
+      // to the brazier throws its thin legs and brace as wedges radiating from
+      // the stand, which reads as a cross stamped into the light pool. The bowl
+      // keeps casting — its shadow is the spot that seats the brazier.
+      if (/brazier_(leg|brace|coals)/.test(mesh.name)) return false;
       // Range cull: nothing past the torch's own reach can receive its light, so
       // nothing there can cast a visible shadow from it either. This is a third
       // of the cube map's draw calls, measured live in the hideout.
