@@ -146,7 +146,7 @@ export function createCombatSim(
 
     // New systems only needed for area-based sims. Appended to preserve the
     // canonical ordering of the first 12 systems (checked by legacy tests).
-    registerInteractSystem(sim);
+    registerInteractSystem(sim, collisionRef);
     registerPickupSystem(sim);
     registerEquipmentSystem(sim);
     registerCurrencySystem(sim);

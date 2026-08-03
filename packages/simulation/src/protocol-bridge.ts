@@ -11,7 +11,7 @@ import type { World, Entity } from "./ecs";
 import type {
   Health, Mana, Position, Cooldowns, CastingC, MonsterC,
   AilmentC, ProjectileC, GroundAreaC, BossC, TelegraphC,
-  SessionC, InteractableC, ItemC, InventoryC, StashC, VendorC, EquipmentC, FlasksC, DefensesC, OffenseC, ProgressC,
+  SessionC, InteractableC, ContainerC, ItemC, InventoryC, StashC, VendorC, EquipmentC, FlasksC, DefensesC, OffenseC, ProgressC,
   EnergyShieldC, ShardsC, MoveDir,
 } from "./components";
 
@@ -269,6 +269,7 @@ export function buildSnapshot(
   for (const e of world.query("interactable", "position")) {
     const ia = world.get<InteractableC>(e, "interactable")!;
     const pos = world.get<Position>(e, "position")!;
+    const c = ia.kind === "container" ? world.get<ContainerC>(e, "container") : undefined;
     entities.push({
       id: e,
       kind: ia.kind,
@@ -276,6 +277,7 @@ export function buildSnapshot(
       y: toNumber(pos.y),
       yaw: ia.yaw,
       inRange: inRangeOf(pp.x, pp.y, pos.x, pos.y, ia.radius),
+      ...(c ? { look: c.look, opened: c.opened === 1 } : {}),
     });
   }
 

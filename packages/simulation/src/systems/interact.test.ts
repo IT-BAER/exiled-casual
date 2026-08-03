@@ -6,7 +6,7 @@ import { waystoneItem, permanentWaystone, isPermanentWaystone, describeItem, cur
 import { Simulation } from "../loop";
 import { registerInteractSystem } from "./interact";
 import type { World } from "../ecs";
-import type { SessionC, Position, InteractableC, InventoryC } from "../components";
+import type { SessionC, Position, InteractableC, InventoryC, ContainerC } from "../components";
 
 function makeWorld() {
   const sim = new Simulation();
@@ -425,5 +425,52 @@ describe("Portal Scroll", () => {
     const session = world.get<SessionC>(sessionE, "session")!;
     expect(session.pendingArea).toBe("hideout");
     expect(session.portalsLeft).toBe(3);
+  });
+});
+
+describe("containers", () => {
+  function withContainer() {
+    const ctx = makeWorld();
+    const { world } = ctx;
+    const chest = world.create();
+    world.set<Position>(chest, "position", { x: fp(0), y: fp(8) });
+    world.set<InteractableC>(chest, "interactable", { kind: "container", radius: fp(2), yaw: 0 });
+    world.set<ContainerC>(chest, "container", { look: "chest", key: "cache:7:0:reward.test", opened: 0 });
+    return { ...ctx, chest };
+  }
+
+  it("opening a container spills at least one item and marks it opened", () => {
+    const { sim, world, player, chest } = withContainer();
+    sim.step([interactCmd(player, chest)]);
+    expect(world.get<ContainerC>(chest, "container")!.opened).toBe(1);
+    expect(world.query("item").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("a second click is a no-op, not a re-roll", () => {
+    const { sim, world, player, chest } = withContainer();
+    sim.step([interactCmd(player, chest)]);
+    const paid = world.query("item").length;
+    sim.step([interactCmd(player, chest)]);
+    expect(world.query("item").length).toBe(paid);
+  });
+
+  it("out of range pays nothing", () => {
+    const { sim, world, player, chest } = withContainer();
+    world.set<Position>(player, "position", { x: fp(20), y: fp(20) });
+    sim.step([interactCmd(player, chest)]);
+    expect(world.get<ContainerC>(chest, "container")!.opened).toBe(0);
+    expect(world.query("item").length).toBe(0);
+  });
+
+  it("the same key pays the same items — the roll is the anchor's, not the click's", () => {
+    const a = withContainer();
+    const b = withContainer();
+    a.sim.step([interactCmd(a.player, a.chest)]);
+    // Open b's on a different tick to prove the click's moment does not matter.
+    b.sim.step([]);
+    b.sim.step([]);
+    b.sim.step([interactCmd(b.player, b.chest)]);
+    const names = (w: World) => w.query("item").map((e) => JSON.stringify(w.get(e, "item"))).sort();
+    expect(names(a.world)).toEqual(names(b.world));
   });
 });

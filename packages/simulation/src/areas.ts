@@ -16,8 +16,9 @@ import { damageCode } from "./damage-types";
 import { fnv1a32 } from "./rng";
 import type {
   Position, Health, Faction, MonsterC, DefensesC, BossC,
-  InteractableC, SessionC, AreaKind, ItemC,
+  InteractableC, SessionC, AreaKind, ItemC, ContainerC,
 } from "./components";
+import type { Collision } from "./collision";
 
 /** What a cache pays as the loot math indexes rarity: 2 = rare. A found room is
  *  worth a rare monster's burst, which is where the number comes from rather
@@ -277,41 +278,29 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
     const bossDef = withMonsterRes(bossFor(biomeId), ws.monsterResAdd);
     spawnMonster(world, bossDef, fp(boss.x), fp(boss.y), false, scale);
 
-    // Every reward anchor is a cache lying on the floor. They were minimap pips
-    // and nothing else: the generator walled a pocket, the player found it, and
-    // the room was empty. A cache pays on the same math a rare kill does, so a
-    // pocket is worth the detour without being a second currency system.
-    //
-    // Variance is the point (docs/09): the count is rolled per cache, so the
-    // one at the end of the longest spur can pay one plate or five, and the
-    // player never learns a rate. Seeded off the map, so a replay of it lays
-    // out the same floor.
-    const cacheIlvl = areaLevel(session.areaTier) + MONSTER_ILVL_OFFSET[REWARD_RARITY]!;
-    // The AREA channel only — dropCount folds the rarity channel in itself, and
-    // passing a rare-scaled multiplier here scales it twice: 14 items a cache.
-    const cacheArea = quantityScaleMilli(0, ws.quantityPct, 0);
+    // Every reward anchor is a CONTAINER now, not loot lying on the floor: a
+    // chest, a barrel or a crate the player has to click. The payout math is
+    // unchanged — the seed string the old floor caches rolled from rides in
+    // `ContainerC.key`, so the same map on the same tick pays the same items;
+    // only the moment of the roll moved from area build to the lid opening,
+    // which is where PoE rolls a strongbox and where docs/09 wants the wait.
     for (const a of layout.objectiveAnchors) {
       if (!a.id.startsWith("reward.")) continue;
-      const ax = fp(a.x), ay = fp(a.y);
-      // At least one: a room the player had to find must never be empty.
-      const count = Math.max(1, dropCount(fnv1a32(`cache:${session.mapSeed}:${tick}:${a.id}`), REWARD_RARITY, cacheArea));
-      for (let i = 0; i < count; i++) {
-        const seed = fnv1a32(`cache:${session.mapSeed}:${tick}:${a.id}:${i}`);
-        const equipment = dropCategory(fnv1a32(`cachecat:${session.mapSeed}:${tick}:${a.id}:${i}`), DROP_POOL) === "equipment";
-        const item = equipment
-          ? rollItem(ITEM_POOLS, seed, cacheIlvl, REWARD_RARITY, undefined, ws.rarityPct)
-          : currencyItem(currencyForRoll(seed >>> 8));
-        const base = equipment ? baseOf(item.baseId) : { w: 1, h: 1 };
-        // Same spread idiom as a death burst, so a five-item cache is a pile on
-        // the floor rather than five plates stacked on one tile.
-        const off = PACK_SPREAD[i % PACK_SPREAD.length]!;
-        const ring = Math.trunc(i / PACK_SPREAD.length) * fp(0.5);
-        const px = ax + off.dx + ring, py = ay + off.dy + ring;
-        const on = col.isWalkable(px, py, fp(0.3)) ? { x: px, y: py } : { x: ax, y: ay };
-        const ge = world.create();
-        world.set<Position>(ge, "position", on);
-        world.set<ItemC>(ge, "item", { item, w: base.w, h: base.h });
-      }
+      const pick = fnv1a32(`container:${session.mapSeed}:${a.id}`);
+      const ce = world.create();
+      world.set<Position>(ce, "position", { x: fp(a.x), y: fp(a.y) });
+      world.set<InteractableC>(ce, "interactable", {
+        kind: "container",
+        radius: fp(2),
+        // Seeded, render-only: rows of identically-facing barrels read as level
+        // furniture; a scatter of yaws reads as someone's stores.
+        yaw: ((pick >>> 8) % 628) / 100,
+      });
+      world.set<ContainerC>(ce, "container", {
+        look: CONTAINER_LOOKS[pick % CONTAINER_LOOKS.length]!,
+        key: `cache:${session.mapSeed}:${tick}:${a.id}`,
+        opened: 0,
+      });
     }
 
     // Return portal so the map can be exited without dying.
@@ -323,6 +312,52 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
       radius: PORTAL_RADIUS,
       yaw: 3.1416,
     });
+  }
+}
+
+/** The looks a reward container can wear, indexed by the anchor's seed. */
+const CONTAINER_LOOKS: readonly ContainerC["look"][] = ["chest", "barrel", "crate"];
+
+/**
+ * Roll and spill a container's payout onto the floor around it.
+ *
+ * The maths is the old floor-cache maths verbatim: `key` is the same seed
+ * string buildArea used to roll with at area build, so moving the roll to the
+ * moment of opening changed WHEN the items exist, never WHICH items they are.
+ * A cache pays on the same math a rare kill does (REWARD_RARITY), the count is
+ * rolled per container so the player never learns a rate (docs/09), and at
+ * least one item drops — a room the player had to find must never be empty.
+ */
+export function spillContainer(
+  world: World,
+  session: SessionC,
+  key: string,
+  ax: number,
+  ay: number,
+  collision?: Collision | null,
+): void {
+  const ws = waystoneScaleFor(session.waystoneSeed);
+  const cacheIlvl = areaLevel(session.areaTier) + MONSTER_ILVL_OFFSET[REWARD_RARITY]!;
+  // The AREA channel only — dropCount folds the rarity channel in itself, and
+  // passing a rare-scaled multiplier here scales it twice: 14 items a cache.
+  const cacheArea = quantityScaleMilli(0, ws.quantityPct, 0);
+  const count = Math.max(1, dropCount(fnv1a32(key), REWARD_RARITY, cacheArea));
+  for (let i = 0; i < count; i++) {
+    const seed = fnv1a32(`${key}:${i}`);
+    const equipment = dropCategory(fnv1a32(`cachecat:${key.slice("cache:".length)}:${i}`), DROP_POOL) === "equipment";
+    const item = equipment
+      ? rollItem(ITEM_POOLS, seed, cacheIlvl, REWARD_RARITY, undefined, ws.rarityPct)
+      : currencyItem(currencyForRoll(seed >>> 8));
+    const base = equipment ? baseOf(item.baseId) : { w: 1, h: 1 };
+    // Same spread idiom as a death burst, so a five-item payout is a pile on
+    // the floor rather than five plates stacked on one tile.
+    const off = PACK_SPREAD[i % PACK_SPREAD.length]!;
+    const ring = Math.trunc(i / PACK_SPREAD.length) * fp(0.5);
+    const px = ax + off.dx + ring, py = ay + off.dy + ring;
+    const on = collision && !collision.isWalkable(px, py, fp(0.3)) ? { x: ax, y: ay } : { x: px, y: py };
+    const ge = world.create();
+    world.set<Position>(ge, "position", on);
+    world.set<ItemC>(ge, "item", { item, w: base.w, h: base.h });
   }
 }
 

@@ -70,11 +70,25 @@ export interface ProgressC { level: number; xp: number; gold: number }
 
 /** Something the player can activate with the `interact` intent. */
 export interface InteractableC {
-  kind: "mapDevice" | "portal" | "stash" | "vendor";
+  kind: "mapDevice" | "portal" | "stash" | "vendor" | "container";
   /** Activation range, Fixed. */
   radius: Fixed;
   /** Render-only fixed yaw in radians. A literal constant, never computed. */
   yaw: number;
+}
+
+/**
+ * A loot container standing on a reward anchor. The payout is NOT stored here:
+ * `key` is the same seed string the old floor caches rolled from, so opening
+ * one pays exactly what the cache at that anchor used to pay — the roll just
+ * waits for the lid instead of happening at area build (docs/09: the spike
+ * fires on anticipation, and a chest is anticipation made of wood).
+ */
+export interface ContainerC {
+  look: "chest" | "barrel" | "crate";
+  /** Seed prefix for the payout rolls; per-item seeds append `:${i}`. */
+  key: string;
+  opened: 0 | 1;
 }
 
 export interface Position   { x: Fixed; y: Fixed }

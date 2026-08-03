@@ -2,12 +2,13 @@ import { MAP_PORTALS } from "@exiled/protocol";
 import { atlasGraph, isNodeReachable, mapSeedFor, atlasNodeTier } from "@exiled/rules";
 import { isPermanentWaystone, isPortalScroll } from "@exiled/content-runtime";
 import { Simulation } from "../loop";
-import type { Position, InteractableC, SessionC, InventoryC } from "../components";
-import { spawnPortalRing, PORTAL_RADIUS } from "../areas";
+import type { Position, InteractableC, SessionC, InventoryC, ContainerC } from "../components";
+import { spawnPortalRing, spillContainer, PORTAL_RADIUS } from "../areas";
 import { inRangeOf } from "../protocol-bridge";
+import type { CollisionRef } from "../collision";
 
 
-export function registerInteractSystem(sim: Simulation): void {
+export function registerInteractSystem(sim: Simulation, collisionRef?: CollisionRef): void {
   sim.register("interact", (world, _tick, commands) => {
     // Require a session singleton; legacy sims without one are no-ops.
     const sessionEntities = world.query("session");
@@ -129,6 +130,15 @@ export function registerInteractSystem(sim: Simulation): void {
 
       // Re-read session here (may have been updated by a previous command this tick).
       const session = world.get<SessionC>(sessionE, "session")!;
+
+      if (ia.kind === "container") {
+        const c = world.get<ContainerC>(targetId, "container");
+        // Opened is forever: the second click is a no-op, not a re-roll.
+        if (!c || c.opened === 1) continue;
+        world.set<ContainerC>(targetId, "container", { ...c, opened: 1 });
+        spillContainer(world, session, c.key, pos.x, pos.y, collisionRef?.active);
+        continue;
+      }
 
       if (ia.kind === "mapDevice") {
         // The device no longer auto-opens; the client opens the preparation

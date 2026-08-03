@@ -155,7 +155,7 @@ export type ToWorker = ToWorker_Init | ToWorker_Intent | ToWorker_Reset | ToWork
 
 export interface SnapshotEntity {
   id: number;
-  kind: "monster" | "projectile" | "groundArea" | "telegraph" | "portal" | "mapDevice" | "stash" | "vendor" | "groundItem";
+  kind: "monster" | "projectile" | "groundArea" | "telegraph" | "portal" | "mapDevice" | "stash" | "vendor" | "container" | "groundItem";
   x: number; y: number;
   radius?: number;
   life?: number; maxLife?: number;
@@ -191,6 +191,10 @@ export interface SnapshotEntity {
   inRange?: boolean;
   /** portal/mapDevice only: fixed yaw in radians, so the renderer angles it consistently */
   yaw?: number;
+  /** container only: which piece of furniture it is drawn as. */
+  look?: "chest" | "barrel" | "crate";
+  /** container only: true once it has been opened and paid. */
+  opened?: boolean;
   /** groundItem only: rarity tint, display name, and affix lines for hover. */
   rarity?: ItemRarity;
   name?: string;

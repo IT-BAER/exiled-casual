@@ -5,8 +5,8 @@ import { CONTENT_VERSION, MONSTERS, MONSTER_POOLS, PACK_COUNT, bossFor, mapBase 
 import { mapBaseIdForNode, monsterTierScale } from "@exiled/rules";
 import type { MonsterDef } from "@exiled/content-schema";
 import { World, type Entity } from "./ecs.js";
-import { buildArea } from "./areas.js";
-import type { SessionC, Health, MonsterC, Position } from "./components.js";
+import { buildArea, spillContainer } from "./areas.js";
+import type { SessionC, Health, MonsterC, Position, ContainerC } from "./components.js";
 
 function mapSessionAtTier(tier: number): SessionC {
   return {
@@ -118,24 +118,54 @@ describe("pool-driven spawning", () => {
     }
   });
 
-  it("every reward anchor is standing loot, not a pip on the minimap", () => {
+  it("every reward anchor stands a closed container, not loot on the floor", () => {
     const { world, session, layout } = mapFixture({ mapSeed: 7 });
     buildArea(world, "map", session, layout);
     const rewards = layout.objectiveAnchors.filter((a) => a.id.startsWith("reward."));
     expect(rewards.length).toBeGreaterThan(0);
-    const ground = world.query("item", "position").map((e) => world.get<Position>(e, "position")!);
+    const containers = world.query("container", "position");
+    expect(containers.length).toBe(rewards.length);
+    // Nothing pays at build any more: the roll waits for the lid.
+    expect(world.query("item").length).toBe(0);
     for (const r of rewards) {
-      const near = ground.some((p) =>
-        Math.abs(p.x - fp(r.x)) <= fp(2) && Math.abs(p.y - fp(r.y)) <= fp(2));
-      expect(near, `${r.id} pays nothing`).toBe(true);
+      const near = containers.some((e) => {
+        const p = world.get<Position>(e, "position")!;
+        return p.x === fp(r.x) && p.y === fp(r.y);
+      });
+      expect(near, `${r.id} has no container`).toBe(true);
+    }
+    for (const e of containers) {
+      const c = world.get<ContainerC>(e, "container")!;
+      expect(["chest", "barrel", "crate"]).toContain(c.look);
+      expect(c.opened).toBe(0);
     }
   });
 
-  it("pays the caches out with variance, not the same handful every time", () => {
+  it("different anchors wear different furniture, not one chest stamped everywhere", () => {
+    const looks = new Set<string>();
+    for (let seed = 1; seed <= 10; seed++) {
+      const f = mapFixture({ mapSeed: seed });
+      buildArea(f.world, "map", f.session, f.layout);
+      for (const e of f.world.query("container"))
+        looks.add(f.world.get<ContainerC>(e, "container")!.look);
+    }
+    expect(looks.size).toBeGreaterThan(1);
+  });
+
+  const spillAll = (w: World, session: SessionC) => {
+    for (const e of w.query("container", "position")) {
+      const c = w.get<ContainerC>(e, "container")!;
+      const p = w.get<Position>(e, "position")!;
+      spillContainer(w, session, c.key, p.x, p.y);
+    }
+  };
+
+  it("opened containers pay with variance, not the same handful every time", () => {
     const counts = new Set<number>();
     for (let seed = 1; seed <= 25; seed++) {
       const f = mapFixture({ mapSeed: seed });
       buildArea(f.world, "map", f.session, f.layout);
+      spillAll(f.world, f.session);
       counts.add(f.world.query("item").length);
     }
     // docs/09: a cache that always pays the same amount is a vending machine.
@@ -145,11 +175,13 @@ describe("pool-driven spawning", () => {
   const groundItems = (w: World) => w.query("item", "position").map((e) =>
     JSON.stringify([w.get<Position>(e, "position"), w.get(e, "item")]));
 
-  it("replays identically: the same map, entered on the same tick, lays out the same loot", () => {
+  it("replays identically: the same map, entered on the same tick, pays the same loot", () => {
     const a = mapFixture({ mapSeed: 99 });
     const b = mapFixture({ mapSeed: 99 });
     buildArea(a.world, "map", a.session, a.layout, 240);
     buildArea(b.world, "map", b.session, b.layout, 240);
+    spillAll(a.world, a.session);
+    spillAll(b.world, b.session);
     expect(groundItems(a.world)).toEqual(groundItems(b.world));
   });
 
@@ -163,6 +195,7 @@ describe("pool-driven spawning", () => {
     for (const tick of [0, 97, 1000, 54321]) {
       const f = mapFixture({ mapSeed: 99 });
       buildArea(f.world, "map", f.session, f.layout, tick);
+      spillAll(f.world, f.session);
       seen.add(groundItems(f.world).join("|"));
     }
     expect(seen.size, "every entry laid out the same loot").toBe(4);
