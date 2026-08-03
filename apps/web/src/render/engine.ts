@@ -75,12 +75,13 @@ const MAP_FILL_INTENSITY = 0.18;
 // is unchanged. Do not raise it further: 5.5 flattens the floor and the pool
 // stops being a pool.
 //
-// 300 and not the 420 it was tuned to alone. The place lights itself now — the
+// 265 (down from 300 on the owner's "slightly less" call) and not the 420 it
+// was tuned to alone. The place lights itself now — the
 // braziers in render/lights.ts stand in the room and throw their own pools — so
 // the lamp on the belt no longer has to be the only reason anything is visible.
 // It is a pool the player carries between other people's fires, which is what it
 // reads as in PoE, and turning it down is what lets a brazier be seen at all.
-const TORCH_INTENSITY = 300;
+const TORCH_INTENSITY = 265;
 /** Every light that can stand in a room at once: the fill, the sun, the torch,
  *  and the whole brazier pool. Materials are capped to exactly this, see
  *  `createScene` — Babylon's own default of four drops the rest without a word. */
@@ -825,7 +826,7 @@ export function createScene(engine: Engine): SceneHandle {
     // name, so a rename cannot smuggle a caster past it.
     torchShadows.getShadowMap()!.renderListPredicate = (mesh) => {
       if (mesh === ground || mesh.name.startsWith("telegraph-") || mesh.name === FLAME_MESH
-        || isWardrobePart(mesh.name)) return false;
+        || mesh.name.startsWith("groundblob-") || isWardrobePart(mesh.name)) return false;
       // Range cull: nothing past the torch's own reach can receive its light, so
       // nothing there can cast a visible shadow from it either. This is a third
       // of the cube map's draw calls, measured live in the hideout.
@@ -837,7 +838,8 @@ export function createScene(engine: Engine): SceneHandle {
       return dx * dx + dy * dy + dz * dz <= reach * reach;
     };
     scene.onNewMeshAddedObservable.add((mesh) => {
-      if (mesh.name.startsWith("telegraph-") || mesh === ground || isLevelGeometry(mesh.name)) {
+      if (mesh.name.startsWith("telegraph-") || mesh.name.startsWith("groundblob-")
+        || mesh === ground || isLevelGeometry(mesh.name)) {
         return;
       }
       // The fire is light, not a thing standing in light: an ember that cast

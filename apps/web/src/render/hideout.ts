@@ -1,5 +1,6 @@
 import { Mesh, type Scene } from "@babylonjs/core";
 import { attachProp, type PropKind } from "./props";
+import { standGroundBlob } from "./meshes";
 import { setFireSpots, type FireSpot } from "./lights";
 import { CAMERA_ALPHA } from "./engine";
 
@@ -112,6 +113,12 @@ export const HIDEOUT_FIRES: readonly FireSpot[] = HIDEOUT_DECOR
   .filter((d) => d.kind === "brazier")
   .map((d, i) => ({ x: d.x, z: d.z, phase: i * 2.3 }));
 
+/** Contact-blob half-extents per furniture kind; the rug lies flat and has none. */
+const DECOR_BLOBS: Partial<Record<PropKind, [number, number]>> = {
+  table: [1.25, 0.7], bench: [0.7, 0.35], crate: [0.5, 0.5],
+  barrel: [0.42, 0.42], pillar: [0.55, 0.55], brazier: [0.5, 0.5],
+};
+
 /** Drop the last set. Safe on a scene that never had one. */
 export function clearHideoutDecor(scene: Scene): void {
   for (const node of [...scene.transformNodes, ...scene.meshes]) {
@@ -140,6 +147,8 @@ export function buildHideoutDecor(scene: Scene): void {
       root.dispose(false, false);
       return;
     }
+    const blob = DECOR_BLOBS[d.kind];
+    if (blob) standGroundBlob(scene, root, blob[0], blob[1]);
     // These DO cast, and should: engine.ts registers every new mesh that is not
     // level geometry, and the stash already grounds itself the same way. The wall
     // lesson was about SIZE, not about props — at this sun a shadow runs about 2.6

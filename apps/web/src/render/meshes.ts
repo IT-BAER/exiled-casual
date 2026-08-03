@@ -17,7 +17,7 @@ import { attachBoltTrail, attachCinderFX, cinderGlow } from "./skill-fx";
 import { attachRig, rigOf, type RigParts } from "./rig";
 import { playSfx, worldSfxMix } from "../audio/sfx";
 
-export type MeshKind = "player" | "monster" | "rare" | "boss" | "projectile" | "groundArea" | "telegraph" | "portal" | "mapDevice" | "stash" | "vendor" | "groundItem";
+export type MeshKind = "player" | "monster" | "rare" | "boss" | "projectile" | "groundArea" | "telegraph" | "portal" | "mapDevice" | "stash" | "vendor" | "container" | "groundItem";
 
 /**
  * Y-lift off the ground plane per kind (render only). The authored actors
@@ -40,6 +40,7 @@ const Y_LIFT: Record<MeshKind, number> = {
   mapDevice: 0,
   stash: 0,
   vendor: 0,
+  container: 0,
   // small floor-level beacon marker
   groundItem: 0.15,
 };
@@ -964,6 +965,7 @@ export function updatePortal(root: Mesh, hovered: boolean): void {
  * which one it got.
  */
 function buildMapDevice(scene: Scene, root: Mesh): void {
+  standGroundBlob(scene, root, 0.95);
   const asset = attachProp(scene, root, "mapDevice");
   if (asset) {
     root.metadata = {
@@ -1022,9 +1024,11 @@ function buildMapDevice(scene: Scene, root: Mesh): void {
  * timber, cold iron straps, a domed lid. Hover warms the iron so it reads clickable.
  */
 function buildStash(scene: Scene, root: Mesh): void {
+  standGroundBlob(scene, root, 0.75, 0.6);
   const asset = attachProp(scene, root, "stash");
   if (asset) {
-    root.metadata = { iron: asset["iron"], interactKind: "stash" };
+    // The chest is one material now; the whole thing warms on hover.
+    root.metadata = { iron: asset["stash_chest"] ?? asset["iron"], interactKind: "stash" };
     return;
   }
 
@@ -1075,6 +1079,139 @@ function buildStash(scene: Scene, root: Mesh): void {
   lock.material = iron;
 
   root.metadata = { iron, interactKind: "stash" };
+}
+
+/**
+ * A reward container standing on a map's reward anchor: a chest, a barrel or a
+ * crate, primitives in the same timber-and-iron language as the stash so the
+ * three read as one family of furniture. The chest's lid hangs on a hinge node
+ * so opening it is a rotation, not a re-build.
+ */
+/**
+ * The contact shadow the sun cannot give a prop. The directional shadow falls
+ * away from the base, so everything standing on the floor read as floating a
+ * finger above it; this soft dark pool pins it down. One shared radial-gradient
+ * texture per scene, one cheap unlit quad per prop, excluded from both shadow
+ * generators by its name (engine.ts).
+ */
+const BLOB_TEXTURES = new WeakMap<Scene, DynamicTexture>();
+
+export function standGroundBlob(scene: Scene, root: Mesh, rx: number, rz = rx): void {
+  let tex = BLOB_TEXTURES.get(scene);
+  if (!tex) {
+    tex = new DynamicTexture("groundblob-tex", 128, scene, false);
+    const ctx = tex.getContext();
+    const g = ctx.createRadialGradient(64, 64, 10, 64, 64, 64);
+    g.addColorStop(0, "rgba(0,0,0,0.5)");
+    g.addColorStop(0.6, "rgba(0,0,0,0.26)");
+    g.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 128, 128);
+    tex.update();
+    tex.hasAlpha = true;
+    BLOB_TEXTURES.set(scene, tex);
+  }
+  const mat = new StandardMaterial(`${root.name}-blob`, scene);
+  mat.diffuseColor = Color3.Black();
+  mat.specularColor = Color3.Black();
+  mat.emissiveColor = Color3.Black();
+  mat.opacityTexture = tex;
+  mat.disableLighting = true;
+  const quad = MeshBuilder.CreateGround(`groundblob-${root.name}`, { width: rx * 2, height: rz * 2 }, scene);
+  // Above the floor decals (rug sits at 0.012) but under everything solid.
+  quad.position.y = 0.015;
+  quad.isPickable = false;
+  quad.parent = root;
+  quad.material = mat;
+}
+
+function buildContainer(scene: Scene, root: Mesh, look: string): void {
+  standGroundBlob(scene, root, look === "barrel" ? 0.5 : 0.65, look === "chest" ? 0.5 : undefined);
+  if (look === "chest") {
+    const asset = attachProp(scene, root, "lootChest");
+    if (asset) {
+      // The authored chest's lid mesh has its origin on the hinge line, so it
+      // plays the hinge role the primitive build kept as a separate node.
+      const hinge = root.getChildMeshes(false).find((m) => m.name === "lootChest_lid") ?? null;
+      if (hinge) hinge.rotationQuaternion = null;
+      const mat = asset["loot_chest"];
+      root.metadata = { wood: mat, iron: mat, hinge, interactKind: "container" };
+      return;
+    }
+  }
+
+  const wood = new StandardMaterial(`${root.name}-ct-wood`, scene);
+  wood.diffuseColor = new Color3(0.22, 0.14, 0.08);
+  wood.emissiveColor = new Color3(0.03, 0.02, 0.01);
+  wood.specularColor = new Color3(0.15, 0.12, 0.08);
+  wood.specularPower = 32;
+
+  const iron = new StandardMaterial(`${root.name}-ct-iron`, scene);
+  iron.diffuseColor = new Color3(0.15, 0.14, 0.14);
+  iron.emissiveColor = new Color3(0.03, 0.03, 0.03);
+  iron.specularColor = new Color3(0.6, 0.58, 0.5);
+  iron.specularPower = 96;
+
+  let lid: Mesh | null = null;
+  if (look === "barrel") {
+    const body = MeshBuilder.CreateCylinder(`${root.name}-ct-body`, { diameter: 0.78, height: 0.95, tessellation: 14 }, scene);
+    body.position.y = 0.475;
+    body.parent = root;
+    body.material = wood;
+    for (const y of [0.2, 0.75]) {
+      const hoop = MeshBuilder.CreateTorus(`${root.name}-ct-hoop`, { diameter: 0.78, thickness: 0.05, tessellation: 14 }, scene);
+      hoop.position.y = y;
+      hoop.parent = root;
+      hoop.material = iron;
+    }
+  } else if (look === "crate") {
+    const body = MeshBuilder.CreateBox(`${root.name}-ct-body`, { width: 0.9, depth: 0.9, height: 0.8 }, scene);
+    body.position.y = 0.4;
+    body.parent = root;
+    body.material = wood;
+    // Diagonal brace plank on the front face, the one mark that says "crate".
+    const brace = MeshBuilder.CreateBox(`${root.name}-ct-brace`, { width: 1.1, depth: 0.05, height: 0.12 }, scene);
+    brace.position.set(0, 0.4, -0.46);
+    brace.rotation.z = 0.72;
+    brace.parent = root;
+    brace.material = iron;
+  } else {
+    const body = MeshBuilder.CreateBox(`${root.name}-ct-body`, { width: 1.05, depth: 0.7, height: 0.5 }, scene);
+    body.position.y = 0.25;
+    body.parent = root;
+    body.material = wood;
+    // Lid on a hinge at the back edge, so opened is a rotation about it.
+    const hinge = new Mesh(`${root.name}-ct-hinge`, scene);
+    hinge.parent = root;
+    hinge.position.set(0, 0.5, 0.35);
+    lid = MeshBuilder.CreateCylinder(`${root.name}-ct-lid`, { diameter: 0.7, height: 1.05, tessellation: 12, arc: 0.5 }, scene);
+    lid.rotation.z = Math.PI / 2;
+    lid.position.set(0, 0, -0.35);
+    lid.parent = hinge;
+    lid.material = wood;
+    const lock = MeshBuilder.CreateBox(`${root.name}-ct-lock`, { width: 0.16, depth: 0.06, height: 0.18 }, scene);
+    lock.position.set(0, 0.46, -0.36);
+    lock.parent = root;
+    lock.material = iron;
+    root.metadata = { wood, iron, hinge, interactKind: "container" };
+    return;
+  }
+  root.metadata = { wood, iron, interactKind: "container" };
+}
+
+/**
+ * Hover warms the ironwork like every other clickable; opened swings the
+ * chest's lid back and lets the whole thing go cold — an emptied container
+ * must stop advertising itself or every room keeps promising twice.
+ */
+export function updateContainer(root: Mesh, hovered: boolean, opened: boolean): void {
+  const parts = root.metadata as { wood?: StandardMaterial; iron?: StandardMaterial; hinge?: Mesh } | null;
+  if (!parts?.iron || !parts.wood) return;
+  const e = !opened && hovered ? 0.26 : 0.03;
+  parts.iron.emissiveColor.set(e, e * 0.72, e * 0.3);
+  const w = opened ? 0 : 0.03;
+  parts.wood.emissiveColor.set(w, w * 0.7, w * 0.35);
+  if (parts.hinge) parts.hinge.rotation.x = opened ? -1.9 : 0;
 }
 
 /** Warm the chest's ironwork on hover, the same affordance the map device uses. */
@@ -1263,6 +1400,14 @@ export function makeMesh(
   if (kind === "vendor") {
     const root = new Mesh(name, scene);
     buildVendor(scene, root);
+    return root;
+  }
+
+  if (kind === "container") {
+    const root = new Mesh(name, scene);
+    // `species` is the shared string channel on makeMesh; for containers it
+    // carries the look ("chest" | "barrel" | "crate").
+    buildContainer(scene, root, species ?? "chest");
     return root;
   }
 

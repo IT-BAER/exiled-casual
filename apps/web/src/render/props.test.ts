@@ -28,7 +28,7 @@ describe("props asset", () => {
     const roots = json.nodes.filter((n) => n.mesh === undefined && (n.children?.length ?? 0) > 0);
     // The two the sim spawns, then the furniture render/hideout.ts places.
     expect(roots.map((n) => n.name)).toEqual(expect.arrayContaining([
-      "mapDevice", "stash", "rug", "table", "bench", "crate", "barrel", "pillar", "brazier",
+      "mapDevice", "stash", "lootChest", "rug", "table", "bench", "crate", "barrel", "pillar", "brazier",
     ]));
   });
 
@@ -48,8 +48,8 @@ describe("props asset", () => {
   it("names the materials the hover code drives", () => {
     const names = json.materials.map((m) => m.name);
     for (const wanted of [
-      "brass_top", "brass_side", "chest_wood", "iron", "stone", "rug", "pillar_stone",
-      "brazier_coal",
+      "brass_top", "brass_side", "chest_wood", "iron", "rug", "pillar_stone",
+      "brazier_coal", "stash_chest", "loot_chest",
     ]) {
       expect(names).toContain(wanted);
     }
@@ -68,6 +68,7 @@ describe("props asset", () => {
    */
   it("embeds compressed textures and stays small", () => {
     for (const image of json.images) expect(image.mimeType).toBe("image/jpeg");
-    expect(glb.byteLength).toBeLessThan(1_200_000);
+    // Raised from 1.2MB when the two downloaded chests (stash, lootChest) came in.
+    expect(glb.byteLength).toBeLessThan(1_500_000);
   });
 });

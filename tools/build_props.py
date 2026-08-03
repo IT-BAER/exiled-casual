@@ -44,10 +44,12 @@ import os
 import sys
 
 import bpy
+import mathutils
 import numpy
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TEX_DIR = os.path.join(ROOT, "assets", "props")
+SOURCE_DIR = os.path.join(TEX_DIR, "source")
 BUILD_DIR = os.path.join(TEX_DIR, "build")
 OUT = os.path.join(ROOT, "apps", "web", "public", "models", "props.glb")
 
@@ -149,29 +151,6 @@ def box(name, center, size):
         (cx + hx, cy + hy, cz + hz), (cx - hx, cy + hy, cz + hz),
     ]
     faces = [[0, 3, 2, 1], [4, 5, 6, 7], [0, 1, 5, 4], [2, 3, 7, 6], [3, 0, 4, 7], [1, 2, 6, 5]]
-    return mesh_object(name, verts, faces)
-
-
-def dome(name, x0, x1, ry, rz, z0, segments=20):
-    """Half-ellipse cross-section swept along X — the chest lid and its straps.
-
-    A full half-circle lid (rise = half the depth) domes so high the chest reads
-    as a barrel; the reference chests rise about a third of their depth, so the
-    section is an ellipse and `rz` is free.
-    """
-    section = []
-    for i in range(segments + 1):
-        a = -math.pi / 2 + math.pi * i / segments
-        section.append((ry * math.sin(a), z0 + rz * math.cos(a)))
-
-    verts = [(x0, y, z) for y, z in section] + [(x1, y, z) for y, z in section]
-    n = len(section)
-    faces = []
-    for s in range(n - 1):
-        faces.append([s, n + s, n + s + 1, s + 1])
-    faces.append(list(range(n)))                      # cap at x0
-    faces.append(list(range(2 * n - 1, n - 1, -1)))   # cap at x1
-    faces.append([0, n - 1, 2 * n - 1, n])            # flat underside
     return mesh_object(name, verts, faces)
 
 
@@ -303,6 +282,79 @@ def uv_lathe(obj, span, height, u_repeat, flat_slot=0, wall_slot=1):
 
 
 # --------------------------------------------------------------------------
+# appended assets
+# --------------------------------------------------------------------------
+#
+# The two chests are not modelled here: they are downloaded source .blends
+# (tools/fetch_blenderkit.py) appended in, cut down to game weight and re-dressed
+# in this file's material language (base colour only, metallic 0, 6% emission)
+# so they sit in the same light as everything built above.
+
+
+def append_objects(blend_name, names):
+    path = os.path.join(SOURCE_DIR, blend_name)
+    if not os.path.exists(path):
+        sys.exit("missing source asset: " + path + " (run tools/fetch_blenderkit.py)")
+    with bpy.data.libraries.load(path, link=False) as (src, dst):
+        missing = [n for n in names if n not in src.objects]
+        if missing:
+            sys.exit(f"{blend_name} lacks objects: {', '.join(missing)}")
+        dst.objects = list(names)
+    out = []
+    for obj in dst.objects:
+        bpy.context.scene.collection.objects.link(obj)
+        obj.parent = None  # source empties were not loaded; locals stay coherent
+        out.append(obj)
+    # A fresh datablock answers matrix_world as identity until the depsgraph has
+    # run once — copying it before this update flattened every part onto the
+    # origin (the first export had the lid inside the chest).
+    bpy.context.view_layer.update()
+    return out
+
+
+def bounds(objs):
+    """Combined world-space min/max corners of the meshes."""
+    lo = mathutils.Vector((1e9, 1e9, 1e9))
+    hi = -lo
+    for obj in objs:
+        for corner in obj.bound_box:
+            w = obj.matrix_world @ mathutils.Vector(corner)
+            lo = mathutils.Vector(map(min, lo, w))
+            hi = mathutils.Vector(map(max, hi, w))
+    return lo, hi
+
+
+def decimate_to(obj, target):
+    """Collapse a sculpt-weight mesh to a game budget in TRIANGLES, UVs kept."""
+    for m in list(obj.modifiers):
+        obj.modifiers.remove(m)
+    tris = sum(len(p.vertices) - 2 for p in obj.data.polygons)
+    if tris > target:
+        m = obj.modifiers.new("dec", "DECIMATE")
+        m.use_collapse_triangulate = True
+        m.ratio = target / tris
+        bpy.context.view_layer.objects.active = obj
+        bpy.ops.object.modifier_apply(modifier=m.name)
+
+
+def asset_material(name, image_name, gain, roughness):
+    """A textured_material built from an image PACKED in an appended .blend."""
+    img = bpy.data.images.get(image_name)
+    if img is None:
+        sys.exit("appended asset carries no image named " + image_name)
+    img.scale(TEX_SIZE, TEX_SIZE)
+    if gain != 1.0:
+        px = numpy.empty(len(img.pixels), dtype=numpy.float32)
+        img.pixels.foreach_get(px)
+        rgb = px.reshape(-1, 4)[:, :3]
+        numpy.clip(rgb * gain, 0.0, 1.0, out=rgb)
+        img.pixels.foreach_set(px)
+    dst = os.path.join(BUILD_DIR, name + ".jpg")
+    img.save_render(filepath=dst, scene=bpy.context.scene)
+    return textured_material(name, dst, roughness)
+
+
+# --------------------------------------------------------------------------
 # materials
 # --------------------------------------------------------------------------
 
@@ -378,16 +430,6 @@ def coal_material(name, path):
     return mat
 
 
-def flat_material(name, rgb, roughness):
-    mat = bpy.data.materials.new(name)
-    mat.use_nodes = True
-    bsdf = mat.node_tree.nodes["Principled BSDF"]
-    bsdf.inputs["Base Color"].default_value = (*rgb, 1.0)
-    bsdf.inputs["Metallic"].default_value = 0.0
-    bsdf.inputs["Roughness"].default_value = roughness
-    return mat
-
-
 # --------------------------------------------------------------------------
 # the props
 # --------------------------------------------------------------------------
@@ -444,68 +486,86 @@ def build_map_device(mats):
     return root
 
 
-# The chest keeps the primitives' footprint too: a 1.6 x 1.15 step, a 1.35 x 0.85
-# body. Only the lid moved — a half-round lid rises 0.42 and reads as a barrel,
-# so it is an ellipse rising 0.26.
-CHEST_BODY = (1.35, 0.85, 0.60)
-CHEST_BODY_Z = 0.12
-CHEST_LID_RISE = 0.30
-STRAP_X = (-0.42, 0.42)
+# The stash is Poly Haven's Treasure Chest (cc_zero, fetched by
+# tools/fetch_blenderkit.py), standing straight on the ground — the old stone
+# step is gone on his call. 1.20 across, a shade under the primitives' 1.35.
+STASH_CHEST_W = 1.20
+
+# Per-mesh triangle budgets for the appended chests. The sources are render
+# assets (the stash bottom alone is 26k polys); at this camera a chest is maybe
+# 150px across and these numbers keep every silhouette edge that survives that.
+STASH_BUDGET = {
+    "treasure_chest_bottom": 1400, "treasure_chest_lid": 1000,
+    "treasure_chest_lock": 300, "treasure_chest_handle_left": 150,
+    "treasure_chest_handle_right": 150,
+}
 
 
-def build_stash(mats):
+def build_stash():
     root = bpy.data.objects.new("stash", None)
     bpy.context.scene.collection.objects.link(root)
-    # The chest is built facing -Y, and two axis conversions stand between here
+    # The chest's lock faces -Y, and two axis conversions stand between here
     # and the game: Blender Z-up to glTF Y-up, then glTF right-handed to Babylon
     # left-handed. They land -Y away from the camera, so the lock and hinges swap
     # places and the stash presents its back. Turned once, at the root.
     root.rotation_euler = (0.0, 0.0, math.pi)
 
-    w, d, h = CHEST_BODY
-    top = CHEST_BODY_Z + h
-
-    parts = []
-    step = box("stash_step", (0, 0, 0.06), (1.60, 1.15, 0.12))
-    parts.append((step, mats["stone"], 1.0))
-
-    body = box("stash_body", (0, 0, CHEST_BODY_Z + h / 2), (w, d, h))
-    parts.append((body, mats["chest_wood"], 0.62))
-
-    # Sunk 0.02 into the body: a lid resting exactly on the top face gives two
-    # coplanar surfaces and a z-fighting seam right along the eye line.
-    lid = dome("stash_lid", -w / 2 - 0.02, w / 2 + 0.02, d / 2 + 0.015, CHEST_LID_RISE, top - 0.02)
-    parts.append((lid, mats["chest_wood"], 0.62))
-
-    for i, x in enumerate(STRAP_X):
-        strap = box(f"stash_strap_{i}", (x, 0, CHEST_BODY_Z + h / 2), (0.10, d + 0.04, h + 0.03))
-        parts.append((strap, mats["iron"], 0.45))
-        band = dome(f"stash_band_{i}", x - 0.05, x + 0.05, d / 2 + 0.032, CHEST_LID_RISE + 0.017, top - 0.02)
-        parts.append((band, mats["iron"], 0.45))
-        for z in (CHEST_BODY_Z + 0.12, top - 0.12):
-            for y, sign in ((-d / 2 - 0.02, -1), (d / 2 + 0.02, 1)):
-                rivet = cone(f"stash_rivet_{i}", (x, y, z), 0.028, 0.020, 0.05 * sign, "y")
-                parts.append((rivet, mats["iron"], 0.45))
-
-    # The hasp reads as one piece of iron: a band over the lid's centre coming
-    # down into the lock plate. A lock plate on its own reads as a box someone
-    # nailed to the front.
-    hasp = dome("stash_hasp", -0.06, 0.06, d / 2 + 0.032, CHEST_LID_RISE + 0.017, top - 0.02)
-    parts.append((hasp, mats["iron"], 0.45))
-    # Wider than the band that lands on it, or the plate is two slivers peeking
-    # out from behind the hasp and the chest reads as having no lock at all.
-    lock = box("stash_lock", (0, -d / 2 - 0.025, top - 0.13), (0.32, 0.05, 0.22))
-    parts.append((lock, mats["iron"], 0.45))
-    for x in (-0.18, 0.18):
-        hinge = cone("stash_hinge", (x, d / 2 + 0.01, top - 0.03), 0.035, 0.035, 0.16, "x")
-        parts.append((hinge, mats["iron"], 0.45))
-
-    for obj, mat, tile in parts:
-        bevel(obj)
+    parts = append_objects("treasure_chest.blend", list(STASH_BUDGET))
+    # Poly Haven's diff is exposure-correct already; lifting it read as pale
+    # pink pine against the reference's dark timber.
+    mat = asset_material("stash_chest", "treasure_chest_diff.png", gain=0.88, roughness=0.75)
+    for obj in parts:
+        decimate_to(obj, STASH_BUDGET[obj.name])
+        obj.data.materials.clear()
         obj.data.materials.append(mat)
-        uv_box(obj, tile)
         smooth_by_angle(obj, 40)
-        obj.parent = root
+
+    # One carrier scales the asset to the stash's width and stands it on the
+    # step, so the source meshes keep their own transforms untouched.
+    carrier = bpy.data.objects.new("stash_chest", None)
+    bpy.context.scene.collection.objects.link(carrier)
+    lo, hi = bounds(parts)
+    scale = STASH_CHEST_W / (hi.x - lo.x)
+    carrier.scale = (scale, scale, scale)
+    carrier.location = (-(lo.x + hi.x) / 2 * scale, -(lo.y + hi.y) / 2 * scale, -lo.z * scale)
+    for obj in parts:
+        obj.parent = carrier
+    carrier.parent = root
+    return root
+
+
+# The map reward chest: Mutanzom3D's Wooden Chest (royalty_free). The lid is a
+# separate mesh whose origin sits on the hinge line, so the runtime opens it by
+# rotating the `lootChest_lid` node — same contract the primitive version had.
+LOOT_CHEST_W = 1.05
+LOOT_BUDGET = {"Wooden Chest": 1800, "Wooden Chest Door": 500}
+
+
+def build_loot_chest():
+    root = bpy.data.objects.new("lootChest", None)
+    bpy.context.scene.collection.objects.link(root)
+    # Lock at -Y, turned to face the camera exactly like the stash above.
+    root.rotation_euler = (0.0, 0.0, math.pi)
+
+    body, lid = append_objects("wooden_chest.blend", list(LOOT_BUDGET))
+    mat = asset_material("loot_chest", "Props_Wooden Chest_BaseColor.jpg", gain=1.45, roughness=0.8)
+    for obj in (body, lid):
+        decimate_to(obj, LOOT_BUDGET[obj.name])
+        obj.data.materials.clear()
+        obj.data.materials.append(mat)
+        smooth_by_angle(obj, 40)
+    body.name = "lootChest_body"
+    lid.name = "lootChest_lid"
+
+    carrier = bpy.data.objects.new("lootChest_scale", None)
+    bpy.context.scene.collection.objects.link(carrier)
+    lo, hi = bounds((body, lid))
+    scale = LOOT_CHEST_W / (hi.x - lo.x)
+    carrier.scale = (scale, scale, scale)
+    carrier.location = (-(lo.x + hi.x) / 2 * scale, -(lo.y + hi.y) / 2 * scale, -lo.z * scale)
+    body.parent = carrier
+    lid.parent = carrier
+    carrier.parent = root
     return root
 
 
@@ -752,11 +812,6 @@ def main():
         "brass_side": textured_material("brass_side", built["brass_side"], 0.45),
         "chest_wood": textured_material("chest_wood", built["chest_wood"], 0.85),
         "iron": textured_material("iron", built["iron"], 0.55),
-        # glTF base colour is LINEAR, and the Babylon material it becomes gamma
-        # corrects it on the way out: the 0.17 the primitive step used renders at
-        # 0.45 here, a poured-concrete slab under a chest made of real timber art.
-        # 0.023 linear is that same 0.17 on screen.
-        "stone": flat_material("stone", (0.023, 0.022, 0.020), 0.95),
         # Cloth and masonry for the decor set. The rug is rougher than the timber
         # (a carpet has no sheen at all) and the stone rougher still.
         "rug": textured_material("rug", built["rug"], 0.96),
@@ -765,7 +820,8 @@ def main():
     }
 
     build_map_device(mats)
-    build_stash(mats)
+    build_stash()
+    build_loot_chest()
     build_rug(mats)
     build_table(mats)
     build_bench(mats)

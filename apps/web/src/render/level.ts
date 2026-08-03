@@ -22,6 +22,7 @@ import {
   type RockCell,
 } from "./rocks";
 import { attachProp } from "./props";
+import { standGroundBlob } from "./meshes";
 import { setFireSpots, type FireSpot } from "./lights";
 import type { WalkableGrid } from "@exiled/mapgen";
 
@@ -320,6 +321,7 @@ function standBraziers(
       root.dispose(false, false);
       continue;
     }
+    standGroundBlob(scene, root, 0.5);
     for (const mesh of root.getChildMeshes()) {
       mesh.isPickable = false;
       mesh.receiveShadows = true;

@@ -34,6 +34,8 @@ const GLTF_ROOT = "__root__";
  */
 export const PROP_KINDS = [
   "mapDevice", "stash",
+  // The map reward chest; barrels and crates stay primitives (meshes.ts).
+  "lootChest",
   "rug", "table", "bench", "crate", "barrel", "pillar",
   // The one prop that is also a light. `render/lights.ts` finds these by their
   // root name and hangs a real point light over each bowl.

@@ -3,7 +3,7 @@ import type { Scene } from "@babylonjs/core";
 import type { Mesh } from "@babylonjs/core";
 import { blinkBurst } from "./skill-fx";
 import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
-import { animateActor, makeMesh, setHitFlash, updateTelegraph, updatePortal, updateMapDevice, updateStash, updateVendor, updateGroundItem, updateRareElement, portalAppear, portalVanish, isPortalMesh, PORTAL_STAGGER_MS, Y_LIFT } from "./meshes";
+import { animateActor, makeMesh, setHitFlash, updateTelegraph, updatePortal, updateMapDevice, updateStash, updateVendor, updateContainer, updateGroundItem, updateRareElement, portalAppear, portalVanish, isPortalMesh, PORTAL_STAGGER_MS, Y_LIFT } from "./meshes";
 import type { MeshKind } from "./meshes";
 import { COSMETIC_SLOTS, looksForEquipment, previewItemFor, rigOf, type Looks } from "./rig";
 import { creatureOf } from "./meshes";
@@ -151,6 +151,7 @@ function kindOf(e: SnapshotEntity): MeshKind {
   if (e.kind === "mapDevice") return "mapDevice";
   if (e.kind === "stash") return "stash";
   if (e.kind === "vendor") return "vendor";
+  if (e.kind === "container") return "container";
   if (e.kind === "groundItem") return "groundItem";
   return "groundArea";
 }
@@ -327,7 +328,9 @@ export class SnapshotRenderer {
         ny,
         alpha,
         e.radius,
-        e.species,
+        // The shared string channel: species for monsters, the furniture look
+        // for containers (makeMesh reads it per kind).
+        e.species ?? e.look,
       );
       const mesh = this.meshes.get(e.id);
       if (!mesh) continue;
@@ -361,6 +364,9 @@ export class SnapshotRenderer {
       }
       if (e.kind === "vendor") {
         updateVendor(mesh, this.hoveredEntityId === e.id);
+      }
+      if (e.kind === "container") {
+        updateContainer(mesh, this.hoveredEntityId === e.id, e.opened === true);
       }
       if (e.kind === "groundItem") {
         updateGroundItem(mesh, e.rarity);
