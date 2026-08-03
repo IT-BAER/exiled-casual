@@ -5,7 +5,7 @@ import type { Scene } from "@babylonjs/core";
 import type { Snapshot } from "@exiled/protocol";
 import { testPlayer } from "../test-fixtures";
 import { fp } from "@exiled/fixed-point";
-import { DEFAULT_SETTINGS } from "../settings";
+import { DEFAULT_SETTINGS, MOVE_SOCKET } from "../settings";
 
 /**
  * The skill row's mapping, which the bar owns now: `1` fires whatever sits in the
@@ -355,6 +355,94 @@ describe("attachBindings hold-to-move", () => {
         (c) => c[0]?.type === "intent" && c[0]?.intent?.kind === "useSkill",
       ).length,
     ).toBe(1);
+  });
+});
+
+describe("attachBindings aim", () => {
+  /**
+   * A ray that leans one world unit sideways per unit of drop, so where it lands
+   * depends on the HEIGHT of the plane it is met at: the floor at y=0 and the
+   * plane a bolt flies in are different points, which a straight-down ray hides.
+   */
+  function slantScene(ground: { x: number; z: number }): Scene {
+    return {
+      createPickingRay: () => ({ origin: { x: ground.x - 10, y: 10, z: ground.z }, direction: { x: 1, y: -1, z: 0 } }),
+      pick: () => ({ hit: true, pickedMesh: null }),
+    } as unknown as Scene;
+  }
+
+  function lastIntent(post: ReturnType<typeof vi.fn>, kind: string) {
+    const calls = post.mock.calls.filter((c) => c[0]?.type === "intent" && c[0]?.intent?.kind === kind);
+    return calls[calls.length - 1]?.[0].intent;
+  }
+
+  function attach(scene: Scene) {
+    const c = document.createElement("canvas");
+    document.body.appendChild(c);
+    const w = { postMessage: vi.fn() };
+    const { detach } = attachBindings(
+      c, w as unknown as Worker, scene,
+      undefined, undefined, undefined, undefined, undefined, defaultSkillForKey,
+      (button) => (button === 2 ? "skill.ember_bolt.v1" : MOVE_SOCKET),
+    );
+    const cleanup = () => { detach(); c.remove(); };
+    return { c, w, cleanup };
+  }
+
+  const move = (c: HTMLCanvasElement) =>
+    c.dispatchEvent(new MouseEvent("pointermove", { button: 0, buttons: 0, clientX: 50, clientY: 50, bubbles: true }));
+  const cast = (key: string) =>
+    window.dispatchEvent(new KeyboardEvent("keydown", { key, code: `Digit${key}`, bubbles: true }));
+
+  it("re-picks the cursor's world point when the camera moved under a still mouse", () => {
+    // Hold-to-move keeps the mouse perfectly still while the camera follows the
+    // player, so the same pixel is over a DIFFERENT world point every frame. A
+    // cast taken from the point the pointer last MOVED over aims behind the player.
+    const at = { x: 1, z: 2 };
+    const { c, w, cleanup } = attach(slantScene(at));
+    move(c);
+    at.x = 9; at.z = 4; // the player ran; the camera came with him
+    cast("1");
+    expect(lastIntent(w.postMessage, "useSkill")).toMatchObject({ tx: fp(9 - 0.8), ty: fp(4) });
+    cleanup();
+  });
+
+  it("aims a projectile at the height it flies at, not the floor under the cursor", () => {
+    const { c, w, cleanup } = attach(slantScene({ x: 6, z: 3 }));
+    move(c);
+    cast("1"); // ember bolt
+    expect(lastIntent(w.postMessage, "useSkill")).toMatchObject({ tx: fp(6 - 0.8), ty: fp(3) });
+    cleanup();
+  });
+
+  it("aims a ground-targeted skill at the floor, where its cinders are painted", () => {
+    const { c, w, cleanup } = attach(slantScene({ x: 6, z: 3 }));
+    move(c);
+    cast("2"); // cinder ground
+    expect(lastIntent(w.postMessage, "useSkill")).toMatchObject({ tx: fp(6), ty: fp(3) });
+    cleanup();
+  });
+
+  it("aims a blink at the floor: the destination is a place to stand", () => {
+    const { c, w, cleanup } = attach(slantScene({ x: 6, z: 3 }));
+    move(c);
+    cast("3"); // blink
+    expect(lastIntent(w.postMessage, "useSkill")).toMatchObject({ tx: fp(6), ty: fp(3) });
+    cleanup();
+  });
+
+  it("walks to the floor even though skills aim above it", () => {
+    const { c, w, cleanup } = attach(slantScene({ x: 6, z: 3 }));
+    c.dispatchEvent(new MouseEvent("pointerdown", { button: 0, buttons: 1, clientX: 50, clientY: 50, bubbles: true }));
+    expect(lastIntent(w.postMessage, "moveTo")).toMatchObject({ x: fp(6), y: fp(3) });
+    cleanup();
+  });
+
+  it("uses the same aim plane for a mouse-button cast", () => {
+    const { c, w, cleanup } = attach(slantScene({ x: 6, z: 3 }));
+    c.dispatchEvent(new MouseEvent("pointerdown", { button: 2, buttons: 2, clientX: 50, clientY: 50, bubbles: true }));
+    expect(lastIntent(w.postMessage, "useSkill")).toMatchObject({ tx: fp(6 - 0.8), ty: fp(3) });
+    cleanup();
   });
 });
 

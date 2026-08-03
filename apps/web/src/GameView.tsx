@@ -11,7 +11,7 @@ import { enablePhysics, resetPhysics } from "./render/ragdoll";
 import { resetFireLights } from "./render/lights";
 import { loadRocks, resetRocks } from "./render/rocks";
 import { loadPlayerRig, resetPlayerRig } from "./render/rig";
-import { attachBindings, getAimWorld } from "./input/bindings";
+import { attachBindings } from "./input/bindings";
 import { CORE_SFX, playSfx, preloadSfx, setAmbient, stopAmbient } from "./audio/sfx";
 import { createSoundscape } from "./audio/soundscape";
 import { preloadUiArt } from "./ui-art";
@@ -238,7 +238,7 @@ export function GameView({
 
     // Bindings need the scene for ground picking, and must be attached before the
     // onmessage handler below so onSnapshot exists when the worker starts sending.
-    const { detach, onSnapshot, approach } = attachBindings(
+    const { detach, onSnapshot, approach, getAim } = attachBindings(
       canvas,
       worker,
       scene,
@@ -401,7 +401,7 @@ export function GameView({
       const alpha = Math.min(1, (performance.now() - prevTickTime) / MS_PER_TICK);
       renderer.apply(prevSnap, curSnap, alpha);
       // The aim target updates every frame so the arm tracks the cursor live.
-      const aim = getAimWorld();
+      const aim = getAim();
       renderer.setAim(aim.x, aim.y);
       // Camera follows the player (interpolated) so they stay centred like an ARPG.
       // The 4th arg (cloneAlphaBetaRadius=true) keeps the orbit fixed and moves the

@@ -2,6 +2,8 @@ import type { Intent, Snapshot, SpawnKind, ToWorker } from "@exiled/protocol";
 import { heldToMoveIntent, keyToIntent, pointerToWorld } from "./intents";
 import type { Node, Scene } from "@babylonjs/core";
 import { MOVE_SOCKET } from "../settings";
+import { SKILLS } from "@exiled/content-runtime";
+import { Y_LIFT } from "../render/meshes";
 
 // ponytail: thin DOM glue — all key→intent mapping lives in intents.ts
 
@@ -19,41 +21,64 @@ const SPAWN_KEYS: Record<string, SpawnKind> = {
   Numpad0: "clear",
 };
 
-/**
- * Current aim in RAW world floats (sim x, sim y=Babylon z), updated on pointermove
- * via ground-plane raycast. Raw (not fixed-point) because keyToIntent applies fp()
- * itself — pre-converting here would double-scale the skill target ~1000×.
- */
-let aimWorld = { x: 0, y: 0 };
-
-/** Current cursor position in sim coordinates (world x, world y = Babylon z). */
-export function getAimWorld(): { x: number; y: number } {
-  return aimWorld;
-}
-
 const MOVE_KEYS = new Set(["w", "a", "s", "d"]);
 
 /**
- * The point on the FLOOR under a screen pixel. `scene.pick` returns the first
- * mesh the ray meets, and a wall's top face stands 3.5 units up, so a click on
- * a wall resolved to that top corner: the player walked to a spot well short of
- * the cursor, and the further the wall, the bigger the lie. The floor is one
- * flat plane at y=0 (`engine.ts`), so meet it analytically instead — cheaper
- * than a second pick, and it cannot miss the way a mesh pick can.
+ * The height a skill is aimed at: the plane a projectile FLIES in, not the floor
+ * (`Y_LIFT.projectile`, meshes.ts).
+ *
+ * A bolt is drawn at chest height, so on screen its path runs a long way above
+ * the floor line it follows — aiming at the floor under the cursor sent every
+ * bolt visibly over the top of whatever the cursor was on, and pointing at a
+ * monster's body, which is drawn above its own feet, targeted the floor BEYOND
+ * it. Meeting the picking ray at the height the bolt travels at makes the cursor
+ * and the bolt's path the same line on screen.
+ *
+ * Ground-targeted skills keep the floor: their cinders are painted on it.
  */
-function groundPoint(
+export const AIM_HEIGHT = Y_LIFT.projectile;
+
+/**
+ * The point where the pixel's ray meets the horizontal plane at `height`.
+ *
+ * `scene.pick` returns the first mesh the ray meets, and a wall's top face stands
+ * 3.5 units up, so a click on a wall resolved to that top corner: the player
+ * walked to a spot well short of the cursor, and the further the wall, the bigger
+ * the lie. The floor is one flat plane at y=0 (`engine.ts`), so meet it
+ * analytically instead — cheaper than a second pick, and it cannot miss the way a
+ * mesh pick can.
+ */
+function planePoint(
   scene: Scene,
   sx: number,
   sy: number,
+  height = 0,
 ): { x: number; z: number } | null {
   const ray = scene.createPickingRay(sx, sy, null, null);
   // Looking up or along the plane: there is no ground under that pixel.
   if (ray.direction.y >= -1e-6) return null;
-  const t = -ray.origin.y / ray.direction.y;
+  const t = (height - ray.origin.y) / ray.direction.y;
+  if (t < 0) return null; // the plane is behind the camera
   return {
     x: ray.origin.x + ray.direction.x * t,
     z: ray.origin.z + ray.direction.z * t,
   };
+}
+
+/**
+ * Effects aimed at a BODY, which is drawn standing above its own feet. Everything
+ * else — scorched ground, a blink's destination — is aimed at the floor, because
+ * the floor is where the player is looking when he picks the spot.
+ */
+const AIMED_AT_BODIES: ReadonlySet<string> = new Set(["spawnProjectile", "meleeStrike"]);
+
+/**
+ * Which plane a given skill is aimed at. Read off the effects rather than a list
+ * of ids, so a new skill lands on the right plane the day it is authored.
+ */
+function aimHeightFor(skillId: string): number {
+  const def = SKILLS.get(skillId);
+  return def?.effects.some((e) => AIMED_AT_BODIES.has(e.type)) ? AIM_HEIGHT : 0;
 }
 
 /**
@@ -170,6 +195,8 @@ export function attachBindings(
   detach: () => void;
   onSnapshot: (snap: Snapshot) => void;
   approach: (entityId: number, x: number, y: number) => void;
+  /** Where the cursor points right now, for the arm that tracks it. */
+  getAim: () => { x: number; y: number };
 } {
   // Movement keys currently held, oldest→newest. Needed so releasing one key
   // resumes another still-held direction, and releasing the last sends "stop".
@@ -186,6 +213,27 @@ export function attachBindings(
   // DIFFERENT world point each frame — re-picking is what keeps the player moving
   // when the button is held without the mouse moving.
   let lastScreen: { x: number; y: number } | null = null;
+
+  // Last aim that resolved, kept so a frame where the cursor is off the plane
+  // (over the sky past the map's edge) casts where the player last pointed
+  // rather than at the world origin.
+  let lastAim = { x: 0, y: 0 };
+
+  /**
+   * Where the cursor points, in RAW world floats (sim x, sim y = Babylon z).
+   * Raw, not fixed-point, because `keyToIntent` applies `fp()` itself —
+   * pre-converting here would double-scale the target ~1000x.
+   *
+   * Re-picked on every call rather than cached at pointermove: the camera follows
+   * the player, so a cursor that has not moved a pixel sits over a different world
+   * point each frame, and a cast taken from the last MOVE aimed where the player
+   * used to be.
+   */
+  function aimAt(height: number): { x: number; y: number } {
+    const p = lastScreen && planePoint(scene, lastScreen.x, lastScreen.y, height);
+    if (p) lastAim = { x: p.x, y: p.z };
+    return lastAim;
+  }
 
   // Entity id of the portal or map device the player last clicked; null when
   // nothing is pending. Cleared on interact fire, entity disappearance, or a
@@ -276,7 +324,10 @@ export function attachBindings(
       post(heldToMoveIntent(held));
       return;
     }
-    const intent = keyToIntent(e.key, aimWorld, skillForKey);
+    // The skill is resolved first only to know WHICH plane to aim at; keyToIntent
+    // resolves it again for the intent itself (a bar lookup, not work worth saving).
+    const keySkill = skillForKey?.(e.key);
+    const intent = keyToIntent(e.key, aimAt(keySkill ? aimHeightFor(keySkill) : AIM_HEIGHT), skillForKey);
     if (intent) post(intent);
   }
 
@@ -294,16 +345,12 @@ export function attachBindings(
     // A chorded press or release arrives here, not on pointerdown/up. See syncButtons.
     syncButtons(e, e.buttons);
     lastScreen = { x: e.clientX, y: e.clientY };
-    const floor = groundPoint(scene, e.clientX, e.clientY);
-    if (floor) {
-      // Raw world floats; keyToIntent applies fp() when building the skill target.
-      aimWorld = { x: floor.x, y: floor.z };
-      // Hold-to-move: while the button is held, re-target toward the cursor so
-      // dragging steers the player continuously.
-      if (pointerHeld) {
-        const world = pointerToWorld(floor);
-        post({ kind: "moveTo", x: world.x, y: world.y });
-      }
+    // Hold-to-move: while the button is held, re-target toward the cursor so
+    // dragging steers the player continuously. Walking is on the floor, always.
+    const floor = planePoint(scene, e.clientX, e.clientY);
+    if (floor && pointerHeld) {
+      const world = pointerToWorld(floor);
+      post({ kind: "moveTo", x: world.x, y: world.y });
     }
     // Hover still asks the meshes first — that question really is "what is under
     // the cursor", walls and all — and the columns only after they say nothing.
@@ -318,9 +365,9 @@ export function attachBindings(
   function castFromMouse(button: number, sx: number, sy: number): boolean {
     const skillId = skillForMouse?.(button);
     if (!skillId || skillId === MOVE_SOCKET) return false;
-    const floor = groundPoint(scene, sx, sy);
-    if (!floor) return true; // bound, just no ground under the cursor this frame
-    const aim = pointerToWorld(floor);
+    const at = planePoint(scene, sx, sy, aimHeightFor(skillId));
+    if (!at) return true; // bound, just no ground under the cursor this frame
+    const aim = pointerToWorld(at);
     post({ kind: "useSkill", skillId, tx: aim.x, ty: aim.y });
     return true;
   }
@@ -372,7 +419,7 @@ export function attachBindings(
     // plumbed through three components: the ghost IS the carried piece, and this
     // is a one-way signal from the panel to the world, not shared state.
     if (document.querySelector("[data-carrying]")) return;
-    const floor = groundPoint(scene, e.clientX, e.clientY);
+    const floor = planePoint(scene, e.clientX, e.clientY);
     if (!floor) return;
     const world = pointerToWorld(floor);
     // PoE-style: clicking directly on a portal or map device auto-walks to it and
@@ -423,7 +470,7 @@ export function attachBindings(
       for (const button of skillButtonsHeld) castFromMouse(button, lastScreen.x, lastScreen.y);
     }
     if (pointerHeld && lastScreen) {
-      const floor = groundPoint(scene, lastScreen.x, lastScreen.y);
+      const floor = planePoint(scene, lastScreen.x, lastScreen.y);
       if (floor) {
         const world = pointerToWorld(floor);
         post({ kind: "moveTo", x: world.x, y: world.y });
@@ -514,5 +561,5 @@ export function attachBindings(
     post({ kind: "moveTo", ...pointerToWorld({ x, z: y }) });
   }
 
-  return { detach, onSnapshot, approach };
+  return { detach, onSnapshot, approach, getAim: () => aimAt(AIM_HEIGHT) };
 }

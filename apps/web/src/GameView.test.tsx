@@ -79,9 +79,8 @@ vi.mock("./input/bindings", () => ({
     hoisted.openPanel = onPanel;
     hoisted.openStash = onStash;
     hoisted.openVendor = onVendor;
-    return { detach: () => {}, onSnapshot: () => {}, approach: () => {} };
+    return { detach: () => {}, onSnapshot: () => {}, approach: () => {}, getAim: () => ({ x: 0, y: 0 }) };
   },
-  getAimWorld: () => ({ x: 0, y: 0 }),
 }));
 
 import { GameView } from "./GameView";
