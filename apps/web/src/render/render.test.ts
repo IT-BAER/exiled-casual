@@ -497,8 +497,10 @@ describe("SnapshotRenderer", () => {
     };
     renderer.setAim(TARGET.x, TARGET.z);
 
+    // Flown out to 20, twice the target's distance: the bolt does NOT stop at
+    // the cursor, and the line must not bend where it passes it.
     const drawn: { x: number; z: number }[] = [];
-    for (let i = 0; i <= 25; i++) {
+    for (let i = 0; i <= 50; i++) {
       const next = snap(2 + i, i * 0.4);
       renderer.apply(prev, next, 1);
       prev = next;
@@ -506,12 +508,12 @@ describe("SnapshotRenderer", () => {
       if (m) drawn.push({ x: m.position.x, z: m.position.z });
     }
 
-    // It starts at the tip and ends on the target...
+    // It starts at the tip and passes through the target...
     expect(drawn[0]!.x).toBeCloseTo(HAND.x, 2);
     expect(drawn[0]!.z).toBeCloseTo(HAND.z, 2);
-    const last = drawn[drawn.length - 1]!;
-    expect(last.x).toBeCloseTo(TARGET.x, 1);
-    expect(last.z).toBeCloseTo(TARGET.z, 1);
+    const atTarget = drawn.find((p) => p.x >= TARGET.x)!;
+    expect(atTarget.z).toBeCloseTo(TARGET.z, 1);
+    expect(drawn[drawn.length - 1]!.x).toBeGreaterThan(TARGET.x * 1.8);
 
     // ...and every point between lies ON that line. Cross product against the
     // tip→target direction: zero for all of them or the path is bent.

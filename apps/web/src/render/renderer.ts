@@ -304,8 +304,12 @@ export class SnapshotRenderer {
           // How far this bolt has to go: the cursor point the cast was aimed at,
           // which is the aim the frame before it appeared. A bolt that dies early
           // on a monster simply never spends the last of its offset.
+          // Floored: the offset is spent at offset/range per unit flown, and a
+          // bolt aimed at the player's own feet would otherwise set a slope
+          // steep enough to walk the drawn bolt right off the sim's line if it
+          // hits nothing and flies its full 20.
           const range = this.aim
-            ? Math.max(1, Math.hypot(this.aim.x - e.x, this.aim.y - e.y))
+            ? Math.max(3, Math.hypot(this.aim.x - e.x, this.aim.y - e.y))
             : ASSUMED_RANGE;
           this.fromHand.set(e.id, {
             offset: hand.subtract(new Vector3(e.x, Y_LIFT.projectile, e.y)),
@@ -329,26 +333,28 @@ export class SnapshotRenderer {
          * beside everything it was aimed at, for its whole flight.
          *
          * Spending the offset in proportion to the distance still to go turns it
-         * into the straight line from the tip to that same target: full offset at
-         * the hand, none at the far end, and linear in between, which is what a
-         * straight line is. Not a merge and not a curve — the bolt is never off
-         * the tip-to-target line at any point of its flight.
+         * into the straight line from the tip THROUGH that target: full offset at
+         * the hand, none at the target, and linear in between and BEYOND. The
+         * share is deliberately not clamped at the target — clamping it there is
+         * what made the bolt kink back onto the sim's line the moment it passed
+         * the cursor, which is the same parallel-line bug arriving late.
+         *
+         * The price is that past the target the drawn bolt and the sim's own
+         * position drift apart, at the few degrees between the two lines. A bolt
+         * that sails well past what it was aimed at is flying over empty ground,
+         * so the drift buys a straight line at no cost anyone can see.
          *
          * Each end of the interpolated step carries its own share, or the
          * shrinking happens in tick-sized jumps between the frames.
          */
         const share = (x: number, y: number) =>
-          Math.max(0, 1 - Math.hypot(x - handEntry.from.x, y - handEntry.from.y) / handEntry.range);
+          1 - Math.hypot(x - handEntry.from.x, y - handEntry.from.y) / handEntry.range;
+        const kp = share(ox, oy);
         const kn = share(e.x, e.y);
-        if (kn <= 0) {
-          this.fromHand.delete(e.id);
-        } else {
-          const kp = share(ox, oy);
-          ox += handEntry.offset.x * kp;
-          oy += handEntry.offset.z * kp;
-          nx += handEntry.offset.x * kn;
-          ny += handEntry.offset.z * kn;
-        }
+        ox += handEntry.offset.x * kp;
+        oy += handEntry.offset.z * kp;
+        nx += handEntry.offset.x * kn;
+        ny += handEntry.offset.z * kn;
       }
       this.syncMesh(
         e.id,
