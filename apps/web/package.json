@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:soon": "vite build --config vite.soon.config.ts",
     "preview": "vite preview"
   },
   "dependencies": {

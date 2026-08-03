@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="/favicon.ico" sizes="48x48 32x32 16x16" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="theme-color" content="#07080a" />
+    <title>Exiled Casual</title>
+    <meta name="description" content="A browser ARPG. Soon." />
+    <meta property="og:title" content="Exiled Casual" />
+    <meta property="og:description" content="A browser ARPG. Soon." />
+    <meta property="og:type" content="website" />
+    <link rel="preload" href="/fonts/cinzel-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <style>
+      /* Self-hosted, same file the game ships. SIL Open Font License 1.1, see
+         /fonts/OFL.txt. Only the display face: this page has no prose. */
+      @font-face {
+        font-family: "Cinzel";
+        src: url(/fonts/cinzel-latin.woff2) format("woff2");
+        font-weight: 400 700;
+        font-display: swap;
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 100%; height: 100%; overflow: hidden; background: #05060a; }
+      body { user-select: none; -webkit-user-select: none; }
+      #root { width: 100%; height: 100%; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/soon.tsx"></script>
+  </body>
+</html>
