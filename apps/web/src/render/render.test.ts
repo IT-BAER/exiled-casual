@@ -466,6 +466,64 @@ describe("SnapshotRenderer", () => {
     expect(m2).not.toBeNull();
   });
 
+  it("flies a bolt straight from the weapon tip to the target, never a curve", () => {
+    // The sim launches from the player's CENTRE and lands on the aimed point.
+    // Drawn at the weapon tip with a constant offset, that is a line PARALLEL to
+    // the one the player aimed along — beside everything he pointed at. Spending
+    // the offset in proportion to the distance still to run makes the drawn path
+    // the straight line tip → target instead. Straight is the requirement: a
+    // bolt that bends back through the player's chest and then sets off is worse
+    // than the parallel one.
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const renderer = new SnapshotRenderer(scene);
+    const HAND = new Vector3(0.4, 1.2, 0.6); // weapon tip, out to the right
+    const TARGET = { x: 10, z: 0 }; // the sim flies +x along z=0
+
+    const snap = (tick: number, x: number, entities = true) =>
+      makeSnapshot({
+        tick,
+        entities: entities ? [{ id: 2, kind: "projectile" as const, x, y: 0, radius: 0.4, team: 0 }] : [],
+      });
+
+    let prev = snap(1, 0, false);
+    renderer.apply(null, prev, 1);
+    scene.getMeshByName("entity-0")!.metadata = {
+      rig: {
+        setLooks: () => {}, setAimTarget: () => {}, dispose: () => {},
+        setLocomotion: () => {}, setFacing: () => {}, update: () => {},
+        castPoint: () => HAND,
+      },
+    };
+    renderer.setAim(TARGET.x, TARGET.z);
+
+    const drawn: { x: number; z: number }[] = [];
+    for (let i = 0; i <= 25; i++) {
+      const next = snap(2 + i, i * 0.4);
+      renderer.apply(prev, next, 1);
+      prev = next;
+      const m = scene.getMeshByName("entity-2");
+      if (m) drawn.push({ x: m.position.x, z: m.position.z });
+    }
+
+    // It starts at the tip and ends on the target...
+    expect(drawn[0]!.x).toBeCloseTo(HAND.x, 2);
+    expect(drawn[0]!.z).toBeCloseTo(HAND.z, 2);
+    const last = drawn[drawn.length - 1]!;
+    expect(last.x).toBeCloseTo(TARGET.x, 1);
+    expect(last.z).toBeCloseTo(TARGET.z, 1);
+
+    // ...and every point between lies ON that line. Cross product against the
+    // tip→target direction: zero for all of them or the path is bent.
+    const dx = TARGET.x - HAND.x;
+    const dz = TARGET.z - HAND.z;
+    const len = Math.hypot(dx, dz);
+    for (const p of drawn) {
+      const off = Math.abs((p.x - HAND.x) * dz - (p.z - HAND.z) * dx) / len;
+      expect(off).toBeLessThan(0.01);
+    }
+  });
+
   it("disposes the mesh when an entity disappears in a subsequent snapshot", () => {
     engine = new NullEngine();
     const { scene } = createScene(engine);

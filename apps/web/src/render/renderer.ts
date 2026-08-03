@@ -56,11 +56,11 @@ const BLINK_Y = 0.9;
 const HIT_FLASH_TICKS = 3;
 
 /**
- * Ticks after which the hand offset stops being applied (the bolt is far
- * enough that the constant offset is invisible). The offset is NOT blended
- * away: decaying it curves the bolt through the player's centre.
+ * How far a bolt is assumed to be flying when the cursor's own point is not
+ * available (headless, or a cast before the first frame). Only the RATE the
+ * hand offset is spent at depends on it.
  */
-const HAND_OFFSET_TTL = 30;
+const ASSUMED_RANGE = 8;
 
 /** How long a corpse lies there, in ticks. */
 const CORPSE_TICKS = Math.round(CORPSE_SECONDS * TICKS_PER_SEC);
@@ -166,8 +166,11 @@ export class SnapshotRenderer {
   private readonly tilt = new Map<number, [number, number]>();
   /** The tick each entity was last struck on. Absent means it is not lit. */
   private readonly hit = new Map<number, number>();
-  /** Newborn bolts offset to the casting hand; constant until TTL expires. */
-  private readonly fromHand = new Map<number, { offset: Vector3; tick: number }>();
+  /** Last cursor point fed in by the render loop; the target a new bolt flies at. */
+  private aim: { x: number; y: number } | null = null;
+  /** Newborn bolts offset to the casting hand: where each was launched and how
+   *  far it has to go, which is the rate the offset is spent at. */
+  private readonly fromHand = new Map<number, { offset: Vector3; from: { x: number; y: number }; range: number }>();
   /** What each entity is drawn as, so a dead one can be told from a closed portal. */
   private readonly kinds = new Map<number, MeshKind>();
   /** Bodies the sim has forgotten, still falling. Disposed when their time is up. */
@@ -204,6 +207,9 @@ export class SnapshotRenderer {
 
   /** Feed the cursor's world position to the casting arm's aim solver. */
   setAim(worldX: number, worldZ: number): void {
+    // Also kept as the point a bolt born this frame is flying AT: that is what
+    // turns the hand offset into a straight line rather than a parallel one.
+    this.aim = { x: worldX, y: worldZ };
     if (this.playerId === null) return;
     const mesh = this.meshes.get(this.playerId);
     if (mesh) rigOf(mesh)?.setAimTarget(worldX, worldZ);
@@ -290,14 +296,21 @@ export class SnapshotRenderer {
       const playerRig = playerMesh ? rigOf(playerMesh) : undefined;
       if (e.kind === "projectile" && (e.team ?? 0) === 0 && playerRig && !this.meshes.has(e.id)) {
         if (!this.fromHand.has(e.id)) {
-          this.fromHand.set(e.id, { offset: Vector3.Zero(), tick: next.tick });
+          this.fromHand.set(e.id, { offset: Vector3.Zero(), from: { x: e.x, y: e.y }, range: ASSUMED_RANGE });
           continue;
         }
         const hand = playerRig.castPoint();
         if (hand) {
+          // How far this bolt has to go: the cursor point the cast was aimed at,
+          // which is the aim the frame before it appeared. A bolt that dies early
+          // on a monster simply never spends the last of its offset.
+          const range = this.aim
+            ? Math.max(1, Math.hypot(this.aim.x - e.x, this.aim.y - e.y))
+            : ASSUMED_RANGE;
           this.fromHand.set(e.id, {
             offset: hand.subtract(new Vector3(e.x, Y_LIFT.projectile, e.y)),
-            tick: next.tick,
+            from: { x: e.x, y: e.y },
+            range,
           });
         } else {
           this.fromHand.delete(e.id);
@@ -309,14 +322,32 @@ export class SnapshotRenderer {
       let nx = e.x;
       let ny = e.y;
       if (handEntry) {
-        const age = next.tick - handEntry.tick + alpha;
-        if (age >= HAND_OFFSET_TTL) {
+        /*
+         * The sim flies the bolt from the player's CENTRE to the point he aimed
+         * at. Drawing it at the weapon tip instead is a constant offset, and a
+         * CONSTANT offset is a line parallel to that one — a bolt a hand's width
+         * beside everything it was aimed at, for its whole flight.
+         *
+         * Spending the offset in proportion to the distance still to go turns it
+         * into the straight line from the tip to that same target: full offset at
+         * the hand, none at the far end, and linear in between, which is what a
+         * straight line is. Not a merge and not a curve — the bolt is never off
+         * the tip-to-target line at any point of its flight.
+         *
+         * Each end of the interpolated step carries its own share, or the
+         * shrinking happens in tick-sized jumps between the frames.
+         */
+        const share = (x: number, y: number) =>
+          Math.max(0, 1 - Math.hypot(x - handEntry.from.x, y - handEntry.from.y) / handEntry.range);
+        const kn = share(e.x, e.y);
+        if (kn <= 0) {
           this.fromHand.delete(e.id);
         } else {
-          ox += handEntry.offset.x;
-          oy += handEntry.offset.z;
-          nx += handEntry.offset.x;
-          ny += handEntry.offset.z;
+          const kp = share(ox, oy);
+          ox += handEntry.offset.x * kp;
+          oy += handEntry.offset.z * kp;
+          nx += handEntry.offset.x * kn;
+          ny += handEntry.offset.z * kn;
         }
       }
       this.syncMesh(
