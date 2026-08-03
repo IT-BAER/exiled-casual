@@ -139,3 +139,12 @@ Eleven days, in screenshots. Notes live in [`../docs/`](../docs/).
 <td width="50%"><img src="screenshots/2026-07-30-monster-pack-separation.jpeg" alt="Monster pack spreading around the player and rock walls" width="100%"><br><sub>Pack separation.</sub></td>
 </tr>
 </table>
+
+## 2026-07-31 · Carried shields and real fire
+
+<table>
+<tr>
+<td width="50%"><img src="screenshots/2026-07-31-shield-carried.jpeg" alt="Character carrying a buckler on the forearm beside a burning brazier" width="100%"><br><sub>Shields ride the carrying arm.</sub></td>
+<td width="50%"><img src="screenshots/2026-07-31-hideout-firelight-portals.jpeg" alt="Hideout at night with six portals, geometry flames in the braziers, and the vendor Varkis" width="100%"><br><sub>Braziers burn real flames.</sub></td>
+</tr>
+</table>
