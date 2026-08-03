@@ -11,7 +11,7 @@ import {
   VertexBuffer,
   type Scene,
 } from "@babylonjs/core";
-import { attachProp } from "./props";
+import { attachProp, type PropKind } from "./props";
 import { attachCreature, type CreatureRig } from "./monsters";
 import { attachBoltTrail, attachCinderFX, cinderGlow } from "./skill-fx";
 import { attachRig, rigOf, type RigParts } from "./rig";
@@ -1125,17 +1125,26 @@ export function standGroundBlob(scene: Scene, root: Mesh, rx: number, rz = rx): 
   quad.material = mat;
 }
 
+/** Downloaded mesh, and the material key it ships, for each container look. */
+const CONTAINER_ASSET: Record<string, { kind: PropKind; mat: string }> = {
+  chest: { kind: "lootChest", mat: "loot_chest" },
+  barrel: { kind: "barrel", mat: "barrel_wood" },
+  crate: { kind: "crate", mat: "crate_wood" },
+};
+
 function buildContainer(scene: Scene, root: Mesh, look: string): void {
-  standGroundBlob(scene, root, look === "barrel" ? 0.5 : 0.65, look === "chest" ? 0.5 : undefined);
-  if (look === "chest") {
-    const asset = attachProp(scene, root, "lootChest");
-    if (asset) {
-      // The authored chest's lid mesh has its origin on the hinge line, so it
-      // plays the hinge role the primitive build kept as a separate node.
-      const hinge = root.getChildMeshes(false).find((m) => m.name === "lootChest_lid") ?? null;
-      if (hinge) hinge.rotationQuaternion = null;
-      const mat = asset["loot_chest"];
-      root.metadata = { wood: mat, iron: mat, hinge, interactKind: "container" };
+  standGroundBlob(scene, root, look === "barrel" ? 0.36 : 0.5, look === "chest" ? 0.38 : undefined);
+  const asset = CONTAINER_ASSET[look];
+  if (asset) {
+    const mats = attachProp(scene, root, asset.kind);
+    if (mats) {
+      const mat = mats[asset.mat];
+      // The chest opens by sliding its lid back off the box rather than tipping
+      // it up on a hinge: a lid thrown open to 110 degrees at this camera is a
+      // plank standing between the player and the loot he just won.
+      const lid = root.getChildMeshes(false).find((m) => m.name === "lootChest_lid") ?? null;
+      if (lid) lid.rotationQuaternion = null;
+      root.metadata = { wood: mat, iron: mat, lid, lidRest: lid?.position.clone(), interactKind: "container" };
       return;
     }
   }
@@ -1180,38 +1189,50 @@ function buildContainer(scene: Scene, root: Mesh, look: string): void {
     body.position.y = 0.25;
     body.parent = root;
     body.material = wood;
-    // Lid on a hinge at the back edge, so opened is a rotation about it.
-    const hinge = new Mesh(`${root.name}-ct-hinge`, scene);
-    hinge.parent = root;
-    hinge.position.set(0, 0.5, 0.35);
+    // The greybox lid answers the same contract as the authored one: a node the
+    // caller slides along z, rather than a hinge node it rotates.
     lid = MeshBuilder.CreateCylinder(`${root.name}-ct-lid`, { diameter: 0.7, height: 1.05, tessellation: 12, arc: 0.5 }, scene);
     lid.rotation.z = Math.PI / 2;
-    lid.position.set(0, 0, -0.35);
-    lid.parent = hinge;
+    lid.position.set(0, 0.5, 0);
+    lid.parent = root;
     lid.material = wood;
     const lock = MeshBuilder.CreateBox(`${root.name}-ct-lock`, { width: 0.16, depth: 0.06, height: 0.18 }, scene);
     lock.position.set(0, 0.46, -0.36);
     lock.parent = root;
     lock.material = iron;
-    root.metadata = { wood, iron, hinge, interactKind: "container" };
+    root.metadata = { wood, iron, lid, lidRest: lid.position.clone(), interactKind: "container" };
     return;
   }
   root.metadata = { wood, iron, interactKind: "container" };
 }
 
 /**
- * Hover warms the ironwork like every other clickable; opened swings the
+ * Hover warms the ironwork like every other clickable; opened slides the
  * chest's lid back and lets the whole thing go cold — an emptied container
  * must stop advertising itself or every room keeps promising twice.
+ *
+ * The lid travels over its own hinge edge, which is the side its geometry does
+ * NOT extend to: the mesh is authored with its origin on that line, so the sign
+ * of the bounding centre says which way "back" is without this code having to
+ * know how many axis conversions stand between Blender and here.
  */
+const LID_SLIDE = 0.44;
+
 export function updateContainer(root: Mesh, hovered: boolean, opened: boolean): void {
-  const parts = root.metadata as { wood?: StandardMaterial; iron?: StandardMaterial; hinge?: Mesh } | null;
+  const parts = root.metadata as {
+    wood?: StandardMaterial; iron?: StandardMaterial; lid?: Mesh | null; lidRest?: Vector3;
+  } | null;
   if (!parts?.iron || !parts.wood) return;
   const e = !opened && hovered ? 0.26 : 0.03;
   parts.iron.emissiveColor.set(e, e * 0.72, e * 0.3);
   const w = opened ? 0 : 0.03;
   parts.wood.emissiveColor.set(w, w * 0.7, w * 0.35);
-  if (parts.hinge) parts.hinge.rotation.x = opened ? -1.9 : 0;
+  const { lid, lidRest } = parts;
+  if (lid && lidRest) {
+    const box = lid.getBoundingInfo().boundingBox;
+    const back = box.center.z >= 0 ? -1 : 1;
+    lid.position.z = lidRest.z + (opened ? back * box.extendSize.z * 2 * LID_SLIDE : 0);
+  }
 }
 
 /** Warm the chest's ironwork on hover, the same affordance the map device uses. */

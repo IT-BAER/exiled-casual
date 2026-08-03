@@ -303,11 +303,19 @@ def append_objects(blend_name, names):
     out = []
     for obj in dst.objects:
         bpy.context.scene.collection.objects.link(obj)
-        obj.parent = None  # source empties were not loaded; locals stay coherent
         out.append(obj)
     # A fresh datablock answers matrix_world as identity until the depsgraph has
     # run once — copying it before this update flattened every part onto the
     # origin (the first export had the lid inside the chest).
+    bpy.context.view_layer.update()
+    # The source empties are not loaded, so every part is unparented here — and
+    # that has to KEEP the pose the depsgraph just computed. Clearing `parent`
+    # alone falls back to matrix_basis, which is the object's position BEFORE its
+    # parent inverse: the chest's lid authored half a metre up and behind the box
+    # it is supposed to close.
+    for obj, world in [(o, o.matrix_world.copy()) for o in out]:
+        obj.parent = None
+        obj.matrix_world = world
     bpy.context.view_layer.update()
     return out
 
@@ -501,31 +509,37 @@ STASH_BUDGET = {
 }
 
 
-def build_stash():
-    root = bpy.data.objects.new("stash", None)
+def build_appended(name, mat_name, blend_name, budgets, image, gain, roughness, width, renames=None):
+    """Append a downloaded asset, cut it to budget, re-dress it and stand it up.
+
+    One carrier scales the whole asset to `width` across its LONGEST horizontal
+    axis and stands it on the floor, so the source meshes keep their own
+    transforms and the parts keep their pose relative to each other. Scaling by x
+    alone made the crate — half again as deep as it is wide — the biggest thing
+    in the room.
+    """
+    root = bpy.data.objects.new(name, None)
     bpy.context.scene.collection.objects.link(root)
-    # The chest's lock faces -Y, and two axis conversions stand between here
-    # and the game: Blender Z-up to glTF Y-up, then glTF right-handed to Babylon
-    # left-handed. They land -Y away from the camera, so the lock and hinges swap
-    # places and the stash presents its back. Turned once, at the root.
+    # These assets put their front (lock, staves seam, brand) at -Y, and two axis
+    # conversions stand between here and the game: Blender Z-up to glTF Y-up,
+    # then glTF right-handed to Babylon left-handed. They land -Y away from the
+    # camera, so a prop presents its back. Turned once, at the root.
     root.rotation_euler = (0.0, 0.0, math.pi)
 
-    parts = append_objects("treasure_chest.blend", list(STASH_BUDGET))
-    # Poly Haven's diff is exposure-correct already; lifting it read as pale
-    # pink pine against the reference's dark timber.
-    mat = asset_material("stash_chest", "treasure_chest_diff.png", gain=0.88, roughness=0.75)
+    parts = append_objects(blend_name, list(budgets))
+    mat = asset_material(mat_name, image, gain=gain, roughness=roughness)
     for obj in parts:
-        decimate_to(obj, STASH_BUDGET[obj.name])
+        decimate_to(obj, budgets[obj.name])
         obj.data.materials.clear()
         obj.data.materials.append(mat)
         smooth_by_angle(obj, 40)
+    for obj in parts:
+        obj.name = (renames or {}).get(obj.name, obj.name)
 
-    # One carrier scales the asset to the stash's width and stands it on the
-    # step, so the source meshes keep their own transforms untouched.
-    carrier = bpy.data.objects.new("stash_chest", None)
+    carrier = bpy.data.objects.new(name + "_scale", None)
     bpy.context.scene.collection.objects.link(carrier)
     lo, hi = bounds(parts)
-    scale = STASH_CHEST_W / (hi.x - lo.x)
+    scale = width / max(hi.x - lo.x, hi.y - lo.y)
     carrier.scale = (scale, scale, scale)
     carrier.location = (-(lo.x + hi.x) / 2 * scale, -(lo.y + hi.y) / 2 * scale, -lo.z * scale)
     for obj in parts:
@@ -534,39 +548,32 @@ def build_stash():
     return root
 
 
+def build_stash():
+    # Poly Haven's diff is exposure-correct already; lifting it read as pale
+    # pink pine against the reference's dark timber.
+    return build_appended(
+        "stash", "stash_chest", "treasure_chest.blend", STASH_BUDGET,
+        "treasure_chest_diff.png", gain=0.88, roughness=0.75, width=STASH_CHEST_W,
+    )
+
+
 # The map reward chest: Mutanzom3D's Wooden Chest (royalty_free). The lid is a
 # separate mesh whose origin sits on the hinge line, so the runtime opens it by
-# rotating the `lootChest_lid` node — same contract the primitive version had.
-LOOT_CHEST_W = 1.05
+# sliding the `lootChest_lid` node back off the box.
+#
+# The reward containers are all deliberately smaller than the stash: the stash is
+# furniture you walk up to, these are things you find on the floor of a map, and
+# at this camera a metre-wide box beside a 1.8-metre character read as a wardrobe.
+LOOT_CHEST_W = 0.82
 LOOT_BUDGET = {"Wooden Chest": 1800, "Wooden Chest Door": 500}
 
 
 def build_loot_chest():
-    root = bpy.data.objects.new("lootChest", None)
-    bpy.context.scene.collection.objects.link(root)
-    # Lock at -Y, turned to face the camera exactly like the stash above.
-    root.rotation_euler = (0.0, 0.0, math.pi)
-
-    body, lid = append_objects("wooden_chest.blend", list(LOOT_BUDGET))
-    mat = asset_material("loot_chest", "Props_Wooden Chest_BaseColor.jpg", gain=1.45, roughness=0.8)
-    for obj in (body, lid):
-        decimate_to(obj, LOOT_BUDGET[obj.name])
-        obj.data.materials.clear()
-        obj.data.materials.append(mat)
-        smooth_by_angle(obj, 40)
-    body.name = "lootChest_body"
-    lid.name = "lootChest_lid"
-
-    carrier = bpy.data.objects.new("lootChest_scale", None)
-    bpy.context.scene.collection.objects.link(carrier)
-    lo, hi = bounds((body, lid))
-    scale = LOOT_CHEST_W / (hi.x - lo.x)
-    carrier.scale = (scale, scale, scale)
-    carrier.location = (-(lo.x + hi.x) / 2 * scale, -(lo.y + hi.y) / 2 * scale, -lo.z * scale)
-    body.parent = carrier
-    lid.parent = carrier
-    carrier.parent = root
-    return root
+    return build_appended(
+        "lootChest", "loot_chest", "wooden_chest.blend", LOOT_BUDGET,
+        "Props_Wooden Chest_BaseColor.jpg", gain=0.85, roughness=0.8, width=LOOT_CHEST_W,
+        renames={"Wooden Chest": "lootChest_body", "Wooden Chest Door": "lootChest_lid"},
+    )
 
 
 # --------------------------------------------------------------------------
@@ -643,35 +650,35 @@ def build_bench(mats):
     return _finish(parts, root)
 
 
-def build_crate(mats):
-    """A crate, banded rather than nailed: two irons read at fifty pixels, a
-    hundred nail heads do not."""
-    root = _root("crate")
-    parts = [(box("crate_body", (0, 0, 0.31), (0.62, 0.62, 0.62)), mats["chest_wood"], 0.55)]
-    for i, z in enumerate((0.14, 0.48)):
-        parts.append((box(f"crate_band_x_{i}", (0, 0, z), (0.66, 0.09, 0.09)), mats["iron"], 0.4))
-        parts.append((box(f"crate_band_y_{i}", (0, 0, z), (0.09, 0.66, 0.09)), mats["iron"], 0.4))
-    return _finish(parts, root)
+# The other two reward containers, downloaded like the chests rather than turned
+# here: ydd 3D's "Wooden old barrel" and Crazy0_0Cat's "Antique Wooden Crate"
+# (both royalty_free). A lathe and a banded box were honest greyboxes, but they
+# stood next to a photoscanned chest and lost. The crate ships as six plank
+# meshes and needs no decimation at all (272 tris the lot).
+BARREL_W = 0.56
+BARREL_BUDGET = {"Wooden old barrel": 1200}
+CRATE_W = 0.80
+CRATE_BUDGET = {
+    "Куб.001": 400, "Cube.009": 400, "Cube.008": 400,
+    "Cube.007": 400, "Cube.006": 400, "Cube.005": 400,
+}
 
 
-def build_barrel(mats):
-    """Staved barrel: one lathe for the timber, two short cylinders for the hoops.
+def build_crate():
+    # Both of these are authored for a lit studio render, so they arrive far
+    # brighter than the chests: at the chests' 1.35 the crate was bare pine and
+    # the barrel's head was clipped to flat white.
+    return build_appended(
+        "crate", "crate_wood", "crate.blend", CRATE_BUDGET,
+        "Low_BaseColor.jpg", gain=0.62, roughness=0.85, width=CRATE_W,
+    )
 
-    The profile bulges at the waist because a barrel that does not is a bin, and
-    the bulge is the whole silhouette from above.
-    """
-    root = _root("barrel")
-    profile = [
-        (0.0, 0.80), (0.20, 0.80),
-        (0.255, 0.66), (0.285, 0.40), (0.255, 0.14),
-        (0.20, 0.0), (0.0, 0.0),
-    ]
-    staves = mesh_object("barrel_staves", *lathe(profile, 18))
-    parts = [(staves, mats["chest_wood"], 0.7)]
-    for i, z in enumerate((0.20, 0.60)):
-        hoop = cone(f"barrel_hoop_{i}", (0, 0, z), 0.272, 0.272, 0.08, "z")
-        parts.append((hoop, mats["iron"], 0.35))
-    return _finish(parts, root)
+
+def build_barrel():
+    return build_appended(
+        "barrel", "barrel_wood", "barrel.blend", BARREL_BUDGET,
+        "barrel_basecolor.jpg", gain=0.8, roughness=0.8, width=BARREL_W,
+    )
 
 
 def build_pillar(mats):
@@ -825,8 +832,8 @@ def main():
     build_rug(mats)
     build_table(mats)
     build_bench(mats)
-    build_crate(mats)
-    build_barrel(mats)
+    build_crate()
+    build_barrel()
     build_pillar(mats)
     build_brazier(mats)
 

@@ -49,7 +49,7 @@ describe("props asset", () => {
     const names = json.materials.map((m) => m.name);
     for (const wanted of [
       "brass_top", "brass_side", "chest_wood", "iron", "rug", "pillar_stone",
-      "brazier_coal", "stash_chest", "loot_chest",
+      "brazier_coal", "stash_chest", "loot_chest", "barrel_wood", "crate_wood",
     ]) {
       expect(names).toContain(wanted);
     }
@@ -68,7 +68,10 @@ describe("props asset", () => {
    */
   it("embeds compressed textures and stays small", () => {
     for (const image of json.images) expect(image.mimeType).toBe("image/jpeg");
-    // Raised from 1.2MB when the two downloaded chests (stash, lootChest) came in.
-    expect(glb.byteLength).toBeLessThan(1_500_000);
+    // Raised from 1.2MB when the two downloaded chests (stash, lootChest) came
+    // in, and again for the downloaded barrel and crate. Each costs one 512
+    // JPEG; a dropped downscale would cost ten megabytes, which is what this
+    // number is really watching for.
+    expect(glb.byteLength).toBeLessThan(1_600_000);
   });
 });

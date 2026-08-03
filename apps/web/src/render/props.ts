@@ -34,7 +34,9 @@ const GLTF_ROOT = "__root__";
  */
 export const PROP_KINDS = [
   "mapDevice", "stash",
-  // The map reward chest; barrels and crates stay primitives (meshes.ts).
+  // The reward containers. `crate` and `barrel` are both map loot and hideout
+  // decor: one downloaded mesh each, standing in for what used to be a banded
+  // box and a lathe (meshes.ts still greyboxes all three when the fetch fails).
   "lootChest",
   "rug", "table", "bench", "crate", "barrel", "pillar",
   // The one prop that is also a light. `render/lights.ts` finds these by their
