@@ -171,6 +171,23 @@ function clipSeconds(group: AnimationGroup): number {
   return fps > 0 ? (group.to - group.from) / fps : 0;
 }
 
+/**
+ * Restart a playing group at the frame it is currently on. The restart is the
+ * point: `enableBlending` only ramps when a group STARTS, so a group that kept
+ * playing underneath a one-shot takes its bones back in a single frame unless
+ * it is bounced like this. Keeps phase and speed; only the ease is new.
+ */
+export function restartAtCurrentFrame(group: AnimationGroup, loop: boolean): void {
+  if (!group.isPlaying) return;
+  const frame = group.animatables[0]?.masterFrame ?? group.from;
+  const ratio = group.speedRatio;
+  group.stop();
+  // Full range, then jump: passing `frame` as `from` would narrow every later
+  // loop of the cycle to frame..to instead of resuming the whole clip.
+  group.start(loop, ratio);
+  group.goToFrame(frame);
+}
+
 export function speedRatioFor(clip: RigClip, speed: number): number {
   if (clip !== "walk" && clip !== "run") return 1;
   const matched = (speed / CLIP_SPEED[clip]) * CADENCE[clip];
@@ -837,6 +854,7 @@ export class RigActor {
     // third of a second of cast only ever showed the first third of the swing,
     // so the bolt left a hand that was still lifting.
     group.start(false, ratio);
+    group.onAnimationGroupEndObservable.addOnce(this.easeOutToLocomotion);
   }
 
   /** Stop the sustained upper-body cast without disturbing locomotion. */
@@ -853,6 +871,7 @@ export class RigActor {
     const ratio = actionRatio(clipSeconds(group), seconds);
     group.speedRatio = ratio;
     group.start(false, ratio);
+    group.onAnimationGroupEndObservable.addOnce(this.easeOutToLocomotion);
     this.nextStrikeIndex = (this.nextStrikeIndex + 1) % STRIKE_CLIPS.length;
   }
 
@@ -870,6 +889,20 @@ export class RigActor {
     this.teardown();
     this.pivot.dispose();
   }
+
+  /**
+   * Ease the bones back to locomotion when a one-shot cast or strike lets go.
+   *
+   * enableBlending only ramps at a START: the locomotion group has been playing
+   * underneath the whole time, so when the action clip ends (or is stopped) it
+   * takes the upper body back in one frame — that snap is what this removes.
+   * Restarting the group at the frame it is already on keeps the legs' phase
+   * and buys the blend-in from wherever the action pose left the arms.
+   */
+  private easeOutToLocomotion = (): void => {
+    const group = this.groups.get(this.locomotion);
+    if (group) restartAtCurrentFrame(group, CLIP_LOOPS[this.locomotion]);
+  };
 
   private switchTo(clip: RigClip): void {
     const group = this.groups.get(clip);
@@ -1044,7 +1077,11 @@ export class RigActor {
       }
       group.normalize(source.from, source.to);
       group.enableBlending = true;
-      group.blendingSpeed = 0.12;
+      // blendingSpeed is a per-frame lerp factor, so the ease shortens as the
+      // display speeds up: 0.12 is ~130ms at 60Hz but ~50ms at 165Hz, which is
+      // where "the cast snaps in" came from. Action clips take a softer ramp;
+      // locomotion keeps the tighter one so a stop still plants the feet.
+      group.blendingSpeed = isLayeredClip(clip) ? 0.06 : 0.12;
       this.groups.set(clip, group);
     }
 
