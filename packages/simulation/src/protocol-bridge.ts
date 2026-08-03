@@ -118,12 +118,15 @@ const titleCase = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
  */
 function describeSkills(offense: OffenseC | undefined): DisplaySkill[] {
   const castSpeedPct = offense?.castSpeedPct ?? 0;
+  const timingScale = 100 + castSpeedPct;
   const spellDamagePct = offense?.spellDamagePct ?? 0;
   const out: DisplaySkill[] = [];
   for (const def of SKILLS.values()) {
     // Same floor skillCast applies: a cast never drops below one tick.
     const castTicks = def.castTicks
-      ? Math.max(1, Math.trunc((def.castTicks * 100) / (100 + castSpeedPct)))
+      ? timingScale > 0
+        ? Math.max(1, Math.trunc((def.castTicks * 100) / timingScale))
+        : def.castTicks
       : 0;
     const castTimeSec = castTicks / 30;
     const lines: string[] = [];
@@ -154,7 +157,12 @@ function describeSkills(offense: OffenseC | undefined): DisplaySkill[] {
       lines,
     };
     // No hit damage means no DPS column, the way PoE drops it for a movement skill.
-    if (hitDamage > 0 && castTimeSec > 0) skill.dps = hitDamage / castTimeSec;
+    // Divided by the interval the skill actually REPEATS at, not by its wind-up:
+    // a cooldown longer than the cast is what a held button waits on, and dividing
+    // by the cast alone claimed a rate the player never gets. Cast speed shortens
+    // the wind-up only, so a cooldown-bound skill reads the same at any cast speed.
+    const repeatSec = Math.max(castTicks, def.cooldownTicks) / 30;
+    if (hitDamage > 0 && repeatSec > 0) skill.dps = hitDamage / repeatSec;
     out.push(skill);
   }
   return out;
@@ -361,6 +369,14 @@ export function buildSnapshot(
         const c = world.get<CastingC>(playerEntity, "casting");
         return c !== undefined && c.untilTick > tick;
       })(),
+      castingAction: (() => {
+        const c = world.get<CastingC>(playerEntity, "casting");
+        return c !== undefined && c.untilTick > tick ? c.action : undefined;
+      })(),
+      castTicks: (() => {
+        const c = world.get<CastingC>(playerEntity, "casting");
+        return c !== undefined && c.untilTick > tick ? c.ticks : undefined;
+      })(),
       flasks: (() => {
         const f = world.get<FlasksC>(playerEntity, "flasks");
         return f
@@ -368,8 +384,11 @@ export function buildSnapshot(
           : { lifeCharges: 0, lifeMax: 0, manaCharges: 0, manaMax: 0 };
       })(),
       heading: (() => {
+        // One heading, whether a walk steered it or a cast set it: a standing
+        // caster writes this himself, so there is nothing else to fall back to.
         const d = world.get<MoveDir>(playerEntity, "moveDir");
-        return d && (d.hx !== 0 || d.hy !== 0) ? { x: toNumber(d.hx), y: toNumber(d.hy) } : undefined;
+        if (d && (d.hx !== 0 || d.hy !== 0)) return { x: toNumber(d.hx), y: toNumber(d.hy) };
+        return undefined;
       })(),
       level: progress.level,
       xp: progress.xp,

@@ -5,7 +5,7 @@ import { registerSkillCast } from "./skill-cast";
 import { gridCollision } from "../collision";
 import { makeGrid } from "../test-grid";
 import type { SkillDef } from "@exiled/content-schema";
-import type { Position, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC, CastingC, OffenseC } from "../components";
+import type { Position, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC, CastingC, OffenseC, Health } from "../components";
 
 // Authored skill defs matching the contract tables exactly.
 const EMBER_BOLT: SkillDef = {
@@ -43,10 +43,40 @@ const BLINK: SkillDef = {
   effects: [{ type: "teleport", distanceFixed: fp(5) }],
 };
 
+const DELAYED_BOLT: SkillDef = {
+  ...EMBER_BOLT,
+  id: "skill.test_delayed_bolt.v1",
+  castTicks: 3,
+  cooldownTicks: 0,
+};
+
+/** The melee default attack: free, and it lands the tick it is cast. */
+const CLEAVE: SkillDef = {
+  id: "skill.test_cleave.v1",
+  name: "Cleave",
+  manaCostFixed: 0,
+  cooldownTicks: 0,
+  effects: [{
+    type: "meleeStrike",
+    reachFixed: fp(2),
+    arcDegrees: 120,
+    damage: { type: "physical", amountFixed: fp(14) },
+  }],
+};
+
+const DELAYED_CLEAVE: SkillDef = {
+  ...CLEAVE,
+  id: "skill.test_delayed_cleave.v1",
+  castTicks: 3,
+};
+
 const ALL_SKILLS = new Map<string, SkillDef>([
   [EMBER_BOLT.id, EMBER_BOLT],
   [CINDER_GROUND.id, CINDER_GROUND],
   [BLINK.id, BLINK],
+  [CLEAVE.id, CLEAVE],
+  [DELAYED_BOLT.id, DELAYED_BOLT],
+  [DELAYED_CLEAVE.id, DELAYED_CLEAVE],
 ]);
 
 function makeCaster(sim: Simulation, mana = fp(60)) {
@@ -58,7 +88,94 @@ function makeCaster(sim: Simulation, mana = fp(60)) {
   return e;
 }
 
+function makeEnemyForCastTest(sim: Simulation, x: number, y: number) {
+  const e = sim.world.create();
+  sim.world.set<Position>(e, "position", { x, y });
+  sim.world.set<Health>(e, "health", { life: fp(50), maxLife: fp(50) });
+  sim.world.set<Faction>(e, "faction", { team: 1 });
+  return e;
+}
+
 describe("registerSkillCast", () => {
+  it("holds a delayed spell until its cast window ends", () => {
+    const sim = new Simulation();
+    registerSkillCast(sim, ALL_SKILLS);
+    const caster = makeCaster(sim, fp(60));
+    const cmd = {
+      tick: 0, entity: caster, type: "useSkill", skillId: DELAYED_BOLT.id,
+      data: { tx: fp(10), ty: 0 },
+    };
+
+    sim.step([cmd]);
+    expect(sim.world.query("projectile")).toHaveLength(0);
+    expect(sim.world.get<CastingC>(caster, "casting")?.untilTick).toBe(3);
+
+    sim.step([{ ...cmd, tick: 1 }]);
+    sim.step([{ ...cmd, tick: 2 }]);
+    expect(sim.world.query("projectile")).toHaveLength(0);
+
+    sim.step();
+    expect(sim.world.query("projectile")).toHaveLength(1);
+    expect(sim.world.get<CastingC>(caster, "casting")).toBeUndefined();
+  });
+
+  it("does not queue another cast while the first one is winding up", () => {
+    const sim = new Simulation();
+    registerSkillCast(sim, ALL_SKILLS);
+    const caster = makeCaster(sim, fp(60));
+    const cmd = {
+      tick: 0, entity: caster, type: "useSkill", skillId: DELAYED_BOLT.id,
+      data: { tx: fp(10), ty: 0 },
+    };
+
+    sim.step([cmd]);
+    sim.step([{ ...cmd, tick: 1 }]);
+    sim.step([{ ...cmd, tick: 2 }]);
+    sim.step();
+
+    expect(sim.world.query("projectile")).toHaveLength(1);
+    expect(sim.world.get<Mana>(caster, "mana")?.mana).toBe(fp(60) - fp(8));
+  });
+
+  it("gives a held skill a completed tick before the next wind-up starts", () => {
+    const sim = new Simulation();
+    registerSkillCast(sim, ALL_SKILLS);
+    const caster = makeCaster(sim, fp(60));
+    const held = (tick: number) => ({
+      tick, entity: caster, type: "useSkill" as const, skillId: DELAYED_BOLT.id,
+      data: { tx: fp(10), ty: 0 },
+    });
+
+    for (let tick = 0; tick <= 3; tick++) sim.step([held(tick)]);
+    expect(sim.world.query("projectile")).toHaveLength(1);
+    expect(sim.world.get<CastingC>(caster, "casting")).toBeUndefined();
+
+    sim.step([held(4)]);
+    expect(sim.world.query("projectile")).toHaveLength(1);
+    expect(sim.world.get<CastingC>(caster, "casting")?.untilTick).toBe(7);
+  });
+
+  it("delays a melee hit until the attack wind-up ends", () => {
+    const sim = new Simulation();
+    registerSkillCast(sim, ALL_SKILLS);
+    const caster = makeCaster(sim);
+    const foe = makeEnemyForCastTest(sim, fp(1.5), 0);
+    const cmd = {
+      tick: 0, entity: caster, type: "useSkill", skillId: DELAYED_CLEAVE.id,
+      data: { tx: fp(5), ty: 0 },
+    };
+
+    sim.step([cmd]);
+    expect(sim.damageQueue).toEqual([]);
+    sim.step([{ ...cmd, tick: 1 }]);
+    sim.step([{ ...cmd, tick: 2 }]);
+    expect(sim.damageQueue).toEqual([]);
+    sim.step([{ ...cmd, tick: 3 }]);
+    expect(sim.damageQueue).toEqual([
+      { target: foe, source: caster, amountFixed: fp(14), type: 1 },
+    ]);
+  });
+
   it("useSkill ember_bolt spawns exactly one projectile entity and deducts mana", () => {
     const sim = new Simulation();
     registerSkillCast(sim, ALL_SKILLS);
@@ -122,6 +239,9 @@ describe("registerSkillCast", () => {
 
     // PoE: cast time is base / (1 + increases). 8 ticks at 15% is 6.95, floored to 6.
     expect(sim.world.get<CastingC>(caster, "casting")!.untilTick).toBe(6);
+    // The renderer paces the swing by this, so it has to be the SHORTENED length
+    // and not the skill's base, or a fast cast plays a clip that outlives it.
+    expect(sim.world.get<CastingC>(caster, "casting")!.ticks).toBe(6);
   });
 
   it("a skill with no crit chance of its own never crits, whatever gear says", () => {
@@ -308,4 +428,71 @@ describe("registerSkillCast", () => {
     }]);
     expect(sim.world.get<Position>(caster, "position")!.x).toBeLessThan(fp(4));
   });
+
+  /**
+   * The melee branch. It is the only effect that resolves inside the cast itself,
+   * so the observable is the damage queue after one step, not a spawned entity.
+   */
+  describe("meleeStrike", () => {
+    function makeEnemy(sim: Simulation, x: number, y: number) {
+      const e = sim.world.create();
+      sim.world.set<Position>(e, "position", { x, y });
+      sim.world.set<Health>(e, "health", { life: fp(50), maxLife: fp(50) });
+      sim.world.set<Faction>(e, "faction", { team: 1 });
+      return e;
+    }
+    function cleave(sim: Simulation, caster: number, tx: number, ty: number) {
+      sim.step([{ tick: 0, entity: caster, type: "useSkill", skillId: CLEAVE.id, data: { tx, ty } }]);
+    }
+
+    it("hits an enemy in front, inside reach", () => {
+      const sim = new Simulation();
+      registerSkillCast(sim, ALL_SKILLS);
+      const caster = makeCaster(sim);
+      const foe = makeEnemy(sim, fp(1.5), 0);
+      cleave(sim, caster, fp(5), 0);
+      expect(sim.damageQueue).toEqual([
+        { target: foe, source: caster, amountFixed: fp(14), type: 1 },
+      ]);
+    });
+
+    it("hits every enemy in the wedge at once, unlike a projectile", () => {
+      const sim = new Simulation();
+      registerSkillCast(sim, ALL_SKILLS);
+      const caster = makeCaster(sim);
+      const a = makeEnemy(sim, fp(1.5), 0);
+      const b = makeEnemy(sim, fp(1.2), fp(0.6));
+      cleave(sim, caster, fp(5), 0);
+      expect(sim.damageQueue.map((d) => d.target).sort()).toEqual([a, b].sort());
+    });
+
+    it("misses an enemy behind the swing", () => {
+      const sim = new Simulation();
+      registerSkillCast(sim, ALL_SKILLS);
+      const caster = makeCaster(sim);
+      makeEnemy(sim, fp(-1.5), 0);
+      cleave(sim, caster, fp(5), 0);
+      expect(sim.damageQueue).toEqual([]);
+    });
+
+    it("misses an enemy past its reach", () => {
+      const sim = new Simulation();
+      registerSkillCast(sim, ALL_SKILLS);
+      const caster = makeCaster(sim);
+      makeEnemy(sim, fp(3.5), 0);
+      cleave(sim, caster, fp(5), 0);
+      expect(sim.damageQueue).toEqual([]);
+    });
+
+    it("never hits its own team", () => {
+      const sim = new Simulation();
+      registerSkillCast(sim, ALL_SKILLS);
+      const caster = makeCaster(sim);
+      const friend = makeEnemy(sim, fp(1.5), 0);
+      sim.world.set<Faction>(friend, "faction", { team: 0 });
+      cleave(sim, caster, fp(5), 0);
+      expect(sim.damageQueue).toEqual([]);
+    });
+  });
+
 });

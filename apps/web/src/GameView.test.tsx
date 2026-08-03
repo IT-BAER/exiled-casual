@@ -51,9 +51,10 @@ vi.mock("./render/engine", () => ({
     detachZoom: vi.fn(),
   }),
   applyGraphics: vi.fn(),
+  setMapFill: vi.fn(),
 }));
 vi.mock("./render/renderer", () => ({
-  SnapshotRenderer: vi.fn(() => ({ apply: vi.fn(), cyclePlayerOutfit: vi.fn(), setHoveredEntity: vi.fn() })),
+  SnapshotRenderer: vi.fn(() => ({ apply: vi.fn(), cyclePlayerOutfit: vi.fn(), setHoveredEntity: vi.fn(), setAim: vi.fn() })),
 }));
 vi.mock("./render/rig", () => ({ loadPlayerRig: () => Promise.resolve(), resetPlayerRig: vi.fn() }));
 vi.mock("./render/props", () => ({ loadProps: () => Promise.resolve(), resetProps: vi.fn() }));
@@ -80,6 +81,7 @@ vi.mock("./input/bindings", () => ({
     hoisted.openVendor = onVendor;
     return { detach: () => {}, onSnapshot: () => {}, approach: () => {} };
   },
+  getAimWorld: () => ({ x: 0, y: 0 }),
 }));
 
 import { GameView } from "./GameView";

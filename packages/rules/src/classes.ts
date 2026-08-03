@@ -6,11 +6,13 @@
  * `@exiled/content-runtime`, and `simulation/classes.test.ts` fails if the two
  * lists ever disagree. Same arrangement as `MAP_BASE_IDS` above.
  *
- * Classes are COSMETIC in this slice. The id is stored on the character so
- * stats can hang off it later without a save migration, but nothing in
- * `stats.ts` reads it yet: a class picks a look, a portrait and a starting
- * outfit, never a number. Borrowed from PoE1's class select (the roster row's
- * "Level 96 Champion" line); the names and fiction are original.
+ * A class picks a look, a portrait, a starting outfit and ONE number: its
+ * default attack (`DEFAULT_ATTACK_BY_CLASS` in content-runtime). Nothing in
+ * `stats.ts` reads the id even so. PoE keys the default attack off the equipped
+ * weapon instead, and that is where this goes once weapon bases and a weapon
+ * damage stat exist — the class map is the stand-in until then, not the design.
+ * Borrowed from PoE1's class select (the roster row's "Level 96 Champion"
+ * line); the names and fiction are original.
  */
 export const CLASS_IDS = ["class.ironsworn", "class.stalker", "class.emberbound"] as const;
 

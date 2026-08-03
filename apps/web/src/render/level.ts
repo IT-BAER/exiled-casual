@@ -93,9 +93,19 @@ const TOP_SHADE = 0.22;
  *  sun head-on where the flat floor only takes it at a graze. That is why the
  *  screenshot has the stone as the brightest thing in frame. In
  *  `inside-map-battle.webp` the cliffs are the DARKEST thing, near silhouette,
- *  and the saturated floor is what the eye reads. 0.30 is a third of the way
- *  through the physical range and puts the stone back under the ground. */
-const ROCK_ALBEDO = 0.3;
+ *  and the saturated floor is what the eye reads.
+ *
+ *  0.30 was a third of the way through the physical range and STILL came back as
+ *  the brightest thing on screen, which is the measurement that settles this: a
+ *  boulder is not a wall. Half its facets point at the sky and take this low key
+ *  light square on, where the flat floor only ever grazes it, and ACES at
+ *  exposure 1.15 then rolls those lit facets toward white. Matching the reference
+ *  is therefore not a matter of landing inside stone's albedo range — it is
+ *  going UNDER it far enough that a facet in full sun still reads as dark rock.
+ *  0.18 is deliberately below the physical fifth-to-a-third for that reason;
+ *  the tint pass normalises to mean 1.0, so this is the only place it can come
+ *  from. The ground must stay the bright thing in every frame. */
+const ROCK_ALBEDO = 0.18;
 
 /** Weathered stone. Lower than the ground's 0.92 on purpose: a rock face is
  *  smoother than loose dirt, and the small sheen difference is what separates
@@ -422,7 +432,18 @@ export function buildLevel(
       );
       box.position.set(
         originX + (runStart + (runLen - 1) / 2) * cellSize,
-        bandHeight / 2,
+        // Sunk to flush with the floor once rocks carry the wall: the band's own
+        // right angles were the loudest thing left in the frame wherever the
+        // scatter drops a cell, and the boulders are wide enough to seal the
+        // silhouette without it (MIN_WIDTH covers the widest gap the scatter can
+        // leave — see ROCK_SPACING). What shows in a gap now is the floor plate
+        // the ground already extends underneath, not the void. Still built rather
+        // than skipped: it is the whole wall in the headless/failed-fetch
+        // fallback, where `rocky` is false and it stands at full height.
+        // The 0.05 is not slop: at exactly -bandHeight/2 the band's top face is
+        // COPLANAR with the ground at y=0, and the two z-fight into flickering
+        // near-black quads at the rock bases. It has to be strictly under.
+        rocky ? -bandHeight / 2 - 0.05 : bandHeight / 2,
         originY + y * cellSize,
       );
       shadeTopFace(box);
@@ -458,10 +479,25 @@ export function buildLevel(
     // Walked as a ring rather than folded into the sweep above: that sweep scans
     // horizontal runs and skips ahead past them, so it cannot see a single cell
     // on a left or right edge without breaking the run merge it exists to do.
+    // Outward here is away from the map's CENTRE, not away from adjacent floor:
+    // the rim's far side is the void, which has no cells to read a normal off.
+    // `scatterRampart` needs it to know which side of the ring the camera is on,
+    // and only the sign matters, so a plain centre-to-cell vector is enough.
+    const midX = (cols - 1) / 2;
+    const midY = (rows - 1) / 2;
     for (let y = 0; y < rows; y++)
       for (let x = 0; x < cols; x++)
-        if (isOuterEdge(x, y))
-          edgeCells.push({ x: originX + x * cellSize, z: originY + y * cellSize });
+        if (isOuterEdge(x, y)) {
+          const ox = x - midX;
+          const oy = y - midY;
+          const len = Math.hypot(ox, oy) || 1;
+          edgeCells.push({
+            x: originX + x * cellSize,
+            z: originY + y * cellSize,
+            nx: ox / len,
+            nz: oy / len,
+          });
+        }
 
     buildRocks(scene, scatterRocks(rockCells, cellSize), material);
     buildRocks(scene, scatterDebris(floorCells), material, DEBRIS_MESH_PREFIX);

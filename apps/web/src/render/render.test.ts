@@ -16,7 +16,7 @@ import { applyBiomeTint } from "./level";
 import { LIGHT_POOL } from "./lights";
 import { HAZE_HEIGHT, HAZE_MAX_SIZE, HAZE_NAME, MOTES_NAME } from "./haze";
 import { BIOMES } from "@exiled/content-runtime";
-import { SnapshotRenderer } from "./renderer";
+import { SnapshotRenderer, syncActionAnimation, syncCastingAnimation } from "./renderer";
 import { makeMesh, updateTelegraph } from "./meshes";
 import type { Snapshot } from "@exiled/protocol";
 import { testPlayer, testStats } from "../test-fixtures";
@@ -27,6 +27,36 @@ vi.mock("../audio/sfx", async (importOriginal) => ({
   ...await importOriginal<typeof import("../audio/sfx")>(),
   playSfx: vi.fn(),
 }));
+
+describe("sustained casting animation", () => {
+  it("starts on the casting edge, remains running, and stops when casting ends", () => {
+    const rig = { playCast: vi.fn(), stopCast: vi.fn() };
+
+    syncCastingAnimation(rig, false, true);
+    syncCastingAnimation(rig, true, true);
+    syncCastingAnimation(rig, true, false);
+
+    expect(rig.playCast).toHaveBeenCalledTimes(1);
+    expect(rig.stopCast).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses the melee action clip for a melee cast and leaves spell casting separate", () => {
+    const rig = {
+      playCast: vi.fn(),
+      stopCast: vi.fn(),
+      playStrike: vi.fn(),
+      stopStrike: vi.fn(),
+    };
+
+    syncActionAnimation(rig, false, true, undefined, "melee");
+    syncActionAnimation(rig, true, true, "melee", "melee");
+    syncActionAnimation(rig, true, false, "melee", undefined);
+
+    expect(rig.playStrike).toHaveBeenCalledTimes(1);
+    expect(rig.playCast).not.toHaveBeenCalled();
+    expect(rig.stopStrike).not.toHaveBeenCalled();
+  });
+});
 
 function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
   return {
@@ -180,8 +210,8 @@ describe("atmosphere", () => {
 
   it("takes each biome's hue into the fog without taking its brightness", () => {
     // Same rule as the lights: a biome is a colour, not a dimmer. Approximately
-    // and not exactly, because the void is not grey — multiplying (0.09, 0.1,
-    // 0.12) by a mean-1 tint moves the mean by a fraction of a percent, since
+    // and not exactly, because the void is not grey — multiplying VOID_COLOR
+    // by a mean-1 tint moves the mean by a fraction of a percent, since
     // mean(V·t) only equals mean(V)·mean(t) when one of them is flat. Two
     // decimal places is the honest bound; anything tighter is asserting maths
     // that is not true.

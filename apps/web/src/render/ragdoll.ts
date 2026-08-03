@@ -35,15 +35,23 @@ const FLOOR_HALF = 200;
  * parents to find the nearest bone that IS configured, so leaving one out
  * lengthens its parent's segment instead of breaking the chain.
  */
-const PLAYER_PARTS: Record<string, number> = {
-  pelvis: 0.20,
-  spine_02: 0.22,
-  neck_01: 0.10,
-  Head: 0.16,
-  upperarm_l: 0.10, lowerarm_l: 0.09, hand_l: 0.07,
-  upperarm_r: 0.10, lowerarm_r: 0.09, hand_r: 0.07,
-  thigh_l: 0.14, calf_l: 0.12, foot_l: 0.09,
-  thigh_r: 0.14, calf_r: 0.12, foot_r: 0.09,
+const PLAYER_PARTS: Record<string, RagdollBoneProperties> = {
+  pelvis:      { size: 0.20 } as RagdollBoneProperties,
+  spine_02:    { size: 0.22, min: -0.3, max: 0.3 } as RagdollBoneProperties,
+  neck_01:     { size: 0.10, min: -0.4, max: 0.4 } as RagdollBoneProperties,
+  Head:        { size: 0.16, min: -0.3, max: 0.3 } as RagdollBoneProperties,
+  upperarm_l:  { size: 0.10, min: -1.2, max: 1.2 } as RagdollBoneProperties,
+  lowerarm_l:  { size: 0.09, min: -0.1, max: 2.2 } as RagdollBoneProperties,
+  hand_l:      { size: 0.07, min: -0.4, max: 0.4 } as RagdollBoneProperties,
+  upperarm_r:  { size: 0.10, min: -1.2, max: 1.2 } as RagdollBoneProperties,
+  lowerarm_r:  { size: 0.09, min: -0.1, max: 2.2 } as RagdollBoneProperties,
+  hand_r:      { size: 0.07, min: -0.4, max: 0.4 } as RagdollBoneProperties,
+  thigh_l:     { size: 0.14, min: -1.0, max: 1.0 } as RagdollBoneProperties,
+  calf_l:      { size: 0.12, min: -0.1, max: 2.0 } as RagdollBoneProperties,
+  foot_l:      { size: 0.09, min: -0.5, max: 0.5 } as RagdollBoneProperties,
+  thigh_r:     { size: 0.14, min: -1.0, max: 1.0 } as RagdollBoneProperties,
+  calf_r:      { size: 0.12, min: -0.1, max: 2.0 } as RagdollBoneProperties,
+  foot_r:      { size: 0.09, min: -0.5, max: 0.5 } as RagdollBoneProperties,
 };
 
 /**
@@ -52,8 +60,8 @@ const PLAYER_PARTS: Record<string, number> = {
  * `arm<n>_<j>` chains off it. So there is no per-species table here and there is
  * not meant to be one — a new species built by the same tool falls over for free.
  */
-const TRUNK = 0.18;
-const LIMB = 0.10;
+const TRUNK = 0.10;
+const LIMB = 0.06;
 
 function creaturePart(bone: string): number | null {
   if (bone.startsWith("body_")) return TRUNK;
@@ -63,20 +71,17 @@ function creaturePart(bone: string): number | null {
 
 function configFor(skeleton: Skeleton): RagdollBoneProperties[] {
   const config: RagdollBoneProperties[] = [];
-  // The skeleton's own root bone goes in whether or not it is a body part.
-  //
-  // Babylon picks the ragdoll's root by walking to the top of the skeleton, and
-  // if that bone has no config it reports index -1: no constraints are built at
-  // all and the sync loop bails on its first line, which looks exactly like a
-  // ragdoll that was never enabled. The wardrobe's top bone is `root`, an
-  // origin marker under the feet, and it is only in the list to be found.
   const top = skeleton.bones.find((b) => b.getParent() === null);
   for (const bone of skeleton.bones) {
-    const size = bone === top
-      ? PLAYER_PARTS[bone.name] ?? creaturePart(bone.name) ?? ROOT_MARKER
-      : PLAYER_PARTS[bone.name] ?? creaturePart(bone.name);
-    if (size === null || size === undefined) continue;
-    config.push({ bone: bone.name, size } as RagdollBoneProperties);
+    const entry = PLAYER_PARTS[bone.name];
+    const creatureSize = creaturePart(bone.name);
+    if (entry) {
+      config.push({ ...entry, bone: bone.name } as RagdollBoneProperties);
+    } else if (creatureSize !== null) {
+      config.push({ bone: bone.name, size: creatureSize, min: -0.4, max: 0.4 } as RagdollBoneProperties);
+    } else if (bone === top) {
+      config.push({ bone: bone.name, size: ROOT_MARKER } as RagdollBoneProperties);
+    }
   }
   return config;
 }
@@ -165,9 +170,15 @@ export function dropDead(scene: Scene, root: Mesh, push: Vector3 | null): boolea
     // are placed off the live pose, so it is left to Babylon rather than done here.
     const doll = new Ragdoll(skeleton, root, config);
     doll.ragdoll();
+    // Damp every body so limbs settle instead of oscillating forever.
+    for (let i = 0; i < config.length; i++) {
+      const body = doll.getAggregate(i)?.body;
+      if (body) {
+        body.setLinearDamping(5);
+        body.setAngularDamping(8);
+      }
+    }
     if (push) {
-      // On the root aggregate only. Impulsing every part shreds a body outward
-      // from its own centre, which is a firework and not a death.
       doll.getAggregate(0)?.body?.applyImpulse(
         push.scale(DEATH_IMPULSE), root.getAbsolutePosition());
     }
@@ -181,7 +192,7 @@ export function dropDead(scene: Scene, root: Mesh, push: Vector3 | null): boolea
 }
 
 /** Newton-seconds into a corpse. Enough to sell the blow, short of launching it. */
-const DEATH_IMPULSE = 3.5;
+const DEATH_IMPULSE = 2.0;
 
 /** The physics attached to a corpse, so the renderer can let it go. */
 export function disposeRagdoll(root: Mesh): void {

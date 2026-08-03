@@ -96,8 +96,25 @@ export interface MoveTarget { x: Fixed; y: Fixed; active: 0 | 1 }
 export interface MoveDir    { dx: number; dy: number; hx: Fixed; hy: Fixed }
 /** keys are skillId strings; values are the tick at which the skill becomes ready */
 export interface Cooldowns  { [skillId: string]: number }
-/** Post-cast recovery: caster is "casting" (and moves slower) while tick < untilTick. */
-export interface CastingC   { untilTick: number }
+/**
+ * A cast wind-up. The optional payload is present only while a non-instant skill
+ * is waiting to resolve, so the effect and its aim stay authoritative in the sim
+ * instead of being re-read from a later input repeat.
+ */
+export interface CastingC {
+  untilTick: number;
+  skillId?: string;
+  tx?: Fixed;
+  ty?: Fixed;
+  /** Snapshot of the offensive values at cast start. */
+  spellDamagePct?: number;
+  didCrit?: 0 | 1;
+  team?: number;
+  action?: "spell" | "melee";
+  /** Full length of this wind-up in ticks, cast speed already applied. The
+   *  renderer paces the clip by it so the release pose lands on the hit. */
+  ticks?: number;
+}
 export interface MonsterC {
   defId: string;
   moveSpeed: Fixed;

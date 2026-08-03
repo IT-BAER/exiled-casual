@@ -44,7 +44,9 @@ describe("golden (b): Cinder Ground burning ailment", () => {
   it("applies burning stacks to a monster standing in the area", () => {
     const { sim, world, playerEntity } = createCombatSim(42);
     const cmd = fireSkill(playerEntity, "skill.cinder_ground.v1", fp(5), fp(0), 0);
-    for (let t = 0; t < 7; t++) {
+    // Cinder Ground now resolves after its 15-tick cast, then gets its first
+    // application on the following ground-area tick.
+    for (let t = 0; t < 30; t++) {
       sim.step(t === 0 ? [cmd] : []);
     }
     const hasAilment = world.query("monster", "ailment").some(e =>
@@ -82,7 +84,8 @@ describe("golden (d): monster death removes entity", () => {
     // Second cast off the skill's OWN cooldown rather than a literal: at a fixed
     // tick 10 this test quietly stopped firing twice the day the cooldown passed
     // it, and a one-bolt run does not overkill anything.
-    const second = SKILLS.get("skill.ember_bolt.v1")!.cooldownTicks;
+    const bolt = SKILLS.get("skill.ember_bolt.v1")!;
+    const second = Math.max(bolt.cooldownTicks, (bolt.castTicks ?? 0) + 1);
     const cmds: [number, ReturnType<typeof fireSkill>][] = [
       [0, fireSkill(playerEntity, "skill.ember_bolt.v1", fp(5), fp(0), 0)],
       [second, fireSkill(playerEntity, "skill.ember_bolt.v1", fp(5), fp(0), second)],

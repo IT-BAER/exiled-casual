@@ -63,12 +63,17 @@ const JITTER = 0.32;
  *  the pebbles a smaller number gives. */
 const MIN_WIDTH = 1.35;
 const MAX_WIDTH = 1.95;
-/** Height as a multiple of width. The ceiling is the character, not the box wall
- *  it replaced: at 0.95 the tallest rock matched the old 1.85 wall, which put it
- *  level with his head, and under a camera ~49 degrees up a boulder that tall
- *  hides the man walking behind it — the bug this art pass began with. 0.78 caps
- *  the tallest at ~1.52 so his head clears every rock on the map. Under ~0.6 they
- *  read as flat slabs seen from above. */
+/** Height as a multiple of width, for the boulders the CAMERA LOOKS OVER.
+ *
+ *  Capped at the character's head, and this is the cap that may never be lifted:
+ *  under a camera ~49 degrees up a rock of height h hides h/tan(49) ≈ 0.87h of
+ *  world behind it, so a boulder taller than 1.8 hides the man walking behind it.
+ *  0.78 puts the tallest at ~1.52 and his head clears every one.
+ *
+ *  Cave height comes from CLIFFS instead (see `CLIFF`), which are the same stone
+ *  on the wall runs the camera looks AT rather than over. Splitting the two is
+ *  what buys a tall cave wall without owing the frame an occlusion fade — raising
+ *  THIS number is the thing that owes one. Under ~0.6 they read as flat slabs. */
 const MIN_ASPECT = 0.62;
 const MAX_ASPECT = 0.78;
 /** Off-vertical lean. Small on purpose — a rock is heavy, and a whole boundary
@@ -136,15 +141,20 @@ const DEBRIS: ScatterConfig = {
 };
 
 /**
- * The map's outer rim, and the only stone allowed to be tall.
+ * The map's outer rim, and the ONLY stone allowed to be tall.
  *
- * Everything else on the grid has the player walking behind it, so its height is
- * capped by his head. Nothing is ever behind this ring — it IS the edge of the
- * world — so the cap does not apply, and it has to be tall because the ground
- * plate stops exactly here and past it is the void. A single row of 1.5-unit
- * boulders left a lip of bare dirt ending in black, which is the one thing the
- * reference frames never show: in PoE the floor runs to every edge and the world
- * never visibly stops.
+ * This is where the cave comes from, because it is the one place height is free:
+ * nothing is ever behind this ring — it IS the edge of the world — so it cannot
+ * hide anything the player needs. That is exactly how the reference is built.
+ * The huge dark masses in `map boundary(right side).webp` and the sloping walls
+ * framing `inside-map-battle.webp` are all boundary, standing two to three times
+ * the player's height and running up out of the shot, while the floor they
+ * enclose stays open.
+ *
+ * It also has to be tall because the ground plate stops exactly here and past it
+ * is the void. A single row of boulder-height rock left a lip of bare dirt ending
+ * in black, which is the one thing the reference frames never show: in PoE the
+ * floor runs to every edge and the world never visibly stops.
  *
  * Wider spacing than the boulders on purpose. These are big enough to close the
  * ring on their own, and packing them as tightly turns a rampart into gravel.
@@ -153,10 +163,36 @@ const RAMPART: ScatterConfig = {
   spacing: 1,
   minWidth: 1.9,
   maxWidth: 2.6,
-  minAspect: 1.05,
-  maxAspect: 1.25,
+  // 3.6 to 6.2 units: two to three times the player, which is the reference's
+  // proportion at the boundary. Free to go here and nowhere else.
+  minAspect: 1.9,
+  maxAspect: 2.4,
   maxTilt: 0.12,
   /** Bedrock, not scree: the rim should look like it comes out of the ground. */
+  sink: 0.08,
+};
+
+/**
+ * The rim on the camera's own side, which may NOT be tall.
+ *
+ * Height on this side buys nothing and costs the player. What the tall rim is
+ * for is hiding the void where the ground plate ends — but the void beyond the
+ * near rim lies behind the camera and is never in frame, so there is nothing
+ * there to hide. Meanwhile the player can walk right up to it, and a 5.7-unit
+ * rock 1.6 units toward the camera from him hides him completely. Measured in
+ * the running game, which is the only reason this config exists.
+ *
+ * Still taller and wider than a boulder, so the map still visibly ENDS: it reads
+ * as the far lip of a bowl seen from outside rather than as more scatter. At
+ * this height a player standing hard against it loses his boots and nothing else.
+ */
+const RAMPART_NEAR: ScatterConfig = {
+  spacing: 1,
+  minWidth: 1.9,
+  maxWidth: 2.6,
+  minAspect: 0.55,
+  maxAspect: 0.72,
+  maxTilt: 0.12,
   sink: 0.08,
 };
 
@@ -164,6 +200,57 @@ const RAMPART: ScatterConfig = {
  *  rock under this sun throws a shadow longer than a room is wide. */
 const RAMPART_MESH_PREFIX = "wallrun-rampart-";
 export { RAMPART_MESH_PREFIX };
+
+/**
+ * NO CAVE WALLS INLAND. This was tried and measured, and the reference is what
+ * settled it.
+ *
+ * The attempt: make the wall runs the camera looks AT much taller, since nothing
+ * the player needs is behind them, and leave the runs he looks OVER short. It
+ * cannot work here. `WALL_THICK_CELLS` is 1, so a wall is ONE cell thick and the
+ * same cell is the far wall of one room and the near wall of the next — it
+ * cannot be tall and short at once. Measured in the running game: a 5.6-unit
+ * cliff stood 1.02 units toward the camera from the player and hid him
+ * completely.
+ *
+ * The reference says not to want it anyway. In `map boundary(right side).webp`
+ * and `inside-map-battle.webp` the tall rock is the map's BOUNDARY, sloping away
+ * at the frame edge with nothing behind it, and `map-layout-1.jpeg`'s walkable
+ * overlay shows the interior as one broad open polygon holding only LOW rubble
+ * and THIN trunks. PoE gets the cave read from layout and from value — its rock
+ * is near-black — never from tall walls standing in the play space.
+ *
+ * So height lives in `RAMPART` (the outer rim, where nothing can stand behind
+ * it) and darkness lives in level.ts's wall albedo. Inland stone stays under the
+ * player's head.
+ */
+
+/**
+ * Which way the camera lies, in xz, normalised.
+ *
+ * `CAMERA_ALPHA` is -PI/4 and NOTHING rotates it — the wheel moves the zoom and
+ * the pitch, never the yaw — so which side of a thing the camera is on is a
+ * constant of the build rather than a per-frame question. An ArcRotateCamera at
+ * alpha sits at (cos a, _, sin a) from its target, so at -PI/4 it stands off
+ * toward +x and -z. Confirmed against the running camera, not just derived:
+ * `position - target` normalises to exactly (0.7071, -0.7071) in xz.
+ *
+ * Re-derive if CAMERA_ALPHA moves, or the rim goes tall on the wrong side.
+ */
+const CAM_X = Math.SQRT1_2;
+const CAM_Z = -Math.SQRT1_2;
+
+/**
+ * How much a cell's outward face turns toward the camera: +1 dead on, -1 away.
+ *
+ * This is the test that failed for inner walls and works for the rim, and the
+ * difference is worth stating because it looks like the same idea. An inner wall
+ * has FLOOR on both sides, so "outward" is one room's away-side and the next
+ * room's toward-side and the cell cannot honour both. The rim has floor on one
+ * side and the void on the other. It is genuinely one-sided, so there is exactly
+ * one right answer per cell.
+ */
+const facing = (cell: RockCell): number => (cell.nx ?? 0) * CAM_X + (cell.nz ?? 0) * CAM_Z;
 
 interface LoadedRocks {
   scene: Scene;
@@ -287,9 +374,19 @@ export function scatterDebris(cells: readonly RockCell[]): RockPlacement[] {
   return scatter(cells, DEBRIS);
 }
 
-/** The tall ring that closes the map's edge — see RAMPART. */
+/**
+ * The ring that closes the map's edge — see RAMPART.
+ *
+ * Tall where the camera looks AT it and low where it stands between the camera
+ * and the player. Cells arrive with an outward normal pointing away from the map
+ * centre (level.ts), so a cell with no normal falls to `facing` 0 and takes the
+ * LOW config: the safe answer, since a rim rock that is too short shows a little
+ * void and one that is too tall hides the character.
+ */
 export function scatterRampart(cells: readonly RockCell[]): RockPlacement[] {
-  return scatter(cells, RAMPART);
+  const far = cells.filter((c) => facing(c) < 0);
+  const near = cells.filter((c) => facing(c) >= 0);
+  return [...scatter(far, RAMPART), ...scatter(near, RAMPART_NEAR)];
 }
 
 function scatter(cells: readonly RockCell[], cfg: ScatterConfig): RockPlacement[] {

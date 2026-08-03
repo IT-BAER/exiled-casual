@@ -16,7 +16,9 @@ import {
   rareTemplate,
   MONSTER_POOLS,
   pickPack,
+  DEFAULT_ATTACK_BY_CLASS,
 } from "./index.js";
+import { CLASS_IDS } from "@exiled/rules";
 
 describe("CONTENT_VERSION", () => {
   it('=== "slice1.v1"', () => {
@@ -76,21 +78,28 @@ describe("SKILLS", () => {
     }
   });
 
-  it("ember_bolt manaCostFixed === fp(12) and cooldownTicks === 12", () => {
+  it("ember_bolt manaCostFixed === fp(10) and cooldownTicks === 15", () => {
     const def = SKILLS.get("skill.ember_bolt.v1")!;
-    expect(def.manaCostFixed).toBe(fp(12));
-    expect(def.cooldownTicks).toBe(12);
+    expect(def.manaCostFixed).toBe(fp(10));
+    expect(def.cooldownTicks).toBe(15);
   });
 
   /**
-   * The cast is the rate limiter and the cooldown sits under it, which is what
-   * makes "% increased Cast Speed" the stat that speeds this skill up. Swap the
-   * two and gear can never give the rate back — see the note on the def.
+   * A held button re-issues the cast every tick, so the cooldown is what decides
+   * whether one cast is separable from the next. Under the wind-up it never
+   * binds: casts chain with a two-tick gap and the wind-up stops reading as one,
+   * which is exactly the "holding the button skips the cast time" report. Above
+   * it, every cast in a held stream starts from rest the way the first one does.
    */
-  it("ember_bolt is limited by its cast, not its cooldown", () => {
-    const def = SKILLS.get("skill.ember_bolt.v1")!;
-    expect(def.castTicks).toBe(14);
-    expect(def.cooldownTicks).toBeLessThan(def.castTicks!);
+  it("every wind-up skill leaves a gap between held casts", () => {
+    for (const def of SKILLS.values()) {
+      if (!def.castTicks) continue;
+      expect.soft(def.cooldownTicks, def.id).toBeGreaterThan(def.castTicks);
+    }
+  });
+
+  it("keeps active spell wind-ups short", () => {
+    expect(SKILLS.get("skill.cinder_ground.v1")!.castTicks).toBe(9);
   });
 
   it("cinder_ground has a spawnGroundArea effect with burning ailment maxStacks=5 dpsFixed=fp(8)", () => {
@@ -138,9 +147,9 @@ describe("MONSTERS", () => {
   });
 
   // Swarm speed, under the player's 4.2 but close enough to punish walking away.
-  it("cinder_imp moveSpeedFixed === fp(3.5)", () => {
+  it("cinder_imp moveSpeedFixed === fp(2.9)", () => {
     const def = MONSTERS.get("monster.cinder_imp.v1")!;
-    expect(def.moveSpeedFixed).toBe(fp(3.5));                // 3500
+    expect(def.moveSpeedFixed).toBe(fp(2.9));                // 2900
   });
 
   it("cinder_imp attackDamage is physical fp(6)", () => {
@@ -244,6 +253,60 @@ describe("monster pools", () => {
     for (const def of MONSTERS.values()) {
       if (def.archetype !== "heavy") continue;
       expect(def.heavy!.windupTicks / 30, def.id).toBeGreaterThanOrEqual(0.75);
+    }
+  });
+});
+
+/**
+ * The default attack: every class has one, it is free, and it is not a drop.
+ * Pinned here because the bar wires L/M/R to these ids, so a rename that only
+ * touched skills.ts would leave three sockets firing nothing.
+ */
+describe("DEFAULT_ATTACK_BY_CLASS", () => {
+  it("covers every class exactly, with no strays", () => {
+    expect(Object.keys(DEFAULT_ATTACK_BY_CLASS).sort()).toEqual([...CLASS_IDS].sort());
+  });
+
+  it("names a skill that exists", () => {
+    for (const id of Object.values(DEFAULT_ATTACK_BY_CLASS)) {
+      expect(SKILLS.has(id)).toBe(true);
+    }
+  });
+
+  it("costs no mana: it is what you fall back to when dry", () => {
+    for (const id of Object.values(DEFAULT_ATTACK_BY_CLASS)) {
+      expect(SKILLS.get(id)!.manaCostFixed).toBe(0);
+    }
+  });
+
+  it("uses a minimal seven-tick wind-up for every default attack", () => {
+    for (const id of Object.values(DEFAULT_ATTACK_BY_CLASS)) {
+      expect(SKILLS.get(id)!.castTicks).toBe(7);
+    }
+  });
+
+  it("gives the three classes three different attacks", () => {
+    const ids = Object.values(DEFAULT_ATTACK_BY_CLASS);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("swings for the melee class and shoots for the other two", () => {
+    const effectOf = (classId: string) =>
+      SKILLS.get(DEFAULT_ATTACK_BY_CLASS[classId]!)!.effects[0]!.type;
+    expect(effectOf("class.ironsworn")).toBe("meleeStrike");
+    expect(effectOf("class.stalker")).toBe("spawnProjectile");
+    expect(effectOf("class.emberbound")).toBe("spawnProjectile");
+  });
+
+  it("hits softer than a real skill, so it never replaces one", () => {
+    const bolt = SKILLS.get("skill.ember_bolt.v1")!.effects[0]!;
+    const boltDamage = bolt.type === "spawnProjectile" ? bolt.damage.amountFixed : 0;
+    for (const id of Object.values(DEFAULT_ATTACK_BY_CLASS)) {
+      const eff = SKILLS.get(id)!.effects[0]!;
+      const dmg = eff.type === "spawnProjectile" || eff.type === "meleeStrike"
+        ? eff.damage.amountFixed : 0;
+      expect(dmg).toBeGreaterThan(0);
+      expect(dmg).toBeLessThan(boltDamage / 2);
     }
   });
 });

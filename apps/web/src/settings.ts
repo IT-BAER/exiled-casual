@@ -62,8 +62,12 @@ export interface UiSettings {
   skillBar: (string | null)[];
 }
 
-/** Numbered sockets on the bar. The three mouse buttons are not reorderable yet. */
-export const SKILL_SLOT_COUNT = 5;
+/** Total sockets: 5 numbered (keys 1-5) then L, M, R mouse. The HUD draws them
+ *  as two rows and MUST slice to MOUSE_SLOT_BASE for the numbered row. */
+export const SKILL_SLOT_COUNT = 8;
+export const MOUSE_SLOT_BASE = 5;
+/** Left click's default. A sentinel, not null: clearing L gives movement back. */
+export const MOVE_SOCKET = "builtin.move";
 
 export interface Settings {
   graphics: GraphicsSettings;
@@ -96,7 +100,10 @@ export const DEFAULT_SETTINGS: Settings = {
     minimap: true,
     lootLabels: true,
     orbNumbers: true,
-    skillBar: ["skill.ember_bolt.v1", "skill.cinder_ground.v1", "skill.blink.v1", null, null],
+    skillBar: [
+      "skill.ember_bolt.v1", "skill.cinder_ground.v1", "skill.blink.v1", null, null,
+      MOVE_SOCKET, null, null,
+    ],
   },
 };
 
@@ -136,6 +143,13 @@ function skillBar(raw: unknown, fallback: (string | null)[]): (string | null)[] 
   const seen = new Set<string>();
   const out: (string | null)[] = [];
   for (let i = 0; i < SKILL_SLOT_COUNT; i++) {
+    // A save from before the mouse row is 5 long. Missing entries take the
+    // default rather than null, so the left button still walks.
+    if (i >= raw.length) {
+      const d = fallback[i] ?? null;
+      out.push(d !== null && !seen.has(d) ? (seen.add(d), d) : null);
+      continue;
+    }
     const v = raw[i];
     if (typeof v === "string" && v.length > 0 && !seen.has(v)) {
       seen.add(v);

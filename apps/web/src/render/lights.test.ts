@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { Mesh, NullEngine, Scene, Vector3 } from "@babylonjs/core";
+import { Mesh, MeshBuilder, NullEngine, Scene, Vector3 } from "@babylonjs/core";
 import { FLAME_MESH, flameParticleCount } from "./flames";
 import {
   BRAZIER_FLAME_Y, BRAZIER_RIM_R, BRAZIER_RIM_Y, LIGHT_POOL,
@@ -47,6 +47,23 @@ describe("the fires a place is lit by", () => {
     expect(state.filter((l) => l.on)).toHaveLength(1);
     expect(state[0]!.x).toBe(1);
     expect(state[0]!.z).toBe(2);
+  });
+
+  it("does not render shadow casters beyond the fire's own light", () => {
+    const s = scene();
+    const [light] = createFireLights(s);
+    const predicate = light!.getShadowGenerator()?.getShadowMap()?.renderListPredicate;
+    expect(predicate).toBeTypeOf("function");
+
+    const near = MeshBuilder.CreateBox("near-fire", { size: 1 }, s);
+    near.position.set(1, 0.5, 0);
+    near.computeWorldMatrix(true);
+    const far = MeshBuilder.CreateBox("far-from-fire", { size: 1 }, s);
+    far.position.set(100, 0.5, 0);
+    far.computeWorldMatrix(true);
+
+    expect(predicate!(near)).toBe(true);
+    expect(predicate!(far)).toBe(false);
   });
 
   it("flickers, and never to nothing", () => {

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Engine, Matrix, Vector3 } from "@babylonjs/core";
 import type { Scene } from "@babylonjs/core";
-import { applyGraphics, createScene } from "./render/engine";
+import { applyGraphics, createScene, setMapFill } from "./render/engine";
 import { buildLevel, applyBiomeTint, applyTilesetFloor } from "./render/level";
 import { buildHideoutDecor, clearHideoutDecor } from "./render/hideout";
 import { SnapshotRenderer } from "./render/renderer";
@@ -11,8 +11,8 @@ import { enablePhysics, resetPhysics } from "./render/ragdoll";
 import { resetFireLights } from "./render/lights";
 import { loadRocks, resetRocks } from "./render/rocks";
 import { loadPlayerRig, resetPlayerRig } from "./render/rig";
-import { attachBindings } from "./input/bindings";
-import { CORE_SFX, playSfx, preloadSfx } from "./audio/sfx";
+import { attachBindings, getAimWorld } from "./input/bindings";
+import { CORE_SFX, playSfx, preloadSfx, setAmbient, stopAmbient } from "./audio/sfx";
 import { createSoundscape } from "./audio/soundscape";
 import { preloadUiArt } from "./ui-art";
 import { setTitle } from "./title";
@@ -29,7 +29,7 @@ import { Divider, FramedPanel, GOLD, MenuButton, DISPLAY, SERIF } from "./menu/f
 import { LoadingScreen, LOADING_ART, FADE_MS } from "./LoadingScreen";
 import { pickTip } from "./tips";
 import { OptionsPanel } from "./menu/OptionsPanel";
-import { DEFAULT_SETTINGS, type Settings } from "./settings";
+import { DEFAULT_SETTINGS, MOUSE_SLOT_BASE, MOVE_SOCKET, type Settings } from "./settings";
 import type { FrameHook, Projector } from "./hud/LootLabels";
 import type { AreaLayout } from "@exiled/mapgen";
 import { BIOMES, mapBase } from "@exiled/content-runtime";
@@ -265,6 +265,9 @@ export function GameView({
       // The key row IS the bar's order: `1` fires the first socket, whatever the
       // player last dragged into it.
       (key) => skillBarRef.current[Number(key) - 1] ?? null,
+      // Returns the raw socket value: MOVE_SOCKET, a skill id, or null (cleared).
+      // The bindings layer decides what each means.
+      (button) => skillBarRef.current[MOUSE_SLOT_BASE + button] ?? null,
     );
 
     // Loot plates are DOM, so their click has to reach the same approach-then-act
@@ -306,6 +309,7 @@ export function GameView({
         playSfx("portal-enter");
         // The base also says what the floor is, which is what his boots land on.
         soundscape.reset(base?.biomeId ?? null);
+        setAmbient(base?.biomeId ?? null);
         // Nothing the player had open belongs to the place they just left. The
         // inventory in particular: opening a map from the device leaves it up, and
         // stepping through the portal used to land you in the map reading a bag.
@@ -326,6 +330,7 @@ export function GameView({
           art: `${LOADING_ART}/${base?.biomeId ?? "hideout"}.jpg`,
         });
         buildLevel(scene, grid, base?.tilesetId);
+        setMapFill(scene, msg.area === "map");
         // Furniture, and only in the hideout: a map is a place you pass through.
         if (msg.area === "hideout") buildHideoutDecor(scene);
         else clearHideoutDecor(scene);
@@ -344,6 +349,9 @@ export function GameView({
       // ponytail: float alpha for lerp — never fed into sim
       const alpha = Math.min(1, (performance.now() - prevTickTime) / MS_PER_TICK);
       renderer.apply(prevSnap, curSnap, alpha);
+      // The aim target updates every frame so the arm tracks the cursor live.
+      const aim = getAimWorld();
+      renderer.setAim(aim.x, aim.y);
       // Camera follows the player (interpolated) so they stay centred like an ARPG.
       // The 4th arg (cloneAlphaBetaRadius=true) keeps the orbit fixed and moves the
       // camera WITH the target; the default recomputes the angles and drifts.
@@ -436,6 +444,7 @@ export function GameView({
       resetMonsters();
       resetPhysics();
       resetRocks();
+      stopAmbient();
       sceneRef.current = null;
       engineRef.current = null;
       engine.dispose();

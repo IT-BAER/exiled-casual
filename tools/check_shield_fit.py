@@ -76,19 +76,18 @@ for obj in sorted((o for o in bpy.data.objects if o.name.startswith("weapon2."))
         f"hand={np.abs(hand_local).round(4)}",
     )
 
-    if "buckler" in obj.name and (abs(normal[1]) < 0.90 or abs(normal[2]) > 0.10):
-        failures.append(f"{obj.name}: face is not upright and forward-facing")
-    if "tower" in obj.name and (abs(normal[0]) < 0.90 or abs(tall[2]) < 0.90):
-        failures.append(f"{obj.name}: plate is not upright and left-facing")
+    # Every shield is carried in the same attitude, so this is one rule and not
+    # one per mesh: the face is upright and turned left, never forward. A buckler
+    # aimed at the horizon is a plate held out, not a shield strapped to an arm.
+    if abs(normal[0]) < 0.90 or abs(normal[2]) > 0.10:
+        failures.append(f"{obj.name}: face is not upright and left-facing")
+    if "tower" in obj.name and abs(tall[2]) < 0.90:
+        failures.append(f"{obj.name}: plate is not upright")
     if abs(hand_local[0]) > 0.12 or abs(hand_local[1]) > 0.12:
         failures.append(f"{obj.name}: hand misses the carried area")
-    if "buckler" in obj.name and not 0.15 <= abs(hand_local[2]) <= 0.23:
-        failures.append(f"{obj.name}: plate is not against the holding arm")
-    if "tower" in obj.name and not 0.025 <= abs(hand_local[2]) <= 0.10:
+    if not 0.02 <= abs(hand_local[2]) <= 0.12:
         failures.append(f"{obj.name}: grip depth misses the holding hand")
 
-tower_name = next(name for name in shield_points if "tower" in name)
-tower = shield_points[tower_name]
 arm_points = []
 for name in ("gloves.bracers.bracers", "body.ranger.hands", "body.ranger.sleeves"):
     obj = bpy.data.objects[name].evaluated_get(deps)
@@ -96,21 +95,34 @@ for name in ("gloves.bracers.bracers", "body.ranger.hands", "body.ranger.sleeves
     arm_points.extend((obj.matrix_world @ vertex.co)[:] for vertex in mesh.vertices)
     obj.to_mesh_clear()
 arm_points = np.array(arm_points)
-delta = tower[:, None, :] - arm_points[None, :, :]
-nearest_arm = float(np.sqrt(np.min(np.einsum("ijk,ijk->ij", delta, delta))))
-print(f"{tower_name}: nearest arm surface={nearest_arm:.4f}")
-if nearest_arm > 0.035:
-    failures.append(f"{tower_name}: plate is visibly detached from the holding arm")
 
-centre = tower.mean(axis=0)
-values, vectors = np.linalg.eigh(np.cov((tower - centre).T))
-normal = vectors[:, np.argmin(values)]
-if normal[1] < 0:
-    normal *= -1
-left_yaw = float(np.degrees(np.arctan2(normal[0], normal[1])))
-print(f"{tower_name}: left cant={left_yaw:.2f} degrees")
-if not 65.0 <= left_yaw <= 85.0:
-    failures.append(f"{tower_name}: face does not point left with a small forward bias")
+for name, points in sorted(shield_points.items()):
+    delta = points[:, None, :] - arm_points[None, :, :]
+    nearest_arm = float(np.sqrt(np.min(np.einsum("ijk,ijk->ij", delta, delta))))
+    if nearest_arm > 0.035:
+        failures.append(f"{name}: plate is visibly detached from the holding arm")
+
+    centre = points.mean(axis=0)
+    values, vectors = np.linalg.eigh(np.cov((points - centre).T))
+    normal = vectors[:, np.argmin(values)]
+    # A plane has two normals, so the cant has to be measured on the side the
+    # plate actually bows towards - the earlier version normalised the sign off
+    # the y axis and so scored an inverted shield as a correct one, which is how
+    # boards that cupped the hip shipped. The bowed face is the SPARSE extreme
+    # along the normal: the flat back and its rim wall crowd their own side.
+    depth = (points - centre) @ normal
+    near_front = int((depth > depth.max() - 0.006).sum())
+    near_back = int((depth < depth.min() + 0.006).sum())
+    bow = normal if near_front < near_back else -normal
+    outward = centre[:2] / np.linalg.norm(centre[:2])
+    outward_dot = float(bow[:2] @ outward)
+    left_yaw = float(np.degrees(np.arctan2(bow[0], -bow[1])))
+    print(f"{name}: nearest arm surface={nearest_arm:.4f}, bow={bow.round(3)}, "
+          f"left cant={left_yaw:.2f} degrees, outward dot={outward_dot:.3f}")
+    if outward_dot < 0.5:
+        failures.append(f"{name}: plate bows towards the body instead of away from it")
+    if not 65.0 <= left_yaw <= 85.0:
+        failures.append(f"{name}: face does not point left with a small forward bias")
 
 if failures:
     raise SystemExit("\n".join(failures))

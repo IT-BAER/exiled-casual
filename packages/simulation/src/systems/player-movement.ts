@@ -46,6 +46,9 @@ const TURN_SPEED_FLOOR_PCT = 88;
  */
 const TURN_FOR_DISTANCE: Fixed = fp(1);
 
+/** Click-to-move may route around a blocked target only inside this distance. */
+export const MAX_AUTO_ROUTE_DISTANCE: Fixed = fp(5);
+
 /**
  * Where to walk THIS tick to end up at (tx, ty): the target itself while the line
  * to it is clear, and the next waypoint of the route around otherwise.
@@ -62,6 +65,9 @@ function aimAt(
 ): { x: Fixed; y: Fixed } {
   if (!collision?.nav) return { x: tx, y: ty };
   if (hasLineOfSight(collision, x, y, tx, ty, bodyRadius)) return { x: tx, y: ty };
+  const dx = tx - x;
+  const dy = ty - y;
+  if (isqrt(dx * dx + dy * dy) > MAX_AUTO_ROUTE_DISTANCE) return { x: tx, y: ty };
   // No route at all (a click inside solid rock with no mouth to stand in) hands
   // the walk back to the straight line, which the slide then stops at the wall.
   return collision.nav.waypoint(x, y, tx, ty, bodyRadius) ?? { x: tx, y: ty };
@@ -94,7 +100,7 @@ function corner(
 }
 
 /** A vector rescaled to length 1 (Fixed). Zero in, zero out. */
-function unit(x: Fixed, y: Fixed): { x: Fixed; y: Fixed } {
+export function unit(x: Fixed, y: Fixed): { x: Fixed; y: Fixed } {
   const len = isqrt(x * x + y * y);
   if (len === 0) return { x: 0, y: 0 };
   return { x: Math.trunc((x * FP_SCALE) / len), y: Math.trunc((y * FP_SCALE) / len) };

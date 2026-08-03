@@ -102,7 +102,7 @@ SOURCES: dict[str, str] = {
     "portal-enter": "Epic Stock Media - Elemental Mutation Whooshes and Impacts/GLASMvmt_Whoosh Glass Crystal Fragments Sharp Shards Dry 05_ESM_EMWI.wav",
     # A pitch collapsing, not a power-down: every "downer" in the bundle is a trailer
     # synth, and a guitar dive bomb is the same falling gesture with a body to it.
-    "portal-close": "Rogue Waves - Metal Tensions/MUSCStngr_Open String Dive Bomb Down, Whammy bar, Low_RogueWaves_MetalTensions_13.wav",
+    "portal-close": "Justsoundeffects - Futuristic Interface/UIMvmt_Resonant Electric Whoosh 01_JSE_FI.wav",
     "waystone-activate": "Alexander Kopeikin - Emotion and Magic/magic, action gesture, evil presence, onslaught-004.wav",
 
     # ── Flask, feet, UI ─────────────────────────────────────────────────────────

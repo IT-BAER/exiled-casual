@@ -107,9 +107,12 @@ HELM_LIP, HELM_LIP_H = 0.014, 0.035
 # The wand, as (distance along its own axis, radius). Butt behind the fist, a
 # swell at the head: a constant-radius rod is a dowel, and the one silhouette cue
 # that survives the play camera is that the far end is fatter than the near one.
+# Sized against the icon, which draws a wand about as long as the forearm that
+# holds it: at 0.36 long and 20 mm through the fist it read as a chopstick under
+# the play camera, where the whole character is 12% of frame height.
 WAND_PROFILE = [
-    (-0.100, 0.010), (-0.060, 0.014), (0.000, 0.014), (0.100, 0.011),
-    (0.190, 0.013), (0.235, 0.023), (0.260, 0.013),
+    (-0.145, 0.016), (-0.087, 0.022), (0.000, 0.022), (0.145, 0.018),
+    (0.276, 0.021), (0.341, 0.037), (0.377, 0.021),
 ]
 WAND_SIDES = 8
 # Swung 65 degrees off the fist axis and onto the arm's, so at rest it hangs down
@@ -154,22 +157,29 @@ FOREARM_TOP, FOREARM_BOTTOM = 1.238, 0.848
 # sit against the bracer, with only enough clearance to avoid depth flicker.
 SHIELD_CLEAR = 0.004
 
+# Every shield is carried in the SAME attitude: face left with a small forward
+# bias, because that is how a shield sits on a strapped forearm and because the
+# play camera reads a plate edge-on as a stick. A buckler aimed straight forward
+# was the odd one out, and it looked like a dinner plate held out to be taken.
+# The sign decides which way the plate bows: at -75 the domed face and its
+# ironwork turn inward and the shield cups the hip like a bowl.
+SHIELD_YAW = math.radians(75.0)
+TOWER_YAW = SHIELD_YAW
+
 # Each shield's own anchor: (x of its centre, y of its BACK face, z of its centre).
 # The x is pulled inboard of the arm so the plate covers the hip instead of
 # hanging off the side, and the buckler is centred on the forearm the way a
 # buckler really is strapped.
-BUCKLER_AT = (0.355, FOREARM_FRONT - SHIELD_CLEAR, 1.045)
+# Once a plate faces left, its width runs along the character's forward axis.
+# Shift that span back until the hand lands behind its middle, not past its edge.
+BUCKLER_FOREARM_SHIFT = 0.300
+BUCKLER_AT = (0.340, FOREARM_FRONT - SHIELD_CLEAR + BUCKLER_FOREARM_SHIFT, 1.045)
 # The tower shield hangs from the arm rather than being pinned through its middle:
 # its top sits just under the elbow, so the boards fall towards the knee and stay
 # clear of the pauldron at 1.43. Centred at the forearm it reached the shoulder,
 # which is a door carried at chest height.
-# Once the plate faces left, its width runs along the character's forward axis.
-# Shift that span back until the hand lands behind its middle, not past its edge.
 TOWER_FOREARM_SHIFT = 0.220
 TOWER_AT = (0.340, FOREARM_FRONT - SHIELD_CLEAR + TOWER_FOREARM_SHIFT, 0.960)
-# Face left with a small forward bias. The shield hangs beside the character;
-# pointing mainly forward puts it ahead of the arm instead of on the forearm.
-TOWER_YAW = math.radians(-75.0)
 
 # The buckler, matched to ember_buckler.png: a round riveted plate, domed, with a
 # raised rim and a proud central boss. 0.36 across, so it covers a shoulder and no
@@ -210,10 +220,12 @@ TOWER_NU, TOWER_NV = 13, 21
 # The coat's profile, waist first: (z, radius) around the body axis. Measured
 # against the ranger's own silhouette rather than guessed - his torso peaks at
 # r=0.192 over the hips, his belt at 0.177 and his legs at 0.193, so the coat
-# starts at 0.195 and flares from there and never has to fight them for space.
+# starts inside the belt, follows the lower torso, then opens over the hips. A
+# single wide top ring made a straight, detached skirt seam under the belt.
 COAT_RINGS = [
-    (1.120, 0.195),  # just under the belt (z 1.125), so the belt stays on top
-    (0.980, 0.215),
+    (1.120, 0.158),  # cinched under the belt, not raised into it
+    (1.045, 0.174),  # fitted yoke before the coat opens over the hips
+    (0.980, 0.208),
     (0.800, 0.243),
     (0.600, 0.268),
     (0.400, 0.292),
@@ -616,10 +628,12 @@ def skin_to(obj, armature, bone_name, material):
         obj.data.materials[0] = material
     else:
         obj.data.materials.append(material)
+    # The pinned texel is for gear with no art of its own to wear. A piece that
+    # brought its own projection (the shields) keeps it.
     if not obj.data.uv_layers:
-        obj.data.uv_layers.new()
-    for loop in obj.data.uv_layers[0].data:
-        loop.uv = HELM_UV
+        layer = obj.data.uv_layers.new()
+        for loop in layer.data:
+            loop.uv = HELM_UV
     # Flat, for the same reason the helm is: facets catching light are what read
     # as forged iron at the size the play camera draws a hand.
     for poly in obj.data.polygons:
@@ -652,6 +666,7 @@ def build_wand(armature, material):
     bmesh.ops.bridge_loops(bm, edges=[e for e in bm.edges if len(e.link_faces) < 2])
     bm.to_mesh(obj.data)
     bm.free()
+    rod_uv(obj)
     fit = Matrix.Translation(WAND_AT) @ Matrix.Rotation(WAND_TILT, 4, "Y")
     return place(obj, armature, "hand_r", hand_frame(armature, "hand_r", False), material, fit)
 
@@ -678,6 +693,49 @@ def rest_against_arm(obj):
     obj.data.transform(Matrix.Translation((0.0, -deepest, 0.0)))
 
 
+def rod_uv(obj):
+    """Lay a shaft's own icon along it: v up the length, u across the barrel.
+
+    Planar and not cylindrical: the icon is a side view of the object, so wrapping
+    it around the barrel would squeeze the whole picture into the circumference.
+    Projected, the far side repeats the near side mirrored, which at a wand's
+    width is a texel or two.
+    """
+    axis = [vertex.co.z for vertex in obj.data.vertices]
+    across = [vertex.co.x for vertex in obj.data.vertices]
+    span_a = max(max(axis) - min(axis), 1e-6)
+    span_c = max(max(across) - min(across), 1e-6)
+    layer = obj.data.uv_layers.new()
+    for poly in obj.data.polygons:
+        for loop in poly.loop_indices:
+            i = obj.data.loops[loop].vertex_index
+            layer.data[loop].uv = ((across[i] - min(across)) / span_c,
+                                   (axis[i] - min(axis)) / span_a)
+
+
+def plate_uv(obj):
+    """Lay the shield's own inventory icon across its face.
+
+    Held gear otherwise samples a single texel, which is all a wand or a stone
+    needs, but a shield IS its icon: the boards, the bands and the boss are drawn
+    there and a flat repalettized wash throws all of that away. So the plate gets
+    a planar projection along its own normal - u across the face, v up it -
+    against a texture that is the icon cropped to its art (`build_gear_textures`).
+    The back and the edge walls take the same projection; nothing but the front is
+    ever turned towards the camera.
+    """
+    across = Vector((math.cos(SHIELD_YAW), math.sin(SHIELD_YAW), 0.0))
+    u = [vertex.co.xy.to_3d().dot(across) for vertex in obj.data.vertices]
+    v = [vertex.co.z for vertex in obj.data.vertices]
+    span_u = max(max(u) - min(u), 1e-6)
+    span_v = max(max(v) - min(v), 1e-6)
+    layer = obj.data.uv_layers.new()
+    for poly in obj.data.polygons:
+        for loop in poly.loop_indices:
+            i = obj.data.loops[loop].vertex_index
+            layer.data[loop].uv = ((u[i] - min(u)) / span_u, (v[i] - min(v)) / span_v)
+
+
 def shield_fit(armature, anchor):
     """Express the measured shield carry anchor inside the forearm bind frame."""
     basis = armature.matrix_world @ armature.data.bones[SHIELD_BONE].matrix_local
@@ -695,22 +753,27 @@ def build_buckler(armature, material):
     cy = BUCKLER_BACK
     n = BUCKLER_SEGMENTS
 
+    def yawed(px, py, z):
+        """Cant the plate about its own vertical axis, exactly as the tower is."""
+        sin, cos = math.sin(SHIELD_YAW), math.cos(SHIELD_YAW)
+        return (cx + px * cos - py * sin, cy + px * sin + py * cos, z)
+
     def ring_point(rf, out, s):
         theta = 2.0 * math.pi * s / n
         # Every other segment stands proud, outside the boss: eight ridges from
         # the boss to the rim, which is the icon's spoked face.
         lift = BUCKLER_SPOKE if (s % 2 == 0 and rf >= 0.30) else 0.0
         r = rf * BUCKLER_R
-        return (cx + r * math.cos(theta), cy - (out + lift), cz + r * math.sin(theta))
+        return yawed(r * math.cos(theta), -(out + lift), cz + r * math.sin(theta))
 
     # The profile's first entry is the crown of the boss, which is a point rather
     # than a ring, and the appended last one is the back of the plate: between
     # them the two 1.00 entries stand the rim's edge up as a wall.
     profile = list(BUCKLER_PROFILE) + [(1.00, BUCKLER_BACK)]
-    crown = bm.verts.new((cx, cy - profile[0][1], cz))
+    crown = bm.verts.new(yawed(0.0, -profile[0][1], cz))
     rings = [[bm.verts.new(ring_point(rf, out, s)) for s in range(n)]
              for rf, out in profile[1:]]
-    back = bm.verts.new((cx, cy - BUCKLER_BACK, cz))
+    back = bm.verts.new(yawed(0.0, -BUCKLER_BACK, cz))
     for s in range(n):
         bm.faces.new((crown, rings[0][s], rings[0][(s + 1) % n]))
     for a, b in zip(rings, rings[1:]):
@@ -722,6 +785,7 @@ def build_buckler(armature, material):
     bm.to_mesh(obj.data)
     bm.free()
     rest_against_arm(obj)
+    plate_uv(obj)
     log(f"built buckler: {len(obj.data.vertices)}v, {BUCKLER_R * 2:.2f} across")
     basis, fit = shield_fit(armature, BUCKLER_AT)
     return place_in_basis(obj, armature, SHIELD_BONE, material, basis, fit)
@@ -779,6 +843,7 @@ def build_tower(armature, material):
     bm.to_mesh(obj.data)
     bm.free()
     rest_against_arm(obj)
+    plate_uv(obj)
     log(f"built tower shield: {len(obj.data.vertices)}v, {TOWER_W:.2f} x {TOWER_H:.2f}")
     basis, fit = shield_fit(armature, TOWER_AT)
     return place_in_basis(obj, armature, SHIELD_BONE, material, basis, fit)

@@ -58,10 +58,10 @@ describe("buildSnapshot", () => {
     expect(snap.player.casting).toBe(false);
   });
 
-  it("player.casting is true during a cast's recovery window", () => {
+  it("player.casting is true during a cast's wind-up", () => {
     const { world, sim, playerEntity } = createCombatSim(42);
     const intent: Intent = { kind: "useSkill", skillId: "skill.ember_bolt.v1", tx: fp(5), ty: fp(0) };
-    sim.step([intentToCommand(intent, playerEntity, 0)]); // castTicks 8 → untilTick 8
+    sim.step([intentToCommand(intent, playerEntity, 0)]); // castTicks 9 → untilTick 9
     const snap = buildSnapshot(world, sim, sim.tick, CONTENT_VERSION);
     expect(snap.player.casting).toBe(true);
   });
@@ -72,7 +72,7 @@ describe("buildSnapshot", () => {
     const cmd = intentToCommand(intent, playerEntity, 0);
     sim.step([cmd]);
     const snap = buildSnapshot(world, sim, sim.tick, CONTENT_VERSION);
-    expect(snap.player.cooldowns["skill.ember_bolt.v1"]).toBeCloseTo(11 / 30, 5);
+    expect(snap.player.cooldowns["skill.ember_bolt.v1"]).toBeCloseTo(14 / 30, 5);
   });
 
   it("monster entities appear in snapshot sorted by id with life/maxLife/rare", () => {
@@ -93,6 +93,7 @@ describe("buildSnapshot", () => {
     const { world, sim, playerEntity } = createCombatSim(42);
     const intent: Intent = { kind: "useSkill", skillId: "skill.ember_bolt.v1", tx: fp(5), ty: fp(0) };
     sim.step([intentToCommand(intent, playerEntity, 0)]);
+    for (let i = 1; i <= 14; i++) sim.step();
     const snap = buildSnapshot(world, sim, sim.tick, CONTENT_VERSION);
     const projs = snap.entities.filter(e => e.kind === "projectile");
     expect(projs).toHaveLength(1);
@@ -396,12 +397,13 @@ describe("buildSnapshot - skills", () => {
     expect(bolt).toBeDefined();
     expect(bolt!.name).toBe("Ember Bolt");
     expect(bolt!.description.length).toBeGreaterThan(0);
-    expect(bolt!.manaCost).toBe(12);
-    // 14 cast ticks and 12 cooldown ticks at 30 Hz, with no cast speed on the base build.
-    expect(bolt!.castTimeSec).toBeCloseTo(14 / 30, 5);
-    expect(bolt!.cooldownSec).toBeCloseTo(12 / 30, 5);
-    // 36 fire damage over the cast, which is what its DPS column has to say.
-    expect(bolt!.dps).toBeCloseTo(36 / (14 / 30), 3);
+    expect(bolt!.manaCost).toBe(10);
+    // Nine cast ticks and fifteen cooldown ticks at 30 Hz, with no cast speed on the base build.
+    expect(bolt!.castTimeSec).toBeCloseTo(9 / 30, 5);
+    expect(bolt!.cooldownSec).toBeCloseTo(15 / 30, 5);
+    // 36 fire damage per REPEAT, and the cooldown is the longer of the two, so the
+    // DPS column quotes the rate a held button actually delivers.
+    expect(bolt!.dps).toBeCloseTo(36 / (15 / 30), 3);
     expect(bolt!.lines).toContain("Deals 36 Fire Damage");
   });
 
@@ -410,8 +412,8 @@ describe("buildSnapshot - skills", () => {
     world.set(playerEntity, "offense", { spellDamagePct: 0, castSpeedPct: 100, critChancePct: 0 });
     const snap = buildSnapshot(world, sim, 0, CONTENT_VERSION);
     const bolt = snap.skills!.find((s) => s.id === "skill.ember_bolt.v1")!;
-    // Twice as fast: 14 ticks become 7, the same floor skillCast applies.
-    expect(bolt.castTimeSec).toBeCloseTo(7 / 30, 5);
+    // Twice as fast: integer fixed-step timing floors nine ticks to four.
+    expect(bolt.castTimeSec).toBeCloseTo(4 / 30, 5);
   });
 
   it("omits DPS for a skill that deals no damage", () => {

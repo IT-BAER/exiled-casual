@@ -99,6 +99,49 @@ describe("validateSkillDef", () => {
     expect(r.ok).toBe(false);
   });
 
+  /**
+   * The melee branch. Unlike a projectile it has no travel, so reach and arc are
+   * the whole targeting rule and both have to survive validation.
+   */
+  it("accepts a meleeStrike effect", () => {
+    const r = validateSkillDef({
+      ...validSkill,
+      effects: [
+        {
+          type: "meleeStrike",
+          reachFixed: fp(1.6),
+          arcDegrees: 120,
+          damage: { type: "physical", amountFixed: fp(14) },
+        },
+      ],
+    });
+    expect(r.ok).toBe(true);
+  });
+
+  it("rejects a meleeStrike with an arc outside 0..360", () => {
+    const r = validateSkillDef({
+      ...validSkill,
+      effects: [
+        {
+          type: "meleeStrike",
+          reachFixed: fp(1.6),
+          arcDegrees: 400,
+          damage: { type: "physical", amountFixed: fp(14) },
+        } as never,
+      ],
+    });
+    expect(r.ok).toBe(false);
+    expect(r.errors.some((e) => e.includes("arcDegrees"))).toBe(true);
+  });
+
+  it("rejects a meleeStrike missing damage", () => {
+    const r = validateSkillDef({
+      ...validSkill,
+      effects: [{ type: "meleeStrike", reachFixed: fp(1.6), arcDegrees: 120 } as never],
+    });
+    expect(r.ok).toBe(false);
+  });
+
   it("rejects spawnProjectile missing damage field", () => {
     const r = validateSkillDef({
       ...validSkill,

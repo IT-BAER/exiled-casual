@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { DEFAULT_SETTINGS, MIN_RESOLUTION_SCALE, sanitize } from "./settings";
+import { DEFAULT_SETTINGS, MIN_RESOLUTION_SCALE, MOVE_SOCKET, SKILL_SLOT_COUNT, sanitize } from "./settings";
 
 describe("sanitize", () => {
   it("gives defaults for anything that is not a settings object", () => {
@@ -86,29 +86,41 @@ describe("sanitize", () => {
 describe("the skill bar rides in the settings", () => {
   const bar = (raw: unknown) => sanitize({ ui: { skillBar: raw } }).ui.skillBar;
 
-  it("defaults to the three starting skills in the first three sockets", () => {
+  it("defaults to 5 numbered + L=Move, M=null, R=null", () => {
     expect(sanitize(null).ui.skillBar).toEqual([
       "skill.ember_bolt.v1", "skill.cinder_ground.v1", "skill.blink.v1", null, null,
+      MOVE_SOCKET, null, null,
     ]);
   });
 
   it("keeps a saved order", () => {
-    expect(bar([null, "skill.blink.v1", null, null, "skill.ember_bolt.v1"]))
-      .toEqual([null, "skill.blink.v1", null, null, "skill.ember_bolt.v1"]);
+    expect(bar([null, "skill.blink.v1", null, null, "skill.ember_bolt.v1", MOVE_SOCKET, null, null]))
+      .toEqual([null, "skill.blink.v1", null, null, "skill.ember_bolt.v1", MOVE_SOCKET, null, null]);
   });
 
-  it("is always exactly five sockets, however long the save was", () => {
-    expect(bar(["a"]).length).toBe(5);
-    expect(bar(["a", "b", "c", "d", "e", "f", "g"]).length).toBe(5);
-    expect(bar("not an array").length).toBe(5);
+  it("is always exactly eight sockets", () => {
+    expect(bar(["a"]).length).toBe(SKILL_SLOT_COUNT);
+    expect(bar(["a", "b", "c", "d", "e", "f", "g", "h", "i"]).length).toBe(SKILL_SLOT_COUNT);
+    expect(bar("not an array").length).toBe(SKILL_SLOT_COUNT);
+  });
+
+  it("gives a five-socket save its mouse defaults back", () => {
+    expect(bar(["skill.blink.v1", null, null, null, null]))
+      .toEqual(["skill.blink.v1", null, null, null, null, MOVE_SOCKET, null, null]);
+  });
+
+  it("does not refill a socket the player cleared", () => {
+    expect(bar([null, null, null, null, null, null, null, null])[5]).toBeNull();
   });
 
   /** One skill in two sockets would fire twice off one press and read as a dupe. */
   it("refuses the same skill in two sockets", () => {
-    expect(bar(["a", "a", "b", null, null])).toEqual(["a", null, "b", null, null]);
+    expect(bar(["a", "a", "b", null, null, null, null, null]))
+      .toEqual(["a", null, "b", null, null, null, null, null]);
   });
 
   it("throws nothing at junk inside the array", () => {
-    expect(bar([1, {}, "", null, "ok"])).toEqual([null, null, null, null, "ok"]);
+    expect(bar([1, {}, "", null, "ok", null, null, null]))
+      .toEqual([null, null, null, null, "ok", null, null, null]);
   });
 });

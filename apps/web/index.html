@@ -65,9 +65,13 @@
          simply be switched off — a keyboard player has to be able to see where
          they are — so it is replaced with a gilt one that belongs to the frame.
          `:focus-visible` and not `:focus`: it appears for the keyboard and never
-         for the mouse, which is the case the white line kept showing up in. */
+         for the mouse, which is the case the white line kept showing up in.
+         Gated on `data-kbd`, set by the first Tab/arrow press, because an
+         `autoFocus`ed button counts as focus-visible on load: the ring stood
+         around PLAY before the player had touched a key. */
       :focus { outline: none; }
-      :focus-visible { outline: 2px solid #c8a44d; outline-offset: 3px; }
+      :focus-visible { outline: none; }
+      body[data-kbd] :focus-visible { outline: 2px solid #c8a44d; outline-offset: 3px; }
       * { cursor: image-set(url(/textures/ui/cursor_32.png) 1x, url(/textures/ui/cursor_64.png) 2x) 1 1, default !important; }
       /* Illegal target for whatever is armed on the cursor: the same blade, cooled
          to red iron, so the refusal is legible without leaving the art. */
@@ -118,6 +122,13 @@
   <body>
     <div id="boot"><div id="boot-ring"></div></div>
     <div id="root"></div>
+    <!-- Arms the gilt focus ring on the first keyboard navigation, and never for
+         the mouse or for an autofocused button. -->
+    <script>
+      addEventListener("keydown", function (e) {
+        if (e.key === "Tab" || e.key.startsWith("Arrow")) document.body.dataset.kbd = "1";
+      }, { capture: true });
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -6,7 +6,11 @@ import { NullEngine } from "@babylonjs/core";
 import { createScene } from "./engine";
 import { makeMesh } from "./meshes";
 import {
+  actionRatio,
+  ACTION_RATIO_MAX,
+  ACTION_RATIO_MIN,
   clipForSpeed,
+  CLIP_NAME,
   idleRatio,
   IDLE_SETTLE_SEC,
   IDLE_SETTLED,
@@ -21,6 +25,8 @@ import {
   HIPS_BOB,
   SKIRT_CHAINS,
   SKIRT_JOINTS,
+  STRIKE_CLIPS,
+  isLayeredClip,
 } from "./rig";
 import { ITEM_POOLS, STARTER_BASE_IDS, baseOf } from "@exiled/content-runtime";
 import { EQUIP_SLOTS_BY_CLASS } from "@exiled/simulation";
@@ -90,6 +96,25 @@ describe("speedRatioFor", () => {
     expect(speedRatioFor("walk", 100)).toBe(1.8);
     expect(speedRatioFor("cast", 3.5)).toBe(1);
     expect(speedRatioFor("idle", 0)).toBe(1);
+  });
+});
+
+describe("actionRatio", () => {
+  it("fits the authored clip into the wind-up the sim granted", () => {
+    // A 1s swing inside a 0.5s cast plays at twice speed, so the release pose
+    // lands on the tick the hit does instead of a third of the way in.
+    expect(actionRatio(1, 0.5)).toBeCloseTo(2, 5);
+    expect(actionRatio(1, 1)).toBeCloseTo(1, 5);
+  });
+
+  it("clamps so a short wind-up is not a one-frame twitch", () => {
+    expect(actionRatio(1, 0.01)).toBe(ACTION_RATIO_MAX);
+    expect(actionRatio(1, 100)).toBe(ACTION_RATIO_MIN);
+  });
+
+  it("falls back to the authored rate when the window is unknown", () => {
+    expect(actionRatio(1, undefined)).toBe(1);
+    expect(actionRatio(0, 0.5)).toBe(1);
   });
 });
 
@@ -502,6 +527,77 @@ describe("pack skin compatibility", () => {
  * wardrobe, or a change to the remap itself. The runtime path cannot be used —
  * there is no HTTP server here, so the loader always falls back.
  */
+/**
+ * The cast is the pack's left-handed spell mirrored onto the right arm by
+ * `tools/build_cast_mirror.py`, because the wand skins to `hand_r`. Nothing else
+ * pins that: the clip is a name the loader looks up, and a library rebuilt
+ * without the mirror step still loads, still animates, and casts from the empty
+ * hand. So this measures which arm actually moves, per bone, straight out of the
+ * glb — the mirror is a swap, so the two chains trade places exactly.
+ */
+describe("the cast clip drives the weapon arm", () => {
+  const MODELS = fileURLToPath(new URL("../../public/models/", import.meta.url));
+  const glb = readFileSync(`${MODELS}anim-library.glb`);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const json = JSON.parse(glb.subarray(20, 20 + glb.readUInt32LE(12)).toString("utf8")) as any;
+  const bin = 20 + glb.readUInt32LE(12) + 8;
+
+  /** How far a bone's rotation travels over a clip, summed component-wise. */
+  function travel(clipName: string, bone: string): number {
+    const clip = json.animations.find((a: { name: string }) => a.name === clipName);
+    expect(clip, clipName).toBeDefined();
+    let total = 0;
+    for (const channel of clip.channels) {
+      if (channel.target.path !== "rotation") continue;
+      if (json.nodes[channel.target.node].name !== bone) continue;
+      const a = json.accessors[clip.samplers[channel.sampler].output];
+      const start = bin + (json.bufferViews[a.bufferView].byteOffset ?? 0) + (a.byteOffset ?? 0);
+      const at = (k: number, c: number) => glb.readFloatLE(start + (k * 4 + c) * 4);
+      // q and -q are the same rotation, and the pack's own takes do flip sign
+      // mid-clip: `Sword_Attack`'s upperarm_r flips twice and reads as nearly
+      // three times the travel it actually has. Align each frame to the one
+      // before it, or the measure says more about the encoding than the arm.
+      for (let k = 1; k < a.count; k++) {
+        let dot = 0;
+        for (let c = 0; c < 4; c++) dot += at(k, c) * at(k - 1, c);
+        const sign = dot < 0 ? -1 : 1;
+        for (let c = 0; c < 4; c++) total += Math.abs(sign * at(k, c) - at(k - 1, c));
+      }
+    }
+    return total;
+  }
+
+  it("ships every clip the loader asks for", () => {
+    const names = new Set(json.animations.map((a: { name: string }) => a.name));
+    for (const name of Object.values(CLIP_NAME)) expect(names, name).toContain(name);
+  });
+
+  it("ships two sword-derived weapon-arm attacks and layers both over locomotion", () => {
+    expect(STRIKE_CLIPS).toHaveLength(2);
+    expect(new Set(STRIKE_CLIPS.map((clip) => CLIP_NAME[clip])).size).toBe(2);
+    expect(CLIP_NAME.strikeA).toBe("Rig|Sword_Attack");
+    // Both takes are slashes: the second is the first rolled onto another swing
+    // plane by tools/build_slash_variant.py, not the pack's bare-fisted punch.
+    expect(CLIP_NAME.strikeB).toBe("Rig|Sword_Attack_Down");
+    for (const clip of STRIKE_CLIPS) {
+      expect(isLayeredClip(clip)).toBe(true);
+      const right = travel(CLIP_NAME[clip], "upperarm_r") + travel(CLIP_NAME[clip], "lowerarm_r");
+      const left = travel(CLIP_NAME[clip], "upperarm_l") + travel(CLIP_NAME[clip], "lowerarm_l");
+      // A sword take swings one arm and counterbalances with the other, so the
+      // weapon arm leads by about 2x rather than owning the clip outright.
+      expect(right, clip).toBeGreaterThan(left * 1.8);
+    }
+  });
+
+  it("swings the right arm and not the left", () => {
+    for (const bone of ["upperarm", "lowerarm"]) {
+      const right = travel(CLIP_NAME.cast, `${bone}_r`);
+      const left = travel(CLIP_NAME.cast, `${bone}_l`);
+      expect(right, bone).toBeGreaterThan(left * 3);
+    }
+  });
+});
+
 describe("the idle clip leaves the soles planted", () => {
   const MODELS = fileURLToPath(new URL("../../public/models/", import.meta.url));
 

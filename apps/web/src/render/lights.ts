@@ -175,6 +175,18 @@ export function createFireLights(scene: Scene): PointLight[] {
   return pool;
 }
 
+/** A caster beyond the light's reach cannot change a lit pixel. The extra two
+ * units cover animated limbs whose skinned vertices can leave their bind-pose
+ * sphere, matching the torch's proven safety margin. */
+function reachesCaster(light: PointLight, mesh: AbstractMesh): boolean {
+  const sphere = mesh.getBoundingInfo().boundingSphere;
+  const dx = sphere.centerWorld.x - light.position.x;
+  const dy = sphere.centerWorld.y - light.position.y;
+  const dz = sphere.centerWorld.z - light.position.z;
+  const reach = light.range + sphere.radiusWorld + 2;
+  return dx * dx + dy * dy + dz * dz <= reach * reach;
+}
+
 /**
  * Give a bowl real shadows.
  *
@@ -211,7 +223,8 @@ function castFrom(scene: Scene, light: PointLight | undefined): void {
     gen.getShadowMap()!.renderListPredicate = (mesh) =>
       mesh.name !== "ground"
       && mesh.name !== FLAME_MESH
-      && !mesh.name.startsWith("telegraph-");
+      && !mesh.name.startsWith("telegraph-")
+      && reachesCaster(light, mesh);
     // Rendered on demand only: `updateFireLights` re-arms ONE map per frame,
     // round-robin. Four cube maps every frame were half the whole frame budget
     // (54 -> 110 fps in the hideout, measured live); staggered at a third of the
@@ -305,12 +318,14 @@ export function updateFireLights(scene: Scene, at: Vector3, deltaMs: number): vo
       continue;
     }
     const { s } = found;
+    const moved = light.position.x !== s.x || light.position.z !== s.z;
     light.position.set(s.x, BRAZIER_FLAME_Y, s.z);
     const t = clock + s.phase;
     const wobble = Math.sin(t * 3.1) * 0.66 + Math.sin(t * 1.27 + 1.7) * 0.34;
     light.intensity = FIRE_INTENSITY * (1 + FLICKER_INTENSITY * wobble);
     light.range = FIRE_RANGE * zoom * (1 + FLICKER_RANGE * wobble);
     light.setEnabled(true);
+    if (moved) light.getShadowGenerator()?.getShadowMap()?.resetRefreshCounter();
   }
 
   // One shadow cube per frame, rotating through the lit bowls. The maps are

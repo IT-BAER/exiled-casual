@@ -143,7 +143,9 @@ describe("worldSfxMix", () => {
 
   it("routes every sampled cue into one player-facing volume category", () => {
     for (const name of voiceNames()) {
-      const expected = name.startsWith("skill-")
+      const expected = name.startsWith("ambient-")
+        ? "music"
+        : name.startsWith("skill-")
         ? "skills"
         : name.startsWith("ui-") ? "interface" : "environment";
       expect(sfxCategory(name), name).toBe(expected);

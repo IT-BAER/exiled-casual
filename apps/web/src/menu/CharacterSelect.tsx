@@ -42,6 +42,8 @@ export interface CharacterSelectProps {
   onDelete: (id: string) => void;
   onBack: () => void;
   onOptions: () => void;
+  onExport: () => void;
+  onImport: (file: File) => void;
   /** How many characters this world holds. Local is one; online is uncapped. */
   cap: number;
 }
@@ -55,9 +57,12 @@ export function CharacterSelect({
   onDelete,
   onBack,
   onOptions,
+  onExport,
+  onImport,
   cap,
 }: CharacterSelectProps): React.ReactElement {
   const [confirming, setConfirming] = React.useState<CharacterHeader | null>(null);
+  const importRef = React.useRef<HTMLInputElement>(null);
   const selected = characters.find((c) => c.id === selectedId) ?? null;
   const full = characters.length >= cap;
 
@@ -107,6 +112,21 @@ export function CharacterSelect({
           <MenuButton height={36} style={{ flex: 1, minWidth: 0 }} onClick={onOptions}>
             Options
           </MenuButton>
+        </div>
+
+        <Divider />
+
+        <div style={{ display: "flex", gap: 8 }}>
+          <MenuButton height={34} style={{ flex: 1, minWidth: 0 }} onClick={onExport}>Export</MenuButton>
+          <MenuButton height={34} style={{ flex: 1, minWidth: 0 }} onClick={() => importRef.current?.click()}>Import</MenuButton>
+          <input
+            ref={importRef}
+            aria-label="Import save"
+            type="file"
+            accept="application/json,.json"
+            onChange={(e) => { const file = e.currentTarget.files?.[0]; if (file) onImport(file); e.currentTarget.value = ""; }}
+            style={{ display: "none" }}
+          />
         </div>
 
         <Divider />

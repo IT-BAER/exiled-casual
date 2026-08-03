@@ -24,6 +24,8 @@ function view(over: Partial<React.ComponentProps<typeof CharacterSelect>> = {}) 
     onDelete: vi.fn(),
     onBack: vi.fn(),
     onOptions: vi.fn(),
+    onExport: vi.fn(),
+    onImport: vi.fn(),
     cap: 8,
     ...over,
   };
@@ -40,6 +42,15 @@ describe("CharacterSelect", () => {
     expect(options.disabled).toBe(false);
     fireEvent.click(options);
     expect(props.onOptions).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers portable save export and import", () => {
+    const props = view();
+    fireEvent.click(screen.getByRole("button", { name: /^export$/i }));
+    expect(props.onExport).toHaveBeenCalledTimes(1);
+    const file = new File(["{}"], "save.json", { type: "application/json" });
+    fireEvent.change(screen.getByLabelText(/import save/i), { target: { files: [file] } });
+    expect(props.onImport).toHaveBeenCalledWith(file);
   });
 
   it("shows a row per character with its name, level and class", () => {

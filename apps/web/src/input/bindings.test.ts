@@ -86,9 +86,13 @@ describe("attachBindings hold-to-move", () => {
     canvas.remove();
   });
 
-  function pointer(type: string, button = 0, target: EventTarget = canvas) {
+  // `buttons` is the bitmask of what is CURRENTLY down, which is what the
+  // bindings read for chorded presses; jsdom will not derive it from `button`.
+  function pointer(type: string, button = 0, target: EventTarget = canvas, buttons?: number) {
+    const bit = [1, 4, 2][button] ?? 0;
+    const mask = buttons ?? (type === "pointerup" ? 0 : bit);
     target.dispatchEvent(
-      new MouseEvent(type, { button, clientX: 50, clientY: 50, bubbles: true }),
+      new MouseEvent(type, { button, buttons: mask, clientX: 50, clientY: 50, bubbles: true }),
     );
   }
 
@@ -109,6 +113,7 @@ describe("attachBindings hold-to-move", () => {
     expect(moveToCount(worker.postMessage)).toBe(0);
 
     ghost.remove();
+    pointer("pointerup", 0, window); // a real second press needs a release first
     pointer("pointerdown");
     expect(moveToCount(worker.postMessage)).toBe(1);
   });
@@ -130,6 +135,62 @@ describe("attachBindings hold-to-move", () => {
       intent: { kind: "moveTo", x: fp(9), y: fp(9) },
     });
     detach();
+    c.remove();
+  });
+
+  it("casts with the right button while the left is held walking", () => {
+    // Pointer Events fire pointerdown only for the FIRST button: pressing right
+    // while left is down arrives as a pointermove carrying buttons = 1|2, and
+    // releasing right arrives the same way. Reading `button` alone missed both,
+    // so right-click did nothing at all while walking.
+    const w = { postMessage: vi.fn() };
+    const c = document.createElement("canvas");
+    document.body.appendChild(c);
+    const { detach: d, onSnapshot } = attachBindings(
+      c, w as unknown as Worker, fakeScene(),
+      undefined, undefined, undefined, undefined, undefined, undefined,
+      (button) => (button === 2 ? "skill.ember_bolt.v1" : "builtin.move"),
+    );
+    const move = (buttons: number) =>
+      c.dispatchEvent(new MouseEvent("pointermove", { button: 0, buttons, clientX: 50, clientY: 50, bubbles: true }));
+
+    c.dispatchEvent(new MouseEvent("pointerdown", { button: 0, buttons: 1, clientX: 50, clientY: 50, bubbles: true }));
+    expect(moveToCount(w.postMessage)).toBe(1);
+    move(1 | 2); // right pressed while left stays down
+    expect(intentCount(w.postMessage, "useSkill")).toBe(1);
+    // Both keep going: walking is not interrupted and the cast repeats.
+    onSnapshot(makeSnap());
+    expect(intentCount(w.postMessage, "useSkill")).toBe(2);
+    expect(moveToCount(w.postMessage)).toBe(3); // down + the move + the snapshot
+    move(1); // right released, left still down
+    onSnapshot(makeSnap());
+    expect(intentCount(w.postMessage, "useSkill")).toBe(2);
+    d();
+    c.remove();
+  });
+
+  it("repeats a held skill only after the previous cast has completed", () => {
+    const w = { postMessage: vi.fn() };
+    const c = document.createElement("canvas");
+    document.body.appendChild(c);
+    const { detach: d, onSnapshot } = attachBindings(
+      c, w as unknown as Worker, fakeScene(),
+      undefined, undefined, undefined, undefined, undefined, undefined,
+      (button) => (button === 2 ? "skill.ember_bolt.v1" : null),
+    );
+    c.dispatchEvent(new MouseEvent("pointerdown", { button: 2, clientX: 50, clientY: 50, bubbles: true }));
+    expect(intentCount(w.postMessage, "useSkill")).toBe(1);
+    const casting = makeSnap();
+    casting.player.casting = true;
+    onSnapshot(casting);
+    onSnapshot(casting);
+    expect(intentCount(w.postMessage, "useSkill")).toBe(1);
+    onSnapshot(makeSnap());
+    expect(intentCount(w.postMessage, "useSkill")).toBe(2);
+    window.dispatchEvent(new MouseEvent("pointerup", { button: 2, bubbles: true }));
+    onSnapshot(makeSnap());
+    expect(intentCount(w.postMessage, "useSkill")).toBe(2);
+    d();
     c.remove();
   });
 
@@ -170,27 +231,32 @@ describe("attachBindings hold-to-move", () => {
   });
 
   it("does not move on pointermove when the button is not held", () => {
-    pointer("pointermove");
-    pointer("pointermove");
+    pointer("pointermove", 0, canvas, 0);
+    pointer("pointermove", 0, canvas, 0);
     expect(moveToCount(worker.postMessage)).toBe(0);
   });
 
   it("stops re-targeting after the button is released", () => {
     pointer("pointerdown");
     pointer("pointerup", 0, window); // release may land outside the canvas
-    pointer("pointermove");
+    pointer("pointermove", 0, canvas, 0);
     expect(moveToCount(worker.postMessage)).toBe(1); // only the initial down
   });
 
   it("ignores non-left buttons", () => {
     pointer("pointerdown", 2);
-    pointer("pointermove");
+    pointer("pointermove", 0, canvas, 2);
     expect(moveToCount(worker.postMessage)).toBe(0);
   });
 
-  it("r key posts a reset message", () => {
+  it("r key does NOT reset the sim — that wiped the character's inventory", () => {
+    // `reset` rebuilds the core as `new WorkerCore(42)`: no characterId, no
+    // hydrate, so the live character is replaced by an empty seed-42 lab one and
+    // the next durable change persists that emptiness. It was a greybox-lab
+    // affordance that outlived the lab, and it fires on the dev server too, which
+    // is where it was actually losing people's gear.
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "r", bubbles: true }));
-    expect(worker.postMessage).toHaveBeenCalledWith({ type: "reset" });
+    expect(worker.postMessage).not.toHaveBeenCalledWith({ type: "reset" });
   });
 
   it("numpad keys post spawn messages", () => {

@@ -7,31 +7,16 @@ const SKILL_DEFS: SkillDef[] = [
     name: "Ember Bolt",
     description: "Launches a bolt of fire that bursts on the first enemy it strikes.",
     /**
-     * Fourteen ticks a cast, not eight: 2.1 casts a second where it used to be
-     * 3.75 and read as a hose.
-     *
-     * The rate is what had to come down, and buying that with the COOLDOWN alone
-     * would have been the wrong knob — cast speed shortens a cast and never a
-     * cooldown (PoE's rule, kept in skill-cast.ts), so the one number gear can
-     * ever give back is the cast time. It carries the change; the cooldown moves
-     * to 12 only to stay under the cast, where it has always been, so it never
-     * becomes the limiter itself.
-     *
-     * Damage 25 -> 36 and mana 8 -> 12 hold damage-per-mana at 3.0 against the old
-     * 3.1, and the mana pool is what caps sustained damage (balance.test.ts) — so
-     * the fight keeps its length while the hands slow down and the hits get 44%
-     * heavier. Fewer, bigger hits is docs/09 rule 4, intensity over density, not a
-     * compromise with it.
-     *
-     * Measured against the four archetype bands rather than reasoned about: swarm
-     * 2.2s, brute 5.4s, shooter 2.0s, heavy 4.6s, versus 2.2 / 4.8 / 2.1 / 4.3
-     * before. Scaling damage by the full 1.75 instead put the shooter pack at 1.8s,
-     * under its own floor — a 108-life target wastes whatever a bolt overkills it
-     * by, so per-hit damage does not buy time back linearly.
+     * Nine ticks keeps the wind-up visible without making the skill feel held
+     * back. The cooldown must stay ABOVE it: at eight it never bound, so a held
+     * button chained casts nose to tail with a two-tick gap and the wind-up
+     * stopped reading as one — the first bolt looked like it cost time and every
+     * bolt after it looked free. Fifteen leaves a beat between bolts, and matches
+     * every other attack skill.
      */
-    manaCostFixed: fp(12),
-    cooldownTicks: 12,
-    castTicks: 14,
+    manaCostFixed: fp(10),
+    cooldownTicks: 15,
+    castTicks: 9,
     critChancePct: 7,
     effects: [
       {
@@ -49,7 +34,7 @@ const SKILL_DEFS: SkillDef[] = [
     description: "Scorches the ground at a location, burning enemies who stand in the cinders.",
     manaCostFixed: fp(20),
     cooldownTicks: 30,
-    castTicks: 15,
+    castTicks: 9,
     effects: [
       {
         type: "spawnGroundArea",
@@ -62,6 +47,80 @@ const SKILL_DEFS: SkillDef[] = [
           durationTicks: 60,
           maxStacks: 5,
         },
+      },
+    ],
+  },
+  /*
+   * The three default attacks, one per class.
+   *
+   * PoE keys this off the equipped weapon, not the character. We key it off the
+   * class because the only weapon classes that exist here are wand, focus and
+   * shield: there is no bow and no melee weapon to read, and no weapon damage
+   * stat for one to carry. When those land this map becomes the fallback and the
+   * weapon wins, which is why every one of these is a plain content def with no
+   * class logic inside it.
+   *
+   * All three are free: a default attack is what the player still has when the
+   * mana pool is dry, and mana is what caps sustained damage (balance.test.ts).
+   * 0.5s repeat gate (15 ticks) on top of the 7-tick cast means ~1.4 attacks/sec.
+   * Damage sits near a third of Ember Bolt's 36 so it is a floor to fall back to
+   * and never the better choice.
+   */
+  {
+    id: "skill.strike.v1",
+    name: "Strike",
+    description: "A swing of whatever is in hand. Costs nothing and always available.",
+    manaCostFixed: 0,
+    cooldownTicks: 15,
+    castTicks: 7,
+    critChancePct: 5,
+    effects: [
+      {
+        type: "meleeStrike",
+        // Reach is to the target's surface, so 1.6 clears a 0.85 brute at arm's
+        // length rather than needing the player inside it.
+        reachFixed: fp(1.6),
+        // Wide enough that two bodies in a doorway both take it, narrow enough
+        // that turning around is a real cost.
+        arcDegrees: 120,
+        damage: { type: "physical", amountFixed: fp(14) },
+      },
+    ],
+  },
+  {
+    id: "skill.snap_shot.v1",
+    name: "Snap Shot",
+    description: "A loosed arrow, quick and cheap. Costs nothing and always available.",
+    manaCostFixed: 0,
+    cooldownTicks: 15,
+    castTicks: 7,
+    critChancePct: 5,
+    effects: [
+      {
+        type: "spawnProjectile",
+        // Faster and thinner than Ember Bolt: an arrow, not a lobbed flame.
+        speedPerSecFixed: fp(20),
+        radiusFixed: fp(0.3),
+        maxRangeFixed: fp(14),
+        damage: { type: "physical", amountFixed: fp(11) },
+      },
+    ],
+  },
+  {
+    id: "skill.ember_spark.v1",
+    name: "Ember Spark",
+    description: "A thrown mote of fire. Costs nothing and always available.",
+    manaCostFixed: 0,
+    cooldownTicks: 15,
+    castTicks: 7,
+    critChancePct: 5,
+    effects: [
+      {
+        type: "spawnProjectile",
+        speedPerSecFixed: fp(14),
+        radiusFixed: fp(0.35),
+        maxRangeFixed: fp(16),
+        damage: { type: "fire", amountFixed: fp(10) },
       },
     ],
   },
@@ -86,3 +145,22 @@ for (const def of SKILL_DEFS) {
 export const SKILLS: ReadonlyMap<string, SkillDef> = new Map(
   SKILL_DEFS.map((d) => [d.id, d]),
 );
+
+/**
+ * Which default attack each class swings. This is the one place a class picks a
+ * NUMBER rather than a look, so it is also where "classes are cosmetic" stopped
+ * being true — see the note in `@exiled/rules/classes.ts`.
+ *
+ * `content.test.ts` pins it against `CLASS_IDS` and against `SKILLS`, so neither
+ * a new class nor a renamed skill can leave a socket firing nothing.
+ */
+export const DEFAULT_ATTACK_BY_CLASS: Record<string, string> = {
+  "class.ironsworn": "skill.strike.v1",
+  "class.stalker": "skill.snap_shot.v1",
+  "class.emberbound": "skill.ember_spark.v1",
+};
+
+/** The default attack for a class id, falling back rather than throwing mid-run. */
+export function defaultAttackFor(classId: string): string {
+  return DEFAULT_ATTACK_BY_CLASS[classId] ?? DEFAULT_ATTACK_BY_CLASS["class.stalker"]!;
+}

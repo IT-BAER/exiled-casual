@@ -46,7 +46,7 @@ export function SkillTooltip(
     >
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px" }}>
         <div style={{ flex: 1, fontSize: 17, color: GOLD, letterSpacing: 1, whiteSpace: "nowrap" }}>{skill.name}</div>
-        {skill.dps !== undefined && <Stat label="DPS" value={String(skill.dps)} />}
+        {skill.dps !== undefined && <Stat label="DPS" value={String(Math.round(skill.dps))} />}
         <Stat label="Cost" value={`${skill.manaCost} Mana`} />
         <Stat label="Cast Time" value={`${skill.castTimeSec.toFixed(2)} sec`} />
         {skill.cooldownSec > 0 && <Stat label="Cooldown" value={`${skill.cooldownSec.toFixed(2)} sec`} />}

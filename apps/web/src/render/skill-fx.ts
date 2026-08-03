@@ -98,9 +98,9 @@ function wispSystem(scene: Scene, name: string, capacity: number): ParticleSyste
   ps.particleTexture = new Texture(WISP, scene);
   ps.blendMode = ParticleSystem.BLENDMODE_ADD;
   ps.applyFog = true;
-  ps.addColorGradient(0, new Color4(0.42, 0.38, 0.95, 0));
-  ps.addColorGradient(0.25, new Color4(0.46, 0.52, 1, 0.42));
-  ps.addColorGradient(1, new Color4(0.22, 0.16, 0.55, 0));
+  ps.addColorGradient(0, new Color4(0.5, 0.45, 1, 0));
+  ps.addColorGradient(0.2, new Color4(0.55, 0.6, 1, 0.7));
+  ps.addColorGradient(1, new Color4(0.28, 0.2, 0.65, 0));
   return ps;
 }
 
@@ -185,7 +185,7 @@ function playOnce(scene: Scene, mesh: Mesh, seconds: number, from: number, to: n
 export const FLASH_NAME = "fx-flash";
 /** Bright enough to be seen against a 420-intensity torch, short enough not to
  *  be mistaken for a second lamp in the room. */
-const FLASH_INTENSITY = 900;
+const FLASH_INTENSITY = 500;
 const FLASH_DECAY = 4.5; // per second, multiplicative
 
 /**
@@ -251,31 +251,27 @@ export function attachBoltTrail(scene: Scene, mesh: AbstractMesh): ParticleSyste
   // its 256px cell and the rest is black, so the quad has to be oversized
   // before the fire is anything but a few pixels: at 0.6 the whole tail came
   // out as a dotted red line behind a white ball.
-  sizeOverLife(ps, 1.15, 0.22);
-  // Short: the tail's length is lifetime x speed, and anything past about half a
-  // second leaves a smear hanging in the air after the bolt has already landed.
-  ps.minLifeTime = 0.14;
-  ps.maxLifeTime = 0.42;
-  // High, and the reason the capacity is 140: the rate has to beat the bolt's
-  // own 12 units/s or the tail comes out as a dotted line.
-  ps.emitRate = 200;
+  sizeOverLife(ps, 0.5, 0.1);
+  ps.minLifeTime = 0.05;
+  ps.maxLifeTime = 0.1;
+  ps.emitRate = 80;
 
   // Sideways and slightly up, then gravity takes them down. Sparks that fall out
   // of the flight path are what sells it as burning matter and not a light.
-  ps.direction1 = new Vector3(-0.5, -0.1, -0.5);
-  ps.direction2 = new Vector3(0.5, 0.4, 0.5);
-  ps.minEmitPower = 0.2;
-  ps.maxEmitPower = 1.0;
-  ps.gravity = new Vector3(0, -3.4, 0);
+  ps.direction1 = new Vector3(-0.3, -0.05, -0.3);
+  ps.direction2 = new Vector3(0.3, 0.25, 0.3);
+  ps.minEmitPower = 0.1;
+  ps.maxEmitPower = 0.5;
+  ps.gravity = new Vector3(0, -2.0, 0);
   ps.start();
 
   // The ribbon. Particles alone cannot draw a continuous streak — they are
   // discrete, so a fast bolt always breaks its own tail into a dotted line —
   // and a streak is the single thing that separates a fireball from a comet
   // sprite in the reference frame.
-  const ribbon = new TrailMesh(`${BOLT_TRAIL_NAME}-ribbon`, mesh, scene, 0.17, 34, true);
+  const ribbon = new TrailMesh(`${BOLT_TRAIL_NAME}-ribbon`, mesh, scene, 0.08, 10, true);
   ribbon.material = glowMaterial(scene, `${BOLT_TRAIL_NAME}-ribbon-mat`, new Color3(1, 0.55, 0.2));
-  ribbon.material.alpha = 0.75;
+  ribbon.material.alpha = 0.4;
   ribbon.isPickable = false;
 
   // The bolt mesh is disposed the tick the sim kills the projectile, i.e. on
@@ -300,21 +296,19 @@ export const BOLT_BURST_NAME = "fx-bolt-burst";
 /** Impact: flame thrown outward, a ring across the floor and a real flash of
  *  light on it, all on the same frame. */
 export function emberBurst(scene: Scene, at: Vector3): ParticleSystem {
-  shockwave(scene, at, 3.4, new Color3(1, 0.55, 0.18));
+  shockwave(scene, at, 2.2, new Color3(1, 0.55, 0.18));
   flash(scene, at);
 
-  const ps = fireSystem(scene, BOLT_BURST_NAME, 64);
+  const ps = fireSystem(scene, BOLT_BURST_NAME, 40);
   ps.emitter = at;
-  // Radial directions with no work: a sphere emitter's direction is its own
-  // surface normal, so every particle leaves the centre outward.
-  ps.createSphereEmitter(0.12, 1);
-  sizeOverLife(ps, 1.4, 0.25);
-  ps.minLifeTime = 0.2;
-  ps.maxLifeTime = 0.55;
-  ps.minEmitPower = 2.5;
-  ps.maxEmitPower = 7;
+  ps.createSphereEmitter(0.1, 1);
+  sizeOverLife(ps, 0.9, 0.18);
+  ps.minLifeTime = 0.15;
+  ps.maxLifeTime = 0.4;
+  ps.minEmitPower = 2;
+  ps.maxEmitPower = 5;
   ps.gravity = new Vector3(0, -7, 0);
-  return burst(ps, 56, 0.55);
+  return burst(ps, 32, 0.4);
 }
 
 export const CINDER_NAME = "fx-cinder";
@@ -431,7 +425,7 @@ export const BLINK_STREAK_NAME = "fx-blink-streak";
  * than the character: anything near opaque washes the room out and reads brighter
  * than the fire skills that actually hurt. Exported so the test can hold it.
  */
-export const BLINK_ALPHA = 0.3;
+export const BLINK_ALPHA = 0.48;
 
 /**
  * Blink: a streak along the path travelled, a collapsing puff where the
@@ -476,31 +470,30 @@ export function blinkBurst(scene: Scene, from: Vector3, to: Vector3): void {
     // playOnce overwrites the material's alpha on its first frame: what actually
     // shipped was a near-opaque additive bar five units long, and at peak it
     // clipped to white and lost the violet that says which skill it was.
-    thinOut(scene, streak, 0.22, BLINK_ALPHA, 1, 0.35);
+    thinOut(scene, streak, 0.35, BLINK_ALPHA, 1, 0.25);
   }
   // No impact flash. A teleport lands nothing, and the shared 900-intensity
   // white light lit the whole floor for a skill that does no damage.
 
-  const out = wispSystem(scene, BLINK_NAME, 48);
+  const out = wispSystem(scene, BLINK_NAME, 60);
   out.emitter = to;
-  out.createSphereEmitter(0.25, 1);
-  sizeOverLife(out, 0.85, 0.14);
-  out.minLifeTime = 0.18;
-  out.maxLifeTime = 0.45;
-  out.minEmitPower = 2;
-  out.maxEmitPower = 5;
-  // Arcane, so it disperses rather than falls: gravity would make it debris.
-  out.gravity = new Vector3(0, 0.4, 0);
-  burst(out, 44, 0.45);
+  out.createSphereEmitter(0.3, 1);
+  sizeOverLife(out, 1.1, 0.2);
+  out.minLifeTime = 0.2;
+  out.maxLifeTime = 0.5;
+  out.minEmitPower = 2.5;
+  out.maxEmitPower = 6;
+  out.gravity = new Vector3(0, 0.6, 0);
+  burst(out, 52, 0.5);
 
-  const collapse = wispSystem(scene, BLINK_NAME, 40);
+  const collapse = wispSystem(scene, BLINK_NAME, 48);
   collapse.emitter = from;
-  collapse.createSphereEmitter(1.1, 1);
-  sizeOverLife(collapse, 0.7, 0.16);
-  collapse.minLifeTime = 0.16;
-  collapse.maxLifeTime = 0.3;
-  collapse.minEmitPower = -5;
-  collapse.maxEmitPower = -2.5;
+  collapse.createSphereEmitter(1.0, 1);
+  sizeOverLife(collapse, 0.9, 0.2);
+  collapse.minLifeTime = 0.18;
+  collapse.maxLifeTime = 0.35;
+  collapse.minEmitPower = -6;
+  collapse.maxEmitPower = -3;
   collapse.gravity = Vector3.Zero();
-  burst(collapse, 36, 0.3);
+  burst(collapse, 44, 0.35);
 }

@@ -39,10 +39,13 @@ const MenuStage = React.lazy(() => import("./menu/MenuStage").then((m) => ({ def
 import { DEFAULT_SETTINGS, type Settings } from "./settings";
 import { setTitle } from "./title";
 import { setSoundMix } from "./audio/drop-sound";
+import { preloadSfx } from "./audio/sfx";
 import {
   capFor,
   createCharacter,
   deleteCharacter,
+  exportRoster,
+  importRoster,
   readRoster,
   saveSettingsSoon,
   settingsOf,
@@ -56,6 +59,10 @@ type Screen =
   | { kind: "create" }
   | { kind: "info"; which: "about" }
   | { kind: "game"; characterId: string };
+
+/** `?play` in the URL: see the roster effect below. Read once, outside render. */
+const AUTOPLAY =
+  typeof window !== "undefined" && new URLSearchParams(window.location.search).has("play");
 
 export function App(): React.ReactElement {
   const [screen, setScreen] = React.useState<Screen>({ kind: "menu" });
@@ -77,7 +84,13 @@ export function App(): React.ReactElement {
       if (!live) return;
       setRoster(r);
       setSettings(settingsOf(r));
-      setSelectedId(r.lastPlayedId ?? r.characters[0]?.id ?? null);
+      const first = r.lastPlayedId ?? r.characters[0]?.id ?? null;
+      setSelectedId(first);
+      // `?play` walks straight into the world with the last character, so a
+      // driven browser can reach the game without three clicks it cannot see
+      // (the menus are canvas-adjacent and the mode dialog remounts under a
+      // snapshot). DEV only: this is a test hook, not a shortcut we ship.
+      if (import.meta.env?.DEV && first && AUTOPLAY) setScreen({ kind: "game", characterId: first });
     });
     return () => { live = false; };
   }, []);
@@ -101,6 +114,14 @@ export function App(): React.ReactElement {
   React.useEffect(() => {
     setSoundMix(settings.sound);
   }, [settings.sound]);
+
+  // The menu's own cues, fetched before the first press rather than by it: playSfx
+  // starts the load and returns silent, so without this the first click of a fresh
+  // page is the one click nobody hears. GameView still preloads CORE_SFX for the
+  // rest; a context created here is suspended until that first click resumes it.
+  React.useEffect(() => {
+    void preloadSfx(["ui-click", "ui-hover", "ui-panel-open"]);
+  }, []);
 
   const rows = React.useMemo(() => headers(roster), [roster]);
   /**
@@ -189,6 +210,25 @@ export function App(): React.ReactElement {
             }}
             onBack={() => setScreen({ kind: "menu" })}
             onOptions={() => setOptionsOpen(true)}
+            onExport={() => {
+              const blob = new Blob([exportRoster(roster)], { type: "application/json" });
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement("a");
+              link.href = url;
+              link.download = `exiled-casual-save-${new Date().toISOString().slice(0, 10)}.json`;
+              link.click();
+              URL.revokeObjectURL(url);
+            }}
+            onImport={(file) => {
+              void file.text().then((text) => {
+                if (!window.confirm("Importing replaces the current local save. Continue?")) return;
+                return importRoster(text).then((next) => {
+                  setRoster(next);
+                  setSettings(settingsOf(next));
+                  setSelectedId(next.lastPlayedId ?? next.characters[0]?.id ?? null);
+                });
+              }).catch((e: unknown) => setError(String(e instanceof Error ? e.message : e)));
+            }}
           />
         ) : (
           <CreateCharacter

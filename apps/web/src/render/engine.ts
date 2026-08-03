@@ -48,6 +48,12 @@ import { createFireLights, LIGHT_POOL, setFireLightZoom, updateFireLights } from
  */
 const SUN_INTENSITY = 6.0;
 const FILL_INTENSITY = 0.45;
+// Maps drop the sky fill further than the hideout: a place you pass through
+// should read as lit by what's actually placed in it (torches, braziers),
+// not by ambient light that relights every shadowed pixel regardless of
+// where the fires are. The hideout keeps FILL_INTENSITY — it is a lived-in,
+// permanently-lit home base, not a dungeon.
+const MAP_FILL_INTENSITY = 0.18;
 
 /**
  * The player's own light: PoE1's "light radius" made literal, a warm pool that
@@ -113,13 +119,19 @@ const TORCH_FLICKER = 0.035;
  *
  *  Matched on the part name and NOT on having an `entity-` root: the hideout
  *  props are entities too, so a root test takes the map device and the stash out
- *  along with the characters. */
-const isWardrobePart = (name: string): boolean =>
-  /^(base|body|belt|boots|gloves|helmet)\./.test(name);
+ *  along with the characters.
+ *
+ *  Held gear is a wardrobe slot like any other and belongs here for the same
+ *  reason the body does: the torch rides the player, so a shield in his own hand
+ *  is a slab an arm's length from the lamp, and it threw a shadow across half the
+ *  room that swung with the walk cycle. Listing the armour slots by hand is what
+ *  left the two weapon slots out. */
+export const isWardrobePart = (name: string): boolean =>
+  /^(base|body|belt|boots|gloves|helmet|weapon1|weapon2)\./.test(name);
 
 /** The colour past the last wall. Fog is tinted TO this, so distance dissolves
  *  into the void instead of meeting it at a hard cliff at the map edge. */
-export const VOID_COLOR = new Color3(0.09, 0.1, 0.12);
+export const VOID_COLOR = new Color3(0.02, 0.022, 0.026);
 
 /**
  * How far the edge darkening goes. Two presets and not one number because the
@@ -197,12 +209,20 @@ export function applyGraphics(scene: Scene, engine: Engine | null, g: GraphicsSe
   // one-way door, and the whole point of a live setting is that it comes back.
   const sun = scene.getLightByName("sun");
   if (sun) sun.shadowEnabled = g.shadows !== "off";
-  // The torch is a POINT light, so its shadow map is a cube: six faces for one
-  // pool of light. It is the first thing to drop and the last to restore.
+  // The torch and fires are POINT lights, so each shadow map is a six-face cube.
+  // Low keeps only the directional sun; High restores every local shadow.
   const torch = scene.getLightByName("torch");
   if (torch) {
     torch.shadowEnabled = g.shadows === "high";
     torch.diffuse = torchColor(g.torchWarmth);
+  }
+  // Every local point-light shadow is a six-face cube map. Low keeps the one
+  // directional sun map; only High pays for the torch and fire cubes. Looking
+  // the fires up by prefix also covers a pool whose size changes later.
+  for (const light of scene.lights) {
+    if (light.name.startsWith("firelight-")) {
+      light.shadowEnabled = g.shadows === "high";
+    }
   }
 
   const pipelines = scene.postProcessRenderPipelineManager?.supportedPipelines;
@@ -383,6 +403,15 @@ const SHADOW_EXTENT = 16;
  */
 const SUN_DISTANCE = 60;
 
+/** Switches the sky fill between the hideout's level and the dimmer one maps
+ *  use, so a place is lit by what's placed in it rather than flat ambient.
+ *  Looked up by name rather than threaded through `SceneHandle`: the light is
+ *  created once in `createScene` and this is called on every area change. */
+export function setMapFill(scene: Scene, isMap: boolean): void {
+  const fill = scene.getLightByName("fill");
+  if (fill) fill.intensity = isMap ? MAP_FILL_INTENSITY : FILL_INTENSITY;
+}
+
 export interface SceneHandle {
   scene: Scene;
   camera: ArcRotateCamera;
@@ -433,6 +462,7 @@ export function createScene(engine: Engine): SceneHandle {
   // which made a white ground plane invisible on a white page).
   scene.clearColor = new Color4(VOID_COLOR.r, VOID_COLOR.g, VOID_COLOR.b, 1);
   scene.fogColor = VOID_COLOR.clone();
+  scene.skipPointerMovePicking = true;
   applyAtmosphere(scene, "soft");
 
   // Top-down-ish camera: positioned above the origin, looking down at the
@@ -607,6 +637,8 @@ export function createScene(engine: Engine): SceneHandle {
   }
   ground.material = groundMat;
   ground.receiveShadows = true;
+  ground.freezeWorldMatrix();
+  ground.doNotSyncBoundingInfo = true;
 
   // The dungeon walls are no longer a fixed arena ring — they come from the
   // generated area's walkable grid, built by buildLevel() when the worker sends
@@ -682,6 +714,9 @@ export function createScene(engine: Engine): SceneHandle {
     sun.shadowMaxZ = SUN_DISTANCE + 35;
 
     const shadows = new ShadowGenerator(2048, sun);
+    // No forceBackFacesOnly here: it halves the shadow-map draw but stores the
+    // FAR side of a closed boulder, so the floor at its own base sits behind
+    // that depth and self-shadows into hard black squares that fight per frame.
     // Contact hardening (PCSS): sharp where an object meets the floor, widening
     // with the gap to its caster. A single blur radius is the thing that reads
     // as CG — a boulder's shadow is crisp at its base and diffuse at the far end
@@ -755,6 +790,7 @@ export function createScene(engine: Engine): SceneHandle {
     torch.shadowMinZ = 0.4;
     torch.shadowMaxZ = TORCH_RANGE;
     const torchShadows = new ShadowGenerator(1024, torch);
+    // See the sun generator: back-faces-only turns every boulder base black.
     torchShadows.usePercentageCloserFiltering = true;
     torchShadows.filteringQuality = ShadowGenerator.QUALITY_LOW; // x6 faces
     torchShadows.darkness = 0.35; // softer than the sun's: fill still reaches in
@@ -797,7 +833,7 @@ export function createScene(engine: Engine): SceneHandle {
       const dx = bs.centerWorld.x - torch.position.x;
       const dy = bs.centerWorld.y - torch.position.y;
       const dz = bs.centerWorld.z - torch.position.z;
-      const reach = torch.range + bs.radiusWorld;
+      const reach = torch.range + bs.radiusWorld + 2;
       return dx * dx + dy * dy + dz * dz <= reach * reach;
     };
     scene.onNewMeshAddedObservable.add((mesh) => {

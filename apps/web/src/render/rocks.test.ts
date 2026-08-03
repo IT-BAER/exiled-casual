@@ -8,6 +8,31 @@ function line(count: number, z = 0): RockCell[] {
   return Array.from({ length: count }, (_, i) => ({ x: i * 0.5, z }));
 }
 
+/** The same run, turned so its outward face points a given way. */
+function aimed(count: number, nx: number, nz: number): RockCell[] {
+  return line(count).map((c) => ({ ...c, nx, nz }));
+}
+
+describe("inland stone stays under the player's head", () => {
+  // The invariant a cave-wall pass keeps trying to break, pinned from every
+  // direction rather than for one wall orientation. A rock of height h hides
+  // 0.87h of world behind it at this camera, so anything over the player's 1.8
+  // hides the player — and because the wall band is ONE cell thick, every wall is
+  // some room's near wall, so there is no orientation that is safe to exempt.
+  // Height only becomes free at the map's rim, which is what scatterRampart is.
+  it.each([
+    ["facing the camera", 1, 0],
+    ["facing away", -1, 0],
+    ["side on", 0, 1],
+    ["side on, other way", 0, -1],
+    ["no normal at all", 0, 0],
+  ])("caps a boulder %s", (_label, nx, nz) => {
+    const rocks = scatterRocks(aimed(300, nx, nz));
+    expect(rocks.length).toBeGreaterThan(10);
+    expect(Math.max(...rocks.map((r) => r.height))).toBeLessThanOrEqual(1.53);
+  });
+});
+
 describe("scatterRocks", () => {
   it("never puts two rocks closer than the spacing", () => {
     const rocks = scatterRocks(line(200));
@@ -118,14 +143,31 @@ describe("scatterDebris", () => {
 });
 
 describe("scatterRampart", () => {
-  it("clears the boulder height cap, which is the whole reason it exists", () => {
+  it("clears the boulder height cap on the side the camera looks AT", () => {
     // Boulders are capped at the character's head (MAX_WIDTH * MAX_ASPECT = 1.52)
     // because he walks behind them. Nothing is behind the map's outer ring, and a
     // rock no taller than a boulder cannot hide the void the ground plate ends in.
-    const edge = Array.from({ length: 60 }, (_, i) => ({ x: i * 0.5, z: 0 }));
+    const edge = Array.from({ length: 60 }, (_, i) => ({ x: i * 0.5, z: 0, nx: -1, nz: 0 }));
     const heights = scatterRampart(edge).map((p) => p.height);
     expect(heights.length).toBeGreaterThan(10);
     expect(Math.min(...heights)).toBeGreaterThan(1.52);
+  });
+
+  it("stays low on the side the camera looks THROUGH", () => {
+    // The near rim has nothing to hide — the void past it is behind the camera —
+    // and the player can stand against it, so height here only costs him. A
+    // 5.7-unit rim rock 1.6 units toward the camera hid him outright in game.
+    const edge = Array.from({ length: 60 }, (_, i) => ({ x: i * 0.5, z: 0, nx: 1, nz: 0 }));
+    const heights = scatterRampart(edge).map((p) => p.height);
+    expect(heights.length).toBeGreaterThan(10);
+    // Under his head, so standing against it costs him his boots and no more.
+    expect(Math.max(...heights)).toBeLessThan(1.8);
+  });
+
+  it("takes the low config when a cell carries no normal at all", () => {
+    // Too short shows a little void; too tall hides the character. Fail safe.
+    const edge = Array.from({ length: 60 }, (_, i) => ({ x: i * 0.5, z: 0 }));
+    expect(Math.max(...scatterRampart(edge).map((p) => p.height))).toBeLessThan(1.8);
   });
 
   it("is deterministic, like the boulders", () => {

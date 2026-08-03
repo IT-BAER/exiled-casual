@@ -31,14 +31,29 @@ import { SkirtSim, type SkirtCollider } from "./skirt";
  */
 
 /** Clips the game can actually trigger today. The library ships 45. */
-export type RigClip = "idle" | "walk" | "run" | "cast";
+export type RigClip = "idle" | "walk" | "run" | "cast" | "strikeA" | "strikeB";
+export type StrikeClip = "strikeA" | "strikeB";
+
+/** Alternated melee takes: two sword-derived slashes with opposite motion. */
+export const STRIKE_CLIPS: readonly StrikeClip[] = ["strikeA", "strikeB"];
 
 /** Clip names inside anim-library.glb — FBX2glTF prefixes every take with "Rig|". */
-const CLIP_NAME: Record<RigClip, string> = {
+/**
+ * The cast is the pack's `Spell_Simple_Shoot` mirrored onto the right arm by
+ * `tools/build_cast_mirror.py`: the original raises the LEFT hand, but the wand
+ * skins to `hand_r` and `castPoint()` bends the bolt to that hand, so unmirrored
+ * it throws from the empty hand.
+ */
+export const CLIP_NAME: Record<RigClip, string> = {
   idle: "Rig|Idle_Loop",
   walk: "Rig|Walk_Loop",
   run: "Rig|Jog_Fwd_Loop",
-  cast: "Rig|Spell_Simple_Shoot",
+  cast: "Rig|Spell_Simple_Shoot_R",
+  strikeA: "Rig|Sword_Attack",
+  // The pack ships one sword swing. The second take is that swing rolled onto a
+  // downward diagonal and played back to front by `tools/build_slash_variant.py`
+  // — a slash from the other side, not the pack's bare-fisted punch.
+  strikeB: "Rig|Sword_Attack_Down",
 };
 
 const CLIP_LOOPS: Record<RigClip, boolean> = {
@@ -46,6 +61,8 @@ const CLIP_LOOPS: Record<RigClip, boolean> = {
   walk: true,
   run: true,
   cast: false,
+  strikeA: false,
+  strikeB: false,
 };
 
 /**
@@ -132,6 +149,26 @@ export const IDLE_SETTLED = 0.58;
 export function idleRatio(seconds: number): number {
   const t = Math.min(1, Math.max(0, seconds / IDLE_SETTLE_SEC));
   return 1 + (IDLE_SETTLED - 1) * t;
+}
+
+/**
+ * Playback rate that fits an authored action clip into the wind-up the
+ * simulation actually granted, so the release pose lands on the tick the hit
+ * does. Clamped: a wind-up shortened by cast speed must not turn the swing into
+ * a one-frame twitch, and a slow one must not freeze it into a mime.
+ */
+export const ACTION_RATIO_MIN = 0.6;
+export const ACTION_RATIO_MAX = 3;
+export function actionRatio(authoredSeconds: number, windowSeconds: number | undefined): number {
+  if (!(authoredSeconds > 0) || !(windowSeconds !== undefined && windowSeconds > 0)) return 1;
+  const matched = authoredSeconds / windowSeconds;
+  return Math.min(ACTION_RATIO_MAX, Math.max(ACTION_RATIO_MIN, matched));
+}
+
+/** Authored length of a clip in seconds. */
+function clipSeconds(group: AnimationGroup): number {
+  const fps = group.targetedAnimations[0]?.animation.framePerSecond ?? 30;
+  return fps > 0 ? (group.to - group.from) / fps : 0;
 }
 
 export function speedRatioFor(clip: RigClip, speed: number): number {
@@ -362,25 +399,24 @@ const skirtJointName = (chain: number, joint: number): string =>
  * ran the boot straight through the coat. The foot needs its own because a boot
  * reaches a long way forward of the ankle it pivots on.
  *
- * Radii are each limb's *median* half-width, measured off the ranger's own legs
- * and boots about these very segments (thigh 0.088, calf and boot 0.074, foot
- * 0.068). They were its widest slice before — 0.11 is the thigh's 99th
- * percentile — and a capsule has one radius for its whole length, so sizing it
- * to the fattest point made the entire leg that fat. The measured cost of that:
- * the leg surface overlapped the coat's rest pose by up to 7cm *while standing
- * still*, roughly a third of the cloth's rest points in contact every frame.
- * Permanent contact is not collision, it is a cage — the coat was held out in a
- * fixed bell, which is exactly why it read as stiff and why a stride never
- * looked like it touched anything. Nothing can push cloth that is already
- * pushed.
+ * These are maximum radial extents measured from the exported GLB by
+ * `tools/measure_wardrobe_colliders.py`, plus 8mm cloth thickness. The old
+ * median-width capsules were substantially inside the rendered geometry, so a
+ * mathematically clear collider still showed a boot through the coat. Boots get
+ * their own profile because the ranger greaves extend above the calf and the
+ * commoner shoes are wider at the foot.
  */
-const SKIRT_COLLIDERS: readonly { from: string; to: string; radius: number }[] = [
-  { from: "thigh_l", to: "calf_l", radius: 0.088 },
-  { from: "thigh_r", to: "calf_r", radius: 0.088 },
-  { from: "calf_l", to: "foot_l", radius: 0.074 },
-  { from: "calf_r", to: "foot_r", radius: 0.074 },
-  { from: "foot_l", to: "ball_l", radius: 0.068 },
-  { from: "foot_r", to: "ball_r", radius: 0.068 },
+const SKIRT_COLLIDERS: readonly {
+  from: string; to: string; commoner: number; ranger: number;
+}[] = [
+  // The coat is authored against the upper-leg median, so its fitted yoke is
+  // the separation surface there. Maximum thigh width would cage the waist.
+  { from: "thigh_l", to: "calf_l", commoner: 0.088, ranger: 0.088 },
+  { from: "thigh_r", to: "calf_r", commoner: 0.088, ranger: 0.088 },
+  { from: "calf_l", to: "foot_l", commoner: 0.123, ranger: 0.124 },
+  { from: "calf_r", to: "foot_r", commoner: 0.123, ranger: 0.124 },
+  { from: "foot_l", to: "ball_l", commoner: 0.117, ranger: 0.109 },
+  { from: "foot_r", to: "ball_r", commoner: 0.117, ranger: 0.109 },
 ];
 
 /** Down the bone: glTF joints out of Blender point along their own +Y. */
@@ -437,8 +473,24 @@ const LOWER_BODY: ReadonlySet<string> = new Set([
   "thigh_r", "calf_r", "foot_r", "ball_r", "ball_leaf_r", "foot_end_r",
 ]);
 
+/**
+ * Weapon-hand bones layered actions must not touch, or the fingers open and the
+ * weapon floats. The grip is whatever the locomotion clip left them at.
+ */
+const WEAPON_HAND: ReadonlySet<string> = new Set([
+  "hand_r",
+  "thumb_01_r", "thumb_02_r", "thumb_03_r", "thumb_04_leaf_r",
+  "index_01_r", "index_02_r", "index_03_r", "index_04_leaf_r",
+  "middle_01_r", "middle_02_r", "middle_03_r", "middle_04_leaf_r",
+  "ring_01_r", "ring_02_r", "ring_03_r", "ring_04_leaf_r",
+  "pinky_01_r", "pinky_02_r", "pinky_03_r", "pinky_04_leaf_r",
+]);
+
 /** Clips that layer over locomotion instead of replacing it. */
-const UPPER_BODY_CLIPS: ReadonlySet<RigClip> = new Set<RigClip>(["cast"]);
+const UPPER_BODY_CLIPS: ReadonlySet<RigClip> = new Set<RigClip>(["cast", ...STRIKE_CLIPS]);
+
+/** Whether locomotion keeps ownership of the pelvis and legs under this clip. */
+export const isLayeredClip = (clip: RigClip): boolean => UPPER_BODY_CLIPS.has(clip);
 
 /**
  * How much of a clip's hips bounce to keep, PER CLIP. The jog is authored with
@@ -461,7 +513,9 @@ const UPPER_BODY_CLIPS: ReadonlySet<RigClip> = new Set<RigClip>(["cast"]);
  *
  * Locomotion is exempt on purpose: those clips slide the feet anyway.
  */
-export const HIPS_BOB: Record<RigClip, number> = { idle: 1, walk: 0.65, run: 0.65, cast: 1 };
+export const HIPS_BOB: Record<RigClip, number> = {
+  idle: 1, walk: 0.65, run: 0.65, cast: 1, strikeA: 1, strikeB: 1,
+};
 
 /**
  * Re-express a hips translation curve in the target rig's proportions: keep the
@@ -605,6 +659,7 @@ export class RigActor {
   private entries: InstantiatedEntries | null = null;
   private active: AnimationGroup | null = null;
   private activeClip: RigClip | null = null;
+  private nextStrikeIndex = 0;
   private locomotion: RigClip = "idle";
   /** Seconds this body has been standing still, for the breath to settle over. */
   private standing = 0;
@@ -625,7 +680,21 @@ export class RigActor {
   private pelvis: TransformNode | null = null;
   /** The casting hand, so a spell can be drawn leaving it. */
   private hand: TransformNode | null = null;
-  private colliders: (SkirtCollider & { head: TransformNode; tail: TransformNode })[] = [];
+  /** Bones that carry the cast toward the cursor: spine, clavicle, upper arm. */
+  private aimBones: TransformNode[] = [];
+  /** World-space aim target (x = Babylon x, z = Babylon z). */
+  private aimTarget: { x: number; z: number } | null = null;
+  /** Observer that applies aim rotation after the animation system runs. */
+  private aimObserver: Observer<Scene> | null = null;
+  private colliders: (SkirtCollider & {
+    head: TransformNode;
+    tail: TransformNode;
+    previousA: Vector3;
+    previousB: Vector3;
+    commonerRadius: number;
+    rangerRadius: number;
+    initialized: boolean;
+  })[] = [];
   private cloth: Observer<Scene> | null = null;
   /** Solving cloth nobody can see is the one cost worth a flag. */
   private coatVisible = false;
@@ -758,11 +827,43 @@ export class RigActor {
    * whatever the legs are doing: cast while running and the character keeps
    * running, arm outstretched, instead of freezing mid-stride.
    */
-  playCast(): void {
+  playCast(seconds?: number): void {
     const group = this.groups.get("cast");
     if (!group) return;
     group.stop();
-    group.start(false, 1);
+    const ratio = actionRatio(clipSeconds(group), seconds);
+    group.speedRatio = ratio;
+    // Played ONCE, paced to the wind-up: looping it at a fixed rate meant a
+    // third of a second of cast only ever showed the first third of the swing,
+    // so the bolt left a hand that was still lifting.
+    group.start(false, ratio);
+  }
+
+  /** Stop the sustained upper-body cast without disturbing locomotion. */
+  stopCast(): void {
+    this.groups.get("cast")?.stop();
+  }
+
+  /** Alternate authored weapon-arm attacks while locomotion keeps the legs. */
+  playStrike(seconds?: number): void {
+    const clip = STRIKE_CLIPS[this.nextStrikeIndex]!;
+    const group = this.groups.get(clip);
+    if (!group) return;
+    for (const strike of STRIKE_CLIPS) this.groups.get(strike)?.stop();
+    const ratio = actionRatio(clipSeconds(group), seconds);
+    group.speedRatio = ratio;
+    group.start(false, ratio);
+    this.nextStrikeIndex = (this.nextStrikeIndex + 1) % STRIKE_CLIPS.length;
+  }
+
+  /** Cancel a strike when the actor is removed or otherwise reset. */
+  stopStrike(): void {
+    for (const strike of STRIKE_CLIPS) this.groups.get(strike)?.stop();
+  }
+
+  /** Set the world-space point the casting arm should aim at. */
+  setAimTarget(worldX: number, worldZ: number): void {
+    this.aimTarget = { x: worldX, z: worldZ };
   }
 
   dispose(): void {
@@ -816,6 +917,88 @@ export class RigActor {
 
     const handNode = byName.get(HAND_BONE);
     this.hand = handNode instanceof TransformNode ? handNode : null;
+    // Bones the aim rotates during a cast: spine, clavicle, upper arm, and head.
+    // Each bone gets a share of the aim so the twist distributes naturally.
+    // Weights are how much of the TOTAL aim each bone carries; they sum > 1
+    // because the child inherits the parent and the clip's own baked direction
+    // already biases the arm, so they have to over-correct.
+    const AIM_CHAIN: { name: string; weight: number }[] = [
+      { name: "spine_03", weight: 0.5 },
+      { name: "clavicle_r", weight: 0.7 },
+      { name: "upperarm_r", weight: 1.0 },
+    ];
+    const HEAD_BONE_NAME = "Head";
+    this.aimBones = [];
+    const aimWeights: number[] = [];
+    let headBone: TransformNode | null = null;
+    for (const { name, weight } of AIM_CHAIN) {
+      const node = byName.get(name);
+      if (node instanceof TransformNode) {
+        this.aimBones.push(node);
+        aimWeights.push(weight);
+      }
+    }
+    const hb = byName.get(HEAD_BONE_NAME);
+    if (hb instanceof TransformNode) headBone = hb;
+
+    // Scratch vectors for the aim solver.
+    const worldUp = new Vector3(0, 1, 0);
+    const localAxis = new Vector3();
+    const parentInv = new Matrix();
+
+    // Rotate `bone` by `angle` radians around world Y, expressed in the bone's
+    // parent space. This is the key: `rotationQuaternion` is in PARENT space,
+    // so a world-up yaw has to be transformed into that frame first.
+    const aimBone = (bone: TransformNode, angle: number) => {
+      bone.computeWorldMatrix(true);
+      const parent = bone.parent as TransformNode | null;
+      if (!parent) return;
+      parent.computeWorldMatrix(true);
+      parent.getWorldMatrix().invertToRef(parentInv);
+      Vector3.TransformNormalToRef(worldUp, parentInv, localAxis);
+      localAxis.normalize();
+      const rot = bone.rotationQuaternion;
+      if (rot) {
+        Quaternion.RotationAxisToRef(localAxis, angle, this.delta);
+        rot.multiplyInPlace(this.delta);
+      }
+    };
+
+    this.aimObserver = this.scene.onAfterAnimationsObservable.add(() => {
+      if (!this.aimTarget) return;
+      const castGroup = this.groups.get("cast");
+      const casting = castGroup !== undefined && castGroup.isPlaying;
+      if (!casting) return;
+
+      this.pivot.computeWorldMatrix(true);
+
+      const px = this.pivot.absolutePosition.x;
+      const pz = this.pivot.absolutePosition.z;
+      const tdx = this.aimTarget.x - px;
+      const tdz = this.aimTarget.z - pz;
+      if (tdx * tdx + tdz * tdz < 0.01) return;
+
+      const targetYaw = Math.atan2(tdx, tdz);
+      const bodyWorldYaw = this.host.rotation.y;
+      // The mirrored cast clip bakes the arm slightly to the right (~16 deg).
+      const CLIP_BIAS = 0.42;
+      let aimYaw = -(targetYaw - bodyWorldYaw) + CLIP_BIAS;
+      while (aimYaw > Math.PI) aimYaw -= 2 * Math.PI;
+      while (aimYaw < -Math.PI) aimYaw += 2 * Math.PI;
+
+      const ARM_MAX = 1.4;
+      const clampedArm = Math.max(-ARM_MAX, Math.min(ARM_MAX, aimYaw));
+      for (let i = 0; i < this.aimBones.length; i++) {
+        aimBone(this.aimBones[i]!, clampedArm * aimWeights[i]!);
+      }
+
+      // Head follows the aim too.
+      if (headBone) {
+        const HEAD_MAX = 0.87;
+        const clampedHead = Math.max(-HEAD_MAX, Math.min(HEAD_MAX, aimYaw));
+        aimBone(headBone, clampedHead * 0.6);
+      }
+    });
 
     // Read the hips rest pose before any clip starts and could move it.
     const hipsNode = byName.get(HIPS_BONE);
@@ -832,11 +1015,11 @@ export class RigActor {
       // Retarget by bone name. Rotation keyframes are shared with the source
       // container, which is read-only, so instances cost only the group; the
       // hips curve is the one that has to be rebuilt per rig.
-      const upperOnly = UPPER_BODY_CLIPS.has(clip);
+      const upperOnly = isLayeredClip(clip);
       const group = new AnimationGroup(`${this.host.name}-${clip}`, this.scene);
       for (const targeted of source.targetedAnimations) {
         const sourceNode = targeted.target as Node;
-        if (upperOnly && LOWER_BODY.has(sourceNode.name)) continue;
+        if (upperOnly && (LOWER_BODY.has(sourceNode.name) || WEAPON_HAND.has(sourceNode.name))) continue;
         const target = byName.get(sourceNode.name);
         if (!target) continue;
         const property = targeted.animation.targetProperty;
@@ -867,6 +1050,7 @@ export class RigActor {
 
     this.active = null;
     this.activeClip = null;
+    this.nextStrikeIndex = 0;
     this.switchTo(this.locomotion);
   }
 
@@ -923,11 +1107,19 @@ export class RigActor {
       for (let j = 0; j < SKIRT_JOINTS; j++) this.restsWorld.push(new Vector3());
     }
 
-    for (const { from, to, radius } of SKIRT_COLLIDERS) {
+    for (const { from, to, commoner, ranger } of SKIRT_COLLIDERS) {
       const head = byName.get(from);
       const tail = byName.get(to);
       if (head instanceof TransformNode && tail instanceof TransformNode) {
-        this.colliders.push({ head, tail, a: new Vector3(), b: new Vector3(), radius });
+        this.colliders.push({
+          head, tail,
+          a: new Vector3(), b: new Vector3(),
+          previousA: new Vector3(), previousB: new Vector3(),
+          radius: commoner,
+          commonerRadius: commoner,
+          rangerRadius: ranger,
+          initialized: false,
+        });
       }
     }
 
@@ -960,11 +1152,22 @@ export class RigActor {
         Vector3.TransformCoordinatesToRef(chain.rests[j]!, world, this.restsWorld[i * SKIRT_JOINTS + j]!);
       }
     }
+    const rangerBoots = this.looks.boots !== null && meshLook(this.looks.boots) === "ranger";
     for (const collider of this.colliders) {
+      collider.radius = rangerBoots ? collider.rangerRadius : collider.commonerRadius;
+      if (collider.initialized) {
+        collider.previousA.copyFrom(collider.a);
+        collider.previousB.copyFrom(collider.b);
+      }
       collider.head.computeWorldMatrix(true);
       collider.tail.computeWorldMatrix(true);
       collider.a.copyFrom(collider.head.absolutePosition);
       collider.b.copyFrom(collider.tail.absolutePosition);
+      if (!collider.initialized) {
+        collider.previousA.copyFrom(collider.a);
+        collider.previousB.copyFrom(collider.b);
+        collider.initialized = true;
+      }
     }
 
     sim.step(
@@ -1023,7 +1226,15 @@ export class RigActor {
   castPoint(): Vector3 | null {
     if (!this.hand) return null;
     this.hand.computeWorldMatrix(true);
-    return this.hand.getAbsolutePosition().clone();
+    // Offset along the bone's direction to reach the weapon tip rather than the
+    // palm. glTF bones point along their own +Y, so transforming (0, WEAPON_TIP, 0)
+    // through the bone's world matrix lands at the tip.
+    const WEAPON_TIP = 0.45;
+    const tip = Vector3.TransformCoordinates(
+      new Vector3(0, WEAPON_TIP, 0),
+      this.hand.getWorldMatrix(),
+    );
+    return tip;
   }
 
   /**
@@ -1035,6 +1246,7 @@ export class RigActor {
     for (const group of this.groups.values()) group.stop();
     this.active = null;
     this.activeClip = null;
+    this.nextStrikeIndex = 0;
     if (this.cloth) this.scene.onBeforeRenderObservable.remove(this.cloth);
     this.cloth = null;
   }
@@ -1047,6 +1259,10 @@ export class RigActor {
     this.colliders = [];
     this.pelvis = null;
     this.hand = null;
+    this.aimBones = [];
+    this.aimTarget = null;
+    if (this.aimObserver) this.scene.onAfterAnimationsObservable.remove(this.aimObserver);
+    this.aimObserver = null;
     this.anchorsWorld.length = 0;
     this.restsWorld.length = 0;
     this.coatVisible = false;
@@ -1064,6 +1280,7 @@ export class RigActor {
     this.entries = null;
     this.active = null;
     this.activeClip = null;
+    this.nextStrikeIndex = 0;
   }
 }
 

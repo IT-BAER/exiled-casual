@@ -58,6 +58,19 @@ export type EffectNode =
       durationTicks: number;
       ailment: AilmentSpec;
     }
+  /**
+   * A swing that lands the moment it is cast: no entity, no travel, no tick of
+   * flight. Everything within `reachFixed` and inside an `arcDegrees` wedge
+   * centred on the aim is hit at once, which is why this is the one effect that
+   * can hit several targets and the projectile cannot.
+   */
+  | {
+      type: "meleeStrike";
+      reachFixed: Fixed;
+      /** Full width of the wedge, not the half-angle. 360 hits all round. */
+      arcDegrees: number;
+      damage: DamageSpec;
+    }
   | { type: "teleport"; distanceFixed: Fixed };
 
 export interface SkillDef {
@@ -247,6 +260,17 @@ function validateEffectNode(v: unknown, idx: number, errors: string[]): boolean 
       ok = false;
     }
     if (!validateAilmentSpec(v["ailment"], `${path}.ailment`, errors)) ok = false;
+  } else if (type === "meleeStrike") {
+    if (!isNonNegInt(v["reachFixed"])) {
+      errors.push(`${path}.reachFixed: must be a non-negative integer`);
+      ok = false;
+    }
+    const arc = v["arcDegrees"];
+    if (typeof arc !== "number" || !Number.isFinite(arc) || arc <= 0 || arc > 360) {
+      errors.push(`${path}.arcDegrees: must be a number in (0, 360]`);
+      ok = false;
+    }
+    if (!validateDamageSpec(v["damage"], `${path}.damage`, errors)) ok = false;
   } else if (type === "teleport") {
     if (!isNonNegInt(v["distanceFixed"])) {
       errors.push(`${path}.distanceFixed: must be a non-negative integer`);

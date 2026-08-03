@@ -5,13 +5,34 @@ import { DirectionalLight } from "@babylonjs/core/Lights/directionalLight";
 import { PointLight } from "@babylonjs/core/Lights/pointLight";
 import { ShadowGenerator } from "@babylonjs/core/Lights/Shadows/shadowGenerator";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
-import { applyGraphics } from "./engine";
+import { applyGraphics, isWardrobePart } from "./engine";
 import { DEFAULT_SETTINGS } from "../settings";
 
 function bareScene() {
   const engine = new NullEngine();
   return { engine, scene: new Scene(engine) };
 }
+
+describe("isWardrobePart", () => {
+  it("covers every slot the wardrobe has, held gear included", () => {
+    // This is what keeps the torch off the character: it excludes him from the
+    // lamp he carries and from its shadow map. Held gear was missing, so a
+    // shield an arm's length from the flame threw a room-wide shadow that swung
+    // with the walk. Every slot of `EQUIPPED`/`UNEQUIPPED` belongs here.
+    for (const part of [
+      "base.head.head", "body.ranger.coat", "belt.ranger.belt", "boots.ranger.boots",
+      "gloves.bracers.bracers", "helmet.hood.helm",
+      "weapon1.wand.shaft", "weapon2.buckler.plate", "weapon2.tower.plate",
+    ]) {
+      expect(isWardrobePart(part)).toBe(true);
+    }
+    // And nothing else: the hideout props are entities too, and a map device
+    // that stopped casting would sit on the floor with no contact shadow.
+    for (const other of ["wallrun-3", "prop.mapdevice", "ground", "telegraph-1"]) {
+      expect(isWardrobePart(other)).toBe(false);
+    }
+  });
+});
 
 describe("applyGraphics", () => {
   it("is a no-op on a scene that has none of the pieces", () => {
@@ -47,16 +68,25 @@ describe("applyGraphics", () => {
     engine.dispose();
   });
 
-  it("low keeps the sun and drops the torch, which is the expensive one", () => {
+  it("low keeps the sun and drops every point-light cube map", () => {
     const { engine, scene } = bareScene();
     const sun = new DirectionalLight("sun", new Vector3(0, -1, 0), scene);
     const torch = new PointLight("torch", new Vector3(0, 2, 0), scene);
+    const fire = new PointLight("firelight-0", new Vector3(3, 2, 0), scene);
     new ShadowGenerator(256, sun);
     new ShadowGenerator(128, torch);
+    new ShadowGenerator(128, fire);
 
     applyGraphics(scene, engine, { ...DEFAULT_SETTINGS.graphics, shadows: "low" });
     expect(sun.shadowEnabled).toBe(true);
     expect(torch.shadowEnabled).toBe(false); // a cube map is six faces
+    expect(fire.shadowEnabled).toBe(false); // every point shadow is six faces
+
+    applyGraphics(scene, engine, { ...DEFAULT_SETTINGS.graphics, shadows: "off" });
+    expect(fire.shadowEnabled).toBe(false);
+
+    applyGraphics(scene, engine, { ...DEFAULT_SETTINGS.graphics, shadows: "high" });
+    expect(fire.shadowEnabled).toBe(true);
     engine.dispose();
   });
 

@@ -30,6 +30,9 @@ import { Vector3 } from "@babylonjs/core";
 export interface SkirtCollider {
   a: Vector3;
   b: Vector3;
+  /** Previous solver-frame endpoints, for continuous collision detection. */
+  previousA?: Vector3;
+  previousB?: Vector3;
   radius: number;
 }
 
@@ -194,6 +197,8 @@ const scratch = new Vector3();
 const scratchPerp = new Vector3();
 const scratchNear = new Vector3();
 const scratchSample = new Vector3();
+const scratchSweepA = new Vector3();
+const scratchSweepB = new Vector3();
 
 /**
  * Rotate `dir` toward `rest` until it is within `cosLimit` of it. Both are unit
@@ -352,14 +357,18 @@ export class SkirtSim {
     // Guard against a first frame, a background tab, or a debugger pause handing
     // us a dt measured in seconds.
     this.carry = Math.min(this.carry + (dt > 0 ? dt : 0), FIXED_STEP * MAX_STEPS);
-    while (this.carry >= FIXED_STEP) {
-      this.carry -= FIXED_STEP;
+    const steps = Math.floor(this.carry / FIXED_STEP);
+    this.carry -= steps * FIXED_STEP;
+    for (let step = 0; step < steps; step++) {
+      const sweepStart = step / steps;
+      const sweepEnd = (step + 1) / steps;
       this.integrate(rests);
       for (let pass = 0; pass < ITERATIONS; pass++) this.constrain(anchors, rests);
       this.budget.fill(MAX_CONTACT_PUSH);
-      for (let pass = 0; pass < COLLIDE_PASSES; pass++) {
-        if (!this.collide(anchors, colliders)) break;
+      for (let contact = 0; contact < COLLIDE_PASSES; contact++) {
+        if (!this.collide(anchors, colliders, sweepStart, sweepEnd)) break;
       }
+      this.collide(anchors, colliders, sweepStart, sweepEnd);
     }
   }
 
@@ -422,14 +431,21 @@ export class SkirtSim {
    * clear. Sampling along each segment is the same lesson the collider side
    * already learned: a limb is a segment, and so is the cloth hanging past it.
    */
-  private collide(anchors: readonly Vector3[], colliders: readonly SkirtCollider[]): boolean {
+  private collide(
+    anchors: readonly Vector3[],
+    colliders: readonly SkirtCollider[],
+    sweepStart: number,
+    sweepEnd: number,
+  ): boolean {
     const n = this.perChain;
     let moved = false;
     for (let chain = 0; chain < this.anchors.length; chain++) {
       for (let j = 0; j < n; j++) {
         const i = chain * n + j;
         const base = j === 0 ? anchors[chain]! : this.points[i - 1]!;
-        if (this.collideSegment(base, this.points[i]!, this.previous[i]!, i, colliders)) moved = true;
+        if (this.collideSegment(
+          base, this.points[i]!, this.previous[i]!, i, colliders, sweepStart, sweepEnd,
+        )) moved = true;
       }
     }
     return moved;
@@ -454,30 +470,52 @@ export class SkirtSim {
     previous: Vector3,
     index: number,
     colliders: readonly SkirtCollider[],
+    sweepStart: number,
+    sweepEnd: number,
   ): boolean {
     let moved = false;
     for (const collider of colliders) {
       if (this.budget[index]! <= 0) return moved;
-      // Closest approach of the two segments outright, rather than sampling
-      // points along the cloth: any fixed set of samples leaves gaps between
-      // them exactly the size of the thing being kept out, which is how a knee
-      // gets through in the first place.
-      const t = closestOnSegment(base, end, collider.a, collider.b, scratchNear);
-      scratchSample.copyFrom(end).subtractInPlace(base).scaleInPlace(t).addInPlace(base);
-      scratch.copyFrom(scratchSample).subtractInPlace(scratchNear);
+      const previousA = collider.previousA ?? collider.a;
+      const previousB = collider.previousB ?? collider.b;
+      const travel = Math.max(
+        Vector3.Distance(previousA, collider.a),
+        Vector3.Distance(previousB, collider.b),
+      ) * (sweepEnd - sweepStart);
+      // Keep adjacent temporal samples closer than half the collision radius.
+      // A limb cannot jump completely over the cloth between two such samples.
+      const sweepSteps = Math.min(
+        32,
+        Math.max(1, Math.ceil(travel / Math.max(collider.radius * 0.5, 1e-3))),
+      );
+      for (let sweep = 0; sweep <= sweepSteps; sweep++) {
+        if (this.budget[index]! <= 0) return moved;
+        const alpha = sweepStart + (sweep / sweepSteps) * (sweepEnd - sweepStart);
+        Vector3.LerpToRef(previousA, collider.a, alpha, scratchSweepA);
+        Vector3.LerpToRef(previousB, collider.b, alpha, scratchSweepB);
 
-      const distance = scratch.length();
-      if (distance >= collider.radius) continue;
-      // Exactly on the axis gives no direction to push along. Measure-zero,
-      // and the next frame of body motion moves one of the two off it.
-      if (distance < 1e-6) continue;
-      const reach = Math.max(t, MIN_CONTACT);
-      const push = Math.min((collider.radius - distance) / reach, this.budget[index]!);
-      this.budget[index]! -= push;
-      scratch.scaleInPlace(push / distance);
-      end.addInPlace(scratch);
-      previous.addInPlace(scratch.scaleInPlace(CONTACT_ABSORB));
-      moved = true;
+        // Closest approach of the two segments outright, rather than sampling
+        // points along the cloth: any fixed spatial samples leave gaps.
+        const t = closestOnSegment(base, end, scratchSweepA, scratchSweepB, scratchNear);
+        scratchSample.copyFrom(end).subtractInPlace(base).scaleInPlace(t).addInPlace(base);
+        scratch.copyFrom(scratchSample).subtractInPlace(scratchNear);
+
+        const distance = scratch.length();
+        if (distance >= collider.radius) continue;
+        if (distance < 1e-6) {
+          scratch.copyFrom(base).subtractInPlace(scratchSweepA);
+          scratch.y = 0;
+          if (scratch.lengthSquared() < 1e-12) scratch.set(1, 0, 0);
+          else scratch.normalize();
+        }
+        const reach = Math.max(t, MIN_CONTACT);
+        const push = Math.min((collider.radius - distance) / reach, this.budget[index]!);
+        this.budget[index] = this.budget[index]! - push;
+        scratch.scaleInPlace(distance < 1e-6 ? push : push / distance);
+        end.addInPlace(scratch);
+        previous.addInPlace(scratch.scaleInPlace(CONTACT_ABSORB));
+        moved = true;
+      }
     }
     return moved;
   }

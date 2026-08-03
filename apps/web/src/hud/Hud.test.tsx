@@ -488,6 +488,26 @@ describe("Hud skill tooltip", () => {
     fireEvent.mouseEnter(screen.getByTestId("skill-slot-4"));
     expect(screen.queryByTestId("skill-tooltip")).toBeNull();
   });
+
+  it("clicking a socket opens a tile picker whose tiles carry their bound key and tooltip", async () => {
+    // Laid out from reference-screenshots/skill-action-bar.webp: sectioned icon
+    // tiles, each captioned with the key it already answers to.
+    render(<Hud snapshot={makeSnap({ skills: [emberBolt] })} />);
+    fireEvent.click(screen.getByTestId("skill-slot-1"));
+    const picker = await screen.findByTestId("skill-picker");
+    expect(picker).toHaveTextContent("Actions");
+    expect(picker).toHaveTextContent("Skills");
+    // Ember Bolt sits on socket 1, so its tile wears "1".
+    expect(screen.getByTestId("pick-skill.ember_bolt.v1")).toHaveTextContent("1");
+    // Move and Clear are the built-in actions, always offered.
+    expect(screen.getByTestId("pick-builtin.move")).toBeTruthy();
+    expect(screen.getByTestId("pick-clear")).toBeTruthy();
+    // Hovering a tile shows the same detail tooltip the bar does.
+    fireEvent.pointerEnter(screen.getByTestId("pick-skill.ember_bolt.v1"));
+    const tip = await screen.findByTestId("skill-tooltip");
+    expect(tip).toHaveTextContent("Ember Bolt");
+    expect(tip).toHaveTextContent("Deals 25 Fire Damage");
+  });
 });
 
 
@@ -553,14 +573,14 @@ describe("skill bar drag and drop", () => {
     const seen: (string | null)[][] = [];
     render(<Hud snapshot={makeSnap({})} skillBar={BAR} onSkillBarChange={(b) => seen.push(b)} />);
     drag(1, 4);
-    expect(seen).toEqual([[null, "skill.cinder_ground.v1", "skill.blink.v1", "skill.ember_bolt.v1", null]]);
+    expect(seen[0]!.slice(0, 5)).toEqual([null, "skill.cinder_ground.v1", "skill.blink.v1", "skill.ember_bolt.v1", null]);
   });
 
   it("swaps two occupied sockets", () => {
     const seen: (string | null)[][] = [];
     render(<Hud snapshot={makeSnap({})} skillBar={BAR} onSkillBarChange={(b) => seen.push(b)} />);
     drag(1, 3);
-    expect(seen).toEqual([["skill.blink.v1", "skill.cinder_ground.v1", "skill.ember_bolt.v1", null, null]]);
+    expect(seen[0]!.slice(0, 5)).toEqual(["skill.blink.v1", "skill.cinder_ground.v1", "skill.ember_bolt.v1", null, null]);
   });
 
   it("dropping a socket on itself changes nothing", () => {
@@ -577,6 +597,19 @@ describe("skill bar drag and drop", () => {
   });
 
   /** Nothing fires off a mouse socket yet, so a skill dropped there would vanish. */
+  /**
+   * The icon covers the tile edge to edge, so a draggable img is what the pointer
+   * actually grabs: the browser drags the image and the tile's own dragStart never
+   * runs. jsdom fires drag events at the div, so every other test here passes while
+   * the bar is unusable in a real browser. This is the only guard against that.
+   */
+  it("the icon does not steal the tile's drag", () => {
+    render(<Hud snapshot={makeSnap({})} skillBar={BAR} />);
+    const icon = screen.getByTestId("skill-slot-1").querySelector("img");
+    expect(icon).not.toBeNull();
+    expect(icon!.getAttribute("draggable")).toBe("false");
+  });
+
   it("the mouse row takes no drops", () => {
     render(<Hud snapshot={makeSnap({})} skillBar={BAR} />);
     expect(screen.getByTestId("skill-slot-6").getAttribute("draggable")).toBe("false");

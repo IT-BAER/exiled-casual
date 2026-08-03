@@ -16,6 +16,7 @@ import type { CharacterRecord, KvStore, RosterBlob } from "@exiled/persistence";
 import {
   LOCAL_CHARACTER_CAP,
   addCharacter,
+  asRoster,
   emptyRoster,
   headers,
   putSettings,
@@ -73,6 +74,25 @@ export async function deleteCharacter(roster: RosterBlob, id: string): Promise<R
 }
 
 export { headers };
+
+/** Stable, human-inspectable contents for a portable `.json` save file. */
+export function exportRoster(roster: RosterBlob): string {
+  return `${JSON.stringify(roster, null, 2)}\n`;
+}
+
+/** Validate completely before the single atomic overwrite. */
+export async function importRoster(text: string, target: KvStore = kv()): Promise<RosterBlob> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text) as unknown;
+  } catch {
+    throw new Error("This is not a valid Exiled Casual save file.");
+  }
+  const roster = asRoster(parsed);
+  if (!roster) throw new Error("This is not a valid Exiled Casual save file.");
+  await saveRoster(target, roster);
+  return roster;
+}
 
 /** What the player has set, proven safe. A roster with no settings reads as defaults. */
 export function settingsOf(roster: RosterBlob): Settings {

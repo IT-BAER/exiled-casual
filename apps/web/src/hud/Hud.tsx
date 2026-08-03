@@ -6,7 +6,7 @@ import { PANEL_W } from "./layout";
 import { SkillTooltip } from "./SkillTooltip";
 import { XpBar } from "./XpBar";
 import { playDropSound } from "../audio/drop-sound";
-import { DEFAULT_SETTINGS, SKILL_SLOT_COUNT } from "../settings";
+import { DEFAULT_SETTINGS, MOUSE_SLOT_BASE, MOVE_SOCKET, SKILL_SLOT_COUNT } from "../settings";
 import { VENDOR_NAME, VENDOR_TITLE } from "../npc";
 
 // Bottom HUD geometry, measured off reference-screenshots/poe1-lower-bar.png, a 2558x388 crop
@@ -90,7 +90,10 @@ const BAR_PAD = `calc(${BAR_PAD_EXPR})`;
 // exist, the rest render as empty sockets.
 // PoE2 itself puts skills on QWERT and flasks on the digits — we swap the two, so
 // the movement hand keeps the flasks. Deliberate, not a parity miss.
-type SkillSlot = { id: string | null; key: string; mouse?: boolean; icon?: string; glow?: string };
+type SkillSlot = {
+  id: string | null; key: string; mouse?: boolean;
+  icon?: string; glow?: string; label?: string;
+};
 
 /**
  * A skill's face, keyed by id rather than baked into a socket.
@@ -103,16 +106,33 @@ export const SKILL_ART: Record<string, { icon: string; glow: string }> = {
   "skill.ember_bolt.v1": { icon: "/textures/skills/ember_bolt.png", glow: "#ff7a2f" },
   "skill.cinder_ground.v1": { icon: "/textures/skills/cinder_ground.png", glow: "#e0492b" },
   "skill.blink.v1": { icon: "/textures/skills/blink.png", glow: "#3fb6ff" },
+  "skill.strike.v1": { icon: "/textures/skills/strike.png", glow: "#c4a45a" },
+  "skill.snap_shot.v1": { icon: "/textures/skills/snap_shot.png", glow: "#9ab0c4" },
+  "skill.ember_spark.v1": { icon: "/textures/skills/ember_spark.png", glow: "#e8993a" },
+  // Not a skill: the built-in walk action a mouse socket can hold. It lives here
+  // so the bar draws it exactly like everything else instead of special-casing it.
+  [MOVE_SOCKET]: { icon: "/textures/skills/move.png", glow: "#9c8a6a" },
 };
 
-/** The mouse row. PoE1 gives left, middle and right a skill each; ours hold none yet. */
+/** The mouse row, in PointerEvent.button order. */
 const MOUSE_KEYS: readonly string[] = ["L", "M", "R"];
 
-/** Socket `i` of the numbered row, dressed from whatever skill the bar puts there. */
-function socketFor(bar: (string | null)[], i: number): SkillSlot {
+/** Socket `i` of the bar. Works for both rows: past MOUSE_SLOT_BASE the key is
+ *  a mouse letter, and MOVE_SOCKET gets a label instead of an icon. */
+function socketFor(bar: (string | null)[], i: number, names?: ReadonlyMap<string, string>): SkillSlot {
   const id = bar[i] ?? null;
   const art = id ? SKILL_ART[id] : undefined;
-  return { id, key: String(i + 1), ...(art ? { icon: art.icon, glow: art.glow } : {}) };
+  const mouse = i >= MOUSE_SLOT_BASE;
+  const key = mouse ? MOUSE_KEYS[i - MOUSE_SLOT_BASE]! : String(i + 1);
+  // A label only stands in for art that does not exist; Move has its own icon now.
+  const label = art ? undefined
+    : id === MOVE_SOCKET ? "Move"
+    : id ? (names?.get(id) ?? id) : undefined;
+  return {
+    id, key, label,
+    ...(mouse ? { mouse: true } : {}),
+    ...(art ? { icon: art.icon, glow: art.glow } : {}),
+  };
 }
 
 /**
@@ -120,7 +140,7 @@ function socketFor(bar: (string | null)[], i: number): SkillSlot {
  * (reference-screenshots/poe1-lower-bar.png): the mouse buttons sit in their own row
  * above the numbered slots, and both rows draw the same tile.
  */
-function SkillTile({ slot, n, cooldowns, onHover, drag }: {
+function SkillTile({ slot, n, cooldowns, onHover, drag, onAssignRequest }: {
   slot: SkillSlot;
   n: number;
   cooldowns: Record<string, number>;
@@ -131,6 +151,7 @@ function SkillTile({ slot, n, cooldowns, onHover, drag }: {
    * what stops a skill being dropped somewhere nothing would ever fire it.
    */
   drag?: { index: number; onDrop: (from: number, to: number) => void };
+  onAssignRequest?: () => void;
 }) {
   const cd = slot.id ? cooldowns[slot.id] ?? 0 : 0;
   const ready = cd <= 0;
@@ -140,6 +161,11 @@ function SkillTile({ slot, n, cooldowns, onHover, drag }: {
       data-testid={`skill-slot-${n}`}
       onMouseEnter={() => onHover(slot.id)}
       onMouseLeave={() => onHover(null)}
+      // Left click opens the picker. A real drag never fires click, so this does
+      // not fight the drag-to-reorder the same tile also carries.
+      onClick={() => onAssignRequest?.()}
+      // Right click has no job on the bar now, so keep the browser menu off it.
+      onContextMenu={(ev) => ev.preventDefault()}
       // Only a socket with something in it can be picked up; every socket in the
       // row can be dropped on, including an empty one, which is how a skill is
       // moved to 4 rather than only swapped with 2.
@@ -175,10 +201,25 @@ function SkillTile({ slot, n, cooldowns, onHover, drag }: {
             : "inset 0 0 10px rgba(0,0,0,0.85)",
       }}
     >
+      {!slot.icon && slot.label && (
+        <span style={{
+          position: "absolute", inset: 0, display: "flex",
+          alignItems: "center", justifyContent: "center",
+          fontSize: `clamp(7px, ${(ORB_VW * 0.05).toFixed(2)}vw, 11px)`,
+          color: "#9aa0a8", textShadow: "0 1px 3px #000",
+        }}>
+          {slot.label}
+        </span>
+      )}
       {slot.icon && (
         <img
           src={slot.icon}
           alt=""
+          // The icon covers the whole tile, and an img is draggable by default, so
+          // without this every grab starts the BROWSER's image drag: the tile's own
+          // dragStart never fires, dataTransfer carries a URL, and the drop reads
+          // NaN. Invisible to jsdom, which dispatches drag events at the div.
+          draggable={false}
           style={{
             width: "100%",
             height: "100%",
@@ -222,6 +263,131 @@ function SkillTile({ slot, n, cooldowns, onHover, drag }: {
       >
         {slot.key}
       </span>
+    </div>
+  );
+}
+
+const PICK_TILE = 40;
+
+/** The key caption a socket index wears, matching the bar's own two rows. */
+function socketKeyLabel(i: number): string {
+  return i >= MOUSE_SLOT_BASE ? MOUSE_KEYS[i - MOUSE_SLOT_BASE]! : String(i + 1);
+}
+
+/** One choosable tile in the picker: art if the entry has any, else its initial. */
+function PickTile({ id, name, bound, selected, onPick, onHover }: {
+  id: string | null;
+  name: string;
+  bound: string | null;
+  selected: boolean;
+  onPick: (id: string | null) => void;
+  onHover: (id: string | null) => void;
+}) {
+  const art = id ? SKILL_ART[id] : undefined;
+  return (
+    <button
+      data-testid={`pick-${id ?? "clear"}`} role="menuitem" title={name}
+      onClick={() => onPick(id)}
+      onPointerEnter={() => onHover(id)}
+      onPointerLeave={() => onHover(null)}
+      style={{
+        width: PICK_TILE, padding: 0, cursor: "pointer", font: "inherit",
+        display: "flex", flexDirection: "column", alignItems: "stretch",
+        background: "transparent", border: "none",
+      }}
+    >
+      <span style={{
+        position: "relative", height: PICK_TILE, borderRadius: 2,
+        border: `1px solid ${selected ? "#d9b04a" : "#43382180"}`,
+        background: art
+          ? `#05070a center/cover url(${art.icon})`
+          : "radial-gradient(circle at 50% 35%, #1b1d22, #06080b)",
+        boxShadow: selected ? `0 0 6px ${art?.glow ?? "#d9b04a"}` : "inset 0 0 8px rgba(0,0,0,0.8)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        color: "#8d8778", fontSize: 18,
+      }}>
+        {/* Clear has no art on purpose: an empty socket is what it assigns. */}
+        {art ? null : id === null ? "✕" : name.slice(0, 1)}
+      </span>
+      {/* PoE2 captions each tile with the key it is currently bound to, which is
+          how you see at a glance that a skill is already sitting on another socket. */}
+      <span style={{
+        height: 12, lineHeight: "12px", fontSize: 9, fontWeight: 700,
+        color: bound ? "#d9b04a" : "transparent", textShadow: "0 1px 2px #000",
+      }}>{bound ?? "."}</span>
+    </button>
+  );
+}
+
+/**
+ * Right-click assignment popup, laid out from reference-screenshots/skill-action-bar.webp
+ * (PoE2's own socket picker, circled bottom right): a titled panel of icon TILES in
+ * labelled sections, each captioned with the key it is bound to, not a text menu.
+ */
+function SkillPicker({ skills, details, bar, current, onPick, onClose }: {
+  skills: ReadonlyMap<string, string>;
+  /** Full skill records, so a hovered tile shows the same tooltip the bar does. */
+  details: Snapshot["skills"];
+  bar: readonly (string | null)[];
+  current: string | null;
+  onPick: (id: string | null) => void;
+  onClose: () => void;
+}) {
+  const [hovered, setHovered] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const onClick = () => onClose();
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("pointerdown", onClick);
+    return () => { window.removeEventListener("keydown", onKey); window.removeEventListener("pointerdown", onClick); };
+  }, [onClose]);
+
+  /** Which key this entry already answers to, so the tile can wear it. */
+  const boundKey = (id: string | null): string | null => {
+    if (id === null) return null;
+    const i = bar.indexOf(id);
+    return i === -1 ? null : socketKeyLabel(i);
+  };
+
+  const sections: { title: string; items: { id: string | null; name: string }[] }[] = [
+    { title: "Actions", items: [{ id: MOVE_SOCKET, name: "Move" }, { id: null, name: "Clear" }] },
+    { title: "Skills", items: [...skills].map(([id, name]) => ({ id: id as string | null, name })) },
+  ];
+
+  const pick = (id: string | null) => { onPick(id); onClose(); };
+
+  return (
+    <div data-testid="skill-picker" role="menu" onPointerDown={(e) => e.stopPropagation()} style={{
+      position: "absolute", right: BAR_PAD, bottom: `calc(${BAR_H} + 8px)`,
+      width: PICK_TILE * 4 + 22, zIndex: 40, padding: "2px 6px 6px", pointerEvents: "auto",
+      background: "linear-gradient(180deg,#15161a,#0a0b0e)",
+      border: "1px solid #6b5a34", borderRadius: 3,
+      boxShadow: "0 6px 20px rgba(0,0,0,0.75)", fontFamily: SERIF,
+    }}>
+      <button aria-label="Close" onClick={onClose} style={{
+        position: "absolute", top: 2, right: 4, padding: 0, lineHeight: 1,
+        background: "none", border: "none", cursor: "pointer", color: "#7d7566", fontSize: 12,
+      }}>{"✕"}</button>
+      {sections.map((s) => (
+        <div key={s.title}>
+          <div style={{
+            margin: "4px 0 3px", paddingBottom: 2, textAlign: "center",
+            borderBottom: "1px solid #43382160", color: "#b9a06a",
+            fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase",
+          }}>{s.title}</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, justifyContent: "center" }}>
+            {s.items.map((c) => (
+              <PickTile key={c.id ?? "__clear"} id={c.id} name={c.name}
+                bound={boundKey(c.id)} selected={c.id === current}
+                onPick={pick} onHover={setHovered} />
+            ))}
+          </div>
+        </div>
+      ))}
+      {/* Nested inside the panel on purpose: the picker already owns a stacking
+          context, so anchoring the tooltip to its top edge keeps it above the
+          panel without a second z-index guess about the bar below. */}
+      <SkillTooltip skills={details} id={hovered} right="0" bottom="100%" />
     </div>
   );
 }
@@ -557,6 +723,19 @@ export function Hud({
     onSkillBarChange?.(next);
   }, [bar, onSkillBarChange]);
 
+  const [assigning, setAssigning] = React.useState<number | null>(null);
+  const assignSocket = React.useCallback((index: number, id: string | null) => {
+    const next = bar.map((v, i) => (id !== null && v === id && i !== index ? null : v));
+    next[index] = id;
+    onSkillBarChange?.(next);
+  }, [bar, onSkillBarChange]);
+
+  const skillNames = React.useMemo(() => {
+    const m = new Map<string, string>();
+    for (const s of snapshot?.skills ?? []) m.set(s.id, s.name);
+    return m;
+  }, [snapshot?.skills]);
+
   // docs/09 rule 1: a reward the player cannot hear and see did not happen. Two
   // guaranteed payouts used to land in total silence — the level the fixed track
   // pays on a dry session (rule 7), and the stones a cleared map hands back, which
@@ -861,15 +1040,20 @@ export function Hud({
       >
         {/* The mouse row closes on a warm hairline, drawn as a shadow so it costs no height. */}
         <div style={{ display: "flex", gap: `${SLOT_GAP}px`, boxShadow: "0 1px 0 rgba(101,81,49,0.85)" }}>
-          {MOUSE_KEYS.map((key, i) => (
-            <SkillTile
-              key={key}
-              slot={{ id: null, key, mouse: true }}
-              n={i + 6}
-              cooldowns={cooldowns}
-              onHover={setHoveredSkill}
-            />
-          ))}
+          {MOUSE_KEYS.map((_, i) => {
+            const idx = MOUSE_SLOT_BASE + i;
+            return (
+              <SkillTile
+                key={MOUSE_KEYS[i]}
+                slot={socketFor(bar, idx, skillNames)}
+                n={idx + 1}
+                cooldowns={cooldowns}
+                onHover={setHoveredSkill}
+                drag={{ index: idx, onDrop: swapSockets }}
+                onAssignRequest={() => setAssigning(idx)}
+              />
+            );
+          })}
         </div>
         {/* PoE1 recesses a rail between the two rows rather than leaving a gap: 18px of
             shadow on the reference, closed underneath by a brighter hairline that runs the
@@ -885,14 +1069,15 @@ export function Hud({
           }}
         />
         <div style={{ display: "flex", gap: `${SLOT_GAP}px` }}>
-          {bar.map((_, i) => (
+          {bar.slice(0, MOUSE_SLOT_BASE).map((_, i) => (
             <SkillTile
               key={i}
-              slot={socketFor(bar, i)}
+              slot={socketFor(bar, i, skillNames)}
               n={i + 1}
               cooldowns={cooldowns}
               onHover={setHoveredSkill}
               drag={{ index: i, onDrop: swapSockets }}
+              onAssignRequest={() => setAssigning(i)}
             />
           ))}
         </div>
@@ -903,6 +1088,16 @@ export function Hud({
           a tooltip nested inside it can never rise above the inventory panel it opens
           into. Out here it is a plain sibling and its own zIndex settles the order. */}
       <SkillTooltip skills={snapshot.skills} id={hoveredSkill} right={BAR_PAD} bottom={`calc(${BAR_H} + 8px)`} />
+      {assigning !== null && (
+        <SkillPicker
+          skills={skillNames}
+          details={snapshot.skills}
+          bar={bar}
+          current={bar[assigning] ?? null}
+          onPick={(id) => assignSocket(assigning, id)}
+          onClose={() => setAssigning(null)}
+        />
+      )}
     </div>
   );
 }

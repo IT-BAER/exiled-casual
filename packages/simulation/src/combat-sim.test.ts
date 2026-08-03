@@ -5,7 +5,7 @@ import { MONSTERS, CONTENT_VERSION } from "@exiled/content-runtime";
 import { generateArea } from "@exiled/mapgen";
 import { createCombatSim, spawnLabActors } from "./combat-sim";
 import { gridCollision } from "./collision";
-import type { BossC, MonsterC, Position, MoveTarget, SessionC } from "./components";
+import type { BossC, MonsterC, Position, MoveTarget, SessionC, InventoryC } from "./components";
 
 describe("createCombatSim", () => {
   it("spawns exactly 1 player and 6 monsters (5 normal + 1 rare)", () => {
@@ -177,6 +177,15 @@ describe("createCombatSim", () => {
     for (let t = 0; t < 120; t++) sim.step([]);
     const p = world.get<Position>(playerEntity, "position")!;
     expect(mapCol.isWalkable(p.x, p.y, fp(0.5))).toBe(true);
+  });
+
+  it("lab shield spawn puts both bases in the backpack", () => {
+    const { world } = createCombatSim(42, { area: "hideout" });
+    spawnLabActors(world, "shields", 0, 0);
+    const sessionE = [...world.query("inventory")][0]!;
+    const ids = world.get<InventoryC>(sessionE, "inventory")!.items.map((p) => p.item.baseId);
+    expect(ids).toContain("base.ember_buckler");
+    expect(ids).toContain("base.ashwall_tower_shield");
   });
 
   it("system registration order matches canonical spec", () => {

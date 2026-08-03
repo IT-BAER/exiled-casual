@@ -2,6 +2,17 @@ import { describe, it, expect } from "vitest";
 import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
 import { testPlayer } from "../test-fixtures";
 import { createSoundscape } from "./soundscape";
+import { ambientCue } from "./sfx";
+
+describe("area ambience", () => {
+  it("gives the hideout and each biome a deliberate loop", () => {
+    expect(ambientCue(null)).toBe("ambient-hideout");
+    expect(ambientCue("vaal_stone")).toBe("ambient-cave");
+    expect(ambientCue("desert")).toBe("ambient-wind");
+    expect(ambientCue("swamp")).toBe("ambient-swamp");
+    expect(ambientCue("forest")).toBe("ambient-forest");
+  });
+});
 
 /** A snapshot with the bits the soundscape reads, and nothing else. */
 function snap(over: Partial<Snapshot> = {}): Snapshot {

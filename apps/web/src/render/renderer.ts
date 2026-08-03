@@ -56,18 +56,64 @@ const BLINK_Y = 0.9;
 const HIT_FLASH_TICKS = 3;
 
 /**
- * Ticks a projectile takes to slide from the casting hand onto its true path.
- * Three: any longer and the offset is still visible when the bolt is halfway
- * across the room, which reads as a bolt flying crooked rather than as one
- * thrown by an arm.
+ * Ticks after which the hand offset stops being applied (the bolt is far
+ * enough that the constant offset is invisible). The offset is NOT blended
+ * away: decaying it curves the bolt through the player's centre.
  */
-const HAND_BLEND_TICKS = 3;
+const HAND_OFFSET_TTL = 30;
 
 /** How long a corpse lies there, in ticks. */
 const CORPSE_TICKS = Math.round(CORPSE_SECONDS * TICKS_PER_SEC);
 
 /** Kinds that fall over when they die. Everything else just stops existing. */
 const BODIES = new Set<MeshKind>(["player", "monster", "rare", "boss"]);
+
+export interface CastingAnimation {
+  playCast(seconds?: number): void;
+  stopCast(): void;
+}
+
+export interface ActionAnimation extends CastingAnimation {
+  playStrike(seconds?: number): void;
+  stopStrike(): void;
+}
+
+/** Synchronise the render animation with the simulation-owned casting state. */
+export function syncCastingAnimation(
+  rig: CastingAnimation | null,
+  wasCasting: boolean,
+  isCasting: boolean,
+  seconds?: number,
+): void {
+  if (!rig || wasCasting === isCasting) return;
+  if (isCasting) rig.playCast(seconds);
+  else rig.stopCast();
+}
+
+/**
+ * Synchronise the render clip with the simulation's current cast action.
+ * `seconds` is the wind-up the sim granted this cast (cast speed included), so
+ * the clip is paced to end on the hit rather than run at its authored rate.
+ */
+export function syncActionAnimation(
+  rig: ActionAnimation | null,
+  wasCasting: boolean,
+  isCasting: boolean,
+  wasAction: "spell" | "melee" | undefined,
+  action: "spell" | "melee" | undefined,
+  seconds?: number,
+): void {
+  if (!rig) return;
+  if (isCasting && (!wasCasting || wasAction !== action)) {
+    if (action === "melee") rig.playStrike(seconds);
+    else rig.playCast(seconds);
+    return;
+  }
+  // A sword swing owns its full animation and is allowed to finish after the
+  // simulation hit lands. Spell casting is a sustained pose, so it ends with
+  // the cast window.
+  if (!isCasting && wasCasting && wasAction !== "melee") rig.stopCast();
+}
 
 /** Height the death impulse is aimed above the floor, so a body topples rather
  *  than slides. */
@@ -94,11 +140,6 @@ const RUN_SPEED = 3;
 /** Per-frame ease onto the target tilt, so the body settles rather than snaps. */
 const TILT_EASE = 0.12;
 
-/** Rising edge of the sim's casting flag, i.e. a cast just started this tick. */
-function didCast(prev: Snapshot, next: Snapshot): boolean {
-  return next.player.casting && !prev.player.casting;
-}
-
 function kindOf(e: SnapshotEntity): MeshKind {
   if (e.kind === "monster") {
     if (e.boss) return "boss";
@@ -124,7 +165,7 @@ export class SnapshotRenderer {
   private readonly tilt = new Map<number, [number, number]>();
   /** The tick each entity was last struck on. Absent means it is not lit. */
   private readonly hit = new Map<number, number>();
-  /** Newborn bolts still being drawn out of the hand, and when they were cast. */
+  /** Newborn bolts offset to the casting hand; constant until TTL expires. */
   private readonly fromHand = new Map<number, { offset: Vector3; tick: number }>();
   /** What each entity is drawn as, so a dead one can be told from a closed portal. */
   private readonly kinds = new Map<number, MeshKind>();
@@ -158,6 +199,13 @@ export class SnapshotRenderer {
         return true;
       };
     }
+  }
+
+  /** Feed the cursor's world position to the casting arm's aim solver. */
+  setAim(worldX: number, worldZ: number): void {
+    if (this.playerId === null) return;
+    const mesh = this.meshes.get(this.playerId);
+    if (mesh) rigOf(mesh)?.setAimTarget(worldX, worldZ);
   }
 
   /** Set the entity the mouse is hovering; drives portal/device highlight visuals. */
@@ -234,37 +282,55 @@ export class SnapshotRenderer {
     for (const e of next.entities) {
       liveIds.add(e.id);
       const prevE = prev?.entities.find((p) => p.id === e.id);
-      // A bolt the sim spawned at the body centre, caught before it is drawn there.
-      if (e.kind === "projectile" && (e.team ?? 0) === 0 && !this.meshes.has(e.id)) {
-        const hand = playerMesh ? rigOf(playerMesh)?.castPoint() ?? null : null;
-        if (hand) this.fromHand.set(e.id, {
-          offset: hand.subtract(new Vector3(e.x, Y_LIFT.projectile, e.y)),
-          tick: next.tick,
-        });
+      // On the bolt's first tick the cast animation hasn't moved the arm yet,
+      // so castPoint() returns the idle-pose hand (at the hip). Skip the first
+      // tick entirely: the bolt is invisible for 1/30s, and on the second tick
+      // the arm is raised and castPoint() gives the real weapon tip.
+      const playerRig = playerMesh ? rigOf(playerMesh) : undefined;
+      if (e.kind === "projectile" && (e.team ?? 0) === 0 && playerRig && !this.meshes.has(e.id)) {
+        if (!this.fromHand.has(e.id)) {
+          this.fromHand.set(e.id, { offset: Vector3.Zero(), tick: next.tick });
+          continue;
+        }
+        const hand = playerRig.castPoint();
+        if (hand) {
+          this.fromHand.set(e.id, {
+            offset: hand.subtract(new Vector3(e.x, Y_LIFT.projectile, e.y)),
+            tick: next.tick,
+          });
+        } else {
+          this.fromHand.delete(e.id);
+        }
+      }
+      const handEntry = this.fromHand.get(e.id);
+      let ox = prevE?.x ?? e.x;
+      let oy = prevE?.y ?? e.y;
+      let nx = e.x;
+      let ny = e.y;
+      if (handEntry) {
+        const age = next.tick - handEntry.tick + alpha;
+        if (age >= HAND_OFFSET_TTL) {
+          this.fromHand.delete(e.id);
+        } else {
+          ox += handEntry.offset.x;
+          oy += handEntry.offset.z;
+          nx += handEntry.offset.x;
+          ny += handEntry.offset.z;
+        }
       }
       this.syncMesh(
         e.id,
         kindOf(e),
-        prevE?.x ?? e.x,
-        prevE?.y ?? e.y,
-        e.x,
-        e.y,
+        ox,
+        oy,
+        nx,
+        ny,
         alpha,
         e.radius,
         e.species,
       );
       const mesh = this.meshes.get(e.id);
       if (!mesh) continue;
-      // Draw the first tenth of a second of a bolt's flight bent out of the hand
-      // that cast it and back onto the line the sim put it on. Render only: the
-      // sim's own position is what everything collides against, and moving that
-      // would change where a spell lands to fix where it looks like it started.
-      const hand = this.fromHand.get(e.id);
-      if (hand) {
-        const age = next.tick - hand.tick + alpha;
-        if (age >= HAND_BLEND_TICKS) this.fromHand.delete(e.id);
-        else mesh.position.addInPlace(hand.offset.scale(1 - age / HAND_BLEND_TICKS));
-      }
       // Struck: life is the only report of a hit the client gets, and it is the
       // honest one — a swing that missed or was absorbed never moves it.
       if (newTick && e.life !== undefined && prevE?.life !== undefined && e.life < prevE.life) {
@@ -367,21 +433,38 @@ export class SnapshotRenderer {
 
     if (next.tick !== this.lastTick) {
       this.lastTick = next.tick;
-      // The sim's casting flag going up means a cast started this tick — drives
-      // the spell animation. Instant skills (castTicks 0) never raise it.
-      if (prev && didCast(prev, next)) {
+      // The sim owns the whole recovery window. Start the looping upper-body
+      // clip on its rising edge and stop it on the falling edge, so holding a
+      // skill cannot leave the arm frozen while the cast is still active.
+      if (!prev || next.player.casting !== prev.player.casting || next.player.castingAction !== prev.player.castingAction) {
         const playerMesh = this.meshes.get(next.player.id);
-        if (playerMesh) rigOf(playerMesh)?.playCast();
+        const rig = playerMesh ? rigOf(playerMesh) : null;
+        syncActionAnimation(
+          rig,
+          prev?.player.casting ?? false,
+          next.player.casting,
+          prev?.player.castingAction,
+          next.player.castingAction,
+          next.player.castTicks === undefined ? undefined : next.player.castTicks / TICKS_PER_SEC,
+        );
       }
       if (prev) {
         const dx = next.player.x - prev.player.x;
         const dy = next.player.y - prev.player.y;
         if (dx * dx + dy * dy > TELEPORT_STEP * TELEPORT_STEP) {
-          blinkBurst(
-            this.scene,
-            new Vector3(prev.player.x, BLINK_Y, prev.player.y),
-            new Vector3(next.player.x, BLINK_Y, next.player.y),
-          );
+          const pm = this.meshes.get(next.player.id);
+          if (pm) {
+            pm.setEnabled(false);
+            pm.position.x = next.player.x;
+            pm.position.z = next.player.y;
+          }
+          const BLINK_REVEAL_MS = 60;
+          const fromV = new Vector3(prev.player.x, BLINK_Y, prev.player.y);
+          const toV = new Vector3(next.player.x, BLINK_Y, next.player.y);
+          setTimeout(() => {
+            blinkBurst(this.scene, fromV, toV);
+            if (pm) pm.setEnabled(true);
+          }, BLINK_REVEAL_MS);
         }
       }
     }

@@ -39,6 +39,11 @@ const DIR = "/audio";
 interface Voice { gain: number; wet: number; vary: number }
 
 const VOICES: Record<string, Voice> = {
+  "ambient-hideout":          { gain: 0.12, wet: 0.08, vary: 0 },
+  "ambient-cave":             { gain: 0.10, wet: 0.24, vary: 0 },
+  "ambient-wind":             { gain: 0.09, wet: 0.04, vary: 0 },
+  "ambient-swamp":            { gain: 0.08, wet: 0.10, vary: 0 },
+  "ambient-forest":           { gain: 0.08, wet: 0.08, vary: 0 },
   "skill-ember-bolt-cast":    { gain: 0.18, wet: 0.14, vary: 0.06 },
   "skill-ember-bolt-impact":  { gain: 0.34, wet: 0.18, vary: 0.08 },
   "skill-cinder-ground-cast": { gain: 0.32, wet: 0.22, vary: 0.04 },
@@ -118,6 +123,7 @@ const VOICES: Record<string, Voice> = {
 export type SfxName = keyof typeof VOICES & string;
 
 export function sfxCategory(name: string): SoundCategory {
+  if (name.startsWith("ambient-")) return "music";
   if (name.startsWith("skill-")) return "skills";
   if (name.startsWith("ui-")) return "interface";
   return "environment";
@@ -322,6 +328,33 @@ export function stopAllSfxLoops(): void {
 
 function clamp(v: number): number {
   return Math.max(0, Math.min(1, v));
+}
+
+const AMBIENT_BY_BIOME: Record<string, string> = {
+  vaal_stone: "ambient-cave",
+  desert: "ambient-wind",
+  swamp: "ambient-swamp",
+  forest: "ambient-forest",
+};
+
+export function ambientCue(biomeId: string | null): string {
+  return biomeId === null ? "ambient-hideout" : (AMBIENT_BY_BIOME[biomeId] ?? "ambient-cave");
+}
+
+let wantedAmbient: string | null = null;
+export function setAmbient(biomeId: string | null): void {
+  const cue = ambientCue(biomeId);
+  if (wantedAmbient === cue && loops.has("ambient")) return;
+  wantedAmbient = cue;
+  stopSfxLoop("ambient");
+  void preloadSfx([cue]).then(() => {
+    if (wantedAmbient === cue) startSfxLoop(cue, "ambient");
+  });
+}
+
+export function stopAmbient(): void {
+  wantedAmbient = null;
+  stopSfxLoop("ambient");
 }
 
 function clampPan(v: number): number {

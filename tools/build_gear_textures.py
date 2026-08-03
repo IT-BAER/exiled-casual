@@ -56,15 +56,29 @@ BASES = {
     "base.ironsworn_plate": "ironsworn_plate.png",
     "base.stalker_leathers": "stalker_leathers.png",
     "base.emberbound_robe": "emberbound_robe.png",
-    # The off hand. Held gear is pinned to a single bright texel of the atlas, so
-    # a shield with no bake of its own is not merely the wrong colour, it is a
-    # white slab: the one texel it samples is the helm's light grey and there is
-    # no second texel to break it up. Through a ramp that texel becomes the light
-    # end of the icon's own palette, while each shield's geometry supplies its
-    # distinct silhouette.
+    # The hands, and the one place the atlas is not the source at all: see
+    # ICON_ART below.
     "base.ember_buckler": "ember_buckler.png",
     "base.ashwall_tower_shield": "ashwall_tower_shield.png",
+    "base.emberwand": "emberwand.png",
 }
+
+# Held gear wears its own icon rather than a repalettized atlas.
+#
+# A ramp is the right answer for armour, where the geometry is an authored outfit
+# with its own UVs and only the colours may move. Held gear has neither: it is a
+# generated shape carrying a planar projection (`plate_uv` / `rod_uv` in
+# build_wardrobe.py), and its icon is a picture of that exact object. Ramping the
+# atlas onto it threw away the boards, the bands and the boss and left a flat wash
+# of the right hue, which is why a plate read as painted cardboard next to its own
+# inventory art, and a wand as a bare dowel.
+ICON_ART = ("base.ember_buckler", "base.ashwall_tower_shield", "base.emberwand")
+
+# The icons are cut out on transparency and the plate is a solid object, so the
+# art is composited onto its own darkest colour first: sampled here, as a
+# percentile of the icon's own opaque pixels, so the fill is the shadow the
+# artist already used rather than a black an eye reads as a hole.
+ICON_FILL = 0.05
 
 # The character is roughly 12% of frame height, so the atlas is downscaled on the
 # way out: 256 is past the point where more texels are visible, and five full-size
@@ -129,6 +143,25 @@ def repalette(atlas, ramp):
     return out
 
 
+def icon_plate(icon_path):
+    """The icon itself, cropped to its art and squared, ready for a planar UV.
+
+    Squaring it is not a distortion to correct: the plate's projection maps the
+    mesh's own bounds onto the whole image, so a tall shield stretches a tall
+    crop back out to the shape it was drawn in.
+    """
+    icon = Image.open(icon_path).convert("RGBA")
+    art = icon.crop(icon.getbbox())
+    opaque = [p for p in art.getdata() if p[3] > 128]
+    if not opaque:
+        raise SystemExit(f"{icon_path}: no opaque pixels to skin held gear with")
+    opaque.sort(key=luminance)
+    fill = opaque[int(len(opaque) * ICON_FILL)][:3]
+    plate = Image.new("RGBA", art.size, fill + (255,))
+    plate.alpha_composite(art)
+    return plate.resize((SIZE, SIZE), Image.LANCZOS)
+
+
 def main():
     atlas = Image.open(ATLAS).convert("RGBA")
     os.makedirs(OUT, exist_ok=True)
@@ -139,8 +172,11 @@ def main():
         if not os.path.exists(icon_path):
             raise SystemExit(f"missing icon for {base_id}: {icon_path}")
 
-        ramp = build_ramp(icon_path)
-        out = repalette(atlas, ramp).resize((SIZE, SIZE), Image.LANCZOS)
+        if base_id in ICON_ART:
+            out = icon_plate(icon_path)
+        else:
+            ramp = build_ramp(icon_path)
+            out = repalette(atlas, ramp).resize((SIZE, SIZE), Image.LANCZOS)
 
         slug = base_id.split(".", 1)[1]
         path = os.path.join(OUT, f"{slug}.png")

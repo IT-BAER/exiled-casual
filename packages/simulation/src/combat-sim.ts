@@ -5,10 +5,11 @@ import {
 } from "@exiled/rules";
 import { SKILLS, MONSTERS, rareTemplate, CONTENT_VERSION, ITEM_POOLS, baseOf, CURRENCY_DROPS, currencyItem, waystoneItem } from "@exiled/content-runtime";
 import { generateArea, type AreaLayout } from "@exiled/mapgen";
+import type { Item } from "@exiled/content-schema";
 import { gridCollision, type CollisionRef } from "./collision";
 import { fnv1a32 } from "./rng";
 import { stockVendor } from "./vendor";
-import { withPermanentWaystone } from "./inventory";
+import { withPermanentWaystone, placeFirstFit } from "./inventory";
 import { Simulation } from "./loop";
 import { World } from "./ecs";
 import type { Entity } from "./ecs";
@@ -216,12 +217,29 @@ let labRareSpawns = 0;
 
 export function spawnLabActors(
   world: World,
-  kind: "imp" | "pack" | "rare" | "boss" | "clear" | "hurtboss" | "item",
+  kind: "imp" | "pack" | "rare" | "boss" | "clear" | "hurtboss" | "item" | "shields",
   cx: number,
   cy: number,
 ): void {
   if (kind === "clear") {
     for (const e of [...world.query("monster")]) world.destroy(e);
+    return;
+  }
+
+  if (kind === "shields") {
+    // Lab-only: both shield bases straight into the backpack, so the off-hand
+    // look can be judged without farming a drop that rolls its base at random.
+    const sessionE = [...world.query("inventory")][0];
+    if (sessionE === undefined) return;
+    let inv = world.get<InventoryC>(sessionE, "inventory")!;
+    for (const baseId of ["base.ember_buckler", "base.ashwall_tower_shield"]) {
+      const base = baseOf(baseId);
+      const cell = placeFirstFit(inv, base.w, base.h);
+      if (!cell) continue;
+      const item: Item = { baseId, rarity: "normal", itemLevel: 80, affixes: [] };
+      inv = { ...inv, items: [...inv.items, { x: cell.x, y: cell.y, w: base.w, h: base.h, item }] };
+    }
+    world.set<InventoryC>(sessionE, "inventory", inv);
     return;
   }
 

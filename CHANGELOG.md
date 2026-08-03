@@ -12,16 +12,48 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ### Added
 
+- Every character has an attack that costs nothing. The Ironsworn swings at what
+  is in front of him and catches two of them if they crowd the doorway; the
+  Stalker looses an arrow; the Emberbound throws a mote of fire. None of them
+  need mana, so running the pool dry no longer leaves you standing there.
 - The braziers burn. Every bowl in the hideout and out on the maps now stands a
   real flame in it, built out of geometry rather than painted on a card, with a
   white-hot core, a tongue that tears at the top and sparks that leave it.
 
 ### Changed
 
+- Ember Bolt pauses between bolts when you hold the button. Its cooldown used to
+  sit under its own wind-up, so holding the button chained casts nose to tail and
+  only the first bolt ever looked like it cost anything. Each bolt now starts
+  from rest, and the DPS on the tooltip quotes the rate you actually get rather
+  than the one the wind-up alone implied.
 - The fire in the main menu is many small embers instead of a few fat ones, so
   it reads as flame rather than as a lamp behind glass.
 - Portals are a tear rather than a lit oval: a ragged cyan arc round a hole that
   goes black in the middle, with broken shards turning slowly inside it.
+- Boulders stand at the edge of a map now instead of inland, and the rock is
+  darker, so a cave reads as a cave without a cliff growing between you and your
+  own character.
+
+### Changed (animation)
+
+- Melee alternates two real slashes now. The second is the first swing carried
+  round onto a downward diagonal, so hitting twice reads as two cuts instead of
+  a sword swing followed by a punch.
+
+### Fixed
+
+- A cast plays at the speed it actually casts at. The clip ran at its authored
+  rate whatever the wind-up was, so a quick spell only ever showed the first
+  third of the motion and the bolt left a hand that was still lifting; held
+  down, it looked like the skill was firing instantly. It now finishes on the
+  hit and settles back to idle.
+- Skills can be dragged between the numbered slots again. The icon itself was
+  being picked up instead of the slot under it.
+- The ground no longer flickers black squares where it meets the rocks.
+- Pressing R stopped emptying your inventory and your equipment. It was a
+  leftover greybox key that replaced the character with an empty one and then
+  saved it.
 
 ## [0.1.0] - 2026-07-30
 

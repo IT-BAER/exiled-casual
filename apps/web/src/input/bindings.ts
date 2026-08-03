@@ -1,6 +1,7 @@
 import type { Intent, Snapshot, SpawnKind, ToWorker } from "@exiled/protocol";
 import { heldToMoveIntent, keyToIntent, pointerToWorld } from "./intents";
 import type { Node, Scene } from "@babylonjs/core";
+import { MOVE_SOCKET } from "../settings";
 
 // ponytail: thin DOM glue — all key→intent mapping lives in intents.ts
 
@@ -24,6 +25,11 @@ const SPAWN_KEYS: Record<string, SpawnKind> = {
  * itself — pre-converting here would double-scale the skill target ~1000×.
  */
 let aimWorld = { x: 0, y: 0 };
+
+/** Current cursor position in sim coordinates (world x, world y = Babylon z). */
+export function getAimWorld(): { x: number; y: number } {
+  return aimWorld;
+}
 
 const MOVE_KEYS = new Set(["w", "a", "s", "d"]);
 
@@ -158,6 +164,8 @@ export function attachBindings(
    * taken at mount would go stale the first time a skill was dragged.
    */
   skillForKey?: (key: string) => string | null,
+  /** What the mouse buttons fire. Index is bar index (MOUSE_SLOT_BASE + button). */
+  skillForMouse?: (button: number) => string | null,
 ): {
   detach: () => void;
   onSnapshot: (snap: Snapshot) => void;
@@ -169,6 +177,10 @@ export function attachBindings(
   // True while the left mouse button is down: hold-to-move keeps steering the
   // player toward the cursor, instead of a single click-to-point.
   let pointerHeld = false;
+  // Mouse buttons held down that are bound to a skill. Re-fired every snapshot so
+  // holding a button keeps casting, the way the numbered keys do through the
+  // browser's own key auto-repeat. The sim drops casts still on cooldown.
+  const skillButtonsHeld = new Set<number>();
   // Last cursor screen position, so held-move can re-pick the world point every
   // snapshot. The camera follows the player, so a stationary cursor sits over a
   // DIFFERENT world point each frame — re-picking is what keeps the player moving
@@ -234,11 +246,13 @@ export function attachBindings(
       return;
     }
     const k = e.key.toLowerCase();
-    // r = lab respawn: fresh player + monsters back at their spawn ring
-    if (k === "r") {
-      worker.postMessage({ type: "reset" } satisfies ToWorker);
-      return;
-    }
+    // NO `r` HERE. It used to be "lab respawn", from when this was a greybox
+    // arena with nothing durable in it. `reset` rebuilds the worker's core as
+    // `new WorkerCore(42)` — no characterId, no hydrate — so it does not respawn
+    // the player, it REPLACES him with an empty seed-42 lab character, and the
+    // next durable change persists that. A stray keypress emptied a real
+    // character's inventory and equipment. The message still exists for the
+    // worker; nothing in the game may bind a key to it.
     // o = try on the next outfit. Render-only, the sim never hears about it.
     if (k === "o") {
       onCycleOutfit?.();
@@ -277,6 +291,8 @@ export function attachBindings(
   }
 
   function onPointerMove(e: PointerEvent) {
+    // A chorded press or release arrives here, not on pointerdown/up. See syncButtons.
+    syncButtons(e, e.buttons);
     lastScreen = { x: e.clientX, y: e.clientY };
     const floor = groundPoint(scene, e.clientX, e.clientY);
     if (floor) {
@@ -298,8 +314,57 @@ export function attachBindings(
     setHover(null);
   }
 
-  function onPointerDown(e: PointerEvent) {
-    if (e.button !== 0) return; // left button drives movement
+  /** Fire the skill bound to `button` at the given screen point. False when nothing is bound. */
+  function castFromMouse(button: number, sx: number, sy: number): boolean {
+    const skillId = skillForMouse?.(button);
+    if (!skillId || skillId === MOVE_SOCKET) return false;
+    const floor = groundPoint(scene, sx, sy);
+    if (!floor) return true; // bound, just no ground under the cursor this frame
+    const aim = pointerToWorld(floor);
+    post({ kind: "useSkill", skillId, tx: aim.x, ty: aim.y });
+    return true;
+  }
+
+  /**
+   * Pointer Events fire `pointerdown` only for the FIRST button pressed: a second
+   * button pressed while another is held arrives as a `pointermove` carrying an
+   * updated `buttons` bitmask, and `pointerup` likewise waits for the LAST button
+   * to come up. So chorded presses (LMB to walk, RMB to cast) have to be read off
+   * the bitmask rather than off the event's own `button`. Bit per button index.
+   */
+  const BUTTON_BIT = [1, 4, 2];
+  let buttonsMask = 0;
+
+  function syncButtons(e: PointerEvent, now: number) {
+    for (let button = 0; button < BUTTON_BIT.length; button++) {
+      const bit = BUTTON_BIT[button]!;
+      const was = (buttonsMask & bit) !== 0;
+      const is = (now & bit) !== 0;
+      if (is && !was) onButtonDown(button, e);
+      else if (!is && was) onButtonUp(button);
+    }
+    buttonsMask = now;
+  }
+
+  function onButtonDown(button: number, e: PointerEvent) {
+    // Middle or right: cast the assigned skill if any. The context menu and
+    // autoscroll are suppressed by their own listeners, since the press that
+    // starts a chord reaches us as a pointermove that must not be cancelled.
+    if (button === 1 || button === 2) {
+      lastScreen = { x: e.clientX, y: e.clientY };
+      if (castFromMouse(button, e.clientX, e.clientY)) skillButtonsHeld.add(button);
+      return;
+    }
+    // Left button: three states. MOVE_SOCKET = walk (fall through below).
+    // A skill id = cast. null (cleared) = do nothing.
+    const leftAction = skillForMouse ? skillForMouse(0) : MOVE_SOCKET;
+    if (leftAction !== null && leftAction !== MOVE_SOCKET) {
+      lastScreen = { x: e.clientX, y: e.clientY };
+      castFromMouse(0, e.clientX, e.clientY);
+      skillButtonsHeld.add(0);
+      return;
+    }
+    if (leftAction === null) return; // cleared: left button is dead
     // A piece is riding the cursor with no button held, so this press is the one
     // that puts it down. The inventory's drop-to-ground path reads the RELEASE,
     // which means without this the same click both drops the item and sets the
@@ -325,8 +390,21 @@ export function attachBindings(
     pointerHeld = true;
   }
 
+  function onButtonUp(button: number) {
+    if (button === 0) pointerHeld = false;
+    skillButtonsHeld.delete(button);
+  }
+
+  // The first press and the last release still arrive as real pointerdown/up.
+  // OR/AND the event's own button in, because a synthetic event may carry a
+  // `buttons` that has not caught up with the button it reports.
+  function onPointerDown(e: PointerEvent) {
+    if (e.button === 1 || e.button === 2) e.preventDefault();
+    syncButtons(e, e.buttons | (BUTTON_BIT[e.button] ?? 0));
+  }
+
   function onPointerUp(e: PointerEvent) {
-    if (e.button === 0) pointerHeld = false;
+    syncButtons(e, e.buttons & ~(BUTTON_BIT[e.button] ?? 0));
   }
 
   /**
@@ -341,6 +419,9 @@ export function attachBindings(
     // cursor and steer there every snapshot. Because the camera tracks the player,
     // that point drifts as the player advances, so the player keeps moving in the
     // cursor's direction even when the mouse is perfectly still.
+    if (skillButtonsHeld.size > 0 && lastScreen && !snap.player.casting) {
+      for (const button of skillButtonsHeld) castFromMouse(button, lastScreen.x, lastScreen.y);
+    }
     if (pointerHeld && lastScreen) {
       const floor = groundPoint(scene, lastScreen.x, lastScreen.y);
       if (floor) {
@@ -399,6 +480,12 @@ export function attachBindings(
     }
   }
 
+  // Suppress the browser context menu on the canvas so right-click casts.
+  const onContextMenu = (e: Event) => e.preventDefault();
+  canvas.addEventListener("contextmenu", onContextMenu);
+  // Suppress middle-click autoscroll.
+  const onAuxClick = (e: Event) => e.preventDefault();
+  canvas.addEventListener("auxclick", onAuxClick);
   window.addEventListener("keydown", onKeyDown);
   window.addEventListener("keyup", onKeyUp);
   canvas.addEventListener("pointermove", onPointerMove);
@@ -408,6 +495,8 @@ export function attachBindings(
   window.addEventListener("pointerup", onPointerUp);
 
   function detach() {
+    canvas.removeEventListener("contextmenu", onContextMenu);
+    canvas.removeEventListener("auxclick", onAuxClick);
     window.removeEventListener("keydown", onKeyDown);
     window.removeEventListener("keyup", onKeyUp);
     canvas.removeEventListener("pointermove", onPointerMove);

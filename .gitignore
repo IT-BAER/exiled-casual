@@ -52,3 +52,17 @@ tools/__pycache__/
 # hand a contributor a list of instructions written for someone else.
 CLAUDE.md
 AGENTS.md
+
+# Sounds
+audio-libs/
+skills-lock.json
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+graft/
+.ignore
+
+# Local MCP server config for the agent working here
+.mcp.json
+
+# Intermediate fire-sprite frames; the baked sheet in public/ is what ships
+.tmp-fire-sprite/

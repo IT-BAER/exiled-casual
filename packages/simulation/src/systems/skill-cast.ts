@@ -1,12 +1,14 @@
-import { fpClamp, fpStepToward } from "@exiled/fixed-point";
+import { fpClamp, fpStepToward, isqrt } from "@exiled/fixed-point";
 import { createStream } from "../rng";
 import { scalePct } from "@exiled/rules";
 import type { SkillDef } from "@exiled/content-schema";
 import { Simulation } from "../loop";
+import type { World } from "../ecs";
 import { WORLD_MIN, WORLD_MAX } from "../movement";
-import { sweep, type CollisionRef } from "../collision";
+import { sweep, type Collision, type CollisionRef } from "../collision";
 import type { Position, PlayerC, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC, CastingC, OffenseC, Health } from "../components";
 import { damageCode } from "../damage-types";
+import { bodyRadiusOf } from "../body";
 
 export function registerSkillCast(
   sim: Simulation,
@@ -19,8 +21,152 @@ export function registerSkillCast(
   // randomness and replays from before crit existed still check out.
   const critRolls = createStream(seed, "crit");
 
+  const actionFor = (skill: SkillDef): "spell" | "melee" =>
+    skill.effects.some((effect) => effect.type === "meleeStrike") ? "melee" : "spell";
+
+  function resolveSkill(
+    world: World,
+    tick: number,
+    caster: number,
+    skill: SkillDef,
+    tx: number,
+    ty: number,
+    spellDamagePct: number,
+    didCrit: boolean,
+    casterTeam: number,
+    collision: Collision | undefined,
+  ): void {
+    const pos = world.get<Position>(caster, "position");
+    if (!pos) return;
+
+    for (const effect of skill.effects) {
+      if (effect.type === "spawnProjectile") {
+        const speedPerTick = Math.trunc(effect.speedPerSecFixed / 30);
+        const step = fpStepToward(pos.x, pos.y, tx, ty, speedPerTick);
+        if (step.dx === 0 && step.dy === 0) continue; // aim on top of caster
+
+        const proj = world.create();
+        world.set<Position>(proj, "position", { x: pos.x, y: pos.y });
+        world.set<ProjectileC>(proj, "projectile", {
+          dirx: step.dx,
+          diry: step.dy,
+          remainingRange: effect.maxRangeFixed,
+          radius: effect.radiusFixed,
+          damageType: damageCode(effect.damage.type),
+          damageAmount: scalePct(effect.damage.amountFixed, spellDamagePct) * (didCrit ? 2 : 1),
+          ownerId: caster,
+          team: casterTeam,
+        });
+      } else if (effect.type === "spawnGroundArea") {
+        // Aimed past a wall, the patch lands on the wall instead of in the room
+        // behind it. The centre is swept as a point, so the circle may lick over
+        // the rock but cannot be placed through it.
+        let ax = tx;
+        let ay = ty;
+        if (collision) {
+          const reach = sweep(collision, pos.x, pos.y, tx - pos.x, ty - pos.y, 0);
+          ax = pos.x + reach.dx;
+          ay = pos.y + reach.dy;
+        }
+        const gx = fpClamp(ax, WORLD_MIN, WORLD_MAX);
+        const gy = fpClamp(ay, WORLD_MIN, WORLD_MAX);
+        const area = world.create();
+        world.set<Position>(area, "position", { x: gx, y: gy });
+        world.set<GroundAreaC>(area, "groundArea", {
+          radius: effect.radiusFixed,
+          expiryTick: tick + effect.durationTicks,
+          nextTick: tick,
+          ailmentKind: effect.ailment.kind,
+          stacksPerApply: effect.ailment.stacksPerApply,
+          dps: effect.ailment.dpsFixed,
+          ailmentDuration: effect.ailment.durationTicks,
+          maxStacks: effect.ailment.maxStacks,
+          team: casterTeam,
+        });
+      } else if (effect.type === "meleeStrike") {
+        // No entity and no flight: the swing resolves inside the cast, which is
+        // what lets it hit several targets where a projectile stops at the first.
+        const ax = tx - pos.x;
+        const ay = ty - pos.y;
+        const aimLen = isqrt(ax * ax + ay * ay);
+        if (aimLen === 0) continue;
+
+        // The wedge test is a dot product against cos(half-arc), not atan2, so
+        // the comparison stays deterministic fixed-point integer math.
+        const cosHalfArc = Math.round(Math.cos((effect.arcDegrees / 2) * Math.PI / 180) * 10000);
+        for (const target of world.query("position", "health", "faction")) {
+          if (target === caster) continue;
+          if (world.get<Faction>(target, "faction")!.team === casterTeam) continue;
+          const tpos = world.get<Position>(target, "position")!;
+          const dx = tpos.x - pos.x;
+          const dy = tpos.y - pos.y;
+          const reach = effect.reachFixed + bodyRadiusOf(world, target);
+          const dist2 = dx * dx + dy * dy;
+          if (dist2 > reach * reach) continue;
+
+          const dLen = isqrt(dist2);
+          if (dLen > 0) {
+            const cos = Math.trunc((ax * dx + ay * dy) * 10000 / (aimLen * dLen));
+            if (cos < cosHalfArc) continue;
+          }
+
+          sim.enqueueDamage({
+            target,
+            source: caster,
+            amountFixed: scalePct(effect.damage.amountFixed, spellDamagePct) * (didCrit ? 2 : 1),
+            type: damageCode(effect.damage.type),
+          });
+        }
+      } else if (effect.type === "teleport") {
+        const step = fpStepToward(pos.x, pos.y, tx, ty, effect.distanceFixed);
+        let dx = step.dx;
+        let dy = step.dy;
+        if (collision) {
+          // Blink must not land inside a wall and must not cross one.
+          const body = world.get<PlayerC>(caster, "player")?.bodyRadius ?? 0;
+          const reach = sweep(collision, pos.x, pos.y, step.dx, step.dy, body);
+          dx = reach.dx;
+          dy = reach.dy;
+        }
+        world.set<Position>(caster, "position", {
+          x: fpClamp(pos.x + dx, WORLD_MIN, WORLD_MAX),
+          y: fpClamp(pos.y + dy, WORLD_MIN, WORLD_MAX),
+        });
+      }
+    }
+  }
+
   sim.register("skillCast", (world, tick, commands) => {
     const collision = collisionRef?.active ?? undefined;
+    const completedThisTick = new Set<number>();
+
+    // Resolve completed wind-ups before accepting this tick's input. A held
+    // button therefore starts the next cast only after the prior action landed.
+    for (const caster of world.query("casting")) {
+      const casting = world.get<CastingC>(caster, "casting")!;
+      if (casting.untilTick > tick) continue;
+      if (casting.skillId) {
+        const skill = skills.get(casting.skillId);
+        const alive = (world.get<Health>(caster, "health")?.life ?? 1) > 0;
+        if (skill && alive) {
+          resolveSkill(
+            world,
+            tick,
+            caster,
+            skill,
+            casting.tx ?? 0,
+            casting.ty ?? 0,
+            casting.spellDamagePct ?? 0,
+            casting.didCrit === 1,
+            casting.team ?? world.get<Faction>(caster, "faction")?.team ?? 0,
+            collision,
+          );
+        }
+      }
+      world.remove(caster, "casting");
+      completedThisTick.add(caster);
+    }
+
     for (const cmd of commands) {
       if (cmd.type !== "useSkill" || cmd.entity === undefined || !cmd.skillId) continue;
       const caster = cmd.entity;
@@ -29,6 +175,12 @@ export function registerSkillCast(
       // A corpse does not cast, same rule movement follows. Absent health reads
       // as alive so the health-less test casters are untouched.
       if ((world.get<Health>(caster, "health")?.life ?? 1) <= 0) continue;
+      if (completedThisTick.has(caster)) continue;
+
+      // A cast is one action, not a queue. Held input can keep issuing commands,
+      // but the simulation ignores them until the current wind-up resolves.
+      const active = world.get<CastingC>(caster, "casting");
+      if (active && active.untilTick > tick) continue;
 
       const cds = world.get<Cooldowns>(caster, "cooldowns") ?? {};
       if ((cds[cmd.skillId] ?? 0) > tick) continue; // on cooldown
@@ -48,17 +200,8 @@ export function registerSkillCast(
         [cmd.skillId]: tick + skill.cooldownTicks,
       });
 
-      // Post-cast recovery: effect still fires this tick (below), but the caster
-      // is slowed until untilTick. Instant skills (castTicks 0/absent) skip this.
-      // Gear's "% increased Cast Speed" shortens it the way PoE does — cast speed
-      // is 1/cast time, and increases add together before they divide — and the
-      // skill's cooldown is deliberately left alone, which is PoE's rule too.
-      if (skill.castTicks && skill.castTicks > 0) {
-        const castSpeedPct = offense?.castSpeedPct ?? 0;
-        const ticks = Math.max(1, Math.trunc((skill.castTicks * 100) / (100 + castSpeedPct)));
-        world.set<CastingC>(caster, "casting", { untilTick: tick + ticks });
-      }
-
+      // The caster is slowed during the wind-up. Instant skills (castTicks
+      // 0/absent) skip it. Cast speed shortens the wind-up the way PoE does.
       // NOTE (ordering edge case): mana is spent and cooldown is set before the
       // pos/aim guards below. A caster with no Position component, or one aiming
       // exactly on itself, will consume mana and cooldown with no spawned effect.
@@ -87,71 +230,30 @@ export function registerSkillCast(
       const didCrit = baseCritPct > 0
         && critRolls.nextInt(0, 9999) < scalePct(baseCritPct * 100, offense?.critChancePct ?? 0);
 
-      for (const effect of skill.effects) {
-        if (effect.type === "spawnProjectile") {
-          const speedPerTick = Math.trunc(effect.speedPerSecFixed / 30);
-          const step = fpStepToward(pos.x, pos.y, tx, ty, speedPerTick);
-          if (step.dx === 0 && step.dy === 0) continue; // aim on top of caster
-
-          const proj = world.create();
-          world.set<Position>(proj, "position", { x: pos.x, y: pos.y });
-          world.set<ProjectileC>(proj, "projectile", {
-            dirx: step.dx,
-            diry: step.dy,
-            remainingRange: effect.maxRangeFixed,
-            radius: effect.radiusFixed,
-            damageType: damageCode(effect.damage.type),
-            damageAmount: scalePct(effect.damage.amountFixed, spellDamagePct) * (didCrit ? 2 : 1),
-            ownerId: caster,
-            team: casterTeam,
-          });
-        } else if (effect.type === "spawnGroundArea") {
-          // Aimed past a wall, the patch lands on the wall instead of in the room
-          // behind it — the same rule the bolt and the blink follow. The centre is
-          // swept as a point: the burning circle is allowed to lick over the rock,
-          // it is only forbidden to be placed through it.
-          let ax = tx;
-          let ay = ty;
-          if (collision) {
-            const reach = sweep(collision, pos.x, pos.y, tx - pos.x, ty - pos.y, 0);
-            ax = pos.x + reach.dx;
-            ay = pos.y + reach.dy;
-          }
-          const gx = fpClamp(ax, WORLD_MIN, WORLD_MAX);
-          const gy = fpClamp(ay, WORLD_MIN, WORLD_MAX);
-          const area = world.create();
-          world.set<Position>(area, "position", { x: gx, y: gy });
-          world.set<GroundAreaC>(area, "groundArea", {
-            radius: effect.radiusFixed,
-            expiryTick: tick + effect.durationTicks,
-            nextTick: tick,
-            ailmentKind: effect.ailment.kind,
-            stacksPerApply: effect.ailment.stacksPerApply,
-            dps: effect.ailment.dpsFixed,
-            ailmentDuration: effect.ailment.durationTicks,
-            maxStacks: effect.ailment.maxStacks,
-            team: casterTeam,
-          });
-        } else if (effect.type === "teleport") {
-          const step = fpStepToward(pos.x, pos.y, tx, ty, effect.distanceFixed);
-          let dx = step.dx;
-          let dy = step.dy;
-          if (collision) {
-            // Blink must not land inside a wall AND must not cross one. Trying a
-            // few fractions and taking the first that was clear did the first
-            // only: a one-cell wall with floor behind it was a free teleport
-            // through it, which is the "skills go through walls" report.
-            const body = world.get<PlayerC>(caster, "player")?.bodyRadius ?? 0;
-            const reach = sweep(collision, pos.x, pos.y, step.dx, step.dy, body);
-            dx = reach.dx;
-            dy = reach.dy;
-          }
-          world.set<Position>(caster, "position", {
-            x: fpClamp(pos.x + dx, WORLD_MIN, WORLD_MAX),
-            y: fpClamp(pos.y + dy, WORLD_MIN, WORLD_MAX),
-          });
-        }
+      const castSpeedPct = offense?.castSpeedPct ?? 0;
+      const timingScale = 100 + castSpeedPct;
+      const castTicks = skill.castTicks
+        ? timingScale > 0
+          ? Math.max(1, Math.trunc((skill.castTicks * 100) / timingScale))
+          : skill.castTicks
+        : 0;
+      if (castTicks > 0) {
+        world.set<CastingC>(caster, "casting", {
+          untilTick: tick + castTicks,
+          skillId: skill.id,
+          tx,
+          ty,
+          spellDamagePct,
+          didCrit: didCrit ? 1 : 0,
+          team: casterTeam,
+          action: actionFor(skill),
+          ticks: castTicks,
+        });
+        continue;
       }
+
+      // No wind-up means this is still an instant skill, such as Blink.
+      resolveSkill(world, tick, caster, skill, tx, ty, spellDamagePct, didCrit, casterTeam, collision);
     }
   });
 }

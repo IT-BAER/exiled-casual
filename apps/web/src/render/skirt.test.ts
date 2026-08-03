@@ -73,6 +73,24 @@ describe("SkirtSim", () => {
     expect(mid.x).toBeLessThan(0);
   });
 
+  it("escapes a leg that is exactly centred on the cloth", () => {
+    // Idle can place a chain directly over a leg's centreline. A zero-distance
+    // contact still needs a stable outward direction, otherwise the collider is
+    // skipped forever and the rendered leg stays inside the robe.
+    const sim = new SkirtSim(1, 2, SEGMENT);
+    const { anchors, rests } = pose(0);
+    const leg = {
+      a: new Vector3(0, 1, 0),
+      b: new Vector3(0, 0, 0),
+      radius: 0.16,
+    };
+
+    for (let i = 0; i < 60; i++) sim.step(FRAME, anchors, rests, [leg]);
+
+    const mid = anchors[0]!.add(sim.direction(0, 0, anchors[0]!, new Vector3()).scale(SEGMENT));
+    expect(Math.abs(mid.x)).toBeGreaterThan(leg.radius - 0.02);
+  });
+
   it("is pushed off a knee that touches only the middle of a panel", () => {
     // The cloth is drawn between its particles, and a knee lands squarely
     // between them: this capsule clears both ends of the lower segment (0.269
@@ -178,6 +196,26 @@ describe("SkirtSim", () => {
     // 2cm on a character 1.8 units tall is the point a leg reads as showing
     // through. The shipped 6 units/s left 0.05 here — half the leg's radius.
     expect(worst).toBeLessThan(0.02);
+  });
+
+  it("catches a boot that crosses the coat between solver samples", () => {
+    const sim = new SkirtSim(1, 2, SEGMENT);
+    const { anchors, rests } = pose(0);
+    for (let i = 0; i < 30; i++) sim.step(FRAME, anchors, rests, []);
+
+    // Both endpoint poses are clear of the hanging panel. Only the swept path
+    // intersects it, matching a boot crossing a robe between rendered frames.
+    const boot = {
+      a: new Vector3(0.35, 0.8, -0.15),
+      b: new Vector3(0.35, 0.35, 0.15),
+      previousA: new Vector3(-0.35, 0.8, -0.15),
+      previousB: new Vector3(-0.35, 0.35, 0.15),
+      radius: 0.12,
+    };
+    sim.step(1 / 240, anchors, rests, [boot]);
+
+    const displaced = tip(sim, 0);
+    expect(Math.hypot(displaced.x, displaced.z)).toBeGreaterThan(0.01);
   });
 
   it("snaps home on a teleport instead of streaking across the map", () => {

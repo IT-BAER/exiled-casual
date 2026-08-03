@@ -109,7 +109,7 @@ const EMBER_STRETCH = 2.6;
  * back instead of two or three, and the shape only exists in the range where
  * that sum is still under 1.
  */
-const BRIGHT = 0.7;
+const BRIGHT = 0.52;
 
 /**
  * How fast an ember fades as it climbs.
@@ -152,10 +152,10 @@ function emberColour(u: number, out: Color4): void {
     out.r = 1; out.g = (246 - 60 * k) / 255; out.b = (214 - 96 * k) / 255;
   } else if (u < 0.6) {
     const k = (u - 0.22) / 0.38;
-    out.r = 1; out.g = (186 - 70 * k) / 255; out.b = (118 - 90 * k) / 255;
+    out.r = 1; out.g = (205 - 58 * k) / 255; out.b = (112 - 74 * k) / 255;
   } else {
     const k = (u - 0.6) / 0.4;
-    out.r = (255 - 80 * k) / 255; out.g = (116 - 76 * k) / 255; out.b = (28 - 20 * k) / 255;
+    out.r = (255 - 42 * k) / 255; out.g = (147 - 54 * k) / 255; out.b = (44 - 28 * k) / 255;
   }
 }
 

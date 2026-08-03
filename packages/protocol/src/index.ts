@@ -125,9 +125,9 @@ export const PICKUP_RADIUS = fp(2.5);
 // ---------------------------------------------------------------------------
 
 /** Lab-only spawn control, so a test arena can start empty and be filled on demand. */
-export type SpawnKind = "imp" | "pack" | "rare" | "boss" | "clear" | "hurtboss" | "item";
+export type SpawnKind = "imp" | "pack" | "rare" | "boss" | "clear" | "hurtboss" | "item" | "shields";
 
-export const SPAWN_KINDS: readonly SpawnKind[] = ["imp", "pack", "rare", "boss", "clear", "hurtboss", "item"];
+export const SPAWN_KINDS: readonly SpawnKind[] = ["imp", "pack", "rare", "boss", "clear", "hurtboss", "item", "shields"];
 
 /**
  * `characterId` names the roster entry this session plays. Optional so the lab
@@ -264,8 +264,13 @@ export interface Snapshot {
     energyShield: number; maxEnergyShield: number;
     cooldowns: Record<string, number>;
     alive: boolean;
-    /** In post-cast recovery this tick (moving slowed, cast pose held). */
+    /** In a cast wind-up this tick (moving slowed, action pose held). */
     casting: boolean;
+    /** Render action for the active cast. Absent outside a cast wind-up. */
+    castingAction?: "spell" | "melee";
+    /** Length of the active wind-up in ticks, cast speed already applied, so the
+     *  renderer can pace the clip to end on the hit. Absent outside a cast. */
+    castTicks?: number;
     /** Charge state for the two utility flasks (life on Q, mana on E). */
     flasks: { lifeCharges: number; lifeMax: number; manaCharges: number; manaMax: number };
     /** Gear-derived totals for the character sheet. Life and mana stay above, where the HUD reads them. */
@@ -281,7 +286,9 @@ export interface Snapshot {
      * Unit heading the body is turned to, which the sim rate-limits. The renderer
      * faces the player by this rather than by the step, because the two differ
      * whenever a target inside the turning circle is walked at in a straight line.
-     * Absent before the player has moved.
+     *
+     * While standing it is the direction of the last cast instead, so a spell
+     * turns the body the way walking does. Absent until he has done either.
      */
     heading?: { x: number; y: number };
   };

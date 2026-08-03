@@ -3,11 +3,30 @@ import { MemoryKv, emptyRoster, loadRoster, saveRoster } from "@exiled/persisten
 import { DEFAULT_SETTINGS } from "../settings";
 import {
   SETTINGS_DEBOUNCE_MS,
+  exportRoster,
   flushSettingsSave,
+  importRoster,
   saveSettingsSoon,
   setKv,
   settingsOf,
 } from "./roster";
+
+describe("portable save files", () => {
+  it("round-trips a roster and its opaque character state", async () => {
+    const source = { ...emptyRoster(), characters: [{ id: "v", name: "Vess", classId: "class.stalker", level: 12, league: "Local", createdAt: 1, state: { life: 42 } }] };
+    const target = new MemoryKv();
+    const restored = await importRoster(exportRoster(source), target);
+    expect(restored).toEqual(source);
+    expect(await loadRoster(target)).toEqual(source);
+  });
+
+  it("rejects an incompatible file before overwriting storage", async () => {
+    const target = new MemoryKv();
+    await saveRoster(target, emptyRoster());
+    await expect(importRoster('{"version":999,"characters":[]}', target)).rejects.toThrow(/valid/i);
+    expect(await loadRoster(target)).toEqual(emptyRoster());
+  });
+});
 
 let store: MemoryKv;
 

@@ -405,6 +405,36 @@ describe("click-to-move routes around what it cannot walk through", () => {
     expect(reversals).toBe(0);
   });
 
+  it("does not route around a wall when the target is more than five meters away", () => {
+    const sim = new Simulation();
+    const farWalled = [
+      ".........",
+      ".........",
+      ".........",
+      ".........",
+      "####.####",
+      ".........",
+      ".........",
+      ".........",
+      ".........",
+      ".........",
+    ];
+    registerPlayerMovement(sim, { active: gridCollision(makeGrid(farWalled)) });
+    const p = sim.world.create();
+    sim.world.set<Position>(p, "position", { x: fp(1), y: fp(1) });
+    sim.world.set<PlayerC>(p, "player", { moveSpeed: Math.trunc(fp(3) / 30), bodyRadius: fp(0.2) });
+    sim.world.set<Faction>(p, "faction", { team: 0 });
+    sim.world.set<MoveDir>(p, "moveDir", { dx: 0, dy: 0, hx: 0, hy: 0 });
+    const goal = { x: fp(1), y: fp(8) };
+
+    sim.step([{ tick: 0, entity: p, type: "moveTo", data: goal }]);
+    for (let t = 1; t < 400; t++) sim.step([]);
+
+    const end = sim.world.get<Position>(p, "position")!;
+    expect(end.y).toBeLessThan(fp(4));
+    expect(fpDist2(end.x, end.y, goal.x, goal.y)).toBeGreaterThan(fp(2) * fp(2));
+  });
+
   it("still walks a clear line straight, with no detour", () => {
     const { sim, p } = walledSim();
     // Same side of the wall, nothing in between.
