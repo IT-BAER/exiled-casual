@@ -1,6 +1,7 @@
-"""Fetch a free BlenderKit asset by its asset_base_id.
+"""Fetch a free BlenderKit asset by its asset_base_id, or search for one.
 
   python tools/fetch_blenderkit.py <asset_base_id> [--type blend|gltf] [--out PATH]
+  python tools/fetch_blenderkit.py --search "chest" [--limit 10]
 
 Free assets download anonymously: the search API lists the files, the downloads
 endpoint hands back a presigned URL (it wants a scene_uuid, any UUID works).
@@ -35,10 +36,26 @@ def get_json(url):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("asset_base_id")
+    ap.add_argument("asset_base_id", nargs="?")
     ap.add_argument("--type", default="blend", help="fileType to fetch (blend, gltf, ...)")
     ap.add_argument("--out", default=None, help="output path (default assets/props/source/<slug>)")
+    ap.add_argument("--search", default=None, help="list free models matching this text instead of fetching")
+    ap.add_argument("--limit", type=int, default=10)
     args = ap.parse_args()
+
+    if args.search:
+        q = args.search.replace(" ", "+") + "+asset_type:model+is_free:true+order:_score"
+        data = get_json(f"{API}/search/?query={q}&page_size={args.limit}")
+        print(f"{data['count']} free models; top {min(args.limit, data['count'])}:")
+        for a in data["results"]:
+            blend = next((f for f in a["files"] if f["fileType"] == "blend"), None)
+            size = f"{(blend['fileUploadSize'] or 0) / 1e6:.1f}MB" if blend else "no blend"
+            variants = sorted({f["fileType"] for f in a["files"] if f["fileType"].startswith("resolution")})
+            print(f"  {a['assetBaseId']}  {a['name']}  [{a['license']}, {size}"
+                  + (f", small: {', '.join(variants)}" if variants else "") + "]")
+        return
+    if not args.asset_base_id:
+        ap.error("asset_base_id required unless --search is given")
 
     data = get_json(f"{API}/search/?query=asset_base_id:{args.asset_base_id}")
     if not data.get("results"):
