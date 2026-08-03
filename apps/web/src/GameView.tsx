@@ -34,6 +34,7 @@ import type { FrameHook, Projector } from "./hud/LootLabels";
 import type { AreaLayout } from "@exiled/mapgen";
 import { BIOMES, mapBase } from "@exiled/content-runtime";
 import type { Snapshot, FromWorker, ToWorker } from "@exiled/protocol";
+import { atlasGraph } from "@exiled/rules";
 
 const LAB_SEED = 42;
 // ponytail: fixed seed for the lab; M3 will thread seed from game state
@@ -274,6 +275,53 @@ export function GameView({
     // path the canvas picker uses for portals and devices.
     setPick(() => approach);
 
+    // `?play&map` / `?play&map=<node name>`: the driven-browser leg of the ?play
+    // harness (App.tsx). Bare `map` opens the device panel on arrival; a name
+    // sockets the permanent waystone into that node, activates it, and walks
+    // into the first portal — a map session with no clicks a script cannot aim.
+    // DEV only, like ?play itself.
+    let harness: "panel" | "activate" | "portal" | "done" = "done";
+    if (import.meta.env?.DEV && typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.has("map")) harness = params.get("map") ? "activate" : "panel";
+    }
+    let harnessTicks = 0;
+    const harnessStep = (snap: Snapshot): void => {
+      if (harness === "panel") {
+        if (snap.entities.some((e) => e.kind === "mapDevice")) {
+          setPanelOpen(true);
+          setInventoryOpen(true);
+          harness = "done";
+        }
+      } else if (harness === "activate") {
+        // A run already open (the stone is spent) still has portals standing.
+        if (snap.mapOpen) {
+          harness = "portal";
+          return;
+        }
+        const wanted = `node.${new URLSearchParams(window.location.search).get("map")}`;
+        const stone = snap.inventory.items.find((i) => i.baseId === "map.waystone" && i.waystone?.tier === 1);
+        if (!stone) return;
+        const node = atlasGraph(snap.atlasSeed).find((n) => n.id === wanted);
+        if (!node) {
+          console.warn(`?map: no node "${wanted}"; have`, atlasGraph(snap.atlasSeed).map((n) => n.id));
+          harness = "done";
+          return;
+        }
+        workerRef.current?.postMessage({
+          type: "intent",
+          intent: { kind: "activateMap", atlasNodeId: node.id, x: stone.x, y: stone.y },
+        } satisfies ToWorker);
+        harness = "portal";
+      } else if (harness === "portal") {
+        // Re-issued once a second, not fired-and-done: the first snapshots come
+        // in behind the loading fade, where an intent can land before the sim
+        // is taking them. The area handler below ends it when the map arrives.
+        const portal = snap.entities.find((e) => e.kind === "portal");
+        if (portal && harnessTicks++ % 30 === 0) approach(portal.id, portal.x, portal.y);
+      }
+    };
+
     worker.onmessage = (e: MessageEvent<FromWorker>) => {
       const msg = e.data;
       if (msg.type === "snapshot") {
@@ -291,7 +339,10 @@ export function GameView({
         }
         // Let bindings fire the interact intent once the pending target is inRange.
         onSnapshot(msg.snapshot);
+        if (harness !== "done") harnessStep(msg.snapshot);
       } else if (msg.type === "area") {
+        // The ?map harness's destination: once a map area arrives, its job is done.
+        if (msg.area === "map") harness = "done";
         // Dungeon walls belong to the "map". The hideout is an open lab: pass an
         // empty grid so buildLevel clears any stale walls and draws none.
         const grid = msg.area === "map" ? msg.layout.grid : null;

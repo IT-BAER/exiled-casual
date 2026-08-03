@@ -289,7 +289,9 @@ describe("attachBindings hold-to-move", () => {
     document.body.appendChild(c);
     const { detach: d, onSnapshot, approach } = attachBindings(c, w as unknown as Worker, fakeScene());
     approach(77, 4, 6);
-    expect(w.postMessage).toHaveBeenCalledWith({ type: "intent", intent: { kind: "moveTo", x: 4, y: 6 } });
+    // Fixed-point on the wire: raw snapshot floats quantised to ~0 and walked
+    // every distant approach to the map origin instead of the target.
+    expect(w.postMessage).toHaveBeenCalledWith({ type: "intent", intent: { kind: "moveTo", x: fp(4), y: fp(6) } });
     // Still walking: out of range means no pickup yet.
     onSnapshot(makeSnap([{ id: 77, kind: "groundItem", x: 4, y: 6, inRange: false }]));
     expect(intentCount(w.postMessage, "pickupItem")).toBe(0);

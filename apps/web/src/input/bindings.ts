@@ -83,7 +83,7 @@ const PICK_HEIGHT = 2.0;
  * item — a column round every drop would eat the movement clicks in the middle of
  * the fight that made the drops.
  */
-const FORGIVING_KINDS: ReadonlySet<string> = new Set(["mapDevice", "stash", "vendor"]);
+const FORGIVING_KINDS: ReadonlySet<string> = new Set(["mapDevice", "stash", "vendor", "container"]);
 
 /**
  * Where a picking ray enters the column at `(cx, cz)`, or null if it misses.
@@ -509,7 +509,9 @@ export function attachBindings(
    *  DOM loot plates, which sit above the canvas and never reach its picker. */
   function approach(entityId: number, x: number, y: number) {
     pendingInteractId = entityId;
-    post({ kind: "moveTo", x, y });
+    // Callers hand in snapshot floats; the intent wants fixed-point. Raw floats
+    // quantise to ~0, which walked every distant approach to the map origin.
+    post({ kind: "moveTo", ...pointerToWorld({ x, z: y }) });
   }
 
   return { detach, onSnapshot, approach };
