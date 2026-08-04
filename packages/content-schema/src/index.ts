@@ -681,6 +681,9 @@ export interface Biome {
   name: string;
   /** Ambient light tint, linear 0..1 RGB. The mood of the place in one triple. */
   tint: readonly [number, number, number];
+  /** Flood the void outside the rim with water. A property of the PLACE, like
+   *  the tint: the renderer reads it and nothing threads through the layout. */
+  sea?: boolean;
 }
 
 /**

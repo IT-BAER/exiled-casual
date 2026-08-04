@@ -3,6 +3,7 @@ import { Engine, Matrix, Vector3 } from "@babylonjs/core";
 import type { Scene } from "@babylonjs/core";
 import { applyGraphics, createScene, setMapFill } from "./render/engine";
 import { buildLevel, applyBiomeTint, applyTilesetFloor } from "./render/level";
+import { buildSea } from "./render/sea";
 import { buildHideoutDecor, clearHideoutDecor } from "./render/hideout";
 import { SnapshotRenderer } from "./render/renderer";
 import { loadProps, resetProps } from "./render/props";
@@ -381,6 +382,7 @@ export function GameView({
           art: `${LOADING_ART}/${base?.biomeId ?? "hideout"}.jpg`,
         });
         buildLevel(scene, grid, base?.tilesetId);
+        buildSea(scene, grid, base ? BIOMES[base.biomeId].sea === true : false);
         setMapFill(scene, msg.area === "map");
         // Furniture, and only in the hideout: a map is a place you pass through.
         if (msg.area === "hideout") buildHideoutDecor(scene);

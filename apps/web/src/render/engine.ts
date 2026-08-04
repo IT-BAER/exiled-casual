@@ -21,6 +21,7 @@ import {
 } from "@babylonjs/core";
 import { DEFAULT_SETTINGS, type GraphicsSettings } from "../settings";
 import { ROCK_MESH_PREFIX } from "./rocks";
+import { SEA_MESH_NAME } from "./sea";
 import { createHaze, createMotes } from "./haze";
 import { FLAME_MESH } from "./flames";
 import { createFireLights, LIGHT_POOL, setFireLightZoom, updateFireLights } from "./lights";
@@ -780,7 +781,11 @@ export function createScene(engine: Engine): SceneHandle {
     // the only reason matching on it here works.
     const isLevelGeometry = (name: string): boolean =>
       (name.startsWith("wallrun-") && !name.startsWith(ROCK_MESH_PREFIX)) ||
-      name === WALL_MESH_NAME;
+      name === WALL_MESH_NAME ||
+      // The sea is a sheet covering everything outside the rim: casting from it
+      // would put the whole void in shadow, and it is born with this name for
+      // the same reason the wall mesh is.
+      name === SEA_MESH_NAME;
     // The torch throws its own shadows, and it is the only light that may throw
     // them off a wall: the sun's problem was a 3.5-unit run smearing one 9-unit
     // band across a whole room, but the torch stands INSIDE the room at the

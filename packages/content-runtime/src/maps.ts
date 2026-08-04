@@ -37,6 +37,8 @@ export const BIOMES: Record<BiomeId, Biome> = {
     // Open sky off open water: the one biome with nothing overhead, so it keeps
     // more of the light than any of them and takes it slightly cold off the sea.
     tint: [0.82, 0.88, 0.94],
+    // The only biome where the void outside the rim is a thing and not an edge.
+    sea: true,
   },
 };
 
