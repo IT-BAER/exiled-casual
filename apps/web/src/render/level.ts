@@ -268,7 +268,7 @@ const BEACH_PROP_PREFIX = "beach-prop-";
  *  two bands are what makes the dressing read as "the sea put this here"
  *  rather than as scatter. `reference-screenshots/beach-map.jpg` has the same
  *  gradient: debris thickens toward the water and thins toward the dunes. */
-const SHELL_COUNT = 26;
+const SHELL_COUNT = 38;
 const SHELL_BAND: [number, number] = [0.4, 3.2];
 const DRIFTWOOD_COUNT = 9;
 const DRIFTWOOD_BAND: [number, number] = [1.5, 9];
