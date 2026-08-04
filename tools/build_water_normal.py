@@ -1,14 +1,16 @@
 """Tiling wave normal map for the strand's sea.
 
 Generated, not sourced. Every BlenderKit water hit is either a procedural node
-graph with no texture to extract or a royalty_free photoscan of a pool, and a
-wave normal is one of the few surfaces a sum of sines describes exactly: pick
-INTEGER wave numbers and the height field is periodic by construction, so it
-tiles with no seam pass at all (unlike the biome plates, which need the 12%
-cross-fade in build_tileset_textures.py).
+graph with no texture to extract or a royalty_free photoscan of a pool.
 
-Two travel directions per octave, so the crests cross instead of marching in
-one direction like a conveyor belt.
+Built in the FREQUENCY domain, which is how ocean surfaces are actually made:
+fill a spectrum with random phases and an amplitude that falls off with wave
+number, then inverse-FFT it. Two properties come free and neither is available
+from a hand-written sum of sines — the field is exactly periodic (so it tiles
+with no seam pass, unlike the biome plates), and it is ISOTROPIC. A sum of a
+dozen sines is not: with that few directions the crests cross at fixed angles
+and the water reads as woven plaid, which is what the first two attempts looked
+like on screen.
 
     python tools/build_water_normal.py
 """
@@ -21,34 +23,46 @@ from PIL import Image
 SIZE = 512
 OUT = Path(__file__).resolve().parent.parent / "apps/web/public/textures/water/water_normal.jpg"
 
-# (wave numbers kx, ky, amplitude). Integers only: kx/ky are cycles across the
-# whole tile, so any integer pair is periodic over it. Amplitudes fall off with
-# frequency the way real wind chop does.
-WAVES = [
-    (2, 1, 1.00),
-    (1, -3, 0.70),
-    (4, 2, 0.45),
-    (-3, 5, 0.30),
-    (7, -4, 0.18),
-    (9, 6, 0.11),
-    (13, -11, 0.06),
-]
+# Wave numbers kept, in cycles across the tile. The low end is the reason this
+# was regenerated twice: at a 9-unit tile, wave number 1 is a nine-metre swell,
+# which on screen is a soft lump three body-lengths across. Wind chop on a
+# shallow beach is decimetres, so the spectrum starts at 5. The high end stops
+# short of Nyquist because anything finer only aliases into sparkle at this
+# camera height.
+K_MIN = 5
+K_MAX = 90
 
-# World height of the crests relative to the tile's own width. Low: this is wind
-# chop on shallow water read from a camera 49 degrees up, not an ocean swell.
-STEEPNESS = 5.0
+# How fast amplitude falls with wave number. 1.6 is between a true Phillips
+# spectrum's steepness and flat: flatter than this is sandpaper, steeper is the
+# lumps again.
+FALLOFF = 1.6
+
+# Slope scale. Chosen against the frame, not derived: the water is lit by one
+# low sun, so this is really "how much specular breakup", and past about 1.2 the
+# highlights blow to white stripes.
+STEEPNESS = 0.9
+
+# Deterministic: the same texture every build, so a rebuild is never a silent
+# art change.
+SEED = 7
 
 
 def height_field() -> np.ndarray:
-    u = np.linspace(0, 2 * np.pi, SIZE, endpoint=False)
-    x, y = np.meshgrid(u, u)
-    h = np.zeros((SIZE, SIZE), dtype=np.float64)
-    for kx, ky, amp in WAVES:
-        # A phase per wave, else every crest lines up at the origin and the tile
-        # has one bright cross in it.
-        phase = (kx * 1.7 + ky * 0.9) % (2 * np.pi)
-        h += amp * np.sin(kx * x + ky * y + phase)
-    return h / sum(a for _, _, a in WAVES)
+    rng = np.random.default_rng(SEED)
+    kx = np.fft.fftfreq(SIZE, d=1.0 / SIZE)
+    ky = np.fft.fftfreq(SIZE, d=1.0 / SIZE)
+    KX, KY = np.meshgrid(kx, ky, indexing="xy")
+    k = np.hypot(KX, KY)
+    amp = np.zeros_like(k)
+    band = (k >= K_MIN) & (k <= K_MAX)
+    amp[band] = k[band] ** -FALLOFF
+    # Random phase per component, Hermitian-symmetrised by taking the real part
+    # of the transform: the field stays real and stays periodic.
+    phase = rng.uniform(0, 2 * np.pi, size=k.shape)
+    spectrum = amp * np.exp(1j * phase)
+    h = np.real(np.fft.ifft2(spectrum))
+    h /= np.abs(h).max()
+    return h
 
 
 def main() -> None:
@@ -64,7 +78,7 @@ def main() -> None:
     # OpenGL convention Blender exports.
     rgb = np.clip((n * 0.5 + 0.5) * 255, 0, 255).astype(np.uint8)
     OUT.parent.mkdir(parents=True, exist_ok=True)
-    Image.fromarray(rgb).save(OUT, quality=92)
+    Image.fromarray(rgb).save(OUT, quality=94)
     print(f"wrote {OUT} ({SIZE}x{SIZE})")
 
 

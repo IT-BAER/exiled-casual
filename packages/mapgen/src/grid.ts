@@ -26,6 +26,29 @@ export interface WalkableGrid {
   originY: number;
   /** rows*cols, row-major; 1 = walkable, 0 = wall. */
   cells: Uint8Array;
+  /** rows*cols, 1 = open sea. Only the coast generator sets it, and only it
+   *  can: a wall cell is a cliff on one side of a beach and water on the other,
+   *  and nothing about `cells` tells the two apart. Absent everywhere else. */
+  water?: Uint8Array;
+  /** The waterline as the CURVE it actually is, in world units.
+   *
+   *  The cell grid cannot carry it: a shoreline quantised to half-unit cells is
+   *  a staircase, and no amount of shading hides a staircase. The generator has
+   *  the exact fractional position per column, so it hands that over and the
+   *  renderer builds the water off the curve instead of off the cells. */
+  shore?: Shoreline;
+}
+
+export interface Shoreline {
+  /** World axis the shore RUNS along; `cross` is the other one. */
+  along: "x" | "y";
+  /** World coordinate of sample i along that axis: `start + i * step`. */
+  start: number;
+  step: number;
+  /** Cross-axis world coordinate of the waterline at each sample. */
+  cross: Float32Array;
+  /** +1 when the sea lies at greater cross coordinate, -1 when at less. */
+  seaSide: 1 | -1;
 }
 
 export interface Socket {

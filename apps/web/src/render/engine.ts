@@ -47,14 +47,14 @@ import { createFireLights, LIGHT_POOL, setFireLightZoom, updateFireLights } from
  * threw big correct shadows the whole time, which is what proved the casters
  * were never the problem and the ambient was.
  */
-const SUN_INTENSITY = 6.0;
-const FILL_INTENSITY = 0.45;
+export const SUN_INTENSITY = 6.0;
+export const FILL_INTENSITY = 0.45;
 // Maps drop the sky fill further than the hideout: a place you pass through
 // should read as lit by what's actually placed in it (torches, braziers),
 // not by ambient light that relights every shadowed pixel regardless of
 // where the fires are. The hideout keeps FILL_INTENSITY — it is a lived-in,
 // permanently-lit home base, not a dungeon.
-const MAP_FILL_INTENSITY = 0.18;
+export const MAP_FILL_INTENSITY = 0.18;
 
 /**
  * The player's own light: PoE1's "light radius" made literal, a warm pool that

@@ -122,7 +122,7 @@ describe("WorkerCore", () => {
     // a different dungeon just as surely as the wrong seed does.
     const mapSeed = mapSeedFor(offerWaystones(42, WAYSTONE_OFFER_COUNT)[0]!.seed, "node.the_wrackline");
     const grammar = grammarForNode("node.the_wrackline");
-    expect(grammar).toBe("strand"); // The Wrackline is a strand
+    expect(grammar).toBe("coast"); // The Wrackline is a beach, not a chunk route
     expect(core.getAreaLayout().hash).toBe(generateArea(mapSeed, CONTENT_VERSION, grammar).hash);
     expect(core.getAreaLayout().hash).not.toBe(generateArea(mapSeed, CONTENT_VERSION, "loop").hash);
   });

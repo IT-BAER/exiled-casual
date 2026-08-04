@@ -673,7 +673,7 @@ export const BIOME_IDS = ["vaal_stone", "desert", "swamp", "forest", "strand"] a
 export type BiomeId = (typeof BIOME_IDS)[number];
 
 /** Which chunk library and branch count an area is assembled from. */
-export const LAYOUT_GRAMMAR_IDS = ["loop", "open-field", "sunken-ruins", "strand"] as const;
+export const LAYOUT_GRAMMAR_IDS = ["loop", "open-field", "sunken-ruins", "strand", "coast"] as const;
 export type LayoutGrammarId = (typeof LAYOUT_GRAMMAR_IDS)[number];
 
 export interface Biome {
@@ -684,6 +684,12 @@ export interface Biome {
   /** Flood the void outside the rim with water. A property of the PLACE, like
    *  the tint: the renderer reads it and nothing threads through the layout. */
   sea?: boolean;
+  /** Multiplier on the area's key and fill light. 1 is the dungeon rig every
+   *  other biome uses. This is NOT the tint doing brightness by the back door —
+   *  `applyBiomeTint` still normalises hue to mean 1.0 for exactly that reason —
+   *  it is the separate fact that some places are outdoors in daylight and a
+   *  beach is the clearest of them (`reference-screenshots/beach-map.jpg`). */
+  light?: number;
 }
 
 /**

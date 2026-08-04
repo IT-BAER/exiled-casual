@@ -149,7 +149,12 @@ function makeFog(grid: WalkableGrid): HTMLCanvasElement {
   c.width = grid.cols * FOG_SS;
   c.height = grid.rows * FOG_SS;
   const ctx = c.getContext("2d");
-  if (ctx) {
+  // `?revealed` opens the whole map at once. A dev-only harness switch, and the
+  // only way to judge a LAYOUT from inside the game: walking a map to see its
+  // shape takes minutes and shows it a disc at a time.
+  const revealed = typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).has("revealed");
+  if (ctx && !revealed) {
     ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, c.width, c.height);
   }

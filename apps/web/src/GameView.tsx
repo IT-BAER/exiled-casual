@@ -301,7 +301,12 @@ export function GameView({
           return;
         }
         const wanted = `node.${new URLSearchParams(window.location.search).get("map")}`;
-        const stone = snap.inventory.items.find((i) => i.baseId === "map.waystone" && i.waystone?.tier === 1);
+        // The LOWEST tier in the bag, not tier 1 specifically: the harness is for
+        // looking at a place, and after a couple of runs there is no tier 1 left
+        // — it used to sit there forever waiting for a stone that was spent.
+        const stone = [...snap.inventory.items]
+          .filter((i) => i.baseId === "map.waystone" && i.waystone)
+          .sort((a, b) => (a.waystone!.tier - b.waystone!.tier))[0];
         if (!stone) return;
         const node = atlasGraph(snap.atlasSeed).find((n) => n.id === wanted);
         if (!node) {
@@ -328,6 +333,12 @@ export function GameView({
       if (msg.type === "snapshot") {
         prevSnap = curSnap;
         curSnap = msg.snapshot;
+        // DEV: the only handle on sim state from the devtools console. The
+        // renderer can be read through `__scene`; without this the sim cannot,
+        // and "why did the harness not enter the map" has no answer.
+        if (import.meta.env?.DEV && typeof window !== "undefined") {
+          (window as unknown as { __snap?: unknown }).__snap = msg.snapshot;
+        }
         prevTickTime = performance.now();
         soundscape.observe(msg.snapshot);
         setSnapshot(msg.snapshot);
@@ -388,7 +399,11 @@ export function GameView({
         if (msg.area === "hideout") buildHideoutDecor(scene);
         else clearHideoutDecor(scene);
         applyTilesetFloor(scene, base?.tilesetId ?? null);
-        applyBiomeTint(scene, base ? BIOMES[base.biomeId].tint : null);
+        applyBiomeTint(
+          scene,
+          base ? BIOMES[base.biomeId].tint : null,
+          base ? BIOMES[base.biomeId].light ?? 1 : 1,
+        );
         setAreaLayout(msg.area === "map" ? msg.layout : null);
         // Arms the paint only once this area's materials and textures are in.
         // Babylon defers this through a timeout even when nothing is pending, so

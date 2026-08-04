@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { BIOME_IDS, LAYOUT_GRAMMAR_IDS } from "@exiled/content-schema";
 import { BIOMES, MAP_BASES, mapBase, biomeOf } from "@exiled/content-runtime";
-import { GRAMMARS } from "@exiled/mapgen";
+import { isGrammarId } from "@exiled/mapgen";
 import {
   ATLAS_NODE_COUNT,
   MAP_BASE_IDS,
@@ -29,8 +29,9 @@ describe("map bases", () => {
     for (const base of Object.values(MAP_BASES)) {
       expect(BIOME_IDS, `${base.id} biome`).toContain(base.biomeId);
       expect(LAYOUT_GRAMMAR_IDS, `${base.id} grammar`).toContain(base.layoutGrammarId);
-      // The grammar id has to be one mapgen can actually build.
-      expect(Object.keys(GRAMMARS), `${base.id} grammar`).toContain(base.layoutGrammarId);
+      // The grammar id has to be one mapgen can actually build — either a chunk
+      // library or the one id that names a generator instead (`coast`).
+      expect(isGrammarId(base.layoutGrammarId), `${base.id} grammar`).toBe(true);
     }
   });
 

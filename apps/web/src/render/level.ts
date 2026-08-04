@@ -8,7 +8,15 @@ import {
   VertexBuffer,
   type Scene,
 } from "@babylonjs/core";
-import { FLOOR_TILES, GROUND_SIZE, VOID_COLOR, WALL_MESH_NAME } from "./engine";
+import {
+  FILL_INTENSITY,
+  FLOOR_TILES,
+  GROUND_SIZE,
+  MAP_FILL_INTENSITY,
+  SUN_INTENSITY,
+  VOID_COLOR,
+  WALL_MESH_NAME,
+} from "./engine";
 import { tintHaze } from "./haze";
 import {
   DEBRIS_MESH_PREFIX,
@@ -344,11 +352,19 @@ export function buildLevel(
   const { cols, rows, cellSize, originX, originY, cells } = grid;
   const isFloor = (x: number, y: number): boolean =>
     x >= 0 && y >= 0 && x < cols && y < rows && cells[y * cols + x] === 1;
+  // Water is wall to the sim and to nothing else. A beach does not have a wall
+  // of boulders along the waterline: the sand runs into the sea, and the rock
+  // belongs on the landward side only. Without this the coast's seaward edge got
+  // the same rampart every dungeon rim gets, which is the "greybox with sand on
+  // it" read the whole generator exists to kill.
+  const isSea = (x: number, y: number): boolean =>
+    grid.water !== undefined && x >= 0 && y >= 0 && x < cols && y < rows &&
+    grid.water[y * cols + x] === 1;
   // 8-neighbourhood: a wall cell diagonally touching floor is a room corner. Drawing
   // it too fills the corner so the horizontal and vertical walls meet flush (cardinal
   // -only leaves a notch at every corner). Render-only; collision uses the raw grid.
   const isBoundaryWall = (x: number, y: number): boolean => {
-    if (cells[y * cols + x] !== 0) return false;
+    if (cells[y * cols + x] !== 0 || isSea(x, y)) return false;
     const n = WALL_THICK_CELLS;
     for (let dy = -n; dy <= n; dy++)
       for (let dx = -n; dx <= n; dx++)
@@ -391,10 +407,11 @@ export function buildLevel(
   // dead cells it drew no rock at all and the ground plate — which is sized to
   // exactly this ring — ended as a lip of bare dirt against the void.
   const isOuterEdge = (x: number, y: number): boolean =>
+    !isSea(x, y) && (
     x < WALL_THICK_CELLS ||
     y < WALL_THICK_CELLS ||
     x >= cols - WALL_THICK_CELLS ||
-    y >= rows - WALL_THICK_CELLS;
+    y >= rows - WALL_THICK_CELLS);
   // ponytail: horizontal-run greedy only; add vertical/2D rectangle merging if a
   // profile shows the per-cell vertical walls still cost.
   for (let y = 0; y < rows; y++) {
@@ -556,9 +573,23 @@ export function applyTilesetFloor(scene: Scene, tilesetId: string | null): void 
  * Tints multiply the neutral rig, so `null` (the hideout) restores plain white
  * rather than leaving the last map's colour on the lab.
  */
-export function applyBiomeTint(scene: Scene, tint: readonly [number, number, number] | null): void {
+export function applyBiomeTint(
+  scene: Scene,
+  tint: readonly [number, number, number] | null,
+  light = 1,
+): void {
   const fill = scene.getLightByName("fill");
   const sun = scene.getLightByName("sun");
+  // Daylight, where a biome has any. Applied to the INTENSITIES, never to the
+  // tint: the tint is normalised to mean 1.0 precisely so it cannot dim or lift
+  // a place, and this is the one knob that is allowed to.
+  //
+  // Recomputed from the rig's own constants rather than scaling whatever is
+  // currently set, or a second call on the same area multiplies a beach twice.
+  // `tint === null` is the hideout, which keeps the lived-in fill; every map
+  // takes the dimmer one, exactly as `setMapFill` sets it.
+  if (fill) fill.intensity = (tint === null ? FILL_INTENSITY : MAP_FILL_INTENSITY) * light;
+  if (sun) sun.intensity = SUN_INTENSITY * light;
   // Normalised to mean 1.0, so a tint shifts HUE and never brightness. Applied
   // raw, Vaal Stone's [0.62,0.70,0.68] took a third out of the ambient term, and
   // an assembled map is mostly corridor floor lying in a wall's shadow — the

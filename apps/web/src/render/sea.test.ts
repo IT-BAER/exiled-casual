@@ -4,7 +4,7 @@ import { NullEngine, VertexBuffer, VertexData } from "@babylonjs/core";
 import { createScene } from "./engine";
 import { buildSea, SEA_MESH_NAME } from "./sea";
 import { BIOMES } from "@exiled/content-runtime";
-import type { WalkableGrid } from "@exiled/mapgen";
+import type { Shoreline, WalkableGrid } from "@exiled/mapgen";
 
 let engine: InstanceType<typeof NullEngine>;
 
@@ -70,14 +70,16 @@ describe("buildSea", () => {
     const { mesh } = buildSea(scene, coveGrid(), true);
     const colors = mesh!.getVerticesData(VertexBuffer.ColorKind)!;
     let peak = 0;
-    let open = 0;
+    let open = Infinity;
     for (let i = 0; i < colors.length; i += 4) {
       peak = Math.max(peak, colors[i]!);
-      open = Math.min(open === 0 ? colors[i]! : open, colors[i]!);
+      open = Math.min(open, colors[i]!);
     }
 
-    expect(peak).toBeGreaterThan(1.5);
-    expect(open).toBeCloseTo(1, 5);
+    // Surf at the shore, and open water well under it: the ramp between the two
+    // is what stops the sea reading as one flat sheet.
+    expect(peak).toBeGreaterThan(2.5);
+    expect(open).toBeLessThan(1);
   });
 
   it("sits just over the sand, so the waterline is the shore itself", () => {
@@ -104,6 +106,52 @@ describe("buildSea", () => {
     VertexData.ComputeNormals(pos, idx, derived);
 
     for (let i = 1; i < derived.length; i += 3) expect(derived[i]).toBeGreaterThan(0.9);
+  });
+
+  it("draws a coast off the shoreline CURVE, not off the cells", () => {
+    // The bug this replaced: a waterline quantised to half-unit cells is a
+    // staircase of translucent triangles, and no shading hides it. Given a
+    // shoreline the strip has to land on the curve exactly, to a fraction of a
+    // cell — so the test asserts a cross coordinate that no cell edge can hit.
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const grid = coveGrid();
+    const n = grid.cols;
+    const cross = new Float32Array(n);
+    for (let i = 0; i < n; i++) cross[i] = 1.37 + 0.11 * i; // deliberately off-grid
+    const shore: Shoreline = {
+      along: "x",
+      start: grid.originX,
+      step: grid.cellSize,
+      cross,
+      seaSide: 1,
+    };
+
+    const { mesh } = buildSea(scene, { ...grid, shore }, true);
+    const pos = mesh!.getVerticesData(VertexBuffer.PositionKind)!;
+    const zs = new Set<number>();
+    for (let i = 0; i < pos.length; i += 3) zs.add(Math.round(pos[i + 2]! * 1000) / 1000);
+
+    // Every sample of the curve appears, at its exact fractional position.
+    for (let i = 0; i < n; i++) expect(zs.has(Math.round(cross[i]! * 1000) / 1000)).toBe(true);
+  });
+
+  it("fades the coast's water out AT the waterline, so nothing steps", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const grid = coveGrid();
+    const cross = new Float32Array(grid.cols).fill(2.5);
+    const { mesh } = buildSea(
+      scene,
+      { ...grid, shore: { along: "x", start: grid.originX, step: grid.cellSize, cross, seaSide: 1 } },
+      true,
+    );
+    const pos = mesh!.getVerticesData(VertexBuffer.PositionKind)!;
+    const col = mesh!.getVerticesData(VertexBuffer.ColorKind)!;
+    for (let v = 0; v < pos.length / 3; v++) {
+      // At or landward of the waterline the water is fully transparent.
+      if (pos[v * 3 + 2]! <= 2.5) expect(col[v * 4 + 3]).toBe(0);
+    }
   });
 
   it("is the strand and only the strand", () => {

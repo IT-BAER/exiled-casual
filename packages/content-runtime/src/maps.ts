@@ -39,6 +39,10 @@ export const BIOMES: Record<BiomeId, Biome> = {
     tint: [0.82, 0.88, 0.94],
     // The only biome where the void outside the rim is a thing and not an edge.
     sea: true,
+    // Open sky, midday, off water that throws half of it back up. Every other
+    // biome is underground or under a canopy; this one is the reference's beach,
+    // where the sand is the brightest thing on the screen by a wide margin.
+    light: 3,
   },
 };
 
@@ -79,7 +83,7 @@ export const MAP_BASES: Record<string, MapBase> = {
     id: "map.strand",
     biomeId: "strand",
     tilesetId: "tileset.strand",
-    layoutGrammarId: "strand",
+    layoutGrammarId: "coast",
   },
 };
 
