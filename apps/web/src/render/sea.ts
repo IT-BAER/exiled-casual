@@ -67,6 +67,23 @@ let DEEP_TINT: [number, number, number] = [0.85, 1.2, 1.15];
 /** White added at the surf line, on top of the tint. */
 let FOAM_ADD = 8;
 
+/** A second, weaker line of broken water further out. Real surf has more than
+ *  one breaker, and the reference shows two before the water goes flat; one
+ *  line alone reads as a painted border around the sand. */
+let BREAKER_AT = 9.5;
+let BREAKER_WIDTH = 1.6;
+let BREAKER_ADD = 1.1;
+
+/** Wet sand, landward of the waterline: how far it reaches and how much it
+ *  darkens the beach. Drawn as part of the water strip (see SHORE_BANDS), so it
+ *  follows the same curve and can never drift out of register with it. */
+// Reach and strength of the wet band. At 1.4/0.78 it read as a grey ribbon
+// drawn just inland of the white surf — an outline around the sand rather than
+// sand the tide has been over. Shorter and lighter, it is a tone the eye takes
+// for damp.
+let WET_SAND_REACH = 1.0;
+let WET_SAND_DARKEN = 0.88;
+
 /** World units per texture repeat for the wave normal, and how fast each of the
  *  two layers travels (repeats per second). Different rates in different
  *  directions on purpose: one scrolling normal is a conveyor belt, two crossing
@@ -169,7 +186,16 @@ function startScroll(scene: Scene, mat: PBRMaterial): void {
  * Graded, not even: the first two metres carry the surf and need the vertices,
  * the last forty are one flat colour and need two.
  */
-const SHORE_BANDS = [-0.8, -0.3, 0, 0.2, 0.45, 0.7, 0.95, 1.25, 1.6, 2.1, 2.8, 4, 6, 9, 14, 22, 34, SKIRT_REACH];
+const SHORE_BANDS = [
+  // Wet sand: the tide's last reach, landward of the water and darker than the
+  // dry beach. It is drawn by the same strip because it is the same curve, and
+  // in `reference-screenshots/beach-map.jpg` it is as wide as the surf itself.
+  -2.4, -1.6, -1.0, -0.5,
+  // The surf and the shallows.
+  0, 0.2, 0.45, 0.7, 0.95, 1.25, 1.6, 2.1, 2.8, 4, 6,
+  // The second breaker, then open water.
+  8.5, 11, 14, 22, 34, SKIRT_REACH,
+];
 
 /** Extra samples past each end of the shore curve, in world units, so the sea
  *  does not stop where the map does. */
@@ -209,11 +235,19 @@ function shoreColor(
   at = FOAM_AT,
   gain = 1,
 ): [number, number, number, number] {
-  const d = Math.max(0, outUnits);
+  // Inland of the waterline this is not water at all: it is the wet sand the
+  // last wave left, drawn as a dark multiply over the beach. Alpha rises again
+  // going inland, then falls off at the tide's reach.
+  if (outUnits < 0) {
+    const w = Math.max(0, 1 + outUnits / WET_SAND_REACH);
+    return [WET_SAND_DARKEN, WET_SAND_DARKEN * 0.96, WET_SAND_DARKEN * 0.88, w * 0.8];
+  }
+  const d = outUnits;
   const deep = Math.min(1, d / (DEPTH_CELLS * cellSize));
   // A band, not a ramp: see FOAM_AT. Gaussian so it has no edges of its own.
   const t = (d - at) / FOAM_WIDTH;
-  const foam = Math.exp(-t * t) * FOAM_ADD * gain;
+  const b = (d - BREAKER_AT) / BREAKER_WIDTH;
+  const foam = Math.exp(-t * t) * FOAM_ADD * gain + Math.exp(-b * b) * BREAKER_ADD * gain;
   return [
     SHALLOW_TINT[0] + (DEEP_TINT[0] - SHALLOW_TINT[0]) * deep + foam,
     SHALLOW_TINT[1] + (DEEP_TINT[1] - SHALLOW_TINT[1]) * deep + foam,
@@ -544,9 +578,14 @@ export function tuneSea(patch: Record<string, unknown>): string {
     WET_UNITS: (v) => { WET_UNITS = v as number; },
     DEPTH_CELLS: (v) => { DEPTH_CELLS = v as number; },
     SHALLOW_TINT: (v) => { SHALLOW_TINT = v as [number, number, number]; },
+    WET_SAND_REACH: (v) => { WET_SAND_REACH = v as number; },
+    WET_SAND_DARKEN: (v) => { WET_SAND_DARKEN = v as number; },
+    BREAKER_AT: (v) => { BREAKER_AT = v as number; },
+    BREAKER_WIDTH: (v) => { BREAKER_WIDTH = v as number; },
+    BREAKER_ADD: (v) => { BREAKER_ADD = v as number; },
     DEEP_TINT: (v) => { DEEP_TINT = v as [number, number, number]; },
   };
   for (const [k, v] of Object.entries(patch)) table[k]?.(v);
   if (lastSeaArgs) buildSea(lastSeaArgs.scene, lastSeaArgs.grid, true);
-  return JSON.stringify({ FOAM_AT, FOAM_WIDTH, FOAM_ADD, WET_UNITS, DEPTH_CELLS, SHALLOW_TINT, DEEP_TINT });
+  return JSON.stringify({ FOAM_AT, FOAM_WIDTH, FOAM_ADD, WET_UNITS, DEPTH_CELLS, SHALLOW_TINT, DEEP_TINT, WET_SAND_REACH, WET_SAND_DARKEN, BREAKER_AT, BREAKER_WIDTH, BREAKER_ADD });
 }

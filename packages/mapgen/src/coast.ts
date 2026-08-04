@@ -46,8 +46,13 @@ const SHORE_BASE = 100;
  *  as a curve someone drew rather than as a coastline. */
 const SHORE_LONG = 9;
 const SHORE_SHORT = 4;
-const SHORE_FINE = 2.6;
-const SHORE_RAG = 1.3;
+// Kept small on purpose. At 2.6/1.3 the fine harmonics put a wiggle every five
+// metres, and because the surf band follows the curve exactly, the shoreline
+// read as a jagged ribbon rather than as water — real surf smooths detail out
+// at that scale. The long bays do the shaping; these two only stop the curve
+// looking drawn.
+const SHORE_FINE = 1.6;
+const SHORE_RAG = 0.5;
 
 /** Beach width between cliff and waterline, in cells. 32..52 is 16..26 world
  *  units, and the camera shows about 19 across — so the player can never see

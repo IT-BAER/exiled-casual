@@ -260,6 +260,87 @@ function shadeTopFace(box: Mesh): void {
 /** Prefix every brazier root an area stands up. Cleared on the next build. */
 const AREA_BRAZIER_PREFIX = "area-brazier-";
 
+/** Prefix for the beach dressing, cleared the same way. */
+const BEACH_PROP_PREFIX = "beach-prop-";
+
+/** How many of each, and how far from the waterline they may lie, in world
+ *  units. Shells wash up AT the tide line and driftwood lands further in — the
+ *  two bands are what makes the dressing read as "the sea put this here"
+ *  rather than as scatter. `reference-screenshots/beach-map.jpg` has the same
+ *  gradient: debris thickens toward the water and thins toward the dunes. */
+const SHELL_COUNT = 26;
+const SHELL_BAND: [number, number] = [0.4, 3.2];
+const DRIFTWOOD_COUNT = 9;
+const DRIFTWOOD_BAND: [number, number] = [1.5, 9];
+
+/**
+ * Dress a coast: shells along the tide line, driftwood up the beach.
+ *
+ * Deterministic and RNG-free, the same rule the braziers follow: a hash of the
+ * index picks the spot, so a screenshot and a replay agree and nothing has to be
+ * threaded through the renderer.
+ *
+ * One clone per item, not thin instances. Sixty-odd extra draws is what a scan
+ * mesh costs when it has to sit at an arbitrary yaw on an arbitrary spot, and
+ * the alternative is baking the prop's own node transform into every matrix.
+ * ponytail: revisit if a frame profile shows the draw count mattering.
+ */
+function dressBeach(scene: Scene, grid: WalkableGrid): void {
+  const shore = grid.shore;
+  if (!shore) return;
+  const { cols, rows, cellSize, originX, originY, cells } = grid;
+  const n = shore.cross.length;
+  const rnd = (i: number, salt: number): number => {
+    const x = Math.sin(i * 127.1 + salt * 311.7) * 43758.5453;
+    return x - Math.floor(x);
+  };
+  const isFloorAt = (wx: number, wz: number): boolean => {
+    const cx = Math.round((wx - originX) / cellSize);
+    const cy = Math.round((wz - originY) / cellSize);
+    if (cx < 1 || cy < 1 || cx >= cols - 1 || cy >= rows - 1) return false;
+    return cells[cy * cols + cx] === 1;
+  };
+
+  const place = (kind: "shell" | "driftwood", count: number, band: [number, number]): void => {
+    for (let i = 0; i < count; i++) {
+      // Spread along the shore, then a step inland from the waterline at that
+      // sample. Landward is the opposite of the sea side, by definition.
+      const s = Math.floor(((i + rnd(i, kind === "shell" ? 3 : 4) * 0.7) / count) * (n - 1));
+      const along = shore.start + s * shore.step;
+      const inland = band[0] + rnd(i, kind === "shell" ? 5 : 6) * (band[1] - band[0]);
+      const cross = shore.cross[s]! - shore.seaSide * inland;
+      const wx = shore.along === "x" ? along : cross;
+      const wz = shore.along === "x" ? cross : along;
+      if (!isFloorAt(wx, wz)) continue;
+      const root = new Mesh(`${BEACH_PROP_PREFIX}${kind}-${i}`, scene);
+      root.position.set(wx, 0, wz);
+      root.rotation.y = rnd(i, 7) * Math.PI * 2;
+      // Small size variation, and shells lie at any angle because a wave does
+      // not set them down flat.
+      const k = 0.8 + rnd(i, 8) * 0.5;
+      // The driftwood scan is a BRANCH: 2.1 metres long and eleven centimetres
+      // thick once scaled to length, which at this camera is a hair on the sand.
+      // Fattening the cross-section (never the length) turns it into the log the
+      // reference has lying about.
+      const fat = kind === "driftwood" ? 2.4 : 1;
+      root.scaling.set(k, k * fat, k * fat);
+      if (kind === "shell") root.rotation.z = (rnd(i, 9) - 0.5) * 0.7;
+      root.isPickable = false;
+      if (attachProp(scene, root, kind) === null) {
+        root.dispose(false, false);
+        return; // no props asset: headless or a failed fetch, so drop the lot
+      }
+      for (const mesh of root.getChildMeshes()) {
+        mesh.isPickable = false;
+        mesh.receiveShadows = true;
+      }
+    }
+  };
+
+  place("shell", SHELL_COUNT, SHELL_BAND);
+  place("driftwood", DRIFTWOOD_COUNT, DRIFTWOOD_BAND);
+}
+
 /**
  * How far apart two fires must stand, in world units, and how many an area gets.
  *
@@ -345,6 +426,9 @@ export function buildLevel(
 ): LevelResult {
   // Area swaps (and the open hideout) call this again; drop the previous walls.
   scene.getMeshByName(WALL_MESH_NAME)?.dispose();
+  for (const node of [...scene.meshes, ...scene.transformNodes]) {
+    if (node.name.startsWith(BEACH_PROP_PREFIX)) node.dispose(false, false);
+  }
   clearRocks();
   fitGround(scene, grid);
   if (!grid) return { walls: null, wallCells: 0 };
@@ -474,6 +558,10 @@ export function buildLevel(
   // open cells this sweep collected, and a brazier wants one that has a wall to
   // stand against.
   standBraziers(scene, grid, isFloor);
+  // The shore's own dressing. After the braziers because it uses the same
+  // sweep's knowledge of where the floor is, and before the merge for no reason
+  // other than keeping every "stand something up" call in one place.
+  dressBeach(scene, grid);
 
   if (wallCells === 0) return { walls: null, wallCells: 0 };
 

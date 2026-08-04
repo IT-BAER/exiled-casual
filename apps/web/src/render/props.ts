@@ -39,6 +39,8 @@ export const PROP_KINDS = [
   // box and a lathe (meshes.ts still greyboxes all three when the fetch fails).
   "lootChest",
   "rug", "table", "bench", "crate", "barrel", "pillar",
+  // The beach set, placed by render/level.ts along a coast's shoreline.
+  "driftwood", "shell",
   // The one prop that is also a light. `render/lights.ts` finds these by their
   // root name and hangs a real point light over each bowl.
   "brazier",

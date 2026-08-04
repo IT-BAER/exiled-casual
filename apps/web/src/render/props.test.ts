@@ -69,9 +69,9 @@ describe("props asset", () => {
   it("embeds compressed textures and stays small", () => {
     for (const image of json.images) expect(image.mimeType).toBe("image/jpeg");
     // Raised from 1.2MB when the two downloaded chests (stash, lootChest) came
-    // in, and again for the downloaded barrel and crate. Each costs one 512
-    // JPEG; a dropped downscale would cost ten megabytes, which is what this
-    // number is really watching for.
-    expect(glb.byteLength).toBeLessThan(1_600_000);
+    // in, again for the downloaded barrel and crate, and again for the beach set
+    // (driftwood, shell). Each costs one 512 JPEG; a dropped downscale would
+    // cost ten megabytes, which is what this number is really watching for.
+    expect(glb.byteLength).toBeLessThan(1_800_000);
   });
 });

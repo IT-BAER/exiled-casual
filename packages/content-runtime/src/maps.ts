@@ -42,7 +42,7 @@ export const BIOMES: Record<BiomeId, Biome> = {
     // Open sky, midday, off water that throws half of it back up. Every other
     // biome is underground or under a canopy; this one is the reference's beach,
     // where the sand is the brightest thing on the screen by a wide margin.
-    light: 3,
+    light: 2.4,
   },
 };
 

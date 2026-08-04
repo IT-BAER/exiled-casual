@@ -613,6 +613,41 @@ def build_loot_chest():
 
 
 # --------------------------------------------------------------------------
+# the beach set
+# --------------------------------------------------------------------------
+#
+# What a shore has on it that a dungeon does not. Both are photoscans from
+# BlenderKit (royalty_free), cut hard: they are background dressing seen from
+# nine metres up, and the sources ship 128k and 51k polys respectively — about
+# two hundred times what the silhouette survives at this camera.
+#
+# Scaled to real-world sizes rather than to the source's: the driftwood scan is
+# authored at nine metres long, which is a fallen tree, not a log on a beach.
+DRIFTWOOD_W = 2.1
+SHELL_W = 0.34
+DRIFTWOOD_BUDGET = {"3DModel_Custom": 520}
+SHELL_BUDGET = {"seashell": 160}
+
+
+def build_driftwood():
+    return build_appended(
+        "driftwood", "driftwood", "driftwood_log.blend", DRIFTWOOD_BUDGET,
+        # Bleached: a log that has been in salt water is grey, not bark-brown,
+        # and the scan was lit warm.
+        "3DModel_Custom.jpg", gain=1.05, roughness=0.85, width=DRIFTWOOD_W,
+        renames={"3DModel_Custom": "driftwood_log"},
+    )
+
+
+def build_shell():
+    return build_appended(
+        "shell", "shell", "seashell_scan.blend", SHELL_BUDGET,
+        "Shell_diffuse.jpeg", gain=1.0, roughness=0.55, width=SHELL_W,
+        renames={"seashell": "shell_body"},
+    )
+
+
+# --------------------------------------------------------------------------
 # the decor set
 # --------------------------------------------------------------------------
 #
@@ -873,6 +908,8 @@ def main():
     build_map_device(mats)
     build_stash()
     build_loot_chest()
+    build_driftwood()
+    build_shell()
     build_rug(mats)
     build_table(mats)
     build_bench(mats)

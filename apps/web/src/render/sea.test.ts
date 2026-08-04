@@ -148,10 +148,20 @@ describe("buildSea", () => {
     );
     const pos = mesh!.getVerticesData(VertexBuffer.PositionKind)!;
     const col = mesh!.getVerticesData(VertexBuffer.ColorKind)!;
+    let wetSand = 0;
     for (let v = 0; v < pos.length / 3; v++) {
-      // At or landward of the waterline the water is fully transparent.
-      if (pos[v * 3 + 2]! <= 2.5) expect(col[v * 4 + 3]).toBe(0);
+      const z = pos[v * 3 + 2]!;
+      // Exactly at the waterline the water has no opacity at all — that is what
+      // leaves the polygon edge with nothing to show.
+      if (Math.abs(z - 2.5) < 1e-6) expect(col[v * 4 + 3]).toBe(0);
+      // Landward is the wet-sand pass, which is a dark multiply and NOT water:
+      // it may be opaque, but it must never be brighter than the beach.
+      if (z < 2.5 - 1e-6) {
+        wetSand++;
+        expect(col[v * 4]).toBeLessThan(1);
+      }
     }
+    expect(wetSand).toBeGreaterThan(0);
   });
 
   it("is the strand and only the strand", () => {
