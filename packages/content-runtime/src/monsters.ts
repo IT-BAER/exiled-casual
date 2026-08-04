@@ -363,9 +363,14 @@ export const PACK_COUNT: Record<MonsterArchetype, number> = {
 export interface PoolEntry { defId: string; weight: number }
 
 /**
- * Three species per biome, and each biome a different three-of-four, so no two
- * biomes ask the same question. A heavy is the rarest roll in any pool because
- * it is the loudest: three in a map is a fight, ten is a chore.
+ * A different mix of archetypes per biome, so no two biomes ask the same
+ * question. A heavy is the rarest roll in any pool because it is the loudest:
+ * three in a map is a fight, ten is a chore.
+ *
+ * Four biomes took the four distinct three-of-four mixes and exhausted them, so
+ * the strand fields all FOUR archetypes rather than a fifth three that would
+ * have to repeat one. That is the right shape for it anyway: it is the first map
+ * anyone runs, and meeting one of each is how a player learns there are kinds.
  */
 export const MONSTER_POOLS: Record<BiomeId, readonly PoolEntry[]> = {
   vaal_stone: [
@@ -388,6 +393,15 @@ export const MONSTER_POOLS: Record<BiomeId, readonly PoolEntry[]> = {
     { defId: "monster.thornhide_boar.v1", weight: 2 },
     { defId: "monster.hoarfrost_spitter.v1", weight: 2 },
   ],
+  // Borrowed rather than newly modelled, and all four are things that belong in
+  // wet sand: what lives in it, what wades out of it, what burns over it, and
+  // what came in on the last storm and did not go back out.
+  strand: [
+    { defId: "monster.sand_skitterer.v1", weight: 3 },
+    { defId: "monster.bog_drowned.v1", weight: 2 },
+    { defId: "monster.fen_wisp.v1", weight: 2 },
+    { defId: "monster.rotting_behemoth.v1", weight: 1 },
+  ],
 };
 
 /**
@@ -397,14 +411,20 @@ export const MONSTER_POOLS: Record<BiomeId, readonly PoolEntry[]> = {
  * all ended on the same warden.
  *
  * The Warden keeps Vaal Stone rather than moving to a molten biome it would
- * match better: it is the fight every character has already learned, and the
- * first map anyone runs is worth leaving alone.
+ * match better: it is the fight every character has already learned.
+ *
+ * The strand shares Mother Vhal with the swamp, which is the one place two
+ * biomes end the same way. It is deliberate and it is temporary: a drowned thing
+ * is the right answer for a shoreline, and a wrong-themed boss on the FIRST map
+ * anyone runs costs more than a repeated one on the fifth. Swapping it is one
+ * line once the strand has a boss of its own.
  */
 export const BOSSES: Record<BiomeId, string> = {
   vaal_stone: "monster.cinder_warden.v1",
   desert: "monster.sirrath.v1",
   swamp: "monster.mother_vhal.v1",
   forest: "monster.ghaltrek.v1",
+  strand: "monster.mother_vhal.v1",
 };
 
 /** The boss for a biome. Total, so an unknown biome cannot end a run bossless. */

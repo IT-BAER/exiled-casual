@@ -31,6 +31,13 @@ export const BIOMES: Record<BiomeId, Biome> = {
     // Filtered through a canopy: dim, cool, a little blue.
     tint: [0.66, 0.74, 0.62],
   },
+  strand: {
+    id: "strand",
+    name: "Strand",
+    // Open sky off open water: the one biome with nothing overhead, so it keeps
+    // more of the light than any of them and takes it slightly cold off the sea.
+    tint: [0.82, 0.88, 0.94],
+  },
 };
 
 /**
@@ -65,6 +72,12 @@ export const MAP_BASES: Record<string, MapBase> = {
     biomeId: "forest",
     tilesetId: "tileset.forest",
     layoutGrammarId: "open-field",
+  },
+  "map.strand": {
+    id: "map.strand",
+    biomeId: "strand",
+    tilesetId: "tileset.strand",
+    layoutGrammarId: "strand",
   },
 };
 

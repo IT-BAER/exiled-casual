@@ -178,9 +178,10 @@ describe("MONSTERS", () => {
 });
 
 describe("monster pools", () => {
-  it("every biome has exactly three species", () => {
+  it("every biome fields three species, or four where three cannot be distinct", () => {
     for (const id of BIOME_IDS) {
-      expect(MONSTER_POOLS[id].length, id).toBe(3);
+      expect(MONSTER_POOLS[id].length, id).toBeGreaterThanOrEqual(3);
+      expect(MONSTER_POOLS[id].length, id).toBeLessThanOrEqual(4);
     }
   });
 
@@ -195,11 +196,13 @@ describe("monster pools", () => {
   it("no biome repeats an archetype", () => {
     for (const id of BIOME_IDS) {
       const kinds = MONSTER_POOLS[id].map((e) => MONSTERS.get(e.defId)!.archetype);
-      expect(new Set(kinds).size, id).toBe(3);
+      // Against the pool's own length, not against three: the strand fields all
+      // four because four biomes exhausted the distinct three-of-fours.
+      expect(new Set(kinds).size, id).toBe(kinds.length);
     }
   });
 
-  it("no two biomes field the same three archetypes", () => {
+  it("no two biomes field the same mix of archetypes", () => {
     const sigs = BIOME_IDS.map((id) =>
       MONSTER_POOLS[id].map((e) => MONSTERS.get(e.defId)!.archetype).sort().join(","),
     );
@@ -238,7 +241,7 @@ describe("monster pools", () => {
     for (const id of BIOME_IDS) {
       const hit = new Set<string>();
       for (let i = 0; i < 1000; i++) hit.add(pickPack(id, i / 1000).id);
-      expect(hit.size, id).toBe(3);
+      expect(hit.size, id).toBe(MONSTER_POOLS[id].length);
     }
   });
 

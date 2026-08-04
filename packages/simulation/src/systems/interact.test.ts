@@ -56,12 +56,12 @@ describe("registerInteractSystem", () => {
     const { sim, world, player, sessionE } = makeWorld();
     const ws = offerWaystones(0, WAYSTONE_OFFER_COUNT)[0]!;
 
-    sim.step([activateCmd(player, "node.ashen_glade", { x: 0, y: 0 })]);
+    sim.step([activateCmd(player, "node.the_wrackline", { x: 0, y: 0 })]);
 
     const session = world.get<SessionC>(sessionE, "session")!;
     expect(session.mapOpen).toBe(1);
     expect(session.areaTier).toBe(ws.tier);
-    expect(session.activeNodeId).toBe("node.ashen_glade");
+    expect(session.activeNodeId).toBe("node.the_wrackline");
     expect(session.portalsLeft).toBe(MAP_PORTALS);
     expect(world.query("interactable").filter((e) =>
       world.get<InteractableC>(e, "interactable")!.kind === "portal",
@@ -76,7 +76,7 @@ describe("registerInteractSystem", () => {
 
   it("activateMap is rejected when no stone sits at the specified cell", () => {
     const { sim, world, player, sessionE } = makeWorld();
-    sim.step([activateCmd(player, "node.ashen_glade", { x: 99, y: 0 })]);
+    sim.step([activateCmd(player, "node.the_wrackline", { x: 99, y: 0 })]);
     expect(world.get<SessionC>(sessionE, "session")!.mapOpen).toBe(0);
   });
 
@@ -86,14 +86,14 @@ describe("registerInteractSystem", () => {
    */
   it("activateMap with a run already open replaces it", () => {
     const { sim, world, player, sessionE } = makeWorld();
-    sim.step([activateCmd(player, "node.ashen_glade", { x: 0, y: 0 })]);
+    sim.step([activateCmd(player, "node.the_wrackline", { x: 0, y: 0 })]);
     const first = world.get<SessionC>(sessionE, "session")!;
     expect(first.mapOpen).toBe(1);
     // Spend some of the first run's budget, so a fresh six is visible as a reset.
     world.set<SessionC>(sessionE, "session", { ...first, portalsLeft: 2 });
 
     const at = giveStone(world, sessionE, WAYSTONE_MAX_TIER);
-    sim.step([activateCmd(player, "node.ashen_glade", at)]);
+    sim.step([activateCmd(player, "node.the_wrackline", at)]);
 
     const second = world.get<SessionC>(sessionE, "session")!;
     expect(second.mapSeed).not.toBe(first.mapSeed);
@@ -103,23 +103,23 @@ describe("registerInteractSystem", () => {
 
   it("replacing a run leaves six portals round the device, not twelve", () => {
     const { sim, world, player, sessionE } = makeWorld();
-    sim.step([activateCmd(player, "node.ashen_glade", { x: 0, y: 0 })]);
+    sim.step([activateCmd(player, "node.the_wrackline", { x: 0, y: 0 })]);
     const ring = () => world
       .query("interactable")
       .filter((e) => world.get<InteractableC>(e, "interactable")!.kind === "portal").length;
     expect(ring()).toBe(MAP_PORTALS);
     const at = giveStone(world, sessionE, WAYSTONE_MAX_TIER);
-    sim.step([activateCmd(player, "node.ashen_glade", at)]);
+    sim.step([activateCmd(player, "node.the_wrackline", at)]);
     expect(ring()).toBe(MAP_PORTALS);
   });
 
   it("but not from inside the map, where there is no device", () => {
     const { sim, world, player, sessionE } = makeWorld();
-    sim.step([activateCmd(player, "node.ashen_glade", { x: 0, y: 0 })]);
+    sim.step([activateCmd(player, "node.the_wrackline", { x: 0, y: 0 })]);
     const first = world.get<SessionC>(sessionE, "session")!;
     world.set<SessionC>(sessionE, "session", { ...first, area: "map" });
     const at = giveStone(world, sessionE, WAYSTONE_MAX_TIER);
-    sim.step([activateCmd(player, "node.ashen_glade", at)]);
+    sim.step([activateCmd(player, "node.the_wrackline", at)]);
     expect(world.get<SessionC>(sessionE, "session")!.mapSeed).toBe(first.mapSeed);
   });
 
@@ -189,8 +189,8 @@ describe("registerInteractSystem", () => {
   it("activateMap is rejected for an already-completed node", () => {
     const { sim, world, player, sessionE } = makeWorld();
     const s = world.get<SessionC>(sessionE, "session")!;
-    world.set<SessionC>(sessionE, "session", { ...s, completedNodes: ["node.ashen_glade"] });
-    sim.step([activateCmd(player, "node.ashen_glade", { x: 0, y: 0 })]);
+    world.set<SessionC>(sessionE, "session", { ...s, completedNodes: ["node.the_wrackline"] });
+    sim.step([activateCmd(player, "node.the_wrackline", { x: 0, y: 0 })]);
     expect(world.get<SessionC>(sessionE, "session")!.mapOpen).toBe(0);
   });
 
@@ -297,7 +297,7 @@ describe("registerInteractSystem", () => {
       const { sim, world, player, sessionE } = makeWorld();
       onlyPermanent(world, sessionE);
 
-      sim.step([activateCmd(player, "node.ashen_glade", { x: 3, y: 2 })]);
+      sim.step([activateCmd(player, "node.the_wrackline", { x: 3, y: 2 })]);
 
       const session = world.get<SessionC>(sessionE, "session")!;
       expect(session.mapOpen, "the map opened").toBe(1);

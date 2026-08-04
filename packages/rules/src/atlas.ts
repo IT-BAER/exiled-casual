@@ -129,14 +129,14 @@ export function mapSeedFor(waystoneSeed: number, atlasNodeId: string): number {
   return h >>> 0;
 }
 
-export const ATLAS_NODE_COUNT = 12;
+export const ATLAS_NODE_COUNT = 15;
 
 // Names are fixed per index so a place keeps its name across a content update;
 // only its position and its routes come from the seed.
 const NODE_NAMES: readonly string[] = [
-  "Ashen Glade", "Emberfall", "Cinder Vault", "Blackmire", "Sunken Chapel",
+  "The Wrackline", "Emberfall", "Cinder Vault", "Blackmire", "Sunken Chapel",
   "Ossuary Steps", "Rustwater", "The Pale Reach", "Kiln of Ash", "Thornwake",
-  "Gallowsmoor", "Vault of Cinders",
+  "Gallowsmoor", "Vault of Cinders", "Hollowbriar", "Gullscour", "Bonestrand",
 ];
 
 /**
@@ -146,7 +146,7 @@ const NODE_NAMES: readonly string[] = [
  * Same arrangement as `GEAR_TEXTURE` in the renderer.
  */
 export const MAP_BASE_IDS = [
-  "map.vaal_stone", "map.desert", "map.swamp", "map.forest",
+  "map.vaal_stone", "map.desert", "map.swamp", "map.forest", "map.strand",
 ] as const;
 export type MapBaseId = (typeof MAP_BASE_IDS)[number];
 
@@ -156,7 +156,9 @@ export type MapBaseId = (typeof MAP_BASE_IDS)[number];
  * seed. Three nodes per base, so no biome is a novelty.
  */
 const NODE_MAP_BASES: readonly MapBaseId[] = [
-  "map.forest",      // Ashen Glade
+  // Index 0 is where every character starts (atlasNodeTier calls it tier 1), so
+  // it is the strand: the first thing anyone sees is open sky over open water.
+  "map.strand",      // The Wrackline
   "map.desert",      // Emberfall
   "map.vaal_stone",  // Cinder Vault
   "map.swamp",       // Blackmire
@@ -168,6 +170,9 @@ const NODE_MAP_BASES: readonly MapBaseId[] = [
   "map.forest",      // Thornwake
   "map.forest",      // Gallowsmoor
   "map.vaal_stone",  // Vault of Cinders
+  "map.forest",      // Hollowbriar
+  "map.strand",      // Gullscour
+  "map.strand",      // Bonestrand
 ];
 
 /** The base an Atlas node runs, by its index in the fixed name table. */
@@ -193,7 +198,7 @@ function nodeIdFor(name: string): string {
 // Fixed per index alongside the name, for the same reason: the layout is seeded
 // per account, the place is not.
 const NODE_FLAVOUR: readonly string[] = [
-  "Nothing grew back after the burning, and nothing was meant to.",
+  "The tide brings everything back. Not always in one piece.",
   "The rain fell hot for a week, and the town drank all of it.",
   "They sealed the door from the inside. Ask yourself why.",
   "The mud keeps every step, and gives none of them back.",
@@ -205,6 +210,9 @@ const NODE_FLAVOUR: readonly string[] = [
   "The hedge grew inward until there was no village left to fence.",
   "Twelve ropes, twelve winters, one patient wind.",
   "What burned here was kept, not buried.",
+  "The thorns lean toward the path. They have had time to learn it.",
+  "The birds got here first, and left nothing worth the walk.",
+  "Count the hulls. Then count the crews.",
 ];
 
 /**
@@ -217,7 +225,7 @@ const NODE_FLAVOUR: readonly string[] = [
 export function atlasGraph(atlasSeed: number): AtlasGraphNode[] {
   const rnd = mulberry32(atlasSeed >>> 0);
   const frac = () => rnd() / 0x100000000;
-  const cols = 4, rows = 3;
+  const cols = 5, rows = 3;
   const nodes: AtlasGraphNode[] = [];
   for (let i = 0; i < ATLAS_NODE_COUNT; i++) {
     const col = i % cols, row = Math.floor(i / cols);

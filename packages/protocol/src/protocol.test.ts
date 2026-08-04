@@ -119,8 +119,8 @@ describe("validateIntent — interact", () => {
 
 describe("validateIntent — activateMap", () => {
   test("validates activateMap", () => {
-    expect(validateIntent({ kind: "activateMap", atlasNodeId: "node.ashen_glade", x: 0, y: 0 }))
-      .toEqual({ kind: "activateMap", atlasNodeId: "node.ashen_glade", x: 0, y: 0 });
+    expect(validateIntent({ kind: "activateMap", atlasNodeId: "node.the_wrackline", x: 0, y: 0 }))
+      .toEqual({ kind: "activateMap", atlasNodeId: "node.the_wrackline", x: 0, y: 0 });
   });
   test("rejects activateMap with empty ids", () => {
     expect(() => validateIntent({ kind: "activateMap", atlasNodeId: "", x: 0, y: 0 })).toThrow();

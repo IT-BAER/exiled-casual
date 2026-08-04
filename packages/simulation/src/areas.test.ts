@@ -11,7 +11,7 @@ import type { SessionC, Health, MonsterC, Position, ContainerC } from "./compone
 
 function mapSessionAtTier(tier: number): SessionC {
   return {
-    area: "map", atlasSeed: 0, mapSeed: 7, waystoneSeed: 0, areaTier: tier, activeNodeId: "node.ashen_glade",
+    area: "map", atlasSeed: 0, mapSeed: 7, waystoneSeed: 0, areaTier: tier, activeNodeId: "node.the_wrackline",
     completedNodes: [], portalsLeft: 6, mapOpen: 1, pendingArea: "",
   };
 }
@@ -62,7 +62,7 @@ describe("tier scaling on map spawn", () => {
 // two helpers can't drift on what a session needs.
 function mapFixture(overrides: Partial<SessionC> & { mapSeed: number }) {
   const session: SessionC = {
-    area: "map", atlasSeed: 0, waystoneSeed: 0, areaTier: 1, activeNodeId: "node.ashen_glade",
+    area: "map", atlasSeed: 0, waystoneSeed: 0, areaTier: 1, activeNodeId: "node.the_wrackline",
     completedNodes: [], portalsLeft: 6, mapOpen: 1, pendingArea: "",
     ...overrides,
   };

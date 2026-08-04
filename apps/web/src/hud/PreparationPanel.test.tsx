@@ -62,7 +62,7 @@ describe("PreparationPanel", () => {
     expect(screen.getByTestId("prep-popup-name").textContent).toBe(node.name);
     expect(popup.textContent).toContain(node.flavour);
     // Anchored to the node it belongs to, not to the middle of the screen.
-    expect(popup.style.left).toContain(`${(node.x * 100).toFixed(2)}%`);
+    expect(popup.style.left).toContain(`${parseFloat(Math.min(88, Math.max(12, node.x * 100)).toFixed(2))}%`);
     // Empty until a stone goes in, and the button says no while it is.
     expect(screen.queryByTestId("prep-socket-stone")).toBeNull();
     expect((screen.getByTestId("prep-activate") as HTMLButtonElement).disabled).toBe(true);
@@ -233,9 +233,9 @@ describe("the place's biome", () => {
         onClose={() => {}}
       />,
     );
-    // Ashen Glade is node 0, and node 0 is always reachable, so its popup opens.
+    // The Wrackline is node 0, and node 0 is always reachable, so its popup opens.
     fireEvent.click(screen.getByTestId(`prep-node-${atlasGraph(7)[0]!.id}`));
-    expect(screen.getByTestId("prep-popup-name").textContent).toBe("Ashen Glade");
-    expect(screen.getByTestId("prep-popup-biome").textContent).toBe("Forest");
+    expect(screen.getByTestId("prep-popup-name").textContent).toBe("The Wrackline");
+    expect(screen.getByTestId("prep-popup-biome").textContent).toBe("Strand");
   });
 });

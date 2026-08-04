@@ -21,7 +21,7 @@ function seedRolling(id: string): number {
 function mapSession(waystoneSeed: number, areaTier = 1): SessionC {
   return {
     area: "map", atlasSeed: 1, mapSeed: 99, waystoneSeed, areaTier,
-    activeNodeId: "node.ashen_glade", completedNodes: [], portalsLeft: 6, mapOpen: 1, pendingArea: "",
+    activeNodeId: "node.the_wrackline", completedNodes: [], portalsLeft: 6, mapOpen: 1, pendingArea: "",
   };
 }
 
@@ -88,7 +88,9 @@ describe("map modifiers reach the monsters", () => {
   it("a plain stone leaves the monsters exactly as content wrote them", () => {
     const world = buildMap(mapSession(0));
     const e = world.query("monster", "defenses")[0]!;
-    expect(world.get<DefensesC>(e, "defenses")!.res.cold).toBe(0);
+    const m = world.get<MonsterC>(e, "monster")!;
+    const base = MONSTERS.get(m.defId)!.defenses.resPct;
+    expect(world.get<DefensesC>(e, "defenses")!.res.cold).toBe(base.cold);
   });
 });
 
@@ -99,7 +101,7 @@ describe("the player's resistances are taxed only inside the map", () => {
     const sessionE = world.query("session")[0]!;
     const base = world.get<SessionC>(sessionE, "session")!;
     world.set<SessionC>(sessionE, "session", {
-      ...base, waystoneSeed, areaTier: 1, mapOpen: 1, portalsLeft: 6, activeNodeId: "node.ashen_glade",
+      ...base, waystoneSeed, areaTier: 1, mapOpen: 1, portalsLeft: 6, activeNodeId: "node.the_wrackline",
     });
     const resOf = () => world.get<DefensesC>(playerEntity, "defenses")!.res.fire;
     const goTo = (area: "hideout" | "map") => {

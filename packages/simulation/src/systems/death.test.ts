@@ -163,19 +163,19 @@ describe("registerDeath", () => {
   }
 
   it("marks the active node completed when the map boss dies", () => {
-    const { sim, world, sessionE } = makeBossDeath("map", "node.ashen_glade", []);
+    const { sim, world, sessionE } = makeBossDeath("map", "node.the_wrackline", []);
     sim.step();
-    expect(world.get<SessionC>(sessionE, "session")!.completedNodes).toContain("node.ashen_glade");
+    expect(world.get<SessionC>(sessionE, "session")!.completedNodes).toContain("node.the_wrackline");
   });
 
   it("does not double-add an already-completed node", () => {
-    const { sim, world, sessionE } = makeBossDeath("map", "node.ashen_glade", ["node.ashen_glade"]);
+    const { sim, world, sessionE } = makeBossDeath("map", "node.the_wrackline", ["node.the_wrackline"]);
     sim.step();
-    expect(world.get<SessionC>(sessionE, "session")!.completedNodes).toEqual(["node.ashen_glade"]);
+    expect(world.get<SessionC>(sessionE, "session")!.completedNodes).toEqual(["node.the_wrackline"]);
   });
 
   it("does not complete a node when a non-boss monster dies", () => {
-    const { sim, world, sessionE } = makeBossDeath("map", "node.ashen_glade", []);
+    const { sim, world, sessionE } = makeBossDeath("map", "node.the_wrackline", []);
     world.remove(world.query("boss")[0]!, "boss"); // now an ordinary monster at 0 life
     sim.step();
     expect(world.get<SessionC>(sessionE, "session")!.completedNodes).toEqual([]);
@@ -188,7 +188,7 @@ describe("registerDeath", () => {
     registerDeath(sim);
     const w = sim.world;
     const s = w.create();
-    w.set(s, "session", { area: "map", atlasSeed: 1, mapSeed: 7, waystoneSeed: 0, areaTier: 5, activeNodeId: "node.ashen_glade", completedNodes: [], portalsLeft: 6, mapOpen: 1, pendingArea: "" });
+    w.set(s, "session", { area: "map", atlasSeed: 1, mapSeed: 7, waystoneSeed: 0, areaTier: 5, activeNodeId: "node.the_wrackline", completedNodes: [], portalsLeft: 6, mapOpen: 1, pendingArea: "" });
     const m = w.create();
     w.set(m, "position", { x: 100, y: 200 });
     w.set(m, "health", { life: 0, maxLife: 40 });
@@ -213,7 +213,7 @@ describe("registerDeath", () => {
     registerDeath(sim);
     const w = sim.world;
     const s = w.create();
-    w.set(s, "session", { area: "map", atlasSeed: 1, mapSeed: opts.mapSeed ?? 7, waystoneSeed: opts.waystoneSeed ?? 0, areaTier: 5, activeNodeId: "node.ashen_glade", completedNodes: ["node.ashen_glade"], portalsLeft: 6, mapOpen: 1, pendingArea: "" });
+    w.set(s, "session", { area: "map", atlasSeed: 1, mapSeed: opts.mapSeed ?? 7, waystoneSeed: opts.waystoneSeed ?? 0, areaTier: 5, activeNodeId: "node.the_wrackline", completedNodes: ["node.the_wrackline"], portalsLeft: 6, mapOpen: 1, pendingArea: "" });
     const m = w.create();
     w.set(m, "position", { x: fp(3), y: fp(-2) });
     w.set(m, "health", { life: 0, maxLife: 40 });
@@ -479,7 +479,7 @@ describe("clearing a map hands Waystones back", () => {
     );
 
   it("the boss's death adds the run's drops to the owned stock", () => {
-    const { sim, world } = makeBossDeath("map", "node.ashen_glade", []);
+    const { sim, world } = makeBossDeath("map", "node.the_wrackline", []);
     sim.step();
     const drops = waystoneGroundItems(world);
     expect(drops.length).toBeGreaterThan(0);
@@ -490,7 +490,7 @@ describe("clearing a map hands Waystones back", () => {
   });
 
   it("a node already cleared pays nothing a second time", () => {
-    const { sim, world } = makeBossDeath("map", "node.ashen_glade", ["node.ashen_glade"]);
+    const { sim, world } = makeBossDeath("map", "node.the_wrackline", ["node.the_wrackline"]);
     sim.step();
     expect(waystoneGroundItems(world).length).toBe(0);
   });

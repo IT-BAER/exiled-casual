@@ -39,14 +39,17 @@ def main():
     ap.add_argument("asset_base_id", nargs="?")
     ap.add_argument("--type", default="blend", help="fileType to fetch (blend, gltf, ...)")
     ap.add_argument("--out", default=None, help="output path (default assets/props/source/<slug>)")
-    ap.add_argument("--search", default=None, help="list free models matching this text instead of fetching")
+    ap.add_argument("--search", default=None, help="list free assets matching this text instead of fetching")
+    ap.add_argument("--asset-type", default="model",
+                    help="model | material | brush | hdr. Tileset plates want material.")
     ap.add_argument("--limit", type=int, default=10)
     args = ap.parse_args()
 
     if args.search:
-        q = args.search.replace(" ", "+") + "+asset_type:model+is_free:true+order:_score"
+        q = (args.search.replace(" ", "+")
+             + f"+asset_type:{args.asset_type}+is_free:true+order:_score")
         data = get_json(f"{API}/search/?query={q}&page_size={args.limit}")
-        print(f"{data['count']} free models; top {min(args.limit, data['count'])}:")
+        print(f"{data['count']} free {args.asset_type}s; top {min(args.limit, data['count'])}:")
         for a in data["results"]:
             blend = next((f for f in a["files"] if f["fileType"] == "blend"), None)
             size = f"{(blend['fileUploadSize'] or 0) / 1e6:.1f}MB" if blend else "no blend"

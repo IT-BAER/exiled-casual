@@ -78,7 +78,10 @@ describe("sfx assets", () => {
   it("every ground has all of its falls, and the fallback ground is one of them", () => {
     const body = readFileSync(resolve(__dirname, "soundscape.ts"), "utf8");
     const table = body.slice(body.indexOf("const GROUND:"), body.indexOf("const DEFAULT_GROUND"));
-    const grounds = [...table.matchAll(/:\s*"([a-z]+)",/g)].map((m) => m[1]!);
+    // Deduped: GROUND is keyed on what the ear hears, so two biomes may name the
+    // same floor (the strand and the desert both walk on dirt) and that must not
+    // read as a missing file or as a shipped byte nobody plays.
+    const grounds = [...new Set([...table.matchAll(/:\s*"([a-z]+)",/g)].map((m) => m[1]!))];
     const variants = Number(/const GROUND_VARIANTS = (\d+)/.exec(body)?.[1]);
     const fallback = /const DEFAULT_GROUND = "([a-z]+)"/.exec(body)?.[1];
     const voices = new Set(voiceNames());

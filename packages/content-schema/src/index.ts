@@ -669,7 +669,7 @@ export function validateAffix(v: unknown): ValidationResult {
  * for. Vaal Stone is a city identity rather than a primary biome, and is here
  * because a ruined stone city is the look the Atlas is built around.
  */
-export const BIOME_IDS = ["vaal_stone", "desert", "swamp", "forest"] as const;
+export const BIOME_IDS = ["vaal_stone", "desert", "swamp", "forest", "strand"] as const;
 export type BiomeId = (typeof BIOME_IDS)[number];
 
 /** Which chunk library and branch count an area is assembled from. */

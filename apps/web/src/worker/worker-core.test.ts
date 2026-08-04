@@ -101,7 +101,7 @@ describe("WorkerCore", () => {
 
     // Open the portal ring by activating a map (T5: activateMap opens it, not a
     // device interact — that is now a no-op). ws-0 resolves against the session seed.
-    core.pushIntent({ kind: "activateMap", atlasNodeId: "node.ashen_glade", x: 0, y: 0 });
+    core.pushIntent({ kind: "activateMap", atlasNodeId: "node.the_wrackline", x: 0, y: 0 });
     advanceUntil(core, (s) => s.entities.some((e) => e.kind === "portal"));
 
     // Step through a portal into the dungeon.
@@ -120,9 +120,9 @@ describe("WorkerCore", () => {
     // The grammar is part of that identity: the Atlas node picks the map base,
     // the base picks the layout grammar, and generating with the wrong one draws
     // a different dungeon just as surely as the wrong seed does.
-    const mapSeed = mapSeedFor(offerWaystones(42, WAYSTONE_OFFER_COUNT)[0]!.seed, "node.ashen_glade");
-    const grammar = grammarForNode("node.ashen_glade");
-    expect(grammar).toBe("open-field"); // Ashen Glade is a forest
+    const mapSeed = mapSeedFor(offerWaystones(42, WAYSTONE_OFFER_COUNT)[0]!.seed, "node.the_wrackline");
+    const grammar = grammarForNode("node.the_wrackline");
+    expect(grammar).toBe("strand"); // The Wrackline is a strand
     expect(core.getAreaLayout().hash).toBe(generateArea(mapSeed, CONTENT_VERSION, grammar).hash);
     expect(core.getAreaLayout().hash).not.toBe(generateArea(mapSeed, CONTENT_VERSION, "loop").hash);
   });

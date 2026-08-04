@@ -31,7 +31,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 MASTERS = ROOT / "assets" / "tilesets"
 OUT = ROOT / "apps" / "web" / "public" / "textures" / "tilesets"
 
-BIOMES = ["vaal_stone", "desert", "swamp", "forest"]
+BIOMES = ["vaal_stone", "desert", "swamp", "forest", "strand"]
 
 # Shipped size. The old CC0 stone wall was 1024x512 and read fine at the game's
 # 2-world-unit repeat; matching it keeps the memory cost where it was. The floor
