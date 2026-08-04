@@ -1,5 +1,5 @@
 import { fp, fpDist2, fpMul } from "@exiled/fixed-point";
-import { gridCollision } from "./collision";
+import { blockerCollision, gridCollision } from "./collision";
 import {
   makeRare, mapBaseIdForNode, monsterTierScale, waystoneScaleFor,
   areaLevel, dropCount, dropCategory, quantityScaleMilli, rollItem,
@@ -7,7 +7,7 @@ import {
 } from "@exiled/rules";
 import {
   PACK_COUNT, bossFor, mapBase, pickPack, rareTemplate,
-  ITEM_POOLS, baseOf, currencyItem, currencyForRoll,
+  ITEM_POOLS, baseOf, currencyItem, currencyForRoll, hideoutFootprints,
 } from "@exiled/content-runtime";
 import { ELEMENTS, type MonsterDef } from "@exiled/content-schema";
 import type { AreaLayout } from "@exiled/mapgen";
@@ -18,7 +18,7 @@ import type {
   Position, Health, Faction, MonsterC, DefensesC, BossC,
   InteractableC, SessionC, AreaKind, ItemC, ContainerC,
 } from "./components";
-import type { Collision } from "./collision";
+import type { Blocker, Collision } from "./collision";
 
 /** What a cache pays as the loot math indexes rarity: 2 = rare. A found room is
  *  worth a rare monster's burst, which is where the number comes from rather
@@ -313,6 +313,48 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
       yaw: 3.1416,
     });
   }
+}
+
+/**
+ * What an interactable's BODY is, which is not what its `radius` says.
+ *
+ * `InteractableC.radius` is how close you must stand to use the thing (2.5 for
+ * the map device, so it answers before you are on top of it); this is how much
+ * floor it takes up. A portal is missing on purpose: it is a doorway, and one
+ * you cannot walk into is one you cannot take.
+ */
+const BLOCK_RADIUS: Partial<Record<InteractableC["kind"], number>> = {
+  mapDevice: 0.85,   // DEVICE_SPAN 1.61 across in build_props.py
+  stash: 0.6,        // STASH_CHEST_W 1.20
+  vendor: 0.4,       // a man
+  container: 0.42,   // the widest of chest 0.82, crate 0.80, barrel 0.56
+};
+
+/**
+ * The collision the area is played against: its walls, plus everything standing
+ * on the floor.
+ *
+ * Built from the world rather than from the layout, so it has to be called AFTER
+ * `buildArea` — the containers and the shops it collides against are entities
+ * that function creates. The hideout has no walls and gets its furniture alone,
+ * which is why it is a Collision now where it used to be null.
+ */
+export function areaCollision(world: World, area: AreaKind, layout: AreaLayout): Collision {
+  const blockers: Blocker[] = [];
+  for (const e of world.query("interactable")) {
+    const it = world.get<InteractableC>(e, "interactable")!;
+    const r = BLOCK_RADIUS[it.kind];
+    if (r === undefined) continue;
+    const p = world.get<Position>(e, "position")!;
+    blockers.push({ x: p.x, y: p.y, r: fp(r) });
+  }
+  if (area !== "map") {
+    // Sim (x, y) is Babylon (x, z): the decor list is written in the renderer's
+    // axes because that is where it is composed.
+    for (const f of hideoutFootprints()) blockers.push({ x: fp(f.x), y: fp(f.z), r: fp(f.r) });
+    return blockerCollision(blockers);
+  }
+  return gridCollision(layout.grid, blockers);
 }
 
 /** The looks a reward container can wear, indexed by the anchor's seed. */

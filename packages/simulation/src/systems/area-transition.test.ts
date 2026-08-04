@@ -165,7 +165,7 @@ describe("registerAreaTransition — map entry (collision + start socket)", () =
     expect(world.get<Position>(player, "position")).toEqual({ x: fp(start.x), y: fp(start.y) });
   });
 
-  it("leaving the map (back to hideout) clears collision and spawns at (0,0)", () => {
+  it("leaving the map (back to hideout) drops the walls, keeps the furniture, spawns at (0,0)", () => {
     const sim = new Simulation();
     const ref: CollisionRef = { active: gridCollision(generateArea(1, CONTENT_VERSION).grid) };
     registerAreaTransition(sim, ref);
@@ -180,7 +180,12 @@ describe("registerAreaTransition — map entry (collision + start socket)", () =
 
     sim.step();
 
-    expect(ref.active).toBeNull();
+    // The hideout has no walls: a point far outside any generated map is open.
+    expect(ref.active!.isWalkable(fp(400), fp(-400), fp(0.5))).toBe(true);
+    // It does have a map device, and the player walks around that.
+    expect(ref.active!.isWalkable(fp(-2.828), fp(2.828), fp(0.5))).toBe(false);
+    // And he arrives on clear floor rather than inside one of them.
     expect(world.get<Position>(player, "position")).toEqual({ x: 0, y: 0 });
+    expect(ref.active!.isWalkable(0, 0, fp(0.5))).toBe(true);
   });
 });

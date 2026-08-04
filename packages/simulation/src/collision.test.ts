@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { fp } from "@exiled/fixed-point";
 import type { WalkableGrid } from "@exiled/mapgen";
-import { gridCollision, slide } from "./collision";
+import { blockerCollision, gridCollision, slide } from "./collision";
 
 // Build a WalkableGrid from an ASCII map. '.' = walkable, '#' = wall.
 // cellSize 1 and origin 0 make cell (cx,cy) sit at world (cx,cy) for readability.
@@ -73,6 +73,64 @@ describe("gridCollision.isWalkable on 0.5-unit cells", () => {
     expect(c.isWalkable(fp(1.5), fp(1.5), fp(0.42))).toBe(false);
     // Half a cell further back it clears with room to spare.
     expect(c.isWalkable(fp(1.25), fp(1.5), fp(0.42))).toBe(true);
+  });
+});
+
+// Furniture: a barrel is not a wall cell, it is a disc standing on floor cells.
+describe("blockers", () => {
+  const open = makeGrid([
+    ".....",
+    ".....",
+    ".....",
+    ".....",
+    ".....",
+  ]);
+  const barrel = { x: fp(2), y: fp(2), r: fp(0.4) };
+  const c = gridCollision(open, [barrel]);
+
+  it("the cell it stands on is floor to the grid and blocked to a body", () => {
+    expect(gridCollision(open).isWalkable(fp(2), fp(2), 0)).toBe(true);
+    expect(c.isWalkable(fp(2), fp(2), 0)).toBe(false);
+  });
+
+  it("a body is stopped by its own width, not only by its centre", () => {
+    expect(c.isWalkable(fp(2.6), fp(2), 0)).toBe(true);
+    expect(c.isWalkable(fp(2.6), fp(2), fp(0.5))).toBe(false);
+    expect(c.isWalkable(fp(3.0), fp(2), fp(0.5))).toBe(true);
+  });
+
+  it("the floor around it is untouched", () => {
+    expect(c.isWalkable(fp(0), fp(0), fp(0.5))).toBe(true);
+    expect(c.isWalkable(fp(4), fp(4), fp(0.5))).toBe(true);
+  });
+
+  it("a monster routes around it: the field never crosses it", () => {
+    // Standing due west of the barrel with the target due east, the downhill
+    // neighbour has to be off the line rather than through it.
+    const wp = c.nav!.waypoint(fp(1), fp(2), fp(3), fp(2), fp(0.5));
+    expect(wp).not.toBeNull();
+    expect(wp!.y).not.toBe(fp(2));
+  });
+});
+
+// The hideout has no walls and no grid, only furniture.
+describe("blockerCollision", () => {
+  const c = blockerCollision([{ x: fp(0), y: fp(0), r: fp(1) }]);
+
+  it("blocks the disc and nothing else", () => {
+    expect(c.isWalkable(fp(0), fp(0), 0)).toBe(false);
+    expect(c.isWalkable(fp(1.2), fp(0), 0)).toBe(true);
+    expect(c.isWalkable(fp(1.2), fp(0), fp(0.5))).toBe(false);
+  });
+
+  it("is unbounded: far off the hideout plate is still walkable", () => {
+    expect(c.isWalkable(fp(500), fp(-500), fp(0.5))).toBe(true);
+  });
+
+  it("slides along a table instead of sticking to it", () => {
+    const r = slide(c, fp(-1.6), fp(0), fp(0.4), fp(0.4), fp(0.5));
+    expect(r.x).toBe(fp(-1.6)); // into it, cancelled
+    expect(r.y).toBe(fp(0.4)); // past it, allowed
   });
 });
 

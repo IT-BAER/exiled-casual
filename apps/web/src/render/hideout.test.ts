@@ -1,8 +1,10 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
 import { NullEngine, Scene } from "@babylonjs/core";
-import { HIDEOUT_DECOR, buildHideoutDecor, clearHideoutDecor } from "./hideout";
+import { HIDEOUT_DECOR, SCREEN_SQUARE, hideoutFootprints } from "@exiled/content-runtime";
+import { buildHideoutDecor, clearHideoutDecor } from "./hideout";
 import { PROP_KINDS } from "./props";
+import { CAMERA_ALPHA } from "./engine";
 
 /**
  * The camera looks along the world diagonal, so a placement's world coordinates say
@@ -61,6 +63,34 @@ describe("hideout decor", () => {
         const b = HIDEOUT_DECOR[j]!;
         expect(Math.hypot(a.x - b.x, a.z - b.z), `${a.kind} vs ${b.kind}`).toBeGreaterThan(0.7);
       }
+    }
+  });
+
+  /**
+   * The decor list left the renderer so the sim can collide against it, and it
+   * took the camera angle with it as a literal. If the camera ever leans a
+   * different way, every long piece is turned across the frame instead of along
+   * it — and the table's collision discs with it.
+   */
+  it("is still composed against the camera the client actually uses", () => {
+    expect(SCREEN_SQUARE).toBeCloseTo(-CAMERA_ALPHA, 10);
+  });
+
+  /**
+   * Furniture the player bumps into has to be furniture that is drawn: a disc
+   * where nothing stands is an invisible wall, and both come from one list.
+   */
+  it("gives every solid piece a footprint that sits on it", () => {
+    const solid = HIDEOUT_DECOR.filter((d) => d.kind !== "rug");
+    const discs = hideoutFootprints();
+    expect(discs.length).toBeGreaterThanOrEqual(solid.length);
+    for (const disc of discs) {
+      const nearest = Math.min(...solid.map((d) => Math.hypot(d.x - disc.x, d.z - disc.z)));
+      expect(nearest).toBeLessThanOrEqual(0.7);
+    }
+    for (const d of solid) {
+      const nearest = Math.min(...discs.map((disc) => Math.hypot(d.x - disc.x, d.z - disc.z)));
+      expect(nearest, `${d.kind} has no footprint`).toBeLessThanOrEqual(0.7);
     }
   });
 

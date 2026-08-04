@@ -3,9 +3,9 @@ import { generateArea, type GrammarId } from "@exiled/mapgen";
 import { CONTENT_VERSION, mapBase } from "@exiled/content-runtime";
 import { mapBaseIdForNode } from "@exiled/rules";
 import { Simulation } from "../loop";
-import { gridCollision, type CollisionRef } from "../collision";
+import { type CollisionRef } from "../collision";
 import type { SessionC, MoveTarget, MoveDir, Position } from "../components";
-import { buildArea, HIDEOUT_SPAWN } from "../areas";
+import { areaCollision, buildArea, HIDEOUT_SPAWN } from "../areas";
 import { recomputePlayerStats } from "../derived";
 
 export function registerAreaTransition(sim: Simulation, collisionRef?: CollisionRef): void {
@@ -43,9 +43,11 @@ export function registerAreaTransition(sim: Simulation, collisionRef?: Collision
     );
     buildArea(world, newArea, newSession, layout, tick);
 
-    // Swap the shared level collision: walls on inside the map, off in the hideout.
+    // Swap the shared level collision: the map's walls, and in either area the
+    // furniture and shops `buildArea` just stood up. After it, never before —
+    // the containers it collides against are entities that call created.
     if (collisionRef) {
-      collisionRef.active = newArea === "map" ? gridCollision(layout.grid) : null;
+      collisionRef.active = areaCollision(world, newArea, layout);
     }
 
     // A map modifier can tax the player's resistances, and that tax is a

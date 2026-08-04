@@ -6,7 +6,7 @@ import {
 import { SKILLS, MONSTERS, rareTemplate, CONTENT_VERSION, ITEM_POOLS, baseOf, CURRENCY_DROPS, currencyItem, waystoneItem } from "@exiled/content-runtime";
 import { generateArea, type AreaLayout } from "@exiled/mapgen";
 import type { Item } from "@exiled/content-schema";
-import { gridCollision, type CollisionRef } from "./collision";
+import { type CollisionRef } from "./collision";
 import { fnv1a32 } from "./rng";
 import { stockVendor } from "./vendor";
 import { withPermanentWaystone, placeFirstFit } from "./inventory";
@@ -36,7 +36,7 @@ import { registerCurrencySystem } from "./systems/currency";
 import { registerAreaTransition } from "./systems/area-transition";
 import { registerFlaskSystem } from "./systems/flask";
 import { registerRevive } from "./systems/revive";
-import { buildArea, spawnMonster } from "./areas";
+import { areaCollision, buildArea, spawnMonster } from "./areas";
 
 export function createCombatSim(
   seed: number,
@@ -52,15 +52,14 @@ export function createCombatSim(
   const { world } = sim;
 
   // Generate the indoor layout (or accept an injected one — the boss golden and
-  // Phase D's areaTransition pass a pre-built layout). Collision is only wired
-  // for the "map" area; the hideout lab and legacy paths stay world-bounded.
+  // Phase D's areaTransition pass a pre-built layout). Only an area-based sim
+  // collides; the legacy path stays a world-bounded open plane.
   const layout = opts.layout ?? generateArea(seed, CONTENT_VERSION);
   // One mutable holder shared by every movement system AND the area-transition
-  // system, so walking hideout → map turns collision on mid-session (and off on
-  // the way back) without re-registering systems.
-  const collisionRef: CollisionRef = {
-    active: opts.area === "map" ? gridCollision(layout.grid) : null,
-  };
+  // system, so walking hideout → map swaps collision mid-session without
+  // re-registering systems. Filled in below, once buildArea has stood up the
+  // furniture and shops it also has to collide against.
+  const collisionRef: CollisionRef = { active: null };
 
   // ── Register systems in canonical order ──────────────────────────────────
   registerResourceRegen(sim);
@@ -143,6 +142,7 @@ export function createCombatSim(
       manaCharges: FLASK_MAX_CHARGES, manaMax: FLASK_MAX_CHARGES,
     });
     buildArea(world, opts.area, session, layout);
+    collisionRef.active = areaCollision(world, opts.area, layout);
 
     // New systems only needed for area-based sims. Appended to preserve the
     // canonical ordering of the first 12 systems (checked by legacy tests).

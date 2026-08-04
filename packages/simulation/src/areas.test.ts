@@ -1,11 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { generateArea } from "@exiled/mapgen";
 import { fp } from "@exiled/fixed-point";
-import { CONTENT_VERSION, MONSTERS, MONSTER_POOLS, PACK_COUNT, bossFor, mapBase } from "@exiled/content-runtime";
+import { CONTENT_VERSION, MONSTERS, MONSTER_POOLS, PACK_COUNT, bossFor, mapBase, hideoutFootprints } from "@exiled/content-runtime";
 import { mapBaseIdForNode, monsterTierScale } from "@exiled/rules";
 import type { MonsterDef } from "@exiled/content-schema";
 import { World, type Entity } from "./ecs.js";
-import { buildArea, spillContainer } from "./areas.js";
+import { areaCollision, buildArea, spillContainer, HIDEOUT_SPAWN } from "./areas.js";
+import { gridCollision } from "./collision.js";
 import type { SessionC, Health, MonsterC, Position, ContainerC } from "./components.js";
 
 function mapSessionAtTier(tier: number): SessionC {
@@ -210,5 +211,73 @@ describe("pool-driven spawning", () => {
     const pos = world.get<Position>(rares[0]!, "position")!;
     expect(pos.x).toBe(fp(last.x));
     expect(pos.y).toBe(fp(last.y));
+  });
+});
+
+describe("areaCollision", () => {
+  it("hideout: the furniture is solid and the arrival spot is not", () => {
+    const world = new World();
+    const session: SessionC = {
+      area: "hideout", atlasSeed: 0, mapSeed: 1, waystoneSeed: 0, areaTier: 0,
+      activeNodeId: "", completedNodes: [], portalsLeft: 0, mapOpen: 0, pendingArea: "",
+    };
+    const layout = generateArea(1, CONTENT_VERSION);
+    buildArea(world, "hideout", session, layout);
+    const col = areaCollision(world, "hideout", layout);
+
+    // Every drawn piece except the rug stops a body.
+    for (const f of hideoutFootprints()) {
+      expect(col.isWalkable(fp(f.x), fp(f.z), 0), `${f.x},${f.z}`).toBe(false);
+    }
+    // The rug is floor: it is the one thing standing where the player lands.
+    expect(col.isWalkable(HIDEOUT_SPAWN.x, HIDEOUT_SPAWN.y, fp(0.5))).toBe(true);
+    // The shops are objects too, and a portal is a doorway rather than an object.
+    expect(col.isWalkable(fp(-4.95), fp(-2.121), fp(0.5))).toBe(false);
+    expect(col.isWalkable(fp(2.121), fp(4.95), fp(0.5))).toBe(false);
+  });
+
+  it("map: a container is solid, and its walls are still walls", () => {
+    const { world, session, layout } = mapFixture({ mapSeed: 7 });
+    buildArea(world, "map", session, layout);
+    const col = areaCollision(world, "map", layout);
+    const bare = gridCollision(layout.grid);
+
+    const containers = world.query("container");
+    expect(containers.length).toBeGreaterThan(0);
+    for (const e of containers) {
+      const p = world.get<Position>(e, "position")!;
+      expect(bare.isWalkable(p.x, p.y, 0), "mapgen puts a container on floor").toBe(true);
+      expect(col.isWalkable(p.x, p.y, 0), "and it is not floor any more").toBe(false);
+      // One body-width clear of it and the floor is floor again.
+      expect(col.isWalkable(p.x + fp(1.4), p.y, 0) || col.isWalkable(p.x - fp(1.4), p.y, 0)).toBe(true);
+    }
+  });
+
+  /**
+   * The containers stand up after the generator picked where the fights are, so
+   * one could be dropped on a body — and a body inside a blocker cannot move in
+   * any direction for the rest of the run.
+   *
+   * Asked as a DELTA against the same layout's bare walls, not as an absolute:
+   * some sockets already hand a wide body a spot its own radius does not fit in
+   * (seed 3 stands a 0.85 boar in stone), which is the generator's business and
+   * older than any of this.
+   */
+  it("no body that could stand there before is walled in by the furniture", () => {
+    for (const mapSeed of [3, 7, 21, 99, 1234]) {
+      const { world, session, layout } = mapFixture({ mapSeed });
+      buildArea(world, "map", session, layout);
+      const col = areaCollision(world, "map", layout);
+      const bare = gridCollision(layout.grid);
+      for (const e of world.query("monster", "position")) {
+        const p = world.get<Position>(e, "position")!;
+        const m = world.get<MonsterC>(e, "monster")!;
+        const r = MONSTERS.get(m.defId)!.radiusFixed;
+        if (!bare.isWalkable(p.x, p.y, r)) continue;
+        expect(col.isWalkable(p.x, p.y, r), `seed ${mapSeed} monster ${m.defId}`).toBe(true);
+      }
+      const start = layout.objectiveAnchors.find((a) => a.id === "start")!;
+      expect(col.isWalkable(fp(start.x), fp(start.y), fp(0.5)), `seed ${mapSeed} start`).toBe(true);
+    }
   });
 });

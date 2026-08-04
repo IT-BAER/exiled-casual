@@ -165,8 +165,46 @@ export function hasLineOfSight(
   return reach.dx === dx && reach.dy === dy;
 }
 
+/**
+ * A standing object: furniture, a container, the map device. Round because a
+ * barrel is round and a table is close enough at this camera, and because a disc
+ * is the one shape the body disc can be tested against without an axis test.
+ *
+ * Kept apart from the wall grid rather than punched into it. The client builds
+ * its `wallrun-*` boxes from those same cells, so a blocked cell under a crate
+ * would grow a slab of biome masonry around it; and a 0.5-unit cell rounds a
+ * 0.4 barrel up to a metre of blocked floor or down to nothing.
+ */
+export interface Blocker {
+  x: Fixed;
+  y: Fixed;
+  /** Footprint radius, not the interact radius: what the body bumps into. */
+  r: Fixed;
+}
+
+/** True when the body disc at (x, y) overlaps any blocker. */
+function hitsBlocker(blockers: readonly Blocker[], x: Fixed, y: Fixed, bodyRadius: Fixed): boolean {
+  for (const b of blockers) {
+    const dx = x - b.x;
+    const dy = y - b.y;
+    const reach = b.r + bodyRadius;
+    if (dx * dx + dy * dy < reach * reach) return true;
+  }
+  return false;
+}
+
+/**
+ * Collision for an area that has furniture but no walls — the hideout, which is
+ * an open plate. No nav: nothing hunts there, and a BFS wants a bounded grid.
+ */
+export function blockerCollision(blockers: readonly Blocker[]): Collision {
+  return {
+    isWalkable: (x, y, bodyRadius) => !hitsBlocker(blockers, x, y, bodyRadius),
+  };
+}
+
 /** Adapt a mapgen walkable grid into a Collision (fixed-point → cell lookup). */
-export function gridCollision(grid: WalkableGrid): Collision {
+export function gridCollision(grid: WalkableGrid, blockers: readonly Blocker[] = []): Collision {
   // Grid geometry in fixed-point so the cell index is computed with integer
   // math on the sim's own Fixed coordinates (no per-call float drift).
   const ox = fp(grid.originX);
@@ -190,6 +228,9 @@ export function gridCollision(grid: WalkableGrid): Collision {
    */
   const isWalkable = (x: Fixed, y: Fixed, bodyRadius: Fixed): boolean => {
     if (!walkableAt(x, y)) return false;
+    // Inside the same function the nav flood is built from, so a monster routes
+    // around a crate rather than grinding on one it can see straight through.
+    if (blockers.length > 0 && hitsBlocker(blockers, x, y, bodyRadius)) return false;
     const r = bodyRadius;
     if (r <= 0) return true;
     const loX = Math.floor((x - r - ox) / cs);
