@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { ASSEMBLED_CELLS, assembleArea } from "./assemble-area";
 import { LOOP_GRAMMAR } from "./loop-grammar";
+import { STRAND_GRAMMAR } from "./strand-grammar";
 import { SPAWN_TARGET } from "./grid";
 import { AREA_TILES } from "./skeleton";
 
@@ -177,5 +178,63 @@ describe("assembleArea", () => {
     const proofs = new Set<string>();
     for (let seed = 0; seed < 20; seed++) proofs.add(gen(seed).chosenVariantIds.join("|"));
     expect(proofs.size).toBeGreaterThan(15);
+  });
+});
+
+/**
+ * The strand draws the field's chunks on a ribbon instead of a loop, so the only
+ * thing that can break is the seam between the two: every gate the loop passes
+ * has to pass on a route that never closes.
+ */
+describe("assembleArea, strand", () => {
+  const strand = (seed: number) => assembleArea(seed, V, STRAND_GRAMMAR);
+
+  it("never returns an invalid layout: 200 seeds all pass every gate", () => {
+    for (let seed = 0; seed < 200; seed++) {
+      expect(strand(seed).validationChecks.every((c) => c.passed), `seed ${seed}`).toBe(true);
+    }
+  });
+
+  it("assembles rather than falling back for the overwhelming majority of seeds", () => {
+    let assembled = 0;
+    for (let seed = 0; seed < 200; seed++) if (!strand(seed).usedFallback) assembled++;
+    expect(assembled).toBeGreaterThan(190);
+  });
+
+  // No seam test here, unlike the loop's: `organicRim` carves the boundary after
+  // the chunks are stamped, so a wall facing floor across a tile seam is what an
+  // eroded edge IS. open-field breaks that same rule 5406 times in 50 seeds.
+
+  it("stands the player somewhere a body fits", () => {
+    for (let seed = 0; seed < 60; seed++) {
+      const layout = strand(seed);
+      if (layout.usedFallback) continue;
+      const { grid } = layout;
+      const start = layout.objectiveAnchors.find((a) => a.id === "start")!;
+      const cx = Math.round((start.x - grid.originX) / grid.cellSize);
+      const cy = Math.round((start.y - grid.originY) / grid.cellSize);
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          expect(grid.cells[(cy + dy) * grid.cols + (cx + dx)],
+            `seed ${seed}: wall at ${dx},${dy} of the start cell`).toBe(1);
+        }
+      }
+    }
+  });
+
+  it("walks the player the length of the shore to reach the boss", () => {
+    // The point of the ribbon. On the loop the boss sits across a ring the
+    // player can reach either way around; here it is at the far end, so the
+    // straight-line distance from the door is most of the map's own width.
+    let worst = Infinity;
+    for (let seed = 0; seed < 50; seed++) {
+      const layout = strand(seed);
+      if (layout.usedFallback) continue;
+      const start = layout.objectiveAnchors.find((a) => a.id === "start")!;
+      const boss = layout.objectiveAnchors.find((a) => a.id === "boss")!;
+      worst = Math.min(worst, Math.hypot(boss.x - start.x, boss.y - start.y));
+    }
+    // The area is 72 units across; half of that as the crow flies is a walk.
+    expect(worst).toBeGreaterThan(36);
   });
 });

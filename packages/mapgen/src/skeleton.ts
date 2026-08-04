@@ -97,24 +97,120 @@ function bfs(masks: Uint8Array, start: TileXY): Uint8Array {
 const rimScore = (t: TileXY): number =>
   Math.max(Math.abs(t.tx - (N - 1) / 2), Math.abs(t.ty - (N - 1) / 2));
 
-export function generateSkeleton(rng: RandomStream, branchCount: number): Skeleton | null {
-  // 1. A rectangle ring, deformed by bulges into an irregular closed loop.
-  const x0 = rng.nextInt(0, 1), x1 = rng.nextInt(N - 2, N - 1);
-  const y0 = rng.nextInt(0, 1), y1 = rng.nextInt(N - 2, N - 1);
-  const loop = ringCycle(x0, y0, x1, y1);
-  const bulges = rng.nextInt(3, 6);
-  for (let k = 0; k < bulges; k++) bulge(loop, rng);
+/**
+ * A closed cycle, or one walk from one edge of the lattice to the far one.
+ *
+ * The ribbon is PoE's Strand and Beach: "fairly linear, following the shoreline
+ * will lead to the Boss Arena", "a single broad corridor". A loop with the wrap
+ * edge dropped is not the same thing — that leaves the start in the middle of a
+ * bent line with half the map behind it — so the walk is generated as a walk.
+ */
+export type RouteShape = "loop" | "ribbon";
+
+/**
+ * Weight of a sideways step against the one step forward.
+ *
+ * This is the meander, and it is the whole shape: at 1 the shore is a ruler, and
+ * the two lateral options between them outvote forward 2:1 here, so the walk
+ * wanders about two tiles across for every one it advances. It is also what makes
+ * the ribbon long enough to be a map — straight, it would cross the lattice in
+ * seven tiles.
+ */
+const RIBBON_MEANDER = 2;
+
+/** Shorter than this is a puddle, not a shore; the walk is redrawn instead. */
+const RIBBON_MIN_TILES = 14;
+
+/** Redraws before giving up and letting the caller fall back. */
+const RIBBON_TRIES = 80;
+
+/**
+ * A self-avoiding walk across the lattice, never stepping back the way it came.
+ *
+ * It stops three tiles short of the far edge rather than on it, which is what
+ * reserves a clear 2x2 for the boss at the END of the shore. Stopping on the far
+ * edge leaves one free row, a 2x2 needs two, and the block would then be placed
+ * beside some middle tile instead — a boss you walk past on the way out.
+ */
+function ribbonPath(rng: RandomStream): TileXY[] | null {
+  for (let attempt = 0; attempt < RIBBON_TRIES; attempt++) {
+    const travel = rng.nextInt(0, 3);
+    const [fx, fy] = DIR_VEC[travel]!;
+    const forwards = fx + fy > 0;
+    const along = (t: TileXY): number => (fx !== 0 ? t.tx : t.ty);
+    const lateral = rng.nextInt(0, N - 1);
+    const startAlong = forwards ? 0 : N - 1;
+    const goalAlong = forwards ? N - 3 : 2;
+
+    let cur: TileXY = fx !== 0
+      ? { tx: startAlong, ty: lateral }
+      : { tx: lateral, ty: startAlong };
+    const path: TileXY[] = [cur];
+    const seen = new Set([idx(cur.tx, cur.ty)]);
+
+    while (along(cur) !== goalAlong) {
+      // Forward and the two sides, never the way back: without that the walk can
+      // fold onto its own approach and the "linear" reading is gone.
+      const options: { t: TileXY; w: number }[] = [];
+      for (const [d, w] of [[travel, 1], [(travel + 1) % 4, RIBBON_MEANDER],
+        [(travel + 3) % 4, RIBBON_MEANDER]] as const) {
+        const t = { tx: cur.tx + DIR_VEC[d]![0], ty: cur.ty + DIR_VEC[d]![1] };
+        if (!inBounds(t.tx, t.ty) || seen.has(idx(t.tx, t.ty))) continue;
+        options.push({ t, w });
+      }
+      if (options.length === 0) break; // walked itself into a corner; redraw
+      let roll = rng.nextInt(0, options.reduce((s, o) => s + o.w, 0) - 1);
+      let next = options[options.length - 1]!.t;
+      for (const o of options) {
+        roll -= o.w;
+        if (roll < 0) { next = o.t; break; }
+      }
+      cur = next;
+      path.push(cur);
+      seen.add(idx(cur.tx, cur.ty));
+    }
+
+    if (along(cur) === goalAlong && path.length >= RIBBON_MIN_TILES) return path;
+  }
+  return null;
+}
+
+export function generateSkeleton(
+  rng: RandomStream,
+  branchCount: number,
+  shape: RouteShape = "loop",
+): Skeleton | null {
+  // 1. The route: a rectangle ring deformed by bulges, or a walk across.
+  let loop: TileXY[];
+  if (shape === "ribbon") {
+    const path = ribbonPath(rng);
+    if (!path) return null;
+    loop = path;
+  } else {
+    const x0 = rng.nextInt(0, 1), x1 = rng.nextInt(N - 2, N - 1);
+    const y0 = rng.nextInt(0, 1), y1 = rng.nextInt(N - 2, N - 1);
+    loop = ringCycle(x0, y0, x1, y1);
+    const bulges = rng.nextInt(3, 6);
+    for (let k = 0; k < bulges; k++) bulge(loop, rng);
+  }
 
   const masks = new Uint8Array(N * N);
-  for (let i = 0; i < loop.length; i++) connect(masks, loop[i]!, loop[(i + 1) % loop.length]!);
+  for (let i = 0; i + 1 < loop.length; i++) connect(masks, loop[i]!, loop[i + 1]!);
+  if (shape !== "ribbon") connect(masks, loop[loop.length - 1]!, loop[0]!);
 
   const onRoute = new Set(loop.map((t) => idx(t.tx, t.ty)));
 
-  // 2. Start: any loop tile on the outermost occupied ring. The player arrives
-  //    by portal, so this is a marker inside a tile, not a door in the outer wall.
-  const best = Math.max(...loop.map(rimScore));
-  const rim = loop.filter((t) => rimScore(t) === best);
-  const startTile = rim[rng.nextInt(0, rim.length - 1)]!;
+  // 2. Start: the ribbon's own first tile, or for a loop any tile on the
+  //    outermost occupied ring. The player arrives by portal, so this is a
+  //    marker inside a tile, not a door in the outer wall.
+  let startTile: TileXY;
+  if (shape === "ribbon") {
+    startTile = loop[0]!;
+  } else {
+    const best = Math.max(...loop.map(rimScore));
+    const rim = loop.filter((t) => rimScore(t) === best);
+    startTile = rim[rng.nextInt(0, rim.length - 1)]!;
+  }
 
   // 3. Boss: a free 2x2 block hung off the loop tile farthest by route. This
   //    runs BEFORE the spurs, because the block is mandatory and needs the most
@@ -168,6 +264,10 @@ export function generateSkeleton(rng: RandomStream, branchCount: number): Skelet
   for (let b = 0; b < branchCount; b++) {
     const candidates: [TileXY, TileXY][] = [];
     for (const t of loop) {
+      // Never off a ribbon's first tile: the entrance is the one place the
+      // single-corridor reading has to be established, and a fork there is a
+      // choice before the player has seen the shore.
+      if (shape === "ribbon" && t === startTile) continue;
       for (const [dx, dy] of DIR_VEC) {
         const n = { tx: t.tx + dx, ty: t.ty + dy };
         if (!inBounds(n.tx, n.ty) || onRoute.has(idx(n.tx, n.ty))) continue;

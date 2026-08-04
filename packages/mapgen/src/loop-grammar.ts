@@ -7,6 +7,7 @@
 // chunks.ts. Caps are the dead ends, so they carry the reward markers.
 import { assertAuthored, type Chunk } from "./chunks";
 import { SPAWN_TARGET } from "./grid";
+import type { RouteShape } from "./skeleton";
 
 export interface Grammar {
   id: string;
@@ -25,6 +26,14 @@ export interface Grammar {
    * field grammar asks for this and the loop grammar does not.
    */
   organicRim?: boolean;
+  /**
+   * How the route is drawn on the tile lattice. Default "loop".
+   *
+   * The one place a grammar is more than a chunk library: a closed cycle and a
+   * walk from edge to edge are different SHAPES, not different chunk sets, and
+   * PoE's Strand ("follow the shoreline to the Boss Arena") is the second.
+   */
+  routeShape?: RouteShape;
 }
 
 export type MaskClass = "solid" | "cap" | "straight" | "corner" | "tee" | "cross";

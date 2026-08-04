@@ -673,7 +673,7 @@ export const BIOME_IDS = ["vaal_stone", "desert", "swamp", "forest"] as const;
 export type BiomeId = (typeof BIOME_IDS)[number];
 
 /** Which chunk library and branch count an area is assembled from. */
-export const LAYOUT_GRAMMAR_IDS = ["loop", "open-field", "sunken-ruins"] as const;
+export const LAYOUT_GRAMMAR_IDS = ["loop", "open-field", "sunken-ruins", "strand"] as const;
 export type LayoutGrammarId = (typeof LAYOUT_GRAMMAR_IDS)[number];
 
 export interface Biome {

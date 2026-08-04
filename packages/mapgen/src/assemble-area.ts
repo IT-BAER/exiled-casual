@@ -144,6 +144,7 @@ export function assembleArea(seed: number, contentVersion: string, grammar: Gram
   const skeleton = generateSkeleton(
     createStream(seed, `${contentVersion}.layout.skeleton`),
     grammar.branchCount,
+    grammar.routeShape,
   );
   if (!skeleton) return fallbackLayout(seed, contentVersion, grammar.spawnTarget);
 
