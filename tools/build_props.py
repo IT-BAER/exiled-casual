@@ -345,17 +345,53 @@ def decimate_to(obj, target):
         bpy.ops.object.modifier_apply(modifier=m.name)
 
 
-def asset_material(name, image_name, gain, roughness):
-    """A textured_material built from an image PACKED in an appended .blend."""
+LUMA = numpy.array([0.299, 0.587, 0.114], dtype=numpy.float32)
+# How much of each end to discard when reading a palette or normalising into it:
+# a jpeg's darkest and brightest 2% are compression speckle, and letting them
+# define the ends maps the whole texture into the middle of the ramp.
+PALETTE_CLIP = 0.02
+
+
+def _palette_ramp(path, steps=256):
+    """256 colours sampled from an image's own pixels by luminance percentile."""
+    img = bpy.data.images.load(path)
+    px = numpy.empty(len(img.pixels), dtype=numpy.float32)
+    img.pixels.foreach_get(px)
+    rgb = px.reshape(-1, 4)[:, :3].copy()
+    bpy.data.images.remove(img)
+    order = numpy.argsort(rgb @ LUMA)
+    lo = int(len(order) * PALETTE_CLIP)
+    pick = numpy.linspace(lo, len(order) - 1 - lo, steps).astype(numpy.int32)
+    return rgb[order[pick]]
+
+
+def asset_material(name, image_name, gain, roughness, palette=None):
+    """A textured_material built from an image PACKED in an appended .blend.
+
+    `palette` re-dresses the texture in another one's colours: the source is
+    normalised across its own luminance span and looked up in a ramp sampled
+    from the palette image, so it keeps every plank, nail and scratch it was
+    authored with and wears the other asset's tone and saturation. Same trick as
+    tools/build_gear_textures.py. A flat gain cannot do this job — two assets
+    downloaded from different authors differ in how saturated and how bright
+    their wood is, and scaling one until it is dark enough leaves it a
+    washed-out version of the other's colour.
+    """
     img = bpy.data.images.get(image_name)
     if img is None:
         sys.exit("appended asset carries no image named " + image_name)
     img.scale(TEX_SIZE, TEX_SIZE)
-    if gain != 1.0:
+    if gain != 1.0 or palette:
         px = numpy.empty(len(img.pixels), dtype=numpy.float32)
         img.pixels.foreach_get(px)
         rgb = px.reshape(-1, 4)[:, :3]
         numpy.clip(rgb * gain, 0.0, 1.0, out=rgb)
+        if palette:
+            ramp = _palette_ramp(palette)
+            lum = rgb @ LUMA
+            span = numpy.quantile(lum, (PALETTE_CLIP, 1.0 - PALETTE_CLIP))
+            t = numpy.clip((lum - span[0]) / max(span[1] - span[0], 1e-6), 0.0, 1.0)
+            rgb[:] = ramp[(t * (len(ramp) - 1)).astype(numpy.int32)]
         img.pixels.foreach_set(px)
     dst = os.path.join(BUILD_DIR, name + ".jpg")
     img.save_render(filepath=dst, scene=bpy.context.scene)
@@ -509,7 +545,7 @@ STASH_BUDGET = {
 }
 
 
-def build_appended(name, mat_name, blend_name, budgets, image, gain, roughness, width, renames=None):
+def build_appended(name, mat_name, blend_name, budgets, image, gain, roughness, width, renames=None, palette=None):
     """Append a downloaded asset, cut it to budget, re-dress it and stand it up.
 
     One carrier scales the whole asset to `width` across its LONGEST horizontal
@@ -527,7 +563,7 @@ def build_appended(name, mat_name, blend_name, budgets, image, gain, roughness, 
     root.rotation_euler = (0.0, 0.0, math.pi)
 
     parts = append_objects(blend_name, list(budgets))
-    mat = asset_material(mat_name, image, gain=gain, roughness=roughness)
+    mat = asset_material(mat_name, image, gain=gain, roughness=roughness, palette=palette)
     for obj in parts:
         decimate_to(obj, budgets[obj.name])
         obj.data.materials.clear()
@@ -668,9 +704,17 @@ def build_crate():
     # Both of these are authored for a lit studio render, so they arrive far
     # brighter than the chests: at the chests' 1.35 the crate was bare pine and
     # the barrel's head was clipped to flat white.
+    #
+    # Dimming alone did not save the crate: at 0.62 it still measured twice the
+    # barrel's brightness at 1.7x its saturation, and stood in the hideout as
+    # blond pine beside stained oak. It wears the barrel's palette instead — the
+    # two stand together on the same reward anchors, so the barrel is the
+    # reference, and BUILD_DIR holds its finished texture because main() builds
+    # it first.
     return build_appended(
         "crate", "crate_wood", "crate.blend", CRATE_BUDGET,
-        "Low_BaseColor.jpg", gain=0.62, roughness=0.85, width=CRATE_W,
+        "Low_BaseColor.jpg", gain=1.0, roughness=0.85, width=CRATE_W,
+        palette=os.path.join(BUILD_DIR, "barrel_wood.jpg"),
     )
 
 
@@ -832,8 +876,8 @@ def main():
     build_rug(mats)
     build_table(mats)
     build_bench(mats)
+    build_barrel()  # before the crate: the crate is palettized onto its texture
     build_crate()
-    build_barrel()
     build_pillar(mats)
     build_brazier(mats)
 
