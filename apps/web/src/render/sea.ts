@@ -61,11 +61,23 @@ let WET_UNITS = 0.35;
 /** Vertex tint at the shallow and deep ends of that ramp. Multiplies the
  *  material's own albedo, so these are ratios and not colours: warm and pale
  *  over wet sand, cold and dark once the bottom is gone. */
-let SHALLOW_TINT: [number, number, number] = [3.8, 3.4, 2.6];
+let SHALLOW_TINT: [number, number, number] = [2.7, 2.5, 1.9];
 let DEEP_TINT: [number, number, number] = [0.85, 1.2, 1.15];
 
 /** White added at the surf line, on top of the tint. */
 let FOAM_ADD = 8;
+
+/** Swell: faint lines of brighter water running PARALLEL to the shore, every
+ *  `SWELL_PITCH` metres out. Both references show them — water arrives in
+ *  ranks, and without them the shallows are one flat wash of colour no matter
+ *  how good the normal map is. Amplitude is deliberately small; this is a tone,
+ *  not a stripe. */
+const SWELL_PITCH = 3.1;
+const SWELL_ADD = 0.16;
+/** Metres over which the swell fades IN going out to sea. Without it the first
+ *  crest lands on top of the surf band and widens it into one pale wash — the
+ *  ranks belong outside the break, not on it. */
+const SWELL_FADE_IN = 4.5;
 
 /** A second, weaker line of broken water further out. Real surf has more than
  *  one breaker, and the reference shows two before the water goes flat; one
@@ -98,7 +110,9 @@ const DETAIL_SPEED_V = 0.017;
 /** The water's own albedo, BEFORE the shallow-to-deep vertex tint above
  *  multiplies it. Held low and slightly green so the shallow end lands on the
  *  reference's wet tan and the deep end on its grey-green, from one material. */
-const SEA_COLOR = new Color3(0.09, 0.13, 0.11);
+// Khaki rather than green: PoE1's beach water is the colour of stirred sand,
+// and a green base under the shallow tint came out as pond.
+const SEA_COLOR = new Color3(0.13, 0.125, 0.09);
 const SEA_ROUGHNESS = 0.2;
 /** Opaque, except where the vertex alpha fades it out at the shore. It was
  *  0.82, and at that value the sand under the water showed through everywhere
@@ -192,7 +206,7 @@ const SHORE_BANDS = [
   // in `reference-screenshots/beach-map.jpg` it is as wide as the surf itself.
   -2.4, -1.6, -1.0, -0.5,
   // The surf and the shallows.
-  0, 0.2, 0.45, 0.7, 0.95, 1.25, 1.6, 2.1, 2.8, 4, 6,
+  0, 0.2, 0.45, 0.7, 0.95, 1.25, 1.6, 2.1, 2.6, 3.1, 3.7, 4.4, 5.2, 6.1, 7,
   // The second breaker, then open water.
   8.5, 11, 14, 22, 34, SKIRT_REACH,
 ];
@@ -234,6 +248,7 @@ function shoreColor(
   cellSize: number,
   at = FOAM_AT,
   gain = 1,
+  phase = 0,
 ): [number, number, number, number] {
   // Inland of the waterline this is not water at all: it is the wet sand the
   // last wave left, drawn as a dark multiply over the beach. Alpha rises again
@@ -248,10 +263,14 @@ function shoreColor(
   const t = (d - at) / FOAM_WIDTH;
   const b = (d - BREAKER_AT) / BREAKER_WIDTH;
   const foam = Math.exp(-t * t) * FOAM_ADD * gain + Math.exp(-b * b) * BREAKER_ADD * gain;
+  // Swell rides on top, fading out as the water deepens: ranks are a shallow
+  // -water read, and out where the bottom is gone there is nothing to shape them.
+  const swell = Math.sin((d / SWELL_PITCH) * Math.PI * 2 + phase) * SWELL_ADD *
+    (1 - deep) * Math.min(1, d / SWELL_FADE_IN);
   return [
-    SHALLOW_TINT[0] + (DEEP_TINT[0] - SHALLOW_TINT[0]) * deep + foam,
-    SHALLOW_TINT[1] + (DEEP_TINT[1] - SHALLOW_TINT[1]) * deep + foam,
-    SHALLOW_TINT[2] + (DEEP_TINT[2] - SHALLOW_TINT[2]) * deep + foam,
+    SHALLOW_TINT[0] + (DEEP_TINT[0] - SHALLOW_TINT[0]) * deep + foam + swell,
+    SHALLOW_TINT[1] + (DEEP_TINT[1] - SHALLOW_TINT[1]) * deep + foam + swell,
+    SHALLOW_TINT[2] + (DEEP_TINT[2] - SHALLOW_TINT[2]) * deep + foam + swell,
     // Zero at and inside the waterline: the edge of the water is a gradient with
     // no geometry in it, so there is nothing to stair-step.
     Math.min(1, Math.max(0, outUnits) / WET_UNITS),
@@ -292,6 +311,8 @@ function buildShoreSea(scene: Scene, grid: WalkableGrid, shore: Shoreline): SeaR
     // real one does instead of shimmering per vertex.
     const at_ = FOAM_AT + (wobble(Math.floor(i / 7), 1) - 0.5) * 0.5;
     const gain_ = 0.55 + wobble(Math.floor(i / 5), 2) * 0.75;
+    // The swell bends with the shore rather than running dead straight down it.
+    const phase_ = wobble(Math.floor(i / 11), 3) * Math.PI * 2;
     for (const band of SHORE_BANDS) {
       const cross = c + shore.seaSide * band;
       const px = shore.along === "x" ? a : cross;
@@ -299,7 +320,7 @@ function buildShoreSea(scene: Scene, grid: WalkableGrid, shore: Shoreline): SeaR
       positions.push(px, SEA_Y, pz);
       normals.push(0, 1, 0);
       uvs.push(px / WAVE_TILE, pz / WAVE_TILE);
-      colors.push(...shoreColor(band, cellSize, at_, gain_));
+      colors.push(...shoreColor(band, cellSize, at_, gain_, phase_));
     }
   }
 

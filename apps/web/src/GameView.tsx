@@ -35,7 +35,7 @@ import type { FrameHook, Projector } from "./hud/LootLabels";
 import type { AreaLayout } from "@exiled/mapgen";
 import { BIOMES, mapBase } from "@exiled/content-runtime";
 import type { Snapshot, FromWorker, ToWorker } from "@exiled/protocol";
-import { atlasGraph } from "@exiled/rules";
+import { atlasGraph, atlasNodeTier, isNodeReachable, mapBaseIdForNode } from "@exiled/rules";
 
 const LAB_SEED = 42;
 // ponytail: fixed seed for the lab; M3 will thread seed from game state
@@ -287,7 +287,19 @@ export function GameView({
       if (params.has("map")) harness = params.get("map") ? "activate" : "panel";
     }
     let harnessTicks = 0;
+    /**
+     * Snapshots to let pass before the harness touches anything.
+     *
+     * The worker answers `init` by starting the clock AND kicking off an async
+     * `hydrate()` that restores the saved session. Snapshots flow in between: an
+     * activateMap accepted in that window is applied to a session the restore
+     * then overwrites, so the map opens and is silently forgotten. Every symptom
+     * of that is invisible from here — the intent is valid, the sim accepts it,
+     * and the hideout just sits there.
+     */
+    const HARNESS_SETTLE_TICKS = 45;
     const harnessStep = (snap: Snapshot): void => {
+      if (harnessTicks++ < HARNESS_SETTLE_TICKS) return;
       if (harness === "panel") {
         if (snap.entities.some((e) => e.kind === "mapDevice")) {
           setPanelOpen(true);
@@ -301,20 +313,47 @@ export function GameView({
           return;
         }
         const wanted = `node.${new URLSearchParams(window.location.search).get("map")}`;
-        // The LOWEST tier in the bag, not tier 1 specifically: the harness is for
-        // looking at a place, and after a couple of runs there is no tier 1 left
-        // — it used to sit there forever waiting for a stone that was spent.
-        const stone = [...snap.inventory.items]
-          .filter((i) => i.baseId === "map.waystone" && i.waystone)
-          .sort((a, b) => (a.waystone!.tier - b.waystone!.tier))[0];
-        if (!stone) return;
-        const node = atlasGraph(snap.atlasSeed).find((n) => n.id === wanted);
-        if (!node) {
-          console.warn(`?map: no node "${wanted}"; have`, atlasGraph(snap.atlasSeed).map((n) => n.id));
+        // Which PLACE the URL asks for, and a stone good enough to open it.
+        //
+        // Both halves need care because the Atlas is seeded PER CHARACTER. The
+        // node named on the URL is often unreachable (the sim refuses, silently
+        // from here), and a reachable node of the same base may sit further out
+        // than a Tier 1 stone can open — the two rules together are why this
+        // harness used to strand itself in the hideout after a couple of runs.
+        const graph = atlasGraph(snap.atlasSeed);
+        const exact = graph.find((n) => n.id === wanted);
+        if (!exact) {
+          console.warn(`?map: no node "${wanted}"; have`, graph.map((n) => n.id));
           harness = "done";
           return;
         }
-        workerRef.current?.postMessage({
+        const base = mapBaseIdForNode(exact.id);
+        const stones = snap.inventory.items
+          .filter((i) => i.baseId === "map.waystone" && i.waystone)
+          .sort((a, b) => a.waystone!.tier - b.waystone!.tier);
+        if (stones.length === 0) return;
+        const candidates = [exact, ...graph.filter((n) => n.id !== exact.id)]
+          .filter((n) =>
+            mapBaseIdForNode(n.id) === base &&
+            isNodeReachable(graph, snap.completedNodes, n.id) &&
+            !snap.completedNodes.includes(n.id))
+          .sort((a, b) => atlasNodeTier(graph, a.id) - atlasNodeTier(graph, b.id));
+        const node = candidates.find((n) =>
+          stones.some((st) => st.waystone!.tier >= atlasNodeTier(graph, n.id)));
+        if (!node) {
+          console.warn(`?map: no reachable "${base}" node this character can open`);
+          harness = "done";
+          return;
+        }
+        const stone = stones.find((st) => st.waystone!.tier >= atlasNodeTier(graph, node.id))!;
+        console.info("?map: opening", node.id, "tier", atlasNodeTier(graph, node.id), "with stone tier", stone.waystone!.tier);
+        // `worker`, not `workerRef.current`: this runs from THIS worker's own
+        // message handler, and under StrictMode the ref has already been
+        // repointed (or nulled by the first mount's cleanup) by the time a
+        // snapshot arrives. `?.` then swallowed the whole intent, which is why
+        // the harness sat in the hideout with a perfectly good Waystone in the
+        // bag and nothing in the console.
+        worker.postMessage({
           type: "intent",
           intent: { kind: "activateMap", atlasNodeId: node.id, x: stone.x, y: stone.y },
         } satisfies ToWorker);
@@ -324,7 +363,7 @@ export function GameView({
         // in behind the loading fade, where an intent can land before the sim
         // is taking them. The area handler below ends it when the map arrives.
         const portal = snap.entities.find((e) => e.kind === "portal");
-        if (portal && harnessTicks++ % 30 === 0) approach(portal.id, portal.x, portal.y);
+        if (portal && harnessTicks % 30 === 0) approach(portal.id, portal.x, portal.y);
       }
     };
 
