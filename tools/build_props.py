@@ -627,6 +627,15 @@ DRIFTWOOD_W = 2.1
 SHELL_W = 0.34
 DRIFTWOOD_BUDGET = {"3DModel_Custom": 520}
 SHELL_BUDGET = {"seashell": 160}
+# Poly Haven's coast rock (cc_zero): ochre stone with wet hollows and green
+# algae in the cracks, which is the one thing the biome's grey wall plate cannot
+# give a WATERLINE — `reference-screenshots/strand-map-layout.jpg` fringes its
+# whole coast in that colour. LOD3 is the smallest the pack ships and still
+# ninety-six thousand polys.
+COAST_ROCK_W = 1.9
+# 1500, not 700: at 700 a three-metre scan collapses into a faceted plate,
+# and a flat top under a 2.4x beach sun blows to white.
+COAST_ROCK_BUDGET = {"coast_rocks_05_LOD3": 1500}
 
 
 def build_driftwood():
@@ -636,6 +645,17 @@ def build_driftwood():
         # and the scan was lit warm.
         "3DModel_Custom.jpg", gain=1.05, roughness=0.85, width=DRIFTWOOD_W,
         renames={"3DModel_Custom": "driftwood_log"},
+    )
+
+
+def build_coast_rock():
+    return build_appended(
+        "coastRock", "coast_rock", "coast_rocks_05.blend", COAST_ROCK_BUDGET,
+        # Gain well under 1: every other prop here is lit by torches, this one
+        # stands in open daylight at 2.4x, and the scan was already exposed for
+        # a bright day.
+        "coast_rocks_05_diff.png", gain=0.5, roughness=0.85, width=COAST_ROCK_W,
+        renames={"coast_rocks_05_LOD3": "coastRock_body"},
     )
 
 
@@ -910,6 +930,7 @@ def main():
     build_loot_chest()
     build_driftwood()
     build_shell()
+    build_coast_rock()
     build_rug(mats)
     build_table(mats)
     build_bench(mats)

@@ -272,6 +272,12 @@ const SHELL_COUNT = 26;
 const SHELL_BAND: [number, number] = [0.4, 3.2];
 const DRIFTWOOD_COUNT = 9;
 const DRIFTWOOD_BAND: [number, number] = [1.5, 9];
+/** Outcrops standing IN the surf. Negative reach means seaward of the
+ *  waterline: the water is transparent for its first metre, so a rock there
+ *  reads as standing in it — which is what both references have along the whole
+ *  coast, and what the biome's grey wall stone can never look like. */
+const COAST_ROCK_COUNT = 7;
+const COAST_ROCK_BAND: [number, number] = [-3.0, 0.4];
 
 /**
  * Dress a coast: shells along the tide line, driftwood up the beach.
@@ -301,17 +307,23 @@ function dressBeach(scene: Scene, grid: WalkableGrid): void {
     return cells[cy * cols + cx] === 1;
   };
 
-  const place = (kind: "shell" | "driftwood", count: number, band: [number, number]): void => {
+  const place = (
+    kind: "shell" | "driftwood" | "coastRock",
+    count: number,
+    band: [number, number],
+  ): void => {
     for (let i = 0; i < count; i++) {
       // Spread along the shore, then a step inland from the waterline at that
       // sample. Landward is the opposite of the sea side, by definition.
-      const s = Math.floor(((i + rnd(i, kind === "shell" ? 3 : 4) * 0.7) / count) * (n - 1));
+      const salt = kind === "shell" ? 3 : kind === "driftwood" ? 4 : 10;
+      const s = Math.floor(((i + rnd(i, salt) * 0.7) / count) * (n - 1));
       const along = shore.start + s * shore.step;
-      const inland = band[0] + rnd(i, kind === "shell" ? 5 : 6) * (band[1] - band[0]);
+      const inland = band[0] + rnd(i, salt + 2) * (band[1] - band[0]);
       const cross = shore.cross[s]! - shore.seaSide * inland;
       const wx = shore.along === "x" ? along : cross;
       const wz = shore.along === "x" ? cross : along;
-      if (!isFloorAt(wx, wz)) continue;
+      // A rock in the water has no floor cell under it, and that is the point.
+      if (kind !== "coastRock" && !isFloorAt(wx, wz)) continue;
       const root = new Mesh(`${BEACH_PROP_PREFIX}${kind}-${i}`, scene);
       root.position.set(wx, 0, wz);
       root.rotation.y = rnd(i, 7) * Math.PI * 2;
@@ -324,6 +336,15 @@ function dressBeach(scene: Scene, grid: WalkableGrid): void {
       // reference has lying about.
       const fat = kind === "driftwood" ? 2.4 : 1;
       root.scaling.set(k, k * fat, k * fat);
+      if (kind === "coastRock") {
+        // Barely sunk, and tilted: the scan is a flat plate of rock, so lying it
+        // dead level under a quarter metre of water left a pale slab floating in
+        // the shallows. Tipped and mostly proud of the surface it reads as an
+        // outcrop the tide runs around.
+        root.position.y = -0.05 - rnd(i, 12) * 0.15;
+        root.rotation.x = (rnd(i, 13) - 0.5) * 0.5;
+        root.rotation.z = (rnd(i, 14) - 0.5) * 0.5;
+      }
       if (kind === "shell") root.rotation.z = (rnd(i, 9) - 0.5) * 0.7;
       root.isPickable = false;
       if (attachProp(scene, root, kind) === null) {
@@ -339,6 +360,7 @@ function dressBeach(scene: Scene, grid: WalkableGrid): void {
 
   place("shell", SHELL_COUNT, SHELL_BAND);
   place("driftwood", DRIFTWOOD_COUNT, DRIFTWOOD_BAND);
+  place("coastRock", COAST_ROCK_COUNT, COAST_ROCK_BAND);
 }
 
 /**
