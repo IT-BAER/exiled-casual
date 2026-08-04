@@ -50,24 +50,52 @@ const TURN_FOR_DISTANCE: Fixed = fp(1);
 export const MAX_AUTO_ROUTE_DISTANCE: Fixed = fp(5);
 
 /**
- * Where to walk THIS tick to end up at (tx, ty): the target itself while the line
- * to it is clear, and the next waypoint of the route around otherwise.
+ * How far up the line to the target an obstruction has to be before the walk
+ * bends around it.
+ *
+ * MAX_AUTO_ROUTE_DISTANCE says WHETHER a trip is worth routing at all; this says
+ * WHEN, inside a trip already worth it, the bend starts. Without it the route was
+ * taken from the first tick, so a body leaned off the line the moment the mouse
+ * went down — dodging something the player cannot see yet, and in a furnished room
+ * that is most clicks.
+ *
+ * Two metres is a stride or two: comfortably outside the turning circle (about 0.8
+ * units across), so he banks into the way around instead of pivoting on the
+ * barrel's face, and close enough that the bend reads as a response to the
+ * obstacle rather than a plan made at the door.
+ */
+const ROUTE_LOOKAHEAD: Fixed = fp(2);
+
+/**
+ * Where to walk THIS tick to end up at (tx, ty): the target itself while the way
+ * ahead is clear, and the next waypoint of the route around otherwise.
  *
  * The same one-controller-per-journey rule the monsters use (`chaseStep`): the
- * question is geometric and about the whole trip, so its answer changes once, when
- * the body rounds the corner. Anything that flips per tick makes a body judder
- * against the wall it is passing. An open floor answers "the target" every tick
- * and is byte-identical to the walk that shipped before routing existed.
+ * question is geometric, so its answer changes once, when the body rounds the
+ * corner. Anything that flips per tick makes a body judder against the wall it is
+ * passing. It is asked of the near leg rather than the whole trip, which is the
+ * one difference: a wall four rooms away is not in the way yet. An open floor
+ * answers "the target" every tick and is byte-identical to the walk that shipped
+ * before routing existed.
  */
 function aimAt(
   collision: Collision | undefined,
   x: Fixed, y: Fixed, tx: Fixed, ty: Fixed, bodyRadius: Fixed,
 ): { x: Fixed; y: Fixed } {
   if (!collision?.nav) return { x: tx, y: ty };
-  if (hasLineOfSight(collision, x, y, tx, ty, bodyRadius)) return { x: tx, y: ty };
   const dx = tx - x;
   const dy = ty - y;
-  if (isqrt(dx * dx + dy * dy) > MAX_AUTO_ROUTE_DISTANCE) return { x: tx, y: ty };
+  const dist = isqrt(dx * dx + dy * dy);
+  // The line only as far as he can see himself walking. Clipped, not scaled: past
+  // the lookahead the target's own distance must not change the test.
+  const ahead = dist > ROUTE_LOOKAHEAD
+    ? {
+      x: x + Math.trunc((dx * ROUTE_LOOKAHEAD) / dist),
+      y: y + Math.trunc((dy * ROUTE_LOOKAHEAD) / dist),
+    }
+    : { x: tx, y: ty };
+  if (hasLineOfSight(collision, x, y, ahead.x, ahead.y, bodyRadius)) return { x: tx, y: ty };
+  if (dist > MAX_AUTO_ROUTE_DISTANCE) return { x: tx, y: ty };
   // No route at all (a click inside solid rock with no mouth to stand in) hands
   // the walk back to the straight line, which the slide then stops at the wall.
   return collision.nav.waypoint(x, y, tx, ty, bodyRadius) ?? { x: tx, y: ty };

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { fp, fpClamp, fpDist2 } from "@exiled/fixed-point";
+import { fp, fpClamp, fpDist2, type Fixed } from "@exiled/fixed-point";
 import { Simulation } from "../loop";
 import { registerPlayerMovement, CASTING_MOVE_PCT } from "./player-movement";
 import { WORLD_MIN, WORLD_MAX, ARENA_RADIUS } from "../movement";
@@ -433,6 +433,36 @@ describe("click-to-move routes around what it cannot walk through", () => {
     const end = sim.world.get<Position>(p, "position")!;
     expect(end.y).toBeLessThan(fp(4));
     expect(fpDist2(end.x, end.y, goal.x, goal.y)).toBeGreaterThan(fp(2) * fp(2));
+  });
+
+  it("holds the straight line until the wall is in front of him, then goes around", () => {
+    const sim = new Simulation();
+    const rows = [".........", ".........", ".........", ".........",
+      "####.####", ".........", ".........", "........."];
+    registerPlayerMovement(sim, { active: gridCollision(makeGrid(rows)) });
+    const p = sim.world.create();
+    sim.world.set<Position>(p, "position", { x: fp(1), y: fp(1) });
+    sim.world.set<PlayerC>(p, "player", { moveSpeed: Math.trunc(fp(3) / 30), bodyRadius: fp(0.2) });
+    sim.world.set<Faction>(p, "faction", { team: 0 });
+    sim.world.set<MoveDir>(p, "moveDir", { dx: 0, dy: 0, hx: 0, hy: 0 });
+    // Inside MAX_AUTO_ROUTE_DISTANCE, so this is a trip the router will take; the
+    // question here is only when it starts taking it.
+    const goal = { x: fp(1), y: fp(5.5) };
+
+    sim.step([{ tick: 0, entity: p, type: "moveTo", data: goal }]);
+    let leftTheLineAt: Fixed | null = null;
+    for (let t = 1; t < 400; t++) {
+      sim.step([]);
+      const now = sim.world.get<Position>(p, "position")!;
+      if (leftTheLineAt === null && Math.abs(now.x - fp(1)) > fp(0.25)) leftTheLineAt = now.y;
+    }
+
+    // The wall's face is at y=4, three metres up the line. Routed from the first
+    // tick he would peel off at y=1; he holds the line until it is a stride ahead.
+    expect(leftTheLineAt).not.toBeNull();
+    expect(leftTheLineAt!).toBeGreaterThan(fp(1.5));
+    const end = sim.world.get<Position>(p, "position")!;
+    expect(fpDist2(end.x, end.y, goal.x, goal.y)).toBeLessThan(fp(0.5) * fp(0.5));
   });
 
   it("still walks a clear line straight, with no detour", () => {
