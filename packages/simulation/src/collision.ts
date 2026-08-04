@@ -194,13 +194,42 @@ function hitsBlocker(blockers: readonly Blocker[], x: Fixed, y: Fixed, bodyRadiu
 }
 
 /**
+ * Cell size of the field flooded around grid-less furniture, and how far past
+ * the furniture it reaches. Half a unit is the mapgen cell, so a route around a
+ * hideout table is quantised exactly like a route around a dungeon corner; three
+ * units of margin is comfortably wider than the widest way around any of it.
+ */
+const BLOCKER_NAV_CELL = 0.5;
+const BLOCKER_NAV_MARGIN = 3;
+
+/**
  * Collision for an area that has furniture but no walls — the hideout, which is
- * an open plate. No nav: nothing hunts there, and a BFS wants a bounded grid.
+ * an open plate.
+ *
+ * It carries a nav field even though nothing hunts there: click-to-move reads
+ * the same field (`aimAt` in player-movement.ts), and without one a click on the
+ * far side of the table walks the player into its edge and leaves him there.
+ * The field is flooded over a box around the furniture only; a step outside that
+ * box has nothing to route around anyway, and `waypoint` answers null there,
+ * which hands the walk back to the straight line.
  */
 export function blockerCollision(blockers: readonly Blocker[]): Collision {
-  return {
-    isWalkable: (x, y, bodyRadius) => !hitsBlocker(blockers, x, y, bodyRadius),
-  };
+  const isWalkable = (x: Fixed, y: Fixed, bodyRadius: Fixed): boolean =>
+    !hitsBlocker(blockers, x, y, bodyRadius);
+  if (blockers.length === 0) return { isWalkable };
+
+  let loX = blockers[0]!.x, hiX = loX, loY = blockers[0]!.y, hiY = loY;
+  for (const b of blockers) {
+    loX = Math.min(loX, b.x - b.r); hiX = Math.max(hiX, b.x + b.r);
+    loY = Math.min(loY, b.y - b.r); hiY = Math.max(hiY, b.y + b.r);
+  }
+  const cs = fp(BLOCKER_NAV_CELL);
+  const margin = fp(BLOCKER_NAV_MARGIN);
+  const ox = loX - margin;
+  const oy = loY - margin;
+  const cols = Math.ceil((hiX + margin - ox) / cs) + 1;
+  const rows = Math.ceil((hiY + margin - oy) / cs) + 1;
+  return { isWalkable, nav: gridNav(cols, rows, ox, oy, cs, isWalkable) };
 }
 
 /** Adapt a mapgen walkable grid into a Collision (fixed-point → cell lookup). */
@@ -253,7 +282,7 @@ export function gridCollision(grid: WalkableGrid, blockers: readonly Blocker[] =
     return true;
   };
 
-  return { isWalkable, nav: gridNav(grid, ox, oy, cs, isWalkable) };
+  return { isWalkable, nav: gridNav(grid.cols, grid.rows, ox, oy, cs, isWalkable) };
 }
 
 /** Larger than any route across a 112x112 lattice, so it doubles as "no route". */
@@ -261,14 +290,19 @@ const UNREACHABLE = 0xffff;
 /** Fixed expansion order — the flood must not depend on iteration luck. */
 const NEIGHBOURS: readonly (readonly [number, number])[] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
+/**
+ * The BFS field, over a lattice rather than over a grid: it asks `isWalkable`
+ * what a cell is and never reads a wall byte, which is what lets the hideout —
+ * furniture on an open plate, no grid at all — flood one the same way.
+ */
 function gridNav(
-  grid: WalkableGrid,
+  cols: number,
+  rows: number,
   ox: Fixed,
   oy: Fixed,
   cs: Fixed,
   isWalkable: (x: Fixed, y: Fixed, r: Fixed) => boolean,
 ): Nav {
-  const { cols, rows } = grid;
   const n = cols * rows;
   const centreX = (cx: number): Fixed => ox + cx * cs;
   const centreY = (cy: number): Fixed => oy + cy * cs;
@@ -329,6 +363,27 @@ function gridNav(
     return dist;
   };
 
+  /** The next cell downhill of (cx, cy), or null at the target or a dead end. */
+  const downhill = (dist: Uint16Array, cx: number, cy: number): [number, number] | null => {
+    let best = dist[cy * cols + cx]!;
+    let bx = -1;
+    let by = -1;
+    for (const [dx, dy] of NEIGHBOURS) {
+      const nx = cx + dx;
+      const ny = cy + dy;
+      if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+      const d = dist[ny * cols + nx]!;
+      if (d < best) { best = d; bx = nx; by = ny; }
+    }
+    return bx < 0 ? null : [bx, by];
+  };
+
+  /**
+   * How far down the chain the pull looks. Twelve cells is six units, past the
+   * player's own routing cap, so the corner is always inside it.
+   */
+  const PULL_LOOKAHEAD = 12;
+
   return {
     waypoint(fromX, fromY, toX, toY, bodyRadius) {
       const cx = toCol(fromX);
@@ -338,17 +393,30 @@ function gridNav(
 
       // Strictly downhill: equal-or-worse means arrived or cut off, and a null
       // there hands the caller back to its straight step instead of a shuffle.
-      let best = dist[cy * cols + cx]!;
-      let bx = -1;
-      let by = -1;
-      for (const [dx, dy] of NEIGHBOURS) {
-        const nx = cx + dx;
-        const ny = cy + dy;
-        if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
-        const d = dist[ny * cols + nx]!;
-        if (d < best) { best = d; bx = nx; by = ny; }
+      const first = downhill(dist, cx, cy);
+      if (first === null) return null;
+
+      /**
+       * Pull the string taut: aim at the FARTHEST cell down the chain that can
+       * still be walked to in a straight line, not at the next one.
+       *
+       * The flood is four-connected, so its chain is a staircase — and a body
+       * aimed one cell ahead walks the staircase, which is the clunk: it turns
+       * every half unit, and the turn it is making has nothing to do with the
+       * obstacle it is going around. Aimed at the corner instead, it walks one
+       * straight leg to the corner and one away from it, and the target holds
+       * still for the whole leg rather than moving every tick.
+       */
+      const me: Collision = { isWalkable };
+      let [bx, by] = first;
+      let [px, py] = first;
+      for (let i = 1; i < PULL_LOOKAHEAD; i++) {
+        const next = downhill(dist, px, py);
+        if (next === null) break;
+        [px, py] = next;
+        if (!hasLineOfSight(me, fromX, fromY, centreX(px), centreY(py), bodyRadius)) break;
+        bx = px; by = py;
       }
-      if (bx < 0) return null;
       return { x: centreX(bx), y: centreY(by) };
     },
   };

@@ -322,12 +322,17 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
  * the map device, so it answers before you are on top of it); this is how much
  * floor it takes up. A portal is missing on purpose: it is a doorway, and one
  * you cannot walk into is one you cannot take.
+ *
+ * Each is about two thirds of what the prop measures, for the reason
+ * `FOOTPRINT` in content-runtime/hideout.ts gives: the body is a 0.5 disc of its
+ * own, so a footprint drawn to the silhouette holds the player half a metre off
+ * the thing he is walking up to.
  */
 const BLOCK_RADIUS: Partial<Record<InteractableC["kind"], number>> = {
-  mapDevice: 0.85,   // DEVICE_SPAN 1.61 across in build_props.py
-  stash: 0.6,        // STASH_CHEST_W 1.20
-  vendor: 0.4,       // a man
-  container: 0.42,   // the widest of chest 0.82, crate 0.80, barrel 0.56
+  mapDevice: 0.55,   // DEVICE_SPAN 1.61 across in build_props.py
+  stash: 0.4,        // STASH_CHEST_W 1.20
+  vendor: 0.28,      // a man
+  container: 0.28,   // the widest of chest 0.82, crate 0.80, barrel 0.56
 };
 
 /**

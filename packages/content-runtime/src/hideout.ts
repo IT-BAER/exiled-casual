@@ -111,18 +111,24 @@ export const HIDEOUT_DECOR: readonly Decor[] = [
  * depth lets the player walk through both halves of the top — a table is the
  * biggest thing in the room and the one whose edge is read as an edge.
  *
+ * Deliberately UNDER the prop's real half-width, roughly two thirds of it. The
+ * player's own body is a 0.5 disc, so a footprint drawn to the silhouette stops
+ * him half a metre short of the timber and reads as an invisible wall around the
+ * furniture. Shoulders clipping a tabletop is what every ARPG does and nobody
+ * sees; a gap is what everybody sees.
+ *
  * Screen units rather than local ones because the long pieces are placed at
  * SCREEN_SQUARE exactly (see above), so `at` rotates a footprint the same way it
  * rotated the placement, and no handedness question arises. A rug is floor.
  */
 const FOOTPRINT: Record<DecorKind, readonly (readonly [number, number, number])[]> = {
   rug: [],
-  table: [[-0.6, 0, 0.5], [0.6, 0, 0.5]],
-  bench: [[-0.3, 0, 0.28], [0.3, 0, 0.28]],
-  crate: [[0, 0, 0.45]],
-  barrel: [[0, 0, 0.32]],
-  pillar: [[0, 0, 0.45]],
-  brazier: [[0, 0, 0.3]],
+  table: [[-0.65, 0, 0.3], [0.65, 0, 0.3]],
+  bench: [[-0.32, 0, 0.18], [0.32, 0, 0.18]],
+  crate: [[0, 0, 0.28]],
+  barrel: [[0, 0, 0.2]],
+  pillar: [[0, 0, 0.3]],
+  brazier: [[0, 0, 0.2]],
 };
 
 /** Every disc the hideout's furniture stands on, in world (x, z) metres. */

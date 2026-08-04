@@ -179,10 +179,13 @@ describe("nav field is a pure function of target cell and body radius", () => {
   it("moving the target to a new cell re-routes", () => {
     // Pressed against the wall, so the two ways around it diverge: a target past
     // the top of the wall must send the body north, one past the bottom south.
+    // The waypoint is the far end of the straight leg, not the next cell: the
+    // field's own chain is a four-connected staircase, and a body aimed one cell
+    // ahead walks it as one. So this asks which WAY it sends the body.
     const north = collision.nav!.waypoint(fp(3), fp(3), fp(7), fp(0), 0);
     const south = collision.nav!.waypoint(fp(3), fp(3), fp(7), fp(5), 0);
-    expect(north).toEqual({ x: fp(3), y: fp(2) });
-    expect(south).toEqual({ x: fp(3), y: fp(4) });
+    expect(north!.y).toBeLessThan(fp(3));
+    expect(south!.y).toBeGreaterThan(fp(3));
   });
 
   it("no waypoint when the body already stands on the target cell", () => {

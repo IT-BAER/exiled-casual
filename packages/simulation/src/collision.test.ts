@@ -127,6 +127,31 @@ describe("blockerCollision", () => {
     expect(c.isWalkable(fp(500), fp(-500), fp(0.5))).toBe(true);
   });
 
+  /**
+   * A click on the far side of the table has to walk around it. Without a field
+   * here, `aimAt` hands click-to-move the straight line and the slide parks the
+   * player against the near edge for as long as the button is held.
+   */
+  it("routes around the furniture rather than into it", () => {
+    let x = fp(-2), y = fp(0);
+    let sidestepped = false;
+    let arrived = false;
+    for (let i = 0; i < 30; i++) {
+      const wp = c.nav!.waypoint(x, y, fp(2), fp(0), fp(0.5));
+      if (wp === null) break;
+      x = wp.x; y = wp.y;
+      expect(c.isWalkable(x, y, fp(0.5)), `step ${i} walked into it`).toBe(true);
+      if (y !== fp(0)) sidestepped = true;
+      if (x > fp(1.5)) { arrived = true; break; }
+    }
+    expect(sidestepped, "walked straight at it").toBe(true);
+    expect(arrived, "never got past it").toBe(true);
+  });
+
+  it("has no opinion outside the box it flooded", () => {
+    expect(c.nav!.waypoint(fp(60), fp(60), fp(2), fp(0), fp(0.5))).toBeNull();
+  });
+
   it("slides along a table instead of sticking to it", () => {
     const r = slide(c, fp(-1.6), fp(0), fp(0.4), fp(0.4), fp(0.5));
     expect(r.x).toBe(fp(-1.6)); // into it, cancelled
