@@ -386,8 +386,20 @@ export function InventoryPanel({
   React.useEffect(() => {
     if (!armed) { setArmedPos(null); return; }
     const onMove = (e: PointerEvent) => setArmedPos({ x: e.clientX, y: e.clientY });
+    // While armed, ANY right-click dismisses — and never reaches the browser's
+    // own menu, which the panel's empty ground otherwise let through. Capture
+    // phase, so the grid cells' own contextmenu handlers cannot re-arm first.
+    const onCtx = (e: MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setArmed(null);
+    };
     window.addEventListener("pointermove", onMove);
-    return () => window.removeEventListener("pointermove", onMove);
+    window.addEventListener("contextmenu", onCtx, true);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("contextmenu", onCtx, true);
+    };
   }, [armed]);
   /** The vendor window's keyword box. Local: it dims the shelf, nothing else. */
   const [highlight, setHighlight] = React.useState("");
@@ -682,8 +694,12 @@ export function InventoryPanel({
                     quickTransfer(container, it);
                     return;
                   }
-                  if (armed && container === "backpack" && accepts(armed, it)) {
+                  if (armed) {
+                    // The hand holds an orb: this click either spends it or does
+                    // nothing at all. Falling through to grab was how aiming at
+                    // the wrong item picked the item up instead.
                     e.preventDefault();
+                    if (container !== "backpack" || !accepts(armed, it)) return;
                     setHover(null);
                     setArmed(null);
                     // The outcome is the payoff, so it gets the drop chime at the rarity

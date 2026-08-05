@@ -374,6 +374,30 @@ describe("spending currency on an item", () => {
     expect(screen.getByTestId("armed-icon").getAttribute("src")).toBe("/textures/currency/wisdom.png");
   });
 
+  it("a second right-click dismisses the armed orb and never reaches the browser menu", () => {
+    const withIcon = {
+      ...withScroll,
+      items: [{ ...withScroll.items[0]!, icon: "/textures/currency/wisdom.png" }, withScroll.items[1]!],
+    };
+    render(<InventoryPanel inventory={withIcon} onClose={() => {}} />);
+    fireEvent.contextMenu(screen.getByTestId("inventory-item-0"));
+    fireEvent.pointerMove(window, { clientX: 50, clientY: 50 });
+    expect(screen.queryByTestId("armed-icon")).not.toBeNull();
+    const ctx = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+    fireEvent(screen.getByTestId("inventory-panel"), ctx);
+    expect(ctx.defaultPrevented).toBe(true);
+    expect(screen.queryByTestId("armed-icon")).toBeNull();
+  });
+
+  it("an armed click on an illegal target does nothing, and never picks the target up", () => {
+    render(<InventoryPanel inventory={withScroll} onClose={() => {}} />);
+    fireEvent.contextMenu(screen.getByTestId("inventory-item-0"));
+    // The wand is unidentified, so wisdom accepts it — use the scroll itself
+    // (its own cell) as the illegal target instead.
+    fireEvent.pointerDown(screen.getByTestId("inventory-item-0"));
+    expect(screen.queryByTestId("drag-ghost")).toBeNull();
+  });
+
   it("refuses a target the armed orb cannot legally change", () => {
     const seen: unknown[] = [];
     const withOrb = {
