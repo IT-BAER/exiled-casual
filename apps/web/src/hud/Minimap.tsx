@@ -349,6 +349,10 @@ export function Minimap(
         width: "min(86vh, 86vw)",
         height: "min(86vh, 86vw)",
         opacity: overlayOpacity,
+        // No tinted square at this size: the corner map's backdrop, blown up,
+        // reads as a panel dimming the whole screen. The contour holds up
+        // against bright ground because the overlay is fading as a whole anyway.
+        background: "none",
       }
     : {
         top: `${MAP_INSET_VW}vw`,
