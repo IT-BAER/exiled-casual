@@ -97,12 +97,12 @@ SOURCES: dict[str, str] = {
     # Short inward vortex. The full 5.5-second tail is deliberately capped by
     # trim_sfx.py: one map-device sequence needs an accent, not an ambience bed.
     "portal-open": "Chupapsound - Essential Scifi/DSGN VORTEX IN.wav",
-    # Keep crossing distinct from the opening vortex above: a glass-shard whoosh is
-    # the same inward gesture with a material behind it.
-    "portal-enter": "Epic Stock Media - Elemental Mutation Whooshes and Impacts/GLASMvmt_Whoosh Glass Crystal Fragments Sharp Shards Dry 05_ESM_EMWI.wav",
-    # A pitch collapsing, not a power-down: every "downer" in the bundle is a trailer
-    # synth, and a guitar dive bomb is the same falling gesture with a body to it.
-    "portal-close": "Justsoundeffects - Futuristic Interface/UIMvmt_Resonant Electric Whoosh 01_JSE_FI.wav",
+    # Keep crossing distinct from the opening vortex above: a single spell whoosh is
+    # the same inward gesture without the glass-shard material the old pick had.
+    "portal-enter": "CB Sound Design - Whoosh And Push/W_a_P_Spell_Whoosh_19.wav",
+    # Air rushing out, not a power-down: the resonant electric whoosh read as a
+    # guitar string; a plain wind rush is the same falling gesture with no synth.
+    "portal-close": "344 Audio - Elemental Palette Designed Vol. 1/WINDDsgn_Wind, Rush, Whoosh, Long x5 01_344 Audio_Elemental Palette Designed Vol 1.wav",
     "waystone-activate": "Alexander Kopeikin - Emotion and Magic/magic, action gesture, evil presence, onslaught-004.wav",
 
     # ── Flask, feet, UI ─────────────────────────────────────────────────────────
