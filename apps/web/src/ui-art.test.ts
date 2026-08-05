@@ -70,6 +70,8 @@ describe("UI_ART", () => {
       "/textures/ui/menu/portrait_ironsworn.png",
       "/textures/ui/menu/portrait_stalker.png",
       "/textures/ui/menu/portrait_emberbound.png",
+      // The standalone SOON teaser has its own build and never enters the game.
+      "/textures/ui/menu/gilt_metal.png",
       // The loading plate's vignette is an <img>, not a CSS background, so the
       // browser starts it with the plate itself. There is nothing earlier to
       // warm it at: the plate IS the wait.
