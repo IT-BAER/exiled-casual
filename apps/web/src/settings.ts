@@ -83,7 +83,7 @@ export const DEFAULT_SETTINGS: Settings = {
     shadows: "high",
     ambientOcclusion: true,
     bloom: true,
-    atmosphere: "soft",
+    atmosphere: "heavy",
     resolutionScale: 1,
     torchWarmth: 0.55,
   },
