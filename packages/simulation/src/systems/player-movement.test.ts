@@ -5,7 +5,7 @@ import { registerPlayerMovement, CASTING_MOVE_PCT } from "./player-movement";
 import { WORLD_MIN, WORLD_MAX, ARENA_RADIUS } from "../movement";
 import { gridCollision } from "../collision";
 import { makeGrid } from "../test-grid";
-import type { Position, PlayerC, MoveTarget, MoveDir, Faction, CastingC } from "../components";
+import type { Position, PlayerC, MoveTarget, MoveDir, Faction, CastingC, SkillHoldC } from "../components";
 
 function makePlayer(sim: Simulation, x = 0, y = 0, moveSpeed = fp(3)) {
   const e = sim.world.create();
@@ -200,6 +200,20 @@ describe("registerPlayerMovement", () => {
     sim.step([{ tick: 0, entity: p, type: "moveDir", data: { dx: 1, dy: 0 } }]);
     const pos = sim.world.get<Position>(p, "position")!;
     expect(pos.x).toBe(Math.trunc(speed * CASTING_MOVE_PCT / 100));
+  });
+
+  it("keeps CASTING_MOVE_PCT while a skill button is held, across the cooldown gap", () => {
+    const sim = new Simulation();
+    registerPlayerMovement(sim);
+    const speed = fp(3);
+    const p = makePlayer(sim, 0, 0, speed);
+    // No active cast (recovery over), but the hold window is live: the client
+    // is still re-issuing useSkill, so the walk must not burst back to a run.
+    sim.world.set<CastingC>(p, "casting", { untilTick: 0 });
+    sim.world.set<SkillHoldC>(p, "skillHold", { untilTick: 10 });
+    sim.step([{ tick: 0, entity: p, type: "moveDir", data: { dx: 1, dy: 0 } }]);
+    expect(sim.world.get<Position>(p, "position")!.x)
+      .toBe(Math.trunc(speed * CASTING_MOVE_PCT / 100));
   });
 
   it("moves at full speed once the casting recovery has elapsed", () => {

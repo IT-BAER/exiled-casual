@@ -208,6 +208,10 @@ export function attachBindings(
   // holding a button keeps casting, the way the numbered keys do through the
   // browser's own key auto-repeat. The sim drops casts still on cooldown.
   const skillButtonsHeld = new Set<number>();
+  // Skill KEYS held, re-fired the same way. The browser's own auto-repeat used
+  // to stand in for this, but its half-second initial delay left a gap where
+  // the sim saw no command and the walk burst back to a run mid-hold.
+  const skillKeysHeld = new Set<string>();
   // Last cursor screen position, so held-move can re-pick the world point every
   // snapshot. The camera follows the player, so a stationary cursor sits over a
   // DIFFERENT world point each frame — re-picking is what keeps the player moving
@@ -328,10 +332,14 @@ export function attachBindings(
     // resolves it again for the intent itself (a bar lookup, not work worth saving).
     const keySkill = skillForKey?.(e.key);
     const intent = keyToIntent(e.key, aimAt(keySkill ? aimHeightFor(keySkill) : AIM_HEIGHT), skillForKey);
-    if (intent) post(intent);
+    if (intent) {
+      post(intent);
+      if (intent.kind === "useSkill") skillKeysHeld.add(e.key);
+    }
   }
 
   function onKeyUp(e: KeyboardEvent) {
+    skillKeysHeld.delete(e.key);
     const k = e.key.toLowerCase();
     if (!MOVE_KEYS.has(k)) return;
     const i = held.indexOf(k);
@@ -468,6 +476,15 @@ export function attachBindings(
     // cursor's direction even when the mouse is perfectly still.
     if (skillButtonsHeld.size > 0 && lastScreen && !snap.player.casting) {
       for (const button of skillButtonsHeld) castFromMouse(button, lastScreen.x, lastScreen.y);
+    }
+    // Held skill keys re-fire exactly as the mouse buttons above do, which both
+    // keeps the cast chain going and keeps the sim's skillHold window fed.
+    if (skillKeysHeld.size > 0 && !snap.player.casting) {
+      for (const key of skillKeysHeld) {
+        const skill = skillForKey?.(key);
+        const intent = keyToIntent(key, aimAt(skill ? aimHeightFor(skill) : AIM_HEIGHT), skillForKey);
+        if (intent?.kind === "useSkill") post(intent);
+      }
     }
     if (pointerHeld && lastScreen) {
       const floor = planePoint(scene, lastScreen.x, lastScreen.y);

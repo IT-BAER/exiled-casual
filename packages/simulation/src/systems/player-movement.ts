@@ -2,7 +2,7 @@ import { FP_SCALE, fp, fpClamp, fpStepToward, isqrt, type Fixed } from "@exiled/
 import { Simulation } from "../loop";
 import { WORLD_MIN, WORLD_MAX } from "../movement";
 import { slide, hasLineOfSight, type Collision, type CollisionRef } from "../collision";
-import type { Position, PlayerC, MoveTarget, MoveDir, CastingC, Health } from "../components";
+import type { Position, PlayerC, MoveTarget, MoveDir, CastingC, Health, SkillHoldC } from "../components";
 
 /** Player moves at this percent of moveSpeed during post-cast recovery. */
 export const CASTING_MOVE_PCT = 40;
@@ -216,9 +216,13 @@ export function registerPlayerMovement(sim: Simulation, collisionRef?: Collision
       const moveDir = world.get<MoveDir>(e, "moveDir");
       const moveTarget = world.get<MoveTarget>(e, "moveTarget");
 
-      // Post-cast recovery slows the player; effect already fired on the cast tick.
+      // Post-cast recovery slows the player; effect already fired on the cast
+      // tick. A held skill button (skillHold, refreshed by every useSkill
+      // command) keeps the same pace across the cooldown gaps between casts,
+      // so hold-to-cast walks instead of stuttering run-cast-run.
       const casting = world.get<CastingC>(e, "casting");
-      const speed = casting && casting.untilTick > tick
+      const hold = world.get<SkillHoldC>(e, "skillHold");
+      const speed = (casting && casting.untilTick > tick) || (hold && hold.untilTick > tick)
         ? Math.trunc(player.moveSpeed * CASTING_MOVE_PCT / 100)
         : player.moveSpeed;
 

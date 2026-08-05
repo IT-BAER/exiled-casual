@@ -6,7 +6,7 @@ import { Simulation } from "../loop";
 import type { World } from "../ecs";
 import { WORLD_MIN, WORLD_MAX } from "../movement";
 import { sweep, type Collision, type CollisionRef } from "../collision";
-import type { Position, PlayerC, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC, CastingC, OffenseC, Health } from "../components";
+import type { Position, PlayerC, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC, CastingC, OffenseC, Health, SkillHoldC } from "../components";
 import { damageCode } from "../damage-types";
 import { bodyRadiusOf } from "../body";
 
@@ -20,6 +20,11 @@ export function registerSkillCast(
   // skill has a base crit chance at all, so a kit that cannot crit consumes no
   // randomness and replays from before crit existed still check out.
   const critRolls = createStream(seed, "crit");
+
+  // How long one useSkill command counts as "still holding the button". The
+  // client re-issues per 30 Hz snapshot while held, so three ticks bridges any
+  // jitter without dragging the slow walk past the release.
+  const SKILL_HOLD_TICKS = 3;
 
   const actionFor = (skill: SkillDef): "spell" | "melee" =>
     skill.effects.some((effect) => effect.type === "meleeStrike") ? "melee" : "spell";
@@ -175,6 +180,10 @@ export function registerSkillCast(
       // A corpse does not cast, same rule movement follows. Absent health reads
       // as alive so the health-less test casters are untouched.
       if ((world.get<Health>(caster, "health")?.life ?? 1) <= 0) continue;
+      // Every command, refused or not, marks the button as held: the client
+      // re-issues per snapshot, so a short window bridges the gaps and movement
+      // never bursts back to a run between casts (player-movement reads it).
+      world.set<SkillHoldC>(caster, "skillHold", { untilTick: tick + SKILL_HOLD_TICKS });
       if (completedThisTick.has(caster)) continue;
 
       // A cast is one action, not a queue. Held input can keep issuing commands,

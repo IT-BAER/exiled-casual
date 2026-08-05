@@ -125,6 +125,13 @@ export interface Cooldowns  { [skillId: string]: number }
  * is waiting to resolve, so the effect and its aim stay authoritative in the sim
  * instead of being re-read from a later input repeat.
  */
+/**
+ * The player is holding a skill button: refreshed by every useSkill command,
+ * accepted or refused, so movement keeps the casting walk speed across the
+ * cooldown gaps between casts instead of bursting back to a run.
+ */
+export interface SkillHoldC { untilTick: number }
+
 export interface CastingC {
   untilTick: number;
   skillId?: string;
