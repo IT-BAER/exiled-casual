@@ -84,9 +84,9 @@ const VOICES: Record<string, Voice> = {
   "monster-slam-windup":      { gain: 0.30, wet: 0.20, vary: 0.03 },
   "monster-slam-impact":      { gain: 0.42, wet: 0.30, vary: 0.04 },
   "player-hurt":              { gain: 0.19, wet: 0.10, vary: 0.08 },
-  "portal-open":              { gain: 0.34, wet: 0.34, vary: 0 },
-  "portal-close":             { gain: 0.28, wet: 0.30, vary: 0 },
-  "portal-enter":             { gain: 0.34, wet: 0.24, vary: 0 },
+  "portal-open":              { gain: 0.24, wet: 0.34, vary: 0 },
+  "portal-close":             { gain: 0.20, wet: 0.30, vary: 0 },
+  "portal-enter":             { gain: 0.24, wet: 0.24, vary: 0 },
   "waystone-activate":        { gain: 0.36, wet: 0.28, vary: 0 },
   "flask-drink":              { gain: 0.30, wet: 0.08, vary: 0.05 },
   // Feet are meant to be felt, not listened to: PoE barely gives the player any, and
