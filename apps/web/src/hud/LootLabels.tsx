@@ -38,7 +38,7 @@ export type FrameHook = (cb: () => void) => () => void;
 /** Pixels the plate floats above the item's ground position. */
 const PLATE_LIFT = 26;
 /** Row pitch and horizontal tolerance used to unstack co-located plates. */
-const PLATE_ROW = 22;
+const PLATE_ROW = 25;
 const PLATE_SPREAD_X = 120;
 /** Gap between two stacked plates, on top of the taller one's own height. */
 const PLATE_GAP = 4;
@@ -177,11 +177,11 @@ export function LootLabels({ snapshot, project, afterFrame, onPick, plates = tru
               left: 0,
               top: 0,
               visibility: "hidden", // until the first projection places it
-              padding: base ? "3px 12px 4px" : "2px 12px 3px",
+              padding: base ? "4px 14px 5px" : "3px 14px 4px",
               background: PLATE_BG[rarity] ?? PLATE_BG["normal"],
               border: `1px solid ${look.frame}66`, // the reference plate is filled, not outlined
               color: look.text,
-              font: `14px ${SERIF}`,
+              font: `16px ${SERIF}`,
               fontVariant: "small-caps",
               letterSpacing: "0.04em",
               lineHeight: 1.25,
@@ -192,7 +192,7 @@ export function LootLabels({ snapshot, project, afterFrame, onPick, plates = tru
             }}
           >
             {e.name ?? "Item"}
-            {base ? <div style={{ fontSize: 12, opacity: 0.85 }}>{base}</div> : null}
+            {base ? <div style={{ fontSize: 13, opacity: 0.85 }}>{base}</div> : null}
             {/* Stem down to the drop, so a plate lifted out of a stack still says
                 which item on the floor it belongs to. */}
             <span
