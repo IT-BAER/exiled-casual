@@ -357,6 +357,23 @@ describe("spending currency on an item", () => {
     expect(seen).toEqual([{ kind: "applyCurrency", fromX: 0, fromY: 0, x: 4, y: 0 }]);
   });
 
+  it("right-click arms without grabbing: bare icon on the cursor, no drag ghost", () => {
+    const withIconScroll = {
+      ...withScroll,
+      items: [{ ...withScroll.items[0]!, icon: "/textures/currency/wisdom.png" }, withScroll.items[1]!],
+    };
+    render(<InventoryPanel inventory={withIconScroll} onClose={() => {}} />);
+    // The press half of a right-click must not start a drag on the way to contextmenu.
+    fireEvent(
+      screen.getByTestId("inventory-item-0"),
+      new MouseEvent("pointerdown", { bubbles: true, button: 2, clientX: 10, clientY: 10 }),
+    );
+    fireEvent.contextMenu(screen.getByTestId("inventory-item-0"));
+    expect(screen.queryByTestId("drag-ghost")).toBeNull();
+    fireEvent.pointerMove(window, { clientX: 100, clientY: 120 });
+    expect(screen.getByTestId("armed-icon").getAttribute("src")).toBe("/textures/currency/wisdom.png");
+  });
+
   it("refuses a target the armed orb cannot legally change", () => {
     const seen: unknown[] = [];
     const withOrb = {

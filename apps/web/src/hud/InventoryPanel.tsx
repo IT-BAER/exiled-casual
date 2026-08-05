@@ -380,6 +380,15 @@ export function InventoryPanel({
   // left-click the item to spend it on. Holds the currency itself rather than a flag,
   // because which orb is on the cursor decides what every other cell will accept.
   const [armed, setArmed] = React.useState<GridItem | null>(null);
+  // Where the armed orb's bare icon rides. Deliberately NOT the drag ghost: no
+  // rarity border, no glow, smaller than a cell — using is not moving.
+  const [armedPos, setArmedPos] = React.useState<{ x: number; y: number } | null>(null);
+  React.useEffect(() => {
+    if (!armed) { setArmedPos(null); return; }
+    const onMove = (e: PointerEvent) => setArmedPos({ x: e.clientX, y: e.clientY });
+    window.addEventListener("pointermove", onMove);
+    return () => window.removeEventListener("pointermove", onMove);
+  }, [armed]);
   /** The vendor window's keyword box. Local: it dims the shelf, nothing else. */
   const [highlight, setHighlight] = React.useState("");
   const boxRef = React.useRef<HTMLDivElement | null>(null);
@@ -492,6 +501,9 @@ export function InventoryPanel({
     // Every grab funnels through here, so one guard covers the equipment slots too:
     // a press while a piece is already carried is part of placing it, never a grab.
     if (drag) return;
+    // Right-click never grabs: it arms a consumable (onContextMenu), and a grab
+    // on the way there is what made using an orb look like moving it.
+    if (e.button === 2) return;
     setHover(null);
     setDrag({ from, item, w, h, x: e.clientX, y: e.clientY, ox: e.clientX, oy: e.clientY, carried: false });
   };
@@ -630,6 +642,9 @@ export function InventoryPanel({
                   // would silently swap the piece on the cursor, and the vendor and
                   // ctrl paths below would buy or destroy on the way past.
                   if (drag) { e.preventDefault(); return; }
+                  // Right-click belongs to onContextMenu (arming a consumable):
+                  // it must not buy, sell, transfer or grab on the way there.
+                  if (e.button === 2) { e.preventDefault(); return; }
                   // A shelf cell is bought, never dragged: one click is the whole
                   // transaction, and the sim re-checks the price and the room.
                   if (container === "vendor") {
@@ -977,6 +992,24 @@ export function InventoryPanel({
         included, or an item picked up in the bag vanishes behind the stash. */}
     <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 60, fontFamily: SERIF, color: PARCHMENT }}>
       {hover && <ItemTooltip {...hover.item} x={hover.x} y={hover.y} />}
+      {armed && armedPos && !drag && armed.icon && (
+        <img
+          data-testid="armed-icon"
+          src={armed.icon}
+          alt=""
+          style={{
+            position: "fixed",
+            left: armedPos.x + 10,
+            top: armedPos.y + 10,
+            width: 28,
+            height: 28,
+            objectFit: "contain",
+            pointerEvents: "none",
+            zIndex: 10,
+            filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.8))",
+          }}
+        />
+      )}
       {drag && (
         <div
           data-testid="drag-ghost"
