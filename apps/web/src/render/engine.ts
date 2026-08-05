@@ -76,13 +76,14 @@ export const MAP_FILL_INTENSITY = 0.18;
 // is unchanged. Do not raise it further: 5.5 flattens the floor and the pool
 // stops being a pool.
 //
-// 265 (down from 300 on the owner's "slightly less" call) and not the 420 it
-// was tuned to alone. The place lights itself now — the
+// 210 (down from 265 on the owner's "flashlight, not lantern" call, which
+// itself came down from 300) and not the 420 it was tuned to alone. The place
+// lights itself now — the
 // braziers in render/lights.ts stand in the room and throw their own pools — so
 // the lamp on the belt no longer has to be the only reason anything is visible.
 // It is a pool the player carries between other people's fires, which is what it
 // reads as in PoE, and turning it down is what lets a brazier be seen at all.
-const TORCH_INTENSITY = 265;
+const TORCH_INTENSITY = 210;
 /** Every light that can stand in a room at once: the fill, the sun, the torch,
  *  and the whole brazier pool. Materials are capped to exactly this, see
  *  `createScene` — Babylon's own default of four drops the rest without a word. */
@@ -90,11 +91,12 @@ const SCENE_LIGHTS = 3 + LIGHT_POOL;
 /** Where the pool stops. GLTF falloff windows the inverse square to this, so the
  *  edge is defined instead of trailing off across the whole map.
  *
- *  8 and not 11 because the camera only shows 9.5 world units of height: at 11
- *  the pool covered the entire frame, which is a global brightness change, not a
- *  light the player carries. At 8 it reaches about two thirds of the way out and
- *  there is cold stone outside it to read the warm edge against. */
-const TORCH_RANGE = 9.3;
+ *  Small because the camera only shows 9.5 world units of height: near 11 the
+ *  pool covered the entire frame, which is a global brightness change, not a
+ *  light the player carries. At 7.8 (down from 9.3 on the owner's lantern call)
+ *  it reaches about two thirds of the way out and there is cold stone outside
+ *  it to read the warm edge against. */
+const TORCH_RANGE = 7.8;
 /** Above the floor, not at the feet: at 0 the pool is a hot spot under the
  *  character, and the falloff eats the whole radius within a step. Kept above
  *  head height for the reason in TORCH_INTENSITY. */
