@@ -9,9 +9,9 @@ export const CASTING_MOVE_PCT = 40;
 
 /**
  * How far the heading may swing in one tick, as the chord across the unit
- * circle: 0.6 is about 35 degrees, so a right-angle turn takes three ticks
- * and a full reversal five (~0.17s). Raised twice from 0.35: run-and-gun
- * zig-zags and 180s felt sluggish at 20 and still at 25 degrees a tick.
+ * circle: 0.6 is about 35 degrees, so a right-angle turn takes three ticks.
+ * Raised twice from 0.35: run-and-gun zig-zags felt sluggish at 20 and still
+ * at 25 degrees a tick. Reversals get REVERSE_CHORD below instead.
  *
  * A chord and not an angle because the sim owns no trigonometry: stepping the
  * heading vector toward the target vector by a fixed length and renormalising
@@ -20,12 +20,26 @@ export const CASTING_MOVE_PCT = 40;
 const TURN_CHORD = fp(0.6);
 
 /**
+ * Speed at a dead reversal (dot = -1), as a percent of the run.
+ *
+ * Turn radius is speed over turn rate, so a reversal taken at the 88 floor is
+ * an arc — a U-turn, not a man turning around. Swinging the heading faster
+ * instead re-opens the close-cursor spin the anti-spin test guards, so the
+ * radius comes down the other way: past 90 degrees the speed ramps from the
+ * floor toward this, he plants for the ~5 ticks the 180 takes, and the arc
+ * collapses to a pivot. Continuous at dot = 0, so ordinary steering never
+ * feels it.
+ */
+const REVERSAL_SPEED_PCT = 40;
+
+/**
  * Speed while the heading is fighting the keys, as a percent of the run.
  *
  * Nobody changes direction at full pace: you shed speed into the corner and
- * spend it coming out. Full ahead is 100, a dead-on reversal is this, and the
+ * spend it coming out. Full ahead is 100, a right-angle ask is this, and the
  * angle in between reads off the dot product — so the cost is continuous, which
- * is the difference between a runner and a turret. The recovery is free: the
+ * is the difference between a runner and a turret. Past 90 degrees the ramp
+ * continues down to REVERSAL_SPEED_PCT so a 180 is a pivot, not an arc. The recovery is free: the
  * percentage climbs by itself as the heading closes on the key.
  *
  * 88 and not the 62 it shipped at. At 62 a straight reversal — the commonest
@@ -117,8 +131,12 @@ function corner(
   // Rounded, not truncated: a unit vector is only unit to the nearest thousandth,
   // so a heading dead on its key reads 999 and would forfeit a percent of the run
   // forever after every turn.
-  const pct = TURN_SPEED_FLOOR_PCT
-    + Math.trunc(((100 - TURN_SPEED_FLOOR_PCT) * (dot + FP_SCALE) + FP_SCALE) / (2 * FP_SCALE));
+  // At the floor-to-100 blend's own dot = 0 value, so the two halves meet.
+  const atZero = TURN_SPEED_FLOOR_PCT + Math.trunc((100 - TURN_SPEED_FLOOR_PCT) / 2);
+  const pct = dot < 0
+    ? atZero + Math.trunc(((atZero - REVERSAL_SPEED_PCT) * dot) / FP_SCALE)
+    : TURN_SPEED_FLOOR_PCT
+      + Math.trunc(((100 - TURN_SPEED_FLOOR_PCT) * (dot + FP_SCALE) + FP_SCALE) / (2 * FP_SCALE));
   const cornered = Math.trunc((speed * pct) / 100);
   // The heading is a unit vector, so one multiply is the whole step and the
   // diagonal is exactly as fast as the cardinal it was built from.
