@@ -72,10 +72,11 @@ describe("speedRatioFor", () => {
   it("paces the walk on its own stride and turns the jog over a little quicker", () => {
     // The walk is literal: 1.0 keeps its planted foot planted.
     expect(speedRatioFor("walk", 1.4)).toBeCloseTo(1, 5);
-    // The jog trades about a tenth of a stride of slide for steps that are not
-    // bounds — its clip depicts 4 u/s and the player only covers 3.5.
-    expect(speedRatioFor("run", 3.5)).toBeGreaterThan(1);
-    expect(speedRatioFor("run", 3.5)).toBeLessThan(1.2);
+    // The jog trades a little slide for steps that are not bounds — its clip
+    // depicts 4 u/s and the player only covers 3.5; cadence 1.4 turns the legs
+    // over quicker than the ground to match the footstep cues.
+    expect(speedRatioFor("run", 3.5)).toBeGreaterThan(1.1);
+    expect(speedRatioFor("run", 3.5)).toBeLessThan(1.35);
   });
 
   it("holds the jog through a corner instead of flicking to a walk", () => {

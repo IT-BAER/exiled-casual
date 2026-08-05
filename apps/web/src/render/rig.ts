@@ -83,12 +83,13 @@ const CLIP_SPEED: Record<"walk" | "run", number> = { walk: 1.4, run: 4.0 };
  *
  * The jog is the compromise line. Its clip depicts 4.0 u/s (measured, see
  * CLIP_SPEED) and the player runs at 3.5, so a literal 1.0 would play it at
- * 0.875 and every step would be a bound. 1.25 lands the playback just over
- * 1.0 — a run, at a run's cadence, for about a tenth of a stride of slide.
- * The alternative was the short-stride walk clip driven to 2.5x, which is a
+ * 0.875 and every step would be a bound. 1.4 (up from 1.25 on the owner's
+ * "match the step sounds" call) lands the playback at ~1.22 — quicker steps
+ * against the same ground speed, at the price of a little more slide. The
+ * alternative was the short-stride walk clip driven to 2.5x, which is a
  * power-walk and was rejected on sight.
  */
-const CADENCE: Record<"walk" | "run", number> = { walk: 1, run: 1.25 };
+const CADENCE: Record<"walk" | "run", number> = { walk: 1, run: 1.4 };
 
 const MIN_RATIO = 0.5;
 const MAX_RATIO = 1.8;
