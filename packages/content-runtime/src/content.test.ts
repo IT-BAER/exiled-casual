@@ -147,9 +147,9 @@ describe("MONSTERS", () => {
   });
 
   // Swarm speed, under the player's 4.2 but close enough to punish walking away.
-  it("cinder_imp moveSpeedFixed === fp(2.9)", () => {
+  it("cinder_imp moveSpeedFixed === fp(2.6)", () => {
     const def = MONSTERS.get("monster.cinder_imp.v1")!;
-    expect(def.moveSpeedFixed).toBe(fp(2.9));                // 2900
+    expect(def.moveSpeedFixed).toBe(fp(2.6));                // 2600
   });
 
   it("cinder_imp attackDamage is physical fp(6)", () => {
