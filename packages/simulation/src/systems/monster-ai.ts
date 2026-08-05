@@ -188,6 +188,7 @@ export function registerMonsterAI(sim: Simulation, collisionRef?: CollisionRef):
           // Only slamReadyTick advances; attackReadyTick is deliberately left
           // alone so melee auto-attacks fire freely during the slam cooldown.
           slamReadyTick: tick + heavy.cooldownTicks,
+          lastAttackTick: tick,
         });
         continue;
       }
@@ -243,7 +244,11 @@ export function registerMonsterAI(sim: Simulation, collisionRef?: CollisionRef):
             attackReadyTick = tick + mon.attackCooldownTicks;
           }
         }
-        world.set<MonsterC>(m, "monster", { ...mon, state: "attack", attackReadyTick });
+        world.set<MonsterC>(m, "monster", {
+          ...mon, state: "attack", attackReadyTick,
+          // A swing happened exactly when the cooldown advanced this tick.
+          ...(attackReadyTick !== mon.attackReadyTick ? { lastAttackTick: tick } : {}),
+        });
         const out = shove(collision, mpos.x, mpos.y, push, mon.bodyRadius);
         if (out.x !== mpos.x || out.y !== mpos.y) {
           world.set<Position>(m, "position", {

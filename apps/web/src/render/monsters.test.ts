@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { MONSTERS } from "@exiled/content-runtime";
-import { partOfCreature } from "./monsters";
+import { partOfCreature, CreatureRig } from "./monsters";
+import type { AnimationGroup } from "@babylonjs/core";
 
 /**
  * `monsters.glb` is built offline by `tools/build_monsters.py`, and the runtime
@@ -72,13 +73,14 @@ describe("monsters asset", () => {
    * and ship all thirty-four clips seventeen times over, which still loads and
    * still animates, so only a name count catches it.
    */
-  it("ships a walk and an idle for every creature, and nothing else", () => {
+  it("ships a walk, an idle and an attack for every creature, and nothing else", () => {
     const names = json.animations.map((a) => a.name);
     for (const root of species) {
       expect(names).toContain(`${root}|walk`);
       expect(names).toContain(`${root}|idle`);
+      expect(names).toContain(`${root}|attack`);
     }
-    expect(names.length).toBe(species.length * 2);
+    expect(names.length).toBe(species.length * 3);
   });
 
   /**
@@ -109,9 +111,53 @@ describe("monsters asset", () => {
     expect(partOfCreature({ name: imp }, imp), "the skeleton").toBe(true);
     expect(partOfCreature({ name: `${imp}|walk` }, imp), "the walk clip").toBe(true);
     expect(partOfCreature({ name: `${imp}|idle` }, imp), "the idle clip").toBe(true);
+    expect(partOfCreature({ name: `${imp}|attack` }, imp), "the attack clip").toBe(true);
     expect(partOfCreature({ name: "__root__" }, imp), "the glTF wrapper").toBe(true);
     expect(partOfCreature({ name: "monster.vaal_husk.v1|walk" }, imp)).toBe(false);
     expect(partOfCreature({ name: "monster.vaal_husk.v1" }, imp)).toBe(false);
+  });
+
+  /**
+   * The strike is a ONE-SHOT over locomotion, and its edge is the snapshot's
+   * `attackTick` changing — never its value. Two things go wrong without this:
+   * a creature first seen carrying an old swing greets the camera with one,
+   * and locomotion drives the bones out from under the strike mid-clip.
+   */
+  it("plays the strike once on a change of attack tick, never on the first sight", () => {
+    const started: string[] = [];
+    const ends: (() => void)[] = [];
+    const group = (name: string): AnimationGroup => ({
+      name,
+      speedRatio: 1,
+      enableBlending: false,
+      blendingSpeed: 0,
+      start: (loop: boolean) => started.push(`${name}${loop ? "" : ":once"}`),
+      stop: () => {},
+      dispose: () => {},
+      onAnimationGroupEndObservable: { addOnce: (fn: () => void) => ends.push(fn) },
+    } as unknown as AnimationGroup);
+    const species = "monster.cinder_imp.v1";
+    const rig = new CreatureRig(
+      ["walk", "idle", "attack"].map((c) => group(`${species}|${c}`)),
+      species,
+    );
+    started.length = 0; // the constructor's arrival breath
+
+    rig.noteAttack(120); // first report: seeds the edge, plays nothing
+    expect(started).toEqual([]);
+
+    rig.noteAttack(150);
+    expect(started).toEqual([`${species}|attack:once`]);
+
+    // Mid-strike, locomotion must not take the bones back.
+    started.length = 0;
+    rig.setLocomotion(3);
+    expect(started).toEqual([]);
+
+    // The clip ends, and the next locomotion call owns the body again.
+    ends.forEach((fn) => fn());
+    rig.setLocomotion(3);
+    expect(started).toEqual([`${species}|walk`]);
   });
 
   /**
@@ -127,10 +173,14 @@ describe("monsters asset", () => {
    * hides, Draco or meshopt for the geometry) is the lever that moves this and
    * it is its own slice of work — the loading plate already sits over forty
    * seconds on Slow 3G with the models that were here before.
+   *
+   * 6.75MB since the attack clip: seventeen more clips at fifteen frames each
+   * measured 29KB in total, so the third clip per species is a rounding against
+   * the mesh and the hides. The lever is still compression.
    */
   it("embeds compressed textures and stays within budget", () => {
     for (const image of json.images) expect(image.mimeType).toBe("image/jpeg");
     expect(json.images.length).toBeLessThanOrEqual(12);
-    expect(glb.byteLength).toBeLessThan(6_500_000);
+    expect(glb.byteLength).toBeLessThan(6_750_000);
   });
 });

@@ -181,6 +181,11 @@ export interface SnapshotEntity {
    * sound if nothing else.
    */
   team?: number;
+  /**
+   * monster only: tick of the last swing. The renderer plays the attack clip
+   * when the value changes; the tick itself only serves as that edge.
+   */
+  attackTick?: number;
   /** true for the boss monster; kind stays "monster" so existing consumers keep working */
   boss?: boolean;
   /** boss phase, present only when boss === true */

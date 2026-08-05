@@ -219,6 +219,7 @@ export function buildSnapshot(
     // Only a rare carries a theme; makeRare converts its whole hit to one
     // element, so the attack type IS the theme and nothing has to be stored.
     if (mon.rare === 1) entry.element = damageTypeOf(mon.attackType) as MonsterElement;
+    if (mon.lastAttackTick !== undefined) entry.attackTick = mon.lastAttackTick;
     if (ail !== undefined) entry.ailmentStacks = ail.stacks;
     if (world.has(e, "boss")) {
       const bc = world.get<BossC>(e, "boss")!;

@@ -97,7 +97,11 @@ export function partOfCreature(entity: { name: string }, species: string): boole
 }
 
 /** The clips `build_monsters.py` authors, one NLA track each. */
-type Clip = "walk" | "idle";
+type Clip = "walk" | "idle" | "attack";
+
+/** The strike plays a shade quick — authored over the walk's frames, it reads
+ *  sluggish at 1.0 against a swing that has already landed in the sim. */
+const ATTACK_RATIO = 1.3;
 
 /**
  * Ground speed, in units per second, at which a walk cycle plays back unscaled.
@@ -129,6 +133,10 @@ const MOVING = 0.05;
 export class CreatureRig {
   private readonly groups = new Map<Clip, AnimationGroup>();
   private playing: Clip | null = null;
+  /** Mid one-shot strike: locomotion keeps its hands off the bones. */
+  private striking = false;
+  /** Last swing tick seen, so only the change fires the clip. */
+  private lastAttackTick: number | undefined;
   /** Seconds stood still, so the breath can settle the way the player's does. */
   private standing = 0;
   private readonly scene: Scene | null;
@@ -136,7 +144,10 @@ export class CreatureRig {
   constructor(groups: AnimationGroup[], species: string, scene: Scene | null = null) {
     this.scene = scene;
     for (const group of groups) {
-      const clip = group.name.endsWith("walk") ? "walk" : group.name.endsWith("idle") ? "idle" : null;
+      const clip = group.name.endsWith("walk") ? "walk"
+        : group.name.endsWith("idle") ? "idle"
+        : group.name.endsWith("attack") ? "attack"
+        : null;
       // Babylon clones every group in the container, and a group whose targets
       // were pruned falls back to the SOURCE nodes — which would animate the
       // shared container out from under every other monster.
@@ -153,7 +164,34 @@ export class CreatureRig {
     this.play("idle", IDLE_RATIO);
   }
 
+  /**
+   * The sim swung (snapshot `attackTick` changed): play the strike once, over
+   * whatever locomotion asks for, then hand the body back. The tick is only an
+   * edge — its value never schedules anything client-side.
+   */
+  noteAttack(tick: number | undefined): void {
+    if (tick === undefined || tick === this.lastAttackTick) return;
+    // The first report only seeds the edge. A creature that comes into view
+    // carrying a swing from before it was drawn must not greet the camera
+    // with one.
+    const seeding = this.lastAttackTick === undefined;
+    this.lastAttackTick = tick;
+    if (seeding) return;
+    const group = this.groups.get("attack");
+    if (!group) return;
+    this.striking = true;
+    for (const [name, other] of this.groups) if (name !== "attack") other.stop();
+    group.speedRatio = ATTACK_RATIO;
+    group.start(false, ATTACK_RATIO);
+    group.onAnimationGroupEndObservable.addOnce(() => {
+      this.striking = false;
+      this.playing = null; // force the next setLocomotion to restart its clip
+    });
+    this.playing = "attack";
+  }
+
   setLocomotion(speed: number): void {
+    if (this.striking) return;
     if (speed <= MOVING) {
       // Same settle as the player rig, off the same clock: a creature that has
       // been standing in a corner since the map opened should not be breathing
@@ -171,6 +209,7 @@ export class CreatureRig {
    *  is trying to own, and the corpse would twitch through its walk. */
   stopForDeath(): void {
     for (const group of this.groups.values()) group.stop();
+    this.striking = false;
     this.playing = null;
   }
 

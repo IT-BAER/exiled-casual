@@ -720,6 +720,29 @@ CROSS_PART = 0.55
 # How far the trunk travels, as fractions of the creature's height.
 BOB = 0.016
 SWAY = 0.010
+
+# --- the strike -----------------------------------------------------------
+# A lunge, not a limb waved in front of a still body: the feet stay where they
+# are standing (the leg IK is solved against a MOVING hip, so a trunk driven
+# forward bends the knees by itself) and the whole animal travels. That is why
+# nothing here touches `foot_offset` — a strike that stepped would slide.
+#
+# Timed in three parts over the clip: coil back, drive through, settle. The
+# drive is deliberately the shortest of the three; an attack that takes as long
+# to land as it does to wind up reads as a stretch, not a hit.
+ATTACK_FRAMES = 15          # half a second at 30 fps
+ATTACK_COIL = 0.34          # fraction of the clip spent winding up
+ATTACK_HIT = 0.52           # where the blow lands
+# Travel and dip at full extension, as fractions of the creature's height, plus
+# how far it rocks back in the coil (a fraction of the lunge).
+LUNGE = 0.13
+LUNGE_DIP = 0.05
+COIL_BACK = 0.45
+# Radians at the hit: the spine folds over the blow, everything hanging off it
+# whips harder, and an arm that has one swings through.
+STRIKE_SPINE = 0.30
+STRIKE_SECONDARY = 0.42
+STRIKE_ARM = 1.15
 # Radians. The spine's own bend, and what a neck or a tail hanging off it adds.
 SPINE_SWING = 0.055
 SECONDARY_SWING = 0.085
@@ -1064,6 +1087,76 @@ class Gait:
                 self._dirs[bone.name] = Matrix.Rotation(amp * math.sin(phase), 3, "X") @ rest
         return poser.apply(dir_for, offset_for)
 
+    def strike_envelope(self, t):
+        """How far through the blow at normalised clip position `t`.
+
+        -1 at the deepest coil, +1 at full extension, 0 at rest. One curve
+        drives the trunk, the spine and the arms, so the whole animal commits
+        to the same beat instead of three parts arriving separately.
+        """
+        if t < ATTACK_COIL:
+            # Ease into the coil and hold it a moment: the pause is what makes
+            # the drive read as released rather than as constant motion.
+            return -COIL_BACK * math.sin(math.pi * 0.5 * (t / ATTACK_COIL))
+        if t < ATTACK_HIT:
+            u = (t - ATTACK_COIL) / (ATTACK_HIT - ATTACK_COIL)
+            # Accelerating out of the coil, arriving at full reach.
+            return -COIL_BACK * math.cos(math.pi * 0.5 * u) + math.sin(math.pi * 0.5 * u)
+        u = (t - ATTACK_HIT) / (1.0 - ATTACK_HIT)
+        # Settle back, overshooting slightly under the rest line so the body
+        # absorbs the blow instead of snapping to attention.
+        return math.cos(math.pi * 0.5 * u) - 0.12 * math.sin(math.pi * u)
+
+    def strike(self, poser, t):
+        """Pose the creature mid-attack at normalised clip position `t`.
+
+        The legs are solved in their standing stance, so driving the trunk
+        forward bends the knees and the feet stay planted — a lunge. Nothing
+        here uses the walk's foot offsets.
+        """
+        e = self.strike_envelope(t)
+        offset = Vector((0.0,
+                         LUNGE * self.height * e,
+                         -LUNGE_DIP * self.height * max(0.0, e) - self.crouch * 0.5))
+
+        solved = {}
+        for leg in self.legs:
+            solved[leg["bones"][0].name] = leg
+
+        def offset_for(name):
+            return offset if name == self.root else None
+
+        def dir_for(name, head, posed):
+            leg = solved.get(name)
+            if leg is not None:
+                self._solve_leg(leg, head, 0.0, False, posed)
+            cached = self._dirs.get(name)
+            if cached is not None:
+                return cached
+            return self._strike_dir(name, e)
+
+        self._dirs = {}
+        for arm in self.arms:
+            # Both arms swing together: this is a strike, not a stride.
+            for k, bone in enumerate(arm["bones"]):
+                rest = (bone.tail - bone.head).normalized()
+                amp = STRIKE_ARM * (1.0 if k == 0 else 0.5)
+                # Same sign as the walk's arm swing: positive is forward. The
+                # negative read as raising both arms overhead at the hit, which
+                # is a salute, not a claw going through something.
+                self._dirs[bone.name] = Matrix.Rotation(amp * e, 3, "X") @ rest
+        return poser.apply(dir_for, offset_for)
+
+    def _strike_dir(self, name, e):
+        bone = next((b for b in self.body_bones if b.name == name), None)
+        if bone is None:
+            return None
+        rest = (bone.tail - bone.head).normalized()
+        # Fold over the blow around X (the pitch axis), unlike the walk's Z
+        # yaw: an animal biting leads with its head, it does not turn away.
+        amp = (STRIKE_SPINE if bone.spine else STRIKE_SECONDARY) * (0.5 + 0.5 * bone.depth)
+        return Matrix.Rotation(-amp * e, 3, "X") @ rest
+
     def _solve_leg(self, leg, hip, t, moving, posed):
         bones, rest = leg["bones"], leg["rest"]
         # The stance shift rides with the crouch: both are walk posture, and a
@@ -1108,12 +1201,16 @@ class Gait:
 
 
 def author_clips(arm, gait, bones):
-    """Write `walk` and `idle` onto the armature as two NLA tracks.
+    """Write `walk`, `idle` and `attack` onto the armature as NLA tracks.
 
     One track per clip, named `<species>|<clip>`, because the glTF exporter's
     ACTIONS mode offers every action to every armature in the file and would
-    give all seventeen creatures all thirty-four clips. NLA_TRACKS exports each
-    track once, on the armature that owns it, under the track's own name.
+    give all seventeen creatures every clip. NLA_TRACKS exports each track
+    once, on the armature that owns it, under the track's own name.
+
+    `attack` is the one clip that does NOT loop: the runtime plays it once on
+    the sim's swing and hands the body back to locomotion, so its last frame
+    still repeats the first — a strike that ended mid-lunge would pop.
     """
     poser = Poser(arm, bones)
     arm.animation_data_create()
@@ -1121,7 +1218,8 @@ def author_clips(arm, gait, bones):
     # Idle is authored over the same frame count as the walk and played back
     # slow (`IDLE_RATIO` in `monsters.ts`). A breath is one long sine — sampling
     # it three times as densely only costs the download.
-    for clip, length, moving in (("walk", walk, True), ("idle", walk, False)):
+    for clip, length, moving in (("walk", walk, True), ("idle", walk, False),
+                                 ("attack", ATTACK_FRAMES, None)):
         action = bpy.data.actions.new("%s|%s" % (arm.name, clip))
         action.use_fake_user = True
         slot = action.slots.new("OBJECT", arm.name)
@@ -1132,7 +1230,9 @@ def author_clips(arm, gait, bones):
 
         for frame in range(length + 1):
             # The last frame repeats the first, so the loop has no seam.
-            moved = gait.pose(poser, (frame % length) / length, moving)
+            phase = (frame % length) / length
+            moved = (gait.strike(poser, phase) if moving is None
+                     else gait.pose(poser, phase, moving))
             for bone in bones:
                 arm.pose.bones[bone.name].keyframe_insert(
                     "rotation_quaternion", frame=frame + 1)

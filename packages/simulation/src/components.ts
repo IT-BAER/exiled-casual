@@ -169,6 +169,12 @@ export interface MonsterC {
    */
   rootedUntilTick: number;
   state: "idle" | "chase" | "attack";
+  /**
+   * Tick of the last swing (melee hit, ranged shot, or slam wind-up start).
+   * The renderer plays the attack clip on the change. Optional for the same
+   * save/checksum reason as SessionC.dead: absent and never-attacked agree.
+   */
+  lastAttackTick?: number;
   /** 1 = rare, 0 = normal */
   rare: 0 | 1;
   /** 1 = boss add, 0 = normal spawn */
