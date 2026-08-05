@@ -245,8 +245,9 @@ function Spinner(): React.ReactElement {
         // The sheet is scaled so ONE cell fills the box.
         backgroundSize: `${FRAME_COLS * 100}% ${FRAME_ROWS * 100}%`,
         backgroundRepeat: "no-repeat",
-        animation: `exiled-spin-x ${SPIN_SEC}s steps(${FRAME_COLS}) infinite,`
-          + ` exiled-spin-y ${SPIN_SEC * FRAME_ROWS}s steps(${FRAME_ROWS}) infinite`,
+        // Reversed: the ember walks the ring counter-clockwise.
+        animation: `exiled-spin-x ${SPIN_SEC}s steps(${FRAME_COLS}) infinite reverse,`
+          + ` exiled-spin-y ${SPIN_SEC * FRAME_ROWS}s steps(${FRAME_ROWS}) infinite reverse`,
       }}
     >
       <style>
