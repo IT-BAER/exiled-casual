@@ -667,6 +667,75 @@ def build_shell():
     )
 
 
+# The wreck debris both beach references are thick with: broken hull planks
+# half-buried in sand, and clusters of sun-bleached bone. Crazy0_0Cat's Broken
+# Wooden Planks (royalty_free, 66e40f0e-22d9-474f-929d-cb477fb78055) is five
+# loose boards already lying as a heap; danes_dysfunction's Human Skull
+# (royalty_free, 139ba285-470c-4f35-8139-d41af8b9a319) anchors each bone cluster and
+# its diffuse also dresses the generated long bones — box-projected, because
+# the texture is bone-coloured everywhere and a 30cm prop at a nine-metre
+# camera never shows the seam.
+WRECK_TIMBER_W = 1.7
+WRECK_TIMBER_BUDGET = {
+    "Куб": 32, "Куб.001": 32, "Куб.002": 32, "Куб.003": 32, "Куб.004": 32,
+}
+BONES_SKULL_W = 0.32
+BONES_BUDGET = {"Human Skull": 600}
+
+
+def build_wreck_timber():
+    return build_appended(
+        "wreckTimber", "wreck_timber", "wreck_planks.blend", WRECK_TIMBER_BUDGET,
+        # Wreck wood is dark: soaked, tarred and weathered, and the reference
+        # timbers read nearly black against the sand under the beach's 2.4x sun.
+        "Материал_BaseColor.jpg.001", gain=0.55, roughness=0.9, width=WRECK_TIMBER_W,
+        renames={
+            "Куб": "wreckTimber_0", "Куб.001": "wreckTimber_1",
+            "Куб.002": "wreckTimber_2", "Куб.003": "wreckTimber_3",
+            "Куб.004": "wreckTimber_4",
+        },
+    )
+
+
+def _long_bone(name, length, shaft_r):
+    """A long bone lying flat on the ground: knobbed ends, thin shaft."""
+    h = length / 2
+    k = shaft_r * 2.1  # knob radius
+    verts, faces = lathe([
+        (0.0, h), (k * 0.85, h * 0.94), (k, h * 0.86), (shaft_r * 1.3, h * 0.7),
+        (shaft_r, h * 0.4), (shaft_r * 0.9, 0.0), (shaft_r, -h * 0.4),
+        (shaft_r * 1.3, -h * 0.7), (k, -h * 0.86), (k * 0.85, -h * 0.94), (0.0, -h),
+    ], 8)
+    return mesh_object(name, verts, faces)
+
+
+def build_bones():
+    root = build_appended(
+        "bones", "bones", "human_skull.blend", BONES_BUDGET,
+        # Bleached bone in open daylight, same exposure logic as the coast rock:
+        # the scan is already bright, and the beach sun runs at 2.4x.
+        "ML_HumanSkull_Diffuse.jpg", gain=0.62, roughness=0.6, width=BONES_SKULL_W,
+        renames={"Human Skull": "bones_skull"},
+    )
+    mat = bpy.data.materials["bones"]
+    # Three long bones scattered around the skull, the cluster the reference
+    # lays out: never a tidy skeleton, just what the tide left.
+    for i, (length, dx, dy, yaw) in enumerate([
+        (0.62, 0.34, 0.10, 0.4),
+        (0.55, -0.28, 0.24, 2.3),
+        (0.48, 0.02, -0.30, 1.1),
+    ]):
+        bone = _long_bone(f"bones_long_{i}", length, 0.024)
+        uv_box(bone, 0.3)
+        bone.data.materials.append(mat)
+        smooth_by_angle(bone, 40)
+        # Lathe spins about Z; lay it down, then yaw it. It rests on its knobs.
+        bone.rotation_euler = (math.pi / 2, 0.0, yaw)
+        bone.location = (dx, dy, 0.024 * 2.1)
+        bone.parent = root
+    return root
+
+
 # --------------------------------------------------------------------------
 # the decor set
 # --------------------------------------------------------------------------
@@ -931,6 +1000,8 @@ def main():
     build_driftwood()
     build_shell()
     build_coast_rock()
+    build_wreck_timber()
+    build_bones()
     build_rug(mats)
     build_table(mats)
     build_bench(mats)

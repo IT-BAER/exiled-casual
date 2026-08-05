@@ -346,6 +346,14 @@ const DRIFTWOOD_BAND: [number, number] = [1.5, 9];
  *  coast, and what the biome's grey wall stone can never look like. */
 const COAST_ROCK_COUNT = 7;
 const COAST_ROCK_BAND: [number, number] = [-3.0, 0.4];
+/** Wreck debris further up the sand, where a storm tide would strand it. Both
+ *  references scatter broken hull timbers and clusters of bleached bone across
+ *  the OPEN beach, not just along the waterline — that mid-band is what still
+ *  read empty after the shell and driftwood passes. */
+const WRECK_TIMBER_COUNT = 6;
+const WRECK_TIMBER_BAND: [number, number] = [3.0, 11];
+const BONES_COUNT = 8;
+const BONES_BAND: [number, number] = [2.0, 10];
 
 /**
  * Dress a coast: shells along the tide line, driftwood up the beach.
@@ -376,14 +384,18 @@ function dressBeach(scene: Scene, grid: WalkableGrid): void {
   };
 
   const place = (
-    kind: "shell" | "driftwood" | "coastRock",
+    kind: "shell" | "driftwood" | "coastRock" | "wreckTimber" | "bones",
     count: number,
     band: [number, number],
   ): void => {
     for (let i = 0; i < count; i++) {
       // Spread along the shore, then a step inland from the waterline at that
       // sample. Landward is the opposite of the sea side, by definition.
-      const salt = kind === "shell" ? 3 : kind === "driftwood" ? 4 : 10;
+      const salt =
+        kind === "shell" ? 3 :
+        kind === "driftwood" ? 4 :
+        kind === "wreckTimber" ? 17 :
+        kind === "bones" ? 23 : 10;
       const s = Math.floor(((i + rnd(i, salt) * 0.7) / count) * (n - 1));
       const along = shore.start + s * shore.step;
       const inland = band[0] + rnd(i, salt + 2) * (band[1] - band[0]);
@@ -414,6 +426,12 @@ function dressBeach(scene: Scene, grid: WalkableGrid): void {
         root.rotation.z = (rnd(i, 14) - 0.5) * 0.5;
       }
       if (kind === "shell") root.rotation.z = (rnd(i, 9) - 0.5) * 0.7;
+      if (kind === "wreckTimber") {
+        // Sunk a touch and tipped: a plank lying dead flat ON the sand reads
+        // as placed, one breaking the surface reads as stranded.
+        root.position.y = -0.02 - rnd(i, 15) * 0.03;
+        root.rotation.x = (rnd(i, 16) - 0.5) * 0.25;
+      }
       root.isPickable = false;
       if (attachProp(scene, root, kind) === null) {
         root.dispose(false, false);
@@ -429,6 +447,8 @@ function dressBeach(scene: Scene, grid: WalkableGrid): void {
   place("shell", SHELL_COUNT, SHELL_BAND);
   place("driftwood", DRIFTWOOD_COUNT, DRIFTWOOD_BAND);
   place("coastRock", COAST_ROCK_COUNT, COAST_ROCK_BAND);
+  place("wreckTimber", WRECK_TIMBER_COUNT, WRECK_TIMBER_BAND);
+  place("bones", BONES_COUNT, BONES_BAND);
 }
 
 /**
@@ -765,7 +785,10 @@ export function buildLevel(
       );
       buildRocks(scene, scatterLedge(behind, ledgeCells), stone, LEDGE_MESH_PREFIX);
       buildRocks(scene, scatterDune(rockCells, cellSize), stone, DUNE_MESH_PREFIX);
-      buildRocks(scene, scatterDebris(floorCells), material, DEBRIS_MESH_PREFIX);
+      // Sparser than a dungeon floor: `beach-map.jpg` keeps its open sand almost
+      // clean of loose stone, and at the dungeon spacing the pebbles read as
+      // dirt across the whole beach.
+      buildRocks(scene, scatterDebris(floorCells, 3.4), material, DEBRIS_MESH_PREFIX);
       buildRocks(scene, scatterDuneRim(edgeCells), stone, DUNE_RIM_MESH_PREFIX);
       // Scrub: a mat over the low blobs standing in the sand, and a fringe where
       // the tall ledge meets the beach. Both references put green in both

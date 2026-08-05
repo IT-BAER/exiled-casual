@@ -91,6 +91,23 @@ WALL_MIN_LUMA = 120.0
 # fighting the art.
 FLOOR_GRADE = {"coast": (1.24, 1.02, 0.74)}
 
+# The Coast scan is TRAMPLED: footprint pits and scuffed brown patches that at
+# game distance read as dirt strewn over the beach, where the reference's sand
+# is smooth wave ripple. Compressing luma below the median toward it fades the
+# pits and patches while the ripple detail (which lives above the median) keeps
+# its full contrast. The value is the fraction of below-median contrast KEPT.
+FLOOR_CALM = {"coast": 0.55}
+
+
+def calm(a: np.ndarray, keep: float) -> np.ndarray:
+    """Fade dark blemishes: scale each below-median pixel toward the median."""
+    lum = 0.299 * a[:, :, 0] + 0.587 * a[:, :, 1] + 0.114 * a[:, :, 2]
+    med = float(np.median(lum))
+    f = np.ones_like(lum)
+    dark = lum < med
+    f[dark] = (med + (lum[dark] - med) * keep) / np.maximum(lum[dark], 1e-3)
+    return a * f[:, :, None]
+
 
 def mean_luma(a: np.ndarray) -> float:
     return float((0.299 * a[:, :, 0] + 0.587 * a[:, :, 1] + 0.114 * a[:, :, 2]).mean())
@@ -185,6 +202,7 @@ def plate(
     size: tuple[int, int],
     min_luma: float,
     hue: tuple[float, float, float] | None = None,
+    calm_keep: float | None = None,
 ) -> tuple[Image.Image, str] | None:
     """Load a master, make it tile, lift it if it is too dark to play on, grade
     it to its biome's hue, and downscale it to its shipped size."""
@@ -195,6 +213,8 @@ def plate(
     before = seam_error(a)
     a = make_seamless(a)
     after = seam_error(a)
+    if calm_keep is not None:
+        a = calm(a, calm_keep)
     a, luma_before, luma_after = lift_luma(a, min_luma)
     sat_before = saturation(a)
     if hue is not None:
@@ -227,6 +247,7 @@ def build(biome: str) -> bool:
         (FLOOR_SHIP, FLOOR_SHIP),
         FLOOR_MIN_LUMA,
         FLOOR_GRADE.get(biome),
+        FLOOR_CALM.get(biome),
     )
     if floor is None:
         return False

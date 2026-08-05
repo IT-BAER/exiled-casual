@@ -654,8 +654,11 @@ export function scatterRocks(
 }
 
 /** Sparse stone across the open floor — see DEBRIS for why it exists. */
-export function scatterDebris(cells: readonly RockCell[]): RockPlacement[] {
-  return scatter(cells, DEBRIS);
+export function scatterDebris(
+  cells: readonly RockCell[],
+  spacing: number = DEBRIS.spacing,
+): RockPlacement[] {
+  return scatter(cells, { ...DEBRIS, spacing });
 }
 
 /**
