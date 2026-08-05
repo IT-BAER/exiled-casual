@@ -1,38 +1,47 @@
 # Exiled Casual
 
-A browser-native action RPG inspired by Path of Exile 1 **and** 2, taking the best of either
-where they differ. It is not a clone of one of them: where the two games disagree, the one
-that plays better wins, and the source is named in the code and docs so the borrowing stays
-honest. Built spec-first with [Claude Code](https://claude.com/claude-code) as a public devlog
-experiment: how far a deterministic ARPG can get in a handful of days when the design is
-written down before any code is.
+[Website](https://exiledcasual.com) · [Devlog](devlog/README.md)
 
-This is a work in progress, not a finished game. Running today: a 30 Hz fixed-point combat
-sim with skills, ailments and a two-phase boss; procedural biome maps assembled from authored
-chunks; an Atlas of nodes opened with waystones you carry as inventory items; items across all
-four rarities with affixes, implicits and identification; a paper-doll equipment screen that
-feeds real derived stats; stash, vendor and disenchanting; and a 3D character whose gear
-changes on the model. There is no skill tree yet, and balance is untuned.
+An original browser-native action RPG inspired by Path of Exile 1 **and** 2, taking the best of
+either where they differ. It is not a clone of either game. Borrowed design ideas name their
+source in the code and docs, while the implementation, world, art, and content remain original.
+
+The public website is a teaser. The game itself is an active work in progress and currently runs
+locally.
+
+## What is playable now
+
+- Deterministic 30 Hz combat with class-specific default attacks, skills, ailments, buffs,
+  animated creature strikes, and a two-phase boss.
+- A hideout and six-portal run loop, procedural biome maps, and an open coastal Strand with surf,
+  wet sand, shells, driftwood, and wreckage.
+- An Atlas opened with inventory-held Waystones, including preparation, modifiers, fog, and a
+  centred map overlay.
+- Normal, magic, rare, and unique items with affixes, implicits, identification, crafting orbs,
+  loot beams, stash, vendor, disenchanting, and equipment-derived stats.
+- A rigged 3D character with visible equipped gear, animated cloth, positional audio, ambience,
+  and a game shell covering menus, character selection, loading, options, and local saves.
+
+There is no skill tree yet, balance is untuned, and no public playable build is available.
 
 ## How it is built
 
-Every slice starts from a written spec, not from a prompt. The [`docs/`](docs/) folder
-holds a clean-room research pack (game mechanics reconstructed from public sources) plus
-the per-slice specs and plans that were implemented against it:
+Every slice starts from a written spec. The [`docs/`](docs/) folder holds a clean-room research
+pack (game mechanics reconstructed from public sources) plus the per-slice specs and plans that
+were implemented against it:
 
 - [`docs/README.md`](docs/README.md) - the research pack index and design invariants
 - [`docs/specs/`](docs/specs/) - per-slice design specs
 - [`docs/plans/`](docs/plans/) - the task-by-task implementation plans
 
-Two project rules (see [`CLAUDE.md`](CLAUDE.md)) keep the output faithful instead of
-generic: real game screenshots are the visual source of truth and get checked before any
-UI or render work, and item/affix mechanics are researched against public databases rather
-than invented. Because both games are drawn on, a borrowed mechanic or look says in the
-code which of the two it came from.
+Two project rules keep the output grounded: real game screenshots are checked before UI or render
+work, and item and affix mechanics are researched against public databases rather than invented.
+Because both games are drawn on, a borrowed mechanic or look says in the code which game it came
+from.
 
 ## Devlog
 
-Screenshots of each step, in order, are in [`devlog/`](devlog/README.md).
+Major visible milestones, in screenshots and short notes, are in [`devlog/`](devlog/README.md).
 
 ## Tech stack
 
@@ -42,15 +51,15 @@ Screenshots of each step, in order, are in [`devlog/`](devlog/README.md).
 | Client | React 18 + Babylon.js 7 (WebGL2), Vite 5 |
 | Simulation | Hand-rolled ECS, 30 Hz fixed timestep, runs in a Web Worker |
 | Determinism | Fixed-point integers only, named seeded RNG streams, replayable to a checksum |
-| Persistence | IndexedDB, versioned save blob |
+| Persistence | IndexedDB, versioned character roster and shared stash; JSON import/export |
 | Tests | Vitest (+ Testing Library and jsdom for the HUD) |
 | Asset pipeline | Blender 5.2 headless via Python (`tools/`) for the rig, props and rocks; Pillow scripts for tilesets and per-base gear textures |
 | Art | Generated raster masters, then re-palettized or made tiling offline. No runtime asset generation. |
 | CI | GitHub Actions: typecheck, tests, web build on every push |
 
-There is no server. The "server" is the simulation worker, and the client is untrusted by
-construction: it sends intents, never outcomes, and the sim re-validates range, tier, cost and
-placement on every one.
+The current build has no remote game server. Its authority boundary is the simulation worker: the
+client sends intents, never outcomes, and the simulation re-validates range, tier, cost, and
+placement.
 
 ## Layout
 
