@@ -1,6 +1,6 @@
 # Devlog
 
-Eleven days, in screenshots. Notes live in [`../docs/`](../docs/).
+Development milestones, in screenshots and short notes. Longer notes live in [`../docs/`](../docs/).
 
 ## 2026-07-20 · First playable combat
 
@@ -148,3 +148,22 @@ Eleven days, in screenshots. Notes live in [`../docs/`](../docs/).
 <td width="50%"><img src="screenshots/2026-07-31-hideout-firelight-portals.jpeg" alt="Hideout at night with six portals, geometry flames in the braziers, and the vendor Varkis" width="100%"><br><sub>Braziers burn real flames.</sub></td>
 </tr>
 </table>
+
+## 2026-08-03 · A fuller world and a public face
+
+Downloaded, opening treasure chests replaced the placeholder containers, and reward anchors became
+clickable caches that spill their loot once. Skills now aim from the weapon tip toward the current
+cursor position. The lightweight SOON teaser also went live at exiledcasual.com.
+
+## 2026-08-04 · The Strand becomes a coast
+
+The first area was rebuilt as an open beach with a curved shoreline, surf, wet sand, sea rock,
+shells, driftwood, and weeded coastal stones. Hideout furniture, shops, and containers also became
+solid obstacles with routed movement around them.
+
+## 2026-08-05 · Combat and navigation feedback
+
+The corner minimap gained a centred Tab overlay, map entry gained breakable spawn grace with a
+countdown buff, and currency orbs gained clear cursor and target-cell feedback. Every creature also
+received a species-authored strike animation, while wreck timbers and bone clusters finished the
+coast dressing.
