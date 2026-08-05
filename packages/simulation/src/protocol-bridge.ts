@@ -392,6 +392,15 @@ export function buildSnapshot(
         if (d && (d.hx !== 0 || d.hy !== 0)) return { x: toNumber(d.hx), y: toNumber(d.hy) };
         return undefined;
       })(),
+      buffs: (() => {
+        const out: { id: string; kind: "buff" | "debuff"; remainingSec: number }[] = [];
+        // Spawn grace (damage-resolve). 30 Hz; rounded up so it never shows 0
+        // while still active.
+        if (session?.graceUntilTick !== undefined && session.graceUntilTick > tick) {
+          out.push({ id: "grace", kind: "buff", remainingSec: Math.ceil((session.graceUntilTick - tick) / 30) });
+        }
+        return out;
+      })(),
       level: progress.level,
       xp: progress.xp,
       xpToNext: xpToNext(progress.level),

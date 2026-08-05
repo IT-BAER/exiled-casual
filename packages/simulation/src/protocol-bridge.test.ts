@@ -262,6 +262,20 @@ describe("buildSnapshot — session fields and interactables", () => {
     expect(snap.mapOpen).toBe(false);
   });
 
+  it("reports the spawn grace as a buff with whole seconds left, and drops it when spent", () => {
+    const { world } = makeMinimalWorld();
+    const sessionE = world.create();
+    world.set<SessionC>(sessionE, "session", {
+      area: "map", atlasSeed: 0, mapSeed: 0, waystoneSeed: 0, areaTier: 1, activeNodeId: "",
+      completedNodes: [], portalsLeft: 6, mapOpen: 1, pendingArea: "",
+      graceUntilTick: 300, graceX: 0, graceY: 0,
+    });
+    // 295 ticks left at tick 5 -> 10s, rounded up.
+    expect(buildSnapshot(world, {} as never, 5, "test").player.buffs)
+      .toEqual([{ id: "grace", kind: "buff", remainingSec: 10 }]);
+    expect(buildSnapshot(world, {} as never, 300, "test").player.buffs).toEqual([]);
+  });
+
   it("snapshot carries areaTier, atlasSeed, completedNodes from session", () => {
     const { world } = makeMinimalWorld();
     const sessionE = world.create();

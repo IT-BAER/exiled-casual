@@ -295,6 +295,12 @@ export interface Snapshot {
      * turns the body the way walking does. Absent until he has done either.
      */
     heading?: { x: number; y: number };
+    /**
+     * Timed effects on the player, display-ready for the HUD's buff bar.
+     * `remainingSec` is whole seconds, already rounded up. Absent on a sim
+     * built without a session.
+     */
+    buffs?: { id: string; kind: "buff" | "debuff"; remainingSec: number }[];
   };
   entities: SnapshotEntity[];
   /** Grid inventory (session singleton), display-ready. Empty when no session. */

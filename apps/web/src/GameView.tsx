@@ -25,6 +25,7 @@ import { CharacterPanel } from "./hud/CharacterPanel";
 import { LootLabels } from "./hud/LootLabels";
 import { NpcLabels } from "./hud/NpcLabels";
 import { Minimap } from "./hud/Minimap";
+import { BuffBar } from "./hud/BuffBar";
 import { DebugStats } from "./hud/DebugStats";
 import { Divider, FramedPanel, GOLD, MenuButton, DISPLAY, SERIF } from "./menu/frames";
 import { LoadingScreen, LOADING_ART, FADE_MS } from "./LoadingScreen";
@@ -646,6 +647,7 @@ export function GameView({
         plates={settings.ui.lootLabels}
       />
       <NpcLabels snapshot={snapshot} project={project} afterFrame={afterFrame} />
+      <BuffBar snapshot={snapshot} />
       <Hud
         snapshot={snapshot}
         hoveredEntityId={hoveredEntityId}
