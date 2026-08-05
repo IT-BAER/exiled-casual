@@ -2,6 +2,26 @@
 
 This plan targets an original browser action RPG that reproduces the observed systems grammar without copying protected expression or reverse engineering private implementation. Time and staffing ranges are planning estimates, not sourced facts.
 
+## Implementation checkpoint: 2026-08-05
+
+This is still the forward build plan. Current delivery does not map cleanly to whole phases because
+later vertical slices were pulled forward before all breadth gates in earlier phases were complete.
+
+| Phase | Current state |
+|---|---|
+| 0: boundary and grammar | Research pack and original-IP boundary established |
+| 1: deterministic kernel | Built locally: fixed point, entity-component system, named randomness, replay/checksum, continuous integration |
+| 2: combat lab | Built and expanded: worker authority, three classes, six skills, four monster archetypes, 17 monster definitions |
+| 3: complete map run | Built: hideout, Map Device, six portals, death/revive, five map bases, bosses, loading |
+| 4: item and crafting loop | Substantial slice built: four rarities, identification, currency, equipment, stash, vendor, disenchanting |
+| 5: Atlas meta-progression | Partial: 15-node seeded graph, fog, tier gates, modifiers, sustain; no Atlas passives, towers, or fortresses |
+| 6: content alpha | Not reached at the breadth targets below |
+| 7: multiplayer and market | Not started |
+| 8: public operations | Teaser site only; no playable deployment |
+
+The living as-built boundary is the
+[current implementation contract](specs/2026-08-05-current-implementation-contract.md).
+
 ## 1. What "perfect" can mean
 
 A useful fidelity contract has four measurable dimensions:

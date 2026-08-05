@@ -1,10 +1,31 @@
 # Exiled Casual — Slice: "Waystones + Tier Scaling"
 
-Design spec. Status: approved for planning, 2026-07-21.
+Design spec. Status: **built and surpassed.** Historical scope approved 2026-07-21; current
+behavior verified 2026-08-05. See
+[`2026-08-05-current-implementation-contract.md`](2026-08-05-current-implementation-contract.md).
 Baseline research: `docs/` pack (PoE 2 EA 0.5.4b clean-room reconstruction).
 Position: closes the last **Phase 3** gap in `docs/06` (map item + device activation)
 before Phase 4 loot/crafting and Phase 5 full Atlas. Follows Milestone 3 (boss arena,
 hideout↔map loop, portals, death-return) at HEAD `b167f4d`.
+
+## As built
+
+The tier formula, deterministic scaling, authoritative activation, and preparation panel shipped.
+The temporary offer model in this document no longer describes the game:
+
+- Waystones are 1 by 1 backpack items selected by inventory cell, not regenerated panel offers.
+- A permanent, unmodifiable Tier 1 stone prevents an empty inventory from hard-locking progress.
+- The Atlas is a seeded 15-node graph with adjacency fog, node lore, biome/map-base identity, and
+  minimum tier by graph depth.
+- A run seed combines the Waystone seed and node id. The selected stone carries deterministic
+  modifiers that affect monsters, player resistance, experience, quantity, and rarity.
+- Boss completion persists the node, drops replacement Waystones, and modified stones pay an
+  additional stone one tier higher, capped at Tier 15.
+- The preparation view is a full-screen Atlas with a node popup and Waystone socket. Activation
+  consumes the socketed backpack item only after simulation validation.
+
+The fixed linear tier multipliers remain calibration knobs. Tablets, towers, fortresses, Atlas
+passives, and a remote map transaction remain unimplemented.
 
 ## Product thesis
 
@@ -137,5 +158,5 @@ unscaled) → muls of 1.0, a no-op, so existing hideout/tests are unaffected.
   one edit; mark with a `ponytail:` calibration comment.
 - **Float muls → fixed-point rounding**: apply the mul in integer space and truncate consistently,
   or life/damage drift between replays. Test a couple of tiers against expected fixed values.
-- **Node completion has no persistence**: reload resets `completedNodes`. Acceptable this slice
-  (whole session is in-memory); flagged so it is not mistaken for a bug.
+- **Historical slice limit:** node completion initially had no persistence and reload reset
+  `completedNodes`. Current character saves persist Atlas completion.

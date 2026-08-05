@@ -1,11 +1,29 @@
 # Exiled Casual — Vertical Slice 1: "First Descent"
 
-Design spec. Status: approved for planning, 2026-07-19.
+Design spec. Status: **built and substantially surpassed.** Historical scope approved 2026-07-19;
+current behavior verified 2026-08-05. See
+[`2026-08-05-current-implementation-contract.md`](2026-08-05-current-implementation-contract.md).
 Baseline research: `docs/` pack (PoE 2 EA 0.5.4b clean-room reconstruction).
+
+## As built
+
+The worker-authoritative fixed-point simulation, intent/snapshot boundary, replay checksums,
+hideout, six-portal run loop, Atlas activation, boss fight, loot, inventory, equipment, and local
+persistence all shipped. The implementation then moved beyond this slice in material ways:
+
+- three classes replaced the one-caster product boundary;
+- Waystones became inventory items, and the Atlas grew to 15 seeded-position nodes;
+- map generation became authored chunk assembly plus a separate coast generator, not the proposed
+  room-graph/template solver;
+- full rarity, currency crafting, stash, vendor, identification, and visible worn gear shipped;
+- production art, animation, effects, loading, menus, settings, and audio replaced the greybox.
+
+The transaction language in sections 8 and 9 remains a future online requirement. Local saves are
+versioned and deterministic, but there is no crash-recoverable server escrow or remote finalization.
 
 ## Product thesis
 
-A browser-native, original-IP action RPG in the Path of Exile 2 mould, aimed at
+A browser-native, original-IP action RPG drawing on Path of Exile 1 and 2, aimed at
 **PoE players who want to casually run maps from their hideout**. The hub-first
 loop is the product, not a placeholder: sign in, stand in your hideout, pick a
 map, run it, come back richer. Everything is clean-room — original names, art,
@@ -15,7 +33,7 @@ lore, numbers; no extracted assets, data, or protocols.
 
 | Decision | Value |
 |---|---|
-| Team | Solo developer + Claude Code |
+| Team | Solo developer |
 | Ambition | Aiming to ship; hold load-bearing invariants from day one, no rewrites |
 | Presentation | Full 3D (Babylon.js), **greybox primitive actors first**, rigged art later |
 | First slice | "Mini map run" as a closed hub loop |

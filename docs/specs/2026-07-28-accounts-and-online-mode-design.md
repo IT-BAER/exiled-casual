@@ -1,12 +1,15 @@
 # Accounts and online mode
 
-Status: design. Written 2026-07-28, before any account code existed. Partly implemented since —
-see **What has shipped** below; nothing about the architecture choice has changed.
+Status: **local half built; online half remains design-only.** Written 2026-07-28 and reconciled
+against current code 2026-08-05. See **What has shipped** below and the
+[`current implementation contract`](2026-08-05-current-implementation-contract.md).
 
-The game goes public and playable at **exiledcasual.com**, in two modes: **local** (browser
+The intended playable game can eventually ship at **exiledcasual.com**, in two modes: **local** (browser
 storage, no account, works offline) and **online** (login, account, database). This document
 picks the architecture and names what it costs, so the choice is not made accidentally by the
 first commit that touches auth.
+
+As of 2026-08-05 the domain serves a teaser only. No playable build or online service is deployed.
 
 ## What already holds
 
@@ -155,6 +158,11 @@ account. Rough order when it does start:
 - **Gold and shards did not.** They stay per-character even though `protocol/index.ts` calls gold
   "account-bound", because sharing them means threading roster state through vendor buy and sell,
   and with the cap at one character nothing is observable until online exists. Decide it there.
+- **Portable local saves shipped on 2026-08-02.** Character select exports the complete roster as
+  versioned JSON. Import validates the roster version before confirmation and atomic replacement;
+  a rejected file leaves the existing save untouched.
+- **Settings are roster-global opaque data.** The persistence package stores them without learning
+  their schema; `settings.ts` is the total parser and corrupt fields fall back independently.
 
 Still absent, deliberately: any account, any login, any network call. The client has never once
 tried to reach a server.

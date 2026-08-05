@@ -1,6 +1,6 @@
 # Exiled Casual — Slice: "Per-biome monster pools" (P1, the fight layer)
 
-Design spec. Status: **not built.**
+Design spec. Status: **built and expanded, verified 2026-08-05.**
 Position: follows "Biomes & Layout Grammar" (`docs/specs/2026-07-28-biome-mapgen-design.md`),
 which listed per-biome monster pools in its §8 risks and deferred them to this document.
 Baseline: `docs/09-reward-psychology.md` §4 (rules 3, 4 and 8 constrain the kill→loot path).
@@ -9,9 +9,24 @@ This spec covers **P1 only**: the fight. The art it needs is real and is specced
 see "Decomposition" below. P1 ships playable on the existing imp primitive, and is fully
 verifiable by tests without a single new model.
 
+## As built
+
+P1 shipped with the four archetypes, weighted biome pools, pack counts, faction-generic
+projectiles, committed heavy telegraphs, and deterministic species in snapshots. The content now
+has five biome pools: the original four use distinct three-archetype mixes, while Coast teaches all
+four using species borrowed from the matching wet-sand biomes.
+
+The presentation layer also shipped. `monsters.glb` contains one skinned mesh per species and
+shared per-species idle, walk, and attack clips. A simulation-owned `attackTick` triggers the strike
+once; locomotion resumes after the clip. Monsters use direct movement on open ground and consult a
+body-radius navigation field only after collision blocks the direct step.
+
+The known line-of-sight ceiling remains: aggro does not require visibility. Projectiles now stop at
+level collision, but full perception and line-of-sight behavior is still a separate design problem.
+
 ## Product thesis
 
-Four biomes now look different and fight identically. Every map, in every biome, at every tier,
+At the time this slice was written, four biomes looked different and fought identically. Every map, in every biome, at every tier,
 spawns `monster.cinder_imp.v1` at each socket and `monster.cinder_warden.v1` in the boss room
 (`simulation/src/areas.ts:146-169`), and every one of them runs the same behaviour: walk at the
 player, swing at `attackRangeFixed` (`systems/monster-ai.ts`). A player who has learned one map

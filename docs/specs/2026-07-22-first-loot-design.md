@@ -1,10 +1,29 @@
 # Exiled Casual — Slice: "First Loot"
 
-Design spec. Status: approved for planning, 2026-07-22.
+Design spec. Status: **built and substantially surpassed.** Historical scope approved 2026-07-22;
+current behavior verified 2026-08-05. See
+[`2026-08-05-current-implementation-contract.md`](2026-08-05-current-implementation-contract.md).
 Baseline research: `docs/` pack (PoE 2 EA 0.5.4b clean-room reconstruction).
 Position: opens **Phase 4** (item & crafting loop, `docs/06:138`). Follows the
 "Waystones + Tier Scaling" slice (`docs/specs/2026-07-21-waystones-tier-scaling-design.md`,
 integrated on `main` at `c1dd39e`).
+
+## As built
+
+The deterministic drop, ground entity, authoritative pickup, 12 by 5 grid, tooltip, and checksum
+contracts shipped. The current item loop now also includes:
+
+- normal, magic, rare, and unique rarity with prefix/suffix capacity, base implicits, item level,
+  rare names, unique fixed identities, and identification;
+- drag placement, equip/unequip, ground drop, quick transfer, shared stash, vendor buy/sell, and
+  disenchanting;
+- equipment-derived life, mana, energy shield, armour, resistances, attributes, cast speed,
+  critical chance, and damage;
+- life/mana flasks, seven currency/scroll bases, crafting transformations, and Portal Scrolls;
+- loot plates, click targets, rarity beams, drop sounds, boss bursts, and one-shot reward containers;
+- Waystones as inventory items with a separate deterministic modifier model.
+
+Trade, loot-filter authoring, sockets, support gems, and a remote economy ledger remain future work.
 
 ## Product thesis
 
@@ -156,8 +175,8 @@ first-fit scans top-left → bottom-right for the first free `w×h` rectangle (`
   but any value that later feeds combat must convert consistently — keep affix rolls as plain ints this
   slice and mark the boundary.
 - **Grid placement failure UX.** A full inventory means pickup silently no-ops; surface a HUD hint
-  ("inventory full") so it is not mistaken for a bug. In-memory-only inventory resets on reload — flagged,
-  not a bug.
+  ("inventory full") so it is not mistaken for a bug. The original slice reset inventory on reload;
+  current character saves persist it.
 - **Checksum regression** (see §6) is the highest-risk item; a golden-replay test with a boss/rare drop
   guards it.
 

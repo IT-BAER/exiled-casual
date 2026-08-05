@@ -1,13 +1,18 @@
-# Browser ARPG Reconstruction Research Pack
+# Exiled Casual Research and Implementation Pack
 
 Version lock: Path of Exile 2 Early Access 0.5.4b, researched 2026-07-19  
 Primary rules baseline: Content Update 0.5.0, Return of the Ancients  
-Purpose: an implementation specification for a mechanically faithful, browser-native action RPG
+Purpose: research baseline plus implementation specifications for an original browser-native action RPG
 
 Scope note: this pack is version-locked to PoE2 because that is what was researched here, but the
 game it feeds draws on Path of Exile 1 and 2 both, taking the better of the two where they differ
 (PoE1's inventory pane and bottom bar, for instance). Where a mechanic or look is borrowed, the
 spec that borrows it names which game it came from.
+
+The numbered chapters are the researched target and future architecture, not a claim that every
+system is already shipped. The current repository contract is
+[`specs/2026-08-05-current-implementation-contract.md`](specs/2026-08-05-current-implementation-contract.md).
+Current code and contract tests take precedence when a historical slice records an older decision.
 
 ## Read this first
 
@@ -35,6 +40,21 @@ This is a clean-room mechanics and architecture document, not copied game data a
 | [06-build-plan-and-validation.md](06-build-plan-and-validation.md) | Vertical slices, sequencing, staffing reality, acceptance criteria, tests, balance telemetry, content tools, and release gates |
 | [07-source-ledger.md](07-source-ledger.md) | Official and community sources, version relevance, confidence, conflicts, and unanswered questions |
 | [08-product-ui-and-api-contracts.md](08-product-ui-and-api-contracts.md) | Desktop product surfaces, input and accessibility rules, HTTP/real-time contracts, reconnects, errors, admin, and telemetry |
+| [09-reward-psychology.md](09-reward-psychology.md) | Reward anticipation, variance, audiovisual payoff, and the constraints every loot or progression feature answers to |
+
+## Implementation specifications
+
+| Specification | Current status |
+|---|---|
+| [Current implementation contract](specs/2026-08-05-current-implementation-contract.md) | Living as-built truth, verified 2026-08-05 |
+| [First Descent](specs/2026-07-19-first-descent-design.md) | Built and substantially surpassed |
+| [Waystones and tier scaling](specs/2026-07-21-waystones-tier-scaling-design.md) | Built; inventory stones, modifiers, sustain, and 15-node Atlas added later |
+| [First Loot](specs/2026-07-22-first-loot-design.md) | Built; full rarity, crafting, stash, vendor, and equipment loop added later |
+| [Accounts and online mode](specs/2026-07-28-accounts-and-online-mode-design.md) | Local roster/migration/import built; online authority remains design-only |
+| [Biomes and layout grammar](specs/2026-07-28-biome-mapgen-design.md) | Built; later expanded with Coast and a dedicated shoreline generator |
+| [Per-biome monster pools](specs/2026-07-28-monster-pools-design.md) | Built, including authored species rigs and strike clips |
+| [Loading screen](specs/2026-07-29-loading-screen-design.md) | Built across boot, lazy chunk, and area transitions |
+| [Options panel](specs/2026-07-29-options-panel-design.md) | Built and expanded; damage numbers remain deferred |
 
 ## Evidence vocabulary
 

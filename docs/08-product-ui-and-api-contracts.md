@@ -2,6 +2,12 @@
 
 This document closes the gap between rules and a buildable browser product. UI and endpoint names are proposed. The released product needs original visual design and terminology.
 
+Implementation checkpoint, 2026-08-05: the local menu, roster, character, hideout, Atlas, HUD,
+inventory, settings, and save surfaces are built. The HTTP API, real-time transport, reconnect,
+account, trade, telemetry, support, and admin sections remain future contracts. The public domain is
+a teaser, not a playable deployment. See the
+[current implementation contract](specs/2026-08-05-current-implementation-contract.md).
+
 ## 1. Supported product shape
 
 - Desktop browser first.

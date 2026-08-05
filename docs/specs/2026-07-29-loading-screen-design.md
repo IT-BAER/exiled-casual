@@ -1,12 +1,25 @@
 # Exiled Casual — Slice: "Loading screen"
 
-Design spec. Status: approved for implementation, 2026-07-29. Owner picked all three forks
+Design spec. Status: **built, verified 2026-08-05.** Owner picked all three forks
 (full scope, pre-rendered animation, one wallpaper per biome) on the plan of the same date.
 Follows the options-panel slice at HEAD `cbedccd`.
 
 Reference plate: **the owner's own layout sketch** — full-bleed wallpaper, a hairline rule near
 the foot, then a footer band carrying TIPS bottom-left, the loading animation centred, and the
 area name bottom-right. That sketch is the layout contract.
+
+## As built
+
+All three covers shipped: static markup in `index.html` for first boot, a React Suspense plate while
+the lazy game chunk arrives, and a `GameView` plate for area transitions. The area plate stays up
+until the worker area message arrived, the level and biome were built, the rig is ready for the
+active scene, and a frame from the new area painted. `GameView` raises its plate on mount, so the
+Suspense and world-build waits read as one continuous transition.
+
+Biome wallpapers, a small boot plate, the rendered spinner sheet, tips, area names, vignette, and
+fade shipped. The proposed determinate progress bar did not, because the synchronous level build
+still has no honest countable progress. Texture compression and visible chunk-load failure remain
+open.
 
 > **Reference gap, stated up front.** `reference-screenshots/` holds no PoE loading screen.
 > CLAUDE.md forbids designing UI from memory, so the *layout* comes from the sketch and the

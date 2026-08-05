@@ -1,6 +1,6 @@
 # Exiled Casual — Slice: "Biomes & Layout Grammar"
 
-Design spec. Status: **built, 2026-07-28.** See "As built" at the foot for where the
+Design spec. Status: **built and expanded, verified 2026-08-05.** See "As built" at the foot for where the
 implementation departed from this document and what it turned up.
 Baseline research: `docs/01-atlas-and-map-running.md` §5 (biomes, layout families, `MapBase`)
 and §6 (generation pipeline).
@@ -178,9 +178,9 @@ matching `assets/props/`.
   outer **mask** over assembled tiles, applied only to rim tiles the route does not use — applied
   anywhere else it severs the loop. The risk does not fully go away; the honest answer is that
   `open-field` may need more chunk variants than `loop` to hide its lattice.
-- **Layout variation alone will not fix repeat runs.** There are **2 monster definitions in the
-  entire game**. Four biomes will look different and fight identically. Out of scope here, and it
-  is the next thing after this slice.
+- **Layout variation alone would not fix repeat runs.** At design time there were **2 monster
+  definitions in the entire game**, so four biomes would have looked different and fought
+  identically. The later monster-pool slice closed this gap.
 - **Generated textures may not tile.** Accepted with the seam pass above as the mitigation. If a
   set still seams after one repair pass, fall back to a CC0 ambientCG substrate for that biome
   rather than spending a second generation loop on it.
@@ -212,9 +212,10 @@ matching `assets/props/`.
 
 ## As built
 
-All five slices shipped. 996 tests pass, typecheck and the web build are clean, and the
-result was driven in the browser: a Vaal Stone loop map, a Swamp loop map and a Forest
-open-field map were each entered through a portal and inspected.
+The authored chunk assembler, derived edge masks, deterministic transform algebra, route-spread
+spawns, reward anchors, biome definitions, tilesets, minimap layout, and renderer integration all
+shipped. The current area is a 9 by 9 lattice of 16-cell chunks. Vaal Stone uses `loop`, Desert and
+Forest use `open-field`, and Swamp uses `sunken-ruins`.
 
 **Departures from the plan above**
 
@@ -251,13 +252,21 @@ open-field map were each entered through a portal and inspected.
 
 **Still open**
 
-- **Four biomes will still fight identically.** There are 2 monster definitions in the game.
-  This was flagged in the risks above, is unchanged, and is the next thing worth doing.
-- Only walls and floors are per-biome. No props, no decals, no per-biome ambient audio.
 - The lattice is still legible in the `loop` grammar, where rooms meet on tile boundaries.
   The organic rim helps `open-field` only, exactly as predicted.
 - Near-black actors read poorly on the darker biomes even after the luminance lift. The
   floors now match the hideout's own calibrated value, so going further would mean
   re-tuning the character material rather than the ground.
-- No devlog screenshots were captured: the workspace rule requires the user to confirm each
-  screen before it is shot, and this ran unattended.
+
+**Expansion after the original slice**
+
+- Five biome-specific monster pools now select among 13 regular species and four bosses.
+- Five ambience beds follow the current area, and props now dress the hideout and Coast.
+- `coast` is a generator, not a chunk grammar. It emits open sand between a wandering cliff and a
+  floating shoreline curve, plus explicit water cells. `render/sea.ts` builds wet sand, surf,
+  shallows, swell ranks, and deep water from the curve.
+- The Coast renderer excludes sea from the generic rim and rock scatter, then places shells,
+  driftwood, weeded rocks, wreck timber, and bones relative to the shoreline.
+- Coast became the starting map base, and the content contract now covers five biomes and five map
+  bases. The legacy `strand` chunk grammar remains in the accepted id set but no current map base
+  selects it.

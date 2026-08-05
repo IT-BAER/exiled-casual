@@ -2,6 +2,11 @@
 
 All architecture in this document is proposed for the reconstruction. It is not a claim about Grinding Gear Games' private implementation. Public talks establish that PoE uses a proprietary C++ engine, procedural terrain tooling, seed-based area generation, and authoritative online instances. The concrete browser stack below is our design.
 
+Implementation checkpoint, 2026-08-05: the React/Babylon client, Web Worker simulation, shared
+fixed-point rules, intent/snapshot protocol, IndexedDB persistence, and replay checksums are built.
+Node services, PostgreSQL, Redis, WebSockets, reconnect, parties, and remote authority remain future
+architecture. See the [current implementation contract](specs/2026-08-05-current-implementation-contract.md).
+
 ## Architecture decision
 
 Build a server-authoritative TypeScript game first, with Babylon.js on the client, a dedicated simulation worker, and a shared pure-rules package. Keep the transport and simulation boundaries language-neutral so a proven hot service can later move to Rust without rewriting content.

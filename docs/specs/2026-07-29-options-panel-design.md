@@ -1,9 +1,23 @@
 # Exiled Casual — Slice: "Options panel"
 
-Design spec. Status: approved for planning, 2026-07-29.
+Design spec. Status: **built and expanded, verified 2026-08-05.** Damage numbers remain deferred.
 Reference plate: `reference-screenshots/options.png` (**PoE 1** — tabbed window, gilt name band,
 red X, six tabs, label-left/control-right rows, scrollbar, SAVE+CLOSE footer, drawn over a live
 game). Follows the main-menu / character-select slice at HEAD `341c9f3`.
+
+## As built
+
+The shared panel, live application, total settings parser, debounced roster persistence, and both
+entry points shipped. The panel is docked furniture in game and a dimmed dialog over the menu.
+Current settings exceed the original proposal:
+
+- graphics: shadows, ambient occlusion, bloom, atmosphere, resolution scale, and torch warmth;
+- sound: master, mute, and separate music, interface, skills, loot, and environment levels on one
+  shared bus;
+- UI: minimap, loot labels, globe numbers, Tab-overlay opacity, and eight skill-bar assignments.
+
+The original damage-number increment did not ship and no snapshot damage-event contract exists.
+The old text below records the decision that this requires its own reward-feedback specification.
 
 ## Product thesis
 
@@ -38,7 +52,8 @@ graphics knob is turning it while looking at the frame it changes.
 
 Keybinds / an Input tab; a Game tab (loot filter, tooltips); Notifications; language; resolution or
 window mode (the browser owns those); per-character settings; a settings sync across devices;
-music volume (there is no music — §6); the scrollbar's own art if no tab overflows.
+music volume (there was no music when this slice was written; category audio shipped later); the
+scrollbar's own art if no tab overflows.
 
 ## 1. The window
 
@@ -147,16 +162,17 @@ assume either — it draws over whatever is there, exactly as the plate does ove
 
 ## 6. Sound
 
-`playDropSound` (`apps/web/src/audio/drop-sound.ts:131`) is today the **only** sound in the game —
-one synthesised cue per rarity, no music, no ambient bed. Its `dry` and `wet` gains connect
-**straight to `ctx.destination`** (`:75-76`), so there is nowhere to put a volume.
+At design time, `playDropSound` (`apps/web/src/audio/drop-sound.ts:131`) was the **only** sound in
+the game: one synthesised cue per rarity, no music, no ambient bed. Its `dry` and `wet` gains
+connected **straight to `ctx.destination`** (`:75-76`), so there was nowhere to put a volume.
 
 The delta is one master `GainNode` inserted between those two and the destination, plus reading its
 value from settings. That gives the Sound tab two honest rows: **Master Volume** (slider) and
 **Mute** (gem checkbox).
 
-**No Music slider until there is music**, and no Master/Effects split while one bus exists — two
-knobs that move the same gain is a control that teaches the player the panel is decorative.
+The later audio slice added curated interface, skill, loot, environment, and ambience cues on the
+shared bus, so the current panel exposes those category levels plus master and mute. The design
+rule still holds: a category is shown only when it controls a distinct audible bus input.
 
 ## 7. Damage numbers (increment 3)
 
