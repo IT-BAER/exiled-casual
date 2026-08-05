@@ -396,7 +396,7 @@ export const MONSTER_POOLS: Record<BiomeId, readonly PoolEntry[]> = {
   // Borrowed rather than newly modelled, and all four are things that belong in
   // wet sand: what lives in it, what wades out of it, what burns over it, and
   // what came in on the last storm and did not go back out.
-  strand: [
+  coast: [
     { defId: "monster.sand_skitterer.v1", weight: 3 },
     { defId: "monster.bog_drowned.v1", weight: 2 },
     { defId: "monster.fen_wisp.v1", weight: 2 },
@@ -424,7 +424,7 @@ export const BOSSES: Record<BiomeId, string> = {
   desert: "monster.sirrath.v1",
   swamp: "monster.mother_vhal.v1",
   forest: "monster.ghaltrek.v1",
-  strand: "monster.mother_vhal.v1",
+  coast: "monster.mother_vhal.v1",
 };
 
 /** The boss for a biome. Total, so an unknown biome cannot end a run bossless. */

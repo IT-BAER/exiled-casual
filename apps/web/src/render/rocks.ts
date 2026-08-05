@@ -1,6 +1,8 @@
 import {
+  Color3,
   LoadAssetContainerAsync,
   Matrix,
+  PBRMaterial,
   Quaternion,
   Vector3,
   type AbstractMesh,
@@ -109,6 +111,26 @@ interface ScatterConfig {
    * is out. Fixing those means geometry per cell, not a nudge.
    */
   outwardHalfCell?: number;
+  /**
+   * World units to move the shape the OTHER way, onto the floor the cell
+   * borders. The opposite of `outwardHalfCell` and for the opposite reason: a
+   * thing that grows at the foot of a boundary rather than being part of it.
+   *
+   * Without this the coast's scrub was placed on the boundary cells and then
+   * buried by the dune scattered over the same cells — several hundred clumps
+   * drawn inside a metre of opaque sand, which reads on screen as a bald berm
+   * with six stray tufts where the mounds happen not to meet.
+   */
+  inset?: number;
+  /**
+   * World units to raise the shape off the ground, before `sink`.
+   *
+   * For the one case where a scatter is dressing something ELSE the scatter put
+   * there: the coast's scrub grows on top of its ledge, and the ledge is a metre
+   * of opaque rock built from the same cells. Placed at y=0 the clumps were
+   * inside it.
+   */
+  lift?: number;
 }
 
 const BOULDERS: ScatterConfig = {
@@ -200,6 +222,268 @@ const RAMPART_NEAR: ScatterConfig = {
  *  rock under this sun throws a shadow longer than a room is wide. */
 const RAMPART_MESH_PREFIX = "wallrun-rampart-";
 export { RAMPART_MESH_PREFIX };
+
+/**
+ * THE COAST'S WALL IS AN OVERGROWN LEDGE. Read all four references before
+ * touching these — they took three passes to read correctly.
+ *
+ * `strand-map-layout2.png` (the revealed overview) is the one that settles the
+ * shape: the Strand's whole boundary is a NARROW ribbon, two or three player
+ * widths across, meandering in long sweeps with sharp corners, and it is a solid
+ * mat of khaki-olive scrub with barely any bare ground showing through.
+ * `strand-map1.jpg.png` is the same thing at gameplay zoom and says what is
+ * under the scrub: a smooth ROUNDED rock mass, dark and pebbled, with ferns and
+ * broad leaf spilling over its lip. Not a cliff face, not a boulder chain, and
+ * nothing with a facet on it.
+ *
+ * So the ledge is the same machinery as everything else here at a shape no
+ * boulder config would take — wide, low, smooth-shaded, packed close enough to
+ * fuse into one continuous mass — and the scrub over it is what the eye actually
+ * reads from a camera nine metres up.
+ *
+ * Spacing is well under the width on purpose. A boulder scatter wants gaps
+ * between stones; a ledge wants none, and the overlap is what turns eight
+ * discrete lumps into one run.
+ */
+const DUNE: ScatterConfig = {
+  /** Barely a fifth of the narrowest mound, where a boulder's spacing is a third
+   *  of its own width. Measured on screen, not chosen: at 0.95 the mounds stood
+   *  clear of each other and the boundary read as a row of eggs on the sand. The
+   *  berm is a CONTINUOUS swell, so the overlap has to be most of the shape. */
+  spacing: 0.5,
+  /** Smaller than a boulder, not bigger. Three-unit mounds each read as one
+   *  object the size of a hut; at half that they lose their individual identity
+   *  and the eye takes the run instead. */
+  minWidth: 1.8,
+  maxWidth: 2.8,
+  /** 0.47-1.0 tall: knee to waist. High enough to read as a barrier you follow
+   *  rather than a rise you would step over, low enough that it can never hide
+   *  the character the way the rejected cliff did. */
+  minAspect: 0.26,
+  maxAspect: 0.36,
+  /** Sand does not tip. A visibly leaning dune reads as a boulder again. */
+  maxTilt: 0.05,
+  /** Well sunk: a dune GROWS out of the beach, and the buried quarter is what
+   *  removes the last of the "object placed on the ground" read. */
+  sink: 0.24,
+};
+
+/**
+ * The coast's outer rim, where the ground plate stops and the void begins.
+ *
+ * Same job as RAMPART and the same near/far split for the same reason, but a
+ * beach cannot close its edge with a rock ring — the reference's boundary rises
+ * as dune and scrub, so this is simply a bigger dune. Tall enough on the far
+ * side to hide where the sand ends, and the near side stays under his head.
+ */
+const DUNE_RIM: ScatterConfig = {
+  ...DUNE,
+  spacing: 0.9,
+  minWidth: 3.4,
+  maxWidth: 5.0,
+  /** 1.9-2.8 units on the far side: the same two-to-three-times-the-player
+   *  proportion the rock rampart uses, since it is hiding the same void. */
+  minAspect: 0.55,
+  maxAspect: 0.55,
+  sink: 0.12,
+};
+
+const DUNE_RIM_NEAR: ScatterConfig = {
+  ...DUNE_RIM,
+  minAspect: 0.2,
+  maxAspect: 0.26,
+};
+
+/**
+ * The weed on the dune's crest, and the single detail that makes the boundary
+ * read as a beach rather than as sand-coloured rock.
+ *
+ * `strand-map-layout.jpg`'s whole coastline is a khaki-olive fuzz sitting on a
+ * pale ribbon: the ribbon is the shape and the fuzz is what names it. So the
+ * clumps are scattered over the SAME cells as the dune, tightly enough to form a
+ * band rather than dotting it.
+ *
+ * Knee-high and no taller. A clump is a silhouette breaker, not a screen, and
+ * anything that hides a monster standing behind the boundary is a bug.
+ */
+const WEED: ScatterConfig = {
+  /** Half the narrowest clump, so the clumps OVERLAP. In
+   *  `strand-map-layout2.png` the boundary is a solid mat with no ground showing
+   *  between the rosettes; a scatter that merely dots the ledge reads as a bald
+   *  ridge with some grass on it, which is what the first pass looked like. */
+  spacing: 0.36,
+  minWidth: 1.0,
+  maxWidth: 1.8,
+  /** 0.55-1.35 tall. Knee to hip, never higher: a clump that hides a monster
+   *  standing behind the boundary is a bug, not dressing. */
+  minAspect: 0.55,
+  maxAspect: 0.75,
+  /** Free to lean hard. Scrub is the one thing here that SHOULD look blown. */
+  maxTilt: 0.28,
+  /** Rooted a little under, so the blades come out of the ground rather than
+   *  standing on it — a clump resting on the surface reads as a potted bush. */
+  sink: 0.16,
+};
+
+/** The mat ON the ledge, which is most of what the top-down camera sees of the
+ *  boundary at all. Lifted onto the rock: at y=0 several hundred clumps were
+ *  drawn inside a metre of opaque stone, and the ridge came back bald. */
+const WEED_CREST: ScatterConfig = { ...WEED, lift: 0.62 };
+
+/** The fringe at the ledge's foot, spilling onto the open sand. Both gameplay
+ *  references have it — `beach-map-walls.png`'s undergrowth runs out over the
+ *  beach and `strand-map1.jpg.png`'s leaf hangs off the lip — and it is what
+ *  stops the boundary having a hard line where it meets the floor. */
+const WEED_FOOT: ScatterConfig = { ...WEED, spacing: 0.7, inset: 0.85 };
+
+/**
+ * The LEDGE: the coast's landward edge, and the one part of a boundary that is
+ * allowed to be a wall.
+ *
+ * "Those are not high walls, those are just a stack of stones side by side" —
+ * and that was right. A one-cell line of knee-high mounds is a kerb however
+ * nicely it is textured. `strand-map1.jpg.png` has the boundary standing well
+ * over the player's head as a single rounded rock MASS, and
+ * `strand-map-layout2.png` has it two or three player-widths deep.
+ *
+ * Height is free here for exactly the reason it is free on the rampart, and for
+ * no other: this run is one-sided. It is the map's edge, nothing the player
+ * needs is ever behind it, so a face turned AWAY from the camera may tower while
+ * the face turned toward it stays under his head. That is why `scatterLedge`
+ * takes the same near/far split `scatterRampart` does, and why the blobs
+ * standing in the open sand may NOT use it — a blob has floor on every side, so
+ * "away from the camera" is also somebody's near side, and a 3-unit tower on one
+ * is the bug the rejected cliff pass shipped.
+ */
+const LEDGE_FAR: ScatterConfig = {
+  /** Tight. The mass has to FUSE — every unit of visible gap between two lumps
+   *  is another stone in the stack he called out. */
+  spacing: 0.5,
+  /** Narrow and tall, not wide and tall. At 3.0-4.4 wide the run came off the
+   *  screen as a range of hills that ate two thirds of the frame; the reference
+   *  wall is about a player and a half across and stands twice that. */
+  minWidth: 2.0,
+  maxWidth: 2.8,
+  /** 1.7-2.7 units: over the player's head, the reference's own proportion. */
+  minAspect: 0.85,
+  maxAspect: 0.97,
+  maxTilt: 0.06,
+  sink: 0.14,
+};
+
+/** The same mass where it stands between the camera and the player. 0.9-1.7,
+ *  so a player walking hard against it loses his boots and nothing else. */
+const LEDGE_NEAR: ScatterConfig = { ...LEDGE_FAR, minAspect: 0.42, maxAspect: 0.55 };
+
+/** The row the player can walk up to. 0.85-1.4: under WALL_HEIGHT's 1.8 by the
+ *  same margin the boulders keep, so his head clears it wherever he stands. */
+const LEDGE_FRONT: ScatterConfig = { ...LEDGE_FAR, minAspect: 0.4, maxAspect: 0.5, sink: 0.2 };
+
+/** The low mounds standing IN the sand — see DUNE. Never tall: floor on every
+ *  side means no direction is safely "away". */
+export function scatterDune(cells: readonly RockCell[], cellSize = 0.5): RockPlacement[] {
+  return scatter(cells, { ...DUNE, outwardHalfCell: cellSize / 2 });
+}
+
+/**
+ * The coast's landward wall: a low front and a tall back — see LEDGE_FAR.
+ *
+ * `front` is the row standing ON the boundary cells, and it may NEVER be tall,
+ * whichever way it faces. The near/far test says which way a face turns, not
+ * where the player is, and a run classed "far" can still be the thing he is
+ * walking along — the wall came back at 2.7 units on his own cell and swallowed
+ * him whole. So height goes strictly BEHIND the line he can reach: the rows
+ * `level.ts` pushes outward take the tall config on the side the camera looks
+ * at, and stay low on the side it looks over.
+ */
+export function scatterLedge(
+  cells: readonly RockCell[],
+  front: readonly RockCell[],
+): RockPlacement[] {
+  const far = cells.filter((c) => facing(c) < 0);
+  const near = cells.filter((c) => facing(c) >= 0);
+  return [
+    ...scatter(far, LEDGE_FAR),
+    ...scatter(near, LEDGE_NEAR),
+    ...scatter(front, LEDGE_FRONT),
+  ];
+}
+
+/** The coast's own version of the rampart — see DUNE_RIM. */
+export function scatterDuneRim(cells: readonly RockCell[]): RockPlacement[] {
+  const far = cells.filter((c) => facing(c) < 0);
+  const near = cells.filter((c) => facing(c) >= 0);
+  return [...scatter(far, DUNE_RIM), ...scatter(near, DUNE_RIM_NEAR)];
+}
+
+/**
+ * Scrub over a low mound: a mat on its crest and a fringe at its foot — see
+ * WEED_CREST and WEED_FOOT.
+ *
+ * One call rather than two so the two passes cannot drift apart, and so the
+ * caller never has to know that "the vegetation" is two placements deep.
+ */
+export function scatterWeed(cells: readonly RockCell[]): RockPlacement[] {
+  return [...scatter(cells, WEED_CREST), ...scatter(cells, WEED_FOOT)];
+}
+
+/**
+ * Scrub at the foot of the LEDGE, and only at its foot.
+ *
+ * The mass is two to three metres of rock and a crest mat would be placed inside
+ * it. Both gameplay references put the green here anyway: `beach-map-walls.png`
+ * runs its undergrowth out of the wall onto the open sand, and
+ * `strand-map1.jpg.png` hangs its leaf off the lip. What this is really for is
+ * that the wall must not meet the beach along a hard line.
+ */
+export function scatterLedgeWeed(cells: readonly RockCell[]): RockPlacement[] {
+  return scatter(cells, { ...WEED_FOOT, spacing: 0.5, inset: 1.35 });
+}
+
+/**
+ * The scanned plant set: fern and four bushes, thrown along the boundary among
+ * the blade clumps.
+ *
+ * Sparser than the weed on purpose. The weed is the MAT — the khaki fuzz that
+ * `strand-map-layout2.png` runs the whole coastline in — and this is what breaks
+ * it up, the way `beach-map-walls.png` has fern and broad leaf standing out of
+ * its undergrowth rather than instead of it. One every couple of metres is what
+ * reads as a coastline; one every half metre is a garden centre.
+ *
+ * Aspect near 1 because these keep their authored proportions: the meshes are
+ * normalised by FOOTPRINT, not into a unit box (`_fit_unit_footprint` in
+ * tools/build_rocks.py), so width and height must move together or a fern comes
+ * out as a different plant.
+ */
+const FLORA: ScatterConfig = {
+  spacing: 1.4,
+  minWidth: 1.3,
+  maxWidth: 2.4,
+  minAspect: 0.9,
+  maxAspect: 1.1,
+  maxTilt: 0.12,
+  sink: 0.08,
+  inset: 1.1,
+};
+
+export function scatterFlora(cells: readonly RockCell[]): RockPlacement[] {
+  return scatter(cells, FLORA);
+}
+
+/** The low mounds in the sand. Cast, like the boulders they replace: a metre of
+ *  rock under this sun throws the shadow that stops it looking pasted on. */
+export const DUNE_MESH_PREFIX = "wallrun-dune-";
+/** The landward wall. Never casts, for the rampart's reason: two to three units
+ *  of continuous run under this sun is one unbroken band across the beach. */
+export const LEDGE_MESH_PREFIX = "wallrun-ledge-";
+/** The outer ridge. Never casts — same reason as `RAMPART_MESH_PREFIX`. */
+export const DUNE_RIM_MESH_PREFIX = "wallrun-dunerim-";
+/** The scrub. Never casts: a few hundred clumps each throwing a shadow map
+ *  update is the one thing on this boundary that is not worth a frame. */
+export const WEED_MESH_PREFIX = "wallrun-weed-";
+/** The scanned plant set. Same exclusion, and alpha-cut geometry in a shadow map
+ *  is a whole extra depth pass for a fern. */
+export const FLORA_MESH_PREFIX = "wallrun-flora-";
 
 /**
  * NO CAVE WALLS INLAND. This was tried and measured, and the reference is what
@@ -417,6 +701,10 @@ function scatter(cells: readonly RockCell[], cfg: ScatterConfig): RockPlacement[
       x += (cell.nx ?? 0) * out;
       z += (cell.nz ?? 0) * out;
     }
+    if (cfg.inset !== undefined) {
+      x -= (cell.nx ?? 0) * cfg.inset;
+      z -= (cell.nz ?? 0) * cfg.inset;
+    }
 
     const cx = Math.floor(x / spacing);
     const cz = Math.floor(z / spacing);
@@ -434,7 +722,7 @@ function scatter(cells: readonly RockCell[], cfg: ScatterConfig): RockPlacement[
 
     const rock: RockPlacement = {
       x,
-      y: -height * cfg.sink,
+      y: (cfg.lift ?? 0) - height * cfg.sink,
       z,
       width,
       height,
@@ -452,10 +740,60 @@ function scatter(cells: readonly RockCell[], cfg: ScatterConfig): RockPlacement[
   return out;
 }
 
-function sourceMeshes(container: AssetContainer): AbstractMesh[] {
-  return container.meshes
+/**
+ * The source meshes one prefix draws from.
+ *
+ * `rocks.glb` carries three families — `rock_*` boulders, `dune_*` swells and
+ * `weed_*` blade clumps — because the scatter, the thin-instancing and the
+ * per-area disposal are identical for all three and a second glb would be a
+ * second load path for no gain. Which family a build takes is read off the
+ * prefix it was asked for, so a caller can never pair a coast's dune scatter
+ * with a boulder mesh.
+ *
+ * A glb that predates the dunes has no `dune_*` at all, and a name filter that
+ * matched nothing would silently draw no boundary. Falling back to everything
+ * that is not one of the other families keeps that case rendering — and the
+ * geometry test's single `rock-a` source, which is neither.
+ */
+/**
+ * Put a scanned plant into the same exposure as everything else in the frame.
+ *
+ * A glTF material arrives at baseColorFactor 1, and the coast runs its sun at
+ * `light` 2.4 — six times the dungeon rig — so every leaf came off the screen
+ * white. The rock next to it is trimmed for exactly the same reason
+ * (SEA_ROCK_ALBEDO in level.ts); this is that trim for the flora, applied here
+ * because here is the only place a material the runtime did not build is
+ * touched. Idempotent: `buildRocks` runs on every area change and the material
+ * is shared, so it must not compound.
+ */
+const FLORA_ALBEDO = 0.34;
+
+function dressFlora(mat: PBRMaterial): void {
+  if (!mat || mat.metadata?.["floraDressed"] === true) return;
+  mat.metadata = { ...(mat.metadata ?? {}), floraDressed: true };
+  mat.albedoColor = new Color3(FLORA_ALBEDO, FLORA_ALBEDO, FLORA_ALBEDO);
+  // The 6% self-lighting the plant was authored with is 6% of a texture that is
+  // now being read three times darker; left alone it becomes the brightest part
+  // of the leaf.
+  mat.emissiveColor = mat.emissiveColor.scale(FLORA_ALBEDO);
+}
+
+function sourceMeshes(container: AssetContainer, prefix: string): AbstractMesh[] {
+  const all = container.meshes
     .filter((m) => m.name !== GLTF_ROOT && m.getTotalVertices() > 0)
     .sort((a, b) => a.name.localeCompare(b.name));
+  const family = prefix.startsWith(FLORA_MESH_PREFIX)
+    ? "flora_"
+    : prefix.startsWith(WEED_MESH_PREFIX)
+      ? "weed_"
+      : prefix.startsWith(LEDGE_MESH_PREFIX)
+        ? "ledge_"
+        : prefix.startsWith(DUNE_MESH_PREFIX) || prefix.startsWith(DUNE_RIM_MESH_PREFIX)
+          ? "dune_"
+          : null;
+  if (family === null) return all.filter((m) => !/^(dune|ledge|weed|flora)_/.test(m.name));
+  const picked = all.filter((m) => m.name.startsWith(family));
+  return picked.length > 0 ? picked : all;
 }
 
 /** Drop the previous area's rocks. Safe to call when there were none. */
@@ -478,13 +816,13 @@ export function clearRocks(): void {
 export function buildRocks(
   scene: Scene,
   placements: readonly RockPlacement[],
-  material: Material,
+  material: Material | null,
   prefix: string = ROCK_MESH_PREFIX,
 ): Mesh[] | null {
   for (const mesh of placed.get(prefix) ?? []) mesh.dispose();
   placed.delete(prefix);
   if (!loaded || loaded.scene !== scene) return null;
-  const sources = sourceMeshes(loaded.container);
+  const sources = sourceMeshes(loaded.container, prefix);
   if (sources.length === 0) return null;
 
   const matrices: number[][] = sources.map(() => []);
@@ -522,7 +860,18 @@ export function buildRocks(
     mesh.rotationQuaternion = null;
     mesh.rotation.setAll(0);
     mesh.scaling.setAll(1);
-    mesh.material = material;
+    // `null` keeps whatever the glb authored, which is the whole point for the
+    // plant set: a boulder wears its biome's plate, a fern wears a photograph of
+    // a fern and each species has its own.
+    if (material !== null) mesh.material = material;
+    else if (mesh.material) {
+      // MASK, not BLEND. Blender 5.2's exporter writes alphaMode BLEND whatever
+      // `blend_method` says, and a few hundred sorted transparent instances a
+      // frame is real cost for leaves that only ever needed a cutout.
+      mesh.material.transparencyMode = 1; // Material.MATERIAL_ALPHATEST
+      mesh.material.backFaceCulling = false;
+      dressFlora(mesh.material as PBRMaterial);
+    }
     mesh.receiveShadows = true;
     mesh.isPickable = false;
     mesh.thinInstanceSetBuffer("matrix", new Float32Array(data), 16, true);

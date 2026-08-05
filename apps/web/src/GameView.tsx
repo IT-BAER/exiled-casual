@@ -298,8 +298,24 @@ export function GameView({
      * and the hideout just sits there.
      */
     const HARNESS_SETTLE_TICKS = 45;
+    /**
+     * When to stop waiting and show whatever we are standing in.
+     *
+     * The loading plate is held up for the whole hideout leg (see `needsPaint`),
+     * which is the only way `?play&map=<node>` opens ON the beach instead of
+     * showing a hideout, a walk and a portal first. The cost of that is a black
+     * screen if the harness ever gets stuck — a node the sim quietly refuses, a
+     * portal that never spawns — so it gives up after twenty seconds and lets
+     * the hideout through rather than hanging on a plate forever.
+     */
+    const HARNESS_GIVE_UP_TICKS = 30 * 20;
     const harnessStep = (snap: Snapshot): void => {
       if (harnessTicks++ < HARNESS_SETTLE_TICKS) return;
+      if (harnessTicks > HARNESS_GIVE_UP_TICKS) {
+        console.warn("?map: gave up waiting; showing the area we are in");
+        harness = "done";
+        return;
+      }
       if (harness === "panel") {
         if (snap.entities.some((e) => e.kind === "mapDevice")) {
           setPanelOpen(true);
@@ -442,6 +458,7 @@ export function GameView({
           scene,
           base ? BIOMES[base.biomeId].tint : null,
           base ? BIOMES[base.biomeId].light ?? 1 : 1,
+          base ? BIOMES[base.biomeId].sea === true : false,
         );
         setAreaLayout(msg.area === "map" ? msg.layout : null);
         // Arms the paint only once this area's materials and textures are in.
@@ -474,7 +491,14 @@ export function GameView({
       // The one place the loading plate is allowed to come down: a frame for
       // this area is now on the glass. Guarded by the flag rather than by state,
       // so this costs one boolean read per frame and sets React state once.
-      if (needsPaint) {
+      // Held up for the whole `?play&map=<node>` leg: the harness's hideout,
+      // its walk and its portal are staging, not a place, and showing them was
+      // the difference between "the URL opens the map" and "the URL watches
+      // someone else open it". The plate comes down on the MAP's first frame.
+      // `harness` is already "done" in normal play, so this costs nothing there,
+      // and it gives up on its own after twenty seconds (HARNESS_GIVE_UP_TICKS)
+      // rather than hanging on a black plate.
+      if (needsPaint && harness === "done") {
         needsPaint = false;
         // Dissolve rather than cut. The world under it is finished either way —
         // this fade costs the player nothing, because the frame behind it is

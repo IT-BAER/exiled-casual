@@ -24,19 +24,25 @@ import {
   type Socket,
 } from "./grid";
 
-/** Same 144 cells (72 world units) as the assembled areas. The camera, the rim
- *  fade and the monster nav flood are all tuned against that size. */
-export const COAST_CELLS = 144;
+/** A coast is LONGER than an assembled area: 224 cells is 112 world units, and
+ *  the camera shows about nineteen across, so the walk is six screens instead of
+ *  the three and a half a 144-cell grid gave. A beach that ends before the
+ *  player has settled into walking it is a corridor with a nicer floor.
+ *
+ *  The grid stays square because everything downstream (`buildLayout`, the
+ *  minimap, the nav flood) is written against one `size`. The extra rows cost
+ *  nothing but sea. */
+export const COAST_CELLS = 224;
 
 /** Solid cells at each END of the shore, so the map closes rather than running
  *  off the grid. The sea itself is NOT capped: it continues past both ends. */
 const END_MARGIN = 8;
 
-/** Canonical shoreline height, in cells, before the wobble. Everything at or
- *  above this row (in the canonical frame) is sea, so this also sets how much
- *  water is on the grid: 44 cells, 22 world units, well past the ~10 the camera
- *  shows beyond the rim. */
-const SHORE_BASE = 100;
+/** Canonical shoreline row before the wobble: everything at or above it is sea.
+ *  Set from the top so the water band is a constant depth however long the beach
+ *  gets — 44 cells of it, 22 world units, well past the ~10 the camera shows
+ *  beyond the rim. */
+const SHORE_BASE = COAST_CELLS - 44;
 
 /** Wobble of the shoreline, in cells, as four harmonics.
  *
@@ -63,19 +69,27 @@ const WIDTH_MAX = 52;
 /** The boss bay: the last stretch of shore opens out. 28 cells long, up to 26
  *  cells wider, because a boss needs ground the camera cannot frame in one shot
  *  (the same reason the chunk grammars reserve a 2x2 tile block for one). */
-const BOWL_LEN = 28;
+const BOWL_LEN = 34;
 const BOWL_EXTRA = 26;
 
 /** Rocks and dune scrub standing in the open sand. Blobs, never walls: this is
  *  the shape PoE's overlay actually shows, and it is what gives an open beach
  *  something to walk around without ever telling the player where to go. */
-const BLOB_TRIES = 22;
+const BLOB_TRIES = 34;
 const BLOB_MIN_R = 2;
 const BLOB_MAX_R = 4;
 /** How far apart two blobs must stand, in cells. Without it they merge into one
  *  central ridge and the beach is a lane again — which is exactly what the first
  *  pass produced. */
 const BLOB_SPACING = 13;
+
+/** How far past the waterline the player may still walk, in cells. Three is a
+ *  metre and a half of ankle-deep water: a beach you cannot set foot in is a
+ *  beach with an invisible fence down it, and the sea's own alpha ramp is short
+ *  enough that a body standing there is not underneath opaque water. The
+ *  waterline the renderer draws does NOT move — only how far the floor runs
+ *  under it. */
+const WADE_CELLS = 3;
 
 /** World units of quiet around the portal, matching the assembler's. */
 const SPAWN_SAFE_RADIUS = 10;
@@ -197,7 +211,8 @@ export function generateCoast(
       // happens to stop, and the one thing the camera always sees out there is
       // that there is more of it.
       if (y >= shore) water[i] = 1;
-      else if (open && y > cliff) cells[i] = 1;
+      // Floor runs a little PAST the waterline, so the shallows are walkable.
+      if (open && y > cliff && y < shore + WADE_CELLS) cells[i] = 1;
     }
   }
 

@@ -236,6 +236,6 @@ describe("the place's biome", () => {
     // The Wrackline is node 0, and node 0 is always reachable, so its popup opens.
     fireEvent.click(screen.getByTestId(`prep-node-${atlasGraph(7)[0]!.id}`));
     expect(screen.getByTestId("prep-popup-name").textContent).toBe("The Wrackline");
-    expect(screen.getByTestId("prep-popup-biome").textContent).toBe("Strand");
+    expect(screen.getByTestId("prep-popup-biome").textContent).toBe("Coast");
   });
 });

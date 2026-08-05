@@ -146,7 +146,7 @@ const NODE_NAMES: readonly string[] = [
  * Same arrangement as `GEAR_TEXTURE` in the renderer.
  */
 export const MAP_BASE_IDS = [
-  "map.vaal_stone", "map.desert", "map.swamp", "map.forest", "map.strand",
+  "map.vaal_stone", "map.desert", "map.swamp", "map.forest", "map.coast",
 ] as const;
 export type MapBaseId = (typeof MAP_BASE_IDS)[number];
 
@@ -158,7 +158,7 @@ export type MapBaseId = (typeof MAP_BASE_IDS)[number];
 const NODE_MAP_BASES: readonly MapBaseId[] = [
   // Index 0 is where every character starts (atlasNodeTier calls it tier 1), so
   // it is the strand: the first thing anyone sees is open sky over open water.
-  "map.strand",      // The Wrackline
+  "map.coast",       // The Wrackline
   "map.desert",      // Emberfall
   "map.vaal_stone",  // Cinder Vault
   "map.swamp",       // Blackmire
@@ -171,8 +171,8 @@ const NODE_MAP_BASES: readonly MapBaseId[] = [
   "map.forest",      // Gallowsmoor
   "map.vaal_stone",  // Vault of Cinders
   "map.forest",      // Hollowbriar
-  "map.strand",      // Gullscour
-  "map.strand",      // Bonestrand
+  "map.coast",       // Gullscour
+  "map.coast",       // Bonestrand
 ];
 
 /** The base an Atlas node runs, by its index in the fixed name table. */

@@ -63,11 +63,20 @@ describe("generateCoast", () => {
     }
   });
 
-  it("never floods a cell the player can stand on", () => {
+  it("only lets the walkable floor into the water at the tide line", () => {
+    // The player wades: floor runs a few cells past the waterline so a beach is
+    // not fenced off from its own sea. What must never happen is floor out in
+    // DEEP water, so the overlap is bounded per column rather than forbidden.
     for (const seed of SEEDS) {
       const { grid } = generateCoast(seed, V, 16);
-      for (let i = 0; i < grid.cells.length; i++)
-        if (grid.cells[i] === 1) expect(grid.water![i]).toBe(0);
+      for (let x = 0; x < COAST_CELLS; x++) {
+        let wet = 0;
+        for (let y = 0; y < COAST_CELLS; y++) {
+          const i = y * COAST_CELLS + x;
+          if (grid.cells[i] === 1 && grid.water![i] === 1) wet++;
+        }
+        expect(wet, `seed ${seed} column ${x}`).toBeLessThanOrEqual(3);
+      }
     }
   });
 

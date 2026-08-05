@@ -31,7 +31,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 MASTERS = ROOT / "assets" / "tilesets"
 OUT = ROOT / "apps" / "web" / "public" / "textures" / "tilesets"
 
-BIOMES = ["vaal_stone", "desert", "swamp", "forest", "strand"]
+BIOMES = ["vaal_stone", "desert", "swamp", "forest", "coast"]
 
 # Shipped size. The old CC0 stone wall was 1024x512 and read fine at the game's
 # 2-world-unit repeat; matching it keeps the memory cost where it was. The floor
@@ -73,6 +73,24 @@ NORMAL_STRENGTH = 2.2
 FLOOR_MIN_LUMA = 95.0
 WALL_MIN_LUMA = 120.0
 
+# Per-biome hue for a floor plate, normalised to mean 1.0 exactly as
+# `applyBiomeTint` normalises the light: it may shift a plate's COLOUR and can
+# never change how bright it is. `lift_luma` above owns brightness; this owns hue,
+# and the two never fight.
+#
+# It exists because the light cannot do this job. Measured against
+# `reference-screenshots/beach-map.jpg`, PoE's dry sand runs RGB 217/180/120 —
+# saturation 0.45, and unmistakably gold. Our Coast plate is a photoscan shot
+# under an overcast sky and lands at 0.17: grey-beige, and on screen it came back
+# as bone. The tint pass drives the SUN, so the only way to reach 0.45 through it
+# is a light so orange that it turns the character, the sea and the surf orange
+# with it. Sand is gold because sand is gold, so the colour belongs in the plate.
+#
+# Only the Coast needs one. Every other master was generated to its biome's brief
+# and already carries its own hue; a grade on those would be a second opinion
+# fighting the art.
+FLOOR_GRADE = {"coast": (1.24, 1.02, 0.74)}
+
 
 def mean_luma(a: np.ndarray) -> float:
     return float((0.299 * a[:, :, 0] + 0.587 * a[:, :, 1] + 0.114 * a[:, :, 2]).mean())
@@ -98,6 +116,23 @@ def lift_luma(a: np.ndarray, target: float) -> tuple[np.ndarray, float, float]:
             lo = g
     out = (x ** ((lo + hi) / 2)) * 255.0
     return out, before, mean_luma(out)
+
+
+def grade(a: np.ndarray, rgb: tuple[float, float, float]) -> np.ndarray:
+    """Shift a plate's hue without touching its brightness.
+
+    The multiplier is normalised to mean 1.0 and the result is then pulled back
+    to the luminance it went in with — the channel weights of a multiply and of
+    luma are not the same, so a mean-1.0 tint still moves the mean by a few
+    percent, and this pass may not be allowed to undo `lift_luma`.
+    """
+    k = 3.0 / sum(rgb)
+    before = mean_luma(a)
+    out = a * np.array(rgb, dtype=np.float32) * k
+    after = mean_luma(out)
+    if after > 0:
+        out *= before / after
+    return out.clip(0, 255)
 
 
 def make_seamless(a: np.ndarray) -> np.ndarray:
@@ -140,11 +175,19 @@ def normal_map(rgb: np.ndarray) -> np.ndarray:
     return ((out * 0.5 + 0.5) * 255.0).clip(0, 255).astype(np.uint8)
 
 
+def saturation(a: np.ndarray) -> float:
+    m = a.reshape(-1, 3).mean(0)
+    return float((m.max() - m.min()) / max(m.max(), 1e-6))
+
+
 def plate(
-    src: pathlib.Path, size: tuple[int, int], min_luma: float
+    src: pathlib.Path,
+    size: tuple[int, int],
+    min_luma: float,
+    hue: tuple[float, float, float] | None = None,
 ) -> tuple[Image.Image, str] | None:
-    """Load a master, make it tile, lift it if it is too dark to play on, and
-    downscale it to its shipped size."""
+    """Load a master, make it tile, lift it if it is too dark to play on, grade
+    it to its biome's hue, and downscale it to its shipped size."""
     if not src.exists():
         print(f"    MISSING {src.relative_to(ROOT)}")
         return None
@@ -153,10 +196,14 @@ def plate(
     a = make_seamless(a)
     after = seam_error(a)
     a, luma_before, luma_after = lift_luma(a, min_luma)
+    sat_before = saturation(a)
+    if hue is not None:
+        a = grade(a, hue)
     img = Image.fromarray(a.clip(0, 255).astype(np.uint8)).resize(size, Image.LANCZOS)
     note = (
         f"seam L-R {before[0]:5.2f}->{after[0]:4.2f}  T-B {before[1]:5.2f}->{after[1]:4.2f}"
         f"  luma {luma_before:5.1f}->{luma_after:5.1f}"
+        f"  sat {sat_before:4.2f}->{saturation(a):4.2f}"
     )
     return img, note
 
@@ -175,7 +222,12 @@ def build(biome: str) -> bool:
     )
     print(f"  {biome:11s} wall   {wall_note}")
 
-    floor = plate(MASTERS / biome / "floor_master_v1.png", (FLOOR_SHIP, FLOOR_SHIP), FLOOR_MIN_LUMA)
+    floor = plate(
+        MASTERS / biome / "floor_master_v1.png",
+        (FLOOR_SHIP, FLOOR_SHIP),
+        FLOOR_MIN_LUMA,
+        FLOOR_GRADE.get(biome),
+    )
     if floor is None:
         return False
     floor_img, floor_note = floor

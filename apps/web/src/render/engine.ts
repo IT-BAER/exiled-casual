@@ -20,7 +20,7 @@ import {
   type Engine,
 } from "@babylonjs/core";
 import { DEFAULT_SETTINGS, type GraphicsSettings } from "../settings";
-import { ROCK_MESH_PREFIX } from "./rocks";
+import { DUNE_MESH_PREFIX, ROCK_MESH_PREFIX } from "./rocks";
 import { SEA_MESH_NAME } from "./sea";
 import { createHaze, createMotes } from "./haze";
 import { FLAME_MESH } from "./flames";
@@ -779,8 +779,16 @@ export function createScene(engine: Engine): SceneHandle {
     // WALL_MESH_NAME after the merge, so this filter only ever saw Babylon's
     // default. `buildLevel` now merges INTO a mesh already called that, which is
     // the only reason matching on it here works.
+    // The coast's berm is cast back in for the same reason as the boulders: it
+    // is the same height, it is discrete, and without a shadow a metre of sand
+    // reads as painted onto the beach rather than standing on it. Its outer
+    // ridge and its scrub stay out — the ridge is the rampart's unbroken band
+    // again, and a few hundred grass clumps are the one thing on this boundary
+    // not worth a shadow map update.
     const isLevelGeometry = (name: string): boolean =>
-      (name.startsWith("wallrun-") && !name.startsWith(ROCK_MESH_PREFIX)) ||
+      (name.startsWith("wallrun-") &&
+        !name.startsWith(ROCK_MESH_PREFIX) &&
+        !name.startsWith(DUNE_MESH_PREFIX)) ||
       name === WALL_MESH_NAME ||
       // The sea is a sheet covering everything outside the rim: casting from it
       // would put the whole void in shadow, and it is born with this name for

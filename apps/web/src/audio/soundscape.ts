@@ -121,7 +121,7 @@ const GROUND: Record<string, string> = {
   desert: "dirt",
   swamp: "mud",
   forest: "grass",
-  strand: "dirt",
+  coast: "dirt",
 };
 const DEFAULT_GROUND = "stone";
 
@@ -140,7 +140,7 @@ const ROOM: Record<string, number> = {
   desert: 0.3,
   // The most open place in the game: sand underfoot and water on one side, so
   // there is nothing at all to give a cue back.
-  strand: 0.2,
+  coast: 0.2,
 };
 const HIDEOUT_ROOM = 1.15;
 /** Falls per ground on disk, `footstep-<ground>-1..N`. */

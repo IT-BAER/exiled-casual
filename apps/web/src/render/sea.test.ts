@@ -165,8 +165,8 @@ describe("buildSea", () => {
   });
 
   it("is the strand and only the strand", () => {
-    expect(BIOMES.strand.sea).toBe(true);
+    expect(BIOMES.coast.sea).toBe(true);
     for (const biome of Object.values(BIOMES))
-      if (biome.id !== "strand") expect(biome.sea).toBeUndefined();
+      if (biome.id !== "coast") expect(biome.sea).toBeUndefined();
   });
 });

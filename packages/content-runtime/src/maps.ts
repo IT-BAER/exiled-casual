@@ -31,12 +31,23 @@ export const BIOMES: Record<BiomeId, Biome> = {
     // Filtered through a canopy: dim, cool, a little blue.
     tint: [0.66, 0.74, 0.62],
   },
-  strand: {
-    id: "strand",
-    name: "Strand",
+  coast: {
+    id: "coast",
+    name: "Coast",
     // Open sky off open water: the one biome with nothing overhead, so it keeps
-    // more of the light than any of them and takes it slightly cold off the sea.
-    tint: [0.82, 0.88, 0.94],
+    // more of the light than any of them.
+    //
+    // WARM, not cold. This was [0.82,0.88,0.94] on the reasoning that light off
+    // the sea comes back blue, and the reference says otherwise:
+    // `reference-screenshots/beach-map.jpg` is a warm midday beach throughout —
+    // its dry sand measures RGB 217/180/120 — and under a cool tint ours read as
+    // bone. The sand's own gold now lives in the plate (FLOOR_GRADE in
+    // tools/build_tileset_textures.py, which is the only place it can live
+    // without turning the character orange too); this is the daylight over it.
+    // Written with the largest channel at 1: `applyBiomeTint` divides by the
+    // mean anyway, so only the RATIO is load-bearing, and every other biome is
+    // authored inside 0..1.
+    tint: [1.0, 0.95, 0.88],
     // The only biome where the void outside the rim is a thing and not an edge.
     sea: true,
     // Open sky, midday, off water that throws half of it back up. Every other
@@ -79,10 +90,10 @@ export const MAP_BASES: Record<string, MapBase> = {
     tilesetId: "tileset.forest",
     layoutGrammarId: "open-field",
   },
-  "map.strand": {
-    id: "map.strand",
-    biomeId: "strand",
-    tilesetId: "tileset.strand",
+  "map.coast": {
+    id: "map.coast",
+    biomeId: "coast",
+    tilesetId: "tileset.coast",
     layoutGrammarId: "coast",
   },
 };

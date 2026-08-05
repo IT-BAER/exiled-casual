@@ -25,8 +25,19 @@ import {
   clearRocks,
   isRocksReady,
   scatterDebris,
+  scatterDune,
+  scatterDuneRim,
+  scatterFlora,
+  scatterLedge,
+  scatterLedgeWeed,
   scatterRampart,
   scatterRocks,
+  scatterWeed,
+  DUNE_MESH_PREFIX,
+  DUNE_RIM_MESH_PREFIX,
+  FLORA_MESH_PREFIX,
+  LEDGE_MESH_PREFIX,
+  WEED_MESH_PREFIX,
   type RockCell,
 } from "./rocks";
 import { attachProp } from "./props";
@@ -116,6 +127,9 @@ const TOP_SHADE = 0.22;
  *  from. The ground must stay the bright thing in every frame. */
 const ROCK_ALBEDO = 0.18;
 
+/** The same number for a coast — see `wallMaterial` for why it is higher. */
+const SEA_ROCK_ALBEDO = 0.22;
+
 /** Weathered stone. Lower than the ground's 0.92 on purpose: a rock face is
  *  smoother than loose dirt, and the small sheen difference is what separates
  *  the two materials now that both are lit by the same physical model. */
@@ -152,8 +166,8 @@ export function tilesetDir(tilesetId: string): string {
  * `tools/build_tileset_textures.py` — see that script for why the seam pass
  * exists at all.
  */
-function wallMaterial(scene: Scene, tilesetId: string): PBRMaterial {
-  const name = `${WALL_MAT_NAME}-${tilesetId}`;
+function wallMaterial(scene: Scene, tilesetId: string, sea = false): PBRMaterial {
+  const name = `${WALL_MAT_NAME}-${tilesetId}${sea ? "-sea" : ""}`;
   const existing = scene.getMaterialByName(name) as PBRMaterial | null;
   if (existing) return existing;
   const dir = tilesetDir(tilesetId);
@@ -171,10 +185,64 @@ function wallMaterial(scene: Scene, tilesetId: string): PBRMaterial {
   // ours had one grey-green doing both. applyBiomeTint drives the LIGHTS, so it
   // moves rock and floor together and can never make this distinction — it has
   // to live in the material.
-  mat.albedoColor = new Color3(ROCK_ALBEDO * 0.94, ROCK_ALBEDO, ROCK_ALBEDO * 1.14);
+  // Warm on a coast, cold everywhere else. The cold bias is a DUNGEON rule: it
+  // separates rock from ground when both are lit by the same torch, and the rock
+  // is the thing in shadow. A shore is lit by open daylight off warm sand and
+  // both gameplay references show its rock as brown-ochre with weed in it — under
+  // the cold bias ours came off the screen as blue granite, which is the read he
+  // rejected outright.
+  //
+  // And well over ROCK_ALBEDO, which is the other half of the same rule. 0.18 is
+  // deliberately under stone's physical range because a dungeon boulder catches
+  // a torch square on and would otherwise be the brightest thing in a dark room.
+  // A coast has the opposite problem: the plate is a dark brown-and-moss ground
+  // scan, the ledge is the DARK thing next to bright sand by construction, and at
+  // 0.18 it came off the screen as a black snake against the beach. In the
+  // revealed overview the ledge and the sand are close in value.
+  const albedo = sea ? SEA_ROCK_ALBEDO : ROCK_ALBEDO;
+  mat.albedoColor = sea
+    ? new Color3(albedo * 1.2, albedo * 1.02, albedo * 0.78)
+    : new Color3(albedo * 0.94, albedo, albedo * 1.14);
   // Nothing mutates this material after this line (biome mood is done through
   // the LIGHTS, see applyBiomeTint), so skip its per-frame dirty checks.
   // checkReadyOnlyOnce still waits for the textures before caching the effect.
+  mat.freeze();
+  return mat;
+}
+
+/** How far BEHIND the boundary line the ledge's tall rows sit, in world units.
+ *  The line itself is drawn separately and always low (LEDGE_FRONT in rocks.ts),
+ *  because the player can stand on it; everything here is off the playable grid,
+ *  which is the only reason it is allowed over his head. Two rows and no more —
+ *  at three spanning 2.6 units the wall became a range of hills over most of the
+ *  frame. Depth out there is free; it is the FRAME it costs. */
+const LEDGE_ROWS = [1.15, 2.3];
+
+/** The scrub over the ledge.
+ *
+ *  Dry marram, not lawn: `strand-map-layout2.png` runs its whole coastline in a
+ *  khaki-olive that is barely green at all, and the one thing that would undo
+ *  the ledge is a band of park grass along it. Sampled off the reference's mat
+ *  rather than picked, which is why it is this yellow.
+ *
+ *  Single-sided geometry (tools/build_rocks.py), so culling is off: a blade has
+ *  a back, and half a clump vanishing as the camera passes is worse than the
+ *  triangles saved. */
+const WEED_COLOR = new Color3(0.46, 0.41, 0.21);
+const WEED_MAT_NAME = "level-weed-mat";
+
+function weedMaterial(scene: Scene): PBRMaterial {
+  const existing = scene.getMaterialByName(WEED_MAT_NAME) as PBRMaterial | null;
+  if (existing) return existing;
+  const mat = new PBRMaterial(WEED_MAT_NAME, scene);
+  mat.metallic = 0;
+  mat.roughness = 0.95;
+  mat.albedoColor = WEED_COLOR;
+  mat.backFaceCulling = false;
+  // Dry grass is thin enough that the sun comes through it. A little emission
+  // stands in for the transmission a leaf shader would do, and without it a
+  // clump on the shaded side of the berm goes to a black smudge.
+  mat.emissiveColor = WEED_COLOR.scale(0.18);
   mat.freeze();
   return mat;
 }
@@ -387,6 +455,7 @@ function standBraziers(
   scene: Scene,
   grid: WalkableGrid,
   isFloor: (x: number, y: number) => boolean,
+  isSea: (x: number, y: number) => boolean,
 ): void {
   for (const node of [...scene.meshes, ...scene.transformNodes]) {
     if (node.name.startsWith(AREA_BRAZIER_PREFIX)) node.dispose(false, false);
@@ -405,6 +474,11 @@ function standBraziers(
       const wallE = !isFloor(x + 1, y);
       const sides = Number(wallN) + Number(wallS) + Number(wallW) + Number(wallE);
       if (sides !== 1) continue;
+      // Never against the sea. Water is "wall" to this test, so on a beach every
+      // candidate lined the tide line and the whole map was lit from the water —
+      // a row of standing fires in the surf, which is the one place a fire cannot
+      // be. A brazier belongs against the cliff.
+      if (isSea(x, y - 1) || isSea(x, y + 1) || isSea(x - 1, y) || isSea(x + 1, y)) continue;
       const wx = originX + x * cellSize;
       const wz = originY + y * cellSize;
       if (spots.some((s) => Math.hypot(s.x - wx, s.z - wz) < FIRE_SPACING)) continue;
@@ -498,6 +572,43 @@ export function buildLevel(
   // plinth under them. Without it (headless tests, a failed fetch) the band is
   // the wall again at full height, which is the look this replaced and still plays.
   const rocky = isRocksReady(scene);
+
+  /**
+   * Which boundary cells are the map's own EDGE, as opposed to an obstacle
+   * standing in the open.
+   *
+   * Flooded inward from the grid's border rather than assumed, because on a
+   * coast both are "wall": the landward cliff line AND the blobs scattered
+   * across the sand. They must not be drawn the same way — the edge is one-sided
+   * and may therefore stand over the player's head, while a blob has floor all
+   * round it and a tall one hides whoever walks behind it. Treating every
+   * boundary cell as edge is exactly what put a four-unit tower on each blob in
+   * the middle of the beach the first time this was tried.
+   *
+   * A blob is a wall pocket the border flood can never reach, the same way an
+   * inland pocket is unreachable from the sea. Coast only: every other biome
+   * gets its edge from the rim ring below.
+   */
+  const isEdgeCell = new Uint8Array(cols * rows);
+  if (grid.shore) {
+    const stack: number[] = [];
+    const push = (x: number, y: number): void => {
+      if (x < 0 || y < 0 || x >= cols || y >= rows) return;
+      const i = y * cols + x;
+      if (isEdgeCell[i] || isSea(x, y) || cells[i] === 1) return;
+      isEdgeCell[i] = 1;
+      stack.push(i);
+    };
+    for (let x = 0; x < cols; x++) { push(x, 0); push(x, rows - 1); }
+    for (let y = 0; y < rows; y++) { push(0, y); push(cols - 1, y); }
+    while (stack.length) {
+      const i = stack.pop()!;
+      const x = i % cols;
+      const y = (i - x) / cols;
+      push(x - 1, y); push(x + 1, y); push(x, y - 1); push(x, y + 1);
+    }
+  }
+
   const bandHeight = rocky ? BAND_HEIGHT : WALL_HEIGHT;
 
   const uH = bandHeight / TILE;
@@ -506,6 +617,9 @@ export function buildLevel(
   const rockCells: RockCell[] = [];
   const floorCells: RockCell[] = [];
   const edgeCells: RockCell[] = [];
+  /** Boundary cells the border flood reached: the coast's landward wall. Empty
+   *  on every other biome, where `isEdgeCell` is never filled. */
+  const ledgeCells: RockCell[] = [];
   let wallCells = 0;
 
   // The outermost ring of the grid, floor-adjacent or not. `isBoundaryWall` only
@@ -536,12 +650,16 @@ export function buildLevel(
       const runLen = x - runStart;
       wallCells += runLen;
       if (rocky)
-        for (let i = 0; i < runLen; i++)
-          rockCells.push({
-            x: originX + (runStart + i) * cellSize,
+        for (let i = 0; i < runLen; i++) {
+          const cx = runStart + i;
+          const cell = {
+            x: originX + cx * cellSize,
             z: originY + y * cellSize,
-            ...outward(runStart + i, y),
-          });
+            ...outward(cx, y),
+          };
+          if (isEdgeCell[y * cols + cx] === 1) ledgeCells.push(cell);
+          else rockCells.push(cell);
+        }
 
       const width = runLen * cellSize;
       const uW = width / TILE;
@@ -579,7 +697,7 @@ export function buildLevel(
   // Fires along the walls, before the merge: `floorCells` is already the list of
   // open cells this sweep collected, and a brazier wants one that has a wall to
   // stand against.
-  standBraziers(scene, grid, isFloor);
+  standBraziers(scene, grid, isFloor, isSea);
   // The shore's own dressing. After the braziers because it uses the same
   // sweep's knowledge of where the floor is, and before the merge for no reason
   // other than keeping every "stand something up" call in one place.
@@ -628,12 +746,55 @@ export function buildLevel(
           });
         }
 
-    buildRocks(scene, scatterRocks(rockCells, cellSize), material);
-    buildRocks(scene, scatterDebris(floorCells), material, DEBRIS_MESH_PREFIX);
-    buildRocks(scene, scatterRampart(edgeCells), material, RAMPART_MESH_PREFIX);
+    // A coast borders in sand, not in stone — see `DUNE` in rocks.ts, and the
+    // two references it cites. Same scatter, same six meshes, different shape
+    // and the FLOOR plate instead of the wall plate.
+    if (grid.shore) {
+      // Coastal rock, warm rather than the dungeon's cold: same plate, different
+      // light to sit in. See `wallMaterial`.
+      const stone = wallMaterial(scene, tilesetId, true);
+      const weed = weedMaterial(scene);
+      // The wall is DEEP, not a line. One cell of boundary is half a unit and a
+      // single row of it read as a stack of stones laid side by side however
+      // tall each one was; `strand-map-layout2.png` has the boundary two to
+      // three player-widths across. The rows behind the first cost nothing to
+      // place — everything out there is off the map — and they are what turns a
+      // row of rocks into a mass with a back to it.
+      const behind = ledgeCells.flatMap((c) =>
+        LEDGE_ROWS.map((d) => ({ ...c, x: c.x + (c.nx ?? 0) * d, z: c.z + (c.nz ?? 0) * d })),
+      );
+      buildRocks(scene, scatterLedge(behind, ledgeCells), stone, LEDGE_MESH_PREFIX);
+      buildRocks(scene, scatterDune(rockCells, cellSize), stone, DUNE_MESH_PREFIX);
+      buildRocks(scene, scatterDebris(floorCells), material, DEBRIS_MESH_PREFIX);
+      buildRocks(scene, scatterDuneRim(edgeCells), stone, DUNE_RIM_MESH_PREFIX);
+      // Scrub: a mat over the low blobs standing in the sand, and a fringe where
+      // the tall ledge meets the beach. Both references put green in both
+      // places, and neither has a hard line where the wall meets the floor.
+      buildRocks(
+        scene,
+        [...scatterWeed(rockCells), ...scatterLedgeWeed(ledgeCells)],
+        weed,
+        WEED_MESH_PREFIX,
+      );
+      // And the scanned plants through the mat. `null` material: each species
+      // carries its own photograph — see `buildRocks`.
+      buildRocks(
+        scene,
+        scatterFlora([...ledgeCells, ...rockCells]),
+        null,
+        FLORA_MESH_PREFIX,
+      );
+    } else {
+      buildRocks(scene, scatterRocks(rockCells, cellSize), material);
+      buildRocks(scene, scatterDebris(floorCells), material, DEBRIS_MESH_PREFIX);
+      buildRocks(scene, scatterRampart(edgeCells), material, RAMPART_MESH_PREFIX);
+    }
   }
   if (merged) {
-    merged.material = material;
+    // The band is the kerb the boundary sits in, and it shows wherever the
+    // scatter drops a cell, so on a coast it takes the same warm stone the ledge
+    // does rather than a strip of cold cliff running through it.
+    merged.material = grid.shore ? wallMaterial(scene, tilesetId, true) : material;
     // Walls receive shadows (actors crossing them read correctly) but never cast
     // one — see engine.ts for why a 3.5-unit run must not.
     merged.receiveShadows = true;
@@ -683,10 +844,22 @@ export function applyTilesetFloor(scene: Scene, tilesetId: string | null): void 
  * Tints multiply the neutral rig, so `null` (the hideout) restores plain white
  * rather than leaving the last map's colour on the lab.
  */
+/** How bright the distance is on a biome that is outdoors under an open sky.
+ *
+ *  `VOID_COLOR` is 0.02 — the black a dungeon's fog fades into, which is right
+ *  when what lies past the rim is rock and unlit air. On a coast it is sea and
+ *  daylight, and at fogEnd 28-34 against a camera that sees nineteen units the
+ *  band eats the frame's corners: measured at luma 12 out of 255, against a
+ *  reference beach whose corners are as bright as its middle. So the far colour
+ *  on an open-sky biome is HAZE, not void — light scattered off the water, which
+ *  is what `beach-map.jpg` actually shows behind its surf. */
+const SEA_HAZE = new Color3(0.42, 0.4, 0.36);
+
 export function applyBiomeTint(
   scene: Scene,
   tint: readonly [number, number, number] | null,
   light = 1,
+  sea = false,
 ): void {
   const fill = scene.getLightByName("fill");
   const sun = scene.getLightByName("sun");
@@ -718,7 +891,8 @@ export function applyBiomeTint(
   // void keeps its brightness and only takes the biome's hue. No second table to
   // fall out of step with the first — a swamp's distance goes green because the
   // swamp is green, and the hideout's goes back to neutral with everything else.
-  scene.fogColor = new Color3(VOID_COLOR.r * nr, VOID_COLOR.g * ng, VOID_COLOR.b * nb);
+  const far = sea ? SEA_HAZE : VOID_COLOR;
+  scene.fogColor = new Color3(far.r * nr, far.g * ng, far.b * nb);
   // The air in the room is part of the room's colour, so it takes the same tint.
   tintHaze(scene, nr, ng, nb);
 }
