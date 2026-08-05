@@ -76,14 +76,14 @@ export const MAP_FILL_INTENSITY = 0.18;
 // is unchanged. Do not raise it further: 5.5 flattens the floor and the pool
 // stops being a pool.
 //
-// 210 (down from 265 on the owner's "flashlight, not lantern" call, which
-// itself came down from 300) and not the 420 it was tuned to alone. The place
+// 175 (walked down from 300 -> 265 -> 210 on the owner's repeated "smaller
+// lantern" calls) and not the 420 it was tuned to alone. The place
 // lights itself now — the
 // braziers in render/lights.ts stand in the room and throw their own pools — so
 // the lamp on the belt no longer has to be the only reason anything is visible.
 // It is a pool the player carries between other people's fires, which is what it
 // reads as in PoE, and turning it down is what lets a brazier be seen at all.
-const TORCH_INTENSITY = 210;
+const TORCH_INTENSITY = 175;
 /** Every light that can stand in a room at once: the fill, the sun, the torch,
  *  and the whole brazier pool. Materials are capped to exactly this, see
  *  `createScene` — Babylon's own default of four drops the rest without a word. */
@@ -96,7 +96,7 @@ const SCENE_LIGHTS = 3 + LIGHT_POOL;
  *  light the player carries. At 7.8 (down from 9.3 on the owner's lantern call)
  *  it reaches about two thirds of the way out and there is cold stone outside
  *  it to read the warm edge against. */
-const TORCH_RANGE = 7.8;
+const TORCH_RANGE = 6.5;
 /** Above the floor, not at the feet: at 0 the pool is a hot spot under the
  *  character, and the falloff eats the whole radius within a step. Kept above
  *  head height for the reason in TORCH_INTENSITY. */
