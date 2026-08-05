@@ -247,6 +247,17 @@ export function OptionsPanel({
                   onToggle={(minimap) => setUi({ minimap })}
                 />
               </Row>
+              <Row label="Overlay Map Opacity" note="The big Tab map, made to be left open while running.">
+                <Slider
+                  label="Overlay Map Opacity"
+                  value={settings.ui.overlayMapOpacity}
+                  min={0.15}
+                  max={1}
+                  step={0.05}
+                  format={(v) => `${Math.round(v * 100)}%`}
+                  onSet={(overlayMapOpacity) => setUi({ overlayMapOpacity })}
+                />
+              </Row>
               <Row label="Show Life and Mana Numbers" note="The globes still show the level.">
                 <Gem
                   label="Show Life and Mana Numbers"

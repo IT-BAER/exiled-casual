@@ -54,6 +54,12 @@ export interface UiSettings {
   /** The `Life 100/100` readouts over the globes. The globes say it too. */
   orbNumbers: boolean;
   /**
+   * Opacity of the Tab overlay map, the big centred one meant to be left open
+   * while running. Floored well above zero: a fully transparent overlay is a
+   * toggle that appears to do nothing.
+   */
+  overlayMapOpacity: number;
+  /**
    * Which skill sits in which numbered socket of the skill bar, in bar order.
    * `null` is an empty socket. A setting rather than sim state because it is a
    * preference about the screen, not about the character: nothing the sim owns
@@ -100,6 +106,7 @@ export const DEFAULT_SETTINGS: Settings = {
     minimap: true,
     lootLabels: true,
     orbNumbers: true,
+    overlayMapOpacity: 0.6,
     skillBar: [
       "skill.ember_bolt.v1", "skill.cinder_ground.v1", "skill.blink.v1", null, null,
       MOVE_SOCKET, null, null,
@@ -194,6 +201,7 @@ export function sanitize(raw: unknown): Settings {
       minimap: bool(u["minimap"], d.ui.minimap),
       lootLabels: bool(u["lootLabels"], d.ui.lootLabels),
       orbNumbers: bool(u["orbNumbers"], d.ui.orbNumbers),
+      overlayMapOpacity: num(u["overlayMapOpacity"], 0.15, 1, d.ui.overlayMapOpacity),
       skillBar: skillBar(u["skillBar"], d.ui.skillBar),
     },
   };

@@ -24,6 +24,14 @@ describe("Minimap", () => {
     expect(box.querySelector("canvas")).toBeTruthy();
   });
 
+  it("centres and fades as the Tab overlay, doubling its resolution", () => {
+    render(<Minimap layout={layout} player={start} overlay overlayOpacity={0.4} />);
+    const box = screen.getByTestId("minimap");
+    expect(box.style.transform).toBe("translate(-50%, -50%)");
+    expect(box.style.opacity).toBe("0.4");
+    expect(box.querySelector("canvas")!.width).toBe(768);
+  });
+
   it("survives a player standing outside the grid", () => {
     // Defensive: a stale snapshot from the previous area can carry a position
     // that is off this grid entirely. It must not throw.

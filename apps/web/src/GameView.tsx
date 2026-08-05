@@ -96,6 +96,8 @@ export function GameView({
   const [optionsOpen, setOptionsOpen] = useState(false);
   // F3 performance readout. Render-only; toggleable even on the death screen.
   const [statsOpen, setStatsOpen] = useState(false);
+  // Tab's big centred map, meant to be left open while running. Render-only.
+  const [overlayMapOpen, setOverlayMapOpen] = useState(false);
   // The Options panel applies graphics to the LIVE scene, and the scene is built
   // inside the mount effect where nothing else can reach it.
   const sceneRef = useRef<Scene | null>(null);
@@ -539,6 +541,12 @@ export function GameView({
         return;
       }
       if (deadRef.current) return;
+      // Tab is the overlay map, and must not walk the browser's focus ring.
+      if (ev.key === "Tab") {
+        ev.preventDefault();
+        setOverlayMapOpen((v) => !v);
+        return;
+      }
       const k = ev.key.toLowerCase();
       if (k === "i") { setInventoryOpen((v) => !v); setStashOpen(false); }
       // The sheet is cut from the stash's pane and docks where the stash docks, so
@@ -648,7 +656,12 @@ export function GameView({
         })}
       />
       {settings.ui.minimap && (
-        <Minimap layout={areaLayout} player={snapshot?.player ?? null} />
+        <Minimap
+          layout={areaLayout}
+          player={snapshot?.player ?? null}
+          overlay={overlayMapOpen}
+          overlayOpacity={settings.ui.overlayMapOpacity}
+        />
       )}
       {statsOpen && <DebugStats engineRef={engineRef} sceneRef={sceneRef} />}
       {panelOpen && snapshot && (

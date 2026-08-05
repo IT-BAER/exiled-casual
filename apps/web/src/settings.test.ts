@@ -43,6 +43,10 @@ describe("sanitize", () => {
       DEFAULT_SETTINGS.graphics.resolutionScale,
     );
     expect(sanitize({ sound: { master: "0.5" } }).sound.master).toBe(DEFAULT_SETTINGS.sound.master);
+    // The overlay map floor is 0.15, not 0: fully transparent reads as broken.
+    expect(sanitize({ ui: { overlayMapOpacity: 0 } }).ui.overlayMapOpacity).toBe(0.15);
+    expect(sanitize({ ui: { overlayMapOpacity: 2 } }).ui.overlayMapOpacity).toBe(1);
+    expect(sanitize(null).ui.overlayMapOpacity).toBe(DEFAULT_SETTINGS.ui.overlayMapOpacity);
   });
 
   it("keeps every saved sound category and defaults older saves", () => {

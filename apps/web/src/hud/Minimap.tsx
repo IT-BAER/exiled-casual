@@ -197,9 +197,19 @@ export interface MinimapProps {
   /** Null outside a map — the hideout has no minimap. */
   layout: AreaLayout | null;
   player: { x: number; y: number } | null;
+  /**
+   * Tab's big centred map. The SAME component instance switching container
+   * style, never a second mount: the fog and seen layers live in refs, and a
+   * second instance would start fully fogged.
+   */
+  overlay?: boolean;
+  /** Opacity of the overlay, `settings.ui.overlayMapOpacity`. */
+  overlayOpacity?: number;
 }
 
-export function Minimap({ layout, player }: MinimapProps): React.JSX.Element | null {
+export function Minimap(
+  { layout, player, overlay = false, overlayOpacity = 0.6 }: MinimapProps,
+): React.JSX.Element | null {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const terrainRef = useRef<HTMLCanvasElement | null>(null);
   const fogRef = useRef<HTMLCanvasElement | null>(null);
@@ -327,15 +337,32 @@ export function Minimap({ layout, player }: MinimapProps): React.JSX.Element | n
 
   if (!layout || !grid) return null;
 
-  return (
-    <div
-      data-testid="minimap"
-      style={{
-        position: "absolute",
+  // The overlay is the same map centred and blown up, PoE's Tab map: sized to
+  // the short screen edge so it never crops, and faded as a whole so the world
+  // stays playable through it. Resolution doubles with the size or the upscale
+  // smears the contour.
+  const box = overlay
+    ? {
+        top: "50%",
+        left: "50%",
+        transform: "translate(-50%, -50%)",
+        width: "min(86vh, 86vw)",
+        height: "min(86vh, 86vw)",
+        opacity: overlayOpacity,
+      }
+    : {
         top: `${MAP_INSET_VW}vw`,
         right: `${MAP_INSET_VW}vw`,
         width: `${MAP_VW}vw`,
         height: `${MAP_VW}vw`,
+      };
+
+  return (
+    <div
+      data-testid="minimap"
+      data-overlay={overlay || undefined}
+      style={{
+        position: "absolute",
         pointerEvents: "none",
         // A tinted square, still no border. PoE darkens the world under the map
         // so the contour has something to read against over bright ground, but
@@ -344,12 +371,13 @@ export function Minimap({ layout, player }: MinimapProps): React.JSX.Element | n
         background: "rgba(0,0,0,0.34)",
         filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.75))",
         fontFamily: SERIF,
+        ...box,
       }}
     >
       <canvas
         ref={canvasRef}
-        width={384}
-        height={384}
+        width={overlay ? 768 : 384}
+        height={overlay ? 768 : 384}
         style={{ width: "100%", height: "100%", display: "block" }}
       />
     </div>
