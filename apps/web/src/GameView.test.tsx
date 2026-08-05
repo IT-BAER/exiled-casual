@@ -35,6 +35,8 @@ vi.mock("@babylonjs/core", () => ({
   })),
   Vector3: class { static Project = vi.fn(() => ({ x: 0, y: 0, z: 0.5 })); },
   Matrix: { Identity: vi.fn() },
+  // sea.ts builds its palette at module scope, so the mock must carry Color3.
+  Color3: class { constructor(public r = 0, public g = 0, public b = 0) {} },
 }));
 vi.mock("./render/engine", () => ({
   createScene: () => ({
@@ -46,6 +48,8 @@ vi.mock("./render/engine", () => ({
       // straight through would make "armed before the build" and "armed after
       // it" indistinguishable, which is the one thing worth pinning here.
       executeWhenReady: (fn: () => void) => { hoisted.ready = fn; },
+      // buildSea sweeps the last run's strip before deciding whether to build.
+      getMeshByName: () => null,
     },
     camera: { viewport: { toGlobal: vi.fn() }, setTarget: vi.fn() },
     detachZoom: vi.fn(),
