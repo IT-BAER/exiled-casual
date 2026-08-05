@@ -9,14 +9,15 @@ export const CASTING_MOVE_PCT = 40;
 
 /**
  * How far the heading may swing in one tick, as the chord across the unit
- * circle: 0.35 is a touch over 20 degrees, so a right-angle turn takes about
- * five ticks and a full reversal nine — a sixth to a third of a second.
+ * circle: 0.6 is about 35 degrees, so a right-angle turn takes three ticks
+ * and a full reversal five (~0.17s). Raised twice from 0.35: run-and-gun
+ * zig-zags and 180s felt sluggish at 20 and still at 25 degrees a tick.
  *
  * A chord and not an angle because the sim owns no trigonometry: stepping the
  * heading vector toward the target vector by a fixed length and renormalising
  * IS a rotation, and it is all integer math, so the replay checksum holds.
  */
-const TURN_CHORD = fp(0.35);
+const TURN_CHORD = fp(0.6);
 
 /**
  * Speed while the heading is fighting the keys, as a percent of the run.

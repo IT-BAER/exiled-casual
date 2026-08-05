@@ -351,8 +351,8 @@ describe("click-to-move turns like the keys do", () => {
       }
       prev = { hx: h.hx, hy: h.hy };
     }
-    // TURN_CHORD is a touch over 20 degrees a tick; the slack is fixed-point rounding.
-    expect(worstDeg).toBeLessThan(30);
+    // TURN_CHORD is about 35 degrees a tick; the slack is fixed-point rounding.
+    expect(worstDeg).toBeLessThan(44);
   });
 });
 
