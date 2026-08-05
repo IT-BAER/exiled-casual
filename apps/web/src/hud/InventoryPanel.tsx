@@ -729,7 +729,13 @@ export function InventoryPanel({
                   textAlign: "center",
                   padding: 2,
                   boxSizing: "border-box",
-                  boxShadow: `inset 0 0 8px ${RARITY_BORDER[it.rarity]}44`,
+                  // An armed orb lights the cells it can legally land on, a
+                  // subtle gilt lift rather than a hard ring; everything it
+                  // cannot touch keeps only its own rarity glow.
+                  boxShadow: armed && container === "backpack" && accepts(armed, it)
+                      && (armed.x !== it.x || armed.y !== it.y)
+                    ? "inset 0 0 8px #e8c86a66, 0 0 6px #e8c86a55"
+                    : `inset 0 0 8px ${RARITY_BORDER[it.rarity]}44`,
                   opacity: drag?.from.kind === "grid" && drag.from.container === container && drag.from.x === it.x && drag.from.y === it.y ? 0.3
                     // PoE's keyword box HIGHLIGHTS rather than filters: the goods
                     // stay where they are and everything else falls back, so the
