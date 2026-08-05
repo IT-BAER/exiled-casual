@@ -267,7 +267,7 @@ describe("click-to-move turns like the keys do", () => {
     expect(sim.world.get<Position>(p, "position")).toEqual({ x: fp(3), y: 0 });
   });
 
-  it("a click behind him takes several ticks to come about", () => {
+  it("a click straight behind him comes about at the constant turn rate", () => {
     const sim = new Simulation();
     registerPlayerMovement(sim);
     const p = walker(sim);
@@ -277,15 +277,17 @@ describe("click-to-move turns like the keys do", () => {
     const headingBefore = sim.world.get<MoveDir>(p, "moveDir")!;
     expect(headingBefore.hx).toBeGreaterThan(0);
 
-    // Now click well behind him.
+    // Now click well behind him: the rotation is 35 degrees a tick regardless
+    // of the ask (the old chord-step stalled near 180 and read as a slow
+    // U-turn), so six ticks later he is running dead west.
     const at = sim.world.get<Position>(p, "position")!;
     sim.step([{ tick: 2, entity: p, type: "moveTo", data: { x: at.x - fp(20), y: 0 } }]);
-    // One tick later he is NOT already running west: the heading is mid-turn.
+    for (let i = 0; i < 6; i++) sim.step([]);
     const after = sim.world.get<MoveDir>(p, "moveDir")!;
-    expect(after.hx).toBeGreaterThan(-fp(1));
-    expect(Math.abs(after.hy)).toBeGreaterThan(0); // came about through a side
-    // And he has kept going forward for at least one more tick.
-    expect(sim.world.get<Position>(p, "position")!.x).toBeGreaterThan(at.x);
+    expect(after.hx).toBeLessThan(-fp(0.8)); // came about, within one turn-step of west
+    const xNow = sim.world.get<Position>(p, "position")!.x;
+    sim.step([]);
+    expect(sim.world.get<Position>(p, "position")!.x).toBeLessThan(xNow); // and is walking back
   });
 
   it("but he does come about, and gets there", () => {

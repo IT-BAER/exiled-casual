@@ -8,16 +8,18 @@ import type { Position, PlayerC, MoveTarget, MoveDir, CastingC, Health } from ".
 export const CASTING_MOVE_PCT = 40;
 
 /**
- * How far the heading may swing in one tick, as the chord across the unit
- * circle: 0.6 is about 35 degrees, so a right-angle turn takes three ticks.
- * Raised twice from 0.35: run-and-gun zig-zags felt sluggish at 20 and still
- * at 25 degrees a tick. Reversals get REVERSE_CHORD below instead.
+ * How far the heading swings in one tick: 35 degrees, as fixed-point cos/sin,
+ * so a right-angle turn takes three ticks and a 180 five (~0.17s).
  *
- * A chord and not an angle because the sim owns no trigonometry: stepping the
- * heading vector toward the target vector by a fixed length and renormalising
- * IS a rotation, and it is all integer math, so the replay checksum holds.
+ * A ROTATION and not a chord-step toward the target: stepping the heading
+ * vector a fixed length toward a nearly-opposite target mostly SHRINKS it, so
+ * the renormalised swing collapses near 180 degrees — exact reversals crawled
+ * while curves turned at full rate, which read as a slow U-turn. Rotating by a
+ * baked cos/sin pair is the same integer math (no runtime trig, replay
+ * checksum holds) at a constant angular rate regardless of the ask.
  */
-const TURN_CHORD = fp(0.6);
+const TURN_COS = fp(0.819); // cos 35
+const TURN_SIN = fp(0.574); // sin 35
 
 /**
  * Speed at a dead reversal (dot = -1), as a percent of the run.
@@ -47,14 +49,14 @@ const REVERSAL_SPEED_PCT = 40;
  * character to a trudge for the third of a second the turn takes, and what that
  * reads as on screen is the game hesitating rather than the body leaning. The
  * cost is still there and still continuous; it is a lean now, not a brake. The
- * turn RATE (TURN_CHORD) is what stops a spin, and it is untouched.
+ * turn RATE (TURN_COS/TURN_SIN) is what stops a spin, and it is untouched.
  */
 const TURN_SPEED_FLOOR_PCT = 88;
 
 /**
  * How far a click has to be before the walk to it is steered rather than aimed.
  *
- * Comfortably past the turn's own diameter (about 0.8 units at TURN_CHORD and a
+ * Comfortably past the turn's own diameter (under 0.8 units at 35 degrees a tick and a
  * walk's speed), so a target inside this can always be reached in a straight line
  * instead of circled. It is also the honest read of the input: a click half a unit
  * away is a nudge, not a corner.
@@ -164,12 +166,15 @@ export function unit(x: Fixed, y: Fixed): { x: Fixed; y: Fixed } {
 function steer(h: { x: Fixed; y: Fixed }, t: { x: Fixed; y: Fixed }): { x: Fixed; y: Fixed } {
   const cross = h.x * t.y - h.y * t.x;
   const dot = h.x * t.x + h.y * t.y;
-  if (cross === 0) {
-    if (dot >= 0) return t; // already there
-    return unit(h.x - Math.trunc((h.y * TURN_CHORD) / FP_SCALE), h.y + Math.trunc((h.x * TURN_CHORD) / FP_SCALE));
-  }
-  const step = fpStepToward(h.x, h.y, t.x, t.y, TURN_CHORD);
-  return unit(h.x + step.dx, h.y + step.dy);
+  // Inside one step of the ask: land on it, or the heading orbits the target.
+  if (dot >= 0 && Math.trunc(dot / FP_SCALE) >= TURN_COS) return t;
+  // Rotate one step the shorter way round; a dead-on flip (cross 0, behind)
+  // has no shorter way, so pick the left hand and commit.
+  const s = cross >= 0 ? 1 : -1;
+  return unit(
+    Math.trunc((h.x * TURN_COS - s * h.y * TURN_SIN) / FP_SCALE),
+    Math.trunc((s * h.x * TURN_SIN + h.y * TURN_COS) / FP_SCALE),
+  );
 }
 
 export function registerPlayerMovement(sim: Simulation, collisionRef?: CollisionRef): void {
