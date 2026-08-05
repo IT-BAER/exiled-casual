@@ -2,9 +2,9 @@ import { describe, it, expect } from "vitest";
 import { fp } from "@exiled/fixed-point";
 import { resBlock } from "@exiled/content-schema";
 import { Simulation } from "../loop";
-import { registerDamageResolve } from "./damage-resolve";
+import { registerDamageResolve, SPAWN_GRACE_TICKS } from "./damage-resolve";
 import { ES_RECHARGE_DELAY_TICKS } from "@exiled/rules";
-import type { Health, DefensesC, FlasksC, EnergyShieldC } from "../components";
+import type { Health, DefensesC, FlasksC, EnergyShieldC, SessionC } from "../components";
 
 it("applies two enqueued events, floored at 0", () => {
   const sim = new Simulation();
@@ -92,6 +92,70 @@ describe("a boss pays flask charges as it bleeds", () => {
     registerDamageResolve(sim);
     sim.step();
     expect(w.get<FlasksC>(p, "flasks")!.manaCharges).toBe(0);
+  });
+});
+
+describe("spawn grace", () => {
+  /** Player under grace, one queued hit, then whatever `mutate` does before the step. */
+  function gracedSim(mutate?: (w: Simulation["world"], p: number) => void) {
+    const sim = new Simulation();
+    const w = sim.world;
+    const p = w.create();
+    w.set(p, "player", { moveSpeed: 0, bodyRadius: fp(0.5) });
+    w.set<Health>(p, "health", { life: fp(100), maxLife: fp(100) });
+    w.set<DefensesC>(p, "defenses", { res: resBlock(), armour: 0 });
+    w.set(p, "position", { x: fp(3), y: fp(4) });
+    const s = w.create();
+    w.set(s, "session", {
+      area: "map", mapSeed: 1, waystoneSeed: 1, areaTier: 1, activeNodeId: "",
+      completedNodes: [], portalsLeft: 6, mapOpen: 1, pendingArea: "",
+      graceUntilTick: SPAWN_GRACE_TICKS, graceX: fp(3), graceY: fp(4),
+    });
+    mutate?.(w, p);
+    sim.register("testProducer", () => {
+      sim.enqueueDamage({ target: p, source: 99, amountFixed: fp(30), type: 1 });
+    });
+    registerDamageResolve(sim);
+    sim.step();
+    return { life: w.get<Health>(p, "health")!.life, session: w.get<SessionC>(s, "session")! };
+  }
+
+  it("swallows a hit while he stands where he spawned", () => {
+    const r = gracedSim();
+    expect(r.life).toBe(fp(100));
+    expect(r.session.graceUntilTick).toBe(SPAWN_GRACE_TICKS);
+  });
+
+  it("breaks the moment he has moved, and the hit lands", () => {
+    const r = gracedSim((w, p) => w.set(p, "position", { x: fp(3.5), y: fp(4) }));
+    expect(r.life).toBe(fp(70));
+    expect(r.session.graceUntilTick).toBeUndefined();
+  });
+
+  it("breaks on an active cast", () => {
+    const r = gracedSim((w, p) => w.set(p, "casting", { untilTick: 10, skillId: "s" }));
+    expect(r.life).toBe(fp(70));
+  });
+
+  it("expires on its own tick even standing still", () => {
+    const sim = new Simulation();
+    const w = sim.world;
+    const p = w.create();
+    w.set(p, "player", { moveSpeed: 0, bodyRadius: fp(0.5) });
+    w.set<Health>(p, "health", { life: fp(100), maxLife: fp(100) });
+    w.set<DefensesC>(p, "defenses", { res: resBlock(), armour: 0 });
+    w.set(p, "position", { x: fp(3), y: fp(4) });
+    const s = w.create();
+    w.set(s, "session", {
+      area: "map", mapSeed: 1, waystoneSeed: 1, areaTier: 1, activeNodeId: "",
+      completedNodes: [], portalsLeft: 6, mapOpen: 1, pendingArea: "",
+      graceUntilTick: 1, graceX: fp(3), graceY: fp(4),
+    });
+    registerDamageResolve(sim);
+    sim.step(); // tick 0: still graced
+    expect(w.get<SessionC>(s, "session")!.graceUntilTick).toBe(1);
+    sim.step(); // tick 1: expired, cleared
+    expect(w.get<SessionC>(s, "session")!.graceUntilTick).toBeUndefined();
   });
 });
 

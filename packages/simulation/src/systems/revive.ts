@@ -1,6 +1,7 @@
 import { Simulation } from "../loop";
 import type { Position, SessionC } from "../components";
 import { reviveVitals } from "./death";
+import { SPAWN_GRACE_TICKS } from "./damage-resolve";
 
 /**
  * Answering the death screen.
@@ -21,7 +22,7 @@ import { reviveVitals } from "./death";
  * the only honest answer is the hideout, and the client greys the other button.
  */
 export function registerRevive(sim: Simulation): void {
-  sim.register("revive", (world, _tick, commands) => {
+  sim.register("revive", (world, tick, commands) => {
     const sessionE = world.query("session")[0];
     if (sessionE === undefined) return;
     const session = world.get<SessionC>(sessionE, "session")!;
@@ -43,6 +44,16 @@ export function registerRevive(sim: Simulation): void {
         portalsLeft,
         mapOpen: inMap && portalsLeft === 0 ? 0 : session.mapOpen,
         pendingArea: atCheckpoint ? "" : "hideout",
+        // A checkpoint revive wakes among the same monsters, so it carries the
+        // same spawn grace a fresh entry does (damage-resolve breaks it). The
+        // hideout has nothing to be graced against.
+        ...(atCheckpoint
+          ? {
+            graceUntilTick: tick + SPAWN_GRACE_TICKS,
+            graceX: session.checkpointX ?? 0,
+            graceY: session.checkpointY ?? 0,
+          }
+          : {}),
       });
 
       for (const p of world.query("player")) {

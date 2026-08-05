@@ -52,6 +52,16 @@ export interface SessionC {
    */
   checkpointX?: Fixed;
   checkpointY?: Fixed;
+  /**
+   * Spawn grace: the player cannot be damaged until this tick, granted on map
+   * entry and on a checkpoint revive. It holds only while he stands where it was
+   * granted and casts nothing — `graceX/graceY` are that spot, and damage-resolve
+   * clears all three the tick he moves or acts. Optional for the same
+   * save/checksum reason as `dead` above.
+   */
+  graceUntilTick?: number;
+  graceX?: Fixed;
+  graceY?: Fixed;
   /** Area to build at the end of this tick; "" means stay put. */
   pendingArea: AreaKind | "";
 }

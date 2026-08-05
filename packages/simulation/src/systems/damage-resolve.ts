@@ -1,10 +1,38 @@
 import { applyDamage, bossChargeSteps, absorbWithEnergyShield, ES_RECHARGE_DELAY_TICKS } from "@exiled/rules";
 import { Simulation } from "../loop";
-import type { Health, DefensesC, FlasksC, EnergyShieldC, MonsterC } from "../components";
+import type {
+  Health, DefensesC, FlasksC, EnergyShieldC, MonsterC, SessionC, Position, CastingC,
+} from "../components";
 import { damageTypeOf } from "../damage-types";
+
+/** Spawn grace: 10 seconds at 30 Hz, or until the player moves or casts. */
+export const SPAWN_GRACE_TICKS = 300;
 
 export function registerDamageResolve(sim: Simulation): void {
   sim.register("damageResolve", (world, tick) => {
+    // Maintain the spawn grace every tick, not only when damage arrives: the
+    // break is one-way, so "he cast three seconds ago" must already have
+    // cleared it by the time the next hit asks.
+    const sessionE = world.query("session")[0];
+    const session = sessionE !== undefined
+      ? world.get<SessionC>(sessionE, "session")! : undefined;
+    let graced = false;
+    if (session?.graceUntilTick) {
+      const p = world.query("player")[0];
+      const pos = p !== undefined ? world.get<Position>(p, "position") : undefined;
+      const casting = p !== undefined ? world.get<CastingC>(p, "casting") : undefined;
+      const broken =
+        tick >= session.graceUntilTick ||
+        pos === undefined ||
+        pos.x !== session.graceX || pos.y !== session.graceY ||
+        (casting !== undefined && casting.untilTick > tick);
+      if (broken) {
+        const { graceUntilTick: _u, graceX: _x, graceY: _y, ...rest } = session;
+        world.set<SessionC>(sessionE!, "session", rest);
+      } else {
+        graced = true;
+      }
+    }
     const q = sim.damageQueue
       .slice()
       .sort((a, b) =>
@@ -15,6 +43,9 @@ export function registerDamageResolve(sim: Simulation): void {
     sim.damageQueue = [];
 
     for (const ev of q) {
+      // Spawn grace swallows the hit entirely: no life, no shield, no recharge
+      // delay. The monster still noticed him when it decided to attack.
+      if (graced && world.has(ev.target, "player")) continue;
       const health = world.get<Health>(ev.target, "health");
       const def = world.get<DefensesC>(ev.target, "defenses");
       if (!health || !def) continue;

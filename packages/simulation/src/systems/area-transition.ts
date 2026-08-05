@@ -6,6 +6,7 @@ import { Simulation } from "../loop";
 import { type CollisionRef } from "../collision";
 import type { SessionC, MoveTarget, MoveDir, Position } from "../components";
 import { areaCollision, buildArea, HIDEOUT_SPAWN } from "../areas";
+import { SPAWN_GRACE_TICKS } from "./damage-resolve";
 import { recomputePlayerStats } from "../derived";
 
 export function registerAreaTransition(sim: Simulation, collisionRef?: CollisionRef): void {
@@ -62,8 +63,11 @@ export function registerAreaTransition(sim: Simulation, collisionRef?: Collision
     // (systems/revive.ts). Recorded here rather than re-derived on revive, so
     // coming back never has to regenerate a layout to find one anchor.
     if (newArea === "map") {
+      // Entering also grants the spawn grace: untouchable while he stands on
+      // the entrance and does nothing. damage-resolve owns the breaking.
       world.set<SessionC>(sessionE, "session", {
         ...newSession, checkpointX: spawnPt.x, checkpointY: spawnPt.y,
+        graceUntilTick: tick + SPAWN_GRACE_TICKS, graceX: spawnPt.x, graceY: spawnPt.y,
       });
     }
     for (const p of world.query("player")) {
