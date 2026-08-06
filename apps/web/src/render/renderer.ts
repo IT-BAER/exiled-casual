@@ -654,13 +654,20 @@ export class SnapshotRenderer {
     const dx = nextX - prevX;
     const dz = nextY - prevY;
     let yawStep = 0;
-    if (dx * dx + dz * dz > 1e-6) {
+    // The step is the heading for everything that steers into its own movement.
+    // The player does not, quite: a target inside his turning circle is walked
+    // at in a straight line while the body comes about at its own rate, so the
+    // sim sends the heading and this follows THAT or he pivots with the cursor.
+    //
+    // And a sent heading turns him whether or not he is moving, which is the
+    // only way a man standing still can face what he is casting at. Zero is not
+    // a direction — a heading nobody has written yet would snap him to +z.
+    const sent = heading && (heading.x !== 0 || heading.y !== 0)
+      ? Math.atan2(heading.x, heading.y)
+      : null;
+    if (dx * dx + dz * dz > 1e-6 || sent !== null) {
       const wasYaw = mesh.rotation.y;
-      // The step is the heading for everything that steers into its own movement.
-      // The player does not, quite: a target inside his turning circle is walked
-      // at in a straight line while the body comes about at its own rate, so the
-      // sim sends the heading and this follows THAT or he pivots with the cursor.
-      const aim = heading ? Math.atan2(heading.x, heading.y) : Math.atan2(dx, dz);
+      const aim = sent ?? Math.atan2(dx, dz);
       mesh.rotation.y = lerpAngle(wasYaw, aim, 0.25);
       yawStep = mesh.rotation.y - wasYaw;
     }

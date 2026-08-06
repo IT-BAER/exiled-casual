@@ -285,6 +285,21 @@ export function registerPlayerMovement(sim: Simulation, collisionRef?: Collision
             world.set<MoveDir>(e, "moveDir", { dx: moveDir.dx, dy: moveDir.dy, hx: h.x, hy: h.y });
           }
         }
+      } else if (hold && hold.untilTick > tick) {
+        // Standing and casting: come about to face it, at the same bounded rate
+        // the keys turn him at. Only here, in the branch where nothing is moving
+        // him — a cast fired mid-run must not pull the body off the direction it
+        // is running in, which is what makes a run-and-gun readable at all.
+        const want = unit((hold.tx ?? pos.x) - pos.x, (hold.ty ?? pos.y) - pos.y);
+        // A player who has never moved carries no heading component at all, and
+        // the first thing he does can be a cast.
+        const from = moveDir ?? { dx: 0, dy: 0, hx: 0, hy: 0 };
+        if (want.x !== 0 || want.y !== 0) {
+          const held = from.hx === 0 && from.hy === 0
+            ? want
+            : steer({ x: from.hx, y: from.hy }, want);
+          world.set<MoveDir>(e, "moveDir", { dx: from.dx, dy: from.dy, hx: held.x, hy: held.y });
+        }
       }
 
       // Resolve against level collision (slide along walls) when a map is loaded;

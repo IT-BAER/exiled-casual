@@ -216,6 +216,44 @@ describe("registerPlayerMovement", () => {
       .toBe(Math.trunc(speed * CASTING_MOVE_PCT / 100));
   });
 
+  it("comes about to face a cast he is standing still for", () => {
+    const sim = new Simulation();
+    registerPlayerMovement(sim);
+    const p = makePlayer(sim, 0, 0, fp(3));
+    // Facing +x, casting at something due -y.
+    sim.world.set<MoveDir>(p, "moveDir", { dx: 0, dy: 0, hx: fp(1), hy: 0 });
+    sim.world.set<SkillHoldC>(p, "skillHold", { untilTick: 30, tx: 0, ty: fp(-8) });
+
+    sim.step([]);
+    const first = sim.world.get<MoveDir>(p, "moveDir")!;
+    // Turned toward it, and only part of the way: the body comes about at the
+    // same bounded rate the keys turn it at.
+    expect(first.hy).toBeLessThan(0);
+    expect(first.hx).toBeGreaterThan(0);
+    expect(sim.world.get<Position>(p, "position")!.x).toBe(0); // and stayed put
+
+    for (let t = 1; t < 12; t++) sim.step([]);
+    const settled = sim.world.get<MoveDir>(p, "moveDir")!;
+    expect(settled.hy).toBeLessThan(-fp(0.98));
+    expect(Math.abs(settled.hx)).toBeLessThan(fp(0.05));
+  });
+
+  it("does not let a cast pull the body off the way he is running", () => {
+    const sim = new Simulation();
+    registerPlayerMovement(sim);
+    const p = makePlayer(sim, 0, 0, fp(3));
+    // Running east, casting at something due south: run-and-gun keeps the run.
+    sim.world.set<SkillHoldC>(p, "skillHold", { untilTick: 30, tx: 0, ty: fp(-8) });
+    for (let t = 0; t < 6; t++) {
+      sim.step([{ tick: t, entity: p, type: "moveDir", data: { dx: 1, dy: 0 } }]);
+    }
+
+    const dir = sim.world.get<MoveDir>(p, "moveDir")!;
+    expect(dir.hx).toBeGreaterThan(fp(0.99));
+    expect(dir.hy).toBe(0);
+    expect(sim.world.get<Position>(p, "position")!.x).toBeGreaterThan(0);
+  });
+
   it("moves at full speed once the casting recovery has elapsed", () => {
     const sim = new Simulation();
     registerPlayerMovement(sim);

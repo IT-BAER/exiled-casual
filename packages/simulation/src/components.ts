@@ -130,7 +130,15 @@ export interface Cooldowns  { [skillId: string]: number }
  * accepted or refused, so movement keeps the casting walk speed across the
  * cooldown gaps between casts instead of bursting back to a run.
  */
-export interface SkillHoldC { untilTick: number }
+/**
+ * The button is down, and where it is pointed.
+ *
+ * The aim rides along because it is the only report of where a cast was sent
+ * that outlives the tick it was issued on: an instant skill leaves no `casting`
+ * behind, so without this a standing caster has nothing to turn toward between
+ * one bolt and the next.
+ */
+export interface SkillHoldC { untilTick: number; tx?: Fixed; ty?: Fixed }
 
 export interface CastingC {
   untilTick: number;

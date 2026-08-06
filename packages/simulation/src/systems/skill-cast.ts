@@ -183,7 +183,11 @@ export function registerSkillCast(
       // Every command, refused or not, marks the button as held: the client
       // re-issues per snapshot, so a short window bridges the gaps and movement
       // never bursts back to a run between casts (player-movement reads it).
-      world.set<SkillHoldC>(caster, "skillHold", { untilTick: tick + SKILL_HOLD_TICKS });
+      world.set<SkillHoldC>(caster, "skillHold", {
+        untilTick: tick + SKILL_HOLD_TICKS,
+        tx: cmd.data?.["tx"],
+        ty: cmd.data?.["ty"],
+      });
       if (completedThisTick.has(caster)) continue;
 
       // A cast is one action, not a queue. Held input can keep issuing commands,
