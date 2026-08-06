@@ -32,9 +32,16 @@ export interface Decor {
  * The camera looks along the diagonal, so a table built along +X runs off toward
  * the corner of the frame. Furniture composed for a fixed camera wants its long
  * edge across that camera's view, which is this angle and not zero. It is
- * `-CAMERA_ALPHA` from render/engine.ts; hideout.test.ts pins the two together.
+ * `CAMERA_ALPHA` from render/engine.ts; hideout.test.ts pins the two together.
+ *
+ * The SIGN is the whole thing, and it was wrong: a yaw of +PI/4 takes a prop's
+ * local +X to world (0.707, -0.707), which is straight DOWN the frame, so every
+ * long piece stood at ninety degrees to the composition it was written for. The
+ * table ran up the screen with a bench buried under each end, and its footprint
+ * discs — laid out in screen units on the assumption above — blocked the floor
+ * across the frame while the timber lay along it.
  */
-export const SCREEN_SQUARE = Math.PI / 4;
+export const SCREEN_SQUARE = -Math.PI / 4;
 
 /**
  * A placement written where the composition actually happens: on the screen.

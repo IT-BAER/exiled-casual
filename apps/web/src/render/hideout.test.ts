@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { NullEngine, Scene } from "@babylonjs/core";
+import { Matrix, NullEngine, Scene, Vector3 } from "@babylonjs/core";
 import { HIDEOUT_DECOR, SCREEN_SQUARE, hideoutFootprints } from "@exiled/content-runtime";
 import { buildHideoutDecor, clearHideoutDecor } from "./hideout";
 import { PROP_KINDS } from "./props";
@@ -73,7 +73,22 @@ describe("hideout decor", () => {
    * it — and the table's collision discs with it.
    */
   it("is still composed against the camera the client actually uses", () => {
-    expect(SCREEN_SQUARE).toBeCloseTo(-CAMERA_ALPHA, 10);
+    expect(SCREEN_SQUARE).toBeCloseTo(CAMERA_ALPHA, 10);
+  });
+
+  /**
+   * ...and the sign of it, measured rather than asserted. Babylon takes a yawed
+   * prop's local +X to (cos y, -sin y), and `at(1, 0)` is where the frame's own
+   * right-hand direction lands in the world. They have to be the same vector, or
+   * every long piece stands across the composition it was written for — which is
+   * how a table ended up running up the screen with a bench under each end.
+   */
+  it("turns a long prop ALONG the frame, not up it", () => {
+    const long = Vector3.TransformNormal(
+      new Vector3(1, 0, 0), Matrix.RotationY(SCREEN_SQUARE));
+    const r = Math.SQRT1_2;
+    expect(long.x).toBeCloseTo(r, 6);
+    expect(long.z).toBeCloseTo(r, 6);
   });
 
   /**
