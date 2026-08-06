@@ -114,6 +114,30 @@ export function atlasNodeTier(graph: readonly AtlasGraphNode[], nodeId: string):
 }
 
 /**
+ * The tier of the cheapest place a cleared node opens up: the lowest
+ * `atlasNodeTier` among its routes that have not been run yet. Null when every
+ * route out is already cleared, or the node is not on the graph.
+ *
+ * This is what the boss has to pay. A hop out costs two tiers and a plain run
+ * hands back the tier you brought, so without it a character who spends his
+ * last high stone on a far node is farming the same place until a modified
+ * stone happens to roll — the Atlas stops being a route decision and becomes a
+ * slot machine for permission to move.
+ */
+export function nextNodeTier(
+  graph: readonly AtlasGraphNode[],
+  nodeId: string,
+  completedNodes: readonly string[],
+): number | null {
+  const node = graph.find((n) => n.id === nodeId);
+  if (!node) return null;
+  const onward = node.links
+    .filter((l) => !completedNodes.includes(l))
+    .map((l) => atlasNodeTier(graph, l));
+  return onward.length === 0 ? null : Math.min(...onward);
+}
+
+/**
  * The seed a run draws its map from. Both halves matter: the Waystone, so two
  * stones are two different runs, and the place, so the same stone taken to two
  * nodes is not the same dungeon twice. FNV-1a, inlined to keep this leaf free of

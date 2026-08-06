@@ -6,7 +6,7 @@ import { fp } from "@exiled/fixed-point";
 import { fnv1a32 } from "../rng";
 import {
   rollItem, areaLevel, FLASK_CHARGES_PER_KILL, gainXp, xpAward,
-  waystoneScaleFor, waystoneDrops, waystoneMods,
+  waystoneScaleFor, waystoneDrops, waystoneMods, atlasGraph, nextNodeTier,
   dropCount, dropCategory, quantityScaleMilli, MONSTER_ILVL_OFFSET, DROP_POOL, BOSS_DROP_POOL,
 } from "@exiled/rules";
 import { recomputePlayerStats } from "../derived";
@@ -52,6 +52,15 @@ export function registerDeath(sim: Simulation): void {
         // second a tier higher) for one taken on a stone that carried
         // modifiers. This is the loop that keeps a character in maps.
         const drops = waystoneDrops(s.mapSeed, s.areaTier, waystoneMods(s.waystoneSeed).length > 0);
+        // ...and at least one of them opens a door. A hop out costs two tiers
+        // while a plain run pays back the tier you brought, so the map you just
+        // cleared could leave you unable to go anywhere new — the Atlas stopped
+        // being a route decision and became a wait for a stone that rolls
+        // modifiers. Raising the best drop never pays less than the run's own
+        // tier (a stone opens anything at or under it), so this is a floor.
+        const onward = nextNodeTier(atlasGraph(s.atlasSeed), s.activeNodeId, s.completedNodes);
+        const best = drops[drops.length - 1]!;
+        if (onward !== null && best.tier < onward) best.tier = onward;
         world.set<SessionC>(sessionE!, "session", {
           ...s,
           completedNodes: [...s.completedNodes, s.activeNodeId],

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   areaLevel, monsterTierScale, offerWaystones, WAYSTONE_OFFER_COUNT,
-  atlasGraph, ATLAS_NODE_COUNT, isNodeReachable, atlasNodeTier, WAYSTONE_MAX_TIER,
+  atlasGraph, ATLAS_NODE_COUNT, isNodeReachable, atlasNodeTier, nextNodeTier, WAYSTONE_MAX_TIER,
 } from "./atlas.js";
 
 describe("atlas rules", () => {
@@ -160,5 +160,23 @@ describe("atlasNodeTier", () => {
 
   it("an unknown place reads as the starting tier rather than throwing", () => {
     expect(atlasNodeTier(graph, "node.nowhere")).toBe(1);
+  });
+});
+
+describe("nextNodeTier", () => {
+  const graph = atlasGraph(2026);
+
+  it("names the cheapest stone that opens somewhere new", () => {
+    // Every route out of the start is one hop, and a hop is two tiers.
+    expect(nextNodeTier(graph, graph[0]!.id, [graph[0]!.id])).toBe(3);
+  });
+
+  it("is null once every route out has been cleared", () => {
+    const first = graph[0]!;
+    expect(nextNodeTier(graph, first.id, [first.id, ...first.links])).toBeNull();
+  });
+
+  it("is null for a place that is not on the graph", () => {
+    expect(nextNodeTier(graph, "node.nowhere", [])).toBeNull();
   });
 });

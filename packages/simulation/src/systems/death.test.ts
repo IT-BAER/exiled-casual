@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { fp } from "@exiled/fixed-point";
 import { Simulation } from "../loop";
 import { registerDeath } from "./death";
-import { START_LEVEL, waystoneMods } from "@exiled/rules";
+import { START_LEVEL, waystoneMods, atlasGraph } from "@exiled/rules";
 import { WISDOM_SCROLL_BASE_ID, isCurrency } from "@exiled/content-runtime";
 import type { World } from "../ecs";
 import type { SessionC, ProgressC, Position, Health } from "../components";
@@ -454,13 +454,13 @@ describe("registerDeath", () => {
 
 describe("clearing a map hands Waystones back", () => {
   /** A dying map boss on `activeNodeId`, with `completedNodes` already behind it. */
-  function makeBossDeath(area: "map", activeNodeId: string, completedNodes: string[]) {
+  function makeBossDeath(area: "map", activeNodeId: string, completedNodes: string[], areaTier = 5) {
     const sim = new Simulation();
     registerDeath(sim);
     const { world } = sim;
     const sessionE = world.create();
     world.set<SessionC>(sessionE, "session", {
-      area, atlasSeed: 0, mapSeed: 0, waystoneSeed: 0, areaTier: 5,
+      area, atlasSeed: 0, mapSeed: 0, waystoneSeed: 0, areaTier,
       activeNodeId, completedNodes, portalsLeft: 6, mapOpen: 1, pendingArea: "",
     });
     const boss = world.create();
@@ -493,5 +493,32 @@ describe("clearing a map hands Waystones back", () => {
     const { sim, world } = makeBossDeath("map", "node.the_wrackline", ["node.the_wrackline"]);
     sim.step();
     expect(waystoneGroundItems(world).length).toBe(0);
+  });
+
+  const bestTier = (world: ReturnType<typeof makeBossDeath>["world"]) =>
+    Math.max(...waystoneGroundItems(world).map((e) =>
+      (world.get(e, "item") as { item: { waystone: { tier: number } } }).item.waystone.tier));
+
+  it("pays enough to open the next place, so clearing one is never a dead end", () => {
+    // A Tier 1 run on the starting node used to hand back a Tier 1 stone, and
+    // every route out of it wants Tier 3 — the character was farming the same
+    // place until a stone happened to roll modifiers.
+    const { sim, world } = makeBossDeath("map", "node.the_wrackline", [], 1);
+    sim.step();
+    expect(bestTier(world)).toBe(3);
+  });
+
+  it("never pays below the stone that was brought", () => {
+    const { sim, world } = makeBossDeath("map", "node.the_wrackline", [], 9);
+    sim.step();
+    expect(bestTier(world)).toBe(9);
+  });
+
+  it("pays the run's own tier when every route out is already cleared", () => {
+    const graph = atlasGraph(0);
+    const first = graph[0]!;
+    const { sim, world } = makeBossDeath("map", first.id, [...first.links], 1);
+    sim.step();
+    expect(bestTier(world)).toBe(1);
   });
 });
