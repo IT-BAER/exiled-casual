@@ -167,12 +167,14 @@ function buildFloor(scene: Scene): void {
 
 /**
  * Let a body fall. `push` is the direction the killing blow came FROM, so the
- * corpse is thrown away from it.
+ * corpse is thrown away from it, and `at` is the world point it landed on —
+ * chest height and off the centre line is a body that turns as it drops, the
+ * root's own position is a body swept off its feet. Defaults to the root.
  *
  * Returns false when nothing could be done — no physics, no skeleton — which is
  * the caller's signal to dispose the mesh the old way.
  */
-export function dropDead(scene: Scene, root: Mesh, push: Vector3 | null): boolean {
+export function dropDead(scene: Scene, root: Mesh, push: Vector3 | null, at?: Vector3): boolean {
   if (!ready.has(scene)) return false;
   const skinned = root.getChildMeshes(false).find((m) => m.skeleton);
   const skeleton = skinned?.skeleton;
@@ -197,7 +199,7 @@ export function dropDead(scene: Scene, root: Mesh, push: Vector3 | null): boolea
     }
     if (push) {
       doll.getAggregate(0)?.body?.applyImpulse(
-        push.scale(DEATH_IMPULSE), root.getAbsolutePosition());
+        push.scale(DEATH_IMPULSE), at ?? root.getAbsolutePosition());
     }
     // Onto whatever metadata the actor already carries (the player's holds its
     // rig), never over it.

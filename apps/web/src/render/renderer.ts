@@ -121,6 +121,14 @@ export function syncActionAnimation(
 /** Height the death impulse is aimed above the floor, so a body topples rather
  *  than slides. */
 const DEATH_LIFT = 0.35;
+/** Where on the body the blow lands: chest height, and up to this far off its
+ *  centre line, which is the whole difference between a fall and a spin. */
+const DEATH_CHEST = 0.65;
+const DEATH_OFF_CENTRE = 0.3;
+/** How close a vanished bolt has to be to the body to have been what killed it.
+ *  Wide enough for a monster radius plus the tick the impact was resolved on,
+ *  short enough that a bolt expiring against a wall nearby is not mistaken for it. */
+const HIT_REACH = 1.5;
 
 /**
  * Only bodies lean. A portal or a chest carries a fixed yaw and no weight, and
@@ -142,6 +150,34 @@ const RUN_PITCH = 0.05;
 const RUN_SPEED = 3;
 /** Per-frame ease onto the target tilt, so the body settles rather than snaps. */
 const TILT_EASE = 0.12;
+
+/**
+ * Where the killing blow came FROM, in world space.
+ *
+ * A bolt that was in the air last snapshot, is gone this one, and was standing
+ * on top of the body when it went IS the thing that killed it — that is the only
+ * report of a killer the client ever gets, and it is the one that matters for a
+ * spitter shooting the player in the back while he runs at something else.
+ * Everything else is a melee hit, and the player is who that was.
+ */
+export function blowFrom(
+  x: number,
+  z: number,
+  prev: Snapshot | null,
+  next: Snapshot,
+): Vector3 {
+  let best: Vector3 | null = null;
+  let bestDist = HIT_REACH;
+  for (const e of prev?.entities ?? []) {
+    if (e.kind !== "projectile") continue;
+    if (next.entities.some((n) => n.id === e.id)) continue;
+    const dist = Math.hypot(e.x - x, e.y - z);
+    if (dist >= bestDist) continue;
+    bestDist = dist;
+    best = new Vector3(e.x, 0, e.y);
+  }
+  return best ?? new Vector3(next.player.x, 0, next.player.y);
+}
 
 function kindOf(e: SnapshotEntity): MeshKind {
   if (e.kind === "monster") {
@@ -202,7 +238,7 @@ export class SnapshotRenderer {
         if (!snap) return false;
         const target = id ?? snap.player.id;
         const mesh = this.meshes.get(target);
-        if (!mesh || !this.fell(mesh, snap)) return false;
+        if (!mesh || !this.fell(mesh, snap, null)) return false;
         this.meshes.delete(target);
         this.kinds.delete(target);
         return true;
@@ -259,7 +295,7 @@ export class SnapshotRenderer {
     // revive builds a new one — standing, at the checkpoint, which is the point.
     const playerCorpse = this.meshes.get(next.player.id);
     if (!next.player.alive && playerCorpse) {
-      if (this.fell(playerCorpse, next)) {
+      if (this.fell(playerCorpse, next, prev)) {
         this.meshes.delete(next.player.id);
         this.kinds.delete(next.player.id);
       }
@@ -439,7 +475,7 @@ export class SnapshotRenderer {
           rigOf(mesh)?.dispose();
           portalVanish(this.scene, mesh);
         } else if (!areaChanged && BODIES.has(this.kinds.get(id) ?? "groundArea")
-          && this.fell(mesh, next)) {
+          && this.fell(mesh, next, prev)) {
           // Kept: it is a corpse now, and owned by `corpses` rather than by the
           // entity id, which the sim is free to hand to something else.
         } else {
@@ -539,21 +575,28 @@ export class SnapshotRenderer {
    * test, a browser that refused it), which leaves the caller on the old path
    * where a dead thing simply vanishes.
    */
-  private fell(mesh: Mesh, next: Snapshot): boolean {
-    // Away from whatever killed it. The client is never told who did, but the
-    // player is who it was fighting, and a body thrown at its killer is wrong in
-    // a way anyone can see while thrown away from it is right often enough.
+  private fell(mesh: Mesh, next: Snapshot, prev: Snapshot | null): boolean {
     const push = mesh.position
-      .subtract(new Vector3(next.player.x, 0, next.player.y));
+      .subtract(blowFrom(mesh.position.x, mesh.position.z, prev, next));
     push.y = 0;
     if (push.lengthSquared() < 1e-4) push.set(0, 0, 1);
     push.normalize().y = DEATH_LIFT;
-    if (!dropDead(this.scene, mesh, push)) return false;
+    // WHERE the blow landed, which is what makes one death different from the
+    // next. An impulse at the root is applied at the feet, so every body was
+    // swept off its legs the same way and landed flat like a dropped plank.
+    // Chest height topples it, and a random step off the centre line turns it as
+    // it goes — the same rule as everything else in docs/09: the variance is the
+    // effect, and there is no seed here because nothing replays a corpse.
+    const side = new Vector3(-push.z, 0, push.x).normalize()
+      .scale((Math.random() * 2 - 1) * DEATH_OFF_CENTRE);
+    const at = mesh.position.add(new Vector3(0, DEATH_CHEST, 0)).add(side);
+    if (!dropDead(this.scene, mesh, push, at)) return false;
     rigOf(mesh)?.stopForDeath();
     creatureOf(mesh)?.stopForDeath();
     this.corpses.push({ mesh, until: next.tick + CORPSE_TICKS });
     return true;
   }
+
 
   private syncMesh(
     id: number,

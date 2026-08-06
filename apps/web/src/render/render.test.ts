@@ -19,7 +19,7 @@ import { applyBiomeTint } from "./level";
 import { LIGHT_POOL } from "./lights";
 import { HAZE_HEIGHT, HAZE_MAX_SIZE, HAZE_NAME, MOTES_NAME, MOTES_NOISE_NAME } from "./haze";
 import { BIOMES } from "@exiled/content-runtime";
-import { SnapshotRenderer, syncActionAnimation, syncCastingAnimation } from "./renderer";
+import { blowFrom, SnapshotRenderer, syncActionAnimation, syncCastingAnimation } from "./renderer";
 import { makeMesh, updateTelegraph } from "./meshes";
 import type { Snapshot } from "@exiled/protocol";
 import { testPlayer, testStats } from "../test-fixtures";
@@ -258,6 +258,28 @@ describe("atmosphere", () => {
     // plane and the quad ends in a dead-straight horizontal line — at alpha 0.35
     // the frame was banded with them. Height must beat half the largest sprite.
     expect(HAZE_HEIGHT).toBeGreaterThan(HAZE_MAX_SIZE / 2);
+  });
+
+  it("names the bolt that killed a body, and the player when nothing did", () => {
+    const bolt = { id: 9, kind: "projectile" as const, x: 4.4, y: 1, radius: 0.2 };
+    const far = { id: 10, kind: "projectile" as const, x: -20, y: 20, radius: 0.2 };
+    const prev = makeSnapshot({ entities: [bolt, far] });
+    // Both bolts are gone this snapshot; only the one that was standing on the
+    // body can have been what killed it.
+    const next = makeSnapshot({ tick: 2, entities: [], player: testPlayer({ x: -3, y: 0 }) });
+
+    const hit = blowFrom(5, 1, prev, next);
+    expect(hit.x).toBeCloseTo(4.4);
+    expect(hit.z).toBeCloseTo(1);
+
+    // A body nowhere near either bolt was struck by hand, and the player is the
+    // only hand there is.
+    const melee = blowFrom(5, 1, makeSnapshot({ entities: [far] }), next);
+    expect(melee.x).toBeCloseTo(-3);
+
+    // A bolt still in the air hit nothing: it has to be in prev and NOT in next.
+    const flying = blowFrom(5, 1, prev, makeSnapshot({ tick: 2, entities: [bolt] }));
+    expect(flying.x).toBeCloseTo(0);
   });
 
   it("floats motes in the torchlight, warm and fading in at both ends", () => {
