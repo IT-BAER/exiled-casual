@@ -824,6 +824,19 @@ export class RigActor {
     return clone;
   }
 
+  /**
+   * Stand as though he had been here a while.
+   *
+   * The menu's characters are not arriving anywhere: nobody watched them stop.
+   * In game the breath settles because `setLocomotion` is called every frame and
+   * the standing clock runs; a menu asks for the idle once and would otherwise
+   * hold the full-rate breath of a man who just came to a halt, forever.
+   */
+  standSettled(): void {
+    this.standing = IDLE_SETTLE_SEC;
+    this.setLocomotion(0);
+  }
+
   /** Pick and pace the locomotion clip from the actor's real ground speed. */
   setLocomotion(speed: number): void {
     const clip = clipForSpeed(speed, this.locomotion);

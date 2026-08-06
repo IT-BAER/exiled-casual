@@ -390,8 +390,9 @@ export async function createMenuStage(canvas: HTMLCanvasElement): Promise<MenuSt
   const rig: RigActor | null = attachRig(scene, host);
   // Standing still is a locomotion speed of zero, which is the idle clip. Asking
   // for the clip by name would duplicate the walk/run hysteresis that already
-  // lives in `clipForSpeed`.
-  rig?.setLocomotion(0);
+  // lives in `clipForSpeed`. Settled rather than fresh: he has been waiting in
+  // this hall, he did not run in and stop the instant the screen opened.
+  rig?.standSettled();
 
   // Contact shadow, and it must be built HERE, after the wardrobe is in.
   //
