@@ -24,10 +24,14 @@ import urllib.error
 import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-API = "https://api.tripo3d.ai/v2/openapi"
+API = "https://openapi.tripo3d.ai/v3"
+# v3 has no balance endpoint; the v2 one still answers for the same key.
+BALANCE_URL = "https://api.tripo3d.ai/v2/openapi/user/balance"
 POLL_SECONDS = 3
 # Tripo hands back a presigned URL; it does not live long, so download at once.
 TERMINAL = {"success", "failed", "cancelled", "banned", "expired", "unknown"}
+# As the API itself reports them when `model` is missing.
+MODELS = ["v3.1-20260211", "v3.0-20250812", "v2.5-20250123", "P1-20260311"]
 
 
 def api_key():
@@ -49,7 +53,7 @@ def api_key():
 
 def call(path, body=None, data=None, headers=None):
     req = urllib.request.Request(
-        f"{API}/{path}",
+        path if path.startswith("http") else f"{API}/{path}",
         data=json.dumps(body).encode() if body is not None else data,
         headers={"Authorization": f"Bearer {api_key()}", **(headers or {})},
     )
@@ -75,7 +79,7 @@ def upload(path):
         blob = f.read()
     body = (f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{name}\"\r\n"
             f"Content-Type: {mime}\r\n\r\n").encode() + blob + f"\r\n--{boundary}--\r\n".encode()
-    data = call("upload", data=body, headers={"Content-Type": f"multipart/form-data; boundary={boundary}"})
+    data = call("files", data=body, headers={"Content-Type": f"multipart/form-data; boundary={boundary}"})
     token = data.get("image_token") or data.get("file_token")
     if not token:
         sys.exit("upload returned no token: " + json.dumps(data)[:300])
@@ -85,7 +89,7 @@ def upload(path):
 def wait(task_id):
     last = None
     while True:
-        data = call(f"task/{task_id}")
+        data = call(f"tasks/{task_id}")
         status, progress = data.get("status"), data.get("progress", 0)
         if (status, progress) != last:
             print(f"  {status} {progress}%")
@@ -109,20 +113,22 @@ def main():
     ap.add_argument("--face-limit", type=int, default=20000,
                     help="triangle budget asked of the generator; build_props.py decimates further")
     ap.add_argument("--style", help="e.g. person:person2cartoon, object:clay, object:steampunk")
-    ap.add_argument("--model-version", default="v2.5-20250123")
+    ap.add_argument("--model", default="v3.1-20260211", choices=MODELS)
     ap.add_argument("--no-pbr", action="store_true", help="take the plain textured model, not the PBR one")
-    ap.add_argument("--balance", action="store_true", help="print remaining credits and exit")
+    ap.add_argument("--balance", action="store_true", help="print remaining API credits and exit")
     args = ap.parse_args()
 
     if args.balance:
-        data = call("user/balance")
-        print(f"balance: {data.get('balance')} (frozen {data.get('frozen')})")
+        data = call(BALANCE_URL)
+        print(f"balance: {data.get('balance')} API credits (frozen {data.get('frozen')}). "
+              "Studio credits are a separate wallet and are not spendable here.")
         return
     if bool(args.text) == bool(args.image):
         ap.error("give exactly one of --text or --image")
 
+    # v3 dropped the `type` field: the capability is the endpoint.
     task = {
-        "model_version": args.model_version,
+        "model": args.model,
         "face_limit": args.face_limit,
         "texture": True,
         "pbr": not args.no_pbr,
@@ -130,20 +136,22 @@ def main():
     if args.style:
         task["style"] = args.style
     if args.text:
-        task.update(type="text_to_model", prompt=args.text)
+        endpoint, task["prompt"] = "generation/text-to-model", args.text
         name = slug(args.text)
-    elif args.image.startswith("http"):
-        task.update(type="image_to_model", image_url=args.image)
-        name = slug(os.path.splitext(os.path.basename(args.image))[0])
     else:
-        token, ext = upload(args.image)
-        task.update(type="image_to_model", file={"type": ext, "file_token": token})
+        endpoint = "generation/image-to-model"
         name = slug(os.path.splitext(os.path.basename(args.image))[0])
+        if args.image.startswith("http"):
+            task["file"] = {"url": args.image}
+        else:
+            token, ext = upload(args.image)
+            task["file"] = {"type": ext, "file_token": token}
 
-    task_id = call("task", body=task)["task_id"]
+    task_id = call(endpoint, body=task)["task_id"]
     print(f"task {task_id}")
     output = wait(task_id).get("output", {})
-    url = output.get("pbr_model") or output.get("model") or output.get("base_model")
+    url = (output.get("pbr_model") or output.get("model")
+           or output.get("model_url") or output.get("base_model"))
     if not url:
         sys.exit("finished task carried no model: " + json.dumps(output)[:300])
 
