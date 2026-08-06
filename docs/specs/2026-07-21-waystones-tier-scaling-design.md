@@ -1,7 +1,7 @@
 # Exiled Casual — Slice: "Waystones + Tier Scaling"
 
 Design spec. Status: **built and surpassed.** Historical scope approved 2026-07-21; current
-behavior verified 2026-08-05. See
+behavior verified 2026-08-06. See
 [`2026-08-05-current-implementation-contract.md`](2026-08-05-current-implementation-contract.md).
 Baseline research: `docs/` pack (PoE 2 EA 0.5.4b clean-room reconstruction).
 Position: closes the last **Phase 3** gap in `docs/06` (map item + device activation)
@@ -21,6 +21,11 @@ The temporary offer model in this document no longer describes the game:
   modifiers that affect monsters, player resistance, experience, quantity, and rarity.
 - Boss completion persists the node, drops replacement Waystones, and modified stones pay an
   additional stone one tier higher, capped at Tier 15.
+- That payout has a floor the tier formula alone does not give. Hopping between Atlas nodes costs
+  two tiers while a plain run returns the tier it was opened with, so a cleared map could leave the
+  character unable to open anywhere new. `nextNodeTier` names the cheapest tier among the not-yet-run
+  routes out of the cleared node and the boss's best drop is raised to it. A stone opens anything at
+  or under its tier, so the floor never pays less than the run's own.
 - The preparation view is a full-screen Atlas with a node popup and Waystone socket. Activation
   consumes the socketed backpack item only after simulation validation.
 

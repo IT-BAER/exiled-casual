@@ -46,7 +46,7 @@ This is a clean-room mechanics and architecture document, not copied game data a
 
 | Specification | Current status |
 |---|---|
-| [Current implementation contract](specs/2026-08-05-current-implementation-contract.md) | Living as-built truth, verified 2026-08-05 |
+| [Current implementation contract](specs/2026-08-05-current-implementation-contract.md) | Living as-built truth, verified 2026-08-06 |
 | [First Descent](specs/2026-07-19-first-descent-design.md) | Built and substantially surpassed |
 | [Waystones and tier scaling](specs/2026-07-21-waystones-tier-scaling-design.md) | Built; inventory stones, modifiers, sustain, and 15-node Atlas added later |
 | [First Loot](specs/2026-07-22-first-loot-design.md) | Built; full rarity, crafting, stash, vendor, and equipment loop added later |

@@ -231,7 +231,15 @@ Assets that ship inside the product, as opposed to research references. Every ro
 | `assets/characters/Male_Ranger.*`, `Male_Peasant.*`, `T_*.png`, baked into `apps/web/public/models/wardrobe.glb` | [Modular Character Outfits - Fantasy](https://quaternius.com/packs/modularcharacteroutfitsfantasy.html) by Quaternius (Standard) | CC0 1.0 Universal | The player character and its swappable outfits, rigged to the same skeleton. The packs themselves are no longer served: `tools/build_wardrobe.py` welds them into one glb, and generates the ranger's coat and the hood cap, which no pack ships |
 | `assets/characters/Base_Male.*`, `Hair_SimpleParted.*`, `T_Eye_*.png`, baked into `apps/web/public/models/wardrobe.glb` | [Universal Base Characters](https://quaternius.com/packs/universalbasecharacters.html) by Quaternius (Standard) | CC0 1.0 Universal | The head, neck, eyes and eyebrows, cut out of the base male, plus one hairstyle. The outfit pack above ships no head but references the face painted in `T_Regular_Male_Dark_BaseColor.png`; this is the pack that head belongs to |
 
-Everything else that ships is made for this project: `props.glb` and `rocks.glb` are built in Blender, and every texture in `apps/web/public/textures/` (tilesets, items, interface, menu art, FX) is generated. `apps/web/public/models/` is the only directory with third-party geometry in it.
+Everything else that ships is made for this project: `props.glb` and `rocks.glb` are built in Blender, and the textures in `apps/web/public/textures/` (items, interface, menu art, FX) are generated. `apps/web/public/models/` is the only directory with third-party geometry in it.
+
+Biome plates are the one exception, and they are recorded where they are built rather than in this table: the coast tileset is derived from two CC0 BlenderKit materials, listed by asset id, author, and licence in `assets/tilesets/coast/SOURCE.md`. The source `.blend` files run to hundreds of megabytes and are not committed, so recording the id beside the derived plate is what makes the master reproducible.
+
+New art follows one order, and the reason is provenance rather than taste:
+
+1. **Search BlenderKit first** (`tools/fetch_blenderkit.py`), free assets only, and write the asset id into a `SOURCE.md` next to whatever is built from it. A CC0 photogrammetry master tiles by construction and carries a licence that is already cleared for this table.
+2. **Generate the raster** through the image-generation skill when nothing matches. Hand-authored vector art is not an option for game art; the quality gap is visible.
+3. **Generate the mesh** with `tools/fetch_tripo3d.py` only when the owner explicitly asks for it. It bills a paid API wallet, so it is never a fallback taken unprompted, and the alternative is to build the mesh headless in Blender and still pull its textures from BlenderKit.
 
 CC0 is a public-domain dedication, so there is no attribution obligation and no share-alike clause; the credit above is courtesy, not a licence term. Neither pack is derived from any Path of Exile material.
 

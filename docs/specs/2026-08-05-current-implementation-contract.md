@@ -1,6 +1,6 @@
 # Exiled Casual: current implementation contract
 
-Status: **as built and verified on 2026-08-05 at `c4d801c`.**
+Status: **as built and verified on 2026-08-06 at `9051f42`.**
 
 This is the living specification for what the repository implements now. Earlier dated specs
 preserve the decision and delivery history of individual slices. Where an older proposal differs
@@ -72,12 +72,31 @@ Six portals are the run budget. Leaving through a portal or accepting a revive s
 closes at zero. Map entry and checkpoint revive grant ten seconds of spawn grace, broken by moving
 or casting. Boss death completes the active node once and pays the deterministic Waystone return.
 
+That return has a floor. A hop between Atlas nodes costs two tiers while a plain run hands back the
+tier it was opened with, so clearing a map could leave a character holding nothing able to open
+anywhere new. The boss's best stone is raised to the cheapest tier among the not-yet-run routes out
+of the cleared node, and a stone opens anything at or under its tier. The floor never pays less than
+the run's own tier, so the Atlas stays a route decision rather than a wait for a lucky roll.
+
 ## 5. Combat and characters
 
 The three classes share the core skill set but each has a class-specific free default attack:
 melee Strike, Snap Shot, or Ember Spark. Ember Bolt, Cinder Ground, and Blink provide the common
-starter vocabulary. Cast wind-up, cooldown, movement penalty, held-input repeat, aim, resources,
-critical strikes, ailments, ground effects, flasks, death, and revive are simulation-owned.
+starter vocabulary. Cast wind-up, cooldown, movement penalty, held-input repeat, aim, facing,
+resources, critical strikes, ailments, ground effects, flasks, death, and revive are
+simulation-owned.
+
+Two of those are worth stating exactly, because the client can only follow them:
+
+- **Facing.** A character standing still turns toward what he casts at, at the same bounded rate the
+  movement keys turn him. Running, the cast is ignored and the run keeps the body, which is what
+  makes run-and-gun readable. The aim rides on the held-skill component rather than the casting one,
+  because an instant skill leaves no cast behind to turn toward between one bolt and the next.
+- **Action pacing.** A held button re-fires on the longer of the wind-up and the cooldown, so for
+  every shipped skill that is the cooldown. The simulation therefore hands the renderer that repeat
+  interval, not the wind-up, and the arm clip is stretched to fill it. Pacing the clip by the
+  wind-up alone played it at roughly twice speed and left the arm idle for the rest of the beat.
+  The hit still lands on the wind-up tick; only the animation rate moved.
 
 Monster content has four combat archetypes:
 
@@ -101,6 +120,15 @@ one cliff, not a corridor. It emits explicit water cells plus a floating shoreli
 renderer builds wet sand, surf, shallows, swell bands, and deep water from that curve, then dresses
 the beach with shells, driftwood, weeded rock, wreck timber, and bones. Coast is the starting Atlas
 biome.
+
+Death is drawn, not simulated: the simulation owns the kill, and the client owns the body. A dead
+monster becomes a physics ragdoll thrown by the blow that killed it, aimed at chest height and a
+random step off the centre line so the body turns as it goes down. When a projectile was standing on
+the body the tick before it vanished, that projectile is the blow, which is the only attribution the
+client can actually know. The corpse then lies where it fell for 25 seconds and sinks through the
+floor over three, so the disappearance reads as burial rather than a pop. Physics has to be released
+before the sink starts, because in ragdoll mode every bone is rewritten from its box each frame and
+a lowered root is otherwise cancelled on the same frame.
 
 The player uses one wardrobe glTF containing all supported slot looks on a shared 65-joint rig.
 Equipped bases select visible meshes and generated per-base textures without replacing the skeleton.
@@ -137,11 +165,32 @@ Settings are global roster data and apply live. Current controls cover shadows, 
 bloom, atmosphere, resolution scale, torch warmth, master/mute plus music/interface/skills/loot/
 environment mix, minimap, loot labels, globe numbers, overlay-map opacity, and skill-bar assignment.
 
-Audio is snapshot-diff driven through one bus. Curated cues cover interface, skills, impacts,
+Audio is snapshot-diff driven through one bus, never a call at the dispatch site, so a cue fired on
+the press cannot lie when the simulation refuses the cast. The diff carries one rule worth stating:
+a first snapshot is not an event. The session's opening area message is a restore rather than a
+journey, and in development it arrives on every hot reload, so neither the arrival cue nor the
+crossing cue may fire on it.
+
+Curated cues cover interface, skills, impacts,
 movement surfaces, loot, portals, monsters, and environment. Five ambience beds are selected by
 area or biome; Coast currently takes the cave fallback until it receives a dedicated bed.
 
-## 9. Verification contract
+## 9. Development affordances
+
+These exist because some of the work cannot be judged from a test, and none of them ship:
+
+- `F3` shows a performance readout. Render-only, and available even on the death screen, so it is
+  the one key not gated behind a development build.
+- `F4` opens an asset menu that stands one chosen prop or species on the hideout floor at a time,
+  which is how a model is inspected without hunting for it in a map. Development builds only.
+- `?play&map=<node>&revealed` opens a map with no clicks and un-fogs the minimap, the only way to
+  read a layout without walking it. The harness has to let the session settle first, because the
+  worker starts its clock and hydrates the save asynchronously and an activation accepted inside
+  that window is overwritten by the restore.
+- `__sea({...})` rebuilds the coast water in place from a development console, because the surf
+  numbers are not guessable and the first pass at them was invisible.
+
+## 10. Verification contract
 
 Every change must pass:
 
@@ -156,7 +205,7 @@ content referential integrity, item/equipment consistency, roster migration/impo
 asset loading, and UI-art preload coverage. Visual work additionally requires comparison against
 the checked-in local reference screenshots and an approved devlog capture for major visible steps.
 
-## 10. Deliberately not implemented
+## 11. Deliberately not implemented
 
 - accounts, login, remote persistence, remote authoritative simulation, parties, and trade;
 - passive tree, support gems, weapon-set switching, and broad skill/content progression;
