@@ -94,9 +94,12 @@ SOURCES: dict[str, str] = {
     "skill-blink": "CB Sound Design - Whoosh And Push/W_a_P_Spell_Whoosh_19.wav",
 
     # ── Portals and the map device ──────────────────────────────────────────────
-    # Short inward vortex. The full 5.5-second tail is deliberately capped by
-    # trim_sfx.py: one map-device sequence needs an accent, not an ambience bed.
-    "portal-open": "Chupapsound - Essential Scifi/DSGN VORTEX IN.wav",
+    # An airy gust that swells and falls away. The designed sci-fi vortex this
+    # replaces carried a sustained partial stack under the noise, the same thing
+    # portal-close was already re-picked for: it read as a struck synth string,
+    # and the return portal opens at the instant a map arrives, so it was heard
+    # as the map's own sound.
+    "portal-open": "Rescopic Sound - Distinct Whooshes/WHSH_Airy-Whoosh Wind Gust 11_RSCPC_DW.wav",
     # Keep crossing distinct from the opening vortex above: a single spell whoosh is
     # the same inward gesture without the glass-shard material the old pick had.
     "portal-enter": "CB Sound Design - Whoosh And Push/W_a_P_Spell_Whoosh_19.wav",
