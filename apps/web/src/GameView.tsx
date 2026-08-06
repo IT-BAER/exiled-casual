@@ -9,6 +9,7 @@ import { SnapshotRenderer } from "./render/renderer";
 import { loadProps, resetProps } from "./render/props";
 import { loadMonsters, resetMonsters } from "./render/monsters";
 import { enablePhysics, resetPhysics } from "./render/ragdoll";
+import { toggleGallery } from "./render/gallery";
 import { resetFireLights } from "./render/lights";
 import { loadRocks, resetRocks } from "./render/rocks";
 import { loadPlayerRig, resetPlayerRig } from "./render/rig";
@@ -539,6 +540,14 @@ export function GameView({
       if (ev.key === "F3") {
         ev.preventDefault();
         setStatsOpen((v) => !v);
+        return;
+      }
+      // F4 stands every prop and every species in rows on the floor. DEV only,
+      // like the ?play harness: it is a way to look at the art, not a cheat, and
+      // it has no sim side at all.
+      if (ev.key === "F4" && import.meta.env?.DEV) {
+        ev.preventDefault();
+        if (sceneRef.current) toggleGallery(sceneRef.current, camera.target);
         return;
       }
       if (deadRef.current) return;
