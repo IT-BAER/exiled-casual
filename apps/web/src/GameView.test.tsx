@@ -61,7 +61,13 @@ vi.mock("./render/renderer", () => ({
   SnapshotRenderer: vi.fn(() => ({ apply: vi.fn(), cyclePlayerOutfit: vi.fn(), setHoveredEntity: vi.fn(), setAim: vi.fn() })),
 }));
 vi.mock("./render/rig", () => ({ loadPlayerRig: () => Promise.resolve(), resetPlayerRig: vi.fn() }));
-vi.mock("./render/props", () => ({ loadProps: () => Promise.resolve(), resetProps: vi.fn() }));
+// PROP_KINDS is the real list: the F4 asset menu builds its rows off it at
+// import time, so a mock without it fails the whole suite at collection.
+vi.mock("./render/props", async (importOriginal) => ({
+  ...await importOriginal<typeof import("./render/props")>(),
+  loadProps: () => Promise.resolve(),
+  resetProps: vi.fn(),
+}));
 vi.mock("./render/monsters", () => ({ loadMonsters: () => Promise.resolve(), resetMonsters: vi.fn(), attachCreature: () => null }));
 vi.mock("./render/rocks", () => ({ loadRocks: () => Promise.resolve(), resetRocks: vi.fn() }));
 // The hideout's furniture builds real Babylon meshes and instantiates the prop

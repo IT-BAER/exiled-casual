@@ -9,7 +9,8 @@ import { SnapshotRenderer } from "./render/renderer";
 import { loadProps, resetProps } from "./render/props";
 import { loadMonsters, resetMonsters } from "./render/monsters";
 import { enablePhysics, resetPhysics } from "./render/ragdoll";
-import { toggleGallery } from "./render/gallery";
+import { clearGallery, spawnAsset } from "./render/gallery";
+import { AssetSpawner } from "./hud/AssetSpawner";
 import { resetFireLights } from "./render/lights";
 import { loadRocks, resetRocks } from "./render/rocks";
 import { loadPlayerRig, resetPlayerRig } from "./render/rig";
@@ -98,6 +99,12 @@ export function GameView({
   const [optionsOpen, setOptionsOpen] = useState(false);
   // F3 performance readout. Render-only; toggleable even on the death screen.
   const [statsOpen, setStatsOpen] = useState(false);
+  // F4 asset menu, and how many exhibits it has stood up. DEV only.
+  const [spawnerOpen, setSpawnerOpen] = useState(false);
+  const [spawned, setSpawned] = useState(0);
+  // Where a spawned asset is put: in front of wherever the camera is looking,
+  // which is the player. The camera is built in the mount effect like the scene.
+  const cameraRef = useRef<{ target: Vector3 } | null>(null);
   // Tab's big centred map, meant to be left open while running. Render-only.
   const [overlayMapOpen, setOverlayMapOpen] = useState(false);
   // The Options panel applies graphics to the LIVE scene, and the scene is built
@@ -215,6 +222,7 @@ export function GameView({
     });
     const { scene, camera, detachZoom } = createScene(engine);
     sceneRef.current = scene;
+    cameraRef.current = camera;
     engineRef.current = engine;
     const renderer = new SnapshotRenderer(scene);
 
@@ -542,12 +550,11 @@ export function GameView({
         setStatsOpen((v) => !v);
         return;
       }
-      // F4 stands every prop and every species in rows on the floor. DEV only,
-      // like the ?play harness: it is a way to look at the art, not a cheat, and
-      // it has no sim side at all.
+      // F4 opens the asset menu. DEV only, like the ?play harness: it is a way
+      // to look at the art, not a cheat, and it has no sim side at all.
       if (ev.key === "F4" && import.meta.env?.DEV) {
         ev.preventDefault();
-        if (sceneRef.current) toggleGallery(sceneRef.current, camera.target);
+        setSpawnerOpen((v) => !v);
         return;
       }
       if (deadRef.current) return;
@@ -675,6 +682,21 @@ export function GameView({
         />
       )}
       {statsOpen && <DebugStats engineRef={engineRef} sceneRef={sceneRef} />}
+      {spawnerOpen && (
+        <AssetSpawner
+          standing={spawned}
+          onSpawn={(id) => {
+            const scene = sceneRef.current;
+            const at = cameraRef.current?.target;
+            if (scene && at && spawnAsset(scene, id, at)) setSpawned((n) => n + 1);
+          }}
+          onClear={() => {
+            if (sceneRef.current) clearGallery(sceneRef.current);
+            setSpawned(0);
+          }}
+          onClose={() => setSpawnerOpen(false)}
+        />
+      )}
       {panelOpen && snapshot && (
         <PreparationPanel
           atlasSeed={snapshot.atlasSeed}
