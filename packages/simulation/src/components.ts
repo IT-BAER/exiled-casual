@@ -150,8 +150,11 @@ export interface CastingC {
   didCrit?: 0 | 1;
   team?: number;
   action?: "spell" | "melee";
-  /** Full length of this wind-up in ticks, cast speed already applied. The
-   *  renderer paces the clip by it so the release pose lands on the hit. */
+  /** The beat this action fills, in ticks: the longer of the wind-up (cast
+   *  speed already applied) and the cooldown, which is how often a held button
+   *  actually re-fires. The renderer paces the clip by it, so the swing lasts
+   *  as long as the gap the player sees rather than sprinting through the
+   *  wind-up and waiting out the rest. */
   ticks?: number;
 }
 export interface MonsterC {

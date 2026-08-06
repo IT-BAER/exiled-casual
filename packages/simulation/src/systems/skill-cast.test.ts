@@ -360,6 +360,35 @@ describe("registerSkillCast", () => {
     expect(sim.world.get<CastingC>(caster, "casting")!.untilTick).toBe(8);
   });
 
+  it("paces the animation by the repeat interval, not the wind-up", () => {
+    const sim = new Simulation();
+    // Wind-up 8, cooldown 20: a held button fires every 20 ticks, so that is
+    // the beat the arm has to fill. Pacing the clip by the 8 made it play more
+    // than twice too fast and then stand still for the remaining 12.
+    const slowRepeat: SkillDef = { ...EMBER_BOLT, castTicks: 8, cooldownTicks: 20 };
+    registerSkillCast(sim, new Map([[slowRepeat.id, slowRepeat]]));
+    const caster = makeCaster(sim, fp(60));
+    sim.step([{
+      tick: 0, entity: caster, type: "useSkill",
+      skillId: slowRepeat.id, data: { tx: fp(10), ty: 0 },
+    }]);
+    const casting = sim.world.get<CastingC>(caster, "casting")!;
+    expect(casting.untilTick).toBe(8);  // the bolt still leaves on the wind-up
+    expect(casting.ticks).toBe(20);     // the arm still has the whole beat
+  });
+
+  it("a wind-up longer than the cooldown paces by the wind-up", () => {
+    const sim = new Simulation();
+    const slowCast: SkillDef = { ...EMBER_BOLT, castTicks: 30, cooldownTicks: 6 };
+    registerSkillCast(sim, new Map([[slowCast.id, slowCast]]));
+    const caster = makeCaster(sim, fp(60));
+    sim.step([{
+      tick: 0, entity: caster, type: "useSkill",
+      skillId: slowCast.id, data: { tx: fp(10), ty: 0 },
+    }]);
+    expect(sim.world.get<CastingC>(caster, "casting")!.ticks).toBe(30);
+  });
+
   it("an instant cast (no castTicks) sets no CastingC", () => {
     const sim = new Simulation();
     registerSkillCast(sim, ALL_SKILLS);

@@ -250,6 +250,13 @@ export function registerSkillCast(
           ? Math.max(1, Math.trunc((skill.castTicks * 100) / timingScale))
           : skill.castTicks
         : 0;
+      // The arm is paced by the beat the player watches, which is the repeat
+      // interval and not the wind-up. Holding the button re-fires only once the
+      // cooldown is up, so a 0.5s clip squeezed into a 7-tick wind-up sprinted
+      // through the swing at twice speed and then stood still for the other 8:
+      // read as the cast being far too fast. Whichever of the two is longer is
+      // the real gap between one release and the next.
+      const beatTicks = Math.max(castTicks, skill.cooldownTicks);
       if (castTicks > 0) {
         world.set<CastingC>(caster, "casting", {
           untilTick: tick + castTicks,
@@ -260,7 +267,7 @@ export function registerSkillCast(
           didCrit: didCrit ? 1 : 0,
           team: casterTeam,
           action: actionFor(skill),
-          ticks: castTicks,
+          ticks: beatTicks,
         });
         continue;
       }
