@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CORPSE_SECONDS, SINK_SECONDS, sinkDepth } from "./ragdoll";
+import { CORPSE_SECONDS, DEATH_SPEED, SINK_SECONDS, sinkDepth } from "./ragdoll";
 
 describe("corpse sink", () => {
   it("starts at the floor and ends deep enough to swallow a body", () => {
@@ -22,6 +22,14 @@ describe("corpse sink", () => {
   it("clamps outside the window", () => {
     expect(sinkDepth(-1)).toBe(0);
     expect(sinkDepth(2)).toBe(sinkDepth(1));
+  });
+
+  it("throws the trunk at a speed a body could be thrown at", () => {
+    // Impulse over the box's own mass is the velocity it leaves with. Below a
+    // walking pace the fall is gravity alone and every death is the same shape;
+    // above a sprint the corpse is launched. The old 2.0 impulse was 0.2 m/s.
+    expect(DEATH_SPEED).toBeGreaterThan(1.5);
+    expect(DEATH_SPEED).toBeLessThan(6);
   });
 
   it("leaves the body lying still far longer than the sink takes", () => {

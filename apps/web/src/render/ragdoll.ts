@@ -92,12 +92,15 @@ function configFor(skeleton: Skeleton): RagdollBoneProperties[] {
   for (const bone of skeleton.bones) {
     const entry = PLAYER_PARTS[bone.name];
     const creatureSize = creaturePart(bone.name);
+    // Mass is stated rather than left to Babylon's default, because the death
+    // impulse is sized against it: a silent change of default would quietly
+    // rescale every fall in the game.
     if (entry) {
-      config.push({ ...entry, bone: bone.name } as RagdollBoneProperties);
+      config.push({ ...entry, mass: BOX_MASS, bone: bone.name } as RagdollBoneProperties);
     } else if (creatureSize !== null) {
-      config.push({ bone: bone.name, size: creatureSize, min: -0.4, max: 0.4 } as RagdollBoneProperties);
+      config.push({ bone: bone.name, size: creatureSize, mass: BOX_MASS, min: -0.4, max: 0.4 } as RagdollBoneProperties);
     } else if (bone === top) {
-      config.push({ bone: bone.name, size: ROOT_MARKER } as RagdollBoneProperties);
+      config.push({ bone: bone.name, size: ROOT_MARKER, mass: BOX_MASS } as RagdollBoneProperties);
     }
   }
   return config;
@@ -190,11 +193,17 @@ export function dropDead(scene: Scene, root: Mesh, push: Vector3 | null, at?: Ve
     const doll = new Ragdoll(skeleton, root, config);
     doll.ragdoll();
     // Damp every body so limbs settle instead of oscillating forever.
+    //
+    // These were 5 and 8, which is not settling, it is a body falling through
+    // treacle: linear damping of 5 leaves under one percent of a velocity after
+    // a second, so whatever the blow did was gone before the corpse had left the
+    // spot it died on. At 1.2 the throw survives the first half second, which is
+    // the part anyone watches, and the limbs still stop instead of ringing.
     for (let i = 0; i < config.length; i++) {
       const body = doll.getAggregate(i)?.body;
       if (body) {
-        body.setLinearDamping(5);
-        body.setAngularDamping(8);
+        body.setLinearDamping(LINEAR_DAMPING);
+        body.setAngularDamping(ANGULAR_DAMPING);
       }
     }
     if (push) {
@@ -210,8 +219,26 @@ export function dropDead(scene: Scene, root: Mesh, push: Vector3 | null, at?: Ve
   }
 }
 
-/** Newton-seconds into a corpse. Enough to sell the blow, short of launching it. */
-const DEATH_IMPULSE = 2.0;
+/**
+ * What a blow is worth, in newton-seconds, and what it costs the body it lands on.
+ *
+ * The arithmetic is the whole point, because the old number was not a taste
+ * question, it was two orders out. Every box in the doll weighs `BOX_MASS`, the
+ * impulse goes into ONE of them, and impulse over mass is the velocity it leaves
+ * with: at 2.0 into a 10 kg trunk that was 0.2 m/s, a fifth of a walking pace,
+ * against a body that is already falling at 9.8. Nothing about the direction of
+ * the blow could survive that, which is why every death looked identical.
+ *
+ * 34 is about 3.4 m/s on the trunk — a stagger and half a turn, not a launch —
+ * and the joints drag the rest of the animal with it.
+ */
+const BOX_MASS = 10;
+const DEATH_IMPULSE = 34;
+/** Metres per second the trunk leaves with. The number above, made checkable. */
+export const DEATH_SPEED = DEATH_IMPULSE / BOX_MASS;
+/** How fast that is bled off again. See the note where these are applied. */
+const LINEAR_DAMPING = 1.2;
+const ANGULAR_DAMPING = 3;
 
 /**
  * Freeze a settled body in the pose it landed in and hand its physics back.
