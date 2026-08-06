@@ -19,8 +19,25 @@ import {
  * loop.
  */
 
-/** Seconds a corpse is left on the floor before it is disposed. */
-export const CORPSE_SECONDS = 6;
+/** Seconds a corpse lies still on the floor before it starts to sink. */
+export const CORPSE_SECONDS = 25;
+
+/** Seconds the sink itself takes, once it starts. */
+export const SINK_SECONDS = 3;
+
+/** How far under the floor a body has to go before none of it is left. */
+const SINK_DEPTH = 1.6;
+
+/**
+ * How deep a sinking body is at `t` of the sink, 0..1.
+ *
+ * Quadratic so it creeps at the start: the moment a corpse begins to move is
+ * the one the eye catches, and the floor hides the fast part.
+ */
+export function sinkDepth(t: number): number {
+  const clamped = t <= 0 ? 0 : t >= 1 ? 1 : t;
+  return SINK_DEPTH * clamped * clamped;
+}
 
 /** Where the physics floor sits. The level's own floor is drawn at y=0. */
 const FLOOR_Y = 0;
@@ -193,6 +210,22 @@ export function dropDead(scene: Scene, root: Mesh, push: Vector3 | null): boolea
 
 /** Newton-seconds into a corpse. Enough to sell the blow, short of launching it. */
 const DEATH_IMPULSE = 2.0;
+
+/**
+ * Freeze a settled body in the pose it landed in and hand its physics back.
+ *
+ * Required before the sink, not just tidy: in ragdoll mode Babylon writes each
+ * bone from its box's WORLD position through the inverse of the root's matrix,
+ * so lowering the root is cancelled on the same frame and the corpse never
+ * moves. `pauseSync` stops that observer, and it has to be set before the
+ * aggregates go or it reads them after they are disposed.
+ */
+export function freezeRagdoll(root: Mesh): void {
+  const doll = (root.metadata as { doll?: Ragdoll } | null)?.doll;
+  if (!doll) return;
+  doll.pauseSync = true;
+  disposeRagdoll(root);
+}
 
 /** The physics attached to a corpse, so the renderer can let it go. */
 export function disposeRagdoll(root: Mesh): void {

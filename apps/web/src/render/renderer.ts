@@ -7,7 +7,7 @@ import { animateActor, makeMesh, setHitFlash, updateTelegraph, updatePortal, upd
 import type { MeshKind } from "./meshes";
 import { COSMETIC_SLOTS, looksForEquipment, previewItemFor, rigOf, type Looks } from "./rig";
 import { creatureOf } from "./meshes";
-import { CORPSE_SECONDS, disposeRagdoll, dropDead } from "./ragdoll";
+import { CORPSE_SECONDS, SINK_SECONDS, disposeRagdoll, dropDead, freezeRagdoll, sinkDepth } from "./ragdoll";
 import { CAMERA_ALPHA } from "./engine";
 import { lerp, lerpAngle } from "./interp";
 
@@ -62,8 +62,11 @@ const HIT_FLASH_TICKS = 3;
  */
 const ASSUMED_RANGE = 8;
 
-/** How long a corpse lies there, in ticks. */
+/** How long a corpse lies there before it starts to sink, in ticks. */
 const CORPSE_TICKS = Math.round(CORPSE_SECONDS * TICKS_PER_SEC);
+
+/** How long the sink takes, in ticks. */
+const SINK_TICKS = Math.round(SINK_SECONDS * TICKS_PER_SEC);
 
 /** Kinds that fall over when they die. Everything else just stops existing. */
 const BODIES = new Set<MeshKind>(["player", "monster", "rare", "boss"]);
@@ -173,8 +176,10 @@ export class SnapshotRenderer {
   private readonly fromHand = new Map<number, { offset: Vector3; from: { x: number; y: number }; range: number }>();
   /** What each entity is drawn as, so a dead one can be told from a closed portal. */
   private readonly kinds = new Map<number, MeshKind>();
-  /** Bodies the sim has forgotten, still falling. Disposed when their time is up. */
-  private readonly corpses: { mesh: Mesh; until: number }[] = [];
+  /** Bodies the sim has forgotten, still falling. `until` is the tick they start
+   *  to sink on; `restY` is the height they settled at, the sink measured down
+   *  from it. */
+  private readonly corpses: { mesh: Mesh; until: number; restY?: number }[] = [];
   private static readonly GAIT_PER_UNIT = 3.2;
   /** apply() runs several times per snapshot while interpolating; once-per-tick
    *  work (like firing a cast animation) is gated on this. */
@@ -450,16 +455,28 @@ export class SnapshotRenderer {
       }
     }
 
-    // Corpses whose time is up. Nothing fades them out: at this camera a body
-    // sinking through the floor is more visible than one that is simply gone by
-    // the time the player has looked away from it.
+    // Corpses whose time is up. They lie there long enough to be walked over and
+    // looted around, then go down through the floor rather than blinking out:
+    // the disappearance is what the eye catches, so it is spent on something
+    // that reads as the ground taking the body.
     for (let i = this.corpses.length - 1; i >= 0; i--) {
       const corpse = this.corpses[i]!;
       if (next.tick < corpse.until) continue;
-      this.corpses.splice(i, 1);
-      disposeRagdoll(corpse.mesh);
-      rigOf(corpse.mesh)?.dispose();
-      corpse.mesh.dispose();
+      if (corpse.restY === undefined) {
+        // Physics has to let go first, or the ragdoll writes the body back to
+        // the world position it settled at on every frame of the sink.
+        freezeRagdoll(corpse.mesh);
+        corpse.restY = corpse.mesh.position.y;
+      }
+      const done = next.tick - corpse.until;
+      if (done >= SINK_TICKS) {
+        this.corpses.splice(i, 1);
+        disposeRagdoll(corpse.mesh);
+        rigOf(corpse.mesh)?.dispose();
+        corpse.mesh.dispose();
+        continue;
+      }
+      corpse.mesh.position.y = corpse.restY - sinkDepth(done / SINK_TICKS);
     }
 
     // Faded on the sim's clock, like every other timing in the client: a wall
