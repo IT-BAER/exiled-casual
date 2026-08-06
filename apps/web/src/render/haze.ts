@@ -1,4 +1,4 @@
-import { Color4, ParticleSystem, Texture, Vector3 } from "@babylonjs/core";
+import { Color4, NoiseProceduralTexture, ParticleSystem, Texture, Vector3 } from "@babylonjs/core";
 import type { ArcRotateCamera, Scene } from "@babylonjs/core";
 
 /** Looked up by name from `applyBiomeTint`, the same way the lights are. */
@@ -131,6 +131,9 @@ function setHazeColor(ps: ParticleSystem, nr: number, ng: number, nb: number): v
 /** Motes are looked up by name too, but only by the tests: they take no tint. */
 export const MOTES_NAME = "motes";
 
+/** The wander field the motes are advected through. Named so a test can find it. */
+export const MOTES_NOISE_NAME = "motes-drift";
+
 /** Small enough to read as a speck and no smaller. The camera shows about 19
  *  world units across a ~2000px canvas, so one world unit is ~100px and this
  *  range lands at 5 to 12 pixels. Below about 0.04 they alias into a flicker. */
@@ -177,13 +180,35 @@ export function createMotes(scene: Scene, camera: ArcRotateCamera): ParticleSyst
   ps.maxLifeTime = 11;
   ps.emitRate = 11;
 
-  // Rising, barely. Convection off a torch, not sparks off a fire: anything
-  // faster puts a burning thing in the room that the player cannot find.
-  ps.gravity = new Vector3(0, 0.035, 0);
-  ps.direction1 = new Vector3(-0.04, 0.02, -0.04);
-  ps.direction2 = new Vector3(0.04, 0.08, 0.04);
+  // Dust is doing whatever the last thing to walk through it left it doing:
+  // some of it climbs on the torch's convection, some settles under its own
+  // weight, and none of it travels in a straight line. Every speck rising at
+  // once is not air in a room, it is a parallax layer sliding past — the same
+  // rule the menu's dust carries (`menu/atmos.tsx`).
+  //
+  // Gravity has to be ZERO for that: at the old 0.035 it added a quarter of a
+  // unit per second upward over an 8-second life, which swamps any initial
+  // velocity, so a mote born falling turned around and rose with the rest.
+  ps.gravity = Vector3.Zero();
+  ps.direction1 = new Vector3(-0.09, -0.05, -0.09);
+  ps.direction2 = new Vector3(0.09, 0.10, 0.09);
   ps.minEmitPower = 0.1;
   ps.maxEmitPower = 0.35;
+
+  // ...and the wander on top of it. A launch direction alone gives every speck
+  // one straight line for its whole life, which at this size reads as rain.
+  // Babylon samples this field per particle and ADDS it to the direction, so it
+  // is a force and not an offset: small numbers, or the field turns into a
+  // draught with a shape.
+  const drift = new NoiseProceduralTexture(MOTES_NOISE_NAME, 32, scene);
+  drift.animationSpeedFactor = 1.4;
+  // 0.5 is the centre of the range Babylon remaps to -1..1, so the field pushes
+  // both ways. Brighter and every mote drifts the same way, which is a wind.
+  drift.brightness = 0.5;
+  drift.octaves = 3;
+  drift.persistence = 0.8;
+  ps.noiseTexture = drift;
+  ps.noiseStrength = new Vector3(0.12, 0.08, 0.12);
 
   ps.preWarmCycles = 120;
   ps.preWarmStepOffset = 3;

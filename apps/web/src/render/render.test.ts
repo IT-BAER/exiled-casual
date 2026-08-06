@@ -17,7 +17,7 @@ import {
 import { applyAtmosphere, BETA_AT_DEFAULT, createScene, VOID_COLOR } from "./engine";
 import { applyBiomeTint } from "./level";
 import { LIGHT_POOL } from "./lights";
-import { HAZE_HEIGHT, HAZE_MAX_SIZE, HAZE_NAME, MOTES_NAME } from "./haze";
+import { HAZE_HEIGHT, HAZE_MAX_SIZE, HAZE_NAME, MOTES_NAME, MOTES_NOISE_NAME } from "./haze";
 import { BIOMES } from "@exiled/content-runtime";
 import { SnapshotRenderer, syncActionAnimation, syncCastingAnimation } from "./renderer";
 import { makeMesh, updateTelegraph } from "./meshes";
@@ -266,8 +266,19 @@ describe("atmosphere", () => {
     const motes = scene.particleSystems.find((p) => p.name === MOTES_NAME)! as ParticleSystem;
 
     expect(motes).toBeTruthy();
-    // Rising, or they are snow.
-    expect(motes.gravity.y).toBeGreaterThan(0);
+    // Not all of it rises: a field where every speck climbs is a parallax layer
+    // sliding past the camera, not air in a room. Some fall, and the sideways
+    // spread is of the same order as the vertical one.
+    expect(motes.direction1.y).toBeLessThan(0);
+    expect(motes.direction2.y).toBeGreaterThan(0);
+    expect(motes.direction2.x).toBeGreaterThanOrEqual(motes.direction2.y * 0.8);
+    // Gravity would swamp both over a mote's life: 0.035 up is a quarter of a
+    // unit per second by the end of one, so a falling mote would turn around.
+    expect(motes.gravity.y).toBe(0);
+    // ...and each one wanders instead of running its launch direction in a
+    // straight line for eleven seconds.
+    expect(motes.noiseTexture?.name).toBe(MOTES_NOISE_NAME);
+    expect(motes.noiseStrength.x).toBeGreaterThan(0);
 
     const stops = motes.getColorGradients()!;
     expect(stops[0]!.color1.a).toBe(0);
