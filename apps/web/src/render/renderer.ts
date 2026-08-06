@@ -321,10 +321,19 @@ export class SnapshotRenderer {
     // Portals arriving this snapshot, in ring order (spawnPortalRing creates them
     // in that order, so ascending entity id IS the arc). Their index is what the
     // stagger is measured in — see portalAppear.
-    const arrivingPortals = next.entities
-      .filter((e) => e.kind === "portal" && !this.meshes.has(e.id))
-      .map((e) => e.id)
-      .sort((a, b) => a - b);
+    //
+    // A portal is only ARRIVING if we were watching the same place a moment ago.
+    // Without that, every portal already standing in a place the client is seeing
+    // for the first time announces itself with the opening sweep: walking into a
+    // map plays it over the return portal, and in dev an HMR reload plays it on
+    // every save, which is where it was finally heard. Same rule the closing cue
+    // already carries — a missing previous snapshot is not an event.
+    const arrivingPortals = prev !== null && prev.area === next.area
+      ? next.entities
+        .filter((e) => e.kind === "portal" && !this.meshes.has(e.id))
+        .map((e) => e.id)
+        .sort((a, b) => a - b)
+      : [];
 
     // Entities
     for (const e of next.entities) {

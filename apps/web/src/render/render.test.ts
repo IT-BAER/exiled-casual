@@ -882,10 +882,17 @@ describe("portals arrive one at a time", () => {
   const ring = (n: number) =>
     Array.from({ length: n }, (_, i) => ({ id: 100 + i, kind: "portal" as const, x: i, y: 0, yaw: 0 }));
 
+  /** The device was clicked: same place, one moment later, now with portals. */
+  const opened = (n: number, renderer: SnapshotRenderer) => {
+    const empty = makeSnapshot({ entities: [] });
+    renderer.apply(null, empty, 1);
+    renderer.apply(empty, makeSnapshot({ tick: 2, entities: ring(n) }), 1);
+  };
+
   it("holds every portal but the first shut, and opens them in ring order", () => {
     const scene = new Scene(new NullEngine());
     const renderer = new SnapshotRenderer(scene);
-    renderer.apply(null, makeSnapshot({ entities: ring(4) }), 1);
+    opened(4, renderer);
 
     const meshes = [100, 101, 102, 103].map((id) => scene.getMeshByName(`entity-${id}`)!);
     for (const m of meshes) expect(m).not.toBeNull();
@@ -901,18 +908,45 @@ describe("portals arrive one at a time", () => {
     vi.spyOn(engine, "getDeltaTime").mockReturnValue(250);
     const scene = new Scene(engine);
     const renderer = new SnapshotRenderer(scene);
-    renderer.apply(null, makeSnapshot({ entities: ring(6) }), 1);
+    opened(6, renderer);
 
     for (let i = 0; i < 6; i++) scene.onBeforeRenderObservable.notifyObservers(scene);
 
     expect(vi.mocked(playSfx).mock.calls.map(([name]) => name)).toEqual(["portal-open"]);
   });
 
+  /**
+   * The one he kept hearing and nobody could place: it only fires where nobody
+   * plays, on the first snapshot of a place. Walking into a map plays it over the
+   * return portal that was already standing there, and in dev an HMR reload plays
+   * it on every save — a rising sweep out of nowhere, in a map, with no portal
+   * opening anywhere.
+   */
+  it("says nothing about portals that were already standing when we arrived", () => {
+    engine = new NullEngine();
+    vi.spyOn(engine, "getDeltaTime").mockReturnValue(250);
+    const scene = new Scene(engine);
+    const renderer = new SnapshotRenderer(scene);
+
+    // A cold start inside a map, and then a walk from the hideout into one.
+    renderer.apply(null, makeSnapshot({ area: "map", entities: ring(2) }), 1);
+    const hideout = makeSnapshot({ area: "hideout", entities: [] });
+    renderer.apply(hideout, makeSnapshot({ area: "map", entities: ring(2) }), 1);
+    for (let i = 0; i < 6; i++) scene.onBeforeRenderObservable.notifyObservers(scene);
+
+    expect(vi.mocked(playSfx).mock.calls.map(([name]) => name)).toEqual([]);
+    // ...and they are standing, not stuck shut at 0.001 waiting for a sequence
+    // that will never run.
+    const standing = scene.getMeshByName("entity-101")!;
+    expect(standing.isEnabled(false)).toBe(true);
+    expect(standing.scaling.x).toBe(1);
+  });
+
   it("a portal already standing is not re-opened by the next frame", () => {
     const scene = new Scene(new NullEngine());
     const renderer = new SnapshotRenderer(scene);
-    const snap = makeSnapshot({ entities: ring(2) });
-    renderer.apply(null, snap, 1);
+    opened(2, renderer);
+    const snap = makeSnapshot({ tick: 2, entities: ring(2) });
     const second = scene.getMeshByName("entity-101")!;
     second.setEnabled(true);
     second.scaling.setAll(1);

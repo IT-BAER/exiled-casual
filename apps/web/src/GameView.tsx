@@ -298,6 +298,8 @@ export function GameView({
       const params = new URLSearchParams(window.location.search);
       if (params.has("map")) harness = params.get("map") ? "activate" : "panel";
     }
+    /** The area we are already standing in, so a restore is not a crossing. */
+    let stoodIn: string | null = null;
     let harnessTicks = 0;
     /**
      * Snapshots to let pass before the harness touches anything.
@@ -436,7 +438,14 @@ export function GameView({
         // The one sound the player makes and never hears an entity for: the
         // crossing itself. Every id in the new area is new, so the diff has to
         // start over or the whole old population would be reported dead.
-        playSfx("portal-enter");
+        //
+        // Only when there was somewhere to cross FROM. The first area message of
+        // a session is a restore, not a journey — the player was already standing
+        // there — and in dev that message arrives on every HMR save, which is
+        // where this was finally heard: a whoosh, and the portal sweep behind it,
+        // in a quiet map nobody had walked into.
+        if (stoodIn !== null) playSfx("portal-enter");
+        stoodIn = msg.area;
         // The base also says what the floor is, which is what his boots land on.
         soundscape.reset(base?.biomeId ?? null);
         setAmbient(base?.biomeId ?? null);

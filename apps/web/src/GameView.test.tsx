@@ -70,6 +70,13 @@ vi.mock("./render/props", async (importOriginal) => ({
 }));
 vi.mock("./render/monsters", () => ({ loadMonsters: () => Promise.resolve(), resetMonsters: vi.fn(), attachCreature: () => null }));
 vi.mock("./render/rocks", () => ({ loadRocks: () => Promise.resolve(), resetRocks: vi.fn() }));
+vi.mock("./audio/sfx", async (importOriginal) => ({
+  ...await importOriginal<typeof import("./audio/sfx")>(),
+  playSfx: vi.fn(),
+  preloadSfx: vi.fn(),
+  setAmbient: vi.fn(),
+  stopAmbient: vi.fn(),
+}));
 // The hideout's furniture builds real Babylon meshes and instantiates the prop
 // container. Same reason the level and the rig are mocked: none of it is what this
 // file is about, and render/hideout.test.ts owns the placements.
@@ -95,6 +102,7 @@ vi.mock("./input/bindings", () => ({
 
 import { GameView } from "./GameView";
 import { FADE_MS } from "./LoadingScreen";
+import { playSfx } from "./audio/sfx";
 
 const makeSnap = (): Snapshot => ({
   tick: 1, area: "hideout", portalsLeft: 0, mapOpen: false, areaTier: 0,
@@ -155,6 +163,23 @@ describe("GameView", () => {
       settings: { ...DEFAULT_SETTINGS, ui: { ...DEFAULT_SETTINGS.ui, lootLabels: false } },
     });
     expect(screen.queryByTestId(`loot-label-${DROP.id}`)).toBeNull();
+  });
+
+  /**
+   * A restore is not a journey. The worker sends an area message when a session
+   * hydrates, so the crossing whoosh fired on a page load — and in dev, on every
+   * HMR save, in a map nobody had walked into. The portal sweep behind it is the
+   * same bug in the renderer (see render.test.ts).
+   */
+  it("does not play the crossing cue for the area it restores into", () => {
+    mountWithSnapshot();
+    vi.mocked(playSfx).mockClear();
+
+    sendArea("");
+    expect(vi.mocked(playSfx).mock.calls.map(([name]) => name)).not.toContain("portal-enter");
+
+    sendArea("map.swamp");
+    expect(vi.mocked(playSfx).mock.calls.map(([name]) => name)).toContain("portal-enter");
   });
 
   it("F3 toggles the performance readout, even while down", () => {
