@@ -52,6 +52,28 @@ describe("SkirtSim", () => {
     expect(tip(sim, 0.3).subtract(pose(0.3).rests[1]!).length()).toBeLessThan(1e-3);
   });
 
+  it("simulates the same wall-clock time at 12 fps as at 60 fps", () => {
+    // A frame under the catch-up ceiling must not DROP time: a 80ms frame that
+    // only simulates 50ms runs the coat in slow motion against full-speed limbs,
+    // which is the low-fps glitch. Walk two sims along the same 2-second stride,
+    // one at 60 fps and one at 12.5 fps, and the hems must land together.
+    const at60 = new SkirtSim(1, 2, SEGMENT);
+    const at12 = new SkirtSim(1, 2, SEGMENT);
+    run(at60, 0, 30);
+    run(at12, 0, 30);
+    const speed = 2; // units/s, a stride
+    for (let f = 0; f < 120; f++) {
+      const { anchors, rests } = pose(speed * (f + 1) * (1 / 60));
+      at60.step(1 / 60, anchors, rests, []);
+    }
+    for (let f = 0; f < 25; f++) {
+      const { anchors, rests } = pose(speed * (f + 1) * 0.08);
+      at12.step(0.08, anchors, rests, []);
+    }
+    const x = speed * 2;
+    expect(tip(at12, x).subtract(tip(at60, x)).length()).toBeLessThan(0.02);
+  });
+
   it("is pushed off a knee that walks into it", () => {
     const sim = new SkirtSim(1, 2, SEGMENT);
     run(sim, 0, 30);

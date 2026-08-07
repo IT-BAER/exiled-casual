@@ -51,10 +51,14 @@ export interface SkirtCollider {
  */
 const FIXED_STEP = 1 / 240;
 /**
- * Catch-up after a hitch, in steps. Held at the same 50ms of wall clock the 1/60
- * solver allowed, so a background tab still resumes rather than fast-forwards.
+ * Catch-up after a hitch, in steps. 100ms of wall clock: the ceiling exists so a
+ * background tab resumes rather than fast-forwards, but every frame UNDER it
+ * must simulate its full delta — at the old 50ms a 12 fps game dropped 30ms of
+ * cloth time per frame, running the coat in slow motion against full-speed legs,
+ * which read as the robe glitching whenever the frame rate dipped
+ * (skirt.test.ts pins 12 fps and 60 fps to the same hem).
  */
-const MAX_STEPS = 12;
+const MAX_STEPS = 24;
 
 /** Steps that used to happen in the time one now does; keeps the tuning below. */
 const PER_OLD_STEP = FIXED_STEP * 60;
@@ -298,6 +302,18 @@ export class SkirtSim {
    * cloth extra travel: the passes share one budget instead of each taking one.
    */
   private readonly budget: Float64Array;
+  /**
+   * Last frame's pose, and the per-substep interpolation between it and this
+   * frame's. The colliders learned this lesson first (`previousA`/`previousB`):
+   * a substep must see the pose AT its moment, not the end of the frame — fed
+   * the end pose, every substep of a long frame yanks the cloth toward a target
+   * that teleported a whole frame's travel, and the robe glitches exactly when
+   * the frame rate drops.
+   */
+  private readonly anchorsPrev: Vector3[];
+  private readonly restsPrev: Vector3[];
+  private readonly anchorsMid: Vector3[];
+  private readonly restsMid: Vector3[];
   private readonly segment: number;
   private readonly perChain: number;
   private carry = 0;
@@ -309,6 +325,10 @@ export class SkirtSim {
     this.points = Array.from({ length: chains * joints }, () => new Vector3());
     this.previous = Array.from({ length: chains * joints }, () => new Vector3());
     this.anchors = Array.from({ length: chains }, () => new Vector3());
+    this.anchorsPrev = Array.from({ length: chains }, () => new Vector3());
+    this.anchorsMid = Array.from({ length: chains }, () => new Vector3());
+    this.restsPrev = Array.from({ length: chains * joints }, () => new Vector3());
+    this.restsMid = Array.from({ length: chains * joints }, () => new Vector3());
     this.budget = new Float64Array(chains * joints);
   }
 
@@ -332,7 +352,11 @@ export class SkirtSim {
       this.points[i]!.copyFrom(rests[i]!);
       this.previous[i]!.copyFrom(rests[i]!);
     }
-    for (let i = 0; i < this.anchors.length; i++) this.anchors[i]!.copyFrom(anchors[i]!);
+    for (let i = 0; i < this.anchors.length; i++) {
+      this.anchors[i]!.copyFrom(anchors[i]!);
+      this.anchorsPrev[i]!.copyFrom(anchors[i]!);
+    }
+    for (let i = 0; i < this.restsPrev.length; i++) this.restsPrev[i]!.copyFrom(rests[i]!);
     this.carry = 0;
     this.settled = true;
   }
@@ -362,13 +386,27 @@ export class SkirtSim {
     for (let step = 0; step < steps; step++) {
       const sweepStart = step / steps;
       const sweepEnd = (step + 1) / steps;
-      this.integrate(rests);
-      for (let pass = 0; pass < ITERATIONS; pass++) this.constrain(anchors, rests);
+      // The pose AT this substep's moment, not the end of the frame — the same
+      // sweep the colliders get. See `anchorsPrev`.
+      for (let i = 0; i < this.anchorsMid.length; i++) {
+        Vector3.LerpToRef(this.anchorsPrev[i]!, anchors[i]!, sweepEnd, this.anchorsMid[i]!);
+      }
+      for (let i = 0; i < this.restsMid.length; i++) {
+        Vector3.LerpToRef(this.restsPrev[i]!, rests[i]!, sweepEnd, this.restsMid[i]!);
+      }
+      this.integrate(this.restsMid);
+      for (let pass = 0; pass < ITERATIONS; pass++) this.constrain(this.anchorsMid, this.restsMid);
       this.budget.fill(MAX_CONTACT_PUSH);
       for (let contact = 0; contact < COLLIDE_PASSES; contact++) {
-        if (!this.collide(anchors, colliders, sweepStart, sweepEnd)) break;
+        if (!this.collide(this.anchorsMid, colliders, sweepStart, sweepEnd)) break;
       }
-      this.collide(anchors, colliders, sweepStart, sweepEnd);
+      this.collide(this.anchorsMid, colliders, sweepStart, sweepEnd);
+    }
+    if (steps > 0) {
+      // A dt too small to step keeps its previous pose, so the motion is swept
+      // next frame rather than dropped.
+      for (let i = 0; i < this.anchorsPrev.length; i++) this.anchorsPrev[i]!.copyFrom(anchors[i]!);
+      for (let i = 0; i < this.restsPrev.length; i++) this.restsPrev[i]!.copyFrom(rests[i]!);
     }
   }
 
