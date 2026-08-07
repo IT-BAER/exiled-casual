@@ -1136,10 +1136,26 @@ function blobMaterial(scene: Scene): StandardMaterial | null {
   return mat;
 }
 
+/**
+ * How far the pool spreads past the footprint it was given.
+ *
+ * Callers pass the half-extents of the THING, and a shadow the exact size of the
+ * thing is a shadow nobody can see: a crate, a barrel and a pillar on its plinth
+ * all sit flush on the floor and swallow their own contact shadow whole. The
+ * brazier was the only prop that ever visibly had one, and only because it
+ * stands on three legs with daylight between them. So the quad is always wider
+ * than what it grounds, and the gradient's soft outer half is what shows.
+ */
+const BLOB_SPREAD = 1.7;
+
 export function standGroundBlob(scene: Scene, root: Mesh, rx: number, rz = rx): void {
   const mat = blobMaterial(scene);
   if (!mat) return;
-  const quad = MeshBuilder.CreateGround(`groundblob-${root.name}`, { width: rx * 2, height: rz * 2 }, scene);
+  const quad = MeshBuilder.CreateGround(
+    `groundblob-${root.name}`,
+    { width: rx * 2 * BLOB_SPREAD, height: rz * 2 * BLOB_SPREAD },
+    scene,
+  );
   // Above the floor decals (rug sits at 0.012) but under everything solid.
   quad.position.y = 0.015;
   quad.isPickable = false;
