@@ -38,6 +38,16 @@ SCRATCH = os.path.join(tempfile.gettempdir(), "exiled-cast-mirror.glb")
 SOURCE_CLIP = "Rig|Spell_Simple_Shoot"
 MIRROR_CLIP = "Rig|Spell_Simple_Shoot_R"
 
+# The pack's spell pose holds the head 44 degrees off the midline for the whole
+# clip, looking at the raised hand. It is a constant, not a gesture, and the
+# mirror faithfully carries it to the other side: the character cast straight
+# ahead and stared to his right the entire time. `rig.ts` already turns the head
+# toward the cursor on top of this clip, so the authored yaw is not a pose to
+# preserve, it is the thing fighting the aim. Dropped here rather than zeroed in
+# Blender so the pose the mirror computes stays a pure reflection: with no
+# channel the head simply keeps whatever the locomotion clip underneath is doing.
+NEUTRAL_BONES = {"Head"}
+
 MIRROR = Matrix.Diagonal((-1.0, 1.0, 1.0, 1.0))
 
 
@@ -209,14 +219,19 @@ def splice():
         sampler["input"] = remap[sampler["input"]]
         sampler["output"] = remap[sampler["output"]]
     kept = []
+    dropped = 0
     for channel in clip["channels"]:
         name = from_add.get(channel["target"].get("node"))
         if name not in by_name:
+            continue
+        if name in NEUTRAL_BONES and channel["target"].get("path") == "rotation":
+            dropped += 1
             continue
         channel["target"]["node"] = by_name[name]
         kept.append(channel)
     clip["channels"] = kept
     assert kept, "no channel matched a library node by name"
+    assert dropped == len(NEUTRAL_BONES), f"expected to drop {len(NEUTRAL_BONES)}, dropped {dropped}"
 
     doc["animations"].append(clip)
     doc["buffers"][0]["byteLength"] = len(blob) + (-len(blob) % 4)
