@@ -1,7 +1,9 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { Matrix, MeshBuilder, NullEngine, Scene, Vector3 } from "@babylonjs/core";
-import { cullCasters } from "./shadow-cull";
+import {
+  FreeCamera, Matrix, MeshBuilder, NullEngine, PointLight, Scene, ShadowGenerator, Vector3,
+} from "@babylonjs/core";
+import { cullCasters, cullShadowCasters } from "./shadow-cull";
 
 /**
  * The frustum of one face of a point light's shadow cube: 90 degrees, square,
@@ -52,5 +54,34 @@ describe("cullCasters", () => {
     expect(cullCasters(face(), [front], 1, out)).toBe(out);
     // ...and a second pass leaves one entry, not two.
     expect(cullCasters(face(), [front], 1, out)).toHaveLength(1);
+  });
+});
+
+describe("a shadow map given its own caster filter", () => {
+  /** A lit point light with a shadow cube, and a camera so its projection exists. */
+  const lamp = () => {
+    const scene = new Scene(new NullEngine());
+    new FreeCamera("probe", Vector3.Zero(), scene);
+    const light = new PointLight("lamp", Vector3.Zero(), scene);
+    light.shadowMinZ = 0.4;
+    light.shadowMaxZ = 11;
+    const gen = new ShadowGenerator(256, light);
+    return { scene, gen, map: gen.getShadowMap()! };
+  };
+
+  it("asks the filter once a frame however many faces the cube has", () => {
+    const { scene, gen, map } = lamp();
+    MeshBuilder.CreateBox("wall", { size: 1 }, scene).computeWorldMatrix(true);
+    let asked = 0;
+    cullShadowCasters(gen, () => (asked++, true));
+
+    for (let f = 0; f < 6; f++) {
+      map.onBeforeRenderObservable.notifyObservers(f);
+      map.getCustomRenderList!(f, [], 0);
+    }
+
+    // One mesh in the scene, six faces: six calls would be the per-face filtering
+    // that made the first attempt at this 30% slower than the churn it removed.
+    expect(asked).toBe(scene.meshes.length);
   });
 });

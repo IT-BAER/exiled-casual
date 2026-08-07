@@ -17,6 +17,7 @@ import {
   StandardMaterial,
   Texture,
   Vector3,
+  type AbstractMesh,
   type Engine,
 } from "@babylonjs/core";
 import { DEFAULT_SETTINGS, type GraphicsSettings } from "../settings";
@@ -835,17 +836,19 @@ export function createScene(engine: Engine): SceneHandle {
     // rig from a monster's here — the whole class stays out. The sun still gives
     // every actor the shadow that matters.
     //
-    // A predicate and not the add-time filter the sun uses: that one sees a name
-    // ONCE, when the mesh is added, so anything renamed afterwards is already
-    // registered under whatever it was called first — 40 actor parts got in that
-    // way. `renderListPredicate` is re-evaluated every frame against the current
-    // name, so a rename cannot smuggle a caster past it.
-    torchShadows.getShadowMap()!.renderListPredicate = (mesh) => {
+    // Re-tested every frame and not at add time the way the sun's filter is:
+    // that one sees a name ONCE, when the mesh is added, so anything renamed
+    // afterwards is already registered under whatever it was called first — 40
+    // actor parts got in that way. Read against the current name, a rename
+    // cannot smuggle a caster past it.
+    const torchCasts = (mesh: AbstractMesh): boolean => {
       if (mesh === ground || mesh.name.startsWith("telegraph-") || mesh.name === FLAME_MESH
         || mesh.name.startsWith("groundblob-") || isWardrobePart(mesh.name)) return false;
       // Range cull: nothing past the torch's own reach can receive its light, so
       // nothing there can cast a visible shadow from it either. This is a third
-      // of the cube map's draw calls, measured live in the hideout.
+      // of the cube map's draw calls, measured live in the hideout. It stays even
+      // though `shadowMaxZ` is the same far plane the per-face cull tests, because
+      // it prunes ONCE against six frustum tests that would each pay for it.
       const bs = mesh.getBoundingInfo().boundingSphere;
       const dx = bs.centerWorld.x - torch.position.x;
       const dy = bs.centerWorld.y - torch.position.y;
@@ -878,7 +881,7 @@ export function createScene(engine: Engine): SceneHandle {
     // is every mesh in the level while its ortho box brackets only the 32 units
     // on screen; the torch's is submitted six times, once per cube face.
     cullShadowCasters(shadows);
-    cullShadowCasters(torchShadows);
+    cullShadowCasters(torchShadows, torchCasts);
 
     // Walk the light along with the camera so the frustum always brackets what
     // the player can see. Backwards along the light direction, and high enough

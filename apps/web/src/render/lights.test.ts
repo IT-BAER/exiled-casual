@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { Mesh, MeshBuilder, NullEngine, Scene, Vector3 } from "@babylonjs/core";
+import { FreeCamera, Mesh, MeshBuilder, NullEngine, Scene, Vector3 } from "@babylonjs/core";
 import { FLAME_MESH, flameParticleCount } from "./flames";
 import {
   BRAZIER_FLAME_Y, BRAZIER_RIM_R, BRAZIER_RIM_Y, LIGHT_POOL,
@@ -51,9 +51,12 @@ describe("the fires a place is lit by", () => {
 
   it("does not render shadow casters beyond the fire's own light", () => {
     const s = scene();
+    // A point light computes no shadow projection at all with no active camera
+    // (`PointLight._setDefaultShadowProjectionMatrix` returns early), which leaves
+    // the frustum degenerate and lets everything through the per-face cull.
+    new FreeCamera("probe", Vector3.Zero(), s);
     const [light] = createFireLights(s);
-    const predicate = light!.getShadowGenerator()?.getShadowMap()?.renderListPredicate;
-    expect(predicate).toBeTypeOf("function");
+    const map = light!.getShadowGenerator()!.getShadowMap()!;
 
     const near = MeshBuilder.CreateBox("near-fire", { size: 1 }, s);
     near.position.set(1, 0.5, 0);
@@ -62,8 +65,20 @@ describe("the fires a place is lit by", () => {
     far.position.set(100, 0.5, 0);
     far.computeWorldMatrix(true);
 
-    expect(predicate!(near)).toBe(true);
-    expect(predicate!(far)).toBe(false);
+    // All six faces: a caster the +X face cannot see may still be standing behind
+    // the fire on -X, and only the union says whether it is drawn at all.
+    const drawn = new Set<string>();
+    for (let f = 0; f < 6; f++) {
+      map.onBeforeRenderObservable.notifyObservers(f);
+      for (const mesh of map.getCustomRenderList!(f, [], 0) ?? []) drawn.add(mesh.name);
+    }
+    expect(drawn.has("near-fire")).toBe(true);
+    expect(drawn.has("far-from-fire")).toBe(false);
+    // ...and it must do it WITHOUT a predicate. A predicate is the only thing
+    // that makes `ObjectRenderer.prepareRenderList` clear and refill the map's
+    // render list every frame, and refilling an emptied one marks every mesh in
+    // the scene light-dirty. See `cullShadowCasters`.
+    expect(map.renderListPredicate).toBeFalsy();
   });
 
   it("flickers, and never to nothing", () => {

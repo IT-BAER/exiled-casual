@@ -65,13 +65,50 @@ let PLANES: Plane[] | null = null;
  * runs first and calls `getTransformMatrix`, which caches per face index. So
  * asking the generator for its transform here always gets the face about to be
  * drawn.
+ *
+ * Pass `keep` instead of setting `renderListPredicate`, and this file owns the
+ * caster list. The predicate is not a filter Babylon applies to a list it
+ * already has: `ObjectRenderer.prepareRenderList` REBUILDS `map.renderList` out
+ * of `scene.meshes` every frame, `renderList.length = 0` and then re-push. That
+ * array is observed, and `_renderListHasChanged` wraps the mutator METHODS and
+ * not the `length` property — so the clear goes unseen and the first push then
+ * reads `previousLength === 0` and calls `_markSubMeshesAsLightDirty()` on every
+ * mesh in the SCENE. Five predicated maps against 576 meshes, twice a frame:
+ * measured at ~9% of the frame in `the_wrackline`, every millisecond of it under
+ * a shadow RTT and none under the camera.
+ *
+ * So the shadow map keeps the empty `renderList` it was built with, untouched,
+ * and the answer comes from here instead: `keep` runs once a frame (cached on
+ * the frame id, because a cube asks six times) and the frustum cull per face.
+ * The same total work the predicate did, minus the invalidation.
  */
-export function cullShadowCasters(gen: ShadowGenerator): void {
+export function cullShadowCasters(
+  gen: ShadowGenerator,
+  keep?: (mesh: AbstractMesh) => boolean,
+): void {
   const map = gen.getShadowMap();
   if (!map) return;
   const out: AbstractMesh[] = [];
-  // A null list means "render the scene's active meshes", which is Babylon's own
-  // default and not ours to second-guess.
-  map.getCustomRenderList = (_face, list, count) =>
-    list && cullCasters(gen.getTransformMatrix(), list, count, out);
+  if (!keep) {
+    // A null list means "render the scene's active meshes", which is Babylon's own
+    // default and not ours to second-guess.
+    map.getCustomRenderList = (_face, list, count) =>
+      list && cullCasters(gen.getTransformMatrix(), list, count, out);
+    return;
+  }
+  const scene = map.getScene()!;
+  const kept: AbstractMesh[] = [];
+  let keptFrame = -1;
+  map.getCustomRenderList = () => {
+    const frame = scene.getFrameId();
+    if (frame !== keptFrame) {
+      keptFrame = frame;
+      kept.length = 0;
+      // `scene.meshes` rather than a list of our own, kept by observing adds and
+      // removes: it is the array the predicate read, and Babylon prunes it on
+      // dispose, so there is no way for this one to hold a dead mesh.
+      for (const mesh of scene.meshes) if (keep(mesh)) kept.push(mesh);
+    }
+    return cullCasters(gen.getTransformMatrix(), kept, kept.length, out);
+  };
 }

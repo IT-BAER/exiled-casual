@@ -221,7 +221,7 @@ function castFrom(scene: Scene, light: PointLight | undefined): void {
     // paint on the floor. Everything else in the room casts, actors included —
     // that is the whole difference between this and the torch, which rides the
     // player and would only ever draw a blob under his own feet.
-    gen.getShadowMap()!.renderListPredicate = (mesh) =>
+    const casts = (mesh: AbstractMesh): boolean =>
       mesh.name !== "ground"
       && mesh.name !== FLAME_MESH
       && !mesh.name.startsWith("telegraph-")
@@ -235,7 +235,7 @@ function castFrom(scene: Scene, light: PointLight | undefined): void {
     // ...and only the casters each face can see. A bowl's reach is 11 units in a
     // room the whole level is a caster in, so this is where the cube stops being
     // six passes over everything standing near the fire.
-    cullShadowCasters(gen);
+    cullShadowCasters(gen, casts);
   } catch {
     /* no render targets under NullEngine — lit but unshadowed is fine in tests */
   }
