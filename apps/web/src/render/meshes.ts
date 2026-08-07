@@ -1094,51 +1094,63 @@ function buildStash(scene: Scene, root: Mesh): void {
  * texture per scene, one cheap unlit quad per prop, excluded from both shadow
  * generators by its name (engine.ts).
  */
-const BLOB_MATERIALS = new WeakMap<Scene, StandardMaterial>();
+const BLOB_MATERIALS = new WeakMap<Scene, Partial<Record<BlobKind, StandardMaterial>>>();
+
+/** Who is standing there. Furniture and a body do not touch a floor alike. */
+export type BlobKind = "prop" | "actor";
 
 /**
- * One material for every blob in the scene, not one per prop.
+ * The gradient each kind gets: where the solid core stops (in texture pixels of
+ * a 128 map, so 64 is the full radius) and the alpha ramp out from it.
  *
- * They are all the same unlit black quad over the same gradient, and since the
- * sun stopped casting this is what grounds a MONSTER too — a swarm would
- * otherwise be a StandardMaterial each, and each one is its own state change at
+ * A prop is heavy and its base is a hard edge, so its pool has a defined core
+ * and does most of its fading in the outer third. An actor is a body on two
+ * feet under a moving light, and a crisp disc travelling with him reads as a
+ * decal stuck to the floor — his starts falling off almost immediately and
+ * never gets as dark.
+ */
+const BLOB_LOOK: Record<BlobKind, { inner: number; stops: readonly [number, number][] }> = {
+  prop: { inner: 26, stops: [[0, 0.34], [0.55, 0.24], [0.8, 0.08], [1, 0]] },
+  actor: { inner: 4, stops: [[0, 0.22], [0.45, 0.14], [0.75, 0.05], [1, 0]] },
+};
+
+/**
+ * One material per kind per scene, not one per object.
+ *
+ * Since the sun stopped casting this is what grounds a MONSTER too, and a swarm
+ * would otherwise be a StandardMaterial each — every one its own state change at
  * draw time for a difference no pixel can show.
  */
-function blobMaterial(scene: Scene): StandardMaterial | null {
-  let mat = BLOB_MATERIALS.get(scene);
-  if (mat) return mat;
+function blobMaterial(scene: Scene, kind: BlobKind): StandardMaterial | null {
+  const byKind = BLOB_MATERIALS.get(scene) ?? {};
+  const cached = byKind[kind];
+  if (cached) return cached;
   // A DynamicTexture wants a canvas, and there is none under NullEngine — the
   // same headless hole the shadow generators and the GlowLayer sit behind. Every
   // actor goes through here now, so an unguarded throw takes the whole renderer
   // down in tests rather than costing one soft quad.
   let tex: DynamicTexture;
   try {
-    tex = new DynamicTexture("groundblob-tex", 128, scene, false);
+    tex = new DynamicTexture(`groundblob-tex-${kind}`, 128, scene, false);
   } catch {
     return null;
   }
+  const look = BLOB_LOOK[kind];
   const ctx = tex.getContext();
-  // A tight dark core with a short soft edge, not a wash. The first version held
-  // 0.26 alpha all the way out to 60% of the radius and only then began to fade,
-  // which over a quad already wider than the prop read as a big grey smudge
-  // rather than as something touching the floor. Most of the falloff now happens
-  // in the outer third.
-  const g = ctx.createRadialGradient(64, 64, 26, 64, 64, 64);
-  g.addColorStop(0, "rgba(0,0,0,0.34)");
-  g.addColorStop(0.55, "rgba(0,0,0,0.24)");
-  g.addColorStop(0.8, "rgba(0,0,0,0.08)");
-  g.addColorStop(1, "rgba(0,0,0,0)");
+  const g = ctx.createRadialGradient(64, 64, look.inner, 64, 64, 64);
+  for (const [at, alpha] of look.stops) g.addColorStop(at, `rgba(0,0,0,${alpha})`);
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, 128, 128);
   tex.update();
   tex.hasAlpha = true;
-  mat = new StandardMaterial("groundblob-mat", scene);
+  const mat = new StandardMaterial(`groundblob-mat-${kind}`, scene);
   mat.diffuseColor = Color3.Black();
   mat.specularColor = Color3.Black();
   mat.emissiveColor = Color3.Black();
   mat.opacityTexture = tex;
   mat.disableLighting = true;
-  BLOB_MATERIALS.set(scene, mat);
+  byKind[kind] = mat;
+  BLOB_MATERIALS.set(scene, byKind);
   return mat;
 }
 
@@ -1154,12 +1166,22 @@ function blobMaterial(scene: Scene): StandardMaterial | null {
  */
 const BLOB_SPREAD = 1.2;
 
-export function standGroundBlob(scene: Scene, root: Mesh, rx: number, rz = rx): void {
-  const mat = blobMaterial(scene);
+export function standGroundBlob(
+  scene: Scene,
+  root: Mesh,
+  rx: number,
+  rz = rx,
+  kind: BlobKind = "prop",
+): void {
+  const mat = blobMaterial(scene, kind);
   if (!mat) return;
+  // An actor's pool spreads further than a prop's on top of being fainter: the
+  // gradient alone would only make him paler, and what a body needs is a wider,
+  // vaguer patch than the hard-edged block of furniture beside him.
+  const spread = kind === "actor" ? BLOB_SPREAD * 1.35 : BLOB_SPREAD;
   const quad = MeshBuilder.CreateGround(
     `groundblob-${root.name}`,
-    { width: rx * 2 * BLOB_SPREAD, height: rz * 2 * BLOB_SPREAD },
+    { width: rx * 2 * spread, height: rz * 2 * spread },
     scene,
   );
   // Above the floor decals (rug sits at 0.012) but under everything solid.
@@ -1301,6 +1323,11 @@ export function updateStash(root: Mesh, hovered: boolean): void {
  * warming them on hover would light the player up too.
  */
 function buildVendor(scene: Scene, root: Mesh): void {
+  // He is a man standing on a floor before he is a thing to click, and the mark
+  // below is a hover cue, not a shadow. While the sun cast, that read fine; with
+  // it gone the ring was the only thing under him and it looked like a contact
+  // shadow that had come out wrong.
+  standGroundBlob(scene, root, 0.42, 0.42, "actor");
   // A ring worn into the floor where he stands, and the whole hover cue.
   //
   // It is the ring and not the man because the man is the PLAYER's rig: his
@@ -1403,7 +1430,7 @@ export function makeMesh(
     // FIRST, before the `rare`/`boss` scaling below, so it grows with the body
     // it belongs to instead of needing a size of its own per kind. Every actor
     // sits at Y_LIFT 0, so the quad's own 0.015 clears the floor decals.
-    standGroundBlob(scene, root, 0.42);
+    standGroundBlob(scene, root, 0.42, 0.42, "actor");
     if (kind === "player") {
       // Skinned humanoid when its assets loaded; the primitive caster is the
       // fallback for headless tests and for a failed model fetch.
