@@ -216,13 +216,15 @@ export function registerPlayerMovement(sim: Simulation, collisionRef?: Collision
       const moveDir = world.get<MoveDir>(e, "moveDir");
       const moveTarget = world.get<MoveTarget>(e, "moveTarget");
 
-      // Post-cast recovery slows the player; effect already fired on the cast
-      // tick. A held skill button (skillHold, refreshed by every useSkill
-      // command) keeps the same pace across the cooldown gaps between casts,
-      // so hold-to-cast walks instead of stuttering run-cast-run.
+      // The wind-up slows the player, and nothing else does. The held button
+      // (skillHold, refreshed by every useSkill command) used to hold the same
+      // pace across the cooldown gaps so hold-to-cast never burst back to a
+      // run; once a bolt cost 30 ticks of cooldown against 9 of cast, that was
+      // three quarters of a second of walking with the arms already down.
+      // Holding a skill is not casting it: the gap is the player's to run in.
       const casting = world.get<CastingC>(e, "casting");
       const hold = world.get<SkillHoldC>(e, "skillHold");
-      const speed = (casting && casting.untilTick > tick) || (hold && hold.untilTick > tick)
+      const speed = casting && casting.untilTick > tick
         ? Math.trunc(player.moveSpeed * CASTING_MOVE_PCT / 100)
         : player.moveSpeed;
 
