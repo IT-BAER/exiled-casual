@@ -26,13 +26,17 @@ const hoisted = vi.hoisted(() => ({
 }));
 
 vi.mock("@babylonjs/core", () => ({
-  Engine: vi.fn(() => ({
+  // Classes, not `vi.fn(...)`: the code under test calls `new`, and a mock
+  // function is not a constructor.
+  Engine: class {
     // Captured rather than dropped: the loading plate comes down on a PAINTED
     // frame, so a suite that never runs one would sit under the plate forever.
-    runRenderLoop: (fn: () => void) => { hoisted.frame = fn; },
-    resize: vi.fn(), dispose: vi.fn(),
-    getRenderWidth: () => 1920, getRenderHeight: () => 1080,
-  })),
+    runRenderLoop = (fn: () => void) => { hoisted.frame = fn; };
+    resize = vi.fn();
+    dispose = vi.fn();
+    getRenderWidth = () => 1920;
+    getRenderHeight = () => 1080;
+  },
   Vector3: class { static Project = vi.fn(() => ({ x: 0, y: 0, z: 0.5 })); },
   Matrix: { Identity: vi.fn() },
   // sea.ts builds its palette at module scope, so the mock must carry Color3.
@@ -58,7 +62,12 @@ vi.mock("./render/engine", () => ({
   setMapFill: vi.fn(),
 }));
 vi.mock("./render/renderer", () => ({
-  SnapshotRenderer: vi.fn(() => ({ apply: vi.fn(), cyclePlayerOutfit: vi.fn(), setHoveredEntity: vi.fn(), setAim: vi.fn() })),
+  SnapshotRenderer: class {
+    apply = vi.fn();
+    cyclePlayerOutfit = vi.fn();
+    setHoveredEntity = vi.fn();
+    setAim = vi.fn();
+  },
 }));
 vi.mock("./render/rig", () => ({ loadPlayerRig: () => Promise.resolve(), resetPlayerRig: vi.fn() }));
 // PROP_KINDS is the real list: the F4 asset menu builds its rows off it at
@@ -117,16 +126,20 @@ const makeSnap = (): Snapshot => ({
 });
 
 beforeAll(() => {
+  // A real class, not `vi.fn(...)`: GameView calls `new Worker(...)`, and a mock
+  // function is not a constructor.
   vi.stubGlobal(
     "Worker",
-    vi.fn(() => {
-      const w = {
-        postMessage: vi.fn(), onmessage: null, terminate: vi.fn(),
-        addEventListener: vi.fn(), removeEventListener: vi.fn(),
-      };
-      hoisted.worker = w;
-      return w;
-    }),
+    class {
+      postMessage = vi.fn();
+      onmessage = null;
+      terminate = vi.fn();
+      addEventListener = vi.fn();
+      removeEventListener = vi.fn();
+      constructor() {
+        hoisted.worker = this;
+      }
+    },
   );
 });
 
