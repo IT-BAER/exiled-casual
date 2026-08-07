@@ -9,6 +9,11 @@ import {
   actionRatio,
   ACTION_RATIO_MAX,
   ACTION_RATIO_MIN,
+  aimAngles,
+  ARM_MAX,
+  CLIP_BIAS,
+  HEAD_FOLLOW,
+  HEAD_MAX,
   clipForSpeed,
   CLIP_NAME,
   idleRatio,
@@ -116,6 +121,41 @@ describe("actionRatio", () => {
   it("falls back to the authored rate when the window is unknown", () => {
     expect(actionRatio(1, undefined)).toBe(1);
     expect(actionRatio(0, 0.5)).toBe(1);
+  });
+});
+
+describe("aimAngles", () => {
+  it("leaves the head straight when the body already faces the aim", () => {
+    // A standing cast turns the body onto the aim, so the residual angle is
+    // zero. The arm still gets the clip's own bias, because the mirrored cast
+    // bakes it right of where it points; the neck must not inherit that or the
+    // head sits cocked to one side for the whole cast.
+    const { arm, head } = aimAngles(1.2, 1.2);
+    expect(arm).toBeCloseTo(CLIP_BIAS, 5);
+    expect(head).toBeCloseTo(0, 5);
+  });
+
+  it("turns the head toward an aim the body has not caught up with", () => {
+    // Body at 0, target a half-radian to its right: the head leads the turn.
+    const right = aimAngles(0.5, 0);
+    expect(right.head).toBeCloseTo(-0.5 * HEAD_FOLLOW, 5);
+    const left = aimAngles(-0.5, 0);
+    expect(left.head).toBeCloseTo(0.5 * HEAD_FOLLOW, 5);
+  });
+
+  it("clamps both, so neither the shoulder nor the neck breaks", () => {
+    expect(aimAngles(-2, 0).arm).toBe(ARM_MAX);
+    expect(aimAngles(2, 0).arm).toBe(-ARM_MAX);
+    expect(aimAngles(-2, 0).head).toBeCloseTo(HEAD_MAX * HEAD_FOLLOW, 5);
+    expect(aimAngles(2, 0).head).toBeCloseTo(-HEAD_MAX * HEAD_FOLLOW, 5);
+  });
+
+  it("aiming at his own back picks a side rather than tearing", () => {
+    // Straight behind, the bias pushes the arm past a half turn and it wraps to
+    // the other shoulder. Both ends are the same pose, so either is right; this
+    // pins WHICH, because a silent flip here would read as a twitch.
+    expect(aimAngles(-Math.PI + 0.1, 0).arm).toBe(-ARM_MAX);
+    expect(aimAngles(-Math.PI + 0.5, 0).arm).toBe(ARM_MAX);
   });
 });
 

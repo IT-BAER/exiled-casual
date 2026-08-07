@@ -161,6 +161,44 @@ export function idleRatio(seconds: number): number {
  */
 export const ACTION_RATIO_MIN = 0.6;
 export const ACTION_RATIO_MAX = 3;
+
+/**
+ * How far the mirrored cast clip bakes the arm off the direction it is meant to
+ * point: about 16 degrees to the right. A fact about the ARM, and nothing else.
+ */
+export const CLIP_BIAS = 0.42;
+/** Shoulder and neck limits, and how much of the residual the head takes. */
+export const ARM_MAX = 1.4;
+export const HEAD_MAX = 0.87;
+export const HEAD_FOLLOW = 0.6;
+
+/** Wrap to (-PI, PI]. */
+function wrapPi(a: number): number {
+  let w = a;
+  while (w > Math.PI) w -= 2 * Math.PI;
+  while (w < -Math.PI) w += 2 * Math.PI;
+  return w;
+}
+
+/**
+ * The two rotations one cast frame adds on top of the animated pose: how far
+ * the arm chain and the head turn off the body's own facing.
+ *
+ * The head takes the raw residual and the arm takes it plus the clip's bias.
+ * Sharing the bias with the neck was invisible while the body ignored the aim,
+ * because the residual was large and the bias was a rounding error inside it.
+ * Once a standing cast turned the body onto the target the residual went to
+ * zero, and the bias was the only thing left: the head sat cocked 14 degrees to
+ * one side for the whole cast, and swung there as the body came about.
+ */
+export function aimAngles(targetYaw: number, bodyYaw: number): { arm: number; head: number } {
+  const aimYaw = wrapPi(-(targetYaw - bodyYaw) + CLIP_BIAS);
+  const head = wrapPi(aimYaw - CLIP_BIAS);
+  return {
+    arm: Math.max(-ARM_MAX, Math.min(ARM_MAX, aimYaw)),
+    head: Math.max(-HEAD_MAX, Math.min(HEAD_MAX, head)) * HEAD_FOLLOW,
+  };
+}
 export function actionRatio(authoredSeconds: number, windowSeconds: number | undefined): number {
   if (!(authoredSeconds > 0) || !(windowSeconds !== undefined && windowSeconds > 0)) return 1;
   const matched = authoredSeconds / windowSeconds;
@@ -1026,26 +1064,12 @@ export class RigActor {
       const tdz = this.aimTarget.z - pz;
       if (tdx * tdx + tdz * tdz < 0.01) return;
 
-      const targetYaw = Math.atan2(tdx, tdz);
-      const bodyWorldYaw = this.host.rotation.y;
-      // The mirrored cast clip bakes the arm slightly to the right (~16 deg).
-      const CLIP_BIAS = 0.42;
-      let aimYaw = -(targetYaw - bodyWorldYaw) + CLIP_BIAS;
-      while (aimYaw > Math.PI) aimYaw -= 2 * Math.PI;
-      while (aimYaw < -Math.PI) aimYaw += 2 * Math.PI;
-
-      const ARM_MAX = 1.4;
-      const clampedArm = Math.max(-ARM_MAX, Math.min(ARM_MAX, aimYaw));
+      const { arm, head } = aimAngles(Math.atan2(tdx, tdz), this.host.rotation.y);
       for (let i = 0; i < this.aimBones.length; i++) {
-        aimBone(this.aimBones[i]!, clampedArm * aimWeights[i]!);
+        aimBone(this.aimBones[i]!, arm * aimWeights[i]!);
       }
-
-      // Head follows the aim too.
-      if (headBone) {
-        const HEAD_MAX = 0.87;
-        const clampedHead = Math.max(-HEAD_MAX, Math.min(HEAD_MAX, aimYaw));
-        aimBone(headBone, clampedHead * 0.6);
-      }
+      // The head follows the aim too, but on its own angle: see `aimAngles`.
+      if (headBone) aimBone(headBone, head);
     });
 
     // Read the hips rest pose before any clip starts and could move it.
