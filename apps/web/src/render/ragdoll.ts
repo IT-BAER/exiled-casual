@@ -207,8 +207,13 @@ export function dropDead(scene: Scene, root: Mesh, push: Vector3 | null, at?: Ve
       }
     }
     if (push) {
-      doll.getAggregate(0)?.body?.applyImpulse(
-        push.scale(DEATH_IMPULSE), at ?? root.getAbsolutePosition());
+      const bodies = config.map((_, i) => doll.getAggregate(i)?.body ?? null);
+      throwBody(
+        bodies,
+        trunkIndex(config.map((c) => (c as { bone?: string }).bone ?? "")),
+        push,
+        at ?? root.getAbsolutePosition(),
+      );
     }
     // Onto whatever metadata the actor already carries (the player's holds its
     // rig), never over it.
@@ -219,22 +224,68 @@ export function dropDead(scene: Scene, root: Mesh, push: Vector3 | null, at?: Ve
   }
 }
 
+/** What the body a blow lands on can do about it. */
+export interface DollBody {
+  applyImpulse(impulse: Vector3, at: Vector3): void;
+  getLinearVelocity(): Vector3;
+  setLinearVelocity(velocity: Vector3): void;
+}
+
 /**
- * What a blow is worth, in newton-seconds, and what it costs the body it lands on.
+ * Which box the killing blow lands ON.
  *
- * The arithmetic is the whole point, because the old number was not a taste
- * question, it was two orders out. Every box in the doll weighs `BOX_MASS`, the
- * impulse goes into ONE of them, and impulse over mass is the velocity it leaves
- * with: at 2.0 into a 10 kg trunk that was 0.2 m/s, a fifth of a walking pace,
- * against a body that is already falling at 9.8. Nothing about the direction of
- * the blow could survive that, which is why every death looked identical.
+ * Not box 0. Both packs put the top bone first, and the top bone is a marker
+ * (`root` on the wardrobe, the armature node on a creature) that gets a body
+ * only so the chain is not broken. It sits between the feet, so the whole
+ * "chest height, off the centre line" aim was landing on an ankle-high stub.
+ */
+export function trunkIndex(bones: readonly string[]): number {
+  const i = bones.findIndex((b) => b === "pelvis" || b.startsWith("body_"));
+  return i < 0 ? 0 : i;
+}
+
+/**
+ * Throw a doll away from what killed it.
  *
- * 34 is about 3.4 m/s on the trunk — a stagger and half a turn, not a launch —
- * and the joints drag the rest of the animal with it.
+ * The boxes are JOINTED, which is what the old arithmetic missed: an impulse
+ * into one of sixteen 10 kg boxes does not leave that box at 3.4 m/s, it leaves
+ * the 160 kg it is chained to at 0.2 m/s, and a body already falling at 9.8 goes
+ * straight down on the spot it died. That is the whole "the corpse does not
+ * react" report. So every box takes the same velocity change and the doll leaves
+ * as one thing.
+ *
+ * The trunk alone takes its share as an impulse at `at` (chest height, off the
+ * centre line) and that torque is what turns the body as it goes. The others are
+ * pushed through their own centres: sixteen boxes all spinning about one shared
+ * point is not a death, it is a shredding.
+ */
+export function throwBody(
+  bodies: readonly (DollBody | null)[],
+  trunk: number,
+  push: Vector3,
+  at: Vector3,
+): void {
+  const kick = push.scale(DEATH_SPEED);
+  for (let i = 0; i < bodies.length; i++) {
+    const body = bodies[i];
+    if (!body) continue;
+    if (i === trunk) body.applyImpulse(push.scale(DEATH_IMPULSE), at);
+    else body.setLinearVelocity(body.getLinearVelocity().add(kick));
+  }
+}
+
+/**
+ * What a blow is worth: the speed the corpse leaves at, and the impulse that
+ * buys it for one box.
+ *
+ * Below a walking pace, the fall is gravity alone and every death is the same
+ * shape. 3.4 m/s is a stagger and half a turn, not a launch, and `LINEAR_DAMPING`
+ * bleeds it off inside the half second anyone watches.
  */
 const BOX_MASS = 10;
+/** Newton-seconds for one `BOX_MASS` box. The trunk's share, applied off-centre. */
 const DEATH_IMPULSE = 34;
-/** Metres per second the trunk leaves with. The number above, made checkable. */
+/** Metres per second the corpse leaves with. The number above, made checkable. */
 export const DEATH_SPEED = DEATH_IMPULSE / BOX_MASS;
 /** How fast that is bled off again. See the note where these are applied. */
 const LINEAR_DAMPING = 1.2;
