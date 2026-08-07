@@ -82,7 +82,7 @@ export function spawnAsset(scene: Scene, id: string, at: Vector3): boolean {
 
   const isProp = (PROP_KINDS as readonly string[]).includes(id);
   const stood = isProp
-    ? attachProp(scene, root, id as PropKind) !== null
+    ? attachProp(scene, root, id as PropKind, true) !== null
     : attachCreature(scene, root, id) !== null;
   if (!stood) {
     root.dispose(false, false);

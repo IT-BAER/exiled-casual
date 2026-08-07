@@ -63,6 +63,11 @@ export function loadProps(scene: Scene): Promise<void> {
 
   pending = LoadAssetContainerAsync(PROPS_URL, scene)
     .then((container) => {
+      // On the SOURCE, because a shared prop is an `InstancedMesh` and setting
+      // this on one of those is a no-op that warns. Every prop in this file
+      // stands on a floor the sun and the torch both light, so there is no kind
+      // that wants it off, and a clone inherits it from here too.
+      for (const mesh of container.meshes) mesh.receiveShadows = true;
       loaded = { scene, container };
     })
     .catch(() => {
@@ -97,15 +102,28 @@ function isUnder(node: Node, name: string): boolean {
  * so the caller can wire them to its hover affordance.
  *
  * Null when the asset has not loaded, which is the signal to greybox instead.
+ *
+ * `shared` is the difference between a copy and an INSTANCE, and it is the whole
+ * cost of a shadow frame. Babylon defaults `doNotInstantiate` to true, so a call
+ * that passes only a predicate gets a full clone carrying its own cloned
+ * materials — ninety plain meshes in the hideout, redrawn on each of a point
+ * light's six cube faces, which measured 875 of the frame's 1241 draw calls. An
+ * instance is ONE draw however many stand in the room. The price is that
+ * instances share the source's materials, so only a caller that ignores the
+ * return value may ask for it: tinting a shared material on hover would light
+ * every crate in the area, not the one under the pointer.
  */
-export function attachProp(scene: Scene, root: Mesh, kind: PropKind): Record<string, Material> | null {
+export function attachProp(
+  scene: Scene, root: Mesh, kind: PropKind, shared = false,
+): Record<string, Material> | null {
   if (!loaded || loaded.scene !== scene) return null;
 
-  const entries = loaded.container.instantiateModelsToScene((n) => n, true, {
+  const entries = loaded.container.instantiateModelsToScene((n) => n, !shared, {
     // Prune the prop we did not ask for at the source. A rejected node takes its
     // whole subtree with it, so the other prop is never cloned — and neither are
     // the per-instance materials that would then have nothing to hang on.
     predicate: (e: Node) => e.name === GLTF_ROOT || isUnder(e, kind),
+    doNotInstantiate: !shared,
   });
 
   const materials: Record<string, Material> = {};

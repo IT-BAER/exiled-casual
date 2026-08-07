@@ -53,7 +53,9 @@ export function buildHideoutDecor(scene: Scene): void {
     root.position.set(d.x, 0, d.z);
     root.rotation.y = d.yaw;
     root.isPickable = false;
-    if (attachProp(scene, root, d.kind) === null) {
+    // Shared: furniture has no hover state, and the room stands a dozen of these
+    // inside two point lights' cube maps.
+    if (attachProp(scene, root, d.kind, true) === null) {
       root.dispose(false, false);
       return;
     }

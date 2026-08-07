@@ -433,7 +433,8 @@ function dressBeach(scene: Scene, grid: WalkableGrid): void {
         root.rotation.x = (rnd(i, 16) - 0.5) * 0.25;
       }
       root.isPickable = false;
-      if (attachProp(scene, root, kind) === null) {
+      // Shared: a beach stands dozens of these and none of them is hoverable.
+      if (attachProp(scene, root, kind, true) === null) {
         root.dispose(false, false);
         return; // no props asset: headless or a failed fetch, so drop the lot
       }
@@ -519,7 +520,7 @@ function standBraziers(
     const root = new Mesh(`${AREA_BRAZIER_PREFIX}${i}`, scene);
     root.position.set(s.x, 0, s.z);
     root.isPickable = false;
-    if (attachProp(scene, root, "brazier") === null) {
+    if (attachProp(scene, root, "brazier", true) === null) {
       // No props asset (headless, or a failed fetch). The light still stands:
       // an unlit room with an invisible brazier is worse than a lit one with a
       // missing bowl, and the fallback is the same one every prop here takes.
