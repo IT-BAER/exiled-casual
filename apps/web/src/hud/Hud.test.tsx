@@ -6,7 +6,7 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 vi.mock("../audio/drop-sound", () => ({ playDropSound: vi.fn() }));
 import { playDropSound } from "../audio/drop-sound";
 import "@testing-library/jest-dom/vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, act } from "@testing-library/react";
 import { Hud } from "./Hud";
 import { VENDOR_NAME, VENDOR_TITLE } from "../npc";
 import { xpPerHour, TICK_BACKGROUND, TICK_BACKGROUND_EMPTY, RAIL_H } from "./XpBar";
@@ -538,6 +538,22 @@ describe("Hud reward banner", () => {
     const banner = screen.getByTestId("reward-banner");
     expect(banner).toHaveTextContent("Level 13");
     expect(banner).toHaveTextContent("Waystone");
+  });
+
+  it("still clears itself when the next snapshot is not a win", () => {
+    vi.useFakeTimers();
+    try {
+      const { rerender } = render(<Hud snapshot={makeSnap({ waystoneItems: 0 })} />);
+      rerender(<Hud snapshot={makeSnap({ waystoneItems: 1 })} />);
+      expect(screen.getByTestId("reward-banner")).toHaveTextContent("Waystone");
+      // Spending the stone on a map re-runs the payout effect. The dismissal must
+      // not die with it, or the banner hangs on screen for the rest of the run.
+      rerender(<Hud snapshot={makeSnap({ waystoneItems: 0 })} />);
+      act(() => { vi.advanceTimersByTime(3000); });
+      expect(screen.queryByTestId("reward-banner")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("stays quiet when a stone is spent rather than won", () => {

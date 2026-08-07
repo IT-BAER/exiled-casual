@@ -741,7 +741,11 @@ export function Hud({
   // pays on a dry session (rule 7), and the stones a cleared map hands back, which
   // is rule 4's whole "the map must not be able to pay zero" moment. Both were only
   // discoverable later, by reading a number in a panel.
-  const [banner, setBanner] = React.useState<string | null>(null);
+  // `seq` exists so the dismissal is its own effect: hanging the timeout off the
+  // payout effect meant the very next snapshot (spending the stone on a map) tore
+  // the timer down through cleanup and then returned early without a new one, and
+  // the banner stayed up for the rest of the run.
+  const [banner, setBanner] = React.useState<{ text: string; seq: number } | null>(null);
   const level = snapshot?.player.level ?? null;
   const stones = snapshot?.inventory.items.filter((i) => i.baseId === "map.waystone").length ?? null;
   const last = React.useRef<{ level: number; stones: number } | null>(null);
@@ -761,11 +765,15 @@ export function Hud({
     if (lines.length === 0) return;
     // A boss kill can pay both at once. Rule 3 says concentrate rather than spread,
     // so they share one banner and one sound instead of queueing two.
-    setBanner(lines.join("   ·   "));
+    setBanner((prev) => ({ text: lines.join("   ·   "), seq: (prev?.seq ?? 0) + 1 }));
     playDropSound(level > was.level ? "unique" : "rare");
+  }, [level, stones]);
+
+  React.useEffect(() => {
+    if (!banner) return;
     const t = setTimeout(() => setBanner(null), 2400);
     return () => clearTimeout(t);
-  }, [level, stones]);
+  }, [banner]);
 
   if (!snapshot) return null;
 
@@ -892,7 +900,7 @@ export function Hud({
             textShadow: "0 0 18px rgba(201,168,76,0.55), 0 2px 6px #000",
           }}
         >
-          {banner}
+          {banner.text}
         </div>
       )}
 
