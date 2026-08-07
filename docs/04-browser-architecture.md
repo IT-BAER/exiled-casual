@@ -16,7 +16,7 @@ Recommended initial stack:
 | Layer | Choice | Reason |
 |---|---|---|
 | Shell and account UI | React + TypeScript | Mature form, accessibility, routing, and state tooling; do not put per-frame game state in React |
-| 3D renderer | Babylon.js, WebGPU first with WebGL2 fallback | Production-oriented scene, material, particle, instancing, asset, inspector, and WebGPU support |
+| 3D renderer | Babylon.js on WebGL2 | Production-oriented scene, material, particle, instancing, asset and inspector support. WebGL2 only, deliberately: one render path is one set of shader bugs, and nothing here is GPU-compute bound |
 | Local simulation | Dedicated Web Worker | Keeps fixed-step rules, pathing, prediction, and snapshots away from main-thread rendering/UI stalls |
 | Shared rules | Framework-free TypeScript package | Same definitions, fixed-point helpers, validation, serialization, and tests on browser and server |
 | Authoritative instance | Node.js TypeScript initially | Fastest path to one-language determinism and iteration; isolate each area in a worker/process |
@@ -418,7 +418,8 @@ Maintain explicit entity and effect budgets per map. A useful initial stress fix
 - Mobile and laptop memory pressure can evict cached assets. All handles need recoverable placeholders and bundle revalidation.
 - A refresh is equivalent to disconnect, not logout or character death. Preserve a bounded reconnect lease.
 - Service-worker updates must not mix JavaScript, protocol, and content versions. Activate only after all clients are closed or route each connection to compatible servers.
-- WebGL context loss and WebGPU device loss require renderer reconstruction from simulation state.
+- WebGL context loss requires renderer reconstruction from simulation state. The client
+  takes the cheap route: it reloads once on `webglcontextlost` and rebuilds from the save.
 - Browser audio requires a user gesture. Prime the audio context during the first explicit start interaction.
 - Keyboard layouts, IME, browser shortcuts, pointer lock, high-DPI scaling, and accessibility zoom need explicit tests.
 

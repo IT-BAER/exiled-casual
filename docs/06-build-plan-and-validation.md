@@ -397,7 +397,7 @@ Acceptance is based on authoritative correctness first, then visual smoothness.
 Test current stable plus one previous major version for:
 
 - Chromium, Firefox, Safari on supported desktop OSes.
-- WebGPU path where supported and WebGL2 fallback.
+- WebGL2, the one render path there is.
 - GPU/device/context loss.
 - Pointer lock, high DPI, layout keyboards, IME, controller.
 - Service-worker update and offline shell failure.
@@ -564,7 +564,7 @@ Do not inspect private protocols, client binaries, memory, extracted art/data, o
 |---|---|---|
 | IP/trade-dress claim | Medium / existential | Original brand/content/UI, source licensing, legal review, no extraction |
 | Rules breadth overwhelms code | High / high | Shared stat/effect primitives, content compiler, no one-off callbacks |
-| Browser GPU overload | High / high | WebGPU/WebGL tiers, instancing, effect quotas, stress fixtures, shed cosmetics first |
+| Browser GPU overload | High / high | Graphics quality tiers, instancing, effect quotas, stress fixtures, shed cosmetics first |
 | Nondeterministic replay | Medium / high | Integer/quantized math, fixed ordering, named RNG, cross-runtime golden suite |
 | Item duplication | Medium / existential economy impact | Server authority, revisions, escrow, idempotency, ledger, failure injection |
 | Content migrations corrupt saves | Medium / high | Immutable manifests, explicit policies, old-fixture round trips, dry-run audit |

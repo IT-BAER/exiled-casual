@@ -176,7 +176,8 @@ This pack deeply specifies the repeatable endgame and all foundations it depends
 
 The intended original browser game can support:
 
-- Desktop Chromium, Firefox, and Safari, with progressive WebGPU and WebGL2 fallback.
+- Desktop Chromium, Firefox, and Safari on WebGL2. WebGPU is not used: the client
+  constructs Babylon's WebGL `Engine` only, and there is no plan to add a second path.
 - Keyboard/mouse first, controller after the input abstraction is stable.
 - Installable PWA shell, but an online authoritative game session.
 - Solo at vertical-slice launch, then parties up to four or six after server migration and encounter scaling are proven.

@@ -14,6 +14,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p apps/web/tsconfig.json",
     "test": "vitest run",
+    "size": "node tools/check_bundle_size.mjs",
     "test:watch": "vitest"
   },
   "devDependencies": {
