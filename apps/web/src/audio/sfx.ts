@@ -44,6 +44,8 @@ const VOICES: Record<string, Voice> = {
   "ambient-wind":             { gain: 0.09, wet: 0.04, vary: 0 },
   "ambient-swamp":            { gain: 0.08, wet: 0.10, vary: 0 },
   "ambient-forest":           { gain: 0.08, wet: 0.08, vary: 0 },
+  // Open coast: almost no reverb, because there is nothing out there to reflect.
+  "ambient-shore":            { gain: 0.08, wet: 0.03, vary: 0 },
   "skill-ember-bolt-cast":    { gain: 0.18, wet: 0.14, vary: 0.06 },
   "skill-ember-bolt-impact":  { gain: 0.34, wet: 0.18, vary: 0.08 },
   "skill-cinder-ground-cast": { gain: 0.32, wet: 0.22, vary: 0.04 },
@@ -334,11 +336,14 @@ function clamp(v: number): number {
   return Math.max(0, Math.min(1, v));
 }
 
-const AMBIENT_BY_BIOME: Record<string, string> = {
+/** One per biome, and it must stay that way: the fallback below answers for any
+ *  id, so a biome that is simply missing plays a cave and nothing complains. */
+export const AMBIENT_BY_BIOME: Record<string, string> = {
   vaal_stone: "ambient-cave",
   desert: "ambient-wind",
   swamp: "ambient-swamp",
   forest: "ambient-forest",
+  coast: "ambient-shore",
 };
 
 export function ambientCue(biomeId: string | null): string {

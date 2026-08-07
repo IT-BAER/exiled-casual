@@ -910,11 +910,6 @@ export class RigActor {
     group.onAnimationGroupEndObservable.addOnce(this.easeOutToLocomotion);
   }
 
-  /** Stop the sustained upper-body cast without disturbing locomotion. */
-  stopCast(): void {
-    this.groups.get("cast")?.stop();
-  }
-
   /** Alternate authored weapon-arm attacks while locomotion keeps the legs. */
   playStrike(seconds?: number): void {
     const clip = STRIKE_CLIPS[this.nextStrikeIndex]!;

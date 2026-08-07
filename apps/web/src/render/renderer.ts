@@ -71,32 +71,22 @@ const SINK_TICKS = Math.round(SINK_SECONDS * TICKS_PER_SEC);
 /** Kinds that fall over when they die. Everything else just stops existing. */
 const BODIES = new Set<MeshKind>(["player", "monster", "rare", "boss"]);
 
-export interface CastingAnimation {
+export interface ActionAnimation {
   playCast(seconds?: number): void;
-  stopCast(): void;
-}
-
-export interface ActionAnimation extends CastingAnimation {
   playStrike(seconds?: number): void;
   stopStrike(): void;
 }
 
-/** Synchronise the render animation with the simulation-owned casting state. */
-export function syncCastingAnimation(
-  rig: CastingAnimation | null,
-  wasCasting: boolean,
-  isCasting: boolean,
-  seconds?: number,
-): void {
-  if (!rig || wasCasting === isCasting) return;
-  if (isCasting) rig.playCast(seconds);
-  else rig.stopCast();
-}
-
 /**
  * Synchronise the render clip with the simulation's current cast action.
- * `seconds` is the wind-up the sim granted this cast (cast speed included), so
- * the clip is paced to end on the hit rather than run at its authored rate.
+ *
+ * `seconds` is the BEAT the sim granted this cast: the wind-up or the cooldown,
+ * whichever is longer, because that is the gap the player actually watches. The
+ * casting flag only lives for the wind-up, so an action is started on its rising
+ * edge and then left alone. Every clip here owns its full animation and is
+ * allowed to finish after the hit lands: cutting the spell clip on the falling
+ * edge showed the first 30% of a one-second swing, and the bolt left a hand that
+ * was still lifting.
  */
 export function syncActionAnimation(
   rig: ActionAnimation | null,
@@ -110,12 +100,7 @@ export function syncActionAnimation(
   if (isCasting && (!wasCasting || wasAction !== action)) {
     if (action === "melee") rig.playStrike(seconds);
     else rig.playCast(seconds);
-    return;
   }
-  // A sword swing owns its full animation and is allowed to finish after the
-  // simulation hit lands. Spell casting is a sustained pose, so it ends with
-  // the cast window.
-  if (!isCasting && wasCasting && wasAction !== "melee") rig.stopCast();
 }
 
 /** Height the death impulse is aimed above the floor, so a body topples rather

@@ -15,6 +15,7 @@ const SOURCES = {
   "ambient-wind": "Epic Stock Media - Synthesized Nature Loops and Sounds/WINDInt_Loop Weather Wind Whipping Constricted Flow Turbulent 01_ESM_SNLS.wav",
   "ambient-swamp": "Epic Stock Media - Synthesized Nature Loops and Sounds/AMBTrop_Loop Ambience Jungle Night Humid Birds Bug Chirps 01_ESM_SNLS.wav",
   "ambient-forest": "Justsoundeffects - Forest Ambiences/BIRDPrey_Spring Night Deciduous Forest Many Tawny Owls Wind Leaves Rustling_JSE_FA.wav",
+  "ambient-shore": "Just Sound Effects - Rocky Coast of Norway/WATRWave_Medium Waves at Pebble Beach_JSE_RCoN_Stereo.wav",
   "portal-close": "Justsoundeffects - Futuristic Interface/UIMvmt_Resonant Electric Whoosh 01_JSE_FI.wav",
 };
 

@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest";
 import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
 import { testPlayer } from "../test-fixtures";
 import { createSoundscape } from "./soundscape";
-import { ambientCue } from "./sfx";
+import { ambientCue, AMBIENT_BY_BIOME } from "./sfx";
+import { BIOMES } from "@exiled/content-runtime";
 
 describe("area ambience", () => {
   it("gives the hideout and each biome a deliberate loop", () => {
@@ -11,6 +12,15 @@ describe("area ambience", () => {
     expect(ambientCue("desert")).toBe("ambient-wind");
     expect(ambientCue("swamp")).toBe("ambient-swamp");
     expect(ambientCue("forest")).toBe("ambient-forest");
+    expect(ambientCue("coast")).toBe("ambient-shore");
+  });
+
+  it("leaves no biome on the fallback", () => {
+    // The Strand shipped playing the cave loop: a beach with cave reverb, and
+    // nothing failed because the fallback answers for every id there is.
+    for (const id of Object.keys(BIOMES)) {
+      expect(AMBIENT_BY_BIOME[id], `${id} has no ambient of its own`).toBeDefined();
+    }
   });
 });
 

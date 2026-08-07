@@ -19,7 +19,7 @@ import { applyBiomeTint } from "./level";
 import { LIGHT_POOL } from "./lights";
 import { HAZE_HEIGHT, HAZE_MAX_SIZE, HAZE_NAME, MOTES_NAME, MOTES_NOISE_NAME } from "./haze";
 import { BIOMES } from "@exiled/content-runtime";
-import { blowFrom, SnapshotRenderer, syncActionAnimation, syncCastingAnimation } from "./renderer";
+import { blowFrom, SnapshotRenderer, syncActionAnimation } from "./renderer";
 import { makeMesh, updateTelegraph } from "./meshes";
 import type { Snapshot } from "@exiled/protocol";
 import { testPlayer, testStats } from "../test-fixtures";
@@ -33,21 +33,31 @@ vi.mock("../audio/sfx", async (importOriginal) => ({
 }));
 
 describe("sustained casting animation", () => {
-  it("starts on the casting edge, remains running, and stops when casting ends", () => {
-    const rig = { playCast: vi.fn(), stopCast: vi.fn() };
+  it("starts on the casting edge and is not restarted while the cast runs", () => {
+    const rig = { playCast: vi.fn(), playStrike: vi.fn(), stopStrike: vi.fn() };
 
-    syncCastingAnimation(rig, false, true);
-    syncCastingAnimation(rig, true, true);
-    syncCastingAnimation(rig, true, false);
+    syncActionAnimation(rig, false, true, undefined, "spell");
+    syncActionAnimation(rig, true, true, "spell", "spell");
 
     expect(rig.playCast).toHaveBeenCalledTimes(1);
-    expect(rig.stopCast).toHaveBeenCalledTimes(1);
+  });
+
+  it("lets the swing finish after the wind-up ends", () => {
+    // The clip is paced to the BEAT (wind-up or cooldown, whichever is longer)
+    // while the casting flag lives only for the wind-up. Cutting it on the
+    // falling edge showed 30% of a 1s swing and the bolt left a lifting hand.
+    const rig = { playCast: vi.fn(), playStrike: vi.fn(), stopStrike: vi.fn() };
+
+    syncActionAnimation(rig, false, true, undefined, "spell", 1);
+    syncActionAnimation(rig, true, false, "spell", undefined, 1);
+
+    expect(rig.playCast).toHaveBeenCalledTimes(1);
+    expect(rig.playCast).toHaveBeenCalledWith(1);
   });
 
   it("uses the melee action clip for a melee cast and leaves spell casting separate", () => {
     const rig = {
       playCast: vi.fn(),
-      stopCast: vi.fn(),
       playStrike: vi.fn(),
       stopStrike: vi.fn(),
     };
