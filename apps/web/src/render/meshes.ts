@@ -1118,9 +1118,15 @@ function blobMaterial(scene: Scene): StandardMaterial | null {
     return null;
   }
   const ctx = tex.getContext();
-  const g = ctx.createRadialGradient(64, 64, 10, 64, 64, 64);
-  g.addColorStop(0, "rgba(0,0,0,0.5)");
-  g.addColorStop(0.6, "rgba(0,0,0,0.26)");
+  // A tight dark core with a short soft edge, not a wash. The first version held
+  // 0.26 alpha all the way out to 60% of the radius and only then began to fade,
+  // which over a quad already wider than the prop read as a big grey smudge
+  // rather than as something touching the floor. Most of the falloff now happens
+  // in the outer third.
+  const g = ctx.createRadialGradient(64, 64, 26, 64, 64, 64);
+  g.addColorStop(0, "rgba(0,0,0,0.34)");
+  g.addColorStop(0.55, "rgba(0,0,0,0.24)");
+  g.addColorStop(0.8, "rgba(0,0,0,0.08)");
   g.addColorStop(1, "rgba(0,0,0,0)");
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, 128, 128);
@@ -1146,7 +1152,7 @@ function blobMaterial(scene: Scene): StandardMaterial | null {
  * stands on three legs with daylight between them. So the quad is always wider
  * than what it grounds, and the gradient's soft outer half is what shows.
  */
-const BLOB_SPREAD = 1.7;
+const BLOB_SPREAD = 1.2;
 
 export function standGroundBlob(scene: Scene, root: Mesh, rx: number, rz = rx): void {
   const mat = blobMaterial(scene);
