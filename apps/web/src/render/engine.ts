@@ -828,6 +828,19 @@ export function createScene(engine: Engine): SceneHandle {
     // and every contact shadow in the room detaches from its object.
     torchShadows.bias = 0.0002;
     torchShadows.normalBias = 0.03;
+    // Every other frame, and the six faces are 204 of the frame's 684 draws.
+    //
+    // A skipped frame keeps the cube it drew last time rather than clearing it,
+    // so this is 30 Hz shadows under a 60 Hz light. Measured in the_wrackline at
+    // high: 0.77 ms of a 1.55 ms ceiling (the ceiling being the torch casting
+    // nothing at all), rt_ms 5.33 -> 4.60, and no worse a frame-time tail.
+    //
+    // Not the 3 the same measurement says is worth 1.18 ms. The fires round-robin
+    // at a quarter of this rate and get away with it because firelight is soft
+    // and already flickering, but the torch RIDES THE PLAYER: its lag is not a
+    // flicker, it is every shadow in the pool sitting a step behind where the
+    // light actually is. 33 ms of that is a bet; 50 ms is a different one.
+    torchShadows.getShadowMap()!.refreshRate = 2;
     // An actor may not cast from the torch. The lamp rides the player, so the
     // player's own shadow lands directly under the player as a blob that follows
     // the feet and reads as a stain on the floor, not as light. Actor parts share
