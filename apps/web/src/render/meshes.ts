@@ -1189,11 +1189,34 @@ export function standGroundBlob(
   quad.isPickable = false;
   quad.parent = root;
   quad.material = mat;
-  if (kind === "actor") ACTOR_BLOBS.set(root, quad);
+  if (kind === "actor") {
+    ACTOR_BLOBS.set(root, quad);
+    actorQuads.add(quad);
+    // A body can spawn while High is already active, so it has to come up hidden
+    // rather than pop in and vanish on the next graphics change.
+    quad.setEnabled(actorBlobsVisible);
+    quad.onDisposeObservable.addOnce(() => actorQuads.delete(quad));
+  }
 }
 
 /** The pool under an actor, so `keepGroundBlobFlat` can find it again. */
 const ACTOR_BLOBS = new WeakMap<Mesh, Mesh>();
+
+/**
+ * Actor pools are the grounding at Low; High replaces them with real shadows
+ * cast from the braziers and the torch, so the shadow setting hides them.
+ *
+ * A live set pruned on dispose, not a by-name scan each toggle: an actor blob is
+ * born every time a body spawns, and the setter also has to reach the ones that
+ * already exist. `applyGraphics` drives it off `g.shadows`.
+ */
+const actorQuads = new Set<Mesh>();
+let actorBlobsVisible = true;
+
+export function setActorBlobsVisible(visible: boolean): void {
+  actorBlobsVisible = visible;
+  for (const quad of actorQuads) quad.setEnabled(visible);
+}
 
 /**
  * Hold an actor's pool flat on the floor while his body leans over it.

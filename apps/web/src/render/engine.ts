@@ -27,6 +27,7 @@ import { createHaze, createMotes } from "./haze";
 import { FLAME_MESH } from "./flames";
 import { createFireLights, LIGHT_POOL, setFireLightZoom, updateFireLights } from "./lights";
 import { cullShadowCasters } from "./shadow-cull";
+import { setActorBlobsVisible } from "./meshes";
 
 /**
  * Light intensities for a PBR scene. Roughly PI times the values the old
@@ -231,14 +232,18 @@ export function applyGraphics(scene: Scene, engine: Engine | null, g: GraphicsSe
     const map = torch.getShadowGenerator()?.getShadowMap();
     if (map) map.refreshRate = g.shadows === "high" ? 1 : 2;
   }
-  // The fires never cast, same call as the sun: `darkness = 0.6` on a 512 map
-  // refreshed one cube per frame means a fire shadow removes 40% of ONE light in
-  // a room lit by several, and the owner could not pick Low from High in the
-  // hideout while paying 15 fps for it. Looking them up by prefix also covers a
-  // pool whose size changes later.
+  // High turns the braziers into real casters; Low and Off leave the torch alone
+  // with blobs under the actors. The generators are already built (lights.ts
+  // `castFrom`) and round-robin one cube a frame, so a lit bowl throws a real
+  // shadow of everything near it, actors included. Looking them up by prefix
+  // covers a pool whose size changes later.
+  const fires = g.shadows === "high";
   for (const light of scene.lights) {
-    if (light.name.startsWith("firelight-")) light.shadowEnabled = false;
+    if (light.name.startsWith("firelight-")) light.shadowEnabled = fires;
   }
+  // The blob under each actor is the grounding at Low; at High the braziers and
+  // torch throw the real thing, so the pool comes off. See `setActorBlobsVisible`.
+  setActorBlobsVisible(!fires);
 
   const pipelines = scene.postProcessRenderPipelineManager?.supportedPipelines;
   const ssao = pipelines?.find((p) => p.name === "ssao");

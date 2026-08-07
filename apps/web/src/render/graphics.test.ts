@@ -83,16 +83,16 @@ describe("applyGraphics", () => {
 
     applyGraphics(scene, engine, { ...DEFAULT_SETTINGS.graphics, shadows: "low" });
     expect(sun.shadowEnabled).toBe(false);
+    // Low is the torch alone, refreshed every other frame; the fires stay dark.
     expect(fire.shadowEnabled).toBe(false);
-    // The torch is the only light left that casts, so Low and High are how often
-    // its cube is redrawn: every other frame against every frame.
     expect(torch.shadowEnabled).toBe(true);
     expect(torchMap.refreshRate).toBe(2);
 
+    // High adds the braziers as real casters and speeds the torch to every frame.
     applyGraphics(scene, engine, { ...DEFAULT_SETTINGS.graphics, shadows: "high" });
     expect(torch.shadowEnabled).toBe(true);
     expect(torchMap.refreshRate).toBe(1);
-    expect(fire.shadowEnabled).toBe(false);
+    expect(fire.shadowEnabled).toBe(true);
 
     applyGraphics(scene, engine, { ...DEFAULT_SETTINGS.graphics, shadows: "off" });
     expect(torch.shadowEnabled).toBe(false);

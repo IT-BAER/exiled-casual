@@ -97,6 +97,13 @@ export function cullShadowCasters(
     return;
   }
   const scene = map.getScene()!;
+  // A receiver's shader only compiles SHADOWn for a light whose map has a
+  // NON-EMPTY renderList (PrepareDefinesForLight checks renderList.length > 0
+  // before prepareDefines). The list's contents are never drawn — the custom
+  // render list below always answers — but leave it empty and every floor is
+  // compiled with no code to sample this map, which reads as "no shadow at any
+  // darkness". One long-lived mesh is the flag.
+  map.renderList = [scene.getMeshByName("ground") ?? scene.meshes[0]!];
   const kept: AbstractMesh[] = [];
   let keptFrame = -1;
   map.getCustomRenderList = () => {

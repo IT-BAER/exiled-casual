@@ -147,8 +147,6 @@ let lastMeshCount = -1;
  */
 let zoom = 1;
 /** Which lit bowl re-renders its shadow cube this frame. See `castFrom`. */
-let robin = 0;
-
 /**
  * Build the pool. Call once per scene, with the other lights.
  *
@@ -205,11 +203,11 @@ function castFrom(scene: Scene, light: PointLight | undefined): void {
     const gen = new ShadowGenerator(512, light);
     gen.usePercentageCloserFiltering = true;
     gen.filteringQuality = ShadowGenerator.QUALITY_LOW; // x6 faces
-    // Lighter than the sun's: a fire is one source in a room the sun and the
-    // torch are also in, and a black shadow from it reads as a hole. Lighter
-    // again since the bowl's disc got measured (`rimShadowRadius`): what is left
-    // of it should seat the brazier on the floor, not paint a ring round it.
-    gen.darkness = 0.6;
+    // `darkness` only attenuates this ONE light's occluded term; the fill and
+    // the other fires relight the rest, and near a bowl the fire term dominates,
+    // so even 0.5 reads clearly. (When these shadows seemed immune to darkness
+    // entirely, the cause was the empty renderList — see cullShadowCasters.)
+    gen.darkness = 0.5;
     // The same pair the torch needs, for the same reason: a point light over a
     // floor samples that floor at a grazing angle across six faces, and at the
     // stock bias the surface shadows ITSELF in rings centred on the lamp.
@@ -248,7 +246,6 @@ export function resetFireLights(): void {
   clock = 0;
   lastMeshCount = -1;
   zoom = 1;
-  robin = 0;
   resetFireFlames();
 }
 
@@ -333,9 +330,11 @@ export function updateFireLights(scene: Scene, at: Vector3, deltaMs: number): vo
     if (moved) light.getShadowGenerator()?.getShadowMap()?.resetRefreshCounter();
   }
 
-  // One shadow cube per frame, rotating through the lit bowls. The maps are
-  // RENDER_ONCE; this is the only thing that re-arms them.
-  const lit = pool.filter((l) => l.isEnabled());
-  if (lit.length > 0)
-    lit[robin++ % lit.length]!.getShadowGenerator()?.getShadowMap()?.resetRefreshCounter();
+  // Every lit bowl's cube re-armed every frame. The maps are RENDER_ONCE; this
+  // is the only thing that re-arms them. The old one-cube-per-frame round-robin
+  // predates per-face caster culling and read as low-framerate shadows; if this
+  // is what keeps high under 100 fps, drop back to re-arming two per frame.
+  for (const light of pool) {
+    if (light.isEnabled()) light.getShadowGenerator()?.getShadowMap()?.resetRefreshCounter();
+  }
 }
