@@ -38,6 +38,43 @@ describe("ItemTooltip", () => {
   });
 });
 
+describe("placement around the cursor", () => {
+  // jsdom's window is 1024x768. `x`/`y` are the pointer itself, which is the tip
+  // of the arrow: every edge of the panel is measured off that one point.
+  const at = (x: number, y: number) => {
+    cleanup();
+    render(<ItemTooltip name="Ember Wand" rarity="normal" lines={[]} x={x} y={y} />);
+    return screen.getByTestId("item-tooltip").style;
+  };
+
+  it("opens down and right of the tip, clear of the arrow", () => {
+    const s = at(100, 100);
+    expect(parseFloat(s.left)).toBeGreaterThan(100);
+    expect(parseFloat(s.top)).toBeGreaterThan(100);
+  });
+
+  it("clears the tip upward when it opens upward", () => {
+    // The panel grows up from a low cursor, so the same gap has to be measured
+    // from its BOTTOM edge. Anchoring bottom at the cursor drew it over the arrow.
+    const s = at(100, 700);
+    expect(s.top).toBe("");
+    expect(768 - parseFloat(s.bottom)).toBeLessThan(700);
+  });
+
+  it("opens to the left of the tip rather than under it at the right edge", () => {
+    const s = at(1000, 100);
+    const left = parseFloat(s.left);
+    expect(left).toBeGreaterThanOrEqual(0);
+    expect(left + 300).toBeLessThan(1000);
+  });
+
+  it("stays on screen in the corner it cannot fit either way", () => {
+    const s = at(1020, 760);
+    expect(parseFloat(s.left)).toBeGreaterThanOrEqual(0);
+    expect(parseFloat(s.bottom)).toBeGreaterThanOrEqual(0);
+  });
+});
+
 describe("unidentified items", () => {
   it("marks an unread drop with a red Unidentified line", () => {
     render(<ItemTooltip name="Ember Wand" rarity="rare" lines={[]} unidentified x={0} y={0} />);

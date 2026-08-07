@@ -112,12 +112,19 @@ export function ItemTooltip({
   const width = 300;
   const vw = typeof window !== "undefined" ? window.innerWidth : 1920;
   const vh = typeof window !== "undefined" ? window.innerHeight : 1080;
-  const left = Math.min(x, vw - width - 8);
+  // `x`/`y` are the pointer, which is the TIP of the arrow, and the panel is
+  // placed around it: the gap goes on whichever side the panel actually opens
+  // toward. Offsetting the coordinate at the call site instead only worked while
+  // the panel opened down and right; flipped, the same 18px walked it back over
+  // the cursor, and clamped to the right edge it landed under the arrow entirely.
+  const GAP = 18;
   // Below the midpoint the tooltip grows upward from the cursor instead of down, so a
   // tall one (unique, with stats + mods + flavour) cannot run off the bottom edge.
   // Anchoring an edge avoids measuring the rendered height.
   const flipUp = y > vh / 2;
-  const place = flipUp ? { bottom: Math.max(8, vh - y) } : { top: y };
+  const flipLeft = x + GAP + width > vw - 8;
+  const left = flipLeft ? Math.max(8, x - GAP - width) : x + GAP;
+  const place = flipUp ? { bottom: Math.max(8, vh - y + GAP) } : { top: y + GAP };
   return (
     <div
       data-testid="item-tooltip"

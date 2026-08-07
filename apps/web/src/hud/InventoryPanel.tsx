@@ -635,8 +635,8 @@ export function InventoryPanel({
                 // Refusal is the cursor's job now (index.html): red iron blade over
                 // an item the armed orb cannot touch, gilt blade everywhere else.
                 data-cursor={armed && !accepts(armed, it) ? "deny" : undefined}
-                onMouseEnter={(e) => !drag && setHover({ at: { grid: container, ix: it.x, iy: it.y }, x: e.clientX + 18, y: e.clientY + 18 })}
-                onMouseMove={(e) => !drag && setHover({ at: { grid: container, ix: it.x, iy: it.y }, x: e.clientX + 18, y: e.clientY + 18 })}
+                onMouseEnter={(e) => !drag && setHover({ at: { grid: container, ix: it.x, iy: it.y }, x: e.clientX, y: e.clientY })}
+                onMouseMove={(e) => !drag && setHover({ at: { grid: container, ix: it.x, iy: it.y }, x: e.clientX, y: e.clientY })}
                 // Unconditional: the guard used to be "clear it only if the
                 // tooltip is still MINE", compared by object identity, and a
                 // snapshot arriving while the cursor sat on a cell rebuilt every
@@ -991,7 +991,7 @@ export function InventoryPanel({
                 item={equipment[s.slot]}
                 highlight={slotHighlight(s.slot)}
                 onGrab={(slot, e) => grab({ kind: "slot", slot }, equipment[slot]!, 1.5, 1.5, e)}
-                onHover={(_item, e) => !drag && setHover({ at: { slot: s.slot }, x: e.clientX + 18, y: e.clientY + 18 })}
+                onHover={(_item, e) => !drag && setHover({ at: { slot: s.slot }, x: e.clientX, y: e.clientY })}
                 onLeave={() => setHover(null)}
               />
             ))}
