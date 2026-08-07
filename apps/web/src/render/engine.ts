@@ -732,89 +732,31 @@ export function createScene(engine: Engine): SceneHandle {
     // hardening and ~380 casters a frame, and at `low` (which keeps only this
     // one) against `high` he could not see a difference in the Strand at all.
     // What grounds a prop now is the soft pool `standGroundBlob` puts under it,
-    // and the torch and the fires still throw real shadows where a real light
-    // stands. Kept as a disabled generator rather than deleted so the frustum
-    // tuning above, which took a lot of looking, is still here to switch back on.
-    const shadows = new ShadowGenerator(2048, sun);
+    // and the torch still throws a real shadow where a real light stands.
+    //
+    // No generator at all, not a disabled one: `sun.shadowEnabled` alone would
+    // stop it drawing, but an allocated 2048 map is 16 MB of nothing, and it
+    // registered a caster on every mesh added to the scene to fill a render list
+    // nobody reads.
+    //
+    // What it took to look right, if it ever comes back. `useContactHardeningShadow`
+    // (PCSS), not PCF: a boulder's shadow is crisp at its base and diffuse at the
+    // far end, and at this raking sun that runs the length of every shadow in the
+    // frame. `contactHardeningLightSizeUVRatio = 0.07`, which is a sun 2.2 units
+    // wide and physically absurd, but it also sets the BLOCKER SEARCH radius and at
+    // 0.2 the search swept wider than the props themselves and the frame lost its
+    // shadows entirely. `filteringQuality = QUALITY_MEDIUM`, `darkness = 0.12`,
+    // `normalBias = 0.02` (along the normal, because a plain bias big enough to
+    // clear the acne detaches every contact shadow from its object), and NO
+    // `forceBackFacesOnly` (it halves the draw but stores the far side of a closed
+    // boulder, so the floor at its base self-shadows into hard black squares).
+    //
+    // And it could never cast level geometry: a 3.5-unit wall run under this sun
+    // throws a ~9-unit band, longer than a room is wide, which at darkness 0.12
+    // took every room to unplayable black. Boulders and the coast berm were the
+    // exception, capped at 1.52 and standing apart, so they threw separated
+    // ~4-unit smears with lit floor between them. The rampart stayed out.
     sun.shadowEnabled = false;
-    // No forceBackFacesOnly here: it halves the shadow-map draw but stores the
-    // FAR side of a closed boulder, so the floor at its own base sits behind
-    // that depth and self-shadows into hard black squares that fight per frame.
-    // Contact hardening (PCSS): sharp where an object meets the floor, widening
-    // with the gap to its caster. A single blur radius is the thing that reads
-    // as CG — a boulder's shadow is crisp at its base and diffuse at the far end
-    // of the smear, and at this raking sun that difference runs the length of
-    // every shadow in the frame. Supersedes PCF; setting both is last-one-wins.
-    shadows.useContactHardeningShadow = true;
-    // Light size in shadow-map UV, and this number is sharper than it looks.
-    // The frustum is 2*SHADOW_EXTENT across, so 0.07 is a sun about 2.2 units
-    // wide — physically absurd, and the point: a real sun's penumbra is under a
-    // degree and invisible here, while a readable "softens with distance" needs
-    // a source with size.
-    //
-    // It also sets the BLOCKER SEARCH radius, which is why it cannot simply be
-    // turned up. At 0.2 the search swept ~3 world units, wider than the props
-    // themselves, so most samples found no blocker, every penumbra estimate came
-    // out enormous and the frame lost its shadows entirely — verified against a
-    // PCF frame of the same hideout, chest and map device both bare. 0.07 is the
-    // largest value where the shadows are still there.
-    shadows.contactHardeningLightSizeUVRatio = 0.07;
-    shadows.filteringQuality = ShadowGenerator.QUALITY_MEDIUM;
-    shadows.darkness = 0.12; // deep, but the flagstones still read through them
-    // Offset the shadow lookup along the receiving surface's own normal, which is
-    // what stops a lit face shadowing ITSELF. A prop is both caster and receiver,
-    // and where this sun rakes a flat top the depth it stored and the depth it
-    // tests differ by less than a texel: the tabletop came out ringed with
-    // concentric moire that swam across the wood as the player moved, because the
-    // frustum is dragged along behind the camera every frame. Proved by turning
-    // reception off on that one mesh, which cleared it while SSAO and the torch's
-    // own shadows were already ruled out. Along the normal and not a flat depth
-    // bias: a plain bias big enough for this detaches every contact shadow from
-    // the thing casting it.
-    shadows.normalBias = 0.02;
-    // Every actor part the renderer spawns later becomes a caster on its own, so
-    // the renderer never has to know a shadow generator exists. The ground is the
-    // only mesh alive at this point, and it only receives.
-    // Telegraph meshes (fill disc + rim torus, named "telegraph-*") must not cast
-    // shadows — they are unlit VFX decals and a shadow from them would look wrong.
-    //
-    // Neither may level walls ("wallrun-*", and the merged mesh Babylon names
-    // "<first source>_merged"). Two reasons, both found by running an assembled
-    // map rather than the old disc:
-    //  - A 3.5-unit wall under this low sun throws a ~9-unit shadow, longer than
-    //    a room is wide, so at darkness 0.12 every room went to unplayable black.
-    //    The disc had almost no walls, which is why it never showed before.
-    //  - buildLevel makes one box per wall run and merges them, disposing the
-    //    sources; the render list kept every disposed box, 817 of them after one
-    //    map, and grew again on each area change.
-    // The boulders are the exception, cast back in: what made a room unplayable
-    // was a 3.5-unit run throwing ONE CONTINUOUS 9-unit band, and the boulders
-    // that replaced those runs are capped at 1.52 and stand apart, so they throw
-    // separated ~4-unit smears with lit floor between them. That is exactly the
-    // floor in `inside-map-battle.webp`, where the long hard shadows carry most
-    // of the depth. The rampart stays out — 3.2 units in an unbroken ring is the
-    // continuous band again, and it rings the map where nothing needs to read.
-    // This sees a mesh's name ONCE, when it is added, so a mesh renamed later is
-    // already registered under whatever it was called first. That is how the
-    // merged wall mesh has been casting all along: it used to be renamed to
-    // WALL_MESH_NAME after the merge, so this filter only ever saw Babylon's
-    // default. `buildLevel` now merges INTO a mesh already called that, which is
-    // the only reason matching on it here works.
-    // The coast's berm is cast back in for the same reason as the boulders: it
-    // is the same height, it is discrete, and without a shadow a metre of sand
-    // reads as painted onto the beach rather than standing on it. Its outer
-    // ridge and its scrub stay out — the ridge is the rampart's unbroken band
-    // again, and a few hundred grass clumps are the one thing on this boundary
-    // not worth a shadow map update.
-    const isLevelGeometry = (name: string): boolean =>
-      (name.startsWith("wallrun-") &&
-        !name.startsWith(ROCK_MESH_PREFIX) &&
-        !name.startsWith(DUNE_MESH_PREFIX)) ||
-      name === WALL_MESH_NAME ||
-      // The sea is a sheet covering everything outside the rim: casting from it
-      // would put the whole void in shadow, and it is born with this name for
-      // the same reason the wall mesh is.
-      name === SEA_MESH_NAME;
     // The torch throws its own shadows, and it is the only light that may throw
     // them off a wall: the sun's problem was a 3.5-unit run smearing one 9-unit
     // band across a whole room, but the torch stands INSIDE the room at the
@@ -825,7 +767,7 @@ export function createScene(engine: Engine): SceneHandle {
     torch.shadowMinZ = 0.4;
     torch.shadowMaxZ = TORCH_RANGE;
     const torchShadows = new ShadowGenerator(1024, torch);
-    // See the sun generator: back-faces-only turns every boulder base black.
+    // See the note above the sun: back-faces-only turns every boulder base black.
     torchShadows.usePercentageCloserFiltering = true;
     torchShadows.filteringQuality = ShadowGenerator.QUALITY_LOW; // x6 faces
     torchShadows.darkness = 0.35; // softer than the sun's: fill still reaches in
@@ -886,31 +828,30 @@ export function createScene(engine: Engine): SceneHandle {
       const reach = torch.range + bs.radiusWorld + 2;
       return dx * dx + dy * dy + dz * dz <= reach * reach;
     };
-    scene.onNewMeshAddedObservable.add((mesh) => {
-      if (mesh.name.startsWith("telegraph-") || mesh.name.startsWith("groundblob-")
-        || mesh === ground || isLevelGeometry(mesh.name)) {
-        return;
-      }
-      // The fire is light, not a thing standing in light: an ember that cast
-      // would put a flicker of shadow under every brazier in the room, and
-      // there are a thousand of them in a frame.
-      if (mesh.name === FLAME_MESH) return;
-      shadows.addShadowCaster(mesh);
-    });
-    // And the floor itself, belt and braces: it is registered by the time the
-    // first frame runs even though it is created above this block, so the filter
-    // alone does not clear it. A flat plane with nothing under it can only ever
-    // cast onto ITSELF, and at this sun angle that self-shadow landed as a faint
-    // diagonal stripe across every lit surface in the frame — shadow acne at the
-    // shadow map's texel pitch, which no bias tuning fixes as cheaply as simply
-    // not casting. It still receives.
-    shadows.removeShadowCaster(ground);
-    torchShadows.removeShadowCaster(ground);
+    // Nothing is registered as a caster any more, because the sun renders no
+    // shadow map to put one in. What used to run here was an observer on EVERY
+    // mesh added to the scene, pushing into `shadowMap.renderList` — and that is
+    // an observed array whose `_renderListHasChanged` marks every mesh in the
+    // scene light-dirty whenever it goes empty or leaves empty. An area change
+    // disposes several hundred meshes and builds several hundred more, all
+    // through that list, for a map that is never drawn.
+    //
+    // It also had a standing leak: `wallrun-*` boxes disposed by the merge never
+    // came back out of the list, 817 of them after one map and more on each area
+    // change. Both problems disappear with the registration.
+    //
+    // To put the sun's shadows back: restore this observer against
+    // `isLevelGeometry`, telegraph decals, `groundblob-*` and FLAME_MESH (a
+    // thousand embers a frame, each one light rather than a thing standing in
+    // light), re-enable `sun.shadowEnabled` in `applyGraphics`, and put back the
+    // `cullShadowCasters(shadows)` below. Note the floor was a special case even
+    // then: it is registered before that filter exists, and a flat plane with
+    // nothing under it can only cast onto ITSELF — at this sun angle that landed
+    // as a faint diagonal stripe across every lit surface, shadow acne at the
+    // map's texel pitch, which no bias tuning fixes as cheaply as not casting.
 
-    // Neither map may submit a caster its own frustum cannot see. The sun's list
-    // is every mesh in the level while its ortho box brackets only the 32 units
-    // on screen; the torch's is submitted six times, once per cube face.
-    cullShadowCasters(shadows);
+    // The torch's map may not submit a caster its own frustum cannot see: its
+    // list is handed to all six cube faces unculled otherwise.
     cullShadowCasters(torchShadows, torchCasts);
 
     // Walk the light along with the camera so the frustum always brackets what
