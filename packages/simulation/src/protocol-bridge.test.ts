@@ -72,7 +72,7 @@ describe("buildSnapshot", () => {
     const cmd = intentToCommand(intent, playerEntity, 0);
     sim.step([cmd]);
     const snap = buildSnapshot(world, sim, sim.tick, CONTENT_VERSION);
-    expect(snap.player.cooldowns["skill.ember_bolt.v1"]).toBeCloseTo(14 / 30, 5);
+    expect(snap.player.cooldowns["skill.ember_bolt.v1"]).toBeCloseTo(29 / 30, 5);
   });
 
   it("monster entities appear in snapshot sorted by id with life/maxLife/rare", () => {
@@ -412,12 +412,12 @@ describe("buildSnapshot - skills", () => {
     expect(bolt!.name).toBe("Ember Bolt");
     expect(bolt!.description.length).toBeGreaterThan(0);
     expect(bolt!.manaCost).toBe(10);
-    // Nine cast ticks and fifteen cooldown ticks at 30 Hz, with no cast speed on the base build.
+    // Nine cast ticks and thirty cooldown ticks at 30 Hz, with no cast speed on the base build.
     expect(bolt!.castTimeSec).toBeCloseTo(9 / 30, 5);
-    expect(bolt!.cooldownSec).toBeCloseTo(15 / 30, 5);
+    expect(bolt!.cooldownSec).toBeCloseTo(30 / 30, 5);
     // 36 fire damage per REPEAT, and the cooldown is the longer of the two, so the
     // DPS column quotes the rate a held button actually delivers.
-    expect(bolt!.dps).toBeCloseTo(36 / (15 / 30), 3);
+    expect(bolt!.dps).toBeCloseTo(36 / (30 / 30), 3);
     expect(bolt!.lines).toContain("Deals 36 Fire Damage");
   });
 

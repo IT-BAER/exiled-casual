@@ -78,10 +78,10 @@ describe("SKILLS", () => {
     }
   });
 
-  it("ember_bolt manaCostFixed === fp(10) and cooldownTicks === 15", () => {
+  it("ember_bolt manaCostFixed === fp(10) and cooldownTicks === 30", () => {
     const def = SKILLS.get("skill.ember_bolt.v1")!;
     expect(def.manaCostFixed).toBe(fp(10));
-    expect(def.cooldownTicks).toBe(15);
+    expect(def.cooldownTicks).toBe(30);
   });
 
   /**

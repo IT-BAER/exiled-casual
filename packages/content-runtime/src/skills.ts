@@ -11,11 +11,12 @@ const SKILL_DEFS: SkillDef[] = [
      * back. The cooldown must stay ABOVE it: at eight it never bound, so a held
      * button chained casts nose to tail with a two-tick gap and the wind-up
      * stopped reading as one — the first bolt looked like it cost time and every
-     * bolt after it looked free. Fifteen leaves a beat between bolts, and matches
-     * every other attack skill.
+     * bolt after it looked free. Thirty is one second at 30 Hz: a held button
+     * fires on a beat the ear can count, which is what the cast animation is now
+     * paced to.
      */
     manaCostFixed: fp(10),
-    cooldownTicks: 15,
+    cooldownTicks: 30,
     castTicks: 9,
     critChancePct: 7,
     effects: [
@@ -33,7 +34,7 @@ const SKILL_DEFS: SkillDef[] = [
     name: "Cinder Ground",
     description: "Scorches the ground at a location, burning enemies who stand in the cinders.",
     manaCostFixed: fp(20),
-    cooldownTicks: 30,
+    cooldownTicks: 90,
     castTicks: 9,
     effects: [
       {
@@ -129,7 +130,7 @@ const SKILL_DEFS: SkillDef[] = [
     name: "Blink",
     description: "Teleport a short distance. Shares a cooldown with other movement skills.",
     manaCostFixed: fp(15),
-    cooldownTicks: 90,
+    cooldownTicks: 150,
     effects: [{ type: "teleport", distanceFixed: fp(5) }],
   },
 ];

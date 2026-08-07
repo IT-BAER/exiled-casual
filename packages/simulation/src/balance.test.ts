@@ -30,6 +30,18 @@ import type { Health, Mana, Position, MonsterC } from "./components";
  *   kill    imp 0.6s | pack of five 1.2s | rare 3.2s (6.4s vs its own element)
  *           Cinder Warden 19.2s | Ghaltrek 17.7s | Mother Vhal 19.7s | Sirrath 26.7s
  *
+ * Re-measured at the cooldown retune (bolt 0.5s -> 1s, ground 1s -> 3s, blink
+ * 3s -> 5s), same character, same content otherwise:
+ *
+ *   kill    swamp boss 11.7s | forest 12.6s | coast 11.7s
+ *           swarm 4.0s | brute 5.5s | shooter 3.4s | heavy 6.7s
+ *
+ * Bosses got SHORTER while trash got longer, and the two have one cause between
+ * them: mana. A boss fight is long enough to be paid for by regeneration, and
+ * Cinder Ground's 3-second field on a 3-second cooldown holds the same uptime it
+ * always did for a third of the mana, so the freed pool buys bolts. Trash dies
+ * inside the opening full pool, where a halved bolt rate is simply half the rate.
+ *
  * The four bosses share one life pool and still measure 9 seconds apart, because
  * what is timed is the FIGHT and not the boss: Sirrath's phase two brings four
  * skitterers where the Warden's brings two imps, and the clear is not over until
@@ -263,17 +275,23 @@ describe("time to kill", () => {
   );
 
   /**
-   * Every map ends on its biome's boss, and a map boss is a ~20 second fight —
+   * Every map ends on its biome's boss, and a map boss is a ~12 second fight —
    * that is the design intent, and it is the same intent in all four biomes. The
    * three added with the models are not tuned to their own bands: they share the
    * Warden's life and are held to the Warden's band, so a biome cannot quietly
    * become the fast one to farm.
+   *
+   * It was ~20 seconds until the cooldown retune, and the boss life behind it did
+   * not move: Cinder Ground's field lasts 3 seconds, so putting its cooldown at 3
+   * bought the same permanent uptime for a third of the mana, and the freed pool
+   * pays for bolts. Bolt damage is not the lever here — doubling it takes the
+   * fight to 7.7s, and shortening the field to 1.5s does not move it at all.
    */
-  it.each(Object.entries(BOSSES))("the %s boss takes between 15 and 40 seconds", (_biome, defId) => {
+  it.each(Object.entries(BOSSES))("the %s boss takes between 10 and 40 seconds", (_biome, defId) => {
     const r = rig();
     spawnMonster(r.world, MONSTERS.get(defId)!, fp(0), SPAWN_Y, false);
     const secs = ticksToClear(r).ticks / HZ;
-    expect(secs).toBeGreaterThan(15);
+    expect(secs).toBeGreaterThan(10);
     expect(secs).toBeLessThan(40);
   });
 });
@@ -371,10 +389,13 @@ function secondsToKillIdlePlayer(biomeId: BiomeId): number {
 
 describe("archetype time-to-kill (Tier 1, reference character)", () => {
   const bands: Record<string, { defId: string; min: number; max: number }> = {
-    swarm:   { defId: "monster.vaal_husk.v1",      min: 2, max: 4 },
+    // Trash drifted the other way from the bosses at the cooldown retune: a short
+    // fight opens on a full mana pool, so halving the bolt's rate is not paid back
+    // by the pool the boss fight lives off. Measured 4.0 / 5.5 / 3.4 / 6.7s.
+    swarm:   { defId: "monster.vaal_husk.v1",      min: 2, max: 5 },
     brute:   { defId: "monster.vaal_construct.v1", min: 4, max: 7 },
     shooter: { defId: "monster.dune_spitter.v1",   min: 2, max: 5 },
-    heavy:   { defId: "monster.blood_sentinel.v1", min: 3, max: 6 },
+    heavy:   { defId: "monster.blood_sentinel.v1", min: 3, max: 8 },
   };
 
   for (const [archetype, band] of Object.entries(bands)) {

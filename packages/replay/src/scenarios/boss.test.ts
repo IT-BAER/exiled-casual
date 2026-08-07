@@ -62,8 +62,10 @@ describe("boss golden (c): slam telegraph deals damage on impact", () => {
 describe("boss golden (d): reset tears down the boss encounter", () => {
   it("activating the return portal removes the boss, its adds, and any telegraphs", () => {
     const a = buildBossArena(BOSS_SEED, { nearPhase2: true });
-    const cmds = boltSpamCommands(a.playerEntity, 60);
-    for (let t = 0; t < 60; t++) a.sim.step(cmds[t] ?? []);
+    // Long enough to reach phase 2 at the bolt's own rate: the setup here is a
+    // live encounter with adds, and the assertion is what the portal tears down.
+    const cmds = boltSpamCommands(a.playerEntity, 120);
+    for (let t = 0; t < 120; t++) a.sim.step(cmds[t] ?? []);
 
     // Precondition: a live phase-2 encounter with adds.
     expect(a.world.query("boss")).toHaveLength(1);
