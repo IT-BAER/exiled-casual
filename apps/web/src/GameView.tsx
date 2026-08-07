@@ -220,6 +220,20 @@ export function GameView({
       powerPreference: "high-performance",
       doNotHandleContextLost: true,
     });
+    // A lost GL context (GPU reset, driver update, too many live contexts) leaves
+    // a dead canvas. We skip Babylon's in-place restore on purpose (the scene
+    // rebuilds cleanly from a reload, and the restore machinery is bookkeeping on
+    // every frame for a case this rarely hits) and reload instead. The guard
+    // stops a reload loop when the loss recurs during load: reload once, then if
+    // the session survives, clear the flag so a later loss can try again.
+    const onContextLost = (ev: Event) => {
+      ev.preventDefault(); // without this the browser never fires a restore
+      if (sessionStorage.getItem("gl-reloaded")) return;
+      sessionStorage.setItem("gl-reloaded", "1");
+      location.reload();
+    };
+    canvas.addEventListener("webglcontextlost", onContextLost);
+    const glGuardTimer = window.setTimeout(() => sessionStorage.removeItem("gl-reloaded"), 8000);
     const { scene, camera, detachZoom } = createScene(engine);
     sceneRef.current = scene;
     cameraRef.current = camera;
@@ -546,7 +560,8 @@ export function GameView({
       void enablePhysics(scene);
     });
 
-    window.addEventListener("resize", () => engine.resize());
+    const onResize = () => engine.resize();
+    window.addEventListener("resize", onResize);
 
     // i = inventory, c = character sheet. Both render-only; the sim never hears
     // about either, and both can be open at once the way PoE2 has them.
@@ -603,6 +618,9 @@ export function GameView({
       detach();
       detachZoom(); // the canvas outlives the engine, so its listener must go
       window.removeEventListener("keydown", onInvKey);
+      window.removeEventListener("resize", onResize);
+      canvas.removeEventListener("webglcontextlost", onContextLost);
+      window.clearTimeout(glGuardTimer);
       resetPlayerRig(); // containers belong to the scene we are about to dispose
       resetProps();
       resetFireLights();

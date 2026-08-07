@@ -52,18 +52,28 @@ self.addEventListener("fetch", (event) => {
   }
 
   event.respondWith(
-    caches.match(req).then(
-      (hit) =>
-        hit ??
-        fetch(req).then((res) => {
-          // Opaque and error responses are not worth keeping: a cached 404 is a
-          // file that stays broken until the cache version changes.
-          if (res.ok && res.type === "basic") {
-            const copy = res.clone();
-            void caches.open(CACHE).then((c) => c.put(req, copy));
-          }
-          return res;
-        }),
-    ),
+    caches.match(req).then((hit) => {
+      const fresh = fetch(req).then((res) => {
+        // Opaque and error responses are not worth keeping: a cached 404 is a
+        // file that stays broken until the cache version changes.
+        if (res.ok && res.type === "basic") {
+          const copy = res.clone();
+          void caches.open(CACHE).then((c) => c.put(req, copy));
+        }
+        return res;
+      });
+      // Vite's content-hashed bundles under /assets/ never change under their
+      // name, so a cache hit is authoritative and no fetch is worth spending.
+      if (hit && url.pathname.startsWith("/assets/")) return hit;
+      // Everything else (wardrobe.glb, monsters.glb, textures, physics wasm) has
+      // a stable name but mutable contents: serve the cached copy at once, then
+      // refresh it in the background so a redeploy is at most one load stale
+      // instead of pinned until CACHE is bumped.
+      if (hit) {
+        void fresh.catch(() => {});
+        return hit;
+      }
+      return fresh;
+    }),
   );
 });
