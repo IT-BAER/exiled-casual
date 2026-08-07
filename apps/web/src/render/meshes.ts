@@ -1094,29 +1094,51 @@ function buildStash(scene: Scene, root: Mesh): void {
  * texture per scene, one cheap unlit quad per prop, excluded from both shadow
  * generators by its name (engine.ts).
  */
-const BLOB_TEXTURES = new WeakMap<Scene, DynamicTexture>();
+const BLOB_MATERIALS = new WeakMap<Scene, StandardMaterial>();
 
-export function standGroundBlob(scene: Scene, root: Mesh, rx: number, rz = rx): void {
-  let tex = BLOB_TEXTURES.get(scene);
-  if (!tex) {
+/**
+ * One material for every blob in the scene, not one per prop.
+ *
+ * They are all the same unlit black quad over the same gradient, and since the
+ * sun stopped casting this is what grounds a MONSTER too — a swarm would
+ * otherwise be a StandardMaterial each, and each one is its own state change at
+ * draw time for a difference no pixel can show.
+ */
+function blobMaterial(scene: Scene): StandardMaterial | null {
+  let mat = BLOB_MATERIALS.get(scene);
+  if (mat) return mat;
+  // A DynamicTexture wants a canvas, and there is none under NullEngine — the
+  // same headless hole the shadow generators and the GlowLayer sit behind. Every
+  // actor goes through here now, so an unguarded throw takes the whole renderer
+  // down in tests rather than costing one soft quad.
+  let tex: DynamicTexture;
+  try {
     tex = new DynamicTexture("groundblob-tex", 128, scene, false);
-    const ctx = tex.getContext();
-    const g = ctx.createRadialGradient(64, 64, 10, 64, 64, 64);
-    g.addColorStop(0, "rgba(0,0,0,0.5)");
-    g.addColorStop(0.6, "rgba(0,0,0,0.26)");
-    g.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, 128, 128);
-    tex.update();
-    tex.hasAlpha = true;
-    BLOB_TEXTURES.set(scene, tex);
+  } catch {
+    return null;
   }
-  const mat = new StandardMaterial(`${root.name}-blob`, scene);
+  const ctx = tex.getContext();
+  const g = ctx.createRadialGradient(64, 64, 10, 64, 64, 64);
+  g.addColorStop(0, "rgba(0,0,0,0.5)");
+  g.addColorStop(0.6, "rgba(0,0,0,0.26)");
+  g.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 128, 128);
+  tex.update();
+  tex.hasAlpha = true;
+  mat = new StandardMaterial("groundblob-mat", scene);
   mat.diffuseColor = Color3.Black();
   mat.specularColor = Color3.Black();
   mat.emissiveColor = Color3.Black();
   mat.opacityTexture = tex;
   mat.disableLighting = true;
+  BLOB_MATERIALS.set(scene, mat);
+  return mat;
+}
+
+export function standGroundBlob(scene: Scene, root: Mesh, rx: number, rz = rx): void {
+  const mat = blobMaterial(scene);
+  if (!mat) return;
   const quad = MeshBuilder.CreateGround(`groundblob-${root.name}`, { width: rx * 2, height: rz * 2 }, scene);
   // Above the floor decals (rug sits at 0.012) but under everything solid.
   quad.position.y = 0.015;
@@ -1355,6 +1377,11 @@ export function makeMesh(
   // clone/thin-instance it instead.
   if (kind === "player" || kind === "monster" || kind === "rare" || kind === "boss") {
     const root = new Mesh(name, scene); // empty container; renderer positions this
+    // What stands an actor ON the floor, now that the sun casts nothing. Built
+    // FIRST, before the `rare`/`boss` scaling below, so it grows with the body
+    // it belongs to instead of needing a size of its own per kind. Every actor
+    // sits at Y_LIFT 0, so the quad's own 0.015 clears the floor decals.
+    standGroundBlob(scene, root, 0.42);
     if (kind === "player") {
       // Skinned humanoid when its assets loaded; the primitive caster is the
       // fallback for headless tests and for a failed model fetch.

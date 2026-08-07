@@ -218,19 +218,26 @@ export function applyGraphics(scene: Scene, engine: Engine | null, g: GraphicsSe
   // about the LOCAL lights only: Low is the torch alone, High adds the fires.
   const sun = scene.getLightByName("sun");
   if (sun) sun.shadowEnabled = false;
-  // Both are POINT lights, so each shadow map is a six-face cube. The torch is
-  // the one that follows the player and is therefore always the one worth
-  // paying for first; the four fires are a bonus on top.
+  // The torch is the only light in the game that casts, and the setting is how
+  // OFTEN its cube is redrawn rather than whether it exists. Six faces at 1024
+  // is the single most expensive thing in the frame, and a skipped frame keeps
+  // the cube it drew last time, so High tracks the player exactly and Low lets
+  // his shadows sit up to 33 ms behind him. That is a difference you can see in
+  // motion, which is more than the old ladder managed.
   const torch = scene.getLightByName("torch");
   if (torch) {
     torch.shadowEnabled = g.shadows !== "off";
     torch.diffuse = torchColor(g.torchWarmth);
+    const map = torch.getShadowGenerator()?.getShadowMap();
+    if (map) map.refreshRate = g.shadows === "high" ? 1 : 2;
   }
-  // Looking the fires up by prefix also covers a pool whose size changes later.
+  // The fires never cast, same call as the sun: `darkness = 0.6` on a 512 map
+  // refreshed one cube per frame means a fire shadow removes 40% of ONE light in
+  // a room lit by several, and the owner could not pick Low from High in the
+  // hideout while paying 15 fps for it. Looking them up by prefix also covers a
+  // pool whose size changes later.
   for (const light of scene.lights) {
-    if (light.name.startsWith("firelight-")) {
-      light.shadowEnabled = g.shadows === "high";
-    }
+    if (light.name.startsWith("firelight-")) light.shadowEnabled = false;
   }
 
   const pipelines = scene.postProcessRenderPipelineManager?.supportedPipelines;

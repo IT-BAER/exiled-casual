@@ -79,18 +79,24 @@ describe("applyGraphics", () => {
     new ShadowGenerator(128, torch);
     new ShadowGenerator(128, fire);
 
+    const torchMap = torch.getShadowGenerator()!.getShadowMap()!;
+
     applyGraphics(scene, engine, { ...DEFAULT_SETTINGS.graphics, shadows: "low" });
     expect(sun.shadowEnabled).toBe(false);
-    // The torch is the light that follows the player, so it is the one worth
-    // paying for first; the four fire cubes are what High adds on top.
-    expect(torch.shadowEnabled).toBe(true);
-    expect(fire.shadowEnabled).toBe(false); // every point shadow is six faces
-
-    applyGraphics(scene, engine, { ...DEFAULT_SETTINGS.graphics, shadows: "off" });
     expect(fire.shadowEnabled).toBe(false);
+    // The torch is the only light left that casts, so Low and High are how often
+    // its cube is redrawn: every other frame against every frame.
+    expect(torch.shadowEnabled).toBe(true);
+    expect(torchMap.refreshRate).toBe(2);
 
     applyGraphics(scene, engine, { ...DEFAULT_SETTINGS.graphics, shadows: "high" });
-    expect(fire.shadowEnabled).toBe(true);
+    expect(torch.shadowEnabled).toBe(true);
+    expect(torchMap.refreshRate).toBe(1);
+    expect(fire.shadowEnabled).toBe(false);
+
+    applyGraphics(scene, engine, { ...DEFAULT_SETTINGS.graphics, shadows: "off" });
+    expect(torch.shadowEnabled).toBe(false);
+    expect(fire.shadowEnabled).toBe(false);
     engine.dispose();
   });
 
