@@ -14,6 +14,7 @@ import {
   resetFireFlames,
   updateFireFlames,
 } from "./flames";
+import { cullShadowCasters } from "./shadow-cull";
 
 /**
  * The fires the world is lit by, as opposed to the one the player carries.
@@ -231,6 +232,10 @@ function castFrom(scene: Scene, light: PointLight | undefined): void {
     // frame rate each, firelight shadows are soft and flickering anyway and the
     // lag is not readable.
     gen.getShadowMap()!.refreshRate = RenderTargetTexture.REFRESHRATE_RENDER_ONCE;
+    // ...and only the casters each face can see. A bowl's reach is 11 units in a
+    // room the whole level is a caster in, so this is where the cube stops being
+    // six passes over everything standing near the fire.
+    cullShadowCasters(gen);
   } catch {
     /* no render targets under NullEngine — lit but unshadowed is fine in tests */
   }

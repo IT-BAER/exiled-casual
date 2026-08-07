@@ -25,6 +25,7 @@ import { SEA_MESH_NAME } from "./sea";
 import { createHaze, createMotes } from "./haze";
 import { FLAME_MESH } from "./flames";
 import { createFireLights, LIGHT_POOL, setFireLightZoom, updateFireLights } from "./lights";
+import { cullShadowCasters } from "./shadow-cull";
 
 /**
  * Light intensities for a PBR scene. Roughly PI times the values the old
@@ -872,6 +873,12 @@ export function createScene(engine: Engine): SceneHandle {
     // not casting. It still receives.
     shadows.removeShadowCaster(ground);
     torchShadows.removeShadowCaster(ground);
+
+    // Neither map may submit a caster its own frustum cannot see. The sun's list
+    // is every mesh in the level while its ortho box brackets only the 32 units
+    // on screen; the torch's is submitted six times, once per cube face.
+    cullShadowCasters(shadows);
+    cullShadowCasters(torchShadows);
 
     // Walk the light along with the camera so the frustum always brackets what
     // the player can see. Backwards along the light direction, and high enough
