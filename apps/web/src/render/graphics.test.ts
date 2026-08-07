@@ -63,12 +63,14 @@ describe("applyGraphics", () => {
     expect(sun.getShadowGenerator()).toBe(sunGen);
 
     applyGraphics(scene, engine, { ...DEFAULT_SETTINGS.graphics, shadows: "high" });
-    expect(sun.shadowEnabled).toBe(true);
+    // ...but never the sun, at any setting. It costs a 2048 contact-hardened map
+    // and ~380 casters a frame for a difference the owner could not see.
+    expect(sun.shadowEnabled).toBe(false);
     expect(torch.shadowEnabled).toBe(true);
     engine.dispose();
   });
 
-  it("low keeps the sun and drops every point-light cube map", () => {
+  it("low is the torch alone and high adds the fires, and the sun never casts", () => {
     const { engine, scene } = bareScene();
     const sun = new DirectionalLight("sun", new Vector3(0, -1, 0), scene);
     const torch = new PointLight("torch", new Vector3(0, 2, 0), scene);
@@ -78,8 +80,10 @@ describe("applyGraphics", () => {
     new ShadowGenerator(128, fire);
 
     applyGraphics(scene, engine, { ...DEFAULT_SETTINGS.graphics, shadows: "low" });
-    expect(sun.shadowEnabled).toBe(true);
-    expect(torch.shadowEnabled).toBe(false); // a cube map is six faces
+    expect(sun.shadowEnabled).toBe(false);
+    // The torch is the light that follows the player, so it is the one worth
+    // paying for first; the four fire cubes are what High adds on top.
+    expect(torch.shadowEnabled).toBe(true);
     expect(fire.shadowEnabled).toBe(false); // every point shadow is six faces
 
     applyGraphics(scene, engine, { ...DEFAULT_SETTINGS.graphics, shadows: "off" });

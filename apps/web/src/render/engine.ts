@@ -213,18 +213,20 @@ export function applyGraphics(scene: Scene, engine: Engine | null, g: GraphicsSe
 
   // Shadows. `shadowEnabled` and NOT disposing the generator: disposing is a
   // one-way door, and the whole point of a live setting is that it comes back.
+  // The sun never casts, at any setting — see the generator in `createScene`.
+  // Ground blobs pin things to the floor instead, so the ladder below is now
+  // about the LOCAL lights only: Low is the torch alone, High adds the fires.
   const sun = scene.getLightByName("sun");
-  if (sun) sun.shadowEnabled = g.shadows !== "off";
-  // The torch and fires are POINT lights, so each shadow map is a six-face cube.
-  // Low keeps only the directional sun; High restores every local shadow.
+  if (sun) sun.shadowEnabled = false;
+  // Both are POINT lights, so each shadow map is a six-face cube. The torch is
+  // the one that follows the player and is therefore always the one worth
+  // paying for first; the four fires are a bonus on top.
   const torch = scene.getLightByName("torch");
   if (torch) {
-    torch.shadowEnabled = g.shadows === "high";
+    torch.shadowEnabled = g.shadows !== "off";
     torch.diffuse = torchColor(g.torchWarmth);
   }
-  // Every local point-light shadow is a six-face cube map. Low keeps the one
-  // directional sun map; only High pays for the torch and fire cubes. Looking
-  // the fires up by prefix also covers a pool whose size changes later.
+  // Looking the fires up by prefix also covers a pool whose size changes later.
   for (const light of scene.lights) {
     if (light.name.startsWith("firelight-")) {
       light.shadowEnabled = g.shadows === "high";
@@ -719,7 +721,15 @@ export function createScene(engine: Engine): SceneHandle {
     sun.shadowMinZ = SUN_DISTANCE - 35;
     sun.shadowMaxZ = SUN_DISTANCE + 35;
 
+    // The sun casts NOTHING. Owner's call, 2026-08-07: a 2048 map, contact
+    // hardening and ~380 casters a frame, and at `low` (which keeps only this
+    // one) against `high` he could not see a difference in the Strand at all.
+    // What grounds a prop now is the soft pool `standGroundBlob` puts under it,
+    // and the torch and the fires still throw real shadows where a real light
+    // stands. Kept as a disabled generator rather than deleted so the frustum
+    // tuning above, which took a lot of looking, is still here to switch back on.
     const shadows = new ShadowGenerator(2048, sun);
+    sun.shadowEnabled = false;
     // No forceBackFacesOnly here: it halves the shadow-map draw but stores the
     // FAR side of a closed boulder, so the floor at its own base sits behind
     // that depth and self-shadows into hard black squares that fight per frame.
