@@ -8,6 +8,7 @@ import {
 } from "@babylonjs/core";
 import { addRim } from "./rim";
 import { idleRatio } from "./rig";
+import { warmContainer } from "./warm-shaders";
 
 /**
  * Every creature in the game as one authored glTF.
@@ -45,11 +46,12 @@ export function loadMonsters(scene: Scene): Promise<void> {
   if (pending) return pending;
 
   pending = LoadAssetContainerAsync(MONSTERS_URL, scene)
-    .then((container) => {
+    .then(async (container) => {
       // Once, on the container's own materials: every instance shares them, so
       // a rim added here reaches all forty creatures for three uniforms.
       for (const material of container.materials) addRim(material);
       loaded = { scene, container };
+      await warmContainer(container);
     })
     .catch(() => {
       loaded = null;

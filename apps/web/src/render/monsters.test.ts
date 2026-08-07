@@ -3,7 +3,8 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { MONSTERS } from "@exiled/content-runtime";
 import { partOfCreature, CreatureRig } from "./monsters";
-import type { AnimationGroup } from "@babylonjs/core";
+import { warmContainer } from "./warm-shaders";
+import type { AnimationGroup, AssetContainer } from "@babylonjs/core";
 
 /**
  * `monsters.glb` is built offline by `tools/build_monsters.py`, and the runtime
@@ -178,6 +179,46 @@ describe("monsters asset", () => {
    * measured 29KB in total, so the third clip per species is a rounding against
    * the mesh and the hides. The lever is still compression.
    */
+  /**
+   * The shader warm that ends the map-entry stall. Every instance of a species
+   * shares one container material, so the effect is compiled ONCE against a
+   * source mesh that wears it — one compile per distinct material, never per
+   * mesh, and never on a material-less mesh. A regression that compiled per mesh
+   * would warm forty shaders for seventeen materials and lengthen the plate for
+   * nothing; one that fed a mesh not wearing the material would compile the
+   * wrong defines and leave the stall in place.
+   */
+  it("compiles one shader per distinct material, on a mesh that wears it", async () => {
+    const calls: { material: unknown; mesh: unknown }[] = [];
+    const makeMat = (id: string) => {
+      const self = {
+        id,
+        forceCompilationAsync(mesh: unknown) {
+          calls.push({ material: self, mesh });
+          return Promise.resolve();
+        },
+      };
+      return self;
+    };
+    const a = makeMat("a");
+    const b = makeMat("b");
+    const container = {
+      meshes: [
+        { name: "m1", material: a },
+        { name: "m2", material: a },
+        { name: "m3", material: b },
+        { name: "m4", material: null },
+      ],
+    } as unknown as AssetContainer;
+
+    await warmContainer(container);
+
+    expect(calls.length).toBe(2);
+    for (const call of calls) {
+      expect((call.mesh as { material: unknown }).material).toBe(call.material);
+    }
+  });
+
   it("embeds compressed textures and stays within budget", () => {
     for (const image of json.images) expect(image.mimeType).toBe("image/jpeg");
     expect(json.images.length).toBeLessThanOrEqual(12);

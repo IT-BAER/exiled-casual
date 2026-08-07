@@ -6,6 +6,7 @@ import {
   type Node,
   type Scene,
 } from "@babylonjs/core";
+import { warmContainer } from "./warm-shaders";
 
 /**
  * The hideout props — the two interactables and the furniture — as one authored glTF.
@@ -62,13 +63,17 @@ export function loadProps(scene: Scene): Promise<void> {
   if (pending) return pending;
 
   pending = LoadAssetContainerAsync(PROPS_URL, scene)
-    .then((container) => {
+    .then(async (container) => {
       // On the SOURCE, because a shared prop is an `InstancedMesh` and setting
       // this on one of those is a no-op that warns. Every prop in this file
       // stands on a floor the sun and the torch both light, so there is no kind
       // that wants it off, and a clone inherits it from here too.
       for (const mesh of container.meshes) mesh.receiveShadows = true;
       loaded = { scene, container };
+      // The hideout dresses itself from this container on arrival — 186 active
+      // meshes held out of the scene until then, whose shaders otherwise compile
+      // as they first draw. That is the return-to-hideout ramp. Warm them here.
+      await warmContainer(container);
     })
     .catch(() => {
       loaded = null;
