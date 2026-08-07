@@ -220,7 +220,10 @@ export function generateCoast(
   // walk still connects: a blob that pinches the beach shut is the one failure
   // this shape can have, and it costs one flood to rule out.
   const blobRng = createStream(seed, `${contentVersion}.coast.blobs`);
-  const startX = END_MARGIN + 6;
+  // Far enough down the beach that there is still beach BEHIND the arrival: the
+  // way home stands back there, and one cell inside the end margin is floor the
+  // edge ledge leans over.
+  const startX = END_MARGIN + 14;
   const bossX = COAST_CELLS - 1 - END_MARGIN - Math.floor(BOWL_LEN / 2);
   const midY = (x: number): number => Math.round((profile.shore[x]! + profile.cliff[x]!) / 2);
   const startCanon = { x: startX, y: midY(startX) };

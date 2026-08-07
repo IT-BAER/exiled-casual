@@ -107,6 +107,26 @@ describe("generateCoast", () => {
     }
   });
 
+  it("stands the way out in open sand, not against the end of the beach", () => {
+    // A cell a body fits in is not a cell a PORTAL fits in. The first attempt at
+    // "behind him" landed one cell inside the end margin, which is floor and
+    // passes every walk gate, and the edge ledge leans over it: the doorway came
+    // out half buried in rock. Clearance is what the eye reads, so pin clearance.
+    const R = 4; // cells, so two world units of sand on every side
+    for (const seed of SEEDS) {
+      const l = generateCoast(seed, V, 16);
+      const exit = l.objectiveAnchors.find((a) => a.id === "exit")!;
+      const cx = Math.round((exit.x - l.grid.originX) / CELL_SIZE);
+      const cy = Math.round((exit.y - l.grid.originY) / CELL_SIZE);
+      for (let dy = -R; dy <= R; dy++) {
+        for (let dx = -R; dx <= R; dx++) {
+          const i = (cy + dy) * COAST_CELLS + (cx + dx);
+          expect(l.grid.cells[i], `seed ${seed} at ${dx},${dy}`).toBe(1);
+        }
+      }
+    }
+  });
+
   it("pays out along the way", () => {
     for (const seed of SEEDS.slice(0, 10)) {
       const l = generateCoast(seed, V, 16);
