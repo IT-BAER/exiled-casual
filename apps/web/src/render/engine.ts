@@ -27,7 +27,6 @@ import { createHaze, createMotes } from "./haze";
 import { FLAME_MESH } from "./flames";
 import { createFireLights, LIGHT_POOL, setFireLightZoom, updateFireLights } from "./lights";
 import { cullShadowCasters } from "./shadow-cull";
-import { setActorBlobsVisible } from "./meshes";
 
 /**
  * Light intensities for a PBR scene. Roughly PI times the values the old
@@ -241,9 +240,9 @@ export function applyGraphics(scene: Scene, engine: Engine | null, g: GraphicsSe
   for (const light of scene.lights) {
     if (light.name.startsWith("firelight-")) light.shadowEnabled = fires;
   }
-  // The blob under each actor is the grounding at Low; at High the braziers and
-  // torch throw the real thing, so the pool comes off. See `setActorBlobsVisible`.
-  setActorBlobsVisible(!fires);
+  // The blob under each actor STAYS at High, under the braziers' real casts:
+  // a soft contact pool grounds a body the nearest fire is too far to shadow,
+  // and the reference layers both. Owner's call, 2026-08-07.
 
   const pipelines = scene.postProcessRenderPipelineManager?.supportedPipelines;
   const ssao = pipelines?.find((p) => p.name === "ssao");
