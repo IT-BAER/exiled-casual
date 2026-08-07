@@ -4,6 +4,10 @@
   "private": true,
   "type": "module",
   "workspaces": ["packages/*", "apps/*"],
+  "engines": {
+    "node": ">=22.16.0"
+  },
+  "packageManager": "npm@11.7.0",
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p apps/web/tsconfig.json",
     "test": "vitest run",
