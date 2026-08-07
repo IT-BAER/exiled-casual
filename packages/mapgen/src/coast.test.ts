@@ -91,6 +91,22 @@ describe("generateCoast", () => {
     }
   });
 
+  it("puts the way out at the player's back, not between him and the map", () => {
+    for (const seed of SEEDS) {
+      const l = generateCoast(seed, V, 16);
+      const start = l.objectiveAnchors.find((a) => a.id === "start")!;
+      const boss = l.objectiveAnchors.find((a) => a.id === "boss")!;
+      const exit = l.objectiveAnchors.find((a) => a.id === "exit")!;
+      // Projection of the exit onto the walk the player is about to make. Negative
+      // is behind him; the portal standing in the middle of the view he arrived
+      // looking at is the thing this fixes.
+      const bx = boss.x - start.x, by = boss.y - start.y;
+      const len = Math.hypot(bx, by);
+      const along = ((exit.x - start.x) * bx + (exit.y - start.y) * by) / len;
+      expect(along, `seed ${seed}`).toBeLessThan(0);
+    }
+  });
+
   it("pays out along the way", () => {
     for (const seed of SEEDS.slice(0, 10)) {
       const l = generateCoast(seed, V, 16);

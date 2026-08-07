@@ -285,7 +285,10 @@ export function generateCoast(
 
   // The return portal stands a few paces down the beach from the arrival point,
   // not on top of it: two portals in one spot is one portal the player misses.
-  const exitCanon = { x: startX + 5, y: midY(startX + 5) };
+  // BEHIND him, away from the boss: put it the other way and the way home sits in
+  // the middle of the first view of the map, which is the one thing the arrival
+  // shot should be showing.
+  const exitCanon = { x: startX - 5, y: midY(startX - 5) };
   const exitCell = nearestStandable(cells, canonCell(exitCanon).cx, canonCell(exitCanon).cy) ?? startCell;
 
   const objectiveAnchors: Socket[] = [
