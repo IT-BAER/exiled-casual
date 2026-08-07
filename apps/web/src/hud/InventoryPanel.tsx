@@ -359,9 +359,14 @@ export function InventoryPanel({
     if (prev === null || prev === shardTotal) return;
     playDropSound(shardTotal > prev ? "normal" : "unique");
   }, [shardTotal]);
-  // Keyed by the item, not a grid index, so equipped slots and backpack cells
-  // share one hover path; an index could only ever address the backpack.
-  const [hover, setHover] = React.useState<{ item: DisplayItem; x: number; y: number } | null>(null);
+  // Keyed by WHERE the cursor is, not by the item that was under it: a cell and a
+  // paper-doll slot both address one place, and the sim rebuilds every item object
+  // 30 times a second. Holding the object froze the tooltip at the moment of the
+  // hover, which is why spending an orb had to close it rather than show what the
+  // orb had just written. Resolved against the current snapshot below.
+  const [hover, setHover] = React.useState<
+    { at: { grid: ContainerId; ix: number; iy: number } | { slot: EquipSlotId }; x: number; y: number } | null
+  >(null);
   // A tooltip outlives the cell it came from: removing an element fires no
   // mouseleave, and the tooltip is painted by this component rather than by the
   // pane that closed, so walking away from the stash or the vendor left it hanging
@@ -369,6 +374,14 @@ export function InventoryPanel({
   const shelfOpen = vendorOpen;
   const stashShown = stash !== undefined;
   React.useEffect(() => { setHover(null); }, [shelfOpen, stashShown]);
+  /** The item the cursor is over, as the CURRENT snapshot has it. Gone from its
+   *  cell means gone from the screen, which is what a sold or consumed piece is. */
+  const at = hover?.at;
+  const hoverItem: DisplayItem | undefined = at === undefined
+    ? undefined
+    : "slot" in at
+      ? equipment[at.slot]
+      : grids[at.grid]?.items.find((i) => i.x === at.ix && i.y === at.iy);
   // `w`/`h` are the held piece's footprint in cells, carried on the drag because
   // DisplayItem itself has no size: only the backpack entry that wraps it does.
   // `ox`/`oy` are where the press landed and `carried` says the piece is riding the
@@ -622,8 +635,8 @@ export function InventoryPanel({
                 // Refusal is the cursor's job now (index.html): red iron blade over
                 // an item the armed orb cannot touch, gilt blade everywhere else.
                 data-cursor={armed && !accepts(armed, it) ? "deny" : undefined}
-                onMouseEnter={(e) => !drag && setHover({ item: it, x: e.clientX + 18, y: e.clientY + 18 })}
-                onMouseMove={(e) => !drag && setHover({ item: it, x: e.clientX + 18, y: e.clientY + 18 })}
+                onMouseEnter={(e) => !drag && setHover({ at: { grid: container, ix: it.x, iy: it.y }, x: e.clientX + 18, y: e.clientY + 18 })}
+                onMouseMove={(e) => !drag && setHover({ at: { grid: container, ix: it.x, iy: it.y }, x: e.clientX + 18, y: e.clientY + 18 })}
                 // Unconditional: the guard used to be "clear it only if the
                 // tooltip is still MINE", compared by object identity, and a
                 // snapshot arriving while the cursor sat on a cell rebuilt every
@@ -700,7 +713,9 @@ export function InventoryPanel({
                     // the wrong item picked the item up instead.
                     e.preventDefault();
                     if (container !== "backpack" || !accepts(armed, it)) return;
-                    setHover(null);
+                    // The tooltip STAYS: it addresses the cell, so the next
+                    // snapshot repaints it with what the orb just wrote. Closing it
+                    // hid the whole payoff behind a second hover.
                     setArmed(null);
                     // The outcome is the payoff, so it gets the drop chime at the rarity
                     // the application lands on, which is audible before the new lines are
@@ -976,7 +991,7 @@ export function InventoryPanel({
                 item={equipment[s.slot]}
                 highlight={slotHighlight(s.slot)}
                 onGrab={(slot, e) => grab({ kind: "slot", slot }, equipment[slot]!, 1.5, 1.5, e)}
-                onHover={(item, e) => !drag && setHover({ item, x: e.clientX + 18, y: e.clientY + 18 })}
+                onHover={(_item, e) => !drag && setHover({ at: { slot: s.slot }, x: e.clientX + 18, y: e.clientY + 18 })}
                 onLeave={() => setHover(null)}
               />
             ))}
@@ -1013,7 +1028,7 @@ export function InventoryPanel({
     {/* The tooltip and the drag ghost ride over every panel, the stash layer
         included, or an item picked up in the bag vanishes behind the stash. */}
     <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 60, fontFamily: SERIF, color: PARCHMENT }}>
-      {hover && <ItemTooltip {...hover.item} x={hover.x} y={hover.y} />}
+      {hoverItem && <ItemTooltip {...hoverItem} x={hover!.x} y={hover!.y} />}
       {armed && armedPos && !drag && armed.icon && (
         <img
           data-testid="armed-icon"

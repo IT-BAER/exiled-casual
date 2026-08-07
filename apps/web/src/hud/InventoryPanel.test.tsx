@@ -357,6 +357,33 @@ describe("spending currency on an item", () => {
     expect(seen).toEqual([{ kind: "applyCurrency", fromX: 0, fromY: 0, x: 4, y: 0 }]);
   });
 
+  /**
+   * The payoff of an orb is the lines it wrote, and the click that spends it is
+   * also the click that would close the tooltip reading them. It stays, and it
+   * re-reads the item out of the snapshot the sim just sent rather than the copy
+   * the mouse was over — a frozen tooltip is a worse lie than none.
+   */
+  it("keeps the tooltip open on the identified item and shows what the scroll wrote", () => {
+    const { rerender } = render(<InventoryPanel inventory={withScroll} onClose={() => {}} />);
+    fireEvent.mouseEnter(screen.getByTestId("inventory-item-1"), { clientX: 40, clientY: 40 });
+    expect(screen.getByTestId("item-tooltip").textContent).toContain("Ember Wand");
+
+    fireEvent.contextMenu(screen.getByTestId("inventory-item-0"));
+    fireEvent.pointerDown(screen.getByTestId("inventory-item-1"));
+
+    const identified = {
+      ...withScroll,
+      items: [
+        withScroll.items[0]!,
+        { ...withScroll.items[1]!, unidentified: false, lines: ["+12 to maximum Life"] },
+      ],
+    };
+    rerender(<InventoryPanel inventory={identified} onClose={() => {}} />);
+    const tip = screen.getByTestId("item-tooltip");
+    expect(tip.textContent).toContain("Ember Wand");
+    expect(tip.textContent).toContain("+12 to maximum Life");
+  });
+
   it("right-click arms without grabbing: bare icon on the cursor, no drag ghost", () => {
     const withIconScroll = {
       ...withScroll,
