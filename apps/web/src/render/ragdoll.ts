@@ -284,11 +284,18 @@ export function throwBody(
  */
 const BOX_MASS = 10;
 /** Newton-seconds for one `BOX_MASS` box. The trunk's share, applied off-centre. */
-const DEATH_IMPULSE = 34;
-/** Metres per second the corpse leaves with. The number above, made checkable. */
+const DEATH_IMPULSE = 55;
+/** Metres per second the corpse leaves with. The number above, made checkable.
+ *
+ * Instrumented at 34/1.2: the throw was applied in full and the trunk travelled
+ * ~1.3 units — and the owner still read it as "no reaction", because a uniform
+ * drift that decays over half a second is a slide, not a blow. What reads as a
+ * killing blow is the PROFILE, not the distance: leave fast, die fast. 5.5 m/s
+ * bled at 2.5/s covers about the same ground as 3.4 bled at 1.2, but the first
+ * 200ms carries most of it. */
 export const DEATH_SPEED = DEATH_IMPULSE / BOX_MASS;
 /** How fast that is bled off again. See the note where these are applied. */
-const LINEAR_DAMPING = 1.2;
+const LINEAR_DAMPING = 2.5;
 const ANGULAR_DAMPING = 3;
 
 /**
