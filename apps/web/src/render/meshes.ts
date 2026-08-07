@@ -1189,6 +1189,29 @@ export function standGroundBlob(
   quad.isPickable = false;
   quad.parent = root;
   quad.material = mat;
+  if (kind === "actor") ACTOR_BLOBS.set(root, quad);
+}
+
+/** The pool under an actor, so `keepGroundBlobFlat` can find it again. */
+const ACTOR_BLOBS = new WeakMap<Mesh, Mesh>();
+
+/**
+ * Hold an actor's pool flat on the floor while his body leans over it.
+ *
+ * `SnapshotRenderer.lean` banks and pitches the ROOT, which pivots on the feet,
+ * and the blob is a child of that root — so it tilted with him, drove one edge
+ * below y=0, and the floor clipped the buried half off along a dead straight
+ * line. It read as the shadow being sliced away in whichever direction he was
+ * running, which is exactly what it was.
+ *
+ * Negated Euler angles rather than a true inverse: Babylon composes these in a
+ * fixed order so the cancellation is not exact, but the lean tops out around
+ * nine degrees and the residual on a radially symmetric gradient is not
+ * something a pixel can show.
+ */
+export function keepGroundBlobFlat(root: Mesh, pitch: number, roll: number): void {
+  const blob = ACTOR_BLOBS.get(root);
+  if (blob) blob.rotation.set(-pitch, 0, -roll);
 }
 
 /** Downloaded mesh, and the material key it ships, for each container look. */

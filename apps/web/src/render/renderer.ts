@@ -3,7 +3,7 @@ import type { Scene } from "@babylonjs/core";
 import type { Mesh } from "@babylonjs/core";
 import { blinkBurst } from "./skill-fx";
 import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
-import { animateActor, makeMesh, setHitFlash, updateTelegraph, updatePortal, updateMapDevice, updateStash, updateVendor, updateContainer, updateGroundItem, updateRareElement, portalAppear, portalVanish, isPortalMesh, PORTAL_STAGGER_MS, Y_LIFT } from "./meshes";
+import { animateActor, keepGroundBlobFlat, makeMesh, setHitFlash, updateTelegraph, updatePortal, updateMapDevice, updateStash, updateVendor, updateContainer, updateGroundItem, updateRareElement, portalAppear, portalVanish, isPortalMesh, PORTAL_STAGGER_MS, Y_LIFT } from "./meshes";
 import type { MeshKind } from "./meshes";
 import { COSMETIC_SLOTS, looksForEquipment, previewItemFor, rigOf, type Looks } from "./rig";
 import { creatureOf } from "./meshes";
@@ -697,5 +697,7 @@ export class SnapshotRenderer {
     this.tilt.set(id, [nextRoll, nextPitch]);
     mesh.rotation.z = nextRoll;
     mesh.rotation.x = nextPitch;
+    // The body leans; the pool it stands in does not. See `keepGroundBlobFlat`.
+    keepGroundBlobFlat(mesh, nextPitch, nextRoll);
   }
 }
