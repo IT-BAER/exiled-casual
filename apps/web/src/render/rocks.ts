@@ -485,6 +485,26 @@ export const WEED_MESH_PREFIX = "wallrun-weed-";
  *  is a whole extra depth pass for a fern. */
 export const FLORA_MESH_PREFIX = "wallrun-flora-";
 
+const DRESSING_PREFIXES = [
+  DEBRIS_MESH_PREFIX, RAMPART_MESH_PREFIX, DUNE_MESH_PREFIX,
+  DUNE_RIM_MESH_PREFIX, WEED_MESH_PREFIX, FLORA_MESH_PREFIX,
+] as const;
+
+/**
+ * The scatter that may never enter a shadow cube's render list.
+ *
+ * The "never casts" notes above each prefix were aspiration until this existed:
+ * a thin-instance host's bounding sphere spans EVERY instance, so on the coast a
+ * weed mesh's sphere covers the whole map, every reach and frustum cull accepts
+ * it, and each armed cube face re-drew all its instances — most of the Coast's
+ * fps gap to the hideout. Boulders and the ledge stay out of this list on
+ * purpose: they are the walls, and the torch pool ending where a wall eats it is
+ * a read worth its draw.
+ */
+export function isScatterDressing(name: string): boolean {
+  return DRESSING_PREFIXES.some((p) => name.startsWith(p));
+}
+
 /**
  * NO CAVE WALLS INLAND. This was tried and measured, and the reference is what
  * settled it.
@@ -877,6 +897,14 @@ export function buildRocks(
     }
     mesh.receiveShadows = true;
     mesh.isPickable = false;
+    // Dressing is also kept out of the GlowLayer: the layer draws every mesh
+    // into its render target (non-emissive ones as black occluders), a full
+    // extra pass over thousands of instances that can never glow. Boulders and
+    // the ledge stay so a portal's bloom cannot shine through a wall.
+    if (isScatterDressing(mesh.name)) {
+      const glow = scene.effectLayers?.find((l) => l.name === "glow");
+      (glow as { addExcludedMesh?: (m: Mesh) => void } | undefined)?.addExcludedMesh?.(mesh);
+    }
     mesh.thinInstanceSetBuffer("matrix", new Float32Array(data), 16, true);
     mesh.thinInstanceRefreshBoundingInfo(true);
     // The host sits at identity and the instances never move; the bounding info

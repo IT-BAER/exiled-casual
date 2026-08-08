@@ -21,7 +21,7 @@ import {
   type Engine,
 } from "@babylonjs/core";
 import { DEFAULT_SETTINGS, type GraphicsSettings } from "../settings";
-import { DUNE_MESH_PREFIX, ROCK_MESH_PREFIX } from "./rocks";
+import { isScatterDressing } from "./rocks";
 import { SEA_MESH_NAME } from "./sea";
 import { createHaze, createMotes } from "./haze";
 import { FLAME_MESH } from "./flames";
@@ -819,7 +819,11 @@ export function createScene(engine: Engine): SceneHandle {
     // cannot smuggle a caster past it.
     const torchCasts = (mesh: AbstractMesh): boolean => {
       if (mesh === ground || mesh.name.startsWith("telegraph-") || mesh.name === FLAME_MESH
-        || mesh.name.startsWith("groundblob-") || isWardrobePart(mesh.name)) return false;
+        || mesh.name.startsWith("groundblob-") || isWardrobePart(mesh.name)
+        // Dressing scatter never casts — see isScatterDressing. The range cull
+        // below cannot save it: a thin-instance host's bounding sphere spans
+        // every instance, so it is always "in reach".
+        || isScatterDressing(mesh.name)) return false;
       // Range cull: nothing past the torch's own reach can receive its light, so
       // nothing there can cast a visible shadow from it either. This is a third
       // of the cube map's draw calls, measured live in the hideout. It stays even

@@ -81,6 +81,32 @@ describe("the fires a place is lit by", () => {
     expect(map.renderListPredicate).toBeFalsy();
   });
 
+  it("never draws dressing scatter, however close it stands", () => {
+    // A thin-instance host's bounding sphere spans EVERY instance, so on the
+    // coast a weed mesh's sphere covers the whole map and the reach cull always
+    // accepts it: each armed cube face re-drew all ~2,500 instances. Dressing
+    // is excluded by name instead; boulders and the ledge (the walls) still cast.
+    const s = scene();
+    new FreeCamera("probe", Vector3.Zero(), s);
+    const [light] = createFireLights(s);
+    const map = light!.getShadowGenerator()!.getShadowMap()!;
+
+    const weed = MeshBuilder.CreateBox("wallrun-weed-0", { size: 1 }, s);
+    weed.position.set(1, 0.5, 0);
+    weed.computeWorldMatrix(true);
+    const rock = MeshBuilder.CreateBox("wallrun-rock-0", { size: 1 }, s);
+    rock.position.set(1, 0.5, 1);
+    rock.computeWorldMatrix(true);
+
+    const drawn = new Set<string>();
+    for (let f = 0; f < 6; f++) {
+      map.onBeforeRenderObservable.notifyObservers(f);
+      for (const mesh of map.getCustomRenderList!(f, [], 0) ?? []) drawn.add(mesh.name);
+    }
+    expect(drawn.has("wallrun-weed-0")).toBe(false);
+    expect(drawn.has("wallrun-rock-0")).toBe(true);
+  });
+
   it("flickers, and never to nothing", () => {
     const s = scene();
     createFireLights(s);

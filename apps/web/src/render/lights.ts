@@ -14,6 +14,7 @@ import {
   resetFireFlames,
   updateFireFlames,
 } from "./flames";
+import { isScatterDressing } from "./rocks";
 import { cullShadowCasters } from "./shadow-cull";
 
 /**
@@ -223,6 +224,7 @@ function castFrom(scene: Scene, light: PointLight | undefined): void {
       mesh.name !== "ground"
       && mesh.name !== FLAME_MESH
       && !mesh.name.startsWith("telegraph-")
+      && !isScatterDressing(mesh.name)
       && reachesCaster(light, mesh);
     // Rendered on demand only: `updateFireLights` re-arms ONE map per frame,
     // round-robin. Four cube maps every frame were half the whole frame budget

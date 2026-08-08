@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  ROCK_SPACING, scatterDebris, scatterRampart, scatterRocks, type RockCell,
+  ROCK_SPACING, isScatterDressing, scatterDebris, scatterRampart, scatterRocks, type RockCell,
 } from "./rocks";
 
 /** A straight run of wall cells, at the mapgen cell size of 0.5 world units. */
@@ -12,6 +12,19 @@ function line(count: number, z = 0): RockCell[] {
 function aimed(count: number, nx: number, nz: number): RockCell[] {
   return line(count).map((c) => ({ ...c, nx, nz }));
 }
+
+describe("isScatterDressing", () => {
+  it("names the dressing and spares the walls", () => {
+    // Dressing (thin-instanced, map-wide bounding sphere) stays out of every
+    // shadow cube; boulders, the ledge, and the merged wall band still cast.
+    for (const name of [
+      "wallrun-weed-0", "wallrun-flora-2", "wallrun-debris-1",
+      "wallrun-dune-0", "wallrun-dunerim-3", "wallrun-rampart-0",
+    ]) expect(isScatterDressing(name)).toBe(true);
+    for (const name of ["wallrun-rock-0", "wallrun-ledge-1", "wallrun-3-2", "prop.mapdevice"])
+      expect(isScatterDressing(name)).toBe(false);
+  });
+});
 
 describe("inland stone stays under the player's head", () => {
   // The invariant a cave-wall pass keeps trying to break, pinned from every

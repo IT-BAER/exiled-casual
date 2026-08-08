@@ -58,6 +58,21 @@ describe("buildRocks geometry ownership", () => {
     expect(boulders![0]!.geometry).not.toBe(sources[0]!.geometry);
   });
 
+  it("keeps dressing out of the glow layer, and the walls in it", () => {
+    // The GlowLayer draws every non-excluded mesh into its own render target as
+    // a black occluder — a whole extra pass over thousands of instances that can
+    // never glow. Boulders stay: a portal's bloom must not shine through a wall.
+    const excluded: string[] = [];
+    (scene.effectLayers as unknown as { name: string; addExcludedMesh(m: Mesh): void }[])
+      .push({ name: "glow", addExcludedMesh: (m: Mesh) => excluded.push(m.name) });
+    const material = new StandardMaterial("m", scene);
+    buildRocks(scene, [placement(0, 1.2)], material, "wallrun-weed-");
+    buildRocks(scene, [placement(3, 1.8)], material);
+
+    expect(excluded).toContain("wallrun-weed-0");
+    expect(excluded).not.toContain("wallrun-rock-0");
+  });
+
   it("keeps the boulder's own scale after a debris build has run", () => {
     const material = new StandardMaterial("m", scene);
     const boulders = buildRocks(scene, [placement(0, 1.8)], material);
