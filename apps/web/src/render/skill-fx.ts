@@ -445,6 +445,22 @@ export const BLINK_ALPHA = 0.48;
  * The implosion is the same sphere emitter run at NEGATIVE power: direction is
  * the surface normal, so a negative multiplier walks every particle inward.
  */
+/**
+ * Fire the whole impact vocabulary once, dark, behind the loading plate.
+ *
+ * The first REAL hit used to pay three one-off compiles on the main thread —
+ * the particle shader (fire sheet + fog variant), the ring's glow material, and
+ * worst the FLASH light's arrival, which recompiles every material in the scene
+ * for a fourth light — and that is the stutter on the first Ember Bolt of a
+ * fresh map. Every burst here self-disposes, and the flash is zeroed AFTER
+ * emberBurst raised it, so the warm-up draws nothing the player can see.
+ */
+export function warmSkillFx(scene: Scene): void {
+  emberBurst(scene, Vector3.Zero());
+  const light = scene.getLightByName(FLASH_NAME) as PointLight | null;
+  if (light) light.intensity = 0;
+}
+
 export function blinkBurst(scene: Scene, from: Vector3, to: Vector3): void {
   const delta = to.subtract(from);
   const len = delta.length();

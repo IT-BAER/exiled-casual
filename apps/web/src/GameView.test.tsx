@@ -92,6 +92,7 @@ vi.mock("./audio/sfx", async (importOriginal) => ({
 // The hideout's furniture builds real Babylon meshes and instantiates the prop
 // container. Same reason the level and the rig are mocked: none of it is what this
 // file is about, and render/hideout.test.ts owns the placements.
+vi.mock("./render/skill-fx", () => ({ warmSkillFx: vi.fn() }));
 vi.mock("./render/hideout", () => ({
   buildHideoutDecor: vi.fn(), clearHideoutDecor: vi.fn(),
 }));

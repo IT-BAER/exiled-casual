@@ -12,6 +12,7 @@ import {
   CINDER_NAME,
   FLASH_NAME,
   RING_NAME,
+  warmSkillFx,
 } from "./skill-fx";
 
 let engine: NullEngine | undefined;
@@ -156,6 +157,31 @@ describe("ember bolt", () => {
       bolt.computeWorldMatrix(true);
       bolt.dispose();
     }
+    expect(scene.lights.filter((l) => l.name === FLASH_NAME)).toHaveLength(1);
+  });
+});
+
+describe("warmSkillFx", () => {
+  it("stands the whole impact vocabulary up dark, so the first real hit compiles nothing", () => {
+    const scene = newScene();
+    warmSkillFx(scene);
+
+    // The flash light EXISTS (its arrival is what recompiles every material
+    // for a fourth light) but at zero intensity: the warm-up must be invisible.
+    const light = scene.getLightByName(FLASH_NAME);
+    expect(light).not.toBeNull();
+    expect(light!.intensity).toBe(0);
+
+    // The burst and ring are live, so the particle and glow shaders compile
+    // behind the loading plate instead of on the first cast.
+    expect(systems(scene, BOLT_BURST_NAME)).toHaveLength(1);
+    expect(scene.getMeshByName(RING_NAME)).not.toBeNull();
+  });
+
+  it("is idempotent per area: a second warm leaves one flash light", () => {
+    const scene = newScene();
+    warmSkillFx(scene);
+    warmSkillFx(scene);
     expect(scene.lights.filter((l) => l.name === FLASH_NAME)).toHaveLength(1);
   });
 });
