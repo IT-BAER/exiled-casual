@@ -167,3 +167,15 @@ The corner minimap gained a centred Tab overlay, map entry gained breakable spaw
 countdown buff, and currency orbs gained clear cursor and target-cell feedback. Every creature also
 received a species-authored strike animation, while wreck timbers and bone clusters finished the
 coast dressing.
+
+## 2026-08-08 · Painted tooltip headers
+
+Item tooltips traded their CSS chevron arrows for painted metal header bands, one per rarity:
+weathered silver for normal, blued steel for magic, antique gold for rare, and ember bronze for
+unique, each stretching cleanly around one- or two-line item names.
+
+<table>
+<tr>
+<td width="100%"><img src="screenshots/2026-08-08-tooltip-rarity-bands.jpeg" alt="Ember Wand tooltip with the painted silver header band" width="100%"><br><sub>Painted rarity header bands.</sub></td>
+</tr>
+</table>
