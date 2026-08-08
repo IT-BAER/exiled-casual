@@ -63,6 +63,24 @@ describe("registerRevive", () => {
     expect(f.world.get<Mana>(f.p, "mana")!.mana).toBe(fp(60));
   });
 
+  it("checkpoint: wakes under spawn grace, anchored where he stands", () => {
+    const f = fixture("map", 6);
+    f.sim.step();
+    const revivedAt = f.sim.tick;
+    f.sim.step(f.answer("checkpoint"));
+    const s = session(f);
+    expect(s.graceUntilTick).toBe(revivedAt + 300);
+    expect(s.graceX).toBe(CHECKPOINT.x);
+    expect(s.graceY).toBe(CHECKPOINT.y);
+  });
+
+  it("hideout: no grace — there is nothing to be graced against", () => {
+    const f = fixture("map", 6);
+    f.sim.step();
+    f.sim.step(f.answer("hideout"));
+    expect(session(f).graceUntilTick).toBeUndefined();
+  });
+
   it("hideout: same portal, but the walk out and no teleport of its own", () => {
     const f = fixture("map", 6);
     f.sim.step();
