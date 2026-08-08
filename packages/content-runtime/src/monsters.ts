@@ -240,7 +240,9 @@ const MONSTER_DEFS: MonsterDef[] = [
     id: "monster.bog_drowned.v1", name: "Bog Drowned", archetype: "brute",
     maxLifeFixed: LIFE.brute, moveSpeedFixed: fp(1.8), attackRangeFixed: fp(1.6),
     attackDamage: { type: "physical", amountFixed: HIT.brute },
-    attackCooldownTicks: 75, radiusFixed: fp(0.85),
+    // 0.55, not the brute archetype's 0.85: the drowned is a slim humanoid
+    // (mesh reach 0.58) and the copied radius detonated bolts on empty air.
+    attackCooldownTicks: 75, radiusFixed: fp(0.55),
     defenses: { resPct: resBlock({ cold: 20 }), armourFixed: fp(3) },
   },
   {

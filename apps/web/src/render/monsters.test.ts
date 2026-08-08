@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { MONSTERS } from "@exiled/content-runtime";
+import { toNumber } from "@exiled/fixed-point";
 import { partOfCreature, CreatureRig } from "./monsters";
 import { warmContainer } from "./warm-shaders";
 import type { AnimationGroup, AssetContainer, InstantiatedEntries } from "@babylonjs/core";
@@ -23,6 +24,7 @@ describe("monsters asset", () => {
   ) as {
     nodes: { name: string; mesh?: number; skin?: number; children?: number[] }[];
     meshes: { primitives: { material?: number; attributes: Record<string, number> }[] }[];
+    accessors: { min?: number[]; max?: number[] }[];
     materials: { name: string }[];
     images: { mimeType: string }[];
     skins: { joints: number[] }[];
@@ -82,6 +84,33 @@ describe("monsters asset", () => {
       expect(names).toContain(`${root}|attack`);
     }
     expect(names.length).toBe(species.length * 3);
+  });
+
+  /**
+   * The sim's body radius must fit inside the art it stands for. The two are
+   * authored apart — `radiusFixed` in content-runtime, the mesh in Blender — and
+   * nothing else compares them, so a copy-pasted archetype radius on a slim
+   * model surfaces only as bolts detonating on empty air a step in front of the
+   * body (the Bog Drowned shipped at 0.85 against a 0.58-wide mesh). One-sided
+   * on purpose: a radius smaller than a sprawling mesh is a forgiving hitbox,
+   * not a floating impact.
+   */
+  it("keeps every sim body radius inside its mesh's footprint", () => {
+    for (const root of species) {
+      const node = json.nodes.find((n) => n.name === root)!;
+      const meshNode = (node.children ?? []).map((i) => json.nodes[i]!).find((c) => c.mesh !== undefined)!;
+      let reach = 0;
+      for (const prim of json.meshes[meshNode.mesh!]!.primitives) {
+        const acc = json.accessors[prim.attributes["POSITION"]!]!;
+        // Horizontal reach from the origin: glTF x/z are the ground plane.
+        for (const i of [0, 2] as const) {
+          reach = Math.max(reach, Math.abs(acc.min![i]!), Math.abs(acc.max![i]!));
+        }
+      }
+      const radius = toNumber(MONSTERS.get(root)!.radiusFixed);
+      expect(radius, `${root} sim radius ${radius} sticks out past its mesh (reach ${reach.toFixed(2)})`)
+        .toBeLessThanOrEqual(reach * 1.2);
+    }
   });
 
   /**
