@@ -13,15 +13,48 @@ import {
 // eased so a walking player stays in front of a pack rather than getting run down).
 // Nothing here used to break 3.0, so a player who kept walking could not be
 // touched. Bosses stay slow and telegraph.
+
+/**
+ * Life and hit are per ARCHETYPE, not per species: what changes biome to biome is
+ * the element and the flavour, so these are one knob each rather than seventeen
+ * numbers that drift apart. Every species below reads them; only the Imp and the
+ * bosses carry their own, because they are not one of a kind.
+ *
+ * Casual pass: -25% life, -30% hit against the numbers `balance.test.ts` had
+ * measured. His reading is that the first map is too hard for a casual player,
+ * and both halves of that are here — a character has 100 life and NO
+ * regeneration, so the hit is what kills, and life is what makes a clear a war
+ * of attrition. Every band in `balance.test.ts` moved with this and was
+ * re-measured against the same rig, not re-argued.
+ */
+const LIFE = {
+  swarm: fp(66),    // was 88
+  brute: fp(345),   // was 460
+  shooter: fp(81),  // was 108
+  heavy: fp(360),   // was 480
+  boss: fp(630),    // was 840
+} as const;
+const HIT = {
+  swarm: fp(3),     // was 4
+  brute: fp(9),     // was 13
+  shooter: fp(6),   // was 8
+  heavy: fp(6),     // was 8
+} as const;
+
 const MONSTER_DEFS: MonsterDef[] = [
   {
     id: "monster.cinder_imp.v1",
     name: "Cinder Imp",
     archetype: "swarm",
+    // The Imp keeps its own numbers: it is in no biome pool, only the Warden's
+    // phase-2 brood and the test lab. Its life stays where it was — one Ember
+    // Bolt is 36, and an imp that dies to a single bolt takes the mitigation
+    // arithmetic out of every golden replay that measures a hit on one. Only
+    // what it HITS for follows the casual pass.
     maxLifeFixed: fp(40),
     moveSpeedFixed: fp(2.6),
     attackRangeFixed: fp(1.2),
-    attackDamage: { type: "physical", amountFixed: fp(6) },
+    attackDamage: { type: "physical", amountFixed: fp(4) },
     attackCooldownTicks: 45,
     radiusFixed: fp(0.5),
     defenses: { resPct: resBlock(), armourFixed: fp(0.5) },
@@ -35,21 +68,16 @@ const MONSTER_DEFS: MonsterDef[] = [
     // 56s of mana-starved poking (balance.test.ts). The Warden stays
     // fire-flavoured at 25; 40% against the only element in the game is a wall,
     // not a choice.
-    //
-    // 840 is not a difficulty raise, it is the same 20-second fight bought back
-    // after the mana economy doubled what the player spends inside it: at the old
-    // 420 the retuned caster cleared this in 10.1s. Fight length is the design
-    // intent and life is the knob that holds it, so life follows player damage.
-    maxLifeFixed: fp(840),
+    maxLifeFixed: LIFE.boss,
     moveSpeedFixed: fp(1.35),
     attackRangeFixed: fp(2.2),
-    attackDamage: { type: "physical", amountFixed: fp(10) },
+    attackDamage: { type: "physical", amountFixed: fp(7) },
     attackCooldownTicks: 60,
     radiusFixed: fp(1.4),
     defenses: { resPct: resBlock({ fire: 25 }), armourFixed: fp(3) },
     boss: {
       phase2AtLifePct: 50,
-      slam: { windupTicks: 30, radiusFixed: fp(3.5), damageFixed: fp(28), cooldownTicks: 150, rangeFixed: fp(9) },
+      slam: { windupTicks: 30, radiusFixed: fp(3.5), damageFixed: fp(20), cooldownTicks: 150, rangeFixed: fp(9) },
       phase2: {
         fireGroundDurationTicks: 120,
         addCount: 2,
@@ -59,7 +87,7 @@ const MONSTER_DEFS: MonsterDef[] = [
         // standing in it is at maxStacks within a second: the number that matters
         // is 5 x dps = 20/s, not 4. At fp(12) that was 60/s, which burned the base
         // 100 life pool in 1.7s — a patch you cannot react to, only pre-dodge.
-        fireGround: { kind: "burning", stacksPerApply: 1, dpsFixed: fp(4), durationTicks: 60, maxStacks: 5 },
+        fireGround: { kind: "burning", stacksPerApply: 1, dpsFixed: fp(3), durationTicks: 60, maxStacks: 5 },
       },
     },
   },
@@ -79,10 +107,10 @@ const MONSTER_DEFS: MonsterDef[] = [
     // Desert. Asks: can you close? It never stops dropping motes, but each one
     // is small and slow to land. The long range is the whole fight — standing
     // where you killed the last pack is not a plan.
-    maxLifeFixed: fp(840),
+    maxLifeFixed: LIFE.boss,
     moveSpeedFixed: fp(1.15),
     attackRangeFixed: fp(2.0),
-    attackDamage: { type: "fire", amountFixed: fp(9) },
+    attackDamage: { type: "fire", amountFixed: fp(6) },
     attackCooldownTicks: 60,
     radiusFixed: fp(1.4),
     defenses: { resPct: resBlock({ fire: 25 }), armourFixed: fp(2) },
@@ -90,13 +118,13 @@ const MONSTER_DEFS: MonsterDef[] = [
       phase2AtLifePct: 50,
       // Half the Warden's radius at nearly twice its cadence and range: the same
       // pressure spread thinner, so it punishes standing rather than misreading.
-      slam: { windupTicks: 26, radiusFixed: fp(2.3), damageFixed: fp(20), cooldownTicks: 96, rangeFixed: fp(12) },
+      slam: { windupTicks: 26, radiusFixed: fp(2.3), damageFixed: fp(14), cooldownTicks: 96, rangeFixed: fp(12) },
       phase2: {
         fireGroundDurationTicks: 150,
         addCount: 4,
         addDefId: "monster.sand_skitterer.v1",
         cadenceMulPct: 62,
-        fireGround: { kind: "burning", stacksPerApply: 1, dpsFixed: fp(3), durationTicks: 60, maxStacks: 5 },
+        fireGround: { kind: "burning", stacksPerApply: 1, dpsFixed: fp(2), durationTicks: 60, maxStacks: 5 },
       },
     },
   },
@@ -106,10 +134,10 @@ const MONSTER_DEFS: MonsterDef[] = [
     archetype: "brute",
     // Swamp. Asks: do you kill the adds or the mother? One enormous, slow,
     // unmissable circle, and a brood that keeps arriving while you decide.
-    maxLifeFixed: fp(840),
+    maxLifeFixed: LIFE.boss,
     moveSpeedFixed: fp(1.0),
     attackRangeFixed: fp(2.6),
-    attackDamage: { type: "chaos", amountFixed: fp(11) },
+    attackDamage: { type: "chaos", amountFixed: fp(8) },
     attackCooldownTicks: 66,
     radiusFixed: fp(1.4),
     defenses: { resPct: resBlock({ chaos: 30 }), armourFixed: fp(3) },
@@ -118,13 +146,13 @@ const MONSTER_DEFS: MonsterDef[] = [
       // 5 units across with a 48-tick wind-up: it cannot be dodged by reaction
       // and does not need to be. It is a question about where you were standing
       // a second and a half ago.
-      slam: { windupTicks: 48, radiusFixed: fp(5.0), damageFixed: fp(32), cooldownTicks: 186, rangeFixed: fp(8) },
+      slam: { windupTicks: 48, radiusFixed: fp(5.0), damageFixed: fp(22), cooldownTicks: 186, rangeFixed: fp(8) },
       phase2: {
         fireGroundDurationTicks: 180,
         addCount: 3,
         addDefId: "monster.fen_wisp.v1",
         cadenceMulPct: 80,
-        fireGround: { kind: "burning", stacksPerApply: 1, dpsFixed: fp(5), durationTicks: 60, maxStacks: 5 },
+        fireGround: { kind: "burning", stacksPerApply: 1, dpsFixed: fp(3), durationTicks: 60, maxStacks: 5 },
       },
     },
   },
@@ -135,22 +163,22 @@ const MONSTER_DEFS: MonsterDef[] = [
     // Forest. Asks: can you keep moving? The fastest thing with a boss bar in
     // the game, on the shortest wind-up, and it does not leave ground you can
     // read — the danger is where it IS, not where it was.
-    maxLifeFixed: fp(840),
+    maxLifeFixed: LIFE.boss,
     moveSpeedFixed: fp(2.0),
     attackRangeFixed: fp(2.4),
-    attackDamage: { type: "physical", amountFixed: fp(12) },
+    attackDamage: { type: "physical", amountFixed: fp(8) },
     attackCooldownTicks: 52,
     radiusFixed: fp(1.4),
     defenses: { resPct: resBlock({ cold: 20 }), armourFixed: fp(4) },
     boss: {
       phase2AtLifePct: 45,
-      slam: { windupTicks: 21, radiusFixed: fp(3.0), damageFixed: fp(23), cooldownTicks: 108, rangeFixed: fp(7) },
+      slam: { windupTicks: 21, radiusFixed: fp(3.0), damageFixed: fp(16), cooldownTicks: 108, rangeFixed: fp(7) },
       phase2: {
         fireGroundDurationTicks: 90,
         addCount: 3,
         addDefId: "monster.bramble_whelp.v1",
         cadenceMulPct: 70,
-        fireGround: { kind: "burning", stacksPerApply: 1, dpsFixed: fp(4), durationTicks: 60, maxStacks: 5 },
+        fireGround: { kind: "burning", stacksPerApply: 1, dpsFixed: fp(3), durationTicks: 60, maxStacks: 5 },
       },
     },
   },
@@ -159,131 +187,99 @@ const MONSTER_DEFS: MonsterDef[] = [
   // constructs and one thing that swings something too big for a corridor.
   {
     id: "monster.vaal_husk.v1", name: "Vaal Husk", archetype: "swarm",
-    // 88 is the measured number: at 24, four husks fell in 0.83s — faster than
-    // a lone imp, which is the wrong feel for a pack. 88 scales that to ~3s,
-    // inside the 2-4s swarm band. See balance.test.ts "swarm dies in 2-4s".
-    maxLifeFixed: fp(88), moveSpeedFixed: fp(2.6), attackRangeFixed: fp(1.1),
-    attackDamage: { type: "physical", amountFixed: fp(4) },
+    maxLifeFixed: LIFE.swarm, moveSpeedFixed: fp(2.6), attackRangeFixed: fp(1.1),
+    attackDamage: { type: "physical", amountFixed: HIT.swarm },
     attackCooldownTicks: 40, radiusFixed: fp(0.42),
     defenses: { resPct: resBlock(), armourFixed: fp(0) },
   },
   {
     id: "monster.vaal_construct.v1", name: "Vaal Construct", archetype: "brute",
-    // 460 is the measured number: at 140, the construct fell in 1.1s — faster
-    // than the swarm pack it is supposed to outlast. At 700 it took 9.1s (over
-    // band); at 420 it took 3.77s (under band). Armour makes the curve non-linear:
-    // marginal rate 52 life/s between those points, so +38 life → 458, rounded to
-    // 460. Targets ~4.5s inside the 4-7s brute band. See balance.test.ts "brute dies in 4-7s".
-    maxLifeFixed: fp(460), moveSpeedFixed: fp(1.8), attackRangeFixed: fp(1.6),
-    attackDamage: { type: "physical", amountFixed: fp(13) },
+    maxLifeFixed: LIFE.brute, moveSpeedFixed: fp(1.8), attackRangeFixed: fp(1.6),
+    attackDamage: { type: "physical", amountFixed: HIT.brute },
     attackCooldownTicks: 75, radiusFixed: fp(0.85),
     defenses: { resPct: resBlock(), armourFixed: fp(4) },
   },
   {
     id: "monster.blood_sentinel.v1", name: "Blood Sentinel", archetype: "heavy",
-    // 480 is the measured number: at 88, the sentinel fell in 0.83s — same as
-    // a swarm, which drains the telegraph of all meaning. 480 targets ~4.5s,
-    // inside the 3-6s heavy band. See balance.test.ts "heavy dies in 3-6s".
-    maxLifeFixed: fp(480), moveSpeedFixed: fp(1.55), attackRangeFixed: fp(1.8),
-    attackDamage: { type: "chaos", amountFixed: fp(8) },
+    maxLifeFixed: LIFE.heavy, moveSpeedFixed: fp(1.55), attackRangeFixed: fp(1.8),
+    attackDamage: { type: "chaos", amountFixed: HIT.heavy },
     attackCooldownTicks: 45, radiusFixed: fp(0.8),
     defenses: { resPct: resBlock({ chaos: 30 }), armourFixed: fp(2) },
-    heavy: { windupTicks: 30, radiusFixed: fp(2.6), damageFixed: fp(22), cooldownTicks: 150, rangeFixed: fp(6.5) },
+    heavy: { windupTicks: 30, radiusFixed: fp(2.6), damageFixed: fp(15), cooldownTicks: 150, rangeFixed: fp(6.5) },
   },
 
   // --- Desert: swarm, shooter, heavy. Nothing here holds a line; it circles.
   {
     id: "monster.sand_skitterer.v1", name: "Sand Skitterer", archetype: "swarm",
-    // Same archetype life budget as vaal_husk (88): swarm band is 2-4s regardless
-    // of biome — only the element and flavour differ. Measured via vaal_husk at
-    // 0.83s/24, scaled to 3s target. See balance.test.ts "swarm dies in 2-4s".
-    maxLifeFixed: fp(88), moveSpeedFixed: fp(2.6), attackRangeFixed: fp(1.1),
-    attackDamage: { type: "physical", amountFixed: fp(4) },
+    maxLifeFixed: LIFE.swarm, moveSpeedFixed: fp(2.6), attackRangeFixed: fp(1.1),
+    attackDamage: { type: "physical", amountFixed: HIT.swarm },
     attackCooldownTicks: 40, radiusFixed: fp(0.42),
     defenses: { resPct: resBlock({ fire: 20 }), armourFixed: fp(0) },
   },
   {
     id: "monster.dune_spitter.v1", name: "Dune Spitter", archetype: "shooter",
-    // 108 is the measured number: at 32, two spitters fell in 1.03s — well short
-    // of the 2-5s shooter band. 108 scales that to ~3.5s target. See
-    // balance.test.ts "shooter dies in 2-5s".
-    maxLifeFixed: fp(108), moveSpeedFixed: fp(1.6), attackRangeFixed: fp(7.5),
-    attackDamage: { type: "chaos", amountFixed: fp(8) },
+    maxLifeFixed: LIFE.shooter, moveSpeedFixed: fp(1.6), attackRangeFixed: fp(7.5),
+    attackDamage: { type: "chaos", amountFixed: HIT.shooter },
     attackCooldownTicks: 70, radiusFixed: fp(0.5),
     defenses: { resPct: resBlock({ chaos: 25 }), armourFixed: fp(0.5) },
     ranged: { speedFixed: fp(9), radiusFixed: fp(0.22) },
   },
   {
     id: "monster.sunbaked_colossus.v1", name: "Sunbaked Colossus", archetype: "heavy",
-    // 480: same heavy budget as blood_sentinel, measured via that species at 0.83s/88
-    // and scaled to 3-6s band. 25% fire res not 40% for the same reason as the Warden:
-    // fire is the only element the player owns.
-    maxLifeFixed: fp(480), moveSpeedFixed: fp(1.55), attackRangeFixed: fp(1.8),
-    attackDamage: { type: "fire", amountFixed: fp(8) },
+    // 25% fire res not 40% for the same reason as the Warden: fire is the only
+    // element the player owns.
+    maxLifeFixed: LIFE.heavy, moveSpeedFixed: fp(1.55), attackRangeFixed: fp(1.8),
+    attackDamage: { type: "fire", amountFixed: HIT.heavy },
     attackCooldownTicks: 45, radiusFixed: fp(0.8),
     defenses: { resPct: resBlock({ fire: 25 }), armourFixed: fp(2) },
-    heavy: { windupTicks: 30, radiusFixed: fp(2.6), damageFixed: fp(22), cooldownTicks: 150, rangeFixed: fp(6.5) },
+    heavy: { windupTicks: 30, radiusFixed: fp(2.6), damageFixed: fp(15), cooldownTicks: 150, rangeFixed: fp(6.5) },
   },
 
   // --- Swamp: brute, shooter, heavy. Slow, wet, and nothing you can outrun in a line.
   {
     id: "monster.bog_drowned.v1", name: "Bog Drowned", archetype: "brute",
-    // 460: same brute budget as vaal_construct; measured at 1.1s/140, 9.1s/700,
-    // 3.77s/420. Marginal rate 52 life/s, target 4.5s → 460. One armour less
-    // (3 vs 4) means marginally faster — still inside 4-7s band.
-    maxLifeFixed: fp(460), moveSpeedFixed: fp(1.8), attackRangeFixed: fp(1.6),
-    attackDamage: { type: "physical", amountFixed: fp(13) },
+    maxLifeFixed: LIFE.brute, moveSpeedFixed: fp(1.8), attackRangeFixed: fp(1.6),
+    attackDamage: { type: "physical", amountFixed: HIT.brute },
     attackCooldownTicks: 75, radiusFixed: fp(0.85),
     defenses: { resPct: resBlock({ cold: 20 }), armourFixed: fp(3) },
   },
   {
     id: "monster.fen_wisp.v1", name: "Fen Wisp", archetype: "shooter",
-    // 108: same shooter budget as dune_spitter, measured at 1.03s/32 and scaled
-    // to 2-5s band (target 3.5s). See balance.test.ts "shooter dies in 2-5s".
-    maxLifeFixed: fp(108), moveSpeedFixed: fp(1.6), attackRangeFixed: fp(7.5),
-    attackDamage: { type: "lightning", amountFixed: fp(8) },
+    maxLifeFixed: LIFE.shooter, moveSpeedFixed: fp(1.6), attackRangeFixed: fp(7.5),
+    attackDamage: { type: "lightning", amountFixed: HIT.shooter },
     attackCooldownTicks: 70, radiusFixed: fp(0.5),
     defenses: { resPct: resBlock({ lightning: 30 }), armourFixed: fp(0.5) },
     ranged: { speedFixed: fp(9), radiusFixed: fp(0.22) },
   },
   {
     id: "monster.rotting_behemoth.v1", name: "Rotting Behemoth", archetype: "heavy",
-    // 480: same heavy budget as blood_sentinel, measured at 0.83s/88 and scaled
-    // to 3-6s band (target 4.5s).
-    maxLifeFixed: fp(480), moveSpeedFixed: fp(1.55), attackRangeFixed: fp(1.8),
-    attackDamage: { type: "physical", amountFixed: fp(8) },
+    maxLifeFixed: LIFE.heavy, moveSpeedFixed: fp(1.55), attackRangeFixed: fp(1.8),
+    attackDamage: { type: "physical", amountFixed: HIT.heavy },
     attackCooldownTicks: 45, radiusFixed: fp(0.8),
     defenses: { resPct: resBlock({ chaos: 20 }), armourFixed: fp(2) },
-    heavy: { windupTicks: 30, radiusFixed: fp(2.6), damageFixed: fp(22), cooldownTicks: 150, rangeFixed: fp(6.5) },
+    heavy: { windupTicks: 30, radiusFixed: fp(2.6), damageFixed: fp(15), cooldownTicks: 150, rangeFixed: fp(6.5) },
   },
 
   // --- Forest: swarm, brute, shooter. The only biome with nothing to dodge,
   // and the only one that never lets you stand still.
   {
     id: "monster.bramble_whelp.v1", name: "Bramble Whelp", archetype: "swarm",
-    // 88: same swarm budget as vaal_husk, measured at 0.83s/24 and scaled to
-    // 2-4s band (target 3s). See balance.test.ts "swarm dies in 2-4s".
-    maxLifeFixed: fp(88), moveSpeedFixed: fp(2.6), attackRangeFixed: fp(1.1),
-    attackDamage: { type: "physical", amountFixed: fp(4) },
+    maxLifeFixed: LIFE.swarm, moveSpeedFixed: fp(2.6), attackRangeFixed: fp(1.1),
+    attackDamage: { type: "physical", amountFixed: HIT.swarm },
     attackCooldownTicks: 40, radiusFixed: fp(0.42),
     defenses: { resPct: resBlock(), armourFixed: fp(0) },
   },
   {
     id: "monster.thornhide_boar.v1", name: "Thornhide Boar", archetype: "brute",
-    // 460: same brute budget as vaal_construct; measured at 1.1s/140, 9.1s/700,
-    // 3.77s/420. Marginal rate 52 life/s, target 4.5s → 460. See balance.test.ts
-    // "brute dies in 4-7s".
-    maxLifeFixed: fp(460), moveSpeedFixed: fp(1.8), attackRangeFixed: fp(1.6),
-    attackDamage: { type: "physical", amountFixed: fp(13) },
+    maxLifeFixed: LIFE.brute, moveSpeedFixed: fp(1.8), attackRangeFixed: fp(1.6),
+    attackDamage: { type: "physical", amountFixed: HIT.brute },
     attackCooldownTicks: 75, radiusFixed: fp(0.85),
     defenses: { resPct: resBlock({ cold: 15 }), armourFixed: fp(3) },
   },
   {
     id: "monster.hoarfrost_spitter.v1", name: "Hoarfrost Spitter", archetype: "shooter",
-    // 108: same shooter budget as dune_spitter, measured at 1.03s/32 and scaled
-    // to 2-5s band (target 3.5s). See balance.test.ts "shooter dies in 2-5s".
-    maxLifeFixed: fp(108), moveSpeedFixed: fp(1.6), attackRangeFixed: fp(7.5),
-    attackDamage: { type: "cold", amountFixed: fp(8) },
+    maxLifeFixed: LIFE.shooter, moveSpeedFixed: fp(1.6), attackRangeFixed: fp(7.5),
+    attackDamage: { type: "cold", amountFixed: HIT.shooter },
     attackCooldownTicks: 70, radiusFixed: fp(0.5),
     defenses: { resPct: resBlock({ cold: 30 }), armourFixed: fp(0.5) },
     ranged: { speedFixed: fp(9), radiusFixed: fp(0.22) },

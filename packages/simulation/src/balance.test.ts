@@ -54,6 +54,18 @@ import type { Health, Mana, Position, MonsterC } from "./components";
  * The Warden's is the same 20-second fight it was before mana regeneration went
  * from 6/s to 15/s — its life was raised to hold that. What changed is what the
  * 20 seconds contain: 1.05 casts/s became 2.18.
+ *
+ * Re-measured at the casual pass (monster life -25%, monster hit -30%, content-
+ * runtime/monsters.ts), which is the one retune here that moved a band because a
+ * PERSON asked for it rather than because a number drifted: his reading is that
+ * the first map is too hard for a casual player.
+ *
+ *   kill    swamp boss 8.7s | forest 9.7s | coast 8.7s
+ *   die     five-imp pack 8.8s | Warden phase 1 16.0s
+ *
+ * Killing got ~25% faster and dying got ~45% slower, in one pass, which is the
+ * whole shape of the change: the bands below were widened to what it measured,
+ * not what would have kept them green.
  */
 
 const HZ = 30;
@@ -287,11 +299,11 @@ describe("time to kill", () => {
    * pays for bolts. Bolt damage is not the lever here — doubling it takes the
    * fight to 7.7s, and shortening the field to 1.5s does not move it at all.
    */
-  it.each(Object.entries(BOSSES))("the %s boss takes between 10 and 40 seconds", (_biome, defId) => {
+  it.each(Object.entries(BOSSES))("the %s boss takes between 7 and 40 seconds", (_biome, defId) => {
     const r = rig();
     spawnMonster(r.world, MONSTERS.get(defId)!, fp(0), SPAWN_Y, false);
     const secs = ticksToClear(r).ticks / HZ;
-    expect(secs).toBeGreaterThan(10);
+    expect(secs).toBeGreaterThan(7);
     expect(secs).toBeLessThan(40);
   });
 });
@@ -314,22 +326,22 @@ describe("time to death, player standing still and doing nothing", () => {
     expect(ticksToDeath(r) / HZ).toBeGreaterThan(15);
   });
 
-  it("a five-imp pack kills in three to eight seconds", () => {
+  it("a five-imp pack kills in four to twelve seconds", () => {
     const r = rig();
     for (const [dx, dy] of [[-1.5, 0], [0, 0], [1.5, 0], [-0.75, 1.5], [0.75, 1.5]] as const) {
       spawnImp(r, fp(dx), fp(dy));
     }
     const secs = ticksToDeath(r) / HZ;
-    expect(secs).toBeGreaterThan(3);
-    expect(secs).toBeLessThan(8);
+    expect(secs).toBeGreaterThan(4);
+    expect(secs).toBeLessThan(12);
   });
 
-  it("the Warden's phase 1 kills in six to fifteen seconds", () => {
+  it("the Warden's phase 1 kills in eight to twenty-two seconds", () => {
     const r = rig();
     spawnWarden(r);
     const secs = ticksToDeath(r) / HZ;
-    expect(secs).toBeGreaterThan(6);
-    expect(secs).toBeLessThan(15);
+    expect(secs).toBeGreaterThan(8);
+    expect(secs).toBeLessThan(22);
   });
 
   it("phase 2 is deadlier than phase 1, but still leaves three seconds to walk out", () => {

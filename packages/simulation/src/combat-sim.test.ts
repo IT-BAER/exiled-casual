@@ -55,8 +55,9 @@ describe("createCombatSim", () => {
     const normalLife = lives.find(l => l.rare === 0)!.maxLife;
     const rareLife = lives.find(l => l.rare === 1)!.maxLife;
     expect(rareLife).toBeGreaterThan(normalLife);
-    // fp(40)=40000; 40000*900/100 = 360000 = fp(360). normal = fp(40)=40000.
-    expect(rareLife).toBe(Math.trunc(fp(40) * 900 / 100)); // fp(360)
+    // The multiplier is the pin, not the imp's life: a balance pass moves the
+    // base and this test is about what `makeRare` does to whatever it is handed.
+    expect(rareLife).toBe(Math.trunc((normalLife * 900) / 100));
   });
 
   it("running 30 ticks twice with the same seed produces identical checksum sequences (determinism)", () => {

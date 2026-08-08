@@ -152,10 +152,10 @@ describe("MONSTERS", () => {
     expect(def.moveSpeedFixed).toBe(fp(2.6));                // 2600
   });
 
-  it("cinder_imp attackDamage is physical fp(6)", () => {
+  it("cinder_imp attackDamage is physical fp(4)", () => {
     const def = MONSTERS.get("monster.cinder_imp.v1")!;
     expect(def.attackDamage.type).toBe("physical");
-    expect(def.attackDamage.amountFixed).toBe(fp(6));        // 6000
+    expect(def.attackDamage.amountFixed).toBe(fp(4));        // 4000
   });
 
   it("cinder_imp has no resistances and armourFixed === fp(0.5)", () => {
