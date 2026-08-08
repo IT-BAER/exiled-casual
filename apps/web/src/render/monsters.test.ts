@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { MONSTERS } from "@exiled/content-runtime";
 import { partOfCreature, CreatureRig } from "./monsters";
 import { warmContainer } from "./warm-shaders";
-import type { AnimationGroup, AssetContainer } from "@babylonjs/core";
+import type { AnimationGroup, AssetContainer, InstantiatedEntries } from "@babylonjs/core";
 
 /**
  * `monsters.glb` is built offline by `tools/build_monsters.py`, and the runtime
@@ -139,7 +139,12 @@ describe("monsters asset", () => {
     } as unknown as AnimationGroup);
     const species = "monster.cinder_imp.v1";
     const rig = new CreatureRig(
-      ["walk", "idle", "attack"].map((c) => group(`${species}|${c}`)),
+      {
+        animationGroups: ["walk", "idle", "attack"].map((c) => group(`${species}|${c}`)),
+        rootNodes: [],
+        skeletons: [],
+        dispose: () => {},
+      } as unknown as InstantiatedEntries,
       species,
     );
     started.length = 0; // the constructor's arrival breath

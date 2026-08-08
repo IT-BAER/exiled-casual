@@ -2,6 +2,7 @@ import {
   LoadAssetContainerAsync,
   type AnimationGroup,
   type AssetContainer,
+  type InstantiatedEntries,
   type Mesh,
   type Node,
   type Scene,
@@ -143,9 +144,13 @@ export class CreatureRig {
   private standing = 0;
   private readonly scene: Scene | null;
 
-  constructor(groups: AnimationGroup[], species: string, scene: Scene | null = null) {
+  constructor(
+    private readonly entries: InstantiatedEntries,
+    species: string,
+    scene: Scene | null = null,
+  ) {
     this.scene = scene;
-    for (const group of groups) {
+    for (const group of entries.animationGroups) {
       const clip = group.name.endsWith("walk") ? "walk"
         : group.name.endsWith("idle") ? "idle"
         : group.name.endsWith("attack") ? "attack"
@@ -164,6 +169,19 @@ export class CreatureRig {
     // The first breath after being built is the arrival one; the settle starts
     // from there, exactly as it does when a creature stops walking.
     this.play("idle", IDLE_RATIO);
+  }
+
+  /**
+   * Free the whole instantiation, not just the visible mesh. Each monster gets
+   * its OWN skeleton (`doNotInstantiate`), so disposing the entity mesh leaves
+   * the bones, the `__root__`, and the cloned animation groups behind — 7000+
+   * `leg`/`body_` transform nodes after a few area crossings, the framerate
+   * bleeding out. `InstantiatedEntries.dispose()` is the same call `PlayerRig`
+   * makes; the renderer invokes this wherever it disposes an actor mesh.
+   */
+  dispose(): void {
+    this.entries.dispose();
+    this.groups.clear();
   }
 
   /**
@@ -246,7 +264,7 @@ export function attachCreature(scene: Scene, root: Mesh, species: string): Creat
     node.parent = root;
     for (const mesh of node.getChildMeshes()) mesh.isPickable = false;
   }
-  return new CreatureRig(entries.animationGroups, species, scene);
+  return new CreatureRig(entries, species, scene);
 }
 
 function hasChild(node: Node, name: string): boolean {
