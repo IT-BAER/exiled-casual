@@ -191,6 +191,17 @@ export const CORE_SFX: readonly string[] = [
 ];
 
 /**
+ * Every voice there is, for the loading screen to swallow whole.
+ *
+ * The whole library is 1.2 MB of Opus across fifty-odd files: less than one of
+ * the character's textures, and cheaper to fetch all of than to reason about
+ * which biome needs which. `CORE_SFX` still exists and still goes first, because
+ * ordering is the only thing that matters once cost stops mattering — the first
+ * click must not wait behind a swamp ambience nobody is standing in.
+ */
+export const ALL_SFX: readonly string[] = Object.keys(VOICES);
+
+/**
  * Play one sound. First call for a name starts the fetch and returns silently, so
  * an unpreloaded sound costs its first occurrence and nothing after it.
  *

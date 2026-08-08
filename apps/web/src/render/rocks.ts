@@ -1,3 +1,4 @@
+import { warmContainer } from "./warm-shaders";
 import {
   Color3,
   LoadAssetContainerAsync,
@@ -583,12 +584,16 @@ export function loadRocks(scene: Scene): Promise<void> {
   // ready when nothing was ever loaded into it.
   const gen = ++generation;
   pending = LoadAssetContainerAsync(ROCKS_URL, scene)
-    .then((container) => {
+    .then(async (container) => {
       if (gen !== generation) {
         container.dispose();
         return;
       }
       loaded = { scene, container };
+      // Same reason props.glb warms: a container is held OUT of the scene, so
+      // `executeWhenReady` never sees it, and the first boulder to draw compiles
+      // its shader on the frame it appears in — which is the frame a map opens on.
+      await warmContainer(container);
     })
     .catch(() => {
       if (gen === generation) loaded = null;

@@ -15,9 +15,10 @@ import { resetFireLights } from "./render/lights";
 import { loadRocks, resetRocks } from "./render/rocks";
 import { loadPlayerRig, resetPlayerRig } from "./render/rig";
 import { attachBindings } from "./input/bindings";
-import { CORE_SFX, playSfx, preloadSfx, setAmbient, stopAmbient } from "./audio/sfx";
+import { ALL_SFX, CORE_SFX, playSfx, preloadSfx, setAmbient, stopAmbient } from "./audio/sfx";
 import { createSoundscape } from "./audio/soundscape";
 import { preloadUiArt } from "./ui-art";
+import { preloadWorldArt } from "./render/world-art";
 import { setTitle } from "./title";
 import { FeedbackDialog, type FeedbackKind } from "./menu/FeedbackDialog";
 import { Hud, BAR_H, ORB_RISE } from "./hud/Hud";
@@ -211,7 +212,17 @@ export function GameView({
      * opening bolt of a session is not the one that fires in silence.
      */
     const soundscape = createSoundscape();
+    // Core first, then the whole library behind it: what a cue costs is one
+    // fetch, and the only cue that can ever be heard late is the one that is
+    // still on the wire when it fires. Both are running under the loading plate.
     void preloadSfx(CORE_SFX);
+    void preloadSfx(ALL_SFX);
+    // Textures the world only asks for once the plate is already down: the fire
+    // sheet on the first cast, an icon on the first drop, a gear texture on the
+    // first piece equipped (render/world-art.ts). Started here and never awaited:
+    // it runs alongside the models the first frame really is waiting for, and a
+    // texture that 404s or stalls must not be able to hold the door shut.
+    void preloadWorldArt();
 
     // Babylon engine + render loop
     // Ask for the discrete GPU on dual-GPU laptops; context-loss recovery is a
