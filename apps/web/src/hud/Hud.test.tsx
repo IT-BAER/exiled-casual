@@ -663,24 +663,29 @@ describe("the disenchanter has a name", () => {
 });
 
 /**
- * The tree's own affordance. There is no button for it, so the count IS the
- * invitation: a level-up that hands you something you cannot find is a reward
- * that did not happen (docs/09).
+ * The tree's affordance: a "+" button on the lower bar (right of the flasks),
+ * PoE1-style. It is always there — the tree is always reachable — and carries the
+ * unspent count as a badge, because a level-up that hands you something you cannot
+ * find is a reward that did not happen (docs/09).
  */
 describe("unspent passive points", () => {
-  it("says how many there are and which key opens them", () => {
+  it("shows the count as a badge on the plus button", () => {
     const { getByTestId } = render(<Hud snapshot={makeSnap({ passivePoints: 3 })} />);
-    expect(getByTestId("passive-points-chip").textContent).toContain("3 passive points");
-    expect(getByTestId("passive-points-chip").textContent).toContain("P");
+    expect(getByTestId("passive-open-count").textContent).toContain("3");
   });
 
-  it("counts one point in the singular", () => {
-    const { getByTestId } = render(<Hud snapshot={makeSnap({ passivePoints: 1 })} />);
-    expect(getByTestId("passive-points-chip").textContent).toContain("1 passive point (");
+  it("opens the tree when the plus is clicked", () => {
+    const onOpenPassives = vi.fn();
+    const { getByTestId } = render(
+      <Hud snapshot={makeSnap({ passivePoints: 2 })} onOpenPassives={onOpenPassives} />,
+    );
+    getByTestId("passive-open-button").click();
+    expect(onOpenPassives).toHaveBeenCalledTimes(1);
   });
 
-  it("goes away when the last point is spent", () => {
-    const { queryByTestId } = render(<Hud snapshot={makeSnap({ passivePoints: 0 })} />);
-    expect(queryByTestId("passive-points-chip")).toBeNull();
+  it("drops the badge when the last point is spent, but keeps the button", () => {
+    const { getByTestId, queryByTestId } = render(<Hud snapshot={makeSnap({ passivePoints: 0 })} />);
+    expect(queryByTestId("passive-open-count")).toBeNull();
+    expect(getByTestId("passive-open-button")).not.toBeNull();
   });
 });
