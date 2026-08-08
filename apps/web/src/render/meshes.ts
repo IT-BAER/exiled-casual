@@ -15,6 +15,7 @@ import { attachProp, type PropKind } from "./props";
 import { attachCreature, type CreatureRig } from "./monsters";
 import { attachBoltTrail, attachCinderFX, cinderGlow } from "./skill-fx";
 import { attachRig, rigOf, type RigParts } from "./rig";
+import { hasRim, HIT_TINT, HIT_ALPHA } from "./rim";
 import { playSfx, worldSfxMix } from "../audio/sfx";
 
 export type MeshKind = "player" | "monster" | "rare" | "boss" | "projectile" | "groundArea" | "telegraph" | "portal" | "mapDevice" | "stash" | "vendor" | "container" | "groundItem";
@@ -321,21 +322,23 @@ export function updateRareElement(root: Mesh, element: string | undefined): void
  * Whitewash a body for the moment it is struck. `t` runs 1 at the hit to 0 when
  * it is over; anything at or below 0 clears it.
  *
- * An overlay rather than a material change: monsters share cached materials by
- * species, so tinting one emissive would light up every imp on the screen. The
- * overlay is per mesh, costs no material, and survives a skinned mesh that has
- * its own shader — the two things that rule out every other way of doing this.
- *
- * Deliberately small (docs/09 rule 3: intensity beats density). A hit lands
- * several times a second all fight; anything that reads as a flash from across
- * the room becomes a strobe by the second pack.
+ * Materials carrying the rim plugin get the flash through it (a per-mesh
+ * `hitFlash` in metadata, read at bind time): Babylon's `renderOverlay` pass
+ * mis-renders on those skinned PBR materials — a data texture drawn as colour,
+ * green hatch rows on every hit tick. The material stays shared per species
+ * either way; tinting one emissive would light up every imp on the screen.
+ * Meshes without the plugin (greybox fallback) keep the overlay.
  */
-const HIT_TINT = new Color3(1, 0.93, 0.86);
-const HIT_ALPHA = 0.3;
-
 export function setHitFlash(root: Mesh, t: number): void {
   const on = t > 0;
   for (const m of [root, ...root.getChildMeshes(false)]) {
+    if (hasRim(m.material)) {
+      m.renderOverlay = false;
+      // Mutate, never replace: ActorParts and glTF loader data live here too.
+      const meta = (m.metadata ??= {}) as { hitFlash?: number };
+      meta.hitFlash = on ? Math.min(1, t) : 0;
+      continue;
+    }
     if (!on) { m.renderOverlay = false; continue; }
     m.overlayColor = HIT_TINT;
     m.overlayAlpha = HIT_ALPHA * Math.min(1, t);

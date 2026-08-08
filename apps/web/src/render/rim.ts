@@ -25,6 +25,9 @@
  */
 import type { Material } from "@babylonjs/core/Materials/material";
 import type { UniformBuffer } from "@babylonjs/core/Materials/uniformBuffer";
+import type { Scene } from "@babylonjs/core/scene";
+import type { AbstractEngine } from "@babylonjs/core/Engines/abstractEngine";
+import type { SubMesh } from "@babylonjs/core/Meshes/subMesh";
 import { Color3 } from "@babylonjs/core/Maths/math";
 import { MaterialPluginBase } from "@babylonjs/core/Materials/materialPluginBase";
 
@@ -45,6 +48,20 @@ export const RIM_INTENSITY = 0.34;
 export const RIM_POWER = 3.4;
 
 const NAME = "ExiledRim";
+
+/**
+ * The hit flash lives here too, not in Babylon's `renderOverlay`: that extra
+ * overlay pass mis-renders on skinned PBR materials carrying this plugin (a
+ * data texture drawn as colour — green hatch rows on every hit tick). The
+ * material stays shared per species, so the flash value rides the struck
+ * MESH's metadata and is read per submesh at bind time.
+ *
+ * Deliberately small (docs/09 rule 3: intensity beats density). A hit lands
+ * several times a second all fight; anything that reads as a flash from across
+ * the room becomes a strobe by the second pack.
+ */
+export const HIT_TINT = new Color3(1, 0.93, 0.86);
+export const HIT_ALPHA = 0.3;
 
 class RimPlugin extends MaterialPluginBase {
   constructor(material: Material) {
@@ -67,19 +84,23 @@ class RimPlugin extends MaterialPluginBase {
         { name: "rimIntensity", size: 1, type: "float" },
         { name: "rimPower", size: 1, type: "float" },
         { name: "rimColor", size: 3, type: "vec3" },
+        { name: "hitFlash", size: 1, type: "float" },
       ],
       fragment: `
         uniform float rimIntensity;
         uniform float rimPower;
         uniform vec3 rimColor;
+        uniform float hitFlash;
       `,
     };
   }
 
-  override bindForSubMesh(uniformBuffer: UniformBuffer): void {
+  override bindForSubMesh(uniformBuffer: UniformBuffer, _scene: Scene, _engine: AbstractEngine, subMesh: SubMesh): void {
     uniformBuffer.updateFloat("rimIntensity", RIM_INTENSITY);
     uniformBuffer.updateFloat("rimPower", RIM_POWER);
     uniformBuffer.updateColor3("rimColor", RIM_COLOR);
+    const flash = (subMesh.getMesh().metadata as { hitFlash?: number } | null)?.hitFlash ?? 0;
+    uniformBuffer.updateFloat("hitFlash", flash);
   }
 
   override getCustomCode(shaderType: string): Record<string, string> | null {
@@ -93,6 +114,7 @@ class RimPlugin extends MaterialPluginBase {
           float rimFacing = 1.0 - clamp(dot(normalize(normalW), viewDirectionW), 0.0, 1.0);
           finalColor.rgb += rimColor * pow(rimFacing, rimPower) * rimIntensity;
         #endif
+        finalColor.rgb = mix(finalColor.rgb, vec3(${HIT_TINT.r.toFixed(3)}, ${HIT_TINT.g.toFixed(3)}, ${HIT_TINT.b.toFixed(3)}), hitFlash * ${HIT_ALPHA.toFixed(3)});
       `,
     };
   }
@@ -105,4 +127,9 @@ class RimPlugin extends MaterialPluginBase {
 export function addRim(material: Material): void {
   if (material.pluginManager?.getPlugin(NAME)) return;
   new RimPlugin(material);
+}
+
+/** Whether a material already carries the plugin — the flash rides it if so. */
+export function hasRim(material: Material | null): boolean {
+  return !!material?.pluginManager?.getPlugin(NAME);
 }
