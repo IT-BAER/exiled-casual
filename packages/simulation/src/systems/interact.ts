@@ -1,8 +1,12 @@
 import { MAP_PORTALS } from "@exiled/protocol";
-import { atlasGraph, isNodeReachable, mapSeedFor, atlasNodeTier } from "@exiled/rules";
+import {
+  atlasGraph, isNodeReachable, mapSeedFor, atlasNodeTier,
+  canAllocate, passivePoints, START_LEVEL, DEFAULT_CLASS_ID,
+} from "@exiled/rules";
 import { isPermanentWaystone } from "@exiled/content-runtime";
 import { Simulation } from "../loop";
-import type { Position, InteractableC, SessionC, InventoryC, ContainerC } from "../components";
+import type { Position, InteractableC, SessionC, InventoryC, ContainerC, ProgressC } from "../components";
+import { recomputePlayerStats } from "../derived";
 import { spawnPortalRing, spillContainer } from "../areas";
 import { inRangeOf } from "../protocol-bridge";
 import type { CollisionRef } from "../collision";
@@ -66,6 +70,32 @@ export function registerInteractSystem(sim: Simulation, collisionRef?: Collision
           mapOpen: 1,
         });
         spawnPortalRing(world, MAP_PORTALS);
+        continue;
+      }
+
+      // ── The passive tree: spend a point, or take them all back ─────────────
+      if (cmd.type === "allocatePassive" || cmd.type === "respecPassives") {
+        const session = world.get<SessionC>(sessionE, "session")!;
+        const progress = world.get<ProgressC>(sessionE, "progress");
+        const allocated = session.passives ?? [];
+        if (cmd.type === "respecPassives") {
+          if (allocated.length === 0) continue;
+          world.set<SessionC>(sessionE, "session", { ...session, passives: [] });
+          recomputePlayerStats(world);
+          continue;
+        }
+        const nodeId = cmd.passiveId;
+        if (nodeId === undefined) continue;
+        // Both halves of the rule, server-side, because the client is untrusted:
+        // there has to be a point left, and the node has to touch something this
+        // character already owns (@exiled/rules/passives.ts).
+        const spent = allocated.length;
+        if (spent >= passivePoints(progress?.level ?? START_LEVEL)) continue;
+        if (!canAllocate(session.classId ?? DEFAULT_CLASS_ID, allocated, nodeId)) continue;
+        world.set<SessionC>(sessionE, "session", { ...session, passives: [...allocated, nodeId] });
+        // Life granted by a node is headroom, not a heal — the same rule a chest
+        // piece follows, and the same call that enforces it.
+        recomputePlayerStats(world);
         continue;
       }
 

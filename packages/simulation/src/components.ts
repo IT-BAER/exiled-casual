@@ -64,6 +64,19 @@ export interface SessionC {
   graceY?: Fixed;
   /** Area to build at the end of this tick; "" means stay put. */
   pendingArea: AreaKind | "";
+  /**
+   * Which class this character is. The world had no idea until the passive tree
+   * needed one: a class is the DOOR into the tree (`@exiled/rules/passives.ts`),
+   * so allocation cannot be checked without it. Stamped from the roster on every
+   * load, so a save written before this existed gets it back on the way in.
+   * Optional for the same save/checksum reason as `dead`.
+   */
+  classId?: string;
+  /**
+   * Passive nodes taken, in the order they were taken. Absent and empty are the
+   * same state, which is what keeps an old save and an old checksum agreeing.
+   */
+  passives?: string[];
 }
 
 /**

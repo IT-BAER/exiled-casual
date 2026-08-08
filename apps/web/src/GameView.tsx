@@ -25,6 +25,7 @@ import { Hud, BAR_H, ORB_RISE } from "./hud/Hud";
 import { PreparationPanel } from "./hud/PreparationPanel";
 import { InventoryPanel } from "./hud/InventoryPanel";
 import { CharacterPanel } from "./hud/CharacterPanel";
+import { PassiveTreePanel } from "./hud/PassiveTreePanel";
 import { LootLabels } from "./hud/LootLabels";
 import { NpcLabels } from "./hud/NpcLabels";
 import { Minimap } from "./hud/Minimap";
@@ -39,7 +40,7 @@ import type { FrameHook, Projector } from "./hud/LootLabels";
 import type { AreaLayout } from "@exiled/mapgen";
 import { BIOMES, mapBase } from "@exiled/content-runtime";
 import type { Snapshot, FromWorker, ToWorker } from "@exiled/protocol";
-import { atlasGraph, atlasNodeTier, isNodeReachable, mapBaseIdForNode } from "@exiled/rules";
+import { atlasGraph, atlasNodeTier, isNodeReachable, mapBaseIdForNode, DEFAULT_CLASS_ID } from "@exiled/rules";
 
 const LAB_SEED = 42;
 // ponytail: fixed seed for the lab; M3 will thread seed from game state
@@ -77,6 +78,9 @@ export function GameView({
   // The bench takes the same left-hand slot as the stash, so one closes the other.
   const [vendorOpen, setVendorOpen] = useState(false);
   const [characterOpen, setCharacterOpen] = useState(false);
+  // The passive tree (P). Fullscreen, like PoE's own, and render-only until a
+  // node is clicked — the sim owns whether that click is allowed.
+  const [passivesOpen, setPassivesOpen] = useState(false);
   // The Escape menu: the only way back out to character select.
   const [gameMenuOpen, setGameMenuOpen] = useState(false);
   /** Which report dialog is open, if any. Overlays take turns here too. */
@@ -117,7 +121,7 @@ export function GameView({
   // cheaper than five functional updates that also have to decide something.
   const overlayOpenRef = useRef(false);
   overlayOpenRef.current =
-    panelOpen || inventoryOpen || stashOpen || vendorOpen || characterOpen || optionsOpen;
+    panelOpen || inventoryOpen || stashOpen || vendorOpen || characterOpen || optionsOpen || passivesOpen;
   /**
    * Down and waiting on the death screen. Same mirror-ref trick as above, and for
    * the same reason: the keydown listener is attached once. While it is set, no
@@ -608,6 +612,12 @@ export function GameView({
       // the three take turns in that slot. Unconditional: the only way the stash is
       // up when `c` is pressed is if the sheet was already down.
       if (k === "c") { setCharacterOpen((v) => !v); setStashOpen(false); setVendorOpen(false); }
+      // P is the tree, PoE1's own key. It covers the screen, so it takes the
+      // screen: nothing else stays up behind it.
+      if (k === "p") {
+        setPassivesOpen((v) => !v);
+        setInventoryOpen(false); setStashOpen(false); setVendorOpen(false); setCharacterOpen(false);
+      }
       if (k === "escape") {
         // Escape clears the screen first and only raises the game menu once the
         // screen is already clear. The other way round, one stray Escape while
@@ -619,6 +629,7 @@ export function GameView({
           setVendorOpen(false);
           setCharacterOpen(false);
           setOptionsOpen(false);
+          setPassivesOpen(false);
         } else {
           setGameMenuOpen((open) => !open);
         }
@@ -669,7 +680,7 @@ export function GameView({
    * the one thing they all have in common is that there is now one more of them.
    */
   const panelsOpen =
-    [panelOpen, inventoryOpen, stashOpen, vendorOpen, characterOpen].filter(Boolean).length;
+    [panelOpen, inventoryOpen, stashOpen, vendorOpen, characterOpen, passivesOpen].filter(Boolean).length;
   const panelsWere = useRef(0);
   useEffect(() => {
     if (panelsOpen > panelsWere.current) playSfx("ui-panel-open");
@@ -778,6 +789,16 @@ export function GameView({
       {/* After the inventory so it paints above that panel's backdrop when both are open. */}
       {characterOpen && snapshot && (
         <CharacterPanel player={snapshot.player} onClose={() => setCharacterOpen(false)} />
+      )}
+      {snapshot && (
+        <PassiveTreePanel
+          open={passivesOpen}
+          classId={snapshot.player.classId ?? DEFAULT_CLASS_ID}
+          allocated={snapshot.player.passives ?? []}
+          points={snapshot.player.passivePoints ?? 0}
+          onIntent={(intent) => workerRef.current?.postMessage({ type: "intent", intent } satisfies ToWorker)}
+          onClose={() => setPassivesOpen(false)}
+        />
       )}
       {gameMenuOpen && (
         <GameMenu

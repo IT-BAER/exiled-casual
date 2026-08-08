@@ -15,6 +15,7 @@ export const testPlayer = (over: Partial<Snapshot["player"]> = {}): Snapshot["pl
   cooldowns: {}, alive: true, casting: false,
   level: 65, xp: 0, xpToNext: 60_000, gold: 0,
   flasks: { lifeCharges: 7, lifeMax: 7, manaCharges: 7, manaMax: 7 },
+  passives: [], passivePoints: 24, classId: "class.stalker",
   stats: testStats(),
   ...over,
 });

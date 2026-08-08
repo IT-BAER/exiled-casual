@@ -62,9 +62,17 @@ export type Intent =
    * ever inside an open map; the sim finds the scroll in its own inventory, so the
    * client never names one.
    */
-  | { kind: "usePortalScroll" };
+  | { kind: "usePortalScroll" }
+  /**
+   * Take one passive node. The sim owns the rule (a node has to touch something
+   * already allocated, and there has to be a point left to spend), so a client
+   * that draws the whole tree as clickable can still only ever be told no.
+   */
+  | { kind: "allocatePassive"; nodeId: string }
+  /** Give every point back. Free and total: half a respec is a second rule. */
+  | { kind: "respecPassives" };
 
-export type CommandType = "moveTo" | "moveDir" | "useSkill" | "stop" | "interact" | "activateMap" | "pickupItem" | "equipItem" | "unequipItem" | "dropItem" | "moveItem" | "useFlask" | "applyCurrency" | "sellItem" | "buyItem" | "revive" | "usePortalScroll";
+export type CommandType = "moveTo" | "moveDir" | "useSkill" | "stop" | "interact" | "activateMap" | "pickupItem" | "equipItem" | "unequipItem" | "dropItem" | "moveItem" | "useFlask" | "applyCurrency" | "sellItem" | "buyItem" | "revive" | "usePortalScroll" | "allocatePassive" | "respecPassives";
 
 // ---------------------------------------------------------------------------
 // Run loop
@@ -306,6 +314,15 @@ export interface Snapshot {
      * built without a session.
      */
     buffs?: { id: string; kind: "buff" | "debuff"; remainingSec: number }[];
+    /** Passive nodes taken. The tree itself is content the client already has,
+     *  so only the allocation crosses the wire. Optional like every other field
+     *  added to this shape: absent and empty are the same character. */
+    passives?: string[];
+    /** Points still to spend, which is what the tree's header counts down. */
+    passivePoints?: number;
+    /** Which door this character was born at, so the client can draw the tree
+     *  from the same start the sim validates against. */
+    classId?: string;
   };
   entities: SnapshotEntity[];
   /** Grid inventory (session singleton), display-ready. Empty when no session. */
@@ -502,6 +519,13 @@ export function validateIntent(v: unknown): Intent {
     }
     case "usePortalScroll":
       return { kind: "usePortalScroll" };
+    case "allocatePassive": {
+      if (typeof obj["nodeId"] !== "string" || obj["nodeId"].length === 0)
+        throw new Error("validateIntent allocatePassive: nodeId must be a non-empty string");
+      return { kind: "allocatePassive", nodeId: obj["nodeId"] as string };
+    }
+    case "respecPassives":
+      return { kind: "respecPassives" };
     default:
       throw new Error(`validateIntent: unknown kind: ${String(obj["kind"])}`);
   }

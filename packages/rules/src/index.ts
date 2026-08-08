@@ -13,3 +13,4 @@ export * from "./currency.js";
 export * from "./disenchant.js";
 export * from "./loot.js";
 export * from "./vendor.js";
+export * from "./passives.js";

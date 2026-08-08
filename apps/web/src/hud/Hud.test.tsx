@@ -38,6 +38,7 @@ function makeSnap(overrides: {
   skills?: Snapshot["skills"];
   /** Waystone items to seed into inventory.items for the reward-banner tests. */
   waystoneItems?: number;
+  passivePoints?: number;
 }): Snapshot {
   // Build a minimal inventory with `waystoneItems` 1x1 waystone cells, if any.
   const waystoneInv = overrides.waystoneItems
@@ -74,6 +75,7 @@ function makeSnap(overrides: {
       xpToNext: overrides.xpToNext ?? 60_000,
       gold: 0,
       flasks: overrides.flasks ?? { lifeCharges: 7, lifeMax: 7, manaCharges: 7, manaMax: 7 },
+      ...(overrides.passivePoints === undefined ? {} : { passivePoints: overrides.passivePoints }),
       stats: testStats(),
     },
     entities: overrides.entities ?? [],
@@ -657,5 +659,28 @@ describe("the disenchanter has a name", () => {
     render(<Hud snapshot={withVendor} hoveredEntityId={42} />);
     expect(screen.getByTestId("interact-label").textContent).toContain(VENDOR_NAME);
     expect(screen.getByTestId("interact-label").textContent).toContain(VENDOR_TITLE);
+  });
+});
+
+/**
+ * The tree's own affordance. There is no button for it, so the count IS the
+ * invitation: a level-up that hands you something you cannot find is a reward
+ * that did not happen (docs/09).
+ */
+describe("unspent passive points", () => {
+  it("says how many there are and which key opens them", () => {
+    const { getByTestId } = render(<Hud snapshot={makeSnap({ passivePoints: 3 })} />);
+    expect(getByTestId("passive-points-chip").textContent).toContain("3 passive points");
+    expect(getByTestId("passive-points-chip").textContent).toContain("P");
+  });
+
+  it("counts one point in the singular", () => {
+    const { getByTestId } = render(<Hud snapshot={makeSnap({ passivePoints: 1 })} />);
+    expect(getByTestId("passive-points-chip").textContent).toContain("1 passive point (");
+  });
+
+  it("goes away when the last point is spent", () => {
+    const { queryByTestId } = render(<Hud snapshot={makeSnap({ passivePoints: 0 })} />);
+    expect(queryByTestId("passive-points-chip")).toBeNull();
   });
 });

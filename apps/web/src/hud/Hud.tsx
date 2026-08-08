@@ -998,6 +998,37 @@ export function Hud({
 
       <XpBar level={snapshot.player.level} xp={xp} xpToNext={xpToNext} />
 
+      {/* Points waiting to be spent, over the rail that granted them. PoE1 puts a
+          plus on the tree's button; there is no button here, so the chip IS the
+          affordance — it names the key as well as the count, because a level-up
+          that hands you something you cannot find is a reward that did not
+          happen (docs/09). It goes away the moment the last point is spent. */}
+      {(snapshot.player.passivePoints ?? 0) > 0 && (
+        <div
+          data-testid="passive-points-chip"
+          style={{
+            position: "absolute",
+            left: "50%",
+            transform: "translateX(-50%)",
+            bottom: `calc(${BAR_H} + 0.6vh)`,
+            padding: "0.25vh 0.7vw",
+            fontFamily: SERIF,
+            fontSize: "1.15vh",
+            color: "#1a1408",
+            background: "linear-gradient(180deg,#e8c368,#b98f36)",
+            border: "1px solid #f4dfa0",
+            borderRadius: 2,
+            boxShadow: "0 0 10px rgba(232,195,104,0.45)",
+            pointerEvents: "none",
+            zIndex: 3,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {snapshot.player.passivePoints} passive point
+          {snapshot.player.passivePoints === 1 ? "" : "s"} (press P)
+        </div>
+      )}
+
       {/* Flask bar — runs off the screen side and under the life globe, per poe1-lower-bar.png */}
       <div
         data-testid="flask-row"

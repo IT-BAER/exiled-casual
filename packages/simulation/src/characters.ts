@@ -20,7 +20,7 @@ import { characterClass } from "@exiled/content-runtime";
 import { START_LEVEL, classIdOr } from "@exiled/rules";
 import type { Item } from "@exiled/content-schema";
 import type { World } from "./ecs";
-import type { EquipmentC, ProgressC, StashC } from "./components";
+import type { EquipmentC, ProgressC, SessionC, StashC } from "./components";
 import { EMPTY_STASH, restore, snapshot, type PersistedState } from "./persist";
 import { recomputePlayerStats } from "./derived";
 import { openRoster } from "./roster-io";
@@ -64,6 +64,14 @@ export async function loadCharacterInto(
     equipStartingGear(world, record.classId);
   } else {
     restore(world, record.state as PersistedState);
+  }
+  // The roster is the authority on what class this is, not the save: a character
+  // created before the session carried one still has it in the row. The passive
+  // tree reads it to know which door is open (@exiled/rules/passives.ts).
+  const sessionE = world.query("session")[0];
+  if (sessionE !== undefined) {
+    const session = world.get<SessionC>(sessionE, "session");
+    if (session) world.set<SessionC>(sessionE, "session", { ...session, classId: record.classId });
   }
   // After restore either way: restore() would otherwise put the character's own
   // stale stash copy back over the shared one.

@@ -1,4 +1,4 @@
-import { baseCasterStats, applyItemMods, levelBonus, START_LEVEL, waystoneScaleFor } from "@exiled/rules";
+import { baseCasterStats, applyItemMods, levelBonus, passiveStatMods, START_LEVEL, waystoneScaleFor } from "@exiled/rules";
 import { itemStatMods } from "@exiled/content-runtime";
 import { ELEMENTS } from "@exiled/content-schema";
 import type { World } from "./ecs";
@@ -37,9 +37,17 @@ export function recomputePlayerStats(world: World, opts: { refill?: boolean } = 
   // the one an unlevelled character has always had.
   const progress = sessionE === undefined ? undefined : world.get<ProgressC>(sessionE, "progress");
   const bonus = levelBonus(progress?.level ?? START_LEVEL);
+  // The passive tree enters the same fold as gear, for the same reason the level
+  // bonus does: a node and a chest piece grant the same kind of thing, so one
+  // arithmetic has to own both or the character sheet and the sim will disagree
+  // about a number they both claim to be reading.
+  const allocated = sessionE === undefined
+    ? []
+    : world.get<SessionC>(sessionE, "session")?.passives ?? [];
   const s = applyItemMods(baseCasterStats(), [
     { stat: "maxLife", value: bonus.maxLife },
     { stat: "maxMana", value: bonus.maxMana },
+    ...passiveStatMods(allocated),
     ...mods,
   ]);
 

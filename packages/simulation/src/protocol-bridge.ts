@@ -3,7 +3,7 @@ import { PICKUP_RADIUS } from "@exiled/protocol";
 import type { DisplaySkill, Intent, Snapshot, SnapshotEntity, MonsterElement } from "@exiled/protocol";
 import { damageTypeOf } from "./damage-types";
 import { VENDOR_COLS, VENDOR_ROWS } from "./vendor";
-import { physicalMitigationPct, scalePct, xpToNext, START_LEVEL, vendorBuyPrice } from "@exiled/rules";
+import { physicalMitigationPct, scalePct, xpToNext, START_LEVEL, vendorBuyPrice, passivePoints, DEFAULT_CLASS_ID } from "@exiled/rules";
 import { resBlock } from "@exiled/content-schema";
 import { describeItem, SKILLS, TOWN_PORTAL_SKILL } from "@exiled/content-runtime";
 import type { Command, Simulation } from "./loop";
@@ -96,6 +96,10 @@ export function intentToCommand(intent: Intent, player: Entity, tick: number): C
       };
     case "buyItem":
       return { tick, entity: player, type: "buyItem", data: { x: intent.x, y: intent.y } };
+    case "allocatePassive":
+      return { tick, entity: player, type: "allocatePassive", passiveId: intent.nodeId };
+    case "respecPassives":
+      return { tick, entity: player, type: "respecPassives" };
     case "usePortalScroll":
       // The scroll's right-click IS the Portal skill: one action, one cast time,
       // one cooldown. Two implementations of "open the way home" is how a hotkey
@@ -405,6 +409,11 @@ export function buildSnapshot(
         }
         return out;
       })(),
+      passives: session?.passives ?? [],
+      // What is LEFT, not what was granted: the header counts down, and the sim
+      // is the only thing that knows how many were spent.
+      passivePoints: Math.max(0, passivePoints(progress.level) - (session?.passives?.length ?? 0)),
+      classId: session?.classId ?? DEFAULT_CLASS_ID,
       level: progress.level,
       xp: progress.xp,
       xpToNext: xpToNext(progress.level),

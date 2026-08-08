@@ -7,7 +7,8 @@ import { Simulation } from "../loop";
 import { registerInteractSystem } from "./interact";
 import { registerSkillCast } from "./skill-cast";
 import type { World } from "../ecs";
-import type { SessionC, Position, InteractableC, InventoryC, ContainerC } from "../components";
+import type { SessionC, Position, InteractableC, InventoryC, ContainerC, Health } from "../components";
+import { PASSIVE_TREE, canAllocate, passiveNode, passivePoints, startNodeId, START_LEVEL } from "@exiled/rules";
 
 function makeWorld() {
   const sim = new Simulation();
@@ -21,6 +22,9 @@ function makeWorld() {
   const player = world.create();
   world.set(player, "player", { moveSpeed: 0, bodyRadius: fp(0.5) });
   world.set(player, "mana", { mana: fp(60), maxMana: fp(60), regen: 0 });
+  // Health, so a passive that grants life has somewhere to land: the tree writes
+  // through `recomputePlayerStats`, which only ever touches components that exist.
+  world.set<Health>(player, "health", { life: fp(100), maxLife: fp(100) });
   // Place player at the map device position so range checks pass by default.
   world.set<Position>(player, "position", { x: fp(0), y: fp(8) });
 
@@ -530,5 +534,94 @@ describe("containers", () => {
     b.sim.step([interactCmd(b.player, b.chest)]);
     const names = (w: World) => w.query("item").map((e) => JSON.stringify(w.get(e, "item"))).sort();
     expect(names(a.world)).toEqual(names(b.world));
+  });
+});
+
+/**
+ * The passive tree, from the sim's side: the client draws all 200 nodes and the
+ * rule that says which of them may be taken lives here, because the client is
+ * untrusted.
+ */
+describe("the passive tree", () => {
+  const CLASS = "class.stalker";
+  const door = passiveNode(startNodeId(CLASS))!;
+  const near = door.links[0]!;
+  const far = PASSIVE_TREE.find((n) => n.kind === "keystone")!.id;
+
+  function atLevel(level = START_LEVEL) {
+    const ctx = makeWorld();
+    const session = ctx.world.get<SessionC>(ctx.sessionE, "session")!;
+    ctx.world.set<SessionC>(ctx.sessionE, "session", { ...session, classId: CLASS });
+    ctx.world.set(ctx.sessionE, "progress", { level, xp: 0, gold: 0 });
+    return ctx;
+  }
+  const take = (player: number, nodeId: string) =>
+    [{ tick: 0, entity: player, type: "allocatePassive", passiveId: nodeId }];
+  const allocated = (world: World, sessionE: number) =>
+    world.get<SessionC>(sessionE, "session")!.passives ?? [];
+
+  it("takes a node the door touches", () => {
+    const { sim, world, player, sessionE } = atLevel();
+    sim.step(take(player, near));
+    expect(allocated(world, sessionE)).toEqual([near]);
+  });
+
+  it("refuses a node nothing allocated touches", () => {
+    const { sim, world, player, sessionE } = atLevel();
+    sim.step(take(player, far));
+    expect(allocated(world, sessionE)).toEqual([]);
+  });
+
+  it("refuses a node that does not exist", () => {
+    const { sim, world, player, sessionE } = atLevel();
+    sim.step(take(player, "p.nowhere"));
+    expect(allocated(world, sessionE)).toEqual([]);
+  });
+
+  it("refuses to take the same node twice", () => {
+    const { sim, world, player, sessionE } = atLevel();
+    sim.step(take(player, near));
+    sim.step(take(player, near));
+    expect(allocated(world, sessionE)).toEqual([near]);
+  });
+
+  it("stops at the points the level pays for", () => {
+    const { sim, world, player, sessionE } = atLevel();
+    const budget = passivePoints(START_LEVEL);
+    // Walk outward greedily until the budget runs out, then try once more.
+    for (let i = 0; i <= budget + 5; i++) {
+      const have = allocated(world, sessionE);
+      const next = PASSIVE_TREE.find((n) => canAllocate(CLASS, have, n.id));
+      if (!next) break;
+      sim.step(take(player, next.id));
+    }
+    expect(allocated(world, sessionE)).toHaveLength(budget);
+  });
+
+  it("grants what the node says, on the player, not just on the sheet", () => {
+    const { sim, world, player, sessionE } = atLevel();
+    // Walk to the nearest node that grants life, so the assertion is about the
+    // grant rather than about which door this class happens to start at.
+    const path: string[] = [];
+    let life = PASSIVE_TREE.find((n) => canAllocate(CLASS, path, n.id))!;
+    while (!life.mods.some((m) => m.stat === "maxLife" || m.stat === "strength")) {
+      path.push(life.id);
+      sim.step(take(player, life.id));
+      life = PASSIVE_TREE.find((n) => canAllocate(CLASS, path, n.id))!;
+    }
+    const before = world.get<Health>(player, "health")!.maxLife;
+    sim.step(take(player, life.id));
+    expect(allocated(world, sessionE)).toEqual([...path, life.id]);
+    expect(world.get<Health>(player, "health")!.maxLife).toBeGreaterThan(before);
+  });
+
+  it("gives every point back at once, and the stats with them", () => {
+    const { sim, world, player, sessionE } = atLevel();
+    sim.step(take(player, near));
+    const withNode = world.get<Health>(player, "health")?.maxLife ?? 0;
+    sim.step([{ tick: 0, entity: player, type: "respecPassives" }]);
+    expect(allocated(world, sessionE)).toEqual([]);
+    const after = world.get<Health>(player, "health")?.maxLife ?? 0;
+    expect(after).toBeLessThanOrEqual(withNode);
   });
 });

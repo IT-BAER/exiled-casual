@@ -11,6 +11,8 @@ export interface Command {
   data?: Record<string, number>;
   /** Set when type === "activateMap"; kept off `data` since that field is numbers-only. */
   atlasNodeId?: string;
+  /** Set when type === "allocatePassive", for the same reason. */
+  passiveId?: string;
   /** Set when type === "activateMap": the backpack cell holding the stone. */
   x?: number;
   y?: number;
