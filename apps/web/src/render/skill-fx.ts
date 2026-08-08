@@ -285,6 +285,13 @@ export function attachBoltTrail(scene: Scene, mesh: AbstractMesh): ParticleSyste
     emberBurst(scene, mesh.getAbsolutePosition().clone());
     // The trail is NOT auto-disposed with its generator, and one left standing
     // keeps trying to sample a mesh that no longer exists.
+    //
+    // stop() BEFORE dispose(), and it is not a nicety: TrailMesh registers its
+    // own onBeforeRenderObservable observer in start() and has no dispose()
+    // override of its own (Babylon 9.20.0), so disposing it leaves that observer
+    // running update() over the vertex buffers of a mesh that is gone — one dead
+    // loop per frame, per bolt, for the rest of the session.
+    ribbon.stop();
     ribbon.material?.dispose();
     ribbon.dispose();
   });

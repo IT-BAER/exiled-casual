@@ -59,6 +59,36 @@ describe("ember bolt", () => {
     expect(farthest).toBeLessThan(1);
   });
 
+  /**
+   * Every bolt costs a per-frame observer for the rest of the session unless the
+   * trail is STOPPED, not merely disposed.
+   *
+   * `TrailMesh.start()` registers an `onBeforeRenderObservable` observer and
+   * only `stop()` removes it — Babylon's TrailMesh has no `dispose()` override
+   * of its own (checked against 9.20.0), so `dispose()` leaves that observer
+   * running `update()` over the vertex buffers of a mesh that is gone. Thirty
+   * two bolts into a session that is thirty two dead loops a frame, measured
+   * live, and it never recovers because leaving the area does not touch it.
+   */
+  it("takes its ribbon's per-frame observer with it when the bolt lands", async () => {
+    const scene = newScene();
+    const trailObservers = () =>
+      scene.onBeforeRenderObservable.observers.filter((o) =>
+        String(o.callback).includes("this.update()")).length;
+
+    const mesh = makeMesh(scene, "projectile", "entity-7");
+    expect(trailObservers()).toBe(1);
+
+    mesh.dispose();
+    // Observable.remove marks and splices on a setTimeout(0), so the count is
+    // only honest on the next macrotask. Reading it synchronously says "still
+    // registered" whether the removal happened or not.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(scene.getMeshByName(`${BOLT_TRAIL_NAME}-ribbon`)).toBeNull();
+    expect(trailObservers()).toBe(0);
+  });
+
   it("burns each spark through the flipbook over its own lifetime", () => {
     const scene = newScene();
     makeMesh(scene, "projectile", "entity-7");
