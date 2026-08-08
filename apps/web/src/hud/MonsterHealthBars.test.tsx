@@ -54,6 +54,21 @@ describe("MonsterHealthBars", () => {
     expect(screen.queryByTestId("monster-hp-4")).toBeNull();
   });
 
+  it("places the bar at the renderer's interpolated position, not the 30 Hz snapshot", () => {
+    // afterFrame captures the placement callback so the test can run a "frame".
+    let place: (() => void) | null = null;
+    render(
+      <MonsterHealthBars
+        snapshot={snapshotWith([monster({ id: 3, x: 5, y: 5 })] as Snapshot["entities"])}
+        project={project}
+        afterFrame={(cb) => { place = cb; return () => {}; }}
+        worldPos={(id) => (id === 3 ? { x: 6, y: 6 } : null)}
+      />,
+    );
+    place!();
+    expect(screen.getByTestId("monster-hp-3").style.transform).toContain("translate(60px, 60px)");
+  });
+
   it("never eats a click", () => {
     render(
       <MonsterHealthBars

@@ -26,12 +26,18 @@ const BAR_H = 5;
  * instead of re-rendering. Fill width IS re-rendered per snapshot — life only
  * changes when a snapshot arrives, so that is exactly often enough.
  */
-export function MonsterHealthBars({ snapshot, project, afterFrame }: {
+export function MonsterHealthBars({ snapshot, project, afterFrame, worldPos }: {
   snapshot: Snapshot | null;
   /** Null until the Babylon scene exists; bars then hold their last position. */
   project: Projector | null;
   /** Placement runs on this when it exists, and on rAF when it does not. */
   afterFrame?: FrameHook | null;
+  /**
+   * The renderer's per-frame position for an entity, when it has one. The mesh
+   * glides on interpolated coords between 30 Hz snapshots; a bar pinned to the
+   * raw snapshot stutters against it, so placement prefers this.
+   */
+  worldPos?: ((id: number) => { x: number; y: number } | null) | null;
 }) {
   const nodes = useRef(new Map<number, HTMLDivElement>());
   const positions = useRef(new Map<number, { x: number; y: number }>());
@@ -52,7 +58,7 @@ export function MonsterHealthBars({ snapshot, project, afterFrame }: {
     if (!project) return;
     const place = () => {
       for (const [id, node] of nodes.current) {
-        const at = positions.current.get(id);
+        const at = worldPos?.(id) ?? positions.current.get(id);
         if (!at) continue;
         const p = project(at.x, at.y, BAR_HEIGHT);
         node.style.visibility = p.visible ? "visible" : "hidden";
@@ -66,7 +72,7 @@ export function MonsterHealthBars({ snapshot, project, afterFrame }: {
     const tick = () => { place(); raf = requestAnimationFrame(tick); };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [project, afterFrame]);
+  }, [project, afterFrame, worldPos]);
 
   return (
     <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>

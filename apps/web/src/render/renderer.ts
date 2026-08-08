@@ -246,6 +246,16 @@ export class SnapshotRenderer {
     if (mesh) rigOf(mesh)?.setAimTarget(worldX, worldZ);
   }
 
+  /**
+   * Per-frame world position of an entity's mesh in sim coords, for DOM overlays.
+   * The mesh glides on interpolated coords between 30 Hz snapshots, so this is
+   * smoother than the snapshot the overlay was rendered from.
+   */
+  entityWorldPos(id: number): { x: number; y: number } | null {
+    const mesh = this.meshes.get(id);
+    return mesh ? { x: mesh.position.x, y: mesh.position.z } : null;
+  }
+
   /** Set the entity the mouse is hovering; drives portal/device highlight visuals. */
   setHoveredEntity(id: number | null): void {
     this.hoveredEntityId = id;

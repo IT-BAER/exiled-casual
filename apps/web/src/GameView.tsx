@@ -164,6 +164,8 @@ export function GameView({
   const [areaLayout, setAreaLayout] = useState<AreaLayout | null>(null);
   const [project, setProject] = useState<Projector | null>(null);
   const [afterFrame, setAfterFrame] = useState<FrameHook | null>(null);
+  const [entityWorldPos, setEntityWorldPos] =
+    useState<((id: number) => { x: number; y: number } | null) | null>(null);
   const [pick, setPick] = useState<((id: number, x: number, y: number) => void) | null>(null);
   const workerRef = useRef<Worker | null>(null);
   /**
@@ -289,6 +291,10 @@ export function GameView({
       );
       return { x: p.x, y: p.y, visible: p.z > 0 && p.z < 1 };
     });
+
+    // Monster health bars follow the mesh, not the snapshot: the renderer
+    // interpolates positions per frame and a bar pinned to 30 Hz stutters.
+    setEntityWorldPos(() => (id: number) => renderer.entityWorldPos(id));
 
     // Labels are placed after the frame is drawn, never on their own rAF: see
     // FrameHook in hud/LootLabels.tsx for what a frame of lag looks like.
@@ -739,7 +745,12 @@ export function GameView({
       />
       <NpcLabels snapshot={snapshot} project={project} afterFrame={afterFrame} />
       {settings.ui.monsterHealthBars && (
-        <MonsterHealthBars snapshot={snapshot} project={project} afterFrame={afterFrame} />
+        <MonsterHealthBars
+          snapshot={snapshot}
+          project={project}
+          afterFrame={afterFrame}
+          worldPos={entityWorldPos}
+        />
       )}
       <BuffBar snapshot={snapshot} />
       <Hud
