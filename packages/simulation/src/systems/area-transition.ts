@@ -8,8 +8,20 @@ import type { SessionC, MoveTarget, MoveDir, Position } from "../components";
 import { areaCollision, buildArea, HIDEOUT_SPAWN } from "../areas";
 import { SPAWN_GRACE_TICKS } from "./damage-resolve";
 import { recomputePlayerStats } from "../derived";
+import { restoreArea, suspendArea, suspendedMatches, type SuspendedArea } from "../suspend";
 
 export function registerAreaTransition(sim: Simulation, collisionRef?: CollisionRef): void {
+  /**
+   * The map the player walked out of and can still walk back into.
+   *
+   * A closure rather than a component: it must not be in the world, or it would
+   * be in the checksum and in the save, and a whole area's population hashed
+   * into every tick of the hideout is a lot of arithmetic to prove nothing
+   * changed. It dies with the simulation, which is the honest lifetime — a
+   * reloaded save has no map standing anywhere.
+   */
+  let suspended: SuspendedArea | null = null;
+
   sim.register("areaTransition", (world, tick) => {
     const sessionEntities = world.query("session");
     if (sessionEntities.length === 0) return;
@@ -22,6 +34,18 @@ export function registerAreaTransition(sim: Simulation, collisionRef?: Collision
     // Entities to keep: player(s) + the session singleton.
     const keepSet = new Set<number>(world.query("player"));
     keepSet.add(sessionE);
+
+    // Walking out of a map that is still open freezes it, so coming back finds
+    // it as it was left. `mapOpen` is the test rather than `portalsLeft`, because
+    // the interact system has already spent the portal this crossing costs: at
+    // zero portals it also closes the map, and a closed map is one nobody can
+    // return to. Leaving with no portals left, or leaving the hideout, drops
+    // whatever was held — the map it described is over or was never entered.
+    if (session.area === "map" && newArea === "hideout" && session.mapOpen === 1) {
+      suspended = suspendArea(world, keepSet, session, tick);
+    } else if (session.area === "map") {
+      suspended = null;
+    }
 
     // Spread alive to a snapshot before destroying (world.alive is mutated by destroy).
     for (const e of [...world.alive]) {
@@ -42,7 +66,17 @@ export function registerAreaTransition(sim: Simulation, collisionRef?: Collision
       CONTENT_VERSION,
       grammarForNode(newSession.activeNodeId),
     );
-    buildArea(world, newArea, newSession, layout, tick);
+    // The same map, walked back into: put the frozen population back instead of
+    // rolling a fresh one out of the seed. Anything else builds the area.
+    if (newArea === "map" && suspendedMatches(suspended, newSession)) {
+      restoreArea(world, suspended, tick);
+    } else {
+      buildArea(world, newArea, newSession, layout, tick);
+    }
+    // Entering a map consumes what was held either way: it was this map, and it
+    // is now standing in the world again, or it was a map the player has walked
+    // away from for good and a stale copy of it is just memory nobody will read.
+    if (newArea === "map") suspended = null;
 
     // Swap the shared level collision: the map's walls, and in either area the
     // furniture and shops `buildArea` just stood up. After it, never before —

@@ -189,3 +189,104 @@ describe("registerAreaTransition — map entry (collision + start socket)", () =
     expect(ref.active!.isWalkable(0, 0, fp(0.5))).toBe(true);
   });
 });
+
+/**
+ * Leaving a map you can still come back to freezes it. The rule is PoE1's: the
+ * portal budget is what says a map is still yours, so a walk home to empty the
+ * bag must not re-roll the place.
+ */
+describe("a map with portals left is still standing when you come back", () => {
+  /** A session mid-run: in a map, one portal already spent, five left. */
+  function inOpenMap(world: ReturnType<typeof makeWorld>["world"]) {
+    const sessionE = world.create();
+    const session: SessionC = {
+      area: "map", atlasSeed: 0, areaTier: 3, activeNodeId: "node.the_wrackline",
+      completedNodes: [], mapSeed: 4242, waystoneSeed: 0,
+      portalsLeft: 5, mapOpen: 1, pendingArea: "hideout",
+    };
+    world.set<SessionC>(sessionE, "session", session);
+    return sessionE;
+  }
+
+  /** One thinned pack and one opened chest, the two things a return has to find. */
+  function populate(world: ReturnType<typeof makeWorld>["world"]) {
+    const hurt = world.create();
+    world.set(hurt, "monster", { defId: "monster.vaal_husk.v1", state: "chase", moveSpeed: fp(2),
+      bodyRadius: fp(0.4), attackRange: fp(1), attackCooldownTicks: 40, attackDamage: fp(3),
+      attackType: 1, attackReadyTick: 90, slamReadyTick: 0, rootedUntilTick: 0, rare: 0, summoned: 0 });
+    world.set<Health>(hurt, "health", { life: fp(12), maxLife: fp(66) });
+    world.set<Position>(hurt, "position", { x: fp(11), y: fp(-7) });
+    const chest = world.create();
+    world.set(chest, "interactable", { kind: "container", radius: fp(2), yaw: 0 });
+    world.set(chest, "container", { look: "chest", key: "cache:4242:0:r1", opened: 1 });
+    world.set<Position>(chest, "position", { x: fp(3), y: fp(3) });
+    return { hurt, chest };
+  }
+
+  /** Walk out, wait `idle` ticks in the hideout, walk back in. */
+  function roundTrip(idle: number) {
+    const { sim, world, player } = makeWorld();
+    const sessionE = inOpenMap(world);
+    populate(world);
+    sim.step(); // out
+    const inHideout = world.get<SessionC>(sessionE, "session")!;
+    for (let t = 0; t < idle; t++) sim.step();
+    world.set<SessionC>(sessionE, "session", { ...inHideout, pendingArea: "map" });
+    sim.step(); // back in
+    return { sim, world, player, sessionE };
+  }
+
+  const monstersOf = (world: ReturnType<typeof makeWorld>["world"]) =>
+    world.query("monster", "health").map((e) => ({
+      life: world.get<Health>(e, "health")!.life,
+      pos: world.get<Position>(e, "position")!,
+      ready: (world.get(e, "monster") as { attackReadyTick: number }).attackReadyTick,
+    }));
+
+  it("brings back the same wounded monster, in the same place", () => {
+    const { sim, world } = roundTrip(0);
+    // `ready` is rebased by the ticks that passed, so it is asserted as the time
+    // it has LEFT — which is the thing that has to survive the trip.
+    expect(monstersOf(world).map((m) => ({ ...m, ready: m.ready - sim.tick }))).toEqual([
+      { life: fp(12), pos: { x: fp(11), y: fp(-7) }, ready: 89 },
+    ]);
+  });
+
+  it("brings back the opened chest still opened", () => {
+    const { world } = roundTrip(0);
+    const chests = world.query("container");
+    expect(chests).toHaveLength(1);
+    expect(world.get(chests[0]!, "container")).toEqual(
+      { look: "chest", key: "cache:4242:0:r1", opened: 1 },
+    );
+  });
+
+  it("gives a cooldown back the time it had left, not the time it was away", () => {
+    // Left on tick 1 with 89 ticks to go; 200 ticks of hideout must not spend them.
+    const { sim, world } = (() => {
+      const r = roundTrip(200);
+      return { sim: r.sim, world: r.world };
+    })();
+    const ready = monstersOf(world)[0]!.ready;
+    expect(ready - sim.tick).toBe(89);
+  });
+
+  it("rolls a fresh map when the last portal closed it", () => {
+    const { sim, world } = makeWorld();
+    const sessionE = world.create();
+    world.set<SessionC>(sessionE, "session", {
+      area: "map", atlasSeed: 0, areaTier: 3, activeNodeId: "node.the_wrackline",
+      completedNodes: [], mapSeed: 4242, waystoneSeed: 0,
+      portalsLeft: 0, mapOpen: 0, pendingArea: "hideout",
+    });
+    populate(world);
+    sim.step();
+    const inHideout = world.get<SessionC>(sessionE, "session")!;
+    world.set<SessionC>(sessionE, "session", { ...inHideout, mapOpen: 1, pendingArea: "map" });
+    sim.step();
+    // Whatever the generator rolled, it is not one husk on 12 life at (11,-7).
+    expect(monstersOf(world).map((m) => ({ ...m, ready: m.ready - sim.tick }))).not.toEqual([
+      { life: fp(12), pos: { x: fp(11), y: fp(-7) }, ready: 89 },
+    ]);
+  });
+});
