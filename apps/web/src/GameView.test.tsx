@@ -23,6 +23,9 @@ const hoisted = vi.hoisted(() => ({
   frame: null as (() => void) | null,
   /** The scene's pending executeWhenReady callback, held rather than run. */
   ready: null as (() => void) | null,
+  /** When set, loadProps returns this instead of resolving at once, so a test
+   *  can land the hideout's area message before the props "arrive". */
+  propsLoaded: null as Promise<void> | null,
 }));
 
 vi.mock("@babylonjs/core", () => ({
@@ -74,7 +77,7 @@ vi.mock("./render/rig", () => ({ loadPlayerRig: () => Promise.resolve(), resetPl
 // import time, so a mock without it fails the whole suite at collection.
 vi.mock("./render/props", async (importOriginal) => ({
   ...await importOriginal<typeof import("./render/props")>(),
-  loadProps: () => Promise.resolve(),
+  loadProps: () => hoisted.propsLoaded ?? Promise.resolve(),
   resetProps: vi.fn(),
 }));
 vi.mock("./render/monsters", () => ({ loadMonsters: () => Promise.resolve(), resetMonsters: vi.fn(), attachCreature: () => null }));
@@ -184,6 +187,30 @@ describe("GameView", () => {
    * HMR save, in a map nobody had walked into. The portal sweep behind it is the
    * same bug in the renderer (see render.test.ts).
    */
+  /**
+   * The startup race that emptied the hideout: the worker's `area: hideout`
+   * message lands before props.glb has loaded, buildHideoutDecor aborts on the
+   * missing container and nothing ever called it again — furniture, braziers
+   * and blobs all absent while every entity mesh (built by the render loop,
+   * which waits on the load) had its art.
+   */
+  it("dresses the hideout again once the props land after the area message", async () => {
+    let arrive!: () => void;
+    hoisted.propsLoaded = new Promise((r) => { arrive = r; });
+    try {
+      mountWithSnapshot();
+      act(() => {
+        hoisted.worker?.onmessage?.({ data: { type: "area", area: "hideout" } });
+      });
+      const { buildHideoutDecor } = await import("./render/hideout");
+      vi.mocked(buildHideoutDecor).mockClear();
+      await act(async () => { arrive(); await Promise.resolve(); });
+      expect(buildHideoutDecor).toHaveBeenCalledTimes(1);
+    } finally {
+      hoisted.propsLoaded = null;
+    }
+  });
+
   it("does not play the crossing cue for the area it restores into", () => {
     mountWithSnapshot();
     vi.mocked(playSfx).mockClear();

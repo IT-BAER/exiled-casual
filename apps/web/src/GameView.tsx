@@ -549,6 +549,10 @@ export function GameView({
     let unmounted = false;
     void Promise.all([loadPlayerRig(scene), loadProps(scene), loadRocks(scene), loadMonsters(scene)]).then(() => {
       if (!unmounted) engine.runRenderLoop(renderFrame);
+      // The worker's hideout area message usually beats props.glb here, and its
+      // dressing pass aborted on the missing container with no retry — a bare
+      // hideout while every entity mesh had its art. Dress it again now.
+      if (!unmounted && stoodIn === "hideout") buildHideoutDecor(scene);
       // AFTER the models, never before: these are panels nobody has asked for yet,
       // and the first frame is what the player is actually waiting on. Warming them
       // here is why the first Escape no longer draws a frameless panel — see
