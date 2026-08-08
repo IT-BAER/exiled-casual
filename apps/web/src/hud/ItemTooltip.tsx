@@ -32,41 +32,21 @@ const LABEL_GREY = "#7b7b74"; // stat/requirement words
 const VALUE_LIGHT = "#d2d2c8"; // stat/requirement numbers
 const UNID_RED = "#d02020"; // the unread marker
 
-type Look = { text: string; headBg: string; frame: string; flourish: string; ornate: boolean };
+// `band` is a painted header frame (assets/menu -> build_menu_textures.py),
+// drawn as a nine-slice: `cap` is where the ornate end-cap ends and the
+// repeatable middle begins, in source pixels of the 768-wide band.
+type Look = { text: string; frame: string; ornate: boolean; band: string; cap: number };
 export const RARITY = {
-  normal: { text: "#c8c8c8", headBg: "linear-gradient(180deg,#4a4a4a,#282828)", frame: "#8a8a8a", flourish: "#c0c0c0", ornate: false },
-  magic: { text: "#8f97ff", headBg: "linear-gradient(180deg,#1a2340,#0c1020)", frame: "#57699f", flourish: "#8f9bd8", ornate: false },
-  rare: { text: "#e6d64a", headBg: "linear-gradient(180deg,#3a2e15,#201707)", frame: "#a3812f", flourish: "#d8b048", ornate: true },
-  unique: { text: "#af6025", headBg: "linear-gradient(180deg,#2d1c0b,#180e05)", frame: "#7f4a20", flourish: "#c07b30", ornate: true },
+  normal: { text: "#c8c8c8", frame: "#8a8a8a", ornate: false, band: "/textures/ui/menu/tooltip_header_normal.png", cap: 70 },
+  magic: { text: "#8f97ff", frame: "#57699f", ornate: false, band: "/textures/ui/menu/tooltip_header_magic.png", cap: 58 },
+  rare: { text: "#e6d64a", frame: "#a3812f", ornate: true, band: "/textures/ui/menu/tooltip_header_rare.png", cap: 106 },
+  unique: { text: "#af6025", frame: "#7f4a20", ornate: true, band: "/textures/ui/menu/tooltip_header_unique.png", cap: 100 },
 } satisfies Record<string, Look>;
 
-// Inward-pointing dagger/arrow end-cap flanking the header name.
-// ponytail: CSS chevron, not the pixel filigree of the real gold frame; upgrade to
-// an SVG/sprite flourish if the header needs to be exact.
-function Flourish({ color, side, ornate }: { color: string; side: "left" | "right"; ornate: boolean }) {
-  // Chunky blade end-cap: a rectangular tail with a wide triangular point aimed
-  // inward at the name, echoing the metal daggers in the normal/magic screenshots.
-  const clip =
-    side === "left"
-      ? "polygon(0 28%, 52% 28%, 52% 8%, 100% 50%, 52% 92%, 52% 72%, 0 72%)"
-      : "polygon(100% 28%, 48% 28%, 48% 8%, 0 50%, 48% 92%, 48% 72%, 100% 72%)";
-  return (
-    <span
-      aria-hidden
-      style={{
-        position: "absolute",
-        top: "50%",
-        transform: "translateY(-50%)",
-        [side]: 8,
-        width: ornate ? 28 : 24,
-        height: ornate ? 15 : 13,
-        background: `linear-gradient(180deg, ${color}, ${color}88)`,
-        opacity: 0.92,
-        clipPath: clip,
-      }}
-    />
-  );
-}
+/** Source height of every band master after the build step. */
+const BAND_H = 126;
+/** Header band height on screen; the caps scale with it. */
+const HEAD_H = 34;
 
 // Faint section divider between the stat block, requirements, and affixes.
 function Rule() {
@@ -145,14 +125,20 @@ export function ItemTooltip({
       <div
         style={{
           position: "relative",
-          padding: r.ornate ? "9px 34px" : "6px 30px",
-          background: r.headBg,
-          borderTop: `1px solid ${r.frame}`,
-          borderBottom: `1px solid ${r.frame}`,
-          boxShadow: `inset 0 0 0 1px rgba(0,0,0,0.5)`,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          minHeight: baseName && baseName !== name ? HEAD_H + 14 : HEAD_H,
+          padding: `3px ${Math.round(r.cap * (HEAD_H / BAND_H)) + 10}px`,
+          boxSizing: "border-box",
+          borderStyle: "solid",
+          borderWidth: 0,
+          borderImageSource: `url(${r.band})`,
+          borderImageSlice: `20 ${r.cap} fill`,
+          borderImageWidth: `${Math.round(20 * (HEAD_H / BAND_H))}px ${Math.round(r.cap * (HEAD_H / BAND_H))}px`,
+          borderImageRepeat: "stretch",
         }}
       >
-        <Flourish color={r.flourish} side="left" ornate={r.ornate} />
         <div
           style={{
             color: r.text,
@@ -171,7 +157,6 @@ export function ItemTooltip({
             </div>
           )}
         </div>
-        <Flourish color={r.flourish} side="right" ornate={r.ornate} />
       </div>
 
       <div style={{ padding: "9px 14px 12px" }}>

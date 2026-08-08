@@ -52,6 +52,13 @@ PLAN: dict[str, tuple[str, int | None, int | None]] = {
     # One tab plate, tinted by CSS for active/inactive, the same rule the button
     # follows: two renders of the same tab are never quite the same tab.
     "tab_plate_v1": ("tab_plate.png", 384, None),
+    # Item tooltip header bands, one per rarity, stretched by CSS border-image:
+    # the end-caps are the slice, the middle repeats. Opaque by design - the
+    # band IS the header background - so crop_to_alpha passes them through.
+    "tooltip_header_normal_v1": ("tooltip_header_normal.png", 768, None),
+    "tooltip_header_magic_v1": ("tooltip_header_magic.png", 768, None),
+    "tooltip_header_rare_v1": ("tooltip_header_rare.png", 768, None),
+    "tooltip_header_unique_v1": ("tooltip_header_unique.png", 768, None),
 }
 
 ALPHA_FLOOR = 8
