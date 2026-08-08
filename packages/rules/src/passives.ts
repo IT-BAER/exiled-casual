@@ -129,6 +129,17 @@ const THEMES = {
     minor: [{ stat: "chaosResPct", value: 5 }],
     notable: [{ stat: "chaosResPct", value: 14 }, { stat: "maxLife", value: 12 }],
   },
+  /**
+   * The bridges between one discipline and the next. PoE calls these travel
+   * nodes and pays almost nothing for them, which is the point: what they buy is
+   * the ROUTE, and a route that costs points is what stops a tree being eight
+   * separate ladders.
+   */
+  travel: {
+    title: "Waypoint",
+    minor: [{ stat: "maxLife", value: 4 }],
+    notable: [{ stat: "maxLife", value: 4 }],
+  },
 } as const satisfies Record<string, Theme>;
 
 type ThemeId = keyof typeof THEMES;
@@ -200,6 +211,24 @@ const KEYSTONES: readonly { spoke: string; name: string; mods: readonly ItemStat
 const RAD = Math.PI / 180;
 const round1 = (n: number): number => Math.round(n * 10) / 10;
 
+/**
+ * A stable nudge in [-amount, +amount], hashed off a string.
+ *
+ * Eight identical spokes of identical rosettes drew a snowflake, and a snowflake
+ * reads as a diagram of a tree rather than as one — the reference's web is
+ * irregular everywhere (`skill-tree.png`). This is the irregularity, and it is
+ * hashed rather than random so the tree is the same shape in the client, in the
+ * sim and in a test.
+ */
+function wobble(key: string, amount: number): number {
+  let h = 2166136261;
+  for (let i = 0; i < key.length; i++) {
+    h ^= key.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (((h >>> 0) % 2001) / 1000 - 1) * amount;
+}
+
 function build(): PassiveNode[] {
   const nodes = new Map<string, PassiveNode & { links: string[] }>();
   const add = (n: PassiveNode & { links: string[] }) => { nodes.set(n.id, n); return n.id; };
@@ -230,14 +259,17 @@ function build(): PassiveNode[] {
   // One column of clusters per spoke, running outward.
   const firstOfSpoke: string[] = [];
   const lastOfSpoke = new Map<string, string>();
+  /** Where each cluster's notable ended up, so the bridges can find them. */
+  const hubAt = new Map<string, { id: string; x: number; y: number }>();
   SPOKES.forEach((spoke, si) => {
-    const angle = (360 / SPOKES.length) * si;
+    const angle = (360 / SPOKES.length) * si + wobble(`${spoke.name}:spoke`, 5);
     let inner: string | null = null;
     spoke.themes.forEach((themeId, ri) => {
       const theme = THEMES[themeId];
-      const radius = RING_RADIUS[ri]!;
-      const cx = Math.cos(angle * RAD) * radius;
-      const cy = Math.sin(angle * RAD) * radius;
+      const radius = RING_RADIUS[ri]! + wobble(`${spoke.name}:${ri}:r`, 26);
+      const lean = angle + wobble(`${spoke.name}:${ri}:a`, 7);
+      const cx = Math.cos(lean * RAD) * radius;
+      const cy = Math.sin(lean * RAD) * radius;
       const notable = add({
         id: `p.${spoke.name.toLowerCase()}.${ri}.hub`,
         name: `${theme.title} of ${spoke.name}`,
@@ -251,13 +283,15 @@ function build(): PassiveNode[] {
       const count = RING_MINORS[ri]!;
       const minors: string[] = [];
       for (let m = 0; m < count; m++) {
-        const a = angle + 40 + (360 / count) * m + ri * 17;
+        const key = `${spoke.name}:${ri}:${m}`;
+        const a = angle + 40 + (360 / count) * m + ri * 17 + wobble(`${key}:a`, 9);
+        const spread = CLUSTER_SPREAD + wobble(`${key}:s`, 9);
         minors.push(add({
           id: `p.${spoke.name.toLowerCase()}.${ri}.${m}`,
           name: theme.title,
           kind: "minor",
-          x: round1(cx + Math.cos(a * RAD) * CLUSTER_SPREAD),
-          y: round1(cy + Math.sin(a * RAD) * CLUSTER_SPREAD),
+          x: round1(cx + Math.cos(a * RAD) * spread),
+          y: round1(cy + Math.sin(a * RAD) * spread),
           mods: theme.minor,
           links: [],
         }));
@@ -272,8 +306,42 @@ function build(): PassiveNode[] {
       else link(inner, minors[0]!);
       inner = minors[Math.floor(count / 2)]!;
       lastOfSpoke.set(spoke.name, notable);
+      hubAt.set(`${si}:${ri}`, { id: notable, x: cx, y: cy });
     });
   });
+
+  // Bridges between neighbouring spokes, two rings in.
+  //
+  // Without them the tree is eight ladders that only meet at the rim, and the
+  // route decision — the thing a tree is FOR — collapses into "which ladder".
+  // Each bridge is a pair of cheap travel nodes, PoE's own answer: what they buy
+  // is the crossing, and paying two points for it is the cost of the crossing.
+  for (const ri of [1, 2]) {
+    SPOKES.forEach((spoke, si) => {
+      const from = hubAt.get(`${si}:${ri}`)!;
+      const to = hubAt.get(`${(si + 1) % SPOKES.length}:${ri}`)!;
+      const theme = THEMES.travel;
+      let prev = from.id;
+      for (const t of [1, 2]) {
+        const f = t / 3;
+        // Bowed outward, so the bridge follows the ring rather than cutting the
+        // chord straight through the empty middle.
+        const bow = 1 + 0.16 * Math.sin(f * Math.PI);
+        const id = add({
+          id: `p.bridge.${ri}.${si}.${t}`,
+          name: theme.title,
+          kind: "minor",
+          x: round1((from.x + (to.x - from.x) * f) * bow),
+          y: round1((from.y + (to.y - from.y) * f) * bow),
+          mods: theme.minor,
+          links: [],
+        });
+        link(prev, id);
+        prev = id;
+      }
+      link(prev, to.id);
+    });
+  }
 
   // Every door opens onto the two spokes nearest it, so no class is born inside
   // one discipline. Nearest by angle, not by a table: the ring is generated.

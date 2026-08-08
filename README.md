@@ -19,10 +19,12 @@ locally.
   centred map overlay.
 - Normal, magic, rare, and unique items with affixes, implicits, identification, crafting orbs,
   loot beams, stash, vendor, disenchanting, and equipment-derived stats.
+- A 239-node passive tree across eight disciplines, with class start doors, notables, travel
+  bridges and keystones that trade one stat for another.
 - A rigged 3D character with visible equipped gear, animated cloth, positional audio, ambience,
   and a game shell covering menus, character selection, loading, options, and local saves.
 
-There is no skill tree yet, balance is untuned, and no public playable build is available.
+Balance is measured rather than final, and no public playable build is available.
 
 ## How it is built
 

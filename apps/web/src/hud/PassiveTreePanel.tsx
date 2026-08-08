@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Intent } from "@exiled/protocol";
 import {
   PASSIVE_TREE, canAllocate, passiveLines, passiveNode, startNodeId,
@@ -24,27 +24,44 @@ import { DISPLAY, GOLD, PARCHMENT, SERIF } from "./InventoryPanel";
  * which is the same contract every other panel here works to.
  */
 
-/** How much of the tree is on screen at rest. Tree units, see passives.ts. */
+/** How much of the tree is on screen at zoom 1. Tree units, see passives.ts. */
 const VIEW = 1750;
-const ZOOM_MIN = 0.45;
-const ZOOM_MAX = 2.6;
+// The whole web is 1600 units across, so anything under this is zooming out
+// past the tree into empty field.
+const ZOOM_MIN = 0.85;
+const ZOOM_MAX = 3.2;
+/**
+ * Where it opens: close in, on this character's own door.
+ *
+ * The whole web at once is a picture of a tree rather than a thing to spend a
+ * point in — PoE opens on your start for the same reason, and the wheel is one
+ * scroll away either way.
+ */
+const OPEN_ZOOM = 1.9;
 
 const RADIUS: Record<PassiveNode["kind"], number> = {
-  start: 26, minor: 9, notable: 17, keystone: 21,
+  start: 30, minor: 11, notable: 21, keystone: 24,
 };
 
 /** Taken, reachable, or out of reach — the three states a node is drawn in. */
 type NodeState = "taken" | "open" | "far";
 
+/**
+ * Contrast is the whole readability of this screen, and the first pass had none:
+ * an unallocated node at #241f18 against a translucent plate over a lit map was
+ * invisible, so 200 of the 207 nodes simply were not there. PoE's tree dims what
+ * you have not taken, it does not hide it — a dark disc inside a clearly visible
+ * ring, which is what the ring colours below are for.
+ */
 const FILL: Record<NodeState, string> = {
   taken: "#e8c368",
-  open: "#5d5647",
-  far: "#241f18",
+  open: "#6f6449",
+  far: "#2b2620",
 };
 const STROKE: Record<NodeState, string> = {
   taken: "#fff0c0",
-  open: "#8d8064",
-  far: "#3a3227",
+  open: "#d8b978",
+  far: "#6a5c46",
 };
 
 export interface PassiveTreePanelProps {
@@ -61,12 +78,24 @@ export function PassiveTreePanel({
   open, classId, allocated, points, onIntent, onClose,
 }: PassiveTreePanelProps) {
   const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [zoom, setZoom] = useState(1);
+  const [zoom, setZoom] = useState(OPEN_ZOOM);
   const [hover, setHover] = useState<{ id: string; x: number; y: number } | null>(null);
   const drag = useRef<{ x: number; y: number; px: number; py: number } | null>(null);
 
   const taken = useMemo(() => new Set(allocated), [allocated]);
   const start = startNodeId(classId);
+
+  // Every opening starts at the door again, wherever the last one was left.
+  // Panning away and closing it used to mean the next P showed empty field.
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    if (open && !wasOpen.current) {
+      const door = passiveNode(start);
+      setPan({ x: door?.x ?? 0, y: door?.y ?? 0 });
+      setZoom(OPEN_ZOOM);
+    }
+    wasOpen.current = open;
+  }, [open, start]);
 
   /**
    * Every link once, not twice. Both ends name each other (the tree's links are
@@ -107,7 +136,10 @@ export function PassiveTreePanel({
         position: "absolute", inset: 0, zIndex: 4,
         pointerEvents: "auto",
         // Translucent, so the world is still visibly running behind it.
-        background: "radial-gradient(circle at 50% 45%, rgba(10,12,16,0.86), rgba(4,5,7,0.96))",
+        // Near-opaque. The world kept rendering behind the first version and a
+        // lit beach read straight through the plate, which put a sand-coloured
+        // wash behind every node on the screen the tree needs contrast on.
+        background: "radial-gradient(circle at 50% 45%, rgba(9,10,14,0.985), rgba(2,3,4,0.998))",
         fontFamily: SERIF, color: PARCHMENT,
         display: "flex", flexDirection: "column",
         userSelect: "none",
@@ -186,9 +218,9 @@ export function PassiveTreePanel({
             <line
               key={i}
               x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-              stroke={lit ? "#e8c368" : "#3b342a"}
-              strokeWidth={lit ? 4 : 2}
-              opacity={lit ? 0.95 : 0.5}
+              stroke={lit ? "#e8c368" : "#584c39"}
+              strokeWidth={lit ? 5 : 2.5}
+              opacity={lit ? 0.95 : 0.8}
             />
           );
         })}

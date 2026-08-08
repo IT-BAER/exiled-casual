@@ -1,6 +1,6 @@
 # Exiled Casual: current implementation contract
 
-Status: **as built and verified on 2026-08-06 at `9051f42`.**
+Status: **as built and verified on 2026-08-08 at `1cb32e3`.**
 
 This is the living specification for what the repository implements now. Earlier dated specs
 preserve the decision and delivery history of individual slices. Where an older proposal differs
@@ -18,8 +18,8 @@ deployment. There is no account service, remote game server, multiplayer, or pub
 
 ## 2. Runtime architecture
 
-- TypeScript npm-workspaces monorepo.
-- React owns menus and heads-up display (HUD); Babylon.js owns the 3D world.
+- TypeScript npm-workspaces monorepo on Node 22.
+- React 19 owns menus and heads-up display (HUD); Babylon.js 9 owns the 3D world.
 - The authoritative 30 Hz entity-component-system simulation runs in a Web Worker.
 - The main thread sends intents. The simulation re-checks range, cost, placement, tier, and state,
   then emits snapshots. The renderer never authors an outcome.
@@ -72,6 +72,27 @@ Six portals are the run budget. Leaving through a portal or accepting a revive s
 closes at zero. Map entry and checkpoint revive grant ten seconds of spawn grace, broken by moving
 or casting. Boss death completes the active node once and pays the deterministic Waystone return.
 
+A map left with portals to spare is still standing when the character comes back. Leaving freezes
+the area's whole population into a snapshot and returning restores it, so the pack that was thinned
+is still thinned, the container that was opened is still open, and the loot that would not fit is
+still on the floor. It is a snapshot and not a second world running in the background: nothing about
+a cleared corridor changes while the player is in the hideout, so a suspended map costs nothing per
+tick. Cooldowns come back holding the time they had left rather than the time spent away, and
+transient things - a projectile in flight, burning ground, a wind-up - are moments and do not
+survive. The snapshot lives with the simulation instance, not in the save: a reloaded session has no
+map standing anywhere, which is the same rule restore already applied to an in-flight run.
+
+There is one way home per area, and opening a new one replaces it. Inside a map every portal leads
+to the same hideout, so a second is never a second destination. A dead map boss opens one for free
+where it fell, PoE2's rule rather than PoE1's, because the alternative is a walk back across a
+cleared map with a full bag. Anywhere else the character opens it: the Portal skill on `Y`, which is
+also what right-clicking a Portal Scroll fires, so the hotkey and the icon are one action with one
+cost (a scroll), one two-second wind-up and one ten-second cooldown. A cast that opens nothing -
+no scroll, or the map closed underneath it - refunds the cooldown rather than charging for nothing.
+
+A completed Atlas node can be run again with another stone, PoE1's rule; completion feeds fog,
+tiers and the boss's first-clear reward, and never locks a place out.
+
 That return has a floor. A hop between Atlas nodes costs two tiers while a plain run hands back the
 tier it was opened with, so clearing a map could leave a character holding nothing able to open
 anywhere new. The boss's best stone is raised to the cheapest tier among the not-yet-run routes out
@@ -97,6 +118,34 @@ Two of those are worth stating exactly, because the client can only follow them:
   interval, not the wind-up, and the arm clip is stretched to fill it. Pacing the clip by the
   wind-up alone played it at roughly twice speed and left the arm idle for the rest of the beat.
   The hit still lands on the wind-up tick; only the animation rate moved.
+
+### The passive tree
+
+The tree is 239 nodes across eight disciplines, generated from authored tables rather than placed
+one at a time: the tables carry the design (which disciplines exist, what each cluster is about,
+what a keystone costs) and the geometry is a rule, so no link can point at a node that is not there.
+Clusters of small nodes ring a notable, cheap travel nodes bridge neighbouring disciplines two rings
+in, and four keystones hang past the rim. Each keystone is a trade rather than a bigger notable.
+
+Three class doors open onto the two nearest disciplines each, so no class is born inside one. A
+character has 24 points at level 65 and two a level to the cap, which is 94 - enough to walk two
+disciplines and a keystone, never enough to walk all eight. Allocation is the PoE rule in one
+sentence: a node may be taken when it touches something already allocated, and the door counts as
+allocated. Refunding is free and total.
+
+Every node's effect is an `ItemStatMod`, the same currency gear speaks, folded by the same
+`applyItemMods`: a passive and a chest piece cannot drift apart. That is also why no keystone
+changes a RULE - the simulation has no hook for one, and a keystone whose text lies is worse than
+one that trades numbers honestly. The simulation owns both halves of allocation because the client
+is untrusted; `P` opens the tree, and an unspent point announces itself over the experience rail.
+
+### Balance
+
+Monster life and hit are per archetype rather than per species: what differs biome to biome is the
+element and the flavour. The current numbers are a deliberate casual pass - life down 25 percent and
+hit down 30 percent against what `balance.test.ts` had measured - taken because the first map was
+too hard for the audience this game is for. Every band in that suite was re-measured against the
+same rig rather than re-argued: killing got about a quarter faster, dying about half again slower.
 
 Monster content has four combat archetypes:
 
@@ -154,12 +203,27 @@ containers that spill once; every authored reward marker pays outside the spawn-
 ## 8. HUD, loading, settings, and audio
 
 The game shell includes life/mana globes, flasks, two-row skill bar, experience rail, loot labels,
-inventory, stash, character sheet, preparation panel, Atlas, death panel, buff bar, corner minimap,
-and a centred Tab overlay map. The map overlay has configurable opacity.
+inventory, stash, character sheet, passive tree, preparation panel, Atlas, death panel, buff bar,
+corner minimap, and a centred Tab overlay map. The map overlay has configurable opacity.
+
+The tree is drawn as SVG from `@exiled/rules` directly, because the tree itself is content the
+client already has and only the allocation crosses the wire. It opens on the character's own door
+rather than on the whole wheel, pans by drag and zooms by wheel, and a click is a request: nothing
+changes until the snapshot says the simulation accepted it.
 
 Loading has three real covers: static first boot, lazy game chunk, and area rebuild. Area loading
 stays up until the worker area message has arrived, level and biome art are built, the scene rig is
 ready, and a frame from the new area has actually painted.
+
+Everything a run can ask for later is warmed while that plate is up. The whole sound library goes,
+not a core subset: fifty-odd Opus cues are 1.2 MB between them, so the split was only ever ordering,
+and core still goes first. The textures nothing fetches until it is needed - the fire sheet on the
+first cast, an item icon on the first drop, a gear texture on the first piece equipped - are listed
+in `render/world-art.ts` and warmed at mount, with a test that walks `public/textures` so the list
+cannot rot behind a new asset. Container shaders are compiled behind the plate for the same reason:
+an asset container is held out of the scene, so `executeWhenReady` never sees it and its first
+instance would otherwise compile as it first drew. The texture warm is deliberately NOT part of the
+gate the first frame waits on - a file that 404s or stalls must not be able to hold the door shut.
 
 Settings are global roster data and apply live. Current controls cover shadows, ambient occlusion,
 bloom, atmosphere, resolution scale, torch warmth, master/mute plus music/interface/skills/loot/
@@ -208,7 +272,7 @@ the checked-in local reference screenshots and an approved devlog capture for ma
 ## 11. Deliberately not implemented
 
 - accounts, login, remote persistence, remote authoritative simulation, parties, and trade;
-- passive tree, support gems, weapon-set switching, and broad skill/content progression;
+- support gems, weapon-set switching, and broad skill/content progression;
 - a public playable deployment;
 - damage numbers and their protocol events;
 - controller and touch interfaces;
