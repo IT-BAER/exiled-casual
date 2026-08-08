@@ -780,6 +780,29 @@ export function Hud({
     return () => clearTimeout(t);
   }, [banner]);
 
+  /**
+   * The experience rail runs BETWEEN the two panels, never under them: the
+   * panels' stone is opaque to the floor, so a rail crossing behind it hid the
+   * whole fill of a young character (14% of the screen is less than one panel).
+   * PoE1's own rail starts past the flask assembly (poe1-lower-bar.png). The
+   * panels are content-sized, so their widths are measured, not declared; they
+   * only change with the viewport (vw units), so a resize listener covers it.
+   */
+  const flaskRowRef = React.useRef<HTMLDivElement>(null);
+  const skillRowRef = React.useRef<HTMLDivElement>(null);
+  const [railInset, setRailInset] = React.useState({ left: 0, right: 0 });
+  React.useLayoutEffect(() => {
+    const measure = () => setRailInset({
+      left: flaskRowRef.current?.offsetWidth ?? 0,
+      right: skillRowRef.current?.offsetWidth ?? 0,
+    });
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+    // Keyed on the HUD existing, not on mount: the first mount has no snapshot,
+    // renders nothing, and a measure taken then reads both panels as 0.
+  }, [snapshot == null]);
+
   if (!snapshot) return null;
 
   const { life, maxLife, mana, maxMana, cooldowns, energyShield, maxEnergyShield } = snapshot.player;
@@ -1001,7 +1024,7 @@ export function Hud({
 
       <div data-testid="bar-connector" style={connectStyle} />
 
-      <XpBar level={snapshot.player.level} xp={xp} xpToNext={xpToNext} />
+      <XpBar level={snapshot.player.level} xp={xp} xpToNext={xpToNext} left={railInset.left} right={railInset.right} />
 
       {/* The unspent-point count no longer rides a center chip; the plus on the
           lower bar (below, right of the flasks) carries it as a badge instead. */}
@@ -1009,6 +1032,7 @@ export function Hud({
       {/* Flask bar — runs off the screen side and under the life globe, per poe1-lower-bar.png */}
       <div
         data-testid="flask-row"
+        ref={flaskRowRef}
         style={{
           ...barStyle,
           left: 0,
@@ -1095,6 +1119,7 @@ export function Hud({
           mana globe the way the flask panel runs under the life globe. */}
       <div
         data-testid="skill-row"
+        ref={skillRowRef}
         style={{
           ...barStyle,
           right: 0,

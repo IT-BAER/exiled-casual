@@ -134,7 +134,13 @@ function useXpRate(xp: number, level: number): number | null {
  * you are never meant to look at directly, only to notice out of the corner of
  * your eye.
  */
-export function XpBar({ level, xp, xpToNext }: { level: number; xp: number; xpToNext: number }) {
+export function XpBar({ level, xp, xpToNext, left = 0, right = 0 }: {
+  level: number; xp: number; xpToNext: number;
+  /** Panel widths, measured by the HUD: the rail runs BETWEEN the two panels,
+      never under their opaque stone — at 14% a full-width rail's whole fill sat
+      behind the flask panel and the bar read as empty. */
+  left?: number; right?: number;
+}) {
   const [hover, setHover] = React.useState(false);
   const rate = useXpRate(xp, level);
   // A capped character has nothing left to earn, so its bar reads full rather than empty.
@@ -146,8 +152,8 @@ export function XpBar({ level, xp, xpToNext }: { level: number; xp: number; xpTo
         data-testid="xp-bar"
         style={{
           position: "absolute",
-          left: 0,
-          right: 0,
+          left,
+          right,
           bottom: 0,
           height: RAIL_H,
           background: "linear-gradient(180deg,#0a0805,#16110a)",
@@ -208,8 +214,8 @@ export function XpBar({ level, xp, xpToNext }: { level: number; xp: number; xpTo
         onPointerLeave={() => setHover(false)}
         style={{
           position: "absolute",
-          left: 0,
-          right: 0,
+          left,
+          right,
           bottom: 0,
           height: HOVER_H,
           pointerEvents: "auto",

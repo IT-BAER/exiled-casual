@@ -394,6 +394,32 @@ describe("experience bar", () => {
     expect(screen.getByTestId("xp-bar")).toHaveStyle({ zIndex: "1" });
   });
 
+  /**
+   * The rail runs BETWEEN the panels, not under them: at 14% of a full-width
+   * rail the whole fill sat behind the flask panel's opaque stone and the bar
+   * read as empty (poe1-lower-bar.png starts its rail past the flask assembly
+   * too). The panels are content-sized, so the insets are measured off them.
+   */
+  it("starts after the flask panel and ends before the skill panel", () => {
+    const orig = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetWidth")!;
+    Object.defineProperty(HTMLElement.prototype, "offsetWidth", {
+      configurable: true,
+      get(this: HTMLElement) {
+        const t = this.getAttribute("data-testid");
+        return t === "flask-row" ? 340 : t === "skill-row" ? 520 : 0;
+      },
+    });
+    try {
+      render(<Hud snapshot={makeSnap({ level: 68, xp: 30_000, xpToNext: 120_000 })} />);
+      expect(screen.getByTestId("xp-bar").style.left).toBe("340px");
+      expect(screen.getByTestId("xp-bar").style.right).toBe("520px");
+      expect(screen.getByTestId("xp-bar-hit").style.left).toBe("340px");
+      expect(screen.getByTestId("xp-bar-hit").style.right).toBe("520px");
+    } finally {
+      Object.defineProperty(HTMLElement.prototype, "offsetWidth", orig);
+    }
+  });
+
   it("ticks the rail every 5% of the level, so the segments say something", () => {
     render(<Hud snapshot={makeSnap({ level: 68, xp: 30_000, xpToNext: 120_000 })} />);
     const ticks = screen.getByTestId("xp-bar-ticks");
