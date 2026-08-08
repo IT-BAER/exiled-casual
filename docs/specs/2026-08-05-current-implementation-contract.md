@@ -72,6 +72,12 @@ Six portals are the run budget. Leaving through a portal or accepting a revive s
 closes at zero. Map entry and checkpoint revive grant ten seconds of spawn grace, broken by moving
 or casting. Boss death completes the active node once and pays the deterministic Waystone return.
 
+That return has a floor. A hop between Atlas nodes costs two tiers while a plain run hands back the
+tier it was opened with, so clearing a map could leave a character holding nothing able to open
+anywhere new. The boss's best stone is raised to the cheapest tier among the not-yet-run routes out
+of the cleared node, and a stone opens anything at or under its tier. The floor never pays less than
+the run's own tier, so the Atlas stays a route decision rather than a wait for a lucky roll.
+
 A map left with portals to spare is still standing when the character comes back. Leaving freezes
 the area's whole population into a snapshot and returning restores it, so the pack that was thinned
 is still thinned, the container that was opened is still open, and the loot that would not fit is
@@ -92,12 +98,6 @@ no scroll, or the map closed underneath it - refunds the cooldown rather than ch
 
 A completed Atlas node can be run again with another stone, PoE1's rule; completion feeds fog,
 tiers and the boss's first-clear reward, and never locks a place out.
-
-That return has a floor. A hop between Atlas nodes costs two tiers while a plain run hands back the
-tier it was opened with, so clearing a map could leave a character holding nothing able to open
-anywhere new. The boss's best stone is raised to the cheapest tier among the not-yet-run routes out
-of the cleared node, and a stone opens anything at or under its tier. The floor never pays less than
-the run's own tier, so the Atlas stays a route decision rather than a wait for a lucky roll.
 
 ## 5. Combat and characters
 
