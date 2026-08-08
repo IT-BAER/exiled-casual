@@ -332,6 +332,8 @@ export function updateRareElement(root: Mesh, element: string | undefined): void
 export function setHitFlash(root: Mesh, t: number): void {
   const on = t > 0;
   for (const m of [root, ...root.getChildMeshes(false)]) {
+    // Under the root but not the body: a white contact shadow reads as a square.
+    if (m.name.startsWith("groundblob-") || m.name === "rare-aura") continue;
     if (hasRim(m.material)) {
       m.renderOverlay = false;
       // Mutate, never replace: ActorParts and glTF loader data live here too.

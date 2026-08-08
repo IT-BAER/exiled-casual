@@ -112,4 +112,24 @@ describe("hit flash through the rim plugin", () => {
     expect((skinned.metadata as { hitFlash?: number }).hitFlash).toBe(0);
     expect(greybox.renderOverlay).toBe(false);
   });
+
+  /**
+   * The contact-shadow quad and the rare's aura ring hang under the same actor
+   * root but are not the body: overlaying them draws a white square under every
+   * struck monster (owner-reported after the plugin flash landed).
+   */
+  it("never flashes the ground blob or the aura ring", () => {
+    const s = scene();
+    const root = new Mesh("actor", s);
+    const blob = new Mesh("groundblob-actor", s);
+    blob.parent = root;
+    blob.material = new StandardMaterial("blob", s);
+    const aura = new Mesh("rare-aura", s);
+    aura.parent = root;
+    aura.material = new StandardMaterial("aura", s);
+
+    setHitFlash(root, 1);
+    expect(blob.renderOverlay).toBeFalsy();
+    expect(aura.renderOverlay).toBeFalsy();
+  });
 });
