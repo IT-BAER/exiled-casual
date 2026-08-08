@@ -41,6 +41,13 @@ export function sinkDepth(t: number): number {
 
 /** Where the physics floor sits. The level's own floor is drawn at y=0. */
 const FLOOR_Y = 0;
+/**
+ * The physics floor is raised this far above the drawn one: the boxes are
+ * thinner than the flesh skinned around their bones, so a box resting ON y=0
+ * puts the skin's surface UNDER it. The margin is roughly the fat a limb
+ * carries past its box.
+ */
+export const FLESH_MARGIN = 0.12;
 /** Half-extent of the physics floor. Comfortably past any generated area. */
 const FLOOR_HALF = 200;
 
@@ -162,7 +169,7 @@ export function resetPhysics(): void {
 function buildFloor(scene: Scene): void {
   const floor = MeshBuilder.CreateBox(
     "physics-floor", { width: FLOOR_HALF * 2, depth: FLOOR_HALF * 2, height: 1 }, scene);
-  floor.position.y = FLOOR_Y - 0.5;
+  floor.position.y = FLOOR_Y + FLESH_MARGIN - 0.5;
   floor.isVisible = false;
   floor.isPickable = false;
   new PhysicsAggregate(floor, PhysicsShapeType.BOX, { mass: 0, restitution: 0.05 }, scene);
