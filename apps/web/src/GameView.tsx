@@ -724,6 +724,7 @@ export function GameView({
         onSkillBarChange={(skillBar) => onSettingsChange?.({
           ...settings, ui: { ...settings.ui, skillBar },
         })}
+        onOpenPassives={() => setPassivesOpen(true)}
       />
       {settings.ui.minimap && (
         <Minimap
