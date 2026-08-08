@@ -1,21 +1,25 @@
 import type { Intent } from "@exiled/protocol";
 import { fp } from "@exiled/fixed-point";
-
-
-const FLASK_KEYS: Record<string, "life" | "mana"> = {
-  q: "life",
-  e: "mana",
-};
+import { DEFAULT_KEYBINDS, type KeybindAction, type Keybinds } from "../settings";
 
 // Rotated 45° to match the camera yaw (engine.ts, alpha=-π/4): screen-up is
 // world (-1,+1), screen-right is (+1,+1). The sim already normalises a diagonal
 // (player-movement.ts), so W does not outrun the old axis-aligned W.
-const MOVE_KEYS: Record<string, { dx: -1 | 0 | 1; dy: -1 | 0 | 1 }> = {
-  w: { dx: -1, dy: 1 },
-  s: { dx: 1, dy: -1 },
-  a: { dx: -1, dy: -1 },
-  d: { dx: 1, dy: 1 },
+const MOVE_DIRS: Partial<Record<KeybindAction, { dx: -1 | 0 | 1; dy: -1 | 0 | 1 }>> = {
+  moveUp: { dx: -1, dy: 1 },
+  moveDown: { dx: 1, dy: -1 },
+  moveLeft: { dx: -1, dy: -1 },
+  moveRight: { dx: 1, dy: 1 },
 };
+
+/** The action a pressed key is bound to, or null. "" never matches: unbound. */
+function actionFor(key: string, binds: Keybinds): KeybindAction | null {
+  if (key === "") return null;
+  for (const action of Object.keys(binds) as KeybindAction[]) {
+    if (binds[action] === key) return action;
+  }
+  return null;
+}
 
 /**
  * Pure: every movement key currently held, as one direction.
@@ -28,11 +32,12 @@ const MOVE_KEYS: Record<string, { dx: -1 | 0 | 1; dy: -1 | 0 | 1 }> = {
  * The sum is reduced to its signs because that is what the sim's moveDir takes;
  * it normalises the length itself, so W+A+D is exactly as fast as W.
  */
-export function heldToMoveIntent(held: readonly string[]): Intent {
+export function heldToMoveIntent(held: readonly string[], binds: Keybinds = DEFAULT_KEYBINDS): Intent {
   let dx = 0;
   let dy = 0;
   for (const k of held) {
-    const m = MOVE_KEYS[k.toLowerCase()];
+    const action = actionFor(k.toLowerCase(), binds);
+    const m = action && MOVE_DIRS[action];
     if (m) {
       dx += m.dx;
       dy += m.dy;
@@ -57,20 +62,22 @@ export function keyToIntent(
    * the player had just dragged it out of.
    */
   skillForKey?: (key: string) => string | null,
+  binds: Keybinds = DEFAULT_KEYBINDS,
 ): Intent | null {
   // Lower-case so CapsLock / Shift ("W") still map to WASD movement.
   const k = key.toLowerCase();
-  const move = MOVE_KEYS[k];
+  const action = actionFor(k, binds);
+  const move = action && MOVE_DIRS[action];
   if (move) return { kind: "moveDir", ...move };
 
-  const slot = FLASK_KEYS[k];
-  if (slot) return { kind: "useFlask", slot };
+  if (action === "flaskLife") return { kind: "useFlask", slot: "life" };
+  if (action === "flaskMana") return { kind: "useFlask", slot: "mana" };
 
-  // Y is the way home. It rides the Portal Scroll intent rather than a bare
-  // useSkill so both entry points — this key and the right-click on the scroll
-  // itself — arrive as the same command (protocol-bridge.ts turns it into the
-  // Portal skill, cast time and cooldown included).
-  if (k === "y") return { kind: "usePortalScroll" };
+  // The way home rides the Portal Scroll intent rather than a bare useSkill so
+  // both entry points — this key and the right-click on the scroll itself —
+  // arrive as the same command (protocol-bridge.ts turns it into the Portal
+  // skill, cast time and cooldown included).
+  if (action === "portal") return { kind: "usePortalScroll" };
 
   const skillId = skillForKey?.(key);
   if (skillId) {

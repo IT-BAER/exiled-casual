@@ -240,3 +240,62 @@ describe("graphics defaults", () => {
     expect(screen.getByLabelText("Torch Warmth")).toBeTruthy();
   });
 });
+
+describe("keybinds tab", () => {
+  const openTab = () => fireEvent.click(screen.getByRole("tab", { name: /keybinds/i }));
+
+  it("shows every action with its bound key", () => {
+    setup();
+    openTab();
+    expect(screen.getByRole("button", { name: /move up key/i }).textContent).toBe("W");
+    expect(screen.getByRole("button", { name: /overlay map key/i }).textContent).toBe("Tab");
+  });
+
+  it("rebinds on the next press and reports the whole settings object", () => {
+    const { onChange } = setup();
+    openTab();
+    fireEvent.click(screen.getByRole("button", { name: /pick up item key/i }));
+    fireEvent.keyDown(window, { key: "f" });
+    const next = onChange.mock.calls[0]![0] as Settings;
+    expect(next.ui.keybinds.pickup).toBe("f");
+    expect(next.ui.keybinds.moveUp).toBe("w");
+  });
+
+  it("a stolen key swaps: the other action takes the old one", () => {
+    const { onChange } = setup();
+    openTab();
+    fireEvent.click(screen.getByRole("button", { name: /life flask key/i }));
+    fireEvent.keyDown(window, { key: "g" });
+    const next = onChange.mock.calls[0]![0] as Settings;
+    expect(next.ui.keybinds.flaskLife).toBe("g");
+    expect(next.ui.keybinds.pickup).toBe("q");
+  });
+
+  it("Escape cancels the listen without closing the panel or binding", () => {
+    const { onChange, onClose } = setup();
+    openTab();
+    fireEvent.click(screen.getByRole("button", { name: /portal to hideout key/i }));
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(onChange).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("refuses a skill-row digit", () => {
+    const { onChange } = setup();
+    openTab();
+    fireEvent.click(screen.getByRole("button", { name: /portal to hideout key/i }));
+    fireEvent.keyDown(window, { key: "3" });
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("resets the keybinds alone", () => {
+    const { onChange } = setup({
+      ui: { ...DEFAULT_SETTINGS.ui, keybinds: { ...DEFAULT_SETTINGS.ui.keybinds, pickup: "f" } },
+    });
+    openTab();
+    fireEvent.click(screen.getByText("Reset to Default"));
+    const next = onChange.mock.calls[0]![0] as Settings;
+    expect(next.ui.keybinds).toEqual(DEFAULT_SETTINGS.ui.keybinds);
+    expect(next.graphics).toEqual(DEFAULT_SETTINGS.graphics);
+  });
+});

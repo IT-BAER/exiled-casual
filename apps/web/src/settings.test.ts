@@ -1,6 +1,46 @@
 import { describe, it, expect } from "vitest";
 import { DEFAULT_SETTINGS, MIN_RESOLUTION_SCALE, MOVE_SOCKET, SKILL_SLOT_COUNT, sanitize } from "./settings";
 
+describe("the keybinds ride in the settings", () => {
+  const binds = (raw: unknown) => sanitize({ ui: { keybinds: raw } }).ui.keybinds;
+
+  it("defaults to the keys the game shipped with", () => {
+    expect(sanitize(null).ui.keybinds).toEqual({
+      moveUp: "w", moveDown: "s", moveLeft: "a", moveRight: "d",
+      flaskLife: "q", flaskMana: "e", portal: "y", pickup: "g",
+      overlayMap: "tab", inventory: "i", character: "c", passives: "p",
+    });
+  });
+
+  it("keeps a saved rebind and defaults the rest", () => {
+    const got = binds({ pickup: "f", portal: "t" });
+    expect(got.pickup).toBe("f");
+    expect(got.portal).toBe("t");
+    expect(got.moveUp).toBe("w");
+  });
+
+  it("lower-cases and refuses junk per entry", () => {
+    expect(binds({ pickup: "F" }).pickup).toBe("f");
+    expect(binds({ pickup: 3 }).pickup).toBe("g");
+    expect(binds({ pickup: "" }).pickup).toBe("g");
+    expect(binds({ pickup: "x".repeat(40) }).pickup).toBe("g");
+    expect(binds("not an object")).toEqual(DEFAULT_SETTINGS.ui.keybinds);
+  });
+
+  it("never hands out Escape or a skill-row digit", () => {
+    expect(binds({ pickup: "escape" }).pickup).toBe("g");
+    expect(binds({ portal: "3" }).portal).toBe("y");
+  });
+
+  /** One key on two actions fires both off one press. First claim wins,
+   *  the later action goes unbound rather than inventing a key. */
+  it("unbinds the later of two actions claiming one key", () => {
+    const got = binds({ flaskLife: "g" });
+    expect(got.flaskLife).toBe("g");
+    expect(got.pickup).toBe("");
+  });
+});
+
 describe("sanitize", () => {
   it("gives defaults for anything that is not a settings object", () => {
     for (const junk of [undefined, null, 0, "", "graphics", [], true, NaN]) {

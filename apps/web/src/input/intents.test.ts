@@ -126,6 +126,29 @@ describe("heldToMoveIntent", () => {
   });
 });
 
+describe("rebound keys", () => {
+  const aim = { x: 0, y: 0 };
+  const binds = { ...DEFAULT_SETTINGS.ui.keybinds, moveUp: "z", flaskLife: "f", portal: "h" };
+
+  it("keyToIntent follows the map: the new key fires, the old one is dead", () => {
+    expect(keyToIntent("z", aim, undefined, binds)).toEqual({ kind: "moveDir", dx: -1, dy: 1 });
+    expect(keyToIntent("w", aim, undefined, binds)).toBeNull();
+    expect(keyToIntent("f", aim, undefined, binds)).toEqual({ kind: "useFlask", slot: "life" });
+    expect(keyToIntent("q", aim, undefined, binds)).toBeNull();
+    expect(keyToIntent("h", aim, undefined, binds)).toEqual({ kind: "usePortalScroll" });
+  });
+
+  it("an unbound action fires on nothing", () => {
+    const unbound = { ...DEFAULT_SETTINGS.ui.keybinds, pickup: "" };
+    expect(keyToIntent("", aim, undefined, unbound)).toBeNull();
+  });
+
+  it("heldToMoveIntent sums by the map", () => {
+    expect(heldToMoveIntent(["z", "d"], binds)).toEqual({ kind: "moveDir", dx: 0, dy: 1 });
+    expect(heldToMoveIntent(["w"], binds)).toEqual({ kind: "stop" });
+  });
+});
+
 describe("pointerToWorld", () => {
   it("maps Babylon xz pick coords to sim Fixed xy", () => {
     const result = pointerToWorld({ x: 3.2, z: -1.7 });

@@ -72,6 +72,8 @@ export interface UiSettings {
    * changes when a skill moves from 1 to 4.
    */
   skillBar: (string | null)[];
+  /** What the non-skill keys do. See KEYBIND_ACTIONS. */
+  keybinds: Keybinds;
 }
 
 /** Total sockets: 5 numbered (keys 1-5) then L, M, R mouse. The HUD draws them
@@ -80,6 +82,48 @@ export const SKILL_SLOT_COUNT = 8;
 export const MOUSE_SLOT_BASE = 5;
 /** Left click's default. A sentinel, not null: clearing L gives movement back. */
 export const MOVE_SOCKET = "builtin.move";
+
+/** Everything a key can be told to do. Escape and the skill row (1-5) stay fixed. */
+export const KEYBIND_ACTIONS = [
+  "moveUp", "moveDown", "moveLeft", "moveRight",
+  "flaskLife", "flaskMana", "portal", "pickup",
+  "overlayMap", "inventory", "character", "passives",
+] as const;
+export type KeybindAction = (typeof KEYBIND_ACTIONS)[number];
+/** Values are lower-cased `KeyboardEvent.key`s; "" is unbound. */
+export type Keybinds = Record<KeybindAction, string>;
+
+export const DEFAULT_KEYBINDS: Keybinds = {
+  moveUp: "w", moveDown: "s", moveLeft: "a", moveRight: "d",
+  flaskLife: "q", flaskMana: "e", portal: "y", pickup: "g",
+  overlayMap: "tab", inventory: "i", character: "c", passives: "p",
+};
+
+/** Keys no action may take: the menu key, and the skill row the HUD draws. */
+const RESERVED_KEYS = new Set(["escape", "1", "2", "3", "4", "5"]);
+
+/**
+ * A saved keybind map, proven: each action a non-reserved, short, lower-cased
+ * key, defaulting per entry. One key on two actions would fire both off one
+ * press, so the first claimant (in KEYBIND_ACTIONS order) keeps it and the
+ * later one goes unbound — the UI's own swap never produces that state, only a
+ * hand-edited save does.
+ */
+function keybinds(raw: unknown): Keybinds {
+  const src = obj(raw);
+  const out = {} as Keybinds;
+  const claimed = new Set<string>();
+  for (const action of KEYBIND_ACTIONS) {
+    const v = src[action];
+    let key = typeof v === "string" && v.length > 0 && v.length <= 24
+      ? v.toLowerCase() : DEFAULT_KEYBINDS[action];
+    if (RESERVED_KEYS.has(key)) key = DEFAULT_KEYBINDS[action];
+    if (claimed.has(key)) key = "";
+    if (key !== "") claimed.add(key);
+    out[action] = key;
+  }
+  return out;
+}
 
 export interface Settings {
   graphics: GraphicsSettings;
@@ -118,6 +162,7 @@ export const DEFAULT_SETTINGS: Settings = {
       "skill.ember_bolt.v1", "skill.cinder_ground.v1", "skill.blink.v1", null, null,
       MOVE_SOCKET, null, null,
     ],
+    keybinds: { ...DEFAULT_KEYBINDS },
   },
 };
 
@@ -211,6 +256,7 @@ export function sanitize(raw: unknown): Settings {
       overlayMapOpacity: num(u["overlayMapOpacity"], 0.15, 1, d.ui.overlayMapOpacity),
       monsterHealthBars: bool(u["monsterHealthBars"], d.ui.monsterHealthBars),
       skillBar: skillBar(u["skillBar"], d.ui.skillBar),
+      keybinds: keybinds(u["keybinds"]),
     },
   };
 }

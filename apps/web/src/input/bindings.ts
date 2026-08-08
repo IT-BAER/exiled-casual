@@ -1,7 +1,7 @@
 import type { Intent, Snapshot, SpawnKind, ToWorker } from "@exiled/protocol";
 import { heldToMoveIntent, keyToIntent, pointerToWorld } from "./intents";
 import type { Node, Scene } from "@babylonjs/core";
-import { MOVE_SOCKET } from "../settings";
+import { DEFAULT_KEYBINDS, MOVE_SOCKET, type Keybinds } from "../settings";
 import { SKILLS } from "@exiled/content-runtime";
 import { Y_LIFT } from "../render/meshes";
 
@@ -21,7 +21,7 @@ const SPAWN_KEYS: Record<string, SpawnKind> = {
   Numpad0: "clear",
 };
 
-const MOVE_KEYS = new Set(["w", "a", "s", "d"]);
+const MOVE_ACTIONS = ["moveUp", "moveDown", "moveLeft", "moveRight"] as const;
 
 /**
  * The height a skill is aimed at: the plane a projectile FLIES in, not the floor
@@ -191,6 +191,8 @@ export function attachBindings(
   skillForKey?: (key: string) => string | null,
   /** What the mouse buttons fire. Index is bar index (MOUSE_SLOT_BASE + button). */
   skillForMouse?: (button: number) => string | null,
+  /** The rebindable keys, read fresh on every press like the skill bar above. */
+  keybinds?: () => Keybinds,
 ): {
   detach: () => void;
   onSnapshot: (snap: Snapshot) => void;
@@ -222,6 +224,9 @@ export function attachBindings(
   // (over the sky past the map's edge) casts where the player last pointed
   // rather than at the world origin.
   let lastAim = { x: 0, y: 0 };
+
+  const binds = () => keybinds?.() ?? DEFAULT_KEYBINDS;
+  const isMoveKey = (k: string) => MOVE_ACTIONS.some((a) => binds()[a] === k && k !== "");
 
   /**
    * Where the cursor points, in RAW world floats (sim x, sim y = Babylon z).
@@ -310,8 +315,8 @@ export function attachBindings(
       onCycleOutfit?.();
       return;
     }
-    // g = pick up the nearest in-range ground item (sim re-checks range).
-    if (k === "g" && latestSnap) {
+    // Pickup: the nearest in-range ground item (sim re-checks range).
+    if (k === binds().pickup && k !== "" && latestSnap) {
       const items = latestSnap.entities.filter((e) => e.kind === "groundItem" && e.inRange);
       if (items.length > 0) {
         const px = latestSnap.player.x, py = latestSnap.player.y;
@@ -323,15 +328,15 @@ export function attachBindings(
     }
     // Movement is the sum of everything held, so W+D is the diagonal between
     // them rather than whichever key was struck last.
-    if (MOVE_KEYS.has(k)) {
+    if (isMoveKey(k)) {
       if (!held.includes(k)) held.push(k);
-      post(heldToMoveIntent(held));
+      post(heldToMoveIntent(held, binds()));
       return;
     }
     // The skill is resolved first only to know WHICH plane to aim at; keyToIntent
     // resolves it again for the intent itself (a bar lookup, not work worth saving).
     const keySkill = skillForKey?.(e.key);
-    const intent = keyToIntent(e.key, aimAt(keySkill ? aimHeightFor(keySkill) : AIM_HEIGHT), skillForKey);
+    const intent = keyToIntent(e.key, aimAt(keySkill ? aimHeightFor(keySkill) : AIM_HEIGHT), skillForKey, binds());
     if (intent) {
       post(intent);
       if (intent.kind === "useSkill") skillKeysHeld.add(e.key);
@@ -341,12 +346,14 @@ export function attachBindings(
   function onKeyUp(e: KeyboardEvent) {
     skillKeysHeld.delete(e.key);
     const k = e.key.toLowerCase();
-    if (!MOVE_KEYS.has(k)) return;
+    // Membership is the held list itself, not the current binds: a key rebound
+    // mid-hold must still release the movement it started.
     const i = held.indexOf(k);
-    if (i !== -1) held.splice(i, 1);
+    if (i === -1) return;
+    held.splice(i, 1);
     // Re-sum what is left, so releasing one key of a diagonal walks the player
     // on the other instead of stalling or snapping to the last press.
-    post(heldToMoveIntent(held));
+    post(heldToMoveIntent(held, binds()));
   }
 
   function onPointerMove(e: PointerEvent) {
@@ -482,7 +489,7 @@ export function attachBindings(
     if (skillKeysHeld.size > 0 && !snap.player.casting) {
       for (const key of skillKeysHeld) {
         const skill = skillForKey?.(key);
-        const intent = keyToIntent(key, aimAt(skill ? aimHeightFor(skill) : AIM_HEIGHT), skillForKey);
+        const intent = keyToIntent(key, aimAt(skill ? aimHeightFor(skill) : AIM_HEIGHT), skillForKey, binds());
         if (intent?.kind === "useSkill") post(intent);
       }
     }

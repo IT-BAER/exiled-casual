@@ -16,17 +16,44 @@
  */
 import React from "react";
 import { DISPLAY, SERIF, Divider, FramedPanel, GOLD, GOLD_DIM, MENU_ART, MenuButton, PARCHMENT } from "./frames";
-import { DEFAULT_SETTINGS, MIN_RESOLUTION_SCALE, type Settings, type ShadowQuality } from "../settings";
+import { DEFAULT_KEYBINDS, DEFAULT_SETTINGS, MIN_RESOLUTION_SCALE, type KeybindAction, type Keybinds, type Settings, type ShadowQuality } from "../settings";
 import { playSoundPreview, type SoundPreviewCategory } from "../audio/bus";
 // hud/layout.ts imports nothing, so the menu bundle gains two numbers, not the HUD.
 import { PANEL_W } from "../hud/layout";
 
-type TabId = "graphics" | "sound" | "ui";
+type TabId = "graphics" | "sound" | "ui" | "keybinds";
 const TABS: readonly { id: TabId; label: string }[] = [
   { id: "graphics", label: "Graphics" },
   { id: "sound", label: "Sound" },
   { id: "ui", label: "UI" },
+  { id: "keybinds", label: "Keybinds" },
 ];
+
+/** Row order and reading names for the rebindable actions. */
+const KEYBIND_ROWS: readonly { action: KeybindAction; label: string }[] = [
+  { action: "moveUp", label: "Move Up" },
+  { action: "moveDown", label: "Move Down" },
+  { action: "moveLeft", label: "Move Left" },
+  { action: "moveRight", label: "Move Right" },
+  { action: "flaskLife", label: "Life Flask" },
+  { action: "flaskMana", label: "Mana Flask" },
+  { action: "portal", label: "Portal to Hideout" },
+  { action: "pickup", label: "Pick Up Item" },
+  { action: "overlayMap", label: "Overlay Map" },
+  { action: "inventory", label: "Inventory" },
+  { action: "character", label: "Character Sheet" },
+  { action: "passives", label: "Passive Tree" },
+];
+
+/** Escape closes the panel and the skill row is drawn 1-5: neither is for taking. */
+const UNBINDABLE = new Set(["escape", "1", "2", "3", "4", "5"]);
+
+/** How a stored key reads on the button. */
+function keyLabel(key: string): string {
+  if (key === "") return "Unbound";
+  if (key === " ") return "Space";
+  return key.length === 1 ? key.toUpperCase() : key[0]!.toUpperCase() + key.slice(1);
+}
 
 export function OptionsPanel({
   settings,
@@ -236,6 +263,37 @@ export function OptionsPanel({
                   onToggle={(muted) => setSound({ muted })}
                 />
               </Row>
+            </>
+          ) : tab === "keybinds" ? (
+            <>
+              <Group>Keybinds</Group>
+              {KEYBIND_ROWS.map(({ action, label }) => (
+                <Row key={action} label={label}>
+                  <KeyButton
+                    label={label}
+                    value={settings.ui.keybinds[action]}
+                    onSet={(key) => {
+                      const binds: Keybinds = { ...settings.ui.keybinds };
+                      // A key can serve one action: the action that held it
+                      // takes this one's old key, so nothing goes silently dead.
+                      for (const other of Object.keys(binds) as KeybindAction[]) {
+                        if (other !== action && binds[other] === key) binds[other] = binds[action];
+                      }
+                      binds[action] = key;
+                      setUi({ keybinds: binds });
+                    }}
+                  />
+                </Row>
+              ))}
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
+                <MenuButton
+                  height={34}
+                  style={{ minWidth: 190 }}
+                  onClick={() => setUi({ keybinds: { ...DEFAULT_KEYBINDS } })}
+                >
+                  Reset to Default
+                </MenuButton>
+              </div>
             </>
           ) : (
             <>
@@ -507,6 +565,68 @@ function Choice<T extends string>({
         );
       })}
     </div>
+  );
+}
+
+/**
+ * The key plate: shows the bound key, and on click waits for the next press.
+ *
+ * The capture listener goes on window so it beats every bubble-phase handler in
+ * the app — the panel's own Escape-to-close and the game's panel hotkeys both
+ * live there, and a press meant as a binding must reach neither. Escape cancels
+ * the listen (and stays unbindable for exactly that reason); so does clicking
+ * anywhere else, since the listener leaves with the blur.
+ */
+function KeyButton({
+  label,
+  value,
+  onSet,
+}: {
+  label: string;
+  value: string;
+  onSet: (key: string) => void;
+}): React.ReactElement {
+  const [listening, setListening] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!listening) return;
+    const onKey = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setListening(false);
+      const key = e.key.toLowerCase();
+      if (!UNBINDABLE.has(key) && key.length <= 24) onSet(key);
+    };
+    const onClickAway = () => setListening(false);
+    window.addEventListener("keydown", onKey, { capture: true });
+    window.addEventListener("pointerdown", onClickAway);
+    return () => {
+      window.removeEventListener("keydown", onKey, { capture: true });
+      window.removeEventListener("pointerdown", onClickAway);
+    };
+  }, [listening, onSet]);
+
+  return (
+    <button
+      type="button"
+      aria-label={`${label} key`}
+      onClick={() => setListening(true)}
+      onPointerDown={(e) => e.stopPropagation()}
+      style={{
+        appearance: "none",
+        minWidth: 120,
+        padding: "6px 14px",
+        border: `1px solid ${listening ? GOLD : "#3a352c"}`,
+        background: listening ? "rgba(200,164,77,0.16)" : "rgba(0,0,0,0.45)",
+        fontFamily: SERIF,
+        fontSize: 12,
+        letterSpacing: 1.4,
+        color: listening ? "#f6e6bd" : value === "" ? "#6d655a" : "#d8c9a8",
+        cursor: "pointer",
+      }}
+    >
+      {listening ? "Press a key…" : keyLabel(value)}
+    </button>
   );
 }
 

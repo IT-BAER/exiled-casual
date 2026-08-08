@@ -161,6 +161,9 @@ export function GameView({
    */
   const skillBarRef = useRef(settings.ui.skillBar);
   skillBarRef.current = settings.ui.skillBar;
+  // The keybinds, mirrored for the same reason again.
+  const keybindsRef = useRef(settings.ui.keybinds);
+  keybindsRef.current = settings.ui.keybinds;
   // The map's layout, kept for the minimap. Null in the hideout, which has none.
   const [areaLayout, setAreaLayout] = useState<AreaLayout | null>(null);
   const [project, setProject] = useState<Projector | null>(null);
@@ -341,6 +344,7 @@ export function GameView({
       // Returns the raw socket value: MOVE_SOCKET, a skill id, or null (cleared).
       // The bindings layer decides what each means.
       (button) => skillBarRef.current[MOUSE_SLOT_BASE + button] ?? null,
+      () => keybindsRef.current,
     );
 
     // Loot plates are DOM, so their click has to reach the same approach-then-act
@@ -634,21 +638,22 @@ export function GameView({
         return;
       }
       if (deadRef.current) return;
-      // Tab is the overlay map, and must not walk the browser's focus ring.
-      if (ev.key === "Tab") {
+      const k = ev.key.toLowerCase();
+      const kb = keybindsRef.current;
+      // The overlay map must not walk the browser's focus ring (default Tab).
+      if (k === kb.overlayMap && k !== "") {
         ev.preventDefault();
         setOverlayMapOpen((v) => !v);
         return;
       }
-      const k = ev.key.toLowerCase();
-      if (k === "i") { setInventoryOpen((v) => !v); setStashOpen(false); }
+      if (k === kb.inventory && k !== "") { setInventoryOpen((v) => !v); setStashOpen(false); }
       // The sheet is cut from the stash's pane and docks where the stash docks, so
       // the three take turns in that slot. Unconditional: the only way the stash is
       // up when `c` is pressed is if the sheet was already down.
-      if (k === "c") { setCharacterOpen((v) => !v); setStashOpen(false); setVendorOpen(false); }
-      // P is the tree, PoE1's own key. It covers the screen, so it takes the
-      // screen: nothing else stays up behind it.
-      if (k === "p") {
+      if (k === kb.character && k !== "") { setCharacterOpen((v) => !v); setStashOpen(false); setVendorOpen(false); }
+      // The tree covers the screen, so it takes the screen: nothing else stays
+      // up behind it. Default is P, PoE1's own key.
+      if (k === kb.passives && k !== "") {
         setPassivesOpen((v) => !v);
         setInventoryOpen(false); setStashOpen(false); setVendorOpen(false); setCharacterOpen(false);
       }
