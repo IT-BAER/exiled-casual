@@ -49,6 +49,33 @@ describe("the passive tree's shape", () => {
     const spots = new Set(PASSIVE_TREE.map((n) => `${n.x},${n.y}`));
     expect(spots.size).toBe(PASSIVE_TREE.length);
   });
+
+  /**
+   * A line drawn through a node it does not name reads as a connection that does
+   * not exist — the eye cannot tell "passes behind" from "links to". The radii
+   * are the client's drawing radii; the tree owns the geometry, so the tree
+   * guards it.
+   */
+  it("routes no link through a node it does not name", () => {
+    const RADII = { start: 30, minor: 11, notable: 21, keystone: 24 } as const;
+    const segDist = (px: number, py: number, ax: number, ay: number, bx: number, by: number) => {
+      const dx = bx - ax, dy = by - ay;
+      const l2 = dx * dx + dy * dy;
+      const t = l2 === 0 ? 0 : Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / l2));
+      return Math.hypot(px - (ax + dx * t), py - (ay + dy * t));
+    };
+    for (const a of PASSIVE_TREE) {
+      for (const bid of a.links) {
+        if (a.id > bid) continue; // each edge once
+        const b = passiveNode(bid)!;
+        for (const n of PASSIVE_TREE) {
+          if (n.id === a.id || n.id === bid) continue;
+          const d = segDist(n.x, n.y, a.x, a.y, b.x, b.y);
+          expect(d, `${a.id} -> ${bid} passes through ${n.id}`).toBeGreaterThan(RADII[n.kind] + 2);
+        }
+      }
+    }
+  });
 });
 
 describe("allocation", () => {

@@ -240,6 +240,24 @@ function build(): PassiveNode[] {
     if (!na.links.includes(b)) na.links.push(b);
     if (!nb.links.includes(a)) nb.links.push(a);
   };
+  /**
+   * The cluster member nearest a point. Every link that leaves a cluster attaches
+   * HERE rather than at a fixed index: an entry chosen by index sat wherever the
+   * rosette's rotation left it, and a quarter of the tree's lines cut straight
+   * through nodes they did not name — which the eye reads as connections that do
+   * not exist. The nearest member faces the far end by construction, so the line
+   * clears its own rosette.
+   */
+  const nearest = (ids: readonly string[], x: number, y: number): string => {
+    let best = ids[0]!;
+    let bestD = Infinity;
+    for (const id of ids) {
+      const n = nodes.get(id)!;
+      const d = (n.x - x) ** 2 + (n.y - y) ** 2;
+      if (d < bestD) { bestD = d; best = id; }
+    }
+    return best;
+  };
 
   // The three doors, evenly spaced and each named for the class that starts there.
   const startIds: string[] = [];
@@ -257,13 +275,11 @@ function build(): PassiveNode[] {
   });
 
   // One column of clusters per spoke, running outward.
-  const firstOfSpoke: string[] = [];
+  /** Each cluster's minors and centre, so every outgoing link can pick `nearest`. */
+  const clusterAt = new Map<string, { minors: string[]; x: number; y: number }>();
   const lastOfSpoke = new Map<string, string>();
-  /** Where each cluster's notable ended up, so the bridges can find them. */
-  const hubAt = new Map<string, { id: string; x: number; y: number }>();
   SPOKES.forEach((spoke, si) => {
     const angle = (360 / SPOKES.length) * si + wobble(`${spoke.name}:spoke`, 5);
-    let inner: string | null = null;
     spoke.themes.forEach((themeId, ri) => {
       const theme = THEMES[themeId];
       const radius = RING_RADIUS[ri]! + wobble(`${spoke.name}:${ri}:r`, 26);
@@ -302,11 +318,14 @@ function build(): PassiveNode[] {
       minors.forEach((id, m) => link(id, minors[(m + 1) % minors.length]!));
       link(notable, minors[0]!);
       link(notable, minors[Math.floor(count / 2)]!);
-      if (inner === null) firstOfSpoke.push(minors[0]!);
-      else link(inner, minors[0]!);
-      inner = minors[Math.floor(count / 2)]!;
+      if (ri > 0) {
+        // The spoke's own ladder: the previous cluster's minor facing this one
+        // to this cluster's minor facing back.
+        const prev = clusterAt.get(`${si}:${ri - 1}`)!;
+        link(nearest(prev.minors, cx, cy), nearest(minors, prev.x, prev.y));
+      }
       lastOfSpoke.set(spoke.name, notable);
-      hubAt.set(`${si}:${ri}`, { id: notable, x: cx, y: cy });
+      clusterAt.set(`${si}:${ri}`, { minors, x: cx, y: cy });
     });
   });
 
@@ -318,10 +337,15 @@ function build(): PassiveNode[] {
   // is the crossing, and paying two points for it is the cost of the crossing.
   for (const ri of [1, 2]) {
     SPOKES.forEach((spoke, si) => {
-      const from = hubAt.get(`${si}:${ri}`)!;
-      const to = hubAt.get(`${(si + 1) % SPOKES.length}:${ri}`)!;
+      const from = clusterAt.get(`${si}:${ri}`)!;
+      const to = clusterAt.get(`${(si + 1) % SPOKES.length}:${ri}`)!;
+      // The bridge lands on the minor of each cluster that faces the other.
+      const fromId = nearest(from.minors, to.x, to.y);
+      const toId = nearest(to.minors, from.x, from.y);
+      const a = nodes.get(fromId)!;
+      const b = nodes.get(toId)!;
       const theme = THEMES.travel;
-      let prev = from.id;
+      let prev = fromId;
       for (const t of [1, 2]) {
         const f = t / 3;
         // Bowed outward, so the bridge follows the ring rather than cutting the
@@ -331,15 +355,15 @@ function build(): PassiveNode[] {
           id: `p.bridge.${ri}.${si}.${t}`,
           name: theme.title,
           kind: "minor",
-          x: round1((from.x + (to.x - from.x) * f) * bow),
-          y: round1((from.y + (to.y - from.y) * f) * bow),
+          x: round1((a.x + (b.x - a.x) * f) * bow),
+          y: round1((a.y + (b.y - a.y) * f) * bow),
           mods: theme.minor,
           links: [],
         });
         link(prev, id);
         prev = id;
       }
-      link(prev, to.id);
+      link(prev, toId);
     });
   }
 
@@ -347,35 +371,40 @@ function build(): PassiveNode[] {
   // one discipline. Nearest by angle, not by a table: the ring is generated.
   CLASS_IDS.forEach((classId, i) => {
     const angle = 90 + (360 / CLASS_IDS.length) * i;
+    const door = nodes.get(startNodeId(classId))!;
     const perSpoke = 360 / SPOKES.length;
-    const nearest = Math.round(angle / perSpoke);
+    const near = Math.round(angle / perSpoke);
     for (const d of [0, 1]) {
-      const si = (nearest + d + SPOKES.length) % SPOKES.length;
-      link(startNodeId(classId), firstOfSpoke[si]!);
+      const si = (near + d + SPOKES.length) % SPOKES.length;
+      const first = clusterAt.get(`${si}:0`)!;
+      link(startNodeId(classId), nearest(first.minors, door.x, door.y));
     }
   });
 
-  // The rim: neighbouring spokes joined at their outermost notable, which is what
-  // turns eight dead ends into one web you can cross the long way round.
-  SPOKES.forEach((spoke, si) => {
-    const next = SPOKES[(si + 1) % SPOKES.length]!;
-    link(lastOfSpoke.get(spoke.name)!, lastOfSpoke.get(next.name)!);
+  // The rim: neighbouring spokes joined at their outermost clusters, which is
+  // what turns eight dead ends into one web you can cross the long way round.
+  SPOKES.forEach((_, si) => {
+    const from = clusterAt.get(`${si}:3`)!;
+    const to = clusterAt.get(`${(si + 1) % SPOKES.length}:3`)!;
+    link(nearest(from.minors, to.x, to.y), nearest(to.minors, from.x, from.y));
   });
 
   // Keystones hang one step past the end of their spoke.
   for (const ks of KEYSTONES) {
     const si = SPOKES.findIndex((s) => s.name === ks.spoke);
     const angle = (360 / SPOKES.length) * si;
+    const x = round1(Math.cos(angle * RAD) * (RING_RADIUS[3] + 130));
+    const y = round1(Math.sin(angle * RAD) * (RING_RADIUS[3] + 130));
     const id = add({
       id: `p.keystone.${ks.name.toLowerCase().replace(/[^a-z]+/g, "_")}`,
       name: ks.name,
       kind: "keystone",
-      x: round1(Math.cos(angle * RAD) * (RING_RADIUS[3] + 130)),
-      y: round1(Math.sin(angle * RAD) * (RING_RADIUS[3] + 130)),
+      x, y,
       mods: ks.mods,
       links: [],
     });
-    link(id, lastOfSpoke.get(ks.spoke)!);
+    const last = clusterAt.get(`${si}:3`)!;
+    link(id, nearest(last.minors, x, y));
   }
 
   return [...nodes.values()];

@@ -66,6 +66,27 @@ const RING: Record<NodeState, string> = {
   far: "#4e452f",
 };
 
+/**
+ * The path an edge is drawn on. Two minors of one cluster ring their notable, so
+ * their link bends AROUND it as an arc of the rosette's own circle — PoE's
+ * clusters read as rings because their chains are arcs, and the same nodes
+ * joined by chords read as pentagons. Everything else (spokes, bridges, rim,
+ * doors) stays a straight line.
+ */
+function edgePath(a: PassiveNode, b: PassiveNode): string {
+  const line = `M ${a.x} ${a.y} L ${b.x} ${b.y}`;
+  const m = /^(p\.\w+\.\d+)\.\d+$/.exec(a.id);
+  if (!m || !b.id.startsWith(`${m[1]}.`)) return line;
+  const hub = passiveNode(`${m[1]}.hub`);
+  if (!hub || hub.id === a.id || hub.id === b.id) return line;
+  const ra = Math.hypot(a.x - hub.x, a.y - hub.y);
+  const rb = Math.hypot(b.x - hub.x, b.y - hub.y);
+  const r = (ra + rb) / 2;
+  // Shorter way round: the sign of the cross product picks the sweep.
+  const cross = (a.x - hub.x) * (b.y - hub.y) - (a.y - hub.y) * (b.x - hub.x);
+  return `M ${a.x} ${a.y} A ${r.toFixed(1)} ${r.toFixed(1)} 0 0 ${cross > 0 ? 1 : 0} ${b.x} ${b.y}`;
+}
+
 export interface PassiveTreePanelProps {
   open: boolean;
   classId: string;
@@ -107,14 +128,14 @@ export function PassiveTreePanel({
    */
   const edges = useMemo(() => {
     const seen = new Set<string>();
-    const out: { a: PassiveNode; b: PassiveNode }[] = [];
+    const out: { a: PassiveNode; b: PassiveNode; d: string }[] = [];
     for (const node of PASSIVE_TREE) {
       for (const id of node.links) {
         const key = node.id < id ? `${node.id}|${id}` : `${id}|${node.id}`;
         if (seen.has(key)) continue;
         seen.add(key);
         const other = passiveNode(id);
-        if (other) out.push({ a: node, b: other });
+        if (other) out.push({ a: node, b: other, d: edgePath(node, other) });
       }
     }
     return out;
@@ -234,34 +255,35 @@ export function PassiveTreePanel({
             burns one thin bright path through where the points went — line weight
             is what separated the two, not just colour, and the old 2.5/5 widths
             read as a wireframe diagram instead of a constellation. */}
-        {edges.map(({ a, b }, i) => {
+        {edges.map(({ a, b, d }, i) => {
           const lit = (taken.has(a.id) || a.id === start) && (taken.has(b.id) || b.id === start);
           return lit ? (
             <g key={i}>
-              <line
-                x1={a.x} y1={a.y} x2={b.x} y2={b.y}
+              <path
+                d={d} fill="none"
                 stroke="#c99f4a" strokeWidth={9} opacity={0.28}
                 filter="url(#passive-glow)"
               />
-              <line
-                x1={a.x} y1={a.y} x2={b.x} y2={b.y}
+              <path
+                d={d} fill="none"
                 stroke="#ecd291" strokeWidth={3} opacity={0.95}
               />
             </g>
           ) : (
-            <line
+            <path
               key={i}
-              x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-              stroke="#3d3a33" strokeWidth={1.4} opacity={0.9}
+              d={d} fill="none"
+              stroke="#54492f" strokeWidth={1.5} opacity={0.85}
             />
           );
         })}
         {PASSIVE_TREE.map((node) => {
           const state = stateOf(node);
           const r = RADIUS[node.kind];
+          const hot = hover?.id === node.id && state !== "far";
           const common = {
             fill: SOCKET[state],
-            stroke: RING[state],
+            stroke: hot ? "#f4e2ac" : RING[state],
             strokeWidth: node.kind === "minor" ? 2 : 3,
             style: { cursor: state === "open" ? "pointer" : "default" },
             onMouseEnter: (e: React.MouseEvent) => setHover({ id: node.id, x: e.clientX, y: e.clientY }),
