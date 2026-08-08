@@ -51,17 +51,19 @@ type NodeState = "taken" | "open" | "far";
  * an unallocated node at #241f18 against a translucent plate over a lit map was
  * invisible, so 200 of the 207 nodes simply were not there. PoE's tree dims what
  * you have not taken, it does not hide it — a dark disc inside a clearly visible
- * ring, which is what the ring colours below are for.
+ * ring. The second pass over-corrected into flat mustard discs; what the
+ * reference actually draws is a dark SOCKET inside a bronze ring, and only the
+ * allocated path burns gold. Socket fill and ring stroke per state:
  */
-const FILL: Record<NodeState, string> = {
-  taken: "#e8c368",
-  open: "#6f6449",
-  far: "#2b2620",
+const SOCKET: Record<NodeState, string> = {
+  taken: "url(#passive-taken)",
+  open: "#241f15",
+  far: "#15130e",
 };
-const STROKE: Record<NodeState, string> = {
-  taken: "#fff0c0",
-  open: "#d8b978",
-  far: "#6a5c46",
+const RING: Record<NodeState, string> = {
+  taken: "#f4e2ac",
+  open: "#a98d54",
+  far: "#4e452f",
 };
 
 export interface PassiveTreePanelProps {
@@ -139,7 +141,9 @@ export function PassiveTreePanel({
         // Near-opaque. The world kept rendering behind the first version and a
         // lit beach read straight through the plate, which put a sand-coloured
         // wash behind every node on the screen the tree needs contrast on.
-        background: "radial-gradient(circle at 50% 45%, rgba(9,10,14,0.985), rgba(2,3,4,0.998))",
+        // Deep desaturated navy, not neutral black: the reference field is a
+        // night sky, and the bronze rings only read warm against a cool ground.
+        background: "radial-gradient(circle at 50% 45%, rgba(13,17,26,0.988), rgba(4,6,10,0.998))",
         fontFamily: SERIF, color: PARCHMENT,
         display: "flex", flexDirection: "column",
         userSelect: "none",
@@ -212,15 +216,43 @@ export function PassiveTreePanel({
         onPointerUp={() => { drag.current = null; }}
         onPointerLeave={() => { drag.current = null; }}
       >
+        <defs>
+          {/* The allocated socket: molten gold, lit from the upper half the way
+              the reference's taken gems catch the light. */}
+          <radialGradient id="passive-taken" cx="50%" cy="38%" r="70%">
+            <stop offset="0%" stopColor="#f6df9d" />
+            <stop offset="55%" stopColor="#d3a852" />
+            <stop offset="100%" stopColor="#8a5f22" />
+          </radialGradient>
+          {/* Soft halo behind anything gold. Blur in tree units; the region has to
+              be generous or the halo clips square at its edges. */}
+          <filter id="passive-glow" x="-80%" y="-80%" width="260%" height="260%">
+            <feGaussianBlur stdDeviation="7" />
+          </filter>
+        </defs>
+        {/* The reference draws the web as HAIRLINES a shade above the field, and
+            burns one thin bright path through where the points went — line weight
+            is what separated the two, not just colour, and the old 2.5/5 widths
+            read as a wireframe diagram instead of a constellation. */}
         {edges.map(({ a, b }, i) => {
           const lit = (taken.has(a.id) || a.id === start) && (taken.has(b.id) || b.id === start);
-          return (
+          return lit ? (
+            <g key={i}>
+              <line
+                x1={a.x} y1={a.y} x2={b.x} y2={b.y}
+                stroke="#c99f4a" strokeWidth={9} opacity={0.28}
+                filter="url(#passive-glow)"
+              />
+              <line
+                x1={a.x} y1={a.y} x2={b.x} y2={b.y}
+                stroke="#ecd291" strokeWidth={3} opacity={0.95}
+              />
+            </g>
+          ) : (
             <line
               key={i}
               x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-              stroke={lit ? "#e8c368" : "#584c39"}
-              strokeWidth={lit ? 5 : 2.5}
-              opacity={lit ? 0.95 : 0.8}
+              stroke="#3d3a33" strokeWidth={1.4} opacity={0.9}
             />
           );
         })}
@@ -228,8 +260,8 @@ export function PassiveTreePanel({
           const state = stateOf(node);
           const r = RADIUS[node.kind];
           const common = {
-            fill: FILL[state],
-            stroke: STROKE[state],
+            fill: SOCKET[state],
+            stroke: RING[state],
             strokeWidth: node.kind === "minor" ? 2 : 3,
             style: { cursor: state === "open" ? "pointer" : "default" },
             onMouseEnter: (e: React.MouseEvent) => setHover({ id: node.id, x: e.clientX, y: e.clientY }),
@@ -240,21 +272,48 @@ export function PassiveTreePanel({
               onIntent?.({ kind: "allocatePassive", nodeId: node.id });
             },
           };
-          // A keystone is a diamond in both PoE trees, which is the whole reason
-          // one is legible from across the map at this zoom.
-          return node.kind === "keystone" ? (
-            <rect
-              key={node.id} data-testid={`passive-node-${node.id}`}
-              x={node.x - r} y={node.y - r} width={r * 2} height={r * 2}
-              transform={`rotate(45 ${node.x} ${node.y})`}
-              {...common}
-            />
-          ) : (
-            <circle
-              key={node.id} data-testid={`passive-node-${node.id}`}
-              cx={node.x} cy={node.y} r={r}
-              {...common}
-            />
+          const big = node.kind !== "minor";
+          return (
+            <g key={node.id}>
+              {/* Taken nodes glow; open ones carry a faint invitation of the same. */}
+              {state === "taken" && (
+                <circle cx={node.x} cy={node.y} r={r + 6} fill="#e8c368"
+                  opacity={0.4} filter="url(#passive-glow)" pointerEvents="none" />
+              )}
+              {/* Notables, keystones and the start wear the reference's second,
+                  outer ring — the ornament that makes one legible from across
+                  the map before its size does. */}
+              {big && (node.kind === "keystone" ? (
+                <rect
+                  x={node.x - r - 6} y={node.y - r - 6} width={(r + 6) * 2} height={(r + 6) * 2}
+                  transform={`rotate(45 ${node.x} ${node.y})`}
+                  fill="none" stroke={RING[state]} strokeWidth={1.2} opacity={0.55}
+                  pointerEvents="none"
+                />
+              ) : (
+                <circle
+                  cx={node.x} cy={node.y} r={r + 5}
+                  fill="none" stroke={RING[state]} strokeWidth={1.2} opacity={0.55}
+                  pointerEvents="none"
+                />
+              ))}
+              {/* A keystone is a diamond in both PoE trees, which is the whole
+                  reason one is legible from across the map at this zoom. */}
+              {node.kind === "keystone" ? (
+                <rect
+                  data-testid={`passive-node-${node.id}`}
+                  x={node.x - r} y={node.y - r} width={r * 2} height={r * 2}
+                  transform={`rotate(45 ${node.x} ${node.y})`}
+                  {...common}
+                />
+              ) : (
+                <circle
+                  data-testid={`passive-node-${node.id}`}
+                  cx={node.x} cy={node.y} r={r}
+                  {...common}
+                />
+              )}
+            </g>
           );
         })}
       </svg>
