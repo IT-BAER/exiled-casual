@@ -2,7 +2,7 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { NullEngine, Color3, VertexBuffer } from "@babylonjs/core";
+import { NullEngine, Color3, Mesh, VertexBuffer } from "@babylonjs/core";
 import { createScene } from "./engine";
 import { buildLevel, applyBiomeTint, applyTilesetFloor, tilesetDir } from "./level";
 import { MAP_BASES, BIOMES } from "@exiled/content-runtime";
@@ -106,6 +106,19 @@ describe("buildLevel", () => {
     expect(result.walls).toBeNull();
     expect(result.wallCells).toBe(0);
     expect(scene.getMeshByName("level-walls")).toBeNull();
+  });
+
+  it("sweeps the previous area's braziers even when the next area has no grid", () => {
+    // The hideout's buildLevel(null) returned before standBraziers, whose first
+    // act is that sweep — so a map's braziers stood in the hideout forever
+    // (196 meshes fresh vs 301 after a map, the difference never reclaimed).
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+
+    const stray = new Mesh("area-brazier-0", scene);
+    buildLevel(scene, null);
+
+    expect(stray.isDisposed()).toBe(true);
   });
 
   it("never makes level geometry a shadow caster", () => {

@@ -543,8 +543,11 @@ export function buildLevel(
 ): LevelResult {
   // Area swaps (and the open hideout) call this again; drop the previous walls.
   scene.getMeshByName(WALL_MESH_NAME)?.dispose();
+  // Braziers too: their own sweep in standBraziers never runs for the hideout
+  // (no grid), which left a map's braziers standing there for good.
   for (const node of [...scene.meshes, ...scene.transformNodes]) {
-    if (node.name.startsWith(BEACH_PROP_PREFIX)) node.dispose(false, false);
+    if (node.name.startsWith(BEACH_PROP_PREFIX)
+      || node.name.startsWith(AREA_BRAZIER_PREFIX)) node.dispose(false, false);
   }
   clearRocks();
   fitGround(scene, grid);

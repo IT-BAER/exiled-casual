@@ -211,6 +211,8 @@ export class SnapshotRenderer {
   private hoveredEntityId: number | null = null;
   /** The last snapshot applied, for the DEV handles alone. */
   private lastSnapshot: Snapshot | null = null;
+  /** The area the last applied snapshot was of; drives areaChanged. */
+  private lastArea: string | null = null;
 
   constructor(scene: Scene) {
     this.scene = scene;
@@ -218,6 +220,9 @@ export class SnapshotRenderer {
     // thing that cannot be staged from a driven page (it needs a fight), and a
     // ragdoll that never falls looks exactly like one that was never asked to.
     if (typeof window !== "undefined" && import.meta.env?.DEV) {
+      // The instance itself: a driven page cannot reach renderer internals any
+      // other way (a dynamic import() gets its own module identity under Vite).
+      (window as unknown as { __renderer?: SnapshotRenderer }).__renderer = this;
       (window as unknown as { __fell?: (id?: number) => boolean }).__fell = (id) => {
         const snap = this.lastSnapshot;
         if (!snap) return false;
@@ -457,7 +462,25 @@ export class SnapshotRenderer {
     // mattered: crossing into the hideout hands the first snapshot of the new
     // area with `prev` null, so the map's six portals were reported gone one by
     // one and each of them played its closing cue over the loading plate.
-    const areaChanged = prev === null || prev.area !== next.area;
+    // Against the renderer's OWN last-applied area, never prev's: snapshots
+    // advance per worker message but apply() runs per rendered frame, so a
+    // burst across the transition (the loading plate all but guarantees one)
+    // skips the straddling pair and prev is already in the new area.
+    const areaChanged = this.lastArea !== next.area;
+    this.lastArea = next.area;
+
+    // Corpses belong to the place they fell in. They live outside `this.meshes`,
+    // so without this they ride the crossing and lie in the new area until their
+    // sink timer expires — ~220 of a map's meshes in the hideout for 28 seconds.
+    if (areaChanged && this.corpses.length > 0) {
+      for (const corpse of this.corpses) {
+        disposeRagdoll(corpse.mesh);
+        rigOf(corpse.mesh)?.dispose();
+        creatureOf(corpse.mesh)?.dispose();
+        corpse.mesh.dispose();
+      }
+      this.corpses.length = 0;
+    }
 
     // Dispose meshes for entities that no longer exist. A rig owns scene-level
     // animation groups that mesh.dispose() would leave behind.
@@ -474,6 +497,7 @@ export class SnapshotRenderer {
           // entity id, which the sim is free to hand to something else.
         } else {
           rigOf(mesh)?.dispose();
+          creatureOf(mesh)?.dispose();
           mesh.dispose();
         }
         this.meshes.delete(id);
@@ -503,6 +527,7 @@ export class SnapshotRenderer {
         this.corpses.splice(i, 1);
         disposeRagdoll(corpse.mesh);
         rigOf(corpse.mesh)?.dispose();
+        creatureOf(corpse.mesh)?.dispose();
         corpse.mesh.dispose();
         continue;
       }
