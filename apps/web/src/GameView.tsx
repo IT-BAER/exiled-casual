@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Engine, Matrix, Vector3 } from "@babylonjs/core";
 import type { Scene } from "@babylonjs/core";
 import { applyGraphics, createScene, setMapFill } from "./render/engine";
@@ -39,7 +39,7 @@ import { DEFAULT_SETTINGS, MOUSE_SLOT_BASE, MOVE_SOCKET, type Settings } from ".
 import type { FrameHook, Projector } from "./hud/LootLabels";
 import type { AreaLayout } from "@exiled/mapgen";
 import { BIOMES, mapBase } from "@exiled/content-runtime";
-import type { Snapshot, FromWorker, ToWorker } from "@exiled/protocol";
+import type { Snapshot, FromWorker, Intent, ToWorker } from "@exiled/protocol";
 import { atlasGraph, atlasNodeTier, isNodeReachable, mapBaseIdForNode, DEFAULT_CLASS_ID } from "@exiled/rules";
 
 const LAB_SEED = 42;
@@ -122,6 +122,28 @@ export function GameView({
   const overlayOpenRef = useRef(false);
   overlayOpenRef.current =
     panelOpen || inventoryOpen || stashOpen || vendorOpen || characterOpen || optionsOpen || passivesOpen;
+  /**
+   * Stable props for the passive tree, so a snapshot cannot re-render it.
+   *
+   * The worker builds a NEW `passives` array in every snapshot, thirty a
+   * second, and the panel is two thousand SVG elements: handed fresh
+   * identities it rebuilt them all each tick, which React time-sliced into
+   * ~150ms bursts once a second — the stutter felt while panning the tree.
+   * The array reference is kept until its CONTENT changes, and the two
+   * callbacks close over refs, so every prop is still except when a point is
+   * actually spent.
+   */
+  const allocRef = useRef<readonly string[]>([]);
+  const alloc = snapshot?.player.passives ?? [];
+  if (allocRef.current.length !== alloc.length || allocRef.current.some((v, i) => v !== alloc[i])) {
+    allocRef.current = alloc;
+  }
+  const allocatedPassives = allocRef.current;
+  const sendIntent = useCallback((intent: Intent) => {
+    workerRef.current?.postMessage({ type: "intent", intent } satisfies ToWorker);
+  }, []);
+  const closePassives = useCallback(() => setPassivesOpen(false), []);
+
   /**
    * Down and waiting on the death screen. Same mirror-ref trick as above, and for
    * the same reason: the keydown listener is attached once. While it is set, no
@@ -795,10 +817,10 @@ export function GameView({
         <PassiveTreePanel
           open={passivesOpen}
           classId={snapshot.player.classId ?? DEFAULT_CLASS_ID}
-          allocated={snapshot.player.passives ?? []}
+          allocated={allocatedPassives}
           points={snapshot.player.passivePoints ?? 0}
-          onIntent={(intent) => workerRef.current?.postMessage({ type: "intent", intent } satisfies ToWorker)}
-          onClose={() => setPassivesOpen(false)}
+          onIntent={sendIntent}
+          onClose={closePassives}
         />
       )}
       {gameMenuOpen && (

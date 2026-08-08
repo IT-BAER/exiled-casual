@@ -121,6 +121,163 @@ function edgePath(a: PassiveNode, b: PassiveNode): string {
   return `M ${(a.x + ux * ta).toFixed(1)} ${(a.y + uy * ta).toFixed(1)} L ${(b.x - ux * tb).toFixed(1)} ${(b.y - uy * tb).toFixed(1)}`;
 }
 
+/**
+ * Every link once, not twice. Both ends name each other (the tree's links are
+ * symmetric on purpose), so drawing them all would paint each line over
+ * itself — invisible at rest, and visibly doubled the moment a line is
+ * highlighted by alpha. Module scope: the tree is static content, so its
+ * geometry never belongs to a component instance.
+ */
+const EDGES: readonly { a: PassiveNode; b: PassiveNode; d: string }[] = (() => {
+  const seen = new Set<string>();
+  const out: { a: PassiveNode; b: PassiveNode; d: string }[] = [];
+  for (const node of PASSIVE_TREE) {
+    for (const id of node.links) {
+      const key = node.id < id ? `${node.id}|${id}` : `${id}|${node.id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const other = passiveNode(id);
+      if (other) out.push({ a: node, b: other, d: edgePath(node, other) });
+    }
+  }
+  return out;
+})();
+
+/**
+ * The web itself — two thousand SVG elements, and the reason this layer is a
+ * memo: the panel re-renders on every pan step and hover move, and rebuilding
+ * the whole constellation for a viewBox change is what stuttered. Everything
+ * state-dependent that changes per POINTER (the hover ring, the tooltip) lives
+ * outside; this layer changes only when a point is spent or the class differs.
+ */
+const TreeWeb = React.memo(function TreeWeb({ classId, allocated, onHover, onHoverEnd, onIntent }: {
+  classId: string;
+  allocated: readonly string[];
+  onHover: (id: string, x: number, y: number) => void;
+  onHoverEnd: () => void;
+  onIntent?: (intent: Intent) => void;
+}) {
+  const taken = useMemo(() => new Set(allocated), [allocated]);
+  const start = startNodeId(classId);
+  const stateOf = (node: PassiveNode): NodeState => {
+    if (node.id === start || taken.has(node.id)) return "taken";
+    return canAllocate(classId, allocated, node.id) ? "open" : "far";
+  };
+  return (
+    <>
+      {/* The reference draws the web as HAIRLINES a shade above the field, and
+          burns one thin bright path through where the points went — line weight
+          is what separated the two, not just colour, and the old 2.5/5 widths
+          read as a wireframe diagram instead of a constellation. */}
+      {EDGES.map(({ a, b, d }, i) => {
+        const lit = (taken.has(a.id) || a.id === start) && (taken.has(b.id) || b.id === start);
+        return lit ? (
+          <g key={i}>
+            <path
+              d={d} fill="none"
+              stroke="#c99f4a" strokeWidth={9} opacity={0.28}
+              filter="url(#passive-glow)"
+            />
+            <path
+              d={d} fill="none"
+              stroke="#ecd291" strokeWidth={3} opacity={0.95}
+            />
+          </g>
+        ) : (
+          <path
+            key={i}
+            d={d} fill="none"
+            stroke="#54492f" strokeWidth={1.5} opacity={0.85}
+          />
+        );
+      })}
+      {PASSIVE_TREE.map((node) => {
+        const state = stateOf(node);
+        const r = RADIUS[node.kind];
+        const common = {
+          fill: "transparent",
+          stroke: "none",
+          "data-state": state,
+          style: { cursor: state === "open" ? "pointer" : "default" },
+          onMouseEnter: (e: React.MouseEvent) => onHover(node.id, e.clientX, e.clientY),
+          onMouseMove: (e: React.MouseEvent) => onHover(node.id, e.clientX, e.clientY),
+          onMouseLeave: onHoverEnd,
+          onClick: () => {
+            if (state !== "open") return;
+            onIntent?.({ kind: "allocatePassive", nodeId: node.id });
+          },
+        };
+        const fh = r * FRAME_OVER[node.kind]; // frame half-span
+        const ih = fh * 0.66; // icon half-span, inside the ring
+        const theme = passiveTheme(node.id);
+        return (
+          <g key={node.id} opacity={state === "far" ? DIM : 1}>
+            {/* Taken nodes glow; the painted art itself never changes state. */}
+            {state === "taken" && (
+              <circle cx={node.x} cy={node.y} r={r + 6} fill="#e8c368"
+                opacity={0.4} filter="url(#passive-glow)" pointerEvents="none" />
+            )}
+            {/* A door is its class: the select screen's portrait, clipped
+                into the laurel frame, so "where do I start" is a face. */}
+            {node.kind === "start" && (
+              <>
+                <clipPath id={`passive-door-${node.id}`}>
+                  <circle cx={node.x} cy={node.y} r={r * 0.94} />
+                </clipPath>
+                <image
+                  href={characterClass(`class.${node.id.slice("p.start.".length)}`).portrait}
+                  x={node.x - r} y={node.y - r} width={r * 2} height={r * 2}
+                  clipPath={`url(#passive-door-${node.id})`}
+                  preserveAspectRatio="xMidYMid slice"
+                  pointerEvents="none"
+                />
+              </>
+            )}
+            {theme && (
+              <image
+                href={`/hud/passives/${theme}.png`}
+                x={node.x - ih} y={node.y - ih} width={ih * 2} height={ih * 2}
+                pointerEvents="none"
+              />
+            )}
+            <image
+              href={FRAME_SRC[node.kind]}
+              x={node.x - fh} y={node.y - fh} width={fh * 2} height={fh * 2}
+              pointerEvents="none"
+            />
+            {/* Allocation reads as a lit ring OVER the bronze, the reference's
+                own move: gold burns around what you own. The HOVER ring is the
+                panel's overlay, so a pointer never re-renders this layer. */}
+            {state === "taken" && (
+              <circle
+                cx={node.x} cy={node.y} r={r}
+                fill="none" stroke={RING.taken}
+                strokeWidth={node.kind === "minor" ? 2 : 3}
+                opacity={0.9} pointerEvents="none"
+              />
+            )}
+            {/* The hit target carries the testid; the art is pointer-blind. */}
+            {node.kind === "keystone" ? (
+              <rect
+                data-testid={`passive-node-${node.id}`}
+                x={node.x - r} y={node.y - r} width={r * 2} height={r * 2}
+                transform={`rotate(45 ${node.x} ${node.y})`}
+                {...common}
+              />
+            ) : (
+              <circle
+                data-testid={`passive-node-${node.id}`}
+                cx={node.x} cy={node.y} r={r}
+                {...common}
+              />
+            )}
+          </g>
+        );
+      })}
+    </>
+  );
+});
+
 export interface PassiveTreePanelProps {
   open: boolean;
   classId: string;
@@ -154,37 +311,19 @@ export function PassiveTreePanel({
     wasOpen.current = open;
   }, [open, start]);
 
-  /**
-   * Every link once, not twice. Both ends name each other (the tree's links are
-   * symmetric on purpose), so drawing them all would paint each line over
-   * itself — invisible at rest, and visibly doubled the moment a line is
-   * highlighted by alpha.
-   */
-  const edges = useMemo(() => {
-    const seen = new Set<string>();
-    const out: { a: PassiveNode; b: PassiveNode; d: string }[] = [];
-    for (const node of PASSIVE_TREE) {
-      for (const id of node.links) {
-        const key = node.id < id ? `${node.id}|${id}` : `${id}|${node.id}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        const other = passiveNode(id);
-        if (other) out.push({ a: node, b: other, d: edgePath(node, other) });
-      }
-    }
-    return out;
-  }, []);
-
-  const stateOf = useCallback((node: PassiveNode): NodeState => {
-    if (node.id === start || taken.has(node.id)) return "taken";
-    return canAllocate(classId, allocated, node.id) ? "open" : "far";
-  }, [classId, allocated, taken, start]);
+  // Stable across pans and hovers, or the memo under them is a no-op.
+  const onHover = useCallback((id: string, x: number, y: number) => setHover({ id, x, y }), []);
+  const onHoverEnd = useCallback(() => setHover(null), []);
 
   if (!open) return null;
 
   const half = VIEW / (2 * zoom);
   const viewBox = `${pan.x - half} ${pan.y - half} ${half * 2} ${half * 2}`;
   const hovered = hover ? passiveNode(hover.id) : null;
+  // The hover ring is the panel's own overlay: drawn here so a pointer move
+  // repaints one circle, never the two-thousand-element web beneath it.
+  const hot = hovered && (hovered.id === start || taken.has(hovered.id)
+    || canAllocate(classId, allocated, hovered.id)) ? hovered : null;
 
   return (
     <div
@@ -278,115 +417,29 @@ export function PassiveTreePanel({
             <feGaussianBlur stdDeviation="7" />
           </filter>
         </defs>
-        {/* The reference draws the web as HAIRLINES a shade above the field, and
-            burns one thin bright path through where the points went — line weight
-            is what separated the two, not just colour, and the old 2.5/5 widths
-            read as a wireframe diagram instead of a constellation. */}
-        {edges.map(({ a, b, d }, i) => {
-          const lit = (taken.has(a.id) || a.id === start) && (taken.has(b.id) || b.id === start);
-          return lit ? (
-            <g key={i}>
-              <path
-                d={d} fill="none"
-                stroke="#c99f4a" strokeWidth={9} opacity={0.28}
-                filter="url(#passive-glow)"
-              />
-              <path
-                d={d} fill="none"
-                stroke="#ecd291" strokeWidth={3} opacity={0.95}
-              />
-            </g>
-          ) : (
-            <path
-              key={i}
-              d={d} fill="none"
-              stroke="#54492f" strokeWidth={1.5} opacity={0.85}
-            />
-          );
-        })}
-        {PASSIVE_TREE.map((node) => {
-          const state = stateOf(node);
-          const r = RADIUS[node.kind];
-          const hot = hover?.id === node.id && state !== "far";
-          const common = {
-            fill: "transparent",
-            stroke: "none",
-            "data-state": state,
-            style: { cursor: state === "open" ? "pointer" : "default" },
-            onMouseEnter: (e: React.MouseEvent) => setHover({ id: node.id, x: e.clientX, y: e.clientY }),
-            onMouseMove: (e: React.MouseEvent) => setHover({ id: node.id, x: e.clientX, y: e.clientY }),
-            onMouseLeave: () => setHover(null),
-            onClick: () => {
-              if (state !== "open") return;
-              onIntent?.({ kind: "allocatePassive", nodeId: node.id });
-            },
-          };
-          const fh = r * FRAME_OVER[node.kind]; // frame half-span
-          const ih = fh * 0.66; // icon half-span, inside the ring
-          const theme = passiveTheme(node.id);
-          return (
-            <g key={node.id} opacity={state === "far" ? DIM : 1}>
-              {/* Taken nodes glow; the painted art itself never changes state. */}
-              {state === "taken" && (
-                <circle cx={node.x} cy={node.y} r={r + 6} fill="#e8c368"
-                  opacity={0.4} filter="url(#passive-glow)" pointerEvents="none" />
-              )}
-              {/* A door is its class: the select screen's portrait, clipped
-                  into the laurel frame, so "where do I start" is a face. */}
-              {node.kind === "start" && (
-                <>
-                  <clipPath id={`passive-door-${node.id}`}>
-                    <circle cx={node.x} cy={node.y} r={r * 0.94} />
-                  </clipPath>
-                  <image
-                    href={characterClass(`class.${node.id.slice("p.start.".length)}`).portrait}
-                    x={node.x - r} y={node.y - r} width={r * 2} height={r * 2}
-                    clipPath={`url(#passive-door-${node.id})`}
-                    preserveAspectRatio="xMidYMid slice"
-                    pointerEvents="none"
-                  />
-                </>
-              )}
-              {theme && (
-                <image
-                  href={`/hud/passives/${theme}.png`}
-                  x={node.x - ih} y={node.y - ih} width={ih * 2} height={ih * 2}
-                  pointerEvents="none"
-                />
-              )}
-              <image
-                href={FRAME_SRC[node.kind]}
-                x={node.x - fh} y={node.y - fh} width={fh * 2} height={fh * 2}
-                pointerEvents="none"
-              />
-              {/* Allocation and hover read as a lit ring OVER the bronze, the
-                  reference's own move: gold burns around what you own. */}
-              {(state === "taken" || hot) && (
-                <circle
-                  cx={node.x} cy={node.y} r={r}
-                  fill="none" stroke={hot ? "#f4e2ac" : RING.taken}
-                  strokeWidth={node.kind === "minor" ? 2 : 3}
-                  opacity={0.9} pointerEvents="none"
-                />
-              )}
-              {/* The hit target carries the testid; the art is pointer-blind. */}
-              {node.kind === "keystone" ? (
-                <rect
-                  data-testid={`passive-node-${node.id}`}
-                  x={node.x - r} y={node.y - r} width={r * 2} height={r * 2}
-                  transform={`rotate(45 ${node.x} ${node.y})`}
-                  {...common}
-                />
-              ) : (
-                <circle
-                  data-testid={`passive-node-${node.id}`}
-                  cx={node.x} cy={node.y} r={r}
-                  {...common}
-                />
-              )}
-            </g>
-          );
-        })}
+        <TreeWeb
+          classId={classId}
+          allocated={allocated}
+          onHover={onHover}
+          onHoverEnd={onHoverEnd}
+          onIntent={onIntent}
+        />
+        {hot && (hot.kind === "keystone" ? (
+          <rect
+            x={hot.x - RADIUS.keystone} y={hot.y - RADIUS.keystone}
+            width={RADIUS.keystone * 2} height={RADIUS.keystone * 2}
+            transform={`rotate(45 ${hot.x} ${hot.y})`}
+            fill="none" stroke="#f4e2ac" strokeWidth={3}
+            opacity={0.9} pointerEvents="none"
+          />
+        ) : (
+          <circle
+            cx={hot.x} cy={hot.y} r={RADIUS[hot.kind]}
+            fill="none" stroke="#f4e2ac"
+            strokeWidth={hot.kind === "minor" ? 2 : 3}
+            opacity={0.9} pointerEvents="none"
+          />
+        ))}
       </svg>
 
       {hovered && hover && (
