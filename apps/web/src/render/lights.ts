@@ -14,7 +14,7 @@ import {
   resetFireFlames,
   updateFireFlames,
 } from "./flames";
-import { isScatterDressing } from "./rocks";
+import { LEDGE_MESH_PREFIX, isScatterDressing } from "./rocks";
 import { cullShadowCasters } from "./shadow-cull";
 
 /**
@@ -225,6 +225,11 @@ function castFrom(scene: Scene, light: PointLight | undefined): void {
       && mesh.name !== FLAME_MESH
       && !mesh.name.startsWith("telegraph-")
       && !isScatterDressing(mesh.name)
+      // The coast's ledge is 900+ thin instances behind one map-wide bounding
+      // sphere, re-drawn on every face of every armed cube (~5M indices a
+      // frame, measured live). It keeps casting from the TORCH — the pool the
+      // player reads — and gives up the decorative fire shadows.
+      && !mesh.name.startsWith(LEDGE_MESH_PREFIX)
       && reachesCaster(light, mesh);
     // Rendered on demand only: `updateFireLights` re-arms ONE map per frame,
     // round-robin. Four cube maps every frame were half the whole frame budget

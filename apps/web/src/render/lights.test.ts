@@ -98,12 +98,19 @@ describe("the fires a place is lit by", () => {
     rock.position.set(1, 0.5, 1);
     rock.computeWorldMatrix(true);
 
+    // The ledge stays out of the FIRE cubes too (its 907 instances re-drew on
+    // every face); it still casts from the torch, the light whose pool matters.
+    const ledge = MeshBuilder.CreateBox("wallrun-ledge-0", { size: 1 }, s);
+    ledge.position.set(0, 0.5, 1);
+    ledge.computeWorldMatrix(true);
+
     const drawn = new Set<string>();
     for (let f = 0; f < 6; f++) {
       map.onBeforeRenderObservable.notifyObservers(f);
       for (const mesh of map.getCustomRenderList!(f, [], 0) ?? []) drawn.add(mesh.name);
     }
     expect(drawn.has("wallrun-weed-0")).toBe(false);
+    expect(drawn.has("wallrun-ledge-0")).toBe(false);
     expect(drawn.has("wallrun-rock-0")).toBe(true);
   });
 

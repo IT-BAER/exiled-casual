@@ -181,12 +181,13 @@ LEDGE_RELIEF = 0.3
 LEDGE_SLICES = 2
 
 WEEDS = 4
-BLADES = 48
-# Segments per blade. 4 is enough to bend one; the whole point is the fuzzy mass,
-# not any single blade, and at this camera a blade is about two pixels wide.
-BLADE_SEGMENTS = 4
+# 24 blades at 2 segments is 96 tris a clump, a quarter of what shipped: the
+# coast draws ~900 clumps through main, SSAO and glow every frame, and at this
+# camera the mass, not any blade, is the read. Blades widened to keep it.
+BLADES = 24
+BLADE_SEGMENTS = 2
 # Blade half-width at the root, in the clump's own unit box.
-BLADE_ROOT = 0.022
+BLADE_ROOT = 0.032
 
 
 def build_dune(index):
@@ -370,10 +371,13 @@ FLORA_SOURCES = [
     # (blend, object name, triangle budget, base-colour image, alpha image)
     ("coast_fern.blend", "Picsart_24-11-03_17-17-16-746.006", 128,
      "Picsart_24-11-03_17-17-16-746.png", None),
-    ("dune_shrub.blend", "shrub_02_a_LOD2", 1600, "shrub_02_diff.png", "shrub_02_alpha.png"),
-    ("dune_shrub.blend", "shrub_02_b_LOD2", 1400, "shrub_02_diff.png", "shrub_02_alpha.png"),
-    ("dune_shrub.blend", "shrub_02_c_LOD2", 1600, "shrub_02_diff.png", "shrub_02_alpha.png"),
-    ("dune_shrub.blend", "shrub_02_d_LOD2", 1400, "shrub_02_diff.png", "shrub_02_alpha.png"),
+    # 400/350, down from 1600/1400: a shrub is a leaf-textured cutout cloud and
+    # its silhouette survives the collapse; ~240 instances were a third of the
+    # coast's per-frame scatter indices.
+    ("dune_shrub.blend", "shrub_02_a_LOD2", 400, "shrub_02_diff.png", "shrub_02_alpha.png"),
+    ("dune_shrub.blend", "shrub_02_b_LOD2", 350, "shrub_02_diff.png", "shrub_02_alpha.png"),
+    ("dune_shrub.blend", "shrub_02_c_LOD2", 400, "shrub_02_diff.png", "shrub_02_alpha.png"),
+    ("dune_shrub.blend", "shrub_02_d_LOD2", 350, "shrub_02_diff.png", "shrub_02_alpha.png"),
 ]
 # Every flora texture lands here. The shrub ships 4K maps and there are five
 # species; at native size this one glb would outweigh the character rig.

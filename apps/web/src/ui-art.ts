@@ -36,6 +36,11 @@ export const UI_ART: readonly string[] = [
   `${MENU}/slider_handle.png`,
   `${MENU}/tab_plate.png`,
   `${MENU}/row_plate.png`,
+  // Item tooltips: the first hover paints the rarity band, so all four warm.
+  `${MENU}/tooltip_header_normal.png`,
+  `${MENU}/tooltip_header_magic.png`,
+  `${MENU}/tooltip_header_rare.png`,
+  `${MENU}/tooltip_header_unique.png`,
   // Inventory, stash, character sheet.
   "/textures/ui/char_header_v1.png",
   "/textures/ui/char_stone_v1.png",
