@@ -179,3 +179,16 @@ unique, each stretching cleanly around one- or two-line item names.
 <td width="100%"><img src="screenshots/2026-08-08-tooltip-rarity-bands.jpeg" alt="Ember Wand tooltip with the painted silver header band" width="100%"><br><sub>Painted rarity header bands.</sub></td>
 </tr>
 </table>
+
+## 2026-08-08 · The passive tree gets its faces
+
+The passive tree traded styled circles for painted art: an ornate bronze frame per node kind, an
+engraved icon per stat theme on every node face, and the three class portraits set into their
+origin doors. Connection lines now stop at each node's rim instead of running underneath, and the
+allocated path still burns gold through the web.
+
+<table>
+<tr>
+<td width="100%"><img src="screenshots/2026-08-08-passive-tree-painted.jpeg" alt="Passive tree with painted bronze frames, theme icons and class portrait doors" width="100%"><br><sub>Painted node faces and portrait doors.</sub></td>
+</tr>
+</table>
