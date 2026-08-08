@@ -682,8 +682,11 @@ function buildPortal(scene: Scene, root: Mesh): void {
   // space stays circular; the QUAD's aspect is what makes the tear an oval —
   // 1.2 x 2.16 of actual tear, the standing-doorway proportion he asked for,
   // and six portals on the hideout arc (~3.7u apart) still clear each other.
+  // Lifted 0.2 above where the geometry says it belongs: the tear's lower feather
+  // fades out under the floor plane, so a portal centred on its own half-height
+  // reads as sunk into the ground rather than standing on it.
   const face = MeshBuilder.CreatePlane(`${root.name}-pi`, { width: 1.5, height: 2.7 }, scene);
-  face.position.y = 1.12;
+  face.position.y = 1.32;
   face.parent = root;
   const mat = new ShaderMaterial(`${root.name}-portal`, scene, PORTAL_SHADER, {
     attributes: ["position", "uv"],
