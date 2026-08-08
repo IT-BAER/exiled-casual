@@ -60,6 +60,12 @@ export interface UiSettings {
    */
   overlayMapOpacity: number;
   /**
+   * A thin life bar over any damaged monster. Default OFF: the flash on hit is
+   * the game's answer, this is the readout for players who want the number-ish
+   * version. Bosses keep their own big bar either way.
+   */
+  monsterHealthBars: boolean;
+  /**
    * Which skill sits in which numbered socket of the skill bar, in bar order.
    * `null` is an empty socket. A setting rather than sim state because it is a
    * preference about the screen, not about the character: nothing the sim owns
@@ -107,6 +113,7 @@ export const DEFAULT_SETTINGS: Settings = {
     lootLabels: true,
     orbNumbers: true,
     overlayMapOpacity: 0.6,
+    monsterHealthBars: false,
     skillBar: [
       "skill.ember_bolt.v1", "skill.cinder_ground.v1", "skill.blink.v1", null, null,
       MOVE_SOCKET, null, null,
@@ -202,6 +209,7 @@ export function sanitize(raw: unknown): Settings {
       lootLabels: bool(u["lootLabels"], d.ui.lootLabels),
       orbNumbers: bool(u["orbNumbers"], d.ui.orbNumbers),
       overlayMapOpacity: num(u["overlayMapOpacity"], 0.15, 1, d.ui.overlayMapOpacity),
+      monsterHealthBars: bool(u["monsterHealthBars"], d.ui.monsterHealthBars),
       skillBar: skillBar(u["skillBar"], d.ui.skillBar),
     },
   };

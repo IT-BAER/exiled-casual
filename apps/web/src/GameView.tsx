@@ -28,6 +28,7 @@ import { CharacterPanel } from "./hud/CharacterPanel";
 import { PassiveTreePanel } from "./hud/PassiveTreePanel";
 import { LootLabels } from "./hud/LootLabels";
 import { NpcLabels } from "./hud/NpcLabels";
+import { MonsterHealthBars } from "./hud/MonsterHealthBars";
 import { Minimap } from "./hud/Minimap";
 import { BuffBar } from "./hud/BuffBar";
 import { DebugStats } from "./hud/DebugStats";
@@ -737,6 +738,9 @@ export function GameView({
         plates={settings.ui.lootLabels}
       />
       <NpcLabels snapshot={snapshot} project={project} afterFrame={afterFrame} />
+      {settings.ui.monsterHealthBars && (
+        <MonsterHealthBars snapshot={snapshot} project={project} afterFrame={afterFrame} />
+      )}
       <BuffBar snapshot={snapshot} />
       <Hud
         snapshot={snapshot}

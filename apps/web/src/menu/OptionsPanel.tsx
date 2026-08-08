@@ -272,6 +272,13 @@ export function OptionsPanel({
                   onToggle={(lootLabels) => setUi({ lootLabels })}
                 />
               </Row>
+              <Row label="Show Monster Health Bars" note="A small bar over a monster once it takes damage.">
+                <Gem
+                  label="Show Monster Health Bars"
+                  on={settings.ui.monsterHealthBars}
+                  onToggle={(monsterHealthBars) => setUi({ monsterHealthBars })}
+                />
+              </Row>
             </>
           )}
         </div>
