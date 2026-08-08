@@ -27,7 +27,9 @@ export function registerInteractSystem(sim: Simulation, collisionRef?: Collision
         if (session.area !== "hideout") continue;
         const atlasNodeId = cmd.atlasNodeId;
         if (!atlasNodeId) continue;
-        if (session.completedNodes.includes(atlasNodeId)) continue;
+        // A completed node is NOT refused: PoE1's rule, a place you can always
+        // return to with a stone. completedNodes only feeds fog, tiers and the
+        // boss's first-clear reward.
         // Fog is a server rule, not a greyed-out button: the client is untrusted.
         const graph = atlasGraph(session.atlasSeed);
         if (!isNodeReachable(graph, session.completedNodes, atlasNodeId)) continue;

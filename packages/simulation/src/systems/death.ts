@@ -47,7 +47,8 @@ export function registerDeath(sim: Simulation): void {
       const isRare = world.get<MonsterC>(e, "monster")?.rare === 1;
 
       // A dying map boss completes the active Atlas node before it is destroyed.
-      if (isBoss && s && s.area === "map" && s.activeNodeId !== "" && !s.completedNodes.includes(s.activeNodeId)) {
+      if (isBoss && s && s.area === "map" && s.activeNodeId !== "") {
+        const firstClear = !s.completedNodes.includes(s.activeNodeId);
         // Clearing a map hands stones back — one for a plain run, two (the
         // second a tier higher) for one taken on a stone that carried
         // modifiers. This is the loop that keeps a character in maps.
@@ -58,13 +59,16 @@ export function registerDeath(sim: Simulation): void {
         // being a route decision and became a wait for a stone that rolls
         // modifiers. Raising the best drop never pays less than the run's own
         // tier (a stone opens anything at or under it), so this is a floor.
-        const onward = nextNodeTier(atlasGraph(s.atlasSeed), s.activeNodeId, s.completedNodes);
-        const best = drops[drops.length - 1]!;
-        if (onward !== null && best.tier < onward) best.tier = onward;
-        world.set<SessionC>(sessionE!, "session", {
-          ...s,
-          completedNodes: [...s.completedNodes, s.activeNodeId],
-        });
+        // First-clear only: a re-run is break-even sustain, never a door-opener.
+        if (firstClear) {
+          const onward = nextNodeTier(atlasGraph(s.atlasSeed), s.activeNodeId, s.completedNodes);
+          const best = drops[drops.length - 1]!;
+          if (onward !== null && best.tier < onward) best.tier = onward;
+          world.set<SessionC>(sessionE!, "session", {
+            ...s,
+            completedNodes: [...s.completedNodes, s.activeNodeId],
+          });
+        }
         // On the floor, not into the bag. A stone is a 1x1 grid item now, and a
         // full backpack must never be able to eat the one reward the whole map
         // was run for (docs/09: the payout has to be seen to have happened).

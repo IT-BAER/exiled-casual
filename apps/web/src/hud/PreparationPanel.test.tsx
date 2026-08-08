@@ -101,7 +101,7 @@ describe("PreparationPanel", () => {
     expect(screen.queryByTestId("prep-popup")).toBeNull();
   });
 
-  it("disables a completed node", () => {
+  it("a completed node stays clickable: cleared marks it, it does not lock it", () => {
     const done = atlasGraph(atlasSeed)[0]!.id;
     render(
       <PreparationPanel
@@ -109,7 +109,7 @@ describe("PreparationPanel", () => {
         onEject={() => {}} onActivate={() => {}} onClose={() => {}}
       />,
     );
-    expect((screen.getByTestId(`prep-node-${done}`) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByTestId(`prep-node-${done}`) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("shows the fog: only the first node is enterable on a fresh atlas", () => {

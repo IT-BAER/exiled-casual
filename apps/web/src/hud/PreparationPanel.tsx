@@ -87,12 +87,12 @@ function AtlasMap(props: {
   // Four states, not three: a place can be out of fog and still refuse the stone
   // in your hand, which is a different problem to solve and has to look like one.
   const state = (n: AtlasGraphNode) =>
-    completedNodes.includes(n.id)
-      ? "cleared"
-      : !isNodeReachable(nodes, completedNodes, n.id)
+    !isNodeReachable(nodes, completedNodes, n.id)
       ? "fog"
       : stoneTier !== null && stoneTier < atlasNodeTier(nodes, n.id)
       ? "underTier"
+      : completedNodes.includes(n.id)
+      ? "cleared"
       : "open";
 
   // Each undirected link once, keyed by its sorted pair.
@@ -156,7 +156,7 @@ function AtlasMap(props: {
           // What the place is, in one line, because the medallion can only carry
           // a colour and a number: PoE2's Atlas says the rest on hover.
           const tip =
-            st === "cleared" ? `${n.name} — cleared`
+            st === "cleared" ? `${n.name} — cleared; Tier ${tier} or better to run it again`
             : st === "fog" ? `${n.name} — no route yet`
             : st === "underTier" ? `${n.name} — needs a Tier ${tier} Waystone`
             : `${n.name} — Tier ${tier} or better, Area Level ${areaLevel(tier)}`;
@@ -164,7 +164,7 @@ function AtlasMap(props: {
             <button
               key={n.id}
               data-testid={`prep-node-${n.id}`}
-              disabled={st !== "open"}
+              disabled={st !== "open" && st !== "cleared"}
               onClick={() => onSelect(n.id)}
               title={tip}
               style={{

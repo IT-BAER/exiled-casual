@@ -379,8 +379,7 @@ export function GameView({
         const candidates = [exact, ...graph.filter((n) => n.id !== exact.id)]
           .filter((n) =>
             mapBaseIdForNode(n.id) === base &&
-            isNodeReachable(graph, snap.completedNodes, n.id) &&
-            !snap.completedNodes.includes(n.id))
+            isNodeReachable(graph, snap.completedNodes, n.id))
           .sort((a, b) => atlasNodeTier(graph, a.id) - atlasNodeTier(graph, b.id));
         const node = candidates.find((n) =>
           stones.some((st) => st.waystone!.tier >= atlasNodeTier(graph, n.id)));

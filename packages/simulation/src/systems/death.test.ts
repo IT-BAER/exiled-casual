@@ -213,7 +213,9 @@ describe("registerDeath", () => {
     registerDeath(sim);
     const w = sim.world;
     const s = w.create();
-    w.set(s, "session", { area: "map", atlasSeed: 1, mapSeed: opts.mapSeed ?? 7, waystoneSeed: opts.waystoneSeed ?? 0, areaTier: 5, activeNodeId: "node.the_wrackline", completedNodes: ["node.the_wrackline"], portalsLeft: 6, mapOpen: 1, pendingArea: "" });
+    // activeNodeId "" keeps the boss's waystone payout out of these burst
+    // counts (a completed node no longer suppresses it — re-runs pay too).
+    w.set(s, "session", { area: "map", atlasSeed: 1, mapSeed: opts.mapSeed ?? 7, waystoneSeed: opts.waystoneSeed ?? 0, areaTier: 5, activeNodeId: "", completedNodes: ["node.the_wrackline"], portalsLeft: 6, mapOpen: 1, pendingArea: "" });
     const m = w.create();
     w.set(m, "position", { x: fp(3), y: fp(-2) });
     w.set(m, "health", { life: 0, maxLife: 40 });
@@ -489,10 +491,16 @@ describe("clearing a map hands Waystones back", () => {
     }
   });
 
-  it("a node already cleared pays nothing a second time", () => {
-    const { sim, world } = makeBossDeath("map", "node.the_wrackline", ["node.the_wrackline"]);
+  /**
+   * A cleared node can be run again (PoE1's rule), and a re-run is break-even
+   * sustain: the plain drops come back, but the first-clear onward-tier floor
+   * does not — re-farming a cheap place must never mint door-opening stones.
+   */
+  it("a re-run still pays waystones, without the first-clear onward floor", () => {
+    const { sim, world } = makeBossDeath("map", "node.the_wrackline", ["node.the_wrackline"], 1);
     sim.step();
-    expect(waystoneGroundItems(world).length).toBe(0);
+    expect(waystoneGroundItems(world).length).toBeGreaterThan(0);
+    expect(bestTier(world)).toBe(1); // first-clear on this node would floor it to 3
   });
 
   const bestTier = (world: ReturnType<typeof makeBossDeath>["world"]) =>

@@ -186,12 +186,18 @@ describe("registerInteractSystem", () => {
     expect(seedAt(graph[0]!.id, [])).toBe(first); // and stays put for a place
   });
 
-  it("activateMap is rejected for an already-completed node", () => {
+  /**
+   * PoE1's rule, not PoE2's: a map is somewhere you can always go back to when
+   * you hold a stone for it. With 15 fixed nodes, "cleared = never again" would
+   * end the game at run 15. Completion still drives fog, tiers and the boss's
+   * first-clear reward; it is not a lock.
+   */
+  it("activateMap re-opens an already-completed node", () => {
     const { sim, world, player, sessionE } = makeWorld();
     const s = world.get<SessionC>(sessionE, "session")!;
     world.set<SessionC>(sessionE, "session", { ...s, completedNodes: ["node.the_wrackline"] });
     sim.step([activateCmd(player, "node.the_wrackline", { x: 0, y: 0 })]);
-    expect(world.get<SessionC>(sessionE, "session")!.mapOpen).toBe(0);
+    expect(world.get<SessionC>(sessionE, "session")!.mapOpen).toBe(1);
   });
 
   it("out-of-range click on map device is ignored (trust boundary)", () => {
