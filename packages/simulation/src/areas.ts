@@ -7,7 +7,7 @@ import {
 } from "@exiled/rules";
 import {
   PACK_COUNT, bossFor, mapBase, pickPack, rareTemplate,
-  ITEM_POOLS, baseOf, currencyItem, currencyForRoll, hideoutFootprints,
+  ITEM_POOLS, baseOf, currencyItem, currencyForRoll, hideoutFootprints, isPortalScroll,
 } from "@exiled/content-runtime";
 import { ELEMENTS, type MonsterDef } from "@exiled/content-schema";
 import type { AreaLayout } from "@exiled/mapgen";
@@ -16,7 +16,7 @@ import { damageCode } from "./damage-types";
 import { fnv1a32 } from "./rng";
 import type {
   Position, Health, Faction, MonsterC, DefensesC, BossC,
-  InteractableC, SessionC, AreaKind, ItemC, ContainerC,
+  InteractableC, SessionC, AreaKind, ItemC, ContainerC, InventoryC,
 } from "./components";
 import type { Blocker, Collision } from "./collision";
 
@@ -76,6 +76,72 @@ const PORTAL_RING: readonly { dx: number; dy: number; yaw: number }[] = [
   { dx: fp(0.849),  dy: fp(3.394),  yaw: 0.8 },
   { dx: fp(2.475),  dy: fp(2.475),  yaw: 1.4 },
 ];
+
+/**
+ * Open the one doorway home, where the caster is standing, and take away every
+ * other one in the area first.
+ *
+ * The replacement is the point, not a tidy-up: inside a map every portal leads to
+ * the same hideout, so a second one is never a second destination — only more
+ * doorways to trip over, and one of them the exit you did not mean to take.
+ * Whoever opened the newest one said where they want to leave from.
+ *
+ * Map-side only. Called in the hideout it would eat the map device's whole ring.
+ */
+export function openReturnPortal(world: World, x: number, y: number): void {
+  for (const e of [...world.alive]) {
+    if (world.get<InteractableC>(e, "interactable")?.kind === "portal") world.destroy(e);
+  }
+  const e = world.create();
+  world.set<Position>(e, "position", { x, y });
+  world.set<InteractableC>(e, "interactable", { kind: "portal", radius: PORTAL_RADIUS, yaw: 3.1416 });
+}
+
+/**
+ * A character's way home: spend one Portal Scroll and tear the doorway open where
+ * `caster` stands. Returns false and spends nothing when there is nothing to buy.
+ *
+ * This is the whole rule for the Portal skill (`skill.town_portal.v1`), which is
+ * what both the Y key and the right-click on a scroll fire. It lives here rather
+ * than in the skill system because it is a fact about the SESSION — where a
+ * portal may be opened, and what it costs — and the skill system only knows
+ * about mana and cooldowns.
+ */
+export function spendScrollAndOpenPortal(world: World, caster: Entity): boolean {
+  const sessionE = world.query("session")[0];
+  if (sessionE === undefined) return false;
+  const session = world.get<SessionC>(sessionE, "session")!;
+  // Only inside an open map: in the hideout there is nothing to leave, and in a
+  // closed one there would be nothing to come back to.
+  if (session.area !== "map" || session.mapOpen !== 1) return false;
+  const pos = world.get<Position>(caster, "position");
+  if (!pos) return false;
+
+  // Standing in a doorway already: the scroll would buy nothing, so it is not
+  // spent — the same rule the map device follows about a run already open.
+  for (const e of world.query("interactable", "position")) {
+    const ia = world.get<InteractableC>(e, "interactable")!;
+    if (ia.kind !== "portal") continue;
+    const p = world.get<Position>(e, "position")!;
+    if (fpDist2(pos.x, pos.y, p.x, p.y) <= ia.radius * ia.radius) return false;
+  }
+
+  const inv = world.get<InventoryC>(sessionE, "inventory");
+  const index = inv ? inv.items.findIndex((p) => isPortalScroll(p.item)) : -1;
+  if (index === -1) return false;
+  const held = inv!.items[index]!;
+  // Currency stacks, so a stack of five spends one and keeps four.
+  const left = (held.count ?? 1) - 1;
+  world.set<InventoryC>(sessionE, "inventory", {
+    ...inv!,
+    items: left > 0
+      ? inv!.items.map((p, i) => (i === index ? { ...p, count: left } : p))
+      : inv!.items.filter((_, i) => i !== index),
+  });
+
+  openReturnPortal(world, pos.x, pos.y);
+  return true;
+}
 
 /**
  * Spawn `count` portals around the map device (indices 0..count-1 from PORTAL_RING).

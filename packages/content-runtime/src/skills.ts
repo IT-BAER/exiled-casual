@@ -126,6 +126,25 @@ const SKILL_DEFS: SkillDef[] = [
     ],
   },
   {
+    /**
+     * The way home, on Y. PoE1's Portal Scroll, not PoE2's free return: it spends
+     * a scroll, which is why it is also what the inventory's right-click on a
+     * scroll fires — one action with one set of rules, rather than a hotkey that
+     * quietly ignores the cooldown the icon obeys.
+     *
+     * Two seconds of wind-up and ten of cooldown are the whole answer to "so it
+     * doesn't get spammed": long enough that opening one mid-fight is a decision,
+     * short enough that a full bag is never a walk back to the entrance.
+     */
+    id: "skill.town_portal.v1",
+    name: "Portal",
+    description: "Tears open a doorway back to the hideout. Costs one Portal Scroll and replaces any other way home already standing in this area.",
+    manaCostFixed: 0,
+    cooldownTicks: 300,
+    castTicks: 60,
+    effects: [{ type: "openPortal" }],
+  },
+  {
     id: "skill.blink.v1",
     name: "Blink",
     description: "Teleport a short distance. Shares a cooldown with other movement skills.",
@@ -146,6 +165,13 @@ for (const def of SKILL_DEFS) {
 export const SKILLS: ReadonlyMap<string, SkillDef> = new Map(
   SKILL_DEFS.map((d) => [d.id, d]),
 );
+
+/**
+ * The way home. Named because two places outside content fire it — the Y key and
+ * the right-click on a Portal Scroll — and neither of them should be spelling an
+ * id by hand.
+ */
+export const TOWN_PORTAL_SKILL = "skill.town_portal.v1";
 
 /**
  * Which default attack each class swings. This is the one place a class picks a

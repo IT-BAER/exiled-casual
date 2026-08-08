@@ -2,6 +2,7 @@ import { Simulation } from "../loop";
 import type { World } from "../ecs";
 import type { Health, Mana, MoveTarget, MoveDir, SessionC, MonsterC, Position, ItemC, FlasksC, ProgressC, EnergyShieldC, VendorC } from "../components";
 import { stockVendor } from "../vendor";
+import { openReturnPortal } from "../areas";
 import { fp } from "@exiled/fixed-point";
 import { fnv1a32 } from "../rng";
 import {
@@ -74,6 +75,13 @@ export function registerDeath(sim: Simulation): void {
         // was run for (docs/09: the payout has to be seen to have happened).
         const bossPos = world.get<Position>(e, "position");
         if (bossPos) {
+          // The map is over, so the way out opens where it ended. PoE2 does this
+          // and PoE1 does not, and PoE2 is right: the alternative is a walk back
+          // across a cleared map with a full bag, which is the least interesting
+          // minute a run can end on. It costs no scroll — the fight paid for it —
+          // and it replaces the doorway at the entrance, so there is exactly one
+          // way home and it is the one you are standing next to.
+          openReturnPortal(world, bossPos.x, bossPos.y);
           for (const [i, d] of drops.entries()) {
             const off = DROP_SPREAD[i % DROP_SPREAD.length]!;
             const ge = world.create();

@@ -1,9 +1,9 @@
 import { MAP_PORTALS } from "@exiled/protocol";
 import { atlasGraph, isNodeReachable, mapSeedFor, atlasNodeTier } from "@exiled/rules";
-import { isPermanentWaystone, isPortalScroll } from "@exiled/content-runtime";
+import { isPermanentWaystone } from "@exiled/content-runtime";
 import { Simulation } from "../loop";
 import type { Position, InteractableC, SessionC, InventoryC, ContainerC } from "../components";
-import { spawnPortalRing, spillContainer, PORTAL_RADIUS } from "../areas";
+import { spawnPortalRing, spillContainer } from "../areas";
 import { inRangeOf } from "../protocol-bridge";
 import type { CollisionRef } from "../collision";
 
@@ -66,50 +66,6 @@ export function registerInteractSystem(sim: Simulation, collisionRef?: Collision
           mapOpen: 1,
         });
         spawnPortalRing(world, MAP_PORTALS);
-        continue;
-      }
-
-      // ── Portal Scroll: a way home from where you are standing ──────────────
-      if (cmd.type === "usePortalScroll" && cmd.entity !== undefined) {
-        const session = world.get<SessionC>(sessionE, "session")!;
-        // Only inside an open map. In the hideout there is nothing to leave, and
-        // in a closed one there would be nothing to come back to.
-        if (session.area !== "map" || session.mapOpen !== 1) continue;
-        const playerPos = world.get<Position>(cmd.entity, "position");
-        if (!playerPos) continue;
-
-        // A portal already within arm's reach means the scroll would buy nothing,
-        // so it is not spent: the same rule the map device follows about a run
-        // that is already open.
-        let covered = false;
-        for (const e of world.query("interactable", "position")) {
-          const ia = world.get<InteractableC>(e, "interactable")!;
-          if (ia.kind !== "portal") continue;
-          const p = world.get<Position>(e, "position")!;
-          if (inRangeOf(playerPos.x, playerPos.y, p.x, p.y, ia.radius)) { covered = true; break; }
-        }
-        if (covered) continue;
-
-        const inv = world.get<InventoryC>(sessionE, "inventory");
-        const index = inv ? inv.items.findIndex((p) => isPortalScroll(p.item)) : -1;
-        if (index === -1) continue;
-        const held = inv!.items[index]!;
-        // Currency stacks, so a stack of five spends one and keeps four.
-        const left = (held.count ?? 1) - 1;
-        world.set<InventoryC>(sessionE, "inventory", {
-          ...inv!,
-          items: left > 0
-            ? inv!.items.map((p, i) => (i === index ? { ...p, count: left } : p))
-            : inv!.items.filter((_, i) => i !== index),
-        });
-
-        const portalE = world.create();
-        world.set<Position>(portalE, "position", { x: playerPos.x, y: playerPos.y });
-        world.set<InteractableC>(portalE, "interactable", {
-          kind: "portal",
-          radius: PORTAL_RADIUS,
-          yaw: 3.1416,
-        });
         continue;
       }
 

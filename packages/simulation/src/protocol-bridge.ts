@@ -5,7 +5,7 @@ import { damageTypeOf } from "./damage-types";
 import { VENDOR_COLS, VENDOR_ROWS } from "./vendor";
 import { physicalMitigationPct, scalePct, xpToNext, START_LEVEL, vendorBuyPrice } from "@exiled/rules";
 import { resBlock } from "@exiled/content-schema";
-import { describeItem, SKILLS } from "@exiled/content-runtime";
+import { describeItem, SKILLS, TOWN_PORTAL_SKILL } from "@exiled/content-runtime";
 import type { Command, Simulation } from "./loop";
 import type { World, Entity } from "./ecs";
 import type {
@@ -97,7 +97,10 @@ export function intentToCommand(intent: Intent, player: Entity, tick: number): C
     case "buyItem":
       return { tick, entity: player, type: "buyItem", data: { x: intent.x, y: intent.y } };
     case "usePortalScroll":
-      return { tick, entity: player, type: "usePortalScroll" };
+      // The scroll's right-click IS the Portal skill: one action, one cast time,
+      // one cooldown. Two implementations of "open the way home" is how a hotkey
+      // ends up obeying a cooldown that the inventory icon walks straight past.
+      return { tick, entity: player, type: "useSkill", skillId: TOWN_PORTAL_SKILL };
     case "revive":
       // `data` is numbers-only, so the choice rides as a flag rather than a word.
       return {

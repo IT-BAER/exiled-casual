@@ -66,6 +66,12 @@ export function keyToIntent(
   const slot = FLASK_KEYS[k];
   if (slot) return { kind: "useFlask", slot };
 
+  // Y is the way home. It rides the Portal Scroll intent rather than a bare
+  // useSkill so both entry points — this key and the right-click on the scroll
+  // itself — arrive as the same command (protocol-bridge.ts turns it into the
+  // Portal skill, cast time and cooldown included).
+  if (k === "y") return { kind: "usePortalScroll" };
+
   const skillId = skillForKey?.(key);
   if (skillId) {
     return { kind: "useSkill", skillId, tx: fp(aim.x), ty: fp(aim.y) };

@@ -174,6 +174,34 @@ describe("registerDeath", () => {
     expect(world.get<SessionC>(sessionE, "session")!.completedNodes).toEqual(["node.the_wrackline"]);
   });
 
+  /**
+   * The map ends where the boss fell, so the way out does too — PoE2's rule, and
+   * the alternative is a walk back across a cleared map with a full bag.
+   */
+  it("a dead map boss leaves one way home, where it fell", () => {
+    const { sim, world, boss } = makeBossDeath("map", "node.the_wrackline", []);
+    world.set<Position>(boss, "position", { x: fp(9), y: fp(-4) });
+    // The doorway the map was entered by, somewhere else entirely.
+    const entrance = world.create();
+    world.set<Position>(entrance, "position", { x: fp(0), y: fp(0) });
+    world.set(entrance, "interactable", { kind: "portal", radius: fp(2.5), yaw: 0 });
+
+    sim.step();
+
+    const portals = world.query("interactable", "position").filter(
+      (e) => (world.get(e, "interactable") as { kind: string }).kind === "portal",
+    );
+    expect(portals).toHaveLength(1);
+    expect(world.get<Position>(portals[0]!, "position")).toEqual({ x: fp(9), y: fp(-4) });
+  });
+
+  it("a boss dying in the hideout opens nothing", () => {
+    const { sim, world, boss } = makeBossDeath("hideout", "node.the_wrackline", []);
+    world.set<Position>(boss, "position", { x: fp(9), y: fp(-4) });
+    sim.step();
+    expect(world.query("interactable")).toHaveLength(0);
+  });
+
   it("does not complete a node when a non-boss monster dies", () => {
     const { sim, world, sessionE } = makeBossDeath("map", "node.the_wrackline", []);
     world.remove(world.query("boss")[0]!, "boss"); // now an ordinary monster at 0 life

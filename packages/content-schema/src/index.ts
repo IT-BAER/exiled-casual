@@ -71,7 +71,13 @@ export type EffectNode =
       arcDegrees: number;
       damage: DamageSpec;
     }
-  | { type: "teleport"; distanceFixed: Fixed };
+  | { type: "teleport"; distanceFixed: Fixed }
+  /**
+   * A doorway home, opened where the caster stands. It carries no numbers of its
+   * own — where it leads and what it costs are the session's rules, not
+   * content's — so it is the one effect node that is only a tag.
+   */
+  | { type: "openPortal" };
 
 export interface SkillDef {
   id: string;
@@ -276,6 +282,8 @@ function validateEffectNode(v: unknown, idx: number, errors: string[]): boolean 
       errors.push(`${path}.distanceFixed: must be a non-negative integer`);
       ok = false;
     }
+  } else if (type === "openPortal") {
+    // Nothing to validate: the node is a tag.
   } else {
     errors.push(`${path}.type: unknown effect type "${String(type)}"`);
     ok = false;

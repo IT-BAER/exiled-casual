@@ -2,19 +2,25 @@ import { describe, it, expect } from "vitest";
 import { fp } from "@exiled/fixed-point";
 import { offerWaystones, atlasGraph, WAYSTONE_OFFER_COUNT, atlasNodeTier, WAYSTONE_MAX_TIER } from "@exiled/rules";
 import { MAP_PORTALS } from "@exiled/protocol";
-import { waystoneItem, permanentWaystone, isPermanentWaystone, describeItem, currencyItem, isPortalScroll, PORTAL_SCROLL_BASE_ID } from "@exiled/content-runtime";
+import { waystoneItem, permanentWaystone, isPermanentWaystone, describeItem, currencyItem, isPortalScroll, PORTAL_SCROLL_BASE_ID, SKILLS, TOWN_PORTAL_SKILL } from "@exiled/content-runtime";
 import { Simulation } from "../loop";
 import { registerInteractSystem } from "./interact";
+import { registerSkillCast } from "./skill-cast";
 import type { World } from "../ecs";
 import type { SessionC, Position, InteractableC, InventoryC, ContainerC } from "../components";
 
 function makeWorld() {
   const sim = new Simulation();
   registerInteractSystem(sim);
+  // The Portal skill is the way home now, so the session rules it obeys (an open
+  // map, a scroll in the bag, no doorway already underfoot) are cast through the
+  // skill system rather than through a command of its own.
+  registerSkillCast(sim, SKILLS);
   const { world } = sim;
 
   const player = world.create();
   world.set(player, "player", { moveSpeed: 0, bodyRadius: fp(0.5) });
+  world.set(player, "mana", { mana: fp(60), maxMana: fp(60), regen: 0 });
   // Place player at the map device position so range checks pass by default.
   world.set<Position>(player, "position", { x: fp(0), y: fp(8) });
 
@@ -370,7 +376,13 @@ describe("Portal Scroll", () => {
     });
     return w;
   }
-  const useScroll = (player: number) => [{ tick: 0, entity: player, type: "usePortalScroll" }];
+  /** Press Y and hold still until the doorway is torn open. The skill has a
+   *  wind-up, so nothing at all has happened on the tick of the press. */
+  const CAST_TICKS = SKILLS.get(TOWN_PORTAL_SKILL)!.castTicks!;
+  function castPortal(sim: Simulation, player: number): void {
+    sim.step([{ tick: sim.tick, entity: player, type: "useSkill", skillId: TOWN_PORTAL_SKILL }]);
+    for (let t = 0; t < CAST_TICKS; t++) sim.step([]);
+  }
   const portals = (world: World) => world
     .query("interactable", "position")
     .filter((e) => world.get<InteractableC>(e, "interactable")!.kind === "portal");
@@ -381,7 +393,7 @@ describe("Portal Scroll", () => {
 
   it("opens a portal at the player's feet and spends one scroll", () => {
     const { sim, world, player, sessionE } = inMap(6, 3);
-    sim.step(useScroll(player));
+    castPortal(sim, player);
     const open = portals(world);
     expect(open).toHaveLength(1);
     expect(world.get<Position>(open[0]!, "position")).toEqual({ x: fp(0), y: fp(8) });
@@ -392,14 +404,14 @@ describe("Portal Scroll", () => {
 
   it("the last scroll leaves the cell rather than a stack of zero", () => {
     const { sim, world, player, sessionE } = inMap(6, 1);
-    sim.step(useScroll(player));
+    castPortal(sim, player);
     expect(world.get<InventoryC>(sessionE, "inventory")!.items).toHaveLength(0);
     expect(portals(world)).toHaveLength(1);
   });
 
   it("no scroll, no portal", () => {
     const { sim, world, player } = inMap(6, 0);
-    sim.step(useScroll(player));
+    castPortal(sim, player);
     expect(portals(world)).toHaveLength(0);
   });
 
@@ -409,7 +421,7 @@ describe("Portal Scroll", () => {
       cols: 12, rows: 5,
       items: [{ x: 0, y: 0, w: 1, h: 1, item: currencyItem(PORTAL_SCROLL_BASE_ID) }],
     });
-    sim.step(useScroll(player));
+    castPortal(sim, player);
     expect(portals(world)).toHaveLength(0);
     expect(scrollsLeft(world, sessionE)).toBe(1);
   });
@@ -417,15 +429,55 @@ describe("Portal Scroll", () => {
   /** A scroll spent on a doorway that is already there buys nothing, so it is kept. */
   it("refuses to spend a scroll where a portal already stands", () => {
     const { sim, world, player, sessionE } = inMap(6, 2);
-    sim.step(useScroll(player));
-    sim.step(useScroll(player));
+    castPortal(sim, player);
+    castPortal(sim, player);
     expect(portals(world)).toHaveLength(1);
     expect(scrollsLeft(world, sessionE)).toBe(1);
   });
 
+  /** One way home per area: a second casting moves the doorway, it does not add
+   *  one. Every portal in a map leads to the same hideout, so a second is only a
+   *  thing to trip over. */
+  it("a second casting replaces the first rather than standing beside it", () => {
+    const { sim, world, player, sessionE } = inMap(6, 2);
+    castPortal(sim, player);
+    world.set<Position>(player, "position", { x: fp(30), y: fp(30) });
+    // Past the cooldown: it is ten seconds, which is the whole answer to "so it
+    // doesn't get spammed", and a test that skipped it would be testing nothing.
+    for (let t = 0; t < SKILLS.get(TOWN_PORTAL_SKILL)!.cooldownTicks; t++) sim.step([]);
+    castPortal(sim, player);
+    const open = portals(world);
+    expect(open).toHaveLength(1);
+    expect(world.get<Position>(open[0]!, "position")).toEqual({ x: fp(30), y: fp(30) });
+    expect(scrollsLeft(world, sessionE)).toBe(0);
+  });
+
+  it("will not open a second one inside the cooldown", () => {
+    const { sim, world, player, sessionE } = inMap(6, 2);
+    castPortal(sim, player);
+    world.set<Position>(player, "position", { x: fp(30), y: fp(30) });
+    castPortal(sim, player); // pressed again immediately: refused, scroll kept
+    expect(portals(world)).toHaveLength(1);
+    expect(scrollsLeft(world, sessionE)).toBe(1);
+  });
+
+  /** A press that opened nothing must not cost ten seconds: the cooldown is
+   *  refunded, so an empty bag reads as "nothing happened" and not as "broken". */
+  it("refunds the cooldown when there was no scroll to spend", () => {
+    const { sim, world, player, sessionE } = inMap(6, 0);
+    castPortal(sim, player);
+    expect(portals(world)).toHaveLength(0);
+    world.set<InventoryC>(sessionE, "inventory", {
+      cols: 12, rows: 5,
+      items: [{ x: 0, y: 0, w: 1, h: 1, item: currencyItem(PORTAL_SCROLL_BASE_ID) }],
+    });
+    castPortal(sim, player);
+    expect(portals(world)).toHaveLength(1);
+  });
+
   it("the portal it opens is a real way out: taking it spends a portal", () => {
     const { sim, world, player, sessionE } = inMap(4, 1);
-    sim.step(useScroll(player));
+    castPortal(sim, player);
     const portal = portals(world)[0]!;
     sim.step([interactCmd(player, portal)]);
     const session = world.get<SessionC>(sessionE, "session")!;

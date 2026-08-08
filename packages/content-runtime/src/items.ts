@@ -429,7 +429,7 @@ function affixLine(value: number, label: string): string {
  */
 const CURRENCY_LINES: Record<string, readonly string[]> = {
   [PORTAL_SCROLL_BASE_ID]: [
-    "Right click to open a portal to your hideout",
+    "Right click, or press Y, to open a portal to your hideout",
     "Only usable inside a map",
   ],
 };

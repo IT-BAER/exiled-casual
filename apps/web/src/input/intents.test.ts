@@ -30,6 +30,13 @@ describe("keyToIntent", () => {
     expect(keyToIntent("W", aim)).toEqual({ kind: "moveDir", dx: -1, dy: 1 });
   });
 
+  // Y is the way home, and it arrives as the scroll intent so the key and the
+  // right-click on a Portal Scroll are one action all the way down.
+  it("y → usePortalScroll", () => {
+    expect(keyToIntent("y", aim)).toEqual({ kind: "usePortalScroll" });
+    expect(keyToIntent("Y", aim)).toEqual({ kind: "usePortalScroll" });
+  });
+
   /**
    * The key row IS the skill bar's order now: what 1 fires is whatever the player
    * dragged into the first socket, so the mapping comes in as a lookup rather than

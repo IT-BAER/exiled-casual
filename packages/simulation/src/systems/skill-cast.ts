@@ -9,6 +9,7 @@ import { sweep, type Collision, type CollisionRef } from "../collision";
 import type { Position, PlayerC, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC, CastingC, OffenseC, Health, SkillHoldC } from "../components";
 import { damageCode } from "../damage-types";
 import { bodyRadiusOf } from "../body";
+import { spendScrollAndOpenPortal } from "../areas";
 
 export function registerSkillCast(
   sim: Simulation,
@@ -137,6 +138,17 @@ export function registerSkillCast(
           x: fpClamp(pos.x + dx, WORLD_MIN, WORLD_MAX),
           y: fpClamp(pos.y + dy, WORLD_MIN, WORLD_MAX),
         });
+      } else if (effect.type === "openPortal") {
+        // The one effect that spends something other than mana, so it is the one
+        // that can fail at the END of its own cast: a scroll can be dropped, or
+        // the map can close, in the two seconds the doorway takes to tear open.
+        // A failure refunds the cooldown — the player pressed a key and got
+        // nothing, and charging ten seconds for nothing is how a hotkey earns a
+        // reputation for being broken.
+        if (!spendScrollAndOpenPortal(world, caster)) {
+          const cds = world.get<Cooldowns>(caster, "cooldowns");
+          if (cds) world.set<Cooldowns>(caster, "cooldowns", { ...cds, [skill.id]: 0 });
+        }
       }
     }
   }
