@@ -192,3 +192,16 @@ allocated path still burns gold through the web.
 <td width="100%"><img src="screenshots/2026-08-08-passive-tree-painted.jpeg" alt="Passive tree with painted bronze frames, theme icons and class portrait doors" width="100%"><br><sub>Painted node faces and portrait doors.</sub></td>
 </tr>
 </table>
+
+## 2026-08-08 · Monster health bars
+
+A new option draws a thin red life bar over any monster the moment it takes damage — off by
+default, toggled under Heads-up Display. The bar rides the renderer's interpolated mesh position
+rather than the 30 Hz snapshot, so it glides with the monster instead of stuttering behind it.
+Bosses keep their big bar at the top of the screen.
+
+<table>
+<tr>
+<td width="100%"><img src="screenshots/2026-08-08-monster-hp-bars.jpeg" alt="Small red health bars over damaged monsters in a map fight" width="100%"><br><sub>Life bars over damaged monsters.</sub></td>
+</tr>
+</table>
