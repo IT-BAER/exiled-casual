@@ -67,9 +67,8 @@ describe("PassiveTreePanel", () => {
 
   it("lights an allocated node and leaves the rest dark", () => {
     panel({ allocated: [near] });
-    const taken = screen.getByTestId(`passive-node-${near}`);
-    const untaken = screen.getByTestId(`passive-node-${far}`);
-    expect(taken.getAttribute("fill")).not.toBe(untaken.getAttribute("fill"));
+    expect(screen.getByTestId(`passive-node-${near}`).getAttribute("data-state")).toBe("taken");
+    expect(screen.getByTestId(`passive-node-${far}`).getAttribute("data-state")).toBe("far");
   });
 
   it("offers a refund only once there is something to refund", () => {

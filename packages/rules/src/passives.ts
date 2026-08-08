@@ -423,6 +423,19 @@ export function startNodeId(classId: string): string {
   return `p.start.${classId.replace(/^class\./, "")}`;
 }
 
+/**
+ * The theme a node's face wears, for the client's icon lookup. Derived from the
+ * id the same way build() assigned it; doors and keystones have no theme — a
+ * door is only a frame, and a keystone's diamond is its own mark.
+ */
+export function passiveTheme(id: string): ThemeId | null {
+  if (id.startsWith("p.bridge.")) return "travel";
+  const m = /^p\.(\w+)\.(\d)\./.exec(id);
+  if (!m) return null;
+  const spoke = SPOKES.find((s) => s.name.toLowerCase() === m[1]);
+  return spoke?.themes[Number(m[2])] ?? null;
+}
+
 /** Is `id` one of the three doors? Doors are free and cost no point. */
 export function isStartNode(id: string): boolean {
   return passiveNode(id)?.kind === "start";

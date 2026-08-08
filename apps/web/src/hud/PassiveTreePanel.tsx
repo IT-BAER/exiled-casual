@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Intent } from "@exiled/protocol";
 import {
-  PASSIVE_TREE, canAllocate, passiveLines, passiveNode, startNodeId,
+  PASSIVE_TREE, canAllocate, passiveLines, passiveNode, passiveTheme, startNodeId,
   type PassiveNode,
 } from "@exiled/rules";
+import { characterClass } from "@exiled/content-runtime";
 import { DISPLAY, GOLD, PARCHMENT, SERIF } from "./InventoryPanel";
 
 /**
@@ -55,11 +56,6 @@ type NodeState = "taken" | "open" | "far";
  * reference actually draws is a dark SOCKET inside a bronze ring, and only the
  * allocated path burns gold. Socket fill and ring stroke per state:
  */
-const SOCKET: Record<NodeState, string> = {
-  taken: "url(#passive-taken)",
-  open: "#241f15",
-  far: "#15130e",
-};
 const RING: Record<NodeState, string> = {
   taken: "#f4e2ac",
   open: "#a98d54",
@@ -67,24 +63,62 @@ const RING: Record<NodeState, string> = {
 };
 
 /**
- * The path an edge is drawn on. Two minors of one cluster ring their notable, so
- * their link bends AROUND it as an arc of the rosette's own circle — PoE's
- * clusters read as rings because their chains are arcs, and the same nodes
- * joined by chords read as pentagons. Everything else (spokes, bridges, rim,
- * doors) stays a straight line.
+ * The painted faces (`public/hud/passives/`, sliced by build_passive_textures.py
+ * from codex-imagegen sheets): one ornate bronze FRAME per kind and one engraved
+ * ICON per theme. State never swaps the art — `far` dims it and `taken` burns
+ * gold around it, which is exactly how the reference keeps 200 unallocated nodes
+ * readable without 200 more textures.
+ */
+const FRAME_SRC: Record<PassiveNode["kind"], string> = {
+  minor: "/hud/passives/frame-minor.png",
+  notable: "/hud/passives/frame-notable.png",
+  keystone: "/hud/passives/frame-keystone.png",
+  start: "/hud/passives/frame-start.png",
+};
+/** How far past the hit radius the frame art reaches. */
+const FRAME_OVER: Record<PassiveNode["kind"], number> = {
+  minor: 1.35, notable: 1.35, keystone: 1.4, start: 1.3,
+};
+const DIM = 0.42;
+
+/**
+ * The path an edge is drawn on, stopping at each node's RIM rather than its
+ * centre — a line drawn to the centre shows through the painted face, and no
+ * paint order fixes that while the frame's middle is transparent. Two minors of
+ * one cluster ring their notable, so their link bends AROUND it as an arc of the
+ * rosette's own circle — PoE's clusters read as rings because their chains are
+ * arcs, and the same nodes joined by chords read as pentagons. Everything else
+ * (spokes, bridges, rim, doors) stays a straight line.
  */
 function edgePath(a: PassiveNode, b: PassiveNode): string {
-  const line = `M ${a.x} ${a.y} L ${b.x} ${b.y}`;
+  const ta = RADIUS[a.kind] + 2;
+  const tb = RADIUS[b.kind] + 2;
   const m = /^(p\.\w+\.\d+)\.\d+$/.exec(a.id);
-  if (!m || !b.id.startsWith(`${m[1]}.`)) return line;
-  const hub = passiveNode(`${m[1]}.hub`);
-  if (!hub || hub.id === a.id || hub.id === b.id) return line;
-  const ra = Math.hypot(a.x - hub.x, a.y - hub.y);
-  const rb = Math.hypot(b.x - hub.x, b.y - hub.y);
-  const r = (ra + rb) / 2;
-  // Shorter way round: the sign of the cross product picks the sweep.
-  const cross = (a.x - hub.x) * (b.y - hub.y) - (a.y - hub.y) * (b.x - hub.x);
-  return `M ${a.x} ${a.y} A ${r.toFixed(1)} ${r.toFixed(1)} 0 0 ${cross > 0 ? 1 : 0} ${b.x} ${b.y}`;
+  const hub = m && b.id.startsWith(`${m[1]}.`) ? passiveNode(`${m[1]}.hub`) : undefined;
+  if (hub && hub.id !== a.id && hub.id !== b.id) {
+    const r = (Math.hypot(a.x - hub.x, a.y - hub.y) + Math.hypot(b.x - hub.x, b.y - hub.y)) / 2;
+    let angA = Math.atan2(a.y - hub.y, a.x - hub.x);
+    let angB = Math.atan2(b.y - hub.y, b.x - hub.x);
+    // Shorter way round; the sign also says which way each end retreats.
+    let d = angB - angA;
+    if (d > Math.PI) d -= 2 * Math.PI;
+    if (d < -Math.PI) d += 2 * Math.PI;
+    if (Math.abs(d) * r > ta + tb) {
+      const s = Math.sign(d);
+      angA += (s * ta) / r;
+      angB -= (s * tb) / r;
+      const ax = hub.x + Math.cos(angA) * r;
+      const ay = hub.y + Math.sin(angA) * r;
+      const bx = hub.x + Math.cos(angB) * r;
+      const by = hub.y + Math.sin(angB) * r;
+      return `M ${ax.toFixed(1)} ${ay.toFixed(1)} A ${r.toFixed(1)} ${r.toFixed(1)} 0 0 ${d > 0 ? 1 : 0} ${bx.toFixed(1)} ${by.toFixed(1)}`;
+    }
+  }
+  const len = Math.hypot(b.x - a.x, b.y - a.y);
+  if (len <= ta + tb) return `M ${a.x} ${a.y} L ${b.x} ${b.y}`;
+  const ux = (b.x - a.x) / len;
+  const uy = (b.y - a.y) / len;
+  return `M ${(a.x + ux * ta).toFixed(1)} ${(a.y + uy * ta).toFixed(1)} L ${(b.x - ux * tb).toFixed(1)} ${(b.y - uy * tb).toFixed(1)}`;
 }
 
 export interface PassiveTreePanelProps {
@@ -238,13 +272,6 @@ export function PassiveTreePanel({
         onPointerLeave={() => { drag.current = null; }}
       >
         <defs>
-          {/* The allocated socket: molten gold, lit from the upper half the way
-              the reference's taken gems catch the light. */}
-          <radialGradient id="passive-taken" cx="50%" cy="38%" r="70%">
-            <stop offset="0%" stopColor="#f6df9d" />
-            <stop offset="55%" stopColor="#d3a852" />
-            <stop offset="100%" stopColor="#8a5f22" />
-          </radialGradient>
           {/* Soft halo behind anything gold. Blur in tree units; the region has to
               be generous or the halo clips square at its edges. */}
           <filter id="passive-glow" x="-80%" y="-80%" width="260%" height="260%">
@@ -282,9 +309,9 @@ export function PassiveTreePanel({
           const r = RADIUS[node.kind];
           const hot = hover?.id === node.id && state !== "far";
           const common = {
-            fill: SOCKET[state],
-            stroke: hot ? "#f4e2ac" : RING[state],
-            strokeWidth: node.kind === "minor" ? 2 : 3,
+            fill: "transparent",
+            stroke: "none",
+            "data-state": state,
             style: { cursor: state === "open" ? "pointer" : "default" },
             onMouseEnter: (e: React.MouseEvent) => setHover({ id: node.id, x: e.clientX, y: e.clientY }),
             onMouseMove: (e: React.MouseEvent) => setHover({ id: node.id, x: e.clientX, y: e.clientY }),
@@ -294,33 +321,55 @@ export function PassiveTreePanel({
               onIntent?.({ kind: "allocatePassive", nodeId: node.id });
             },
           };
-          const big = node.kind !== "minor";
+          const fh = r * FRAME_OVER[node.kind]; // frame half-span
+          const ih = fh * 0.66; // icon half-span, inside the ring
+          const theme = passiveTheme(node.id);
           return (
-            <g key={node.id}>
-              {/* Taken nodes glow; open ones carry a faint invitation of the same. */}
+            <g key={node.id} opacity={state === "far" ? DIM : 1}>
+              {/* Taken nodes glow; the painted art itself never changes state. */}
               {state === "taken" && (
                 <circle cx={node.x} cy={node.y} r={r + 6} fill="#e8c368"
                   opacity={0.4} filter="url(#passive-glow)" pointerEvents="none" />
               )}
-              {/* Notables, keystones and the start wear the reference's second,
-                  outer ring — the ornament that makes one legible from across
-                  the map before its size does. */}
-              {big && (node.kind === "keystone" ? (
-                <rect
-                  x={node.x - r - 6} y={node.y - r - 6} width={(r + 6) * 2} height={(r + 6) * 2}
-                  transform={`rotate(45 ${node.x} ${node.y})`}
-                  fill="none" stroke={RING[state]} strokeWidth={1.2} opacity={0.55}
+              {/* A door is its class: the select screen's portrait, clipped
+                  into the laurel frame, so "where do I start" is a face. */}
+              {node.kind === "start" && (
+                <>
+                  <clipPath id={`passive-door-${node.id}`}>
+                    <circle cx={node.x} cy={node.y} r={r * 0.94} />
+                  </clipPath>
+                  <image
+                    href={characterClass(`class.${node.id.slice("p.start.".length)}`).portrait}
+                    x={node.x - r} y={node.y - r} width={r * 2} height={r * 2}
+                    clipPath={`url(#passive-door-${node.id})`}
+                    preserveAspectRatio="xMidYMid slice"
+                    pointerEvents="none"
+                  />
+                </>
+              )}
+              {theme && (
+                <image
+                  href={`/hud/passives/${theme}.png`}
+                  x={node.x - ih} y={node.y - ih} width={ih * 2} height={ih * 2}
                   pointerEvents="none"
                 />
-              ) : (
+              )}
+              <image
+                href={FRAME_SRC[node.kind]}
+                x={node.x - fh} y={node.y - fh} width={fh * 2} height={fh * 2}
+                pointerEvents="none"
+              />
+              {/* Allocation and hover read as a lit ring OVER the bronze, the
+                  reference's own move: gold burns around what you own. */}
+              {(state === "taken" || hot) && (
                 <circle
-                  cx={node.x} cy={node.y} r={r + 5}
-                  fill="none" stroke={RING[state]} strokeWidth={1.2} opacity={0.55}
-                  pointerEvents="none"
+                  cx={node.x} cy={node.y} r={r}
+                  fill="none" stroke={hot ? "#f4e2ac" : RING.taken}
+                  strokeWidth={node.kind === "minor" ? 2 : 3}
+                  opacity={0.9} pointerEvents="none"
                 />
-              ))}
-              {/* A keystone is a diamond in both PoE trees, which is the whole
-                  reason one is legible from across the map at this zoom. */}
+              )}
+              {/* The hit target carries the testid; the art is pointer-blind. */}
               {node.kind === "keystone" ? (
                 <rect
                   data-testid={`passive-node-${node.id}`}
