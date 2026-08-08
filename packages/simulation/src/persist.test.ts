@@ -5,7 +5,8 @@ import { rollItem, areaLevel } from "@exiled/rules";
 import { ITEM_POOLS, baseOf } from "@exiled/content-runtime";
 import { createCombatSim } from "./combat-sim";
 import { snapshot, restore, saveTo, loadInto } from "./persist";
-import type { SessionC, InventoryC } from "./components";
+import type { SessionC, InventoryC, Health } from "./components";
+import { PASSIVE_TREE } from "@exiled/rules";
 
 function sessionEntity(world: ReturnType<typeof createCombatSim>["world"]) {
   return world.query("session")[0]!;
@@ -42,6 +43,28 @@ describe("persist: snapshot/restore round-trip", () => {
     // The stashed loot, plus the permanent waystone `restore` puts back into
     // every bag it loads — including saves written before that stone existed.
     expect(reboot.world.get<InventoryC>(sessionEntity(reboot.world), "inventory")!.items).toHaveLength(2);
+  });
+
+  /**
+   * A character that loses its tree on reload has lost the only thing levels are
+   * spent on, so this is the one field worth a test of its own: it rides on the
+   * session, and the session is what the blob is.
+   */
+  it("brings the passive tree back, and the stats it granted with it", async () => {
+    const kv = new MemoryKv();
+    const { world } = createCombatSim(7, { area: "hideout" });
+    const life = PASSIVE_TREE.find((n) => n.mods.some((m) => m.stat === "maxLife" && m.value > 0))!;
+    setSession(world, { classId: "class.stalker", passives: [life.id] });
+    await saveTo(kv, world);
+
+    const reboot = createCombatSim(7, { area: "hideout" });
+    const bare = reboot.world.get<Health>(reboot.world.query("player")[0]!, "health")!.maxLife;
+    expect(await loadInto(kv, reboot.world)).toBe(true);
+    expect(getSession(reboot.world).passives).toEqual([life.id]);
+    expect(getSession(reboot.world).classId).toBe("class.stalker");
+    // restore() re-derives, so the node is on the character and not only in the list.
+    expect(reboot.world.get<Health>(reboot.world.query("player")[0]!, "health")!.maxLife)
+      .toBeGreaterThan(bare);
   });
 
   it("loadInto returns false when nothing was ever saved", async () => {
