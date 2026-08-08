@@ -473,6 +473,15 @@ export function canAllocate(
   const node = passiveNode(id);
   if (!node || node.kind === "start") return false;
   if (allocated.includes(id)) return false;
+  // A notable is its cluster's centre, not a side door: it opens only once MORE
+  // THAN HALF of its own rosette's minors are taken (owner's rule). Strictly
+  // more — on a four-minor cluster two is still shut.
+  if (node.kind === "notable") {
+    const cluster = id.replace(/hub$/, "");
+    const minors = PASSIVE_TREE.filter((n) => n.kind === "minor" && n.id.startsWith(cluster));
+    const have = minors.filter((n) => allocated.includes(n.id)).length;
+    if (have * 2 <= minors.length) return false;
+  }
   const start = startNodeId(classId);
   return node.links.some((n) => n === start || allocated.includes(n));
 }

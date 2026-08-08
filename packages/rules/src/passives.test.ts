@@ -106,6 +106,24 @@ describe("allocation", () => {
     expect(canAllocate(CLASS, [], "p.nowhere")).toBe(false);
   });
 
+  /**
+   * A notable is the cluster's centre, not its side door: it opens only once
+   * MORE THAN HALF of its own rosette's minors are taken. Half is not enough —
+   * on a four-minor cluster two are 50% and the hub stays shut.
+   */
+  it("keeps a notable shut until most of its own minors are taken", () => {
+    const hub = passiveNode("p.ember.0.hub")!;
+    expect(hub.kind).toBe("notable");
+    const minors = PASSIVE_TREE
+      .filter((n) => n.kind === "minor" && n.id.startsWith("p.ember.0."))
+      .map((n) => n.id);
+    expect(minors.length).toBe(4);
+    // Adjacent (the hub touches minors[0]) but only half the rosette: shut.
+    expect(canAllocate(CLASS, [minors[0]!, minors[1]!], hub.id)).toBe(false);
+    // Three of four is a majority: open.
+    expect(canAllocate(CLASS, [minors[0]!, minors[1]!, minors[2]!], hub.id)).toBe(true);
+  });
+
   /** Another class's door is not a door of yours: it is not in your allocated set. */
   it("does not let one class walk in through another's door", () => {
     const other = CLASS_IDS[1]!;
