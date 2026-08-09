@@ -59,9 +59,23 @@ describe("PassiveTreePanel", () => {
     expect(seen).toEqual([]);
   });
 
-  it("says nothing when a node is already taken", () => {
+  /** A second click on a node you own is undo, PoE's own gesture. */
+  it("asks for a refund when a taken node is clicked again", () => {
     const seen = panel({ allocated: [near] });
     fireEvent.click(screen.getByTestId(`passive-node-${near}`));
+    expect(seen).toEqual([{ kind: "refundPassive", nodeId: near }]);
+  });
+
+  it("says nothing when the node clicked is holding another one up", () => {
+    const second = passiveNode(near)!.links.find((n) => n !== near && n !== door.id)!;
+    const seen = panel({ allocated: [near, second] });
+    fireEvent.click(screen.getByTestId(`passive-node-${near}`));
+    expect(seen).toEqual([]);
+  });
+
+  it("says nothing when the door itself is clicked", () => {
+    const seen = panel({ allocated: [near] });
+    fireEvent.click(screen.getByTestId(`passive-node-${door.id}`));
     expect(seen).toEqual([]);
   });
 

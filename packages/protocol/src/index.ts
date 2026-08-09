@@ -70,9 +70,10 @@ export type Intent =
    */
   | { kind: "allocatePassive"; nodeId: string }
   /** Give every point back. Free and total: half a respec is a second rule. */
+  | { kind: "refundPassive"; nodeId: string }
   | { kind: "respecPassives" };
 
-export type CommandType = "moveTo" | "moveDir" | "useSkill" | "stop" | "interact" | "activateMap" | "pickupItem" | "equipItem" | "unequipItem" | "dropItem" | "moveItem" | "useFlask" | "applyCurrency" | "sellItem" | "buyItem" | "revive" | "usePortalScroll" | "allocatePassive" | "respecPassives";
+export type CommandType = "moveTo" | "moveDir" | "useSkill" | "stop" | "interact" | "activateMap" | "pickupItem" | "equipItem" | "unequipItem" | "dropItem" | "moveItem" | "useFlask" | "applyCurrency" | "sellItem" | "buyItem" | "revive" | "usePortalScroll" | "allocatePassive" | "refundPassive" | "respecPassives";
 
 // ---------------------------------------------------------------------------
 // Run loop
@@ -523,6 +524,11 @@ export function validateIntent(v: unknown): Intent {
       if (typeof obj["nodeId"] !== "string" || obj["nodeId"].length === 0)
         throw new Error("validateIntent allocatePassive: nodeId must be a non-empty string");
       return { kind: "allocatePassive", nodeId: obj["nodeId"] as string };
+    }
+    case "refundPassive": {
+      if (typeof obj["nodeId"] !== "string" || obj["nodeId"] === "")
+        throw new Error("validateIntent refundPassive: nodeId must be a non-empty string");
+      return { kind: "refundPassive", nodeId: obj["nodeId"] as string };
     }
     case "respecPassives":
       return { kind: "respecPassives" };

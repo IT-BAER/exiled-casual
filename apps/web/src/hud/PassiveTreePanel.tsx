@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Intent } from "@exiled/protocol";
 import {
-  PASSIVE_TREE, canAllocate, passiveLines, passiveNode, passiveTheme, startNodeId,
+  PASSIVE_TREE, canAllocate, canRefund, passiveLines, passiveNode, passiveTheme, startNodeId,
   type PassiveNode,
 } from "@exiled/rules";
 import { characterClass } from "@exiled/content-runtime";
@@ -194,16 +194,31 @@ const TreeWeb = React.memo(function TreeWeb({ classId, allocated, onHover, onHov
       })}
       {PASSIVE_TREE.map((node) => {
         const state = stateOf(node);
+        // Only asked of the handful of nodes actually taken, and only when the
+        // allocation changed: TreeWeb is memoized, and this decides a cursor.
+        const undo = state === "taken" && node.id !== start
+          && canRefund(classId, allocated, node.id);
         const r = RADIUS[node.kind];
         const common = {
           fill: "transparent",
           stroke: "none",
           "data-state": state,
-          style: { cursor: state === "open" ? "pointer" : "default" },
+          style: { cursor: state === "open" || undo ? "pointer" : "default" },
           onMouseEnter: (e: React.MouseEvent) => onHover(node.id, e.clientX, e.clientY),
           onMouseMove: (e: React.MouseEvent) => onHover(node.id, e.clientX, e.clientY),
           onMouseLeave: onHoverEnd,
           onClick: () => {
+            // A second click on a node you own is undo, which is the gesture PoE
+            // itself uses. The door is not a node you bought and can never go
+            // back, and a node holding a branch up refuses here as well as in the
+            // sim — the click has to be silent rather than send an intent that
+            // will be thrown away, or the tree flickers on every dead press.
+            if (state === "taken") {
+              if (node.id !== start && canRefund(classId, allocated, node.id)) {
+                onIntent?.({ kind: "refundPassive", nodeId: node.id });
+              }
+              return;
+            }
             if (state !== "open") return;
             onIntent?.({ kind: "allocatePassive", nodeId: node.id });
           },
@@ -424,6 +439,10 @@ export function PassiveTreePanel({
           {passiveLines(hovered).map((line, i) => (
             <div key={i} style={{ color: "#8aa6ff" }}>{line}</div>
           ))}
+          {/* Undo is only ever discovered if the tree says it is there. */}
+          {taken.has(hovered.id) && canRefund(classId, allocated, hovered.id) && (
+            <div style={{ color: "#9a9280", marginTop: "0.35vh" }}>Click again to refund.</div>
+          )}
           {hovered.kind === "start" && (
             <div style={{ color: "#9a9280" }}>Where this class begins. Costs nothing.</div>
           )}

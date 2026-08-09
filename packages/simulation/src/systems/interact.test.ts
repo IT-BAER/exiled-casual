@@ -8,7 +8,7 @@ import { registerInteractSystem } from "./interact";
 import { registerSkillCast } from "./skill-cast";
 import type { World } from "../ecs";
 import type { SessionC, Position, InteractableC, InventoryC, ContainerC, Health } from "../components";
-import { PASSIVE_TREE, canAllocate, passiveNode, passivePoints, startNodeId, START_LEVEL } from "@exiled/rules";
+import { PASSIVE_TREE, canAllocate, isStartNode, passiveNode, passivePoints, startNodeId, START_LEVEL } from "@exiled/rules";
 
 function makeWorld() {
   const sim = new Simulation();
@@ -613,6 +613,34 @@ describe("the passive tree", () => {
     sim.step(take(player, life.id));
     expect(allocated(world, sessionE)).toEqual([...path, life.id]);
     expect(world.get<Health>(player, "health")!.maxLife).toBeGreaterThan(before);
+  });
+
+  const give = (player: number, nodeId: string) =>
+    [{ tick: 0, entity: player, type: "refundPassive", passiveId: nodeId }];
+
+  it("gives one node back, and the stats it granted with it", () => {
+    const { sim, world, player, sessionE } = atLevel();
+    const bare = world.get<Health>(player, "health")!.maxLife;
+    sim.step(take(player, near));
+    sim.step(give(player, near));
+    expect(allocated(world, sessionE)).toEqual([]);
+    expect(world.get<Health>(player, "health")!.maxLife).toBe(bare);
+  });
+
+  it("refuses to give back a node another one is standing on", () => {
+    const { sim, world, player, sessionE } = atLevel();
+    const second = passiveNode(near)!.links.find((n) => n !== near && !isStartNode(n))!;
+    sim.step(take(player, near));
+    sim.step(take(player, second));
+    sim.step(give(player, near));
+    expect(allocated(world, sessionE)).toEqual([near, second]);
+  });
+
+  it("refuses a node that was never taken", () => {
+    const { sim, world, player, sessionE } = atLevel();
+    sim.step(take(player, near));
+    sim.step(give(player, far));
+    expect(allocated(world, sessionE)).toEqual([near]);
   });
 
   it("gives every point back at once, and the stats with them", () => {

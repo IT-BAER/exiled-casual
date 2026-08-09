@@ -486,6 +486,42 @@ export function canAllocate(
   return node.links.some((n) => n === start || allocated.includes(n));
 }
 
+/**
+ * Whether a point can be taken back out of `id`, which is PoE's own rule: what
+ * is left has to still be a tree grown from the class door. Refunding the node a
+ * branch hangs off would leave everything past it floating, and the honest answer
+ * to that click is no, not a silent cascade that also refunds five nodes the
+ * player never pointed at.
+ *
+ * Decided by REPLAY rather than by a second rulebook: take the remaining nodes
+ * from nothing, in any order `canAllocate` allows, and see whether all of them
+ * can be reached again. Every condition `canAllocate` has is monotone — more
+ * allocated never closes a node that was open — so the fixpoint is reached
+ * whatever order the loop happens to try, and there is exactly one authority on
+ * what a legal tree is. A notable's own threshold is included for free, which is
+ * why a minor cannot be pulled out from under a hub that needs it.
+ */
+export function canRefund(
+  classId: string,
+  allocated: readonly string[],
+  id: string,
+): boolean {
+  if (!allocated.includes(id)) return false;
+  // Deduplicated: a replay can only ever take a node once, so a saved set that
+  // somehow lists one twice would fail the count below and freeze the tree.
+  const rest = [...new Set(allocated.filter((a) => a !== id))];
+  const taken: string[] = [];
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const n of rest) {
+      if (taken.includes(n) || !canAllocate(classId, taken, n)) continue;
+      taken.push(n);
+      grew = true;
+    }
+  }
+  return taken.length === rest.length;
+}
+
 /** Everything the allocated set grants, as gear-shaped mods. */
 export function passiveStatMods(allocated: readonly string[]): ItemStatMod[] {
   const out: ItemStatMod[] = [];

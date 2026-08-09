@@ -1,7 +1,7 @@
 import { MAP_PORTALS } from "@exiled/protocol";
 import {
   atlasGraph, isNodeReachable, mapSeedFor, atlasNodeTier,
-  canAllocate, passivePoints, START_LEVEL, DEFAULT_CLASS_ID,
+  canAllocate, canRefund, passivePoints, START_LEVEL, DEFAULT_CLASS_ID,
 } from "@exiled/rules";
 import { isPermanentWaystone } from "@exiled/content-runtime";
 import { Simulation } from "../loop";
@@ -74,7 +74,8 @@ export function registerInteractSystem(sim: Simulation, collisionRef?: Collision
       }
 
       // ── The passive tree: spend a point, or take them all back ─────────────
-      if (cmd.type === "allocatePassive" || cmd.type === "respecPassives") {
+      if (cmd.type === "allocatePassive" || cmd.type === "refundPassive"
+        || cmd.type === "respecPassives") {
         const session = world.get<SessionC>(sessionE, "session")!;
         const progress = world.get<ProgressC>(sessionE, "progress");
         const allocated = session.passives ?? [];
@@ -86,6 +87,20 @@ export function registerInteractSystem(sim: Simulation, collisionRef?: Collision
         }
         const nodeId = cmd.passiveId;
         if (nodeId === undefined) continue;
+        // Undo, one node at a time, on the same terms the allocation was granted:
+        // the client is untrusted, so the rule that what is left is still a tree
+        // grown from the door is re-decided here (@exiled/rules/passives.ts).
+        if (cmd.type === "refundPassive") {
+          if (!canRefund(session.classId ?? DEFAULT_CLASS_ID, allocated, nodeId)) continue;
+          world.set<SessionC>(sessionE, "session", {
+            ...session,
+            passives: allocated.filter((p) => p !== nodeId),
+          });
+          // Life the node granted is headroom going back out, the same call that
+          // put it there — and never a heal on the way.
+          recomputePlayerStats(world);
+          continue;
+        }
         // Both halves of the rule, server-side, because the client is untrusted:
         // there has to be a point left, and the node has to touch something this
         // character already owns (@exiled/rules/passives.ts).

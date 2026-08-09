@@ -98,6 +98,8 @@ export function intentToCommand(intent: Intent, player: Entity, tick: number): C
       return { tick, entity: player, type: "buyItem", data: { x: intent.x, y: intent.y } };
     case "allocatePassive":
       return { tick, entity: player, type: "allocatePassive", passiveId: intent.nodeId };
+    case "refundPassive":
+      return { tick, entity: player, type: "refundPassive", passiveId: intent.nodeId };
     case "respecPassives":
       return { tick, entity: player, type: "respecPassives" };
     case "usePortalScroll":

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  PASSIVE_TREE, canAllocate, isStartNode, passiveLines, passiveNode,
+  PASSIVE_TREE, canAllocate, canRefund, isStartNode, passiveLines, passiveNode,
   passivePoints, passiveStatMods, startNodeId,
 } from "./passives";
 import { CLASS_IDS } from "./classes";
@@ -78,6 +78,27 @@ describe("the passive tree's shape", () => {
   });
 });
 
+/** The nodes to take, door excluded and `id` included, to walk there legally. */
+function pathTo(classId: string, id: string): string[] {
+  const start = startNodeId(classId);
+  const prev = new Map<string, string>();
+  const seen = new Set([start]);
+  const queue = [start];
+  while (queue.length > 0) {
+    const cur = queue.shift()!;
+    if (cur === id) break;
+    for (const n of passiveNode(cur)!.links) {
+      if (seen.has(n)) continue;
+      seen.add(n);
+      prev.set(n, cur);
+      queue.push(n);
+    }
+  }
+  const out: string[] = [];
+  for (let c = id; c !== start; c = prev.get(c)!) out.unshift(c);
+  return out;
+}
+
 describe("allocation", () => {
   const CLASS = CLASS_IDS[0]!;
   const neighbours = passiveNode(startNodeId(CLASS))!.links;
@@ -122,6 +143,47 @@ describe("allocation", () => {
     expect(canAllocate(CLASS, [minors[0]!, minors[1]!], hub.id)).toBe(false);
     // Three of four is a majority: open.
     expect(canAllocate(CLASS, [minors[0]!, minors[1]!, minors[2]!], hub.id)).toBe(true);
+  });
+
+  /**
+   * Undo, with PoE's one condition: what is left has to still be a tree grown
+   * from the door. Refunding the node a whole branch hangs off would leave every
+   * node past it floating, so it is refused rather than silently cascading.
+   */
+  describe("refund", () => {
+    it("gives back the last node taken", () => {
+      const first = neighbours[0]!;
+      expect(canRefund(CLASS, [first], first)).toBe(true);
+    });
+
+    it("refuses a node that is holding another one up", () => {
+      const first = neighbours[0]!;
+      const second = passiveNode(first)!.links.find((n) => !isStartNode(n) && n !== first)!;
+      expect(canRefund(CLASS, [first, second], first)).toBe(false);
+      expect(canRefund(CLASS, [first, second], second)).toBe(true);
+    });
+
+    it("refuses a node that was never taken, and refuses the door", () => {
+      expect(canRefund(CLASS, [], neighbours[0]!)).toBe(false);
+      expect(canRefund(CLASS, [neighbours[0]!], startNodeId(CLASS))).toBe(false);
+    });
+
+    /** A notable's own threshold outlives the click that opened it: pulling a
+     *  minor back out from under it would leave a hub nothing qualifies for. */
+    it("refuses a minor whose notable would fall below its threshold", () => {
+      const minors = PASSIVE_TREE
+        .filter((n) => n.kind === "minor" && n.id.startsWith("p.ember.0."))
+        .map((n) => n.id);
+      const path = pathTo(CLASS, minors[0]!);
+      const taken = [...path, ...minors, "p.ember.0.hub"];
+      expect(canRefund(CLASS, taken, "p.ember.0.hub")).toBe(true);
+      // Four minors, so the hub needs three. Giving one back leaves exactly
+      // three and is allowed; giving a second back would leave two, which is
+      // half of four and not a majority, so the hub holds it in place.
+      expect(canRefund(CLASS, taken, minors[3]!)).toBe(true);
+      const three = taken.filter((n) => n !== minors[3]);
+      expect(canRefund(CLASS, three, minors[2]!)).toBe(false);
+    });
   });
 
   /** Another class's door is not a door of yours: it is not in your allocated set. */
