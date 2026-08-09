@@ -210,6 +210,35 @@ describe("createSoundscape", () => {
   });
 
   /**
+   * A pool that SHRANK is not a pool that was emptied. Refunding a passive that
+   * grants energy shield lowers the maximum, so the current value falls with it
+   * and the naive "less than last snapshot" test heard a hit that never landed —
+   * the character screamed while reading his own tree. Same for unequipping a
+   * chest piece, which is the sibling case the one guard covers.
+   */
+  it("says nothing when the pool itself got smaller", () => {
+    const hurt = (before: Partial<Snapshot["player"]>, after: Partial<Snapshot["player"]>) =>
+      run([
+        snap({ tick: 1, player: testPlayer(before) }),
+        snap({ tick: 2, player: testPlayer(after) }),
+      ]).filter((n) => n === "monster-melee-hit" || n === "player-hurt");
+
+    expect(hurt(
+      { energyShield: 40, maxEnergyShield: 40 },
+      { energyShield: 0, maxEnergyShield: 0 },
+    )).toEqual([]);
+    expect(hurt(
+      { life: 120, maxLife: 120 },
+      { life: 100, maxLife: 100 },
+    )).toEqual([]);
+    // The pool held its size, so this one really is a hit.
+    expect(hurt(
+      { energyShield: 40, maxEnergyShield: 40 },
+      { energyShield: 10, maxEnergyShield: 40 },
+    )).toEqual(["player-hurt"]);
+  });
+
+  /**
    * The cue is read off the cooldown the cast SET, not off the button press, so a
    * bolt the sim refused for mana never makes the noise of one that flew.
    */

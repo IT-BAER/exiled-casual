@@ -314,7 +314,16 @@ export function createSoundscape(opts: Options = {}): Soundscape {
       // The player taking a hit: something's hands if anything is standing on him,
       // and something's spell otherwise. Two samples for one event reads as variety
       // rather than as a double hit, because only one of them ever plays.
-      if ((snap.player.life < before.player.life
+      //
+      // A pool that SHRANK is not a pool that was emptied. Refunding a passive
+      // that grants energy shield lowers the maximum, and the current value falls
+      // with it; so does unequipping the chest piece that granted it. Both used
+      // to scream. So the cue asks for a drop in a pool that kept its size, which
+      // is the only shape damage has — the sim never reduces a maximum to hurt
+      // anyone.
+      const poolsHeld = snap.player.maxLife >= before.player.maxLife
+        && snap.player.maxEnergyShield >= before.player.maxEnergyShield;
+      if (poolsHeld && (snap.player.life < before.player.life
         || snap.player.energyShield < before.player.energyShield) && taken()) {
         const adjacent = snap.entities.some((e) =>
           e.kind === "monster"
