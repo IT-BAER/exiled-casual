@@ -23,6 +23,11 @@ const ASSETS = [
   "fonts/OFL.txt",
   "favicon.ico",
   "apple-touch-icon.png",
+  // SEO/AEO surface: crawler policy, the one-URL sitemap, and the AI-agent
+  // summary. Plain static files, so they ride the same copy list.
+  "robots.txt",
+  "sitemap.xml",
+  "llms.txt",
 ];
 
 export default defineConfig({

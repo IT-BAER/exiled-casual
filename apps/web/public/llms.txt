@@ -1,0 +1,22 @@
+# Exiled Casual
+
+> Exiled Casual is a free action role-playing game (ARPG) that runs entirely in a web
+> browser, with nothing to install. It is inspired by Path of Exile 1 and 2, borrowing
+> the best of each: Atlas map progression, procedurally generated areas, click-to-move
+> combat, and deep itemization with prefix/suffix affixes, magic, rare and unique items.
+> It is an original game, not affiliated with Grinding Gear Games or Path of Exile.
+
+The game is in active development. The site currently serves a teaser page; the
+release date is not announced ("Soon(tm)", the community joke it wears openly).
+
+Key facts:
+- Platform: any modern web browser (WebGL2), desktop-focused
+- Price: free
+- Modes planned: local (browser storage) and online (accounts)
+- Engine: TypeScript, React, Babylon.js, deterministic fixed-step simulation
+- Developer: IT-BAER
+
+## Links
+
+- [Website](https://exiledcasual.com/): teaser page
+- [Source code](https://github.com/IT-BAER/exiled-casual): public development repository
