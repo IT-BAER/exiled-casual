@@ -337,6 +337,17 @@ export function OptionsPanel({
                   onToggle={(monsterHealthBars) => setUi({ monsterHealthBars })}
                 />
               </Row>
+              <Group>Troubleshooting</Group>
+              <Row
+                label="Debug Logging"
+                note="Writes what the sim is doing to the browser console (F12). Noisy."
+              >
+                <Gem
+                  label="Debug Logging"
+                  on={settings.ui.debugLogging}
+                  onToggle={(debugLogging) => setUi({ debugLogging })}
+                />
+              </Row>
             </>
           )}
         </div>

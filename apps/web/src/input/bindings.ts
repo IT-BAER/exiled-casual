@@ -4,6 +4,7 @@ import type { Node, Scene } from "@babylonjs/core";
 import { DEFAULT_KEYBINDS, MOVE_SOCKET, type Keybinds } from "../settings";
 import { SKILLS } from "@exiled/content-runtime";
 import { Y_LIFT } from "../render/meshes";
+import { dlog } from "../debug";
 
 // ponytail: thin DOM glue — all key→intent mapping lives in intents.ts
 
@@ -292,6 +293,9 @@ export function attachBindings(
 
   function post(intent: Intent) {
     const msg: ToWorker = { type: "intent", intent };
+    // Every intent the pointer and the keys produce goes through here; the panels
+    // have their own funnel in GameView. See debug.ts.
+    dlog("intent", intent.kind, intent);
     worker.postMessage(msg);
   }
 
@@ -299,6 +303,7 @@ export function attachBindings(
     // Checked before the skill row, which shares these keys' `key` values.
     const spawn = SPAWN_KEYS[e.code];
     if (spawn) {
+      dlog("intent", "spawn", spawn);
       worker.postMessage({ type: "spawn", what: spawn } satisfies ToWorker);
       return;
     }

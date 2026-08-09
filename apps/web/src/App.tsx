@@ -38,6 +38,7 @@ const GameView = React.lazy(() => import("./GameView").then((m) => ({ default: m
 const MenuStage = React.lazy(() => import("./menu/MenuStage").then((m) => ({ default: m.MenuStage })));
 import { DEFAULT_SETTINGS, type Settings } from "./settings";
 import { setTitle } from "./title";
+import { setDebugLogging } from "./debug";
 import { setSoundMix } from "./audio/drop-sound";
 import { preloadSfx } from "./audio/sfx";
 import {
@@ -114,6 +115,13 @@ export function App(): React.ReactElement {
   React.useEffect(() => {
     setSoundMix(settings.sound);
   }, [settings.sound]);
+
+  // Module state on debug.ts for the same reason sound is: one place covers the
+  // menu and the game, and a logger that only starts when Options is opened
+  // would miss the boot it was switched on to explain.
+  React.useEffect(() => {
+    setDebugLogging(settings.ui.debugLogging);
+  }, [settings.ui.debugLogging]);
 
   // The menu's own cues, fetched before the first press rather than by it: playSfx
   // starts the load and returns silent, so without this the first click of a fresh

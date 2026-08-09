@@ -17,6 +17,7 @@ import { loadPlayerRig, resetPlayerRig } from "./render/rig";
 import { attachBindings } from "./input/bindings";
 import { ALL_SFX, CORE_SFX, playSfx, preloadSfx, setAmbient, stopAmbient } from "./audio/sfx";
 import { createSoundscape } from "./audio/soundscape";
+import { createDebugSnapshotLog, dlog } from "./debug";
 import { preloadUiArt } from "./ui-art";
 import { preloadWorldArt } from "./render/world-art";
 import { setTitle } from "./title";
@@ -101,6 +102,7 @@ export function GameView({
    * whenever a panel is open is a game you can stand still in to think.
    */
   useEffect(() => {
+    dlog("sim", gameMenuOpen ? "paused" : "resumed");
     workerRef.current?.postMessage({ type: "pause", paused: gameMenuOpen } satisfies ToWorker);
   }, [gameMenuOpen]);
   const [optionsOpen, setOptionsOpen] = useState(false);
@@ -142,6 +144,10 @@ export function GameView({
   }
   const allocatedPassives = allocRef.current;
   const sendIntent = useCallback((intent: Intent) => {
+    // Logged where it is SENT rather than diffed out of a snapshot: an intent the
+    // sim refused leaves no trace in the world, and that is exactly the case the
+    // log exists for. See debug.ts.
+    dlog("intent", intent.kind, intent);
     workerRef.current?.postMessage({ type: "intent", intent } satisfies ToWorker);
   }, []);
   const closePassives = useCallback(() => setPassivesOpen(false), []);
@@ -245,6 +251,8 @@ export function GameView({
      * opening bolt of a session is not the one that fires in silence.
      */
     const soundscape = createSoundscape();
+    /** The same snapshots, said out loud, when ui.debugLogging is on. */
+    const debugLog = createDebugSnapshotLog();
     // Core first, then the whole library behind it: what a cue costs is one
     // fetch, and the only cue that can ever be heard late is the one that is
     // still on the wire when it fires. Both are running under the loading plate.
@@ -472,6 +480,7 @@ export function GameView({
         }
         prevTickTime = performance.now();
         soundscape.observe(msg.snapshot);
+        debugLog(msg.snapshot);
         setSnapshot(msg.snapshot);
         // The RISING edge, not the state: the device opens with a run already
         // running now, and a flat `if (mapOpen)` closed that panel again on the
@@ -483,7 +492,10 @@ export function GameView({
         // Let bindings fire the interact intent once the pending target is inRange.
         onSnapshot(msg.snapshot);
         if (harness !== "done") harnessStep(msg.snapshot);
+      } else if (msg.type === "ready") {
+        dlog("worker", "ready");
       } else if (msg.type === "area") {
+        dlog("worker", "area", { area: msg.area, mapBaseId: msg.mapBaseId });
         // The ?map harness's destination: once a map area arrives, its job is done.
         if (msg.area === "map") harness = "done";
         // Dungeon walls belong to the "map". The hideout is an open lab: pass an
@@ -807,10 +819,7 @@ export function GameView({
           onNodeSelect={() => setInventoryOpen(true)}
           onClose={() => { setPanelOpen(false); setSocketedCell(null); }}
           onActivate={(atlasNodeId, x, y) => {
-            workerRef.current?.postMessage({
-              type: "intent",
-              intent: { kind: "activateMap", atlasNodeId, x, y },
-            });
+            sendIntent({ kind: "activateMap", atlasNodeId, x, y });
             setPanelOpen(false);
             setSocketedCell(null);
           }}
@@ -830,7 +839,7 @@ export function GameView({
           // socketWanted: panel is open and the socket is empty, so ctrl+click / drag sockets a stone.
           socketWanted={panelOpen && socketedStone === null}
           onSocketWaystone={(x, y) => setSocketedCell({ x, y })}
-          onIntent={(intent) => workerRef.current?.postMessage({ type: "intent", intent } satisfies ToWorker)}
+          onIntent={sendIntent}
           onClose={() => { setInventoryOpen(false); setStashOpen(false); setVendorOpen(false); }}
         />
       )}
@@ -874,9 +883,7 @@ export function GameView({
           portalsLeft={snapshot.portalsLeft}
           inMap={snapshot.area === "map" && snapshot.mapOpen}
           onRevive={(where) => {
-            workerRef.current?.postMessage({
-              type: "intent", intent: { kind: "revive", where },
-            } satisfies ToWorker);
+            sendIntent({ kind: "revive", where });
             // Every overlay goes with the body: coming back is a fresh screen.
             setPanelOpen(false);
             setInventoryOpen(false);

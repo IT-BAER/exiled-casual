@@ -74,6 +74,12 @@ export interface UiSettings {
   skillBar: (string | null)[];
   /** What the non-skill keys do. See KEYBIND_ACTIONS. */
   keybinds: Keybinds;
+  /**
+   * Print what the sim is doing to the browser console (see debug.ts). Default
+   * OFF: it is a firehose, and it is here for the session where something needs
+   * a timeline rather than for every session.
+   */
+  debugLogging: boolean;
 }
 
 /** Total sockets: 5 numbered (keys 1-5) then L, M, R mouse. The HUD draws them
@@ -163,6 +169,7 @@ export const DEFAULT_SETTINGS: Settings = {
       MOVE_SOCKET, null, null,
     ],
     keybinds: { ...DEFAULT_KEYBINDS },
+    debugLogging: false,
   },
 };
 
@@ -257,6 +264,7 @@ export function sanitize(raw: unknown): Settings {
       monsterHealthBars: bool(u["monsterHealthBars"], d.ui.monsterHealthBars),
       skillBar: skillBar(u["skillBar"], d.ui.skillBar),
       keybinds: keybinds(u["keybinds"]),
+      debugLogging: bool(u["debugLogging"], d.ui.debugLogging),
     },
   };
 }
