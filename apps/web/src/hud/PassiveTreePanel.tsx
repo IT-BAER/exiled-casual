@@ -6,6 +6,7 @@ import {
 } from "@exiled/rules";
 import { characterClass } from "@exiled/content-runtime";
 import { DISPLAY, GOLD, PARCHMENT, SERIF } from "./InventoryPanel";
+import { Divider, GOLD_DIM, MenuButton } from "../menu/frames";
 
 /**
  * The passive tree, drawn the way `reference-screenshots/skill-tree.png` draws
@@ -346,49 +347,13 @@ export function PassiveTreePanel({
         setZoom((z) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z * (e.deltaY < 0 ? 1.12 : 1 / 1.12))));
       }}
     >
-      <header
-        style={{
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "1.1vh 1.6vw", flex: "none",
-          borderBottom: `1px solid ${GOLD}44`,
-          background: "linear-gradient(180deg, rgba(0,0,0,0.55), rgba(0,0,0,0))",
-        }}
-      >
-        <span style={{ fontFamily: DISPLAY, letterSpacing: "0.08em", color: GOLD, fontSize: "1.5vh" }}>
-          PASSIVE TREE
-        </span>
-        <span data-testid="passive-points" style={{ fontSize: "1.4vh" }}>
-          {points} point{points === 1 ? "" : "s"} unspent
-        </span>
-        <span style={{ display: "flex", gap: "0.8vw", alignItems: "center" }}>
-          <button
-            type="button"
-            data-testid="passive-respec"
-            onClick={() => onIntent?.({ kind: "respecPassives" })}
-            disabled={allocated.length === 0}
-            style={{
-              font: "inherit", fontSize: "1.2vh", padding: "0.4vh 0.9vw",
-              color: allocated.length === 0 ? "#6b6355" : PARCHMENT,
-              background: "rgba(0,0,0,0.45)", border: `1px solid ${GOLD}55`,
-              cursor: allocated.length === 0 ? "default" : "pointer",
-            }}
-          >
-            Refund all
-          </button>
-          <button
-            type="button"
-            data-testid="passive-close"
-            onClick={onClose}
-            style={{
-              font: "inherit", fontSize: "1.2vh", padding: "0.4vh 0.9vw",
-              color: PARCHMENT, background: "rgba(0,0,0,0.45)", border: `1px solid ${GOLD}55`,
-              cursor: "pointer",
-            }}
-          >
-            Close
-          </button>
-        </span>
-      </header>
+      <Header
+        classId={classId}
+        points={points}
+        allocatedCount={allocated.length}
+        onRespec={() => onIntent?.({ kind: "respecPassives" })}
+        onClose={onClose}
+      />
 
       <svg
         data-testid="passive-svg"
@@ -465,5 +430,118 @@ export function PassiveTreePanel({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * The band across the top of the tree, in the game's own panel voice rather than
+ * in the browser's: the display face and the gilt of `menu/frames.tsx`, the same
+ * plate buttons every other screen presses, and the filigree rule under it that
+ * the Options window and the character sheet already stand on.
+ *
+ * The unspent points are the loudest thing on it on purpose. An unspent point is
+ * power the player has EARNED and not taken yet (docs/09), so it gets the gold,
+ * the numeral, and a slow breath of glow that stops the moment the last one is
+ * spent — a counter reading 0 goes quiet and grey instead, because nothing is
+ * owed and a pulsing zero is a nag with nothing behind it.
+ */
+function Header({
+  classId, points, allocatedCount, onRespec, onClose,
+}: {
+  classId: string;
+  points: number;
+  allocatedCount: number;
+  onRespec: () => void;
+  onClose: () => void;
+}): React.ReactElement {
+  const owed = points > 0;
+  return (
+    <header
+      style={{
+        flex: "none",
+        padding: "1.1vh 1.6vw 0",
+        // A vault lit from above: the band is the top of the field, not a bar
+        // pasted onto it, so it has no edge of its own and fades into the tree.
+        background: "linear-gradient(180deg, rgba(0,0,0,0.72), rgba(0,0,0,0.28) 60%, rgba(0,0,0,0))",
+      }}
+    >
+      <style>
+        {"@keyframes passive-points-breath{"
+          + "0%,100%{text-shadow:0 0 0.6vh rgba(200,164,77,0.35),0 1px 2px rgba(0,0,0,0.9)}"
+          + "50%{text-shadow:0 0 1.5vh rgba(240,205,120,0.85),0 1px 2px rgba(0,0,0,0.9)}}"}
+      </style>
+      <div
+        style={{
+          display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center",
+          gap: "1.2vw",
+        }}
+      >
+        {/* Who is spending, and what they have spent so far. */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.2vh" }}>
+          <span
+            style={{
+              fontFamily: DISPLAY, fontSize: "1.35vh", letterSpacing: "0.18em",
+              textTransform: "uppercase", color: GOLD,
+              textShadow: "0 1px 2px rgba(0,0,0,0.9)",
+            }}
+          >
+            {characterClass(classId)?.name ?? "Exile"}
+          </span>
+          <span style={{ fontSize: "1.15vh", color: GOLD_DIM }}>
+            {allocatedCount} passive{allocatedCount === 1 ? "" : "s"} allocated
+          </span>
+        </div>
+
+        {/* The title, and under it the one number the screen is about. */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.3vh" }}>
+          <span
+            style={{
+              fontFamily: DISPLAY, fontSize: "1.9vh", letterSpacing: "0.34em",
+              textTransform: "uppercase", color: GOLD,
+              // Indented by the tracking's trailing space, or the word sits left
+              // of centre by half a letter and nothing looks square with it.
+              textIndent: "0.34em",
+              textShadow: "0 1px 3px rgba(0,0,0,0.95)",
+            }}
+          >
+            Passive Tree
+          </span>
+          <span
+            data-testid="passive-points"
+            style={{
+              fontFamily: DISPLAY, fontSize: "1.2vh", letterSpacing: "0.16em",
+              textTransform: "uppercase",
+              color: owed ? "#f0cd78" : "#7d7768",
+              animation: owed ? "passive-points-breath 2.6s ease-in-out infinite" : "none",
+            }}
+          >
+            <span style={{ fontSize: "1.75vh", color: owed ? GOLD : "#7d7768" }}>{points}</span>
+            {` point${points === 1 ? "" : "s"} unspent`}
+          </span>
+        </div>
+
+        <div style={{ display: "flex", gap: "0.7vw", justifyContent: "flex-end" }}>
+          <MenuButton
+            data-testid="passive-respec"
+            height={30}
+            style={{ minWidth: "9vw" }}
+            disabled={allocatedCount === 0}
+            title={allocatedCount === 0 ? "Nothing allocated to refund." : undefined}
+            onClick={onRespec}
+          >
+            Refund All
+          </MenuButton>
+          <MenuButton
+            data-testid="passive-close"
+            height={30}
+            style={{ minWidth: "7vw" }}
+            onClick={onClose}
+          >
+            Close
+          </MenuButton>
+        </div>
+      </div>
+      <Divider style={{ marginTop: "0.9vh" }} />
+    </header>
   );
 }
