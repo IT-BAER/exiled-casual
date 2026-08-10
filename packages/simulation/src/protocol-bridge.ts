@@ -102,6 +102,8 @@ export function intentToCommand(intent: Intent, player: Entity, tick: number): C
       return { tick, entity: player, type: "refundPassive", passiveId: intent.nodeId };
     case "respecPassives":
       return { tick, entity: player, type: "respecPassives" };
+    case "setSkillBar":
+      return { tick, entity: player, type: "setSkillBar", bar: intent.bar };
     case "usePortalScroll":
       // The scroll's right-click IS the Portal skill: one action, one cast time,
       // one cooldown. Two implementations of "open the way home" is how a hotkey

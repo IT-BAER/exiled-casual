@@ -211,29 +211,32 @@ describe("skills persistence", () => {
   });
 
   describe("reseedDefaultAttack", () => {
-    it("replaces another class's default attack sitting in the mouse slot", () => {
-      const bar = defaultBar("class.stalker"); // seeds skill.snap_shot.v1 there
-      const fixed = reseedDefaultAttack(bar, "class.ironsworn");
-      expect(fixed[MOUSE_SLOT_BASE + 2]).toBe("skill.strike.v1");
+    it("stamps the class's own attack into a never-reseeded save's mouse slot", () => {
+      // Seeded for the wrong class (stalker's Snap Shot), attackReseeded absent:
+      // exactly the shape every pre-Task-6 save is in.
+      const skills: SkillsC = { gems: {}, bar: defaultBar("class.stalker") };
+      const fixed = reseedDefaultAttack(skills, "class.ironsworn");
+      expect(fixed.bar[MOUSE_SLOT_BASE + 2]).toBe("skill.strike.v1");
+      expect(fixed.attackReseeded).toBe(true);
     });
 
-    it("leaves a deliberately chosen, non-default-attack skill untouched", () => {
-      const bar = defaultBar("class.ironsworn");
-      bar[MOUSE_SLOT_BASE + 2] = "skill.cinder_ground.v1";
-      // This is the assertion that fails against an unconditional overwrite:
-      // an unconditional reseed would replace it with skill.strike.v1 here too.
-      expect(reseedDefaultAttack(bar, "class.ironsworn")).toEqual(bar);
+    it("marks the flag done even when the slot already held the right attack", () => {
+      // If this didn't set the flag, a character whose first-ever load happened
+      // to already be correct would stay unflagged and get force-corrected the
+      // moment he later chose a deliberate cross-class attack.
+      const skills: SkillsC = { gems: {}, bar: defaultBar("class.ironsworn") };
+      const fixed = reseedDefaultAttack(skills, "class.ironsworn");
+      expect(fixed.bar).toEqual(skills.bar);
+      expect(fixed.attackReseeded).toBe(true);
     });
 
-    it("leaves an empty mouse slot untouched", () => {
+    it("is a no-op once attackReseeded is set, even over a deliberate cross-class attack", () => {
       const bar = defaultBar("class.ironsworn");
-      bar[MOUSE_SLOT_BASE + 2] = null;
-      expect(reseedDefaultAttack(bar, "class.ironsworn")).toEqual(bar);
-    });
-
-    it("is a no-op when the slot already holds this class's own attack", () => {
-      const bar = defaultBar("class.ironsworn");
-      expect(reseedDefaultAttack(bar, "class.ironsworn")).toEqual(bar);
+      bar[MOUSE_SLOT_BASE + 2] = "skill.snap_shot.v1"; // a real, deliberate choice
+      const skills: SkillsC = { gems: {}, bar, attackReseeded: true };
+      // This is the assertion that fails against dropping the flag guard: an
+      // unconditional reseed would replace it with skill.strike.v1 here too.
+      expect(reseedDefaultAttack(skills, "class.ironsworn")).toEqual(skills);
     });
   });
 

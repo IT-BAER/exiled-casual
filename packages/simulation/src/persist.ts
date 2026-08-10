@@ -5,7 +5,7 @@ import { stockVendor } from "./vendor";
 import { withPermanentWaystone } from "./inventory";
 import { recomputePlayerStats } from "./derived";
 import { START_LEVEL, isUnlocked, maxGemLevel, MAX_GEM_LEVEL, gemXpToNext } from "@exiled/rules";
-import { SKILLS, defaultAttackFor, DEFAULT_ATTACK_BY_CLASS } from "@exiled/content-runtime";
+import { SKILLS, defaultAttackFor } from "@exiled/content-runtime";
 import { SKILL_SLOT_COUNT, MOUSE_SLOT_BASE, MOVE_SOCKET } from "@exiled/protocol";
 
 /**
@@ -127,8 +127,8 @@ function sanitizeGems(raw: unknown, cap: number): Record<string, { level: number
 }
 
 /**
- * Repairs the class's default-attack mouse slot on an existing bar, but only
- * when it is provably the seeding bug and not a player's choice.
+ * One-shot repair for the class's default-attack mouse slot, gated on
+ * `SkillsC.attackReseeded` rather than re-derived structurally every load.
  *
  * `defaultBar` and `grantSkills` may run before the roster's classId is known
  * (a fresh world's session carries none until `characters.ts` stamps it from
@@ -138,23 +138,21 @@ function sanitizeGems(raw: unknown, cap: number): Record<string, { level: number
  * already-wrong save self-heals on the next login rather than needing a
  * one-time migration.
  *
- * The corrupt state is narrow and recognisable: the slot holds SOME class's
- * default attack that is not THIS class's own. Anything else — a skill the
- * player deliberately put there, or an empty slot — is left alone. Once
- * `SkillsC.bar` is player-writable (Task 6) that distinction is the only
- * thing standing between "repair a bug" and "silently discard a choice", or
- * reintroducing a duplicate `normalizeBar` would otherwise have to null back
- * out on the very next restore (Task 5 review round 2).
+ * Before `SkillsC.bar` was player-writable, the corrupt state was narrow and
+ * recognisable: the slot could only ever hold SOME class's default attack,
+ * because nothing else ever wrote it. Task 6's `setSkillBar` intent makes a
+ * DELIBERATE cross-class basic attack a legal thing for a player to slot,
+ * which that structural guess can no longer tell apart from the bug it was
+ * built to catch — so it would silently discard the player's choice on his
+ * very next login. A save missing the flag is exactly (and only) a save that
+ * predates this fix, so the correction there is unconditional; once stamped,
+ * the flag makes every later call a no-op, even over a deliberate swap.
  */
-export function reseedDefaultAttack(bar: (string | null)[], classId: string): (string | null)[] {
-  const correct = defaultAttackFor(classId);
-  const current = bar[MOUSE_SLOT_BASE + 2];
-  const isSomeClassDefault = typeof current === "string"
-    && (Object.values(DEFAULT_ATTACK_BY_CLASS) as string[]).includes(current);
-  if (!isSomeClassDefault || current === correct) return bar;
-  const out = [...bar];
-  out[MOUSE_SLOT_BASE + 2] = correct;
-  return out;
+export function reseedDefaultAttack(skills: SkillsC, classId: string): SkillsC {
+  if (skills.attackReseeded) return skills;
+  const bar = [...skills.bar];
+  bar[MOUSE_SLOT_BASE + 2] = defaultAttackFor(classId);
+  return { ...skills, bar, attackReseeded: true };
 }
 
 /**
@@ -174,7 +172,14 @@ export function grantSkills(world: World): void {
     if (!isUnlocked(def, level, classId)) continue;
     if (gems[def.id] === undefined) gems[def.id] = { level: 1, xp: 0 };
   }
-  world.set<SkillsC>(e, "skills", { gems, bar: current?.bar ?? defaultBar(classId) });
+  world.set<SkillsC>(e, "skills", {
+    gems,
+    bar: current?.bar ?? defaultBar(classId),
+    // Carried forward, never reset here: this runs on every level-up, and
+    // resetting it would let a legitimate cross-class basic attack the player
+    // already set get stomped back to the class default on the next grant.
+    ...(current?.attackReseeded ? { attackReseeded: true } : {}),
+  });
 }
 
 /**
@@ -212,7 +217,13 @@ export function restore(world: World, state: PersistedState): void {
   const cap = maxGemLevel(progress.level);
   const saved = state.skills;
   if (saved) {
-    world.set<SkillsC>(e, "skills", { gems: sanitizeGems(saved.gems, cap), bar: normalizeBar(saved.bar) });
+    world.set<SkillsC>(e, "skills", {
+      gems: sanitizeGems(saved.gems, cap),
+      bar: normalizeBar(saved.bar),
+      // Absent on every save written before this flag existed, which is
+      // exactly the save `reseedDefaultAttack` still has a bug left to fix.
+      ...(saved.attackReseeded ? { attackReseeded: true } : {}),
+    });
   }
   grantSkills(world);
   world.set<ShardsC>(e, "shards", state.shards ?? { counts: {} });

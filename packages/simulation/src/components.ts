@@ -102,6 +102,15 @@ export interface ProgressC { level: number; xp: number; gold: number }
 export interface SkillsC {
   gems: Record<string, { level: number; xp: number }>;
   bar: (string | null)[];
+  /**
+   * Provenance for the mouse-right default-attack repair (`reseedDefaultAttack`
+   * in persist.ts), not sim math the checksum needs to see. True once the
+   * class's own attack has been stamped into the mouse slot; absent/false on
+   * every save written before that flag existed, which is exactly the save
+   * that can still hold the pre-fix bug. Once true the slot is the player's to
+   * set via `setSkillBar`, including a deliberate cross-class basic attack.
+   */
+  attackReseeded?: boolean;
 }
 
 /** Something the player can activate with the `interact` intent. */

@@ -77,13 +77,14 @@ export async function loadCharacterInto(
     // bar's mouse-right slot may hold the "" fallback's Snap Shot regardless of
     // class. Re-derive that one slot now, every load, so an already-wrong save
     // self-heals on the next login instead of needing a one-time migration.
+    // One-shot via `attackReseeded`: once stamped, this is a no-op even over a
+    // deliberate cross-class basic attack set through `setSkillBar` (Task 6).
     const skills = world.get<SkillsC>(sessionE, "skills");
     if (skills) {
       // classIdOr, same laundering equipStartingGear already applies above: a
       // bogus roster classId must not get the Stalker fallback attack while
       // its gear came out of the default class (Task 5 review round 2).
-      const bar = reseedDefaultAttack(skills.bar, classIdOr(record.classId));
-      world.set<SkillsC>(sessionE, "skills", { ...skills, bar });
+      world.set<SkillsC>(sessionE, "skills", reseedDefaultAttack(skills, classIdOr(record.classId)));
     }
   }
   // After restore either way: restore() would otherwise put the character's own

@@ -71,9 +71,16 @@ export type Intent =
   | { kind: "allocatePassive"; nodeId: string }
   /** Give every point back. Free and total: half a respec is a second rule. */
   | { kind: "refundPassive"; nodeId: string }
-  | { kind: "respecPassives" };
+  | { kind: "respecPassives" }
+  /**
+   * Put the action bar in this order. The bar is sim state now, because gem
+   * experience is earned by the slot — so a swap is an intent, not a setting.
+   * The sim re-checks every id against what this character has actually
+   * unlocked, so a client that offers a locked skill can still only be told no.
+   */
+  | { kind: "setSkillBar"; bar: (string | null)[] };
 
-export type CommandType = "moveTo" | "moveDir" | "useSkill" | "stop" | "interact" | "activateMap" | "pickupItem" | "equipItem" | "unequipItem" | "dropItem" | "moveItem" | "useFlask" | "applyCurrency" | "sellItem" | "buyItem" | "revive" | "usePortalScroll" | "allocatePassive" | "refundPassive" | "respecPassives";
+export type CommandType = "moveTo" | "moveDir" | "useSkill" | "stop" | "interact" | "activateMap" | "pickupItem" | "equipItem" | "unequipItem" | "dropItem" | "moveItem" | "useFlask" | "applyCurrency" | "sellItem" | "buyItem" | "revive" | "usePortalScroll" | "allocatePassive" | "refundPassive" | "respecPassives" | "setSkillBar";
 
 // ---------------------------------------------------------------------------
 // Run loop
@@ -546,6 +553,16 @@ export function validateIntent(v: unknown): Intent {
     }
     case "respecPassives":
       return { kind: "respecPassives" };
+    case "setSkillBar": {
+      const bar = obj["bar"];
+      if (!Array.isArray(bar) || bar.length > SKILL_SLOT_COUNT)
+        throw new Error(`validateIntent setSkillBar: bar must be an array of at most ${SKILL_SLOT_COUNT}`);
+      for (const v of bar) {
+        if (v !== null && (typeof v !== "string" || v.length === 0))
+          throw new Error("validateIntent setSkillBar: each entry must be a non-empty string or null");
+      }
+      return { kind: "setSkillBar", bar: bar as (string | null)[] };
+    }
     default:
       throw new Error(`validateIntent: unknown kind: ${String(obj["kind"])}`);
   }

@@ -216,12 +216,14 @@ describe("loadCharacterInto / saveCharacterTo", () => {
     const kv = await withOneCharacter("class.ironsworn");
     const world = fresh();
     await loadCharacterInto(kv, world, "vess");
-    // Simulate a save written by the pre-fix build: the mouse slot holds Snap
-    // Shot regardless of class.
+    // Simulate a save written by the pre-Task-6 build: the mouse slot holds
+    // Snap Shot regardless of class, and attackReseeded is unset — the one
+    // provenance shape that can still only be the bug, never a deliberate
+    // choice, since the flag did not exist yet to record one.
     const skills = get<SkillsC>(world, "skills");
     const badBar = [...skills.bar];
     badBar[MOUSE_SLOT_BASE + 2] = "skill.snap_shot.v1";
-    set<SkillsC>(world, "skills", { ...skills, bar: badBar });
+    set<SkillsC>(world, "skills", { gems: skills.gems, bar: badBar });
     await saveCharacterTo(kv, world, "vess");
 
     const reboot = fresh();
@@ -246,6 +248,29 @@ describe("loadCharacterInto / saveCharacterTo", () => {
     const reboot = fresh();
     await loadCharacterInto(kv, reboot, "vess");
     expect(get<SkillsC>(reboot, "skills").bar[MOUSE_SLOT_BASE + 2]).toBe("skill.cinder_ground.v1");
+  });
+
+  // Task 6: setSkillBar makes the mouse-right slot player-writable, including a
+  // cross-class basic attack — a legal choice the old structural heuristic
+  // ("some class's default attack that isn't mine") could not tell apart from
+  // the seeding bug it existed to catch. This fails against that heuristic:
+  // Snap Shot IS a class's default attack, so an unflagged reseed would stomp
+  // it back to Strike on this second load.
+  it("survives a deliberate cross-class basic attack across a second load", async () => {
+    const kv = await withOneCharacter("class.ironsworn");
+    const world = fresh();
+    // First load: the one-shot repair runs and sets attackReseeded.
+    await loadCharacterInto(kv, world, "vess");
+    const skills = get<SkillsC>(world, "skills");
+    expect(skills.attackReseeded).toBe(true);
+    const chosenBar = [...skills.bar];
+    chosenBar[MOUSE_SLOT_BASE + 2] = defaultAttackFor("class.stalker"); // "skill.snap_shot.v1"
+    set<SkillsC>(world, "skills", { ...skills, bar: chosenBar });
+    await saveCharacterTo(kv, world, "vess");
+
+    const reboot = fresh();
+    await loadCharacterInto(kv, reboot, "vess");
+    expect(get<SkillsC>(reboot, "skills").bar[MOUSE_SLOT_BASE + 2]).toBe("skill.snap_shot.v1");
   });
 
   it("round-trips one character's progress", async () => {

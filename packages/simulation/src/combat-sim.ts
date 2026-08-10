@@ -37,6 +37,7 @@ import { registerCurrencySystem } from "./systems/currency";
 import { registerAreaTransition } from "./systems/area-transition";
 import { registerFlaskSystem } from "./systems/flask";
 import { registerRevive } from "./systems/revive";
+import { registerSkillsSystem } from "./systems/skills";
 import { areaCollision, buildArea, spawnMonster } from "./areas";
 
 export function createCombatSim(
@@ -160,6 +161,7 @@ export function createCombatSim(
     // the transition that reads it runs on the NEXT tick either way, so ordering
     // here only decides whether the walk out costs one tick or two.
     registerRevive(sim);
+    registerSkillsSystem(sim);
   } else {
     // ── Legacy path: no session, golden-replay–safe bootstrap ────────────
     if (opts.monsters !== false) {

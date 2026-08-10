@@ -20,6 +20,8 @@ export interface Command {
   slot?: EquipSlotId;
   /** Set when type === "useFlask" */
   flask?: "life" | "mana";
+  /** Set when type === "setSkillBar"; kept off `data` since that field is numbers-only. */
+  bar?: (string | null)[];
 }
 
 export type System = (

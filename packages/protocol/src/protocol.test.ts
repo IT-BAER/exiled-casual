@@ -1,6 +1,6 @@
 import { describe, expect, it, test } from "vitest";
 import { readFileSync } from "node:fs";
-import { validateIntent, isToWorker } from "./index.js";
+import { validateIntent, isToWorker, SKILL_SLOT_COUNT } from "./index.js";
 import type { FromWorker } from "./index.js";
 import { fp } from "@exiled/fixed-point";
 import { generateArea } from "@exiled/mapgen";
@@ -152,6 +152,21 @@ describe("validateIntent — useFlask", () => {
 
   test("missing slot throws", () => {
     expect(() => validateIntent({ kind: "useFlask" })).toThrow();
+  });
+});
+
+describe("validateIntent — setSkillBar", () => {
+  it("validates setSkillBar and refuses a bar that is not an array of ids", () => {
+    expect(validateIntent({ kind: "setSkillBar", bar: ["skill.a.v1", null] }))
+      .toEqual({ kind: "setSkillBar", bar: ["skill.a.v1", null] });
+    expect(() => validateIntent({ kind: "setSkillBar", bar: "nope" })).toThrow();
+    expect(() => validateIntent({ kind: "setSkillBar", bar: [1, 2] })).toThrow();
+    expect(() => validateIntent({ kind: "setSkillBar" })).toThrow();
+  });
+
+  it("refuses a bar longer than SKILL_SLOT_COUNT rather than truncating it silently", () => {
+    const long = new Array(SKILL_SLOT_COUNT + 1).fill(null);
+    expect(() => validateIntent({ kind: "setSkillBar", bar: long })).toThrow();
   });
 });
 
