@@ -3,9 +3,12 @@ import { isPermanentWaystone } from "@exiled/content-runtime";
 import { MemoryKv } from "@exiled/persistence";
 import { rollItem, areaLevel, maxGemLevel, gemXpToNext } from "@exiled/rules";
 import { ITEM_POOLS, baseOf, defaultAttackFor } from "@exiled/content-runtime";
-import { SKILL_SLOT_COUNT, MOVE_SOCKET } from "@exiled/protocol";
+import { SKILL_SLOT_COUNT, MOVE_SOCKET, MOUSE_SLOT_BASE } from "@exiled/protocol";
 import { createCombatSim } from "./combat-sim";
-import { snapshot, restore, saveTo, loadInto, grantSkills, defaultBar, VERSION, type PersistedState } from "./persist";
+import {
+  snapshot, restore, saveTo, loadInto, grantSkills, defaultBar, reseedDefaultAttack, VERSION,
+  type PersistedState,
+} from "./persist";
 import type { SessionC, InventoryC, Health, SkillsC, ProgressC } from "./components";
 import { PASSIVE_TREE } from "@exiled/rules";
 
@@ -205,6 +208,33 @@ describe("skills persistence", () => {
 
   it("persist.VERSION is still 2, so no existing character is dropped", () => {
     expect(VERSION).toBe(2);
+  });
+
+  describe("reseedDefaultAttack", () => {
+    it("replaces another class's default attack sitting in the mouse slot", () => {
+      const bar = defaultBar("class.stalker"); // seeds skill.snap_shot.v1 there
+      const fixed = reseedDefaultAttack(bar, "class.ironsworn");
+      expect(fixed[MOUSE_SLOT_BASE + 2]).toBe("skill.strike.v1");
+    });
+
+    it("leaves a deliberately chosen, non-default-attack skill untouched", () => {
+      const bar = defaultBar("class.ironsworn");
+      bar[MOUSE_SLOT_BASE + 2] = "skill.cinder_ground.v1";
+      // This is the assertion that fails against an unconditional overwrite:
+      // an unconditional reseed would replace it with skill.strike.v1 here too.
+      expect(reseedDefaultAttack(bar, "class.ironsworn")).toEqual(bar);
+    });
+
+    it("leaves an empty mouse slot untouched", () => {
+      const bar = defaultBar("class.ironsworn");
+      bar[MOUSE_SLOT_BASE + 2] = null;
+      expect(reseedDefaultAttack(bar, "class.ironsworn")).toEqual(bar);
+    });
+
+    it("is a no-op when the slot already holds this class's own attack", () => {
+      const bar = defaultBar("class.ironsworn");
+      expect(reseedDefaultAttack(bar, "class.ironsworn")).toEqual(bar);
+    });
   });
 
   it("a gem never restores above what the character level allows", () => {

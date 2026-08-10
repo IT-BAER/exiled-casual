@@ -79,7 +79,11 @@ export async function loadCharacterInto(
     // self-heals on the next login instead of needing a one-time migration.
     const skills = world.get<SkillsC>(sessionE, "skills");
     if (skills) {
-      world.set<SkillsC>(sessionE, "skills", { ...skills, bar: reseedDefaultAttack(skills.bar, record.classId) });
+      // classIdOr, same laundering equipStartingGear already applies above: a
+      // bogus roster classId must not get the Stalker fallback attack while
+      // its gear came out of the default class (Task 5 review round 2).
+      const bar = reseedDefaultAttack(skills.bar, classIdOr(record.classId));
+      world.set<SkillsC>(sessionE, "skills", { ...skills, bar });
     }
   }
   // After restore either way: restore() would otherwise put the character's own

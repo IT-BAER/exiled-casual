@@ -229,6 +229,25 @@ describe("loadCharacterInto / saveCharacterTo", () => {
     expect(get<SkillsC>(reboot, "skills").bar[MOUSE_SLOT_BASE + 2]).toBe("skill.strike.v1");
   });
 
+  // Review round 2: the fix above must not eat a player's own choice. This is
+  // the test that matters — it fails against the unconditional reseed the
+  // first fix shipped, which stomped this slot on every single load.
+  it("survives a deliberately chosen, non-default-attack skill in the mouse slot across a load", async () => {
+    const kv = await withOneCharacter("class.ironsworn");
+    const world = fresh();
+    await loadCharacterInto(kv, world, "vess");
+    const skills = get<SkillsC>(world, "skills");
+    const customBar = [...skills.bar];
+    // Not any class's default attack — a real, deliberate choice.
+    customBar[MOUSE_SLOT_BASE + 2] = "skill.cinder_ground.v1";
+    set<SkillsC>(world, "skills", { ...skills, bar: customBar });
+    await saveCharacterTo(kv, world, "vess");
+
+    const reboot = fresh();
+    await loadCharacterInto(kv, reboot, "vess");
+    expect(get<SkillsC>(reboot, "skills").bar[MOUSE_SLOT_BASE + 2]).toBe("skill.cinder_ground.v1");
+  });
+
   it("round-trips one character's progress", async () => {
     const kv = await withOneCharacter();
     const world = fresh();

@@ -5,7 +5,7 @@ import { stockVendor } from "./vendor";
 import { withPermanentWaystone } from "./inventory";
 import { recomputePlayerStats } from "./derived";
 import { START_LEVEL, isUnlocked, maxGemLevel, MAX_GEM_LEVEL, gemXpToNext } from "@exiled/rules";
-import { SKILLS, defaultAttackFor } from "@exiled/content-runtime";
+import { SKILLS, defaultAttackFor, DEFAULT_ATTACK_BY_CLASS } from "@exiled/content-runtime";
 import { SKILL_SLOT_COUNT, MOUSE_SLOT_BASE, MOVE_SOCKET } from "@exiled/protocol";
 
 /**
@@ -127,7 +127,8 @@ function sanitizeGems(raw: unknown, cap: number): Record<string, { level: number
 }
 
 /**
- * Corrects just the class's default-attack mouse slot on an existing bar.
+ * Repairs the class's default-attack mouse slot on an existing bar, but only
+ * when it is provably the seeding bug and not a player's choice.
  *
  * `defaultBar` and `grantSkills` may run before the roster's classId is known
  * (a fresh world's session carries none until `characters.ts` stamps it from
@@ -136,10 +137,23 @@ function sanitizeGems(raw: unknown, cap: number): Record<string, { level: number
  * is called again once the real classId is known, on every load, so an
  * already-wrong save self-heals on the next login rather than needing a
  * one-time migration.
+ *
+ * The corrupt state is narrow and recognisable: the slot holds SOME class's
+ * default attack that is not THIS class's own. Anything else — a skill the
+ * player deliberately put there, or an empty slot — is left alone. Once
+ * `SkillsC.bar` is player-writable (Task 6) that distinction is the only
+ * thing standing between "repair a bug" and "silently discard a choice", or
+ * reintroducing a duplicate `normalizeBar` would otherwise have to null back
+ * out on the very next restore (Task 5 review round 2).
  */
 export function reseedDefaultAttack(bar: (string | null)[], classId: string): (string | null)[] {
+  const correct = defaultAttackFor(classId);
+  const current = bar[MOUSE_SLOT_BASE + 2];
+  const isSomeClassDefault = typeof current === "string"
+    && (Object.values(DEFAULT_ATTACK_BY_CLASS) as string[]).includes(current);
+  if (!isSomeClassDefault || current === correct) return bar;
   const out = [...bar];
-  out[MOUSE_SLOT_BASE + 2] = defaultAttackFor(classId);
+  out[MOUSE_SLOT_BASE + 2] = correct;
   return out;
 }
 
