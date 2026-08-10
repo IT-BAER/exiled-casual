@@ -25,7 +25,7 @@ function snapWith(entities: Snapshot["entities"]): Snapshot {
     player: {
       id: 0, x: 0, y: 0, life: 100, maxLife: 100, mana: 30, maxMana: 60,
       energyShield: 0, maxEnergyShield: 0,
-      cooldowns: {}, alive: true, casting: false, level: 65, xp: 0, xpToNext: 60_000, gold: 0,
+      cooldowns: {}, alive: true, casting: false, level: 65, xp: 0, xpToNext: 126_750, gold: 0,
       flasks: { lifeCharges: 7, lifeMax: 7, manaCharges: 7, manaMax: 7 }, stats: testStats(),
     },
     entities,

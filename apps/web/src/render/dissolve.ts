@@ -3,7 +3,7 @@
  *
  * Deleting someone used to be a state change with no event: the row vanished
  * and the figure in the hall was simply not drawn on the next frame. A character
- * you have played to level 65 deserves the frame it takes to lose him, and the
+ * you have played for hours deserves the frame it takes to lose him, and the
  * reference is the obvious one — Infinity War's dusting, which works because it
  * is SLOW, because the body goes from the bottom up rather than fading
  * uniformly, and because what leaves the body is lit while the body is not.

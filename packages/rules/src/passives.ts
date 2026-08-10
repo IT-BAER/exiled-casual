@@ -445,7 +445,7 @@ export function isStartNode(id: string): boolean {
  * How many points a character of this level has spent-able.
  *
  * One a level from 1 to 100 is 99 points in a web of 239 nodes: the same budget
- * the 65-to-94 era ended on, which is roughly PoE's own reach — enough to walk
+ * the 65-to-94 era ended on, which is roughly PoE's own reach, enough to walk
  * two disciplines and a keystone, never enough to walk all eight. A level-1
  * character opens with nothing, because his first point is his first level-up
  * and that is the fixed-ratio track doing its job (docs/09 rule 7).

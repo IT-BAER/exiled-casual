@@ -72,7 +72,7 @@ function makeSnap(overrides: {
       casting: false,
       level: overrides.level ?? 65,
       xp: overrides.xp ?? 0,
-      xpToNext: overrides.xpToNext ?? 60_000,
+      xpToNext: overrides.xpToNext ?? 126_750,
       gold: 0,
       flasks: overrides.flasks ?? { lifeCharges: 7, lifeMax: 7, manaCharges: 7, manaMax: 7 },
       ...(overrides.passivePoints === undefined ? {} : { passivePoints: overrides.passivePoints }),

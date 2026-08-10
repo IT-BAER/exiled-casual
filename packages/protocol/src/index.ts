@@ -269,7 +269,7 @@ export interface Snapshot {
   /** Retry budget left on the open map; 0 when no map is open. */
   portalsLeft: number;
   mapOpen: boolean;
-  /** Tier of the open map; 0 when no map is open. areaLevel = 64 + areaTier. */
+  /** Tier of the open map; 0 when no map is open. areaLevel = 2 + 6 * areaTier. */
   areaTier: number;
   /** Stable session seed the client uses to compute the Waystone offers. */
   atlasSeed: number;

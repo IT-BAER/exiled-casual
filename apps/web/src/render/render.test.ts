@@ -86,7 +86,7 @@ function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
       energyShield: 0, maxEnergyShield: 0,
       cooldowns: {},
       alive: true,
-      casting: false, level: 65, xp: 0, xpToNext: 60_000, gold: 0,
+      casting: false, level: 65, xp: 0, xpToNext: 126_750, gold: 0,
       flasks: { lifeCharges: 7, lifeMax: 7, manaCharges: 7, manaMax: 7 }, stats: testStats(),
     },
     area: "map",
