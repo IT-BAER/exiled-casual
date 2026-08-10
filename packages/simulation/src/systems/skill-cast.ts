@@ -62,6 +62,7 @@ export function registerSkillCast(
           damageAmount: scalePct(effect.damage.amountFixed, spellDamagePct) * (didCrit ? 2 : 1),
           ownerId: caster,
           team: casterTeam,
+          ...(effect.pierceCount ? { pierceLeft: effect.pierceCount, hitIds: [] } : {}),
         });
       } else if (effect.type === "spawnGroundArea") {
         // Aimed past a wall, the patch lands on the wall instead of in the room

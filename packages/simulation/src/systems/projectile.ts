@@ -36,18 +36,26 @@ export function registerProjectileMove(sim: Simulation, collisionRef?: Collision
         const r = proj.radius + bodyRadius;
         return r * r;
       };
+      let pierceLeft = proj.pierceLeft ?? 0;
+      let hitIds = proj.hitIds;
       for (const m of world.query("position", "health", "faction")) {
         const mFaction = world.get<Faction>(m, "faction")!;
         if (mFaction.team === proj.team) continue; // same team
         const mPos = world.get<Position>(m, "position")!;
         const dist2 = fpDist2(nx, ny, mPos.x, mPos.y);
         if (dist2 <= combinedR2Fn(bodyRadiusOf(world, m))) {
+          if (hitIds && hitIds.includes(m)) continue;
           sim.enqueueDamage({
             target: m,
             source: proj.ownerId,
             amountFixed: proj.damageAmount,
             type: proj.damageType,
           });
+          if (pierceLeft > 0) {
+            pierceLeft--;
+            hitIds = [...(hitIds ?? []), m];
+            continue; // keeps flying, and may strike a second body this same tick
+          }
           newRange = 0; // spent
           break; // first target only
         }
@@ -55,7 +63,11 @@ export function registerProjectileMove(sim: Simulation, collisionRef?: Collision
 
       // Intentionally not clamped to WORLD_MIN/WORLD_MAX: projectiles fly past the arena edge and are removed by range depletion / the expiry system, not pinned to the wall.
       world.set<Position>(e, "position", { x: nx, y: ny });
-      world.set<ProjectileC>(e, "projectile", { ...proj, remainingRange: newRange });
+      world.set<ProjectileC>(e, "projectile", {
+        ...proj,
+        remainingRange: newRange,
+        ...(proj.pierceLeft !== undefined ? { pierceLeft, hitIds: hitIds ?? [] } : {}),
+      });
     }
   });
 }

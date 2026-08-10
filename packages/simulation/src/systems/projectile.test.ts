@@ -21,7 +21,7 @@ function makeProjectile(sim: Simulation, px: number, py: number, dirx: number, d
   return e;
 }
 
-function makeMonster(sim: Simulation, mx: number, my: number) {
+function makeMonster(sim: Simulation, mx: number, my: number, bodyRadius = fp(0.5)) {
   const e = sim.world.create();
   sim.world.set<Position>(e, "position", { x: mx, y: my });
   // Collision now keys off "health", not "monster" (see registerProjectileMove) —
@@ -29,7 +29,7 @@ function makeMonster(sim: Simulation, mx: number, my: number) {
   sim.world.set<Health>(e, "health", { life: fp(40), maxLife: fp(40) });
   sim.world.set<MonsterC>(e, "monster", {
     defId: "monster.cinder_imp.v1",
-    moveSpeed: 0, bodyRadius: fp(0.5),
+    moveSpeed: 0, bodyRadius,
     attackRange: fp(1.2), attackCooldownTicks: 45,
     attackDamage: fp(6), attackType: 1,
     attackReadyTick: 0, slamReadyTick: 0, rootedUntilTick: 0, state: "idle", rare: 0, summoned: 0,
@@ -119,6 +119,86 @@ describe("registerProjectileMove", () => {
     const afterSecond = sim.world.get<Position>(proj, "position")!;
     expect(afterSecond.x).toBe(afterHit.x);
     expect(afterSecond.y).toBe(afterHit.y);
+  });
+
+  it("a bolt with no pierce is spent on the first body, as it always was", () => {
+    const sim = new Simulation();
+    registerProjectileMove(sim);
+    const proj = makeProjectile(sim, 0, 0, fp(1), 0, fp(20));
+    const monster1 = makeMonster(sim, fp(1), 0);
+    const monster2 = makeMonster(sim, fp(2), 0);
+    sim.step(); // bolt reaches monster1 and is spent there
+    expect(sim.damageQueue).toHaveLength(1);
+    expect(sim.damageQueue[0]!.target).toBe(monster1);
+    const p = sim.world.get<ProjectileC>(proj, "projectile")!;
+    expect(p.remainingRange).toBeLessThanOrEqual(0);
+    const afterHit = sim.world.get<Position>(proj, "position")!;
+    sim.step(); // spent bolt must not advance far enough to ever reach monster2
+    expect(sim.damageQueue).toHaveLength(0);
+    const afterSecond = sim.world.get<Position>(proj, "position")!;
+    expect(afterSecond.x).toBe(afterHit.x);
+    expect(afterSecond.y).toBe(afterHit.y);
+  });
+
+  it("a bolt with pierceLeft 1 hits two bodies in a line and stops at the second", () => {
+    const sim = new Simulation();
+    registerProjectileMove(sim);
+    const proj = sim.world.create();
+    sim.world.set<Position>(proj, "position", { x: 0, y: 0 });
+    sim.world.set<ProjectileC>(proj, "projectile", {
+      dirx: fp(1), diry: 0,
+      remainingRange: fp(20),
+      radius: fp(0.4),
+      damageType: 0,
+      damageAmount: fp(25),
+      ownerId: proj,
+      team: 0,
+      pierceLeft: 1,
+      hitIds: [],
+    });
+    const monster1 = makeMonster(sim, fp(1), 0);
+    const monster2 = makeMonster(sim, fp(2), 0);
+
+    sim.step(); // bolt reaches monster1, pierces through instead of stopping
+    expect(sim.damageQueue).toHaveLength(1);
+    expect(sim.damageQueue[0]!.target).toBe(monster1);
+    let p = sim.world.get<ProjectileC>(proj, "projectile")!;
+    expect(p.remainingRange).toBeGreaterThan(0); // still flying
+    expect(p.pierceLeft).toBe(0);
+
+    sim.step(); // bolt reaches monster2 with no pierce left, spends there
+    expect(sim.damageQueue).toHaveLength(1);
+    expect(sim.damageQueue[0]!.target).toBe(monster2);
+    p = sim.world.get<ProjectileC>(proj, "projectile")!;
+    expect(p.remainingRange).toBeLessThanOrEqual(0);
+  });
+
+  it("a piercing bolt never hits the same body twice while it is still inside it", () => {
+    const sim = new Simulation();
+    registerProjectileMove(sim);
+    const proj = sim.world.create();
+    sim.world.set<Position>(proj, "position", { x: 0, y: 0 });
+    sim.world.set<ProjectileC>(proj, "projectile", {
+      dirx: fp(0.1), diry: 0,
+      remainingRange: fp(20),
+      radius: fp(0.4),
+      damageType: 0,
+      damageAmount: fp(25),
+      ownerId: proj,
+      team: 0,
+      pierceLeft: 5,
+      hitIds: [],
+    });
+    // Wide body (bodyRadius fp(2)) so the bolt, creeping fp(0.1) per tick, stays
+    // inside it for many ticks instead of clearing the hitbox in one step.
+    const monster = makeMonster(sim, fp(1), 0, fp(2));
+
+    const hitsOnMonster: DamageEvent[] = [];
+    for (let i = 0; i < 20; i++) {
+      sim.step();
+      hitsOnMonster.push(...sim.damageQueue.filter((e) => e.target === monster));
+    }
+    expect(hitsOnMonster).toHaveLength(1);
   });
 
   it("a monster-team bolt damages the player", () => {

@@ -227,6 +227,12 @@ export interface ProjectileC {
   damageAmount: Fixed;
   ownerId: Entity;
   team: number;
+  /** Bodies this bolt may still pass through. Absent or 0 = spent on the first,
+   *  which is every projectile in the game below gem 5. */
+  pierceLeft?: number;
+  /** Entities already struck, so a bolt still overlapping a body it pierced does
+   *  not hit it again every tick. Only ever set on a piercing bolt. */
+  hitIds?: number[];
 }
 export interface GroundAreaC {
   radius: Fixed;
