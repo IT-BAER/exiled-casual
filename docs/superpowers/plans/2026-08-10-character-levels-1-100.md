@@ -15,7 +15,7 @@
 - Golden replay checksums must stay stable in shape. Where a value changes, regenerate deliberately and say so in the commit message.
 - Commit messages: no attribution trailers, no emdashes.
 - Run from repo root: `npx vitest run <scope>`, `npm run typecheck`.
-- Do not touch `packages/simulation/src/balance.test.ts` band values until Task 6, which re-measures them.
+- `packages/simulation/src/balance.test.ts` band values are re-measured in Task 2 and touched nowhere else. Every task ends with a fully green suite; no task may commit a known-red test.
 
 ---
 
@@ -136,16 +136,21 @@ Expected: PASS.
 
 ```bash
 git add packages/rules/src/xp.ts packages/rules/src/xp.test.ts
-git commit -m "feat(xp): a character starts at level 1 and the curve is cubic"
+git commit -m "feat(xp): a character starts at level 1 and the curve is quadratic"
 ```
 
 ---
 
-### Task 2: The Atlas comes down to meet a level-1 character
+### Task 2: The Atlas comes down to meet a level-1 character, and the bands are re-measured
 
 **Files:**
 - Modify: `packages/rules/src/atlas.ts:44-53` (`areaLevel`, `monsterTierScale`)
-- Test: `packages/rules/src/atlas.test.ts`
+- Test: `packages/rules/src/atlas.test.ts`, `packages/simulation/src/balance.test.ts`
+
+**Why the balance re-measure lives in this task:** `monsterTierScale` is what the balance bands were
+measured against. Changing it in one task and re-measuring in a later one would leave three
+intervening commits with a known-red suite, which is a suite nobody can trust to catch a real
+regression. The rescale and its re-measurement are one deliverable.
 
 **Interfaces:**
 - Consumes: `START_LEVEL` and `MAX_LEVEL` from Task 1 (import from `./xp`; `atlas.ts` already sits in the same package, so this is an intra-package import and does not break the pure-leaf rule).
@@ -238,10 +243,52 @@ export function monsterTierScale(tier: number): { lifeMilli: number; dmgMilli: n
 Run: `npx vitest run packages/rules/src/atlas.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Run the balance suite and capture what it now measures**
+
+Run: `npx vitest run packages/simulation/src/balance.test.ts`
+Expected: FAIL. For each failing case, write down the measured value from the failure message. Do not
+edit anything yet.
+
+- [ ] **Step 6: Judge each measured value against the design intent**
+
+The intents, from the file's own case names, are:
+
+| Case | Intent |
+|---|---|
+| a lone imp | dies in under 1.5s |
+| a five-imp pack | clears in under 6s |
+| lone imp vs a stationary player | needs at least 15s to kill |
+| five-imp pack vs a stationary player | 4 to 12s |
+| Warden phase 1 | 8 to 22s |
+| Warden phase 2 | deadlier than phase 1, still leaves 3s to walk out |
+| a full biome pack | under 12s |
+
+If a measured value sits inside its stated intent, widen or shift the band to the measured value and
+move on. If it sits outside — an imp now takes four seconds to kill, or kills the player in six —
+the tuning constant is wrong, not the band. Adjust the two per-mille knobs in `monsterTierScale`
+from Step 3 and re-run. **Never edit a band to accept a number that contradicts its own case name.**
+
+Note that these cases run at tier 0 or tier 1, where `monsterTierScale` is at or near 1000/1000 by
+construction, so most bands should not move at all. A band that moves a long way at tier 0 means
+something other than the tier scale changed, and that is worth understanding before editing it.
+
+- [ ] **Step 7: Apply the re-measured bands**
+
+Edit only the numeric bands. Leave every case name, every rig setup and every assertion structure
+untouched, so the diff shows exactly which measurements moved.
+
+- [ ] **Step 8: Run both suites and typecheck**
+
+Run: `npx vitest run packages/rules packages/simulation`
+Expected: PASS.
+
+Run: `npm run typecheck`
+Expected: exit code 0.
+
+- [ ] **Step 9: Commit**
 
 ```bash
-git add packages/rules/src/atlas.ts packages/rules/src/atlas.test.ts
+git add packages/rules/src/atlas.ts packages/rules/src/atlas.test.ts packages/simulation/src/balance.test.ts
 git commit -m "feat(atlas): tier 0 is area level 2, so a new character has somewhere to start"
 ```
 
@@ -405,64 +452,8 @@ git commit -m "test(hud): the preparation panel's area level comes from the rule
 
 ---
 
-### Task 6: Re-measure the balance bands against the same rig
 
-**Files:**
-- Modify: `packages/simulation/src/balance.test.ts` (band values only)
-- Test: the same file
-
-**Interfaces:**
-- Consumes: everything from Tasks 1 to 3.
-- Produces: nothing. This is the verification gate for the whole plan.
-
-**Why this is a task and not a cleanup:** the bands in this file were measured, not chosen. `monsterTierScale` and `levelBonus` both moved, so the measurements are stale by construction. Re-measuring means running the existing rig and reading what it now produces, then deciding whether that number is acceptable — not editing bands until they are green.
-
-- [ ] **Step 1: Run the balance suite and capture what it now measures**
-
-Run: `npx vitest run packages/simulation/src/balance.test.ts`
-Expected: FAIL. For each failing case, write down the measured value from the failure message. Do not edit yet.
-
-- [ ] **Step 2: Judge each measured value against the design intent**
-
-The intents, from the file's own case names, are:
-
-| Case | Intent |
-|---|---|
-| a lone imp | dies in under 1.5s |
-| a five-imp pack | clears in under 6s |
-| lone imp vs a stationary player | needs at least 15s to kill |
-| five-imp pack vs a stationary player | 4 to 12s |
-| Warden phase 1 | 8 to 22s |
-| Warden phase 2 | deadlier than phase 1, still leaves 3s to walk out |
-| a full biome pack | under 12s |
-
-If a measured value sits inside its stated intent, widen or shift the band to the measured value and move on. If it sits outside — an imp now takes four seconds to kill, or kills the player in six — the tuning constant is wrong, not the band. Go back to `monsterTierScale` in Task 2 and adjust the two per-mille knobs, then re-run. **Never edit a band to accept a number that contradicts its own case name.**
-
-- [ ] **Step 3: Apply the re-measured bands**
-
-Edit only the numeric bands. Leave every case name, every rig setup and every assertion structure untouched, so the diff shows exactly which measurements moved.
-
-- [ ] **Step 4: Run the full suite and typecheck**
-
-Run: `npx vitest run`
-Expected: PASS, all files.
-
-Run: `npm run typecheck`
-Expected: exit code 0.
-
-Run: `npm run build -w apps/web`
-Expected: exit code 0.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add packages/simulation/src/balance.test.ts
-git commit -m "test(balance): re-measure every band against the 1-100 curve"
-```
-
----
-
-### Task 7: Say what changed, where the project records it
+### Task 6: Say what changed, where the project records it
 
 **Files:**
 - Modify: `docs/specs/2026-08-05-current-implementation-contract.md` (§5 Balance), `CHANGELOG.md`
