@@ -57,8 +57,12 @@ roster UI data shared by every character, which cannot survive skills that diffe
 earn experience from the slot they sit in.
 
 `SkillsC` rides the existing opaque `state` blob into the roster, so `ROSTER_VERSION` (3) is
-untouched. `persist.VERSION` goes 2 to 3 with a read-time upgrade that seeds `bar` from the old
-global setting and grants every skill the character's level already qualifies for.
+untouched. `persist.VERSION` also stays at 2: `loadInto` returns false on any version mismatch and
+there is no migration path (`persist.ts:107`), so bumping it would silently delete every existing
+character. Instead `skills?: SkillsC` is added as an **optional** field, exactly the pattern
+`stash`, `progress` and `shards` already use, and `restore` fills it in for a save written without
+one — seeding `bar` from the old global setting and granting every skill the level qualifies for.
+Unlock is derived from level anyway, so an absent field is not missing data.
 
 Content gains three fields per `SkillDef` (`content-schema`, validated at module load like the rest):
 
@@ -132,7 +136,8 @@ New pins:
   renamed skill or a new class cannot leave a hole;
 - `maxGemLevel` at character 1, 20 and 100;
 - award split across 1, 2 and 5 occupied slots, including the truncation;
-- the `persist.VERSION` 2 to 3 upgrade: bar seeded, gems granted, nothing lost;
+- a save written without `skills` restores with the bar seeded and the gems granted, and no
+  existing character is dropped;
 - `balance.test.ts` re-measured, with gem 1 and gem 20 both inside their bands;
 - golden replay checksums unchanged in shape (they will differ in value; regenerate deliberately and
   say so in the commit).
