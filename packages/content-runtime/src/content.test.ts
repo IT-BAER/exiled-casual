@@ -313,3 +313,130 @@ describe("DEFAULT_ATTACK_BY_CLASS", () => {
     }
   });
 });
+
+describe("skill unlocks and growth", () => {
+  const UNLOCK: Record<string, number> = {
+    "skill.strike.v1": 1,
+    "skill.snap_shot.v1": 1,
+    "skill.ember_spark.v1": 1,
+    "skill.ember_bolt.v1": 1,
+    "skill.blink.v1": 4,
+    "skill.cinder_ground.v1": 8,
+    "skill.town_portal.v1": 10,
+  };
+
+  it("pins the unlock level of every skill, with no skill missing from the table", () => {
+    expect(new Set(SKILLS.keys())).toEqual(new Set(Object.keys(UNLOCK)));
+    for (const [id, level] of Object.entries(UNLOCK)) {
+      expect(SKILLS.get(id)!.unlockLevel, id).toBe(level);
+    }
+  });
+
+  it("every default attack is available at character level 1", () => {
+    for (const id of Object.values(DEFAULT_ATTACK_BY_CLASS)) {
+      expect(SKILLS.get(id)!.unlockLevel, id).toBe(1);
+    }
+  });
+
+  it("every skill is authored classless until the class kits land", () => {
+    for (const [id, def] of SKILLS) {
+      expect(def.classId, id).toBeUndefined();
+    }
+  });
+
+  it("every skill grows damage and mana, mana never faster than damage", () => {
+    for (const [id, def] of SKILLS) {
+      expect(def.growth.perLevel.damagePct, id).toBe(6);
+      expect(def.growth.perLevel.manaPct, id).toBe(4);
+    }
+  });
+
+  // Every authored gem number, exact: the own scalar's field and perMille, and
+  // each breakpoint's atLevel plus its exact patch key/value. A typo anywhere in
+  // this table (Snap Shot's gem-15 copied from Ember Bolt's 3, Cinder Ground's
+  // perMille off by a zero) fails right here instead of validating clean and
+  // growing the wrong number at runtime.
+  const GEM_NUMBERS: Record<
+    string,
+    { own?: { field: string; perMille: number }; breakpoints: { atLevel: number; patch: Record<string, number> }[] }
+  > = {
+    "skill.strike.v1": {
+      own: { field: "reachFixed", perMille: 15 },
+      breakpoints: [
+        { atLevel: 5, patch: { arcDegrees: 200 } },
+        { atLevel: 15, patch: { arcDegrees: 360 } },
+      ],
+    },
+    "skill.snap_shot.v1": {
+      own: { field: "maxRangeFixed", perMille: 20 },
+      breakpoints: [
+        { atLevel: 5, patch: { pierceCount: 1 } },
+        { atLevel: 15, patch: { pierceCount: 2 } },
+      ],
+    },
+    "skill.ember_spark.v1": {
+      own: { field: "maxRangeFixed", perMille: 20 },
+      breakpoints: [
+        { atLevel: 5, patch: { pierceCount: 1 } },
+        { atLevel: 15, patch: { pierceCount: 2 } },
+      ],
+    },
+    "skill.ember_bolt.v1": {
+      own: { field: "maxRangeFixed", perMille: 20 },
+      breakpoints: [
+        { atLevel: 5, patch: { pierceCount: 1 } },
+        { atLevel: 15, patch: { pierceCount: 3 } },
+      ],
+    },
+    "skill.blink.v1": {
+      own: { field: "distanceFixed", perMille: 20 },
+      breakpoints: [],
+    },
+    "skill.cinder_ground.v1": {
+      own: { field: "durationTicks", perMille: 25 },
+      breakpoints: [
+        { atLevel: 5, patch: { radiusFixed: fp(3.5) } },
+        { atLevel: 15, patch: { radiusFixed: fp(4.5) } },
+      ],
+    },
+    "skill.town_portal.v1": { breakpoints: [] },
+  };
+
+  it("pins every authored own-scalar and breakpoint number exactly", () => {
+    expect(new Set(Object.keys(GEM_NUMBERS))).toEqual(new Set(SKILLS.keys()));
+    for (const [id, expected] of Object.entries(GEM_NUMBERS)) {
+      const growth = SKILLS.get(id)!.growth;
+      if (expected.own) {
+        expect(growth.perLevel.own, id).toEqual(expected.own);
+      } else {
+        expect(growth.perLevel.own, id).toBeUndefined();
+      }
+      expect(growth.breakpoints.length, id).toBe(expected.breakpoints.length);
+      expected.breakpoints.forEach((bp, i) => {
+        expect(growth.breakpoints[i]!.atLevel, `${id}[${i}].atLevel`).toBe(bp.atLevel);
+        expect(growth.breakpoints[i]!.patch, `${id}[${i}].patch`).toEqual(bp.patch);
+      });
+    }
+  });
+
+  it("every breakpoint names a top-level key of its own first effect", () => {
+    for (const [id, def] of SKILLS) {
+      const first = def.effects[0]! as unknown as Record<string, unknown>;
+      for (const bp of def.growth.breakpoints) {
+        for (const key of Object.keys(bp.patch)) {
+          expect(Object.hasOwn(first, key), `${id}: ${key}`).toBe(true);
+        }
+      }
+    }
+  });
+
+  it("every authored own-scalar names a field its own first effect actually has", () => {
+    for (const [id, def] of SKILLS) {
+      const own = def.growth.perLevel.own;
+      if (!own) continue;
+      const first = def.effects[0]! as unknown as Record<string, unknown>;
+      expect(Object.hasOwn(first, own.field), `${id}: ${own.field}`).toBe(true);
+      expect(own.perMille, id).toBeGreaterThan(0);
+    }
+  });
+});

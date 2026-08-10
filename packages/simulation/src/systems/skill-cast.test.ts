@@ -13,6 +13,8 @@ const EMBER_BOLT: SkillDef = {
   name: "Ember Bolt",
   manaCostFixed: fp(8),   // 8000
   cooldownTicks: 6,
+  unlockLevel: 1,
+  growth: { perLevel: { damagePct: 6, manaPct: 4 }, breakpoints: [] },
   effects: [{
     type: "spawnProjectile",
     speedPerSecFixed: fp(12),  // 12000
@@ -27,6 +29,8 @@ const CINDER_GROUND: SkillDef = {
   name: "Cinder Ground",
   manaCostFixed: fp(20),
   cooldownTicks: 30,
+  unlockLevel: 1,
+  growth: { perLevel: { damagePct: 6, manaPct: 4 }, breakpoints: [] },
   effects: [{
     type: "spawnGroundArea",
     radiusFixed: fp(2.5),
@@ -40,6 +44,8 @@ const BLINK: SkillDef = {
   name: "Blink",
   manaCostFixed: fp(15),
   cooldownTicks: 90,
+  unlockLevel: 1,
+  growth: { perLevel: { damagePct: 6, manaPct: 4 }, breakpoints: [] },
   effects: [{ type: "teleport", distanceFixed: fp(5) }],
 };
 
@@ -56,6 +62,8 @@ const CLEAVE: SkillDef = {
   name: "Cleave",
   manaCostFixed: 0,
   cooldownTicks: 0,
+  unlockLevel: 1,
+  growth: { perLevel: { damagePct: 6, manaPct: 4 }, breakpoints: [] },
   effects: [{
     type: "meleeStrike",
     reachFixed: fp(2),

@@ -1,6 +1,20 @@
 import { fp } from "@exiled/fixed-point";
 import { validateSkillDef, type SkillDef } from "@exiled/content-schema";
 
+/*
+ * Every skill carries an unlock level and a growth block (docs/superpowers/specs/
+ * 2026-08-10-skill-acquisition-design.md). Unlock levels are chosen so a
+ * character has a kit inside the first hour and the rest of the climb is gem
+ * levels rather than new icons.
+ *
+ * `own` is the ONE authored scalar a level grows beyond damage and mana, and no
+ * breakpoint may patch the same field (the schema refuses it) because the patch
+ * lands after the growth and would wipe it.
+ *
+ * Blink and Portal have no breakpoints on purpose: PoE1 gives its movement and
+ * utility gems almost nothing per level either, and inventing two behaviour
+ * changes for a teleport would be a rule nobody asked for.
+ */
 const SKILL_DEFS: SkillDef[] = [
   {
     id: "skill.ember_bolt.v1",
@@ -19,6 +33,14 @@ const SKILL_DEFS: SkillDef[] = [
     cooldownTicks: 30,
     castTicks: 9,
     critChancePct: 7,
+    unlockLevel: 1,
+    growth: {
+      perLevel: { damagePct: 6, manaPct: 4, own: { field: "maxRangeFixed", perMille: 20 } },
+      breakpoints: [
+        { atLevel: 5, text: "Pierces one enemy", patch: { pierceCount: 1 } },
+        { atLevel: 15, text: "Pierces three enemies", patch: { pierceCount: 3 } },
+      ],
+    },
     effects: [
       {
         type: "spawnProjectile",
@@ -26,6 +48,7 @@ const SKILL_DEFS: SkillDef[] = [
         radiusFixed: fp(0.4),
         maxRangeFixed: fp(20),
         damage: { type: "fire", amountFixed: fp(36) },
+        pierceCount: 0,
       },
     ],
   },
@@ -36,6 +59,14 @@ const SKILL_DEFS: SkillDef[] = [
     manaCostFixed: fp(20),
     cooldownTicks: 90,
     castTicks: 9,
+    unlockLevel: 8,
+    growth: {
+      perLevel: { damagePct: 6, manaPct: 4, own: { field: "durationTicks", perMille: 25 } },
+      breakpoints: [
+        { atLevel: 5, text: "Scorches a wider patch", patch: { radiusFixed: fp(3.5) } },
+        { atLevel: 15, text: "Scorches a far wider patch", patch: { radiusFixed: fp(4.5) } },
+      ],
+    },
     effects: [
       {
         type: "spawnGroundArea",
@@ -75,6 +106,14 @@ const SKILL_DEFS: SkillDef[] = [
     cooldownTicks: 15,
     castTicks: 7,
     critChancePct: 5,
+    unlockLevel: 1,
+    growth: {
+      perLevel: { damagePct: 6, manaPct: 4, own: { field: "reachFixed", perMille: 15 } },
+      breakpoints: [
+        { atLevel: 5, text: "Swings a wider arc", patch: { arcDegrees: 200 } },
+        { atLevel: 15, text: "Swings all the way around you", patch: { arcDegrees: 360 } },
+      ],
+    },
     effects: [
       {
         type: "meleeStrike",
@@ -96,6 +135,14 @@ const SKILL_DEFS: SkillDef[] = [
     cooldownTicks: 15,
     castTicks: 7,
     critChancePct: 5,
+    unlockLevel: 1,
+    growth: {
+      perLevel: { damagePct: 6, manaPct: 4, own: { field: "maxRangeFixed", perMille: 20 } },
+      breakpoints: [
+        { atLevel: 5, text: "Pierces one enemy", patch: { pierceCount: 1 } },
+        { atLevel: 15, text: "Pierces two enemies", patch: { pierceCount: 2 } },
+      ],
+    },
     effects: [
       {
         type: "spawnProjectile",
@@ -104,6 +151,7 @@ const SKILL_DEFS: SkillDef[] = [
         radiusFixed: fp(0.3),
         maxRangeFixed: fp(14),
         damage: { type: "physical", amountFixed: fp(11) },
+        pierceCount: 0,
       },
     ],
   },
@@ -115,6 +163,14 @@ const SKILL_DEFS: SkillDef[] = [
     cooldownTicks: 15,
     castTicks: 7,
     critChancePct: 5,
+    unlockLevel: 1,
+    growth: {
+      perLevel: { damagePct: 6, manaPct: 4, own: { field: "maxRangeFixed", perMille: 20 } },
+      breakpoints: [
+        { atLevel: 5, text: "Pierces one enemy", patch: { pierceCount: 1 } },
+        { atLevel: 15, text: "Pierces two enemies", patch: { pierceCount: 2 } },
+      ],
+    },
     effects: [
       {
         type: "spawnProjectile",
@@ -122,6 +178,7 @@ const SKILL_DEFS: SkillDef[] = [
         radiusFixed: fp(0.35),
         maxRangeFixed: fp(16),
         damage: { type: "fire", amountFixed: fp(10) },
+        pierceCount: 0,
       },
     ],
   },
@@ -142,6 +199,8 @@ const SKILL_DEFS: SkillDef[] = [
     manaCostFixed: 0,
     cooldownTicks: 300,
     castTicks: 60,
+    unlockLevel: 10,
+    growth: { perLevel: { damagePct: 6, manaPct: 4 }, breakpoints: [] },
     effects: [{ type: "openPortal" }],
   },
   {
@@ -150,6 +209,11 @@ const SKILL_DEFS: SkillDef[] = [
     description: "Teleport a short distance. Shares a cooldown with other movement skills.",
     manaCostFixed: fp(15),
     cooldownTicks: 150,
+    unlockLevel: 4,
+    growth: {
+      perLevel: { damagePct: 6, manaPct: 4, own: { field: "distanceFixed", perMille: 20 } },
+      breakpoints: [],
+    },
     effects: [{ type: "teleport", distanceFixed: fp(5) }],
   },
 ];
