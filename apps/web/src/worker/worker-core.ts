@@ -11,7 +11,7 @@ import {
   IndexedDbKv,
   MemoryKv,
 } from "@exiled/simulation";
-import type { Simulation, World, Entity, Position, SessionC, InventoryC, KvStore } from "@exiled/simulation";
+import type { Simulation, World, Entity, Position, SessionC, InventoryC, SkillsC, KvStore } from "@exiled/simulation";
 import type { Intent, Snapshot, SpawnKind, AreaKind } from "@exiled/protocol";
 import { CONTENT_VERSION } from "@exiled/content-runtime";
 import { generateArea, type AreaLayout } from "@exiled/mapgen";
@@ -146,11 +146,22 @@ export class WorkerCore {
     const s = this.world.get<SessionC>(e, "session");
     const inv = this.world.get<InventoryC>(e, "inventory");
     const stash = this.world.get<InventoryC>(e, "stash");
+    const skills = this.world.get<SkillsC>(e, "skills");
     // Positions, not just counts: rearranging the stash changes nothing about how
     // many items it holds, and a count-only fingerprint would never save the move.
     const cells = (g: InventoryC | undefined) =>
       (g?.items ?? []).reduce((a, p) => a + p.x * 31 + p.y * 7 + (p.count ?? 1), g?.items.length ?? 0);
-    return `${s?.completedNodes.join(",") ?? ""}|${cells(inv)}|${cells(stash)}`;
+    // The bar and its reseed flag are durable choices, folded in the same way a
+    // grid move is — a reorder with nothing picked up must still trip a save.
+    // Gem level/xp is deliberately left OUT: it changes on every kill (that's
+    // the whole point of gem xp), so folding it in would turn "persist on the
+    // durable stuff" into "persist every tick", which is the 30x/second write
+    // this signature exists to avoid. A dropped in-flight gem tick is
+    // re-earnable from the next kill the same way any other un-persisted
+    // change since the last save is; a dropped bar swap or reseed stamp is not
+    // re-derivable from anything and has to be caught here instead.
+    const barSig = skills?.bar.join(",") ?? "";
+    return `${s?.completedNodes.join(",") ?? ""}|${cells(inv)}|${cells(stash)}|${barSig}|${skills?.attackReseeded ? 1 : 0}`;
   }
 
   /**

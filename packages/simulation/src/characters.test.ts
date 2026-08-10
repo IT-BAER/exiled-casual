@@ -238,6 +238,11 @@ describe("loadCharacterInto / saveCharacterTo", () => {
     const kv = await withOneCharacter("class.ironsworn");
     const world = fresh();
     await loadCharacterInto(kv, world, "vess");
+    // Level 8, so skill.cinder_ground.v1 is legitimately unlocked: restore() now
+    // runs the whole bar through the same unlock filter setSkillBar does, so a
+    // locked (or still-START_LEVEL) choice here would be indistinguishable from
+    // the hostile-save case this fix is guarding against.
+    set<ProgressC>(world, "progress", { ...get<ProgressC>(world, "progress"), level: 8 });
     const skills = get<SkillsC>(world, "skills");
     const customBar = [...skills.bar];
     // Not any class's default attack — a real, deliberate choice.

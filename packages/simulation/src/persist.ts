@@ -92,6 +92,26 @@ export function normalizeBar(raw: unknown): (string | null)[] {
 }
 
 /**
+ * A bar's ids trimmed to what `charLevel`/`classId` actually has unlocked, so
+ * neither a hand-edited save nor a client's `setSkillBar` message can leave a
+ * locked skill sitting in a socket with no gem behind it. `null` and
+ * `MOVE_SOCKET` pass through untouched since neither is a skill. Shared by
+ * the load path (`restore`, below) and the live intent (`systems/skills.ts`)
+ * so the two provably can't drift apart.
+ */
+export function filterUnlockedBar(
+  bar: (string | null)[],
+  charLevel: number,
+  classId: string,
+): (string | null)[] {
+  return bar.map((id) => {
+    if (id === null || id === MOVE_SOCKET) return id;
+    const def = SKILLS.get(id);
+    return def && isUnlocked(def, charLevel, classId) ? id : null;
+  });
+}
+
+/**
  * A saved gem map, proven rather than trusted: every level and xp is a clamped,
  * finite integer, and a skill id content no longer defines is dropped rather
  * than carried forever as a phantom gem. `cap` is `maxGemLevel(character
@@ -217,9 +237,13 @@ export function restore(world: World, state: PersistedState): void {
   const cap = maxGemLevel(progress.level);
   const saved = state.skills;
   if (saved) {
+    // A hand-edited (or pre-Task-6) save can put a locked id in a socket the
+    // same way it can put an over-level gem in the map: filtered on read, not
+    // just when the live `setSkillBar` intent runs.
+    const bar = filterUnlockedBar(normalizeBar(saved.bar), progress.level, safe.classId ?? "");
     world.set<SkillsC>(e, "skills", {
       gems: sanitizeGems(saved.gems, cap),
-      bar: normalizeBar(saved.bar),
+      bar,
       // Absent on every save written before this flag existed, which is
       // exactly the save `reseedDefaultAttack` still has a bug left to fix.
       ...(saved.attackReseeded ? { attackReseeded: true } : {}),

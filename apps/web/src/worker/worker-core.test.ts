@@ -6,6 +6,7 @@ import { generateArea } from "@exiled/mapgen";
 import { offerWaystones, mapSeedFor, WAYSTONE_OFFER_COUNT } from "@exiled/rules";
 import { CONTENT_VERSION } from "@exiled/content-runtime";
 import { grammarForNode } from "@exiled/simulation";
+import { MemoryKv } from "@exiled/persistence";
 
 function monsters(core: WorkerCore) {
   return core.snapshot()!.entities.filter((e) => e.kind === "monster");
@@ -125,5 +126,22 @@ describe("WorkerCore", () => {
     expect(grammar).toBe("coast"); // The Wrackline is a beach, not a chunk route
     expect(core.getAreaLayout().hash).toBe(generateArea(mapSeed, CONTENT_VERSION, grammar).hash);
     expect(core.getAreaLayout().hash).not.toBe(generateArea(mapSeed, CONTENT_VERSION, "loop").hash);
+  });
+
+  // Fix round 1, finding 1: a bar-only change used to be invisible to the
+  // durable-state fingerprint, so quitting right after a reorder (no kill, no
+  // pickup) silently discarded the swap.
+  it("a bar swap alone trips a save, with nothing picked up or killed", () => {
+    const kv = new MemoryKv();
+    const core = new WorkerCore(42, kv);
+    core.advance(34); // let the fingerprint settle past construction
+    const writesBefore = kv.writes;
+
+    const bar = new Array(8).fill(null) as (string | null)[];
+    bar[0] = "skill.ember_bolt.v1"; // unlocked at level 1, so it isn't filtered out
+    core.pushIntent({ kind: "setSkillBar", bar });
+    core.advance(34);
+
+    expect(kv.writes).toBeGreaterThan(writesBefore);
   });
 });

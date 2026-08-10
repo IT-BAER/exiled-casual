@@ -104,11 +104,13 @@ export interface SkillsC {
   bar: (string | null)[];
   /**
    * Provenance for the mouse-right default-attack repair (`reseedDefaultAttack`
-   * in persist.ts), not sim math the checksum needs to see. True once the
-   * class's own attack has been stamped into the mouse slot; absent/false on
-   * every save written before that flag existed, which is exactly the save
-   * that can still hold the pre-fix bug. Once true the slot is the player's to
-   * set via `setSkillBar`, including a deliberate cross-class basic attack.
+   * in persist.ts). Rides in the checksum like every other component field
+   * (`checksumWorld` hashes every key), but carries no gameplay meaning of its
+   * own. True once the class's own attack has been stamped into the mouse
+   * slot; absent/false on every save written before that flag existed, which
+   * is exactly the save that can still hold the pre-fix bug. Once true the
+   * slot is the player's to set via `setSkillBar`, including a deliberate
+   * cross-class basic attack.
    */
   attackReseeded?: boolean;
 }

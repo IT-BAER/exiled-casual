@@ -1,8 +1,5 @@
-import { isUnlocked } from "@exiled/rules";
-import { SKILLS } from "@exiled/content-runtime";
-import { MOVE_SOCKET } from "@exiled/protocol";
 import { Simulation } from "../loop";
-import { normalizeBar } from "../persist";
+import { normalizeBar, filterUnlockedBar } from "../persist";
 import type { ProgressC, SessionC, SkillsC } from "../components";
 
 /**
@@ -13,21 +10,18 @@ import type { ProgressC, SessionC, SkillsC } from "../components";
  */
 export function registerSkillsSystem(sim: Simulation): void {
   sim.register("skills", (world, _tick, commands) => {
+    const e = world.query("session")[0];
+    if (e === undefined) return;
+    const skills = world.get<SkillsC>(e, "skills");
+    if (!skills) return;
+    const level = world.get<ProgressC>(e, "progress")?.level ?? 1;
+    const classId = world.get<SessionC>(e, "session")?.classId ?? "";
     for (const cmd of commands) {
       if (cmd.type !== "setSkillBar" || !cmd.bar) continue;
-      const e = world.query("session")[0];
-      if (e === undefined) continue;
-      const skills = world.get<SkillsC>(e, "skills");
-      if (!skills) continue;
-      const level = world.get<ProgressC>(e, "progress")?.level ?? 1;
-      const classId = world.get<SessionC>(e, "session")?.classId ?? "";
       // The client's list is a request, not a fact: an id this character has not
-      // unlocked empties its socket rather than being honoured.
-      const bar = normalizeBar(cmd.bar).map((id) => {
-        if (id === null || id === MOVE_SOCKET) return id;
-        const def = SKILLS.get(id);
-        return def && isUnlocked(def, level, classId) ? id : null;
-      });
+      // unlocked empties its socket rather than being honoured. Shared with the
+      // load path (persist.ts's restore()) so the two can never drift.
+      const bar = filterUnlockedBar(normalizeBar(cmd.bar), level, classId);
       world.set<SkillsC>(e, "skills", { ...skills, bar });
     }
   });

@@ -206,6 +206,30 @@ describe("skills persistence", () => {
     }
   });
 
+  // Fix round 1, finding 2: sanitizeGems hardens gems on read but the bar rode
+  // through normalizeBar alone (shape/length/dedup, no unlock check), so a
+  // hand-edited save could park a locked skill in a socket with no gem behind
+  // it. Breaks if restore() stops running the bar through the same unlock
+  // filter setSkillBar applies live.
+  it("restore strips a hand-edited locked skill out of the bar rather than leaving it socketed", () => {
+    const { world } = createCombatSim(7, { area: "hideout" });
+    const base = snapshot(world)!;
+    const bar = defaultBar("");
+    bar[0] = "skill.cinder_ground.v1"; // unlocks at level 8; hand-edited into a level-1 save
+    const state: PersistedState = {
+      ...base,
+      progress: { level: 1, xp: 0, gold: 0 },
+      skills: { gems: {}, bar },
+    };
+
+    const fresh = createCombatSim(9, { area: "hideout" }).world;
+    restore(fresh, state);
+
+    const skills = fresh.get<SkillsC>(sessionEntity(fresh), "skills")!;
+    expect(skills.bar[0]).toBeNull();
+    expect(Object.hasOwn(skills.gems, "skill.cinder_ground.v1")).toBe(false);
+  });
+
   it("persist.VERSION is still 2, so no existing character is dropped", () => {
     expect(VERSION).toBe(2);
   });
