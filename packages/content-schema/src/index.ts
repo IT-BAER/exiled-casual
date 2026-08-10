@@ -51,6 +51,13 @@ export type EffectNode =
       radiusFixed: Fixed;
       maxRangeFixed: Fixed;
       damage: DamageSpec;
+      /**
+       * Extra bodies the bolt passes through before it is spent. Absent or 0 is
+       * PoE's default: the first target stops it. This is the one new sim
+       * mechanism gem breakpoints bring, and it is a field rather than a flag so
+       * one breakpoint can widen what an earlier one opened.
+       */
+      pierceCount?: number;
     }
   | {
       type: "spawnGroundArea";
@@ -79,11 +86,57 @@ export type EffectNode =
    */
   | { type: "openPortal" };
 
+/**
+ * Fields a skill's authored per-level scalar may grow. Deliberately a closed
+ * list rather than `string`: an author's typo would otherwise be a scalar that
+ * silently grows nothing, and no test can see the difference between that and a
+ * skill whose growth is genuinely small.
+ */
+export const GROWTH_FIELDS = [
+  "radiusFixed", "durationTicks", "distanceFixed", "reachFixed", "maxRangeFixed",
+] as const;
+export type GrowthField = (typeof GROWTH_FIELDS)[number];
+
+/**
+ * A behaviour change at a gem level, authored as data.
+ *
+ * `patch` is merged SHALLOWLY over `effects[0]`, so it may only set top-level
+ * scalar keys. A nested patch would replace a whole sub-object and force an
+ * author to repeat five fields to change one; the validator refuses it rather
+ * than letting that become a habit.
+ */
+export interface SkillBreakpoint {
+  atLevel: number;
+  /** One line, shown in the tooltip and greyed out until it is reached. */
+  text: string;
+  patch: Record<string, number>;
+}
+
+export interface SkillGrowth {
+  perLevel: {
+    /** Compounding, applied per level above 1, to every hit and ailment number. */
+    damagePct: number;
+    /** Compounding, applied per level above 1, to manaCostFixed. */
+    manaPct: number;
+    /** One authored scalar, in per-mille of the def's own value, added per level above 1. */
+    own?: { field: GrowthField; perMille: number };
+  };
+  /** At most two, ascending by atLevel. Zero is legal: not every skill earns one. */
+  breakpoints: SkillBreakpoint[];
+}
+
 export interface SkillDef {
   id: string;
   name: string;
   /** Prose for the tooltip's white block. Authored, never derived from effects. */
   description?: string;
+  /** Absent means every class may use it. Enforced from day one; every skill
+   *  authored today is classless (see docs/superpowers/specs §5). */
+  classId?: string;
+  /** Character level that grants this skill. Unlock is DERIVED from the level on
+   *  every load, never stored, so a save cannot desync into a missing skill. */
+  unlockLevel: number;
+  growth: SkillGrowth;
   manaCostFixed: Fixed;
   cooldownTicks: number;
   /** Post-cast movement recovery, in ticks. Omitted/0 = instant, no slow. */
@@ -256,6 +309,10 @@ function validateEffectNode(v: unknown, idx: number, errors: string[]): boolean 
       ok = false;
     }
     if (!validateDamageSpec(v["damage"], `${path}.damage`, errors)) ok = false;
+    if (v["pierceCount"] !== undefined && !isNonNegInt(v["pierceCount"])) {
+      errors.push(`${path}.pierceCount: must be a non-negative integer when present`);
+      ok = false;
+    }
   } else if (type === "spawnGroundArea") {
     if (!isNonNegInt(v["radiusFixed"])) {
       errors.push(`${path}.radiusFixed: must be a non-negative integer`);
@@ -291,6 +348,82 @@ function validateEffectNode(v: unknown, idx: number, errors: string[]): boolean 
   return ok;
 }
 
+function validateSkillGrowth(v: unknown, errors: string[]): void {
+  if (!isObj(v)) {
+    errors.push("growth: required object");
+    return;
+  }
+  const per = v["perLevel"];
+  if (!isObj(per)) {
+    errors.push("growth.perLevel: required object");
+    return;
+  }
+  for (const f of ["damagePct", "manaPct"] as const) {
+    if (!isNonNegInt(per[f])) errors.push(`growth.perLevel.${f}: must be a non-negative integer`);
+  }
+  let ownField: string | undefined;
+  const own = per["own"];
+  if (own !== undefined) {
+    if (!isObj(own)) {
+      errors.push("growth.perLevel.own: must be an object when present");
+    } else {
+      const field = own["field"];
+      if (typeof field !== "string" || !(GROWTH_FIELDS as readonly string[]).includes(field)) {
+        errors.push(`growth.perLevel.own.field: must be one of ${GROWTH_FIELDS.join(", ")}`);
+      } else {
+        ownField = field;
+      }
+      if (!isNonNegInt(own["perMille"])) {
+        errors.push("growth.perLevel.own.perMille: must be a non-negative integer");
+      }
+    }
+  }
+  const bps = v["breakpoints"];
+  if (!Array.isArray(bps)) {
+    errors.push("growth.breakpoints: must be an array");
+    return;
+  }
+  if (bps.length > 2) errors.push("growth.breakpoints: at most two");
+  let prev = 0;
+  for (let i = 0; i < bps.length; i++) {
+    const bp = bps[i];
+    const path = `growth.breakpoints[${i}]`;
+    if (!isObj(bp)) {
+      errors.push(`${path}: must be an object`);
+      continue;
+    }
+    const at = bp["atLevel"];
+    if (!isPosInt(at)) {
+      errors.push(`${path}.atLevel: must be a positive integer`);
+    } else if ((at as number) <= prev) {
+      errors.push(`${path}.atLevel: must be greater than the previous breakpoint`);
+    } else {
+      prev = at as number;
+    }
+    if (typeof bp["text"] !== "string" || bp["text"].length === 0) {
+      errors.push(`${path}.text: must be a non-empty string`);
+    }
+    const patch = bp["patch"];
+    if (!isObj(patch) || Object.keys(patch).length === 0) {
+      errors.push(`${path}.patch: must be a non-empty object`);
+      continue;
+    }
+    for (const [k, pv] of Object.entries(patch)) {
+      // Shallow merge over effects[0]: only top-level scalars, or the patch
+      // silently replaces a whole sub-object.
+      if (typeof pv !== "number" || !Number.isInteger(pv)) {
+        errors.push(`${path}.patch.${k}: must be an integer scalar`);
+      }
+      if (k === "type") errors.push(`${path}.patch.type: a breakpoint may not change the effect type`);
+      if (ownField !== undefined && k === ownField) {
+        errors.push(
+          `${path}.patch.${k}: growth.perLevel.own already grows this field; the patch would wipe it`,
+        );
+      }
+    }
+  }
+}
+
 export function validateSkillDef(v: unknown): ValidationResult {
   const errors: string[] = [];
   if (!isObj(v)) {
@@ -317,6 +450,13 @@ export function validateSkillDef(v: unknown): ValidationResult {
   if (v["critChancePct"] !== undefined && !isNonNegInt(v["critChancePct"])) {
     errors.push("critChancePct: must be a non-negative integer");
   }
+  if (!isPosInt(v["unlockLevel"])) {
+    errors.push("unlockLevel: must be a positive integer");
+  }
+  if (v["classId"] !== undefined && (typeof v["classId"] !== "string" || v["classId"].length === 0)) {
+    errors.push("classId: must be a non-empty string when present");
+  }
+  validateSkillGrowth(v["growth"], errors);
   const effects = v["effects"];
   if (!Array.isArray(effects) || effects.length === 0) {
     errors.push("effects: must be a non-empty array");

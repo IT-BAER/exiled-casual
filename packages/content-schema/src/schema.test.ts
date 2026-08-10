@@ -12,6 +12,8 @@ import {
 const validSkill: SkillDef = {
   id: "skill.ember_bolt.v1",
   name: "Ember Bolt",
+  unlockLevel: 1,
+  growth: { perLevel: { damagePct: 6, manaPct: 4 }, breakpoints: [] },
   manaCostFixed: fp(8),
   cooldownTicks: 6,
   effects: [
@@ -455,5 +457,121 @@ describe("validateMonsterDef archetypes", () => {
     });
     expect(r.ok).toBe(false);
     expect(r.errors.join(" ")).toMatch(/heavy/);
+  });
+});
+
+describe("validateSkillDef: gem growth", () => {
+  const base = {
+    id: "skill.test.v1",
+    name: "Test",
+    manaCostFixed: 0,
+    cooldownTicks: 10,
+    unlockLevel: 1,
+    growth: { perLevel: { damagePct: 6, manaPct: 4 }, breakpoints: [] },
+    effects: [
+      {
+        type: "spawnProjectile",
+        speedPerSecFixed: 1000,
+        radiusFixed: 300,
+        maxRangeFixed: 14000,
+        damage: { type: "physical", amountFixed: 11000 },
+      },
+    ],
+  };
+
+  it("accepts a minimal growth block", () => {
+    expect(validateSkillDef(base).ok).toBe(true);
+  });
+
+  it("requires unlockLevel to be a positive integer", () => {
+    expect(validateSkillDef({ ...base, unlockLevel: 0 }).ok).toBe(false);
+    expect(validateSkillDef({ ...base, unlockLevel: 1.5 }).ok).toBe(false);
+    const r = validateSkillDef({ ...base, unlockLevel: undefined });
+    expect(r.ok).toBe(false);
+    expect(r.errors.join(" ")).toContain("unlockLevel");
+  });
+
+  it("requires growth and its per-level percentages", () => {
+    expect(validateSkillDef({ ...base, growth: undefined }).ok).toBe(false);
+    expect(validateSkillDef({
+      ...base, growth: { perLevel: { damagePct: -1, manaPct: 4 }, breakpoints: [] },
+    }).ok).toBe(false);
+  });
+
+  it("accepts an authored own-scalar and rejects an unknown field", () => {
+    expect(validateSkillDef({
+      ...base,
+      growth: {
+        perLevel: { damagePct: 6, manaPct: 4, own: { field: "maxRangeFixed", perMille: 20 } },
+        breakpoints: [],
+      },
+    }).ok).toBe(true);
+    expect(validateSkillDef({
+      ...base,
+      growth: {
+        perLevel: { damagePct: 6, manaPct: 4, own: { field: "notAField", perMille: 20 } },
+        breakpoints: [],
+      },
+    }).ok).toBe(false);
+  });
+
+  it("allows at most two breakpoints, in ascending order", () => {
+    const bp = (atLevel: number) => ({ atLevel, text: "x", patch: { pierceCount: 1 } });
+    expect(validateSkillDef({
+      ...base, growth: { perLevel: { damagePct: 6, manaPct: 4 }, breakpoints: [bp(5), bp(15)] },
+    }).ok).toBe(true);
+    expect(validateSkillDef({
+      ...base, growth: { perLevel: { damagePct: 6, manaPct: 4 }, breakpoints: [bp(5), bp(15), bp(18)] },
+    }).ok).toBe(false);
+    expect(validateSkillDef({
+      ...base, growth: { perLevel: { damagePct: 6, manaPct: 4 }, breakpoints: [bp(15), bp(5)] },
+    }).ok).toBe(false);
+  });
+
+  it("rejects a breakpoint patch that is not a top-level scalar", () => {
+    const r = validateSkillDef({
+      ...base,
+      growth: {
+        perLevel: { damagePct: 6, manaPct: 4 },
+        breakpoints: [{ atLevel: 5, text: "x", patch: { damage: { type: "fire", amountFixed: 1 } } }],
+      },
+    });
+    expect(r.ok).toBe(false);
+    expect(r.errors.join(" ")).toContain("scalar");
+  });
+
+  it("rejects a breakpoint that patches the field growth already grows", () => {
+    const r = validateSkillDef({
+      ...base,
+      growth: {
+        perLevel: { damagePct: 6, manaPct: 4, own: { field: "maxRangeFixed", perMille: 20 } },
+        breakpoints: [{ atLevel: 5, text: "x", patch: { maxRangeFixed: 20000 } }],
+      },
+    });
+    expect(r.ok).toBe(false);
+    expect(r.errors.join(" ")).toContain("maxRangeFixed");
+  });
+
+  it("rejects a breakpoint patch keyed on `type`", () => {
+    expect(validateSkillDef({
+      ...base,
+      growth: {
+        perLevel: { damagePct: 6, manaPct: 4 },
+        breakpoints: [{ atLevel: 5, text: "x", patch: { type: "teleport" } }],
+      },
+    }).ok).toBe(false);
+  });
+
+  it("accepts pierceCount on a projectile and rejects a negative one", () => {
+    const withPierce = { ...base, effects: [{ ...base.effects[0], pierceCount: 2 }] };
+    expect(validateSkillDef(withPierce).ok).toBe(true);
+    const bad = { ...base, effects: [{ ...base.effects[0], pierceCount: -1 }] };
+    expect(validateSkillDef(bad).ok).toBe(false);
+  });
+
+  it("accepts an absent classId and rejects an empty one", () => {
+    expect(validateSkillDef(base).ok).toBe(true);
+    expect(validateSkillDef({ ...base, classId: "" }).ok).toBe(false);
+    expect(validateSkillDef({ ...base, classId: "class.stalker" }).ok).toBe(true);
   });
 });
