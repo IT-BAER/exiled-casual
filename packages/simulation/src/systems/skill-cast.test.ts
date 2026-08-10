@@ -5,7 +5,7 @@ import { registerSkillCast } from "./skill-cast";
 import { gridCollision } from "../collision";
 import { makeGrid } from "../test-grid";
 import type { SkillDef } from "@exiled/content-schema";
-import type { Position, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC, CastingC, OffenseC, Health } from "../components";
+import type { Position, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC, CastingC, OffenseC, Health, SessionC, SkillsC } from "../components";
 
 // Authored skill defs matching the contract tables exactly.
 const EMBER_BOLT: SkillDef = {
@@ -95,6 +95,28 @@ function makeCaster(sim: Simulation, mana = fp(60)) {
   sim.world.set<Cooldowns>(e, "cooldowns", {});
   return e;
 }
+
+/** A session entity carrying one gem at the given level, the fold's real input. */
+function makeSessionWithGem(sim: Simulation, skillId: string, level: number) {
+  const e = sim.world.create();
+  sim.world.set<SessionC>(e, "session", {
+    area: "hideout", atlasSeed: 0, mapSeed: 0, waystoneSeed: 0, areaTier: 0,
+    activeNodeId: "", completedNodes: [], portalsLeft: 0, mapOpen: 0, pendingArea: "",
+  });
+  sim.world.set<SkillsC>(e, "skills", { gems: { [skillId]: { level, xp: 0 } }, bar: [] });
+  return e;
+}
+
+/** Ember Bolt with pierce added as a gem-5 breakpoint, per the contract tables. */
+const PIERCE_BOLT: SkillDef = {
+  ...EMBER_BOLT,
+  id: "skill.test_pierce_bolt.v1",
+  effects: [{ ...EMBER_BOLT.effects[0]!, pierceCount: 0 } as SkillDef["effects"][0]],
+  growth: {
+    perLevel: { damagePct: 6, manaPct: 4 },
+    breakpoints: [{ atLevel: 5, text: "pierce", patch: { pierceCount: 1 } }],
+  },
+};
 
 function makeEnemyForCastTest(sim: Simulation, x: number, y: number) {
   const e = sim.world.create();
@@ -529,6 +551,86 @@ describe("registerSkillCast", () => {
       sim.world.set<Faction>(friend, "faction", { team: 0 });
       cleave(sim, caster, fp(5), 0);
       expect(sim.damageQueue).toEqual([]);
+    });
+  });
+
+  describe("gem levels fold into the cast", () => {
+    it("a gem 1 caster spawns exactly the projectile the def describes", () => {
+      // Existing behaviour, restated as a pin: without it, a bug in the fold that
+      // scales at gem 1 has nothing to fail against.
+      const sim = new Simulation();
+      registerSkillCast(sim, ALL_SKILLS);
+      makeSessionWithGem(sim, EMBER_BOLT.id, 1);
+      const caster = makeCaster(sim, fp(60));
+      sim.step([{
+        tick: 0, entity: caster, type: "useSkill",
+        skillId: EMBER_BOLT.id, data: { tx: fp(10), ty: 0 },
+      }]);
+
+      const proj = sim.world.get<ProjectileC>(sim.world.query("projectile")[0]!, "projectile")!;
+      expect(proj.damageAmount).toBe(fp(25));
+      expect(sim.world.get<Mana>(caster, "mana")!.mana).toBe(fp(60) - fp(8));
+    });
+
+    it("a gem 10 caster's bolt hits harder and costs more mana than a gem 1 one", () => {
+      // Set the session's SkillsC gem to level 10, cast, read the spawned
+      // ProjectileC.damageAmount and the mana actually spent. Assert both rose, and
+      // assert damage rose by MORE than mana in ratio.
+      const sim = new Simulation();
+      registerSkillCast(sim, ALL_SKILLS);
+      makeSessionWithGem(sim, EMBER_BOLT.id, 10);
+      const caster = makeCaster(sim, fp(60));
+      sim.step([{
+        tick: 0, entity: caster, type: "useSkill",
+        skillId: EMBER_BOLT.id, data: { tx: fp(10), ty: 0 },
+      }]);
+
+      const proj = sim.world.get<ProjectileC>(sim.world.query("projectile")[0]!, "projectile")!;
+      // +6%/level compounded over 9 steps: trunc(25000 * 1.06^9) = 42233.
+      expect(proj.damageAmount).toBe(42233);
+      const manaSpent = fp(60) - sim.world.get<Mana>(caster, "mana")!.mana;
+      // +4%/level compounded over 9 steps: trunc(8000 * 1.04^9) = 11381.
+      expect(manaSpent).toBe(11381);
+      expect(proj.damageAmount).toBeGreaterThan(fp(25));
+      expect(manaSpent).toBeGreaterThan(fp(8));
+      // Damage's ratio to base (42233/25000) beats mana's ratio to base
+      // (11381/8000), checked by cross-multiplication to stay integer.
+      expect(proj.damageAmount * fp(8)).toBeGreaterThan(manaSpent * fp(25));
+    });
+
+    it("a gem 5 caster's bolt pierces, a gem 4 caster's does not", () => {
+      // Assert ProjectileC.pierceLeft is 1 at gem 5 and undefined at gem 4. This is
+      // the breakpoint reaching the sim, which no rules-level test can prove.
+      const skills = new Map([[PIERCE_BOLT.id, PIERCE_BOLT]]);
+      const pierceLeftAt = (level: number): number | undefined => {
+        const sim = new Simulation();
+        registerSkillCast(sim, skills);
+        makeSessionWithGem(sim, PIERCE_BOLT.id, level);
+        const caster = makeCaster(sim, fp(60));
+        sim.step([{
+          tick: 0, entity: caster, type: "useSkill",
+          skillId: PIERCE_BOLT.id, data: { tx: fp(10), ty: 0 },
+        }]);
+        return sim.world.get<ProjectileC>(sim.world.query("projectile")[0]!, "projectile")!.pierceLeft;
+      };
+
+      expect(pierceLeftAt(5)).toBe(1);
+      expect(pierceLeftAt(4)).toBeUndefined();
+    });
+
+    it("a caster with no SkillsC casts at gem 1 rather than throwing", () => {
+      // Every legacy test world has no session and therefore no SkillsC.
+      const sim = new Simulation();
+      registerSkillCast(sim, ALL_SKILLS);
+      const caster = makeCaster(sim, fp(60));
+      expect(() => sim.step([{
+        tick: 0, entity: caster, type: "useSkill",
+        skillId: EMBER_BOLT.id, data: { tx: fp(10), ty: 0 },
+      }])).not.toThrow();
+
+      const proj = sim.world.get<ProjectileC>(sim.world.query("projectile")[0]!, "projectile")!;
+      expect(proj.damageAmount).toBe(fp(25));
+      expect(sim.world.get<Mana>(caster, "mana")!.mana).toBe(fp(60) - fp(8));
     });
   });
 

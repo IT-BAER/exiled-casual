@@ -193,6 +193,10 @@ export interface CastingC {
    *  as long as the gap the player sees rather than sprinting through the
    *  wind-up and waiting out the rest. */
   ticks?: number;
+  /** The level the cast was PAID at. Recorded rather than re-read on resolution:
+   *  a level-up landing inside a two-second Portal wind-up must not retroactively
+   *  change what that cast does, and must not change it back either. */
+  gemLevel?: number;
 }
 export interface MonsterC {
   defId: string;

@@ -1,12 +1,12 @@
 import { fpClamp, fpStepToward, isqrt } from "@exiled/fixed-point";
 import { createStream } from "../rng";
-import { scalePct } from "@exiled/rules";
+import { scalePct, effectiveSkill } from "@exiled/rules";
 import type { SkillDef } from "@exiled/content-schema";
 import { Simulation } from "../loop";
 import type { World } from "../ecs";
 import { WORLD_MIN, WORLD_MAX } from "../movement";
 import { sweep, type Collision, type CollisionRef } from "../collision";
-import type { Position, PlayerC, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC, CastingC, OffenseC, Health, SkillHoldC } from "../components";
+import type { Position, PlayerC, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC, CastingC, OffenseC, Health, SkillHoldC, SkillsC } from "../components";
 import { damageCode } from "../damage-types";
 import { bodyRadiusOf } from "../body";
 import { spendScrollAndOpenPortal } from "../areas";
@@ -26,6 +26,17 @@ export function registerSkillCast(
   // client re-issues per 30 Hz snapshot while held, so three ticks bridges any
   // jitter without dragging the slow walk past the release.
   const SKILL_HOLD_TICKS = 3;
+
+  /**
+   * The gem level this caster has in this skill, or 1. One lookup per cast: the
+   * fold is a handful of integer ops, and caching it would need an invalidation
+   * rule for every character level, every load and every respec.
+   */
+  const gemLevelFor = (world: World, skillId: string): number => {
+    const e = world.query("session")[0];
+    if (e === undefined) return 1;
+    return world.get<SkillsC>(e, "skills")?.gems[skillId]?.level ?? 1;
+  };
 
   const actionFor = (skill: SkillDef): "spell" | "melee" =>
     skill.effects.some((effect) => effect.type === "meleeStrike") ? "melee" : "spell";
@@ -164,7 +175,8 @@ export function registerSkillCast(
       const casting = world.get<CastingC>(caster, "casting")!;
       if (casting.untilTick > tick) continue;
       if (casting.skillId) {
-        const skill = skills.get(casting.skillId);
+        const base = skills.get(casting.skillId);
+        const skill = base ? effectiveSkill(base, casting.gemLevel ?? 1) : undefined;
         const alive = (world.get<Health>(caster, "health")?.life ?? 1) > 0;
         if (skill && alive) {
           resolveSkill(
@@ -188,8 +200,10 @@ export function registerSkillCast(
     for (const cmd of commands) {
       if (cmd.type !== "useSkill" || cmd.entity === undefined || !cmd.skillId) continue;
       const caster = cmd.entity;
-      const skill = skills.get(cmd.skillId);
-      if (!skill) continue;
+      const base = skills.get(cmd.skillId);
+      if (!base) continue;
+      const gemLevel = gemLevelFor(world, cmd.skillId);
+      const skill = effectiveSkill(base, gemLevel);
       // A corpse does not cast, same rule movement follows. Absent health reads
       // as alive so the health-less test casters are untouched.
       if ((world.get<Health>(caster, "health")?.life ?? 1) <= 0) continue;
@@ -281,6 +295,7 @@ export function registerSkillCast(
           team: casterTeam,
           action: actionFor(skill),
           ticks: beatTicks,
+          gemLevel,
         });
         continue;
       }
