@@ -468,10 +468,10 @@ describe("boss abilities scale with the map's tier", () => {
     return world.get<TelegraphC>(world.query("telegraph")[0]!, "telegraph")!;
   }
 
-  it("a Tier 10 slam hits twice as hard as a Tier 0 one", () => {
-    // monsterTierScale(10).dmgMilli = 2000, i.e. 2x.
+  it("a Tier 10 slam hits 5.3x as hard as a Tier 0 one", () => {
+    // monsterTierScale(10).dmgMilli = 1000 + 430*10 = 5300, i.e. 5.3x.
     expect(slamAt(0).damage).toBe(fp(28));
-    expect(slamAt(10).damage).toBe(fp(56));
+    expect(slamAt(10).damage).toBe(fp(148.4));
   });
 
   it("the phase-2 burning patch scales with the same knob", () => {
@@ -491,7 +491,7 @@ describe("boss abilities scale with the map's tier", () => {
     expect(world.get<BossC>(boss, "boss")!.phase).toBe(2);
     sim.step();
     const tele = world.get<TelegraphC>(world.query("telegraph")[0]!, "telegraph")!;
-    expect(tele.ground!.dps).toBe(fp(18)); // fp(9) at 2x
+    expect(tele.ground!.dps).toBe(fp(47.7)); // fp(9) at 5.3x
   });
 
   it("a boss with no session (the legacy replay path) is unscaled", () => {

@@ -41,15 +41,22 @@ export interface AtlasGraphNode extends AtlasNode {
 
 export const WAYSTONE_OFFER_COUNT = 3;
 
-// Natural area level per docs/01:308.
+/**
+ * Natural area level per docs/01:308, rescaled for a 1-100 character. Tier 0 is
+ * level 2 so a character out of the character-creation screen can run the first
+ * node, and the fifteenth is 86 so the last stretch to 100 is a tier the player
+ * has chosen to farm rather than one the Atlas hands him.
+ */
 export function areaLevel(tier: number): number {
-  return 64 + tier;
+  return 2 + 6 * tier;
 }
 
 // ponytail: linear per-mille scaling is a calibration placeholder (docs/01:780
 // says monster-vs-level needs empirical tuning). Two knobs; adjust here only.
+// The per-tier step tracks the six area levels a tier now covers, so a monster
+// at the top of the Atlas is about ten times a tier-0 one rather than three.
 export function monsterTierScale(tier: number): { lifeMilli: number; dmgMilli: number } {
-  return { lifeMilli: 1000 + 150 * tier, dmgMilli: 1000 + 100 * tier };
+  return { lifeMilli: 1000 + 650 * tier, dmgMilli: 1000 + 430 * tier };
 }
 
 // Mulberry32 (same family as the sim PRNG, but inlined so this leaf module keeps

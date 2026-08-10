@@ -3,18 +3,9 @@ import {
   areaLevel, monsterTierScale, offerWaystones, WAYSTONE_OFFER_COUNT,
   atlasGraph, ATLAS_NODE_COUNT, isNodeReachable, atlasNodeTier, nextNodeTier, WAYSTONE_MAX_TIER,
 } from "./atlas.js";
+import { xpToNext, monsterXp } from "./xp.js";
 
 describe("atlas rules", () => {
-  it("areaLevel is 64 + tier", () => {
-    expect(areaLevel(1)).toBe(65);
-    expect(areaLevel(15)).toBe(79);
-  });
-
-  it("monsterTierScale is per-mille, 1.0 at tier 0", () => {
-    expect(monsterTierScale(0)).toEqual({ lifeMilli: 1000, dmgMilli: 1000 });
-    expect(monsterTierScale(10)).toEqual({ lifeMilli: 2500, dmgMilli: 2000 });
-  });
-
   it("offerWaystones is deterministic for a seed", () => {
     const a = offerWaystones(42, WAYSTONE_OFFER_COUNT);
     const b = offerWaystones(42, WAYSTONE_OFFER_COUNT);
@@ -178,5 +169,51 @@ describe("nextNodeTier", () => {
 
   it("is null for a place that is not on the graph", () => {
     expect(nextNodeTier(graph, "node.nowhere", [])).toBeNull();
+  });
+});
+
+describe("the Atlas spans a 1-100 character's climb", () => {
+  it("opens at a level a fresh character can survive", () => {
+    expect(areaLevel(0)).toBe(2);
+  });
+
+  it("tops out below the level cap, so the last levels are a grind by choice", () => {
+    expect(areaLevel(ATLAS_NODE_COUNT - 1)).toBe(86);
+  });
+
+  it("climbs by a fixed step, so a tier is always worth the same jump", () => {
+    for (let t = 0; t < ATLAS_NODE_COUNT - 1; t++) {
+      expect(areaLevel(t + 1) - areaLevel(t)).toBe(6);
+    }
+  });
+
+  it("costs a sane number of kills at every level, which is the real contract", () => {
+    // The two curves are only meaningful against each other: a level must never
+    // cost so few kills that it is noise, nor so many that the track stops
+    // paying (docs/09 rule 7). Measured in normal-monster equivalents at the
+    // area level a character of that level would be running; a rare is 8 of
+    // these and a boss 40, so real kill counts are several times smaller.
+    // This case lives here rather than in xp.test.ts because it needs BOTH
+    // curves, and it is the only thing stopping them being tuned separately.
+    for (const level of [1, 10, 50, 90, 99]) {
+      const tier = Math.max(0, Math.min(ATLAS_NODE_COUNT - 1, Math.round((level - 2) / 6)));
+      const kills = xpToNext(level) / monsterXp(areaLevel(tier), "normal");
+      expect(kills).toBeGreaterThan(10);
+      expect(kills).toBeLessThan(5_000);
+    }
+  });
+
+  it("keeps tier 0 monsters at their authored numbers", () => {
+    // The reference character is tuned against tier 0. If this scale ever stops
+    // being 1000/1000, every band in balance.test.ts moves with it.
+    expect(monsterTierScale(0)).toEqual({ lifeMilli: 1000, dmgMilli: 1000 });
+  });
+
+  it("scales monsters across the whole Atlas rather than the old 15 tiers", () => {
+    const top = monsterTierScale(ATLAS_NODE_COUNT - 1);
+    expect(top.lifeMilli).toBeGreaterThan(monsterTierScale(0).lifeMilli);
+    expect(top.dmgMilli).toBeGreaterThan(monsterTierScale(0).dmgMilli);
+    expect(Number.isSafeInteger(top.lifeMilli)).toBe(true);
+    expect(Number.isSafeInteger(top.dmgMilli)).toBe(true);
   });
 });

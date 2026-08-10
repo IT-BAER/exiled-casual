@@ -225,7 +225,7 @@ describe("registerDeath", () => {
     const groundItems = equipmentDrops(w);
     expect(groundItems.length).toBe(1);
     const ic = w.get(groundItems[0]!, "item") as { item: { itemLevel: number }; w: number; h: number };
-    expect(ic.item.itemLevel).toBe(71); // 64 + tier 5, +2 because a rare monster drops gear two levels above itself
+    expect(ic.item.itemLevel).toBe(34); // 2 + 6*5, +2 because a rare monster drops gear two levels above itself
     expect(ic.w).toBeGreaterThan(0);
   });
 
@@ -349,31 +349,36 @@ describe("registerDeath", () => {
   }
 
   it("a map kill banks the monster's experience", () => {
-    const { sim, world, sessionE } = makeXpKill({ area: "map", areaTier: 1, xp: 0 });
+    // level 20 explicitly: areaLevel(3) is 20, matching it exactly (no penalty),
+    // and its threshold (xpToNext(20) = 12,000) is nowhere near the kill's award,
+    // so the award lands untouched rather than being partly eaten by a level-up.
+    const { sim, world, sessionE } = makeXpKill({ area: "map", areaTier: 3, xp: 0, level: 20 });
     sim.step([]);
-    // areaLevel 65, character 65: no penalty, one normal monster.
-    expect(world.get<ProgressC>(sessionE, "progress")).toEqual({ level: 65, xp: 65, gold: 0 });
+    expect(world.get<ProgressC>(sessionE, "progress")).toEqual({ level: 20, xp: 20, gold: 0 });
   });
 
   it("a boss is worth forty normals", () => {
-    const { sim, world, sessionE } = makeXpKill({ area: "map", areaTier: 1, xp: 0, boss: true });
+    const { sim, world, sessionE } = makeXpKill({ area: "map", areaTier: 3, xp: 0, boss: true, level: 20 });
     sim.step([]);
-    expect(world.get<ProgressC>(sessionE, "progress")!.xp).toBe(65 * 40);
+    expect(world.get<ProgressC>(sessionE, "progress")!.xp).toBe(20 * 40);
   });
 
   it("a hideout kill is worth nothing", () => {
     const { sim, world, sessionE } = makeXpKill({ area: "hideout", areaTier: 0, xp: 0 });
     sim.step([]);
-    expect(world.get<ProgressC>(sessionE, "progress")).toEqual({ level: 65, xp: 0, gold: 0 });
+    expect(world.get<ProgressC>(sessionE, "progress")).toEqual({ level: START_LEVEL, xp: 0, gold: 0 });
   });
 
   it("crossing the threshold levels up and re-derives the life pool", () => {
-    // areaLevel 64 boss = 2560, which is exactly what is missing from the level.
-    const { sim, world, sessionE, p } = makeXpKill({ area: "map", areaTier: 0, xp: 60_000 - 2560, boss: true });
+    // level 10, areaLevel(1) = 8: within the no-penalty band. The boss award
+    // (monsterXp(8, "boss") = 320) is exactly what's missing from xpToNext(10)
+    // = 3,000, so this kill crosses precisely one level.
+    const { sim, world, sessionE, p } = makeXpKill({ area: "map", areaTier: 1, xp: 3_000 - 320, boss: true, level: 10 });
     sim.step([]);
-    expect(world.get<ProgressC>(sessionE, "progress")).toEqual({ level: 66, xp: 0, gold: 0 });
-    // One level = +6 life, granted as headroom rather than as a heal.
-    expect(world.get<{ maxLife: number; life: number }>(p, "health")).toEqual({ maxLife: fp(106), life: fp(100) });
+    expect(world.get<ProgressC>(sessionE, "progress")).toEqual({ level: 11, xp: 0, gold: 0 });
+    // levelBonus is total-based (210 life over 99 levels), so crossing 10->11
+    // grants +2 life (21 at level 11, 19 at level 10), not a flat per-level rate.
+    expect(world.get<{ maxLife: number; life: number }>(p, "health")).toEqual({ maxLife: fp(121), life: fp(100) });
   });
 
   it("killing a monster refills one charge on each flask and never exceeds max", () => {
