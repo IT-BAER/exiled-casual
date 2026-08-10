@@ -198,8 +198,8 @@ describe("allocation", () => {
 
 describe("what the points buy", () => {
   it("starts with a handful and never outgrows the tree", () => {
-    expect(passivePoints(START_LEVEL)).toBe(24);
-    expect(passivePoints(MAX_LEVEL)).toBe(94);
+    expect(passivePoints(START_LEVEL)).toBe(0);
+    expect(passivePoints(MAX_LEVEL)).toBe(99);
     expect(passivePoints(MAX_LEVEL)).toBeLessThan(PASSIVE_TREE.length / 2);
   });
 
@@ -220,6 +220,29 @@ describe("what the points buy", () => {
 
   it("ignores a node that is not in the tree rather than throwing mid-run", () => {
     expect(passiveStatMods(["p.nowhere"])).toEqual([]);
+  });
+});
+
+describe("the passive budget over a 1-100 climb", () => {
+  it("gives a brand-new character nothing to spend yet", () => {
+    expect(passivePoints(START_LEVEL)).toBe(0);
+  });
+
+  it("reaches the same budget at the cap the 65-94 era ended on", () => {
+    // 94 points in a 239-node tree: enough to walk two disciplines and a
+    // keystone, never enough to walk all eight. That budget is the design.
+    expect(passivePoints(MAX_LEVEL)).toBe(99);
+  });
+
+  it("never exceeds the budget however far past the cap it is asked", () => {
+    expect(passivePoints(MAX_LEVEL + 50)).toBe(passivePoints(MAX_LEVEL));
+  });
+
+  it("is monotonic and whole", () => {
+    for (let lv = START_LEVEL; lv < MAX_LEVEL; lv++) {
+      expect(passivePoints(lv + 1)).toBeGreaterThanOrEqual(passivePoints(lv));
+      expect(Number.isSafeInteger(passivePoints(lv))).toBe(true);
+    }
   });
 });
 

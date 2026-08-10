@@ -8,7 +8,7 @@ import { registerInteractSystem } from "./interact";
 import { registerSkillCast } from "./skill-cast";
 import type { World } from "../ecs";
 import type { SessionC, Position, InteractableC, InventoryC, ContainerC, Health } from "../components";
-import { PASSIVE_TREE, canAllocate, isStartNode, passiveNode, passivePoints, startNodeId, START_LEVEL } from "@exiled/rules";
+import { PASSIVE_TREE, canAllocate, isStartNode, passiveNode, passivePoints, startNodeId, START_LEVEL, MAX_LEVEL } from "@exiled/rules";
 
 function makeWorld() {
   const sim = new Simulation();
@@ -561,7 +561,7 @@ describe("the passive tree", () => {
     world.get<SessionC>(sessionE, "session")!.passives ?? [];
 
   it("takes a node the door touches", () => {
-    const { sim, world, player, sessionE } = atLevel();
+    const { sim, world, player, sessionE } = atLevel(MAX_LEVEL);
     sim.step(take(player, near));
     expect(allocated(world, sessionE)).toEqual([near]);
   });
@@ -579,7 +579,7 @@ describe("the passive tree", () => {
   });
 
   it("refuses to take the same node twice", () => {
-    const { sim, world, player, sessionE } = atLevel();
+    const { sim, world, player, sessionE } = atLevel(MAX_LEVEL);
     sim.step(take(player, near));
     sim.step(take(player, near));
     expect(allocated(world, sessionE)).toEqual([near]);
@@ -599,7 +599,7 @@ describe("the passive tree", () => {
   });
 
   it("grants what the node says, on the player, not just on the sheet", () => {
-    const { sim, world, player, sessionE } = atLevel();
+    const { sim, world, player, sessionE } = atLevel(MAX_LEVEL);
     // Walk to the nearest node that grants life, so the assertion is about the
     // grant rather than about which door this class happens to start at.
     const path: string[] = [];
@@ -628,7 +628,7 @@ describe("the passive tree", () => {
   });
 
   it("refuses to give back a node another one is standing on", () => {
-    const { sim, world, player, sessionE } = atLevel();
+    const { sim, world, player, sessionE } = atLevel(MAX_LEVEL);
     const second = passiveNode(near)!.links.find((n) => n !== near && !isStartNode(n))!;
     sim.step(take(player, near));
     sim.step(take(player, second));
@@ -637,7 +637,7 @@ describe("the passive tree", () => {
   });
 
   it("refuses a node that was never taken", () => {
-    const { sim, world, player, sessionE } = atLevel();
+    const { sim, world, player, sessionE } = atLevel(MAX_LEVEL);
     sim.step(take(player, near));
     sim.step(give(player, far));
     expect(allocated(world, sessionE)).toEqual([near]);
