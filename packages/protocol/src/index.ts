@@ -97,6 +97,20 @@ export const AREA_KINDS: readonly AreaKind[] = ["hideout", "map"];
 export const MAP_PORTALS = 6;
 
 /**
+ * Total action-bar sockets: 5 numbered (keys 1-5) then L, M, R mouse. The HUD
+ * draws them as two rows and MUST slice to MOUSE_SLOT_BASE for the numbered row.
+ *
+ * Protocol-level rather than a client preference since the bar became per-character
+ * sim state: gem experience is earned by the SLOT, so its length is part of the
+ * contract between worker and client.
+ */
+export const SKILL_SLOT_COUNT = 8;
+export const MOUSE_SLOT_BASE = 5;
+/** Left click's default. A sentinel, not null: clearing L gives movement back.
+ *  Never a skill id, so it is skipped by the gem experience split. */
+export const MOVE_SOCKET = "builtin.move";
+
+/**
  * Resistances by element, integer percent. Protocol-local and structural, like
  * ItemRarity: the sim's ResBlock assigns to it without the wire contract taking
  * a dependency on content.

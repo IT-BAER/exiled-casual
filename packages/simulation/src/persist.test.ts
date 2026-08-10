@@ -1,11 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { isPermanentWaystone } from "@exiled/content-runtime";
 import { MemoryKv } from "@exiled/persistence";
-import { rollItem, areaLevel } from "@exiled/rules";
-import { ITEM_POOLS, baseOf } from "@exiled/content-runtime";
+import { rollItem, areaLevel, maxGemLevel } from "@exiled/rules";
+import { ITEM_POOLS, baseOf, defaultAttackFor } from "@exiled/content-runtime";
+import { SKILL_SLOT_COUNT, MOVE_SOCKET } from "@exiled/protocol";
 import { createCombatSim } from "./combat-sim";
-import { snapshot, restore, saveTo, loadInto } from "./persist";
-import type { SessionC, InventoryC, Health } from "./components";
+import { snapshot, restore, saveTo, loadInto, grantSkills, defaultBar, VERSION, type PersistedState } from "./persist";
+import type { SessionC, InventoryC, Health, SkillsC, ProgressC } from "./components";
 import { PASSIVE_TREE } from "@exiled/rules";
 
 function sessionEntity(world: ReturnType<typeof createCombatSim>["world"]) {
@@ -123,5 +124,98 @@ describe("persist: run-transaction fault injection", () => {
   it("restore is a no-op when the reboot world has no session", () => {
     const bare = createCombatSim(7).world;
     expect(() => restore(bare, { version: 1, session: {} as SessionC, inventory: {} as InventoryC })).not.toThrow();
+  });
+});
+
+describe("skills persistence", () => {
+  it("a fresh world has a gem for every skill level 1 unlocks and none it does not", () => {
+    const { world } = createCombatSim(7, { area: "hideout" });
+    const skills = world.get<SkillsC>(sessionEntity(world), "skills")!;
+    const session = getSession(world);
+    const defaultAttackId = defaultAttackFor(session.classId ?? "");
+    expect(skills.gems[defaultAttackId]).toEqual({ level: 1, xp: 0 });
+    expect(skills.gems["skill.ember_bolt.v1"]).toEqual({ level: 1, xp: 0 });
+    expect(Object.hasOwn(skills.gems, "skill.blink.v1")).toBe(false);
+    expect(Object.hasOwn(skills.gems, "skill.cinder_ground.v1")).toBe(false);
+    expect(Object.hasOwn(skills.gems, "skill.town_portal.v1")).toBe(false);
+  });
+
+  it("a level-up grants the gems that level opened, leaving the ones already held alone", () => {
+    const { world } = createCombatSim(7, { area: "hideout" });
+    const e = sessionEntity(world);
+    // Give the already-held ember_bolt gem real progress, so a reset would be visible.
+    const before = world.get<SkillsC>(e, "skills")!;
+    world.set<SkillsC>(e, "skills", {
+      ...before,
+      gems: { ...before.gems, "skill.ember_bolt.v1": { level: 5, xp: 77 } },
+    });
+    world.set<ProgressC>(e, "progress", { ...world.get<ProgressC>(e, "progress")!, level: 10 });
+
+    grantSkills(world);
+
+    const skills = world.get<SkillsC>(e, "skills")!;
+    expect(skills.gems["skill.blink.v1"]).toEqual({ level: 1, xp: 0 });
+    expect(skills.gems["skill.cinder_ground.v1"]).toEqual({ level: 1, xp: 0 });
+    expect(skills.gems["skill.town_portal.v1"]).toEqual({ level: 1, xp: 0 });
+    // The gem already held was left exactly as it was, not reset by the grant.
+    expect(skills.gems["skill.ember_bolt.v1"]).toEqual({ level: 5, xp: 77 });
+  });
+
+  it("snapshot round-trips gems and the bar", () => {
+    const { world } = createCombatSim(7, { area: "hideout" });
+    const e = sessionEntity(world);
+    world.set<ProgressC>(e, "progress", { ...world.get<ProgressC>(e, "progress")!, level: 12 });
+    grantSkills(world);
+    const before = world.get<SkillsC>(e, "skills")!;
+    world.set<SkillsC>(e, "skills", {
+      gems: { ...before.gems, "skill.ember_bolt.v1": { level: 6, xp: 42 } },
+      bar: ["skill.ember_bolt.v1", "skill.blink.v1", null, null, null, MOVE_SOCKET, null, "skill.snap_shot.v1"],
+    });
+
+    const snap = snapshot(world)!;
+    const fresh = createCombatSim(9, { area: "hideout" }).world;
+    restore(fresh, snap);
+
+    expect(fresh.get<SkillsC>(sessionEntity(fresh), "skills")).toEqual(world.get<SkillsC>(e, "skills"));
+  });
+
+  it("a save written with NO skills field restores with the bar seeded and the gems granted", () => {
+    const { world } = createCombatSim(7, { area: "hideout" });
+    const someSnapshot = snapshot(world)!;
+    const state = { ...someSnapshot, progress: { level: 12, xp: 0, gold: 0 } };
+    delete (state as Record<string, unknown>)["skills"];
+
+    const freshWorld = createCombatSim(9, { area: "hideout" }).world;
+    restore(freshWorld, state as PersistedState);
+
+    const skills = freshWorld.get<SkillsC>(sessionEntity(freshWorld), "skills")!;
+    expect(Object.keys(skills.gems).length).toBeGreaterThan(0);
+    expect(skills.bar).toHaveLength(SKILL_SLOT_COUNT);
+    // Every id on the seeded bar is either a granted gem or the move sentinel.
+    for (const id of skills.bar) {
+      if (id === null || id === MOVE_SOCKET) continue;
+      expect(Object.hasOwn(skills.gems, id), id).toBe(true);
+    }
+  });
+
+  it("persist.VERSION is still 2, so no existing character is dropped", () => {
+    expect(VERSION).toBe(2);
+  });
+
+  it("a gem never restores above what the character level allows", () => {
+    const { world } = createCombatSim(7, { area: "hideout" });
+    const base = snapshot(world)!;
+    const state: PersistedState = {
+      ...base,
+      progress: { level: 3, xp: 0, gold: 0 },
+      skills: { gems: { "skill.ember_bolt.v1": { level: 20, xp: 999 } }, bar: defaultBar("") },
+    };
+
+    const fresh = createCombatSim(9, { area: "hideout" }).world;
+    restore(fresh, state);
+
+    const skills = fresh.get<SkillsC>(sessionEntity(fresh), "skills")!;
+    expect(maxGemLevel(3)).toBe(3);
+    expect(skills.gems["skill.ember_bolt.v1"]!.level).toBe(maxGemLevel(3));
   });
 });

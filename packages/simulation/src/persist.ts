@@ -1,10 +1,12 @@
 import type { KvStore } from "@exiled/persistence";
 import type { World } from "./ecs";
-import type { SessionC, InventoryC, StashC, VendorC, EquipmentC, ProgressC, ShardsC } from "./components";
+import type { SessionC, InventoryC, StashC, VendorC, EquipmentC, ProgressC, ShardsC, SkillsC } from "./components";
 import { stockVendor } from "./vendor";
 import { withPermanentWaystone } from "./inventory";
 import { recomputePlayerStats } from "./derived";
-import { START_LEVEL } from "@exiled/rules";
+import { START_LEVEL, isUnlocked, maxGemLevel } from "@exiled/rules";
+import { SKILLS, defaultAttackFor } from "@exiled/content-runtime";
+import { SKILL_SLOT_COUNT, MOUSE_SLOT_BASE, MOVE_SOCKET } from "@exiled/protocol";
 
 /**
  * Run-transaction persistence. The whole durable state (session + inventory) is
@@ -32,6 +34,9 @@ export interface PersistedState {
   progress?: ProgressC;
   /** Optional so a save written before the disenchanter existed still loads, with no shards. */
   shards?: ShardsC;
+  /** Optional so a save written before gems existed still loads: `restore` grants
+   *  and seeds it fresh, the same as a brand-new character. */
+  skills?: SkillsC;
   /**
    * The shelf, holes and all. Persisted rather than re-rolled on load: the roll is
    * deterministic, so a fresh roll would silently restock whatever was just bought.
@@ -51,7 +56,59 @@ export function snapshot(world: World): PersistedState | null {
   const stash = world.get<StashC>(e, "stash") ?? EMPTY_STASH;
   const shards = world.get<ShardsC>(e, "shards") ?? { counts: {} };
   const vendor = world.get<VendorC>(e, "vendor");
-  return { version: VERSION, session, inventory, stash, equipment, progress, shards, ...(vendor ? { vendor } : {}) };
+  const skills = world.get<SkillsC>(e, "skills");
+  return {
+    version: VERSION, session, inventory, stash, equipment, progress, shards,
+    ...(vendor ? { vendor } : {}),
+    ...(skills ? { skills } : {}),
+  };
+}
+
+/**
+ * The bar a character starts with: his class's default attack on left click's
+ * neighbour, Ember Bolt on 1, and movement where PoE1 puts it.
+ */
+export function defaultBar(classId: string): (string | null)[] {
+  const bar: (string | null)[] = new Array(SKILL_SLOT_COUNT).fill(null);
+  bar[0] = "skill.ember_bolt.v1";
+  bar[MOUSE_SLOT_BASE] = MOVE_SOCKET;
+  bar[MOUSE_SLOT_BASE + 2] = defaultAttackFor(classId);
+  return bar;
+}
+
+/** A saved bar, proven rather than trusted: exactly SKILL_SLOT_COUNT entries,
+ *  each a string or null, and no id in two sockets at once. */
+export function normalizeBar(raw: unknown): (string | null)[] {
+  const src = Array.isArray(raw) ? raw : [];
+  const out: (string | null)[] = [];
+  const seen = new Set<string>();
+  for (let i = 0; i < SKILL_SLOT_COUNT; i++) {
+    const v = src[i];
+    const id = typeof v === "string" && v.length > 0 && !seen.has(v) ? v : null;
+    if (id !== null) seen.add(id);
+    out.push(id);
+  }
+  return out;
+}
+
+/**
+ * Bring the gem list level with the character. Idempotent and additive: a skill
+ * the level now opens gets a gem at 1, a skill already held is left exactly as
+ * it is, and nothing is ever taken away. Called on every load and on every
+ * character level, which is why unlock can be derived rather than stored.
+ */
+export function grantSkills(world: World): void {
+  const e = world.query("session")[0];
+  if (e === undefined) return;
+  const level = world.get<ProgressC>(e, "progress")?.level ?? START_LEVEL;
+  const classId = world.get<SessionC>(e, "session")?.classId ?? "";
+  const current = world.get<SkillsC>(e, "skills");
+  const gems = { ...(current?.gems ?? {}) };
+  for (const def of SKILLS.values()) {
+    if (!isUnlocked(def, level, classId)) continue;
+    if (gems[def.id] === undefined) gems[def.id] = { level: 1, xp: 0 };
+  }
+  world.set<SkillsC>(e, "skills", { gems, bar: current?.bar ?? defaultBar(classId) });
 }
 
 /**
@@ -83,6 +140,19 @@ export function restore(world: World, state: PersistedState): void {
   // the field is defaulted on its own rather than only when progress is missing.
   const progress = state.progress ?? { level: START_LEVEL, xp: 0, gold: 0 };
   world.set<ProgressC>(e, "progress", { ...progress, gold: progress.gold ?? 0 });
+  // Clamp on read: a hand-edited save must not put a gem 20 skill in a level-3
+  // character's hand. Then grant, so a save written before gems existed — or one
+  // written before the level that opened a skill — comes back complete.
+  const cap = maxGemLevel(progress.level);
+  const saved = state.skills;
+  if (saved) {
+    const gems: Record<string, { level: number; xp: number }> = {};
+    for (const [id, gem] of Object.entries(saved.gems)) {
+      gems[id] = { level: Math.min(gem.level, cap), xp: gem.xp };
+    }
+    world.set<SkillsC>(e, "skills", { gems, bar: normalizeBar(saved.bar) });
+  }
+  grantSkills(world);
   world.set<ShardsC>(e, "shards", state.shards ?? { counts: {} });
   world.set<VendorC>(e, "vendor", state.vendor ?? stockVendor(state.session.atlasSeed, progress.level));
   // Saved gear has to reach the player, not just the equipment panel. Life and

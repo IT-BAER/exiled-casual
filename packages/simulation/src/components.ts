@@ -91,6 +91,19 @@ export interface SessionC {
  */
 export interface ProgressC { level: number; xp: number; gold: number }
 
+/**
+ * Which skills this character has, what each one has earned, and where they sit.
+ *
+ * The bar lives here rather than in client settings because experience is earned
+ * by the SLOT: a shared, global bar cannot survive characters whose skills differ
+ * and whose gems level at different rates. Only unlocked skills appear in `gems`;
+ * unlock itself is DERIVED from the character level (`isUnlocked`), never stored.
+ */
+export interface SkillsC {
+  gems: Record<string, { level: number; xp: number }>;
+  bar: (string | null)[];
+}
+
 /** Something the player can activate with the `interact` intent. */
 export interface InteractableC {
   kind: "mapDevice" | "portal" | "stash" | "vendor" | "container";

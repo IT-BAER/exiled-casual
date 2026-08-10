@@ -1,11 +1,11 @@
 /**
  * What the player has set, and the only thing that parses it.
  *
- * This file imports NOTHING. It is pulled into the menu bundle, which must not
- * grow a renderer or a simulation to draw a checkbox, and it is the trust
- * boundary for the save: `settings` rides in the roster blob as an opaque field
- * exactly as `stash` does, so what comes back off the disk is `unknown` and has
- * to be proven before anything reads it.
+ * This file imports nothing but the protocol's pure constants (no renderer, no
+ * simulation). It is pulled into the menu bundle, which must not grow either to
+ * draw a checkbox, and it is the trust boundary for the save: `settings` rides
+ * in the roster blob as an opaque field exactly as `stash` does, so what comes
+ * back off the disk is `unknown` and has to be proven before anything reads it.
  *
  * `sanitize` is therefore TOTAL. A corrupt settings field reads as defaults, the
  * way `readBlob` already treats unparseable JSON, because the alternative is a
@@ -82,12 +82,8 @@ export interface UiSettings {
   debugLogging: boolean;
 }
 
-/** Total sockets: 5 numbered (keys 1-5) then L, M, R mouse. The HUD draws them
- *  as two rows and MUST slice to MOUSE_SLOT_BASE for the numbered row. */
-export const SKILL_SLOT_COUNT = 8;
-export const MOUSE_SLOT_BASE = 5;
-/** Left click's default. A sentinel, not null: clearing L gives movement back. */
-export const MOVE_SOCKET = "builtin.move";
+import { SKILL_SLOT_COUNT, MOUSE_SLOT_BASE, MOVE_SOCKET } from "@exiled/protocol";
+export { SKILL_SLOT_COUNT, MOUSE_SLOT_BASE, MOVE_SOCKET };
 
 /** Everything a key can be told to do. Escape and the skill row (1-5) stay fixed. */
 export const KEYBIND_ACTIONS = [
