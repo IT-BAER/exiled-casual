@@ -15,10 +15,12 @@ export const MAX_LEVEL = 100;
  *
  * Quadratic, because a kill's value only grows LINEARLY with area level: a
  * cubic curve outruns what the player can earn and the late game stops paying
- * at all. This shape holds the cost at roughly 15 normal-monster equivalents to
- * leave level 1 and 3,400 to leave 99, which is a few minutes against about ten
- * maps. `xp.test.ts` pins that band rather than the constant, so the constant
- * can be retuned without anyone having to guess what it was protecting.
+ * at all. This shape holds the cost at roughly 8 penalized normal-monster
+ * equivalents to leave level 1 (Tier 1 is six area levels above him, since
+ * Tier 0 is not a map anyone can stand on) and about 5,300 to leave 99, which
+ * is a few minutes against about ten maps. `xp.test.ts` pins that band rather
+ * than the constant, so the constant can be retuned without anyone having to
+ * guess what it was protecting.
  */
 export function xpToNext(level: number): number {
   if (level >= MAX_LEVEL) return 0;

@@ -568,13 +568,13 @@ describe("the passive tree", () => {
   });
 
   it("refuses a node nothing allocated touches", () => {
-    const { sim, world, player, sessionE } = atLevel();
+    const { sim, world, player, sessionE } = atLevel(MAX_LEVEL);
     sim.step(take(player, far));
     expect(allocated(world, sessionE)).toEqual([]);
   });
 
   it("refuses a node that does not exist", () => {
-    const { sim, world, player, sessionE } = atLevel();
+    const { sim, world, player, sessionE } = atLevel(MAX_LEVEL);
     sim.step(take(player, "p.nowhere"));
     expect(allocated(world, sessionE)).toEqual([]);
   });

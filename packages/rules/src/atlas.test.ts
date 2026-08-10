@@ -3,7 +3,7 @@ import {
   areaLevel, monsterTierScale, offerWaystones, WAYSTONE_OFFER_COUNT,
   atlasGraph, ATLAS_NODE_COUNT, isNodeReachable, atlasNodeTier, nextNodeTier, WAYSTONE_MAX_TIER,
 } from "./atlas.js";
-import { xpToNext, monsterXp } from "./xp.js";
+import { xpToNext, xpAward } from "./xp.js";
 
 describe("atlas rules", () => {
   it("offerWaystones is deterministic for a seed", () => {
@@ -178,7 +178,9 @@ describe("the Atlas spans a 1-100 character's climb", () => {
   });
 
   it("tops out below the level cap, so the last levels are a grind by choice", () => {
-    expect(areaLevel(ATLAS_NODE_COUNT - 1)).toBe(86);
+    // The playable ceiling is Tier 15, not ATLAS_NODE_COUNT - 1 (14) - that
+    // index is a node-count coincidence, not the Waystone tier band (1..15).
+    expect(areaLevel(WAYSTONE_MAX_TIER)).toBe(92);
   });
 
   it("climbs by a fixed step, so a tier is always worth the same jump", () => {
@@ -190,16 +192,24 @@ describe("the Atlas spans a 1-100 character's climb", () => {
   it("costs a sane number of kills at every level, which is the real contract", () => {
     // The two curves are only meaningful against each other: a level must never
     // cost so few kills that it is noise, nor so many that the track stops
-    // paying (docs/09 rule 7). Measured in normal-monster equivalents at the
-    // area level a character of that level would be running; a rare is 8 of
-    // these and a boss 40, so real kill counts are several times smaller.
+    // paying (docs/09 rule 7). Measured in PENALIZED normal-monster-equivalents
+    // (xpAward, not raw monsterXp) at the BEST REACHABLE Waystone tier for that
+    // character level - tiers run 1..15 only (WAYSTONE_MAX_TIER), never tier 0,
+    // which is not a map anyone can stand on. A rare is 8 of these and a boss
+    // 40, so real kill counts are several times smaller.
     // This case lives here rather than in xp.test.ts because it needs BOTH
     // curves, and it is the only thing stopping them being tuned separately.
+    //
+    // Bounds: measured kills range from ~7.5 (level 1, running Tier 1 six area
+    // levels above him, penalized) to 5,346 (level 99, pinned at Tier 15 since
+    // the Atlas has nothing higher, so the last stretch is fought under-levelled
+    // by design). > 5 and < 6,000 brackets the real curve with headroom rather
+    // than re-deriving the exact numbers, so a real regression still trips it.
     for (const level of [1, 10, 50, 90, 99]) {
-      const tier = Math.max(0, Math.min(ATLAS_NODE_COUNT - 1, Math.round((level - 2) / 6)));
-      const kills = xpToNext(level) / monsterXp(areaLevel(tier), "normal");
-      expect(kills).toBeGreaterThan(10);
-      expect(kills).toBeLessThan(5_000);
+      const tier = Math.max(1, Math.min(WAYSTONE_MAX_TIER, Math.round((level - 2) / 6)));
+      const kills = xpToNext(level) / xpAward(level, areaLevel(tier), "normal");
+      expect(kills).toBeGreaterThan(5);
+      expect(kills).toBeLessThan(6_000);
     }
   });
 
@@ -215,5 +225,14 @@ describe("the Atlas spans a 1-100 character's climb", () => {
     expect(top.dmgMilli).toBeGreaterThan(monsterTierScale(0).dmgMilli);
     expect(Number.isSafeInteger(top.lifeMilli)).toBe(true);
     expect(Number.isSafeInteger(top.dmgMilli)).toBe(true);
+  });
+
+  it("pins both per-mille slopes exactly, at a mid tier and the top tier", () => {
+    // The weaker case above only checks monotonic and integer; a slope typo
+    // (e.g. swapping the life and damage per-mille knobs, or a fat-fingered
+    // digit) leaves both true. This pins the actual numbers so either knob
+    // moving alone fails here.
+    expect(monsterTierScale(7)).toEqual({ lifeMilli: 5550, dmgMilli: 4010 });
+    expect(monsterTierScale(ATLAS_NODE_COUNT - 1)).toEqual({ lifeMilli: 10100, dmgMilli: 7020 });
   });
 });
