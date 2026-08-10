@@ -19,10 +19,13 @@ locally.
   centred map overlay.
 - Normal, magic, rare, and unique items with affixes, implicits, identification, crafting orbs,
   loot beams, stash, vendor, disenchanting, and equipment-derived stats.
-- A 239-node passive tree across eight disciplines, with class start doors, notables, travel
-  bridges and keystones that trade one stat for another.
+- A 239-node passive tree across eight disciplines, with class start doors, notables that open once
+  their cluster is mostly taken, travel bridges, keystones that trade one stat for another, and
+  per-node refunds.
 - A rigged 3D character with visible equipped gear, animated cloth, positional audio, ambience,
   and a game shell covering menus, character selection, loading, options, and local saves.
+- Options that reach the whole game: graphics and audio mixes, HUD toggles, rebindable keys, and a
+  debug-logging channel that narrates a run to the console.
 
 Balance is measured rather than final, and no public playable build is available.
 
@@ -49,8 +52,8 @@ Major visible milestones, in screenshots and short notes, are in [`devlog/`](dev
 
 | | |
 |---|---|
-| Language | TypeScript 5.6, strict, ES modules, npm workspaces monorepo |
-| Client | React 18 + Babylon.js 7 (WebGL2), Vite 5 |
+| Language | TypeScript 7, strict, ES modules, npm workspaces monorepo |
+| Client | React 19 + Babylon.js 9 (WebGL2), Vite 8 |
 | Simulation | Hand-rolled ECS, 30 Hz fixed timestep, runs in a Web Worker |
 | Determinism | Fixed-point integers only, named seeded RNG streams, replayable to a checksum |
 | Persistence | IndexedDB, versioned character roster and shared stash; JSON import/export |

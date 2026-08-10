@@ -1,6 +1,6 @@
 # Exiled Casual: current implementation contract
 
-Status: **as built and verified on 2026-08-08 at `1cb32e3`.**
+Status: **as built and verified on 2026-08-10 at `3502a54`** (full suite 1751/1751, typecheck clean).
 
 This is the living specification for what the repository implements now. Earlier dated specs
 preserve the decision and delivery history of individual slices. Where an older proposal differs
@@ -131,13 +131,20 @@ Three class doors open onto the two nearest disciplines each, so no class is bor
 character has 24 points at level 65 and two a level to the cap, which is 94 - enough to walk two
 disciplines and a keystone, never enough to walk all eight. Allocation is the PoE rule in one
 sentence: a node may be taken when it touches something already allocated, and the door counts as
-allocated. Refunding is free and total.
+allocated. A notable additionally waits until more than half of its own rosette of minors is taken,
+so the centre of a cluster is earned rather than dived at.
+
+Refunding is free, and works two ways: a full reset, or a second click on a node you already own,
+which gives that one point back. The single refund is `canRefund` in the rules - it replays
+`canAllocate` over the set minus that node - so it refuses a load-bearing node rather than
+cascading a whole branch away.
 
 Every node's effect is an `ItemStatMod`, the same currency gear speaks, folded by the same
 `applyItemMods`: a passive and a chest piece cannot drift apart. That is also why no keystone
 changes a RULE - the simulation has no hook for one, and a keystone whose text lies is worse than
 one that trades numbers honestly. The simulation owns both halves of allocation because the client
-is untrusted; `P` opens the tree, and an unspent point announces itself over the experience rail.
+is untrusted; `P` opens the tree, as does a gold plus sitting on the lower bar right of the flasks,
+which is also where an unspent point announces itself.
 
 ### Balance
 
@@ -204,7 +211,9 @@ containers that spill once; every authored reward marker pays outside the spawn-
 
 The game shell includes life/mana globes, flasks, two-row skill bar, experience rail, loot labels,
 inventory, stash, character sheet, passive tree, preparation panel, Atlas, death panel, buff bar,
-corner minimap, and a centred Tab overlay map. The map overlay has configurable opacity.
+corner minimap, and a centred Tab overlay map. The map overlay has configurable opacity. An
+optional small life bar rides over a monster once it has been damaged; it follows the interpolated
+mesh rather than the 30 Hz snapshot, or it would stutter a frame behind the body it labels.
 
 The tree is drawn as SVG from `@exiled/rules` directly, because the tree itself is content the
 client already has and only the allocation crosses the wire. It opens on the character's own door
@@ -227,13 +236,22 @@ gate the first frame waits on - a file that 404s or stalls must not be able to h
 
 Settings are global roster data and apply live. Current controls cover shadows, ambient occlusion,
 bloom, atmosphere, resolution scale, torch warmth, master/mute plus music/interface/skills/loot/
-environment mix, minimap, loot labels, globe numbers, overlay-map opacity, and skill-bar assignment.
+environment mix, minimap, loot labels, globe numbers, monster life bars, overlay-map opacity,
+skill-bar assignment, rebindable keys, and a debug-logging toggle.
+
+Keybinds are a tab of their own: binding a key already taken swaps the two rather than leaving a
+dead action. Debug logging is one flat channel written to `console.debug` (Chrome needs Verbose
+shown). Intents are logged at the send funnels, everything else is a snapshot diff, which is the
+same rule the audio follows and for the same reason - a log written at the press lies whenever the
+simulation refuses the cast.
 
 Audio is snapshot-diff driven through one bus, never a call at the dispatch site, so a cue fired on
 the press cannot lie when the simulation refuses the cast. The diff carries one rule worth stating:
 a first snapshot is not an event. The session's opening area message is a restore rather than a
 journey, and in development it arrives on every hot reload, so neither the arrival cue nor the
-crossing cue may fire on it.
+crossing cue may fire on it. The same care applies to pools: a life or energy-shield value that fell
+because its *maximum* fell - refunding a passive, unequipping the gear that granted it - is not a
+hit, and the hurt cue is guarded at that one shared site rather than at each caller.
 
 Curated cues cover interface, skills, impacts,
 movement surfaces, loot, portals, monsters, and environment. Five ambience beds are selected by
