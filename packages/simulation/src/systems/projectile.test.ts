@@ -121,25 +121,6 @@ describe("registerProjectileMove", () => {
     expect(afterSecond.y).toBe(afterHit.y);
   });
 
-  it("a bolt with no pierce is spent on the first body, as it always was", () => {
-    const sim = new Simulation();
-    registerProjectileMove(sim);
-    const proj = makeProjectile(sim, 0, 0, fp(1), 0, fp(20));
-    const monster1 = makeMonster(sim, fp(1), 0);
-    const monster2 = makeMonster(sim, fp(2), 0);
-    sim.step(); // bolt reaches monster1 and is spent there
-    expect(sim.damageQueue).toHaveLength(1);
-    expect(sim.damageQueue[0]!.target).toBe(monster1);
-    const p = sim.world.get<ProjectileC>(proj, "projectile")!;
-    expect(p.remainingRange).toBeLessThanOrEqual(0);
-    const afterHit = sim.world.get<Position>(proj, "position")!;
-    sim.step(); // spent bolt must not advance far enough to ever reach monster2
-    expect(sim.damageQueue).toHaveLength(0);
-    const afterSecond = sim.world.get<Position>(proj, "position")!;
-    expect(afterSecond.x).toBe(afterHit.x);
-    expect(afterSecond.y).toBe(afterHit.y);
-  });
-
   it("a bolt with pierceLeft 1 hits two bodies in a line and stops at the second", () => {
     const sim = new Simulation();
     registerProjectileMove(sim);
@@ -171,6 +152,40 @@ describe("registerProjectileMove", () => {
     expect(sim.damageQueue[0]!.target).toBe(monster2);
     p = sim.world.get<ProjectileC>(proj, "projectile")!;
     expect(p.remainingRange).toBeLessThanOrEqual(0);
+  });
+
+  it("a piercing bolt can strike two bodies on the same tick, not just across ticks", () => {
+    const sim = new Simulation();
+    registerProjectileMove(sim);
+    const proj = sim.world.create();
+    sim.world.set<Position>(proj, "position", { x: 0, y: 0 });
+    sim.world.set<ProjectileC>(proj, "projectile", {
+      dirx: fp(1), diry: 0,
+      remainingRange: fp(20),
+      radius: fp(0.4),
+      damageType: 0,
+      damageAmount: fp(25),
+      ownerId: proj,
+      team: 0,
+      pierceLeft: 1,
+      hitIds: [],
+    });
+    // Bolt lands at (fp(1), 0) after one step; combined radius is fp(0.4)+fp(0.5)
+    // = 900. monster1 sits dead on the landing point, monster2 is offset in y by
+    // 600 — inside combinedR2 (810000) but a distinct body, not colinear with the
+    // travel direction, so both are only reachable on the SAME tick, never a later
+    // one. A mutant that decrements pierceLeft but `break`s (deferring the second
+    // hit to next tick, when the bolt has moved past monster2 entirely) fails
+    // this: monster2 would never take damage at all.
+    const monster1 = makeMonster(sim, fp(1), 0);
+    const monster2 = makeMonster(sim, fp(1), fp(0.6));
+
+    sim.step();
+    expect(sim.damageQueue).toHaveLength(2);
+    const targets = sim.damageQueue.map((e) => e.target).sort();
+    expect(targets).toEqual([monster1, monster2].sort());
+    const p = sim.world.get<ProjectileC>(proj, "projectile")!;
+    expect(p.remainingRange).toBeLessThanOrEqual(0); // pierceLeft spent on the 2nd hit
   });
 
   it("a piercing bolt never hits the same body twice while it is still inside it", () => {
