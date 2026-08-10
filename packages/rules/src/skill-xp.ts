@@ -23,9 +23,9 @@ export function maxGemLevel(charLevel: number): number {
  * Quadratic for the same reason the character curve is (`xp.ts`): a kill's value
  * grows only LINEARLY with area level, so a steeper curve stops paying at all.
  * Twice the character coefficient because the climb is 19 levels rather than 99.
- * The whole climb costs 148,200, which on a three-skill bar is about 444,600
- * character experience and lands gem 20 near character 35; a full eight-slot bar
- * pushes it to about 47. `skill-xp.test.ts` pins that BAND, not this constant.
+ * The whole climb costs 148,200, which on a three-skill bar is 444,600 character
+ * experience and lands gem 20 at character 36; a full eight-slot bar pushes it
+ * to character 50. `skill-xp.test.ts` pins that BAND, not this constant.
  */
 export function gemXpToNext(gemLevel: number): number {
   if (gemLevel >= MAX_GEM_LEVEL) return 0;
@@ -64,7 +64,7 @@ export function gainGemXp(gem: Gem, amount: number, cap: number): Gem {
   if (gem.level >= MAX_GEM_LEVEL) return { level: MAX_GEM_LEVEL, xp: 0 };
   let level = gem.level;
   let xp = gem.xp + amount;
-  const ceiling = Math.min(MAX_GEM_LEVEL, Math.max(1, Math.trunc(cap)));
+  const ceiling = maxGemLevel(cap);
   while (level < ceiling && xp >= gemXpToNext(level)) {
     xp -= gemXpToNext(level);
     level++;
@@ -108,7 +108,7 @@ function scaleDamage(effect: EffectNode, pct: number, times: number): EffectNode
  * why the schema refuses a patch of the same field the growth grows.
  */
 export function effectiveSkill(def: SkillDef, gemLevel: number): SkillDef {
-  const level = Math.min(MAX_GEM_LEVEL, Math.max(1, Math.trunc(gemLevel)));
+  const level = maxGemLevel(gemLevel);
   const steps = level - 1;
   const { damagePct, manaPct, own } = def.growth.perLevel;
 

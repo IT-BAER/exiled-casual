@@ -348,7 +348,7 @@ function validateEffectNode(v: unknown, idx: number, errors: string[]): boolean 
   return ok;
 }
 
-function validateSkillGrowth(v: unknown, errors: string[]): void {
+function validateSkillGrowth(v: unknown, effects0Keys: Set<string> | undefined, errors: string[]): void {
   if (!isObj(v)) {
     errors.push("growth: required object");
     return;
@@ -420,6 +420,9 @@ function validateSkillGrowth(v: unknown, errors: string[]): void {
           `${path}.patch.${k}: growth.perLevel.own already grows this field; the patch would wipe it`,
         );
       }
+      if (effects0Keys !== undefined && !effects0Keys.has(k)) {
+        errors.push(`${path}.patch.${k}: not a field of effects[0], the patch would land as a dead key`);
+      }
     }
   }
 }
@@ -456,8 +459,11 @@ export function validateSkillDef(v: unknown): ValidationResult {
   if (v["classId"] !== undefined && (typeof v["classId"] !== "string" || v["classId"].length === 0)) {
     errors.push("classId: must be a non-empty string when present");
   }
-  validateSkillGrowth(v["growth"], errors);
   const effects = v["effects"];
+  const effects0Keys = Array.isArray(effects) && isObj(effects[0])
+    ? new Set(Object.keys(effects[0]))
+    : undefined;
+  validateSkillGrowth(v["growth"], effects0Keys, errors);
   if (!Array.isArray(effects) || effects.length === 0) {
     errors.push("effects: must be a non-empty array");
   } else {

@@ -5,6 +5,7 @@ import {
   MAX_GEM_LEVEL, maxGemLevel, gemXpToNext, isUnlocked, splitGemXp, gainGemXp,
   effectiveSkill, reachedBreakpoints, nextBreakpoint,
 } from "./skill-xp";
+import { xpToNext } from "./xp";
 
 const bolt: SkillDef = {
   id: "skill.fixture_bolt.v1",
@@ -72,11 +73,11 @@ describe("gemXpToNext", () => {
     for (let l = 1; l < MAX_GEM_LEVEL; l++) total += gemXpToNext(l);
     // ...is earned as one THIRD of the character's, on a three-skill bar.
     const charXpNeeded = total * 3;
-    // Invert the character curve (xpToNext = 30 * l * l) by walking it.
+    // Invert the real character curve by walking it.
     let acc = 0;
     let charLevel = 1;
     while (acc < charXpNeeded && charLevel < 100) {
-      acc += 30 * charLevel * charLevel;
+      acc += xpToNext(charLevel);
       charLevel++;
     }
     expect(charLevel).toBeGreaterThan(30);

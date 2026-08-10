@@ -475,6 +475,10 @@ describe("validateSkillDef: gem growth", () => {
         radiusFixed: 300,
         maxRangeFixed: 14000,
         damage: { type: "physical", amountFixed: 11000 },
+        // Present (even at 0) so a breakpoint patch of pierceCount names a real
+        // field, exactly like the three authored projectile bases in
+        // content-runtime/skills.ts.
+        pierceCount: 0,
       },
     ],
   };
@@ -567,6 +571,18 @@ describe("validateSkillDef: gem growth", () => {
     expect(validateSkillDef(withPierce).ok).toBe(true);
     const bad = { ...base, effects: [{ ...base.effects[0], pierceCount: -1 }] };
     expect(validateSkillDef(bad).ok).toBe(false);
+  });
+
+  it("rejects a breakpoint patch key absent from effects[0]", () => {
+    const r = validateSkillDef({
+      ...base,
+      growth: {
+        perLevel: { damagePct: 6, manaPct: 4 },
+        breakpoints: [{ atLevel: 5, text: "x", patch: { pierceCounts: 1 } }],
+      },
+    });
+    expect(r.ok).toBe(false);
+    expect(r.errors.join(" ")).toContain("pierceCounts");
   });
 
   it("accepts an absent classId and rejects an empty one", () => {
