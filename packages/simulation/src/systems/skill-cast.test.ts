@@ -632,6 +632,39 @@ describe("registerSkillCast", () => {
       expect(proj.damageAmount).toBe(fp(25));
       expect(sim.world.get<Mana>(caster, "mana")!.mana).toBe(fp(60) - fp(8));
     });
+
+    it("a gem level-up landing inside a wind-up does not change what that cast resolves as", () => {
+      // The cast is paid for at gem 4 (untilTick 3). Levelling the gem to 5 while
+      // it is still in flight must not let the gem-5 number leak into a cast
+      // already paid for — CastingC.gemLevel is what stops that, not a re-read
+      // of the caster's current level at resolution.
+      const sim = new Simulation();
+      registerSkillCast(sim, ALL_SKILLS);
+      const session = makeSessionWithGem(sim, DELAYED_BOLT.id, 4);
+      const caster = makeCaster(sim, fp(60));
+      sim.step([{
+        tick: 0, entity: caster, type: "useSkill",
+        skillId: DELAYED_BOLT.id, data: { tx: fp(10), ty: 0 },
+      }]);
+      expect(sim.world.get<CastingC>(caster, "casting")!.gemLevel).toBe(4);
+
+      // Level the gem to 5 mid wind-up (untilTick is 3; the wind-up is still open).
+      const skills = sim.world.get<SkillsC>(session, "skills")!;
+      sim.world.set<SkillsC>(session, "skills", {
+        ...skills, gems: { ...skills.gems, [DELAYED_BOLT.id]: { level: 5, xp: 0 } },
+      });
+
+      sim.step(); // tick 1
+      sim.step(); // tick 2
+      sim.step(); // tick 3: the wind-up resolves
+
+      const proj = sim.world.get<ProjectileC>(sim.world.query("projectile")[0]!, "projectile")!;
+      // +6%/level compounded over 3 steps (gem 4): trunc(25000 * 1.06^3) = 29775.
+      // The gem-5 number (4 steps) is 31561 — a mutant that re-reads the current
+      // gem level at resolution instead of `casting.gemLevel` produces that
+      // number here instead, failing this assertion.
+      expect(proj.damageAmount).toBe(29775);
+    });
   });
 
 });

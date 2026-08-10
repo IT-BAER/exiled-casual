@@ -202,8 +202,6 @@ export function registerSkillCast(
       const caster = cmd.entity;
       const base = skills.get(cmd.skillId);
       if (!base) continue;
-      const gemLevel = gemLevelFor(world, cmd.skillId);
-      const skill = effectiveSkill(base, gemLevel);
       // A corpse does not cast, same rule movement follows. Absent health reads
       // as alive so the health-less test casters are untouched.
       if ((world.get<Health>(caster, "health")?.life ?? 1) <= 0) continue;
@@ -224,6 +222,9 @@ export function registerSkillCast(
 
       const cds = world.get<Cooldowns>(caster, "cooldowns") ?? {};
       if ((cds[cmd.skillId] ?? 0) > tick) continue; // on cooldown
+
+      const gemLevel = gemLevelFor(world, cmd.skillId);
+      const skill = effectiveSkill(base, gemLevel);
 
       const offense = world.get<OffenseC>(caster, "offense");
       const manaComp = world.get<Mana>(caster, "mana");
