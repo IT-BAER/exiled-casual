@@ -1,6 +1,6 @@
 # Exiled Casual: current implementation contract
 
-Status: **as built and verified on 2026-08-10 at `3502a54`** (full suite 1751/1751, typecheck clean).
+Status: **as built and verified on 2026-08-10 at `66e2344`** (full suite 1765/1765, typecheck clean).
 
 This is the living specification for what the repository implements now. Earlier dated specs
 preserve the decision and delivery history of individual slices. Where an older proposal differs
@@ -128,8 +128,8 @@ Clusters of small nodes ring a notable, cheap travel nodes bridge neighbouring d
 in, and four keystones hang past the rim. Each keystone is a trade rather than a bigger notable.
 
 Three class doors open onto the two nearest disciplines each, so no class is born inside one. A
-character has 24 points at level 65 and two a level to the cap, which is 94 - enough to walk two
-disciplines and a keystone, never enough to walk all eight. Allocation is the PoE rule in one
+character opens with nothing and one point a level, which is 99 at the level 100 cap - enough to
+walk two disciplines and a keystone, never enough to walk all eight. Allocation is the PoE rule in one
 sentence: a node may be taken when it touches something already allocated, and the door counts as
 allocated. A notable additionally waits until more than half of its own rosette of minors is taken,
 so the centre of a cluster is earned rather than dived at.
@@ -147,6 +147,13 @@ is untrusted; `P` opens the tree, as does a gold plus sitting on the lower bar r
 which is also where an unspent point announces itself.
 
 ### Balance
+
+A character runs from level 1 to the level 100 cap. Atlas tier sets area level directly,
+`areaLevel(tier) = 2 + 6 * tier`, so tier 0 is area level 2 and the fifteenth tier is 86; `xpToNext`
+and the passive-point rate are shaped for the same climb. `monsterTierScale`'s per-tier steps were
+widened to keep pace with that broader span, but `balance.test.ts` measures time-to-kill and
+time-to-death against a fixed reference rig (`createCombatSim`'s Tier-0-equivalent 1000/1000 monster
+scale) that was never wired to `monsterTierScale`, so none of its bands moved for this change.
 
 Monster life and hit are per archetype rather than per species: what differs biome to biome is the
 element and the flavour. The current numbers are a deliberate casual pass - life down 25 percent and

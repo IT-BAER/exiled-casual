@@ -10,6 +10,16 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+### Changed
+
+- New characters start at level 1 instead of level 65, and the climb now runs
+  the whole way to 100. The Atlas starts at area level 2 and the highest tier
+  sits at 86, so the first map is a fair fight for someone just out of
+  character creation instead of a shove into the deep end. Life and mana from
+  levelling, and points on the passive tree, are spread across the longer
+  climb rather than handed out all at once, so a level still feels like
+  something happened.
+
 ### Added
 
 - Every character has an attack that costs nothing. The Ironsworn swings at what
