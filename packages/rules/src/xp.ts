@@ -2,22 +2,27 @@
 // reads: a level-up happens inside a tick and has to replay identically.
 
 /**
- * The character starts where PoE2's endgame does. This game has no campaign —
- * `areaLevel(0)` is already 64 — so a level-1 character would spend its whole
- * life fighting things thirty levels above it and the level-difference penalty
- * below would read as a permanent tax rather than a choice. Starting at 65 puts
- * the character in the same band as the maps it can actually open, which is what
- * makes pushing tier a decision: a higher tier pays more per kill and is worth
- * the risk only once you have the level to collect it.
+ * A character starts at 1. The Atlas is rescaled to meet him there
+ * (`atlas.ts`: tier 0 is area level 2), so the level-difference penalty is a
+ * choice about which tier to run, never a permanent tax for existing.
  */
-export const START_LEVEL = 65;
+export const START_LEVEL = 1;
 /** Both PoE games stop at 100, and so does this one. */
 export const MAX_LEVEL = 100;
 
-/** Experience needed to leave `level`. Zero at the cap: nothing to buy. */
+/**
+ * Experience needed to leave `level`. Zero at the cap: nothing to buy.
+ *
+ * Quadratic, because a kill's value only grows LINEARLY with area level: a
+ * cubic curve outruns what the player can earn and the late game stops paying
+ * at all. This shape holds the cost at roughly 15 normal-monster equivalents to
+ * leave level 1 and 3,400 to leave 99, which is a few minutes against about ten
+ * maps. `xp.test.ts` pins that band rather than the constant, so the constant
+ * can be retuned without anyone having to guess what it was protecting.
+ */
 export function xpToNext(level: number): number {
   if (level >= MAX_LEVEL) return 0;
-  return 60_000 + 40_000 * Math.max(0, level - START_LEVEL);
+  return 30 * level * level;
 }
 
 /**
@@ -56,12 +61,18 @@ export function xpAward(charLevel: number, areaLevel: number, kind: MonsterXpKin
 /**
  * What levelling itself grants. Deliberately small and flat: gear is where this
  * game's power lives, and a level that handed out a percentage would compound
- * with every affix. Six life and two mana a level is 210/70 over the whole
- * climb — about two chest pieces' worth across 35 levels.
+ * with every affix. The whole-climb total is unchanged from the 65-100 era -
+ * 210 life and 70 mana - so spreading it over 99 levels makes each level
+ * smaller, never the climb richer. Computed from the total rather than from a
+ * per-level rate so it lands exactly on 210/70 at the cap instead of drifting.
  */
 export function levelBonus(level: number): { maxLife: number; maxMana: number } {
-  const n = Math.max(0, level - START_LEVEL);
-  return { maxLife: 6 * n, maxMana: 2 * n };
+  const n = Math.min(Math.max(level, START_LEVEL), MAX_LEVEL) - START_LEVEL;
+  const span = MAX_LEVEL - START_LEVEL;
+  return {
+    maxLife: Math.trunc((210 * n) / span),
+    maxMana: Math.trunc((70 * n) / span),
+  };
 }
 
 /** Apply an award. Loops, so one boss can carry a character past two thresholds. */
