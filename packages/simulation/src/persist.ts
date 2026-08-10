@@ -4,7 +4,7 @@ import type { SessionC, InventoryC, StashC, VendorC, EquipmentC, ProgressC, Shar
 import { stockVendor } from "./vendor";
 import { withPermanentWaystone } from "./inventory";
 import { recomputePlayerStats } from "./derived";
-import { START_LEVEL, isUnlocked, maxGemLevel } from "@exiled/rules";
+import { START_LEVEL, isUnlocked, maxGemLevel, MAX_GEM_LEVEL, gemXpToNext } from "@exiled/rules";
 import { SKILLS, defaultAttackFor } from "@exiled/content-runtime";
 import { SKILL_SLOT_COUNT, MOUSE_SLOT_BASE, MOVE_SOCKET } from "@exiled/protocol";
 
@@ -92,6 +92,58 @@ export function normalizeBar(raw: unknown): (string | null)[] {
 }
 
 /**
+ * A saved gem map, proven rather than trusted: every level and xp is a clamped,
+ * finite integer, and a skill id content no longer defines is dropped rather
+ * than carried forever as a phantom gem. `cap` is `maxGemLevel(character
+ * level)` — a level saved above it is a hand edit or a pre-nerf save, and the
+ * xp beside it is clamped along with it: banked xp computed against a ceiling
+ * that no longer holds must not carry past what the clamped level allows, or
+ * the gem re-levels the instant it earns a single point once the character
+ * level catches back up (Task 5 review finding 4).
+ */
+function sanitizeGems(raw: unknown, cap: number): Record<string, { level: number; xp: number }> {
+  const src = raw !== null && typeof raw === "object" && !Array.isArray(raw)
+    ? (raw as Record<string, unknown>)
+    : {};
+  const out: Record<string, { level: number; xp: number }> = {};
+  for (const [id, v] of Object.entries(src)) {
+    if (!SKILLS.has(id)) continue;
+    const gem = v as { level?: unknown; xp?: unknown };
+    if (
+      typeof gem?.level !== "number" || !Number.isFinite(gem.level) ||
+      typeof gem?.xp !== "number" || !Number.isFinite(gem.xp)
+    ) continue;
+    const savedLevel = Math.max(1, Math.trunc(gem.level));
+    const level = Math.min(savedLevel, cap);
+    let xp = Math.max(0, Math.trunc(gem.xp));
+    if (level >= MAX_GEM_LEVEL) {
+      xp = 0;
+    } else if (level < savedLevel) {
+      xp = Math.min(xp, gemXpToNext(level) - 1);
+    }
+    out[id] = { level, xp };
+  }
+  return out;
+}
+
+/**
+ * Corrects just the class's default-attack mouse slot on an existing bar.
+ *
+ * `defaultBar` and `grantSkills` may run before the roster's classId is known
+ * (a fresh world's session carries none until `characters.ts` stamps it from
+ * the roster row), which seeds this one slot off the `""` fallback — every
+ * class's Snap Shot instead of its own attack (Task 5 review finding 1). This
+ * is called again once the real classId is known, on every load, so an
+ * already-wrong save self-heals on the next login rather than needing a
+ * one-time migration.
+ */
+export function reseedDefaultAttack(bar: (string | null)[], classId: string): (string | null)[] {
+  const out = [...bar];
+  out[MOUSE_SLOT_BASE + 2] = defaultAttackFor(classId);
+  return out;
+}
+
+/**
  * Bring the gem list level with the character. Idempotent and additive: a skill
  * the level now opens gets a gem at 1, a skill already held is left exactly as
  * it is, and nothing is ever taken away. Called on every load and on every
@@ -146,11 +198,7 @@ export function restore(world: World, state: PersistedState): void {
   const cap = maxGemLevel(progress.level);
   const saved = state.skills;
   if (saved) {
-    const gems: Record<string, { level: number; xp: number }> = {};
-    for (const [id, gem] of Object.entries(saved.gems)) {
-      gems[id] = { level: Math.min(gem.level, cap), xp: gem.xp };
-    }
-    world.set<SkillsC>(e, "skills", { gems, bar: normalizeBar(saved.bar) });
+    world.set<SkillsC>(e, "skills", { gems: sanitizeGems(saved.gems, cap), bar: normalizeBar(saved.bar) });
   }
   grantSkills(world);
   world.set<ShardsC>(e, "shards", state.shards ?? { counts: {} });

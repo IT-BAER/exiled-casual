@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { isPermanentWaystone } from "@exiled/content-runtime";
 import { MemoryKv } from "@exiled/persistence";
-import { rollItem, areaLevel, maxGemLevel } from "@exiled/rules";
+import { rollItem, areaLevel, maxGemLevel, gemXpToNext } from "@exiled/rules";
 import { ITEM_POOLS, baseOf, defaultAttackFor } from "@exiled/content-runtime";
 import { SKILL_SLOT_COUNT, MOVE_SOCKET } from "@exiled/protocol";
 import { createCombatSim } from "./combat-sim";
@@ -130,9 +130,14 @@ describe("persist: run-transaction fault injection", () => {
 describe("skills persistence", () => {
   it("a fresh world has a gem for every skill level 1 unlocks and none it does not", () => {
     const { world } = createCombatSim(7, { area: "hideout" });
+    // Pin a NAMED, non-Stalker class: `session.classId ?? ""` degrades to the
+    // same Stalker fallback the review's Critical bug also produced, which
+    // would make this assertion pass whether or not the class is wired up.
+    setSession(world, { classId: "class.ironsworn" });
+    grantSkills(world);
     const skills = world.get<SkillsC>(sessionEntity(world), "skills")!;
-    const session = getSession(world);
-    const defaultAttackId = defaultAttackFor(session.classId ?? "");
+    const defaultAttackId = defaultAttackFor("class.ironsworn");
+    expect(defaultAttackId).toBe("skill.strike.v1");
     expect(skills.gems[defaultAttackId]).toEqual({ level: 1, xp: 0 });
     expect(skills.gems["skill.ember_bolt.v1"]).toEqual({ level: 1, xp: 0 });
     expect(Object.hasOwn(skills.gems, "skill.blink.v1")).toBe(false);
@@ -217,5 +222,68 @@ describe("skills persistence", () => {
     const skills = fresh.get<SkillsC>(sessionEntity(fresh), "skills")!;
     expect(maxGemLevel(3)).toBe(3);
     expect(skills.gems["skill.ember_bolt.v1"]!.level).toBe(maxGemLevel(3));
+    // Review finding 4: xp banked against the fictional level-20 ceiling must
+    // not survive the clamp, or the gem re-levels straight back up the instant
+    // it earns a single point once the character catches up to a higher cap.
+    expect(skills.gems["skill.ember_bolt.v1"]!.xp).toBeLessThan(gemXpToNext(maxGemLevel(3)));
+  });
+
+  it("a gem already at the level cap keeps its legitimately banked xp", () => {
+    // Not clamped down (savedLevel === cap): the banking design (skill-xp.ts)
+    // lets xp exceed gemXpToNext while capped, on purpose, so this must survive
+    // untouched — proof the finding-4 fix only fires on an actual downclamp.
+    const { world } = createCombatSim(7, { area: "hideout" });
+    const base = snapshot(world)!;
+    const state: PersistedState = {
+      ...base,
+      progress: { level: 3, xp: 0, gold: 0 },
+      skills: { gems: { "skill.ember_bolt.v1": { level: 3, xp: 999 } }, bar: defaultBar("") },
+    };
+
+    const fresh = createCombatSim(9, { area: "hideout" }).world;
+    restore(fresh, state);
+
+    expect(fresh.get<SkillsC>(sessionEntity(fresh), "skills")!.gems["skill.ember_bolt.v1"])
+      .toEqual({ level: 3, xp: 999 });
+  });
+
+  it("restore drops hostile gem data instead of poisoning the checksum", () => {
+    const { world } = createCombatSim(7, { area: "hideout" });
+    const base = snapshot(world)!;
+    const state: PersistedState = {
+      ...base,
+      progress: { level: 10, xp: 0, gold: 0 },
+      skills: {
+        gems: {
+          "skill.ember_bolt.v1": { level: 2.9, xp: 5 },       // non-integer level: truncated
+          "skill.blink.v1": { level: "20", xp: 0 } as unknown as { level: number; xp: number }, // wrong type: dropped
+          "skill.town_portal.v1": { level: NaN, xp: 0 },       // NaN: dropped
+          "skill.cinder_ground.v1": { level: -5, xp: -3 },     // out of range: floored to legal minimums
+          "skill.nonexistent.v1": { level: 1, xp: 0 },         // unknown id: dropped
+        },
+        bar: defaultBar(""),
+      },
+    };
+
+    const fresh = createCombatSim(9, { area: "hideout" }).world;
+    // The point of this test: restore must not throw, and the world it produces
+    // must still be checksum-safe (every numeric field a finite integer).
+    expect(() => restore(fresh, state)).not.toThrow();
+
+    const skills = fresh.get<SkillsC>(sessionEntity(fresh), "skills")!;
+    for (const gem of Object.values(skills.gems)) {
+      expect(Number.isInteger(gem.level)).toBe(true);
+      expect(Number.isInteger(gem.xp)).toBe(true);
+    }
+    expect(skills.gems["skill.ember_bolt.v1"]).toEqual({ level: 2, xp: 5 });
+    // Dropped as bad data, but level 10 unlocks both — grantSkills (which
+    // restore() always runs after sanitizing) legitimately re-grants them at
+    // level 1 rather than leaving the character locked out of a skill it owns.
+    expect(skills.gems["skill.blink.v1"]).toEqual({ level: 1, xp: 0 });
+    expect(skills.gems["skill.town_portal.v1"]).toEqual({ level: 1, xp: 0 });
+    expect(skills.gems["skill.cinder_ground.v1"]!.level).toBe(1);
+    expect(skills.gems["skill.cinder_ground.v1"]!.xp).toBe(0);
+    // Not a real skill id: nothing grants it back, so it stays gone for good.
+    expect(skills.gems["skill.nonexistent.v1"]).toBeUndefined();
   });
 });

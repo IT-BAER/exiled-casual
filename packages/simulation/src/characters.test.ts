@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { MemoryKv, ROSTER_VERSION, addCharacter, emptyRoster, findCharacter, saveRoster } from "@exiled/persistence";
 import { CLASS_IDS, DEFAULT_CLASS_ID, START_LEVEL } from "@exiled/rules";
-import { CLASSES, STARTER_BASE_IDS, baseOf } from "@exiled/content-runtime";
+import { CLASSES, STARTER_BASE_IDS, baseOf, defaultAttackFor } from "@exiled/content-runtime";
+import { MOUSE_SLOT_BASE } from "@exiled/protocol";
 import { createCombatSim } from "./combat-sim";
 import { saveTo } from "./persist";
 import { equipStartingGear, loadCharacterInto, saveCharacterTo } from "./characters";
@@ -12,7 +13,7 @@ import {
   migrateSingleSave,
   openRoster,
 } from "./roster-io";
-import type { EquipmentC, InventoryC, ProgressC, SessionC, StashC } from "./components";
+import type { EquipmentC, InventoryC, ProgressC, SessionC, SkillsC, StashC } from "./components";
 
 const NOW = 1_700_000_000_000;
 type Sim = ReturnType<typeof createCombatSim>;
@@ -197,6 +198,35 @@ describe("loadCharacterInto / saveCharacterTo", () => {
 
   it("reports false for a character that is not in the roster", async () => {
     expect(await loadCharacterInto(await withOneCharacter(), fresh(), "nobody")).toBe(false);
+  });
+
+  // Review finding 1 (Critical): the bar used to be seeded off classId "" —
+  // combat-sim's own initial world seed runs before the roster's classId is
+  // known — so every class got the Stalker's Snap Shot in the right-click slot.
+  it("seeds a never-played character's mouse attack from its own class, not the Stalker fallback", async () => {
+    const kv = await withOneCharacter("class.ironsworn");
+    const world = fresh();
+    await loadCharacterInto(kv, world, "vess");
+    const bar = get<SkillsC>(world, "skills").bar;
+    expect(defaultAttackFor("class.ironsworn")).toBe("skill.strike.v1");
+    expect(bar[MOUSE_SLOT_BASE + 2]).toBe("skill.strike.v1");
+  });
+
+  it("self-heals a character already saved with the wrong class's attack in the mouse slot", async () => {
+    const kv = await withOneCharacter("class.ironsworn");
+    const world = fresh();
+    await loadCharacterInto(kv, world, "vess");
+    // Simulate a save written by the pre-fix build: the mouse slot holds Snap
+    // Shot regardless of class.
+    const skills = get<SkillsC>(world, "skills");
+    const badBar = [...skills.bar];
+    badBar[MOUSE_SLOT_BASE + 2] = "skill.snap_shot.v1";
+    set<SkillsC>(world, "skills", { ...skills, bar: badBar });
+    await saveCharacterTo(kv, world, "vess");
+
+    const reboot = fresh();
+    await loadCharacterInto(kv, reboot, "vess");
+    expect(get<SkillsC>(reboot, "skills").bar[MOUSE_SLOT_BASE + 2]).toBe("skill.strike.v1");
   });
 
   it("round-trips one character's progress", async () => {

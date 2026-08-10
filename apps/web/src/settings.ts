@@ -12,6 +12,9 @@
  * game that will not start and cannot say why.
  */
 
+import { SKILL_SLOT_COUNT, MOUSE_SLOT_BASE, MOVE_SOCKET } from "@exiled/protocol";
+export { SKILL_SLOT_COUNT, MOUSE_SLOT_BASE, MOVE_SOCKET };
+
 export type ShadowQuality = "off" | "low" | "high";
 
 /**
@@ -81,9 +84,6 @@ export interface UiSettings {
    */
   debugLogging: boolean;
 }
-
-import { SKILL_SLOT_COUNT, MOUSE_SLOT_BASE, MOVE_SOCKET } from "@exiled/protocol";
-export { SKILL_SLOT_COUNT, MOUSE_SLOT_BASE, MOVE_SOCKET };
 
 /** Everything a key can be told to do. Escape and the skill row (1-5) stay fixed. */
 export const KEYBIND_ACTIONS = [

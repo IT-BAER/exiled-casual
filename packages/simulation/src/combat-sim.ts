@@ -15,9 +15,9 @@ import { World } from "./ecs";
 import type { Entity } from "./ecs";
 import type {
   Position, Health, Mana, Faction, PlayerC, Cooldowns, DefensesC,
-  MoveTarget, MoveDir, SessionC, AreaKind, InventoryC, StashC, VendorC, ItemC, EquipmentC, FlasksC, ProgressC, ShardsC, SkillsC,
+  MoveTarget, MoveDir, SessionC, AreaKind, InventoryC, StashC, VendorC, ItemC, EquipmentC, FlasksC, ProgressC, ShardsC,
 } from "./components";
-import { defaultBar, grantSkills } from "./persist";
+import { grantSkills } from "./persist";
 import { registerResourceRegen } from "./systems/resource";
 import { registerSkillCast } from "./systems/skill-cast";
 import { registerPlayerMovement } from "./systems/player-movement";
@@ -136,7 +136,8 @@ export function createCombatSim(
     world.set<StashC>(sessionE, "stash", { cols: 12, rows: 12, items: [] });
     world.set<ShardsC>(sessionE, "shards", { counts: {} });
     world.set<ProgressC>(sessionE, "progress", { level: START_LEVEL, xp: 0, gold: START_GOLD });
-    world.set<SkillsC>(sessionE, "skills", { gems: {}, bar: defaultBar(session.classId ?? "") });
+    // grantSkills seeds a bar itself (defaultBar(classId)) when none exists yet,
+    // so a separate world.set here would only be overwritten one line later.
     grantSkills(world);
     world.set<VendorC>(sessionE, "vendor", stockVendor(seed, START_LEVEL));
     world.set<EquipmentC>(sessionE, "equipment", { slots: {} });

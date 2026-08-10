@@ -20,8 +20,8 @@ import { characterClass } from "@exiled/content-runtime";
 import { START_LEVEL, classIdOr } from "@exiled/rules";
 import type { Item } from "@exiled/content-schema";
 import type { World } from "./ecs";
-import type { EquipmentC, ProgressC, SessionC, StashC } from "./components";
-import { EMPTY_STASH, restore, snapshot, type PersistedState } from "./persist";
+import type { EquipmentC, ProgressC, SessionC, SkillsC, StashC } from "./components";
+import { EMPTY_STASH, restore, reseedDefaultAttack, snapshot, type PersistedState } from "./persist";
 import { recomputePlayerStats } from "./derived";
 import { openRoster } from "./roster-io";
 
@@ -72,6 +72,15 @@ export async function loadCharacterInto(
   if (sessionE !== undefined) {
     const session = world.get<SessionC>(sessionE, "session");
     if (session) world.set<SessionC>(sessionE, "session", { ...session, classId: record.classId });
+    // Skills were seeded above (restore(), or a fresh world's own combat-sim
+    // seed for a never-played character) before this classId was known, so the
+    // bar's mouse-right slot may hold the "" fallback's Snap Shot regardless of
+    // class. Re-derive that one slot now, every load, so an already-wrong save
+    // self-heals on the next login instead of needing a one-time migration.
+    const skills = world.get<SkillsC>(sessionE, "skills");
+    if (skills) {
+      world.set<SkillsC>(sessionE, "skills", { ...skills, bar: reseedDefaultAttack(skills.bar, record.classId) });
+    }
   }
   // After restore either way: restore() would otherwise put the character's own
   // stale stash copy back over the shared one.
