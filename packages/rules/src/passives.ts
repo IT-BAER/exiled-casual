@@ -155,8 +155,8 @@ type ThemeId = keyof typeof THEMES;
  * and the reason two Rangers can end up nothing alike.
  *
  * The themes run defensive-first on purpose. The nearest cluster on every spoke
- * is something a level-65 character can use immediately, and the specialised
- * ones are two clusters out, so the first ten points are never wasted.
+ * is something a character can use as soon as he has a point to spend, and the
+ * specialised ones are two clusters out, so the first ten points are never wasted.
  */
 const SPOKES: readonly { name: string; themes: readonly [ThemeId, ThemeId, ThemeId, ThemeId] }[] = [
   { name: "Ember",   themes: ["life", "spell", "fireRes", "spell"] },

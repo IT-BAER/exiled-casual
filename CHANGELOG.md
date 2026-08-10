@@ -13,8 +13,8 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 ### Changed
 
 - New characters start at level 1 instead of level 65, and the climb now runs
-  the whole way to 100. The Atlas starts at area level 2 and the highest tier
-  sits at 86, so the first map is a fair fight for someone just out of
+  the whole way to 100. The Atlas starts at area level 8 and the highest tier
+  sits at 92, so the first map is a fair fight for someone just out of
   character creation instead of a shove into the deep end. Life and mana from
   levelling, and points on the passive tree, are spread across the longer
   climb rather than handed out all at once, so a level still feels like

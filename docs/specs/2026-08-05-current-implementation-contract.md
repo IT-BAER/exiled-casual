@@ -149,7 +149,8 @@ which is also where an unspent point announces itself.
 ### Balance
 
 A character runs from level 1 to the level 100 cap. Atlas tier sets area level directly,
-`areaLevel(tier) = 2 + 6 * tier`, so tier 0 is area level 2 and the fifteenth tier is 86; `xpToNext`
+`areaLevel(tier) = 2 + 6 * tier`. Waystone tiers run 1 to 15 (`WAYSTONE_MAX_TIER`), so the playable
+range is Tier 1 at area level 8 through Tier 15 at area level 92; `xpToNext`
 and the passive-point rate are shaped for the same climb. `monsterTierScale`'s per-tier steps were
 widened to keep pace with that broader span, but `balance.test.ts` measures time-to-kill and
 time-to-death against a fixed reference rig (`createCombatSim`'s Tier-0-equivalent 1000/1000 monster
