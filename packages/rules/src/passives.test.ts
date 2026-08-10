@@ -229,7 +229,7 @@ describe("the passive budget over a 1-100 climb", () => {
   });
 
   it("reaches the same budget at the cap the 65-94 era ended on", () => {
-    // 94 points in a 239-node tree: enough to walk two disciplines and a
+    // 99 points in a 239-node tree: enough to walk two disciplines and a
     // keystone, never enough to walk all eight. That budget is the design.
     expect(passivePoints(MAX_LEVEL)).toBe(99);
   });

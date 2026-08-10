@@ -6,6 +6,7 @@ import { waystoneItem, permanentWaystone, isPermanentWaystone, describeItem, cur
 import { Simulation } from "../loop";
 import { registerInteractSystem } from "./interact";
 import { registerSkillCast } from "./skill-cast";
+import { recomputePlayerStats } from "../derived";
 import type { World } from "../ecs";
 import type { SessionC, Position, InteractableC, InventoryC, ContainerC, Health } from "../components";
 import { PASSIVE_TREE, canAllocate, isStartNode, passiveNode, passivePoints, startNodeId, START_LEVEL, MAX_LEVEL } from "@exiled/rules";
@@ -586,8 +587,8 @@ describe("the passive tree", () => {
   });
 
   it("stops at the points the level pays for", () => {
-    const { sim, world, player, sessionE } = atLevel();
-    const budget = passivePoints(START_LEVEL);
+    const { sim, world, player, sessionE } = atLevel(MAX_LEVEL);
+    const budget = passivePoints(MAX_LEVEL);
     // Walk outward greedily until the budget runs out, then try once more.
     for (let i = 0; i <= budget + 5; i++) {
       const have = allocated(world, sessionE);
@@ -619,7 +620,12 @@ describe("the passive tree", () => {
     [{ tick: 0, entity: player, type: "refundPassive", passiveId: nodeId }];
 
   it("gives one node back, and the stats it granted with it", () => {
-    const { sim, world, player, sessionE } = atLevel();
+    const { sim, world, player, sessionE } = atLevel(MAX_LEVEL);
+    // `health` is seeded flat in makeWorld() and only synced to the level's own
+    // life bonus by recomputePlayerStats, which allocate/refund trigger. Prime it
+    // once with zero passives so "bare" is the level-100 baseline the refund
+    // itself will land back on, not the pre-sync scaffold value.
+    recomputePlayerStats(world);
     const bare = world.get<Health>(player, "health")!.maxLife;
     sim.step(take(player, near));
     sim.step(give(player, near));
@@ -644,7 +650,7 @@ describe("the passive tree", () => {
   });
 
   it("gives every point back at once, and the stats with them", () => {
-    const { sim, world, player, sessionE } = atLevel();
+    const { sim, world, player, sessionE } = atLevel(MAX_LEVEL);
     sim.step(take(player, near));
     const withNode = world.get<Health>(player, "health")?.maxLife ?? 0;
     sim.step([{ tick: 0, entity: player, type: "respecPassives" }]);
