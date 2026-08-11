@@ -44,8 +44,12 @@ describe("sfx assets", () => {
     const body = readFileSync(resolve(__dirname, "soundscape.ts"), "utf8");
     const emitted = [...body.matchAll(/play\("([a-z0-9-]+)"/g)].map((m) => m[1]!);
     const cast = [...body.matchAll(/"skill\.[a-z_.0-9]+":\s*"([a-z0-9-]+)"/g)].map((m) => m[1]!);
-    expect(emitted.length).toBeGreaterThan(5);
-    for (const name of [...emitted, ...cast]) expect(voices.has(name), name).toBe(true);
+    // The flight and impact cues moved into per-skill profiles (skill-fx.ts):
+    // the loop reads them off fxProfile() rather than a literal in soundscape.ts.
+    const fxBody = readFileSync(resolve(__dirname, "../render/skill-fx.ts"), "utf8");
+    const fx = [...fxBody.matchAll(/(?:flightCue|impactCue):\s*"([a-z0-9-]+)"/g)].map((m) => m[1]!);
+    expect(emitted.length + fx.length).toBeGreaterThan(5);
+    for (const name of [...emitted, ...cast, ...fx]) expect(voices.has(name), name).toBe(true);
   });
 
   /**

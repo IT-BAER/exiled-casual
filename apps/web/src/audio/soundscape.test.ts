@@ -397,6 +397,19 @@ describe("sustained skills", () => {
     ]);
   });
 
+  /**
+   * The flight loop is read off the skill's own profile, not one bed shared by
+   * every bolt kind: an arrow has no burning tail, so it gets no loop at all.
+   */
+  it("mutes the arrow's flight bed instead of giving it fire's tail", () => {
+    const arrow: SnapshotEntity = { id: 9, kind: "projectile", x: 1, y: 0, team: 0, skillId: "skill.snap_shot.v1" };
+    const log = runLoops([
+      snap({ tick: 1 }),
+      snap({ tick: 2, entities: [arrow] }),
+    ]);
+    expect(log).toEqual([]);
+  });
+
   it("a monster's spit is not the player's skill", () => {
     const spit: SnapshotEntity = { id: 2, kind: "projectile", x: 1, y: 0, team: 1 };
     const log = runLoops([snap({ tick: 1 }), snap({ tick: 2, entities: [spit] })]);

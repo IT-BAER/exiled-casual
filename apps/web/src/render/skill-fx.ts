@@ -305,6 +305,7 @@ export const SKILL_FX: Record<string, FxProfile> = {
     lifeMax: 0.06,
     burstColour: new Color3(0.8, 0.78, 0.7),
     burstRadius: 0.9,
+    flightCue: null,
   },
   "skill.strike.v1": FALLBACK_FX,
   "skill.cinder_ground.v1": {

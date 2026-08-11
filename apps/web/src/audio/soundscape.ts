@@ -5,6 +5,7 @@ import {
   worldSfxMix,
 } from "./sfx";
 import { setRoom } from "./bus";
+import { fxProfile } from "../render/skill-fx";
 
 /**
  * The fight, heard rather than described.
@@ -191,7 +192,7 @@ interface Options {
  * which is over long before the thing it described is.
  */
 function sustainedCue(e: SnapshotEntity): string | null {
-  if (e.kind === "projectile") return (e.team ?? 0) === 0 ? "skill-ember-bolt-flight" : null;
+  if (e.kind === "projectile") return (e.team ?? 0) === 0 ? fxProfile(e.skillId).flightCue : null;
   if (e.kind === "groundArea") return "skill-cinder-ground-loop";
   return null;
 }
@@ -272,7 +273,8 @@ export function createSoundscape(opts: Options = {}): Soundscape {
         } else if (e.kind === "projectile" && (e.team ?? 0) === 0) {
           // His own bolt, spent: it either hit something or ran out of range, and
           // both are the same burst as far as the ear is concerned.
-          play("skill-ember-bolt-impact", ...at(e));
+          const cue = fxProfile(e.skillId).impactCue;
+          if (cue) play(cue, ...at(e));
         }
         // Whatever it was, it is not sounding any more.
         const key = sustained.get(id);
