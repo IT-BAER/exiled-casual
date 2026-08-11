@@ -268,6 +268,7 @@ export function buildSnapshot(
       // Nothing else in the snapshot says whose a bolt is, and the client has to
       // tell his own cast from a spitter's answer to sound either of them.
       team: pr.team,
+      ...(pr.skillId ? { skillId: pr.skillId } : {}),
     });
   }
 
@@ -279,6 +280,7 @@ export function buildSnapshot(
       x: toNumber(gp.x), y: toNumber(gp.y),
       radius: toNumber(ga.radius),
       remainingSeconds: (ga.expiryTick - tick) / 30,
+      ...(ga.skillId ? { skillId: ga.skillId } : {}),
     });
   }
 

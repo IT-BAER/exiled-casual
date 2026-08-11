@@ -261,6 +261,9 @@ export interface ProjectileC {
   /** Entities already struck, so a bolt still overlapping a body it pierced does
    *  not hit it again every tick. Only ever set on a piercing bolt. */
   hitIds?: number[];
+  /** Which skill spawned this, so the client can pick its look. Absent on a
+   *  monster's own projectile, which has no skill behind it. */
+  skillId?: string;
 }
 export interface GroundAreaC {
   radius: Fixed;
@@ -273,6 +276,9 @@ export interface GroundAreaC {
   maxStacks: number;
   /** team that OWNS this area; only entities on a different team are affected */
   team: number;
+  /** Which skill spawned this, so the client can pick its look. Absent on a
+   *  monster's own projectile, which has no skill behind it. */
+  skillId?: string;
 }
 export interface BossC {
   phase: 1 | 2;

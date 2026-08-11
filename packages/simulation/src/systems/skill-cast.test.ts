@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { fp } from "@exiled/fixed-point";
 import { Simulation } from "../loop";
 import { registerSkillCast } from "./skill-cast";
+import { createCombatSim } from "../combat-sim";
 import { gridCollision } from "../collision";
 import { makeGrid } from "../test-grid";
 import type { SkillDef } from "@exiled/content-schema";
@@ -665,6 +666,17 @@ describe("registerSkillCast", () => {
       // number here instead, failing this assertion.
       expect(proj.damageAmount).toBe(29775);
     });
+  });
+
+  it("a cast projectile names the skill that made it, so the client can draw it", () => {
+    const { sim, world, playerEntity } = createCombatSim(7, { monsters: false });
+    sim.step([{
+      tick: sim.tick, entity: playerEntity, type: "useSkill",
+      skillId: "skill.ember_bolt.v1", data: { tx: fp(0), ty: fp(6) },
+    }]);
+    for (let i = 0; i < 9; i++) sim.step(); // ember_bolt's castTicks wind-up
+    const proj = world.query("projectile")[0]!;
+    expect(world.get<ProjectileC>(proj, "projectile")!.skillId).toBe("skill.ember_bolt.v1");
   });
 
 });

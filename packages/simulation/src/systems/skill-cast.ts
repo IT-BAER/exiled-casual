@@ -74,6 +74,7 @@ export function registerSkillCast(
           ownerId: caster,
           team: casterTeam,
           ...(effect.pierceCount ? { pierceLeft: effect.pierceCount, hitIds: [] } : {}),
+          skillId: skill.id,
         });
       } else if (effect.type === "spawnGroundArea") {
         // Aimed past a wall, the patch lands on the wall instead of in the room
@@ -100,6 +101,7 @@ export function registerSkillCast(
           ailmentDuration: effect.ailment.durationTicks,
           maxStacks: effect.ailment.maxStacks,
           team: casterTeam,
+          skillId: skill.id,
         });
       } else if (effect.type === "meleeStrike") {
         // No entity and no flight: the swing resolves inside the cast, which is

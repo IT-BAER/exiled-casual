@@ -202,6 +202,12 @@ export interface SnapshotEntity {
    * `rarity` are protocol-local types.
    */
   species?: string;
+  /**
+   * projectile/groundArea only: which skill spawned it, so the renderer can pick
+   * its look. A plain string for the same reason `species` is one: the wire
+   * contract must not depend on content.
+   */
+  skillId?: string;
   remainingSeconds?: number;
   ailmentStacks?: number;
   /**

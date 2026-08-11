@@ -560,5 +560,17 @@ describe("buildSnapshot - skills", () => {
       "skill.blink.v1",
     ]);
   });
+
+  it("puts the skill id on the projectile it serializes", () => {
+    const { sim, world, playerEntity } = createCombatSim(7, { monsters: false });
+    sim.step([{
+      tick: sim.tick, entity: playerEntity, type: "useSkill",
+      skillId: "skill.ember_bolt.v1", data: { tx: fp(0), ty: fp(6) },
+    }]);
+    for (let i = 0; i < 9; i++) sim.step(); // ember_bolt's castTicks wind-up
+    const snap = buildSnapshot(world, sim, sim.tick, CONTENT_VERSION);
+    const proj = snap.entities.find((e) => e.kind === "projectile")!;
+    expect(proj.skillId).toBe("skill.ember_bolt.v1");
+  });
 });
 
