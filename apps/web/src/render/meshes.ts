@@ -13,7 +13,7 @@ import {
 } from "@babylonjs/core";
 import { attachProp, type PropKind } from "./props";
 import { attachCreature, type CreatureRig } from "./monsters";
-import { attachBoltTrail, attachCinderFX, cinderGlow } from "./skill-fx";
+import { attachBoltTrail, attachCinderFX, cinderGlow, fxProfile } from "./skill-fx";
 import { attachRig, rigOf, type RigParts } from "./rig";
 import { hasRim, HIT_TINT, HIT_ALPHA } from "./rim";
 import { playSfx, worldSfxMix } from "../audio/sfx";
@@ -1450,6 +1450,7 @@ export function makeMesh(
   name: string,
   at?: Vector3,
   species?: string,
+  skillId?: string,
 ): Mesh {
   // ponytail: each actor is assembled from ~10 primitive parts per instance
   // (shared materials, but geometry is not GPU-instanced). Fine for a lab-sized
@@ -1604,7 +1605,7 @@ export function makeMesh(
     mesh.position.copyFrom(at);
     mesh.computeWorldMatrix(true); // the trail reads the bounding box, not the position
   }
-  if (kind === "projectile") attachBoltTrail(scene, mesh);
+  if (kind === "projectile") attachBoltTrail(scene, mesh, fxProfile(skillId));
   else attachCinderFX(scene, mesh);
   return mesh;
 }

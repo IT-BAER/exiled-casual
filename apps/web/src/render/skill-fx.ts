@@ -230,6 +230,55 @@ function shockwave(scene: Scene, at: Vector3, to: number, color: Color3): void {
   playOnce(scene, ring, 0.32, 0.35, to, 0.9);
 }
 
+/**
+ * What one skill looks and sounds like. Colour is never the only difference:
+ * bloom is a graphics setting, so size, rate and speed have to carry it too.
+ */
+export interface FxProfile {
+  core: Color3;
+  wake: Color3;
+  trailWidth: number;
+  emitRate: number;
+  sizeStart: number;
+  sizeEnd: number;
+  lifeMin: number;
+  lifeMax: number;
+  burstColour: Color3;
+  burstRadius: number;
+  flightCue: string | null;
+  impactCue: string | null;
+}
+
+/** What a monster's bolt and any unmapped skill draw: today's ember bolt. */
+export const FALLBACK_FX: FxProfile = {
+  core: new Color3(1, 0.55, 0.2),
+  wake: new Color3(1, 0.55, 0.2),
+  trailWidth: 0.08,
+  emitRate: 80,
+  sizeStart: 0.5,
+  sizeEnd: 0.1,
+  lifeMin: 0.05,
+  lifeMax: 0.1,
+  burstColour: new Color3(1, 0.55, 0.18),
+  burstRadius: 2.2,
+  flightCue: "skill-ember-bolt-flight",
+  impactCue: "skill-ember-bolt-impact",
+};
+
+export const SKILL_FX: Record<string, FxProfile> = {
+  "skill.ember_bolt.v1": FALLBACK_FX,
+  "skill.ember_spark.v1": FALLBACK_FX,
+  "skill.snap_shot.v1": FALLBACK_FX,
+  "skill.strike.v1": FALLBACK_FX,
+  "skill.cinder_ground.v1": FALLBACK_FX,
+  "skill.blink.v1": FALLBACK_FX,
+  "skill.town_portal.v1": FALLBACK_FX,
+};
+
+export function fxProfile(skillId: string | undefined): FxProfile {
+  return (skillId === undefined ? undefined : SKILL_FX[skillId]) ?? FALLBACK_FX;
+}
+
 export const BOLT_TRAIL_NAME = "fx-bolt-trail";
 
 /**
@@ -241,7 +290,7 @@ export const BOLT_TRAIL_NAME = "fx-bolt-trail";
  * spawned at wherever it was that frame and then left behind in world space,
  * which is what makes the tail a tail instead of a fur coat that flies along.
  */
-export function attachBoltTrail(scene: Scene, mesh: AbstractMesh): ParticleSystem {
+export function attachBoltTrail(scene: Scene, mesh: AbstractMesh, fx: FxProfile = FALLBACK_FX): ParticleSystem {
   const ps = fireSystem(scene, BOLT_TRAIL_NAME, 140);
   ps.emitter = mesh;
   ps.minEmitBox = new Vector3(-0.04, -0.04, -0.04);
@@ -251,10 +300,10 @@ export function attachBoltTrail(scene: Scene, mesh: AbstractMesh): ParticleSyste
   // its 256px cell and the rest is black, so the quad has to be oversized
   // before the fire is anything but a few pixels: at 0.6 the whole tail came
   // out as a dotted red line behind a white ball.
-  sizeOverLife(ps, 0.5, 0.1);
-  ps.minLifeTime = 0.05;
-  ps.maxLifeTime = 0.1;
-  ps.emitRate = 80;
+  sizeOverLife(ps, fx.sizeStart, fx.sizeEnd);
+  ps.minLifeTime = fx.lifeMin;
+  ps.maxLifeTime = fx.lifeMax;
+  ps.emitRate = fx.emitRate;
 
   // Sideways and slightly up, then gravity takes them down. Sparks that fall out
   // of the flight path are what sells it as burning matter and not a light.
@@ -269,8 +318,8 @@ export function attachBoltTrail(scene: Scene, mesh: AbstractMesh): ParticleSyste
   // discrete, so a fast bolt always breaks its own tail into a dotted line —
   // and a streak is the single thing that separates a fireball from a comet
   // sprite in the reference frame.
-  const ribbon = new TrailMesh(`${BOLT_TRAIL_NAME}-ribbon`, mesh, scene, 0.08, 10, true);
-  ribbon.material = glowMaterial(scene, `${BOLT_TRAIL_NAME}-ribbon-mat`, new Color3(1, 0.55, 0.2));
+  const ribbon = new TrailMesh(`${BOLT_TRAIL_NAME}-ribbon`, mesh, scene, fx.trailWidth, 10, true);
+  ribbon.material = glowMaterial(scene, `${BOLT_TRAIL_NAME}-ribbon-mat`, fx.wake);
   ribbon.material.alpha = 0.4;
   ribbon.isPickable = false;
 
@@ -282,7 +331,7 @@ export function attachBoltTrail(scene: Scene, mesh: AbstractMesh): ParticleSyste
   // is CUT at impact rather than left to fall. The burst goes off in the same
   // place on the same frame and covers it.
   mesh.onDisposeObservable.addOnce(() => {
-    emberBurst(scene, mesh.getAbsolutePosition().clone());
+    emberBurst(scene, mesh.getAbsolutePosition().clone(), fx);
     // The trail is NOT auto-disposed with its generator, and one left standing
     // keeps trying to sample a mesh that no longer exists.
     //
@@ -302,8 +351,8 @@ export const BOLT_BURST_NAME = "fx-bolt-burst";
 
 /** Impact: flame thrown outward, a ring across the floor and a real flash of
  *  light on it, all on the same frame. */
-export function emberBurst(scene: Scene, at: Vector3): ParticleSystem {
-  shockwave(scene, at, 2.2, new Color3(1, 0.55, 0.18));
+export function emberBurst(scene: Scene, at: Vector3, fx: FxProfile = FALLBACK_FX): ParticleSystem {
+  shockwave(scene, at, fx.burstRadius, fx.burstColour);
   flash(scene, at);
 
   const ps = fireSystem(scene, BOLT_BURST_NAME, 40);

@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect, afterEach } from "vitest";
 import { NullEngine, ParticleSystem, Scene, StandardMaterial, Texture, Vector3 } from "@babylonjs/core";
+import { SKILLS } from "@exiled/content-runtime";
 import { makeMesh } from "./meshes";
 import {
   blinkBurst,
@@ -13,6 +14,9 @@ import {
   FLASH_NAME,
   RING_NAME,
   warmSkillFx,
+  fxProfile,
+  FALLBACK_FX,
+  SKILL_FX,
 } from "./skill-fx";
 
 let engine: NullEngine | undefined;
@@ -287,5 +291,17 @@ describe("blink", () => {
       expect(still.scaling.y).toBe(1);
       expect(still.position.equals(at)).toBe(true);
     }
+  });
+});
+
+describe("fx profiles", () => {
+  it("gives every authored skill its own profile", () => {
+    const missing = [...SKILLS.keys()].filter((id) => SKILL_FX[id] === undefined);
+    expect(missing, `skills with no FX profile: ${missing.join(", ")}`).toEqual([]);
+  });
+
+  it("falls back rather than throwing on an id it does not know", () => {
+    expect(fxProfile("skill.not_a_skill.v9")).toBe(FALLBACK_FX);
+    expect(fxProfile(undefined)).toBe(FALLBACK_FX);
   });
 });

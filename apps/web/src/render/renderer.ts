@@ -418,6 +418,8 @@ export class SnapshotRenderer {
         // The shared string channel: species for monsters, the furniture look
         // for containers (makeMesh reads it per kind).
         e.species ?? e.look,
+        undefined,
+        e.skillId,
       );
       const mesh = this.meshes.get(e.id);
       if (!mesh) continue;
@@ -638,6 +640,7 @@ export class SnapshotRenderer {
     radius?: number,
     species?: string,
     heading?: { x: number; y: number },
+    skillId?: string,
   ): void {
     let mesh = this.meshes.get(id);
     const fresh = !mesh;
@@ -646,7 +649,7 @@ export class SnapshotRenderer {
     if (!mesh) {
       // Born where it belongs. A mesh built at the origin and moved afterwards
       // drags any trail it owns across the level on its first frames.
-      mesh = makeMesh(this.scene, kind, `entity-${id}`, new Vector3(x, Y_LIFT[kind], z), species);
+      mesh = makeMesh(this.scene, kind, `entity-${id}`, new Vector3(x, Y_LIFT[kind], z), species, skillId);
       mesh.rotation.y = SPAWN_YAW;
       this.meshes.set(id, mesh);
       this.kinds.set(id, kind);
