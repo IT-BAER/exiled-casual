@@ -5,14 +5,18 @@ import type { Scene } from "@babylonjs/core";
 import type { Snapshot } from "@exiled/protocol";
 import { testPlayer } from "../test-fixtures";
 import { fp } from "@exiled/fixed-point";
-import { DEFAULT_SETTINGS, MOVE_SOCKET } from "../settings";
+import { MOVE_SOCKET } from "../settings";
 
 /**
  * The skill row's mapping, which the bar owns now: `1` fires whatever sits in the
  * first socket. Passed in here so a cast test is exercising the real path.
  */
+const DEFAULT_BAR = [
+  "skill.ember_bolt.v1", "skill.cinder_ground.v1", "skill.blink.v1", null, null,
+  MOVE_SOCKET, null, null,
+];
 const defaultSkillForKey = (key: string): string | null =>
-  DEFAULT_SETTINGS.ui.skillBar[Number(key) - 1] ?? null;
+  DEFAULT_BAR[Number(key) - 1] ?? null;
 
 /**
  * A ray straight down from above `(x, z)`, so the floor intersection at y=0 is

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { heldToMoveIntent, keyToIntent, pointerToWorld } from "./intents";
-import { DEFAULT_SETTINGS } from "../settings";
+import { DEFAULT_SETTINGS, MOVE_SOCKET } from "../settings";
 import { fp } from "@exiled/fixed-point";
 
 describe("keyToIntent", () => {
@@ -42,7 +42,10 @@ describe("keyToIntent", () => {
    * dragged into the first socket, so the mapping comes in as a lookup rather than
    * living here.
    */
-  const defaultBar = DEFAULT_SETTINGS.ui.skillBar;
+  const defaultBar = [
+    "skill.ember_bolt.v1", "skill.cinder_ground.v1", "skill.blink.v1", null, null,
+    MOVE_SOCKET, null, null,
+  ];
   const barLookup = (bar: (string | null)[]) => (key: string) => bar[Number(key) - 1] ?? null;
 
   it("1 → useSkill ember_bolt aimed at aim point", () => {

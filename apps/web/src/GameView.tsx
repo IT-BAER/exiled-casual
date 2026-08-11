@@ -165,8 +165,8 @@ export function GameView({
    * mount and its key handler has to fire whatever is in the socket NOW, not
    * whatever was in it when the game started.
    */
-  const skillBarRef = useRef(settings.ui.skillBar);
-  skillBarRef.current = settings.ui.skillBar;
+  const skillBarRef = useRef<(string | null)[]>([]);
+  skillBarRef.current = snapshot?.skillBar ?? [];
   // The keybinds, mirrored for the same reason again.
   const keybindsRef = useRef(settings.ui.keybinds);
   keybindsRef.current = settings.ui.keybinds;
@@ -778,11 +778,9 @@ export function GameView({
       <Hud
         snapshot={snapshot}
         hoveredEntityId={hoveredEntityId}
-        skillBar={settings.ui.skillBar}
+        skillBar={snapshot?.skillBar ?? []}
         orbNumbers={settings.ui.orbNumbers}
-        onSkillBarChange={(skillBar) => onSettingsChange?.({
-          ...settings, ui: { ...settings.ui, skillBar },
-        })}
+        onSkillBarChange={(bar) => sendIntent({ kind: "setSkillBar", bar })}
         onOpenPassives={() => setPassivesOpen(true)}
       />
       {settings.ui.minimap && (

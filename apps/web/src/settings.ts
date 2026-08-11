@@ -68,13 +68,6 @@ export interface UiSettings {
    * version. Bosses keep their own big bar either way.
    */
   monsterHealthBars: boolean;
-  /**
-   * Which skill sits in which numbered socket of the skill bar, in bar order.
-   * `null` is an empty socket. A setting rather than sim state because it is a
-   * preference about the screen, not about the character: nothing the sim owns
-   * changes when a skill moves from 1 to 4.
-   */
-  skillBar: (string | null)[];
   /** What the non-skill keys do. See KEYBIND_ACTIONS. */
   keybinds: Keybinds;
   /**
@@ -160,10 +153,6 @@ export const DEFAULT_SETTINGS: Settings = {
     orbNumbers: true,
     overlayMapOpacity: 0.6,
     monsterHealthBars: false,
-    skillBar: [
-      "skill.ember_bolt.v1", "skill.cinder_ground.v1", "skill.blink.v1", null, null,
-      MOVE_SOCKET, null, null,
-    ],
     keybinds: { ...DEFAULT_KEYBINDS },
     debugLogging: false,
   },
@@ -192,35 +181,6 @@ function member<T extends string>(raw: unknown, allowed: readonly T[], fallback:
   return typeof raw === "string" && (allowed as readonly string[]).includes(raw)
     ? (raw as T)
     : fallback;
-}
-
-/**
- * A saved skill bar, proven rather than trusted: exactly SKILL_SLOT_COUNT entries,
- * each a string or null, and no skill in two sockets at once. A bar written by a
- * build that shipped a different skill list still parses — a skill that no longer
- * exists simply draws as an empty socket and fires nothing.
- */
-function skillBar(raw: unknown, fallback: (string | null)[]): (string | null)[] {
-  if (!Array.isArray(raw)) return [...fallback];
-  const seen = new Set<string>();
-  const out: (string | null)[] = [];
-  for (let i = 0; i < SKILL_SLOT_COUNT; i++) {
-    // A save from before the mouse row is 5 long. Missing entries take the
-    // default rather than null, so the left button still walks.
-    if (i >= raw.length) {
-      const d = fallback[i] ?? null;
-      out.push(d !== null && !seen.has(d) ? (seen.add(d), d) : null);
-      continue;
-    }
-    const v = raw[i];
-    if (typeof v === "string" && v.length > 0 && !seen.has(v)) {
-      seen.add(v);
-      out.push(v);
-    } else {
-      out.push(null);
-    }
-  }
-  return out;
 }
 
 export function sanitize(raw: unknown): Settings {
@@ -258,7 +218,6 @@ export function sanitize(raw: unknown): Settings {
       orbNumbers: bool(u["orbNumbers"], d.ui.orbNumbers),
       overlayMapOpacity: num(u["overlayMapOpacity"], 0.15, 1, d.ui.overlayMapOpacity),
       monsterHealthBars: bool(u["monsterHealthBars"], d.ui.monsterHealthBars),
-      skillBar: skillBar(u["skillBar"], d.ui.skillBar),
       keybinds: keybinds(u["keybinds"]),
       debugLogging: bool(u["debugLogging"], d.ui.debugLogging),
     },

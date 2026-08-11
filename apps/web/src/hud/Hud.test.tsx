@@ -87,6 +87,11 @@ function makeSnap(overrides: {
   };
 }
 
+// A stand-in for the bar these tests used to get free from settings defaults.
+// The bar is now server-authoritative (Snapshot.skillBar); tests that care
+// which skill sits in which socket pass it explicitly.
+const DEFAULT_BAR = ["skill.ember_bolt.v1", "skill.cinder_ground.v1", "skill.blink.v1", null, null];
+
 describe("Hud", () => {
   it("renders null snapshot without crashing", () => {
     render(<Hud snapshot={null} />);
@@ -116,7 +121,7 @@ describe("Hud", () => {
 
   it("skill with cooldown shows remaining seconds", () => {
     const snap = makeSnap({ cooldowns: { "skill.ember_bolt.v1": 1.5 } });
-    render(<Hud snapshot={snap} />);
+    render(<Hud snapshot={snap} skillBar={DEFAULT_BAR} />);
     expect(screen.getByText("1.5s")).toBeInTheDocument();
   });
 
@@ -129,7 +134,7 @@ describe("Hud", () => {
         "skill.blink.v1": 4,
       },
     });
-    render(<Hud snapshot={snap} />);
+    render(<Hud snapshot={snap} skillBar={DEFAULT_BAR} />);
     expect(screen.getByTestId("skill-slot-1")).not.toHaveTextContent(/s$/);
     expect(screen.getByTestId("skill-slot-2")).toHaveTextContent("2.0s");
   });
@@ -493,7 +498,7 @@ describe("Hud skill tooltip", () => {
   };
 
   it("shows the hovered skill's name, cost and effect lines", async () => {
-    render(<Hud snapshot={makeSnap({ skills: [emberBolt] })} />);
+    render(<Hud snapshot={makeSnap({ skills: [emberBolt] })} skillBar={DEFAULT_BAR} />);
     fireEvent.mouseEnter(screen.getByTestId("skill-slot-1"));
     const tip = await screen.findByTestId("skill-tooltip");
     expect(tip).toHaveTextContent("Ember Bolt");
@@ -524,7 +529,7 @@ describe("Hud skill tooltip", () => {
   it("clicking a socket opens a tile picker whose tiles carry their bound key and tooltip", async () => {
     // Laid out from reference-screenshots/skill-action-bar.webp: sectioned icon
     // tiles, each captioned with the key it already answers to.
-    render(<Hud snapshot={makeSnap({ skills: [emberBolt] })} />);
+    render(<Hud snapshot={makeSnap({ skills: [emberBolt] })} skillBar={DEFAULT_BAR} />);
     fireEvent.click(screen.getByTestId("skill-slot-1"));
     const picker = await screen.findByTestId("skill-picker");
     expect(picker).toHaveTextContent("Actions");
@@ -671,6 +676,24 @@ describe("skill bar drag and drop", () => {
     expect(imgs.filter((src) => src?.includes("ember_bolt"))).toHaveLength(1);
     expect(screen.getByTestId("skill-slot-5").querySelector("img")).not.toBeNull();
     expect(screen.getByTestId("skill-slot-1").querySelector("img")).toBeNull();
+  });
+
+  it("draws the bar the snapshot carries, not a prop default", () => {
+    const snap: Snapshot = { ...makeSnap({}), skillBar: [null, null, "skill.blink.v1", null, null] };
+    render(<Hud snapshot={snap} skillBar={snap.skillBar} />);
+    const icon = screen.getByTestId("skill-slot-3").querySelector("img");
+    expect(icon).not.toBeNull();
+    expect(icon!.getAttribute("src")).toContain("blink");
+  });
+
+  it("dispatches setSkillBar when two sockets are swapped", () => {
+    const seen: (string | null)[][] = [];
+    render(<Hud snapshot={makeSnap({})} skillBar={BAR} onSkillBarChange={(b) => seen.push(b)} />);
+    drag(1, 3);
+    expect(seen).toEqual([[
+      "skill.blink.v1", "skill.cinder_ground.v1", "skill.ember_bolt.v1", null, null,
+      null, null, null,
+    ]]);
   });
 });
 

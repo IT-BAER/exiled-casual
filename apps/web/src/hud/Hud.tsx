@@ -702,7 +702,7 @@ function Orb(props: {
 export function Hud({
   snapshot,
   hoveredEntityId = null,
-  skillBar = DEFAULT_SETTINGS.ui.skillBar,
+  skillBar = [],
   orbNumbers = DEFAULT_SETTINGS.ui.orbNumbers,
   onSkillBarChange,
   onOpenPassives,
