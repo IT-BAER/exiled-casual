@@ -266,11 +266,54 @@ export const FALLBACK_FX: FxProfile = {
 };
 
 export const SKILL_FX: Record<string, FxProfile> = {
-  "skill.ember_bolt.v1": FALLBACK_FX,
-  "skill.ember_spark.v1": FALLBACK_FX,
-  "skill.snap_shot.v1": FALLBACK_FX,
+  // The real cast: a white-hot core dragging a deep orange wake, heavy and slow.
+  "skill.ember_bolt.v1": {
+    ...FALLBACK_FX,
+    core: new Color3(1, 0.92, 0.75),
+    wake: new Color3(1, 0.45, 0.12),
+    trailWidth: 0.11,
+    emitRate: 110,
+    sizeStart: 0.6,
+    sizeEnd: 0.12,
+    burstColour: new Color3(1, 0.5, 0.14),
+    burstRadius: 2.6,
+  },
+  // The free fallback, and it must read as one: a small pale mote, thin and dry.
+  "skill.ember_spark.v1": {
+    ...FALLBACK_FX,
+    core: new Color3(1, 0.85, 0.45),
+    wake: new Color3(0.95, 0.7, 0.25),
+    trailWidth: 0.05,
+    emitRate: 45,
+    sizeStart: 0.28,
+    sizeEnd: 0.06,
+    lifeMin: 0.03,
+    lifeMax: 0.07,
+    burstColour: new Color3(1, 0.75, 0.3),
+    burstRadius: 1.2,
+  },
+  // Not fire at all: an arrow, so the wake is dust off the shaft, not flame.
+  "skill.snap_shot.v1": {
+    ...FALLBACK_FX,
+    core: new Color3(0.85, 0.82, 0.72),
+    wake: new Color3(0.6, 0.58, 0.52),
+    trailWidth: 0.04,
+    emitRate: 25,
+    sizeStart: 0.2,
+    sizeEnd: 0.05,
+    lifeMin: 0.03,
+    lifeMax: 0.06,
+    burstColour: new Color3(0.8, 0.78, 0.7),
+    burstRadius: 0.9,
+  },
   "skill.strike.v1": FALLBACK_FX,
-  "skill.cinder_ground.v1": FALLBACK_FX,
+  "skill.cinder_ground.v1": {
+    ...FALLBACK_FX,
+    core: new Color3(1, 0.42, 0.1),
+    wake: new Color3(0.7, 0.2, 0.05),
+    burstColour: new Color3(1, 0.42, 0.1),
+    burstRadius: 3.2,
+  },
   "skill.blink.v1": FALLBACK_FX,
   "skill.town_portal.v1": FALLBACK_FX,
 };

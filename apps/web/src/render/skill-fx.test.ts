@@ -154,6 +154,19 @@ describe("ember bolt", () => {
     expect(light!.intensity).toBeGreaterThan(0);
   });
 
+  it("colours its head from its own skill, not whichever projectile spawned first", () => {
+    const scene = newScene();
+    const bolt = makeMesh(scene, "projectile", "entity-1", undefined, undefined, "skill.ember_bolt.v1");
+    const arrow = makeMesh(scene, "projectile", "entity-2", undefined, undefined, "skill.snap_shot.v1");
+    const bolt2 = makeMesh(scene, "projectile", "entity-3", undefined, undefined, "skill.ember_bolt.v1");
+
+    const boltMat = bolt.material as StandardMaterial;
+    const arrowMat = arrow.material as StandardMaterial;
+    expect(boltMat.emissiveColor.equals(arrowMat.emissiveColor)).toBe(false);
+    // Same skill reuses the same cached material, so the cache still caches.
+    expect(bolt2.material).toBe(bolt.material);
+  });
+
   it("reuses one flash light, so a second hit cannot push a material over 4", () => {
     const scene = newScene();
     for (const id of [1, 2]) {
@@ -303,5 +316,15 @@ describe("fx profiles", () => {
   it("falls back rather than throwing on an id it does not know", () => {
     expect(fxProfile("skill.not_a_skill.v9")).toBe(FALLBACK_FX);
     expect(fxProfile(undefined)).toBe(FALLBACK_FX);
+  });
+
+  it("separates the two fire projectiles by more than colour, since bloom can be off", () => {
+    const bolt = SKILL_FX["skill.ember_bolt.v1"]!;
+    const spark = SKILL_FX["skill.ember_spark.v1"]!;
+    // A player with bloom off sees size and density, not glow.
+    expect(spark.sizeStart).toBeLessThan(bolt.sizeStart);
+    expect(spark.emitRate).toBeLessThan(bolt.emitRate);
+    expect(spark.trailWidth).toBeLessThan(bolt.trailWidth);
+    expect(spark.burstRadius).toBeLessThan(bolt.burstRadius);
   });
 });

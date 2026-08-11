@@ -1570,7 +1570,9 @@ export function makeMesh(
     return m;
   }
 
-  const matName = `mat-${kind}`;
+  // Projectile heads key by skill too, or the first bolt built in a session
+  // decides every later skill's head colour off its own cached material.
+  const matName = kind === "projectile" ? `mat-projectile-${skillId ?? "default"}` : `mat-${kind}`;
   let m = scene.getMaterialByName(matName) as StandardMaterial | null;
   if (!m) {
     const [r, g, b] = FIRE_COLOR[kind];
@@ -1580,7 +1582,7 @@ export function makeMesh(
     m.disableLighting = true;
     if (kind === "projectile") {
       // Full emissive so the GlowLayer blooms the head instead of tinting it.
-      m.emissiveColor = new Color3(r, g, b);
+      m.emissiveColor = fxProfile(skillId).core.clone();
     } else {
       // Additive, radially masked, and crawling: the patch reads as ground
       // burning rather than as a translucent decal ending on a hard rim. The
