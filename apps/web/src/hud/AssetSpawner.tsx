@@ -1,5 +1,23 @@
 import React from "react";
 import { SPAWNABLE } from "../render/gallery";
+import type { SpawnKind } from "@exiled/protocol";
+
+/**
+ * The sim half of the workbench. Every one of these also has a numpad key
+ * (`SPAWN_KEYS`, bindings.ts), which nobody discovers; the labels say what the
+ * press does, not what the message is called.
+ */
+const SIM_ACTIONS: { kind: SpawnKind; label: string }[] = [
+  { kind: "imp", label: "one imp" },
+  { kind: "pack", label: "a pack" },
+  { kind: "rare", label: "a rare" },
+  { kind: "boss", label: "the boss" },
+  { kind: "hurtboss", label: "hurt boss -20%" },
+  { kind: "item", label: "drop an item" },
+  { kind: "shields", label: "both shields" },
+  { kind: "levelup", label: "level up +1" },
+  { kind: "clear", label: "kill all monsters" },
+];
 
 /**
  * F4's asset menu: pick one thing and stand it on the floor.
@@ -13,11 +31,14 @@ export function AssetSpawner({
   onSpawn,
   onClear,
   onClose,
+  onSim,
   standing,
 }: {
   onSpawn: (id: string) => void;
   onClear: () => void;
   onClose: () => void;
+  /** Sends a lab spawn message to the worker. */
+  onSim: (kind: SpawnKind) => void;
   /** How many are on the floor already, so the Clear button can say. */
   standing: number;
 }) {
@@ -58,8 +79,20 @@ export function AssetSpawner({
           ))}
         </div>
       ))}
+      <div style={{ color: "#7a8792", marginTop: 6 }}>Sim</div>
+      {SIM_ACTIONS.map((a) => (
+        <button
+          key={a.kind}
+          type="button"
+          data-testid={`sim-${a.kind}`}
+          onClick={() => onSim(a.kind)}
+          style={a.kind === "clear" ? { ...ROW, color: "#e08a7a" } : ROW}
+        >
+          {a.label}
+        </button>
+      ))}
       <button type="button" onClick={onClear} style={{ ...ROW, marginTop: 8, color: "#e08a7a" }}>
-        clear {standing > 0 ? `(${standing})` : ""}
+        clear assets {standing > 0 ? `(${standing})` : ""}
       </button>
     </div>
   );

@@ -1,7 +1,7 @@
 import { fp } from "@exiled/fixed-point";
 import {
   baseCasterStats, makeRare, rollItem, FLASK_MAX_CHARGES, START_LEVEL,
-  offerWaystones, WAYSTONE_OFFER_COUNT, START_GOLD,
+  offerWaystones, WAYSTONE_OFFER_COUNT, START_GOLD, gainXp, xpToNext,
 } from "@exiled/rules";
 import { SKILLS, MONSTERS, rareTemplate, CONTENT_VERSION, ITEM_POOLS, baseOf, CURRENCY_DROPS, currencyItem, waystoneItem } from "@exiled/content-runtime";
 import { generateArea, type AreaLayout } from "@exiled/mapgen";
@@ -18,6 +18,7 @@ import type {
   MoveTarget, MoveDir, SessionC, AreaKind, InventoryC, StashC, VendorC, ItemC, EquipmentC, FlasksC, ProgressC, ShardsC,
 } from "./components";
 import { grantSkills } from "./persist";
+import { recomputePlayerStats } from "./derived";
 import { registerResourceRegen } from "./systems/resource";
 import { registerSkillCast } from "./systems/skill-cast";
 import { registerPlayerMovement } from "./systems/player-movement";
@@ -223,12 +224,26 @@ let labRareSpawns = 0;
 
 export function spawnLabActors(
   world: World,
-  kind: "imp" | "pack" | "rare" | "boss" | "clear" | "hurtboss" | "item" | "shields",
+  kind: "imp" | "pack" | "rare" | "boss" | "clear" | "hurtboss" | "item" | "shields" | "levelup",
   cx: number,
   cy: number,
 ): void {
   if (kind === "clear") {
     for (const e of [...world.query("monster")]) world.destroy(e);
+    return;
+  }
+
+  if (kind === "levelup") {
+    // Exactly one level: the grant is what the bar still needs, so a press can
+    // never buy two and the new level starts its own climb from zero. Stats and
+    // the skill grant follow, or a granted level would open nothing.
+    const progressE = [...world.query("progress")][0];
+    if (progressE === undefined) return;
+    const p = world.get<ProgressC>(progressE, "progress")!;
+    const next = gainXp(p.level, p.xp, xpToNext(p.level) - p.xp);
+    world.set<ProgressC>(progressE, "progress", { ...next, gold: p.gold });
+    recomputePlayerStats(world);
+    grantSkills(world);
     return;
   }
 

@@ -5,7 +5,7 @@ import { MONSTERS, CONTENT_VERSION } from "@exiled/content-runtime";
 import { generateArea } from "@exiled/mapgen";
 import { createCombatSim, spawnLabActors } from "./combat-sim";
 import { gridCollision } from "./collision";
-import type { BossC, MonsterC, Position, MoveTarget, SessionC, InventoryC } from "./components";
+import type { BossC, MonsterC, Position, MoveTarget, SessionC, InventoryC, ProgressC, SkillsC } from "./components";
 
 describe("createCombatSim", () => {
   it("spawns exactly 1 player and 6 monsters (5 normal + 1 rare)", () => {
@@ -125,6 +125,36 @@ describe("createCombatSim", () => {
     // Never underflows past 0, however many times it is applied.
     for (let i = 0; i < 10; i++) spawnLabActors(world, "hurtboss", 0, 0);
     expect(life().life).toBe(0);
+  });
+
+  it("lab 'levelup' buys exactly the next level, and opens what that level opens", () => {
+    const { world } = createCombatSim(42, { area: "map" });
+    const sessionE = world.query("progress")[0]!;
+    const prog = () => world.get<ProgressC>(sessionE, "progress")!;
+    const before = prog();
+    const life = () => world.get<{ maxLife: number }>(world.query("player")[0]!, "health")!.maxLife;
+    const lifeBefore = life();
+
+    spawnLabActors(world, "levelup", 0, 0);
+
+    // One level, and the xp bar resets rather than carrying a surplus: the
+    // grant is exactly `xpToNext`, never a lump that could buy two.
+    expect(prog().level).toBe(before.level + 1);
+    expect(prog().xp).toBe(0);
+    expect(prog().gold).toBe(before.gold);
+    // A granted level is a real one: Life rose with it, so stats were recomputed.
+    expect(life()).toBeGreaterThan(lifeBefore);
+  });
+
+  it("lab 'levelup' grants the gem of a skill the new level unlocks", () => {
+    const { world } = createCombatSim(42, { area: "map" });
+    const sessionE = world.query("progress")[0]!;
+    const gems = () => Object.keys(world.get<SkillsC>(sessionE, "skills")!.gems).length;
+    const start = gems();
+
+    // Walk up enough levels that at least one unlock threshold is crossed.
+    for (let i = 0; i < 8; i++) spawnLabActors(world, "levelup", 0, 0);
+    expect(gems()).toBeGreaterThan(start);
   });
 
   // ── Map area: generated layout, socket placement, collision (C4) ─────────

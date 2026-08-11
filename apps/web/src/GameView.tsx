@@ -42,7 +42,7 @@ import { DEFAULT_SETTINGS, MOUSE_SLOT_BASE, MOVE_SOCKET, type Settings } from ".
 import type { FrameHook, Projector } from "./hud/LootLabels";
 import type { AreaLayout } from "@exiled/mapgen";
 import { BIOMES, mapBase } from "@exiled/content-runtime";
-import type { Snapshot, FromWorker, Intent, ToWorker } from "@exiled/protocol";
+import type { Snapshot, FromWorker, Intent, ToWorker, SpawnKind } from "@exiled/protocol";
 import { atlasGraph, atlasNodeTier, isNodeReachable, mapBaseIdForNode, DEFAULT_CLASS_ID } from "@exiled/rules";
 
 const LAB_SEED = 42;
@@ -149,6 +149,10 @@ export function GameView({
     // log exists for. See debug.ts.
     dlog("intent", intent.kind, intent);
     workerRef.current?.postMessage({ type: "intent", intent } satisfies ToWorker);
+  }, []);
+  const sendSpawn = useCallback((what: SpawnKind) => {
+    dlog("intent", "spawn", what);
+    workerRef.current?.postMessage({ type: "spawn", what } satisfies ToWorker);
   }, []);
   const closePassives = useCallback(() => setPassivesOpen(false), []);
 
@@ -804,6 +808,7 @@ export function GameView({
             if (sceneRef.current) clearGallery(sceneRef.current);
             setSpawned(0);
           }}
+          onSim={sendSpawn}
           onClose={() => setSpawnerOpen(false)}
         />
       )}
