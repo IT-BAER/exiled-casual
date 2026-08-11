@@ -486,6 +486,10 @@ describe("Hud skill tooltip", () => {
     cooldownSec: 0.2,
     dps: 93.75,
     lines: ["Deals 25 Fire Damage"],
+    gemLevel: 1,
+    gemXp: 0,
+    gemXpToNext: 60,
+    breakpoints: [],
   };
 
   it("shows the hovered skill's name, cost and effect lines", async () => {

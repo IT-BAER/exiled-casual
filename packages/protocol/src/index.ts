@@ -371,6 +371,8 @@ export interface Snapshot {
   shards: Record<string, number>;
   /** Skills as the tooltip shows them. Absent on a sim built without content. */
   skills?: DisplaySkill[];
+  /** The action bar, as the sim holds it. The client renders THIS, never its own copy. */
+  skillBar?: (string | null)[];
 }
 
 /**
@@ -394,6 +396,15 @@ export interface DisplaySkill {
   dps?: number;
   /** The blue block, one worded line per effect. */
   lines: string[];
+  /** The gem's level, 1..20. */
+  gemLevel: number;
+  /** Experience banked toward the next gem level, and what it costs. 0 at the cap. */
+  gemXp: number;
+  gemXpToNext: number;
+  /** Lines for breakpoints already reached, in order. */
+  breakpoints: string[];
+  /** The one greyed out in the tooltip, absent once there are none left. */
+  nextBreakpoint?: { atLevel: number; text: string };
 }
 
 export interface FromWorker_Snapshot { type: "snapshot"; snapshot: Snapshot }

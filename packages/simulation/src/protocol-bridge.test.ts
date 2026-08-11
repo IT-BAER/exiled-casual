@@ -2,15 +2,38 @@ import { describe, it, expect } from "vitest";
 import { fp, toNumber } from "@exiled/fixed-point";
 import { createCombatSim } from "./combat-sim";
 import { intentToCommand, buildSnapshot } from "./protocol-bridge";
-import { CONTENT_VERSION, MONSTERS } from "@exiled/content-runtime";
+import { CONTENT_VERSION, MONSTERS, SKILLS } from "@exiled/content-runtime";
 import { ITEM_POOLS, baseOf } from "@exiled/content-runtime";
-import { rollItem } from "@exiled/rules";
+import { rollItem, effectiveSkill } from "@exiled/rules";
 import type { Intent } from "@exiled/protocol";
 import { World } from "./ecs";
 import { spawnMonster } from "./areas";
+import { grantSkills } from "./persist";
 import type {
-  Position, Health, Mana, MonsterC, BossC, TelegraphC, SessionC, InteractableC,
+  Position, Health, Mana, MonsterC, BossC, TelegraphC, SessionC, InteractableC, SkillsC, ProgressC,
 } from "./components";
+
+/**
+ * A session-backed sim with the character's level set explicitly and skills
+ * granted for it, so gem unlock tests don't depend on createCombatSim's own
+ * default level.
+ */
+function setupSkillsWorld(seed: number, charLevel: number, tier = 0) {
+  const { world, sim } = createCombatSim(seed, { area: "map", tier });
+  const sessionE = world.query("session")[0]!;
+  world.set<ProgressC>(sessionE, "progress", { level: charLevel, xp: 0, gold: 0 });
+  grantSkills(world);
+  return { world, sim, sessionE };
+}
+
+/** Overwrite one gem's level/xp directly, bypassing the xp-award path. */
+function setGem(world: World, sessionE: number, skillId: string, level: number, xp = 0): void {
+  const skills = world.get<SkillsC>(sessionE, "skills")!;
+  world.set<SkillsC>(sessionE, "skills", {
+    ...skills,
+    gems: { ...skills.gems, [skillId]: { level, xp } },
+  });
+}
 
 describe("intentToCommand", () => {
   it("moveTo maps to correct Command shape", () => {
@@ -404,8 +427,10 @@ describe("buildSnapshot — species on monster snapshots", () => {
 });
 
 describe("buildSnapshot - skills", () => {
+  // Gem level 1 == the authored def (effectiveSkill's growth is a no-op at
+  // steps=0), so these numbers are unchanged from the pre-gem-level bridge.
   it("reports each skill with the numbers the character actually casts at", () => {
-    const { world, sim } = createCombatSim(42);
+    const { world, sim } = setupSkillsWorld(42, 1);
     const snap = buildSnapshot(world, sim, 0, CONTENT_VERSION);
     const bolt = snap.skills?.find((s) => s.id === "skill.ember_bolt.v1");
     expect(bolt).toBeDefined();
@@ -422,7 +447,7 @@ describe("buildSnapshot - skills", () => {
   });
 
   it("carries cast speed into the reported cast time", () => {
-    const { world, sim, playerEntity } = createCombatSim(42);
+    const { world, sim, playerEntity } = createCombatSim(42, { area: "map" });
     world.set(playerEntity, "offense", { spellDamagePct: 0, castSpeedPct: 100, critChancePct: 0 });
     const snap = buildSnapshot(world, sim, 0, CONTENT_VERSION);
     const bolt = snap.skills!.find((s) => s.id === "skill.ember_bolt.v1")!;
@@ -431,11 +456,109 @@ describe("buildSnapshot - skills", () => {
   });
 
   it("omits DPS for a skill that deals no damage", () => {
-    const { world, sim } = createCombatSim(42);
+    // Blink unlocks at character level 4.
+    const { world, sim } = setupSkillsWorld(42, 4);
     const snap = buildSnapshot(world, sim, 0, CONTENT_VERSION);
     const blink = snap.skills!.find((s) => s.id === "skill.blink.v1")!;
     expect(blink.dps).toBeUndefined();
     expect(blink.castTimeSec).toBe(0);
+  });
+
+  it("emits only the skills this character has unlocked", () => {
+    const { world, sim } = setupSkillsWorld(42, 1, 0);
+    const snap = buildSnapshot(world, sim, 0, CONTENT_VERSION);
+    const ids = snap.skills!.map((s) => s.id);
+    // cinder_ground (unlockLevel 8) and town_portal (unlockLevel 10) are locked
+    // at level 1; ember_bolt (unlockLevel 1) is not.
+    expect(ids).not.toContain("skill.cinder_ground.v1");
+    expect(ids).not.toContain("skill.town_portal.v1");
+    expect(ids).toContain("skill.ember_bolt.v1");
+  });
+
+  it("emits every skill once the level has opened them all", () => {
+    const { world, sim } = setupSkillsWorld(42, 100, 0);
+    const snap = buildSnapshot(world, sim, 0, CONTENT_VERSION);
+    const ids = new Set(snap.skills!.map((s) => s.id));
+    expect(ids).toEqual(new Set(SKILLS.keys()));
+    expect(ids.size).toBe(7);
+  });
+
+  it("quotes the gem's numbers, not the def's", () => {
+    const { world, sim, sessionE } = setupSkillsWorld(42, 10, 0);
+    setGem(world, sessionE, "skill.ember_bolt.v1", 10);
+    const snap = buildSnapshot(world, sim, 0, CONTENT_VERSION);
+    const bolt = snap.skills!.find((s) => s.id === "skill.ember_bolt.v1")!;
+
+    // Hand-computed: manaCostFixed=10000 (fp(10)), manaPct=4, 9 steps
+    // (gemLevel 10 - 1), compounding truncated at every step:
+    // 10000 -> 10400 -> 10816 -> 11248 -> 11697 -> 12164 -> 12650 -> 13156
+    // -> 13682 -> 14229.
+    expect(bolt.manaCost).toBeCloseTo(14.229, 5);
+    // Cross-check against the same formula skillCast uses, alongside (not
+    // instead of) the hand-computed literal above.
+    const def = SKILLS.get("skill.ember_bolt.v1")!;
+    expect(bolt.manaCost).toBe(toNumber(effectiveSkill(def, 10).manaCostFixed));
+
+    // Hand-computed: damage amountFixed=36000 (fp(36)), damagePct=6, 9 steps:
+    // 36000 -> 38160 -> 40449 -> 42875 -> 45447 -> 48173 -> 51063 -> 54126
+    // -> 57373 -> 60815. dps divides by the repeat interval (max(cast,
+    // cooldown)/30 = 30/30 = 1s), unaffected by gem level.
+    expect(bolt.dps).toBeCloseTo(60.815, 3);
+
+    expect(bolt.manaCost).toBeGreaterThan(10);
+    expect(bolt.dps!).toBeGreaterThan(36);
+  });
+
+  it("lists the breakpoints reached and greys the next one", () => {
+    const { world, sim, sessionE } = setupSkillsWorld(42, 5, 0);
+    setGem(world, sessionE, "skill.ember_bolt.v1", 5);
+    const snap = buildSnapshot(world, sim, 0, CONTENT_VERSION);
+    const bolt = snap.skills!.find((s) => s.id === "skill.ember_bolt.v1")!;
+    expect(bolt.breakpoints).toEqual(["Pierces one enemy"]);
+    expect(bolt.nextBreakpoint).toEqual({ atLevel: 15, text: "Pierces three enemies" });
+  });
+
+  it("drops nextBreakpoint once the last one is reached", () => {
+    const { world, sim, sessionE } = setupSkillsWorld(42, 15, 0);
+    setGem(world, sessionE, "skill.ember_bolt.v1", 15);
+    const snap = buildSnapshot(world, sim, 0, CONTENT_VERSION);
+    const bolt = snap.skills!.find((s) => s.id === "skill.ember_bolt.v1")!;
+    expect(bolt.nextBreakpoint).toBeUndefined();
+    expect(bolt.breakpoints).toEqual(["Pierces one enemy", "Pierces three enemies"]);
+  });
+
+  it("carries the bar the sim holds", () => {
+    const { world, sim, sessionE } = setupSkillsWorld(42, 1, 0);
+    const bar = world.get<SkillsC>(sessionE, "skills")!.bar;
+    const snap = buildSnapshot(world, sim, 0, CONTENT_VERSION);
+    expect(snap.skillBar).toEqual(bar);
+  });
+
+  it("gemXpToNext is 0 at the gem cap, so the client draws no rail", () => {
+    const { world, sim, sessionE } = setupSkillsWorld(42, 20, 0);
+    setGem(world, sessionE, "skill.ember_bolt.v1", 20);
+    const snap = buildSnapshot(world, sim, 0, CONTENT_VERSION);
+    const bolt = snap.skills!.find((s) => s.id === "skill.ember_bolt.v1")!;
+    expect(bolt.gemXpToNext).toBe(0);
+  });
+
+  it("orders skills by authored order, not gems' insertion order", () => {
+    const { world, sim, sessionE } = setupSkillsWorld(42, 20, 0);
+    // Deliberately wrong order: blink (authored last) inserted before
+    // ember_bolt (authored first). Object.entries would reshuffle without
+    // the sort in describeSkills.
+    world.set<SkillsC>(sessionE, "skills", {
+      gems: {
+        "skill.blink.v1": { level: 1, xp: 0 },
+        "skill.ember_bolt.v1": { level: 1, xp: 0 },
+      },
+      bar: world.get<SkillsC>(sessionE, "skills")!.bar,
+    });
+    const snap = buildSnapshot(world, sim, 0, CONTENT_VERSION);
+    expect(snap.skills!.map((s) => s.id)).toEqual([
+      "skill.ember_bolt.v1",
+      "skill.blink.v1",
+    ]);
   });
 });
 

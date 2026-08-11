@@ -3,7 +3,7 @@ import { PICKUP_RADIUS } from "@exiled/protocol";
 import type { DisplaySkill, Intent, Snapshot, SnapshotEntity, MonsterElement } from "@exiled/protocol";
 import { damageTypeOf } from "./damage-types";
 import { VENDOR_COLS, VENDOR_ROWS } from "./vendor";
-import { physicalMitigationPct, scalePct, xpToNext, START_LEVEL, vendorBuyPrice, passivePoints, DEFAULT_CLASS_ID } from "@exiled/rules";
+import { physicalMitigationPct, scalePct, xpToNext, START_LEVEL, vendorBuyPrice, passivePoints, DEFAULT_CLASS_ID, effectiveSkill, reachedBreakpoints, nextBreakpoint, gemXpToNext } from "@exiled/rules";
 import { resBlock } from "@exiled/content-schema";
 import { describeItem, SKILLS, TOWN_PORTAL_SKILL } from "@exiled/content-runtime";
 import type { Command, Simulation } from "./loop";
@@ -12,7 +12,7 @@ import type {
   Health, Mana, Position, Cooldowns, CastingC, MonsterC,
   AilmentC, ProjectileC, GroundAreaC, BossC, TelegraphC,
   SessionC, InteractableC, ContainerC, ItemC, InventoryC, StashC, VendorC, EquipmentC, FlasksC, DefensesC, OffenseC, ProgressC,
-  EnergyShieldC, ShardsC, MoveDir,
+  EnergyShieldC, ShardsC, MoveDir, SkillsC,
 } from "./components";
 
 /**
@@ -127,12 +127,20 @@ const titleCase = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
  * the tooltip has to promise exactly what the cast will do, and the client can
  * see neither OffenseC nor the fixed-point content.
  */
-function describeSkills(offense: OffenseC | undefined): DisplaySkill[] {
+function describeSkills(
+  offense: OffenseC | undefined,
+  skills: SkillsC | undefined,
+): DisplaySkill[] {
   const castSpeedPct = offense?.castSpeedPct ?? 0;
   const timingScale = 100 + castSpeedPct;
   const spellDamagePct = offense?.spellDamagePct ?? 0;
   const out: DisplaySkill[] = [];
-  for (const def of SKILLS.values()) {
+  // Driven off the GEMS, not off SKILLS: a locked skill must not reach the client
+  // at all, or the bar offers a socket the sim will refuse.
+  for (const [id, gem] of Object.entries(skills?.gems ?? {})) {
+    const authored = SKILLS.get(id);
+    if (!authored) continue;
+    const def = effectiveSkill(authored, gem.level);
     // Same floor skillCast applies: a cast never drops below one tick.
     const castTicks = def.castTicks
       ? timingScale > 0
@@ -158,6 +166,7 @@ function describeSkills(offense: OffenseC | undefined): DisplaySkill[] {
         lines.push(`Teleports ${round1(toNumber(effect.distanceFixed))} metres`);
       }
     }
+    const nb = nextBreakpoint(authored, gem.level);
     const skill: DisplaySkill = {
       id: def.id,
       name: def.name,
@@ -166,6 +175,11 @@ function describeSkills(offense: OffenseC | undefined): DisplaySkill[] {
       castTimeSec,
       cooldownSec: def.cooldownTicks / 30,
       lines,
+      gemLevel: gem.level,
+      gemXp: gem.xp,
+      gemXpToNext: gemXpToNext(gem.level),
+      breakpoints: reachedBreakpoints(authored, gem.level).map((b) => b.text),
+      ...(nb ? { nextBreakpoint: { atLevel: nb.atLevel, text: nb.text } } : {}),
     };
     // No hit damage means no DPS column, the way PoE drops it for a movement skill.
     // Divided by the interval the skill actually REPEATS at, not by its wind-up:
@@ -176,6 +190,10 @@ function describeSkills(offense: OffenseC | undefined): DisplaySkill[] {
     if (hitDamage > 0 && repeatSec > 0) skill.dps = hitDamage / repeatSec;
     out.push(skill);
   }
+  // Authored order, not insertion order: a gem granted later must not jump the
+  // list and move an icon out from under the cursor.
+  const order = [...SKILLS.keys()];
+  out.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
   return out;
 }
 
@@ -444,6 +462,10 @@ export function buildSnapshot(
     vendor,
     equipment,
     shards: (sessionE !== undefined ? world.get<ShardsC>(sessionE, "shards") : undefined)?.counts ?? {},
-    skills: describeSkills(world.get<OffenseC>(playerEntity, "offense")),
+    skills: describeSkills(
+      world.get<OffenseC>(playerEntity, "offense"),
+      sessionE !== undefined ? world.get<SkillsC>(sessionE, "skills") : undefined,
+    ),
+    skillBar: (sessionE !== undefined ? world.get<SkillsC>(sessionE, "skills") : undefined)?.bar,
   };
 }
