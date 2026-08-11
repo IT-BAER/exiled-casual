@@ -29,6 +29,12 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 - The braziers burn. Every bowl in the hideout and out on the maps now stands a
   real flame in it, built out of geometry rather than painted on a card, with a
   white-hot core, a tongue that tears at the top and sparks that leave it.
+- Skills unlock as you level and get stronger on their own kills. Every skill on
+  your bar earns a share of the experience a kill pays, hits harder and costs
+  more mana as it climbs, and gets a real upgrade at levels 5 and 15: Ember Bolt
+  starts piercing, Cinder Ground scorches a wider patch, not just bigger
+  numbers. A maxed skill runs a fixed mana pool dry faster than a fresh one, so
+  the payoff for levelling one all the way is real but not free.
 
 ### Changed
 

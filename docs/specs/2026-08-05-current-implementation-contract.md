@@ -1,6 +1,6 @@
 # Exiled Casual: current implementation contract
 
-Status: **as built and verified on 2026-08-10 at `66e2344`** (full suite 1765/1765, typecheck clean).
+Status: **as built and verified on 2026-08-11 at `6eef738`** (full suite 1867/1867, typecheck clean).
 
 This is the living specification for what the repository implements now. Earlier dated specs
 preserve the decision and delivery history of individual slices. Where an older proposal differs
@@ -156,6 +156,18 @@ widened to keep pace with that broader span, but `balance.test.ts` measures time
 time-to-death against a fixed reference rig (`createCombatSim`'s Tier-0-equivalent 1000/1000 monster
 scale) that was never wired to `monsterTierScale`, so none of its bands moved for this change.
 
+Skills unlock by character level and level on their own, shared, bar-wide experience: a kill's award
+splits evenly across occupied bar slots, so a fuller bar levels each gem slower. A gem's cap is
+`min(20, charLevel)`, so a gem cannot outlevel the character carrying it even when a shared bar hands
+it one already ahead of him. Each level adds +6% damage and +4% mana cost, both compounding, and two
+authored breakpoints per skill (at most) land at gem 5 and gem 15, patching the skill outright
+(Ember Bolt starts piercing, Strike's arc widens) rather than only scaling its numbers.
+`balance.test.ts` re-measures a gem 1 and a gem 20 caster against the same reference rig: gem 20
+kills roughly 2.4x faster, short of the 3.03x that 6%-per-level damage alone predicts, because Cinder
+Ground's mana cost rises the same 4%/level on a fixed cooldown and eats into it within one fight; a
+gem 20 caster also runs a fixed mana pool dry in a handful of casts where a gem 1 caster never does,
+which is the mana economy actually capping a maxed-out skill rather than only intending to.
+
 Monster life and hit are per archetype rather than per species: what differs biome to biome is the
 element and the flavour. The current numbers are a deliberate casual pass - life down 25 percent and
 hit down 30 percent against what `balance.test.ts` had measured - taken because the first map was
@@ -298,7 +310,7 @@ the checked-in local reference screenshots and an approved devlog capture for ma
 ## 11. Deliberately not implemented
 
 - accounts, login, remote persistence, remote authoritative simulation, parties, and trade;
-- support gems, weapon-set switching, and broad skill/content progression;
+- support gems, gem quality, a swap cost, class skill kits, and weapon-set switching;
 - a public playable deployment;
 - damage numbers and their protocol events;
 - controller and touch interfaces;

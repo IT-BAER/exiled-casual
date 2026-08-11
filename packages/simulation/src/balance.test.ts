@@ -10,7 +10,7 @@ import { spawnMonster } from "./areas";
 import { Simulation } from "./loop";
 import type { Command } from "./loop";
 import type { World, Entity } from "./ecs";
-import type { Health, Mana, Position, MonsterC } from "./components";
+import type { Health, Mana, Position, MonsterC, SessionC, SkillsC, Cooldowns } from "./components";
 
 /**
  * Encounter pacing, measured rather than asserted from arithmetic. Two slices
@@ -66,6 +66,17 @@ import type { Health, Mana, Position, MonsterC } from "./components";
  * Killing got ~25% faster and dying got ~45% slower, in one pass, which is the
  * whole shape of the change: the bands below were widened to what it measured,
  * not what would have kept them green.
+ *
+ * Measured for gem levels (Tier 0, no gear, one rare template, bolt+ground
+ * rotation): a gem 1 caster kills the reference rare in 7.7s, gem 20 in 3.2s,
+ * a 2.4x speedup, short of the 3.03x that 19 steps of 6%-per-level damage
+ * alone would give, because Cinder Ground's cost rose the same 4%/level and
+ * it fires on its own 3s cooldown regardless of gem level, so at gem 20 mana
+ * buys fewer of its casts inside the same fight. Bolt cast in isolation (no
+ * target needed, mana never goes towards a kill) sustains forever at gem 1
+ * (regen 15/s beats a 10-mana cost every second) and runs dry after 7 casts
+ * at gem 20 (cost compounds to ~21, regen does not), the mana economy
+ * actually capping a maxed gem, not merely a design intent.
  */
 
 const HZ = 30;
@@ -91,8 +102,28 @@ const SPAWN_Y = fp(6);
 
 interface Rig { sim: Simulation; world: World; player: Entity }
 
-function rig(): Rig {
+/**
+ * The lab rig, at a gem level. The legacy path (no `area` option) never
+ * creates a session, and `gemLevelFor` reads gem levels off one, so gem 1
+ * (its fallback) needs no session at all and every pre-existing call stays
+ * on the untouched legacy path. A gem level above 1 gets the minimal session
+ * a gem lookup needs: `area: "hideout"`, tier 0, no waystone, which is the
+ * exact neutral point `mapDangerScale` already returns for a session-less
+ * world, so monster life and damage are unaffected by the session existing.
+ */
+function rig(gemLevel = 1): Rig {
   const { sim, world, playerEntity } = createCombatSim(7, { monsters: false });
+  if (gemLevel > 1) {
+    const sessionE = world.create();
+    world.set<SessionC>(sessionE, "session", {
+      area: "hideout", atlasSeed: 0, mapSeed: 0, waystoneSeed: 0,
+      areaTier: 0, activeNodeId: "", completedNodes: [], portalsLeft: 0, mapOpen: 0, pendingArea: "",
+    });
+    world.set<SkillsC>(sessionE, "skills", {
+      gems: { [BOLT]: { level: gemLevel, xp: 0 }, [GROUND]: { level: gemLevel, xp: 0 } },
+      bar: [],
+    });
+  }
   return { sim, world, player: playerEntity };
 }
 
@@ -155,6 +186,29 @@ function ticksToClear(
     if (world.query("monster").length === 0) return { ticks: t, casts };
   }
   return { ticks: Infinity, casts };
+}
+
+/**
+ * Bolts cast at a fixed point every tick the cooldown allows, no monster or
+ * kill involved: purely the mana economy at this gem level. Returns the
+ * count of casts that actually spent mana before the first attempt that was
+ * off cooldown but refused for lack of mana, or `Infinity` if that never
+ * happened inside `maxSecs`.
+ */
+function castsToDry(gemLevel: number, maxSecs: number): number {
+  const { sim, world, player } = rig(gemLevel);
+  const mana = () => world.get<Mana>(player, "mana")!.mana;
+  const offCooldown = () => (world.get<Cooldowns>(player, "cooldowns")?.[BOLT] ?? 0) <= sim.tick;
+  const at: Position = { x: fp(0), y: SPAWN_Y };
+  let casts = 0;
+  for (let t = 1; t <= maxSecs * HZ; t++) {
+    const attempting = offCooldown();
+    const before = mana();
+    sim.step(cast(sim, player, at, BOLT));
+    if (mana() < before) { casts++; continue; }
+    if (attempting) return casts;
+  }
+  return Infinity;
 }
 
 /**
@@ -305,6 +359,43 @@ describe("time to kill", () => {
     const secs = ticksToClear(r).ticks / HZ;
     expect(secs).toBeGreaterThan(7);
     expect(secs).toBeLessThan(40);
+  });
+
+  const referenceRare = RARE_TEMPLATES[0]!;
+
+  it("a gem 1 character kills the reference rare inside the existing band", () => {
+    const r = rig(1);
+    spawnMonster(r.world, makeRare(impDef(), referenceRare), fp(0), SPAWN_Y, true);
+    const secs = ticksToClear(r).ticks / HZ;
+    expect(secs).toBeGreaterThan(2);
+    expect(secs).toBeLessThan(12);
+  });
+
+  it("a gem 20 character kills it well under half the time, and still spends mana", () => {
+    const r1 = rig(1);
+    spawnMonster(r1.world, makeRare(impDef(), referenceRare), fp(0), SPAWN_Y, true);
+    const secs1 = ticksToClear(r1).ticks / HZ;
+
+    const r20 = rig(20);
+    spawnMonster(r20.world, makeRare(impDef(), referenceRare), fp(0), SPAWN_Y, true);
+    const secs20 = ticksToClear(r20).ticks / HZ;
+
+    // 19 steps of 6%-per-level damage alone is 3.03x; Cinder Ground's own cost
+    // rising 4%/level on a fixed 3s cooldown eats into that inside one fight,
+    // so the measured speedup lands short of the pure damage number.
+    const speedup = secs1 / secs20;
+    expect(speedup).toBeGreaterThan(2);
+    expect(speedup).toBeLessThan(3);
+
+    // The load-bearing half: mana costs rose 4%/level too, so a gem 20 caster
+    // runs dry in fewer casts than a gem 1 one, even though the pool itself
+    // did not grow. Bolt cast alone, no target needed: at gem 1 the 15/s regen
+    // outpaces a 10-mana cost cast every second and it never runs dry inside
+    // 30 seconds; at gem 20 the cost compounds past what regen replaces.
+    expect(castsToDry(1, 30)).toBe(Infinity);
+    const dry20 = castsToDry(20, 30);
+    expect(dry20).toBeGreaterThan(3);
+    expect(dry20).toBeLessThan(10);
   });
 });
 
