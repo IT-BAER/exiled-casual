@@ -782,13 +782,19 @@ export function Hud({
     // the breakpoint is the thing that says what changed (docs/09 rule 1). Both
     // ride the one banner rather than queueing two.
     const levelledIds: string[] = [];
+    let crossed = false;
     for (const [id, now] of Object.entries(gems)) {
-      // A gem with no `before` was just unlocked; treating it as level 0 makes
-      // its own first level read as a level-up like any other, which is also
-      // how it gets named (the sim auto-slots it into a socket that would
-      // otherwise flash and announce nothing).
-      const before = was.gems[id] ?? { level: 0, breakpoints: 0 };
+      const before = was.gems[id];
       const name = skillNames.get(id) ?? id;
+      if (!before) {
+        // A baseline holding no gems at all is the pre-hydration snapshot, not a
+        // moment when every skill unlocked at once: the worker starts its clock
+        // before the save has loaded, so the restore reads as a burst of unlocks.
+        if (Object.keys(was.gems).length === 0) continue;
+        lines.push(`${name} Unlocked`);
+        levelledIds.push(id);
+        continue;
+      }
       // Every breakpoint reached since the last snapshot, not just the last:
       // a boss kill can carry a gem past two thresholds in one tick.
       const crossedLines = (snapshot?.skills?.find((s) => s.id === id)?.breakpoints ?? [])
@@ -796,6 +802,7 @@ export function Hud({
       if (crossedLines.length > 0) {
         for (const text of crossedLines) lines.push(`${name}: ${text}`);
         levelledIds.push(id);
+        crossed = true;
       } else if (now.level > before.level) {
         lines.push(`${name} Level ${now.level}`);
         levelledIds.push(id);
@@ -811,9 +818,6 @@ export function Hud({
     // so they share one banner and one sound instead of queueing two.
     setBanner((prev) => ({ text: lines.join("   ·   "), seq: (prev?.seq ?? 0) + 1 }));
     // A breakpoint is the loudest of the three, then a character level, then a gem.
-    const crossed = Object.entries(gems).some(
-      ([id, now]) => (was.gems[id]?.breakpoints ?? now.breakpoints) < now.breakpoints,
-    );
     playDropSound(crossed || level > was.level ? "unique" : "rare");
   }, [level, stones, gems, snapshot?.skills, skillNames]);
 

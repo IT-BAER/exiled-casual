@@ -673,8 +673,29 @@ describe("Hud gem levels and breakpoints", () => {
         skillBar={["skill.ember_bolt.v1", "skill.blink.v1", null, null, null]}
       />,
     );
-    expect(screen.getByTestId("reward-banner")).toHaveTextContent("Blink");
+    expect(screen.getByTestId("reward-banner")).toHaveTextContent("Blink Unlocked");
     expect(screen.getByTestId("skill-slot-2")).toHaveAttribute("data-flash", "1");
+  });
+
+  it("stays silent when the save arrives, not just on the very first snapshot", () => {
+    // The worker starts its clock before hydrate() resolves, so snapshot 1 is a
+    // pre-hydration world with no gems and snapshot 2 is the whole restored save.
+    // Read as unlocks, that is a banner, a bar-wide flash and a sound on every
+    // login, which is exactly what the first-snapshot guard cannot see.
+    const { rerender } = render(<Hud snapshot={makeSnap({ skills: [] })} />);
+    rerender(
+      <Hud
+        snapshot={makeSnap({
+          skills: [
+            { ...emberBolt, gemLevel: 8, breakpoints: ["Pierces one enemy"] },
+            { ...blink, gemLevel: 8 },
+          ],
+        })}
+        skillBar={BAR}
+      />,
+    );
+    expect(screen.queryByTestId("reward-banner")).toBeNull();
+    expect(playDropSound).not.toHaveBeenCalled();
   });
 
   it("does not congratulate on the first snapshot", () => {
