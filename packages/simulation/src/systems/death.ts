@@ -148,20 +148,27 @@ export function registerDeath(sim: Simulation): void {
 
           // The gem's share of the same kill. Every occupied slot is paid whether
           // it was cast or not (spec §1): swapping a skill in costs a slot and
-          // nothing else, so experimenting stays free. The free class attack is the
-          // one exception: it sits on every bar unasked, so paying it would tax
-          // every deliberate skill by a share the pacing budget never counted.
+          // nothing else, so experimenting stays free. The free class attack sits
+          // on every bar unasked, so it is not in the denominator and cannot tax a
+          // deliberate skill; it earns instead as though it were one more slot,
+          // which keeps its own breakpoints reachable without ever leading.
           const skills = world.get<SkillsC>(sessionE, "skills");
           if (skills) {
-            const occupied = skills.bar.filter(
-              (id) => id !== null && skills.gems[id] !== undefined && !FREE_ATTACKS.has(id),
+            const slotted = skills.bar.filter(
+              (id) => id !== null && skills.gems[id] !== undefined,
             );
+            const occupied = slotted.filter((id) => !FREE_ATTACKS.has(id!));
+            const free = slotted.filter((id) => FREE_ATTACKS.has(id!));
             const share = splitGemXp(gain, occupied.length);
-            if (share > 0) {
+            const freeShare = splitGemXp(gain, occupied.length + 1);
+            if (share > 0 || freeShare > 0) {
               const cap = maxGemLevel(next.level);
               const gems = { ...skills.gems };
               for (const id of occupied) {
                 gems[id!] = gainGemXp(gems[id!]!, share, cap);
+              }
+              for (const id of free) {
+                gems[id!] = gainGemXp(gems[id!]!, freeShare, cap);
               }
               world.set<SkillsC>(sessionE, "skills", { ...skills, gems });
             }

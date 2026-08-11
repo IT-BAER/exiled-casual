@@ -445,11 +445,12 @@ describe("registerDeath", () => {
     expect(world.get<SkillsC>(sessionE, "skills")!.gems["skill.blink.v1"]).toEqual({ level: 1, xp: 8 });
   });
 
-  it("pays nothing to the free class attack, and does not count it in the split", () => {
-    // Same award (8 xp). The bar carries ember_bolt plus the Stalker's free attack
-    // in its mouse socket. Only ember_bolt is deliberate, so splitGemXp(8, 1) = 8
-    // lands whole on it: a denominator of 2 would give 4, and paying the free
-    // attack at all would move its gem off {level 1, xp 0}.
+  it("pays the free class attack out of nobody's share", () => {
+    // Same award (8 xp). The bar carries ember_bolt plus the Stalker's free
+    // attack in its mouse socket. ember_bolt still takes splitGemXp(8, 1) = 8,
+    // undiluted, because the free attack is not in the denominator: a share of
+    // 4 would mean it was. The free attack earns as though it were one more
+    // slot, splitGemXp(8, 1 + 1) = 4, so it keeps pace without taxing anyone.
     const { sim, world, sessionE } = makeGemKill({
       area: "map", areaTier: 1, level: 10, xp: 0,
       skills: {
@@ -463,7 +464,40 @@ describe("registerDeath", () => {
     sim.step([]);
     const skills = world.get<SkillsC>(sessionE, "skills")!;
     expect(skills.gems["skill.ember_bolt.v1"]).toEqual({ level: 1, xp: 8 });
-    expect(skills.gems["skill.snap_shot.v1"]).toEqual({ level: 1, xp: 0 });
+    expect(skills.gems["skill.snap_shot.v1"]).toEqual({ level: 1, xp: 4 });
+  });
+
+  it("levels a free attack on a bar that holds nothing else", () => {
+    // The level-1 case: nothing deliberate is slotted yet, so the split has no
+    // denominator at all and the free attack is the only thing being used.
+    // splitGemXp(8, 0 + 1) = 8 lands on it, which is what keeps Strike's arc
+    // breakpoints reachable instead of pinning it at gem 1 forever.
+    const { sim, world, sessionE } = makeGemKill({
+      area: "map", areaTier: 1, level: 10, xp: 0,
+      skills: {
+        gems: { "skill.snap_shot.v1": { level: 1, xp: 0 } },
+        bar: [null, null, null, null, null, MOVE_SOCKET, null, "skill.snap_shot.v1"],
+      },
+    });
+    sim.step([]);
+    expect(world.get<SkillsC>(sessionE, "skills")!.gems["skill.snap_shot.v1"]).toEqual({ level: 1, xp: 8 });
+  });
+
+  it("pays nothing to a free attack the character owns but has not slotted", () => {
+    // Slotted, not cast, and not merely owned: the rule that governs every
+    // other gem governs this one too.
+    const { sim, world, sessionE } = makeGemKill({
+      area: "map", areaTier: 1, level: 10, xp: 0,
+      skills: {
+        gems: {
+          "skill.ember_bolt.v1": { level: 1, xp: 0 },
+          "skill.snap_shot.v1": { level: 1, xp: 0 },
+        },
+        bar: ["skill.ember_bolt.v1", null, null, null, null, MOVE_SOCKET, null, null],
+      },
+    });
+    sim.step([]);
+    expect(world.get<SkillsC>(sessionE, "skills")!.gems["skill.snap_shot.v1"]).toEqual({ level: 1, xp: 0 });
   });
 
   it("pays nothing to a skill the character owns but has not slotted", () => {

@@ -34,7 +34,10 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
   more mana as it climbs, and gets a real upgrade at levels 5 and 15: Ember Bolt
   starts piercing, Cinder Ground scorches a wider patch, not just bigger
   numbers. A maxed skill runs a fixed mana pool dry faster than a fresh one, so
-  the payoff for levelling one all the way is real but not free.
+  the payoff for levelling one all the way is real but not free. Your free class
+  attack levels too, on its own account: it takes nothing from the skills you
+  chose, but it does not stay a level-1 stick forever either, and the Ironsworn
+  who keeps swinging eventually sweeps the whole circle around him.
 
 ### Changed
 
