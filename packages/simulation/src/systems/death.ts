@@ -12,8 +12,11 @@ import {
   splitGemXp, gainGemXp, maxGemLevel,
 } from "@exiled/rules";
 import { recomputePlayerStats } from "../derived";
-import { ITEM_POOLS, baseOf, currencyItem, currencyForRoll, waystoneItem } from "@exiled/content-runtime";
+import { ITEM_POOLS, baseOf, currencyItem, currencyForRoll, waystoneItem, DEFAULT_ATTACK_BY_CLASS } from "@exiled/content-runtime";
 import { grantSkills } from "../persist";
+
+/** The free class attacks, which occupy a bar slot but never earn a share of a kill. */
+const FREE_ATTACKS = new Set(Object.values(DEFAULT_ATTACK_BY_CLASS));
 
 /**
  * Monster rarity as the loot math indexes it: 0..3 normal, magic, rare, unique.
@@ -148,10 +151,14 @@ export function registerDeath(sim: Simulation): void {
 
           // The gem's share of the same kill. Every occupied slot is paid whether
           // it was cast or not (spec §1): swapping a skill in costs a slot and
-          // nothing else, so experimenting stays free.
+          // nothing else, so experimenting stays free. The free class attack is the
+          // one exception: it sits on every bar unasked, so paying it would tax
+          // every deliberate skill by a share the pacing budget never counted.
           const skills = world.get<SkillsC>(sessionE, "skills");
           if (skills) {
-            const occupied = skills.bar.filter((id) => id !== null && skills.gems[id] !== undefined);
+            const occupied = skills.bar.filter(
+              (id) => id !== null && skills.gems[id] !== undefined && !FREE_ATTACKS.has(id),
+            );
             const share = splitGemXp(gain, occupied.length);
             if (share > 0) {
               const cap = maxGemLevel(next.level);
