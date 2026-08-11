@@ -642,6 +642,39 @@ describe("Hud gem levels and breakpoints", () => {
       <Hud snapshot={makeSnap({ skills: [{ ...emberBolt, breakpoints: ["Level 4: Adds Burning"] }] })} />,
     );
     expect(screen.getByTestId("reward-banner")).toHaveTextContent("Adds Burning");
+    // A breakpoint is the loudest of the three: it must ring the "unique" sound,
+    // not the plain "rare" a bare gem level-up gets.
+    expect(playDropSound).toHaveBeenCalledWith("unique");
+  });
+
+  it("announces every breakpoint crossed in one tick, not just the last", () => {
+    // A boss kill can carry a gem past two thresholds at once (Task 8).
+    const { rerender } = render(<Hud snapshot={makeSnap({ skills: [emberBolt] })} />);
+    rerender(
+      <Hud snapshot={makeSnap({
+        skills: [{ ...emberBolt, breakpoints: ["Level 4: Adds Burning", "Level 6: Bigger Radius"] }],
+      })} />,
+    );
+    const banner = screen.getByTestId("reward-banner");
+    expect(banner).toHaveTextContent("Adds Burning");
+    expect(banner).toHaveTextContent("Bigger Radius");
+  });
+
+  it("announces and flashes a newly unlocked gem", () => {
+    // The sim auto-slots a fresh unlock into the first free numbered socket
+    // (as of 94f76ed); a silent, un-flashed new socket is a reward that did
+    // not happen.
+    const { rerender } = render(
+      <Hud snapshot={makeSnap({ skills: [emberBolt] })} skillBar={["skill.ember_bolt.v1", null, null, null, null]} />,
+    );
+    rerender(
+      <Hud
+        snapshot={makeSnap({ skills: [emberBolt, blink] })}
+        skillBar={["skill.ember_bolt.v1", "skill.blink.v1", null, null, null]}
+      />,
+    );
+    expect(screen.getByTestId("reward-banner")).toHaveTextContent("Blink");
+    expect(screen.getByTestId("skill-slot-2")).toHaveAttribute("data-flash", "1");
   });
 
   it("does not congratulate on the first snapshot", () => {
@@ -669,6 +702,12 @@ describe("Hud gem levels and breakpoints", () => {
     rerender(
       <Hud snapshot={makeSnap({ skills: [emberBolt, { ...blink, gemLevel: 2 }] })} skillBar={BAR} />,
     );
+    // A steady-state tick with the SAME values, in a fresh object: the sim
+    // hands the HUD a new snapshot every 33ms whether or not anything
+    // changed, and that must not clear a flash that just lit.
+    rerender(
+      <Hud snapshot={makeSnap({ skills: [emberBolt, { ...blink, gemLevel: 2 }] })} skillBar={BAR} />,
+    );
     // BAR sits blink in socket index 2, drawn as skill-slot-3; ember_bolt in
     // socket index 0, drawn as skill-slot-1.
     expect(screen.getByTestId("skill-slot-3")).toHaveAttribute("data-flash", "1");
@@ -681,6 +720,9 @@ describe("Hud gem levels and breakpoints", () => {
       const { rerender } = render(
         <Hud snapshot={makeSnap({ skills: [blink] })} skillBar={BAR} />,
       );
+      rerender(<Hud snapshot={makeSnap({ skills: [{ ...blink, gemLevel: 2 }] })} skillBar={BAR} />);
+      // Same steady-state tick as above: the flash must survive it before the
+      // duration check means anything.
       rerender(<Hud snapshot={makeSnap({ skills: [{ ...blink, gemLevel: 2 }] })} skillBar={BAR} />);
       expect(screen.getByTestId("skill-slot-3")).toHaveAttribute("data-flash", "1");
       act(() => { vi.advanceTimersByTime(2500); });

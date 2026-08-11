@@ -783,17 +783,29 @@ export function Hud({
     // ride the one banner rather than queueing two.
     const levelledIds: string[] = [];
     for (const [id, now] of Object.entries(gems)) {
-      const before = was.gems[id];
-      if (!before) continue; // newly unlocked: the level-up line already covers it
-      if (now.breakpoints > before.breakpoints) {
-        const text = snapshot?.skills?.find((s) => s.id === id)?.breakpoints.at(-1);
-        if (text) { lines.push(`${skillNames.get(id) ?? id}: ${text}`); levelledIds.push(id); }
+      // A gem with no `before` was just unlocked; treating it as level 0 makes
+      // its own first level read as a level-up like any other, which is also
+      // how it gets named (the sim auto-slots it into a socket that would
+      // otherwise flash and announce nothing).
+      const before = was.gems[id] ?? { level: 0, breakpoints: 0 };
+      const name = skillNames.get(id) ?? id;
+      // Every breakpoint reached since the last snapshot, not just the last:
+      // a boss kill can carry a gem past two thresholds in one tick.
+      const crossedLines = (snapshot?.skills?.find((s) => s.id === id)?.breakpoints ?? [])
+        .slice(before.breakpoints);
+      if (crossedLines.length > 0) {
+        for (const text of crossedLines) lines.push(`${name}: ${text}`);
+        levelledIds.push(id);
       } else if (now.level > before.level) {
-        lines.push(`${skillNames.get(id) ?? id} Level ${now.level}`);
+        lines.push(`${name} Level ${now.level}`);
         levelledIds.push(id);
       }
     }
-    setFlashing(new Set(levelledIds));
+    // A steady-state tick (nothing levelled) must leave the flash alone: the
+    // sim hands the HUD a fresh snapshot every ~33ms whether or not anything
+    // changed, and clearing here killed the flash one tick after it lit.
+    // The banner-dismissal effect below already owns turning it off.
+    if (levelledIds.length > 0) setFlashing(new Set(levelledIds));
     if (lines.length === 0) return;
     // A boss kill can pay both at once. Rule 3 says concentrate rather than spread,
     // so they share one banner and one sound instead of queueing two.

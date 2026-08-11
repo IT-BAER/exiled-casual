@@ -45,9 +45,16 @@ export function SkillTooltip(
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px" }}>
-        <div style={{ flex: 1, fontSize: 17, color: GOLD, letterSpacing: 1, whiteSpace: "nowrap" }}>{skill.name}</div>
+        <div style={{ flex: 1, fontSize: 17, color: GOLD, letterSpacing: 1, whiteSpace: "nowrap" }}>
+          {skill.name}
+          {/* PoE1's own gem header (skill-tooltip.png) carries the level as a
+              badge on the icon, never a fifth stat column: four columns already
+              fill the fixed 430px width, and a fifth pushed the name off the
+              DPS column. The tooltip draws no icon, so the level rides the name
+              line instead, dim rather than gold so it reads as metadata. */}
+          <span style={{ marginLeft: 8, fontSize: 12, color: GOLD_DIM }}>{`Level ${skill.gemLevel}`}</span>
+        </div>
         {skill.dps !== undefined && <Stat label="DPS" value={String(Math.round(skill.dps))} />}
-        <Stat label="Gem" value={`Level ${skill.gemLevel}`} />
         <Stat label="Cost" value={`${skill.manaCost} Mana`} />
         <Stat label="Cast Time" value={`${skill.castTimeSec.toFixed(2)} sec`} />
         {skill.cooldownSec > 0 && <Stat label="Cooldown" value={`${skill.cooldownSec.toFixed(2)} sec`} />}
@@ -69,7 +76,7 @@ export function SkillTooltip(
       {(skill.breakpoints.length > 0 || skill.nextBreakpoint) && (
         <>
           <div style={{ height: 1, background: GOLD_DIM, opacity: 0.6 }} />
-          <div style={{ padding: "8px 12px", fontSize: 13, lineHeight: 1.4 }}>
+          <div data-testid="breakpoints" style={{ padding: "8px 12px", fontSize: 13, lineHeight: 1.4 }}>
             {skill.breakpoints.map((text) => (
               <div key={text} style={{ color: MODIFIER }}>{text}</div>
             ))}

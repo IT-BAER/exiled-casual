@@ -63,5 +63,6 @@ describe("SkillTooltip gem level", () => {
   it("shows nothing about breakpoints for a skill that has none", () => {
     renderTip(makeSkill({ breakpoints: [], nextBreakpoint: undefined }));
     expect(screen.queryByTestId("next-breakpoint")).toBeNull();
+    expect(screen.queryByTestId("breakpoints")).toBeNull();
   });
 });
