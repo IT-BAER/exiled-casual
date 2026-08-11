@@ -36,6 +36,15 @@ describe("SkillTooltip gem level", () => {
     expect(screen.getByTestId("skill-tooltip")).toHaveTextContent("Level 7");
   });
 
+  // jsdom does no layout, so the clip is only reachable through the rule that
+  // caused it: a fixed width the four stat columns cannot fit in.
+  it("sizes the header to its columns rather than clipping the last one", () => {
+    renderTip(makeSkill({ dps: 40, cooldownSec: 1 }));
+    const style = screen.getByTestId("skill-tooltip").style;
+    expect(style.width).toBe("max-content");
+    expect(screen.getByText("Cooldown")).toBeInTheDocument();
+  });
+
   it("draws an experience rail whose width is gemXp over gemXpToNext", () => {
     renderTip(makeSkill({ gemXp: 30, gemXpToNext: 60 }));
     expect(screen.getByTestId("gem-xp-fill")).toHaveStyle({ width: "50%" });

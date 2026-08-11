@@ -35,7 +35,9 @@ export function SkillTooltip(
         position: "absolute",
         bottom,
         right,
-        width: 430,
+        width: "max-content",
+        minWidth: 430,
+        maxWidth: "min(96vw, 720px)",
         zIndex: 5,
         pointerEvents: "none",
         fontFamily: SERIF,
@@ -48,10 +50,10 @@ export function SkillTooltip(
         <div style={{ flex: 1, fontSize: 17, color: GOLD, letterSpacing: 1, whiteSpace: "nowrap" }}>
           {skill.name}
           {/* PoE1's own gem header (skill-tooltip.png) carries the level as a
-              badge on the icon, never a fifth stat column: four columns already
-              fill the fixed 430px width, and a fifth pushed the name off the
-              DPS column. The tooltip draws no icon, so the level rides the name
-              line instead, dim rather than gold so it reads as metadata. */}
+              badge on the icon, never a stat column. The tooltip draws no icon,
+              so the level rides the name line instead, dim rather than gold so
+              it reads as metadata. The header grows past its 430px minimum
+              rather than clipping a column, since every value is nowrap. */}
           <span style={{ marginLeft: 8, fontSize: 12, color: GOLD_DIM }}>{`Level ${skill.gemLevel}`}</span>
         </div>
         {skill.dps !== undefined && <Stat label="DPS" value={String(Math.round(skill.dps))} />}
@@ -64,7 +66,7 @@ export function SkillTooltip(
       {skill.gemXpToNext > 0 && (
         <div
           data-testid="gem-xp-rail"
-          style={{ height: 6, background: "#6a5220", borderTop: "1px solid #000", borderBottom: "1px solid #000" }}
+          style={{ height: 4, background: "#6a5220", borderTop: "1px solid #000", borderBottom: "1px solid #000" }}
         >
           <div
             data-testid="gem-xp-fill"
