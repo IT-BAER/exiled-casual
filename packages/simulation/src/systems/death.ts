@@ -169,9 +169,8 @@ export function registerDeath(sim: Simulation): void {
             // the shop is worth walking back to, so the new level and the new goods
             // land together rather than the goods arriving unannounced.
             world.set<VendorC>(sessionE, "vendor", stockVendor(s.atlasSeed, next.level));
-            // The level may have opened a skill. Granting here rather than only on
-            // load is what puts the new icon on the bar in the moment it is earned,
-            // which is the whole of docs/09 rule 1 for this track.
+            // The level may have opened a skill. Granting its gem here rather than
+            // only on load is what makes it slottable in the moment it is earned.
             grantSkills(world);
           }
         }

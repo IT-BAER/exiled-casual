@@ -519,7 +519,11 @@ describe("registerDeath", () => {
       area: "hideout", areaTier: 0, level: 10, xp: 0, skills: before,
     });
     sim.step([]);
-    expect(world.get<SkillsC>(sessionE, "skills")).toEqual(before);
+    // Literals, not `before`: the ECS stores that object by identity, so comparing
+    // against it would pass an implementation that mutated the gems in place.
+    expect(world.get<SkillsC>(sessionE, "skills")?.gems).toEqual({
+      "skill.ember_bolt.v1": { level: 1, xp: 0 },
+    });
   });
 
   it("killing a monster refills one charge on each flask and never exceeds max", () => {
