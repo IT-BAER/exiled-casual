@@ -17,10 +17,11 @@ self.onmessage = (e: MessageEvent) => {
   const msg = raw;
   if (msg.type === "init") {
     const c = new WorkerCore(msg.seed, undefined, msg.characterId);
-    core = c;
-    // Restore any saved run first, THEN send the (possibly restored) layout once
-    // so the renderer builds floor + walls, then ready.
+    // `core` is assigned only once the saved run is in: the interval's `!core`
+    // guard is what keeps a pre-hydration world (no skills, empty bar, a dead
+    // left click) from ever reaching the renderer as snapshot 1.
     void c.hydrate().then(() => {
+      core = c;
       const area: FromWorker = { type: "area", area: c.getArea(), layout: c.getAreaLayout(), mapBaseId: c.getMapBaseId() };
       self.postMessage(area);
       const ready: FromWorker = { type: "ready" };
