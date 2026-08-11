@@ -1,6 +1,6 @@
 import { Simulation } from "../loop";
 import type { World } from "../ecs";
-import type { Health, Mana, MoveTarget, MoveDir, SessionC, MonsterC, Position, ItemC, FlasksC, ProgressC, EnergyShieldC, VendorC } from "../components";
+import type { Health, Mana, MoveTarget, MoveDir, SessionC, MonsterC, Position, ItemC, FlasksC, ProgressC, EnergyShieldC, VendorC, SkillsC } from "../components";
 import { stockVendor } from "../vendor";
 import { openReturnPortal } from "../areas";
 import { fp } from "@exiled/fixed-point";
@@ -9,9 +9,11 @@ import {
   rollItem, areaLevel, FLASK_CHARGES_PER_KILL, gainXp, xpAward,
   waystoneScaleFor, waystoneDrops, waystoneMods, atlasGraph, nextNodeTier,
   dropCount, dropCategory, quantityScaleMilli, MONSTER_ILVL_OFFSET, DROP_POOL, BOSS_DROP_POOL,
+  splitGemXp, gainGemXp, maxGemLevel,
 } from "@exiled/rules";
 import { recomputePlayerStats } from "../derived";
 import { ITEM_POOLS, baseOf, currencyItem, currencyForRoll, waystoneItem } from "@exiled/content-runtime";
+import { grantSkills } from "../persist";
 
 /**
  * Monster rarity as the loot math indexes it: 0..3 normal, magic, rare, unique.
@@ -143,12 +145,34 @@ export function registerDeath(sim: Simulation): void {
           const gain = Math.trunc((base * (100 + waystoneScaleFor(s.waystoneSeed).experiencePct)) / 100);
           const next = gainXp(prog.level, prog.xp, gain);
           world.set<ProgressC>(sessionE, "progress", { ...next, gold: prog.gold });
+
+          // The gem's share of the same kill. Every occupied slot is paid whether
+          // it was cast or not (spec §1): swapping a skill in costs a slot and
+          // nothing else, so experimenting stays free.
+          const skills = world.get<SkillsC>(sessionE, "skills");
+          if (skills) {
+            const occupied = skills.bar.filter((id) => id !== null && skills.gems[id] !== undefined);
+            const share = splitGemXp(gain, occupied.length);
+            if (share > 0) {
+              const cap = maxGemLevel(next.level);
+              const gems = { ...skills.gems };
+              for (const id of occupied) {
+                gems[id!] = gainGemXp(gems[id!]!, share, cap);
+              }
+              world.set<SkillsC>(sessionE, "skills", { ...skills, gems });
+            }
+          }
+
           if (next.level !== prog.level) {
             recomputePlayerStats(world);
             // A level-up restocks the shelf (docs/02 §17). It is also the one moment
             // the shop is worth walking back to, so the new level and the new goods
             // land together rather than the goods arriving unannounced.
             world.set<VendorC>(sessionE, "vendor", stockVendor(s.atlasSeed, next.level));
+            // The level may have opened a skill. Granting here rather than only on
+            // load is what puts the new icon on the bar in the moment it is earned,
+            // which is the whole of docs/09 rule 1 for this track.
+            grantSkills(world);
           }
         }
       }
