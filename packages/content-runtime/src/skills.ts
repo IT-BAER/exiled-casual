@@ -255,3 +255,9 @@ export const DEFAULT_ATTACK_BY_CLASS: Record<string, string> = {
 export function defaultAttackFor(classId: string): string {
   return DEFAULT_ATTACK_BY_CLASS[classId] ?? DEFAULT_ATTACK_BY_CLASS["class.stalker"]!;
 }
+
+/**
+ * Every class's free attack. Nothing here was earned, so none of it takes a
+ * share of a kill's gem experience and none of it is auto-slotted on a level.
+ */
+export const FREE_ATTACKS: ReadonlySet<string> = new Set(Object.values(DEFAULT_ATTACK_BY_CLASS));

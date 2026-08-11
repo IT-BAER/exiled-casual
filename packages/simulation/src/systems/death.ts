@@ -12,11 +12,8 @@ import {
   splitGemXp, gainGemXp, maxGemLevel,
 } from "@exiled/rules";
 import { recomputePlayerStats } from "../derived";
-import { ITEM_POOLS, baseOf, currencyItem, currencyForRoll, waystoneItem, DEFAULT_ATTACK_BY_CLASS } from "@exiled/content-runtime";
+import { ITEM_POOLS, baseOf, currencyItem, currencyForRoll, waystoneItem, FREE_ATTACKS } from "@exiled/content-runtime";
 import { grantSkills } from "../persist";
-
-/** The free class attacks, which occupy a bar slot but never earn a share of a kill. */
-const FREE_ATTACKS = new Set(Object.values(DEFAULT_ATTACK_BY_CLASS));
 
 /**
  * Monster rarity as the loot math indexes it: 0..3 normal, magic, rare, unique.

@@ -169,6 +169,51 @@ describe("skills persistence", () => {
     expect(skills.gems["skill.ember_bolt.v1"]).toEqual({ level: 5, xp: 77 });
   });
 
+  it("a newly opened skill lands in the first empty socket, so the level-up is visible", () => {
+    // Level 3 to level 4 opens Blink. defaultBar fills socket 0 with Ember Bolt,
+    // so the first empty numbered socket is 1.
+    const { world } = createCombatSim(7, { area: "hideout" });
+    const e = sessionEntity(world);
+    world.set<ProgressC>(e, "progress", { ...world.get<ProgressC>(e, "progress")!, level: 4 });
+
+    grantSkills(world);
+
+    const bar = world.get<SkillsC>(e, "skills")!.bar;
+    expect(bar[0]).toBe("skill.ember_bolt.v1");
+    expect(bar[1]).toBe("skill.blink.v1");
+  });
+
+  it("never slots the same skill twice, however many times it grants", () => {
+    const { world } = createCombatSim(7, { area: "hideout" });
+    const e = sessionEntity(world);
+    world.set<ProgressC>(e, "progress", { ...world.get<ProgressC>(e, "progress")!, level: 4 });
+    grantSkills(world);
+    grantSkills(world);
+
+    const bar = world.get<SkillsC>(e, "skills")!.bar;
+    expect(bar.filter((id) => id === "skill.blink.v1")).toHaveLength(1);
+    expect(bar.filter((id) => id === "skill.ember_bolt.v1")).toHaveLength(1);
+  });
+
+  it("leaves a full bar alone rather than evicting a skill the player chose", () => {
+    const { world } = createCombatSim(7, { area: "hideout" });
+    const e = sessionEntity(world);
+    const full: (string | null)[] = [
+      "skill.ember_bolt.v1", "skill.strike.v1", "skill.snap_shot.v1", "skill.ember_spark.v1",
+      "skill.town_portal.v1", MOVE_SOCKET, null, null,
+    ];
+    world.set<SkillsC>(e, "skills", { ...world.get<SkillsC>(e, "skills")!, bar: full });
+    world.set<ProgressC>(e, "progress", { ...world.get<ProgressC>(e, "progress")!, level: 4 });
+
+    grantSkills(world);
+
+    // Blink got its gem but no socket: the five numbered ones are taken, and the
+    // mouse row is not somewhere a grant may write.
+    const skills = world.get<SkillsC>(e, "skills")!;
+    expect(skills.gems["skill.blink.v1"]).toEqual({ level: 1, xp: 0 });
+    expect(skills.bar).toEqual(full);
+  });
+
   it("snapshot round-trips gems and the bar", () => {
     const { world } = createCombatSim(7, { area: "hideout" });
     const e = sessionEntity(world);
@@ -226,7 +271,10 @@ describe("skills persistence", () => {
     restore(fresh, state);
 
     const skills = fresh.get<SkillsC>(sessionEntity(fresh), "skills")!;
-    expect(skills.bar[0]).toBeNull();
+    // The socket it vacated does not have to stay empty: this save carries no
+    // gems at all, so the grant that follows the filter hands Ember Bolt the
+    // first free socket. What must hold is that the locked skill is off the bar.
+    expect(skills.bar).not.toContain("skill.cinder_ground.v1");
     expect(Object.hasOwn(skills.gems, "skill.cinder_ground.v1")).toBe(false);
   });
 

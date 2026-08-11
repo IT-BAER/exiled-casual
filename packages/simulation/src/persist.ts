@@ -5,7 +5,7 @@ import { stockVendor } from "./vendor";
 import { withPermanentWaystone } from "./inventory";
 import { recomputePlayerStats } from "./derived";
 import { START_LEVEL, isUnlocked, maxGemLevel, MAX_GEM_LEVEL, gemXpToNext } from "@exiled/rules";
-import { SKILLS, defaultAttackFor } from "@exiled/content-runtime";
+import { SKILLS, defaultAttackFor, FREE_ATTACKS } from "@exiled/content-runtime";
 import { SKILL_SLOT_COUNT, MOUSE_SLOT_BASE, MOVE_SOCKET } from "@exiled/protocol";
 
 /**
@@ -188,13 +188,22 @@ export function grantSkills(world: World): void {
   const classId = world.get<SessionC>(e, "session")?.classId ?? "";
   const current = world.get<SkillsC>(e, "skills");
   const gems = { ...(current?.gems ?? {}) };
+  const bar = [...(current?.bar ?? defaultBar(classId))];
   for (const def of SKILLS.values()) {
     if (!isUnlocked(def, level, classId)) continue;
-    if (gems[def.id] === undefined) gems[def.id] = { level: 1, xp: 0 };
+    if (gems[def.id] !== undefined) continue;
+    gems[def.id] = { level: 1, xp: 0 };
+    // A skill nobody can see was not a reward (docs/09 rule 1), so the one the
+    // level just opened takes the first free numbered socket. Never the mouse
+    // row, never an occupied one (a full bar is a choice the player made), and
+    // never a free attack, which is unlocked for every class and earns nothing.
+    if (FREE_ATTACKS.has(def.id) || bar.includes(def.id)) continue;
+    const free = bar.findIndex((id, i) => id === null && i < MOUSE_SLOT_BASE);
+    if (free !== -1) bar[free] = def.id;
   }
   world.set<SkillsC>(e, "skills", {
     gems,
-    bar: current?.bar ?? defaultBar(classId),
+    bar,
     // Carried forward, never reset here: this runs on every level-up, and
     // resetting it would let a legitimate cross-class basic attack the player
     // already set get stomped back to the class default on the next grant.
