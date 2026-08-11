@@ -107,9 +107,10 @@ interface Rig { sim: Simulation; world: World; player: Entity }
  * creates a session, and `gemLevelFor` reads gem levels off one, so gem 1
  * (its fallback) needs no session at all and every pre-existing call stays
  * on the untouched legacy path. A gem level above 1 gets the minimal session
- * a gem lookup needs: `area: "hideout"`, tier 0, no waystone, which is the
- * exact neutral point `mapDangerScale` already returns for a session-less
- * world, so monster life and damage are unaffected by the session existing.
+ * a gem lookup needs: `area: "hideout"`, tier 0, no waystone. That is neutral
+ * for outbound damage only: the time-to-kill bands measure the same fight with
+ * or without it. A hideout session does change what monsters do to the player,
+ * so the time-to-death bands must keep running session-less.
  */
 function rig(gemLevel = 1): Rig {
   const { sim, world, playerEntity } = createCombatSim(7, { monsters: false });
