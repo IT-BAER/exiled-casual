@@ -62,13 +62,17 @@ export function SkillTooltip(
       {/* The empty track must read as a vessel waiting to fill, so it stays
           visible against the tooltip's black gradient at 0% fill. */}
       {skill.gemXpToNext > 0 && (
-        <div data-testid="gem-xp-rail" style={{ height: 3, background: "#3a2c10" }}>
+        <div
+          data-testid="gem-xp-rail"
+          style={{ height: 6, background: "#6a5220", borderTop: "1px solid #000", borderBottom: "1px solid #000" }}
+        >
           <div
             data-testid="gem-xp-fill"
             style={{
               height: "100%",
               width: `${Math.min(100, Math.round((skill.gemXp * 100) / skill.gemXpToNext))}%`,
-              background: GOLD_DIM,
+              background: GOLD,
+              boxShadow: `0 0 6px ${GOLD}`,
             }}
           />
         </div>
