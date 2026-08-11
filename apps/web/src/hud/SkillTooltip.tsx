@@ -59,8 +59,10 @@ export function SkillTooltip(
         <Stat label="Cast Time" value={`${skill.castTimeSec.toFixed(2)} sec`} />
         {skill.cooldownSec > 0 && <Stat label="Cooldown" value={`${skill.cooldownSec.toFixed(2)} sec`} />}
       </div>
+      {/* The empty track must read as a vessel waiting to fill, so it stays
+          visible against the tooltip's black gradient at 0% fill. */}
       {skill.gemXpToNext > 0 && (
-        <div data-testid="gem-xp-rail" style={{ height: 3, background: "#1a1a1a" }}>
+        <div data-testid="gem-xp-rail" style={{ height: 3, background: "#3a2c10" }}>
           <div
             data-testid="gem-xp-fill"
             style={{
