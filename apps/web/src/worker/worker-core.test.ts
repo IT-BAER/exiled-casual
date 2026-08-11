@@ -128,7 +128,7 @@ describe("WorkerCore", () => {
     expect(core.getAreaLayout().hash).not.toBe(generateArea(mapSeed, CONTENT_VERSION, "loop").hash);
   });
 
-  // Fix round 1, finding 1: a bar-only change used to be invisible to the
+  // A bar-only change must not be invisible to the
   // durable-state fingerprint, so quitting right after a reorder (no kill, no
   // pickup) silently discarded the swap.
   it("a bar swap alone trips a save, with nothing picked up or killed", () => {

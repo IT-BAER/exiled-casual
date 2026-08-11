@@ -648,7 +648,7 @@ describe("Hud gem levels and breakpoints", () => {
   });
 
   it("announces every breakpoint crossed in one tick, not just the last", () => {
-    // A boss kill can carry a gem past two thresholds at once (Task 8).
+    // A boss kill can carry a gem past two thresholds at once.
     const { rerender } = render(<Hud snapshot={makeSnap({ skills: [emberBolt] })} />);
     rerender(
       <Hud snapshot={makeSnap({

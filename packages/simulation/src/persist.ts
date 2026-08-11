@@ -119,7 +119,7 @@ export function filterUnlockedBar(
  * xp beside it is clamped along with it: banked xp computed against a ceiling
  * that no longer holds must not carry past what the clamped level allows, or
  * the gem re-levels the instant it earns a single point once the character
- * level catches back up (Task 5 review finding 4).
+ * level catches back up.
  */
 function sanitizeGems(raw: unknown, cap: number): Record<string, { level: number; xp: number }> {
   const src = raw !== null && typeof raw === "object" && !Array.isArray(raw)
@@ -147,26 +147,10 @@ function sanitizeGems(raw: unknown, cap: number): Record<string, { level: number
 }
 
 /**
- * One-shot repair for the class's default-attack mouse slot, gated on
- * `SkillsC.attackReseeded` rather than re-derived structurally every load.
- *
- * `defaultBar` and `grantSkills` may run before the roster's classId is known
- * (a fresh world's session carries none until `characters.ts` stamps it from
- * the roster row), which seeds this one slot off the `""` fallback — every
- * class's Snap Shot instead of its own attack (Task 5 review finding 1). This
- * is called again once the real classId is known, on every load, so an
- * already-wrong save self-heals on the next login rather than needing a
- * one-time migration.
- *
- * Before `SkillsC.bar` was player-writable, the corrupt state was narrow and
- * recognisable: the slot could only ever hold SOME class's default attack,
- * because nothing else ever wrote it. Task 6's `setSkillBar` intent makes a
- * DELIBERATE cross-class basic attack a legal thing for a player to slot,
- * which that structural guess can no longer tell apart from the bug it was
- * built to catch — so it would silently discard the player's choice on his
- * very next login. A save missing the flag is exactly (and only) a save that
- * predates this fix, so the correction there is unconditional; once stamped,
- * the flag makes every later call a no-op, even over a deliberate swap.
+ * Stamps the class's own default attack into its mouse slot once, gated on
+ * `SkillsC.attackReseeded`: an unflagged save may carry the `""` classId
+ * fallback, and a player may legally slot another class's basic attack, so
+ * nothing structural can tell those two apart. Once stamped, a no-op.
  */
 export function reseedDefaultAttack(skills: SkillsC, classId: string): SkillsC {
   if (skills.attackReseeded) return skills;

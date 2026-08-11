@@ -251,7 +251,7 @@ describe("skills persistence", () => {
     }
   });
 
-  // Fix round 1, finding 2: sanitizeGems hardens gems on read but the bar rode
+  // sanitizeGems hardens gems on read but the bar rode
   // through normalizeBar alone (shape/length/dedup, no unlock check), so a
   // hand-edited save could park a locked skill in a socket with no gem behind
   // it. Breaks if restore() stops running the bar through the same unlock
@@ -327,7 +327,7 @@ describe("skills persistence", () => {
     const skills = fresh.get<SkillsC>(sessionEntity(fresh), "skills")!;
     expect(maxGemLevel(3)).toBe(3);
     expect(skills.gems["skill.ember_bolt.v1"]!.level).toBe(maxGemLevel(3));
-    // Review finding 4: xp banked against the fictional level-20 ceiling must
+    // xp banked against the fictional level-20 ceiling must
     // not survive the clamp, or the gem re-levels straight back up the instant
     // it earns a single point once the character catches up to a higher cap.
     expect(skills.gems["skill.ember_bolt.v1"]!.xp).toBeLessThan(gemXpToNext(maxGemLevel(3)));
