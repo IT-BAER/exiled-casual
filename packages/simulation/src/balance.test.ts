@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { fp } from "@exiled/fixed-point";
-import { baseCasterStats, burningTickDamage, AILMENT_TICK_INTERVAL } from "@exiled/rules";
+import {
+  baseCasterStats, burningTickDamage, AILMENT_TICK_INTERVAL, areaLevel, monsterTierScale, maxGemLevel,
+} from "@exiled/rules";
 import { MONSTERS, SKILLS, RARE_TEMPLATES, MONSTER_POOLS, PACK_COUNT, BOSSES } from "@exiled/content-runtime";
 import type { BiomeId, MonsterDef } from "@exiled/content-schema";
 import { makeRare } from "@exiled/rules";
@@ -107,18 +109,20 @@ interface Rig { sim: Simulation; world: World; player: Entity }
  * creates a session, and `gemLevelFor` reads gem levels off one, so gem 1
  * (its fallback) needs no session at all and every pre-existing call stays
  * on the untouched legacy path. A gem level above 1 gets the minimal session
- * a gem lookup needs: `area: "hideout"`, tier 0, no waystone. That is neutral
+ * a gem lookup needs: `area: "hideout"`, the given tier, no waystone. A tier
+ * above 0 needs that session too, since the slam damage systems read the tier
+ * off it while ordinary attack damage is baked in at spawn. That is neutral
  * for outbound damage only: the time-to-kill bands measure the same fight with
  * or without it. A hideout session does change what monsters do to the player,
  * so the time-to-death bands must keep running session-less.
  */
-function rig(gemLevel = 1): Rig {
+function rig(gemLevel = 1, areaTier = 0): Rig {
   const { sim, world, playerEntity } = createCombatSim(7, { monsters: false });
-  if (gemLevel > 1) {
+  if (gemLevel > 1 || areaTier > 0) {
     const sessionE = world.create();
     world.set<SessionC>(sessionE, "session", {
       area: "hideout", atlasSeed: 0, mapSeed: 0, waystoneSeed: 0,
-      areaTier: 0, activeNodeId: "", completedNodes: [], portalsLeft: 0, mapOpen: 0, pendingArea: "",
+      areaTier, activeNodeId: "", completedNodes: [], portalsLeft: 0, mapOpen: 0, pendingArea: "",
     });
     world.set<SkillsC>(sessionE, "skills", {
       gems: { [BOLT]: { level: gemLevel, xp: 0 }, [GROUND]: { level: gemLevel, xp: 0 } },
@@ -397,6 +401,59 @@ describe("time to kill", () => {
     const dry20 = castsToDry(20, 30);
     expect(dry20).toBeGreaterThan(3);
     expect(dry20).toBeLessThan(10);
+  });
+});
+
+/**
+ * What the Atlas costs, measured: the reference rare killed at each tier by a
+ * character carrying the highest gem his area level allows (`maxGemLevel` is the
+ * character level below 20) and NO gear, which is the only progression this lab
+ * can model. Seconds to clear:
+ *
+ *   tier   0    1    3     5     7    10    15
+ *   level  2    8   20    32    44    62    92
+ *   gem    2    8   20    20    20    20    20
+ *   kill  7.6  8.2 10.4  18.8  27.2  38.5  60.9
+ *
+ * Gems are the whole answer up to tier 3 and nothing after it: they cap at 20
+ * where the character hits level 20, which is tier 3's own area level, while
+ * monster life keeps climbing to 10.1x at tier 15. So the last twelve tiers are
+ * paid for by gear alone, and a gearless character's fight grows linearly to 8x
+ * its tier-0 length. That is the shape to design gear against, not a defect:
+ * the band below fails if either slope moves without the other.
+ *
+ * Time-to-DEATH is deliberately absent. Scaling a tier needs a session, and a
+ * session makes monsters behave differently towards the player (the same reason
+ * the gem bands measure outbound damage only) — a five-imp pack at every tier
+ * measured Infinity here, which is a reading of the rig, not of the game.
+ */
+describe("the tier ladder (reference character, on-level gems, no gear)", () => {
+  const onLevelGem = (tier: number) => maxGemLevel(areaLevel(tier));
+
+  function secondsToKillReferenceRare(tier: number): number {
+    const r = rig(onLevelGem(tier), tier);
+    spawnMonster(
+      r.world, makeRare(impDef(), RARE_TEMPLATES[0]!), fp(0), SPAWN_Y, true, monsterTierScale(tier),
+    );
+    return ticksToClear(r, { maxSecs: 600 }).ticks / HZ;
+  }
+
+  it("costs more time at every tier, and 6-10x by the top of the Atlas", () => {
+    const ladder = [0, 3, 7, 10, 15].map(secondsToKillReferenceRare);
+    for (let i = 1; i < ladder.length; i++) expect(ladder[i]!).toBeGreaterThan(ladder[i - 1]!);
+    const growth = ladder.at(-1)! / ladder[0]!;
+    expect(growth).toBeGreaterThan(6);
+    expect(growth).toBeLessThan(10);
+  });
+
+  it("gem levels carry tier 3 and stop mattering above it", () => {
+    // At tier 3 the cap is reached, so this is the last tier where levelling the
+    // gem is the player's answer to the monsters getting bigger.
+    expect(onLevelGem(3)).toBe(20);
+    const capped = secondsToKillReferenceRare(3);
+    const r1 = rig(1, 3);
+    spawnMonster(r1.world, makeRare(impDef(), RARE_TEMPLATES[0]!), fp(0), SPAWN_Y, true, monsterTierScale(3));
+    expect(ticksToClear(r1, { maxSecs: 600 }).ticks / HZ / capped).toBeGreaterThan(1.5);
   });
 });
 
