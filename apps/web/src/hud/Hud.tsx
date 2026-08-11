@@ -142,7 +142,7 @@ function socketFor(bar: (string | null)[], i: number, names?: ReadonlyMap<string
  * (reference-screenshots/poe1-lower-bar.png): the mouse buttons sit in their own row
  * above the numbered slots, and both rows draw the same tile.
  */
-function SkillTile({ slot, n, cooldowns, onHover, drag, onAssignRequest }: {
+function SkillTile({ slot, n, cooldowns, onHover, drag, onAssignRequest, flash }: {
   slot: SkillSlot;
   n: number;
   cooldowns: Record<string, number>;
@@ -154,6 +154,8 @@ function SkillTile({ slot, n, cooldowns, onHover, drag, onAssignRequest }: {
    */
   drag?: { index: number; onDrop: (from: number, to: number) => void };
   onAssignRequest?: () => void;
+  /** The gem in this socket just levelled: the banner says WHAT, this says WHERE. */
+  flash?: boolean;
 }) {
   const cd = slot.id ? cooldowns[slot.id] ?? 0 : 0;
   const ready = cd <= 0;
@@ -161,6 +163,7 @@ function SkillTile({ slot, n, cooldowns, onHover, drag, onAssignRequest }: {
   return (
     <div
       data-testid={`skill-slot-${n}`}
+      data-flash={flash ? "1" : undefined}
       onMouseEnter={() => onHover(slot.id)}
       onMouseLeave={() => onHover(null)}
       // Left click opens the picker. A real drag never fires click, so this does
@@ -196,7 +199,9 @@ function SkillTile({ slot, n, cooldowns, onHover, drag, onAssignRequest }: {
           : "radial-gradient(circle at 50% 35%, #14171d, #07090c)",
         border: `1px solid ${over ? "#d9b04a" : slot.icon && ready ? "#6b5a34" : "#2b3038"}`,
         borderRadius: 2,
-        boxShadow: over
+        boxShadow: flash
+          ? `0 0 14px 3px #d9b04a, inset 0 0 10px rgba(0,0,0,0.75)`
+          : over
           ? "0 0 8px rgba(217,176,74,0.55), inset 0 0 10px rgba(0,0,0,0.6)"
           : slot.icon && ready
             ? `0 0 6px ${slot.glow}33, inset 0 0 10px rgba(0,0,0,0.75)`
@@ -751,13 +756,19 @@ export function Hud({
   // the timer down through cleanup and then returned early without a new one, and
   // the banner stayed up for the rest of the run.
   const [banner, setBanner] = React.useState<{ text: string; seq: number } | null>(null);
+  const [flashing, setFlashing] = React.useState<ReadonlySet<string>>(new Set());
   const level = snapshot?.player.level ?? null;
   const stones = snapshot?.inventory.items.filter((i) => i.baseId === "map.waystone").length ?? null;
-  const last = React.useRef<{ level: number; stones: number } | null>(null);
+  const gems = React.useMemo(() => {
+    const m: Record<string, { level: number; breakpoints: number }> = {};
+    for (const s of snapshot?.skills ?? []) m[s.id] = { level: s.gemLevel, breakpoints: s.breakpoints.length };
+    return m;
+  }, [snapshot?.skills]);
+  const last = React.useRef<{ level: number; stones: number; gems: typeof gems } | null>(null);
   React.useEffect(() => {
     if (level === null || stones === null) return;
     const was = last.current;
-    last.current = { level, stones };
+    last.current = { level, stones, gems };
     // The first snapshot is the baseline, not a win; a reload would otherwise
     // congratulate the player on the level they already had.
     if (!was) return;
@@ -767,16 +778,36 @@ export function Hud({
       // Spending a stone on a map is not a payout, so only a rise counts.
       ...(won > 0 ? [`Waystone${won > 1 ? ` x${won}` : ""}`] : []),
     ];
+    // A breakpoint outranks the level it arrived with: the level is a number and
+    // the breakpoint is the thing that says what changed (docs/09 rule 1). Both
+    // ride the one banner rather than queueing two.
+    const levelledIds: string[] = [];
+    for (const [id, now] of Object.entries(gems)) {
+      const before = was.gems[id];
+      if (!before) continue; // newly unlocked: the level-up line already covers it
+      if (now.breakpoints > before.breakpoints) {
+        const text = snapshot?.skills?.find((s) => s.id === id)?.breakpoints.at(-1);
+        if (text) { lines.push(`${skillNames.get(id) ?? id}: ${text}`); levelledIds.push(id); }
+      } else if (now.level > before.level) {
+        lines.push(`${skillNames.get(id) ?? id} Level ${now.level}`);
+        levelledIds.push(id);
+      }
+    }
+    setFlashing(new Set(levelledIds));
     if (lines.length === 0) return;
     // A boss kill can pay both at once. Rule 3 says concentrate rather than spread,
     // so they share one banner and one sound instead of queueing two.
     setBanner((prev) => ({ text: lines.join("   ·   "), seq: (prev?.seq ?? 0) + 1 }));
-    playDropSound(level > was.level ? "unique" : "rare");
-  }, [level, stones]);
+    // A breakpoint is the loudest of the three, then a character level, then a gem.
+    const crossed = Object.entries(gems).some(
+      ([id, now]) => (was.gems[id]?.breakpoints ?? now.breakpoints) < now.breakpoints,
+    );
+    playDropSound(crossed || level > was.level ? "unique" : "rare");
+  }, [level, stones, gems, snapshot?.skills, skillNames]);
 
   React.useEffect(() => {
     if (!banner) return;
-    const t = setTimeout(() => setBanner(null), 2400);
+    const t = setTimeout(() => { setBanner(null); setFlashing(new Set()); }, 2400);
     return () => clearTimeout(t);
   }, [banner]);
 
@@ -1155,6 +1186,7 @@ export function Hud({
                 onHover={setHoveredSkill}
                 drag={{ index: idx, onDrop: swapSockets }}
                 onAssignRequest={() => setAssigning(idx)}
+                flash={bar[idx] !== null && flashing.has(bar[idx]!)}
               />
             );
           })}
@@ -1182,6 +1214,7 @@ export function Hud({
               onHover={setHoveredSkill}
               drag={{ index: i, onDrop: swapSockets }}
               onAssignRequest={() => setAssigning(i)}
+              flash={bar[i] !== null && flashing.has(bar[i]!)}
             />
           ))}
         </div>

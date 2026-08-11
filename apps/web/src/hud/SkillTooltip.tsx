@@ -47,12 +47,43 @@ export function SkillTooltip(
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px" }}>
         <div style={{ flex: 1, fontSize: 17, color: GOLD, letterSpacing: 1, whiteSpace: "nowrap" }}>{skill.name}</div>
         {skill.dps !== undefined && <Stat label="DPS" value={String(Math.round(skill.dps))} />}
+        <Stat label="Gem" value={`Level ${skill.gemLevel}`} />
         <Stat label="Cost" value={`${skill.manaCost} Mana`} />
         <Stat label="Cast Time" value={`${skill.castTimeSec.toFixed(2)} sec`} />
         {skill.cooldownSec > 0 && <Stat label="Cooldown" value={`${skill.cooldownSec.toFixed(2)} sec`} />}
       </div>
+      {skill.gemXpToNext > 0 && (
+        <div data-testid="gem-xp-rail" style={{ height: 3, background: "#1a1a1a" }}>
+          <div
+            data-testid="gem-xp-fill"
+            style={{
+              height: "100%",
+              width: `${Math.min(100, Math.round((skill.gemXp * 100) / skill.gemXpToNext))}%`,
+              background: GOLD_DIM,
+            }}
+          />
+        </div>
+      )}
       <div style={{ height: 1, background: GOLD_DIM, opacity: 0.6 }} />
       <div style={{ padding: "8px 12px", fontSize: 13, color: PARCHMENT, lineHeight: 1.35 }}>{skill.description}</div>
+      {(skill.breakpoints.length > 0 || skill.nextBreakpoint) && (
+        <>
+          <div style={{ height: 1, background: GOLD_DIM, opacity: 0.6 }} />
+          <div style={{ padding: "8px 12px", fontSize: 13, lineHeight: 1.4 }}>
+            {skill.breakpoints.map((text) => (
+              <div key={text} style={{ color: MODIFIER }}>{text}</div>
+            ))}
+            {/* The grey line is where the anticipation lives (docs/09 rule 1):
+                it is the cheapest device in the whole design, so it is shown
+                even before the first breakpoint is reached. */}
+            {skill.nextBreakpoint && (
+              <div data-testid="next-breakpoint" style={{ color: "#5a5a5a" }}>
+                {`Level ${skill.nextBreakpoint.atLevel}: ${skill.nextBreakpoint.text}`}
+              </div>
+            )}
+          </div>
+        </>
+      )}
       {skill.lines.length > 0 && (
         <>
           <div style={{ height: 1, background: GOLD_DIM, opacity: 0.6 }} />

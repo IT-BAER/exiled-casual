@@ -600,6 +600,97 @@ describe("Hud reward banner", () => {
   });
 });
 
+describe("Hud gem levels and breakpoints", () => {
+  const emberBolt = {
+    id: "skill.ember_bolt.v1",
+    name: "Ember Bolt",
+    description: "Launches a bolt of fire that bursts on the first enemy it strikes.",
+    manaCost: 8,
+    castTimeSec: 8 / 30,
+    cooldownSec: 0.2,
+    lines: [],
+    gemLevel: 1,
+    gemXp: 0,
+    gemXpToNext: 60,
+    breakpoints: [],
+  };
+  const blink = {
+    id: "skill.blink.v1",
+    name: "Blink",
+    description: "Teleports a short distance.",
+    manaCost: 15,
+    castTimeSec: 0,
+    cooldownSec: 3,
+    lines: [],
+    gemLevel: 1,
+    gemXp: 0,
+    gemXpToNext: 60,
+    breakpoints: [],
+  };
+
+  it("raises the banner when a gem levels", () => {
+    const { rerender } = render(<Hud snapshot={makeSnap({ skills: [emberBolt] })} />);
+    rerender(<Hud snapshot={makeSnap({ skills: [{ ...emberBolt, gemLevel: 2 }] })} />);
+    const banner = screen.getByTestId("reward-banner");
+    expect(banner).toHaveTextContent("Ember Bolt");
+    expect(banner).toHaveTextContent("Level 2");
+  });
+
+  it("raises the banner naming what changed when a breakpoint is crossed", () => {
+    const { rerender } = render(<Hud snapshot={makeSnap({ skills: [emberBolt] })} />);
+    rerender(
+      <Hud snapshot={makeSnap({ skills: [{ ...emberBolt, breakpoints: ["Level 4: Adds Burning"] }] })} />,
+    );
+    expect(screen.getByTestId("reward-banner")).toHaveTextContent("Adds Burning");
+  });
+
+  it("does not congratulate on the first snapshot", () => {
+    render(<Hud snapshot={makeSnap({ skills: [{ ...emberBolt, gemLevel: 5 }] })} />);
+    expect(screen.queryByTestId("reward-banner")).toBeNull();
+  });
+
+  it("shares one banner when a character level and a gem level land on the same kill", () => {
+    const { rerender } = render(
+      <Hud snapshot={makeSnap({ level: 12, skills: [emberBolt] })} />,
+    );
+    rerender(
+      <Hud snapshot={makeSnap({ level: 13, skills: [{ ...emberBolt, gemLevel: 2 }] })} />,
+    );
+    const banners = screen.getAllByTestId("reward-banner");
+    expect(banners).toHaveLength(1);
+    expect(banners[0]).toHaveTextContent("Level 13");
+    expect(banners[0]).toHaveTextContent("Ember Bolt");
+  });
+
+  it("flashes the bar slot the gem that levelled sits in, and only that one", () => {
+    const { rerender } = render(
+      <Hud snapshot={makeSnap({ skills: [emberBolt, blink] })} skillBar={BAR} />,
+    );
+    rerender(
+      <Hud snapshot={makeSnap({ skills: [emberBolt, { ...blink, gemLevel: 2 }] })} skillBar={BAR} />,
+    );
+    // BAR sits blink in socket index 2, drawn as skill-slot-3; ember_bolt in
+    // socket index 0, drawn as skill-slot-1.
+    expect(screen.getByTestId("skill-slot-3")).toHaveAttribute("data-flash", "1");
+    expect(screen.getByTestId("skill-slot-1")).not.toHaveAttribute("data-flash");
+  });
+
+  it("stops flashing after the flash duration", () => {
+    vi.useFakeTimers();
+    try {
+      const { rerender } = render(
+        <Hud snapshot={makeSnap({ skills: [blink] })} skillBar={BAR} />,
+      );
+      rerender(<Hud snapshot={makeSnap({ skills: [{ ...blink, gemLevel: 2 }] })} skillBar={BAR} />);
+      expect(screen.getByTestId("skill-slot-3")).toHaveAttribute("data-flash", "1");
+      act(() => { vi.advanceTimersByTime(2500); });
+      expect(screen.getByTestId("skill-slot-3")).not.toHaveAttribute("data-flash");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 /**
  * Dragging a skill from one socket to another. A swap and not an insert: five
  * sockets and three skills means dropping onto an occupied one has to put
