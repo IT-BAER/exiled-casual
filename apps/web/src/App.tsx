@@ -36,6 +36,10 @@ import { OptionsPanel } from "./menu/OptionsPanel";
  */
 const GameView = React.lazy(() => import("./GameView").then((m) => ({ default: m.GameView })));
 const MenuStage = React.lazy(() => import("./menu/MenuStage").then((m) => ({ default: m.MenuStage })));
+/** The dev asset viewer. Lazy for the same reason: it owns an engine too. */
+const AssetViewer = React.lazy(() =>
+  import("./dev/AssetViewer").then((m) => ({ default: m.AssetViewer })),
+);
 import { DEFAULT_SETTINGS, type Settings } from "./settings";
 import { setTitle } from "./title";
 import { setDebugLogging } from "./debug";
@@ -59,14 +63,28 @@ type Screen =
   | { kind: "select" }
   | { kind: "create" }
   | { kind: "info"; which: "about" }
-  | { kind: "game"; characterId: string };
+  | { kind: "game"; characterId: string }
+  | { kind: "viewer" };
 
 /** `?play` in the URL: see the roster effect below. Read once, outside render. */
 const AUTOPLAY =
   typeof window !== "undefined" && new URLSearchParams(window.location.search).has("play");
 
+/**
+ * `?viewer`: open the asset viewer instead of the menu.
+ *
+ * DEV only, both here and at the button below. It is a workshop screen with the
+ * whole wardrobe on it, and shipping it would hand a player every unearned look
+ * in the game as a dropdown.
+ */
+const VIEWER =
+  typeof window !== "undefined" && new URLSearchParams(window.location.search).has("viewer");
+const DEV = import.meta.env?.DEV === true;
+
 export function App(): React.ReactElement {
-  const [screen, setScreen] = React.useState<Screen>({ kind: "menu" });
+  const [screen, setScreen] = React.useState<Screen>(
+    DEV && VIEWER ? { kind: "viewer" } : { kind: "menu" },
+  );
   const [roster, setRoster] = React.useState<RosterBlob>(emptyRoster);
   const [mode, setMode] = React.useState<Mode>("local");
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
@@ -91,7 +109,7 @@ export function App(): React.ReactElement {
       // driven browser can reach the game without three clicks it cannot see
       // (the menus are canvas-adjacent and the mode dialog remounts under a
       // snapshot). DEV only: this is a test hook, not a shortcut we ship.
-      if (import.meta.env?.DEV && first && AUTOPLAY) setScreen({ kind: "game", characterId: first });
+      if (DEV && first && AUTOPLAY && !VIEWER) setScreen({ kind: "game", characterId: first });
     });
     return () => { live = false; };
   }, []);
@@ -177,6 +195,14 @@ export function App(): React.ReactElement {
           onSettingsChange={changeSettings}
           onExit={() => setScreen({ kind: "select" })}
         />
+      </React.Suspense>
+    );
+  }
+
+  if (screen.kind === "viewer") {
+    return (
+      <React.Suspense fallback={null}>
+        <AssetViewer onExit={() => setScreen({ kind: "menu" })} />
       </React.Suspense>
     );
   }
@@ -277,6 +303,24 @@ export function App(): React.ReactElement {
         onOptions={() => setOptionsOpen(true)}
         onAbout={() => setScreen({ kind: "info", which: "about" })}
       />
+      {/* A corner tab, not a menu entry: the main menu is painted art with a
+          fixed set of plates, and a sixth one that only exists in dev would
+          change the composition of a screen we judge against a reference. */}
+      {DEV && (
+        <button
+          type="button"
+          data-testid="dev-viewer"
+          onClick={() => setScreen({ kind: "viewer" })}
+          style={{
+            position: "absolute", right: 8, bottom: 8, zIndex: 40,
+            padding: "3px 9px", cursor: "pointer",
+            background: "rgba(10,10,12,0.8)", border: "1px solid #2b2b31",
+            color: "#8a8a95", font: '11px ui-monospace, "Cascadia Mono", monospace',
+          }}
+        >
+          assets
+        </button>
+      )}
       {screen.kind === "mode" && (
         <ModeDialog
           onCancel={() => setScreen({ kind: "menu" })}
