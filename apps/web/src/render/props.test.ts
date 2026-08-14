@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { Mesh, Scene } from "@babylonjs/core";
-import { attachProp, loadProps, PROP_KINDS, resetProps } from "./props";
+import { attachProp, isPropsReady, loadProps, PROP_KINDS, resetProps } from "./props";
 
 /**
  * The container the loader would hand back, with the one call this module makes
@@ -141,5 +141,43 @@ describe("attachProp replication", () => {
    */
   it("makes the container's own meshes shadow receivers", () => {
     expect(fake.sources.map((m) => m.receiveShadows)).toEqual([true, true]);
+  });
+});
+
+/**
+ * Two scenes, one module-level cache.
+ *
+ * A container belongs to the scene it was loaded with, so a second scene handed
+ * the first scene's in-flight promise ends up ready for somebody else: nothing
+ * throws, nothing logs, and `attachProp` just answers null for the rest of the
+ * page's life. It is not a corner case — StrictMode mounts, unmounts and
+ * remounts every effect, so the second scene ALWAYS asks while the first is
+ * still loading. Found as an asset viewer whose props rendered as empty space.
+ */
+describe("loading into two scenes", () => {
+  it("readies the scene that asked, not the one that asked first", async () => {
+    resetProps();
+    const first = {} as Scene;
+    const second = {} as Scene;
+    const a = loadProps(first);
+    const b = loadProps(second);
+    await Promise.all([a, b]);
+    expect(isPropsReady(second)).toBe(true);
+  });
+
+  it("attaches to the scene that asked second", async () => {
+    resetProps();
+    const first = {} as Scene;
+    const second = {} as Scene;
+    await Promise.all([loadProps(first), loadProps(second)]);
+    expect(attachProp(second, {} as Mesh, "barrel", true)).not.toBeNull();
+  });
+
+  it("still answers a repeat asker from the cache", async () => {
+    resetProps();
+    const scene = {} as Scene;
+    await loadProps(scene);
+    await loadProps(scene);
+    expect(isPropsReady(scene)).toBe(true);
   });
 });

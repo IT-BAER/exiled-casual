@@ -14,23 +14,50 @@
 import React from "react";
 import {
   createViewerScene,
+  dressedFromVocabulary,
   CHARACTER_SUBJECT,
+  NAKED,
   VIEWER_CLIPS,
   VIEWER_SUBJECTS,
   type ViewerScene,
 } from "../render/viewer-scene";
 import {
   COSMETIC_SLOTS,
-  GEAR_TEXTURE_BASES,
+  looksForEquipment,
+  meshLook,
   type CosmeticSlot,
   type Looks,
 } from "../render/rig";
+import { basesForSlot, orphanLooks } from "./bases";
 
-/** Bare, so the first thing seen is the geometry and not a starter outfit. */
-const NAKED: Looks = {
-  weapon1: null, weapon2: null, helmet: null,
-  body: null, gloves: null, boots: null, belt: null,
-};
+/**
+ * What one slot is showing: a real item base, a bare wardrobe look, or nothing.
+ *
+ * The two are not the same question. A base is what a player can hold — it picks
+ * the geometry AND the palette its inventory icon was painted with, and it goes
+ * through `looksForEquipment` so what stands here is exactly what a drop would
+ * put on him. A bare look is the geometry with the outfit's authored texture,
+ * which is the only way to see a look no base points at yet.
+ */
+type Worn = { kind: "base"; baseId: string } | { kind: "look"; look: string } | null;
+
+/** Compose the wardrobe's `Looks` from the panel's per-slot choices. */
+export function looksFor(worn: Partial<Record<CosmeticSlot, Worn>>): Looks {
+  const equipped: Partial<Record<CosmeticSlot, { baseId: string }>> = {};
+  for (const slot of COSMETIC_SLOTS) {
+    const w = worn[slot];
+    if (w?.kind === "base") equipped[slot] = { baseId: w.baseId };
+  }
+  // The game's own resolution first, so a base looks here exactly as it looks in
+  // play, then the bare looks laid over the slots that chose one.
+  const out = looksForEquipment(equipped);
+  for (const slot of COSMETIC_SLOTS) {
+    const w = worn[slot];
+    if (w === null || w === undefined) out[slot] = null;
+    else if (w.kind === "look") out[slot] = w.look;
+  }
+  return out;
+}
 
 const PANEL: React.CSSProperties = {
   position: "absolute",
@@ -51,6 +78,7 @@ export function AssetViewer({ onExit }: { onExit: () => void }): React.ReactElem
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const sceneRef = React.useRef<ViewerScene | null>(null);
   const [subject, setSubject] = React.useState<string>(CHARACTER_SUBJECT.id);
+  const [worn, setWorn] = React.useState<Partial<Record<CosmeticSlot, Worn>>>({});
   const [looks, setLooks] = React.useState<Looks>(NAKED);
   const [vocab, setVocab] = React.useState<Record<string, string[]>>({});
   const [clip, setClip] = React.useState<string>(VIEWER_CLIPS[0]!.label);
@@ -64,10 +92,23 @@ export function AssetViewer({ onExit }: { onExit: () => void }): React.ReactElem
       .then(async (scene) => {
         if (dead || scene === null) { scene?.dispose(); return; }
         sceneRef.current = scene;
-        scene.setLooks(NAKED);
         await scene.show(CHARACTER_SUBJECT.id);
         if (dead) return;
-        setVocab(scene.vocabulary());
+        // The vocabulary is only readable once the wardrobe is instantiated, so
+        // the opening outfit is chosen here rather than at construction.
+        const found = scene.vocabulary();
+        const dressed = dressedFromVocabulary(found);
+        scene.setLooks(dressed);
+        setVocab(found);
+        setLooks(dressed);
+        setWorn(
+          Object.fromEntries(
+            COSMETIC_SLOTS.map((s) => {
+              const look = dressed[s];
+              return [s, look === null ? null : { kind: "look" as const, look }];
+            }),
+          ),
+        );
         setReady(true);
       })
       .catch(() => undefined);
@@ -86,10 +127,12 @@ export function AssetViewer({ onExit }: { onExit: () => void }): React.ReactElem
     void sceneRef.current?.show(id);
   }, []);
 
-  const wear = React.useCallback((slot: CosmeticSlot, look: string | null) => {
-    setLooks((prev) => {
-      const next = { ...prev, [slot]: look };
-      sceneRef.current?.setLooks(next);
+  const wear = React.useCallback((slot: CosmeticSlot, choice: Worn) => {
+    setWorn((prev) => {
+      const next = { ...prev, [slot]: choice };
+      const composed = looksFor(next);
+      sceneRef.current?.setLooks(composed);
+      setLooks(composed);
       return next;
     });
   }, []);
@@ -127,39 +170,38 @@ export function AssetViewer({ onExit }: { onExit: () => void }): React.ReactElem
         <aside style={{ ...PANEL, right: 0, borderWidth: "0 0 0 1px" }} data-testid="viewer-gear">
           <Header text="Gear" />
           {COSMETIC_SLOTS.map((slot) => {
-            const options = vocab[slot] ?? [];
-            if (options.length === 0) return null;
+            const bases = basesForSlot(slot);
+            const options = orphanLooks(slot, vocab[slot] ?? []);
+            if (bases.length === 0 && options.length === 0) return null;
+            const chosen = worn[slot] ?? null;
             const current = looks[slot];
             return (
-              <div key={slot} style={{ marginBottom: 10 }}>
+              <div key={slot} style={{ marginBottom: 12 }}>
                 <div style={{ color: "#6f6f7a", letterSpacing: 1 }}>{slot.toUpperCase()}</div>
-                <Row label="— none —" on={current === null} onClick={() => wear(slot, null)} />
+                <Row label="— none —" on={chosen === null} onClick={() => wear(slot, null)} />
+                {bases.map((b) => (
+                  <Row
+                    key={b.id}
+                    label={b.name}
+                    on={chosen?.kind === "base" && chosen.baseId === b.id}
+                    onClick={() => wear(slot, { kind: "base", baseId: b.id })}
+                  />
+                ))}
+                {/* Only what no base can reach — see `orphanLooks`. */}
+                {options.length > 0 && (
+                  <div style={{ color: "#4e4e57", marginTop: 3 }}>unworn looks</div>
+                )}
                 {options.map((look) => (
                   <Row
                     key={look}
                     label={look}
-                    on={current !== null && current.split("#")[0] === look}
-                    onClick={() => wear(slot, look)}
+                    on={chosen?.kind === "look" && meshLook(chosen.look) === look}
+                    onClick={() => wear(slot, { kind: "look", look })}
+                    dim
                   />
                 ))}
-                {current !== null && (
-                  <select
-                    value={current.split("#")[1] ?? ""}
-                    onChange={(e) => {
-                      const base = e.target.value;
-                      const geo = current.split("#")[0]!;
-                      wear(slot, base === "" ? geo : `${geo}#${base}`);
-                    }}
-                    style={{
-                      width: "100%", marginTop: 3, background: "#17171c",
-                      color: "#c8c8d0", border: "1px solid #2b2b31", font: "inherit",
-                    }}
-                  >
-                    <option value="">authored texture</option>
-                    {GEAR_TEXTURE_BASES.map((b) => (
-                      <option key={b} value={b}>{b.replace("base.", "")}</option>
-                    ))}
-                  </select>
+                {current !== null && current.includes("#") && (
+                  <div style={{ color: "#4e4e57" }}>{`↳ ${current}`}</div>
                 )}
               </div>
             );
@@ -189,7 +231,7 @@ function Header({ text }: { text: string }): React.ReactElement {
 }
 
 function Row(
-  { label, on, onClick }: { label: string; on: boolean; onClick: () => void },
+  { label, on, onClick, dim }: { label: string; on: boolean; onClick: () => void; dim?: boolean },
 ): React.ReactElement {
   return (
     <button
@@ -199,7 +241,7 @@ function Row(
         display: "block", width: "100%", textAlign: "left",
         padding: "2px 6px", marginBottom: 1, cursor: "pointer",
         background: on ? "#3a2c18" : "transparent",
-        color: on ? "#f0cf94" : "#c8c8d0",
+        color: on ? "#f0cf94" : dim === true ? "#7e7e88" : "#c8c8d0",
         border: "1px solid transparent",
         font: "inherit",
       }}

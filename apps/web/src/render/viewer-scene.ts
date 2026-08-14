@@ -18,6 +18,7 @@ import {
   DirectionalLight,
   Engine,
   HemisphericLight,
+  ImageProcessingConfiguration,
   Mesh,
   Scene,
   Vector3,
@@ -30,6 +31,7 @@ import {
   attachRig,
   loadPlayerRig,
   resetPlayerRig,
+  COSMETIC_SLOTS,
   type Looks,
   type RigActor,
   type RigClip,
@@ -103,6 +105,31 @@ export function looksFromPartNames(names: readonly string[]): Record<string, str
 }
 
 /**
+ * A full outfit, taking the first look each slot ships.
+ *
+ * The viewer used to open with every slot null, and null is not "no gear" to a
+ * wardrobe that hides what it is not wearing: the only parts left enabled were
+ * the four head meshes, so a camera correctly framed on a 1.9m body showed a
+ * head floating in the middle of it. Opening dressed is what makes the frame
+ * legible, and taking the looks from the asset rather than naming them keeps a
+ * newly built look from arriving switched off.
+ */
+export function dressedFromVocabulary(vocab: Record<string, string[]>): Looks {
+  const looks = { ...NAKED };
+  for (const slot of COSMETIC_SLOTS) {
+    const first = vocab[slot]?.[0];
+    if (first !== undefined) looks[slot] = first;
+  }
+  return looks;
+}
+
+/** Every slot empty. Exported so the panel and the scene agree on the word. */
+export const NAKED: Looks = {
+  weapon1: null, weapon2: null, helmet: null,
+  body: null, gloves: null, boots: null, belt: null,
+};
+
+/**
  * Camera distance that fits a subject of this radius in the frame.
  *
  * Derived from the vertical field of view rather than picked per asset, so a
@@ -158,15 +185,36 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
   camera.panningSensibility = 250;
   camera.attachControl(canvas, true);
 
-  // Three-point-ish and deliberately plain. Play's warm low sun flatters a
-  // silhouette from one side and is exactly what a viewer must not do.
+  // Three-point-ish and deliberately plain: play's warm low sun flatters a
+  // silhouette from one side, which is exactly what a viewer must not do.
+  //
+  // The KEY is as strong as play's sun (`SUN_INTENSITY`, 6.0) on purpose. A
+  // gentler one looked reasonable and was not: these are PBR materials with no
+  // environment texture behind them, so nothing but the lights reaches them, and
+  // at a third of play's sun every armour base rendered near-black and the
+  // palettes this screen exists to compare were indistinguishable by eye.
   const key = new DirectionalLight("viewer-key", new Vector3(-0.4, -0.8, 0.5), scene);
-  key.intensity = 2.2;
+  key.intensity = 6;
   const rim = new DirectionalLight("viewer-rim", new Vector3(0.6, -0.2, -0.8), scene);
-  rim.intensity = 1.1;
+  rim.intensity = 2.4;
   rim.diffuse = new Color3(0.75, 0.82, 1);
+  // Up from play's 0.45: with no sky and no bounce, the fill is the only thing
+  // keeping the shadow side from being a hole in the model.
   const fill = new HemisphericLight("viewer-fill", new Vector3(0, 1, 0), scene);
-  fill.intensity = 0.55;
+  fill.intensity = 1.2;
+
+  // Same roll-off play uses, for the same reason: a 6.0 key drives the lit faces
+  // past 1.0, and clipped they flatten into white patches on the facets the
+  // shading is there to show.
+  try {
+    const ip = scene.imageProcessingConfiguration;
+    ip.toneMappingEnabled = true;
+    ip.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES;
+    ip.exposure = 1.15;
+    ip.contrast = 1.1;
+  } catch {
+    /* no image processing under NullEngine */
+  }
 
   await Promise.all([
     loadPlayerRig(scene).catch(() => undefined),

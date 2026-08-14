@@ -39,15 +39,27 @@ interface LoadedMonsters {
 }
 
 let loaded: LoadedMonsters | null = null;
-let pending: Promise<void> | null = null;
+/**
+ * The load in flight AND the scene it is loading into. See `loadProps` for why
+ * the scene is half of the key: a promise shared across scenes leaves
+ * `attachCreature` returning null with nothing thrown.
+ */
+let pending: { scene: Scene; promise: Promise<void> } | null = null;
 
 /** Fetch the creatures once, before the render loop starts. */
 export function loadMonsters(scene: Scene): Promise<void> {
   if (loaded?.scene === scene) return Promise.resolve();
-  if (pending) return pending;
+  if (pending?.scene === scene) return pending.promise;
 
-  pending = LoadAssetContainerAsync(MONSTERS_URL, scene)
+  const prior = pending?.promise ?? Promise.resolve();
+  const promise = prior
+    .catch(() => undefined)
+    .then(() => {
+      if (loaded?.scene === scene) return undefined;
+      return LoadAssetContainerAsync(MONSTERS_URL, scene);
+    })
     .then(async (container) => {
+      if (container === undefined) return;
       // Once, on the container's own materials: every instance shares them, so
       // a rim added here reaches all forty creatures for three uniforms.
       for (const material of container.materials) addRim(material);
@@ -58,10 +70,11 @@ export function loadMonsters(scene: Scene): Promise<void> {
       loaded = null;
     })
     .finally(() => {
-      pending = null;
+      if (pending?.promise === promise) pending = null;
     });
 
-  return pending;
+  pending = { scene, promise };
+  return promise;
 }
 
 export function isMonstersReady(scene: Scene): boolean {

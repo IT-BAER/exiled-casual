@@ -55,15 +55,35 @@ interface LoadedProps {
 }
 
 let loaded: LoadedProps | null = null;
-let pending: Promise<void> | null = null;
+/**
+ * The load in flight AND the scene it is loading into.
+ *
+ * A container belongs to the scene it was loaded with, so handing a second
+ * scene the first scene's promise resolves with `loaded.scene` pointing at
+ * somebody else's scene: `isPropsReady` answers false and `attachProp` returns
+ * null forever, with nothing thrown and nothing logged. That is not a corner
+ * case — in dev it is every screen, because StrictMode mounts, unmounts and
+ * remounts every effect, so the second scene always asks while the first is
+ * still in flight. See `loadPlayerRig`, which had this and fixed it.
+ */
+let pending: { scene: Scene; promise: Promise<void> } | null = null;
 
 /** Fetch the props once, before the render loop starts. */
 export function loadProps(scene: Scene): Promise<void> {
   if (loaded?.scene === scene) return Promise.resolve();
-  if (pending) return pending;
+  if (pending?.scene === scene) return pending.promise;
 
-  pending = LoadAssetContainerAsync(PROPS_URL, scene)
+  // A load running for a DIFFERENT scene is queued behind rather than shared, so
+  // the container this caller ends up with is its own.
+  const prior = pending?.promise ?? Promise.resolve();
+  const promise = prior
+    .catch(() => undefined)
+    .then(() => {
+      if (loaded?.scene === scene) return undefined;
+      return LoadAssetContainerAsync(PROPS_URL, scene);
+    })
     .then(async (container) => {
+      if (container === undefined) return;
       // On the SOURCE, because a shared prop is an `InstancedMesh` and setting
       // this on one of those is a no-op that warns. Every prop in this file
       // stands on a floor the sun and the torch both light, so there is no kind
@@ -79,10 +99,11 @@ export function loadProps(scene: Scene): Promise<void> {
       loaded = null;
     })
     .finally(() => {
-      pending = null;
+      if (pending?.promise === promise) pending = null;
     });
 
-  return pending;
+  pending = { scene, promise };
+  return promise;
 }
 
 export function isPropsReady(scene: Scene): boolean {

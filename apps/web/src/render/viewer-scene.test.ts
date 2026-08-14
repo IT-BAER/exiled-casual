@@ -4,7 +4,13 @@ import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
 import { COSMETIC_SLOTS, CLIP_NAME, type RigClip } from "./rig";
 import { SPAWNABLE } from "./gallery";
-import { VIEWER_CLIPS, VIEWER_SUBJECTS, CHARACTER_SUBJECT, looksFromPartNames } from "./viewer-scene";
+import {
+  VIEWER_CLIPS,
+  VIEWER_SUBJECTS,
+  CHARACTER_SUBJECT,
+  dressedFromVocabulary,
+  looksFromPartNames,
+} from "./viewer-scene";
 
 /** Every `slot.look.part` name the wardrobe actually ships. */
 const PART_NAMES = (() => {
@@ -46,6 +52,35 @@ describe("viewer clips", () => {
     const keys = VIEWER_CLIPS.map((c) => c.key);
     expect(new Set(keys).size).toBe(keys.length);
     for (const k of keys) expect(k).toMatch(/^[0-9]$/);
+  });
+});
+
+describe("opening outfit", () => {
+  /**
+   * The bug this pins: with every slot null the wardrobe leaves only the head
+   * enabled, so a camera correctly framed on the whole body showed a head alone.
+   */
+  it("fills every slot the wardrobe ships geometry for", () => {
+    const vocab = looksFromPartNames(PART_NAMES);
+    const looks = dressedFromVocabulary(vocab);
+    for (const slot of COSMETIC_SLOTS) {
+      if ((vocab[slot]?.length ?? 0) === 0) continue;
+      expect(looks[slot], `${slot} opened empty`).not.toBeNull();
+    }
+  });
+
+  it("leaves a slot the wardrobe has nothing for empty", () => {
+    expect(dressedFromVocabulary({ body: ["plate"] }).helmet).toBeNull();
+  });
+
+  it("picks looks that exist in that slot", () => {
+    const vocab = looksFromPartNames(PART_NAMES);
+    const looks = dressedFromVocabulary(vocab);
+    for (const slot of COSMETIC_SLOTS) {
+      const look = looks[slot];
+      if (look === null) continue;
+      expect(vocab[slot]).toContain(look);
+    }
   });
 });
 
