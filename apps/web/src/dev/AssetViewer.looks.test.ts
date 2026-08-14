@@ -18,8 +18,14 @@ describe("composing what the panel is wearing", () => {
     expect(looksFor({ body: { kind: "look", look: "plate" } }).body).toBe("plate");
   });
 
-  it("empties a slot set to none, rather than falling back to a default", () => {
-    expect(looksFor({ body: null, boots: null }).body).toBeNull();
+  it("shows the game's own empty slot, because a bare body does not exist here", () => {
+    // The torso, arms and legs are looks of the BODY slot, so emptying it
+    // undresses him past nudity into invisibility. The game answers an empty
+    // body slot with commoner cloth; so does this.
+    expect(looksFor({ body: null, boots: null }).body).toBe("commoner");
+    expect(looksFor({ body: null, boots: null }).boots).toBe("commoner");
+    // A slot the game leaves empty is still empty.
+    expect(looksFor({ helmet: null }).helmet).toBeNull();
   });
 
   it("dresses slots independently", () => {
@@ -33,9 +39,10 @@ describe("composing what the panel is wearing", () => {
     expect(out.helmet).toBeNull();
   });
 
-  it("leaves a slot the panel has not touched empty", () => {
-    // Untouched must not silently inherit the game's UNEQUIPPED commoner: the
-    // viewer's outfit is whatever its panel says and nothing else.
-    expect(looksFor({}).body).toBeNull();
+  it("dresses an untouched slot the way an empty slot is dressed in play", () => {
+    // Not "whatever the panel says and nothing else" any more: on this wardrobe
+    // an unsaid body slot means no torso, arms or legs either.
+    expect(looksFor({}).body).toBe("commoner");
+    expect(looksFor({}).weapon1).toBeNull();
   });
 });

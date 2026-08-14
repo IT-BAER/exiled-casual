@@ -50,11 +50,16 @@ export function looksFor(worn: Partial<Record<CosmeticSlot, Worn>>): Looks {
   }
   // The game's own resolution first, so a base looks here exactly as it looks in
   // play, then the bare looks laid over the slots that chose one.
+  //
+  // An empty slot is what the GAME shows for an empty slot, which is commoner
+  // cloth on the body and boots. Forcing it to null instead emptied the body
+  // slot of the torso, the arms and the legs as well - they are looks of that
+  // slot, not a base mesh - so clearing every slot left a head hanging in the
+  // dark. There is no naked body in this wardrobe to fall back to.
   const out = looksForEquipment(equipped);
   for (const slot of COSMETIC_SLOTS) {
     const w = worn[slot];
-    if (w === null || w === undefined) out[slot] = null;
-    else if (w.kind === "look") out[slot] = w.look;
+    if (w?.kind === "look") out[slot] = w.look;
   }
   return out;
 }
