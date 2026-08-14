@@ -524,6 +524,32 @@ describe("wardrobe asset", () => {
     }
   });
 
+  it("bends a cuirass with the body, not against it", () => {
+    // The shell over the chest takes its weights from the nearest torso vertex
+    // (`build_cuirass`) precisely so it deforms with the tunic under it. Bound
+    // to one spine bone instead it would be rigid and shear at the waist, and
+    // bound to the coat's chains it would swing with the skirt. Either reads as
+    // a bug only in motion, so the bind is pinned rather than the look.
+    const joints = json.skins[0]!.joints.map((j) => json.nodes[j]!.name);
+    const bonesOf = (name: string) => {
+      const { data: index } = attribute(name, "JOINTS_0");
+      const { data: weight } = attribute(name, "WEIGHTS_0");
+      const used = new Set<string>();
+      for (let k = 0; k < weight.length; k++) {
+        if (weight[k]! > 0) used.add(joints[index[k]!]!);
+      }
+      return [...used].sort();
+    };
+    const shells = json.nodes
+      .filter((n) => /^body\.[^.]+\.cuirass$/.test(n.name) && n.mesh !== undefined)
+      .map((n) => n.name);
+    expect(shells.length).toBeGreaterThan(0);
+    for (const shell of shells) {
+      expect(bonesOf(shell), `${shell} does not bend with the torso`)
+        .toEqual(bonesOf("body.ranger.torso"));
+    }
+  });
+
   it("carries the helm, which is the iron half of a helmet", () => {
     // Generated from the cowl's own crown: the pack ships cloth and every helmet
     // base is drawn as a riveted shell over it. Lose this part in a rebuild and

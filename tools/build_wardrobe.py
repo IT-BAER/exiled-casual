@@ -299,6 +299,34 @@ COAT_CLEARANCE = 0.012
 # about 1.4 it stops being armour and becomes a pair of wings.
 PLATE_PAULDRON_SCALE = 1.25
 
+# The cuirass, which is what actually makes plate read as plate. Every look
+# clones the ranger's torso (see `BODY_BASE_PARTS`), so above the waist plate IS
+# his leather tunic and no profile number can change that - only accent geometry
+# over the top of it can, the same way the pauldron does.
+#
+# Its radius is DERIVED from the torso at each ring rather than authored, so the
+# shell cannot sink into the body it covers however the tunic is later changed:
+# `swell` is how far it then stands off, and that is the only look number here.
+# The chest swells and the waist does not, which is the shape of a breastplate.
+#
+# Stops at 1.40, below the shoulder flare: the torso's widest slice up there is
+# the shoulders themselves (half-width 0.205 against a 0.117 depth), and a ring
+# wide enough to clear that is a barrel around the arms, which is the pauldron's
+# job and not this one.
+CUIRASS_RINGS = [(1.150, 1.01), (1.220, 1.02), (1.300, 1.06),
+                 (1.360, 1.07), (1.400, 1.03)]
+# Squashed front to back like the body under it, and like the coat.
+CUIRASS_DEPTH = 0.92
+CUIRASS_CLEARANCE = 0.010
+# Twelve, and flat-shaded, for the reason the helm is: at ten pixels a head a
+# smooth shell reads as cloth however it is coloured, and it is the facets
+# catching the light that say iron. A finer ring throws that away.
+CUIRASS_SEG = 12
+# The shell is given a real inner surface at this fraction of the outer, so its
+# top and bottom edges have thickness. An open tube shows its own inside at the
+# collar the moment the character is seen from above, which is always.
+CUIRASS_INNER = 0.94
+
 # The body parts a look needs besides its coat, cloned from the ranger's so a new
 # armour look is a whole character rather than a floating skirt.
 BODY_BASE_PARTS = ("torso", "legs", "sleeves", "hands")
@@ -983,6 +1011,91 @@ def torso_uvs(torso):
     return list(seen.values())
 
 
+def build_cuirass(armature, torso, look):
+    """A faceted breastplate over the cloned tunic, weighted like the tunic.
+
+    Weights and uvs are taken from the nearest torso vertex rather than authored.
+    That is the same reasoning the coat borrows its uvs by: the atlas is a packed
+    character sheet, so any box big enough for a chest also clips something else
+    into it, and a plate weighted to one spine bone shears at the waist while the
+    body under it bends. Copying what the tunic already does makes the shell
+    follow the body exactly, through every clip, for free.
+    """
+    cy = COAT_CY
+    samples = [(v.co.copy(), [(g.group, g.weight) for g in v.groups])
+               for v in torso.data.vertices]
+    group_name = {g.index: g.name for g in torso.vertex_groups}
+    uv_layer = torso.data.uv_layers[0].data
+    uv_of = {}
+    for poly in torso.data.polygons:
+        for li in poly.loop_indices:
+            uv_of.setdefault(torso.data.loops[li].vertex_index, tuple(uv_layer[li].uv))
+
+    def ring_radius(z, swell):
+        near = [p for p, _ in samples if abs(p.z - z) < 0.030]
+        if not near:
+            raise SystemExit(f"cuirass: the torso has no vertices at z {z:.3f}")
+        # Undo the ellipse, exactly as `assert_coat_clears` does: the shell has to
+        # clear the body at every angle, and the tight one is not the side.
+        return max(math.hypot(p.x, (p.y - cy) / CUIRASS_DEPTH)
+                   for p in near) * swell + CUIRASS_CLEARANCE
+
+    rings = [(z, ring_radius(z, swell)) for z, swell in CUIRASS_RINGS]
+
+    verts, faces = [], []
+    for scale in (1.0, CUIRASS_INNER):
+        for z, radius in rings:
+            for s in range(CUIRASS_SEG):
+                theta = 2.0 * math.pi * s / CUIRASS_SEG
+                verts.append(coat_point(theta, z, radius * scale, cy, CUIRASS_DEPTH))
+    span = len(rings) * CUIRASS_SEG
+
+    def quads(base, flip):
+        for r in range(len(rings) - 1):
+            for s in range(CUIRASS_SEG):
+                n = (s + 1) % CUIRASS_SEG
+                top, bottom = base + r * CUIRASS_SEG, base + (r + 1) * CUIRASS_SEG
+                face = (top + s, top + n, bottom + n, bottom + s)
+                faces.append(face[::-1] if flip else face)
+
+    quads(0, False)        # outer surface
+    quads(span, True)      # inner surface, wound the other way
+    # The rims that close the two surfaces into one shell with an edge.
+    for r, flip in ((0, True), (len(rings) - 1, False)):
+        for s in range(CUIRASS_SEG):
+            n = (s + 1) % CUIRASS_SEG
+            outer, inner = r * CUIRASS_SEG, span + r * CUIRASS_SEG
+            face = (outer + s, outer + n, inner + n, inner + s)
+            faces.append(face[::-1] if flip else face)
+
+    name = f"body.{look}.cuirass"
+    mesh = bpy.data.meshes.new(name)
+    mesh.from_pydata(verts, [], faces)
+    mesh.update()
+    mesh.materials.append(torso.data.materials[0])
+    obj = bpy.data.objects.new(name, mesh)
+    bpy.context.scene.collection.objects.link(obj)
+
+    groups = {}
+    uvs = mesh.uv_layers.new(name="UVMap")
+    per_vertex = []
+    for v in mesh.vertices:
+        index = min(range(len(samples)),
+                    key=lambda i: (samples[i][0] - v.co).length_squared)
+        for gi, weight in samples[index][1]:
+            name_ = group_name[gi]
+            group = groups.get(name_) or groups.setdefault(name_, obj.vertex_groups.new(name=name_))
+            group.add([v.index], weight, "REPLACE")
+        per_vertex.append(uv_of.get(index, (0.0, 0.0)))
+    for loop in mesh.loops:
+        uvs.data[loop.index].uv = per_vertex[loop.vertex_index]
+
+    rebind(obj, armature)
+    log(f"built {look} cuirass: {len(mesh.vertices)}v, {len(mesh.polygons)} faces, "
+        f"r {rings[0][1]:.3f}..{max(r for _, r in rings):.3f}, flat-shaded")
+    return obj
+
+
 def build_pauldrons(armature, source, look, scale):
     """A shoulder cap on each side, from the pack's single left-hand one.
 
@@ -1270,6 +1383,7 @@ def main():
     for cap in build_pauldrons(armature, bpy.data.objects["Male_Ranger_Acc_Pauldron"],
                                "plate", PLATE_PAULDRON_SCALE):
         generated.add(cap.name)
+    generated.add(build_cuirass(armature, ranger_body, "plate").name)
     hood = bpy.data.objects["Male_Ranger_Head_Hood"]
     generated.add(build_helm(armature, hood).name)
 
