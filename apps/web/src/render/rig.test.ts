@@ -396,21 +396,30 @@ describe("wardrobe asset", () => {
     // rather than a count test because the counts live in two languages.
     const joints = json.skins[0]!.joints.map((j) => json.nodes[j]!.name);
     const chainOf = joints.map((n) => /^skirt_(\d+)_/.exec(n)?.[1] ?? null);
-    const { data: index } = attribute("body.ranger.coat", "JOINTS_0");
-    const { data: weight } = attribute("body.ranger.coat", "WEIGHTS_0");
+    // Every body look is its own coat and each must satisfy this, not only the
+    // ranger: a bulkier plate or a slimmer leather profile that re-opened the
+    // between-chains gap would be a leg through cloth on that look alone.
+    const coats = json.nodes
+      .filter((n) => /^body\.[^.]+\.coat$/.test(n.name) && n.mesh !== undefined)
+      .map((n) => n.name);
+    expect(coats.length).toBeGreaterThan(1);
 
-    let worst = 0;
-    for (let v = 0; v < weight.length / 4; v++) {
-      const perChain = new Map<string, number>();
-      for (let k = 0; k < 4; k++) {
-        const chain = chainOf[index[v * 4 + k]!] ?? null;
-        if (chain === null) continue; // the pelvis holds the pinned waist band
-        perChain.set(chain, (perChain.get(chain) ?? 0) + weight[v * 4 + k]!);
+    for (const coat of coats) {
+      const { data: index } = attribute(coat, "JOINTS_0");
+      const { data: weight } = attribute(coat, "WEIGHTS_0");
+      let worst = 0;
+      for (let v = 0; v < weight.length / 4; v++) {
+        const perChain = new Map<string, number>();
+        for (let k = 0; k < 4; k++) {
+          const chain = chainOf[index[v * 4 + k]!] ?? null;
+          if (chain === null) continue; // the pelvis holds the pinned waist band
+          perChain.set(chain, (perChain.get(chain) ?? 0) + weight[v * 4 + k]!);
+        }
+        const shares = [...perChain.values()].sort((a, b) => b - a);
+        worst = Math.max(worst, shares[1] ?? 0);
       }
-      const shares = [...perChain.values()].sort((a, b) => b - a);
-      worst = Math.max(worst, shares[1] ?? 0);
+      expect(worst, `${coat} splits a vertex across chains`).toBeLessThan(0.01);
     }
-    expect(worst).toBeLessThan(0.01);
   });
 
   it("carries a head that is unwrapped onto the painted face, not pinned to one texel", () => {

@@ -400,6 +400,13 @@ const EQUIPPED: Looks = {
 const LOOK_BY_BASE: Record<string, string> = {
   "base.ember_buckler": "buckler",
   "base.ashwall_tower_shield": "tower",
+  // Body bases whose silhouette is their own, not the generic coat: the plate is
+  // bulkier and stops at tassets, the leather is a slim knee-length cut (both
+  // `body.<look>.coat` in `build_wardrobe.py`). A base with no entry here still
+  // wears `EQUIPPED.body` (the ranger coat), so the robe classes are unchanged
+  // until that floor-length look lands.
+  "base.ironsworn_plate": "plate",
+  "base.stalker_leathers": "leather",
 };
 
 const HEAD_PREFIX = "base.head.";

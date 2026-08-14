@@ -246,6 +246,30 @@ COAT_SEG = 32
 COAT_CY = 0.03
 COAT_DEPTH = 0.88
 
+# A profile per body look: the item art is not one silhouette, so the geometry is
+# not either. `ranger` is the reference and stays byte-identical (its numbers ARE
+# the module constants above), so every unmapped base still renders as it did.
+# `plate` is bulkier through the torso and stops at short stiff tassets; `leather`
+# is a slim knee-length cut. Both hems sit ABOVE ranger's deepest tatter (0.200),
+# so the skirt span (SKIRT_TOP_Z..SKIRT_HEM_Z) is still ranger's and the chains
+# are unchanged - a floor-length robe that deepens them is a separate task that
+# re-baselines the cloth pins. `rig.test.ts` binds every coat here to one chain.
+BODY_LOOKS = {
+    "ranger": {"rings": COAT_RINGS, "hem": COAT_HEM, "cy": COAT_CY, "depth": COAT_DEPTH},
+    "plate": {
+        "rings": [(1.120, 0.170), (1.045, 0.192), (0.900, 0.236),
+                  (0.700, 0.256), (0.520, 0.262)],
+        "hem": [(0.470, 0.256), (0.430, 0.268)],
+        "cy": 0.03, "depth": 0.94,
+    },
+    "leather": {
+        "rings": [(1.120, 0.150), (1.045, 0.160), (0.950, 0.178),
+                  (0.760, 0.194), (0.600, 0.204)],
+        "hem": [(0.540, 0.206), (0.500, 0.214)],
+        "cy": 0.03, "depth": 0.86,
+    },
+}
+
 # The coat hangs off a ring of two-joint chains rather than off the legs. Riding
 # the thighs was the first attempt and it looks wrong for a good reason: a thigh
 # rotation is rigid about the hip, so the hem sweeps a wide arc exactly in phase
@@ -849,11 +873,15 @@ def build_tower(armature, material):
     return place_in_basis(obj, armature, SHIELD_BONE, material, basis, fit)
 
 
-def coat_point(theta, z, radius):
-    """A point on the coat's surface: elliptical around the body's own axis."""
+def coat_point(theta, z, radius, cy=COAT_CY, depth=COAT_DEPTH):
+    """A point on the coat's surface: elliptical around the body's own axis.
+
+    `cy`/`depth` default to the ranger profile so the skirt chains, which are
+    ranger's, are laid out exactly as before; a per-look coat passes its own.
+    """
     return (
         radius * math.cos(theta),
-        COAT_CY + radius * COAT_DEPTH * math.sin(theta),
+        cy + radius * depth * math.sin(theta),
         z,
     )
 
@@ -922,13 +950,17 @@ def torso_uvs(torso):
     return list(seen.values())
 
 
-def build_coat(armature, torso):
-    """A long coat for the ranger body look, because the item art is not a tunic.
+def build_coat(armature, torso, look="ranger"):
+    """A coat for a body look, because the item art is not one silhouette.
 
-    The one thing a re-palettized texture cannot buy is shape: every body base so
-    far is drawn as a floor-length coat with a ragged hem, and the ranger's
-    authored body ends at the hip. So this adds the missing half of the
-    silhouette as a lofted skirt hanging from under his belt.
+    The one thing a re-palettized texture cannot buy is shape: a plate cuirass, a
+    ranger's coat and a leather jerkin are three shapes, not three colours of one.
+    Each `look` in `BODY_LOOKS` is a `(z, radius)` profile lofted the same way and
+    named `body.<look>.coat`; the ranger profile is the module constants, so its
+    mesh is byte-identical to before.
+
+    The ranger's authored body ends at the hip, so this adds the missing half of
+    the silhouette as a lofted skirt hanging from under his belt.
 
     It hangs off the skirt chains (see `build_skirt_bones`), not off the body. It
     was skinned to the thighs first, and that is worth not repeating: a thigh
@@ -942,14 +974,19 @@ def build_coat(armature, torso):
     strip of skin into it; sampling the tunic's real vertices cannot leave the
     cloth island, and it lands the tunic's own hem trim on the coat's hem.
     """
+    profile = BODY_LOOKS[look]
+    coat_rings, coat_hem = profile["rings"], profile["hem"]
+    cy, depth = profile["cy"], profile["depth"]
+    name = f"body.{look}.coat"
+
     verts, faces, meta = [], [], []
-    rings = COAT_RINGS + [None]  # the hem ring alternates, so it is built inline
+    rings = list(coat_rings) + [None]  # the hem ring alternates, built inline
 
     for r, ring in enumerate(rings):
         for s in range(COAT_SEG):
-            z, radius = COAT_HEM[s % len(COAT_HEM)] if ring is None else ring
+            z, radius = coat_hem[s % len(coat_hem)] if ring is None else ring
             theta = 2.0 * math.pi * s / COAT_SEG
-            verts.append(coat_point(theta, z, radius))
+            verts.append(coat_point(theta, z, radius, cy, depth))
             meta.append((theta if theta <= math.pi else theta - 2.0 * math.pi, z))
         if r == 0:
             continue
@@ -958,21 +995,21 @@ def build_coat(armature, torso):
             n = (s + 1) % COAT_SEG
             faces.append((top + s, top + n, bottom + n, bottom + s))
 
-    mesh = bpy.data.meshes.new("body.ranger.coat")
+    mesh = bpy.data.meshes.new(name)
     mesh.from_pydata(verts, [], faces)
     mesh.update()
     for poly in mesh.polygons:
         poly.use_smooth = True
     mesh.materials.append(torso.data.materials[0])
 
-    obj = bpy.data.objects.new("body.ranger.coat", mesh)
+    obj = bpy.data.objects.new(name, mesh)
     bpy.context.scene.collection.objects.link(obj)
 
     samples = torso_uvs(torso)
     if not samples:
         raise SystemExit("coat: the torso has no vertices in the uv sampling band")
-    z_hem = min(z for z, _ in COAT_HEM)
-    z_top = COAT_RINGS[0][0]
+    z_hem = min(z for z, _ in coat_hem)
+    z_top = coat_rings[0][0]
 
     uv_layer = mesh.uv_layers.new(name="UVMap")
     per_vertex = []
@@ -1074,7 +1111,9 @@ def main():
     )
     generated = {o.name for o in build_head(armature, skin_material)}
     build_skirt_bones(armature)
-    generated.add(build_coat(armature, bpy.data.objects["Male_Ranger_Body"]).name)
+    ranger_body = bpy.data.objects["Male_Ranger_Body"]
+    for look in BODY_LOOKS:
+        generated.add(build_coat(armature, ranger_body, look).name)
     hood = bpy.data.objects["Male_Ranger_Head_Hood"]
     generated.add(build_helm(armature, hood).name)
 
