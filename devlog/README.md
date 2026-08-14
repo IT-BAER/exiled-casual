@@ -205,3 +205,17 @@ Bosses keep their big bar at the top of the screen.
 <td width="100%"><img src="screenshots/2026-08-08-monster-hp-bars.jpeg" alt="Small red health bars over damaged monsters in a map fight" width="100%"><br><sub>Life bars over damaged monsters.</sub></td>
 </tr>
 </table>
+
+## 2026-08-14 · Held gear wears its own art
+
+Shields and wands stopped being white slabs. Every held mesh is pinned to a single texel, so each
+weapon and off-hand base now gets its own bake: the Ember Buckler carries a painted iron face with
+molten cracks running out from the boss, and the reverse stays plain dark instead of mirroring the
+art. Worn armour is baked the same way, re-palettizing the ranger atlas to each base's inventory
+icon.
+
+<table>
+<tr>
+<td width="100%"><img src="screenshots/2026-08-14-ember-buckler-face.jpeg" alt="Close-up of the Ember Buckler strapped to the character's arm, iron face with molten cracks" width="100%"><br><sub>The Ember Buckler's painted face.</sub></td>
+</tr>
+</table>
