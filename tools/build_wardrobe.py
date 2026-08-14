@@ -250,25 +250,39 @@ COAT_DEPTH = 0.88
 # not either. `ranger` is the reference and stays byte-identical (its numbers ARE
 # the module constants above), so every unmapped base still renders as it did.
 # `plate` is bulkier through the torso and stops at short stiff tassets; `leather`
-# is a slim knee-length cut. Both hems sit ABOVE ranger's deepest tatter (0.200),
+# is a trimmer knee-length cut. Both hems sit ABOVE ranger's deepest tatter (0.200),
 # so the skirt span (SKIRT_TOP_Z..SKIRT_HEM_Z) is still ranger's and the chains
 # are unchanged - a floor-length robe that deepens them is a separate task that
 # re-baselines the cloth pins. `rig.test.ts` binds every coat here to one chain.
+#
+# A coat may not be narrower than the body it covers, and the tight spot is the
+# DIAGONAL, not the side: the profile is a radius but the coat is an ellipse, so
+# a ring of radius r only reaches `r * depth` front-to-back and something between
+# the two at 45 degrees. The ranger tunic's own hem flares to 0.192 at z 0.98 and
+# sits almost exactly ON his coat's surface there, so it is the binding
+# constraint for every look that clones his torso - a look narrower than the
+# ranger through that band pushes the tunic's tatters out through the cloth, and
+# it shows standing still, which no cloth tuning can reach. `assert_coat_clears`
+# fails the build on it rather than leaving it to be spotted in game.
 BODY_LOOKS = {
     "ranger": {"rings": COAT_RINGS, "hem": COAT_HEM, "cy": COAT_CY, "depth": COAT_DEPTH},
     "plate": {
-        "rings": [(1.120, 0.170), (1.045, 0.192), (0.900, 0.236),
-                  (0.700, 0.256), (0.520, 0.262)],
-        "hem": [(0.470, 0.256), (0.430, 0.268)],
+        "rings": [(1.120, 0.173), (1.045, 0.192), (0.900, 0.236),
+                  (0.700, 0.256), (0.520, 0.269)],
+        "hem": [(0.470, 0.277), (0.430, 0.284)],
         "cy": 0.03, "depth": 0.94,
     },
     "leather": {
-        "rings": [(1.120, 0.150), (1.045, 0.160), (0.950, 0.178),
-                  (0.760, 0.194), (0.600, 0.204)],
-        "hem": [(0.540, 0.206), (0.500, 0.214)],
-        "cy": 0.03, "depth": 0.86,
+        "rings": [(1.120, 0.176), (1.045, 0.191), (0.950, 0.212),
+                  (0.760, 0.229), (0.600, 0.256)],
+        "hem": [(0.540, 0.266), (0.500, 0.272)],
+        "cy": 0.03, "depth": 0.88,
     },
 }
+
+# What the coat keeps between itself and the body under it. 8mm of cloth plus
+# enough that an animation which shifts the tunic a little does not spend it all.
+COAT_CLEARANCE = 0.012
 
 # The body parts a look needs besides its coat, cloned from the ranger's so a new
 # armour look is a whole character rather than a floating skirt.
@@ -954,6 +968,54 @@ def torso_uvs(torso):
     return list(seen.values())
 
 
+def assert_coat_clears(look, bodies):
+    """Fail the build if the body pokes out through this look's coat.
+
+    Exact rather than radial: a vertex is inside the ring of radius `r` when
+    `hypot(x, (y - cy) / depth) < r`, so the ellipse is undone instead of being
+    compared against a radius it only reaches at the sides. Comparing the widest
+    coat vertex against the widest body vertex is what missed this the first
+    time - both peak at the side, and the tunic came through on the diagonal.
+
+    Only the tunic, the legs and the boots are tested. The arms hang outside the
+    coat by design, and a check that swallowed them would demand a barrel.
+    """
+    profile = BODY_LOOKS[look]
+    rings = list(profile["rings"]) + list(profile["hem"])
+    cy, depth = profile["cy"], profile["depth"]
+    z_top = rings[0][0]
+    z_hem = min(z for z, _ in rings)
+
+    points = [v.co for obj in bodies for v in obj.data.vertices]
+    worst = None
+    for z, r in rings:
+        # A band, because a ring only has to clear the body it is actually next
+        # to; half the gap to the neighbouring rings is the honest reach.
+        band = 0.030
+        for p in points:
+            if abs(p.z - z) > band or not (z_hem <= p.z <= z_top):
+                continue
+            need = math.hypot(p.x, (p.y - cy) / depth) + COAT_CLEARANCE
+            if need > r and (worst is None or need - r > worst[0]):
+                worst = (need - r, z, r, need)
+    if worst is None:
+        log(f"coat {look}: clears the body at every ring (>= {COAT_CLEARANCE * 100:.1f}cm)")
+        return
+    gap, z, r, need = worst
+    message = (f"body.{look}.coat is narrower than the body it covers: at z {z:.3f} "
+               f"the ring is r {r:.3f} but the tunic/legs need {need:.3f} "
+               f"({gap * 100:.1f}cm through the cloth, standing still)")
+    # The ranger profile is the authored reference and is pinned byte-identical,
+    # so it is measured and reported rather than enforced: his tunic hem sits
+    # about a centimetre inside the clearance at the hip and has always done so.
+    # Widening him is a look change, not a bug fix, and it re-baselines the
+    # cloth pins with him. Every generated look answers to the check.
+    if look == "ranger":
+        log(f"NOTE (baseline, not enforced): {message}")
+        return
+    raise SystemExit(message)
+
+
 def build_coat(armature, torso, look="ranger"):
     """A coat for a body look, because the item art is not one silhouette.
 
@@ -1116,7 +1178,14 @@ def main():
     generated = {o.name for o in build_head(armature, skin_material)}
     build_skirt_bones(armature)
     ranger_body = bpy.data.objects["Male_Ranger_Body"]
+    # The tunic, the legs and the boots are what a coat has to cover; the arms
+    # hang outside it. Checked before the meshes are renamed, so these are still
+    # the pack's own names.
+    covered = [ranger_body,
+               bpy.data.objects["Male_Ranger_Legs"],
+               bpy.data.objects["Male_Ranger_Feet_Boots"]]
     for look in BODY_LOOKS:
+        assert_coat_clears(look, covered)
         generated.add(build_coat(armature, ranger_body, look).name)
     hood = bpy.data.objects["Male_Ranger_Head_Hood"]
     generated.add(build_helm(armature, hood).name)
