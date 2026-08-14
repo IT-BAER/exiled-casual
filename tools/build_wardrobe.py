@@ -607,12 +607,16 @@ def build_helm(armature, hood):
     hand-built dome would need its own weight painting to follow the head, and
     this one cannot drift from the cloth it caps by construction.
 
-    Pushed *outward only*: the cowl points forward over the face, and a shell
-    shrink-wrapped onto it would be a pointed hood in iron. Clamping to a dome
-    keeps that point where the cloth is wider than the dome and rounds out the
-    sides and crown, where it is not. Flat-shaded, unlike everything else here:
-    at ten pixels a head, facets catching light are what say plate rather than
-    cloth.
+    Every vertex lands ON the dome, and the dome is sized from the crown it caps
+    rather than declared. Clamping only the vertices that fell INSIDE a fixed
+    ellipsoid left the rest of them on the cloth, so the shell alternated between
+    projected rings and the hood's own wrinkles and read as a stack of terraces
+    down the crown - the flat shading that is supposed to say plate drew a ledge
+    at every one. A dome measured to contain the crown has nothing left inside it
+    to leave behind, and it cannot sink under the cloth it is grown from either.
+
+    Flat-shaded, unlike everything else here: at ten pixels a head, facets
+    catching light are what say plate rather than cloth.
     """
     bpy.context.view_layer.update()
     obj = hood.copy()
@@ -632,11 +636,20 @@ def build_helm(armature, hood):
     if not bm.faces:
         raise SystemExit(f"helm: the cowl has no faces above z {HELM_CUT}")
 
+    # Grow the dome until the crown is inside it: per axis, the furthest cloth
+    # vertex from the centre, floored by the authored half-extents so a small
+    # cowl still gets a helmet-shaped cap rather than a skullcap.
+    reach = Vector((0.0, 0.0, 0.0))
+    for v in bm.verts:
+        d = (mw @ v.co) - centre
+        reach = Vector((max(reach.x, abs(d.x)), max(reach.y, abs(d.y)), max(reach.z, abs(d.z))))
+    half = Vector((max(half.x, reach.x), max(half.y, reach.y), max(half.z, reach.z)))
+
     for v in bm.verts:
         p = mw @ v.co
         d = p - centre
         k = Vector((d.x / half.x, d.y / half.y, d.z / half.z)).length
-        if 0.0 < k < 1.0:
+        if k > 0.0:
             p = centre + d / k
             d = p - centre
         p += d.normalized() * HELM_CLEAR
@@ -658,7 +671,7 @@ def build_helm(armature, hood):
     rebind(obj, armature)
 
     log(f"built helm: {len(obj.data.vertices)}v of cowl above z {HELM_CUT}, "
-        f"mat={obj.data.materials[0].name}")
+        f"dome half {half.x:.3f}/{half.y:.3f}/{half.z:.3f}, mat={obj.data.materials[0].name}")
     return obj
 
 
