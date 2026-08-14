@@ -1426,13 +1426,17 @@ def main():
                                "plate", PLATE_PAULDRON_SCALE):
         generated.add(cap.name)
     generated.add(build_cuirass(armature, ranger_body, "plate").name)
-    hood = bpy.data.objects["Male_Ranger_Head_Hood"]
-    generated.add(build_helm(armature, hood).name)
+    # No generated helm. A shell grown out of the cowl's crown is a smooth dome
+    # in the icon's palette sitting on cloth, which reads as a swim cap and not
+    # as the riveted iron every helmet base is drawn with. Until a helmet is
+    # modelled, a helmet base recolours the cowl and nothing else: cloth that is
+    # the wrong story beats iron that is the wrong object. `build_helm` and its
+    # constants are kept for whoever models that shell.
 
     # Held gear shares the hood's material, so the whole character is still two
     # draw setups and a weapon can be re-palettized by `build_gear_textures.py`
     # the same way a helmet is.
-    iron = hood.data.materials[0]
+    iron = bpy.data.objects["Male_Ranger_Head_Hood"].data.materials[0]
     for build in (build_wand, build_focus, build_buckler, build_tower):
         generated.add(build(armature, iron).name)
 

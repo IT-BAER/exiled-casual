@@ -289,10 +289,11 @@ export function meshLook(look: string): string {
  * `albedoTexture` is swapped at runtime.
  *
  * Shape is not something a texture can fix, and it is not this table's job: the
- * armoured body carries a generated coat (`body.ranger.coat`) and the helmet a
- * generated iron cap (`helmet.hood.helm`) so the silhouette agrees with the art
- * too. Both are one shape for their whole slot, though, so what still does not
- * vary per base is the cut - only the colour.
+ * armoured body carries a generated coat (`body.ranger.coat`) so the silhouette
+ * agrees with the art too. It is one shape for its whole slot, though, so what
+ * still does not vary per base is the cut - only the colour. The helmet has no
+ * such shape: a shell grown off the cowl's crown read as a swim cap, so a helmet
+ * base recolours the cloth until one is modelled (`build_wardrobe.py`).
  *
  * Keys are item base ids. A base with no entry keeps the authored look, so an
  * unmapped base renders as green ranger gear rather than as nothing.
@@ -429,28 +430,6 @@ const COAT_PART = ".coat";
  * the cowl — so it is the only part that comes off.
  */
 const HAIR_PART = `${HEAD_PREFIX}hair`;
-
-/**
- * The generated iron cap, which is an ITEM and not part of the cowl.
- *
- * It is pinned to one bright texel (`HELM_UV` in `build_wardrobe.py`) so that a
- * helmet base's ramp puts it at the light end of that icon's palette: plate grey
- * over the charcoal cloth beneath it. On the plain ranger atlas that same texel
- * is the atlas's own bright grey, so a hood worn with nothing in the slot got a
- * white faceted skullcap sitting on green cloth. There is no texture that fixes
- * both, and there should not be: a metal cap on a head wearing no helmet is an
- * item that is not there. Without a base the cowl is worn alone, exactly as it
- * was before the cap was generated.
- */
-const HELM_PART = ".helm";
-
-/**
- * Whether a part of the wanted look is actually drawn. Only the generated helm
- * asks for more than its look being the chosen one; see `HELM_PART`.
- */
-export function partShown(meshName: string, lookChosen: boolean, baseId: string | undefined): boolean {
-  return lookChosen && !(meshName.endsWith(HELM_PART) && baseId === undefined);
-}
 
 /**
  * The bones the coat hangs from, baked by `tools/build_wardrobe.py`: a ring of
@@ -839,7 +818,7 @@ export class RigActor {
       for (const [look, meshes] of byLook) {
         const on = look === wantedLook;
         for (const mesh of meshes) {
-          mesh.setEnabled(partShown(mesh.name, on, baseId));
+          mesh.setEnabled(on);
           if (on && mesh.name.includes(COAT_PART)) coat = true;
           // Only the visible look pays for the swap; a hidden one is re-dressed
           // when it comes back.

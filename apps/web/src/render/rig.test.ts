@@ -25,7 +25,6 @@ import {
   speedRatioFor,
   looksForEquipment,
   meshLook,
-  partShown,
   COSMETIC_SLOTS,
   GEAR_TEXTURE_BASES,
   HIPS_BOB,
@@ -157,31 +156,6 @@ describe("aimAngles", () => {
     // pins WHICH, because a silent flip here would read as a twitch.
     expect(aimAngles(-Math.PI + 0.1, 0).arm).toBe(-ARM_MAX);
     expect(aimAngles(-Math.PI + 0.5, 0).arm).toBe(ARM_MAX);
-  });
-});
-
-/**
- * The generated iron cap is pinned to the atlas's brightest texel so a helmet
- * base's palette puts it at the light end of its own ramp. Worn with nothing in
- * the slot there is no palette, so that texel is the raw atlas grey and the cowl
- * got a white skullcap on green cloth.
- */
-describe("partShown", () => {
-  it("keeps the generated helm off a hood worn with no helmet base", () => {
-    expect(partShown("helmet.hood.helm", true, undefined)).toBe(false);
-    expect(partShown("helmet.hood.helm", true, "base.cinder_cap")).toBe(true);
-  });
-
-  it("leaves every other part to its look alone", () => {
-    expect(partShown("helmet.hood.hood", true, undefined)).toBe(true);
-    expect(partShown("body.ranger.coat", true, undefined)).toBe(true);
-    expect(partShown("helmet.hood.hood", false, "base.cinder_cap")).toBe(false);
-  });
-
-  it("only ever hides a look the wardrobe really ships", () => {
-    // A rule keyed on a name is a rule that a rename silently disables.
-    const parts = readFileSync(fileURLToPath(new URL("../../public/models/wardrobe.glb", import.meta.url)));
-    expect(parts.includes("helmet.hood.helm")).toBe(true);
   });
 });
 
@@ -582,14 +556,6 @@ describe("wardrobe asset", () => {
       expect(bonesOf(shell), `${shell} does not bend with the torso`)
         .toEqual(bonesOf("body.ranger.torso"));
     }
-  });
-
-  it("carries the helm, which is the iron half of a helmet", () => {
-    // Generated from the cowl's own crown: the pack ships cloth and every helmet
-    // base is drawn as a riveted shell over it. Lose this part in a rebuild and
-    // the character goes back to a soft hood under charred-iron item art, which
-    // the look-prefix test below would not notice - the hood is still there.
-    expect(skinned).toContain("helmet.hood.helm");
   });
 
   it("carries every look the code can ask for", () => {

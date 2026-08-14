@@ -21,7 +21,7 @@ describe("isWardrobePart", () => {
     // with the walk. Every slot of `EQUIPPED`/`UNEQUIPPED` belongs here.
     for (const part of [
       "base.head.head", "body.ranger.coat", "belt.ranger.belt", "boots.ranger.boots",
-      "gloves.bracers.bracers", "helmet.hood.helm",
+      "gloves.bracers.bracers", "helmet.hood.hood",
       "weapon1.wand.shaft", "weapon2.buckler.plate", "weapon2.tower.plate",
     ]) {
       expect(isWardrobePart(part)).toBe(true);
