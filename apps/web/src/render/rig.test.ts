@@ -290,10 +290,18 @@ describe("gear textures", () => {
   it("covers every base that can fill a cosmetic slot", () => {
     // Any equippable armour base without a texture renders as green ranger gear
     // next to charred-iron item art, which is the mismatch this whole pipeline
-    // exists to remove.
+    // exists to remove. Held gear is worse than wrong-coloured: its meshes carry
+    // either one pinned texel or a projection of their own icon, so an unmapped
+    // hand base smears the clothing atlas along a wand.
+    //
+    // The class is NOT the slot name — a `wand` fills `weapon1` and a `shield`
+    // fills `weapon2` — so the two are mapped through the sim's own table rather
+    // than compared as strings, which silently skipped every held class.
     const cosmetic = new Set<string>(COSMETIC_SLOTS);
+    const worn = (itemClass: string) =>
+      (EQUIP_SLOTS_BY_CLASS[itemClass] ?? []).some((slot) => cosmetic.has(slot));
     const missing = ITEM_BASES.filter(
-      (b) => b.itemClass !== undefined && cosmetic.has(b.itemClass) && !GEAR_TEXTURE_BASES.includes(b.id),
+      (b) => b.itemClass !== undefined && worn(b.itemClass) && !GEAR_TEXTURE_BASES.includes(b.id),
     );
     expect(missing.map((b) => b.id)).toEqual([]);
   });

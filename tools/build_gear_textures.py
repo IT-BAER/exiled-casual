@@ -61,6 +61,10 @@ BASES = {
     "base.ember_buckler": "ember_buckler.png",
     "base.ashwall_tower_shield": "ashwall_tower_shield.png",
     "base.emberwand": "emberwand.png",
+    # The focus is the one held piece with no projection at all: it is a stone the
+    # off hand carries and its mesh samples the single pinned texel, so it takes
+    # the ramp like armour does and wears that icon's bright end.
+    "base.ashen_focus": "ashen_focus.png",
 }
 
 # Held gear wears its own icon rather than a repalettized atlas.
@@ -72,13 +76,40 @@ BASES = {
 # atlas onto it threw away the boards, the bands and the boss and left a flat wash
 # of the right hue, which is why a plate read as painted cardboard next to its own
 # inventory art, and a wand as a bare dowel.
-ICON_ART = ("base.ember_buckler", "base.ashwall_tower_shield", "base.emberwand")
+ICON_ART = ("base.ember_buckler", "base.ashwall_tower_shield")
+
+# The wand is icon art too, but not as a plate. A shield's icon is a picture of a
+# broad face and the mesh has a broad face to put it on; a wand's icon is a
+# 40-pixel-wide column of a 400-pixel-tall painting, and squaring that up the way
+# a plate is squared blew a 5x horizontal upscale of the bark across the shaft.
+# It read as mottled putty at arm's length.
+#
+# What survives at that size is the LENGTH: charred haft, bound grip, ember at
+# the head. So the icon is collapsed to one column - the median of each row's own
+# opaque pixels - and that column is repeated across the barrel. The gradient is
+# the icon's real one, there is no upscaled detail to turn to mush, and the
+# planar wrap has nothing to mirror on the far side.
+ICON_STRIP = ("base.emberwand",)
 
 # The icons are cut out on transparency and the plate is a solid object, so the
 # art is composited onto its own darkest colour first: sampled here, as a
 # percentile of the icon's own opaque pixels, so the fill is the shadow the
 # artist already used rather than a black an eye reads as a hole.
 ICON_FILL = 0.05
+
+# A square of that same fill colour stamped into each corner of the plate, for
+# the faces a planar projection has nothing true to say about: a shield's edge
+# walls and its back. Those took the front projection too, which smeared the
+# boards around the rim and printed the icon mirrored on the back. `plate_uv` in
+# build_wardrobe.py aims them at RIM_UV instead, so they wear the object's own
+# darkest colour and read as a shadowed edge.
+#
+# All four corners, because a corner of the image is a corner of the mesh's own
+# bounding box: on the round buckler that is off the disc entirely, and on the
+# tower shield it is under the arch or on the iron edging, either way a few
+# texels of a colour that is already there. Aiming at one corner would mean
+# knowing which way the loader runs v.
+RIM_PATCH = 4
 
 # The character is roughly 12% of frame height, so the atlas is downscaled on the
 # way out: 256 is past the point where more texels are visible, and five full-size
@@ -101,6 +132,64 @@ CLIP = 0.02
 # character put him at the bottom of his own ramp: correct colours, but a
 # silhouette against the hideout's grey flagstones. Below 1.0 lifts mid-tones.
 GAMMA = 0.62
+
+# Every icon is painted to read on a near-black inventory panel, so its palette is
+# a dark one and the ramp inherits that: the bakes measured 21-39 mean luma of 255
+# and, worn, plate and leather sampled RGB ~(15,16,17) under play's own sun. The
+# armour was a silhouette. `build_tileset_textures.py` lifts floors and walls for
+# exactly this reason, and this is the same pass at the other end of the frame.
+#
+# The floor is not chosen by eye: it is the ranger atlas's OWN opaque mean, the
+# one texture on this character that is known to read correctly in game. A gear
+# bake replaces the outfit, so it may not be darker than the outfit was. Bakes
+# already above it are left alone.
+def lift_luma(img, target):
+    """Raise an image's opaque mean luminance to `target`, keeping its colours.
+
+    Gamma on LUMINANCE, and the pixel scaled by how far its own luminance moved,
+    rather than gamma on each channel. Gamma per channel lifts the small channels
+    proportionally more than the large ones, so it walks every pixel towards white:
+    it brightened the plate and the cinder cap into the same grey, and one palette
+    per base is the entire point of this bake. Scaling preserves the ratio between
+    channels, so charcoal-and-crimson stays that at any brightness.
+
+    Not a flat multiply either: a factor big enough to lift a 21-luma mean clips
+    the ember highlights the icons carry. The gamma curve gives the dark texels
+    most of the lift and the bright ones almost none.
+    """
+    px = [p for p in img.getdata() if p[3] > 128]
+    before = sum(luminance(p) for p in px) / len(px)
+    if before >= target:
+        return img, before, before
+
+    def factors(g):
+        # Per luminance step, the multiplier that takes it to its gamma'd value.
+        return [1.0 if i == 0 else (255.0 * (i / 255.0) ** g) / i for i in range(256)]
+
+    def mean_at(g):
+        f = factors(g)
+        return sum(min(255.0, luminance(p) * f[luminance(p)]) for p in px) / len(px)
+
+    lo, hi = 0.05, 1.0
+    for _ in range(30):  # bisect on gamma; the mean is monotonic in it
+        g = (lo + hi) / 2
+        if mean_at(g) < target:
+            hi = g
+        else:
+            lo = g
+    f = factors((lo + hi) / 2)
+
+    out = Image.new("RGBA", img.size)
+    src, dst = img.load(), out.load()
+    w, h = img.size
+    for y in range(h):
+        for x in range(w):
+            p = src[x, y]
+            k = f[luminance(p)]
+            dst[x, y] = (min(255, int(p[0] * k)), min(255, int(p[1] * k)),
+                         min(255, int(p[2] * k)), p[3])
+    after = [p for p in out.getdata() if p[3] > 128]
+    return out, before, sum(luminance(p) for p in after) / len(after)
 
 
 def luminance(px):
@@ -159,12 +248,60 @@ def icon_plate(icon_path):
     fill = opaque[int(len(opaque) * ICON_FILL)][:3]
     plate = Image.new("RGBA", art.size, fill + (255,))
     plate.alpha_composite(art)
-    return plate.resize((SIZE, SIZE), Image.LANCZOS)
+    out = plate.resize((SIZE, SIZE), Image.LANCZOS)
+    patch = Image.new("RGBA", (RIM_PATCH, RIM_PATCH), fill + (255,))
+    for x in (0, SIZE - RIM_PATCH):
+        for y in (0, SIZE - RIM_PATCH):
+            out.paste(patch, (x, y))
+    return out
+
+
+def icon_strip(icon_path):
+    """The icon's own top-to-bottom colour, one column wide, repeated across.
+
+    Median rather than mean per row: the icons are cut out on transparency and a
+    mean over a row that is half rim antialiasing drags the whole shaft towards
+    the background. A row with nothing opaque in it (the gap under a crossguard)
+    keeps the row above, so the strip never opens a hole.
+    """
+    icon = Image.open(icon_path).convert("RGBA")
+    art = icon.crop(icon.getbbox())
+    px = art.load()
+    w, h = art.size
+
+    column = []
+    last = None
+    for y in range(h):
+        row = sorted((px[x, y] for x in range(w) if px[x, y][3] > 128), key=luminance)
+        if row:
+            last = row[len(row) // 2][:3]
+        if last is None:
+            continue
+        column.append(last)
+    if not column:
+        raise SystemExit(f"{icon_path}: no opaque pixels to strip held gear with")
+
+    # A per-row median jitters where the bark does, and one column of that is a
+    # barcode rather than a shaft. Smoothed over a few rows it is the gradient
+    # again, and the ember band is broad enough to survive it.
+    span = max(1, len(column) // 40)
+    smooth = []
+    for y in range(len(column)):
+        win = column[max(0, y - span):y + span + 1]
+        smooth.append(tuple(sum(c[i] for c in win) // len(win) for i in range(3)))
+
+    strip = Image.new("RGBA", (1, len(smooth)))
+    strip.putdata([c + (255,) for c in smooth])
+    return strip.resize((SIZE, SIZE), Image.LANCZOS)
 
 
 def main():
     atlas = Image.open(ATLAS).convert("RGBA")
     os.makedirs(OUT, exist_ok=True)
+
+    atlas_px = [p for p in atlas.getdata() if p[3] > 128]
+    target = sum(luminance(p) for p in atlas_px) / len(atlas_px)
+    print(f"GEAR luma floor {target:.1f}, the ranger atlas's own opaque mean")
 
     written = {}
     for base_id, icon_name in BASES.items():
@@ -174,15 +311,20 @@ def main():
 
         if base_id in ICON_ART:
             out = icon_plate(icon_path)
+        elif base_id in ICON_STRIP:
+            out = icon_strip(icon_path)
         else:
             ramp = build_ramp(icon_path)
             out = repalette(atlas, ramp).resize((SIZE, SIZE), Image.LANCZOS)
+
+        out, luma_before, luma_after = lift_luma(out, target)
 
         slug = base_id.split(".", 1)[1]
         path = os.path.join(OUT, f"{slug}.png")
         out.save(path, optimize=True)
         written[base_id] = os.path.getsize(path)
-        print(f"GEAR {base_id:24s} <- {icon_name:24s} {SIZE}x{SIZE} {written[base_id] // 1024} KB")
+        print(f"GEAR {base_id:24s} <- {icon_name:24s} {SIZE}x{SIZE} {written[base_id] // 1024} KB"
+              f"  luma {luma_before:5.1f}->{luma_after:5.1f}")
 
     print(f"GEAR wrote {len(written)} textures, {sum(written.values()) // 1024} KB total, to {OUT}")
     print("GEAR base ids: " + json.dumps(sorted(written)))

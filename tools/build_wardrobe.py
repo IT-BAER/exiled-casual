@@ -166,6 +166,15 @@ SHIELD_CLEAR = 0.004
 SHIELD_YAW = math.radians(75.0)
 TOWER_YAW = SHIELD_YAW
 
+# How far off head-on a face may turn and still carry the shield's icon, and the
+# texel the rest of them sample. 0.2 is about 78 degrees: the dome of the buckler
+# and the bow of the tower turn their outer boards well past 45, and every one of
+# those is still the picture. Only the edge walls and the back fall outside.
+# RIM_UV sits inside the fill square `build_gear_textures.py` stamps in EACH
+# corner of the plate, so it lands in one whichever way the loader runs v.
+PLATE_FRONT_DOT = 0.2
+RIM_UV = (0.008, 0.008)
+
 # Each shield's own anchor: (x of its centre, y of its BACK face, z of its centre).
 # The x is pulled inboard of the arm so the plate covers the hip instead of
 # hanging off the side, and the buckler is centred on the forearm the way a
@@ -806,19 +815,39 @@ def plate_uv(obj):
     there and a flat repalettized wash throws all of that away. So the plate gets
     a planar projection along its own normal - u across the face, v up it -
     against a texture that is the icon cropped to its art (`build_gear_textures`).
-    The back and the edge walls take the same projection; nothing but the front is
-    ever turned towards the camera.
+
+    Only the FRONT wears it. A planar projection has nothing true to say about a
+    face turned away from it: the edge walls took a single column of the picture
+    and dragged it around the rim, and the back took the whole icon mirrored, so
+    the shield read as a sticker on a slab from every angle but head on. Those
+    faces are aimed at RIM_UV instead, a corner of the plate that the bake fills
+    with the object's own darkest colour, which is what a shadowed edge is.
     """
     across = Vector((math.cos(SHIELD_YAW), math.sin(SHIELD_YAW), 0.0))
+    # The face the icon is painted for: the plate is built along its own -y and
+    # then yawed, so the outward direction is that yaw applied to (0, -1).
+    facing = Vector((math.sin(SHIELD_YAW), -math.cos(SHIELD_YAW), 0.0))
     u = [vertex.co.xy.to_3d().dot(across) for vertex in obj.data.vertices]
     v = [vertex.co.z for vertex in obj.data.vertices]
     span_u = max(max(u) - min(u), 1e-6)
     span_v = max(max(v) - min(v), 1e-6)
     layer = obj.data.uv_layers.new()
+    front = 0
     for poly in obj.data.polygons:
-        for loop in poly.loop_indices:
-            i = obj.data.loops[loop].vertex_index
-            layer.data[loop].uv = ((u[i] - min(u)) / span_u, (v[i] - min(v)) / span_v)
+        # Well clear of edge-on: the buckler's dome and the tower's bow turn the
+        # face away from the projection at the rim, and those verges belong to the
+        # picture, not to the edge.
+        if poly.normal.dot(facing) > PLATE_FRONT_DOT:
+            front += 1
+            for loop in poly.loop_indices:
+                i = obj.data.loops[loop].vertex_index
+                layer.data[loop].uv = ((u[i] - min(u)) / span_u, (v[i] - min(v)) / span_v)
+        else:
+            for loop in poly.loop_indices:
+                layer.data[loop].uv = RIM_UV
+    if front == 0:
+        raise SystemExit(f"{obj.name}: no face carries the icon; the facing axis is wrong")
+    log(f"  {obj.name}: {front}/{len(obj.data.polygons)} faces wear the icon")
 
 
 def shield_fit(armature, anchor):

@@ -48,6 +48,7 @@ export const WORLD_ART: readonly string[] = [
   "/textures/walls/wall_normal.jpg",
   "/textures/world/brazier_fire_sheet.png",
   // Worn gear: the first piece equipped in a map re-textures the rig.
+  "/textures/gear/ashen_focus.png",
   "/textures/gear/ashen_treads.png",
   "/textures/gear/ashwall_tower_shield.png",
   "/textures/gear/cinder_cap.png",

@@ -315,6 +315,11 @@ const GEAR_TEXTURE: Record<string, string> = {
   // what gives each shield its own iron, leather and ember palette.
   "base.ember_buckler": "/textures/gear/ember_buckler.png",
   "base.ashwall_tower_shield": "/textures/gear/ashwall_tower_shield.png",
+  // The main hand and the stone beside it. The wand carries a projection of its
+  // own icon up the shaft (`rod_uv`) and the focus one pinned texel, so without
+  // an entry here the wand wears the clothing atlas stretched along it.
+  "base.emberwand": "/textures/gear/emberwand.png",
+  "base.ashen_focus": "/textures/gear/ashen_focus.png",
 };
 
 /** Base ids the character has a baked armour texture for. Pinned by `rig.test.ts`. */
