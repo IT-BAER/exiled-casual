@@ -492,6 +492,38 @@ describe("wardrobe asset", () => {
     }
   });
 
+  it("hangs a pauldron on the arm it belongs to, on both sides", () => {
+    // Plate's caps are the pack's single left-hand pauldron, copied and mirrored
+    // (`build_pauldrons`). The mesh carries a vertex group per skeleton joint
+    // rather than only the one it uses, so moving the bind is moving WEIGHTS,
+    // and the first attempt renamed groups instead: every group took the same
+    // name, Blender suffixed the collisions, and the group holding the weights
+    // matched no bone. glTF answers that with `neutral_bone`, which is silent -
+    // the cap loads, binds to the root, and hangs at the character's feet. A
+    // name test cannot see it; only where the weights point can.
+    const joints = json.skins[0]!.joints.map((j) => json.nodes[j]!.name);
+    const caps = json.nodes
+      .filter((n) => /^body\.[^.]+\.pauldron_[lr]$/.test(n.name) && n.mesh !== undefined)
+      .map((n) => n.name);
+    expect(caps.length).toBeGreaterThanOrEqual(2);
+
+    for (const cap of caps) {
+      const side = cap.endsWith("_l") ? "l" : "r";
+      const { data: index } = attribute(cap, "JOINTS_0");
+      const { data: weight } = attribute(cap, "WEIGHTS_0");
+      const perBone = new Map<string, number>();
+      for (let k = 0; k < weight.length; k++) {
+        if (weight[k]! <= 0) continue;
+        const bone = joints[index[k]!]!;
+        perBone.set(bone, (perBone.get(bone) ?? 0) + weight[k]!);
+      }
+      // A shoulder cap follows the arm and nothing else: bound to the cloth
+      // chains it would swing with the skirt and shear off the shoulder.
+      expect([...perBone.keys()], `${cap} is not bound to its own arm alone`)
+        .toEqual([`upperarm_${side}`]);
+    }
+  });
+
   it("carries the helm, which is the iron half of a helmet", () => {
     // Generated from the cowl's own crown: the pack ships cloth and every helmet
     // base is drawn as a riveted shell over it. Lose this part in a rebuild and

@@ -284,6 +284,21 @@ BODY_LOOKS = {
 # enough that an animation which shifts the tunic a little does not spend it all.
 COAT_CLEARANCE = 0.012
 
+# Plate's shoulder caps, built from the pack's own pauldron rather than from a
+# generated dome: it is already modelled, already weighted to the arm, and
+# already in the atlas, so a hand-built shell would only be a worse copy that
+# needs its own uvs. The ranger wears exactly ONE of them, on his left, which is
+# a scout's asymmetry - plate is the look that should be armoured on both sides,
+# so the copy is mirrored and the rig happens to be exactly symmetric about x=0
+# (upperarm_l head +0.1919 against upperarm_r -0.1919, same y and z), which is
+# what makes a mirrored copy land by assignment instead of needing a re-fit.
+#
+# Scaled about the shoulder joint, not about the mesh's own centre: a cap grown
+# about its middle lifts off the joint it is supposed to sit on. 1.25 is bulk
+# that still reads as a shoulder at the play camera's ten pixels a head; past
+# about 1.4 it stops being armour and becomes a pair of wings.
+PLATE_PAULDRON_SCALE = 1.25
+
 # The body parts a look needs besides its coat, cloned from the ranger's so a new
 # armour look is a whole character rather than a floating skirt.
 BODY_BASE_PARTS = ("torso", "legs", "sleeves", "hands")
@@ -968,6 +983,69 @@ def torso_uvs(torso):
     return list(seen.values())
 
 
+def build_pauldrons(armature, source, look, scale):
+    """A shoulder cap on each side, from the pack's single left-hand one.
+
+    Weighted to `upperarm_*` and nothing else, exactly as the source is: a
+    pauldron follows the arm, not the cloth, so it must not touch the coat's
+    chains or it would swing with the skirt and shear off the shoulder.
+
+    The right-hand copy is the left mirrored through x=0 and reassigned to the
+    opposite bone. That is only legitimate because the armature is symmetric to
+    the last digit; the winding is flipped with it, since mirroring turns every
+    face inside out and Babylon culls back faces.
+    """
+    # The mesh carries a group per skeleton joint, not just the one it uses, so
+    # the bind is moved by moving WEIGHTS between two existing groups. Renaming
+    # groups instead is a trap worth naming: every group takes the same new name,
+    # Blender suffixes the collisions, and the one that carried the weights ends
+    # up matching no bone at all - which the exporter quietly answers with
+    # `neutral_bone`, so the cap renders pinned to the floor.
+    weighted = {g.name for g in source.vertex_groups
+                for v in source.data.vertices
+                for gv in v.groups if gv.group == g.index and gv.weight > 0}
+    if weighted != {"upperarm_l"}:
+        raise SystemExit(f"pauldron: expected weights on upperarm_l alone, got {sorted(weighted)}")
+
+    made = []
+    for side, mirror in (("l", False), ("r", True)):
+        obj = source.copy()
+        obj.data = source.data.copy()
+        obj.name = obj.data.name = f"body.{look}.pauldron_{side}"
+        bpy.context.scene.collection.objects.link(obj)
+
+        # The bone's own head, NOT the left one negated: `upperarm_r` already
+        # sits at the mirrored position, so negating it again scales the cap
+        # about a point on the wrong side of the body.
+        pivot = armature.data.bones[f"upperarm_{side}"].head_local
+        for v in obj.data.vertices:
+            p = v.co.copy()
+            if mirror:
+                p.x = -p.x
+            v.co = pivot + (p - pivot) * scale
+        if mirror:
+            obj.data.flip_normals()
+            # Custom split normals survive the mirror pointing the wrong way and
+            # would light the cap as if it were still the left one. They are an
+            # attribute since 4.1, so dropping the attribute is how they go.
+            custom = obj.data.attributes.get("custom_normal")
+            if custom is not None:
+                obj.data.attributes.remove(custom)
+            source_group = obj.vertex_groups["upperarm_l"]
+            target_group = obj.vertex_groups["upperarm_r"]
+            moved = [(v.index, g.weight) for v in obj.data.vertices
+                     for g in v.groups if g.group == source_group.index]
+            for index, weight in moved:
+                target_group.add([index], weight, "REPLACE")
+                source_group.remove([index])
+
+        rebind(obj, armature)
+        made.append(obj)
+    log(f"built {look} pauldrons: {len(made)} caps, "
+        f"{len(made[0].data.vertices)}v each, scale {scale}")
+    return made
+
+
 def assert_coat_clears(look, bodies):
     """Fail the build if the body pokes out through this look's coat.
 
@@ -1187,6 +1265,11 @@ def main():
     for look in BODY_LOOKS:
         assert_coat_clears(look, covered)
         generated.add(build_coat(armature, ranger_body, look).name)
+    # Plate alone: the ranger keeps the pack's own single cap, and a slim leather
+    # jerkin with plate shoulders would be neither.
+    for cap in build_pauldrons(armature, bpy.data.objects["Male_Ranger_Acc_Pauldron"],
+                               "plate", PLATE_PAULDRON_SCALE):
+        generated.add(cap.name)
     hood = bpy.data.objects["Male_Ranger_Head_Hood"]
     generated.add(build_helm(armature, hood).name)
 
