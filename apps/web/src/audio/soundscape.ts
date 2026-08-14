@@ -347,8 +347,6 @@ export function createSoundscape(opts: Options = {}): Soundscape {
       const f = snap.player.flasks;
       const pf = before.player.flasks;
       if (f.lifeCharges < pf.lifeCharges || f.manaCharges < pf.manaCharges) play("flask-drink");
-      // The stone going in, heard once: mapOpen only rises on an activation.
-      if (snap.mapOpen && !before.mapOpen) play("waystone-activate");
 
       const moved = Math.hypot(snap.player.x - before.player.x, snap.player.y - before.player.y);
       if (moved > STEP_MIN_MOVE && snap.player.alive) {

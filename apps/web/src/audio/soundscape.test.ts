@@ -260,11 +260,11 @@ describe("createSoundscape", () => {
     ])).toEqual(["flask-drink"]);
   });
 
-  it("the map opening sounds the stone going in", () => {
+  it("the map opening is silent here; the portal whoosh belongs to the renderer", () => {
     expect(run([
       snap({ tick: 1, mapOpen: false }),
       snap({ tick: 2, mapOpen: true }),
-    ])).toEqual(["waystone-activate"]);
+    ])).toEqual([]);
   });
 
   it("walking makes footfalls on a cadence, and standing still is silent", () => {
