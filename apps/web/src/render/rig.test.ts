@@ -466,6 +466,32 @@ describe("wardrobe asset", () => {
     expect(skinned).toContain("body.ranger.coat");
   });
 
+  it("gives every armour body look a whole body, not just a coat", () => {
+    // The runtime dresses by showing `body.<look>.*` and hiding the rest of the
+    // slot, so a look that owns only a coat renders as a floating skirt with no
+    // torso, arms or legs. Every armour look (anything past the commoner default)
+    // must carry the same body parts the ranger does, plus its own coat.
+    const partsOf = (look: string) =>
+      new Set(
+        skinned
+          .filter((n) => n.startsWith(`body.${look}.`))
+          .map((n) => n.split(".")[2]!),
+      );
+    const need = ["torso", "legs", "sleeves", "hands", "coat"];
+    const looks = new Set(
+      skinned
+        .filter((n) => n.startsWith("body.") && !n.startsWith("body.commoner."))
+        .map((n) => n.split(".")[1]!),
+    );
+    expect(looks.size).toBeGreaterThan(1); // ranger plus at least one armour look
+    for (const look of looks) {
+      const parts = partsOf(look);
+      for (const part of need) {
+        expect(parts.has(part), `body.${look} is missing ${part}`).toBe(true);
+      }
+    }
+  });
+
   it("carries the helm, which is the iron half of a helmet", () => {
     // Generated from the cowl's own crown: the pack ships cloth and every helmet
     // base is drawn as a riveted shell over it. Lose this part in a rebuild and

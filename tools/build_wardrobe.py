@@ -270,6 +270,10 @@ BODY_LOOKS = {
     },
 }
 
+# The body parts a look needs besides its coat, cloned from the ranger's so a new
+# armour look is a whole character rather than a floating skirt.
+BODY_BASE_PARTS = ("torso", "legs", "sleeves", "hands")
+
 # The coat hangs off a ring of two-joint chains rather than off the legs. Riding
 # the thighs was the first attempt and it looks wrong for a good reason: a thigh
 # rotation is rigid about the hip, so the hem sweeps a wide arc exactly in phase
@@ -1140,6 +1144,23 @@ def main():
     missing = set(RENAME.values()) - {o.name for o in meshes()}
     if missing:
         raise SystemExit(f"missing expected parts: {sorted(missing)}")
+
+    # A body look is a whole body, not just a coat. `build_coat` gives each look
+    # its own skirt silhouette, but the runtime dresses by showing `body.<look>.*`
+    # and hiding the rest of the slot - so a look with only a coat renders as a
+    # floating coat with no torso, arms or legs. Give every armour look its own
+    # copy of the ranger torso/legs/sleeves/hands (same geometry and weights, the
+    # coat on top is what differs), so dressing it shows a character.
+    for look in BODY_LOOKS:
+        if look == "ranger":
+            continue  # ranger already owns the pack's body parts
+        for part in BODY_BASE_PARTS:
+            src = bpy.data.objects[f"body.ranger.{part}"]
+            dup = src.copy()
+            dup.data = src.data.copy()
+            dup.name = f"body.{look}.{part}"
+            dup.data.name = dup.name
+            bpy.context.scene.collection.objects.link(dup)
 
     for o in list(bpy.context.scene.objects):
         if o.type == "MESH" and o.name.startswith("Icosphere"):
