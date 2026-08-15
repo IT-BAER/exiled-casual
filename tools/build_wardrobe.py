@@ -675,6 +675,363 @@ def build_helm(armature, hood):
     return obj
 
 
+# --- Harvested donor gear -----------------------------------------------------
+#
+# Two real .blend packs, cut apart the same way the outfit packs are, except the
+# cut is by BONE rather than by material: each pack rigs its armour to its own
+# skeleton, and what is wanted is the plate, never that skeleton. So a piece is
+# appended, its dominant DEF- bone's REST matrix is read off its own armature,
+# and the piece is re-expressed in the wardrobe's matching bone's rest frame -
+# `target * Scale(ratio) * donor.inverted()` - the same measured-frame technique
+# `shield_fit`/`build_pauldrons` already use for the outfit's own gear. Every
+# harvested piece is then rigid to that one bone, exactly like held gear: a
+# blended weight would only let a plate bend where the rig's own cloth cannot.
+KNIGHT_SRC = "D:/VSC/exiled-casual/assets/props/source/"
+SALET_BLEND = KNIGHT_SRC + "german_salet_medieval_armor_helmet"
+RIGGED_KNIGHT_BLEND = KNIGHT_SRC + "rigged_knight"
+
+# A harvested scan is 50-200k tris raw; these packs ship pre-decimated already,
+# but a piece over this still gets collapsed - same budget/approach as
+# `build_props.py`'s `decimate_to`.
+KNIGHT_TRI_BUDGET = 15000
+
+
+def decimate_to(obj, target):
+    """Collapse a mesh to a triangle budget, UVs and vertex groups kept."""
+    tris = sum(len(p.vertices) - 2 for p in obj.data.polygons)
+    if tris <= target:
+        return
+    m = obj.modifiers.new("dec", "DECIMATE")
+    m.use_collapse_triangulate = True
+    m.ratio = target / tris
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.modifier_apply(modifier=m.name)
+    log(f"  decimated {obj.name}: {tris} -> "
+        f"{sum(len(p.vertices) - 2 for p in obj.data.polygons)} tris")
+
+# How much wider than the bare head the shell sits (helmet over hair and
+# padding, never skin-tight) and how far its crown clears the skull's own top.
+SALET_WIDTH_MARGIN = 1.15
+
+# Anchored at the RIM, not the crown: the donor's own peak stands well above its
+# visor hinge, so lining the crown up with the skull's own top left the visor
+# hanging in mid-air over the brow with the whole shell floating above the hair.
+# A brim just clear of the eyes is the one edge every reference art keeps.
+SALET_RIM_CLEAR = 0.010
+
+# The rigged knight's object names, harvested once per build so their shared
+# material ("Steel.002") is imported exactly once - importing it twice gives
+# Blender no choice but to suffix the second copy, doubling the texture set.
+KNIGHT_ARMATURE_OBJ = "Rigged knight"
+KNIGHT_PIECES = (
+    "FinalBaseMesh_013.001", "FinalBaseMesh_013.002", "FinalBaseMesh_016.001",
+    "FinalBaseMesh_006.001", "FinalBaseMesh_006.002", "FinalBaseMesh_018.001",
+    "FinalBaseMesh_009.001", "FinalBaseMesh_010.001",
+)
+
+
+def bake_modifiers(obj):
+    """Apply a mesh object's modifier stack in place, in background mode."""
+    if not obj.modifiers:
+        return
+    bpy.ops.object.select_all(action="DESELECT")
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.convert(target="MESH")
+
+
+def bake_world(obj):
+    """Fold `obj`'s resolved world transform into its mesh data and drop the parent.
+
+    Donor packs carry their own parent chains (an empty, or their own armature);
+    once the chain has done its job of placing the mesh in world space, nothing
+    downstream should have to walk it again.
+    """
+    obj.data.transform(obj.matrix_world)
+    obj.matrix_world = Matrix.Identity(4)
+    obj.parent = None
+
+
+def harvest_skin_rigid(obj, armature, bone_name, out_name):
+    """Rename `obj`, clear whatever vertex groups it arrived with, and rebind it
+    rigid to one wardrobe bone at weight 1.0 - the held-gear tail, without the
+    material swap: a harvested piece keeps the donor's own material and UVs.
+    """
+    obj.name = obj.data.name = out_name
+    for vg in list(obj.vertex_groups):
+        obj.vertex_groups.remove(vg)
+    group = obj.vertex_groups.new(name=bone_name)
+    group.add(range(len(obj.data.vertices)), 1.0, "REPLACE")
+    rebind(obj, armature)
+    return obj
+
+
+def split_by_groups(obj, l_names, r_names, keep_left):
+    """A left/right half of `obj`, split by which side's vertex groups own more
+    of each vertex - not by an x threshold, because a strap can cross x=0 while
+    still belonging entirely to the shoulder it is riveted to.
+    """
+    dup = obj.copy()
+    dup.data = obj.data.copy()
+    bpy.context.scene.collection.objects.link(dup)
+    group_name = {g.index: g.name for g in dup.vertex_groups}
+
+    def is_left(v):
+        l = sum(g.weight for g in v.groups if group_name.get(g.group) in l_names)
+        r = sum(g.weight for g in v.groups if group_name.get(g.group) in r_names)
+        return l >= r
+
+    kept = {v.index for v in dup.data.vertices if is_left(v) == keep_left}
+    bm = bmesh.new()
+    bm.from_mesh(dup.data)
+    bm.verts.ensure_lookup_table()
+    bmesh.ops.delete(bm, geom=[v for v in bm.verts if v.index not in kept], context="VERTS")
+    if not bm.faces:
+        raise SystemExit(f"{obj.name}: {'left' if keep_left else 'right'} half is empty")
+    bm.to_mesh(dup.data)
+    bm.free()
+    return dup
+
+
+def bone_matrix(armature, name):
+    return armature.matrix_world @ armature.data.bones[name].matrix_local
+
+
+def bone_length(armature, name):
+    b = armature.data.bones[name]
+    return (b.tail_local - b.head_local).length
+
+
+def hand_span(armature, side):
+    """Wrist to knuckle line, not the wrist bone's own length.
+
+    The wardrobe's `hand_l`/`hand_r` is a short UE-mannequin stub - the fingers
+    are their own bones downstream of it - so its raw length is under half the
+    donor rig's wrist-to-knuckle `DEF-hand` bone and scales a gauntlet to a
+    child's. `middle_01` is where the donor's own hand bone ends: the knuckle
+    line, not the fingertip.
+    """
+    hand = bone_matrix(armature, f"hand_{side}").translation
+    knuckle = bone_matrix(armature, f"middle_01_{side}").translation
+    return (knuckle - hand).length
+
+
+def rigid_fit(donor_arm, donor_bone, armature, target_bone, target_length):
+    """`target * Scale(target/donor) * donor.inverted()`, scaled about the joint.
+
+    Both matrices are REST poses - Blender bone matrices, not posed ones - so
+    this is a pure re-expression: wherever the piece sat relative to its own
+    bone's head and axes in the donor rig, it sits the same way relative to the
+    wardrobe bone, just rescaled to that bone's own length.
+    """
+    donor_m = bone_matrix(donor_arm, donor_bone)
+    target_m = bone_matrix(armature, target_bone)
+    scale = target_length / bone_length(donor_arm, donor_bone)
+    return target_m @ Matrix.Scale(scale, 4) @ donor_m.inverted(), scale
+
+
+def build_knight_helm(armature, head_obj, eyes_obj):
+    """A real riveted salet, harvested whole rather than grown out of the cowl.
+
+    `helmed` (the shell) and `visor` carry their own parent chain (an empty,
+    then each other) and their own Auto-Smooth/WeightedNormal modifier stack
+    and a Limit Rotation constraint on the visor that has nothing left to limit
+    once it is rigid - all three are baked away here, and what is left is one
+    merged mesh in the pack's own materials.
+
+    Placed by measurement, not a hand-picked matrix: scaled so its own width
+    clears the wardrobe head's width by `SALET_WIDTH_MARGIN`, then slid so its
+    RIM - the bottom of the shell, not the peak of the crown - sits
+    `SALET_RIM_CLEAR` above the eyes. Both packs share one Z-up, -Y-forward
+    convention (checked against the visor, which lands at negative y - the face
+    - unrotated), so no axis conversion is needed, only scale and a slide.
+    """
+    with bpy.data.libraries.load(SALET_BLEND, link=False) as (data_from, data_to):
+        want = ["German salet medieval armor helmet.", "helmed", "visor"]
+        data_to.objects = [n for n in want if n in data_from.objects]
+    for obj in data_to.objects:
+        bpy.context.scene.collection.objects.link(obj)
+    bpy.context.view_layer.update()
+
+    empty = bpy.data.objects["German salet medieval armor helmet."]
+    helmed = bpy.data.objects["helmed"]
+    visor = bpy.data.objects["visor"]
+    visor.constraints.clear()
+
+    for obj in (helmed, visor):
+        bake_modifiers(obj)
+    bpy.context.view_layer.update()
+    for obj in (helmed, visor):
+        bake_world(obj)
+
+    bpy.ops.object.select_all(action="DESELECT")
+    helmed.select_set(True)
+    visor.select_set(True)
+    bpy.context.view_layer.objects.active = helmed
+    bpy.ops.object.join()
+    bpy.data.objects.remove(empty, do_unlink=True)
+    decimate_to(helmed, KNIGHT_TRI_BUDGET)
+
+    obj = helmed
+    verts = obj.data.vertices
+    xs = [v.co.x for v in verts]
+    ys = [v.co.y for v in verts]
+    zs = [v.co.z for v in verts]
+    donor_width = max(xs) - min(xs)
+
+    head_pts = [head_obj.matrix_world @ v.co for v in head_obj.data.vertices]
+    head_width = max(p.x for p in head_pts) - min(p.x for p in head_pts)
+    head_cy = (min(p.y for p in head_pts) + max(p.y for p in head_pts)) * 0.5
+
+    eye_pts = [eyes_obj.matrix_world @ v.co for v in eyes_obj.data.vertices]
+    eye_top = max(p.z for p in eye_pts)
+
+    scale = (head_width * SALET_WIDTH_MARGIN) / donor_width
+    rim_z = eye_top + SALET_RIM_CLEAR
+    dz = rim_z - min(zs) * scale
+    dy = head_cy - (min(ys) + max(ys)) * 0.5 * scale
+
+    obj.data.transform(Matrix.Diagonal((scale, scale, scale, 1.0)))
+    obj.data.transform(Matrix.Translation((0.0, dy, dz)))
+
+    harvest_skin_rigid(obj, armature, "Head", "helmet.knight.helm")
+    log(f"built knight helm: {len(obj.data.vertices)}v, scale {scale:.3f}, "
+        f"rim z {rim_z:.3f}, crown z {rim_z + (max(zs) - min(zs)) * scale:.3f}, "
+        f"mats={[m.name for m in obj.data.materials]}")
+    return obj
+
+
+def import_knight():
+    """Append the rigged knight's own armature and its eight armour meshes."""
+    with bpy.data.libraries.load(RIGGED_KNIGHT_BLEND, link=False) as (data_from, data_to):
+        want = [KNIGHT_ARMATURE_OBJ] + list(KNIGHT_PIECES)
+        data_to.objects = [n for n in want if n in data_from.objects]
+    for obj in data_to.objects:
+        bpy.context.scene.collection.objects.link(obj)
+    bpy.context.view_layer.update()
+    donor_arm = bpy.data.objects[KNIGHT_ARMATURE_OBJ]
+    pieces = {n: bpy.data.objects[n] for n in KNIGHT_PIECES if n in bpy.data.objects}
+    for obj in pieces.values():
+        obj.modifiers.clear()
+        # A shape key ("V_None", a variant slider) leaves `mesh.vertices` alone
+        # when `Mesh.transform()` runs and the glTF exporter reads the shape
+        # key's own Basis data instead - every later `data.transform()` call in
+        # this build (the fit, then nothing else) would silently not apply to
+        # what gets exported. Dropped, not preserved: nothing here drives it.
+        if obj.data.shape_keys:
+            bpy.context.view_layer.objects.active = obj
+            bpy.ops.object.shape_key_remove(all=True)
+        bake_world(obj)
+    return donor_arm, pieces
+
+
+def build_knight_gear(armature):
+    """Vambraces, a gauntlet, knee cops, greaves and sabatons, all rigid.
+
+    One import of the rigged knight's pack feeds both the gloves and the boots
+    look, so its shared `Steel.002` material is only ever imported once. Pieces
+    that arrive as one symmetric mesh (the gauntlet, the greave, the sabatons)
+    are split by which side's vertex groups actually own each vertex, then each
+    half is fit to its own bone independently - a strap crossing the midline
+    stays with whichever shoulder or shin it is riveted to.
+    """
+    donor_arm, pieces = import_knight()
+
+    def half_len(bone):
+        # The donor rig splits an upper-arm/forearm/thigh/shin into two roughly
+        # equal DEF- bones; the wardrobe has one. A piece rigged to the second,
+        # knee/wrist-adjacent half is fit against half that bone's own length,
+        # not the whole limb, or it comes out scaled for a limb twice as long.
+        return bone_length(armature, bone) * 0.5
+
+    gloves_parts, boots_parts = [], []
+
+    for name, donor_bone, target_bone in (
+        ("FinalBaseMesh_013.001", "DEF-forearm.R.001", "lowerarm_r"),
+        ("FinalBaseMesh_013.002", "DEF-forearm.L.001", "lowerarm_l"),
+    ):
+        obj = pieces[name]
+        fit, scale = rigid_fit(donor_arm, donor_bone, armature, target_bone, half_len(target_bone))
+        obj.data.transform(fit)
+        harvest_skin_rigid(obj, armature, target_bone, f"gloves.knight.{name}")
+        gloves_parts.append(obj)
+        log(f"  vambrace -> {target_bone}: donor {donor_bone}, scale {scale:.3f}")
+
+    gauntlet = pieces["FinalBaseMesh_016.001"]
+    l_names, r_names = {"DEF-hand.L", "DEF-thumb.01.L"}, {"DEF-hand.R", "DEF-thumb.01.R"}
+    halves = {"l": split_by_groups(gauntlet, l_names, r_names, keep_left=True),
+              "r": split_by_groups(gauntlet, l_names, r_names, keep_left=False)}
+    bpy.data.objects.remove(gauntlet, do_unlink=True)
+    for side, obj in halves.items():
+        target_bone = f"hand_{side}"
+        donor_bone = f"DEF-hand.{side.upper()}"
+        fit, scale = rigid_fit(donor_arm, donor_bone, armature, target_bone, hand_span(armature, side))
+        obj.data.transform(fit)
+        harvest_skin_rigid(obj, armature, target_bone, f"gloves.knight.gauntlet_{side}")
+        gloves_parts.append(obj)
+        log(f"  gauntlet -> {target_bone}: donor {donor_bone}, scale {scale:.3f}")
+
+    for name, donor_bone, target_bone in (
+        ("FinalBaseMesh_006.001", "DEF-thigh.R.001", "thigh_r"),
+        ("FinalBaseMesh_006.002", "DEF-thigh.L.001", "thigh_l"),
+    ):
+        obj = pieces[name]
+        fit, scale = rigid_fit(donor_arm, donor_bone, armature, target_bone, half_len(target_bone))
+        obj.data.transform(fit)
+        harvest_skin_rigid(obj, armature, target_bone, f"boots.knight.{name}")
+        boots_parts.append(obj)
+        log(f"  knee cop -> {target_bone}: donor {donor_bone}, scale {scale:.3f}")
+
+    greave = pieces["FinalBaseMesh_018.001"]
+    l_names = {"DEF-shin.L", "DEF-shin.L.001", "DEF-foot.L", "DEF-toe.L", "DEF-thigh.L.001"}
+    r_names = {"DEF-shin.R", "DEF-shin.R.001", "DEF-foot.R", "DEF-toe.R", "DEF-thigh.R.001"}
+    halves = {"l": split_by_groups(greave, l_names, r_names, keep_left=True),
+              "r": split_by_groups(greave, l_names, r_names, keep_left=False)}
+    bpy.data.objects.remove(greave, do_unlink=True)
+    for side, obj in halves.items():
+        target_bone = f"calf_{side}"
+        donor_bone = f"DEF-shin.{side.upper()}"
+        fit, scale = rigid_fit(donor_arm, donor_bone, armature, target_bone, half_len(target_bone))
+        obj.data.transform(fit)
+        harvest_skin_rigid(obj, armature, target_bone, f"boots.knight.greave_{side}")
+        boots_parts.append(obj)
+        log(f"  greave -> {target_bone}: donor {donor_bone}, scale {scale:.3f}")
+
+    for name, tag in (("FinalBaseMesh_009.001", "sabaton"), ("FinalBaseMesh_010.001", "ankle")):
+        piece = pieces[name]
+        l_names = {"DEF-foot.L", "DEF-toe.L", "DEF-shin.L.001"}
+        r_names = {"DEF-foot.R", "DEF-toe.R", "DEF-shin.R.001"}
+        halves = {"l": split_by_groups(piece, l_names, r_names, keep_left=True),
+                  "r": split_by_groups(piece, l_names, r_names, keep_left=False)}
+        bpy.data.objects.remove(piece, do_unlink=True)
+        for side, obj in halves.items():
+            target_bone = f"foot_{side}"
+            donor_bone = f"DEF-foot.{side.upper()}"
+            fit, scale = rigid_fit(donor_arm, donor_bone, armature, target_bone,
+                                    bone_length(armature, target_bone))
+            obj.data.transform(fit)
+            harvest_skin_rigid(obj, armature, target_bone, f"boots.knight.{tag}_{side}")
+            boots_parts.append(obj)
+            log(f"  {tag} -> {target_bone}: donor {donor_bone}, scale {scale:.3f}")
+
+    bpy.data.objects.remove(donor_arm, do_unlink=True)
+
+    def merge(parts, name):
+        bpy.ops.object.select_all(action="DESELECT")
+        for obj in parts:
+            obj.select_set(True)
+        bpy.context.view_layer.objects.active = parts[0]
+        bpy.ops.object.join()
+        merged = parts[0]
+        merged.name = merged.data.name = name
+        decimate_to(merged, KNIGHT_TRI_BUDGET)
+        rebind(merged, armature)
+        log(f"built {name}: {len(merged.data.vertices)}v, mats={[m.name for m in merged.data.materials]}")
+        return merged
+
+    return merge(gloves_parts, "gloves.knight.part"), merge(boots_parts, "boots.knight.part")
+
+
 def hand_frame(armature, bone_name, mirror):
     """The frame held gear is authored in: (origin, out, palm, grip).
 
@@ -1408,7 +1765,8 @@ def main():
     skin_material = next(
         m for o in meshes() for m in o.data.materials if m and m.name == SKIN_MAT
     )
-    generated = {o.name for o in build_head(armature, skin_material)}
+    head_parts = build_head(armature, skin_material)
+    generated = {o.name for o in head_parts}
     build_skirt_bones(armature)
     ranger_body = bpy.data.objects["Male_Ranger_Body"]
     # The tunic, the legs and the boots are what a coat has to cover; the arms
@@ -1426,12 +1784,15 @@ def main():
                                "plate", PLATE_PAULDRON_SCALE):
         generated.add(cap.name)
     generated.add(build_cuirass(armature, ranger_body, "plate").name)
-    # No generated helm. A shell grown out of the cowl's crown is a smooth dome
-    # in the icon's palette sitting on cloth, which reads as a swim cap and not
-    # as the riveted iron every helmet base is drawn with. Until a helmet is
-    # modelled, a helmet base recolours the cowl and nothing else: cloth that is
-    # the wrong story beats iron that is the wrong object. `build_helm` and its
-    # constants are kept for whoever models that shell.
+
+    # A real riveted salet, harvested from its own donor pack (see
+    # `build_knight_helm`), plus vambraces/gauntlet/greaves/sabatons rigid to the
+    # limb bones they cover (`build_knight_gear`). `build_helm`'s generated dome
+    # is kept, uncalled, for whoever wants a procedural fallback.
+    generated.add(build_knight_helm(armature, head_parts[0], head_parts[1]).name)
+    for part in build_knight_gear(armature):
+        generated.add(part.name)
+    dedupe_materials()
 
     # Held gear shares the hood's material, so the whole character is still two
     # draw setups and a weapon can be re-palettized by `build_gear_textures.py`

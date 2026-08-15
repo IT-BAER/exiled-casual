@@ -327,6 +327,18 @@ const GEAR_TEXTURE: Record<string, string> = {
 export const GEAR_TEXTURE_BASES: readonly string[] = Object.keys(GEAR_TEXTURE);
 
 /**
+ * Looks whose mesh carries its own donor UVs and textures rather than the
+ * ranger atlas, so `GEAR_TEXTURE`'s swap must never reach them.
+ *
+ * The bake in `GEAR_TEXTURE` is a luminance -> icon-palette lookup made FOR the
+ * ranger atlas's own UV layout (`build_gear_textures.py`); pasting it onto a
+ * harvested mesh's own UVs (`build_wardrobe.py`'s knight helm/gloves/boots)
+ * would smear that bake across foreign texture space instead of recolouring
+ * anything.
+ */
+const DONOR_TEXTURED_LOOKS = new Set(["knight"]);
+
+/**
  * What the lab preview puts in each slot. The preview exists so the wardrobe can
  * be checked without farming five drops, and a preview that skipped the base ids
  * would show the authored green outfit — the one thing the armour textures are
@@ -413,6 +425,15 @@ const LOOK_BY_BASE: Record<string, string> = {
   // until that floor-length look lands.
   "base.ironsworn_plate": "plate",
   "base.stalker_leathers": "leather",
+  // Harvested real geometry, not a re-palette: a riveted salet
+  // (`helmet.knight.helm`) and vambrace/gauntlet/greave/sabaton pieces
+  // (`gloves.knight.part`, `boots.knight.part`), all rigid to the limb bones
+  // they cover. Keeps its own donor UVs and textures - see
+  // `DONOR_TEXTURED_LOOKS`, which keeps `GEAR_TEXTURE`'s ranger-atlas bake off
+  // it, or the swap would smear that bake across foreign UV space.
+  "base.cinder_cap": "knight",
+  "base.ember_gauntlets": "knight",
+  "base.ashen_treads": "knight",
 };
 
 const HEAD_PREFIX = "base.head.";
@@ -822,7 +843,7 @@ export class RigActor {
           if (on && mesh.name.includes(COAT_PART)) coat = true;
           // Only the visible look pays for the swap; a hidden one is re-dressed
           // when it comes back.
-          if (on) mesh.material = this.geared(mesh, baseId);
+          if (on) mesh.material = this.geared(mesh, baseId, look);
         }
       }
     }
@@ -850,11 +871,12 @@ export class RigActor {
    * own invertY and UV set, and the glTF loader does not use those, so a
    * hand-built one lands upside down on a hand-authored atlas.
    */
-  private geared(mesh: Mesh, baseId: string | undefined): Material | null {
+  private geared(mesh: Mesh, baseId: string | undefined, look: string): Material | null {
     let base = this.baseMaterials.get(mesh);
     if (base === undefined) this.baseMaterials.set(mesh, (base = mesh.material));
 
-    const url = baseId === undefined ? undefined : GEAR_TEXTURE[baseId];
+    const url = baseId === undefined || DONOR_TEXTURED_LOOKS.has(look)
+      ? undefined : GEAR_TEXTURE[baseId];
     // An unmapped base, or a material with no albedo to replace, keeps the
     // authored look: wrong-coloured armour beats an invisible limb.
     if (!url || !(base instanceof PBRMaterial) || !(base.albedoTexture instanceof Texture)) {
