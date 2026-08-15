@@ -413,6 +413,14 @@ const LOOK_BY_BASE: Record<string, string> = {
   // until that floor-length look lands.
   "base.ironsworn_plate": "plate",
   "base.stalker_leathers": "leather",
+  // The three armour slots plate now has geometry of its own in. Each piece is
+  // derived from the one it covers (`build_over` / `build_tassets`), so what
+  // separates them from the ranger gear underneath is bulk and a hard flat-shaded
+  // edge, not a different cut - the palette bake does the rest. The helmet is
+  // still absent: a helmet base recolours the cowl.
+  "base.ember_gauntlets": "plate",
+  "base.ashen_treads": "plate",
+  "base.cinderchain_sash": "plate",
 };
 
 const HEAD_PREFIX = "base.head.";

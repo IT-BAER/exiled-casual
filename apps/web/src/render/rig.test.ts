@@ -574,6 +574,76 @@ describe("wardrobe asset", () => {
     }
   });
 
+  it("carries a look for every base that can be worn", () => {
+    // The slot default is not the whole story any more: `LOOK_BY_BASE` names a
+    // look per base for the worn slots too, so a base pointing at a look the
+    // builder does not emit is an invisible limb rather than a wrong colour, and
+    // the slot-default test above cannot see it.
+    const worn: string[] = [];
+    for (const base of ITEM_BASES) {
+      const slots = EQUIP_SLOTS_BY_CLASS[base.itemClass ?? ""] ?? [];
+      for (const slot of COSMETIC_SLOTS) {
+        if (slot === "weapon1" || slot === "weapon2") continue;
+        if (!slots.includes(slot)) continue;
+        const look = looksForEquipment({ [slot]: { baseId: base.id } })[slot];
+        expect(look, `${base.id} has no look`).not.toBeNull();
+        worn.push(`${slot}.${meshLook(look!)}.`);
+      }
+    }
+    expect(worn.length).toBeGreaterThan(0);
+    for (const prefix of worn) {
+      expect(skinned.some((n) => n.startsWith(prefix)), `${prefix} missing`).toBe(true);
+    }
+  });
+
+  it("hangs the tassets on the coat's chains, not on the pelvis", () => {
+    // They are a plate over swinging cloth. Weighted to the body they would be a
+    // rigid slab the coat passes through every stride, which is why they borrow
+    // the coat's own weights (`build_tassets`) - so what is pinned is that they
+    // ride the same chains, not what they look like.
+    const joints = json.skins[0]!.joints.map((j) => json.nodes[j]!.name);
+    const { data: index } = attribute("belt.plate.tassets", "JOINTS_0");
+    const { data: weight } = attribute("belt.plate.tassets", "WEIGHTS_0");
+    const chains = new Set<string>();
+    let onChains = 0;
+    for (let v = 0; v < weight.length / 4; v++) {
+      let share = 0;
+      for (let k = v * 4; k < v * 4 + 4; k++) {
+        const bone = joints[index[k]!]!;
+        if (weight[k]! > 0 && bone.startsWith("skirt_")) {
+          chains.add(bone.replace(/_\d+$/, ""));
+          share += weight[k]!;
+        }
+      }
+      if (share > 0.5) onChains++;
+    }
+    expect(chains.size).toBe(SKIRT_CHAINS);
+    // Not every vertex: the coat's own top band is pinned to the body under the
+    // belt (`SKIRT_PINNED`), and the tassets borrow that too, so their top row
+    // is meant to stay put while the rest of the panel swings.
+    expect(onChains / (weight.length / 4)).toBeGreaterThan(0.6);
+  });
+
+  it("bends the offset shells exactly like the piece they cover", () => {
+    // The gauntlets and the greaves are the bracer and the boot pushed out along
+    // the limb's own radius (`build_over`), so they inherit that surface's
+    // weights vertex for vertex. Any drift here is a plate that shears off the
+    // wrist or the ankle the moment a clip runs, and it is invisible standing
+    // still.
+    const joints = json.skins[0]!.joints.map((j) => json.nodes[j]!.name);
+    const bonesOf = (name: string) => {
+      const { data: index } = attribute(name, "JOINTS_0");
+      const { data: weight } = attribute(name, "WEIGHTS_0");
+      const used = new Set<string>();
+      for (let k = 0; k < weight.length; k++) {
+        if (weight[k]! > 0) used.add(joints[index[k]!]!);
+      }
+      return [...used].sort();
+    };
+    expect(bonesOf("gloves.plate.gauntlets")).toEqual(bonesOf("gloves.bracers.bracers"));
+    expect(bonesOf("boots.plate.greaves")).toEqual(bonesOf("boots.ranger.boots"));
+  });
+
   it("carries a look for every base that can be held", () => {
     // The hands are the one place a *base* names its own mesh rather than
     // inheriting its slot's, so a mistyped look here is not a wrong colour, it
