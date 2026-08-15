@@ -624,6 +624,20 @@ describe("wardrobe asset", () => {
     expect(onChains / (weight.length / 4)).toBeGreaterThan(0.6);
   });
 
+  it("rides the sallet on the head bone alone", () => {
+    // It is the one authored piece here, so it is also the one with no surface to
+    // borrow a bind from: a helmet that took any spine weight would swim on the
+    // neck through every clip, and that is only visible in motion.
+    const joints = json.skins[0]!.joints.map((j) => json.nodes[j]!.name);
+    const { data: index } = attribute("helmet.plate.sallet", "JOINTS_0");
+    const { data: weight } = attribute("helmet.plate.sallet", "WEIGHTS_0");
+    const used = new Set<string>();
+    for (let k = 0; k < weight.length; k++) {
+      if (weight[k]! > 0) used.add(joints[index[k]!]!);
+    }
+    expect([...used]).toEqual(["Head"]);
+  });
+
   it("bends the offset shells exactly like the piece they cover", () => {
     // The gauntlets and the greaves are the bracer and the boot pushed out along
     // the limb's own radius (`build_over`), so they inherit that surface's

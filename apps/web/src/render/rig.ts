@@ -291,9 +291,9 @@ export function meshLook(look: string): string {
  * Shape is not something a texture can fix, and it is not this table's job: the
  * armoured body carries a generated coat (`body.ranger.coat`) so the silhouette
  * agrees with the art too. It is one shape for its whole slot, though, so what
- * still does not vary per base is the cut - only the colour. The helmet has no
- * such shape: a shell grown off the cowl's crown read as a swim cap, so a helmet
- * base recolours the cloth until one is modelled (`build_wardrobe.py`).
+ * still does not vary per base is the cut - only the colour. The helmet is a
+ * shape now too: an authored sallet, not the shell grown off the cowl's crown
+ * that read as a swim cap (`build_wardrobe.py`).
  *
  * Keys are item base ids. A base with no entry keeps the authored look, so an
  * unmapped base renders as green ranger gear rather than as nothing.
@@ -417,7 +417,9 @@ const LOOK_BY_BASE: Record<string, string> = {
   // derived from the one it covers (`build_over` / `build_tassets`), so what
   // separates them from the ranger gear underneath is bulk and a hard flat-shaded
   // edge, not a different cut - the palette bake does the rest. The helmet is
-  // still absent: a helmet base recolours the cowl.
+  // the exception: it is authored rather than derived, because it covers a head
+  // neither pack ships.
+  "base.cinder_cap": "plate",
   "base.ember_gauntlets": "plate",
   "base.ashen_treads": "plate",
   "base.cinderchain_sash": "plate",

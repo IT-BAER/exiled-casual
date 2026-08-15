@@ -368,6 +368,36 @@ SHELL_CLEAR = 0.006
 # How much of a vertex a region's bones must own before the shell covers it.
 SHELL_WEIGHT = 0.55
 
+# The sallet, and it is AUTHORED rather than derived - the one piece here that
+# is. Every other generated part covers something the packs already model, and a
+# helmet covers a head neither pack ships: growing one off the cowl's crown is
+# what `build_helm` did, and a smooth dome in the icon's palette sitting on cloth
+# read as a swim cap. What separates iron from cloth at ten pixels a head is a
+# hard horizontal break, so the shape is two shells with a gap between them - a
+# faceted crown, a band under it, and daylight across the eyes.
+#
+# Around the head's own centre (`HELM_C`), which is measured on the cut head, and
+# an ellipse rather than a circle because a skull is deeper than it is wide.
+SALLET_SEG = 10
+# The crown, as (z, half-width, half-depth). Stops short of a point: an apex is a
+# hood, and the last ring capped flat is the strike face a helmet actually has.
+SALLET_CROWN = [
+    (1.748, 0.129, 0.152), (1.800, 0.122, 0.143),
+    (1.848, 0.101, 0.117), (1.880, 0.055, 0.064),
+]
+# The band, from just under the crown down to the brow. Its bottom edge drops and
+# its depth grows towards the BACK, which is the sallet's tail - the one profile
+# cue that survives a silhouette, and the reason this is not a bucket.
+SALLET_BAND_TOP, SALLET_BAND_R = 1.734, (0.133, 0.157)
+SALLET_BAND_BOTTOM, SALLET_TAIL_DROP = 1.700, 0.062
+SALLET_TAIL_SWELL = 0.22
+# The brim over the eyes, on the front half only, flaring straight out of the
+# band's top so it catches the sun as a line rather than as a fatter helmet.
+SALLET_BRIM = 0.013
+# Both shells get a real inner surface, so the slit between them has thickness
+# and the camera never looks into an open tube from above.
+SALLET_INNER = 0.93
+
 # The coat hangs off a ring of two-joint chains rather than off the legs. Riding
 # the thighs was the first attempt and it looks wrong for a good reason: a thigh
 # rotation is rigid about the hip, so the hem sweeps a wide arc exactly in phase
@@ -1200,6 +1230,136 @@ def build_tassets(armature, coat, look):
     return obj
 
 
+def sallet_point(theta, z, rx, ry):
+    """A point on a ring around the head's own axis. Theta 0 is the face."""
+    c = Vector(HELM_C)
+    return Vector((c.x + math.sin(theta) * rx, c.y + math.cos(theta) * ry, z))
+
+
+def loft(rings, seg, flip=False):
+    """Quads between `rings` consecutive rings of `seg` points, wound either way."""
+    faces = []
+    for r in range(rings - 1):
+        for s in range(seg):
+            n = (s + 1) % seg
+            top, bottom = r * seg, (r + 1) * seg
+            face = (top + s, top + n, bottom + n, bottom + s)
+            faces.append(face[::-1] if flip else face)
+    return faces
+
+
+def build_sallet(armature, head, material):
+    """A faceted sallet: a crown, a band, and a slit of daylight between them.
+
+    Authored, not grown off the cowl. A shell pushed out of the hood's crown is a
+    smooth dome sitting on cloth and reads as a swim cap however it is painted -
+    what says iron at ten pixels a head is a hard horizontal break and a tail, so
+    the break is real geometry with a gap in it rather than a shading trick.
+
+    Weighted wholly to `Head` and pinned to the bright texel `HELM_UV`, which is
+    what puts it at the light end of a helmet base's own palette ramp while the
+    cloth under it lands in the same icon's charcoal.
+    """
+    verts, faces = [], []
+
+    def shell(rings, cap):
+        """One closed piece: outer surface, inner surface, and the rims between."""
+        base = len(verts)
+        for scale in (1.0, SALLET_INNER):
+            for z, rx, ry in rings:
+                for s in range(SALLET_SEG):
+                    theta = 2.0 * math.pi * s / SALLET_SEG
+                    verts.append(sallet_point(theta, z, rx * scale, ry * scale))
+        span = len(rings) * SALLET_SEG
+        for face in loft(len(rings), SALLET_SEG):
+            faces.append(tuple(base + i for i in face))
+        for face in loft(len(rings), SALLET_SEG, flip=True):
+            faces.append(tuple(base + span + i for i in face))
+        # The rims. The crown is closed over the top instead, or the camera looks
+        # straight down a pipe from the play angle.
+        edges = ((0, True),) if cap else ((0, True), (len(rings) - 1, False))
+        for r, flip in edges:
+            for s in range(SALLET_SEG):
+                n = (s + 1) % SALLET_SEG
+                outer, inner = base + r * SALLET_SEG, base + span + r * SALLET_SEG
+                face = (outer + s, outer + n, inner + n, inner + s)
+                faces.append(face[::-1] if flip else face)
+        if cap:
+            top = base + (len(rings) - 1) * SALLET_SEG
+            faces.append(tuple(top + s for s in range(SALLET_SEG))[::-1])
+
+    shell(SALLET_CROWN, cap=True)
+
+    # The band, ring by angle rather than by height: the tail is what makes this a
+    # sallet and not a bucket, so its bottom edge drops and its depth swells
+    # towards the back, while the front gets the brim instead.
+    rx, ry = SALLET_BAND_R
+    base = len(verts)
+    for scale in (1.0, SALLET_INNER):
+        for lower in (False, True):
+            for s in range(SALLET_SEG):
+                theta = 2.0 * math.pi * s / SALLET_SEG
+                back = (1.0 - math.cos(theta)) * 0.5
+                if lower:
+                    z = SALLET_BAND_BOTTOM - SALLET_TAIL_DROP * back
+                    swell = 1.0 + SALLET_TAIL_SWELL * back
+                    verts.append(sallet_point(theta, z, rx * swell * scale, ry * swell * scale))
+                else:
+                    brim = SALLET_BRIM * (1.0 - back)
+                    verts.append(sallet_point(theta, SALLET_BAND_TOP,
+                                              (rx + brim) * scale, (ry + brim) * scale))
+    span = 2 * SALLET_SEG
+    for face in loft(2, SALLET_SEG):
+        faces.append(tuple(base + i for i in face))
+    for face in loft(2, SALLET_SEG, flip=True):
+        faces.append(tuple(base + span + i for i in face))
+    for r, flip in ((0, True), (1, False)):
+        for s in range(SALLET_SEG):
+            n = (s + 1) % SALLET_SEG
+            outer, inner = base + r * SALLET_SEG, base + span + r * SALLET_SEG
+            face = (outer + s, outer + n, inner + n, inner + s)
+            faces.append(face[::-1] if flip else face)
+
+    name = "helmet.plate.sallet"
+    mesh = bpy.data.meshes.new(name)
+    mesh.from_pydata(verts, [], faces)
+    mesh.update()
+    mesh.materials.append(material)
+    obj = bpy.data.objects.new(name, mesh)
+    bpy.context.scene.collection.objects.link(obj)
+
+    uvs = mesh.uv_layers.new(name="UVMap")
+    for loop in uvs.data:
+        loop.uv = HELM_UV
+    for poly in mesh.polygons:
+        poly.use_smooth = False
+    obj.vertex_groups.new(name="Head").add(
+        [v.index for v in mesh.vertices], 1.0, "REPLACE")
+
+    # It has to contain the head, and the head is the mesh that was cut out of the
+    # base male rather than a number: a helmet the skull comes through is not a
+    # look choice, it is a face in a bucket.
+    inside = [p for p in (v.co for v in head.data.vertices) if p.z >= SALLET_BAND_TOP]
+    if not inside:
+        raise SystemExit(f"sallet: the head has nothing above z {SALLET_BAND_TOP:.3f}")
+    worst = None
+    for p in inside:
+        d = p - Vector(HELM_C)
+        k = max(abs(d.x) / SALLET_BAND_R[0], abs(d.y) / SALLET_BAND_R[1])
+        if worst is None or k > worst[0]:
+            worst = (k, p.copy())
+    if worst[0] > 1.0:
+        raise SystemExit(f"sallet: the skull reaches {worst[0]:.2f} of the band's "
+                         f"own radius at z {worst[1].z:.3f} - it comes through the iron")
+
+    rebind(obj, armature)
+    log(f"built sallet: {len(mesh.vertices)}v, {len(mesh.polygons)} faces, "
+        f"crown to z {SALLET_CROWN[-1][0]:.3f}, tail to "
+        f"{SALLET_BAND_BOTTOM - SALLET_TAIL_DROP:.3f}, skull at "
+        f"{worst[0] * 100:.0f}% of the band, flat-shaded")
+    return obj
+
+
 def bone_axis(armature, name):
     """A bone's rest segment, or None for a group that names no bone."""
     bone = armature.data.bones.get(name)
@@ -1694,6 +1854,10 @@ def main():
     # replace the ranger's knee-high boot with a shoe, and the shin under it is
     # bare mesh the boot was always covering. The plate boot is the whole boot.
     generated.add(build_tassets(armature, coats["plate"], "plate").name)
+    generated.add(build_sallet(
+        armature, bpy.data.objects["base.head.head"],
+        bpy.data.objects["Male_Ranger_Head_Hood"].data.materials[0],
+    ).name)
     generated.add(build_over(
         "gloves.plate.gauntlets", bpy.data.objects["Male_Ranger_Arms_Bracer"],
         armature, None,
@@ -1702,12 +1866,9 @@ def main():
         "boots.plate.greaves", bpy.data.objects["Male_Ranger_Feet_Boots"],
         armature, None,
     ).name)
-    # No generated helm. A shell grown out of the cowl's crown is a smooth dome
-    # in the icon's palette sitting on cloth, which reads as a swim cap and not
-    # as the riveted iron every helmet base is drawn with. Until a helmet is
-    # modelled, a helmet base recolours the cowl and nothing else: cloth that is
-    # the wrong story beats iron that is the wrong object. `build_helm` and its
-    # constants are kept for whoever models that shell.
+    # `build_helm` and its constants stay uncalled: growing the shell out of the
+    # cowl's crown is the version of this that read as a swim cap, and
+    # `build_sallet` above is the authored answer to it.
 
     # Held gear shares the hood's material, so the whole character is still two
     # draw setups and a weapon can be re-palettized by `build_gear_textures.py`
