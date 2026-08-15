@@ -340,64 +340,6 @@ CUIRASS_INNER = 0.94
 # armour look is a whole character rather than a floating skirt.
 BODY_BASE_PARTS = ("torso", "legs", "sleeves", "hands")
 
-# Plate's hip panels. They hang OUTSIDE the coat and borrow the coat's own
-# weights, so they ride the skirt chains: weighted to the pelvis instead they
-# would be a rigid slab standing still inside a swinging coat, and the cloth
-# would pass through them every stride.
-#
-# Radius comes from the plate coat's profile at each height plus a clearance, for
-# the reason the cuirass derives its rings from the torso - a panel authored at a
-# fixed radius sinks into the cloth the moment that profile is retuned.
-TASSET_Z = (1.020, 0.930, 0.830, 0.720)
-TASSET_CLEAR = 0.016
-# Eight panels of three coat columns each, with one column of daylight between
-# them. Separate panels are the whole point: a continuous band at this height is
-# a second skirt, and it is the vertical gaps that say plate.
-TASSET_PANELS = 8
-TASSET_COLUMNS = 3
-# Panel thickness, as a fraction of its radius pulled back towards the body.
-TASSET_INNER = 0.955
-
-# The offset shells: gauntlets over the hands, sabatons over the boots. Both are
-# the covered surface itself pushed out along its own normals, which is the one
-# construction that cannot clip what it covers and needs no uvs or weights of its
-# own - it inherits the exact ones the surface under it already had, so it bends
-# at the knuckle and the ankle for free. A generated box around a hand in an
-# A-pose does neither.
-SHELL_CLEAR = 0.006
-# How much of a vertex a region's bones must own before the shell covers it.
-SHELL_WEIGHT = 0.55
-
-# The sallet, and it is AUTHORED rather than derived - the one piece here that
-# is. Every other generated part covers something the packs already model, and a
-# helmet covers a head neither pack ships: growing one off the cowl's crown is
-# what `build_helm` did, and a smooth dome in the icon's palette sitting on cloth
-# read as a swim cap. What separates iron from cloth at ten pixels a head is a
-# hard horizontal break, so the shape is two shells with a gap between them - a
-# faceted crown, a band under it, and daylight across the eyes.
-#
-# Around the head's own centre (`HELM_C`), which is measured on the cut head, and
-# an ellipse rather than a circle because a skull is deeper than it is wide.
-SALLET_SEG = 10
-# The crown, as (z, half-width, half-depth). Stops short of a point: an apex is a
-# hood, and the last ring capped flat is the strike face a helmet actually has.
-SALLET_CROWN = [
-    (1.748, 0.129, 0.152), (1.800, 0.122, 0.143),
-    (1.848, 0.101, 0.117), (1.880, 0.055, 0.064),
-]
-# The band, from just under the crown down to the brow. Its bottom edge drops and
-# its depth grows towards the BACK, which is the sallet's tail - the one profile
-# cue that survives a silhouette, and the reason this is not a bucket.
-SALLET_BAND_TOP, SALLET_BAND_R = 1.734, (0.133, 0.157)
-SALLET_BAND_BOTTOM, SALLET_TAIL_DROP = 1.700, 0.062
-SALLET_TAIL_SWELL = 0.22
-# The brim over the eyes, on the front half only, flaring straight out of the
-# band's top so it catches the sun as a line rather than as a fatter helmet.
-SALLET_BRIM = 0.013
-# Both shells get a real inner surface, so the slit between them has thickness
-# and the camera never looks into an open tube from above.
-SALLET_INNER = 0.93
-
 # The coat hangs off a ring of two-joint chains rather than off the legs. Riding
 # the thighs was the first attempt and it looks wrong for a good reason: a thigh
 # rotation is rigid about the hip, so the hem sweeps a wide arc exactly in phase
@@ -1111,385 +1053,6 @@ def torso_uvs(torso):
     return list(seen.values())
 
 
-def copy_bind_from(obj, source):
-    """Give a generated shell the weights and uvs of the mesh it covers.
-
-    Nearest source vertex, per shell vertex. Authoring either by hand is the
-    trap: the atlas is a packed character sheet, so any uv box big enough for a
-    plate also clips a boot buckle into it, and a shell weighted to one bone
-    shears at the joint the body under it bends at. Borrowing makes the shell
-    follow the surface exactly, through every clip, for free.
-    """
-    samples = [(v.co.copy(), [(g.group, g.weight) for g in v.groups])
-               for v in source.data.vertices]
-    group_name = {g.index: g.name for g in source.vertex_groups}
-    uv_layer = source.data.uv_layers[0].data
-    uv_of = {}
-    for poly in source.data.polygons:
-        for li in poly.loop_indices:
-            uv_of.setdefault(source.data.loops[li].vertex_index, tuple(uv_layer[li].uv))
-
-    mesh = obj.data
-    groups = {}
-    uvs = mesh.uv_layers.new(name="UVMap")
-    per_vertex = []
-    for v in mesh.vertices:
-        index = min(range(len(samples)),
-                    key=lambda i: (samples[i][0] - v.co).length_squared)
-        for gi, weight in samples[index][1]:
-            name_ = group_name[gi]
-            group = groups.get(name_) or groups.setdefault(name_, obj.vertex_groups.new(name=name_))
-            group.add([v.index], weight, "REPLACE")
-        per_vertex.append(uv_of.get(index, (0.0, 0.0)))
-    for loop in mesh.loops:
-        uvs.data[loop.index].uv = per_vertex[loop.vertex_index]
-
-
-def profile_radius(look, z):
-    """This body look's coat radius at a height, interpolated between its rings."""
-    rings = sorted(list(BODY_LOOKS[look]["rings"]) + list(BODY_LOOKS[look]["hem"]))
-    if z <= rings[0][0]:
-        return rings[0][1]
-    if z >= rings[-1][0]:
-        return rings[-1][1]
-    for (z0, r0), (z1, r1) in zip(rings, rings[1:]):
-        if z0 <= z <= z1:
-            return r0 + (r1 - r0) * (z - z0) / (z1 - z0)
-    raise SystemExit(f"profile_radius: z {z:.3f} fell through {look}'s rings")
-
-
-def build_tassets(armature, coat, look):
-    """Hip panels over the coat, riding the coat's own chains.
-
-    Built as separate panels rather than one band, because the vertical gaps are
-    the read: a continuous ring at hip height is a second skirt whatever colour it
-    is painted. Radius is the coat's profile plus a clearance, so retuning that
-    profile moves the plate with it instead of burying it.
-    """
-    profile = BODY_LOOKS[look]
-    cy, depth = profile["cy"], profile["depth"]
-    step = COAT_SEG // TASSET_PANELS
-    if step <= TASSET_COLUMNS:
-        raise SystemExit(f"tassets: {TASSET_PANELS} panels of {TASSET_COLUMNS} "
-                         f"columns leave no gap in {COAT_SEG}")
-
-    verts, faces = [], []
-    for panel in range(TASSET_PANELS):
-        base = len(verts)
-        columns = [panel * step + c for c in range(TASSET_COLUMNS + 1)]
-        for scale in (1.0, TASSET_INNER):
-            for z in TASSET_Z:
-                radius = (profile_radius(look, z) + TASSET_CLEAR) * scale
-                for column in columns:
-                    theta = 2.0 * math.pi * column / COAT_SEG
-                    verts.append(coat_point(theta, z, radius, cy, depth))
-        wide = len(columns)
-        span = len(TASSET_Z) * wide
-
-        def quads(offset, flip):
-            for r in range(len(TASSET_Z) - 1):
-                for c in range(wide - 1):
-                    top = base + offset + r * wide + c
-                    bottom = top + wide
-                    face = (top, top + 1, bottom + 1, bottom)
-                    faces.append(face[::-1] if flip else face)
-
-        quads(0, False)     # the face the camera sees
-        quads(span, True)   # its back, wound the other way
-        # The four rims that close the two sheets into a plate with an edge.
-        for r, flip in ((0, True), (len(TASSET_Z) - 1, False)):
-            for c in range(wide - 1):
-                outer, inner = base + r * wide, base + span + r * wide
-                face = (outer + c, outer + c + 1, inner + c + 1, inner + c)
-                faces.append(face[::-1] if flip else face)
-        for c, flip in ((0, False), (wide - 1, True)):
-            for r in range(len(TASSET_Z) - 1):
-                outer, inner = base + c, base + span + c
-                face = (outer + r * wide, outer + (r + 1) * wide,
-                        inner + (r + 1) * wide, inner + r * wide)
-                faces.append(face[::-1] if flip else face)
-
-    name = f"belt.{look}.tassets"
-    mesh = bpy.data.meshes.new(name)
-    mesh.from_pydata(verts, [], faces)
-    mesh.update()
-    mesh.materials.append(coat.data.materials[0])
-    obj = bpy.data.objects.new(name, mesh)
-    bpy.context.scene.collection.objects.link(obj)
-
-    copy_bind_from(obj, coat)
-    rebind(obj, armature)
-
-    chains = sorted({g.name for g in obj.vertex_groups if g.name.startswith("skirt_")})
-    if not chains:
-        raise SystemExit("tassets: took no skirt weight from the coat, so they are "
-                         "a rigid slab inside swinging cloth")
-    log(f"built {look} tassets: {TASSET_PANELS} panels, {len(mesh.vertices)}v, "
-        f"{len(mesh.polygons)} faces, z {TASSET_Z[0]:.3f}..{TASSET_Z[-1]:.3f}, "
-        f"on {len(chains)} skirt chains")
-    return obj
-
-
-def sallet_point(theta, z, rx, ry):
-    """A point on a ring around the head's own axis. Theta 0 is the face."""
-    c = Vector(HELM_C)
-    return Vector((c.x + math.sin(theta) * rx, c.y + math.cos(theta) * ry, z))
-
-
-def loft(rings, seg, flip=False):
-    """Quads between `rings` consecutive rings of `seg` points, wound either way."""
-    faces = []
-    for r in range(rings - 1):
-        for s in range(seg):
-            n = (s + 1) % seg
-            top, bottom = r * seg, (r + 1) * seg
-            face = (top + s, top + n, bottom + n, bottom + s)
-            faces.append(face[::-1] if flip else face)
-    return faces
-
-
-def build_sallet(armature, head, material):
-    """A faceted sallet: a crown, a band, and a slit of daylight between them.
-
-    Authored, not grown off the cowl. A shell pushed out of the hood's crown is a
-    smooth dome sitting on cloth and reads as a swim cap however it is painted -
-    what says iron at ten pixels a head is a hard horizontal break and a tail, so
-    the break is real geometry with a gap in it rather than a shading trick.
-
-    Weighted wholly to `Head` and pinned to the bright texel `HELM_UV`, which is
-    what puts it at the light end of a helmet base's own palette ramp while the
-    cloth under it lands in the same icon's charcoal.
-    """
-    verts, faces = [], []
-
-    def shell(rings, cap):
-        """One closed piece: outer surface, inner surface, and the rims between."""
-        base = len(verts)
-        for scale in (1.0, SALLET_INNER):
-            for z, rx, ry in rings:
-                for s in range(SALLET_SEG):
-                    theta = 2.0 * math.pi * s / SALLET_SEG
-                    verts.append(sallet_point(theta, z, rx * scale, ry * scale))
-        span = len(rings) * SALLET_SEG
-        for face in loft(len(rings), SALLET_SEG):
-            faces.append(tuple(base + i for i in face))
-        for face in loft(len(rings), SALLET_SEG, flip=True):
-            faces.append(tuple(base + span + i for i in face))
-        # The rims. The crown is closed over the top instead, or the camera looks
-        # straight down a pipe from the play angle.
-        edges = ((0, True),) if cap else ((0, True), (len(rings) - 1, False))
-        for r, flip in edges:
-            for s in range(SALLET_SEG):
-                n = (s + 1) % SALLET_SEG
-                outer, inner = base + r * SALLET_SEG, base + span + r * SALLET_SEG
-                face = (outer + s, outer + n, inner + n, inner + s)
-                faces.append(face[::-1] if flip else face)
-        if cap:
-            top = base + (len(rings) - 1) * SALLET_SEG
-            faces.append(tuple(top + s for s in range(SALLET_SEG))[::-1])
-
-    shell(SALLET_CROWN, cap=True)
-
-    # The band, ring by angle rather than by height: the tail is what makes this a
-    # sallet and not a bucket, so its bottom edge drops and its depth swells
-    # towards the back, while the front gets the brim instead.
-    rx, ry = SALLET_BAND_R
-    base = len(verts)
-    for scale in (1.0, SALLET_INNER):
-        for lower in (False, True):
-            for s in range(SALLET_SEG):
-                theta = 2.0 * math.pi * s / SALLET_SEG
-                back = (1.0 - math.cos(theta)) * 0.5
-                if lower:
-                    z = SALLET_BAND_BOTTOM - SALLET_TAIL_DROP * back
-                    swell = 1.0 + SALLET_TAIL_SWELL * back
-                    verts.append(sallet_point(theta, z, rx * swell * scale, ry * swell * scale))
-                else:
-                    brim = SALLET_BRIM * (1.0 - back)
-                    verts.append(sallet_point(theta, SALLET_BAND_TOP,
-                                              (rx + brim) * scale, (ry + brim) * scale))
-    span = 2 * SALLET_SEG
-    for face in loft(2, SALLET_SEG):
-        faces.append(tuple(base + i for i in face))
-    for face in loft(2, SALLET_SEG, flip=True):
-        faces.append(tuple(base + span + i for i in face))
-    for r, flip in ((0, True), (1, False)):
-        for s in range(SALLET_SEG):
-            n = (s + 1) % SALLET_SEG
-            outer, inner = base + r * SALLET_SEG, base + span + r * SALLET_SEG
-            face = (outer + s, outer + n, inner + n, inner + s)
-            faces.append(face[::-1] if flip else face)
-
-    name = "helmet.plate.sallet"
-    mesh = bpy.data.meshes.new(name)
-    mesh.from_pydata(verts, [], faces)
-    mesh.update()
-    mesh.materials.append(material)
-    obj = bpy.data.objects.new(name, mesh)
-    bpy.context.scene.collection.objects.link(obj)
-
-    uvs = mesh.uv_layers.new(name="UVMap")
-    for loop in uvs.data:
-        loop.uv = HELM_UV
-    for poly in mesh.polygons:
-        poly.use_smooth = False
-    obj.vertex_groups.new(name="Head").add(
-        [v.index for v in mesh.vertices], 1.0, "REPLACE")
-
-    # It has to contain the head, and the head is the mesh that was cut out of the
-    # base male rather than a number: a helmet the skull comes through is not a
-    # look choice, it is a face in a bucket.
-    inside = [p for p in (v.co for v in head.data.vertices) if p.z >= SALLET_BAND_TOP]
-    if not inside:
-        raise SystemExit(f"sallet: the head has nothing above z {SALLET_BAND_TOP:.3f}")
-    worst = None
-    for p in inside:
-        d = p - Vector(HELM_C)
-        k = max(abs(d.x) / SALLET_BAND_R[0], abs(d.y) / SALLET_BAND_R[1])
-        if worst is None or k > worst[0]:
-            worst = (k, p.copy())
-    if worst[0] > 1.0:
-        raise SystemExit(f"sallet: the skull reaches {worst[0]:.2f} of the band's "
-                         f"own radius at z {worst[1].z:.3f} - it comes through the iron")
-
-    rebind(obj, armature)
-    log(f"built sallet: {len(mesh.vertices)}v, {len(mesh.polygons)} faces, "
-        f"crown to z {SALLET_CROWN[-1][0]:.3f}, tail to "
-        f"{SALLET_BAND_BOTTOM - SALLET_TAIL_DROP:.3f}, skull at "
-        f"{worst[0] * 100:.0f}% of the band, flat-shaded")
-    return obj
-
-
-def bone_axis(armature, name):
-    """A bone's rest segment, or None for a group that names no bone."""
-    bone = armature.data.bones.get(name)
-    return None if bone is None else (bone.head_local.copy(), bone.tail_local.copy())
-
-
-def shell_direction(point, normal, axis):
-    """Which way is out, for a plate over a limb.
-
-    Radially off the bone's own segment, falling back to the surface normal where
-    there is no radius to speak of: past the end of the last joint, at a toe cap
-    or a fingertip, every direction is along the axis and the normal is all that
-    is left.
-    """
-    if axis is None:
-        return normal.copy()
-    head, tail = axis
-    span = tail - head
-    length = span.length_squared
-    t = 0.0 if length < 1e-12 else max(0.0, min(1.0, (point - head).dot(span) / length))
-    radial = point - (head + span * t)
-    return radial.normalized() if radial.length > 1e-4 else normal.copy()
-
-
-def build_over(name, source, armature, bones, extra=None):
-    """A shell copied off the surface it covers and pushed out along its normals.
-
-    The one construction that cannot clip what it covers: every point of it starts
-    on the surface and moves away from it, and it inherits that surface's uvs and
-    weights exactly rather than by nearest match, so it bends at the same knuckle
-    and the same ankle. A box authored around a hand in an A-pose does neither.
-
-    `bones` names the region: a vertex is covered when those groups own at least
-    `SHELL_WEIGHT` of it between them, which follows the joint rather than a plane
-    through it - a foot does not meet an ankle at one height. `None` covers the
-    whole source, for a mesh that is already only the region.
-
-    Measured on this wardrobe, not assumed: the ranger's "skin" arms carry weight
-    on the finger bones ALONE (no `hand_*` at all), so they are fingers and not
-    hands, and a shell over splayed fingers folds into the gaps between them - the
-    clearance check below is what caught that. His bracer is the forearm piece
-    that slot actually shows, so the gauntlet is a bulkier one.
-    """
-    obj = source.copy()
-    obj.data = source.data.copy()
-    obj.name = obj.data.name = name
-    bpy.context.scene.collection.objects.link(obj)
-    mesh = obj.data
-
-    if bones is None:
-        keep = {v.index for v in mesh.vertices if extra is None or extra(v.co)}
-    else:
-        wanted = {g.index for g in obj.vertex_groups if g.name in bones}
-        if len(wanted) != len(bones):
-            raise SystemExit(f"{name}: {source.name} has no groups for "
-                             f"{sorted(set(bones) - {g.name for g in obj.vertex_groups})}")
-        keep = set()
-        for v in mesh.vertices:
-            share = sum(g.weight for g in v.groups if g.group in wanted)
-            if share >= SHELL_WEIGHT and (extra is None or extra(v.co)):
-                keep.add(v.index)
-
-    bm = bmesh.new()
-    bm.from_mesh(mesh)
-    bm.verts.ensure_lookup_table()
-    gone = [f for f in bm.faces if any(v.index not in keep for v in f.verts)]
-    bmesh.ops.delete(bm, geom=gone, context="FACES")
-    if not bm.faces:
-        raise SystemExit(f"{name}: the region covered no faces of {source.name}")
-    # A vertex with no face left has no normal either, so it would stay exactly on
-    # the surface and report a zero clearance for the whole shell.
-    loose = [v for v in bm.verts if not v.link_faces]
-    if loose:
-        bmesh.ops.delete(bm, geom=loose, context="VERTS")
-    # Weld first, and this is the whole difference between a shell and a torn one.
-    # These packs split a vertex per hard edge - 1536 coincident groups in the
-    # bracer alone - and a split copy owns only the faces on ONE side of that
-    # edge, so its normal points along the surface rather than away from it.
-    # Offset unwelded, those points slide sideways INTO the mesh instead of off it
-    # and the sheet tears at every crease. Flat shading is what the shell wants
-    # anyway, so the split buys nothing here.
-    bmesh.ops.remove_doubles(bm, verts=bm.verts[:], dist=1e-5)
-    bm.verts.ensure_lookup_table()
-    bm.normal_update()
-    # Away from the LIMB, not along the vertex normal. These sources are closed
-    # solids, so a normal offset moves the far wall of the tube towards the bone
-    # instead of away from it: the hole shrinks by the clearance and the plate
-    # ends up inside the arm it is armouring. Pushing every point off the axis of
-    # the bone that owns it grows both walls outward, which is what a size up in
-    # armour is. Near an axis end - a fingertip, a toe cap - there is no radial
-    # direction left, and the normal is the honest one there.
-    before = [f.normal.copy() for f in bm.faces]
-    deform = bm.verts.layers.deform.active
-    axis_of = {g.index: bone_axis(armature, g.name) for g in obj.vertex_groups}
-    for v in bm.verts:
-        weights = v[deform].items() if deform else ()
-        best = max(weights, key=lambda kv: kv[1], default=(None, 0.0))[0]
-        v.co += shell_direction(v.co, v.normal, axis_of.get(best)) * SHELL_CLEAR
-
-    # The one thing a constant radial offset can still get wrong, and the check
-    # that caught it: across a narrow gap - between two fingers, under a strap -
-    # the two sides walk into each other and the surface folds through itself.
-    # A fold turns its faces inside out, so counting flipped normals sees it,
-    # while a distance to the source cannot: the shell of a thin-walled source
-    # correctly ends up millimetres from that source's far wall.
-    bm.normal_update()
-    folded = sum(1 for f, was in zip(bm.faces, before) if f.normal.dot(was) < 0.0)
-    if folded:
-        raise SystemExit(f"{name}: {folded} of {len(before)} faces turned inside out "
-                         f"offsetting {SHELL_CLEAR * 1000:.0f}mm off {source.name} - "
-                         f"the shell folds through itself in a gap that narrow")
-
-    # Deliberately NOT solidified. These sources are closed volumes already, and
-    # `bmesh.ops.solidify` gives its new inner shell no vertex groups at all: those
-    # points stay at the bind pose while the skinned ones move, so every face
-    # joining the two stretches into a metre-long spike the moment a clip runs.
-    # What is left open is the boot's own rim, which the leg stands in.
-    rim = sum(1 for e in bm.edges if len(e.link_faces) == 1)
-    bm.to_mesh(mesh)
-    bm.free()
-    mesh.update()
-    mesh.shade_flat()
-
-    rebind(obj, armature)
-    log(f"built {name}: {len(mesh.vertices)}v, {len(mesh.polygons)} faces, "
-        f"{SHELL_CLEAR * 1000:.0f}mm off {source.name} radially, no folds, "
-        f"{rim} open rim edges, flat-shaded")
-    return obj
-
-
 def build_cuirass(armature, torso, look):
     """A faceted breastplate over the cloned tunic, weighted like the tunic.
 
@@ -1501,10 +1064,17 @@ def build_cuirass(armature, torso, look):
     follow the body exactly, through every clip, for free.
     """
     cy = COAT_CY
-    samples = [v.co for v in torso.data.vertices]
+    samples = [(v.co.copy(), [(g.group, g.weight) for g in v.groups])
+               for v in torso.data.vertices]
+    group_name = {g.index: g.name for g in torso.vertex_groups}
+    uv_layer = torso.data.uv_layers[0].data
+    uv_of = {}
+    for poly in torso.data.polygons:
+        for li in poly.loop_indices:
+            uv_of.setdefault(torso.data.loops[li].vertex_index, tuple(uv_layer[li].uv))
 
     def ring_radius(z, swell):
-        near = [p for p in samples if abs(p.z - z) < 0.030]
+        near = [p for p, _ in samples if abs(p.z - z) < 0.030]
         if not near:
             raise SystemExit(f"cuirass: the torso has no vertices at z {z:.3f}")
         # Undo the ellipse, exactly as `assert_coat_clears` does: the shell has to
@@ -1548,7 +1118,20 @@ def build_cuirass(armature, torso, look):
     obj = bpy.data.objects.new(name, mesh)
     bpy.context.scene.collection.objects.link(obj)
 
-    copy_bind_from(obj, torso)
+    groups = {}
+    uvs = mesh.uv_layers.new(name="UVMap")
+    per_vertex = []
+    for v in mesh.vertices:
+        index = min(range(len(samples)),
+                    key=lambda i: (samples[i][0] - v.co).length_squared)
+        for gi, weight in samples[index][1]:
+            name_ = group_name[gi]
+            group = groups.get(name_) or groups.setdefault(name_, obj.vertex_groups.new(name=name_))
+            group.add([v.index], weight, "REPLACE")
+        per_vertex.append(uv_of.get(index, (0.0, 0.0)))
+    for loop in mesh.loops:
+        uvs.data[loop.index].uv = per_vertex[loop.vertex_index]
+
     rebind(obj, armature)
     log(f"built {look} cuirass: {len(mesh.vertices)}v, {len(mesh.polygons)} faces, "
         f"r {rings[0][1]:.3f}..{max(r for _, r in rings):.3f}, flat-shaded")
@@ -1834,41 +1417,21 @@ def main():
     covered = [ranger_body,
                bpy.data.objects["Male_Ranger_Legs"],
                bpy.data.objects["Male_Ranger_Feet_Boots"]]
-    coats = {}
     for look in BODY_LOOKS:
         assert_coat_clears(look, covered)
-        coats[look] = build_coat(armature, ranger_body, look)
-        generated.add(coats[look].name)
+        generated.add(build_coat(armature, ranger_body, look).name)
     # Plate alone: the ranger keeps the pack's own single cap, and a slim leather
     # jerkin with plate shoulders would be neither.
     for cap in build_pauldrons(armature, bpy.data.objects["Male_Ranger_Acc_Pauldron"],
                                "plate", PLATE_PAULDRON_SCALE):
         generated.add(cap.name)
     generated.add(build_cuirass(armature, ranger_body, "plate").name)
-    # The three slots plate had nothing of its own in. Each is derived from the
-    # piece it covers, so none of them can be the wrong size for a body that is
-    # later retuned: the tassets from the plate coat's profile, the gauntlets and
-    # the greaves from the bracer and boot surfaces themselves.
-    #
-    # A slot shows ONE look, so a foot-only sabaton is not an option: it would
-    # replace the ranger's knee-high boot with a shoe, and the shin under it is
-    # bare mesh the boot was always covering. The plate boot is the whole boot.
-    generated.add(build_tassets(armature, coats["plate"], "plate").name)
-    generated.add(build_sallet(
-        armature, bpy.data.objects["base.head.head"],
-        bpy.data.objects["Male_Ranger_Head_Hood"].data.materials[0],
-    ).name)
-    generated.add(build_over(
-        "gloves.plate.gauntlets", bpy.data.objects["Male_Ranger_Arms_Bracer"],
-        armature, None,
-    ).name)
-    generated.add(build_over(
-        "boots.plate.greaves", bpy.data.objects["Male_Ranger_Feet_Boots"],
-        armature, None,
-    ).name)
-    # `build_helm` and its constants stay uncalled: growing the shell out of the
-    # cowl's crown is the version of this that read as a swim cap, and
-    # `build_sallet` above is the authored answer to it.
+    # No generated helm. A shell grown out of the cowl's crown is a smooth dome
+    # in the icon's palette sitting on cloth, which reads as a swim cap and not
+    # as the riveted iron every helmet base is drawn with. Until a helmet is
+    # modelled, a helmet base recolours the cowl and nothing else: cloth that is
+    # the wrong story beats iron that is the wrong object. `build_helm` and its
+    # constants are kept for whoever models that shell.
 
     # Held gear shares the hood's material, so the whole character is still two
     # draw setups and a weapon can be re-palettized by `build_gear_textures.py`
