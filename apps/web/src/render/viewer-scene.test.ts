@@ -70,7 +70,7 @@ describe("opening outfit", () => {
   });
 
   it("leaves a slot the wardrobe has nothing for empty", () => {
-    expect(dressedFromVocabulary({ body: ["plate"] }).helmet).toBeNull();
+    expect(dressedFromVocabulary({ body: ["knight"] }).helmet).toBeNull();
   });
 
   it("picks looks that exist in that slot", () => {
@@ -96,19 +96,20 @@ describe("look vocabulary", () => {
   });
 
   it("finds the armour silhouettes the wardrobe was just given", () => {
+    // Six separately authored outfits, not one coat in three palettes.
     const bySlot = looksFromPartNames(PART_NAMES);
-    expect(bySlot.body).toContain("plate");
-    expect(bySlot.body).toContain("leather");
-    expect(bySlot.body).toContain("ranger");
+    for (const look of ["knight", "barbarian", "mage", "ranger", "rogue", "hooded"]) {
+      expect(bySlot.body, look).toContain(look);
+    }
   });
 
   it("keeps a look once however many parts carry it", () => {
-    const bySlot = looksFromPartNames(["body.plate.torso", "body.plate.coat", "body.ranger.torso"]);
-    expect(bySlot.body).toEqual(["plate", "ranger"]);
+    const bySlot = looksFromPartNames(["body.knight.torso", "body.knight.cape", "body.ranger.torso"]);
+    expect(bySlot.body).toEqual(["knight", "ranger"]);
   });
 
   it("ignores the head, which is not a swappable look", () => {
-    const bySlot = looksFromPartNames(["base.head.skull", "body.plate.torso"]);
+    const bySlot = looksFromPartNames(["base.head.face", "body.knight.torso"]);
     expect(bySlot.base).toBeUndefined();
   });
 });

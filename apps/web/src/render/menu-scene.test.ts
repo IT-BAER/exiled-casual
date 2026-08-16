@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { NullEngine, Scene } from "@babylonjs/core";
 import { CLASS_IDS } from "@exiled/rules";
 import { CLASSES } from "@exiled/content-runtime";
-import { COSMETIC_SLOTS, meshLook, resetPlayerRig } from "./rig";
+import { COSMETIC_SLOTS, looksForEquipment, meshLook, resetPlayerRig } from "./rig";
 import { floorScreenY, shadowReachScreenY } from "./menu-scene";
 import { looksForClass } from "../menu/class-looks";
 
@@ -65,12 +65,19 @@ describe("class looks", () => {
     expect(looks.boots).not.toBeNull();
   });
 
-  it("each class asks for its own body texture, or the three are one character", () => {
+  it("each class wears its own outfit, or the three are one character", () => {
+    // This used to check that each class carried its own `#base` palette onto a
+    // single shared coat. The wardrobe now ships six outfits, so the classes are
+    // told apart by GEOMETRY - which means the looks themselves must differ, and
+    // each must name the outfit its starting body base maps to.
     const bodies = CLASS_IDS.map((id) => looksForClass(id).body);
     expect(new Set(bodies).size).toBe(bodies.length);
-    // The look is `<mesh look>#<base id>`; the base id is what picks the palette.
     for (const [i, id] of CLASS_IDS.entries()) {
-      expect(bodies[i]).toBe(`${meshLook(bodies[i]!)}#${CLASSES[id]!.startingGear["body"]}`);
+      const fromBase = looksForEquipment({
+        body: { baseId: CLASSES[id]!.startingGear["body"] },
+      }).body;
+      expect(bodies[i], id).toBe(fromBase);
+      expect(meshLook(bodies[i]!)).toBe(bodies[i]);
     }
   });
 

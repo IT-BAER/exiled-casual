@@ -37,23 +37,23 @@ export type StrikeClip = "strikeA" | "strikeB";
 /** Alternated melee takes: two sword-derived slashes with opposite motion. */
 export const STRIKE_CLIPS: readonly StrikeClip[] = ["strikeA", "strikeB"];
 
-/** Clip names inside anim-library.glb — FBX2glTF prefixes every take with "Rig|". */
 /**
- * The cast is the pack's `Spell_Simple_Shoot` mirrored onto the right arm by
- * `tools/build_cast_mirror.py`: the original raises the LEFT hand, but the wand
- * skins to `hand_r` and `castPoint()` bends the bolt to that hand, so unmirrored
- * it throws from the empty hand.
+ * Clip names inside anim-library.glb, built by `tools/build_anim_library.py`.
+ *
+ * These are copies, not retargets: KayKit animates the same `Rig_Medium`
+ * skeleton `wardrobe.glb` is built on. That retired two offline fixups the old
+ * pack needed — a LEFT-handed spell mirrored onto the weapon arm, and one sword
+ * swing rolled and played backwards to fake a second take. The pack has a
+ * right-handed cast and 22 melee clips, so both strikes are authored swings
+ * with opposite motion.
  */
 export const CLIP_NAME: Record<RigClip, string> = {
-  idle: "Rig|Idle_Loop",
-  walk: "Rig|Walk_Loop",
-  run: "Rig|Jog_Fwd_Loop",
-  cast: "Rig|Spell_Simple_Shoot_R",
-  strikeA: "Rig|Sword_Attack",
-  // The pack ships one sword swing. The second take is that swing rolled onto a
-  // downward diagonal and played back to front by `tools/build_slash_variant.py`
-  // — a slash from the other side, not the pack's bare-fisted punch.
-  strikeB: "Rig|Sword_Attack_Down",
+  idle: "Idle_Loop",
+  walk: "Walk_Loop",
+  run: "Run_Loop",
+  cast: "Cast_Shoot",
+  strikeA: "Sword_Attack",
+  strikeB: "Sword_Attack_Down",
 };
 
 const CLIP_LOOPS: Record<RigClip, boolean> = {
@@ -279,49 +279,22 @@ export function meshLook(look: string): string {
 }
 
 /**
- * Armour texture per item base, baked by `tools/build_gear_textures.py`.
+ * Armour texture per item base. Deliberately empty on this wardrobe.
  *
- * The character wears one authored outfit and the item art is charred iron with
- * ember in the seams, so equipping an Emberweave Robe used to leave him in green
- * linen — the inventory and the world looked like two different games. New
- * geometry per base is out of reach, so the material is what changes: each base
- * gets the ranger atlas re-palettized to that icon's own colours, and only
- * `albedoTexture` is swapped at runtime.
+ * The old wardrobe had ONE authored outfit, so an equipped Emberweave Robe could
+ * only be told apart from plate by colour: `tools/build_gear_textures.py`
+ * re-palettized the ranger atlas to each base's inventory icon and the runtime
+ * swapped `albedoTexture`. That bake is a luminance -> icon-palette lookup made
+ * for the ranger atlas's own UV layout, and this wardrobe has no ranger atlas -
+ * it has six outfits, each with its own. Pasting the old bake onto KayKit UVs
+ * would smear it across foreign texture space.
  *
- * Shape is not something a texture can fix, and it is not this table's job: the
- * armoured body carries a generated coat (`body.ranger.coat`) so the silhouette
- * agrees with the art too. It is one shape for its whole slot, though, so what
- * still does not vary per base is the cut - only the colour. The helmet has no
- * such shape: a shell grown off the cowl's crown read as a swim cap, so a helmet
- * base recolours the cloth until one is modelled (`build_wardrobe.py`).
- *
- * Keys are item base ids. A base with no entry keeps the authored look, so an
- * unmapped base renders as green ranger gear rather than as nothing.
+ * So the difference between bases is now GEOMETRY, which is what it should have
+ * been: `LOOK_BY_BASE` sends plate to the knight, leather to the rogue and robes
+ * to the mage. The mechanism stays wired up for a future per-base bake against
+ * the new atlases; an empty table simply means no base swaps its texture.
  */
-const GEAR_TEXTURE: Record<string, string> = {
-  "base.cinder_cap": "/textures/gear/cinder_cap.png",
-  "base.emberweave_robe": "/textures/gear/emberweave_robe.png",
-  "base.ember_gauntlets": "/textures/gear/ember_gauntlets.png",
-  "base.ashen_treads": "/textures/gear/ashen_treads.png",
-  "base.cinderchain_sash": "/textures/gear/cinderchain_sash.png",
-  // The three class starter bodies. These are what make a class visible: the
-  // coat geometry is the same either way, so the base id picking a different
-  // palette is the ONLY thing separating an Ironsworn from an Emberbound on a
-  // wardrobe with one male rig and two looks per slot.
-  "base.ironsworn_plate": "/textures/gear/ironsworn_plate.png",
-  "base.stalker_leathers": "/textures/gear/stalker_leathers.png",
-  "base.emberbound_robe": "/textures/gear/emberbound_robe.png",
-  // The shields. Held gear samples one texel, and untextured that texel is the
-  // helm's bright grey, which renders the plate as a white slab. The bake is
-  // what gives each shield its own iron, leather and ember palette.
-  "base.ember_buckler": "/textures/gear/ember_buckler.png",
-  "base.ashwall_tower_shield": "/textures/gear/ashwall_tower_shield.png",
-  // The main hand and the stone beside it. The wand carries a projection of its
-  // own icon up the shaft (`rod_uv`) and the focus one pinned texel, so without
-  // an entry here the wand wears the clothing atlas stretched along it.
-  "base.emberwand": "/textures/gear/emberwand.png",
-  "base.ashen_focus": "/textures/gear/ashen_focus.png",
-};
+const GEAR_TEXTURE: Record<string, string> = {};
 
 /** Base ids the character has a baked armour texture for. Pinned by `rig.test.ts`. */
 export const GEAR_TEXTURE_BASES: readonly string[] = Object.keys(GEAR_TEXTURE);
@@ -336,7 +309,7 @@ export const GEAR_TEXTURE_BASES: readonly string[] = Object.keys(GEAR_TEXTURE);
  * would smear that bake across foreign texture space instead of recolouring
  * anything.
  */
-const DONOR_TEXTURED_LOOKS = new Set(["knight"]);
+const DONOR_TEXTURED_LOOKS = new Set<string>();
 
 /**
  * What the lab preview puts in each slot. The preview exists so the wardrobe can
@@ -380,77 +353,73 @@ export function previewItemFor(slot: CosmeticSlot): { baseId: string } {
  */
 
 /**
- * What the character wears with the slot empty. Body and boots are never bare:
- * an unequipped character is a commoner in shirt and shoes, the way PoE2 starts
- * you clothed rather than naked.
+ * What the character wears with the slot empty. Body, arms and legs are never
+ * bare: an unequipped character is a ranger in leathers, the way PoE2 starts you
+ * clothed rather than naked. The ranger is the plainest of the six outfits.
  */
 const UNEQUIPPED: Looks = {
   weapon1: null, weapon2: null,
-  helmet: null, body: "commoner", gloves: null, boots: "commoner", belt: null,
+  helmet: null, body: "ranger", gloves: "ranger", boots: "ranger", belt: null,
 };
 
 /**
- * What the character wears with *something* in the slot. Deliberately one look
- * per slot rather than a per-base table: with a single armoured set authored so
- * far, mapping every base onto it means any new item is visible the day it is
- * added instead of silently rendering as commoner cloth.
+ * What the character wears with *something* in the slot whose base has no look
+ * of its own. Armoured by default, so a base added tomorrow is visible the day
+ * it is added instead of silently rendering as the unequipped outfit.
+ *
+ * `belt` is null because KayKit models no belt as a separate piece - every
+ * outfit's belt is painted into its torso. The slot stays in `CosmeticSlot` so
+ * the paper-doll and the item tables do not have to change shape.
  */
 const EQUIPPED: Looks = {
-  weapon1: "wand", weapon2: "focus",
-  helmet: "hood", body: "ranger", gloves: "bracers", boots: "ranger", belt: "ranger",
+  weapon1: "sword", weapon2: "buckler",
+  helmet: "knight", body: "knight", gloves: "knight", boots: "knight", belt: null,
 };
 
 /**
- * Bases whose geometry is not their slot's default one.
+ * Bases whose look is not their slot's default one.
  *
- * The armour slots get away with a single look each because a robe and a plate
- * are both a coat; a hand does not, because the off hand holds either a floating
- * orb or a slab of iron and picking the wrong one is not a wrong colour, it is
- * the wrong object. So the hands are the one place a base names its own mesh,
- * and everything absent here keeps `EQUIPPED`'s default.
+ * This table is the whole reason the wardrobe swap was worth doing. It used to
+ * hold two body looks and two shields, because there was one authored outfit
+ * and everything else was that outfit re-palettized. Now every entry names a
+ * separately authored KayKit outfit or weapon, so an Ironsworn and an Emberbound
+ * differ in SHAPE, not in tint.
  *
- * One mesh per shield, not one shared plate: a buckler and a tower shield are
- * different objects in the icons and at arm's length, and the palette bake alone
- * could only make one shape two colours. Both are modelled where they sit on a
- * standing character (`tools/build_wardrobe.py`), so the hold is the same and the
- * silhouette is not.
+ * A base absent here keeps `EQUIPPED`'s default for its slot.
  */
 const LOOK_BY_BASE: Record<string, string> = {
+  // Held gear. The off hand is the clearest case for a per-base mesh: a buckler
+  // and a tower shield are different objects in the icons and at arm's length,
+  // and no palette could make one shape read as both.
   "base.ember_buckler": "buckler",
   "base.ashwall_tower_shield": "tower",
-  // Body bases whose silhouette is their own, not the generic coat: the plate is
-  // bulkier and stops at tassets, the leather is a slim knee-length cut (both
-  // `body.<look>.coat` in `build_wardrobe.py`). A base with no entry here still
-  // wears `EQUIPPED.body` (the ranger coat), so the robe classes are unchanged
-  // until that floor-length look lands.
-  "base.ironsworn_plate": "plate",
-  "base.stalker_leathers": "leather",
-  // Harvested real geometry, not a re-palette: a riveted salet
-  // (`helmet.knight.helm`) and vambrace/gauntlet/greave/sabaton pieces
-  // (`gloves.knight.part`, `boots.knight.part`), all rigid to the limb bones
-  // they cover. Keeps its own donor UVs and textures - see
-  // `DONOR_TEXTURED_LOOKS`, which keeps `GEAR_TEXTURE`'s ranger-atlas bake off
-  // it, or the swap would smear that bake across foreign UV space.
+  "base.emberwand": "wand",
+  "base.ashen_focus": "focus",
+  // Armour. With six outfits on one rig, a base's silhouette is now a lookup
+  // rather than a re-palette of one coat: plate is the knight, leather is the
+  // rogue, robes are the mage. Arms and legs come with their outfit, so a plate
+  // gauntlet base names the knight look and gets the whole plated sleeve.
+  "base.ironsworn_plate": "knight",
+  "base.stalker_leathers": "rogue",
+  "base.emberbound_robe": "mage",
+  "base.emberweave_robe": "mage",
   "base.cinder_cap": "knight",
   "base.ember_gauntlets": "knight",
   "base.ashen_treads": "knight",
 };
 
+
 const HEAD_PREFIX = "base.head.";
 
-/** The part of a look that the cloth solver drives, if the look has one. */
-const COAT_PART = ".coat";
+/** The part of a look the cloth solver would drive, if this rig had chains. */
+const COAT_PART = ".cape";
 
-/**
- * The hair cap, which is the one head part a helmet really does replace.
- *
- * The rest of the head stays on under a helmet. The wardrobe's only helmet look
- * is the ranger's hood, and that hood is an open-faced cowl, not a closed shape:
- * hiding the whole head under it left the character looking out of an empty
- * hood. Hair is different — it sits proud of the skull and would push through
- * the cowl — so it is the only part that comes off.
+/*
+ * There used to be a `HAIR_PART` here, hidden whenever a helmet went on: the
+ * old wardrobe's only helmet was an open cowl and a generated hair cap pushed
+ * straight through it. KayKit models headgear as closed shapes that sit OVER a
+ * head and ships no separate hair, so the head is simply always on.
  */
-const HAIR_PART = `${HEAD_PREFIX}hair`;
 
 /**
  * The bones the coat hangs from, baked by `tools/build_wardrobe.py`: a ring of
@@ -549,10 +518,10 @@ const ROTATION = "rotationQuaternion";
 const TRANSLATION = "position";
 
 /** The one bone these clips translate. Everything else is pure rotation. */
-const HIPS_BONE = "pelvis";
+const HIPS_BONE = "hips";
 
 /** Where a spell leaves the body: the weapon hand, the same one `weapon1` skins to. */
-const HAND_BONE = "hand_r";
+const HAND_BONE = "hand.r";
 
 /**
  * Bones a layered clip must not touch, so it can play over locomotion without
@@ -560,21 +529,17 @@ const HAND_BONE = "hand_r";
  */
 const LOWER_BODY: ReadonlySet<string> = new Set([
   "root", HIPS_BONE,
-  "thigh_l", "calf_l", "foot_l", "ball_l", "ball_leaf_l", "foot_end_l",
-  "thigh_r", "calf_r", "foot_r", "ball_r", "ball_leaf_r", "foot_end_r",
+  "upperleg.l", "lowerleg.l", "foot.l", "toes.l",
+  "upperleg.r", "lowerleg.r", "foot.r", "toes.r",
 ]);
 
 /**
- * Weapon-hand bones layered actions must not touch, or the fingers open and the
- * weapon floats. The grip is whatever the locomotion clip left them at.
+ * Weapon-hand bones layered actions must not touch, or the held mesh swings
+ * away from the fist. This rig has no fingers - the weapon is skinned whole to
+ * `handslot.r` - so the grip is those three bones and nothing else.
  */
 const WEAPON_HAND: ReadonlySet<string> = new Set([
-  "hand_r",
-  "thumb_01_r", "thumb_02_r", "thumb_03_r", "thumb_04_leaf_r",
-  "index_01_r", "index_02_r", "index_03_r", "index_04_leaf_r",
-  "middle_01_r", "middle_02_r", "middle_03_r", "middle_04_leaf_r",
-  "ring_01_r", "ring_02_r", "ring_03_r", "ring_04_leaf_r",
-  "pinky_01_r", "pinky_02_r", "pinky_03_r", "pinky_04_leaf_r",
+  "wrist.r", HAND_BONE, "handslot.r",
 ]);
 
 /** Clips that layer over locomotion instead of replacing it. */
@@ -851,11 +816,9 @@ export class RigActor {
     // bind pose so it does not snap into place in front of the player.
     if (coat && !this.coatVisible) this.skirt?.unsettle();
     this.coatVisible = coat;
-    // A helmet takes the hair off, not the head: see `HAIR_PART`.
-    const bare = this.looks.helmet === null;
-    for (const mesh of this.headParts) {
-      mesh.setEnabled(bare || !mesh.name.startsWith(HAIR_PART));
-    }
+    // The head stays on under every helmet: KayKit's headgear is modelled to
+    // sit over a skull, and the knight's is open-faced.
+    for (const mesh of this.headParts) mesh.setEnabled(true);
   }
 
   /**
@@ -1424,6 +1387,9 @@ export function looksForEquipment(equipped: Partial<Record<CosmeticSlot, unknown
     if (item === undefined) continue;
     const baseId = (item as { baseId?: string } | null)?.baseId;
     const look = (baseId !== undefined ? LOOK_BY_BASE[baseId] : undefined) ?? EQUIPPED[slot];
+    // A slot the wardrobe has no geometry for (`belt`) stays null rather than
+    // becoming the string "null", which would ask for `belt.null.*` meshes.
+    if (look === null) continue;
     out[slot] = look + (baseId !== undefined && baseId in GEAR_TEXTURE ? `#${baseId}` : "");
   }
   return out;

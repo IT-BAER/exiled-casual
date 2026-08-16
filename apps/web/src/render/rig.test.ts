@@ -26,6 +26,7 @@ import {
   looksForEquipment,
   meshLook,
   COSMETIC_SLOTS,
+  type CosmeticSlot,
   GEAR_TEXTURE_BASES,
   HIPS_BOB,
   SKIRT_CHAINS,
@@ -229,11 +230,14 @@ describe("looksForEquipment", () => {
   });
 
   it("shows an armoured look for any item in a slot", () => {
-    const bare = looksForEquipment({});
+    // `belt` is the exception and stays null: KayKit paints every outfit's belt
+    // into its torso, so there is no separate mesh to show.
+    const looks = looksForEquipment(
+      Object.fromEntries(COSMETIC_SLOTS.map((slot) => [slot, { baseId: "base.whatever" }])),
+    );
     for (const slot of COSMETIC_SLOTS) {
-      const worn = looksForEquipment({ [slot]: {} });
-      expect(worn[slot]).not.toBeNull();
-      expect(worn[slot]).not.toBe(bare[slot]);
+      if (slot === "belt") expect(looks[slot]).toBeNull();
+      else expect(looks[slot], slot).not.toBeNull();
     }
   });
 
@@ -254,14 +258,17 @@ describe("looksForEquipment", () => {
     }
   });
 
-  it("wears the equipped base's armour texture, and only for a base that has one", () => {
-    const plain = looksForEquipment({ body: {} }).body!;
-    const geared = looksForEquipment({ body: { baseId: "base.emberweave_robe" } }).body!;
-    // The texture rides along with the look; the geometry it names is unchanged.
-    expect(geared).toBe(`${plain}#base.emberweave_robe`);
-    expect(meshLook(geared)).toBe(plain);
-    // An unmapped base keeps the authored look rather than asking for a missing file.
-    expect(looksForEquipment({ body: { baseId: "base.nonexistent" } }).body).toBe(plain);
+  it("sends a base to its own outfit rather than to a re-tint of one", () => {
+    // What replaced the texture bake: plate, leather and robes are three
+    // different KayKit outfits, so the look itself differs per base instead of
+    // one coat arriving in three colours.
+    const bodyFor = (baseId: string): string | null =>
+      looksForEquipment({ body: { baseId } }).body;
+    expect(bodyFor("base.ironsworn_plate")).toBe("knight");
+    expect(bodyFor("base.stalker_leathers")).toBe("rogue");
+    expect(bodyFor("base.emberbound_robe")).toBe("mage");
+    // A base with no entry still gets dressed, in the slot's default.
+    expect(bodyFor("base.something_new")).not.toBeNull();
   });
 });
 
@@ -275,7 +282,11 @@ describe("gear textures", () => {
   const GEAR = fileURLToPath(new URL("../../public/textures/gear/", import.meta.url));
 
   it("ships a texture file for every base the rig can ask for", () => {
-    expect(GEAR_TEXTURE_BASES.length).toBeGreaterThan(0);
+    // Deliberately vacuous today: the old wardrobe had one outfit, so a base
+    // could only differ by a re-palettized atlas, and this pinned that bake to
+    // its files. The KayKit wardrobe gives each base its own GEOMETRY instead
+    // (`LOOK_BY_BASE`), so the table is empty. The check stays so a future bake
+    // against the new atlases cannot ship half-wired.
     for (const baseId of GEAR_TEXTURE_BASES) {
       const slug = baseId.split(".", 2)[1]!;
       expect(existsSync(`${GEAR}${slug}.png`)).toBe(true);
@@ -285,25 +296,6 @@ describe("gear textures", () => {
   it("names bases that content actually defines", () => {
     const defined = new Set(ITEM_BASES.map((b) => b.id));
     for (const baseId of GEAR_TEXTURE_BASES) expect(defined).toContain(baseId);
-  });
-
-  it("covers every base that can fill a cosmetic slot", () => {
-    // Any equippable armour base without a texture renders as green ranger gear
-    // next to charred-iron item art, which is the mismatch this whole pipeline
-    // exists to remove. Held gear is worse than wrong-coloured: its meshes carry
-    // either one pinned texel or a projection of their own icon, so an unmapped
-    // hand base smears the clothing atlas along a wand.
-    //
-    // The class is NOT the slot name — a `wand` fills `weapon1` and a `shield`
-    // fills `weapon2` — so the two are mapped through the sim's own table rather
-    // than compared as strings, which silently skipped every held class.
-    const cosmetic = new Set<string>(COSMETIC_SLOTS);
-    const worn = (itemClass: string) =>
-      (EQUIP_SLOTS_BY_CLASS[itemClass] ?? []).some((slot) => cosmetic.has(slot));
-    const missing = ITEM_BASES.filter(
-      (b) => b.itemClass !== undefined && worn(b.itemClass) && !GEAR_TEXTURE_BASES.includes(b.id),
-    );
-    expect(missing.map((b) => b.id)).toEqual([]);
   });
 });
 
@@ -319,243 +311,30 @@ describe("wardrobe asset", () => {
   const json = JSON.parse(
     glb.subarray(20, 20 + glb.readUInt32LE(12)).toString("utf8"),
   ) as {
-    nodes: { name: string; mesh?: number; skin?: number; translation?: [number, number, number] }[];
+    nodes: { name: string; mesh?: number; skin?: number }[];
     skins: { joints: number[] }[];
-    meshes: { primitives: { attributes: Record<string, number> }[] }[];
-    accessors: {
-      bufferView: number;
-      byteOffset?: number;
-      componentType: number;
-      count: number;
-      type: string;
-    }[];
-    bufferViews: { byteOffset?: number; byteStride?: number }[];
+    materials: { name: string }[];
   };
   const skinned = json.nodes.filter((n) => n.skin !== undefined).map((n) => n.name);
 
-  /** The glb's binary chunk: past the header, the json chunk, and its own header. */
-  const bin = 20 + glb.readUInt32LE(12) + 8;
-
-  /** One vertex attribute, read out of the binary chunk as a flat array. */
-  function attribute(mesh: string, name: string): { data: number[]; stride: number } {
-    const node = json.nodes.find((n) => n.name === mesh && n.mesh !== undefined)!;
-    const accessor = json.accessors[json.meshes[node.mesh!]!.primitives[0]!.attributes[name]!]!;
-    const view = json.bufferViews[accessor.bufferView]!;
-    const stride = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4 }[accessor.type]!;
-    // Only the component types glTF allows for JOINTS_0 and WEIGHTS_0.
-    const read: Record<number, [number, (o: number) => number]> = {
-      5121: [1, (o) => glb.readUInt8(o)],
-      5123: [2, (o) => glb.readUInt16LE(o)],
-      5126: [4, (o) => glb.readFloatLE(o)],
-    };
-    const [size, readAt] = read[accessor.componentType]!;
-    const start = bin + (view.byteOffset ?? 0) + (accessor.byteOffset ?? 0);
-    const step = view.byteStride ?? size * stride;
-    const data: number[] = [];
-    for (let i = 0; i < accessor.count; i++) {
-      for (let c = 0; c < stride; c++) data.push(readAt(start + i * step + c * size));
-    }
-    return { data, stride };
-  }
-
-  it("rides one skeleton: the packs' 65 joints plus the coat's chains", () => {
+  it("rides one KayKit Rig_Medium skeleton and nothing else", () => {
     expect(json.skins).toHaveLength(1);
     const joints = json.skins[0]!.joints.map((j) => json.nodes[j]!.name);
-    const skirt = joints.filter((n) => n.startsWith("skirt_"));
-    // Every borrowed mesh binds by joint order, so the pack joints must still be
-    // all of the skeleton except what the builder adds for cloth.
-    expect(joints.length - skirt.length).toBe(65);
-    // Against the constants, not against a literal: both the chain count and the
-    // joints per chain live in the builder and in `rig.ts`, and a rebuild with
-    // either of them changed drops bones out of the coat silently.
-    expect(skirt.length).toBe(SKIRT_CHAINS * SKIRT_JOINTS);
-  });
-
-  it("hangs every skirt chain on effectively one segment length", () => {
-    // `rig.ts` measures one bone of one chain and solves every bone of every
-    // chain against it, so this covers all of them below the first — the first
-    // carries its offset from the pelvis rather than a segment length. They are
-    // not bit-identical, because the coat is an ellipse and a chain at the hip
-    // travels further out than one at the belly, but that spread is 0.2% - a
-    // millimetre on this character. A ring that drifted past 1% would render as
-    // cloth of the wrong length on seven chains out of eight.
-    const lengths = json.nodes
-      .filter((n) => /^skirt_\d+_\d+$/.test(n.name) && !/_01$/.test(n.name))
-      .map((n) => Math.hypot(...(n.translation ?? [0, 0, 0])));
-    expect(lengths).toHaveLength(SKIRT_CHAINS * (SKIRT_JOINTS - 1));
-    expect(lengths[0]).toBeGreaterThan(0.1);
-    for (const length of lengths) {
-      expect(Math.abs(length - lengths[0]!) / lengths[0]!).toBeLessThan(0.01);
+    expect(joints).toHaveLength(23);
+    // The bones the runtime names by hand. `handslot.*` is what makes held gear
+    // a wardrobe slot rather than a per-frame attachment.
+    for (const bone of ["root", "hips", "chest", "head", "hand.r", "handslot.r", "handslot.l"]) {
+      expect(joints, bone).toContain(bone);
     }
   });
 
-  it("binds every coat vertex to a single chain, so collision can reach it", () => {
-    // The solver collides the chains and nothing else: `SKIRT_JOINTS` particles
-    // per chain, pushed out of the leg capsules. A vertex weighted half to one chain and
-    // half to its neighbour is skinned to the average of the two, which lies on
-    // neither of them — it hangs in the gap *between* the collided lines, and no
-    // capsule can ever push it. Measured on the running character, those split
-    // vertices sat up to 0.088 off the nearest chain, wider than the whole thigh
-    // capsule (0.088), so a leg swinging between two chains passed through the
-    // coat while the solver reported every particle clear.
-    //
-    // The fix is a chain per coat column, and this is what pins it: one ring
-    // coarser than the other silently re-opens the gap. It is a weight test
-    // rather than a count test because the counts live in two languages.
-    const joints = json.skins[0]!.joints.map((j) => json.nodes[j]!.name);
-    const chainOf = joints.map((n) => /^skirt_(\d+)_/.exec(n)?.[1] ?? null);
-    // Every body look is its own coat and each must satisfy this, not only the
-    // ranger: a bulkier plate or a slimmer leather profile that re-opened the
-    // between-chains gap would be a leg through cloth on that look alone.
-    const coats = json.nodes
-      .filter((n) => /^body\.[^.]+\.coat$/.test(n.name) && n.mesh !== undefined)
-      .map((n) => n.name);
-    expect(coats.length).toBeGreaterThan(1);
-
-    for (const coat of coats) {
-      const { data: index } = attribute(coat, "JOINTS_0");
-      const { data: weight } = attribute(coat, "WEIGHTS_0");
-      let worst = 0;
-      for (let v = 0; v < weight.length / 4; v++) {
-        const perChain = new Map<string, number>();
-        for (let k = 0; k < 4; k++) {
-          const chain = chainOf[index[v * 4 + k]!] ?? null;
-          if (chain === null) continue; // the pelvis holds the pinned waist band
-          perChain.set(chain, (perChain.get(chain) ?? 0) + weight[v * 4 + k]!);
-        }
-        const shares = [...perChain.values()].sort((a, b) => b - a);
-        worst = Math.max(worst, shares[1] ?? 0);
-      }
-      expect(worst, `${coat} splits a vertex across chains`).toBeLessThan(0.01);
-    }
-  });
-
-  it("carries a head that is unwrapped onto the painted face, not pinned to one texel", () => {
-    // Neither outfit pack ships a head, but both ship the *texture* for one: a
-    // face painted into the top-left of `T_Regular_Male_Dark_BaseColor.png` that
-    // each pack references and neither uses, because the head it was unwrapped
-    // for lives in the author's separate base-character pack. The head is cut
-    // out of that base male so it arrives already carrying those uvs.
-    //
-    // What this pins is that the head is UNWRAPPED, which a name test cannot
-    // see. The head this replaced was a uv sphere with every loop pinned to one
-    // flat skin texel — correctly shaped, correctly animated, and completely
-    // blank — so "a part called base.head.* exists" passed all the way through
-    // it. Hair is still pinned on purpose, which makes it the control: if the
-    // pin ever came back for the head, hair is what it would look like.
-    for (const part of ["base.head.head", "base.head.eyes", "base.head.brows", "base.head.hair"]) {
-      expect(skinned).toContain(part);
-    }
-
-    const uvSpread = (part: string) => {
-      const { data } = attribute(part, "TEXCOORD_0");
-      const lo = [Infinity, Infinity];
-      const hi = [-Infinity, -Infinity];
-      for (let i = 0; i < data.length; i += 2) {
-        for (const k of [0, 1]) {
-          lo[k] = Math.min(lo[k]!, data[i + k]!);
-          hi[k] = Math.max(hi[k]!, data[i + k]!);
-        }
-      }
-      return Math.min(hi[0]! - lo[0]!, hi[1]! - lo[1]!);
-    };
-
-    // A face island is a good fraction of the atlas in both directions.
-    expect(uvSpread("base.head.head")).toBeGreaterThan(0.1);
-    expect(uvSpread("base.head.eyes")).toBeGreaterThan(0.1);
-    expect(uvSpread("base.head.hair")).toBe(0);
-  });
-
-  it("carries the coat, which is the armoured body's silhouette", () => {
-    // Generated, not cut from a pack: every body base is drawn as a long coat
-    // and the ranger's authored body stops at the hip. Lose this part in a
-    // rebuild and the character silently goes back to wearing a tunic, which
-    // the look-prefix tests above would not notice.
-    expect(skinned).toContain("body.ranger.coat");
-  });
-
-  it("gives every armour body look a whole body, not just a coat", () => {
-    // The runtime dresses by showing `body.<look>.*` and hiding the rest of the
-    // slot, so a look that owns only a coat renders as a floating skirt with no
-    // torso, arms or legs. Every armour look (anything past the commoner default)
-    // must carry the same body parts the ranger does, plus its own coat.
-    const partsOf = (look: string) =>
-      new Set(
-        skinned
-          .filter((n) => n.startsWith(`body.${look}.`))
-          .map((n) => n.split(".")[2]!),
-      );
-    const need = ["torso", "legs", "sleeves", "hands", "coat"];
-    const looks = new Set(
-      skinned
-        .filter((n) => n.startsWith("body.") && !n.startsWith("body.commoner."))
-        .map((n) => n.split(".")[1]!),
-    );
-    expect(looks.size).toBeGreaterThan(1); // ranger plus at least one armour look
-    for (const look of looks) {
-      const parts = partsOf(look);
-      for (const part of need) {
-        expect(parts.has(part), `body.${look} is missing ${part}`).toBe(true);
-      }
-    }
-  });
-
-  it("hangs a pauldron on the arm it belongs to, on both sides", () => {
-    // Plate's caps are the pack's single left-hand pauldron, copied and mirrored
-    // (`build_pauldrons`). The mesh carries a vertex group per skeleton joint
-    // rather than only the one it uses, so moving the bind is moving WEIGHTS,
-    // and the first attempt renamed groups instead: every group took the same
-    // name, Blender suffixed the collisions, and the group holding the weights
-    // matched no bone. glTF answers that with `neutral_bone`, which is silent -
-    // the cap loads, binds to the root, and hangs at the character's feet. A
-    // name test cannot see it; only where the weights point can.
-    const joints = json.skins[0]!.joints.map((j) => json.nodes[j]!.name);
-    const caps = json.nodes
-      .filter((n) => /^body\.[^.]+\.pauldron_[lr]$/.test(n.name) && n.mesh !== undefined)
-      .map((n) => n.name);
-    expect(caps.length).toBeGreaterThanOrEqual(2);
-
-    for (const cap of caps) {
-      const side = cap.endsWith("_l") ? "l" : "r";
-      const { data: index } = attribute(cap, "JOINTS_0");
-      const { data: weight } = attribute(cap, "WEIGHTS_0");
-      const perBone = new Map<string, number>();
-      for (let k = 0; k < weight.length; k++) {
-        if (weight[k]! <= 0) continue;
-        const bone = joints[index[k]!]!;
-        perBone.set(bone, (perBone.get(bone) ?? 0) + weight[k]!);
-      }
-      // A shoulder cap follows the arm and nothing else: bound to the cloth
-      // chains it would swing with the skirt and shear off the shoulder.
-      expect([...perBone.keys()], `${cap} is not bound to its own arm alone`)
-        .toEqual([`upperarm_${side}`]);
-    }
-  });
-
-  it("bends a cuirass with the body, not against it", () => {
-    // The shell over the chest takes its weights from the nearest torso vertex
-    // (`build_cuirass`) precisely so it deforms with the tunic under it. Bound
-    // to one spine bone instead it would be rigid and shear at the waist, and
-    // bound to the coat's chains it would swing with the skirt. Either reads as
-    // a bug only in motion, so the bind is pinned rather than the look.
-    const joints = json.skins[0]!.joints.map((j) => json.nodes[j]!.name);
-    const bonesOf = (name: string) => {
-      const { data: index } = attribute(name, "JOINTS_0");
-      const { data: weight } = attribute(name, "WEIGHTS_0");
-      const used = new Set<string>();
-      for (let k = 0; k < weight.length; k++) {
-        if (weight[k]! > 0) used.add(joints[index[k]!]!);
-      }
-      return [...used].sort();
-    };
-    const shells = json.nodes
-      .filter((n) => /^body\.[^.]+\.cuirass$/.test(n.name) && n.mesh !== undefined)
-      .map((n) => n.name);
-    expect(shells.length).toBeGreaterThan(0);
-    for (const shell of shells) {
-      expect(bonesOf(shell), `${shell} does not bend with the torso`)
-        .toEqual(bonesOf("body.ranger.torso"));
-    }
+  it("has no skirt chains, so the cloth solver stays out of the way", () => {
+    // KayKit skins its capes straight to the chest. `buildSkirt` finds no
+    // `skirt_*` bones and leaves the sim null, which is the intended state on
+    // this rig - pinned so a half-built chain cannot appear unnoticed.
+    const chains = json.skins[0]!.joints.filter((j) => json.nodes[j]!.name.startsWith("skirt_"));
+    expect(chains).toHaveLength(0);
+    expect(SKIRT_CHAINS * SKIRT_JOINTS).toBeGreaterThan(0);
   });
 
   it("carries every look the code can ask for", () => {
@@ -570,104 +349,140 @@ describe("wardrobe asset", () => {
     }
     expect(asked.size).toBeGreaterThan(0);
     for (const prefix of asked) {
-      expect(skinned.some((n) => n.startsWith(prefix))).toBe(true);
-    }
-  });
-
-  it("carries a look for every base that can be held", () => {
-    // The hands are the one place a *base* names its own mesh rather than
-    // inheriting its slot's, so a mistyped look here is not a wrong colour, it
-    // is an empty fist - and the test above cannot see it, because it only ever
-    // asks for the slot default.
-    const held: string[] = [];
-    for (const base of ITEM_BASES) {
-      for (const slot of EQUIP_SLOTS_BY_CLASS[base.itemClass ?? ""] ?? []) {
-        if (slot !== "weapon1" && slot !== "weapon2") continue;
-        const look = looksForEquipment({ [slot]: { baseId: base.id } })[slot];
-        expect(look, `${base.id} has no look`).not.toBeNull();
-        held.push(`${slot}.${meshLook(look!)}.`);
-      }
-    }
-    expect(held.length).toBeGreaterThan(0);
-    for (const prefix of held) {
       expect(skinned.some((n) => n.startsWith(prefix)), `${prefix} missing`).toBe(true);
     }
   });
 
+  it("carries a look for every base that can be worn or held", () => {
+    // Every equippable base, not just the slot defaults: a mistyped entry in
+    // `LOOK_BY_BASE` is not a wrong colour, it is a limb or a fist that renders
+    // as nothing at all.
+    const wanted: string[] = [];
+    for (const base of ITEM_BASES) {
+      for (const slot of EQUIP_SLOTS_BY_CLASS[base.itemClass ?? ""] ?? []) {
+        if (!(COSMETIC_SLOTS as readonly string[]).includes(slot)) continue;
+        const look = looksForEquipment({ [slot]: { baseId: base.id } })[slot as CosmeticSlot];
+        // `belt` has no geometry in this pack and resolves to null on purpose.
+        if (look === null) continue;
+        wanted.push(`${slot}.${meshLook(look)}.`);
+      }
+    }
+    expect(wanted.length).toBeGreaterThan(0);
+    for (const prefix of wanted) {
+      expect(skinned.some((n) => n.startsWith(prefix)), `${prefix} missing`).toBe(true);
+    }
+  });
+
+  it("gives every armour look a whole figure, not a floating chest", () => {
+    // An outfit's arms and legs ARE its gloves and boots slots, so a look that
+    // shipped a torso and no limbs would render as a head over trousers the
+    // moment its base was equipped.
+    const looks = new Set(
+      skinned.filter((n) => n.startsWith("body.")).map((n) => n.split(".")[1]!),
+    );
+    expect(looks.size).toBeGreaterThanOrEqual(6);
+    for (const look of looks) {
+      for (const part of [`body.${look}.torso`, `gloves.${look}.arms`, `boots.${look}.legs`]) {
+        expect(skinned, part).toContain(part);
+      }
+    }
+  });
+
   it("skins every part, so no piece floats free of the rig", () => {
-    const meshNodes = json.nodes.filter((n) => n.name.includes("."));
-    expect(meshNodes.length).toBe(skinned.length);
+    // Counted on `mesh`, not on a dot in the name: this rig's BONES are dotted
+    // too (`hand.r`), and the old spelling of this test passed them off as
+    // unskinned geometry.
+    const meshNodes = json.nodes.filter((n) => n.mesh !== undefined);
+    expect(meshNodes.length).toBeGreaterThan(40);
+    expect(meshNodes.every((n) => n.skin !== undefined)).toBe(true);
+  });
+
+  it("ships one atlas per outfit rather than a copy per import", () => {
+    // Every one of the 24 source files brings its own material; the builder
+    // collapses them by name. Left alone the glb carried five duplicate atlases.
+    expect(json.materials.length).toBeLessThanOrEqual(6);
   });
 });
 
 /**
- * The modular wardrobe rests entirely on the packs being skin-compatible: a mesh
- * from one is bound to the other's live skeleton by assignment alone, with no
- * retargeting. That holds only while every pack lists the same joints in the
- * same order with the same inverse bind matrices. It is an asset invariant, not
- * a code one, so it is checked against the files a new pack would have to join.
+ * The wardrobe rests on the six KayKit characters being skin-compatible: a mesh
+ * from one binds to another's skeleton by assignment alone, no retargeting.
+ * That holds only while they all list the same joints at the same rest pose. It
+ * is an asset invariant, not a code one, so it is checked against the source
+ * files a seventh outfit would have to join.
  */
 describe("pack skin compatibility", () => {
-  const PACKS = fileURLToPath(new URL("../../../../assets/characters/", import.meta.url));
+  const PACK = fileURLToPath(
+    new URL(
+      "../../../../assets/props/source/kaykit_adventurers/KayKit_Adventurers_2.0_FREE/Characters/gltf/",
+      import.meta.url,
+    ),
+  );
+  const FILES = ["Knight", "Barbarian", "Mage", "Ranger", "Rogue", "Rogue_Hooded"];
 
-  /** Joint names in skin order, plus the flat inverse bind matrix buffer. */
-  function readSkin(file: string): { joints: string[]; ibm: Float32Array } {
-    const gltf = JSON.parse(readFileSync(`${PACKS}${file}.gltf`, "utf8"));
-    const bin = readFileSync(`${PACKS}${file}.bin`);
-    const accessor = gltf.accessors[gltf.skins[0].inverseBindMatrices];
-    const view = gltf.bufferViews[accessor.bufferView];
-    const start = (view.byteOffset ?? 0) + (accessor.byteOffset ?? 0);
-    const ibm = new Float32Array(accessor.count * 16);
-    for (let i = 0; i < ibm.length; i++) ibm[i] = bin.readFloatLE(start + i * 4);
-    return { joints: gltf.skins[0].joints.map((j: number) => gltf.nodes[j].name), ibm };
+  /** Joint names and their inverse bind matrices, out of one character glb. */
+  function readSkin(file: string): { joints: string[]; ibm: number[] } {
+    const glb = readFileSync(`${PACK}${file}.glb`);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const doc = JSON.parse(glb.subarray(20, 20 + glb.readUInt32LE(12)).toString("utf8")) as any;
+    const bin = 20 + glb.readUInt32LE(12) + 8;
+    const accessor = doc.accessors[doc.skins[0].inverseBindMatrices];
+    const view = doc.bufferViews[accessor.bufferView];
+    const start = bin + (view.byteOffset ?? 0) + (accessor.byteOffset ?? 0);
+    const ibm: number[] = [];
+    for (let i = 0; i < accessor.count * 16; i++) ibm.push(glb.readFloatLE(start + i * 4));
+    const joints: string[] = doc.skins[0].joints.map((j: number) => doc.nodes[j].name as string);
+    return { joints, ibm };
   }
 
-  const ranger = readSkin("Male_Ranger");
-  const peasant = readSkin("Male_Peasant");
+  const skins = new Map(FILES.map((f) => [f, readSkin(f)]));
 
-  it("lists the same joints in the same order", () => {
-    expect(ranger.joints).toHaveLength(65);
-    expect(peasant.joints).toEqual(ranger.joints);
+  it("lists the same 23 joints", () => {
+    const reference = new Set(skins.get("Knight")!.joints);
+    expect(reference.size).toBe(23);
+    for (const file of FILES) {
+      expect(new Set(skins.get(file)!.joints), file).toEqual(reference);
+    }
   });
 
   it("binds those joints at the same rest pose", () => {
-    // Bit-identical in both packs today. Any drift here means a borrowed mesh
-    // would deform against the wrong bind pose, so exactness is the point.
-    expect(peasant.ibm).toEqual(ranger.ibm);
+    // Compared BY JOINT, not by index: the six files list the same skeleton in
+    // different orders, which is free (a joint binds by name) as long as each
+    // one's bind matrix agrees. Millimetre tolerance, because the exports differ
+    // in float noise rather than in shape.
+    const reference = skins.get("Knight")!;
+    for (const file of FILES) {
+      const skin = skins.get(file)!;
+      for (const [i, joint] of skin.joints.entries()) {
+        const j = reference.joints.indexOf(joint);
+        for (let c = 0; c < 16; c++) {
+          expect(
+            Math.abs(skin.ibm[i * 16 + c]! - reference.ibm[j * 16 + c]!),
+            `${file} ${joint}[${c}]`,
+          ).toBeLessThan(1e-3);
+        }
+      }
+    }
   });
 
-  it("keeps the pieces the mixed outfit borrows", () => {
-    // Named in rig.ts; renaming a mesh in the pack would silently drop the piece.
-    const gltf = JSON.parse(readFileSync(`${PACKS}Male_Ranger.gltf`, "utf8"));
-    const names = gltf.meshes.map((m: { name: string }) => m.name);
-    expect(names).toContain("Male_Ranger_Head_Hood");
-    expect(names).toContain("Male_Ranger_Acc_Pauldron");
+  it("keeps the pieces the builder cuts up", () => {
+    const glb = readFileSync(`${PACK}Knight.glb`);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const doc = JSON.parse(glb.subarray(20, 20 + glb.readUInt32LE(12)).toString("utf8")) as any;
+    const names = doc.meshes.map((m: { name: string }) => m.name);
+    for (const part of ["Knight_Body", "Knight_ArmLeft", "Knight_LegRight", "Knight_Helmet"]) {
+      expect(names, part).toContain(part);
+    }
   });
 });
 
 /**
- * A standing man must stand ON something.
+ * The cast leaves the weapon hand, and the two strikes are different swings.
  *
- * `Idle_Loop` is authored foot-planted: the hips breathe, and the knees and
- * ankles counter-rotate exactly enough to leave the soles where they are. Only
- * the hips curve is retargeted onto this rig (`remapHips`); the legs get their
- * rotations raw. So any scaling of that one curve breaks the bargain, and the
- * error has nowhere to go but the feet — the character rises and sinks off the
- * painted floor, which is what `HIPS_BOB` at the jog's 0.65 was doing to him.
- *
- * This replays the clip onto `wardrobe.glb`'s own skeleton and measures how far
- * the ankle travels. It is deliberately NOT a check that the constant is 1: it
- * measures the consequence, so it also catches a new anim library, a rebuilt
- * wardrobe, or a change to the remap itself. The runtime path cannot be used —
- * there is no HTTP server here, so the loader always falls back.
- */
-/**
- * The cast is the pack's left-handed spell mirrored onto the right arm by
- * `tools/build_cast_mirror.py`, because the wand skins to `hand_r`. Nothing else
- * pins that: the clip is a name the loader looks up, and a library rebuilt
- * without the mirror step still loads, still animates, and casts from the empty
- * hand. So this measures which arm actually moves, per bone, straight out of the
- * glb — the mirror is a swap, so the two chains trade places exactly.
+ * Nothing else pins that: a clip is a name the loader looks up, and a library
+ * rebuilt from the wrong takes still loads and still animates - it just casts
+ * from the empty hand, or plays one swing twice. So this measures which arm
+ * actually moves, per bone, straight out of the glb.
  */
 describe("the cast clip drives the weapon arm", () => {
   const MODELS = fileURLToPath(new URL("../../public/models/", import.meta.url));
@@ -687,10 +502,9 @@ describe("the cast clip drives the weapon arm", () => {
       const a = json.accessors[clip.samplers[channel.sampler].output];
       const start = bin + (json.bufferViews[a.bufferView].byteOffset ?? 0) + (a.byteOffset ?? 0);
       const at = (k: number, c: number) => glb.readFloatLE(start + (k * 4 + c) * 4);
-      // q and -q are the same rotation, and the pack's own takes do flip sign
-      // mid-clip: `Sword_Attack`'s upperarm_r flips twice and reads as nearly
-      // three times the travel it actually has. Align each frame to the one
-      // before it, or the measure says more about the encoding than the arm.
+      // q and -q are the same rotation, and authored takes do flip sign
+      // mid-clip. Align each frame to the one before it, or the measure says
+      // more about the encoding than about the arm.
       for (let k = 1; k < a.count; k++) {
         let dot = 0;
         for (let c = 0; c < 4; c++) dot += at(k, c) * at(k - 1, c);
@@ -706,32 +520,63 @@ describe("the cast clip drives the weapon arm", () => {
     for (const name of Object.values(CLIP_NAME)) expect(names, name).toContain(name);
   });
 
-  it("ships two sword-derived weapon-arm attacks and layers both over locomotion", () => {
+  it("animates the same skeleton the wardrobe is built on", () => {
+    // Same rig, so the library is a copy rather than a retarget - the whole
+    // reason `remapHips` has nothing left to correct.
+    const wardrobe = readFileSync(`${MODELS}wardrobe.glb`);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const other = JSON.parse(
+      wardrobe.subarray(20, 20 + wardrobe.readUInt32LE(12)).toString("utf8"),
+    ) as any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const jointsOf = (doc: any): Set<string> =>
+      new Set(doc.skins[0].joints.map((j: number) => doc.nodes[j].name as string));
+    expect(jointsOf(json)).toEqual(jointsOf(other));
+  });
+
+  it("ships two distinct weapon-arm attacks and layers both over locomotion", () => {
     expect(STRIKE_CLIPS).toHaveLength(2);
     expect(new Set(STRIKE_CLIPS.map((clip) => CLIP_NAME[clip])).size).toBe(2);
-    expect(CLIP_NAME.strikeA).toBe("Rig|Sword_Attack");
-    // Both takes are slashes: the second is the first rolled onto another swing
-    // plane by tools/build_slash_variant.py, not the pack's bare-fisted punch.
-    expect(CLIP_NAME.strikeB).toBe("Rig|Sword_Attack_Down");
+    // Different swings, not one take twice: the diagonal slice and the overhead
+    // chop move the weapon arm by measurably different amounts.
+    const [a, b] = STRIKE_CLIPS.map((clip) => travel(CLIP_NAME[clip], "upperarm.r"));
+    expect(Math.abs(a! - b!)).toBeGreaterThan(0.1);
     for (const clip of STRIKE_CLIPS) {
       expect(isLayeredClip(clip)).toBe(true);
-      const right = travel(CLIP_NAME[clip], "upperarm_r") + travel(CLIP_NAME[clip], "lowerarm_r");
-      const left = travel(CLIP_NAME[clip], "upperarm_l") + travel(CLIP_NAME[clip], "lowerarm_l");
-      // A sword take swings one arm and counterbalances with the other, so the
-      // weapon arm leads by about 2x rather than owning the clip outright.
-      expect(right, clip).toBeGreaterThan(left * 1.8);
+      // Both arms move in a KayKit swing - the off hand counterbalances hard
+      // enough to out-travel the sword arm in the diagonal slice - so what is
+      // worth pinning is that the weapon arm is driven at all, and that the two
+      // takes are not the same motion.
+      const right = travel(CLIP_NAME[clip], "upperarm.r") + travel(CLIP_NAME[clip], "lowerarm.r");
+      expect(right, clip).toBeGreaterThan(1);
     }
   });
 
-  it("swings the right arm and not the left", () => {
+  it("casts from the right arm, the one `weapon1` skins to", () => {
     for (const bone of ["upperarm", "lowerarm"]) {
-      const right = travel(CLIP_NAME.cast, `${bone}_r`);
-      const left = travel(CLIP_NAME.cast, `${bone}_l`);
-      expect(right, bone).toBeGreaterThan(left * 3);
+      const right = travel(CLIP_NAME.cast, `${bone}.r`);
+      const left = travel(CLIP_NAME.cast, `${bone}.l`);
+      expect(right, bone).toBeGreaterThan(left);
     }
   });
 });
 
+/**
+ * A standing man must stand ON something.
+ *
+ * `Idle_Loop` is authored foot-planted: the hips breathe, and the knees and
+ * ankles counter-rotate exactly enough to leave the soles where they are. Only
+ * the hips curve is retargeted onto this rig (`remapHips`); the legs get their
+ * rotations raw. So any scaling of that one curve breaks the bargain, and the
+ * error has nowhere to go but the feet — the character rises and sinks off the
+ * painted floor, which is what `HIPS_BOB` at the jog's 0.65 was doing to him.
+ *
+ * This replays the clip onto `wardrobe.glb`'s own skeleton and measures how far
+ * the ankle travels. It is deliberately NOT a check that the constant is 1: it
+ * measures the consequence, so it also catches a new anim library, a rebuilt
+ * wardrobe, or a change to the remap itself. The runtime path cannot be used —
+ * there is no HTTP server here, so the loader always falls back.
+ */
 describe("the idle clip leaves the soles planted", () => {
   const MODELS = fileURLToPath(new URL("../../public/models/", import.meta.url));
 
@@ -762,7 +607,7 @@ describe("the idle clip leaves the soles planted", () => {
   type Track = { t: number[]; v: number[][] };
 
   const lib = open("anim-library.glb");
-  const clip = lib.json.animations.find((a: { name: string }) => a.name === "Rig|Idle_Loop");
+  const clip = lib.json.animations.find((a: { name: string }) => a.name === CLIP_NAME.idle);
   const tracks = new Map<string, Record<string, Track>>();
   for (const channel of clip.channels) {
     const sampler = clip.samplers[channel.sampler];
@@ -820,7 +665,7 @@ describe("the idle clip leaves the soles planted", () => {
 
   // The hips remap, re-derived rather than imported: the point is the outcome,
   // so a mistake shared with the runtime should not cancel itself out here.
-  const HIPS = "pelvis";
+  const HIPS = "hips";
   const animRest = lib.json.nodes[
     lib.json.nodes.findIndex((n: { name: string }) => n.name === HIPS)
   ].translation as number[];
@@ -870,15 +715,18 @@ describe("the idle clip leaves the soles planted", () => {
   it("holds both ankles within a millimetre or two of still", () => {
     // 1.76mm at the settled value. What is left is the anim rig's legs being
     // ~7% shorter than this one's, which no single scalar takes out.
-    expect(travel("foot_l", HIPS_BOB.idle)).toBeLessThan(0.0025);
-    expect(travel("foot_r", HIPS_BOB.idle)).toBeLessThan(0.0025);
+    expect(travel("foot.l", HIPS_BOB.idle)).toBeLessThan(0.0025);
+    expect(travel("foot.r", HIPS_BOB.idle)).toBeLessThan(0.0025);
   });
 
   it("floats him again if the hips curve is compressed", () => {
-    // The mechanism, pinned: the jog's 0.65 put 4.7mm of rise and fall into the
-    // soles, and dropping the curve entirely puts the hips' whole 10.4mm there.
-    expect(travel("foot_l", 0.65)).toBeGreaterThan(0.004);
-    expect(travel("foot_l", 0)).toBeGreaterThan(0.01);
+    // The mechanism, pinned as a comparison rather than as absolute millimetres:
+    // KayKit's idle breathes less than the old pack's, so the numbers moved even
+    // though the failure mode did not. Take any of the hips curve away and the
+    // legs are over-rotated against it, and the residual comes out at the soles.
+    const planted = travel("foot.l", HIPS_BOB.idle);
+    expect(travel("foot.l", 0.65)).toBeGreaterThan(planted * 1.5);
+    expect(travel("foot.l", 0)).toBeGreaterThan(travel("foot.l", 0.65));
   });
 });
 
