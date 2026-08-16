@@ -59,12 +59,6 @@ describe("wearable bases", () => {
     for (const b of WEARABLE_BASES) {
       const looks = looksForEquipment({ [b.slot]: { baseId: b.id } });
       const look = looks[b.slot];
-      // `belt` resolves to nothing on purpose: KayKit paints every outfit's belt
-      // into its torso, so the slot has no mesh of its own to show.
-      if (b.slot === "belt") {
-        expect(look, `${b.id} should be the beltless slot`).toBeNull();
-        continue;
-      }
       expect(look, `${b.id} resolved to nothing`).not.toBeNull();
       const wanted = `${b.slot}.${meshLook(look!)}.`;
       expect(
@@ -75,20 +69,17 @@ describe("wearable bases", () => {
   });
 
   it("drops a look an item base already covers", () => {
-    // `knight` is Ironsworn Plate. Listing both offers the same armour twice
+    // `plate` is Ironsworn Plate. Listing both offers the same armour twice
     // under two names that render differently.
-    expect(orphanLooks("body", ["knight", "barbarian"])).toEqual(["barbarian"]);
+    expect(orphanLooks("body", ["plate", "commoner"])).toEqual(["commoner"]);
   });
 
   it("keeps a look no base points at", () => {
-    expect(orphanLooks("body", ["barbarian"])).toContain("barbarian");
+    expect(orphanLooks("body", ["commoner"])).toContain("commoner");
   });
 
-  it("sends a base to its own outfit, not to a re-tint of one", () => {
-    // The base used to pick a palette baked onto a single shared coat. It now
-    // picks which of the six KayKit outfits is worn, so the resolved look IS
-    // the difference between an Ironsworn and a Stalker.
-    expect(looksForEquipment({ body: { baseId: "base.ironsworn_plate" } }).body).toBe("knight");
-    expect(looksForEquipment({ body: { baseId: "base.stalker_leathers" } }).body).toBe("rogue");
+  it("carries the base id through, so the baked item texture is the one drawn", () => {
+    const looks = looksForEquipment({ body: { baseId: "base.ironsworn_plate" } });
+    expect(looks.body).toBe("plate#base.ironsworn_plate");
   });
 });

@@ -31,8 +31,8 @@ ANIMS = os.path.join(MODELS, "anim-library.glb")
 # One look per slot, matching rig.ts's EQUIPPED. Held gear first, because it is
 # what a preview is usually being run for.
 DEFAULT_LOOKS = [
-    "weapon1.sword", "weapon2.buckler", "helmet.knight", "body.knight",
-    "gloves.knight", "boots.knight", "base.head",
+    "weapon1.wand", "weapon2.buckler", "helmet.hood", "body.ranger",
+    "gloves.bracers", "boots.ranger", "belt.ranger", "base.head",
 ]
 
 # Same lenses as preview_monsters.py, plus a straight-on front view: a weapon
@@ -145,7 +145,7 @@ def main():
     # The clips ship in their own file, exactly as the runtime fetches them.
     before = set(bpy.data.objects)
     bpy.ops.import_scene.gltf(filepath=ANIMS)
-    action = next((a for a in bpy.data.actions if a.name == opts["clip"]), None)
+    action = next((a for a in bpy.data.actions if a.name.endswith("|" + opts["clip"])), None)
     if action is None:
         sys.exit("no clip %r; have %s" % (opts["clip"], sorted(a.name for a in bpy.data.actions)))
     for obj in set(bpy.data.objects) - before:
