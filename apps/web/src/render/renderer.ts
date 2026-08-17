@@ -5,7 +5,7 @@ import { blinkBurst } from "./skill-fx";
 import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
 import { animateActor, keepGroundBlobFlat, makeMesh, setHitFlash, updateTelegraph, updatePortal, updateMapDevice, updateStash, updateVendor, updateContainer, updateGroundItem, updateRareElement, portalAppear, portalVanish, isPortalMesh, PORTAL_STAGGER_MS, Y_LIFT } from "./meshes";
 import type { MeshKind } from "./meshes";
-import { COSMETIC_SLOTS, looksForEquipment, previewItemFor, rigOf, type Looks } from "./rig";
+import { BASE_LOOKS, rigOf } from "./rig";
 import { creatureOf } from "./meshes";
 import { CORPSE_SECONDS, SINK_SECONDS, disposeRagdoll, dropDead, freezeRagdoll, sinkDepth } from "./ragdoll";
 import { CAMERA_ALPHA } from "./engine";
@@ -206,7 +206,6 @@ export class SnapshotRenderer {
    *  work (like firing a cast animation) is gated on this. */
   private lastTick = -1;
   private playerId: number | null = null;
-  private previewStep = 0;
   /** Entity id the mouse is hovering; drives mesh highlight, NOT inRange. */
   private hoveredEntityId: number | null = null;
   /** The last snapshot applied, for the DEV handles alone. */
@@ -261,24 +260,6 @@ export class SnapshotRenderer {
     this.hoveredEntityId = id;
   }
 
-  /**
-   * Lab preview of the wardrobe. Step 0 is the truth — whatever the character
-   * actually has equipped. The rest walk the armoured looks on one slot at a
-   * time, because seeing all five slots from real drops means finding five
-   * pieces of armour, and this shows the same thing in five keypresses.
-   * Render-only either way: the sim never hears about it.
-   */
-  cyclePlayerOutfit(): void {
-    this.previewStep = (this.previewStep + 1) % (COSMETIC_SLOTS.length + 2);
-  }
-
-  /** The look set to draw this frame: equipment, unless a preview is stepped in. */
-  private looksFor(next: Snapshot): Looks {
-    if (this.previewStep === 0) return looksForEquipment(next.equipment ?? {});
-    const shown = COSMETIC_SLOTS.slice(0, this.previewStep - 1);
-    return looksForEquipment(Object.fromEntries(shown.map((s) => [s, previewItemFor(s)])));
-  }
-
   apply(prev: Snapshot | null, next: Snapshot, alpha: number): void {
     // Collect the full set of ids that should exist after this call
     const liveIds = new Set<number>();
@@ -313,10 +294,11 @@ export class SnapshotRenderer {
       next.player.heading,
     );
 
-    // Dress the character from what it is wearing. Visibility only, so this is
-    // cheap enough to reassert every frame and self-heals if a mesh was rebuilt.
+    // Dress the character. Equipping an item changes no visuals, so this is
+    // always the one wired look; asserting it every frame self-heals if a mesh
+    // was rebuilt.
     const playerMesh = this.meshes.get(next.player.id);
-    if (playerMesh) rigOf(playerMesh)?.setLooks(this.looksFor(next));
+    if (playerMesh) rigOf(playerMesh)?.setLooks(BASE_LOOKS);
 
     // Portals arriving this snapshot, in ring order (spawnPortalRing creates them
     // in that order, so ascending entity id IS the arc). Their index is what the

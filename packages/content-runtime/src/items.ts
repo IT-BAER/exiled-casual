@@ -49,13 +49,10 @@ const ITEM_BASES: ItemBase[] = [
  * The body armour each class is created wearing.
  *
  * Out of `ITEM_POOLS.bases` on purpose, the way currency and the waystone are:
- * these exist so a new character has a silhouette, not so the loot table grows
+ * these exist so a new character starts equipped, not so the loot table grows
  * three entries and every drop-rate test shifts underneath it. `baseOf` still
  * resolves them, so they hover, equip and sit in the grid like any other piece.
- *
- * One per class because armour variety in the renderer is texture-only
- * (`GEAR_TEXTURE`): the geometry is the same coat either way, and the base id is
- * the only thing that can pick a different palette for it.
+ * Equipping one changes no rendered geometry — the character is one base body.
  */
 const STARTER_BASES: ItemBase[] = [
   {

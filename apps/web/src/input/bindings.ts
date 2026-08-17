@@ -179,7 +179,6 @@ export function attachBindings(
   canvas: HTMLCanvasElement,
   worker: Worker,
   scene: Scene,
-  onCycleOutfit?: () => void,
   onHoverInteractable?: (entityId: number | null) => void,
   onOpenPanel?: (open: boolean) => void,
   onOpenStash?: (open: boolean) => void,
@@ -315,11 +314,6 @@ export function attachBindings(
     // next durable change persists that. A stray keypress emptied a real
     // character's inventory and equipment. The message still exists for the
     // worker; nothing in the game may bind a key to it.
-    // o = try on the next outfit. Render-only, the sim never hears about it.
-    if (k === "o") {
-      onCycleOutfit?.();
-      return;
-    }
     // Pickup: the nearest in-range ground item (sim re-checks range).
     if (k === binds().pickup && k !== "" && latestSnap) {
       const items = latestSnap.entities.filter((e) => e.kind === "groundItem" && e.inRange);

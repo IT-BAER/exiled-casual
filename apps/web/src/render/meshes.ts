@@ -14,7 +14,7 @@ import {
 import { attachProp, type PropKind } from "./props";
 import { attachCreature, type CreatureRig } from "./monsters";
 import { attachBoltTrail, attachCinderFX, cinderGlow, fxProfile } from "./skill-fx";
-import { attachRig, rigOf, type RigParts } from "./rig";
+import { attachRig, rigOf, BASE_LOOKS, type RigParts } from "./rig";
 import { hasRim, HIT_TINT, HIT_ALPHA } from "./rim";
 import { playSfx, worldSfxMix } from "../audio/sfx";
 
@@ -1341,13 +1341,13 @@ export function updateStash(root: Mesh, hovered: boolean): void {
 }
 
 /**
- * The disenchanter: a hooded figure standing over a brazier, not a bench.
+ * The disenchanter: a figure standing over a brazier, not a bench.
  *
  * PoE2 gives every hideout service a person to talk to, and a service you walk
  * up to and *ask* is worth more than furniture you rummage in — the shards are
  * the same either way, but someone handing them over is an event. The NPC is the
- * same wardrobe rig the player wears, dressed as a hooded commoner so he reads
- * as a townsman rather than a second adventurer.
+ * same wardrobe rig the player wears; there is no separate townsman look, so he
+ * is drawn identically.
  *
  * The brazier stays, and carries all the hover feedback. It has to: the rig's
  * materials come from the shared glTF and are common to every instance, so
@@ -1385,12 +1385,7 @@ function buildVendor(scene: Scene, root: Mesh): void {
   // failed fetch), which leaves the ring standing on its own.
   const rig = attachRig(scene, root);
   if (rig) {
-    // Empty-handed on purpose: he is a disenchanter behind a counter, and a
-    // shopkeeper holding a wand reads as another adventurer.
-    rig.setLooks({
-      weapon1: null, weapon2: null,
-      helmet: "hood", body: "commoner", gloves: null, boots: "commoner", belt: null,
-    });
+    rig.setLooks(BASE_LOOKS);
     rig.setLocomotion(0); // stand and breathe; he never goes anywhere
   }
 

@@ -174,7 +174,6 @@ const NODE_NAMES: readonly string[] = [
  * Map base ids. This module is a pure leaf — no `@exiled` imports — so it may
  * hold only the ids; the DEFINITIONS (biome, tileset, layout grammar) live in
  * `@exiled/content-runtime`, and a test there fails if the two lists disagree.
- * Same arrangement as `GEAR_TEXTURE` in the renderer.
  */
 export const MAP_BASE_IDS = [
   "map.vaal_stone", "map.desert", "map.swamp", "map.forest", "map.coast",

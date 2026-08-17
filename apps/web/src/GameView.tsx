@@ -329,7 +329,6 @@ export function GameView({
       canvas,
       worker,
       scene,
-      () => renderer.cyclePlayerOutfit(),
       (id) => {
         // Both the renderer (mesh highlight) and React (HUD label) must update.
         renderer.setHoveredEntity(id);

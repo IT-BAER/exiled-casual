@@ -1,8 +1,8 @@
 // @vitest-environment node
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect, afterEach } from "vitest";
-import { NullEngine } from "@babylonjs/core";
+import { LoadAssetContainerAsync, NullEngine } from "@babylonjs/core";
 import { createScene } from "./engine";
 import { makeMesh } from "./meshes";
 import {
@@ -17,34 +17,20 @@ import {
   clipForSpeed,
   CLIP_NAME,
   idleRatio,
+  indexRigSubtree,
   IDLE_SETTLE_SEC,
   IDLE_SETTLED,
   isRigReady,
   loadPlayerRig,
   resetPlayerRig,
   speedRatioFor,
-  looksForEquipment,
-  meshLook,
-  COSMETIC_SLOTS,
-  GEAR_TEXTURE_BASES,
+  BASE_LOOKS,
+  NO_LOOKS,
+  SLOTS,
   HIPS_BOB,
-  SKIRT_CHAINS,
-  SKIRT_JOINTS,
   STRIKE_CLIPS,
   isLayeredClip,
 } from "./rig";
-import { ITEM_POOLS, STARTER_BASE_IDS, baseOf } from "@exiled/content-runtime";
-import { EQUIP_SLOTS_BY_CLASS } from "@exiled/simulation";
-
-/**
- * Every base that can end up in an equipment slot, droppable or not.
- *
- * `ITEM_POOLS.bases` is the DROP pool, and the class starter armours are
- * deliberately outside it (they exist so a new character has a silhouette, not
- * so the loot table grows three entries). They are still worn, so they still
- * owe the rig a texture.
- */
-const ITEM_BASES = [...ITEM_POOLS.bases, ...STARTER_BASE_IDS.map((id) => baseOf(id))];
 
 let engine: InstanceType<typeof NullEngine>;
 
@@ -218,95 +204,6 @@ describe("rig fallback", () => {
   });
 });
 
-describe("looksForEquipment", () => {
-  it("dresses an empty character as a commoner, never bare", () => {
-    const bare = looksForEquipment({});
-    // Body and boots must always render something: a naked character is a bug,
-    // and the packs have no naked body to fall back to anyway.
-    expect(bare.body).not.toBeNull();
-    expect(bare.boots).not.toBeNull();
-    expect(bare.helmet).toBeNull();
-  });
-
-  it("shows an armoured look for any item in a slot", () => {
-    const bare = looksForEquipment({});
-    for (const slot of COSMETIC_SLOTS) {
-      const worn = looksForEquipment({ [slot]: {} });
-      expect(worn[slot]).not.toBeNull();
-      expect(worn[slot]).not.toBe(bare[slot]);
-    }
-  });
-
-  it("leaves the other slots alone when one is filled", () => {
-    const worn = looksForEquipment({ helmet: {} });
-    const bare = looksForEquipment({});
-    expect(worn.body).toBe(bare.body);
-    expect(worn.boots).toBe(bare.boots);
-  });
-
-  it("dresses a slot the same whatever the item's rarity rolled", () => {
-    // A rarity tint was tried here and reverted: it recoloured the whole
-    // silhouette rather than reading as one special piece. Rarity must stay out
-    // of the look until there is accent geometry to give it.
-    const plain = looksForEquipment({ body: {} }).body;
-    for (const rarity of ["normal", "magic", "rare", "unique"]) {
-      expect(looksForEquipment({ body: { rarity } }).body).toBe(plain);
-    }
-  });
-
-  it("wears the equipped base's armour texture, and only for a base that has one", () => {
-    const plain = looksForEquipment({ body: {} }).body!;
-    const geared = looksForEquipment({ body: { baseId: "base.emberweave_robe" } }).body!;
-    // The texture rides along with the look; the geometry it names is unchanged.
-    expect(geared).toBe(`${plain}#base.emberweave_robe`);
-    expect(meshLook(geared)).toBe(plain);
-    // An unmapped base keeps the authored look rather than asking for a missing file.
-    expect(looksForEquipment({ body: { baseId: "base.nonexistent" } }).body).toBe(plain);
-  });
-});
-
-/**
- * The armour textures are baked offline from the item icons, so nothing at build
- * time connects the base ids in `items.ts`, the files in `public/textures/gear/`
- * and the table in `rig.ts`. A base renamed in content would silently go back to
- * wearing green linen. This pins all three together.
- */
-describe("gear textures", () => {
-  const GEAR = fileURLToPath(new URL("../../public/textures/gear/", import.meta.url));
-
-  it("ships a texture file for every base the rig can ask for", () => {
-    expect(GEAR_TEXTURE_BASES.length).toBeGreaterThan(0);
-    for (const baseId of GEAR_TEXTURE_BASES) {
-      const slug = baseId.split(".", 2)[1]!;
-      expect(existsSync(`${GEAR}${slug}.png`)).toBe(true);
-    }
-  });
-
-  it("names bases that content actually defines", () => {
-    const defined = new Set(ITEM_BASES.map((b) => b.id));
-    for (const baseId of GEAR_TEXTURE_BASES) expect(defined).toContain(baseId);
-  });
-
-  it("covers every base that can fill a cosmetic slot", () => {
-    // Any equippable armour base without a texture renders as green ranger gear
-    // next to charred-iron item art, which is the mismatch this whole pipeline
-    // exists to remove. Held gear is worse than wrong-coloured: its meshes carry
-    // either one pinned texel or a projection of their own icon, so an unmapped
-    // hand base smears the clothing atlas along a wand.
-    //
-    // The class is NOT the slot name — a `wand` fills `weapon1` and a `shield`
-    // fills `weapon2` — so the two are mapped through the sim's own table rather
-    // than compared as strings, which silently skipped every held class.
-    const cosmetic = new Set<string>(COSMETIC_SLOTS);
-    const worn = (itemClass: string) =>
-      (EQUIP_SLOTS_BY_CLASS[itemClass] ?? []).some((slot) => cosmetic.has(slot));
-    const missing = ITEM_BASES.filter(
-      (b) => b.itemClass !== undefined && worn(b.itemClass) && !GEAR_TEXTURE_BASES.includes(b.id),
-    );
-    expect(missing.map((b) => b.id)).toEqual([]);
-  });
-});
-
 /**
  * The runtime dresses the character by name: it shows every mesh prefixed
  * `<slot>.<look>.` and hides the rest of that slot. Nothing checks that spelling
@@ -319,329 +216,46 @@ describe("wardrobe asset", () => {
   const json = JSON.parse(
     glb.subarray(20, 20 + glb.readUInt32LE(12)).toString("utf8"),
   ) as {
-    nodes: { name: string; mesh?: number; skin?: number; translation?: [number, number, number] }[];
+    nodes: { name: string; mesh?: number; skin?: number; children?: number[] }[];
     skins: { joints: number[] }[];
-    meshes: { primitives: { attributes: Record<string, number> }[] }[];
-    accessors: {
-      bufferView: number;
-      byteOffset?: number;
-      componentType: number;
-      count: number;
-      type: string;
-    }[];
-    bufferViews: { byteOffset?: number; byteStride?: number }[];
+    meshes: { name: string }[];
   };
   const skinned = json.nodes.filter((n) => n.skin !== undefined).map((n) => n.name);
 
-  /** The glb's binary chunk: past the header, the json chunk, and its own header. */
-  const bin = 20 + glb.readUInt32LE(12) + 8;
-
-  /** One vertex attribute, read out of the binary chunk as a flat array. */
-  function attribute(mesh: string, name: string): { data: number[]; stride: number } {
-    const node = json.nodes.find((n) => n.name === mesh && n.mesh !== undefined)!;
-    const accessor = json.accessors[json.meshes[node.mesh!]!.primitives[0]!.attributes[name]!]!;
-    const view = json.bufferViews[accessor.bufferView]!;
-    const stride = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4 }[accessor.type]!;
-    // Only the component types glTF allows for JOINTS_0 and WEIGHTS_0.
-    const read: Record<number, [number, (o: number) => number]> = {
-      5121: [1, (o) => glb.readUInt8(o)],
-      5123: [2, (o) => glb.readUInt16LE(o)],
-      5126: [4, (o) => glb.readFloatLE(o)],
-    };
-    const [size, readAt] = read[accessor.componentType]!;
-    const start = bin + (view.byteOffset ?? 0) + (accessor.byteOffset ?? 0);
-    const step = view.byteStride ?? size * stride;
-    const data: number[] = [];
-    for (let i = 0; i < accessor.count; i++) {
-      for (let c = 0; c < stride; c++) data.push(readAt(start + i * step + c * size));
-    }
-    return { data, stride };
-  }
-
-  it("rides one skeleton: the packs' 65 joints plus the coat's chains", () => {
-    expect(json.skins).toHaveLength(1);
-    const joints = json.skins[0]!.joints.map((j) => json.nodes[j]!.name);
-    const skirt = joints.filter((n) => n.startsWith("skirt_"));
-    // Every borrowed mesh binds by joint order, so the pack joints must still be
-    // all of the skeleton except what the builder adds for cloth.
-    expect(joints.length - skirt.length).toBe(65);
-    // Against the constants, not against a literal: both the chain count and the
-    // joints per chain live in the builder and in `rig.ts`, and a rebuild with
-    // either of them changed drops bones out of the coat silently.
-    expect(skirt.length).toBe(SKIRT_CHAINS * SKIRT_JOINTS);
+  it("ships exactly the two base bodies, four parts each", () => {
+    const meshNames = json.meshes.map((m) => m.name).sort();
+    expect(meshNames).toEqual([
+      "base.female.body", "base.female.brows", "base.female.eyes", "base.female.hair",
+      "base.male.body", "base.male.brows", "base.male.eyes", "base.male.hair",
+    ].sort());
   });
 
-  it("hangs every skirt chain on effectively one segment length", () => {
-    // `rig.ts` measures one bone of one chain and solves every bone of every
-    // chain against it, so this covers all of them below the first — the first
-    // carries its offset from the pelvis rather than a segment length. They are
-    // not bit-identical, because the coat is an ellipse and a chain at the hip
-    // travels further out than one at the belly, but that spread is 0.2% - a
-    // millimetre on this character. A ring that drifted past 1% would render as
-    // cloth of the wrong length on seven chains out of eight.
-    const lengths = json.nodes
-      .filter((n) => /^skirt_\d+_\d+$/.test(n.name) && !/_01$/.test(n.name))
-      .map((n) => Math.hypot(...(n.translation ?? [0, 0, 0])));
-    expect(lengths).toHaveLength(SKIRT_CHAINS * (SKIRT_JOINTS - 1));
-    expect(lengths[0]).toBeGreaterThan(0.1);
-    for (const length of lengths) {
-      expect(Math.abs(length - lengths[0]!) / lengths[0]!).toBeLessThan(0.01);
-    }
-  });
-
-  it("binds every coat vertex to a single chain, so collision can reach it", () => {
-    // The solver collides the chains and nothing else: `SKIRT_JOINTS` particles
-    // per chain, pushed out of the leg capsules. A vertex weighted half to one chain and
-    // half to its neighbour is skinned to the average of the two, which lies on
-    // neither of them — it hangs in the gap *between* the collided lines, and no
-    // capsule can ever push it. Measured on the running character, those split
-    // vertices sat up to 0.088 off the nearest chain, wider than the whole thigh
-    // capsule (0.088), so a leg swinging between two chains passed through the
-    // coat while the solver reported every particle clear.
-    //
-    // The fix is a chain per coat column, and this is what pins it: one ring
-    // coarser than the other silently re-opens the gap. It is a weight test
-    // rather than a count test because the counts live in two languages.
-    const joints = json.skins[0]!.joints.map((j) => json.nodes[j]!.name);
-    const chainOf = joints.map((n) => /^skirt_(\d+)_/.exec(n)?.[1] ?? null);
-    // Every body look is its own coat and each must satisfy this, not only the
-    // ranger: a bulkier plate or a slimmer leather profile that re-opened the
-    // between-chains gap would be a leg through cloth on that look alone.
-    const coats = json.nodes
-      .filter((n) => /^body\.[^.]+\.coat$/.test(n.name) && n.mesh !== undefined)
-      .map((n) => n.name);
-    expect(coats.length).toBeGreaterThan(1);
-
-    for (const coat of coats) {
-      const { data: index } = attribute(coat, "JOINTS_0");
-      const { data: weight } = attribute(coat, "WEIGHTS_0");
-      let worst = 0;
-      for (let v = 0; v < weight.length / 4; v++) {
-        const perChain = new Map<string, number>();
-        for (let k = 0; k < 4; k++) {
-          const chain = chainOf[index[v * 4 + k]!] ?? null;
-          if (chain === null) continue; // the pelvis holds the pinned waist band
-          perChain.set(chain, (perChain.get(chain) ?? 0) + weight[v * 4 + k]!);
-        }
-        const shares = [...perChain.values()].sort((a, b) => b - a);
-        worst = Math.max(worst, shares[1] ?? 0);
-      }
-      expect(worst, `${coat} splits a vertex across chains`).toBeLessThan(0.01);
-    }
-  });
-
-  it("carries a head that is unwrapped onto the painted face, not pinned to one texel", () => {
-    // Neither outfit pack ships a head, but both ship the *texture* for one: a
-    // face painted into the top-left of `T_Regular_Male_Dark_BaseColor.png` that
-    // each pack references and neither uses, because the head it was unwrapped
-    // for lives in the author's separate base-character pack. The head is cut
-    // out of that base male so it arrives already carrying those uvs.
-    //
-    // What this pins is that the head is UNWRAPPED, which a name test cannot
-    // see. The head this replaced was a uv sphere with every loop pinned to one
-    // flat skin texel — correctly shaped, correctly animated, and completely
-    // blank — so "a part called base.head.* exists" passed all the way through
-    // it. Hair is still pinned on purpose, which makes it the control: if the
-    // pin ever came back for the head, hair is what it would look like.
-    for (const part of ["base.head.head", "base.head.eyes", "base.head.brows", "base.head.hair"]) {
-      expect(skinned).toContain(part);
-    }
-
-    const uvSpread = (part: string) => {
-      const { data } = attribute(part, "TEXCOORD_0");
-      const lo = [Infinity, Infinity];
-      const hi = [-Infinity, -Infinity];
-      for (let i = 0; i < data.length; i += 2) {
-        for (const k of [0, 1]) {
-          lo[k] = Math.min(lo[k]!, data[i + k]!);
-          hi[k] = Math.max(hi[k]!, data[i + k]!);
-        }
-      }
-      return Math.min(hi[0]! - lo[0]!, hi[1]! - lo[1]!);
-    };
-
-    // A face island is a good fraction of the atlas in both directions.
-    expect(uvSpread("base.head.head")).toBeGreaterThan(0.1);
-    expect(uvSpread("base.head.eyes")).toBeGreaterThan(0.1);
-    expect(uvSpread("base.head.hair")).toBe(0);
-  });
-
-  it("carries the coat, which is the armoured body's silhouette", () => {
-    // Generated, not cut from a pack: every body base is drawn as a long coat
-    // and the ranger's authored body stops at the hip. Lose this part in a
-    // rebuild and the character silently goes back to wearing a tunic, which
-    // the look-prefix tests above would not notice.
-    expect(skinned).toContain("body.ranger.coat");
-  });
-
-  it("gives every armour body look a whole body, not just a coat", () => {
-    // The runtime dresses by showing `body.<look>.*` and hiding the rest of the
-    // slot, so a look that owns only a coat renders as a floating skirt with no
-    // torso, arms or legs. Every armour look (anything past the commoner default)
-    // must carry the same body parts the ranger does, plus its own coat.
-    const partsOf = (look: string) =>
-      new Set(
-        skinned
-          .filter((n) => n.startsWith(`body.${look}.`))
-          .map((n) => n.split(".")[2]!),
-      );
-    const need = ["torso", "legs", "sleeves", "hands", "coat"];
-    const looks = new Set(
-      skinned
-        .filter((n) => n.startsWith("body.") && !n.startsWith("body.commoner."))
-        .map((n) => n.split(".")[1]!),
-    );
-    expect(looks.size).toBeGreaterThan(1); // ranger plus at least one armour look
-    for (const look of looks) {
-      const parts = partsOf(look);
-      for (const part of need) {
-        expect(parts.has(part), `body.${look} is missing ${part}`).toBe(true);
-      }
-    }
-  });
-
-  it("hangs a pauldron on the arm it belongs to, on both sides", () => {
-    // Plate's caps are the pack's single left-hand pauldron, copied and mirrored
-    // (`build_pauldrons`). The mesh carries a vertex group per skeleton joint
-    // rather than only the one it uses, so moving the bind is moving WEIGHTS,
-    // and the first attempt renamed groups instead: every group took the same
-    // name, Blender suffixed the collisions, and the group holding the weights
-    // matched no bone. glTF answers that with `neutral_bone`, which is silent -
-    // the cap loads, binds to the root, and hangs at the character's feet. A
-    // name test cannot see it; only where the weights point can.
-    const joints = json.skins[0]!.joints.map((j) => json.nodes[j]!.name);
-    const caps = json.nodes
-      .filter((n) => /^body\.[^.]+\.pauldron_[lr]$/.test(n.name) && n.mesh !== undefined)
-      .map((n) => n.name);
-    expect(caps.length).toBeGreaterThanOrEqual(2);
-
-    for (const cap of caps) {
-      const side = cap.endsWith("_l") ? "l" : "r";
-      const { data: index } = attribute(cap, "JOINTS_0");
-      const { data: weight } = attribute(cap, "WEIGHTS_0");
-      const perBone = new Map<string, number>();
-      for (let k = 0; k < weight.length; k++) {
-        if (weight[k]! <= 0) continue;
-        const bone = joints[index[k]!]!;
-        perBone.set(bone, (perBone.get(bone) ?? 0) + weight[k]!);
-      }
-      // A shoulder cap follows the arm and nothing else: bound to the cloth
-      // chains it would swing with the skirt and shear off the shoulder.
-      expect([...perBone.keys()], `${cap} is not bound to its own arm alone`)
-        .toEqual([`upperarm_${side}`]);
-    }
-  });
-
-  it("bends a cuirass with the body, not against it", () => {
-    // The shell over the chest takes its weights from the nearest torso vertex
-    // (`build_cuirass`) precisely so it deforms with the tunic under it. Bound
-    // to one spine bone instead it would be rigid and shear at the waist, and
-    // bound to the coat's chains it would swing with the skirt. Either reads as
-    // a bug only in motion, so the bind is pinned rather than the look.
-    const joints = json.skins[0]!.joints.map((j) => json.nodes[j]!.name);
-    const bonesOf = (name: string) => {
-      const { data: index } = attribute(name, "JOINTS_0");
-      const { data: weight } = attribute(name, "WEIGHTS_0");
-      const used = new Set<string>();
-      for (let k = 0; k < weight.length; k++) {
-        if (weight[k]! > 0) used.add(joints[index[k]!]!);
-      }
-      return [...used].sort();
-    };
-    const shells = json.nodes
-      .filter((n) => /^body\.[^.]+\.cuirass$/.test(n.name) && n.mesh !== undefined)
-      .map((n) => n.name);
-    expect(shells.length).toBeGreaterThan(0);
-    for (const shell of shells) {
-      expect(bonesOf(shell), `${shell} does not bend with the torso`)
-        .toEqual(bonesOf("body.ranger.torso"));
+  it("rides two 65-bone skeletons, one per body", () => {
+    expect(json.skins).toHaveLength(2);
+    for (const skin of json.skins) {
+      expect(skin.joints.map((j) => json.nodes[j]!.name)).toHaveLength(65);
     }
   });
 
   it("carries every look the code can ask for", () => {
-    const asked = new Set<string>();
-    for (const looks of [
-      looksForEquipment({}),
-      looksForEquipment(Object.fromEntries(COSMETIC_SLOTS.map((s) => [s, {}]))),
-    ]) {
-      for (const slot of COSMETIC_SLOTS) {
-        if (looks[slot] !== null) asked.add(`${slot}.${looks[slot]}.`);
+    for (const looks of [BASE_LOOKS, NO_LOOKS]) {
+      for (const slot of SLOTS) {
+        const look = looks[slot];
+        if (look === null) continue;
+        const prefix = `${slot}.${look}.`;
+        expect(skinned.some((n) => n.startsWith(prefix)), `wardrobe has no ${prefix}*`).toBe(true);
       }
-    }
-    expect(asked.size).toBeGreaterThan(0);
-    for (const prefix of asked) {
-      expect(skinned.some((n) => n.startsWith(prefix))).toBe(true);
     }
   });
 
-  it("carries a look for every base that can be held", () => {
-    // The hands are the one place a *base* names its own mesh rather than
-    // inheriting its slot's, so a mistyped look here is not a wrong colour, it
-    // is an empty fist - and the test above cannot see it, because it only ever
-    // asks for the slot default.
-    const held: string[] = [];
-    for (const base of ITEM_BASES) {
-      for (const slot of EQUIP_SLOTS_BY_CLASS[base.itemClass ?? ""] ?? []) {
-        if (slot !== "weapon1" && slot !== "weapon2") continue;
-        const look = looksForEquipment({ [slot]: { baseId: base.id } })[slot];
-        expect(look, `${base.id} has no look`).not.toBeNull();
-        held.push(`${slot}.${meshLook(look!)}.`);
-      }
-    }
-    expect(held.length).toBeGreaterThan(0);
-    for (const prefix of held) {
-      expect(skinned.some((n) => n.startsWith(prefix)), `${prefix} missing`).toBe(true);
-    }
+  it("names the two skeleton roots the loader keys off of", () => {
+    const roots = json.nodes.filter((n) => n.name === "Armature" || n.name === "Armature_female");
+    expect(roots.map((n) => n.name).sort()).toEqual(["Armature", "Armature_female"]);
   });
 
-  it("skins every part, so no piece floats free of the rig", () => {
+  it("skins every part, so no piece floats free of a rig", () => {
     const meshNodes = json.nodes.filter((n) => n.name.includes("."));
     expect(meshNodes.length).toBe(skinned.length);
-  });
-});
-
-/**
- * The modular wardrobe rests entirely on the packs being skin-compatible: a mesh
- * from one is bound to the other's live skeleton by assignment alone, with no
- * retargeting. That holds only while every pack lists the same joints in the
- * same order with the same inverse bind matrices. It is an asset invariant, not
- * a code one, so it is checked against the files a new pack would have to join.
- */
-describe("pack skin compatibility", () => {
-  const PACKS = fileURLToPath(new URL("../../../../assets/characters/", import.meta.url));
-
-  /** Joint names in skin order, plus the flat inverse bind matrix buffer. */
-  function readSkin(file: string): { joints: string[]; ibm: Float32Array } {
-    const gltf = JSON.parse(readFileSync(`${PACKS}${file}.gltf`, "utf8"));
-    const bin = readFileSync(`${PACKS}${file}.bin`);
-    const accessor = gltf.accessors[gltf.skins[0].inverseBindMatrices];
-    const view = gltf.bufferViews[accessor.bufferView];
-    const start = (view.byteOffset ?? 0) + (accessor.byteOffset ?? 0);
-    const ibm = new Float32Array(accessor.count * 16);
-    for (let i = 0; i < ibm.length; i++) ibm[i] = bin.readFloatLE(start + i * 4);
-    return { joints: gltf.skins[0].joints.map((j: number) => gltf.nodes[j].name), ibm };
-  }
-
-  const ranger = readSkin("Male_Ranger");
-  const peasant = readSkin("Male_Peasant");
-
-  it("lists the same joints in the same order", () => {
-    expect(ranger.joints).toHaveLength(65);
-    expect(peasant.joints).toEqual(ranger.joints);
-  });
-
-  it("binds those joints at the same rest pose", () => {
-    // Bit-identical in both packs today. Any drift here means a borrowed mesh
-    // would deform against the wrong bind pose, so exactness is the point.
-    expect(peasant.ibm).toEqual(ranger.ibm);
-  });
-
-  it("keeps the pieces the mixed outfit borrows", () => {
-    // Named in rig.ts; renaming a mesh in the pack would silently drop the piece.
-    const gltf = JSON.parse(readFileSync(`${PACKS}Male_Ranger.gltf`, "utf8"));
-    const names = gltf.meshes.map((m: { name: string }) => m.name);
-    expect(names).toContain("Male_Ranger_Head_Hood");
-    expect(names).toContain("Male_Ranger_Acc_Pauldron");
   });
 });
 
@@ -879,6 +493,79 @@ describe("the idle clip leaves the soles planted", () => {
     // soles, and dropping the curve entirely puts the hips' whole 10.4mm there.
     expect(travel("foot_l", 0.65)).toBeGreaterThan(0.004);
     expect(travel("foot_l", 0)).toBeGreaterThan(0.01);
+  });
+});
+
+/**
+ * The one thing the JSON checks above cannot see: what Babylon's glTF loader
+ * HANDS BACK. It wraps every import in a single `__root__` node carrying the
+ * right-to-left-handed conversion, so an asset's own skeleton roots are that
+ * node's children and never the container's root nodes. Reading the roots as if
+ * they were the armatures indexes nothing, disables the whole import, and
+ * renders a black screen with no error anywhere — the asset, the fetch and the
+ * bone names all being correct is exactly why nothing else here catches it.
+ *
+ * So this goes through the real loader on the real glb rather than the JSON.
+ */
+describe("indexRigSubtree against the real loader", () => {
+  const MODELS = fileURLToPath(new URL("../../public/models/", import.meta.url));
+
+  /** Babylon reads a File through FileReader, which node does not ship. */
+  class NodeFileReader {
+    result: unknown;
+    error: unknown;
+    onload?: (e: { target: NodeFileReader }) => void;
+    onerror?: (e: { target: NodeFileReader }) => void;
+    onloadend?: (e: { target: NodeFileReader }) => void;
+    abort(): void {}
+    readAsArrayBuffer(blob: Blob): void { this.finish(blob.arrayBuffer()); }
+    readAsText(blob: Blob): void { this.finish(blob.text()); }
+    private finish(promise: Promise<unknown>): void {
+      promise.then((result) => {
+        this.result = result;
+        this.onload?.({ target: this });
+        this.onloadend?.({ target: this });
+      }).catch((error: unknown) => {
+        this.error = error;
+        this.onerror?.({ target: this });
+        this.onloadend?.({ target: this });
+      });
+    }
+  }
+
+  it("indexes the male subtree and switches the female body off", async () => {
+    const original = (globalThis as { FileReader?: unknown }).FileReader;
+    (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    try {
+      const bytes = readFileSync(`${MODELS}wardrobe.glb`);
+      const file = new File([bytes], "wardrobe.glb", { type: "model/gltf-binary" });
+      const container = await LoadAssetContainerAsync(file, scene);
+      const entries = container.instantiateModelsToScene((n) => n, false, {
+        doNotInstantiate: true,
+      });
+
+      const byName = indexRigSubtree(entries.rootNodes);
+
+      // The male body's parts and his bones, or the runtime has nothing to
+      // dress and no skeleton to drive.
+      for (const part of ["body", "brows", "eyes", "hair"]) {
+        expect(byName.has(`base.male.${part}`), `base.male.${part}`).toBe(true);
+      }
+      expect(byName.has("pelvis")).toBe(true);
+      expect(byName.has("hand_r")).toBe(true);
+      // Her skeleton must not be indexed: both carry the same 65 bone names and
+      // whichever landed second would silently own the animation.
+      expect(byName.has("base.female.body")).toBe(false);
+
+      const enabled = (name: string): boolean =>
+        scene.meshes.find((m) => m.name === name)?.isEnabled() ?? false;
+      expect(enabled("base.male.body")).toBe(true);
+      expect(enabled("base.female.body")).toBe(false);
+    } finally {
+      (globalThis as { FileReader?: unknown }).FileReader = original;
+    }
   });
 });
 

@@ -13,8 +13,7 @@ import {
 /**
  * `@exiled/rules` is a pure leaf, so it holds only the map base IDS while
  * `@exiled/content-runtime` holds their definitions, and neither may import the
- * other. This file is where the two halves are checked against each other — the
- * same arrangement as `GEAR_TEXTURE` in the renderer.
+ * other. This file is where the two halves are checked against each other.
  */
 describe("map bases", () => {
   it("rules' id list and content-runtime's definitions are the same set", () => {

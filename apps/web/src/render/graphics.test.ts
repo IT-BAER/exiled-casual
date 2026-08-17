@@ -14,15 +14,12 @@ function bareScene() {
 }
 
 describe("isWardrobePart", () => {
-  it("covers every slot the wardrobe has, held gear included", () => {
+  it("covers the wardrobe's one slot", () => {
     // This is what keeps the torch off the character: it excludes him from the
-    // lamp he carries and from its shadow map. Held gear was missing, so a
-    // shield an arm's length from the flame threw a room-wide shadow that swung
-    // with the walk. Every slot of `EQUIPPED`/`UNEQUIPPED` belongs here.
+    // lamp he carries and from its shadow map.
     for (const part of [
-      "base.head.head", "body.ranger.coat", "belt.ranger.belt", "boots.ranger.boots",
-      "gloves.bracers.bracers", "helmet.hood.hood",
-      "weapon1.wand.shaft", "weapon2.buckler.plate", "weapon2.tower.plate",
+      "base.male.body", "base.male.brows", "base.male.eyes", "base.male.hair",
+      "base.female.body",
     ]) {
       expect(isWardrobePart(part)).toBe(true);
     }

@@ -66,9 +66,7 @@ ALPHA_FLOOR = 8
 # The three class starter armours are ITEM icons, not menu art, so they land in
 # the item folder with the rest of the inventory art. They are built here anyway
 # because their masters are generated alongside the menu's and the crop-then-
-# scale step is identical. `tools/build_gear_textures.py` then re-palettizes the
-# character atlas from each of them, which is what makes three classes read as
-# three people on one rig.
+# scale step is identical.
 ITEMS_DST = pathlib.Path(__file__).resolve().parent.parent / "apps" / "web" / "public" / "textures" / "items"
 ITEM_ICONS: dict[str, tuple[str, int]] = {
     "icon_ironsworn_plate_v1": ("ironsworn_plate.png", 256),

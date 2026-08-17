@@ -121,19 +121,12 @@ export function torchColor(w: number): Color3 {
 }
 /** Flicker depth. Two detuned sines, because a single one reads as a pulse. */
 const TORCH_FLICKER = 0.035;
-/** A part of a dressed character, from `wardrobe.glb`'s `slot.look.part` naming.
+/** A part of the character body, from `wardrobe.glb`'s `slot.look.part` naming.
  *
  *  Matched on the part name and NOT on having an `entity-` root: the hideout
  *  props are entities too, so a root test takes the map device and the stash out
- *  along with the characters.
- *
- *  Held gear is a wardrobe slot like any other and belongs here for the same
- *  reason the body does: the torch rides the player, so a shield in his own hand
- *  is a slab an arm's length from the lamp, and it threw a shadow across half the
- *  room that swung with the walk cycle. Listing the armour slots by hand is what
- *  left the two weapon slots out. */
-export const isWardrobePart = (name: string): boolean =>
-  /^(base|body|belt|boots|gloves|helmet|weapon1|weapon2)\./.test(name);
+ *  along with the characters. */
+export const isWardrobePart = (name: string): boolean => /^base\./.test(name);
 
 /** The colour past the last wall. Fog is tinted TO this, so distance dissolves
  *  into the void instead of meeting it at a hard cliff at the map edge. */

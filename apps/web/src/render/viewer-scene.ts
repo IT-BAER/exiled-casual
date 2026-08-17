@@ -31,7 +31,8 @@ import {
   attachRig,
   loadPlayerRig,
   resetPlayerRig,
-  COSMETIC_SLOTS,
+  BASE_LOOKS,
+  SLOTS,
   type Looks,
   type RigActor,
   type RigClip,
@@ -82,9 +83,6 @@ export const VIEWER_CLIPS: readonly ViewerClip[] = [
   { key: "5", clip: "strikeA", label: "Strike" },
 ];
 
-/** Head geometry is cut from a separate base and is not a look anyone picks. */
-const HEAD_PREFIX = "base.head.";
-
 /**
  * The looks each slot ships, read off `slot.look.part` mesh names.
  *
@@ -95,7 +93,6 @@ const HEAD_PREFIX = "base.head.";
 export function looksFromPartNames(names: readonly string[]): Record<string, string[]> {
   const bySlot: Record<string, string[]> = {};
   for (const name of names) {
-    if (name.startsWith(HEAD_PREFIX)) continue;
     const [slot, look] = name.split(".");
     if (slot === undefined || look === undefined) continue;
     const list = (bySlot[slot] ??= []);
@@ -105,29 +102,24 @@ export function looksFromPartNames(names: readonly string[]): Record<string, str
 }
 
 /**
- * A full outfit, taking the first look each slot ships.
+ * The wired look, if the wardrobe actually ships it.
  *
- * The viewer used to open with every slot null, and null is not "no gear" to a
- * wardrobe that hides what it is not wearing: the only parts left enabled were
- * the four head meshes, so a camera correctly framed on a 1.9m body showed a
- * head floating in the middle of it. Opening dressed is what makes the frame
- * legible, and taking the looks from the asset rather than naming them keeps a
- * newly built look from arriving switched off.
+ * Only `male` is wired (see `BASE_LOOKS`); the wardrobe also ships `female`,
+ * and picking "the first look each slot has" would sometimes hand the viewer a
+ * body the game never draws. Checked against the vocabulary anyway, so an
+ * asset that stopped shipping the male body opens on nothing rather than a
+ * silent lie.
  */
 export function dressedFromVocabulary(vocab: Record<string, string[]>): Looks {
   const looks = { ...NAKED };
-  for (const slot of COSMETIC_SLOTS) {
-    const first = vocab[slot]?.[0];
-    if (first !== undefined) looks[slot] = first;
+  for (const slot of SLOTS) {
+    if (vocab[slot]?.includes(BASE_LOOKS[slot] ?? "")) looks[slot] = BASE_LOOKS[slot];
   }
   return looks;
 }
 
 /** Every slot empty. Exported so the panel and the scene agree on the word. */
-export const NAKED: Looks = {
-  weapon1: null, weapon2: null, helmet: null,
-  body: null, gloves: null, boots: null, belt: null,
-};
+export const NAKED: Looks = { base: null };
 
 /**
  * Camera distance that fits a subject of this radius in the frame.

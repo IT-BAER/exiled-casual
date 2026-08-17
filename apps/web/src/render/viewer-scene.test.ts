@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
-import { COSMETIC_SLOTS, CLIP_NAME, type RigClip } from "./rig";
+import { BASE_LOOKS, CLIP_NAME, SLOTS, type RigClip } from "./rig";
 import { SPAWNABLE } from "./gallery";
 import {
   VIEWER_CLIPS,
@@ -55,28 +55,21 @@ describe("viewer clips", () => {
   });
 });
 
-describe("opening outfit", () => {
-  /**
-   * The bug this pins: with every slot null the wardrobe leaves only the head
-   * enabled, so a camera correctly framed on the whole body showed a head alone.
-   */
-  it("fills every slot the wardrobe ships geometry for", () => {
+describe("opening look", () => {
+  it("opens dressed in the one wired look", () => {
     const vocab = looksFromPartNames(PART_NAMES);
     const looks = dressedFromVocabulary(vocab);
-    for (const slot of COSMETIC_SLOTS) {
-      if ((vocab[slot]?.length ?? 0) === 0) continue;
-      expect(looks[slot], `${slot} opened empty`).not.toBeNull();
-    }
+    expect(looks).toEqual(BASE_LOOKS);
   });
 
   it("leaves a slot the wardrobe has nothing for empty", () => {
-    expect(dressedFromVocabulary({ body: ["plate"] }).helmet).toBeNull();
+    expect(dressedFromVocabulary({ base: ["female"] }).base).toBeNull();
   });
 
-  it("picks looks that exist in that slot", () => {
+  it("picks a look that exists in that slot", () => {
     const vocab = looksFromPartNames(PART_NAMES);
     const looks = dressedFromVocabulary(vocab);
-    for (const slot of COSMETIC_SLOTS) {
+    for (const slot of SLOTS) {
       const look = looks[slot];
       if (look === null) continue;
       expect(vocab[slot]).toContain(look);
@@ -87,28 +80,17 @@ describe("opening outfit", () => {
 describe("look vocabulary", () => {
   it("reads the wardrobe's own part names, not a hand-typed list", () => {
     const bySlot = looksFromPartNames(PART_NAMES);
-    // The panel exists to swap gear: a slot the wardrobe ships geometry for must
-    // arrive with at least one look, or its row is a dead heading.
-    for (const slot of COSMETIC_SLOTS) {
-      if (!PART_NAMES.some((n) => n.startsWith(`${slot}.`))) continue;
-      expect(bySlot[slot]?.length ?? 0).toBeGreaterThan(0);
-    }
+    expect(bySlot.base?.length ?? 0).toBeGreaterThan(0);
   });
 
-  it("finds the armour silhouettes the wardrobe was just given", () => {
+  it("finds both bodies the wardrobe ships", () => {
     const bySlot = looksFromPartNames(PART_NAMES);
-    expect(bySlot.body).toContain("plate");
-    expect(bySlot.body).toContain("leather");
-    expect(bySlot.body).toContain("ranger");
+    expect(bySlot.base).toContain("male");
+    expect(bySlot.base).toContain("female");
   });
 
   it("keeps a look once however many parts carry it", () => {
-    const bySlot = looksFromPartNames(["body.plate.torso", "body.plate.coat", "body.ranger.torso"]);
-    expect(bySlot.body).toEqual(["plate", "ranger"]);
-  });
-
-  it("ignores the head, which is not a swappable look", () => {
-    const bySlot = looksFromPartNames(["base.head.skull", "body.plate.torso"]);
-    expect(bySlot.base).toBeUndefined();
+    const bySlot = looksFromPartNames(["base.male.body", "base.male.hair", "base.female.body"]);
+    expect(bySlot.base).toEqual(["male", "female"]);
   });
 });

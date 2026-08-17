@@ -3,8 +3,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { NullEngine, Scene } from "@babylonjs/core";
 import { CLASS_IDS } from "@exiled/rules";
-import { CLASSES } from "@exiled/content-runtime";
-import { COSMETIC_SLOTS, meshLook, resetPlayerRig } from "./rig";
+import { BASE_LOOKS, SLOTS, resetPlayerRig } from "./rig";
 import { floorScreenY, shadowReachScreenY } from "./menu-scene";
 import { looksForClass } from "../menu/class-looks";
 
@@ -17,10 +16,9 @@ afterEach(() => {
 });
 
 /**
- * The select screen dresses the rig by class. `rig.test.ts` already pins that
- * every look the GAME asks for exists in the wardrobe; this pins the same thing
- * for the looks the MENU asks for, which come from a different table and would
- * otherwise fail as an invisible character in front of a painting.
+ * The select screen dresses the rig by class. Every class shares the one
+ * wired body, so `rig.test.ts` pinning that look exists in the wardrobe is
+ * the whole guarantee; this pins that the menu asks for the same look.
  */
 describe("class looks", () => {
   const MODELS = fileURLToPath(new URL("../../public/models/", import.meta.url));
@@ -45,10 +43,10 @@ describe("class looks", () => {
   it("every class resolves to geometry the wardrobe ships", () => {
     for (const classId of CLASS_IDS) {
       const looks = looksForClass(classId);
-      for (const slot of COSMETIC_SLOTS) {
+      for (const slot of SLOTS) {
         const look = looks[slot];
         if (look === null) continue;
-        const prefix = `${slot}.${meshLook(look)}.`;
+        const prefix = `${slot}.${look}.`;
         expect(
           names.some((n) => n.startsWith(prefix)),
           `${classId} wants ${prefix}* and the wardrobe has none`,
@@ -57,26 +55,14 @@ describe("class looks", () => {
     }
   });
 
-  it("a class with an empty slot falls back to commoner cloth, never to nothing", () => {
-    // Ironsworn wears no helmet, and a bare slot must still leave a body there.
-    const looks = looksForClass("class.ironsworn");
-    expect(looks.helmet).toBeNull();
-    expect(looks.body).not.toBeNull();
-    expect(looks.boots).not.toBeNull();
-  });
-
-  it("each class asks for its own body texture, or the three are one character", () => {
-    const bodies = CLASS_IDS.map((id) => looksForClass(id).body);
-    expect(new Set(bodies).size).toBe(bodies.length);
-    // The look is `<mesh look>#<base id>`; the base id is what picks the palette.
-    for (const [i, id] of CLASS_IDS.entries()) {
-      expect(bodies[i]).toBe(`${meshLook(bodies[i]!)}#${CLASSES[id]!.startingGear["body"]}`);
+  it("dresses every class in the same wired look, since there is no per-class wardrobe", () => {
+    for (const classId of CLASS_IDS) {
+      expect(looksForClass(classId)).toEqual(BASE_LOOKS);
     }
   });
 
   it("an unknown class still dresses somebody", () => {
-    const looks = looksForClass("class.nope");
-    expect(looks.body).not.toBeNull();
+    expect(looksForClass("class.nope")).toEqual(BASE_LOOKS);
   });
 
   /**

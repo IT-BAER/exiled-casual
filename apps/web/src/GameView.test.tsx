@@ -67,7 +67,6 @@ vi.mock("./render/engine", () => ({
 vi.mock("./render/renderer", () => ({
   SnapshotRenderer: class {
     apply = vi.fn();
-    cyclePlayerOutfit = vi.fn();
     setHoveredEntity = vi.fn();
     setAim = vi.fn();
   },
@@ -101,7 +100,7 @@ vi.mock("./render/level", () => ({
 }));
 vi.mock("./input/bindings", () => ({
   attachBindings: (
-    _canvas: unknown, _worker: unknown, _scene: unknown, _cycle: unknown, _hover: unknown,
+    _canvas: unknown, _worker: unknown, _scene: unknown, _hover: unknown,
     onPanel: (open: boolean) => void,
     onStash: (open: boolean) => void,
     onVendor: (open: boolean) => void,

@@ -81,7 +81,7 @@ describe("attachBindings hold-to-move", () => {
     worker = { postMessage: vi.fn() };
     ({ detach } = attachBindings(
       canvas, worker as unknown as Worker, fakeScene(),
-      undefined, undefined, undefined, undefined, undefined, defaultSkillForKey,
+      undefined, undefined, undefined, undefined, defaultSkillForKey,
     ));
   });
 
@@ -152,7 +152,7 @@ describe("attachBindings hold-to-move", () => {
     document.body.appendChild(c);
     const { detach: d, onSnapshot } = attachBindings(
       c, w as unknown as Worker, fakeScene(),
-      undefined, undefined, undefined, undefined, undefined, undefined,
+      undefined, undefined, undefined, undefined, undefined,
       (button) => (button === 2 ? "skill.ember_bolt.v1" : "builtin.move"),
     );
     const move = (buttons: number) =>
@@ -179,7 +179,7 @@ describe("attachBindings hold-to-move", () => {
     document.body.appendChild(c);
     const { detach: d, onSnapshot } = attachBindings(
       c, w as unknown as Worker, fakeScene(),
-      undefined, undefined, undefined, undefined, undefined, undefined,
+      undefined, undefined, undefined, undefined, undefined,
       (button) => (button === 2 ? "skill.ember_bolt.v1" : null),
     );
     c.dispatchEvent(new MouseEvent("pointerdown", { button: 2, clientX: 50, clientY: 50, bubbles: true }));
@@ -386,7 +386,7 @@ describe("attachBindings aim", () => {
     const w = { postMessage: vi.fn() };
     const { detach } = attachBindings(
       c, w as unknown as Worker, scene,
-      undefined, undefined, undefined, undefined, undefined, defaultSkillForKey,
+      undefined, undefined, undefined, undefined, defaultSkillForKey,
       (button) => (button === 2 ? "skill.ember_bolt.v1" : MOVE_SOCKET),
     );
     const cleanup = () => { detach(); c.remove(); };
@@ -477,7 +477,6 @@ describe("attachBindings map device", () => {
       worker as unknown as Worker,
       fakeMapDeviceScene(7),
       undefined,
-      undefined,
       onOpenPanel,
     );
 
@@ -503,7 +502,6 @@ describe("attachBindings map device", () => {
       worker as unknown as Worker,
       fakeInteractScene(42), // portal
       undefined,
-      undefined,
       onOpenPanel,
     );
 
@@ -528,7 +526,6 @@ describe("attachBindings proximity close", () => {
       canvas,
       worker as unknown as Worker,
       fakeMapDeviceScene(7),
-      undefined,
       undefined,
       undefined,
       onStash,
@@ -563,7 +560,6 @@ describe("attachBindings proximity close", () => {
       worker as unknown as Worker,
       fakeMapDeviceScene(7),
       undefined,
-      undefined,
       onOpenPanel,
     );
 
@@ -590,7 +586,6 @@ describe("attachBindings hover", () => {
       canvas,
       { postMessage: vi.fn() } as unknown as Worker,
       fakeInteractScene(42),
-      undefined,
       onHover,
     );
 
@@ -610,7 +605,6 @@ describe("attachBindings hover", () => {
       canvas,
       { postMessage: vi.fn() } as unknown as Worker,
       fakeInteractScene(42),
-      undefined,
       onHover,
     );
 
@@ -640,7 +634,6 @@ describe("attachBindings hover", () => {
       canvas,
       { postMessage: vi.fn() } as unknown as Worker,
       switchingScene,
-      undefined,
       onHover,
     );
 
@@ -671,7 +664,6 @@ describe("attachBindings hover", () => {
       canvas,
       { postMessage: vi.fn() } as unknown as Worker,
       fakeScene(),
-      undefined,
       onHover,
     );
 
@@ -691,7 +683,6 @@ describe("attachBindings hover", () => {
       canvas,
       { postMessage: vi.fn() } as unknown as Worker,
       fakeScene(),
-      undefined,
       onHover,
     );
 
@@ -718,7 +709,6 @@ describe("attachBindings hover", () => {
         canvas,
         { postMessage: vi.fn() } as unknown as Worker,
         fakeScene(),
-        undefined,
         onHover,
       );
 
@@ -739,7 +729,6 @@ describe("attachBindings hover", () => {
       canvas,
       { postMessage: vi.fn() } as unknown as Worker,
       fakeInteractScene(9),
-      undefined,
       onHover,
     );
 

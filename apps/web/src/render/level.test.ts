@@ -165,8 +165,8 @@ describe("buildLevel", () => {
 /**
  * The renderer looks these up by path at runtime, so a base whose plates were
  * never built is a wall that renders untextured in the real game and nowhere
- * else. Same guard as `GEAR_TEXTURE` in rig.test.ts: the data and the files on
- * disk must agree. Rebuild with `python tools/build_tileset_textures.py`.
+ * else. The data and the files on disk must agree. Rebuild with
+ * `python tools/build_tileset_textures.py`.
  */
 describe("biome tilesets", () => {
   const publicDir = fileURLToPath(new URL("../../public", import.meta.url));

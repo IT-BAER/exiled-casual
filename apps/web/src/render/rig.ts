@@ -3,16 +3,13 @@ import {
   AnimationGroup,
   Matrix,
   Mesh,
-  PBRMaterial,
   Quaternion,
-  Texture,
   TransformNode,
   Vector3,
   LoadAssetContainerAsync,
   type AssetContainer,
   type IAnimationKey,
   type InstantiatedEntries,
-  type Material,
   type Node,
   type Observer,
   type Scene,
@@ -21,13 +18,11 @@ import "@babylonjs/loaders/glTF";
 import { SkirtSim, type SkirtCollider } from "./skirt";
 
 /**
- * Skinned player actor: one CC0 humanoid skeleton, animation clips retargeted
- * onto it by bone name, and outfits that are pure data.
+ * Skinned player actor: a base body on a 65-bone Unreal-named skeleton, and
+ * animation clips retargeted onto it by bone name.
  *
- * The two source packs export the same 65-bone Unreal-named rig, so a clip
- * authored on the animation library drives any outfit without retargeting
- * machinery — the bones are matched by name and the eight leaf tips that differ
- * (`foot_end_l` vs `ball_leaf_l`) deform nothing.
+ * The animation library's clip tracks and the wardrobe's own skeleton share
+ * every bone name, so a clip drives the rig without retargeting machinery.
  */
 
 /** Clips the game can actually trigger today. The library ships 45. */
@@ -235,222 +230,39 @@ export function speedRatioFor(clip: RigClip, speed: number): number {
 }
 
 /**
- * The character is one asset, `wardrobe.glb`, carrying every slot's geometry on
- * a single 65-joint skeleton. `tools/build_wardrobe.py` cuts it out of the two
- * source packs offline, because neither pack is modular on its own: each welds
- * its sleeves to its bare forearms, and neither ships a head at all — the ranger
- * only looks finished because his hood *is* his head.
+ * The character is one asset, `wardrobe.glb`: two base bodies (male, female),
+ * each its own skeleton, each carrying its fixed hair, brows and eyes.
+ * `tools/build_wardrobe.py` cuts it out of the Quaternius base-character packs.
  *
- * Every part is named `slot.look.part`, so dressing the character is pure
- * visibility: show the meshes of the chosen look, hide the rest of that slot.
- * Nothing is instantiated or rebuilt when gear changes, which is what keeps a
- * mid-stride armour swap from restarting the walk cycle.
+ * Every part is named `slot.look.part`; the one slot is `base` and a look
+ * (`male` or `female`) is shown by enabling its parts and hiding every other
+ * look's. Nothing is instantiated or rebuilt when the look changes, which is
+ * what keeps a mid-stride swap from restarting the walk cycle.
  */
 const WARDROBE_URL = "/models/wardrobe.glb";
 
-/**
- * Equipment slots that change how the character looks.
- *
- * The two hands are slots like any other, which is the whole trick: a weapon is
- * a `weapon1.<look>.part` mesh skinned 100% to `hand_r` and an off-hand piece is
- * skinned to `hand_l`, so showing one is the same visibility flip that puts a
- * hood on a head. Nothing is parented, attached or driven per frame, and a
- * weapon swap costs exactly what an armour swap costs: nothing.
- */
-export type CosmeticSlot =
-  | "weapon1" | "weapon2" | "helmet" | "body" | "gloves" | "boots" | "belt";
+/** The skeleton the runtime drives. The wardrobe also ships `Armature_female`,
+ * whose 65 bones carry the same names, and nothing selects her yet. */
+const MALE_RIG = "Armature";
 
-export const COSMETIC_SLOTS: readonly CosmeticSlot[] = [
-  "weapon1", "weapon2", "helmet", "body", "gloves", "boots", "belt",
-];
+/** Every skeleton root the wardrobe ships, wired or not. */
+const RIG_ROOT = /^Armature(_[a-z]+)?$/;
 
-/**
- * A look per slot, or null for "wearing nothing there".
- *
- * A look is `<mesh look>`, optionally followed by `#<base id>`: the mesh look
- * picks the geometry, the base id picks the armour texture that geometry wears
- * (see `GEAR_TEXTURE`). Only the part before the `#` ever names a mesh.
- */
-export type Looks = Record<CosmeticSlot, string | null>;
+/** The one wardrobe slot: everything ships as `base.<look>.<part>`. */
+export type Slot = "base";
+export const SLOTS: readonly Slot[] = ["base"];
 
-/** The geometry half of a look value — what `slot.<this>.part` is named after. */
-export function meshLook(look: string): string {
-  return look.split("#")[0]!;
-}
+/** A look per slot, or null for "nothing shown there". */
+export type Looks = Record<Slot, string | null>;
+
+/** Nobody drawn: the menu hall with no character standing in it. */
+export const NO_LOOKS: Looks = { base: null };
 
 /**
- * Armour texture per item base, baked by `tools/build_gear_textures.py`.
- *
- * The character wears one authored outfit and the item art is charred iron with
- * ember in the seams, so equipping an Emberweave Robe used to leave him in green
- * linen — the inventory and the world looked like two different games. New
- * geometry per base is out of reach, so the material is what changes: each base
- * gets the ranger atlas re-palettized to that icon's own colours, and only
- * `albedoTexture` is swapped at runtime.
- *
- * Shape is not something a texture can fix, and it is not this table's job: the
- * armoured body carries a generated coat (`body.ranger.coat`) so the silhouette
- * agrees with the art too. It is one shape for its whole slot, though, so what
- * still does not vary per base is the cut - only the colour. The helmet has no
- * such shape: a shell grown off the cowl's crown read as a swim cap, so a helmet
- * base recolours the cloth until one is modelled (`build_wardrobe.py`).
- *
- * Keys are item base ids. A base with no entry keeps the authored look, so an
- * unmapped base renders as green ranger gear rather than as nothing.
+ * The only look the game wires up today. The wardrobe ships a female body on
+ * the same skeleton shape, but nothing yet picks her — see `build_wardrobe.py`.
  */
-const GEAR_TEXTURE: Record<string, string> = {
-  "base.cinder_cap": "/textures/gear/cinder_cap.png",
-  "base.emberweave_robe": "/textures/gear/emberweave_robe.png",
-  "base.ember_gauntlets": "/textures/gear/ember_gauntlets.png",
-  "base.ashen_treads": "/textures/gear/ashen_treads.png",
-  "base.cinderchain_sash": "/textures/gear/cinderchain_sash.png",
-  // The three class starter bodies. These are what make a class visible: the
-  // coat geometry is the same either way, so the base id picking a different
-  // palette is the ONLY thing separating an Ironsworn from an Emberbound on a
-  // wardrobe with one male rig and two looks per slot.
-  "base.ironsworn_plate": "/textures/gear/ironsworn_plate.png",
-  "base.stalker_leathers": "/textures/gear/stalker_leathers.png",
-  "base.emberbound_robe": "/textures/gear/emberbound_robe.png",
-  // The shields. Held gear samples one texel, and untextured that texel is the
-  // helm's bright grey, which renders the plate as a white slab. The bake is
-  // what gives each shield its own iron, leather and ember palette.
-  "base.ember_buckler": "/textures/gear/ember_buckler.png",
-  "base.ashwall_tower_shield": "/textures/gear/ashwall_tower_shield.png",
-  // The main hand and the stone beside it. The wand carries a projection of its
-  // own icon up the shaft (`rod_uv`) and the focus one pinned texel, so without
-  // an entry here the wand wears the clothing atlas stretched along it.
-  "base.emberwand": "/textures/gear/emberwand.png",
-  "base.ashen_focus": "/textures/gear/ashen_focus.png",
-};
-
-/** Base ids the character has a baked armour texture for. Pinned by `rig.test.ts`. */
-export const GEAR_TEXTURE_BASES: readonly string[] = Object.keys(GEAR_TEXTURE);
-
-/**
- * Looks whose mesh carries its own donor UVs and textures rather than the
- * ranger atlas, so `GEAR_TEXTURE`'s swap must never reach them.
- *
- * The bake in `GEAR_TEXTURE` is a luminance -> icon-palette lookup made FOR the
- * ranger atlas's own UV layout (`build_gear_textures.py`); pasting it onto a
- * harvested mesh's own UVs (`build_wardrobe.py`'s knight helm/gloves/boots)
- * would smear that bake across foreign texture space instead of recolouring
- * anything.
- */
-const DONOR_TEXTURED_LOOKS = new Set(["knight"]);
-
-/**
- * What the lab preview puts in each slot. The preview exists so the wardrobe can
- * be checked without farming five drops, and a preview that skipped the base ids
- * would show the authored green outfit — the one thing the armour textures are
- * there to replace.
- */
-const PREVIEW_BASE: Record<CosmeticSlot, string> = {
-  weapon1: "base.emberwand",
-  weapon2: "base.ember_buckler",
-  helmet: "base.cinder_cap",
-  body: "base.emberweave_robe",
-  gloves: "base.ember_gauntlets",
-  boots: "base.ashen_treads",
-  belt: "base.cinderchain_sash",
-};
-
-/** A stand-in equipped item for the lab preview, shaped like the snapshot's. */
-export function previewItemFor(slot: CosmeticSlot): { baseId: string } {
-  return { baseId: PREVIEW_BASE[slot] };
-}
-
-/*
- * Rarity used to recolour these looks, and it is deliberately gone.
- *
- * The idea was sound — there is one authored armoured set per slot, so a rare
- * and a normal helmet are the same hood, and a drop the player cannot see did
- * not really pay out. The execution was not. Two findings are worth keeping so
- * the next attempt does not repeat them:
- *
- * 1. Albedo cannot tint these packs at all. `albedoColor` multiplies the
- *    authored texture, and that texture is a saturated green, so a gold factor
- *    moved the rendered hood by about 3% — invisible under the play camera.
- * 2. Emissive does shift the hue, whatever is baked underneath, but the scene's
- *    glow layer blooms it and the usable range is tiny: 0.34 rendered a
- *    featureless glowing man, and even 0.04 washed the whole outfit one colour.
- *
- * That is the real problem: tinting every part of a slot recolours the entire
- * silhouette instead of reading as "this piece is special". A second look needs
- * accent *geometry*, not a colour pass over the geometry that is already there.
- */
-
-/**
- * What the character wears with the slot empty. Body and boots are never bare:
- * an unequipped character is a commoner in shirt and shoes, the way PoE2 starts
- * you clothed rather than naked.
- */
-const UNEQUIPPED: Looks = {
-  weapon1: null, weapon2: null,
-  helmet: null, body: "commoner", gloves: null, boots: "commoner", belt: null,
-};
-
-/**
- * What the character wears with *something* in the slot. Deliberately one look
- * per slot rather than a per-base table: with a single armoured set authored so
- * far, mapping every base onto it means any new item is visible the day it is
- * added instead of silently rendering as commoner cloth.
- */
-const EQUIPPED: Looks = {
-  weapon1: "wand", weapon2: "focus",
-  helmet: "hood", body: "ranger", gloves: "bracers", boots: "ranger", belt: "ranger",
-};
-
-/**
- * Bases whose geometry is not their slot's default one.
- *
- * The armour slots get away with a single look each because a robe and a plate
- * are both a coat; a hand does not, because the off hand holds either a floating
- * orb or a slab of iron and picking the wrong one is not a wrong colour, it is
- * the wrong object. So the hands are the one place a base names its own mesh,
- * and everything absent here keeps `EQUIPPED`'s default.
- *
- * One mesh per shield, not one shared plate: a buckler and a tower shield are
- * different objects in the icons and at arm's length, and the palette bake alone
- * could only make one shape two colours. Both are modelled where they sit on a
- * standing character (`tools/build_wardrobe.py`), so the hold is the same and the
- * silhouette is not.
- */
-const LOOK_BY_BASE: Record<string, string> = {
-  "base.ember_buckler": "buckler",
-  "base.ashwall_tower_shield": "tower",
-  // Body bases whose silhouette is their own, not the generic coat: the plate is
-  // bulkier and stops at tassets, the leather is a slim knee-length cut (both
-  // `body.<look>.coat` in `build_wardrobe.py`). A base with no entry here still
-  // wears `EQUIPPED.body` (the ranger coat), so the robe classes are unchanged
-  // until that floor-length look lands.
-  "base.ironsworn_plate": "plate",
-  "base.stalker_leathers": "leather",
-  // Harvested real geometry, not a re-palette: a riveted salet
-  // (`helmet.knight.helm`) and vambrace/gauntlet/greave/sabaton pieces
-  // (`gloves.knight.part`, `boots.knight.part`), all rigid to the limb bones
-  // they cover. Keeps its own donor UVs and textures - see
-  // `DONOR_TEXTURED_LOOKS`, which keeps `GEAR_TEXTURE`'s ranger-atlas bake off
-  // it, or the swap would smear that bake across foreign UV space.
-  "base.cinder_cap": "knight",
-  "base.ember_gauntlets": "knight",
-  "base.ashen_treads": "knight",
-};
-
-const HEAD_PREFIX = "base.head.";
-
-/** The part of a look that the cloth solver drives, if the look has one. */
-const COAT_PART = ".coat";
-
-/**
- * The hair cap, which is the one head part a helmet really does replace.
- *
- * The rest of the head stays on under a helmet. The wardrobe's only helmet look
- * is the ranger's hood, and that hood is an open-faced cowl, not a closed shape:
- * hiding the whole head under it left the character looking out of an empty
- * hood. Hair is different — it sits proud of the skull and would push through
- * the cowl — so it is the only part that comes off.
- */
-const HAIR_PART = `${HEAD_PREFIX}hair`;
+export const BASE_LOOKS: Looks = { base: "male" };
 
 /**
  * The bones the coat hangs from, baked by `tools/build_wardrobe.py`: a ring of
@@ -490,24 +302,23 @@ const skirtJointName = (chain: number, joint: number): string =>
  * ran the boot straight through the coat. The foot needs its own because a boot
  * reaches a long way forward of the ankle it pivots on.
  *
- * These are maximum radial extents measured from the exported GLB by
- * `tools/measure_wardrobe_colliders.py`, plus 8mm cloth thickness. The old
- * median-width capsules were substantially inside the rendered geometry, so a
- * mathematically clear collider still showed a boot through the coat. Boots get
- * their own profile because the ranger greaves extend above the calf and the
- * commoner shoes are wider at the foot.
+ * These are maximum radial extents measured off the outfit-era wardrobe, plus
+ * 8mm cloth thickness. The old median-width capsules were substantially inside
+ * the rendered geometry, so a mathematically clear collider still showed a boot
+ * through the coat. Re-measure against whatever body carries cloth next: the
+ * solver is dormant and no shipping asset has skirt chains.
  */
 const SKIRT_COLLIDERS: readonly {
-  from: string; to: string; commoner: number; ranger: number;
+  from: string; to: string; radius: number;
 }[] = [
   // The coat is authored against the upper-leg median, so its fitted yoke is
   // the separation surface there. Maximum thigh width would cage the waist.
-  { from: "thigh_l", to: "calf_l", commoner: 0.088, ranger: 0.088 },
-  { from: "thigh_r", to: "calf_r", commoner: 0.088, ranger: 0.088 },
-  { from: "calf_l", to: "foot_l", commoner: 0.123, ranger: 0.124 },
-  { from: "calf_r", to: "foot_r", commoner: 0.123, ranger: 0.124 },
-  { from: "foot_l", to: "ball_l", commoner: 0.117, ranger: 0.109 },
-  { from: "foot_r", to: "ball_r", commoner: 0.117, ranger: 0.109 },
+  { from: "thigh_l", to: "calf_l", radius: 0.088 },
+  { from: "thigh_r", to: "calf_r", radius: 0.088 },
+  { from: "calf_l", to: "foot_l", radius: 0.124 },
+  { from: "calf_r", to: "foot_r", radius: 0.124 },
+  { from: "foot_l", to: "ball_l", radius: 0.117 },
+  { from: "foot_r", to: "ball_r", radius: 0.117 },
 ];
 
 /** Down the bone: glTF joints out of Blender point along their own +Y. */
@@ -551,17 +362,17 @@ const TRANSLATION = "position";
 /** The one bone these clips translate. Everything else is pure rotation. */
 const HIPS_BONE = "pelvis";
 
-/** Where a spell leaves the body: the weapon hand, the same one `weapon1` skins to. */
+/** Where a spell leaves the body: the weapon hand, the same one a held mesh would skin to. */
 const HAND_BONE = "hand_r";
 
 /**
  * Bones a layered clip must not touch, so it can play over locomotion without
- * fighting it for the legs. Leaf tips are included by name from both packs.
+ * fighting it for the legs. Leaf tips are included by name.
  */
 const LOWER_BODY: ReadonlySet<string> = new Set([
   "root", HIPS_BONE,
-  "thigh_l", "calf_l", "foot_l", "ball_l", "ball_leaf_l", "foot_end_l",
-  "thigh_r", "calf_r", "foot_r", "ball_r", "ball_leaf_r", "foot_end_r",
+  "thigh_l", "calf_l", "foot_l", "ball_l", "ball_end_l", "foot_end_l",
+  "thigh_r", "calf_r", "foot_r", "ball_r", "ball_end_r", "foot_end_r",
 ]);
 
 /**
@@ -570,11 +381,11 @@ const LOWER_BODY: ReadonlySet<string> = new Set([
  */
 const WEAPON_HAND: ReadonlySet<string> = new Set([
   "hand_r",
-  "thumb_01_r", "thumb_02_r", "thumb_03_r", "thumb_04_leaf_r",
-  "index_01_r", "index_02_r", "index_03_r", "index_04_leaf_r",
-  "middle_01_r", "middle_02_r", "middle_03_r", "middle_04_leaf_r",
-  "ring_01_r", "ring_02_r", "ring_03_r", "ring_04_leaf_r",
-  "pinky_01_r", "pinky_02_r", "pinky_03_r", "pinky_04_leaf_r",
+  "thumb_01_r", "thumb_02_r", "thumb_03_r", "thumb_04_end_r",
+  "index_01_r", "index_02_r", "index_03_r", "index_04_end_r",
+  "middle_01_r", "middle_02_r", "middle_03_r", "middle_04_end_r",
+  "ring_01_r", "ring_02_r", "ring_03_r", "ring_04_end_r",
+  "pinky_01_r", "pinky_02_r", "pinky_03_r", "pinky_04_end_r",
 ]);
 
 /** Clips that layer over locomotion instead of replacing it. */
@@ -738,6 +549,39 @@ export function resetPlayerRig(scene?: Scene): void {
 }
 
 /**
+ * Index the wired body's skeleton subtree by node name, and switch every other
+ * skeleton in the import off.
+ *
+ * The wardrobe ships two skeletons ("Armature", "Armature_female") carrying the
+ * same 65 bone names, so indexing both into one map would let whichever landed
+ * second silently own the animation. A second rig in the same scene clones
+ * these nodes and a clone carries a `.001` suffix, so a root is matched on its
+ * stem.
+ *
+ * The skeletons are searched for BELOW the nodes handed in, never among them:
+ * Babylon's glTF loader wraps an import in one `__root__` node carrying the
+ * right-to-left-handed conversion, so a container's root nodes are that wrapper
+ * and the armatures are its children. Treating the wrapper as an armature
+ * indexes nothing and disables the entire import, silently.
+ */
+export function indexRigSubtree(roots: readonly Node[]): Map<string, Node> {
+  const byName = new Map<string, Node>();
+  for (const root of roots) {
+    for (const node of [root, ...root.getDescendants(false)]) {
+      const stem = node.name.replace(/\.\d+$/, "");
+      if (!RIG_ROOT.test(stem)) continue;
+      if (stem !== MALE_RIG) {
+        if (node instanceof TransformNode) node.setEnabled(false);
+        continue;
+      }
+      byName.set(node.name, node);
+      for (const child of node.getDescendants(false)) byName.set(child.name, child);
+    }
+  }
+  return byName;
+}
+
+/**
  * One animated character instance, parented under an actor root that the
  * renderer keeps positioning and turning as before.
  */
@@ -757,13 +601,7 @@ export class RigActor {
 
   /** Every wardrobe part, grouped `slot` -> `look` -> meshes. */
   private readonly parts = new Map<string, Map<string, Mesh[]>>();
-  private readonly headParts: Mesh[] = [];
-  private looks: Looks = { ...UNEQUIPPED };
-
-  /** The material each part was exported with, before any gear texture. */
-  private readonly baseMaterials = new Map<Mesh, Material | null>();
-  /** Re-textured clones, `<source material id>#<base id>` -> clone. Built once, reused. */
-  private readonly gearedMaterials = new Map<string, PBRMaterial>();
+  private looks: Looks = { ...NO_LOOKS };
 
   /** Coat cloth. Null when the wardrobe has no skirt chains (an older asset). */
   private skirt: SkirtSim | null = null;
@@ -782,8 +620,6 @@ export class RigActor {
     tail: TransformNode;
     previousA: Vector3;
     previousB: Vector3;
-    commonerRadius: number;
-    rangerRadius: number;
     initialized: boolean;
   })[] = [];
   private cloth: Observer<Scene> | null = null;
@@ -821,7 +657,7 @@ export class RigActor {
    */
   setLooks(looks: Looks): void {
     let changed = false;
-    for (const slot of COSMETIC_SLOTS) {
+    for (const slot of SLOTS) {
       if (this.looks[slot] !== looks[slot]) {
         this.looks[slot] = looks[slot];
         changed = true;
@@ -831,70 +667,13 @@ export class RigActor {
   }
 
   private applyLooks(): void {
-    let coat = false;
     for (const [slot, byLook] of this.parts) {
-      const wanted = this.looks[slot as CosmeticSlot] ?? null;
-      const wantedLook = wanted === null ? null : meshLook(wanted);
-      const baseId = wanted === null ? undefined : wanted.split("#")[1];
+      const wanted = this.looks[slot as Slot] ?? null;
       for (const [look, meshes] of byLook) {
-        const on = look === wantedLook;
-        for (const mesh of meshes) {
-          mesh.setEnabled(on);
-          if (on && mesh.name.includes(COAT_PART)) coat = true;
-          // Only the visible look pays for the swap; a hidden one is re-dressed
-          // when it comes back.
-          if (on) mesh.material = this.geared(mesh, baseId, look);
-        }
+        const on = look === wanted;
+        for (const mesh of meshes) mesh.setEnabled(on);
       }
     }
-    // Cloth that was hidden has been swinging nowhere; drop it back onto the
-    // bind pose so it does not snap into place in front of the player.
-    if (coat && !this.coatVisible) this.skirt?.unsettle();
-    this.coatVisible = coat;
-    // A helmet takes the hair off, not the head: see `HAIR_PART`.
-    const bare = this.looks.helmet === null;
-    for (const mesh of this.headParts) {
-      mesh.setEnabled(bare || !mesh.name.startsWith(HAIR_PART));
-    }
-  }
-
-  /**
-   * The material `mesh` should wear for an equipped base: its own, or a clone of
-   * it carrying that base's armour texture.
-   *
-   * Clones are per rig actor, and the source material is never touched, because
-   * it belongs to the read-only asset container every instance is built from —
-   * re-texturing it in place would dress the disenchanter in the player's gear.
-   *
-   * The texture is *cloned from the material's own* and then pointed at a new
-   * URL rather than constructed fresh. A new `Texture` would default to Babylon's
-   * own invertY and UV set, and the glTF loader does not use those, so a
-   * hand-built one lands upside down on a hand-authored atlas.
-   */
-  private geared(mesh: Mesh, baseId: string | undefined, look: string): Material | null {
-    let base = this.baseMaterials.get(mesh);
-    if (base === undefined) this.baseMaterials.set(mesh, (base = mesh.material));
-
-    const url = baseId === undefined || DONOR_TEXTURED_LOOKS.has(look)
-      ? undefined : GEAR_TEXTURE[baseId];
-    // An unmapped base, or a material with no albedo to replace, keeps the
-    // authored look: wrong-coloured armour beats an invisible limb.
-    if (!url || !(base instanceof PBRMaterial) || !(base.albedoTexture instanceof Texture)) {
-      return base;
-    }
-
-    const key = `${base.uniqueId}#${baseId}`;
-    let clone = this.gearedMaterials.get(key);
-    if (!clone) {
-      clone = base.clone(`${base.name}#${baseId}`);
-      const texture = base.albedoTexture.clone();
-      if (texture) {
-        texture.updateURL(url);
-        clone.albedoTexture = texture;
-      }
-      this.gearedMaterials.set(key, clone);
-    }
-    return clone;
   }
 
   /**
@@ -1006,12 +785,16 @@ export class RigActor {
     });
     this.entries = entries;
 
-    const byName = new Map<string, Node>();
-    for (const root of entries.rootNodes) {
-      root.parent = this.pivot;
-      byName.set(root.name, root);
-      for (const child of root.getDescendants(false)) byName.set(child.name, child);
-    }
+    // The wardrobe ships two skeletons ("Armature", "Armature_female") with the
+    // same 65 bone names, so indexing both into one map by name would let
+    // whichever loaded second silently own the animation. Only the male body is
+    // wired today, so only his skeleton's subtree is read, and the female one is
+    // switched off outright rather than left to whatever visibility it imported
+    // with.
+    // A second rig in the same scene clones these nodes, and a clone carries a
+    // `.001` suffix, so the root is matched on its stem.
+    for (const root of entries.rootNodes) root.parent = this.pivot;
+    const byName = indexRigSubtree(entries.rootNodes);
 
     // Index the parts by the `slot.look.part` names the builder emits. Cloned
     // instances keep the source name plus a Babylon suffix, so the slot and look
@@ -1020,10 +803,6 @@ export class RigActor {
       if (!(node instanceof Mesh)) continue;
       const [slot, look] = node.name.split(".");
       if (slot === undefined || look === undefined) continue;
-      if (node.name.startsWith(HEAD_PREFIX)) {
-        this.headParts.push(node);
-        continue;
-      }
       let byLook = this.parts.get(slot);
       if (!byLook) this.parts.set(slot, (byLook = new Map()));
       const list = byLook.get(look);
@@ -1213,7 +992,7 @@ export class RigActor {
       for (let j = 0; j < SKIRT_JOINTS; j++) this.restsWorld.push(new Vector3());
     }
 
-    for (const { from, to, commoner, ranger } of SKIRT_COLLIDERS) {
+    for (const { from, to, radius } of SKIRT_COLLIDERS) {
       const head = byName.get(from);
       const tail = byName.get(to);
       if (head instanceof TransformNode && tail instanceof TransformNode) {
@@ -1221,9 +1000,7 @@ export class RigActor {
           head, tail,
           a: new Vector3(), b: new Vector3(),
           previousA: new Vector3(), previousB: new Vector3(),
-          radius: commoner,
-          commonerRadius: commoner,
-          rangerRadius: ranger,
+          radius,
           initialized: false,
         });
       }
@@ -1258,9 +1035,7 @@ export class RigActor {
         Vector3.TransformCoordinatesToRef(chain.rests[j]!, world, this.restsWorld[i * SKIRT_JOINTS + j]!);
       }
     }
-    const rangerBoots = this.looks.boots !== null && meshLook(this.looks.boots) === "ranger";
     for (const collider of this.colliders) {
-      collider.radius = rangerBoots ? collider.rangerRadius : collider.commonerRadius;
       if (collider.initialized) {
         collider.previousA.copyFrom(collider.a);
         collider.previousB.copyFrom(collider.b);
@@ -1375,13 +1150,6 @@ export class RigActor {
     for (const group of this.groups.values()) group.dispose();
     this.groups.clear();
     this.parts.clear();
-    this.headParts.length = 0;
-    for (const clone of this.gearedMaterials.values()) {
-      clone.albedoTexture?.dispose();
-      clone.dispose();
-    }
-    this.gearedMaterials.clear();
-    this.baseMaterials.clear();
     this.entries?.dispose();
     this.entries = null;
     this.active = null;
@@ -1407,24 +1175,4 @@ export function attachRig(scene: Scene, host: Mesh): RigActor | null {
 /** The rig on an actor root, if it has one. */
 export function rigOf(root: Mesh): RigActor | null {
   return (root.metadata as RigParts | null)?.rig ?? null;
-}
-
-/**
- * Which look each slot should wear, given what is equipped. Any item in a slot
- * shows that slot's armoured look; an empty slot falls back to the commoner
- * clothes, so the character is never rendered bare. The item's *base* picks the
- * armour texture that look wears; its rarity is deliberately not consulted,
- * because recolouring a whole slot by tier washes the silhouette one colour
- * instead of pointing at the piece that is special.
- */
-export function looksForEquipment(equipped: Partial<Record<CosmeticSlot, unknown>>): Looks {
-  const out = { ...UNEQUIPPED };
-  for (const slot of COSMETIC_SLOTS) {
-    const item = equipped[slot];
-    if (item === undefined) continue;
-    const baseId = (item as { baseId?: string } | null)?.baseId;
-    const look = (baseId !== undefined ? LOOK_BY_BASE[baseId] : undefined) ?? EQUIPPED[slot];
-    out[slot] = look + (baseId !== undefined && baseId in GEAR_TEXTURE ? `#${baseId}` : "");
-  }
-  return out;
 }

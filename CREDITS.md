@@ -8,10 +8,11 @@ The character models, animations, and their textures come from two
 dedication). CC0 requires no attribution and has no share-alike clause; the credit here
 is a courtesy. Neither pack is derived from any Path of Exile material.
 
-- **[Modular Character Outfits - Fantasy](https://quaternius.com/packs/modularcharacteroutfitsfantasy.html)**
-  by Quaternius, the player character and swappable outfits:
-  `apps/web/public/models/Male_Peasant.*`, `Male_Ranger.*`, `T_Peasant_*`, `T_Ranger_*`,
-  `T_Regular_Male_*`.
+- **[Universal Base Characters](https://quaternius.com/packs/universalbasecharacters.html)**
+  by Quaternius, the player character's two base bodies, their hair and their textures:
+  `assets/characters/Base_Male.*`, `Superhero_Female_FullBody.*`, `Hair_SimpleParted.*`,
+  `Hair_Buns.*`, `T_Superhero_*`, `T_Hair_*`, `T_Eye_*`, baked into
+  `apps/web/public/models/wardrobe.glb`.
 - **[Universal Animation Library](https://quaternius.com/packs/universalanimationlibrary.html)**
   by Quaternius, humanoid animation clips on a 65-bone Unreal-named rig:
   `apps/web/public/models/anim-library.glb`.

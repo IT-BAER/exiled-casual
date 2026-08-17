@@ -371,8 +371,8 @@ def asset_material(name, image_name, gain, roughness, palette=None):
     `palette` re-dresses the texture in another one's colours: the source is
     normalised across its own luminance span and looked up in a ramp sampled
     from the palette image, so it keeps every plank, nail and scratch it was
-    authored with and wears the other asset's tone and saturation. Same trick as
-    tools/build_gear_textures.py. A flat gain cannot do this job — two assets
+    authored with and wears the other asset's tone and saturation. A flat gain
+    cannot do this job — two assets
     downloaded from different authors differ in how saturated and how bright
     their wood is, and scaling one until it is dark enough leaves it a
     washed-out version of the other's colour.
