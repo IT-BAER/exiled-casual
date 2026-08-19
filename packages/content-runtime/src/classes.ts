@@ -4,10 +4,10 @@
 // fails if its list and these definitions ever disagree, the same arrangement
 // `MAP_BASES` uses.
 //
-// Cosmetic only. The wardrobe is a single male rig with two looks per slot, so
-// a class cannot change the body; what it changes is the outfit that body is
-// created in, and the baked armour texture on each starting base is what makes
-// the three read as three different people at character-select distance.
+// `startingGear` is what a class OWNS, not what it looks like. Every class
+// shows the one wired base body (`looksForClass`), so the three read as three
+// people by portrait, blurb and default attack alone until gear geometry
+// returns. See the accepted regression in CLAUDE.md.
 import type { CharacterClass } from "@exiled/content-schema";
 import { CLASS_IDS, DEFAULT_CLASS_ID } from "@exiled/rules";
 
