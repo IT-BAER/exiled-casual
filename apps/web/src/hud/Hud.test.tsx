@@ -863,9 +863,10 @@ describe("the disenchanter has a name", () => {
 
 /**
  * The tree's affordance: a "+" button on the lower bar (right of the flasks),
- * PoE1-style. It is always there — the tree is always reachable — and carries the
- * unspent count as a badge, because a level-up that hands you something you cannot
- * find is a reward that did not happen (docs/09).
+ * PoE1-style. It appears only while points wait, and carries the unspent count as
+ * a badge, because a level-up that hands you something you cannot find is a reward
+ * that did not happen (docs/09). With nothing to spend the plus is nothing to press,
+ * so it goes; the tree stays reachable on the passives keybind.
  */
 describe("unspent passive points", () => {
   it("shows the count as a badge on the plus button", () => {
@@ -882,9 +883,9 @@ describe("unspent passive points", () => {
     expect(onOpenPassives).toHaveBeenCalledTimes(1);
   });
 
-  it("drops the badge when the last point is spent, but keeps the button", () => {
-    const { getByTestId, queryByTestId } = render(<Hud snapshot={makeSnap({ passivePoints: 0 })} />);
+  it("hides the plus entirely when the last point is spent", () => {
+    const { queryByTestId } = render(<Hud snapshot={makeSnap({ passivePoints: 0 })} />);
     expect(queryByTestId("passive-open-count")).toBeNull();
-    expect(getByTestId("passive-open-button")).not.toBeNull();
+    expect(queryByTestId("passive-open-button")).toBeNull();
   });
 });

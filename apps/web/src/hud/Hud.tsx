@@ -1100,8 +1100,10 @@ export function Hud({
 
       {/* The passive tree's plus, PoE1's own affordance on the lower bar. It stands
           on the world just RIGHT of the flask frame, not inside it — his mark, and
-          PoE1 also parks the tree button clear of the flask niches. The count rides
-          it as a badge when points wait. */}
+          PoE1 also parks the tree button clear of the flask niches. It shows only
+          while points wait, with the count as a badge; the keybind opens the tree
+          the rest of the time. */}
+      {(snapshot.player.passivePoints ?? 0) > 0 && (
       <button
         type="button"
         data-testid="passive-open-button"
@@ -1131,35 +1133,32 @@ export function Hud({
             width: "100%",
             height: "100%",
             display: "block",
-            filter: (snapshot.player.passivePoints ?? 0) > 0
-              ? "drop-shadow(0 0 6px rgba(232,195,104,0.6)) drop-shadow(0 2px 4px rgba(0,0,0,0.8))"
-              : "brightness(0.8) saturate(0.85) drop-shadow(0 2px 4px rgba(0,0,0,0.8))",
+            filter: "drop-shadow(0 0 6px rgba(232,195,104,0.6)) drop-shadow(0 2px 4px rgba(0,0,0,0.8))",
           }}
         />
-        {(snapshot.player.passivePoints ?? 0) > 0 && (
-          <span
-            data-testid="passive-open-count"
-            style={{
-              position: "absolute",
-              top: "-18%",
-              right: "-18%",
-              minWidth: "1.5em",
-              padding: "0 0.3em",
-              fontFamily: SERIF,
-              fontSize: `clamp(9px, ${(ORB_VW * 0.07).toFixed(2)}vw, 14px)`,
-              lineHeight: 1.5,
-              color: "#1a1408",
-              background: "linear-gradient(180deg,#e8c368,#b98f36)",
-              border: "1px solid #f4dfa0",
-              borderRadius: "1em",
-              boxShadow: "0 0 8px rgba(232,195,104,0.5)",
-              textShadow: "none",
-            }}
-          >
-            {snapshot.player.passivePoints}
-          </span>
-        )}
+        <span
+          data-testid="passive-open-count"
+          style={{
+            position: "absolute",
+            top: "-18%",
+            right: "-18%",
+            minWidth: "1.5em",
+            padding: "0 0.3em",
+            fontFamily: SERIF,
+            fontSize: `clamp(9px, ${(ORB_VW * 0.07).toFixed(2)}vw, 14px)`,
+            lineHeight: 1.5,
+            color: "#1a1408",
+            background: "linear-gradient(180deg,#e8c368,#b98f36)",
+            border: "1px solid #f4dfa0",
+            borderRadius: "1em",
+            boxShadow: "0 0 8px rgba(232,195,104,0.5)",
+            textShadow: "none",
+          }}
+        >
+          {snapshot.player.passivePoints}
+        </span>
       </button>
+      )}
 
       {/* Skill bar — two rows, as PoE1's lower bar has it: the three mouse buttons
           above, the five numbered slots below, the whole panel running under the
