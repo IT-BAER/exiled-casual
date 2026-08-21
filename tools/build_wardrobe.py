@@ -246,9 +246,14 @@ HELM_COVER_FROM = 0.25
 HELM_WIDTH_FROM = 1.32   # first dome/head width ratio the search tries
 HELM_BACK_SHIFT = 0.06   # seat, as a fraction of head depth
 
-WAND_LEN_RATIO = 0.23      # of body height
+# A haft is sized by the hole a fist makes, not by the length that looks right:
+# scaling a gnarled donor to a wand's length leaves its grip wider than the
+# fingers can close, and the knuckles come through the wood.
+WAND_GRIP_DIA = 0.038      # metres across the shaft where the fist closes
+WAND_MIN_LEN = 0.24        # below this the piece reads as a stone, not a wand
+
 BUCKLER_DIA_RATIO = 0.20   # of body height
-BUCKLER_GAP = 0.008        # air between forearm and shield back
+BUCKLER_GAP = 0.008        # air between the arm and the shield's back face
 BUCKLER_ALONG = 0.82       # 0 at the elbow, 1 at the wrist
 
 
@@ -336,6 +341,39 @@ def placed(obj, scale, rot, translate):
     return Matrix.Translation(translate) @ rot @ Matrix.Scale(scale, 4) @ Matrix.Translation(-c)
 
 
+def seated(obj, scale, rot, anchor, target):
+    """Place a donor so its own `anchor` point lands on `target`."""
+    _, _, _, c = bbox([v.co for v in obj.data.vertices])
+    return placed(obj, scale, rot, target - (rot.to_3x3() @ ((anchor - c) * scale)))
+
+
+def waist(obj, axis, bands=12):
+    """The narrowest cross-section along `axis`, as (position, radius).
+
+    A carved haft is thinnest exactly where a hand is meant to close on it, so
+    the grip is a measurement rather than a guess. Bands, not per-vertex: one
+    stray vertex on the donor's axis would otherwise read as an infinitely thin
+    waist wherever it happened to sit.
+    """
+    pts = [v.co for v in obj.data.vertices]
+    lo, hi, dims, c = bbox(pts)
+    others = [i for i in range(3) if i != axis]
+    best = None
+    for i in range(bands):
+        a = lo[axis] + dims[axis] * i / bands
+        b = lo[axis] + dims[axis] * (i + 1) / bands
+        sel = [p for p in pts if a <= p[axis] <= b]
+        if len(sel) < 8:
+            continue
+        r = max(math.hypot(p[others[0]] - c[others[0]], p[others[1]] - c[others[1]])
+                for p in sel)
+        if best is None or r < best[1]:
+            best = ((a + b) / 2, r)
+    if best is None:
+        raise SystemExit("no measurable cross-section along the donor's long axis")
+    return best
+
+
 def fit_head_shell(donor, body, rig):
     """Grow the shell until the skull above the brim is inside it.
 
@@ -374,46 +412,100 @@ def fit_head_shell(donor, body, rig):
     raise SystemExit(f"helm never enclosed the skull; ratio search {tries}")
 
 
+KNUCKLES = ("index_01_r", "middle_01_r", "ring_01_r", "pinky_01_r")
+
+
+def grip_hole(rig, radius):
+    """Where a closed fist's hole sits, at `radius` of shaft.
+
+    The rest hand is OPEN - fingers straight, thumb splayed - so the hole does
+    not exist to be measured: the fist is something the idle clip makes out of
+    the finger bones. It has to be predicted instead, from the knuckle line the
+    fingers curl about and the thumb that says which side of that line is palm.
+    Taking the hand vertex group's centre is the trap it replaces: those bones
+    end at the knuckles, so the group's box is the wrist band and a wand seated
+    on it rides the forearm with the fist closed and empty below.
+    """
+    heads = [rig.matrix_world @ rig.data.bones[b].head_local for b in KNUCKLES]
+    knuckle = sum(heads, Vector((0, 0, 0))) / len(heads)
+    finger = (rig.matrix_world @ rig.data.bones[KNUCKLES[1]].tail_local) - heads[1]
+    finger.normalize()
+    thumb = rig.data.bones["thumb_01_r"]
+    palm = (rig.matrix_world @ thumb.tail_local) - knuckle
+    palm -= finger * palm.dot(finger)
+    palm.normalize()
+    return knuckle + palm * radius
+
+
 def fit_hand_grip(donor, body, rig):
-    """A shaft through the closed fist, tip pointing the way the body faces."""
+    """A shaft through the closed fist, gripped at its waist.
+
+    Sized off the grip and not off the length: this donor's midpoint is its
+    fattest knot, so centring it on the hand puts 9 cm of wood inside a fist
+    that can close on about 4, and the knuckles come through it.
+    """
     _, _, body_dims, _ = bbox([body.matrix_world @ v.co for v in body.data.vertices])
-    _, _, hand_dims, hand_c = bbox(group_points(body, "hand_r"))
+    hand_pts = group_points(body, "hand_r")
     _, _, d_dims, _ = bbox([v.co for v in donor.data.vertices])
-    scale = (body_dims.z * WAND_LEN_RATIO) / d_dims.z
+    grip_z, grip_r = waist(donor, 2)
+    scale = WAND_GRIP_DIA / (2 * grip_r)
+    length = d_dims.z * scale
+    if length < WAND_MIN_LEN:
+        raise SystemExit(
+            f"wand is {length * 1000:.0f} mm at a {WAND_GRIP_DIA * 1000:.0f} mm grip; "
+            "this donor is too stout to read as a wand")
     # The donor's long axis is Z with its decorated end at +Z. Turning +Z onto
     # -Y aims the tip where the character looks, so the shaft runs front to back
-    # through the hand rather than along the arm.
+    # through the hand rather than along the arm - and -Y survives the shoulder
+    # rotation that drops the arm to the character's side, so an idle pose aims
+    # it the same way the bind pose does.
     rot = Matrix.Rotation(math.radians(90), 4, "X")
-    return placed(donor, scale, rot, hand_c), {
+    _, _, _, d_c = bbox([v.co for v in donor.data.vertices])
+    anchor = Vector((d_c.x, d_c.y, grip_z))
+    hole = grip_hole(rig, grip_r * scale)
+    M = seated(donor, scale, rot, anchor, hole)
+    p01, med = gap_profile(bvh_of(donor, M), hand_pts)
+    return M, {
         "scale": round(scale, 5),
-        "length_m": round(body_dims.z * WAND_LEN_RATIO, 4),
+        "length_m": round(length, 4),
+        "grip_diameter_mm": round(2 * grip_r * scale * 1000, 2),
+        "grip_at_length_fraction": round((grip_z - (-d_dims.z / 2)) / d_dims.z, 3),
+        "hole_m": [round(v, 4) for v in hole],
+        "hand_gap_p01_mm": round(p01 * 1000, 2),
     }
 
 
 def fit_forearm_strap(donor, body, rig):
-    """A disc off the outside of the forearm, facing along the palm normal."""
+    """A disc in front of the forearm, its face along the way the body looks.
+
+    Which perpendicular the face takes is the whole fit. A shield turned to -Z
+    lies flat under a T-posed forearm and is unarguable in the bind pose, but
+    the shoulder rotation that drops the arm to the side is a turn about Y: it
+    carries -Z round to +X and the shield ends up edge-on, facing across the
+    hip and cutting through it. -Y is fixed by that same rotation, so the disc
+    keeps both its plane and its facing in every pose the arm reaches.
+    """
     _, _, body_dims, _ = bbox([body.matrix_world @ v.co for v in body.data.vertices])
     arm_pts = group_points(body, "lowerarm_l")
-    _, _, arm_dims, arm_c = bbox(arm_pts)
+    hand_pts = group_points(body, "hand_l")
     _, _, d_dims, _ = bbox([v.co for v in donor.data.vertices])
     scale = (body_dims.z * BUCKLER_DIA_RATIO) / max(d_dims.x, d_dims.z)
-    # The donor's face looks -Y with its disc in XZ. The palm normal is the
-    # hand's own thinnest axis, Z on this body, so the shield turns to face -Z
-    # and hangs off the underside of the forearm - the outside of the arm once
-    # it is down at the side, which is where a strapped shield lives.
-    rot = Matrix.Rotation(math.radians(90), 4, "X")
     bone = rig.data.bones["lowerarm_l"]
     elbow = rig.matrix_world @ bone.head_local
     wrist = rig.matrix_world @ bone.tail_local
     along = elbow.lerp(wrist, BUCKLER_ALONG)
-    centre = Vector((along.x, along.y,
-                     arm_c.z - arm_dims.z / 2 - BUCKLER_GAP - d_dims.y * scale / 2))
-    M = placed(donor, scale, rot, centre)
-    p01, med = gap_profile(bvh_of(donor, M), arm_pts)
+    # The arm is not the only thing behind the shield: the fist reaches further
+    # forward than the forearm does, and clearing only the arm leaves fingers
+    # standing through the boss.
+    front = min(p.y for p in arm_pts + hand_pts)
+    centre = Vector((along.x, front - BUCKLER_GAP - d_dims.y * scale / 2, along.z))
+    M = placed(donor, scale, Matrix.Identity(4), centre)
+    p01, med = gap_profile(bvh_of(donor, M), arm_pts + hand_pts)
     return M, {
         "scale": round(scale, 5),
         "diameter_m": round(body_dims.z * BUCKLER_DIA_RATIO, 4),
         "arm_gap_p01_mm": round(p01 * 1000, 2),
+        "arm_gap_median_mm": round(med * 1000, 2),
     }
 
 
