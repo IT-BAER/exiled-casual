@@ -45,6 +45,7 @@ import { setTitle } from "./title";
 import { setDebugLogging } from "./debug";
 import { setSoundMix } from "./audio/drop-sound";
 import { preloadSfx } from "./audio/sfx";
+import { warmMenuStage } from "./menu/warm-stage";
 import {
   capFor,
   createCharacter,
@@ -80,6 +81,9 @@ const AUTOPLAY =
 const VIEWER =
   typeof window !== "undefined" && new URLSearchParams(window.location.search).has("viewer");
 const DEV = import.meta.env?.DEV === true;
+
+/** How long the menu keeps the wire to itself before the stage warms behind it. */
+const WARM_DELAY_MS = 400;
 
 export function App(): React.ReactElement {
   const [screen, setScreen] = React.useState<Screen>(
@@ -148,6 +152,17 @@ export function App(): React.ReactElement {
   React.useEffect(() => {
     void preloadSfx(["ui-click", "ui-hover", "ui-panel-open"]);
   }, []);
+
+  // The figure in the hall, fetched from the menu rather than by the click that
+  // reaches him. His chunk, his wardrobe and his clips are the same whoever is
+  // picked, so the roster screen has no reason to be where that download starts;
+  // see menu/warm-stage. Held off the first frames so the menu's own art is
+  // never the thing queued behind it.
+  React.useEffect(() => {
+    if (screen.kind !== "menu" && screen.kind !== "mode") return;
+    const t = setTimeout(() => void warmMenuStage(), WARM_DELAY_MS);
+    return () => clearTimeout(t);
+  }, [screen.kind]);
 
   const rows = React.useMemo(() => headers(roster), [roster]);
   /**
