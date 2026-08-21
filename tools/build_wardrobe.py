@@ -15,13 +15,19 @@ already resolves: it shows one look per slot and hides the rest.
         --python tools/build_wardrobe.py
 """
 
+import json
+import math
 import os
 import sys
 
 import bpy
+import mathutils
+from mathutils import Matrix, Vector
 
 SRC = "D:/VSC/exiled-casual/assets/characters/"
+GEAR_SRC = "D:/VSC/exiled-casual/assets/props/source/trellis_local/"
 OUT = "D:/VSC/exiled-casual/apps/web/public/models/wardrobe.glb"
+FIT_REPORT = "D:/VSC/exiled-casual/assets/characters/gear-fit.json"
 
 # The armature the runtime drives. Only the male is wired today; the female
 # ships beside him so she is one look away rather than one build away.
@@ -70,8 +76,8 @@ def clear_scene():
     bpy.ops.wm.read_factory_settings(use_empty=True)
 
 
-def import_gltf(name):
-    path = os.path.join(SRC, name)
+def import_gltf(name, root=SRC):
+    path = os.path.join(root, name)
     if not os.path.exists(path):
         raise SystemExit(f"missing source: {path}")
     before = set(bpy.data.objects)
@@ -201,13 +207,292 @@ def build_look(spec):
     return sorted(named)
 
 
+# --------------------------------------------------------------------------
+# Rigid gear
+#
+# Every piece here is one closed donor mesh with no skeleton of its own, so it
+# is fitted to a measured feature of the body and then skinned ENTIRELY to the
+# one bone it hangs from. That is what keeps the runtime unchanged: a helmet is
+# `helmet.<look>.helm` exactly the way a body is `base.<look>.body`, shown by
+# enabling it and hidden by not, with no socket, no parenting and no per-frame
+# work anywhere in the client.
+#
+# Placement is derived from the body that is actually loaded - this head's
+# width, this hand's centre, this forearm's thickness - never from a world
+# coordinate, so the same table fits a body with different proportions.
+
+RIGID_GEAR = (
+    {
+        "slot": "helmet", "look": "iron", "part": "helm",
+        "src": "iron-helm-8k-v3.glb", "bone": "Head", "fit": "head_shell",
+    },
+    {
+        "slot": "weapon1", "look": "emberwand", "part": "mesh",
+        "src": "wand-3000-v3b.glb", "bone": "hand_r", "fit": "hand_grip",
+    },
+    {
+        "slot": "weapon2", "look": "buckler", "part": "mesh",
+        "src": "buckler-4000-v1.glb", "bone": "lowerarm_l", "fit": "forearm_strap",
+    },
+)
+
+# Air the scalp must keep under a hard shell, and the skull it is measured over:
+# everything above a quarter of the head's height, forehead included. Filtering
+# the face out reads as sensible - the opening is meant to be bare - and hides
+# the one fault that matters, because the forehead is ABOVE the brim and has to
+# be under steel.
+HELM_CLEAR = 0.005
+HELM_COVER_FROM = 0.25
+HELM_WIDTH_FROM = 1.32   # first dome/head width ratio the search tries
+HELM_BACK_SHIFT = 0.06   # seat, as a fraction of head depth
+
+WAND_LEN_RATIO = 0.23      # of body height
+BUCKLER_DIA_RATIO = 0.20   # of body height
+BUCKLER_GAP = 0.008        # air between forearm and shield back
+BUCKLER_ALONG = 0.82       # 0 at the elbow, 1 at the wrist
+
+
+def bbox(points):
+    lo = Vector((min(p.x for p in points), min(p.y for p in points), min(p.z for p in points)))
+    hi = Vector((max(p.x for p in points), max(p.y for p in points), max(p.z for p in points)))
+    return lo, hi, (hi - lo), (lo + hi) / 2
+
+
+def group_points(mesh, group, min_w=0.5):
+    gi = mesh.vertex_groups[group].index
+    return [mesh.matrix_world @ v.co for v in mesh.data.vertices
+            if sum(g.weight for g in v.groups if g.group == gi) >= min_w]
+
+
+def bake_transform(obj):
+    """glTF import leaves its Y-up to Z-up rotation on the object; push it into
+    the mesh so vertex coordinates are world coordinates."""
+    obj.data.transform(obj.matrix_world)
+    obj.matrix_world = Matrix.Identity(4)
+    obj.data.update()
+
+
+def bvh_of(obj, M=None):
+    """A BVH over the datablock, optionally transformed.
+
+    Built from raw polygons rather than `FromObject`: editing mesh vertices in
+    place does not retag an evaluated object, so a BVH taken through the
+    depsgraph during a search reads whatever the previous candidate left behind.
+    """
+    verts = [(M @ v.co) if M else v.co.copy() for v in obj.data.vertices]
+    tris = []
+    for poly in obj.data.polygons:
+        idx = list(poly.vertices)
+        for i in range(1, len(idx) - 1):
+            tris.append((idx[0], idx[i], idx[i + 1]))
+    return mathutils.bvhtree.BVHTree.FromPolygons(verts, tris)
+
+
+def gap_profile(bvh, pts):
+    """Distances from `pts` to a surface, as (1st percentile, median).
+
+    The minimum is deliberately not the gate. One vertex grazing the steel is
+    not a fault anybody can see, and on a scanned donor there is always one:
+    chasing it to zero grows the helmet until it reads as a bucket. A patch of
+    scalp coming through is what shows, and a percentile is what measures one.
+    """
+    ds = sorted(bvh.find_nearest(p)[3] for p in pts if bvh.find_nearest(p)[0] is not None)
+    if not ds:
+        return 0.0, 0.0
+    return ds[max(0, len(ds) // 100)], ds[len(ds) // 2]
+
+
+def cavity_ceiling(obj):
+    """Height of a shell's inner crown, in its own coordinates.
+
+    What rests on a head is the underside of the dome, and finding it means
+    going through the steel: a ray dropped from above hits the outer skin first
+    and the ceiling second. Taking the lowest vertex down the central axis was
+    tried and is wrong on a donor with a comb - the measurement lands on the
+    comb, and the crown then stays welded to the scalp at every size.
+    """
+    lo, hi, dims, c = bbox([v.co for v in obj.data.vertices])
+    bvh = bvh_of(obj)
+    down = Vector((0, 0, -1))
+    ceiling = None
+    for fx in (-0.25, -0.12, 0.0, 0.12, 0.25):
+        for fy in (-0.12, 0.0, 0.12):
+            start = Vector((c.x + dims.x * fx, c.y + dims.y * fy, hi.z + dims.z))
+            outer = bvh.ray_cast(start, down, dims.z * 3)
+            if outer[0] is None:
+                continue
+            inner = bvh.ray_cast(Vector(outer[0]) + down * 1e-4, down, dims.z * 3)
+            if inner[0] is None:
+                continue
+            ceiling = inner[0].z if ceiling is None else min(ceiling, inner[0].z)
+    if ceiling is None:
+        raise SystemExit("no cavity under the dome: this donor is not a shell")
+    return ceiling
+
+
+def placed(obj, scale, rot, translate):
+    """Scale a donor about its own centre, rotate it, then move it."""
+    _, _, _, c = bbox([v.co for v in obj.data.vertices])
+    return Matrix.Translation(translate) @ rot @ Matrix.Scale(scale, 4) @ Matrix.Translation(-c)
+
+
+def fit_head_shell(donor, body, rig):
+    """Grow the shell until the skull above the brim is inside it.
+
+    Seating alone cannot do it: the cavity has to be wide enough for the head
+    before the crown can clear, and a donor scanned around somebody else's skull
+    never is at the first ratio tried.
+    """
+    head_lo, head_hi, head_dims, head_c = bbox(group_points(body, "Head"))
+    hp = [v.co for v in donor.data.vertices]
+    _, d_hi, d_dims, d_c = bbox(hp)
+    dome = [p for p in hp if p.z > d_c.z]
+    dome_w = max(p.x for p in dome) - min(p.x for p in dome)
+    ceiling = cavity_ceiling(donor)
+    dy = head_dims.y * HELM_BACK_SHIFT
+    covered = [p for p in group_points(body, "Head", 0.5)
+               if p.z > head_c.z + head_dims.z * HELM_COVER_FROM]
+
+    def matrix(scale):
+        lift = (ceiling - d_c.z) * scale
+        return placed(donor, scale, Matrix.Identity(4), Vector((
+            head_c.x, head_c.y + dy, head_hi.z + HELM_CLEAR - lift)))
+
+    tries = []
+    for i in range(24):
+        ratio = HELM_WIDTH_FROM + 0.05 * i
+        scale = (head_dims.x * ratio) / dome_w
+        p01, med = gap_profile(bvh_of(donor, matrix(scale)), covered)
+        tries.append([round(ratio, 3), round(p01 * 1000, 2), round(med * 1000, 2)])
+        if p01 >= HELM_CLEAR:
+            return matrix(scale), {
+                "dome_width_ratio": round(ratio, 3), "scale": round(scale, 5),
+                "skull_gap_p01_mm": round(p01 * 1000, 2),
+                "skull_gap_median_mm": round(med * 1000, 2),
+                "skull_points": len(covered),
+            }
+    raise SystemExit(f"helm never enclosed the skull; ratio search {tries}")
+
+
+def fit_hand_grip(donor, body, rig):
+    """A shaft through the closed fist, tip pointing the way the body faces."""
+    _, _, body_dims, _ = bbox([body.matrix_world @ v.co for v in body.data.vertices])
+    _, _, hand_dims, hand_c = bbox(group_points(body, "hand_r"))
+    _, _, d_dims, _ = bbox([v.co for v in donor.data.vertices])
+    scale = (body_dims.z * WAND_LEN_RATIO) / d_dims.z
+    # The donor's long axis is Z with its decorated end at +Z. Turning +Z onto
+    # -Y aims the tip where the character looks, so the shaft runs front to back
+    # through the hand rather than along the arm.
+    rot = Matrix.Rotation(math.radians(90), 4, "X")
+    return placed(donor, scale, rot, hand_c), {
+        "scale": round(scale, 5),
+        "length_m": round(body_dims.z * WAND_LEN_RATIO, 4),
+    }
+
+
+def fit_forearm_strap(donor, body, rig):
+    """A disc off the outside of the forearm, facing along the palm normal."""
+    _, _, body_dims, _ = bbox([body.matrix_world @ v.co for v in body.data.vertices])
+    arm_pts = group_points(body, "lowerarm_l")
+    _, _, arm_dims, arm_c = bbox(arm_pts)
+    _, _, d_dims, _ = bbox([v.co for v in donor.data.vertices])
+    scale = (body_dims.z * BUCKLER_DIA_RATIO) / max(d_dims.x, d_dims.z)
+    # The donor's face looks -Y with its disc in XZ. The palm normal is the
+    # hand's own thinnest axis, Z on this body, so the shield turns to face -Z
+    # and hangs off the underside of the forearm - the outside of the arm once
+    # it is down at the side, which is where a strapped shield lives.
+    rot = Matrix.Rotation(math.radians(90), 4, "X")
+    bone = rig.data.bones["lowerarm_l"]
+    elbow = rig.matrix_world @ bone.head_local
+    wrist = rig.matrix_world @ bone.tail_local
+    along = elbow.lerp(wrist, BUCKLER_ALONG)
+    centre = Vector((along.x, along.y,
+                     arm_c.z - arm_dims.z / 2 - BUCKLER_GAP - d_dims.y * scale / 2))
+    M = placed(donor, scale, rot, centre)
+    p01, med = gap_profile(bvh_of(donor, M), arm_pts)
+    return M, {
+        "scale": round(scale, 5),
+        "diameter_m": round(body_dims.z * BUCKLER_DIA_RATIO, 4),
+        "arm_gap_p01_mm": round(p01 * 1000, 2),
+    }
+
+
+FITTERS = {
+    "head_shell": fit_head_shell,
+    "hand_grip": fit_hand_grip,
+    "forearm_strap": fit_forearm_strap,
+}
+
+
+def skin_to_bone(mesh, rig, bone):
+    """Bind every vertex to one bone at full weight.
+
+    A rigid piece needs no deformation, only to go where its joint goes, and one
+    group at weight 1 says that in the same skinning the body already uses. The
+    runtime therefore learns nothing new: the piece rides the skeleton it is
+    exported with.
+    """
+    if bone not in rig.data.bones:
+        raise SystemExit(f"{mesh.name}: no bone {bone} on {rig.name}")
+    mesh.parent = rig
+    mesh.matrix_parent_inverse = rig.matrix_world.inverted()
+    for mod in list(mesh.modifiers):
+        if mod.type == "ARMATURE":
+            mesh.modifiers.remove(mod)
+    mod = mesh.modifiers.new("Armature", "ARMATURE")
+    mod.object = rig
+    group = mesh.vertex_groups.new(name=bone)
+    group.add(range(len(mesh.data.vertices)), 1.0, "REPLACE")
+
+
+def build_rigid_gear(rig, body):
+    """Fit, skin and name every rigid piece against one built look."""
+    fitted = {}
+    for spec in RIGID_GEAR:
+        path = os.path.join(GEAR_SRC, spec["src"])
+        if not os.path.exists(path):
+            raise SystemExit(f"missing gear source: {path}")
+        objs = import_gltf(spec["src"], root=GEAR_SRC)
+        meshes = [o for o in objs if o.type == "MESH"]
+        if len(meshes) != 1:
+            raise SystemExit(f"{spec['src']}: expected one mesh, got {len(meshes)}")
+        donor = meshes[0]
+        for other in objs:
+            if other is not donor:
+                drop(other)
+        bake_transform(donor)
+        M, detail = FITTERS[spec["fit"]](donor, body, rig)
+        donor.data.transform(M)
+        donor.data.update()
+        donor.name = f"{spec['slot']}.{spec['look']}.{spec['part']}"
+        donor.data.name = donor.name
+        skin_to_bone(donor, rig, spec["bone"])
+        tris = sum(len(p.vertices) - 2 for p in donor.data.polygons)
+        detail.update({"bone": spec["bone"], "fit": spec["fit"], "triangles": tris,
+                       "source": spec["src"]})
+        fitted[donor.name] = detail
+        print(f"fitted {donor.name}: {tris} tris on {spec['bone']}")
+    return fitted
+
+
 def main():
     clear_scene()
+    built = {}
     for spec in LOOKS:
         parts = build_look(spec)
         missing = {"body", "eyes", "brows", "hair"} - set(parts)
         if missing:
             raise SystemExit(f"{spec['look']}: missing parts {sorted(missing)}")
+        built[spec["look"]] = spec
+
+    # Gear is fitted to the wired body only. The female ships unwired, and a
+    # second copy of every piece would double the download for a look nothing
+    # can select yet.
+    male_rig = bpy.data.objects[MALE_RIG]
+    male_body = bpy.data.objects["base.male.body"]
+    fitted = build_rigid_gear(male_rig, male_body)
+    with open(FIT_REPORT, "w") as fh:
+        json.dump(fitted, fh, indent=1)
 
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     bpy.ops.export_scene.gltf(

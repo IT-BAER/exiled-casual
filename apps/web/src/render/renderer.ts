@@ -5,7 +5,8 @@ import { blinkBurst } from "./skill-fx";
 import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
 import { animateActor, keepGroundBlobFlat, makeMesh, setHitFlash, updateTelegraph, updatePortal, updateMapDevice, updateStash, updateVendor, updateContainer, updateGroundItem, updateRareElement, portalAppear, portalVanish, isPortalMesh, PORTAL_STAGGER_MS, Y_LIFT } from "./meshes";
 import type { MeshKind } from "./meshes";
-import { BASE_LOOKS, rigOf } from "./rig";
+import { rigOf } from "./rig";
+import { looksForEquipment } from "./gear-looks";
 import { creatureOf } from "./meshes";
 import { CORPSE_SECONDS, SINK_SECONDS, disposeRagdoll, dropDead, freezeRagdoll, sinkDepth } from "./ragdoll";
 import { CAMERA_ALPHA } from "./engine";
@@ -294,11 +295,12 @@ export class SnapshotRenderer {
       next.player.heading,
     );
 
-    // Dress the character. Equipping an item changes no visuals, so this is
-    // always the one wired look; asserting it every frame self-heals if a mesh
-    // was rebuilt.
+    // Dress the character from what the sim says he is wearing. Asserted every
+    // frame rather than on a change: `setLooks` only moves visibility and exits
+    // early when nothing differs, and doing it here self-heals a mesh that was
+    // rebuilt underneath us.
     const playerMesh = this.meshes.get(next.player.id);
-    if (playerMesh) rigOf(playerMesh)?.setLooks(BASE_LOOKS);
+    if (playerMesh) rigOf(playerMesh)?.setLooks(looksForEquipment(next.equipment ?? {}));
 
     // Portals arriving this snapshot, in ring order (spawnPortalRing creates them
     // in that order, so ascending entity id IS the arc). Their index is what the

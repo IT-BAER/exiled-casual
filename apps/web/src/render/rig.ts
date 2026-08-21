@@ -248,21 +248,41 @@ const MALE_RIG = "Armature";
 /** Every skeleton root the wardrobe ships, wired or not. */
 const RIG_ROOT = /^Armature(_[a-z]+)?$/;
 
-/** The one wardrobe slot: everything ships as `base.<look>.<part>`. */
-export type Slot = "base";
-export const SLOTS: readonly Slot[] = ["base"];
+/**
+ * The wardrobe slots. `base` is the body; the rest are gear, and they are named
+ * for the equipment slots the sim already uses (`EquipSlotId`) so that dressing
+ * the character is a lookup and never a translation table.
+ *
+ * Gear needs no machinery beyond this. Each rigid piece is skinned entirely to
+ * the one joint it hangs from, pinned by `rig.test.ts`, so it rides the skeleton
+ * exactly the way the body does: showing a helmet is enabling a mesh, and there
+ * is no socket, no re-parenting and no per-frame work anywhere in the client.
+ */
+export type Slot = "base" | "helmet" | "weapon1" | "weapon2";
+export const SLOTS: readonly Slot[] = ["base", "helmet", "weapon1", "weapon2"];
 
 /** A look per slot, or null for "nothing shown there". */
 export type Looks = Record<Slot, string | null>;
 
 /** Nobody drawn: the menu hall with no character standing in it. */
-export const NO_LOOKS: Looks = { base: null };
+export const NO_LOOKS: Looks = { base: null, helmet: null, weapon1: null, weapon2: null };
 
 /**
- * The only look the game wires up today. The wardrobe ships a female body on
- * the same skeleton shape, but nothing yet picks her — see `build_wardrobe.py`.
+ * The bare body, carrying nothing. The wardrobe ships a female body on the same
+ * skeleton shape, but nothing yet picks her — see `build_wardrobe.py`.
  */
-export const BASE_LOOKS: Looks = { base: "male" };
+export const BASE_LOOKS: Looks = { base: "male", helmet: null, weapon1: null, weapon2: null };
+
+/**
+ * Hair is geometry, and a hard helm is a closed shell around the skull: worn
+ * together the fringe comes through the steel at the brow and the temples. The
+ * shell is fitted to the bare head on purpose (`tools/build_wardrobe.py` gates
+ * the clearance against the skull, not the hairstyle), so the hair goes away
+ * while a helmet is on rather than the helmet growing to swallow it.
+ */
+export function hidesHair(looks: Looks): boolean {
+  return looks.helmet !== null;
+}
 
 /**
  * The bones the coat hangs from, baked by `tools/build_wardrobe.py`: a ring of
@@ -667,11 +687,14 @@ export class RigActor {
   }
 
   private applyLooks(): void {
+    const bareHead = !hidesHair(this.looks);
     for (const [slot, byLook] of this.parts) {
       const wanted = this.looks[slot as Slot] ?? null;
       for (const [look, meshes] of byLook) {
         const on = look === wanted;
-        for (const mesh of meshes) mesh.setEnabled(on);
+        for (const mesh of meshes) {
+          mesh.setEnabled(on && (bareHead || !mesh.name.includes(".hair")));
+        }
       }
     }
   }

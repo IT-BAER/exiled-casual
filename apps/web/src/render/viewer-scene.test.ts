@@ -56,10 +56,20 @@ describe("viewer clips", () => {
 });
 
 describe("opening look", () => {
-  it("opens dressed in the one wired look", () => {
+  /**
+   * The body is the wired one and the gear is whatever ships. A workshop screen
+   * that opened on the bare body would hide every piece it exists to show, and
+   * an unwired FEMALE body picked the same way would show a body the game never
+   * draws - hence the two rules rather than one.
+   */
+  it("opens on the wired body wearing the gear the wardrobe ships", () => {
     const vocab = looksFromPartNames(PART_NAMES);
     const looks = dressedFromVocabulary(vocab);
-    expect(looks).toEqual(BASE_LOOKS);
+    expect(looks.base).toBe(BASE_LOOKS.base);
+    for (const slot of ["helmet", "weapon1", "weapon2"] as const) {
+      expect(vocab[slot], `wardrobe ships no ${slot}`).toBeDefined();
+      expect(looks[slot]).toBe(vocab[slot]![0]);
+    }
   });
 
   it("leaves a slot the wardrobe has nothing for empty", () => {

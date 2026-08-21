@@ -32,6 +32,7 @@ import {
   loadPlayerRig,
   resetPlayerRig,
   BASE_LOOKS,
+  NO_LOOKS,
   SLOTS,
   type Looks,
   type RigActor,
@@ -102,24 +103,34 @@ export function looksFromPartNames(names: readonly string[]): Record<string, str
 }
 
 /**
- * The wired look, if the wardrobe actually ships it.
+ * The wired body, plus whatever gear the wardrobe ships.
  *
- * Only `male` is wired (see `BASE_LOOKS`); the wardrobe also ships `female`,
- * and picking "the first look each slot has" would sometimes hand the viewer a
- * body the game never draws. Checked against the vocabulary anyway, so an
- * asset that stopped shipping the male body opens on nothing rather than a
- * silent lie.
+ * The BODY is pinned rather than picked: only `male` is wired (see
+ * `BASE_LOOKS`), the wardrobe also ships `female`, and taking "the first look
+ * this slot has" would sometimes hand the viewer a body the game never draws.
+ * Checked against the vocabulary anyway, so an asset that stopped shipping the
+ * male body opens on nothing rather than a silent lie.
+ *
+ * GEAR is picked first-available, because this is the workshop screen and a
+ * piece nothing here can put on is a piece nobody can look at. In play a slot
+ * fills only when the item is equipped.
  */
 export function dressedFromVocabulary(vocab: Record<string, string[]>): Looks {
   const looks = { ...NAKED };
   for (const slot of SLOTS) {
-    if (vocab[slot]?.includes(BASE_LOOKS[slot] ?? "")) looks[slot] = BASE_LOOKS[slot];
+    const wired = BASE_LOOKS[slot];
+    if (wired !== null) {
+      if (vocab[slot]?.includes(wired)) looks[slot] = wired;
+      continue;
+    }
+    const first = vocab[slot]?.[0];
+    if (first !== undefined) looks[slot] = first;
   }
   return looks;
 }
 
 /** Every slot empty. Exported so the panel and the scene agree on the word. */
-export const NAKED: Looks = { base: null };
+export const NAKED: Looks = { ...NO_LOOKS };
 
 /**
  * Camera distance that fits a subject of this radius in the frame.

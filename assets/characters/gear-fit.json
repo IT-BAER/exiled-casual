@@ -1,0 +1,30 @@
+{
+ "helmet.iron.helm": {
+  "dome_width_ratio": 1.57,
+  "scale": 0.39949,
+  "skull_gap_p01_mm": 7.3,
+  "skull_gap_median_mm": 50.41,
+  "skull_points": 139,
+  "bone": "Head",
+  "fit": "head_shell",
+  "triangles": 7999,
+  "source": "iron-helm-8k-v3.glb"
+ },
+ "weapon1.emberwand.mesh": {
+  "scale": 0.43,
+  "length_m": 0.4185,
+  "bone": "hand_r",
+  "fit": "hand_grip",
+  "triangles": 2999,
+  "source": "wand-3000-v3b.glb"
+ },
+ "weapon2.buckler.mesh": {
+  "scale": 0.35994,
+  "diameter_m": 0.3639,
+  "arm_gap_p01_mm": 12.09,
+  "bone": "lowerarm_l",
+  "fit": "forearm_strap",
+  "triangles": 4000,
+  "source": "buckler-4000-v1.glb"
+ }
+}

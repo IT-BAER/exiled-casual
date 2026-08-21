@@ -210,24 +210,97 @@ describe("rig fallback", () => {
  * at build time, so a renamed part in `tools/build_wardrobe.py` would surface
  * only as an invisible limb in the running game. This pins the two together.
  */
+/** Which joint each rigid piece must hang from, and nothing else. */
+const RIGID_BONES: Record<string, string> = {
+  "helmet.iron.helm": "Head",
+  "weapon1.emberwand.mesh": "hand_r",
+  "weapon2.buckler.mesh": "lowerarm_l",
+};
+
+const COMPONENTS: Record<number, number> = { 5120: 1, 5121: 1, 5122: 2, 5123: 2, 5125: 4, 5126: 4 };
+const TYPE_COUNT: Record<string, number> = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4 };
+
+/** Read one glTF accessor out of the binary chunk as a flat number array. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function readAccessor(json: any, bin: Buffer, index: number): number[] {
+  const acc = json.accessors[index];
+  const view = json.bufferViews[acc.bufferView];
+  const per = TYPE_COUNT[acc.type]!;
+  const size = COMPONENTS[acc.componentType]!;
+  const stride = view.byteStride ?? per * size;
+  const base = (view.byteOffset ?? 0) + (acc.byteOffset ?? 0);
+  const out: number[] = [];
+  for (let i = 0; i < acc.count; i += 1) {
+    for (let c = 0; c < per; c += 1) {
+      const at = base + i * stride + c * size;
+      switch (acc.componentType) {
+        case 5121: out.push(bin.readUInt8(at)); break;
+        case 5123: out.push(bin.readUInt16LE(at)); break;
+        case 5125: out.push(bin.readUInt32LE(at)); break;
+        case 5126: out.push(bin.readFloatLE(at)); break;
+        default: throw new Error(`unhandled componentType ${acc.componentType}`);
+      }
+    }
+  }
+  return out;
+}
+
 describe("wardrobe asset", () => {
   const MODELS = fileURLToPath(new URL("../../public/models/", import.meta.url));
   const glb = readFileSync(`${MODELS}wardrobe.glb`);
   const json = JSON.parse(
     glb.subarray(20, 20 + glb.readUInt32LE(12)).toString("utf8"),
-  ) as {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ) as any as {
     nodes: { name: string; mesh?: number; skin?: number; children?: number[] }[];
     skins: { joints: number[] }[];
-    meshes: { name: string }[];
+    meshes: { name: string; primitives: { attributes: Record<string, number> }[] }[];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    accessors: any[]; bufferViews: any[]; buffers0Len: number;
   };
+  // The JSON chunk is padded to four bytes and the BIN chunk header is another
+  // eight; without both the binary offsets land mid-accessor.
+  json.buffers0Len = (glb.readUInt32LE(12) + 3 & ~3) + 8;
   const skinned = json.nodes.filter((n) => n.skin !== undefined).map((n) => n.name);
 
-  it("ships exactly the two base bodies, four parts each", () => {
+  it("ships the two base bodies and the rigid gear, and nothing else", () => {
     const meshNames = json.meshes.map((m) => m.name).sort();
     expect(meshNames).toEqual([
       "base.female.body", "base.female.brows", "base.female.eyes", "base.female.hair",
       "base.male.body", "base.male.brows", "base.male.eyes", "base.male.hair",
+      "helmet.iron.helm", "weapon1.emberwand.mesh", "weapon2.buckler.mesh",
     ].sort());
+  });
+
+  /**
+   * The whole reason the client needs no socket, no parenting and no per-frame
+   * work for held and worn gear: each rigid piece is skinned entirely to the one
+   * joint it hangs from, so it rides the skeleton exactly the way the body does.
+   * A piece that picked up a second influence would start deforming, and a piece
+   * bound to the wrong joint would follow the wrong limb - neither shows up in a
+   * name check, so the weights are read out of the buffer.
+   */
+  it("binds every rigid piece to exactly one joint at full weight", () => {
+    const bin = glb.subarray(20 + json.buffers0Len);
+    for (const [mesh, bone] of Object.entries(RIGID_BONES)) {
+      const node = json.nodes.find((n) => n.name === mesh);
+      expect(node, `no node ${mesh}`).toBeDefined();
+      const prim = json.meshes[node!.mesh!]!.primitives[0]!;
+      const joints = readAccessor(json, bin, prim.attributes["JOINTS_0"]!);
+      const weights = readAccessor(json, bin, prim.attributes["WEIGHTS_0"]!);
+      const skin = json.skins[node!.skin!]!;
+      const used = new Set<number>();
+      for (let v = 0; v < weights.length / 4; v += 1) {
+        const w = weights.slice(v * 4, v * 4 + 4);
+        const j = joints.slice(v * 4, v * 4 + 4);
+        for (let k = 0; k < 4; k += 1) {
+          if (w[k]! > 0.0001) used.add(j[k]!);
+        }
+        expect(w[0]).toBeCloseTo(1, 4);
+      }
+      expect([...used]).toHaveLength(1);
+      expect(json.nodes[skin.joints[[...used][0]!]!]!.name).toBe(bone);
+    }
   });
 
   it("rides two 65-bone skeletons, one per body", () => {
