@@ -1,9 +1,9 @@
 {
  "helmet.iron.helm": {
-  "dome_width_ratio": 1.57,
-  "scale": 0.39949,
-  "skull_gap_p01_mm": 7.3,
-  "skull_gap_median_mm": 50.41,
+  "dome_width_ratio": 1.2,
+  "scale": 0.30534,
+  "skull_gap_p01_mm": 3.42,
+  "skull_gap_median_mm": 29.12,
   "skull_points": 139,
   "bone": "Head",
   "fit": "head_shell",
@@ -12,7 +12,8 @@
  },
  "weapon1.emberwand.mesh": {
   "scale": 0.26304,
-  "length_m": 0.256,
+  "stretch": 1.6347,
+  "length_m": 0.4185,
   "grip_diameter_mm": 38.0,
   "grip_at_length_fraction": 0.392,
   "hole_m": [
@@ -20,7 +21,12 @@
    0.0484,
    1.4379
   ],
-  "hand_gap_p01_mm": 0.23,
+  "aim_world": [
+   -0.45,
+   -0.55,
+   -0.7
+  ],
+  "hand_gap_p01_mm": 0.31,
   "bone": "hand_r",
   "fit": "hand_grip",
   "triangles": 2999,
@@ -29,8 +35,8 @@
  "weapon2.buckler.mesh": {
   "scale": 0.35994,
   "diameter_m": 0.3639,
-  "arm_gap_p01_mm": 22.29,
-  "arm_gap_median_mm": 92.73,
+  "arm_gap_p01_mm": 22.14,
+  "arm_gap_median_mm": 93.55,
   "bone": "lowerarm_l",
   "fit": "forearm_strap",
   "triangles": 4000,

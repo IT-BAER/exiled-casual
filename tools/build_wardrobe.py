@@ -241,20 +241,43 @@ RIGID_GEAR = (
 # the face out reads as sensible - the opening is meant to be bare - and hides
 # the one fault that matters, because the forehead is ABOVE the brim and has to
 # be under steel.
-HELM_CLEAR = 0.005
+HELM_CLEAR = 0.003       # padding under the steel, metres
 HELM_COVER_FROM = 0.25
-HELM_WIDTH_FROM = 1.32   # first dome/head width ratio the search tries
 HELM_BACK_SHIFT = 0.06   # seat, as a fraction of head depth
+HELM_WIDTH_FROM = 1.05   # narrowest dome/head width ratio worth trying
+HELM_WIDTH_TO = 1.35     # past this a shell is a bucket, whatever it measures
+HELM_WIDTH_STEP = 0.025
+# Clearance alone cannot say a helmet is too big, because growing the shell
+# also reseats it: the scalp point nearest the steel keeps changing, so the
+# gap wanders up and down as the ratio climbs rather than rising with it.
+# Accepting the first ratio that clears therefore lands on whichever local dip
+# happens to come first - 1.57 on this donor, a helm half again as wide as the
+# head. The smallest passing ratio is the fit; the median gap is the ceiling
+# that catches a donor whose shape needs a bucket to clear anything at all.
+HELM_MAX_MEDIAN = 0.035
 
 # A haft is sized by the hole a fist makes, not by the length that looks right:
 # scaling a gnarled donor to a wand's length leaves its grip wider than the
-# fingers can close, and the knuckles come through the wood.
+# fingers can close, and the knuckles come through the wood. Length is then
+# bought back along the shaft alone, which a hand cannot feel and an eye reads
+# as a longer wand rather than a fatter one.
 WAND_GRIP_DIA = 0.038      # metres across the shaft where the fist closes
-WAND_MIN_LEN = 0.24        # below this the piece reads as a stone, not a wand
+WAND_LEN_RATIO = 0.23      # of body height
+WAND_MAX_STRETCH = 1.8     # past this the carving visibly smears
+# Where the wand's head should point while he stands still, in world axes: out
+# to his right, ahead of him, and down. Aiming it across the palm is what a
+# hand actually does and it is unreadable, because `Idle_Loop` is a bare-handed
+# idle that turns the grip axis forward and UP - down the barrel of the front
+# camera, and inside the arm from the game camera. The bind-pose direction that
+# lands here is measured off the clip, not assumed.
+WAND_AIM = (-0.45, -0.55, -0.70)
+IDLE_CLIP = "Rig|Idle_Loop"
+ANIMS = "D:/VSC/exiled-casual/apps/web/public/models/anim-library.glb"
 
 BUCKLER_DIA_RATIO = 0.20   # of body height
 BUCKLER_GAP = 0.008        # air between the arm and the shield's back face
 BUCKLER_ALONG = 0.82       # 0 at the elbow, 1 at the wrist
+BUCKLER_ROLL = -90         # degrees about the shield's own face
 
 
 def bbox(points):
@@ -335,16 +358,23 @@ def cavity_ceiling(obj):
     return ceiling
 
 
-def placed(obj, scale, rot, translate):
-    """Scale a donor about its own centre, rotate it, then move it."""
+def sizing(scale, stretch=1.0, axis=2):
+    """Uniform scale, optionally drawn out along one of the donor's own axes."""
+    s = [scale, scale, scale]
+    s[axis] *= stretch
+    return Matrix.Diagonal((s[0], s[1], s[2], 1.0))
+
+
+def placed(obj, S, rot, translate):
+    """Size a donor about its own centre, rotate it, then move it."""
     _, _, _, c = bbox([v.co for v in obj.data.vertices])
-    return Matrix.Translation(translate) @ rot @ Matrix.Scale(scale, 4) @ Matrix.Translation(-c)
+    return Matrix.Translation(translate) @ rot @ S @ Matrix.Translation(-c)
 
 
-def seated(obj, scale, rot, anchor, target):
+def seated(obj, S, rot, anchor, target):
     """Place a donor so its own `anchor` point lands on `target`."""
     _, _, _, c = bbox([v.co for v in obj.data.vertices])
-    return placed(obj, scale, rot, target - (rot.to_3x3() @ ((anchor - c) * scale)))
+    return placed(obj, S, rot, target - (rot.to_3x3() @ (S.to_3x3() @ (anchor - c))))
 
 
 def waist(obj, axis, bands=12):
@@ -393,23 +423,77 @@ def fit_head_shell(donor, body, rig):
 
     def matrix(scale):
         lift = (ceiling - d_c.z) * scale
-        return placed(donor, scale, Matrix.Identity(4), Vector((
+        return placed(donor, sizing(scale), Matrix.Identity(4), Vector((
             head_c.x, head_c.y + dy, head_hi.z + HELM_CLEAR - lift)))
 
     tries = []
-    for i in range(24):
-        ratio = HELM_WIDTH_FROM + 0.05 * i
+    ratio = HELM_WIDTH_FROM
+    while ratio <= HELM_WIDTH_TO + 1e-9:
         scale = (head_dims.x * ratio) / dome_w
         p01, med = gap_profile(bvh_of(donor, matrix(scale)), covered)
         tries.append([round(ratio, 3), round(p01 * 1000, 2), round(med * 1000, 2)])
-        if p01 >= HELM_CLEAR:
+        if p01 >= HELM_CLEAR and med <= HELM_MAX_MEDIAN:
             return matrix(scale), {
                 "dome_width_ratio": round(ratio, 3), "scale": round(scale, 5),
                 "skull_gap_p01_mm": round(p01 * 1000, 2),
                 "skull_gap_median_mm": round(med * 1000, 2),
                 "skull_points": len(covered),
             }
-    raise SystemExit(f"helm never enclosed the skull; ratio search {tries}")
+        ratio += HELM_WIDTH_STEP
+    raise SystemExit(f"no helm size both clears the skull and stays a helmet; {tries}")
+
+
+def idle_rotation(rig, bone):
+    """How the idle clip turns one bone, as a rest-to-posed 3x3.
+
+    Borrowed from `anim-library.glb` and handed straight back: the clip is
+    imported, read at one frame and deleted again, and the rig leaves in its
+    rest pose. A piece aimed in the rest pose is aimed at nothing anybody sees -
+    the character is never in it - so the clip he stands in is the only frame
+    that can say where a weapon points.
+    """
+    before = set(bpy.data.objects)
+    bpy.ops.import_scene.gltf(filepath=ANIMS)
+    borrowed = [o for o in bpy.data.objects if o not in before]
+    if IDLE_CLIP not in bpy.data.actions:
+        raise SystemExit(f"{ANIMS} carries no {IDLE_CLIP}")
+    act = bpy.data.actions[IDLE_CLIP]
+    if rig.animation_data is None:
+        rig.animation_data_create()
+    rig.animation_data.action = act
+    for slot in act.slots:
+        rig.animation_data.action_slot = slot
+        break
+    bpy.context.scene.frame_set(int(sum(act.frame_range) // 2))
+    bpy.context.view_layer.update()
+    pose = rig.pose.bones[bone].matrix
+    R = (rig.matrix_world @ pose
+         @ rig.data.bones[bone].matrix_local.inverted()).to_3x3()
+
+    # Dropping the action does not undo the pose: every bone keeps whatever the
+    # last evaluated frame left on it, and the export would ship a rig frozen
+    # mid-idle.
+    rig.animation_data_clear()
+    for pb in rig.pose.bones:
+        pb.matrix_basis = Matrix.Identity(4)
+    bpy.context.scene.frame_set(0)
+    bpy.context.view_layer.update()
+    for o in borrowed:
+        drop(o)
+    for a in list(bpy.data.actions):
+        bpy.data.actions.remove(a)
+    rest = (rig.matrix_world @ rig.pose.bones[bone].matrix
+            @ rig.data.bones[bone].matrix_local.inverted()).to_3x3()
+    if max(abs(rest[i][j] - rig.matrix_world.to_3x3()[i][j])
+           for i in range(3) for j in range(3)) > 1e-4:
+        raise SystemExit(f"{bone} did not return to its rest pose after reading {IDLE_CLIP}")
+    return R
+
+
+def aimed(donor, axis_dir, R, aim):
+    """Rotate a donor's own `axis_dir` onto whatever the clip turns into `aim`."""
+    want = R.transposed() @ Vector(aim).normalized()
+    return axis_dir.rotation_difference(want).to_matrix().to_4x4()
 
 
 KNUCKLES = ("index_01_r", "middle_01_r", "ring_01_r", "pinky_01_r")
@@ -449,28 +533,27 @@ def fit_hand_grip(donor, body, rig):
     _, _, d_dims, _ = bbox([v.co for v in donor.data.vertices])
     grip_z, grip_r = waist(donor, 2)
     scale = WAND_GRIP_DIA / (2 * grip_r)
-    length = d_dims.z * scale
-    if length < WAND_MIN_LEN:
-        raise SystemExit(
-            f"wand is {length * 1000:.0f} mm at a {WAND_GRIP_DIA * 1000:.0f} mm grip; "
-            "this donor is too stout to read as a wand")
-    # The donor's long axis is Z with its decorated end at +Z. Turning +Z onto
-    # -Y aims the tip where the character looks, so the shaft runs front to back
-    # through the hand rather than along the arm - and -Y survives the shoulder
-    # rotation that drops the arm to the character's side, so an idle pose aims
-    # it the same way the bind pose does.
-    rot = Matrix.Rotation(math.radians(90), 4, "X")
+    want = body_dims.z * WAND_LEN_RATIO
+    stretch = min(WAND_MAX_STRETCH, want / (d_dims.z * scale))
+    length = d_dims.z * scale * stretch
+    # The donor's long axis is Z with its decorated end at +Z, so +Z is the way
+    # the head points and the rotation is whatever carries it to WAND_AIM once
+    # the idle clip has turned the hand.
+    R = idle_rotation(rig, "hand_r")
+    rot = aimed(donor, Vector((0, 0, 1)), R, WAND_AIM)
     _, _, _, d_c = bbox([v.co for v in donor.data.vertices])
     anchor = Vector((d_c.x, d_c.y, grip_z))
     hole = grip_hole(rig, grip_r * scale)
-    M = seated(donor, scale, rot, anchor, hole)
+    M = seated(donor, sizing(scale, stretch), rot, anchor, hole)
     p01, med = gap_profile(bvh_of(donor, M), hand_pts)
     return M, {
         "scale": round(scale, 5),
+        "stretch": round(stretch, 4),
         "length_m": round(length, 4),
         "grip_diameter_mm": round(2 * grip_r * scale * 1000, 2),
         "grip_at_length_fraction": round((grip_z - (-d_dims.z / 2)) / d_dims.z, 3),
         "hole_m": [round(v, 4) for v in hole],
+        "aim_world": list(WAND_AIM),
         "hand_gap_p01_mm": round(p01 * 1000, 2),
     }
 
@@ -499,7 +582,11 @@ def fit_forearm_strap(donor, body, rig):
     # standing through the boss.
     front = min(p.y for p in arm_pts + hand_pts)
     centre = Vector((along.x, front - BUCKLER_GAP - d_dims.y * scale / 2, along.z))
-    M = placed(donor, scale, Matrix.Identity(4), centre)
+    # The facing settles which way the disc looks; the roll settles where its
+    # boss straps and its spokes run, which the donor authored for a different
+    # arm than this one.
+    roll = Matrix.Rotation(math.radians(BUCKLER_ROLL), 4, "Y")
+    M = placed(donor, sizing(scale), roll, centre)
     p01, med = gap_profile(bvh_of(donor, M), arm_pts + hand_pts)
     return M, {
         "scale": round(scale, 5),
