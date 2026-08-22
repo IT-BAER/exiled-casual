@@ -38,8 +38,14 @@
  "weapon2.buckler.mesh": {
   "scale": 0.35994,
   "diameter_m": 0.3639,
-  "arm_gap_p01_mm": 22.14,
-  "arm_gap_median_mm": 93.55,
+  "arm_reach_mm": 45.59,
+  "face_world": [
+   0.94,
+   -0.34,
+   0.0
+  ],
+  "arm_gap_p01_mm": 11.78,
+  "arm_gap_median_mm": 73.55,
   "bone": "lowerarm_l",
   "fit": "forearm_strap",
   "triangles": 4000,

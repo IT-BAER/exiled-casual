@@ -291,6 +291,10 @@ BUCKLER_DIA_RATIO = 0.20   # of body height
 BUCKLER_GAP = 0.008        # air between the arm and the shield's back face
 BUCKLER_ALONG = 0.82       # 0 at the elbow, 1 at the wrist
 BUCKLER_ROLL = -90         # degrees about the shield's own face
+# Where the face looks while he stands still, in world axes: out from his left
+# side and a little ahead, which is how a strapped buckler hangs when the arm is
+# down. Measured against the idle clip, not the bind pose.
+BUCKLER_FACE = (0.94, -0.34, 0.0)
 
 
 def bbox(points):
@@ -510,6 +514,8 @@ def idle_pose(rig, bone, probes):
     pose = rig.pose.bones[bone].matrix
     M = (rig.matrix_world @ pose @ rig.data.bones[bone].matrix_local.inverted())
     posed = {n: (rig.matrix_world @ rig.pose.bones[n].head).copy() for n in probes}
+    mats = {n: (rig.matrix_world @ rig.pose.bones[n].matrix
+                @ rig.data.bones[n].matrix_local.inverted()) for n in probes}
 
     # Dropping the action does not undo the pose: every bone keeps whatever the
     # last evaluated frame left on it, and the export would ship a rig frozen
@@ -528,7 +534,7 @@ def idle_pose(rig, bone, probes):
     if max(abs(rest[i][j] - rig.matrix_world.to_3x3()[i][j])
            for i in range(3) for j in range(3)) > 1e-4:
         raise SystemExit(f"{bone} did not return to its rest pose after reading {IDLE_CLIP}")
-    return M, posed
+    return M, posed, mats
 
 
 def aimed(donor, axis_dir, R, aim):
@@ -538,6 +544,11 @@ def aimed(donor, axis_dir, R, aim):
 
 
 FINGERS = ("index", "middle", "ring", "pinky")
+# Every bone the left fist is painted to. `hand_l` alone is the wrist band - the
+# fingers carry their own groups, and they are what stands furthest out from the
+# arm, so a shield cleared against `hand_l` has the knuckles through its face.
+LEFT_HAND = ("hand_l",) + tuple(f"{f}_{i:02d}_l" for f in ("index", "middle", "ring", "pinky", "thumb")
+                                for i in (1, 2, 3))
 # Every joint down the four fingers, which curl around whatever the fist holds:
 # their centroid in the posed hand is the middle of the hole, and no part of it
 # has to be guessed from an open hand.
@@ -575,7 +586,7 @@ def fit_hand_grip(donor, body, rig):
     # The donor's long axis is Z with its decorated end at +Z, so +Z is the way
     # the head points and the rotation is whatever carries it to WAND_AIM once
     # the idle clip has turned the hand.
-    M, posed = idle_pose(rig, "hand_r", FIST_JOINTS)
+    M, posed, _ = idle_pose(rig, "hand_r", FIST_JOINTS)
     rot = aimed(donor, Vector((0, 0, 1)), M.to_3x3(), WAND_AIM)
     _, _, _, d_c = bbox([v.co for v in donor.data.vertices])
     anchor = Vector((d_c.x, d_c.y, grip_z))
@@ -597,14 +608,15 @@ def fit_hand_grip(donor, body, rig):
 
 
 def fit_forearm_strap(donor, body, rig):
-    """A disc in front of the forearm, its face along the way the body looks.
+    """A disc strapped to the outside of the forearm, hanging beside the hip.
 
-    Which perpendicular the face takes is the whole fit. A shield turned to -Z
-    lies flat under a T-posed forearm and is unarguable in the bind pose, but
-    the shoulder rotation that drops the arm to the side is a turn about Y: it
-    carries -Z round to +X and the shield ends up edge-on, facing across the
-    hip and cutting through it. -Y is fixed by that same rotation, so the disc
-    keeps both its plane and its facing in every pose the arm reaches.
+    Aimed the same way a weapon is: against the clip he stands in, never the
+    bind pose. A facing that is unarguable with the arm out to the side is
+    turned by the shoulder rotation that drops it, and -Z becomes +X - the
+    shield finishes edge-on, cutting across the hip. The face is put where a
+    strapped shield looks in the idle instead, outward from his own left arm,
+    and the disc rides one arm radius clear of the skin so the strap side never
+    sinks into it.
     """
     _, _, body_dims, _ = bbox([body.matrix_world @ v.co for v in body.data.vertices])
     arm_pts = group_points(body, "lowerarm_l")
@@ -614,21 +626,31 @@ def fit_forearm_strap(donor, body, rig):
     bone = rig.data.bones["lowerarm_l"]
     elbow = rig.matrix_world @ bone.head_local
     wrist = rig.matrix_world @ bone.tail_local
-    along = elbow.lerp(wrist, BUCKLER_ALONG)
-    # The arm is not the only thing behind the shield: the fist reaches further
-    # forward than the forearm does, and clearing only the arm leaves fingers
-    # standing through the boss.
-    front = min(p.y for p in arm_pts + hand_pts)
-    centre = Vector((along.x, front - BUCKLER_GAP - d_dims.y * scale / 2, along.z))
+
+    M, _, mats = idle_pose(rig, "lowerarm_l", LEFT_HAND)
+    face = Vector(BUCKLER_FACE).normalized()
+    along = (M @ elbow).lerp(M @ wrist, BUCKLER_ALONG)
+    # The arm is not the only thing behind the shield: the fist stands further
+    # out than the forearm does. Every part is carried by the bone it is painted
+    # to, in the pose, and the disc goes outboard of whichever reaches furthest.
+    out = [M @ q for q in arm_pts]
+    for b in LEFT_HAND:
+        out += [mats[b] @ q for q in group_points(body, b)]
+    reach = max((p - along).dot(face) for p in out)
+    centre = M.inverted() @ (
+        along + face * (reach + BUCKLER_GAP + d_dims.y * scale / 2))
     # The facing settles which way the disc looks; the roll settles where its
     # boss straps and its spokes run, which the donor authored for a different
     # arm than this one.
     roll = Matrix.Rotation(math.radians(BUCKLER_ROLL), 4, "Y")
-    M = placed(donor, sizing(scale), roll, centre)
-    p01, med = gap_profile(bvh_of(donor, M), arm_pts + hand_pts)
-    return M, {
+    rot = aimed(donor, Vector((0, -1, 0)), M.to_3x3(), BUCKLER_FACE) @ roll
+    M4 = placed(donor, sizing(scale), rot, centre)
+    p01, med = gap_profile(bvh_of(donor, M4), arm_pts + hand_pts)
+    return M4, {
         "scale": round(scale, 5),
         "diameter_m": round(body_dims.z * BUCKLER_DIA_RATIO, 4),
+        "arm_reach_mm": round(reach * 1000, 2),
+        "face_world": list(BUCKLER_FACE),
         "arm_gap_p01_mm": round(p01 * 1000, 2),
         "arm_gap_median_mm": round(med * 1000, 2),
     }

@@ -38,6 +38,24 @@ uses client axes.
    only, capped at `WAND_MAX_STRETCH`, because a hand can feel a fatter grip and an eye reads a
    longer one.
 
+## The offhand
+
+A strapped shield follows the same three rules with the grip replaced by a strap:
+
+1. **Aimed against the clip.** `BUCKLER_FACE` is where the disc's face looks in the idle, out from
+   his left side and a little ahead. A facing that is unarguable in the bind pose is not: the
+   shoulder rotation that drops the arm turns -Z into +X and stands the shield edge-on across the
+   hip.
+2. **Seated outboard of everything the arm carries.** The disc's back face sits `BUCKLER_GAP` clear
+   of whichever part of the arm reaches furthest along the facing, measured in the pose with each
+   part carried by the bone it is painted to. `hand_l` alone is the wrist band - the fingers have
+   their own groups and stand furthest out, so clearing against `hand_l` leaves the knuckles
+   through the shield's face.
+3. **Sized off the body, not the donor.** `BUCKLER_DIA_RATIO` of body height, 0.20, which lands a
+   364 mm disc on this body.
+
+`BUCKLER_ALONG` (0.82, 0 at the elbow and 1 at the wrist) says where down the forearm it straps.
+
 ## Current numbers
 
 | knob | value | what moves |
@@ -46,6 +64,10 @@ uses client axes.
 | `WAND_GRIP_DIA` | 0.028 m | shaft across the fist; sizing the whole piece follows from it |
 | `WAND_LEN_RATIO` | 0.23 of body height | wanted length; reached only if the stretch cap allows |
 | `WAND_MAX_STRETCH` | 1.8 | past this the carving smears. At 28 mm the wand lands at 340 mm |
+| `BUCKLER_FACE` | (0.94, -0.34, 0.0) | where the disc looks in the idle pose: out from his left, slightly ahead |
+| `BUCKLER_ALONG` | 0.82 | where it straps, elbow to wrist |
+| `BUCKLER_GAP` | 0.008 m | air between the shield's back and the furthest thing the arm carries |
+| `BUCKLER_DIA_RATIO` | 0.20 of body height | 364 mm on this body |
 
 ## Verifying a fit
 
@@ -61,8 +83,10 @@ Numbers alone have passed on every wrong placement so far. Both halves are requi
 
 ## Open
 
-- Only the wand is fitted this way. The buckler is strapped to the forearm and the helm is seated on
-  the skull; neither is a grip.
+- The helm is seated on the skull rather than aimed or gripped, and is the one piece with no rule
+  from this page.
+- Reading the client's axes: alpha 0 on the viewer camera is his RIGHT, alpha pi his left. Two
+  rounds of shield captures were shot across the body before that was established.
 - The ears and the lower nape are outside every helm measurement. Four attempts at an automatic
   "is skin through the steel" test failed on an open-brimmed shell, so helm width has a floor an eye
   set (`HELM_WIDTH_FROM`), not a number the fitter proves.
