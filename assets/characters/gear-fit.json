@@ -1,10 +1,10 @@
 {
  "helmet.iron.helm": {
-  "dome_width_ratio": 1.05,
-  "scale": 0.26717,
-  "skull_gap_p01_mm": 0.25,
-  "skull_gap_median_mm": 18.69,
-  "skull_covered": 0.9928,
+  "dome_width_ratio": 1.125,
+  "scale": 0.28626,
+  "skull_gap_p01_mm": 0.38,
+  "skull_gap_median_mm": 24.22,
+  "skull_covered": 1.0,
   "skull_points": 139,
   "crown_seat_mm": -6.0,
   "forward_of_head_centre_mm": 6.6,

@@ -248,7 +248,7 @@ HELM_BACK_SHIFT = -0.03  # seat, as a fraction of head depth; negative is forwar
 # test replaced it: ray parity is undefined on a shell open at the bottom, and
 # "steel overhead" is true of the whole head under any dome. The width floor is
 # therefore an eye's number, set where the ears stopped coming through.
-HELM_WIDTH_FROM = 1.05   # narrowest dome/head width ratio worth trying
+HELM_WIDTH_FROM = 1.125  # narrowest dome/head width ratio worth trying
 HELM_WIDTH_TO = 1.35     # past this a shell is a bucket, whatever it measures
 HELM_WIDTH_STEP = 0.025
 # A nearest-surface distance is unsigned, so a scalp point 2 mm through the
@@ -264,9 +264,9 @@ HELM_WIDTH_STEP = 0.025
 # demands a bucket. What they must not do is come THROUGH the steel, and that is
 # a different measurement: a point embedded in the shell wall is inside its
 # solid, which ray parity says and a distance cannot.
-HELM_COVERAGE = 0.99     # fraction of measured cranium that must have steel outboard
+HELM_COVERAGE = 1.0      # fraction of measured cranium that must have steel outboard
 HELM_MIN_GAP = 0.0002    # 1st-percentile air between scalp and steel, metres
-HELM_MAX_MEDIAN = 0.024
+HELM_MAX_MEDIAN = 0.030
 
 # A haft is sized by the hole a fist makes, not by the length that looks right:
 # scaling a gnarled donor to a wand's length leaves its grip wider than the
