@@ -276,7 +276,7 @@ HELM_MAX_MEDIAN = 0.030
 WAND_GRIP_DIA = 0.038      # metres across the shaft where the fist closes
 WAND_LEN_RATIO = 0.23      # of body height
 WAND_MAX_STRETCH = 1.8     # past this the carving visibly smears
-WAND_HOLE_ALONG = 1.0      # grip radii from the knuckle line towards the fingertips
+WAND_HOLE_ALONG = -1.0      # grip radii from the knuckle line towards the fingertips
 # Where the wand's head should point while he stands still, in world axes:
 # ahead of him and raised about a third of a right angle, with a little of his
 # own right in it so the shaft clears the thigh. Aiming it across the palm is

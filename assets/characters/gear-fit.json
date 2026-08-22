@@ -20,16 +20,16 @@
   "grip_diameter_mm": 38.0,
   "grip_at_length_fraction": 0.392,
   "hole_m": [
-   -0.8356,
-   0.0489,
-   1.4372
+   -0.7976,
+   0.048,
+   1.4386
   ],
   "aim_world": [
    -0.2,
    -0.78,
    0.59
   ],
-  "hand_gap_p01_mm": 6.87,
+  "hand_gap_p01_mm": 0.1,
   "bone": "hand_r",
   "fit": "hand_grip",
   "triangles": 2999,
