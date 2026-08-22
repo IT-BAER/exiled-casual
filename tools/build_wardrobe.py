@@ -273,10 +273,9 @@ HELM_MAX_MEDIAN = 0.030
 # fingers can close, and the knuckles come through the wood. Length is then
 # bought back along the shaft alone, which a hand cannot feel and an eye reads
 # as a longer wand rather than a fatter one.
-WAND_GRIP_DIA = 0.038      # metres across the shaft where the fist closes
+WAND_GRIP_DIA = 0.028      # metres across the shaft where the fist closes
 WAND_LEN_RATIO = 0.23      # of body height
 WAND_MAX_STRETCH = 1.8     # past this the carving visibly smears
-WAND_HOLE_ALONG = -1.0      # grip radii from the knuckle line towards the fingertips
 # Where the wand's head should point while he stands still, in world axes:
 # ahead of him and raised about a third of a right angle, with a little of his
 # own right in it so the shaft clears the thigh. Aiming it across the palm is
@@ -485,8 +484,8 @@ def fit_head_shell(donor, body, rig):
     raise SystemExit(f"no helm size both clears the skull and stays a helmet; {tries}")
 
 
-def idle_rotation(rig, bone):
-    """How the idle clip turns one bone, as a rest-to-posed 3x3.
+def idle_pose(rig, bone, probes):
+    """How the idle clip turns one bone, and where it puts a set of joints.
 
     Borrowed from `anim-library.glb` and handed straight back: the clip is
     imported, read at one frame and deleted again, and the rig leaves in its
@@ -509,8 +508,8 @@ def idle_rotation(rig, bone):
     bpy.context.scene.frame_set(int(sum(act.frame_range) // 2))
     bpy.context.view_layer.update()
     pose = rig.pose.bones[bone].matrix
-    R = (rig.matrix_world @ pose
-         @ rig.data.bones[bone].matrix_local.inverted()).to_3x3()
+    M = (rig.matrix_world @ pose @ rig.data.bones[bone].matrix_local.inverted())
+    posed = {n: (rig.matrix_world @ rig.pose.bones[n].head).copy() for n in probes}
 
     # Dropping the action does not undo the pose: every bone keeps whatever the
     # last evaluated frame left on it, and the export would ship a rig frozen
@@ -529,7 +528,7 @@ def idle_rotation(rig, bone):
     if max(abs(rest[i][j] - rig.matrix_world.to_3x3()[i][j])
            for i in range(3) for j in range(3)) > 1e-4:
         raise SystemExit(f"{bone} did not return to its rest pose after reading {IDLE_CLIP}")
-    return R
+    return M, posed
 
 
 def aimed(donor, axis_dir, R, aim):
@@ -538,32 +537,24 @@ def aimed(donor, axis_dir, R, aim):
     return axis_dir.rotation_difference(want).to_matrix().to_4x4()
 
 
-KNUCKLES = ("index_01_r", "middle_01_r", "ring_01_r", "pinky_01_r")
+FINGERS = ("index", "middle", "ring", "pinky")
+# Every joint down the four fingers, which curl around whatever the fist holds:
+# their centroid in the posed hand is the middle of the hole, and no part of it
+# has to be guessed from an open hand.
+FIST_JOINTS = tuple(f"{f}_{i:02d}_r" for f in FINGERS for i in (1, 2, 3)) +     tuple(f"{f}_04_end_r" for f in FINGERS)
 
 
-def grip_hole(rig, radius):
-    """Where a closed fist's hole sits, at `radius` of shaft.
+def fist_centre(posed):
+    """Middle of the hole a closed fist makes, from the joints that make it.
 
     The rest hand is OPEN - fingers straight, thumb splayed - so the hole does
-    not exist to be measured: the fist is something the idle clip makes out of
-    the finger bones. It has to be predicted instead, from the knuckle line the
-    fingers curl about and the thumb that says which side of that line is palm.
-    Taking the hand vertex group's centre is the trap it replaces: those bones
-    end at the knuckles, so the group's box is the wrist band and a wand seated
-    on it rides the forearm with the fist closed and empty below.
+    not exist in it to be measured, and predicting one from the knuckle line is
+    what put the shaft beside the fist rather than through it. The idle clip
+    closes the fingers, so the hole is read where it actually exists: the four
+    fingers wrap the shaft, and the centroid of their joints is its axis.
     """
-    heads = [rig.matrix_world @ rig.data.bones[b].head_local for b in KNUCKLES]
-    knuckle = sum(heads, Vector((0, 0, 0))) / len(heads)
-    finger = (rig.matrix_world @ rig.data.bones[KNUCKLES[1]].tail_local) - heads[1]
-    finger.normalize()
-    thumb = rig.data.bones["thumb_01_r"]
-    palm = (rig.matrix_world @ thumb.tail_local) - knuckle
-    palm -= finger * palm.dot(finger)
-    palm.normalize()
-    # The knuckle heads are the near end of the hole, not its centre: fingers
-    # curl about the middle phalanx, so the shaft rides a segment further down
-    # the hand than the joints it is measured from.
-    return knuckle + palm * radius + finger * radius * WAND_HOLE_ALONG
+    pts = [posed[n] for n in FIST_JOINTS]
+    return sum(pts, Vector((0, 0, 0))) / len(pts)
 
 
 def fit_hand_grip(donor, body, rig):
@@ -584,11 +575,13 @@ def fit_hand_grip(donor, body, rig):
     # The donor's long axis is Z with its decorated end at +Z, so +Z is the way
     # the head points and the rotation is whatever carries it to WAND_AIM once
     # the idle clip has turned the hand.
-    R = idle_rotation(rig, "hand_r")
-    rot = aimed(donor, Vector((0, 0, 1)), R, WAND_AIM)
+    M, posed = idle_pose(rig, "hand_r", FIST_JOINTS)
+    rot = aimed(donor, Vector((0, 0, 1)), M.to_3x3(), WAND_AIM)
     _, _, _, d_c = bbox([v.co for v in donor.data.vertices])
     anchor = Vector((d_c.x, d_c.y, grip_z))
-    hole = grip_hole(rig, grip_r * scale)
+    # The hole is found in the pose and the mesh is authored in the rest one, so
+    # it comes back through the same transform the clip applied.
+    hole = M.inverted() @ fist_centre(posed)
     M = seated(donor, sizing(scale, stretch), rot, anchor, hole)
     p01, med = gap_profile(bvh_of(donor, M), hand_pts)
     return M, {

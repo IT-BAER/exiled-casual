@@ -188,6 +188,13 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
   camera.panningSensibility = 250;
   camera.attachControl(canvas, true);
 
+  // A dev handle on the camera and the scene. Judging a fit means putting the
+  // eye at one repeatable place, which dragging the canvas cannot do, and the
+  // arc camera is otherwise reachable only through the pointer.
+  if (import.meta.env.DEV) {
+    (window as unknown as Record<string, unknown>).__viewer = { scene, camera };
+  }
+
   // Three-point-ish and deliberately plain: play's warm low sun flatters a
   // silhouette from one side, which is exactly what a viewer must not do.
   //

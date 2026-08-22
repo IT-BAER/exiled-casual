@@ -14,22 +14,22 @@
   "source": "iron-helm-8k-v3.glb"
  },
  "weapon1.emberwand.mesh": {
-  "scale": 0.26304,
-  "stretch": 1.6347,
-  "length_m": 0.4185,
-  "grip_diameter_mm": 38.0,
+  "scale": 0.19382,
+  "stretch": 1.8,
+  "length_m": 0.3395,
+  "grip_diameter_mm": 28.0,
   "grip_at_length_fraction": 0.392,
   "hole_m": [
-   -0.7976,
-   0.048,
-   1.4386
+   -0.8036,
+   0.0626,
+   1.4246
   ],
   "aim_world": [
    -0.2,
    -0.78,
    0.59
   ],
-  "hand_gap_p01_mm": 0.1,
+  "hand_gap_p01_mm": 0.41,
   "bone": "hand_r",
   "fit": "hand_grip",
   "triangles": 2999,
