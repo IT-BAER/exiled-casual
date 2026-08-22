@@ -244,17 +244,20 @@ RIGID_GEAR = (
 HELM_CLEAR = 0.003       # padding under the steel, metres
 HELM_COVER_FROM = 0.25
 HELM_BACK_SHIFT = 0.06   # seat, as a fraction of head depth
-HELM_WIDTH_FROM = 1.05   # narrowest dome/head width ratio worth trying
+HELM_WIDTH_FROM = 0.95   # narrowest dome/head width ratio worth trying
 HELM_WIDTH_TO = 1.35     # past this a shell is a bucket, whatever it measures
 HELM_WIDTH_STEP = 0.025
-# Clearance alone cannot say a helmet is too big, because growing the shell
-# also reseats it: the scalp point nearest the steel keeps changing, so the
-# gap wanders up and down as the ratio climbs rather than rising with it.
-# Accepting the first ratio that clears therefore lands on whichever local dip
-# happens to come first - 1.57 on this donor, a helm half again as wide as the
-# head. The smallest passing ratio is the fit; the median gap is the ceiling
-# that catches a donor whose shape needs a bucket to clear anything at all.
-HELM_MAX_MEDIAN = 0.035
+# A nearest-surface distance is unsigned, so a scalp point 2 mm through the
+# steel and one 2 mm under it measure the same. Sizing on that number alone
+# grows the shell until the distance happens to rise, which is why a bucket
+# reads as a fit. Coverage is the signed test: from a point under steel, a ray
+# out along the head's radius hits the shell, and from a point poking through
+# it hits nothing. The smallest ratio that covers every scalp point is the fit;
+# the gap floor keeps the steel off the skin and the median gap is the ceiling
+# that rejects a donor needing a bucket to cover anything at all.
+HELM_COVERAGE = 1.0      # fraction of measured scalp that must have steel outboard
+HELM_MIN_GAP = 0.0003    # 1st-percentile air between scalp and steel, metres
+HELM_MAX_MEDIAN = 0.024
 
 # A haft is sized by the hole a fist makes, not by the length that looks right:
 # scaling a gnarled donor to a wand's length leaves its grip wider than the
@@ -264,13 +267,14 @@ HELM_MAX_MEDIAN = 0.035
 WAND_GRIP_DIA = 0.038      # metres across the shaft where the fist closes
 WAND_LEN_RATIO = 0.23      # of body height
 WAND_MAX_STRETCH = 1.8     # past this the carving visibly smears
-# Where the wand's head should point while he stands still, in world axes: out
-# to his right, ahead of him, and down. Aiming it across the palm is what a
-# hand actually does and it is unreadable, because `Idle_Loop` is a bare-handed
-# idle that turns the grip axis forward and UP - down the barrel of the front
-# camera, and inside the arm from the game camera. The bind-pose direction that
-# lands here is measured off the clip, not assumed.
-WAND_AIM = (-0.45, -0.55, -0.70)
+# Where the wand's head should point while he stands still, in world axes:
+# ahead of him and raised about a third of a right angle, with a little of his
+# own right in it so the shaft clears the thigh. Aiming it across the palm is
+# what a hand actually does and it is unreadable, because `Idle_Loop` is a
+# bare-handed idle that turns the grip axis forward and UP - down the barrel of
+# the front camera, and inside the arm from the game camera. The bind-pose
+# direction that lands here is measured off the clip, not assumed.
+WAND_AIM = (-0.20, -0.78, 0.59)
 IDLE_CLIP = "Rig|Idle_Loop"
 ANIMS = "D:/VSC/exiled-casual/apps/web/public/models/anim-library.glb"
 
@@ -328,6 +332,28 @@ def gap_profile(bvh, pts):
     if not ds:
         return 0.0, 0.0
     return ds[max(0, len(ds) // 100)], ds[len(ds) // 2]
+
+
+def covered_fraction(bvh, pts, centre):
+    """Fraction of `pts` with surface outboard of them, along the head radius.
+
+    `find_nearest` cannot say which side of the steel a point is on, so this is
+    the test that a scalp point is actually under the helmet rather than merely
+    close to it.
+    """
+    hits = 0
+    for p in pts:
+        d = p - centre
+        if d.length < 1e-6:
+            d = Vector((0, 0, 1))
+        d = d.normalized()
+        loc, nrm, _, _ = bvh.ray_cast(p + d * 1e-4, d)
+        # An inner surface faces back at the head, an outer one faces away: a
+        # ray that leaves through the outside of the shell says the point was
+        # never under it, even though it hit steel.
+        if loc is not None and nrm.dot(d) < 0:
+            hits += 1
+    return hits / len(pts) if pts else 0.0
 
 
 def cavity_ceiling(obj):
@@ -430,13 +456,17 @@ def fit_head_shell(donor, body, rig):
     ratio = HELM_WIDTH_FROM
     while ratio <= HELM_WIDTH_TO + 1e-9:
         scale = (head_dims.x * ratio) / dome_w
-        p01, med = gap_profile(bvh_of(donor, matrix(scale)), covered)
-        tries.append([round(ratio, 3), round(p01 * 1000, 2), round(med * 1000, 2)])
-        if p01 >= HELM_CLEAR and med <= HELM_MAX_MEDIAN:
+        bvh = bvh_of(donor, matrix(scale))
+        p01, med = gap_profile(bvh, covered)
+        cov = covered_fraction(bvh, covered, head_c)
+        tries.append([round(ratio, 3), round(p01 * 1000, 2), round(med * 1000, 2),
+                      round(cov, 4)])
+        if cov >= HELM_COVERAGE and p01 >= HELM_MIN_GAP and med <= HELM_MAX_MEDIAN:
             return matrix(scale), {
                 "dome_width_ratio": round(ratio, 3), "scale": round(scale, 5),
                 "skull_gap_p01_mm": round(p01 * 1000, 2),
                 "skull_gap_median_mm": round(med * 1000, 2),
+                "skull_covered": round(cov, 4),
                 "skull_points": len(covered),
             }
         ratio += HELM_WIDTH_STEP
