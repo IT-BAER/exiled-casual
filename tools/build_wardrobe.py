@@ -241,9 +241,9 @@ RIGID_GEAR = (
 # the face out reads as sensible - the opening is meant to be bare - and hides
 # the one fault that matters, because the forehead is ABOVE the brim and has to
 # be under steel.
-HELM_CLEAR = 0.003       # padding under the steel, metres
+HELM_CLEAR = -0.006      # crown seat relative to the top of the skull, metres
 HELM_COVER_FROM = 0.25
-HELM_BACK_SHIFT = 0.06   # seat, as a fraction of head depth
+HELM_BACK_SHIFT = -0.03  # seat, as a fraction of head depth; negative is forward
 HELM_WIDTH_FROM = 0.95   # narrowest dome/head width ratio worth trying
 HELM_WIDTH_TO = 1.35     # past this a shell is a bucket, whatever it measures
 HELM_WIDTH_STEP = 0.025
@@ -468,6 +468,8 @@ def fit_head_shell(donor, body, rig):
                 "skull_gap_median_mm": round(med * 1000, 2),
                 "skull_covered": round(cov, 4),
                 "skull_points": len(covered),
+                "crown_seat_mm": round(HELM_CLEAR * 1000, 1),
+                "forward_of_head_centre_mm": round(-dy * 1000, 1),
             }
         ratio += HELM_WIDTH_STEP
     raise SystemExit(f"no helm size both clears the skull and stays a helmet; {tries}")
