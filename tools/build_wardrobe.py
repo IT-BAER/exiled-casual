@@ -242,9 +242,13 @@ RIGID_GEAR = (
 # the one fault that matters, because the forehead is ABOVE the brim and has to
 # be under steel.
 HELM_CLEAR = -0.006      # crown seat relative to the top of the skull, metres
-HELM_COVER_FROM = 0.25
+HELM_COVER_FROM = 0.25   # cranium measured from this fraction of head height up
 HELM_BACK_SHIFT = -0.03  # seat, as a fraction of head depth; negative is forward
-HELM_WIDTH_FROM = 0.95   # narrowest dome/head width ratio worth trying
+# The ears and the lower nape are outside this measurement and no automatic
+# test replaced it: ray parity is undefined on a shell open at the bottom, and
+# "steel overhead" is true of the whole head under any dome. The width floor is
+# therefore an eye's number, set where the ears stopped coming through.
+HELM_WIDTH_FROM = 1.05   # narrowest dome/head width ratio worth trying
 HELM_WIDTH_TO = 1.35     # past this a shell is a bucket, whatever it measures
 HELM_WIDTH_STEP = 0.025
 # A nearest-surface distance is unsigned, so a scalp point 2 mm through the
@@ -255,8 +259,13 @@ HELM_WIDTH_STEP = 0.025
 # it hits nothing. The smallest ratio that covers every scalp point is the fit;
 # the gap floor keeps the steel off the skin and the median gap is the ceiling
 # that rejects a donor needing a bucket to cover anything at all.
-HELM_COVERAGE = 1.0      # fraction of measured scalp that must have steel outboard
-HELM_MIN_GAP = 0.0003    # 1st-percentile air between scalp and steel, metres
+# Coverage answers a question about the cranium only, because the ears and the
+# nape sit below the brim on any open helm and asking for steel outboard of them
+# demands a bucket. What they must not do is come THROUGH the steel, and that is
+# a different measurement: a point embedded in the shell wall is inside its
+# solid, which ray parity says and a distance cannot.
+HELM_COVERAGE = 0.99     # fraction of measured cranium that must have steel outboard
+HELM_MIN_GAP = 0.0002    # 1st-percentile air between scalp and steel, metres
 HELM_MAX_MEDIAN = 0.024
 
 # A haft is sized by the hole a fist makes, not by the length that looks right:
