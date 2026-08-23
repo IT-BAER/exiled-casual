@@ -253,25 +253,35 @@ const RIG_ROOT = /^Armature(_[a-z]+)?$/;
  * for the equipment slots the sim already uses (`EquipSlotId`) so that dressing
  * the character is a lookup and never a translation table.
  *
- * Gear needs no machinery beyond this. Each rigid piece is skinned entirely to
- * the one joint it hangs from, pinned by `rig.test.ts`, so it rides the skeleton
- * exactly the way the body does: showing a helmet is enabling a mesh, and there
- * is no socket, no re-parenting and no per-frame work anywhere in the client.
+ * Gear needs no machinery beyond this. A rigid piece is skinned entirely to the
+ * one joint it hangs from and a plate takes the body's own weights over the
+ * spine and both shoulders, both pinned by `rig.test.ts`, so either rides the
+ * skeleton exactly the way the body does: showing a helmet is enabling a mesh,
+ * and there is no socket, no re-parenting and no per-frame work in the client.
+ *
+ * A slot may hold more than one mesh. The sabatons are one boot fitted to the
+ * right leg and its exact reflection on the left, `boots.plate.sabaton_{r,l}`,
+ * and both are enabled by the same look — a limb worn in pairs needs no new
+ * machinery either, only two names under one slot.
  */
-export type Slot = "base" | "helmet" | "weapon1" | "weapon2";
-export const SLOTS: readonly Slot[] = ["base", "helmet", "weapon1", "weapon2"];
+export type Slot = "base" | "helmet" | "chest" | "boots" | "weapon1" | "weapon2";
+export const SLOTS: readonly Slot[] = ["base", "helmet", "chest", "boots", "weapon1", "weapon2"];
 
 /** A look per slot, or null for "nothing shown there". */
 export type Looks = Record<Slot, string | null>;
 
 /** Nobody drawn: the menu hall with no character standing in it. */
-export const NO_LOOKS: Looks = { base: null, helmet: null, weapon1: null, weapon2: null };
+export const NO_LOOKS: Looks = {
+  base: null, helmet: null, chest: null, boots: null, weapon1: null, weapon2: null,
+};
 
 /**
  * The bare body, carrying nothing. The wardrobe ships a female body on the same
  * skeleton shape, but nothing yet picks her — see `build_wardrobe.py`.
  */
-export const BASE_LOOKS: Looks = { base: "male", helmet: null, weapon1: null, weapon2: null };
+export const BASE_LOOKS: Looks = {
+  base: "male", helmet: null, chest: null, boots: null, weapon1: null, weapon2: null,
+};
 
 /**
  * Hair is geometry, and a hard helm is a closed shell around the skull: worn

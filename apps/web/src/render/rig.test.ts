@@ -217,6 +217,24 @@ const RIGID_BONES: Record<string, string> = {
   "weapon2.buckler.mesh": "lowerarm_l",
 };
 
+/** Every joint the plate is allowed to answer to; see `PLATE_BONES` in the build. */
+const PLATE_BONES = [
+  "spine_01", "spine_02", "spine_03", "neck_01",
+  "clavicle_l", "clavicle_r", "upperarm_l", "upperarm_r",
+];
+
+/**
+ * Each sabaton and the leg it belongs to; see `SABATON_BONES` in the build.
+ *
+ * The pair is the point. One boot is fitted to the right leg and the other is
+ * that mesh reflected across the body's mid-plane, so a left sabaton that kept
+ * a single `_r` group would ride the far leg across the character.
+ */
+const SABATON_BONES: Record<string, string[]> = {
+  "boots.plate.sabaton_r": ["calf_r", "foot_r", "ball_r"],
+  "boots.plate.sabaton_l": ["calf_l", "foot_l", "ball_l"],
+};
+
 const COMPONENTS: Record<number, number> = { 5120: 1, 5121: 1, 5122: 2, 5123: 2, 5125: 4, 5126: 4 };
 const TYPE_COUNT: Record<string, number> = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4 };
 
@@ -269,6 +287,8 @@ describe("wardrobe asset", () => {
       "base.female.body", "base.female.brows", "base.female.eyes", "base.female.hair",
       "base.male.body", "base.male.brows", "base.male.eyes", "base.male.hair",
       "helmet.iron.helm", "weapon1.emberwand.mesh", "weapon2.buckler.mesh",
+      "chest.plate.cuirass",
+      "boots.plate.sabaton_l", "boots.plate.sabaton_r",
     ].sort());
   });
 
@@ -301,6 +321,101 @@ describe("wardrobe asset", () => {
       expect([...used]).toHaveLength(1);
       expect(json.nodes[skin.joints[[...used][0]!]!]!.name).toBe(bone);
     }
+  });
+
+  /**
+   * The cuirass is the one piece that is NOT rigid, and the difference has to be
+   * asserted rather than assumed: a torso plate skinned to a single joint passes
+   * the name check, looks right standing still, and swings off the shoulders the
+   * moment the spine bends. So it must use several joints, all of them from the
+   * set it was fitted against, and every vertex must carry a full unit of weight
+   * - an unnormalised vertex drags toward the origin as a spike.
+   */
+  it("deforms the cuirass over the spine and both shoulders", () => {
+    const bin = glb.subarray(20 + json.buffers0Len);
+    const node = json.nodes.find((n) => n.name === "chest.plate.cuirass");
+    expect(node, "no node chest.plate.cuirass").toBeDefined();
+    const prim = json.meshes[node!.mesh!]!.primitives[0]!;
+    const joints = readAccessor(json, bin, prim.attributes["JOINTS_0"]!);
+    const weights = readAccessor(json, bin, prim.attributes["WEIGHTS_0"]!);
+    const skin = json.skins[node!.skin!]!;
+    const used = new Set<number>();
+    for (let v = 0; v < weights.length / 4; v += 1) {
+      const w = weights.slice(v * 4, v * 4 + 4);
+      const j = joints.slice(v * 4, v * 4 + 4);
+      for (let k = 0; k < 4; k += 1) {
+        if (w[k]! > 0.0001) used.add(j[k]!);
+      }
+      expect(w[0]! + w[1]! + w[2]! + w[3]!).toBeCloseTo(1, 3);
+    }
+    const names = [...used].map((u) => json.nodes[skin.joints[u]!]!.name).sort();
+    expect(names.length).toBeGreaterThan(1);
+    expect(names.every((n) => PLATE_BONES.includes(n)), `strays: ${names}`).toBe(true);
+    expect(names).toContain("spine_03");
+  });
+
+  /**
+   * The boots deform too, and each one has to answer to its OWN leg. A mirrored
+   * mesh is a copy, so its weights arrive naming the leg it was fitted to: miss
+   * the rename and the left boot walks with the right foot, which stands still
+   * in the bind pose and tears across the character on the first stride.
+   */
+  it("deforms each sabaton over its own calf, ankle and ball", () => {
+    const bin = glb.subarray(20 + json.buffers0Len);
+    for (const [mesh, bones] of Object.entries(SABATON_BONES)) {
+      const node = json.nodes.find((n) => n.name === mesh);
+      expect(node, `no node ${mesh}`).toBeDefined();
+      const prim = json.meshes[node!.mesh!]!.primitives[0]!;
+      const joints = readAccessor(json, bin, prim.attributes["JOINTS_0"]!);
+      const weights = readAccessor(json, bin, prim.attributes["WEIGHTS_0"]!);
+      const skin = json.skins[node!.skin!]!;
+      const used = new Set<number>();
+      for (let v = 0; v < weights.length / 4; v += 1) {
+        const w = weights.slice(v * 4, v * 4 + 4);
+        const j = joints.slice(v * 4, v * 4 + 4);
+        for (let k = 0; k < 4; k += 1) {
+          if (w[k]! > 0.0001) used.add(j[k]!);
+        }
+        expect(w[0]! + w[1]! + w[2]! + w[3]!).toBeCloseTo(1, 3);
+      }
+      const names = [...used].map((u) => json.nodes[skin.joints[u]!]!.name).sort();
+      expect(names.length, mesh).toBeGreaterThan(1);
+      expect(names.every((n) => bones.includes(n)), `${mesh} strays: ${names}`).toBe(true);
+      expect(names, mesh).toContain(bones[1]);
+    }
+  });
+
+  /**
+   * The pair is one mesh and its reflection, so the two must be the same size
+   * and stand on opposite sides of the body's mid-plane. Refitting the mirror
+   * image instead would let the search land on its own ratio and put visibly
+   * different steel on the two legs.
+   */
+  it("stands the two sabatons on opposite legs, same steel on both", () => {
+    const bin = glb.subarray(20 + json.buffers0Len);
+    const centres = ["boots.plate.sabaton_r", "boots.plate.sabaton_l"].map((mesh) => {
+      const node = json.nodes.find((n) => n.name === mesh)!;
+      const prim = json.meshes[node.mesh!]!.primitives[0]!;
+      const pos = readAccessor(json, bin, prim.attributes["POSITION"]!);
+      const axis = (c: number): [number, number] => {
+        let lo = Infinity;
+        let hi = -Infinity;
+        for (let v = 0; v < pos.length / 3; v += 1) {
+          lo = Math.min(lo, pos[v * 3 + c]!);
+          hi = Math.max(hi, pos[v * 3 + c]!);
+        }
+        return [lo, hi];
+      };
+      return { x: axis(0), y: axis(1), z: axis(2) };
+    });
+    const [right, left] = centres as [typeof centres[0], typeof centres[0]];
+    // glTF is exported Y-up, so the mid-plane is x and the legs differ only in it.
+    expect(right.x[0]! + left.x[1]!).toBeCloseTo(0, 3);
+    expect(right.x[1]! + left.x[0]!).toBeCloseTo(0, 3);
+    expect(right.y[0]).toBeCloseTo(left.y[0]!, 4);
+    expect(right.z[1]).toBeCloseTo(left.z[1]!, 4);
+    // ...and they are on opposite sides of it, not two copies of one leg.
+    expect(right.x[1]! * left.x[0]!).toBeLessThan(0);
   });
 
   it("rides two 65-bone skeletons, one per body", () => {

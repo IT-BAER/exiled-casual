@@ -20,8 +20,10 @@ import math
 import os
 import sys
 
+import bmesh
 import bpy
 import mathutils
+import numpy as np
 from mathutils import Matrix, Vector
 
 SRC = "D:/VSC/exiled-casual/assets/characters/"
@@ -210,9 +212,11 @@ def build_look(spec):
 # --------------------------------------------------------------------------
 # Rigid gear
 #
-# Every piece here is one closed donor mesh with no skeleton of its own, so it
-# is fitted to a measured feature of the body and then skinned ENTIRELY to the
-# one bone it hangs from. That is what keeps the runtime unchanged: a helmet is
+# Every piece here is one donor mesh with no skeleton of its own, fitted to a
+# measured feature of the body. A piece with no `deform` key hangs off one joint
+# and is skinned ENTIRELY to it; a piece that names bones in `deform` takes the
+# body's own weights over that set instead, because a torso plate has to bend
+# where the spine bends. That is what keeps the runtime unchanged: a helmet is
 # `helmet.<look>.helm` exactly the way a body is `base.<look>.body`, shown by
 # enabling it and hidden by not, with no socket, no parenting and no per-frame
 # work anywhere in the client.
@@ -221,10 +225,29 @@ def build_look(spec):
 # width, this hand's centre, this forearm's thickness - never from a world
 # coordinate, so the same table fits a body with different proportions.
 
+PLATE_BONES = ("spine_01", "spine_02", "spine_03", "neck_01",
+               "clavicle_l", "clavicle_r", "upperarm_l", "upperarm_r")
+
+# Every joint a gauntlet answers to. The wrist band alone is not enough: each
+# finger carries its own groups and they are what the steel has to follow, and
+# the cuff stands over the forearm, which moves with the elbow and not the
+# wrist. The twelve terminal `*_end_*` tips are left out on purpose - the
+# fingertip steel then comes out of the transfer orphaned and `skin_by_transfer`
+# pins an orphan to the nearest kept bone, which is the last real finger joint.
+FINGER_BONES = tuple(f"{finger}_{i:02d}" for finger in ("index", "middle", "ring", "pinky", "thumb")
+                     for i in (1, 2, 3))
+GAUNTLET_BONES = ("hand_r", "lowerarm_r") + tuple(f"{b}_r" for b in FINGER_BONES)
+
+# A sabaton is the shin plate and the boot under it, so it bends at the ankle and
+# again at the ball of the foot. The knee is the top rim's limit rather than a
+# joint it hangs from: `thigh_r` would drag the shaft up the leg on every stride.
+SABATON_BONES = ("calf_r", "foot_r", "ball_r")
+
 RIGID_GEAR = (
     {
         "slot": "helmet", "look": "iron", "part": "helm",
         "src": "iron-helm-8k-v3.glb", "bone": "Head", "fit": "head_shell",
+        "matte": True,
     },
     {
         "slot": "weapon1", "look": "emberwand", "part": "mesh",
@@ -234,7 +257,31 @@ RIGID_GEAR = (
         "slot": "weapon2", "look": "buckler", "part": "mesh",
         "src": "buckler-4000-v1.glb", "bone": "lowerarm_l", "fit": "forearm_strap",
     },
+    {
+        "slot": "chest", "look": "plate", "part": "cuirass",
+        "src": "plate-cuirass-15k-v2.glb", "bone": "spine_03", "fit": "plate_torso",
+        "deform": PLATE_BONES, "matte": True,
+    },
+    {
+        "slot": "boots", "look": "plate", "part": "sabaton",
+        "src": "sabaton-8k-v1.glb", "bone": "foot_r", "fit": "boot_leg",
+        "deform": SABATON_BONES, "matte": True, "mirror": True,
+    },
 )
+
+# The gauntlet donor is built (`tools/prep_gauntlet.py`) and not worn: its own
+# shell is pinched onto the skin at the finger webs, so the fit's 1st-percentile
+# air reads 0.02-0.08 mm against a 0.5 mm gate at every clearance in the sweep.
+GLOVES_PENDING = {
+    "slot": "gloves", "look": "plate", "part": "gauntlet",
+    "src": "gauntlet-hand-v2.glb", "bone": "hand_r", "fit": "hand_plate",
+    "deform": GAUNTLET_BONES, "matte": True, "mirror": True,
+}
+
+# Both donors ship a glossy ORM pack that reads as latex under Babylon's PBR;
+# raised/capped here rather than flattened, so a steel highlight still moves.
+MATTE_ROUGHNESS_FLOOR = 0.55
+MATTE_METALLIC_CAP = 0.85
 
 # Air the scalp must keep under a hard shell, and the skull it is measured over:
 # everything above a quarter of the head's height, forehead included. Filtering
@@ -296,6 +343,113 @@ BUCKLER_ROLL = -90         # degrees about the shield's own face
 # down. Measured against the idle clip, not the bind pose.
 BUCKLER_FACE = (0.94, -0.34, 0.0)
 
+# A rigid piece is measured in the idle and carried back through the clip's own
+# transform, because it rides one joint and the mesh must be authored in the
+# rest pose. A DEFORMING piece inverts that rule: the skinning is what carries
+# it into every clip, so it is fitted against the REST body and nothing about
+# the idle applies. Fitting a plate to the idle would bake that one frame's
+# spine bend into the bind pose and put it back into the ribs everywhere else.
+#
+# The plate covers the trunk, and each pauldron sits over its own shoulder, so
+# the weights it takes from the body have to span all three. Anything outside
+# this set is dropped after the transfer: a chest plate that picks up a stray
+# thigh weight tears downward the moment he runs.
+# The trunk is measured below the armpit, because the pauldrons stand far wider
+# than the chest and sizing on the full width leaves the plate INSIDE it - the
+# body then wears two floating shoulder caps and a sliver of sternum. The donor
+# is trimmed at the belt and its pauldrons start about a quarter of the way up
+# what is left, so the band has to stop short of that, not at the halfway mark.
+PLATE_TRUNK_TO = 0.26    # fraction of donor height that is trunk, not pauldron
+# Height and width are scaled separately, because this donor is 1.37 as tall as
+# it is wide and the body's neck-to-waist over chest width is about 1.07. One
+# uniform scale cannot satisfy both: sized to the chest it hangs to mid-thigh,
+# sized to the torso it is a corset. A plate is not a face - nobody reads a few
+# per cent of stretch in it, and everybody reads a skirt over the knees.
+# Positive lifts the collar ABOVE the base of the neck, and because the bottom
+# rim is pinned to the lumbar this makes the plate taller rather than just
+# higher. Swept: 0.00 covers 0.55 of the ribcage, 0.06 covers 0.79, 0.09 covers
+# 0.91 and everything past it buys nothing while the median gap climbs again.
+# The donor's neck opening is cut wide and low, so at the seat that looks right
+# the upper chest is simply bare.
+PLATE_COLLAR = 0.09      # collar rim relative to the base of the neck, metres
+PLATE_WAIST = -0.04      # bottom rim relative to the base of the lumbar, metres
+PLATE_WIDTH_FROM = 1.06  # narrowest plate/chest width ratio worth trying
+PLATE_WIDTH_TO = 1.45    # past this it is a barrel, whatever it measures
+PLATE_WIDTH_STEP = 0.02
+# The shoulder joint is measured as a ball on the body itself: the upper arm's
+# own radius, taken over the skin down the first fraction of the bone.
+PLATE_SOCKET_ALONG = 0.3  # of upperarm length, from the head down
+PLATE_COVERAGE = 0.90   # fraction of measured chest that must have steel outboard
+PLATE_MIN_GAP = 0.0005  # 1st-percentile air between skin and steel, metres
+PLATE_MAX_MEDIAN = 0.040
+
+# A gauntlet is a hand-shaped shell, so its length is not a ratio to sweep: the
+# fingertips have to land on the fingertips or the steel reads as a claw or a
+# stump. Length is pinned to the hand and the cross-section is what grows until
+# the knuckles are inside, which is the plate's split by another name.
+# What grows is the AIR, not a proportion: armour clears skin by millimetres, and
+# a hand is three and a half times as wide as it is thick, so one shared ratio
+# buys 5 mm through the fingers by adding 17 mm across them. The sweep is over
+# the clearance itself and each axis takes the same millimetres on its own span.
+# The donor runs up its own +Z: fingertips at +Z, the cuff opening at -Z, the
+# thumb splayed to +X and dropped to the palm side at -Y, which is what makes it
+# a RIGHT hand. The rest pose holds that hand out along -X with the palm down
+# and the thumb forward, which is where the two quarter turns below put it.
+GAUNTLET_TIP = 0.008        # steel past the fingertips, metres
+GAUNTLET_SEAT = 0.06        # wrist plane, as a fraction of hand length in from it
+GAUNTLET_WRIST_FROM = 0.15  # the wrist is the donor's waist, searched over this
+GAUNTLET_WRIST_TO = 0.55    # stretch of its own length and no further
+# Width and thickness are both measured over the outer fifth of the hand, which
+# is fingers and nothing else: an anatomical thumb tips out at 0.75 of the
+# donor's run and at 0.58 of this body's hand, so anything lower lets the thumb
+# answer for the width. It measures half again what the four fingers span, and
+# the fit then squashes them to make room for a thumb that was never going to
+# line up - every steel finger lands in the gap between two of the body's.
+GAUNTLET_FAN_FROM = 0.80    # of hand length, from the wrist out
+GAUNTLET_CLEAR_FROM = 0.0005  # tightest air between fingers and steel, metres
+GAUNTLET_CLEAR_TO = 0.014     # past this it is a mitt, whatever it measures
+GAUNTLET_CLEAR_STEP = 0.0005
+# The webs between the fingers are the hand's arm sockets: a glove is cut open
+# there and no shell reaches into them, so a ray fired out of a web leaves
+# between two steel fingers and reports bare skin however well the hand is
+# covered. Each web is a ball on the midpoint of two neighbouring finger roots,
+# sized by those fingers' own measured radius - all of it read off this body.
+GAUNTLET_WEB_ALONG = 0.6    # of finger length, from the root down
+# Skin with less room than this between itself and the next finger holds no air
+# for a glove: two shell faces share the gap, so half of a millimetre is the
+# most either side can have. Measured per point, not named - the flanks of the
+# ring and pinky run 0.65 mm apart on this body and no geometry changes that.
+GAUNTLET_PINCH = 0.002
+GAUNTLET_COVERAGE = 0.90    # fraction of measured hand that must have steel outboard
+GAUNTLET_MIN_GAP = 0.0005   # 1st-percentile air between skin and steel, metres
+GAUNTLET_MAX_MEDIAN = 0.020
+
+# A boot stands on the floor, so the one thing that cannot be traded is the
+# outer sole: seat it anywhere but the ground and the character floats or sinks.
+# Everything else follows from that - the piece is sized on the foot, and the
+# shaft is drawn up the shin afterwards the way a wand buys length along its own
+# shaft, because nothing about a calf reads a few per cent of stretch.
+# The donor is authored toe at -Y, heel at +Y, sole at -Z, which is the rest
+# pose's own foot orientation, so it needs no rotation.
+BOOT_TOP = -0.03            # top rim relative to the knee, metres; negative is below
+BOOT_LEN_FROM = 1.00        # narrowest boot/foot length ratio worth trying
+BOOT_LEN_TO = 1.60          # past this it is a clown's boot, whatever it measures
+BOOT_LEN_STEP = 0.02
+BOOT_MAX_STRETCH = 2.0      # past this the donor's straps visibly smear
+BOOT_ANKLE_FROM = 0.30      # the ankle is the donor's waist, searched over this
+BOOT_ANKLE_TO = 0.70        # stretch of its own height and no further
+# A standing foot bears on the insole, so there is no air under it to measure
+# and no outboard direction to fire a ray along: sole contact is left out of
+# both gates. Which skin that is comes out of the body - a point is on the sole
+# when the way out of its own limb points more DOWNWARD than sideways, so the
+# test is a direction and not a height anybody chose. Half a right angle, not
+# merely "downward", because a calf's way out is horizontal to within a degree
+# or two either way and rounding it down would drop half the shin.
+SOLE_CONTACT = -math.sqrt(0.5)
+BOOT_COVERAGE = 0.90        # fraction of measured leg that must have steel outboard
+BOOT_MIN_GAP = 0.0005       # 1st-percentile air between skin and steel, metres
+BOOT_MAX_MEDIAN = 0.030
+
 
 def bbox(points):
     lo = Vector((min(p.x for p in points), min(p.y for p in points), min(p.z for p in points)))
@@ -331,6 +485,28 @@ def bvh_of(obj, M=None):
         for i in range(1, len(idx) - 1):
             tris.append((idx[0], idx[i], idx[i + 1]))
     return mathutils.bvhtree.BVHTree.FromPolygons(verts, tris)
+
+
+def covered_laterally(bvh, pts, axis):
+    """Fraction of `pts` with a surface outboard of them, measured sideways.
+
+    `covered_fraction` fires each ray away from one centre, which is the right
+    question about a skull and a meaningless one about a trunk: a ray from a low
+    rib through the chest centroid runs UP the torso and leaves through the neck
+    opening, so a plate that covers everything still scores about a third. A
+    breastplate is asked the lateral question instead - from this rib, straight
+    out from the spine at its own height, is there steel - and the vertical
+    openings a cuirass is supposed to have stop deciding the answer.
+    """
+    hits = 0
+    for p in pts:
+        d = p - Vector((axis.x, axis.y, p.z))
+        if d.length < 1e-6:
+            hits += 1
+            continue
+        if bvh.ray_cast(p, d.normalized())[0] is not None:
+            hits += 1
+    return hits / len(pts)
 
 
 def gap_profile(bvh, pts):
@@ -441,6 +617,93 @@ def waist(obj, axis, bands=12):
     if best is None:
         raise SystemExit("no measurable cross-section along the donor's long axis")
     return best
+
+
+def band(points, axis, at, half):
+    """Centre and radius of one slice across a limb or a donor.
+
+    A seat lands on the middle of a cross-section, and a bone head is not it:
+    the wrist joint sits above and behind the wrist's own skin, and seating a
+    cuff on the joint puts the glove through the back of the hand.
+    """
+    sel = [p for p in points if abs(p[axis] - at) <= half]
+    if len(sel) < 8:
+        raise SystemExit(f"only {len(sel)} points in the slice at {at:.4f} along axis {axis}")
+    centre = sum(sel, Vector((0, 0, 0))) / len(sel)
+    others = [i for i in range(3) if i != axis]
+    radius = max(math.hypot(p[others[0]] - centre[others[0]], p[others[1]] - centre[others[1]])
+                 for p in sel)
+    return centre, radius
+
+
+def narrowest(obj, axis, low, high, bands=16):
+    """The narrowest cross-section of a donor between two fractions of its run.
+
+    `waist` searches the whole length, which finds a fingertip long before it
+    finds a wrist and an open boot cuff before it finds an ankle. The join a
+    piece is seated on lies in the middle of it, so the search is bounded to
+    that stretch and each band is measured about its OWN centre rather than the
+    donor's, or a bent shape reads as narrow wherever it happens to cross the
+    axis.
+    """
+    pts = [v.co for v in obj.data.vertices]
+    lo, _, dims, _ = bbox(pts)
+    best = None
+    for i in range(bands):
+        a = lo[axis] + dims[axis] * (low + (high - low) * i / bands)
+        b = lo[axis] + dims[axis] * (low + (high - low) * (i + 1) / bands)
+        sel = [p for p in pts if a <= p[axis] <= b]
+        if len(sel) < 8:
+            continue
+        centre, radius = band(sel, axis, (a + b) / 2, dims[axis])
+        if best is None or radius < best[2]:
+            best = ((a + b) / 2, centre, radius)
+    if best is None:
+        raise SystemExit(f"no measurable cross-section between {low} and {high} of the donor")
+    return best
+
+
+def nearest_on(segments, p):
+    """The closest point to `p` on a set of bone segments."""
+    best = None
+    for head, tail in segments:
+        axis = tail - head
+        t = 0.0 if axis.length_squared < 1e-12 else max(
+            0.0, min(1.0, (p - head).dot(axis) / axis.length_squared))
+        q = head + axis * t
+        d = (p - q).length
+        if best is None or d < best[0]:
+            best = (d, q)
+    return best[1]
+
+
+def outward(segments, p):
+    """Which way is out of the limb, from one point of skin on it."""
+    d = p - nearest_on(segments, p)
+    return d.normalized() if d.length > 1e-6 else Vector((0, 0, 1))
+
+
+def covered_radially(bvh, pts, segments):
+    """Fraction of `pts` with a surface outboard of them, out of their own limb.
+
+    `covered_laterally` fires every ray away from one vertical axis, which is
+    the right question about a trunk and a meaningless one about a limb that
+    bends: a ray from the instep away from a leg axis runs along the foot rather
+    than out of it, and a ray from a fingertip away from a wrist runs down the
+    finger. The nearest bone this piece covers is the axis for that point, so
+    the hand and the ankle are each measured out of themselves.
+
+    Signed, the same way `covered_fraction` is: an inner surface faces back at
+    the limb, so a ray that leaves through the OUTSIDE of the shell says the
+    skin was never under it even though it hit steel.
+    """
+    hits = 0
+    for p in pts:
+        d = outward(segments, p)
+        loc, nrm, _, _ = bvh.ray_cast(p + d * 1e-4, d)
+        if loc is not None and nrm.dot(d) < 0:
+            hits += 1
+    return hits / len(pts) if pts else 0.0
 
 
 def fit_head_shell(donor, body, rig):
@@ -656,10 +919,391 @@ def fit_forearm_strap(donor, body, rig):
     }
 
 
+
+def arm_socket(rig, body, side):
+    """The shoulder joint as a ball: the upper arm's median radius at its head.
+
+    Measured off the skin the arm actually carries, so it scales with the body.
+    """
+    bone = rig.data.bones[f"upperarm_{side}"]
+    head = rig.matrix_world @ bone.head_local
+    axis = (rig.matrix_world @ bone.tail_local) - head
+    if axis.length_squared < 1e-12:
+        raise SystemExit(f"upperarm_{side} has no length to measure a socket along")
+    radii = []
+    for p in group_points(body, f"upperarm_{side}", 0.5):
+        t = (p - head).dot(axis) / axis.length_squared
+        if 0.0 <= t <= PLATE_SOCKET_ALONG:
+            radii.append((p - (head + axis * t)).length)
+    if not radii:
+        raise SystemExit(f"upperarm_{side} carries no skin to measure a socket on")
+    radii.sort()
+    return head, radii[len(radii) // 2]
+
+
+def fit_plate_torso(donor, body, rig):
+    """Grow the plate until the chest under it is inside it.
+
+    The same signed test the helm uses, for the same reason: a nearest-surface
+    distance reads a rib 2 mm through the steel and one 2 mm under it as the
+    same number, so sizing on distance alone grows the shell until it reads as
+    a barrel. Coverage asks the question that matters - is there steel outboard
+    of this piece of skin - and the gap floor keeps the steel off it.
+
+    Measured against the REST body. The skinning carries the plate into every
+    clip, so a fit made in the idle would bake that frame's spine into the bind
+    pose.
+    """
+    # Two different sets, because they answer two different questions. The
+    # RIBCAGE sizes the plate: it is the thing the steel has to go round. The
+    # clavicles are only along for coverage - including them in the measurement
+    # makes the "chest width" a shoulder span, about 10 cm wider than any chest,
+    # and dividing that by the donor's waist sizes the plate as a barrel.
+    ribs = []
+    for b in ("spine_02", "spine_03"):
+        ribs += group_points(body, b, 0.35)
+    chest = list(ribs)
+    for b in ("clavicle_l", "clavicle_r"):
+        chest += group_points(body, b, 0.35)
+    if not ribs:
+        raise SystemExit("the body carries no chest weights to fit a plate against")
+    _, _, chest_dims, _ = bbox(ribs)
+    _, _, _, chest_c = bbox(chest)
+    # The arm socket is open on a cuirass, the way the ears and nape are open on
+    # a helm: skin inside the arm's own radius of the joint is not the plate's.
+    sockets = [arm_socket(rig, body, side) for side in "lr"]
+    sample = [p for p in chest if all((p - h).length >= r for h, r in sockets)]
+    if not sample:
+        raise SystemExit("the arm sockets swallowed every chest point")
+    neck = rig.matrix_world @ rig.data.bones["neck_01"].head_local
+
+    hp = [v.co for v in donor.data.vertices]
+    d_lo, d_hi, d_dims, d_c = bbox(hp)
+    trunk = [p for p in hp if p.z < d_lo.z + d_dims.z * PLATE_TRUNK_TO]
+    trunk_w = max(p.x for p in trunk) - min(p.x for p in trunk)
+    collar = Vector((d_c.x, d_c.y, d_hi.z))
+
+    top = neck.z + PLATE_COLLAR
+    bottom = (rig.matrix_world @ rig.data.bones["spine_01"].head_local).z + PLATE_WAIST
+    high = (top - bottom) / d_dims.z
+
+    def matrix(wide):
+        S = Matrix.Diagonal((wide, wide, high, 1.0))
+        return seated(donor, S, Matrix.Identity(4), collar,
+                      Vector((chest_c.x, chest_c.y, top)))
+
+    tries = []
+    ratio = PLATE_WIDTH_FROM
+    while ratio <= PLATE_WIDTH_TO + 1e-9:
+        wide = (chest_dims.x * ratio) / trunk_w
+        bvh = bvh_of(donor, matrix(wide))
+        p01, med = gap_profile(bvh, sample)
+        cov = covered_laterally(bvh, sample, chest_c)
+        tries.append([round(ratio, 3), round(p01 * 1000, 2), round(med * 1000, 2),
+                      round(cov, 4)])
+        if cov >= PLATE_COVERAGE and p01 >= PLATE_MIN_GAP and med <= PLATE_MAX_MEDIAN:
+            return matrix(wide), {
+                "trunk_width_ratio": round(ratio, 3),
+                "width_scale": round(wide, 5), "height_scale": round(high, 5),
+                "torso_span_m": round(top - bottom, 4),
+                "chest_width_m": round(chest_dims.x, 4),
+                "donor_trunk_width": round(trunk_w, 4),
+                "chest_gap_p01_mm": round(p01 * 1000, 2),
+                "chest_gap_median_mm": round(med * 1000, 2),
+                "chest_covered": round(cov, 4),
+                "chest_points": len(sample),
+                "arm_socket_points": len(chest) - len(sample),
+                "arm_socket_radius_mm": round(sockets[0][1] * 1000, 2),
+                "collar_below_neck_mm": round(-PLATE_COLLAR * 1000, 1),
+            }
+        ratio += PLATE_WIDTH_STEP
+    raise SystemExit(f"no plate size both clears the chest and stays a cuirass; {tries}")
+
+
+def bones_of(rig, names):
+    """Each bone as a world-space segment."""
+    return [(rig.matrix_world @ rig.data.bones[n].head_local,
+             rig.matrix_world @ rig.data.bones[n].tail_local) for n in names]
+
+
+def limb_radius(rig, body, bone, along):
+    """A joint as a ball: the median skin radius down the first `along` of its
+    own bone, the same measurement `arm_socket` makes of a shoulder."""
+    b = rig.data.bones[bone]
+    head = rig.matrix_world @ b.head_local
+    axis = (rig.matrix_world @ b.tail_local) - head
+    if axis.length_squared < 1e-12:
+        raise SystemExit(f"{bone} has no length to measure a radius along")
+    radii = []
+    for p in group_points(body, bone, 0.35):
+        t = (p - head).dot(axis) / axis.length_squared
+        if 0.0 <= t <= along:
+            radii.append((p - (head + axis * t)).length)
+    if not radii:
+        raise SystemExit(f"{bone} carries no skin to measure a radius on")
+    radii.sort()
+    return head, radii[len(radii) // 2]
+
+
+def surface_headroom(bm, rings=2, reach=0.02):
+    """How far each vertex may move before the surface meets itself.
+
+    The distance to the nearest triangle outside the vertex's own `rings` of
+    neighbours: across a finger crease that is a millimetre, over a knuckle it
+    is centimetres. Face-accurate on purpose - two sides of a crease pinch
+    between their vertices, and a distance taken off the corners misses it.
+    The mesh must be welded first, or a UV seam's doubled vertices read as a
+    surface touching itself and every seam reports no room at all.
+    """
+    bm.verts.index_update()
+    near = []
+    for v in bm.verts:
+        ring = {v}
+        for _ in range(rings):
+            ring |= {e.other_vert(u) for u in list(ring) for e in u.link_edges}
+        near.append({u.index for u in ring})
+    tris = []
+    for f in bm.faces:
+        idx = [v.index for v in f.verts]
+        for i in range(1, len(idx) - 1):
+            tris.append((idx[0], idx[i], idx[i + 1]))
+    bvh = mathutils.bvhtree.BVHTree.FromPolygons([v.co.copy() for v in bm.verts], tris)
+    room = []
+    for i, v in enumerate(bm.verts):
+        best = reach
+        for _loc, _nrm, index, dist in bvh.find_nearest_range(v.co, reach):
+            if any(x in near[i] for x in tris[index]):
+                continue
+            best = min(best, dist)
+        room.append(best)
+    return room
+
+
+def skin_pinch(body):
+    """Every skin point's own headroom, keyed by position.
+
+    The hand's fingers are modelled a millimetre apart down their flanks. Two
+    faces of a shell share that millimetre, so half of it is all the air any
+    glove can hold there - the same reason the plate drops the arm sockets and
+    the boot drops the sole, measured off the body instead of named.
+    """
+    obj = body.copy()
+    obj.data = body.data.copy()
+    bpy.context.scene.collection.objects.link(obj)
+    obj.data.transform(body.matrix_world)
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-5)
+    bm.normal_update()
+    room = surface_headroom(bm)
+    found = {key_of(v.co): room[i] for i, v in enumerate(bm.verts)}
+    bm.free()
+    drop(obj)
+    return found
+
+
+def key_of(point):
+    return (round(point.x, 6), round(point.y, 6), round(point.z, 6))
+
+
+def finger_webs(rig, body, side):
+    """The webs between the fingers, as balls.
+
+    Neighbouring finger roots give each centre and the fingers' own measured
+    radius gives the size, so nothing here is a number somebody picked: it is
+    the arm socket's construction on a smaller joint.
+    """
+    across = ("thumb", "index", "middle", "ring", "pinky")
+    measured = [limb_radius(rig, body, f"{f}_01_{side}", GAUNTLET_WEB_ALONG) for f in across]
+    return [((a[0] + b[0]) / 2, max(a[1], b[1])) for a, b in zip(measured, measured[1:])]
+
+
+def fit_hand_plate(donor, body, rig):
+    """Grow the glove until the hand inside it is covered.
+
+    The same signed test the helm and the plate use, fired out of the hand's own
+    bones (`covered_radially`): a nearest-surface distance reads a knuckle 2 mm
+    under the steel and one 2 mm through it as the same number.
+
+    Measured against the REST body. The skinning is what carries a deforming
+    piece into every clip, so a fit made in the idle would bake that frame's
+    closed fist into the bind pose and put the steel through the fingers
+    everywhere else. It is also why the donor has to be authored flat: a glove
+    sculpted with the fingers relaxed hangs below the straight ones at every
+    size, which no placement fixes.
+    """
+    matrix, sample, segments, measured = hand_plate_seat(donor, body, rig)
+
+    tries = []
+    clear = GAUNTLET_CLEAR_FROM
+    while clear <= GAUNTLET_CLEAR_TO + 1e-9:
+        bvh = bvh_of(donor, matrix(clear))
+        p01, med = gap_profile(bvh, sample)
+        cov = covered_radially(bvh, sample, segments)
+        tries.append([round(clear * 1000, 2), round(p01 * 1000, 2), round(med * 1000, 2),
+                      round(cov, 4)])
+        if cov >= GAUNTLET_COVERAGE and p01 >= GAUNTLET_MIN_GAP and med <= GAUNTLET_MAX_MEDIAN:
+            width, thick = measured["fan_scales"](clear)
+            # The sizing callable is the seat's own, not something a fit report
+            # can carry.
+            return matrix(clear), dict(
+                {k: v for k, v in measured.items() if k != "fan_scales"},
+                hand_clearance_mm=round(clear * 1000, 2),
+                width_scale=round(width, 5),
+                thickness_scale=round(thick, 5),
+                hand_gap_p01_mm=round(p01 * 1000, 2),
+                hand_gap_median_mm=round(med * 1000, 2),
+                hand_covered=round(cov, 4),
+                steel_past_fingertips_mm=round(GAUNTLET_TIP * 1000, 1),
+            )
+        clear += GAUNTLET_CLEAR_STEP
+    raise SystemExit(f"no gauntlet size both clears the hand and stays a glove; {tries}")
+
+
+def hand_plate_seat(donor, body, rig):
+    """The hand a glove goes on, the donor's own finger run, and what puts one
+    on the other. Shared with `tools/prep_gauntlet.py`, which carves the donor's
+    cavity out of this same hand at this same placement."""
+    hand = group_points(body, "hand_r", 0.35)
+    for bone in FINGER_BONES:
+        hand += group_points(body, f"{bone}_r", 0.35)
+    if not hand:
+        raise SystemExit("the body carries no hand weights to fit a gauntlet against")
+    # The rest arm runs out along -X, so the wrist is the +X end of the hand.
+    _, hand_hi, hand_dims, hand_c = bbox(hand)
+    hand_len = hand_dims.x
+    seat_x = hand_hi.x - hand_len * GAUNTLET_SEAT
+
+    webs = finger_webs(rig, body, "r")
+    sample = [p for p in hand if all((p - c).length >= r for c, r in webs)]
+    pinched = skin_pinch(body)
+    sample = [p for p in sample
+              if pinched.get(key_of(p), GAUNTLET_PINCH) >= GAUNTLET_PINCH]
+    if not sample:
+        raise SystemExit("the finger webs swallowed every hand point")
+    segments = bones_of(rig, ("hand_r",) + tuple(f"{b}_r" for b in FINGER_BONES))
+
+    hp = [v.co for v in donor.data.vertices]
+    wrist_z, _, wrist_r = narrowest(donor, 2, GAUNTLET_WRIST_FROM, GAUNTLET_WRIST_TO)
+    glove = [p for p in hp if p.z > wrist_z]
+    _, g_hi, _, g_c = bbox(glove)
+    run = g_hi.z - wrist_z
+    long = (hand_len + GAUNTLET_TIP) / run
+
+    # The fingers alone, on each mesh, in its own axes: the donor runs up +Z and
+    # is measured across X and through Y; the hand runs out -X, across Y and
+    # through Z.
+    _, _, fan_body, fan_body_c = bbox(
+        [p for p in hand if p.x < hand_hi.x - hand_len * GAUNTLET_FAN_FROM])
+    _, _, fan_donor, fan_donor_c = bbox(
+        [p for p in glove if p.z > wrist_z + run * GAUNTLET_FAN_FROM])
+    # Donor +Z is the fingers and +X the thumb; the rest pose wants the fingers
+    # down -X, the palm down -Z and the thumb forward at -Y. Two quarter turns.
+    rot = Matrix.Rotation(math.radians(-90), 4, "Z") @ Matrix.Rotation(math.radians(90), 4, "X")
+    # Seated down the fingers, not on the whole hand: the rest pose's thumb is
+    # rotated under the palm and this donor's lies flat in it, so a hand's bbox
+    # centre sits three centimetres lower on the body than on the donor and the
+    # glove goes on under the palm.
+    anchor = Vector((fan_donor_c.x, fan_donor_c.y, wrist_z))
+    target = Vector((seat_x, fan_body_c.y, fan_body_c.z))
+
+    def scales(clear):
+        """The same air on both axes: a glove is not a scaled hand."""
+        return ((fan_body.y + 2 * clear) / fan_donor.x,
+                (fan_body.z + 2 * clear) / fan_donor.y)
+
+    def matrix(clear):
+        width, thick = scales(clear)
+        return seated(donor, Matrix.Diagonal((width, thick, long, 1.0)), rot, anchor, target)
+
+    return matrix, sample, segments, {
+        "length_scale": round(long, 5),
+        "hand_length_m": round(hand_len, 4),
+        "finger_fan_m": round(fan_body.y, 4),
+        "finger_thickness_m": round(fan_body.z, 4),
+        "donor_finger_fan": round(fan_donor.x, 4),
+        "donor_wrist_radius": round(wrist_r, 4),
+        "donor_wrist_at": round(wrist_z, 5),
+        "donor_run": round(run, 5),
+        "hand_points": len(sample),
+        "finger_web_points": len(hand) - len(sample),
+        "finger_web_radius_mm": round(max(r for _, r in webs) * 1000, 2),
+        "fan_scales": scales,
+    }
+
+
+def fit_boot_leg(donor, body, rig):
+    """Grow the boot until the leg inside it is covered, standing on the floor.
+
+    The outer sole is the one thing that cannot move: seat it anywhere but the
+    ground the feet are already on and the character floats or sinks. So the
+    piece is sized on the foot and the shaft is drawn up the shin afterwards,
+    the way the wand buys length along its own shaft.
+
+    Measured against the REST body, for the reason the plate is.
+    """
+    leg = []
+    for bone in SABATON_BONES:
+        leg += group_points(body, bone, 0.35)
+    foot = group_points(body, "foot_r", 0.35) + group_points(body, "ball_r", 0.35)
+    if not foot:
+        raise SystemExit("the body carries no foot weights to fit a sabaton against")
+    _, _, foot_dims, _ = bbox(foot)
+    sole_z = min(p.z for p in foot)
+    knee = (rig.matrix_world @ rig.data.bones["calf_r"].head_local).z
+    top = knee + BOOT_TOP
+    ankle_z = (rig.matrix_world @ rig.data.bones["foot_r"].head_local).z
+    seat, _ = band(leg, 2, ankle_z, (top - sole_z) * 0.05)
+
+    segments = bones_of(rig, SABATON_BONES)
+    # Below the rim, because a boot is open at the top and the calf above it is
+    # bare on purpose; and never the underside, which stands on the insole.
+    sample = [p for p in leg if p.z <= top and outward(segments, p).z > SOLE_CONTACT]
+    if not sample:
+        raise SystemExit("the rim and the sole between them swallowed every leg point")
+
+    hp = [v.co for v in donor.data.vertices]
+    d_lo, d_hi, d_dims, _ = bbox(hp)
+    _, ankle_c, ankle_r = narrowest(donor, 2, BOOT_ANKLE_FROM, BOOT_ANKLE_TO)
+
+    tries = []
+    ratio = BOOT_LEN_FROM
+    while ratio <= BOOT_LEN_TO + 1e-9:
+        scale = (foot_dims.y * ratio) / d_dims.y
+        stretch = min(BOOT_MAX_STRETCH, (top - sole_z) / (d_dims.z * scale))
+        M = seated(donor, sizing(scale, stretch, 2), Matrix.Identity(4),
+                   Vector((ankle_c.x, ankle_c.y, d_lo.z)),
+                   Vector((seat.x, seat.y, sole_z)))
+        bvh = bvh_of(donor, M)
+        p01, med = gap_profile(bvh, sample)
+        cov = covered_radially(bvh, sample, segments)
+        tries.append([round(ratio, 3), round(p01 * 1000, 2), round(med * 1000, 2),
+                      round(cov, 4)])
+        if cov >= BOOT_COVERAGE and p01 >= BOOT_MIN_GAP and med <= BOOT_MAX_MEDIAN:
+            return M, {
+                "foot_length_ratio": round(ratio, 3),
+                "scale": round(scale, 5), "shaft_stretch": round(stretch, 4),
+                "foot_length_m": round(foot_dims.y, 4),
+                "shin_span_m": round(top - sole_z, 4),
+                "donor_ankle_radius": round(ankle_r, 4),
+                "leg_gap_p01_mm": round(p01 * 1000, 2),
+                "leg_gap_median_mm": round(med * 1000, 2),
+                "leg_covered": round(cov, 4),
+                "leg_points": len(sample),
+                "sole_and_rim_points": len(leg) - len(sample),
+                "rim_below_knee_mm": round(-BOOT_TOP * 1000, 1),
+            }
+        ratio += BOOT_LEN_STEP
+    raise SystemExit(f"no sabaton size both clears the leg and stays a boot; {tries}")
+
+
 FITTERS = {
     "head_shell": fit_head_shell,
     "hand_grip": fit_hand_grip,
     "forearm_strap": fit_forearm_strap,
+    "plate_torso": fit_plate_torso,
+    "hand_plate": fit_hand_plate,
+    "boot_leg": fit_boot_leg,
 }
 
 
@@ -684,9 +1328,174 @@ def skin_to_bone(mesh, rig, bone):
     group.add(range(len(mesh.data.vertices)), 1.0, "REPLACE")
 
 
+def skin_by_transfer(mesh, body, rig, bones):
+    """Take the body's own weights, over one named set of bones.
+
+    A plate cannot ride a joint the way a helmet does: it spans the spine and
+    both shoulders, and every one of them moves separately. Nearest-surface
+    transfer asks the body what it does under each point of steel and gives the
+    steel the same answer, which is the only thing that keeps a pauldron on a
+    shoulder through a full stride.
+
+    Everything outside `bones` is dropped rather than left at a small weight.
+    An unnormalised stray - a thigh group on a breastplate - is invisible in the
+    idle and tears the plate downward the moment the leg swings.
+    """
+    missing = [b for b in bones if b not in rig.data.bones]
+    if missing:
+        raise SystemExit(f"{mesh.name}: no bones {missing} on {rig.name}")
+    for group in list(mesh.vertex_groups):
+        mesh.vertex_groups.remove(group)
+
+    # The modifier names both objects. `object.data_transfer` reads its source
+    # and its destination off the selection instead, which is one stray active
+    # object away from transferring the wrong way and reporting success.
+    bpy.ops.object.select_all(action="DESELECT")
+    mesh.select_set(True)
+    bpy.context.view_layer.objects.active = mesh
+    mod = mesh.modifiers.new("Transfer", "DATA_TRANSFER")
+    mod.object = body
+    mod.use_vert_data = True
+    mod.data_types_verts = {"VGROUP_WEIGHTS"}
+    mod.vert_mapping = "POLYINTERP_NEAREST"
+    mod.layers_vgroup_select_src = "ALL"
+    mod.layers_vgroup_select_dst = "NAME"
+    bpy.ops.object.datalayout_transfer(modifier=mod.name)
+    bpy.ops.object.modifier_apply(modifier=mod.name)
+
+    kept = 0
+    for group in list(mesh.vertex_groups):
+        if group.name in bones:
+            kept += 1
+        else:
+            mesh.vertex_groups.remove(group)
+    if kept < len(bones):
+        raise SystemExit(
+            f"{mesh.name}: transfer produced {kept} of {len(bones)} groups")
+
+    # Dropping groups leaves the survivors summing to less than one, which reads
+    # as a plate shrinking toward the origin under the modifier.
+    bpy.context.view_layer.objects.active = mesh
+    bpy.ops.object.vertex_group_normalize_all(lock_active=False)
+    # A pauldron tip stands out past the shoulder in open air, so the body
+    # polygon nearest to it is down the forearm - and every weight there belongs
+    # to a group this piece just dropped. Those vertices come out of the
+    # transfer with nothing on them, which the modifier reads as the origin and
+    # draws as a spike through the character. They are given the nearest bone
+    # that IS kept, which for a pauldron tip is the upper arm it hangs from.
+    orphans = [v for v in mesh.data.vertices if not v.groups]
+    if orphans:
+        segs = [(b, rig.matrix_world @ rig.data.bones[b].head_local,
+                 rig.matrix_world @ rig.data.bones[b].tail_local) for b in bones]
+        for v in orphans:
+            best, near = None, None
+            for name, head, tail in segs:
+                axis = tail - head
+                t = 0.0 if axis.length_squared < 1e-12 else max(
+                    0.0, min(1.0, (v.co - head).dot(axis) / axis.length_squared))
+                d = (v.co - (head + axis * t)).length
+                if near is None or d < near:
+                    best, near = name, d
+            mesh.vertex_groups[best].add([v.index], 1.0, "REPLACE")
+        print(f"  {mesh.name}: {len(orphans)} vertices past the body, "
+              f"pinned to the nearest kept bone")
+    rebind(mesh, rig)
+    return kept
+
+
+def mirrored(right, rig, name):
+    """The other side of a fitted piece, reflected across the body's mid-plane.
+
+    A gauntlet is fitted to one hand and worn on two, and refitting the mirror
+    image is not the same thing as mirroring the fit: the search would land on
+    its own ratio and the two hands would carry visibly different steel. The
+    reflection is exact instead, which only holds because this rest pose IS
+    symmetric - see `assert_symmetric`, which runs before anything is copied.
+    """
+    left = right.copy()
+    left.data = right.data.copy()
+    bpy.context.scene.collection.objects.link(left)
+    left.name = name
+    left.data.name = name
+    left.data.transform(Matrix.Diagonal((-1.0, 1.0, 1.0, 1.0)))
+    # Reflecting turns every triangle inside out, and Babylon culls back faces.
+    left.data.flip_normals()
+    left.data.update()
+    for group in left.vertex_groups:
+        if group.name.endswith("_r"):
+            group.name = group.name[:-2] + "_l"
+    missing = [g.name for g in left.vertex_groups if g.name not in rig.data.bones]
+    if missing:
+        raise SystemExit(f"{name}: mirrored onto bones that do not exist: {missing}")
+    rebind(left, rig)
+    return left
+
+
+def assert_symmetric(rig):
+    """Every `_r` bone is its `_l` twin reflected across x = 0, or a mirrored
+    piece lands beside the limb it is meant to be on rather than around it."""
+    worst, who = 0.0, None
+    pairs = 0
+    for bone in rig.data.bones:
+        if not bone.name.endswith("_r"):
+            continue
+        twin = rig.data.bones.get(bone.name[:-2] + "_l")
+        if twin is None:
+            raise SystemExit(f"{bone.name} has no left twin on {rig.name}")
+        pairs += 1
+        for a, b in ((bone.head_local, twin.head_local), (bone.tail_local, twin.tail_local)):
+            a = rig.matrix_world @ a
+            b = rig.matrix_world @ b
+            d = (Vector((-a.x, a.y, a.z)) - b).length
+            if d > worst:
+                worst, who = d, bone.name
+    if worst > 1e-4:
+        raise SystemExit(f"{rig.name} is not symmetric: {who} is off by {worst * 1000:.2f} mm")
+    return pairs, worst
+
+
+def _channel_image(socket):
+    """The image and RGB index feeding a BSDF socket through a glTF ORM Separate Color node."""
+    if not socket.links:
+        return None
+    src = socket.links[0]
+    node = src.from_node
+    if node.type != "SEPARATE_COLOR":
+        raise SystemExit(f"cannot matte {socket.name}: unexpected source {node.type}")
+    channel = {"Red": 0, "Green": 1, "Blue": 2}[src.from_socket.name]
+    tex = node.inputs[0].links[0].from_node
+    return tex.image, channel
+
+
+def _transform_channel(socket, fn):
+    """Apply a vectorized 0..1 -> 0..1 map to a socket's texture channel, or its scalar."""
+    found = _channel_image(socket)
+    if found is None:
+        socket.default_value = float(fn(np.array([socket.default_value]))[0])
+        return
+    image, channel = found
+    px = np.empty(len(image.pixels), dtype=np.float32)
+    image.pixels.foreach_get(px)
+    px = px.reshape(-1, image.channels)
+    px[:, channel] = fn(px[:, channel])
+    image.pixels.foreach_set(px.ravel())
+    image.update()
+
+
+def matte(mesh):
+    """Raise the roughness floor and cap peak metallic so donor steel stops reading as latex."""
+    mat = mesh.data.materials[0]
+    bsdf = next(n for n in mat.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+    _transform_channel(bsdf.inputs["Roughness"],
+                        lambda v: MATTE_ROUGHNESS_FLOOR + v * (1 - MATTE_ROUGHNESS_FLOOR))
+    _transform_channel(bsdf.inputs["Metallic"], lambda v: np.minimum(v, MATTE_METALLIC_CAP))
+
+
 def build_rigid_gear(rig, body):
     """Fit, skin and name every rigid piece against one built look."""
     fitted = {}
+    pairs, off = assert_symmetric(rig)
+    print(f"{rig.name}: {pairs} mirrored bone pairs, worst {off * 1000:.4f} mm off centre")
     for spec in RIGID_GEAR:
         path = os.path.join(GEAR_SRC, spec["src"])
         if not os.path.exists(path):
@@ -703,14 +1512,34 @@ def build_rigid_gear(rig, body):
         M, detail = FITTERS[spec["fit"]](donor, body, rig)
         donor.data.transform(M)
         donor.data.update()
-        donor.name = f"{spec['slot']}.{spec['look']}.{spec['part']}"
+        stem = f"{spec['slot']}.{spec['look']}.{spec['part']}"
+        # A mirrored piece is worn on both limbs, so the fitted one says which
+        # side it was measured against and the reflection carries the other.
+        donor.name = f"{stem}_r" if spec.get("mirror") else stem
         donor.data.name = donor.name
-        skin_to_bone(donor, rig, spec["bone"])
+        # Before the copy, and once: the halves share one material, so matteing
+        # after the mirror would run the texture through the map twice.
+        if spec.get("matte"):
+            matte(donor)
+        if spec.get("deform"):
+            groups = skin_by_transfer(donor, body, rig, spec["deform"])
+            detail["deform_bones"] = list(spec["deform"])
+            detail["deform_groups"] = groups
+        else:
+            skin_to_bone(donor, rig, spec["bone"])
         tris = sum(len(p.vertices) - 2 for p in donor.data.polygons)
         detail.update({"bone": spec["bone"], "fit": spec["fit"], "triangles": tris,
                        "source": spec["src"]})
         fitted[donor.name] = detail
         print(f"fitted {donor.name}: {tris} tris on {spec['bone']}")
+        if spec.get("mirror"):
+            left = mirrored(donor, rig, f"{stem}_l")
+            fitted[left.name] = dict(
+                detail, bone=spec["bone"][:-2] + "_l", mirrored_from=donor.name,
+                deform_bones=[b[:-2] + "_l" for b in spec.get("deform", ())],
+                deform_groups=len(left.vertex_groups),
+            )
+            print(f"mirrored {left.name}: {tris} tris on {spec['bone'][:-2] + '_l'}")
     return fitted
 
 
@@ -750,4 +1579,5 @@ def main():
     print(f"  meshes:    {meshes}")
 
 
-main()
+if __name__ == "__main__":
+    main()

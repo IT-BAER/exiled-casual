@@ -27,7 +27,7 @@ describe("dressing the character from what he has equipped", () => {
    */
   it("shows nothing for a base with no mesh, rather than the wrong one", () => {
     const looks = looksForEquipment({
-      body: { baseId: "base.ironsworn_plate" },
+      body: { baseId: "base.stalker_leathers" },
       weapon2: { baseId: "base.ashwall_tower_shield" },
     });
     expect(looks.weapon2).toBeNull();
