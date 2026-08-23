@@ -228,6 +228,12 @@ def build_look(spec):
 PLATE_BONES = ("spine_01", "spine_02", "spine_03", "neck_01",
                "clavicle_l", "clavicle_r", "upperarm_l", "upperarm_r")
 
+# A fauld hangs off the belt and its tassets ride the thighs, so the skirt has
+# to answer to both legs and to the lumbar the cuirass above it already bends
+# with. Without `spine_01` the top ring stays rigid while the plate over it
+# leans, and the two rims part company at the waist.
+HIPS_BONES = ("spine_01", "pelvis", "thigh_l", "thigh_r")
+
 # Every joint a gauntlet answers to. The wrist band alone is not enough: each
 # finger carries its own groups and they are what the steel has to follow, and
 # the cuff stands over the forearm, which moves with the elbow and not the
@@ -261,6 +267,11 @@ RIGID_GEAR = (
         "slot": "chest", "look": "plate", "part": "cuirass",
         "src": "plate-cuirass-15k-v2.glb", "bone": "spine_03", "fit": "plate_torso",
         "deform": PLATE_BONES, "matte": True,
+    },
+    {
+        "slot": "chest", "look": "plate", "part": "tassets",
+        "src": "fauld-proc-v2.glb", "bone": "pelvis", "fit": "plate_hips",
+        "deform": HIPS_BONES, "matte": True,
     },
     {
         "slot": "boots", "look": "plate", "part": "sabaton",
@@ -373,6 +384,27 @@ PLATE_TRUNK_TO = 0.26    # fraction of donor height that is trunk, not pauldron
 # the upper chest is simply bare.
 PLATE_COLLAR = 0.09      # collar rim relative to the base of the neck, metres
 PLATE_WAIST = -0.04      # bottom rim relative to the base of the lumbar, metres
+# A cuirass hem is not level: this donor's back hangs 125 mm lower than its
+# front, so pinning the bbox bottom to the belt leaves the FRONT hem 8 cm above
+# it and a strip of bare midriff round the front and both sides. The front hem
+# is the rim a fauld has to meet, so that is the edge the waist plane means.
+#
+# Getting it there by scaling the whole plate taller was tried and is wrong: the
+# arm openings scale with it, chest skin ends up inside an enlarged armscye and
+# coverage falls to 0.848 at every width. Only the SKIRT stretches.
+#
+# The line it stretches below is the last spine joint the plate hangs from,
+# carried into the donor through the placement that is already established:
+# above it is chest, shoulders and openings, below it is belly and skirt. It is
+# a body landmark, so it moves with the body, and it sits BELOW the armpit -
+# asserted, because that is what keeps the arm openings the size they were.
+# Higher lines were tried and cost coverage the gate is right to refuse: at the
+# armpit itself the skirt drags the whole ribcage down with it and lands at
+# 0.8918. At this one the plate's three numbers come out where they were before
+# the skirt existed. (`PLATE_TRUNK_TO` is not this line: at 0.26 of the donor it
+# is the band just above the belt, and the pauldrons flare at 0.67.)
+PLATE_FRONT = 0.15       # the front hem is the lowest point in this depth of the donor
+PLATE_SKIRT_MAX = 1.6    # past this the belly is visibly drawn out, whatever it measures
 PLATE_WIDTH_FROM = 1.06  # narrowest plate/chest width ratio worth trying
 PLATE_WIDTH_TO = 1.45    # past this it is a barrel, whatever it measures
 PLATE_WIDTH_STEP = 0.02
@@ -382,6 +414,44 @@ PLATE_SOCKET_ALONG = 0.3  # of upperarm length, from the head down
 PLATE_COVERAGE = 0.90   # fraction of measured chest that must have steel outboard
 PLATE_MIN_GAP = 0.0005  # 1st-percentile air between skin and steel, metres
 PLATE_MAX_MEDIAN = 0.040
+
+# The fauld is the cuirass's own second half, so its top rim is measured off the
+# cuirass rather than off the body: the same lumbar plane the breastplate stops
+# at, plus an overlap that tucks the waist ring UNDER the steel above it. A rim
+# that merely met the plate would open into a bare strip of hip the moment the
+# spine bent, because the two pieces answer to different joints.
+HIPS_OVERLAP = 0.02      # the waist ring sits this far above the cuirass rim, metres
+HIPS_HEM = 0.04          # the hem stops this far above the knee, metres
+# The donor's waist ring is its narrow top and the hem is half again as wide, so
+# sizing the ring to the hips already flares the tassets over the thighs. The
+# sweep is the plate's by another name: the smallest ring that clears the hips.
+HIPS_WIDTH_FROM = 1.05   # narrowest ring/hip width ratio worth trying
+HIPS_WIDTH_TO = 1.50     # past this it is a barrel, whatever it measures
+HIPS_WIDTH_STEP = 0.02
+# Two different measurements of the donor's top, because it has two. The SIZING
+# ring is the narrowest cross-section in the donor's top quarter - the waist
+# proper, the way the boot finds its ankle - and it has to be found rather than
+# taken off the bbox, because the band above it is deliberately wider. That band
+# is the LIP: the top this fraction of the donor's height, riveted outside the
+# breastplate, and what has to reach past the cuirass's own bottom rim.
+HIPS_RING_FROM = 0.75    # the waist is searched over the donor's top quarter
+HIPS_LIP = 0.06          # the lip is the top this fraction of the donor
+HIPS_RIM_BAND = 0.02     # the cuirass's rim is its lowest this much, metres
+HIPS_RIM_CLEAR = 0.002   # the lip reaches this far past that rim, metres
+# Below the plate's 0.90 on purpose: the donor carries four stride slits at the
+# front, the back and both sides, and the skin behind a slit is bare by design.
+# The crotch is excluded from the measurement instead of tolerated by the gate -
+# see `fit_plate_hips`.
+HIPS_COVERAGE = 0.85
+HIPS_INNER = 0.5         # outward directions this far toward the other leg are crotch
+# A skirt covers sideways. Skin whose way out of its own limb points up leaves
+# through the open waist - that is the cuirass's to cover - and skin pointing
+# down leaves through the open hem, which is what a hem is. The boot draws the
+# same line at its rim and its sole; without it the two openings alone cost this
+# fit 28 per cent of its coverage.
+HIPS_VERTICAL = 0.5      # outward directions this far off level are an opening
+HIPS_MIN_GAP = 0.0005    # 1st-percentile air between skin and steel, metres
+HIPS_MAX_MEDIAN = 0.045
 
 # A gauntlet is a hand-shaped shell, so its length is not a ratio to sweep: the
 # fingertips have to land on the fingertips or the steel reads as a claw or a
@@ -953,6 +1023,11 @@ def fit_plate_torso(donor, body, rig):
     Measured against the REST body. The skinning carries the plate into every
     clip, so a fit made in the idle would bake that frame's spine into the bind
     pose.
+
+    Unlike the other fitters this one EDITS the donor: the skirt below the
+    armscye is drawn down onto the belt before the matrix is built, because a
+    hem that hangs 125 mm out of level cannot be corrected by any affine
+    transform that leaves the arm openings where they are.
     """
     # Two different sets, because they answer two different questions. The
     # RIBCAGE sizes the plate: it is the thing the steel has to go round. The
@@ -982,10 +1057,36 @@ def fit_plate_torso(donor, body, rig):
     trunk = [p for p in hp if p.z < d_lo.z + d_dims.z * PLATE_TRUNK_TO]
     trunk_w = max(p.x for p in trunk) - min(p.x for p in trunk)
     collar = Vector((d_c.x, d_c.y, d_hi.z))
-
     top = neck.z + PLATE_COLLAR
     bottom = (rig.matrix_world @ rig.data.bones["spine_01"].head_local).z + PLATE_WAIST
     high = (top - bottom) / d_dims.z
+
+    # Seated with no rotation onto a body that faces -Y, so the donor's front is
+    # its -Y side. Asserted rather than assumed: if the lowest point of that side
+    # IS the lowest point of the whole plate, this donor's hem is level or hung
+    # the other way round and there is no skirt to draw down.
+    front_hem = min(p.z for p in hp if p.y <= d_lo.y + d_dims.y * PLATE_FRONT)
+    if front_hem <= d_lo.z + 1e-6:
+        raise SystemExit("this cuirass's front hem is its lowest point: it faces +Y")
+    waistline = (rig.matrix_world @ rig.data.bones["spine_03"].head_local).z
+    if waistline >= min(h.z - r for h, r in sockets):
+        raise SystemExit("spine_03 sits at or above the armpit: stretching the skirt "
+                         "below it would resize the arm openings")
+    armscye = d_hi.z - (top - waistline) / high
+    # `high` is unchanged, so the collar still lands on `top` and the donor's own
+    # bbox bottom still lands on `bottom`. Sending the FRONT hem there therefore
+    # means sending it to the bbox bottom, and k is what the skirt has to stretch
+    # by to put it there. The back hem follows it down, over the buttocks, where
+    # the tassets cover what the plate no longer does.
+    skirt = (armscye - d_lo.z) / (armscye - front_hem)
+    if skirt > PLATE_SKIRT_MAX:
+        raise SystemExit(f"this cuirass's skirt would have to stretch {skirt:.2f}x "
+                         f"to reach the belt, past {PLATE_SKIRT_MAX}")
+    for v in donor.data.vertices:
+        if v.co.z < armscye:
+            v.co.z = armscye - (armscye - v.co.z) * skirt
+    donor.data.update()
+    back_hem = top - (d_hi.z - (armscye - (armscye - d_lo.z) * skirt)) * high
 
     def matrix(wide):
         S = Matrix.Diagonal((wide, wide, high, 1.0))
@@ -1006,6 +1107,10 @@ def fit_plate_torso(donor, body, rig):
                 "trunk_width_ratio": round(ratio, 3),
                 "width_scale": round(wide, 5), "height_scale": round(high, 5),
                 "torso_span_m": round(top - bottom, 4),
+                "skirt_stretch": round(skirt, 4),
+                "skirt_line_z": round(top - (d_hi.z - armscye) * high, 4),
+                "front_hem_z": round(bottom, 4),
+                "back_hem_z": round(back_hem, 4),
                 "chest_width_m": round(chest_dims.x, 4),
                 "donor_trunk_width": round(trunk_w, 4),
                 "chest_gap_p01_mm": round(p01 * 1000, 2),
@@ -1297,11 +1402,147 @@ def fit_boot_leg(donor, body, rig):
     raise SystemExit(f"no sabaton size both clears the leg and stays a boot; {tries}")
 
 
+def fit_plate_hips(donor, body, rig):
+    """Grow the fauld until the hips and thighs under it are covered.
+
+    The plate's search, one storey down: the ring is the smallest one that puts
+    steel outboard of the hips, and the donor's own flare carries the tassets
+    over the thighs from there. Height and width scale separately for the reason
+    the cuirass does - the span from the belt to the knee is set by the body, and
+    a uniform scale that satisfies it would size the ring by accident.
+
+    Measured against the REST body, for the reason the plate is.
+
+    The crotch is taken OUT of the measurement rather than tolerated by the gate.
+    A fauld is open between the legs: the inner face of each thigh has the other
+    leg outboard of it, not steel, and no size of skirt ever covers it. Those
+    points are the ones whose way out of their own limb aims across the body's
+    mid-plane, which the body itself says - `outward` reads it off the thigh the
+    skin belongs to. The open waist and the open hem go the same way, by the
+    same test turned upright. What is left of the gate's shortfall from the
+    plate's 0.90 is the four stride slits, which are bare by design.
+    """
+    hips = group_points(body, "pelvis", 0.35)
+    legs = group_points(body, "thigh_l", 0.35) + group_points(body, "thigh_r", 0.35)
+    if not hips or not legs:
+        raise SystemExit("the body carries no hip or thigh weights to fit a fauld against")
+
+    # The donor is authored front = -Y and wider across than deep, so it needs no
+    # rotation onto a body built the same way; but that is a fact about this rest
+    # pose, and a body facing the other way would put the front slit on a buttock.
+    toe = (rig.matrix_world @ rig.data.bones["ball_r"].head_local
+           - rig.matrix_world @ rig.data.bones["foot_r"].head_local)
+    if toe.y >= 0:
+        raise SystemExit("this body does not face -Y: the fauld's slits need a rotation")
+
+    cuirass_rim = (rig.matrix_world @ rig.data.bones["spine_01"].head_local).z + PLATE_WAIST
+    top = cuirass_rim + HIPS_OVERLAP
+    knee = sum((rig.matrix_world @ rig.data.bones[b].head_local).z
+               for b in ("calf_l", "calf_r")) / 2
+    bottom = knee + HIPS_HEM
+    if bottom >= top:
+        raise SystemExit("the knee is above the belt: there is no fauld span to fill")
+
+    # The ring is sized on the hips, and the hips are the pelvis plus the top of
+    # the thighs: a band about the hip joint, reaching as far below it as the
+    # belt is above it, so the widest part of the pelvis is inside the span the
+    # skirt's own ring has to clear.
+    hip_z = sum((rig.matrix_world @ rig.data.bones[b].head_local).z
+                for b in ("thigh_l", "thigh_r")) / 2
+    hip_band = [p for p in hips + legs if hip_z - (top - hip_z) <= p.z <= top]
+    if len(hip_band) < 8:
+        raise SystemExit("no hip band to size a fauld against")
+    _, _, hip_dims, hip_c = bbox(hip_band)
+
+    segments = bones_of(rig, ("pelvis", "thigh_l", "thigh_r"))
+    sample = []
+    crotch = opening = 0
+    for p in hips + legs:
+        if not (bottom <= p.z <= top):
+            continue
+        out = outward(segments, p)
+        side = nearest_on(segments, p).x
+        if abs(side) > 1e-3 and -out.x * math.copysign(1.0, side) > HIPS_INNER:
+            crotch += 1
+            continue
+        if abs(out.z) > HIPS_VERTICAL:
+            opening += 1
+            continue
+        sample.append(p)
+    if not sample:
+        raise SystemExit("the hem and the crotch between them swallowed every hip point")
+
+    hp = [v.co for v in donor.data.vertices]
+    d_lo, d_hi, d_dims, d_c = bbox(hp)
+    _, _, ring_r = narrowest(donor, 2, HIPS_RING_FROM, 1.0)
+    ring_w = ring_r * 2
+    lip = [p for p in hp if p.z >= d_hi.z - d_dims.z * HIPS_LIP]
+    lip_r = max(math.hypot(p.x - d_c.x, p.y - d_c.y) for p in lip)
+    waist_ring = Vector((d_c.x, d_c.y, d_hi.z))
+    high = (top - bottom) / d_dims.z
+
+    # The cuirass is fitted before this piece, so its rim can simply be read off
+    # the scene. A fauld is riveted OUTSIDE the breastplate: the lip has to stand
+    # past that rim, not merely below it, or the two pieces meet edge to edge and
+    # a strip of hip shows between them at every angle. Absent - a fauld fitted
+    # on its own - there is nothing to reach past and the condition drops out.
+    cuirass = bpy.data.objects.get("chest.plate.cuirass")
+    rim_r = 0.0
+    if cuirass is not None:
+        cvs = [cuirass.matrix_world @ v.co for v in cuirass.data.vertices]
+        c_lo = min(v.z for v in cvs)
+        rim_r = max(math.hypot(v.x - hip_c.x, v.y - hip_c.y)
+                    for v in cvs if v.z <= c_lo + HIPS_RIM_BAND)
+        if c_lo >= top:
+            raise SystemExit(
+                f"the cuirass rim at {c_lo:.4f} is above the fauld's lip at {top:.4f}")
+
+    def matrix(wide):
+        S = Matrix.Diagonal((wide, wide, high, 1.0))
+        return seated(donor, S, Matrix.Identity(4), waist_ring,
+                      Vector((hip_c.x, hip_c.y, top)))
+
+    tries = []
+    ratio = HIPS_WIDTH_FROM
+    while ratio <= HIPS_WIDTH_TO + 1e-9:
+        wide = (hip_dims.x * ratio) / ring_w
+        bvh = bvh_of(donor, matrix(wide))
+        p01, med = gap_profile(bvh, sample)
+        cov = covered_radially(bvh, sample, segments)
+        lip_out = lip_r * wide
+        tries.append([round(ratio, 3), round(p01 * 1000, 2), round(med * 1000, 2),
+                      round(cov, 4), round(lip_out * 1000, 1)])
+        if (cov >= HIPS_COVERAGE and p01 >= HIPS_MIN_GAP and med <= HIPS_MAX_MEDIAN
+                and lip_out >= rim_r + HIPS_RIM_CLEAR):
+            return matrix(wide), {
+                "ring_width_ratio": round(ratio, 3),
+                "width_scale": round(wide, 5), "height_scale": round(high, 5),
+                "hip_width_m": round(hip_dims.x, 4),
+                "span_m": round(top - bottom, 4),
+                "donor_ring_width": round(ring_w, 4),
+                "lip_radius_m": round(lip_r * wide, 4),
+                "cuirass_rim_radius_m": round(rim_r, 4),
+                "lip_past_rim_mm": round((lip_r * wide - rim_r) * 1000, 2),
+                "hip_gap_p01_mm": round(p01 * 1000, 2),
+                "hip_gap_median_mm": round(med * 1000, 2),
+                "hip_covered": round(cov, 4),
+                "hip_points": len(sample),
+                "crotch_points": crotch,
+                "opening_points": opening,
+                "overlap_mm": round(HIPS_OVERLAP * 1000, 1),
+                "hem_above_knee_mm": round(HIPS_HEM * 1000, 1),
+            }
+        ratio += HIPS_WIDTH_STEP
+    raise SystemExit("no fauld size clears the hips, covers the cuirass rim and stays "
+                     f"a skirt; ratio, p01, median, covered, lip: {tries}")
+
+
 FITTERS = {
     "head_shell": fit_head_shell,
     "hand_grip": fit_hand_grip,
     "forearm_strap": fit_forearm_strap,
     "plate_torso": fit_plate_torso,
+    "plate_hips": fit_plate_hips,
     "hand_plate": fit_hand_plate,
     "boot_leg": fit_boot_leg,
 }

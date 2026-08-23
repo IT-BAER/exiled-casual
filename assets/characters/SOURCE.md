@@ -48,3 +48,10 @@ The hair atlases are greyscale masks, not coloured art. Untinted they render
 bone white, so `HAIR_TINT` in the builder multiplies them; the female's eyebrows
 sample the same mask and take the same tint, while the male's are painted into
 his body atlas and are left alone.
+
+## Fauld and tassets (`chest.plate.tassets`)
+
+Built procedurally by `tools/prep_tassets.py` (no scan: TRELLIS decodes a plate
+skirt into loose flakes). Texture is BlenderKit material
+`8352b3b2-edb7-4700-a9d6-055ab6ec9233` "Aged Black Steel" (royalty free, 1K),
+baked into the donor `assets/props/source/trellis_local/fauld-proc-v2.glb`.
