@@ -52,6 +52,29 @@
   "source": "buckler-4000-v1.glb"
  },
  "chest.plate.cuirass": {
+  "crotch_z": 0.8936,
+  "crotch_points": 76,
+  "belt_z": 1.1397,
+  "belt_donor_radius": 0.1841,
+  "hem_z_before": 0.6924,
+  "hem_z_after": 0.8436,
+  "hem_length_scale": 0.662,
+  "hem_below_crotch_mm": 50.0,
+  "hem_radius_before_m": 0.2717,
+  "hem_radius_after_m": 0.2269,
+  "hip_half_width_m": 0.1923,
+  "hem_taper": 0.8181,
+  "taper_wanted": 0.8181,
+  "taper_tries": [
+   [
+    0.818,
+    3.85,
+    39.81
+   ]
+  ],
+  "hip_gap_p01_mm": 3.85,
+  "hip_gap_median_mm": 39.81,
+  "hip_points": 533,
   "trunk_width_ratio": 1.06,
   "width_scale": 0.93804,
   "height_scale": 1.00343,
@@ -146,12 +169,12 @@
   "built_from": "base.male.body leg weights, offset along its own normals",
   "source": "body",
   "offset_mm": 4.0,
-  "offset_min_mm": 0.0,
+  "offset_min_mm": 0.5,
   "offset_p01_mm": 0.5,
   "offset_median_mm": 4.0,
-  "shell_capped_vertices": 20,
+  "shell_capped_vertices": 7,
   "crease_capped_vertices": 146,
-  "shell_air_min_mm": 0.021,
+  "shell_air_min_mm": 0.5,
   "worn_shell_air": {
    "boots.plate.sabaton_l": {
     "vertices": 268,
@@ -166,10 +189,10 @@
     "median_mm": 17.908
    },
    "chest.plate.cuirass": {
-    "vertices": 186,
-    "min_mm": 0.021,
-    "p01_mm": 0.275,
-    "median_mm": 27.863
+    "vertices": 191,
+    "min_mm": 0.5,
+    "p01_mm": 0.5,
+    "median_mm": 28.622
    }
   },
   "waist_z": 1.081,

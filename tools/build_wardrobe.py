@@ -411,6 +411,31 @@ PLATE_COLLAR = 0.18      # collar rim relative to the base of the neck, metres
 # body proportion.
 PLATE_HEM_ABOVE_KNEE = 0.15
 PLATE_TRUNK_SAMPLES = 24  # heights the trunk is measured across, over that stretch
+# A fauld that reaches mid-thigh and keeps the donor's flare reads as a dress,
+# whatever it measures. Both faults are fixed on the donor, BELOW the belt only,
+# after the width sweep has settled - the chest, the collar and the width are the
+# fit that was accepted and nothing here may move them.
+#
+# Length is pinned to the crotch rather than to the knee, because the crotch is
+# what a short fauld has to cover and the knee is what a long one reaches. The
+# crotch is read off the body: the lowest skin the pelvis carries at half weight
+# or more, within a hand's width of the mid-plane, so it is this body's own
+# landmark and not a height anybody chose.
+PLATE_HEM_BELOW_CROTCH = 0.05  # the hem lands this far under the crotch, metres
+PLATE_CROTCH_HALF = 0.03       # skin this close to the mid-plane is the crotch
+# The line the skirt is drawn up to is the BELT, found as the donor's narrowest
+# ring between its hem and its chest. Pinning it there is what keeps the belt
+# where the fit put it: everything above the ring is untouched.
+PLATE_BELT_FROM = 0.10   # the belt ring is searched over this stretch of donor height
+PLATE_BELT_TO = 0.50
+PLATE_BELT_BANDS = 32
+# Flare: the hem may stand no further from the hip axis than the hips themselves
+# plus a little ease, or the skirt swings wide of the legs and is a skirt. The
+# taper runs from nothing at the belt to the measured factor at the hem, and it
+# is backed off in steps if it costs the thighs their air.
+PLATE_FAULD_EASE = 0.03  # the hem may reach this far past the hips, metres
+PLATE_HEM_BAND = 0.10    # the bottom this share of the fauld is its hem
+PLATE_TAPER_STEP = 0.02  # the taper is relaxed by this much per try
 # A scanned cuirass hem need not be level, and one that hangs out of level cannot
 # be corrected by any affine transform that leaves the arm openings alone - the
 # older donor's back hung 125 mm below its front and only its SKIRT was stretched
@@ -1084,6 +1109,125 @@ def donor_trunk(donor, lo, dims, centre):
     return best
 
 
+def body_crotch(body):
+    """The lowest skin the pelvis carries, on the mid-plane: this body's crotch.
+
+    A fauld is short when it clears this and long when it reaches the knee, so
+    it is the landmark the hem is measured from. Weighted at half rather than a
+    third, and taken near x = 0, because a thigh's own skin carries some pelvis
+    everywhere and only the fork between the legs is pelvis alone.
+    """
+    pts = [p for p in group_points(body, "pelvis", 0.5) if abs(p.x) <= PLATE_CROTCH_HALF]
+    if not pts:
+        raise SystemExit("no pelvis skin on the mid-plane to measure a crotch at")
+    return min(p.z for p in pts), len(pts)
+
+
+def donor_belt(points, lo, dims, axis):
+    """The donor's narrowest ring between its hem and its chest: the belt.
+
+    A radius about the piece's own axis, not an x-span: the fauld flares in
+    depth as well as across, and a belt is the one ring on the whole skirt that
+    does neither.
+    """
+    best = None
+    for i in range(PLATE_BELT_BANDS):
+        a = lo.z + dims.z * (PLATE_BELT_FROM + (PLATE_BELT_TO - PLATE_BELT_FROM) * i / PLATE_BELT_BANDS)
+        b = lo.z + dims.z * (PLATE_BELT_FROM + (PLATE_BELT_TO - PLATE_BELT_FROM) * (i + 1) / PLATE_BELT_BANDS)
+        sel = [p for p in points if a <= p.z <= b]
+        if len(sel) < 8:
+            continue
+        r = max(math.hypot(p.x - axis.x, p.y - axis.y) for p in sel)
+        if best is None or r < best[1]:
+            best = ((a + b) / 2, r)
+    if best is None:
+        raise SystemExit("no measurable ring between the donor's hem and its chest")
+    return best
+
+
+def drape_fauld(donor, M, hip_axis, hip_half, hem_world, hips):
+    """Shorten and un-flare the suit's skirt, below its belt and nowhere else.
+
+    Two edits in the donor's own coordinates, both pinned at the belt ring so
+    the fit above it is untouched: a z map that draws the hem up to the target,
+    and a taper toward the hip axis running from nothing at the belt to whatever
+    the hem needs. `M` is the placement the sweep settled on and is NOT rebuilt
+    afterwards - it maps donor space to the body, and these edits are in donor
+    space, so the chest stays exactly where it was accepted.
+
+    The taper is relaxed in steps if it costs the thighs their air: a skirt
+    drawn in tight enough to look right and tight enough to walk through is not
+    an improvement.
+    """
+    hp = [v.co for v in donor.data.vertices]
+    d_lo, _, d_dims, _ = bbox(hp)
+    axis = M.inverted() @ Vector((hip_axis.x, hip_axis.y, 0.0))
+    belt_z, belt_r = donor_belt(hp, d_lo, d_dims, axis)
+    belt_world = (M @ Vector((0.0, 0.0, belt_z))).z
+    old_hem = (M @ Vector((0.0, 0.0, d_lo.z))).z
+    if hem_world >= belt_world:
+        raise SystemExit(f"the hem target {hem_world:.4f} is at or above the belt "
+                         f"{belt_world:.4f}: there is no skirt to shorten")
+    k = (belt_world - hem_world) / (belt_world - old_hem)
+    if k < 1.0:
+        for v in donor.data.vertices:
+            if v.co.z < belt_z:
+                v.co.z = belt_z - (belt_z - v.co.z) * k
+        donor.data.update()
+    hem_z = belt_z - (belt_z - d_lo.z) * k
+
+    band = (belt_z - hem_z) * PLATE_HEM_BAND
+    hem_pts = [v.co.copy() for v in donor.data.vertices if v.co.z <= hem_z + band]
+    if not hem_pts:
+        raise SystemExit("the shortened skirt has no hem band to measure a flare on")
+
+    def world_radius(pts):
+        return max(math.hypot((M @ p).x - hip_axis.x, (M @ p).y - hip_axis.y) for p in pts)
+
+    hem_r = world_radius(hem_pts)
+    target = hip_half + PLATE_FAULD_EASE
+    wanted = min(1.0, target / hem_r)
+
+    # Each try re-places the vertices from their un-tapered coordinates, so
+    # relaxing the taper is a fresh placement and not a second squeeze.
+    below = [(v, v.co.copy()) for v in donor.data.vertices if v.co.z < belt_z]
+    tries = []
+    factor = wanted
+    while True:
+        for v, co in below:
+            t = min(1.0, (belt_z - co.z) / (belt_z - hem_z))
+            scale = 1.0 + (factor - 1.0) * t
+            v.co.x = axis.x + (co.x - axis.x) * scale
+            v.co.y = axis.y + (co.y - axis.y) * scale
+        donor.data.update()
+        p01, med = gap_profile(bvh_of(donor, M), hips)
+        tries.append([round(factor, 3), round(p01 * 1000, 2), round(med * 1000, 2)])
+        if p01 >= PLATE_MIN_GAP or factor >= 1.0 - 1e-9:
+            break
+        factor = min(1.0, factor + PLATE_TAPER_STEP)
+    if p01 < PLATE_MIN_GAP:
+        raise SystemExit(f"no fauld taper clears the hips; factor, p01, median: {tries}")
+
+    after = [v.co.copy() for v in donor.data.vertices if v.co.z <= hem_z + band]
+    return {
+        "belt_z": round(belt_world, 4),
+        "belt_donor_radius": round(belt_r, 4),
+        "hem_z_before": round(old_hem, 4),
+        "hem_z_after": round((M @ Vector((0.0, 0.0, hem_z))).z, 4),
+        "hem_length_scale": round(k, 4),
+        "hem_below_crotch_mm": round(PLATE_HEM_BELOW_CROTCH * 1000, 1),
+        "hem_radius_before_m": round(hem_r, 4),
+        "hem_radius_after_m": round(world_radius(after), 4),
+        "hip_half_width_m": round(hip_half, 4),
+        "hem_taper": round(factor, 4),
+        "taper_wanted": round(wanted, 4),
+        "taper_tries": tries,
+        "hip_gap_p01_mm": round(p01 * 1000, 2),
+        "hip_gap_median_mm": round(med * 1000, 2),
+        "hip_points": len(hips),
+    }
+
+
 def fit_plate_torso(donor, body, rig):
     """Grow the plate until the chest under it is inside it.
 
@@ -1159,6 +1303,19 @@ def fit_plate_torso(donor, body, rig):
         arms += group_points(body, f"upperarm_{side}", 0.35)
     arm_segments = bones_of(rig, ("upperarm_l", "upperarm_r"))
 
+    # What the skirt has to cover and clear, all of it read off this body: the
+    # crotch sets the hem, and the hips set how far the hem may stand out.
+    crotch, crotch_pts = body_crotch(body)
+    hem_world = crotch - PLATE_HEM_BELOW_CROTCH
+    hips = []
+    for b in ("pelvis", "thigh_l", "thigh_r"):
+        hips += group_points(body, b, 0.35)
+    skirted = [p for p in hips if p.z >= hem_world]
+    if not skirted:
+        raise SystemExit("no hip or thigh skin above the hem to size a fauld against")
+    _, _, _, hip_axis = bbox(skirted)
+    hip_half = max(math.hypot(p.x - hip_axis.x, p.y - hip_axis.y) for p in skirted)
+
     def matrix(wide):
         S = Matrix.Diagonal((wide, wide, high, 1.0))
         return seated(donor, S, Matrix.Identity(4), collar,
@@ -1175,7 +1332,12 @@ def fit_plate_torso(donor, body, rig):
         tries.append([round(ratio, 3), round(p01 * 1000, 2), round(med * 1000, 2),
                       round(cov, 4), round(arm_cov, 4)])
         if cov >= PLATE_COVERAGE and p01 >= PLATE_MIN_GAP and med <= PLATE_MAX_MEDIAN:
-            return matrix(wide), {
+            placement = matrix(wide)
+            fauld = drape_fauld(donor, placement, hip_axis, hip_half, hem_world, skirted)
+            return placement, {
+                "crotch_z": round(crotch, 4),
+                "crotch_points": crotch_pts,
+                **fauld,
                 "trunk_width_ratio": round(ratio, 3),
                 "width_scale": round(wide, 5), "height_scale": round(high, 5),
                 "suit_span_m": round(top - bottom, 4),
