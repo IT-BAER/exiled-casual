@@ -270,7 +270,7 @@ RIGID_GEAR = (
     },
     {
         "slot": "chest", "look": "plate", "part": "tassets",
-        "src": "fauld-proc-v2.glb", "bone": "pelvis", "fit": "plate_hips",
+        "src": "fauld-proc-v3.glb", "bone": "pelvis", "fit": "plate_hips",
         "deform": HIPS_BONES, "matte": True,
     },
     {
@@ -291,8 +291,8 @@ GLOVES_PENDING = {
 
 # Both donors ship a glossy ORM pack that reads as latex under Babylon's PBR;
 # raised/capped here rather than flattened, so a steel highlight still moves.
-MATTE_ROUGHNESS_FLOOR = 0.55
-MATTE_METALLIC_CAP = 0.85
+MATTE_ROUGHNESS_FLOOR = 0.40
+MATTE_METALLIC_CAP = 0.95
 
 # Air the scalp must keep under a hard shell, and the skull it is measured over:
 # everything above a quarter of the head's height, forehead included. Filtering
@@ -421,7 +421,12 @@ PLATE_MAX_MEDIAN = 0.040
 # that merely met the plate would open into a bare strip of hip the moment the
 # spine bent, because the two pieces answer to different joints.
 HIPS_OVERLAP = 0.02      # the waist ring sits this far above the cuirass rim, metres
-HIPS_HEM = 0.04          # the hem stops this far above the knee, metres
+# Signed against the KNEE: positive stops the hem above it, negative carries it
+# below. The sabaton's own rim is 30 mm under the knee (`BOOT_TOP`), so at -10 mm
+# the skirt hangs 20 mm over the outside of that cuff and the shin has no bare
+# band at any stride. Above the knee - which is where 0.04 put it - the skirt is
+# short enough to show the crotch from a low angle, which is the fault this is.
+HIPS_HEM = -0.010        # the hem lands this far above the knee, metres
 # The donor's waist ring is its narrow top and the hem is half again as wide, so
 # sizing the ring to the hips already flares the tassets over the thighs. The
 # sweep is the plate's by another name: the smallest ring that clears the hips.
@@ -438,10 +443,10 @@ HIPS_RING_FROM = 0.75    # the waist is searched over the donor's top quarter
 HIPS_LIP = 0.06          # the lip is the top this fraction of the donor
 HIPS_RIM_BAND = 0.02     # the cuirass's rim is its lowest this much, metres
 HIPS_RIM_CLEAR = 0.002   # the lip reaches this far past that rim, metres
-# Below the plate's 0.90 on purpose: the donor carries four stride slits at the
-# front, the back and both sides, and the skin behind a slit is bare by design.
-# The crotch is excluded from the measurement instead of tolerated by the gate -
-# see `fit_plate_hips`.
+# Below the plate's 0.90 on purpose: the donor's eight panels lap rather than
+# meet, so a ray leaving between two laps can still slip out at a grazing angle
+# even though the plan is closed. The crotch is excluded from THIS measurement
+# and reported on its own instead - see `fit_plate_hips`.
 HIPS_COVERAGE = 0.85
 HIPS_INNER = 0.5         # outward directions this far toward the other leg are crotch
 # A skirt covers sideways. Skin whose way out of its own limb points up leaves
@@ -1413,14 +1418,13 @@ def fit_plate_hips(donor, body, rig):
 
     Measured against the REST body, for the reason the plate is.
 
-    The crotch is taken OUT of the measurement rather than tolerated by the gate.
-    A fauld is open between the legs: the inner face of each thigh has the other
-    leg outboard of it, not steel, and no size of skirt ever covers it. Those
+    The crotch is measured on its own rather than mixed into the gate. Those
     points are the ones whose way out of their own limb aims across the body's
     mid-plane, which the body itself says - `outward` reads it off the thigh the
-    skin belongs to. The open waist and the open hem go the same way, by the
-    same test turned upright. What is left of the gate's shortfall from the
-    plate's 0.90 is the four stride slits, which are bare by design.
+    skin belongs to; the ray out of one leaves past the other, so what it can
+    hit is the far side of the skirt. `crotch_covered` is that fraction, and it
+    is the number that says the skirt closes between the legs. The open waist
+    and the open hem go the same way, by the same test turned upright.
     """
     hips = group_points(body, "pelvis", 0.35)
     legs = group_points(body, "thigh_l", 0.35) + group_points(body, "thigh_r", 0.35)
@@ -1456,14 +1460,15 @@ def fit_plate_hips(donor, body, rig):
 
     segments = bones_of(rig, ("pelvis", "thigh_l", "thigh_r"))
     sample = []
-    crotch = opening = 0
+    crotch_pts = []
+    opening = 0
     for p in hips + legs:
         if not (bottom <= p.z <= top):
             continue
         out = outward(segments, p)
         side = nearest_on(segments, p).x
         if abs(side) > 1e-3 and -out.x * math.copysign(1.0, side) > HIPS_INNER:
-            crotch += 1
+            crotch_pts.append(p)
             continue
         if abs(out.z) > HIPS_VERTICAL:
             opening += 1
@@ -1509,6 +1514,7 @@ def fit_plate_hips(donor, body, rig):
         bvh = bvh_of(donor, matrix(wide))
         p01, med = gap_profile(bvh, sample)
         cov = covered_radially(bvh, sample, segments)
+        crotch_cov = covered_radially(bvh, crotch_pts, segments)
         lip_out = lip_r * wide
         tries.append([round(ratio, 3), round(p01 * 1000, 2), round(med * 1000, 2),
                       round(cov, 4), round(lip_out * 1000, 1)])
@@ -1527,10 +1533,12 @@ def fit_plate_hips(donor, body, rig):
                 "hip_gap_median_mm": round(med * 1000, 2),
                 "hip_covered": round(cov, 4),
                 "hip_points": len(sample),
-                "crotch_points": crotch,
+                "crotch_points": len(crotch_pts),
+                "crotch_covered": round(crotch_cov, 4),
                 "opening_points": opening,
                 "overlap_mm": round(HIPS_OVERLAP * 1000, 1),
-                "hem_above_knee_mm": round(HIPS_HEM * 1000, 1),
+                "hem_vs_knee_mm": round(HIPS_HEM * 1000, 1),
+                "boot_rim_below_hem_mm": round((HIPS_HEM - BOOT_TOP) * 1000, 1),
             }
         ratio += HIPS_WIDTH_STEP
     raise SystemExit("no fauld size clears the hips, covers the cuirass rim and stays "

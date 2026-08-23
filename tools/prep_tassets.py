@@ -4,7 +4,7 @@ Image-to-3D returns flakes for a plate skirt: the lames are thin, parallel and
 self-occluding, and the decoder reads the stack as noise. A fauld is not a
 sculpt though - it is a lathe and a stack, every band a cone of revolution and
 every lame an arc of one - so it is authored from those numbers instead, which
-makes the overlaps, the slit widths and the hem radius true by construction.
+makes the overlaps, the laps and the hem radius true by construction.
 
 Metres, Z up, front is -Y, centred on X=0. The wardrobe fitter rescales it.
 
@@ -19,12 +19,14 @@ import os
 
 import bmesh
 import bpy
+import numpy
 from mathutils import Matrix, Vector
 
 ROOT = "D:/VSC/exiled-casual"
-OUT_GLB = ROOT + "/assets/props/source/trellis_local/fauld-proc-v2.glb"
-OUT_JSON = ROOT + "/assets/props/source/trellis_local/fauld-proc-v2.json"
-REVIEW = ROOT + "/review/3d/fauld-proc-v2"
+OUT_GLB = ROOT + "/assets/props/source/trellis_local/fauld-proc-v3.glb"
+OUT_JSON = ROOT + "/assets/props/source/trellis_local/fauld-proc-v3.json"
+REVIEW = ROOT + "/review/3d/fauld-proc-v3"
+CUIRASS_GLB = ROOT + "/assets/props/source/trellis_local/plate-cuirass-15k-v2.glb"
 MAT_BLEND = ROOT + "/assets/props/source/mat-aged-black-steel.blend"
 BLENDERKIT_ID = "8352b3b2-edb7-4700-a9d6-055ab6ec9233"
 BLENDERKIT_NAME = "Aged Black Steel"
@@ -52,7 +54,7 @@ BAND_FLARE = FLARE * 0.17   # each band ends this much further out than it start
 # strip of hip shows between them from every angle.
 TOP_BAND_PROUD = 0.015
 BANDS = 3
-RING_SEGS = 32
+RING_SEGS = 24
 OVAL_X = 1.08             # x radius over y radius
 
 # --- tassets -----------------------------------------------------------------
@@ -61,11 +63,24 @@ LAMES = 5
 LAME_H = 0.07
 LAME_OVERLAP = 0.015
 LAME_STEP = FLARE * 0.071   # each lower lame stands this much proud of the one above
-LAME_SEGS = 5
-LAME_ROWS = 2
-STACK_CENTRES = (45.0, 135.0, 225.0, 315.0)   # front-left, back-left, back-right, front-right
+LAME_SEGS = 4
+LAME_ROWS = 1
+# Eight panels on a 45-degree pitch, so one is centred on the front and one on
+# the back and the seams fall on the diagonals. At 45 degrees of pitch an arc of
+# 75 leaves each panel lapping its neighbour by 15 degrees of plan on either
+# side, which is what closes the skirt: a ray out of either thigh meets steel in
+# every direction, the crotch included. There is no front, back or side slit -
+# the stride is taken up by the laps sliding over one another.
+STACK_CENTRES = tuple(45.0 * i for i in range(8))
 LAME_ARC_TOP = 75.0       # degrees; the stack widens downward
 LAME_ARC_BOTTOM = 81.0
+# Neighbouring panels cannot occupy the same shell or they interpenetrate along
+# every lap, so alternate ones ride this far out and the rest this far in - the
+# over-and-under a real lame skirt is riveted with. It has to beat the plate's
+# own thickness by a clear margin: at 4.5 mm the skinning pushed the under
+# panel's corners back out through the over panel on every bend, which reads as
+# a torn lame rather than a lap.
+LAME_ALTERNATE = 0.009
 
 # --- plate -------------------------------------------------------------------
 THICKNESS = 0.004
@@ -74,8 +89,8 @@ BEVEL_SEGS = 1
 
 # --- rivets ------------------------------------------------------------------
 RIVET_R = 0.0062
-RIVET_SEGS = 6
-RIVET_STEP = 0.08         # arc length between rivets
+RIVET_SEGS = 5
+RIVET_STEP = 0.19         # arc length between rivets
 RIVET_INSET = 0.010       # above the lower edge
 RIVET_SINK = 0.0008       # base pushed into the plate so the open ring is hidden
 
@@ -230,23 +245,26 @@ def build():
 
     for s, centre in enumerate(STACK_CENTRES):
         c = math.radians(centre)
+        off = LAME_ALTERNATE if s % 2 == 0 else -LAME_ALTERNATE
         for j in range(LAMES):
             z_top, z_bot, r_top, r_bot, arc_t, arc_b = lame_extent(j)
             arc = max(arc_t, arc_b)
             parts.append(plate("lame%d_%d" % (s, j), c - arc / 2, c + arc / 2,
-                               LAME_SEGS, LAME_ROWS, z_top, z_bot, r_top, r_bot, False))
+                               LAME_SEGS, LAME_ROWS, z_top, z_bot,
+                               r_top + off, r_bot + off, False))
 
     bm = bmesh.new()
     for i in range(BANDS):
         z_top, z_bot, r_top, r_bot = band_extent(i)
         r = r_bot + (r_top - r_bot) * (RIVET_INSET / BAND_H)
         rivet_run(bm, 0.0, 2.0 * math.pi, r, z_bot + RIVET_INSET, True)
-    for centre in STACK_CENTRES:
+    for s, centre in enumerate(STACK_CENTRES):
         c = math.radians(centre)
+        off = LAME_ALTERNATE if s % 2 == 0 else -LAME_ALTERNATE
         for j in range(LAMES):
             z_top, z_bot, r_top, r_bot, arc_t, arc_b = lame_extent(j)
             arc = max(arc_t, arc_b) * 0.86
-            r = r_bot + (r_top - r_bot) * (RIVET_INSET / LAME_H)
+            r = r_bot + (r_top - r_bot) * (RIVET_INSET / LAME_H) + off
             rivet_run(bm, c - arc / 2, c + arc / 2, r, z_bot + RIVET_INSET, False)
     parts.append(new_object("rivets", bm))
 
@@ -294,7 +312,7 @@ def uv_unwrap(ob):
         d.uv = (d.uv[0] * TEX_TILE, d.uv[1] * TEX_TILE)
 
 
-def steel_material():
+def steel_material(target=None):
     """The BlenderKit plate rebuilt as four image textures straight into the
     BSDF - the donor's own node tree carries mapping and displacement the glTF
     exporter would drop on the floor."""
@@ -312,11 +330,12 @@ def steel_material():
     mat.use_nodes = True
     nt = mat.node_tree
     bsdf = nt.nodes["Principled BSDF"]
+    tone = {}
     if len(imgs) < 4:
         bsdf.inputs["Base Color"].default_value = (0.11, 0.11, 0.115, 1.0)
         bsdf.inputs["Metallic"].default_value = 0.9
         bsdf.inputs["Roughness"].default_value = 0.55
-        return mat, None
+        return mat, None, tone
 
     def tex(key, y, non_color=True):
         n = nt.nodes.new("ShaderNodeTexImage")
@@ -328,14 +347,171 @@ def steel_material():
 
     base = tex("BaseColor", 300, non_color=False)
     base.image.colorspace_settings.name = 'sRGB'
+    metal = tex("Metallic", 0)
+    rough = tex("Roughness", -300)
+    if target:
+        base.image, b_before, b_after = retone(base.image, target["cuirass_linear_rgb"])
+        metal.image, m_before, m_after = rescale_map(metal.image, target["cuirass_metallic"])
+        rough.image, r_before, r_after = rescale_map(rough.image, target["cuirass_roughness"])
+        tone = {"fauld_linear_rgb_before": b_before, "fauld_linear_rgb_after": b_after,
+                "fauld_metallic_before": round(m_before, 5),
+                "fauld_metallic_after": round(m_after, 5),
+                "fauld_roughness_before": round(r_before, 5),
+                "fauld_roughness_after": round(r_after, 5)}
     nt.links.new(base.outputs["Color"], bsdf.inputs["Base Color"])
-    nt.links.new(tex("Metallic", 0).outputs["Color"], bsdf.inputs["Metallic"])
-    nt.links.new(tex("Roughness", -300).outputs["Color"], bsdf.inputs["Roughness"])
+    nt.links.new(metal.outputs["Color"], bsdf.inputs["Metallic"])
+    nt.links.new(rough.outputs["Color"], bsdf.inputs["Roughness"])
     nm = nt.nodes.new("ShaderNodeNormalMap")
     nm.location = (-400, -600)
     nt.links.new(tex("Normal", -600).outputs["Color"], nm.inputs["Color"])
     nt.links.new(nm.outputs["Normal"], bsdf.inputs["Normal"])
-    return mat, BLENDERKIT_ID
+    return mat, BLENDERKIT_ID, tone
+
+
+# --------------------------------------------------------------------------- #
+# tone
+# --------------------------------------------------------------------------- #
+def srgb_to_linear(a):
+    return numpy.where(a <= 0.04045, a / 12.92, ((a + 0.055) / 1.055) ** 2.4)
+
+
+def linear_to_srgb(a):
+    a = numpy.clip(a, 0.0, 1.0)
+    return numpy.where(a <= 0.0031308, a * 12.92, 1.055 * a ** (1.0 / 2.4) - 0.055)
+
+
+def rgb_of(img):
+    """The image's colour channels as an (n, 3) array, still sRGB-encoded."""
+    buf = numpy.empty(len(img.pixels), dtype=numpy.float32)
+    img.pixels.foreach_get(buf)
+    return buf.reshape(-1, 4)
+
+
+def mean_linear(px):
+    """(mean linear rgb, mean linear luminance) of an sRGB-encoded pixel block."""
+    lin = srgb_to_linear(px[:, :3].astype(numpy.float64))
+    rgb = lin.mean(axis=0)
+    return rgb, float(rgb @ (0.2126, 0.7152, 0.0722))
+
+
+def base_colour_image(ob):
+    """The image feeding Base Color on this object's first material."""
+    for slot in ob.material_slots:
+        mat = slot.material
+        if mat is None or not mat.use_nodes:
+            continue
+        for node in mat.node_tree.nodes:
+            if node.type != 'BSDF_PRINCIPLED':
+                continue
+            link = node.inputs["Base Color"].links
+            if link and link[0].from_node.type == 'TEX_IMAGE':
+                return link[0].from_node.image
+    return None
+
+
+def channel_mean(img, index=None):
+    """Mean of a non-colour map, or of one of its channels."""
+    px = rgb_of(img)
+    if index is None:
+        return float(px[:, :3].mean())
+    return float(px[:, index].mean())
+
+
+def linked_image(inp):
+    """(image, channel index) feeding a shader input, through a channel split."""
+    if not inp.links:
+        return None, None
+    node = inp.links[0].from_node
+    if node.type == 'TEX_IMAGE':
+        return node.image, None
+    if node.type in ('SEPARATE_COLOR', 'SEPARATE_RGB'):
+        up = node.inputs[0].links[0].from_node
+        idx = {"Red": 0, "Green": 1, "Blue": 2}[inp.links[0].from_socket.name]
+        return up.image, idx
+    return None, None
+
+
+def cuirass_tone():
+    """What the cuirass donor's own maps average to: base colour in linear
+    light, and the metallic and roughness it answers the light with.
+
+    The fauld is riveted to that breastplate, so the two have to be the same
+    steel, and base colour alone does not say that: the BlenderKit plate's
+    black steel at metallic 0.9 and roughness 0.55 renders four times darker
+    than the same mean at the scan's 0.66 and 0.31, because a rough metal has
+    no diffuse to show. All three are matched, and the colour per channel, so
+    the plate's rust is pulled to the scan's neutral as well as to its value.
+    Run in an empty scene BEFORE the fauld is built, so nothing is disturbed.
+    """
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    bpy.ops.import_scene.gltf(filepath=CUIRASS_GLB)
+    out = {}
+    for ob in bpy.context.scene.objects:
+        if ob.type != 'MESH':
+            continue
+        img = base_colour_image(ob)
+        if img is None:
+            continue
+        rgb, luma = mean_linear(rgb_of(img))
+        out = {"cuirass_image": img.name,
+               "cuirass_linear_rgb": [round(float(c), 5) for c in rgb],
+               "cuirass_luma": round(luma, 5)}
+        for slot in ob.material_slots:
+            mat = slot.material
+            if mat is None or not mat.use_nodes:
+                continue
+            for node in mat.node_tree.nodes:
+                if node.type != 'BSDF_PRINCIPLED':
+                    continue
+                for key in ("Metallic", "Roughness"):
+                    m_img, idx = linked_image(node.inputs[key])
+                    out["cuirass_" + key.lower()] = (
+                        round(channel_mean(m_img, idx), 5) if m_img is not None
+                        else round(float(node.inputs[key].default_value), 5))
+        bpy.ops.wm.read_factory_settings(use_empty=True)
+        return out
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    return out
+
+
+def retone(img, target_rgb):
+    """A copy of `img` scaled per channel in linear light onto `target_rgb`.
+
+    A generated copy rather than the loaded one: the exporter hands the original
+    file's bytes straight through when the source is a file, so an edit made in
+    place ships unchanged.
+    """
+    px = rgb_of(img)
+    before, _ = mean_linear(px)
+    scale = numpy.asarray(target_rgb) / numpy.maximum(before, 1e-9)
+    lin = srgb_to_linear(px[:, :3].astype(numpy.float64)) * scale
+    out = numpy.empty_like(px, dtype=numpy.float32)
+    out[:, :3] = linear_to_srgb(lin)
+    out[:, 3] = px[:, 3]
+    copy = bpy.data.images.new(img.name + "_toned", img.size[0], img.size[1],
+                               alpha=True, float_buffer=False)
+    copy.colorspace_settings.name = 'sRGB'
+    copy.pixels.foreach_set(out.reshape(-1))
+    copy.update()
+    after, _ = mean_linear(rgb_of(copy))
+    return copy, [round(float(v), 5) for v in before], [round(float(v), 5) for v in after]
+
+
+def rescale_map(img, target):
+    """A copy of a non-colour map scaled so its own mean lands on `target`."""
+    px = rgb_of(img)
+    before = float(px[:, :3].mean())
+    if before <= 1e-9 or not target:
+        return img, before, before
+    out = numpy.empty_like(px, dtype=numpy.float32)
+    out[:, :3] = numpy.clip(px[:, :3] * (target / before), 0.0, 1.0)
+    out[:, 3] = px[:, 3]
+    copy = bpy.data.images.new(img.name + "_matched", img.size[0], img.size[1],
+                               alpha=True, float_buffer=False)
+    copy.colorspace_settings.name = 'Non-Color'
+    copy.pixels.foreach_set(out.reshape(-1))
+    copy.update()
+    return copy, before, float(rgb_of(copy)[:, :3].mean())
 
 
 # --------------------------------------------------------------------------- #
@@ -441,11 +617,12 @@ def flat_grey(ob):
 def main():
     os.makedirs(REVIEW, exist_ok=True)
     os.makedirs(os.path.dirname(OUT_GLB), exist_ok=True)
-    bpy.ops.wm.read_factory_settings(use_empty=True)
+    target = cuirass_tone()
 
     ob = build()
     uv_unwrap(ob)
-    mat, bk_id = steel_material()
+    mat, bk_id, tone = steel_material(target)
+    tone.update(target)
     ob.data.materials.clear()
     ob.data.materials.append(mat)
 
@@ -502,8 +679,13 @@ def main():
         "texture": ({"blenderkit_id": bk_id, "blenderkit_name": BLENDERKIT_NAME}
                     if bk_id else {"fallback": "flat PBR 0.11 / metallic 0.9 / rough 0.55"}),
         "rays": rays,
-        "slit_chord_at_hem_m": round(2 * HEM_R * math.sin(math.radians(
-            (90.0 - LAME_ARC_BOTTOM) / 2.0)), 4),
+        "stacks": len(STACK_CENTRES),
+        "lames_per_stack": LAMES,
+        "stack_pitch_deg": 45.0,
+        "lap_deg_per_side": round((LAME_ARC_BOTTOM - 45.0) / 2.0, 2),
+        "slits": "none - the panels lap, front and back are closed",
+        "alternate_offset_mm": round(LAME_ALTERNATE * 1000, 2),
+        "tone": tone,
     }
 
     cam = setup_render(ob)
