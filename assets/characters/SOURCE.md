@@ -55,3 +55,12 @@ Built procedurally by `tools/prep_tassets.py` (no scan: TRELLIS decodes a plate
 skirt into loose flakes). Texture is BlenderKit material
 `8352b3b2-edb7-4700-a9d6-055ab6ec9233` "Aged Black Steel" (royalty free, 1K),
 baked into the donor `assets/props/source/trellis_local/fauld-proc-v2.glb`.
+
+## Trousers (`chest.plate.legs`)
+
+No donor mesh: `build_trousers` in `tools/build_wardrobe.py` duplicates the male
+body's own leg surface and offsets it 4 mm along its vertex normals, so it
+carries the body's weights and cannot clip. Texture is BlenderKit material
+`d583c044-b586-4ecf-b3a1-12de1d032b3f` "Aged Dark Leather" (royalty free, 1K,
+by KID), kept at `assets/props/source/mat-aged-dark-leather.blend` and relinked
+into a smart-projected UV set at 3.5 tiles.

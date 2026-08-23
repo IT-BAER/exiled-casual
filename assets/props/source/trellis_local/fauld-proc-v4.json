@@ -1,0 +1,210 @@
+{
+  "source": "procedural (tools/prep_tassets.py)",
+  "output": "D:/VSC/exiled-casual/assets/props/source/trellis_local/fauld-proc-v4.glb",
+  "object": "fauld",
+  "mesh_count": 1,
+  "triangles": 6972,
+  "vertices": 8076,
+  "components": 966,
+  "expected_components": {
+    "waist_band": 1,
+    "bands": 2,
+    "lames": 40,
+    "rivets": "one loose dome each, buckle joined to them"
+  },
+  "bbox_gltf_yup": {
+    "min": [
+      -0.2394,
+      -0.2275,
+      0.0
+    ],
+    "max": [
+      0.2394,
+      0.227,
+      0.4202
+    ]
+  },
+  "materials": [
+    "fauld_steel"
+  ],
+  "uv_layers": [
+    "UVMap"
+  ],
+  "texture": {
+    "blenderkit_id": "8352b3b2-edb7-4700-a9d6-055ab6ec9233",
+    "blenderkit_name": "Aged Black Steel"
+  },
+  "rays": {
+    "+X@tassets_z0.21": {
+      "hit": true,
+      "at": [
+        0.2334,
+        0.0,
+        0.21
+      ]
+    },
+    "+X@fauld_z0.35": {
+      "hit": true,
+      "at": [
+        0.2093,
+        0.0,
+        0.35
+      ]
+    },
+    "-X@tassets_z0.21": {
+      "hit": true,
+      "at": [
+        -0.2334,
+        0.0,
+        0.21
+      ]
+    },
+    "-X@fauld_z0.35": {
+      "hit": true,
+      "at": [
+        -0.2093,
+        0.0,
+        0.35
+      ]
+    },
+    "+Y@tassets_z0.21": {
+      "hit": true,
+      "at": [
+        0.0,
+        0.2161,
+        0.21
+      ]
+    },
+    "+Y@fauld_z0.35": {
+      "hit": true,
+      "at": [
+        0.0,
+        0.1938,
+        0.35
+      ]
+    },
+    "-Y@tassets_z0.21": {
+      "hit": true,
+      "at": [
+        0.0,
+        -0.2161,
+        0.21
+      ]
+    },
+    "-Y@fauld_z0.35": {
+      "hit": true,
+      "at": [
+        0.0,
+        -0.1938,
+        0.35
+      ]
+    },
+    "thigh_left +X@z0.21": {
+      "hit": true,
+      "at": [
+        0.2334,
+        0.0,
+        0.21
+      ]
+    },
+    "thigh_left -X@z0.21": {
+      "hit": true,
+      "at": [
+        -0.2334,
+        0.0,
+        0.21
+      ]
+    },
+    "thigh_left +Y@z0.21": {
+      "hit": true,
+      "at": [
+        -0.09,
+        0.1793,
+        0.21
+      ]
+    },
+    "thigh_left -Y@z0.21": {
+      "hit": true,
+      "at": [
+        -0.09,
+        -0.1793,
+        0.21
+      ]
+    },
+    "thigh_right +X@z0.21": {
+      "hit": true,
+      "at": [
+        0.2334,
+        0.0,
+        0.21
+      ]
+    },
+    "thigh_right -X@z0.21": {
+      "hit": true,
+      "at": [
+        -0.2334,
+        0.0,
+        0.21
+      ]
+    },
+    "thigh_right +Y@z0.21": {
+      "hit": true,
+      "at": [
+        0.09,
+        0.1793,
+        0.21
+      ]
+    },
+    "thigh_right -Y@z0.21": {
+      "hit": true,
+      "at": [
+        0.09,
+        -0.1793,
+        0.21
+      ]
+    }
+  },
+  "stacks": 8,
+  "lames_per_stack": 5,
+  "stack_pitch_deg": 45.0,
+  "lap_deg_per_side": 18.0,
+  "slits": "none - the panels lap, front and back are closed",
+  "alternate_offset_mm": 9.0,
+  "waist_band": {
+    "height_m": 0.055,
+    "outer_r_top_m": 0.22,
+    "outer_r_bottom_m": 0.223,
+    "inner_r_top_m": 0.216,
+    "share_of_donor_height": 0.131,
+    "buckle_mm": [
+      40.0,
+      30.0,
+      6.0
+    ]
+  },
+  "tone": {
+    "fauld_linear_rgb_before": [
+      0.01487,
+      0.0119,
+      0.01094
+    ],
+    "fauld_linear_rgb_after": [
+      0.05117,
+      0.05078,
+      0.05146
+    ],
+    "fauld_metallic_before": 0.77897,
+    "fauld_metallic_after": 0.66223,
+    "fauld_roughness_before": 0.45782,
+    "fauld_roughness_after": 0.31148,
+    "cuirass_image": "Image_0",
+    "cuirass_linear_rgb": [
+      0.0513,
+      0.05073,
+      0.05151
+    ],
+    "cuirass_luma": 0.05091,
+    "cuirass_metallic": 0.66228,
+    "cuirass_roughness": 0.31144
+  }
+}

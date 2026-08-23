@@ -227,6 +227,12 @@ const PLATE_BONES = [
 const HIPS_BONES = ["spine_01", "pelvis", "thigh_l", "thigh_r"];
 
 /**
+ * Every joint the trousers are allowed to answer to; see `LEG_BONES` in the
+ * build, plus the `spine_01` the waist rim picks up off the body's own weights.
+ */
+const LEG_BONES = ["pelvis", "thigh_l", "thigh_r", "calf_l", "calf_r", "spine_01"];
+
+/**
  * Each sabaton and the leg it belongs to; see `SABATON_BONES` in the build.
  *
  * The pair is the point. One boot is fitted to the right leg and the other is
@@ -290,7 +296,7 @@ describe("wardrobe asset", () => {
       "base.female.body", "base.female.brows", "base.female.eyes", "base.female.hair",
       "base.male.body", "base.male.brows", "base.male.eyes", "base.male.hair",
       "helmet.iron.helm", "weapon1.emberwand.mesh", "weapon2.buckler.mesh",
-      "chest.plate.cuirass", "chest.plate.tassets",
+      "chest.plate.cuirass", "chest.plate.tassets", "chest.plate.legs",
       "boots.plate.sabaton_l", "boots.plate.sabaton_r",
     ].sort());
   });
@@ -383,6 +389,36 @@ describe("wardrobe asset", () => {
     }
     const names = [...used].map((u) => json.nodes[skin.joints[u]!]!.name).sort();
     expect(names).toEqual([...HIPS_BONES].sort());
+  });
+
+  /**
+   * The trousers are the body's own leg surface pushed out four millimetres, so
+   * their weights are the skin's weights and nothing else: a group from outside
+   * the leg set means the copy picked up a neighbour's influence and the leather
+   * will part from the leg it was cut from, which is the one thing this
+   * technique exists to make impossible.
+   */
+  it("deforms the trousers over the legs alone, on the body's own weights", () => {
+    const bin = glb.subarray(20 + json.buffers0Len);
+    const node = json.nodes.find((n) => n.name === "chest.plate.legs");
+    expect(node, "no node chest.plate.legs").toBeDefined();
+    const prim = json.meshes[node!.mesh!]!.primitives[0]!;
+    const joints = readAccessor(json, bin, prim.attributes["JOINTS_0"]!);
+    const weights = readAccessor(json, bin, prim.attributes["WEIGHTS_0"]!);
+    const skin = json.skins[node!.skin!]!;
+    const used = new Set<number>();
+    for (let v = 0; v < weights.length / 4; v += 1) {
+      const w = weights.slice(v * 4, v * 4 + 4);
+      const j = joints.slice(v * 4, v * 4 + 4);
+      for (let k = 0; k < 4; k += 1) {
+        if (w[k]! > 0.0001) used.add(j[k]!);
+      }
+      expect(w[0]! + w[1]! + w[2]! + w[3]!).toBeCloseTo(1, 3);
+    }
+    const names = [...used].map((u) => json.nodes[skin.joints[u]!]!.name).sort();
+    expect(names.every((n) => LEG_BONES.includes(n)), `strays: ${names}`).toBe(true);
+    expect(names).toContain("thigh_l");
+    expect(names).toContain("calf_r");
   });
 
   /**

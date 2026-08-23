@@ -23,9 +23,9 @@ import numpy
 from mathutils import Matrix, Vector
 
 ROOT = "D:/VSC/exiled-casual"
-OUT_GLB = ROOT + "/assets/props/source/trellis_local/fauld-proc-v3.glb"
-OUT_JSON = ROOT + "/assets/props/source/trellis_local/fauld-proc-v3.json"
-REVIEW = ROOT + "/review/3d/fauld-proc-v3"
+OUT_GLB = ROOT + "/assets/props/source/trellis_local/fauld-proc-v4.glb"
+OUT_JSON = ROOT + "/assets/props/source/trellis_local/fauld-proc-v4.json"
+REVIEW = ROOT + "/review/3d/fauld-proc-v4"
 CUIRASS_GLB = ROOT + "/assets/props/source/trellis_local/plate-cuirass-15k-v2.glb"
 MAT_BLEND = ROOT + "/assets/props/source/mat-aged-black-steel.blend"
 BLENDERKIT_ID = "8352b3b2-edb7-4700-a9d6-055ab6ec9233"
@@ -34,9 +34,19 @@ BLENDERKIT_NAME = "Aged Black Steel"
 OBJ_NAME = "fauld"
 MAT_NAME = "fauld_steel"
 
+# --- plate -------------------------------------------------------------------
+THICKNESS = 0.004
+BEVEL_W = 0.0007
+BEVEL_SEGS = 1
+
 # --- fauld -------------------------------------------------------------------
 WAIST_Z = 0.42
-WAIST_R = 0.17
+# The skirt's own waist, which the belt above it does NOT set: the fit sizes the
+# belt on the cuirass flare, so anything tied to the belt would be dragged out
+# with it. This is the radius that has to clear the hips once scaled - at 0.17
+# the first lame band landed inside the widest hip point and the fit's tightest
+# air read a fifth of a millimetre against a half-millimetre gate.
+WAIST_R = 0.192
 # A fauld hangs, it does not stand out: the hem clears the waist by an eighth of
 # its own radius, and every flare below is a share of that one number rather
 # than a figure of its own, so the skirt cannot drift into a bell by arithmetic.
@@ -48,12 +58,38 @@ FLARE = HEM_R - WAIST_R
 BAND_H = 0.06
 BAND_OVERLAP = 0.012      # a band's top edge sits this far under the one above
 BAND_FLARE = FLARE * 0.17   # each band ends this much further out than it starts
-# The top band is riveted OUTSIDE the breastplate, the way a real fauld is, so
-# it stands proud of the ring below it and the cuirass's bottom rim tucks into
-# the shadow of that lip. Without it the two pieces meet edge to edge and a
-# strip of hip shows between them from every angle.
-TOP_BAND_PROUD = 0.015
-BANDS = 3
+# The skirt does not meet the breastplate, it is BELTED to it. A lip band merely
+# standing 30 mm proud of the cuirass rim reads as a second drum with a dark
+# ledge between the two, which is exactly what it is. What joins them is a
+# plain waist band: smooth, near vertical, deep enough to swallow the rim, with
+# one row of rivets along its lower edge and a buckle at the front - a belt
+# line, so the eye reads one suit and not two pieces stacked.
+#
+# The band is sized on the CUIRASS in the fitter, not here: this radius only
+# sets what the fit has to scale, and the hanging bands below are held a
+# clearance inside its inner face so the two shells never share a surface.
+# The belt continues the CUIRASS, not the skirt. This breastplate ends in a
+# flared peplum whose lip is 47 mm wider than the hips and whose back tail hangs
+# 100 mm below its front rim, so a belt sized on the skirt leaves the flare
+# standing over a ledge - which is the fault - and a belt sized to wrap the
+# flare from outside at the skirt's height would be a hoop. What works is a deep
+# band whose outer face carries the flare's own line down: the lip lands on it,
+# the tail hangs inside it, and the lames hang from under it.
+#
+# Deep enough to swallow that back tail (the fit measures both edges), and wide
+# enough that the flare's lip sits ON it rather than proud of it. The skirt
+# below keeps its own waist radius - see `HANG_R`.
+# The band is a CIRCLE where the skirt under it is an oval: the fit scales one
+# number, so an oval band clears the breastplate across the hips and cuts into
+# it front and back - 5.6 mm of plate through the belt at the front, measured.
+WAIST_BAND_H = 0.055
+WAIST_BAND_R = 0.220        # outer radius at the top, round
+WAIST_BAND_FLARE = 0.003    # and this much wider at its lower edge, no more
+BUCKLE_W = 0.040
+BUCKLE_H = 0.030
+BUCKLE_PROUD = 0.006        # how far it stands off the band
+BUCKLE_SINK = 0.004         # and how far its back is buried in it
+BANDS = 2                   # the fauld band hanging under the waist band
 RING_SEGS = 24
 OVAL_X = 1.08             # x radius over y radius
 
@@ -82,15 +118,15 @@ LAME_ARC_BOTTOM = 81.0
 # a torn lame rather than a lap.
 LAME_ALTERNATE = 0.009
 
-# --- plate -------------------------------------------------------------------
-THICKNESS = 0.004
-BEVEL_W = 0.0007
-BEVEL_SEGS = 1
-
 # --- rivets ------------------------------------------------------------------
 RIVET_R = 0.0062
 RIVET_SEGS = 5
 RIVET_STEP = 0.19         # arc length between rivets
+# The belt is the one run that has to READ as a rivet line rather than as a few
+# studs, so it is spaced on its own. At the shared 0.19 the waist takes six
+# rivets round a metre of circumference and the line disappears; the budget for
+# them comes from the hanging bands, which are half hidden under the lames.
+WAIST_RIVET_STEP = 0.065
 RIVET_INSET = 0.010       # above the lower edge
 RIVET_SINK = 0.0008       # base pushed into the plate so the open ring is hidden
 
@@ -102,23 +138,29 @@ RENDER_RES = 900
 # --------------------------------------------------------------------------- #
 # maths
 # --------------------------------------------------------------------------- #
-def ring_point(a, r, z):
+def ring_point(a, r, z, oval=OVAL_X):
     """A point on the oval ring of mean radius r."""
-    return Vector((math.cos(a) * r * OVAL_X, math.sin(a) * r, z))
+    return Vector((math.cos(a) * r * oval, math.sin(a) * r, z))
 
 
-def ring_normal(a):
-    n = Vector((math.cos(a) / OVAL_X, math.sin(a) * OVAL_X, 0.0))
+def ring_normal(a, oval=OVAL_X):
+    n = Vector((math.cos(a) / oval, math.sin(a) * oval, 0.0))
     n.normalize()
     return n
 
 
+WAIST_BAND_BOT = WAIST_Z - WAIST_BAND_H
+# The hanging bands keep the skirt's own waist radius, well inside the belt's
+# inner face: sharing a radius with the shell above is a z-fight, not a lap, and
+# tying them to the belt would let the belt's sizing widen the whole skirt.
+HANG_R = WAIST_R
+
+
 def band_extent(i):
-    """(top_z, bottom_z, top_r, bottom_r) of fauld band i, 0 at the waist."""
-    top_z = WAIST_Z - i * (BAND_H - BAND_OVERLAP)
-    proud = TOP_BAND_PROUD if i == 0 else 0.0
+    """(top_z, bottom_z, top_r, bottom_r) of fauld band i, 0 under the belt."""
+    top_z = WAIST_BAND_BOT + BAND_OVERLAP - i * (BAND_H - BAND_OVERLAP)
     return (top_z, top_z - BAND_H,
-            WAIST_R + i * BAND_FLARE + proud, WAIST_R + (i + 1) * BAND_FLARE + proud)
+            HANG_R + i * BAND_FLARE, HANG_R + (i + 1) * BAND_FLARE)
 
 
 FAULD_BOTTOM_Z = band_extent(BANDS - 1)[1]
@@ -158,7 +200,7 @@ def new_object(name, bm):
     return ob
 
 
-def strip(bm, a0, a1, segs, rows, z_top, z_bot, r_top, r_bot, closed):
+def strip(bm, a0, a1, segs, rows, z_top, z_bot, r_top, r_bot, closed, oval=OVAL_X):
     """A conical strip. Angle index runs +theta, row index runs +z, so the
     quad winding gives an outward normal without a recalc."""
     cols = segs if closed else segs + 1
@@ -170,7 +212,7 @@ def strip(bm, a0, a1, segs, rows, z_top, z_bot, r_top, r_bot, closed):
         for j in range(rows + 1):
             t = j / rows
             col.append(bm.verts.new(ring_point(a, r_bot + (r_top - r_bot) * t,
-                                               z_bot + (z_top - z_bot) * t)))
+                                               z_bot + (z_top - z_bot) * t, oval)))
         verts.append(col)
     for i in range(segs):
         i2 = (i + 1) % cols
@@ -179,9 +221,9 @@ def strip(bm, a0, a1, segs, rows, z_top, z_bot, r_top, r_bot, closed):
     return verts
 
 
-def plate(name, a0, a1, segs, rows, z_top, z_bot, r_top, r_bot, closed):
+def plate(name, a0, a1, segs, rows, z_top, z_bot, r_top, r_bot, closed, oval=OVAL_X):
     bm = bmesh.new()
-    strip(bm, a0, a1, segs, rows, z_top, z_bot, r_top, r_bot, closed)
+    strip(bm, a0, a1, segs, rows, z_top, z_bot, r_top, r_bot, closed, oval)
     ob = new_object(name, bm)
     m = ob.modifiers.new("solid", 'SOLIDIFY')
     m.thickness = THICKNESS
@@ -225,18 +267,41 @@ def rivet(bm, pos, normal):
         bm.faces.new((hi[i], hi[k], apex))
 
 
-def rivet_run(bm, a0, a1, r, z, closed):
+def rivet_run(bm, a0, a1, r, z, closed, step=RIVET_STEP, oval=OVAL_X):
     """Rivets spaced along an arc at height z."""
     span = abs(a1 - a0) * r
-    n = max(2, int(round(span / RIVET_STEP)))
+    n = max(2, int(round(span / step)))
     for i in range(n if closed else n + 1):
         f = i / n if not closed else i / n
         a = a0 + (a1 - a0) * f
-        rivet(bm, ring_point(a, r, z), ring_normal(a))
+        rivet(bm, ring_point(a, r, z, oval), ring_normal(a, oval))
+
+
+def buckle(bm, r):
+    """A plain rectangular buckle plate at front centre, half buried in the band.
+
+    Front is -Y, so it sits on the -Y face of the ring; the band is an oval and
+    its y radius is the ring radius itself, which is the face this lands on.
+    """
+    z = WAIST_BAND_BOT + WAIST_BAND_H * 0.5
+    y_out = -(r + BUCKLE_PROUD)
+    y_in = -(r - BUCKLE_SINK)
+    hx, hz = BUCKLE_W / 2, BUCKLE_H / 2
+    corners = [(-hx, -hz), (hx, -hz), (hx, hz), (-hx, hz)]
+    out = [bm.verts.new(Vector((x, y_out, z + dz))) for x, dz in corners]
+    inn = [bm.verts.new(Vector((x, y_in, z + dz))) for x, dz in corners]
+    bm.faces.new(tuple(reversed(out)))
+    for i in range(4):
+        k = (i + 1) % 4
+        bm.faces.new((out[i], inn[i], inn[k], out[k]))
 
 
 def build():
     parts = []
+
+    parts.append(plate("waistband", 0.0, 2.0 * math.pi, RING_SEGS, 1,
+                       WAIST_Z, WAIST_BAND_BOT,
+                       WAIST_BAND_R, WAIST_BAND_R + WAIST_BAND_FLARE, True, 1.0))
 
     for i in range(BANDS):
         z_top, z_bot, r_top, r_bot = band_extent(i)
@@ -254,10 +319,10 @@ def build():
                                r_top + off, r_bot + off, False))
 
     bm = bmesh.new()
-    for i in range(BANDS):
-        z_top, z_bot, r_top, r_bot = band_extent(i)
-        r = r_bot + (r_top - r_bot) * (RIVET_INSET / BAND_H)
-        rivet_run(bm, 0.0, 2.0 * math.pi, r, z_bot + RIVET_INSET, True)
+    buckle(bm, WAIST_BAND_R + WAIST_BAND_FLARE * 0.5)
+    band_r = WAIST_BAND_R + WAIST_BAND_FLARE * (1.0 - RIVET_INSET / WAIST_BAND_H)
+    rivet_run(bm, 0.0, 2.0 * math.pi, band_r, WAIST_BAND_BOT + RIVET_INSET, True,
+              WAIST_RIVET_STEP, 1.0)
     for s, centre in enumerate(STACK_CENTRES):
         c = math.radians(centre)
         off = LAME_ALTERNATE if s % 2 == 0 else -LAME_ALTERNATE
@@ -670,8 +735,9 @@ def main():
         "triangles": tris,
         "vertices": len(me.vertices),
         "components": components(me),
-        "expected_components": {"bands": BANDS, "lames": LAMES * len(STACK_CENTRES),
-                                "rivets": "one loose dome each"},
+        "expected_components": {"waist_band": 1, "bands": BANDS,
+                                "lames": LAMES * len(STACK_CENTRES),
+                                "rivets": "one loose dome each, buckle joined to them"},
         "bbox_gltf_yup": {"min": [round(v, 4) for v in lo],
                           "max": [round(v, 4) for v in hi]},
         "materials": [s.material.name for s in ob.material_slots if s.material],
@@ -685,6 +751,12 @@ def main():
         "lap_deg_per_side": round((LAME_ARC_BOTTOM - 45.0) / 2.0, 2),
         "slits": "none - the panels lap, front and back are closed",
         "alternate_offset_mm": round(LAME_ALTERNATE * 1000, 2),
+        "waist_band": {"height_m": WAIST_BAND_H,
+                       "outer_r_top_m": WAIST_BAND_R,
+                       "outer_r_bottom_m": round(WAIST_BAND_R + WAIST_BAND_FLARE, 4),
+                       "inner_r_top_m": round(WAIST_BAND_R - THICKNESS, 4),
+                       "share_of_donor_height": round(WAIST_BAND_H / (WAIST_Z - HEM_Z), 4),
+                       "buckle_mm": [BUCKLE_W * 1000, BUCKLE_H * 1000, BUCKLE_PROUD * 1000]},
         "tone": tone,
     }
 

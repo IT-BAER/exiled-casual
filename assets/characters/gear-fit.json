@@ -86,25 +86,36 @@
   "source": "plate-cuirass-15k-v2.glb"
  },
  "chest.plate.tassets": {
-  "ring_width_ratio": 1.13,
-  "width_scale": 1.06853,
-  "height_scale": 1.23656,
-  "hip_width_m": 0.3663,
-  "span_m": 0.5196,
-  "donor_ring_width": 0.3874,
-  "lip_radius_m": 0.2178,
-  "cuirass_rim_radius_m": 0.1875,
-  "lip_past_rim_mm": 30.37,
-  "hip_gap_p01_mm": 3.88,
-  "hip_gap_median_mm": 44.08,
-  "hip_covered": 0.972,
-  "hip_points": 428,
+  "band_slack_over_rim": 1.0,
+  "band_width_over_hip": 1.248,
+  "width_set_by": "the cuirass rim",
+  "width_scale": 0.95235,
+  "height_scale": 1.18193,
+  "hip_width_m": 0.3481,
+  "span_m": 0.4966,
+  "lip_radius_m": 0.2173,
+  "cuirass_rim_radius_m": 0.2143,
+  "lip_past_rim_mm": 3.0,
+  "hip_gap_p01_mm": 4.27,
+  "hip_gap_median_mm": 43.43,
+  "hip_covered": 0.9327,
+  "hip_points": 416,
   "crotch_points": 120,
   "crotch_covered": 0.9667,
-  "opening_points": 148,
-  "overlap_mm": 20.0,
+  "opening_points": 126,
   "hem_vs_knee_mm": -10.0,
   "boot_rim_below_hem_mm": 20.0,
+  "band_rise_mm": -3.0,
+  "band_outer_radius_m": 0.2173,
+  "cuirass_flare_radius_m": 0.2143,
+  "band_air_mm": 2.37,
+  "band_bins_measured": 12,
+  "rim_covered_deg": 300.0,
+  "worst_rim_outside_band_mm": 0.0,
+  "rim_below_band_worst_deg_mm": [
+   90.0,
+   29.6
+  ],
   "deform_bones": [
    "spine_01",
    "pelvis",
@@ -114,8 +125,8 @@
   "deform_groups": 4,
   "bone": "pelvis",
   "fit": "plate_hips",
-  "triangles": 6902,
-  "source": "fauld-proc-v3.glb"
+  "triangles": 6972,
+  "source": "fauld-proc-v4.glb"
  },
  "boots.plate.sabaton_r": {
   "foot_length_ratio": 1.54,
@@ -165,5 +176,37 @@
   "triangles": 7990,
   "source": "sabaton-8k-v1.glb",
   "mirrored_from": "boots.plate.sabaton_r"
+ },
+ "chest.plate.legs": {
+  "built_from": "base.male.body leg weights, offset along its own normals",
+  "source": "body",
+  "offset_mm": 4.0,
+  "offset_min_mm": 0.5,
+  "offset_p01_mm": 0.5,
+  "offset_median_mm": 4.0,
+  "boot_capped_vertices": 2,
+  "crease_capped_vertices": 146,
+  "boot_air_min_mm": 0.5,
+  "waist_z": 1.081,
+  "ankle_z": 0.0865,
+  "vertices": 1208,
+  "triangles": 2204,
+  "decimate_ratio": 1.0,
+  "uv_tiles": 3.5,
+  "bone": "pelvis",
+  "fit": "body_offset",
+  "deform_bones": [
+   "pelvis",
+   "thigh_l",
+   "thigh_r",
+   "calf_l",
+   "calf_r",
+   "spine_01"
+  ],
+  "deform_groups": 6,
+  "texture": {
+   "blenderkit_id": "d583c044-b586-4ecf-b3a1-12de1d032b3f",
+   "blenderkit_name": "Aged Dark Leather"
+  }
  }
 }

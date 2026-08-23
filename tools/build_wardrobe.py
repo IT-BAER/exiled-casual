@@ -270,7 +270,7 @@ RIGID_GEAR = (
     },
     {
         "slot": "chest", "look": "plate", "part": "tassets",
-        "src": "fauld-proc-v3.glb", "bone": "pelvis", "fit": "plate_hips",
+        "src": "fauld-proc-v4.glb", "bone": "pelvis", "fit": "plate_hips",
         "deform": HIPS_BONES, "matte": True,
     },
     {
@@ -420,27 +420,43 @@ PLATE_MAX_MEDIAN = 0.040
 # at, plus an overlap that tucks the waist ring UNDER the steel above it. A rim
 # that merely met the plate would open into a bare strip of hip the moment the
 # spine bent, because the two pieces answer to different joints.
-HIPS_OVERLAP = 0.02      # the waist ring sits this far above the cuirass rim, metres
+# The join is a BELT, not two rims meeting. The donor's top is a plain waist
+# band, and it is sized on the cuirass rather than on the body: its inner face
+# clears the breastplate's rim by a few millimetres all the way round, and its
+# top stands above the rim's lowest front point, so the rim ends up INSIDE the
+# band and there is no ledge between the two pieces to read as a gap.
+HIPS_BAND_AIR = 0.003    # the band's outer face stands this far past the flare, metres
+# Signed against the cuirass's lowest FRONT point: negative tucks the band's top
+# edge under the flare's lip, which is where it belongs - the lip then lands on
+# the band and there is no seam to see. Positive would push the band's edge up
+# inside the flare, where the plate is wider than any belt that is not a hoop.
+HIPS_BAND_RISE = -0.003
+# The band's share of the donor's own height, which is `WAIST_BAND_H` over the
+# donor's span in `tools/prep_tassets.py`. It cannot be measured off the mesh:
+# a smooth band carries vertices at its two edges only, so every slab search
+# through the middle of one finds a rivet and calls that the waist.
+HIPS_BAND = 0.131
+HIPS_BAND_BINS = 36      # 10-degree bins for the air, rim-cover and overlap sweeps
 # Signed against the KNEE: positive stops the hem above it, negative carries it
 # below. The sabaton's own rim is 30 mm under the knee (`BOOT_TOP`), so at -10 mm
 # the skirt hangs 20 mm over the outside of that cuff and the shin has no bare
 # band at any stride. Above the knee - which is where 0.04 put it - the skirt is
 # short enough to show the crotch from a low angle, which is the fault this is.
 HIPS_HEM = -0.010        # the hem lands this far above the knee, metres
-# The donor's waist ring is its narrow top and the hem is half again as wide, so
-# sizing the ring to the hips already flares the tassets over the thighs. The
-# sweep is the plate's by another name: the smallest ring that clears the hips.
-HIPS_WIDTH_FROM = 1.05   # narrowest ring/hip width ratio worth trying
-HIPS_WIDTH_TO = 1.50     # past this it is a barrel, whatever it measures
+# The width is not swept off the hips any more: the waist band is a belt on the
+# cuirass, so the rim decides it and there is one answer. What is left to sweep
+# is slack ABOVE that answer, for the case where the skirt hanging under a
+# rim-tight band cannot make its own gates; every step of it is air opening at
+# the belt, so it is bounded tightly and reported when it is used.
+HIPS_BAND_SLACK = 1.30   # most the sweep may widen the piece past a rim-tight band
 HIPS_WIDTH_STEP = 0.02
-# Two different measurements of the donor's top, because it has two. The SIZING
-# ring is the narrowest cross-section in the donor's top quarter - the waist
-# proper, the way the boot finds its ankle - and it has to be found rather than
-# taken off the bbox, because the band above it is deliberately wider. That band
-# is the LIP: the top this fraction of the donor's height, riveted outside the
-# breastplate, and what has to reach past the cuirass's own bottom rim.
-HIPS_RING_FROM = 0.75    # the waist is searched over the donor's top quarter
-HIPS_LIP = 0.06          # the lip is the top this fraction of the donor
+# The band is measured at the donor's very top, over this fraction of its
+# height: its smallest radius there is the inner face the cuirass rim goes
+# inside, its largest is the outer face that has to stand past that rim. It is
+# NOT found by a slab search - a smooth band carries vertices only at its two
+# edges, so a slab through the middle of one finds a rivet and calls it the
+# waist.
+HIPS_LIP = 0.06          # the band is read off the top this fraction of the donor
 HIPS_RIM_BAND = 0.02     # the cuirass's rim is its lowest this much, metres
 HIPS_RIM_CLEAR = 0.002   # the lip reaches this far past that rim, metres
 # Below the plate's 0.90 on purpose: the donor's eight panels lap rather than
@@ -1439,10 +1455,19 @@ def fit_plate_hips(donor, body, rig):
     if toe.y >= 0:
         raise SystemExit("this body does not face -Y: the fauld's slits need a rotation")
 
-    cuirass_rim = (rig.matrix_world @ rig.data.bones["spine_01"].head_local).z + PLATE_WAIST
-    top = cuirass_rim + HIPS_OVERLAP
     knee = sum((rig.matrix_world @ rig.data.bones[b].head_local).z
                for b in ("calf_l", "calf_r")) / 2
+
+    # The cuirass is fitted before this piece, so it can simply be read off the
+    # scene. Its own front rim is what the belt is hung from - the front is the
+    # edge the eye follows, and this donor's back tail hangs lower than it.
+    cuirass = bpy.data.objects.get("chest.plate.cuirass")
+    if cuirass is None:
+        raise SystemExit("the fauld's waist band is sized on the cuirass, which is not fitted")
+    cvs = [cuirass.matrix_world @ v.co for v in cuirass.data.vertices]
+    c_lo = min(v.z for v in cvs)
+    mid_y = sum(p.y for p in cvs) / len(cvs)
+    top = min(v.z for v in cvs if v.y < mid_y) + HIPS_BAND_RISE
     bottom = knee + HIPS_HEM
     if bottom >= top:
         raise SystemExit("the knee is above the belt: there is no fauld span to fill")
@@ -1479,53 +1504,108 @@ def fit_plate_hips(donor, body, rig):
 
     hp = [v.co for v in donor.data.vertices]
     d_lo, d_hi, d_dims, d_c = bbox(hp)
-    _, _, ring_r = narrowest(donor, 2, HIPS_RING_FROM, 1.0)
-    ring_w = ring_r * 2
     lip = [p for p in hp if p.z >= d_hi.z - d_dims.z * HIPS_LIP]
     lip_r = max(math.hypot(p.x - d_c.x, p.y - d_c.y) for p in lip)
     waist_ring = Vector((d_c.x, d_c.y, d_hi.z))
     high = (top - bottom) / d_dims.z
 
-    # The cuirass is fitted before this piece, so its rim can simply be read off
-    # the scene. A fauld is riveted OUTSIDE the breastplate: the lip has to stand
-    # past that rim, not merely below it, or the two pieces meet edge to edge and
-    # a strip of hip shows between them at every angle. Absent - a fauld fitted
-    # on its own - there is nothing to reach past and the condition drops out.
-    cuirass = bpy.data.objects.get("chest.plate.cuirass")
-    rim_r = 0.0
-    if cuirass is not None:
-        cvs = [cuirass.matrix_world @ v.co for v in cuirass.data.vertices]
-        c_lo = min(v.z for v in cvs)
-        rim_r = max(math.hypot(v.x - hip_c.x, v.y - hip_c.y)
-                    for v in cvs if v.z <= c_lo + HIPS_RIM_BAND)
-        if c_lo >= top:
-            raise SystemExit(
-                f"the cuirass rim at {c_lo:.4f} is above the fauld's lip at {top:.4f}")
+    # A fauld is belted OUTSIDE the breastplate, so the band is sized on the
+    # widest thing the breastplate puts in front of it: the flare's lip, which
+    # is what the eye follows down. Everything of the cuirass at or below the
+    # band's top edge has to end up inside the band's outer face.
+    rim_r = max(math.hypot(v.x - hip_c.x, v.y - hip_c.y)
+                for v in cvs if v.z <= top)
+    if c_lo >= top:
+        raise SystemExit(
+            f"the cuirass rim at {c_lo:.4f} is above the fauld's band top at {top:.4f}")
+
+    # The band's outer face is the donor's widest radius at its very top, and it
+    # is what the whole piece is scaled by: the stand-off from the flare is a
+    # fixed few millimetres, so the width is READ rather than swept. The sweep
+    # below starts there and only climbs if the skirt cannot make its gates.
+    band_out_r = max(math.hypot(p.x - d_c.x, p.y - d_c.y)
+                     for p in hp if p.z >= d_hi.z - d_dims.z * HIPS_LIP)
+    wide_band = (rim_r + HIPS_BAND_AIR) / band_out_r
 
     def matrix(wide):
         S = Matrix.Diagonal((wide, wide, high, 1.0))
         return seated(donor, S, Matrix.Identity(4), waist_ring,
                       Vector((hip_c.x, hip_c.y, top)))
 
+    def band_metrics(wide):
+        """Air, rim cover and overlap between the fitted band and the cuirass.
+
+        Both shells are binned by angle about the hip centre, because neither is
+        a circle: the donor is an oval and the breastplate is a scan. In each bin
+        the band's outer face is the largest radius its own vertices reach inside
+        the band's height, and the cuirass is the largest radius and the lowest z
+        its own reach there. Air is the band standing PAST the plate; negative
+        air is the plate poking through it.
+        """
+        band_bot = top - (top - bottom) * HIPS_BAND
+        m = matrix(wide)
+        inner = [None] * HIPS_BAND_BINS
+        outer = [None] * HIPS_BAND_BINS
+        low = [None] * HIPS_BAND_BINS
+
+        def slot(x, y):
+            a = math.atan2(y - hip_c.y, x - hip_c.x)
+            return int((a + math.pi) / (2 * math.pi) * HIPS_BAND_BINS) % HIPS_BAND_BINS
+
+        for q in hp:
+            w = m @ q
+            if not (band_bot <= w.z <= top):
+                continue
+            i = slot(w.x, w.y)
+            r = math.hypot(w.x - hip_c.x, w.y - hip_c.y)
+            inner[i] = r if inner[i] is None else max(inner[i], r)
+        for v in cvs:
+            i = slot(v.x, v.y)
+            low[i] = v.z if low[i] is None else min(low[i], v.z)
+            if not (band_bot <= v.z <= top):
+                continue
+            r = math.hypot(v.x - hip_c.x, v.y - hip_c.y)
+            outer[i] = r if outer[i] is None else max(outer[i], r)
+
+        pairs = [(inner[i], outer[i]) for i in range(HIPS_BAND_BINS)
+                 if inner[i] is not None and outer[i] is not None]
+        air = min(a - b for a, b in pairs) if pairs else None
+        step = 360.0 / HIPS_BAND_BINS
+        covered = sum(step for z in low if z is not None and z >= band_bot)
+        below = [(i * step - 180.0, band_bot - low[i]) for i in range(HIPS_BAND_BINS)
+                 if low[i] is not None and low[i] < band_bot]
+        worst = max(below, key=lambda t: t[1]) if below else None
+        return {
+            "band_air_mm": round(air * 1000, 2) if air is not None else None,
+            "band_bins_measured": len(pairs),
+            "rim_covered_deg": round(covered, 1),
+            "worst_rim_outside_band_mm": (round(max(0.0, -air) * 1000, 2)
+                                          if air is not None else None),
+            "rim_below_band_worst_deg_mm": ([round(worst[0], 1), round(worst[1] * 1000, 1)]
+                                            if worst else None),
+        }
+
     tries = []
-    ratio = HIPS_WIDTH_FROM
-    while ratio <= HIPS_WIDTH_TO + 1e-9:
-        wide = (hip_dims.x * ratio) / ring_w
+    slack = 1.0
+    while slack <= HIPS_BAND_SLACK + 1e-9:
+        wide = wide_band * slack
         bvh = bvh_of(donor, matrix(wide))
         p01, med = gap_profile(bvh, sample)
         cov = covered_radially(bvh, sample, segments)
         crotch_cov = covered_radially(bvh, crotch_pts, segments)
         lip_out = lip_r * wide
-        tries.append([round(ratio, 3), round(p01 * 1000, 2), round(med * 1000, 2),
+        tries.append([round(slack, 3), round(p01 * 1000, 2), round(med * 1000, 2),
                       round(cov, 4), round(lip_out * 1000, 1)])
         if (cov >= HIPS_COVERAGE and p01 >= HIPS_MIN_GAP and med <= HIPS_MAX_MEDIAN
                 and lip_out >= rim_r + HIPS_RIM_CLEAR):
-            return matrix(wide), {
-                "ring_width_ratio": round(ratio, 3),
+            report = {
+                "band_slack_over_rim": round(slack, 3),
+                "band_width_over_hip": round(band_out_r * 2 * wide / hip_dims.x, 3),
+                "width_set_by": ("the cuirass rim" if abs(slack - 1.0) < 1e-9
+                                 else "swept above a rim-tight band"),
                 "width_scale": round(wide, 5), "height_scale": round(high, 5),
                 "hip_width_m": round(hip_dims.x, 4),
                 "span_m": round(top - bottom, 4),
-                "donor_ring_width": round(ring_w, 4),
                 "lip_radius_m": round(lip_r * wide, 4),
                 "cuirass_rim_radius_m": round(rim_r, 4),
                 "lip_past_rim_mm": round((lip_r * wide - rim_r) * 1000, 2),
@@ -1536,13 +1616,17 @@ def fit_plate_hips(donor, body, rig):
                 "crotch_points": len(crotch_pts),
                 "crotch_covered": round(crotch_cov, 4),
                 "opening_points": opening,
-                "overlap_mm": round(HIPS_OVERLAP * 1000, 1),
                 "hem_vs_knee_mm": round(HIPS_HEM * 1000, 1),
                 "boot_rim_below_hem_mm": round((HIPS_HEM - BOOT_TOP) * 1000, 1),
+                "band_rise_mm": round(HIPS_BAND_RISE * 1000, 1),
+                "band_outer_radius_m": round(band_out_r * wide, 4),
+                "cuirass_flare_radius_m": round(rim_r, 4),
             }
-        ratio += HIPS_WIDTH_STEP
-    raise SystemExit("no fauld size clears the hips, covers the cuirass rim and stays "
-                     f"a skirt; ratio, p01, median, covered, lip: {tries}")
+            report.update(band_metrics(wide))
+            return matrix(wide), report
+        slack += HIPS_WIDTH_STEP
+    raise SystemExit("no fauld size clears the hips, belts onto the cuirass rim and "
+                     f"stays a skirt; slack, p01, median, covered, lip: {tries}")
 
 
 FITTERS = {
@@ -1792,6 +1876,233 @@ def build_rigid_gear(rig, body):
     return fitted
 
 
+# --------------------------------------------------------------------------
+# Trousers
+#
+# The leather under the plate is not a donor and not a fit: it IS the body's own
+# leg surface, duplicated and pushed out along its normals. Every vertex keeps
+# the weights the skin it was cut from carries, so the trousers deform with the
+# leg the way the leg deforms and cannot clip through it at any pose - which no
+# generated garment, however well fitted in the rest pose, can promise.
+#
+# The waist and the ankle rims are left open on purpose: the fauld covers the
+# one and the sabaton cuff swallows the other, and a closed rim there is two
+# surfaces fighting over the same millimetre.
+
+LEG_BONES = ("pelvis", "thigh_l", "thigh_r", "calf_l", "calf_r")
+TROUSER_WEIGHT = 0.5        # summed leg weight a body vertex needs to be trousers
+TROUSER_OFFSET = 0.004      # how far the leather stands off the skin, metres
+TROUSER_FLOOR = 0.0005      # and the least it may be pulled back to, metres
+TROUSER_WAIST = 0.02        # above the top of the pelvis; the fauld hides the rim
+# The sabaton is skinned OUTSIDE the shin, and its own fit reports a 0.58 mm
+# first-percentile gap to the skin - so a flat 4 mm push would stand the leather
+# through the boot wall. Every vertex is capped by the air actually measured to
+# the fitted boot instead of by a rule about where the knee is.
+TROUSER_BOOT_AIR = 0.0005   # air kept between the leather and a sabaton's inner face
+TROUSER_BOOT_REACH = 0.05   # past this a boot is not near enough to cap anything
+TROUSER_SAFE = 0.45         # share of its own headroom a vertex may take (the crotch)
+TROUSER_TILE = 3.5          # grain repeats over the unwrapped leg
+TROUSER_TRIS = 6000
+LEATHER_BLEND = "D:/VSC/exiled-casual/assets/props/source/mat-aged-dark-leather.blend"
+LEATHER_ID = "d583c044-b586-4ecf-b3a1-12de1d032b3f"
+LEATHER_NAME = "Aged Dark Leather"
+LEATHER_FALLBACK = (0.06, 0.05, 0.04, 1.0)
+LEATHER_ROUGHNESS = 0.75
+
+
+def leather_material():
+    """The BlenderKit leather rebuilt as plain image textures into the BSDF.
+
+    The donor's own tree carries mapping and displacement the glTF exporter
+    drops, so the maps are relinked here. No `matte()` pass: that map exists to
+    stop donor steel reading as latex, and leather is not steel.
+    """
+    imgs = {}
+    if os.path.exists(LEATHER_BLEND):
+        with bpy.data.libraries.load(LEATHER_BLEND) as (df, dt):
+            dt.images = list(df.images)
+        for im in dt.images:
+            if im is None:
+                continue
+            for key in ("Color", "Roughness", "NormalGL"):
+                if key.lower() in im.name.lower():
+                    imgs[key] = im
+    mat = bpy.data.materials.new("trouser_leather")
+    mat.use_nodes = True
+    nt = mat.node_tree
+    bsdf = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
+    bsdf.inputs["Metallic"].default_value = 0.0
+    if len(imgs) < 3:
+        bsdf.inputs["Base Color"].default_value = LEATHER_FALLBACK
+        bsdf.inputs["Roughness"].default_value = LEATHER_ROUGHNESS
+        return mat, None
+
+    def tex(key, y, colour):
+        n = nt.nodes.new("ShaderNodeTexImage")
+        n.image = imgs[key]
+        n.location = (-700, y)
+        n.image.colorspace_settings.name = "sRGB" if colour else "Non-Color"
+        return n
+
+    nt.links.new(tex("Color", 300, True).outputs["Color"], bsdf.inputs["Base Color"])
+    nt.links.new(tex("Roughness", 0, False).outputs["Color"], bsdf.inputs["Roughness"])
+    nm = nt.nodes.new("ShaderNodeNormalMap")
+    nm.location = (-400, -300)
+    nt.links.new(tex("NormalGL", -300, False).outputs["Color"], nm.inputs["Color"])
+    nt.links.new(nm.outputs["Normal"], bsdf.inputs["Normal"])
+    return mat, LEATHER_ID
+
+
+def build_trousers(rig, body, worn):
+    """Cut the legs off the body, push them out, and call the result leather.
+
+    `worn` is every piece already fitted on this body: the boots among them are
+    what the offset has to stay inside, and they are measured rather than
+    assumed.
+    """
+    name = "chest.plate.legs"
+    obj = body.copy()
+    obj.data = body.data.copy()
+    obj.name = obj.data.name = name
+    bpy.context.scene.collection.objects.link(obj)
+    obj.data.transform(body.matrix_world)
+    obj.matrix_world = Matrix.Identity(4)
+    for mod in list(obj.modifiers):
+        obj.modifiers.remove(mod)
+    while obj.data.materials:
+        obj.data.materials.pop()
+
+    missing = [b for b in LEG_BONES if b not in obj.vertex_groups]
+    if missing:
+        raise SystemExit(f"{name}: the body carries no groups for {missing}")
+    keep = {obj.vertex_groups[b].index for b in LEG_BONES}
+    pelvis = rig.data.bones["pelvis"]
+    waist_z = max((rig.matrix_world @ pelvis.head_local).z,
+                  (rig.matrix_world @ pelvis.tail_local).z) + TROUSER_WAIST
+    ankle_z = min((rig.matrix_world @ rig.data.bones["foot_" + s].head_local).z
+                  for s in "lr")
+
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    dl = bm.verts.layers.deform.active
+    doomed = [v for v in bm.verts
+              if sum(w for gi, w in v[dl].items() if gi in keep) < TROUSER_WEIGHT
+              or not ankle_z <= v.co.z <= waist_z]
+    bmesh.ops.delete(bm, geom=doomed, context="VERTS")
+    loose = [v for v in bm.verts if not v.link_faces]
+    if loose:
+        bmesh.ops.delete(bm, geom=loose, context="VERTS")
+    if not bm.faces:
+        bm.free()
+        raise SystemExit(f"{name}: the weight and height cuts left no leg surface")
+    bm.normal_update()
+
+    boots = [bvh_of(o) for o in worn if o.name.startswith("boots.")]
+    room = surface_headroom(bm)
+    pushed, capped_by_boot, capped_by_self, tightest = [], 0, 0, None
+    for i, v in enumerate(bm.verts):
+        want = TROUSER_OFFSET
+        # `surface_headroom` reports its own reach when it found nothing, and
+        # that is not a measurement - only a vertex that actually saw another
+        # part of the leg is held back by it.
+        if room[i] < 0.02 - 1e-9:
+            held = max(TROUSER_FLOOR, room[i] * TROUSER_SAFE)
+            if held < want:
+                want = held
+                capped_by_self += 1
+        near = None
+        for bvh in boots:
+            hit = bvh.find_nearest(v.co, TROUSER_BOOT_REACH)
+            if hit[0] is not None and (near is None or hit[3] < near):
+                near = hit[3]
+        if near is not None:
+            allowed = max(TROUSER_FLOOR, near - TROUSER_BOOT_AIR)
+            if allowed < want - 1e-9:
+                want = allowed
+                capped_by_boot += 1
+            left = near - want
+            tightest = left if tightest is None else min(tightest, left)
+        v.co += v.normal * want
+        pushed.append(want)
+    bm.to_mesh(obj.data)
+    bm.free()
+    obj.data.update()
+
+    tris = sum(len(p.vertices) - 2 for p in obj.data.polygons)
+    ratio = 1.0
+    if tris > TROUSER_TRIS:
+        ratio = TROUSER_TRIS / tris
+        mod = obj.modifiers.new("Decimate", "DECIMATE")
+        mod.ratio = ratio
+        bpy.ops.object.select_all(action="DESELECT")
+        obj.select_set(True)
+        bpy.context.view_layer.objects.active = obj
+        bpy.ops.object.modifier_apply(modifier=mod.name)
+        tris = sum(len(p.vertices) - 2 for p in obj.data.polygons)
+
+    # The weights are already exact - these are the body's own vertices - so
+    # nothing is transferred. Everything outside the leg set is dropped and the
+    # survivors renormalised, or a stray spine weight tears the seat upward.
+    spine = False
+    if "spine_01" in obj.vertex_groups:
+        gi = obj.vertex_groups["spine_01"].index
+        spine = any(gi in {g.group for g in v.groups} for v in obj.data.vertices)
+    bones = LEG_BONES + (("spine_01",) if spine else ())
+    for group in list(obj.vertex_groups):
+        if group.name not in bones:
+            obj.vertex_groups.remove(group)
+    bpy.ops.object.select_all(action="DESELECT")
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.vertex_group_normalize_all(lock_active=False)
+    orphans = [v.index for v in obj.data.vertices if not v.groups]
+    if orphans:
+        raise SystemExit(f"{name}: {len(orphans)} vertices carry no leg weight")
+    rebind(obj, rig)
+
+    # The body's own UVs address the skin atlas, so they are thrown away: a
+    # leather tile read through them would paint a face across a thigh.
+    while obj.data.uv_layers:
+        obj.data.uv_layers.remove(obj.data.uv_layers[0])
+    obj.data.uv_layers.new(name="UVMap")
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.select_all(action="SELECT")
+    bpy.ops.uv.smart_project(angle_limit=math.radians(66.0), island_margin=0.003)
+    bpy.ops.object.mode_set(mode="OBJECT")
+    for d in obj.data.uv_layers.active.data:
+        d.uv = (d.uv[0] * TROUSER_TILE, d.uv[1] * TROUSER_TILE)
+    mat, asset = leather_material()
+    obj.data.materials.append(mat)
+    for poly in obj.data.polygons:
+        poly.use_smooth = True
+
+    n = len(pushed)
+    order = sorted(pushed)
+    air = "n/a" if tightest is None else "%.2f mm" % (tightest * 1000)
+    print(f"fitted {name}: {tris} tris, {n} verts, offset min {order[0]*1000:.2f} "
+          f"p01 {order[n//100]*1000:.2f} median {order[n//2]*1000:.2f} max "
+          f"{order[-1]*1000:.2f} mm, {capped_by_boot} capped by a boot, "
+          f"{capped_by_self} by their own crease, tightest boot air {air}")
+    return {name: {
+        "built_from": "base.male.body leg weights, offset along its own normals",
+        "source": "body",
+        "offset_mm": TROUSER_OFFSET * 1000,
+        "offset_min_mm": round(order[0] * 1000, 3),
+        "offset_p01_mm": round(order[n // 100] * 1000, 3),
+        "offset_median_mm": round(order[n // 2] * 1000, 3),
+        "boot_capped_vertices": capped_by_boot,
+        "crease_capped_vertices": capped_by_self,
+        "boot_air_min_mm": None if tightest is None else round(tightest * 1000, 3),
+        "waist_z": round(waist_z, 4), "ankle_z": round(ankle_z, 4),
+        "vertices": len(obj.data.vertices), "triangles": tris,
+        "decimate_ratio": round(ratio, 4),
+        "uv_tiles": TROUSER_TILE,
+        "bone": "pelvis", "fit": "body_offset",
+        "deform_bones": list(bones), "deform_groups": len(obj.vertex_groups),
+        "texture": {"blenderkit_id": asset, "blenderkit_name": LEATHER_NAME},
+    }}
+
+
 def main():
     clear_scene()
     built = {}
@@ -1808,6 +2119,8 @@ def main():
     male_rig = bpy.data.objects[MALE_RIG]
     male_body = bpy.data.objects["base.male.body"]
     fitted = build_rigid_gear(male_rig, male_body)
+    fitted.update(build_trousers(male_rig, male_body,
+                                 [o for o in bpy.data.objects if o.type == "MESH"]))
     with open(FIT_REPORT, "w") as fh:
         json.dump(fitted, fh, indent=1)
 
