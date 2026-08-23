@@ -217,14 +217,17 @@ const RIGID_BONES: Record<string, string> = {
   "weapon2.buckler.mesh": "lowerarm_l",
 };
 
-/** Every joint the plate is allowed to answer to; see `PLATE_BONES` in the build. */
+/**
+ * Every joint the suit is allowed to answer to; see `PLATE_BONES` in the build.
+ * It is one shell from the gorget to the fauld's hem, so it answers to the hips
+ * and both thighs as well as the trunk and the shoulders.
+ */
 const PLATE_BONES = [
   "spine_01", "spine_02", "spine_03", "neck_01",
   "clavicle_l", "clavicle_r", "upperarm_l", "upperarm_r",
+  "pelvis", "thigh_l", "thigh_r",
 ];
 
-/** Every joint the fauld is allowed to answer to; see `HIPS_BONES` in the build. */
-const HIPS_BONES = ["spine_01", "pelvis", "thigh_l", "thigh_r"];
 
 /**
  * Every joint the trousers are allowed to answer to; see `LEG_BONES` in the
@@ -296,7 +299,7 @@ describe("wardrobe asset", () => {
       "base.female.body", "base.female.brows", "base.female.eyes", "base.female.hair",
       "base.male.body", "base.male.brows", "base.male.eyes", "base.male.hair",
       "helmet.iron.helm", "weapon1.emberwand.mesh", "weapon2.buckler.mesh",
-      "chest.plate.cuirass", "chest.plate.tassets", "chest.plate.legs",
+      "chest.plate.cuirass", "chest.plate.legs",
       "boots.plate.sabaton_l", "boots.plate.sabaton_r",
     ].sort());
   });
@@ -333,14 +336,14 @@ describe("wardrobe asset", () => {
   });
 
   /**
-   * The cuirass is the one piece that is NOT rigid, and the difference has to be
+   * The suit is the one worn piece that is NOT rigid, and the difference has to be
    * asserted rather than assumed: a torso plate skinned to a single joint passes
    * the name check, looks right standing still, and swings off the shoulders the
    * moment the spine bends. So it must use several joints, all of them from the
    * set it was fitted against, and every vertex must carry a full unit of weight
    * - an unnormalised vertex drags toward the origin as a spike.
    */
-  it("deforms the cuirass over the spine and both shoulders", () => {
+  it("deforms the suit over the spine, both shoulders and both thighs", () => {
     const bin = glb.subarray(20 + json.buffers0Len);
     const node = json.nodes.find((n) => n.name === "chest.plate.cuirass");
     expect(node, "no node chest.plate.cuirass").toBeDefined();
@@ -361,34 +364,10 @@ describe("wardrobe asset", () => {
     expect(names.length).toBeGreaterThan(1);
     expect(names.every((n) => PLATE_BONES.includes(n)), `strays: ${names}`).toBe(true);
     expect(names).toContain("spine_03");
-  });
-
-  /**
-   * The fauld deforms over both legs and the lumbar, and the set is exact in
-   * both directions. Miss `spine_01` and its top ring stays rigid while the
-   * cuirass riveted over it leans, so the two rims part at the waist; pick up a
-   * calf and the skirt tears down a shin on every stride. Neither shows in a
-   * name check, so the weights are read out of the buffer.
-   */
-  it("deforms the tassets over the hips and both thighs", () => {
-    const bin = glb.subarray(20 + json.buffers0Len);
-    const node = json.nodes.find((n) => n.name === "chest.plate.tassets");
-    expect(node, "no node chest.plate.tassets").toBeDefined();
-    const prim = json.meshes[node!.mesh!]!.primitives[0]!;
-    const joints = readAccessor(json, bin, prim.attributes["JOINTS_0"]!);
-    const weights = readAccessor(json, bin, prim.attributes["WEIGHTS_0"]!);
-    const skin = json.skins[node!.skin!]!;
-    const used = new Set<number>();
-    for (let v = 0; v < weights.length / 4; v += 1) {
-      const w = weights.slice(v * 4, v * 4 + 4);
-      const j = joints.slice(v * 4, v * 4 + 4);
-      for (let k = 0; k < 4; k += 1) {
-        if (w[k]! > 0.0001) used.add(j[k]!);
-      }
-      expect(w[0]! + w[1]! + w[2]! + w[3]!).toBeCloseTo(1, 3);
-    }
-    const names = [...used].map((u) => json.nodes[skin.joints[u]!]!.name).sort();
-    expect(names).toEqual([...HIPS_BONES].sort());
+    // The fauld is part of the same shell: without the legs it stays welded to
+    // the pelvis and a thigh walks straight out through it.
+    expect(names).toContain("thigh_l");
+    expect(names).toContain("thigh_r");
   });
 
   /**

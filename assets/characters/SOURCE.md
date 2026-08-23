@@ -49,7 +49,15 @@ bone white, so `HAIR_TINT` in the builder multiplies them; the female's eyebrows
 sample the same mask and take the same tint, while the male's are painted into
 his body atlas and are left alone.
 
-## Fauld and tassets (`chest.plate.tassets`)
+## Plate suit (`chest.plate.cuirass`)
+
+Locally generated (TRELLIS.2), stripped of fourteen sliver shells by
+`tools/prep_plate_suit.py` into `assets/props/source/trellis_local/plate-suit-15k-v1.glb`
+(14 847 tris, 3 shells): cuirass, layered pauldrons, half sleeves, belt and a
+short fauld in one piece, worn over the leather trousers. It replaced the
+separate `chest.plate.tassets` skirt, whose donor and fitter are parked.
+
+## Fauld and tassets (parked, `SKIRT_PARKED`)
 
 Built procedurally by `tools/prep_tassets.py` (no scan: TRELLIS decodes a plate
 skirt into loose flakes). Texture is BlenderKit material

@@ -225,8 +225,13 @@ def build_look(spec):
 # width, this hand's centre, this forearm's thickness - never from a world
 # coordinate, so the same table fits a body with different proportions.
 
+# The suit is a cuirass, its pauldrons and half sleeves, and its own short fauld
+# in one shell, so it answers to the trunk, both shoulders AND the hips: the
+# fauld hangs off the belt and swings with the thighs. Without the leg joints the
+# skirt stays welded to the pelvis and the thigh walks out through it.
 PLATE_BONES = ("spine_01", "spine_02", "spine_03", "neck_01",
-               "clavicle_l", "clavicle_r", "upperarm_l", "upperarm_r")
+               "clavicle_l", "clavicle_r", "upperarm_l", "upperarm_r",
+               "pelvis", "thigh_l", "thigh_r")
 
 # A fauld hangs off the belt and its tassets ride the thighs, so the skirt has
 # to answer to both legs and to the lumbar the cuirass above it already bends
@@ -265,13 +270,8 @@ RIGID_GEAR = (
     },
     {
         "slot": "chest", "look": "plate", "part": "cuirass",
-        "src": "plate-cuirass-15k-v2.glb", "bone": "spine_03", "fit": "plate_torso",
+        "src": "plate-suit-15k-v1.glb", "bone": "spine_03", "fit": "plate_torso",
         "deform": PLATE_BONES, "matte": True,
-    },
-    {
-        "slot": "chest", "look": "plate", "part": "tassets",
-        "src": "fauld-proc-v4.glb", "bone": "pelvis", "fit": "plate_hips",
-        "deform": HIPS_BONES, "matte": True,
     },
     {
         "slot": "boots", "look": "plate", "part": "sabaton",
@@ -283,6 +283,16 @@ RIGID_GEAR = (
 # The gauntlet donor is built (`tools/prep_gauntlet.py`) and not worn: its own
 # shell is pinched onto the skin at the finger webs, so the fit's 1st-percentile
 # air reads 0.02-0.08 mm against a 0.5 mm gate at every clearance in the sweep.
+# The long lame skirt the fauld donor made. The plate suit carries its own short
+# fauld, so two skirts would fight over the same hips; `fit_plate_hips`, the
+# `HIPS_*` constants and `tools/prep_tassets.py` stay for the day a longer one
+# is wanted over a suit that has none.
+SKIRT_PARKED = {
+    "slot": "chest", "look": "plate", "part": "tassets",
+    "src": "fauld-proc-v4.glb", "bone": "pelvis", "fit": "plate_hips",
+    "deform": HIPS_BONES, "matte": True,
+}
+
 GLOVES_PENDING = {
     "slot": "gloves", "look": "plate", "part": "gauntlet",
     "src": "gauntlet-hand-v2.glb", "bone": "hand_r", "fit": "hand_plate",
@@ -367,44 +377,48 @@ BUCKLER_FACE = (0.94, -0.34, 0.0)
 # thigh weight tears downward the moment he runs.
 # The trunk is measured below the armpit, because the pauldrons stand far wider
 # than the chest and sizing on the full width leaves the plate INSIDE it - the
-# body then wears two floating shoulder caps and a sliver of sternum. The donor
-# is trimmed at the belt and its pauldrons start about a quarter of the way up
-# what is left, so the band has to stop short of that, not at the halfway mark.
-PLATE_TRUNK_TO = 0.26    # fraction of donor height that is trunk, not pauldron
-# Height and width are scaled separately, because this donor is 1.37 as tall as
-# it is wide and the body's neck-to-waist over chest width is about 1.07. One
-# uniform scale cannot satisfy both: sized to the chest it hangs to mid-thigh,
-# sized to the torso it is a corset. A plate is not a face - nobody reads a few
-# per cent of stretch in it, and everybody reads a skirt over the knees.
-# Positive lifts the collar ABOVE the base of the neck, and because the bottom
-# rim is pinned to the lumbar this makes the plate taller rather than just
-# higher. Swept: 0.00 covers 0.55 of the ribcage, 0.06 covers 0.79, 0.09 covers
-# 0.91 and everything past it buys nothing while the median gap climbs again.
-# The donor's neck opening is cut wide and low, so at the seat that looks right
-# the upper chest is simply bare.
-PLATE_COLLAR = 0.09      # collar rim relative to the base of the neck, metres
-PLATE_WAIST = -0.04      # bottom rim relative to the base of the lumbar, metres
-# A cuirass hem is not level: this donor's back hangs 125 mm lower than its
-# front, so pinning the bbox bottom to the belt leaves the FRONT hem 8 cm above
-# it and a strip of bare midriff round the front and both sides. The front hem
-# is the rim a fauld has to meet, so that is the edge the waist plane means.
-#
-# Getting it there by scaling the whole plate taller was tried and is wrong: the
-# arm openings scale with it, chest skin ends up inside an enlarged armscye and
-# coverage falls to 0.848 at every width. Only the SKIRT stretches.
-#
-# The line it stretches below is the last spine joint the plate hangs from,
-# carried into the donor through the placement that is already established:
-# above it is chest, shoulders and openings, below it is belly and skirt. It is
-# a body landmark, so it moves with the body, and it sits BELOW the armpit -
-# asserted, because that is what keeps the arm openings the size they were.
-# Higher lines were tried and cost coverage the gate is right to refuse: at the
-# armpit itself the skirt drags the whole ribcage down with it and lands at
-# 0.8918. At this one the plate's three numbers come out where they were before
-# the skirt existed. (`PLATE_TRUNK_TO` is not this line: at 0.26 of the donor it
-# is the band just above the belt, and the pauldrons flare at 0.67.)
-PLATE_FRONT = 0.15       # the front hem is the lowest point in this depth of the donor
-PLATE_SKIRT_MAX = 1.6    # past this the belly is visibly drawn out, whatever it measures
+# body then wears two floating shoulder caps and a sliver of sternum. On a suit
+# that runs collar to mid-thigh in one shell the band is the WAIST: it is the
+# only stretch of the donor with nothing else beside it, sleeves above it and the
+# fauld's flare below. Measured as the narrowest cross-section in that stretch,
+# not at a named height, so it moves with whatever donor is fitted.
+# The top of the stretch is where the armscye opens: a ray fired above it leaves
+# through the sleeve instead of the chest wall and reads 0.81 m across on a torso
+# that is 0.47.
+PLATE_TRUNK_FROM = 0.42  # the trunk is measured over this stretch of donor height
+PLATE_TRUNK_TO = 0.64
+# Height and width are scaled separately, because a donor's own aspect is not the
+# body's: sized to the chest this suit hangs past the knees, sized to the span
+# from the collar to mid-thigh it is a corset. A plate is not a face - nobody
+# reads a few per cent of stretch in it, and everybody reads a skirt over the
+# knees.
+# Positive lifts the collar ABOVE the base of the neck, and because the hem is
+# pinned to the thigh this makes the suit taller rather than just higher - which
+# is the whole point, because the seat is really about where the PAULDRONS land.
+# Swept against the hem pinned at mid-thigh: at 0.09 the shoulder caps hang
+# 48 mm below the shoulder joint, they graze the trapezius (1st-percentile air
+# 0.2-0.3 mm against a 0.5 mm floor) and lateral cover of the upper chest is
+# 0.78; every step up lifts them, and from 0.18 the caps sit ON the shoulders
+# with 8 mm of air, cover is 1.000 and the median gap is still inside its cap.
+# Past 0.20 nothing improves and the suit is climbing off the body.
+# This donor's collar is a tall flared gorget, so the rim ends up at chin height:
+# that is the donor's own proportion, not slack in the fit.
+PLATE_COLLAR = 0.18      # collar rim relative to the base of the neck, metres
+# The suit's hem is its fauld's, and a fauld stops at mid-thigh: far enough down
+# that no low camera angle sees under it, far enough above the knee that the leg
+# never walks through it. Measured off the knee (the calf's own head) because
+# that is the landmark the leg bends at, so the skirt keeps its clearance on any
+# body proportion.
+PLATE_HEM_ABOVE_KNEE = 0.15
+PLATE_TRUNK_SAMPLES = 24  # heights the trunk is measured across, over that stretch
+# A scanned cuirass hem need not be level, and one that hangs out of level cannot
+# be corrected by any affine transform that leaves the arm openings alone - the
+# older donor's back hung 125 mm below its front and only its SKIRT was stretched
+# down onto the belt. This suit's front and back hems agree to within a few
+# millimetres, so it takes one uniform placement and no skirt segment at all.
+# Asserted rather than assumed: past this the two-segment stretch is needed back.
+PLATE_FRONT = 0.15       # the hem is read over this depth of each face of the donor
+PLATE_HEM_LEVEL = 0.02   # most the front and back hems may differ by, metres
 PLATE_WIDTH_FROM = 1.06  # narrowest plate/chest width ratio worth trying
 PLATE_WIDTH_TO = 1.45    # past this it is a barrel, whatever it measures
 PLATE_WIDTH_STEP = 0.02
@@ -1032,6 +1046,44 @@ def arm_socket(rig, body, side):
     return head, radii[len(radii) // 2]
 
 
+def donor_trunk(donor, lo, dims, centre):
+    """The suit's own torso: how wide it is, how deep, and where its middle is.
+
+    Not an x-span of the vertices: on a suit with sleeves the widest points at
+    chest height are the sleeves, and sizing the trunk on them leaves the plate
+    inside the ribs. Not a connected run of vertex positions either - the donor's
+    density is uneven and a run walked through it collapses wherever the wall is
+    coarsely tessellated. It is a RAY out of the donor's own axis instead, four
+    ways: the first thing a ray leaving the middle of the torso meets is the
+    torso wall, whatever hangs outside it.
+
+    The DEPTH and the seat come out of the same cast, at the widest height, and
+    both are needed. A donor whose torso does not sit in the middle of its own
+    bounding box - this one is carried 21 mm behind it by the fauld's back flare
+    - is seated on that box with the breastplate grazing the sternum and the
+    backplate four centimetres off the spine.
+    """
+    bvh = bvh_of(donor)
+    best = None
+    for i in range(PLATE_TRUNK_SAMPLES):
+        f = PLATE_TRUNK_FROM + (PLATE_TRUNK_TO - PLATE_TRUNK_FROM) * i / (PLATE_TRUNK_SAMPLES - 1)
+        z = lo.z + dims.z * f
+        origin = Vector((centre.x, centre.y, z))
+        right = bvh.ray_cast(origin, Vector((1, 0, 0)))
+        left = bvh.ray_cast(origin, Vector((-1, 0, 0)))
+        front = bvh.ray_cast(origin, Vector((0, -1, 0)))
+        back = bvh.ray_cast(origin, Vector((0, 1, 0)))
+        if any(h[0] is None for h in (right, left, front, back)):
+            continue
+        span = right[0].x - left[0].x
+        if best is None or span > best[1]:
+            best = (z, span, back[0].y - front[0].y, (back[0].y + front[0].y) / 2)
+    if best is None:
+        raise SystemExit("no ray out of the donor's axis met its own wall between "
+                         f"{PLATE_TRUNK_FROM} and {PLATE_TRUNK_TO} of its height")
+    return best
+
+
 def fit_plate_torso(donor, body, rig):
     """Grow the plate until the chest under it is inside it.
 
@@ -1045,10 +1097,10 @@ def fit_plate_torso(donor, body, rig):
     clip, so a fit made in the idle would bake that frame's spine into the bind
     pose.
 
-    Unlike the other fitters this one EDITS the donor: the skirt below the
-    armscye is drawn down onto the belt before the matrix is built, because a
-    hem that hangs 125 mm out of level cannot be corrected by any affine
-    transform that leaves the arm openings where they are.
+    The donor is placed whole, with one height scale and one swept width: this
+    suit's front and back hems agree to within a few millimetres, so there is no
+    out-of-level skirt for a second segment to draw down. `PLATE_HEM_LEVEL` says
+    so out loud, because the fix for a donor that fails it is not a wider sweep.
     """
     # Two different sets, because they answer two different questions. The
     # RIBCAGE sizes the plate: it is the thing the steel has to go round. The
@@ -1073,41 +1125,39 @@ def fit_plate_torso(donor, body, rig):
         raise SystemExit("the arm sockets swallowed every chest point")
     neck = rig.matrix_world @ rig.data.bones["neck_01"].head_local
 
+    knee = sum((rig.matrix_world @ rig.data.bones[n].head_local).z
+               for n in ("calf_l", "calf_r")) / 2
+
     hp = [v.co for v in donor.data.vertices]
     d_lo, d_hi, d_dims, d_c = bbox(hp)
-    trunk = [p for p in hp if p.z < d_lo.z + d_dims.z * PLATE_TRUNK_TO]
-    trunk_w = max(p.x for p in trunk) - min(p.x for p in trunk)
-    collar = Vector((d_c.x, d_c.y, d_hi.z))
+    trunk_at, trunk_w, trunk_d, trunk_y = donor_trunk(donor, d_lo, d_dims, d_c)
+    # Seated on the torso's own middle, not the bounding box's: see `donor_trunk`.
+    collar = Vector((d_c.x, trunk_y, d_hi.z))
     top = neck.z + PLATE_COLLAR
-    bottom = (rig.matrix_world @ rig.data.bones["spine_01"].head_local).z + PLATE_WAIST
+    bottom = knee + PLATE_HEM_ABOVE_KNEE
+    if bottom >= top:
+        raise SystemExit("the knee is above the collar: there is no suit span to fill")
     high = (top - bottom) / d_dims.z
 
     # Seated with no rotation onto a body that faces -Y, so the donor's front is
-    # its -Y side. Asserted rather than assumed: if the lowest point of that side
-    # IS the lowest point of the whole plate, this donor's hem is level or hung
-    # the other way round and there is no skirt to draw down.
+    # its -Y side. Both hems are read and compared: a donor whose faces disagree
+    # needs the two-segment skirt stretch the older cuirass had, and no width in
+    # the sweep is a substitute for it.
     front_hem = min(p.z for p in hp if p.y <= d_lo.y + d_dims.y * PLATE_FRONT)
-    if front_hem <= d_lo.z + 1e-6:
-        raise SystemExit("this cuirass's front hem is its lowest point: it faces +Y")
-    waistline = (rig.matrix_world @ rig.data.bones["spine_03"].head_local).z
-    if waistline >= min(h.z - r for h, r in sockets):
-        raise SystemExit("spine_03 sits at or above the armpit: stretching the skirt "
-                         "below it would resize the arm openings")
-    armscye = d_hi.z - (top - waistline) / high
-    # `high` is unchanged, so the collar still lands on `top` and the donor's own
-    # bbox bottom still lands on `bottom`. Sending the FRONT hem there therefore
-    # means sending it to the bbox bottom, and k is what the skirt has to stretch
-    # by to put it there. The back hem follows it down, over the buttocks, where
-    # the tassets cover what the plate no longer does.
-    skirt = (armscye - d_lo.z) / (armscye - front_hem)
-    if skirt > PLATE_SKIRT_MAX:
-        raise SystemExit(f"this cuirass's skirt would have to stretch {skirt:.2f}x "
-                         f"to reach the belt, past {PLATE_SKIRT_MAX}")
-    for v in donor.data.vertices:
-        if v.co.z < armscye:
-            v.co.z = armscye - (armscye - v.co.z) * skirt
-    donor.data.update()
-    back_hem = top - (d_hi.z - (armscye - (armscye - d_lo.z) * skirt)) * high
+    back_hem = min(p.z for p in hp if p.y >= d_hi.y - d_dims.y * PLATE_FRONT)
+    tilt = abs(front_hem - back_hem)
+    if tilt > PLATE_HEM_LEVEL:
+        raise SystemExit(f"this suit's hem is {tilt * 1000:.1f} mm out of level, past "
+                         f"{PLATE_HEM_LEVEL * 1000:.0f}: it needs a skirt stretch, not a scale")
+
+    # Reported, never gated. The sleeves are authored hanging at the donor's own
+    # angle and the rest pose holds the arms straight out, so how much of the
+    # upper arm ends up under steel is a fact about the donor's stance rather
+    # than about the size the sweep picked.
+    arms = []
+    for side in "lr":
+        arms += group_points(body, f"upperarm_{side}", 0.35)
+    arm_segments = bones_of(rig, ("upperarm_l", "upperarm_r"))
 
     def matrix(wide):
         S = Matrix.Diagonal((wide, wide, high, 1.0))
@@ -1121,19 +1171,23 @@ def fit_plate_torso(donor, body, rig):
         bvh = bvh_of(donor, matrix(wide))
         p01, med = gap_profile(bvh, sample)
         cov = covered_laterally(bvh, sample, chest_c)
+        arm_cov = covered_radially(bvh, arms, arm_segments)
         tries.append([round(ratio, 3), round(p01 * 1000, 2), round(med * 1000, 2),
-                      round(cov, 4)])
+                      round(cov, 4), round(arm_cov, 4)])
         if cov >= PLATE_COVERAGE and p01 >= PLATE_MIN_GAP and med <= PLATE_MAX_MEDIAN:
             return matrix(wide), {
                 "trunk_width_ratio": round(ratio, 3),
                 "width_scale": round(wide, 5), "height_scale": round(high, 5),
-                "torso_span_m": round(top - bottom, 4),
-                "skirt_stretch": round(skirt, 4),
-                "skirt_line_z": round(top - (d_hi.z - armscye) * high, 4),
-                "front_hem_z": round(bottom, 4),
-                "back_hem_z": round(back_hem, 4),
+                "suit_span_m": round(top - bottom, 4),
+                "hem_z": round(bottom, 4),
+                "hem_above_knee_mm": round(PLATE_HEM_ABOVE_KNEE * 1000, 1),
+                "donor_hem_out_of_level_mm": round(tilt * 1000, 2),
                 "chest_width_m": round(chest_dims.x, 4),
                 "donor_trunk_width": round(trunk_w, 4),
+                "donor_trunk_depth": round(trunk_d, 4),
+                "donor_trunk_at": round(trunk_at, 4),
+                "donor_trunk_offset_from_bbox_mm": round((trunk_y - d_c.y) * 1000, 2),
+                "donor_depth_over_chest": round((trunk_d / trunk_w) / (chest_dims.y / chest_dims.x), 4),
                 "chest_gap_p01_mm": round(p01 * 1000, 2),
                 "chest_gap_median_mm": round(med * 1000, 2),
                 "chest_covered": round(cov, 4),
@@ -1141,9 +1195,12 @@ def fit_plate_torso(donor, body, rig):
                 "arm_socket_points": len(chest) - len(sample),
                 "arm_socket_radius_mm": round(sockets[0][1] * 1000, 2),
                 "collar_below_neck_mm": round(-PLATE_COLLAR * 1000, 1),
+                "upper_arm_covered": round(arm_cov, 4),
+                "upper_arm_points": len(arms),
             }
         ratio += PLATE_WIDTH_STEP
-    raise SystemExit(f"no plate size both clears the chest and stays a cuirass; {tries}")
+    raise SystemExit("no suit size both clears the chest and stays a cuirass; "
+                     f"ratio, p01, median, chest, arms: {tries}")
 
 
 def bones_of(rig, names):
@@ -1900,6 +1957,11 @@ TROUSER_WAIST = 0.02        # above the top of the pelvis; the fauld hides the r
 # the fitted boot instead of by a rule about where the knee is.
 TROUSER_BOOT_AIR = 0.0005   # air kept between the leather and a sabaton's inner face
 TROUSER_BOOT_REACH = 0.05   # past this a boot is not near enough to cap anything
+# The suit's fauld hangs over the same thighs, so it caps the leather exactly the
+# way a boot does. It is the same measurement and the same floor: the trousers
+# are built AFTER the rigid gear, so both shells are already in the scene and
+# neither clearance is a rule about where a hem is.
+TROUSER_SHELLS = ("boots.", "chest.plate.cuirass")
 TROUSER_SAFE = 0.45         # share of its own headroom a vertex may take (the crotch)
 TROUSER_TILE = 3.5          # grain repeats over the unwrapped leg
 TROUSER_TRIS = 6000
@@ -1997,9 +2059,13 @@ def build_trousers(rig, body, worn):
         raise SystemExit(f"{name}: the weight and height cuts left no leg surface")
     bm.normal_update()
 
-    boots = [bvh_of(o) for o in worn if o.name.startswith("boots.")]
+    shells = [(o.name, bvh_of(o)) for o in worn
+              if any(o.name.startswith(pre) for pre in TROUSER_SHELLS)]
     room = surface_headroom(bm)
-    pushed, capped_by_boot, capped_by_self, tightest = [], 0, 0, None
+    pushed, capped_by_shell, capped_by_self, tightest = [], 0, 0, None
+    # Per shell, so the fauld's clearance is its own number rather than lost in a
+    # minimum the boots usually win.
+    per_shell = {name: [] for name, _ in shells}
     for i, v in enumerate(bm.verts):
         want = TROUSER_OFFSET
         # `surface_headroom` reports its own reach when it found nothing, and
@@ -2010,18 +2076,27 @@ def build_trousers(rig, body, worn):
             if held < want:
                 want = held
                 capped_by_self += 1
-        near = None
-        for bvh in boots:
+        near, seen = None, []
+        for shell, bvh in shells:
             hit = bvh.find_nearest(v.co, TROUSER_BOOT_REACH)
-            if hit[0] is not None and (near is None or hit[3] < near):
+            if hit[0] is None:
+                continue
+            seen.append((shell, hit[3]))
+            if near is None or hit[3] < near:
                 near = hit[3]
         if near is not None:
-            allowed = max(TROUSER_FLOOR, near - TROUSER_BOOT_AIR)
+            # No floor under this one, unlike the crease cap: where a worn shell
+            # is closer to the skin than the air it wants, the leather stays ON
+            # the skin. It is under steel there, so nothing is lost, and pushing
+            # it out regardless is what puts leather through a fauld.
+            allowed = max(0.0, near - TROUSER_BOOT_AIR)
             if allowed < want - 1e-9:
                 want = allowed
-                capped_by_boot += 1
+                capped_by_shell += 1
             left = near - want
             tightest = left if tightest is None else min(tightest, left)
+            for shell, d in seen:
+                per_shell[shell].append(d - want)
         v.co += v.normal * want
         pushed.append(want)
     bm.to_mesh(obj.data)
@@ -2078,11 +2153,38 @@ def build_trousers(rig, body, worn):
 
     n = len(pushed)
     order = sorted(pushed)
+    # Per shell, as a profile rather than a minimum, for the reason `gap_profile`
+    # gives: one vertex grazing worn steel is not a fault anybody can see, and on
+    # a surface cut out of a scanned body there is always one. The 1st percentile
+    # is what a patch of leather through the fauld would move.
+    air_profile = {}
+    for shell, airs in per_shell.items():
+        if not airs:
+            continue
+        order_air = sorted(airs)
+        air_profile[shell] = {
+            "vertices": len(order_air),
+            "min_mm": round(order_air[0] * 1000, 3),
+            "p01_mm": round(order_air[len(order_air) // 100] * 1000, 3),
+            "median_mm": round(order_air[len(order_air) // 2] * 1000, 3),
+        }
     air = "n/a" if tightest is None else "%.2f mm" % (tightest * 1000)
     print(f"fitted {name}: {tris} tris, {n} verts, offset min {order[0]*1000:.2f} "
           f"p01 {order[n//100]*1000:.2f} median {order[n//2]*1000:.2f} max "
-          f"{order[-1]*1000:.2f} mm, {capped_by_boot} capped by a boot, "
-          f"{capped_by_self} by their own crease, tightest boot air {air}")
+          f"{order[-1]*1000:.2f} mm, {capped_by_shell} capped by worn steel, "
+          f"{capped_by_self} by their own crease, tightest air {air}, "
+          f"per shell {air_profile}")
+    fauld = air_profile.get("chest.plate.cuirass")
+    if fauld is None:
+        raise SystemExit(f"{name}: no trouser vertex is within {TROUSER_BOOT_REACH} m "
+                         "of the suit's fauld to measure against")
+    # Zero, not the air the boots keep: the leather cannot be held off a shell
+    # that is already inside the skin it was cut from - that clearance is the
+    # SUIT's, measured in its own fit - so what this gate can honestly ask is
+    # that no band of leather stands through the fauld.
+    if fauld["p01_mm"] < 0.0:
+        raise SystemExit(f"{name}: leather stands {-fauld['p01_mm']:.2f} mm through the "
+                         "fauld at its 1st percentile")
     return {name: {
         "built_from": "base.male.body leg weights, offset along its own normals",
         "source": "body",
@@ -2090,9 +2192,10 @@ def build_trousers(rig, body, worn):
         "offset_min_mm": round(order[0] * 1000, 3),
         "offset_p01_mm": round(order[n // 100] * 1000, 3),
         "offset_median_mm": round(order[n // 2] * 1000, 3),
-        "boot_capped_vertices": capped_by_boot,
+        "shell_capped_vertices": capped_by_shell,
         "crease_capped_vertices": capped_by_self,
-        "boot_air_min_mm": None if tightest is None else round(tightest * 1000, 3),
+        "shell_air_min_mm": None if tightest is None else round(tightest * 1000, 3),
+        "worn_shell_air": air_profile,
         "waist_z": round(waist_z, 4), "ankle_z": round(ankle_z, 4),
         "vertices": len(obj.data.vertices), "triangles": tris,
         "decimate_ratio": round(ratio, 4),
