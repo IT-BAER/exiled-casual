@@ -270,7 +270,7 @@ RIGID_GEAR = (
     },
     {
         "slot": "chest", "look": "plate", "part": "cuirass",
-        "src": "plate-suit-15k-v1.glb", "bone": "spine_03", "fit": "plate_torso",
+        "src": "plate-suit-15k-v3.glb", "bone": "spine_03", "fit": "plate_torso",
         "deform": PLATE_BONES, "matte": True,
     },
     {

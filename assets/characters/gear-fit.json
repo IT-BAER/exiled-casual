@@ -113,8 +113,8 @@
   "deform_groups": 11,
   "bone": "spine_03",
   "fit": "plate_torso",
-  "triangles": 14847,
-  "source": "plate-suit-15k-v1.glb"
+  "triangles": 15361,
+  "source": "plate-suit-15k-v3.glb"
  },
  "boots.plate.sabaton_r": {
   "foot_length_ratio": 1.54,

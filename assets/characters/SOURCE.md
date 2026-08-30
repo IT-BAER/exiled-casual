@@ -57,6 +57,19 @@ Locally generated (TRELLIS.2), stripped of fourteen sliver shells by
 short fauld in one piece, worn over the leather trousers. It replaced the
 separate `chest.plate.tassets` skirt, whose donor and fitter are parked.
 
+The suit is worn as `plate-suit-15k-v3.glb`, v1 run through
+`tools/repair_donor.py`. The decode came back UNWELDED - 24 016 vertices over
+7 917 positions, so every triangle was its own island and the shell carried
+4 327 boundary loops. Most were pinholes five or six edges around, invisible in
+a thumbnail and a puncture you could see the void through on the pauldron at
+play distance. Welded at 0.1 mm and filled to twelve edges it is 186 loops and
+15 362 tris, and the 113 openings a suit is supposed to have are untouched.
+
+**Never recalculate normals over the whole shell to close a decoded surface.**
+A recalc re-orients every face from one seed; on this suit it flipped half of
+them and the breastplate rendered as black shards with skin between. Only the
+new caps get their winding decided, each against the ring it closes.
+
 ## Fauld and tassets (parked, `SKIRT_PARKED`)
 
 Built procedurally by `tools/prep_tassets.py` (no scan: TRELLIS decodes a plate
