@@ -282,11 +282,13 @@ RIGID_GEAR = (
         "src": "sabaton-8k-v1.glb", "bone": "foot_r", "fit": "boot_leg",
         "deform": SABATON_BONES, "matte": True, "mirror": True,
     },
+    {
+        "slot": "gloves", "look": "plate", "part": "gauntlet",
+        "src": "gauntlet-hand-v2.glb", "bone": "hand_r", "fit": "hand_authored",
+        "deform": GAUNTLET_BONES, "matte": True, "mirror": True,
+    },
 )
 
-# The gauntlet donor is built (`tools/prep_gauntlet.py`) and not worn: its own
-# shell is pinched onto the skin at the finger webs, so the fit's 1st-percentile
-# air reads 0.02-0.08 mm against a 0.5 mm gate at every clearance in the sweep.
 # The long lame skirt the fauld donor made. The plate suit carries its own short
 # fauld, so two skirts would fight over the same hips; `fit_plate_hips`, the
 # `HIPS_*` constants and `tools/prep_tassets.py` stay for the day a longer one
@@ -295,12 +297,6 @@ SKIRT_PARKED = {
     "slot": "chest", "look": "plate", "part": "tassets",
     "src": "fauld-proc-v4.glb", "bone": "pelvis", "fit": "plate_hips",
     "deform": HIPS_BONES, "matte": True,
-}
-
-GLOVES_PENDING = {
-    "slot": "gloves", "look": "plate", "part": "gauntlet",
-    "src": "gauntlet-hand-v2.glb", "bone": "hand_r", "fit": "hand_plate",
-    "deform": GAUNTLET_BONES, "matte": True, "mirror": True,
 }
 
 # Both donors ship a glossy ORM pack that reads as latex under Babylon's PBR;
@@ -566,6 +562,12 @@ GAUNTLET_PINCH = 0.002
 GAUNTLET_COVERAGE = 0.90    # fraction of measured hand that must have steel outboard
 GAUNTLET_MIN_GAP = 0.0005   # 1st-percentile air between skin and steel, metres
 GAUNTLET_MAX_MEDIAN = 0.020
+
+# The two quarter turns a donor built in this body's own hand space is carried
+# through to reach the convention the sweep reads: fingers up +Z, thumb at +X.
+# `tools/prep_gauntlet.py` shares this name rather than keeping its own copy.
+HAND_DONOR_SPACE = (Matrix.Rotation(math.radians(-90), 4, "Z")
+                    @ Matrix.Rotation(math.radians(90), 4, "X")).inverted()
 
 # A boot stands on the floor, so the one thing that cannot be traded is the
 # outer sole: seat it anywhere but the ground and the character floats or sinks.
@@ -1518,6 +1520,35 @@ def fit_hand_plate(donor, body, rig):
     raise SystemExit(f"no gauntlet size both clears the hand and stays a glove; {tries}")
 
 
+def fit_hand_authored(donor, body, rig):
+    """Place a donor carved from this body's own hand; never resize it.
+
+    `tools/prep_gauntlet.py` cuts its shell out of this same hand's skin and
+    pushes it out by a clearance already measured on this body, so growing a
+    size back out of the donor's own finger fan re-derives a number the shape
+    already answers and shrinks an already-fitted shell - which is what drove
+    steel through the fingers under `fit_hand_plate`.
+    """
+    _, sample, segments, measured = hand_plate_seat(donor, body, rig)
+    matrix = HAND_DONOR_SPACE.inverted()
+    bvh = bvh_of(donor, matrix)
+    p01, med = gap_profile(bvh, sample)
+    cov = covered_radially(bvh, sample, segments)
+    if cov >= GAUNTLET_COVERAGE and p01 >= GAUNTLET_MIN_GAP and med <= GAUNTLET_MAX_MEDIAN:
+        return matrix, dict(
+            {k: v for k, v in measured.items() if k != "fan_scales"},
+            hand_gap_p01_mm=round(p01 * 1000, 2),
+            hand_gap_median_mm=round(med * 1000, 2),
+            hand_covered=round(cov, 4),
+            placed_as_authored=True,
+        )
+    raise SystemExit(
+        f"the authored gauntlet fails its placement gate: covered {cov:.4f} "
+        f"(need >= {GAUNTLET_COVERAGE}), p01 gap {p01 * 1000:.2f} mm "
+        f"(need >= {GAUNTLET_MIN_GAP * 1000:.2f}), median gap {med * 1000:.2f} mm "
+        f"(need <= {GAUNTLET_MAX_MEDIAN * 1000:.2f})")
+
+
 def hand_plate_seat(donor, body, rig):
     """The hand a glove goes on, the donor's own finger run, and what puts one
     on the other. Shared with `tools/prep_gauntlet.py`, which carves the donor's
@@ -1915,6 +1946,7 @@ FITTERS = {
     "plate_torso": fit_plate_torso,
     "plate_hips": fit_plate_hips,
     "hand_plate": fit_hand_plate,
+    "hand_authored": fit_hand_authored,
     "boot_leg": fit_boot_leg,
 }
 

@@ -264,15 +264,16 @@ const RIG_ROOT = /^Armature(_[a-z]+)?$/;
  * and both are enabled by the same look — a limb worn in pairs needs no new
  * machinery either, only two names under one slot.
  */
-export type Slot = "base" | "helmet" | "chest" | "boots" | "weapon1" | "weapon2";
-export const SLOTS: readonly Slot[] = ["base", "helmet", "chest", "boots", "weapon1", "weapon2"];
+export type Slot = "base" | "helmet" | "chest" | "boots" | "gloves" | "weapon1" | "weapon2";
+export const SLOTS: readonly Slot[] =
+  ["base", "helmet", "chest", "boots", "gloves", "weapon1", "weapon2"];
 
 /** A look per slot, or null for "nothing shown there". */
 export type Looks = Record<Slot, string | null>;
 
 /** Nobody drawn: the menu hall with no character standing in it. */
 export const NO_LOOKS: Looks = {
-  base: null, helmet: null, chest: null, boots: null, weapon1: null, weapon2: null,
+  base: null, helmet: null, chest: null, boots: null, gloves: null, weapon1: null, weapon2: null,
 };
 
 /**
@@ -280,7 +281,7 @@ export const NO_LOOKS: Looks = {
  * skeleton shape, but nothing yet picks her — see `build_wardrobe.py`.
  */
 export const BASE_LOOKS: Looks = {
-  base: "male", helmet: null, chest: null, boots: null, weapon1: null, weapon2: null,
+  base: "male", helmet: null, chest: null, boots: null, gloves: null, weapon1: null, weapon2: null,
 };
 
 /**

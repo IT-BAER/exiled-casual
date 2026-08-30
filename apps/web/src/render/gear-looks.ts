@@ -23,6 +23,7 @@ export const GEAR_LOOKS: Readonly<Record<string, GearLook>> = {
   "base.cinder_cap": { slot: "helmet", look: "iron" },
   "base.ironsworn_plate": { slot: "chest", look: "plate" },
   "base.ashen_treads": { slot: "boots", look: "plate" },
+  "base.ember_gauntlets": { slot: "gloves", look: "plate" },
 };
 
 /** What the sim tells the client about one equipped item, as far as looks care. */

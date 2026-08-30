@@ -302,6 +302,7 @@ describe("wardrobe asset", () => {
       "weapon2.towershield.mesh",
       "chest.plate.cuirass", "chest.plate.legs",
       "boots.plate.sabaton_l", "boots.plate.sabaton_r",
+      "gloves.plate.gauntlet_l", "gloves.plate.gauntlet_r",
     ].sort());
   });
 
