@@ -19,6 +19,7 @@ export interface GearLook {
 export const GEAR_LOOKS: Readonly<Record<string, GearLook>> = {
   "base.emberwand": { slot: "weapon1", look: "emberwand" },
   "base.ember_buckler": { slot: "weapon2", look: "buckler" },
+  "base.ashwall_tower_shield": { slot: "weapon2", look: "towershield" },
   "base.cinder_cap": { slot: "helmet", look: "iron" },
   "base.ironsworn_plate": { slot: "chest", look: "plate" },
   "base.ashen_treads": { slot: "boots", look: "plate" },

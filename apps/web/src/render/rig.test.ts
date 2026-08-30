@@ -299,6 +299,7 @@ describe("wardrobe asset", () => {
       "base.female.body", "base.female.brows", "base.female.eyes", "base.female.hair",
       "base.male.body", "base.male.brows", "base.male.eyes", "base.male.hair",
       "helmet.iron.helm", "weapon1.emberwand.mesh", "weapon2.buckler.mesh",
+      "weapon2.towershield.mesh",
       "chest.plate.cuirass", "chest.plate.legs",
       "boots.plate.sabaton_l", "boots.plate.sabaton_r",
     ].sort());

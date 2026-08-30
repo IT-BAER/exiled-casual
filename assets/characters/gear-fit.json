@@ -51,6 +51,23 @@
   "triangles": 4000,
   "source": "buckler-4000-v1.glb"
  },
+ "weapon2.towershield.mesh": {
+  "scale": 1.12468,
+  "height_m": 1.1281,
+  "arm_reach_mm": 37.31,
+  "face_world": [
+   0.94,
+   -0.34,
+   0.0
+  ],
+  "hang_from_bottom": 0.78,
+  "arm_gap_p01_mm": 21.15,
+  "arm_gap_median_mm": 100.28,
+  "bone": "lowerarm_l",
+  "fit": "tower_strap",
+  "triangles": 9998,
+  "source": "tower-shield-10k-v3.glb"
+ },
  "chest.plate.cuirass": {
   "crotch_z": 0.8936,
   "crotch_points": 76,
