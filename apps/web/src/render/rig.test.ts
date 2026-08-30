@@ -215,6 +215,11 @@ const RIGID_BONES: Record<string, string> = {
   "helmet.iron.helm": "Head",
   "weapon1.emberwand.mesh": "hand_r",
   "weapon2.buckler.mesh": "lowerarm_l",
+  // The shoulder caps are cut off the suit precisely so they can be rigid: an
+  // edge welded across a shoulder joint stretches up to eight times its rest
+  // length when the arm lifts, and no weighting removes that.
+  "chest.plate.pauldron_l": "upperarm_l",
+  "chest.plate.pauldron_r": "upperarm_r",
 };
 
 /**
@@ -301,6 +306,7 @@ describe("wardrobe asset", () => {
       "helmet.iron.helm", "weapon1.emberwand.mesh", "weapon2.buckler.mesh",
       "weapon2.towershield.mesh",
       "chest.plate.cuirass", "chest.plate.legs",
+      "chest.plate.pauldron_l", "chest.plate.pauldron_r",
       "boots.plate.sabaton_l", "boots.plate.sabaton_r",
       "gloves.plate.gauntlet_l", "gloves.plate.gauntlet_r",
     ].sort());

@@ -233,6 +233,25 @@ PLATE_BONES = ("spine_01", "spine_02", "spine_03", "neck_01",
                "clavicle_l", "clavicle_r", "upperarm_l", "upperarm_r",
                "pelvis", "thigh_l", "thigh_r")
 
+# What is left of that shell once the two shoulder caps are their own objects.
+# A smooth-skinned edge whose ends answer to the trunk and to an upper arm has
+# to stretch when the arm lifts - measured up to 8x its rest length at 55 deg -
+# and no weighting removes that, because the two bones genuinely move apart.
+TORSO_BONES = tuple(b for b in PLATE_BONES if not b.startswith("upperarm"))
+PLATE_ARMS = ("upperarm_r", "upperarm_l")
+# Where the shell stops being torso: the body's own upper-arm weight under each
+# point of steel, which is the same number that decides how far that point would
+# have been dragged. Half a unit is the boundary; the band either side of it is
+# shell that belongs to BOTH pieces, so the torso's rim slides under steel
+# instead of opening a crack. `split_arm_plates` prints the band it cut.
+PLATE_SPLIT_AT = 0.5     # arm weight at which the shell stops being torso
+# Overlap is grown in millimetres, not in weight: the transfer crosses from
+# trunk to arm inside a single 15 mm edge over much of the shoulder, so any band
+# cut between two weights collapses to a touching seam. Each cap therefore takes
+# every vertex within this of the arm set and the torso drops only the arm set
+# eroded by the same, which leaves twice this much shell in both meshes.
+PLATE_SPLIT_MARGIN = 0.06
+
 # A fauld hangs off the belt and its tassets ride the thighs, so the skirt has
 # to answer to both legs and to the lumbar the cuirass above it already bends
 # with. Without `spine_01` the top ring stays rigid while the plate over it
@@ -275,7 +294,8 @@ RIGID_GEAR = (
     {
         "slot": "chest", "look": "plate", "part": "cuirass",
         "src": "plate-suit-15k-v3.glb", "bone": "spine_03", "fit": "plate_torso",
-        "deform": PLATE_BONES, "matte": True, "twosided": True,
+        "deform": TORSO_BONES, "split_arms": PLATE_ARMS,
+        "matte": True, "twosided": True,
     },
     {
         "slot": "boots", "look": "plate", "part": "sabaton",
@@ -301,8 +321,10 @@ SKIRT_PARKED = {
 
 # Both donors ship a glossy ORM pack that reads as latex under Babylon's PBR;
 # raised/capped here rather than flattened, so a steel highlight still moves.
+# The metallic cap is also a floor under the DIFFUSE term: a metal has none, so
+# a fully metallic plate renders black anywhere the environment fails to reach.
 MATTE_ROUGHNESS_FLOOR = 0.40
-MATTE_METALLIC_CAP = 0.95
+MATTE_METALLIC_CAP = 0.75
 
 # Air the scalp must keep under a hard shell, and the skull it is measured over:
 # everything above a quarter of the head's height, forehead included. Filtering
@@ -1968,8 +1990,78 @@ def skin_to_bone(mesh, rig, bone):
             mesh.modifiers.remove(mod)
     mod = mesh.modifiers.new("Armature", "ARMATURE")
     mod.object = rig
+    for stale in list(mesh.vertex_groups):
+        mesh.vertex_groups.remove(stale)
     group = mesh.vertex_groups.new(name=bone)
     group.add(range(len(mesh.data.vertices)), 1.0, "REPLACE")
+
+
+def _kdtree(pts, idxs):
+    tree = mathutils.kdtree.KDTree(len(idxs))
+    for i in idxs:
+        tree.insert(pts[i], i)
+    tree.balance()
+    return tree
+
+
+def _cut_verts(obj, doomed):
+    """Drop a set of vertices and every face that used one, then any loose rest."""
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    bm.verts.ensure_lookup_table()
+    bmesh.ops.delete(bm, geom=[bm.verts[i] for i in doomed], context="VERTS")
+    loose = [v for v in bm.verts if not v.link_faces]
+    if loose:
+        bmesh.ops.delete(bm, geom=loose, context="VERTS")
+    bm.to_mesh(obj.data)
+    bm.free()
+    obj.data.update()
+
+
+def split_arm_plates(donor, body, rig, arms, classify_bones, stem, at, margin):
+    """Cut the shoulder caps off a torso shell into one rigid piece per arm.
+
+    A point of steel belongs to an arm when the body under it does: the same
+    nearest-surface transfer the whole shell is skinned with answers that, and
+    it answers it where the fault is, on the outer shoulder and down the sleeve,
+    rather than on the flank a hanging arm bone happens to run past.
+
+    That set is then dilated by `margin` for the cap and eroded by `margin` for
+    the torso, so a band twice `margin` wide is cut into both meshes and the
+    cuirass rim sits under the cap it left rather than beside it.
+    """
+    skin_by_transfer(donor, body, rig, classify_bones)
+    idx = {g.name: g.index for g in donor.vertex_groups}
+    pts = [donor.matrix_world @ v.co for v in donor.data.vertices]
+    n = len(pts)
+    made = []
+    for bone in arms:
+        want = idx[bone]
+        w = [next((g.weight for g in v.groups if g.group == want), 0.0)
+             for v in donor.data.vertices]
+        core = [i for i in range(n) if w[i] >= at]
+        outside = [i for i in range(n) if w[i] < at]
+        if not core or not outside:
+            raise SystemExit(f"{donor.name}: nothing to cut at {bone} weight {at}")
+        near_core, near_outside = _kdtree(pts, core), _kdtree(pts, outside)
+        # Dilated: the cap keeps the arm set and every vertex within `margin` of
+        # it. Eroded: the torso drops only arm vertices that far inside the set.
+        dilated = {i for i in range(n) if near_core.find(pts[i])[2] <= margin}
+        eroded = {i for i in core if near_outside.find(pts[i])[2] > margin}
+        piece = donor.copy()
+        piece.data = donor.data.copy()
+        bpy.context.scene.collection.objects.link(piece)
+        piece.name = piece.data.name = f"{stem}_{bone.split('_')[-1]}"
+        _cut_verts(piece, [i for i in range(n) if i not in dilated])
+        print(f"  {piece.name}: {len(piece.data.vertices)} vertices of {n}, "
+              f"{len(core)} at {bone} weight {at} or more, "
+              f"{len(dilated) - len(eroded)} of them shared with the torso "
+              f"(band {margin * 2000:.0f} mm wide)")
+        made.append((piece, bone, eroded))
+
+    _cut_verts(donor, sorted({i for _, _, eroded in made for i in eroded}))
+    print(f"  {donor.name}: {len(donor.data.vertices)} vertices of {n} kept")
+    return [(piece, bone) for piece, bone, _ in made]
 
 
 def skin_by_transfer(mesh, body, rig, bones):
@@ -2171,6 +2263,21 @@ def build_rigid_gear(rig, body):
         if spec.get("twosided"):
             for mat in donor.data.materials:
                 mat.use_backface_culling = False
+        # Split before skinning: each cap is bound rigidly to its own upper arm,
+        # and the shell left over never spans a shoulder joint again.
+        caps = []
+        if spec.get("split_arms"):
+            caps = split_arm_plates(donor, body, rig, spec["split_arms"], PLATE_BONES,
+                                    f"{spec['slot']}.{spec['look']}.pauldron",
+                                    PLATE_SPLIT_AT, PLATE_SPLIT_MARGIN)
+        for piece, bone in caps:
+            skin_to_bone(piece, rig, bone)
+            cap_tris = sum(len(p.vertices) - 2 for p in piece.data.polygons)
+            fitted[piece.name] = dict(detail, bone=bone, fit=spec["fit"],
+                                      triangles=cap_tris, source=spec["src"],
+                                      split_from=stem, split_at_weight=PLATE_SPLIT_AT,
+                                      overlap_band_mm=PLATE_SPLIT_MARGIN * 2000)
+            print(f"fitted {piece.name}: {cap_tris} tris rigid on {bone}")
         if spec.get("deform"):
             groups = skin_by_transfer(donor, body, rig, spec["deform"])
             detail["deform_bones"] = list(spec["deform"])
