@@ -275,7 +275,7 @@ RIGID_GEAR = (
     {
         "slot": "chest", "look": "plate", "part": "cuirass",
         "src": "plate-suit-15k-v3.glb", "bone": "spine_03", "fit": "plate_torso",
-        "deform": PLATE_BONES, "matte": True,
+        "deform": PLATE_BONES, "matte": True, "twosided": True,
     },
     {
         "slot": "boots", "look": "plate", "part": "sabaton",
@@ -2165,6 +2165,12 @@ def build_rigid_gear(rig, body):
         # after the mirror would run the texture through the map twice.
         if spec.get("matte"):
             matte(donor)
+        # A scanned suit is an open shell: the neck, the armholes, the hem and
+        # the two sleeve mouths are rings it simply stops at, and a culled
+        # backface turns each into a black cavity. Steel from inside is steel.
+        if spec.get("twosided"):
+            for mat in donor.data.materials:
+                mat.use_backface_culling = False
         if spec.get("deform"):
             groups = skin_by_transfer(donor, body, rig, spec["deform"])
             detail["deform_bones"] = list(spec["deform"])
