@@ -24,6 +24,7 @@ import {
   Vector3,
   type AbstractMesh,
 } from "@babylonjs/core";
+import { buildSkyEnvironment, ENVIRONMENT_INTENSITY, GROUND_COLOR, SKY_COLOR } from "./environment";
 import { attachProp, loadProps, PROP_KINDS, type PropKind } from "./props";
 import { attachCreature, loadMonsters } from "./monsters";
 import { SPAWNABLE, type Spawnable } from "./gallery";
@@ -192,7 +193,14 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
   // eye at one repeatable place, which dragging the canvas cannot do, and the
   // arc camera is otherwise reachable only through the pointer.
   if (import.meta.env.DEV) {
-    (window as unknown as Record<string, unknown>).__viewer = { scene, camera };
+    (window as unknown as Record<string, unknown>).__viewer = {
+      scene,
+      camera,
+      buildSkyEnvironment,
+      SKY_COLOR,
+      GROUND_COLOR,
+      ENVIRONMENT_INTENSITY,
+    };
   }
 
   // Three-point-ish and deliberately plain: play's warm low sun flatters a
@@ -231,6 +239,14 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
     loadProps(scene).catch(() => undefined),
     loadMonsters(scene).catch(() => undefined),
   ]);
+
+  // After the imports, so the viewer judges armour under the same environment
+  // the game and the menu give it.
+  buildSkyEnvironment(scene, {
+    sky: SKY_COLOR,
+    ground: GROUND_COLOR,
+    intensity: ENVIRONMENT_INTENSITY,
+  });
 
   engine.runRenderLoop(() => scene.render());
   const onResize = () => engine.resize();

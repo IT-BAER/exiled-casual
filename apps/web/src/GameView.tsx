@@ -14,6 +14,12 @@ import { AssetSpawner } from "./hud/AssetSpawner";
 import { resetFireLights } from "./render/lights";
 import { loadRocks, resetRocks } from "./render/rocks";
 import { loadPlayerRig, resetPlayerRig } from "./render/rig";
+import {
+  buildSkyEnvironment,
+  ENVIRONMENT_INTENSITY,
+  GROUND_COLOR,
+  SKY_COLOR,
+} from "./render/environment";
 import { attachBindings } from "./input/bindings";
 import { ALL_SFX, CORE_SFX, playSfx, preloadSfx, setAmbient, stopAmbient } from "./audio/sfx";
 import { createSoundscape } from "./audio/soundscape";
@@ -629,6 +635,18 @@ export function GameView({
       // Two megabytes of wasm, and nothing waits on it: the first body to die
       // before it lands simply vanishes the way it always did.
       void enablePhysics(scene);
+      // AFTER the wardrobe's glTF import, never during scene construction: a
+      // metal has no diffuse term, so plate with no environment renders black,
+      // but starting this cube before the import leaves every PBR material in
+      // the scene flat instead. Last in the callback, so that nothing the
+      // player is waiting on sits behind a decoration.
+      if (!unmounted) {
+        buildSkyEnvironment(scene, {
+          sky: SKY_COLOR,
+          ground: GROUND_COLOR,
+          intensity: ENVIRONMENT_INTENSITY,
+        });
+      }
     });
 
     const onResize = () => engine.resize();

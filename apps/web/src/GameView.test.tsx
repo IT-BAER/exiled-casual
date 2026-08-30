@@ -64,6 +64,15 @@ vi.mock("./render/engine", () => ({
   applyGraphics: vi.fn(),
   setMapFill: vi.fn(),
 }));
+// The sky cube needs a real WebGL cube texture and a real `scene.textures`,
+// neither of which the mocks above have. What this suite pins is the order the
+// load callback runs in, not the contents of an IBL.
+vi.mock("./render/environment", () => ({
+  buildSkyEnvironment: vi.fn(),
+  SKY_COLOR: {},
+  GROUND_COLOR: {},
+  ENVIRONMENT_INTENSITY: 1,
+}));
 vi.mock("./render/renderer", () => ({
   SnapshotRenderer: class {
     apply = vi.fn();

@@ -62,6 +62,11 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ### Fixed
 
+- Plate armour is metal again instead of a black cut-out. A metal surface has no
+  diffuse colour of its own - all it can show is what is around it to reflect -
+  and there was nothing around it, so the steel came out black wherever the sun
+  did not land square on it. The scene now carries a sky and a ground for it to
+  catch.
 - A cast plays at the speed it actually casts at. The clip ran at its authored
   rate whatever the wind-up was, so a quick spell only ever showed the first
   third of the motion and the bolt left a hand that was still lifting; held

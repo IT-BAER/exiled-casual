@@ -31,6 +31,12 @@ import {
   Vector3,
 } from "@babylonjs/core";
 import { attachRig, loadPlayerRig, resetPlayerRig, type Looks, type RigActor } from "./rig";
+import {
+  buildSkyEnvironment,
+  ENVIRONMENT_INTENSITY,
+  GROUND_COLOR,
+  SKY_COLOR,
+} from "./environment";
 import { dissolveAway, dissolveIn, primeDissolve } from "./dissolve";
 
 /**
@@ -379,6 +385,16 @@ export async function createMenuStage(canvas: HTMLCanvasElement): Promise<MenuSt
   rim.falloffType = Light.FALLOFF_GLTF;
 
   await loadPlayerRig(scene);
+
+  // Same ordering rule as the contact shadow below, and for the same reason:
+  // anything that starts a texture across the wardrobe's glTF import leaves
+  // every wardrobe material flat. This cube is what gives the plate's metal a
+  // specular lobe to sample, so without it the armour on this plate is black.
+  buildSkyEnvironment(scene, {
+    sky: SKY_COLOR,
+    ground: GROUND_COLOR,
+    intensity: ENVIRONMENT_INTENSITY,
+  });
 
   const host = new Mesh("menu-actor", scene);
   host.position.copyFrom(FEET);
