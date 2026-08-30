@@ -1,0 +1,135 @@
+{
+  "source": "procedural (tools/prep_tassets.py)",
+  "output": "D:/VSC/exiled-casual/assets/props/source/trellis_local/fauld-proc-v1.glb",
+  "object": "fauld",
+  "mesh_count": 1,
+  "triangles": 6586,
+  "vertices": 7211,
+  "components": 789,
+  "expected_components": {
+    "bands": 3,
+    "lames": 20,
+    "rivets": "one loose dome each"
+  },
+  "bbox_gltf_yup": {
+    "min": [
+      -0.2496,
+      -0.2315,
+      0.0
+    ],
+    "max": [
+      0.2496,
+      0.2315,
+      0.4207
+    ]
+  },
+  "materials": [
+    "fauld_steel"
+  ],
+  "uv_layers": [
+    "UVMap"
+  ],
+  "texture": {
+    "blenderkit_id": "8352b3b2-edb7-4700-a9d6-055ab6ec9233",
+    "blenderkit_name": "Aged Black Steel"
+  },
+  "rays": {
+    "+X@tassets_z0.21": {
+      "hit": false,
+      "at": null
+    },
+    "+X@fauld_z0.35": {
+      "hit": true,
+      "at": [
+        0.2013,
+        0.0,
+        0.35
+      ]
+    },
+    "-X@tassets_z0.21": {
+      "hit": false,
+      "at": null
+    },
+    "-X@fauld_z0.35": {
+      "hit": true,
+      "at": [
+        -0.2013,
+        0.0,
+        0.35
+      ]
+    },
+    "+Y@tassets_z0.21": {
+      "hit": false,
+      "at": null
+    },
+    "+Y@fauld_z0.35": {
+      "hit": true,
+      "at": [
+        0.0,
+        0.1864,
+        0.35
+      ]
+    },
+    "-Y@tassets_z0.21": {
+      "hit": false,
+      "at": null
+    },
+    "-Y@fauld_z0.35": {
+      "hit": true,
+      "at": [
+        0.0,
+        -0.1864,
+        0.35
+      ]
+    },
+    "thigh_left +X@z0.21": {
+      "hit": false,
+      "at": null
+    },
+    "thigh_left -X@z0.21": {
+      "hit": false,
+      "at": null
+    },
+    "thigh_left +Y@z0.21": {
+      "hit": true,
+      "at": [
+        -0.09,
+        0.2088,
+        0.21
+      ]
+    },
+    "thigh_left -Y@z0.21": {
+      "hit": true,
+      "at": [
+        -0.09,
+        -0.2088,
+        0.21
+      ]
+    },
+    "thigh_right +X@z0.21": {
+      "hit": false,
+      "at": null
+    },
+    "thigh_right -X@z0.21": {
+      "hit": false,
+      "at": null
+    },
+    "thigh_right +Y@z0.21": {
+      "hit": true,
+      "at": [
+        0.09,
+        0.2088,
+        0.21
+      ]
+    },
+    "thigh_right -Y@z0.21": {
+      "hit": true,
+      "at": [
+        0.09,
+        -0.2088,
+        0.21
+      ]
+    }
+  },
+  "slit_chord_at_hem_m": 0.0377
+}

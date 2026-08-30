@@ -66,3 +66,13 @@ skills-lock.json
 
 # Teaser build (npm run build:soon -w apps/web); deployed to BM-EXC, never committed
 apps/web/dist-soon/
+
+# Handoffs written for the agent working here, not for a contributor - the same
+# reason CLAUDE.md is local only.
+docs/handoffs/
+
+# TRELLIS scratch: 228 MB of intermediate scans and probe renders, plus one
+# ruled-out Tripo export. The donors the wardrobe build actually reads are the
+# prepped glbs beside them and in trellis_local/, and those are tracked.
+assets/props/source/trellis_test/
+assets/props/source/tripo_plate_cuirass.glb

@@ -1,0 +1,39 @@
+{
+ "built_from": "base.male.body hand + forearm weights, cut at the cuff plane",
+ "skin_gap_mm": 3.0,
+ "safe_share": 0.45,
+ "wall_mm": 2.0,
+ "relax_passes": [
+  3,
+  3,
+  7
+ ],
+ "cuff_up_mm": 55.0,
+ "cuff_flare_mm": 11.0,
+ "lame_mm": 1.5,
+ "shell_vertices": 901,
+ "pinched_vertices": [
+  793,
+  812
+ ],
+ "lame_vertices": 646,
+ "rim_edges": 34,
+ "inner_pulled": 286,
+ "thinnest_wall_mm": 0.103,
+ "vertices": 1802,
+ "triangles": 3600,
+ "triangles_reloaded": 3600,
+ "self_crossings": 0,
+ "source_crossings": 0,
+ "contain_clearance_mm": 9.0,
+ "contain_margin_mm": 1.12,
+ "contain_band": 0,
+ "roughness_pre_matte": 0.22,
+ "metallic": 0.85,
+ "symmetry_pairs": 29,
+ "symmetry_worst_mm": 0.00044,
+ "wrote": [
+  "D:/VSC/exiled-casual/assets/props/source/trellis_local/gauntlet-hand-v1.glb",
+  "D:/VSC/exiled-casual/assets/props/source/gauntlet-hand-v1.glb"
+ ]
+}
