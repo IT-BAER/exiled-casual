@@ -122,13 +122,6 @@
   <body>
     <div id="boot"><div id="boot-ring"></div></div>
     <div id="root"></div>
-    <!-- Arms the gilt focus ring on the first keyboard navigation, and never for
-         the mouse or for an autofocused button. -->
-    <script>
-      addEventListener("keydown", function (e) {
-        if (e.key === "Tab" || e.key.startsWith("Arrow")) document.body.dataset.kbd = "1";
-      }, { capture: true });
-    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

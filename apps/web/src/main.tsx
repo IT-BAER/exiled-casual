@@ -2,6 +2,23 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 
+/**
+ * Arms the gilt focus ring (`body[data-kbd] :focus-visible` in `index.html`) on
+ * the first keyboard navigation, and never for the mouse or for an autofocused
+ * button.
+ *
+ * In the module rather than an inline `<script>`: the production CSP serves
+ * `script-src 'self' 'wasm-unsafe-eval' blob:` with no `'unsafe-inline'`, so an
+ * inline listener is refused and the ring never turns on for a live player.
+ */
+addEventListener(
+  "keydown",
+  (e: KeyboardEvent) => {
+    if (e.key === "Tab" || e.key.startsWith("Arrow")) document.body.dataset.kbd = "1";
+  },
+  { capture: true },
+);
+
 const root = document.getElementById("root");
 if (!root) throw new Error("no #root element");
 createRoot(root).render(
