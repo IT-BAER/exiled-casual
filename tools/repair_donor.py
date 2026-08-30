@@ -12,10 +12,18 @@ Islands are the other half: a decode hands back the odd unattached flake, which
 reads as a lame hanging off an elbow. An island under a share of the largest
 one's vertex count is dropped.
 
+Size alone cannot pick a shell's intended openings: a bulky decode leaves
+boundary loops well past --max-loop that are still pinholes, and holes_fill
+run over a whole batch silently drops any loop that is non-planar,
+self-touching or vertex-sharing with another loop in the batch - the small
+loops in that batch stay open with no error. --keep-largest N instead ranks
+every welded boundary loop by edge count and keeps only the top N as openings,
+filling every other loop one at a time so one bad loop cannot sink the rest.
+
 Run:
   blender --background --factory-startup --python tools/repair_donor.py -- \
       --in <donor.glb> --out <repaired.glb> [--max-loop 32] [--island-share 0.02]
-      [--weld 0.0001]
+      [--weld 0.0001] [--keep-largest 0]
 """
 
 import sys
@@ -26,7 +34,8 @@ import bmesh
 
 def args():
     tail = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
-    out = {"in": None, "out": None, "max-loop": 12, "island-share": 0.02, "weld": 0.0001}
+    out = {"in": None, "out": None, "max-loop": 12, "island-share": 0.02, "weld": 0.0001,
+           "keep-largest": 0}
     for i in range(0, len(tail) - 1, 2):
         key = tail[i].lstrip("-")
         if key not in out:
@@ -78,6 +87,23 @@ def islands(bm):
     return groups
 
 
+def fill_loop(bm, edges):
+    """Close one boundary loop; return (new faces, edges still open).
+
+    holes_fill refuses non-planar or self-touching loops with no error, so a
+    triangle_fill fan over the same edges is the fallback rather than a
+    second bulk pass that would hide the same failure again.
+    """
+    result = bmesh.ops.holes_fill(bm, edges=edges, sides=len(edges))
+    new = [f for f in result.get("faces", []) if f.is_valid]
+    open_edges = [e for e in edges if e.is_valid and len(e.link_faces) == 1]
+    if open_edges:
+        result = bmesh.ops.triangle_fill(bm, use_beauty=True, edges=open_edges)
+        new += [f for f in result.get("faces", []) if f.is_valid]
+        open_edges = [e for e in edges if e.is_valid and len(e.link_faces) == 1]
+    return new, open_edges
+
+
 def main():
     opts = args()
     bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -108,16 +134,27 @@ def main():
             bmesh.ops.delete(bm, geom=dead, context="VERTS")
         dropped = sum(1 for g in groups[1:] if len(g) < floor)
 
-        small = [e for loop in loops_of(bm) if len(loop) <= opts["max-loop"] for e in loop]
-        kept = [loop for loop in loops_of(bm) if len(loop) > opts["max-loop"]]
-        if small:
-            new = bmesh.ops.holes_fill(bm, edges=small, sides=opts["max-loop"])
+        loops = loops_of(bm)
+        if opts["keep-largest"] > 0:
+            ranked = sorted(loops, key=len, reverse=True)
+            kept = ranked[:opts["keep-largest"]]
+            to_fill = ranked[opts["keep-largest"]:]
+        else:
+            kept = [loop for loop in loops if len(loop) > opts["max-loop"]]
+            to_fill = [loop for loop in loops if len(loop) <= opts["max-loop"]]
+
+        filled, failed = 0, []
+        for loop in to_fill:
+            new, open_edges = fill_loop(bm, loop)
             # Only the caps get their winding decided, and each against the ring
             # it closes. A recalc over the whole shell instead re-orients every
             # face from one seed and flips half a decoded surface black.
-            capped = [f for f in new.get("faces", []) if f.is_valid]
-            if capped:
-                bmesh.ops.recalc_face_normals(bm, faces=capped)
+            if new:
+                bmesh.ops.recalc_face_normals(bm, faces=new)
+            if open_edges:
+                failed.append(len(loop))
+            else:
+                filled += 1
 
         after_tris = sum(len(f.verts) - 2 for f in bm.faces)
         after_loops = len(loops_of(bm))
@@ -129,7 +166,8 @@ def main():
         print(f"{obj.name}: verts {before_verts} -> {after_verts}, "
               f"tris {before_tris} -> {after_tris} (+{after_tris - before_tris})")
         print(f"  boundary loops {len(before_loops)} -> {after_loops}, "
-              f"kept {len(kept)} openings over {opts['max-loop']} edges")
+              f"filled {filled}, kept {[len(loop) for loop in kept]} openings, "
+              f"failed {failed}")
         print(f"  islands dropped {dropped} under {floor:.0f} verts")
 
     bpy.ops.export_scene.gltf(filepath=opts["out"], export_format="GLB",
