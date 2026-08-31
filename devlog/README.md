@@ -219,3 +219,66 @@ icon.
 <td width="100%"><img src="screenshots/2026-08-14-ember-buckler-face.jpeg" alt="Close-up of the Ember Buckler strapped to the character's arm, iron face with molten cracks" width="100%"><br><sub>The Ember Buckler's painted face.</sub></td>
 </tr>
 </table>
+
+## 2026-08-19 · A real body under the armour
+
+The character is no longer a stand-in. He is a Quaternius Universal Base Character, repacked onto
+his own 65-joint Unreal-named skeleton and wearing his own pack's atlas, so the anatomy, the face
+and the skin all come from one source instead of three. Class picks the body and the starting gear;
+it does not touch the numbers yet.
+
+<table>
+<tr>
+<td width="100%"><img src="screenshots/2026-08-19-character-creation-body.jpeg" alt="Character creation screen with the new base body standing before a seated colossus" width="100%"><br><sub>The new base body in character creation.</sub></td>
+</tr>
+</table>
+
+## 2026-08-22 · Gear rides the skeleton it is skinned to
+
+First worn and held pieces on the new body: a helm, a wand and a buckler. Each is skinned to the
+bone it belongs on rather than parented to a socket, so the helm turns with the skull, the wand
+stays in the fist through the cast, and the buckler keeps its face pointed the way he does. The
+helm is sized to the smallest shell that still covers the whole cranium.
+
+<table>
+<tr>
+<td width="100%"><img src="screenshots/2026-08-22-helm-wand-buckler.jpeg" alt="Character wearing a helm, holding a wand in one hand and a buckler on the other arm" width="100%"><br><sub>Helm, wand and buckler, each on its own bone.</sub></td>
+</tr>
+</table>
+
+## 2026-08-23 · A full plate suit
+
+Body armour became a real suit instead of a recoloured torso: cuirass, pauldrons, belt, and a fauld
+of overlapping lames that ends just under the crotch and hugs the hips. Leather trousers are grown
+from the body's own legs, and the sabatons are their own pieces. The steel is matte black with a
+gloss pass, and the skirt closes all the way round.
+
+<table>
+<tr>
+<td width="100%"><img src="screenshots/2026-08-23-plate-suit.jpeg" alt="Character in a black plate suit with pauldrons, belt, fauld, leather trousers and boots" width="100%"><br><sub>Cuirass, pauldrons, fauld and boots.</sub></td>
+</tr>
+</table>
+
+## 2026-08-30 · A tower shield and something to reflect
+
+The tower shield hangs from the forearm and is sized on the character's height, not on a disc
+radius, so it reads as cover rather than a prop. The scene also carries a sky now: without one, a
+metal surface had nothing to reflect and every plate came out flat.
+
+<table>
+<tr>
+<td width="100%"><img src="screenshots/2026-08-30-tower-shield.jpeg" alt="Character in plate armour with a tall tower shield hanging from the forearm" width="100%"><br><sub>The tower shield on the forearm.</sub></td>
+</tr>
+</table>
+
+## 2026-08-31 · Worn gear hides the skin under it
+
+The body is cut into regions, so a plate covers the skin beneath it instead of letting it poke
+through at the seams. Shoulder caps are bounded by the arm they ride, which stops a breastplate
+being bound to the humerus and swinging with it. Arms stay deliberately bare.
+
+<table>
+<tr>
+<td width="100%"><img src="screenshots/2026-08-31-gear-hides-skin.jpeg" alt="Character in bright steel plate with gauntlets, no skin showing through the armour seams" width="100%"><br><sub>Steel plate with no skin through the seams.</sub></td>
+</tr>
+</table>
