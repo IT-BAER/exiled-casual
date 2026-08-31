@@ -30,6 +30,7 @@ import {
   HIPS_BOB,
   STRIKE_CLIPS,
   isLayeredClip,
+  hiddenBaseParts,
 } from "./rig";
 
 let engine: InstanceType<typeof NullEngine>;
@@ -280,6 +281,45 @@ function readAccessor(json: any, bin: Buffer, index: number): number[] {
   return out;
 }
 
+/**
+ * Worn steel replaces the body under it rather than standing over it. Skin the
+ * armour closes is not drawn at all, so nothing can poke through a plate at any
+ * pose, and the pieces the armour does NOT close stay on the body.
+ */
+describe("what worn gear hides of the body", () => {
+  it("leaves a bare man whole", () => {
+    expect([...hiddenBaseParts(BASE_LOOKS)]).toEqual([]);
+  });
+
+  it("takes the hands under gloves, the feet under boots and the trunk under a chest", () => {
+    expect([...hiddenBaseParts({ ...BASE_LOOKS, gloves: "plate" })].sort())
+      .toEqual(["hand_l", "hand_r"]);
+    expect([...hiddenBaseParts({ ...BASE_LOOKS, boots: "plate" })].sort())
+      .toEqual(["foot_l", "foot_r"]);
+    expect([...hiddenBaseParts({ ...BASE_LOOKS, chest: "plate" })].sort())
+      .toEqual(["torso"]);
+  });
+
+  /**
+   * The one that was already here: a fringe comes through a closed shell at the
+   * brow, and the helm is fitted to the bare skull rather than to a hairstyle.
+   */
+  it("still takes the hair under a helmet", () => {
+    expect([...hiddenBaseParts({ ...BASE_LOOKS, helmet: "iron" })]).toEqual(["hair"]);
+  });
+
+  /**
+   * The arms stay. This suit has half sleeves and the gauntlet cuff stops at the
+   * forearm, so hiding an arm would open bare air between the two rather than
+   * close anything.
+   */
+  it("leaves the arms alone, since no worn piece closes them", () => {
+    const dressed = { ...BASE_LOOKS, chest: "plate", gloves: "plate", boots: "plate" };
+    const hidden = hiddenBaseParts(dressed);
+    expect([...hidden].sort()).toEqual(["foot_l", "foot_r", "hand_l", "hand_r", "torso"]);
+  });
+});
+
 describe("wardrobe asset", () => {
   const MODELS = fileURLToPath(new URL("../../public/models/", import.meta.url));
   const glb = readFileSync(`${MODELS}wardrobe.glb`);
@@ -302,7 +342,11 @@ describe("wardrobe asset", () => {
     const meshNames = json.meshes.map((m) => m.name).sort();
     expect(meshNames).toEqual([
       "base.female.body", "base.female.brows", "base.female.eyes", "base.female.hair",
+      "base.female.torso", "base.female.hand_l", "base.female.hand_r",
+      "base.female.foot_l", "base.female.foot_r",
       "base.male.body", "base.male.brows", "base.male.eyes", "base.male.hair",
+      "base.male.torso", "base.male.hand_l", "base.male.hand_r",
+      "base.male.foot_l", "base.male.foot_r",
       "helmet.iron.helm", "weapon1.emberwand.mesh", "weapon2.buckler.mesh",
       "weapon2.towershield.mesh",
       "chest.plate.cuirass", "chest.plate.legs",

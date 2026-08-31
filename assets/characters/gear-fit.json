@@ -112,12 +112,12 @@
   "arm_socket_points": 30,
   "arm_socket_radius_mm": 69.16,
   "collar_below_neck_mm": -180.0,
-  "upper_arm_covered": 0.6384,
+  "upper_arm_covered": 0.6299,
   "upper_arm_points": 354,
   "bone": "upperarm_r",
   "fit": "plate_torso",
   "triangles": 3173,
-  "source": "plate-suit-15k-v3.glb",
+  "source": "plate-suit-15k-v5.glb",
   "split_from": "chest.plate.cuirass",
   "split_at_weight": 0.5,
   "overlap_band_mm": 120.0
@@ -166,12 +166,12 @@
   "arm_socket_points": 30,
   "arm_socket_radius_mm": 69.16,
   "collar_below_neck_mm": -180.0,
-  "upper_arm_covered": 0.6384,
+  "upper_arm_covered": 0.6299,
   "upper_arm_points": 354,
   "bone": "upperarm_l",
   "fit": "plate_torso",
-  "triangles": 3604,
-  "source": "plate-suit-15k-v3.glb",
+  "triangles": 2602,
+  "source": "plate-suit-15k-v5.glb",
   "split_from": "chest.plate.cuirass",
   "split_at_weight": 0.5,
   "overlap_band_mm": 120.0
@@ -220,7 +220,7 @@
   "arm_socket_points": 30,
   "arm_socket_radius_mm": 69.16,
   "collar_below_neck_mm": -180.0,
-  "upper_arm_covered": 0.6384,
+  "upper_arm_covered": 0.6299,
   "upper_arm_points": 354,
   "deform_bones": [
    "spine_01",
@@ -236,8 +236,8 @@
   "deform_groups": 9,
   "bone": "spine_03",
   "fit": "plate_torso",
-  "triangles": 11444,
-  "source": "plate-suit-15k-v3.glb"
+  "triangles": 10838,
+  "source": "plate-suit-15k-v5.glb"
  },
  "boots.plate.sabaton_r": {
   "foot_length_ratio": 1.54,

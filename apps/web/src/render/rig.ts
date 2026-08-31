@@ -285,14 +285,33 @@ export const BASE_LOOKS: Looks = {
 };
 
 /**
- * Hair is geometry, and a hard helm is a closed shell around the skull: worn
- * together the fringe comes through the steel at the brow and the temples. The
- * shell is fitted to the bare head on purpose (`tools/build_wardrobe.py` gates
- * the clearance against the skull, not the hairstyle), so the hair goes away
- * while a helmet is on rather than the helmet growing to swallow it.
+ * What each worn slot replaces of the body under it.
+ *
+ * Steel is not laid over skin. Fitting a shell around a limb and hoping the two
+ * never meet fails at some pose in some clip, and the failure is skin pushing
+ * out through a plate. The body is cut into these pieces by
+ * `split_body_regions` in `tools/build_wardrobe.py`, and the piece a worn item
+ * closes is simply not drawn - hair under a helmet was the first of them.
+ *
+ * Only what an item genuinely closes is listed. The arms are absent: this suit
+ * has half sleeves and the gauntlet cuff stops at the forearm, so hiding an arm
+ * would open bare air between the two rather than close anything.
  */
-export function hidesHair(looks: Looks): boolean {
-  return looks.helmet !== null;
+const COVERED_BY: Partial<Record<Slot, readonly string[]>> = {
+  helmet: ["hair"],
+  gloves: ["hand_l", "hand_r"],
+  boots: ["foot_l", "foot_r"],
+  chest: ["torso"],
+};
+
+/** The `base.<look>.<part>` pieces the worn gear replaces. */
+export function hiddenBaseParts(looks: Looks): ReadonlySet<string> {
+  const hidden = new Set<string>();
+  for (const [slot, parts] of Object.entries(COVERED_BY)) {
+    if (looks[slot as Slot] === null) continue;
+    for (const part of parts) hidden.add(part);
+  }
+  return hidden;
 }
 
 /**
@@ -698,13 +717,16 @@ export class RigActor {
   }
 
   private applyLooks(): void {
-    const bareHead = !hidesHair(this.looks);
+    const hidden = hiddenBaseParts(this.looks);
     for (const [slot, byLook] of this.parts) {
       const wanted = this.looks[slot as Slot] ?? null;
       for (const [look, meshes] of byLook) {
         const on = look === wanted;
         for (const mesh of meshes) {
-          mesh.setEnabled(on && (bareHead || !mesh.name.includes(".hair")));
+          // Only the body answers to coverage; a clone carries a Babylon suffix
+          // after the part, so the part is the third field and nothing else.
+          const part = slot === "base" ? mesh.name.split(".")[2] ?? "" : "";
+          mesh.setEnabled(on && !hidden.has(part));
         }
       }
     }

@@ -273,6 +273,24 @@ GAUNTLET_BONES = ("hand_r", "lowerarm_r") + tuple(f"{b}_r" for b in FINGER_BONES
 # joint it hangs from: `thigh_r` would drag the shaft up the leg on every stride.
 SABATON_BONES = ("calf_r", "foot_r", "ball_r")
 
+# A worn piece REPLACES the body under it. The skin it closes is not drawn at
+# all, so nothing can push out through a plate at any pose, and that needs the
+# body cut into pieces the runtime can switch off one at a time. The cut asks
+# the same summed-weight question `build_trousers` asks of the legs.
+#
+# Only what a piece genuinely CLOSES is listed. The arms are not: this suit has
+# half sleeves and the gauntlet cuff stops at the forearm, so hiding an arm
+# would open bare air between the two rather than close anything. Nor are the
+# neck and the clavicles - they stand in the cuirass's own collar and arm holes.
+BODY_REGIONS = {
+    "torso": ("spine_01", "spine_02", "spine_03"),
+    "hand_l": ("hand_l",) + tuple(f"{b}_l" for b in FINGER_BONES),
+    "hand_r": ("hand_r",) + tuple(f"{b}_r" for b in FINGER_BONES),
+    "foot_l": ("foot_l", "ball_l"),
+    "foot_r": ("foot_r", "ball_r"),
+}
+BODY_REGION_WEIGHT = 0.5    # summed weight over a region's bones to belong to it
+
 RIGID_GEAR = (
     {
         "slot": "helmet", "look": "iron", "part": "helm",
@@ -293,7 +311,7 @@ RIGID_GEAR = (
     },
     {
         "slot": "chest", "look": "plate", "part": "cuirass",
-        "src": "plate-suit-15k-v3.glb", "bone": "spine_03", "fit": "plate_torso",
+        "src": "plate-suit-15k-v5.glb", "bone": "spine_03", "fit": "plate_torso",
         "deform": TORSO_BONES, "split_arms": PLATE_ARMS,
         "matte": True, "twosided": True,
     },
@@ -2018,6 +2036,63 @@ def _cut_verts(obj, doomed):
     obj.data.update()
 
 
+def _cut_faces(obj, doomed):
+    """Drop a set of faces and any vertex left holding none."""
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    bm.faces.ensure_lookup_table()
+    bmesh.ops.delete(bm, geom=[bm.faces[i] for i in doomed], context="FACES")
+    loose = [v for v in bm.verts if not v.link_faces]
+    if loose:
+        bmesh.ops.delete(bm, geom=loose, context="VERTS")
+    bm.to_mesh(obj.data)
+    bm.free()
+    obj.data.update()
+
+
+def split_body_regions(body, look):
+    """Cut a body into the pieces worn steel is allowed to replace.
+
+    A face joins a region as soon as ONE of its corners belongs there, and the
+    body keeps only the faces with no corner in any region. The two never share
+    a triangle, so a region that is SHOWN meets the body with no crack, and a
+    region that is hidden leaves the single rim of faces the cuff over it
+    covers. Cutting by vertex instead would delete every straddling face from
+    both meshes and open that rim even with nothing worn.
+    """
+    bm = bmesh.new()
+    bm.from_mesh(body.data)
+    bm.verts.ensure_lookup_table()
+    dl = bm.verts.layers.deform.active
+    idx = {g.name: g.index for g in body.vertex_groups}
+    regions, claimed = [], set()
+    for region, bones in BODY_REGIONS.items():
+        missing = [b for b in bones if b not in idx]
+        if missing:
+            raise SystemExit(f"{body.name}: no vertex groups {missing}")
+        want = {idx[b] for b in bones}
+        core = {v.index for v in bm.verts
+                if sum(w for gi, w in v[dl].items() if gi in want) >= BODY_REGION_WEIGHT}
+        faces = {f.index for f in bm.faces if any(v.index in core for v in f.verts)}
+        if not faces:
+            raise SystemExit(f"{body.name}: nothing weighted to {region}")
+        regions.append((region, faces))
+        claimed |= faces
+    total = len(bm.faces)
+    bm.free()
+
+    for region, faces in regions:
+        piece = body.copy()
+        piece.data = body.data.copy()
+        piece.name = piece.data.name = f"base.{look}.{region}"
+        bpy.context.scene.collection.objects.link(piece)
+        _cut_faces(piece, [i for i in range(total) if i not in faces])
+        print(f"  {piece.name}: {len(piece.data.polygons)} faces")
+    _cut_faces(body, sorted(claimed))
+    print(f"  {body.name}: {len(body.data.polygons)} faces of {total} kept")
+    return [region for region, _ in regions]
+
+
 def split_arm_plates(donor, body, rig, arms, classify_bones, stem, at, margin):
     """Cut the shoulder caps off a torso shell into one rigid piece per arm.
 
@@ -2591,6 +2666,11 @@ def main():
     fitted = build_rigid_gear(male_rig, male_body)
     fitted.update(build_trousers(male_rig, male_body,
                                  [o for o in bpy.data.objects if o.type == "MESH"]))
+    # Last: everything above reads a whole body, as a transfer source or as the
+    # shell a copy is taken from.
+    for look in built:
+        split_body_regions(bpy.data.objects[f"base.{look}.body"], look)
+
     with open(FIT_REPORT, "w") as fh:
         json.dump(fitted, fh, indent=1)
 
