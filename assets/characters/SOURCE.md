@@ -57,7 +57,22 @@ Locally generated (TRELLIS.2), stripped of fourteen sliver shells by
 short fauld in one piece, worn over the leather trousers. It replaced the
 separate `chest.plate.tassets` skirt, whose donor and fitter are parked.
 
-The suit is worn as `plate-suit-15k-v5.glb`, v3 with one shell deleted. v3 kept
+The suit is worn as `plate-suit-15k-v6.glb`, a fresh generation off a dead-front
+reference: 14 860 tris, one mesh, one material, and ONE vertex-connected island,
+where v5 is two. It carries real value range, edge wear and a steel-versus-
+leather separation v5 never had. `review/3d/plate-suit/README.md` records how it
+was made and is the authority on that pipeline. It cost `PLATE_WIDTH_FROM`
+1.06 -> 0.98: at 1.06 its median skin-to-steel gap is 49.81 mm against a 40 mm
+limit and the fitter rejected it outright.
+
+Its SHOULDER is worse than v5's. From a side camera the deltoid is a stack of
+ragged thin lames with holes that show skin behind them, and rendering the
+cuirass with both caps hidden reproduces it, so it is the donor's own geometry
+and no rigging change reaches it. v5's shoulder is one clean dome. A v7 aimed at
+the shoulder is the standing plan; `review/plate-v6/side-v5.png` against
+`side-fixed-v6.png` is the comparison that decided it.
+
+v5 is `plate-suit-15k-v5.glb`, v3 with one shell deleted. v3 kept
 a 1 067-triangle shell floating over the LEFT shoulder with no counterpart on the
 right, and `split_arm_plates` cut it apart: 998 triangles into the cap, rigid on
 `upperarm_l`, and a 540- and a 40-triangle fragment into the cuirass, deforming
