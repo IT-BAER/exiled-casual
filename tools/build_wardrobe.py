@@ -251,6 +251,14 @@ PLATE_SPLIT_AT = 0.5     # arm weight at which the shell stops being torso
 # every vertex within this of the arm set and the torso drops only the arm set
 # eroded by the same, which leaves twice this much shell in both meshes.
 PLATE_SPLIT_MARGIN = 0.06
+# How far a cap may stand off the arm it rides, in metres, measured out from the
+# arm's OWN skin rather than guessed: a pauldron is a dome over the deltoid and
+# a sleeve down the humerus, and nothing further out is arm at any pose. Without
+# this the transfer hands the humerus every point of loose steel whose nearest
+# body surface happens to be the arm - collar, upper chest, the flank under the
+# armpit - and rigid binding then swings a slab of breastplate off the cuirass.
+PLATE_CAP_STANDOFF = 0.05   # out from the axis, past the widest arm skin
+PLATE_CAP_INBOARD = 0.02    # along the bone, past where the arm's skin starts
 
 # A fauld hangs off the belt and its tassets ride the thighs, so the skirt has
 # to answer to both legs and to the lumbar the cuirass above it already bends
@@ -311,7 +319,7 @@ RIGID_GEAR = (
     },
     {
         "slot": "chest", "look": "plate", "part": "cuirass",
-        "src": "plate-suit-15k-v5.glb", "bone": "spine_03", "fit": "plate_torso",
+        "src": "plate-suit-15k-v6.glb", "bone": "spine_03", "fit": "plate_torso",
         "deform": TORSO_BONES, "split_arms": PLATE_ARMS,
         "matte": True, "twosided": True,
     },
@@ -493,7 +501,10 @@ PLATE_TAPER_STEP = 0.02  # the taper is relaxed by this much per try
 # Asserted rather than assumed: past this the two-segment stretch is needed back.
 PLATE_FRONT = 0.15       # the hem is read over this depth of each face of the donor
 PLATE_HEM_LEVEL = 0.02   # most the front and back hems may differ by, metres
-PLATE_WIDTH_FROM = 1.06  # narrowest plate/chest width ratio worth trying
+# A chest box measured off skin includes soft tissue, so a cuirass that reads
+# narrower than it can still stand clear of every rib. Coverage and the gap floor
+# decide that, not this bound - it only says where the sweep starts looking.
+PLATE_WIDTH_FROM = 0.98  # narrowest plate/chest width ratio worth trying
 PLATE_WIDTH_TO = 1.45    # past this it is a barrel, whatever it measures
 PLATE_WIDTH_STEP = 0.02
 # The shoulder joint is measured as a ball on the body itself: the upper arm's
@@ -2093,13 +2104,42 @@ def split_body_regions(body, look):
     return [region for region, _ in regions]
 
 
-def split_arm_plates(donor, body, rig, arms, classify_bones, stem, at, margin):
+def arm_reach(body, rig, bone, at, standoff, inboard):
+    """The sleeve of air a cap for `bone` may occupy, measured off the arm.
+
+    Returned as the bone's own frame plus two bounds: how far inboard of the
+    arm's own skin the cap may reach along the bone, and how far out from the
+    bone axis. Both come from the body, so a different body moves them.
+    """
+    b = rig.data.bones[bone]
+    head = rig.matrix_world @ b.head_local
+    axis = ((rig.matrix_world @ b.tail_local) - head).normalized()
+    want = body.vertex_groups[bone].index
+    skin = [body.matrix_world @ v.co for v in body.data.vertices
+            if any(g.group == want and g.weight >= at for g in v.groups)]
+    if not skin:
+        raise SystemExit(f"{body.name}: no skin at {bone} weight {at}")
+    axial = [(p - head).dot(axis) for p in skin]
+    radial = [((p - head) - axis * t).length for p, t in zip(skin, axial)]
+    return head, axis, min(axial) - inboard, max(radial) + standoff
+
+
+def split_arm_plates(donor, body, rig, arms, classify_bones, stem, at, margin,
+                     standoff, inboard):
     """Cut the shoulder caps off a torso shell into one rigid piece per arm.
 
     A point of steel belongs to an arm when the body under it does: the same
     nearest-surface transfer the whole shell is skinned with answers that, and
     it answers it where the fault is, on the outer shoulder and down the sleeve,
     rather than on the flank a hanging arm bone happens to run past.
+
+    The transfer alone is not enough on a shell that stands off the skin. Steel
+    out in the air over the chest, the collar or the flank finds the arm as its
+    nearest body surface, and every point it hands the arm is then bound rigidly
+    to the humerus: a slab of breastplate that swings away from the cuirass the
+    moment the arm moves. `arm_reach` therefore bounds the cap to the sleeve of
+    air around the arm's own skin, and steel outside it stays torso whatever the
+    transfer says.
 
     That set is then dilated by `margin` for the cap and eroded by `margin` for
     the torso, so a band twice `margin` wide is cut into both meshes and the
@@ -2114,15 +2154,28 @@ def split_arm_plates(donor, body, rig, arms, classify_bones, stem, at, margin):
         want = idx[bone]
         w = [next((g.weight for g in v.groups if g.group == want), 0.0)
              for v in donor.data.vertices]
-        core = [i for i in range(n) if w[i] >= at]
-        outside = [i for i in range(n) if w[i] < at]
+        head, axis, axial_min, radial_max = arm_reach(
+            body, rig, bone, at, standoff, inboard)
+        reach = []
+        for p in pts:
+            t = (p - head).dot(axis)
+            reach.append(t >= axial_min
+                         and ((p - head) - axis * t).length <= radial_max)
+        core = [i for i in range(n) if w[i] >= at and reach[i]]
+        outside = [i for i in range(n) if not (w[i] >= at and reach[i])]
         if not core or not outside:
             raise SystemExit(f"{donor.name}: nothing to cut at {bone} weight {at}")
         near_core, near_outside = _kdtree(pts, core), _kdtree(pts, outside)
         # Dilated: the cap keeps the arm set and every vertex within `margin` of
         # it. Eroded: the torso drops only arm vertices that far inside the set.
-        dilated = {i for i in range(n) if near_core.find(pts[i])[2] <= margin}
+        # The reach bounds the dilation too, or the band grows the slab back.
+        dilated = {i for i in range(n)
+                   if reach[i] and near_core.find(pts[i])[2] <= margin}
         eroded = {i for i in core if near_outside.find(pts[i])[2] > margin}
+        print(f"  {bone}: cap reach {radial_max * 1000:.0f} mm off the bone, "
+              f"{axial_min * 1000:.0f} mm inboard; "
+              f"{sum(1 for i in range(n) if w[i] >= at and not reach[i])} vertices "
+              f"the transfer gave the arm are outside it and stay torso")
         piece = donor.copy()
         piece.data = donor.data.copy()
         bpy.context.scene.collection.objects.link(piece)
@@ -2344,7 +2397,8 @@ def build_rigid_gear(rig, body):
         if spec.get("split_arms"):
             caps = split_arm_plates(donor, body, rig, spec["split_arms"], PLATE_BONES,
                                     f"{spec['slot']}.{spec['look']}.pauldron",
-                                    PLATE_SPLIT_AT, PLATE_SPLIT_MARGIN)
+                                    PLATE_SPLIT_AT, PLATE_SPLIT_MARGIN,
+                                    PLATE_CAP_STANDOFF, PLATE_CAP_INBOARD)
         for piece, bone in caps:
             skin_to_bone(piece, rig, bone)
             cap_tris = sum(len(p.vertices) - 2 for p in piece.data.polygons)
