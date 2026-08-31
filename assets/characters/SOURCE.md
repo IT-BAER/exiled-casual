@@ -57,8 +57,25 @@ Locally generated (TRELLIS.2), stripped of fourteen sliver shells by
 short fauld in one piece, worn over the leather trousers. It replaced the
 separate `chest.plate.tassets` skirt, whose donor and fitter are parked.
 
-The suit is worn as `plate-suit-15k-v3.glb`, v1 run through
-`tools/repair_donor.py`. The decode came back UNWELDED - 24 016 vertices over
+The suit is worn as `plate-suit-15k-v5.glb`, v3 with one shell deleted. v3 kept
+a 1 067-triangle shell floating over the LEFT shoulder with no counterpart on the
+right, and `split_arm_plates` cut it apart: 998 triangles into the cap, rigid on
+`upperarm_l`, and a 540- and a 40-triangle fragment into the cuirass, deforming
+with the spine. The pieces swung apart on every pose and tore through the real
+cap, which is the black wreckage the left shoulder showed in `?viewer`.
+`repair_donor.py --keep-largest` cannot remove it, because the junk shell is
+larger than the fauld it would have to keep.
+
+Deleting it did NOT close the seam between the cap and the cuirass - it widened
+it, because the stray shell had been covering part of the hole. That seam is
+still open and is steel to steel, not skin.
+
+`plate-suit-15k-v4.glb` is a denser decode of the same suit (17 723 tris,
+1 416 of them the same stray shoulder shell) that nothing has ever worn. v5
+skips it rather than rebasing on it, so what ships stays the shell that was
+measured.
+
+v3 is v1 run through `tools/repair_donor.py`. The decode came back UNWELDED - 24 016 vertices over
 7 917 positions, so every triangle was its own island and the shell carried
 4 327 boundary loops. Most were pinholes five or six edges around, invisible in
 a thumbnail and a puncture you could see the void through on the pauldron at
