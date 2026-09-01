@@ -293,15 +293,17 @@ export const BASE_LOOKS: Looks = {
  * `split_body_regions` in `tools/build_wardrobe.py`, and the piece a worn item
  * closes is simply not drawn - hair under a helmet was the first of them.
  *
- * Only what an item genuinely closes is listed. The arms are absent: this suit
- * has half sleeves and the gauntlet cuff stops at the forearm, so hiding an arm
- * would open bare air between the two rather than close anything.
+ * Only what an item genuinely closes is listed. The plate suit is a whole
+ * harness cut off at the skull base, the wrists and the ankles, so it closes
+ * the trunk, both arms and both legs. The head, the hands and the feet are
+ * absent because a helmet, a gauntlet and a boot own those and each is its own
+ * item.
  */
 const COVERED_BY: Partial<Record<Slot, readonly string[]>> = {
   helmet: ["hair"],
   gloves: ["hand_l", "hand_r"],
   boots: ["foot_l", "foot_r"],
-  chest: ["torso"],
+  chest: ["torso", "arm_l", "arm_r", "leg_l", "leg_r"],
 };
 
 /** The `base.<look>.<part>` pieces the worn gear replaces. */

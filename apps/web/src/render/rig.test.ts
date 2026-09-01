@@ -216,30 +216,21 @@ const RIGID_BONES: Record<string, string> = {
   "helmet.iron.helm": "Head",
   "weapon1.emberwand.mesh": "hand_r",
   "weapon2.buckler.mesh": "lowerarm_l",
-  // The shoulder caps are cut off the suit precisely so they can be rigid: an
-  // edge welded across a shoulder joint stretches up to eight times its rest
-  // length when the arm lifts, and no weighting removes that.
-  "chest.plate.pauldron_l": "upperarm_l",
-  "chest.plate.pauldron_r": "upperarm_r",
 };
 
 /**
- * Every joint the suit is allowed to answer to; see `PLATE_BONES` in the build.
- * It is one shell from the gorget to the fauld's hem, so it answers to the hips
- * and both thighs as well as the trunk and the shoulders.
+ * Every joint the suit is allowed to answer to; see `SUIT_BONES` in the build.
+ * It is one harness from the gorget to the ankles, so it answers to both elbows
+ * and both knees as well as the trunk, the shoulders and the hips.
  */
 const PLATE_BONES = [
   "spine_01", "spine_02", "spine_03", "neck_01",
   "clavicle_l", "clavicle_r", "upperarm_l", "upperarm_r",
-  "pelvis", "thigh_l", "thigh_r",
+  "lowerarm_l", "lowerarm_r",
+  "pelvis", "thigh_l", "thigh_r", "calf_l", "calf_r",
 ];
 
 
-/**
- * Every joint the trousers are allowed to answer to; see `LEG_BONES` in the
- * build, plus the `spine_01` the waist rim picks up off the body's own weights.
- */
-const LEG_BONES = ["pelvis", "thigh_l", "thigh_r", "calf_l", "calf_r", "spine_01"];
 
 /**
  * Each sabaton and the leg it belongs to; see `SABATON_BONES` in the build.
@@ -297,7 +288,7 @@ describe("what worn gear hides of the body", () => {
     expect([...hiddenBaseParts({ ...BASE_LOOKS, boots: "plate" })].sort())
       .toEqual(["foot_l", "foot_r"]);
     expect([...hiddenBaseParts({ ...BASE_LOOKS, chest: "plate" })].sort())
-      .toEqual(["torso"]);
+      .toEqual(["arm_l", "arm_r", "leg_l", "leg_r", "torso"]);
   });
 
   /**
@@ -309,14 +300,17 @@ describe("what worn gear hides of the body", () => {
   });
 
   /**
-   * The arms stay. This suit has half sleeves and the gauntlet cuff stops at the
-   * forearm, so hiding an arm would open bare air between the two rather than
-   * close anything.
+   * A dressed man is steel from the collar down. The suit closes the trunk, the
+   * arms and the legs; the gauntlets and the boots close what it was cut short
+   * of. Only the head and the neck are still his own.
    */
-  it("leaves the arms alone, since no worn piece closes them", () => {
+  it("leaves nothing of a fully dressed man but his head", () => {
     const dressed = { ...BASE_LOOKS, chest: "plate", gloves: "plate", boots: "plate" };
     const hidden = hiddenBaseParts(dressed);
-    expect([...hidden].sort()).toEqual(["foot_l", "foot_r", "hand_l", "hand_r", "torso"]);
+    expect([...hidden].sort()).toEqual([
+      "arm_l", "arm_r", "foot_l", "foot_r", "hand_l", "hand_r",
+      "leg_l", "leg_r", "torso",
+    ]);
   });
 });
 
@@ -344,13 +338,16 @@ describe("wardrobe asset", () => {
       "base.female.body", "base.female.brows", "base.female.eyes", "base.female.hair",
       "base.female.torso", "base.female.hand_l", "base.female.hand_r",
       "base.female.foot_l", "base.female.foot_r",
+      "base.female.arm_l", "base.female.arm_r",
+      "base.female.leg_l", "base.female.leg_r",
       "base.male.body", "base.male.brows", "base.male.eyes", "base.male.hair",
       "base.male.torso", "base.male.hand_l", "base.male.hand_r",
       "base.male.foot_l", "base.male.foot_r",
+      "base.male.arm_l", "base.male.arm_r",
+      "base.male.leg_l", "base.male.leg_r",
       "helmet.iron.helm", "weapon1.emberwand.mesh", "weapon2.buckler.mesh",
       "weapon2.towershield.mesh",
-      "chest.plate.cuirass", "chest.plate.legs",
-      "chest.plate.pauldron_l", "chest.plate.pauldron_r",
+      "chest.plate.cuirass",
       "boots.plate.sabaton_l", "boots.plate.sabaton_r",
       "gloves.plate.gauntlet_l", "gloves.plate.gauntlet_r",
     ].sort());
@@ -395,7 +392,7 @@ describe("wardrobe asset", () => {
    * set it was fitted against, and every vertex must carry a full unit of weight
    * - an unnormalised vertex drags toward the origin as a spike.
    */
-  it("deforms the suit over the spine, both shoulders and both thighs", () => {
+  it("deforms the suit over the spine, both elbows and both knees", () => {
     const bin = glb.subarray(20 + json.buffers0Len);
     const node = json.nodes.find((n) => n.name === "chest.plate.cuirass");
     expect(node, "no node chest.plate.cuirass").toBeDefined();
@@ -420,36 +417,23 @@ describe("wardrobe asset", () => {
     // the pelvis and a thigh walks straight out through it.
     expect(names).toContain("thigh_l");
     expect(names).toContain("thigh_r");
+    // And the harness runs to the ankles, so the greave and the vambrace have
+    // to answer to the joints above them or a shin swings with the thigh.
+    expect(names).toContain("calf_l");
+    expect(names).toContain("calf_r");
+    expect(names).toContain("lowerarm_l");
+    expect(names).toContain("lowerarm_r");
   });
 
   /**
-   * The trousers are the body's own leg surface pushed out four millimetres, so
-   * their weights are the skin's weights and nothing else: a group from outside
-   * the leg set means the copy picked up a neighbour's influence and the leather
-   * will part from the leg it was cut from, which is the one thing this
-   * technique exists to make impossible.
+   * The trousers are parked, and this is what says so out loud. They were the
+   * body's own leg surface pushed out four millimetres and called leather,
+   * standing in for leg armour the chest slot did not have; the harness carries
+   * cuisses and greaves of its own now, so shipping them again would only bury
+   * a second pair of legs inside the steel.
    */
-  it("deforms the trousers over the legs alone, on the body's own weights", () => {
-    const bin = glb.subarray(20 + json.buffers0Len);
-    const node = json.nodes.find((n) => n.name === "chest.plate.legs");
-    expect(node, "no node chest.plate.legs").toBeDefined();
-    const prim = json.meshes[node!.mesh!]!.primitives[0]!;
-    const joints = readAccessor(json, bin, prim.attributes["JOINTS_0"]!);
-    const weights = readAccessor(json, bin, prim.attributes["WEIGHTS_0"]!);
-    const skin = json.skins[node!.skin!]!;
-    const used = new Set<number>();
-    for (let v = 0; v < weights.length / 4; v += 1) {
-      const w = weights.slice(v * 4, v * 4 + 4);
-      const j = joints.slice(v * 4, v * 4 + 4);
-      for (let k = 0; k < 4; k += 1) {
-        if (w[k]! > 0.0001) used.add(j[k]!);
-      }
-      expect(w[0]! + w[1]! + w[2]! + w[3]!).toBeCloseTo(1, 3);
-    }
-    const names = [...used].map((u) => json.nodes[skin.joints[u]!]!.name).sort();
-    expect(names.every((n) => LEG_BONES.includes(n)), `strays: ${names}`).toBe(true);
-    expect(names).toContain("thigh_l");
-    expect(names).toContain("calf_r");
+  it("ships no stand-in trousers under the harness", () => {
+    expect(json.nodes.find((n) => n.name === "chest.plate.legs")).toBeUndefined();
   });
 
   /**
