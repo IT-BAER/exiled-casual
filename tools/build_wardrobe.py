@@ -260,21 +260,26 @@ PLATE_SPLIT_MARGIN = 0.06
 PLATE_CAP_STANDOFF = 0.05   # out from the axis, past the widest arm skin
 PLATE_CAP_INBOARD = 0.02    # along the bone, past where the arm's skin starts
 
-# The full harness answers to every joint it spans, elbows and knees included.
-# Steel bent by a smooth transfer reads soft at those two joints; the trade is
-# taken on purpose, because the alternative - a rigid segment per limb section -
-# opens a crack at the outside of every hard bend, and a crack shows the body
-# that is no longer drawn under it.
+# The harness answers to every joint it spans, the knees included. Steel bent by
+# a smooth transfer reads soft at a knee; the trade is taken on purpose, because
+# the alternative - a rigid segment per limb section - opens a crack at the
+# outside of every hard bend, and a crack shows the body that is no longer drawn
+# under it. No forearm: the sleeve is cut off at the pauldron.
 SUIT_BONES = ("spine_01", "spine_02", "spine_03", "neck_01",
               "clavicle_l", "clavicle_r", "upperarm_l", "upperarm_r",
-              "lowerarm_l", "lowerarm_r",
               "pelvis", "thigh_l", "thigh_r", "calf_l", "calf_r")
-# How far past a wrist the gauntlet cut reaches and how wide it opens, both as
-# multiples of what the rig measures there - the hand's own length and the
-# forearm's own skin radius. Wide enough to take a steel glove standing off the
-# hand, tight enough that it cannot bite the fauld hanging beside the wrist.
-SUIT_HAND_REACH = 1.6
-SUIT_WRIST_RADIUS = 2.0
+# Where the sleeve ends, as a fraction of the upper arm from shoulder to elbow.
+# Body armour carries a pauldron over the deltoid and stops; the arm below it is
+# skin and the hand belongs to the glove slot.
+SUIT_PAULDRON_DROP = 0.5
+# The gorget. How far above the skull base the collar rim is drawn, as a
+# fraction of the neck's own length, and how wide the collar column reaches off
+# the neck axis in the neck's own skin radii. The donor's collar stops at the
+# skull base, which leaves the throat bare between it and a helmet rim; lifted
+# this far it meets every helm rim the wardrobe carries and stands under the jaw
+# on a bare head, which is what a gorget does.
+SUIT_GORGET_LIFT = 0.5
+SUIT_GORGET_RADIUS = 2.2
 # How wide the sleeve reaches off the arm axis, in the arm's own skin radii.
 # Generous enough to hold a pauldron standing over the deltoid, tight enough
 # that the fauld hanging 40 cm below the axis is never mistaken for a sleeve.
@@ -1487,7 +1492,9 @@ def trim_donor(donor, M, keep):
 
 
 def taper_sleeves(donor, M, body, rig):
-    """Draw the harness's arms in to the length this body's arms have.
+    """PARKED - the shipping suit is cut at the pauldron, so no sleeve survives.
+
+    Draw the harness's arms in to the length this body's arms have.
 
     One sweep sizes the whole figure off the trunk, and a generated figure's
     arms are their own proportion: this one reaches 44 % past the fingertips of
@@ -1552,6 +1559,52 @@ def taper_sleeves(donor, M, body, rig):
     }
 
 
+def lift_gorget(donor, M, body, rig):
+    """Draw the collar rim up until it meets a helmet, pinned at the neck's base.
+
+    A z map with the same shape as `taper_sleeves`' x map: nothing at or below
+    the base of the neck moves, so the breastplate the sweep just sized stays
+    where it was sized, and the collar column above it is stretched by one
+    factor. The column is picked out by the neck's OWN axis, so the pauldrons
+    standing 21 cm out to each side are never part of it.
+
+    Run AFTER the head cut, or the donor's own helm is still standing in the
+    column and it, not the collar, is what the top reads.
+    """
+    inv = M.inverted()
+    base = rig.matrix_world @ rig.data.bones["neck_01"].head_local
+    skull = (rig.matrix_world @ rig.data.bones["Head"].head_local).z
+    bound = limb_radius(rig, body, "neck_01", 1.0)[1] * SUIT_GORGET_RADIUS
+    target = skull + (skull - base.z) * SUIT_GORGET_LIFT
+
+    def collar(p):
+        return p.z > base.z and math.hypot(p.x - base.x, p.y - base.y) <= bound
+
+    world = [M @ v.co for v in donor.data.vertices]
+    up = [p for p in world if collar(p)]
+    if not up:
+        raise SystemExit(f"no harness steel stands above the neck base within "
+                         f"{bound:.4f} m of its axis: no collar to lift")
+    top = max(p.z for p in up)
+    factor = (target - base.z) / (top - base.z)
+    if factor <= 1.0:
+        return {"gorget_factor": 1.0, "gorget_top_m": round(top, 4),
+                "gorget_target_m": round(target, 4), "gorget_points": len(up)}
+    for v, p in zip(donor.data.vertices, world):
+        if collar(p):
+            v.co = inv @ Vector((p.x, p.y, base.z + (p.z - base.z) * factor))
+    donor.data.update()
+    return {
+        "gorget_factor": round(factor, 4),
+        "gorget_pin_z": round(base.z, 4),
+        "gorget_axis_bound_m": round(bound, 4),
+        "gorget_points": len(up),
+        "gorget_top_m": round(top, 4),
+        "gorget_target_m": round(target, 4),
+        "gorget_top_after_m": round(max((M @ v.co).z for v in donor.data.vertices), 4),
+    }
+
+
 def fit_plate_suit(donor, body, rig):
     """Place a whole harness on the body, then cut it back to the chest slot.
 
@@ -1564,10 +1617,10 @@ def fit_plate_suit(donor, body, rig):
     trunk is.
 
     Then three cuts, all read off the rig: everything above the skull base is a
-    helm, everything past a wrist is a gauntlet, everything below an ankle is a
-    boot. Those are their own slots and their own items, so the chest may not
-    draw them. What is left runs collar to ankle and REPLACES the torso, both
-    arms and both legs - see `BODY_REGIONS`.
+    helm, everything outboard of the pauldron is an arm, everything below an
+    ankle is a boot. Those are their own slots and their own items, so the chest
+    may not draw them. What is left is trunk, pauldrons, fauld and legs, and it
+    REPLACES the torso and both legs - see `BODY_REGIONS`.
 
     Measured against the REST body, for the reason `fit_plate_torso` gives.
     """
@@ -1637,15 +1690,11 @@ def fit_plate_suit(donor, body, rig):
         raise SystemExit("no suit size both covers the ribs and stays a harness; "
                          f"ratio, p01, median, ribs, arms: {tries}")
 
-    # Before any cut, so the gauntlet the wrist cut removes is the one that has
-    # been brought back to where this body's hand actually is.
-    sleeves = taper_sleeves(donor, placement, body, rig)
-    arm_cov_after = covered_radially(bvh_of(donor, placement), arms, arm_segments)
-
     # The helm. `Head` starts at the skull base, so the gorget below the plane
     # is kept and the neck stays inside it.
     head_z = (rig.matrix_world @ rig.data.bones["Head"].head_local).z
     cut_head = trim_donor(donor, placement, lambda p: p.z <= head_z)
+    gorget = lift_gorget(donor, placement, body, rig)
 
     # The sabatons. Both ankles, averaged, because the rest pose stands level
     # and a per-side plane would cut the two shins at different heights.
@@ -1653,32 +1702,21 @@ def fit_plate_suit(donor, body, rig):
                   for n in ("foot_l", "foot_r")) / 2
     cut_feet = trim_donor(donor, placement, lambda p: p.z >= ankle_z)
 
-    # The gauntlets. A sphere round the wrist would swallow the fauld hanging
-    # beside it, so each cut is the forearm's OWN sleeve of air: past the wrist
-    # along the bone, inside this much of its axis, and no further than the hand
-    # is long. All three bounds are the rig's, none is a constant in metres.
-    cut_hands = 0
-    wrists = {}
-    for side in "lr":
-        _, radius = limb_radius(rig, body, f"lowerarm_{side}", 1.0)
-        elbow = rig.matrix_world @ rig.data.bones[f"lowerarm_{side}"].head_local
-        wrist = rig.matrix_world @ rig.data.bones[f"hand_{side}"].head_local
-        axis = (wrist - elbow).normalized()
-        reach = max((rig.matrix_world @ rig.data.bones[f"middle_03_{side}"].tail_local
-                     - wrist).length, radius) * SUIT_HAND_REACH
-        bound = radius * SUIT_WRIST_RADIUS
-
-        def keep(p, wrist=wrist, axis=axis, reach=reach, bound=bound):
-            along = (p - wrist).dot(axis)
-            if along <= 0.0 or along > reach:
-                return True
-            return (p - wrist - axis * along).length > bound
-
-        cut_hands += trim_donor(donor, placement, keep)
-        wrists[side] = {"reach_m": round(reach, 4), "radius_m": round(bound, 4)}
-    if not cut_head or not cut_feet or not cut_hands:
+    # The sleeves. Body armour ends at the pauldron, so everything outboard of a
+    # plane part way down the upper arm goes with the arm it was drawn for. The
+    # plane is paired with the arm's own axis cylinder, or the same cut takes
+    # the fauld hanging 40 cm below it. One pass for both arms: the rest pose is
+    # symmetric about x and the donor was seated on it.
+    shoulder = rig.matrix_world @ rig.data.bones["upperarm_l"].head_local
+    elbow = rig.matrix_world @ rig.data.bones["lowerarm_l"].head_local
+    edge = abs(shoulder.x) + abs(elbow.x - shoulder.x) * SUIT_PAULDRON_DROP
+    bound = arm_socket(rig, body, "l")[1] * SUIT_SLEEVE_RADIUS
+    cut_arms = trim_donor(donor, placement, lambda p: (
+        abs(p.x) <= edge
+        or math.hypot(p.y - shoulder.y, p.z - shoulder.z) > bound))
+    if not cut_head or not cut_feet or not cut_arms:
         raise SystemExit(f"a harness cut removed nothing - head {cut_head}, feet "
-                         f"{cut_feet}, hands {cut_hands}: this donor is not a whole figure")
+                         f"{cut_feet}, arms {cut_arms}: this donor is not a whole figure")
 
     # The one clipping question left. Everything the suit closes is switched off
     # under it, so the only skin that can come through steel is the throat and
@@ -1693,8 +1731,7 @@ def fit_plate_suit(donor, body, rig):
                          f"{PLATE_MIN_GAP * 1000:.1f}: the collar needs raising, not scaling")
 
     return placement, {
-        **sleeves,
-        "upper_arm_covered_after_sleeves": round(arm_cov_after, 4),
+        **gorget,
         "neck_gap_p01_mm": round(neck_p01 * 1000, 2),
         "neck_gap_median_mm": round(neck_med * 1000, 2),
         "neck_points": len(drawn),
@@ -1719,8 +1756,9 @@ def fit_plate_suit(donor, body, rig):
         "cut_ankle_z": round(ankle_z, 4),
         "cut_verts_head": cut_head,
         "cut_verts_feet": cut_feet,
-        "cut_verts_hands": cut_hands,
-        "cut_wrists": wrists,
+        "cut_verts_arms": cut_arms,
+        "cut_pauldron_edge_x": round(edge, 4),
+        "cut_pauldron_bound_m": round(bound, 4),
         "size_tries": tries,
     }
 

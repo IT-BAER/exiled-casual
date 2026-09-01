@@ -70,16 +70,15 @@
   "source": "tower-shield-10k-v3.glb"
  },
  "chest.plate.cuirass": {
-  "sleeve_factor": 0.6391,
-  "sleeve_pin_x": 0.212,
-  "sleeve_axis_bound_m": 0.2075,
-  "sleeve_points": 8300,
-  "sleeve_reach_m": 1.0794,
-  "sleeve_target_m": 0.7664,
-  "sleeve_reach_after_m": 0.7664,
-  "upper_arm_covered_after_sleeves": 0.387,
-  "neck_gap_p01_mm": 2.95,
-  "neck_gap_median_mm": 85.68,
+  "gorget_factor": 1.5844,
+  "gorget_pin_z": 1.5205,
+  "gorget_axis_bound_m": 0.1554,
+  "gorget_points": 617,
+  "gorget_top_m": 1.5956,
+  "gorget_target_m": 1.6395,
+  "gorget_top_after_m": 1.6395,
+  "neck_gap_p01_mm": 1.89,
+  "neck_gap_median_mm": 66.64,
   "neck_points": 1538,
   "trunk_width_ratio": 1.06,
   "width_scale": 2.15345,
@@ -102,17 +101,9 @@
   "cut_ankle_z": 0.0865,
   "cut_verts_head": 351,
   "cut_verts_feet": 1711,
-  "cut_verts_hands": 369,
-  "cut_wrists": {
-   "l": {
-    "reach_m": 0.3425,
-    "radius_m": 0.0822
-   },
-   "r": {
-    "reach_m": 0.3425,
-    "radius_m": 0.0822
-   }
-  },
+  "cut_verts_arms": 6191,
+  "cut_pauldron_edge_x": 0.3375,
+  "cut_pauldron_bound_m": 0.2075,
   "size_tries": [
    [
     0.98,
@@ -159,18 +150,16 @@
    "clavicle_r",
    "upperarm_l",
    "upperarm_r",
-   "lowerarm_l",
-   "lowerarm_r",
    "pelvis",
    "thigh_l",
    "thigh_r",
    "calf_l",
    "calf_r"
   ],
-  "deform_groups": 15,
+  "deform_groups": 13,
   "bone": "spine_03",
   "fit": "plate_suit",
-  "triangles": 18326,
+  "triangles": 13889,
   "source": "plate-suit-20k-v8.glb"
  },
  "boots.plate.sabaton_r": {

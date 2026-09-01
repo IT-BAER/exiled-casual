@@ -220,13 +220,13 @@ const RIGID_BONES: Record<string, string> = {
 
 /**
  * Every joint the suit is allowed to answer to; see `SUIT_BONES` in the build.
- * It is one harness from the gorget to the ankles, so it answers to both elbows
- * and both knees as well as the trunk, the shoulders and the hips.
+ * It is one harness from the gorget to the ankles, so it answers to both knees
+ * as well as the trunk, the shoulders and the hips. No forearm: the sleeve ends
+ * at the pauldron and the arm below it is skin.
  */
 const PLATE_BONES = [
   "spine_01", "spine_02", "spine_03", "neck_01",
   "clavicle_l", "clavicle_r", "upperarm_l", "upperarm_r",
-  "lowerarm_l", "lowerarm_r",
   "pelvis", "thigh_l", "thigh_r", "calf_l", "calf_r",
 ];
 
@@ -288,7 +288,7 @@ describe("what worn gear hides of the body", () => {
     expect([...hiddenBaseParts({ ...BASE_LOOKS, boots: "plate" })].sort())
       .toEqual(["foot_l", "foot_r"]);
     expect([...hiddenBaseParts({ ...BASE_LOOKS, chest: "plate" })].sort())
-      .toEqual(["arm_l", "arm_r", "leg_l", "leg_r", "torso"]);
+      .toEqual(["leg_l", "leg_r", "torso"]);
   });
 
   /**
@@ -300,16 +300,15 @@ describe("what worn gear hides of the body", () => {
   });
 
   /**
-   * A dressed man is steel from the collar down. The suit closes the trunk, the
-   * arms and the legs; the gauntlets and the boots close what it was cut short
-   * of. Only the head and the neck are still his own.
+   * A dressed man keeps his head, his neck and his bare arms. The suit closes
+   * the trunk and the legs, the gauntlets close the hands and the boots close
+   * the feet; between pauldron and gauntlet the arm is his own.
    */
-  it("leaves nothing of a fully dressed man but his head", () => {
+  it("leaves a dressed man his head and his arms", () => {
     const dressed = { ...BASE_LOOKS, chest: "plate", gloves: "plate", boots: "plate" };
     const hidden = hiddenBaseParts(dressed);
     expect([...hidden].sort()).toEqual([
-      "arm_l", "arm_r", "foot_l", "foot_r", "hand_l", "hand_r",
-      "leg_l", "leg_r", "torso",
+      "foot_l", "foot_r", "hand_l", "hand_r", "leg_l", "leg_r", "torso",
     ]);
   });
 });
@@ -417,12 +416,10 @@ describe("wardrobe asset", () => {
     // the pelvis and a thigh walks straight out through it.
     expect(names).toContain("thigh_l");
     expect(names).toContain("thigh_r");
-    // And the harness runs to the ankles, so the greave and the vambrace have
-    // to answer to the joints above them or a shin swings with the thigh.
+    // And the harness runs to the ankles, so the greave has to answer to the
+    // joint above it or a shin swings with the thigh.
     expect(names).toContain("calf_l");
     expect(names).toContain("calf_r");
-    expect(names).toContain("lowerarm_l");
-    expect(names).toContain("lowerarm_r");
   });
 
   /**

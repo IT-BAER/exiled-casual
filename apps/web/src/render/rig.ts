@@ -295,15 +295,15 @@ export const BASE_LOOKS: Looks = {
  *
  * Only what an item genuinely closes is listed. The plate suit is a whole
  * harness cut off at the skull base, the wrists and the ankles, so it closes
- * the trunk, both arms and both legs. The head, the hands and the feet are
- * absent because a helmet, a gauntlet and a boot own those and each is its own
- * item.
+ * the trunk and both legs. The arms, the head, the hands and the feet are
+ * absent because the arm is skin under a pauldron and a helmet, a gauntlet and
+ * a boot own the rest, each its own item.
  */
 const COVERED_BY: Partial<Record<Slot, readonly string[]>> = {
   helmet: ["hair"],
   gloves: ["hand_l", "hand_r"],
   boots: ["foot_l", "foot_r"],
-  chest: ["torso", "arm_l", "arm_r", "leg_l", "leg_r"],
+  chest: ["torso", "leg_l", "leg_r"],
 };
 
 /** The `base.<look>.<part>` pieces the worn gear replaces. */
