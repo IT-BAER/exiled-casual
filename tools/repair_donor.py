@@ -95,13 +95,15 @@ def fill_loop(bm, edges):
     second bulk pass that would hide the same failure again.
     """
     result = bmesh.ops.holes_fill(bm, edges=edges, sides=len(edges))
-    new = [f for f in result.get("faces", []) if f.is_valid]
+    new = list(result.get("faces", []))
     open_edges = [e for e in edges if e.is_valid and len(e.link_faces) == 1]
     if open_edges:
         result = bmesh.ops.triangle_fill(bm, use_beauty=True, edges=open_edges)
-        new += [f for f in result.get("faces", []) if f.is_valid]
+        new += result.get("faces", [])
         open_edges = [e for e in edges if e.is_valid and len(e.link_faces) == 1]
-    return new, open_edges
+    # triangle_fill can remove a face holes_fill just made, so validity is
+    # decided once at the end; a stale face kills recalc_face_normals.
+    return [f for f in new if f.is_valid], open_edges
 
 
 def main():
