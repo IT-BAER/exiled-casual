@@ -280,6 +280,20 @@ SUIT_PAULDRON_DROP = 0.5
 # on a bare head, which is what a gorget does.
 SUIT_GORGET_LIFT = 0.5
 SUIT_GORGET_RADIUS = 2.2
+# The collar rim is levelled sector by sector, not stretched by one factor: this
+# donor's collar stands 40 mm higher at the throat than behind the neck, and one
+# factor that closes the back drives the front through the helmet.
+SUIT_GORGET_SECTORS = 16
+SUIT_GORGET_MAX = 2.2
+# The pauldron. A generated figure's shoulder is its own girth, and this one is
+# thinner than the body it is worn on, so the deltoid comes through the plate.
+# The cap is grown about the arm's own axis until the deltoid under it is
+# inside, ramped in over this much of its span so it does not tear off the
+# breastplate, and never grown by more than this factor.
+SUIT_PAULDRON_STANDOFF = 0.006
+SUIT_PAULDRON_MAX = 1.8
+SUIT_PAULDRON_SECTORS = 12
+SUIT_PAULDRON_RAMP = 0.08
 # How wide the sleeve reaches off the arm axis, in the arm's own skin radii.
 # Generous enough to hold a pauldron standing over the deltoid, tight enough
 # that the fauld hanging 40 cm below the axis is never mistaken for a sleeve.
@@ -319,6 +333,12 @@ SABATON_BONES = ("calf_r", "foot_r", "ball_r")
 # collar and arm holes.
 BODY_REGIONS = {
     "torso": ("spine_01", "spine_02", "spine_03"),
+    # The neck and both clavicles as ONE region, claimed by the chest. Split in
+    # three they leave the vertices that blend across them under every region's
+    # weight floor, and those are exactly the ones standing between a gorget and
+    # a pauldron. The lifted gorget stands above the skull base, so the head's
+    # own rim sits inside it and nothing opens where this goes.
+    "collar": ("neck_01", "clavicle_l", "clavicle_r"),
     "arm_l": ("upperarm_l", "lowerarm_l"),
     "arm_r": ("upperarm_r", "lowerarm_r"),
     "leg_l": ("thigh_l", "calf_l"),
@@ -1580,28 +1600,140 @@ def lift_gorget(donor, M, body, rig):
     def collar(p):
         return p.z > base.z and math.hypot(p.x - base.x, p.y - base.y) <= bound
 
+    def sector(p):
+        a = math.atan2(p.y - base.y, p.x - base.x) / (2 * math.pi) % 1.0
+        return a * SUIT_GORGET_SECTORS
+
     world = [M @ v.co for v in donor.data.vertices]
     up = [p for p in world if collar(p)]
     if not up:
         raise SystemExit(f"no harness steel stands above the neck base within "
                          f"{bound:.4f} m of its axis: no collar to lift")
-    top = max(p.z for p in up)
-    factor = (target - base.z) / (top - base.z)
-    if factor <= 1.0:
-        return {"gorget_factor": 1.0, "gorget_top_m": round(top, 4),
-                "gorget_target_m": round(target, 4), "gorget_points": len(up)}
+    # Each sector carries its own rim, so a back that starts 40 mm low is lifted
+    # 40 mm further than a throat that already reaches the jaw.
+    raw = [base.z] * SUIT_GORGET_SECTORS
+    for p in up:
+        i = int(sector(p)) % SUIT_GORGET_SECTORS
+        raw[i] = max(raw[i], p.z)
+    if min(raw) <= base.z:
+        raise SystemExit(f"the collar leaves a sector of the neck bare: {raw}")
+    # Smoothed round the ring before any factor is taken from it. A rim that
+    # dips in one sector and not its neighbours turns into a spike otherwise:
+    # the low sector is stretched twice as hard as the steel it is welded to.
+    n = SUIT_GORGET_SECTORS
+    tops = [(raw[(i - 1) % n] + raw[i] * 2 + raw[(i + 1) % n]) / 4 for i in range(n)]
+    factors = [min((target - base.z) / (t - base.z), SUIT_GORGET_MAX) for t in tops]
+
+    def factor_at(p):
+        # Between the two nearest sector centres, or the rim steps every 22.5.
+        s = sector(p) - 0.5
+        i = math.floor(s)
+        t = s - i
+        return (factors[int(i) % SUIT_GORGET_SECTORS] * (1 - t)
+                + factors[int(i + 1) % SUIT_GORGET_SECTORS] * t)
+
     for v, p in zip(donor.data.vertices, world):
         if collar(p):
-            v.co = inv @ Vector((p.x, p.y, base.z + (p.z - base.z) * factor))
+            k = max(factor_at(p), 1.0)
+            v.co = inv @ Vector((p.x, p.y, base.z + (p.z - base.z) * k))
     donor.data.update()
     return {
-        "gorget_factor": round(factor, 4),
+        "gorget_factor_min": round(min(factors), 4),
+        "gorget_factor_max": round(max(factors), 4),
         "gorget_pin_z": round(base.z, 4),
         "gorget_axis_bound_m": round(bound, 4),
         "gorget_points": len(up),
-        "gorget_top_m": round(top, 4),
+        "gorget_rim_low_m": round(min(tops), 4),
+        "gorget_rim_high_m": round(max(tops), 4),
         "gorget_target_m": round(target, 4),
         "gorget_top_after_m": round(max((M @ v.co).z for v in donor.data.vertices), 4),
+    }
+
+
+def inflate_pauldrons(donor, M, body, rig):
+    """Grow each shoulder cap about the arm's own axis until the deltoid is in.
+
+    The suit is sized on the trunk, and a generated figure's shoulder girth is
+    its own: this donor's cap sits 92 mm off the arm axis where this body's
+    deltoid reaches 105 mm, so the arm comes through the plate. One radial scale
+    about that axis keeps the cap's shape and its seat on the shoulder - it
+    grows, it does not move.
+
+    The factor is read sector by sector round the axis and the worst one is
+    used. A single figure over the whole cap says nothing: this cap reaches
+    170 mm at its outer flare and 92 mm over the deltoid, and the deltoid is the
+    azimuth the arm comes through. A sector the cap does not reach at all is the
+    arm hole, which is open on every harness ever made, so it is passed over.
+
+    One factor for the whole cap, and never a per-vertex push out to the skin:
+    the cap dips towards the axis where it wraps the arm hole, and pushing those
+    vertices alone tears a hole in the plate around them.
+
+    Ramped in over the first of the cap's span and pinned at the shoulder joint,
+    so the plate does not tear away from the breastplate it overlaps.
+
+    Run AFTER the sleeve cut: growing first would carry sleeve steel outside the
+    cut's own axis cylinder and leave it hanging past the arm.
+    """
+    inv = M.inverted()
+    joint = rig.matrix_world @ rig.data.bones["upperarm_l"].head_local
+    root = abs(joint.x)
+    bound = arm_socket(rig, body, "l")[1] * SUIT_SLEEVE_RADIUS
+
+    def radius(p):
+        return math.hypot(p.y - joint.y, p.z - joint.z)
+
+    def cap(p):
+        return abs(p.x) > root and radius(p) <= bound
+
+    def sector(p):
+        a = math.atan2(p.z - joint.z, p.y - joint.y) / (2 * math.pi) % 1.0
+        return int(a * SUIT_PAULDRON_SECTORS) % SUIT_PAULDRON_SECTORS
+
+    world = [M @ v.co for v in donor.data.vertices]
+    steel = [p for p in world if cap(p)]
+    if not steel:
+        raise SystemExit("no shoulder cap outboard of the joint to grow")
+    edge = max(abs(p.x) for p in steel)
+    skin = [body.matrix_world @ v.co for v in body.data.vertices
+            if root < abs((body.matrix_world @ v.co).x) <= edge]
+    if not skin:
+        raise SystemExit("no arm skin under the cap to measure it against")
+
+    skin_r = [0.0] * SUIT_PAULDRON_SECTORS
+    steel_r = [0.0] * SUIT_PAULDRON_SECTORS
+    for q in skin:
+        i = sector(q)
+        skin_r[i] = max(skin_r[i], radius(q))
+    for q in steel:
+        i = sector(q)
+        steel_r[i] = max(steel_r[i], radius(q))
+    ratios = [(skin_r[i] + SUIT_PAULDRON_STANDOFF) / steel_r[i]
+              for i in range(SUIT_PAULDRON_SECTORS)
+              if steel_r[i] > 0.0 and skin_r[i] > 0.0]
+    if not ratios:
+        raise SystemExit("no sector round the arm carries both skin and cap")
+    k = min(max(ratios), SUIT_PAULDRON_MAX)
+    if k <= 1.0:
+        return {"pauldron_scale": 1.0,
+                "pauldron_worst_sector_ratio": round(max(ratios), 4)}
+    ramp = (edge - root) * SUIT_PAULDRON_RAMP
+    for v, p in zip(donor.data.vertices, world):
+        if not cap(p):
+            continue
+        t = min((abs(p.x) - root) / ramp, 1.0) if ramp > 0 else 1.0
+        f = 1.0 + (k - 1.0) * t
+        v.co = inv @ Vector((p.x, joint.y + (p.y - joint.y) * f,
+                             joint.z + (p.z - joint.z) * f))
+    donor.data.update()
+    return {
+        "pauldron_scale": round(k, 4),
+        "pauldron_worst_sector_ratio": round(max(ratios), 4),
+        "pauldron_sectors_covered": len(ratios),
+        "pauldron_root_x_m": round(root, 4),
+        "pauldron_edge_x_m": round(edge, 4),
+        "pauldron_ramp_m": round(ramp, 4),
+        "pauldron_points": len(steel),
     }
 
 
@@ -1714,6 +1846,7 @@ def fit_plate_suit(donor, body, rig):
     cut_arms = trim_donor(donor, placement, lambda p: (
         abs(p.x) <= edge
         or math.hypot(p.y - shoulder.y, p.z - shoulder.z) > bound))
+    caps = inflate_pauldrons(donor, placement, body, rig)
     if not cut_head or not cut_feet or not cut_arms:
         raise SystemExit(f"a harness cut removed nothing - head {cut_head}, feet "
                          f"{cut_feet}, arms {cut_arms}: this donor is not a whole figure")
@@ -1732,6 +1865,7 @@ def fit_plate_suit(donor, body, rig):
 
     return placement, {
         **gorget,
+        **caps,
         "neck_gap_p01_mm": round(neck_p01 * 1000, 2),
         "neck_gap_median_mm": round(neck_med * 1000, 2),
         "neck_points": len(drawn),

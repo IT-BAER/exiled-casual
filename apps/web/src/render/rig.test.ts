@@ -288,7 +288,7 @@ describe("what worn gear hides of the body", () => {
     expect([...hiddenBaseParts({ ...BASE_LOOKS, boots: "plate" })].sort())
       .toEqual(["foot_l", "foot_r"]);
     expect([...hiddenBaseParts({ ...BASE_LOOKS, chest: "plate" })].sort())
-      .toEqual(["leg_l", "leg_r", "torso"]);
+      .toEqual(["collar", "leg_l", "leg_r", "torso"]);
   });
 
   /**
@@ -300,15 +300,17 @@ describe("what worn gear hides of the body", () => {
   });
 
   /**
-   * A dressed man keeps his head, his neck and his bare arms. The suit closes
-   * the trunk and the legs, the gauntlets close the hands and the boots close
-   * the feet; between pauldron and gauntlet the arm is his own.
+   * A dressed man keeps his head and his bare arms. The suit closes the trunk,
+   * the collar - his neck and both clavicles, which stand in the gorget and
+   * under the pauldrons - and the legs; the gauntlets close the hands and the
+   * boots close the feet. Between pauldron and gauntlet the arm is his own.
    */
   it("leaves a dressed man his head and his arms", () => {
     const dressed = { ...BASE_LOOKS, chest: "plate", gloves: "plate", boots: "plate" };
     const hidden = hiddenBaseParts(dressed);
     expect([...hidden].sort()).toEqual([
-      "foot_l", "foot_r", "hand_l", "hand_r", "leg_l", "leg_r", "torso",
+      "collar", "foot_l", "foot_r", "hand_l", "hand_r", "leg_l", "leg_r",
+      "torso",
     ]);
   });
 });
@@ -337,12 +339,12 @@ describe("wardrobe asset", () => {
       "base.female.body", "base.female.brows", "base.female.eyes", "base.female.hair",
       "base.female.torso", "base.female.hand_l", "base.female.hand_r",
       "base.female.foot_l", "base.female.foot_r",
-      "base.female.arm_l", "base.female.arm_r",
+      "base.female.arm_l", "base.female.arm_r", "base.female.collar",
       "base.female.leg_l", "base.female.leg_r",
       "base.male.body", "base.male.brows", "base.male.eyes", "base.male.hair",
       "base.male.torso", "base.male.hand_l", "base.male.hand_r",
       "base.male.foot_l", "base.male.foot_r",
-      "base.male.arm_l", "base.male.arm_r",
+      "base.male.arm_l", "base.male.arm_r", "base.male.collar",
       "base.male.leg_l", "base.male.leg_r",
       "helmet.iron.helm", "weapon1.emberwand.mesh", "weapon2.buckler.mesh",
       "weapon2.towershield.mesh",
