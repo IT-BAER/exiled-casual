@@ -399,7 +399,7 @@ WAND_MAX_STRETCH = 1.8     # past this the carving visibly smears
 # bare-handed idle that turns the grip axis forward and UP - down the barrel of
 # the front camera, and inside the arm from the game camera. The bind-pose
 # direction that lands here is measured off the clip, not assumed.
-WAND_AIM = (-0.20, -0.78, 0.59)
+WAND_AIM = (-0.18, -0.62, 0.76)
 IDLE_CLIP = "Rig|Idle_Loop"
 ANIMS = "D:/VSC/exiled-casual/apps/web/public/models/anim-library.glb"
 
@@ -415,11 +415,17 @@ BUCKLER_FACE = (0.94, -0.34, 0.0)
 TOWER_HEIGHT_RATIO = 0.62  # of body height; shoulder to below the knee
 TOWER_GAP = 0.012          # air between the arm and the shield's back face
 TOWER_ALONG = 0.95         # 0 at the elbow, 1 at the wrist; a bracer rides near the hand
-# A tower shield is not gripped at its own middle: the forearm strap sits near
-# the top edge, and most of the body hangs below the hand the way a real one
-# is carried. Fraction of the donor's own height, from the bottom, that the
-# strap point sits at.
-TOWER_HANG_FROM_BOTTOM = 0.78  # strap height up the shield's own span, 0 at its foot
+# A tower shield is not gripped at its own middle: the forearm strap sits above
+# it, so the board covers from the chest down past the knee with the hand at the
+# hip. Fraction of the donor's own height, from the bottom, that the strap point
+# sits at. Lower than this and the top edge falls to the belt, leaving a plank
+# beside the leg that guards nothing.
+TOWER_HANG_FROM_BOTTOM = 0.58  # strap height up the shield's own span, 0 at its foot
+# A tall board does not look where a buckler looks. Hung on the buckler's own
+# outward face it stands edge-on to the front, so from the game camera it is a
+# plank beside the leg and covers nothing. This one faces mostly ahead with
+# enough of his left in it that the board clears the thigh.
+TOWER_FACE = (0.32, -0.95, 0.0)
 
 # A rigid piece is measured in the idle and carried back through the clip's own
 # transform, because it rides one joint and the mesh must be authored in the
@@ -1958,32 +1964,42 @@ def fit_tower_strap(donor, body, rig):
     _, _, body_dims, _ = bbox([body.matrix_world @ v.co for v in body.data.vertices])
     arm_pts = group_points(body, "lowerarm_l")
     hand_pts = group_points(body, "hand_l")
-    d_lo, _, d_dims, d_c = bbox([v.co for v in donor.data.vertices])
+    d_lo, d_hi, d_dims, d_c = bbox([v.co for v in donor.data.vertices])
     scale = (body_dims.z * TOWER_HEIGHT_RATIO) / d_dims.z
     bone = rig.data.bones["lowerarm_l"]
     elbow = rig.matrix_world @ bone.head_local
     wrist = rig.matrix_world @ bone.tail_local
 
     M, _, mats = idle_pose(rig, "lowerarm_l", LEFT_HAND)
-    face = Vector(BUCKLER_FACE).normalized()
+    face = Vector(TOWER_FACE).normalized()
     along = (M @ elbow).lerp(M @ wrist, TOWER_ALONG)
     out = [M @ q for q in arm_pts]
     for b in LEFT_HAND:
         out += [mats[b] @ q for q in group_points(body, b)]
     reach = max((p - along).dot(face) for p in out)
-    centre = M.inverted() @ (
-        along + face * (reach + TOWER_GAP + d_dims.y * scale / 2))
-    anchor = Vector((d_c.x, d_c.y, d_lo.z + TOWER_HANG_FROM_BOTTOM * d_dims.z))
+    # The strap sits on the board's own back SURFACE, which a dished shield does
+    # not carry at its bounding box: the box's back is the rim, a half-dish
+    # behind the wood the arm actually rests on, and seating by either the box
+    # back or the mid-depth leaves the same hollow between board and forearm.
+    # Measured off the vertices around the strap height on the board's midline.
+    strap_z = d_lo.z + TOWER_HANG_FROM_BOTTOM * d_dims.z
+    near = [v.co for v in donor.data.vertices
+            if abs(v.co.z - strap_z) < d_dims.z * 0.08
+            and abs(v.co.x - d_c.x) < d_dims.x * 0.15]
+    back_y = max(p.y for p in near) if near else d_hi.y
+    centre = M.inverted() @ (along + face * (reach + TOWER_GAP))
+    anchor = Vector((d_c.x, back_y, strap_z))
     roll = Matrix.Rotation(math.radians(BUCKLER_ROLL), 4, "Y")
-    rot = aimed(donor, Vector((0, -1, 0)), M.to_3x3(), BUCKLER_FACE) @ roll
+    rot = aimed(donor, Vector((0, -1, 0)), M.to_3x3(), TOWER_FACE) @ roll
     M4 = seated(donor, sizing(scale), rot, anchor, centre)
     p01, med = gap_profile(bvh_of(donor, M4), arm_pts + hand_pts)
     return M4, {
         "scale": round(scale, 5),
         "height_m": round(body_dims.z * TOWER_HEIGHT_RATIO, 4),
         "arm_reach_mm": round(reach * 1000, 2),
-        "face_world": list(BUCKLER_FACE),
+        "face_world": list(TOWER_FACE),
         "hang_from_bottom": TOWER_HANG_FROM_BOTTOM,
+        "strap_back_inset_mm": round((d_hi.y - back_y) * scale * 1000, 2),
         "arm_gap_p01_mm": round(p01 * 1000, 2),
         "arm_gap_median_mm": round(med * 1000, 2),
     }
