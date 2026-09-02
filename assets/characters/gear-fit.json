@@ -70,19 +70,15 @@
   "source": "tower-shield-10k-v3.glb"
  },
  "chest.plate.cuirass": {
-  "gorget_factor_min": 1.5547,
-  "gorget_factor_max": 2.2,
+  "gorget_height_m": 0.0393,
+  "gorget_rim_z": 1.5598,
   "gorget_pin_z": 1.5205,
   "gorget_axis_bound_m": 0.1554,
-  "gorget_points": 472,
-  "gorget_rim_low_m": 1.5544,
-  "gorget_rim_high_m": 1.597,
-  "gorget_target_m": 1.6395,
-  "gorget_top_after_m": 1.6444,
+  "cut_verts_gorget": 111,
   "pauldron_scale": 1.0,
   "pauldron_worst_sector_ratio": 0.7909,
-  "neck_gap_p01_mm": 1.53,
-  "neck_gap_median_mm": 54.96,
+  "neck_gap_p01_mm": 6.52,
+  "neck_gap_median_mm": 110.48,
   "neck_points": 1538,
   "trunk_width_ratio": 0.98,
   "width_scale": 1.79759,
@@ -135,7 +131,7 @@
   "deform_groups": 13,
   "bone": "spine_03",
   "fit": "plate_suit",
-  "triangles": 15485,
+  "triangles": 15371,
   "source": "plate-suit-20k-v9.glb"
  },
  "boots.plate.sabaton_r": {

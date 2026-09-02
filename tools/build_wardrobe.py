@@ -272,12 +272,13 @@ SUIT_BONES = ("spine_01", "spine_02", "spine_03", "neck_01",
 # Body armour carries a pauldron over the deltoid and stops; the arm below it is
 # skin and the hand belongs to the glove slot.
 SUIT_PAULDRON_DROP = 0.5
-# The gorget. How far above the skull base the collar rim is drawn, as a
-# fraction of the neck's own length, and how wide the collar column reaches off
-# the neck axis in the neck's own skin radii. The donor's collar stops at the
-# skull base, which leaves the throat bare between it and a helmet rim; lifted
-# this far it meets every helm rim the wardrobe carries and stands under the jaw
-# on a bare head, which is what a gorget does.
+# The gorget. A short steel ring standing this far above the base of the neck,
+# with bare skin above it up to the jaw - a collar drawn to the helm rim is a
+# 12 cm tube round a neck and reads as plumbing rather than armour. The radius
+# is how wide the collar column reaches off the neck axis in the neck's own skin
+# radii; it picks the column out of the shell, so the pauldrons standing 21 cm
+# out to each side and the backplate top are never part of it.
+SUIT_GORGET_HEIGHT = 0.04
 SUIT_GORGET_LIFT = 0.5
 SUIT_GORGET_RADIUS = 2.2
 # The collar rim is levelled sector by sector, not stretched by one factor: this
@@ -333,12 +334,13 @@ SABATON_BONES = ("calf_r", "foot_r", "ball_r")
 # collar and arm holes.
 BODY_REGIONS = {
     "torso": ("spine_01", "spine_02", "spine_03"),
-    # The neck and both clavicles as ONE region, claimed by the chest. Split in
-    # three they leave the vertices that blend across them under every region's
-    # weight floor, and those are exactly the ones standing between a gorget and
-    # a pauldron. The lifted gorget stands above the skull base, so the head's
-    # own rim sits inside it and nothing opens where this goes.
-    "collar": ("neck_01", "clavicle_l", "clavicle_r"),
+    # The neck is its OWN region and stays drawn under a suit: the gorget is a
+    # short ring and the throat above it is skin. Both clavicles are the collar,
+    # which stands inside that ring and under the pauldrons and is hidden. The
+    # trapezius blends across the two and belongs to whichever sums higher - see
+    # `split_body_regions`, which is what keeps a bare strip out of the seam.
+    "neck": ("neck_01",),
+    "collar": ("clavicle_l", "clavicle_r"),
     "arm_l": ("upperarm_l", "lowerarm_l"),
     "arm_r": ("upperarm_r", "lowerarm_r"),
     "leg_l": ("thigh_l", "calf_l"),
@@ -1580,7 +1582,10 @@ def taper_sleeves(donor, M, body, rig):
 
 
 def lift_gorget(donor, M, body, rig):
-    """Draw the collar rim up until it meets a helmet, pinned at the neck's base.
+    """PARKED - the shipping suit wears a SHORT gorget ring with bare neck above
+    it, cut in `fit_plate_suit`, so no collar is drawn up to a helm rim.
+
+    Draw the collar rim up until it meets a helmet, pinned at the neck's base.
 
     A z map with the same shape as `taper_sleeves`' x map: nothing at or below
     the base of the neck moves, so the breastplate the sweep just sized stays
@@ -1834,7 +1839,24 @@ def fit_plate_suit(donor, body, rig):
     # on that plane, so this takes only what flares past it, and may take
     # nothing.
     cut_head = trim_donor(donor, placement, lambda p: p.z <= head_z)
-    gorget = lift_gorget(donor, placement, body, rig)
+
+    # The gorget. A short ring off the base of the neck, with the throat bare
+    # above it: a collar carried all the way to a helm rim is a steel tube round
+    # a neck. Only the neck's own column is cut, so the pauldrons and the
+    # backplate top - both outside the column - keep their height.
+    neck = rig.matrix_world @ rig.data.bones["neck_01"].head_local
+    collar_bound = limb_radius(rig, body, "neck_01", 1.0)[1] * SUIT_GORGET_RADIUS
+
+    def in_collar(p):
+        return math.hypot(p.x - neck.x, p.y - neck.y) <= collar_bound
+
+    rim = neck.z + SUIT_GORGET_HEIGHT
+    cut_gorget = trim_donor(donor, placement,
+                            lambda p: p.z <= rim or not in_collar(p))
+    column = [p.z for p in (placement @ v.co for v in donor.data.vertices)
+              if in_collar(p)]
+    if not column:
+        raise SystemExit("the gorget cut took the whole collar column")
 
     # The sabatons. Both ankles, averaged, because the rest pose stands level
     # and a per-side plane would cut the two shins at different heights.
@@ -1872,7 +1894,11 @@ def fit_plate_suit(donor, body, rig):
                          f"{PLATE_MIN_GAP * 1000:.1f}: the collar needs raising, not scaling")
 
     return placement, {
-        **gorget,
+        "gorget_height_m": round(max(column) - neck.z, 4),
+        "gorget_rim_z": round(max(column), 4),
+        "gorget_pin_z": round(neck.z, 4),
+        "gorget_axis_bound_m": round(collar_bound, 4),
+        "cut_verts_gorget": cut_gorget,
         **caps,
         "neck_gap_p01_mm": round(neck_p01 * 1000, 2),
         "neck_gap_median_mm": round(neck_med * 1000, 2),
@@ -2555,20 +2581,34 @@ def split_body_regions(body, look):
     region that is hidden leaves the single rim of faces the cuff over it
     covers. Cutting by vertex instead would delete every straddling face from
     both meshes and open that rim even with nothing worn.
+
+    A vertex goes to the region that sums HIGHEST over its bones, once the
+    regions together hold `BODY_REGION_WEIGHT` of it. A per-region floor instead
+    drops every vertex that blends across two regions - the trapezius sums under
+    half in the neck and under half in the collar, and lands in neither, which
+    is a bare strip of skin between the gorget and the pauldron. The floor on
+    the TOTAL still keeps the head, which no region claims, on the body.
     """
     bm = bmesh.new()
     bm.from_mesh(body.data)
     bm.verts.ensure_lookup_table()
     dl = bm.verts.layers.deform.active
     idx = {g.name: g.index for g in body.vertex_groups}
-    regions, claimed = [], set()
+    wanted = {}
     for region, bones in BODY_REGIONS.items():
         missing = [b for b in bones if b not in idx]
         if missing:
             raise SystemExit(f"{body.name}: no vertex groups {missing}")
-        want = {idx[b] for b in bones}
-        core = {v.index for v in bm.verts
-                if sum(w for gi, w in v[dl].items() if gi in want) >= BODY_REGION_WEIGHT}
+        wanted[region] = {idx[b] for b in bones}
+    cores = {region: set() for region in wanted}
+    for v in bm.verts:
+        sums = {region: sum(w for gi, w in v[dl].items() if gi in want)
+                for region, want in wanted.items()}
+        best = max(sums, key=lambda region: sums[region])
+        if sum(sums.values()) >= BODY_REGION_WEIGHT and sums[best] > 0.0:
+            cores[best].add(v.index)
+    regions, claimed = [], set()
+    for region, core in cores.items():
         faces = {f.index for f in bm.faces if any(v.index in core for v in f.verts)}
         if not faces:
             raise SystemExit(f"{body.name}: nothing weighted to {region}")

@@ -300,10 +300,11 @@ describe("what worn gear hides of the body", () => {
   });
 
   /**
-   * A dressed man keeps his head and his bare arms. The suit closes the trunk,
-   * the collar - his neck and both clavicles, which stand in the gorget and
-   * under the pauldrons - and the legs; the gauntlets close the hands and the
-   * boots close the feet. Between pauldron and gauntlet the arm is his own.
+   * A dressed man keeps his head, his neck and his bare arms. The suit closes
+   * the trunk, the collar - both clavicles, under the pauldrons - and the legs;
+   * the gauntlets close the hands and the boots close the feet. The neck stands
+   * bare above a short gorget ring, and between pauldron and gauntlet the arm is
+   * his own.
    */
   it("leaves a dressed man his head and his arms", () => {
     const dressed = { ...BASE_LOOKS, chest: "plate", gloves: "plate", boots: "plate" };
@@ -340,11 +341,13 @@ describe("wardrobe asset", () => {
       "base.female.torso", "base.female.hand_l", "base.female.hand_r",
       "base.female.foot_l", "base.female.foot_r",
       "base.female.arm_l", "base.female.arm_r", "base.female.collar",
+      "base.female.neck",
       "base.female.leg_l", "base.female.leg_r",
       "base.male.body", "base.male.brows", "base.male.eyes", "base.male.hair",
       "base.male.torso", "base.male.hand_l", "base.male.hand_r",
       "base.male.foot_l", "base.male.foot_r",
       "base.male.arm_l", "base.male.arm_r", "base.male.collar",
+      "base.male.neck",
       "base.male.leg_l", "base.male.leg_r",
       "helmet.iron.helm", "weapon1.emberwand.mesh", "weapon2.buckler.mesh",
       "weapon2.towershield.mesh",
