@@ -278,9 +278,14 @@ SUIT_PAULDRON_DROP = 0.5
 # is how wide the collar column reaches off the neck axis in the neck's own skin
 # radii; it picks the column out of the shell, so the pauldrons standing 21 cm
 # out to each side and the backplate top are never part of it.
-SUIT_GORGET_HEIGHT = 0.04
+SUIT_GORGET_HEIGHT = 0.05
 SUIT_GORGET_LIFT = 0.5
 SUIT_GORGET_RADIUS = 2.2
+# The cut column, in neck skin radii, used only to trim the shell back to the
+# rim. Wider than SUIT_GORGET_RADIUS above: this donor's collar rises into an
+# angular block reaching 4.1 neck radii off the axis before the pauldrons take
+# over past 4.8, so the cut has to clear that whole block, not just the ring.
+SUIT_GORGET_CUT_RADIUS = 4.3
 # The collar rim is levelled sector by sector, not stretched by one factor: this
 # donor's collar stands 40 mm higher at the throat than behind the neck, and one
 # factor that closes the back drives the front through the helmet.
@@ -1845,7 +1850,7 @@ def fit_plate_suit(donor, body, rig):
     # a neck. Only the neck's own column is cut, so the pauldrons and the
     # backplate top - both outside the column - keep their height.
     neck = rig.matrix_world @ rig.data.bones["neck_01"].head_local
-    collar_bound = limb_radius(rig, body, "neck_01", 1.0)[1] * SUIT_GORGET_RADIUS
+    collar_bound = limb_radius(rig, body, "neck_01", 1.0)[1] * SUIT_GORGET_CUT_RADIUS
 
     def in_collar(p):
         return math.hypot(p.x - neck.x, p.y - neck.y) <= collar_bound
