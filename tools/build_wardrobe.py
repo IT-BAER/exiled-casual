@@ -370,7 +370,7 @@ RIGID_GEAR = (
     },
     {
         "slot": "chest", "look": "plate", "part": "cuirass",
-        "src": "plate-suit-20k-v8.glb", "bone": "spine_03", "fit": "plate_suit",
+        "src": "plate-suit-20k-v9.glb", "bone": "spine_03", "fit": "plate_suit",
         "deform": SUIT_BONES,
         "matte": True, "twosided": True,
     },
@@ -1776,15 +1776,22 @@ def fit_plate_suit(donor, body, rig):
         raise SystemExit("the arm sockets swallowed every rib point")
 
     body_pts = [body.matrix_world @ v.co for v in body.data.vertices]
-    _, b_hi, b_dims, _ = bbox(body_pts)
+    b_lo, b_hi, b_dims, _ = bbox(body_pts)
 
+    # A harness donor carries no head, so its topmost steel is a collar rim and
+    # a collar rim stands at the skull base - which is also where the head cut
+    # runs. Sole to skull base, therefore, not sole to crown: a crown seat adds
+    # a head's height to the trunk, and the shoulders ride up with it (measured
+    # on this donor: 6860 vertices above the skull base and the pauldrons over
+    # the ears).
+    head_z = (rig.matrix_world @ rig.data.bones["Head"].head_local).z
     hp = [v.co for v in donor.data.vertices]
     d_lo, d_hi, d_dims, d_c = bbox(hp)
     trunk_at, trunk_w, trunk_d, trunk_y = donor_trunk(donor, d_lo, d_dims, d_c)
-    high = b_dims.z / d_dims.z
-    # Crown to crown. The donor's own trunk centre carries the horizontal seat,
-    # for the reason `donor_trunk` gives: a fauld flared behind the back drags
-    # the bounding box off the sternum.
+    high = (head_z - b_lo.z) / d_dims.z
+    # The donor's own trunk centre carries the horizontal seat, for the reason
+    # `donor_trunk` gives: a fauld flared behind the back drags the bounding box
+    # off the sternum.
     crown = Vector((d_c.x, trunk_y, d_hi.z))
 
     arms = []
@@ -1795,7 +1802,7 @@ def fit_plate_suit(donor, body, rig):
     def matrix(wide):
         S = Matrix.Diagonal((wide, wide, high, 1.0))
         return seated(donor, S, Matrix.Identity(4), crown,
-                      Vector((chest_c.x, chest_c.y, b_hi.z)))
+                      Vector((chest_c.x, chest_c.y, head_z)))
 
     # The sweep is judged on the RIBS alone, and only on coverage and girth. The
     # cuirass was also held off the skin by a gap floor, because skin it touched
@@ -1823,8 +1830,9 @@ def fit_plate_suit(donor, body, rig):
                          f"ratio, p01, median, ribs, arms: {tries}")
 
     # The helm. `Head` starts at the skull base, so the gorget below the plane
-    # is kept and the neck stays inside it.
-    head_z = (rig.matrix_world @ rig.data.bones["Head"].head_local).z
+    # is kept and the neck stays inside it. The seat already puts the collar rim
+    # on that plane, so this takes only what flares past it, and may take
+    # nothing.
     cut_head = trim_donor(donor, placement, lambda p: p.z <= head_z)
     gorget = lift_gorget(donor, placement, body, rig)
 
@@ -1847,9 +1855,9 @@ def fit_plate_suit(donor, body, rig):
         abs(p.x) <= edge
         or math.hypot(p.y - shoulder.y, p.z - shoulder.z) > bound))
     caps = inflate_pauldrons(donor, placement, body, rig)
-    if not cut_head or not cut_feet or not cut_arms:
-        raise SystemExit(f"a harness cut removed nothing - head {cut_head}, feet "
-                         f"{cut_feet}, arms {cut_arms}: this donor is not a whole figure")
+    if not cut_feet or not cut_arms:
+        raise SystemExit(f"a harness cut removed nothing - feet {cut_feet}, arms "
+                         f"{cut_arms}: this donor is not a whole figure")
 
     # The one clipping question left. Everything the suit closes is switched off
     # under it, so the only skin that can come through steel is the throat and
