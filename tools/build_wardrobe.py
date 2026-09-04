@@ -281,10 +281,10 @@ SUIT_PAULDRON_DROP = 0.5
 SUIT_GORGET_HEIGHT = 0.05
 SUIT_GORGET_LIFT = 0.5
 SUIT_GORGET_RADIUS = 2.2
-# The cut column, in neck skin radii, used only to trim the shell back to the
-# rim. Wider than SUIT_GORGET_RADIUS above: this donor's collar rises into an
-# angular block reaching 4.1 neck radii off the axis before the pauldrons take
-# over past 4.8, so the cut has to clear that whole block, not just the ring.
+# The collar column, in neck skin radii, that the rim cut must leave steel in:
+# the check that the plane did not take the whole collar. Wider than
+# SUIT_GORGET_RADIUS above: this donor's collar rises into an angular block
+# reaching 4.1 neck radii off the axis before the pauldrons take over past 4.8.
 SUIT_GORGET_CUT_RADIUS = 4.3
 # The collar rim is levelled sector by sector, not stretched by one factor: this
 # donor's collar stands 40 mm higher at the throat than behind the neck, and one
@@ -304,6 +304,9 @@ SUIT_PAULDRON_RAMP = 0.08
 # Generous enough to hold a pauldron standing over the deltoid, tight enough
 # that the fauld hanging 40 cm below the axis is never mistaken for a sleeve.
 SUIT_SLEEVE_RADIUS = 3.0
+# How thick the steel reads at a cut rim, metres: the collar's open ring and
+# the pauldron's outer edge are extruded this far into the body they surround.
+SUIT_RIM_LIP = 0.006
 
 # A fauld hangs off the belt and its tassets ride the thighs, so the skirt has
 # to answer to both legs and to the lumbar the cuirass above it already bends
@@ -379,7 +382,7 @@ RIGID_GEAR = (
         "slot": "chest", "look": "plate", "part": "cuirass",
         "src": "plate-suit-20k-v9.glb", "bone": "spine_03", "fit": "plate_suit",
         "deform": SUIT_BONES,
-        "matte": True, "twosided": True,
+        "matte": True, "twosided": True, "clean": True,
     },
     {
         "slot": "boots", "look": "plate", "part": "sabaton",
@@ -402,6 +405,15 @@ SKIRT_PARKED = {
     "src": "fauld-proc-v4.glb", "bone": "pelvis", "fit": "plate_hips",
     "deform": HIPS_BONES, "matte": True,
 }
+
+# A decoded donor is welded at this distance and every boundary loop but the
+# largest DONOR_OPENINGS is closed. Zero for the plate suit: the decode is a
+# solid figure, its steel has an inner and an outer skin 7 mm apart, and its
+# largest boundary loop spans 36 mm at an ankle - every loop is a crack. Edges
+# bent past DONOR_SMOOTH_ANGLE stay sharp under the smooth shading.
+DONOR_WELD = 0.0005
+DONOR_OPENINGS = 0
+DONOR_SMOOTH_ANGLE = math.radians(48.0)
 
 # Both donors ship a glossy ORM pack that reads as latex under Babylon's PBR;
 # raised/capped here rather than flattened, so a steel highlight still moves.
@@ -1495,27 +1507,192 @@ def fit_plate_torso(donor, body, rig):
                      f"ratio, p01, median, chest, arms: {tries}")
 
 
-def trim_donor(donor, M, keep):
-    """Delete the donor geometry `keep` rejects, in donor space.
+def cut_donor(donor, M, co, no, region=None, lip=None):
+    """Slice the donor on a WORLD plane and drop what lies on its `no` side.
 
-    `keep` is asked about WORLD points, so every cut is a rig measurement rather
-    than a fraction of the donor's own box, and a body with other proportions
-    cuts in a different place. Vertex deletion, so a face with one corner in the
-    cut goes with it: a face kept by one corner would leave a tongue of steel
-    hanging past the plane.
+    A bisect, not a vertex deletion: every face crossing the plane is split ON
+    it, so the rim it leaves is one level edge. Deleting the vertices past the
+    plane instead leaves the face row under it as a saw of half-triangles, the
+    torn collar and pauldron tops this suit wore. `region` limits the cut to the
+    faces with a corner inside it (the neck column, an arm cylinder); the plane
+    is otherwise the whole figure's.
+
+    `lip(p)` names, for a rim point, the direction the steel's thickness runs -
+    into the neck, into the arm - and the open edge is extruded SUIT_RIM_LIP
+    that way. A bare cut is a sheet of paper: from above the ring shows its own
+    inside as a black band with a bright thread along the top, and a plate's
+    rolled edge is what the eye expects there. Returns the vertices removed.
     """
+    inv = M.inverted()
     bm = bmesh.new()
     bm.from_mesh(donor.data)
     bm.verts.ensure_lookup_table()
-    gone = [v for v in bm.verts if not keep(M @ v.co)]
-    if not gone:
-        bm.free()
-        return 0
-    bmesh.ops.delete(bm, geom=gone, context="VERTS")
+    before = len(bm.verts)
+    for v in bm.verts:
+        v.co = M @ v.co
+    if region is None:
+        geom = bm.verts[:] + bm.edges[:] + bm.faces[:]
+    else:
+        faces = [f for f in bm.faces if any(region(v.co) for v in f.verts)]
+        verts = {v for f in faces for v in f.verts}
+        edges = {e for f in faces for e in f.edges}
+        geom = list(verts) + list(edges) + faces
+    cut = bmesh.ops.bisect_plane(bm, geom=geom, dist=1e-5, plane_co=co, plane_no=no,
+                                 clear_outer=True, clear_inner=False)
+    removed = before - len(bm.verts)
+    rim = [e for e in cut["geom_cut"] if isinstance(e, bmesh.types.BMEdge)
+           and e.is_valid and e.is_boundary]
+    if lip is not None and rim:
+        uv = bm.loops.layers.uv.active
+        ext = bmesh.ops.extrude_edge_only(bm, edges=rim)
+        new_verts = [g for g in ext["geom"] if isinstance(g, bmesh.types.BMVert)]
+        new_faces = [g for g in ext["geom"] if isinstance(g, bmesh.types.BMFace)]
+        for v in new_verts:
+            v.co += lip(v.co).normalized() * SUIT_RIM_LIP
+        for f in new_faces:
+            # The lip faces the cut's open side, never the void under the plate.
+            f.normal_update()
+            if f.normal.dot(no) < 0:
+                f.normal_flip()
+            if uv is not None:
+                for l in f.loops:
+                    src = l.vert if l.vert not in new_verts else next(
+                        e.other_vert(l.vert) for e in l.vert.link_edges
+                        if e.other_vert(l.vert) not in new_verts)
+                    l[uv].uv = next(sl[uv].uv.copy() for sf in src.link_faces
+                                    if sf not in new_faces for sl in sf.loops if sl.vert is src)
+    for v in bm.verts:
+        v.co = inv @ v.co
     bm.to_mesh(donor.data)
     bm.free()
     donor.data.update()
-    return len(gone)
+    return removed
+
+
+def weld_donor(donor, dist, openings):
+    """Merge a decode's doubled vertices and close its pinholes.
+
+    A TRELLIS shell arrives with three vertices per triangle and no shared edge,
+    and its surface is cracked wherever the decode dropped a face: at play
+    distance a crack is the void, and under two-sided steel it is a black
+    shard. Boundary loops are walked round the face fan, so two loops touching
+    at one vertex stay two loops, and every loop but the `openings` largest is
+    fanned shut from its centroid. Loops that fail to close stay open.
+    """
+    bm = bmesh.new()
+    bm.from_mesh(donor.data)
+    before = len(bm.verts)
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=dist)
+    bmesh.ops.dissolve_degenerate(bm, dist=1e-6, edges=bm.edges)
+    used, loops = set(), []
+    for e0 in bm.edges:
+        if not e0.is_boundary or e0 in used:
+            continue
+        loop, v, e = [e0.verts[0]], e0.verts[1], e0
+        used.add(e0)
+        closed = True
+        while v is not loop[0]:
+            loop.append(v)
+            f, nxt = e.link_faces[0], None
+            for _ in range(64):
+                side = [x for x in f.edges if v in x.verts and x is not e]
+                if not side:
+                    break
+                e2 = side[0]
+                if e2.is_boundary:
+                    nxt = e2
+                    break
+                other = [g for g in e2.link_faces if g is not f]
+                if not other:
+                    break
+                f, e = other[0], e2
+            if nxt is None or nxt in used or len(loop) > 4096:
+                closed = False
+                break
+            e = nxt
+            used.add(e)
+            v = e.other_vert(v)
+        if closed and len(loop) >= 3:
+            loops.append(loop)
+    loops.sort(key=len, reverse=True)
+    uv = bm.loops.layers.uv.active
+    made, filled = [], 0
+    for loop in loops[openings:]:
+        centre = bm.verts.new(sum((v.co for v in loop), Vector()) / len(loop))
+        fan = []
+        for i, a in enumerate(loop):
+            b = loop[(i + 1) % len(loop)]
+            try:
+                fan.append(bm.faces.new((a, b, centre)))
+            except ValueError:
+                continue
+        if not fan:
+            bm.verts.remove(centre)
+            continue
+        filled += 1
+        made += fan
+        if uv is not None:
+            # The cap wears its rim's texture: the centroid has no UV of its own
+            # and a zero UV would drag one atlas corner across every hole.
+            rim = next(l[uv].uv.copy() for f in loop[0].link_faces if f not in fan
+                       for l in f.loops if l.vert is loop[0])
+            for f in fan:
+                for l in f.loops:
+                    l[uv].uv = rim
+    made = [f for f in made if f.is_valid]
+    if made:
+        bmesh.ops.recalc_face_normals(bm, faces=made)
+    bm.to_mesh(donor.data)
+    bm.free()
+    donor.data.update()
+    return {"welded_verts": before - len(donor.data.vertices), "boundary_loops": len(loops),
+            "holes_filled": filled, "openings_kept": [len(l) for l in loops[:openings]]}
+
+
+def smooth_donor(donor, body, angle):
+    """Throw away the decode's per-face normals and shade the shell smooth.
+
+    A decoded suit's stored normals sit a median 26 degrees off the smooth
+    normal of its own welded surface, so every plate renders as a field of
+    flat triangles whatever the mesh does. Edges bent past `angle` stay sharp:
+    those are the lame steps and the plate rims, and smoothing across them
+    melts a harness into a wetsuit.
+
+    The decode's windings are a coin toss face by face, and a smooth normal
+    averaged over them lights two fifths of the trunk from inside. A recalc
+    across the shell cannot settle them either: this steel has an inner and an
+    outer skin joined along its cracks, and the propagation flips at every
+    join. Each face is instead turned to look AWAY from the nearest point of
+    the body it is worn on - the one direction every plate, lame and inner
+    skin agrees on. The donor is in world space by now, as is the body.
+    """
+    me = donor.data
+    if "custom_normal" in me.attributes:
+        me.attributes.remove(me.attributes["custom_normal"])
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    bm.normal_update()
+    skin = bvh_of(body, body.matrix_world)
+    flipped = 0
+    for f in bm.faces:
+        centre = f.calc_center_median()
+        near = skin.find_nearest(centre)[0]
+        if near is not None and f.normal.dot(centre - near) < 0:
+            f.normal_flip()
+            flipped += 1
+    bm.normal_update()
+    sharp = 0
+    for e in bm.edges:
+        e.smooth = True
+        if len(e.link_faces) == 2 and e.calc_face_angle(0.0) > angle:
+            e.smooth = False
+            sharp += 1
+    for f in bm.faces:
+        f.smooth = True
+    bm.to_mesh(me)
+    bm.free()
+    me.update()
+    return {"sharp_edges": sharp, "faces_turned_out": flipped}
 
 
 def taper_sleeves(donor, M, body, rig):
@@ -1843,21 +2020,30 @@ def fit_plate_suit(donor, body, rig):
     # is kept and the neck stays inside it. The seat already puts the collar rim
     # on that plane, so this takes only what flares past it, and may take
     # nothing.
-    cut_head = trim_donor(donor, placement, lambda p: p.z <= head_z)
+    cut_head = cut_donor(donor, placement, Vector((0, 0, head_z)), Vector((0, 0, 1)))
 
     # The gorget. A short ring off the base of the neck, with the throat bare
     # above it: a collar carried all the way to a helm rim is a steel tube round
-    # a neck. Only the neck's own column is cut, so the pauldrons and the
-    # backplate top - both outside the column - keep their height.
+    # a neck. The rim is one plane over the whole trunk and only the pauldrons
+    # are spared: cutting the neck's own column alone left the collar's
+    # shoulders standing past the rim on both sides, a castellated step from
+    # behind. The sleeve cylinders are measured first because they gate this.
     neck = rig.matrix_world @ rig.data.bones["neck_01"].head_local
     collar_bound = limb_radius(rig, body, "neck_01", 1.0)[1] * SUIT_GORGET_CUT_RADIUS
 
     def in_collar(p):
         return math.hypot(p.x - neck.x, p.y - neck.y) <= collar_bound
 
+    shoulder = rig.matrix_world @ rig.data.bones["upperarm_l"].head_local
+    bound = arm_socket(rig, body, "l")[1] * SUIT_SLEEVE_RADIUS
+
+    def in_sleeve(p):
+        return math.hypot(p.y - shoulder.y, p.z - shoulder.z) <= bound
+
     rim = neck.z + SUIT_GORGET_HEIGHT
-    cut_gorget = trim_donor(donor, placement,
-                            lambda p: p.z <= rim or not in_collar(p))
+    cut_gorget = cut_donor(donor, placement, Vector((0, 0, rim)), Vector((0, 0, 1)),
+                           region=lambda p: not in_sleeve(p),
+                           lip=lambda p: Vector((neck.x - p.x, neck.y - p.y, 0)))
     column = [p.z for p in (placement @ v.co for v in donor.data.vertices)
               if in_collar(p)]
     if not column:
@@ -1867,20 +2053,19 @@ def fit_plate_suit(donor, body, rig):
     # and a per-side plane would cut the two shins at different heights.
     ankle_z = sum((rig.matrix_world @ rig.data.bones[n].head_local).z
                   for n in ("foot_l", "foot_r")) / 2
-    cut_feet = trim_donor(donor, placement, lambda p: p.z >= ankle_z)
+    cut_feet = cut_donor(donor, placement, Vector((0, 0, ankle_z)), Vector((0, 0, -1)))
 
     # The sleeves. Body armour ends at the pauldron, so everything outboard of a
     # plane part way down the upper arm goes with the arm it was drawn for. The
     # plane is paired with the arm's own axis cylinder, or the same cut takes
     # the fauld hanging 40 cm below it. One pass for both arms: the rest pose is
     # symmetric about x and the donor was seated on it.
-    shoulder = rig.matrix_world @ rig.data.bones["upperarm_l"].head_local
     elbow = rig.matrix_world @ rig.data.bones["lowerarm_l"].head_local
     edge = abs(shoulder.x) + abs(elbow.x - shoulder.x) * SUIT_PAULDRON_DROP
-    bound = arm_socket(rig, body, "l")[1] * SUIT_SLEEVE_RADIUS
-    cut_arms = trim_donor(donor, placement, lambda p: (
-        abs(p.x) <= edge
-        or math.hypot(p.y - shoulder.y, p.z - shoulder.z) > bound))
+    cut_arms = sum(cut_donor(donor, placement, Vector((s * edge, 0, 0)), Vector((s, 0, 0)),
+                             region=in_sleeve,
+                             lip=lambda p: Vector((0, shoulder.y - p.y, shoulder.z - p.z)))
+                   for s in (1, -1))
     caps = inflate_pauldrons(donor, placement, body, rig)
     if not cut_feet or not cut_arms:
         raise SystemExit(f"a harness cut removed nothing - feet {cut_feet}, arms "
@@ -2903,9 +3088,17 @@ def build_rigid_gear(rig, body):
             if other is not donor:
                 drop(other)
         bake_transform(donor)
+        # A decoded shell is welded and closed BEFORE it is measured, so the
+        # fitter reads one surface; it is shaded smooth AFTER the cuts, so the
+        # rims they leave get the same normals as the plate beside them.
+        if spec.get("clean"):
+            detail_clean = weld_donor(donor, DONOR_WELD, DONOR_OPENINGS)
         M, detail = FITTERS[spec["fit"]](donor, body, rig)
         donor.data.transform(M)
         donor.data.update()
+        if spec.get("clean"):
+            detail_clean.update(smooth_donor(donor, body, DONOR_SMOOTH_ANGLE))
+            detail.update(detail_clean)
         stem = f"{spec['slot']}.{spec['look']}.{spec['part']}"
         # A mirrored piece is worn on both limbs, so the fitted one says which
         # side it was measured against and the reflection carries the other.

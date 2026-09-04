@@ -70,15 +70,15 @@
   "source": "tower-shield-10k-v3.glb"
  },
  "chest.plate.cuirass": {
-  "gorget_height_m": 0.0498,
-  "gorget_rim_z": 1.5703,
+  "gorget_height_m": 0.0793,
+  "gorget_rim_z": 1.5998,
   "gorget_pin_z": 1.5205,
   "gorget_axis_bound_m": 0.3038,
-  "cut_verts_gorget": 170,
+  "cut_verts_gorget": 0,
   "pauldron_scale": 1.0,
   "pauldron_worst_sector_ratio": 0.7909,
-  "neck_gap_p01_mm": 2.81,
-  "neck_gap_median_mm": 106.33,
+  "neck_gap_p01_mm": 1.03,
+  "neck_gap_median_mm": 101.72,
   "neck_points": 1538,
   "trunk_width_ratio": 0.98,
   "width_scale": 1.79759,
@@ -95,13 +95,13 @@
   "chest_points": 476,
   "arm_socket_points": 238,
   "arm_socket_radius_mm": 69.16,
-  "upper_arm_covered": 0.7119,
+  "upper_arm_covered": 0.7147,
   "upper_arm_points": 354,
   "cut_head_z": 1.5998,
   "cut_ankle_z": 0.0865,
   "cut_verts_head": 0,
-  "cut_verts_feet": 1357,
-  "cut_verts_arms": 4682,
+  "cut_verts_feet": 353,
+  "cut_verts_arms": 1252,
   "cut_pauldron_edge_x": 0.3375,
   "cut_pauldron_bound_m": 0.2075,
   "size_tries": [
@@ -110,9 +110,15 @@
     0.24,
     22.55,
     0.9895,
-    0.7119
+    0.7147
    ]
   ],
+  "welded_verts": 17547,
+  "boundary_loops": 233,
+  "holes_filled": 233,
+  "openings_kept": [],
+  "sharp_edges": 7567,
+  "faces_turned_out": 8086,
   "deform_bones": [
    "spine_01",
    "spine_02",
@@ -131,7 +137,7 @@
   "deform_groups": 13,
   "bone": "spine_03",
   "fit": "plate_suit",
-  "triangles": 15278,
+  "triangles": 19029,
   "source": "plate-suit-20k-v9.glb"
  },
  "boots.plate.sabaton_r": {

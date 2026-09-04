@@ -102,6 +102,18 @@ A recalc re-orients every face from one seed; on this suit it flipped half of
 them and the breastplate rendered as black shards with skin between. Only the
 new caps get their winding decided, each against the ring it closes.
 
+The suit worn today is `plate-suit-20k-v9.glb`, and it is CLEANED in the build
+rather than by a repaired copy on disk (`"clean": True` in `RIGID_GEAR`): welded
+at 0.5 mm, every boundary loop fanned shut (233 of them, the largest a 36 mm
+crack at an ankle - the decode is a solid figure with an inner and an outer
+skin 7 mm apart, so it has no intended openings), cut on planes with a bisect
+instead of by vertex deletion, given a 6 mm lip along the collar and pauldron
+rims, and shaded smooth with edges past 48 degrees kept sharp. Its stored
+normals sat a median 26 degrees off the welded surface, and its windings are
+random face by face, so each face is turned to look away from the nearest
+point of the body - a whole-shell recalc flips at every join between the two
+skins. The build reports it under `chest.plate.cuirass` in `gear-fit.json`.
+
 ## Fauld and tassets (parked, `SKIRT_PARKED`)
 
 Built procedurally by `tools/prep_tassets.py` (no scan: TRELLIS decodes a plate
