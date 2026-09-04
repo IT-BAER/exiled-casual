@@ -121,6 +121,19 @@ skirt into loose flakes). Texture is BlenderKit material
 `8352b3b2-edb7-4700-a9d6-055ab6ec9233` "Aged Black Steel" (royalty free, 1K),
 baked into the donor `assets/props/source/trellis_local/fauld-proc-v2.glb`.
 
+## Gorget plate (`chest.plate.gorget`)
+
+No donor mesh: the v9 suit carries no steel over the trapezius, so `build_gorget`
+in `tools/build_wardrobe.py` duplicates the male body's `collar` region (the
+piece `split_body_regions` cuts on the clavicles) and offsets it 5 mm along its
+vertex normals, capped by the air measured to the worn cuirass. It carries the
+body's own weights, so the `collar` piece is hidden under a plate that deforms
+exactly as it would. Texture is BlenderKit material
+`8352b3b2-edb7-4700-a9d6-055ab6ec9233` "Aged Black Steel" (royalty free, 1K),
+kept at `assets/props/source/mat-aged-black-steel.blend`, relinked into a
+smart-projected UV set at 2 tiles with its albedo lifted 1.6x toward the
+cuirass grey.
+
 ## Trousers (`chest.plate.legs`)
 
 No donor mesh: `build_trousers` in `tools/build_wardrobe.py` duplicates the male

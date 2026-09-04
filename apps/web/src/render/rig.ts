@@ -295,18 +295,18 @@ export const BASE_LOOKS: Looks = {
  *
  * Only what an item genuinely closes is listed. The plate suit is a whole
  * harness cut off at the skull base, the wrists and the ankles, so it closes
- * the trunk and both legs. The NECK and the COLLAR (both clavicles) stay drawn:
- * the gorget is a 2 cm ring standing off the neck, and with the clavicles
- * hidden the neck ended in a black void inside it instead of flowing into the
- * shoulders. The arms, the head, the hands and the feet are absent because the
- * arm is skin under a pauldron and a helmet, a gauntlet and a boot own the
- * rest, each its own item.
+ * the trunk and both legs, and its gorget plate (`chest.plate.gorget`, the
+ * collar region itself pushed out to steel) closes the COLLAR. The NECK stays
+ * drawn: the gorget ring stands off it, and a hidden neck is a black void
+ * inside the ring. The arms, the head, the hands and the feet are absent
+ * because the arm is skin under a pauldron and a helmet, a gauntlet and a boot
+ * own the rest, each its own item.
  */
 const COVERED_BY: Partial<Record<Slot, readonly string[]>> = {
   helmet: ["hair"],
   gloves: ["hand_l", "hand_r"],
   boots: ["foot_l", "foot_r"],
-  chest: ["torso", "leg_l", "leg_r"],
+  chest: ["torso", "collar", "leg_l", "leg_r"],
 };
 
 /** The `base.<look>.<part>` pieces the worn gear replaces. */

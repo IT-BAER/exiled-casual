@@ -288,7 +288,7 @@ describe("what worn gear hides of the body", () => {
     expect([...hiddenBaseParts({ ...BASE_LOOKS, boots: "plate" })].sort())
       .toEqual(["foot_l", "foot_r"]);
     expect([...hiddenBaseParts({ ...BASE_LOOKS, chest: "plate" })].sort())
-      .toEqual(["leg_l", "leg_r", "torso"]);
+      .toEqual(["collar", "leg_l", "leg_r", "torso"]);
   });
 
   /**
@@ -301,16 +301,16 @@ describe("what worn gear hides of the body", () => {
 
   /**
    * A dressed man keeps his head, his neck and his bare arms. The suit closes
-   * the trunk, the collar - both clavicles, under the pauldrons - and the legs;
-   * the gauntlets close the hands and the boots close the feet. The neck stands
-   * bare above a short gorget ring, and between pauldron and gauntlet the arm is
-   * his own.
+   * the trunk, the collar - both clavicles, under its own gorget plate - and
+   * the legs; the gauntlets close the hands and the boots close the feet. The
+   * neck stands bare above a short gorget ring, and between pauldron and
+   * gauntlet the arm is his own.
    */
   it("leaves a dressed man his head and his arms", () => {
     const dressed = { ...BASE_LOOKS, chest: "plate", gloves: "plate", boots: "plate" };
     const hidden = hiddenBaseParts(dressed);
     expect([...hidden].sort()).toEqual([
-      "foot_l", "foot_r", "hand_l", "hand_r", "leg_l", "leg_r", "torso",
+      "collar", "foot_l", "foot_r", "hand_l", "hand_r", "leg_l", "leg_r", "torso",
     ]);
   });
 });
@@ -350,7 +350,7 @@ describe("wardrobe asset", () => {
       "base.male.leg_l", "base.male.leg_r",
       "helmet.iron.helm", "weapon1.emberwand.mesh", "weapon2.buckler.mesh",
       "weapon2.towershield.mesh",
-      "chest.plate.cuirass",
+      "chest.plate.cuirass", "chest.plate.gorget",
       "boots.plate.sabaton_l", "boots.plate.sabaton_r",
       "gloves.plate.gauntlet_l", "gloves.plate.gauntlet_r",
     ].sort());
@@ -435,6 +435,28 @@ describe("wardrobe asset", () => {
    */
   it("ships no stand-in trousers under the harness", () => {
     expect(json.nodes.find((n) => n.name === "chest.plate.legs")).toBeUndefined();
+  });
+
+  /**
+   * The v9 suit carries no steel over the trapezius, so the collar it hides is
+   * closed by a plate cut from the collar region itself: skinned, on the same
+   * clavicles, or the shoulders roll out from under it.
+   */
+  it("ships a skinned gorget plate over the hidden collar", () => {
+    const bin = glb.subarray(20 + json.buffers0Len);
+    const node = json.nodes.find((n) => n.name === "chest.plate.gorget");
+    expect(node, "no node chest.plate.gorget").toBeDefined();
+    expect(node!.skin).toBeDefined();
+    const skin = json.skins[node!.skin!]!;
+    const prim = json.meshes[node!.mesh!]!.primitives[0]!;
+    const joints = readAccessor(json, bin, prim.attributes["JOINTS_0"]!);
+    const weights = readAccessor(json, bin, prim.attributes["WEIGHTS_0"]!);
+    const used = new Set<string>();
+    for (let k = 0; k < weights.length; k += 1) {
+      if (weights[k]! > 0.0001) used.add(json.nodes[skin.joints[joints[k]!]!]!.name);
+    }
+    expect(used).toContain("clavicle_l");
+    expect(used).toContain("clavicle_r");
   });
 
   /**

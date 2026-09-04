@@ -271,5 +271,43 @@
   "triangles": 14264,
   "source": "gauntlet-hand-v2.glb",
   "mirrored_from": "gloves.plate.gauntlet_r"
+ },
+ "chest.plate.gorget": {
+  "built_from": "base.male.body collar region, offset along its own normals",
+  "source": "body",
+  "offset_mm": 5.0,
+  "offset_min_mm": 0.0,
+  "offset_p01_mm": 0.0,
+  "offset_median_mm": 3.515,
+  "shell_capped_vertices": 71,
+  "crease_capped_vertices": 95,
+  "worn_shell_air": {
+   "chest.plate.cuirass": {
+    "vertices": 292,
+    "min_mm": 0.036,
+    "p01_mm": 0.19,
+    "median_mm": 7.748
+   }
+  },
+  "vertices": 292,
+  "triangles": 410,
+  "uv_tiles": 2.0,
+  "bone": "spine_03",
+  "fit": "body_offset",
+  "deform_bones": [
+   "Head",
+   "clavicle_l",
+   "clavicle_r",
+   "neck_01",
+   "spine_02",
+   "spine_03",
+   "upperarm_l",
+   "upperarm_r"
+  ],
+  "deform_groups": 8,
+  "texture": {
+   "blenderkit_id": "8352b3b2-edb7-4700-a9d6-055ab6ec9233",
+   "blenderkit_name": "Aged Black Steel"
+  }
  }
 }

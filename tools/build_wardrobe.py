@@ -2788,6 +2788,27 @@ def _cut_faces(obj, doomed):
     obj.data.update()
 
 
+def region_cores(body, bm):
+    """The vertex indices each `BODY_REGIONS` entry claims on this body."""
+    bm.verts.ensure_lookup_table()
+    dl = bm.verts.layers.deform.active
+    idx = {g.name: g.index for g in body.vertex_groups}
+    wanted = {}
+    for region, bones in BODY_REGIONS.items():
+        missing = [b for b in bones if b not in idx]
+        if missing:
+            raise SystemExit(f"{body.name}: no vertex groups {missing}")
+        wanted[region] = {idx[b] for b in bones}
+    cores = {region: set() for region in wanted}
+    for v in bm.verts:
+        sums = {region: sum(w for gi, w in v[dl].items() if gi in want)
+                for region, want in wanted.items()}
+        best = max(sums, key=lambda region: sums[region])
+        if sum(sums.values()) >= BODY_REGION_WEIGHT and sums[best] > 0.0:
+            cores[best].add(v.index)
+    return cores
+
+
 def split_body_regions(body, look):
     """Cut a body into the pieces worn steel is allowed to replace.
 
@@ -2807,22 +2828,7 @@ def split_body_regions(body, look):
     """
     bm = bmesh.new()
     bm.from_mesh(body.data)
-    bm.verts.ensure_lookup_table()
-    dl = bm.verts.layers.deform.active
-    idx = {g.name: g.index for g in body.vertex_groups}
-    wanted = {}
-    for region, bones in BODY_REGIONS.items():
-        missing = [b for b in bones if b not in idx]
-        if missing:
-            raise SystemExit(f"{body.name}: no vertex groups {missing}")
-        wanted[region] = {idx[b] for b in bones}
-    cores = {region: set() for region in wanted}
-    for v in bm.verts:
-        sums = {region: sum(w for gi, w in v[dl].items() if gi in want)
-                for region, want in wanted.items()}
-        best = max(sums, key=lambda region: sums[region])
-        if sum(sums.values()) >= BODY_REGION_WEIGHT and sums[best] > 0.0:
-            cores[best].add(v.index)
+    cores = region_cores(body, bm)
     regions, claimed = [], set()
     for region, core in cores.items():
         faces = {f.index for f in bm.faces if any(v.index in core for v in f.verts)}
@@ -3217,32 +3223,33 @@ LEATHER_FALLBACK = (0.06, 0.05, 0.04, 1.0)
 LEATHER_ROUGHNESS = 0.75
 
 
-def leather_material():
-    """The BlenderKit leather rebuilt as plain image textures into the BSDF.
+def tiled_material(name, blend, fallback, roughness, metallic):
+    """A BlenderKit material rebuilt as plain image textures into the BSDF.
 
     The donor's own tree carries mapping and displacement the glTF exporter
     drops, so the maps are relinked here. No `matte()` pass: that map exists to
-    stop donor steel reading as latex, and leather is not steel.
+    stop donor steel reading as latex, and a tiled material is authored flat.
     """
     imgs = {}
-    if os.path.exists(LEATHER_BLEND):
-        with bpy.data.libraries.load(LEATHER_BLEND) as (df, dt):
+    if os.path.exists(blend):
+        with bpy.data.libraries.load(blend) as (df, dt):
             dt.images = list(df.images)
         for im in dt.images:
             if im is None:
                 continue
-            for key in ("Color", "Roughness", "NormalGL"):
+            for key in ("Color", "Roughness", "Normal", "Metallic"):
                 if key.lower() in im.name.lower():
                     imgs[key] = im
-    mat = bpy.data.materials.new("trouser_leather")
+    mat = bpy.data.materials.new(name)
     mat.use_nodes = True
     nt = mat.node_tree
     bsdf = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
-    bsdf.inputs["Metallic"].default_value = 0.0
-    if len(imgs) < 3:
-        bsdf.inputs["Base Color"].default_value = LEATHER_FALLBACK
-        bsdf.inputs["Roughness"].default_value = LEATHER_ROUGHNESS
-        return mat, None
+    bsdf.inputs["Metallic"].default_value = metallic
+    if not {"Color", "Roughness", "Normal"} <= set(imgs):
+        print(f"  {name}: only {sorted(imgs)} in {blend}, flat fallback")
+        bsdf.inputs["Base Color"].default_value = fallback
+        bsdf.inputs["Roughness"].default_value = roughness
+        return mat, False
 
     def tex(key, y, colour):
         n = nt.nodes.new("ShaderNodeTexImage")
@@ -3255,9 +3262,17 @@ def leather_material():
     nt.links.new(tex("Roughness", 0, False).outputs["Color"], bsdf.inputs["Roughness"])
     nm = nt.nodes.new("ShaderNodeNormalMap")
     nm.location = (-400, -300)
-    nt.links.new(tex("NormalGL", -300, False).outputs["Color"], nm.inputs["Color"])
+    nt.links.new(tex("Normal", -300, False).outputs["Color"], nm.inputs["Color"])
     nt.links.new(nm.outputs["Normal"], bsdf.inputs["Normal"])
-    return mat, LEATHER_ID
+    if "Metallic" in imgs:
+        nt.links.new(tex("Metallic", -600, False).outputs["Color"], bsdf.inputs["Metallic"])
+    return mat, True
+
+
+def leather_material():
+    mat, textured = tiled_material("trouser_leather", LEATHER_BLEND, LEATHER_FALLBACK,
+                                   LEATHER_ROUGHNESS, 0.0)
+    return mat, LEATHER_ID if textured else None
 
 
 def build_trousers(rig, body, worn):
@@ -3451,6 +3466,173 @@ def build_trousers(rig, body, worn):
     }}
 
 
+# --------------------------------------------------------------------------
+# Gorget plate
+#
+# The v9 suit has no steel over the trapezius: its collar is a narrow block
+# round the throat, so from behind the skin showed as two wedges from the ring
+# out to each pauldron. No cut height fixes an absence, so the plate over the
+# collar region is built the way the trousers were: the body's own clavicle
+# surface, duplicated and pushed out along its normals, wearing the body's own
+# weights so it moves with the shoulders and cannot clip through them.
+
+GORGET_OFFSET = 0.005       # how far the plate stands off the skin, metres
+GORGET_FLOOR = 0.0005       # and the least a crease may pull it back to, metres
+GORGET_SAFE = 0.45          # share of its own headroom a vertex may take
+GORGET_SHELL_AIR = 0.0005   # air kept between the plate and worn steel over it
+GORGET_SHELL_REACH = 0.05   # past this a worn shell is not near enough to cap
+GORGET_SHELLS = ("chest.plate.cuirass", "chest.plate.pauldron")
+GORGET_TILE = 2.0           # steel grain repeats over the unwrapped plate
+STEEL_BLEND = "D:/VSC/exiled-casual/assets/props/source/mat-aged-black-steel.blend"
+STEEL_ID = "8352b3b2-edb7-4700-a9d6-055ab6ec9233"
+STEEL_NAME = "Aged Black Steel"
+STEEL_FALLBACK = (0.18, 0.18, 0.19, 1.0)
+STEEL_ROUGHNESS = 0.55
+STEEL_METALLIC = 0.7
+STEEL_LIFT = 1.6            # the black steel's albedo, scaled toward the cuirass grey
+
+
+def build_gorget(rig, body, worn):
+    """Cut the collar region off the body, push it out, and call it steel.
+
+    The cut is exactly the `collar` piece `split_body_regions` will make, so
+    hiding that piece under this plate leaves no skin uncovered and no crack.
+    """
+    name = "chest.plate.gorget"
+    obj = body.copy()
+    obj.data = body.data.copy()
+    obj.name = obj.data.name = name
+    bpy.context.scene.collection.objects.link(obj)
+    obj.data.transform(body.matrix_world)
+    obj.matrix_world = Matrix.Identity(4)
+    for mod in list(obj.modifiers):
+        obj.modifiers.remove(mod)
+    while obj.data.materials:
+        obj.data.materials.pop()
+
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    core = region_cores(body, bm)["collar"]
+    doomed = [f for f in bm.faces if not any(v.index in core for v in f.verts)]
+    bmesh.ops.delete(bm, geom=doomed, context="FACES")
+    loose = [v for v in bm.verts if not v.link_faces]
+    if loose:
+        bmesh.ops.delete(bm, geom=loose, context="VERTS")
+    if not bm.faces:
+        bm.free()
+        raise SystemExit(f"{name}: the collar region has no faces")
+    bm.normal_update()
+
+    shells = [(o.name, bvh_of(o)) for o in worn
+              if any(o.name.startswith(pre) for pre in GORGET_SHELLS)]
+    room = surface_headroom(bm)
+    pushed, capped_by_shell, capped_by_self = [], 0, 0
+    per_shell = {shell: [] for shell, _ in shells}
+    for i, v in enumerate(bm.verts):
+        want = GORGET_OFFSET
+        if room[i] < 0.02 - 1e-9:
+            held = max(GORGET_FLOOR, room[i] * GORGET_SAFE)
+            if held < want:
+                want = held
+                capped_by_self += 1
+        near, seen = None, []
+        for shell, bvh in shells:
+            hit = bvh.find_nearest(v.co, GORGET_SHELL_REACH)
+            if hit[0] is None:
+                continue
+            seen.append((shell, hit[3]))
+            if near is None or hit[3] < near:
+                near = hit[3]
+        if near is not None:
+            allowed = max(0.0, near - GORGET_SHELL_AIR)
+            if allowed < want - 1e-9:
+                want = allowed
+                capped_by_shell += 1
+            for shell, d in seen:
+                per_shell[shell].append(d - want)
+        v.co += v.normal * want
+        pushed.append(want)
+    bm.to_mesh(obj.data)
+    bm.free()
+    obj.data.update()
+
+    # The body's own vertices, so the weights are exact and nothing is
+    # transferred; the groups nothing here uses are dropped for the report.
+    used = set()
+    for v in obj.data.vertices:
+        used |= {g.group for g in v.groups if g.weight > 0.0}
+    for name_ in [g.name for g in obj.vertex_groups if g.index not in used]:
+        obj.vertex_groups.remove(obj.vertex_groups[name_])
+    orphans = [v.index for v in obj.data.vertices if not v.groups]
+    if orphans:
+        raise SystemExit(f"{name}: {len(orphans)} vertices carry no weight")
+    rebind(obj, rig)
+
+    while obj.data.uv_layers:
+        obj.data.uv_layers.remove(obj.data.uv_layers[0])
+    obj.data.uv_layers.new(name="UVMap")
+    bpy.ops.object.select_all(action="DESELECT")
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.select_all(action="SELECT")
+    bpy.ops.uv.smart_project(angle_limit=math.radians(66.0), island_margin=0.003)
+    bpy.ops.object.mode_set(mode="OBJECT")
+    for d in obj.data.uv_layers.active.data:
+        d.uv = (d.uv[0] * GORGET_TILE, d.uv[1] * GORGET_TILE)
+    mat, textured = tiled_material("gorget_steel", STEEL_BLEND, STEEL_FALLBACK,
+                                   STEEL_ROUGHNESS, STEEL_METALLIC)
+    if textured:
+        bsdf = next(n for n in mat.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+        image = bsdf.inputs["Base Color"].links[0].from_node.image
+        px = np.empty(len(image.pixels), dtype=np.float32)
+        image.pixels.foreach_get(px)
+        px = px.reshape(-1, image.channels)
+        px[:, :3] = np.minimum(px[:, :3] * STEEL_LIFT, 1.0)
+        image.pixels.foreach_set(px.ravel())
+    obj.data.materials.append(mat)
+    for poly in obj.data.polygons:
+        poly.use_smooth = True
+
+    tris = sum(len(p.vertices) - 2 for p in obj.data.polygons)
+    n = len(pushed)
+    order = sorted(pushed)
+    air_profile = {}
+    for shell, airs in per_shell.items():
+        if not airs:
+            continue
+        a = sorted(airs)
+        air_profile[shell] = {
+            "vertices": len(a),
+            "min_mm": round(a[0] * 1000, 3),
+            "p01_mm": round(a[len(a) // 100] * 1000, 3),
+            "median_mm": round(a[len(a) // 2] * 1000, 3),
+        }
+    bones = sorted(g.name for g in obj.vertex_groups)
+    print(f"fitted {name}: {tris} tris, {n} verts, offset min {order[0]*1000:.2f} "
+          f"p01 {order[n//100]*1000:.2f} median {order[n//2]*1000:.2f} max "
+          f"{order[-1]*1000:.2f} mm, {capped_by_shell} capped by worn steel, "
+          f"{capped_by_self} by their own crease, bones {bones}, "
+          f"per shell {air_profile}")
+    return {name: {
+        "built_from": "base.male.body collar region, offset along its own normals",
+        "source": "body",
+        "offset_mm": GORGET_OFFSET * 1000,
+        "offset_min_mm": round(order[0] * 1000, 3),
+        "offset_p01_mm": round(order[n // 100] * 1000, 3),
+        "offset_median_mm": round(order[n // 2] * 1000, 3),
+        "shell_capped_vertices": capped_by_shell,
+        "crease_capped_vertices": capped_by_self,
+        "worn_shell_air": air_profile,
+        "vertices": len(obj.data.vertices), "triangles": tris,
+        "uv_tiles": GORGET_TILE,
+        "bone": "spine_03", "fit": "body_offset",
+        "deform_bones": bones, "deform_groups": len(bones),
+        "texture": {"blenderkit_id": STEEL_ID if textured else None,
+                    "blenderkit_name": STEEL_NAME},
+    }}
+
+
 def main():
     clear_scene()
     built = {}
@@ -3467,6 +3649,8 @@ def main():
     male_rig = bpy.data.objects[MALE_RIG]
     male_body = bpy.data.objects["base.male.body"]
     fitted = build_rigid_gear(male_rig, male_body)
+    worn = [o for o in bpy.data.objects if o.type == "MESH" and o.name.startswith("chest.")]
+    fitted.update(build_gorget(male_rig, male_body, worn))
     # The trousers are parked. They were the body's own legs pushed four
     # millimetres out and called leather, standing in for leg armour the chest
     # slot did not have; the harness carries real cuisses and greaves now, so
