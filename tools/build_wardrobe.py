@@ -278,7 +278,7 @@ SUIT_PAULDRON_DROP = 0.5
 # is how wide the collar column reaches off the neck axis in the neck's own skin
 # radii; it picks the column out of the shell, so the pauldrons standing 21 cm
 # out to each side and the backplate top are never part of it.
-SUIT_GORGET_HEIGHT = 0.05
+SUIT_GORGET_HEIGHT = 0.02
 SUIT_GORGET_LIFT = 0.5
 SUIT_GORGET_RADIUS = 2.2
 # The collar column, in neck skin radii, that the rim cut must leave steel in:
@@ -307,6 +307,9 @@ SUIT_SLEEVE_RADIUS = 3.0
 # How thick the steel reads at a cut rim, metres: the collar's open ring and
 # the pauldron's outer edge are extruded this far into the body they surround.
 SUIT_RIM_LIP = 0.006
+# How far inboard of the shoulder joint the pauldron cap still counts as cap
+# and escapes the collar plane, metres.
+SUIT_CAP_INBOARD = 0.08
 
 # A fauld hangs off the belt and its tassets ride the thighs, so the skirt has
 # to answer to both legs and to the lumbar the cuirass above it already bends
@@ -2040,9 +2043,13 @@ def fit_plate_suit(donor, body, rig):
     def in_sleeve(p):
         return math.hypot(p.y - shoulder.y, p.z - shoulder.z) <= bound
 
+    # Only the cap itself is spared, the steel OUTBOARD of the shoulder joint:
+    # the arm cylinder reaches in to the neck, and the collar flare inside it
+    # stood up beside the jaw as a spike the plane never touched.
+    cap_x = abs(shoulder.x) - SUIT_CAP_INBOARD
     rim = neck.z + SUIT_GORGET_HEIGHT
     cut_gorget = cut_donor(donor, placement, Vector((0, 0, rim)), Vector((0, 0, 1)),
-                           region=lambda p: not in_sleeve(p),
+                           region=lambda p: not (in_sleeve(p) and abs(p.x) > cap_x),
                            lip=lambda p: Vector((neck.x - p.x, neck.y - p.y, 0)))
     column = [p.z for p in (placement @ v.co for v in donor.data.vertices)
               if in_collar(p)]
