@@ -288,7 +288,7 @@ describe("what worn gear hides of the body", () => {
     expect([...hiddenBaseParts({ ...BASE_LOOKS, boots: "plate" })].sort())
       .toEqual(["foot_l", "foot_r"]);
     expect([...hiddenBaseParts({ ...BASE_LOOKS, chest: "plate" })].sort())
-      .toEqual(["collar", "leg_l", "leg_r", "torso"]);
+      .toEqual(["leg_l", "leg_r", "torso"]);
   });
 
   /**
@@ -310,8 +310,7 @@ describe("what worn gear hides of the body", () => {
     const dressed = { ...BASE_LOOKS, chest: "plate", gloves: "plate", boots: "plate" };
     const hidden = hiddenBaseParts(dressed);
     expect([...hidden].sort()).toEqual([
-      "collar", "foot_l", "foot_r", "hand_l", "hand_r", "leg_l", "leg_r",
-      "torso",
+      "foot_l", "foot_r", "hand_l", "hand_r", "leg_l", "leg_r", "torso",
     ]);
   });
 });

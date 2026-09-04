@@ -345,9 +345,9 @@ SABATON_BONES = ("calf_r", "foot_r", "ball_r")
 # collar and arm holes.
 BODY_REGIONS = {
     "torso": ("spine_01", "spine_02", "spine_03"),
-    # The neck is its OWN region and stays drawn under a suit: the gorget is a
-    # short ring and the throat above it is skin. Both clavicles are the collar,
-    # which stands inside that ring and under the pauldrons and is hidden. The
+    # The neck and the collar (both clavicles) are their OWN regions and both
+    # stay drawn under a suit: the gorget is a short ring standing off the neck,
+    # and with the clavicles hidden the neck ended in a void inside it. The
     # trapezius blends across the two and belongs to whichever sums higher - see
     # `split_body_regions`, which is what keeps a bare strip out of the seam.
     "neck": ("neck_01",),
