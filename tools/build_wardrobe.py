@@ -279,6 +279,9 @@ SUIT_PAULDRON_DROP = 0.5
 # radii; it picks the column out of the shell, so the pauldrons standing 21 cm
 # out to each side and the backplate top are never part of it.
 SUIT_GORGET_HEIGHT = 0.02
+# The collar steel outside the throat column, over the trapezius, stands this
+# far above the base of the neck.
+SUIT_COLLAR_HEIGHT = 0.06
 SUIT_GORGET_LIFT = 0.5
 SUIT_GORGET_RADIUS = 2.2
 # The collar column, in neck skin radii, that the rim cut must leave steel in:
@@ -2047,10 +2050,26 @@ def fit_plate_suit(donor, body, rig):
     # the arm cylinder reaches in to the neck, and the collar flare inside it
     # stood up beside the jaw as a spike the plane never touched.
     cap_x = abs(shoulder.x) - SUIT_CAP_INBOARD
+    ring_bound = limb_radius(rig, body, "neck_01", 1.0)[1] * SUIT_GORGET_RADIUS
+
+    def in_ring(p):
+        return math.hypot(p.x - neck.x, p.y - neck.y) <= ring_bound
+
+    def is_cap(p):
+        return in_sleeve(p) and abs(p.x) > cap_x
+
+    # Two heights. The throat ring is cut low, so the neck is bare above it;
+    # the collar steel OUTSIDE that column is cut higher, so it still covers the
+    # trapezius slope between the ring and the pauldrons when seen from above -
+    # one low plane left the shoulders bare, one high plane stood the ring up
+    # the throat. The spike beside the jaw rose past both.
     rim = neck.z + SUIT_GORGET_HEIGHT
+    lip = lambda p: Vector((neck.x - p.x, neck.y - p.y, 0))
     cut_gorget = cut_donor(donor, placement, Vector((0, 0, rim)), Vector((0, 0, 1)),
-                           region=lambda p: not (in_sleeve(p) and abs(p.x) > cap_x),
-                           lip=lambda p: Vector((neck.x - p.x, neck.y - p.y, 0)))
+                           region=lambda p: in_ring(p) and not is_cap(p), lip=lip)
+    cut_gorget += cut_donor(donor, placement, Vector((0, 0, neck.z + SUIT_COLLAR_HEIGHT)),
+                            Vector((0, 0, 1)),
+                            region=lambda p: not in_ring(p) and not is_cap(p), lip=lip)
     column = [p.z for p in (placement @ v.co for v in donor.data.vertices)
               if in_collar(p)]
     if not column:
