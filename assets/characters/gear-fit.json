@@ -74,11 +74,11 @@
   "gorget_rim_z": 1.5931,
   "gorget_pin_z": 1.5205,
   "gorget_axis_bound_m": 0.3038,
-  "cut_verts_gorget": -31,
+  "cut_verts_gorget": -28,
   "pauldron_scale": 1.0,
   "pauldron_worst_sector_ratio": 0.7909,
   "neck_gap_p01_mm": 17.51,
-  "neck_gap_median_mm": 122.51,
+  "neck_gap_median_mm": 140.32,
   "neck_points": 1538,
   "trunk_width_ratio": 0.98,
   "width_scale": 1.79759,
@@ -117,8 +117,8 @@
   "boundary_loops": 233,
   "holes_filled": 233,
   "openings_kept": [],
-  "sharp_edges": 7611,
-  "faces_turned_out": 8130,
+  "sharp_edges": 7103,
+  "faces_turned_out": 7828,
   "deform_bones": [
    "spine_01",
    "spine_02",
@@ -135,9 +135,12 @@
    "calf_r"
   ],
   "deform_groups": 13,
+  "greave_cut_z": 0.4824,
+  "greave_below_knee_mm": 60.0,
+  "greave_triangles": 2855,
   "bone": "spine_03",
   "fit": "plate_suit",
-  "triangles": 19239,
+  "triangles": 17151,
   "source": "plate-suit-20k-v9.glb"
  },
  "boots.plate.sabaton_r": {
@@ -190,20 +193,20 @@
   "mirrored_from": "boots.plate.sabaton_r"
  },
  "gloves.plate.gauntlet_r": {
-  "length_scale": 0.98445,
+  "length_scale": 0.95507,
   "hand_length_m": 0.2233,
   "finger_fan_m": 0.0937,
   "finger_thickness_m": 0.0278,
-  "donor_finger_fan": 0.1014,
-  "donor_wrist_radius": 0.0398,
-  "donor_wrist_at": 0.69822,
-  "donor_run": 0.235,
+  "donor_finger_fan": 0.1022,
+  "donor_wrist_radius": 0.0402,
+  "donor_wrist_at": 0.69099,
+  "donor_run": 0.24223,
   "hand_points": 880,
   "finger_web_points": 90,
   "finger_web_radius_mm": 20.29,
   "hand_gap_p01_mm": 0.6,
   "hand_gap_median_mm": 2.83,
-  "hand_covered": 0.9955,
+  "hand_covered": 0.9977,
   "placed_as_authored": true,
   "deform_bones": [
    "hand_r",
@@ -231,20 +234,20 @@
   "source": "gauntlet-hand-v2.glb"
  },
  "gloves.plate.gauntlet_l": {
-  "length_scale": 0.98445,
+  "length_scale": 0.95507,
   "hand_length_m": 0.2233,
   "finger_fan_m": 0.0937,
   "finger_thickness_m": 0.0278,
-  "donor_finger_fan": 0.1014,
-  "donor_wrist_radius": 0.0398,
-  "donor_wrist_at": 0.69822,
-  "donor_run": 0.235,
+  "donor_finger_fan": 0.1022,
+  "donor_wrist_radius": 0.0402,
+  "donor_wrist_at": 0.69099,
+  "donor_run": 0.24223,
   "hand_points": 880,
   "finger_web_points": 90,
   "finger_web_radius_mm": 20.29,
   "hand_gap_p01_mm": 0.6,
   "hand_gap_median_mm": 2.83,
-  "hand_covered": 0.9955,
+  "hand_covered": 0.9977,
   "placed_as_authored": true,
   "deform_bones": [
    "hand_l",
@@ -278,15 +281,15 @@
   "offset_mm": 5.0,
   "offset_min_mm": 0.0,
   "offset_p01_mm": 0.0,
-  "offset_median_mm": 3.515,
-  "shell_capped_vertices": 71,
+  "offset_median_mm": 3.604,
+  "shell_capped_vertices": 76,
   "crease_capped_vertices": 95,
   "worn_shell_air": {
    "chest.plate.cuirass": {
     "vertices": 292,
-    "min_mm": 0.036,
+    "min_mm": 0.035,
     "p01_mm": 0.19,
-    "median_mm": 7.748
+    "median_mm": 7.881
    }
   },
   "vertices": 292,
@@ -305,6 +308,41 @@
    "upperarm_r"
   ],
   "deform_groups": 8,
+  "texture": {
+   "blenderkit_id": "8352b3b2-edb7-4700-a9d6-055ab6ec9233",
+   "blenderkit_name": "Aged Black Steel"
+  }
+ },
+ "chest.plate.backing": {
+  "built_from": "base.male.body torso region, filled out to 3 mm under chest.plate.cuirass",
+  "source": "body",
+  "offset_mm": null,
+  "offset_min_mm": 0.0,
+  "offset_p01_mm": 0.0,
+  "offset_median_mm": 12.608,
+  "shell_capped_vertices": 68,
+  "crease_capped_vertices": 0,
+  "worn_shell_air": {},
+  "vertices": 836,
+  "triangles": 1372,
+  "uv_tiles": 2.0,
+  "bone": "spine_03",
+  "fit": "body_offset",
+  "deform_bones": [
+   "Head",
+   "clavicle_l",
+   "clavicle_r",
+   "neck_01",
+   "pelvis",
+   "spine_01",
+   "spine_02",
+   "spine_03",
+   "thigh_l",
+   "thigh_r",
+   "upperarm_l",
+   "upperarm_r"
+  ],
+  "deform_groups": 12,
   "texture": {
    "blenderkit_id": "8352b3b2-edb7-4700-a9d6-055ab6ec9233",
    "blenderkit_name": "Aged Black Steel"

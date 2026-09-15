@@ -305,11 +305,12 @@ export const BASE_LOOKS: Looks = {
 const COVERED_BY: Partial<Record<Slot, readonly string[]>> = {
   helmet: ["hair"],
   gloves: ["hand_l", "hand_r"],
-  boots: ["foot_l", "foot_r"],
+  // `greave` is the suit's own shins: a sabaton carries its own shin plate.
+  boots: ["foot_l", "foot_r", "greave"],
   chest: ["torso", "collar", "leg_l", "leg_r"],
 };
 
-/** The `base.<look>.<part>` pieces the worn gear replaces. */
+/** The `<slot>.<look>.<part>` pieces the worn gear replaces. */
 export function hiddenBaseParts(looks: Looks): ReadonlySet<string> {
   const hidden = new Set<string>();
   for (const [slot, parts] of Object.entries(COVERED_BY)) {
@@ -630,7 +631,12 @@ export function indexRigSubtree(roots: readonly Node[]): Map<string, Node> {
         continue;
       }
       byName.set(node.name, node);
-      for (const child of node.getDescendants(false)) byName.set(child.name, child);
+      for (const child of node.getDescendants(false)) {
+        byName.set(child.name, child);
+        // A skinned part's bounds stay at the bind pose, so a posed hand or
+        // foot leaves them and the part is culled while plainly on screen.
+        if (child instanceof Mesh && child.skeleton) child.alwaysSelectAsActiveMesh = true;
+      }
     }
   }
   return byName;
@@ -728,9 +734,9 @@ export class RigActor {
       for (const [look, meshes] of byLook) {
         const on = look === wanted;
         for (const mesh of meshes) {
-          // Only the body answers to coverage; a clone carries a Babylon suffix
-          // after the part, so the part is the third field and nothing else.
-          const part = slot === "base" ? mesh.name.split(".")[2] ?? "" : "";
+          // A clone carries a Babylon suffix after the part, so the part is the
+          // third field and nothing else. Body and gear part names never collide.
+          const part = mesh.name.split(".")[2] ?? "";
           mesh.setEnabled(on && !hidden.has(part));
         }
       }

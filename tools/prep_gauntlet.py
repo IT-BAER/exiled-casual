@@ -67,8 +67,8 @@ WALL_SHARE = 0.4
 # wrist to a rim standing this many times the forearm's OWN section, measured on
 # the shell at the cut plane, and the last of the run rolls over into a lip.
 CUFF_UP = 0.055          # how far up the forearm the piece reaches, metres
-CUFF_RIM = 1.70          # rim over forearm section where the roll starts
-CUFF_ROLL = 1.95         # and at the lip itself
+CUFF_RIM = 1.10          # rim over forearm section where the roll starts
+CUFF_ROLL = 1.20         # and at the lip itself
 CUFF_LIP_FROM = 0.80     # of the cuff's own run, where the rim starts rolling
 CUFF_SECTION = 0.005     # half-thickness of the slice the forearm is measured on
 

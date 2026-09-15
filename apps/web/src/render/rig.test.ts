@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect, afterEach } from "vitest";
-import { LoadAssetContainerAsync, NullEngine } from "@babylonjs/core";
+import { LoadAssetContainerAsync, Mesh, NullEngine } from "@babylonjs/core";
 import { createScene } from "./engine";
 import { makeMesh } from "./meshes";
 import {
@@ -286,7 +286,7 @@ describe("what worn gear hides of the body", () => {
     expect([...hiddenBaseParts({ ...BASE_LOOKS, gloves: "plate" })].sort())
       .toEqual(["hand_l", "hand_r"]);
     expect([...hiddenBaseParts({ ...BASE_LOOKS, boots: "plate" })].sort())
-      .toEqual(["foot_l", "foot_r"]);
+      .toEqual(["foot_l", "foot_r", "greave"]);
     expect([...hiddenBaseParts({ ...BASE_LOOKS, chest: "plate" })].sort())
       .toEqual(["collar", "leg_l", "leg_r", "torso"]);
   });
@@ -310,8 +310,18 @@ describe("what worn gear hides of the body", () => {
     const dressed = { ...BASE_LOOKS, chest: "plate", gloves: "plate", boots: "plate" };
     const hidden = hiddenBaseParts(dressed);
     expect([...hidden].sort()).toEqual([
-      "collar", "foot_l", "foot_r", "hand_l", "hand_r", "leg_l", "leg_r", "torso",
+      "collar", "foot_l", "foot_r", "greave", "hand_l", "hand_r", "leg_l", "leg_r", "torso",
     ]);
+  });
+
+  /**
+   * A sabaton carries its own shin plate, so the suit's greave inside it is
+   * switched off; without boots the suit's shins are drawn down to the ankle.
+   */
+  it("swaps the suit's shins for the sabaton's", () => {
+    expect(hiddenBaseParts({ ...BASE_LOOKS, chest: "plate" }).has("greave")).toBe(false);
+    expect(hiddenBaseParts({ ...BASE_LOOKS, chest: "plate", boots: "plate" }).has("greave"))
+      .toBe(true);
   });
 });
 
@@ -350,7 +360,7 @@ describe("wardrobe asset", () => {
       "base.male.leg_l", "base.male.leg_r",
       "helmet.iron.helm", "weapon1.emberwand.mesh", "weapon2.buckler.mesh",
       "weapon2.towershield.mesh",
-      "chest.plate.cuirass", "chest.plate.gorget",
+      "chest.plate.cuirass", "chest.plate.gorget", "chest.plate.greave", "chest.plate.backing",
       "boots.plate.sabaton_l", "boots.plate.sabaton_r",
       "gloves.plate.gauntlet_l", "gloves.plate.gauntlet_r",
     ].sort());
@@ -442,10 +452,10 @@ describe("wardrobe asset", () => {
    * closed by a plate cut from the collar region itself: skinned, on the same
    * clavicles, or the shoulders roll out from under it.
    */
-  it("ships a skinned gorget plate over the hidden collar", () => {
+  const jointsUsed = (name: string): Set<string> => {
     const bin = glb.subarray(20 + json.buffers0Len);
-    const node = json.nodes.find((n) => n.name === "chest.plate.gorget");
-    expect(node, "no node chest.plate.gorget").toBeDefined();
+    const node = json.nodes.find((n) => n.name === name);
+    expect(node, `no node ${name}`).toBeDefined();
     expect(node!.skin).toBeDefined();
     const skin = json.skins[node!.skin!]!;
     const prim = json.meshes[node!.mesh!]!.primitives[0]!;
@@ -455,8 +465,23 @@ describe("wardrobe asset", () => {
     for (let k = 0; k < weights.length; k += 1) {
       if (weights[k]! > 0.0001) used.add(json.nodes[skin.joints[joints[k]!]!]!.name);
     }
+    return used;
+  };
+
+  it("ships a skinned gorget plate over the hidden collar", () => {
+    const used = jointsUsed("chest.plate.gorget");
     expect(used).toContain("clavicle_l");
     expect(used).toContain("clavicle_r");
+  });
+
+  /**
+   * The v9 suit is cracked through across the back, so the hidden torso is cut
+   * off the body and filled out to just under the steel: a crack shows steel.
+   */
+  it("ships a skinned backing plate under the cracked cuirass", () => {
+    const used = jointsUsed("chest.plate.backing");
+    expect(used).toContain("spine_03");
+    expect(used).toContain("pelvis");
   });
 
   /**
@@ -856,6 +881,16 @@ describe("indexRigSubtree against the real loader", () => {
         scene.meshes.find((m) => m.name === name)?.isEnabled() ?? false;
       expect(enabled("base.male.body")).toBe(true);
       expect(enabled("base.female.body")).toBe(false);
+
+      // A skinned piece's bounds are its bind pose: a hanging hand leaves the
+      // T-pose box and the gauntlet is culled while the forearm is on screen.
+      const skinned = [...byName.values()].filter(
+        (n): n is Mesh => n instanceof Mesh && n.skeleton !== null,
+      );
+      expect(skinned.map((m) => m.name)).toContain("gloves.plate.gauntlet_l");
+      for (const mesh of skinned) {
+        expect(mesh.alwaysSelectAsActiveMesh, mesh.name).toBe(true);
+      }
     } finally {
       (globalThis as { FileReader?: unknown }).FileReader = original;
     }

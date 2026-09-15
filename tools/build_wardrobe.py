@@ -282,6 +282,8 @@ SUIT_GORGET_HEIGHT = 0.02
 # The collar steel outside the throat column, over the trapezius, stands this
 # far above the base of the neck.
 SUIT_COLLAR_HEIGHT = 0.06
+# Ahead of the neck the ring's rim drops this many metres per metre forward.
+SUIT_THROAT_FALL = 0.25
 SUIT_GORGET_LIFT = 0.5
 SUIT_GORGET_RADIUS = 2.2
 # The collar column, in neck skin radii, that the rim cut must leave steel in:
@@ -313,6 +315,10 @@ SUIT_RIM_LIP = 0.006
 # How far inboard of the shoulder joint the pauldron cap still counts as cap
 # and escapes the collar plane, metres.
 SUIT_CAP_INBOARD = 0.08
+# Where the suit's shins are cut off into `chest.plate.greave`, below the knee.
+# 30 mm under the sabaton rim (`BOOT_TOP`): the suit is still wider than the
+# boot there, so its edge laps the rim from outside.
+SUIT_GREAVE_BELOW_KNEE = 0.06
 
 # A fauld hangs off the belt and its tassets ride the thighs, so the skirt has
 # to answer to both legs and to the lumbar the cuirass above it already bends
@@ -328,6 +334,7 @@ HIPS_BONES = ("spine_01", "pelvis", "thigh_l", "thigh_r")
 # pins an orphan to the nearest kept bone, which is the last real finger joint.
 FINGER_BONES = tuple(f"{finger}_{i:02d}" for finger in ("index", "middle", "ring", "pinky", "thumb")
                      for i in (1, 2, 3))
+FINGER_TIPS = tuple(f"{finger}_04_end" for finger in ("index", "middle", "ring", "pinky", "thumb"))
 GAUNTLET_BONES = ("hand_r", "lowerarm_r") + tuple(f"{b}_r" for b in FINGER_BONES)
 
 # A sabaton is the shin plate and the boot under it, so it bends at the ankle and
@@ -347,7 +354,7 @@ SABATON_BONES = ("calf_r", "foot_r", "ball_r")
 # own item. Nor are the neck and the clavicles - they stand in the harness's own
 # collar and arm holes.
 BODY_REGIONS = {
-    "torso": ("spine_01", "spine_02", "spine_03"),
+    "torso": ("pelvis", "spine_01", "spine_02", "spine_03"),
     # The neck and the collar (both clavicles) are their OWN regions and both
     # stay drawn under a suit: the gorget is a short ring standing off the neck,
     # and with the clavicles hidden the neck ended in a void inside it. The
@@ -359,8 +366,10 @@ BODY_REGIONS = {
     "arm_r": ("upperarm_r", "lowerarm_r"),
     "leg_l": ("thigh_l", "calf_l"),
     "leg_r": ("thigh_r", "calf_r"),
-    "hand_l": ("hand_l",) + tuple(f"{b}_l" for b in FINGER_BONES),
-    "hand_r": ("hand_r",) + tuple(f"{b}_r" for b in FINGER_BONES),
+    # The `*_04_end_*` tips carry the fingernails; left out, they stay on the
+    # body remainder and stand through the gauntlet's fingertips.
+    "hand_l": ("hand_l",) + tuple(f"{b}_l" for b in FINGER_BONES + FINGER_TIPS),
+    "hand_r": ("hand_r",) + tuple(f"{b}_r" for b in FINGER_BONES + FINGER_TIPS),
     "foot_l": ("foot_l", "ball_l"),
     "foot_r": ("foot_r", "ball_r"),
 }
@@ -388,7 +397,7 @@ RIGID_GEAR = (
         "slot": "chest", "look": "plate", "part": "cuirass",
         "src": "plate-suit-20k-v9.glb", "bone": "spine_03", "fit": "plate_suit",
         "deform": SUIT_BONES,
-        "matte": True, "twosided": True, "clean": True,
+        "matte": True, "twosided": True, "clean": True, "greaves": True,
     },
     {
         "slot": "boots", "look": "plate", "part": "sabaton",
@@ -1668,9 +1677,11 @@ def smooth_donor(donor, body, angle):
     averaged over them lights two fifths of the trunk from inside. A recalc
     across the shell cannot settle them either: this steel has an inner and an
     outer skin joined along its cracks, and the propagation flips at every
-    join. Each face is instead turned to look AWAY from the nearest point of
-    the body it is worn on - the one direction every plate, lame and inner
-    skin agrees on. The donor is in world space by now, as is the body.
+    join. Each face is instead turned to agree with the skin normal at the
+    nearest point of the body it is worn on - the one direction every plate,
+    lame and inner skin agrees on. The normal, not the offset to that point:
+    steel sunk under the hidden skin (shoulder tops, knees) would turn inward.
+    The donor is in world space by now, as is the body.
     """
     me = donor.data
     if "custom_normal" in me.attributes:
@@ -1682,8 +1693,8 @@ def smooth_donor(donor, body, angle):
     flipped = 0
     for f in bm.faces:
         centre = f.calc_center_median()
-        near = skin.find_nearest(centre)[0]
-        if near is not None and f.normal.dot(centre - near) < 0:
+        near, skin_normal = skin.find_nearest(centre)[:2]
+        if near is not None and f.normal.dot(skin_normal) < 0:
             f.normal_flip()
             flipped += 1
     bm.normal_update()
@@ -2062,11 +2073,17 @@ def fit_plate_suit(donor, body, rig):
     # the collar steel OUTSIDE that column is cut higher, so it still covers the
     # trapezius slope between the ring and the pauldrons when seen from above -
     # one low plane left the shoulders bare, one high plane stood the ring up
-    # the throat. The spike beside the jaw rose past both.
+    # the throat. The spike beside the jaw rose past both. Ahead of the neck
+    # axis (the face looks down -Y) the ring's plane falls forward, or the sides
+    # of the collar's front notch stand out past the throat as two fins.
     rim = neck.z + SUIT_GORGET_HEIGHT
     lip = lambda p: Vector((neck.x - p.x, neck.y - p.y, 0))
-    cut_gorget = cut_donor(donor, placement, Vector((0, 0, rim)), Vector((0, 0, 1)),
-                           region=lambda p: in_ring(p) and not is_cap(p), lip=lip)
+    ring = lambda p: in_ring(p) and not is_cap(p)
+    cut_gorget = cut_donor(donor, placement, Vector((0, neck.y, rim)),
+                           Vector((0, -SUIT_THROAT_FALL, 1)).normalized(),
+                           region=lambda p: ring(p) and p.y < neck.y, lip=lip)
+    cut_gorget += cut_donor(donor, placement, Vector((0, 0, rim)), Vector((0, 0, 1)),
+                            region=lambda p: ring(p) and p.y >= neck.y, lip=lip)
     cut_gorget += cut_donor(donor, placement, Vector((0, 0, neck.z + SUIT_COLLAR_HEIGHT)),
                             Vector((0, 0, 1)),
                             region=lambda p: not in_ring(p) and not is_cap(p), lip=lip)
@@ -3042,6 +3059,33 @@ def mirrored(right, rig, name):
     return left
 
 
+def split_greaves(suit, rig, name, below_knee):
+    """Cut the suit's shins off into their own piece, below both knees.
+
+    A sabaton carries its own shin plate, and the suit's greave inside it is
+    the same radius give or take a centimetre, so worn together the two cross
+    down the whole shin and the suit's ankle flange stands out through the boot.
+    The runtime hides this piece under boots (`COVERED_BY` in `rig.ts`); the
+    suit's edge left above then laps the sabaton rim from outside.
+    """
+    knee = sum((rig.matrix_world @ rig.data.bones[b].head_local).z
+               for b in ("calf_l", "calf_r")) / 2
+    z = knee - below_knee
+    shin = suit.copy()
+    shin.data = suit.data.copy()
+    for coll in suit.users_collection:
+        coll.objects.link(shin)
+    shin.name = name
+    shin.data.name = name
+    M = suit.matrix_world
+    kept = cut_donor(suit, M, Vector((0, 0, z)), Vector((0, 0, -1)))
+    cut = cut_donor(shin, M, Vector((0, 0, z)), Vector((0, 0, 1)))
+    if not kept or not cut:
+        raise SystemExit(f"the greave plane at {z:.4f} m left one side empty")
+    return {"greave_cut_z": round(z, 4), "greave_below_knee_mm": round(below_knee * 1000, 1),
+            "greave_triangles": sum(len(p.vertices) - 2 for p in shin.data.polygons)}
+
+
 def assert_symmetric(rig):
     """Every `_r` bone is its `_l` twin reflected across x = 0, or a mirrored
     piece lands beside the limb it is meant to be on rather than around it."""
@@ -3168,6 +3212,9 @@ def build_rigid_gear(rig, body):
             detail["deform_groups"] = groups
         else:
             skin_to_bone(donor, rig, spec["bone"])
+        if spec.get("greaves"):
+            detail.update(split_greaves(donor, rig, f"{spec['slot']}.{spec['look']}.greave",
+                                        SUIT_GREAVE_BELOW_KNEE))
         tris = sum(len(p.vertices) - 2 for p in donor.data.polygons)
         detail.update({"bone": spec["bone"], "fit": spec["fit"], "triangles": tris,
                        "source": spec["src"]})
@@ -3482,6 +3529,8 @@ GORGET_SAFE = 0.45          # share of its own headroom a vertex may take
 GORGET_SHELL_AIR = 0.0005   # air kept between the plate and worn steel over it
 GORGET_SHELL_REACH = 0.05   # past this a worn shell is not near enough to cap
 GORGET_SHELLS = ("chest.plate.cuirass", "chest.plate.pauldron")
+BACKING_AIR = 0.003         # the torso backing stops this far under the cuirass
+BACKING_REACH = 0.15        # and looks this far out along its normal for it
 GORGET_TILE = 2.0           # steel grain repeats over the unwrapped plate
 STEEL_BLEND = "D:/VSC/exiled-casual/assets/props/source/mat-aged-black-steel.blend"
 STEEL_ID = "8352b3b2-edb7-4700-a9d6-055ab6ec9233"
@@ -3489,16 +3538,42 @@ STEEL_NAME = "Aged Black Steel"
 STEEL_FALLBACK = (0.18, 0.18, 0.19, 1.0)
 STEEL_ROUGHNESS = 0.55
 STEEL_METALLIC = 0.7
-STEEL_LIFT = 1.6            # the black steel's albedo, scaled toward the cuirass grey
+# The black steel is rusted and speckled beside a clean grey cuirass, so its
+# albedo takes the cuirass's own mean colour, keeping this share of its grain.
+STEEL_GRAIN = 0.15
+STEEL_NORMAL = 0.35         # normal map strength; full strength reads as fur
 
 
-def build_gorget(rig, body, worn):
-    """Cut the collar region off the body, push it out, and call it steel.
+LUMA = np.array((0.2126, 0.7152, 0.0722), dtype=np.float32)
 
-    The cut is exactly the `collar` piece `split_body_regions` will make, so
-    hiding that piece under this plate leaves no skin uncovered and no crack.
+
+def cuirass_albedo(worn):
+    """Mean base colour of the worn cuirass, sampled at its own UVs so the
+    atlas's empty padding does not count."""
+    obj = next(o for o in worn if o.name.startswith("chest.plate.cuirass"))
+    bsdf = next(n for n in obj.data.materials[0].node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+    link = bsdf.inputs["Base Color"].links
+    if not link:
+        return np.array(bsdf.inputs["Base Color"].default_value[:3], dtype=np.float32)
+    image = link[0].from_node.image
+    w, h = image.size
+    px = np.empty(len(image.pixels), dtype=np.float32)
+    image.pixels.foreach_get(px)
+    px = px.reshape(h, w, image.channels)[:, :, :3]
+    uv = np.empty(len(obj.data.uv_layers.active.data) * 2, dtype=np.float32)
+    obj.data.uv_layers.active.data.foreach_get("uv", uv)
+    uv = uv.reshape(-1, 2) % 1.0
+    return px[(uv[:, 1] * (h - 1)).astype(int), (uv[:, 0] * (w - 1)).astype(int)].mean(axis=0)
+
+
+def build_gorget(rig, body, worn, name="chest.plate.gorget", region="collar", fill=None):
+    """Cut a body region off the body, push it out, and call it steel.
+
+    The cut is exactly the piece `split_body_regions` will make, so hiding that
+    piece under this plate leaves no skin uncovered and no crack. With `fill`, a
+    shell name prefix, each vertex is pushed along its normal to just under that
+    shell instead of a fixed offset: a backing that shows through its cracks.
     """
-    name = "chest.plate.gorget"
     obj = body.copy()
     obj.data = body.data.copy()
     obj.name = obj.data.name = name
@@ -3512,7 +3587,7 @@ def build_gorget(rig, body, worn):
 
     bm = bmesh.new()
     bm.from_mesh(obj.data)
-    core = region_cores(body, bm)["collar"]
+    core = region_cores(body, bm)[region]
     doomed = [f for f in bm.faces if not any(v.index in core for v in f.verts)]
     bmesh.ops.delete(bm, geom=doomed, context="FACES")
     loose = [v for v in bm.verts if not v.link_faces]
@@ -3520,38 +3595,58 @@ def build_gorget(rig, body, worn):
         bmesh.ops.delete(bm, geom=loose, context="VERTS")
     if not bm.faces:
         bm.free()
-        raise SystemExit(f"{name}: the collar region has no faces")
+        raise SystemExit(f"{name}: the {region} region has no faces")
     bm.normal_update()
 
-    shells = [(o.name, bvh_of(o)) for o in worn
-              if any(o.name.startswith(pre) for pre in GORGET_SHELLS)]
-    room = surface_headroom(bm)
     pushed, capped_by_shell, capped_by_self = [], 0, 0
-    per_shell = {shell: [] for shell, _ in shells}
-    for i, v in enumerate(bm.verts):
-        want = GORGET_OFFSET
-        if room[i] < 0.02 - 1e-9:
-            held = max(GORGET_FLOOR, room[i] * GORGET_SAFE)
-            if held < want:
-                want = held
-                capped_by_self += 1
-        near, seen = None, []
-        for shell, bvh in shells:
-            hit = bvh.find_nearest(v.co, GORGET_SHELL_REACH)
+    per_shell = {}
+    if fill:
+        backed = next((bvh_of(o) for o in worn if o.name.startswith(fill)), None)
+        if backed is None:
+            bm.free()
+            raise SystemExit(f"{name}: no worn {fill} to back")
+        missed = set()
+        for v in bm.verts:
+            hit = backed.ray_cast(v.co, v.normal, BACKING_REACH)
+            want = 0.0 if hit[0] is None else max(0.0, hit[3] - BACKING_AIR)
             if hit[0] is None:
-                continue
-            seen.append((shell, hit[3]))
-            if near is None or hit[3] < near:
-                near = hit[3]
-        if near is not None:
-            allowed = max(0.0, near - GORGET_SHELL_AIR)
-            if allowed < want - 1e-9:
-                want = allowed
-                capped_by_shell += 1
-            for shell, d in seen:
-                per_shell[shell].append(d - want)
-        v.co += v.normal * want
-        pushed.append(want)
+                missed.add(v)
+            v.co += v.normal * want
+            pushed.append(want)
+        # Skin no steel stands over is not backed: it would stand out as steel.
+        capped_by_shell = len(missed)
+        bmesh.ops.delete(bm, geom=[f for f in bm.faces if any(v in missed for v in f.verts)],
+                         context="FACES")
+        bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
+    else:
+        shells = [(o.name, bvh_of(o)) for o in worn
+                  if any(o.name.startswith(pre) for pre in GORGET_SHELLS)]
+        room = surface_headroom(bm)
+        per_shell = {shell: [] for shell, _ in shells}
+        for i, v in enumerate(bm.verts):
+            want = GORGET_OFFSET
+            if room[i] < 0.02 - 1e-9:
+                held = max(GORGET_FLOOR, room[i] * GORGET_SAFE)
+                if held < want:
+                    want = held
+                    capped_by_self += 1
+            near, seen = None, []
+            for shell, bvh in shells:
+                hit = bvh.find_nearest(v.co, GORGET_SHELL_REACH)
+                if hit[0] is None:
+                    continue
+                seen.append((shell, hit[3]))
+                if near is None or hit[3] < near:
+                    near = hit[3]
+            if near is not None:
+                allowed = max(0.0, near - GORGET_SHELL_AIR)
+                if allowed < want - 1e-9:
+                    want = allowed
+                    capped_by_shell += 1
+                for shell, d in seen:
+                    per_shell[shell].append(d - want)
+            v.co += v.normal * want
+            pushed.append(want)
     bm.to_mesh(obj.data)
     bm.free()
     obj.data.update()
@@ -3580,7 +3675,7 @@ def build_gorget(rig, body, worn):
     bpy.ops.object.mode_set(mode="OBJECT")
     for d in obj.data.uv_layers.active.data:
         d.uv = (d.uv[0] * GORGET_TILE, d.uv[1] * GORGET_TILE)
-    mat, textured = tiled_material("gorget_steel", STEEL_BLEND, STEEL_FALLBACK,
+    mat, textured = tiled_material(f"{name.split('.')[-1]}_steel", STEEL_BLEND, STEEL_FALLBACK,
                                    STEEL_ROUGHNESS, STEEL_METALLIC)
     if textured:
         bsdf = next(n for n in mat.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
@@ -3588,8 +3683,16 @@ def build_gorget(rig, body, worn):
         px = np.empty(len(image.pixels), dtype=np.float32)
         image.pixels.foreach_get(px)
         px = px.reshape(-1, image.channels)
-        px[:, :3] = np.minimum(px[:, :3] * STEEL_LIFT, 1.0)
+        target = cuirass_albedo(worn)
+        luma = px[:, :3] @ LUMA
+        grain = 1.0 + (luma / max(float(luma.mean()), 1e-6) - 1.0) * STEEL_GRAIN
+        px[:, :3] = np.clip(np.outer(grain, target), 0.0, 1.0)
         image.pixels.foreach_set(px.ravel())
+        next(n for n in mat.node_tree.nodes if n.type == "NORMAL_MAP").inputs["Strength"].default_value = STEEL_NORMAL
+        # The rust's roughness map blotches the highlight; the cuirass reads even.
+        for link in list(bsdf.inputs["Roughness"].links):
+            mat.node_tree.links.remove(link)
+        bsdf.inputs["Roughness"].default_value = STEEL_ROUGHNESS
     obj.data.materials.append(mat)
     for poly in obj.data.polygons:
         poly.use_smooth = True
@@ -3611,13 +3714,16 @@ def build_gorget(rig, body, worn):
     bones = sorted(g.name for g in obj.vertex_groups)
     print(f"fitted {name}: {tris} tris, {n} verts, offset min {order[0]*1000:.2f} "
           f"p01 {order[n//100]*1000:.2f} median {order[n//2]*1000:.2f} max "
-          f"{order[-1]*1000:.2f} mm, {capped_by_shell} capped by worn steel, "
+          f"{order[-1]*1000:.2f} mm, {capped_by_shell} "
+          f"{'under no steel' if fill else 'capped by worn steel'}, "
           f"{capped_by_self} by their own crease, bones {bones}, "
           f"per shell {air_profile}")
     return {name: {
-        "built_from": "base.male.body collar region, offset along its own normals",
+        "built_from": f"base.male.body {region} region, "
+                      + (f"filled out to {BACKING_AIR * 1000:.0f} mm under {fill}" if fill
+                         else "offset along its own normals"),
         "source": "body",
-        "offset_mm": GORGET_OFFSET * 1000,
+        "offset_mm": None if fill else GORGET_OFFSET * 1000,
         "offset_min_mm": round(order[0] * 1000, 3),
         "offset_p01_mm": round(order[n // 100] * 1000, 3),
         "offset_median_mm": round(order[n // 2] * 1000, 3),
@@ -3651,6 +3757,10 @@ def main():
     fitted = build_rigid_gear(male_rig, male_body)
     worn = [o for o in bpy.data.objects if o.type == "MESH" and o.name.startswith("chest.")]
     fitted.update(build_gorget(male_rig, male_body, worn))
+    # The v9 suit is cracked through across the back: a torso backing filled out
+    # to just under it shows steel through every crack instead of the void.
+    fitted.update(build_gorget(male_rig, male_body, worn, "chest.plate.backing", "torso",
+                               fill="chest.plate.cuirass"))
     # The trousers are parked. They were the body's own legs pushed four
     # millimetres out and called leather, standing in for leg armour the chest
     # slot did not have; the harness carries real cuisses and greaves now, so
