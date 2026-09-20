@@ -7,7 +7,7 @@
  * A base that is not in here shows nothing. That is deliberate: rendering some
  * other piece in its place would tell the player a lie about what dropped, and
  * a drop the player cannot read is a reward that did not happen (docs/09). Most
- * bases are unmapped today - only five pieces have meshes.
+ * bases are unmapped today - only eight pieces have meshes.
  */
 import { BASE_LOOKS, type Looks, type Slot } from "./rig";
 
@@ -21,9 +21,15 @@ export const GEAR_LOOKS: Readonly<Record<string, GearLook>> = {
   "base.ember_buckler": { slot: "weapon2", look: "buckler" },
   "base.ashwall_tower_shield": { slot: "weapon2", look: "towershield" },
   "base.cinder_cap": { slot: "helmet", look: "iron" },
+  "base.stalker_hood": { slot: "helmet", look: "leather" },
   "base.ironsworn_plate": { slot: "chest", look: "plate" },
+  "base.stalker_leathers": { slot: "chest", look: "leather" },
+  "base.emberbound_robe": { slot: "chest", look: "robe" },
+  "base.emberweave_robe": { slot: "chest", look: "robe" },
   "base.ashen_treads": { slot: "boots", look: "plate" },
+  "base.stalker_boots": { slot: "boots", look: "leather" },
   "base.ember_gauntlets": { slot: "gloves", look: "plate" },
+  "base.stalker_gloves": { slot: "gloves", look: "leather" },
 };
 
 /** What the sim tells the client about one equipped item, as far as looks care. */

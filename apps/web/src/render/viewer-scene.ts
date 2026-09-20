@@ -286,7 +286,7 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
     camera.radius = frameDistance(max.subtract(min).length() / 2);
   };
 
-  return {
+  const viewer: ViewerScene = {
     async show(id) {
       takeDown();
       host = new Mesh(`viewer-${id}`, scene);
@@ -328,4 +328,10 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
       engine.dispose();
     },
   };
+  // The DEV handle also carries the viewer itself: dressing a look the panel
+  // does not offer, or playing a clip, from the console.
+  if (import.meta.env.DEV) {
+    (window as unknown as Record<string, unknown>).__viewerScene = viewer;
+  }
+  return viewer;
 }

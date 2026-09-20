@@ -302,6 +302,13 @@ export const BASE_LOOKS: Looks = {
  * because the arm is skin under a pauldron and a helmet, a gauntlet and a boot
  * own the rest, each its own item.
  */
+/**
+ * Chest looks whose cloth below the hip hangs on the skirt chains: the specs
+ * `tools/build_wardrobe.py` carries a `skirt` key for. Every other look leaves
+ * the chains unused, so the solver can sit out.
+ */
+const SKIRTED_CHEST: ReadonlySet<string> = new Set(["leather", "robe"]);
+
 const COVERED_BY: Partial<Record<Slot, readonly string[]>> = {
   helmet: ["hair"],
   gloves: ["hand_l", "hand_r"],
@@ -310,12 +317,24 @@ const COVERED_BY: Partial<Record<Slot, readonly string[]>> = {
   chest: ["torso", "collar", "leg_l", "leg_r"],
 };
 
+/**
+ * Chest looks that put nothing of their own over the legs. A closed skirt hands
+ * every vertex below the hip to the chains, so `build_wardrobe.py` builds it no
+ * `backing_leg_*`, and hiding the body's legs under it leaves the man hollow
+ * from the boot tops up - which is what the eye finds looking under the hem.
+ */
+const BARE_LEGS_CHEST: ReadonlySet<string> = new Set(["robe"]);
+
 /** The `<slot>.<look>.<part>` pieces the worn gear replaces. */
 export function hiddenBaseParts(looks: Looks): ReadonlySet<string> {
   const hidden = new Set<string>();
   for (const [slot, parts] of Object.entries(COVERED_BY)) {
     if (looks[slot as Slot] === null) continue;
     for (const part of parts) hidden.add(part);
+  }
+  if (looks.chest !== null && BARE_LEGS_CHEST.has(looks.chest)) {
+    hidden.delete("leg_l");
+    hidden.delete("leg_r");
   }
   return hidden;
 }
@@ -358,23 +377,29 @@ const skirtJointName = (chain: number, joint: number): string =>
  * ran the boot straight through the coat. The foot needs its own because a boot
  * reaches a long way forward of the ankle it pivots on.
  *
- * These are maximum radial extents measured off the outfit-era wardrobe, plus
- * 8mm cloth thickness. The old median-width capsules were substantially inside
- * the rendered geometry, so a mathematically clear collider still showed a boot
- * through the coat. Re-measure against whatever body carries cloth next: the
- * solver is dormant and no shipping asset has skirt chains.
+ * Measured off the Quaternius male by `collider_radii` in
+ * `tools/build_wardrobe.py` (`skirt_colliders` in `gear-fit.json`), plus 8mm
+ * cloth: the calf and foot at their maximum extent, because a median capsule
+ * sat inside the rendered shin and showed a boot through the coat; the thigh at
+ * its median, because its maximum is the buttock and would cage the waist.
+ *
+ * `worn` is what stands there instead once a boot is on, because the cloth is
+ * kept off what is DRAWN on the leg and a boot is wider than the shin it
+ * covers: the fattest shipped boot about each bone, same 8mm cloth. A capsule
+ * cut to bare skin puts the chains ON the shin, which leaves the boot 3cm
+ * proud of the cloth and the hem drawn inside its shaft. The thigh keeps one
+ * radius: a boot reaches that capsule only mid-stride, and widening it to the
+ * boot would cage the hip at every pose.
  */
-const SKIRT_COLLIDERS: readonly {
-  from: string; to: string; radius: number;
+export const SKIRT_COLLIDERS: readonly {
+  from: string; to: string; radius: number; worn?: number;
 }[] = [
-  // The coat is authored against the upper-leg median, so its fitted yoke is
-  // the separation surface there. Maximum thigh width would cage the waist.
-  { from: "thigh_l", to: "calf_l", radius: 0.088 },
-  { from: "thigh_r", to: "calf_r", radius: 0.088 },
-  { from: "calf_l", to: "foot_l", radius: 0.124 },
-  { from: "calf_r", to: "foot_r", radius: 0.124 },
-  { from: "foot_l", to: "ball_l", radius: 0.117 },
-  { from: "foot_r", to: "ball_r", radius: 0.117 },
+  { from: "thigh_l", to: "calf_l", radius: 0.0956 },
+  { from: "thigh_r", to: "calf_r", radius: 0.0956 },
+  { from: "calf_l", to: "foot_l", radius: 0.121, worn: 0.1584 },
+  { from: "calf_r", to: "foot_r", radius: 0.121, worn: 0.1584 },
+  { from: "foot_l", to: "ball_l", radius: 0.1079, worn: 0.1807 },
+  { from: "foot_r", to: "ball_r", radius: 0.1079, worn: 0.1807 },
 ];
 
 /** Down the bone: glTF joints out of Blender point along their own +Y. */
@@ -682,6 +707,9 @@ export class RigActor {
     previousA: Vector3;
     previousB: Vector3;
     initialized: boolean;
+    /** Bare skin and booted radii; `radius` is whichever the looks call for. */
+    bare: number;
+    worn: number;
   })[] = [];
   private cloth: Observer<Scene> | null = null;
   /** Solving cloth nobody can see is the one cost worth a flag. */
@@ -727,7 +755,17 @@ export class RigActor {
     if (changed) this.applyLooks();
   }
 
+  /** A boot is wider than the shin, so the cloth is pushed out of the boot. */
+  private fitColliders(): void {
+    const booted = this.looks.boots !== null;
+    for (const collider of this.colliders) {
+      collider.radius = booted ? collider.worn : collider.bare;
+    }
+  }
+
   private applyLooks(): void {
+    this.coatVisible = SKIRTED_CHEST.has(this.looks.chest ?? "");
+    this.fitColliders();
     const hidden = hiddenBaseParts(this.looks);
     for (const [slot, byLook] of this.parts) {
       const wanted = this.looks[slot as Slot] ?? null;
@@ -1059,7 +1097,7 @@ export class RigActor {
       for (let j = 0; j < SKIRT_JOINTS; j++) this.restsWorld.push(new Vector3());
     }
 
-    for (const { from, to, radius } of SKIRT_COLLIDERS) {
+    for (const { from, to, radius, worn } of SKIRT_COLLIDERS) {
       const head = byName.get(from);
       const tail = byName.get(to);
       if (head instanceof TransformNode && tail instanceof TransformNode) {
@@ -1068,10 +1106,12 @@ export class RigActor {
           a: new Vector3(), b: new Vector3(),
           previousA: new Vector3(), previousB: new Vector3(),
           radius,
+          bare: radius, worn: worn ?? radius,
           initialized: false,
         });
       }
     }
+    this.fitColliders();
 
     this.pelvis = pelvis;
     this.skirtChains = chains;

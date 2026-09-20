@@ -28,10 +28,10 @@ describe("dressing the character from what he has equipped", () => {
   it("shows nothing for a base with no mesh, rather than the wrong one", () => {
     // Asserted, not assumed: the moment either base gets a mesh this fixture is
     // testing the opposite of what it says, and the failure names which one.
-    const unmapped = ["base.stalker_leathers", "base.ashen_focus"] as const;
+    const unmapped = ["base.cinderchain_sash", "base.ashen_focus"] as const;
     for (const baseId of unmapped) expect(GEAR_LOOKS[baseId]).toBeUndefined();
     const looks = looksForEquipment({
-      body: { baseId: unmapped[0] },
+      belt: { baseId: unmapped[0] },
       weapon2: { baseId: unmapped[1] },
     });
     expect(looks.weapon2).toBeNull();

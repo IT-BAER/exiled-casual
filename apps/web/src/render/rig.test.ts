@@ -31,6 +31,9 @@ import {
   STRIKE_CLIPS,
   isLayeredClip,
   hiddenBaseParts,
+  SKIRT_CHAINS,
+  SKIRT_JOINTS,
+  SKIRT_COLLIDERS,
 } from "./rig";
 
 let engine: InstanceType<typeof NullEngine>;
@@ -214,6 +217,7 @@ describe("rig fallback", () => {
 /** Which joint each rigid piece must hang from, and nothing else. */
 const RIGID_BONES: Record<string, string> = {
   "helmet.iron.helm": "Head",
+  "helmet.leather.hood": "Head",
   "weapon1.emberwand.mesh": "hand_r",
   "weapon2.buckler.mesh": "lowerarm_l",
 };
@@ -242,10 +246,12 @@ const PLATE_BONES = [
 const SABATON_BONES: Record<string, string[]> = {
   "boots.plate.sabaton_r": ["calf_r", "foot_r", "ball_r"],
   "boots.plate.sabaton_l": ["calf_l", "foot_l", "ball_l"],
+  "boots.leather.boot_r": ["calf_r", "foot_r", "ball_r"],
+  "boots.leather.boot_l": ["calf_l", "foot_l", "ball_l"],
 };
 
 const COMPONENTS: Record<number, number> = { 5120: 1, 5121: 1, 5122: 2, 5123: 2, 5125: 4, 5126: 4 };
-const TYPE_COUNT: Record<string, number> = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4 };
+const TYPE_COUNT: Record<string, number> = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4, MAT4: 16 };
 
 /** Read one glTF accessor out of the binary chunk as a flat number array. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -315,6 +321,19 @@ describe("what worn gear hides of the body", () => {
   });
 
   /**
+   * The robe's cloth hangs on the chains and swings clear of the legs, so the
+   * build gives it no leg backing. Taking the body's legs as well leaves a
+   * hollow between the boot tops and the hip that any low camera sees.
+   */
+  it("leaves the legs on under a robe, which carries no leg cover of its own", () => {
+    const hidden = hiddenBaseParts({ ...BASE_LOOKS, chest: "robe", boots: "leather" });
+    expect(hidden.has("leg_l")).toBe(false);
+    expect(hidden.has("leg_r")).toBe(false);
+    expect(hidden.has("torso")).toBe(true);
+    expect(hiddenBaseParts({ ...BASE_LOOKS, chest: "leather" }).has("leg_l")).toBe(true);
+  });
+
+  /**
    * A sabaton carries its own shin plate, so the suit's greave inside it is
    * switched off; without boots the suit's shins are drawn down to the ankle.
    */
@@ -333,7 +352,7 @@ describe("wardrobe asset", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ) as any as {
     nodes: { name: string; mesh?: number; skin?: number; children?: number[] }[];
-    skins: { joints: number[] }[];
+    skins: { joints: number[]; inverseBindMatrices: number }[];
     meshes: { name: string; primitives: { attributes: Record<string, number> }[] }[];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     accessors: any[]; bufferViews: any[]; buffers0Len: number;
@@ -358,11 +377,19 @@ describe("wardrobe asset", () => {
       "base.male.arm_l", "base.male.arm_r", "base.male.collar",
       "base.male.neck",
       "base.male.leg_l", "base.male.leg_r",
-      "helmet.iron.helm", "weapon1.emberwand.mesh", "weapon2.buckler.mesh",
+      "helmet.iron.helm", "helmet.leather.hood", "weapon1.emberwand.mesh", "weapon2.buckler.mesh",
       "weapon2.towershield.mesh",
       "chest.plate.cuirass", "chest.plate.gorget", "chest.plate.greave", "chest.plate.backing",
+      "chest.plate.backing_arm_l", "chest.plate.backing_arm_r",
+      "chest.leather.coat", "chest.leather.gorget", "chest.leather.greave", "chest.leather.backing",
+      "chest.leather.backing_arm_l", "chest.leather.backing_arm_r",
+      "chest.leather.backing_leg_l", "chest.leather.backing_leg_r",
+      "chest.robe.robe", "chest.robe.gorget", "chest.robe.backing",
+      "chest.robe.backing_arm_l", "chest.robe.backing_arm_r",
       "boots.plate.sabaton_l", "boots.plate.sabaton_r",
+      "boots.leather.boot_l", "boots.leather.boot_r",
       "gloves.plate.gauntlet_l", "gloves.plate.gauntlet_r",
+      "gloves.leather.glove_l", "gloves.leather.glove_r",
     ].sort());
   });
 
@@ -468,6 +495,35 @@ describe("wardrobe asset", () => {
     return used;
   };
 
+  const sub = (a: number[], b: number[]): number[] => a.map((v, i) => v - b[i]!);
+  const dot = (a: number[], b: number[]): number => a.reduce((sum, v, i) => sum + v * b[i]!, 0);
+  const toSegment = (p: number[], a: number[], b: number[]): number => {
+    const ab = sub(b, a);
+    const t = Math.max(0, Math.min(1, dot(sub(p, a), ab) / dot(ab, ab)));
+    const off = sub(p, a.map((v, i) => v + ab[i]! * t));
+    return Math.sqrt(dot(off, off));
+  };
+
+  /** Where each joint of a skin stands in bind pose: the origin its inverse bind sends to zero. */
+  const bindPose = (skin: any): Map<string, number[]> => {
+    const ibm = readAccessor(json, glb.subarray(20 + json.buffers0Len), skin.inverseBindMatrices);
+    const at = new Map<string, number[]>();
+    skin.joints.forEach((j: number, k: number) => {
+      const m = ibm.slice(k * 16, k * 16 + 16);
+      const a = (r: number, c: number): number => m[c * 4 + r]!;
+      const det = (p: (r: number, c: number) => number): number =>
+        p(0, 0) * (p(1, 1) * p(2, 2) - p(1, 2) * p(2, 1))
+        - p(0, 1) * (p(1, 0) * p(2, 2) - p(1, 2) * p(2, 0))
+        + p(0, 2) * (p(1, 0) * p(2, 1) - p(1, 1) * p(2, 0));
+      const d = det(a);
+      // Cramer, on A * o = -t: the column the answer is wanted in is swapped
+      // for the right-hand side.
+      at.set(json.nodes[j]!.name, [0, 1, 2].map((col) =>
+        det((r, c) => (c === col ? -m[12 + r]! : a(r, c))) / d));
+    });
+    return at;
+  };
+
   it("ships a skinned gorget plate over the hidden collar", () => {
     const used = jointsUsed("chest.plate.gorget");
     expect(used).toContain("clavicle_l");
@@ -521,9 +577,12 @@ describe("wardrobe asset", () => {
    * image instead would let the search land on its own ratio and put visibly
    * different steel on the two legs.
    */
-  it("stands the two sabatons on opposite legs, same steel on both", () => {
+  it.each([
+    ["boots.plate.sabaton_r", "boots.plate.sabaton_l"],
+    ["boots.leather.boot_r", "boots.leather.boot_l"],
+  ])("stands %s and %s on opposite legs, same piece on both", (rightMesh, leftMesh) => {
     const bin = glb.subarray(20 + json.buffers0Len);
-    const centres = ["boots.plate.sabaton_r", "boots.plate.sabaton_l"].map((mesh) => {
+    const centres = [rightMesh, leftMesh].map((mesh) => {
       const node = json.nodes.find((n) => n.name === mesh)!;
       const prim = json.meshes[node.mesh!]!.primitives[0]!;
       const pos = readAccessor(json, bin, prim.attributes["POSITION"]!);
@@ -548,11 +607,99 @@ describe("wardrobe asset", () => {
     expect(right.x[1]! * left.x[0]!).toBeLessThan(0);
   });
 
-  it("rides two 65-bone skeletons, one per body", () => {
+  it("rides a 65-bone female and a male with 96 skirt joints under his pelvis", () => {
     expect(json.skins).toHaveLength(2);
-    for (const skin of json.skins) {
-      expect(skin.joints.map((j) => json.nodes[j]!.name)).toHaveLength(65);
+    const chainCounts = json.skins.map((skin) => {
+      const names = skin.joints.map((j) => json.nodes[j]!.name);
+      const chains = names.filter((n) => n.startsWith("skirt_"));
+      expect(names.length - chains.length).toBe(65);
+      return chains.length;
+    });
+    expect(chainCounts.sort((a, b) => a - b)).toEqual([0, SKIRT_CHAINS * SKIRT_JOINTS]);
+  });
+
+  /**
+   * The chain a piece of cloth hangs on has to run down the inside of that
+   * cloth's own column. A ring hung at hip radius leaves a flared hem further
+   * from its chain than any leg capsule is wide, so the solver collides a line
+   * that lies inside the leg while the visible cloth trails behind the heel.
+   *
+   * Cloth already inside a capsule is the solver's to push out, so only what
+   * hangs free of the legs is measured, and a garment has folds, so the bar is
+   * the ninth decile rather than the worst vertex.
+   */
+  it.each(["chest.robe.robe", "chest.leather.coat"])(
+    "hangs %s on chains that run inside its own cloth", (meshName) => {
+      const node = json.nodes.find((n) => n.name === meshName)!;
+      const skin = json.skins[node.skin!]!;
+      const at = bindPose(skin);
+      const bin = glb.subarray(20 + json.buffers0Len);
+      // The chain's line: its three joints, then one more segment on for the
+      // last bone's tail, which no glTF node carries.
+      const axis = new Map<number, number[][]>();
+      for (let i = 0; i < SKIRT_CHAINS; i += 1) {
+        const knots = [1, 2, 3].map((n) => at.get(`skirt_${i}_${String(n).padStart(2, "0")}`)!);
+        const last = knots[SKIRT_JOINTS - 1]!;
+        axis.set(i, [...knots, last.map((v, k) => v + (v - knots[SKIRT_JOINTS - 2]![k]!))]);
+      }
+      const legs = SKIRT_COLLIDERS.map((c) =>
+        ({ a: at.get(c.from)!, b: at.get(c.to)!, radius: c.radius }));
+
+      const prim = json.meshes[node.mesh!]!.primitives[0]!;
+      const pos = readAccessor(json, bin, prim.attributes["POSITION"]!);
+      const joints = readAccessor(json, bin, prim.attributes["JOINTS_0"]!);
+      const weights = readAccessor(json, bin, prim.attributes["WEIGHTS_0"]!);
+      const free: number[] = [];
+      for (let v = 0; v < pos.length / 3; v += 1) {
+        let best = 0;
+        for (let k = 1; k < 4; k += 1) {
+          if (weights[v * 4 + k]! > weights[v * 4 + best]!) best = k;
+        }
+        const name = json.nodes[skin.joints[joints[v * 4 + best]!]!]!.name;
+        const chain = /^skirt_(\d+)_/.exec(name);
+        if (!chain) continue;
+        const p = [pos[v * 3]!, pos[v * 3 + 1]!, pos[v * 3 + 2]!];
+        if (legs.some((leg) => toSegment(p, leg.a, leg.b) <= leg.radius)) continue;
+        const line = axis.get(Number(chain[1]))!;
+        free.push(Math.min(...line.slice(1).map((k, i) => toSegment(p, line[i]!, k))));
+      }
+      expect(free.length, meshName).toBeGreaterThan(1000);
+      free.sort((a, b) => a - b);
+      const tightest = Math.min(...SKIRT_COLLIDERS.map((c) => c.radius));
+      expect(free[Math.floor(free.length * 0.9)]!, meshName).toBeLessThanOrEqual(tightest);
+    });
+
+  /**
+   * A capsule stands for what the eye sees on that leg, and once a boot is on,
+   * that is the boot. Solved against bare-skin radii the chains press onto the
+   * shin, the boot stands proud of the cloth, and the hem is drawn inside the
+   * shaft. So `worn` has to swallow the whole boot - and has to be worth its
+   * line, which the bare radius failing to is what says so.
+   */
+  it.each([
+    ["boots.leather.boot_r", "_r"],
+    ["boots.plate.sabaton_r", "_r"],
+    ["boots.leather.boot_l", "_l"],
+    ["boots.plate.sabaton_l", "_l"],
+  ])("keeps %s inside the capsules the cloth is pushed out of", (meshName, side) => {
+    const node = json.nodes.find((n) => n.name === meshName)!;
+    const at = bindPose(json.skins[node.skin!]!);
+    const caps = SKIRT_COLLIDERS
+      .filter((c) => c.worn !== undefined && c.from.endsWith(side))
+      .map((c) => ({ a: at.get(c.from)!, b: at.get(c.to)!, bare: c.radius, worn: c.worn! }));
+    const prim = json.meshes[node.mesh!]!.primitives[0]!;
+    const pos = readAccessor(json, glb.subarray(20 + json.buffers0Len),
+      prim.attributes["POSITION"]!);
+
+    let worstWorn = -Infinity;
+    let worstBare = -Infinity;
+    for (let v = 0; v < pos.length / 3; v += 1) {
+      const p = [pos[v * 3]!, pos[v * 3 + 1]!, pos[v * 3 + 2]!];
+      worstWorn = Math.max(worstWorn, Math.min(...caps.map((c) => toSegment(p, c.a, c.b) - c.worn)));
+      worstBare = Math.max(worstBare, Math.min(...caps.map((c) => toSegment(p, c.a, c.b) - c.bare)));
     }
+    expect(worstWorn, meshName).toBeLessThanOrEqual(0);
+    expect(worstBare, meshName).toBeGreaterThan(0.02);
   });
 
   it("carries every look the code can ask for", () => {

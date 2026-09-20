@@ -64,6 +64,8 @@ ICONS: list[tuple[str, str, int, int]] = [
     ("ironcoil_girdle_v1", "ironcoil_girdle", 2, 1),
     ("cinderhide_strap_v1", "cinderhide_strap", 2, 1),
     ("ashen_bracers_v1", "ashen_bracers", 2, 2),
+    ("stalker_gloves_v1", "stalker_gloves", 2, 2),
+    ("stalker_hood_v1", "stalker_hood", 2, 2),
     ("cinderplate_gauntlets_v1", "cinderplate_gauntlets", 2, 2),
     # v2: v1 came back as modern low-cut dress shoes, which is not a slot this game
     # has, and at 1.79 wide to tall it also filled a 2x2 to only 56%.

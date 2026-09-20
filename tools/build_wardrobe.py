@@ -315,10 +315,20 @@ SUIT_RIM_LIP = 0.006
 # How far inboard of the shoulder joint the pauldron cap still counts as cap
 # and escapes the collar plane, metres.
 SUIT_CAP_INBOARD = 0.08
+# Collar steel this far off the trapezius is a torn flap, not a plate: measured
+# on the v9 harness, the shell over that skin sits inside 30 mm and the fins
+# stand 40 to 100 mm out. Read from this far below the shoulder joint up.
+SUIT_FLARE_PROUD = 0.04
+SUIT_FLARE_BELOW_SHOULDER = 0.04
 # Where the suit's shins are cut off into `chest.plate.greave`, below the knee.
 # 30 mm under the sabaton rim (`BOOT_TOP`): the suit is still wider than the
 # boot there, so its edge laps the rim from outside.
 SUIT_GREAVE_BELOW_KNEE = 0.06
+# A soft suit's greave is its trouser legs alone, the shell inside this many
+# calf radii of either shin (`greave_radius` on the spec): a skirt cut on the
+# same plane loses its lower half under a pair of boots and wears the cut as a
+# seam of slivers. The coat's is wider because its boot cuffs and straps flare.
+SOFT_GREAVE_RADIUS = 2.0
 
 # A fauld hangs off the belt and its tassets ride the thighs, so the skirt has
 # to answer to both legs and to the lumbar the cuirass above it already bends
@@ -382,6 +392,20 @@ RIGID_GEAR = (
         "matte": True,
     },
     {
+        "slot": "helmet", "look": "leather", "part": "hood",
+        "src": "leather-hood-20k-v1.glb", "bone": "Head", "fit": "head_shell",
+        # A cowl stands off the skull where a helm's lining does not, so the
+        # median gap it is allowed is wider. A head is deeper than this cavity
+        # and no taller than it, so the stretch that makes room runs front to
+        # back: drawn out along Z instead, the cowl stands over the crown. The
+        # helm's forward pull is left off, because a hood is not worn pulled
+        # down over the brow and the pull costs the occiput the same 7 mm.
+        "symmetric": True,
+        "fit_args": {"coverage": 1.0, "max_median": 0.040, "back_shift": 0.0,
+                     "stretch": 1.2, "stretch_axis": 1},
+        "matte": True,
+    },
+    {
         "slot": "weapon1", "look": "emberwand", "part": "mesh",
         "src": "wand-3000-v3b.glb", "bone": "hand_r", "fit": "hand_grip",
     },
@@ -399,14 +423,53 @@ RIGID_GEAR = (
         "deform": SUIT_BONES,
         "matte": True, "twosided": True, "clean": True, "greaves": True,
     },
+    # The soft suits are the same whole-figure donor shape as the harness -
+    # headless T-pose, gloves and boots on - so they take the same cuts: head at
+    # the skull base, sleeves at the pauldron, feet at the ankle.
+    #
+    # The robe is first of the two because it lays the skirt ring out: its cloth
+    # runs to the ankle, the coat's stops at the greave plane, and a ring laid
+    # out from the coat has nothing to say about the half below it.
+    {
+        "slot": "chest", "look": "robe", "part": "robe",
+        "src": "emberbound-robe-20k-v1.glb", "bone": "spine_03", "fit": "soft_suit",
+        "deform": SUIT_BONES,
+        # No greave. A greave is hidden the moment boots are worn, and this robe
+        # is floor length: splitting its shins off takes exactly the cloth that
+        # covers the boot, and the boot then shows through the outer flare.
+        "matte": True, "twosided": True, "clean": True,
+        "skirt": 0.0,
+    },
+    {
+        "slot": "chest", "look": "leather", "part": "coat",
+        "src": "stalker-leathers-20k-v1.glb", "bone": "spine_03", "fit": "soft_suit",
+        "deform": SUIT_BONES,
+        # The decode's two shoulder caps are not the same garment: the -X one is
+        # a smooth puff, the +X one a faceted plate torn along its lower edge
+        # with a pale sliver over its top. A coat is symmetric, so the good half
+        # carries both, and here that half is the one at -X.
+        "symmetric": "-x",
+        "matte": True, "twosided": True, "clean": True, "greaves": "shins",
+        "greave_radius": 3.5, "skirt": 1.3,
+    },
     {
         "slot": "boots", "look": "plate", "part": "sabaton",
         "src": "sabaton-8k-v1.glb", "bone": "foot_r", "fit": "boot_leg",
         "deform": SABATON_BONES, "matte": True, "mirror": True,
     },
     {
+        "slot": "boots", "look": "leather", "part": "boot",
+        "src": "leather-boot-8k-v1.glb", "bone": "foot_r", "fit": "boot_leg",
+        "deform": SABATON_BONES, "matte": True, "mirror": True,
+    },
+    {
         "slot": "gloves", "look": "plate", "part": "gauntlet",
         "src": "gauntlet-hand-v2.glb", "bone": "hand_r", "fit": "hand_authored",
+        "deform": GAUNTLET_BONES, "matte": True, "mirror": True,
+    },
+    {
+        "slot": "gloves", "look": "leather", "part": "glove",
+        "src": "glove-hand-v1.glb", "bone": "hand_r", "fit": "hand_authored",
         "deform": GAUNTLET_BONES, "matte": True, "mirror": True,
     },
 )
@@ -428,6 +491,9 @@ SKIRT_PARKED = {
 # bent past DONOR_SMOOTH_ANGLE stay sharp under the smooth shading.
 DONOR_WELD = 0.0005
 DONOR_OPENINGS = 0
+# A loose island under this much surface is a decode shard, not a plate: the
+# smallest island any of these donors carries on purpose measures 341 cm2.
+DONOR_SCRAP_AREA = 0.005   # square metres
 DONOR_SMOOTH_ANGLE = math.radians(48.0)
 
 # Both donors ship a glossy ORM pack that reads as latex under Babylon's PBR;
@@ -442,8 +508,10 @@ MATTE_METALLIC_CAP = 0.75
 # the face out reads as sensible - the opening is meant to be bare - and hides
 # the one fault that matters, because the forehead is ABOVE the brim and has to
 # be under steel.
-HELM_CLEAR = -0.006      # crown seat relative to the top of the skull, metres
+HELM_SEAT_SWEEP = 24     # heights the seat is swept over before it is halved
+HELM_SEAT_STEPS = 10     # halvings after the sweep, well under a millimetre
 HELM_COVER_FROM = 0.25   # cranium measured from this fraction of head height up
+HELM_NAPE_FROM = 0.10    # the nape starts this fraction of head depth behind centre
 HELM_BACK_SHIFT = -0.03  # seat, as a fraction of head depth; negative is forward
 # The ears and the lower nape are outside this measurement and no automatic
 # test replaced it: ray parity is undefined on a shell open at the bottom, and
@@ -832,34 +900,6 @@ def covered_fraction(bvh, pts, centre):
     return hits / len(pts) if pts else 0.0
 
 
-def cavity_ceiling(obj):
-    """Height of a shell's inner crown, in its own coordinates.
-
-    What rests on a head is the underside of the dome, and finding it means
-    going through the steel: a ray dropped from above hits the outer skin first
-    and the ceiling second. Taking the lowest vertex down the central axis was
-    tried and is wrong on a donor with a comb - the measurement lands on the
-    comb, and the crown then stays welded to the scalp at every size.
-    """
-    lo, hi, dims, c = bbox([v.co for v in obj.data.vertices])
-    bvh = bvh_of(obj)
-    down = Vector((0, 0, -1))
-    ceiling = None
-    for fx in (-0.25, -0.12, 0.0, 0.12, 0.25):
-        for fy in (-0.12, 0.0, 0.12):
-            start = Vector((c.x + dims.x * fx, c.y + dims.y * fy, hi.z + dims.z))
-            outer = bvh.ray_cast(start, down, dims.z * 3)
-            if outer[0] is None:
-                continue
-            inner = bvh.ray_cast(Vector(outer[0]) + down * 1e-4, down, dims.z * 3)
-            if inner[0] is None:
-                continue
-            ceiling = inner[0].z if ceiling is None else min(ceiling, inner[0].z)
-    if ceiling is None:
-        raise SystemExit("no cavity under the dome: this donor is not a shell")
-    return ceiling
-
-
 def sizing(scale, stretch=1.0, axis=2):
     """Uniform scale, optionally drawn out along one of the donor's own axes."""
     s = [scale, scale, scale]
@@ -993,45 +1033,95 @@ def covered_radially(bvh, pts, segments):
     return hits / len(pts) if pts else 0.0
 
 
-def fit_head_shell(donor, body, rig):
-    """Grow the shell until the skull above the brim is inside it.
+def fit_head_shell(donor, body, rig, coverage=HELM_COVERAGE, max_median=HELM_MAX_MEDIAN,
+                   back_shift=HELM_BACK_SHIFT, width_from=HELM_WIDTH_FROM, stretch=1.0,
+                   stretch_axis=2):
+    """Grow the shell until the skull above the brim is inside it, letting each
+    size down onto the head until its lining meets the scalp.
 
     Seating alone cannot do it: the cavity has to be wide enough for the head
     before the crown can clear, and a donor scanned around somebody else's skull
     never is at the first ratio tried.
+
+    The seat is searched, not read off the donor. A ray dropped through a shell
+    reports whichever inner wall it crosses, and on a hood the wall under an
+    off-axis ray is a side flare a head's height below the cowl's own crown: the
+    hood then hung 190 mm over the skull. Contact with the scalp is the seat,
+    and the same two numbers that accept a size measure it.
     """
     head_lo, head_hi, head_dims, head_c = bbox(group_points(body, "Head"))
     hp = [v.co for v in donor.data.vertices]
     _, d_hi, d_dims, d_c = bbox(hp)
     dome = [p for p in hp if p.z > d_c.z]
     dome_w = max(p.x for p in dome) - min(p.x for p in dome)
-    ceiling = cavity_ceiling(donor)
-    dy = head_dims.y * HELM_BACK_SHIFT
+    dy = head_dims.y * back_shift
     covered = [p for p in group_points(body, "Head", 0.5)
                if p.z > head_c.z + head_dims.z * HELM_COVER_FROM]
+    # Coverage is asked of the crown alone, because a brim is open in front of
+    # it. Nothing is open at the BACK of a skull, and the shell has to come to
+    # rest off the occiput as surely as off the crown: seated on the crown
+    # alone, a cowl whose back wall is narrower than its dome comes down
+    # through the back of the head.
+    skull = covered + [p for p in group_points(body, "Head", 0.5)
+                       if p.z > head_c.z and p.z <= head_c.z + head_dims.z * HELM_COVER_FROM
+                       and p.y > head_c.y + head_dims.y * HELM_NAPE_FROM]
 
-    def matrix(scale):
-        lift = (ceiling - d_c.z) * scale
-        return placed(donor, sizing(scale), Matrix.Identity(4), Vector((
-            head_c.x, head_c.y + dy, head_hi.z + HELM_CLEAR - lift)))
+    def matrix(scale, z):
+        return placed(donor, sizing(scale, stretch, stretch_axis), Matrix.Identity(4),
+                      Vector((head_c.x, head_c.y + dy, z)))
+
+    def clears(scale, z):
+        bvh = bvh_of(donor, matrix(scale, z))
+        return (gap_profile(bvh, skull)[0] >= HELM_MIN_GAP
+                and covered_fraction(bvh, skull, head_c) >= coverage)
+
+    def seat(scale):
+        """The lowest this size sits with the whole cranium still inside it.
+
+        Swept, not halved: a shell held over the head fails coverage exactly as
+        one driven through it does, so clearance is true only in a band and a
+        bisection started above it never enters.
+        """
+        z_scale = scale * (stretch if stretch_axis == 2 else 1.0)
+        high = head_hi.z + d_dims.z * z_scale  # donor floor above the crown
+        low = head_lo.z
+        step = (high - low) / HELM_SEAT_SWEEP
+        best = None
+        for i in range(HELM_SEAT_SWEEP + 1):
+            z = high - step * i
+            if clears(scale, z):
+                best = z
+        if best is None:
+            return high
+        deep = best - step
+        for _ in range(HELM_SEAT_STEPS):
+            mid = (best + deep) / 2
+            if clears(scale, mid):
+                best = mid
+            else:
+                deep = mid
+        return best
 
     tries = []
-    ratio = HELM_WIDTH_FROM
+    ratio = width_from
     while ratio <= HELM_WIDTH_TO + 1e-9:
         scale = (head_dims.x * ratio) / dome_w
-        bvh = bvh_of(donor, matrix(scale))
-        p01, med = gap_profile(bvh, covered)
-        cov = covered_fraction(bvh, covered, head_c)
+        z = seat(scale)
+        bvh = bvh_of(donor, matrix(scale, z))
+        p01 = gap_profile(bvh, skull)[0]
+        med = gap_profile(bvh, covered)[1]
+        cov = covered_fraction(bvh, skull, head_c)
         tries.append([round(ratio, 3), round(p01 * 1000, 2), round(med * 1000, 2),
                       round(cov, 4)])
-        if cov >= HELM_COVERAGE and p01 >= HELM_MIN_GAP and med <= HELM_MAX_MEDIAN:
-            return matrix(scale), {
+        if cov >= coverage and p01 >= HELM_MIN_GAP and med <= max_median:
+            top = z + (d_hi.z - d_c.z) * scale * (stretch if stretch_axis == 2 else 1.0)
+            return matrix(scale, z), {
                 "dome_width_ratio": round(ratio, 3), "scale": round(scale, 5),
                 "skull_gap_p01_mm": round(p01 * 1000, 2),
                 "skull_gap_median_mm": round(med * 1000, 2),
                 "skull_covered": round(cov, 4),
-                "skull_points": len(covered),
-                "crown_seat_mm": round(HELM_CLEAR * 1000, 1),
+                "skull_points": len(skull),
+                "peak_above_crown_mm": round((top - head_hi.z) * 1000, 1),
                 "forward_of_head_centre_mm": round(-dy * 1000, 1),
             }
         ratio += HELM_WIDTH_STEP
@@ -1228,7 +1318,7 @@ def arm_socket(rig, body, side):
     return head, radii[len(radii) // 2]
 
 
-def donor_trunk(donor, lo, dims, centre):
+def donor_trunk(donor, lo, dims, centre, band=(PLATE_TRUNK_FROM, PLATE_TRUNK_TO)):
     """The suit's own torso: how wide it is, how deep, and where its middle is.
 
     Not an x-span of the vertices: on a suit with sleeves the widest points at
@@ -1248,7 +1338,7 @@ def donor_trunk(donor, lo, dims, centre):
     bvh = bvh_of(donor)
     best = None
     for i in range(PLATE_TRUNK_SAMPLES):
-        f = PLATE_TRUNK_FROM + (PLATE_TRUNK_TO - PLATE_TRUNK_FROM) * i / (PLATE_TRUNK_SAMPLES - 1)
+        f = band[0] + (band[1] - band[0]) * i / (PLATE_TRUNK_SAMPLES - 1)
         z = lo.z + dims.z * f
         origin = Vector((centre.x, centre.y, z))
         right = bvh.ray_cast(origin, Vector((1, 0, 0)))
@@ -1262,7 +1352,7 @@ def donor_trunk(donor, lo, dims, centre):
             best = (z, span, back[0].y - front[0].y, (back[0].y + front[0].y) / 2)
     if best is None:
         raise SystemExit("no ray out of the donor's axis met its own wall between "
-                         f"{PLATE_TRUNK_FROM} and {PLATE_TRUNK_TO} of its height")
+                         f"{band[0]} and {band[1]} of its height")
     return best
 
 
@@ -1584,6 +1674,31 @@ def cut_donor(donor, M, co, no, region=None, lip=None):
     return removed
 
 
+def symmetrise(donor, keep="+x"):
+    """Replace one half of the donor across X with a reflection of the other.
+
+    A decode is never symmetric, and a shell is fitted by its worst side: this
+    hood's left rear sat a centimetre tighter than its right, and enclosing the
+    skull there meant growing the whole cowl until it stood over the crown. The
+    kept half is named per donor, because which side came out whole is a fact
+    about that decode and nothing else: the coat's is at -X.
+    """
+    mod = donor.modifiers.new("symmetry", "MIRROR")
+    mod.use_axis[0] = True
+    mod.use_bisect_axis[0] = True
+    mod.use_bisect_flip_axis[0] = keep == "-x"
+    mod.use_mirror_merge = True
+    mod.merge_threshold = DONOR_WELD
+    dg = bpy.context.evaluated_depsgraph_get()
+    me = bpy.data.meshes.new_from_object(donor.evaluated_get(dg))
+    donor.modifiers.remove(mod)
+    old = donor.data
+    donor.data = me
+    bpy.data.meshes.remove(old)
+    donor.data.name = donor.name
+    return {"symmetrised": keep}
+
+
 def weld_donor(donor, dist, openings):
     """Merge a decode's doubled vertices and close its pinholes.
 
@@ -1604,6 +1719,7 @@ def weld_donor(donor, dist, openings):
         if not e0.is_boundary or e0 in used:
             continue
         loop, v, e = [e0.verts[0]], e0.verts[1], e0
+        ledges = [e0]
         used.add(e0)
         closed = True
         while v is not loop[0]:
@@ -1626,34 +1742,66 @@ def weld_donor(donor, dist, openings):
                 break
             e = nxt
             used.add(e)
+            ledges.append(e)
             v = e.other_vert(v)
         if closed and len(loop) >= 3:
-            loops.append(loop)
-    loops.sort(key=len, reverse=True)
+            loops.append((loop, ledges))
+    loops.sort(key=lambda pair: len(pair[0]), reverse=True)
     uv = bm.loops.layers.uv.active
-    made, filled = [], 0
-    for loop in loops[openings:]:
-        centre = bm.verts.new(sum((v.co for v in loop), Vector()) / len(loop))
-        fan = []
-        for i, a in enumerate(loop):
-            b = loop[(i + 1) % len(loop)]
-            try:
-                fan.append(bm.faces.new((a, b, centre)))
-            except ValueError:
-                continue
+    made, filled, fanned = [], 0, 0
+    for loop, ledges in loops[openings:]:
+        # A centroid fan is right for a pinhole and wrong for a tear. This
+        # decode's back is torn twenty centimetres across, and a cone pulled to
+        # that loop's centroid funnels into the chest: from behind it reads as a
+        # chevron notch with the backing in it. A triangulation of the loop
+        # itself stays on the surface, so it is tried first and the fan is what
+        # is left for a rim too ragged to triangulate.
+        edges = [e for e in ledges if e.is_valid and e.is_boundary]
+        fan = bmesh.ops.holes_fill(bm, edges=edges, sides=0)["faces"] if edges else []
+        if not fan and edges:
+            grid = bmesh.ops.triangle_fill(bm, edges=edges, use_beauty=True,
+                                           use_dissolve=False)["geom"]
+            fan = [g for g in grid if isinstance(g, bmesh.types.BMFace)]
         if not fan:
-            bm.verts.remove(centre)
-            continue
+            centre = bm.verts.new(sum((v.co for v in loop), Vector()) / len(loop))
+            for i, a in enumerate(loop):
+                b = loop[(i + 1) % len(loop)]
+                try:
+                    fan.append(bm.faces.new((a, b, centre)))
+                except ValueError:
+                    continue
+            if not fan:
+                bm.verts.remove(centre)
+                continue
+            fanned += 1
         filled += 1
         made += fan
         if uv is not None:
             # The cap wears its rim's texture: the centroid has no UV of its own
             # and a zero UV would drag one atlas corner across every hole.
-            rim = next(l[uv].uv.copy() for f in loop[0].link_faces if f not in fan
-                       for l in f.loops if l.vert is loop[0])
+            rim = next((l[uv].uv.copy() for v in loop if v.is_valid
+                        for f in v.link_faces if f not in fan
+                        for l in f.loops if l.vert is v), None)
             for f in fan:
                 for l in f.loops:
-                    l[uv].uv = rim
+                    if rim is not None:
+                        l[uv].uv = rim
+    made = [f for f in made if f.is_valid]
+    # The walk stops at a non-manifold junction, so the cracks that run into one
+    # are still open. With no opening to keep, whatever boundary is left is a
+    # crack by definition.
+    edged = 0
+    if openings == 0:
+        rest = [e for e in bm.edges if e.is_boundary]
+        if rest:
+            capped = bmesh.ops.holes_fill(bm, edges=rest, sides=0)["faces"]
+            made += capped
+            edged = len(capped)
+    # The decode also leaves shards loose beside the shell - a few square
+    # centimetres of steel standing off the pauldron as a torn fin. An island
+    # this small is never a plate; the smallest real one on these donors is two
+    # orders of magnitude bigger.
+    scrapped = _drop_scrap_islands(bm, DONOR_SCRAP_AREA)
     made = [f for f in made if f.is_valid]
     if made:
         bmesh.ops.recalc_face_normals(bm, faces=made)
@@ -1661,7 +1809,37 @@ def weld_donor(donor, dist, openings):
     bm.free()
     donor.data.update()
     return {"welded_verts": before - len(donor.data.vertices), "boundary_loops": len(loops),
-            "holes_filled": filled, "openings_kept": [len(l) for l in loops[:openings]]}
+            "holes_filled": filled, "holes_fanned": fanned, "holes_filled_edgewise": edged,
+            "scrap_islands_dropped": scrapped[0], "scrap_island_faces": scrapped[1],
+            "largest_scrap_cm2": scrapped[2],
+            "openings_kept": [len(l) for l, _ in loops[:openings]]}
+
+
+def _drop_scrap_islands(bm, max_area):
+    """Delete every loose island under `max_area` of surface. Returns
+    (islands, faces, largest kept-out island in cm2)."""
+    seen, doomed, islands, biggest = set(), [], 0, 0.0
+    for f0 in bm.faces:
+        if f0 in seen:
+            continue
+        stack, comp = [f0], []
+        seen.add(f0)
+        while stack:
+            f = stack.pop()
+            comp.append(f)
+            for e in f.edges:
+                for g in e.link_faces:
+                    if g not in seen:
+                        seen.add(g)
+                        stack.append(g)
+        area = sum(f.calc_area() for f in comp)
+        if area < max_area:
+            doomed += comp
+            islands += 1
+            biggest = max(biggest, area)
+    if doomed:
+        bmesh.ops.delete(bm, geom=doomed, context="FACES")
+    return islands, len(doomed), round(biggest * 1e4, 2)
 
 
 def smooth_donor(donor, body, angle):
@@ -1854,7 +2032,36 @@ def lift_gorget(donor, M, body, rig):
     }
 
 
-def inflate_pauldrons(donor, M, body, rig):
+def trim_collar_flare(donor, M, body, rig, shoulder):
+    """Drop the collar steel that stands off the trapezius instead of on it.
+
+    The decode tears the collar into flaps between the throat ring and the
+    pauldron cap, and a flap keeps the angle it was torn at: from behind they
+    are a stack of fins standing over the shoulder. A collar lies ON the
+    trapezius, so steel more than `SUIT_FLARE_PROUD` off that skin, inboard of
+    the shoulder joint, is a flap and not a plate. What it leaves bare is the
+    collar region, which `build_gorget` closes with its own plate.
+    """
+    skin = bvh_of(body, body.matrix_world)
+    floor = shoulder.z - SUIT_FLARE_BELOW_SHOULDER
+    bm = bmesh.new()
+    bm.from_mesh(donor.data)
+    doomed = []
+    for f in bm.faces:
+        p = M @ f.calc_center_median()
+        if p.z > floor and abs(p.x) < abs(shoulder.x) \
+                and skin.find_nearest(p)[3] > SUIT_FLARE_PROUD:
+            doomed.append(f)
+    if doomed:
+        bmesh.ops.delete(bm, geom=doomed, context="FACES")
+        bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
+    bm.to_mesh(donor.data)
+    bm.free()
+    donor.data.update()
+    return len(doomed)
+
+
+def inflate_pauldrons(donor, M, body, rig, per_vertex=False):
     """Grow each shoulder cap about the arm's own axis until the deltoid is in.
 
     The suit is sized on the trunk, and a generated figure's shoulder girth is
@@ -1878,6 +2085,11 @@ def inflate_pauldrons(donor, M, body, rig):
 
     Run AFTER the sleeve cut: growing first would carry sleeve steel outside the
     cut's own axis cylinder and leave it hanging past the arm.
+
+    `per_vertex` is the soft-suit rule: a cloth sleeve is a tube round the arm
+    with no arm hole to dip into, so each vertex under its sector's skin is
+    pushed out to that skin alone and the rest of the sleeve keeps its shape.
+    One factor over a thin sleeve balloons it into a lobe of fins.
     """
     inv = M.inverted()
     joint = rig.matrix_world @ rig.data.bones["upperarm_l"].head_local
@@ -1922,15 +2134,26 @@ def inflate_pauldrons(donor, M, body, rig):
         return {"pauldron_scale": 1.0,
                 "pauldron_worst_sector_ratio": round(max(ratios), 4)}
     ramp = (edge - root) * SUIT_PAULDRON_RAMP
+    pushed = 0
     for v, p in zip(donor.data.vertices, world):
         if not cap(p):
             continue
         t = min((abs(p.x) - root) / ramp, 1.0) if ramp > 0 else 1.0
-        f = 1.0 + (k - 1.0) * t
+        if per_vertex:
+            r = radius(p)
+            want = skin_r[sector(p)] + SUIT_PAULDRON_STANDOFF
+            if r < 1e-6 or r >= want:
+                continue
+            f = 1.0 + (min(want / r, SUIT_PAULDRON_MAX) - 1.0) * t
+            pushed += 1
+        else:
+            f = 1.0 + (k - 1.0) * t
         v.co = inv @ Vector((p.x, joint.y + (p.y - joint.y) * f,
                              joint.z + (p.z - joint.z) * f))
     donor.data.update()
     return {
+        "pauldron_per_vertex": per_vertex,
+        "pauldron_pushed_points": pushed,
         "pauldron_scale": round(k, 4),
         "pauldron_worst_sector_ratio": round(max(ratios), 4),
         "pauldron_sectors_covered": len(ratios),
@@ -1941,7 +2164,7 @@ def inflate_pauldrons(donor, M, body, rig):
     }
 
 
-def fit_plate_suit(donor, body, rig):
+def fit_plate_suit(donor, body, rig, trunk_band=(PLATE_TRUNK_FROM, PLATE_TRUNK_TO), soft=False):
     """Place a whole harness on the body, then cut it back to the chest slot.
 
     The donor is a complete figure - helm, pauldrons, sleeves, gauntlets, fauld,
@@ -1991,7 +2214,7 @@ def fit_plate_suit(donor, body, rig):
     head_z = (rig.matrix_world @ rig.data.bones["Head"].head_local).z
     hp = [v.co for v in donor.data.vertices]
     d_lo, d_hi, d_dims, d_c = bbox(hp)
-    trunk_at, trunk_w, trunk_d, trunk_y = donor_trunk(donor, d_lo, d_dims, d_c)
+    trunk_at, trunk_w, trunk_d, trunk_y = donor_trunk(donor, d_lo, d_dims, d_c, trunk_band)
     high = (head_z - b_lo.z) / d_dims.z
     # The donor's own trunk centre carries the horizontal seat, for the reason
     # `donor_trunk` gives: a fauld flared behind the back drags the bounding box
@@ -2109,7 +2332,8 @@ def fit_plate_suit(donor, body, rig):
                              region=in_sleeve,
                              lip=lambda p: Vector((0, shoulder.y - p.y, shoulder.z - p.z)))
                    for s in (1, -1))
-    caps = inflate_pauldrons(donor, placement, body, rig)
+    cut_flare = 0 if soft else trim_collar_flare(donor, placement, body, rig, shoulder)
+    caps = inflate_pauldrons(donor, placement, body, rig, per_vertex=soft)
     if not cut_feet or not cut_arms:
         raise SystemExit(f"a harness cut removed nothing - feet {cut_feet}, arms "
                          f"{cut_arms}: this donor is not a whole figure")
@@ -2132,6 +2356,7 @@ def fit_plate_suit(donor, body, rig):
         "gorget_pin_z": round(neck.z, 4),
         "gorget_axis_bound_m": round(collar_bound, 4),
         "cut_verts_gorget": cut_gorget,
+        "cut_faces_collar_flare": cut_flare,
         **caps,
         "neck_gap_p01_mm": round(neck_p01 * 1000, 2),
         "neck_gap_median_mm": round(neck_med * 1000, 2),
@@ -2162,6 +2387,16 @@ def fit_plate_suit(donor, body, rig):
         "cut_pauldron_bound_m": round(bound, 4),
         "size_tries": tries,
     }
+
+
+# A coat's skirt is split down the front, so at the harness's trunk band a ray
+# out of the axis leaves through the split and seats the coat on its trousers,
+# six centimetres behind the chest. A soft suit is measured at chest height.
+SOFT_TRUNK_BAND = (0.58, 0.70)
+
+
+def fit_soft_suit(donor, body, rig):
+    return fit_plate_suit(donor, body, rig, SOFT_TRUNK_BAND, soft=True)
 
 
 def bones_of(rig, names):
@@ -2427,6 +2662,11 @@ def fit_boot_leg(donor, body, rig):
     top = knee + BOOT_TOP
     ankle_z = (rig.matrix_world @ rig.data.bones["foot_r"].head_local).z
     seat, _ = band(leg, 2, ankle_z, (top - sole_z) * 0.05)
+    # Fore-aft the seat is the ankle, but across the body it is the FOOT: this
+    # foot stands 13 mm outboard of its own ankle, and a toe box centred on the
+    # ankle puts the little-toe side through the wall while the inner side has
+    # 30 mm of air. The shaft has room to follow the foot; the toes do not.
+    _, _, _, foot_c = bbox(foot)
 
     segments = bones_of(rig, SABATON_BONES)
     # Below the rim, because a boot is open at the top and the calf above it is
@@ -2438,6 +2678,7 @@ def fit_boot_leg(donor, body, rig):
     hp = [v.co for v in donor.data.vertices]
     d_lo, d_hi, d_dims, _ = bbox(hp)
     _, ankle_c, ankle_r = narrowest(donor, 2, BOOT_ANKLE_FROM, BOOT_ANKLE_TO)
+    _, _, _, d_foot_c = bbox([p for p in hp if p.z <= d_lo.z + d_dims.z * BOOT_ANKLE_FROM])
 
     tries = []
     ratio = BOOT_LEN_FROM
@@ -2445,8 +2686,8 @@ def fit_boot_leg(donor, body, rig):
         scale = (foot_dims.y * ratio) / d_dims.y
         stretch = min(BOOT_MAX_STRETCH, (top - sole_z) / (d_dims.z * scale))
         M = seated(donor, sizing(scale, stretch, 2), Matrix.Identity(4),
-                   Vector((ankle_c.x, ankle_c.y, d_lo.z)),
-                   Vector((seat.x, seat.y, sole_z)))
+                   Vector((d_foot_c.x, ankle_c.y, d_lo.z)),
+                   Vector((foot_c.x, seat.y, sole_z)))
         bvh = bvh_of(donor, M)
         p01, med = gap_profile(bvh, sample)
         cov = covered_radially(bvh, sample, segments)
@@ -2739,6 +2980,7 @@ FITTERS = {
     "tower_strap": fit_tower_strap,
     "plate_torso": fit_plate_torso,
     "plate_suit": fit_plate_suit,
+    "soft_suit": fit_soft_suit,
     "plate_hips": fit_plate_hips,
     "hand_plate": fit_hand_plate,
     "hand_authored": fit_hand_authored,
@@ -2775,6 +3017,36 @@ def _kdtree(pts, idxs):
         tree.insert(pts[i], i)
     tree.balance()
     return tree
+
+
+def _drop_islands_below(obj, M, z):
+    """Drop every connected piece that lies wholly below z: a donor's boot-cuff
+    scrap that the shin cut left outside its region, not a hem that hangs past it."""
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    seen = set()
+    doomed = []
+    for start in bm.verts:
+        if start.index in seen:
+            continue
+        island, stack = [], [start]
+        seen.add(start.index)
+        while stack:
+            v = stack.pop()
+            island.append(v)
+            for e in v.link_edges:
+                o = e.other_vert(v)
+                if o.index not in seen:
+                    seen.add(o.index)
+                    stack.append(o)
+        if all((M @ v.co).z < z for v in island):
+            doomed.extend(island)
+    if doomed:
+        bmesh.ops.delete(bm, geom=doomed, context="VERTS")
+    bm.to_mesh(obj.data)
+    bm.free()
+    obj.data.update()
+    return len(doomed)
 
 
 def _cut_verts(obj, doomed):
@@ -3059,7 +3331,7 @@ def mirrored(right, rig, name):
     return left
 
 
-def split_greaves(suit, rig, name, below_knee):
+def split_greaves(suit, rig, name, below_knee, region=None):
     """Cut the suit's shins off into their own piece, below both knees.
 
     A sabaton carries its own shin plate, and the suit's greave inside it is
@@ -3078,11 +3350,17 @@ def split_greaves(suit, rig, name, below_knee):
     shin.name = name
     shin.data.name = name
     M = suit.matrix_world
-    kept = cut_donor(suit, M, Vector((0, 0, z)), Vector((0, 0, -1)))
-    cut = cut_donor(shin, M, Vector((0, 0, z)), Vector((0, 0, 1)))
+    kept = cut_donor(suit, M, Vector((0, 0, z)), Vector((0, 0, -1)), region=region)
+    cut = cut_donor(shin, M, Vector((0, 0, z)), Vector((0, 0, 1)), region=region)
+    if region is not None:
+        # The copy keeps everything outside the region too; only the shins are its.
+        _cut_verts(shin, [v.index for v in shin.data.vertices
+                          if not region(M @ v.co) or (M @ v.co).z > z + 1e-4])
     if not kept or not cut:
         raise SystemExit(f"the greave plane at {z:.4f} m left one side empty")
+    scraps = _drop_islands_below(suit, M, z)
     return {"greave_cut_z": round(z, 4), "greave_below_knee_mm": round(below_knee * 1000, 1),
+            "greave_scrap_verts_dropped": scraps,
             "greave_triangles": sum(len(p.vertices) - 2 for p in shin.data.polygons)}
 
 
@@ -3169,7 +3447,9 @@ def build_rigid_gear(rig, body):
         # rims they leave get the same normals as the plate beside them.
         if spec.get("clean"):
             detail_clean = weld_donor(donor, DONOR_WELD, DONOR_OPENINGS)
-        M, detail = FITTERS[spec["fit"]](donor, body, rig)
+        if spec.get("symmetric"):
+            symmetrise(donor, "-x" if spec["symmetric"] == "-x" else "+x")
+        M, detail = FITTERS[spec["fit"]](donor, body, rig, **spec.get("fit_args", {}))
         donor.data.transform(M)
         donor.data.update()
         if spec.get("clean"):
@@ -3212,9 +3492,18 @@ def build_rigid_gear(rig, body):
             detail["deform_groups"] = groups
         else:
             skin_to_bone(donor, rig, spec["bone"])
+        if spec.get("skirt") is not None:
+            detail.update(skin_skirt(donor, body, rig, spec["skirt"]))
         if spec.get("greaves"):
+            region = None
+            if spec["greaves"] == "shins":
+                shins = [(rig.matrix_world @ rig.data.bones[b].head_local,
+                          limb_radius(rig, body, b, 1.0)[1]
+                          * spec.get("greave_radius", SOFT_GREAVE_RADIUS))
+                         for b in ("calf_l", "calf_r")]
+                region = lambda p: any(math.hypot(p.x - c.x, p.y - c.y) <= r for c, r in shins)
             detail.update(split_greaves(donor, rig, f"{spec['slot']}.{spec['look']}.greave",
-                                        SUIT_GREAVE_BELOW_KNEE))
+                                        SUIT_GREAVE_BELOW_KNEE, region))
         tris = sum(len(p.vertices) - 2 for p in donor.data.polygons)
         detail.update({"bone": spec["bone"], "fit": spec["fit"], "triangles": tris,
                        "source": spec["src"]})
@@ -3229,6 +3518,272 @@ def build_rigid_gear(rig, body):
             )
             print(f"mirrored {left.name}: {tris} tris on {spec['bone'][:-2] + '_l'}")
     return fitted
+
+
+# --------------------------------------------------------------------------
+# Skirt chains
+#
+# Cloth below the hips is not skinned to the legs: a thigh rotation is rigid
+# about the hip, so a hem on it sweeps in phase with the knee and reads as two
+# stiff blades. It hangs on a ring of bone chains under the pelvis instead,
+# which nothing animates; `render/skirt.ts` solves them at runtime and the
+# cloth lags the body. Counts must match `SKIRT_CHAINS`/`SKIRT_JOINTS` in
+# `render/rig.ts`; `rig.test.ts` pins the pair.
+SKIRT_CHAINS = 32
+SKIRT_JOINTS = 3
+SKIRT_JOINT = "skirt_{i}_{n:02d}"
+# Height down the chain (0 hip, 1 hem) that stays welded to the pelvis.
+SKIRT_PINNED = 0.20
+# Cloth thickness added to every measured leg radius the solver collides with.
+SKIRT_CLOTH = 0.008
+# Heights the cloth column's radius is measured at, and how many times the ring
+# of them is averaged with its neighbours.
+SKIRT_BANDS = 6
+SKIRT_SMOOTH = 2
+SKIRT_COLLIDERS = (("thigh_l", "calf_l"), ("thigh_r", "calf_r"),
+                   ("calf_l", "foot_l"), ("calf_r", "foot_r"),
+                   ("foot_l", "ball_l"), ("foot_r", "ball_r"))
+
+
+def _leg_segments(rig):
+    return {b: (rig.matrix_world @ rig.data.bones[b].head_local,
+                rig.matrix_world @ rig.data.bones[b].tail_local)
+            for b in ("thigh_l", "thigh_r", "calf_l", "calf_r")}
+
+
+def _seg_distance(p, head, tail):
+    axis = tail - head
+    t = max(0.0, min(1.0, (p - head).dot(axis) / axis.length_squared))
+    return (p - (head + axis * t)).length
+
+
+def collider_radii(rig, body):
+    """Maximum radial extent of the skin about each leg bone, plus cloth."""
+    out = {}
+    for head_bone, tail_bone in SKIRT_COLLIDERS:
+        head = rig.matrix_world @ rig.data.bones[head_bone].head_local
+        tail = rig.matrix_world @ rig.data.bones[tail_bone].head_local
+        radii = sorted(_seg_distance(p, head, tail) for p in group_points(body, head_bone, 0.35))
+        # The thigh takes its median: its maximum is the buttock, and a capsule
+        # that wide cages the waist. A calf and a foot are their maximum.
+        r = radii[len(radii) // 2] if head_bone.startswith("thigh") else radii[-1]
+        out[f"{head_bone}->{tail_bone}"] = round(r + SKIRT_CLOTH, 4)
+    return out
+
+
+def _run_length(path):
+    """Cumulative length along a (z, radius) polyline."""
+    run = [0.0]
+    for (z0, r0), (z1, r1) in zip(path, path[1:]):
+        run.append(run[-1] + math.hypot(z1 - z0, r1 - r0))
+    return run
+
+
+def _circle_hit(a, b, centre, radius, u_min):
+    """Where the segment a->b first leaves a circle, as a fraction of it."""
+    dz, dr = b[0] - a[0], b[1] - a[1]
+    aa = dz * dz + dr * dr
+    if aa <= 0.0:
+        return None
+    fz, fr = a[0] - centre[0], a[1] - centre[1]
+    half_b = fz * dz + fr * dr
+    c = fz * fz + fr * fr - radius * radius
+    disc = half_b * half_b - aa * c
+    if disc < 0.0:
+        return None
+    root = math.sqrt(disc)
+    for u in sorted(((-half_b - root) / aa, (-half_b + root) / aa)):
+        if u_min <= u <= 1.0:
+            return u
+    return None
+
+
+def _walk(path, segment):
+    """`SKIRT_JOINTS` + 1 knots down a (z, radius) polyline, each one `segment`
+    in a STRAIGHT line from the last - a chord, not an arc, because the runtime
+    reads one bone length for the whole ring. A path that runs out keeps going
+    along its last direction."""
+    knots = [path[0]]
+    k, u = 0, 0.0
+    for _ in range(SKIRT_JOINTS):
+        centre = knots[-1]
+        hit, j, start = None, k, u
+        while j < len(path) - 1 and hit is None:
+            t = _circle_hit(path[j], path[j + 1], centre, segment, start)
+            hit = None if t is None else (j, t)
+            j, start = j + 1, 0.0
+        if hit is None:
+            (z0, r0), (z1, r1) = path[-2], path[-1]
+            step = math.hypot(z1 - z0, r1 - r0) or 1.0
+            knots.append((centre[0] + (z1 - z0) / step * segment,
+                          centre[1] + (r1 - r0) / step * segment))
+            k, u = len(path) - 2, 1.0
+            continue
+        k, u = hit
+        knots.append((path[k][0] + (path[k + 1][0] - path[k][0]) * u,
+                      path[k][1] + (path[k + 1][1] - path[k][1]) * u))
+    return knots
+
+
+def skirt_columns(cloth, centre, top_z, hem_z):
+    """Per sector, the cloth column's own median radius sampled down its height.
+
+    The chain has to lie inside the cloth it drives: a ring hung at hip radius
+    leaves a flared hem further from its own chain than any leg capsule is wide,
+    so the solver collides a line inside the leg while the visible cloth trails
+    behind the heel. Returns one (z, radius) knot list per chain, all walked at
+    the same segment length, and that length.
+    """
+    span = top_z - hem_z
+    step = 2.0 * math.pi / SKIRT_CHAINS
+    bands = [[[] for _ in range(SKIRT_BANDS)] for _ in range(SKIRT_CHAINS)]
+    for _, p in cloth:
+        i = int(math.atan2(p.y - centre.y, p.x - centre.x) % (2 * math.pi) / step) % SKIRT_CHAINS
+        b = min(SKIRT_BANDS - 1, max(0, int((top_z - p.z) / span * SKIRT_BANDS)))
+        bands[i][b].append(math.hypot(p.x - centre.x, p.y - centre.y))
+    ring = []
+    for col in bands:
+        med = [sorted(rs)[len(rs) // 2] if rs else None for rs in col]
+        seen = [b for b, r in enumerate(med) if r is not None]
+        if not seen:
+            raise SystemExit("a skirt sector caught no cloth at any height")
+        ring.append([med[min(seen, key=lambda k: abs(k - b))] for b in range(SKIRT_BANDS)])
+    # A column is a few hundred vertices and a garment has folds, so one noisy
+    # sector would kink the chain beside it; the neighbours average it out.
+    for _ in range(SKIRT_SMOOTH):
+        ring = [[(ring[(i - 1) % SKIRT_CHAINS][b] + 2 * r + ring[(i + 1) % SKIRT_CHAINS][b]) / 4
+                 for b, r in enumerate(col)] for i, col in enumerate(ring)]
+    zs = [top_z - span * (b + 0.5) / SKIRT_BANDS for b in range(SKIRT_BANDS)]
+    paths = [[(top_z, col[0])] + list(zip(zs, col)) + [(hem_z, col[-1])] for col in ring]
+    lengths = sorted(_run_length(path)[-1] for path in paths)
+    segment = lengths[len(lengths) // 2] / SKIRT_JOINTS
+    return [_walk(path, segment) for path in paths], segment
+
+
+def build_skirt_bones(rig, columns, centre, segment):
+    """A ring of chains hanging off the pelvis, one per cloth column, each
+    bone the same length so the runtime reads one segment off the asset.
+    `columns[i]` is chain i's (z, radius) knots about the hip axis."""
+    to_local = rig.matrix_world.inverted()
+    bpy.ops.object.select_all(action="DESELECT")
+    bpy.context.view_layer.objects.active = rig
+    rig.select_set(True)
+    bpy.ops.object.mode_set(mode="EDIT")
+    bones = rig.data.edit_bones
+    made = []
+    for i, column in enumerate(columns):
+        theta = 2.0 * math.pi * i / SKIRT_CHAINS
+        c, s_ = math.cos(theta), math.sin(theta)
+        knots = [Vector((centre.x + r * c, centre.y + r * s_, z)) for z, r in column]
+        parent = bones["pelvis"]
+        for n in range(SKIRT_JOINTS):
+            off = abs((knots[n + 1] - knots[n]).length - segment)
+            if off > 1e-4:
+                raise SystemExit(f"skirt_{i}_{n + 1:02d} is {off * 1000:.2f} mm off the ring's "
+                                 f"segment: the runtime reads one length for all of them")
+            bone = bones.new(SKIRT_JOINT.format(i=i, n=n + 1))
+            bone.head = to_local @ knots[n]
+            bone.tail = to_local @ knots[n + 1]
+            bone.parent = parent
+            bone.use_connect = n > 0
+            parent = bone
+            made.append(bone.name)
+    bpy.ops.object.mode_set(mode="OBJECT")
+    hems = [column[-1][0] for column in columns]
+    print(f"built {len(columns)} skirt chains ({len(made)} joints), segment {segment:.4f}, "
+          f"z {columns[0][0][0]:.3f} -> {min(hems):.3f}..{max(hems):.3f}")
+    return made
+
+
+def skin_skirt(mesh, body, rig, clear):
+    """Hand the cloth below the hips to the skirt chains.
+
+    A vertex is cloth when it hangs below the pelvis and sits more than `clear`
+    thigh radii off every leg bone. 0 takes everything below the hip, for a
+    closed robe with no trousers under it; a coat over trousers (`clear` > 0)
+    ends at the knee plane the greave is cut on, and the trousers under it stay
+    on the legs. The ring itself always runs from the hip to the donor's ankle
+    cut, so a floor-length robe folds at every joint whichever piece laid the
+    ring out; the first skirted piece in `RIGID_GEAR` lays the ring out from its
+    own cloth and later pieces bind to the same bones, so the piece whose cloth
+    runs lowest is listed first.
+    """
+    M = mesh.matrix_world
+    legs = _leg_segments(rig)
+    r_thigh = limb_radius(rig, body, "thigh_l", 1.0)[1]
+    pelvis_head = rig.matrix_world @ rig.data.bones["pelvis"].head_local
+    top_z = pelvis_head.z
+    knee = sum((rig.matrix_world @ rig.data.bones[b].head_local).z
+               for b in ("calf_l", "calf_r")) / 2
+    floor_z = knee - SUIT_GREAVE_BELOW_KNEE if clear > 0 else None
+    hem_z = min((M @ v.co).z for v in mesh.data.vertices)
+    span = top_z - hem_z
+    cloth = []
+    for v in mesh.data.vertices:
+        p = M @ v.co
+        if p.z >= top_z or (floor_z is not None and p.z < floor_z):
+            continue
+        if clear > 0 and min(_seg_distance(p, h, t) for h, t in legs.values()) < r_thigh * clear:
+            continue
+        cloth.append((v, p))
+    if not cloth:
+        raise SystemExit(f"{mesh.name}: nothing below the hip reads as cloth")
+    if SKIRT_JOINT.format(i=0, n=1) not in rig.data.bones:
+        # A column is measured from the cloth that hangs FREE of the legs: what
+        # lies inside a capsule is the solver's to push out, and counting it
+        # pulls the chain off the drape it is there to carry.
+        radii = collider_radii(rig, body)
+        capsules = [(rig.matrix_world @ rig.data.bones[h].head_local,
+                     rig.matrix_world @ rig.data.bones[t].head_local, radii[f"{h}->{t}"])
+                    for h, t in SKIRT_COLLIDERS]
+        hanging = [(v, p) for v, p in cloth
+                   if all(_seg_distance(p, h, t) > r for h, t, r in capsules)]
+        columns, segment = skirt_columns(hanging, pelvis_head, top_z, hem_z)
+        build_skirt_bones(rig, columns, pelvis_head, segment)
+
+    names = ["pelvis"] + [SKIRT_JOINT.format(i=i, n=n + 1)
+                          for i in range(SKIRT_CHAINS) for n in range(SKIRT_JOINTS)]
+    groups = {n: mesh.vertex_groups.get(n) or mesh.vertex_groups.new(name=n) for n in names}
+    knots = [SKIRT_PINNED + (1.0 - SKIRT_PINNED) * (n + 1) / SKIRT_JOINTS
+             for n in range(SKIRT_JOINTS)]
+    step = 2.0 * math.pi / SKIRT_CHAINS
+    for v, p in cloth:
+        for g in mesh.vertex_groups:
+            g.remove([v.index])
+        t = min(1.0, max(0.0, (top_z - p.z) / span))
+        pinned = min(1.0, max(0.0, (SKIRT_PINNED - t) / SKIRT_PINNED))
+        weights = [0.0] * SKIRT_JOINTS
+        if t <= knots[0]:
+            weights[0] = 1.0
+        elif t >= knots[-1]:
+            weights[-1] = 1.0
+        else:
+            n = next(k for k in range(SKIRT_JOINTS - 1) if t < knots[k + 1])
+            f = (t - knots[n]) / (knots[n + 1] - knots[n])
+            weights[n], weights[n + 1] = 1.0 - f, f
+        weights = [w * (1.0 - pinned) for w in weights]
+        theta = math.atan2(p.y - pelvis_head.y, p.x - pelvis_head.x) % (2 * math.pi)
+        exact = theta / step
+        near = math.floor(exact)
+        blend = exact - near
+        if pinned > 0:
+            groups["pelvis"].add([v.index], pinned, "REPLACE")
+        for chain, share in ((near % SKIRT_CHAINS, 1.0 - blend),
+                             ((near + 1) % SKIRT_CHAINS, blend)):
+            if share <= 0.0:
+                continue
+            for n, w in enumerate(weights):
+                if w > 0.0:
+                    groups[SKIRT_JOINT.format(i=chain, n=n + 1)].add(
+                        [v.index], w * share, "REPLACE")
+    rebind(mesh, rig)
+    print(f"  {mesh.name}: {len(cloth)} cloth vertices on {SKIRT_CHAINS} chains, "
+          f"hip {top_z:.3f} hem {hem_z:.3f}")
+    return {"skirt_vertices": len(cloth), "skirt_top_z": round(top_z, 4),
+            "skirt_hem_z": round(hem_z, 4), "skirt_clear": clear,
+            "skirt_floor_z": None if floor_z is None else round(floor_z, 4),
+            "skirt_cloth_hem_z": round(min(p.z for _, p in cloth), 4),
+            "skirt_colliders": collider_radii(rig, body)}
 
 
 # --------------------------------------------------------------------------
@@ -3528,9 +4083,29 @@ GORGET_FLOOR = 0.0005       # and the least a crease may pull it back to, metres
 GORGET_SAFE = 0.45          # share of its own headroom a vertex may take
 GORGET_SHELL_AIR = 0.0005   # air kept between the plate and worn steel over it
 GORGET_SHELL_REACH = 0.05   # past this a worn shell is not near enough to cap
-GORGET_SHELLS = ("chest.plate.cuirass", "chest.plate.pauldron")
+# Every chest look carries its own gorget and backing, cut from the body and
+# coloured off that look's own shell: `shell` -> (shell, its pauldron caps).
+CHEST_SHELLS = {
+    "plate": "chest.plate.cuirass",
+    "leather": "chest.leather.coat",
+    "robe": "chest.robe.robe",
+}
+SOFT_METALLIC = 0.0         # a leather or cloth collar plate is not steel
 BACKING_AIR = 0.003         # the torso backing stops this far under the cuirass
 BACKING_REACH = 0.15        # and looks this far out along its normal for it
+# A soft suit's backing also stands under the HOLES in its shell: a vertex whose
+# normal meets no shell is still backed, at the collar plate's offset, when the
+# shell is within this distance. Past it the skin is genuinely bare.
+BACKING_NEAR = 0.02
+# A cuirass stands a median 23 mm off the ribs where a coat lies on them, so a
+# torso vertex reading its own tear's rim has to look that much further. The
+# plate's torso is covered edge to edge, so anything this misses is a tear.
+BACKING_NEAR_PLATE = 0.06
+# And it reaches no further than this along a normal: a thigh's normal meets the
+# coat's skirt flap 14 cm out, and a backing pushed there is a shard between
+# the knees. Trousers and sleeves sit within a few centimetres of the skin.
+SOFT_BACKING_REACH = 0.04
+SOFT_BACKED_REGIONS = ("torso", "arm_l", "arm_r", "leg_l", "leg_r")
 GORGET_TILE = 2.0           # steel grain repeats over the unwrapped plate
 STEEL_BLEND = "D:/VSC/exiled-casual/assets/props/source/mat-aged-black-steel.blend"
 STEEL_ID = "8352b3b2-edb7-4700-a9d6-055ab6ec9233"
@@ -3547,10 +4122,10 @@ STEEL_NORMAL = 0.35         # normal map strength; full strength reads as fur
 LUMA = np.array((0.2126, 0.7152, 0.0722), dtype=np.float32)
 
 
-def cuirass_albedo(worn):
-    """Mean base colour of the worn cuirass, sampled at its own UVs so the
+def cuirass_albedo(worn, shell):
+    """Mean base colour of the worn shell, sampled at its own UVs so the
     atlas's empty padding does not count."""
-    obj = next(o for o in worn if o.name.startswith("chest.plate.cuirass"))
+    obj = next(o for o in worn if o.name.startswith(shell))
     bsdf = next(n for n in obj.data.materials[0].node_tree.nodes if n.type == "BSDF_PRINCIPLED")
     link = bsdf.inputs["Base Color"].links
     if not link:
@@ -3566,7 +4141,9 @@ def cuirass_albedo(worn):
     return px[(uv[:, 1] * (h - 1)).astype(int), (uv[:, 0] * (w - 1)).astype(int)].mean(axis=0)
 
 
-def build_gorget(rig, body, worn, name="chest.plate.gorget", region="collar", fill=None):
+def build_gorget(rig, body, worn, name="chest.plate.gorget", region="collar", fill=None,
+                 shell="chest.plate.cuirass", metallic=STEEL_METALLIC, near=None,
+                 reach=BACKING_REACH, keep=None):
     """Cut a body region off the body, push it out, and call it steel.
 
     The cut is exactly the piece `split_body_regions` will make, so hiding that
@@ -3596,6 +4173,11 @@ def build_gorget(rig, body, worn, name="chest.plate.gorget", region="collar", fi
     if not bm.faces:
         bm.free()
         raise SystemExit(f"{name}: the {region} region has no faces")
+    if fill:
+        # A body's torso is 924 vertices over a whole trunk, and a backing that
+        # coarse cannot follow the rim of a tear in the shell it plugs: one cut
+        # is what puts a vertex inside the tear rather than either side of it.
+        bmesh.ops.subdivide_edges(bm, edges=bm.edges[:], cuts=1, use_grid_fill=True)
     bm.normal_update()
 
     pushed, capped_by_shell, capped_by_self = [], 0, 0
@@ -3607,10 +4189,21 @@ def build_gorget(rig, body, worn, name="chest.plate.gorget", region="collar", fi
             raise SystemExit(f"{name}: no worn {fill} to back")
         missed = set()
         for v in bm.verts:
-            hit = backed.ray_cast(v.co, v.normal, BACKING_REACH)
+            hit = backed.ray_cast(v.co, v.normal, reach)
             want = 0.0 if hit[0] is None else max(0.0, hit[3] - BACKING_AIR)
             if hit[0] is None:
-                missed.add(v)
+                side = backed.find_nearest(v.co, near) if near is not None else (None,)
+                if keep is not None and keep(v.co):
+                    want = GORGET_OFFSET
+                elif side[0] is not None:
+                    # A normal that leaves through a tear measures no steel. The
+                    # nearest steel is the tear's own rim, and the backing is
+                    # taken all the way OUT to it - no air, because here the
+                    # backing is not under the plate but in the hole, and 3 mm
+                    # short of the rim is the dark notch the tear reads as.
+                    want = side[3]
+                else:
+                    missed.add(v)
             v.co += v.normal * want
             pushed.append(want)
         # Skin no steel stands over is not backed: it would stand out as steel.
@@ -3619,8 +4212,9 @@ def build_gorget(rig, body, worn, name="chest.plate.gorget", region="collar", fi
                          context="FACES")
         bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
     else:
+        prefixes = (shell, shell.rsplit(".", 1)[0] + ".pauldron")
         shells = [(o.name, bvh_of(o)) for o in worn
-                  if any(o.name.startswith(pre) for pre in GORGET_SHELLS)]
+                  if any(o.name.startswith(pre) for pre in prefixes)]
         room = surface_headroom(bm)
         per_shell = {shell: [] for shell, _ in shells}
         for i, v in enumerate(bm.verts):
@@ -3675,15 +4269,15 @@ def build_gorget(rig, body, worn, name="chest.plate.gorget", region="collar", fi
     bpy.ops.object.mode_set(mode="OBJECT")
     for d in obj.data.uv_layers.active.data:
         d.uv = (d.uv[0] * GORGET_TILE, d.uv[1] * GORGET_TILE)
-    mat, textured = tiled_material(f"{name.split('.')[-1]}_steel", STEEL_BLEND, STEEL_FALLBACK,
-                                   STEEL_ROUGHNESS, STEEL_METALLIC)
+    mat, textured = tiled_material(f"{name.replace('.', '_')}_steel", STEEL_BLEND,
+                                   STEEL_FALLBACK, STEEL_ROUGHNESS, metallic)
     if textured:
         bsdf = next(n for n in mat.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
         image = bsdf.inputs["Base Color"].links[0].from_node.image
         px = np.empty(len(image.pixels), dtype=np.float32)
         image.pixels.foreach_get(px)
         px = px.reshape(-1, image.channels)
-        target = cuirass_albedo(worn)
+        target = cuirass_albedo(worn, shell)
         luma = px[:, :3] @ LUMA
         grain = 1.0 + (luma / max(float(luma.mean()), 1e-6) - 1.0) * STEEL_GRAIN
         px[:, :3] = np.clip(np.outer(grain, target), 0.0, 1.0)
@@ -3756,11 +4350,54 @@ def main():
     male_body = bpy.data.objects["base.male.body"]
     fitted = build_rigid_gear(male_rig, male_body)
     worn = [o for o in bpy.data.objects if o.type == "MESH" and o.name.startswith("chest.")]
-    fitted.update(build_gorget(male_rig, male_body, worn))
-    # The v9 suit is cracked through across the back: a torso backing filled out
-    # to just under it shows steel through every crack instead of the void.
-    fitted.update(build_gorget(male_rig, male_body, worn, "chest.plate.backing", "torso",
-                               fill="chest.plate.cuirass"))
+    # Each chest look closes the collar and the trunk, so each gets a collar
+    # plate and a torso backing of its own colour. The v9 suit is cracked
+    # through across the back: a backing filled out to just under it shows
+    # steel through every crack instead of the void.
+    for look, shell in CHEST_SHELLS.items():
+        metallic = STEEL_METALLIC if look == "plate" else SOFT_METALLIC
+        fitted.update(build_gorget(male_rig, male_body, worn, f"chest.{look}.gorget", "collar",
+                                   shell=shell, metallic=metallic))
+        if look == "plate":
+            # A vertex whose own normal leaves through a tear meets no steel at
+            # all, and unbacked it is the void the tear shows: the chevron in
+            # the back plate. Steel within `BACKING_NEAR` of it is the tear's
+            # own rim, so it is backed at the collar plate's offset.
+            fitted.update(build_gorget(male_rig, male_body, worn, "chest.plate.backing", "torso",
+                                       fill=shell, shell=shell, metallic=metallic,
+                                       near=BACKING_NEAR_PLATE))
+            # And the shoulder. The arm is bare skin under a pauldron, so with
+            # the arm raised the rear quarter looks straight into the cap and
+            # sees the shell's own inside. The deltoid is backed inboard of the
+            # sleeve cut, which fills that view with steel and stays hidden
+            # under the cap for every pose that does not open it.
+            arm_edge = fitted[shell]["cut_pauldron_edge_x"] + SUIT_RIM_LIP
+            for region in ("arm_l", "arm_r"):
+                fitted.update(build_gorget(
+                    male_rig, male_body, worn, f"chest.plate.backing_{region}", region,
+                    fill=shell, shell=shell, metallic=metallic, near=BACKING_NEAR,
+                    reach=SOFT_BACKING_REACH,
+                    keep=lambda co, x=arm_edge: abs(co.x) <= x))
+            continue
+        fitted.update(build_gorget(male_rig, male_body, worn, f"chest.{look}.backing", "torso",
+                                   fill=shell, shell=shell, metallic=metallic,
+                                   near=BACKING_NEAR, reach=SOFT_BACKING_REACH))
+        # A decoded coat is holed at the shoulder caps and the crotch, and the
+        # skin under a hole is drawn; the backing stands under those too.
+        # An arm is backed everywhere inboard of the sleeve cut, hole or not,
+        # so the backing ends at the hem and never stands out below it.
+        edge_x = fitted[shell]["cut_pauldron_edge_x"] + SUIT_RIM_LIP
+        # A closed robe hands every vertex below the hip to the skirt chains,
+        # and a leg plate under cloth that swings away stands out through it.
+        closed_skirt = fitted[shell].get("skirt_clear") == 0.0
+        for region in SOFT_BACKED_REGIONS[1:]:
+            if closed_skirt and region.startswith("leg"):
+                continue
+            keep = (lambda co: abs(co.x) <= edge_x) if region.startswith("arm") else None
+            fitted.update(build_gorget(male_rig, male_body, worn,
+                                       f"chest.{look}.backing_{region}", region,
+                                       fill=shell, shell=shell, metallic=metallic,
+                                       near=BACKING_NEAR, reach=SOFT_BACKING_REACH, keep=keep))
     # The trousers are parked. They were the body's own legs pushed four
     # millimetres out and called leather, standing in for leg armour the chest
     # slot did not have; the harness carries real cuisses and greaves now, so

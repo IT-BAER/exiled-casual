@@ -31,6 +31,11 @@ const ITEM_BASES: ItemBase[] = [
   // can ever equip is a cosmetic that never ships.
   { id: "base.ember_gauntlets", name: "Ember Gauntlets", itemClass: "gloves", w: 2, h: 2, icon: "/textures/items/ember_gauntlets.png" },
   { id: "base.ashen_treads", name: "Ashen Treads", itemClass: "boots", w: 2, h: 2, icon: "/textures/items/ashen_treads.png" },
+  // The Stalker Leathers' own boots: the wardrobe carries a leather boot look, and
+  // a look nothing can equip is a cosmetic that never ships.
+  { id: "base.stalker_boots", name: "Stalker Boots", itemClass: "boots", w: 2, h: 2, icon: "/textures/items/emberstep_shoes.png" },
+  { id: "base.stalker_gloves", name: "Stalker Gloves", itemClass: "gloves", w: 2, h: 2, icon: "/textures/items/stalker_gloves.png" },
+  { id: "base.stalker_hood", name: "Stalker Hood", itemClass: "helmet", w: 2, h: 2, icon: "/textures/items/stalker_hood.png" },
   { id: "base.cinderchain_sash", name: "Cinderchain Sash", itemClass: "belt", w: 2, h: 1, icon: "/textures/items/cinderchain_sash.png" },
   {
     id: "base.emberweave_robe",

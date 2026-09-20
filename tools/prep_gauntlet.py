@@ -32,10 +32,15 @@ from mathutils import Matrix, Vector
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import build_wardrobe as W  # noqa: E402  (Blender runs this file directly)
 
-DONOR = "D:/VSC/exiled-casual/assets/props/source/trellis_local/gauntlet-hand-v2.glb"
-KEPT = "D:/VSC/exiled-casual/assets/props/source/gauntlet-hand-v2.glb"
-REPORT = "D:/VSC/exiled-casual/assets/props/source/gauntlet-hand-v2.json"
-REVIEW = "D:/VSC/exiled-casual/review/3d/gauntlets-v1"
+# `-- leather` builds the same shell without lames as the leather glove; the
+# plate gauntlet is the default and its paths are unchanged.
+LOOK = "leather" if "--" in sys.argv and "leather" in sys.argv[sys.argv.index("--") + 1:] else "plate"
+STEM = "glove-hand-v1" if LOOK == "leather" else "gauntlet-hand-v2"
+DONOR = f"D:/VSC/exiled-casual/assets/props/source/trellis_local/{STEM}.glb"
+KEPT = f"D:/VSC/exiled-casual/assets/props/source/{STEM}.glb"
+REPORT = f"D:/VSC/exiled-casual/assets/props/source/{STEM}.json"
+REVIEW = ("D:/VSC/exiled-casual/review/3d/leather-gloves-v1" if LOOK == "leather"
+          else "D:/VSC/exiled-casual/review/3d/gauntlets-v1")
 
 # Air between skin and the steel's inner face. The fitter re-scales whatever it
 # is handed, so this is the shape's clearance and not the fit's - the sweep
@@ -94,6 +99,10 @@ KNUCKLE_RUN = 0.006
 ALBEDO = (0.050, 0.050, 0.056, 1.0)
 ROUGHNESS = 0.22
 METALLIC = 0.85
+# Worn dark leather for the glove, the coat's own tone: `matte()` lifts 0.6 to
+# 0.82, and a leather with any metallic in it reads as wet.
+LEATHER_ALBEDO = (0.070, 0.045, 0.030, 1.0)
+LEATHER_ROUGHNESS = 0.60
 
 # The fitter's own two quarter turns, inverted: it rotates a donor whose
 # fingers run up +Z and whose thumb is at +X onto the rest hand, so a piece
@@ -554,13 +563,14 @@ def stitch(inner, outer):
 
 
 def steel(obj):
-    """One blackened-steel material, no texture: the set's read is the metal."""
-    mat = bpy.data.materials.new("MI_Gauntlet_Plate")
+    """One flat material, no texture: blackened steel, or the glove's leather."""
+    leather = LOOK == "leather"
+    mat = bpy.data.materials.new("MI_Glove_Leather" if leather else "MI_Gauntlet_Plate")
     mat.use_nodes = True
     bsdf = next(n for n in mat.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
-    bsdf.inputs["Base Color"].default_value = ALBEDO
-    bsdf.inputs["Roughness"].default_value = ROUGHNESS
-    bsdf.inputs["Metallic"].default_value = METALLIC
+    bsdf.inputs["Base Color"].default_value = LEATHER_ALBEDO if leather else ALBEDO
+    bsdf.inputs["Roughness"].default_value = LEATHER_ROUGHNESS if leather else ROUGHNESS
+    bsdf.inputs["Metallic"].default_value = 0.0 if leather else METALLIC
     obj.data.materials.append(mat)
     return mat
 
@@ -678,7 +688,8 @@ def main():
      skin, forearm_r) = hand_shell(body, rig, "r", 0.0, "gauntlet_inner")
     outer, _, _, _, pinched_out, out_passes, _, _, _ =         hand_shell(body, rig, "r", STEEL, "gauntlet_outer")
     spare = crossing_verts(outer)
-    raised, lame_passes = lames(outer, rig, body, "r", spare=spare)
+    # A glove is the fitted surface alone: no plates over the joints.
+    raised, lame_passes = (0, 0) if LOOK == "leather" else lames(outer, rig, body, "r", spare=spare)
     pulled, thinnest = follow(inner, outer, skin, WALL_FLOOR)
     print(f"FOLLOW {pulled} inner vertices pulled under the outer face, "
           f"thinnest wall {thinnest * 1000:.2f} mm")

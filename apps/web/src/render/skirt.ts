@@ -130,11 +130,14 @@ const COLLIDE_PASSES = 2;
  * How far a segment may swing off its bind direction. This is the coat's body:
  * without it the chains fold up over the hips at a sprint and the character
  * appears to be wearing an umbrella. It is also the hard ceiling on how far a
- * leg can push a panel, so it caps how much of a collision is allowed to show:
- * at 50 degrees a knee driving into the cloth ran out of travel mid-stride and
- * the coat stopped moving while the leg kept going.
+ * leg can push a panel, so it caps how much of a collision is allowed to show,
+ * and the two walls sit close together. At 50 degrees and below a knee runs out
+ * of travel mid-stride and the coat stops moving while the leg keeps going:
+ * skirt.test.ts measures 0.107 of leg through the cloth against a 0.02 ceiling.
+ * At 70 an open hip panel reaches 78 degrees off vertical at a run and reads as
+ * a flat plank instead of a swinging panel; 55 holds it to 67.
  */
-const MAX_DEVIATION = Math.cos((70 * Math.PI) / 180);
+const MAX_DEVIATION = Math.cos((55 * Math.PI) / 180);
 
 /**
  * An anchor jump this big in one step is a teleport, not a stride — respawn, or
@@ -196,6 +199,35 @@ export const MAX_CONTACT_PUSH = MAX_CONTACT_SPEED * FIXED_STEP;
  * the limb's momentum, rides *inside* it, and every frame reports contact.
  */
 const CONTACT_ABSORB = 0.3;
+
+/**
+ * How far neighbouring chains may drift apart, as a multiple of their bind
+ * spacing.
+ *
+ * The chains are what the cloth is skinned to, and until this existed nothing
+ * held one to the ones beside it: each was an independent whip sharing only a
+ * similar anchor. A knee spending the whole escape cap on one column moved its
+ * neighbours not at all, and the surface drawn between them stretched into the
+ * shards the robe showed at a sprint. Instrumented on the rig over a run cycle,
+ * the hem's neighbour spacing ran to 20.5x its bind spacing, p90 6.6x, with
+ * 51.6% of chain-pairs past 1.5x.
+ *
+ * Not 1.0, because a skirt legitimately opens: the hem's radius goes 0.345 ->
+ * 0.747 through a run stride, and a ring flaring uniformly widens every gap in
+ * the same proportion.
+ *
+ * 4 is where the two symptoms stop trading. Tighter is visibly tidier cloth and
+ * buys it back in the thing the escape speed above was raised to fix: swept
+ * against a thigh at the measured 18 units/s, penetration is flat at the
+ * no-hoop 0.015 all the way down to 4 and then climbs - 0.029 at 3, 0.041 at
+ * 2.5, 0.052 at 2 - past the 2cm a leg reads as showing through. 4 takes the
+ * hem's neighbour spacing from 20.5x to 6.5x worst and 6.6x to 3.9x at p90,
+ * which is the shards gone, for no leg at all.
+ *
+ * Stretch only. Cloth gathers when it folds inward, so a pair closer than its
+ * bind spacing is left alone.
+ */
+export const HOOP_STRETCH = 4;
 
 const scratch = new Vector3();
 const scratchPerp = new Vector3();
@@ -428,6 +460,7 @@ export class SkirtSim {
 
   /** Hold each segment at its baked length, and inside its cone. */
   private constrain(anchors: readonly Vector3[], rests: readonly Vector3[]): void {
+    this.hoop(rests);
     const n = this.perChain;
     for (let chain = 0; chain < this.anchors.length; chain++) {
       // Top down: each joint is placed against the one above it, which this
@@ -439,6 +472,41 @@ export class SkirtSim {
         // both the live base and the bind-pose base for the first segment.
         const restBase = j === 0 ? anchors[chain]! : rests[i - 1]!;
         this.place(this.points[i]!, base, rests[i]!, restBase);
+      }
+    }
+  }
+
+  /**
+   * Hold neighbouring chains within `HOOP_STRETCH` of their bind spacing.
+   *
+   * Along a chain the segments hold each other; across the ring nothing did, and
+   * the cloth is DRAWN between the chains. This is the only thing that makes the
+   * ring a surface rather than a row of whips that happen to hang side by side.
+   *
+   * The pair's own bind spacing, not a single number: the ring is not evenly
+   * spaced, and a look with a slit has one pair that is far apart by design.
+   * Stretch only, so cloth is free to gather when it folds inward. Runs before
+   * the length pass, which has the last word on how long a segment is - what
+   * survives from here is the direction the pull gave it.
+   */
+  private hoop(rests: readonly Vector3[]): void {
+    const chains = this.anchors.length;
+    if (chains < 2) return;
+    const n = this.perChain;
+    for (let chain = 0; chain < chains; chain++) {
+      const beside = (chain + 1) % chains;
+      for (let j = 0; j < n; j++) {
+        const i = chain * n + j;
+        const k = beside * n + j;
+        const here = this.points[i]!;
+        const there = this.points[k]!;
+        const limit = Vector3.Distance(rests[i]!, rests[k]!) * HOOP_STRETCH;
+        scratch.copyFrom(there).subtractInPlace(here);
+        const apart = scratch.length();
+        if (apart <= limit || apart < 1e-6) continue;
+        scratch.scaleInPlace((apart - limit) / apart / 2);
+        here.addInPlace(scratch);
+        there.subtractInPlace(scratch);
       }
     }
   }

@@ -91,6 +91,8 @@ export const WORLD_ART: readonly string[] = [
   "/textures/items/orb_embers.png",
   "/textures/items/orb_transmutation.png",
   "/textures/items/portal_scroll.png",
+  "/textures/items/stalker_gloves.png",
+  "/textures/items/stalker_hood.png",
   "/textures/items/stalker_leathers.png",
   "/textures/items/unique_ashmaw.png",
   "/textures/items/unique_cinderveil.png",

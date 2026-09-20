@@ -1,10 +1,12 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
 import { Vector3 } from "@babylonjs/core";
-import { SkirtSim, MAX_CONTACT_PUSH } from "./skirt";
+import { SkirtSim, MAX_CONTACT_PUSH, HOOP_STRETCH } from "./skirt";
 
 const SEGMENT = 0.5;
 const FRAME = 1 / 60;
+/** Bind spacing between neighbouring chains, the real ring's 5.5-6.7 cm. */
+const SPACING = 0.06;
 
 /** One chain hanging straight down from `x`, in its bind pose. */
 function pose(x: number): { anchors: Vector3[]; rests: Vector3[] } {
@@ -17,6 +19,41 @@ function pose(x: number): { anchors: Vector3[]; rests: Vector3[] } {
 function run(sim: SkirtSim, x: number, frames: number, colliders = []): void {
   const { anchors, rests } = pose(x);
   for (let i = 0; i < frames; i++) sim.step(FRAME, anchors, rests, colliders);
+}
+
+/** `count` chains in a row, `SPACING` apart, each hanging straight down. */
+function ring(count: number): { anchors: Vector3[]; rests: Vector3[] } {
+  const anchors: Vector3[] = [];
+  const rests: Vector3[] = [];
+  for (let c = 0; c < count; c++) {
+    const x = c * SPACING;
+    anchors.push(new Vector3(x, 1, 0));
+    rests.push(new Vector3(x, 1 - SEGMENT, 0), new Vector3(x, 1 - SEGMENT * 2, 0));
+  }
+  return { anchors, rests };
+}
+
+/** The shipped ring: 32 chains at the measured 6.7cm spacing, hanging down. */
+const CHAINS = 32;
+const RING_RADIUS = (CHAINS * 0.067) / (2 * Math.PI);
+function hoopRing(): { anchors: Vector3[]; rests: Vector3[] } {
+  const anchors: Vector3[] = [];
+  const rests: Vector3[] = [];
+  for (let c = 0; c < CHAINS; c++) {
+    const a = (c / CHAINS) * 2 * Math.PI;
+    const x = Math.cos(a) * RING_RADIUS;
+    const z = Math.sin(a) * RING_RADIUS;
+    anchors.push(new Vector3(x, 1, z));
+    rests.push(new Vector3(x, 1 - SEGMENT, z), new Vector3(x, 1 - SEGMENT * 2, z));
+  }
+  return { anchors, rests };
+}
+
+/** Where chain `c`'s hem ended up. */
+function hem(sim: SkirtSim, anchors: readonly Vector3[], c: number): Vector3 {
+  const anchor = anchors[c]!;
+  const mid = anchor.add(sim.direction(c, 0, anchor, new Vector3()).scale(SEGMENT));
+  return mid.add(sim.direction(c, 1, anchor, new Vector3()).scale(SEGMENT));
 }
 
 /** Where the hem ended up. */
@@ -245,6 +282,83 @@ describe("SkirtSim", () => {
     run(sim, 0, 30);
     run(sim, 40, 1);
     expect(tip(sim, 40).subtract(pose(40).rests[1]!).length()).toBeLessThan(1e-6);
+  });
+
+  /**
+   * The cloth is DRAWN between the chains, so a column driven away on its own
+   * does not read as a swinging panel - it reads as the surface tearing. Over a
+   * captured run the hem's neighbour spacing reached 20x its bind spacing, with
+   * a p90 of 6.6x: nothing in the solver held a column to the ones beside it.
+   */
+  it("carries its neighbours when a limb drives one column away", () => {
+    const sim = new SkirtSim(3, 2, SEGMENT);
+    const { anchors, rests } = ring(3);
+    for (let i = 0; i < 60; i++) sim.step(FRAME, anchors, rests, []);
+
+    // A knee crossing the middle column at the speed a real one moves. The
+    // escape cap is 24 units/s, and spent on one particle alone that is a long
+    // way from the two beside it within a handful of frames.
+    const knee = {
+      a: new Vector3(SPACING, 1, -0.4),
+      b: new Vector3(SPACING, 1 - SEGMENT * 2, -0.4),
+      radius: 0.18,
+    };
+    for (let i = 0; i < 30; i++) {
+      knee.a.z = knee.b.z = -0.4 + i * 0.02;
+      sim.step(FRAME, anchors, rests, [knee]);
+    }
+
+    const left = Vector3.Distance(hem(sim, anchors, 0), hem(sim, anchors, 1));
+    const right = Vector3.Distance(hem(sim, anchors, 1), hem(sim, anchors, 2));
+    expect(Math.max(left, right)).toBeLessThan(SPACING * HOOP_STRETCH * 1.1);
+  });
+
+  /**
+   * The other side of the hoop. Holding a column to its neighbours is also a
+   * brake on how far a leg can shove it, so the escape the tuning above was
+   * bought with has to survive having neighbours. Same swept thigh, same speed
+   * and same 2cm bound as the single-chain regression above, against a row of
+   * nine: the leg crosses them in turn, so each column is held by one the leg
+   * has left and one it has not yet reached.
+   */
+  it("still gets a column out of a leg's way with its neighbours holding it", () => {
+    const sim = new SkirtSim(CHAINS, 2, SEGMENT);
+    const { anchors, rests } = hoopRing();
+    const step = 1 / 240;
+    for (let i = 0; i < 240; i++) sim.step(step, anchors, rests, []);
+
+    const radius = 0.11;
+    const top = 0.75;
+    const bottom = 0.1;
+    const speed = 18;
+    const steps = Math.round(0.6 / (speed * step));
+    let worst = 0;
+    for (let i = 0; i <= steps; i++) {
+      // A knee driving forward out of the ring, at the speed measured off the
+      // real rig. It reaches a handful of columns; the rest of the ring is what
+      // they are held by.
+      const z = -0.2 + i * speed * step;
+      const leg = { a: new Vector3(0, top, z), b: new Vector3(0, bottom, z), radius };
+      sim.step(step, anchors, rests, [leg]);
+
+      for (let c = 0; c < CHAINS; c++) {
+        const anchor = anchors[c]!;
+        const mid = anchor.add(sim.direction(c, 0, anchor, new Vector3()).scale(SEGMENT));
+        const end = mid.add(sim.direction(c, 1, anchor, new Vector3()).scale(SEGMENT));
+        for (const [p, q] of [[anchor, mid], [mid, end]] as [Vector3, Vector3][]) {
+          let near = Infinity;
+          for (let k = 0; k <= 40; k++) {
+            const s = p.add(q.subtract(p).scale(k / 40));
+            near = Math.min(near, Math.hypot(
+              Math.hypot(s.x, s.z - z),
+              Math.max(0, bottom - s.y, s.y - top),
+            ));
+          }
+          worst = Math.max(worst, radius - near);
+        }
+      }
+    }
+    expect(worst).toBeLessThan(0.02);
   });
 
   it("reports unit directions, so a joint can be aimed down one", () => {
