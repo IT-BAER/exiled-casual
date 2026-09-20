@@ -329,15 +329,17 @@ SUIT_GREAVE_BELOW_KNEE = 0.06
 # same plane loses its lower half under a pair of boots and wears the cut as a
 # seam of slivers. The coat's is wider because its boot cuffs and straps flare.
 SOFT_GREAVE_RADIUS = 2.0
-# Cloth inside the skin is pushed this far out onto it, looking this far for the
-# skin, and the push is dilated over this many rings of neighbours, halving per
-# ring. `fit_plate_suit` sizes a suit on the ribs and holds no air anywhere
+# A shell inside the skin is pushed this far out onto it, looking this far for
+# the skin, and the push is dilated over this many rings of neighbours, halving
+# per ring. `fit_plate_suit` sizes a suit on the ribs and holds no air anywhere
 # else, which cost nothing while every region under a suit was switched off; a
-# backing is cut FROM that skin, so buried cloth is what stands the backing
-# outside the garment. Run on the soft suits, where it is measured.
-SOFT_SKIN_AIR = 0.004
-SOFT_SKIN_REACH = 0.25
-SOFT_SKIN_RINGS = 3
+# backing is cut FROM that skin, so a buried shell is what stands the backing
+# outside the garment. Every suit gets it: the plate is the worst of them, 5894
+# of 23772 cuirass vertices buried a median 18 mm and 5634 of them the OUTWARD
+# face, not an inner wall.
+SUIT_SKIN_AIR = 0.004
+SUIT_SKIN_REACH = 0.25
+SUIT_SKIN_RINGS = 3
 
 # A fauld hangs off the belt and its tassets ride the thighs, so the skirt has
 # to answer to both legs and to the lumbar the cuirass above it already bends
@@ -2173,14 +2175,15 @@ def inflate_pauldrons(donor, M, body, rig, per_vertex=False):
     }
 
 
-def clear_skin(donor, M, body, air=SOFT_SKIN_AIR, rings=SOFT_SKIN_RINGS):
+def clear_skin(donor, M, body, air=SUIT_SKIN_AIR, rings=SUIT_SKIN_RINGS):
     """Push cloth that lies inside the skin out onto it.
 
     Measured on the robe: 988 of 17886 vertices sat inside the body, a median
     27 mm deep at the belly and 13 mm over the trapezius, because the donor's
     trunk is narrower there than this body's and the fit only judges the ribs.
     The backing is that same skin pushed 3 mm out, so each one is a patch of
-    backing standing outside the cloth that should hide it.
+    backing standing outside the cloth that should hide it. A rigid shell buries
+    itself the same way and deeper - the cuirass by 105 mm at its worst.
 
     The push is dilated into the cloth around it and never reduced. Smoothing
     the displacement field instead averages the correction away exactly where it
@@ -2195,7 +2198,7 @@ def clear_skin(donor, M, body, air=SOFT_SKIN_AIR, rings=SOFT_SKIN_RINGS):
     world = [M @ v.co for v in bm.verts]
     out, push = [], []
     for i, v in enumerate(bm.verts):
-        loc, nor, _idx, _dist = skin.find_nearest(world[i], SOFT_SKIN_REACH)
+        loc, nor, _idx, _dist = skin.find_nearest(world[i], SUIT_SKIN_REACH)
         if loc is None:
             out.append((M.to_3x3() @ v.normal).normalized())
             push.append(0.0)
@@ -2397,7 +2400,7 @@ def fit_plate_suit(donor, body, rig, trunk_band=(PLATE_TRUNK_FROM, PLATE_TRUNK_T
                    for s in (1, -1))
     cut_flare = 0 if soft else trim_collar_flare(donor, placement, body, rig, shoulder)
     caps = inflate_pauldrons(donor, placement, body, rig, per_vertex=soft)
-    cleared = clear_skin(donor, placement, body) if soft else {}
+    cleared = clear_skin(donor, placement, body)
     if not cut_feet or not cut_arms:
         raise SystemExit(f"a harness cut removed nothing - feet {cut_feet}, arms "
                          f"{cut_arms}: this donor is not a whole figure")
