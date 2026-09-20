@@ -282,3 +282,19 @@ being bound to the humerus and swinging with it. Arms stay deliberately bare.
 <td width="100%"><img src="screenshots/2026-08-31-gear-hides-skin.jpeg" alt="Character in bright steel plate with gauntlets, no skin showing through the armour seams" width="100%"><br><sub>Steel plate with no skin through the seams.</sub></td>
 </tr>
 </table>
+
+## 2026-09-20 · Auditing the armour sets from every angle
+
+Two findings from a full sweep of the plate and robe sets. The plate cuirass carries thin doubled
+rims around both armholes that read as a fan of shards at a grazing angle; a clay render of the
+mesh alone, with no skeleton and no textures, shows they are in the geometry rather than in the
+skinning. The robe's backing shells, tinted red against a green body, show through the cloth while
+the character stands perfectly still, so the drape and the shells it is meant to hide disagree
+about where the body ends.
+
+<table>
+<tr>
+<td width="50%"><img src="screenshots/2026-09-20-plate-cuirass-rim-shards.jpeg" alt="Clay render of the plate cuirass shoulder showing thin flanges standing off the armhole" width="100%"><br><sub>Rim flanges at the armhole.</sub></td>
+<td width="50%"><img src="screenshots/2026-09-20-robe-backing-through-cloth.jpeg" alt="Robed character with the backing shells tinted red, showing red patches through the cloth at the hip and thighs" width="100%"><br><sub>Red backing through the settled drape.</sub></td>
+</tr>
+</table>

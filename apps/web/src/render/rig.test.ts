@@ -321,14 +321,14 @@ describe("what worn gear hides of the body", () => {
   });
 
   /**
-   * The robe's cloth hangs on the chains and swings clear of the legs, so the
-   * build gives it no leg backing. Taking the body's legs as well leaves a
-   * hollow between the boot tops and the hip that any low camera sees.
+   * A robe carries `backing_leg_*` of its own, pinned below, so the legs under
+   * it are switched off like any other chest. Drawing both stands two surfaces
+   * 3 mm apart and the backing wins in patches through the cloth.
    */
-  it("leaves the legs on under a robe, which carries no leg cover of its own", () => {
+  it("closes the legs under a robe, which backs them itself", () => {
     const hidden = hiddenBaseParts({ ...BASE_LOOKS, chest: "robe", boots: "leather" });
-    expect(hidden.has("leg_l")).toBe(false);
-    expect(hidden.has("leg_r")).toBe(false);
+    expect(hidden.has("leg_l")).toBe(true);
+    expect(hidden.has("leg_r")).toBe(true);
     expect(hidden.has("torso")).toBe(true);
     expect(hiddenBaseParts({ ...BASE_LOOKS, chest: "leather" }).has("leg_l")).toBe(true);
   });

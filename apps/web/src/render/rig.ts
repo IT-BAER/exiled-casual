@@ -317,24 +317,12 @@ const COVERED_BY: Partial<Record<Slot, readonly string[]>> = {
   chest: ["torso", "collar", "leg_l", "leg_r"],
 };
 
-/**
- * Chest looks that put nothing of their own over the legs. A closed skirt hands
- * every vertex below the hip to the chains, so `build_wardrobe.py` builds it no
- * `backing_leg_*`, and hiding the body's legs under it leaves the man hollow
- * from the boot tops up - which is what the eye finds looking under the hem.
- */
-const BARE_LEGS_CHEST: ReadonlySet<string> = new Set(["robe"]);
-
 /** The `<slot>.<look>.<part>` pieces the worn gear replaces. */
 export function hiddenBaseParts(looks: Looks): ReadonlySet<string> {
   const hidden = new Set<string>();
   for (const [slot, parts] of Object.entries(COVERED_BY)) {
     if (looks[slot as Slot] === null) continue;
     for (const part of parts) hidden.add(part);
-  }
-  if (looks.chest !== null && BARE_LEGS_CHEST.has(looks.chest)) {
-    hidden.delete("leg_l");
-    hidden.delete("leg_r");
   }
   return hidden;
 }

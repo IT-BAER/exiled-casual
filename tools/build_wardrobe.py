@@ -329,6 +329,15 @@ SUIT_GREAVE_BELOW_KNEE = 0.06
 # same plane loses its lower half under a pair of boots and wears the cut as a
 # seam of slivers. The coat's is wider because its boot cuffs and straps flare.
 SOFT_GREAVE_RADIUS = 2.0
+# Cloth inside the skin is pushed this far out onto it, looking this far for the
+# skin, and the push is dilated over this many rings of neighbours, halving per
+# ring. `fit_plate_suit` sizes a suit on the ribs and holds no air anywhere
+# else, which cost nothing while every region under a suit was switched off; a
+# backing is cut FROM that skin, so buried cloth is what stands the backing
+# outside the garment. Run on the soft suits, where it is measured.
+SOFT_SKIN_AIR = 0.004
+SOFT_SKIN_REACH = 0.25
+SOFT_SKIN_RINGS = 3
 
 # A fauld hangs off the belt and its tassets ride the thighs, so the skirt has
 # to answer to both legs and to the lumbar the cuirass above it already bends
@@ -2164,6 +2173,60 @@ def inflate_pauldrons(donor, M, body, rig, per_vertex=False):
     }
 
 
+def clear_skin(donor, M, body, air=SOFT_SKIN_AIR, rings=SOFT_SKIN_RINGS):
+    """Push cloth that lies inside the skin out onto it.
+
+    Measured on the robe: 988 of 17886 vertices sat inside the body, a median
+    27 mm deep at the belly and 13 mm over the trapezius, because the donor's
+    trunk is narrower there than this body's and the fit only judges the ribs.
+    The backing is that same skin pushed 3 mm out, so each one is a patch of
+    backing standing outside the cloth that should hide it.
+
+    The push is dilated into the cloth around it and never reduced. Smoothing
+    the displacement field instead averages the correction away exactly where it
+    was needed, and a step at the edge of a corrected patch reads as a welt.
+    """
+    inv = M.inverted()
+    skin = bvh_of(body, body.matrix_world)
+    bm = bmesh.new()
+    bm.from_mesh(donor.data)
+    bm.verts.ensure_lookup_table()
+    bm.normal_update()
+    world = [M @ v.co for v in bm.verts]
+    out, push = [], []
+    for i, v in enumerate(bm.verts):
+        loc, nor, _idx, _dist = skin.find_nearest(world[i], SOFT_SKIN_REACH)
+        if loc is None:
+            out.append((M.to_3x3() @ v.normal).normalized())
+            push.append(0.0)
+            continue
+        out.append(nor.copy())
+        depth = -(world[i] - loc).dot(nor)
+        push.append(depth + air if depth > 0.0 else 0.0)
+    buried = sum(1 for p in push if p > 0.0)
+    deepest = max(push) if buried else 0.0
+    if buried:
+        for _ in range(rings):
+            spread = list(push)
+            for v in bm.verts:
+                ring = max((push[e.other_vert(v).index] for e in v.link_edges), default=0.0)
+                spread[v.index] = max(push[v.index], ring * 0.5)
+            push = spread
+        for i, v in enumerate(bm.verts):
+            if push[i] > 0.0:
+                v.co = inv @ (world[i] + out[i] * push[i])
+        bm.to_mesh(donor.data)
+        donor.data.update()
+    moved = sum(1 for p in push if p > 0.0)
+    bm.free()
+    return {
+        "skin_clear_buried_vertices": buried,
+        "skin_clear_moved_vertices": moved,
+        "skin_clear_air_mm": air * 1000,
+        "skin_clear_deepest_mm": round(deepest * 1000, 2),
+    }
+
+
 def fit_plate_suit(donor, body, rig, trunk_band=(PLATE_TRUNK_FROM, PLATE_TRUNK_TO), soft=False):
     """Place a whole harness on the body, then cut it back to the chest slot.
 
@@ -2334,6 +2397,7 @@ def fit_plate_suit(donor, body, rig, trunk_band=(PLATE_TRUNK_FROM, PLATE_TRUNK_T
                    for s in (1, -1))
     cut_flare = 0 if soft else trim_collar_flare(donor, placement, body, rig, shoulder)
     caps = inflate_pauldrons(donor, placement, body, rig, per_vertex=soft)
+    cleared = clear_skin(donor, placement, body) if soft else {}
     if not cut_feet or not cut_arms:
         raise SystemExit(f"a harness cut removed nothing - feet {cut_feet}, arms "
                          f"{cut_arms}: this donor is not a whole figure")
@@ -2358,6 +2422,7 @@ def fit_plate_suit(donor, body, rig, trunk_band=(PLATE_TRUNK_FROM, PLATE_TRUNK_T
         "cut_verts_gorget": cut_gorget,
         "cut_faces_collar_flare": cut_flare,
         **caps,
+        **cleared,
         "neck_gap_p01_mm": round(neck_p01 * 1000, 2),
         "neck_gap_median_mm": round(neck_med * 1000, 2),
         "neck_points": len(drawn),
@@ -4212,6 +4277,16 @@ def build_gorget(rig, body, worn, name="chest.plate.gorget", region="collar", fi
                     want = side[3]
                 else:
                     missed.add(v)
+            else:
+                # A ray measures along one normal, and a grazing hit reads much
+                # further than the shell above the vertex actually clears: a
+                # push that long leaves the shell somewhere off the ray, which
+                # is a patch of backing outside the garment. No shell lies
+                # inside a ball of the nearest-point radius, so that radius less
+                # the air is the longest push that stays under it.
+                clear = backed.find_nearest(v.co, reach)
+                if clear[0] is not None:
+                    want = min(want, max(0.0, clear[3] - BACKING_AIR))
             v.co += v.normal * want
             pushed.append(want)
         # Skin no steel stands over is not backed: it would stand out as steel.
