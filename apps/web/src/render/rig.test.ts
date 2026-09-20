@@ -386,6 +386,7 @@ describe("wardrobe asset", () => {
       "chest.leather.backing_leg_l", "chest.leather.backing_leg_r",
       "chest.robe.robe", "chest.robe.gorget", "chest.robe.backing",
       "chest.robe.backing_arm_l", "chest.robe.backing_arm_r",
+      "chest.robe.backing_leg_l", "chest.robe.backing_leg_r",
       "boots.plate.sabaton_l", "boots.plate.sabaton_r",
       "boots.leather.boot_l", "boots.leather.boot_r",
       "gloves.plate.gauntlet_l", "gloves.plate.gauntlet_r",

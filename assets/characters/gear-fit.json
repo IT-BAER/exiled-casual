@@ -1076,5 +1076,63 @@
    "blenderkit_id": "8352b3b2-edb7-4700-a9d6-055ab6ec9233",
    "blenderkit_name": "Aged Black Steel"
   }
+ },
+ "chest.robe.backing_leg_l": {
+  "built_from": "base.male.body leg_l region, filled out to 3 mm under chest.robe.robe",
+  "source": "body",
+  "offset_mm": null,
+  "offset_min_mm": 0.0,
+  "offset_p01_mm": 0.0,
+  "offset_median_mm": 3.177,
+  "shell_capped_vertices": 803,
+  "crease_capped_vertices": 0,
+  "worn_shell_air": {},
+  "vertices": 1312,
+  "triangles": 2311,
+  "uv_tiles": 2.0,
+  "bone": "spine_03",
+  "fit": "body_offset",
+  "deform_bones": [
+   "calf_l",
+   "foot_l",
+   "pelvis",
+   "spine_01",
+   "thigh_l",
+   "thigh_r"
+  ],
+  "deform_groups": 6,
+  "texture": {
+   "blenderkit_id": "8352b3b2-edb7-4700-a9d6-055ab6ec9233",
+   "blenderkit_name": "Aged Black Steel"
+  }
+ },
+ "chest.robe.backing_leg_r": {
+  "built_from": "base.male.body leg_r region, filled out to 3 mm under chest.robe.robe",
+  "source": "body",
+  "offset_mm": null,
+  "offset_min_mm": 0.0,
+  "offset_p01_mm": 0.0,
+  "offset_median_mm": 4.58,
+  "shell_capped_vertices": 769,
+  "crease_capped_vertices": 0,
+  "worn_shell_air": {},
+  "vertices": 1349,
+  "triangles": 2379,
+  "uv_tiles": 2.0,
+  "bone": "spine_03",
+  "fit": "body_offset",
+  "deform_bones": [
+   "calf_r",
+   "foot_r",
+   "pelvis",
+   "spine_01",
+   "thigh_l",
+   "thigh_r"
+  ],
+  "deform_groups": 6,
+  "texture": {
+   "blenderkit_id": "8352b3b2-edb7-4700-a9d6-055ab6ec9233",
+   "blenderkit_name": "Aged Black Steel"
+  }
  }
 }

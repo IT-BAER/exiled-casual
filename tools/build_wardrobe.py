@@ -4387,12 +4387,11 @@ def main():
         # An arm is backed everywhere inboard of the sleeve cut, hole or not,
         # so the backing ends at the hem and never stands out below it.
         edge_x = fitted[shell]["cut_pauldron_edge_x"] + SUIT_RIM_LIP
-        # A closed robe hands every vertex below the hip to the skirt chains,
-        # and a leg plate under cloth that swings away stands out through it.
-        closed_skirt = fitted[shell].get("skirt_clear") == 0.0
+        # Every soft suit backs its legs, a closed skirt included: a robe hands
+        # every vertex below the hip to the skirt chains, and those swing clear
+        # of the thigh at a run, so an unbacked leg shows bare skin through the
+        # gap. SOFT_BACKING_REACH is what keeps the backing off the hem.
         for region in SOFT_BACKED_REGIONS[1:]:
-            if closed_skirt and region.startswith("leg"):
-                continue
             keep = (lambda co: abs(co.x) <= edge_x) if region.startswith("arm") else None
             fitted.update(build_gorget(male_rig, male_body, worn,
                                        f"chest.{look}.backing_{region}", region,
