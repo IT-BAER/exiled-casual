@@ -4,10 +4,11 @@
 // fails if its list and these definitions ever disagree, the same arrangement
 // `MAP_BASES` uses.
 //
-// `startingGear` is what a class OWNS, not what it looks like. Every class
-// shows the one wired base body (`looksForClass`), so the three read as three
-// people by portrait, blurb and default attack alone until gear geometry
-// returns. See the accepted regression in CLAUDE.md.
+// `startingGear` is the class's own family, head to foot: every armour slot is
+// filled on creation, and each piece resolves to that family's wardrobe look
+// (`gear-looks.ts`). The belt is the one slot with no geometry - it carries
+// stats and sits in the paper doll, and a belt under a cuirass or a robe is not
+// seen anyway.
 import type { CharacterClass } from "@exiled/content-schema";
 import { CLASS_IDS, DEFAULT_CLASS_ID } from "@exiled/rules";
 
@@ -17,12 +18,12 @@ export const CLASSES: Record<string, CharacterClass> = {
     name: "Ironsworn",
     blurb: "Took the oath at the forge and has not put the hammer down since.",
     archetype: "strength",
-    // No helmet: the bare head over heavy plate is the whole silhouette.
     startingGear: {
+      helmet: "base.ironsworn_helm",
       body: "base.ironsworn_plate",
-      gloves: "base.ember_gauntlets",
-      boots: "base.ashen_treads",
-      belt: "base.cinderchain_sash",
+      gloves: "base.ironsworn_gauntlets",
+      boots: "base.ironsworn_sabatons",
+      belt: "base.ironsworn_girdle",
     },
     portrait: "/textures/ui/menu/portrait_ironsworn.png",
   },
@@ -32,11 +33,11 @@ export const CLASSES: Record<string, CharacterClass> = {
     blurb: "Walked out of the treeline one night and never said which one.",
     archetype: "dexterity",
     startingGear: {
-      helmet: "base.cinder_cap",
+      helmet: "base.stalker_hood",
       body: "base.stalker_leathers",
-      gloves: "base.ember_gauntlets",
-      boots: "base.ashen_treads",
-      belt: "base.cinderchain_sash",
+      gloves: "base.stalker_gloves",
+      boots: "base.stalker_boots",
+      belt: "base.stalker_strap",
     },
     portrait: "/textures/ui/menu/portrait_stalker.png",
   },
@@ -45,12 +46,12 @@ export const CLASSES: Record<string, CharacterClass> = {
     name: "Emberbound",
     blurb: "Carries a fire that was never hers to borrow.",
     archetype: "intellect",
-    // Bare hands: a caster's hands have to read as hands.
     startingGear: {
-      helmet: "base.cinder_cap",
-      body: "base.emberbound_robe",
-      boots: "base.ashen_treads",
-      belt: "base.cinderchain_sash",
+      helmet: "base.ember_cowl",
+      body: "base.ember_robe",
+      gloves: "base.ember_wraps",
+      boots: "base.ember_slippers",
+      belt: "base.ember_sash",
     },
     portrait: "/textures/ui/menu/portrait_emberbound.png",
   },

@@ -215,8 +215,8 @@ describe("createCombatSim", () => {
     spawnLabActors(world, "shields", 0, 0);
     const sessionE = [...world.query("inventory")][0]!;
     const ids = world.get<InventoryC>(sessionE, "inventory")!.items.map((p) => p.item.baseId);
-    expect(ids).toContain("base.ember_buckler");
-    expect(ids).toContain("base.ashwall_tower_shield");
+    expect(ids).toContain("base.stalker_buckler");
+    expect(ids).toContain("base.ironsworn_tower_shield");
   });
 
   it("system registration order matches canonical spec", () => {

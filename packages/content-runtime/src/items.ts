@@ -3,9 +3,62 @@ import { waystoneRarity, waystoneMods } from "@exiled/rules";
 
 // Tiny hand-authored pool for the First Loot slice. Grid dims (w×h) follow the
 // 12×5 inventory. Real 45-base / 120-affix content is Phase 4 proper.
+//
+// One family per class and nothing else: `ironsworn_*` is the plate set,
+// `stalker_*` the leather set, `ember_*` the cloth set, and every piece a
+// character wears is one of the eighteen below. A base outside the three
+// families would be a drop the wardrobe has no look for, and a drop the player
+// cannot read is a reward that did not happen (docs/09).
 const ITEM_BASES: ItemBase[] = [
+  // Ironsworn, the plate set. PoE2 puts its armour-base implicit on the body
+  // slot alone, so the helm, gauntlets, sabatons and girdle carry none.
+  { id: "base.ironsworn_helm", name: "Ironsworn Helm", itemClass: "helmet", w: 2, h: 2, icon: "/textures/items/ironsworn_helm.png" },
   {
-    id: "base.emberwand",
+    id: "base.ironsworn_plate",
+    name: "Ironsworn Plate",
+    itemClass: "body",
+    w: 2,
+    h: 3,
+    // PoE2's Str body bases carry +(10-20) to Strength.
+    implicit: { stat: "strength", label: "to Strength", value: 12 },
+    icon: "/textures/items/ironsworn_plate.png",
+  },
+  { id: "base.ironsworn_gauntlets", name: "Ironsworn Gauntlets", itemClass: "gloves", w: 2, h: 2, icon: "/textures/items/ironsworn_gauntlets.png" },
+  { id: "base.ironsworn_sabatons", name: "Ironsworn Sabatons", itemClass: "boots", w: 2, h: 2, icon: "/textures/items/ironsworn_sabatons.png" },
+  { id: "base.ironsworn_girdle", name: "Ironsworn Girdle", itemClass: "belt", w: 2, h: 1, icon: "/textures/items/ironsworn_girdle.png" },
+  // PoE2 gives every shield an implicit block chance and nothing here blocks
+  // yet, so the two shields take the armour side of the base instead and roll
+  // armour and life like the rest of the armour classes.
+  { id: "base.ironsworn_tower_shield", name: "Ironsworn Tower Shield", itemClass: "shield", w: 2, h: 3, icon: "/textures/items/ironsworn_tower_shield.png" },
+
+  // Stalker, the leather set. No implicit anywhere: PoE2's Dex bases are
+  // evasion bases, there is no evasion stat here, and inventing one would open
+  // a balance surface for a cosmetic.
+  { id: "base.stalker_hood", name: "Stalker Hood", itemClass: "helmet", w: 2, h: 2, icon: "/textures/items/stalker_hood.png" },
+  { id: "base.stalker_leathers", name: "Stalker Leathers", itemClass: "body", w: 2, h: 3, icon: "/textures/items/stalker_leathers.png" },
+  { id: "base.stalker_gloves", name: "Stalker Gloves", itemClass: "gloves", w: 2, h: 2, icon: "/textures/items/stalker_gloves.png" },
+  { id: "base.stalker_boots", name: "Stalker Boots", itemClass: "boots", w: 2, h: 2, icon: "/textures/items/stalker_boots.png" },
+  { id: "base.stalker_strap", name: "Stalker Strap", itemClass: "belt", w: 2, h: 1, icon: "/textures/items/stalker_strap.png" },
+  { id: "base.stalker_buckler", name: "Stalker Buckler", itemClass: "shield", w: 2, h: 2, icon: "/textures/items/stalker_buckler.png" },
+
+  // Ember, the cloth set, and the only family that carries the two hands: a
+  // wand and a focus.
+  { id: "base.ember_cowl", name: "Ember Cowl", itemClass: "helmet", w: 2, h: 2, icon: "/textures/items/ember_cowl.png" },
+  {
+    id: "base.ember_robe",
+    name: "Ember Robe",
+    itemClass: "body",
+    w: 2,
+    h: 3,
+    // The Int body implicit, after PoE2's Enlightened Robe.
+    implicit: { stat: "manaRegenPct", label: "% increased Mana Regeneration Rate", value: 30 },
+    icon: "/textures/items/ember_robe.png",
+  },
+  { id: "base.ember_wraps", name: "Ember Wraps", itemClass: "gloves", w: 2, h: 2, icon: "/textures/items/ember_wraps.png" },
+  { id: "base.ember_slippers", name: "Ember Slippers", itemClass: "boots", w: 2, h: 2, icon: "/textures/items/ember_slippers.png" },
+  { id: "base.ember_sash", name: "Ember Sash", itemClass: "belt", w: 2, h: 1, icon: "/textures/items/ember_sash.png" },
+  {
+    id: "base.ember_wand",
     name: "Ember Wand",
     itemClass: "wand",
     w: 1,
@@ -15,93 +68,43 @@ const ITEM_BASES: ItemBase[] = [
     // in the sim can honour, so this borrows the implicit of the base whose stat block the
     // wand already copies: PoE1's Goat's Horn, (10-15)% increased Spell Damage.
     implicit: { stat: "spellDamagePct", label: "% increased Spell Damage", value: 12 },
-    icon: "/textures/items/emberwand.png",
+    icon: "/textures/items/ember_wand.png",
   },
-  // Foci and helmets carry no implicit, which is how PoE2 has them: poe2db lists foci with
-  // energy shield alone, and body armour is the only armour slot with implicit bases at all.
-  { id: "base.ashen_focus", name: "Ashen Focus", itemClass: "focus", w: 2, h: 2, icon: "/textures/items/ashen_focus.png" },
-  // The off hand's other half. PoE2 gives every shield an implicit block chance and
-  // nothing in the sim blocks yet, so these take the armour side of the base instead
-  // and roll armour and life like the rest of the armour classes.
-  { id: "base.ember_buckler", name: "Ember Buckler", itemClass: "shield", w: 2, h: 2, icon: "/textures/items/ember_buckler.png" },
-  { id: "base.ashwall_tower_shield", name: "Ashwall Tower Shield", itemClass: "shield", w: 2, h: 3, icon: "/textures/items/ashwall_tower_shield.png" },
-  { id: "base.cinder_cap", name: "Cinder Cap", itemClass: "helmet", w: 2, h: 2, icon: "/textures/items/cinder_cap.png" },
-  // The other three armour slots. Each exists so its equipment slot can actually
-  // be filled: the character's wardrobe has a look per slot, and a look nothing
-  // can ever equip is a cosmetic that never ships.
-  { id: "base.ember_gauntlets", name: "Ember Gauntlets", itemClass: "gloves", w: 2, h: 2, icon: "/textures/items/ember_gauntlets.png" },
-  { id: "base.ashen_treads", name: "Ashen Treads", itemClass: "boots", w: 2, h: 2, icon: "/textures/items/ashen_treads.png" },
-  // The Stalker Leathers' own boots: the wardrobe carries a leather boot look, and
-  // a look nothing can equip is a cosmetic that never ships.
-  { id: "base.stalker_boots", name: "Stalker Boots", itemClass: "boots", w: 2, h: 2, icon: "/textures/items/emberstep_shoes.png" },
-  { id: "base.stalker_gloves", name: "Stalker Gloves", itemClass: "gloves", w: 2, h: 2, icon: "/textures/items/stalker_gloves.png" },
-  { id: "base.stalker_hood", name: "Stalker Hood", itemClass: "helmet", w: 2, h: 2, icon: "/textures/items/stalker_hood.png" },
-  { id: "base.cinderchain_sash", name: "Cinderchain Sash", itemClass: "belt", w: 2, h: 1, icon: "/textures/items/cinderchain_sash.png" },
-  {
-    id: "base.emberweave_robe",
-    name: "Emberweave Robe",
-    itemClass: "body",
-    w: 2,
-    h: 3,
-    // An energy-shield robe, so it takes the implicit PoE2 puts on its Int body armour:
-    // Enlightened Robe's (40-50)% increased Mana Regeneration Rate.
-    implicit: { stat: "manaRegenPct", label: "% increased Mana Regeneration Rate", value: 45 },
-    icon: "/textures/items/emberweave_robe.png",
-  },
+  // Foci carry no implicit: poe2db lists them with energy shield alone.
+  { id: "base.ember_focus", name: "Ember Focus", itemClass: "focus", w: 2, h: 2, icon: "/textures/items/ember_focus.png" },
 ];
 
 /**
  * The body armour each class is created wearing.
  *
- * Out of `ITEM_POOLS.bases` on purpose, the way currency and the waystone are:
- * these exist so a new character starts equipped, not so the loot table grows
- * three entries and every drop-rate test shifts underneath it. `baseOf` still
- * resolves them, so they hover, equip and sit in the grid like any other piece.
- * Equipping one changes no rendered geometry — the character is one base body.
+ * These are ordinary drops, unlike the currency and the waystone: a slot whose
+ * base can never drop is a slot the player can never improve, and `Cinderveil`
+ * is a unique body armour that needs a body base in the pool to roll onto.
  */
-const STARTER_BASES: ItemBase[] = [
-  {
-    id: "base.ironsworn_plate",
-    name: "Ironsworn Plate",
-    itemClass: "body",
-    w: 2,
-    h: 3,
-    // Armour body armour, so it takes PoE2's armour-base implicit rather than the robe's:
-    // +(10-20) to Strength on the Str body bases.
-    implicit: { stat: "strength", label: "to Strength", value: 12 },
-    icon: "/textures/items/ironsworn_plate.png",
-  },
-  {
-    id: "base.stalker_leathers",
-    name: "Stalker Leathers",
-    itemClass: "body",
-    w: 2,
-    h: 3,
-    // No implicit. PoE2's Dex body armour is an evasion base, and there is no
-    // evasion stat here; inventing one on an item nobody can drop would be a
-    // balance surface opened for a cosmetic. Foci and helmets carry none either.
-    icon: "/textures/items/stalker_leathers.png",
-  },
-  {
-    id: "base.emberbound_robe",
-    name: "Emberbound Robe",
-    itemClass: "body",
-    w: 2,
-    h: 3,
-    implicit: { stat: "manaRegenPct", label: "% increased Mana Regeneration Rate", value: 30 },
-    icon: "/textures/items/emberbound_robe.png",
-  },
-];
+const STARTER_BODY_IDS = ["base.ironsworn_plate", "base.stalker_leathers", "base.ember_robe"] as const;
 
-/** The starter bases, so the class table can be checked against real content. */
-export const STARTER_BASE_IDS: readonly string[] = STARTER_BASES.map((b) => b.id);
+/** The starter bodies, so the class table can be checked against real content. */
+export const STARTER_BASE_IDS: readonly string[] = STARTER_BODY_IDS;
 
 /**
  * Base ids that content has since renamed. A saved inventory outlives the id it was
  * written with, and `baseOf` throwing on load would cost the player the whole stash
  * over a rename (docs/09: a save that corrupts destroys more than any drop created).
  */
-const RENAMED_BASES: Record<string, string> = { "base.wisdom_scroll": "currency.wisdom" };
+const RENAMED_BASES: Record<string, string> = {
+  "base.wisdom_scroll": "currency.wisdom",
+  // The 2026-09 pass that cut every base down to one family per class.
+  "base.cinder_cap": "base.ironsworn_helm",
+  "base.ember_gauntlets": "base.ironsworn_gauntlets",
+  "base.ashen_treads": "base.ironsworn_sabatons",
+  "base.ashwall_tower_shield": "base.ironsworn_tower_shield",
+  "base.ember_buckler": "base.stalker_buckler",
+  "base.cinderchain_sash": "base.ember_sash",
+  "base.emberbound_robe": "base.ember_robe",
+  "base.emberweave_robe": "base.ember_robe",
+  "base.emberwand": "base.ember_wand",
+  "base.ashen_focus": "base.ember_focus",
+};
 
 /**
  * Currency is an item everywhere it matters (it lies on the ground, it sits in the
@@ -276,7 +279,7 @@ const UNIQUES: UniqueItem[] = [
   {
     id: "unique.ashmaw",
     name: "Ashmaw",
-    baseId: "base.emberwand",
+    baseId: "base.ember_wand",
     flavour: "It was a torch, once, before the ash learned to bite.",
     icon: "/textures/items/unique_ashmaw.png",
     mods: [
@@ -288,7 +291,7 @@ const UNIQUES: UniqueItem[] = [
   {
     id: "unique.emberchoir",
     name: "Emberchoir",
-    baseId: "base.ashen_focus",
+    baseId: "base.ember_focus",
     flavour: "Every voice it kept is a voice that burned.",
     icon: "/textures/items/unique_emberchoir.png",
     mods: [
@@ -300,7 +303,7 @@ const UNIQUES: UniqueItem[] = [
   {
     id: "unique.cinderveil",
     name: "Cinderveil",
-    baseId: "base.emberweave_robe",
+    baseId: "base.ember_robe",
     flavour: "The fire spared her. Nothing else did.",
     icon: "/textures/items/unique_cinderveil.png",
     mods: [
@@ -312,7 +315,7 @@ const UNIQUES: UniqueItem[] = [
 ];
 
 // Validate at module load; bad content is a programmer error, fail fast.
-for (const b of [...ITEM_BASES, ...CURRENCY_BASES, ...STARTER_BASES, WAYSTONE_BASE]) {
+for (const b of [...ITEM_BASES, ...CURRENCY_BASES, WAYSTONE_BASE]) {
   const r = validateItemBase(b);
   if (!r.ok) throw new Error(`[content-runtime] Invalid item base "${b.id}": ${r.errors.join("; ")}`);
 }
@@ -350,7 +353,7 @@ for (const b of [...ITEM_BASES, ...CURRENCY_BASES, ...STARTER_BASES, WAYSTONE_BA
 
 export const ITEM_POOLS: ItemPools = { bases: ITEM_BASES, affixes: AFFIXES, uniques: UNIQUES };
 
-const BASE_BY_ID = new Map([...ITEM_BASES, ...CURRENCY_BASES, ...STARTER_BASES, WAYSTONE_BASE].map((b) => [b.id, b]));
+const BASE_BY_ID = new Map([...ITEM_BASES, ...CURRENCY_BASES, WAYSTONE_BASE].map((b) => [b.id, b]));
 const AFFIX_BY_ID = new Map(AFFIXES.map((a) => [a.id, a]));
 const UNIQUE_BY_NAME = new Map(UNIQUES.map((u) => [u.name, u]));
 

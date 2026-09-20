@@ -56,21 +56,27 @@ ICONS: list[tuple[str, str, int, int]] = [
     # any cell one wide it rendered a 35 px sliver. v2 is bladed at both ends and
     # laid on the diagonal, 0.62 wide to tall, which fills a 2x4 to 81%.
     ("ashen_quarterstaff_v2", "ashen_quarterstaff", 2, 4),
-    ("ember_buckler_v1", "ember_buckler", 2, 2),
-    ("ashwall_tower_shield_v1", "ashwall_tower_shield", 2, 3),
-    # Armour, matching the footprint the existing base in each slot already uses.
-    ("ashplate_helm_v1", "ashplate_helm", 2, 2),
+    ("stalker_buckler_v1", "stalker_buckler", 2, 2),
+    ("ironsworn_tower_shield_v1", "ironsworn_tower_shield", 2, 3),
+    # Armour, one family per class: `ironsworn_*` plate, `stalker_*` leather,
+    # `ember_*` cloth. The footprint is the one its base declares in `items.ts`.
+    ("ironsworn_helm_v1", "ironsworn_helm", 2, 2),
     ("emberbone_circlet_v1", "emberbone_circlet", 2, 2),
-    ("ironcoil_girdle_v1", "ironcoil_girdle", 2, 1),
-    ("cinderhide_strap_v1", "cinderhide_strap", 2, 1),
+    ("ironsworn_girdle_v1", "ironsworn_girdle", 2, 1),
+    ("stalker_strap_v1", "stalker_strap", 2, 1),
+    ("ember_sash_v1", "ember_sash", 2, 1),
     ("ashen_bracers_v1", "ashen_bracers", 2, 2),
     ("stalker_gloves_v1", "stalker_gloves", 2, 2),
     ("stalker_hood_v1", "stalker_hood", 2, 2),
-    ("cinderplate_gauntlets_v1", "cinderplate_gauntlets", 2, 2),
+    ("ironsworn_gauntlets_v1", "ironsworn_gauntlets", 2, 2),
+    ("ember_wraps_v1", "ember_wraps", 2, 2),
     # v2: v1 came back as modern low-cut dress shoes, which is not a slot this game
     # has, and at 1.79 wide to tall it also filled a 2x2 to only 56%.
     ("emberstep_shoes_v2", "emberstep_shoes", 2, 2),
-    ("ashen_sabatons_v1", "ashen_sabatons", 2, 2),
+    ("ironsworn_sabatons_v1", "ironsworn_sabatons", 2, 2),
+    ("stalker_boots_v1", "stalker_boots", 2, 2),
+    ("ember_slippers_v1", "ember_slippers", 2, 2),
+    ("ember_cowl_v1", "ember_cowl", 2, 2),
     # The scroll replaces the one hand-authored SVG in the pool.
     ("wisdom_scroll_v1", "wisdom_scroll", 1, 1),
 ]

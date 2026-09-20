@@ -9,12 +9,12 @@ import { MemoryKv } from "@exiled/persistence";
 import type { InventoryC, VendorC, ProgressC } from "./components";
 
 const RARE_WAND: Item = {
-  baseId: "base.emberwand",
+  baseId: "base.ember_wand",
   rarity: "rare",
   itemLevel: 65,
   affixes: [{ affixId: "mod.fire_dmg_1", value: 1 }],
 };
-const NORMAL_WAND: Item = { baseId: "base.emberwand", rarity: "normal", itemLevel: 65, affixes: [] };
+const NORMAL_WAND: Item = { baseId: "base.ember_wand", rarity: "normal", itemLevel: 65, affixes: [] };
 const UNID_WAND: Item = { ...RARE_WAND, unidentified: true };
 const TRANSMUTE: Item = { baseId: "currency.transmutation", rarity: "normal", itemLevel: 1, affixes: [] };
 

@@ -260,7 +260,7 @@ const RIG_ROOT = /^Armature(_[a-z]+)?$/;
  * and there is no socket, no re-parenting and no per-frame work in the client.
  *
  * A slot may hold more than one mesh. The sabatons are one boot fitted to the
- * right leg and its exact reflection on the left, `boots.plate.sabaton_{r,l}`,
+ * right leg and its exact reflection on the left, `boots.ironsworn.sabaton_{r,l}`,
  * and both are enabled by the same look — a limb worn in pairs needs no new
  * machinery either, only two names under one slot.
  */
@@ -295,7 +295,7 @@ export const BASE_LOOKS: Looks = {
  *
  * Only what an item genuinely closes is listed. The plate suit is a whole
  * harness cut off at the skull base, the wrists and the ankles, so it closes
- * the trunk and both legs, and its gorget plate (`chest.plate.gorget`, the
+ * the trunk and both legs, and its gorget plate (`chest.ironsworn.gorget`, the
  * collar region itself pushed out to steel) closes the COLLAR. The NECK stays
  * drawn: the gorget ring stands off it, and a hidden neck is a black void
  * inside the ring. The arms, the head, the hands and the feet are absent
@@ -307,7 +307,7 @@ export const BASE_LOOKS: Looks = {
  * `tools/build_wardrobe.py` carries a `skirt` key for. Every other look leaves
  * the chains unused, so the solver can sit out.
  */
-const SKIRTED_CHEST: ReadonlySet<string> = new Set(["leather", "robe"]);
+const SKIRTED_CHEST: ReadonlySet<string> = new Set(["stalker", "ember"]);
 
 const COVERED_BY: Partial<Record<Slot, readonly string[]>> = {
   helmet: ["hair"],

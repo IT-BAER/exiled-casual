@@ -253,7 +253,7 @@ export function spawnLabActors(
     const sessionE = [...world.query("inventory")][0];
     if (sessionE === undefined) return;
     let inv = world.get<InventoryC>(sessionE, "inventory")!;
-    for (const baseId of ["base.ember_buckler", "base.ashwall_tower_shield"]) {
+    for (const baseId of ["base.stalker_buckler", "base.ironsworn_tower_shield"]) {
       const base = baseOf(baseId);
       const cell = placeFirstFit(inv, base.w, base.h);
       if (!cell) continue;

@@ -1,0 +1,43 @@
+{
+ "built_from": "base.male.body hand + forearm weights, cut at the cuff plane",
+ "skin_gap_mm": 3.0,
+ "safe_share": 0.45,
+ "wall_mm": 3.8,
+ "relax_passes": [
+  4,
+  4,
+  0
+ ],
+ "cuff_up_mm": 82.0,
+ "forearm_section_mm": 40.71,
+ "cuff_rim_ratio": 1.16,
+ "cuff_roll_ratio": 1.16,
+ "lame_mm": 2.2,
+ "lame_overlap_mm": 3.0,
+ "shell_vertices": 3635,
+ "pinched_vertices": [
+  459,
+  2436
+ ],
+ "lame_vertices": 0,
+ "rim_edges": 68,
+ "inner_pulled": 692,
+ "thinnest_wall_mm": 0.045,
+ "vertices": 10575,
+ "triangles": 14536,
+ "triangles_reloaded": 14536,
+ "self_crossings": 0,
+ "source_crossings": 0,
+ "contain_clearance_mm": 11.5,
+ "contain_margin_mm": 1.42,
+ "contain_band": 1,
+ "look": "ember",
+ "roughness_pre_matte": 0.88,
+ "metallic": 0.0,
+ "symmetry_pairs": 29,
+ "symmetry_worst_mm": 0.00044,
+ "wrote": [
+  "D:/VSC/exiled-casual/assets/props/source/trellis_local/wrap-hand-v1.glb",
+  "D:/VSC/exiled-casual/assets/props/source/wrap-hand-v1.glb"
+ ]
+}

@@ -8,7 +8,7 @@ import type { InventoryC, StashC, ShardsC } from "./components";
 
 // A rare wand, identifiable, non-currency, yields 1 Elevation shard.
 const RARE_WAND: Item = {
-  baseId: "base.emberwand",
+  baseId: "base.ember_wand",
   rarity: "rare",
   itemLevel: 65,
   affixes: [
@@ -19,17 +19,17 @@ const RARE_WAND: Item = {
 
 // A magic wand, yields 1 Transmutation shard.
 const MAGIC_WAND: Item = {
-  baseId: "base.emberwand",
+  baseId: "base.ember_wand",
   rarity: "magic",
   itemLevel: 65,
   affixes: [{ affixId: "mod.fire_dmg_1", value: 1 }],
 };
 
 // A normal item, disenchantYield returns null.
-const NORMAL_WAND: Item = { baseId: "base.emberwand", rarity: "normal", itemLevel: 65, affixes: [] };
+const NORMAL_WAND: Item = { baseId: "base.ember_wand", rarity: "normal", itemLevel: 65, affixes: [] };
 
 // An unidentified rare, disenchantYield returns null.
-const UNID_WAND: Item = { baseId: "base.emberwand", rarity: "rare", itemLevel: 65, affixes: [], unidentified: true };
+const UNID_WAND: Item = { baseId: "base.ember_wand", rarity: "rare", itemLevel: 65, affixes: [], unidentified: true };
 
 // Currency, disenchantYield returns null.
 const TRANSMUTE: Item = { baseId: "currency.transmutation", rarity: "normal", itemLevel: 1, affixes: [] };

@@ -61,6 +61,23 @@ export function AssetViewer({ onExit }: { onExit: () => void }): React.ReactElem
         scene.setLooks(dressed);
         setLooks(dressed);
         setReady(true);
+        // `__wear("ironsworn")` dresses one family head to foot; `__wear({})`
+        // strips him, and any partial `Looks` overrides a slot. The panel lists
+        // subjects, not looks, so this is the only way to hold one SET still
+        // and walk around it. `__wear()` answers what the wardrobe ships.
+        (window as unknown as { __wear?: unknown }).__wear = (want?: string | Partial<Looks>) => {
+          const vocab = scene.vocabulary();
+          if (want === undefined) return vocab;
+          const next: Looks = typeof want === "string"
+            ? { ...NAKED, base: dressed.base,
+                ...Object.fromEntries(Object.entries(vocab)
+                  .filter(([, looks]) => looks.includes(want))
+                  .map(([slot]) => [slot, want])) }
+            : { ...dressed, ...want };
+          scene.setLooks(next);
+          setLooks(next);
+          return next;
+        };
       })
       .catch(() => undefined);
     return () => {

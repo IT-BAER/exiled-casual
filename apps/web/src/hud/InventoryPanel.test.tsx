@@ -75,10 +75,10 @@ describe("InventoryPanel", () => {
   });
 
   it("renders base art in the cell when the item has an icon, and the name when it does not", () => {
-    const withIcon = { ...inv, items: [{ ...inv.items[0]!, icon: "/textures/items/emberwand.png" }] };
+    const withIcon = { ...inv, items: [{ ...inv.items[0]!, icon: "/textures/items/ember_wand.png" }] };
     const { rerender } = render(<InventoryPanel inventory={withIcon} onClose={() => {}} />);
     const img = screen.getByTestId("inventory-item-0").querySelector("img");
-    expect(img?.getAttribute("src")).toBe("/textures/items/emberwand.png");
+    expect(img?.getAttribute("src")).toBe("/textures/items/ember_wand.png");
 
     rerender(<InventoryPanel inventory={inv} onClose={() => {}} />);
     const cell = screen.getByTestId("inventory-item-0");

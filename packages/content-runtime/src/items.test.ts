@@ -44,8 +44,8 @@ describe("describeItem", () => {
     const of = (baseId: string) => describeItem({ baseId, rarity: "normal", itemLevel: 65, affixes: [] }).implicit;
     // Ember Wand copies Goat's Horn's stat block (reference-screenshots/item-rare.png), so it
     // carries that base's implicit too. Same value on every drop, unlike an affix.
-    expect(of("base.emberwand")).toBe("12% increased Spell Damage");
-    expect(of("base.cinder_cap")).toBeUndefined();
+    expect(of("base.ember_wand")).toBe("12% increased Spell Damage");
+    expect(of("base.ironsworn_helm")).toBeUndefined();
   });
 
   it("shows a rare item's generated name and keeps the base type", () => {
@@ -98,21 +98,21 @@ describe("baseOf", () => {
 
 describe("itemStatMods", () => {
   it("returns the base implicit even on a normal item", () => {
-    expect(itemStatMods({ baseId: "base.emberwand", rarity: "normal", itemLevel: 1, affixes: [] }))
+    expect(itemStatMods({ baseId: "base.ember_wand", rarity: "normal", itemLevel: 1, affixes: [] }))
       .toEqual([{ stat: "spellDamagePct", value: 12 }]);
   });
 
   it("returns nothing for a base with no implicit and no affixes", () => {
-    expect(itemStatMods({ baseId: "base.ashen_focus", rarity: "normal", itemLevel: 1, affixes: [] }))
+    expect(itemStatMods({ baseId: "base.ember_focus", rarity: "normal", itemLevel: 1, affixes: [] }))
       .toEqual([]);
   });
 
   it("resolves each affix to its stat id and rolled value, implicit first", () => {
     expect(itemStatMods({
-      baseId: "base.emberweave_robe", rarity: "rare", itemLevel: 80,
+      baseId: "base.ember_robe", rarity: "rare", itemLevel: 80,
       affixes: [{ affixId: "affix.life", value: 33 }, { affixId: "affix.fire_res", value: 21 }],
     })).toEqual([
-      { stat: "manaRegenPct", value: 45 },
+      { stat: "manaRegenPct", value: 30 },
       { stat: "maxLife", value: 33 },
       { stat: "fireResPct", value: 21 },
     ]);
@@ -120,7 +120,7 @@ describe("itemStatMods", () => {
 
   it("skips an affix id the pool no longer has", () => {
     expect(itemStatMods({
-      baseId: "base.ashen_focus", rarity: "magic", itemLevel: 80,
+      baseId: "base.ember_focus", rarity: "magic", itemLevel: 80,
       affixes: [{ affixId: "affix.gone", value: 9 }, { affixId: "affix.mana", value: 12 }],
     })).toEqual([{ stat: "maxMana", value: 12 }]);
   });
@@ -128,7 +128,7 @@ describe("itemStatMods", () => {
 
 describe("unidentified items", () => {
   const rare = {
-    baseId: "base.emberwand", rarity: "rare" as const, itemLevel: 82,
+    baseId: "base.ember_wand", rarity: "rare" as const, itemLevel: 82,
     affixes: [{ affixId: "affix.life", value: 33 }], name: "Corpse Husk", unidentified: true,
   };
 

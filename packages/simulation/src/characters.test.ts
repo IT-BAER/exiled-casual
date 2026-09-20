@@ -65,10 +65,22 @@ describe("class content", () => {
     for (const b of bodies) expect(STARTER_BASE_IDS).toContain(b);
   });
 
-  it("keeps the starter bodies out of the drop pool", async () => {
+  it("holds one family per class and nothing else", async () => {
     const { ITEM_POOLS } = await import("@exiled/content-runtime");
-    for (const id of STARTER_BASE_IDS) {
-      expect(ITEM_POOLS.bases.map((b) => b.id)).not.toContain(id);
+    const stray = ITEM_POOLS.bases
+      .map((b) => b.id)
+      .filter((id) => !/^base\.(ironsworn|stalker|ember)_/.test(id));
+    expect(stray).toEqual([]);
+  });
+
+  it("puts every piece a class starts in back in the drop pool", async () => {
+    // A slot whose base can never drop is a slot the player can never improve.
+    const { ITEM_POOLS } = await import("@exiled/content-runtime");
+    const pool = new Set(ITEM_POOLS.bases.map((b) => b.id));
+    for (const c of Object.values(CLASSES)) {
+      for (const [slot, baseId] of Object.entries(c.startingGear)) {
+        expect(pool.has(baseId as string), `${c.id}.${slot}`).toBe(true);
+      }
     }
   });
 });
@@ -93,10 +105,11 @@ describe("equipStartingGear", () => {
     const world = fresh();
     equipStartingGear(world, "class.ironsworn");
     const slots = get<EquipmentC>(world, "equipment").slots;
-    expect(Object.keys(slots).sort()).toEqual(["belt", "body", "boots", "gloves"]);
-    expect(slots["body"]?.baseId).toBe("base.ironsworn_plate");
-    // Ironsworn wears no helmet on purpose; the renderer draws that as bare head.
-    expect(slots["helmet"]).toBeUndefined();
+    // Every class starts in its own family, head to foot.
+    expect(Object.keys(slots).sort()).toEqual(["belt", "body", "boots", "gloves", "helmet"]);
+    for (const item of Object.values(slots)) {
+      expect(item?.baseId).toMatch(/^base\.ironsworn_/);
+    }
   });
 
   it("the gear reaches the player's stats, not just the paper doll", () => {
@@ -193,7 +206,7 @@ describe("loadCharacterInto / saveCharacterTo", () => {
     const kv = await withOneCharacter("class.emberbound");
     const world = fresh();
     expect(await loadCharacterInto(kv, world, "vess")).toBe(true);
-    expect(get<EquipmentC>(world, "equipment").slots["body"]?.baseId).toBe("base.emberbound_robe");
+    expect(get<EquipmentC>(world, "equipment").slots["body"]?.baseId).toBe("base.ember_robe");
   });
 
   it("reports false for a character that is not in the roster", async () => {
@@ -311,7 +324,7 @@ describe("loadCharacterInto / saveCharacterTo", () => {
     const vess = fresh();
     await loadCharacterInto(kv, vess, "vess");
     const stashed = get<StashC>(vess, "stash");
-    const item = { baseId: "base.cinder_cap", rarity: "normal" as const, itemLevel: 1, affixes: [] };
+    const item = { baseId: "base.ironsworn_helm", rarity: "normal" as const, itemLevel: 1, affixes: [] };
     set<StashC>(vess, "stash", { ...stashed, items: [{ x: 0, y: 0, w: 2, h: 2, item }] });
     const inv = get<InventoryC>(vess, "inventory");
     set<InventoryC>(vess, "inventory", { ...inv, items: [{ x: 0, y: 0, w: 2, h: 2, item }] });
@@ -324,7 +337,7 @@ describe("loadCharacterInto / saveCharacterTo", () => {
     await loadCharacterInto(kv, toren, "toren");
     expect(get<StashC>(toren, "stash").items).toHaveLength(1);
     expect(get<InventoryC>(toren, "inventory").items.map((p) => p.item.baseId))
-      .not.toContain("base.cinder_cap");
+      .not.toContain("base.ironsworn_helm");
   });
 
   it("saving an id the roster does not hold writes nothing", async () => {

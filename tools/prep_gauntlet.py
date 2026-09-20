@@ -32,15 +32,23 @@ from mathutils import Matrix, Vector
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import build_wardrobe as W  # noqa: E402  (Blender runs this file directly)
 
-# `-- leather` builds the same shell without lames as the leather glove; the
-# plate gauntlet is the default and its paths are unchanged.
-LOOK = "leather" if "--" in sys.argv and "leather" in sys.argv[sys.argv.index("--") + 1:] else "plate"
-STEM = "glove-hand-v1" if LOOK == "leather" else "gauntlet-hand-v2"
+# One hand piece per family, off the same shell. `-- stalker` and `-- ember`
+# pick theirs; the Ironsworn gauntlet is the default. Only the Ironsworn piece
+# carries lames - a glove and a wrap are the fitted surface alone - and each
+# family sets its own wall, cuff and material below.
+LOOK = "ironsworn"
+if "--" in sys.argv:
+    for arg in sys.argv[sys.argv.index("--") + 1:]:
+        if arg in ("stalker", "ember"):
+            LOOK = arg
+STEM = {"ironsworn": "gauntlet-hand-v2", "stalker": "glove-hand-v1",
+        "ember": "wrap-hand-v1"}[LOOK]
 DONOR = f"D:/VSC/exiled-casual/assets/props/source/trellis_local/{STEM}.glb"
 KEPT = f"D:/VSC/exiled-casual/assets/props/source/{STEM}.glb"
 REPORT = f"D:/VSC/exiled-casual/assets/props/source/{STEM}.json"
-REVIEW = ("D:/VSC/exiled-casual/review/3d/leather-gloves-v1" if LOOK == "leather"
-          else "D:/VSC/exiled-casual/review/3d/gauntlets-v1")
+REVIEW = {"ironsworn": "D:/VSC/exiled-casual/review/3d/gauntlets-v1",
+          "stalker": "D:/VSC/exiled-casual/review/3d/leather-gloves-v1",
+          "ember": "D:/VSC/exiled-casual/review/3d/ember-wraps-v1"}[LOOK]
 
 # Air between skin and the steel's inner face. The fitter re-scales whatever it
 # is handed, so this is the shape's clearance and not the fit's - the sweep
@@ -62,7 +70,9 @@ REACH = 0.02              # how far a headroom query looks, metres
 # so a ring count alone measures how finely the hand is modelled and nothing
 # else - it capped every offset at half an edge length and flattened the cuff.
 FACING = 0.0
-STEEL = 0.002            # wall thickness, outward from the inner face
+# Wall thickness, outward from the inner face. Wool is thicker than steel or
+# hide, and a wrap that reads as one layer of paint is not a wrap.
+STEEL = {"ironsworn": 0.002, "stalker": 0.002, "ember": 0.0038}[LOOK]
 # What the wall takes out of the clearance: this many millimetres where there
 # are millimetres to spare, and never more than this share of what there is.
 WALL_FLOOR = 0.0005
@@ -71,9 +81,12 @@ WALL_SHARE = 0.4
 # The cuff is the forearm stretch of the same shell, flared: it opens from the
 # wrist to a rim standing this many times the forearm's OWN section, measured on
 # the shell at the cut plane, and the last of the run rolls over into a lip.
-CUFF_UP = 0.055          # how far up the forearm the piece reaches, metres
-CUFF_RIM = 1.10          # rim over forearm section where the roll starts
-CUFF_ROLL = 1.20         # and at the lip itself
+# The wrap runs half again as far up the forearm as a cuff does, and ends flat:
+# a bound strip has a frayed edge where a gauntlet has a rolled rim, so its rim
+# and its lip are the same ratio and the roll flattens out.
+CUFF_UP = {"ironsworn": 0.055, "stalker": 0.055, "ember": 0.082}[LOOK]
+CUFF_RIM = {"ironsworn": 1.10, "stalker": 1.10, "ember": 1.16}[LOOK]
+CUFF_ROLL = {"ironsworn": 1.20, "stalker": 1.20, "ember": 1.16}[LOOK]
 CUFF_LIP_FROM = 0.80     # of the cuff's own run, where the rim starts rolling
 CUFF_SECTION = 0.005     # half-thickness of the slice the forearm is measured on
 
@@ -103,6 +116,14 @@ METALLIC = 0.85
 # 0.82, and a leather with any metallic in it reads as wet.
 LEATHER_ALBEDO = (0.070, 0.045, 0.030, 1.0)
 LEATHER_ROUGHNESS = 0.60
+# The robe's own charcoal wool. Darker than the steel and with no metallic at
+# all, which is what separates a wrap from a gauntlet at the game camera: the
+# steel takes a highlight across the knuckles and the wool takes none. Neutral
+# to faintly warm, never blue: a cold grey beside the robe's oxblood reads as a
+# piece off another set, and a flat rough dielectric shows its hue plainly where
+# the robe's baked texture hides it.
+CLOTH_ALBEDO = (0.029, 0.027, 0.026, 1.0)
+CLOTH_ROUGHNESS = 0.88
 
 # The fitter's own two quarter turns, inverted: it rotates a donor whose
 # fingers run up +Z and whose thumb is at +X onto the rest hand, so a piece
@@ -562,15 +583,22 @@ def stitch(inner, outer):
     return len(edges)
 
 
+MATERIALS = {
+    "ironsworn": ("MI_Gauntlet_Plate", ALBEDO, ROUGHNESS, METALLIC),
+    "stalker": ("MI_Glove_Leather", LEATHER_ALBEDO, LEATHER_ROUGHNESS, 0.0),
+    "ember": ("MI_Wrap_Cloth", CLOTH_ALBEDO, CLOTH_ROUGHNESS, 0.0),
+}
+
+
 def steel(obj):
-    """One flat material, no texture: blackened steel, or the glove's leather."""
-    leather = LOOK == "leather"
-    mat = bpy.data.materials.new("MI_Glove_Leather" if leather else "MI_Gauntlet_Plate")
+    """One flat material, no texture: blackened steel, worn hide, or wool."""
+    name, albedo, roughness, metallic = MATERIALS[LOOK]
+    mat = bpy.data.materials.new(name)
     mat.use_nodes = True
     bsdf = next(n for n in mat.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
-    bsdf.inputs["Base Color"].default_value = LEATHER_ALBEDO if leather else ALBEDO
-    bsdf.inputs["Roughness"].default_value = LEATHER_ROUGHNESS if leather else ROUGHNESS
-    bsdf.inputs["Metallic"].default_value = 0.0 if leather else METALLIC
+    bsdf.inputs["Base Color"].default_value = albedo
+    bsdf.inputs["Roughness"].default_value = roughness
+    bsdf.inputs["Metallic"].default_value = metallic
     obj.data.materials.append(mat)
     return mat
 
@@ -689,7 +717,8 @@ def main():
     outer, _, _, _, pinched_out, out_passes, _, _, _ =         hand_shell(body, rig, "r", STEEL, "gauntlet_outer")
     spare = crossing_verts(outer)
     # A glove is the fitted surface alone: no plates over the joints.
-    raised, lame_passes = (0, 0) if LOOK == "leather" else lames(outer, rig, body, "r", spare=spare)
+    raised, lame_passes = ((0, 0) if LOOK != "ironsworn"
+                           else lames(outer, rig, body, "r", spare=spare))
     pulled, thinnest = follow(inner, outer, skin, WALL_FLOOR)
     print(f"FOLLOW {pulled} inner vertices pulled under the outer face, "
           f"thinnest wall {thinnest * 1000:.2f} mm")
@@ -754,7 +783,8 @@ def main():
         "vertices": len(back.data.vertices), "triangles": tris,
         "triangles_reloaded": tris_back, "self_crossings": crossings, "source_crossings": source_crossings,
         "contain_clearance_mm": round(ratio * 1000, 2), "contain_margin_mm": round(margin * 1000, 2),
-        "contain_band": band, "roughness_pre_matte": ROUGHNESS, "metallic": METALLIC,
+        "contain_band": band, "look": LOOK,
+        "roughness_pre_matte": MATERIALS[LOOK][2], "metallic": MATERIALS[LOOK][3],
         "symmetry_pairs": pairs, "symmetry_worst_mm": round(off * 1000, 5),
         "wrote": [DONOR, KEPT],
     }

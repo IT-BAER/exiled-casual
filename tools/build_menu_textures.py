@@ -71,7 +71,7 @@ ITEMS_DST = pathlib.Path(__file__).resolve().parent.parent / "apps" / "web" / "p
 ITEM_ICONS: dict[str, tuple[str, int]] = {
     "icon_ironsworn_plate_v1": ("ironsworn_plate.png", 256),
     "icon_stalker_leathers_v1": ("stalker_leathers.png", 256),
-    "icon_emberbound_robe_v1": ("emberbound_robe.png", 256),
+    "icon_ember_robe_v1": ("ember_robe.png", 256),
 }
 
 

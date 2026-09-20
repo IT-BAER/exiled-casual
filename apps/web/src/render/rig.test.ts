@@ -216,8 +216,8 @@ describe("rig fallback", () => {
  */
 /** Which joint each rigid piece must hang from, and nothing else. */
 const RIGID_BONES: Record<string, string> = {
-  "helmet.iron.helm": "Head",
-  "helmet.leather.hood": "Head",
+  "helmet.ironsworn.helm": "Head",
+  "helmet.stalker.hood": "Head",
   "weapon1.emberwand.mesh": "hand_r",
   "weapon2.buckler.mesh": "lowerarm_l",
 };
@@ -244,10 +244,10 @@ const PLATE_BONES = [
  * a single `_r` group would ride the far leg across the character.
  */
 const SABATON_BONES: Record<string, string[]> = {
-  "boots.plate.sabaton_r": ["calf_r", "foot_r", "ball_r"],
-  "boots.plate.sabaton_l": ["calf_l", "foot_l", "ball_l"],
-  "boots.leather.boot_r": ["calf_r", "foot_r", "ball_r"],
-  "boots.leather.boot_l": ["calf_l", "foot_l", "ball_l"],
+  "boots.ironsworn.sabaton_r": ["calf_r", "foot_r", "ball_r"],
+  "boots.ironsworn.sabaton_l": ["calf_l", "foot_l", "ball_l"],
+  "boots.stalker.boot_r": ["calf_r", "foot_r", "ball_r"],
+  "boots.stalker.boot_l": ["calf_l", "foot_l", "ball_l"],
 };
 
 const COMPONENTS: Record<number, number> = { 5120: 1, 5121: 1, 5122: 2, 5123: 2, 5125: 4, 5126: 4 };
@@ -378,20 +378,22 @@ describe("wardrobe asset", () => {
       "base.male.arm_l", "base.male.arm_r", "base.male.collar",
       "base.male.neck",
       "base.male.leg_l", "base.male.leg_r",
-      "helmet.iron.helm", "helmet.leather.hood", "weapon1.emberwand.mesh", "weapon2.buckler.mesh",
+      "helmet.ironsworn.helm", "helmet.stalker.hood", "weapon1.emberwand.mesh", "weapon2.buckler.mesh",
       "weapon2.towershield.mesh",
-      "chest.plate.cuirass", "chest.plate.gorget", "chest.plate.greave", "chest.plate.backing",
-      "chest.plate.backing_arm_l", "chest.plate.backing_arm_r",
-      "chest.leather.coat", "chest.leather.gorget", "chest.leather.greave", "chest.leather.backing",
-      "chest.leather.backing_arm_l", "chest.leather.backing_arm_r",
-      "chest.leather.backing_leg_l", "chest.leather.backing_leg_r",
-      "chest.robe.robe", "chest.robe.gorget", "chest.robe.backing",
-      "chest.robe.backing_arm_l", "chest.robe.backing_arm_r",
-      "chest.robe.backing_leg_l", "chest.robe.backing_leg_r",
-      "boots.plate.sabaton_l", "boots.plate.sabaton_r",
-      "boots.leather.boot_l", "boots.leather.boot_r",
-      "gloves.plate.gauntlet_l", "gloves.plate.gauntlet_r",
-      "gloves.leather.glove_l", "gloves.leather.glove_r",
+      "chest.ironsworn.cuirass", "chest.ironsworn.gorget", "chest.ironsworn.greave", "chest.ironsworn.backing",
+      "chest.ironsworn.backing_arm_l", "chest.ironsworn.backing_arm_r",
+      "chest.stalker.coat", "chest.stalker.gorget", "chest.stalker.greave", "chest.stalker.backing",
+      "chest.stalker.backing_arm_l", "chest.stalker.backing_arm_r",
+      "chest.stalker.backing_leg_l", "chest.stalker.backing_leg_r",
+      "chest.ember.robe", "chest.ember.gorget", "chest.ember.backing",
+      "chest.ember.backing_arm_l", "chest.ember.backing_arm_r",
+      "chest.ember.backing_leg_l", "chest.ember.backing_leg_r",
+      "boots.ironsworn.sabaton_l", "boots.ironsworn.sabaton_r",
+      "boots.stalker.boot_l", "boots.stalker.boot_r",
+      "boots.ember.slipper_l", "boots.ember.slipper_r",
+      "gloves.ironsworn.gauntlet_l", "gloves.ironsworn.gauntlet_r",
+      "gloves.stalker.glove_l", "gloves.stalker.glove_r",
+      "gloves.ember.wrap_l", "gloves.ember.wrap_r",
     ].sort());
   });
 
@@ -436,8 +438,8 @@ describe("wardrobe asset", () => {
    */
   it("deforms the suit over the spine, both elbows and both knees", () => {
     const bin = glb.subarray(20 + json.buffers0Len);
-    const node = json.nodes.find((n) => n.name === "chest.plate.cuirass");
-    expect(node, "no node chest.plate.cuirass").toBeDefined();
+    const node = json.nodes.find((n) => n.name === "chest.ironsworn.cuirass");
+    expect(node, "no node chest.ironsworn.cuirass").toBeDefined();
     const prim = json.meshes[node!.mesh!]!.primitives[0]!;
     const joints = readAccessor(json, bin, prim.attributes["JOINTS_0"]!);
     const weights = readAccessor(json, bin, prim.attributes["WEIGHTS_0"]!);
@@ -473,7 +475,7 @@ describe("wardrobe asset", () => {
    * a second pair of legs inside the steel.
    */
   it("ships no stand-in trousers under the harness", () => {
-    expect(json.nodes.find((n) => n.name === "chest.plate.legs")).toBeUndefined();
+    expect(json.nodes.find((n) => n.name === "chest.ironsworn.legs")).toBeUndefined();
   });
 
   /**
@@ -527,7 +529,7 @@ describe("wardrobe asset", () => {
   };
 
   it("ships a skinned gorget plate over the hidden collar", () => {
-    const used = jointsUsed("chest.plate.gorget");
+    const used = jointsUsed("chest.ironsworn.gorget");
     expect(used).toContain("clavicle_l");
     expect(used).toContain("clavicle_r");
   });
@@ -537,7 +539,7 @@ describe("wardrobe asset", () => {
    * off the body and filled out to just under the steel: a crack shows steel.
    */
   it("ships a skinned backing plate under the cracked cuirass", () => {
-    const used = jointsUsed("chest.plate.backing");
+    const used = jointsUsed("chest.ironsworn.backing");
     expect(used).toContain("spine_03");
     expect(used).toContain("pelvis");
   });
@@ -580,8 +582,9 @@ describe("wardrobe asset", () => {
    * different steel on the two legs.
    */
   it.each([
-    ["boots.plate.sabaton_r", "boots.plate.sabaton_l"],
-    ["boots.leather.boot_r", "boots.leather.boot_l"],
+    ["boots.ironsworn.sabaton_r", "boots.ironsworn.sabaton_l"],
+    ["boots.stalker.boot_r", "boots.stalker.boot_l"],
+    ["boots.ember.slipper_r", "boots.ember.slipper_l"],
   ])("stands %s and %s on opposite legs, same piece on both", (rightMesh, leftMesh) => {
     const bin = glb.subarray(20 + json.buffers0Len);
     const centres = [rightMesh, leftMesh].map((mesh) => {
@@ -630,7 +633,7 @@ describe("wardrobe asset", () => {
    * hangs free of the legs is measured, and a garment has folds, so the bar is
    * the ninth decile rather than the worst vertex.
    */
-  it.each(["chest.robe.robe", "chest.leather.coat"])(
+  it.each(["chest.ember.robe", "chest.stalker.coat"])(
     "hangs %s on chains that run inside its own cloth", (meshName) => {
       const node = json.nodes.find((n) => n.name === meshName)!;
       const skin = json.skins[node.skin!]!;
@@ -681,7 +684,7 @@ describe("wardrobe asset", () => {
    * a triangle bridging chain 0 to chain 27. The build pins cloth inside
    * `SKIRT_AXIS_*` to the pelvis instead, which is what this bar measures.
    */
-  it.each(["chest.robe.robe", "chest.leather.coat"])(
+  it.each(["chest.ember.robe", "chest.stalker.coat"])(
     "keeps every %s triangle inside chains the hoop can hold", (meshName) => {
       const node = json.nodes.find((n) => n.name === meshName)!;
       const skin = json.skins[node.skin!]!;
@@ -722,10 +725,12 @@ describe("wardrobe asset", () => {
    * line, which the bare radius failing to is what says so.
    */
   it.each([
-    ["boots.leather.boot_r", "_r"],
-    ["boots.plate.sabaton_r", "_r"],
-    ["boots.leather.boot_l", "_l"],
-    ["boots.plate.sabaton_l", "_l"],
+    ["boots.stalker.boot_r", "_r"],
+    ["boots.ironsworn.sabaton_r", "_r"],
+    ["boots.ember.slipper_r", "_r"],
+    ["boots.stalker.boot_l", "_l"],
+    ["boots.ironsworn.sabaton_l", "_l"],
+    ["boots.ember.slipper_l", "_l"],
   ])("keeps %s inside the capsules the cloth is pushed out of", (meshName, side) => {
     const node = json.nodes.find((n) => n.name === meshName)!;
     const at = bindPose(json.skins[node.skin!]!);
@@ -1079,7 +1084,7 @@ describe("indexRigSubtree against the real loader", () => {
       const skinned = [...byName.values()].filter(
         (n): n is Mesh => n instanceof Mesh && n.skeleton !== null,
       );
-      expect(skinned.map((m) => m.name)).toContain("gloves.plate.gauntlet_l");
+      expect(skinned.map((m) => m.name)).toContain("gloves.ironsworn.gauntlet_l");
       for (const mesh of skinned) {
         expect(mesh.alwaysSelectAsActiveMesh, mesh.name).toBe(true);
       }

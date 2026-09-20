@@ -9,13 +9,13 @@ describe("dressing the character from what he has equipped", () => {
 
   it("shows the wand, the buckler and the helm the sim says he is wearing", () => {
     const looks = looksForEquipment({
-      weapon1: { baseId: "base.emberwand" },
-      weapon2: { baseId: "base.ember_buckler" },
-      helmet: { baseId: "base.cinder_cap" },
+      weapon1: { baseId: "base.ember_wand" },
+      weapon2: { baseId: "base.stalker_buckler" },
+      helmet: { baseId: "base.ironsworn_helm" },
     });
     expect(looks.weapon1).toBe("emberwand");
     expect(looks.weapon2).toBe("buckler");
-    expect(looks.helmet).toBe("iron");
+    expect(looks.helmet).toBe("ironsworn");
     expect(looks.base).toBe("male");
   });
 
@@ -28,7 +28,7 @@ describe("dressing the character from what he has equipped", () => {
   it("shows nothing for a base with no mesh, rather than the wrong one", () => {
     // Asserted, not assumed: the moment either base gets a mesh this fixture is
     // testing the opposite of what it says, and the failure names which one.
-    const unmapped = ["base.cinderchain_sash", "base.ashen_focus"] as const;
+    const unmapped = ["base.ember_sash", "base.ember_focus"] as const;
     for (const baseId of unmapped) expect(GEAR_LOOKS[baseId]).toBeUndefined();
     const looks = looksForEquipment({
       belt: { baseId: unmapped[0] },

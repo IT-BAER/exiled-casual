@@ -1,5 +1,5 @@
 {
- "helmet.iron.helm": {
+ "helmet.ironsworn.helm": {
   "dome_width_ratio": 1.2,
   "scale": 0.30534,
   "skull_gap_p01_mm": 0.57,
@@ -13,7 +13,7 @@
   "triangles": 7999,
   "source": "iron-helm-8k-v3.glb"
  },
- "helmet.leather.hood": {
+ "helmet.stalker.hood": {
   "dome_width_ratio": 1.125,
   "scale": 0.38771,
   "skull_gap_p01_mm": 0.79,
@@ -83,7 +83,7 @@
   "triangles": 9998,
   "source": "tower-shield-10k-v3.glb"
  },
- "chest.plate.cuirass": {
+ "chest.ironsworn.cuirass": {
   "gorget_height_m": 0.0726,
   "gorget_rim_z": 1.5931,
   "gorget_pin_z": 1.5205,
@@ -168,7 +168,7 @@
   "triangles": 15389,
   "source": "plate-suit-20k-v9.glb"
  },
- "chest.robe.robe": {
+ "chest.ember.robe": {
   "gorget_height_m": 0.02,
   "gorget_rim_z": 1.5405,
   "gorget_pin_z": 1.5205,
@@ -270,7 +270,7 @@
   "triangles": 16586,
   "source": "emberbound-robe-20k-v1.glb"
  },
- "chest.leather.coat": {
+ "chest.stalker.coat": {
   "gorget_height_m": 0.02,
   "gorget_rim_z": 1.5405,
   "gorget_pin_z": 1.5205,
@@ -376,7 +376,7 @@
   "triangles": 14392,
   "source": "stalker-leathers-20k-v1.glb"
  },
- "boots.plate.sabaton_r": {
+ "boots.ironsworn.sabaton_r": {
   "foot_length_ratio": 1.54,
   "scale": 0.49278,
   "shaft_stretch": 1.057,
@@ -400,7 +400,7 @@
   "triangles": 7990,
   "source": "sabaton-8k-v1.glb"
  },
- "boots.plate.sabaton_l": {
+ "boots.ironsworn.sabaton_l": {
   "foot_length_ratio": 1.54,
   "scale": 0.49278,
   "shaft_stretch": 1.057,
@@ -423,9 +423,9 @@
   "fit": "boot_leg",
   "triangles": 7990,
   "source": "sabaton-8k-v1.glb",
-  "mirrored_from": "boots.plate.sabaton_r"
+  "mirrored_from": "boots.ironsworn.sabaton_r"
  },
- "boots.leather.boot_r": {
+ "boots.stalker.boot_r": {
   "foot_length_ratio": 1.56,
   "scale": 0.56349,
   "shaft_stretch": 0.9221,
@@ -449,7 +449,7 @@
   "triangles": 5124,
   "source": "leather-boot-8k-v1.glb"
  },
- "boots.leather.boot_l": {
+ "boots.stalker.boot_l": {
   "foot_length_ratio": 1.56,
   "scale": 0.56349,
   "shaft_stretch": 0.9221,
@@ -472,9 +472,58 @@
   "fit": "boot_leg",
   "triangles": 5124,
   "source": "leather-boot-8k-v1.glb",
-  "mirrored_from": "boots.leather.boot_r"
+  "mirrored_from": "boots.stalker.boot_r"
  },
- "gloves.plate.gauntlet_r": {
+ "boots.ember.slipper_r": {
+  "foot_length_ratio": 1.48,
+  "scale": 0.50868,
+  "shaft_stretch": 1.0208,
+  "foot_length_m": 0.2696,
+  "shin_span_m": 0.5219,
+  "donor_ankle_radius": 0.1659,
+  "leg_gap_p01_mm": 0.56,
+  "leg_gap_median_mm": 14.89,
+  "leg_covered": 0.9287,
+  "leg_points": 631,
+  "sole_and_rim_points": 163,
+  "rim_below_knee_mm": 30.0,
+  "deform_bones": [
+   "calf_r",
+   "foot_r",
+   "ball_r"
+  ],
+  "deform_groups": 3,
+  "bone": "foot_r",
+  "fit": "boot_leg",
+  "triangles": 5598,
+  "source": "ember-slipper-8k-v1.glb"
+ },
+ "boots.ember.slipper_l": {
+  "foot_length_ratio": 1.48,
+  "scale": 0.50868,
+  "shaft_stretch": 1.0208,
+  "foot_length_m": 0.2696,
+  "shin_span_m": 0.5219,
+  "donor_ankle_radius": 0.1659,
+  "leg_gap_p01_mm": 0.56,
+  "leg_gap_median_mm": 14.89,
+  "leg_covered": 0.9287,
+  "leg_points": 631,
+  "sole_and_rim_points": 163,
+  "rim_below_knee_mm": 30.0,
+  "deform_bones": [
+   "calf_l",
+   "foot_l",
+   "ball_l"
+  ],
+  "deform_groups": 3,
+  "bone": "foot_l",
+  "fit": "boot_leg",
+  "triangles": 5598,
+  "source": "ember-slipper-8k-v1.glb",
+  "mirrored_from": "boots.ember.slipper_r"
+ },
+ "gloves.ironsworn.gauntlet_r": {
   "length_scale": 0.95507,
   "hand_length_m": 0.2233,
   "finger_fan_m": 0.0937,
@@ -515,7 +564,7 @@
   "triangles": 14264,
   "source": "gauntlet-hand-v2.glb"
  },
- "gloves.plate.gauntlet_l": {
+ "gloves.ironsworn.gauntlet_l": {
   "length_scale": 0.95507,
   "hand_length_m": 0.2233,
   "finger_fan_m": 0.0937,
@@ -555,9 +604,9 @@
   "fit": "hand_authored",
   "triangles": 14264,
   "source": "gauntlet-hand-v2.glb",
-  "mirrored_from": "gloves.plate.gauntlet_r"
+  "mirrored_from": "gloves.ironsworn.gauntlet_r"
  },
- "gloves.leather.glove_r": {
+ "gloves.stalker.glove_r": {
   "length_scale": 0.95507,
   "hand_length_m": 0.2233,
   "finger_fan_m": 0.0937,
@@ -598,7 +647,7 @@
   "triangles": 14264,
   "source": "glove-hand-v1.glb"
  },
- "gloves.leather.glove_l": {
+ "gloves.stalker.glove_l": {
   "length_scale": 0.95507,
   "hand_length_m": 0.2233,
   "finger_fan_m": 0.0937,
@@ -638,9 +687,92 @@
   "fit": "hand_authored",
   "triangles": 14264,
   "source": "glove-hand-v1.glb",
-  "mirrored_from": "gloves.leather.glove_r"
+  "mirrored_from": "gloves.stalker.glove_r"
  },
- "chest.plate.gorget": {
+ "gloves.ember.wrap_r": {
+  "length_scale": 0.92898,
+  "hand_length_m": 0.2233,
+  "finger_fan_m": 0.0937,
+  "finger_thickness_m": 0.0278,
+  "donor_finger_fan": 0.1031,
+  "donor_wrist_radius": 0.0384,
+  "donor_wrist_at": 0.68419,
+  "donor_run": 0.24903,
+  "hand_points": 880,
+  "finger_web_points": 90,
+  "finger_web_radius_mm": 20.29,
+  "hand_gap_p01_mm": 0.6,
+  "hand_gap_median_mm": 2.83,
+  "hand_covered": 0.9977,
+  "placed_as_authored": true,
+  "deform_bones": [
+   "hand_r",
+   "lowerarm_r",
+   "index_01_r",
+   "index_02_r",
+   "index_03_r",
+   "middle_01_r",
+   "middle_02_r",
+   "middle_03_r",
+   "ring_01_r",
+   "ring_02_r",
+   "ring_03_r",
+   "pinky_01_r",
+   "pinky_02_r",
+   "pinky_03_r",
+   "thumb_01_r",
+   "thumb_02_r",
+   "thumb_03_r"
+  ],
+  "deform_groups": 17,
+  "bone": "hand_r",
+  "fit": "hand_authored",
+  "triangles": 14536,
+  "source": "wrap-hand-v1.glb"
+ },
+ "gloves.ember.wrap_l": {
+  "length_scale": 0.92898,
+  "hand_length_m": 0.2233,
+  "finger_fan_m": 0.0937,
+  "finger_thickness_m": 0.0278,
+  "donor_finger_fan": 0.1031,
+  "donor_wrist_radius": 0.0384,
+  "donor_wrist_at": 0.68419,
+  "donor_run": 0.24903,
+  "hand_points": 880,
+  "finger_web_points": 90,
+  "finger_web_radius_mm": 20.29,
+  "hand_gap_p01_mm": 0.6,
+  "hand_gap_median_mm": 2.83,
+  "hand_covered": 0.9977,
+  "placed_as_authored": true,
+  "deform_bones": [
+   "hand_l",
+   "lowerarm_l",
+   "index_01_l",
+   "index_02_l",
+   "index_03_l",
+   "middle_01_l",
+   "middle_02_l",
+   "middle_03_l",
+   "ring_01_l",
+   "ring_02_l",
+   "ring_03_l",
+   "pinky_01_l",
+   "pinky_02_l",
+   "pinky_03_l",
+   "thumb_01_l",
+   "thumb_02_l",
+   "thumb_03_l"
+  ],
+  "deform_groups": 17,
+  "bone": "hand_l",
+  "fit": "hand_authored",
+  "triangles": 14536,
+  "source": "wrap-hand-v1.glb",
+  "mirrored_from": "gloves.ember.wrap_r"
+ },
+ "chest.ironsworn.gorget": {
   "built_from": "base.male.body collar region, offset along its own normals",
   "source": "body",
   "offset_mm": 5.0,
@@ -650,7 +782,7 @@
   "shell_capped_vertices": 138,
   "crease_capped_vertices": 95,
   "worn_shell_air": {
-   "chest.plate.cuirass": {
+   "chest.ironsworn.cuirass": {
     "vertices": 292,
     "min_mm": 0.004,
     "p01_mm": 0.024,
@@ -678,8 +810,8 @@
    "blenderkit_name": "Aged Black Steel"
   }
  },
- "chest.plate.backing": {
-  "built_from": "base.male.body torso region, filled out to 3 mm under chest.plate.cuirass",
+ "chest.ironsworn.backing": {
+  "built_from": "base.male.body torso region, filled out to 3 mm under chest.ironsworn.cuirass",
   "source": "body",
   "offset_mm": null,
   "offset_min_mm": 0.0,
@@ -713,8 +845,8 @@
    "blenderkit_name": "Aged Black Steel"
   }
  },
- "chest.plate.backing_arm_l": {
-  "built_from": "base.male.body arm_l region, filled out to 3 mm under chest.plate.cuirass",
+ "chest.ironsworn.backing_arm_l": {
+  "built_from": "base.male.body arm_l region, filled out to 3 mm under chest.ironsworn.cuirass",
   "source": "body",
   "offset_mm": null,
   "offset_min_mm": 0.0,
@@ -742,8 +874,8 @@
    "blenderkit_name": "Aged Black Steel"
   }
  },
- "chest.plate.backing_arm_r": {
-  "built_from": "base.male.body arm_r region, filled out to 3 mm under chest.plate.cuirass",
+ "chest.ironsworn.backing_arm_r": {
+  "built_from": "base.male.body arm_r region, filled out to 3 mm under chest.ironsworn.cuirass",
   "source": "body",
   "offset_mm": null,
   "offset_min_mm": 0.0,
@@ -771,7 +903,7 @@
    "blenderkit_name": "Aged Black Steel"
   }
  },
- "chest.leather.gorget": {
+ "chest.stalker.gorget": {
   "built_from": "base.male.body collar region, offset along its own normals",
   "source": "body",
   "offset_mm": 5.0,
@@ -781,7 +913,7 @@
   "shell_capped_vertices": 122,
   "crease_capped_vertices": 95,
   "worn_shell_air": {
-   "chest.leather.coat": {
+   "chest.stalker.coat": {
     "vertices": 288,
     "min_mm": 0.019,
     "p01_mm": 0.019,
@@ -809,8 +941,8 @@
    "blenderkit_name": "Aged Black Steel"
   }
  },
- "chest.leather.backing": {
-  "built_from": "base.male.body torso region, filled out to 3 mm under chest.leather.coat",
+ "chest.stalker.backing": {
+  "built_from": "base.male.body torso region, filled out to 3 mm under chest.stalker.coat",
   "source": "body",
   "offset_mm": null,
   "offset_min_mm": 0.0,
@@ -844,8 +976,8 @@
    "blenderkit_name": "Aged Black Steel"
   }
  },
- "chest.leather.backing_arm_l": {
-  "built_from": "base.male.body arm_l region, filled out to 3 mm under chest.leather.coat",
+ "chest.stalker.backing_arm_l": {
+  "built_from": "base.male.body arm_l region, filled out to 3 mm under chest.stalker.coat",
   "source": "body",
   "offset_mm": null,
   "offset_min_mm": 0.0,
@@ -873,8 +1005,8 @@
    "blenderkit_name": "Aged Black Steel"
   }
  },
- "chest.leather.backing_arm_r": {
-  "built_from": "base.male.body arm_r region, filled out to 3 mm under chest.leather.coat",
+ "chest.stalker.backing_arm_r": {
+  "built_from": "base.male.body arm_r region, filled out to 3 mm under chest.stalker.coat",
   "source": "body",
   "offset_mm": null,
   "offset_min_mm": 0.0,
@@ -902,8 +1034,8 @@
    "blenderkit_name": "Aged Black Steel"
   }
  },
- "chest.leather.backing_leg_l": {
-  "built_from": "base.male.body leg_l region, filled out to 3 mm under chest.leather.coat",
+ "chest.stalker.backing_leg_l": {
+  "built_from": "base.male.body leg_l region, filled out to 3 mm under chest.stalker.coat",
   "source": "body",
   "offset_mm": null,
   "offset_min_mm": 0.0,
@@ -930,8 +1062,8 @@
    "blenderkit_name": "Aged Black Steel"
   }
  },
- "chest.leather.backing_leg_r": {
-  "built_from": "base.male.body leg_r region, filled out to 3 mm under chest.leather.coat",
+ "chest.stalker.backing_leg_r": {
+  "built_from": "base.male.body leg_r region, filled out to 3 mm under chest.stalker.coat",
   "source": "body",
   "offset_mm": null,
   "offset_min_mm": 0.0,
@@ -958,7 +1090,7 @@
    "blenderkit_name": "Aged Black Steel"
   }
  },
- "chest.robe.gorget": {
+ "chest.ember.gorget": {
   "built_from": "base.male.body collar region, offset along its own normals",
   "source": "body",
   "offset_mm": 5.0,
@@ -968,7 +1100,7 @@
   "shell_capped_vertices": 111,
   "crease_capped_vertices": 95,
   "worn_shell_air": {
-   "chest.robe.robe": {
+   "chest.ember.robe": {
     "vertices": 277,
     "min_mm": 0.016,
     "p01_mm": 0.062,
@@ -996,8 +1128,8 @@
    "blenderkit_name": "Aged Black Steel"
   }
  },
- "chest.robe.backing": {
-  "built_from": "base.male.body torso region, filled out to 3 mm under chest.robe.robe",
+ "chest.ember.backing": {
+  "built_from": "base.male.body torso region, filled out to 3 mm under chest.ember.robe",
   "source": "body",
   "offset_mm": null,
   "offset_min_mm": 0.0,
@@ -1031,8 +1163,8 @@
    "blenderkit_name": "Aged Black Steel"
   }
  },
- "chest.robe.backing_arm_l": {
-  "built_from": "base.male.body arm_l region, filled out to 3 mm under chest.robe.robe",
+ "chest.ember.backing_arm_l": {
+  "built_from": "base.male.body arm_l region, filled out to 3 mm under chest.ember.robe",
   "source": "body",
   "offset_mm": null,
   "offset_min_mm": 0.0,
@@ -1060,8 +1192,8 @@
    "blenderkit_name": "Aged Black Steel"
   }
  },
- "chest.robe.backing_arm_r": {
-  "built_from": "base.male.body arm_r region, filled out to 3 mm under chest.robe.robe",
+ "chest.ember.backing_arm_r": {
+  "built_from": "base.male.body arm_r region, filled out to 3 mm under chest.ember.robe",
   "source": "body",
   "offset_mm": null,
   "offset_min_mm": 0.0,
@@ -1089,8 +1221,8 @@
    "blenderkit_name": "Aged Black Steel"
   }
  },
- "chest.robe.backing_leg_l": {
-  "built_from": "base.male.body leg_l region, filled out to 3 mm under chest.robe.robe",
+ "chest.ember.backing_leg_l": {
+  "built_from": "base.male.body leg_l region, filled out to 3 mm under chest.ember.robe",
   "source": "body",
   "offset_mm": null,
   "offset_min_mm": 0.0,
@@ -1118,8 +1250,8 @@
    "blenderkit_name": "Aged Black Steel"
   }
  },
- "chest.robe.backing_leg_r": {
-  "built_from": "base.male.body leg_r region, filled out to 3 mm under chest.robe.robe",
+ "chest.ember.backing_leg_r": {
+  "built_from": "base.male.body leg_r region, filled out to 3 mm under chest.ember.robe",
   "source": "body",
   "offset_mm": null,
   "offset_min_mm": 0.0,

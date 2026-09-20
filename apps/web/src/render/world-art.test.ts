@@ -10,7 +10,23 @@ const PUBLIC = resolve(__dirname, "../../public");
  * preload, and the ones that belong to somebody else. See `world-art.ts` for why
  * each exclusion is an exclusion; this is the machine-checkable half of it.
  */
-const COVERED = ["buffs", "fx", "gear", "items", "skills", "walls", "water", "world"];
+const COVERED = ["buffs", "fx", "items", "skills", "walls", "water", "world"];
+
+/**
+ * Icons whose master is drawn but whose item base does not exist yet. They are
+ * not preloaded: a map loads art it may need mid-run, and no drop can hand the
+ * player one of these. They come off this list the moment a base claims one.
+ */
+const UNCLAIMED = new Set([
+  "/textures/items/ashen_bracers.png",
+  "/textures/items/ashen_quarterstaff.png",
+  "/textures/items/ashfall_axe.png",
+  "/textures/items/cindercleave_blade.png",
+  "/textures/items/cinderfang_dirk.png",
+  "/textures/items/emberbone_circlet.png",
+  "/textures/items/emberhead_maul.png",
+  "/textures/items/emberstep_shoes.png",
+]);
 
 function filesUnder(dir: string): string[] {
   const root = resolve(PUBLIC, "textures", dir);
@@ -28,7 +44,8 @@ describe("WORLD_ART", () => {
   });
 
   it("lists everything in the covered directories", () => {
-    const missing = COVERED.flatMap(filesUnder).filter((f) => !WORLD_ART.includes(f));
+    const missing = COVERED.flatMap(filesUnder)
+      .filter((f) => !WORLD_ART.includes(f) && !UNCLAIMED.has(f));
     expect(missing, "add these to WORLD_ART (or exclude the directory on purpose)").toEqual([]);
   });
 

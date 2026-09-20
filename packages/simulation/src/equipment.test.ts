@@ -13,12 +13,12 @@ import type { InventoryC, EquipmentC, Position, Health, Mana, DefensesC, Offense
 // Fixtures
 // ---------------------------------------------------------------------------
 
-// base.emberwand: itemClass="wand", w=1, h=2
-const WAND: Item = { baseId: "base.emberwand", rarity: "normal", itemLevel: 65, affixes: [] };
-// base.cinder_cap: itemClass="helmet", w=2, h=2
-const HELMET: Item = { baseId: "base.cinder_cap", rarity: "normal", itemLevel: 65, affixes: [] };
-// base.ashen_focus: itemClass="focus", w=2, h=2
-const FOCUS: Item = { baseId: "base.ashen_focus", rarity: "normal", itemLevel: 65, affixes: [] };
+// base.ember_wand: itemClass="wand", w=1, h=2
+const WAND: Item = { baseId: "base.ember_wand", rarity: "normal", itemLevel: 65, affixes: [] };
+// base.ironsworn_helm: itemClass="helmet", w=2, h=2
+const HELMET: Item = { baseId: "base.ironsworn_helm", rarity: "normal", itemLevel: 65, affixes: [] };
+// base.ember_focus: itemClass="focus", w=2, h=2
+const FOCUS: Item = { baseId: "base.ember_focus", rarity: "normal", itemLevel: 65, affixes: [] };
 
 function makeWorld() {
   return createCombatSim(7, { area: "hideout" });
@@ -103,7 +103,7 @@ describe("equipment system — equipItem", () => {
     sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "weapon1" }, playerEntity, 0)]);
 
     expect(getInv(world).items).toHaveLength(0);
-    expect(getEquip(world).slots["weapon1"]?.baseId).toBe("base.emberwand");
+    expect(getEquip(world).slots["weapon1"]?.baseId).toBe("base.ember_wand");
   });
 
   it("rejects equipping a helmet into weapon1 (illegal class/slot pair)", () => {
@@ -161,8 +161,8 @@ describe("equipment system — equipItem", () => {
 
     // Everything must be unchanged.
     expect(getInv(world).items).toHaveLength(1);
-    expect(getInv(world).items[0]!.item.baseId).toBe("base.emberwand");
-    expect(getEquip(world).slots["weapon1"]?.baseId).toBe("base.ashen_focus");
+    expect(getInv(world).items[0]!.item.baseId).toBe("base.ember_wand");
+    expect(getEquip(world).slots["weapon1"]?.baseId).toBe("base.ember_focus");
   });
 });
 
@@ -183,7 +183,7 @@ describe("equipment system — unequipItem", () => {
 
     expect(getEquip(world).slots["weapon1"]).toBeUndefined();
     expect(getInv(world).items).toHaveLength(1);
-    expect(getInv(world).items[0]!.item.baseId).toBe("base.emberwand");
+    expect(getInv(world).items[0]!.item.baseId).toBe("base.ember_wand");
   });
 
   it("no-op when the slot is already empty", () => {
@@ -206,7 +206,7 @@ describe("equipment system — unequipItem", () => {
     // Wand is 1x2 → h=2 > rows=1 → placeFirstFit returns null → no-op.
     sim.step([intentToCommand({ kind: "unequipItem", slot: "weapon1" }, playerEntity, 0)]);
 
-    expect(getEquip(world).slots["weapon1"]?.baseId).toBe("base.emberwand");
+    expect(getEquip(world).slots["weapon1"]?.baseId).toBe("base.ember_wand");
     expect(getInv(world).items).toHaveLength(0);
   });
 });
@@ -340,7 +340,7 @@ describe("buildSnapshot — equipment", () => {
     const snap = buildSnapshot(world, sim, 0, CONTENT_VERSION);
     // Each armour base has its own baked texture, so an equipped slot that
     // reaches the client without its base id renders as the authored outfit.
-    expect(snap.equipment["body"]!.baseId).toBe("base.emberweave_robe");
+    expect(snap.equipment["body"]!.baseId).toBe("base.ember_robe");
   });
 });
 
@@ -348,9 +348,9 @@ describe("buildSnapshot — equipment", () => {
 // Derived stats: an equipped mod has to reach the player, not just the tooltip
 // ---------------------------------------------------------------------------
 
-/** A robe (implicit 45% mana regen) carrying +40 life, +20 fire res and +50 armour. */
+/** A robe (implicit 30% mana regen) carrying +40 life, +20 fire res and +50 armour. */
 const GEARED_ROBE: Item = {
-  baseId: "base.emberweave_robe", rarity: "rare", itemLevel: 80,
+  baseId: "base.ember_robe", rarity: "rare", itemLevel: 80,
   affixes: [
     { affixId: "affix.life", value: 40 },
     { affixId: "affix.fire_res", value: 20 },
@@ -377,14 +377,14 @@ describe("derived player stats", () => {
     expect(world.get<DefensesC>(playerEntity, "defenses")!.res.fire).toBe(20);
   });
 
-  it("the base implicit applies too: the robe's 45% mana regeneration", () => {
+  it("the base implicit applies too: the robe's 30% mana regeneration", () => {
     const { world, sim, playerEntity } = makeWorld();
     clearInv(world);
     placeInInv(world, GEARED_ROBE, 0, 0, 2, 3);
     sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "body" }, playerEntity, 0)]);
 
-    // base fp(15)/s * 1.45 = fp(21.75)/s → trunc(21750 / 30) = 725 per tick
-    expect(world.get<Mana>(playerEntity, "mana")!.regen).toBe(725);
+    // base fp(15)/s * 1.30 = fp(19.5)/s → trunc(19500 / 30) = 650 per tick
+    expect(world.get<Mana>(playerEntity, "mana")!.regen).toBe(650);
   });
 
   it("the wand implicit gives the player spell damage", () => {
@@ -444,8 +444,8 @@ describe("derived player stats", () => {
     // 50 / (50 + 10 * 6) = 45%.
     expect(s.armourPct).toBe(45);
     expect(s.res.fire).toBe(20);
-    // trunc(fp(21.75)/30) = 725 per tick, so the sheet reports 725*30 = fp(21.75)/s.
-    expect(s.manaRegenPerSec).toBeCloseTo(21.75, 5);
+    // trunc(fp(19.5)/30) = 650 per tick, so the sheet reports 650*30 = fp(19.5)/s.
+    expect(s.manaRegenPerSec).toBeCloseTo(19.5, 5);
     expect(s.spellDamagePct).toBe(0);
   });
 
@@ -453,7 +453,7 @@ describe("derived player stats", () => {
     const { world, sim, playerEntity } = makeWorld();
     clearInv(world);
     const OVERCAP: Item = {
-      baseId: "base.emberweave_robe", rarity: "rare", itemLevel: 80,
+      baseId: "base.ember_robe", rarity: "rare", itemLevel: 80,
       affixes: [{ affixId: "affix.fire_res", value: 80 }],
     };
     placeInInv(world, OVERCAP, 0, 0, 2, 3);
@@ -491,7 +491,7 @@ describe("persist — equipment", () => {
     const { world: w2 } = makeWorld();
     expect(await loadInto(kv, w2)).toBe(true);
     expect(w2.get<EquipmentC>(sessionE(w2), "equipment")!.slots["weapon1"]?.baseId)
-      .toBe("base.emberwand");
+      .toBe("base.ember_wand");
   });
 
   it("old save without equipment field loads as empty slots (backwards compat)", async () => {

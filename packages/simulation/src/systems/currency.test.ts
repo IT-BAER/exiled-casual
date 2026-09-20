@@ -23,7 +23,7 @@ const cell = (x: number, y: number, item: PlacedItem["item"], count?: number): P
   ({ x, y, w: 1, h: 1, item, ...(count === undefined ? {} : { count }) });
 
 const wand = (over: Partial<PlacedItem["item"]> = {}) => ({
-  baseId: "base.emberwand", rarity: "normal" as const, itemLevel: 20, affixes: [], ...over,
+  baseId: "base.ember_wand", rarity: "normal" as const, itemLevel: 20, affixes: [], ...over,
 });
 
 const apply = (sim: Simulation, from: [number, number], to: [number, number]) =>

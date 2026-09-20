@@ -320,7 +320,7 @@ SUIT_CAP_INBOARD = 0.08
 # stand 40 to 100 mm out. Read from this far below the shoulder joint up.
 SUIT_FLARE_PROUD = 0.04
 SUIT_FLARE_BELOW_SHOULDER = 0.04
-# Where the suit's shins are cut off into `chest.plate.greave`, below the knee.
+# Where the suit's shins are cut off into `chest.ironsworn.greave`, below the knee.
 # 30 mm under the sabaton rim (`BOOT_TOP`): the suit is still wider than the
 # boot there, so its edge laps the rim from outside.
 SUIT_GREAVE_BELOW_KNEE = 0.06
@@ -398,12 +398,12 @@ BODY_REGION_WEIGHT = 0.5    # summed weight over a region's bones to belong to i
 
 RIGID_GEAR = (
     {
-        "slot": "helmet", "look": "iron", "part": "helm",
+        "slot": "helmet", "look": "ironsworn", "part": "helm",
         "src": "iron-helm-8k-v3.glb", "bone": "Head", "fit": "head_shell",
         "matte": True,
     },
     {
-        "slot": "helmet", "look": "leather", "part": "hood",
+        "slot": "helmet", "look": "stalker", "part": "hood",
         "src": "leather-hood-20k-v1.glb", "bone": "Head", "fit": "head_shell",
         # A cowl stands off the skull where a helm's lining does not, so the
         # median gap it is allowed is wider. A head is deeper than this cavity
@@ -429,7 +429,7 @@ RIGID_GEAR = (
         "src": "tower-shield-10k-v3.glb", "bone": "lowerarm_l", "fit": "tower_strap",
     },
     {
-        "slot": "chest", "look": "plate", "part": "cuirass",
+        "slot": "chest", "look": "ironsworn", "part": "cuirass",
         "src": "plate-suit-20k-v9.glb", "bone": "spine_03", "fit": "plate_suit",
         "deform": SUIT_BONES,
         "matte": True, "clean": True, "greaves": True,
@@ -442,7 +442,7 @@ RIGID_GEAR = (
     # runs to the ankle, the coat's stops at the greave plane, and a ring laid
     # out from the coat has nothing to say about the half below it.
     {
-        "slot": "chest", "look": "robe", "part": "robe",
+        "slot": "chest", "look": "ember", "part": "robe",
         "src": "emberbound-robe-20k-v1.glb", "bone": "spine_03", "fit": "soft_suit",
         "deform": SUIT_BONES,
         # No greave. A greave is hidden the moment boots are worn, and this robe
@@ -452,7 +452,7 @@ RIGID_GEAR = (
         "skirt": 0.0,
     },
     {
-        "slot": "chest", "look": "leather", "part": "coat",
+        "slot": "chest", "look": "stalker", "part": "coat",
         "src": "stalker-leathers-20k-v1.glb", "bone": "spine_03", "fit": "soft_suit",
         "deform": SUIT_BONES,
         # The decode's two shoulder caps are not the same garment: the -X one is
@@ -464,33 +464,60 @@ RIGID_GEAR = (
         "greave_radius": 3.5, "skirt": 1.3,
     },
     {
-        "slot": "boots", "look": "plate", "part": "sabaton",
+        "slot": "boots", "look": "ironsworn", "part": "sabaton",
         "src": "sabaton-8k-v1.glb", "bone": "foot_r", "fit": "boot_leg",
         "deform": SABATON_BONES, "matte": True, "mirror": True,
     },
     {
-        "slot": "boots", "look": "leather", "part": "boot",
+        "slot": "boots", "look": "stalker", "part": "boot",
         "src": "leather-boot-8k-v1.glb", "bone": "foot_r", "fit": "boot_leg",
         "deform": SABATON_BONES, "matte": True, "mirror": True,
     },
     {
-        "slot": "gloves", "look": "plate", "part": "gauntlet",
+        "slot": "boots", "look": "ember", "part": "slipper",
+        "src": "ember-slipper-8k-v1.glb", "bone": "foot_r", "fit": "boot_leg",
+        "deform": SABATON_BONES, "matte": True, "mirror": True,
+    },
+    {
+        "slot": "gloves", "look": "ironsworn", "part": "gauntlet",
         "src": "gauntlet-hand-v2.glb", "bone": "hand_r", "fit": "hand_authored",
         "deform": GAUNTLET_BONES, "matte": True, "mirror": True,
     },
     {
-        "slot": "gloves", "look": "leather", "part": "glove",
+        "slot": "gloves", "look": "stalker", "part": "glove",
         "src": "glove-hand-v1.glb", "bone": "hand_r", "fit": "hand_authored",
         "deform": GAUNTLET_BONES, "matte": True, "mirror": True,
     },
+    {
+        # Built on the body's own hand by `tools/prep_gauntlet.py -- ember`, for
+        # the reason written at the head of that file: a generated hand misses a
+        # different axis every time, and a rigid piece is placed, not posed.
+        "slot": "gloves", "look": "ember", "part": "wrap",
+        "src": "wrap-hand-v1.glb", "bone": "hand_r", "fit": "hand_authored",
+        "deform": GAUNTLET_BONES, "matte": True, "mirror": True,
+    },
 )
+
+# The Ember cowl, parked with its fit contract until its donor decodes. TRELLIS
+# crashes in the mesh decode on that reference at every resolution it offers,
+# twice out of memory and twice outright; the lever is a simpler reference, not
+# a setting. A wool cowl stands off the skull exactly as the hide hood does, so
+# it takes the hood's contract unchanged.
+COWL_PARKED = {
+    "slot": "helmet", "look": "ember", "part": "cowl",
+    "src": "ember-cowl-20k-v1.glb", "bone": "Head", "fit": "head_shell",
+    "symmetric": True,
+    "fit_args": {"coverage": 1.0, "max_median": 0.040, "back_shift": 0.0,
+                 "stretch": 1.2, "stretch_axis": 1},
+    "matte": True,
+}
 
 # The long lame skirt the fauld donor made. The plate suit carries its own short
 # fauld, so two skirts would fight over the same hips; `fit_plate_hips`, the
 # `HIPS_*` constants and `tools/prep_tassets.py` stay for the day a longer one
 # is wanted over a suit that has none.
 SKIRT_PARKED = {
-    "slot": "chest", "look": "plate", "part": "tassets",
+    "slot": "chest", "look": "ironsworn", "part": "tassets",
     "src": "fauld-proc-v4.glb", "bone": "pelvis", "fit": "plate_hips",
     "deform": HIPS_BONES, "matte": True,
 }
@@ -2817,7 +2844,7 @@ def fit_plate_hips(donor, body, rig):
     # The cuirass is fitted before this piece, so it can simply be read off the
     # scene. Its own front rim is what the belt is hung from - the front is the
     # edge the eye follows, and this donor's back tail hangs lower than it.
-    cuirass = bpy.data.objects.get("chest.plate.cuirass")
+    cuirass = bpy.data.objects.get("chest.ironsworn.cuirass")
     if cuirass is None:
         raise SystemExit("the fauld's waist band is sized on the cuirass, which is not fitted")
     cvs = [cuirass.matrix_world @ v.co for v in cuirass.data.vertices]
@@ -3890,7 +3917,7 @@ TROUSER_BOOT_REACH = 0.05   # past this a boot is not near enough to cap anythin
 # way a boot does. It is the same measurement and the same floor: the trousers
 # are built AFTER the rigid gear, so both shells are already in the scene and
 # neither clearance is a rule about where a hem is.
-TROUSER_SHELLS = ("boots.", "chest.plate.cuirass")
+TROUSER_SHELLS = ("boots.", "chest.ironsworn.cuirass")
 TROUSER_SAFE = 0.45         # share of its own headroom a vertex may take (the crotch)
 TROUSER_TILE = 3.5          # grain repeats over the unwrapped leg
 TROUSER_TRIS = 6000
@@ -3960,7 +3987,7 @@ def build_trousers(rig, body, worn):
     what the offset has to stay inside, and they are measured rather than
     assumed.
     """
-    name = "chest.plate.legs"
+    name = "chest.ironsworn.legs"
     obj = body.copy()
     obj.data = body.data.copy()
     obj.name = obj.data.name = name
@@ -4112,7 +4139,7 @@ def build_trousers(rig, body, worn):
           f"{order[-1]*1000:.2f} mm, {capped_by_shell} capped by worn steel, "
           f"{capped_by_self} by their own crease, tightest air {air}, "
           f"per shell {air_profile}")
-    fauld = air_profile.get("chest.plate.cuirass")
+    fauld = air_profile.get("chest.ironsworn.cuirass")
     if fauld is None:
         raise SystemExit(f"{name}: no trouser vertex is within {TROUSER_BOOT_REACH} m "
                          "of the suit's fauld to measure against")
@@ -4162,9 +4189,9 @@ GORGET_SHELL_REACH = 0.05   # past this a worn shell is not near enough to cap
 # Every chest look carries its own gorget and backing, cut from the body and
 # coloured off that look's own shell: `shell` -> (shell, its pauldron caps).
 CHEST_SHELLS = {
-    "plate": "chest.plate.cuirass",
-    "leather": "chest.leather.coat",
-    "robe": "chest.robe.robe",
+    "ironsworn": "chest.ironsworn.cuirass",
+    "stalker": "chest.stalker.coat",
+    "ember": "chest.ember.robe",
 }
 SOFT_METALLIC = 0.0         # a leather or cloth collar plate is not steel
 BACKING_AIR = 0.003         # the torso backing stops this far under the cuirass
@@ -4217,8 +4244,8 @@ def cuirass_albedo(worn, shell):
     return px[(uv[:, 1] * (h - 1)).astype(int), (uv[:, 0] * (w - 1)).astype(int)].mean(axis=0)
 
 
-def build_gorget(rig, body, worn, name="chest.plate.gorget", region="collar", fill=None,
-                 shell="chest.plate.cuirass", metallic=STEEL_METALLIC, near=None,
+def build_gorget(rig, body, worn, name="chest.ironsworn.gorget", region="collar", fill=None,
+                 shell="chest.ironsworn.cuirass", metallic=STEEL_METALLIC, near=None,
                  reach=BACKING_REACH, keep=None):
     """Cut a body region off the body, push it out, and call it steel.
 
@@ -4441,15 +4468,15 @@ def main():
     # through across the back: a backing filled out to just under it shows
     # steel through every crack instead of the void.
     for look, shell in CHEST_SHELLS.items():
-        metallic = STEEL_METALLIC if look == "plate" else SOFT_METALLIC
+        metallic = STEEL_METALLIC if look == "ironsworn" else SOFT_METALLIC
         fitted.update(build_gorget(male_rig, male_body, worn, f"chest.{look}.gorget", "collar",
                                    shell=shell, metallic=metallic))
-        if look == "plate":
+        if look == "ironsworn":
             # A vertex whose own normal leaves through a tear meets no steel at
             # all, and unbacked it is the void the tear shows: the chevron in
             # the back plate. Steel within `BACKING_NEAR` of it is the tear's
             # own rim, so it is backed at the collar plate's offset.
-            fitted.update(build_gorget(male_rig, male_body, worn, "chest.plate.backing", "torso",
+            fitted.update(build_gorget(male_rig, male_body, worn, "chest.ironsworn.backing", "torso",
                                        fill=shell, shell=shell, metallic=metallic,
                                        near=BACKING_NEAR_PLATE))
             # And the shoulder. The arm is bare skin under a pauldron, so with
@@ -4460,7 +4487,7 @@ def main():
             arm_edge = fitted[shell]["cut_pauldron_edge_x"] + SUIT_RIM_LIP
             for region in ("arm_l", "arm_r"):
                 fitted.update(build_gorget(
-                    male_rig, male_body, worn, f"chest.plate.backing_{region}", region,
+                    male_rig, male_body, worn, f"chest.ironsworn.backing_{region}", region,
                     fill=shell, shell=shell, metallic=metallic, near=BACKING_NEAR,
                     reach=SOFT_BACKING_REACH,
                     keep=lambda co, x=arm_edge: abs(co.x) <= x))

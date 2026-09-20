@@ -6,7 +6,7 @@ import { intentToCommand } from "./protocol-bridge";
 import { saveTo, loadInto } from "./persist";
 import type { InventoryC, StashC, InteractableC } from "./components";
 
-const WAND: Item = { baseId: "base.emberwand", rarity: "normal", itemLevel: 65, affixes: [] };
+const WAND: Item = { baseId: "base.ember_wand", rarity: "normal", itemLevel: 65, affixes: [] };
 const TRANSMUTE: Item = { baseId: "currency.transmutation", rarity: "normal", itemLevel: 1, affixes: [] };
 
 function makeWorld() {
@@ -79,7 +79,7 @@ describe("stash - moveItem containers", () => {
   it("refuses a move onto an occupied cell and leaves both containers untouched", () => {
     const { sim, world, playerEntity } = makeWorld();
     setInv(world, [{ x: 0, y: 0, w: 1, h: 2, item: WAND }]);
-    setStash(world, [{ x: 4, y: 7, w: 2, h: 2, item: { ...WAND, baseId: "base.cinder_cap" } }]);
+    setStash(world, [{ x: 4, y: 7, w: 2, h: 2, item: { ...WAND, baseId: "base.ironsworn_helm" } }]);
     sim.step([intentToCommand(
       { kind: "moveItem", x: 0, y: 0, toX: 5, toY: 8, from: "backpack", to: "stash" }, playerEntity, 0)]);
     expect(getInv(world).items).toHaveLength(1);
