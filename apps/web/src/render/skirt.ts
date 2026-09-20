@@ -216,18 +216,21 @@ const CONTACT_ABSORB = 0.3;
  * 0.747 through a run stride, and a ring flaring uniformly widens every gap in
  * the same proportion.
  *
- * 4 is where the two symptoms stop trading. Tighter is visibly tidier cloth and
- * buys it back in the thing the escape speed above was raised to fix: swept
+ * 3.5 is where the two symptoms stop trading. Tighter is visibly tidier cloth
+ * and buys it back in the thing the escape speed above was raised to fix: swept
  * against a thigh at the measured 18 units/s, penetration is flat at the
- * no-hoop 0.015 all the way down to 4 and then climbs - 0.029 at 3, 0.041 at
+ * no-hoop 0.015 all the way down to 3.5 and then climbs - 0.029 at 3, 0.041 at
  * 2.5, 0.052 at 2 - past the 2cm a leg reads as showing through. 4 takes the
  * hem's neighbour spacing from 20.5x to 6.5x worst and 6.6x to 3.9x at p90,
- * which is the shards gone, for no leg at all.
+ * which is the shards gone, for no leg at all. 3.5 is the last half-step before
+ * that wall and it is free: over 30 frames of a run the worst gap around the
+ * ring is unchanged (0.344 -> 0.363) but the ring is twice as even, worst
+ * neighbour spacing against tightest falling 31.1x to 13.8x.
  *
  * Stretch only. Cloth gathers when it folds inward, so a pair closer than its
  * bind spacing is left alone.
  */
-export const HOOP_STRETCH = 4;
+export const HOOP_STRETCH = 3.5;
 
 const scratch = new Vector3();
 const scratchPerp = new Vector3();

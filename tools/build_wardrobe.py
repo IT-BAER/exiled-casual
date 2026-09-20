@@ -421,7 +421,7 @@ RIGID_GEAR = (
         "slot": "chest", "look": "plate", "part": "cuirass",
         "src": "plate-suit-20k-v9.glb", "bone": "spine_03", "fit": "plate_suit",
         "deform": SUIT_BONES,
-        "matte": True, "twosided": True, "clean": True, "greaves": True,
+        "matte": True, "clean": True, "greaves": True,
     },
     # The soft suits are the same whole-figure donor shape as the harness -
     # headless T-pose, gloves and boots on - so they take the same cuts: head at
@@ -437,7 +437,7 @@ RIGID_GEAR = (
         # No greave. A greave is hidden the moment boots are worn, and this robe
         # is floor length: splitting its shins off takes exactly the cloth that
         # covers the boot, and the boot then shows through the outer flare.
-        "matte": True, "twosided": True, "clean": True,
+        "matte": True, "clean": True,
         "skirt": 0.0,
     },
     {
@@ -449,7 +449,7 @@ RIGID_GEAR = (
         # with a pale sliver over its top. A coat is symmetric, so the good half
         # carries both, and here that half is the one at -X.
         "symmetric": "-x",
-        "matte": True, "twosided": True, "clean": True, "greaves": "shins",
+        "matte": True, "clean": True, "greaves": "shins",
         "greave_radius": 3.5, "skirt": 1.3,
     },
     {
@@ -3530,10 +3530,15 @@ def build_rigid_gear(rig, body):
 # cloth lags the body. Counts must match `SKIRT_CHAINS`/`SKIRT_JOINTS` in
 # `render/rig.ts`; `rig.test.ts` pins the pair.
 SKIRT_CHAINS = 32
-SKIRT_JOINTS = 3
+SKIRT_JOINTS = 6
 SKIRT_JOINT = "skirt_{i}_{n:02d}"
 # Height down the chain (0 hip, 1 hem) that stays welded to the pelvis.
 SKIRT_PINNED = 0.20
+# A chain sector is an ARC, so on the hip axis it is millimetres wide and the
+# vertex angle no longer says which side of the ring the cloth is on. Inside
+# these radii the cloth rides the pelvis instead: on the axis it IS the pelvis.
+SKIRT_AXIS_IN = 0.04
+SKIRT_AXIS_OUT = 0.08
 # Cloth thickness added to every measured leg radius the solver collides with.
 SKIRT_CLOTH = 0.008
 # Heights the cloth column's radius is measured at, and how many times the ring
@@ -3752,6 +3757,9 @@ def skin_skirt(mesh, body, rig, clear):
             g.remove([v.index])
         t = min(1.0, max(0.0, (top_z - p.z) / span))
         pinned = min(1.0, max(0.0, (SKIRT_PINNED - t) / SKIRT_PINNED))
+        r = math.hypot(p.x - pelvis_head.x, p.y - pelvis_head.y)
+        pinned = max(pinned, min(1.0, max(0.0, (SKIRT_AXIS_OUT - r) /
+                                          (SKIRT_AXIS_OUT - SKIRT_AXIS_IN))))
         weights = [0.0] * SKIRT_JOINTS
         if t <= knots[0]:
             weights[0] = 1.0

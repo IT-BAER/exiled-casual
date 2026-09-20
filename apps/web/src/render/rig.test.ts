@@ -353,7 +353,8 @@ describe("wardrobe asset", () => {
   ) as any as {
     nodes: { name: string; mesh?: number; skin?: number; children?: number[] }[];
     skins: { joints: number[]; inverseBindMatrices: number }[];
-    meshes: { name: string; primitives: { attributes: Record<string, number> }[] }[];
+    meshes: { name: string;
+      primitives: { indices?: number; attributes: Record<string, number> }[] }[];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     accessors: any[]; bufferViews: any[]; buffers0Len: number;
   };
@@ -608,7 +609,7 @@ describe("wardrobe asset", () => {
     expect(right.x[1]! * left.x[0]!).toBeLessThan(0);
   });
 
-  it("rides a 65-bone female and a male with 96 skirt joints under his pelvis", () => {
+  it("rides a 65-bone female and a male with 192 skirt joints under his pelvis", () => {
     expect(json.skins).toHaveLength(2);
     const chainCounts = json.skins.map((skin) => {
       const names = skin.joints.map((j) => json.nodes[j]!.name);
@@ -639,7 +640,8 @@ describe("wardrobe asset", () => {
       // last bone's tail, which no glTF node carries.
       const axis = new Map<number, number[][]>();
       for (let i = 0; i < SKIRT_CHAINS; i += 1) {
-        const knots = [1, 2, 3].map((n) => at.get(`skirt_${i}_${String(n).padStart(2, "0")}`)!);
+        const knots = Array.from({ length: SKIRT_JOINTS }, (_, n) =>
+          at.get(`skirt_${i}_${String(n + 1).padStart(2, "0")}`)!);
         const last = knots[SKIRT_JOINTS - 1]!;
         axis.set(i, [...knots, last.map((v, k) => v + (v - knots[SKIRT_JOINTS - 2]![k]!))]);
       }
@@ -668,6 +670,48 @@ describe("wardrobe asset", () => {
       free.sort((a, b) => a - b);
       const tightest = Math.min(...SKIRT_COLLIDERS.map((c) => c.radius));
       expect(free[Math.floor(free.length * 0.9)]!, meshName).toBeLessThanOrEqual(tightest);
+    });
+
+  /**
+   * A chain sector is an ARC, so near the hip axis it is millimetres wide and
+   * `atan2` no longer says which side of the ring a vertex is on: two vertices
+   * a centimetre apart at the crotch seam land half a ring apart, and the 3 cm
+   * triangle between them becomes a 40 cm spike the moment the ring swings.
+   * `hoop()` holds chain i against i+1 only, so nothing in the solver can catch
+   * a triangle bridging chain 0 to chain 27. The build pins cloth inside
+   * `SKIRT_AXIS_*` to the pelvis instead, which is what this bar measures.
+   */
+  it.each(["chest.robe.robe", "chest.leather.coat"])(
+    "keeps every %s triangle inside chains the hoop can hold", (meshName) => {
+      const node = json.nodes.find((n) => n.name === meshName)!;
+      const skin = json.skins[node.skin!]!;
+      const bin = glb.subarray(20 + json.buffers0Len);
+      const prim = json.meshes[node.mesh!]!.primitives[0]!;
+      const joints = readAccessor(json, bin, prim.attributes["JOINTS_0"]!);
+      const weights = readAccessor(json, bin, prim.attributes["WEIGHTS_0"]!);
+      const index = readAccessor(json, bin, prim.indices!);
+
+      const chainOf = (v: number): number | null => {
+        let best = 0;
+        for (let k = 1; k < 4; k += 1) {
+          if (weights[v * 4 + k]! > weights[v * 4 + best]!) best = k;
+        }
+        const name = json.nodes[skin.joints[joints[v * 4 + best]!]!]!.name;
+        const chain = /^skirt_(\d+)_/.exec(name);
+        return chain ? Number(chain[1]) : null;
+      };
+
+      let worst = 0;
+      for (let t = 0; t < index.length; t += 3) {
+        const cs = [...new Set([index[t]!, index[t + 1]!, index[t + 2]!]
+          .map(chainOf).filter((c): c is number => c !== null))].sort((a, b) => a - b);
+        if (cs.length < 2) continue;
+        // The span is the short way round the ring, so 31 and 0 are neighbours.
+        const gap = Math.max(...cs.map((c, i) =>
+          ((cs[(i + 1) % cs.length]! - c) % SKIRT_CHAINS + SKIRT_CHAINS) % SKIRT_CHAINS));
+        worst = Math.max(worst, SKIRT_CHAINS - gap);
+      }
+      expect(worst, meshName).toBeLessThanOrEqual(3);
     });
 
   /**

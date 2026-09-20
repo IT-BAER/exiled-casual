@@ -362,10 +362,14 @@ export const SKIRT_CHAINS = 32;
  * Two could not fold at all where it mattered: each bone was 0.464 long against
  * a thigh capsule of radius 0.088, and a bar five times the leg's width can only
  * pivot about its one joint, never dent. A leg pressing into the middle of a
- * panel had nowhere to put the cloth and went through it. Must match
- * `SKIRT_JOINTS` in `tools/build_wardrobe.py`; `rig.test.ts` pins the pair.
+ * panel had nowhere to put the cloth and went through it. Three had the same
+ * fault one step down: at 0.292 a bone is still over three times the capsule, so
+ * a running leg flung a block of chains out to radius 0.63 while the ones beside
+ * them hung at 0.3, and the cloth drawn between them read as a flat sheet with
+ * the leg bare through it. Must match `SKIRT_JOINTS` in
+ * `tools/build_wardrobe.py`; `rig.test.ts` pins the pair.
  */
-export const SKIRT_JOINTS = 3;
+export const SKIRT_JOINTS = 6;
 const skirtJointName = (chain: number, joint: number): string =>
   `skirt_${chain}_${String(joint).padStart(2, "0")}`;
 
