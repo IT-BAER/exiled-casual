@@ -142,3 +142,13 @@ carries the body's weights and cannot clip. Texture is BlenderKit material
 `d583c044-b586-4ecf-b3a1-12de1d032b3f` "Aged Dark Leather" (royalty free, 1K,
 by KID), kept at `assets/props/source/mat-aged-dark-leather.blend` and relinked
 into a smart-projected UV set at 3.5 tiles.
+
+## Ember cowl (`helmet.ember.cowl`)
+
+Built procedurally by `tools/prep_cowl.py`: a subdivided icosphere about the
+head centre, pushed to the smoothed outer skin radius plus radial Perlin folds,
+so the shell is a radial graph and cannot fold through itself. Texture is
+BlenderKit material `d5ca8a6b-dd40-4f0c-a5c7-e030af0912c5` "Wool fabric"
+(royalty free, 1K, by Nikhil G krishnan), kept at
+`assets/props/source/wool_fabric.blend`, box-projected, scaled to 512 px and packed into
+the donor `assets/props/source/cowl-head-v1.glb`.

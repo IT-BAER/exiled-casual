@@ -661,7 +661,7 @@ def import_one(path):
     return donor
 
 
-def render(obj, paths, shading="SINGLE"):
+def render(obj, paths, shading="SINGLE", views=None):
     """Ortho views of the donor alone, for the eye the gates do not have."""
     scene = bpy.context.scene
     hidden = [o for o in bpy.data.objects if o is not obj and o.type == "MESH"]
@@ -688,8 +688,8 @@ def render(obj, paths, shading="SINGLE"):
     # Donor space: the fingers run up +Z, the thumb out at +X and the palm faces
     # -Y, so the back of the hand is seen from +Y and nothing is looked at down
     # the barrel of the fingers.
-    views = {"front": Vector((0, 1, 0)),
-             "quarter": Vector((0.62, 0.66, -0.42)).normalized()}
+    views = views or {"front": Vector((0, 1, 0)),
+                      "quarter": Vector((0.62, 0.66, -0.42)).normalized()}
     for name, path in paths.items():
         d = views[name]
         cam.location = c + d * span * 3

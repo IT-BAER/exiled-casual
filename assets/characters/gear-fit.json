@@ -27,6 +27,20 @@
   "triangles": 22523,
   "source": "leather-hood-20k-v1.glb"
  },
+ "helmet.ember.cowl": {
+  "dome_width_ratio": 1.075,
+  "scale": 0.82397,
+  "skull_gap_p01_mm": 0.64,
+  "skull_gap_median_mm": 4.55,
+  "skull_covered": 1.0,
+  "skull_points": 237,
+  "peak_above_crown_mm": 10.9,
+  "forward_of_head_centre_mm": -10.2,
+  "bone": "Head",
+  "fit": "head_shell",
+  "triangles": 7324,
+  "source": "cowl-head-v1.glb"
+ },
  "weapon1.emberwand.mesh": {
   "scale": 0.19382,
   "stretch": 1.8,

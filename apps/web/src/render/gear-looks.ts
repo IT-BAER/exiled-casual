@@ -27,9 +27,7 @@ export const GEAR_LOOKS: Readonly<Record<string, GearLook>> = {
   "base.stalker_leathers": { slot: "chest", look: "stalker" },
   "base.stalker_gloves": { slot: "gloves", look: "stalker" },
   "base.stalker_boots": { slot: "boots", look: "stalker" },
-  // `base.ember_cowl` is deliberately absent: its mesh has not decoded yet, and
-  // mapping it would hide the hair for a helmet look with no parts - a bald
-  // head. An unmapped base shows nothing, which is a bare head with hair.
+  "base.ember_cowl": { slot: "helmet", look: "ember" },
   "base.ember_robe": { slot: "chest", look: "ember" },
   "base.ember_wraps": { slot: "gloves", look: "ember" },
   "base.ember_slippers": { slot: "boots", look: "ember" },

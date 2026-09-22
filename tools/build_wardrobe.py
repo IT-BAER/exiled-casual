@@ -417,6 +417,15 @@ RIGID_GEAR = (
         "matte": True,
     },
     {
+        # Built on this head by `tools/prep_cowl.py`, so the width sweep starts at
+        # the head's own width, and `back_shift` is the one that script measures:
+        # a shell with no face in it has its bbox centre behind the head's.
+        "slot": "helmet", "look": "ember", "part": "cowl",
+        "src": "cowl-head-v1.glb", "bone": "Head", "fit": "head_shell",
+        "fit_args": {"width_from": 1.0, "back_shift": 0.04623},
+        "matte": True,
+    },
+    {
         "slot": "weapon1", "look": "emberwand", "part": "mesh",
         "src": "wand-3000-v3b.glb", "bone": "hand_r", "fit": "hand_grip",
     },
@@ -497,20 +506,6 @@ RIGID_GEAR = (
         "deform": GAUNTLET_BONES, "matte": True, "mirror": True,
     },
 )
-
-# The Ember cowl, parked with its fit contract until its donor decodes. TRELLIS
-# crashes in the mesh decode on that reference at every resolution it offers,
-# twice out of memory and twice outright; the lever is a simpler reference, not
-# a setting. A wool cowl stands off the skull exactly as the hide hood does, so
-# it takes the hood's contract unchanged.
-COWL_PARKED = {
-    "slot": "helmet", "look": "ember", "part": "cowl",
-    "src": "ember-cowl-20k-v1.glb", "bone": "Head", "fit": "head_shell",
-    "symmetric": True,
-    "fit_args": {"coverage": 1.0, "max_median": 0.040, "back_shift": 0.0,
-                 "stretch": 1.2, "stretch_axis": 1},
-    "matte": True,
-}
 
 # The long lame skirt the fauld donor made. The plate suit carries its own short
 # fauld, so two skirts would fight over the same hips; `fit_plate_hips`, the

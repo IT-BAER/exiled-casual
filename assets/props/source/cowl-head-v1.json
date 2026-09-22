@@ -1,0 +1,49 @@
+{
+ "built_from": "icosphere hung on the low-passed radius of base.male.body Head + neck_01, cut at the hood hem and the face opening",
+ "skin_gap_mm": 5.0,
+ "wall_mm": 3.8,
+ "sphere_subdiv": 5,
+ "hood_passes": 20,
+ "hood_stand_mm": 33.53,
+ "hem_rings": 6,
+ "face_opening": {
+  "top_w": 0.22,
+  "bottom_w": -1.5,
+  "half_u": 0.72,
+  "power": 3.0,
+  "front_v": 0.0
+ },
+ "hem_w": -0.8,
+ "hem_z": 1.59992,
+ "shell_vertices": 1893,
+ "rim_edges": 0,
+ "hem_shared": 122,
+ "thinnest_wall_mm": 0.0,
+ "median_wall_mm": 3.605,
+ "vertices": 4497,
+ "triangles": 7324,
+ "triangles_reloaded": 7324,
+ "self_crossings": 0,
+ "back_shift": 0.04623,
+ "fit": {
+  "dome_width_ratio": 1.075,
+  "scale": 0.82397,
+  "skull_gap_p01_mm": 0.64,
+  "skull_gap_median_mm": 4.55,
+  "skull_covered": 1.0,
+  "skull_points": 237,
+  "peak_above_crown_mm": 10.9,
+  "forward_of_head_centre_mm": -10.2
+ },
+ "fit_args": {
+  "width_from": 1.0,
+  "back_shift": 0.046234932843415226
+ },
+ "look": "ember",
+ "material": "MI_Cowl_Cloth",
+ "roughness_pre_matte": 0.88,
+ "wrote": [
+  "D:/VSC/exiled-casual/assets/props/source/trellis_local/cowl-head-v1.glb",
+  "D:/VSC/exiled-casual/assets/props/source/cowl-head-v1.glb"
+ ]
+}

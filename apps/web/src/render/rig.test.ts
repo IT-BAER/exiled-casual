@@ -218,6 +218,7 @@ describe("rig fallback", () => {
 const RIGID_BONES: Record<string, string> = {
   "helmet.ironsworn.helm": "Head",
   "helmet.stalker.hood": "Head",
+  "helmet.ember.cowl": "Head",
   "weapon1.emberwand.mesh": "hand_r",
   "weapon2.buckler.mesh": "lowerarm_l",
 };
@@ -378,7 +379,7 @@ describe("wardrobe asset", () => {
       "base.male.arm_l", "base.male.arm_r", "base.male.collar",
       "base.male.neck",
       "base.male.leg_l", "base.male.leg_r",
-      "helmet.ironsworn.helm", "helmet.stalker.hood", "weapon1.emberwand.mesh", "weapon2.buckler.mesh",
+      "helmet.ironsworn.helm", "helmet.stalker.hood", "helmet.ember.cowl", "weapon1.emberwand.mesh", "weapon2.buckler.mesh",
       "weapon2.towershield.mesh",
       "chest.ironsworn.cuirass", "chest.ironsworn.gorget", "chest.ironsworn.greave", "chest.ironsworn.backing",
       "chest.ironsworn.backing_arm_l", "chest.ironsworn.backing_arm_r",
