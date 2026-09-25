@@ -361,6 +361,39 @@ describe("SkirtSim", () => {
     expect(worst).toBeLessThan(0.02);
   });
 
+  /**
+   * The robe is skinned across two neighbouring columns, so where their hems
+   * disagree by more than the gap between them, the cloth drawn between them
+   * folds over itself and shows its back: the torn hem at a run. A knee drives
+   * forward through the ring at the measured 18 units/s; with every column on
+   * its own, 10.8% of neighbour pairs folded across the sweep.
+   */
+  it("moves a panel with the column a knee drives, instead of tearing it away", () => {
+    const sim = new SkirtSim(CHAINS, 2, SEGMENT);
+    const { anchors, rests } = hoopRing();
+    const step = 1 / 240;
+    for (let i = 0; i < 240; i++) sim.step(step, anchors, rests, []);
+
+    const speed = 18;
+    const steps = Math.round(0.6 / (speed * step));
+    let pairs = 0;
+    let folded = 0;
+    for (let i = 0; i <= steps + 60; i++) {
+      const z = -0.2 + Math.min(i, steps) * speed * step;
+      const leg = { a: new Vector3(0, 0.75, z), b: new Vector3(0, 0.1, z), radius: 0.11 };
+      sim.step(step, anchors, rests, [leg]);
+      for (let c = 0; c < CHAINS; c++) {
+        const k = (c + 1) % CHAINS;
+        const here = hem(sim, anchors, c).subtract(rests[c * 2 + 1]!);
+        const there = hem(sim, anchors, k).subtract(rests[k * 2 + 1]!);
+        const gap = Vector3.Distance(rests[c * 2 + 1]!, rests[k * 2 + 1]!);
+        pairs++;
+        if (Vector3.Distance(here, there) > gap) folded++;
+      }
+    }
+    expect(folded / pairs).toBeLessThan(0.05);
+  });
+
   it("reports unit directions, so a joint can be aimed down one", () => {
     const sim = new SkirtSim(1, 2, SEGMENT);
     run(sim, 0, 30);

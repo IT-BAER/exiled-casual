@@ -232,6 +232,26 @@ const CONTACT_ABSORB = 0.3;
  */
 export const HOOP_STRETCH = 3.5;
 
+/**
+ * Share of a particle's offset from its bind pose that it takes from its two
+ * neighbours per step, one half each side.
+ *
+ * The robe is skinned across two neighbouring columns, so wherever their hems
+ * disagree by more than the gap between them the cloth drawn between them folds
+ * over itself and shows its back: the torn hem at a run. The hoop above only
+ * caps how far apart they drift. A leg drove single columns, and over a captured
+ * run the ember robe showed ~720 of its 4710 skirt triangles folded per frame.
+ * Swinging every column the same way left 87, so the tearing is disagreement
+ * between columns, not the swing itself.
+ *
+ * A column a limb touched in the previous step is left where the limb put it:
+ * smoothed back toward its neighbours it is pulled into the leg (frames with
+ * more than 2cm of leg rose 27.5% -> 40%). Pinned, its neighbours move toward
+ * it instead, the panel clears the leg early, and the same replay fell to 17.9%
+ * while the folded triangles fell to ~210.
+ */
+const SHEET = 0.5;
+
 const scratch = new Vector3();
 const scratchPerp = new Vector3();
 const scratchNear = new Vector3();
@@ -351,6 +371,9 @@ export class SkirtSim {
   private readonly restsMid: Vector3[];
   private readonly segment: number;
   private readonly perChain: number;
+  /** Each particle's offset from its bind pose, and the smoothed one; see `sheet`. */
+  private readonly offsets: Vector3[];
+  private readonly smoothed: Vector3[];
   private carry = 0;
   private settled = false;
 
@@ -365,6 +388,8 @@ export class SkirtSim {
     this.restsPrev = Array.from({ length: chains * joints }, () => new Vector3());
     this.restsMid = Array.from({ length: chains * joints }, () => new Vector3());
     this.budget = new Float64Array(chains * joints);
+    this.offsets = Array.from({ length: chains * joints }, () => new Vector3());
+    this.smoothed = Array.from({ length: chains * joints }, () => new Vector3());
   }
 
   /** Particles per chain. One more joint is one more place the cloth may fold. */
@@ -431,6 +456,7 @@ export class SkirtSim {
       }
       this.integrate(this.restsMid);
       for (let pass = 0; pass < ITERATIONS; pass++) this.constrain(this.anchorsMid, this.restsMid);
+      this.sheet(this.restsMid);
       this.budget.fill(MAX_CONTACT_PUSH);
       for (let contact = 0; contact < COLLIDE_PASSES; contact++) {
         if (!this.collide(this.anchorsMid, colliders, sweepStart, sweepEnd)) break;
@@ -458,6 +484,38 @@ export class SkirtSim {
       // is also what drags the cloth along when the character walks.
       scratch.copyFrom(rests[i]!).subtractInPlace(point).scaleInPlace(STIFFNESS);
       point.addInPlace(scratch);
+    }
+  }
+
+  /**
+   * Pull each particle's offset from its bind pose toward its neighbours', so
+   * the columns move as one sheet (`SHEET`). Runs after the length pass and
+   * before collision, which keeps the last word; `budget` still holds the
+   * previous step's contacts here. Moves `previous` too, so it adds no velocity.
+   */
+  private sheet(rests: readonly Vector3[]): void {
+    const chains = this.anchors.length;
+    if (chains < 3) return;
+    const n = this.perChain;
+    for (let i = 0; i < this.points.length; i++) {
+      this.offsets[i]!.copyFrom(this.points[i]!).subtractInPlace(rests[i]!);
+    }
+    for (let chain = 0; chain < chains; chain++) {
+      const left = ((chain + chains - 1) % chains) * n;
+      const right = ((chain + 1) % chains) * n;
+      for (let j = 0; j < n; j++) {
+        const i = chain * n + j;
+        const out = this.smoothed[i]!.copyFrom(this.offsets[i]!);
+        if (this.budget[i]! < MAX_CONTACT_PUSH) continue;
+        out.scaleInPlace(1 - SHEET)
+          .addInPlace(scratch.copyFrom(this.offsets[left + j]!).scaleInPlace(SHEET / 2))
+          .addInPlace(scratch.copyFrom(this.offsets[right + j]!).scaleInPlace(SHEET / 2));
+      }
+    }
+    for (let i = 0; i < this.points.length; i++) {
+      scratch.copyFrom(this.smoothed[i]!).subtractInPlace(this.offsets[i]!);
+      this.points[i]!.addInPlace(scratch);
+      this.previous[i]!.addInPlace(scratch);
     }
   }
 
