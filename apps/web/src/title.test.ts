@@ -12,6 +12,13 @@ describe("titleFor", () => {
     expect(titleFor("  ")).toBe(GAME_NAME);
   });
 
+  it("falls back to the page's own title when there is no place", () => {
+    const home = "Exiled Casual: a free browser ARPG";
+    expect(titleFor(null, home)).toBe(home);
+    expect(titleFor("  ", home)).toBe(home);
+    expect(titleFor("Hideout", home)).toBe(`${GAME_NAME} - Hideout`);
+  });
+
   it("never uses an em dash", () => {
     expect(titleFor("Vaal Foundry")).not.toContain("\u2014");
   });
