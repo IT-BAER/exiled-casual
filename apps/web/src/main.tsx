@@ -21,11 +21,21 @@ addEventListener(
 
 const root = document.getElementById("root");
 if (!root) throw new Error("no #root element");
-createRoot(root).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-);
+
+/** One painted frame, or 100 ms where frames never come (a hidden tab). */
+const afterPaint = () =>
+  new Promise<void>((done) => {
+    requestAnimationFrame(() => setTimeout(done, 0));
+    setTimeout(done, 100);
+  });
+
+/** The boot cover's logo is the page's LCP: let it paint before React mounts the
+ *  menu, whose art would otherwise queue ahead of it. Capped at 1.5 s. */
+const bootLogo = document.getElementById("boot-logo") as HTMLImageElement | null;
+const logoPainted = Promise.race([
+  (bootLogo ? bootLogo.decode().catch(() => undefined) : Promise.resolve()).then(afterPaint),
+  new Promise<void>((done) => setTimeout(done, 1500)),
+]);
 
 /**
  * Retire the first-boot cover (`index.html`'s `#boot`) once React has painted.
@@ -39,7 +49,13 @@ createRoot(root).render(
  * for on every frame of the game behind it.
  */
 const boot = document.getElementById("boot");
-if (boot) {
+void logoPainted.then(() => {
+  createRoot(root).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  );
+  if (!boot) return;
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       boot.classList.add("gone");
@@ -49,7 +65,7 @@ if (boot) {
       setTimeout(() => boot.remove(), 600);
     });
   });
-}
+});
 
 /**
  * Install the service worker, in a real build only.
