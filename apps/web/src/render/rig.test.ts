@@ -1111,31 +1111,31 @@ describe("the idle clip leaves the soles planted", () => {
  *
  * So this goes through the real loader on the real glb rather than the JSON.
  */
+/** Babylon reads a File through FileReader, which node does not ship. */
+class NodeFileReader {
+  result: unknown;
+  error: unknown;
+  onload?: (e: { target: NodeFileReader }) => void;
+  onerror?: (e: { target: NodeFileReader }) => void;
+  onloadend?: (e: { target: NodeFileReader }) => void;
+  abort(): void {}
+  readAsArrayBuffer(blob: Blob): void { this.finish(blob.arrayBuffer()); }
+  readAsText(blob: Blob): void { this.finish(blob.text()); }
+  private finish(promise: Promise<unknown>): void {
+    promise.then((result) => {
+      this.result = result;
+      this.onload?.({ target: this });
+      this.onloadend?.({ target: this });
+    }).catch((error: unknown) => {
+      this.error = error;
+      this.onerror?.({ target: this });
+      this.onloadend?.({ target: this });
+    });
+  }
+}
+
 describe("indexRigSubtree against the real loader", () => {
   const MODELS = fileURLToPath(new URL("../../public/models/", import.meta.url));
-
-  /** Babylon reads a File through FileReader, which node does not ship. */
-  class NodeFileReader {
-    result: unknown;
-    error: unknown;
-    onload?: (e: { target: NodeFileReader }) => void;
-    onerror?: (e: { target: NodeFileReader }) => void;
-    onloadend?: (e: { target: NodeFileReader }) => void;
-    abort(): void {}
-    readAsArrayBuffer(blob: Blob): void { this.finish(blob.arrayBuffer()); }
-    readAsText(blob: Blob): void { this.finish(blob.text()); }
-    private finish(promise: Promise<unknown>): void {
-      promise.then((result) => {
-        this.result = result;
-        this.onload?.({ target: this });
-        this.onloadend?.({ target: this });
-      }).catch((error: unknown) => {
-        this.error = error;
-        this.onerror?.({ target: this });
-        this.onloadend?.({ target: this });
-      });
-    }
-  }
 
   it("indexes the male subtree and switches the female body off", async () => {
     const original = (globalThis as { FileReader?: unknown }).FileReader;
@@ -1181,6 +1181,141 @@ describe("indexRigSubtree against the real loader", () => {
       (globalThis as { FileReader?: unknown }).FileReader = original;
     }
   });
+});
+
+/**
+ * A robe's leg backing is the leg's skin pushed out to 3 mm under the trousers,
+ * so it only stays hidden if both ride the legs the same way. The jog is posed
+ * onto the real skeleton and both are skinned on the CPU; a backing vertex is
+ * showing when no trouser lies over it and trouser lies just under it. The
+ * skirt is left out because at a run it swings clear of the thigh.
+ */
+describe("the robe's leg backing stays under its trousers", () => {
+  const MODELS = fileURLToPath(new URL("../../public/models/", import.meta.url));
+
+  it("keeps both leg backings under the trousers at bind and through most of the jog", async () => {
+    const original = (globalThis as { FileReader?: unknown }).FileReader;
+    (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    try {
+      const load = (name: string) => LoadAssetContainerAsync(
+        new File([readFileSync(`${MODELS}${name}`)], name, { type: "model/gltf-binary" }), scene);
+      const wardrobe = await load("wardrobe.glb");
+      const lib = await load("anim-library.glb");
+      const mesh = (name: string) => wardrobe.meshes.find((m) => m.name === name) as Mesh;
+      const robe = mesh("chest.ember.robe");
+      const nodes = new Map(robe.skeleton!.bones.map((b) => [b.name, b.getTransformNode()!]));
+      const jog = lib.animationGroups.find((g) => g.name === CLIP_NAME.run)!;
+      expect(jog, CLIP_NAME.run).toBeDefined();
+      const tracks = jog.targetedAnimations.filter((t) =>
+        t.animation.targetProperty === "rotationQuaternion" && nodes.has(t.target.name)
+        && !t.target.name.startsWith("skirt_"));
+      expect(tracks.length).toBeGreaterThan(10);
+
+      const skirt = (() => {
+        const bones = robe.skeleton!.bones;
+        const idx = robe.getVerticesData("matricesIndices")!;
+        const w = robe.getVerticesData("matricesWeights")!;
+        return (v: number) => {
+          let best = 0;
+          for (let k = 1; k < 4; k++) if (w[v * 4 + k]! > w[v * 4 + best]!) best = k;
+          return bones[idx[v * 4 + best]!]!.name.startsWith("skirt_");
+        };
+      })();
+      const ri = robe.getIndices()!;
+      const trousers: number[] = [];
+      for (let t = 0; t < ri.length; t += 3) {
+        if (!skirt(ri[t]!) && !skirt(ri[t + 1]!) && !skirt(ri[t + 2]!)) trousers.push(t);
+      }
+
+      /** Distance along a ray to a robe triangle, or -1. */
+      const hit = (p: Float32Array | number[], o: number[], d: number[], t: number, max: number) => {
+        const a = ri[t]! * 3, b = ri[t + 1]! * 3, c = ri[t + 2]! * 3;
+        const e1 = [p[b]! - p[a]!, p[b + 1]! - p[a + 1]!, p[b + 2]! - p[a + 2]!];
+        const e2 = [p[c]! - p[a]!, p[c + 1]! - p[a + 1]!, p[c + 2]! - p[a + 2]!];
+        const q = [d[1]! * e2[2]! - d[2]! * e2[1]!, d[2]! * e2[0]! - d[0]! * e2[2]!,
+          d[0]! * e2[1]! - d[1]! * e2[0]!];
+        const det = e1[0]! * q[0]! + e1[1]! * q[1]! + e1[2]! * q[2]!;
+        if (Math.abs(det) < 1e-12) return -1;
+        const s = [o[0]! - p[a]!, o[1]! - p[a + 1]!, o[2]! - p[a + 2]!];
+        const u = (s[0]! * q[0]! + s[1]! * q[1]! + s[2]! * q[2]!) / det;
+        if (u < 0 || u > 1) return -1;
+        const r = [s[1]! * e1[2]! - s[2]! * e1[1]!, s[2]! * e1[0]! - s[0]! * e1[2]!,
+          s[0]! * e1[1]! - s[1]! * e1[0]!];
+        const v = (d[0]! * r[0]! + d[1]! * r[1]! + d[2]! * r[2]!) / det;
+        if (v < 0 || u + v > 1) return -1;
+        const dist = (e2[0]! * r[0]! + e2[1]! * r[1]! + e2[2]! * r[2]!) / det;
+        return dist > 1e-5 && dist < max ? dist : -1;
+      };
+
+      /** Backing vertices standing outside the trousers, in the current pose. */
+      const showing = (side: "l" | "r") => {
+        const backing = mesh(`chest.ember.backing_leg_${side}`);
+        const bp = backing.getPositionData(true, true)!;
+        const rp = robe.getPositionData(true, true)!;
+        const bi = backing.getIndices()!;
+        const n = new Float32Array(bp.length);
+        for (let t = 0; t < bi.length; t += 3) {
+          const [a, b, c] = [bi[t]! * 3, bi[t + 1]! * 3, bi[t + 2]! * 3];
+          const e1 = [bp[b]! - bp[a]!, bp[b + 1]! - bp[a + 1]!, bp[b + 2]! - bp[a + 2]!];
+          const e2 = [bp[c]! - bp[a]!, bp[c + 1]! - bp[a + 1]!, bp[c + 2]! - bp[a + 2]!];
+          const f = [e1[1]! * e2[2]! - e1[2]! * e2[1]!, e1[2]! * e2[0]! - e1[0]! * e2[2]!,
+            e1[0]! * e2[1]! - e1[1]! * e2[0]!];
+          for (const k of [a, b, c]) for (let i = 0; i < 3; i++) n[k + i]! += f[i]!;
+        }
+        const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+        for (let j = 0; j < bp.length; j += 3) {
+          for (let i = 0; i < 3; i++) {
+            lo[i] = Math.min(lo[i]!, bp[j + i]! - 0.07);
+            hi[i] = Math.max(hi[i]!, bp[j + i]! + 0.07);
+          }
+        }
+        const near = trousers.filter((t) => [0, 1, 2].some((k) => {
+          const v = ri[t + k]! * 3;
+          return [0, 1, 2].every((i) => rp[v + i]! > lo[i]! && rp[v + i]! < hi[i]!);
+        }));
+        let count = 0;
+        for (let j = 0; j < bp.length; j += 3) {
+          const len = Math.hypot(n[j]!, n[j + 1]!, n[j + 2]!) || 1;
+          const out = [n[j]! / len, n[j + 1]! / len, n[j + 2]! / len];
+          const into = out.map((x) => -x);
+          const o = [bp[j]!, bp[j + 1]!, bp[j + 2]!];
+          if (near.some((t) => hit(rp, o, out, t, 0.06) >= 0)) continue;
+          if (near.some((t) => hit(rp, o, into, t, 0.03) >= 0)) count++;
+        }
+        return count;
+      };
+
+      const pose = (frame: number | null) => {
+        for (const t of tracks) {
+          const node = nodes.get(t.target.name)!;
+          (node as unknown as { __rest?: unknown }).__rest ??= node.rotationQuaternion!.clone();
+          node.rotationQuaternion = frame === null
+            ? (node as unknown as { __rest: typeof node.rotationQuaternion }).__rest!.clone()
+            : t.animation.evaluate(frame);
+        }
+        for (const root of wardrobe.rootNodes) root.computeWorldMatrix(true);
+        for (const node of nodes.values()) node.computeWorldMatrix(true);
+        robe.skeleton!.prepare(true);
+      };
+
+      pose(null);
+      // 22 and 13 when the tear-rim fallback pushed with no air.
+      expect(Math.max(showing("l"), showing("r"))).toBeLessThanOrEqual(1);
+      const jogs: [number, number][] = [];
+      for (let k = 0; k < 6; k++) {
+        pose(jog.from + ((jog.to - jog.from) * k) / 6);
+        jogs.push([showing("l"), showing("r")]);
+      }
+      // Body weights under the trousers: 16 to 83 per leg on every frame. The
+      // frame with a knee raised still shows ~60 at the front of that knee.
+      const clean = jogs.filter(([l, r]) => l <= 8 && r <= 8).length;
+      expect(clean, JSON.stringify(jogs)).toBeGreaterThanOrEqual(4);
+    } finally {
+      (globalThis as { FileReader?: unknown }).FileReader = original;
+    }
+  }, 60_000);
 });
 
 describe("idleRatio", () => {

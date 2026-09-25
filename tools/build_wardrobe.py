@@ -4433,15 +4433,52 @@ def cuirass_albedo(worn, shell):
     return px[(uv[:, 1] * (h - 1)).astype(int), (uv[:, 0] * (w - 1)).astype(int)].mean(axis=0)
 
 
+def ride_shell(obj, shell):
+    """Give a backing the weights of the garment over it, or a stride parts the
+    two by more than their 3 mm; under skirt, which swings free, it keeps the
+    body's own. Returns how many vertices took the garment's."""
+    own = [{obj.vertex_groups[g.group].name: g.weight for g in v.groups if g.weight > 0.0}
+           for v in obj.data.vertices]
+    for group in list(obj.vertex_groups):
+        obj.vertex_groups.remove(group)
+    bpy.ops.object.select_all(action="DESELECT")
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
+    mod = obj.modifiers.new("Transfer", "DATA_TRANSFER")
+    mod.object = shell
+    mod.use_vert_data = True
+    mod.data_types_verts = {"VGROUP_WEIGHTS"}
+    mod.vert_mapping = "POLYINTERP_NEAREST"
+    mod.layers_vgroup_select_src = "ALL"
+    mod.layers_vgroup_select_dst = "NAME"
+    bpy.ops.object.datalayout_transfer(modifier=mod.name)
+    bpy.ops.object.modifier_apply(modifier=mod.name)
+    taken = [{obj.vertex_groups[g.group].name: g.weight for g in v.groups if g.weight > 0.0}
+             for v in obj.data.vertices]
+    for group in list(obj.vertex_groups):
+        obj.vertex_groups.remove(group)
+    rode = 0
+    for i, (mine, theirs) in enumerate(zip(own, taken)):
+        free = not theirs or any(b.startswith("skirt_") for b in theirs)
+        weights = mine if free else theirs
+        rode += not free
+        total = sum(weights.values())
+        for bone, w in weights.items():
+            group = obj.vertex_groups.get(bone) or obj.vertex_groups.new(name=bone)
+            group.add([i], w / total, "REPLACE")
+    return rode
+
+
 def build_gorget(rig, body, worn, name="chest.ironsworn.gorget", region="collar", fill=None,
                  shell="chest.ironsworn.cuirass", metallic=STEEL_METALLIC, near=None,
-                 reach=BACKING_REACH, keep=None):
+                 reach=BACKING_REACH, keep=None, ride=False):
     """Cut a body region off the body, push it out, and call it steel.
 
     The cut is exactly the piece `split_body_regions` will make, so hiding that
     piece under this plate leaves no skin uncovered and no crack. With `fill`, a
     shell name prefix, each vertex is pushed along its normal to just under that
     shell instead of a fixed offset: a backing that shows through its cracks.
+    With `ride`, the backing also takes the shell's weights, see `ride_shell`.
     """
     obj = body.copy()
     obj.data = body.data.copy()
@@ -4472,7 +4509,7 @@ def build_gorget(rig, body, worn, name="chest.ironsworn.gorget", region="collar"
         bmesh.ops.subdivide_edges(bm, edges=bm.edges[:], cuts=1, use_grid_fill=True)
     bm.normal_update()
 
-    pushed, capped_by_shell, capped_by_self = [], 0, 0
+    pushed, capped_by_shell, capped_by_self, cleared = [], 0, 0, 0
     per_shell = {}
     if fill:
         backed = next((bvh_of(o) for o in worn if o.name.startswith(fill)), None)
@@ -4513,6 +4550,17 @@ def build_gorget(rig, body, worn, name="chest.ironsworn.gorget", region="collar"
         bmesh.ops.delete(bm, geom=[f for f in bm.faces if any(v in missed for v in f.verts)],
                          context="FACES")
         bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
+        if ride:
+            # A vertex with no shell over it and shell just under it is standing
+            # outside the garment it backs; it goes back under at the usual air.
+            bm.normal_update()
+            for v in bm.verts:
+                if backed.ray_cast(v.co, v.normal, 0.06)[0] is not None:
+                    continue
+                under = backed.ray_cast(v.co, -v.normal, 0.03)
+                if under[0] is not None:
+                    v.co -= v.normal * (under[3] + BACKING_AIR)
+                    cleared += 1
     else:
         prefixes = (shell, shell.rsplit(".", 1)[0] + ".pauldron")
         shells = [(o.name, bvh_of(o)) for o in worn
@@ -4547,8 +4595,9 @@ def build_gorget(rig, body, worn, name="chest.ironsworn.gorget", region="collar"
     bm.free()
     obj.data.update()
 
-    # The body's own vertices, so the weights are exact and nothing is
-    # transferred; the groups nothing here uses are dropped for the report.
+    # The body's own vertices, so the weights are exact and nothing is transferred
+    # unless it rides a shell; the groups nothing here uses are dropped for the report.
+    rode = ride_shell(obj, next(o for o in worn if o.name.startswith(fill))) if ride else None
     used = set()
     for v in obj.data.vertices:
         used |= {g.group for g in v.groups if g.weight > 0.0}
@@ -4625,6 +4674,8 @@ def build_gorget(rig, body, worn, name="chest.ironsworn.gorget", region="collar"
         "offset_median_mm": round(order[n // 2] * 1000, 3),
         "shell_capped_vertices": capped_by_shell,
         "crease_capped_vertices": capped_by_self,
+        "shell_cleared_vertices": cleared,
+        "shell_weighted_vertices": rode,
         "worn_shell_air": air_profile,
         "vertices": len(obj.data.vertices), "triangles": tris,
         "uv_tiles": GORGET_TILE,
@@ -4692,13 +4743,15 @@ def main():
         # Every soft suit backs its legs, a closed skirt included: a robe hands
         # every vertex below the hip to the skirt chains, and those swing clear
         # of the thigh at a run, so an unbacked leg shows bare skin through the
-        # gap. SOFT_BACKING_REACH is what keeps the backing off the hem.
+        # gap. SOFT_BACKING_REACH is what keeps the backing off the hem. A leg
+        # backing rides the trousers over it, or a stride parts the two.
         for region in SOFT_BACKED_REGIONS[1:]:
             keep = (lambda co: abs(co.x) <= edge_x) if region.startswith("arm") else None
             fitted.update(build_gorget(male_rig, male_body, worn,
                                        f"chest.{look}.backing_{region}", region,
                                        fill=shell, shell=shell, metallic=metallic,
-                                       near=BACKING_NEAR, reach=SOFT_BACKING_REACH, keep=keep))
+                                       near=BACKING_NEAR, reach=SOFT_BACKING_REACH, keep=keep,
+                                       ride=region.startswith("leg")))
     # The trousers are parked. They were the body's own legs pushed four
     # millimetres out and called leather, standing in for leg armour the chest
     # slot did not have; the harness carries real cuisses and greaves now, so
