@@ -143,19 +143,19 @@ carries the body's weights and cannot clip. Texture is BlenderKit material
 by KID), kept at `assets/props/source/mat-aged-dark-leather.blend` and relinked
 into a smart-projected UV set at 3.5 tiles.
 
-## Ember cowl (`helmet.ember.cowl`)
+## Class hoods (`helmet.stalker.hood`, `helmet.ember.cowl`)
 
-Built procedurally by `tools/prep_cowl.py`: a subdivided icosphere about the
-head centre, pushed to the smoothed outer skin radius plus radial Perlin folds,
-so the shell is a radial graph and cannot fold through itself. Texture is
-BlenderKit material `d5ca8a6b-dd40-4f0c-a5c7-e030af0912c5` "Wool fabric"
-(royalty free, 1K, by Nikhil G krishnan), kept at
-`assets/props/source/wool_fabric.blend`, box-projected, scaled to 512 px and packed into
-the donor `assets/props/source/cowl-head-v1.glb`.
-
-The same script builds `helmet.ember.drape` (`cowl-neck-v1.glb`): a tube about
-the neck axis from over the hood's hem down over the fitted
-`chest.ember.robe`'s collar, same wool material, skinned by weight transfer off
-the skin level under it with Head blended in at the top and the robe's own
-weights at the foot. Lining and trim are vertex colour. All original, no third-party
-geometry.
+Both start from `Male_Ranger_Head_Hood` in Quaternius' **Modular Character Outfits -
+Fantasy** (free Standard version, CC0 1.0, https://quaternius.com/packs/modularcharacteroutfitsfantasy.html,
+itch.io `quaternius/modular-character-outfits-fantasy`), kept as glTF + bin in
+`assets/props/source/quaternius-fantasy/` with the pack's licence text. It is built
+for the Universal Base Characters body and skinned to the same skeleton, so its
+crown keeps the pack's own weights. `tools/prep_hood.py` keeps its outer shell, cuts
+off the lidded neck, pushes the neck band over the class's collar, runs the cut ring
+on into a capelet draped over the fitted `chest.stalker.coat` / `chest.ember.robe`
+(closed across the throat), and solidifies the whole piece 4 mm for a lining and hem.
+Below the jaw the weights are the coat's, robe's or neck skin's under it. Texture:
+stalker the BlenderKit "Aged Dark Leather" (`d583c044-b586-4ecf-b3a1-12de1d032b3f`),
+ember the BlenderKit "Wool fabric" (`d5ca8a6b-dd40-4f0c-a5c7-e030af0912c5`), both
+levelled to grey, box-projected at 512 px and tinted by vertex colour (shell, lining,
+hem). Outputs `hood-stalker-v2.glb`, `hood-ember-v2.glb`.

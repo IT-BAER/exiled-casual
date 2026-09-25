@@ -470,7 +470,7 @@ def cowl_shell(body, name="cowl"):
         head_c=head_c.copy())
 
 
-def thicken(inner, hem, centre, name="cowl_outer"):
+def thicken(inner, hem, centre, name="cowl_outer", wall=WOOL):
     """The outer face, built FROM the finished inner one rather than beside it.
 
     Two shells offset from the same skin are two different meshes the moment
@@ -501,7 +501,8 @@ def thicken(inner, hem, centre, name="cowl_outer"):
     # about an axis rather than a point.
     origin = [centre(v.co) if callable(centre) else centre for v in inner.data.vertices]
     base = [v.co - o for v, o in zip(inner.data.vertices, origin)]
-    wall = [WOOL * wall_band(hem.get(i, HEM_RINGS)) for i in range(len(base))]
+    full = wall
+    wall = [full * wall_band(hem.get(i, HEM_RINGS)) for i in range(len(base))]
     near = [[] for _ in base]
     for e in inner.data.edges:
         a, b = e.vertices
@@ -521,7 +522,7 @@ def thicken(inner, hem, centre, name="cowl_outer"):
                 for i in range(len(wall))]
     else:
         raise SystemExit(f"the outer layer still folds at {len(hurt)} vertices")
-    print(f"EASE {sum(1 for i, w in enumerate(wall) if w < WOOL * wall_band(hem.get(i, HEM_RINGS)))}"
+    print(f"EASE {sum(1 for i, w in enumerate(wall) if w < full * wall_band(hem.get(i, HEM_RINGS)))}"
           f" vertices thinned")
     return outer
 
@@ -621,7 +622,7 @@ def fold_stitch(inner, outer, folded):
     return len(folded), len(edges), [i for i in range(n) if i not in folded]
 
 
-def box_uvs(obj):
+def box_uvs(obj, tile=WEAVE):
     """Each face projected along its dominant axis, in metres over one weave tile."""
     uv = obj.data.uv_layers.new(name="UVMap")
     for poly in obj.data.polygons:
@@ -629,7 +630,7 @@ def box_uvs(obj):
         s, t = [k for k in range(3) if k != a]
         for li in poly.loop_indices:
             co = obj.data.vertices[obj.data.loops[li].vertex_index].co
-            uv.data[li].uv = (co[s] / WEAVE, co[t] / WEAVE)
+            uv.data[li].uv = (co[s] / tile, co[t] / tile)
 
 
 def wool_maps():
@@ -655,18 +656,19 @@ def wool_maps():
     return base, normal
 
 
-def paint(obj, trim):
+def paint(obj, trim, colours=None):
     """Charcoal outside, red lining inside, a trim band `TRIM_RINGS` deep along the hem.
 
     Per face corner, so the two layers keep their own colour on the vertices
     they share at the fold. `trim` is the ring depth of each outer vertex.
     """
+    cloth, lining, trimmed = colours or (CLOTH, LINING, TRIM)
     side = obj.data.attributes["side"]
     col = obj.data.color_attributes.new("Col", "FLOAT_COLOR", "CORNER")
     counts = [0, 0, 0]
     for poly in obj.data.polygons:
         if side.data[poly.index].value == 1:
-            c, k = LINING, 1
+            c, k = lining, 1
             for li in poly.loop_indices:
                 col.data[li].color = c
         else:
@@ -675,7 +677,7 @@ def paint(obj, trim):
             k = 0
             for li in poly.loop_indices:
                 banded = trim.get(obj.data.loops[li].vertex_index, TRIM_RINGS) < TRIM_RINGS
-                col.data[li].color = TRIM if banded else CLOTH
+                col.data[li].color = trimmed if banded else cloth
                 k = 2 if banded else k
         counts[k] += 1
     obj.data.attributes.remove(side)

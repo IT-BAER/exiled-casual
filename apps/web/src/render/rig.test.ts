@@ -217,8 +217,6 @@ describe("rig fallback", () => {
 /** Which joint each rigid piece must hang from, and nothing else. */
 const RIGID_BONES: Record<string, string> = {
   "helmet.ironsworn.helm": "Head",
-  "helmet.stalker.hood": "Head",
-  "helmet.ember.cowl": "Head",
   "weapon1.emberwand.mesh": "hand_r",
   "weapon2.buckler.mesh": "lowerarm_l",
 };
@@ -229,8 +227,9 @@ const RIGID_BONES: Record<string, string> = {
  * as well as the trunk, the shoulders and the hips. No forearm: the sleeve ends
  * at the pauldron and the arm below it is skin.
  */
-/** Every joint the ember cowl's neck may answer to; see `NECK_BONES` in the build. */
-const NECK_BONES = ["Head", "neck_01", "spine_02", "spine_03", "clavicle_l", "clavicle_r"];
+/** Every joint a class hood may answer to, crown to capelet; see `HOOD_BONES` in the build. */
+const HOOD_BONES = ["Head", "neck_01", "spine_02", "spine_03", "clavicle_l", "clavicle_r",
+  "upperarm_l", "upperarm_r"];
 
 const PLATE_BONES = [
   "spine_01", "spine_02", "spine_03", "neck_01",
@@ -391,14 +390,14 @@ describe("wardrobe asset", () => {
       "base.male.arm_l", "base.male.arm_r", "base.male.collar",
       "base.male.neck",
       "base.male.leg_l", "base.male.leg_r",
-      "helmet.ironsworn.helm", "helmet.stalker.hood", "helmet.ember.cowl", "helmet.ember.drape", "weapon1.emberwand.mesh", "weapon2.buckler.mesh",
+      "helmet.ironsworn.helm", "helmet.stalker.hood", "helmet.ember.cowl", "weapon1.emberwand.mesh", "weapon2.buckler.mesh",
       "weapon2.towershield.mesh",
       "chest.ironsworn.cuirass", "chest.ironsworn.gorget", "chest.ironsworn.greave", "chest.ironsworn.backing",
       "chest.ironsworn.backing_arm_l", "chest.ironsworn.backing_arm_r",
       "chest.stalker.coat", "chest.stalker.gorget", "chest.stalker.greave", "chest.stalker.backing",
       "chest.stalker.backing_arm_l", "chest.stalker.backing_arm_r",
       "chest.stalker.backing_leg_l", "chest.stalker.backing_leg_r",
-      "chest.ember.robe", "chest.ember.gorget", "chest.ember.backing",
+      "chest.ember.robe", "chest.ember.gorget", "chest.ember.greave", "chest.ember.backing",
       "chest.ember.backing_arm_l", "chest.ember.backing_arm_r",
       "chest.ember.backing_leg_l", "chest.ember.backing_leg_r",
       "boots.ironsworn.sabaton_l", "boots.ironsworn.sabaton_r",
@@ -492,35 +491,40 @@ describe("wardrobe asset", () => {
   });
 
   /**
-   * The cowl's neck runs from over the hood's hem down over the robe's collar.
-   * Its top answers to Head, or it lifts off the rigid hood's hem when he looks
-   * down, and its foot to the neck and trunk the robe under it rides. Lining and trim are
-   * vertex colour on the one wool material, so both cloth pieces carry COLOR_0.
+   * Each class hood is one piece from crown to capelet (`tools/prep_hood.py`): the
+   * crown rides Head, the capelet what the coat or robe under it rides, and nothing
+   * below the trunk. Lining and trim are vertex colour on the one material.
    */
-  it("deforms the cowl's neck from the head down to the trunk, and colours the wool", () => {
+  it("deforms each hood from the head down onto the shoulders, and colours it", () => {
     const bin = glb.subarray(20 + json.buffers0Len);
-    const node = json.nodes.find((n) => n.name === "helmet.ember.drape");
-    expect(node, "no node helmet.ember.drape").toBeDefined();
-    const prim = json.meshes[node!.mesh!]!.primitives[0]!;
-    const joints = readAccessor(json, bin, prim.attributes["JOINTS_0"]!);
-    const weights = readAccessor(json, bin, prim.attributes["WEIGHTS_0"]!);
-    const skin = json.skins[node!.skin!]!;
-    const used = new Set<number>();
-    for (let v = 0; v < weights.length / 4; v += 1) {
-      const w = weights.slice(v * 4, v * 4 + 4);
-      const j = joints.slice(v * 4, v * 4 + 4);
-      for (let k = 0; k < 4; k += 1) {
-        if (w[k]! > 0.0001) used.add(j[k]!);
+    for (const mesh of ["helmet.stalker.hood", "helmet.ember.cowl"]) {
+      const node = json.nodes.find((n) => n.name === mesh);
+      expect(node, `no node ${mesh}`).toBeDefined();
+      const prim = json.meshes[node!.mesh!]!.primitives[0]!;
+      const joints = readAccessor(json, bin, prim.attributes["JOINTS_0"]!);
+      const weights = readAccessor(json, bin, prim.attributes["WEIGHTS_0"]!);
+      const position = readAccessor(json, bin, prim.attributes["POSITION"]!);
+      const skin = json.skins[node!.skin!]!;
+      const head = skin.joints.findIndex((j) => json.nodes[j]!.name === "Head");
+      const used = new Set<number>();
+      for (let v = 0; v < weights.length / 4; v += 1) {
+        const w = weights.slice(v * 4, v * 4 + 4);
+        const j = joints.slice(v * 4, v * 4 + 4);
+        for (let k = 0; k < 4; k += 1) {
+          if (w[k]! > 0.0001) used.add(j[k]!);
+        }
+        expect(w[0]! + w[1]! + w[2]! + w[3]!).toBeCloseTo(1, 3);
+        // The crown: the pack skins it softly, a few percent on the neck, never less.
+        if (position[v * 3 + 1]! > 1.7) {
+          const onHead = [0, 1, 2, 3].reduce((sum, k) => sum + (j[k] === head ? w[k]! : 0), 0);
+          expect(onHead, `${mesh} vertex ${v} above the crown line`).toBeGreaterThan(0.95);
+        }
       }
-      expect(w[0]! + w[1]! + w[2]! + w[3]!).toBeCloseTo(1, 3);
-    }
-    const names = [...used].map((u) => json.nodes[skin.joints[u]!]!.name);
-    expect(names.every((n) => NECK_BONES.includes(n)), `strays: ${names}`).toBe(true);
-    expect(names).toContain("Head");
-    expect(names).toContain("neck_01");
-    for (const mesh of ["helmet.ember.cowl", "helmet.ember.drape"]) {
-      const node = json.nodes.find((n) => n.name === mesh)!;
-      expect(json.meshes[node.mesh!]!.primitives[0]!.attributes["COLOR_0"], mesh).toBeDefined();
+      const names = [...used].map((u) => json.nodes[skin.joints[u]!]!.name);
+      expect(names.every((n) => HOOD_BONES.includes(n)), `${mesh} strays: ${names}`).toBe(true);
+      expect(names).toContain("Head");
+      expect(names).toContain("spine_03");
+      expect(prim.attributes["COLOR_0"], mesh).toBeDefined();
     }
   });
 
@@ -583,6 +587,21 @@ describe("wardrobe asset", () => {
         det((r, c) => (c === col ? -m[12 + r]! : a(r, c))) / d));
     });
     return at;
+  };
+
+  /** Where a point given in joint `name`'s own frame stands in bind pose. */
+  const bindPoint = (skin: any, name: string, local: readonly number[]): number[] => {
+    const ibm = readAccessor(json, glb.subarray(20 + json.buffers0Len), skin.inverseBindMatrices);
+    const k = skin.joints.findIndex((j: number) => json.nodes[j]!.name === name);
+    const m = ibm.slice(k * 16, k * 16 + 16);
+    const a = (r: number, c: number): number => m[c * 4 + r]!;
+    const det = (p: (r: number, c: number) => number): number =>
+      p(0, 0) * (p(1, 1) * p(2, 2) - p(1, 2) * p(2, 1))
+      - p(0, 1) * (p(1, 0) * p(2, 2) - p(1, 2) * p(2, 0))
+      + p(0, 2) * (p(1, 0) * p(2, 1) - p(1, 1) * p(2, 0));
+    const d = det(a);
+    return [0, 1, 2].map((col) =>
+      det((r, c) => (c === col ? local[r]! - m[12 + r]! : a(r, c))) / d);
   };
 
   it("ships a skinned gorget plate over the hidden collar", () => {
@@ -822,10 +841,19 @@ describe("wardrobe asset", () => {
     ["boots.ember.slipper_l", "_l"],
   ])("keeps %s inside the capsules the cloth is pushed out of", (meshName, side) => {
     const node = json.nodes.find((n) => n.name === meshName)!;
-    const at = bindPose(json.skins[node.skin!]!);
+    const skin = json.skins[node.skin!]!;
+    const at = bindPose(skin);
     const caps = SKIRT_COLLIDERS
       .filter((c) => c.worn !== undefined && c.from.endsWith(side))
-      .map((c) => ({ a: at.get(c.from)!, b: at.get(c.to)!, bare: c.radius, worn: c.worn! }));
+      .map((c) => {
+        const a = at.get(c.from)!;
+        const b = at.get(c.to)!;
+        // Worn, the capsule stands on the boots' shaft: a bind-frame shift at each end.
+        const shift = c.shaft ? sub(bindPoint(skin, c.from, c.shaft), a) : [0, 0, 0];
+        const toe = c.toe ? sub(bindPoint(skin, c.from, c.toe), a) : shift;
+        return { a, b, wornA: a.map((v, i) => v + shift[i]!), wornB: b.map((v, i) => v + toe[i]!),
+          bare: c.radius, worn: c.worn! };
+      });
     const prim = json.meshes[node.mesh!]!.primitives[0]!;
     const pos = readAccessor(json, glb.subarray(20 + json.buffers0Len),
       prim.attributes["POSITION"]!);
@@ -834,12 +862,32 @@ describe("wardrobe asset", () => {
     let worstBare = -Infinity;
     for (let v = 0; v < pos.length / 3; v += 1) {
       const p = [pos[v * 3]!, pos[v * 3 + 1]!, pos[v * 3 + 2]!];
-      worstWorn = Math.max(worstWorn, Math.min(...caps.map((c) => toSegment(p, c.a, c.b) - c.worn)));
+      worstWorn = Math.max(worstWorn, Math.min(...caps.map((c) => toSegment(p, c.wornA, c.wornB) - c.worn)));
       worstBare = Math.max(worstBare, Math.min(...caps.map((c) => toSegment(p, c.a, c.b) - c.bare)));
     }
     expect(worstWorn, meshName).toBeLessThanOrEqual(0);
     expect(worstBare, meshName).toBeGreaterThan(0.02);
   });
+
+  /**
+   * The shin is the calf capsule's. A foot capsule round the ankle joint, as fat
+   * as heel to sole needs, stood 18cm up the shin and pushed the robe's side
+   * panel out into a wing at idle; laid along the sole it stands 13cm.
+   */
+  it.each(["_l", "_r"])("keeps the worn foot%s capsule off the shin", (side) => {
+    const node = json.nodes.find((n) => n.name === `boots.ember.slipper${side}`)!;
+    const skin = json.skins[node.skin!]!;
+    const c = SKIRT_COLLIDERS.find((k) => k.from === `foot${side}`)!;
+    const ankle = bindPose(skin).get(`foot${side}`)!;
+    // The tail end is the ball joint's own offset in the foot's frame, plus the toe shift.
+    const ball = (json.nodes[skin.joints.find((j) => json.nodes[j]!.name === c.to)!] as
+      unknown as { translation: number[] }).translation;
+    const head = c.shaft ?? [0, 0, 0];
+    const toe = c.toe ?? head;
+    const ends = [bindPoint(skin, c.from, head), bindPoint(skin, c.from, ball.map((v, i) => v + toe[i]!))];
+    expect(Math.max(...ends.map((p) => p[1]!)) + c.worn! - ankle[1]!).toBeLessThan(0.15);
+  });
+
 
   it("carries every look the code can ask for", () => {
     for (const looks of [BASE_LOOKS, NO_LOOKS]) {

@@ -140,6 +140,30 @@ const COLLIDE_PASSES = 2;
 const MAX_DEVIATION = Math.cos((55 * Math.PI) / 180);
 
 /**
+ * How far a segment may bend off the one above it while the legs stand still.
+ * At idle the back boot stands inside the robe's drape: it pushes the knee
+ * joint out, the joint below hangs back, and the side panel breaks into a
+ * point at mid-shin. Held here, idle bends past 30 degrees fell from 6-9 to
+ * under 1 per frame.
+ *
+ * Only while still. At a run the same stiffness moves a pushed column as a
+ * stick while its neighbours hang: folded neighbour pairs rose 21% -> 29-33%,
+ * and a leg sweeping at 0.6 units/s flung the hem 0.43-0.52 in one step.
+ */
+const MAX_BEND = Math.cos((20 * Math.PI) / 180);
+/**
+ * Share of the excess bend taken out per constraint pass. Collision runs after
+ * and has the last word: clamped in full, the knee joint is pushed out again
+ * and the one below ends 35 degrees off; half settles under 30.
+ */
+const BEND_PULL = 0.5;
+/** Fastest limb, units/s: at or under this the bend holds in full, over `MOVING_SPEED` not at all. */
+const STILL_SPEED = 0.25;
+const MOVING_SPEED = 0.5;
+/** Seconds for the bend to come back once the legs stop. It lets go at once. */
+const STILL_RISE = 0.25;
+
+/**
  * An anchor jump this big in one step is a teleport, not a stride — respawn, or
  * a portal. The cloth is snapped home rather than dragged across the map.
  */
@@ -376,6 +400,10 @@ export class SkirtSim {
   private readonly smoothed: Vector3[];
   private carry = 0;
   private settled = false;
+  /** 1 while every limb stands still, 0 while one moves; scales `MAX_BEND`. */
+  private still = 0;
+  /** Each collider's `a` and `b` last frame, to tell a still limb from a moving one. */
+  private readonly limbs: Vector3[] = [];
 
   constructor(chains: number, joints: number, segment: number) {
     this.segment = segment;
@@ -437,6 +465,7 @@ export class SkirtSim {
       return;
     }
     for (let i = 0; i < this.anchors.length; i++) this.anchors[i]!.copyFrom(anchors[i]!);
+    this.settle(dt, colliders);
 
     // Guard against a first frame, a background tab, or a debugger pause handing
     // us a dt measured in seconds.
@@ -469,6 +498,27 @@ export class SkirtSim {
       for (let i = 0; i < this.anchorsPrev.length; i++) this.anchorsPrev[i]!.copyFrom(anchors[i]!);
       for (let i = 0; i < this.restsPrev.length; i++) this.restsPrev[i]!.copyFrom(rests[i]!);
     }
+  }
+
+  /** Ease `still` toward 1 while no limb outruns `STILL_SPEED`, and drop it the frame one does. */
+  private settle(dt: number, colliders: readonly SkirtCollider[]): void {
+    let fastest = 0;
+    if (dt > 0 && this.limbs.length === colliders.length * 2) {
+      colliders.forEach((c, k) => {
+        const travel = Math.max(Vector3.Distance(c.a, this.limbs[k * 2]!), Vector3.Distance(c.b, this.limbs[k * 2 + 1]!));
+        fastest = Math.max(fastest, travel / dt);
+      });
+    }
+    const target = clamp01((MOVING_SPEED - fastest) / (MOVING_SPEED - STILL_SPEED));
+    this.still = target < this.still
+      ? target
+      : this.still + (target - this.still) * (1 - Math.exp(-Math.max(dt, 0) / STILL_RISE));
+    while (this.limbs.length < colliders.length * 2) this.limbs.push(new Vector3());
+    this.limbs.length = colliders.length * 2;
+    colliders.forEach((c, k) => {
+      this.limbs[k * 2]!.copyFrom(c.a);
+      this.limbs[k * 2 + 1]!.copyFrom(c.b);
+    });
   }
 
   private integrate(rests: readonly Vector3[]): void {
@@ -532,7 +582,8 @@ export class SkirtSim {
         // The anchor is its own rest position — the body drives it — so it is
         // both the live base and the bind-pose base for the first segment.
         const restBase = j === 0 ? anchors[chain]! : rests[i - 1]!;
-        this.place(this.points[i]!, base, rests[i]!, restBase);
+        const above = j === 0 ? null : j === 1 ? anchors[chain]! : this.points[i - 2]!;
+        this.place(this.points[i]!, base, rests[i]!, restBase, above, this.previous[i]!);
       }
     }
   }
@@ -574,9 +625,14 @@ export class SkirtSim {
 
   /**
    * Put `point` one segment away from `base`, in a direction clamped to the cone
-   * around the bind direction that `rest` and `restBase` describe.
+   * around the bind direction that `rest` and `restBase` describe, then toward
+   * the `MAX_BEND` cone around `above` -> `base` as far as `still` allows. The
+   * bend moves `previous` too, like `sheet`, so it adds no velocity.
    */
-  private place(point: Vector3, base: Vector3, rest: Vector3, restBase: Vector3): void {
+  private place(
+    point: Vector3, base: Vector3, rest: Vector3, restBase: Vector3,
+    above: Vector3 | null, previous: Vector3,
+  ): void {
     const direction = point.subtract(base);
     const length = direction.length();
     if (length < 1e-6) direction.copyFrom(rest).subtractInPlace(restBase);
@@ -584,6 +640,12 @@ export class SkirtSim {
 
     const restDirection = rest.subtract(restBase).normalize();
     clampToCone(direction, restDirection, MAX_DEVIATION);
+    if (above && this.still > 0) {
+      const free = direction.clone();
+      clampToCone(direction, base.subtract(above).normalize(), MAX_BEND);
+      direction.subtractInPlace(free).scaleInPlace(this.still * BEND_PULL).addInPlace(free).normalize();
+      previous.addInPlace(direction.subtract(free).scaleInPlace(this.segment));
+    }
 
     point.copyFrom(base).addInPlace(direction.scaleInPlace(this.segment));
   }

@@ -14,59 +14,38 @@
   "source": "iron-helm-8k-v3.glb"
  },
  "helmet.stalker.hood": {
-  "dome_width_ratio": 1.125,
-  "scale": 0.38771,
-  "skull_gap_p01_mm": 0.79,
-  "skull_gap_median_mm": 15.76,
-  "skull_covered": 1.0,
-  "skull_points": 237,
-  "peak_above_crown_mm": 41.4,
-  "forward_of_head_centre_mm": -0.0,
-  "bone": "Head",
-  "fit": "head_shell",
-  "triangles": 22523,
-  "source": "leather-hood-20k-v1.glb"
- },
- "helmet.ember.cowl": {
-  "dome_width_ratio": 1.2,
-  "scale": 0.9223,
-  "skull_gap_p01_mm": 0.45,
-  "skull_gap_median_mm": 8.76,
-  "skull_covered": 1.0,
-  "skull_points": 237,
-  "peak_above_crown_mm": 16.9,
-  "forward_of_head_centre_mm": -37.6,
-  "bone": "Head",
-  "fit": "head_shell",
-  "triangles": 7324,
-  "source": "cowl-head-v1.glb"
- },
- "helmet.ember.drape": {
   "placed_as_authored": true,
-  "deform_bones": [
+  "deform_groups": [
+   "Head",
+   "clavicle_l",
+   "clavicle_r",
    "neck_01",
    "spine_02",
    "spine_03",
-   "clavicle_l",
-   "clavicle_r"
+   "upperarm_l",
+   "upperarm_r"
   ],
-  "deform_groups": 5,
-  "head_collar": {
-   "hem_z": 1.58436,
-   "fade_mm": 40.0,
-   "vertices": 3874
-  },
-  "bone": "neck_01",
+  "bone": "Head",
   "fit": "as_built",
-  "triangles": 6912,
-  "source": "cowl-neck-v1.glb",
-  "robe_hem": {
-   "robe": "chest.ember.robe",
-   "band_mm": 10.0,
-   "fade_mm": 15.0,
-   "vertices": 2271,
-   "robe_below_not_under": 464
-  }
+  "triangles": 7152,
+  "source": "hood-stalker-v2.glb"
+ },
+ "helmet.ember.cowl": {
+  "placed_as_authored": true,
+  "deform_groups": [
+   "Head",
+   "clavicle_l",
+   "clavicle_r",
+   "neck_01",
+   "spine_02",
+   "spine_03",
+   "upperarm_l",
+   "upperarm_r"
+  ],
+  "bone": "Head",
+  "fit": "as_built",
+  "triangles": 7152,
+  "source": "hood-ember-v2.glb"
  },
  "weapon1.emberwand.mesh": {
   "scale": 0.19382,
@@ -307,9 +286,13 @@
    "foot_l->ball_l": 0.1079,
    "foot_r->ball_r": 0.1079
   },
+  "greave_cut_z": 0.4824,
+  "greave_below_knee_mm": 60.0,
+  "greave_scrap_verts_dropped": 4,
+  "greave_triangles": 874,
   "bone": "spine_03",
   "fit": "soft_suit",
-  "triangles": 16586,
+  "triangles": 15294,
   "source": "emberbound-robe-20k-v1.glb"
  },
  "chest.stalker.coat": {
@@ -1300,14 +1283,14 @@
   "offset_mm": null,
   "offset_min_mm": 0.0,
   "offset_p01_mm": 0.0,
-  "offset_median_mm": 2.758,
-  "shell_capped_vertices": 812,
+  "offset_median_mm": 0.0,
+  "shell_capped_vertices": 1325,
   "crease_capped_vertices": 0,
-  "shell_cleared_vertices": 17,
-  "shell_weighted_vertices": 1285,
+  "shell_cleared_vertices": 1,
+  "shell_weighted_vertices": 777,
   "worn_shell_air": {},
-  "vertices": 1299,
-  "triangles": 2294,
+  "vertices": 791,
+  "triangles": 1355,
   "uv_tiles": 2.0,
   "bone": "spine_03",
   "fit": "body_offset",
@@ -1330,14 +1313,14 @@
   "offset_mm": null,
   "offset_min_mm": 0.0,
   "offset_p01_mm": 0.0,
-  "offset_median_mm": 4.678,
-  "shell_capped_vertices": 779,
+  "offset_median_mm": 0.0,
+  "shell_capped_vertices": 1280,
   "crease_capped_vertices": 0,
-  "shell_cleared_vertices": 11,
-  "shell_weighted_vertices": 1322,
+  "shell_cleared_vertices": 0,
+  "shell_weighted_vertices": 828,
   "worn_shell_air": {},
-  "vertices": 1333,
-  "triangles": 2360,
+  "vertices": 839,
+  "triangles": 1449,
   "uv_tiles": 2.0,
   "bone": "spine_03",
   "fit": "body_offset",

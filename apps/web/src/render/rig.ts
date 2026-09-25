@@ -395,16 +395,30 @@ const skirtJointName = (chain: number, joint: number): string =>
  * proud of the cloth and the hem drawn inside its shaft. The thigh keeps one
  * radius: a boot reaches that capsule only mid-stride, and widening it to the
  * boot would cage the hip at every pose.
+ *
+ * `shaft` is where the boots' shaft is centred, in the calf bone's own frame:
+ * 15cm across the bone toward the front and inside, 6cm the other way, so a
+ * capsule on the bone holds the robe up to 12cm off a boot. About the shaft,
+ * the three shipped boots fit 11.4cm.
+ *
+ * The worn foot capsule is laid along the sole instead, heel to past the toe:
+ * `shaft` shifts its head end and `toe` its tail end, both in the foot bone's
+ * frame. Round the ankle joint it needed 18cm to reach heel and sole, stood as
+ * far up the shin and pushed the robe's side panel out into a wing at idle.
  */
 export const SKIRT_COLLIDERS: readonly {
   from: string; to: string; radius: number; worn?: number;
+  shaft?: readonly [number, number, number];
+  toe?: readonly [number, number, number];
 }[] = [
   { from: "thigh_l", to: "calf_l", radius: 0.0956 },
   { from: "thigh_r", to: "calf_r", radius: 0.0956 },
-  { from: "calf_l", to: "foot_l", radius: 0.121, worn: 0.1584 },
-  { from: "calf_r", to: "foot_r", radius: 0.121, worn: 0.1584 },
-  { from: "foot_l", to: "ball_l", radius: 0.1079, worn: 0.1807 },
-  { from: "foot_r", to: "ball_r", radius: 0.1079, worn: 0.1807 },
+  { from: "calf_l", to: "foot_l", radius: 0.121, worn: 0.1223, shaft: [0.02, 0, 0.0325] },
+  { from: "calf_r", to: "foot_r", radius: 0.121, worn: 0.1223, shaft: [-0.02, 0, 0.0325] },
+  { from: "foot_l", to: "ball_l", radius: 0.1079, worn: 0.1219,
+    shaft: [0.02, -0.0575, 0.02], toe: [0.02, 0.06, -0.04] },
+  { from: "foot_r", to: "ball_r", radius: 0.1079, worn: 0.1219,
+    shaft: [-0.02, -0.0575, 0.02], toe: [-0.02, 0.06, -0.04] },
 ];
 
 /** Down the bone: glTF joints out of Blender point along their own +Y. */
@@ -715,7 +729,13 @@ export class RigActor {
     /** Bare skin and booted radii; `radius` is whichever the looks call for. */
     bare: number;
     worn: number;
+    /** The worn ends' shifts in the head bone's frame, and the pair in use. */
+    shaft: Vector3 | null;
+    toe: Vector3 | null;
+    offset: Vector3 | null;
+    tailOffset: Vector3 | null;
   })[] = [];
+  private readonly shaftTail = new Vector3();
   private cloth: Observer<Scene> | null = null;
   /** Solving cloth nobody can see is the one cost worth a flag. */
   private coatVisible = false;
@@ -765,6 +785,8 @@ export class RigActor {
     const booted = this.looks.boots !== null;
     for (const collider of this.colliders) {
       collider.radius = booted ? collider.worn : collider.bare;
+      collider.offset = booted ? collider.shaft : null;
+      collider.tailOffset = booted ? collider.toe ?? collider.shaft : null;
     }
   }
 
@@ -1102,7 +1124,7 @@ export class RigActor {
       for (let j = 0; j < SKIRT_JOINTS; j++) this.restsWorld.push(new Vector3());
     }
 
-    for (const { from, to, radius, worn } of SKIRT_COLLIDERS) {
+    for (const { from, to, radius, worn, shaft, toe } of SKIRT_COLLIDERS) {
       const head = byName.get(from);
       const tail = byName.get(to);
       if (head instanceof TransformNode && tail instanceof TransformNode) {
@@ -1112,6 +1134,8 @@ export class RigActor {
           previousA: new Vector3(), previousB: new Vector3(),
           radius,
           bare: radius, worn: worn ?? radius,
+          shaft: shaft ? Vector3.FromArray(shaft) : null, toe: toe ? Vector3.FromArray(toe) : null,
+          offset: null, tailOffset: null,
           initialized: false,
         });
       }
@@ -1154,8 +1178,15 @@ export class RigActor {
       }
       collider.head.computeWorldMatrix(true);
       collider.tail.computeWorldMatrix(true);
-      collider.a.copyFrom(collider.head.absolutePosition);
-      collider.b.copyFrom(collider.tail.absolutePosition);
+      if (collider.offset) {
+        const bone = collider.head.getWorldMatrix();
+        Vector3.TransformCoordinatesToRef(collider.offset, bone, collider.a);
+        this.shaftTail.copyFrom(collider.tail.position).addInPlace(collider.tailOffset ?? collider.offset);
+        Vector3.TransformCoordinatesToRef(this.shaftTail, bone, collider.b);
+      } else {
+        collider.a.copyFrom(collider.head.absolutePosition);
+        collider.b.copyFrom(collider.tail.absolutePosition);
+      }
       if (!collider.initialized) {
         collider.previousA.copyFrom(collider.a);
         collider.previousB.copyFrom(collider.b);

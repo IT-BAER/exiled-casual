@@ -396,18 +396,10 @@ BODY_REGIONS = {
 }
 BODY_REGION_WEIGHT = 0.5    # summed weight over a region's bones to belong to it
 
-# The cowl's neck, from over the hood's hem down over the robe's collar. Head is
-# not transferred: the outer layer lies nearer the jaw than the lining, took Head
-# where the lining took the neck, and the lining came through. `head_collar`
-# hands the top to Head by height instead, over the whole collar: a short fade
-# folded the wool on itself when the head dipped.
-NECK_BONES = ("neck_01", "spine_02", "spine_03", "clavicle_l", "clavicle_r")
-# Its foot lies on the robe, so it takes the robe's own weights there, full up to
-# ROBE_HEM_BAND above the hem and gone ROBE_HEM_FADE further up: skinned off the
-# neck, the robe's shoulders swung out through it at a jog.
-ROBE_HEM_BAND = 0.010
-ROBE_HEM_FADE = 0.015
-ROBE_HEM_COLUMNS = 72       # the neck's own columns, `NECK_COLUMNS` in prep_cowl.py
+# Both class hoods come from `tools/prep_hood.py` already skinned, crown to
+# capelet, on the joints the hood and the coat or robe under its capelet ride.
+HOOD_BONES = ("Head", "neck_01", "spine_02", "spine_03", "clavicle_l", "clavicle_r",
+              "upperarm_l", "upperarm_r")
 
 RIGID_GEAR = (
     {
@@ -416,37 +408,17 @@ RIGID_GEAR = (
         "matte": True,
     },
     {
+        # Quaternius' Ranger hood run on into a capelet by `tools/prep_hood.py`,
+        # built on this body's own rest pose and skinned there, so it is placed as
+        # built and keeps its weights.
         "slot": "helmet", "look": "stalker", "part": "hood",
-        "src": "leather-hood-20k-v1.glb", "bone": "Head", "fit": "head_shell",
-        # A cowl stands off the skull where a helm's lining does not, so the
-        # median gap it is allowed is wider. A head is deeper than this cavity
-        # and no taller than it, so the stretch that makes room runs front to
-        # back: drawn out along Z instead, the cowl stands over the crown. The
-        # helm's forward pull is left off, because a hood is not worn pulled
-        # down over the brow and the pull costs the occiput the same 7 mm.
-        "symmetric": True,
-        "fit_args": {"coverage": 1.0, "max_median": 0.040, "back_shift": 0.0,
-                     "stretch": 1.2, "stretch_axis": 1},
-        "matte": True,
+        "src": "hood-stalker-v2.glb", "bone": "Head", "fit": "as_built",
+        "own_weights": HOOD_BONES, "matte": True,
     },
     {
-        # Built on this head by `tools/prep_cowl.py`, so the width sweep starts at
-        # the head's own width, and `back_shift` is the one that script measures:
-        # a shell with no face in it has its bbox centre behind the head's.
         "slot": "helmet", "look": "ember", "part": "cowl",
-        "src": "cowl-head-v1.glb", "bone": "Head", "fit": "head_shell",
-        "fit_args": {"width_from": 1.2, "back_shift": 0.17004},
-        "matte": True,
-    },
-    {
-        # The cowl's neck, built by `tools/prep_cowl.py` over the fitted hood and
-        # over the robe, so it is placed as built and takes the body's own
-        # weights down the neck: the hood stays rigid on the head.
-        "slot": "helmet", "look": "ember", "part": "drape",
-        "src": "cowl-neck-v1.glb", "bone": "neck_01", "fit": "as_built",
-        "deform": NECK_BONES, "matte": True, "neck_skin": True,
-        "head_collar": {"hood": "helmet.ember.cowl", "fade": 0.04},
-        "robe_hem": "chest.ember.robe",
+        "src": "hood-ember-v2.glb", "bone": "Head", "fit": "as_built",
+        "own_weights": HOOD_BONES, "matte": True,
     },
     {
         "slot": "weapon1", "look": "emberwand", "part": "mesh",
@@ -477,12 +449,12 @@ RIGID_GEAR = (
         "slot": "chest", "look": "ember", "part": "robe",
         "src": "emberbound-robe-20k-v1.glb", "bone": "spine_03", "fit": "soft_suit",
         "deform": SUIT_BONES,
-        # No greave. A greave is hidden the moment boots are worn, and this robe
-        # is floor length: splitting its shins off takes exactly the cloth that
-        # covers the boot, and the boot then shows through the outer flare.
         # Its donor wears trousers under the skirt, 15-18 cm clear of it below
-        # the knee; the clearance keeps them on the legs.
-        "matte": True, "clean": True,
+        # the knee; the clearance keeps them on the legs. Their shins are the
+        # greave, cut inside `SOFT_GREAVE_RADIUS` so the floor-length skirt
+        # stays whole, and tucked into the boot: worn over it, the boot cuff
+        # came out through the trouser leg.
+        "matte": True, "clean": True, "greaves": "shins", "skirt_floor": False,
         "skirt": 1.7,
     },
     {
@@ -3132,6 +3104,26 @@ def skin_to_bone(mesh, rig, bone):
     group.add(range(len(mesh.data.vertices)), 1.0, "REPLACE")
 
 
+def keep_own_weights(mesh, rig, bones):
+    """Rebind a donor that arrives skinned to this rest pose, keeping its weights.
+
+    Groups for joints it does not use are dropped; a used one outside `bones`
+    stops the build, and so does any vertex carrying less than a full unit.
+    """
+    for g in list(mesh.vertex_groups):
+        used = any(x.group == g.index and x.weight > 1e-4 for v in mesh.data.vertices for x in v.groups)
+        if g.name in bones and used:
+            continue
+        if used:
+            raise SystemExit(f"{mesh.name}: weighted to {g.name}, outside {bones}")
+        mesh.vertex_groups.remove(g)
+    short = sum(1 for v in mesh.data.vertices if abs(sum(x.weight for x in v.groups) - 1.0) > 1e-3)
+    if short:
+        raise SystemExit(f"{mesh.name}: {short} vertices do not carry a full unit of weight")
+    rebind(mesh, rig)
+    return sorted(g.name for g in mesh.vertex_groups)
+
+
 def _kdtree(pts, idxs):
     tree = mathutils.kdtree.KDTree(len(idxs))
     for i in idxs:
@@ -3349,155 +3341,6 @@ def split_arm_plates(donor, body, rig, arms, classify_bones, stem, at, margin,
     return [(piece, bone) for piece, bone, _ in made]
 
 
-def head_collar(mesh, hood, fade):
-    """Hand the cloth over a rigid hood's hem to Head, fading out `fade` below it.
-
-    By height alone, so both layers of the wool take the same weight: nearest-skin
-    transfer gave the lining the neck where the outer layer took Head.
-    """
-    worn = bpy.data.objects.get(hood)
-    if worn is None:
-        raise SystemExit(f"{mesh.name}: {hood} has to be fitted before it")
-    hem = min((worn.matrix_world @ v.co).z for v in worn.data.vertices)
-    head = mesh.vertex_groups.get("Head") or mesh.vertex_groups.new(name="Head")
-    held = 0
-    for v in mesh.data.vertices:
-        t = min(1.0, max(0.0, ((mesh.matrix_world @ v.co).z - hem + fade) / fade))
-        h = t * t * (3.0 - 2.0 * t)
-        if h <= 0.0:
-            continue
-        for g in v.groups:
-            if g.group != head.index:
-                g.weight *= 1.0 - h
-        head.add([v.index], h, "REPLACE")
-        held += 1
-    return {"hem_z": round(hem, 5), "fade_mm": fade * 1000, "vertices": held}
-
-
-def onto_neck_skin(mesh, body, rig):
-    """Move every vertex level onto the skin under it, out of the neck axis.
-
-    Returns the old coordinates. A wall standing off the neck took each layer's
-    weights off whichever skin lay nearest it, the two layers bent apart and
-    crossed; on the same ray both read the same skin.
-    """
-    me = body.data.copy()
-    me.transform(body.matrix_world)
-    me.calc_loop_triangles()
-    bvh = mathutils.bvhtree.BVHTree.FromPolygons(
-        [v.co.copy() for v in me.vertices], [tuple(t.vertices) for t in me.loop_triangles])
-    bpy.data.meshes.remove(me)
-    bone = rig.data.bones["neck_01"]
-    axis_y = ((rig.matrix_world @ bone.head_local).y + (rig.matrix_world @ bone.tail_local).y) / 2
-    to_local = mesh.matrix_world.inverted()
-    old = [v.co.copy() for v in mesh.data.vertices]
-    for v in mesh.data.vertices:
-        p = mesh.matrix_world @ v.co
-        c = Vector((0.0, axis_y, p.z))
-        d = Vector((p.x, p.y - axis_y, 0.0))
-        if d.length < 1e-6:
-            continue
-        d.normalize()
-        o, hit = c + d, None
-        for _ in range(32):
-            h = bvh.ray_cast(o, -d)[0]
-            if h is None or (h - c).dot(d) > 0:
-                hit = h
-                break
-            o = h - d * 1e-4
-        if hit is not None:
-            v.co = to_local @ hit
-    return old
-
-
-def robe_hem(mesh, robe, rig):
-    """Blend a neck's foot onto the weights of the robe it lies on.
-
-    Each vertex reads the robe on a level ray out of the neck axis to the INNER
-    layer's radius at its height and angle, so both layers of the wool read the
-    same robe point and bend together. The blend goes by height over the hem of
-    the vertex's own column: full to ROBE_HEM_BAND above it, gone ROBE_HEM_FADE
-    further up.
-    """
-    worn = bpy.data.objects.get(robe)
-    if worn is None:
-        raise SystemExit(f"{mesh.name}: {robe} has to be fitted before it")
-    bone = rig.data.bones["neck_01"]
-    axis_y = ((rig.matrix_world @ bone.head_local).y + (rig.matrix_world @ bone.tail_local).y) / 2
-    rv = [worn.matrix_world @ v.co for v in worn.data.vertices]
-    worn.data.calc_loop_triangles()
-    tris = [tuple(t.vertices) for t in worn.data.loop_triangles]
-    bvh = mathutils.bvhtree.BVHTree.FromPolygons(rv, tris)
-    names = {g.index: g.name for g in worn.vertex_groups}
-    carried = [{names[g.group]: g.weight for g in v.groups} for v in worn.data.vertices]
-    n = ROBE_HEM_COLUMNS
-
-    def column(p):
-        return math.atan2(p.x, -(p.y - axis_y)) % (2 * math.pi) / (2 * math.pi) * n
-
-    def key(p):
-        return round(math.atan2(p.x, -(p.y - axis_y)), 4), round(p.z, 5)
-
-    pts = [mesh.matrix_world @ v.co for v in mesh.data.vertices]
-    hem = [math.inf] * n
-    inner = {}
-    for p in pts:
-        a = round(column(p)) % n
-        hem[a] = min(hem[a], p.z)
-        k = key(p)
-        inner[k] = min(inner.get(k, math.inf), math.hypot(p.x, p.y - axis_y))
-    if math.inf in hem:
-        raise SystemExit(f"{mesh.name} leaves a column of its hem empty")
-
-    groups = {g.name: g for g in mesh.vertex_groups}
-    blended, below = 0, 0
-    for v, p in zip(mesh.data.vertices, pts):
-        f = column(p)
-        u = f - int(f)
-        foot = hem[int(f) % n] * (1 - u) + hem[(int(f) + 1) % n] * u
-        t = min(1.0, max(0.0, (foot + ROBE_HEM_BAND + ROBE_HEM_FADE - p.z) / ROBE_HEM_FADE))
-        w = t * t * (3.0 - 2.0 * t)
-        if w <= 0.0:
-            continue
-        d = Vector((p.x, p.y - axis_y, 0.0)).normalized()
-        reach = inner[key(p)]
-        o, hit, i = Vector((0.0, axis_y, p.z)), None, None
-        for _ in range(32):
-            h, _, j, _ = bvh.ray_cast(o, d, reach)
-            if h is None:
-                break
-            hit, i = h, j
-            reach -= (h - o).length + 1e-4
-            o = h + d * 1e-4
-        if hit is None:
-            # A foot that ends on top of the collar's roll has it below, not under.
-            below += 1
-            hit, _, i, _ = bvh.find_nearest(Vector((0.0, axis_y, p.z)) + d * inner[key(p)])
-        tri = tris[i]
-        bary = mathutils.interpolate.poly_3d_calc([rv[k] for k in tri], hit)
-        theirs = {}
-        for k, b in zip(tri, bary):
-            for name, wt in carried[k].items():
-                theirs[name] = theirs.get(name, 0.0) + wt * b
-        ours = {mesh.vertex_groups[g.group].name: g.weight for g in v.groups}
-        mix = {name: ours.get(name, 0.0) * (1 - w) + theirs.get(name, 0.0) * w
-               for name in set(ours) | set(theirs) if name in NECK_BONES + ("Head",)}
-        top = sorted(mix.items(), key=lambda kv: -kv[1])[:4]
-        total = sum(wt for _, wt in top)
-        if total <= 0.0:
-            continue
-        for gi in [g.group for g in v.groups]:
-            mesh.vertex_groups[gi].remove([v.index])
-        for name, wt in top:
-            if name not in groups:
-                groups[name] = mesh.vertex_groups.new(name=name)
-            groups[name].add([v.index], wt / total, "REPLACE")
-        blended += 1
-    rebind(mesh, rig)
-    return {"robe": robe, "band_mm": ROBE_HEM_BAND * 1000, "fade_mm": ROBE_HEM_FADE * 1000,
-            "vertices": blended, "robe_below_not_under": below}
-
-
 def skin_by_transfer(mesh, body, rig, bones):
     """Take the body's own weights, over one named set of bones.
 
@@ -3704,7 +3547,8 @@ def build_rigid_gear(rig, body):
         if not os.path.exists(path):
             raise SystemExit(f"missing gear source: {path}")
         objs = import_gltf(spec["src"], root=GEAR_SRC)
-        meshes = [o for o in objs if o.type == "MESH"]
+        # A skinned donor comes in with the importer's materialless bone-shape sphere.
+        meshes = [o for o in objs if o.type == "MESH" and o.data.materials]
         if len(meshes) != 1:
             raise SystemExit(f"{spec['src']}: expected one mesh, got {len(meshes)}")
         donor = meshes[0]
@@ -3757,20 +3601,16 @@ def build_rigid_gear(rig, body):
                                       overlap_band_mm=PLATE_SPLIT_MARGIN * 2000)
             print(f"fitted {piece.name}: {cap_tris} tris rigid on {bone}")
         if spec.get("deform"):
-            anchor = onto_neck_skin(donor, body, rig) if spec.get("neck_skin") else None
             groups = skin_by_transfer(donor, body, rig, spec["deform"])
-            if anchor is not None:
-                for v, co in zip(donor.data.vertices, anchor):
-                    v.co = co
             detail["deform_bones"] = list(spec["deform"])
             detail["deform_groups"] = groups
-            if spec.get("head_collar"):
-                detail["head_collar"] = head_collar(donor, **spec["head_collar"])
+        elif spec.get("own_weights"):
+            detail["deform_groups"] = keep_own_weights(donor, rig, spec["own_weights"])
         else:
             skin_to_bone(donor, rig, spec["bone"])
         if spec.get("skirt") is not None:
             detail.update(skin_skirt(donor, body, rig, spec["skirt"],
-                                     floor=bool(spec.get("greaves"))))
+                                     floor=spec.get("skirt_floor", bool(spec.get("greaves")))))
         if spec.get("greaves"):
             region = None
             if spec["greaves"] == "shins":
@@ -3794,12 +3634,6 @@ def build_rigid_gear(rig, body):
                 deform_groups=len(left.vertex_groups),
             )
             print(f"mirrored {left.name}: {tris} tris on {spec['bone'][:-2] + '_l'}")
-    # Last, because the robe it lies on is fitted after the helmet it belongs to.
-    for spec in RIGID_GEAR:
-        if spec.get("robe_hem"):
-            stem = f"{spec['slot']}.{spec['look']}.{spec['part']}"
-            fitted[stem]["robe_hem"] = robe_hem(bpy.data.objects[stem], spec["robe_hem"], rig)
-            print(f"robe hem {stem}: {fitted[stem]['robe_hem']}")
     return fitted
 
 

@@ -366,7 +366,8 @@ describe("SkirtSim", () => {
    * disagree by more than the gap between them, the cloth drawn between them
    * folds over itself and shows its back: the torn hem at a run. A knee drives
    * forward through the ring at the measured 18 units/s; with every column on
-   * its own, 10.8% of neighbour pairs folded across the sweep.
+   * its own, 10.8% of neighbour pairs folded across the sweep. Counted while the
+   * knee moves: a leg standing in the ring gets the idle bend (`MAX_BEND`).
    */
   it("moves a panel with the column a knee drives, instead of tearing it away", () => {
     const sim = new SkirtSim(CHAINS, 2, SEGMENT);
@@ -378,8 +379,8 @@ describe("SkirtSim", () => {
     const steps = Math.round(0.6 / (speed * step));
     let pairs = 0;
     let folded = 0;
-    for (let i = 0; i <= steps + 60; i++) {
-      const z = -0.2 + Math.min(i, steps) * speed * step;
+    for (let i = 0; i <= steps; i++) {
+      const z = -0.2 + i * speed * step;
       const leg = { a: new Vector3(0, 0.75, z), b: new Vector3(0, 0.1, z), radius: 0.11 };
       sim.step(step, anchors, rests, [leg]);
       for (let c = 0; c < CHAINS; c++) {
@@ -392,6 +393,31 @@ describe("SkirtSim", () => {
       }
     }
     expect(folded / pairs).toBeLessThan(0.05);
+  });
+
+  /**
+   * At idle the back boot stands inside the robe's side panel. The shin pushes
+   * the joint at the knee out, the joint below hangs back, and the panel breaks
+   * into a point at mid-shin: the side "wing".
+   */
+  it("drapes over a shin it stands in, instead of folding into a corner", () => {
+    const joints = 6;
+    const segment = 0.145;
+    const sim = new SkirtSim(1, joints, segment);
+    const anchors = [new Vector3(0, 0.9, 0)];
+    const rests = Array.from({ length: joints }, (_, j) => new Vector3(0, 0.9 - segment * (j + 1), 0));
+    const shin = { a: new Vector3(0.05, 0.53, 0.02), b: new Vector3(0.05, 0.09, -0.1), radius: 0.12 };
+    for (let i = 0; i < 240; i++) sim.step(FRAME, anchors, rests, [shin]);
+
+    let worst = 0;
+    const up = new Vector3();
+    const down = new Vector3();
+    for (let j = 1; j < joints; j++) {
+      sim.direction(0, j - 1, anchors[0]!, up);
+      sim.direction(0, j, anchors[0]!, down);
+      worst = Math.max(worst, Math.acos(Math.min(1, Vector3.Dot(up, down))) * 180 / Math.PI);
+    }
+    expect(worst).toBeLessThan(30);
   });
 
   it("reports unit directions, so a joint can be aimed down one", () => {
