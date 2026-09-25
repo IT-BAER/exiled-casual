@@ -480,8 +480,10 @@ RIGID_GEAR = (
         # No greave. A greave is hidden the moment boots are worn, and this robe
         # is floor length: splitting its shins off takes exactly the cloth that
         # covers the boot, and the boot then shows through the outer flare.
+        # Its donor wears trousers under the skirt, 15-18 cm clear of it below
+        # the knee; the clearance keeps them on the legs.
         "matte": True, "clean": True,
-        "skirt": 0.0,
+        "skirt": 1.7,
     },
     {
         "slot": "chest", "look": "stalker", "part": "coat",
@@ -3767,7 +3769,8 @@ def build_rigid_gear(rig, body):
         else:
             skin_to_bone(donor, rig, spec["bone"])
         if spec.get("skirt") is not None:
-            detail.update(skin_skirt(donor, body, rig, spec["skirt"]))
+            detail.update(skin_skirt(donor, body, rig, spec["skirt"],
+                                     floor=bool(spec.get("greaves"))))
         if spec.get("greaves"):
             region = None
             if spec["greaves"] == "shins":
@@ -3980,14 +3983,14 @@ def build_skirt_bones(rig, columns, centre, segment):
     return made
 
 
-def skin_skirt(mesh, body, rig, clear):
+def skin_skirt(mesh, body, rig, clear, floor):
     """Hand the cloth below the hips to the skirt chains.
 
     A vertex is cloth when it hangs below the pelvis and sits more than `clear`
     thigh radii off every leg bone. 0 takes everything below the hip, for a
-    closed robe with no trousers under it; a coat over trousers (`clear` > 0)
-    ends at the knee plane the greave is cut on, and the trousers under it stay
-    on the legs. The ring itself always runs from the hip to the donor's ankle
+    robe with no trousers under it; above 0 the trousers stay on the legs. A
+    piece with a greave (`floor`) ends its cloth at the knee plane the greave
+    is cut on. The ring itself always runs from the hip to the donor's ankle
     cut, so a floor-length robe folds at every joint whichever piece laid the
     ring out; the first skirted piece in `RIGID_GEAR` lays the ring out from its
     own cloth and later pieces bind to the same bones, so the piece whose cloth
@@ -4000,7 +4003,7 @@ def skin_skirt(mesh, body, rig, clear):
     top_z = pelvis_head.z
     knee = sum((rig.matrix_world @ rig.data.bones[b].head_local).z
                for b in ("calf_l", "calf_r")) / 2
-    floor_z = knee - SUIT_GREAVE_BELOW_KNEE if clear > 0 else None
+    floor_z = knee - SUIT_GREAVE_BELOW_KNEE if floor else None
     hem_z = min((M @ v.co).z for v in mesh.data.vertices)
     span = top_z - hem_z
     cloth = []
@@ -4069,6 +4072,7 @@ def skin_skirt(mesh, body, rig, clear):
           f"hip {top_z:.3f} hem {hem_z:.3f}")
     return {"skirt_vertices": len(cloth), "skirt_top_z": round(top_z, 4),
             "skirt_hem_z": round(hem_z, 4), "skirt_clear": clear,
+            "skirt_clear_m": round(r_thigh * clear, 4),
             "skirt_floor_z": None if floor_z is None else round(floor_z, 4),
             "skirt_cloth_hem_z": round(min(p.z for _, p in cloth), 4),
             "skirt_colliders": collider_radii(rig, body)}

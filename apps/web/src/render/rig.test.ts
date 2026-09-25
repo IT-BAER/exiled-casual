@@ -775,6 +775,38 @@ describe("wardrobe asset", () => {
     });
 
   /**
+   * The robe's generated donor wears trousers under the skirt. Handed to the
+   * chains they hang off the pelvis, so a leg steps out of its own trouser
+   * tube and the hem ends beside the foot. Below the knee the two are 15-18 cm
+   * apart at bind with nothing between, so no chained vertex may sit closer.
+   * The coat's cloth stops at the knee, where its hem hugs the calf's head.
+   */
+  it("leaves the trousers under the robe on the legs", () => {
+    const meshName = "chest.ember.robe";
+    const node = json.nodes.find((n) => n.name === meshName)!;
+    const skin = json.skins[node.skin!]!;
+    const at = bindPose(skin);
+    const bin = glb.subarray(20 + json.buffers0Len);
+    const prim = json.meshes[node.mesh!]!.primitives[0]!;
+    const pos = readAccessor(json, bin, prim.attributes["POSITION"]!);
+    const joints = readAccessor(json, bin, prim.attributes["JOINTS_0"]!);
+    const weights = readAccessor(json, bin, prim.attributes["WEIGHTS_0"]!);
+    const shins = ["_l", "_r"].map((s) => [at.get(`calf${s}`)!, at.get(`foot${s}`)!] as const);
+
+    let onShin = 0;
+    for (let v = 0; v < pos.length / 3; v += 1) {
+      let best = 0;
+      for (let k = 1; k < 4; k += 1) {
+        if (weights[v * 4 + k]! > weights[v * 4 + best]!) best = k;
+      }
+      if (!json.nodes[skin.joints[joints[v * 4 + best]!]!]!.name.startsWith("skirt_")) continue;
+      const p = [pos[v * 3]!, pos[v * 3 + 1]!, pos[v * 3 + 2]!];
+      if (shins.some(([a, b]) => toSegment(p, a, b) < 0.15)) onShin += 1;
+    }
+    expect(onShin, meshName).toBe(0);
+  });
+
+  /**
    * A capsule stands for what the eye sees on that leg, and once a boot is on,
    * that is the boot. Solved against bare-skin radii the chains press onto the
    * shin, the boot stands proud of the cloth, and the hem is drawn inside the
