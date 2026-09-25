@@ -6,17 +6,20 @@
 > combat, and deep itemization with prefix/suffix affixes, magic, rare and unique items.
 > It is an original game, not affiliated with Grinding Gear Games or Path of Exile.
 
-The game is in active development. The site currently serves a teaser page; the
-release date is not announced ("Soon(tm)", the community joke it wears openly).
+The game is playable at https://exiledcasual.com/ as an early development build. It changes
+often and its balance is not final.
 
 Key facts:
-- Platform: any modern web browser (WebGL2), desktop-focused
-- Price: free
-- Modes planned: local (browser storage) and online (accounts)
-- Engine: TypeScript, React, Babylon.js, deterministic fixed-step simulation
+- Platform: any modern desktop web browser with WebGL2
+- Price: free, no account needed for local play
+- Saves: local, in the browser (IndexedDB); online accounts are planned
+- Engine: TypeScript, React, Babylon.js, deterministic 30 Hz fixed-step simulation in a Web Worker
 - Developer: IT-BAER
 
 ## Links
 
-- [Website](https://exiledcasual.com/): teaser page
+- [Play the game](https://exiledcasual.com/): the game itself, in the browser
+- [Full description](https://exiledcasual.com/llms-full.txt): features, systems and FAQ in plain text
 - [Source code](https://github.com/IT-BAER/exiled-casual): public development repository
+- [Devlog](https://github.com/IT-BAER/exiled-casual/tree/main/devlog): milestones with screenshots
+- [Changelog](https://github.com/IT-BAER/exiled-casual/blob/main/CHANGELOG.md): release notes

@@ -1,0 +1,84 @@
+# Exiled Casual: full description
+
+> Exiled Casual is a free action role-playing game (ARPG) that runs entirely in a web
+> browser, with nothing to install. It is inspired by Path of Exile 1 and 2 and takes the
+> best of either where they differ. It is an original fan project with original code and
+> art, not affiliated with, endorsed by, or connected to Grinding Gear Games.
+
+Website: https://exiledcasual.com/ (the game itself)
+Source code: https://github.com/IT-BAER/exiled-casual
+Developer: IT-BAER (https://github.com/IT-BAER)
+Status: early development build, playable, changes often, balance not final.
+Price: free.
+
+## How to play
+
+Open https://exiledcasual.com/ in a current desktop browser with WebGL2. Choose PLAY, pick local mode, create a character from one of the
+classes, and enter the hideout. Local mode keeps one character and saves it in the
+browser (IndexedDB); the save can be exported and imported as JSON. The site can be
+installed as a web app from the browser menu.
+
+## Game loop
+
+- A hideout with a map device that opens six portals per run.
+- An Atlas of map nodes, opened with Waystones held in the inventory. A map can be
+  prepared with modifiers before it is opened. Unexplored parts of the Atlas are fogged.
+- Procedurally generated maps across several biomes, assembled from authored chunks,
+  plus an open coastal map (the Strand) with surf, wet sand, shells and wreckage.
+- Each map ends in a boss arena; one boss fights in two phases.
+
+## Combat
+
+- Real-time, click-to-move combat on a deterministic 30 Hz simulation.
+- Each class has its own free default attack plus skills with costs and cooldowns.
+- Ailments and buffs; monsters route around walls rather than getting stuck on them.
+
+## Items and loot
+
+- Four rarities: normal, magic, rare and unique.
+- Prefix and suffix affixes, implicit modifiers, and identification of unidentified items.
+- Crafting orbs change an item's rarity or modifiers.
+- Loot beams mark valuable drops; containers in maps pay out when clicked.
+- A shared stash, a vendor, and disenchanting of unwanted items.
+- Character stats derive from equipped items.
+
+## Character growth
+
+- A passive tree of 239 nodes across eight disciplines.
+- Each class starts at its own door into the tree. Notables open once most of their
+  cluster is taken; travel bridges connect areas; keystones trade one stat for another.
+- Single passive points can be refunded.
+- The 3D character shows the equipped armour; each class has its own full armour set.
+
+## Options
+
+Graphics and audio mixes, HUD toggles, rebindable keys, and a debug log channel.
+
+## Technology
+
+TypeScript, React 19 and Babylon.js 9 (WebGL2), built with Vite. The simulation is a
+hand-rolled entity-component system in a Web Worker, using fixed-point integer math and
+named seeded random streams, so a run replays to an identical checksum. The client sends
+intents, never outcomes; the simulation re-validates range, cost and placement.
+
+## FAQ
+
+Is Exiled Casual free?
+Yes. It is free to play in the browser.
+
+Do I need to download or install anything?
+No. It runs in the browser. Installing it as a web app is optional.
+
+Is it Path of Exile?
+No. It is an original game inspired by Path of Exile 1 and 2. It ships none of their art,
+audio or data, and it is not affiliated with Grinding Gear Games.
+
+Is there multiplayer or an online mode?
+Not yet. Online mode with accounts is planned. Local mode works today.
+
+Does it work on phones?
+It targets desktop browsers. Mobile browsers are not a supported target yet.
+
+Where is my save stored?
+In your browser's local storage (IndexedDB). Clearing site data deletes it, so export the
+save as JSON to keep a copy.
