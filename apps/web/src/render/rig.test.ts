@@ -472,9 +472,9 @@ describe("wardrobe asset", () => {
   });
 
   /**
-   * The cowl's neck runs from over the hood's hem down to the robe's collar.
+   * The cowl's neck runs from over the hood's hem down over the robe's collar.
    * Its top answers to Head, or it lifts off the rigid hood's hem when he looks
-   * down, and its foot to the neck and trunk the robe rides. Lining and trim are
+   * down, and its foot to the neck and trunk the robe under it rides. Lining and trim are
    * vertex colour on the one wool material, so both cloth pieces carry COLOR_0.
    */
   it("deforms the cowl's neck from the head down to the trunk, and colours the wool", () => {

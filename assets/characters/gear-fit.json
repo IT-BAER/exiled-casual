@@ -54,12 +54,19 @@
   "head_collar": {
    "hem_z": 1.58436,
    "fade_mm": 40.0,
-   "vertices": 3744
+   "vertices": 3874
   },
   "bone": "neck_01",
   "fit": "as_built",
   "triangles": 6912,
-  "source": "cowl-neck-v1.glb"
+  "source": "cowl-neck-v1.glb",
+  "robe_hem": {
+   "robe": "chest.ember.robe",
+   "band_mm": 10.0,
+   "fade_mm": 15.0,
+   "vertices": 2271,
+   "robe_below_not_under": 464
+  }
  },
  "weapon1.emberwand.mesh": {
   "scale": 0.19382,

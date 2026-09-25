@@ -396,12 +396,18 @@ BODY_REGIONS = {
 }
 BODY_REGION_WEIGHT = 0.5    # summed weight over a region's bones to belong to it
 
-# The cowl's neck, from over the hood's hem down to the robe's collar. Head is
+# The cowl's neck, from over the hood's hem down over the robe's collar. Head is
 # not transferred: the outer layer lies nearer the jaw than the lining, took Head
 # where the lining took the neck, and the lining came through. `head_collar`
 # hands the top to Head by height instead, over the whole collar: a short fade
 # folded the wool on itself when the head dipped.
 NECK_BONES = ("neck_01", "spine_02", "spine_03", "clavicle_l", "clavicle_r")
+# Its foot lies on the robe, so it takes the robe's own weights there, full up to
+# ROBE_HEM_BAND above the hem and gone ROBE_HEM_FADE further up: skinned off the
+# neck, the robe's shoulders swung out through it at a jog.
+ROBE_HEM_BAND = 0.010
+ROBE_HEM_FADE = 0.015
+ROBE_HEM_COLUMNS = 72       # the neck's own columns, `NECK_COLUMNS` in prep_cowl.py
 
 RIGID_GEAR = (
     {
@@ -434,12 +440,13 @@ RIGID_GEAR = (
     },
     {
         # The cowl's neck, built by `tools/prep_cowl.py` over the fitted hood and
-        # above the robe, so it is placed as built and takes the body's own
+        # over the robe, so it is placed as built and takes the body's own
         # weights down the neck: the hood stays rigid on the head.
         "slot": "helmet", "look": "ember", "part": "neck",
         "src": "cowl-neck-v1.glb", "bone": "neck_01", "fit": "as_built",
         "deform": NECK_BONES, "matte": True, "neck_skin": True,
         "head_collar": {"hood": "helmet.ember.cowl", "fade": 0.04},
+        "robe_hem": "chest.ember.robe",
     },
     {
         "slot": "weapon1", "look": "emberwand", "part": "mesh",
@@ -3401,6 +3408,94 @@ def onto_neck_skin(mesh, body, rig):
     return old
 
 
+def robe_hem(mesh, robe, rig):
+    """Blend a neck's foot onto the weights of the robe it lies on.
+
+    Each vertex reads the robe on a level ray out of the neck axis to the INNER
+    layer's radius at its height and angle, so both layers of the wool read the
+    same robe point and bend together. The blend goes by height over the hem of
+    the vertex's own column: full to ROBE_HEM_BAND above it, gone ROBE_HEM_FADE
+    further up.
+    """
+    worn = bpy.data.objects.get(robe)
+    if worn is None:
+        raise SystemExit(f"{mesh.name}: {robe} has to be fitted before it")
+    bone = rig.data.bones["neck_01"]
+    axis_y = ((rig.matrix_world @ bone.head_local).y + (rig.matrix_world @ bone.tail_local).y) / 2
+    rv = [worn.matrix_world @ v.co for v in worn.data.vertices]
+    worn.data.calc_loop_triangles()
+    tris = [tuple(t.vertices) for t in worn.data.loop_triangles]
+    bvh = mathutils.bvhtree.BVHTree.FromPolygons(rv, tris)
+    names = {g.index: g.name for g in worn.vertex_groups}
+    carried = [{names[g.group]: g.weight for g in v.groups} for v in worn.data.vertices]
+    n = ROBE_HEM_COLUMNS
+
+    def column(p):
+        return math.atan2(p.x, -(p.y - axis_y)) % (2 * math.pi) / (2 * math.pi) * n
+
+    def key(p):
+        return round(math.atan2(p.x, -(p.y - axis_y)), 4), round(p.z, 5)
+
+    pts = [mesh.matrix_world @ v.co for v in mesh.data.vertices]
+    hem = [math.inf] * n
+    inner = {}
+    for p in pts:
+        a = round(column(p)) % n
+        hem[a] = min(hem[a], p.z)
+        k = key(p)
+        inner[k] = min(inner.get(k, math.inf), math.hypot(p.x, p.y - axis_y))
+    if math.inf in hem:
+        raise SystemExit(f"{mesh.name} leaves a column of its hem empty")
+
+    groups = {g.name: g for g in mesh.vertex_groups}
+    blended, below = 0, 0
+    for v, p in zip(mesh.data.vertices, pts):
+        f = column(p)
+        u = f - int(f)
+        foot = hem[int(f) % n] * (1 - u) + hem[(int(f) + 1) % n] * u
+        t = min(1.0, max(0.0, (foot + ROBE_HEM_BAND + ROBE_HEM_FADE - p.z) / ROBE_HEM_FADE))
+        w = t * t * (3.0 - 2.0 * t)
+        if w <= 0.0:
+            continue
+        d = Vector((p.x, p.y - axis_y, 0.0)).normalized()
+        reach = inner[key(p)]
+        o, hit, i = Vector((0.0, axis_y, p.z)), None, None
+        for _ in range(32):
+            h, _, j, _ = bvh.ray_cast(o, d, reach)
+            if h is None:
+                break
+            hit, i = h, j
+            reach -= (h - o).length + 1e-4
+            o = h + d * 1e-4
+        if hit is None:
+            # A foot that ends on top of the collar's roll has it below, not under.
+            below += 1
+            hit, _, i, _ = bvh.find_nearest(Vector((0.0, axis_y, p.z)) + d * inner[key(p)])
+        tri = tris[i]
+        bary = mathutils.interpolate.poly_3d_calc([rv[k] for k in tri], hit)
+        theirs = {}
+        for k, b in zip(tri, bary):
+            for name, wt in carried[k].items():
+                theirs[name] = theirs.get(name, 0.0) + wt * b
+        ours = {mesh.vertex_groups[g.group].name: g.weight for g in v.groups}
+        mix = {name: ours.get(name, 0.0) * (1 - w) + theirs.get(name, 0.0) * w
+               for name in set(ours) | set(theirs) if name in NECK_BONES + ("Head",)}
+        top = sorted(mix.items(), key=lambda kv: -kv[1])[:4]
+        total = sum(wt for _, wt in top)
+        if total <= 0.0:
+            continue
+        for gi in [g.group for g in v.groups]:
+            mesh.vertex_groups[gi].remove([v.index])
+        for name, wt in top:
+            if name not in groups:
+                groups[name] = mesh.vertex_groups.new(name=name)
+            groups[name].add([v.index], wt / total, "REPLACE")
+        blended += 1
+    rebind(mesh, rig)
+    return {"robe": robe, "band_mm": ROBE_HEM_BAND * 1000, "fade_mm": ROBE_HEM_FADE * 1000,
+            "vertices": blended, "robe_below_not_under": below}
+
+
 def skin_by_transfer(mesh, body, rig, bones):
     """Take the body's own weights, over one named set of bones.
 
@@ -3696,6 +3791,12 @@ def build_rigid_gear(rig, body):
                 deform_groups=len(left.vertex_groups),
             )
             print(f"mirrored {left.name}: {tris} tris on {spec['bone'][:-2] + '_l'}")
+    # Last, because the robe it lies on is fitted after the helmet it belongs to.
+    for spec in RIGID_GEAR:
+        if spec.get("robe_hem"):
+            stem = f"{spec['slot']}.{spec['look']}.{spec['part']}"
+            fitted[stem]["robe_hem"] = robe_hem(bpy.data.objects[stem], spec["robe_hem"], rig)
+            print(f"robe hem {stem}: {fitted[stem]['robe_hem']}")
     return fitted
 
 

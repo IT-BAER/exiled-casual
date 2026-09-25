@@ -14,8 +14,8 @@ the brow mesh the fitter already measures against; the hem is a flat cut below
 the jaw, and a tip is drawn up and back off the crown. Radial noise gives the
 wool its folds, a BlenderKit weave its surface.
 
-The neck is a second piece, a tube round the neck axis from inside the hood's
-fitted hem down behind the robe's neckline, read against the FITTED robe and
+The neck is a second piece, a tube round the neck axis from over the hood's
+fitted hem down over the robe's collar, read against the FITTED robe and
 gorget out of `wardrobe.glb` (so build that first). The hood cannot reach down
 there itself: below the jaw nothing is star-shaped about the head centre, and a
 rigid piece that low would cut the robe whenever the head turns. Lining and
@@ -139,8 +139,9 @@ TIP_POWER = 1.4
 # the outermost skin or gorget under it, so every horizontal ray out of the axis
 # crosses it once. Its top rises NECK_TUCK up the OUTSIDE of the hood's hem and
 # dips under the chin at the front, where the hood is open; its foot runs
-# NECK_UNDER below the height at which the robe first stands outside it, and
-# stays inside the robe's inner face, 1-2 mm off the gorget at the front.
+# NECK_DRAPE down over the robe from the height at which the robe first stands
+# out from the neck, lying on the robe's outer face, so a pose that lifts the
+# hem shows robe under it and never skin.
 GORGET = "chest.ember.gorget"
 ROBE = "chest.ember.robe"
 NECK_SKIN = ("neck_01", "spine_03", "clavicle_l", "clavicle_r")
@@ -154,16 +155,20 @@ NECK_GAP = 0.003          # off the skin and the gorget
 NECK_TUCK = 0.02          # the top rises this far over the hood's fitted hem
 NECK_FRONT_HALF = math.radians(60)
 NECK_FRONT_DZ = -0.015    # the top at the front, below the hood's fitted hem
-NECK_UNDER = 0.015
-NECK_DIVE = 1.0           # the most the foot moves in per metre down
+NECK_DRAPE = 0.025
+# A drape, not a cape: the foot stops where the robe under it stands this far
+# outside the wall's top, which on the T-posed trapezius is a centimetre down.
+NECK_DRAPE_OUT = 0.05
+NECK_ROBE_GAP = 0.002     # the wool's inner face off the robe's outer face
+NECK_ROBE_LAYERS = 0.04   # the depth of the robe's rolled collar, out from its inner face
+NECK_DRAPE_AIR = 0.008    # the most a foot point may stand off the robe under it
 NECK_FLARE = 0.02         # the most the wall stands outside its own top radius
 NECK_FOLD_AMP = 0.002
 NECK_FOLD_ACROSS = 2.0    # radius of the noise circle round the axis: ~12 folds
 NECK_FOLD_DOWN = 3.0      # per metre down the column
 NECK_MIN_CLEAR = 0.0005   # p01 clearance off skin and gorget, above the neckline
-NECK_POKE = 0.001         # the most a foot point may stand out of the robe's face
-# What has to stand outside the wool's inner face for it to fit behind the
-# robe: the gap, the wall, the folds, and a gap again.
+# How far the robe stands off the skin or gorget where the neck meets it: the
+# gap, the wall, the folds, and a gap again.
 NECK_ROOM = NECK_GAP + WOOL + NECK_FOLD_AMP + NECK_GAP
 # Over the hood both ride Head, so the wool lies almost on it: the two read as
 # one garment, and the skin never shows between them.
@@ -781,14 +786,15 @@ def outermost(bvh, far, d, ok):
 
 
 def neck_shell(body, rig, worn, hood, hem_top, name="neck_inner"):
-    """A tube about the neck axis, from inside the hood down behind the robe.
+    """A tube about the neck axis, from over the hood down over the robe.
 
     Each column rides the outermost skin or gorget under it and is low-passed
     across columns and down itself, never below that floor. Rows run from the
-    top, NECK_TUCK inside the hood's fitted hem and dipping under the chin at the
+    top, NECK_TUCK over the hood's fitted hem and dipping under the chin at the
     front, down to that column's foot, so both rims are rows and neither is cut
-    vertex by vertex. The foot is NECK_UNDER below the neckline: the first
-    height, going down, at which the robe's outer face stands outside the wool.
+    vertex by vertex. The foot is NECK_DRAPE below the neckline, the first
+    height, going down, at which the robe stands out from the neck, and the wall
+    lies on the robe's outer face all the way down to it.
     """
     under_v, under_t = list(worn[GORGET][0]), list(worn[GORGET][1])
     region_tris(body, NECK_SKIN, under_v, under_t)
@@ -811,20 +817,36 @@ def neck_shell(body, rig, worn, hood, hem_top, name="neck_inner"):
         hit = outermost(bvh, c + d * REACH, d, lambda p: (p - c).dot(d) > 0)
         return None if hit is None else (hit - c).length
 
-    def inner_radius(bvh, z, d, beyond):
-        """The first surface going out from the axis past radius `beyond`."""
+    def robe_face(z, d, beyond):
+        """The robe's outer face nearest the neck, going out past radius `beyond`.
+
+        Not the outermost robe: at shoulder height that is the T-posed sleeve,
+        and a wall on it runs down the arm. The collar's rolled layers lie within
+        NECK_ROBE_LAYERS of the first one.
+        """
         c = Vector((0.0, axis_y, z))
-        o = c
+        o, first, face = c, None, None
         for _ in range(32):
-            hit = bvh.ray_cast(o, d, REACH)[0]
+            hit = robe.ray_cast(o, d, REACH)[0]
             if hit is None:
-                return None
-            if (hit - c).length > beyond:
-                return (hit - c).length
+                break
+            rr = (hit - c).length
+            if rr > beyond:
+                if first is None:
+                    first = rr
+                elif rr > first + NECK_ROBE_LAYERS:
+                    break
+                face = rr
             o = hit + d * 1e-4
-        return None
+        return face
 
     n_a = NECK_COLUMNS
+    # The robe's vertices by column: the collar's cut rim is a level flange that a
+    # level ray only ever meets edge on.
+    by_column = [[] for _ in range(n_a)]
+    for p in worn[ROBE][0]:
+        a = round(math.atan2(p.x, -(p.y - axis_y)) / (2 * math.pi) * n_a) % n_a
+        by_column[a].append((p.z, math.hypot(p.x, p.y - axis_y)))
     thetas = [2 * math.pi * a / n_a for a in range(n_a)]
     outs = [Vector((math.sin(t), -math.cos(t), 0.0)) for t in thetas]   # 0 faces front
     tops = [top_at(t) for t in thetas]
@@ -835,17 +857,13 @@ def neck_shell(body, rig, worn, hood, hem_top, name="neck_inner"):
         col, robe_col, neck = [], [], None
         for z in zs:
             lo = radius(under, z, d)
-            out = radius(robe, z, d)
+            out = None if lo is None else robe_face(z, d, lo - NECK_GAP)
             col.append(lo)
-            # The robe's neck hole is capped inside the neck: that is no cover.
-            # The foot hides behind the robe's INNER face: between its two faces it
-            # grazed the rim, which the walk cut into a ragged edge.
-            robe_col.append(inner_radius(robe, z, d, lo)
-                            if out is not None and lo is not None and out > lo else None)
+            robe_col.append(out)
             if neck is None and z <= tops[a] and lo is not None:
                 if out is not None and out > lo + NECK_ROOM:
                     neck = z
-            if neck is not None and z < neck - NECK_UNDER:
+            if neck is not None and z < neck - NECK_DRAPE:
                 break
         if neck is None:
             raise SystemExit(f"column {a} never meets the robe outside the neck")
@@ -860,17 +878,17 @@ def neck_shell(body, rig, worn, hood, hem_top, name="neck_inner"):
         skin.append(filled)
         robes.append(robe_col)
         necks.append(neck)
-        # The robe opens again a little under its rim toward the front: the foot
-        # ends where its cover does, or it hangs in that opening.
+        # The robe opens a little under its rim toward the front: the foot ends
+        # where the robe under it does, or it hangs over that opening.
         k = zs.index(neck)
-        while k + 1 < len(robe_col) and robe_col[k + 1] is not None and zs[k + 1] >= neck - NECK_UNDER:
+        while k + 1 < len(robe_col) and robe_col[k + 1] is not None and zs[k + 1] >= neck - NECK_DRAPE:
             k += 1
         covers.append(zs[k])
     hem = list(covers)
     for _ in range(NECK_HEM_PASSES):
         hem = [(hem[a - 1] + hem[a] * 2 + hem[(a + 1) % n_a]) / 4 for a in range(n_a)]
-    # Smoothing may drop a foot into an opening or lift it out of the robe.
-    hem = [min(max(h, c), max(z - NECK_UNDER, c)) for h, c, z in zip(hem, covers, necks)]
+    # Smoothing may drop a foot past the robe under it.
+    hem = [min(max(h, c), max(z - NECK_DRAPE, c)) for h, c, z in zip(hem, covers, necks)]
 
     def sampled(a, z):
         """The floor radius of column a at height z, read off its samples."""
@@ -889,7 +907,7 @@ def neck_shell(body, rig, worn, hood, hem_top, name="neck_inner"):
         held = [max(held[a - 1], held[a], held[(a + 1) % n_a]) for a in range(n_a)]
 
     def shape(hem):
-        """The wall for feet at these heights, and where the robe first bit into it."""
+        """The wall for feet at these heights, and the flare cap per column."""
         z_at = [[tops[a] - (tops[a] - hem[a]) * u / NECK_ROWS for u in range(rows)]
                 for a in range(n_a)]
         # Under the neckline the foot follows the skin in but never out: out ran it
@@ -921,6 +939,24 @@ def neck_shell(body, rig, worn, hood, hem_top, name="neck_inner"):
         for a in range(n_a):
             for u in range(below[a] if hang[a] is not None else 0, rows):
                 floor[a][u] = max(floor[a][u], spread[a])
+        # The robe is read the same way but twice as finely, its roll being folds
+        # a few millimetres across, and the wool lies on its outer face; past
+        # NECK_DRAPE_OUT outside the top, the robe a ray meets is a sleeve.
+        cloth = [[0.0] * rows for _ in range(n_a)]
+        steps = (-1, -0.5, 0, 0.5, 1)
+        for a in range(n_a):
+            fan = [Vector((math.sin(thetas[a] + s * half), -math.cos(thetas[a] + s * half), 0.0))
+                   for s in steps]
+            dz = (tops[a] - hem[a]) / NECK_ROWS / 2
+            for u in range(rows):
+                beyond = sampled(a, z_at[a][u]) - NECK_GAP
+                on = [h for h in (robe_face(z_at[a][u] + s * dz, d, beyond) for s in steps for d in fan)
+                      if h is not None and h <= floor[a][0] + NECK_DRAPE_OUT]
+                on += [h for b in (a - 1, a, (a + 1) % n_a) for z, h in by_column[b]
+                       if abs(z - z_at[a][u]) <= 2 * dz and beyond < h <= floor[a][0] + NECK_DRAPE_OUT]
+                if on:
+                    cloth[a][u] = max(on) + NECK_ROBE_GAP - NECK_GAP
+                    floor[a][u] = max(floor[a][u], cloth[a][u])
         r = [row[:] for row in floor]
         for _ in range(NECK_ROUNDS):
             r = [[max(r[a][u], floor[a][u]) for u in range(rows)] for a in range(n_a)]
@@ -930,52 +966,39 @@ def neck_shell(body, rig, worn, hood, hem_top, name="neck_inner"):
                 r = [[(r[a][max(0, u - 1)] + r[a][u] * 2 + r[a][min(rows - 1, u + 1)]) / 4
                       for u in range(rows)] for a in range(n_a)]
         r = [[max(r[a][u], floor[a][u]) for u in range(rows)] for a in range(n_a)]
-        # The robe's rim rolls out and the robe under it comes back in: below the
-        # neckline the foot stays inside the robe's inner face even where that
-        # takes it into the body, which the robe hides.
-        # Once inside, the foot never widens again, or a dip in the face one row
-        # deep notches the wall; and it dives at most NECK_DIVE, or the ledge folds
-        # when the wall is thickened level.
-        bite = [None] * n_a
-        for a in range(n_a):
-            lim = math.inf
-            for u in range(rows):
-                if z_at[a][u] < held[a]:
-                    # The nearer of the two samples round it: the rim's radius
-                    # changes faster than the samples are apart.
-                    k = (top_z - z_at[a][u]) / NECK_STEP
-                    near = [robes[a][j] for j in {min(len(robes[a]) - 1, int(k)),
-                                                  min(len(robes[a]) - 1, int(k) + 1)}
-                            if robes[a][j] is not None]
-                    if near:
-                        lim = min(lim, min(near) - NECK_ROOM)
-                    if bite[a] is None and r[a][u] > lim:
-                        bite[a] = z_at[a][u]
-                    r[a][u] = min(r[a][u], lim)
-            for u in range(rows - 2, -1, -1):
-                r[a][u] = min(r[a][u], r[a][u + 1] + (z_at[a][u] - z_at[a][u + 1]) * NECK_DIVE)
         # A neck, not a cape: past NECK_FLARE outside its top the wall runs straight
         # down into the gorget and robe instead of out along the T-posed trapezius.
+        # The robe is the exception: the wool never passes into it.
         caps = [r[a][0] + NECK_FLARE for a in range(n_a)]
-        r = [[min(r[a][u], caps[a]) for u in range(rows)] for a in range(n_a)]
-        return z_at, r, caps, bite
+        r = [[max(cloth[a][u], min(r[a][u], caps[a])) for u in range(rows)] for a in range(n_a)]
+        return z_at, r, caps
 
-    z_at, r, caps, bite = shape(hem)
-    # Where the robe hugs the neck (the front) the foot would have to dive
-    # through the gorget to get behind it, and each column dived at its own
-    # height: a comb of teeth over the collar. It ends its own hem above the
-    # bite instead; where the neckline is wide it still runs on behind the robe.
-    ends = [hem[a] if bite[a] is None else max(hem[a], bite[a] + NECK_GAP) for a in range(n_a)]
+    z_at, r, caps = shape(hem)
+    # Where the robe stands NECK_DRAPE_OUT outside the wall's top the foot ends
+    # above it: following the robe on out is a cape over the shoulder. Walked
+    # from under the hood, not from the neckline: the collar's roll stands that
+    # far out AT the neckline at the sides, and a foot there is inside the roll.
+    ends = []
+    for a in range(n_a):
+        k = next(j for j, z in enumerate(zs) if z <= hem_top)
+        while k + 1 < len(robes[a]) and zs[k + 1] >= hem[a]:
+            out = robes[a][k + 1]
+            if out is None and zs[k + 1] < necks[a]:
+                break
+            if out is not None and out > r[a][0] + NECK_DRAPE_OUT:
+                break
+            k += 1
+        ends.append(zs[k])
     raised = ends
     for _ in range(2):
         raised = [max(raised[a - 1], raised[a], raised[(a + 1) % n_a]) for a in range(n_a)]
     for _ in range(NECK_HEM_PASSES):
         raised = [max(ends[a], (raised[a - 1] + raised[a] * 2 + raised[(a + 1) % n_a]) / 4)
                   for a in range(n_a)]
+    short = sum(e > h + 1e-9 for e, h in zip(ends, hem))
     hem = raised
-    z_at, r, caps, bite = shape(hem)
-    above, bitten = sum(e > h for e, h in zip(ends, covers)), sum(b is not None for b in bite)
-    print(f"NECK {above} feet end above the robe, {bitten} columns still bitten")
+    z_at, r, caps = shape(hem)
+    print(f"NECK {short} feet stop short of a full drape")
     print(f"NECK axis y {axis_y:.4f}, top {top_z:.4f}, neckline {min(necks):.4f}..{max(necks):.4f}, "
           f"foot {min(hem):.4f}..{max(hem):.4f}, "
           f"top radius {min(row[0] for row in r) * 1000:.1f}..{max(row[0] for row in r) * 1000:.1f} mm")
@@ -1026,7 +1049,7 @@ def neck_shell(body, rig, worn, hood, hem_top, name="neck_inner"):
                      # where the rows run 1-2 mm apart.
                      wall_from=lambda co: co - Vector((co.x, co.y - axis_y, 0.0)).normalized(),
                      top_z=round(top_z, 5), neckline_z=[round(min(necks), 5), round(max(necks), 5)],
-                     feet_above_robe=above, bitten=bitten,
+                     feet_short=short,
                      shell_vertices=len(me.vertices))
 
 
@@ -1117,29 +1140,32 @@ def main():
         d = (p - ndet["axis"](p)).normalized()
         return bvh.ray_cast(p + d * 1e-4, d)[0] is not None
 
-    # The wool never lies under the hood nor passes through it; below its
-    # neckline it is inside the robe.
+    # The wool never lies under the hood or the robe nor passes through either;
+    # below its neckline it lies on the robe, the outer layer a wall further out.
     top = [p for p in pts if p.z > hem_top - 0.002]
     foot = [p for p in pts if p.z < ndet["neckline"](p) - 0.002]
     over_hood = 1.0 - sum(covered(hood_bvh, p) for p in top) / max(1, len(top))
-    in_robe = sum(covered(ndet["robe"], p) for p in foot) / max(1, len(foot))
-    # How far the worst uncovered foot point stands out of the robe's face.
-    poke = max([ndet["robe"].find_nearest(p)[3] for p in foot if not covered(ndet["robe"], p)],
-               default=0.0)
+    over_robe = 1.0 - sum(covered(ndet["robe"], p) for p in foot) / max(1, len(foot))
+    # How far the foot point furthest from the robe stands off it.
+    lift = max([ndet["robe"].find_nearest(p)[3] for p in foot], default=0.0)
     through = len(hood_bvh.overlap(W.bvh_of(neck)))
+    through_robe = len(ndet["robe"].overlap(W.bvh_of(neck)))
     print(f"NECK clearance p01 {clear01 * 1000:.2f} median {clear_median * 1000:.2f} mm, "
-          f"over the hood {over_hood:.4f} of {len(top)}, inside the robe {in_robe:.4f} of {len(foot)} (worst {poke * 1000:.2f} mm out), "
-          f"{through} triangle pairs through the hood")
+          f"over the hood {over_hood:.4f} of {len(top)}, over the robe {over_robe:.4f} of {len(foot)} "
+          f"(furthest {lift * 1000:.2f} mm off), {through} triangle pairs through the hood, "
+          f"{through_robe} through the robe")
     if clear01 < NECK_MIN_CLEAR:
         raise SystemExit(f"the neck sits in the skin or gorget: p01 clearance {clear01 * 1000:.2f} mm")
     if not top or over_hood < 1.0:
         raise SystemExit(f"the neck slips under the hood: {over_hood:.4f} over it")
-    if ndet["bitten"]:
-        raise SystemExit(f"the robe still cuts into {ndet['bitten']} columns of the neck")
-    if poke > NECK_POKE:
-        raise SystemExit(f"the neck shows through the robe by {poke * 1000:.2f} mm")
+    if not foot or over_robe < 1.0:
+        raise SystemExit(f"the neck's foot slips under the robe: {over_robe:.4f} over it")
+    if lift > NECK_DRAPE_AIR + WOOL:
+        raise SystemExit(f"the neck's foot stands {lift * 1000:.2f} mm off the robe")
     if through:
         raise SystemExit(f"the neck passes through the hood at {through} triangle pairs")
+    if through_robe:
+        raise SystemExit(f"the neck passes through the robe at {through_robe} triangle pairs")
 
     pieces = [(donor, STEM, tris, True), (neck, NECK_STEM, neck_tris, True)]
     for obj, stem, _, _ in pieces:
@@ -1159,7 +1185,7 @@ def main():
         "built_from": "hood: icosphere hung on the low-passed radius of base.male.body "
                       "Head + neck_01, cut at the hood hem and the face opening, tip drawn "
                       "up and back; neck: a tube about the neck axis on the skin and the "
-                      "fitted chest.ember.gorget, over the hood's hem and ending above "
+                      "fitted chest.ember.gorget, over the hood's hem and draped over "
                       "chest.ember.robe out of wardrobe.glb",
         "skin_gap_mm": SKIN_GAP * 1000, "wall_mm": WOOL * 1000,
         "sphere_subdiv": SPHERE_SUBDIV, "hood_passes": HOOD_PASSES, "hood_stand_mm": detail["stand_mm"],
@@ -1184,9 +1210,9 @@ def main():
             "self_crossings": neck_crossings, "paint_faces": neck_paint,
             "clearance_p01_mm": round(clear01 * 1000, 2),
             "clearance_median_mm": round(clear_median * 1000, 2),
-            "over_hood": round(over_hood, 4), "inside_robe": round(in_robe, 4),
-            "robe_poke_mm": round(poke * 1000, 2),
-            "feet_above_robe": ndet["feet_above_robe"],
+            "over_hood": round(over_hood, 4), "over_robe": round(over_robe, 4),
+            "foot_lift_mm": round(lift * 1000, 2), "through_robe": through_robe,
+            "feet_short": ndet["feet_short"],
             "through_hood": through,
         },
         "look": "ember", "material": MATERIAL,

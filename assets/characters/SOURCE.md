@@ -154,7 +154,8 @@ BlenderKit material `d5ca8a6b-dd40-4f0c-a5c7-e030af0912c5` "Wool fabric"
 the donor `assets/props/source/cowl-head-v1.glb`.
 
 The same script builds `helmet.ember.neck` (`cowl-neck-v1.glb`): a tube about
-the neck axis from over the hood's hem down to just above the fitted
+the neck axis from over the hood's hem down over the fitted
 `chest.ember.robe`'s collar, same wool material, skinned by weight transfer off
-the skin level under it with Head blended in at the top. Lining and trim are vertex colour. All original, no third-party
+the skin level under it with Head blended in at the top and the robe's own
+weights at the foot. Lining and trim are vertex colour. All original, no third-party
 geometry.

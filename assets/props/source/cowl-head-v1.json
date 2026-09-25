@@ -1,5 +1,5 @@
 {
- "built_from": "hood: icosphere hung on the low-passed radius of base.male.body Head + neck_01, cut at the hood hem and the face opening, tip drawn up and back; neck: a tube about the neck axis on the skin and the fitted chest.ember.gorget, over the hood's hem and ending above chest.ember.robe out of wardrobe.glb",
+ "built_from": "hood: icosphere hung on the low-passed radius of base.male.body Head + neck_01, cut at the hood hem and the face opening, tip drawn up and back; neck: a tube about the neck axis on the skin and the fitted chest.ember.gorget, over the hood's hem and draped over chest.ember.robe out of wardrobe.glb",
  "skin_gap_mm": 5.0,
  "wall_mm": 3.8,
  "sphere_subdiv": 5,
@@ -61,10 +61,10 @@
   "top_z": 1.60436,
   "neckline_z": [
    1.50636,
-   1.54836
+   1.54636
   ],
   "thinnest_wall_mm": 0.0,
-  "median_wall_mm": 3.131,
+  "median_wall_mm": 2.916,
   "triangles": 6912,
   "triangles_reloaded": 6912,
   "self_crossings": 0,
@@ -73,12 +73,13 @@
    3456,
    0
   ],
-  "clearance_p01_mm": 3.02,
-  "clearance_median_mm": 20.94,
+  "clearance_p01_mm": 3.51,
+  "clearance_median_mm": 20.63,
   "over_hood": 1.0,
-  "inside_robe": 0.0,
-  "robe_poke_mm": 0.0,
-  "feet_above_robe": 71,
+  "over_robe": 1.0,
+  "foot_lift_mm": 10.98,
+  "through_robe": 0,
+  "feet_short": 30,
   "through_hood": 0
  },
  "look": "ember",
