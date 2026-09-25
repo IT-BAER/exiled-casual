@@ -442,7 +442,7 @@ RIGID_GEAR = (
         # The cowl's neck, built by `tools/prep_cowl.py` over the fitted hood and
         # over the robe, so it is placed as built and takes the body's own
         # weights down the neck: the hood stays rigid on the head.
-        "slot": "helmet", "look": "ember", "part": "neck",
+        "slot": "helmet", "look": "ember", "part": "drape",
         "src": "cowl-neck-v1.glb", "bone": "neck_01", "fit": "as_built",
         "deform": NECK_BONES, "matte": True, "neck_skin": True,
         "head_collar": {"hood": "helmet.ember.cowl", "fade": 0.04},

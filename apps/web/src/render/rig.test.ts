@@ -310,6 +310,15 @@ describe("what worn gear hides of the body", () => {
   });
 
   /**
+   * The ember cowl's wool runs from over its hood down over the robe, so the
+   * neck under it is closed: drawn, it came out through the wool at a jog.
+   */
+  it("closes the neck under the ember cowl alone", () => {
+    expect([...hiddenBaseParts({ ...BASE_LOOKS, helmet: "ember" })].sort()).toEqual(["hair", "neck"]);
+    expect(hiddenBaseParts({ ...BASE_LOOKS, helmet: "ironsworn" }).has("neck")).toBe(false);
+  });
+
+  /**
    * A dressed man keeps his head, his neck and his bare arms. The suit closes
    * the trunk, the collar - both clavicles, under its own gorget plate - and
    * the legs; the gauntlets close the hands and the boots close the feet. The
@@ -382,7 +391,7 @@ describe("wardrobe asset", () => {
       "base.male.arm_l", "base.male.arm_r", "base.male.collar",
       "base.male.neck",
       "base.male.leg_l", "base.male.leg_r",
-      "helmet.ironsworn.helm", "helmet.stalker.hood", "helmet.ember.cowl", "helmet.ember.neck", "weapon1.emberwand.mesh", "weapon2.buckler.mesh",
+      "helmet.ironsworn.helm", "helmet.stalker.hood", "helmet.ember.cowl", "helmet.ember.drape", "weapon1.emberwand.mesh", "weapon2.buckler.mesh",
       "weapon2.towershield.mesh",
       "chest.ironsworn.cuirass", "chest.ironsworn.gorget", "chest.ironsworn.greave", "chest.ironsworn.backing",
       "chest.ironsworn.backing_arm_l", "chest.ironsworn.backing_arm_r",
@@ -399,6 +408,17 @@ describe("wardrobe asset", () => {
       "gloves.stalker.glove_l", "gloves.stalker.glove_r",
       "gloves.ember.wrap_l", "gloves.ember.wrap_r",
     ].sort());
+  });
+
+  /**
+   * Worn gear hides body pieces by part name alone, in every slot (see
+   * `applyLooks`), so a gear part named like a body region is hidden with it.
+   */
+  it("names no gear part like a body region", () => {
+    const names = json.meshes.map((m) => m.name);
+    const part = (name: string) => name.split(".")[2];
+    const body = new Set(names.filter((n) => n.startsWith("base.")).map(part));
+    expect(names.filter((n) => !n.startsWith("base.") && body.has(part(n)))).toEqual([]);
   });
 
   /**
@@ -479,8 +499,8 @@ describe("wardrobe asset", () => {
    */
   it("deforms the cowl's neck from the head down to the trunk, and colours the wool", () => {
     const bin = glb.subarray(20 + json.buffers0Len);
-    const node = json.nodes.find((n) => n.name === "helmet.ember.neck");
-    expect(node, "no node helmet.ember.neck").toBeDefined();
+    const node = json.nodes.find((n) => n.name === "helmet.ember.drape");
+    expect(node, "no node helmet.ember.drape").toBeDefined();
     const prim = json.meshes[node!.mesh!]!.primitives[0]!;
     const joints = readAccessor(json, bin, prim.attributes["JOINTS_0"]!);
     const weights = readAccessor(json, bin, prim.attributes["WEIGHTS_0"]!);
@@ -498,7 +518,7 @@ describe("wardrobe asset", () => {
     expect(names.every((n) => NECK_BONES.includes(n)), `strays: ${names}`).toBe(true);
     expect(names).toContain("Head");
     expect(names).toContain("neck_01");
-    for (const mesh of ["helmet.ember.cowl", "helmet.ember.neck"]) {
+    for (const mesh of ["helmet.ember.cowl", "helmet.ember.drape"]) {
       const node = json.nodes.find((n) => n.name === mesh)!;
       expect(json.meshes[node.mesh!]!.primitives[0]!.attributes["COLOR_0"], mesh).toBeDefined();
     }

@@ -153,7 +153,7 @@ BlenderKit material `d5ca8a6b-dd40-4f0c-a5c7-e030af0912c5` "Wool fabric"
 `assets/props/source/wool_fabric.blend`, box-projected, scaled to 512 px and packed into
 the donor `assets/props/source/cowl-head-v1.glb`.
 
-The same script builds `helmet.ember.neck` (`cowl-neck-v1.glb`): a tube about
+The same script builds `helmet.ember.drape` (`cowl-neck-v1.glb`): a tube about
 the neck axis from over the hood's hem down over the fitted
 `chest.ember.robe`'s collar, same wool material, skinned by weight transfer off
 the skin level under it with Head blended in at the top and the robe's own

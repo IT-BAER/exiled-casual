@@ -41,7 +41,7 @@
   "triangles": 7324,
   "source": "cowl-head-v1.glb"
  },
- "helmet.ember.neck": {
+ "helmet.ember.drape": {
   "placed_as_authored": true,
   "deform_bones": [
    "neck_01",

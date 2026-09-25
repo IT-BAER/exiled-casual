@@ -298,7 +298,8 @@ export const BASE_LOOKS: Looks = {
  * the trunk and both legs, and its gorget plate (`chest.ironsworn.gorget`, the
  * collar region itself pushed out to steel) closes the COLLAR. The NECK stays
  * drawn: the gorget ring stands off it, and a hidden neck is a black void
- * inside the ring. The arms, the head, the hands and the feet are absent
+ * inside the ring - except under the ember cowl, see `COVERED_BY_LOOK`. The
+ * arms, the head, the hands and the feet are absent
  * because the arm is skin under a pauldron and a helmet, a gauntlet and a boot
  * own the rest, each its own item.
  */
@@ -317,12 +318,24 @@ const COVERED_BY: Partial<Record<Slot, readonly string[]>> = {
   chest: ["torso", "collar", "leg_l", "leg_r"],
 };
 
+/**
+ * Looks that close more than their slot does. The ember cowl's wool runs from
+ * over its hood down over the robe, so the neck inside it is closed: drawn, it
+ * came out through the wool at a jog.
+ */
+const COVERED_BY_LOOK: Partial<Record<Slot, Record<string, readonly string[]>>> = {
+  helmet: { ember: ["neck"] },
+};
+
 /** The `<slot>.<look>.<part>` pieces the worn gear replaces. */
 export function hiddenBaseParts(looks: Looks): ReadonlySet<string> {
   const hidden = new Set<string>();
   for (const [slot, parts] of Object.entries(COVERED_BY)) {
     if (looks[slot as Slot] === null) continue;
     for (const part of parts) hidden.add(part);
+  }
+  for (const [slot, byLook] of Object.entries(COVERED_BY_LOOK)) {
+    for (const part of byLook[looks[slot as Slot] ?? ""] ?? []) hidden.add(part);
   }
   return hidden;
 }
