@@ -217,7 +217,14 @@
       </p>
     </main>
     <div id="boot">
-      <img id="boot-logo" src="/textures/ui/menu/logo.webp" alt="" fetchpriority="high" />
+      <img
+        id="boot-logo"
+        src="/textures/ui/menu/logo.webp"
+        srcset="/textures/ui/menu/logo-512.webp 512w, /textures/ui/menu/logo.webp 1024w"
+        sizes="min(46vw, 760px)"
+        alt=""
+        fetchpriority="high"
+      />
       <div id="boot-ring"></div>
     </div>
     <div id="root"></div>

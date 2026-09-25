@@ -45,6 +45,8 @@ export function MainMenu({
 
       <img
         src={`${MENU_ART}/logo.webp`}
+        srcSet={`${MENU_ART}/logo-512.webp 512w, ${MENU_ART}/logo.webp 1024w`}
+        sizes="min(46vw, 760px)"
         alt="Exiled Casual"
         style={{
           position: "absolute",

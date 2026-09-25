@@ -65,6 +65,10 @@ PLAN: dict[str, tuple[str, int | None, int | None]] = {
 
 ALPHA_FLOOR = 8
 
+# Narrower copies for <img srcset>: stem -> (output name, width). The logo is the
+# menu's LCP element and a phone draws it about 330 device px wide.
+SRCSET_COPIES: dict[str, tuple[str, int]] = {"logo_v4": ("logo-512.webp", 512)}
+
 # The three class starter armours are ITEM icons, not menu art, so they land in
 # the item folder with the rest of the inventory art. They are built here anyway
 # because their masters are generated alongside the menu's and the crop-then-
@@ -136,6 +140,11 @@ def main() -> int:
         if stem.startswith("panel_frame"):
             note = f"  border-image-slice {' '.join(str(v) for v in frame_slice(im))}"
         print(f"{out_name:26} {im.width}x{im.height}  {out.stat().st_size // 1024} KiB{note}")
+        if stem in SRCSET_COPIES:
+            name, w = SRCSET_COPIES[stem]
+            small = im.resize((w, max(1, round(im.height * w / im.width))), Image.LANCZOS)
+            small.convert("RGBA").save(DST / name, quality=quality, method=6)
+            print(f"{name:26} {small.width}x{small.height}  {(DST / name).stat().st_size // 1024} KiB")
 
     ITEMS_DST.mkdir(parents=True, exist_ok=True)
     for stem, (out_name, height) in ITEM_ICONS.items():
