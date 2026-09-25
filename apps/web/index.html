@@ -10,7 +10,67 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#07080a" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <title>Exiled Casual</title>
+    <title>Exiled Casual: a free browser ARPG inspired by Path of Exile</title>
+    <meta
+      name="description"
+      content="Exiled Casual is a free action RPG you play in your browser, with nothing to install. Atlas maps, procedural areas, deep PoE-style loot and crafting, and a 239-node passive tree, drawing on Path of Exile 1 and 2."
+    />
+    <link rel="canonical" href="https://exiledcasual.com/" />
+    <meta property="og:title" content="Exiled Casual: a free browser ARPG" />
+    <meta
+      property="og:description"
+      content="A free action RPG in your browser, inspired by Path of Exile 1 and 2. Atlas maps, procedural areas, deep loot and crafting."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://exiledcasual.com/" />
+    <meta property="og:site_name" content="Exiled Casual" />
+    <meta property="og:image" content="https://exiledcasual.com/textures/ui/menu/menu_backdrop.jpg" />
+    <meta property="og:image:width" content="2048" />
+    <meta property="og:image:height" content="1152" />
+    <meta property="og:image:alt" content="A ruined hall lit by two braziers, the Exiled Casual key art" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Exiled Casual: a free browser ARPG" />
+    <meta
+      name="twitter:description"
+      content="A free action RPG in your browser, inspired by Path of Exile 1 and 2. Atlas maps, procedural areas, deep loot and crafting."
+    />
+    <meta name="twitter:image" content="https://exiledcasual.com/textures/ui/menu/menu_backdrop.jpg" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "@id": "https://exiledcasual.com/#website",
+            "url": "https://exiledcasual.com/",
+            "name": "Exiled Casual",
+            "description": "The official site of Exiled Casual, a free browser action RPG, playable on this page."
+          },
+          {
+            "@type": "VideoGame",
+            "@id": "https://exiledcasual.com/#game",
+            "name": "Exiled Casual",
+            "url": "https://exiledcasual.com/",
+            "image": "https://exiledcasual.com/textures/ui/menu/menu_backdrop.jpg",
+            "description": "A free action RPG that runs entirely in the browser, inspired by Path of Exile 1 and 2: Atlas map progression with Waystones, procedurally generated areas, deterministic real-time combat, deep itemization with affixes, rares, uniques and crafting orbs, and a 239-node passive tree. Early development build.",
+            "genre": ["Action role-playing game", "Hack and slash"],
+            "playMode": "SinglePlayer",
+            "applicationCategory": "Game",
+            "operatingSystem": "Any (web browser with WebGL2)",
+            "gamePlatform": "Web browser",
+            "isAccessibleForFree": true,
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "EUR",
+              "availability": "https://schema.org/InStock"
+            },
+            "author": { "@type": "Organization", "name": "IT-BAER", "url": "https://github.com/IT-BAER" },
+            "sameAs": ["https://github.com/IT-BAER/exiled-casual"]
+          }
+        ]
+      }
+    </script>
     <link rel="preload" href="/fonts/cinzel-latin.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/fonts/ebgaramond-latin.woff2" as="font" type="font/woff2" crossorigin />
     <style>
@@ -120,6 +180,35 @@
     </style>
   </head>
   <body>
+    <!-- Crawlable prose: the game is a canvas, so crawlers and AI agents reading
+         the raw HTML would otherwise see an empty body. Visually hidden, read by
+         screen readers too; outside #root so React never touches it. -->
+    <main
+      style="
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+      "
+    >
+      <h1>Exiled Casual: a free browser ARPG</h1>
+      <p>
+        Exiled Casual is a free action role-playing game that runs entirely in your web browser,
+        with nothing to install. It draws on Path of Exile 1 and 2 both: an Atlas opened with
+        Waystones, procedurally generated maps, click-to-move combat with skills and ailments, and
+        deep itemization with prefix and suffix affixes, magic, rare and unique items, crafting orbs
+        and a stash.
+      </p>
+      <p>
+        Characters grow through a 239-node passive tree across eight disciplines, wear visible 3D
+        gear, and save locally in the browser. The game is an early development build and changes
+        often. It is an original fan project, not affiliated with Grinding Gear Games. Development
+        happens in the open at
+        <a href="https://github.com/IT-BAER/exiled-casual">github.com/IT-BAER/exiled-casual</a>.
+      </p>
+    </main>
     <div id="boot"><div id="boot-ring"></div></div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
