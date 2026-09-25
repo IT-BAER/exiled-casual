@@ -1,5 +1,5 @@
 {
- "built_from": "icosphere hung on the low-passed radius of base.male.body Head + neck_01, cut at the hood hem and the face opening",
+ "built_from": "hood: icosphere hung on the low-passed radius of base.male.body Head + neck_01, cut at the hood hem and the face opening, tip drawn up and back; neck: a tube about the neck axis on the skin and the fitted chest.ember.gorget, over the hood's hem and ending above chest.ember.robe out of wardrobe.glb",
  "skin_gap_mm": 5.0,
  "wall_mm": 3.8,
  "sphere_subdiv": 5,
@@ -13,37 +13,79 @@
   "power": 3.0,
   "front_v": 0.0
  },
+ "tip": {
+  "dir": [
+   0.0,
+   0.8485586047172546,
+   0.5291012525558472
+  ],
+  "front_deg": 55.0,
+  "back_deg": 35.0,
+  "len": 0.08,
+  "power": 1.4
+ },
  "hem_w": -0.8,
  "hem_z": 1.59992,
  "shell_vertices": 1893,
  "rim_edges": 0,
  "hem_shared": 122,
  "thinnest_wall_mm": 0.0,
- "median_wall_mm": 3.605,
- "vertices": 4497,
+ "median_wall_mm": 3.432,
  "triangles": 7324,
  "triangles_reloaded": 7324,
  "self_crossings": 0,
- "back_shift": 0.04623,
+ "paint_faces": [
+  3415,
+  3662,
+  247
+ ],
+ "back_shift": 0.17004,
  "fit": {
-  "dome_width_ratio": 1.075,
-  "scale": 0.82397,
-  "skull_gap_p01_mm": 0.64,
-  "skull_gap_median_mm": 4.55,
+  "dome_width_ratio": 1.2,
+  "scale": 0.9223,
+  "skull_gap_p01_mm": 0.45,
+  "skull_gap_median_mm": 8.76,
   "skull_covered": 1.0,
   "skull_points": 237,
-  "peak_above_crown_mm": 10.9,
-  "forward_of_head_centre_mm": -10.2
+  "peak_above_crown_mm": 16.9,
+  "forward_of_head_centre_mm": -37.6
  },
  "fit_args": {
-  "width_from": 1.0,
-  "back_shift": 0.046234932843415226
+  "width_from": 1.2,
+  "back_shift": 0.17004238350024906
+ },
+ "fitted_hem_z": 1.58436,
+ "neck": {
+  "shell_vertices": 1800,
+  "hem_shared": 144,
+  "top_z": 1.60436,
+  "neckline_z": [
+   1.50636,
+   1.54836
+  ],
+  "thinnest_wall_mm": 0.0,
+  "median_wall_mm": 3.131,
+  "triangles": 6912,
+  "triangles_reloaded": 6912,
+  "self_crossings": 0,
+  "paint_faces": [
+   3456,
+   3456,
+   0
+  ],
+  "clearance_p01_mm": 3.02,
+  "clearance_median_mm": 20.94,
+  "over_hood": 1.0,
+  "inside_robe": 0.0,
+  "robe_poke_mm": 0.0,
+  "feet_above_robe": 71,
+  "through_hood": 0
  },
  "look": "ember",
  "material": "MI_Cowl_Cloth",
  "roughness_pre_matte": 0.88,
  "wrote": [
-  "D:/VSC/exiled-casual/assets/props/source/trellis_local/cowl-head-v1.glb",
-  "D:/VSC/exiled-casual/assets/props/source/cowl-head-v1.glb"
+  "D:/VSC/exiled-casual/assets/props/source/cowl-head-v1.glb",
+  "D:/VSC/exiled-casual/assets/props/source/cowl-neck-v1.glb"
  ]
 }

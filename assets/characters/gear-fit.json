@@ -28,18 +28,38 @@
   "source": "leather-hood-20k-v1.glb"
  },
  "helmet.ember.cowl": {
-  "dome_width_ratio": 1.075,
-  "scale": 0.82397,
-  "skull_gap_p01_mm": 0.64,
-  "skull_gap_median_mm": 4.55,
+  "dome_width_ratio": 1.2,
+  "scale": 0.9223,
+  "skull_gap_p01_mm": 0.45,
+  "skull_gap_median_mm": 8.76,
   "skull_covered": 1.0,
   "skull_points": 237,
-  "peak_above_crown_mm": 10.9,
-  "forward_of_head_centre_mm": -10.2,
+  "peak_above_crown_mm": 16.9,
+  "forward_of_head_centre_mm": -37.6,
   "bone": "Head",
   "fit": "head_shell",
   "triangles": 7324,
   "source": "cowl-head-v1.glb"
+ },
+ "helmet.ember.neck": {
+  "placed_as_authored": true,
+  "deform_bones": [
+   "neck_01",
+   "spine_02",
+   "spine_03",
+   "clavicle_l",
+   "clavicle_r"
+  ],
+  "deform_groups": 5,
+  "head_collar": {
+   "hem_z": 1.58436,
+   "fade_mm": 40.0,
+   "vertices": 3744
+  },
+  "bone": "neck_01",
+  "fit": "as_built",
+  "triangles": 6912,
+  "source": "cowl-neck-v1.glb"
  },
  "weapon1.emberwand.mesh": {
   "scale": 0.19382,

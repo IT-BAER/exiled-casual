@@ -229,6 +229,9 @@ const RIGID_BONES: Record<string, string> = {
  * as well as the trunk, the shoulders and the hips. No forearm: the sleeve ends
  * at the pauldron and the arm below it is skin.
  */
+/** Every joint the ember cowl's neck may answer to; see `NECK_BONES` in the build. */
+const NECK_BONES = ["Head", "neck_01", "spine_02", "spine_03", "clavicle_l", "clavicle_r"];
+
 const PLATE_BONES = [
   "spine_01", "spine_02", "spine_03", "neck_01",
   "clavicle_l", "clavicle_r", "upperarm_l", "upperarm_r",
@@ -379,7 +382,7 @@ describe("wardrobe asset", () => {
       "base.male.arm_l", "base.male.arm_r", "base.male.collar",
       "base.male.neck",
       "base.male.leg_l", "base.male.leg_r",
-      "helmet.ironsworn.helm", "helmet.stalker.hood", "helmet.ember.cowl", "weapon1.emberwand.mesh", "weapon2.buckler.mesh",
+      "helmet.ironsworn.helm", "helmet.stalker.hood", "helmet.ember.cowl", "helmet.ember.neck", "weapon1.emberwand.mesh", "weapon2.buckler.mesh",
       "weapon2.towershield.mesh",
       "chest.ironsworn.cuirass", "chest.ironsworn.gorget", "chest.ironsworn.greave", "chest.ironsworn.backing",
       "chest.ironsworn.backing_arm_l", "chest.ironsworn.backing_arm_r",
@@ -466,6 +469,39 @@ describe("wardrobe asset", () => {
     // joint above it or a shin swings with the thigh.
     expect(names).toContain("calf_l");
     expect(names).toContain("calf_r");
+  });
+
+  /**
+   * The cowl's neck runs from over the hood's hem down to the robe's collar.
+   * Its top answers to Head, or it lifts off the rigid hood's hem when he looks
+   * down, and its foot to the neck and trunk the robe rides. Lining and trim are
+   * vertex colour on the one wool material, so both cloth pieces carry COLOR_0.
+   */
+  it("deforms the cowl's neck from the head down to the trunk, and colours the wool", () => {
+    const bin = glb.subarray(20 + json.buffers0Len);
+    const node = json.nodes.find((n) => n.name === "helmet.ember.neck");
+    expect(node, "no node helmet.ember.neck").toBeDefined();
+    const prim = json.meshes[node!.mesh!]!.primitives[0]!;
+    const joints = readAccessor(json, bin, prim.attributes["JOINTS_0"]!);
+    const weights = readAccessor(json, bin, prim.attributes["WEIGHTS_0"]!);
+    const skin = json.skins[node!.skin!]!;
+    const used = new Set<number>();
+    for (let v = 0; v < weights.length / 4; v += 1) {
+      const w = weights.slice(v * 4, v * 4 + 4);
+      const j = joints.slice(v * 4, v * 4 + 4);
+      for (let k = 0; k < 4; k += 1) {
+        if (w[k]! > 0.0001) used.add(j[k]!);
+      }
+      expect(w[0]! + w[1]! + w[2]! + w[3]!).toBeCloseTo(1, 3);
+    }
+    const names = [...used].map((u) => json.nodes[skin.joints[u]!]!.name);
+    expect(names.every((n) => NECK_BONES.includes(n)), `strays: ${names}`).toBe(true);
+    expect(names).toContain("Head");
+    expect(names).toContain("neck_01");
+    for (const mesh of ["helmet.ember.cowl", "helmet.ember.neck"]) {
+      const node = json.nodes.find((n) => n.name === mesh)!;
+      expect(json.meshes[node.mesh!]!.primitives[0]!.attributes["COLOR_0"], mesh).toBeDefined();
+    }
   });
 
   /**

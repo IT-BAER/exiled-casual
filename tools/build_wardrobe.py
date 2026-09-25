@@ -396,6 +396,13 @@ BODY_REGIONS = {
 }
 BODY_REGION_WEIGHT = 0.5    # summed weight over a region's bones to belong to it
 
+# The cowl's neck, from over the hood's hem down to the robe's collar. Head is
+# not transferred: the outer layer lies nearer the jaw than the lining, took Head
+# where the lining took the neck, and the lining came through. `head_collar`
+# hands the top to Head by height instead, over the whole collar: a short fade
+# folded the wool on itself when the head dipped.
+NECK_BONES = ("neck_01", "spine_02", "spine_03", "clavicle_l", "clavicle_r")
+
 RIGID_GEAR = (
     {
         "slot": "helmet", "look": "ironsworn", "part": "helm",
@@ -422,8 +429,17 @@ RIGID_GEAR = (
         # a shell with no face in it has its bbox centre behind the head's.
         "slot": "helmet", "look": "ember", "part": "cowl",
         "src": "cowl-head-v1.glb", "bone": "Head", "fit": "head_shell",
-        "fit_args": {"width_from": 1.0, "back_shift": 0.04623},
+        "fit_args": {"width_from": 1.2, "back_shift": 0.17004},
         "matte": True,
+    },
+    {
+        # The cowl's neck, built by `tools/prep_cowl.py` over the fitted hood and
+        # above the robe, so it is placed as built and takes the body's own
+        # weights down the neck: the hood stays rigid on the head.
+        "slot": "helmet", "look": "ember", "part": "neck",
+        "src": "cowl-neck-v1.glb", "bone": "neck_01", "fit": "as_built",
+        "deform": NECK_BONES, "matte": True, "neck_skin": True,
+        "head_collar": {"hood": "helmet.ember.cowl", "fade": 0.04},
     },
     {
         "slot": "weapon1", "look": "emberwand", "part": "mesh",
@@ -3063,7 +3079,13 @@ def fit_tower_strap(donor, body, rig):
     }
 
 
+def fit_as_built(donor, body, rig):
+    """Place a donor that was built in this body's own frame; its builder gates it."""
+    return Matrix.Identity(4), {"placed_as_authored": True}
+
+
 FITTERS = {
+    "as_built": fit_as_built,
     "head_shell": fit_head_shell,
     "hand_grip": fit_hand_grip,
     "forearm_strap": fit_forearm_strap,
@@ -3316,6 +3338,67 @@ def split_arm_plates(donor, body, rig, arms, classify_bones, stem, at, margin,
     _cut_verts(donor, sorted({i for _, _, eroded in made for i in eroded}))
     print(f"  {donor.name}: {len(donor.data.vertices)} vertices of {n} kept")
     return [(piece, bone) for piece, bone, _ in made]
+
+
+def head_collar(mesh, hood, fade):
+    """Hand the cloth over a rigid hood's hem to Head, fading out `fade` below it.
+
+    By height alone, so both layers of the wool take the same weight: nearest-skin
+    transfer gave the lining the neck where the outer layer took Head.
+    """
+    worn = bpy.data.objects.get(hood)
+    if worn is None:
+        raise SystemExit(f"{mesh.name}: {hood} has to be fitted before it")
+    hem = min((worn.matrix_world @ v.co).z for v in worn.data.vertices)
+    head = mesh.vertex_groups.get("Head") or mesh.vertex_groups.new(name="Head")
+    held = 0
+    for v in mesh.data.vertices:
+        t = min(1.0, max(0.0, ((mesh.matrix_world @ v.co).z - hem + fade) / fade))
+        h = t * t * (3.0 - 2.0 * t)
+        if h <= 0.0:
+            continue
+        for g in v.groups:
+            if g.group != head.index:
+                g.weight *= 1.0 - h
+        head.add([v.index], h, "REPLACE")
+        held += 1
+    return {"hem_z": round(hem, 5), "fade_mm": fade * 1000, "vertices": held}
+
+
+def onto_neck_skin(mesh, body, rig):
+    """Move every vertex level onto the skin under it, out of the neck axis.
+
+    Returns the old coordinates. A wall standing off the neck took each layer's
+    weights off whichever skin lay nearest it, the two layers bent apart and
+    crossed; on the same ray both read the same skin.
+    """
+    me = body.data.copy()
+    me.transform(body.matrix_world)
+    me.calc_loop_triangles()
+    bvh = mathutils.bvhtree.BVHTree.FromPolygons(
+        [v.co.copy() for v in me.vertices], [tuple(t.vertices) for t in me.loop_triangles])
+    bpy.data.meshes.remove(me)
+    bone = rig.data.bones["neck_01"]
+    axis_y = ((rig.matrix_world @ bone.head_local).y + (rig.matrix_world @ bone.tail_local).y) / 2
+    to_local = mesh.matrix_world.inverted()
+    old = [v.co.copy() for v in mesh.data.vertices]
+    for v in mesh.data.vertices:
+        p = mesh.matrix_world @ v.co
+        c = Vector((0.0, axis_y, p.z))
+        d = Vector((p.x, p.y - axis_y, 0.0))
+        if d.length < 1e-6:
+            continue
+        d.normalize()
+        o, hit = c + d, None
+        for _ in range(32):
+            h = bvh.ray_cast(o, -d)[0]
+            if h is None or (h - c).dot(d) > 0:
+                hit = h
+                break
+            o = h - d * 1e-4
+        if hit is not None:
+            v.co = to_local @ hit
+    return old
 
 
 def skin_by_transfer(mesh, body, rig, bones):
@@ -3577,9 +3660,15 @@ def build_rigid_gear(rig, body):
                                       overlap_band_mm=PLATE_SPLIT_MARGIN * 2000)
             print(f"fitted {piece.name}: {cap_tris} tris rigid on {bone}")
         if spec.get("deform"):
+            anchor = onto_neck_skin(donor, body, rig) if spec.get("neck_skin") else None
             groups = skin_by_transfer(donor, body, rig, spec["deform"])
+            if anchor is not None:
+                for v, co in zip(donor.data.vertices, anchor):
+                    v.co = co
             detail["deform_bones"] = list(spec["deform"])
             detail["deform_groups"] = groups
+            if spec.get("head_collar"):
+                detail["head_collar"] = head_collar(donor, **spec["head_collar"])
         else:
             skin_to_bone(donor, rig, spec["bone"])
         if spec.get("skirt") is not None:
