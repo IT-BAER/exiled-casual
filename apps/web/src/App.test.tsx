@@ -15,6 +15,8 @@ vi.mock("./GameView", () => ({
 vi.mock("./menu/MenuStage", () => ({
   MenuStage: ({ classId }: { classId: string }) => <div data-testid="menu-stage">{classId}</div>,
 }));
+const warm = vi.hoisted(() => vi.fn(() => Promise.resolve()));
+vi.mock("./menu/warm-stage", () => ({ warmMenuStage: warm }));
 
 import { App } from "./App";
 
@@ -55,6 +57,16 @@ describe("App routing", () => {
     expect(await screen.findByTestId("main-menu")).toBeTruthy();
     // The whole point of the split: no engine, no worker, until a character is chosen.
     expect(screen.queryByTestId("game-view")).toBeNull();
+  });
+
+  it("warms the stage on the first input, never on a timer", async () => {
+    warm.mockClear();
+    render(<App />);
+    await screen.findByTestId("main-menu");
+    await new Promise((r) => setTimeout(r, 600));
+    expect(warm).not.toHaveBeenCalled();
+    fireEvent.pointerMove(window);
+    expect(warm).toHaveBeenCalledTimes(1);
   });
 
   it("play asks which world before it shows anyone", async () => {

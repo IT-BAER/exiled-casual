@@ -30,7 +30,9 @@ DST = pathlib.Path(__file__).resolve().parent.parent / "apps" / "web" / "public"
 PLAN: dict[str, tuple[str, int | None, int | None]] = {
     "menu_backdrop_v3": ("menu_backdrop.jpg", None, 86),
     "select_backdrop_v1": ("select_backdrop.jpg", None, 86),
-    "logo_v4": ("logo.png", 1024, None),
+    # WebP, not PNG: the logo is the menu's LCP element, and at q90 it is a
+    # quarter of the PNG's 620 KB with no visible loss over the backdrop.
+    "logo_v4": ("logo.webp", 1024, 90),
     "button_plate_v1": ("button_plate.png", 880, None),
     "panel_frame_v1": ("panel_frame.png", 512, None),
     "row_plate_v1": ("row_plate.png", 1024, None),
@@ -126,6 +128,8 @@ def main() -> int:
         out = DST / out_name
         if quality is None:
             im.convert("RGBA").save(out, optimize=True)
+        elif out.suffix == ".webp":
+            im.convert("RGBA").save(out, quality=quality, method=6)
         else:
             im.convert("RGB").save(out, quality=quality, optimize=True, progressive=True)
         note = ""

@@ -158,6 +158,13 @@
         transition: opacity 220ms linear;
       }
       #boot[hidden] { display: none; }
+      /* MainMenu's logo, same file and same box, so it is painted from the HTML
+         (the page's LCP) and the menu's own copy lands exactly on top of it. */
+      #boot-logo {
+        position: absolute; top: 3.5vh; left: 50%; transform: translateX(-50%);
+        width: min(46vw, 760px);
+        filter: drop-shadow(0 10px 34px rgba(0,0,0,0.85));
+      }
       #boot.gone { opacity: 0; pointer-events: none; }
       /* The same rendered ring the React plate draws, in the same place, so the
          handover does not move it. A CSS animation keeps turning while the main
@@ -209,7 +216,10 @@
         <a href="https://github.com/IT-BAER/exiled-casual">github.com/IT-BAER/exiled-casual</a>.
       </p>
     </main>
-    <div id="boot"><div id="boot-ring"></div></div>
+    <div id="boot">
+      <img id="boot-logo" src="/textures/ui/menu/logo.webp" alt="" fetchpriority="high" />
+      <div id="boot-ring"></div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

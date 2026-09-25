@@ -44,7 +44,7 @@ function Soon(): React.ReactElement {
       <Atmosphere backdrop={`${MENU_ART}/menu_backdrop.jpg`} braziers={BRAZIERS} />
 
       <img
-        src={`${MENU_ART}/logo.png`}
+        src={`${MENU_ART}/logo.webp`}
         alt="Exiled Casual"
         style={{
           position: "absolute",

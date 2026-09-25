@@ -63,7 +63,7 @@ describe("UI_ART", () => {
     // Screens the player only ever sees BEFORE the game starts warm themselves by
     // being on screen; there is nothing to preload them ahead of.
     const menuOnly = new Set([
-      "/textures/ui/menu/logo.png",
+      "/textures/ui/menu/logo.webp",
       "/textures/ui/menu/menu_backdrop.jpg",
       "/textures/ui/menu/select_backdrop.jpg",
       "/textures/ui/menu/fog_sheet.png",

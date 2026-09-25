@@ -17,7 +17,7 @@ const OUT = "dist-soon";
 /** Everything `soon.html` and `soon.tsx` reference by URL. */
 const ASSETS = [
   "textures/ui/menu/menu_backdrop.jpg",
-  "textures/ui/menu/logo.png",
+  "textures/ui/menu/logo.webp",
   "textures/ui/menu/gilt_metal.png",
   "fonts/cinzel-latin.woff2",
   "fonts/OFL.txt",
