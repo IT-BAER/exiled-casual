@@ -298,3 +298,39 @@ about where the body ends.
 <td width="50%"><img src="screenshots/2026-09-20-robe-backing-through-cloth.jpeg" alt="Robed character with the backing shells tinted red, showing red patches through the cloth at the hip and thighs" width="100%"><br><sub>Red backing through the settled drape.</sub></td>
 </tr>
 </table>
+
+## 2026-09-20 · One armour family per class
+
+Every class now starts dressed head to foot in its own family: Ironsworn in plate, Stalker in
+leathers, Emberbound in a robe. The loose bases that named neither a class nor a slot are gone,
+and old saves resolve through a rename table. The same day fixed what the morning's audit found:
+suits no longer bury themselves in the body, so their backing stops standing through the cloth and
+the steel, cloth near the hip axis rides the pelvis instead of tearing the robe open, and the coat
+swings instead of planking.
+
+<table>
+<tr>
+<td width="33%"><img src="screenshots/2026-09-20-class-ironsworn.jpeg" alt="Ironsworn character in the black plate set with helm, cuirass, fauld and sabatons" width="100%"><br><sub>Ironsworn plate.</sub></td>
+<td width="33%"><img src="screenshots/2026-09-20-class-stalker.jpeg" alt="Stalker character in a hooded leather coat with belt, gloves and boots" width="100%"><br><sub>Stalker leathers.</sub></td>
+<td width="33%"><img src="screenshots/2026-09-20-class-ember.jpeg" alt="Emberbound character in a black wool cowl and a floor-length robe with a red lining" width="100%"><br><sub>Emberbound robe.</sub></td>
+</tr>
+</table>
+
+## 2026-09-22 · A wool cowl for the Emberbound
+
+The robe's missing piece. The cowl is grown as a shell around the head's centre rather than
+fitted from a generated hood, so it cannot fold in through the ear, with Perlin folds, a hemmed
+face opening and a BlenderKit wool for colour and normal.
+
+## 2026-09-25 · The cowl meets the robe
+
+The cowl's neck now drapes over the robe's collar and rides the robe at its foot, so a pose lifts
+it onto cloth, not skin, and it closes under the wool so a jog no longer pushes the neck out
+through it. The robe's trousers also ride the legs now: they had been hanging on the skirt's
+chains, so a stance left each trouser leg ending beside its foot.
+
+<table>
+<tr>
+<td width="100%"><img src="screenshots/2026-09-25-ember-cowl.jpeg" alt="Close-up of the Emberbound's black wool cowl with its neck draped over the robe's collar" width="100%"><br><sub>Cowl and neck over the robe's collar.</sub></td>
+</tr>
+</table>
