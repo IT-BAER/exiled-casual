@@ -184,6 +184,7 @@ function kindOf(e: SnapshotEntity): MeshKind {
   if (e.kind === "vendor") return "vendor";
   if (e.kind === "container") return "container";
   if (e.kind === "groundItem") return "groundItem";
+  if (e.kind === "gold") return "gold";
   return "groundArea";
 }
 
@@ -414,7 +415,7 @@ export class SnapshotRenderer {
         e.radius,
         // The shared string channel: species for monsters, the furniture look
         // for containers, the base id for ground items (makeMesh reads it per kind).
-        e.species ?? e.look ?? e.baseId,
+        e.species ?? e.look ?? e.baseId ?? (e.kind === "gold" ? `gold:${e.amount ?? 1}:${e.jackpot ? 1 : 0}` : undefined),
         undefined,
         e.skillId,
       );

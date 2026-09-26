@@ -5,6 +5,7 @@ import {
   worldSfxMix,
 } from "./sfx";
 import { setRoom } from "./bus";
+import { playCoinPickup } from "./drop-sound";
 import { fxProfile } from "../render/skill-fx";
 
 /**
@@ -183,6 +184,8 @@ interface Options {
   room?: (amount: number) => void;
   stopLoop?: (key: string) => void;
   stopAllLoops?: () => void;
+  /** Gold collected. Synthesized, like the drop cues it answers (drop-sound.ts). */
+  coins?: (volume?: number, pan?: number) => void;
 }
 
 /**
@@ -204,6 +207,7 @@ export function createSoundscape(opts: Options = {}): Soundscape {
   const stopLoop = opts.stopLoop ?? stopSfxLoop;
   const stopAllLoops = opts.stopAllLoops ?? stopAllSfxLoops;
   const room = opts.room ?? setRoom;
+  const coins = opts.coins ?? playCoinPickup;
   /** Entity id -> loop key, for everything currently sounding. */
   const sustained = new Map<number, string>();
   let prev: Snapshot | null = null;
@@ -275,6 +279,10 @@ export function createSoundscape(opts: Options = {}): Soundscape {
           // both are the same burst as far as the ear is concerned.
           const cue = fxProfile(e.skillId).impactCue;
           if (cue) play(cue, ...at(e));
+        } else if (e.kind === "gold") {
+          // A pile only leaves the floor it lies on by being walked over.
+          const [volume, , pan] = at(e);
+          coins(volume, pan);
         }
         // Whatever it was, it is not sounding any more.
         const key = sustained.get(id);

@@ -38,6 +38,30 @@ function snapWith(entities: Snapshot["entities"]): Snapshot {
 }
 
 describe("LootLabels", () => {
+  it("plates a gold pile with its amount, and a jackpot brighter than a plain pile", () => {
+    render(<LootLabels project={null} snapshot={snapWith([
+      { id: 21, kind: "gold", x: 1, y: 0, amount: 14, jackpot: false },
+      { id: 22, kind: "gold", x: 2, y: 0, amount: 250, jackpot: true },
+    ])} />);
+    const plain = screen.getByTestId("loot-label-21");
+    const jackpot = screen.getByTestId("loot-label-22");
+    expect(plain).toHaveTextContent("14x Gold");
+    expect(jackpot).toHaveTextContent("250x Gold");
+    expect(plain.dataset["jackpot"]).toBe("false");
+    expect(jackpot.dataset["jackpot"]).toBe("true");
+    // Walked over, never clicked: the click belongs to the floor under it.
+    expect(plain.style.pointerEvents).toBe("none");
+  });
+
+  it("announces a new gold pile with the gold cue, the jackpot with its own", () => {
+    const { rerender } = render(<LootLabels project={null} snapshot={snapWith([])} />);
+    rerender(<LootLabels project={null} snapshot={snapWith([
+      { id: 31, kind: "gold", x: 1, y: 0, amount: 9, jackpot: false },
+      { id: 32, kind: "gold", x: 1, y: 1, amount: 90, jackpot: true },
+    ])} />);
+    expect(vi.mocked(playDropSound).mock.calls.map((c) => c[0])).toEqual(["gold", "gold-jackpot"]);
+  });
+
   it("positions a new ground-item cue relative to the player", () => {
     const { rerender } = render(<LootLabels project={null} snapshot={snapWith([])} />);
     rerender(<LootLabels project={null} snapshot={snapWith([

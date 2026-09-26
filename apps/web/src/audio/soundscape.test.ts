@@ -491,3 +491,28 @@ describe("environment", () => {
     expect(pans.at(-1)).toBeGreaterThan(pans[0]!);
   });
 });
+
+describe("gold pickup cue", () => {
+  const pile = (id: number): SnapshotEntity => ({ id, kind: "gold", x: 1, y: 0, amount: 12, jackpot: false });
+  const coins = (seq: Snapshot[]) => {
+    let n = 0;
+    const s = createSoundscape({ play: () => {}, coins: () => { n++; } });
+    s.reset(null);
+    for (const it of seq) s.observe(it);
+    return n;
+  };
+
+  it("jingles once for each pile that left the floor", () => {
+    expect(coins([
+      snap({ tick: 1, entities: [pile(5), pile(6)] }),
+      snap({ tick: 2, entities: [] }),
+    ])).toBe(2);
+  });
+
+  it("stays quiet when the area changed under the piles", () => {
+    expect(coins([
+      snap({ tick: 1, entities: [pile(5)] }),
+      snap({ tick: 2, area: "hideout", entities: [] }),
+    ])).toBe(0);
+  });
+});

@@ -365,6 +365,16 @@ describe("buildSnapshot — session fields and interactables", () => {
 });
 
 describe("buildSnapshot — ground items and inventory", () => {
+  it("reports a gold pile with its amount and jackpot flag", () => {
+    const { world, sim, playerEntity } = createCombatSim(42, { area: "map" });
+    const pp = world.get<Position>(playerEntity, "position")!;
+    const g = world.create();
+    world.set(g, "position", { x: pp.x + fp(1), y: pp.y });
+    world.set(g, "gold", { amount: 215, jackpot: 1 });
+    const pile = buildSnapshot(world, sim, 1, "test").entities.find((e) => e.id === g);
+    expect(pile).toMatchObject({ kind: "gold", amount: 215, jackpot: true, x: toNumber(pp.x + fp(1)) });
+  });
+
   it("reports ground items and an empty inventory in the snapshot", () => {
     const { world, sim, playerEntity } = createCombatSim(42, { area: "map" });
     const playerPos = world.get<Position>(playerEntity, "position")!;

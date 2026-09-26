@@ -185,7 +185,7 @@ export type ToWorker = ToWorker_Init | ToWorker_Intent | ToWorker_Reset | ToWork
 
 export interface SnapshotEntity {
   id: number;
-  kind: "monster" | "projectile" | "groundArea" | "telegraph" | "portal" | "mapDevice" | "stash" | "vendor" | "container" | "groundItem";
+  kind: "monster" | "projectile" | "groundArea" | "telegraph" | "portal" | "mapDevice" | "stash" | "vendor" | "container" | "groundItem" | "gold";
   x: number; y: number;
   radius?: number;
   life?: number; maxLife?: number;
@@ -238,6 +238,9 @@ export interface SnapshotEntity {
   look?: "chest" | "barrel" | "crate";
   /** container only: true once it has been opened and paid. */
   opened?: boolean;
+  /** gold only: how much the pile holds, and whether it rolled the jackpot tier. */
+  amount?: number;
+  jackpot?: boolean;
   /** groundItem only: rarity tint, display name, and affix lines for hover. */
   rarity?: ItemRarity;
   name?: string;

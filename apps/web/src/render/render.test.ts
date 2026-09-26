@@ -679,6 +679,23 @@ describe("createScene", () => {
 });
 
 describe("makeMesh kinds", () => {
+  it("draws a gold pile as coins on the floor, bigger for the jackpot, never as a fire pool", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const renderer = new SnapshotRenderer(scene);
+    renderer.apply(null, makeSnapshot({ entities: [
+      { id: 1, kind: "gold", x: 2, y: 0, amount: 8, jackpot: false },
+      { id: 2, kind: "gold", x: 4, y: 0, amount: 400, jackpot: true },
+    ] }), 1);
+    const plain = scene.getMeshByName("entity-1")!;
+    const jackpot = scene.getMeshByName("entity-2")!;
+    expect(plain.metadata?.gold).toBe(true);
+    expect(plain.getChildMeshes().length).toBeGreaterThan(2);
+    expect(jackpot.getChildMeshes().length).toBeGreaterThan(plain.getChildMeshes().length);
+    // Walked over, never clicked: a pickable pile would eat the move order.
+    expect(plain.getChildMeshes().every((m) => !m.isPickable)).toBe(true);
+  });
+
   it("makeMesh boss produces a mesh", () => {
     engine = new NullEngine();
     const { scene } = createScene(engine);

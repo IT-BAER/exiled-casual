@@ -37,6 +37,10 @@ const VOICES: Record<string, Voice> = {
   magic: { base: 540, modes: 3, decay: 0.8, gain: 0.26, strike: 3200, sub: [96, 0.5], wet: 0.22 },
   rare: { base: 620, modes: 4, decay: 1.5, gain: 0.32, strike: 3800, sub: [82, 1.0], wet: 0.34 },
   unique: { base: 305, modes: 5, decay: 2.6, gain: 0.4, strike: 4400, sub: [55, 2.4], wet: 0.5 },
+  // Gold is currency, so it gets its own voice (docs/09 rule 2): small, high and
+  // dry, a coin on stone. The jackpot pile rings long enough to turn the head.
+  gold: { base: 1250, modes: 3, decay: 0.35, gain: 0.14, strike: 5200, wet: 0.12 },
+  "gold-jackpot": { base: 980, modes: 4, decay: 1.2, gain: 0.3, strike: 5600, sub: [110, 0.4], wet: 0.3 },
 };
 
 /** One ringing mode: a sine with its own decay, detuned a touch so stacked modes
@@ -88,7 +92,22 @@ export function playDropSound(rarity: string | undefined, volume = 1, pan = 0): 
   if (!b) return;
   const v = VOICES[rarity ?? "normal"] ?? VOICES["normal"]!;
   const level = Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : 0;
+  ring(b, v, b.ctx.currentTime + 0.01, level, pan);
+}
+
+/** Gold collected: three coins landing in a purse, a hair apart and a touch detuned. */
+export function playCoinPickup(volume = 1, pan = 0): void {
+  const b = bus();
+  if (!b) return;
+  const level = Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : 0;
+  const v = VOICES["gold"]!;
   const now = b.ctx.currentTime + 0.01;
+  for (const [i, at] of [0, 0.055, 0.12].entries()) {
+    ring(b, { ...v, base: v.base * (1 + i * 0.07) }, now + at, level * (1 - i * 0.2), pan);
+  }
+}
+
+function ring(b: Bus, v: Voice, now: number, level: number, pan: number): void {
   strike(b, v.strike, now, v.gain * level * 0.9, v.wet, pan);
   for (let i = 0; i < v.modes; i++) {
     // Higher modes are quieter and die sooner, which is what stops a stack of

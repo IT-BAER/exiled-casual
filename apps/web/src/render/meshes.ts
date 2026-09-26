@@ -19,7 +19,7 @@ import { attachGroundModel } from "./ground-looks";
 import { hasRim, HIT_TINT, HIT_ALPHA } from "./rim";
 import { playSfx, worldSfxMix } from "../audio/sfx";
 
-export type MeshKind = "player" | "monster" | "rare" | "boss" | "projectile" | "groundArea" | "telegraph" | "portal" | "mapDevice" | "stash" | "vendor" | "container" | "groundItem";
+export type MeshKind = "player" | "monster" | "rare" | "boss" | "projectile" | "groundArea" | "telegraph" | "portal" | "mapDevice" | "stash" | "vendor" | "container" | "groundItem" | "gold";
 
 /**
  * Y-lift off the ground plane per kind (render only). The authored actors
@@ -45,6 +45,8 @@ const Y_LIFT: Record<MeshKind, number> = {
   container: 0,
   // small floor-level beacon marker
   groundItem: 0.15,
+  // the coins lift themselves off the floor
+  gold: 0,
 };
 
 export { Y_LIFT };
@@ -1402,6 +1404,30 @@ export function updateVendor(root: Mesh, hovered: boolean): void {
   parts.markMat.alpha = hovered ? 0.85 : 0.5;
 }
 
+/**
+ * A heap of coins, more of them the bigger the pile, heaped highest in the
+ * middle. No beam: gold is the floor's everyday reward, and a beam is kept for
+ * the items a filter would shout about. Nothing here is pickable, so a click on
+ * a pile walks the player onto it, which is what collects it.
+ */
+function buildGoldPile(scene: Scene, root: Mesh, amount: number, jackpot: boolean): void {
+  const coin = mat(scene, "gold-coin", 0.95, 0.72, 0.22, 0.45);
+  coin.specularColor = new Color3(0.6, 0.5, 0.25);
+  coin.specularPower = 32;
+  const n = Math.min(14, 3 + Math.floor(Math.log2(Math.max(1, amount)))) + (jackpot ? 6 : 0);
+  const heap = jackpot ? 0.06 : 0.03;
+  for (let i = 0; i < n; i++) {
+    const c = MeshBuilder.CreateCylinder(`${root.name}-coin${i}`, { diameter: 0.13, height: 0.022, tessellation: 12 }, scene);
+    const r = 0.07 * Math.sqrt(i);
+    const a = i * 2.39996; // golden angle, so no two coins line up
+    c.position.set(Math.cos(a) * r, 0.012 + heap * (1 - i / n), Math.sin(a) * r);
+    c.rotation.set((((i * 37) % 7) - 3) * 0.12, 0, (((i * 53) % 5) - 2) * 0.15);
+    c.material = coin;
+    c.isPickable = false;
+    c.parent = root;
+  }
+}
+
 /** Brighten the device emissive on mouse hover so it reads as interactive. */
 export function updateMapDevice(root: Mesh, hovered: boolean): void {
   const parts = root.metadata as { brassBody: StandardMaterial; brassRim: StandardMaterial } | null;
@@ -1533,6 +1559,15 @@ export function makeMesh(
     // `species` is the shared string channel on makeMesh; for containers it
     // carries the look ("chest" | "barrel" | "crate").
     buildContainer(scene, root, species ?? "chest");
+    return root;
+  }
+
+  if (kind === "gold") {
+    // `species` is the shared string channel; for gold it is `gold:<amount>:<jackpot 0|1>`.
+    const [, amount, jackpot] = (species ?? "").split(":");
+    const root = new Mesh(name, scene);
+    root.metadata = { gold: true };
+    buildGoldPile(scene, root, Number(amount) || 1, jackpot === "1");
     return root;
   }
 

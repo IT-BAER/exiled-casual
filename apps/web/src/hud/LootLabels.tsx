@@ -89,7 +89,7 @@ export function LootLabels({ snapshot, project, afterFrame, onPick, plates = tru
 
   // Ground items are static, so the world position can come from the last
   // snapshot even between ticks; only the projection has to be per-frame.
-  const items = (snapshot?.entities ?? []).filter((e) => e.kind === "groundItem");
+  const items = (snapshot?.entities ?? []).filter((e) => e.kind === "groundItem" || e.kind === "gold");
   for (const e of items) positions.current.set(e.id, { x: e.x, y: e.y });
 
   if (snapshot) {
@@ -103,7 +103,7 @@ export function LootLabels({ snapshot, project, afterFrame, onPick, plates = tru
             e.x - snapshot.player.x,
             e.y - snapshot.player.y,
           );
-          playDropSound(e.rarity, volume, pan);
+          playDropSound(e.kind === "gold" ? (e.jackpot ? "gold-jackpot" : "gold") : e.rarity, volume, pan);
         }
       }
       // Forget picked-up ids so a re-drop of the same entity id chimes again.
@@ -150,6 +150,37 @@ export function LootLabels({ snapshot, project, afterFrame, onPick, plates = tru
   return (
     <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
       {(plates ? items : []).map((e) => {
+        if (e.kind === "gold") return (
+          // NeverSink's two gold tiers (reference-screenshots/ground-loot2.png): a
+          // dim plate for the everyday pile, a bright framed one for the jackpot.
+          <div
+            key={e.id}
+            data-testid={`loot-label-${e.id}`}
+            data-jackpot={String(e.jackpot === true)}
+            ref={(node) => {
+              if (node) nodes.current.set(e.id, node);
+              else nodes.current.delete(e.id);
+            }}
+            style={{
+              position: "absolute",
+              left: 0,
+              top: 0,
+              visibility: "hidden",
+              padding: e.jackpot ? "3px 14px 4px" : "1px 8px 2px",
+              background: e.jackpot ? "rgba(8,8,8,0.88)" : "rgba(10,10,10,0.55)",
+              border: e.jackpot ? "1px solid #f3e3b0" : "none",
+              color: e.jackpot ? "#fff6dc" : "#b8a574",
+              font: `${e.jackpot ? 16 : 13}px ${SERIF}`,
+              fontVariant: "small-caps",
+              letterSpacing: "0.04em",
+              whiteSpace: "nowrap",
+              textShadow: "0 1px 2px #000",
+              pointerEvents: "none",
+            }}
+          >
+            {e.amount ?? 0}x Gold
+          </div>
+        );
         const rarity = (e.rarity ?? "normal") as keyof typeof RARITY;
         const look = RARITY[rarity] ?? RARITY.normal;
         // The base type only earns its own line where PoE2 gives it one: under a

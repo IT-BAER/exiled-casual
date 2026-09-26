@@ -11,7 +11,7 @@ import type { World, Entity } from "./ecs";
 import type {
   Health, Mana, Position, Cooldowns, CastingC, MonsterC,
   AilmentC, ProjectileC, GroundAreaC, BossC, TelegraphC,
-  SessionC, InteractableC, ContainerC, ItemC, InventoryC, StashC, VendorC, EquipmentC, FlasksC, DefensesC, OffenseC, ProgressC,
+  SessionC, InteractableC, ContainerC, ItemC, GoldC, InventoryC, StashC, VendorC, EquipmentC, FlasksC, DefensesC, OffenseC, ProgressC,
   EnergyShieldC, ShardsC, MoveDir, SkillsC,
 } from "./components";
 
@@ -337,6 +337,12 @@ export function buildSnapshot(
       baseId: ic.item.baseId,
       inRange: inRangeOf(pp.x, pp.y, ip.x, ip.y, PICKUP_RADIUS),
     });
+  }
+
+  for (const e of world.query("gold", "position")) {
+    const gp = world.get<Position>(e, "position")!;
+    const g = world.get<GoldC>(e, "gold")!;
+    entities.push({ id: e, kind: "gold", x: toNumber(gp.x), y: toNumber(gp.y), amount: g.amount, jackpot: g.jackpot === 1 });
   }
 
   entities.sort((a, b) => a.id - b.id);
