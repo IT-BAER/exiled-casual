@@ -57,7 +57,16 @@ export function slide(
   let ny = y;
   if (dx !== 0 && collision.isWalkable(x + dx, y, bodyRadius)) nx = x + dx;
   if (dy !== 0 && collision.isWalkable(nx, y + dy, bodyRadius)) ny = y + dy;
-  return { x: nx, y: ny };
+  if (nx !== x || ny !== y || (dx !== 0 && dy !== 0)) return { x: nx, y: ny };
+  // A one-axis move clipping a wall's tip has no free axis to slide on, so the
+  // body steps aside toward whichever diagonal clears; a flat wall clears neither.
+  const s = Math.abs(dx + dy);
+  for (const side of [s, -s]) {
+    const px = dx === 0 ? side : 0, py = dy === 0 ? side : 0;
+    if (collision.isWalkable(x + dx + px, y + dy + py, bodyRadius) &&
+        collision.isWalkable(x + px, y + py, bodyRadius)) return { x: x + px, y: y + py };
+  }
+  return { x, y };
 }
 
 /**

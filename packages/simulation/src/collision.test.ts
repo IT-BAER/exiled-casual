@@ -182,6 +182,20 @@ describe("slide", () => {
     expect(r.y).toBe(fp(3)); // parallel to it — allowed
   });
 
+  it("a body caught on a wall's tip steps around it instead of standing still", () => {
+    const tip = gridCollision(makeGrid(["..#..", "..#..", ".....", ".....", "....."]));
+    const r = fp(0.4);
+    // The wall's corner is (1.5, 1.5); at y 1.8 the disc clips it one step on.
+    let pos = { x: fp(1), y: fp(1.8) };
+    for (let i = 0; i < 20; i++) pos = slide(tip, pos.x, pos.y, fp(0.25), 0, r);
+    expect(pos.x).toBeGreaterThan(fp(3));
+  });
+
+  it("a flat wall still stops a body walking straight into it", () => {
+    const r = slide(wall, fp(1), fp(2), fp(0.25), 0, fp(0.4));
+    expect(r).toEqual({ x: fp(1), y: fp(2) });
+  });
+
   it("moves freely when nothing blocks", () => {
     const r = slide(wall, fp(0), fp(0), fp(1), fp(1), 0);
     expect(r.x).toBe(fp(1));
