@@ -583,7 +583,9 @@ export function GameView({
       const alpha = Math.min(1, (performance.now() - prevTickTime) / MS_PER_TICK);
       renderer.apply(prevSnap, curSnap, alpha);
       // The aim target updates every frame so the arm tracks the cursor live.
-      const aim = getAim();
+      // A bot has no cursor: its arm points where the sim turned it, which a cast sets.
+      const h = curSnap.player.heading;
+      const aim = bot && h ? { x: curSnap.player.x + h.x * 6, y: curSnap.player.y + h.y * 6 } : getAim();
       renderer.setAim(aim.x, aim.y);
       // Camera follows the player (interpolated) so they stay centred like an ARPG.
       // The 4th arg (cloneAlphaBetaRadius=true) keeps the orbit fixed and moves the
