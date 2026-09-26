@@ -347,3 +347,17 @@ wool, its buckles and studs filled away, with a fine leather grain or weave over
 <td width="50%"><img src="screenshots/2026-09-26-hood-ember.jpeg" alt="Emberbound in a charcoal wool cowl with red-brown streaks matching the robe" width="100%"><br><sub>Emberbound cowl in the robe's wool.</sub></td>
 </tr>
 </table>
+
+## 2026-09-26 · Loot lies on the floor
+
+A drop no longer stands on the floor as a glowing white hexagon: it lies there as the item itself,
+under its label and beam, the way PoE draws a small model of every ground item. Gear is the piece
+the character wears, laid down on its flattest side; belts, the focus, currency and waystones are
+props shaped after their inventory icons, each landing at its own angle.
+
+<table>
+<tr>
+<td width="50%"><img src="screenshots/2026-09-26-ground-item-robe.jpeg" alt="An Ember Robe dropped in the hideout, lying on the floor under its name plate and a pale beam" width="100%"><br><sub>A dropped robe lies on the floor.</sub></td>
+<td width="50%"><img src="screenshots/2026-09-26-ground-drop-props.jpeg" alt="Belts, a scroll, glowing orbs, a violet vial, a gold gem, a burning focus and a waystone scattered on the hideout floor" width="100%"><br><sub>Belts, currency, focus and waystone on the floor.</sub></td>
+</tr>
+</table>
