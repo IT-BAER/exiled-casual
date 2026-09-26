@@ -67,11 +67,15 @@ class RimPlugin extends MaterialPluginBase {
   constructor(material: Material) {
     // After lighting and tone mapping, like the dissolve edge: this is its own
     // light, not a surface the braziers get a vote on.
-    super(material, NAME, 300, {}, true, true);
+    super(material, NAME, 300, {}, true, false);
     // `rig.ts` clones PBR materials, and a cloned material serialises its
     // plugins and revives them through a global that does not exist in an
     // ES-module build. Same trap, same fix.
     this.doNotSerialize = true;
+    // Only read when the plugin is enabled, so it goes first: without it
+    // `hardBindForSubMesh` never runs and the flash cannot be per mesh.
+    this.registerForExtraEvents = true;
+    this._enable(true);
   }
 
   override getClassName(): string {
@@ -95,10 +99,15 @@ class RimPlugin extends MaterialPluginBase {
     };
   }
 
-  override bindForSubMesh(uniformBuffer: UniformBuffer, _scene: Scene, _engine: AbstractEngine, subMesh: SubMesh): void {
+  override bindForSubMesh(uniformBuffer: UniformBuffer): void {
     uniformBuffer.updateFloat("rimIntensity", RIM_INTENSITY);
     uniformBuffer.updateFloat("rimPower", RIM_POWER);
     uniformBuffer.updateColor3("rimColor", RIM_COLOR);
+  }
+
+  // Every draw, not `bindForSubMesh`: PBR skips that one when the same material
+  // draws again, and the next mesh would inherit the previous one's flash.
+  override hardBindForSubMesh(uniformBuffer: UniformBuffer, _scene: Scene, _engine: AbstractEngine, subMesh: SubMesh): void {
     const flash = (subMesh.getMesh().metadata as { hitFlash?: number } | null)?.hitFlash ?? 0;
     uniformBuffer.updateFloat("hitFlash", flash);
   }

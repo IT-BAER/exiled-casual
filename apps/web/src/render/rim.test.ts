@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect, afterEach } from "vitest";
-import { Mesh, NullEngine, PBRMaterial, Scene, StandardMaterial } from "@babylonjs/core";
+import { FreeCamera, Mesh, MeshBuilder, NullEngine, PBRMaterial, Scene, StandardMaterial, Vector3 } from "@babylonjs/core";
 import type { SubMesh, UniformBuffer } from "@babylonjs/core";
 import { addRim } from "./rim";
 import { setHitFlash } from "./meshes";
@@ -83,12 +83,47 @@ describe("hit flash through the rim plugin", () => {
     const idle = { getMesh: () => ({ metadata: null }) } as unknown as SubMesh;
 
     const a = fakeUbo();
-    plugin.bindForSubMesh(a.ubo, s, engine!, struck);
+    plugin.hardBindForSubMesh(a.ubo, s, engine!, struck);
     expect(a.floats["hitFlash"]).toBe(0.5);
 
     const b = fakeUbo();
-    plugin.bindForSubMesh(b.ubo, s, engine!, idle);
+    plugin.hardBindForSubMesh(b.ubo, s, engine!, idle);
     expect(b.floats["hitFlash"]).toBe(0);
+  });
+
+  /**
+   * PBR skips a plugin's `bindForSubMesh` when the same material draws again
+   * with the same effect, so every draw after the first kept the first mesh's
+   * flash: one struck monster lit its whole species, or a struck one stayed dark.
+   */
+  it("draws each mesh sharing the material with its own flash", async () => {
+    const s = scene();
+    new FreeCamera("cam", new Vector3(0, 0, -10), s);
+    const hide = new PBRMaterial("hide", s);
+    addRim(hide);
+    const meshes = ["a", "b", "c"].map((n, i) => {
+      const m = MeshBuilder.CreateBox(n, {}, s);
+      m.position.x = i * 2 - 2;
+      m.material = hide;
+      return m;
+    });
+    const drawn: Record<string, number[]> = {};
+    let flash = -1;
+    // Babylon's bind leaves the uniform in place until the next update: capture the
+    // hitFlash in force when each mesh's bind finishes, which is what its draw reads.
+    const ubo = (hide as unknown as { _uniformBuffer: UniformBuffer })._uniformBuffer;
+    const update = ubo.updateFloat.bind(ubo);
+    ubo.updateFloat = (name: string, v: number) => { if (name === "hitFlash") flash = v; update(name, v); };
+    const bind = hide.bindForSubMesh.bind(hide);
+    hide.bindForSubMesh = (world, mesh, sub) => { bind(world, mesh, sub); (drawn[mesh.name] ??= []).push(flash); };
+
+    await s.whenReadyAsync();
+    s.render();
+    for (const k of Object.keys(drawn)) delete drawn[k];
+    // Struck in the middle, so both draw orders put an unstruck mesh after it.
+    setHitFlash(meshes[1]!, 1);
+    s.render();
+    expect(drawn).toEqual({ a: [0], b: [1], c: [0] });
   });
 
   it("setHitFlash writes metadata on plugin meshes and overlays the rest", () => {

@@ -1,11 +1,29 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { MONSTERS } from "@exiled/content-runtime";
 import { toNumber } from "@exiled/fixed-point";
-import { partOfCreature, CreatureRig } from "./monsters";
+import { partOfCreature, CreatureRig, loadMonsters, isMonstersReady, attachCreature, resetMonsters } from "./monsters";
+import { setHitFlash } from "./meshes";
+import { hasRim } from "./rim";
+import { Mesh, NullEngine, Scene } from "@babylonjs/core";
 import { warmContainer } from "./warm-shaders";
 import type { AnimationGroup, AssetContainer, InstantiatedEntries } from "@babylonjs/core";
+
+// `loadMonsters` fetches a URL; node has no server, so hand the loader the file on disk.
+vi.mock("@babylonjs/core", async (importOriginal) => {
+  const core = await importOriginal<typeof import("@babylonjs/core")>();
+  const { readFileSync: read } = await import("node:fs");
+  const path = fileURLToPath(new URL("../../public/models/monsters.glb", import.meta.url));
+  return {
+    ...core,
+    LoadAssetContainerAsync: (src: unknown, scene: import("@babylonjs/core").Scene) =>
+      core.LoadAssetContainerAsync(
+        src === "/models/monsters.glb" ? new File([read(path)], "monsters.glb", { type: "model/gltf-binary" }) : (src as string),
+        scene,
+      ),
+  };
+});
 
 /**
  * `monsters.glb` is built offline by `tools/build_monsters.py`, and the runtime
@@ -257,5 +275,51 @@ describe("monsters asset", () => {
     for (const image of json.images) expect(image.mimeType).toBe("image/jpeg");
     expect(json.images.length).toBeLessThanOrEqual(12);
     expect(glb.byteLength).toBeLessThan(6_750_000);
+  });
+});
+
+/** Babylon reads a File through FileReader, which node does not ship. */
+class NodeFileReader {
+  result: unknown;
+  onload?: (e: { target: NodeFileReader }) => void;
+  onloadend?: (e: { target: NodeFileReader }) => void;
+  onerror?: (e: { target: NodeFileReader }) => void;
+  abort(): void {}
+  readAsArrayBuffer(blob: Blob): void {
+    void blob.arrayBuffer().then((r) => { this.result = r; this.onload?.({ target: this }); this.onloadend?.({ target: this }); });
+  }
+}
+
+/**
+ * `instantiateModelsToScene` hands every clone the container mesh's metadata
+ * OBJECT, and the hit flash rides that metadata: one struck monster lit its
+ * whole species.
+ */
+describe("creature instances", () => {
+  it("flash alone when struck", async () => {
+    const original = (globalThis as { FileReader?: unknown }).FileReader;
+    (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    try {
+      await loadMonsters(scene);
+      expect(isMonstersReady(scene)).toBe(true);
+      const species = [...MONSTERS.keys()][0]!;
+      const [struck, other] = ["struck", "other"].map((n) => {
+        const root = new Mesh(n, scene);
+        expect(attachCreature(scene, root, species), species).not.toBeNull();
+        return root;
+      });
+      setHitFlash(struck!, 1);
+      const flash = (root: Mesh) => root.getChildMeshes(false).filter((m) => hasRim(m.material))
+        .map((m) => (m.metadata as { hitFlash?: number } | null)?.hitFlash ?? 0);
+      expect(flash(struck!).length).toBeGreaterThan(0);
+      expect(flash(struck!).every((f) => f === 1)).toBe(true);
+      expect(flash(other!).every((f) => f === 0)).toBe(true);
+    } finally {
+      resetMonsters();
+      engine.dispose();
+      (globalThis as { FileReader?: unknown }).FileReader = original;
+    }
   });
 });

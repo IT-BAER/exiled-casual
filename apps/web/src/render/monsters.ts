@@ -275,7 +275,11 @@ export function attachCreature(scene: Scene, root: Mesh, species: string): Creat
 
   for (const node of entries.rootNodes) {
     node.parent = root;
-    for (const mesh of node.getChildMeshes()) mesh.isPickable = false;
+    for (const mesh of node.getChildMeshes()) {
+      mesh.isPickable = false;
+      // Clones share the container mesh's metadata object, and the hit flash rides it.
+      mesh.metadata = { ...(mesh.metadata ?? {}) };
+    }
   }
   return new CreatureRig(entries, species, scene);
 }
