@@ -126,6 +126,21 @@ describe("itemStatMods", () => {
   });
 });
 
+describe("the plate set's base Armour", () => {
+  const plain = (baseId: string) => ({ baseId, rarity: "normal" as const, itemLevel: 1, affixes: [] });
+  it.each([
+    ["base.ironsworn_plate", 45], ["base.ironsworn_helm", 29],
+    ["base.ironsworn_gauntlets", 15], ["base.ironsworn_sabatons", 22],
+  ])("%s carries PoE2's first Str base value, %i", (baseId, armour) => {
+    expect(itemStatMods(plain(baseId))).toContainEqual({ stat: "armour", value: armour });
+    expect(describeItem(plain(baseId)).statLines).toContainEqual({ label: "Armour", value: String(armour) });
+  });
+
+  it("the girdle carries none, as no PoE2 belt does", () => {
+    expect(itemStatMods(plain("base.ironsworn_girdle")).some((m) => m.stat === "armour")).toBe(false);
+  });
+});
+
 describe("unidentified items", () => {
   const rare = {
     baseId: "base.ember_wand", rarity: "rare" as const, itemLevel: 82,

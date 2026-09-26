@@ -619,6 +619,8 @@ export interface ItemStats {
   critPct?: number;
   /** weapon attacks per second (1.2 -> "1.20") */
   aps?: number;
+  /** armour base's own Armour, before any increase (PoE2's "Armour: 45") */
+  armour?: number;
   /** requirement level */
   reqLevel?: number;
   /** single attribute requirement, e.g. { value: 29, attr: "Int" } */

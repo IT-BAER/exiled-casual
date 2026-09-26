@@ -11,20 +11,23 @@ import { waystoneRarity, waystoneMods } from "@exiled/rules";
 // cannot read is a reward that did not happen (docs/09).
 const ITEM_BASES: ItemBase[] = [
   // Ironsworn, the plate set. PoE2 puts its armour-base implicit on the body
-  // slot alone, so the helm, gauntlets, sabatons and girdle carry none.
-  { id: "base.ironsworn_helm", name: "Ironsworn Helm", itemClass: "helmet", w: 2, h: 2, icon: "/textures/items/ironsworn_helm.png" },
+  // slot alone, so the helm, gauntlets, sabatons and girdle carry none. Base
+  // Armour is PoE2's lowest Str base per slot (poe2db: body 45, helmet 29,
+  // gloves 15, boots 22); no belt has any.
+  { id: "base.ironsworn_helm", name: "Ironsworn Helm", itemClass: "helmet", w: 2, h: 2, stats: { armour: 29 }, icon: "/textures/items/ironsworn_helm.png" },
   {
     id: "base.ironsworn_plate",
     name: "Ironsworn Plate",
     itemClass: "body",
     w: 2,
     h: 3,
+    stats: { armour: 45 },
     // PoE2's Str body bases carry +(10-20) to Strength.
     implicit: { stat: "strength", label: "to Strength", value: 12 },
     icon: "/textures/items/ironsworn_plate.png",
   },
-  { id: "base.ironsworn_gauntlets", name: "Ironsworn Gauntlets", itemClass: "gloves", w: 2, h: 2, icon: "/textures/items/ironsworn_gauntlets.png" },
-  { id: "base.ironsworn_sabatons", name: "Ironsworn Sabatons", itemClass: "boots", w: 2, h: 2, icon: "/textures/items/ironsworn_sabatons.png" },
+  { id: "base.ironsworn_gauntlets", name: "Ironsworn Gauntlets", itemClass: "gloves", w: 2, h: 2, stats: { armour: 15 }, icon: "/textures/items/ironsworn_gauntlets.png" },
+  { id: "base.ironsworn_sabatons", name: "Ironsworn Sabatons", itemClass: "boots", w: 2, h: 2, stats: { armour: 22 }, icon: "/textures/items/ironsworn_sabatons.png" },
   { id: "base.ironsworn_girdle", name: "Ironsworn Girdle", itemClass: "belt", w: 2, h: 1, icon: "/textures/items/ironsworn_girdle.png" },
   // PoE2 gives every shield an implicit block chance and nothing here blocks
   // yet, so the two shields take the armour side of the base instead and roll
@@ -378,6 +381,7 @@ export function itemStatMods(item: Item): { stat: string; value: number }[] {
   const base = baseOf(item.baseId);
   // Structural, not @exiled/rules' ItemStatMod: content must not depend on rules.
   const mods: { stat: string; value: number }[] = [];
+  if (base.stats?.armour) mods.push({ stat: "armour", value: base.stats.armour });
   if (base.implicit) mods.push({ stat: base.implicit.stat, value: base.implicit.value });
   for (const ia of item.affixes) {
     const a = AFFIX_BY_ID.get(ia.affixId);
@@ -466,6 +470,7 @@ export function describeItem(item: Item): ItemDescription {
   if (s?.physMin !== undefined && s.physMax !== undefined) statLines.push({ label: "Physical Damage", value: `${s.physMin}-${s.physMax}` });
   if (s?.critPct !== undefined) statLines.push({ label: "Critical Strike Chance", value: `${s.critPct.toFixed(2)}%` });
   if (s?.aps !== undefined) statLines.push({ label: "Attacks per Second", value: s.aps.toFixed(2) });
+  if (s?.armour !== undefined) statLines.push({ label: "Armour", value: String(s.armour) });
   // An unidentified item is a shape, not a promise: its rolled name and mods stay
   // hidden until a Scroll of Wisdom reads them. The base, its stats and its implicit
   // are visible either way, exactly as PoE shows an unread drop.
