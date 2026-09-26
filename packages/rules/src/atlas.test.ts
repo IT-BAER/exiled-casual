@@ -13,7 +13,7 @@ describe("atlas rules", () => {
     expect(a).toHaveLength(3);
     for (const w of a) {
       expect(w.tier).toBeGreaterThanOrEqual(1);
-      expect(w.tier).toBeLessThanOrEqual(15);
+      expect(w.tier).toBeLessThanOrEqual(2);
       expect(Number.isInteger(w.seed)).toBe(true);
     }
     expect(new Set(a.map((w) => w.id)).size).toBe(3); // ids unique
