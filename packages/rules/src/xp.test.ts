@@ -13,16 +13,19 @@ describe("xpToNext", () => {
 });
 
 describe("monsterXp", () => {
+  // normal carries the density-pass correction (xp.ts KIND_MULT comment);
+  // rare and boss stay at their old multipliers since their count per map
+  // (exactly one each, areas.ts) never changed.
   it("scales with area level and pays rares and bosses more", () => {
-    expect(monsterXp(65, "normal")).toBe(85);
+    expect(monsterXp(65, "normal")).toBe(72.25);
     expect(monsterXp(65, "rare")).toBe(680);
     expect(monsterXp(65, "boss")).toBe(3400);
-    expect(monsterXp(79, "normal")).toBe(99);
+    expect(monsterXp(79, "normal")).toBeCloseTo(84.15);
   });
 
   it("front-loads: a tier 1 kill is worth 3.5x its area level, a tier 15 one 1.2x", () => {
-    expect(monsterXp(8, "normal")).toBe(28);
-    expect(monsterXp(92, "normal")).toBe(112);
+    expect(monsterXp(8, "normal")).toBe(23.8);
+    expect(monsterXp(92, "normal")).toBe(95.2);
   });
 });
 

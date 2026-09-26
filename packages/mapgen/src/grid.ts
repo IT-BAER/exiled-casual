@@ -15,7 +15,7 @@ export const MIN_ROUTE_WIDTH = 1.0 + 0.25;
 /** Monster spawn points every generator aims for. Raised with the lattice
  *  (7x7 -> 9x9 tiles): a map 65% larger on the same budget is a sparser map,
  *  and empty ground between fights is the one thing a bigger area must not buy. */
-export const SPAWN_TARGET = 14;
+export const SPAWN_TARGET = 22;
 
 export interface WalkableGrid {
   cols: number;

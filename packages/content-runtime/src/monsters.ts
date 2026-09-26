@@ -27,18 +27,20 @@ import {
  * of attrition. Every band in `balance.test.ts` moved with this and was
  * re-measured against the same rig, not re-argued.
  */
+// Density pass: more bodies per map (mapgen SPAWN_TARGET), each one weaker, so
+// a pack reads as a swarm rather than a slower version of the same fight.
 const LIFE = {
-  swarm: fp(66),    // was 88
-  brute: fp(345),   // was 460
-  shooter: fp(81),  // was 108
-  heavy: fp(360),   // was 480
-  boss: fp(630),    // was 840
+  swarm: fp(56),    // was 66, x0.85
+  brute: fp(293),   // was 345, x0.85
+  shooter: fp(69),  // was 81, x0.85
+  heavy: fp(306),   // was 360, x0.85
+  boss: fp(630),    // unchanged
 } as const;
 const HIT = {
-  swarm: fp(3),     // was 4
-  brute: fp(9),     // was 13
-  shooter: fp(6),   // was 8
-  heavy: fp(6),     // was 8
+  swarm: fp(1.8),   // was 3, x0.6
+  brute: fp(5.4),   // was 9, x0.6
+  shooter: fp(3.6), // was 6, x0.6
+  heavy: fp(3.6),   // was 6, x0.6
 } as const;
 
 const MONSTER_DEFS: MonsterDef[] = [

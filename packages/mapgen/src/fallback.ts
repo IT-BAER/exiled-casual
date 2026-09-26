@@ -61,6 +61,7 @@ function spawnPointsFor(rooms: Room[], count: number): Socket[] {
   const out: Socket[] = [];
   const offsets: readonly [number, number][] = [
     [2, 2], [-2, -2], [3, -3], [-3, 3], [0, 4], [4, 0], [-4, 0], [0, -4],
+    [5, 5], [-5, -5], [5, -5], [-5, 5],
   ];
   let k = 0;
   for (const r of rooms) {

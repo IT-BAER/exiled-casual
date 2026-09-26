@@ -35,8 +35,13 @@ export function xpToNext(level: number): number {
  * the multipliers say a rare is eight normals and a boss is forty, which is
  * roughly what their fight lengths are (see the tuning notes in
  * content-runtime/monsters.ts).
+ *
+ * Only `normal` carries the density correction: the map's rare and boss are
+ * still exactly one each (areas.ts), so their per-kill worth is untouched;
+ * trash bodies per map measured 53 -> 62.7 (playtest.ts kills, same bot/seeds)
+ * against the mapgen density pass, so normal is 1 / 1.18 to keep total XP/map flat.
  */
-const KIND_MULT = { normal: 1, rare: 8, boss: 40 } as const;
+const KIND_MULT = { normal: 0.85, rare: 8, boss: 40 } as const;
 const XP_AREA_OFFSET = 20;
 export type MonsterXpKind = keyof typeof KIND_MULT;
 
