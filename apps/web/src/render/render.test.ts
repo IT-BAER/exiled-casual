@@ -21,6 +21,7 @@ import { HAZE_HEIGHT, HAZE_MAX_SIZE, HAZE_NAME, MOTES_NAME, MOTES_NOISE_NAME } f
 import { BIOMES } from "@exiled/content-runtime";
 import { blowFrom, SnapshotRenderer, syncActionAnimation } from "./renderer";
 import { makeMesh, updateTelegraph } from "./meshes";
+import { ARROW_NAME } from "./skill-fx";
 import type { Snapshot } from "@exiled/protocol";
 import { testPlayer, testStats } from "../test-fixtures";
 import { columnHit } from "../input/bindings";
@@ -633,6 +634,48 @@ describe("SnapshotRenderer", () => {
         expect(off).toBeLessThan(0.01);
       }
     }
+  });
+
+  it("grows an arrow's wake from the bow, never trailing behind where it was loosed", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const renderer = new SnapshotRenderer(scene);
+    const HAND = new Vector3(0.4, 1.2, 0.3);
+    const snap = (tick: number, x: number, entities = true) =>
+      makeSnapshot({
+        tick,
+        entities: entities
+          ? [{ id: 2, kind: "projectile" as const, x, y: 0, radius: 0.2, team: 0, skillId: "skill.piercing_shot.v1" }]
+          : [],
+      });
+    let prev = snap(1, 0, false);
+    renderer.apply(null, prev, 1);
+    scene.getMeshByName("entity-0")!.metadata = {
+      rig: {
+        setLooks: () => {}, setAimTarget: () => {}, dispose: () => {},
+        setLocomotion: () => {}, setFacing: () => {}, update: () => {},
+        castPoint: () => HAND,
+      },
+    };
+    renderer.setAim(20, 0);
+
+    let full = false;
+    for (let i = 0; i <= 12; i++) {
+      const next = snap(2 + i, i * 0.4);
+      renderer.apply(prev, next, 1);
+      prev = next;
+      const arrow = scene.getMeshByName("entity-2");
+      if (!arrow) continue;
+      const streak = arrow.getChildMeshes(false).find((m) => m.name === `${ARROW_NAME}-streak`)!;
+      const length = streak.scaling.y * 1.3;
+      const flown = Math.hypot(arrow.position.x - HAND.x, arrow.position.z - HAND.z);
+      expect(length).toBeLessThanOrEqual(flown + 0.002);
+      if (flown > 1.3) {
+        expect(length).toBeCloseTo(1.3, 5);
+        full = true;
+      }
+    }
+    expect(full).toBe(true);
   });
 
   it("a melee swing that lands sparks on what it struck, holds the pose and jolts the camera", () => {

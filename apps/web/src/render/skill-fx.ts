@@ -526,6 +526,15 @@ export function attachArrowStreak(scene: Scene, mesh: Mesh, fx: FxProfile): Mesh
   return streak;
 }
 
+/** Cut the wake to `flown` units: a fresh arrow's full wake pokes out behind the archer's back. */
+export function setStreakLength(arrow: Mesh, flown: number): void {
+  const streak = arrow.getChildMeshes(true).find((m) => m.name === `${ARROW_NAME}-streak`);
+  if (!streak) return;
+  const length = Math.max(0.001, Math.min(STREAK_LENGTH, flown));
+  streak.scaling.y = length / STREAK_LENGTH;
+  streak.position.z = -ARROW_LENGTH / 2 - length / 2 + 0.1;
+}
+
 export const SPLINTER_NAME = "fx-splinters";
 const SPLINTERS = 10;
 const SPLINTER_LIFE = 0.55;

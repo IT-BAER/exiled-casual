@@ -1,7 +1,7 @@
 import { Vector3 } from "@babylonjs/core";
 import type { Scene } from "@babylonjs/core";
 import type { Mesh } from "@babylonjs/core";
-import { blinkBurst, fxProfile, meleeImpact } from "./skill-fx";
+import { blinkBurst, fxProfile, meleeImpact, setStreakLength } from "./skill-fx";
 import { HIT_STOP_SCALE, addTrauma, decayTrauma, hitStopMs, shakeOffset } from "./juice";
 import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
 import { animateActor, keepGroundBlobFlat, makeMesh, setHitFlash, updateTelegraph, updatePortal, updateMapDevice, updateStash, updateVendor, updateContainer, updateGroundItem, updateRareElement, portalAppear, portalVanish, isPortalMesh, PORTAL_STAGGER_MS, Y_LIFT } from "./meshes";
@@ -451,6 +451,11 @@ export class SnapshotRenderer {
         const yo = Y_LIFT.projectile + drop * dp;
         const yn = Y_LIFT.projectile + drop * dn;
         mesh.position.y = lerp(yo, yn, alpha);
+        if (handEntry) {
+          const loosedX = handEntry.from.x + handEntry.offset.x;
+          const loosedZ = handEntry.from.y + handEntry.offset.z;
+          setStreakLength(mesh, Math.hypot(mesh.position.x - loosedX, mesh.position.z - loosedZ));
+        }
         // Pointed down its DRAWN path: the hand offset bends it off the sim's.
         const run = Math.hypot(nx - ox, ny - oy);
         if (run > 1e-6) {
