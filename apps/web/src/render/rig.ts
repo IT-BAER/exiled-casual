@@ -26,7 +26,7 @@ import { SkirtSim, type SkirtCollider } from "./skirt";
  */
 
 /** Clips the game can actually trigger today. The library ships 45. */
-export type RigClip = "idle" | "walk" | "run" | "cast" | "strikeA" | "strikeB";
+export type RigClip = "idle" | "walk" | "run" | "cast" | "bow" | "strikeA" | "strikeB";
 export type StrikeClip = "strikeA" | "strikeB";
 
 /** Alternated melee takes: two sword-derived slashes with opposite motion. */
@@ -44,6 +44,8 @@ export const CLIP_NAME: Record<RigClip, string> = {
   walk: "Rig|Walk_Loop",
   run: "Rig|Jog_Fwd_Loop",
   cast: "Rig|Spell_Simple_Shoot_R",
+  // No bow take in the pack: keyed on the wardrobe skeleton by `tools/build_bow_clip.py`.
+  bow: "Rig|Bow_Shoot",
   strikeA: "Rig|Sword_Attack",
   // The pack ships one sword swing. The second take is that swing rolled onto a
   // downward diagonal and played back to front by `tools/build_slash_variant.py`
@@ -56,6 +58,7 @@ const CLIP_LOOPS: Record<RigClip, boolean> = {
   walk: true,
   run: true,
   cast: false,
+  bow: false,
   strikeA: false,
   strikeB: false,
 };
@@ -489,7 +492,7 @@ const WEAPON_HAND: ReadonlySet<string> = new Set([
 ]);
 
 /** Clips that layer over locomotion instead of replacing it. */
-const UPPER_BODY_CLIPS: ReadonlySet<RigClip> = new Set<RigClip>(["cast", ...STRIKE_CLIPS]);
+const UPPER_BODY_CLIPS: ReadonlySet<RigClip> = new Set<RigClip>(["cast", "bow", ...STRIKE_CLIPS]);
 
 /** Whether locomotion keeps ownership of the pelvis and legs under this clip. */
 export const isLayeredClip = (clip: RigClip): boolean => UPPER_BODY_CLIPS.has(clip);
@@ -516,7 +519,7 @@ export const isLayeredClip = (clip: RigClip): boolean => UPPER_BODY_CLIPS.has(cl
  * Locomotion is exempt on purpose: those clips slide the feet anyway.
  */
 export const HIPS_BOB: Record<RigClip, number> = {
-  idle: 1, walk: 0.65, run: 0.65, cast: 1, strikeA: 1, strikeB: 1,
+  idle: 1, walk: 0.65, run: 0.65, cast: 1, bow: 1, strikeA: 1, strikeB: 1,
 };
 
 /**
@@ -849,7 +852,16 @@ export class RigActor {
    * running, arm outstretched, instead of freezing mid-stride.
    */
   playCast(seconds?: number): void {
-    const group = this.groups.get("cast");
+    this.playOnce("cast", seconds);
+  }
+
+  /** Draw and loose: the bow hand is `hand_l`, so the cast's right-arm aim does not apply. */
+  playBow(seconds?: number): void {
+    this.playOnce("bow", seconds);
+  }
+
+  private playOnce(clip: "cast" | "bow", seconds?: number): void {
+    const group = this.groups.get(clip);
     if (!group) return;
     group.stop();
     const ratio = actionRatio(clipSeconds(group), seconds);

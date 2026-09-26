@@ -83,6 +83,7 @@ export const VIEWER_CLIPS: readonly ViewerClip[] = [
   { key: "3", clip: "run", label: "Run", speed: 6 },
   { key: "4", clip: "cast", label: "Cast" },
   { key: "5", clip: "strikeA", label: "Strike" },
+  { key: "6", clip: "bow", label: "Bow" },
 ];
 
 /**
@@ -318,6 +319,7 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
         return;
       }
       if (entry.clip === "cast") rig.playCast();
+      else if (entry.clip === "bow") rig.playBow();
       else rig.playStrike();
     },
     dispose() {

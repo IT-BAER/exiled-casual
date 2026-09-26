@@ -998,6 +998,21 @@ describe("the cast clip drives the weapon arm", () => {
       expect(right, bone).toBeGreaterThan(left * 3);
     }
   });
+
+  it("keys the bow as a layered rotation-only clip that never grips the weapon hand", () => {
+    expect(isLayeredClip("bow")).toBe(true);
+    const clip = json.animations.find((a: { name: string }) => a.name === CLIP_NAME.bow);
+    const keyed = clip.channels.map((c: { target: { node: number; path: string } }) =>
+      `${json.nodes[c.target.node].name}.${c.target.path}`);
+    // Metre translations from the wardrobe skeleton would tear the centimetre rig.
+    for (const k of keyed) expect(k).toMatch(/\.rotation$/);
+    expect(keyed).not.toContain("hand_r.rotation");
+    expect(keyed).toContain("hand_l.rotation");
+    // The draw arm travels further than the bow arm, which only lifts and kicks.
+    const draw = travel(CLIP_NAME.bow, "lowerarm_r");
+    const bow = travel(CLIP_NAME.bow, "lowerarm_l");
+    expect(draw).toBeGreaterThan(bow);
+  });
 });
 
 describe("the idle clip leaves the soles planted", () => {
