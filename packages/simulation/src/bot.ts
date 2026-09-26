@@ -24,6 +24,13 @@ const BLINK = "skill.blink.v1";
  * bolt every 0.4, so a line that grazes a wall corner at 0.4 still eats the bolt.
  */
 const AIM_CLEARANCE = fp(0.55);
+/**
+ * What the client camera shows around the player, in screen axes (u right, v up;
+ * the camera looks down world +x+y rotated 45 degrees). Measured by ground-picking
+ * the live camera's frame corners: 8.5 each side at 16:9, 7.2 up, 5.2 down.
+ * Half a unit in from each edge, so a target is on screen, not clipped by it.
+ */
+const SCREEN = { u: fp(8), up: fp(6.7), down: fp(4.7) };
 
 export interface BotOptions {
   /** Skills the bot may not use (ablation). */
@@ -126,7 +133,8 @@ export class Bot {
       }
       const skill = this.pickSkill(p, target);
       if (skill) out.push(cmd({ type: "useSkill", skillId: skill, data: { tx: target.p.x, ty: target.p.y } }));
-      if (!this.melee && near && dist(p, near.p) < fp(2.5) && !world.has(near.e, "boss")) {
+      // Backing off is for when it hurts; at health a caster stands and casts.
+      if (!this.melee && near && dist(p, near.p) < fp(1.5) && h.life * 2 < h.maxLife && !world.has(near.e, "boss")) {
         out.push(cmd({ type: "moveTo", data: this.escape(p, near.p, fp(2.5)) }));
       } else if (!skill || (skill === this.attack && this.melee && dist(p, target.p) > this.reach())) {
         const to = this.route(p, target.p);
@@ -194,6 +202,15 @@ export class Bot {
     return r === Infinity ? fp(12) : Math.trunc(r * 0.8);
   }
 
+  /** Within the attack's reach and on the player's screen. */
+  private inSight(p: Position, at: Position): boolean {
+    const dx = at.x - p.x;
+    const dy = at.y - p.y;
+    const u = (dx + dy) / Math.SQRT2;
+    const v = (dy - dx) / Math.SQRT2;
+    return dist(p, at) < this.range() && Math.abs(u) <= SCREEN.u && v <= SCREEN.up && -v <= SCREEN.down;
+  }
+
   private reach(): number {
     const s = SKILLS.get(this.attack)!.effects.find((e) => e.type === "meleeStrike");
     return s && s.type === "meleeStrike" ? s.reachFixed + fp(0.3) : fp(1.5);
@@ -204,11 +221,11 @@ export class Bot {
     const w = this.g.world;
     if (this.target !== undefined && w.alive.has(this.target) && tick - this.targetAt < REACTION_TICKS) {
       const tp = w.get<Position>(this.target, "position")!;
-      if (dist(p, tp) < this.range()) return { e: this.target, p: tp };
+      if (this.inSight(p, tp)) return { e: this.target, p: tp };
     }
     // With the boss down the map is over: only what comes at him is worth a shot.
     const seen = this.monsters()
-      .filter((x) => (!bossDead || x.awake) && dist(p, x.p) < this.range() && hasLineOfSight(this.collision, p.x, p.y, x.p.x, x.p.y, AIM_CLEARANCE))
+      .filter((x) => (!bossDead || x.awake) && this.inSight(p, x.p) && hasLineOfSight(this.collision, p.x, p.y, x.p.x, x.p.y, AIM_CLEARANCE))
       .sort((a, b) => Number(b.awake) - Number(a.awake) || dist(p, a.p) - dist(p, b.p));
     const t = seen[0];
     this.target = t?.e;
@@ -232,9 +249,13 @@ export class Bot {
   /** Field under a pack or a big body, bolt while mana lasts, the free attack otherwise. */
   private pickSkill(p: Position, t: { e: Entity; p: Position }): string | undefined {
     const w = this.g.world;
-    const packed = this.monsters().filter((x) => dist(t.p, x.p) < fp(2.5)).length >= 2;
+    const packed = this.monsters().filter((x) => dist(t.p, x.p) < fp(2.5)).length >= 3;
     const big = w.has(t.e, "boss") || w.get<MonsterC>(t.e, "monster")!.rare === 1;
-    if ((packed || big) && this.ready(GROUND)) return GROUND;
+    const burning = w.query("groundArea", "position").some((e) => {
+      const a = w.get<GroundAreaC>(e, "groundArea")!;
+      return a.team === 0 && dist(t.p, w.get<Position>(e, "position")!) < a.radius;
+    });
+    if ((packed || big) && !burning && this.ready(GROUND)) return GROUND;
     if (this.ready(BOLT)) return BOLT;
     if (this.melee && dist(p, t.p) > this.reach()) return undefined;
     return this.onBar(this.attack) ? this.attack : undefined;
