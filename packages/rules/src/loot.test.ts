@@ -121,17 +121,17 @@ describe("dropCount", () => {
 describe("goldDrop", () => {
   const rolls = (n: number) => Array.from({ length: n }, (_, i) => Math.imul(i + 1, 0x9e3779b1) >>> 0);
 
-  it("pays a normal monster about a third of the time, and a rare or unique every time", () => {
+  it("pays a normal monster about one kill in five, and a rare or unique every time", () => {
     const hits = (mr: number) => rolls(20000).filter((r) => goldDrop(r, mr, 8) !== null).length;
-    expect(hits(0) / 20000).toBeGreaterThan(0.3);
-    expect(hits(0) / 20000).toBeLessThan(0.4);
+    expect(hits(0) / 20000).toBeGreaterThan(0.15);
+    expect(hits(0) / 20000).toBeLessThan(0.25);
     expect(hits(2)).toBe(20000);
     expect(hits(3)).toBe(20000);
   });
 
   it("varies the pile between half and one and a half times its base, jackpots aside", () => {
     const amounts = rolls(20000).map((r) => goldDrop(r, 2, 8)).filter((g) => g !== null && !g.jackpot).map((g) => g!.amount);
-    const base = (3 + 8) * GOLD_RARITY_MULT[2]!;
+    const base = (1 + 8 / 2) * GOLD_RARITY_MULT[2]!;
     expect(Math.min(...amounts)).toBe(Math.trunc(base / 2));
     expect(Math.max(...amounts)).toBe(Math.trunc((base * 3) / 2));
   });

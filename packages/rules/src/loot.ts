@@ -104,9 +104,9 @@ export function dropCount(roll: number, monsterRarity: number, quantityMilli = 1
  * two, and the item bands `death.test.ts` pins stay untouched. Every number is a
  * knob (docs/09 §6); the calibration band lives in the sim's gold test.
  */
-export const GOLD_CHANCE_PERMILLE: readonly number[] = [350, 350, 1000, 1000];
-/** A rare pays four normal piles, a boss twelve: the burst is where it lands loudest. */
-export const GOLD_RARITY_MULT: readonly number[] = [1, 2, 4, 12];
+export const GOLD_CHANCE_PERMILLE: readonly number[] = [200, 200, 1000, 1000];
+/** A rare pays four normal piles, a boss eight: the burst is where it lands loudest. */
+export const GOLD_RARITY_MULT: readonly number[] = [1, 2, 4, 8];
 /** One pile in this many is a jackpot: docs/09 rule 5, the variance is the point. */
 export const GOLD_JACKPOT_ONE_IN = 40;
 export const GOLD_JACKPOT_MULT = 5;
@@ -114,15 +114,15 @@ export const GOLD_JACKPOT_MULT = 5;
 export interface GoldPile { amount: number; jackpot: boolean }
 
 /**
- * The gold one kill drops, or null for none. Base `3 + areaLevel`, spread 50..150%,
- * so a tier-1 normal pile averages 11 against a 64-gold magic item on the shelf.
+ * The gold one kill drops, or null for none. Base `1 + areaLevel / 2`, spread
+ * 50..150%, so a tier-1 normal pile averages 5 against a 64-gold magic item.
  *
  * @param roll deterministic hash from the caller, on a stream of its own.
  */
 export function goldDrop(roll: number, monsterRarity: number, areaLevel: number): GoldPile | null {
   const r = roll >>> 0;
   if (r % 1000 >= (GOLD_CHANCE_PERMILLE[monsterRarity] ?? 0)) return null;
-  const base = (3 + Math.max(0, areaLevel)) * (GOLD_RARITY_MULT[monsterRarity] ?? 1);
+  const base = (1 + Math.trunc(Math.max(0, areaLevel) / 2)) * (GOLD_RARITY_MULT[monsterRarity] ?? 1);
   const amount = Math.max(1, Math.trunc((base * (50 + ((r >>> 10) % 101))) / 100));
   const jackpot = (r >>> 17) % GOLD_JACKPOT_ONE_IN === 0;
   return { amount: jackpot ? amount * GOLD_JACKPOT_MULT : amount, jackpot };

@@ -14,6 +14,7 @@ import {
 import { recomputePlayerStats } from "../derived";
 import { ITEM_POOLS, baseOf, currencyItem, currencyForRoll, waystoneItem, FREE_ATTACKS } from "@exiled/content-runtime";
 import { grantSkills } from "../persist";
+import { dropGold } from "./gold";
 
 /**
  * Monster rarity as the loot math indexes it: 0..3 normal, magic, rare, unique.
@@ -128,6 +129,7 @@ export function registerDeath(sim: Simulation): void {
             world.set<Position>(ge, "position", { x: pos.x + off.dx + ring, y: pos.y + off.dy + ring });
             world.set<ItemC>(ge, "item", { item, w: base.w, h: base.h });
           }
+          dropGold(world, pos.x, pos.y, `${s.mapSeed}:${tick}:${e}`, mr, areaLevel(s.areaTier));
         }
       }
 

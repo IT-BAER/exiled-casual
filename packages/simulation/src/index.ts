@@ -35,6 +35,7 @@ export { Bot } from "./bot";
 export type { AreaLayout, WalkableGrid, Socket } from "@exiled/mapgen";
 export { registerInteractSystem } from "./systems/interact";
 export { registerPickupSystem } from "./systems/pickup";
+export { registerGoldPickup, dropGold } from "./systems/gold";
 export { registerCurrencySystem } from "./systems/currency";
 export { registerAreaTransition, grammarForNode } from "./systems/area-transition";
 export { registerFlaskSystem } from "./systems/flask";

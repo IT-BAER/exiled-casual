@@ -19,6 +19,7 @@ import type {
   InteractableC, SessionC, AreaKind, ItemC, ContainerC, InventoryC,
 } from "./components";
 import type { Blocker, Collision } from "./collision";
+import { dropGold } from "./systems/gold";
 
 /** What a cache pays as the loot math indexes rarity: 2 = rare. A found room is
  *  worth a rare monster's burst, which is where the number comes from rather
@@ -472,6 +473,7 @@ export function spillContainer(
     world.set<Position>(ge, "position", on);
     world.set<ItemC>(ge, "item", { item, w: base.w, h: base.h });
   }
+  dropGold(world, ax, ay, key, REWARD_RARITY, areaLevel(session.areaTier), collision);
 }
 
 /** An objective anchor from the layout, or throw if the generator omitted it. */

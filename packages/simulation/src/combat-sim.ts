@@ -33,6 +33,7 @@ import { registerDeath } from "./systems/death";
 import { registerExpiry } from "./systems/expiry";
 import { registerInteractSystem } from "./systems/interact";
 import { registerPickupSystem } from "./systems/pickup";
+import { registerGoldPickup } from "./systems/gold";
 import { registerEquipmentSystem } from "./systems/equipment";
 import { registerCurrencySystem } from "./systems/currency";
 import { registerAreaTransition } from "./systems/area-transition";
@@ -154,6 +155,7 @@ export function createCombatSim(
     // canonical ordering of the first 12 systems (checked by legacy tests).
     registerInteractSystem(sim, collisionRef);
     registerPickupSystem(sim);
+    registerGoldPickup(sim);
     registerEquipmentSystem(sim);
     registerCurrencySystem(sim);
     registerAreaTransition(sim, collisionRef);

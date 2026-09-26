@@ -91,6 +91,9 @@ export interface SessionC {
  */
 export interface ProgressC { level: number; xp: number; gold: number }
 
+/** A pile of gold on the floor. Never an item: it is walked over, not clicked. */
+export interface GoldC { amount: number; jackpot: 0 | 1 }
+
 /**
  * Which skills this character has, what each one has earned, and where they sit.
  *
