@@ -165,7 +165,7 @@ export const SPAWN_KINDS: readonly SpawnKind[] = ["imp", "pack", "rare", "boss",
  * with no roster behind it; when it IS present the worker loads and saves that
  * character rather than the single pre-roster blob.
  */
-export interface ToWorker_Init   { type: "init"; seed: number; characterId?: string }
+export interface ToWorker_Init   { type: "init"; seed: number; characterId?: string; bot?: boolean }
 export interface ToWorker_Intent { type: "intent"; intent: Intent }
 export interface ToWorker_Reset  { type: "reset" }
 export interface ToWorker_Spawn  { type: "spawn"; what: SpawnKind }
@@ -594,7 +594,8 @@ export function isToWorker(v: unknown): v is ToWorker {
   if (!TO_WORKER_TYPES.has(obj["type"] as string)) return false;
   switch (obj["type"]) {
     case "init":   return typeof obj["seed"] === "number"
-      && (obj["characterId"] === undefined || typeof obj["characterId"] === "string");
+      && (obj["characterId"] === undefined || typeof obj["characterId"] === "string")
+      && (obj["bot"] === undefined || typeof obj["bot"] === "boolean");
     case "intent": return typeof obj["intent"] === "object" && obj["intent"] !== null;
     case "reset":  return true;
     case "spawn":  return SPAWN_KINDS.includes(obj["what"] as SpawnKind);

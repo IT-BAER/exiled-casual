@@ -128,6 +128,28 @@ describe("WorkerCore", () => {
     expect(core.getAreaLayout().hash).not.toBe(generateArea(mapSeed, CONTENT_VERSION, "loop").hash);
   });
 
+  it("bot mode plays the map on its own and never writes the save", () => {
+    const kv = new MemoryKv();
+    const core = new WorkerCore(42, kv, "", true);
+    core.advance(34);
+    core.pushIntent({ kind: "activateMap", atlasNodeId: "node.the_wrackline", x: 0, y: 0 });
+    advanceUntil(core, (s) => s.entities.some((e) => e.kind === "portal"));
+    const portal = core.snapshot()!.entities.find((e) => e.kind === "portal")!;
+    walkTo(core, portal.x, portal.y);
+    core.pushIntent({ kind: "interact", targetId: portal.id });
+    advanceUntil(core, () => core.getArea() === "map");
+    const writes = kv.writes;
+    const start = monsters(core).length;
+    const from = core.snapshot()!.player;
+
+    for (let s = 0; s < 60 && monsters(core).length >= start; s++) core.advance(1000);
+
+    const now = core.snapshot()!.player;
+    expect(Math.hypot(now.x - from.x, now.y - from.y)).toBeGreaterThan(1);
+    expect(monsters(core).length).toBeLessThan(start);
+    expect(kv.writes).toBe(writes);
+  });
+
   // A bar-only change must not be invisible to the
   // durable-state fingerprint, so quitting right after a reorder (no kill, no
   // pickup) silently discarded the swap.

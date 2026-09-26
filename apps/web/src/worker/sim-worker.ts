@@ -16,7 +16,7 @@ self.onmessage = (e: MessageEvent) => {
   if (!isToWorker(raw)) return;
   const msg = raw;
   if (msg.type === "init") {
-    const c = new WorkerCore(msg.seed, undefined, msg.characterId);
+    const c = new WorkerCore(msg.seed, undefined, msg.characterId, msg.bot === true);
     // `core` is assigned only once the saved run is in: the interval's `!core`
     // guard is what keeps a pre-hydration world (no skills, empty bar, a dead
     // left click) from ever reaching the renderer as snapshot 1.

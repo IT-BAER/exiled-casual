@@ -239,7 +239,8 @@ export function GameView({
       { type: "module" },
     );
     workerRef.current = worker;
-    worker.postMessage({ type: "init", seed: LAB_SEED, characterId });
+    const bot = new URLSearchParams(window.location.search).has("bot");
+    worker.postMessage({ type: "init", seed: LAB_SEED, characterId, bot });
 
     let prevSnap: Snapshot | null = null;
     let curSnap: Snapshot | null = null;

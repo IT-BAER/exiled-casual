@@ -10,12 +10,14 @@ import {
   saveCharacterTo,
   IndexedDbKv,
   MemoryKv,
+  Bot,
+  areaCollision,
 } from "@exiled/simulation";
 import type { Simulation, World, Entity, Position, SessionC, InventoryC, SkillsC, KvStore } from "@exiled/simulation";
 import type { Intent, Snapshot, SpawnKind, AreaKind } from "@exiled/protocol";
 import { CONTENT_VERSION } from "@exiled/content-runtime";
 import { generateArea, type AreaLayout } from "@exiled/mapgen";
-import { mapBaseIdForNode } from "@exiled/rules";
+import { mapBaseIdForNode, classIdOr } from "@exiled/rules";
 
 // Wall-clock pacing constant (client-side only) — never fed into the sim.
 // ponytail: float constant is intentional; the accumulator drives integer tick steps.
@@ -55,14 +57,19 @@ export class WorkerCore {
    */
   private readonly characterId: string;
   private lastSig = "";
+  /** ?bot mode: the playtest bot plays every map. Never saves, so a run cannot touch a real character. */
+  private readonly botMode: boolean;
+  /** Rebuilt on every map entry; its bosses decide when the map counts as cleared. */
+  private bot: { bot: Bot; bosses: Entity[] } | null = null;
 
-  constructor(seed: number, kv?: KvStore, characterId = "") {
+  constructor(seed: number, kv?: KvStore, characterId = "", bot = false) {
     // The lab starts empty. Monsters and the boss arrive on the numpad spawn
     // keys, so a model, an animation, or an effect can be looked at in peace.
     this.seed = seed;
     this.area = "hideout";
     this.kv = kv ?? (typeof indexedDB !== "undefined" ? new IndexedDbKv() : new MemoryKv());
     this.characterId = characterId;
+    this.botMode = bot;
     const { sim, world, playerEntity, layout } = createCombatSim(seed, { area: this.area });
     this.sim = sim;
     this.world = world;
@@ -124,9 +131,9 @@ export class WorkerCore {
     this.accMs += dtMs;
     const out: Snapshot[] = [];
     while (this.accMs >= MS_PER_TICK - TICK_EPSILON_MS) {
-      const commands = this.pending.map((i) =>
-        intentToCommand(i, this.playerEntity, this.sim.tick),
-      );
+      const commands = this.bot
+        ? this.bot.bot.decide(this.bot.bosses.length > 0 && this.bot.bosses.every((b) => !this.world.alive.has(b)))
+        : this.pending.map((i) => intentToCommand(i, this.playerEntity, this.sim.tick));
       this.pending = [];
       this.sim.step(commands);
       this.accMs -= MS_PER_TICK;
@@ -171,6 +178,7 @@ export class WorkerCore {
    * loses at most that one change (re-earnable). Await it if that ever matters.
    */
   private maybePersist(): void {
+    if (this.botMode) return;
     const sig = this.durableSig();
     if (sig === this.lastSig) return;
     this.lastSig = sig;
@@ -202,7 +210,14 @@ export class WorkerCore {
       grammarForNode(session.activeNodeId),
     );
     this.mapBaseId = this.area === "map" ? mapBaseIdForNode(session.activeNodeId) : "";
+    this.bot = this.botMode && this.area === "map" ? this.newBot(sessionE, session) : null;
     this.areaDirty = true;
+  }
+
+  /** Collision built from the same world and layout the sim's own was, as the headless runner does. */
+  private newBot(session: Entity, s: SessionC): { bot: Bot; bosses: Entity[] } {
+    const game = { sim: this.sim, world: this.world, player: this.playerEntity, session, classId: classIdOr(s.classId ?? "") };
+    return { bot: new Bot(game, areaCollision(this.world, "map", this.areaLayout), {}), bosses: this.world.query("boss") };
   }
 
   /** Latest snapshot, or null before the first tick. */

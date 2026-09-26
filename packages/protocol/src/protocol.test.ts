@@ -68,6 +68,11 @@ describe("isToWorker", () => {
     expect(isToWorker({ type: "init", seed: 12345 })).toBe(true);
   });
 
+  test("init's bot flag is a boolean or absent", () => {
+    expect(isToWorker({ type: "init", seed: 1, bot: true })).toBe(true);
+    expect(isToWorker({ type: "init", seed: 1, bot: "yes" })).toBe(false);
+  });
+
   test("pause carries a boolean and nothing else will do", () => {
     expect(isToWorker({ type: "pause", paused: true })).toBe(true);
     expect(isToWorker({ type: "pause", paused: false })).toBe(true);
