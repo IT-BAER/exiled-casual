@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   BASE_DROP_PCT, MONSTER_QUANTITY_PCT, MONSTER_RARITY_PCT, MONSTER_ILVL_OFFSET,
   playerScaleMilli, quantityScaleMilli, rarityScaleMilli, dropCount,
-  DROP_POOL, BOSS_DROP_POOL, dropCategory,
+  DROP_POOL, BOSS_DROP_POOL, dropCategory, goldDrop, GOLD_RARITY_MULT,
 } from "./loot.js";
 
 describe("playerScaleMilli", () => {
@@ -115,5 +115,38 @@ describe("dropCount", () => {
 
   it("answers area and player quantity", () => {
     expect(mean(2, 2000)).toBeCloseTo(4.2, 1);
+  });
+});
+
+describe("goldDrop", () => {
+  const rolls = (n: number) => Array.from({ length: n }, (_, i) => Math.imul(i + 1, 0x9e3779b1) >>> 0);
+
+  it("pays a normal monster about a third of the time, and a rare or unique every time", () => {
+    const hits = (mr: number) => rolls(20000).filter((r) => goldDrop(r, mr, 8) !== null).length;
+    expect(hits(0) / 20000).toBeGreaterThan(0.3);
+    expect(hits(0) / 20000).toBeLessThan(0.4);
+    expect(hits(2)).toBe(20000);
+    expect(hits(3)).toBe(20000);
+  });
+
+  it("varies the pile between half and one and a half times its base, jackpots aside", () => {
+    const amounts = rolls(20000).map((r) => goldDrop(r, 2, 8)).filter((g) => g !== null && !g.jackpot).map((g) => g!.amount);
+    const base = (3 + 8) * GOLD_RARITY_MULT[2]!;
+    expect(Math.min(...amounts)).toBe(Math.trunc(base / 2));
+    expect(Math.max(...amounts)).toBe(Math.trunc((base * 3) / 2));
+  });
+
+  it("hits a five-fold jackpot about one pile in forty", () => {
+    const piles = rolls(40000).map((r) => goldDrop(r, 3, 8)!);
+    const jackpots = piles.filter((g) => g.jackpot);
+    expect(jackpots.length / piles.length).toBeGreaterThan(0.02);
+    expect(jackpots.length / piles.length).toBeLessThan(0.03);
+    const plainMax = Math.max(...piles.filter((g) => !g.jackpot).map((g) => g.amount));
+    expect(Math.max(...jackpots.map((g) => g.amount))).toBeGreaterThan(plainMax * 4);
+  });
+
+  it("grows with the area level", () => {
+    const mean = (lvl: number) => rolls(5000).reduce((s, r) => s + (goldDrop(r, 2, lvl)?.amount ?? 0), 0);
+    expect(mean(50)).toBeGreaterThan(mean(8) * 4);
   });
 });
