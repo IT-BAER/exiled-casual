@@ -15,6 +15,7 @@ import {
   VertexBuffer,
   type Scene,
 } from "@babylonjs/core";
+import { canonicalBaseId } from "@exiled/content-runtime";
 import { GEAR_LOOKS, type GearLook } from "./gear-looks";
 import { attachProp, type PropKind } from "./props";
 import { wardrobeFor } from "./rig";
@@ -39,9 +40,10 @@ const PROP_LOOKS: Readonly<Record<string, PropKind>> = {
 
 export function groundLookFor(baseId: string | undefined): GroundLook | null {
   if (baseId === undefined) return null;
-  const gear = GEAR_LOOKS[baseId];
+  const id = canonicalBaseId(baseId);
+  const gear = GEAR_LOOKS[id];
   if (gear) return { gear };
-  const prop = PROP_LOOKS[baseId];
+  const prop = PROP_LOOKS[id];
   return prop ? { prop } : null;
 }
 

@@ -29,6 +29,17 @@ describe("groundLookFor", () => {
     for (const id of droppable) expect(groundLookFor(id), id).not.toBeNull();
   });
 
+  it("lays a base under an id content has since renamed as the base it became", () => {
+    for (const [old, now] of [
+      ["base.ashen_focus", "base.ember_focus"],
+      ["base.emberwand", "base.ember_wand"],
+      ["base.wisdom_scroll", "currency.wisdom"],
+    ] as const) {
+      expect(groundLookFor(old), old).toEqual(groundLookFor(now));
+      expect(groundLookFor(old), old).not.toBeNull();
+    }
+  });
+
   it("answers null for no base at all", () => {
     expect(groundLookFor(undefined)).toBeNull();
   });
