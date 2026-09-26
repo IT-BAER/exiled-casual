@@ -51,6 +51,10 @@ describe("LootLabels", () => {
     expect(jackpot.dataset["jackpot"]).toBe("true");
     // Walked over, never clicked: the click belongs to the floor under it.
     expect(plain.style.pointerEvents).toBe("none");
+    // Legible over bright sand: a near-opaque plate, and the jackpot still louder.
+    expect(Number(plain.style.background.match(/[\d.]+\)$/)?.[0].slice(0, -1))).toBeGreaterThanOrEqual(0.85);
+    expect(parseFloat(plain.style.fontSize)).toBeGreaterThanOrEqual(15);
+    expect(parseFloat(jackpot.style.fontSize)).toBeGreaterThan(parseFloat(plain.style.fontSize));
   });
 
   it("announces a new gold pile with the gold cue, the jackpot with its own", () => {

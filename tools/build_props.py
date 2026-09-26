@@ -1283,7 +1283,7 @@ def build_waystone(mats):
 # at this camera never shows, and collapsing the relief itself leaves ragged
 # wafers, so both faces are pressed flat first and only the disc is cut to budget.
 # Its own gold, not `drop_gold`: that one is the Elevation crystal's.
-GOLD_COIN_W = 0.075
+GOLD_COIN_W = 0.12          # a heap about half a unit across is the smallest that reads at game distance
 GOLD_COIN_THICK = 1.4        # the scan's 12% of a diameter reads as foil from nine metres
 GOLD_COIN_TRIS = 36
 GOLD_COIN_SRGB = (0.93, 0.66, 0.16)   # the source's linear (0.887, 0.413, 0.024), unsquared
@@ -1318,7 +1318,7 @@ def build_gold_pile():
             v.co.z = math.copysign(half, v.co.z)
     decimate_to(coin, GOLD_COIN_TRIS)
     coin.data.materials.clear()
-    coin.data.materials.append(flat_material("gold_coin", GOLD_COIN_SRGB, 0.35, emit=0.3))
+    coin.data.materials.append(flat_material("gold_coin", GOLD_COIN_SRGB, 0.35, emit=0.5))
     smooth_by_angle(coin, 40)
     bm = bmesh.new()
     for r, deg, layer, slope in GOLD_PILE:
