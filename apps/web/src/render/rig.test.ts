@@ -34,6 +34,11 @@ import {
   SKIRT_CHAINS,
   SKIRT_JOINTS,
   SKIRT_COLLIDERS,
+  STRIKE_CONTACT,
+  STRIKE_DROP,
+  strikeLunge,
+  strikePace,
+  strikeRatioAt,
 } from "./rig";
 
 let engine: InstanceType<typeof NullEngine>;
@@ -1391,5 +1396,77 @@ describe("idleRatio", () => {
     // It does not keep slowing forever: a body stood still for a minute is
     // breathing, not dying.
     expect(idleRatio(600)).toBeCloseTo(IDLE_SETTLED, 6);
+  });
+});
+
+describe("a melee swing lands heavy and on the hit", () => {
+  const CLIP = 1.533;
+  const WINDUP = 8 / 30;
+  const BEAT = 21 / 30;
+
+  it("reaches the contact pose on the tick the sim resolves the swing", () => {
+    const p = strikePace(CLIP, WINDUP, BEAT);
+    const toContact = (CLIP * STRIKE_DROP) / p.raise + (CLIP * (STRIKE_CONTACT - STRIKE_DROP)) / p.drop;
+    expect(toContact).toBeCloseTo(WINDUP, 3);
+    // The follow-through fills the rest of the beat, so a held button chains swings.
+    expect(toContact + (CLIP * (1 - STRIKE_CONTACT)) / p.follow).toBeCloseTo(BEAT, 3);
+  });
+
+  it("raises slow and drops fast", () => {
+    const p = strikePace(CLIP, WINDUP, BEAT);
+    expect(p.drop).toBeGreaterThan(p.raise * 1.5);
+    expect(strikeRatioAt(0.1, p)).toBe(p.raise);
+    expect(strikeRatioAt((STRIKE_DROP + STRIKE_CONTACT) / 2, p)).toBe(p.drop);
+    expect(strikeRatioAt(0.9, p)).toBe(p.follow);
+  });
+
+  it("falls back to one even rate when the sim sent no wind-up", () => {
+    const r = actionRatio(CLIP, BEAT);
+    expect(strikePace(CLIP, undefined, BEAT)).toEqual({ raise: r, drop: r, follow: r });
+  });
+
+  it("steps in on the drop, holds through contact and settles back", () => {
+    expect(strikeLunge(0)).toBe(0);
+    expect(strikeLunge(STRIKE_DROP)).toBe(0);
+    expect(strikeLunge(STRIKE_CONTACT)).toBe(1);
+    expect(strikeLunge((STRIKE_DROP + STRIKE_CONTACT) / 2)).toBeGreaterThan(0.5);
+    expect(strikeLunge(0.95)).toBe(0);
+  });
+
+  it("puts the contact where both sword takes stop their fastest arm travel", () => {
+    const MODELS = fileURLToPath(new URL("../../public/models/", import.meta.url));
+    const glb = readFileSync(`${MODELS}anim-library.glb`);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const json = JSON.parse(glb.subarray(20, 20 + glb.readUInt32LE(12)).toString("utf8")) as any;
+    const bin = 20 + glb.readUInt32LE(12) + 8;
+    const floats = (i: number, width: number) => {
+      const a = json.accessors[i];
+      const start = bin + (json.bufferViews[a.bufferView].byteOffset ?? 0) + (a.byteOffset ?? 0);
+      return (k: number, c: number) => glb.readFloatLE(start + (k * width + c) * 4);
+    };
+    for (const clip of STRIKE_CLIPS) {
+      const anim = json.animations.find((a: { name: string }) => a.name === CLIP_NAME[clip]);
+      let speed: number[] = [];
+      let times: number[] = [];
+      for (const ch of anim.channels) {
+        const bone = json.nodes[ch.target.node].name as string;
+        if (ch.target.path !== "rotation" || !["upperarm_r", "lowerarm_r", "hand_r", "spine_03"].includes(bone)) continue;
+        const smp = anim.samplers[ch.sampler];
+        const t = floats(smp.input, 1);
+        const q = floats(smp.output, 4);
+        const n = json.accessors[smp.input].count as number;
+        if (times.length === 0) { times = Array.from({ length: n }, (_, k) => t(k, 0)); speed = new Array(n).fill(0); }
+        for (let k = 1; k < n; k++) {
+          let dot = 0;
+          for (let c = 0; c < 4; c++) dot += q(k, c) * q(k - 1, c);
+          speed[k]! += (2 * Math.acos(Math.min(1, Math.abs(dot)))) / (times[k]! - times[k - 1]!);
+        }
+      }
+      const peak = speed.indexOf(Math.max(...speed));
+      let stop = peak;
+      while (stop < speed.length - 1 && speed[stop]! > speed[peak]! * 0.1) stop++;
+      const frac = times[stop]! / times[times.length - 1]!;
+      expect(Math.abs(frac - STRIKE_CONTACT), clip).toBeLessThan(0.03);
+    }
   });
 });

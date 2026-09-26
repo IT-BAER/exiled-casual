@@ -162,6 +162,9 @@ const CAST_SFX: Record<string, string> = {
   "skill.ember_bolt.v1": "skill-ember-bolt-cast",
   "skill.cinder_ground.v1": "skill-cinder-ground-cast",
   "skill.blink.v1": "skill-blink",
+  "skill.strike.v1": "skill-strike-swing",
+  "skill.heavy_strike.v1": "skill-strike-swing",
+  "skill.ground_slam.v1": "skill-strike-swing",
 };
 
 export interface Soundscape {
@@ -355,6 +358,11 @@ export function createSoundscape(opts: Options = {}): Soundscape {
         const cue = CAST_SFX[skillId];
         if (cue) play(cue);
       }
+
+      // A melee swing landing is the one hit the player's own hands made: one thud
+      // per swing however many it caught, and none for a whiff.
+      if (snap.player.strikeTick !== undefined && snap.player.strikeTick !== before.player.strikeTick
+        && (snap.player.strikeHits ?? 0) > 0) play("skill-strike-impact");
 
       // ── Flask, map device, feet ─────────────────────────────────────────────
       const f = snap.player.flasks;

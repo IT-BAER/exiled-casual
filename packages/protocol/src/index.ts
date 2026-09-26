@@ -326,6 +326,10 @@ export interface Snapshot {
     /** Length of the active wind-up in ticks, cast speed already applied, so the
      *  renderer can pace the clip to end on the hit. Absent outside a cast. */
     castTicks?: number;
+    /** Tick the last melee swing resolved on, and how many it hit (0 = a whiff).
+     *  A change is the swing landing, which a held button never shows as a cast edge. */
+    strikeTick?: number;
+    strikeHits?: number;
     /** Charge state for the two utility flasks (life on Q, mana on E). */
     flasks: { lifeCharges: number; lifeMax: number; manaCharges: number; manaMax: number };
     /** Gear-derived totals for the character sheet. Life and mana stay above, where the HUD reads them. */

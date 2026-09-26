@@ -10,7 +10,7 @@ import { World } from "./ecs";
 import { spawnMonster } from "./areas";
 import { grantSkills } from "./persist";
 import type {
-  Position, Health, Mana, MonsterC, BossC, TelegraphC, SessionC, InteractableC, SkillsC, ProgressC,
+  Position, Health, Mana, MonsterC, BossC, TelegraphC, SessionC, InteractableC, SkillsC, ProgressC, StrikeC,
 } from "./components";
 
 /**
@@ -103,6 +103,15 @@ describe("buildSnapshot", () => {
     expect(arrows()).toBe(0);
     sim.step();
     expect(arrows()).toBe(1);
+  });
+
+  it("reports the last melee swing's tick and hit count, and nothing before one", () => {
+    const { world, sim, playerEntity } = createCombatSim(42);
+    expect(buildSnapshot(world, sim, 0, CONTENT_VERSION).player.strikeTick).toBeUndefined();
+    world.set<StrikeC>(playerEntity, "strike", { tick: 5, hits: 3 });
+    const snap = buildSnapshot(world, sim, 6, CONTENT_VERSION);
+    expect(snap.player.strikeTick).toBe(5);
+    expect(snap.player.strikeHits).toBe(3);
   });
 
   it("a spell keeps the spell action", () => {

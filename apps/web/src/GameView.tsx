@@ -592,8 +592,9 @@ export function GameView({
       // camera WITH the target; the default recomputes the angles and drifts.
       const p = curSnap.player;
       const pp = prevSnap?.player ?? p;
+      const shake = renderer.cameraShake();
       camera.setTarget(
-        new Vector3(pp.x + (p.x - pp.x) * alpha, 0, pp.y + (p.y - pp.y) * alpha),
+        new Vector3(pp.x + (p.x - pp.x) * alpha + shake.x, 0, pp.y + (p.y - pp.y) * alpha + shake.z),
         false,
         false,
         true,

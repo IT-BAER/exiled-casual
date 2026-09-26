@@ -1,7 +1,8 @@
 import { Vector3 } from "@babylonjs/core";
 import type { Scene } from "@babylonjs/core";
 import type { Mesh } from "@babylonjs/core";
-import { blinkBurst, fxProfile } from "./skill-fx";
+import { blinkBurst, fxProfile, meleeImpact } from "./skill-fx";
+import { HIT_STOP_SCALE, addTrauma, decayTrauma, hitStopMs, shakeOffset } from "./juice";
 import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
 import { animateActor, keepGroundBlobFlat, makeMesh, setHitFlash, updateTelegraph, updatePortal, updateMapDevice, updateStash, updateVendor, updateContainer, updateGroundItem, updateRareElement, portalAppear, portalVanish, isPortalMesh, PORTAL_STAGGER_MS, Y_LIFT } from "./meshes";
 import type { MeshKind } from "./meshes";
@@ -79,7 +80,7 @@ const BODIES = new Set<MeshKind>(["player", "monster", "rare", "boss"]);
 export interface ActionAnimation {
   playCast(seconds?: number): void;
   playBow(seconds?: number, releaseSeconds?: number): void;
-  playStrike(seconds?: number): void;
+  playStrike(seconds?: number, releaseSeconds?: number): void;
   stopStrike(): void;
 }
 
@@ -105,7 +106,7 @@ export function syncActionAnimation(
 ): void {
   if (!rig) return;
   if (isCasting && (!wasCasting || wasAction !== action)) {
-    if (action === "melee") rig.playStrike(seconds);
+    if (action === "melee") rig.playStrike(seconds, releaseSeconds);
     else if (action === "bow") rig.playBow(seconds, releaseSeconds);
     else rig.playCast(seconds);
   }
@@ -122,6 +123,12 @@ const DEATH_OFF_CENTRE = 0.3;
  *  Wide enough for a monster radius plus the tick the impact was resolved on,
  *  short enough that a bolt expiring against a wall nearby is not mistaken for it. */
 const HIT_REACH = 1.5;
+/** Farthest body a landed swing is drawn striking: Ground Slam's 3.5 reach plus a boss. */
+const MELEE_FX_REACH = 5;
+/** Bursts per swing. Past a few the sparks are one blur and only cost frames. */
+const MAX_MELEE_BURSTS = 4;
+/** A weapon knocks a body further back than a bolt of the same damage. */
+const MELEE_KICK = 1.5;
 
 /**
  * Only bodies lean. A portal or a chest carries a fixed yaw and no weight, and
@@ -229,6 +236,11 @@ export class SnapshotRenderer {
   private lastSnapshot: Snapshot | null = null;
   /** The area the last applied snapshot was of; drives areaChanged. */
   private lastArea: string | null = null;
+  /** Camera shake left, 0..1; read by the render loop through cameraShake(). */
+  shakeTrauma = 0;
+  /** Real ms the hit-stop lets go at; 0 when the world is running. */
+  private hitStopUntil = 0;
+  private lastFrameMs = 0;
 
   constructor(scene: Scene) {
     this.scene = scene;
@@ -272,6 +284,11 @@ export class SnapshotRenderer {
     return mesh ? { x: mesh.position.x, y: mesh.position.z } : null;
   }
 
+  /** Offset for the camera target this frame: the jolt of a landed swing. */
+  cameraShake(): { x: number; z: number } {
+    return shakeOffset(this.shakeTrauma, performance.now());
+  }
+
   /** Set the entity the mouse is hovering; drives portal/device highlight visuals. */
   setHoveredEntity(id: number | null): void {
     this.hoveredEntityId = id;
@@ -285,6 +302,18 @@ export class SnapshotRenderer {
     const newTick = next.tick !== this.lastTick;
     this.now = next.tick + alpha;
     this.lastSnapshot = next;
+    const ms = performance.now();
+    if (this.lastFrameMs > 0) this.shakeTrauma = decayTrauma(this.shakeTrauma, (ms - this.lastFrameMs) / 1000);
+    this.lastFrameMs = ms;
+    if (this.hitStopUntil > 0 && ms >= this.hitStopUntil) {
+      this.scene.animationTimeScale = 1;
+      this.hitStopUntil = 0;
+    }
+    // The swing that landed this tick, if any: a new strikeTick is the only edge a
+    // held button leaves, since the next cast starts on the tick this one resolves.
+    const strikeHits = newTick && prev !== null && next.player.strikeTick !== undefined
+      && next.player.strikeTick !== prev.player.strikeTick ? next.player.strikeHits ?? 0 : 0;
+    let meleeBursts = 0;
 
     // Player
     this.playerId = next.player.id;
@@ -436,11 +465,17 @@ export class SnapshotRenderer {
       // honest one — a swing that missed or was absorbed never moves it.
       if (newTick && e.life !== undefined && prevE?.life !== undefined && e.life < prevE.life) {
         this.hit.set(e.id, next.tick);
+        const meleeHit = strikeHits > 0 && e.kind === "monster"
+          && Math.hypot(e.x - next.player.x, e.y - next.player.y) <= MELEE_FX_REACH;
+        if (meleeHit && meleeBursts < MAX_MELEE_BURSTS) {
+          meleeBursts++;
+          meleeImpact(this.scene, new Vector3(e.x, Y_LIFT.projectile, e.y), e.x - next.player.x, e.y - next.player.y);
+        }
         if (e.kind === "monster" && e.life > 0) {
           const from = blowFrom(e.x, e.y, prev, next);
           const was = this.flinch.get(e.id);
           const tier = e.boss ? "boss" : e.rare ? "rare" : "monster";
-          const strength = flinchStrength(prevE.life - e.life, e.maxLife ?? prevE.life, tier);
+          const strength = flinchStrength(prevE.life - e.life, e.maxLife ?? prevE.life, tier) * (meleeHit ? MELEE_KICK : 1);
           this.flinch.set(e.id, {
             f: kick(was?.f, this.now, e.x - from.x, e.y - from.z, strength),
             base: was?.base ?? mesh.scaling.y,
@@ -569,6 +604,13 @@ export class SnapshotRenderer {
         continue;
       }
       corpse.mesh.position.y = corpse.restY - sinkDepth(done / SINK_TICKS);
+    }
+
+    if (strikeHits > 0) {
+      // The pose holds on the real clock, never the sim's: the world keeps running.
+      this.scene.animationTimeScale = HIT_STOP_SCALE;
+      this.hitStopUntil = performance.now() + hitStopMs(strikeHits);
+      this.shakeTrauma = addTrauma(this.shakeTrauma, strikeHits);
     }
 
     // Faded on the sim's clock, like every other timing in the client: a wall

@@ -9,7 +9,7 @@ import { describeItem, SKILLS, TOWN_PORTAL_SKILL } from "@exiled/content-runtime
 import type { Command, Simulation } from "./loop";
 import type { World, Entity } from "./ecs";
 import type {
-  Health, Mana, Position, Cooldowns, CastingC, MonsterC,
+  Health, Mana, Position, Cooldowns, CastingC, StrikeC, MonsterC,
   AilmentC, ProjectileC, GroundAreaC, BossC, TelegraphC,
   SessionC, InteractableC, ContainerC, ItemC, GoldC, InventoryC, StashC, VendorC, EquipmentC, FlasksC, DefensesC, OffenseC, ProgressC,
   EnergyShieldC, ShardsC, MoveDir, SkillsC,
@@ -423,6 +423,8 @@ export function buildSnapshot(
         const c = world.get<CastingC>(playerEntity, "casting");
         return c !== undefined && c.untilTick > tick ? c.ticks : undefined;
       })(),
+      strikeTick: world.get<StrikeC>(playerEntity, "strike")?.tick,
+      strikeHits: world.get<StrikeC>(playerEntity, "strike")?.hits,
       flasks: (() => {
         const f = world.get<FlasksC>(playerEntity, "flasks");
         return f

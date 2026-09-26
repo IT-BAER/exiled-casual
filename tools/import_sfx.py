@@ -96,6 +96,10 @@ SOURCES: dict[str, str] = {
     # wooden stick cutting the air for the loose, a spear shaft striking for the hit.
     "skill-bow-release": "Justsoundeffects - Transition Whooshes Vol. 1/SWSH_Woodstick Swish 03_JSE_TW1.wav",
     "skill-arrow-impact": "344 Audio - Historical Weapons Vol. 2/WEAPBlnt_Spear And Stick Impact, Wooden MKH 2_344 Audio_Medieval Weapons Vol 2.wav",
+    # Melee: one large swing for every weapon skill, and a two-hander biting into a
+    # body for the landing, because what it lands on is always flesh or hide.
+    "skill-strike-swing": "David Dumais Audio - Melee Weapons Sound Effects Pack 1/SWSH_Swing 3 Large 03_DDUMAIS_NONE.wav",
+    "skill-strike-impact": "Justsoundeffects - Melee Weapons/WEAPAxe_Long Two-Handed Axe Flesh Hit_JSE_MW.wav",
 
     # ── Portals and the map device ──────────────────────────────────────────────
     # An airy gust that swells and falls away. The designed sci-fi vortex this

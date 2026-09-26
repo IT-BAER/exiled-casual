@@ -6,7 +6,7 @@ import { Simulation } from "../loop";
 import type { World } from "../ecs";
 import { WORLD_MIN, WORLD_MAX } from "../movement";
 import { sweep, type Collision, type CollisionRef } from "../collision";
-import type { Position, PlayerC, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC, CastingC, OffenseC, Health, SkillHoldC, SkillsC } from "../components";
+import type { Position, PlayerC, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC, CastingC, OffenseC, Health, SkillHoldC, SkillsC, StrikeC } from "../components";
 import { damageCode } from "../damage-types";
 import { bodyRadiusOf } from "../body";
 import { spendScrollAndOpenPortal } from "../areas";
@@ -133,6 +133,7 @@ export function registerSkillCast(
         // The wedge test is a dot product against cos(half-arc), not atan2, so
         // the comparison stays deterministic fixed-point integer math.
         const cosHalfArc = Math.round(Math.cos((effect.arcDegrees / 2) * Math.PI / 180) * 10000);
+        let hits = 0;
         for (const target of world.query("position", "health", "faction")) {
           if (target === caster) continue;
           if (world.get<Faction>(target, "faction")!.team === casterTeam) continue;
@@ -155,7 +156,9 @@ export function registerSkillCast(
             amountFixed: scalePct(effect.damage.amountFixed, spellDamagePct) * (didCrit ? 2 : 1),
             type: damageCode(effect.damage.type),
           });
+          hits++;
         }
+        world.set<StrikeC>(caster, "strike", { tick, hits });
       } else if (effect.type === "teleport") {
         const step = fpStepToward(pos.x, pos.y, tx, ty, effect.distanceFixed);
         let dx = step.dx;

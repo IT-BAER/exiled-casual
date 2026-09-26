@@ -6,7 +6,7 @@ import { createCombatSim } from "../combat-sim";
 import { gridCollision } from "../collision";
 import { makeGrid } from "../test-grid";
 import type { SkillDef } from "@exiled/content-schema";
-import type { Position, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC, CastingC, OffenseC, Health, SessionC, SkillsC } from "../components";
+import type { Position, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC, CastingC, OffenseC, Health, SessionC, SkillsC, StrikeC } from "../components";
 
 // Authored skill defs matching the contract tables exactly.
 const EMBER_BOLT: SkillDef = {
@@ -563,6 +563,18 @@ describe("registerSkillCast", () => {
       makeEnemy(sim, fp(3.5), 0);
       cleave(sim, caster, fp(5), 0);
       expect(sim.damageQueue).toEqual([]);
+    });
+
+    it("records the tick it landed and how many it hit, a whiff included", () => {
+      const sim = new Simulation();
+      registerSkillCast(sim, ALL_SKILLS);
+      const caster = makeCaster(sim);
+      makeEnemy(sim, fp(1.5), 0);
+      makeEnemy(sim, fp(1.2), fp(0.6));
+      cleave(sim, caster, fp(5), 0);
+      expect(sim.world.get<StrikeC>(caster, "strike")).toEqual({ tick: 0, hits: 2 });
+      sim.step([{ tick: 1, entity: caster, type: "useSkill", skillId: CLEAVE.id, data: { tx: fp(-5), ty: 0 } }]);
+      expect(sim.world.get<StrikeC>(caster, "strike")).toEqual({ tick: 1, hits: 0 });
     });
 
     it("never hits its own team", () => {

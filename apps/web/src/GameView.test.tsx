@@ -78,6 +78,7 @@ vi.mock("./render/renderer", () => ({
     apply = vi.fn();
     setHoveredEntity = vi.fn();
     setAim = vi.fn();
+    cameraShake = () => ({ x: 0, z: 0 });
   },
 }));
 vi.mock("./render/rig", () => ({ loadPlayerRig: () => Promise.resolve(), resetPlayerRig: vi.fn() }));

@@ -192,6 +192,16 @@ describe("createSoundscape", () => {
     ])).toEqual(["skill-bow-release"]);
   });
 
+  it("a melee swing whooshes when the sim takes it and thuds only when it lands on something", () => {
+    const at = (tick: number, cooldown: number, strikeTick?: number, strikeHits?: number) =>
+      snap({ tick, player: { ...testPlayer(), cooldowns: { "skill.strike.v1": cooldown }, strikeTick, strikeHits } });
+    expect(run([at(1, 0), at(2, 0.7), at(9, 0.4, 8, 2)])).toEqual(["skill-strike-swing", "skill-strike-impact"]);
+    // A whiff: the swing, and silence where the blow would be.
+    expect(run([at(1, 0), at(2, 0.7), at(9, 0.4, 8, 0)])).toEqual(["skill-strike-swing"]);
+    // Held: the same landed swing is not heard again on the next snapshot.
+    expect(run([at(1, 0, 8, 1), at(2, 0, 8, 1)])).toEqual([]);
+  });
+
   /** The portals are the renderer's: it staggers them, so it sounds them. */
   it("says nothing about portals", () => {
     const portal: SnapshotEntity = { id: 7, kind: "portal", x: 0, y: 1 };

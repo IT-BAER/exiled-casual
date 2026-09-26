@@ -201,6 +201,14 @@ export interface CastingC {
    *  change what that cast does, and must not change it back either. */
   gemLevel?: number;
 }
+/**
+ * The last melee swing this caster resolved: the tick it landed and how many
+ * bodies were in the wedge. A render edge only; a whiff records 0 hits.
+ */
+export interface StrikeC {
+  tick: number;
+  hits: number;
+}
 export interface MonsterC {
   defId: string;
   moveSpeed: Fixed;

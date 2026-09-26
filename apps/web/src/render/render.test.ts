@@ -635,6 +635,34 @@ describe("SnapshotRenderer", () => {
     }
   });
 
+  it("a melee swing that lands sparks on what it struck, holds the pose and jolts the camera", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const renderer = new SnapshotRenderer(scene);
+    const monster = (life: number) => ({ id: 7, kind: "monster" as const, x: 1.2, y: 0, radius: 0.5, life, maxLife: 50 });
+    const at = (tick: number, life: number, strikeTick?: number, strikeHits?: number) => {
+      const s = makeSnapshot({ tick, entities: [monster(life)] });
+      return { ...s, player: { ...s.player, strikeTick, strikeHits } };
+    };
+    const sparks = () => scene.particleSystems.filter((p) => p.name === "fx-melee-sparks").length;
+
+    // Hurt by something else (no new swing): no melee juice.
+    const a = at(1, 50, 0, 1);
+    renderer.apply(null, a, 1);
+    const b = at(2, 40, 0, 1);
+    renderer.apply(a, b, 1);
+    expect(sparks()).toBe(0);
+    expect(scene.animationTimeScale).toBe(1);
+    expect(renderer.cameraShake()).toEqual({ x: 0, z: 0 });
+
+    // The swing lands this tick and takes life off the body in front.
+    const c = at(3, 30, 3, 1);
+    renderer.apply(b, c, 1);
+    expect(sparks()).toBe(1);
+    expect(scene.animationTimeScale).toBeLessThan(1);
+    expect(renderer.shakeTrauma).toBeGreaterThan(0);
+  });
+
   it("disposes the mesh when an entity disappears in a subsequent snapshot", () => {
     engine = new NullEngine();
     const { scene } = createScene(engine);

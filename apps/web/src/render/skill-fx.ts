@@ -11,6 +11,7 @@ import {
   StandardMaterial,
   Texture,
   TrailMesh,
+  TransformNode,
   Vector3,
 } from "@babylonjs/core";
 import { Mesh } from "@babylonjs/core";
@@ -605,6 +606,87 @@ export function emberBurst(scene: Scene, at: Vector3, fx: FxProfile = FALLBACK_F
   return burst(ps, 32, 0.4);
 }
 
+export const MELEE_SPARKS_NAME = "fx-melee-sparks";
+export const MELEE_DUST_NAME = "fx-melee-dust";
+/** Steel on hide, not fire: a pale warm ring, tighter than a bolt's. */
+const MELEE_RING = new Color3(1, 0.86, 0.62);
+const MELEE_RING_RADIUS = 1.5;
+
+/**
+ * A weapon landing on a body: sparks thrown off the contact AWAY from the
+ * swinger, dust kicked off the floor under it, a tight ring and the shared flash.
+ */
+export function meleeImpact(scene: Scene, at: Vector3, awayX: number, awayZ: number): void {
+  shockwave(scene, at, MELEE_RING_RADIUS, MELEE_RING);
+  flash(scene, at);
+
+  const len = Math.hypot(awayX, awayZ) || 1;
+  const ax = awayX / len;
+  const az = awayZ / len;
+  const sparks = fireSystem(scene, MELEE_SPARKS_NAME, 24);
+  sparks.emitter = at.clone();
+  // A fan out of the far side of the body and up: the blow carries through it.
+  sparks.createPointEmitter(
+    new Vector3(ax - az * 0.9, 0.3, az + ax * 0.9),
+    new Vector3(ax + az * 0.9, 1.1, az - ax * 0.9),
+  );
+  sizeOverLife(sparks, 0.3, 0.04, 0.5);
+  sparks.minLifeTime = 0.12;
+  sparks.maxLifeTime = 0.3;
+  sparks.minEmitPower = 4;
+  sparks.maxEmitPower = 8;
+  sparks.gravity = new Vector3(0, -12, 0);
+  burst(sparks, 20, 0.3);
+
+  const dust = new ParticleSystem(MELEE_DUST_NAME, 8, scene);
+  dust.particleTexture = new Texture(SMOKE_PUFF, scene);
+  dust.blendMode = ParticleSystem.BLENDMODE_STANDARD;
+  dust.applyFog = true;
+  dust.emitter = new Vector3(at.x, 0.12, at.z);
+  dust.createSphereEmitter(0.35, 1);
+  dust.addColorGradient(0, new Color4(0.46, 0.4, 0.32, 0));
+  dust.addColorGradient(0.12, new Color4(0.44, 0.38, 0.3, 0.3));
+  dust.addColorGradient(1, new Color4(0.38, 0.34, 0.3, 0));
+  sizeOverLife(dust, 0.5, 1.4, 0.3);
+  dust.minLifeTime = 0.35;
+  dust.maxLifeTime = 0.7;
+  dust.minEmitPower = 0.8;
+  dust.maxEmitPower = 1.6;
+  dust.gravity = new Vector3(0, 0.3, 0);
+  dust.minInitialRotation = 0;
+  dust.maxInitialRotation = Math.PI * 2;
+  burst(dust, 6, 0.7);
+}
+
+export const SWING_TRAIL_NAME = "fx-swing-trail";
+/** Pale steel, dimmer than a bolt's wake: the swing is the arm, not a spell. */
+const SWING_TRAIL_COLOUR = new Color3(0.95, 0.9, 0.78);
+const SWING_TRAIL_WIDTH = 0.09;
+/** Frames of history (TrailMesh counts frames, not seconds). */
+const SWING_TRAIL_FRAMES = 7;
+
+/** A ribbon off the weapon tip for the fast part of a swing. The caller moves it. */
+export function swingTrail(scene: Scene): { follow(at: Vector3): void; dispose(): void } {
+  const node = new TransformNode(`${SWING_TRAIL_NAME}-tip`, scene);
+  let ribbon: TrailMesh | null = null;
+  return {
+    follow(at: Vector3): void {
+      node.position.copyFrom(at);
+      if (ribbon) return;
+      // Built on the first point, so its history starts at the tip, not the origin.
+      ribbon = new TrailMesh(SWING_TRAIL_NAME, node, scene, SWING_TRAIL_WIDTH, SWING_TRAIL_FRAMES, true);
+      ribbon.material = glowMaterial(scene, `${SWING_TRAIL_NAME}-mat`, SWING_TRAIL_COLOUR);
+      ribbon.material.alpha = 0.45;
+      ribbon.isPickable = false;
+    },
+    dispose(): void {
+      ribbon?.material?.dispose();
+      ribbon?.dispose();
+      node.dispose();
+    },
+  };
+}
+
 export const BOLT_BLAST_NAME = "fx-bolt-blast";
 
 /** The fireball: a handful of big flames swelling out of the hit point. Small on
@@ -791,6 +873,7 @@ export const BLINK_ALPHA = 0.48;
 export function warmSkillFx(scene: Scene): void {
   emberBurst(scene, Vector3.Zero());
   splinterBurst(scene, Vector3.Zero(), 0, SKILL_FX["skill.snap_shot.v1"]!);
+  meleeImpact(scene, Vector3.Zero(), 1, 0);
   const light = scene.getLightByName(FLASH_NAME) as PointLight | null;
   if (light) light.intensity = 0;
 }

@@ -22,6 +22,11 @@ import {
   fxProfile,
   FALLBACK_FX,
   SKILL_FX,
+  meleeImpact,
+  MELEE_SPARKS_NAME,
+  MELEE_DUST_NAME,
+  swingTrail,
+  SWING_TRAIL_NAME,
 } from "./skill-fx";
 
 let engine: NullEngine | undefined;
@@ -230,6 +235,34 @@ describe("ember bolt", () => {
       bolt.dispose();
     }
     expect(scene.lights.filter((l) => l.name === FLASH_NAME)).toHaveLength(1);
+  });
+});
+
+describe("melee", () => {
+  it("a landed blow throws sparks and dust, rings the floor and lights it", () => {
+    const scene = newScene();
+    meleeImpact(scene, new Vector3(1, 0.8, 0), 1, 0);
+    expect(systems(scene, MELEE_SPARKS_NAME)).toHaveLength(1);
+    expect(systems(scene, MELEE_DUST_NAME)).toHaveLength(1);
+    expect(scene.getMeshByName(RING_NAME)).not.toBeNull();
+    expect((scene.getLightByName(FLASH_NAME) as PointLight).intensity).toBeGreaterThan(0);
+  });
+
+  it("a swing ribbon follows its node and leaves nothing behind when cut", () => {
+    const scene = newScene();
+    const swing = () => {
+      const trail = swingTrail(scene);
+      trail.follow(new Vector3(0, 1, 0.5));
+      expect(scene.getMeshByName(SWING_TRAIL_NAME)).not.toBeNull();
+      trail.dispose();
+      expect(scene.getMeshByName(SWING_TRAIL_NAME)).toBeNull();
+    };
+    // The first one also brings the scene's shared default material in.
+    swing();
+    const after = scene.materials.length;
+    for (let i = 0; i < 4; i++) swing();
+    expect(scene.materials.length).toBe(after);
+    expect(scene.transformNodes.filter((n) => n.name.startsWith(SWING_TRAIL_NAME))).toHaveLength(0);
   });
 });
 

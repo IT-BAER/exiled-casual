@@ -16,6 +16,7 @@ import {
 } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
 import { SkirtSim, type SkirtCollider } from "./skirt";
+import { swingTrail } from "./skill-fx";
 
 /**
  * Skinned player actor: a base body on a 65-bone Unreal-named skeleton, and
@@ -162,6 +163,61 @@ export const ACTION_RATIO_MAX = 3;
 
 /** Where `Rig|Bow_Shoot` looses, as a fraction of it: `RELEASE / LAST` in `tools/build_bow_clip.py`. */
 export const BOW_RELEASE = 12 / 30;
+
+/**
+ * Where both sword takes start their drop and where the blade stops, as
+ * fractions of the clip, off the arm's angular speed in anim-library.glb: the
+ * raise runs to 0.30s, the drop peaks at 0.40s and stops at 0.53s of 1.53s.
+ */
+export const STRIKE_DROP = 0.2;
+export const STRIKE_CONTACT = 0.345;
+/** Share of the wind-up the raise gets. The drop gets the rest, so it snaps. */
+const STRIKE_RAISE_SHARE = 0.7;
+/** The drop may run faster than any other action: that speed is the weight. */
+const STRIKE_DROP_MAX = 4;
+/** Units the body steps in on the drop, in the host's own space (+z is forward). */
+const STRIKE_LUNGE = 0.2;
+/** The step is held from contact to here, then eased back by LUNGE_BACK. */
+const LUNGE_HOLD = 0.5;
+const LUNGE_BACK = 0.8;
+
+export interface StrikePace { raise: number; drop: number; follow: number }
+
+/**
+ * Three playback rates for one swing: a slow raise and a fast drop that together
+ * reach the contact pose when the sim resolves the hit, then a follow-through
+ * that fills the rest of the beat. No wind-up from the sim: one even rate.
+ */
+export function strikePace(clipSeconds: number, windupSeconds?: number, beatSeconds?: number): StrikePace {
+  if (!(clipSeconds > 0) || !(windupSeconds !== undefined && windupSeconds > 0)) {
+    const r = actionRatio(clipSeconds, beatSeconds);
+    return { raise: r, drop: r, follow: r };
+  }
+  const clamp = (v: number, max: number) => Math.min(max, Math.max(ACTION_RATIO_MIN, v));
+  const rest = (beatSeconds ?? 0) - windupSeconds;
+  return {
+    raise: clamp((clipSeconds * STRIKE_DROP) / (windupSeconds * STRIKE_RAISE_SHARE), ACTION_RATIO_MAX),
+    drop: clamp((clipSeconds * (STRIKE_CONTACT - STRIKE_DROP)) / (windupSeconds * (1 - STRIKE_RAISE_SHARE)), STRIKE_DROP_MAX),
+    follow: rest > 0 ? clamp((clipSeconds * (1 - STRIKE_CONTACT)) / rest, ACTION_RATIO_MAX) : ACTION_RATIO_MAX,
+  };
+}
+
+/** The rate for the phase `frac` (0..1 through the clip) is in. */
+export function strikeRatioAt(frac: number, pace: StrikePace): number {
+  return frac < STRIKE_DROP ? pace.raise : frac < STRIKE_CONTACT ? pace.drop : pace.follow;
+}
+
+/** How far into its step-in the body is at `frac`, 0..1. */
+export function strikeLunge(frac: number): number {
+  if (frac <= STRIKE_DROP || frac >= LUNGE_BACK) return 0;
+  if (frac < STRIKE_CONTACT) {
+    const u = (frac - STRIKE_DROP) / (STRIKE_CONTACT - STRIKE_DROP);
+    return 1 - (1 - u) * (1 - u);
+  }
+  if (frac < LUNGE_HOLD) return 1;
+  const u = (frac - LUNGE_HOLD) / (LUNGE_BACK - LUNGE_HOLD);
+  return 1 - u * u * (3 - 2 * u);
+}
 
 /**
  * How far the mirrored cast clip bakes the arm off the direction it is meant to
@@ -739,6 +795,10 @@ export class RigActor {
   private aimTarget: { x: number; z: number } | null = null;
   /** Observer that applies aim rotation after the animation system runs. */
   private aimObserver: Observer<Scene> | null = null;
+  /** The swing in flight and the rates it is paced by; null between swings. */
+  private strike: { group: AnimationGroup; pace: StrikePace } | null = null;
+  private trail: ReturnType<typeof swingTrail> | null = null;
+  private strikeObserver: Observer<Scene> | null = null;
   private colliders: (SkirtCollider & {
     head: TransformNode;
     tail: TransformNode;
@@ -894,16 +954,21 @@ export class RigActor {
     group.onAnimationGroupEndObservable.addOnce(this.easeOutToLocomotion);
   }
 
-  /** Alternate authored weapon-arm attacks while locomotion keeps the legs. */
-  playStrike(seconds?: number): void {
+  /**
+   * Alternate authored weapon-arm attacks while locomotion keeps the legs. Paced
+   * per phase (`strikePace`) so the blade stops on the tick the sim lands the hit.
+   */
+  playStrike(seconds?: number, releaseSeconds?: number): void {
     const clip = STRIKE_CLIPS[this.nextStrikeIndex]!;
     const group = this.groups.get(clip);
     if (!group) return;
     for (const strike of STRIKE_CLIPS) this.groups.get(strike)?.stop();
-    const ratio = actionRatio(clipSeconds(group), seconds);
-    group.speedRatio = ratio;
-    group.start(false, ratio);
+    const pace = strikePace(clipSeconds(group), releaseSeconds, seconds);
+    group.speedRatio = pace.raise;
+    group.start(false, pace.raise);
     group.onAnimationGroupEndObservable.addOnce(this.easeOutToLocomotion);
+    this.strike = { group, pace };
+    this.strikeObserver ??= this.scene.onBeforeAnimationsObservable.add(this.paceStrike);
     this.nextStrikeIndex = (this.nextStrikeIndex + 1) % STRIKE_CLIPS.length;
   }
 
@@ -911,6 +976,33 @@ export class RigActor {
   stopStrike(): void {
     for (const strike of STRIKE_CLIPS) this.groups.get(strike)?.stop();
   }
+
+  /** Per frame, before the clips advance: the phase's rate and the step-in. */
+  private paceStrike = (): void => {
+    const strike = this.strike;
+    const frame = strike?.group.isPlaying ? strike.group.animatables[0]?.masterFrame : undefined;
+    if (!strike || frame === undefined) {
+      this.strike = null;
+      this.pivot.position.z = 0;
+      this.trail?.dispose();
+      this.trail = null;
+      return;
+    }
+    const { group, pace } = strike;
+    const frac = (frame - group.from) / Math.max(1e-6, group.to - group.from);
+    const ratio = strikeRatioAt(frac, pace);
+    if (group.speedRatio !== ratio) group.speedRatio = ratio;
+    this.pivot.position.z = STRIKE_LUNGE * strikeLunge(frac);
+    // The ribbon is the drop and nothing else: on the raise it is a slow smear.
+    const tip = frac >= STRIKE_DROP && frac < LUNGE_HOLD ? this.castPoint() : null;
+    if (tip) {
+      this.trail ??= swingTrail(this.scene);
+      this.trail.follow(tip);
+    } else if (this.trail) {
+      this.trail.dispose();
+      this.trail = null;
+    }
+  };
 
   private isDrawingBow(): boolean {
     return this.groups.get("bow")?.isPlaying === true;
@@ -1346,6 +1438,12 @@ export class RigActor {
     this.aimTarget = null;
     if (this.aimObserver) this.scene.onAfterAnimationsObservable.remove(this.aimObserver);
     this.aimObserver = null;
+    if (this.strikeObserver) this.scene.onBeforeAnimationsObservable.remove(this.strikeObserver);
+    this.strikeObserver = null;
+    this.strike = null;
+    this.pivot.position.z = 0;
+    this.trail?.dispose();
+    this.trail = null;
     this.anchorsWorld.length = 0;
     this.restsWorld.length = 0;
     this.coatVisible = false;
