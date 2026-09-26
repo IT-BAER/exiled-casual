@@ -7,6 +7,7 @@ import {
   ShaderMaterial,
   StandardMaterial,
   Texture,
+  TransformNode,
   Vector3,
   VertexBuffer,
   type Scene,
@@ -1567,7 +1568,18 @@ export function makeMesh(
     const [, amount, jackpot] = (species ?? "").split(":");
     const root = new Mesh(name, scene);
     root.metadata = { gold: true };
-    buildGoldPile(scene, root, Number(amount) || 1, jackpot === "1");
+    // The authored heap from props.glb; the procedural coins stand in headless
+    // and before the props load.
+    const heap = new TransformNode(`${name}-heap`, scene);
+    heap.parent = root;
+    heap.rotation.y = root.uniqueId * 2.39996;
+    if (jackpot === "1") heap.scaling.setAll(1.6);
+    if (attachProp(scene, heap, "goldPile", true)) {
+      for (const c of heap.getChildMeshes()) c.isPickable = false;
+    } else {
+      heap.dispose();
+      buildGoldPile(scene, root, Number(amount) || 1, jackpot === "1");
+    }
     return root;
   }
 

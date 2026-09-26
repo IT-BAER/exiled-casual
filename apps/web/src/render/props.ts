@@ -49,6 +49,8 @@ export const PROP_KINDS = [
   "beltIronsworn", "beltStalker", "beltEmber", "focusEmber",
   "scrollWisdom", "scrollPortal", "orbTransmutation", "orbAugmentation",
   "orbElevation", "orbAlchemy", "orbEmbers", "waystone",
+  // A gold pile (render/meshes.ts), scaled up for the jackpot.
+  "goldPile",
 ] as const;
 
 export type PropKind = (typeof PROP_KINDS)[number];

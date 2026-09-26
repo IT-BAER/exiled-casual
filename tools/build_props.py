@@ -1278,6 +1278,67 @@ def build_waystone(mats):
     _dress(_root("waystone"), parts, smooth=30)
 
 
+# Gold on the floor: Kin Chen's Gold coin (BlenderKit 33cac94b-32f4-4ce1-8a36-a0d9713523f7,
+# cc_zero) copied into a small heap. The scan is a 20k-triangle relief a 7 cm coin
+# at this camera never shows, and collapsing the relief itself leaves ragged
+# wafers, so both faces are pressed flat first and only the disc is cut to budget.
+# Its own gold, not `drop_gold`: that one is the Elevation crystal's.
+GOLD_COIN_W = 0.075
+GOLD_COIN_THICK = 1.4        # the scan's 12% of a diameter reads as foil from nine metres
+GOLD_COIN_TRIS = 36
+GOLD_COIN_SRGB = (0.93, 0.66, 0.16)   # the source's linear (0.887, 0.413, 0.024), unsquared
+# (ring radius in diameters, angle deg, layer, outward slope deg) per coin: a
+# scattered floor ring, two shoulders sloping off the middle, a top coin and one
+# leaning on the heap. Authored, not seeded, so the heap is one shape everywhere.
+GOLD_PILE = (
+    (0.0, 0, 0, 3), (1.55, 10, 0, 6), (1.6, 62, 0, -4), (1.45, 118, 0, 8), (1.65, 170, 0, 5),
+    (1.5, 222, 0, -6), (1.6, 275, 0, 7), (1.5, 322, 0, 4),
+    (0.85, 35, 1, 16), (0.8, 105, 1, 18), (0.9, 180, 1, 14), (0.8, 250, 1, 17), (0.85, 310, 1, 15),
+    (0.35, 70, 2, 12), (0.4, 200, 2, 10), (0.3, 320, 2, 13),
+    (0.05, 150, 3, 7),
+    (1.2, 140, 1, 62),
+)
+
+
+def build_gold_pile():
+    coin, = append_objects("gold_coin.blend", ["goldcoin"])
+    # Its parent stood it face-up; the mesh itself is authored on edge.
+    coin.data.transform(coin.matrix_world)
+    coin.matrix_world = mathutils.Matrix.Identity(4)
+    bpy.context.view_layer.update()
+    lo, hi = bounds([coin])
+    size = hi - lo
+    # Flat on the floor, one diameter across, its own centre at the origin.
+    coin.data.transform(mathutils.Matrix.Translation(-(lo + hi) / 2))
+    k = GOLD_COIN_W / max(size.x, size.y)
+    coin.data.transform(mathutils.Matrix.Diagonal((k, k, k * GOLD_COIN_THICK, 1.0)))
+    half = size.z * k * GOLD_COIN_THICK / 2
+    for v in coin.data.vertices:
+        if abs(v.co.z) > half * 0.4:
+            v.co.z = math.copysign(half, v.co.z)
+    decimate_to(coin, GOLD_COIN_TRIS)
+    coin.data.materials.clear()
+    coin.data.materials.append(flat_material("gold_coin", GOLD_COIN_SRGB, 0.35, emit=0.3))
+    smooth_by_angle(coin, 40)
+    bm = bmesh.new()
+    for r, deg, layer, slope in GOLD_PILE:
+        a = math.radians(deg)
+        # Outer rim down: turned to face its ring angle, then tipped about the tangent.
+        lift = half + layer * 2.2 * half + GOLD_COIN_W / 2 * math.sin(math.radians(abs(slope)))
+        m = (mathutils.Matrix.Translation((r * GOLD_COIN_W * math.cos(a), r * GOLD_COIN_W * math.sin(a), lift))
+             @ mathutils.Matrix.Rotation(a, 4, "Z")
+             @ mathutils.Matrix.Rotation(math.radians(slope), 4, "Y"))
+        piece = coin.data.copy()
+        piece.transform(m)
+        bm.from_mesh(piece)
+        bpy.data.meshes.remove(piece)
+    bm.to_mesh(coin.data)
+    bm.free()
+    coin.name = coin.data.name = "goldPile_coins"
+    coin.parent = _root("goldPile")
+    print(f"goldPile: {len(GOLD_PILE)} coins, {sum(len(p.vertices) - 2 for p in coin.data.polygons)} tris")
+
+
 def build_drops(mats):
     mats = dict(mats, **{
         "drop_steel": flat_material("drop_steel", (0.6, 0.6, 0.63), 0.4),
@@ -1297,6 +1358,7 @@ def build_drops(mats):
     build_orbs(mats)
     build_scrolls()
     build_waystone(mats)
+    build_gold_pile()
 
 
 def main():
