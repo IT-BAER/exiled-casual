@@ -21,7 +21,7 @@ function mulberry32(seed: number): () => number {
  * (a rare monster carries 1000% increased rarity, an 11x multiplier), so the
  * bases have to be small for the ladder to survive being multiplied. These
  * three are ours and are the calibration knob: against a rare monster's 11x they
- * pay 22% magic, 5.5% rare, 0.165% unique. Most of what a monster drops is
+ * pay 66% magic, 5.5% rare, 0.165% unique. Most of what a monster drops is
  * still white, which is both how PoE reads and what keeps the Scroll of Wisdom
  * economy solvable — `death.test.ts` pins that supply outruns demand.
  *
@@ -29,7 +29,7 @@ function mulberry32(seed: number): () => number {
  * level 2 monster and a level 84 one use identical odds — and a high map only
  * feels richer because its area and monster rarity are larger.
  */
-const MAGIC_PPM = 20_000;
+const MAGIC_PPM = 60_000;
 const RARE_PPM = 5_000;
 const UNIQUE_PPM = 150;
 

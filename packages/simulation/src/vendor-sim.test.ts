@@ -127,6 +127,19 @@ describe("buyItem", () => {
     expect(getVendor(world).items).toHaveLength(SHELF);
   });
 
+  it("always sells a Scroll of Wisdom and keeps it on the shelf", () => {
+    const { sim, world, playerEntity } = makeWorld();
+    const cell = getVendor(world).items.find((p) => p.item.baseId === "currency.wisdom")!;
+    expect(cell).toBeDefined();
+    setGold(world, vendorBuyPrice(cell.item));
+
+    sim.step([intentToCommand({ kind: "buyItem", x: cell.x, y: cell.y }, playerEntity, 0)]);
+
+    expect(getGold(world)).toBe(0);
+    expect(getInv(world).items.map((p) => p.item.baseId)).toContain("currency.wisdom");
+    expect(getVendor(world).items.some((p) => p.x === cell.x && p.y === cell.y)).toBe(true);
+  });
+
   it("ignores an empty shelf cell", () => {
     const { sim, world, playerEntity } = makeWorld();
     setInv(world, []);

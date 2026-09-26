@@ -1,4 +1,4 @@
-import { ITEM_POOLS, baseOf, currencyItem, isPortalScroll, PORTAL_SCROLL_BASE_ID } from "@exiled/content-runtime";
+import { ITEM_POOLS, baseOf, currencyItem, isPortalScroll, PORTAL_SCROLL_BASE_ID, WISDOM_SCROLL_BASE_ID } from "@exiled/content-runtime";
 import { rollVendorStock } from "@exiled/rules";
 import { placeFirstFit } from "./inventory";
 import type { Item } from "@exiled/content-schema";
@@ -24,17 +24,19 @@ export const VENDOR_ROWS = 8;
  *
  * A Portal Scroll is the way home from a map with a full bag, so it cannot be
  * something a bad roll leaves you without — and a shelf that restocks only on a
- * level-up would be exactly that. `isStaple` is what keeps the cell on the shelf
- * after a purchase (systems/equipment.ts): the cell is a price tag, not a unit.
+ * level-up would be exactly that. The Scroll of Wisdom is PoE1's other staple:
+ * an unread rare must never wait on a lucky drop (docs/09 rule 1), and drops alone
+ * pay about one scroll per unidentified item. `isStaple` is what keeps the cell on
+ * the shelf after a purchase (systems/equipment.ts): the cell is a price tag, not a unit.
  */
-const STAPLES: readonly Item[] = [currencyItem(PORTAL_SCROLL_BASE_ID)];
+const STAPLES: readonly Item[] = [currencyItem(PORTAL_SCROLL_BASE_ID), currencyItem(WISDOM_SCROLL_BASE_ID)];
 
 /** How many cells the staples take before the rolled stock is laid down. */
 export const STAPLE_COUNT = STAPLES.length;
 
 /** Bought without emptying its cell. See STAPLES. */
 export function isStaple(item: Item): boolean {
-  return isPortalScroll(item);
+  return isPortalScroll(item) || item.baseId === WISDOM_SCROLL_BASE_ID;
 }
 
 export function stockVendor(worldSeed: number, level: number): VendorC {
