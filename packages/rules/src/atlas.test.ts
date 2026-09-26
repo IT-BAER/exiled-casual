@@ -232,7 +232,11 @@ describe("the Atlas spans a 1-100 character's climb", () => {
     // (e.g. swapping the life and damage per-mille knobs, or a fat-fingered
     // digit) leaves both true. This pins the actual numbers so either knob
     // moving alone fails here.
-    expect(monsterTierScale(7)).toEqual({ lifeMilli: 5550, dmgMilli: 4010 });
+    expect(monsterTierScale(7)).toEqual({ lifeMilli: 5550, dmgMilli: 3030 });
     expect(monsterTierScale(ATLAS_NODE_COUNT - 1)).toEqual({ lifeMilli: 10100, dmgMilli: 7020 });
+  });
+
+  it("hits softly early: the first stone a character owns adds under a fifth to a hit", () => {
+    expect(monsterTierScale(1).dmgMilli).toBe(1170);
   });
 });

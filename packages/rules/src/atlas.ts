@@ -51,12 +51,17 @@ export function areaLevel(tier: number): number {
   return 2 + 6 * tier;
 }
 
-// ponytail: linear per-mille scaling is a calibration placeholder (docs/01:780
-// says monster-vs-level needs empirical tuning). Two knobs; adjust here only.
-// The per-tier step tracks the six area levels a tier now covers, so a monster
-// at the top of the Atlas is about ten times a tier-0 one rather than three.
+// ponytail: per-mille scaling is a calibration placeholder (docs/01:780 says
+// monster-vs-level needs empirical tuning); adjust here only. Life is linear, so
+// the top of the Atlas is about ten times a tier-0 monster and the kill-time
+// ladder in balance.test.ts holds. Damage reaches the same seven times on a square
+// curve, soft through tiers 1-4, where the linear one killed a fresh character on
+// his second and third maps (simulation/src/playtest.ts).
 export function monsterTierScale(tier: number): { lifeMilli: number; dmgMilli: number } {
-  return { lifeMilli: 1000 + 650 * tier, dmgMilli: 1000 + 430 * tier };
+  return {
+    lifeMilli: 1000 + 650 * tier,
+    dmgMilli: 1000 + 150 * tier + 20 * tier * tier,
+  };
 }
 
 // Mulberry32 (same family as the sim PRNG, but inlined so this leaf module keeps
