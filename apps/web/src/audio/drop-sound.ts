@@ -38,8 +38,9 @@ const VOICES: Record<string, Voice> = {
   rare: { base: 620, modes: 4, decay: 1.5, gain: 0.32, strike: 3800, sub: [82, 1.0], wet: 0.34 },
   unique: { base: 305, modes: 5, decay: 2.6, gain: 0.4, strike: 4400, sub: [55, 2.4], wet: 0.5 },
   // Gold is currency, so it gets its own voice (docs/09 rule 2): small, high and
-  // dry, a coin on stone. The jackpot pile rings long enough to turn the head.
-  gold: { base: 1250, modes: 3, decay: 0.35, gain: 0.14, strike: 5200, wet: 0.12 },
+  // dry, a coin on stone, and quiet: the everyday pile is constant and grates at
+  // any louder. The jackpot pile rings long enough to turn the head.
+  gold: { base: 1250, modes: 3, decay: 0.35, gain: 0.045, strike: 5200, wet: 0.12 },
   "gold-jackpot": { base: 980, modes: 4, decay: 1.2, gain: 0.3, strike: 5600, sub: [110, 0.4], wet: 0.3 },
 };
 
