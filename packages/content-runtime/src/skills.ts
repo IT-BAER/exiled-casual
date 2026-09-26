@@ -135,6 +135,7 @@ const SKILL_DEFS: SkillDef[] = [
         { atLevel: 15, text: "Pierces four enemies", patch: { pierceCount: 4 } },
       ],
     },
+    bow: true,
     effects: [
       {
         type: "spawnProjectile",
@@ -194,6 +195,7 @@ const SKILL_DEFS: SkillDef[] = [
         { atLevel: 15, text: "Every arrow pierces one enemy", patch: { pierceCount: 1 } },
       ],
     },
+    bow: true,
     effects: [
       {
         type: "spawnProjectile",
@@ -270,6 +272,7 @@ const SKILL_DEFS: SkillDef[] = [
         { atLevel: 15, text: "Pierces two enemies", patch: { pierceCount: 2 } },
       ],
     },
+    bow: true,
     effects: [
       {
         type: "spawnProjectile",

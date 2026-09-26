@@ -319,7 +319,10 @@ export interface Snapshot {
     /** In a cast wind-up this tick (moving slowed, action pose held). */
     casting: boolean;
     /** Render action for the active cast. Absent outside a cast wind-up. */
-    castingAction?: "spell" | "melee";
+    castingAction?: "spell" | "melee" | "bow";
+    /** Ticks until the snapshot the wind-up's projectile first appears in (it
+     *  resolves the tick the cast ends). Lets a clip land its release there. */
+    castWindupTicks?: number;
     /** Length of the active wind-up in ticks, cast speed already applied, so the
      *  renderer can pace the clip to end on the hit. Absent outside a cast. */
     castTicks?: number;

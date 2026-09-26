@@ -14,7 +14,7 @@ import {
 } from "@babylonjs/core";
 import { attachProp, type PropKind } from "./props";
 import { attachCreature, type CreatureRig } from "./monsters";
-import { attachBoltTrail, attachCinderFX, cinderGlow, fxProfile } from "./skill-fx";
+import { attachArrowStreak, attachBoltTrail, attachCinderFX, buildArrow, cinderGlow, fxProfile } from "./skill-fx";
 import { attachRig, rigOf, BASE_LOOKS, type RigParts } from "./rig";
 import { attachGroundModel } from "./ground-looks";
 import { hasRim, HIT_TINT, HIT_ALPHA } from "./rim";
@@ -1615,6 +1615,16 @@ export function makeMesh(
     // `species` is the shared string channel; for a ground item it is the base id.
     if (attachGroundModel(scene, m, species, -Y_LIFT.groundItem)) m.isVisible = false;
     return m;
+  }
+
+  if (kind === "projectile" && fxProfile(skillId).arrow) {
+    const arrow = buildArrow(scene, name);
+    if (at) {
+      arrow.position.copyFrom(at);
+      arrow.computeWorldMatrix(true);
+    }
+    attachArrowStreak(scene, arrow, fxProfile(skillId));
+    return arrow;
   }
 
   // Projectile heads key by skill too, or the first bolt built in a session

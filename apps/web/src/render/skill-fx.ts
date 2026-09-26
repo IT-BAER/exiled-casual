@@ -7,12 +7,14 @@ import {
   Light,
   PointLight,
   Quaternion,
+  SolidParticleSystem,
   StandardMaterial,
   Texture,
   TrailMesh,
   Vector3,
 } from "@babylonjs/core";
-import type { AbstractMesh, Mesh, Scene } from "@babylonjs/core";
+import { Mesh } from "@babylonjs/core";
+import type { AbstractMesh, Scene } from "@babylonjs/core";
 
 /**
  * Fire FX for the three starter skills. Kept out of `meshes.ts` because almost
@@ -257,6 +259,10 @@ export interface FxProfile {
   burstRadius: number;
   flightCue: string | null;
   impactCue: string | null;
+  /** Played when a player projectile appears: the loose, for a bow. */
+  launchCue?: string;
+  /** Drawn as an arrow with a bare streak and a splinter hit, not a burning bolt. */
+  arrow?: boolean;
 }
 
 /** What a monster's bolt and any unmapped skill draw: today's ember bolt. */
@@ -278,6 +284,9 @@ export const FALLBACK_FX: FxProfile = {
 /** Snap Shot's arrow drawn harder: a longer, brighter streak and a bigger spray. */
 const DRAWN_ARROW_FX: FxProfile = {
   ...FALLBACK_FX,
+  arrow: true,
+  launchCue: "skill-bow-release",
+  impactCue: "skill-arrow-impact",
   core: new Color3(0.95, 0.92, 0.82),
   wake: new Color3(0.66, 0.63, 0.56),
   trailWidth: 0.06,
@@ -321,6 +330,9 @@ export const SKILL_FX: Record<string, FxProfile> = {
   // Not fire at all: an arrow, so the wake is dust off the shaft, not flame.
   "skill.snap_shot.v1": {
     ...FALLBACK_FX,
+    arrow: true,
+    launchCue: "skill-bow-release",
+    impactCue: "skill-arrow-impact",
     core: new Color3(0.85, 0.82, 0.72),
     wake: new Color3(0.6, 0.58, 0.52),
     trailWidth: 0.04,
@@ -419,6 +431,156 @@ export function attachBoltTrail(scene: Scene, mesh: AbstractMesh, fx: FxProfile 
     ribbon.dispose();
   });
   return ps;
+}
+
+export const ARROW_NAME = "fx-arrow";
+
+/**
+ * Longer than a real arrow on purpose: at the game camera a 0.7 shaft is a few
+ * pixels, and the arrow is the one thing the player watches leave the bow.
+ */
+const ARROW_LENGTH = 0.9;
+
+function arrowMaterial(scene: Scene, part: string, colour: Color3, glow: number): StandardMaterial {
+  const name = `${ARROW_NAME}-${part}-mat`;
+  const cached = scene.getMaterialByName(name) as StandardMaterial | null;
+  if (cached) return cached;
+  const m = new StandardMaterial(name, scene);
+  m.diffuseColor = colour;
+  m.specularColor = new Color3(0.1, 0.1, 0.1);
+  // A dark dungeon floor swallows an unlit brown stick; a little self-light keeps
+  // the silhouette without making it a glowing bolt.
+  m.emissiveColor = colour.scale(glow);
+  return m;
+}
+
+/** Shaft, steel head and three fletching fins, pointing down +z like every mover. */
+export function buildArrow(scene: Scene, name: string): Mesh {
+  const shaft = MeshBuilder.CreateCylinder(`${name}-shaft`, { height: ARROW_LENGTH, diameter: 0.03, tessellation: 6 }, scene);
+  shaft.rotation.x = Math.PI / 2;
+  shaft.material = arrowMaterial(scene, "shaft", new Color3(0.5, 0.33, 0.17), 0.2);
+  const head = MeshBuilder.CreateCylinder(`${name}-head`, { height: 0.15, diameterTop: 0, diameterBottom: 0.08, tessellation: 4 }, scene);
+  head.rotation.x = Math.PI / 2;
+  head.position.z = ARROW_LENGTH / 2 + 0.075;
+  head.material = arrowMaterial(scene, "head", new Color3(0.62, 0.64, 0.7), 0.2);
+  const parts: Mesh[] = [shaft, head];
+  for (let i = 0; i < 3; i++) {
+    const a = (i * 2 * Math.PI) / 3;
+    const fin = MeshBuilder.CreateBox(`${name}-fin${i}`, { width: 0.005, height: 0.06, depth: 0.17 }, scene);
+    fin.position.set(Math.sin(a) * 0.035, Math.cos(a) * 0.035, -ARROW_LENGTH / 2 + 0.11);
+    fin.rotation.z = -a;
+    fin.material = arrowMaterial(scene, "fletch", new Color3(0.86, 0.8, 0.7), 0.15);
+    parts.push(fin);
+  }
+  const arrow = Mesh.MergeMeshes(parts, true, true, undefined, false, true)!;
+  arrow.name = name;
+  // The merge makes a fresh MultiMaterial per call and mesh.dispose() leaves it
+  // behind; the parts are always in this order, so one shared instance fits all.
+  const merged = `${ARROW_NAME}-merged-mat`;
+  // getMaterialByName does not search multiMaterials.
+  const shared = scene.multiMaterials.find((m) => m.name === merged);
+  if (shared) {
+    arrow.material?.dispose(false, false);
+    arrow.material = shared;
+  } else if (arrow.material) {
+    arrow.material.name = merged;
+  }
+  arrow.isPickable = false;
+  return arrow;
+}
+
+/** Behind the fletching, fading to a point. Fixed, unlike a TrailMesh, whose
+ *  length is a frame count: 4 units at 27 fps, a stub at 144. */
+const STREAK_LENGTH = 1.3;
+
+/**
+ * An arrow's wake: a faint additive cone riding behind the shaft, so it is the
+ * same streak at any frame rate and never comes adrift of the arrow. A hit
+ * (`metadata.struck`, set by the renderer on the spent tick) throws splinters;
+ * an arrow that ran out of range just drops.
+ */
+export function attachArrowStreak(scene: Scene, mesh: Mesh, fx: FxProfile): Mesh {
+  const streak = MeshBuilder.CreateCylinder(`${ARROW_NAME}-streak`, {
+    height: STREAK_LENGTH, diameterTop: fx.trailWidth, diameterBottom: 0, tessellation: 8,
+  }, scene);
+  streak.rotation.x = Math.PI / 2;
+  streak.position.z = -ARROW_LENGTH / 2 - STREAK_LENGTH / 2 + 0.1;
+  streak.parent = mesh;
+  streak.isPickable = false;
+  const name = `${ARROW_NAME}-streak-mat-${fx.wake.toHexString()}`;
+  let mat = scene.getMaterialByName(name) as StandardMaterial | null;
+  if (!mat) {
+    // Half the wake colour: the GlowLayer blooms emissive, and at full it
+    // outshone the arrow it trails.
+    mat = glowMaterial(scene, name, fx.wake.scale(0.5));
+    mat.alpha = 0.3;
+    mat.alphaMode = 1; // ALPHA_ADD
+  }
+  streak.material = mat;
+  mesh.onDisposeObservable.addOnce(() => {
+    if ((mesh.metadata as { struck?: boolean } | null)?.struck) {
+      splinterBurst(scene, mesh.getAbsolutePosition().clone(), mesh.rotation.y, fx);
+    }
+  });
+  return streak;
+}
+
+export const SPLINTER_NAME = "fx-splinters";
+const SPLINTERS = 10;
+const SPLINTER_LIFE = 0.55;
+const SPLINTER_GRAVITY = 9;
+
+/**
+ * The hit: the shaft breaking into slivers thrown back off the target, which
+ * tumble, bounce once off the floor and shrink away. Real geometry, not a
+ * sprite, plus the profile's floor ring for the beat of contact.
+ */
+export function splinterBurst(scene: Scene, at: Vector3, yaw: number, fx: FxProfile): void {
+  shockwave(scene, at, fx.burstRadius, fx.burstColour);
+  const sps = new SolidParticleSystem(SPLINTER_NAME, scene, { updatable: true });
+  const shard = MeshBuilder.CreateBox(`${SPLINTER_NAME}-shard`, { width: 0.02, height: 0.02, depth: 0.14 }, scene);
+  sps.addShape(shard, SPLINTERS);
+  shard.dispose();
+  const mesh = sps.buildMesh();
+  mesh.material = arrowMaterial(scene, "shaft", new Color3(0.5, 0.33, 0.17), 0.2);
+  mesh.isPickable = false;
+  mesh.position.copyFrom(at);
+
+  const back = new Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+  const velocity: Vector3[] = [];
+  const spin: Vector3[] = [];
+  const size: number[] = [];
+  for (const p of sps.particles) {
+    const out = new Vector3(Math.random() - 0.5, Math.random() * 0.8 + 0.2, Math.random() - 0.5).normalize();
+    velocity.push(back.scale(0.8).addInPlace(out).normalize().scaleInPlace(2.5 + Math.random() * 3));
+    spin.push(new Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).scaleInPlace(24));
+    size.push(0.6 + Math.random() * 0.7);
+    p.rotation.set(Math.random() * 6, Math.random() * 6, Math.random() * 6);
+  }
+
+  let age = 0;
+  const floor = 0.02 - at.y;
+  const observer = scene.onBeforeRenderObservable.add(() => {
+    const dt = Math.min(scene.getEngine().getDeltaTime() / 1000, 0.05);
+    age += dt;
+    const left = 1 - Math.min(1, age / SPLINTER_LIFE);
+    sps.particles.forEach((p, i) => {
+      const v = velocity[i]!;
+      v.y -= SPLINTER_GRAVITY * dt;
+      p.position.addInPlace(v.scale(dt));
+      if (p.position.y < floor) {
+        p.position.y = floor;
+        v.set(v.x * 0.4, Math.abs(v.y) * 0.3, v.z * 0.4);
+      }
+      p.rotation.addInPlace(spin[i]!.scale(dt));
+      p.scaling.setAll(size[i]! * Math.sqrt(left));
+    });
+    sps.setParticles();
+    if (left <= 0) {
+      scene.onBeforeRenderObservable.remove(observer);
+      sps.dispose();
+    }
+  });
 }
 
 export const BOLT_BURST_NAME = "fx-bolt-burst";
@@ -628,6 +790,7 @@ export const BLINK_ALPHA = 0.48;
  */
 export function warmSkillFx(scene: Scene): void {
   emberBurst(scene, Vector3.Zero());
+  splinterBurst(scene, Vector3.Zero(), 0, SKILL_FX["skill.snap_shot.v1"]!);
   const light = scene.getLightByName(FLASH_NAME) as PointLight | null;
   if (light) light.intensity = 0;
 }

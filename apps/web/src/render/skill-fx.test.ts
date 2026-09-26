@@ -17,6 +17,7 @@ import {
   CINDER_NAME,
   FLASH_NAME,
   RING_NAME,
+  SPLINTER_NAME,
   warmSkillFx,
   fxProfile,
   FALLBACK_FX,
@@ -211,12 +212,12 @@ describe("ember bolt", () => {
   it("colours its head from its own skill, not whichever projectile spawned first", () => {
     const scene = newScene();
     const bolt = makeMesh(scene, "projectile", "entity-1", undefined, undefined, "skill.ember_bolt.v1");
-    const arrow = makeMesh(scene, "projectile", "entity-2", undefined, undefined, "skill.snap_shot.v1");
+    const spark = makeMesh(scene, "projectile", "entity-2", undefined, undefined, "skill.ember_spark.v1");
     const bolt2 = makeMesh(scene, "projectile", "entity-3", undefined, undefined, "skill.ember_bolt.v1");
 
     const boltMat = bolt.material as StandardMaterial;
-    const arrowMat = arrow.material as StandardMaterial;
-    expect(boltMat.emissiveColor.equals(arrowMat.emissiveColor)).toBe(false);
+    const sparkMat = spark.material as StandardMaterial;
+    expect(boltMat.emissiveColor.equals(sparkMat.emissiveColor)).toBe(false);
     // Same skill reuses the same cached material, so the cache still caches.
     expect(bolt2.material).toBe(bolt.material);
   });
@@ -229,6 +230,47 @@ describe("ember bolt", () => {
       bolt.dispose();
     }
     expect(scene.lights.filter((l) => l.name === FLASH_NAME)).toHaveLength(1);
+  });
+});
+
+describe("arrows", () => {
+  const BOW_SKILLS = [...SKILLS.values()].filter((s) => s.bow).map((s) => s.id);
+
+  it("every bow skill flies an arrow a shaft long, not a burning pip", () => {
+    expect(BOW_SKILLS.length).toBeGreaterThan(0);
+    for (const id of BOW_SKILLS) {
+      const scene = newScene();
+      const arrow = makeMesh(scene, "projectile", "entity-1", Vector3.Zero(), undefined, id);
+      arrow.computeWorldMatrix(true);
+      const { minimum: min, maximum: max } = arrow.getBoundingInfo().boundingBox;
+      expect(max.z - min.z, id).toBeGreaterThan(0.9);
+      expect(max.x - min.x, id).toBeLessThan(0.2);
+      expect(systems(scene, BOLT_TRAIL_NAME), id).toHaveLength(0);
+    }
+    const scene = newScene();
+    const bolt = makeMesh(scene, "projectile", "entity-2", Vector3.Zero(), undefined, "skill.ember_bolt.v1");
+    const { minimum: min, maximum: max } = bolt.getBoundingInfo().boundingBox;
+    expect(max.z - min.z).toBeLessThan(0.2);
+  });
+
+  it("shares one merged material across arrows instead of leaking one per shot", () => {
+    const scene = newScene();
+    const count = () => scene.materials.length + scene.multiMaterials.length;
+    makeMesh(scene, "projectile", "entity-1", Vector3.Zero(), undefined, "skill.snap_shot.v1").dispose();
+    const after = count();
+    for (let i = 2; i < 6; i++) makeMesh(scene, "projectile", `entity-${i}`, Vector3.Zero(), undefined, "skill.snap_shot.v1").dispose();
+    expect(count()).toBe(after);
+  });
+
+  it("splinters only when it struck something", () => {
+    const scene = newScene();
+    const spent = makeMesh(scene, "projectile", "entity-1", Vector3.Zero(), undefined, "skill.snap_shot.v1");
+    const lapsed = makeMesh(scene, "projectile", "entity-2", Vector3.Zero(), undefined, "skill.snap_shot.v1");
+    lapsed.dispose();
+    expect(scene.getMeshByName(SPLINTER_NAME)).toBeNull();
+    spent.metadata = { struck: true };
+    spent.dispose();
+    expect(scene.getMeshByName(SPLINTER_NAME)).not.toBeNull();
   });
 });
 
@@ -247,6 +289,7 @@ describe("warmSkillFx", () => {
     // behind the loading plate instead of on the first cast.
     expect(systems(scene, BOLT_BURST_NAME)).toHaveLength(1);
     expect(scene.getMeshByName(RING_NAME)).not.toBeNull();
+    expect(scene.getMeshByName(SPLINTER_NAME)).not.toBeNull();
   });
 
   it("is idempotent per area: a second warm leaves one flash light", () => {

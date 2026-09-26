@@ -64,6 +64,8 @@ const VOICES: Record<string, Voice> = {
   // the master's peaks, which are cracks rather than body.
   "skill-cinder-ground-loop": { gain: 0.45, wet: 0.24, vary: 0.03 },
   "skill-blink":              { gain: 0.30, wet: 0.12, vary: 0.05 },
+  "skill-bow-release":        { gain: 0.26, wet: 0.08, vary: 0.08 },
+  "skill-arrow-impact":       { gain: 0.30, wet: 0.12, vary: 0.10 },
   "monster-melee-hit":        { gain: 0.17, wet: 0.16, vary: 0.10 },
   // The generic pair is the fallback for a species with no material (soundscape.ts),
   // never the cue a known monster gets. The six below are the ones actually heard.
@@ -182,6 +184,7 @@ export function preloadSfx(names: readonly string[]): Promise<void> {
 export const CORE_SFX: readonly string[] = [
   "ui-click", "ui-hover", "ui-panel-open",
   "skill-ember-bolt-cast", "skill-ember-bolt-impact", "skill-cinder-ground-cast", "skill-blink",
+  "skill-bow-release", "skill-arrow-impact",
   // The sustained pair especially: a loop that arrives after the bolt has landed is
   // a loop that never plays, because `startSfxLoop` will not start what it cannot
   // hear now — there is no queue, the flight is over.

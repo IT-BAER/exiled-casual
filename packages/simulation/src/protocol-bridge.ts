@@ -415,6 +415,10 @@ export function buildSnapshot(
         const c = world.get<CastingC>(playerEntity, "casting");
         return c !== undefined && c.untilTick > tick ? c.action : undefined;
       })(),
+      castWindupTicks: (() => {
+        const c = world.get<CastingC>(playerEntity, "casting");
+        return c !== undefined && c.untilTick > tick ? c.untilTick - tick + 1 : undefined;
+      })(),
       castTicks: (() => {
         const c = world.get<CastingC>(playerEntity, "casting");
         return c !== undefined && c.untilTick > tick ? c.ticks : undefined;

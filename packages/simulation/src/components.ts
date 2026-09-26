@@ -189,7 +189,7 @@ export interface CastingC {
   spellDamagePct?: number;
   didCrit?: 0 | 1;
   team?: number;
-  action?: "spell" | "melee";
+  action?: "spell" | "melee" | "bow";
   /** The beat this action fills, in ticks: the longer of the wind-up (cast
    *  speed already applied) and the cooldown, which is how often a held button
    *  actually re-fires. The renderer paces the clip by it, so the swing lasts

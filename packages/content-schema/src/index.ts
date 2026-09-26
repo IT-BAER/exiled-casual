@@ -147,6 +147,8 @@ export interface SkillDef {
   castTicks?: number;
   /** The skill's own critical strike chance, whole percent. Omitted/0 = never crits. */
   critChancePct?: number;
+  /** A bow attack (PoE's Bow tag): drawn and loosed from the bow hand, not cast. */
+  bow?: boolean;
   effects: EffectNode[];
 }
 

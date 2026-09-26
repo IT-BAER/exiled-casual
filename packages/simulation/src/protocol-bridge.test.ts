@@ -89,6 +89,29 @@ describe("buildSnapshot", () => {
     expect(snap.player.casting).toBe(true);
   });
 
+  it("a bow skill casts as 'bow' and says how many ticks remain until the arrow leaves", () => {
+    const { world, sim, playerEntity } = createCombatSim(42);
+    const intent: Intent = { kind: "useSkill", skillId: "skill.snap_shot.v1", tx: fp(5), ty: fp(0) };
+    sim.step([intentToCommand(intent, playerEntity, 0)]);
+    const snap = buildSnapshot(world, sim, sim.tick, CONTENT_VERSION);
+    expect(snap.player.castingAction).toBe("bow");
+    const windup = snap.player.castWindupTicks!;
+    expect(windup).toBeGreaterThan(0);
+    const arrows = () => buildSnapshot(world, sim, sim.tick, CONTENT_VERSION).entities
+      .filter((e) => e.kind === "projectile" && e.skillId === "skill.snap_shot.v1").length;
+    for (let i = 0; i < windup - 1; i++) sim.step();
+    expect(arrows()).toBe(0);
+    sim.step();
+    expect(arrows()).toBe(1);
+  });
+
+  it("a spell keeps the spell action", () => {
+    const { world, sim, playerEntity } = createCombatSim(42);
+    const intent: Intent = { kind: "useSkill", skillId: "skill.ember_bolt.v1", tx: fp(5), ty: fp(0) };
+    sim.step([intentToCommand(intent, playerEntity, 0)]);
+    expect(buildSnapshot(world, sim, sim.tick, CONTENT_VERSION).player.castingAction).toBe("spell");
+  });
+
   it("cooldown shows remaining seconds after a skill is cast", () => {
     const { world, sim, playerEntity } = createCombatSim(42);
     const intent: Intent = { kind: "useSkill", skillId: "skill.ember_bolt.v1", tx: fp(5), ty: fp(0) };

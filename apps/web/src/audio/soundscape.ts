@@ -277,8 +277,9 @@ export function createSoundscape(opts: Options = {}): Soundscape {
         } else if (e.kind === "projectile" && (e.team ?? 0) === 0) {
           // His own bolt, spent: it either hit something or ran out of range, and
           // both are the same burst as far as the ear is concerned.
-          const cue = fxProfile(e.skillId).impactCue;
-          if (cue) play(cue, ...at(e));
+          const fx = fxProfile(e.skillId);
+          // An arrow that ran out of range falls silent; only a hit thuds.
+          if (fx.impactCue && (!fx.arrow || e.spent)) play(fx.impactCue, ...at(e));
         } else if (e.kind === "gold") {
           // A pile only leaves the floor it lies on by being walked over.
           const [volume, , pan] = at(e);
@@ -294,6 +295,10 @@ export function createSoundscape(opts: Options = {}): Soundscape {
         if (was.has(id)) continue;
         if (e.kind === "telegraph") play("monster-slam-windup", ...at(e));
         else if (e.kind === "projectile" && (e.team ?? 0) !== 0) play("monster-spit", ...at(e));
+        else if (e.kind === "projectile") {
+          const launch = fxProfile(e.skillId).launchCue;
+          if (launch) play(launch, ...at(e));
+        }
         const cue = sustainedCue(e);
         if (cue) {
           const key = `${cue}#${id}`;

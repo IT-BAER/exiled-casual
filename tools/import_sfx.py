@@ -92,6 +92,10 @@ SOURCES: dict[str, str] = {
     # its loudest 1.4s rather than a one-shot with a decay.
     "skill-cinder-ground-cast": "Epic Stock Media - Synthesized Nature Loops and Sounds/FIREBurn_Loop Elements Fire Crackling Crunchy Flame Burn 03_ESM_SNLS.wav",
     "skill-blink": "CB Sound Design - Whoosh And Push/W_a_P_Spell_Whoosh_19.wav",
+    # The bundles hold no bow at all (the 2024 "Nocked" sampler is not extracted): a
+    # wooden stick cutting the air for the loose, a spear shaft striking for the hit.
+    "skill-bow-release": "Justsoundeffects - Transition Whooshes Vol. 1/SWSH_Woodstick Swish 03_JSE_TW1.wav",
+    "skill-arrow-impact": "344 Audio - Historical Weapons Vol. 2/WEAPBlnt_Spear And Stick Impact, Wooden MKH 2_344 Audio_Medieval Weapons Vol 2.wav",
 
     # ── Portals and the map device ──────────────────────────────────────────────
     # An airy gust that swells and falls away. The designed sci-fi vortex this

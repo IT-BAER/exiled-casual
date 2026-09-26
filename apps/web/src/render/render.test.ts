@@ -34,7 +34,7 @@ vi.mock("../audio/sfx", async (importOriginal) => ({
 
 describe("sustained casting animation", () => {
   it("starts on the casting edge and is not restarted while the cast runs", () => {
-    const rig = { playCast: vi.fn(), playStrike: vi.fn(), stopStrike: vi.fn() };
+    const rig = { playCast: vi.fn(), playBow: vi.fn(), playStrike: vi.fn(), stopStrike: vi.fn() };
 
     syncActionAnimation(rig, false, true, undefined, "spell");
     syncActionAnimation(rig, true, true, "spell", "spell");
@@ -46,7 +46,7 @@ describe("sustained casting animation", () => {
     // The clip is paced to the BEAT (wind-up or cooldown, whichever is longer)
     // while the casting flag lives only for the wind-up. Cutting it on the
     // falling edge showed 30% of a 1s swing and the bolt left a lifting hand.
-    const rig = { playCast: vi.fn(), playStrike: vi.fn(), stopStrike: vi.fn() };
+    const rig = { playCast: vi.fn(), playBow: vi.fn(), playStrike: vi.fn(), stopStrike: vi.fn() };
 
     syncActionAnimation(rig, false, true, undefined, "spell", 1);
     syncActionAnimation(rig, true, false, "spell", undefined, 1);
@@ -58,6 +58,7 @@ describe("sustained casting animation", () => {
   it("uses the melee action clip for a melee cast and leaves spell casting separate", () => {
     const rig = {
       playCast: vi.fn(),
+      playBow: vi.fn(),
       playStrike: vi.fn(),
       stopStrike: vi.fn(),
     };
@@ -69,6 +70,17 @@ describe("sustained casting animation", () => {
     expect(rig.playStrike).toHaveBeenCalledTimes(1);
     expect(rig.playCast).not.toHaveBeenCalled();
     expect(rig.stopStrike).not.toHaveBeenCalled();
+  });
+
+  it("draws the bow for a bow cast, told both the beat and when the arrow leaves", () => {
+    const rig = { playCast: vi.fn(), playBow: vi.fn(), playStrike: vi.fn(), stopStrike: vi.fn() };
+
+    syncActionAnimation(rig, false, true, undefined, "bow", 0.5, 0.25);
+    syncActionAnimation(rig, true, true, "bow", "bow", 0.5, 0.2);
+
+    expect(rig.playBow).toHaveBeenCalledTimes(1);
+    expect(rig.playBow).toHaveBeenCalledWith(0.5, 0.25);
+    expect(rig.playCast).not.toHaveBeenCalled();
   });
 });
 

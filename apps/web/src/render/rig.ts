@@ -160,6 +160,9 @@ export function idleRatio(seconds: number): number {
 export const ACTION_RATIO_MIN = 0.6;
 export const ACTION_RATIO_MAX = 3;
 
+/** Where `Rig|Bow_Shoot` looses, as a fraction of it: `RELEASE / LAST` in `tools/build_bow_clip.py`. */
+export const BOW_RELEASE = 12 / 30;
+
 /**
  * How far the mirrored cast clip bakes the arm off the direction it is meant to
  * point: about 16 degrees to the right. A fact about the ARM, and nothing else.
@@ -189,9 +192,13 @@ function wrapPi(a: number): number {
  * zero, and the bias was the only thing left: the head sat cocked 14 degrees to
  * one side for the whole cast, and swung there as the body came about.
  */
-export function aimAngles(targetYaw: number, bodyYaw: number): { arm: number; head: number } {
-  const aimYaw = wrapPi(-(targetYaw - bodyYaw) + CLIP_BIAS);
-  const head = wrapPi(aimYaw - CLIP_BIAS);
+export function aimAngles(
+  targetYaw: number,
+  bodyYaw: number,
+  bias = CLIP_BIAS,
+): { arm: number; head: number } {
+  const aimYaw = wrapPi(-(targetYaw - bodyYaw) + bias);
+  const head = wrapPi(aimYaw - bias);
   return {
     arm: Math.max(-ARM_MAX, Math.min(ARM_MAX, aimYaw)),
     head: Math.max(-HEAD_MAX, Math.min(HEAD_MAX, head)) * HEAD_FOLLOW,
@@ -468,6 +475,9 @@ const HIPS_BONE = "pelvis";
 /** Where a spell leaves the body: the weapon hand, the same one a held mesh would skin to. */
 const HAND_BONE = "hand_r";
 
+/** The bow is skinned to the OTHER hand, and the arrow leaves from its grip. */
+const BOW_HAND_BONE = "hand_l";
+
 /**
  * Bones a layered clip must not touch, so it can play over locomotion without
  * fighting it for the legs. Leaf tips are included by name.
@@ -722,6 +732,7 @@ export class RigActor {
   private pelvis: TransformNode | null = null;
   /** The casting hand, so a spell can be drawn leaving it. */
   private hand: TransformNode | null = null;
+  private bowHand: TransformNode | null = null;
   /** Bones that carry the cast toward the cursor: spine, clavicle, upper arm. */
   private aimBones: TransformNode[] = [];
   /** World-space aim target (x = Babylon x, z = Babylon z). */
@@ -852,19 +863,29 @@ export class RigActor {
    * running, arm outstretched, instead of freezing mid-stride.
    */
   playCast(seconds?: number): void {
+    // A bow tail still playing would keep castPoint() on the bow hand.
+    this.groups.get("bow")?.stop();
     this.playOnce("cast", seconds);
   }
 
-  /** Draw and loose: the bow hand is `hand_l`, so the cast's right-arm aim does not apply. */
-  playBow(seconds?: number): void {
-    this.playOnce("bow", seconds);
+  /**
+   * Draw and loose. Paced so the release pose lands when the arrow appears,
+   * not on the beat: the beat puts it anywhere from 15% to 47% into the clip
+   * depending on the skill. The follow-through then plays out at that rate.
+   */
+  playBow(seconds?: number, releaseSeconds?: number): void {
+    const group = this.groups.get("bow");
+    const ratio = group && releaseSeconds !== undefined
+      ? actionRatio(clipSeconds(group) * BOW_RELEASE, releaseSeconds)
+      : undefined;
+    this.playOnce("bow", seconds, ratio);
   }
 
-  private playOnce(clip: "cast" | "bow", seconds?: number): void {
+  private playOnce(clip: "cast" | "bow", seconds?: number, paced?: number): void {
     const group = this.groups.get(clip);
     if (!group) return;
     group.stop();
-    const ratio = actionRatio(clipSeconds(group), seconds);
+    const ratio = paced ?? actionRatio(clipSeconds(group), seconds);
     group.speedRatio = ratio;
     // Played ONCE, paced to the wind-up: looping it at a fixed rate meant a
     // third of a second of cast only ever showed the first third of the swing,
@@ -889,6 +910,10 @@ export class RigActor {
   /** Cancel a strike when the actor is removed or otherwise reset. */
   stopStrike(): void {
     for (const strike of STRIKE_CLIPS) this.groups.get(strike)?.stop();
+  }
+
+  private isDrawingBow(): boolean {
+    return this.groups.get("bow")?.isPlaying === true;
   }
 
   /** Set the world-space point the casting arm should aim at. */
@@ -961,6 +986,8 @@ export class RigActor {
 
     const handNode = byName.get(HAND_BONE);
     this.hand = handNode instanceof TransformNode ? handNode : null;
+    const bowHandNode = byName.get(BOW_HAND_BONE);
+    this.bowHand = bowHandNode instanceof TransformNode ? bowHandNode : null;
     // Bones the aim rotates during a cast: spine, clavicle, upper arm, and head.
     // Each bone gets a share of the aim so the twist distributes naturally.
     // Weights are how much of the TOTAL aim each bone carries; they sum > 1
@@ -1012,7 +1039,8 @@ export class RigActor {
       if (!this.aimTarget) return;
       const castGroup = this.groups.get("cast");
       const casting = castGroup !== undefined && castGroup.isPlaying;
-      if (!casting) return;
+      const drawing = !casting && this.isDrawingBow();
+      if (!casting && !drawing) return;
 
       this.pivot.computeWorldMatrix(true);
 
@@ -1021,6 +1049,15 @@ export class RigActor {
       const tdx = this.aimTarget.x - px;
       const tdz = this.aimTarget.z - pz;
       if (tdx * tdx + tdz * tdz < 0.01) return;
+
+      if (drawing) {
+        // An archer aims with his chest: the clip holds both arms on the arrow
+        // line, so turning the top of the spine turns bow, string and head as one.
+        const { arm } = aimAngles(Math.atan2(tdx, tdz), this.host.rotation.y, 0);
+        const chest = this.aimBones[0];
+        if (chest) aimBone(chest, Math.max(-HEAD_MAX, Math.min(HEAD_MAX, arm)));
+        return;
+      }
 
       const { arm, head } = aimAngles(Math.atan2(tdx, tdz), this.host.rotation.y);
       for (let i = 0; i < this.aimBones.length; i++) {
@@ -1265,6 +1302,10 @@ export class RigActor {
    * cast, which is the entire reason the body centre was the wrong answer.
    */
   castPoint(): Vector3 | null {
+    if (this.bowHand && this.isDrawingBow()) {
+      this.bowHand.computeWorldMatrix(true);
+      return this.bowHand.getAbsolutePosition().clone();
+    }
     if (!this.hand) return null;
     this.hand.computeWorldMatrix(true);
     // Offset along the bone's direction to reach the weapon tip rather than the
@@ -1300,6 +1341,7 @@ export class RigActor {
     this.colliders = [];
     this.pelvis = null;
     this.hand = null;
+    this.bowHand = null;
     this.aimBones = [];
     this.aimTarget = null;
     if (this.aimObserver) this.scene.onAfterAnimationsObservable.remove(this.aimObserver);

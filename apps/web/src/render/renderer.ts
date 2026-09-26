@@ -1,7 +1,7 @@
 import { Vector3 } from "@babylonjs/core";
 import type { Scene } from "@babylonjs/core";
 import type { Mesh } from "@babylonjs/core";
-import { blinkBurst } from "./skill-fx";
+import { blinkBurst, fxProfile } from "./skill-fx";
 import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
 import { animateActor, keepGroundBlobFlat, makeMesh, setHitFlash, updateTelegraph, updatePortal, updateMapDevice, updateStash, updateVendor, updateContainer, updateGroundItem, updateRareElement, portalAppear, portalVanish, isPortalMesh, PORTAL_STAGGER_MS, Y_LIFT } from "./meshes";
 import type { MeshKind } from "./meshes";
@@ -76,6 +76,7 @@ const BODIES = new Set<MeshKind>(["player", "monster", "rare", "boss"]);
 
 export interface ActionAnimation {
   playCast(seconds?: number): void;
+  playBow(seconds?: number, releaseSeconds?: number): void;
   playStrike(seconds?: number): void;
   stopStrike(): void;
 }
@@ -95,13 +96,15 @@ export function syncActionAnimation(
   rig: ActionAnimation | null,
   wasCasting: boolean,
   isCasting: boolean,
-  wasAction: "spell" | "melee" | undefined,
-  action: "spell" | "melee" | undefined,
+  wasAction: "spell" | "melee" | "bow" | undefined,
+  action: "spell" | "melee" | "bow" | undefined,
   seconds?: number,
+  releaseSeconds?: number,
 ): void {
   if (!rig) return;
   if (isCasting && (!wasCasting || wasAction !== action)) {
     if (action === "melee") rig.playStrike(seconds);
+    else if (action === "bow") rig.playBow(seconds, releaseSeconds);
     else rig.playCast(seconds);
   }
 }
@@ -373,6 +376,8 @@ export class SnapshotRenderer {
       let oy = prevE?.y ?? e.y;
       let nx = e.x;
       let ny = e.y;
+      let kp = 0;
+      let kn = 0;
       if (handEntry) {
         /*
          * The sim flies the bolt from the player's CENTRE to the point he aimed
@@ -397,8 +402,8 @@ export class SnapshotRenderer {
          */
         const share = (x: number, y: number) =>
           1 - Math.hypot(x - handEntry.from.x, y - handEntry.from.y) / handEntry.range;
-        const kp = share(ox, oy);
-        const kn = e.spent ? 0 : share(e.x, e.y);
+        kp = share(ox, oy);
+        kn = e.spent ? 0 : share(e.x, e.y);
         ox += handEntry.offset.x * kp;
         oy += handEntry.offset.z * kp;
         nx += handEntry.offset.x * kn;
@@ -421,6 +426,21 @@ export class SnapshotRenderer {
       );
       const mesh = this.meshes.get(e.id);
       if (!mesh) continue;
+      if (e.kind === "projectile" && fxProfile(e.skillId).arrow) {
+        // Down from the bow hand to the aim height on the same straight line as
+        // x/z, but floored there: past the target it flies level, not into the floor.
+        const drop = handEntry?.offset.y ?? 0;
+        const yo = Y_LIFT.projectile + drop * Math.max(0, kp);
+        const yn = Y_LIFT.projectile + drop * Math.max(0, kn);
+        mesh.position.y = lerp(yo, yn, alpha);
+        // Pointed down its DRAWN path: the hand offset bends it off the sim's.
+        const run = Math.hypot(nx - ox, ny - oy);
+        if (run > 1e-6) {
+          mesh.rotation.y = Math.atan2(nx - ox, ny - oy);
+          mesh.rotation.x = Math.atan2(yo - yn, run);
+        }
+        if (e.spent) mesh.metadata = { ...(mesh.metadata ?? {}), struck: true };
+      }
       // The sim swung: one-shot strike over whatever locomotion was playing.
       if (e.attackTick !== undefined) creatureOf(mesh)?.noteAttack(e.attackTick);
       // Struck: life is the only report of a hit the client gets, and it is the
@@ -591,6 +611,7 @@ export class SnapshotRenderer {
           prev?.player.castingAction,
           next.player.castingAction,
           next.player.castTicks === undefined ? undefined : next.player.castTicks / TICKS_PER_SEC,
+          next.player.castWindupTicks === undefined ? undefined : next.player.castWindupTicks / TICKS_PER_SEC,
         );
       }
       if (prev) {

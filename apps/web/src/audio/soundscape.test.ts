@@ -176,6 +176,22 @@ describe("createSoundscape", () => {
     ])).toEqual(["monster-spit", "skill-ember-bolt-impact"]);
   });
 
+  it("an arrow looses when it appears and thuds only if it struck something", () => {
+    const flying: SnapshotEntity = { id: 4, kind: "projectile", x: 1, y: 0, team: 0, skillId: "skill.snap_shot.v1" };
+    expect(run([
+      snap({ tick: 1, entities: [] }),
+      snap({ tick: 2, entities: [flying] }),
+      snap({ tick: 3, entities: [{ ...flying, x: 2, spent: true }] }),
+      snap({ tick: 4, entities: [] }),
+    ])).toEqual(["skill-bow-release", "skill-arrow-impact"]);
+    // Out of range it simply drops: no thud on empty ground.
+    expect(run([
+      snap({ tick: 1, entities: [] }),
+      snap({ tick: 2, entities: [flying] }),
+      snap({ tick: 3, entities: [] }),
+    ])).toEqual(["skill-bow-release"]);
+  });
+
   /** The portals are the renderer's: it staggers them, so it sounds them. */
   it("says nothing about portals", () => {
     const portal: SnapshotEntity = { id: 7, kind: "portal", x: 0, y: 1 };

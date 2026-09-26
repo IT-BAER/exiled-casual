@@ -52,8 +52,8 @@ export function registerSkillCast(
     return world.get<SkillsC>(e, "skills")?.gems[skillId]?.level ?? 1;
   };
 
-  const actionFor = (skill: SkillDef): "spell" | "melee" =>
-    skill.effects.some((effect) => effect.type === "meleeStrike") ? "melee" : "spell";
+  const actionFor = (skill: SkillDef): "spell" | "melee" | "bow" =>
+    skill.effects.some((effect) => effect.type === "meleeStrike") ? "melee" : skill.bow ? "bow" : "spell";
 
   function resolveSkill(
     world: World,
