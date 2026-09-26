@@ -290,6 +290,65 @@ describe("atmosphere", () => {
     // A bolt still in the air hit nothing: it has to be in prev and NOT in next.
     const flying = blowFrom(5, 1, prev, makeSnapshot({ tick: 2, entities: [bolt] }));
     expect(flying.x).toBeCloseTo(0);
+
+    // A spent bolt lingers one tick at the point it struck, and that is the blow.
+    const spent = blowFrom(5, 1, prev, makeSnapshot({ tick: 2, entities: [{ ...bolt, x: 4.6, spent: true }] }));
+    expect(spent.x).toBeCloseTo(4.6);
+  });
+
+  it("a struck monster flinches away from the blow and comes back upright", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const renderer = new SnapshotRenderer(scene);
+    const monster = (tick: number, life: number) =>
+      makeSnapshot({ tick, entities: [{ id: 1, kind: "monster", x: 5, y: 0, life, maxLife: 100 }] });
+    const s1 = monster(1, 100);
+    renderer.apply(null, s1, 1);
+    const mesh = scene.getMeshByName("entity-1")!;
+    const base = mesh.scaling.y;
+    // Where the top of the body sits, horizontally, off its feet.
+    const head = () =>
+      Vector3.TransformCoordinates(Vector3.Up(), Matrix.RotationYawPitchRoll(mesh.rotation.y, mesh.rotation.x, mesh.rotation.z));
+
+    // The player stands at the origin; the body is struck from the -x side.
+    const s2 = monster(2, 70);
+    let furthest = 0;
+    let squashed = false;
+    for (const alpha of [0, 0.25, 0.5, 0.75, 1]) {
+      renderer.apply(s1, s2, alpha);
+      furthest = Math.max(furthest, head().x);
+      squashed ||= mesh.scaling.y < base;
+    }
+    expect(furthest).toBeGreaterThan(0.05);
+    expect(squashed).toBe(true);
+
+    let prev = s2;
+    for (let tick = 3; tick < 12; tick++) {
+      const next = monster(tick, 70);
+      renderer.apply(prev, next, 1);
+      prev = next;
+    }
+    expect(Math.abs(head().x)).toBeLessThan(1e-3);
+    expect(Math.abs(head().z)).toBeLessThan(1e-3);
+    expect(mesh.scaling.y).toBeCloseTo(base);
+    expect(mesh.scaling.x).toBeCloseTo(base);
+  });
+
+  it("the killing blow does not flinch the body it kills", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const renderer = new SnapshotRenderer(scene);
+    const monster = (tick: number, life: number) =>
+      makeSnapshot({ tick, entities: [{ id: 1, kind: "monster", x: 5, y: 0, life, maxLife: 100 }] });
+    const s1 = monster(1, 100);
+    renderer.apply(null, s1, 1);
+    const mesh = scene.getMeshByName("entity-1")!;
+    const base = mesh.scaling.y;
+    const s2 = monster(2, 0);
+    for (const alpha of [0, 0.5, 1]) renderer.apply(s1, s2, alpha);
+    expect(mesh.rotation.x).toBeCloseTo(0);
+    expect(mesh.rotation.z).toBeCloseTo(0);
+    expect(mesh.scaling.y).toBeCloseTo(base);
   });
 
   it("floats motes in the torchlight, warm and fading in at both ends", () => {

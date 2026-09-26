@@ -11,6 +11,8 @@ import { creatureOf } from "./meshes";
 import { CORPSE_SECONDS, SINK_SECONDS, disposeRagdoll, dropDead, freezeRagdoll, sinkDepth } from "./ragdoll";
 import { CAMERA_ALPHA } from "./engine";
 import { lerp, lerpAngle } from "./interp";
+import { FLINCH_TICKS, flinchPose, flinchStrength, kick, leanToTilt } from "./hit-reaction";
+import type { Flinch } from "./hit-reaction";
 
 /** Sim rate. Consecutive snapshots are one tick apart, which is what turns a
  *  position delta into a ground speed for the animation state machine. */
@@ -154,9 +156,13 @@ export function blowFrom(
 ): Vector3 {
   let best: Vector3 | null = null;
   let bestDist = HIT_REACH;
-  for (const e of prev?.entities ?? []) {
+  // Gone this snapshot, or lingering its one spent tick at the point it struck.
+  const struck = [
+    ...(prev?.entities ?? []).filter((e) => !next.entities.some((n) => n.id === e.id)),
+    ...next.entities.filter((e) => e.spent),
+  ];
+  for (const e of struck) {
     if (e.kind !== "projectile") continue;
-    if (next.entities.some((n) => n.id === e.id)) continue;
     const dist = Math.hypot(e.x - x, e.y - z);
     if (dist >= bestDist) continue;
     bestDist = dist;
@@ -191,6 +197,10 @@ export class SnapshotRenderer {
   private readonly tilt = new Map<number, [number, number]>();
   /** The tick each entity was last struck on. Absent means it is not lit. */
   private readonly hit = new Map<number, number>();
+  /** The flinch each struck monster is in, and the root scale it squashes from. */
+  private readonly flinch = new Map<number, { f: Flinch; base: number }>();
+  /** Render time in ticks (snapshot tick plus interpolation), the flinch's clock. */
+  private now = 0;
   /** Last cursor point fed in by the render loop; the target a new bolt flies at. */
   private aim: { x: number; y: number } | null = null;
   /** Newborn bolts offset to the casting hand: where each was launched and how
@@ -267,6 +277,7 @@ export class SnapshotRenderer {
     // apply() runs several times per snapshot while interpolating, so anything
     // that reacts to a CHANGE has to know which of those frames is the first.
     const newTick = next.tick !== this.lastTick;
+    this.now = next.tick + alpha;
     this.lastSnapshot = next;
 
     // Player
@@ -415,6 +426,16 @@ export class SnapshotRenderer {
       // honest one — a swing that missed or was absorbed never moves it.
       if (newTick && e.life !== undefined && prevE?.life !== undefined && e.life < prevE.life) {
         this.hit.set(e.id, next.tick);
+        if (e.kind === "monster" && e.life > 0) {
+          const from = blowFrom(e.x, e.y, prev, next);
+          const was = this.flinch.get(e.id);
+          const tier = e.boss ? "boss" : e.rare ? "rare" : "monster";
+          const strength = flinchStrength(prevE.life - e.life, e.maxLife ?? prevE.life, tier);
+          this.flinch.set(e.id, {
+            f: kick(was?.f, this.now, e.x - from.x, e.y - from.z, strength),
+            base: was?.base ?? mesh.scaling.y,
+          });
+        }
       }
       // Born this snapshot: hold it shut and open it in its turn. The group is one
       // map-device event, so its first portal carries the shared opening cue.
@@ -484,6 +505,9 @@ export class SnapshotRenderer {
     // animation groups that mesh.dispose() would leave behind.
     for (const [id, mesh] of this.meshes) {
       if (!liveIds.has(id)) {
+        // A body dies at its own size: a squash caught mid-flinch would freeze into the corpse.
+        const struck = this.flinch.get(id);
+        if (struck) mesh.scaling.setAll(struck.base);
         // A closing portal outlives the entity that was it: nothing else holds a
         // reference any more, so the collapse disposes it when it finishes.
         if (!areaChanged && isPortalMesh(mesh)) {
@@ -507,6 +531,7 @@ export class SnapshotRenderer {
         this.gait.delete(id);
         this.tilt.delete(id);
         this.hit.delete(id);
+        this.flinch.delete(id);
         this.fromHand.delete(id);
       }
     }
@@ -723,9 +748,22 @@ export class SnapshotRenderer {
     const nextRoll = lerp(roll, rollTo, TILT_EASE);
     const nextPitch = lerp(pitch, pitchTo, TILT_EASE);
     this.tilt.set(id, [nextRoll, nextPitch]);
-    mesh.rotation.z = nextRoll;
-    mesh.rotation.x = nextPitch;
+    // The flinch rides on top of the run's lean and is never eased into it: the
+    // snap IS the hit, and the tilt state stays the run's alone.
+    let drawRoll = nextRoll;
+    let drawPitch = nextPitch;
+    const struck = this.flinch.get(id);
+    if (struck) {
+      const pose = flinchPose(struck.f, this.now);
+      const t = leanToTilt(mesh.rotation.y, pose.x, pose.z);
+      drawRoll += t.roll;
+      drawPitch += t.pitch;
+      mesh.scaling.set(struck.base * (1 + pose.squash / 2), struck.base * (1 - pose.squash), struck.base * (1 + pose.squash / 2));
+      if (this.now - struck.f.start >= FLINCH_TICKS) this.flinch.delete(id);
+    }
+    mesh.rotation.z = drawRoll;
+    mesh.rotation.x = drawPitch;
     // The body leans; the pool it stands in does not. See `keepGroundBlobFlat`.
-    keepGroundBlobFlat(mesh, nextPitch, nextRoll);
+    keepGroundBlobFlat(mesh, drawPitch, drawRoll);
   }
 }
