@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect, afterEach } from "vitest";
-import { LoadAssetContainerAsync, Mesh, NullEngine } from "@babylonjs/core";
+import { LoadAssetContainerAsync, Mesh, NullEngine, TransformNode, Vector3 } from "@babylonjs/core";
 import { createScene } from "./engine";
 import { makeMesh } from "./meshes";
 import {
@@ -11,6 +11,9 @@ import {
   ACTION_RATIO_MIN,
   aimAngles,
   ARM_MAX,
+  BOW_HOOK,
+  BOW_RELEASE,
+  bowStringFor,
   CLIP_BIAS,
   HEAD_FOLLOW,
   HEAD_MAX,
@@ -1251,6 +1254,120 @@ describe("indexRigSubtree against the real loader", () => {
       (globalThis as { FileReader?: unknown }).FileReader = original;
     }
   });
+});
+
+/**
+ * The bow's string is drawn at runtime between two nocks the wardrobe carries on
+ * `hand_l`, so the rigid bow mesh must not carry one of its own, and the drawn
+ * one must actually reach the draw hand. `Rig|Bow_Shoot` is posed onto the real
+ * skeleton the way the runtime retargets it: node-local rotations by bone name.
+ */
+describe("the bow is drawn on a runtime string", () => {
+  const MODELS = fileURLToPath(new URL("../../public/models/", import.meta.url));
+
+  it("strings the bow between its nocks, draws it to the jaw and looses the arrow at release", async () => {
+    const original = (globalThis as { FileReader?: unknown }).FileReader;
+    (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    try {
+      const load = (name: string) => LoadAssetContainerAsync(
+        new File([readFileSync(`${MODELS}${name}`)], name, { type: "model/gltf-binary" }), scene);
+      const wardrobe = await load("wardrobe.glb");
+      const lib = await load("anim-library.glb");
+      const entries = wardrobe.instantiateModelsToScene((n) => n, false, { doNotInstantiate: true });
+      const pivot = new TransformNode("bow-test", scene);
+      for (const root of entries.rootNodes) root.parent = pivot;
+      const byName = indexRigSubtree(entries.rootNodes);
+
+      // No baked string: every bow triangle is stave, a few centimetres at most.
+      const bow = byName.get("weapon1.stalkerbow.mesh") as Mesh;
+      const p = bow.getVerticesData("position")!;
+      const idx = bow.getIndices()!;
+      let longest = 0;
+      for (let t = 0; t < idx.length; t += 3) {
+        for (let k = 0; k < 3; k++) {
+          const a = idx[t + k]! * 3, b = idx[t + (k + 1) % 3]! * 3;
+          longest = Math.max(longest, Math.hypot(p[a]! - p[b]!, p[a + 1]! - p[b + 1]!, p[a + 2]! - p[b + 2]!));
+        }
+      }
+      expect(longest).toBeLessThan(0.1);
+      for (const nock of ["stalkerbow_nock_top", "stalkerbow_nock_bottom"]) {
+        expect(byName.get(nock)?.parent?.name, nock).toBe("hand_l");
+      }
+
+      const string = bowStringFor(scene, pivot, byName)!;
+      expect(string).not.toBeNull();
+      const clip = lib.animationGroups.find((g) => g.name === CLIP_NAME.bow)!;
+      const node = (name: string) => byName.get(name) as TransformNode;
+      const at = (name: string) => {
+        node(name).computeWorldMatrix(true);
+        return node(name).absolutePosition.clone();
+      };
+      const pose = (frac: number) => {
+        for (const t of clip.targetedAnimations) {
+          const target = byName.get((t.target as TransformNode).name);
+          if (t.animation.targetProperty === "rotationQuaternion" && target instanceof TransformNode) {
+            target.rotationQuaternion = t.animation.evaluate(clip.from + (clip.to - clip.from) * frac);
+          }
+        }
+      };
+      const nocks = () => Vector3.Center(at("stalkerbow_nock_top"), at("stalkerbow_nock_bottom"));
+      const fingers = () => ["index_02_r", "middle_02_r", "ring_02_r"]
+        .reduce((sum, f) => sum.addInPlace(at(f)), Vector3.Zero()).scaleInPlace(1 / 3);
+
+      // Not playing: straight nock to nock, no arrow.
+      string.update(null);
+      expect(Vector3.Distance(string.drawn, nocks())).toBeLessThan(1e-4);
+      expect(string.arrow.isEnabled(false)).toBe(false);
+
+      // Before the fingers hold the string the hands are not on the arrow line yet:
+      // an arrow there sticks out sideways at the hip, so there is none.
+      pose(BOW_HOOK[0] / 2);
+      string.update(BOW_HOOK[0] / 2);
+      expect(Vector3.Distance(string.drawn, nocks())).toBeLessThan(1e-4);
+      expect(string.arrow.isEnabled(false)).toBe(false);
+      pose((BOW_HOOK[0] + BOW_HOOK[1]) / 2);
+      string.update((BOW_HOOK[0] + BOW_HOOK[1]) / 2);
+      expect(string.arrow.isEnabled(false)).toBe(false);
+      pose(BOW_HOOK[1]);
+      string.update(BOW_HOOK[1]);
+      expect(string.arrow.isEnabled(false)).toBe(true);
+
+      // Full draw: the string is in the draw fingers, pulled well back off the
+      // bow, and the arrow's nock sits on it.
+      const full = BOW_RELEASE - 0.01;
+      pose(full);
+      string.update(full);
+      expect(Vector3.Distance(string.drawn, fingers())).toBeLessThan(1e-4);
+      expect(Vector3.Distance(string.drawn, nocks())).toBeGreaterThan(0.4);
+      expect(string.arrow.isEnabled(false)).toBe(true);
+      string.arrow.computeWorldMatrix(true);
+      const back = Vector3.TransformCoordinates(new Vector3(0, 0, -0.45), string.arrow.getWorldMatrix());
+      expect(Vector3.Distance(back, string.drawn)).toBeLessThan(0.01);
+      // It points from the string across the bow fist.
+      const tip = Vector3.TransformCoordinates(new Vector3(0, 0, 0.45), string.arrow.getWorldMatrix());
+      expect(Vector3.Distance(tip, at("middle_01_l"))).toBeLessThan(Vector3.Distance(back, at("middle_01_l")));
+
+      // The draw elbow is held level with the shoulder, not hanging at the chest.
+      pose(BOW_RELEASE);
+      expect(Math.abs(at("lowerarm_r").y - at("upperarm_r").y)).toBeLessThan(0.08);
+
+      // Loosed: the sim's arrow takes over and the string snaps back straight.
+      string.update(BOW_RELEASE);
+      expect(string.arrow.isEnabled(false)).toBe(false);
+      expect(Vector3.Distance(string.drawn, nocks())).toBeLessThan(1e-4);
+
+      // Unworn, no string and no arrow, whatever the clip says.
+      string.setEnabled(false);
+      string.update(full);
+      expect(string.string.isEnabled(false)).toBe(false);
+      expect(string.arrow.isEnabled(false)).toBe(false);
+      string.dispose();
+    } finally {
+      (globalThis as { FileReader?: unknown }).FileReader = original;
+    }
+  }, 60_000);
 });
 
 /**

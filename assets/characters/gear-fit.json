@@ -116,9 +116,21 @@
   ],
   "fist_gap_p01_mm": 0.21,
   "fist_gap_median_mm": 11.76,
+  "string_ends_m": [
+   [
+    0.3715,
+    -0.334,
+    1.5148
+   ],
+   [
+    1.2136,
+    0.3347,
+    1.1338
+   ]
+  ],
   "bone": "hand_l",
   "fit": "held",
-  "triangles": 984,
+  "triangles": 976,
   "source": "bow-3000-v1.glb"
  },
  "weapon2.buckler.mesh": {

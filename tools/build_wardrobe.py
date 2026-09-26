@@ -448,6 +448,8 @@ RIGID_GEAR = (
         "src": "bow-3000-v1.glb", "bone": "hand_l", "fit": "held",
         "fit_args": {"side": "l", "length_ratio": BOW_LEN_RATIO, "aim": BOW_AIM,
                      "face": BOW_FACE},
+        # The donor's string is rigid; `rig.ts` draws it from these two nocks.
+        "unstring": ("stalkerbow_nock_top", "stalkerbow_nock_bottom"),
     },
     {
         "slot": "weapon2", "look": "buckler", "part": "mesh",
@@ -3607,6 +3609,49 @@ def matte(mesh):
     _transform_channel(bsdf.inputs["Metallic"], lambda v: np.minimum(v, MATTE_METALLIC_CAP))
 
 
+def unstring(mesh):
+    """Cut the string out of a bow and return its two ends, top first.
+
+    The string is the only geometry spanning the bow: each of its faces has an
+    edge over half the mesh's length, where a stave face is a centimetre or two.
+    """
+    pts = [v.co for v in mesh.data.vertices]
+    span = max((a - b).length for a, b in ((max(pts, key=lambda p: p[i]), min(pts, key=lambda p: p[i]))
+                                           for i in range(3)))
+    bm = bmesh.new()
+    bm.from_mesh(mesh.data)
+    doomed = [f for f in bm.faces if max(e.calc_length() for e in f.edges) > 0.5 * span]
+    if len(doomed) < 3:
+        raise SystemExit(f"{mesh.name}: no string found ({len(doomed)} long faces)")
+    verts = {v for f in doomed for v in f.verts}
+    # The two end rings sit a whole string apart, so split them about the middle.
+    mid = sum((v.co for v in verts), Vector()) / len(verts)
+    axis = max(((a.co - b.co) for a in verts for b in verts), key=lambda d: d.length).normalized()
+    ends = [[v.co for v in verts if (v.co - mid).dot(axis) * s > 0] for s in (1, -1)]
+    ends = sorted((sum(e, Vector()) / len(e) for e in ends), key=lambda p: -p.z)
+    bmesh.ops.delete(bm, geom=doomed, context="FACES")
+    bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
+    bm.to_mesh(mesh.data)
+    bm.free()
+    mesh.data.update()
+    return ends
+
+
+def nock(rig, bone, name, at):
+    """An empty riding `bone`, placed at world point `at` in the rest pose."""
+    obj = bpy.data.objects.new(name, None)
+    bpy.context.scene.collection.objects.link(obj)
+    obj.parent = rig
+    obj.parent_type = "BONE"
+    obj.parent_bone = bone
+    b = rig.data.bones[bone]
+    # A bone child hangs off the bone's TAIL.
+    parent = rig.matrix_world @ b.matrix_local @ Matrix.Translation((0.0, b.length, 0.0))
+    obj.matrix_parent_inverse = Matrix.Identity(4)
+    obj.matrix_basis = parent.inverted() @ Matrix.Translation(at)
+    return obj
+
+
 def build_rigid_gear(rig, body):
     """Fit, skin and name every rigid piece against one built look."""
     fitted = {}
@@ -3636,6 +3681,11 @@ def build_rigid_gear(rig, body):
         M, detail = FITTERS[spec["fit"]](donor, body, rig, **spec.get("fit_args", {}))
         donor.data.transform(M)
         donor.data.update()
+        if spec.get("unstring"):
+            ends = unstring(donor)
+            for name, at in zip(spec["unstring"], ends):
+                nock(rig, spec["bone"], name, at)
+            detail["string_ends_m"] = [[round(c, 4) for c in p] for p in ends]
         if spec.get("clean"):
             detail_clean.update(smooth_donor(donor, body, DONOR_SMOOTH_ANGLE))
             detail.update(detail_clean)

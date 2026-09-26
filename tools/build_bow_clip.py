@@ -61,6 +61,13 @@ TWIST_AIM = math.radians(-40.0)
 TWIST_EASY = math.radians(-25.0)
 # Bow tilt off vertical about the arrow line, top toward the bow-arm side.
 CANT = math.radians(10.0)
+# The IK target is the WRIST; the string sits in the finger joints ahead of it,
+# so the wrist is held this far back for the fingers to anchor at the jaw.
+WRIST_BACK = 0.2
+# The draw elbow's height at full draw, off the shoulder: level, as an archer holds it.
+DRAW_ELBOW_RISE = 0.0
+# Blender's IK bends this arm's elbow toward its pole at -90 degrees, not 0.
+DRAW_POLE_ANGLE = math.radians(-90.0)
 
 
 def smooth(t):
@@ -144,13 +151,37 @@ def grip_rotation(hand_rest, wrist_rest, limb, arrow, fwd, forearm):
     return best[1]
 
 
-def ik(arm, bone, target, pole):
+def ik(arm, bone, target, pole, pole_angle=0.0):
     con = arm.pose.bones[bone].constraints.new("IK")
     con.target = target
     con.pole_target = pole
-    con.pole_angle = 0.0
+    con.pole_angle = pole_angle
     con.chain_count = 2
     return con
+
+
+def draw_pole(arm, shoulder, wrist):
+    """
+    A pole that puts the draw elbow level with the shoulder at full draw.
+
+    The elbow can only lie on one circle, an upper arm from the shoulder and a
+    forearm from the wrist; the level point on it furthest back (+Y) is aimed
+    at from twice as far off the circle's centre.
+    """
+    bones = arm.data.bones
+    upper = (bones["lowerarm_r"].head_local - bones["upperarm_r"].head_local).length
+    fore = (bones["hand_r"].head_local - bones["lowerarm_r"].head_local).length
+    span = (wrist - shoulder).length
+    n = (wrist - shoulder) / span
+    d = (upper * upper - fore * fore + span * span) / (2.0 * span)
+    r = math.sqrt(max(upper * upper - d * d, 0.0))
+    centre = shoulder + n * d
+    u = (Vector((0.0, 0.0, 1.0)) - n * n.z).normalized()
+    v = n.cross(u)
+    cos = max(-1.0, min(1.0, (shoulder.z + DRAW_ELBOW_RISE - centre.z) / (r * u.z)))
+    sin = math.sqrt(1.0 - cos * cos)
+    elbow = max((centre + (u * cos + v * s * sin) * r for s in (1.0, -1.0)), key=lambda e: e.y)
+    return elbow * 2.0 - centre
 
 
 def empty(name):
@@ -206,7 +237,7 @@ def build():
     dx, dz = line_x - shoulder_l.x, line_z - shoulder_l.z
     reach = math.sqrt(max((0.97 * arm_len) ** 2 - dx * dx - dz * dz, 0.0))
     aim = Vector((line_x, shoulder_l.y - reach, line_z))
-    anchor = Vector((line_x - 0.03, face.y - 0.02, line_z))
+    anchor = Vector((line_x - 0.03, face.y - 0.02 + WRIST_BACK, line_z))
     nock = aim + Vector((0.0, 0.14, 0.0))
     loosed = anchor + Vector((-0.10, 0.10, 0.02))
     kick = aim + Vector((0.0, -0.03, -0.02))
@@ -220,10 +251,10 @@ def build():
 
     target_l, target_r = empty("bow_target_l"), empty("bow_target_r")
     pole_l, pole_r = empty("bow_pole_l"), empty("bow_pole_r")
-    # Bow elbow soft and turned out-down; draw elbow high, back and out.
+    # Bow elbow soft and turned out-down; draw elbow level with the shoulder and behind it.
     pole_l.location = shoulder_l + Vector((0.45, -0.1, -0.35))
-    pole_r.location = shoulder_r + Vector((-0.35, 0.55, 0.05))
-    constraints = [ik(arm, "lowerarm_l", target_l, pole_l), ik(arm, "lowerarm_r", target_r, pole_r)]
+    pole_r.location = draw_pole(arm, shoulder_r, anchor)
+    constraints = [ik(arm, "lowerarm_l", target_l, pole_l), ik(arm, "lowerarm_r", target_r, pole_r, DRAW_POLE_ANGLE)]
 
     frames = []
     for frame in range(LAST + 1):
@@ -246,6 +277,14 @@ def build():
         head = pose["hand_l"].to_translation()
         pose["hand_l"] = world.inverted() @ (Matrix.Translation(world @ head) @ grip.to_4x4())
         frames.append(pose)
+
+    anchored = frames[RELEASE]
+    shoulder_z = (world @ anchored["upperarm_r"]).to_translation().z
+    elbow = (world @ anchored["lowerarm_r"]).to_translation()
+    line = (anchor - aim).normalized()
+    off = math.degrees((elbow - anchor).angle(line))
+    print(f"anchor frame {RELEASE}: draw shoulder z {shoulder_z:.3f}, elbow z {elbow.z:.3f}, "
+          f"forearm {off:.0f} deg off the arrow line")
 
     for name, con in zip(("lowerarm_l", "lowerarm_r"), constraints):
         pb[name].constraints.remove(con)

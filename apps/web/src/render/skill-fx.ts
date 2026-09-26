@@ -440,7 +440,7 @@ export const ARROW_NAME = "fx-arrow";
  * Longer than a real arrow on purpose: at the game camera a 0.7 shaft is a few
  * pixels, and the arrow is the one thing the player watches leave the bow.
  */
-const ARROW_LENGTH = 0.9;
+export const ARROW_LENGTH = 0.9;
 
 function arrowMaterial(scene: Scene, part: string, colour: Color3, glow: number): StandardMaterial {
   const name = `${ARROW_NAME}-${part}-mat`;

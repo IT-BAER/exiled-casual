@@ -1,9 +1,12 @@
 import {
   Animation,
   AnimationGroup,
+  Color3,
   Matrix,
   Mesh,
+  MeshBuilder,
   Quaternion,
+  StandardMaterial,
   TransformNode,
   Vector3,
   LoadAssetContainerAsync,
@@ -16,7 +19,7 @@ import {
 } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
 import { SkirtSim, type SkirtCollider } from "./skirt";
-import { swingTrail } from "./skill-fx";
+import { ARROW_LENGTH, buildArrow, swingTrail } from "./skill-fx";
 
 /**
  * Skinned player actor: a base body on a 65-bone Unreal-named skeleton, and
@@ -534,6 +537,134 @@ const HAND_BONE = "hand_r";
 /** The bow is skinned to the OTHER hand, and the arrow leaves from its grip. */
 const BOW_HAND_BONE = "hand_l";
 
+/** The bow look, and the nocks `tools/build_wardrobe.py` cuts its string down to, top first. */
+const BOW_LOOK = "stalkerbow";
+const BOW_NOCKS = ["stalkerbow_nock_top", "stalkerbow_nock_bottom"] as const;
+/** The draw hand's finger joints the string sits in; it is drawn to their centre. */
+const STRING_FINGERS = ["index_02_r", "middle_02_r", "ring_02_r"] as const;
+/** The bow fist's knuckle the nocked arrow rests across. */
+const ARROW_REST = "middle_01_l";
+/**
+ * Fractions of `Rig|Bow_Shoot` over which the fingers take the string: the draw
+ * hand reaches the nock at frame 5 of 30. Before, the string is straight.
+ */
+export const BOW_HOOK: readonly [number, number] = [3 / 30, 8 / 30];
+const STRING_RADIUS = 0.003;
+/** The donor's own string colour (`STRING_COLOUR` in `tools/prep_held_weapons.py`). */
+const STRING_COLOUR = new Color3(0.55, 0.5, 0.4);
+
+/**
+ * The bowstring and the arrow on it, posed every frame between the nocks.
+ *
+ * The bow mesh is rigid on `hand_l`, so a string baked into it can never bend.
+ * This one runs top nock -> draw fingers -> bottom nock while the clip draws and
+ * straight nock to nock otherwise; the nocked arrow lies from the string across
+ * the bow fist until the release, when the sim's arrow takes over. Both hang off
+ * the rig's pivot, so they go wherever the character does.
+ */
+export class BowString {
+  readonly string: Mesh;
+  readonly arrow: Mesh;
+  /** Where the string is held this frame, world space. */
+  readonly drawn = new Vector3();
+  private readonly path = [new Vector3(), new Vector3(), new Vector3()];
+  private readonly toLocal = new Matrix();
+  private readonly top = new Vector3();
+  private readonly bottom = new Vector3();
+  private readonly fingerAt = new Vector3();
+  private readonly dir = new Vector3();
+
+  constructor(
+    scene: Scene,
+    private readonly parent: TransformNode,
+    private readonly nocks: readonly [TransformNode, TransformNode],
+    private readonly fingers: readonly TransformNode[],
+    private readonly rest: TransformNode,
+  ) {
+    this.string = MeshBuilder.CreateTube(`${parent.name}-bowstring`, {
+      path: this.path, radius: STRING_RADIUS, tessellation: 4, updatable: true,
+    }, scene);
+    const name = "bowstring-mat";
+    let mat = scene.getMaterialByName(name) as StandardMaterial | null;
+    if (!mat) {
+      mat = new StandardMaterial(name, scene);
+      mat.diffuseColor = STRING_COLOUR;
+      mat.specularColor = Color3.Black();
+    }
+    this.string.material = mat;
+    this.string.isPickable = false;
+    this.string.parent = parent;
+    this.arrow = buildArrow(scene, `${parent.name}-nocked-arrow`);
+    this.arrow.parent = parent;
+    this.arrow.rotationQuaternion = new Quaternion();
+    this.arrow.setEnabled(false);
+  }
+
+  /** A bow that is not in his hand has no string either. */
+  setEnabled(on: boolean): void {
+    this.string.setEnabled(on);
+    if (!on) this.arrow.setEnabled(false);
+  }
+
+  /** Pose for this frame: `draw` is how far through the bow clip, null when it is not playing. */
+  update(draw: number | null): void {
+    if (!this.string.isEnabled(false)) return;
+    for (const nock of this.nocks) nock.computeWorldMatrix(true);
+    this.top.copyFrom(this.nocks[0].absolutePosition);
+    this.bottom.copyFrom(this.nocks[1].absolutePosition);
+    Vector3.CenterToRef(this.top, this.bottom, this.drawn);
+    const nocked = draw !== null && draw < BOW_RELEASE;
+    if (nocked) {
+      this.fingerAt.setAll(0);
+      for (const finger of this.fingers) {
+        finger.computeWorldMatrix(true);
+        this.fingerAt.addInPlace(finger.absolutePosition);
+      }
+      this.fingerAt.scaleInPlace(1 / this.fingers.length);
+      const t = Math.min(1, Math.max(0, (draw - BOW_HOOK[0]) / (BOW_HOOK[1] - BOW_HOOK[0])));
+      Vector3.LerpToRef(this.drawn, this.fingerAt, t * t * (3 - 2 * t), this.drawn);
+    }
+
+    this.parent.computeWorldMatrix(true);
+    this.parent.getWorldMatrix().invertToRef(this.toLocal);
+    Vector3.TransformCoordinatesToRef(this.top, this.toLocal, this.path[0]!);
+    Vector3.TransformCoordinatesToRef(this.drawn, this.toLocal, this.path[1]!);
+    Vector3.TransformCoordinatesToRef(this.bottom, this.toLocal, this.path[2]!);
+    MeshBuilder.CreateTube(this.string.name, { path: this.path, instance: this.string });
+
+    // Only once the fingers hold the string: before, the hands are off the arrow
+    // line and the shaft sticks out sideways at the hip.
+    const shown = nocked && draw >= BOW_HOOK[1];
+    this.arrow.setEnabled(shown);
+    if (!shown) return;
+    this.rest.computeWorldMatrix(true);
+    Vector3.TransformCoordinatesToRef(this.rest.absolutePosition, this.toLocal, this.dir);
+    this.dir.subtractInPlace(this.path[1]!).normalize();
+    // The arrow is built centred along +Z, so its nock is half a shaft back.
+    this.path[1]!.addToRef(this.dir.scale(ARROW_LENGTH / 2), this.arrow.position);
+    Quaternion.FromUnitVectorsToRef(Vector3.Forward(), this.dir, this.arrow.rotationQuaternion!);
+  }
+
+  dispose(): void {
+    this.string.dispose();
+    this.arrow.dispose();
+  }
+}
+
+/** The string for a rig whose wardrobe carries the nocks, or null for an older asset. */
+export function bowStringFor(scene: Scene, parent: TransformNode, byName: Map<string, Node>): BowString | null {
+  const node = (name: string): TransformNode | null => {
+    const n = byName.get(name);
+    return n instanceof TransformNode ? n : null;
+  };
+  const top = node(BOW_NOCKS[0]);
+  const bottom = node(BOW_NOCKS[1]);
+  const rest = node(ARROW_REST);
+  const fingers = STRING_FINGERS.map(node).filter((f): f is TransformNode => f !== null);
+  if (!top || !bottom || !rest || fingers.length !== STRING_FINGERS.length) return null;
+  return new BowString(scene, parent, [top, bottom], fingers, rest);
+}
+
 /**
  * Bones a layered clip must not touch, so it can play over locomotion without
  * fighting it for the legs. Leaf tips are included by name.
@@ -789,6 +920,8 @@ export class RigActor {
   /** The casting hand, so a spell can be drawn leaving it. */
   private hand: TransformNode | null = null;
   private bowHand: TransformNode | null = null;
+  private bowString: BowString | null = null;
+  private stringObserver: Observer<Scene> | null = null;
   /** Bones that carry the cast toward the cursor: spine, clavicle, upper arm. */
   private aimBones: TransformNode[] = [];
   /** World-space aim target (x = Babylon x, z = Babylon z). */
@@ -872,6 +1005,7 @@ export class RigActor {
   private applyLooks(): void {
     this.coatVisible = SKIRTED_CHEST.has(this.looks.chest ?? "");
     this.fitColliders();
+    this.bowString?.setEnabled(this.looks.weapon1 === BOW_LOOK);
     const hidden = hiddenBaseParts(this.looks);
     for (const [slot, byLook] of this.parts) {
       const wanted = this.looks[slot as Slot] ?? null;
@@ -1008,6 +1142,14 @@ export class RigActor {
     return this.groups.get("bow")?.isPlaying === true;
   }
 
+  /** How far through the bow clip, or null when it is not playing. */
+  private bowDraw(): number | null {
+    const group = this.groups.get("bow");
+    const frame = group?.isPlaying ? group.animatables[0]?.masterFrame : undefined;
+    if (!group || frame === undefined) return null;
+    return (frame - group.from) / Math.max(1e-6, group.to - group.from);
+  }
+
   /** Set the world-space point the casting arm should aim at. */
   setAimTarget(worldX: number, worldZ: number): void {
     this.aimTarget = { x: worldX, z: worldZ };
@@ -1080,6 +1222,11 @@ export class RigActor {
     this.hand = handNode instanceof TransformNode ? handNode : null;
     const bowHandNode = byName.get(BOW_HAND_BONE);
     this.bowHand = bowHandNode instanceof TransformNode ? bowHandNode : null;
+    this.bowString = bowStringFor(this.scene, this.pivot, byName);
+    // Before render: after the clips and the aim have both moved the hands.
+    if (this.bowString) {
+      this.stringObserver = this.scene.onBeforeRenderObservable.add(() => this.bowString?.update(this.bowDraw()));
+    }
     // Bones the aim rotates during a cast: spine, clavicle, upper arm, and head.
     // Each bone gets a share of the aim so the twist distributes naturally.
     // Weights are how much of the TOTAL aim each bone carries; they sum > 1
@@ -1434,6 +1581,10 @@ export class RigActor {
     this.pelvis = null;
     this.hand = null;
     this.bowHand = null;
+    if (this.stringObserver) this.scene.onBeforeRenderObservable.remove(this.stringObserver);
+    this.stringObserver = null;
+    this.bowString?.dispose();
+    this.bowString = null;
     this.aimBones = [];
     this.aimTarget = null;
     if (this.aimObserver) this.scene.onAfterAnimationsObservable.remove(this.aimObserver);
