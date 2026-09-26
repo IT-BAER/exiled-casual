@@ -1,5 +1,5 @@
 import { fp, fpDist2, fpMul } from "@exiled/fixed-point";
-import { blockerCollision, gridCollision } from "./collision";
+import { blockerCollision, gridCollision, hasLineOfSight } from "./collision";
 import {
   makeRare, mapBaseIdForNode, monsterTierScale, waystoneScaleFor,
   areaLevel, dropCount, dropCategory, quantityScaleMilli, rollItem,
@@ -326,14 +326,13 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
         const nearX = sx + ring.dx, nearY = sy + ring.dy;
         const farX = sx - ring.dx, farY = sy - ring.dy;
         const useFar = fpDist2(startX, startY, farX, farY) > fpDist2(startX, startY, nearX, nearY);
-        // Entrance-mirroring preference is first; fall back to the socket centre
-        // (never the nearer offset) so no fallback moves a member closer to the
-        // entrance than the socket itself — the alternate side is closer and
-        // could land within AGGRO_RADIUS where the preferred was safely a wall.
+        // Entrance-mirroring preference is first, never the nearer offset: that side
+        // could land within AGGRO_RADIUS where the preferred was safely a wall. The
+        // fallback is the nearest room round the socket, at most 3 units off it.
         const preferred = useFar ? { x: farX, y: farY } : { x: nearX, y: nearY };
         const pos = col.isWalkable(preferred.x, preferred.y, def.radiusFixed)
           ? preferred
-          : { x: sx, y: sy };
+          : fitBody(col, sx, sy, def.radiusFixed);
         spawnMonster(world, def, pos.x, pos.y, rare, scale);
       }
     }
@@ -343,7 +342,8 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
     // biomes, four monster pools, four tilesets — ended on the same warden.
     const boss = anchor(layout, "boss");
     const bossDef = withMonsterRes(bossFor(biomeId), ws.monsterResAdd);
-    spawnMonster(world, bossDef, fp(boss.x), fp(boss.y), false, scale);
+    const bossAt = fitBody(col, fp(boss.x), fp(boss.y), bossDef.radiusFixed);
+    spawnMonster(world, bossDef, bossAt.x, bossAt.y, false, scale);
 
     // Every reward anchor is a CONTAINER now, not loot lying on the floor: a
     // chest, a barrel or a crate the player has to click. The payout math is
@@ -474,6 +474,31 @@ export function spillContainer(
     world.set<ItemC>(ge, "item", { item, w: base.w, h: base.h });
   }
   dropGold(world, ax, ay, key, REWARD_RARITY, areaLevel(session.areaTier), collision);
+}
+
+/**
+ * The nearest point to (x, y), on half-unit steps and in plain sight of it, where
+ * a body of radius `r` fits. Mapgen promises an anchor floor, not room: a body
+ * placed against a pillar can never take a step and nothing can reach it.
+ */
+function fitBody(col: Collision, x: number, y: number, r: number): { x: number; y: number } {
+  if (col.isWalkable(x, y, r)) return { x, y };
+  const step = fp(0.5);
+  for (let ring = 1; ring <= 6; ring++) {
+    let best: { x: number; y: number } | undefined;
+    let bestD = Infinity;
+    for (let dy = -ring; dy <= ring; dy++) {
+      for (let dx = -ring; dx <= ring; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== ring || dx * dx + dy * dy >= bestD) continue;
+        const px = x + dx * step, py = y + dy * step;
+        if (!col.isWalkable(px, py, r) || !hasLineOfSight(col, x, y, px, py)) continue;
+        best = { x: px, y: py };
+        bestD = dx * dx + dy * dy;
+      }
+    }
+    if (best) return best;
+  }
+  return { x, y };
 }
 
 /** An objective anchor from the layout, or throw if the generator omitted it. */
