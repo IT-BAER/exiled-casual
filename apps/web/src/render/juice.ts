@@ -18,10 +18,10 @@ export const HIT_STOP_SCALE = 0.04;
 /** Trauma one connecting swing adds, and the extra per additional body. */
 const TRAUMA_HIT = 0.32;
 const TRAUMA_PER_EXTRA = 0.1;
-/** Trauma lost per second: one swing's jolt is over in about a sixth of a second. */
-const TRAUMA_DECAY = 2.2;
+/** Trauma lost per second: one pack's jolt is over in about a fifth of a second. */
+const TRAUMA_DECAY = 3;
 /** World units the camera target moves at full trauma. */
-export const SHAKE_UNITS = 0.6;
+export const SHAKE_UNITS = 0.25;
 
 export function hitStopMs(hits: number): number {
   if (hits <= 0) return 0;
