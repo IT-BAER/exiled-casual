@@ -60,10 +60,12 @@ const HIT_FLASH_TICKS = 3;
 
 /**
  * How far a bolt is assumed to be flying when the cursor's own point is not
- * available (headless, or a cast before the first frame). Only the RATE the
- * hand offset is spent at depends on it.
+ * available (headless, or a cast before the first frame). Only the rate an
+ * arrow drops from the bow hand depends on it.
  */
 const ASSUMED_RANGE = 8;
+/** Flight over which a bolt closes the gap from the weapon tip to the sim's line. */
+const HAND_BLEND = 1.5;
 
 /** How long a corpse lies there before it starts to sink, in ticks. */
 const CORPSE_TICKS = Math.round(CORPSE_SECONDS * TICKS_PER_SEC);
@@ -353,12 +355,8 @@ export class SnapshotRenderer {
         const hand = playerRig.castPoint();
         if (hand) {
           // How far this bolt has to go: the cursor point the cast was aimed at,
-          // which is the aim the frame before it appeared. A bolt that dies early
-          // on a monster simply never spends the last of its offset.
-          // Floored: the offset is spent at offset/range per unit flown, and a
-          // bolt aimed at the player's own feet would otherwise set a slope
-          // steep enough to walk the drawn bolt right off the sim's line if it
-          // hits nothing and flies its full 20.
+          // which is the aim the frame before it appeared. An arrow drops over
+          // it; floored, or one aimed at the player's own feet dives straight down.
           const range = this.aim
             ? Math.max(3, Math.hypot(this.aim.x - e.x, this.aim.y - e.y))
             : ASSUMED_RANGE;
@@ -378,36 +376,28 @@ export class SnapshotRenderer {
       let ny = e.y;
       let kp = 0;
       let kn = 0;
+      let dp = 0;
+      let dn = 0;
       if (handEntry) {
         /*
-         * The sim flies the bolt from the player's CENTRE to the point he aimed
-         * at. Drawing it at the weapon tip instead is a constant offset, and a
-         * CONSTANT offset is a line parallel to that one — a bolt a hand's width
-         * beside everything it was aimed at, for its whole flight.
-         *
-         * Spending the offset in proportion to the distance still to go turns it
-         * into the straight line from the tip THROUGH that target: full offset at
-         * the hand, none at the target, and linear in between and BEYOND. The
-         * share is deliberately not clamped at the target — clamping it there is
-         * what made the bolt kink back onto the sim's line the moment it passed
-         * the cursor, which is the same parallel-line bug arriving late.
-         *
-         * The price is that past the target the drawn bolt and the sim's own
-         * position drift apart, at the few degrees between the two lines. A bolt
-         * that sails well past what it was aimed at is flying over empty ground,
-         * so the drift buys a straight line at no cost anyone can see.
-         *
-         * Each end of the interpolated step carries its own share, or the
-         * shrinking happens in tick-sized jumps between the frames.
+         * The sim flies the bolt from the player's CENTRE; it is drawn from the
+         * weapon tip. The offset is spent over a fixed HAND_BLEND of flight, a
+         * straight line from the tip onto the sim's line, and from there the bolt
+         * is drawn exactly where the sim flies it. Each end of the interpolated
+         * step carries its own share, or the offset shrinks in tick-sized jumps.
          */
-        const share = (x: number, y: number) =>
-          1 - Math.hypot(x - handEntry.from.x, y - handEntry.from.y) / handEntry.range;
+        const flown = (x: number, y: number) => Math.hypot(x - handEntry.from.x, y - handEntry.from.y);
+        const share = (x: number, y: number) => Math.max(0, 1 - flown(x, y) / HAND_BLEND);
         kp = share(ox, oy);
         kn = e.spent ? 0 : share(e.x, e.y);
         ox += handEntry.offset.x * kp;
         oy += handEntry.offset.z * kp;
         nx += handEntry.offset.x * kn;
         ny += handEntry.offset.z * kn;
+        // An arrow drops from the bow hand to the flight height over the aim
+        // distance: a 1.5-unit drop would dip it steeply and then level it off.
+        dp = Math.max(0, 1 - flown(prevE?.x ?? e.x, prevE?.y ?? e.y) / handEntry.range);
+        dn = Math.max(0, 1 - flown(e.x, e.y) / handEntry.range);
       }
       this.syncMesh(
         e.id,
@@ -427,11 +417,10 @@ export class SnapshotRenderer {
       const mesh = this.meshes.get(e.id);
       if (!mesh) continue;
       if (e.kind === "projectile" && fxProfile(e.skillId).arrow) {
-        // Down from the bow hand to the aim height on the same straight line as
-        // x/z, but floored there: past the target it flies level, not into the floor.
+        // Floored at the aim point: past it the arrow flies level, not into the floor.
         const drop = handEntry?.offset.y ?? 0;
-        const yo = Y_LIFT.projectile + drop * Math.max(0, kp);
-        const yn = Y_LIFT.projectile + drop * Math.max(0, kn);
+        const yo = Y_LIFT.projectile + drop * dp;
+        const yn = Y_LIFT.projectile + drop * dn;
         mesh.position.y = lerp(yo, yn, alpha);
         // Pointed down its DRAWN path: the hand offset bends it off the sim's.
         const run = Math.hypot(nx - ox, ny - oy);

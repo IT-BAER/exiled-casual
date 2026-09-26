@@ -580,19 +580,15 @@ describe("SnapshotRenderer", () => {
     expect(m2).not.toBeNull();
   });
 
-  it("flies a bolt straight from the weapon tip to the target, never a curve", () => {
-    // The sim launches from the player's CENTRE and lands on the aimed point.
-    // Drawn at the weapon tip with a constant offset, that is a line PARALLEL to
-    // the one the player aimed along — beside everything he pointed at. Spending
-    // the offset in proportion to the distance still to run makes the drawn path
-    // the straight line tip → target instead. Straight is the requirement: a
-    // bolt that bends back through the player's chest and then sets off is worse
-    // than the parallel one.
+  it("flies a bolt from the weapon tip onto the sim's line within 1.5 units, wherever the cursor is", () => {
+    // The sim launches from the player's CENTRE. The drawn bolt leaves the weapon
+    // tip and closes that offset over a fixed HAND_BLEND of flight, in a straight
+    // line, then flies ON the sim's line: what it hits is where it is drawn.
     engine = new NullEngine();
     const { scene } = createScene(engine);
     const renderer = new SnapshotRenderer(scene);
     const HAND = new Vector3(0.4, 1.2, 0.6); // weapon tip, out to the right
-    const TARGET = { x: 10, z: 0 }; // the sim flies +x along z=0
+    const BLEND = 1.5;
 
     const snap = (tick: number, x: number, entities = true) =>
       makeSnapshot({
@@ -609,34 +605,33 @@ describe("SnapshotRenderer", () => {
         castPoint: () => HAND,
       },
     };
-    renderer.setAim(TARGET.x, TARGET.z);
+    // Far cursor: under the old rule the bolt stayed off the line for all 30 units.
+    renderer.setAim(30, 0);
 
-    // Flown out to 20, twice the target's distance: the bolt does NOT stop at
-    // the cursor, and the line must not bend where it passes it.
-    const drawn: { x: number; z: number }[] = [];
+    const drawn: { sim: number; x: number; z: number }[] = [];
     for (let i = 0; i <= 50; i++) {
       const next = snap(2 + i, i * 0.4);
       renderer.apply(prev, next, 1);
       prev = next;
       const m = scene.getMeshByName("entity-2");
-      if (m) drawn.push({ x: m.position.x, z: m.position.z });
+      if (m) drawn.push({ sim: i * 0.4, x: m.position.x, z: m.position.z });
     }
 
-    // It starts at the tip and passes through the target...
-    expect(drawn[0]!.x).toBeCloseTo(HAND.x, 2);
-    expect(drawn[0]!.z).toBeCloseTo(HAND.z, 2);
-    const atTarget = drawn.find((p) => p.x >= TARGET.x)!;
-    expect(atTarget.z).toBeCloseTo(TARGET.z, 1);
-    expect(drawn[drawn.length - 1]!.x).toBeGreaterThan(TARGET.x * 1.8);
-
-    // ...and every point between lies ON that line. Cross product against the
-    // tip→target direction: zero for all of them or the path is bent.
-    const dx = TARGET.x - HAND.x;
-    const dz = TARGET.z - HAND.z;
-    const len = Math.hypot(dx, dz);
+    const from = drawn[0]!;
+    expect(from.x).toBeCloseTo(HAND.x, 2);
+    expect(from.z).toBeCloseTo(HAND.z, 2);
+    const join = { x: from.sim + BLEND, z: 0 };
     for (const p of drawn) {
-      const off = Math.abs((p.x - HAND.x) * dz - (p.z - HAND.z) * dx) / len;
-      expect(off).toBeLessThan(0.01);
+      if (p.sim - from.sim >= BLEND) {
+        expect(p.x).toBeCloseTo(p.sim, 3);
+        expect(p.z).toBeCloseTo(0, 3);
+      } else {
+        // Straight from the tip to where it joins: no curve on the way in.
+        const dx = join.x - HAND.x;
+        const dz = join.z - HAND.z;
+        const off = Math.abs((p.x - HAND.x) * dz - (p.z - HAND.z) * dx) / Math.hypot(dx, dz);
+        expect(off).toBeLessThan(0.01);
+      }
     }
   });
 
