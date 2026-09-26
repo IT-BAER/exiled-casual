@@ -188,6 +188,9 @@ export const FLASH_NAME = "fx-flash";
 const FLASH_INTENSITY = 380;
 /** Units it reaches: the ground around the hit, not the whole 19-unit view. */
 const FLASH_RANGE = 10;
+/** Hung over the hit at brazier height (`BRAZIER_FLAME_Y`), never at bolt height:
+ *  PBR falls off with distance squared, and a light on the struck hide whites it out. */
+const FLASH_Y = 1.8;
 const FLASH_DECAY = 4.5; // per second, multiplicative
 
 /**
@@ -216,7 +219,7 @@ function flash(scene: Scene, at: Vector3): void {
       l.intensity *= Math.max(0, 1 - (FLASH_DECAY * scene.getEngine().getDeltaTime()) / 1000);
     });
   }
-  light.position.copyFrom(at);
+  light.position.set(at.x, FLASH_Y, at.z);
   light.intensity = FLASH_INTENSITY;
 }
 

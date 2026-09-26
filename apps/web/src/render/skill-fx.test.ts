@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect, afterEach } from "vitest";
-import { NullEngine, ParticleSystem, Scene, StandardMaterial, Texture, Vector3 } from "@babylonjs/core";
+import { readFileSync } from "node:fs";
+import { NullEngine, ParticleSystem, PointLight, Scene, StandardMaterial, Texture, Vector3 } from "@babylonjs/core";
 import { SKILLS } from "@exiled/content-runtime";
 import { makeMesh } from "./meshes";
 import {
@@ -10,6 +11,7 @@ import {
   BLINK_ALPHA,
   BOLT_BURST_NAME,
   BOLT_TRAIL_NAME,
+  emberBurst,
   CINDER_NAME,
   FLASH_NAME,
   RING_NAME,
@@ -149,9 +151,23 @@ describe("ember bolt", () => {
     const ring = scene.getMeshByName(RING_NAME);
     expect(ring).not.toBeNull();
     expect(ring!.position.y).toBeLessThan(0.2); // on the floor, not at bolt height
-    const light = scene.getLightByName(FLASH_NAME);
+    const light = scene.getLightByName(FLASH_NAME) as PointLight | null;
     expect(light).not.toBeNull();
     expect(light!.intensity).toBeGreaterThan(0);
+    // Over the hit at lamp height, never at bolt height: PBR hides fall off with
+    // the square of distance, and a light on the struck body's skin whites it out.
+    expect(light!.position.x).toBeCloseTo(4);
+    expect(light!.position.z).toBeCloseTo(-2);
+    expect(light!.position.y).toBeGreaterThanOrEqual(1.5);
+  });
+
+  it("gives the flame sheet an alpha channel, or fog tints the black around each flame into a square", () => {
+    const scene = newScene();
+    const url = (emberBurst(scene, Vector3.Zero()).particleTexture as Texture).url;
+    const png = readFileSync(new URL(`../../public${url}`, import.meta.url));
+    // IHDR colour type: 6 is RGBA. An opaque sheet is additive black that fog
+    // turns into fog colour, and a burst stacks those quads into grey boxes.
+    expect(png[25]).toBe(6);
   });
 
   it("colours its head from its own skill, not whichever projectile spawned first", () => {
