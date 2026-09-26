@@ -80,6 +80,17 @@ describe("registerProjectileMove", () => {
     expect(p.remainingRange).toBeLessThanOrEqual(0);
   });
 
+  it("a bolt that strikes a body stops on the body's near surface, not short of it", () => {
+    const sim = new Simulation();
+    registerProjectileMove(sim);
+    // Point blank: the first 0.4 step already overlaps a body centred 1.1 out.
+    const proj = makeProjectile(sim, 0, 0, fp(0.4), 0, fp(20));
+    makeMonster(sim, fp(1.1), 0);
+    sim.step();
+    expect(sim.world.get<ProjectileC>(proj, "projectile")!.remainingRange).toBeLessThanOrEqual(0);
+    expect(sim.world.get<Position>(proj, "position")).toEqual({ x: fp(0.6), y: 0 });
+  });
+
   it("miss: no damage when monster is out of range", () => {
     const sim = new Simulation();
     registerProjectileMove(sim);

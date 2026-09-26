@@ -208,6 +208,8 @@ export interface SnapshotEntity {
    * contract must not depend on content.
    */
   skillId?: string;
+  /** projectile only: this is its last snapshot, standing where it struck or stopped. */
+  spent?: boolean;
   remainingSeconds?: number;
   ailmentStacks?: number;
   /**

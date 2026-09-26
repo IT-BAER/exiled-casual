@@ -37,6 +37,7 @@ export function registerProjectileMove(sim: Simulation, collisionRef?: Collision
         return r * r;
       };
       let pierceLeft = proj.pierceLeft ?? 0;
+      let at = { x: nx, y: ny };
       let hitIds = proj.hitIds;
       for (const m of world.query("position", "health", "faction")) {
         const mFaction = world.get<Faction>(m, "faction")!;
@@ -57,12 +58,16 @@ export function registerProjectileMove(sim: Simulation, collisionRef?: Collision
             continue; // keeps flying, and may strike a second body this same tick
           }
           newRange = 0; // spent
+          // Rest on the struck body's near surface: the client bursts where the bolt
+          // last stood, and a point-blank step can end inside the caster instead.
+          const body = bodyRadiusOf(world, m);
+          if (traveled > 0) at = { x: mPos.x - Math.trunc((proj.dirx * body) / traveled), y: mPos.y - Math.trunc((proj.diry * body) / traveled) };
           break; // first target only
         }
       }
 
       // Intentionally not clamped to WORLD_MIN/WORLD_MAX: projectiles fly past the arena edge and are removed by range depletion / the expiry system, not pinned to the wall.
-      world.set<Position>(e, "position", { x: nx, y: ny });
+      world.set<Position>(e, "position", at);
       world.set<ProjectileC>(e, "projectile", {
         ...proj,
         remainingRange: newRange,

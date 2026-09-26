@@ -328,7 +328,9 @@ export class SnapshotRenderer {
       // tick entirely: the bolt is invisible for 1/30s, and on the second tick
       // the arm is raised and castPoint() gives the real weapon tip.
       const playerRig = playerMesh ? rigOf(playerMesh) : undefined;
-      if (e.kind === "projectile" && (e.team ?? 0) === 0 && playerRig && !this.meshes.has(e.id)) {
+      // A spent bolt is drawn where it struck, never from the hand: point blank it
+      // lives a single visible snapshot, and the burst goes off where it stands.
+      if (e.kind === "projectile" && (e.team ?? 0) === 0 && playerRig && !this.meshes.has(e.id) && !e.spent) {
         if (!this.fromHand.has(e.id)) {
           this.fromHand.set(e.id, { offset: Vector3.Zero(), from: { x: e.x, y: e.y }, range: ASSUMED_RANGE });
           continue;
@@ -384,7 +386,7 @@ export class SnapshotRenderer {
         const share = (x: number, y: number) =>
           1 - Math.hypot(x - handEntry.from.x, y - handEntry.from.y) / handEntry.range;
         const kp = share(ox, oy);
-        const kn = share(e.x, e.y);
+        const kn = e.spent ? 0 : share(e.x, e.y);
         ox += handEntry.offset.x * kp;
         oy += handEntry.offset.z * kp;
         nx += handEntry.offset.x * kn;
@@ -492,6 +494,10 @@ export class SnapshotRenderer {
           // Kept: it is a corpse now, and owned by `corpses` rather than by the
           // entity id, which the sim is free to hand to something else.
         } else {
+          // Its burst fires on dispose: put it on the struck point first, not partway
+          // through the last interpolated step toward it.
+          const last = prev?.entities.find((p) => p.id === id);
+          if (last?.spent) { mesh.position.x = last.x; mesh.position.z = last.y; mesh.computeWorldMatrix(true); }
           rigOf(mesh)?.dispose();
           creatureOf(mesh)?.dispose();
           mesh.dispose();

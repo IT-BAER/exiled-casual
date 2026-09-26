@@ -269,6 +269,7 @@ export function buildSnapshot(
       // tell his own cast from a spitter's answer to sound either of them.
       team: pr.team,
       ...(pr.skillId ? { skillId: pr.skillId } : {}),
+      ...(pr.remainingRange <= 0 ? { spent: true } : {}),
     });
   }
 
