@@ -40,9 +40,9 @@ export const GRAMMARS: Record<ChunkGrammarId, Grammar> = {
   strand: STRAND_GRAMMAR,
 };
 
-/** Spawn points a coast aims for. The strand grammar's own number: the beach is
- *  the same size and the same walk, only a better shape. */
-const COAST_SPAWN_TARGET = 16;
+/** Spawn points a coast aims for. Four over the strand grammar's 16: at 16 the
+ *  playtest bot cleared a first map in under 3 minutes with 39 kills. */
+const COAST_SPAWN_TARGET = 20;
 
 export function isGrammarId(v: string): v is GrammarId {
   return v === "loop" || v === "open-field" || v === "sunken-ruins" ||
