@@ -46,6 +46,15 @@ describe("RARE_TEMPLATES", () => {
     expect(rareTemplate(-6)).toBe(RARE_TEMPLATES[2]);
     expect(rareTemplate(0x7fffffff)).toBeDefined();
   });
+
+  it("a big-bodied rare trades the swarm multipliers for 300% life and 200% damage", () => {
+    for (const a of ["brute", "heavy"] as const) {
+      expect(rareTemplate(1, a)).toMatchObject({ lifeMulPct: 300, damageMulPct: 200, element: "cold" });
+    }
+    for (const a of ["swarm", "shooter"] as const) {
+      expect(rareTemplate(1, a)).toBe(RARE_TEMPLATES[1]);
+    }
+  });
 });
 
 describe("SKILLS", () => {

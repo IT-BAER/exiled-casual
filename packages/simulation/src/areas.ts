@@ -320,7 +320,7 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
         const rare = i === spawns.length - 1 && j === 0;
         // The map's own seed picks the rare's element, so a given map always
         // demands the same resistance and a replay of it stays identical.
-        const def = rare ? makeRare(base, rareTemplate(session.mapSeed)) : base;
+        const def = rare ? makeRare(base, rareTemplate(session.mapSeed, base.archetype)) : base;
         const ring = PACK_SPREAD[j % PACK_SPREAD.length]!;
         const nearX = sx + ring.dx, nearY = sy + ring.dy;
         const farX = sx - ring.dx, farY = sy - ring.dy;

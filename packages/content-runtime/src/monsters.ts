@@ -339,13 +339,23 @@ export const RARE_TEMPLATES: readonly RareModifier[] = (
 }));
 
 /**
+ * The same themes for a brute or a heavy. 900%/300% was measured on the imp
+ * (66 life); on a brute it made a ~5,100-life tier-1 rare that took 15 of 18
+ * Ironsworn deaths in the playtest bot (simulation/src/playtest.ts).
+ */
+const BIG_RARE_TEMPLATES: readonly RareModifier[] = RARE_TEMPLATES.map((t) => ({
+  ...t, lifeMulPct: 300, damageMulPct: 200,
+}));
+
+/**
  * Pick a rare's elemental theme from any integer (a seed, a hash). Deterministic
  * and total, so a replay picks the same rare twice; hashing is the caller's job
  * because content must not depend on the sim's rng.
  */
-export function rareTemplate(n: number): RareModifier {
-  const i = Math.abs(Math.trunc(n)) % RARE_TEMPLATES.length;
-  return RARE_TEMPLATES[i]!;
+export function rareTemplate(n: number, archetype?: MonsterArchetype): RareModifier {
+  const set = archetype === "brute" || archetype === "heavy" ? BIG_RARE_TEMPLATES : RARE_TEMPLATES;
+  const i = Math.abs(Math.trunc(n)) % set.length;
+  return set[i]!;
 }
 
 /**
