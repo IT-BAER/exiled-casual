@@ -413,8 +413,8 @@ export class SnapshotRenderer {
         alpha,
         e.radius,
         // The shared string channel: species for monsters, the furniture look
-        // for containers (makeMesh reads it per kind).
-        e.species ?? e.look,
+        // for containers, the base id for ground items (makeMesh reads it per kind).
+        e.species ?? e.look ?? e.baseId,
         undefined,
         e.skillId,
       );

@@ -632,6 +632,11 @@ export function isRigReady(scene: Scene): boolean {
   return loaded !== null && loaded.scene === scene;
 }
 
+/** This scene's wardrobe import, or null before it lands. Never a second import. */
+export function wardrobeFor(scene: Scene): AssetContainer | null {
+  return loaded?.scene === scene ? loaded.wardrobe : null;
+}
+
 /**
  * Drop the cached containers — the scene that owns them is going away.
  *

@@ -15,6 +15,7 @@ import { attachProp, type PropKind } from "./props";
 import { attachCreature, type CreatureRig } from "./monsters";
 import { attachBoltTrail, attachCinderFX, cinderGlow, fxProfile } from "./skill-fx";
 import { attachRig, rigOf, BASE_LOOKS, type RigParts } from "./rig";
+import { attachGroundModel } from "./ground-looks";
 import { hasRim, HIT_TINT, HIT_ALPHA } from "./rim";
 import { playSfx, worldSfxMix } from "../audio/sfx";
 
@@ -1562,6 +1563,10 @@ export function makeMesh(
     beamMat.opacityTexture = beamGradient(scene); // bright at the floor, gone at the top
     beam.material = beamMat;
     updateGroundItem(m, "normal");
+    // The item itself lies on the floor. The hexagon stays only as the stand-in
+    // for a base with no model, or a drop made before the wardrobe loaded.
+    // `species` is the shared string channel; for a ground item it is the base id.
+    if (attachGroundModel(scene, m, species, -Y_LIFT.groundItem)) m.isVisible = false;
     return m;
   }
 
