@@ -32,6 +32,7 @@ export const WORLD_ART: readonly string[] = [
   // Skill effects. The fire sheet is the first thing a cast wants.
   "/textures/fx/fire_sheet_v1.png",
   "/textures/fx/haze.png",
+  "/textures/fx/smoke_puff.png",
   "/textures/fx/ember_cracks_v1.png",
   // The HUD's own icons: the bar paints these before anything is cast.
   "/textures/skills/ember_bolt.png",

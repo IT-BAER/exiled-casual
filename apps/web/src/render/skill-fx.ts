@@ -4,6 +4,7 @@ import {
   DynamicTexture,
   MeshBuilder,
   ParticleSystem,
+  Light,
   PointLight,
   Quaternion,
   StandardMaterial,
@@ -35,6 +36,8 @@ const EMBER_CRACKS = "/textures/fx/ember_cracks_v1.png";
 /** Soft round blob, shared with the ambient haze. Arcane wisps want no shape of
  *  their own: the colour gradient is the whole effect. */
 const WISP = "/textures/fx/haze.png";
+/** The same blob as RGBA, white with the blob as alpha, for normally blended smoke. */
+const SMOKE_PUFF = "/textures/fx/smoke_puff.png";
 
 /**
  * The sheet is already orange, so the colour gradient is an ALPHA envelope and
@@ -186,8 +189,9 @@ export const FLASH_NAME = "fx-flash";
 /** Bright enough to be seen against a 420-intensity torch, short enough not to
  *  be mistaken for a second lamp in the room. */
 const FLASH_INTENSITY = 380;
-/** Units it reaches: the ground around the hit, not the whole 19-unit view. */
-const FLASH_RANGE = 10;
+/** Units it reaches: the ground around the hit, not the whole 19-unit view.
+ *  Only honoured under glTF falloff; PBR's default falloff ignores range. */
+const FLASH_RANGE = 4;
 /** Hung over the hit at brazier height (`BRAZIER_FLAME_Y`), never at bolt height:
  *  PBR falls off with distance squared, and a light on the struck hide whites it out. */
 const FLASH_Y = 1.8;
@@ -209,6 +213,7 @@ function flash(scene: Scene, at: Vector3): void {
     light.diffuse = new Color3(1, 0.62, 0.26);
     light.specular = Color3.Black();
     light.range = FLASH_RANGE;
+    light.falloffType = Light.FALLOFF_GLTF;
     light.shadowEnabled = false;
     scene.onBeforeRenderObservable.add(() => {
       const l = light!;
@@ -413,7 +418,55 @@ export function emberBurst(scene: Scene, at: Vector3, fx: FxProfile = FALLBACK_F
   ps.minEmitPower = 2;
   ps.maxEmitPower = 5;
   ps.gravity = new Vector3(0, -7, 0);
+  blast(scene, at);
+  smoke(scene, at);
   return burst(ps, 32, 0.4);
+}
+
+export const BOLT_BLAST_NAME = "fx-bolt-blast";
+
+/** The fireball: a handful of big flames swelling out of the hit point. Small on
+ *  purpose, this is the starter skill; the sparks carry the spray. */
+function blast(scene: Scene, at: Vector3): ParticleSystem {
+  const ps = fireSystem(scene, BOLT_BLAST_NAME, 8);
+  ps.emitter = at.clone();
+  ps.createSphereEmitter(0.15, 1);
+  sizeOverLife(ps, 0.55, 1.35, 0.25);
+  ps.minLifeTime = 0.22;
+  ps.maxLifeTime = 0.38;
+  ps.minEmitPower = 0.4;
+  ps.maxEmitPower = 1.1;
+  ps.gravity = new Vector3(0, 1.5, 0);
+  ps.minInitialRotation = 0;
+  ps.maxInitialRotation = Math.PI * 2;
+  return burst(ps, 6, 0.38);
+}
+
+export const BOLT_SMOKE_NAME = "fx-bolt-smoke";
+
+/** Warm grey smoke that swells and climbs off the hit after the fire is gone:
+ *  the fire says "now", the smoke says "something burned here". */
+function smoke(scene: Scene, at: Vector3): ParticleSystem {
+  const ps = new ParticleSystem(BOLT_SMOKE_NAME, 6, scene);
+  ps.particleTexture = new Texture(SMOKE_PUFF, scene);
+  ps.blendMode = ParticleSystem.BLENDMODE_STANDARD;
+  ps.applyFog = true;
+  ps.emitter = at.clone();
+  ps.createSphereEmitter(0.25, 1);
+  ps.addColorGradient(0, new Color4(0.5, 0.45, 0.4, 0));
+  ps.addColorGradient(0.15, new Color4(0.45, 0.41, 0.36, 0.22));
+  ps.addColorGradient(1, new Color4(0.36, 0.34, 0.32, 0));
+  sizeOverLife(ps, 0.45, 1.2, 0.3);
+  ps.minLifeTime = 0.5;
+  ps.maxLifeTime = 0.9;
+  ps.minEmitPower = 0.3;
+  ps.maxEmitPower = 0.9;
+  ps.gravity = new Vector3(0, 0.6, 0);
+  ps.minInitialRotation = 0;
+  ps.maxInitialRotation = Math.PI * 2;
+  ps.minAngularSpeed = -0.6;
+  ps.maxAngularSpeed = 0.6;
+  return burst(ps, 5, 0.9);
 }
 
 export const CINDER_NAME = "fx-cinder";

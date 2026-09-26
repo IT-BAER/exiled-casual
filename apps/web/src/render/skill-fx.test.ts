@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
-import { NullEngine, ParticleSystem, PointLight, Scene, StandardMaterial, Texture, Vector3 } from "@babylonjs/core";
+import { Light, NullEngine, ParticleSystem, PointLight, Scene, StandardMaterial, Texture, Vector3 } from "@babylonjs/core";
 import { SKILLS } from "@exiled/content-runtime";
 import { makeMesh } from "./meshes";
 import {
@@ -11,6 +11,8 @@ import {
   BLINK_ALPHA,
   BOLT_BURST_NAME,
   BOLT_TRAIL_NAME,
+  BOLT_SMOKE_NAME,
+  BOLT_BLAST_NAME,
   emberBurst,
   CINDER_NAME,
   FLASH_NAME,
@@ -159,6 +161,10 @@ describe("ember bolt", () => {
     expect(light!.position.x).toBeCloseTo(4);
     expect(light!.position.z).toBeCloseTo(-2);
     expect(light!.position.y).toBeGreaterThanOrEqual(1.5);
+    // A pool around the hit, not the view: PBR ignores `range` unless the
+    // falloff is glTF's, which fades to zero at it.
+    expect(light!.falloffType).toBe(Light.FALLOFF_GLTF);
+    expect(light!.range).toBeLessThanOrEqual(5);
   });
 
   it("gives the flame sheet an alpha channel, or fog tints the black around each flame into a square", () => {
@@ -168,6 +174,38 @@ describe("ember bolt", () => {
     // IHDR colour type: 6 is RGBA. An opaque sheet is additive black that fog
     // turns into fog colour, and a burst stacks those quads into grey boxes.
     expect(png[25]).toBe(6);
+  });
+
+  it("leaves soft smoke over the hit that outlives the fire", () => {
+    const scene = newScene();
+    const fire = emberBurst(scene, new Vector3(4, 0.8, -2));
+    const smoke = systems(scene, BOLT_SMOKE_NAME)[0]!;
+    expect(smoke).toBeTruthy();
+    // Normally blended, so it can darken and veil what is behind it; additive
+    // "smoke" is only ever light.
+    expect(smoke.blendMode).toBe(ParticleSystem.BLENDMODE_STANDARD);
+    expect((smoke.emitter as Vector3).x).toBeCloseTo(4);
+    expect((smoke.emitter as Vector3).z).toBeCloseTo(-2);
+    expect(smoke.maxLifeTime).toBeGreaterThan(fire.maxLifeTime * 2);
+    expect(smoke.disposeOnStop).toBe(true);
+    // Its shape is the texture's alpha: an opaque sheet here IS a grey square.
+    const url = (smoke.particleTexture as Texture).url;
+    expect(readFileSync(new URL(`../../public${url}`, import.meta.url))[25]).toBe(6);
+  });
+
+  it("bursts as a small fireball that swells, and the smoke stays second to the fire", () => {
+    const scene = newScene();
+    const sparks = emberBurst(scene, new Vector3(4, 0.8, -2));
+    const blast = systems(scene, BOLT_BLAST_NAME)[0]!;
+    expect(blast).toBeTruthy();
+    expect(blast.blendMode).toBe(ParticleSystem.BLENDMODE_ADD);
+    const size = blast.getSizeGradients()!;
+    expect(size[size.length - 1]!.factor1).toBeGreaterThan(size[0]!.factor1);
+    expect(blast.disposeOnStop).toBe(true);
+    // A starter skill: a few big flames, not a second spark shower.
+    expect(blast.manualEmitCount).toBeLessThanOrEqual(8);
+    const smoke = systems(scene, BOLT_SMOKE_NAME)[0]!;
+    expect(smoke.manualEmitCount * 4).toBeLessThanOrEqual(sparks.manualEmitCount);
   });
 
   it("colours its head from its own skill, not whichever projectile spawned first", () => {
