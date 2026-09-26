@@ -200,15 +200,15 @@ describe("the Atlas spans a 1-100 character's climb", () => {
     // This case lives here rather than in xp.test.ts because it needs BOTH
     // curves, and it is the only thing stopping them being tuned separately.
     //
-    // Bounds: measured kills range from ~7.5 (level 1, running Tier 1 six area
-    // levels above him, penalized) to 5,346 (level 99, pinned at Tier 15 since
+    // Bounds: measured kills range from 3.75 (level 1, running Tier 1 above his
+    // level, which pays in full) to 5,346 (level 99, pinned at Tier 15 since
     // the Atlas has nothing higher, so the last stretch is fought under-levelled
-    // by design). > 5 and < 6,000 brackets the real curve with headroom rather
+    // by design). > 3 and < 6,000 brackets the real curve with headroom rather
     // than re-deriving the exact numbers, so a real regression still trips it.
     for (const level of [1, 10, 50, 90, 99]) {
       const tier = Math.max(1, Math.min(WAYSTONE_MAX_TIER, Math.round((level - 2) / 6)));
       const kills = xpToNext(level) / xpAward(level, areaLevel(tier), "normal");
-      expect(kills).toBeGreaterThan(5);
+      expect(kills).toBeGreaterThan(3);
       expect(kills).toBeLessThan(6_000);
     }
   });

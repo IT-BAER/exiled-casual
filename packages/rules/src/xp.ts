@@ -43,14 +43,13 @@ export function monsterXp(areaLevel: number, kind: MonsterXpKind): number {
 
 /**
  * PoE's level-difference penalty, in the cheapest honest shape: full value while
- * the fight is roughly your level, then a decay to a floor. It is symmetric on
- * purpose — farming a tier you have outgrown pays as badly as overreaching one —
- * because that symmetry is the whole reason the Atlas has tiers. The floor keeps
- * a wildly mismatched kill worth *something*, so a character that overreached
- * still climbs out.
+ * the fight is roughly your level, then a decay to a floor. Only outlevelling an
+ * area is penalised — farming a tier you have outgrown pays badly, which is why
+ * the Atlas has tiers — while overreaching pays in full: the danger is its own
+ * cost, and a penalty on top kept an under-levelled character stuck (playtest.ts).
  */
 export function xpPenaltyPct(charLevel: number, areaLevel: number): number {
-  const diff = Math.abs(areaLevel - charLevel);
+  const diff = Math.max(0, charLevel - areaLevel);
   if (diff <= 3) return 100;
   return Math.max(10, 100 - 10 * (diff - 3));
 }

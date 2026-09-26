@@ -24,20 +24,24 @@ describe("monsterXp", () => {
 describe("xpPenaltyPct", () => {
   it("pays in full inside the tolerance band, then decays to a floor", () => {
     expect(xpPenaltyPct(65, 65)).toBe(100);
-    expect(xpPenaltyPct(65, 68)).toBe(100);
-    expect(xpPenaltyPct(65, 69)).toBe(90);
-    expect(xpPenaltyPct(65, 74)).toBe(40);
-    // Symmetric: outlevelling an area costs the same as overreaching one.
+    expect(xpPenaltyPct(68, 65)).toBe(100);
+    expect(xpPenaltyPct(69, 65)).toBe(90);
+    expect(xpPenaltyPct(74, 65)).toBe(40);
     expect(xpPenaltyPct(75, 65)).toBe(30);
-    expect(xpPenaltyPct(65, 99)).toBe(10);
+    expect(xpPenaltyPct(75, 55)).toBe(10);
+  });
+
+  it("never penalises a character below the area level", () => {
+    expect(xpPenaltyPct(4, 20)).toBe(100);
+    expect(xpPenaltyPct(65, 99)).toBe(100);
   });
 });
 
 describe("xpAward", () => {
   it("is the monster's value after the level-difference penalty, as an integer", () => {
     expect(xpAward(65, 65, "boss")).toBe(2600);
-    // areaLevel 69 boss = 2760 at 90% = 2484
-    expect(xpAward(65, 69, "boss")).toBe(2484);
+    // areaLevel 65 boss for a level 69 character = 2600 at 90% = 2340
+    expect(xpAward(69, 65, "boss")).toBe(2340);
     expect(Number.isInteger(xpAward(65, 71, "normal"))).toBe(true);
   });
 });
