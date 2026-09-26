@@ -43,6 +43,7 @@ import math
 import os
 import sys
 
+import bmesh
 import bpy
 import mathutils
 import numpy
@@ -365,7 +366,7 @@ def _palette_ramp(path, steps=256):
     return rgb[order[pick]]
 
 
-def asset_material(name, image_name, gain, roughness, palette=None):
+def asset_material(name, image_name, gain, roughness, palette=None, tint=None):
     """A textured_material built from an image PACKED in an appended .blend.
 
     `palette` re-dresses the texture in another one's colours: the source is
@@ -381,11 +382,11 @@ def asset_material(name, image_name, gain, roughness, palette=None):
     if img is None:
         sys.exit("appended asset carries no image named " + image_name)
     img.scale(TEX_SIZE, TEX_SIZE)
-    if gain != 1.0 or palette:
+    if gain != 1.0 or palette or tint:
         px = numpy.empty(len(img.pixels), dtype=numpy.float32)
         img.pixels.foreach_get(px)
         rgb = px.reshape(-1, 4)[:, :3]
-        numpy.clip(rgb * gain, 0.0, 1.0, out=rgb)
+        numpy.clip(rgb * gain * numpy.asarray(tint or (1.0, 1.0, 1.0), dtype=numpy.float32), 0.0, 1.0, out=rgb)
         if palette:
             ramp = _palette_ramp(palette)
             lum = rgb @ LUMA
@@ -571,7 +572,12 @@ def build_appended(name, mat_name, blend_name, budgets, image, gain, roughness, 
         smooth_by_angle(obj, 40)
     for obj in parts:
         obj.name = (renames or {}).get(obj.name, obj.name)
+    _carry(name, parts, width).parent = root
+    return root
 
+
+def _carry(name, parts, width):
+    """An empty that scales `parts` to `width` across and stands them centred on the floor."""
     carrier = bpy.data.objects.new(name + "_scale", None)
     bpy.context.scene.collection.objects.link(carrier)
     lo, hi = bounds(parts)
@@ -580,8 +586,7 @@ def build_appended(name, mat_name, blend_name, budgets, image, gain, roughness, 
     carrier.location = (-(lo.x + hi.x) / 2 * scale, -(lo.y + hi.y) / 2 * scale, -lo.z * scale)
     for obj in parts:
         obj.parent = carrier
-    carrier.parent = root
-    return root
+    return carrier
 
 
 def build_stash():
@@ -977,6 +982,323 @@ def _disc_uv(obj, radius):
         uv.data[loop.index].uv = (0.5 + x / (2 * radius), 0.5 + y / (2 * radius))
 
 
+# --------------------------------------------------------------------------
+# the ground drops
+# --------------------------------------------------------------------------
+#
+# What a belt, the focus, currency and a waystone look like lying on the floor
+# (render/ground-looks.ts; gear drops are cut from the wardrobe instead). Built
+# at the size they lie at, a token of the item rather than its real size, and
+# shaped after the item's inventory icon: at this camera an orb is some twenty
+# pixels across, so silhouette and colour are the whole read. Glass, gold and
+# runes emit well past the 6% floor so currency catches the eye (docs/09).
+#
+# Two are downloads: Chpndl _'s Stylized Scroll with Skull (royalty_free,
+# e1746236-dfff-468f-8181-397d452ec3f2) for both scrolls, glow cards cut, and
+# Klo Works' Potion Stylized LowPoly (royalty_free,
+# a442ac26-01a8-4288-bdcd-61fad3dcd328) for alchemy. BlenderKit has no belt,
+# focus, gem or waystone that reads as the icon, so those are built here.
+SCROLL_W = 0.36
+SCROLL_TRIS = 900
+FLASK_W = 0.17
+FLASK_BUDGET = {"Potion_low": 700, "Cap_low": 150}
+# The oval a dropped belt lies in, and its strap.
+BELT_A, BELT_B = 0.19, 0.12
+BELT_T = 0.012
+
+
+def flat_material(name, srgb, roughness, emit=EMISSION):
+    """One colour, given as sRGB and squared into the linear value glTF stores."""
+    mat = bpy.data.materials.new(name)
+    mat.use_nodes = True
+    bsdf = mat.node_tree.nodes["Principled BSDF"]
+    lin = tuple(c * c for c in srgb) + (1.0,)
+    bsdf.inputs["Base Color"].default_value = lin
+    bsdf.inputs["Emission Color"].default_value = lin
+    bsdf.inputs["Emission Strength"].default_value = emit
+    bsdf.inputs["Metallic"].default_value = 0.0
+    bsdf.inputs["Roughness"].default_value = roughness
+    return mat
+
+
+def _outward(obj):
+    """Weld the lathe's seam and point every face out, whatever the profile's winding."""
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-6)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.to_mesh(obj.data)
+    bm.free()
+
+
+def _dress(root, parts, smooth=40):
+    """`_finish` without the bevel: a 1cm buckle bar bevelled at 8mm is a bead."""
+    for obj, mat, tile in parts:
+        _outward(obj)
+        obj.data.materials.append(mat)
+        if tile:
+            uv_box(obj, tile)
+        smooth_by_angle(obj, smooth)
+        obj.parent = root
+    return root
+
+
+def _ball(r, steps=8, squash=1.0):
+    """Profile of a sphere of radius r resting on z=0, top pole first."""
+    return [(r * math.sin(math.pi * i / steps), squash * r * (1 + math.cos(math.pi * i / steps)))
+            for i in range(steps + 1)]
+
+
+def _hoop(r_in, r_out, z0, z1):
+    return [(r_in, z1), (r_out, z1), (r_out, z0), (r_in, z0), (r_in, z1)]
+
+
+def _strap_t(gap, s, segments):
+    """Angle of step s along a strap that leaves `gap` radians open at the front."""
+    return -math.pi / 2 + gap / 2 + (2 * math.pi - gap) * s / segments
+
+
+def _strap(name, width, gap=0.0, thick=BELT_T, across=0.0, segments=40):
+    """A strap lying flat round the BELT oval, seen from above as the belt's face.
+
+    Stood on its edge it read as a hoop, and whatever hung on its far side faced
+    away from the camera.
+    """
+    closed = gap == 0.0
+    rings = segments if closed else segments + 1
+    verts, faces = [], []
+    for s in range(rings):
+        t = _strap_t(gap, s, segments)
+        nx, ny = _oval_normal(t)
+        x, y = BELT_A * math.cos(t), BELT_B * math.sin(t)
+        for off in (across - width / 2, across + width / 2):
+            for z in (0.0, thick):
+                verts.append((x + nx * off, y + ny * off, z))
+    for s in range(segments):
+        i, j = 4 * s, 4 * ((s + 1) % rings)
+        faces += [[i + 2, j + 2, j + 3, i + 3], [i, i + 1, j + 1, j],
+                  [i + 1, i + 3, j + 3, j + 1], [i, j, j + 2, i + 2]]
+    if not closed:
+        end = 4 * segments
+        faces += [[0, 1, 3, 2], [end, end + 2, end + 3, end + 1]]
+    return mesh_object(name, verts, faces)
+
+
+def _oval_normal(t):
+    nx, ny = math.cos(t) / BELT_A, math.sin(t) / BELT_B
+    k = math.hypot(nx, ny)
+    return nx / k, ny / k
+
+
+def _on_strap(obj, t, z, along=0.0, across=0.0):
+    """Lay a box built at the origin on the strap at angle t: x across it, y along it."""
+    nx, ny = _oval_normal(t)
+    obj.location = (BELT_A * math.cos(t) + nx * across - ny * along,
+                    BELT_B * math.sin(t) + ny * across + nx * along, z)
+    obj.rotation_euler = (0.0, 0.0, math.atan2(ny, nx))
+    return obj
+
+
+def _buckle(name, width, gap, mat):
+    """A square frame lying past the strap's free end."""
+    t = _strap_t(gap, 1, 1)
+    w = width + 0.02
+    pieces = [((w, 0.012, 0.012), 0.012, 0.0), ((w, 0.012, 0.012), 0.058, 0.0),
+              ((0.012, 0.058, 0.012), 0.035, -w / 2 + 0.006), ((0.012, 0.058, 0.012), 0.035, w / 2 - 0.006)]
+    return [(_on_strap(box(f"{name}_{i}", (0, 0, 0), size), t, 0.006, along, across), mat, 0)
+            for i, (size, along, across) in enumerate(pieces)]
+
+
+def leather_materials():
+    """The wardrobe's BlenderKit leather, once dark (plate belt) and once brown (hunter's)."""
+    path = os.path.join(SOURCE_DIR, "mat-aged-dark-leather.blend")
+    with bpy.data.libraries.load(path, link=False) as (src, dst):
+        dst.images = ["Aged Dark Leather_Color.jpg"]
+    img = dst.images[0]
+    # asset_material rewrites the pixels in place, so the second tone needs its own copy.
+    twin = img.copy()
+    twin.name = "leather_brown_src"
+    return (asset_material("drop_leather_dark", img.name, gain=1.3, roughness=0.8),
+            asset_material("drop_leather_brown", twin.name, gain=2.4, roughness=0.8))
+
+
+def build_belts(mats):
+    dark, brown = leather_materials()
+    steel = mats["drop_steel"]
+
+    # Ironsworn Girdle: wide dark leather under a row of iron plates.
+    w, gap = 0.07, 0.55
+    parts = [(_strap("beltIronsworn_strap", w, gap), dark, 0.12)] + _buckle("beltIronsworn_buckle", w, gap, steel)
+    for i in range(6):
+        t = _strap_t(gap, i + 0.5, 6)
+        parts.append((_on_strap(box(f"beltIronsworn_plate_{i}", (0, 0, 0), (w - 0.016, 0.04, 0.008)),
+                                t, BELT_T + 0.004), steel, 0))
+    _dress(_root("beltIronsworn"), parts)
+
+    # Stalker Strap: narrower brown leather carrying two pouches.
+    w, gap = 0.05, 0.55
+    parts = [(_strap("beltStalker_strap", w, gap), brown, 0.12)] + _buckle("beltStalker_buckle", w, gap, steel)
+    for i, s in enumerate((0.3, 0.7)):
+        parts.append((_on_strap(box(f"beltStalker_pouch_{i}", (0, 0, 0), (0.055, 0.065, 0.035)),
+                                _strap_t(gap, s, 1), BELT_T + 0.0175), brown, 0.12))
+    _dress(_root("beltStalker"), parts)
+
+    # Ember Sash: charcoal cloth edged in red, knotted at the front, tails lying out.
+    w = 0.075
+    cloth, trim = mats["drop_sash"], mats["drop_sash_trim"]
+    parts = [(_strap("beltEmber_cloth", w), cloth, 0)]
+    for i, side in enumerate((-1, 1)):
+        parts.append((_strap(f"beltEmber_trim_{i}", 0.012, thick=BELT_T + 0.004,
+                             across=side * (w / 2 - 0.006)), trim, 0))
+    knot = mesh_object("beltEmber_knot", *lathe(_ball(0.032, 6, 0.8), 10))
+    knot.location = (0.0, -BELT_B - 0.03, 0.0)
+    parts.append((knot, trim, 0))
+    for i, side in enumerate((-1, 1)):
+        tail = box(f"beltEmber_tail_{i}", (0, 0, 0), (0.05, 0.15, 0.01))
+        tail.location = (side * 0.045, -BELT_B - 0.1, 0.005)
+        tail.rotation_euler = (0.0, 0.0, side * 0.4)
+        parts.append((tail, trim, 0))
+    _dress(_root("beltEmber"), parts)
+
+
+def build_focus(mats):
+    """Ember Focus: a burning dome in an iron ring with four spikes, lying face up."""
+    iron, coal = mats["drop_steel"], mats["brazier_coal"]
+    parts = [
+        (mesh_object("focusEmber_ring", *lathe(_hoop(0.105, 0.135, 0.0, 0.04), 20)), iron, 0),
+        (mesh_object("focusEmber_back", *lathe([(0.0, 0.012), (0.11, 0.012), (0.11, 0.0), (0.0, 0.0)], 20)), iron, 0),
+    ]
+    for i in range(4):
+        a = math.pi / 4 + i * math.pi / 2
+        spike = cone(f"focusEmber_spike_{i}", (0, 0, 0), 0.022, 0.0, 0.06, "x", 8)
+        spike.location = (math.cos(a) * 0.16, math.sin(a) * 0.16, 0.02)
+        spike.rotation_euler = (0.0, 0.0, a)
+        parts.append((spike, iron, 0))
+    root = _dress(_root("focusEmber"), parts)
+    dome = mesh_object("focusEmber_dome", *lathe(
+        [(0.1 * math.sin(a), 0.012 + 0.07 * math.cos(a)) for a in (i * math.pi / 8 for i in range(5))]
+        + [(0.0, 0.012)], 20))
+    _outward(dome)
+    _disc_uv(dome, 0.1)
+    dome.data.materials.append(coal)
+    smooth_by_angle(dome, 60)
+    dome.parent = root
+
+
+def build_orbs(mats):
+    # Orb of Embers: a ball of the brazier's own coals.
+    orb = mesh_object("orbEmbers_body", *lathe(_ball(0.1, 10), 20))
+    _outward(orb)
+    _disc_uv(orb, 0.1)
+    orb.data.materials.append(mats["brazier_coal"])
+    smooth_by_angle(orb, 60)
+    orb.parent = _root("orbEmbers")
+
+    # Orb of Transmutation: pale glass on a steel equator.
+    _dress(_root("orbTransmutation"), [
+        (mesh_object("orbTransmutation_glass", *lathe(_ball(0.1, 10), 20)), mats["drop_glass_blue"], 0),
+        (mesh_object("orbTransmutation_band", *lathe(_hoop(0.097, 0.108, 0.088, 0.112), 20)), mats["drop_steel"], 0),
+    ], smooth=60)
+
+    # Orb of Augmentation: a violet teardrop vial, corked, lying on its side.
+    lie = _root("orbAugmentation_lie")
+    _dress(lie, [
+        (mesh_object("orbAugmentation_glass", *lathe([
+            (0.0, 0.2), (0.02, 0.2), (0.02, 0.175), (0.045, 0.14), (0.065, 0.09),
+            (0.06, 0.05), (0.035, 0.018), (0.0, 0.0)], 16)), mats["drop_glass_violet"], 0),
+        (mesh_object("orbAugmentation_cork", *lathe([
+            (0.0, 0.245), (0.022, 0.245), (0.024, 0.198), (0.0, 0.198)], 12)), mats["drop_cork"], 0),
+        (mesh_object("orbAugmentation_band", *lathe(_hoop(0.019, 0.027, 0.175, 0.19), 12)), mats["drop_vial_band"], 0),
+    ], smooth=60)
+    lie.rotation_euler = (math.pi / 2, 0.0, 0.0)
+    lie.location = (0.0, 0.12, 0.065)
+    lie.parent = _root("orbAugmentation")
+
+    # Orb of Elevation: a faceted gold crystal banded at the waist.
+    _dress(_root("orbElevation"), [
+        (mesh_object("orbElevation_gem", *lathe([
+            (0.0, 0.19), (0.05, 0.17), (0.085, 0.12), (0.085, 0.07), (0.05, 0.02), (0.0, 0.0)], 6)),
+         mats["drop_gold"], 0),
+        (mesh_object("orbElevation_band", *lathe(_hoop(0.083, 0.094, 0.085, 0.105), 6)), mats["drop_gold_dark"], 0),
+    ], smooth=20)
+
+    # Orb of Alchemy: the downloaded flask, lit from inside.
+    build_appended(
+        "orbAlchemy", "drop_alchemy", "potion_stylized_lowpoly.blend", FLASK_BUDGET,
+        "Potion_Base_color.jpg", gain=1.4, roughness=0.4, width=FLASK_W,
+        renames={"Potion_low": "orbAlchemy_flask", "Cap_low": "orbAlchemy_cap"},
+    )
+    bpy.data.materials["drop_alchemy"].node_tree.nodes["Principled BSDF"].inputs["Emission Strength"].default_value = 0.3
+
+
+def build_scrolls():
+    """Wisdom and Portal share one scroll mesh; the portal adds a violet glow in each end."""
+    body, = append_objects("srylized_scroll_with_skull.blend", ["Prop_Scroll"])
+    bm = bmesh.new()
+    bm.from_mesh(body.data)
+    # The glow cards flaring past each end are the second slot.
+    bmesh.ops.delete(bm, geom=[f for f in bm.faces if f.material_index == 1], context="FACES")
+    bm.to_mesh(body.data)
+    bm.free()
+    decimate_to(body, SCROLL_TRIS)
+    art = bpy.data.images["PropT_Scroll_Base_color.jpg"]
+    art_portal = art.copy()  # asset_material rewrites pixels in place
+    art_portal.name = "scroll_portal_src"
+    body.data.materials.clear()
+    body.data.materials.append(asset_material("drop_scroll", art.name, gain=1.0, roughness=0.85))
+    smooth_by_angle(body, 40)
+    body.name = "scrollWisdom_body"
+    twin = body.copy()
+    twin.data = body.data.copy()
+    twin.name = "scrollPortal_body"
+    bpy.context.scene.collection.objects.link(twin)
+    # The icon's portal sits in the roll's end, which faces sideways from this
+    # camera; the whole scroll glowing violet is what reads from above.
+    portal = asset_material("drop_scroll_portal", art_portal.name, gain=1.0, roughness=0.85, tint=(0.55, 0.6, 1.6))
+    portal.node_tree.nodes["Principled BSDF"].inputs["Emission Strength"].default_value = 0.35
+    twin.data.materials[0] = portal
+    bpy.context.view_layer.update()
+    for name, part in (("scrollWisdom", body), ("scrollPortal", twin)):
+        _carry(name, [part], SCROLL_W).parent = _root(name)
+
+
+def build_waystone(mats):
+    """A hexagonal slab lying flat, a brass band across it and a burning rune on top."""
+    parts = [
+        (mesh_object("waystone_slab", *lathe([(0.0, 0.06), (0.15, 0.06), (0.15, 0.0), (0.0, 0.0)], 6)),
+         mats["pillar_stone"], 0.3),
+        (box("waystone_band", (0.0, 0.0, 0.032), (0.045, 0.262, 0.066)), mats["drop_brass"], 0),
+    ]
+    for i, deg in enumerate((90, 210, 330)):
+        a = math.radians(deg)
+        bar = box(f"waystone_rune_{i}", (0, 0, 0), (0.085, 0.018, 0.006))
+        bar.location = (math.cos(a) * 0.045, math.sin(a) * 0.045, 0.068)
+        bar.rotation_euler = (0.0, 0.0, a)
+        parts.append((bar, mats["drop_rune"], 0))
+    _dress(_root("waystone"), parts, smooth=30)
+
+
+def build_drops(mats):
+    mats = dict(mats, **{
+        "drop_steel": flat_material("drop_steel", (0.6, 0.6, 0.63), 0.4),
+        "drop_brass": flat_material("drop_brass", (0.75, 0.58, 0.25), 0.4),
+        "drop_glass_blue": flat_material("drop_glass_blue", (0.62, 0.85, 1.0), 0.2, emit=0.25),
+        "drop_glass_violet": flat_material("drop_glass_violet", (0.45, 0.25, 0.95), 0.2, emit=0.5),
+        "drop_gold": flat_material("drop_gold", (1.0, 0.78, 0.25), 0.3, emit=0.35),
+        "drop_gold_dark": flat_material("drop_gold_dark", (0.62, 0.45, 0.12), 0.4, emit=0.1),
+        "drop_cork": flat_material("drop_cork", (0.6, 0.42, 0.25), 0.9),
+        "drop_vial_band": flat_material("drop_vial_band", (0.55, 0.1, 0.12), 0.6),
+        "drop_rune": flat_material("drop_rune", (1.0, 0.45, 0.1), 0.5, emit=0.9),
+        "drop_sash": flat_material("drop_sash", (0.32, 0.29, 0.29), 0.95),
+        "drop_sash_trim": flat_material("drop_sash_trim", (0.6, 0.1, 0.08), 0.9),
+    })
+    build_belts(mats)
+    build_focus(mats)
+    build_orbs(mats)
+    build_scrolls()
+    build_waystone(mats)
+
+
 def main():
     for obj in list(bpy.data.objects):
         bpy.data.objects.remove(obj, do_unlink=True)
@@ -1009,6 +1331,7 @@ def main():
     build_crate()
     build_pillar(mats)
     build_brazier(mats)
+    build_drops(mats)
 
     bpy.ops.export_scene.gltf(
         filepath=OUT,

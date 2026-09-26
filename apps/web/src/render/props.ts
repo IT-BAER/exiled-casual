@@ -2,7 +2,7 @@ import {
   LoadAssetContainerAsync,
   type AssetContainer,
   type Material,
-  type Mesh,
+  type TransformNode,
   type Node,
   type Scene,
 } from "@babylonjs/core";
@@ -45,6 +45,10 @@ export const PROP_KINDS = [
   // The one prop that is also a light. `render/lights.ts` finds these by their
   // root name and hangs a real point light over each bowl.
   "brazier",
+  // What a non-gear drop lies on the floor as (render/ground-looks.ts).
+  "beltIronsworn", "beltStalker", "beltEmber", "focusEmber",
+  "scrollWisdom", "scrollPortal", "orbTransmutation", "orbAugmentation",
+  "orbElevation", "orbAlchemy", "orbEmbers", "waystone",
 ] as const;
 
 export type PropKind = (typeof PROP_KINDS)[number];
@@ -140,7 +144,7 @@ function isUnder(node: Node, name: string): boolean {
  * every crate in the area, not the one under the pointer.
  */
 export function attachProp(
-  scene: Scene, root: Mesh, kind: PropKind, shared = false,
+  scene: Scene, root: TransformNode, kind: PropKind, shared = false,
 ): Record<string, Material> | null {
   if (!loaded || loaded.scene !== scene) return null;
 

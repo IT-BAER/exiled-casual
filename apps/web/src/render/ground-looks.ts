@@ -16,13 +16,33 @@ import {
   type Scene,
 } from "@babylonjs/core";
 import { GEAR_LOOKS, type GearLook } from "./gear-looks";
+import { attachProp, type PropKind } from "./props";
 import { wardrobeFor } from "./rig";
 
-export type GroundLook = { gear: GearLook };
+export type GroundLook = { gear: GearLook } | { prop: PropKind };
+
+/** Drops nobody wears, modelled in props.glb after their inventory icon. */
+const PROP_LOOKS: Readonly<Record<string, PropKind>> = {
+  "base.ironsworn_girdle": "beltIronsworn",
+  "base.stalker_strap": "beltStalker",
+  "base.ember_sash": "beltEmber",
+  "base.ember_focus": "focusEmber",
+  "currency.wisdom": "scrollWisdom",
+  "currency.portal": "scrollPortal",
+  "currency.transmutation": "orbTransmutation",
+  "currency.augmentation": "orbAugmentation",
+  "currency.elevation": "orbElevation",
+  "currency.alchemy": "orbAlchemy",
+  "currency.embers": "orbEmbers",
+  "map.waystone": "waystone",
+};
 
 export function groundLookFor(baseId: string | undefined): GroundLook | null {
-  const gear = baseId === undefined ? undefined : GEAR_LOOKS[baseId];
-  return gear ? { gear } : null;
+  if (baseId === undefined) return null;
+  const gear = GEAR_LOOKS[baseId];
+  if (gear) return { gear };
+  const prop = PROP_LOOKS[baseId];
+  return prop ? { prop } : null;
 }
 
 /**
@@ -171,8 +191,28 @@ const masters = new WeakMap<Scene, Map<string, Mesh[]>>();
  */
 export function attachGroundModel(scene: Scene, root: Mesh, baseId: string | undefined, floorY: number): boolean {
   const look = groundLookFor(baseId);
+  if (!look || baseId === undefined) return false;
+  const holder = (): TransformNode => {
+    const h = new TransformNode(`${root.name}-floor`, scene);
+    h.parent = root;
+    h.position.y = floorY;
+    // Each drop lands at its own angle; off the mesh id, so it is stable per drop.
+    h.rotation.y = root.uniqueId * 2.39996;
+    return h;
+  };
+
+  if ("prop" in look) {
+    const h = holder();
+    if (attachProp(scene, h, look.prop, true) === null) {
+      h.dispose();
+      return false;
+    }
+    for (const m of h.getChildMeshes()) m.isPickable = false;
+    return true;
+  }
+
   const wardrobe = wardrobeFor(scene);
-  if (!look || !wardrobe || baseId === undefined) return false;
+  if (!wardrobe) return false;
   let byBase = masters.get(scene);
   if (!byBase) masters.set(scene, (byBase = new Map()));
   let parts = byBase.get(baseId);
@@ -182,14 +222,10 @@ export function attachGroundModel(scene: Scene, root: Mesh, baseId: string | und
   }
   if (parts.length === 0) return false;
 
-  const holder = new TransformNode(`${root.name}-floor`, scene);
-  holder.parent = root;
-  holder.position.y = floorY;
-  // Each drop lands at its own angle; off the mesh id, so it is stable per drop.
-  holder.rotation.y = root.uniqueId * 2.39996;
+  const h = holder();
   for (const p of parts) {
     const inst = p.createInstance(`${root.name}-${p.name}`);
-    inst.parent = holder;
+    inst.parent = h;
     inst.isPickable = false;
   }
   return true;

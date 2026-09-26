@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect, afterEach } from "vitest";
 import { LoadAssetContainerAsync, Mesh, NullEngine, VertexBuffer } from "@babylonjs/core";
-import { ITEM_POOLS } from "@exiled/content-runtime";
+import { CURRENCY_DROPS, ITEM_POOLS, PORTAL_SCROLL_BASE_ID, WAYSTONE_BASE_ID } from "@exiled/content-runtime";
 import { createScene } from "./engine";
 import { GEAR_LOOKS } from "./gear-looks";
 import { floorParts, groundLookFor } from "./ground-looks";
@@ -17,6 +17,16 @@ describe("groundLookFor", () => {
       const gear = GEAR_LOOKS[base.id];
       if (gear) expect(groundLookFor(base.id), base.id).toEqual({ gear });
     }
+  });
+
+  it("gives every base that can drop a model to lie on the floor", () => {
+    const droppable = new Set([
+      ...ITEM_POOLS.bases.map((b) => b.id),
+      ...CURRENCY_DROPS.map((c) => c.baseId),
+      PORTAL_SCROLL_BASE_ID,
+      WAYSTONE_BASE_ID,
+    ]);
+    for (const id of droppable) expect(groundLookFor(id), id).not.toBeNull();
   });
 
   it("answers null for no base at all", () => {
