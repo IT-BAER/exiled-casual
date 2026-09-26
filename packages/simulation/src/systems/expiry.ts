@@ -4,7 +4,8 @@ import type { ProjectileC, GroundAreaC } from "../components";
 export function registerExpiry(sim: Simulation): void {
   sim.register("expiry", (world, tick) => {
     for (const e of world.query("projectile")) {
-      if ((world.get<ProjectileC>(e, "projectile")?.remainingRange ?? 1) <= 0) {
+      const p = world.get<ProjectileC>(e, "projectile");
+      if (p && p.remainingRange <= 0 && (p.spentTick ?? -1) < tick) {
         world.destroy(e);
       }
     }

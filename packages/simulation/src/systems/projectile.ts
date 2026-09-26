@@ -5,7 +5,7 @@ import type { CollisionRef } from "../collision";
 import type { Position, ProjectileC, Faction } from "../components";
 
 export function registerProjectileMove(sim: Simulation, collisionRef?: CollisionRef): void {
-  sim.register("projectileMove", (world) => {
+  sim.register("projectileMove", (world, tick) => {
     const collision = collisionRef?.active ?? undefined;
     for (const e of world.query("projectile", "position")) {
       const proj = world.get<ProjectileC>(e, "projectile")!;
@@ -24,7 +24,7 @@ export function registerProjectileMove(sim: Simulation, collisionRef?: Collision
       // Tested per tick, not swept — a bolt covers 0.4 units a tick against a
       // half-unit cell, so the disc always overlaps the cell it would enter.
       if (collision && !collision.isWalkable(nx, ny, proj.radius)) {
-        world.set<ProjectileC>(e, "projectile", { ...proj, remainingRange: 0 });
+        world.set<ProjectileC>(e, "projectile", { ...proj, remainingRange: 0, spentTick: tick });
         continue;
       }
 
@@ -66,6 +66,7 @@ export function registerProjectileMove(sim: Simulation, collisionRef?: Collision
       world.set<ProjectileC>(e, "projectile", {
         ...proj,
         remainingRange: newRange,
+        ...(newRange <= 0 ? { spentTick: tick } : {}),
         ...(proj.pierceLeft !== undefined ? { pierceLeft, hitIds: hitIds ?? [] } : {}),
       });
     }

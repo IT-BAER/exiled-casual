@@ -264,6 +264,8 @@ export interface ProjectileC {
   /** Which skill spawned this, so the client can pick its look. Absent on a
    *  monster's own projectile, which has no skill behind it. */
   skillId?: string;
+  /** Tick it hit or ran out. It lives one tick more, inert, so the snapshot shows where it struck. */
+  spentTick?: number;
 }
 export interface GroundAreaC {
   radius: Fixed;
