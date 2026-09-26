@@ -95,15 +95,17 @@ const SKILL_DEFS: SkillDef[] = [
    * All three are free: a default attack is what the player still has when the
    * mana pool is dry, and mana is what caps sustained damage (balance.test.ts).
    * 0.5s repeat gate (15 ticks) on top of the 7-tick cast means ~1.4 attacks/sec.
-   * Damage sits near a third of Ember Bolt's 36 so it is a floor to fall back to
-   * and never the better choice.
+   * The ranged two hit for under half of Ember Bolt's 36, so a default attack is a
+   * floor to fall back to and never the better choice. Strike swings slower (21
+   * ticks) because a swing hits the whole wedge: the playtest bot has the three
+   * classes clearing a first map within 10% of each other at these numbers.
    */
   {
     id: "skill.strike.v1",
     name: "Strike",
     description: "A swing of whatever is in hand. Costs nothing and always available.",
     manaCostFixed: 0,
-    cooldownTicks: 15,
+    cooldownTicks: 21,
     castTicks: 7,
     critChancePct: 5,
     unlockLevel: 1,
@@ -150,7 +152,7 @@ const SKILL_DEFS: SkillDef[] = [
         speedPerSecFixed: fp(20),
         radiusFixed: fp(0.3),
         maxRangeFixed: fp(14),
-        damage: { type: "physical", amountFixed: fp(11) },
+        damage: { type: "physical", amountFixed: fp(16) },
         pierceCount: 0,
       },
     ],
@@ -177,7 +179,7 @@ const SKILL_DEFS: SkillDef[] = [
         speedPerSecFixed: fp(14),
         radiusFixed: fp(0.35),
         maxRangeFixed: fp(16),
-        damage: { type: "fire", amountFixed: fp(10) },
+        damage: { type: "fire", amountFixed: fp(15) },
         pierceCount: 0,
       },
     ],
