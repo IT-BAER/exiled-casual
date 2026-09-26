@@ -185,7 +185,9 @@ function playOnce(scene: Scene, mesh: Mesh, seconds: number, from: number, to: n
 export const FLASH_NAME = "fx-flash";
 /** Bright enough to be seen against a 420-intensity torch, short enough not to
  *  be mistaken for a second lamp in the room. */
-const FLASH_INTENSITY = 500;
+const FLASH_INTENSITY = 380;
+/** Units it reaches: the ground around the hit, not the whole 19-unit view. */
+const FLASH_RANGE = 10;
 const FLASH_DECAY = 4.5; // per second, multiplicative
 
 /**
@@ -203,7 +205,7 @@ function flash(scene: Scene, at: Vector3): void {
     light = new PointLight(FLASH_NAME, at.clone(), scene);
     light.diffuse = new Color3(1, 0.62, 0.26);
     light.specular = Color3.Black();
-    light.range = 14;
+    light.range = FLASH_RANGE;
     light.shadowEnabled = false;
     scene.onBeforeRenderObservable.add(() => {
       const l = light!;
