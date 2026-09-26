@@ -401,6 +401,17 @@ BODY_REGION_WEIGHT = 0.5    # summed weight over a region's bones to belong to i
 HOOD_BONES = ("Head", "neck_01", "spine_02", "spine_03", "clavicle_l", "clavicle_r",
               "upperarm_l", "upperarm_r")
 
+# Donors from `tools/prep_held_weapons.py`, authored to the `fit_held` contract.
+# Lengths are of body height. A face is where the donor's +X looks in the idle,
+# world axes: the hammer's striking face ahead of him, the bow's string at his
+# side (his left is +X, so -X is toward the body).
+HAMMER_LEN_RATIO = 0.32
+HAMMER_AIM = (-0.18, -0.62, 0.76)   # the wand's, see WAND_AIM
+HAMMER_FACE = (0.0, -1.0, 0.0)
+BOW_LEN_RATIO = 0.64
+BOW_AIM = (0.0, -0.25, 0.97)
+BOW_FACE = (-1.0, 0.0, 0.0)
+
 RIGID_GEAR = (
     {
         "slot": "helmet", "look": "ironsworn", "part": "helm",
@@ -423,6 +434,20 @@ RIGID_GEAR = (
     {
         "slot": "weapon1", "look": "emberwand", "part": "mesh",
         "src": "wand-3000-v3b.glb", "bone": "hand_r", "fit": "hand_grip",
+    },
+    # The class starters, both from `tools/prep_held_weapons.py`. The bow is
+    # weapon1 like any main hand, but a bow is held in the LEFT fist.
+    {
+        "slot": "weapon1", "look": "ironswornhammer", "part": "mesh",
+        "src": "hammer-3000-v1.glb", "bone": "hand_r", "fit": "held",
+        "fit_args": {"side": "r", "length_ratio": HAMMER_LEN_RATIO, "aim": HAMMER_AIM,
+                     "face": HAMMER_FACE},
+    },
+    {
+        "slot": "weapon1", "look": "stalkerbow", "part": "mesh",
+        "src": "bow-3000-v1.glb", "bone": "hand_l", "fit": "held",
+        "fit_args": {"side": "l", "length_ratio": BOW_LEN_RATIO, "aim": BOW_AIM,
+                     "face": BOW_FACE},
     },
     {
         "slot": "weapon2", "look": "buckler", "part": "mesh",
@@ -1274,6 +1299,50 @@ def fit_hand_grip(donor, body, rig):
         "hole_m": [round(v, 4) for v in hole],
         "aim_world": list(WAND_AIM),
         "hand_gap_p01_mm": round(p01 * 1000, 2),
+    }
+
+
+def fit_held(donor, body, rig, side, length_ratio, aim, face):
+    """A donor authored with its grip at the origin, long axis +Z and face +X.
+
+    Aimed and seated in the idle clip's fist exactly as `fit_hand_grip` is, but
+    the donor says where it is held, so a hammer is not gripped at its narrowest
+    point and a bow is not measured through its own string. `face` fixes the
+    roll the wand never needed: which way a hammer strikes, which side a string is.
+    """
+    _, _, body_dims, _ = bbox([body.matrix_world @ v.co for v in body.data.vertices])
+    _, _, d_dims, _ = bbox([v.co for v in donor.data.vertices])
+    scale = body_dims.z * length_ratio / d_dims.z
+    fist = [f"{f}_{i:02d}_{side}" for f in FINGERS for i in (1, 2, 3)] + \
+        [f"{f}_04_end_{side}" for f in FINGERS]
+    hand = [f"hand_{side}"] + [f"{f}_{i:02d}_{side}" for f in FINGERS + ("thumb",) for i in (1, 2, 3)]
+    M, posed, mats = idle_pose(rig, f"hand_{side}", sorted(set(fist + hand)))
+    up = Vector(aim).normalized()
+    ahead = Vector(face) - up * Vector(face).dot(up)
+    if ahead.length < 1e-6:
+        raise SystemExit(f"face {face} is parallel to aim {aim}")
+    ahead.normalize()
+    world = Matrix((ahead, up.cross(ahead), up)).transposed()
+    R = M.to_quaternion().to_matrix()
+    rot = (R.transposed() @ world).to_4x4()
+    # The joints say where the hole's axis is, not where along the haft the
+    # fist sits: the curled fingers hang below the palm, so a haft centred on
+    # them shows its whole grip under the knuckles. The fist is all of its skin.
+    centre = sum((posed[n] for n in fist), Vector()) / len(fist)
+    skin = [mats[b] @ q for b in hand for q in group_points(body, b)]
+    along = (sum(skin, Vector()) / len(skin) - centre).dot(up)
+    hole = M.inverted() @ (centre + up * along)
+    fit = Matrix.Translation(hole) @ rot @ Matrix.Scale(scale, 4)
+    # The fist as it closes in the idle against the donor as it hangs there.
+    p01, med = gap_profile(bvh_of(donor, M @ fit), skin)
+    return fit, {
+        "scale": round(scale, 5),
+        "length_m": round(d_dims.z * scale, 4),
+        "hole_m": [round(v, 4) for v in hole],
+        "grip_slide_mm": round(along * 1000, 1),
+        "aim_world": list(aim), "face_world": list(face),
+        "fist_gap_p01_mm": round(p01 * 1000, 2),
+        "fist_gap_median_mm": round(med * 1000, 2),
     }
 
 
@@ -3069,6 +3138,7 @@ FITTERS = {
     "as_built": fit_as_built,
     "head_shell": fit_head_shell,
     "hand_grip": fit_hand_grip,
+    "held": fit_held,
     "forearm_strap": fit_forearm_strap,
     "tower_strap": fit_tower_strap,
     "plate_torso": fit_plate_torso,

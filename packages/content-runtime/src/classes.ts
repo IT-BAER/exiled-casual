@@ -4,8 +4,8 @@
 // fails if its list and these definitions ever disagree, the same arrangement
 // `MAP_BASES` uses.
 //
-// `startingGear` is the class's own family, head to foot: every armour slot is
-// filled on creation, and each piece resolves to that family's wardrobe look
+// `startingGear` is the class's own family, head to foot: every armour slot and
+// the main hand are filled on creation, and each piece resolves to that family's wardrobe look
 // (`gear-looks.ts`). The belt is the one slot with no geometry - it carries
 // stats and sits in the paper doll, and a belt under a cuirass or a robe is not
 // seen anyway.
@@ -24,6 +24,7 @@ export const CLASSES: Record<string, CharacterClass> = {
       gloves: "base.ironsworn_gauntlets",
       boots: "base.ironsworn_sabatons",
       belt: "base.ironsworn_girdle",
+      weapon1: "base.ironsworn_hammer",
     },
     portrait: "/textures/ui/menu/portrait_ironsworn.png",
   },
@@ -38,6 +39,7 @@ export const CLASSES: Record<string, CharacterClass> = {
       gloves: "base.stalker_gloves",
       boots: "base.stalker_boots",
       belt: "base.stalker_strap",
+      weapon1: "base.stalker_bow",
     },
     portrait: "/textures/ui/menu/portrait_stalker.png",
   },
@@ -52,6 +54,7 @@ export const CLASSES: Record<string, CharacterClass> = {
       gloves: "base.ember_wraps",
       boots: "base.ember_slippers",
       belt: "base.ember_sash",
+      weapon1: "base.ember_kindling_wand",
     },
     portrait: "/textures/ui/menu/portrait_emberbound.png",
   },

@@ -69,6 +69,58 @@
   "triangles": 2999,
   "source": "wand-3000-v3b.glb"
  },
+ "weapon1.ironswornhammer.mesh": {
+  "scale": 1.01059,
+  "length_m": 0.5823,
+  "hole_m": [
+   -0.8009,
+   0.0549,
+   1.4273
+  ],
+  "grip_slide_mm": 8.6,
+  "aim_world": [
+   -0.18,
+   -0.62,
+   0.76
+  ],
+  "face_world": [
+   0.0,
+   -1.0,
+   0.0
+  ],
+  "fist_gap_p01_mm": 0.17,
+  "fist_gap_median_mm": 16.76,
+  "bone": "hand_r",
+  "fit": "held",
+  "triangles": 3000,
+  "source": "hammer-3000-v1.glb"
+ },
+ "weapon1.stalkerbow.mesh": {
+  "scale": 0.99194,
+  "length_m": 1.1645,
+  "hole_m": [
+   0.7953,
+   0.0561,
+   1.4283
+  ],
+  "grip_slide_mm": 11.1,
+  "aim_world": [
+   0.0,
+   -0.25,
+   0.97
+  ],
+  "face_world": [
+   -1.0,
+   0.0,
+   0.0
+  ],
+  "fist_gap_p01_mm": 0.21,
+  "fist_gap_median_mm": 11.76,
+  "bone": "hand_l",
+  "fit": "held",
+  "triangles": 984,
+  "source": "bow-3000-v1.glb"
+ },
  "weapon2.buckler.mesh": {
   "scale": 0.35994,
   "diameter_m": 0.3639,

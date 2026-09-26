@@ -6,6 +6,7 @@ import { MOUSE_SLOT_BASE } from "@exiled/protocol";
 import { createCombatSim } from "./combat-sim";
 import { saveTo } from "./persist";
 import { equipStartingGear, loadCharacterInto, saveCharacterTo } from "./characters";
+import { EQUIP_SLOTS_BY_CLASS } from "./equipment";
 import {
   MIGRATED_CHARACTER_ID,
   MIGRATED_CHARACTER_NAME,
@@ -54,8 +55,18 @@ describe("class content", () => {
         // Throws on an unknown base, which is the assertion.
         const base = baseOf(baseId);
         // A helmet base in the boots slot would dress the character in nonsense.
-        if (base.itemClass !== "body") expect(base.itemClass, `${c.id}.${slot}`).toBe(slot);
+        expect(EQUIP_SLOTS_BY_CLASS[base.itemClass], `${c.id}.${slot}`).toContain(slot);
       }
+    }
+  });
+
+  it("arms every class in its main hand with a weapon of its own family it can hold at level 1", () => {
+    const family = { "class.ironsworn": "ironsworn", "class.stalker": "stalker", "class.emberbound": "ember" } as const;
+    for (const c of Object.values(CLASSES)) {
+      const id = c.startingGear["weapon1"];
+      expect(id, c.id).toBeDefined();
+      expect(id!.startsWith(`base.${family[c.id as keyof typeof family]}_`), id).toBe(true);
+      expect(baseOf(id!).stats?.reqLevel ?? 1, id).toBeLessThanOrEqual(START_LEVEL);
     }
   });
 
@@ -105,8 +116,8 @@ describe("equipStartingGear", () => {
     const world = fresh();
     equipStartingGear(world, "class.ironsworn");
     const slots = get<EquipmentC>(world, "equipment").slots;
-    // Every class starts in its own family, head to foot.
-    expect(Object.keys(slots).sort()).toEqual(["belt", "body", "boots", "gloves", "helmet"]);
+    // Every class starts in its own family, head to foot, weapon in hand.
+    expect(Object.keys(slots).sort()).toEqual(["belt", "body", "boots", "gloves", "helmet", "weapon1"]);
     for (const item of Object.values(slots)) {
       expect(item?.baseId).toMatch(/^base\.ironsworn_/);
     }

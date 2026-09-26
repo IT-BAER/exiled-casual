@@ -4,7 +4,7 @@ Run:
   "/c/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background \
       --factory-startup --disable-autoexec --python tools/preview_wardrobe.py -- \
       [--look male|female] [--views front,quarter,back,side] [--tile 512] \
-      [--out review/wardrobe.png]
+      [--with weapon1.stalkerbow,helmet.stalker] [--out review/wardrobe.png]
 
 This judges the ASSET: the atlas landing on the right islands, the shorts hem
 following the hip, no seam down a leg, no patch of the wrong colour on a foot.
@@ -44,7 +44,7 @@ VIEWS = {
 def args():
     tail = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     out = {
-        "look": "male", "views": "front,quarter,back", "tile": 512,
+        "look": "male", "views": "front,quarter,back", "tile": 512, "with": "",
         "out": "D:/VSC/exiled-casual/review/wardrobe.png",
     }
     for i in range(0, len(tail) - 1, 2):
@@ -96,13 +96,20 @@ def main():
     shown = [o for o in bpy.data.objects if o.type == "MESH" and f".{look}." in o.name]
     if not shown:
         raise SystemExit(f"wardrobe has no base.{look}.* parts")
+    # Gear worn over the body, by `slot.look` prefix; the body alone is framed.
+    framed = list(shown)
+    for prefix in filter(None, opts["with"].split(",")):
+        worn = [o for o in bpy.data.objects if o.type == "MESH" and o.name.startswith(prefix + ".")]
+        if not worn:
+            raise SystemExit(f"wardrobe has no {prefix}.* parts")
+        shown += worn
     for obj in bpy.data.objects:
         if obj.type == "MESH" and obj not in shown:
             obj.hide_render = True
 
     scene, cam = scene_setup(opts["tile"])
 
-    pts = [o.matrix_world @ Vector(c) for o in shown for c in o.bound_box]
+    pts = [o.matrix_world @ Vector(c) for o in framed for c in o.bound_box]
     lo = Vector((min(p.x for p in pts), min(p.y for p in pts), min(p.z for p in pts)))
     hi = Vector((max(p.x for p in pts), max(p.y for p in pts), max(p.z for p in pts)))
     centre, height = (lo + hi) / 2, hi.z - lo.z

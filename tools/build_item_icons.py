@@ -58,6 +58,10 @@ ICONS: list[tuple[str, str, int, int]] = [
     ("ashen_quarterstaff_v2", "ashen_quarterstaff", 2, 4),
     ("stalker_buckler_v1", "stalker_buckler", 2, 2),
     ("ironsworn_tower_shield_v1", "ironsworn_tower_shield", 2, 3),
+    # Starter weapons: plain, worn, no glow -- level 1 gear for each class.
+    ("ironsworn_hammer_v1", "ironsworn_hammer", 2, 3),
+    ("stalker_bow_v1", "stalker_bow", 2, 4),
+    ("ember_kindling_wand_v1", "ember_kindling_wand", 1, 2),
     # Armour, one family per class: `ironsworn_*` plate, `stalker_*` leather,
     # `ember_*` cloth. The footprint is the one its base declares in `items.ts`.
     ("ironsworn_helm_v1", "ironsworn_helm", 2, 2),

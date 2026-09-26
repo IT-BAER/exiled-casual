@@ -35,6 +35,10 @@ export const GEAR_LOOKS: Readonly<Record<string, GearLook>> = {
   // look per family would have them fight over the slot. A held look is named
   // for the weapon it is.
   "base.ember_wand": { slot: "weapon1", look: "emberwand" },
+  // The starter wand is a lesser Ember Wand in the hand; the icon tells them apart.
+  "base.ember_kindling_wand": { slot: "weapon1", look: "emberwand" },
+  "base.ironsworn_hammer": { slot: "weapon1", look: "ironswornhammer" },
+  "base.stalker_bow": { slot: "weapon1", look: "stalkerbow" },
   "base.stalker_buckler": { slot: "weapon2", look: "buckler" },
   "base.ironsworn_tower_shield": { slot: "weapon2", look: "towershield" },
 };

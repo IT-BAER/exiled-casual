@@ -159,3 +159,22 @@ stalker the BlenderKit "Aged Dark Leather" (`d583c044-b586-4ecf-b3a1-12de1d032b3
 ember the BlenderKit "Wool fabric" (`d5ca8a6b-dd40-4f0c-a5c7-e030af0912c5`), both
 levelled to grey, box-projected at 512 px and tinted by vertex colour (shell, lining,
 hem). Outputs `hood-stalker-v2.glb`, `hood-ember-v2.glb`.
+
+## Starter held weapons (`weapon1.ironswornhammer.mesh`, `weapon1.stalkerbow.mesh`)
+
+Both donors are built by `tools/prep_held_weapons.py` into
+`assets/props/source/trellis_local/` (`hammer-3000-v1.glb`, `bow-3000-v1.glb`), each one
+mesh and one material with its colour and metal/roughness baked into a 512 atlas, and
+fitted by `fit_held` in `tools/build_wardrobe.py` (grip at the donor's origin, aimed and
+rolled in the idle clip's fist).
+
+- Hammer: BlenderKit "War Hammer" (`87df6fbd-71db-4acb-a3f5-ff32f16938b7`, royalty free,
+  by Avishka Induwara), kept at `assets/props/source/war_hammer.blend`. A two-handed maul
+  as shipped; the head is shrunk to 0.36 about the haft's mouth and the haft thinned to
+  0.8, and the head's 6% black metal is re-lit as iron off its own grunge map.
+- Bow: no donor mesh. Neither free BlenderKit bow was a plain hunting bow (the
+  "Stylized hand-painted bone bow" carries its spikes in the limb surface, the "Elvan
+  Bow" is horns and crystals), so the stave is swept off a braced-bow centreline. Wood is
+  BlenderKit material "Wood Grain" (`8903140f-d18e-4536-a2f6-19e8d329e83e`, CC0, by
+  PBRPX, `assets/props/source/mat-wood-grain.blend`), the grip wrap the "Aged Dark
+  Leather" above.

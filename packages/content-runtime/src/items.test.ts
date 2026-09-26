@@ -168,3 +168,15 @@ describe("unidentified items", () => {
     expect(d.unidentified).toBeUndefined();
   });
 });
+
+describe("affix pools per item class", () => {
+  // A rare fills 3 prefixes and 3 suffixes; a class with fewer than that eligible
+  // at item level 1 rolls a rare with holes in it.
+  it("offers every droppable class a rare's three prefixes and three suffixes at item level 1", () => {
+    for (const cls of new Set(ITEM_POOLS.bases.map((b) => b.itemClass))) {
+      const at1 = ITEM_POOLS.affixes.filter((a) => a.minItemLevel <= 1 && (a.itemClasses === undefined || a.itemClasses.includes(cls)));
+      expect(at1.filter((a) => a.kind === "prefix").length, `${cls} prefixes`).toBeGreaterThanOrEqual(3);
+      expect(at1.filter((a) => a.kind === "suffix").length, `${cls} suffixes`).toBeGreaterThanOrEqual(3);
+    }
+  });
+});

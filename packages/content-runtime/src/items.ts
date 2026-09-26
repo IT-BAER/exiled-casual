@@ -33,6 +33,18 @@ const ITEM_BASES: ItemBase[] = [
   // yet, so the two shields take the armour side of the base instead and roll
   // armour and life like the rest of the armour classes.
   { id: "base.ironsworn_tower_shield", name: "Ironsworn Tower Shield", itemClass: "shield", w: 2, h: 3, icon: "/textures/items/ironsworn_tower_shield.png" },
+  // The starter weapons copy PoE2's own level-1 bases (poe2db): the hammer is the
+  // Wooden Club's block, the bow the Crude Bow's. Weapon damage is tooltip-only
+  // until attacks read the weapon; the default attack is still class-keyed.
+  {
+    id: "base.ironsworn_hammer",
+    name: "Ironsworn Hammer",
+    itemClass: "mace",
+    w: 2,
+    h: 3,
+    stats: { physMin: 6, physMax: 10, critPct: 5, aps: 1.45, reqLevel: 1 },
+    icon: "/textures/items/ironsworn_hammer.png",
+  },
 
   // Stalker, the leather set. No implicit anywhere: PoE2's Dex bases are
   // evasion bases, there is no evasion stat here, and inventing one would open
@@ -43,6 +55,15 @@ const ITEM_BASES: ItemBase[] = [
   { id: "base.stalker_boots", name: "Stalker Boots", itemClass: "boots", w: 2, h: 2, icon: "/textures/items/stalker_boots.png" },
   { id: "base.stalker_strap", name: "Stalker Strap", itemClass: "belt", w: 2, h: 1, icon: "/textures/items/stalker_strap.png" },
   { id: "base.stalker_buckler", name: "Stalker Buckler", itemClass: "shield", w: 2, h: 2, icon: "/textures/items/stalker_buckler.png" },
+  {
+    id: "base.stalker_bow",
+    name: "Stalker Bow",
+    itemClass: "bow",
+    w: 2,
+    h: 4,
+    stats: { physMin: 6, physMax: 9, critPct: 5, aps: 1.2, reqLevel: 1 },
+    icon: "/textures/items/stalker_bow.png",
+  },
 
   // Ember, the cloth set, and the only family that carries the two hands: a
   // wand and a focus.
@@ -72,6 +93,18 @@ const ITEM_BASES: ItemBase[] = [
     // wand already copies: PoE1's Goat's Horn, (10-15)% increased Spell Damage.
     implicit: { stat: "spellDamagePct", label: "% increased Spell Damage", value: 12 },
     icon: "/textures/items/ember_wand.png",
+  },
+  // PoE2's Withered Wand asks nothing of its wielder; this is the wand a new
+  // Emberbound can hold, and the Ember Wand above is what replaces it.
+  {
+    id: "base.ember_kindling_wand",
+    name: "Kindling Wand",
+    itemClass: "wand",
+    w: 1,
+    h: 2,
+    stats: { physMin: 3, physMax: 6, critPct: 7, aps: 1.4, reqLevel: 1 },
+    implicit: { stat: "spellDamagePct", label: "% increased Spell Damage", value: 6 },
+    icon: "/textures/items/ember_kindling_wand.png",
   },
   // Foci carry no implicit: poe2db lists them with energy shield alone.
   { id: "base.ember_focus", name: "Ember Focus", itemClass: "focus", w: 2, h: 2, icon: "/textures/items/ember_focus.png" },
@@ -261,8 +294,8 @@ const AFFIXES: Affix[] = [
   { id: "affix.energy_shield", kind: "prefix", nameWord: "Ghostly", stat: "energyShield", label: "to maximum Energy Shield", minItemLevel: 1, min: 5, max: 35, itemClasses: ["shield", "focus", "helmet", "body", "gloves", "boots"] },
   { id: "affix.increased_armour", kind: "prefix", nameWord: "Reinforced", stat: "armourPct", label: "% increased Armour", minItemLevel: 1, min: 10, max: 30, itemClasses: ["shield", "helmet", "body", "gloves", "boots", "belt"] },
   { id: "affix.spell_damage", kind: "prefix", nameWord: "Runic", stat: "spellDamagePct", label: "% increased Spell Damage", minItemLevel: 1, min: 10, max: 25, itemClasses: ["wand", "focus"] },
-  { id: "affix.fire_dmg", kind: "prefix", nameWord: "Smoldering", stat: "fireDamage", label: "to Fire Damage", minItemLevel: 1, min: 2, max: 18, itemClasses: ["wand", "focus"] },
-  { id: "affix.cold_dmg", kind: "prefix", nameWord: "Glacial", stat: "coldDamage", label: "to Cold Damage", minItemLevel: 1, min: 2, max: 16, itemClasses: ["wand", "focus"] },
+  { id: "affix.fire_dmg", kind: "prefix", nameWord: "Smoldering", stat: "fireDamage", label: "to Fire Damage", minItemLevel: 1, min: 2, max: 18, itemClasses: ["wand", "focus", "mace", "bow"] },
+  { id: "affix.cold_dmg", kind: "prefix", nameWord: "Glacial", stat: "coldDamage", label: "to Cold Damage", minItemLevel: 1, min: 2, max: 16, itemClasses: ["wand", "focus", "mace", "bow"] },
   { id: "affix.armour", kind: "prefix", nameWord: "Plated", stat: "armour", label: "to Armour", minItemLevel: 8, min: 10, max: 60, itemClasses: ["shield", "helmet", "body", "gloves", "boots", "belt"] },
   { id: "affix.increased_es", kind: "prefix", nameWord: "Spectral", stat: "energyShieldPct", label: "% increased Energy Shield", minItemLevel: 8, min: 10, max: 30, itemClasses: ["shield", "focus", "helmet", "body", "gloves", "boots"] },
   { id: "affix.fire_res", kind: "suffix", nameWord: "of the Furnace", stat: "fireResPct", label: "% to Fire Resistance", minItemLevel: 1, min: 5, max: 25 },
@@ -270,9 +303,12 @@ const AFFIXES: Affix[] = [
   { id: "affix.lightning_res", kind: "suffix", nameWord: "of the Squall", stat: "lightningResPct", label: "% to Lightning Resistance", minItemLevel: 1, min: 5, max: 25 },
   { id: "affix.strength", kind: "suffix", nameWord: "of the Brute", stat: "strength", label: "to Strength", minItemLevel: 1, min: 5, max: 20 },
   { id: "affix.mana_regen", kind: "suffix", nameWord: "of the Spring", stat: "manaRegenPct", label: "% increased Mana Regeneration Rate", minItemLevel: 4, min: 10, max: 35 },
-  { id: "affix.crit_chance", kind: "suffix", nameWord: "of Menace", stat: "critChancePct", label: "% increased Critical Strike Chance", minItemLevel: 8, min: 8, max: 25, itemClasses: ["wand", "focus"] },
+  { id: "affix.crit_chance", kind: "suffix", nameWord: "of Menace", stat: "critChancePct", label: "% increased Critical Strike Chance", minItemLevel: 8, min: 8, max: 25, itemClasses: ["wand", "focus", "mace", "bow"] },
   { id: "affix.cast_speed", kind: "suffix", nameWord: "of Casting", stat: "castSpeedPct", label: "% increased Cast Speed", minItemLevel: 12, min: 3, max: 12, itemClasses: ["wand", "focus"] },
   { id: "affix.chaos_res", kind: "suffix", nameWord: "of the Outcast", stat: "chaosResPct", label: "% to Chaos Resistance", minItemLevel: 15, min: 4, max: 15 },
+  // The attack weapons' own prefixes, appended so no earlier roll moves.
+  { id: "affix.added_phys", kind: "prefix", nameWord: "Honed", stat: "physicalDamage", label: "to Physical Damage", minItemLevel: 1, min: 1, max: 12, itemClasses: ["mace", "bow"] },
+  { id: "affix.phys_dmg_pct", kind: "prefix", nameWord: "Weighted", stat: "physicalDamagePct", label: "% increased Physical Damage", minItemLevel: 1, min: 15, max: 40, itemClasses: ["mace", "bow"] },
 ];
 
 // Named items bound to one base each. Mod ranges are the unique's own and deliberately
