@@ -82,7 +82,7 @@ describe("dropCategory", () => {
     Array.from({ length: 1000 }, (_, r) => dropCategory(r, pool)).filter((c) => c === "currency").length;
 
   it("splits an ordinary kill toward currency", () => {
-    expect(share(DROP_POOL)).toBe(600);
+    expect(share(DROP_POOL)).toBe(720);
   });
 
   it("splits a boss toward equipment", () => {

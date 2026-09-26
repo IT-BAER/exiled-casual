@@ -71,12 +71,14 @@ export function rarityScaleMilli(monsterRarity: number, areaPct: number, playerP
  * categories we do not have. 3.28 shifted it hard toward currency ("Currency
  * Items now account for a significantly larger portion of dropped items ...
  * Non-Unique Equipment items are approximately 6% less common"), and it was
- * the right call: a white Rusted Sword is noise, an orb never is.
+ * the right call: a white Rusted Sword is noise, an orb never is. 72 rather
+ * than 60 since magic went to 9%: more unread items need more Wisdom, and
+ * `death.test.ts` pins that the drops pay for most of the reading.
  *
  * A boss keeps its own equipment-weighted pool, the way PoE bosses carry their
  * own drop tables. docs/09 rule 3: the burst has to be the loud moment.
  */
-export const DROP_POOL = { currency: 60, equipment: 40 } as const;
+export const DROP_POOL = { currency: 72, equipment: 28 } as const;
 export const BOSS_DROP_POOL = { currency: 40, equipment: 60 } as const;
 
 export function dropCategory(roll: number, pool: { currency: number; equipment: number }): "currency" | "equipment" {
