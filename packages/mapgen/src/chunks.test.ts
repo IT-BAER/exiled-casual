@@ -12,6 +12,7 @@ import {
   type Chunk,
 } from "./chunks";
 import { LOOP_GRAMMAR, maskClass } from "./loop-grammar";
+import { FIELD_GRAMMAR } from "./field-grammar";
 
 /** A minimal north-open tile: the 6..9 stub down to a small room. */
 const CAP_N: Chunk = {
@@ -87,6 +88,13 @@ describe("chunk transforms", () => {
     expect(validateChunk({ id: "test.sealed", rows: sealed }).length).toBeGreaterThan(0);
   });
 
+  it("rejects a pillar that leaves the way in exactly one body wide", () => {
+    const pinched = CAP_N.rows.slice();
+    pinched[8] = "##....##......##";
+    pinched[9] = "##....##......##";
+    expect(validateChunk({ id: "test.pinched", rows: pinched }).length).toBeGreaterThan(0);
+  });
+
   it("enumerates deduped orientations, each matching its own derived mask", () => {
     const os = orientations(CAP_N);
     expect(os.length).toBe(4); // a cap is mirror-symmetric, so 8 transforms collapse to 4
@@ -108,7 +116,7 @@ describe("loop grammar library", () => {
   });
 
   it("every authored chunk is structurally valid", () => {
-    for (const c of [...LOOP_GRAMMAR.chunks, LOOP_GRAMMAR.bossChunk]) {
+    for (const g of [LOOP_GRAMMAR, FIELD_GRAMMAR]) for (const c of [...g.chunks, g.bossChunk]) {
       expect(validateChunk(c), c.id).toEqual([]);
     }
   });

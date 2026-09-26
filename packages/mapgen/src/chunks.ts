@@ -187,6 +187,56 @@ export function validateChunk(chunk: Chunk): string[] {
   if (reached !== floors) {
     problems.push(`${chunk.id}: ${floors - reached} floor cells are sealed off`);
   }
+
+  // The player's body (0.5 units = one cell) stands only where its 3x3 block is
+  // floor, and nav floods only those cells: connected floor is not enough. Past
+  // the border counts as floor, since a closed edge is wall on this side already.
+  const wallAt = (x: number, y: number) => x >= 0 && y >= 0 && x < n && y < n && isWall(rows[y]![x]!);
+  const stand = new Uint8Array(total);
+  let stands = 0, from = -1;
+  for (let i = 0; i < total; i++) {
+    if (!walk[i]) continue;
+    const x = i % n, y = (i - x) / n;
+    let ok = true;
+    for (let dy = -1; dy <= 1 && ok; dy++) for (let dx = -1; dx <= 1; dx++) if (wallAt(x + dx, y + dy)) ok = false;
+    if (ok) { stand[i] = 1; stands++; if (from < 0) from = i; }
+  }
+  const body = new Uint8Array(total);
+  let bodyReached = 0;
+  if (from >= 0) {
+    body[from] = 1; bodyReached = 1;
+    const todo = [from];
+    while (todo.length) {
+      const i = todo.pop()!;
+      const cx = i % n, cy = (i - cx) / n;
+      for (const [dx, dy] of DIR_VEC) {
+        const nx = cx + dx, ny = cy + dy;
+        if (nx < 0 || ny < 0 || nx >= n || ny >= n) continue;
+        const j = ny * n + nx;
+        if (body[j] || !stand[j]) continue;
+        body[j] = 1; bodyReached++; todo.push(j);
+      }
+    }
+  }
+  if (bodyReached !== stands) problems.push(`${chunk.id}: ${stands - bodyReached} cells a body stands on are cut off`);
+  const k = OPENING_LO + 1;
+  for (const p of derivePorts(rows)) {
+    const at = p.index * TILE_CELLS + k;
+    const [x, y] = [[at, 0], [n - 1, at], [at, n - 1], [0, at]][p.side]!;
+    if (!body[y! * n + x!]) problems.push(`${chunk.id}: no body fits the port on side ${p.side}`);
+  }
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) {
+      const ch = rows[y]![x]!;
+      if (ch === "." || isWall(ch)) continue;
+      let beside = false;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const i = (y + dy) * n + x + dx;
+        if (y + dy >= 0 && y + dy < n && x + dx >= 0 && x + dx < n && body[i]) beside = true;
+      }
+      if (!beside) problems.push(`${chunk.id}: no body can stand beside '${ch}' at ${x},${y}`);
+    }
+  }
   return problems;
 }
 
