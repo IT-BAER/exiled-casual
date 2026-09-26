@@ -18,6 +18,9 @@ import { VENDOR_NAME, VENDOR_TITLE } from "../npc";
 // The globe is a fraction of the screen, not a pixel size — PoE1 scales it with the
 // resolution, and at 2048px wide a fixed 160px globe reads a quarter too small.
 const BOSS_ENGAGE_RANGE = 10; // world units; boss bar appears once you are this close
+// Sized by the FILL: PoE2's red runs ~36% of a 16:9 screen (boss-fight.png), and our
+// window is 80.6% of the frame art, so 44vw of frame gives 35.5vw of fill.
+const BOSS_BAR_W = "44vw";
 const ORB_HOLE = 0.869; // ring art: its transparent hole is this fraction of the file
 const ORB_VW = 10.3; // sphere diameter
 const ORB = `${ORB_VW}vw`;
@@ -913,45 +916,54 @@ export function Hud({
           data-testid="boss-bar"
           style={{
             position: "absolute",
-            top: 20,
+            top: "0.6vw",
             left: "50%",
             transform: "translateX(-50%)",
-            width: 400,
-            height: 22,
-            background: "#0b0d11",
-            border: "2px solid #4a3a1c",
-            borderRadius: 4,
-            overflow: "hidden",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.7)",
+            width: BOSS_BAR_W,
+            filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.8))",
           }}
         >
+          {/* The frame's window, measured off the art's alpha with 2px tucked under the rim. */}
           <div
             style={{
               position: "absolute",
-              left: 0,
-              top: 0,
-              bottom: 0,
-              width: `${bossLifePct}%`,
-              background: "linear-gradient(to right, #6d0a0a, #c4241a)",
-              transition: "width 120ms linear",
-            }}
-          />
-          <div
-            data-testid="boss-phase"
-            style={{
-              position: "absolute",
-              right: 8,
-              top: "50%",
-              transform: "translateY(-50%)",
-              color: "#f4f0e6",
-              fontSize: 11,
-              fontWeight: 700,
-              letterSpacing: 1,
-              textShadow: "0 1px 3px #000",
+              left: "9.688%",
+              right: "9.688%",
+              top: "41.441%",
+              bottom: "30.18%",
+              background: "#0b0d11",
             }}
           >
-            {boss.bossPhase === 2 ? "II" : "I"}
+            <div
+              data-testid="boss-fill"
+              style={{
+                position: "absolute",
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: `${bossLifePct}%`,
+                background: "linear-gradient(to bottom, #c4291f, #8a0f0c 55%, #4f0707)",
+                transition: "width 120ms linear",
+              }}
+            />
+            <div
+              data-testid="boss-phase"
+              style={{
+                position: "absolute",
+                right: "1.2%",
+                top: "50%",
+                transform: "translateY(-50%)",
+                color: "#f4f0e6",
+                fontSize: "0.7vw",
+                fontWeight: 700,
+                letterSpacing: 1,
+                textShadow: "0 1px 3px #000",
+              }}
+            >
+              {boss.bossPhase === 2 ? "II" : "I"}
+            </div>
           </div>
+          <img src="/hud/boss-bar-frame-v1.png" alt="" style={{ position: "relative", display: "block", width: "100%" }} />
         </div>
       )}
 
