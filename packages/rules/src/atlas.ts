@@ -91,7 +91,7 @@ export function isNodeReachable(
 
 /**
  * The lowest Waystone tier a place will accept, by how far out it sits: hops
- * from the first node, two tiers a hop.
+ * from the first node, one tier a hop.
  *
  * PoE2's Atlas gets harder the further from the start you push, and that is what
  * turns a graph into progression rather than a set of doors. It could not exist
@@ -117,7 +117,9 @@ export function atlasNodeTier(graph: readonly AtlasGraphNode[], nodeId: string):
       queue.push(l);
     }
   }
-  return Math.min(WAYSTONE_MAX_TIER, 1 + 2 * (depth.get(nodeId) ?? 0));
+  // One tier per hop: at two, the first neighbour was area level 20 for a level 4
+  // character (measured by simulation/src/playtest.ts).
+  return Math.min(WAYSTONE_MAX_TIER, 1 + (depth.get(nodeId) ?? 0));
 }
 
 /**
@@ -125,7 +127,7 @@ export function atlasNodeTier(graph: readonly AtlasGraphNode[], nodeId: string):
  * `atlasNodeTier` among its routes that have not been run yet. Null when every
  * route out is already cleared, or the node is not on the graph.
  *
- * This is what the boss has to pay. A hop out costs two tiers and a plain run
+ * This is what the boss has to pay. A hop out costs a tier and a plain run
  * hands back the tier you brought, so without it a character who spends his
  * last high stone on a far node is farming the same place until a modified
  * stone happens to roll — the Atlas stops being a route decision and becomes a

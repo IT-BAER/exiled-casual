@@ -733,7 +733,7 @@ describe("clearing a map hands Waystones back", () => {
     const { sim, world } = makeBossDeath("map", "node.the_wrackline", ["node.the_wrackline"], 1);
     sim.step();
     expect(waystoneGroundItems(world).length).toBeGreaterThan(0);
-    expect(bestTier(world)).toBe(1); // first-clear on this node would floor it to 3
+    expect(bestTier(world)).toBe(1); // first-clear on this node would floor it to 2
   });
 
   const bestTier = (world: ReturnType<typeof makeBossDeath>["world"]) =>
@@ -742,11 +742,11 @@ describe("clearing a map hands Waystones back", () => {
 
   it("pays enough to open the next place, so clearing one is never a dead end", () => {
     // A Tier 1 run on the starting node used to hand back a Tier 1 stone, and
-    // every route out of it wants Tier 3 — the character was farming the same
+    // every route out of it wants Tier 2 — the character was farming the same
     // place until a stone happened to roll modifiers.
     const { sim, world } = makeBossDeath("map", "node.the_wrackline", [], 1);
     sim.step();
-    expect(bestTier(world)).toBe(3);
+    expect(bestTier(world)).toBe(2);
   });
 
   it("never pays below the stone that was brought", () => {

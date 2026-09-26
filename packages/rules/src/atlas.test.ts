@@ -130,8 +130,8 @@ describe("atlasNodeTier", () => {
     expect(atlasNodeTier(graph, graph[0]!.id)).toBe(1);
   });
 
-  it("a neighbour of the start costs two tiers more", () => {
-    expect(atlasNodeTier(graph, graph[0]!.links[0]!)).toBe(3);
+  it("a neighbour of the start costs one tier more", () => {
+    expect(atlasNodeTier(graph, graph[0]!.links[0]!)).toBe(2);
   });
 
   it("every place is reachable and inside the 1..15 band", () => {
@@ -158,8 +158,8 @@ describe("nextNodeTier", () => {
   const graph = atlasGraph(2026);
 
   it("names the cheapest stone that opens somewhere new", () => {
-    // Every route out of the start is one hop, and a hop is two tiers.
-    expect(nextNodeTier(graph, graph[0]!.id, [graph[0]!.id])).toBe(3);
+    // Every route out of the start is one hop, and a hop is one tier.
+    expect(nextNodeTier(graph, graph[0]!.id, [graph[0]!.id])).toBe(2);
   });
 
   it("is null once every route out has been cleared", () => {

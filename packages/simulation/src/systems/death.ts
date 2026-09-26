@@ -56,7 +56,7 @@ export function registerDeath(sim: Simulation): void {
         // second a tier higher) for one taken on a stone that carried
         // modifiers. This is the loop that keeps a character in maps.
         const drops = waystoneDrops(s.mapSeed, s.areaTier, waystoneMods(s.waystoneSeed).length > 0);
-        // ...and at least one of them opens a door. A hop out costs two tiers
+        // ...and at least one of them opens a door. A hop out costs a tier
         // while a plain run pays back the tier you brought, so the map you just
         // cleared could leave you unable to go anywhere new — the Atlas stopped
         // being a route decision and became a wait for a stone that rolls
