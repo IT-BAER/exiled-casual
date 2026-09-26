@@ -252,6 +252,8 @@ export interface SnapshotEntity {
   unidentified?: boolean;
   /** groundItem only: base item class label ("wand", "focus") for the tooltip. */
   itemClass?: string;
+  /** groundItem only: base id, which picks the model lying on the floor. */
+  baseId?: string;
   /** groundItem only: tooltip base-stat block + requirements (reference-screenshots/item-*.png). */
   statLines?: ItemStatLine[];
   reqLevel?: number;

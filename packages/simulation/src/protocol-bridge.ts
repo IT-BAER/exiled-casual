@@ -334,6 +334,7 @@ export function buildSnapshot(
       lines: d.lines,
       flavour: d.flavour,
       unidentified: d.unidentified,
+      baseId: ic.item.baseId,
       inRange: inRangeOf(pp.x, pp.y, ip.x, ip.y, PICKUP_RADIUS),
     });
   }

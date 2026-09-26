@@ -391,6 +391,8 @@ describe("buildSnapshot — ground items and inventory", () => {
     // their own name stays hidden until a Scroll of Wisdom reveals it.
     expect(gi!.name).toBe(item.unidentified === true ? base.name : item.name ?? base.name);
     expect(gi!.unidentified).toBe(item.unidentified);
+    // The floor model is picked by base, so the client needs the id, not the label.
+    expect(gi!.baseId).toBe(item.baseId);
     expect(gi!.inRange).toBe(true);
     expect(snap.inventory).toEqual({ cols: 12, rows: 5, items: [] });
   });
