@@ -15,30 +15,33 @@ export const MAX_LEVEL = 100;
  *
  * Quadratic, because a kill's value only grows LINEARLY with area level: a
  * cubic curve outruns what the player can earn and the late game stops paying
- * at all. This shape holds the cost at roughly 8 penalized normal-monster
- * equivalents to leave level 1 (Tier 1 is six area levels above him, since
- * Tier 0 is not a map anyone can stand on) and about 5,300 to leave 99, which
- * is a few minutes against about ten maps. `xp.test.ts` pins that band rather
+ * at all. The flat 60 is for the bottom only: with kills front-loaded (see
+ * `monsterXp`) level 1 would otherwise cost one kill, and a level that costs
+ * one kill is noise. It is gone in the rounding by level 10. `xp.test.ts` pins that band rather
  * than the constant, so the constant can be retuned without anyone having to
  * guess what it was protecting.
  */
 export function xpToNext(level: number): number {
   if (level >= MAX_LEVEL) return 0;
-  return 30 * level * level;
+  return 30 * level * level + 60;
 }
 
 /**
- * What a kill is worth before the level-difference penalty. Area level is the
- * base, so a Tier 15 monster is worth more than a Tier 1 one for the same swing;
+ * What a kill is worth before the level-difference penalty. Area level plus a
+ * flat 20 is the base, so a Tier 15 monster is worth more than a Tier 1 one for
+ * the same swing, but the first maps pay 3.5x their area level against 1.2x at
+ * the top: without it a character was 13 levels under his third map and died
+ * there 2-3 times a run (simulation/src/playtest.ts);
  * the multipliers say a rare is eight normals and a boss is forty, which is
  * roughly what their fight lengths are (see the tuning notes in
  * content-runtime/monsters.ts).
  */
 const KIND_MULT = { normal: 1, rare: 8, boss: 40 } as const;
+const XP_AREA_OFFSET = 20;
 export type MonsterXpKind = keyof typeof KIND_MULT;
 
 export function monsterXp(areaLevel: number, kind: MonsterXpKind): number {
-  return areaLevel * KIND_MULT[kind];
+  return (areaLevel + XP_AREA_OFFSET) * KIND_MULT[kind];
 }
 
 /**

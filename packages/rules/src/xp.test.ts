@@ -6,18 +6,23 @@ import {
 
 describe("xpToNext", () => {
   it("rises with level and is zero at the cap", () => {
-    expect(xpToNext(START_LEVEL)).toBe(30);
-    expect(xpToNext(START_LEVEL + 1)).toBe(120);
+    expect(xpToNext(START_LEVEL)).toBe(90);
+    expect(xpToNext(START_LEVEL + 1)).toBe(180);
     expect(xpToNext(MAX_LEVEL)).toBe(0);
   });
 });
 
 describe("monsterXp", () => {
   it("scales with area level and pays rares and bosses more", () => {
-    expect(monsterXp(65, "normal")).toBe(65);
-    expect(monsterXp(65, "rare")).toBe(520);
-    expect(monsterXp(65, "boss")).toBe(2600);
-    expect(monsterXp(79, "normal")).toBe(79);
+    expect(monsterXp(65, "normal")).toBe(85);
+    expect(monsterXp(65, "rare")).toBe(680);
+    expect(monsterXp(65, "boss")).toBe(3400);
+    expect(monsterXp(79, "normal")).toBe(99);
+  });
+
+  it("front-loads: a tier 1 kill is worth 3.5x its area level, a tier 15 one 1.2x", () => {
+    expect(monsterXp(8, "normal")).toBe(28);
+    expect(monsterXp(92, "normal")).toBe(112);
   });
 });
 
@@ -39,9 +44,9 @@ describe("xpPenaltyPct", () => {
 
 describe("xpAward", () => {
   it("is the monster's value after the level-difference penalty, as an integer", () => {
-    expect(xpAward(65, 65, "boss")).toBe(2600);
-    // areaLevel 65 boss for a level 69 character = 2600 at 90% = 2340
-    expect(xpAward(69, 65, "boss")).toBe(2340);
+    expect(xpAward(65, 65, "boss")).toBe(3400);
+    // areaLevel 65 boss for a level 69 character = 3400 at 90% = 3060
+    expect(xpAward(69, 65, "boss")).toBe(3060);
     expect(Number.isInteger(xpAward(65, 71, "normal"))).toBe(true);
   });
 });
@@ -102,13 +107,13 @@ describe("gainXp", () => {
   });
 
   it("levels up and carries the remainder", () => {
-    // xpToNext(1) = 30, so 25 + 10 = 35 crosses it with 5 left over.
-    expect(gainXp(1, 25, 10)).toEqual({ level: 2, xp: 5 });
+    // xpToNext(1) = 90, so 85 + 10 = 95 crosses it with 5 left over.
+    expect(gainXp(1, 85, 10)).toEqual({ level: 2, xp: 5 });
   });
 
   it("handles a single award crossing several levels", () => {
-    // 30 (1→2) + 120 (2→3) = 150, leaving 50 on level 3.
-    expect(gainXp(1, 0, 200)).toEqual({ level: 3, xp: 50 });
+    // 90 (1→2) + 180 (2→3) = 270, leaving 50 on level 3.
+    expect(gainXp(1, 0, 320)).toEqual({ level: 3, xp: 50 });
   });
 
   it("stops dead at the cap instead of banking unusable xp", () => {

@@ -200,8 +200,8 @@ describe("the Atlas spans a 1-100 character's climb", () => {
     // This case lives here rather than in xp.test.ts because it needs BOTH
     // curves, and it is the only thing stopping them being tuned separately.
     //
-    // Bounds: measured kills range from 3.75 (level 1, running Tier 1 above his
-    // level, which pays in full) to 5,346 (level 99, pinned at Tier 15 since
+    // Bounds: measured kills range from 3.21 (level 1, running Tier 1 above his
+    // level, which pays in full) to 4,389 (level 99, pinned at Tier 15 since
     // the Atlas has nothing higher, so the last stretch is fought under-levelled
     // by design). > 3 and < 6,000 brackets the real curve with headroom rather
     // than re-deriving the exact numbers, so a real regression still trips it.

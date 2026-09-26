@@ -355,13 +355,13 @@ describe("registerDeath", () => {
     // so the award lands untouched rather than being partly eaten by a level-up.
     const { sim, world, sessionE } = makeXpKill({ area: "map", areaTier: 3, xp: 0, level: 20 });
     sim.step([]);
-    expect(world.get<ProgressC>(sessionE, "progress")).toEqual({ level: 20, xp: 20, gold: 0 });
+    expect(world.get<ProgressC>(sessionE, "progress")).toEqual({ level: 20, xp: 40, gold: 0 });
   });
 
   it("a boss is worth forty normals", () => {
     const { sim, world, sessionE } = makeXpKill({ area: "map", areaTier: 3, xp: 0, boss: true, level: 20 });
     sim.step([]);
-    expect(world.get<ProgressC>(sessionE, "progress")!.xp).toBe(20 * 40);
+    expect(world.get<ProgressC>(sessionE, "progress")!.xp).toBe(40 * 40);
   });
 
   it("a hideout kill is worth nothing", () => {
@@ -372,9 +372,9 @@ describe("registerDeath", () => {
 
   it("crossing the threshold levels up and re-derives the life pool", () => {
     // level 10, areaLevel(1) = 8: within the no-penalty band. The boss award
-    // (monsterXp(8, "boss") = 320) is exactly what's missing from xpToNext(10)
-    // = 3,000, so this kill crosses precisely one level.
-    const { sim, world, sessionE, p } = makeXpKill({ area: "map", areaTier: 1, xp: 3_000 - 320, boss: true, level: 10 });
+    // (monsterXp(8, "boss") = 1,120) is exactly what's missing from xpToNext(10)
+    // = 3,060, so this kill crosses precisely one level.
+    const { sim, world, sessionE, p } = makeXpKill({ area: "map", areaTier: 1, xp: 3_060 - 1_120, boss: true, level: 10 });
     sim.step([]);
     expect(world.get<ProgressC>(sessionE, "progress")).toEqual({ level: 11, xp: 0, gold: 0 });
     // levelBonus is total-based (210 life over 99 levels), so crossing 10->11
@@ -411,8 +411,8 @@ describe("registerDeath", () => {
 
   it("splits one kill's experience across every occupied bar slot", () => {
     // level 10, areaTier 1 (areaLevel 8): |8-10|=2 <= 3, so full value.
-    // monsterXp(8, "normal") = 8*1 = 8, xpAward = trunc(8*100/100) = 8.
-    // Two occupied gem slots: splitGemXp(8, 2) = trunc(8/2) = 4 each.
+    // monsterXp(8, "normal") = 28, xpAward = trunc(28*100/100) = 28.
+    // Two occupied gem slots: splitGemXp(28, 2) = trunc(28/2) = 14 each.
     const { sim, world, sessionE } = makeGemKill({
       area: "map", areaTier: 1, level: 10, xp: 0,
       skills: {
@@ -425,13 +425,13 @@ describe("registerDeath", () => {
     });
     sim.step([]);
     const skills = world.get<SkillsC>(sessionE, "skills")!;
-    expect(skills.gems["skill.ember_bolt.v1"]).toEqual({ level: 1, xp: 4 });
-    expect(skills.gems["skill.blink.v1"]).toEqual({ level: 1, xp: 4 });
+    expect(skills.gems["skill.ember_bolt.v1"]).toEqual({ level: 1, xp: 14 });
+    expect(skills.gems["skill.blink.v1"]).toEqual({ level: 1, xp: 14 });
     expect(skills.gems[MOVE_SOCKET]).toBeUndefined();
   });
 
   it("pays a skill that is on the bar and never cast", () => {
-    // Same award (8 xp) but one occupied slot: splitGemXp(8, 1) = 8. Nothing in
+    // Same award (28 xp) but one occupied slot: splitGemXp(28, 1) = 28. Nothing in
     // this scenario ever casts the skill — only the death system runs — so the
     // full award landing on it proves payout is keyed by slot, not by use.
     const { sim, world, sessionE } = makeGemKill({
@@ -442,15 +442,15 @@ describe("registerDeath", () => {
       },
     });
     sim.step([]);
-    expect(world.get<SkillsC>(sessionE, "skills")!.gems["skill.blink.v1"]).toEqual({ level: 1, xp: 8 });
+    expect(world.get<SkillsC>(sessionE, "skills")!.gems["skill.blink.v1"]).toEqual({ level: 1, xp: 28 });
   });
 
   it("pays the free class attack out of nobody's share", () => {
-    // Same award (8 xp). The bar carries ember_bolt plus the Stalker's free
-    // attack in its mouse socket. ember_bolt still takes splitGemXp(8, 1) = 8,
+    // Same award (28 xp). The bar carries ember_bolt plus the Stalker's free
+    // attack in its mouse socket. ember_bolt still takes splitGemXp(28, 1) = 28,
     // undiluted, because the free attack is not in the denominator: a share of
-    // 4 would mean it was. The free attack earns as though it were one more
-    // slot, splitGemXp(8, 1 + 1) = 4, so it keeps pace without taxing anyone.
+    // 14 would mean it was. The free attack earns as though it were one more
+    // slot, splitGemXp(28, 1 + 1) = 14, so it keeps pace without taxing anyone.
     const { sim, world, sessionE } = makeGemKill({
       area: "map", areaTier: 1, level: 10, xp: 0,
       skills: {
@@ -463,14 +463,14 @@ describe("registerDeath", () => {
     });
     sim.step([]);
     const skills = world.get<SkillsC>(sessionE, "skills")!;
-    expect(skills.gems["skill.ember_bolt.v1"]).toEqual({ level: 1, xp: 8 });
-    expect(skills.gems["skill.snap_shot.v1"]).toEqual({ level: 1, xp: 4 });
+    expect(skills.gems["skill.ember_bolt.v1"]).toEqual({ level: 1, xp: 28 });
+    expect(skills.gems["skill.snap_shot.v1"]).toEqual({ level: 1, xp: 14 });
   });
 
   it("levels a free attack on a bar that holds nothing else", () => {
     // The level-1 case: nothing deliberate is slotted yet, so the split has no
     // denominator at all and the free attack is the only thing being used.
-    // splitGemXp(8, 0 + 1) = 8 lands on it, which is what keeps Strike's arc
+    // splitGemXp(28, 0 + 1) = 28 lands on it, which is what keeps Strike's arc
     // breakpoints reachable instead of pinning it at gem 1 forever.
     const { sim, world, sessionE } = makeGemKill({
       area: "map", areaTier: 1, level: 10, xp: 0,
@@ -480,7 +480,7 @@ describe("registerDeath", () => {
       },
     });
     sim.step([]);
-    expect(world.get<SkillsC>(sessionE, "skills")!.gems["skill.snap_shot.v1"]).toEqual({ level: 1, xp: 8 });
+    expect(world.get<SkillsC>(sessionE, "skills")!.gems["skill.snap_shot.v1"]).toEqual({ level: 1, xp: 28 });
   });
 
   it("pays nothing to a free attack the character owns but has not slotted", () => {
@@ -501,7 +501,7 @@ describe("registerDeath", () => {
   });
 
   it("pays nothing to a skill the character owns but has not slotted", () => {
-    // Same award (8 xp), one occupied slot (ember_bolt): splitGemXp(8, 1) = 8.
+    // Same award (28 xp), one occupied slot (ember_bolt): splitGemXp(28, 1) = 28.
     // blink is owned (has a gem) but not on the bar, so it must not move.
     const { sim, world, sessionE } = makeGemKill({
       area: "map", areaTier: 1, level: 10, xp: 0,
@@ -515,17 +515,17 @@ describe("registerDeath", () => {
     });
     sim.step([]);
     const skills = world.get<SkillsC>(sessionE, "skills")!;
-    expect(skills.gems["skill.ember_bolt.v1"]).toEqual({ level: 1, xp: 8 });
+    expect(skills.gems["skill.ember_bolt.v1"]).toEqual({ level: 1, xp: 28 });
     expect(skills.gems["skill.blink.v1"]).toEqual({ level: 1, xp: 5 });
   });
 
-  it("a gem levels on a big enough kill, and a boss can carry it past two thresholds", () => {
-    // level 10, areaTier 1 (areaLevel 8): |8-10|=2 <= 3, full value.
-    // monsterXp(8, "boss") = 8*40 = 320, xpAward = 320. One occupied slot, so
-    // the whole 320 lands on the one gem. gemXpToNext(1) = 60*1*1 = 60 and
-    // gemXpToNext(2) = 60*2*2 = 240: 320 - 60 - 240 = 20 left over at level 3,
-    // crossing two thresholds in the one kill (cap = maxGemLevel(10) = 10, well
-    // above 3, so the cap never gets in the way here).
+  it("a gem levels on a big enough kill, and a boss can carry it past three thresholds", () => {
+    // level 10, areaTier 1 (areaLevel 8): the character is above it by 2, full value.
+    // monsterXp(8, "boss") = 28*40 = 1,120, xpAward = 1,120. One occupied slot, so
+    // the whole award lands on the one gem. gemXpToNext(1..3) = 60, 240, 540:
+    // 1,120 - 840 = 280 left over at level 4 (gemXpToNext(4) = 960), crossing
+    // three thresholds in the one kill (cap = maxGemLevel(10) = 10, well above 4,
+    // so the cap never gets in the way here).
     const { sim, world, sessionE } = makeGemKill({
       area: "map", areaTier: 1, level: 10, xp: 0, boss: true,
       skills: {
@@ -534,25 +534,25 @@ describe("registerDeath", () => {
       },
     });
     sim.step([]);
-    expect(world.get<SkillsC>(sessionE, "skills")!.gems["skill.ember_bolt.v1"]).toEqual({ level: 3, xp: 20 });
+    expect(world.get<SkillsC>(sessionE, "skills")!.gems["skill.ember_bolt.v1"]).toEqual({ level: 4, xp: 280 });
   });
 
   it("a character level grants the skills it opened and pops the gems that were capped", () => {
-    // level 4, xp 478: xpToNext(4) = 30*16 = 480. areaTier 0 (areaLevel 2):
-    // |2-4|=2 <= 3, full value. monsterXp(2, "normal") = 2, xpAward = 2.
-    // 478 + 2 = 480 crosses exactly to level 5, xp 0.
+    // level 4, xp 518: xpToNext(4) = 30*16 + 60 = 540. areaTier 0 (areaLevel 2):
+    // |2-4|=2 <= 3, full value. monsterXp(2, "normal") = 22, xpAward = 22.
+    // 518 + 22 = 540 crosses exactly to level 5, xp 0.
     //
-    // One occupied slot (ember_bolt), so splitGemXp(2, 1) = 2 lands whole on it.
+    // One occupied slot (ember_bolt), so splitGemXp(22, 1) = 22 lands whole on it.
     // The gem sits at {level: 4, xp: 959}, banked while capped at the pre-kill
     // maxGemLevel(4) = 4 (gemXpToNext(4) = 60*16 = 960). The award uses
-    // maxGemLevel(next.level) = maxGemLevel(5) = 5, so the extra 2 xp (961)
-    // crosses the 960 threshold the instant the cap rises: level 5, xp 1.
+    // maxGemLevel(next.level) = maxGemLevel(5) = 5, so the extra 22 xp (981)
+    // crosses the 960 threshold the instant the cap rises: level 5, xp 21.
     //
     // blink (unlockLevel 4) is deliberately missing from `gems` going in, to
     // stand in for a save gap: it is unlocked at 4 and 5 alike, but only
     // `grantSkills` on the level-up path fills it in.
     const { sim, world, sessionE } = makeGemKill({
-      area: "map", areaTier: 0, level: 4, xp: 478,
+      area: "map", areaTier: 0, level: 4, xp: 518,
       skills: {
         gems: { "skill.ember_bolt.v1": { level: 4, xp: 959 } },
         bar: ["skill.ember_bolt.v1", null, null, null, null, MOVE_SOCKET, null, null],
@@ -561,7 +561,7 @@ describe("registerDeath", () => {
     sim.step([]);
     expect(world.get<ProgressC>(sessionE, "progress")!.level).toBe(5);
     const skills = world.get<SkillsC>(sessionE, "skills")!;
-    expect(skills.gems["skill.ember_bolt.v1"]).toEqual({ level: 5, xp: 1 });
+    expect(skills.gems["skill.ember_bolt.v1"]).toEqual({ level: 5, xp: 21 });
     expect(skills.gems["skill.blink.v1"]).toEqual({ level: 1, xp: 0 });
   });
 
