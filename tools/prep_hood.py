@@ -83,15 +83,23 @@ FOLD_AMP = 0.008
 RIDE_TOP = 0.06
 MIN_CLEAR = 0.0015        # p01 clearance of the capelet's lining off what it lies on
 
-# Leather for the stalker, the BlenderKit leather the coat set already uses; wool for
-# the ember, prep_cowl's weave. Colours are linear albedo over a map levelled to grey.
-HIDE = (0.0296 / C.TEX_MEAN, 0.0196 / C.TEX_MEAN, 0.0105 / C.TEX_MEAN, 1.0)
-HIDE_TRIM = (0.0570 / C.TEX_MEAN, 0.0370 / C.TEX_MEAN, 0.0201 / C.TEX_MEAN, 1.0)
-HIDE_LINING = (0.0225 / C.TEX_MEAN, 0.0121 / C.TEX_MEAN, 0.0065 / C.TEX_MEAN, 1.0)
-GRAIN = 0.12
-GRAIN_CONTRAST = 1.4
-LEATHER_NORMAL = 1.0
-TEX_PX = 512
+# The hood wears the maps of the coat or robe under it, box-projected at that
+# garment's own texel density, so palette and grain match where the capelet lands.
+# The map ships lifted by SKIN_LIFT and the shell's vertex colour takes it back
+# out, which leaves the trim room to be brighter inside COLOR_0's 0..1.
+SKIN_LIFT = 1.25
+SHELL = (1 / SKIN_LIFT,) * 3 + (1.0,)
+SHELL_LINING = (0.7 / SKIN_LIFT,) * 3 + (1.0,)
+SHELL_TRIM = (1.0, 1.0, 1.0, 1.0)
+HARDWARE_LUM = 4.0        # x median luminance: the coat's buckles, not its tan seams (3x)
+HARDWARE_METAL = 0.5      # the robe's gold studs
+SKIN_SOFTEN = 3           # passes of the same 3x3 taps over the base map, ~2.8 px sigma
+SKIN_CONTRAST = 0.6       # share of the luminance spread kept about the mean
+LEATHER_GRAIN = 0.12      # metres per tile of the BlenderKit leather normal, box-projected
+WOOL_GRAIN = 0.12         # prep_cowl's 0.04 m weave is finer than a screen pixel at play distance
+GRAIN_NORMAL = 2.5        # the coat maps are rough; a weaker relief does not read
+GRAIN_PX = 512
+HARDWARE_BLUR = 4        # passes of 3x3 taps 2 px apart; more until every hole is reached
 
 OUTER, LINING, TRIM = 0, 1, 2
 
@@ -126,9 +134,39 @@ def worn_surfaces(names):
     M, bones = rig.matrix_world, rig.data.bones
     neck, head = M @ bones["neck_01"].head_local, M @ bones["Head"].head_local
     centre = Vector((0.0, (neck.y + head.y) / 2, neck.z + CENTRE_DZ))
+    skin = garment_maps(objs[0])
     W.clear_scene()
     return {"bvh": BVHTree.FromPolygons(verts, tris), "verts": verts, "tris": tris,
-            "weights": weights, "owner": owner, "centre": centre, "head": head.copy()}
+            "weights": weights, "owner": owner, "centre": centre, "head": head.copy(),
+            "skin": skin}
+
+
+def garment_maps(obj):
+    """The garment's base colour and roughness/metallic pixels, and metres per map tile."""
+    mat = obj.data.materials[0]
+    bsdf = next(n for n in mat.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+    base = bsdf.inputs["Base Color"].links[0].from_node
+    orm = bsdf.inputs["Roughness"].links[0].from_node.inputs["Color"].links[0].from_node
+    if base.type != "TEX_IMAGE" or orm.type != "TEX_IMAGE":
+        raise SystemExit(f"{obj.name}: expected image-fed base colour and roughness")
+    maps = {}
+    for key, node in (("base", base), ("orm", orm)):
+        px = np.empty(len(node.image.pixels), dtype=np.float32)
+        node.image.pixels.foreach_get(px)
+        maps[key] = (px, tuple(node.image.size))
+    # Texel density over the whole garment, the scale its grain is seen at.
+    w, h = maps["base"][1]
+    uv = obj.data.uv_layers.active.data
+    obj.data.calc_loop_triangles()
+    uv_area = world = 0.0
+    for t in obj.data.loop_triangles:
+        a, b, c = (Vector(uv[li].uv) for li in t.loops)
+        uv_area += abs((b - a).cross(c - a)) / 2
+        world += t.area
+    world *= obj.matrix_world.to_3x3().determinant() ** (2 / 3)
+    maps["tile_m"] = w / math.sqrt(uv_area * w * h / world)
+    print(f"SKIN {obj.name}: {mat.name}, {w}x{h}, one tile {maps['tile_m']:.2f} m")
+    return maps
 
 
 def import_hood():
@@ -520,50 +558,106 @@ def paint(obj, colours):
     return counts
 
 
-def leather(obj):
-    """The BlenderKit grain, levelled to grey and multiplied by the vertex colour."""
-    C.box_uvs(obj, GRAIN)
+def strip_hardware(maps):
+    """Fill the atlas's buckles and studs from the cloth around them.
+
+    Box-projected, they land on the hood as stray metal. A texel is hardware when
+    it is metallic or far brighter than the median; tan seams stay saturated below it.
+    """
+    (base, (w, h)), (orm, _) = maps["base"], maps["orm"]
+    base, orm = base.reshape(h, w, 4).copy(), orm.reshape(h, w, 4).copy()
+    lin = np.where(base[..., :3] <= 0.04045, base[..., :3] / 12.92, ((base[..., :3] + 0.055) / 1.055) ** 2.4)
+    lum = lin @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
+    bad = (lum > HARDWARE_LUM * np.median(lum)) | (orm[..., 2] > HARDWARE_METAL)
+    for axis in (0, 1):  # dilate, so no bright rim is left around a hole
+        bad = bad | np.roll(bad, 1, axis) | np.roll(bad, -1, axis)
+    keep = (~bad).astype(np.float32)[..., None]
+    fill = [base * keep, orm * keep, keep]
+    passes = 0
+    while passes < HARDWARE_BLUR or (fill[2][bad] <= 1e-6).any():
+        fill = [sum(np.roll(np.roll(f, dy, 0), dx, 1) for dy in (-2, 0, 2) for dx in (-2, 0, 2)) for f in fill]
+        passes += 1
+    weight = np.maximum(fill[2], 1e-6)
+    base = np.where(bad[..., None], fill[0] / weight, base)
+    orm = np.where(bad[..., None], fill[1] / weight, orm)
+    # Box-projected, the atlas's chart edges read as a patchwork the garment never
+    # shows, since each chart lies on it continuously; soften them away.
+    for _ in range(SKIN_SOFTEN):
+        base = sum(np.roll(np.roll(base, dy, 0), dx, 1) for dy in (-2, 0, 2) for dx in (-2, 0, 2)) / 9
+    # A clean hide: each texel's luminance pulled toward the mean, hue kept.
+    lin = np.where(base[..., :3] <= 0.04045, base[..., :3] / 12.92, ((base[..., :3] + 0.055) / 1.055) ** 2.4)
+    lum = np.maximum(lin @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32), 1e-6)
+    mean = lum.mean()
+    lin = np.clip(lin * ((mean + (lum - mean) * SKIN_CONTRAST) / lum)[..., None], 0.0, 1.0)
+    base[..., :3] = np.where(lin <= 0.0031308, lin * 12.92, 1.055 * lin ** (1 / 2.4) - 0.055)
+    print(f"HARDWARE {bad.mean() * 100:.2f}% of texels filled")
+    return {"base": (base.ravel(), (w, h)), "orm": (orm.ravel(), (w, h)), "tile_m": maps["tile_m"]}
+
+
+def grain_normal(look):
+    """The fine relief the garment's scan is too coarse to carry: leather grain or wool weave."""
+    if look == "ember":
+        return C.wool_maps()[1], WOOL_GRAIN, GRAIN_NORMAL
     with bpy.data.libraries.load(W.LEATHER_BLEND) as (src, dst):
-        dst.images = list(src.images)
-    base = next((im for im in dst.images if im and "color" in im.name.lower()), None)
-    normal = next((im for im in dst.images if im and "normal" in im.name.lower()), None)
-    if base is None or normal is None:
-        raise SystemExit(f"{W.LEATHER_BLEND} lacks its base colour or normal")
-    normal.colorspace_settings.name = "Non-Color"
-    for im in (base, normal):
-        im.scale(TEX_PX, TEX_PX)
-    px = np.empty(len(base.pixels), dtype=np.float32)
-    base.pixels.foreach_get(px)
-    px = px.reshape(-1, 4)
-    lin = np.where(px[:, :3] <= 0.04045, px[:, :3] / 12.92, ((px[:, :3] + 0.055) / 1.055) ** 2.4)
-    grey = lin @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
-    grey = np.clip(1.0 + (grey / grey.mean() - 1.0) * GRAIN_CONTRAST, 0.2, 3.0)
-    out = np.clip(np.outer(grey, (C.TEX_MEAN,) * 3), 0.0, 1.0)
-    px[:, :3] = np.where(out <= 0.0031308, out * 12.92, 1.055 * out ** (1 / 2.4) - 0.055)
-    base.pixels.foreach_set(px.ravel())
-    base.update()
-    mat = bpy.data.materials.new("MI_Hood_Leather")
+        dst.images = [n for n in src.images if "normal" in n.lower()]
+    if not dst.images:
+        raise SystemExit(f"{W.LEATHER_BLEND} lacks its normal map")
+    normal = dst.images[0]
+    normal.scale(GRAIN_PX, GRAIN_PX)
+    return normal, LEATHER_GRAIN, GRAIN_NORMAL
+
+
+def skin(obj, maps, name, grain):
+    """The garment's own maps, box-projected, multiplied by the vertex colour, over a fine grain."""
+    normal, grain_m, strength = grain
+    C.box_uvs(obj, maps["tile_m"])
+    C.box_uvs(obj, grain_m)
+    obj.data.uv_layers[-1].name = "Grain"  # TEXCOORD_1, the garment's maps stay on 0
+    obj.data.uv_layers.active = obj.data.uv_layers[0]
+    maps = strip_hardware(maps)
+    mat = bpy.data.materials.new(name)
     nodes, links = mat.node_tree.nodes, mat.node_tree.links
     bsdf = next(n for n in nodes if n.type == "BSDF_PRINCIPLED")
-    col = nodes.new("ShaderNodeTexImage")
-    col.image = base
+    texs = {}
+    for key in ("base", "orm"):
+        px, (w, h) = maps[key]
+        px = px.reshape(-1, 4).copy()
+        if key == "base":
+            lin = np.where(px[:, :3] <= 0.04045, px[:, :3] / 12.92, ((px[:, :3] + 0.055) / 1.055) ** 2.4)
+            lin = np.clip(lin * SKIN_LIFT, 0.0, 1.0)
+            px[:, :3] = np.where(lin <= 0.0031308, lin * 12.92, 1.055 * lin ** (1 / 2.4) - 0.055)
+        im = bpy.data.images.new(f"{name}_{key}", w, h)
+        if key == "orm":
+            im.colorspace_settings.name = "Non-Color"
+        im.pixels.foreach_set(px.ravel())
+        im.pack()
+        tex = nodes.new("ShaderNodeTexImage")
+        tex.image = im
+        texs[key] = tex
     tint = nodes.new("ShaderNodeVertexColor")
     tint.layer_name = "Col"
     mix = nodes.new("ShaderNodeMix")
     mix.data_type = "RGBA"
     mix.blend_type = "MULTIPLY"
     mix.inputs["Factor"].default_value = 1.0
-    links.new(col.outputs["Color"], mix.inputs[6])
+    links.new(texs["base"].outputs["Color"], mix.inputs[6])
     links.new(tint.outputs["Color"], mix.inputs[7])
     links.new(mix.outputs[2], bsdf.inputs["Base Color"])
+    sep = nodes.new("ShaderNodeSeparateColor")
+    links.new(texs["orm"].outputs["Color"], sep.inputs["Color"])
+    links.new(sep.outputs["Green"], bsdf.inputs["Roughness"])
+    links.new(sep.outputs["Blue"], bsdf.inputs["Metallic"])
+    normal.colorspace_settings.name = "Non-Color"
+    uvmap = nodes.new("ShaderNodeUVMap")
+    uvmap.uv_map = "Grain"
     nrm = nodes.new("ShaderNodeTexImage")
     nrm.image = normal
+    links.new(uvmap.outputs["UV"], nrm.inputs["Vector"])
     nmap = nodes.new("ShaderNodeNormalMap")
-    nmap.inputs["Strength"].default_value = LEATHER_NORMAL
+    nmap.uv_map = "Grain"
+    nmap.inputs["Strength"].default_value = strength
     links.new(nrm.outputs["Color"], nmap.inputs["Color"])
     links.new(nmap.outputs["Normal"], bsdf.inputs["Normal"])
-    bsdf.inputs["Roughness"].default_value = W.LEATHER_ROUGHNESS
-    bsdf.inputs["Metallic"].default_value = 0.0
     obj.data.materials.append(mat)
 
 
@@ -620,12 +714,8 @@ def build(look, spec):
     if me.has_custom_normals:
         with bpy.context.temp_override(object=hood, active_object=hood):
             bpy.ops.mesh.customdata_custom_splitnormals_clear()
-    if look == "stalker":
-        painted = paint(hood, (HIDE, HIDE_LINING, HIDE_TRIM))
-        leather(hood)
-    else:
-        painted = paint(hood, (C.CLOTH, C.LINING, C.TRIM))
-        C.wool(hood)
+    painted = paint(hood, (SHELL, SHELL_LINING, SHELL_TRIM))
+    skin(hood, surf["skin"], f"MI_Hood_{look}", grain_normal(look))
     for g in list(hood.vertex_groups):
         if g.name not in BONES:
             if any(x.group == g.index and x.weight > 1e-4 for v in me.vertices for x in v.groups):

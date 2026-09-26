@@ -334,3 +334,16 @@ chains, so a stance left each trouser leg ending beside its foot.
 <td width="100%"><img src="screenshots/2026-09-25-ember-cowl.jpeg" alt="Close-up of the Emberbound's black wool cowl with its neck draped over the robe's collar" width="100%"><br><sub>Cowl and neck over the robe's collar.</sub></td>
 </tr>
 </table>
+
+## 2026-09-26 · Hoods cut from the coat's own cloth
+
+Both class hoods are now one piece from crown to capelet, and each wears the texture of the garment
+it lies on: the Stalker's hood takes the coat's leather, the Emberbound's cowl the robe's charcoal
+wool, its buckles and studs filled away, with a fine leather grain or weave over the top.
+
+<table>
+<tr>
+<td width="50%"><img src="screenshots/2026-09-26-hood-stalker.jpeg" alt="Stalker in a dark brown leather hood whose capelet matches the coat beneath it" width="100%"><br><sub>Stalker hood in the coat's leather.</sub></td>
+<td width="50%"><img src="screenshots/2026-09-26-hood-ember.jpeg" alt="Emberbound in a charcoal wool cowl with red-brown streaks matching the robe" width="100%"><br><sub>Emberbound cowl in the robe's wool.</sub></td>
+</tr>
+</table>
