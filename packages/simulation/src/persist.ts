@@ -4,7 +4,7 @@ import type { SessionC, InventoryC, StashC, VendorC, EquipmentC, ProgressC, Shar
 import { stockVendor } from "./vendor";
 import { withPermanentWaystone } from "./inventory";
 import { recomputePlayerStats } from "./derived";
-import { START_LEVEL, isUnlocked, maxGemLevel, MAX_GEM_LEVEL, gemXpToNext } from "@exiled/rules";
+import { START_LEVEL, isUnlocked, maxGemLevel, MAX_GEM_LEVEL, gemXpToNext, classIdOr } from "@exiled/rules";
 import { SKILLS, defaultAttackFor, FREE_ATTACKS } from "@exiled/content-runtime";
 import { SKILL_SLOT_COUNT, MOUSE_SLOT_BASE, MOVE_SOCKET } from "@exiled/protocol";
 
@@ -66,11 +66,11 @@ export function snapshot(world: World): PersistedState | null {
 
 /**
  * The bar a character starts with: his class's default attack on left click's
- * neighbour, Ember Bolt on 1, and movement where PoE1 puts it.
+ * neighbour and movement where PoE1 puts it. `grantSkills` fills socket 1 with
+ * the class's own first skill.
  */
 export function defaultBar(classId: string): (string | null)[] {
   const bar: (string | null)[] = new Array(SKILL_SLOT_COUNT).fill(null);
-  bar[0] = "skill.ember_bolt.v1";
   bar[MOUSE_SLOT_BASE] = MOVE_SOCKET;
   bar[MOUSE_SLOT_BASE + 2] = defaultAttackFor(classId);
   return bar;
@@ -121,20 +121,25 @@ export function filterUnlockedBar(
  * the gem re-levels the instant it earns a single point once the character
  * level catches back up.
  */
-function sanitizeGems(raw: unknown, cap: number): Record<string, { level: number; xp: number }> {
+function sanitizeGems(
+  raw: unknown, cap: number, classId: string,
+): { gems: Record<string, { level: number; xp: number }>; stripped: number } {
   const src = raw !== null && typeof raw === "object" && !Array.isArray(raw)
     ? (raw as Record<string, unknown>)
     : {};
   const out: Record<string, { level: number; xp: number }> = {};
+  let stripped = 1;
   for (const [id, v] of Object.entries(src)) {
-    if (!SKILLS.has(id)) continue;
+    const def = SKILLS.get(id);
     const gem = v as { level?: unknown; xp?: unknown };
     if (
-      typeof gem?.level !== "number" || !Number.isFinite(gem.level) ||
+      !def || typeof gem?.level !== "number" || !Number.isFinite(gem.level) ||
       typeof gem?.xp !== "number" || !Number.isFinite(gem.xp)
     ) continue;
     const savedLevel = Math.max(1, Math.trunc(gem.level));
     const level = Math.min(savedLevel, cap);
+    // Another class's skill is not held at all, so its gem goes with it.
+    if (!isUnlocked(def, def.unlockLevel, classId)) { stripped = Math.max(stripped, level); continue; }
     let xp = Math.max(0, Math.trunc(gem.xp));
     if (level >= MAX_GEM_LEVEL) {
       xp = 0;
@@ -143,7 +148,7 @@ function sanitizeGems(raw: unknown, cap: number): Record<string, { level: number
     }
     out[id] = { level, xp };
   }
-  return out;
+  return { gems: out, stripped };
 }
 
 /**
@@ -164,8 +169,10 @@ export function reseedDefaultAttack(skills: SkillsC, classId: string): SkillsC {
  * the level now opens gets a gem at 1, a skill already held is left exactly as
  * it is, and nothing is ever taken away. Called on every load and on every
  * character level, which is why unlock can be derived rather than stored.
+ * `classStart` is the gem level a class skill opens at (the load path's
+ * stand-in for the other class's gems it just took away).
  */
-export function grantSkills(world: World): void {
+export function grantSkills(world: World, classStart = 1): void {
   const e = world.query("session")[0];
   if (e === undefined) return;
   const level = world.get<ProgressC>(e, "progress")?.level ?? START_LEVEL;
@@ -176,7 +183,7 @@ export function grantSkills(world: World): void {
   for (const def of SKILLS.values()) {
     if (!isUnlocked(def, level, classId)) continue;
     if (gems[def.id] !== undefined) continue;
-    gems[def.id] = { level: 1, xp: 0 };
+    gems[def.id] = { level: def.classId ? classStart : 1, xp: 0 };
     // A skill nobody can see was not a reward (docs/09 rule 1), so the one the
     // level just opened takes the first free numbered socket. Never the mouse
     // row, never an occupied one (a full bar is a choice the player made), and
@@ -229,20 +236,23 @@ export function restore(world: World, state: PersistedState): void {
   // written before the level that opened a skill — comes back complete.
   const cap = maxGemLevel(progress.level);
   const saved = state.skills;
+  let stripped = 1;
   if (saved) {
     // A hand-edited (or pre-Task-6) save can put a locked id in a socket the
     // same way it can put an over-level gem in the map: filtered on read, not
     // just when the live `setSkillBar` intent runs.
     const bar = filterUnlockedBar(normalizeBar(saved.bar), progress.level, safe.classId ?? "");
+    const kept = sanitizeGems(saved.gems, cap, safe.classId ?? "");
+    stripped = kept.stripped;
     world.set<SkillsC>(e, "skills", {
-      gems: sanitizeGems(saved.gems, cap),
+      gems: kept.gems,
       bar,
       // Absent on every save written before this flag existed, which is
       // exactly the save `reseedDefaultAttack` still has a bug left to fix.
       ...(saved.attackReseeded ? { attackReseeded: true } : {}),
     });
   }
-  grantSkills(world);
+  grantSkills(world, stripped);
   world.set<ShardsC>(e, "shards", state.shards ?? { counts: {} });
   world.set<VendorC>(e, "vendor", state.vendor ?? stockVendor(state.session.atlasSeed, progress.level));
   // Saved gear has to reach the player, not just the equipment panel. Life and
@@ -265,6 +275,7 @@ export async function loadInto(kv: KvStore, world: World): Promise<boolean> {
   if (raw === null) return false;
   const state = JSON.parse(raw) as PersistedState;
   if (state.version !== VERSION) return false;
-  restore(world, state);
+  // A pre-roster save may carry no class; without one its class gems strip to nothing.
+  restore(world, { ...state, session: { ...state.session, classId: classIdOr(state.session.classId ?? "") } });
   return true;
 }

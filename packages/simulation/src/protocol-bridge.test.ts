@@ -19,7 +19,7 @@ import type {
  * default level.
  */
 function setupSkillsWorld(seed: number, charLevel: number, tier = 0) {
-  const { world, sim } = createCombatSim(seed, { area: "map", tier });
+  const { world, sim } = createCombatSim(seed, { area: "map", tier, classId: "class.emberbound" });
   const sessionE = world.query("session")[0]!;
   world.set<ProgressC>(sessionE, "progress", { level: charLevel, xp: 0, gold: 0 });
   grantSkills(world);
@@ -459,7 +459,7 @@ describe("buildSnapshot - skills", () => {
   });
 
   it("carries cast speed into the reported cast time", () => {
-    const { world, sim, playerEntity } = createCombatSim(42, { area: "map" });
+    const { world, sim, playerEntity } = createCombatSim(42, { area: "map", classId: "class.emberbound" });
     world.set(playerEntity, "offense", { spellDamagePct: 0, castSpeedPct: 100, critChancePct: 0 });
     const snap = buildSnapshot(world, sim, 0, CONTENT_VERSION);
     const bolt = snap.skills!.find((s) => s.id === "skill.ember_bolt.v1")!;
@@ -487,11 +487,12 @@ describe("buildSnapshot - skills", () => {
     expect(ids).toContain("skill.ember_bolt.v1");
   });
 
-  it("emits every skill once the level has opened them all", () => {
+  it("emits every skill the class may hold once the level has opened them all", () => {
     const { world, sim } = setupSkillsWorld(42, 100, 0);
     const snap = buildSnapshot(world, sim, 0, CONTENT_VERSION);
     const ids = new Set(snap.skills!.map((s) => s.id));
-    expect(ids).toEqual(new Set(SKILLS.keys()));
+    const own = [...SKILLS.values()].filter((d) => !d.classId || d.classId === "class.emberbound").map((d) => d.id);
+    expect(ids).toEqual(new Set(own));
     expect(ids.size).toBe(7);
   });
 

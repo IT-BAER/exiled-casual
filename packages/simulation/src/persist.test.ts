@@ -142,14 +142,14 @@ describe("skills persistence", () => {
     const defaultAttackId = defaultAttackFor("class.ironsworn");
     expect(defaultAttackId).toBe("skill.strike.v1");
     expect(skills.gems[defaultAttackId]).toEqual({ level: 1, xp: 0 });
-    expect(skills.gems["skill.ember_bolt.v1"]).toEqual({ level: 1, xp: 0 });
+    expect(Object.hasOwn(skills.gems, "skill.ember_bolt.v1")).toBe(false);
     expect(Object.hasOwn(skills.gems, "skill.blink.v1")).toBe(false);
     expect(Object.hasOwn(skills.gems, "skill.cinder_ground.v1")).toBe(false);
     expect(Object.hasOwn(skills.gems, "skill.town_portal.v1")).toBe(false);
   });
 
   it("a level-up grants the gems that level opened, leaving the ones already held alone", () => {
-    const { world } = createCombatSim(7, { area: "hideout" });
+    const { world } = createCombatSim(7, { area: "hideout", classId: "class.emberbound" });
     const e = sessionEntity(world);
     // Give the already-held ember_bolt gem real progress, so a reset would be visible.
     const before = world.get<SkillsC>(e, "skills")!;
@@ -172,7 +172,7 @@ describe("skills persistence", () => {
   it("a newly opened skill lands in the first empty socket, so the level-up is visible", () => {
     // Level 3 to level 4 opens Blink. defaultBar fills socket 0 with Ember Bolt,
     // so the first empty numbered socket is 1.
-    const { world } = createCombatSim(7, { area: "hideout" });
+    const { world } = createCombatSim(7, { area: "hideout", classId: "class.emberbound" });
     const e = sessionEntity(world);
     world.set<ProgressC>(e, "progress", { ...world.get<ProgressC>(e, "progress")!, level: 4 });
 
@@ -184,7 +184,7 @@ describe("skills persistence", () => {
   });
 
   it("never slots the same skill twice, however many times it grants", () => {
-    const { world } = createCombatSim(7, { area: "hideout" });
+    const { world } = createCombatSim(7, { area: "hideout", classId: "class.emberbound" });
     const e = sessionEntity(world);
     world.set<ProgressC>(e, "progress", { ...world.get<ProgressC>(e, "progress")!, level: 4 });
     grantSkills(world);
@@ -196,7 +196,7 @@ describe("skills persistence", () => {
   });
 
   it("leaves a full bar alone rather than evicting a skill the player chose", () => {
-    const { world } = createCombatSim(7, { area: "hideout" });
+    const { world } = createCombatSim(7, { area: "hideout", classId: "class.emberbound" });
     const e = sessionEntity(world);
     const full: (string | null)[] = [
       "skill.ember_bolt.v1", "skill.strike.v1", "skill.snap_shot.v1", "skill.ember_spark.v1",
@@ -215,7 +215,7 @@ describe("skills persistence", () => {
   });
 
   it("snapshot round-trips gems and the bar", () => {
-    const { world } = createCombatSim(7, { area: "hideout" });
+    const { world } = createCombatSim(7, { area: "hideout", classId: "class.emberbound" });
     const e = sessionEntity(world);
     world.set<ProgressC>(e, "progress", { ...world.get<ProgressC>(e, "progress")!, level: 12 });
     grantSkills(world);
@@ -226,19 +226,19 @@ describe("skills persistence", () => {
     });
 
     const snap = snapshot(world)!;
-    const fresh = createCombatSim(9, { area: "hideout" }).world;
+    const fresh = createCombatSim(9, { area: "hideout", classId: "class.emberbound" }).world;
     restore(fresh, snap);
 
     expect(fresh.get<SkillsC>(sessionEntity(fresh), "skills")).toEqual(world.get<SkillsC>(e, "skills"));
   });
 
   it("a save written with NO skills field restores with the bar seeded and the gems granted", () => {
-    const { world } = createCombatSim(7, { area: "hideout" });
+    const { world } = createCombatSim(7, { area: "hideout", classId: "class.emberbound" });
     const someSnapshot = snapshot(world)!;
     const state = { ...someSnapshot, progress: { level: 12, xp: 0, gold: 0 } };
     delete (state as Record<string, unknown>)["skills"];
 
-    const freshWorld = createCombatSim(9, { area: "hideout" }).world;
+    const freshWorld = createCombatSim(9, { area: "hideout", classId: "class.emberbound" }).world;
     restore(freshWorld, state as PersistedState);
 
     const skills = freshWorld.get<SkillsC>(sessionEntity(freshWorld), "skills")!;
@@ -257,9 +257,9 @@ describe("skills persistence", () => {
   // it. Breaks if restore() stops running the bar through the same unlock
   // filter setSkillBar applies live.
   it("restore strips a hand-edited locked skill out of the bar rather than leaving it socketed", () => {
-    const { world } = createCombatSim(7, { area: "hideout" });
+    const { world } = createCombatSim(7, { area: "hideout", classId: "class.emberbound" });
     const base = snapshot(world)!;
-    const bar = defaultBar("");
+    const bar = defaultBar("class.emberbound");
     bar[0] = "skill.cinder_ground.v1"; // unlocks at level 8; hand-edited into a level-1 save
     const state: PersistedState = {
       ...base,
@@ -267,7 +267,7 @@ describe("skills persistence", () => {
       skills: { gems: {}, bar },
     };
 
-    const fresh = createCombatSim(9, { area: "hideout" }).world;
+    const fresh = createCombatSim(9, { area: "hideout", classId: "class.emberbound" }).world;
     restore(fresh, state);
 
     const skills = fresh.get<SkillsC>(sessionEntity(fresh), "skills")!;
@@ -276,6 +276,82 @@ describe("skills persistence", () => {
     // first free socket. What must hold is that the locked skill is off the bar.
     expect(skills.bar).not.toContain("skill.cinder_ground.v1");
     expect(Object.hasOwn(skills.gems, "skill.cinder_ground.v1")).toBe(false);
+  });
+
+  describe("class kits", () => {
+    it("an Ironsworn save loses the fire spells from bar and gems on load", () => {
+      const { world } = createCombatSim(7, { area: "hideout", classId: "class.emberbound" });
+      const base = snapshot(world)!;
+      const bar = defaultBar("class.emberbound");
+      bar[1] = "skill.cinder_ground.v1";
+      const state: PersistedState = {
+        ...base,
+        session: { ...base.session, classId: "class.ironsworn" },
+        progress: { level: 10, xp: 0, gold: 0 },
+        skills: {
+          gems: { "skill.ember_bolt.v1": { level: 6, xp: 10 }, "skill.cinder_ground.v1": { level: 2, xp: 0 } },
+          bar,
+        },
+      };
+
+      const fresh = createCombatSim(9, { area: "hideout", classId: "class.emberbound" }).world;
+      restore(fresh, state);
+
+      const skills = fresh.get<SkillsC>(sessionEntity(fresh), "skills")!;
+      expect(skills.bar).not.toContain("skill.ember_bolt.v1");
+      expect(skills.bar).not.toContain("skill.cinder_ground.v1");
+      expect(Object.keys(skills.gems)).not.toContain("skill.ember_bolt.v1");
+      expect(Object.keys(skills.gems)).not.toContain("skill.cinder_ground.v1");
+    });
+
+    it("the class's own skills open at the level of the highest gem load took away", () => {
+      const { world } = createCombatSim(7, { area: "hideout", classId: "class.emberbound" });
+      const base = snapshot(world)!;
+      const state: PersistedState = {
+        ...base,
+        session: { ...base.session, classId: "class.ironsworn" },
+        progress: { level: 10, xp: 0, gold: 0 },
+        skills: {
+          gems: {
+            "skill.ember_bolt.v1": { level: 6, xp: 10 },
+            "skill.cinder_ground.v1": { level: 2, xp: 0 },
+            "skill.blink.v1": { level: 3, xp: 0 },
+          },
+          bar: defaultBar("class.emberbound"),
+        },
+      };
+
+      const fresh = createCombatSim(9, { area: "hideout", classId: "class.emberbound" }).world;
+      restore(fresh, state);
+
+      const gems = fresh.get<SkillsC>(sessionEntity(fresh), "skills")!.gems;
+      expect(gems["skill.heavy_strike.v1"]).toEqual({ level: 6, xp: 0 });
+      expect(gems["skill.ground_slam.v1"]).toEqual({ level: 6, xp: 0 });
+      // Held already, so left as it was.
+      expect(gems["skill.blink.v1"]).toEqual({ level: 3, xp: 0 });
+    });
+
+    it("the grant puts each class's own first skill in socket 1", () => {
+      const own = { "class.emberbound": "skill.ember_bolt.v1", "class.ironsworn": "skill.heavy_strike.v1", "class.stalker": "skill.piercing_shot.v1" };
+      for (const [classId, skill] of Object.entries(own)) {
+        const { world } = createCombatSim(7, { area: "hideout", classId });
+        expect(world.get<SkillsC>(sessionEntity(world), "skills")!.bar[0], classId).toBe(skill);
+      }
+    });
+
+    it("a level-10 Stalker is granted no fire spell, an Emberbound both", () => {
+      for (const [classId, has] of [["class.stalker", false], ["class.emberbound", true]] as const) {
+        const { world } = createCombatSim(7, { area: "hideout", classId: "class.emberbound" });
+        const e = sessionEntity(world);
+        setSession(world, { classId });
+        world.set<SkillsC>(e, "skills", { gems: {}, bar: defaultBar(classId) });
+        world.set<ProgressC>(e, "progress", { level: 10, xp: 0, gold: 0 });
+        grantSkills(world);
+        const gems = world.get<SkillsC>(e, "skills")!.gems;
+        expect(Object.hasOwn(gems, "skill.ember_bolt.v1")).toBe(has);
+        expect(Object.hasOwn(gems, "skill.cinder_ground.v1")).toBe(has);
+      }
+    });
   });
 
   it("persist.VERSION is still 2, so no existing character is dropped", () => {
@@ -313,15 +389,15 @@ describe("skills persistence", () => {
   });
 
   it("a gem never restores above what the character level allows", () => {
-    const { world } = createCombatSim(7, { area: "hideout" });
+    const { world } = createCombatSim(7, { area: "hideout", classId: "class.emberbound" });
     const base = snapshot(world)!;
     const state: PersistedState = {
       ...base,
       progress: { level: 3, xp: 0, gold: 0 },
-      skills: { gems: { "skill.ember_bolt.v1": { level: 20, xp: 999 } }, bar: defaultBar("") },
+      skills: { gems: { "skill.ember_bolt.v1": { level: 20, xp: 999 } }, bar: defaultBar("class.emberbound") },
     };
 
-    const fresh = createCombatSim(9, { area: "hideout" }).world;
+    const fresh = createCombatSim(9, { area: "hideout", classId: "class.emberbound" }).world;
     restore(fresh, state);
 
     const skills = fresh.get<SkillsC>(sessionEntity(fresh), "skills")!;
@@ -337,15 +413,15 @@ describe("skills persistence", () => {
     // Not clamped down (savedLevel === cap): the banking design (skill-xp.ts)
     // lets xp exceed gemXpToNext while capped, on purpose, so this must survive
     // untouched — proof the finding-4 fix only fires on an actual downclamp.
-    const { world } = createCombatSim(7, { area: "hideout" });
+    const { world } = createCombatSim(7, { area: "hideout", classId: "class.emberbound" });
     const base = snapshot(world)!;
     const state: PersistedState = {
       ...base,
       progress: { level: 3, xp: 0, gold: 0 },
-      skills: { gems: { "skill.ember_bolt.v1": { level: 3, xp: 999 } }, bar: defaultBar("") },
+      skills: { gems: { "skill.ember_bolt.v1": { level: 3, xp: 999 } }, bar: defaultBar("class.emberbound") },
     };
 
-    const fresh = createCombatSim(9, { area: "hideout" }).world;
+    const fresh = createCombatSim(9, { area: "hideout", classId: "class.emberbound" }).world;
     restore(fresh, state);
 
     expect(fresh.get<SkillsC>(sessionEntity(fresh), "skills")!.gems["skill.ember_bolt.v1"])
@@ -353,7 +429,7 @@ describe("skills persistence", () => {
   });
 
   it("restore drops hostile gem data instead of poisoning the checksum", () => {
-    const { world } = createCombatSim(7, { area: "hideout" });
+    const { world } = createCombatSim(7, { area: "hideout", classId: "class.emberbound" });
     const base = snapshot(world)!;
     const state: PersistedState = {
       ...base,
@@ -366,11 +442,11 @@ describe("skills persistence", () => {
           "skill.cinder_ground.v1": { level: -5, xp: -3 },     // out of range: floored to legal minimums
           "skill.nonexistent.v1": { level: 1, xp: 0 },         // unknown id: dropped
         },
-        bar: defaultBar(""),
+        bar: defaultBar("class.emberbound"),
       },
     };
 
-    const fresh = createCombatSim(9, { area: "hideout" }).world;
+    const fresh = createCombatSim(9, { area: "hideout", classId: "class.emberbound" }).world;
     // The point of this test: restore must not throw, and the world it produces
     // must still be checksum-safe (every numeric field a finite integer).
     expect(() => restore(fresh, state)).not.toThrow();

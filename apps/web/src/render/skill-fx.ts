@@ -275,6 +275,22 @@ export const FALLBACK_FX: FxProfile = {
   impactCue: "skill-ember-bolt-impact",
 };
 
+/** Snap Shot's arrow drawn harder: a longer, brighter streak and a bigger spray. */
+const DRAWN_ARROW_FX: FxProfile = {
+  ...FALLBACK_FX,
+  core: new Color3(0.95, 0.92, 0.82),
+  wake: new Color3(0.66, 0.63, 0.56),
+  trailWidth: 0.06,
+  emitRate: 40,
+  sizeStart: 0.26,
+  sizeEnd: 0.05,
+  lifeMin: 0.04,
+  lifeMax: 0.08,
+  burstColour: new Color3(0.85, 0.82, 0.72),
+  burstRadius: 1.3,
+  flightCue: null,
+};
+
 export const SKILL_FX: Record<string, FxProfile> = {
   // The real cast: a white-hot core dragging a deep orange wake, heavy and slow.
   "skill.ember_bolt.v1": {
@@ -317,7 +333,11 @@ export const SKILL_FX: Record<string, FxProfile> = {
     burstRadius: 0.9,
     flightCue: null,
   },
+  "skill.piercing_shot.v1": DRAWN_ARROW_FX,
+  "skill.split_arrow.v1": DRAWN_ARROW_FX,
   "skill.strike.v1": FALLBACK_FX,
+  "skill.heavy_strike.v1": FALLBACK_FX,
+  "skill.ground_slam.v1": FALLBACK_FX,
   "skill.cinder_ground.v1": {
     ...FALLBACK_FX,
     core: new Color3(1, 0.42, 0.1),

@@ -42,6 +42,22 @@ describe("first tier-1 map, fresh character (bot)", () => {
   });
 });
 
+/** Level 10 holds every class's level-8 area skill, which a level-1 map never sees. */
+describe("three maps at level 10 (bot)", () => {
+  const sum = Object.fromEntries(CLASS_IDS.map((c) =>
+    [c, summarize([1, 2, 3, 4, 5, 6].flatMap((s) => campaign(c, 400 + s, 3, {}, 10)))])) as Record<string, Summary>;
+
+  it.each(CLASS_IDS)("%s clears every map and rarely dies", (c) => {
+    expect(sum[c]!.clearRate).toBe(1);
+    expect(sum[c]!.deathsPerMap).toBeLessThan(0.5);
+  });
+
+  it("the classes clear within 25% of each other", () => {
+    const t = CLASS_IDS.map((c) => sum[c]!.meanClearSec);
+    expect(Math.max(...t) / Math.min(...t)).toBeLessThan(1.25);
+  });
+});
+
 // ── The wide sweep ───────────────────────────────────────────────────────────
 
 const FULL = process.env["PLAYTEST"] === "full";

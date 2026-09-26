@@ -58,6 +58,10 @@ export type EffectNode =
        * one breakpoint can widen what an earlier one opened.
        */
       pierceCount?: number;
+      /** Projectiles per cast, fanned symmetric about the aim. Absent is 1. */
+      count?: number;
+      /** Full width of the fan. Every projectile's offset must land on a 5 degree step. */
+      spreadDegrees?: number;
     }
   | {
       type: "spawnGroundArea";
@@ -313,6 +317,25 @@ function validateEffectNode(v: unknown, idx: number, errors: string[]): boolean 
       errors.push(`${path}.pierceCount: must be a non-negative integer when present`);
       ok = false;
     }
+    const count = v["count"] ?? 1;
+    const spread = v["spreadDegrees"] ?? 0;
+    if (!isNonNegInt(count) || count === 0) {
+      errors.push(`${path}.count: must be a positive integer when present`);
+      ok = false;
+    } else if (!isNonNegInt(spread) || (spread as number) > 180) {
+      errors.push(`${path}.spreadDegrees: must be an integer in [0, 180] when present`);
+      ok = false;
+    } else {
+      // The sim rotates by a 5 degree sine table, so every offset must be on it.
+      const n = count as number;
+      for (let i = 0; n > 1 && i < n; i++) {
+        if (((spread as number) * (2 * i - (n - 1))) % (10 * (n - 1)) !== 0) {
+          errors.push(`${path}.spreadDegrees: every projectile's offset must be a multiple of 5 degrees`);
+          ok = false;
+          break;
+        }
+      }
+    }
   } else if (type === "spawnGroundArea") {
     if (!isNonNegInt(v["radiusFixed"])) {
       errors.push(`${path}.radiusFixed: must be a non-negative integer`);
@@ -469,6 +492,14 @@ export function validateSkillDef(v: unknown): ValidationResult {
   } else {
     for (let i = 0; i < effects.length; i++) {
       validateEffectNode(effects[i], i, errors);
+    }
+    // Patches land after this check, so the effect each gem level leaves is checked too.
+    const bps = isObj(v["growth"]) ? v["growth"]["breakpoints"] : undefined;
+    let patched = effects[0];
+    for (const bp of Array.isArray(bps) ? bps : []) {
+      if (!isObj(bp) || !isObj(bp["patch"]) || !isObj(patched)) continue;
+      patched = { ...patched, ...bp["patch"] };
+      validateEffectNode(patched, 0, errors);
     }
   }
   return { ok: errors.length === 0, errors };

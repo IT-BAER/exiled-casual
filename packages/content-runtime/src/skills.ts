@@ -20,6 +20,8 @@ const SKILL_DEFS: SkillDef[] = [
     id: "skill.ember_bolt.v1",
     name: "Ember Bolt",
     description: "Launches a bolt of fire that bursts on the first enemy it strikes.",
+    // The fire spells are the Emberbound's kit: a warrior throwing fireballs read wrong.
+    classId: "class.emberbound",
     /**
      * Nine ticks keeps the wind-up visible without making the skill feel held
      * back. The cooldown must stay ABOVE it: at eight it never bound, so a held
@@ -56,6 +58,7 @@ const SKILL_DEFS: SkillDef[] = [
     id: "skill.cinder_ground.v1",
     name: "Cinder Ground",
     description: "Scorches the ground at a location, burning enemies who stand in the cinders.",
+    classId: "class.emberbound",
     manaCostFixed: fp(20),
     cooldownTicks: 90,
     castTicks: 9,
@@ -79,6 +82,128 @@ const SKILL_DEFS: SkillDef[] = [
           durationTicks: 60,
           maxStacks: 5,
         },
+      },
+    ],
+  },
+  /*
+   * The other two classes' Ember Bolt: each class's first mana skill, at Ember
+   * Bolt's cost and beat. Heavy Strike hits harder and wider because a swing
+   * also pays the walk in: at 40 in a 100 degree arc the Ironsworn cleared
+   * 1.26x slower than the casters (playtest.test.ts). Heavy Strike is PoE1's;
+   * Piercing Shot is a name of our own.
+   */
+  {
+    id: "skill.heavy_strike.v1",
+    name: "Heavy Strike",
+    description: "A two-handed blow that crushes everything in front of you.",
+    classId: "class.ironsworn",
+    manaCostFixed: fp(10),
+    cooldownTicks: 30,
+    castTicks: 9,
+    critChancePct: 5,
+    unlockLevel: 1,
+    growth: {
+      perLevel: { damagePct: 6, manaPct: 4, own: { field: "reachFixed", perMille: 15 } },
+      breakpoints: [
+        { atLevel: 5, text: "Crushes a wider arc", patch: { arcDegrees: 180 } },
+        { atLevel: 15, text: "Crushes a far wider arc", patch: { arcDegrees: 240 } },
+      ],
+    },
+    effects: [
+      {
+        type: "meleeStrike",
+        reachFixed: fp(1.8),
+        arcDegrees: 140,
+        damage: { type: "physical", amountFixed: fp(56) },
+      },
+    ],
+  },
+  {
+    id: "skill.piercing_shot.v1",
+    name: "Piercing Shot",
+    description: "A drawn-back arrow that hits hard and punches on through.",
+    classId: "class.stalker",
+    manaCostFixed: fp(10),
+    cooldownTicks: 30,
+    castTicks: 9,
+    critChancePct: 7,
+    unlockLevel: 1,
+    growth: {
+      perLevel: { damagePct: 6, manaPct: 4, own: { field: "maxRangeFixed", perMille: 20 } },
+      breakpoints: [
+        { atLevel: 5, text: "Pierces two enemies", patch: { pierceCount: 2 } },
+        { atLevel: 15, text: "Pierces four enemies", patch: { pierceCount: 4 } },
+      ],
+    },
+    effects: [
+      {
+        type: "spawnProjectile",
+        speedPerSecFixed: fp(22),
+        radiusFixed: fp(0.35),
+        maxRangeFixed: fp(20),
+        damage: { type: "physical", amountFixed: fp(30) },
+        // The name is a promise: it goes through the first body from gem level 1.
+        pierceCount: 1,
+      },
+    ],
+  },
+  /*
+   * The other two classes' Cinder Ground: each class's level-8 answer to a pack,
+   * at its cost and beat. Ground Slam is PoE1/PoE2's; Split Arrow is PoE1's.
+   */
+  {
+    id: "skill.ground_slam.v1",
+    name: "Ground Slam",
+    description: "Smashes the ground, sending a shockwave through everything in front of you.",
+    classId: "class.ironsworn",
+    manaCostFixed: fp(20),
+    cooldownTicks: 90,
+    castTicks: 9,
+    critChancePct: 5,
+    unlockLevel: 8,
+    growth: {
+      perLevel: { damagePct: 6, manaPct: 4, own: { field: "reachFixed", perMille: 15 } },
+      breakpoints: [
+        { atLevel: 5, text: "Shakes a wider cone", patch: { arcDegrees: 90 } },
+        { atLevel: 15, text: "Shakes a far wider cone", patch: { arcDegrees: 120 } },
+      ],
+    },
+    effects: [
+      {
+        type: "meleeStrike",
+        reachFixed: fp(3.5),
+        arcDegrees: 70,
+        damage: { type: "physical", amountFixed: fp(45) },
+      },
+    ],
+  },
+  {
+    id: "skill.split_arrow.v1",
+    name: "Split Arrow",
+    description: "Looses a fan of arrows at once.",
+    classId: "class.stalker",
+    manaCostFixed: fp(20),
+    cooldownTicks: 60,
+    castTicks: 9,
+    critChancePct: 7,
+    unlockLevel: 8,
+    growth: {
+      perLevel: { damagePct: 6, manaPct: 4, own: { field: "maxRangeFixed", perMille: 20 } },
+      breakpoints: [
+        { atLevel: 5, text: "Looses seven arrows", patch: { count: 7, spreadDegrees: 60 } },
+        { atLevel: 15, text: "Every arrow pierces one enemy", patch: { pierceCount: 1 } },
+      ],
+    },
+    effects: [
+      {
+        type: "spawnProjectile",
+        speedPerSecFixed: fp(22),
+        radiusFixed: fp(0.3),
+        maxRangeFixed: fp(14),
+        damage: { type: "physical", amountFixed: fp(30) },
+        pierceCount: 0,
+        count: 5,
+        spreadDegrees: 40,
       },
     ],
   },

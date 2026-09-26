@@ -6,6 +6,7 @@ import { canAllocate, passivePoints, PASSIVE_TREE } from "@exiled/rules";
 import { SKILLS, DEFAULT_ATTACK_BY_CLASS, isCurrency } from "@exiled/content-runtime";
 import { PICKUP_RADIUS } from "@exiled/protocol";
 import { hasLineOfSight, type Collision } from "./collision";
+import { bodyRadiusOf } from "./body";
 import type { Simulation, Command } from "./loop";
 import type { World, Entity } from "./ecs";
 import type {
@@ -16,7 +17,18 @@ import type {
 const HZ = 30;
 /** A person sees a telegraph or a new target about this late. */
 export const REACTION_TICKS = 6;
-const BOLT = "skill.ember_bolt.v1";
+/** Each class's first mana skill: what a player leads with while the pool lasts. */
+const SIGNATURE: Record<string, string> = {
+  "class.ironsworn": "skill.heavy_strike.v1",
+  "class.stalker": "skill.piercing_shot.v1",
+  "class.emberbound": "skill.ember_bolt.v1",
+};
+/** Each class's level-8 pack answer. */
+const AREA: Record<string, string> = {
+  "class.ironsworn": "skill.ground_slam.v1",
+  "class.stalker": "skill.split_arrow.v1",
+  "class.emberbound": "skill.cinder_ground.v1",
+};
 const GROUND = "skill.cinder_ground.v1";
 const BLINK = "skill.blink.v1";
 /**
@@ -43,6 +55,8 @@ export interface BotGame { sim: Simulation; world: World; player: Entity; sessio
 export class Bot {
   private readonly body: number;
   private readonly attack: string;
+  private readonly signature: string;
+  private readonly area: string;
   private readonly melee: boolean;
   private readonly without: ReadonlySet<string>;
   /** Entities the bot gave up on reaching, until the tick stored. */
@@ -60,7 +74,9 @@ export class Bot {
   constructor(private readonly g: BotGame, private readonly collision: Collision, opts: BotOptions) {
     this.body = g.world.get<PlayerC>(g.player, "player")!.bodyRadius;
     this.attack = DEFAULT_ATTACK_BY_CLASS[g.classId]!;
-    this.melee = SKILLS.get(this.attack)!.effects.some((e) => e.type === "meleeStrike");
+    this.signature = SIGNATURE[g.classId]!;
+    this.area = AREA[g.classId]!;
+    this.melee = isMelee(this.attack);
     this.without = new Set(opts.without ?? []);
   }
 
@@ -136,13 +152,25 @@ export class Bot {
       // Backing off is for when it hurts; at health a caster stands and casts.
       if (!this.melee && near && dist(p, near.p) < fp(1.5) && h.life * 2 < h.maxLife && !world.has(near.e, "boss")) {
         out.push(cmd({ type: "moveTo", data: this.escape(p, near.p, fp(2.5)) }));
-      } else if (!skill || (skill === this.attack && this.melee && dist(p, target.p) > this.reach())) {
+      } else if (!skill && !(this.melee && this.hostileFireAt(target.p))) {
         const to = this.route(p, target.p);
-        if (to) out.push(cmd({ type: "moveTo", data: to }));
+        if (to) out.push(cmd(this.intoFire(p, to) ? { type: "stop" } : { type: "moveTo", data: to }));
       } else {
+        // In reach, or a swing whose way in is the monsters' fire: that one waits
+        // at the edge for its target to follow him out.
         out.push(cmd({ type: "stop" }));
       }
       return out;
+    }
+
+    // 2b. Awake and close, but a wall he stands against eats every bolt: open the range.
+    if (!this.melee) {
+      const near = this.monsters().find((x) => x.awake && dist(p, x.p) < fp(3));
+      const away = near && this.escape(p, near.p, fp(3));
+      if (away && (away["x"] !== p.x || away["y"] !== p.y)) {
+        out.push(cmd({ type: "moveTo", data: away }));
+        return out;
+      }
     }
 
     // 3. Nothing in reach: loot, then chests, then the nearest monster.
@@ -159,8 +187,20 @@ export class Bot {
     const to = this.route(p, goal.p);
     // No route at all: behind water or in a pocket the body does not fit.
     if (!to) { this.skip.set(goal.e, tick + 60 * HZ); return out; }
-    out.push(cmd({ type: "moveTo", data: to }));
+    out.push(cmd(this.intoFire(p, to) ? { type: "stop" } : { type: "moveTo", data: to }));
     return out;
+  }
+
+  /**
+   * The next unit of a walk lands in monsters' fire. Step 1 walks him out and this
+   * walk would take him straight back in, every other tick, at the pool's edge.
+   */
+  private intoFire(p: Position, to: Record<string, number>): boolean {
+    const t = { x: to["x"]!, y: to["y"]! };
+    const d = dist(p, t);
+    if (d === 0) return false;
+    const k = Math.min(1, fp(1) / d);
+    return this.hostileFireAt({ x: p.x + Math.round((t.x - p.x) * k), y: p.y + Math.round((t.y - p.y) * k) });
   }
 
   private pos(): Position {
@@ -192,13 +232,22 @@ export class Bot {
     return undefined;
   }
 
-  /** Stand-off distance: what Ember Bolt reaches, or a ranged class's own attack if that is shorter. */
+  /** Whether monsters' fire covers `at`, counting his own body. */
+  private hostileFireAt(at: Position): boolean {
+    const w = this.g.world;
+    return w.query("groundArea", "position").some((e) => {
+      const a = w.get<GroundAreaC>(e, "groundArea")!;
+      return a.team !== 0 && dist(at, w.get<Position>(e, "position")!) < a.radius + this.body;
+    });
+  }
+
+  /** Stand-off distance: the shorter of the two ranged skills a class leads with. */
   private range(): number {
     const reachOf = (id: string) => {
       const e = SKILLS.get(id)!.effects.find((x) => x.type === "spawnProjectile");
       return e && e.type === "spawnProjectile" ? e.maxRangeFixed : Infinity;
     };
-    const r = Math.min(reachOf(BOLT), this.melee ? Infinity : reachOf(this.attack));
+    const r = Math.min(reachOf(this.signature), reachOf(this.attack));
     return r === Infinity ? fp(12) : Math.trunc(r * 0.8);
   }
 
@@ -211,9 +260,10 @@ export class Bot {
     return dist(p, at) < this.range() && Math.abs(u) <= SCREEN.u && v <= SCREEN.up && -v <= SCREEN.down;
   }
 
-  private reach(): number {
-    const s = SKILLS.get(this.attack)!.effects.find((e) => e.type === "meleeStrike");
-    return s && s.type === "meleeStrike" ? s.reachFixed + fp(0.3) : fp(1.5);
+  /** How close a swing needs to stand: reach counts to the target's surface, so a body's width is spare. */
+  private reach(id: string): number {
+    const s = SKILLS.get(id)!.effects.find((e) => e.type === "meleeStrike");
+    return s && s.type === "meleeStrike" ? s.reachFixed + fp(0.3) : Infinity;
   }
 
   /** Nearest awake monster with a clear line, re-chosen only at human speed. */
@@ -225,12 +275,23 @@ export class Bot {
     }
     // With the boss down the map is over: only what comes at him is worth a shot.
     const seen = this.monsters()
-      .filter((x) => (!bossDead || x.awake) && this.inSight(p, x.p) && hasLineOfSight(this.collision, p.x, p.y, x.p.x, x.p.y, AIM_CLEARANCE))
+      .filter((x) => (!bossDead || x.awake) && this.inSight(p, x.p) && this.clearShot(p, x))
       .sort((a, b) => Number(b.awake) - Number(a.awake) || dist(p, a.p) - dist(p, b.p));
     const t = seen[0];
     this.target = t?.e;
     this.targetAt = tick;
     return t;
+  }
+
+  /**
+   * The bolt's own wall test, up to where it meets the target's body: a bolt dies on
+   * its first step that touches a wall, even with the target a step beyond it.
+   */
+  private clearShot(p: Position, t: { e: Entity; p: Position }): boolean {
+    const d = dist(p, t.p);
+    const k = Math.max(fp(0.4), d - AIM_CLEARANCE - bodyRadiusOf(this.g.world, t.e)) / d;
+    const x = p.x + Math.round((t.p.x - p.x) * Math.min(1, k)), y = p.y + Math.round((t.p.y - p.y) * Math.min(1, k));
+    return hasLineOfSight(this.collision, p.x, p.y, x, y, AIM_CLEARANCE);
   }
 
   private onBar(id: string): boolean {
@@ -246,19 +307,21 @@ export class Bot {
     return cd <= this.g.sim.tick && mana >= SKILLS.get(id)!.manaCostFixed;
   }
 
-  /** Field under a pack or a big body, bolt while mana lasts, the free attack otherwise. */
+  /** Area skill on a pack or a big body, the class's own skill while mana lasts, the free attack otherwise. */
   private pickSkill(p: Position, t: { e: Entity; p: Position }): string | undefined {
     const w = this.g.world;
     const packed = this.monsters().filter((x) => dist(t.p, x.p) < fp(2.5)).length >= 3;
     const big = w.has(t.e, "boss") || w.get<MonsterC>(t.e, "monster")!.rare === 1;
-    const burning = w.query("groundArea", "position").some((e) => {
+    // A second field on a burning pack is mana for nothing.
+    const burning = this.area === GROUND && w.query("groundArea", "position").some((e) => {
       const a = w.get<GroundAreaC>(e, "groundArea")!;
       return a.team === 0 && dist(t.p, w.get<Position>(e, "position")!) < a.radius;
     });
-    if ((packed || big) && !burning && this.ready(GROUND)) return GROUND;
-    if (this.ready(BOLT)) return BOLT;
-    if (this.melee && dist(p, t.p) > this.reach()) return undefined;
-    return this.onBar(this.attack) ? this.attack : undefined;
+    const d = dist(p, t.p);
+    if ((packed || big) && !burning && this.ready(this.area) && d <= this.reach(this.area)) return this.area;
+    if (this.ready(this.signature) && d <= this.reach(this.signature)) return this.signature;
+    // Out of reach of a swing: undefined walks him in.
+    return this.onBar(this.attack) && d <= this.reach(this.attack) ? this.attack : undefined;
   }
 
   private loot(): { e: Entity; p: Position }[] {
@@ -327,11 +390,15 @@ export class Bot {
   /** A walkable point `d` away from `from`, turning off the straight line if a wall is there. */
   private escape(p: Position, from: Position, d: number): Record<string, number> {
     const base = Math.atan2(p.y - from.y, p.x - from.x);
-    for (const turn of [0, 0.6, -0.6, 1.2, -1.2, 1.8, -1.8]) {
-      const x = p.x + Math.round(Math.cos(base + turn) * d);
-      const y = p.y + Math.round(Math.sin(base + turn) * d);
-      if (this.collision.isWalkable(x, y, this.body) && hasLineOfSight(this.collision, p.x, p.y, x, y, this.body)) {
-        return { x, y, tx: x, ty: y };
+    // Out of one fire and into the next is no escape: clear ground first, any ground second.
+    for (const clear of [true, false]) {
+      for (const turn of [0, 0.6, -0.6, 1.2, -1.2, 1.8, -1.8]) {
+        const x = p.x + Math.round(Math.cos(base + turn) * d);
+        const y = p.y + Math.round(Math.sin(base + turn) * d);
+        if (clear && this.hostileFireAt({ x, y })) continue;
+        if (this.collision.isWalkable(x, y, this.body) && hasLineOfSight(this.collision, p.x, p.y, x, y, this.body)) {
+          return { x, y, tx: x, ty: y };
+        }
       }
     }
     return { x: p.x, y: p.y, tx: p.x, ty: p.y };
@@ -357,6 +424,9 @@ const PASSIVE_WEIGHT: Record<string, number> = {
 };
 
 
+function isMelee(id: string): boolean {
+  return SKILLS.get(id)!.effects.some((e) => e.type === "meleeStrike");
+}
 function sess(g: BotGame): SessionC { return g.world.get<SessionC>(g.session, "session")!; }
 function progress(g: BotGame): ProgressC { return g.world.get<ProgressC>(g.session, "progress")!; }
 function dist(a: Position, b: Position): number {

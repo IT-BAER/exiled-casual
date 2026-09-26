@@ -49,7 +49,7 @@ describe("setSkillBar", () => {
   });
 
   it("normalizes a short bar up to SKILL_SLOT_COUNT and drops a duplicate id", () => {
-    const { sim, world, playerEntity } = createCombatSim(7, { area: "hideout" });
+    const { sim, world, playerEntity } = createCombatSim(7, { area: "hideout", classId: "class.emberbound" });
     const e = sessionOf(world);
     // ember_bolt unlocks at level 1, so it survives the unlock filter and the
     // duplicate-drop is the only thing under test here.

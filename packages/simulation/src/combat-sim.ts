@@ -50,6 +50,8 @@ export function createCombatSim(
     tier?: number;
     /** Waystone seed the run is on (0 = plain stone). Only with `area: "map"`. */
     waystoneSeed?: number;
+    /** The character's class, which decides the skills it is granted. Only with `area`. */
+    classId?: string;
   } = {},
 ): { sim: Simulation; world: World; playerEntity: Entity; layout: AreaLayout } {
   const sim = new Simulation();
@@ -121,6 +123,7 @@ export function createCombatSim(
       portalsLeft: 0,
       mapOpen: 0,
       pendingArea: "",
+      ...(opts.classId ? { classId: opts.classId } : {}),
       // A sim started straight on a map (the balance rig, the boss golden) has an
       // entrance too, and dying on it must be able to send him back to it.
       ...(opts.area === "map" ? { checkpointX: spawn.x, checkpointY: spawn.y } : {}),

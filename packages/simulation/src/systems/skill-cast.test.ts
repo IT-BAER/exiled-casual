@@ -241,6 +241,27 @@ describe("registerSkillCast", () => {
     expect(projPos.y).toBe(0);
   });
 
+  it("fans count projectiles symmetric about the aim, the middle one on it", () => {
+    const fan: SkillDef = {
+      ...EMBER_BOLT,
+      id: "skill.test_fan.v1",
+      effects: [{ ...EMBER_BOLT.effects[0]!, count: 3, spreadDegrees: 30 } as SkillDef["effects"][0]],
+    };
+    const sim = new Simulation();
+    registerSkillCast(sim, new Map([[fan.id, fan]]));
+    const caster = makeCaster(sim);
+    sim.step([{ tick: 0, entity: caster, type: "useSkill", skillId: fan.id, data: { tx: fp(10), ty: 0 } }]);
+    const dirs = sim.world.query("projectile")
+      .map((e) => sim.world.get<ProjectileC>(e, "projectile")!)
+      .map((p) => [p.dirx, p.diry] as const)
+      .sort((a, b) => a[1] - b[1]);
+    expect(dirs).toHaveLength(3);
+    expect(dirs[1]).toEqual([400, 0]);
+    // 400 per tick rotated 15 degrees: cos 0.9659, sin 0.2588.
+    expect(dirs[0]).toEqual([386, -103]);
+    expect(dirs[2]).toEqual([386, 103]);
+  });
+
   it("scales a spell's hit by the caster's increased spell damage", () => {
     const sim = new Simulation();
     registerSkillCast(sim, ALL_SKILLS);

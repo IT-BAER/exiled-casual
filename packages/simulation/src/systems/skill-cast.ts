@@ -11,6 +11,20 @@ import { damageCode } from "../damage-types";
 import { bodyRadiusOf } from "../body";
 import { spendScrollAndOpenPortal } from "../areas";
 
+/** sin(5k degrees) x 10000 for k = 0..18. Literal, not trig: the sim never depends on Math.sin rounding. */
+const SIN5 = [
+  0, 872, 1736, 2588, 3420, 4226, 5000, 5736, 6428, 7071,
+  7660, 8192, 8660, 9063, 9397, 9659, 9848, 9962, 10000,
+];
+
+/** (dx, dy) turned `deg` degrees, a multiple of 5 within [-90, 90] (the schema holds a fan to that). */
+function rotate(dx: number, dy: number, deg: number): [number, number] {
+  const k = Math.abs(deg) / 5;
+  const sin = Math.sign(deg) * SIN5[k]!;
+  const cos = SIN5[18 - k]!;
+  return [Math.trunc((dx * cos - dy * sin) / 10000), Math.trunc((dx * sin + dy * cos) / 10000)];
+}
+
 export function registerSkillCast(
   sim: Simulation,
   skills: ReadonlyMap<string, SkillDef>,
@@ -62,20 +76,25 @@ export function registerSkillCast(
         const step = fpStepToward(pos.x, pos.y, tx, ty, speedPerTick);
         if (step.dx === 0 && step.dy === 0) continue; // aim on top of caster
 
-        const proj = world.create();
-        world.set<Position>(proj, "position", { x: pos.x, y: pos.y });
-        world.set<ProjectileC>(proj, "projectile", {
-          dirx: step.dx,
-          diry: step.dy,
-          remainingRange: effect.maxRangeFixed,
-          radius: effect.radiusFixed,
-          damageType: damageCode(effect.damage.type),
-          damageAmount: scalePct(effect.damage.amountFixed, spellDamagePct) * (didCrit ? 2 : 1),
-          ownerId: caster,
-          team: casterTeam,
-          ...(effect.pierceCount ? { pierceLeft: effect.pierceCount, hitIds: [] } : {}),
-          skillId: skill.id,
-        });
+        const n = effect.count ?? 1;
+        for (let i = 0; i < n; i++) {
+          const off = n > 1 ? ((effect.spreadDegrees ?? 0) * (2 * i - (n - 1))) / (2 * (n - 1)) : 0;
+          const [dirx, diry] = off === 0 ? [step.dx, step.dy] : rotate(step.dx, step.dy, off);
+          const proj = world.create();
+          world.set<Position>(proj, "position", { x: pos.x, y: pos.y });
+          world.set<ProjectileC>(proj, "projectile", {
+            dirx,
+            diry,
+            remainingRange: effect.maxRangeFixed,
+            radius: effect.radiusFixed,
+            damageType: damageCode(effect.damage.type),
+            damageAmount: scalePct(effect.damage.amountFixed, spellDamagePct) * (didCrit ? 2 : 1),
+            ownerId: caster,
+            team: casterTeam,
+            ...(effect.pierceCount ? { pierceLeft: effect.pierceCount, hitIds: [] } : {}),
+            skillId: skill.id,
+          });
+        }
       } else if (effect.type === "spawnGroundArea") {
         // Aimed past a wall, the patch lands on the wall instead of in the room
         // behind it. The centre is swept as a point, so the circle may lick over

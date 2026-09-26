@@ -384,6 +384,23 @@ describe("Fixed field integer enforcement", () => {
     });
     expect(r.ok).toBe(false);
   });
+
+  it("takes a fan only when every projectile lands on the sim's 5 degree table", () => {
+    const fan = (count: number, spreadDegrees: number) =>
+      validateSkillDef({ ...validSkill, effects: [{ ...validSkill.effects[0]!, count, spreadDegrees } as SkillDef["effects"][0]] });
+    expect(fan(3, 30).ok).toBe(true);
+    expect(fan(2, 10).ok).toBe(true);
+    expect(fan(3, 25).ok).toBe(false);
+    expect(fan(0, 0).ok).toBe(false);
+    expect(fan(3, 190).ok).toBe(false);
+    const patched = (count: number) => validateSkillDef({
+      ...validSkill,
+      effects: [{ ...validSkill.effects[0]!, count: 3, spreadDegrees: 30 } as SkillDef["effects"][0]],
+      growth: { perLevel: { damagePct: 6, manaPct: 4 }, breakpoints: [{ atLevel: 5, text: "more", patch: { count } }] },
+    });
+    expect(patched(4).ok).toBe(true);
+    expect(patched(5).ok).toBe(false);
+  });
 });
 
 describe("validateMonsterDef archetypes", () => {

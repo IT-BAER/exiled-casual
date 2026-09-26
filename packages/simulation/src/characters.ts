@@ -21,7 +21,7 @@ import { START_LEVEL, classIdOr } from "@exiled/rules";
 import type { Item } from "@exiled/content-schema";
 import type { World } from "./ecs";
 import type { EquipmentC, ProgressC, SessionC, SkillsC, StashC } from "./components";
-import { EMPTY_STASH, restore, reseedDefaultAttack, snapshot, type PersistedState } from "./persist";
+import { EMPTY_STASH, grantSkills, restore, reseedDefaultAttack, snapshot, type PersistedState } from "./persist";
 import { recomputePlayerStats } from "./derived";
 import { openRoster } from "./roster-io";
 
@@ -63,7 +63,10 @@ export async function loadCharacterInto(
   if (record.state === null || record.state === undefined) {
     equipStartingGear(world, record.classId);
   } else {
-    restore(world, record.state as PersistedState);
+    // The row's class before the save's: restore drops another class's gems, and
+    // a save written before the session carried a class would lose its own.
+    const state = record.state as PersistedState;
+    restore(world, { ...state, session: { ...state.session, classId: classIdOr(record.classId) } });
   }
   // The roster is the authority on what class this is, not the save: a character
   // created before the session carried one still has it in the row. The passive
@@ -86,6 +89,9 @@ export async function loadCharacterInto(
       // its gear came out of the default class.
       world.set<SkillsC>(sessionE, "skills", reseedDefaultAttack(skills, classIdOr(record.classId)));
     }
+    // A never-played character was granted before it had a class, so without
+    // this it would open its first map with no class skill at all.
+    grantSkills(world);
   }
   // After restore either way: restore() would otherwise put the character's own
   // stale stash copy back over the shared one.

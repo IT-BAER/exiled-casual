@@ -262,7 +262,7 @@ describe("loadCharacterInto / saveCharacterTo", () => {
     const kv = await withOneCharacter("class.ironsworn");
     const world = fresh();
     await loadCharacterInto(kv, world, "vess");
-    // Level 8, so skill.cinder_ground.v1 is legitimately unlocked: restore() now
+    // Level 8, so skill.blink.v1 is legitimately unlocked: restore() now
     // runs the whole bar through the same unlock filter setSkillBar does, so a
     // locked (or still-START_LEVEL) choice here would be indistinguishable from
     // the hostile-save case this fix is guarding against.
@@ -270,13 +270,13 @@ describe("loadCharacterInto / saveCharacterTo", () => {
     const skills = get<SkillsC>(world, "skills");
     const customBar = [...skills.bar];
     // Not any class's default attack — a real, deliberate choice.
-    customBar[MOUSE_SLOT_BASE + 2] = "skill.cinder_ground.v1";
+    customBar[MOUSE_SLOT_BASE + 2] = "skill.blink.v1";
     set<SkillsC>(world, "skills", { ...skills, bar: customBar });
     await saveCharacterTo(kv, world, "vess");
 
     const reboot = fresh();
     await loadCharacterInto(kv, reboot, "vess");
-    expect(get<SkillsC>(reboot, "skills").bar[MOUSE_SLOT_BASE + 2]).toBe("skill.cinder_ground.v1");
+    expect(get<SkillsC>(reboot, "skills").bar[MOUSE_SLOT_BASE + 2]).toBe("skill.blink.v1");
   });
 
   // setSkillBar makes the mouse-right slot player-writable, including a
@@ -369,5 +369,39 @@ describe("loadCharacterInto / saveCharacterTo", () => {
     const reboot = fresh();
     expect(await loadCharacterInto(kv, reboot, MIGRATED_CHARACTER_ID)).toBe(true);
     expect(get<ProgressC>(reboot, "progress").level).toBe(14);
+  });
+});
+
+describe("class kits on load", () => {
+  it("a never-played character starts with its own class skill in socket 1, and no one else's", async () => {
+    const own = {
+      "class.ironsworn": "skill.heavy_strike.v1",
+      "class.stalker": "skill.piercing_shot.v1",
+      "class.emberbound": "skill.ember_bolt.v1",
+    } as const;
+    for (const [classId, skill] of Object.entries(own) as [keyof typeof own, string][]) {
+      const world = fresh();
+      await loadCharacterInto(await withOneCharacter(classId), world, "vess");
+      const skills = get<SkillsC>(world, "skills");
+      expect(skills.bar[0], classId).toBe(skill);
+      for (const other of Object.values(own)) {
+        expect(Object.hasOwn(skills.gems, other), `${classId} ${other}`).toBe(other === skill);
+      }
+    }
+  });
+
+  it("an Emberbound save written without a class keeps its Ember Bolt gem", async () => {
+    const kv = await withOneCharacter("class.emberbound");
+    const world = fresh();
+    await loadCharacterInto(kv, world, "vess");
+    const skills = get<SkillsC>(world, "skills");
+    set<SkillsC>(world, "skills", { ...skills, gems: { ...skills.gems, "skill.ember_bolt.v1": { level: 1, xp: 55 } } });
+    const { classId: _, ...classless } = get<SessionC>(world, "session");
+    set<SessionC>(world, "session", classless);
+    await saveCharacterTo(kv, world, "vess");
+
+    const reboot = fresh();
+    await loadCharacterInto(kv, reboot, "vess");
+    expect(get<SkillsC>(reboot, "skills").gems["skill.ember_bolt.v1"]).toEqual({ level: 1, xp: 55 });
   });
 });

@@ -329,8 +329,12 @@ describe("skill unlocks and growth", () => {
     "skill.snap_shot.v1": 1,
     "skill.ember_spark.v1": 1,
     "skill.ember_bolt.v1": 1,
+    "skill.heavy_strike.v1": 1,
+    "skill.piercing_shot.v1": 1,
     "skill.blink.v1": 4,
     "skill.cinder_ground.v1": 8,
+    "skill.ground_slam.v1": 8,
+    "skill.split_arrow.v1": 8,
     "skill.town_portal.v1": 10,
   };
 
@@ -347,10 +351,16 @@ describe("skill unlocks and growth", () => {
     }
   });
 
-  it("every skill is authored classless until the class kits land", () => {
-    for (const [id, def] of SKILLS) {
-      expect(def.classId, id).toBeUndefined();
-    }
+  it("each class owns its mana skills, and the free attacks and utility are classless", () => {
+    const owner: Record<string, string> = {
+      "skill.ember_bolt.v1": "class.emberbound",
+      "skill.cinder_ground.v1": "class.emberbound",
+      "skill.heavy_strike.v1": "class.ironsworn",
+      "skill.piercing_shot.v1": "class.stalker",
+      "skill.ground_slam.v1": "class.ironsworn",
+      "skill.split_arrow.v1": "class.stalker",
+    };
+    for (const [id, def] of SKILLS) expect(def.classId, id).toBe(owner[id]);
   });
 
   it("every skill grows damage and mana, mana never faster than damage", () => {
@@ -395,6 +405,34 @@ describe("skill unlocks and growth", () => {
       breakpoints: [
         { atLevel: 5, patch: { pierceCount: 1 } },
         { atLevel: 15, patch: { pierceCount: 3 } },
+      ],
+    },
+    "skill.heavy_strike.v1": {
+      own: { field: "reachFixed", perMille: 15 },
+      breakpoints: [
+        { atLevel: 5, patch: { arcDegrees: 180 } },
+        { atLevel: 15, patch: { arcDegrees: 240 } },
+      ],
+    },
+    "skill.piercing_shot.v1": {
+      own: { field: "maxRangeFixed", perMille: 20 },
+      breakpoints: [
+        { atLevel: 5, patch: { pierceCount: 2 } },
+        { atLevel: 15, patch: { pierceCount: 4 } },
+      ],
+    },
+    "skill.ground_slam.v1": {
+      own: { field: "reachFixed", perMille: 15 },
+      breakpoints: [
+        { atLevel: 5, patch: { arcDegrees: 90 } },
+        { atLevel: 15, patch: { arcDegrees: 120 } },
+      ],
+    },
+    "skill.split_arrow.v1": {
+      own: { field: "maxRangeFixed", perMille: 20 },
+      breakpoints: [
+        { atLevel: 5, patch: { count: 7, spreadDegrees: 60 } },
+        { atLevel: 15, patch: { pierceCount: 1 } },
       ],
     },
     "skill.blink.v1": {
