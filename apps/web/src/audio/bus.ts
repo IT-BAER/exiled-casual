@@ -14,7 +14,18 @@ let ctx: AudioContext | null = null;
 let dryBus: GainNode | null = null;
 let wetBus: GainNode | null = null;
 let master: GainNode | null = null;
-let level = 0.8;
+/**
+ * `?volume=N` (percent) scales the whole mix without touching the saved setting;
+ * a `?bot` run defaults to 10% so a watched playtest is not at full volume.
+ */
+export function urlVolumeScale(search: string): number {
+  const q = new URLSearchParams(search);
+  const v = q.get("volume");
+  if (v !== null && v !== "" && Number.isFinite(Number(v))) return unit(Number(v) / 100);
+  return q.has("bot") ? 0.1 : 1;
+}
+const URL_SCALE = typeof location !== "undefined" ? urlVolumeScale(location.search) : 1;
+let level = 0.8 * URL_SCALE;
 let room = 1;
 
 export type SoundCategory = "music" | "interface" | "skills" | "loot" | "environment";
@@ -59,7 +70,7 @@ export function soundLevel(): number {
 /** Set the output volume. Safe before any AudioContext exists. */
 export function setSoundLevel(volume: number, muted: boolean): void {
   const clamped = unit(volume);
-  level = muted ? 0 : clamped;
+  level = muted ? 0 : clamped * URL_SCALE;
   if (master && ctx) master.gain.setTargetAtTime(level, ctx.currentTime, 0.01);
 }
 
