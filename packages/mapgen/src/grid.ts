@@ -4,7 +4,7 @@
 import { fnv1a32 } from "./rng";
 
 /** 4 = profile-specific encounter budgets and the hybrid sunken-ruins layout. */
-export const ALGORITHM_VERSION = 4;
+export const ALGORITHM_VERSION = 5;
 
 /** Cell edge length in world units. Player body radius is 0.5, so a 3-cell
  *  corridor is 1.5 world units wide — player diameter (1.0) plus margin. */

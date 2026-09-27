@@ -438,6 +438,7 @@ export const FIELD_GRAMMAR: Grammar = {
   branchCount: 8,
   spawnTarget: 16,
   organicRim: true,
+  openSeams: true,
 };
 
 // Authoring guard: the canonical masks must be what the borders actually say.

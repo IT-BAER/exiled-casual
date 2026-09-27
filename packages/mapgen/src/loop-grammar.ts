@@ -34,6 +34,9 @@ export interface Grammar {
    * PoE's Strand ("follow the shoreline to the Boss Arena") is the second.
    */
   routeShape?: RouteShape;
+  /** Knock out the seam walls and corner posts the lattice leaves in open
+   *  ground (see `openSeams` in assemble-area.ts). Open ground only. */
+  openSeams?: boolean;
 }
 
 export type MaskClass = "solid" | "cap" | "straight" | "corner" | "tee" | "cross";
@@ -173,10 +176,10 @@ const STRAIGHT_NARROWS: Chunk = {
     "###..........###",
     "###...s......###",
     "####........####",
-    "######....######",
-    "######....######",
-    "######....######",
-    "######....######",
+    "#####......#####",
+    "#####......#####",
+    "#####......#####",
+    "#####......#####",
     "####........####",
     "###......s...###",
     "###..........###",

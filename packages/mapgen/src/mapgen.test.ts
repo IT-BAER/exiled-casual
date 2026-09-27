@@ -106,10 +106,10 @@ describe("generateArea", () => {
   // The generator assembles authored chunks on a 9x9 tile lattice, so an area is
   // a route through rooms, not a disc. Map SIZE is meant to vary — a short loop
   // is a fast map — so this pins the middle of the distribution rather than every
-  // seed. Measured over 200 seeds: loop runs 0.13-0.39 (median 0.32), open-field
-  // 0.13-0.71 (median 0.56). A per-seed floor would only pin the thinnest loop.
+  // seed. Measured over 200 seeds: loop runs 0.27-0.37 (median 0.32), open-field
+  // 0.61-0.83 (median 0.72). A per-seed floor would only pin the thinnest loop.
   it("is a routed area: the typical map is a healthy fraction walkable", () => {
-    for (const [grammar, lo, hi] of [["loop", 0.22, 0.45], ["open-field", 0.40, 0.70]] as const) {
+    for (const [grammar, lo, hi] of [["loop", 0.22, 0.45], ["open-field", 0.55, 0.80]] as const) {
       const fracs: number[] = [];
       for (let s = 0; s < 60; s++) {
         const { grid } = generateArea(s, V, grammar);
