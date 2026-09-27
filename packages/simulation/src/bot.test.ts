@@ -3,6 +3,8 @@ import { fp } from "@exiled/fixed-point";
 import { Bot } from "./bot";
 import { newCharacter } from "./playtest";
 import { spawnLabActors } from "./combat-sim";
+import { spawnMonster } from "./areas";
+import { MONSTERS } from "@exiled/content-runtime";
 import type { Collision } from "./collision";
 import type { Position, GroundAreaC, MonsterC } from "./components";
 
@@ -91,6 +93,21 @@ describe("Bot", () => {
     const out = new Bot(g, block, {}).decide(false);
     expect(out.some((c) => c.type === "useSkill")).toBe(false);
     expect(out.some((c) => c.type === "moveTo")).toBe(true);
+  });
+
+  it("does not back off a shooter behind a wall: it holds where it hits him and never follows", () => {
+    const { g, me } = setupAs("class.emberbound");
+    const x0 = me.x + fp(0.5), x1 = me.x + fp(1.5), y1 = me.y - fp(0.3), y0 = me.y - fp(5);
+    const block: Collision = {
+      isWalkable: (x, y, r) => {
+        const gx = Math.max(0, x0 - x, x - x1), gy = Math.max(0, y0 - y, y - y1);
+        return gx * gx + gy * gy >= r * r && (gx > 0 || gy > 0);
+      },
+    };
+    const wisp = spawnMonster(g.world, MONSTERS.get("monster.fen_wisp.v1")!, me.x + fp(1.9), me.y, false);
+    g.world.set<MonsterC>(wisp, "monster", { ...g.world.get<MonsterC>(wisp, "monster")!, state: "attack" });
+    const out = new Bot(g, block, {}).decide(false);
+    for (const c of out.filter((x) => x.type === "moveTo")) expect(c.data!["x"]!).toBeGreaterThanOrEqual(me.x);
   });
 
   it("stands and casts at full life with a monster close, rather than backing off", () => {

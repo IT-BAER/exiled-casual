@@ -3,7 +3,7 @@
 // balance runner (playtest.ts) and the client's ?bot mode both drive it.
 import { fp } from "@exiled/fixed-point";
 import { canAllocate, passivePoints, PASSIVE_TREE } from "@exiled/rules";
-import { SKILLS, DEFAULT_ATTACK_BY_CLASS, isCurrency } from "@exiled/content-runtime";
+import { SKILLS, DEFAULT_ATTACK_BY_CLASS, MONSTERS, isCurrency } from "@exiled/content-runtime";
 import { PICKUP_RADIUS } from "@exiled/protocol";
 import { hasLineOfSight, type Collision } from "./collision";
 import { bodyRadiusOf } from "./body";
@@ -164,8 +164,11 @@ export class Bot {
     }
 
     // 2b. Awake and close, but a wall he stands against eats every bolt: open the range.
+    // Only a melee monster follows him out; a shooter holds wherever it can hit him,
+    // so backing off one is undone by the walk in (3.) forever.
     if (!this.melee) {
-      const near = this.monsters().find((x) => x.awake && dist(p, x.p) < fp(3));
+      const near = this.monsters().find((x) => x.awake && dist(p, x.p) < fp(3)
+        && !MONSTERS.get(world.get<MonsterC>(x.e, "monster")!.defId)?.ranged);
       const away = near && this.escape(p, near.p, fp(3));
       if (away && (away["x"] !== p.x || away["y"] !== p.y)) {
         out.push(cmd({ type: "moveTo", data: away }));

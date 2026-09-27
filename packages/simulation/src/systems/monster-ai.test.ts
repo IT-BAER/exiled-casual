@@ -545,6 +545,24 @@ describe("shooters", () => {
     expect(world.query("projectile").length).toBe(0);
   });
 
+  it("in range behind a wall, it walks round for a line instead of shooting the rock", () => {
+    const sim = new Simulation();
+    registerMonsterAI(sim, { active: gridCollision(makeGrid(["...#...", "...#...", "...#...", "...#...", ".......", "......."])) });
+    const { world } = sim;
+    const player = world.create();
+    world.set<Position>(player, "position", { x: fp(5), y: fp(1) });
+    world.set<Faction>(player, "faction", { team: 0 });
+    world.set<PlayerC>(player, "player", { moveSpeed: 0, bodyRadius: fp(0.5) });
+    const m = spawnMonster(world, MONSTERS.get("monster.fen_wisp.v1")!, fp(1), fp(1), false);
+    world.set<MonsterC>(m, "monster", { ...world.get<MonsterC>(m, "monster")!, state: "chase" });
+
+    sim.step();
+    expect(world.query("projectile").length).toBe(0);
+    expect(world.get<Position>(m, "position")).not.toEqual({ x: fp(1), y: fp(1) });
+    for (let i = 0; i < 300; i++) sim.step();
+    expect(world.query("projectile").length).toBeGreaterThan(0);
+  });
+
   it("a melee monster still enqueues damage and spawns no bolt", () => {
     const { sim, world, player } = aiFixture({
       def: MONSTERS.get("monster.vaal_husk.v1")!,

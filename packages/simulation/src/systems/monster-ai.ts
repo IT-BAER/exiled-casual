@@ -203,17 +203,17 @@ export function registerMonsterAI(sim: Simulation, collisionRef?: CollisionRef):
         pack, m, mpos.x, mpos.y, mon.bodyRadius, Math.trunc(mon.moveSpeed / 2),
       );
 
-      if (nearestD2 <= ar * ar) {
+      // A shooter stands only where its bolt reaches: the bolt dies on the first
+      // wall its own radius touches, so one in range behind rock keeps walking.
+      const ranged = MONSTERS.get(mon.defId)?.ranged;
+      if (nearestD2 <= ar * ar
+        && (!ranged || hasLineOfSight(collision, mpos.x, mpos.y, ppos.x, ppos.y, ranged.radiusFixed))) {
         let { attackReadyTick } = mon;
         if (tick >= attackReadyTick) {
           const def = MONSTERS.get(mon.defId);
           if (def?.ranged) {
             // A shooter's range is its attack range, so chase already stops it
             // where it should stand: no kiting AI, and none needed.
-            // ponytail: it fires with no line-of-sight check, but the bolt now
-            // dies on the wall (projectile.ts), so a shooter behind rock wastes
-            // its shot instead of hitting through it. Not checking here costs one
-            // wasted cooldown; checking would need the ray at aim time too.
             const speedPerTick = Math.trunc(def.ranged.speedFixed / 30);
             const step = fpStepToward(mpos.x, mpos.y, ppos.x, ppos.y, speedPerTick);
             // Standing exactly on the player: nothing to aim at, so fall through
