@@ -678,6 +678,25 @@ export function scatterRocks(
   return scatter(cells, { ...BOULDERS, outwardHalfCell: cellSize / 2 });
 }
 
+/**
+ * Loose stone at the foot of the cliffs (cliffs.ts): the rock face is one mass,
+ * and a few fallen blocks along it are what stops it reading as a moulded skirt.
+ * Well under the old boulders in size and far sparser, so it never walls anything.
+ */
+const RUBBLE: ScatterConfig = {
+  spacing: 2.4,
+  minWidth: 0.45,
+  maxWidth: 0.95,
+  minAspect: 0.5,
+  maxAspect: 0.72,
+  maxTilt: 0.3,
+  sink: 0.15,
+};
+
+export function scatterRubble(cells: readonly RockCell[], cellSize = 0.5): RockPlacement[] {
+  return scatter(cells, { ...RUBBLE, outwardHalfCell: cellSize / 2 });
+}
+
 /** Sparse stone across the open floor — see DEBRIS for why it exists. */
 export function scatterDebris(
   cells: readonly RockCell[],

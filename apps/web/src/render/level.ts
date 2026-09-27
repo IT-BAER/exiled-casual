@@ -17,6 +17,7 @@ import {
   VOID_COLOR,
   WALL_MESH_NAME,
 } from "./engine";
+import { buildCliffs, CLIFF_MESH_NAME } from "./cliffs";
 import { tintHaze } from "./haze";
 import {
   DEBRIS_MESH_PREFIX,
@@ -31,7 +32,7 @@ import {
   scatterLedge,
   scatterLedgeWeed,
   scatterRampart,
-  scatterRocks,
+  scatterRubble,
   scatterWeed,
   DUNE_MESH_PREFIX,
   DUNE_RIM_MESH_PREFIX,
@@ -575,6 +576,7 @@ export function buildLevel(
 ): LevelResult {
   // Area swaps (and the open hideout) call this again; drop the previous walls.
   scene.getMeshByName(WALL_MESH_NAME)?.dispose();
+  scene.getMeshByName(CLIFF_MESH_NAME)?.dispose();
   // Braziers too: their own sweep in standBraziers never runs for the hideout
   // (no grid), which left a map's braziers standing there for good.
   for (const node of [...scene.meshes, ...scene.transformNodes]) {
@@ -844,7 +846,10 @@ export function buildLevel(
         FLORA_MESH_PREFIX,
       );
     } else {
-      buildRocks(scene, scatterRocks(rockCells, cellSize), material);
+      // The wall is one rock mass (cliffs.ts), tall only where it hides nothing;
+      // a sparse fall of stone at its foot breaks the line it meets the floor on.
+      buildCliffs(scene, grid, material);
+      buildRocks(scene, scatterRubble(rockCells, cellSize), material);
       buildRocks(scene, scatterDebris(floorCells), material, DEBRIS_MESH_PREFIX);
       buildRocks(scene, scatterRampart(edgeCells), material, RAMPART_MESH_PREFIX);
     }

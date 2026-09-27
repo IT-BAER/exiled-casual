@@ -367,7 +367,7 @@ export const BETA_AT_DEFAULT = 0.65;
  */
 export const CAMERA_ALPHA = -Math.PI / 4;
 const BETA_PER_UNIT = -0.08;
-const BETA_LIMIT = { min: BETA_AT_DEFAULT, max: 0.88 };
+export const BETA_LIMIT = { min: BETA_AT_DEFAULT, max: 0.88 };
 
 /**
  * The fastest the view may travel, in half-height units per second.
