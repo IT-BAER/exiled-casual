@@ -7,7 +7,10 @@ vi.mock("../audio/drop-sound", () => ({ playDropSound: vi.fn() }));
 import { playDropSound } from "../audio/drop-sound";
 import "@testing-library/jest-dom/vitest";
 import { render, screen, cleanup, fireEvent, act } from "@testing-library/react";
-import { Hud } from "./Hud";
+import { Hud, SKILL_ART } from "./Hud";
+import { SKILLS } from "@exiled/content-runtime";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { VENDOR_NAME, VENDOR_TITLE } from "../npc";
 import { xpPerHour, TICK_BACKGROUND, TICK_BACKGROUND_EMPTY, RAIL_H } from "./XpBar";
 import type { Snapshot } from "@exiled/protocol";
@@ -158,7 +161,7 @@ describe("Hud", () => {
       atlasSeed: 0,
       completedNodes: [],
       player: testPlayer({ mana: 30 }),
-      entities: [{ id: 10, kind: "monster", x: 0, y: 0, boss: true, bossAwake: true, bossPhase: 2, life: 600, maxLife: 1000 }],
+      entities: [{ id: 10, kind: "monster", x: 0, y: 0, species: "monster.mother_vhal.v1", boss: true, bossAwake: true, bossPhase: 2, life: 600, maxLife: 1000 }],
       inventory: { cols: 12, rows: 5, items: [] },
     stash: { cols: 12, rows: 12, items: [] },
     vendor: { cols: 12, rows: 12, items: [] },
@@ -168,6 +171,8 @@ describe("Hud", () => {
     render(<Hud snapshot={snap} />);
     expect(screen.getByTestId("boss-bar")).toBeInTheDocument();
     expect(screen.getByTestId("boss-phase")).toHaveTextContent("II");
+    // PoE2 names the boss inside its bar (boss-fight.png).
+    expect(screen.getByTestId("boss-name")).toHaveTextContent("Mother Vhal, the Drowned");
     // PoE2's bronze frame over the fill (boss-fight.png), sized to the screen like the globes.
     const bar = screen.getByTestId("boss-bar");
     expect(bar.querySelector("img")).toHaveAttribute("src", "/hud/boss-bar-frame-v1.png");
@@ -892,5 +897,16 @@ describe("unspent passive points", () => {
     const { queryByTestId } = render(<Hud snapshot={makeSnap({ passivePoints: 0 })} />);
     expect(queryByTestId("passive-open-count")).toBeNull();
     expect(queryByTestId("passive-open-button")).toBeNull();
+  });
+});
+
+describe("skill art", () => {
+  /** A skill with no entry draws its name as text in the bar, next to painted neighbours. */
+  it("every skill has an icon, and the file is there", () => {
+    for (const id of SKILLS.keys()) {
+      const art = SKILL_ART[id];
+      expect(art, id).toBeDefined();
+      expect(existsSync(resolve(__dirname, `../../public${art!.icon}`)), art!.icon).toBe(true);
+    }
   });
 });

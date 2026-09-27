@@ -1,6 +1,7 @@
 import React from "react";
 import type { Snapshot } from "@exiled/protocol";
 import { MAP_PORTALS } from "@exiled/protocol";
+import { MONSTERS } from "@exiled/content-runtime";
 import { DISPLAY, SERIF } from "./ItemTooltip";
 import { PANEL_W } from "./layout";
 import { SkillTooltip } from "./SkillTooltip";
@@ -114,6 +115,11 @@ export const SKILL_ART: Record<string, { icon: string; glow: string }> = {
   "skill.strike.v1": { icon: "/textures/skills/strike.png", glow: "#c4a45a" },
   "skill.snap_shot.v1": { icon: "/textures/skills/snap_shot.png", glow: "#9ab0c4" },
   "skill.ember_spark.v1": { icon: "/textures/skills/ember_spark.png", glow: "#e8993a" },
+  "skill.heavy_strike.v1": { icon: "/textures/skills/heavy_strike.png", glow: "#e0873a" },
+  "skill.piercing_shot.v1": { icon: "/textures/skills/piercing_shot.png", glow: "#a9c4dc" },
+  "skill.ground_slam.v1": { icon: "/textures/skills/ground_slam.png", glow: "#d9a14a" },
+  "skill.split_arrow.v1": { icon: "/textures/skills/split_arrow.png", glow: "#b6d4a8" },
+  "skill.town_portal.v1": { icon: "/textures/skills/town_portal.png", glow: "#4fb8ff" },
   // Not a skill: the built-in walk action a mouse socket can hold. It lives here
   // so the bar draws it exactly like everything else instead of special-casing it.
   [MOVE_SOCKET]: { icon: "/textures/skills/move.png", glow: "#9c8a6a" },
@@ -940,6 +946,25 @@ export function Hud({
                 transition: "width 120ms linear",
               }}
             />
+            <div
+              data-testid="boss-name"
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#f2dcc0",
+                fontFamily: DISPLAY,
+                fontSize: "0.85vw",
+                fontVariant: "small-caps",
+                letterSpacing: "0.04em",
+                textShadow: "0 1px 3px #000, 0 0 6px #000",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {(boss.species && MONSTERS.get(boss.species)?.name) ?? ""}
+            </div>
             <div
               data-testid="boss-phase"
               style={{
