@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect, afterEach } from "vitest";
-import { LoadAssetContainerAsync, Mesh, NullEngine, TransformNode, Vector3 } from "@babylonjs/core";
+import { LoadAssetContainerAsync, Mesh, NullEngine, Quaternion, TransformNode, Vector3 } from "@babylonjs/core";
 import { createScene } from "./engine";
 import { makeMesh } from "./meshes";
 import {
@@ -11,6 +11,7 @@ import {
   ACTION_RATIO_MIN,
   aimAngles,
   ARM_MAX,
+  BOW_CARRY,
   BOW_HOOK,
   BOW_RELEASE,
   bowStringFor,
@@ -1007,15 +1008,16 @@ describe("the cast clip drives the weapon arm", () => {
     }
   });
 
-  it("keys the bow as a layered rotation-only clip that never grips the weapon hand", () => {
+  it("keys the bow as a layered rotation-only clip that hooks the string with the empty draw hand", () => {
     expect(isLayeredClip("bow")).toBe(true);
     const clip = json.animations.find((a: { name: string }) => a.name === CLIP_NAME.bow);
     const keyed = clip.channels.map((c: { target: { node: number; path: string } }) =>
       `${json.nodes[c.target.node].name}.${c.target.path}`);
     // Metre translations from the wardrobe skeleton would tear the centimetre rig.
     for (const k of keyed) expect(k).toMatch(/\.rotation$/);
-    expect(keyed).not.toContain("hand_r.rotation");
-    expect(keyed).toContain("hand_l.rotation");
+    for (const bone of ["hand_l", "hand_r", "index_03_r", "middle_03_r", "ring_03_r"]) {
+      expect(keyed).toContain(`${bone}.rotation`);
+    }
     // The draw arm travels further than the bow arm, which only lifts and kicks.
     const draw = travel(CLIP_NAME.bow, "lowerarm_r");
     const bow = travel(CLIP_NAME.bow, "lowerarm_l");
@@ -1304,8 +1306,8 @@ describe("the bow is drawn on a runtime string", () => {
         node(name).computeWorldMatrix(true);
         return node(name).absolutePosition.clone();
       };
-      const pose = (frac: number) => {
-        for (const t of clip.targetedAnimations) {
+      const pose = (frac: number, group = clip) => {
+        for (const t of group.targetedAnimations) {
           const target = byName.get((t.target as TransformNode).name);
           if (t.animation.targetProperty === "rotationQuaternion" && target instanceof TransformNode) {
             target.rotationQuaternion = t.animation.evaluate(clip.from + (clip.to - clip.from) * frac);
@@ -1313,6 +1315,14 @@ describe("the bow is drawn on a runtime string", () => {
         }
       };
       const nocks = () => Vector3.Center(at("stalkerbow_nock_top"), at("stalkerbow_nock_bottom"));
+      // Roll of hand_l about the forearm, off its bind relation: a wrist does not twist.
+      const handRest = node("hand_l").rotationQuaternion!.clone();
+      const handRoll = () => {
+        const d = node("hand_l").rotationQuaternion!.multiply(Quaternion.Inverse(handRest));
+        const a = node("hand_l").position.normalizeToNew();
+        const along = d.x * a.x + d.y * a.y + d.z * a.z;
+        return Math.abs(Math.atan2(along, d.w) * 2 * 180 / Math.PI);
+      };
       const fingers = () => ["index_02_r", "middle_02_r", "ring_02_r"]
         .reduce((sum, f) => sum.addInPlace(at(f)), Vector3.Zero()).scaleInPlace(1 / 3);
 
@@ -1348,15 +1358,44 @@ describe("the bow is drawn on a runtime string", () => {
       // It points from the string across the bow fist.
       const tip = Vector3.TransformCoordinates(new Vector3(0, 0, 0.45), string.arrow.getWorldMatrix());
       expect(Vector3.Distance(tip, at("middle_01_l"))).toBeLessThan(Vector3.Distance(back, at("middle_01_l")));
+      // The nock is at the jaw, not down at the collarbone inside the chest armour.
+      expect(Math.abs(string.drawn.y - at("Head").y)).toBeLessThan(0.05);
+      // A real bow fist: index knuckle on top, thumb up, the wrist not rolled.
+      expect(at("index_01_l").y).toBeGreaterThan(at("pinky_01_l").y + 0.04);
+      expect(handRoll()).toBeLessThan(10);
+      // The shaft lies across the top of the bow fist, never through the fingers.
+      const axis = tip.subtract(back).normalize();
+      for (const f of ["index", "middle", "ring", "pinky"]) {
+        for (const i of [1, 2, 3]) {
+          const off = at(`${f}_0${i}_l`).subtract(back);
+          const gap = off.subtract(axis.scale(Vector3.Dot(off, axis))).length();
+          expect(gap, `${f}_0${i}_l`).toBeGreaterThan(0.025);
+        }
+      }
 
-      // The draw elbow is held level with the shoulder, not hanging at the chest.
+      // The draw elbow rides up with the hand at the jaw: level with the draw
+      // wrist so the forearm runs back along the arrow, never hanging at the chest.
       pose(BOW_RELEASE);
-      expect(Math.abs(at("lowerarm_r").y - at("upperarm_r").y)).toBeLessThan(0.08);
+      expect(Math.abs(at("lowerarm_r").y - at("hand_r").y)).toBeLessThan(0.08);
+      expect(at("lowerarm_r").y).toBeGreaterThan(at("upperarm_r").y);
 
       // Loosed: the sim's arrow takes over and the string snaps back straight.
       string.update(BOW_RELEASE);
       expect(string.arrow.isEnabled(false)).toBe(false);
       expect(Vector3.Distance(string.drawn, nocks())).toBeLessThan(1e-4);
+
+      // Between shots the arm hangs and swings with the locomotion like the other one:
+      // the carry holds the bow hand alone, and the relaxed fist tips the index-side
+      // limb (the BIND-named bottom nock) forward and up, clear of the ground.
+      const carry = lib.animationGroups.find((g) => g.name === BOW_CARRY)!;
+      expect(carry.targetedAnimations.map((t) => (t.target as TransformNode).name)).toEqual(["hand_l"]);
+      pose(0, lib.animationGroups.find((g) => g.name === CLIP_NAME.idle)!);
+      pose(0, carry);
+      const limb = at("stalkerbow_nock_bottom").subtract(at("stalkerbow_nock_top")).normalize();
+      // Idle alone leaves it 8 deg up, the carried fist 14.
+      expect(Math.asin(limb.y) * 180 / Math.PI).toBeGreaterThan(11);
+      expect(Math.min(at("stalkerbow_nock_top").y, at("stalkerbow_nock_bottom").y)).toBeGreaterThan(0.3);
+      expect(handRoll()).toBeLessThan(10);
 
       // Unworn, no string and no arrow, whatever the clip says.
       string.setEnabled(false);

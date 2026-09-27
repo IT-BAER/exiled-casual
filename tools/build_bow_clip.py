@@ -1,4 +1,5 @@
-"""Add a bow draw-and-release clip to `anim-library.glb` as `Rig|Bow_Shoot`.
+"""Add a bow draw-and-release clip to `anim-library.glb` as `Rig|Bow_Shoot`, and
+the bow arm's carry pose between shots as `Rig|Bow_Carry`.
 
 The pack has no bow take, so this one is keyed by hand. It is authored on the
 WARDROBE's male skeleton, not the library's: the bow is skinned to `hand_l`
@@ -13,8 +14,9 @@ turns the bow shoulder toward the target and the neck turns the head back.
 
 Only ROTATIONS of `KEYED` are spliced. Translations would carry this skeleton's
 metre rest lengths into a centimetre library, and the exporter samples every
-bone, so an unkeyed finger would otherwise be pinned to the T-pose. `hand_r` is
-left out because layered clips never write the weapon-hand bones (`rig.ts`).
+bone, so an unkeyed finger would otherwise be pinned to the T-pose. The draw
+hand and its fingers ARE keyed: the bow leaves that hand empty, and `rig.ts`
+lets this one layered clip write the weapon-hand bones.
 
 Same splice as `tools/build_cast_mirror.py`: the library is a vendored FBX2glTF
 conversion and re-exporting it would rewrite every clip. Idempotent.
@@ -47,8 +49,21 @@ FPS = 30
 KEYED = (
     "spine_01", "spine_02", "spine_03", "neck_01", "Head",
     "clavicle_l", "upperarm_l", "lowerarm_l", "hand_l",
-    "upperarm_r", "lowerarm_r",
+    "upperarm_r", "lowerarm_r", "hand_r",
 )
+# Degrees of curl per joint (01, 02, 03) at full hook. Three fingers take the
+# string in their last joints; the pinky and thumb fold out of its way.
+HOOK = {
+    "index": (15.0, 75.0, 45.0), "middle": (15.0, 75.0, 45.0), "ring": (15.0, 75.0, 45.0),
+    "pinky": (55.0, 90.0, 70.0), "thumb": (0.0, 30.0, 30.0),
+}
+DRAW_FINGERS = tuple(f"{f}_{i:02d}_r" for f in HOOK for i in (1, 2, 3))
+KEYED += DRAW_FINGERS
+# Between shots: the bow hand alone, laid over idle, walk and run by `rig.ts`.
+CARRY = "Rig|Bow_Carry"
+CARRY_KEYED = ("hand_l",)
+# How far the relaxed bow fist tips toward the thumb (radial deviation, ~25 deg is a wrist's range).
+CARRY_DEVIATION = math.radians(20.0)
 
 # The beat, in frames at 30 fps. The runtime stretches the whole clip over the
 # skill's repeat interval, so RELEASE is a fraction of it: 40% sits between Snap
@@ -57,16 +72,17 @@ LAST = 30
 RELEASE = 12
 
 # Torso yaw, radians about world up. Negative brings the bow shoulder forward.
-TWIST_AIM = math.radians(-40.0)
+TWIST_AIM = math.radians(-80.0)
 TWIST_EASY = math.radians(-25.0)
 # Bow tilt off vertical about the arrow line, top toward the bow-arm side.
 CANT = math.radians(10.0)
 # The IK target is the WRIST; the string sits in the finger joints ahead of it,
 # so the wrist is held this far back for the fingers to anchor at the jaw.
-WRIST_BACK = 0.2
-# The draw elbow's height at full draw, off the shoulder: level, as an archer holds it.
+WRIST_BACK = 0.02
+# The draw elbow's height at full draw, off the shoulder: level with the draw wrist,
+# so the forearm runs back along the arrow as an archer holds it.
 DRAW_ELBOW_RISE = 0.0
-# Blender's IK bends this arm's elbow toward its pole at -90 degrees, not 0.
+# Blender's IK bends either arm's elbow toward its pole at -90 degrees, not 0.
 DRAW_POLE_ANGLE = math.radians(-90.0)
 
 
@@ -131,24 +147,25 @@ def basis(up, fwd):
     return Matrix((up.cross(fwd), up, fwd)).transposed()
 
 
-def grip_rotation(hand_rest, wrist_rest, limb, arrow, fwd, forearm):
+def grip_rotation(hand_rest, limb, arrow, up, fwd, fist):
     """
-    World rotation of `hand_l` that stands the bow up along the arrow line.
+    World rotation of `hand_l` that stands the bow's upper limb along `up` with
+    the arrow side of the grip toward `fwd`.
 
-    Either limb may point up. The one that leaves the wrist nearer its rest
-    relation to the forearm wins, so the hand is never turned palm-out.
+    The limb on the fist's index side points up, so the index knuckle is on top
+    and the thumb wraps over the grip, as an archer holds it.
     """
-    up = Vector((0.0, 0.0, 1.0))
-    up = Matrix.Rotation(-CANT, 3, fwd) @ up
-    goal = basis(up, fwd)
-    best = None
-    for sign in (1.0, -1.0):
-        align = goal @ basis(limb * sign, arrow).inverted()
-        rot = align @ hand_rest
-        wrist = (wrist_rest.inverted() @ forearm.inverted() @ rot).to_quaternion().angle
-        if best is None or wrist < best[0]:
-            best = (wrist, rot)
-    return best[1]
+    sign = 1.0 if limb.dot(fist) > 0 else -1.0
+    return basis(up, fwd) @ basis(limb * sign, arrow).inverted() @ hand_rest
+
+
+def unroll(forearm, grip, wrist_rest):
+    """
+    Roll of `lowerarm_l` about its own axis that leaves the hand no twist off
+    its rest relation to the forearm: the forearm turns, the wrist does not.
+    """
+    q = (forearm.inverted() @ grip @ wrist_rest.inverted()).to_quaternion()
+    return 2.0 * math.atan2(q.y, q.w) if q.w >= 0 else 2.0 * math.atan2(-q.y, -q.w)
 
 
 def ik(arm, bone, target, pole, pole_angle=0.0):
@@ -160,13 +177,14 @@ def ik(arm, bone, target, pole, pole_angle=0.0):
     return con
 
 
-def draw_pole(arm, shoulder, wrist):
+def draw_pole(arm, shoulder, wrist, out):
     """
     A pole that puts the draw elbow level with the shoulder at full draw.
 
     The elbow can only lie on one circle, an upper arm from the shoulder and a
-    forearm from the wrist; the level point on it furthest back (+Y) is aimed
-    at from twice as far off the circle's centre. None for an arm near straight:
+    forearm from the wrist; of its two level points the one further `out` from
+    the body is aimed at from twice as far off the circle's centre (the other
+    folds the elbow across the chest, behind the neck). None for an arm near straight:
     the circle shrinks to a point and any pole there only spins the elbow.
     """
     bones = arm.data.bones
@@ -183,7 +201,7 @@ def draw_pole(arm, shoulder, wrist):
     v = n.cross(u)
     cos = max(-1.0, min(1.0, (shoulder.z + DRAW_ELBOW_RISE - centre.z) / (r * u.z)))
     sin = math.sqrt(1.0 - cos * cos)
-    elbow = max((centre + (u * cos + v * s * sin) * r for s in (1.0, -1.0)), key=lambda e: e.y)
+    elbow = max((centre + (u * cos + v * s * sin) * r for s in (1.0, -1.0)), key=lambda e: e.dot(out))
     return elbow * 2.0 - centre
 
 
@@ -199,6 +217,78 @@ def rotate_about(bone, angle):
     spin = Matrix.Translation(head) @ Matrix.Rotation(angle, 4, "Z") @ Matrix.Translation(-head)
     bone.matrix = spin @ bone.matrix
     bpy.context.view_layer.update()
+
+
+def turn(bone, axis, angle, world):
+    """Rotate a pose bone about a world axis through its head, children following."""
+    head = world @ bone.head
+    spin = Matrix.Translation(head) @ Matrix.Rotation(angle, 4, axis) @ Matrix.Translation(-head)
+    bone.matrix = world.inverted() @ spin @ world @ bone.matrix
+    bpy.context.view_layer.update()
+
+
+def knuckles(head_of, side):
+    """The fist's long axis, pinky to index, from the three joints down each finger."""
+    return sum((head_of(f"index_{i:02d}_{side}") - head_of(f"pinky_{i:02d}_{side}") for i in (1, 2, 3)),
+               Vector()).normalized()
+
+
+def draw_grip(pb, world, head_of, hand_r_rest, frame_rest, fwd, weight, curl):
+    """
+    Stand the draw hand up on the arrow line and hook its fingers.
+
+    Fingers point down the arrow with the index on top, so the palm faces the jaw
+    and the back of the hand faces out; `weight` blends from wherever the forearm
+    left the hand, `curl` scales the hook.
+    """
+    goal = basis(Vector((0.0, 0.0, 1.0)), fwd) @ frame_rest.inverted() @ hand_r_rest
+    now = (world @ pb["hand_r"].matrix).to_3x3().normalized()
+    rot = now.to_quaternion().slerp(goal.to_quaternion(), weight).to_matrix().to_4x4()
+    wrist = head_of("hand_r")
+    pb["hand_r"].matrix = world.inverted() @ Matrix.Translation(wrist) @ rot
+    bpy.context.view_layer.update()
+    along = (head_of("middle_01_r") - wrist).normalized()
+    palm = along.cross(knuckles(head_of, "r")).normalized()
+    if palm.dot(head_of("thumb_03_r") - wrist) < 0:
+        palm = -palm
+    hinge = along.cross(palm).normalized()
+    for finger, angles in HOOK.items():
+        for i, angle in enumerate(angles, start=1):
+            turn(pb[f"{finger}_{i:02d}_r"], hinge, math.radians(angle) * curl, world)
+
+
+def key_carry(arm, hand_rest, limb):
+    """
+    Key `CARRY`: the bow hand between shots, and nothing else of the arm.
+
+    The arm hangs and swings with idle, walk and run like the other one; the
+    relaxed fist only tips `CARRY_DEVIATION` toward the thumb, so the bow hangs
+    in it with its upper limb forward and up. Two identical frames of `hand_l`
+    against its forearm; the runtime reads the pose, not a motion.
+    """
+    world, pb = arm.matrix_world, arm.pose.bones
+    head_of = lambda n: world @ pb[n].head
+    arm.animation_data.action = None
+    for bone in pb:
+        bone.matrix_basis = Matrix.Identity(4)
+    bpy.context.view_layer.update()
+    fingers = (head_of("middle_01_l") - head_of("hand_l")).normalized()
+    fist = knuckles(head_of, "l")
+    stave = limb if limb.dot(fist) > 0 else -limb
+    grip = Matrix.Rotation(CARRY_DEVIATION, 3, fingers.cross(stave).normalized()) @ hand_rest
+    carried = world.inverted() @ (Matrix.Translation(head_of("hand_l")) @ grip.to_4x4())
+
+    stale = bpy.data.actions.get(CARRY)
+    if stale is not None:
+        bpy.data.actions.remove(stale)
+    arm.animation_data.action = bpy.data.actions.new(CARRY)
+    for frame in (0, 1):
+        bpy.context.scene.frame_set(frame)
+        pb["hand_l"].matrix = carried
+        bpy.context.view_layer.update()
+        pb["hand_l"].keyframe_insert("rotation_quaternion", frame=frame)
+    print(f"carry: fist tipped {math.degrees(CARRY_DEVIATION):.0f} deg toward the thumb, "
+          f"stave {math.degrees((grip @ hand_rest.inverted() @ stave).angle(fingers)):.0f} deg off the bind fingers")
 
 
 def build():
@@ -224,6 +314,8 @@ def build():
     forearm_rest = (world @ pb["lowerarm_l"].matrix).to_3x3().normalized()
     wrist_rest = forearm_rest.inverted() @ hand_rest
     _, limb, arrow = bow_frame(bpy.data.objects[BOW])
+    hand_r_rest = (world @ pb["hand_r"].matrix).to_3x3().normalized()
+    frame_rest = basis(knuckles(head_of, "r"), head_of("middle_01_r") - head_of("hand_r"))
 
     # Targets are laid out off the body at full aim twist, then held there.
     spine = ("spine_01", "spine_02", "spine_03")
@@ -252,15 +344,26 @@ def build():
     draw_hand = [(0, nock + low * 0.6), (5, nock), (RELEASE - 1, anchor), (RELEASE, anchor),
                  (RELEASE + 2, loosed), (22, loosed), (LAST, loosed + low * 1.4)]
     twist = [(0, TWIST_EASY), (5, TWIST_AIM), (22, TWIST_AIM), (LAST, TWIST_EASY)]
+    # The draw hand stands up as it reaches the nock, hooks the string, opens at
+    # the loose and relaxes back toward the carry's loose fist.
+    stand = [(0, 0.0), (4, 1.0), (RELEASE + 2, 1.0), (LAST, 0.0)]
+    hook = [(0, 0.5), (4, 1.0), (RELEASE, 1.0), (RELEASE + 2, 0.2), (22, 0.2), (LAST, 0.6)]
 
     target_l, target_r = empty("bow_target_l"), empty("bow_target_r")
     pole_l, pole_r = empty("bow_pole_l"), empty("bow_pole_r")
-    # Bow elbow soft and turned out-down; draw elbow level with the shoulder and behind it.
-    pole_l.location = shoulder_l + Vector((0.45, -0.1, -0.35))
-    anchor_pole = draw_pole(arm, shoulder_r, anchor)
-    constraints = [ik(arm, "lowerarm_l", target_l, pole_l), ik(arm, "lowerarm_r", target_r, pole_r, DRAW_POLE_ANGLE)]
+    # Bow elbow soft and straight under the arm line: the only turn of the upper arm
+    # that holds the fist index-up without twisting the forearm (out-down needs 34-64 deg).
+    pole_l.location = (shoulder_l + aim) / 2.0 + Vector((0.0, 0.0, -0.5))
+    # Out past the draw shoulder, not back along the arrow: the anchor sits near the
+    # midline, so the elbow circle's rear point is behind the neck.
+    out = shoulder_r - shoulder_l
+    out.z = 0.0
+    out.normalize()
+    anchor_pole = draw_pole(arm, shoulder_r, anchor, out)
+    constraints = [ik(arm, "lowerarm_l", target_l, pole_l, DRAW_POLE_ANGLE), ik(arm, "lowerarm_r", target_r, pole_r, DRAW_POLE_ANGLE)]
 
-    frames = []
+    fist = knuckles(head_of, "l")
+    frames, rolls = [], []
     for frame in range(LAST + 1):
         for name in KEYED:
             pb[name].matrix_basis = Matrix.Identity(4)
@@ -274,12 +377,17 @@ def build():
         target_l.location = track(bow_hand, frame)
         target_r.location = track(draw_hand, frame)
         # Per frame: a pole solved for one hand position folds the forearm upright at another.
-        pole_r.location = draw_pole(arm, shoulder_r, target_r.location) or anchor_pole
+        pole_r.location = draw_pole(arm, shoulder_r, target_r.location, out) or anchor_pole
         bpy.context.view_layer.update()
-        pose = {n: pb[n].matrix.copy() for n in KEYED}
-        forearm = (world @ pose["lowerarm_l"]).to_3x3().normalized()
         fwd = (target_l.location - target_r.location).normalized()
-        grip = grip_rotation(hand_rest, wrist_rest, limb, arrow, fwd, forearm)
+        draw_grip(pb, world, head_of, hand_r_rest, frame_rest, fwd, track(stand, frame), track(hook, frame))
+        pose = {n: pb[n].matrix.copy() for n in KEYED}
+        up = Matrix.Rotation(-CANT, 3, fwd) @ Vector((0.0, 0.0, 1.0))
+        grip = grip_rotation(hand_rest, limb, arrow, up, fwd, fist)
+        forearm = (world @ pose["lowerarm_l"]).to_3x3().normalized()
+        roll = unroll(forearm, grip, wrist_rest)
+        rolls.append(math.degrees(roll))
+        pose["lowerarm_l"] = pose["lowerarm_l"] @ Matrix.Rotation(roll, 4, "Y")
         head = pose["hand_l"].to_translation()
         pose["hand_l"] = world.inverted() @ (Matrix.Translation(world @ head) @ grip.to_4x4())
         frames.append(pose)
@@ -290,7 +398,8 @@ def build():
     line = (anchor - aim).normalized()
     off = math.degrees((elbow - anchor).angle(line))
     print(f"anchor frame {RELEASE}: draw shoulder z {shoulder_z:.3f}, elbow z {elbow.z:.3f}, "
-          f"forearm {off:.0f} deg off the arrow line")
+          f"forearm {off:.0f} deg off the arrow line, bow forearm rolled {rolls[RELEASE]:.0f} deg "
+          f"(range {min(rolls):.0f}..{max(rolls):.0f})")
 
     for name, con in zip(("lowerarm_l", "lowerarm_r"), constraints):
         pb[name].constraints.remove(con)
@@ -314,6 +423,8 @@ def build():
         for name in order:
             pb[name].keyframe_insert("rotation_quaternion", frame=frame)
 
+    key_carry(arm, hand_rest, limb)
+
     for obj in bpy.data.objects:
         obj.select_set(obj is arm)
     bpy.context.view_layer.objects.active = arm
@@ -329,11 +440,11 @@ def build():
     )
 
 
-def splice():
+def splice(clip_name, keyed):
     doc, blob = read_glb(ANIMS)
     add, extra = read_glb(SCRATCH)
 
-    clips = [a for a in add.get("animations", []) if a.get("name") == CLIP]
+    clips = [a for a in add.get("animations", []) if a.get("name") == clip_name]
     assert len(clips) == 1, [a.get("name") for a in add.get("animations", [])]
     clip = json.loads(json.dumps(clips[0]))
 
@@ -341,14 +452,14 @@ def splice():
     from_add = {i: n.get("name") for i, n in enumerate(add["nodes"])}
     channels = [
         c for c in clip["channels"]
-        if c["target"].get("path") == "rotation" and from_add.get(c["target"].get("node")) in KEYED
+        if c["target"].get("path") == "rotation" and from_add.get(c["target"].get("node")) in keyed
     ]
     found = sorted(from_add[c["target"]["node"]] for c in channels)
-    assert found == sorted(KEYED), f"channels {found} != {sorted(KEYED)}"
-    missing = [n for n in KEYED if n not in by_name]
+    assert found == sorted(keyed), f"channels {found} != {sorted(keyed)}"
+    missing = [n for n in keyed if n not in by_name]
     assert not missing, f"library lacks {missing}"
 
-    doc["animations"] = [a for a in doc.get("animations", []) if a.get("name") != CLIP]
+    doc["animations"] = [a for a in doc.get("animations", []) if a.get("name") != clip_name]
     blob += b"\0" * (-len(blob) % 4)
     samplers, remap = [], {}
     for channel in channels:
@@ -373,17 +484,19 @@ def splice():
         channel["target"]["node"] = by_name[from_add[channel["target"]["node"]]]
         samplers.append(sampler)
 
-    doc["animations"].append({"name": CLIP, "channels": channels, "samplers": samplers})
+    doc["animations"].append({"name": clip_name, "channels": channels, "samplers": samplers})
     doc["buffers"][0]["byteLength"] = len(blob) + (-len(blob) % 4)
     write_glb(ANIMS, doc, blob)
-    os.remove(SCRATCH)
     return len(channels)
 
 
 def main():
     build()
-    channels = splice()
-    print(f"{CLIP}: {channels} channels, {LAST + 1} frames, {os.path.getsize(ANIMS) / 1e6:.2f} MB")
+    channels = splice(CLIP, KEYED)
+    carried = splice(CARRY, CARRY_KEYED)
+    os.remove(SCRATCH)
+    print(f"{CLIP}: {channels} channels, {LAST + 1} frames; {CARRY}: {carried} channels; "
+          f"{os.path.getsize(ANIMS) / 1e6:.2f} MB")
 
 
 if __name__ == "__main__":

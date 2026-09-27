@@ -542,13 +542,25 @@ const BOW_LOOK = "stalkerbow";
 const BOW_NOCKS = ["stalkerbow_nock_top", "stalkerbow_nock_bottom"] as const;
 /** The draw hand's finger joints the string sits in; it is drawn to their centre. */
 const STRING_FINGERS = ["index_02_r", "middle_02_r", "ring_02_r"] as const;
-/** The bow fist's knuckle the nocked arrow rests across. */
-const ARROW_REST = "middle_01_l";
+/** The bow fist's finger joints; the nocked arrow rests across the top of them. */
+const BOW_FIST = ["index", "middle", "ring", "pinky"].flatMap((f) => [1, 2, 3].map((i) => `${f}_0${i}_l`));
+/** The bow thumb, which says which side of the stave the arrow lies on. */
+const BOW_THUMB = "thumb_02_l";
+/** Arrow axis above the highest fist joint (finger, glove, shaft) and off the stave's centre. */
+const ARROW_SHELF = 0.025;
+const ARROW_SIDE = 0.03;
 /**
  * Fractions of `Rig|Bow_Shoot` over which the fingers take the string: the draw
  * hand reaches the nock at frame 5 of 30. Before, the string is straight.
  */
 export const BOW_HOOK: readonly [number, number] = [3 / 30, 8 / 30];
+/**
+ * The bow fist between shots: a one-pose clip on `hand_l` alone (`tools/build_bow_clip.py`),
+ * so the arm swings with idle, walk and run while the fist tips the bow forward. Laid over
+ * them while the bow is worn and no action clip owns the upper body, eased over `CARRY_EASE_SEC`.
+ */
+export const BOW_CARRY = "Rig|Bow_Carry";
+const CARRY_EASE_SEC = 0.25;
 const STRING_RADIUS = 0.003;
 /** The donor's own string colour (`STRING_COLOUR` in `tools/prep_held_weapons.py`). */
 const STRING_COLOUR = new Color3(0.55, 0.5, 0.4);
@@ -573,13 +585,18 @@ export class BowString {
   private readonly bottom = new Vector3();
   private readonly fingerAt = new Vector3();
   private readonly dir = new Vector3();
+  private readonly up = new Vector3();
+  private readonly fist = new Vector3();
+  private readonly side = new Vector3();
+  private readonly shelf = new Vector3();
 
   constructor(
     scene: Scene,
     private readonly parent: TransformNode,
     private readonly nocks: readonly [TransformNode, TransformNode],
     private readonly fingers: readonly TransformNode[],
-    private readonly rest: TransformNode,
+    private readonly bowFist: readonly TransformNode[],
+    private readonly thumb: TransformNode,
   ) {
     this.string = MeshBuilder.CreateTube(`${parent.name}-bowstring`, {
       path: this.path, radius: STRING_RADIUS, tessellation: 4, updatable: true,
@@ -637,8 +654,26 @@ export class BowString {
     const shown = nocked && draw >= BOW_HOOK[1];
     this.arrow.setEnabled(shown);
     if (!shown) return;
-    this.rest.computeWorldMatrix(true);
-    Vector3.TransformCoordinatesToRef(this.rest.absolutePosition, this.toLocal, this.dir);
+    // The shelf: over the top of the fist along the stave, beside the stave on
+    // the thumb's side, so the shaft crosses the knuckles instead of the palm.
+    this.top.subtractToRef(this.bottom, this.up).normalize();
+    this.fist.setAll(0);
+    for (const joint of this.bowFist) {
+      joint.computeWorldMatrix(true);
+      this.fist.addInPlace(joint.absolutePosition);
+    }
+    this.fist.scaleInPlace(1 / this.bowFist.length);
+    let rise = -Infinity;
+    for (const joint of this.bowFist) {
+      rise = Math.max(rise, Vector3.Dot(joint.absolutePosition.subtract(this.fist), this.up));
+    }
+    this.fist.addToRef(this.up.scale(rise + ARROW_SHELF), this.shelf);
+    Vector3.CrossToRef(this.up, this.shelf.subtract(this.drawn), this.side);
+    this.side.normalize();
+    this.thumb.computeWorldMatrix(true);
+    if (Vector3.Dot(this.thumb.absolutePosition.subtract(this.fist), this.side) < 0) this.side.scaleInPlace(-1);
+    this.shelf.addInPlace(this.side.scaleInPlace(ARROW_SIDE));
+    Vector3.TransformCoordinatesToRef(this.shelf, this.toLocal, this.dir);
     this.dir.subtractInPlace(this.path[1]!).normalize();
     // The arrow is built centred along +Z, so its nock is half a shaft back.
     this.path[1]!.addToRef(this.dir.scale(ARROW_LENGTH / 2), this.arrow.position);
@@ -659,10 +694,11 @@ export function bowStringFor(scene: Scene, parent: TransformNode, byName: Map<st
   };
   const top = node(BOW_NOCKS[0]);
   const bottom = node(BOW_NOCKS[1]);
-  const rest = node(ARROW_REST);
+  const thumb = node(BOW_THUMB);
   const fingers = STRING_FINGERS.map(node).filter((f): f is TransformNode => f !== null);
-  if (!top || !bottom || !rest || fingers.length !== STRING_FINGERS.length) return null;
-  return new BowString(scene, parent, [top, bottom], fingers, rest);
+  const fist = BOW_FIST.map(node).filter((f): f is TransformNode => f !== null);
+  if (!top || !bottom || !thumb || fingers.length !== STRING_FINGERS.length || fist.length !== BOW_FIST.length) return null;
+  return new BowString(scene, parent, [top, bottom], fingers, fist, thumb);
 }
 
 /**
@@ -677,7 +713,8 @@ const LOWER_BODY: ReadonlySet<string> = new Set([
 
 /**
  * Weapon-hand bones layered actions must not touch, or the fingers open and the
- * weapon floats. The grip is whatever the locomotion clip left them at.
+ * weapon floats. The grip is whatever the locomotion clip left them at. The bow
+ * draw is the exception: the bow is in the other hand and this one hooks the string.
  */
 const WEAPON_HAND: ReadonlySet<string> = new Set([
   "hand_r",
@@ -922,6 +959,10 @@ export class RigActor {
   private bowHand: TransformNode | null = null;
   private bowString: BowString | null = null;
   private stringObserver: Observer<Scene> | null = null;
+  /** The carry pose per bow-arm bone, how far it is laid over the clips, and its observer. */
+  private carry: { node: TransformNode; pose: Quaternion }[] = [];
+  private carryWeight = 0;
+  private carryObserver: Observer<Scene> | null = null;
   /** Bones that carry the cast toward the cursor: spine, clavicle, upper arm. */
   private aimBones: TransformNode[] = [];
   /** World-space aim target (x = Babylon x, z = Babylon z). */
@@ -1325,7 +1366,7 @@ export class RigActor {
       const group = new AnimationGroup(`${this.host.name}-${clip}`, this.scene);
       for (const targeted of source.targetedAnimations) {
         const sourceNode = targeted.target as Node;
-        if (upperOnly && (LOWER_BODY.has(sourceNode.name) || WEAPON_HAND.has(sourceNode.name))) continue;
+        if (upperOnly && (LOWER_BODY.has(sourceNode.name) || (WEAPON_HAND.has(sourceNode.name) && clip !== "bow"))) continue;
         const target = byName.get(sourceNode.name);
         if (!target) continue;
         const property = targeted.animation.targetProperty;
@@ -1356,6 +1397,27 @@ export class RigActor {
       // locomotion keeps the tighter one so a stop still plants the feet.
       group.blendingSpeed = isLayeredClip(clip) ? 0.06 : 0.12;
       this.groups.set(clip, group);
+    }
+
+    const carried = loaded.anims.animationGroups.find((g) => g.name === BOW_CARRY);
+    for (const t of carried?.targetedAnimations ?? []) {
+      const node = byName.get((t.target as Node).name);
+      if (t.animation.targetProperty === ROTATION && node instanceof TransformNode) {
+        this.carry.push({ node, pose: t.animation.evaluate(carried!.from) as Quaternion });
+      }
+    }
+    if (this.carry.length > 0) {
+      this.carryObserver = this.scene.onAfterAnimationsObservable.add(() => {
+        const worn = this.looks.weapon1 === BOW_LOOK;
+        const busy = [...UPPER_BODY_CLIPS].some((c) => this.groups.get(c)?.isPlaying);
+        const step = (this.scene.getEngine?.()?.getDeltaTime?.() ?? 16) / 1000 / CARRY_EASE_SEC;
+        this.carryWeight = worn && !busy ? Math.min(1, this.carryWeight + step) : Math.max(0, this.carryWeight - step);
+        if (this.carryWeight <= 0) return;
+        for (const { node, pose } of this.carry) {
+          const rot = node.rotationQuaternion;
+          if (rot) Quaternion.SlerpToRef(rot, pose, this.carryWeight, rot);
+        }
+      });
     }
 
     this.active = null;
@@ -1583,6 +1645,10 @@ export class RigActor {
     this.bowHand = null;
     if (this.stringObserver) this.scene.onBeforeRenderObservable.remove(this.stringObserver);
     this.stringObserver = null;
+    if (this.carryObserver) this.scene.onAfterAnimationsObservable.remove(this.carryObserver);
+    this.carryObserver = null;
+    this.carry = [];
+    this.carryWeight = 0;
     this.bowString?.dispose();
     this.bowString = null;
     this.aimBones = [];

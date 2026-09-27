@@ -409,8 +409,10 @@ HAMMER_LEN_RATIO = 0.32
 HAMMER_AIM = (-0.18, -0.62, 0.76)   # the wand's, see WAND_AIM
 HAMMER_FACE = (0.0, -1.0, 0.0)
 BOW_LEN_RATIO = 0.64
-BOW_AIM = (0.0, -0.25, 0.97)
-BOW_FACE = (-1.0, 0.0, 0.0)
+# None: measured off the fist. A stave runs along the knuckles with the string
+# toward the wrist, or the wrist bends to hold it up and the fist closes on air.
+BOW_AIM = None
+BOW_FACE = None
 
 RIGID_GEAR = (
     {
@@ -1319,6 +1321,10 @@ def fit_held(donor, body, rig, side, length_ratio, aim, face):
         [f"{f}_04_end_{side}" for f in FINGERS]
     hand = [f"hand_{side}"] + [f"{f}_{i:02d}_{side}" for f in FINGERS + ("thumb",) for i in (1, 2, 3)]
     M, posed, mats = idle_pose(rig, f"hand_{side}", sorted(set(fist + hand)))
+    if aim is None:
+        aim = sum((posed[f"index_{i:02d}_{side}"] - posed[f"pinky_{i:02d}_{side}"] for i in (1, 2, 3)), Vector())
+    if face is None:
+        face = posed[f"hand_{side}"] - posed[f"middle_01_{side}"]
     up = Vector(aim).normalized()
     ahead = Vector(face) - up * Vector(face).dot(up)
     if ahead.length < 1e-6:
@@ -1342,7 +1348,7 @@ def fit_held(donor, body, rig, side, length_ratio, aim, face):
         "length_m": round(d_dims.z * scale, 4),
         "hole_m": [round(v, 4) for v in hole],
         "grip_slide_mm": round(along * 1000, 1),
-        "aim_world": list(aim), "face_world": list(face),
+        "aim_world": [round(v, 4) for v in aim], "face_world": [round(v, 4) for v in face],
         "fist_gap_p01_mm": round(p01 * 1000, 2),
         "fist_gap_median_mm": round(med * 1000, 2),
     }
