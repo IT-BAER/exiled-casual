@@ -1,0 +1,46 @@
+{
+ "built_from": "a radial graph about W.mantle_centre over the fitted helmet.stalker.hood, chest.stalker.coat, chest.stalker.gorget and base.male skin out of wardrobe.glb",
+ "centre": [
+  0.0,
+  0.0594,
+  1.5505
+ ],
+ "back_m": 0.03,
+ "columns": 80,
+ "rows": 28,
+ "hem_radius_m": 0.185,
+ "hem_front_dz": -0.045,
+ "hem_back_dz": -0.11,
+ "tuck_m": 0.02,
+ "top_hug_rows": 6,
+ "open_deg": 59.99999999999999,
+ "gap_mm": 3.0,
+ "hood_gap_mm": 1.0,
+ "wall_mm": 3.0,
+ "thinnest_wall_mm": 0.0,
+ "median_wall_mm": 1.722,
+ "hem_shared": 214,
+ "rim_edges": 0,
+ "paint_faces": [
+  3600,
+  4424,
+  824
+ ],
+ "triangles": 8848,
+ "triangles_reloaded": 8848,
+ "self_crossings": 0,
+ "clearance_p01_mm": 5.19,
+ "clearance_median_mm": 28.98,
+ "through": {
+  "hood": 0,
+  "coat": 0,
+  "gorget": 0,
+  "under": 0
+ },
+ "over_hood": 1.0,
+ "material": "MI_Mantle_Leather",
+ "leather": "d583c044-b586-4ecf-b3a1-12de1d032b3f",
+ "wrote": [
+  "D:/VSC/exiled-casual/assets/props/source/stalker-mantle-v1.glb"
+ ]
+}
