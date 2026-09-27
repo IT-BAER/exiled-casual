@@ -431,6 +431,24 @@ describe("pack separation", () => {
     }
   });
 
+  /**
+   * The player walks through monsters (his movement ignores their bodies), so the
+   * separation has to come from their side, or a pack stands inside him.
+   */
+  it("a monster the player walked onto is shouldered off him, and still hits", () => {
+    const sim = new Simulation();
+    registerMonsterAI(sim);
+    const { world } = sim;
+    playerAt(world, fp(0), fp(0));
+    const m = trash(world, fp(0.2), fp(0));
+    for (let i = 0; i < 30; i++) sim.step();
+    const p = world.get<Position>(m, "position")!;
+    // Contact is 0.5 + 0.5; the push fires only below it, so it settles just inside.
+    const floor = Math.trunc((fp(1) * 8) / 10);
+    expect(fpDist2(p.x, p.y, 0, 0)).toBeGreaterThanOrEqual(floor * floor);
+    expect(world.get<MonsterC>(m, "monster")!.state).toBe("attack");
+  });
+
   it("a lone monster's chase is untouched by the pass", () => {
     const run = () => {
       const sim = new Simulation();

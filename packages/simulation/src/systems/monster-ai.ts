@@ -2,7 +2,7 @@ import { fp, fpDist2, fpMul, fpStepToward, fpClamp, isqrt, type Fixed } from "@e
 import { WORLD_MIN, WORLD_MAX } from "../movement";
 import { chaseStep, hasLineOfSight, slide, type Collision, type CollisionRef } from "../collision";
 import { Simulation } from "../loop";
-import type { Position, MonsterC, Faction, Health, ProjectileC, TelegraphC, SessionC } from "../components";
+import type { Position, MonsterC, Faction, Health, ProjectileC, TelegraphC, SessionC, PlayerC } from "../components";
 import { mapDangerScale } from "../areas";
 import { MONSTERS } from "@exiled/content-runtime";
 
@@ -107,10 +107,17 @@ export function registerMonsterAI(sim: Simulation, collisionRef?: CollisionRef):
     // Snapshotted before anything moves, so a body's shove does not depend on how
     // far through the loop its neighbour happens to be. Bosses are in here as
     // pushers (trash gets shouldered off them) but never move: boss-ai owns them.
+    // So are the living players: his walk ignores their bodies, so without this a
+    // pack he stepped into stood inside him. Contact (radius + 0.5) stays inside
+    // every melee attackRange, so a shouldered monster still reaches.
     const pack: PackBody[] = world.query("monster", "position").map((e) => {
       const p = world.get<Position>(e, "position")!;
       return { e, x: p.x, y: p.y, r: world.get<MonsterC>(e, "monster")!.bodyRadius };
     });
+    for (const e of players) {
+      const p = world.get<Position>(e, "position")!;
+      pack.push({ e, x: p.x, y: p.y, r: world.get<PlayerC>(e, "player")!.bodyRadius });
+    }
 
     for (const m of world.query("monster", "position")) {
       // Boss entities have their own system (boss-ai.ts); skip them here.

@@ -18,13 +18,13 @@ const HZ = 30;
 /** A person sees a telegraph or a new target about this late. */
 export const REACTION_TICKS = 6;
 /** Each class's first mana skill: what a player leads with while the pool lasts. */
-const SIGNATURE: Record<string, string> = {
+export const SIGNATURE: Record<string, string> = {
   "class.ironsworn": "skill.heavy_strike.v1",
   "class.stalker": "skill.piercing_shot.v1",
   "class.emberbound": "skill.ember_bolt.v1",
 };
 /** Each class's level-8 pack answer. */
-const AREA: Record<string, string> = {
+export const AREA: Record<string, string> = {
   "class.ironsworn": "skill.ground_slam.v1",
   "class.stalker": "skill.split_arrow.v1",
   "class.emberbound": "skill.cinder_ground.v1",
@@ -152,7 +152,10 @@ export class Bot {
       // Backing off is for when it hurts; at health a caster stands and casts.
       if (!this.melee && near && dist(p, near.p) < fp(1.5) && h.life * 2 < h.maxLife && !world.has(near.e, "boss")) {
         out.push(cmd({ type: "moveTo", data: this.escape(p, near.p, fp(2.5)) }));
-      } else if (!skill && !(this.melee && this.hostileFireAt(target.p))) {
+      } else if (!skill && !(this.melee && (this.hostileFireAt(target.p)
+        // Already in a swing's reach with every swing cooling down: walking on
+        // takes him to the target's centre, where the swing has nothing to aim at.
+        || dist(p, target.p) <= this.shortestReach()))) {
         const to = this.route(p, target.p);
         if (to) out.push(cmd(this.intoFire(p, to) ? { type: "stop" } : { type: "moveTo", data: to }));
       } else {
@@ -269,6 +272,11 @@ export class Bot {
   private reach(id: string): number {
     const s = SKILLS.get(id)!.effects.find((e) => e.type === "meleeStrike");
     return s && s.type === "meleeStrike" ? s.reachFixed + fp(0.3) : Infinity;
+  }
+
+  /** The shortest reach of any swing on the bar: inside it, every swing he has can land. */
+  private shortestReach(): number {
+    return Math.min(...[this.attack, this.signature, this.area].filter((id) => this.onBar(id)).map((id) => this.reach(id)));
   }
 
   /** Nearest awake monster with a clear line, re-chosen only at human speed. */
