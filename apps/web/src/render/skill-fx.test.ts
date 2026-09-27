@@ -27,6 +27,7 @@ import {
   MELEE_DUST_NAME,
   swingTrail,
   SWING_TRAIL_NAME,
+  ARROW_LENGTH,
 } from "./skill-fx";
 
 let engine: NullEngine | undefined;
@@ -276,7 +277,7 @@ describe("arrows", () => {
       const arrow = makeMesh(scene, "projectile", "entity-1", Vector3.Zero(), undefined, id);
       arrow.computeWorldMatrix(true);
       const { minimum: min, maximum: max } = arrow.getBoundingInfo().boundingBox;
-      expect(max.z - min.z, id).toBeGreaterThan(0.9);
+      expect(max.z - min.z, id).toBeGreaterThan(ARROW_LENGTH);
       expect(max.x - min.x, id).toBeLessThan(0.2);
       expect(systems(scene, BOLT_TRAIL_NAME), id).toHaveLength(0);
     }

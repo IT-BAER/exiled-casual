@@ -437,10 +437,11 @@ export function attachBoltTrail(scene: Scene, mesh: AbstractMesh, fx: FxProfile 
 export const ARROW_NAME = "fx-arrow";
 
 /**
- * Longer than a real arrow on purpose: at the game camera a 0.7 shaft is a few
- * pixels, and the arrow is the one thing the player watches leave the bow.
+ * A touch longer than a real arrow: at the game camera a 0.7 shaft is a few
+ * pixels, and the arrow is the one thing the player watches leave the bow. At
+ * 0.9 it read as a spear.
  */
-export const ARROW_LENGTH = 0.9;
+export const ARROW_LENGTH = 0.75;
 
 function arrowMaterial(scene: Scene, part: string, colour: Color3, glow: number): StandardMaterial {
   const name = `${ARROW_NAME}-${part}-mat`;
@@ -457,18 +458,18 @@ function arrowMaterial(scene: Scene, part: string, colour: Color3, glow: number)
 
 /** Shaft, steel head and three fletching fins, pointing down +z like every mover. */
 export function buildArrow(scene: Scene, name: string): Mesh {
-  const shaft = MeshBuilder.CreateCylinder(`${name}-shaft`, { height: ARROW_LENGTH, diameter: 0.03, tessellation: 6 }, scene);
+  const shaft = MeshBuilder.CreateCylinder(`${name}-shaft`, { height: ARROW_LENGTH, diameter: 0.025, tessellation: 6 }, scene);
   shaft.rotation.x = Math.PI / 2;
   shaft.material = arrowMaterial(scene, "shaft", new Color3(0.5, 0.33, 0.17), 0.2);
-  const head = MeshBuilder.CreateCylinder(`${name}-head`, { height: 0.15, diameterTop: 0, diameterBottom: 0.08, tessellation: 4 }, scene);
+  const head = MeshBuilder.CreateCylinder(`${name}-head`, { height: 0.125, diameterTop: 0, diameterBottom: 0.067, tessellation: 4 }, scene);
   head.rotation.x = Math.PI / 2;
-  head.position.z = ARROW_LENGTH / 2 + 0.075;
+  head.position.z = ARROW_LENGTH / 2 + 0.0625;
   head.material = arrowMaterial(scene, "head", new Color3(0.62, 0.64, 0.7), 0.2);
   const parts: Mesh[] = [shaft, head];
   for (let i = 0; i < 3; i++) {
     const a = (i * 2 * Math.PI) / 3;
-    const fin = MeshBuilder.CreateBox(`${name}-fin${i}`, { width: 0.005, height: 0.06, depth: 0.17 }, scene);
-    fin.position.set(Math.sin(a) * 0.035, Math.cos(a) * 0.035, -ARROW_LENGTH / 2 + 0.11);
+    const fin = MeshBuilder.CreateBox(`${name}-fin${i}`, { width: 0.005, height: 0.05, depth: 0.14 }, scene);
+    fin.position.set(Math.sin(a) * 0.03, Math.cos(a) * 0.03, -ARROW_LENGTH / 2 + 0.09);
     fin.rotation.z = -a;
     fin.material = arrowMaterial(scene, "fletch", new Color3(0.86, 0.8, 0.7), 0.15);
     parts.push(fin);
