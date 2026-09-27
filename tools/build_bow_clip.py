@@ -166,7 +166,8 @@ def draw_pole(arm, shoulder, wrist):
 
     The elbow can only lie on one circle, an upper arm from the shoulder and a
     forearm from the wrist; the level point on it furthest back (+Y) is aimed
-    at from twice as far off the circle's centre.
+    at from twice as far off the circle's centre. None for an arm near straight:
+    the circle shrinks to a point and any pole there only spins the elbow.
     """
     bones = arm.data.bones
     upper = (bones["lowerarm_r"].head_local - bones["upperarm_r"].head_local).length
@@ -175,6 +176,8 @@ def draw_pole(arm, shoulder, wrist):
     n = (wrist - shoulder) / span
     d = (upper * upper - fore * fore + span * span) / (2.0 * span)
     r = math.sqrt(max(upper * upper - d * d, 0.0))
+    if r < 0.05:
+        return None
     centre = shoulder + n * d
     u = (Vector((0.0, 0.0, 1.0)) - n * n.z).normalized()
     v = n.cross(u)
@@ -239,7 +242,8 @@ def build():
     aim = Vector((line_x, shoulder_l.y - reach, line_z))
     anchor = Vector((line_x - 0.03, face.y - 0.02 + WRIST_BACK, line_z))
     nock = aim + Vector((0.0, 0.14, 0.0))
-    loosed = anchor + Vector((-0.10, 0.10, 0.02))
+    # The follow-through slides the hand straight back along the arrow line.
+    loosed = anchor + (anchor - aim).normalized() * 0.08
     kick = aim + Vector((0.0, -0.03, -0.02))
     low = Vector((0.0, 0.10, -0.22))
 
@@ -253,7 +257,7 @@ def build():
     pole_l, pole_r = empty("bow_pole_l"), empty("bow_pole_r")
     # Bow elbow soft and turned out-down; draw elbow level with the shoulder and behind it.
     pole_l.location = shoulder_l + Vector((0.45, -0.1, -0.35))
-    pole_r.location = draw_pole(arm, shoulder_r, anchor)
+    anchor_pole = draw_pole(arm, shoulder_r, anchor)
     constraints = [ik(arm, "lowerarm_l", target_l, pole_l), ik(arm, "lowerarm_r", target_r, pole_r, DRAW_POLE_ANGLE)]
 
     frames = []
@@ -269,6 +273,8 @@ def build():
             rotate_about(pb[name], -yaw / 2.0)
         target_l.location = track(bow_hand, frame)
         target_r.location = track(draw_hand, frame)
+        # Per frame: a pole solved for one hand position folds the forearm upright at another.
+        pole_r.location = draw_pole(arm, shoulder_r, target_r.location) or anchor_pole
         bpy.context.view_layer.update()
         pose = {n: pb[n].matrix.copy() for n in KEYED}
         forearm = (world @ pose["lowerarm_l"]).to_3x3().normalized()
