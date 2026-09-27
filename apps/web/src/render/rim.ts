@@ -46,6 +46,12 @@ export const RIM_INTENSITY = 0.34;
  * degrees of edge-on.
  */
 export const RIM_POWER = 3.4;
+/**
+ * The darkest a creature may render, as a fraction of its own albedo in display
+ * space. Outside the torch a dark hide on a dark floor is only an outline and two
+ * eyes; a lit creature is already brighter than this and keeps its shading.
+ */
+export const DARK_FLOOR = 0.5;
 
 const NAME = "ExiledRim";
 
@@ -119,6 +125,11 @@ class RimPlugin extends MaterialPluginBase {
       // this plugin on a mesh without them would fail to COMPILE rather than
       // fail to shade — which takes every creature sharing that material with it.
       CUSTOM_FRAGMENT_BEFORE_FRAGCOLOR: `
+        float darkFloor = ${DARK_FLOOR.toFixed(3)};
+        #ifdef FOG
+          darkFloor *= fog; // fogFragment's factor: a creature in the fog stays in it
+        #endif
+        finalColor.rgb = max(finalColor.rgb, pow(surfaceAlbedo, vec3(1.0 / 2.2)) * darkFloor);
         #ifdef NORMAL
           float rimFacing = 1.0 - clamp(dot(normalize(normalW), viewDirectionW), 0.0, 1.0);
           finalColor.rgb += rimColor * pow(rimFacing, rimPower) * rimIntensity;

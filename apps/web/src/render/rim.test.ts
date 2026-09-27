@@ -34,6 +34,15 @@ describe("creature rim light", () => {
     expect(plugin!.getCustomCode("vertex")).toBeNull();
   });
 
+  // Outside every light a dark hide is the void's colour; the floor keeps a body
+  // there, and a lit creature, already brighter, is left as it was.
+  it("never lets the body fall below a floor of its own albedo", () => {
+    const material = new PBRMaterial("hide", scene());
+    addRim(material);
+    const code = material.pluginManager!.getPlugin("ExiledRim")!.getCustomCode("fragment")!;
+    expect(code.CUSTOM_FRAGMENT_BEFORE_FRAGCOLOR).toMatch(/max\(finalColor\.rgb, .*surfaceAlbedo/);
+  });
+
   /**
    * `loadMonsters` walks the container's materials on every load, and a scene
    * that reloads them would otherwise stack a second term on the same surface —
