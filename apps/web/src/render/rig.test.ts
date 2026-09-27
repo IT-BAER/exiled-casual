@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, it, expect, afterEach } from "vitest";
 import { LoadAssetContainerAsync, Mesh, NullEngine, Quaternion, TransformNode, Vector3 } from "@babylonjs/core";
 import { createScene } from "./engine";
+import { ARROW_LENGTH } from "./skill-fx";
 import { makeMesh } from "./meshes";
 import {
   actionRatio,
@@ -22,6 +23,7 @@ import {
   CLIP_NAME,
   idleRatio,
   indexRigSubtree,
+  weaponTipLocal,
   IDLE_SETTLE_SEC,
   IDLE_SETTLED,
   isRigReady,
@@ -1276,6 +1278,40 @@ describe("indexRigSubtree against the real loader", () => {
   });
 });
 
+describe("a bolt leaves the weapon's tip", () => {
+  const MODELS = fileURLToPath(new URL("../../public/models/", import.meta.url));
+
+  /** A fixed reach along the hand bone's own +Y put the Ember Bolt half a unit past the wand, out beside the fingers. */
+  it("finds the wand's tip in the hand's frame", async () => {
+    const original = (globalThis as { FileReader?: unknown }).FileReader;
+    (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    try {
+      const file = new File([readFileSync(`${MODELS}wardrobe.glb`)], "wardrobe.glb", { type: "model/gltf-binary" });
+      const entries = (await LoadAssetContainerAsync(file, scene)).instantiateModelsToScene((n) => n, false, { doNotInstantiate: true });
+      const byName = indexRigSubtree(entries.rootNodes);
+      const hand = byName.get("hand_r") as TransformNode;
+      const wand = byName.get("weapon1.emberwand.mesh") as Mesh;
+      hand.computeWorldMatrix(true);
+      wand.computeWorldMatrix(true);
+      // The rest-pose tip: the wand vertex farthest from the hand holding it.
+      const p = wand.getVerticesData("position")!;
+      let tip = Vector3.Zero();
+      let far = -1;
+      for (let i = 0; i < p.length; i += 3) {
+        const v = Vector3.TransformCoordinates(new Vector3(p[i]!, p[i + 1]!, p[i + 2]!), wand.getWorldMatrix());
+        const d = Vector3.Distance(v, hand.absolutePosition);
+        if (d > far) { far = d; tip = v; }
+      }
+      const drawn = Vector3.TransformCoordinates(weaponTipLocal(hand, [wand]), hand.getWorldMatrix());
+      expect(Vector3.Distance(drawn, tip)).toBeLessThan(0.01);
+    } finally {
+      (globalThis as { FileReader?: unknown }).FileReader = original;
+    }
+  });
+});
+
 /**
  * The bow's string is drawn at runtime between two nocks the wardrobe carries on
  * `hand_l`, so the rigid bow mesh must not carry one of its own, and the drawn
@@ -1371,10 +1407,10 @@ describe("the bow is drawn on a runtime string", () => {
       expect(Vector3.Distance(string.drawn, nocks())).toBeGreaterThan(0.4);
       expect(string.arrow.isEnabled(false)).toBe(true);
       string.arrow.computeWorldMatrix(true);
-      const back = Vector3.TransformCoordinates(new Vector3(0, 0, -0.45), string.arrow.getWorldMatrix());
+      const back = Vector3.TransformCoordinates(new Vector3(0, 0, -ARROW_LENGTH / 2), string.arrow.getWorldMatrix());
       expect(Vector3.Distance(back, string.drawn)).toBeLessThan(0.01);
       // It points from the string across the bow fist.
-      const tip = Vector3.TransformCoordinates(new Vector3(0, 0, 0.45), string.arrow.getWorldMatrix());
+      const tip = Vector3.TransformCoordinates(new Vector3(0, 0, ARROW_LENGTH / 2), string.arrow.getWorldMatrix());
       expect(Vector3.Distance(tip, at("middle_01_l"))).toBeLessThan(Vector3.Distance(back, at("middle_01_l")));
       // The nock is at the jaw, not down at the collarbone inside the chest armour.
       expect(Math.abs(string.drawn.y - at("Head").y)).toBeLessThan(0.05);

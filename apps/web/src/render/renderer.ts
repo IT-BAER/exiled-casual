@@ -61,12 +61,16 @@ const HIT_FLASH_TICKS = 3;
 
 /**
  * How far a bolt is assumed to be flying when the cursor's own point is not
- * available (headless, or a cast before the first frame). Only the rate an
- * arrow drops from the bow hand depends on it.
+ * available (headless, or a cast before the first frame): the rate an arrow
+ * drops from the bow hand, and where a bolt meets the sim's line.
  */
 const ASSUMED_RANGE = 8;
-/** Flight over which a bolt closes the gap from the weapon tip to the sim's line. */
-const HAND_BLEND = 1.5;
+/**
+ * Farthest a bolt flies from the weapon tip before it is on the sim's line. It
+ * aims straight at the cursor and meets the line there; past this a far click
+ * would fly it visibly off the line it collides on.
+ */
+const HAND_BLEND_MAX = 6;
 
 /** How long a corpse lies there before it starts to sink, in ticks. */
 const CORPSE_TICKS = Math.round(CORPSE_SECONDS * TICKS_PER_SEC);
@@ -218,7 +222,7 @@ export class SnapshotRenderer {
   private aim: { x: number; y: number } | null = null;
   /** Newborn bolts offset to the casting hand: where each was launched and how
    *  far it has to go, which is the rate the offset is spent at. */
-  private readonly fromHand = new Map<number, { offset: Vector3; from: { x: number; y: number }; range: number }>();
+  private readonly fromHand = new Map<number, { offset: Vector3; from: { x: number; y: number }; range: number; join: number }>();
   /** What each entity is drawn as, so a dead one can be told from a closed portal. */
   private readonly kinds = new Map<number, MeshKind>();
   /** Bodies the sim has forgotten, still falling. `until` is the tick they start
@@ -378,7 +382,7 @@ export class SnapshotRenderer {
       // lives a single visible snapshot, and the burst goes off where it stands.
       if (e.kind === "projectile" && (e.team ?? 0) === 0 && playerRig && !this.meshes.has(e.id) && !e.spent) {
         if (!this.fromHand.has(e.id)) {
-          this.fromHand.set(e.id, { offset: Vector3.Zero(), from: { x: e.x, y: e.y }, range: ASSUMED_RANGE });
+          this.fromHand.set(e.id, { offset: Vector3.Zero(), from: { x: e.x, y: e.y }, range: ASSUMED_RANGE, join: HAND_BLEND_MAX });
           continue;
         }
         const hand = playerRig.castPoint();
@@ -386,13 +390,12 @@ export class SnapshotRenderer {
           // How far this bolt has to go: the cursor point the cast was aimed at,
           // which is the aim the frame before it appeared. An arrow drops over
           // it; floored, or one aimed at the player's own feet dives straight down.
-          const range = this.aim
-            ? Math.max(3, Math.hypot(this.aim.x - e.x, this.aim.y - e.y))
-            : ASSUMED_RANGE;
+          const aimed = this.aim ? Math.hypot(this.aim.x - e.x, this.aim.y - e.y) : ASSUMED_RANGE;
           this.fromHand.set(e.id, {
             offset: hand.subtract(new Vector3(e.x, Y_LIFT.projectile, e.y)),
             from: { x: e.x, y: e.y },
-            range,
+            range: Math.max(3, aimed),
+            join: Math.min(HAND_BLEND_MAX, Math.max(0.5, aimed)),
           });
         } else {
           this.fromHand.delete(e.id);
@@ -410,13 +413,13 @@ export class SnapshotRenderer {
       if (handEntry) {
         /*
          * The sim flies the bolt from the player's CENTRE; it is drawn from the
-         * weapon tip. The offset is spent over a fixed HAND_BLEND of flight, a
-         * straight line from the tip onto the sim's line, and from there the bolt
-         * is drawn exactly where the sim flies it. Each end of the interpolated
+         * weapon tip. The offset is spent over the flight to the aim point (capped
+         * at HAND_BLEND_MAX), one straight line from the tip to where it was aimed,
+         * and from there the bolt is drawn exactly where the sim flies it. Each end of the interpolated
          * step carries its own share, or the offset shrinks in tick-sized jumps.
          */
         const flown = (x: number, y: number) => Math.hypot(x - handEntry.from.x, y - handEntry.from.y);
-        const share = (x: number, y: number) => Math.max(0, 1 - flown(x, y) / HAND_BLEND);
+        const share = (x: number, y: number) => Math.max(0, 1 - flown(x, y) / handEntry.join);
         kp = share(ox, oy);
         kn = e.spent ? 0 : share(e.x, e.y);
         ox += handEntry.offset.x * kp;

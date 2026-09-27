@@ -932,6 +932,33 @@ export function indexRigSubtree(roots: readonly Node[]): Map<string, Node> {
  * One animated character instance, parented under an actor root that the
  * renderer keeps positioning and turning as before.
  */
+/** Reach along the hand bone when no weapon mesh says where its tip is. */
+const WEAPON_TIP = 0.45;
+
+/**
+ * Where a held weapon's tip sits in its hand bone's frame: the vertex farthest
+ * from the hand, read in the rest pose the parts are bound in. Rigid on the
+ * hand, so one read holds for every frame of every clip.
+ */
+export function weaponTipLocal(hand: TransformNode, weapon: readonly Mesh[]): Vector3 {
+  hand.computeWorldMatrix(true);
+  const at = hand.absolutePosition;
+  let tip: Vector3 | null = null;
+  let far = -1;
+  for (const mesh of weapon) {
+    const p = mesh.getVerticesData("position");
+    if (!p) continue;
+    const world = mesh.computeWorldMatrix(true);
+    for (let i = 0; i < p.length; i += 3) {
+      const v = Vector3.TransformCoordinates(new Vector3(p[i]!, p[i + 1]!, p[i + 2]!), world);
+      const d = Vector3.DistanceSquared(v, at);
+      if (d > far) { far = d; tip = v; }
+    }
+  }
+  if (!tip) return new Vector3(0, WEAPON_TIP, 0);
+  return Vector3.TransformCoordinates(tip, hand.getWorldMatrix().clone().invert());
+}
+
 export class RigActor {
   private readonly scene: Scene;
   private readonly host: Mesh;
@@ -957,6 +984,8 @@ export class RigActor {
   /** The casting hand, so a spell can be drawn leaving it. */
   private hand: TransformNode | null = null;
   private bowHand: TransformNode | null = null;
+  /** Each held look's tip in the hand's frame, read at build in the rest pose. */
+  private readonly tips = new Map<string, Vector3>();
   private bowString: BowString | null = null;
   private stringObserver: Observer<Scene> | null = null;
   /** The carry pose per bow-arm bone, how far it is laid over the clips, and its observer. */
@@ -1261,6 +1290,9 @@ export class RigActor {
 
     const handNode = byName.get(HAND_BONE);
     this.hand = handNode instanceof TransformNode ? handNode : null;
+    this.tips.clear();
+    const hand = this.hand;
+    if (hand) for (const [look, meshes] of this.parts.get("weapon1") ?? []) this.tips.set(look, weaponTipLocal(hand, meshes));
     const bowHandNode = byName.get(BOW_HAND_BONE);
     this.bowHand = bowHandNode instanceof TransformNode ? bowHandNode : null;
     this.bowString = bowStringFor(this.scene, this.pivot, byName);
@@ -1609,15 +1641,8 @@ export class RigActor {
     }
     if (!this.hand) return null;
     this.hand.computeWorldMatrix(true);
-    // Offset along the bone's direction to reach the weapon tip rather than the
-    // palm. glTF bones point along their own +Y, so transforming (0, WEAPON_TIP, 0)
-    // through the bone's world matrix lands at the tip.
-    const WEAPON_TIP = 0.45;
-    const tip = Vector3.TransformCoordinates(
-      new Vector3(0, WEAPON_TIP, 0),
-      this.hand.getWorldMatrix(),
-    );
-    return tip;
+    const local = this.tips.get(this.looks.weapon1 ?? "") ?? new Vector3(0, WEAPON_TIP, 0);
+    return Vector3.TransformCoordinates(local, this.hand.getWorldMatrix());
   }
 
   /**

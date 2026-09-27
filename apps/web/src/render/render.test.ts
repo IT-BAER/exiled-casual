@@ -581,15 +581,20 @@ describe("SnapshotRenderer", () => {
     expect(m2).not.toBeNull();
   });
 
-  it("flies a bolt from the weapon tip onto the sim's line within 1.5 units, wherever the cursor is", () => {
+  it.each([
+    // Cursor on the target: one straight line from the tip to where it was aimed.
+    5,
+    // A far cursor joins 6 units out, or the bolt flies half a unit off the line
+    // it collides on and bursts beside what it hit.
+    30,
+  ])("flies a bolt straight from the weapon tip to the aim point (cursor at %d)", (cursor) => {
     // The sim launches from the player's CENTRE. The drawn bolt leaves the weapon
-    // tip and closes that offset over a fixed HAND_BLEND of flight, in a straight
-    // line, then flies ON the sim's line: what it hits is where it is drawn.
+    // tip in ONE straight line to where it was aimed, meets the sim's line there,
+    // and flies on it: no bend partway to the target.
     engine = new NullEngine();
     const { scene } = createScene(engine);
     const renderer = new SnapshotRenderer(scene);
     const HAND = new Vector3(0.4, 1.2, 0.6); // weapon tip, out to the right
-    const BLEND = 1.5;
 
     const snap = (tick: number, x: number, entities = true) =>
       makeSnapshot({
@@ -606,8 +611,7 @@ describe("SnapshotRenderer", () => {
         castPoint: () => HAND,
       },
     };
-    // Far cursor: under the old rule the bolt stayed off the line for all 30 units.
-    renderer.setAim(30, 0);
+    renderer.setAim(cursor, 0);
 
     const drawn: { sim: number; x: number; z: number }[] = [];
     for (let i = 0; i <= 50; i++) {
@@ -621,15 +625,14 @@ describe("SnapshotRenderer", () => {
     const from = drawn[0]!;
     expect(from.x).toBeCloseTo(HAND.x, 2);
     expect(from.z).toBeCloseTo(HAND.z, 2);
-    const join = { x: from.sim + BLEND, z: 0 };
+    const meet = { x: Math.min(cursor, from.sim + 6), z: 0 };
     for (const p of drawn) {
-      if (p.sim - from.sim >= BLEND) {
+      if (p.sim >= meet.x) {
         expect(p.x).toBeCloseTo(p.sim, 3);
         expect(p.z).toBeCloseTo(0, 3);
       } else {
-        // Straight from the tip to where it joins: no curve on the way in.
-        const dx = join.x - HAND.x;
-        const dz = join.z - HAND.z;
+        const dx = meet.x - HAND.x;
+        const dz = meet.z - HAND.z;
         const off = Math.abs((p.x - HAND.x) * dz - (p.z - HAND.z) * dx) / Math.hypot(dx, dz);
         expect(off).toBeLessThan(0.01);
       }
