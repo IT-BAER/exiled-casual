@@ -361,3 +361,16 @@ props shaped after their inventory icons, each landing at its own angle.
 <td width="50%"><img src="screenshots/2026-09-26-ground-drop-props.jpeg" alt="Belts, a scroll, glowing orbs, a violet vial, a gold gem, a burning focus and a waystone scattered on the hideout floor" width="100%"><br><sub>Belts, currency, focus and waystone on the floor.</sub></td>
 </tr>
 </table>
+
+## 2026-09-27 · Drawing the bow like an archer
+
+The Stalker's bow fist now stands index-up, with the thumb wrapped over the grip and the wrist
+straight. The draw hand stands up at the jaw and hooks the string in three fingers. Between
+shots the bow arm hangs and swings with the walk like the other arm, and the fist keeps the bow
+tipped forward.
+
+<table>
+<tr>
+<td width="100%"><img src="screenshots/2026-09-27-bow-archer-grip.jpeg" alt="The Stalker at full draw seen from eight sides: bow fist upright, arrow on the knuckles, draw hand at the jaw" width="100%"><br><sub>Full draw from eight sides.</sub></td>
+</tr>
+</table>
