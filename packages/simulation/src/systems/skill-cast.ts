@@ -127,8 +127,9 @@ export function registerSkillCast(
         // what lets it hit several targets where a projectile stops at the first.
         const ax = tx - pos.x;
         const ay = ty - pos.y;
+        // Aimed at his own feet (a click on a monster standing on him) there is no
+        // wedge to test, so the swing takes everything in reach.
         const aimLen = isqrt(ax * ax + ay * ay);
-        if (aimLen === 0) continue;
 
         // The wedge test is a dot product against cos(half-arc), not atan2, so
         // the comparison stays deterministic fixed-point integer math.
@@ -145,7 +146,7 @@ export function registerSkillCast(
           if (dist2 > reach * reach) continue;
 
           const dLen = isqrt(dist2);
-          if (dLen > 0) {
+          if (dLen > 0 && aimLen > 0) {
             const cos = Math.trunc((ax * dx + ay * dy) * 10000 / (aimLen * dLen));
             if (cos < cosHalfArc) continue;
           }

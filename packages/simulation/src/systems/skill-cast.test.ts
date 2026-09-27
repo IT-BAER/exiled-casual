@@ -577,6 +577,16 @@ describe("registerSkillCast", () => {
       expect(sim.world.get<StrikeC>(caster, "strike")).toEqual({ tick: 1, hits: 0 });
     });
 
+    it("aimed at the caster's own feet, still hits what stands there", () => {
+      const sim = new Simulation();
+      registerSkillCast(sim, ALL_SKILLS);
+      const caster = makeCaster(sim);
+      const onTop = makeEnemy(sim, 0, 0);
+      const beside = makeEnemy(sim, fp(1.2), 0);
+      cleave(sim, caster, 0, 0);
+      expect(sim.damageQueue.map((d) => d.target).sort()).toEqual([onTop, beside].sort());
+    });
+
     it("never hits its own team", () => {
       const sim = new Simulation();
       registerSkillCast(sim, ALL_SKILLS);
