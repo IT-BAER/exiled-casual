@@ -79,7 +79,7 @@ export function createCombatSim(
   registerTelegraphResolve(sim);
   registerAilmentTick(sim);
   registerDamageResolve(sim);
-  registerDeath(sim);
+  registerDeath(sim, collisionRef);
   registerExpiry(sim);
 
   // ── Bootstrap player ─────────────────────────────────────────────────────

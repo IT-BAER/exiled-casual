@@ -15,6 +15,7 @@ import { recomputePlayerStats } from "../derived";
 import { ITEM_POOLS, baseOf, currencyItem, currencyForRoll, waystoneItem, FREE_ATTACKS } from "@exiled/content-runtime";
 import { grantSkills } from "../persist";
 import { dropGold } from "./gold";
+import type { CollisionRef } from "../collision";
 
 /**
  * Monster rarity as the loot math indexes it: 0..3 normal, magic, rare, unique.
@@ -40,8 +41,25 @@ const DROP_SPREAD: readonly { dx: number; dy: number }[] = [
   { dx: fp(-1.3), dy: fp(-0.8) },
 ];
 
-export function registerDeath(sim: Simulation): void {
+/**
+ * Where the boss-kill doorway may stand, relative to the corpse: clear of every
+ * DROP_SPREAD plate and the gold, so it never sits on the loot labels. The first
+ * one with room for a body wins; the corpse itself is the last resort.
+ */
+const PORTAL_BESIDE: readonly { dx: number; dy: number }[] = [
+  { dx: fp(0), dy: fp(-3.5) },
+  { dx: fp(3.5), dy: fp(0) },
+  { dx: fp(-3.5), dy: fp(0) },
+  { dx: fp(0), dy: fp(3.5) },
+  { dx: fp(2.5), dy: fp(-2.5) },
+  { dx: fp(-2.5), dy: fp(-2.5) },
+  { dx: fp(2.5), dy: fp(2.5) },
+  { dx: fp(-2.5), dy: fp(2.5) },
+];
+
+export function registerDeath(sim: Simulation, collisionRef?: CollisionRef): void {
   sim.register("death", (world, tick) => {
+    const collision = collisionRef?.active ?? null;
     for (const e of world.query("monster", "health")) {
       if ((world.get<Health>(e, "health")?.life ?? 1) > 0) continue;
 
@@ -83,8 +101,12 @@ export function registerDeath(sim: Simulation): void {
           // across a cleared map with a full bag, which is the least interesting
           // minute a run can end on. It costs no scroll — the fight paid for it —
           // and it replaces the doorway at the entrance, so there is exactly one
-          // way home and it is the one you are standing next to.
-          openReturnPortal(world, bossPos.x, bossPos.y);
+          // way home and it is the one you are standing next to. Beside the
+          // corpse, not on it, so the doorway does not cover the loot.
+          const spot = PORTAL_BESIDE.find(
+            (o) => !collision || collision.isWalkable(bossPos.x + o.dx, bossPos.y + o.dy, fp(1)),
+          );
+          openReturnPortal(world, bossPos.x + (spot?.dx ?? 0), bossPos.y + (spot?.dy ?? 0));
           for (const [i, d] of drops.entries()) {
             const off = DROP_SPREAD[i % DROP_SPREAD.length]!;
             const ge = world.create();

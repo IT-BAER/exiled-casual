@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import { fp } from "@exiled/fixed-point";
 import { Simulation } from "../loop";
 import { registerDeath } from "./death";
+import { gridCollision, type Collision } from "../collision";
+import { makeGrid } from "../test-grid";
 import { START_LEVEL, waystoneMods, atlasGraph } from "@exiled/rules";
 import { WISDOM_SCROLL_BASE_ID, isCurrency } from "@exiled/content-runtime";
 import { MOVE_SOCKET } from "@exiled/protocol";
@@ -143,9 +145,11 @@ describe("registerDeath", () => {
 
   // ── Atlas node completion on boss death ─────────────────────────────────
 
-  function makeBossDeath(area: "hideout" | "map", activeNodeId: string, completedNodes: string[]) {
+  function makeBossDeath(
+    area: "hideout" | "map", activeNodeId: string, completedNodes: string[], collision?: Collision,
+  ) {
     const sim = new Simulation();
-    registerDeath(sim);
+    registerDeath(sim, collision ? { active: collision } : undefined);
     const { world } = sim;
 
     const sessionE = world.create();
@@ -193,7 +197,34 @@ describe("registerDeath", () => {
       (e) => (world.get(e, "interactable") as { kind: string }).kind === "portal",
     );
     expect(portals).toHaveLength(1);
-    expect(world.get<Position>(portals[0]!, "position")).toEqual({ x: fp(9), y: fp(-4) });
+    // Beside the corpse, not on it: the boss's loot spreads round where it fell,
+    // and a doorway on top of it hides the labels the whole map was run for.
+    const at = world.get<Position>(portals[0]!, "position")!;
+    const d = Math.hypot(at.x - fp(9), at.y - fp(-4)) / fp(1);
+    expect(d).toBeGreaterThan(2.5);
+    expect(d).toBeLessThan(5);
+  });
+
+  it("opens that doorway on floor, never in the arena wall", () => {
+    // Open ground only to the east of where the boss fell.
+    const grid = makeGrid([
+      "###########",
+      "#####......",
+      "#####......",
+      "#####......",
+      "#####......",
+      "#####......",
+      "###########",
+    ]);
+    const collision = gridCollision(grid);
+    const { sim, world, boss } = makeBossDeath("map", "node.the_wrackline", [], collision);
+    world.set<Position>(boss, "position", { x: fp(5), y: fp(3) });
+    sim.step();
+    const portal = world.query("interactable", "position").find(
+      (e) => (world.get(e, "interactable") as { kind: string }).kind === "portal",
+    )!;
+    const at = world.get<Position>(portal, "position")!;
+    expect(collision.isWalkable(at.x, at.y, fp(1))).toBe(true);
   });
 
   it("a boss dying in the hideout opens nothing", () => {
