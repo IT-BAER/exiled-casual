@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { NullEngine, Color3, Mesh, VertexBuffer } from "@babylonjs/core";
 import { createScene } from "./engine";
-import { buildLevel, applyBiomeTint, applyTilesetFloor, tilesetDir } from "./level";
+import { buildLevel, applyBiomeTint, applyTilesetFloor, brazierSpots, tilesetDir } from "./level";
 import { MAP_BASES, BIOMES } from "@exiled/content-runtime";
 import type { WalkableGrid } from "@exiled/mapgen";
 
@@ -231,5 +231,45 @@ describe("biome tilesets", () => {
       const mean = (fill.diffuse.r + fill.diffuse.g + fill.diffuse.b) / 3;
       expect(mean, `${biome.id} mean tint`).toBeCloseTo(1, 5);
     }
+  });
+});
+
+describe("brazierSpots", () => {
+  /** `w` x `h` floor, walled on every side, one cell of wall around it. */
+  function room(w: number, h: number): WalkableGrid {
+    const cols = w + 2, rows = h + 2;
+    const cells = new Uint8Array(cols * rows);
+    for (let y = 1; y <= h; y++) for (let x = 1; x <= w; x++) cells[y * cols + x] = 1;
+    return { cols, rows, cellSize: 0.5, originX: 0, originY: 0, cells };
+  }
+  const floorOf = (g: WalkableGrid) => (x: number, y: number) =>
+    x >= 0 && y >= 0 && x < g.cols && y < g.rows && g.cells[y * g.cols + x] === 1;
+  const noSea = () => false;
+
+  /** Distance from a point to the nearest wall cell's square, cells centred on x * cellSize. */
+  function clearance(g: WalkableGrid, px: number, pz: number): number {
+    const isFloor = floorOf(g);
+    let best = Infinity;
+    for (let y = 0; y < g.rows; y++) for (let x = 0; x < g.cols; x++) {
+      if (isFloor(x, y)) continue;
+      const h = g.cellSize / 2;
+      const dx = Math.max(0, Math.abs(px - x * g.cellSize) - h);
+      const dz = Math.max(0, Math.abs(pz - y * g.cellSize) - h);
+      best = Math.min(best, Math.hypot(dx, dz));
+    }
+    return best;
+  }
+
+  it("stands every bowl clear of the rock it lights", () => {
+    const g = room(40, 40);
+    const spots = brazierSpots(g, floorOf(g), noSea);
+    expect(spots.length).toBeGreaterThan(0);
+    // The bowl is 0.40 across its radius; a boulder face sits on the cell edge.
+    for (const s of spots) expect(clearance(g, s.x, s.z)).toBeGreaterThanOrEqual(0.5);
+  });
+
+  it("never stands one in a lane too narrow to walk around it", () => {
+    const g = room(40, 3);
+    expect(brazierSpots(g, floorOf(g), noSea)).toEqual([]);
   });
 });
