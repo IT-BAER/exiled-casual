@@ -254,6 +254,7 @@ export function buildSnapshot(
       const bc = world.get<BossC>(e, "boss")!;
       entry.boss = true;
       entry.bossPhase = bc.phase;
+      entry.bossAwake = mon.state !== "idle";
     }
     entities.push(entry);
   }

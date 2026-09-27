@@ -228,6 +228,8 @@ export interface SnapshotEntity {
   boss?: boolean;
   /** boss phase, present only when boss === true */
   bossPhase?: 1 | 2;
+  /** boss only: boss-ai has woken it (in range AND in sight); the HUD raises the boss bar on this */
+  bossAwake?: boolean;
   /** telegraph wind-up progress: 0 at cast → 1 at impact, for fill animation */
   progress?: number;
   /** portal/mapDevice only: the player is close enough to activate it */

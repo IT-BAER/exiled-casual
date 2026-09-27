@@ -227,6 +227,14 @@ describe("buildSnapshot — boss & telegraph", () => {
     expect(bosses[0]!.bossPhase).toBe(1);
   });
 
+  it("boss carries bossAwake only once boss-ai has woken it", () => {
+    const { world } = makeMinimalWorld();
+    const e = addBoss(world, 5, 3);
+    expect(buildSnapshot(world, {} as never, 0, "test").entities.find(x => x.boss)!.bossAwake).toBe(false);
+    world.set<MonsterC>(e, "monster", { ...world.get<MonsterC>(e, "monster")!, state: "chase" });
+    expect(buildSnapshot(world, {} as never, 0, "test").entities.find(x => x.boss)!.bossAwake).toBe(true);
+  });
+
   it("plain monster does NOT carry boss or bossPhase keys", () => {
     const { world } = makeMinimalWorld();
     addMonster(world, 2, 2);

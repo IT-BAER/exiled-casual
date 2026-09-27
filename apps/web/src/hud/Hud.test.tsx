@@ -158,7 +158,7 @@ describe("Hud", () => {
       atlasSeed: 0,
       completedNodes: [],
       player: testPlayer({ mana: 30 }),
-      entities: [{ id: 10, kind: "monster", x: 0, y: 0, boss: true, bossPhase: 2, life: 600, maxLife: 1000 }],
+      entities: [{ id: 10, kind: "monster", x: 0, y: 0, boss: true, bossAwake: true, bossPhase: 2, life: 600, maxLife: 1000 }],
       inventory: { cols: 12, rows: 5, items: [] },
     stash: { cols: 12, rows: 12, items: [] },
     vendor: { cols: 12, rows: 12, items: [] },
@@ -180,11 +180,11 @@ describe("Hud", () => {
     expect(screen.queryByTestId("boss-bar")).toBeNull();
   });
 
-  it("renders no boss bar while the boss is across the map, unengaged", () => {
+  it("renders no boss bar while the boss sleeps, even a few units away behind its wall", () => {
     render(
       <Hud
         snapshot={makeSnap({
-          entities: [{ id: 10, kind: "monster", x: 60, y: 0, boss: true, bossPhase: 1, life: 1000, maxLife: 1000 }],
+          entities: [{ id: 10, kind: "monster", x: 3, y: 0, boss: true, bossAwake: false, bossPhase: 1, life: 1000, maxLife: 1000 }],
         })}
       />,
     );

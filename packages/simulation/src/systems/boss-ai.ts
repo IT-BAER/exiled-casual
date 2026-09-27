@@ -22,7 +22,7 @@ const SUMMON_RING: readonly { dx: number; dy: number }[] = [
  * mapgen carves the boss room to (`bossRoom` spans x 30..50, y cy±10), so the warden
  * activates as you cross its threshold rather than marching the length of the map from
  * tick 0 — PoE arms a boss when you enter its arena, not when you open the portal. The
- * HUD raises the boss bar at the same 10 units, so the bar and the fight start together.
+ * HUD raises the boss bar off `bossAwake` (this wake), so the bar and the fight start together.
  *
  * A unit wider than `slam.rangeFixed` (9), which leaves the narrow band where a woken
  * boss closes on foot instead of opening with a slam. Waking is one-way, carried by

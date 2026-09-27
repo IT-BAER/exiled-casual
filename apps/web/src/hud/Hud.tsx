@@ -17,7 +17,6 @@ import { VENDOR_NAME, VENDOR_TITLE } from "../npc";
 // the screen height above the bottom edge; a bronze figure leans on the outer side.
 // The globe is a fraction of the screen, not a pixel size — PoE1 scales it with the
 // resolution, and at 2048px wide a fixed 160px globe reads a quarter too small.
-const BOSS_ENGAGE_RANGE = 10; // world units; boss bar appears once you are this close
 // Sized by the FILL: PoE2's red runs ~36% of a 16:9 screen (boss-fight.png), and our
 // window is 80.6% of the frame art, so 44vw of frame gives 35.5vw of fill.
 const BOSS_BAR_W = "44vw";
@@ -867,14 +866,8 @@ export function Hud({
   const { xp, xpToNext } = snapshot.player;
 
   // PoE2 raises the boss bar when you enter the arena, not the moment the map
-  // loads. The sim has no aggro state to read, so proximity stands in for it:
-  // the boss room's half-extent (mapgen carves it 20 cells across), which is
-  // also one unit outside the Warden's slam range — inside it, you are in the fight.
-  const bossEntity = snapshot.entities.find((e) => e.boss);
-  const boss =
-    bossEntity && Math.hypot(bossEntity.x - snapshot.player.x, bossEntity.y - snapshot.player.y) <= BOSS_ENGAGE_RANGE
-      ? bossEntity
-      : undefined;
+  // loads: boss-ai's wake (range AND line of sight), so an arena wall hides it.
+  const boss = snapshot.entities.find((e) => e.boss && e.bossAwake);
 
   // Hovered entity drives the name label — mouse proximity, not character proximity.
   // inRange (character distance) only drives the auto-interact fire; never shown.
