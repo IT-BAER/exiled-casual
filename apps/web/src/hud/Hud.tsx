@@ -17,9 +17,10 @@ import { VENDOR_NAME, VENDOR_TITLE } from "../npc";
 // the screen height above the bottom edge; a bronze figure leans on the outer side.
 // The globe is a fraction of the screen, not a pixel size — PoE1 scales it with the
 // resolution, and at 2048px wide a fixed 160px globe reads a quarter too small.
-// Sized by the FILL: PoE2's red runs ~36% of a 16:9 screen (boss-fight.png), and our
-// window is 80.6% of the frame art, so 44vw of frame gives 35.5vw of fill.
-const BOSS_BAR_W = "44vw";
+// Sized by the fill's HEIGHT: PoE2's red is 34px of a 2560px screen = 1.33vw (boss-fight.png).
+// Our frame art is far taller per width (1280x222, window 28.4% of it), so 28vw of frame gives
+// 1.38vw of fill height; matching PoE2's width (35%) instead made the bar twice as tall.
+const BOSS_BAR_W = "28vw";
 const ORB_HOLE = 0.869; // ring art: its transparent hole is this fraction of the file
 const ORB_VW = 10.3; // sphere diameter
 const ORB = `${ORB_VW}vw`;
