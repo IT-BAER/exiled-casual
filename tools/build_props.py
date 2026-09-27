@@ -691,9 +691,10 @@ BONES_BUDGET = {"Human Skull": 600}
 def build_wreck_timber():
     return build_appended(
         "wreckTimber", "wreck_timber", "wreck_planks.blend", WRECK_TIMBER_BUDGET,
-        # Wreck wood is dark: soaked, tarred and weathered, and the reference
-        # timbers read nearly black against the sand under the beach's 2.4x sun.
-        "Материал_BaseColor.jpg.001", gain=0.55, roughness=0.9, width=WRECK_TIMBER_W,
+        # Wreck wood is dark: soaked, tarred and weathered. The source is already
+        # near black, so this LIFTS it (built luma ~61; 0.55 gave ~18, flat black
+        # boards with no grain under the beach's 2.4x sun).
+        "Материал_BaseColor.jpg.001", gain=1.9, roughness=0.9, width=WRECK_TIMBER_W,
         renames={
             "Куб": "wreckTimber_0", "Куб.001": "wreckTimber_1",
             "Куб.002": "wreckTimber_2", "Куб.003": "wreckTimber_3",
