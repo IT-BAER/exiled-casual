@@ -983,6 +983,24 @@ describe("the cast clip drives the weapon arm", () => {
     for (const name of Object.values(CLIP_NAME)) expect(names, name).toContain(name);
   });
 
+  it("carries no buffer data a replaced clip left behind", () => {
+    // The splice tools replace a clip by name; its old keys must go with it.
+    const used = new Set<number>();
+    for (const anim of json.animations) for (const s of anim.samplers) used.add(s.input).add(s.output);
+    for (const mesh of json.meshes ?? []) {
+      for (const prim of mesh.primitives) {
+        for (const a of Object.values(prim.attributes) as number[]) used.add(a);
+        if (prim.indices !== undefined) used.add(prim.indices);
+        for (const target of prim.targets ?? []) for (const a of Object.values(target) as number[]) used.add(a);
+      }
+    }
+    for (const skin of json.skins ?? []) if (skin.inverseBindMatrices !== undefined) used.add(skin.inverseBindMatrices);
+    expect(json.accessors.length - used.size).toBe(0);
+    const live = json.bufferViews.reduce((sum: number, v: { byteLength: number }) => sum + v.byteLength + (-v.byteLength & 3), 0);
+    expect(json.bufferViews.length).toBe(used.size);
+    expect(json.buffers[0].byteLength).toBeLessThanOrEqual(live);
+  });
+
   it("ships two sword-derived weapon-arm attacks and layers both over locomotion", () => {
     expect(STRIKE_CLIPS).toHaveLength(2);
     expect(new Set(STRIKE_CLIPS.map((clip) => CLIP_NAME[clip])).size).toBe(2);

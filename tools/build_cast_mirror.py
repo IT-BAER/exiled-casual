@@ -80,7 +80,49 @@ def read_glb(path):
     return doc, blob
 
 
+def compact(doc, blob):
+    """
+    Keep only the accessors and buffer views an animation, mesh or skin uses, and
+    repack the buffer: a splice that replaces a clip by name leaves its old keys behind.
+    """
+    assert not any("bufferView" in i for i in doc.get("images", [])), "image views are not tracked"
+    assert not any("sparse" in a for a in doc["accessors"]), "sparse accessors are not tracked"
+    refs = []  # (container, key) pairs holding an accessor index
+    for anim in doc.get("animations", []):
+        refs += [(s, k) for s in anim["samplers"] for k in ("input", "output")]
+    for mesh in doc.get("meshes", []):
+        for prim in mesh["primitives"]:
+            refs += [(prim["attributes"], k) for k in prim["attributes"]]
+            refs += [(prim, "indices")] if "indices" in prim else []
+            refs += [(t, k) for t in prim.get("targets", []) for k in t]
+    refs += [(s, "inverseBindMatrices") for s in doc.get("skins", []) if "inverseBindMatrices" in s]
+
+    accessors, views, packed, new_acc, new_view = [], [], bytearray(), {}, {}
+    for old in sorted({c[k] for c, k in refs}):
+        accessor = dict(doc["accessors"][old])
+        if "bufferView" in accessor:
+            src = accessor["bufferView"]
+            if src not in new_view:
+                view = dict(doc["bufferViews"][src])
+                start = view.get("byteOffset", 0)
+                packed += b"\0" * (-len(packed) % 4)
+                view["byteOffset"] = len(packed)
+                packed += blob[start:start + view["byteLength"]]
+                new_view[src] = len(views)
+                views.append(view)
+            accessor["bufferView"] = new_view[src]
+        new_acc[old] = len(accessors)
+        accessors.append(accessor)
+    for container, key in refs:
+        container[key] = new_acc[container[key]]
+    doc["accessors"], doc["bufferViews"] = accessors, views
+    packed += b"\0" * (-len(packed) % 4)
+    doc["buffers"][0]["byteLength"] = len(packed)
+    return bytes(packed)
+
+
 def write_glb(path, doc, blob):
+    blob = compact(doc, blob)
     text = json.dumps(doc, separators=(",", ":")).encode("utf-8")
     text += b" " * (-len(text) % 4)
     blob += b"\0" * (-len(blob) % 4)
