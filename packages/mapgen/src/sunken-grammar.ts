@@ -9,6 +9,6 @@ export const SUNKEN_GRAMMAR: Grammar = {
   chunks: LOOP_GRAMMAR.chunks,
   bossChunk: LOOP_GRAMMAR.bossChunk,
   branchCount: 8,
-  spawnTarget: 15,
+  spawnTarget: 26,
   organicRim: true,
 };

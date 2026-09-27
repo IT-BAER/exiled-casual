@@ -436,7 +436,7 @@ export const FIELD_GRAMMAR: Grammar = {
   // More branches than the loop: open ground should offer somewhere to wander,
   // and a dead end in the open costs the player far less than one in a corridor.
   branchCount: 8,
-  spawnTarget: 16,
+  spawnTarget: 32,
   organicRim: true,
   openSeams: true,
 };
