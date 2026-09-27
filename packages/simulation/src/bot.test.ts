@@ -6,7 +6,7 @@ import { spawnLabActors } from "./combat-sim";
 import { spawnMonster } from "./areas";
 import { MONSTERS } from "@exiled/content-runtime";
 import type { Collision } from "./collision";
-import type { Position, GroundAreaC, MonsterC } from "./components";
+import type { Position, GroundAreaC, MonsterC, PlayerC } from "./components";
 
 const OPEN: Collision = { isWalkable: () => true };
 const GROUND = "skill.cinder_ground.v1";
@@ -93,6 +93,19 @@ describe("Bot", () => {
     const out = new Bot(g, block, {}).decide(false);
     expect(out.some((c) => c.type === "useSkill")).toBe(false);
     expect(out.some((c) => c.type === "moveTo")).toBe(true);
+  });
+
+  it("stops beside a monster he walked to rather than walking onto its centre", () => {
+    // Only his own body passes, never a bolt: no shot, so step 3 walks to the goal.
+    const { g, me } = setupAs("class.emberbound");
+    const body = g.world.get<PlayerC>(g.player, "player")!.bodyRadius;
+    spawnLabActors(g.world, "imp", 0, 0);
+    const imp = g.world.query("monster").at(-1)!;
+    g.world.set<Position>(imp, "position", { x: me.x + fp(0.8), y: me.y });
+    g.world.set<MonsterC>(imp, "monster", { ...g.world.get<MonsterC>(imp, "monster")!, state: "idle" });
+    const out = new Bot(g, { isWalkable: (_x, _y, r) => r === body }, {}).decide(false);
+    expect(out.some((c) => c.type === "useSkill" || c.type === "moveTo" || c.type === "interact")).toBe(false);
+    expect(out.some((c) => c.type === "stop")).toBe(true);
   });
 
   it("does not back off a shooter behind a wall: it holds where it hits him and never follows", () => {

@@ -180,9 +180,11 @@ export class Bot {
     const goal = this.pickGoal(p, bossDead);
     if (!goal) return out;
     if (dist(p, goal.p) <= goal.radius) {
+      // Beside a monster he stops: the last walk aimed at its centre, and at distance 0
+      // no projectile spawns from either side.
       out.push(cmd(goal.kind === "item"
         ? { type: "pickupItem", data: { entityId: goal.e } }
-        : { type: "interact", data: { targetId: goal.e } }));
+        : goal.kind === "monster" ? { type: "stop" } : { type: "interact", data: { targetId: goal.e } }));
       // A full bag or a no-op interact would hold the bot here forever.
       if (tick - this.goalSince > HZ) this.skip.set(goal.e, tick + 60 * HZ);
       return out;
