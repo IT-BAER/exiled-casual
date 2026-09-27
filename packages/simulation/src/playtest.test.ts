@@ -3,6 +3,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { CLASS_IDS } from "@exiled/rules";
 import { DEFAULT_ATTACK_BY_CLASS } from "@exiled/content-runtime";
+import { AREA, SIGNATURE } from "./bot";
 import { campaign, newCharacter, playNextMap, summarize, type MapRun, type Summary } from "./playtest";
 
 /**
@@ -93,9 +94,9 @@ describe.skipIf(!FULL)("full playtest report", () => {
     for (const c of CLASS_IDS) {
       const variants: [string, string[]][] = [
         ["full bar", []],
-        ["no Ember Bolt", ["skill.ember_bolt.v1"]],
-        ["no Cinder Ground", ["skill.cinder_ground.v1"]],
-        ["no Blink", ["skill.blink.v1"]],
+        [`no ${short(SIGNATURE[c]!)}`, [SIGNATURE[c]!]],
+        [`no ${short(AREA[c]!)}`, [AREA[c]!]],
+        ["no blink", ["skill.blink.v1"]],
         [`no ${short(DEFAULT_ATTACK_BY_CLASS[c]!)}`, [DEFAULT_ATTACK_BY_CLASS[c]!]],
       ];
       for (const [label, without] of variants) {
