@@ -168,10 +168,11 @@ export class Bot {
 
     // 2b. Awake and close, but a wall he stands against eats every bolt: open the range.
     // Only a melee monster follows him out; a shooter holds wherever it can hit him,
-    // so backing off one is undone by the walk in (3.) forever.
+    // and a brute too wide for the way in never arrives, so backing off either is
+    // undone by the walk in (3.) forever.
     if (!this.melee) {
       const near = this.monsters().find((x) => x.awake && dist(p, x.p) < fp(3)
-        && !MONSTERS.get(world.get<MonsterC>(x.e, "monster")!.defId)?.ranged);
+        && !MONSTERS.get(world.get<MonsterC>(x.e, "monster")!.defId)?.ranged && this.reaches(x.e, x.p, p));
       const away = near && this.escape(p, near.p, fp(3));
       if (away && (away["x"] !== p.x || away["y"] !== p.y)) {
         out.push(cmd({ type: "moveTo", data: away }));
@@ -385,6 +386,13 @@ export class Bot {
     return g;
   }
 
+  /** Whether monster `e` at `from` can walk to `to`: a straight line or a route for its own body. */
+  private reaches(e: Entity, from: Position, to: Position): boolean {
+    const r = bodyRadiusOf(this.g.world, e);
+    if (!this.collision.nav || hasLineOfSight(this.collision, from.x, from.y, to.x, to.y, r)) return true;
+    return this.collision.nav.waypoint(from.x, from.y, to.x, to.y, r) !== null;
+  }
+
   /** Walk toward `to` along the nav field, as far ahead as the line stays clear. */
   private route(p: Position, to: Position): Record<string, number> | null {
     if (hasLineOfSight(this.collision, p.x, p.y, to.x, to.y, this.body)) return { x: to.x, y: to.y };
@@ -445,3 +453,4 @@ function progress(g: BotGame): ProgressC { return g.world.get<ProgressC>(g.sessi
 function dist(a: Position, b: Position): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
+
