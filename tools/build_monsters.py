@@ -1429,24 +1429,28 @@ def hide_material(name, colour, normal, tint):
     tex.image = bpy.data.images.load(colour)
     shade = tex.outputs["Color"]
     if tint != (1.0, 1.0, 1.0):
-        mix = tree.nodes.new("ShaderNodeMixRGB")
+        # The Mix node, not legacy MixRGB: only this one does the exporter turn
+        # into baseColorFactor. MixRGB exported the raw sheet with no tint at all.
+        mix = tree.nodes.new("ShaderNodeMix")
+        mix.data_type = "RGBA"
         mix.blend_type = "MULTIPLY"
-        mix.inputs["Fac"].default_value = 1.0
-        mix.inputs["Color2"].default_value = (*tint, 1.0)
-        tree.links.new(mix.inputs["Color1"], tex.outputs["Color"])
-        shade = mix.outputs["Color"]
+        mix.inputs[0].default_value = 1.0
+        mix.inputs[7].default_value = (*tint, 1.0)
+        tree.links.new(mix.inputs[6], tex.outputs["Color"])
+        shade = mix.outputs[2]
     tree.links.new(bsdf.inputs["Base Color"], shade)
     # Emission follows the tint. Left on the raw sheet it re-adds a slice of the
     # brightness the tint just took off, which is the one thing this pass is for.
     tree.links.new(bsdf.inputs["Emission Color"], shade)
     bsdf.inputs["Emission Strength"].default_value = EMISSION
 
-    ntex = tree.nodes.new("ShaderNodeTexImage")
-    ntex.image = bpy.data.images.load(normal)
-    ntex.image.colorspace_settings.name = "Non-Color"
-    nmap = tree.nodes.new("ShaderNodeNormalMap")
-    tree.links.new(nmap.inputs["Color"], ntex.outputs["Color"])
-    tree.links.new(bsdf.inputs["Normal"], nmap.outputs["Normal"])
+    if normal is not None:
+        ntex = tree.nodes.new("ShaderNodeTexImage")
+        ntex.image = bpy.data.images.load(normal)
+        ntex.image.colorspace_settings.name = "Non-Color"
+        nmap = tree.nodes.new("ShaderNodeNormalMap")
+        tree.links.new(nmap.inputs["Color"], ntex.outputs["Color"])
+        tree.links.new(bsdf.inputs["Normal"], nmap.outputs["Normal"])
 
     bsdf.inputs["Metallic"].default_value = 0.0
     bsdf.inputs["Roughness"].default_value = 0.78
