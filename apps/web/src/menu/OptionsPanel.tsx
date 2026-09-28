@@ -144,7 +144,7 @@ export function OptionsPanel({
 
         {/* The window's height is the screen's, so the short tab no longer
             resizes it under the pointer; the body just scrolls inside it. */}
-        <div style={{ overflowY: "auto", flex: 1, paddingRight: 6 }}>
+        <div style={{ overflowY: "auto", flex: 1, paddingRight: 6, scrollbarWidth: "none" }}>
           {tab === "graphics" ? (
             <>
               <Group>Detail</Group>
@@ -415,7 +415,8 @@ function Tabs({
   onPick: (id: TabId) => void;
 }): React.ReactElement {
   return (
-    <div role="tablist" aria-label="Options sections" style={{ display: "flex", gap: 4 }}>
+    // Four tabs fill the pane's width; on a pane too narrow for one row they wrap.
+    <div role="tablist" aria-label="Options sections" style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
       {TABS.map((t) => {
         const on = t.id === current;
         return (
@@ -428,7 +429,8 @@ function Tabs({
             style={{
               appearance: "none",
               border: "none",
-              padding: "8px 22px 10px",
+              flex: "1 1 auto",
+              padding: "8px 10px 10px",
               backgroundColor: "transparent",
               backgroundImage: `url(${MENU_ART}/tab_plate.webp)`,
               backgroundSize: "100% 100%",
@@ -470,7 +472,10 @@ function Group({ children }: { children: React.ReactNode }): React.ReactElement 
   );
 }
 
-/** Label left, control right. The control column is fixed so they line up. */
+/**
+ * Label left, control right. The pane is 27vw wide, so a control that leaves
+ * the label under 110px drops to its own line, still right-aligned.
+ */
 function Row({
   label,
   note,
@@ -483,20 +488,21 @@ function Row({
   return (
     <div
       style={{
-        display: "grid",
-        gridTemplateColumns: "1fr 260px",
+        display: "flex",
+        flexWrap: "wrap",
         alignItems: "center",
-        gap: 12,
+        columnGap: 12,
+        rowGap: 4,
         minHeight: 40,
       }}
     >
-      <div>
+      <div style={{ flex: "1 1 110px" }}>
         <div style={{ fontFamily: SERIF, fontSize: 14, color: PARCHMENT }}>{label}</div>
         {note !== undefined && (
           <div style={{ fontFamily: SERIF, fontSize: 11, color: GOLD_DIM }}>{note}</div>
         )}
       </div>
-      <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center" }}>
+      <div style={{ display: "flex", alignItems: "center", marginLeft: "auto" }}>
         {children}
       </div>
     </div>
@@ -668,7 +674,8 @@ function Slider({
 }): React.ReactElement {
   const pct = ((value - min) / (max - min)) * 100;
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, width: "100%" }}>
+    // Sized off the viewport like the pane it sits in, so the label keeps its share.
+    <div style={{ display: "flex", alignItems: "center", gap: 10, width: "clamp(160px, 12vw, 260px)" }}>
       <div
         style={{
           position: "relative",

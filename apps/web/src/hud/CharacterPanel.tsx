@@ -285,7 +285,8 @@ export function CharacterPanel({ player, onClose }: { player: Snapshot["player"]
         <BandLabel>Resistances</BandLabel>
         {/* 2x2, fire/cold over lightning/chaos — the reference's arrangement
             (reference-screenshots/character-stats.png). */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+        {/* One column once a pill (Lightning, 172px) no longer fits in half the pane. */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(max(180px, calc(50% - 3px)), 1fr))", gap: 6 }}>
           <ResPill id="fire" label="Fire" pct={s.res.fire} icon={<Icon of="fire" size={20} />} />
           <ResPill id="cold" label="Cold" pct={s.res.cold} icon={<ElementGlyph of="cold" />} />
           <ResPill id="lightning" label="Lightning" pct={s.res.lightning} icon={<ElementGlyph of="lightning" />} />
