@@ -811,23 +811,24 @@ export function createScene(engine: Engine): SceneHandle {
     // actor parts got in that way. Read against the current name, a rename
     // cannot smuggle a caster past it.
     const torchCasts = (mesh: AbstractMesh): boolean => {
-      if (mesh === ground || mesh.name.startsWith("telegraph-") || mesh.name === FLAME_MESH
-        || mesh.name.startsWith("groundblob-") || isWardrobePart(mesh.name)
-        // Dressing scatter never casts — see isScatterDressing. The range cull
-        // below cannot save it: a thin-instance host's bounding sphere spans
-        // every instance, so it is always "in reach".
-        || isScatterDressing(mesh.name)) return false;
       // Range cull: nothing past the torch's own reach can receive its light, so
       // nothing there can cast a visible shadow from it either. This is a third
       // of the cube map's draw calls, measured live in the hideout. It stays even
       // though `shadowMaxZ` is the same far plane the per-face cull tests, because
-      // it prunes ONCE against six frustum tests that would each pay for it.
+      // it prunes ONCE against six frustum tests that would each pay for it. It
+      // runs first because it is cheaper than the name tests it spares.
       const bs = mesh.getBoundingInfo().boundingSphere;
       const dx = bs.centerWorld.x - torch.position.x;
       const dy = bs.centerWorld.y - torch.position.y;
       const dz = bs.centerWorld.z - torch.position.z;
       const reach = torch.range + bs.radiusWorld + 2;
-      return dx * dx + dy * dy + dz * dz <= reach * reach;
+      if (dx * dx + dy * dy + dz * dz > reach * reach) return false;
+      return !(mesh === ground || mesh.name.startsWith("telegraph-") || mesh.name === FLAME_MESH
+        || mesh.name.startsWith("groundblob-") || isWardrobePart(mesh.name)
+        // Dressing scatter never casts — see isScatterDressing. The range cull
+        // above cannot save it: a thin-instance host's bounding sphere spans
+        // every instance, so it is always "in reach".
+        || isScatterDressing(mesh.name));
     };
     // Nothing is registered as a caster any more, because the sun renders no
     // shadow map to put one in. What used to run here was an observer on EVERY

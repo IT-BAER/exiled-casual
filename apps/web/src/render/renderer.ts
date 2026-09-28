@@ -58,6 +58,12 @@ const BLINK_Y = 0.9;
  * rhythm of hits rather than a monster that is permanently white.
  */
 const HIT_FLASH_TICKS = 3;
+/**
+ * A monster this far from the player is past any frame the camera can show (the
+ * ground reaches ~10.6 units at full zoom-out, ~13 on an ultrawide), so it is
+ * disabled and its clips paused until it walks back into range.
+ */
+const SLEEP_RANGE = 20;
 
 /**
  * How far a bolt is assumed to be flying when the cursor's own point is not
@@ -448,6 +454,11 @@ export class SnapshotRenderer {
       );
       const mesh = this.meshes.get(e.id);
       if (!mesh) continue;
+      if (e.kind === "monster") {
+        const far = Math.hypot(e.x - next.player.x, e.y - next.player.y) > SLEEP_RANGE;
+        if (mesh.isEnabled(false) === far) mesh.setEnabled(!far);
+        creatureOf(mesh)?.setAwake(!far);
+      }
       if (e.kind === "projectile" && fxProfile(e.skillId).arrow) {
         // Floored at the aim point: past it the arrow flies level, not into the floor.
         const drop = handEntry?.offset.y ?? 0;
@@ -697,6 +708,9 @@ export class SnapshotRenderer {
     const side = new Vector3(-push.z, 0, push.x).normalize()
       .scale((Math.random() * 2 - 1) * DEATH_OFF_CENTRE);
     const at = mesh.position.add(new Vector3(0, DEATH_CHEST, 0)).add(side);
+    // A kill past SLEEP_RANGE lands on a sleeping body; the ragdoll needs it live.
+    mesh.setEnabled(true);
+    creatureOf(mesh)?.setAwake(true);
     if (!dropDead(this.scene, mesh, push, at)) return false;
     rigOf(mesh)?.stopForDeath();
     creatureOf(mesh)?.stopForDeath();

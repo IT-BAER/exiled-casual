@@ -220,8 +220,11 @@ function castFrom(scene: Scene, light: PointLight | undefined): void {
     // paint on the floor. Everything else in the room casts, actors included —
     // that is the whole difference between this and the torch, which rides the
     // player and would only ever draw a blob under his own feet.
+    // Range first: it is a few multiplies and rejects most of a map's ~950 meshes
+    // before any of the name tests below run.
     const casts = (mesh: AbstractMesh): boolean =>
-      mesh.name !== "ground"
+      reachesCaster(light, mesh)
+      && mesh.name !== "ground"
       && mesh.name !== FLAME_MESH
       && !mesh.name.startsWith("telegraph-")
       && !isScatterDressing(mesh.name)
@@ -229,8 +232,7 @@ function castFrom(scene: Scene, light: PointLight | undefined): void {
       // sphere, re-drawn on every face of every armed cube (~5M indices a
       // frame, measured live). It keeps casting from the TORCH — the pool the
       // player reads — and gives up the decorative fire shadows.
-      && !mesh.name.startsWith(LEDGE_MESH_PREFIX)
-      && reachesCaster(light, mesh);
+      && !mesh.name.startsWith(LEDGE_MESH_PREFIX);
     // Rendered on demand only: `updateFireLights` re-arms ONE map per frame,
     // round-robin. Four cube maps every frame were half the whole frame budget
     // (54 -> 110 fps in the hideout, measured live); staggered at a third of the
@@ -341,7 +343,14 @@ export function updateFireLights(scene: Scene, at: Vector3, deltaMs: number): vo
   // is the only thing that re-arms them. The old one-cube-per-frame round-robin
   // predates per-face caster culling and read as low-framerate shadows; if this
   // is what keeps high under 100 fps, drop back to re-arming two per frame.
-  for (const light of pool) {
-    if (light.isEnabled()) light.getShadowGenerator()?.getShadowMap()?.resetRefreshCounter();
+  // ...but only while its pool can reach the frame: the pool follows the four
+  // NEAREST bowls however far they are, and a cube past the screen is six passes
+  // over the map that light no pixel. Left enabled, so no material recompiles.
+  for (let i = 0; i < pool.length; i++) {
+    const light = pool[i]!;
+    const found = near[i];
+    if (!found || !light.isEnabled()) continue;
+    const reach = FLAME_RANGE * zoom + light.range;
+    if (found.d <= reach * reach) light.getShadowGenerator()?.getShadowMap()?.resetRefreshCounter();
   }
 }

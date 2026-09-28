@@ -4,6 +4,7 @@ import {
   MeshBuilder,
   PBRMaterial,
   Texture,
+  TransformNode,
   Vector4,
   VertexBuffer,
   type Scene,
@@ -443,6 +444,7 @@ function dressBeach(scene: Scene, grid: WalkableGrid): void {
         mesh.isPickable = false;
         mesh.receiveShadows = true;
       }
+      freezeTree(root);
     }
   };
 
@@ -537,6 +539,15 @@ export function brazierSpots(
  * a replay and a screenshot both need that, and neither wants a seed threaded
  * through the renderer.
  */
+/** Placed dressing never moves again. Frozen, a map's few hundred prop meshes
+ *  skip the per-frame world-matrix check; parent first, so children freeze on it. */
+function freezeTree(root: Mesh): void {
+  root.freezeWorldMatrix();
+  for (const node of root.getDescendants(false)) {
+    if (node instanceof TransformNode) node.freezeWorldMatrix();
+  }
+}
+
 function standBraziers(
   scene: Scene,
   grid: WalkableGrid,
@@ -565,6 +576,7 @@ function standBraziers(
       mesh.isPickable = false;
       mesh.receiveShadows = true;
     }
+    freezeTree(root);
   }
   setFireSpots(spots);
 }

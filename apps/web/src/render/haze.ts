@@ -167,6 +167,40 @@ export function moteDrift(x: number, y: number, t: number): number {
   return Math.max(-1, Math.min(1, sum));
 }
 
+/**
+ * `moteDrift` at a fixed point as two numbers: every corner term is
+ * `sin(a + t)`, so the field there is exactly `clamp(c·cos t + s·sin t)`. A mote
+ * never moves its lookup, so this is computed once per mote, not per frame.
+ */
+export function moteDriftBasis(x: number, y: number): [number, number] {
+  let c = 0;
+  let s = 0;
+  for (let i = 0; i < 3; i++) {
+    const px = x * 2 ** i;
+    const py = y * 2 ** i;
+    const ix = Math.floor(px);
+    const iy = Math.floor(py);
+    const fx = px - ix;
+    const fy = py - iy;
+    const wx = fx * fx * (3 - 2 * fx);
+    const wy = fy * fy * (3 - 2 * fy);
+    const corners: [number, number, number, number, number][] = [
+      [0, 0, fx, fy, (1 - wx) * (1 - wy)],
+      [1, 0, fx - 1, fy, wx * (1 - wy)],
+      [0, 1, fx, fy - 1, (1 - wx) * wy],
+      [1, 1, fx - 1, fy - 1, wx * wy],
+    ];
+    for (const [dx, dy, ox, oy, w] of corners) {
+      const hx = (-1 + 2 * fract(Math.sin(127.1 * (ix + dx) + 311.7 * (iy + dy)) * 43758.5453123)) * 6.283;
+      const hy = (-1 + 2 * fract(Math.sin(269.5 * (ix + dx) + 183.3 * (iy + dy)) * 43758.5453123)) * 6.283;
+      const k = w * 0.8 ** i;
+      c += k * (Math.sin(hx) * ox + Math.sin(hy) * oy);
+      s += k * (Math.cos(hx) * ox + Math.cos(hy) * oy);
+    }
+  }
+  return [c, s];
+}
+
 /** The texture's clock: `animationSpeedFactor` 1.4 at Babylon's 0.01 per frame. */
 const DRIFT_RATE = 1.4 * 0.01;
 
@@ -242,15 +276,30 @@ export function createMotes(scene: Scene, camera: ArcRotateCamera): ParticleSyst
   ps.noiseStrength = new Vector3(0.12, 0.08, 0.12);
   const update = ps.updateFunction;
   let time = 0;
+  // Babylon recycles particle objects under new ids, so the cache checks the id.
+  const bases = new WeakMap<object, { id: number; b: number[] }>();
+  const clamp = (v: number) => Math.max(-1, Math.min(1, v));
   ps.updateFunction = (particles) => {
     time += scene.getAnimationRatio() * DRIFT_RATE;
     const step = ps._scaledUpdateSpeed;
     const s = ps.noiseStrength;
+    const cos = Math.cos(time);
+    const sin = Math.sin(time);
     for (const p of particles) {
       const id = p.id;
-      p.direction.x += moteDrift(seat(id, 0), seat(id, 1), time) * s.x * step;
-      p.direction.y += moteDrift(seat(id, 2), seat(id, 3), time) * s.y * step;
-      p.direction.z += moteDrift(seat(id, 4), seat(id, 5), time) * s.z * step;
+      let e = bases.get(p);
+      if (e?.id !== id) {
+        e = { id, b: [
+          ...moteDriftBasis(seat(id, 0), seat(id, 1)),
+          ...moteDriftBasis(seat(id, 2), seat(id, 3)),
+          ...moteDriftBasis(seat(id, 4), seat(id, 5)),
+        ] };
+        bases.set(p, e);
+      }
+      const b = e.b;
+      p.direction.x += clamp(b[0]! * cos + b[1]! * sin) * s.x * step;
+      p.direction.y += clamp(b[2]! * cos + b[3]! * sin) * s.y * step;
+      p.direction.z += clamp(b[4]! * cos + b[5]! * sin) * s.z * step;
     }
     update(particles);
   };

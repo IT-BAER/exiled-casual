@@ -114,7 +114,11 @@ export function cullShadowCasters(
       // `scene.meshes` rather than a list of our own, kept by observing adds and
       // removes: it is the array the predicate read, and Babylon prunes it on
       // dispose, so there is no way for this one to hold a dead mesh.
-      for (const mesh of scene.meshes) if (keep(mesh)) kept.push(mesh);
+      // Disabled meshes (sleeping monsters) and empty roots never draw, and a map
+      // holds hundreds of both; skipping them spares the predicate and the cull.
+      for (const mesh of scene.meshes) {
+        if (mesh.isEnabled() && mesh.getTotalVertices() > 0 && keep(mesh)) kept.push(mesh);
+      }
     }
     return cullCasters(gen.getTransformMatrix(), kept, kept.length, out);
   };

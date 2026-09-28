@@ -156,6 +156,8 @@ export class CreatureRig {
   private seen = false;
   /** Seconds stood still, so the breath can settle the way the player's does. */
   private standing = 0;
+  /** Off screen and paused: clip changes are remembered, not played. See `setAwake`. */
+  private awake = true;
   private readonly scene: Scene | null;
 
   constructor(
@@ -210,6 +212,8 @@ export class CreatureRig {
     if (!this.seen) { this.seen = true; this.lastAttackTick = tick; return; }
     if (tick === undefined || tick === this.lastAttackTick) return;
     this.lastAttackTick = tick;
+    if (!this.awake) return; // a swing nobody can see
+
     const group = this.groups.get("attack");
     if (!group) return;
     this.striking = true;
@@ -238,6 +242,31 @@ export class CreatureRig {
     this.play("walk", Math.min(RATIO_RANGE[1], Math.max(RATIO_RANGE[0], ratio)));
   }
 
+  /**
+   * Pause the bones of a creature nobody can see, and pick up where locomotion
+   * says it should be when it comes back. Every monster in a map animating off
+   * screen was an eighth of a mid-range CPU's frame.
+   */
+  setAwake(awake: boolean): void {
+    if (awake === this.awake) return;
+    this.awake = awake;
+    if (!awake) {
+      if (this.striking) {
+        this.groups.get("attack")?.stop();
+        this.striking = false;
+        this.playing = null;
+      }
+      const group = this.playing ? this.groups.get(this.playing) : undefined;
+      group?.pause();
+      return;
+    }
+    const clip = this.playing;
+    if (!clip) return;
+    for (const [name, other] of this.groups) if (name !== clip) other.stop();
+    const group = this.groups.get(clip);
+    group?.start(true, group.speedRatio);
+  }
+
   /** Let go of the body. A clip still running would drive the bones the physics
    *  is trying to own, and the corpse would twitch through its walk. */
   stopForDeath(): void {
@@ -251,6 +280,10 @@ export class CreatureRig {
     if (!group) return;
     group.speedRatio = ratio;
     if (this.playing === clip) return;
+    if (!this.awake) {
+      this.playing = clip; // started by setAwake(true)
+      return;
+    }
     for (const [name, other] of this.groups) if (name !== clip) other.stop();
     group.start(true, ratio);
     this.playing = clip;

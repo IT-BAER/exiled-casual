@@ -38,6 +38,26 @@ describe("the fires a place is lit by", () => {
     expect(lit.every((l) => l.intensity > 0)).toBe(true);
   });
 
+  it("re-renders a bowl's shadow cube only while its pool can reach the frame", () => {
+    const s = scene();
+    const pool = createFireLights(s);
+    const rearmed = new Set<number>();
+    pool.forEach((light, i) => {
+      // NullEngine builds no render targets; a stub map records the re-arm.
+      light.getShadowGenerator = (() => ({
+        getShadowMap: () => ({ resetRefreshCounter: () => rearmed.add(i) }),
+      })) as unknown as typeof light.getShadowGenerator;
+    });
+    // One bowl by the camera, one far past anything its pool could light.
+    setFireSpots([{ x: 2, z: 0, phase: 0 }, { x: 80, z: 0, phase: 1 }]);
+    updateFireLights(s, Vector3.Zero(), 16);
+    rearmed.clear();
+    updateFireLights(s, Vector3.Zero(), 16);
+    expect([...rearmed]).toEqual([0]);
+    // Both stay lit: switching a light off recompiles every material that sees it.
+    expect(fireLightState().filter((l) => l.on)).toHaveLength(2);
+  });
+
   it("switches a light off when there is no fire for it", () => {
     const s = scene();
     createFireLights(s);

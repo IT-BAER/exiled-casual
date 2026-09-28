@@ -17,7 +17,7 @@ import {
 import { applyAtmosphere, BETA_AT_DEFAULT, createScene, VOID_COLOR } from "./engine";
 import { applyBiomeTint } from "./level";
 import { LIGHT_POOL } from "./lights";
-import { HAZE_HEIGHT, HAZE_MAX_SIZE, HAZE_NAME, MOTES_NAME, moteDrift } from "./haze";
+import { HAZE_HEIGHT, HAZE_MAX_SIZE, HAZE_NAME, MOTES_NAME, moteDrift, moteDriftBasis } from "./haze";
 import { BIOMES } from "@exiled/content-runtime";
 import { blowFrom, SnapshotRenderer, syncActionAnimation } from "./renderer";
 import { makeMesh, updateTelegraph } from "./meshes";
@@ -390,6 +390,9 @@ describe("atmosphere", () => {
     for (let i = 0; i < 200; i++) {
       const d = moteDrift(0.5 + (i % 20) / 40, 0.5 + i / 400, i * 0.1);
       expect(Math.abs(d)).toBeLessThanOrEqual(1);
+      // The per-mote basis the update loop uses is the same field, not a cheaper look-alike.
+      const [c, s] = moteDriftBasis(0.5 + (i % 20) / 40, 0.5 + i / 400);
+      expect(Math.max(-1, Math.min(1, c * Math.cos(i * 0.1) + s * Math.sin(i * 0.1)))).toBeCloseTo(d, 9);
     }
     const p = motes.particles[0]!;
     const before = p.direction.clone();

@@ -192,6 +192,8 @@ let sparks: Spark[] = [];
  *  frame, and the clock they burn on. */
 let burning: readonly FireSpot[] = [];
 let clock = 0;
+/** Bowls given particles on the last update. */
+let lit = BOWLS;
 
 /**
  * Build the system and the particle table. Call once per scene, with the lights.
@@ -211,7 +213,9 @@ export function createFireFlames(scene: Scene): Mesh | null {
   // solid's own facets are below what can be resolved — what matters is that it
   // HAS a shape in the room, and therefore a silhouette, an occlusion and a
   // parallax that a camera-facing quad would not have.
-  const proto = MeshBuilder.CreatePolyhedron("fire-ember-proto", { type: 1, size: 0.5 }, scene);
+  // Shared corners (`flat: false`): 6 vertices instead of 24, and the material
+  // is unlit, so the per-face normals flat shading buys were never drawn.
+  const proto = MeshBuilder.CreatePolyhedron("fire-ember-proto", { type: 1, size: 0.5, flat: false }, scene);
   system.addShape(proto, BOWLS * PER_BOWL);
   proto.dispose();
   const m = system.buildMesh();
@@ -306,6 +310,7 @@ export function resetFireFlames(): void {
   sparks = [];
   burning = [];
   clock = 0;
+  lit = BOWLS;
 }
 
 /** How many embers are alight, for tests. */
@@ -330,7 +335,12 @@ export function updateFireFlames(near: readonly FireSpot[], now: number): void {
     const ph = now + s.phase;
     flicker[b] = 0.72 + 0.2 * Math.sin(ph * 3.1) + 0.1 * Math.sin(ph * 1.27 + 1.7);
   }
-  sps.setParticles();
+  // Only the bowls alight now, plus any that went out since last frame so their
+  // embers get parked once. Every bowl beyond both is already parked.
+  const alight = Math.min(near.length, BOWLS);
+  const span = Math.max(alight, lit);
+  lit = alight;
+  if (span > 0) sps.setParticles(0, span * PER_BOWL - 1);
 }
 
 /** The flicker each burning bowl is at this frame. See `updateFireFlames`. */

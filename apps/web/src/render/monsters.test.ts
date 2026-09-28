@@ -228,6 +228,44 @@ describe("monsters asset", () => {
     expect(started, "the first swing while in view").toEqual([`${species}|attack:once`]);
   });
 
+  it("pauses its clip while asleep and resumes the latest one on waking", () => {
+    const log: string[] = [];
+    const group = (name: string): AnimationGroup => ({
+      name,
+      speedRatio: 1,
+      enableBlending: false,
+      blendingSpeed: 0,
+      start: (loop: boolean) => log.push(`start ${name}${loop ? "" : ":once"}`),
+      stop: () => {},
+      pause: () => log.push(`pause ${name}`),
+      dispose: () => {},
+      onAnimationGroupEndObservable: { addOnce: () => {} },
+    } as unknown as AnimationGroup);
+    const species = "monster.cinder_imp.v1";
+    const rig = new CreatureRig(
+      {
+        animationGroups: ["walk", "idle", "attack"].map((c) => group(`${species}|${c}`)),
+        rootNodes: [],
+        skeletons: [],
+        dispose: () => {},
+      } as unknown as InstantiatedEntries,
+      species,
+    );
+    rig.noteAttack(1);
+    log.length = 0;
+
+    rig.setAwake(false);
+    expect(log).toEqual([`pause ${species}|idle`]);
+    // Asleep, nothing drives the bones: a walk is only remembered, a swing unseen.
+    log.length = 0;
+    rig.setLocomotion(3);
+    rig.noteAttack(2);
+    expect(log).toEqual([]);
+
+    rig.setAwake(true);
+    expect(log).toEqual([`start ${species}|walk`]);
+  });
+
   /**
    * Seventeen creatures share four hide sheets and one bone material. If that
    * ever stops being true the file is carrying per-species textures, and the
