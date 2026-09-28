@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { MemoryKv, ROSTER_VERSION, addCharacter, emptyRoster, findCharacter, saveRoster } from "@exiled/persistence";
-import { CLASS_IDS, DEFAULT_CLASS_ID, START_LEVEL } from "@exiled/rules";
+import { CLASS_IDS, DEFAULT_CLASS_ID, START_LEVEL, familyForClass, familyOf } from "@exiled/rules";
 import { CLASSES, STARTER_BASE_IDS, baseOf, defaultAttackFor } from "@exiled/content-runtime";
 import { MOUSE_SLOT_BASE } from "@exiled/protocol";
 import { createCombatSim } from "./combat-sim";
@@ -61,12 +61,17 @@ describe("class content", () => {
   });
 
   it("arms every class in its main hand with a weapon of its own family it can hold at level 1", () => {
-    const family = { "class.ironsworn": "ironsworn", "class.stalker": "stalker", "class.emberbound": "ember" } as const;
     for (const c of Object.values(CLASSES)) {
       const id = c.startingGear["weapon1"];
       expect(id, c.id).toBeDefined();
-      expect(id!.startsWith(`base.${family[c.id as keyof typeof family]}_`), id).toBe(true);
+      expect(familyOf(id!), id).toBe(familyForClass(c.id));
       expect(baseOf(id!).stats?.reqLevel ?? 1, id).toBeLessThanOrEqual(START_LEVEL);
+    }
+  });
+
+  it("names each class's drop family after the family it starts in", () => {
+    for (const c of Object.values(CLASSES)) {
+      for (const id of Object.values(c.startingGear)) expect(familyOf(id), `${c.id} ${id}`).toBe(familyForClass(c.id));
     }
   });
 

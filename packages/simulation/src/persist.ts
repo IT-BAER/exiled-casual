@@ -254,7 +254,7 @@ export function restore(world: World, state: PersistedState): void {
   }
   grantSkills(world, stripped);
   world.set<ShardsC>(e, "shards", state.shards ?? { counts: {} });
-  world.set<VendorC>(e, "vendor", state.vendor ?? stockVendor(state.session.atlasSeed, progress.level));
+  world.set<VendorC>(e, "vendor", state.vendor ?? stockVendor(state.session.atlasSeed, progress.level, state.session.classId));
   // Saved gear has to reach the player, not just the equipment panel. Life and
   // mana are not persisted, so a restored session starts full.
   recomputePlayerStats(world, { refill: true });

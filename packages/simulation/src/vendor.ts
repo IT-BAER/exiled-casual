@@ -1,5 +1,5 @@
 import { ITEM_POOLS, baseOf, currencyItem, isPortalScroll, PORTAL_SCROLL_BASE_ID, WISDOM_SCROLL_BASE_ID } from "@exiled/content-runtime";
-import { rollVendorStock } from "@exiled/rules";
+import { familyForClass, rollVendorStock } from "@exiled/rules";
 import { placeFirstFit } from "./inventory";
 import type { Item } from "@exiled/content-schema";
 import type { VendorC } from "./components";
@@ -39,7 +39,7 @@ export function isStaple(item: Item): boolean {
   return isPortalScroll(item) || item.baseId === WISDOM_SCROLL_BASE_ID;
 }
 
-export function stockVendor(worldSeed: number, level: number): VendorC {
+export function stockVendor(worldSeed: number, level: number, classId?: string): VendorC {
   const shelf: VendorC = { cols: VENDOR_COLS, rows: VENDOR_ROWS, items: [] };
   for (const item of STAPLES) {
     const base = baseOf(item.baseId);
@@ -48,7 +48,7 @@ export function stockVendor(worldSeed: number, level: number): VendorC {
     shelf.items.push({ x: at.x, y: at.y, w: base.w, h: base.h, item });
   }
   const seed = (worldSeed ^ Math.imul(level, 0x9e3779b1)) >>> 0;
-  for (const item of rollVendorStock(ITEM_POOLS, seed, level)) {
+  for (const item of rollVendorStock(ITEM_POOLS, seed, level, familyForClass(classId))) {
     const base = baseOf(item.baseId);
     const at = placeFirstFit(shelf, base.w, base.h);
     if (at === null) break; // shelf full; the rest of the roll is simply not stocked

@@ -708,16 +708,17 @@ describe("registerDeath", () => {
       // source: the vendor always sells a scroll (vendor.ts STAPLES), so an
       // unlucky map costs gold, never a rare that cannot be read. The ceiling is
       // the other half of the band, because a scroll the player steps over is
-      // clutter and clutter is what makes a drop cheap.
+      // clutter and clutter is what makes a drop cheap. The mean measures 0.85 and
+      // one 100-map window swings 0.80..0.92, so it takes 1000 maps to be a floor.
       let paid = 0, owed = 0;
-      for (let seed = 1; seed <= 100; seed++) {
+      for (let seed = 1; seed <= 1000; seed++) {
         const { sim, w } = makeMapKills(seed);
         sim.step([]);
         paid += scrolls(w).length;
         owed += w.query("item", "position")
           .filter((e) => (w.get(e, "item") as { item: { unidentified?: boolean } }).item.unidentified === true).length;
       }
-      expect(paid / owed).toBeGreaterThan(0.85);
+      expect(paid / owed).toBeGreaterThan(0.82);
       expect(paid / owed).toBeLessThan(1.4);
     });
 

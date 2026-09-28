@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { rollItem } from "./items.js";
+import { familyOf, rollItem } from "./items.js";
 import type { ItemPools } from "@exiled/content-schema";
 
 const POOLS: ItemPools = {
@@ -222,7 +222,7 @@ describe("rollItem", () => {
 
   it("rolls uniques only from the unique pool, with that unique's base and mods", () => {
     let sawUnique = false;
-    for (let s = 1; s <= 800; s++) {
+    for (let s = 1; s <= 20000; s++) {
       const it = rollItem(UNIQUE_POOLS, s, 95, 3);
       if (it.rarity !== "unique") continue;
       sawUnique = true;
@@ -240,7 +240,7 @@ describe("rollItem", () => {
   });
 
   it("unique is rarer than rare", () => {
-    const rarities = Array.from({ length: 1200 }, (_, s) => rollItem(UNIQUE_POOLS, s + 1, 95, 3).rarity);
+    const rarities = Array.from({ length: 20000 }, (_, s) => rollItem(UNIQUE_POOLS, s + 1, 95, 3).rarity);
     const count = (r: string) => rarities.filter((x) => x === r).length;
     expect(count("unique")).toBeGreaterThan(0);
     expect(count("unique")).toBeLessThan(count("rare"));
@@ -271,6 +271,46 @@ describe("rollItem", () => {
       } else if (it.rarity === "normal") {
         expect(it.name).toBeUndefined();
       }
+    }
+  });
+});
+
+describe("class families", () => {
+  // Deliberately lopsided: three bases, two, one. A per-base draw hands "iron" half the drops.
+  const base = (id: string) => ({ id, name: id, itemClass: "wand", w: 1, h: 1 });
+  const unique = (baseId: string) => ({ id: `u.${baseId}`, name: baseId, baseId, flavour: "", mods: [{ affixId: "a", min: 1, max: 2 }] });
+  const FAMILIES: ItemPools = {
+    bases: ["base.iron_a", "base.iron_b", "base.iron_c", "base.hide_a", "base.hide_b", "base.cloth_a"].map(base),
+    affixes: [{ id: "a", kind: "prefix", nameWord: "A", stat: "maxLife", label: "life", minItemLevel: 1, min: 1, max: 2 }],
+    uniques: ["base.iron_a", "base.iron_b", "base.iron_c", "base.hide_a", "base.cloth_a"].map(unique),
+  };
+  const N = 9000;
+  const shares = (force: "normal" | "unique", own?: string) => {
+    const n: Record<string, number> = {};
+    for (let s = 1; s <= N; s++) {
+      const f = familyOf(rollItem(FAMILIES, s, 80, 0, force, 0, own).baseId);
+      n[f] = (n[f] ?? 0) + 1;
+    }
+    return Object.fromEntries(Object.entries(n).map(([f, c]) => [f, c / N]));
+  };
+
+  it("names a base's family by its class word", () => {
+    expect(familyOf("base.ember_kindling_wand")).toBe("ember");
+    expect(familyOf("b0")).toBe("b0");
+  });
+
+  it("gives every family an equal share of the drops, whatever its base count", () => {
+    for (const force of ["normal", "unique"] as const) {
+      for (const share of Object.values(shares(force))) expect(share).toBeCloseTo(1 / 3, 1);
+    }
+  });
+
+  it("drops the player's own family slightly more often: 40/30/30", () => {
+    for (const force of ["normal", "unique"] as const) {
+      const got = shares(force, "hide");
+      expect(Math.abs(got.hide! - 0.4)).toBeLessThan(0.02);
+      expect(Math.abs(got.iron! - 0.3)).toBeLessThan(0.02);
+      expect(Math.abs(got.cloth! - 0.3)).toBeLessThan(0.02);
     }
   });
 });

@@ -6,7 +6,7 @@ import { openReturnPortal } from "../areas";
 import { fp } from "@exiled/fixed-point";
 import { fnv1a32 } from "../rng";
 import {
-  rollItem, areaLevel, FLASK_CHARGES_PER_KILL, gainXp, xpAward,
+  rollItem, familyForClass, areaLevel, FLASK_CHARGES_PER_KILL, gainXp, xpAward,
   waystoneScaleFor, waystoneDrops, waystoneMods, atlasGraph, nextNodeTier,
   dropCount, dropCategory, quantityScaleMilli, MONSTER_ILVL_OFFSET, DROP_POOL, BOSS_DROP_POOL,
   splitGemXp, gainGemXp, maxGemLevel,
@@ -141,7 +141,7 @@ export function registerDeath(sim: Simulation, collisionRef?: CollisionRef): voi
             const forced = isBoss && i === 0;
             const equipment = forced || dropCategory(fnv1a32(`cat:${s.mapSeed}:${tick}:${e}:${i}`), pool) === "equipment";
             const item = equipment
-              ? rollItem(ITEM_POOLS, seed, ilvl, mr, forced ? "rare" : undefined, ws.rarityPct)
+              ? rollItem(ITEM_POOLS, seed, ilvl, mr, forced ? "rare" : undefined, ws.rarityPct, familyForClass(s.classId))
               : currencyItem(currencyForRoll(seed >>> 8));
             const base = equipment ? baseOf(item.baseId) : { w: 1, h: 1 };
             // Second and further rings, so a stone that doubles the payout does
@@ -204,7 +204,7 @@ export function registerDeath(sim: Simulation, collisionRef?: CollisionRef): voi
             // A level-up restocks the shelf (docs/02 §17). It is also the one moment
             // the shop is worth walking back to, so the new level and the new goods
             // land together rather than the goods arriving unannounced.
-            world.set<VendorC>(sessionE, "vendor", stockVendor(s.atlasSeed, next.level));
+            world.set<VendorC>(sessionE, "vendor", stockVendor(s.atlasSeed, next.level, s.classId));
             // The level may have opened a skill. Granting its gem here rather than
             // only on load is what makes it slottable in the moment it is earned.
             grantSkills(world);

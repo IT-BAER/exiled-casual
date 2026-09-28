@@ -2,12 +2,12 @@ import { describe, it, expect } from "vitest";
 import { generateArea } from "@exiled/mapgen";
 import { fp } from "@exiled/fixed-point";
 import { CONTENT_VERSION, MONSTERS, MONSTER_POOLS, PACK_COUNT, bossFor, mapBase, hideoutFootprints } from "@exiled/content-runtime";
-import { mapBaseIdForNode, monsterTierScale } from "@exiled/rules";
+import { familyOf, mapBaseIdForNode, monsterTierScale } from "@exiled/rules";
 import type { MonsterDef } from "@exiled/content-schema";
 import { World, type Entity } from "./ecs.js";
 import { areaCollision, buildArea, spillContainer, HIDEOUT_SPAWN } from "./areas.js";
 import { gridCollision } from "./collision.js";
-import type { SessionC, Health, MonsterC, Position, ContainerC } from "./components.js";
+import type { SessionC, Health, MonsterC, Position, ContainerC, ItemC } from "./components.js";
 import { grammarForNode } from "./systems/area-transition.js";
 
 function mapSessionAtTier(tier: number): SessionC {
@@ -161,6 +161,21 @@ describe("pool-driven spawning", () => {
       spillContainer(w, session, c.key, p.x, p.y);
     }
   };
+
+  it("a container favours the opener's class family, 40/30/30", () => {
+    const w = new World();
+    const session = { ...mapSessionAtTier(5), classId: "class.ironsworn" };
+    for (let i = 0; i < 3000; i++) spillContainer(w, session, `cache:family:${i}`, 0, 0);
+    const n: Record<string, number> = {};
+    for (const e of w.query("item")) {
+      const id = w.get<ItemC>(e, "item")!.item.baseId;
+      if (id.startsWith("base.")) n[familyOf(id)] = (n[familyOf(id)] ?? 0) + 1;
+    }
+    const total = n.ironsworn! + n.stalker! + n.ember!;
+    expect(Math.abs(n.ironsworn! / total - 0.4)).toBeLessThan(0.03);
+    expect(Math.abs(n.stalker! / total - 0.3)).toBeLessThan(0.03);
+    expect(Math.abs(n.ember! / total - 0.3)).toBeLessThan(0.03);
+  });
 
   it("opened containers pay with variance, not the same handful every time", () => {
     const counts = new Set<number>();

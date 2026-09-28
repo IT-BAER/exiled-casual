@@ -90,7 +90,7 @@ const STOCK_RARITY: readonly { rarity: Rarity; pct: number }[] = [
  * levels roughly follow progression with caps"), and never above — a shop that
  * outsells the zone you are in is a shop that replaces playing the zone.
  */
-export function rollVendorStock(pools: ItemPools, seed: number, level: number): Item[] {
+export function rollVendorStock(pools: ItemPools, seed: number, level: number, ownFamily?: string): Item[] {
   const rnd = mulberry32(seed);
   const stock: Item[] = [];
   for (let i = 0; i < VENDOR_STOCK; i++) {
@@ -101,7 +101,7 @@ export function rollVendorStock(pools: ItemPools, seed: number, level: number): 
     // A fresh sub-seed per slot: rollItem burns a variable number of draws
     // depending on the rarity it lands on, so sharing one stream would make an
     // earlier slot's rarity shift every later slot's base.
-    const item = rollItem(pools, rnd(), ilvl, 0, rarity);
+    const item = rollItem(pools, rnd(), ilvl, 0, rarity, 0, ownFamily);
     // The shelf is a display case: you can see what you are paying for. It is
     // also why the vendor is not a way to farm unidentified items for the
     // reveal — that beat belongs to the drop (docs/09 rule 1).

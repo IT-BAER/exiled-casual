@@ -21,6 +21,18 @@ export type ClassId = (typeof CLASS_IDS)[number];
 /** What a character with an unknown or missing class id is treated as. */
 export const DEFAULT_CLASS_ID: ClassId = "class.stalker";
 
+/** Each class's gear family: the word in its bases' ids (`base.ember_robe`), see `familyOf`. */
+export const FAMILY_BY_CLASS: Record<ClassId, string> = {
+  "class.ironsworn": "ironsworn",
+  "class.stalker": "stalker",
+  "class.emberbound": "ember",
+};
+
+/** The family a drop favours for this character; none for a session with no class yet. */
+export function familyForClass(classId: string | undefined): string | undefined {
+  return classId === undefined ? undefined : FAMILY_BY_CLASS[classIdOr(classId)];
+}
+
 /** Narrow an arbitrary string to a class id, falling back rather than throwing mid-run. */
 export function classIdOr(id: string): ClassId {
   return (CLASS_IDS as readonly string[]).includes(id) ? (id as ClassId) : DEFAULT_CLASS_ID;

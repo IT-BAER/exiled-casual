@@ -81,6 +81,14 @@ export function rarityScaleMilli(monsterRarity: number, areaPct: number, playerP
 export const DROP_POOL = { currency: 72, equipment: 28 } as const;
 export const BOSS_DROP_POOL = { currency: 40, equipment: 60 } as const;
 
+/**
+ * Which class family an equipment drop comes from. Every family weighs the same
+ * whatever its base count, and the player's own a little more: 40/30/30 with
+ * three. Ours, not PoE's: PoE picks by drop level and ignores the class.
+ */
+export const OWN_FAMILY_WEIGHT = 4;
+export const OTHER_FAMILY_WEIGHT = 3;
+
 export function dropCategory(roll: number, pool: { currency: number; equipment: number }): "currency" | "equipment" {
   return (roll >>> 0) % (pool.currency + pool.equipment) < pool.currency ? "currency" : "equipment";
 }

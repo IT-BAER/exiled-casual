@@ -2,7 +2,7 @@
 // a leaf (matches rare.ts). PRNG inlined like atlas.ts so there is no @exiled dep.
 import type { ItemPools, Item, ItemAffix, Rarity } from "@exiled/content-schema";
 import { rareName } from "./item-names.js";
-import { rarityScaleMilli } from "./loot.js";
+import { rarityScaleMilli, OWN_FAMILY_WEIGHT, OTHER_FAMILY_WEIGHT } from "./loot.js";
 
 function mulberry32(seed: number): () => number {
   let s = seed >>> 0;
@@ -45,6 +45,21 @@ const UNIQUE_CAP_PPM = 60_000;
 function tierPpm(basePpm: number, capPpm: number, monsterRarity: number, areaPct: number, kPct: number): number {
   const scaled = Math.trunc((basePpm * rarityScaleMilli(monsterRarity, areaPct, 0, kPct)) / 1000);
   return Math.min(capPpm, scaled);
+}
+
+/** A base's family is its id's class word (`base.ember_wand` -> "ember"); a bare id is its own family. */
+export function familyOf(baseId: string): string {
+  return /^base\.([a-z]+)_/.exec(baseId)?.[1] ?? baseId;
+}
+
+/** Family first, by weight, then evenly inside it: two draws, whatever the pool. */
+function pickByFamily<T>(items: readonly T[], baseIdOf: (t: T) => string, own: string | undefined, rnd: () => number): T {
+  const families = [...new Set(items.map((t) => familyOf(baseIdOf(t))))];
+  const weights = families.map((f) => (f === own ? OWN_FAMILY_WEIGHT : OTHER_FAMILY_WEIGHT));
+  let r = rnd() % weights.reduce((a, w) => a + w, 0);
+  const family = families.find((_, i) => (r -= weights[i]!) < 0)!;
+  const inFamily = items.filter((t) => familyOf(baseIdOf(t)) === family);
+  return inFamily[rnd() % inFamily.length]!;
 }
 
 /**
@@ -127,6 +142,7 @@ export function magicName(pools: ItemPools, baseName: string, affixes: readonly 
  *   Best-effort: asking for "unique" on a pool without uniques yields a normal item.
  * @param areaRarityPct the area channel (waystone modifiers). Linear, unlike the
  *   player channel: PoE only diminishes what the player carries.
+ * @param ownFamily the player's class family (`familyOf`), weighted up; absent = all equal.
  */
 export function rollItem(
   pools: ItemPools,
@@ -135,9 +151,10 @@ export function rollItem(
   monsterRarity: number,
   forceRarity?: Rarity,
   areaRarityPct = 0,
+  ownFamily?: string,
 ): Item {
   const rnd = mulberry32(seed);
-  const base = pools.bases[rnd() % pools.bases.length]!;
+  const base = pickByFamily(pools.bases, (b) => b.id, ownFamily, rnd);
   const roll = rnd() % 1_000_000;
   const rarePpm = tierPpm(RARE_PPM, RARE_CAP_PPM, monsterRarity, areaRarityPct, 90);
 
@@ -149,7 +166,7 @@ export function rollItem(
   const uniques = pools.uniques ?? [];
   const uniquePct = Math.min(tierPpm(UNIQUE_PPM, UNIQUE_CAP_PPM, monsterRarity, areaRarityPct, 60), Math.max(0, rarePpm - 1));
   if (uniques.length > 0 && (forceRarity === "unique" || (forceRarity === undefined && roll < uniquePct))) {
-    const u = uniques[rnd() % uniques.length]!;
+    const u = pickByFamily(uniques, (x) => x.baseId, ownFamily, rnd);
     return {
       baseId: u.baseId,
       rarity: "unique",

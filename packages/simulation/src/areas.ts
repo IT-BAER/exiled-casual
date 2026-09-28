@@ -2,7 +2,7 @@ import { fp, fpDist2, fpMul } from "@exiled/fixed-point";
 import { blockerCollision, gridCollision, hasLineOfSight } from "./collision";
 import {
   makeRare, mapBaseIdForNode, monsterTierScale, waystoneScaleFor,
-  areaLevel, dropCount, dropCategory, quantityScaleMilli, rollItem,
+  areaLevel, dropCount, dropCategory, quantityScaleMilli, rollItem, familyForClass,
   MONSTER_ILVL_OFFSET, DROP_POOL,
 } from "@exiled/rules";
 import {
@@ -480,7 +480,7 @@ export function spillContainer(
     const seed = fnv1a32(`${key}:${i}`);
     const equipment = dropCategory(fnv1a32(`cachecat:${key.slice("cache:".length)}:${i}`), DROP_POOL) === "equipment";
     const item = equipment
-      ? rollItem(ITEM_POOLS, seed, cacheIlvl, REWARD_RARITY, undefined, ws.rarityPct)
+      ? rollItem(ITEM_POOLS, seed, cacheIlvl, REWARD_RARITY, undefined, ws.rarityPct, familyForClass(session.classId))
       : currencyItem(currencyForRoll(seed >>> 8));
     const base = equipment ? baseOf(item.baseId) : { w: 1, h: 1 };
     // Same spread idiom as a death burst, so a five-item payout is a pile on
