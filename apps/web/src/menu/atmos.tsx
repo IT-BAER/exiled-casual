@@ -72,7 +72,7 @@ export function Fog(): React.ReactElement {
         style={{
           position: "absolute",
           inset: "-20%",
-          backgroundImage: `url(${MENU_ART}/fog_sheet.png)`,
+          backgroundImage: `url(${MENU_ART}/fog_sheet.webp)`,
           backgroundRepeat: "repeat",
           // Sized in PIXELS, not in a percentage of the element.
           //
@@ -93,7 +93,7 @@ export function Fog(): React.ReactElement {
         style={{
           position: "absolute",
           inset: "-30%",
-          backgroundImage: `url(${MENU_ART}/fog_sheet.png)`,
+          backgroundImage: `url(${MENU_ART}/fog_sheet.webp)`,
           backgroundRepeat: "repeat",
           backgroundSize: `${FOG_NEAR_TILE}px auto`,
           mixBlendMode: "screen",

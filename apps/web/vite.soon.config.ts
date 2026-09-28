@@ -18,7 +18,7 @@ const OUT = "dist-soon";
 const ASSETS = [
   "textures/ui/menu/menu_backdrop.jpg",
   "textures/ui/menu/logo.webp",
-  "textures/ui/menu/gilt_metal.png",
+  "textures/ui/menu/gilt_metal.webp",
   "fonts/cinzel-latin.woff2",
   "fonts/OFL.txt",
   "favicon.ico",

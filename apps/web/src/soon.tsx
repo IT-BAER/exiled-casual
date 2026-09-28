@@ -26,7 +26,7 @@ const GOLD = "#c8a44d";
  * plain gold word rather than an invisible one.
  */
 const GILT: React.CSSProperties = {
-  backgroundImage: `url(${MENU_ART}/gilt_metal.png)`,
+  backgroundImage: `url(${MENU_ART}/gilt_metal.webp)`,
   backgroundSize: "230px",
   backgroundPosition: "center",
   /* The tile that ships is the master pulled most of the way back toward flat

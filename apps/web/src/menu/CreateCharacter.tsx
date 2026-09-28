@@ -100,7 +100,7 @@ export function CreateCharacter({
                 height: 58,
                 cursor: "pointer",
                 border: c.id === chosen.id ? `1px solid ${GOLD}` : "1px solid transparent",
-                background: `url(${MENU_ART}/row_plate.png) 0 0 / 100% 100% no-repeat`,
+                background: `url(${MENU_ART}/row_plate.webp) 0 0 / 100% 100% no-repeat`,
                 filter: c.id === chosen.id ? "brightness(1.5) saturate(1.15)" : "brightness(0.92)",
                 textAlign: "left",
               }}

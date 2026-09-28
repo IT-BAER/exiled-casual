@@ -94,7 +94,7 @@ export function LoadingScreen({ areaName, tip, wallpaper, leaving }: LoadingScre
             corners, which a symmetric gradient cannot be. */}
         <img
           data-testid="loading-vignette"
-          src="/textures/ui/menu/loading_vignette.png"
+          src="/textures/ui/menu/loading_vignette.webp"
           alt=""
           aria-hidden
           style={{

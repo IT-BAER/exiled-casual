@@ -35,7 +35,7 @@ export const PARCHMENT = "#e8dcc0";
 export const EMBER = "#d9762f";
 
 /**
- * Nine-slice inset of `panel_frame.png`, in source pixels, MEASURED off the
+ * Nine-slice inset of `panel_frame.webp`, in source pixels, MEASURED off the
  * alpha channel by `tools/build_menu_textures.py` — not guessed from the brief.
  * The corner ornament ends here; past it the edge is a repeating rail. Get this
  * wrong and the corners stretch, which is the single most obvious way a frame
@@ -96,7 +96,7 @@ export function FramedPanel({
           pointerEvents: "none",
           borderStyle: "solid",
           borderWidth: FRAME_BORDER,
-          borderImageSource: `url(${MENU_ART}/panel_frame.png)`,
+          borderImageSource: `url(${MENU_ART}/panel_frame.webp)`,
           borderImageSlice: FRAME_SLICE,
           borderImageRepeat: "round",
           filter: FRAME_DIM,
@@ -163,7 +163,7 @@ export function MenuButton({
         height,
         minWidth: 180,
         backgroundColor: "transparent",
-        backgroundImage: `url(${MENU_ART}/button_plate.png)`,
+        backgroundImage: `url(${MENU_ART}/button_plate.webp)`,
         backgroundSize: "100% 100%",
         backgroundRepeat: "no-repeat",
         fontFamily: DISPLAY,
@@ -199,7 +199,7 @@ export function Divider({ style }: { style?: React.CSSProperties }): React.React
       aria-hidden
       style={{
         height: 10,
-        backgroundImage: `url(${MENU_ART}/divider.png), linear-gradient(90deg, transparent, ${GOLD_DIM}, transparent)`,
+        backgroundImage: `url(${MENU_ART}/divider.webp), linear-gradient(90deg, transparent, ${GOLD_DIM}, transparent)`,
         backgroundSize: "100% 100%, 100% 1px",
         backgroundPosition: "center, center",
         backgroundRepeat: "no-repeat, no-repeat",

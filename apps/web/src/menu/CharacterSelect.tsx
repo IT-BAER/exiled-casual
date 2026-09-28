@@ -252,7 +252,7 @@ function Row({
         height: 58,
         padding: "0 10px 0 0",
         cursor: "pointer",
-        backgroundImage: `url(${MENU_ART}/row_plate.png)`,
+        backgroundImage: `url(${MENU_ART}/row_plate.webp)`,
         backgroundSize: "100% 100%",
         backgroundRepeat: "no-repeat",
         // The plate carries the row; selection is light on it plus a gilt edge,

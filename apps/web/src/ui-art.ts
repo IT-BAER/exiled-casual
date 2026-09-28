@@ -26,21 +26,21 @@ const MENU = "/textures/ui/menu";
  */
 export const UI_ART: readonly string[] = [
   // The Escape menu, and every framed panel after it.
-  `${MENU}/panel_frame.png`,
-  `${MENU}/button_plate.png`,
-  `${MENU}/divider.png`,
+  `${MENU}/panel_frame.webp`,
+  `${MENU}/button_plate.webp`,
+  `${MENU}/divider.webp`,
   // Options, one keypress further in.
-  `${MENU}/gem_check_on.png`,
-  `${MENU}/gem_check_off.png`,
-  `${MENU}/slider_track.png`,
-  `${MENU}/slider_handle.png`,
-  `${MENU}/tab_plate.png`,
-  `${MENU}/row_plate.png`,
+  `${MENU}/gem_check_on.webp`,
+  `${MENU}/gem_check_off.webp`,
+  `${MENU}/slider_track.webp`,
+  `${MENU}/slider_handle.webp`,
+  `${MENU}/tab_plate.webp`,
+  `${MENU}/row_plate.webp`,
   // Item tooltips: the first hover paints the rarity band, so all four warm.
-  `${MENU}/tooltip_header_normal.png`,
-  `${MENU}/tooltip_header_magic.png`,
-  `${MENU}/tooltip_header_rare.png`,
-  `${MENU}/tooltip_header_unique.png`,
+  `${MENU}/tooltip_header_normal.webp`,
+  `${MENU}/tooltip_header_magic.webp`,
+  `${MENU}/tooltip_header_rare.webp`,
+  `${MENU}/tooltip_header_unique.webp`,
   // Inventory, stash, character sheet.
   "/textures/ui/char_header_v1.png",
   "/textures/ui/char_stone_v1.png",

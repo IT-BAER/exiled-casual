@@ -26,41 +26,41 @@ from PIL import Image
 SRC = pathlib.Path(__file__).resolve().parent.parent / "assets" / "menu"
 DST = pathlib.Path(__file__).resolve().parent.parent / "apps" / "web" / "public" / "textures" / "ui" / "menu"
 
-# master stem -> (output name, target width or None to keep, jpeg quality or None for png)
+# master stem -> (output name, target width or None to keep, jpeg/webp quality or None for lossless webp)
 PLAN: dict[str, tuple[str, int | None, int | None]] = {
     "menu_backdrop_v3": ("menu_backdrop.jpg", None, 86),
     "select_backdrop_v1": ("select_backdrop.jpg", None, 86),
     # WebP, not PNG: the logo is the menu's LCP element, and at q90 it is a
     # quarter of the PNG's 620 KB with no visible loss over the backdrop.
     "logo_v4": ("logo.webp", 1024, 90),
-    "button_plate_v1": ("button_plate.png", 880, None),
-    "panel_frame_v1": ("panel_frame.png", 512, None),
-    "row_plate_v1": ("row_plate.png", 1024, None),
-    "portrait_ironsworn_v1": ("portrait_ironsworn.png", 256, None),
-    "portrait_stalker_v1": ("portrait_stalker.png", 256, None),
-    "portrait_emberbound_v1": ("portrait_emberbound.png", 256, None),
-    "fog_sheet_v1": ("fog_sheet.png", 512, None),
+    "button_plate_v1": ("button_plate.webp", 880, None),
+    "panel_frame_v1": ("panel_frame.webp", 512, None),
+    "row_plate_v1": ("row_plate.webp", 1024, None),
+    "portrait_ironsworn_v1": ("portrait_ironsworn.webp", 256, None),
+    "portrait_stalker_v1": ("portrait_stalker.webp", 256, None),
+    "portrait_emberbound_v1": ("portrait_emberbound.webp", 256, None),
+    "fog_sheet_v1": ("fog_sheet.webp", 512, None),
     # Drawn over the loading plate, never over the game: PoE darkens the corners
     # of a wallpaper so the band and the tip are what the eye lands on.
-    "loading_vignette_v1": ("loading_vignette.png", 1280, None),
-    "divider_v1": ("divider.png", 512, None),
+    "loading_vignette_v1": ("loading_vignette.webp", 1280, None),
+    "divider_v1": ("divider.webp", 512, None),
     # The Options panel's controls. The gems are one plate each rather than a
     # tint of the other: an unlit gem and a lit one differ in more than
     # brightness, and the bezel picks up the glow.
-    "gem_check_off_v1": ("gem_check_off.png", 128, None),
-    "gem_check_on_v1": ("gem_check_on.png", 128, None),
-    "slider_track_v1": ("slider_track.png", 512, None),
-    "slider_handle_v1": ("slider_handle.png", 64, None),
+    "gem_check_off_v1": ("gem_check_off.webp", 128, None),
+    "gem_check_on_v1": ("gem_check_on.webp", 128, None),
+    "slider_track_v1": ("slider_track.webp", 512, None),
+    "slider_handle_v1": ("slider_handle.webp", 64, None),
     # One tab plate, tinted by CSS for active/inactive, the same rule the button
     # follows: two renders of the same tab are never quite the same tab.
-    "tab_plate_v1": ("tab_plate.png", 384, None),
+    "tab_plate_v1": ("tab_plate.webp", 384, None),
     # Item tooltip header bands, one per rarity, stretched by CSS border-image:
     # the end-caps are the slice, the middle repeats. Opaque by design - the
     # band IS the header background - so crop_to_alpha passes them through.
-    "tooltip_header_normal_v1": ("tooltip_header_normal.png", 768, None),
-    "tooltip_header_magic_v1": ("tooltip_header_magic.png", 768, None),
-    "tooltip_header_rare_v1": ("tooltip_header_rare.png", 768, None),
-    "tooltip_header_unique_v1": ("tooltip_header_unique.png", 768, None),
+    "tooltip_header_normal_v1": ("tooltip_header_normal.webp", 768, None),
+    "tooltip_header_magic_v1": ("tooltip_header_magic.webp", 768, None),
+    "tooltip_header_rare_v1": ("tooltip_header_rare.webp", 768, None),
+    "tooltip_header_unique_v1": ("tooltip_header_unique.webp", 768, None),
 }
 
 ALPHA_FLOOR = 8
@@ -131,7 +131,8 @@ def main() -> int:
 
         out = DST / out_name
         if quality is None:
-            im.convert("RGBA").save(out, optimize=True)
+            # Lossless WebP: the same pixels as a PNG at about 70% of the bytes.
+            im.convert("RGBA").save(out, lossless=True, exact=True, method=6)
         elif out.suffix == ".webp":
             im.convert("RGBA").save(out, quality=quality, method=6)
         else:

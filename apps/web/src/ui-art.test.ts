@@ -21,7 +21,7 @@ function referenced(): Set<string> {
         out.add(m[1]!);
       }
       // The menu art is written against a MENU_ART prefix rather than in full.
-      for (const m of body.matchAll(/\$\{MENU_ART\}\/([A-Za-z0-9_.-]+\.(?:png|jpg))/g)) {
+      for (const m of body.matchAll(/\$\{MENU_ART\}\/([A-Za-z0-9_.-]+\.(?:png|jpg|webp))/g)) {
         out.add(`/textures/ui/menu/${m[1]!}`);
       }
       // And sometimes the basename itself is the expression: the checkbox picks
@@ -30,7 +30,7 @@ function referenced(): Set<string> {
       for (const line of body.split(NEWLINE)) {
         if (!line.includes("MENU_ART}")) continue;
         for (const m of line.matchAll(/"([A-Za-z0-9_-]+)"/g)) {
-          const guess = `/textures/ui/menu/${m[1]!}.png`;
+          const guess = `/textures/ui/menu/${m[1]!}.webp`;
           if (existsSync(resolve(PUBLIC, guess.slice(1)))) out.add(guess);
         }
       }
@@ -67,16 +67,16 @@ describe("UI_ART", () => {
       "/textures/ui/menu/logo-512.webp",
       "/textures/ui/menu/menu_backdrop.jpg",
       "/textures/ui/menu/select_backdrop.jpg",
-      "/textures/ui/menu/fog_sheet.png",
-      "/textures/ui/menu/portrait_ironsworn.png",
-      "/textures/ui/menu/portrait_stalker.png",
-      "/textures/ui/menu/portrait_emberbound.png",
+      "/textures/ui/menu/fog_sheet.webp",
+      "/textures/ui/menu/portrait_ironsworn.webp",
+      "/textures/ui/menu/portrait_stalker.webp",
+      "/textures/ui/menu/portrait_emberbound.webp",
       // The standalone SOON teaser has its own build and never enters the game.
-      "/textures/ui/menu/gilt_metal.png",
+      "/textures/ui/menu/gilt_metal.webp",
       // The loading plate's vignette is an <img>, not a CSS background, so the
       // browser starts it with the plate itself. There is nothing earlier to
       // warm it at: the plate IS the wait.
-      "/textures/ui/menu/loading_vignette.png",
+      "/textures/ui/menu/loading_vignette.webp",
     ]);
     const missed = [...used].filter((u) => !listed.has(u) && !menuOnly.has(u));
     expect(missed).toEqual([]);

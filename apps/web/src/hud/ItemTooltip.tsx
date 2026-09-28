@@ -37,10 +37,10 @@ const UNID_RED = "#d02020"; // the unread marker
 // repeatable middle begins, in source pixels of the 768-wide band.
 type Look = { text: string; frame: string; ornate: boolean; band: string; cap: number };
 export const RARITY = {
-  normal: { text: "#c8c8c8", frame: "#8a8a8a", ornate: false, band: "/textures/ui/menu/tooltip_header_normal.png", cap: 70 },
-  magic: { text: "#8f97ff", frame: "#57699f", ornate: false, band: "/textures/ui/menu/tooltip_header_magic.png", cap: 58 },
-  rare: { text: "#e6d64a", frame: "#a3812f", ornate: true, band: "/textures/ui/menu/tooltip_header_rare.png", cap: 106 },
-  unique: { text: "#af6025", frame: "#7f4a20", ornate: true, band: "/textures/ui/menu/tooltip_header_unique.png", cap: 100 },
+  normal: { text: "#c8c8c8", frame: "#8a8a8a", ornate: false, band: "/textures/ui/menu/tooltip_header_normal.webp", cap: 70 },
+  magic: { text: "#8f97ff", frame: "#57699f", ornate: false, band: "/textures/ui/menu/tooltip_header_magic.webp", cap: 58 },
+  rare: { text: "#e6d64a", frame: "#a3812f", ornate: true, band: "/textures/ui/menu/tooltip_header_rare.webp", cap: 106 },
+  unique: { text: "#af6025", frame: "#7f4a20", ornate: true, band: "/textures/ui/menu/tooltip_header_unique.webp", cap: 100 },
 } satisfies Record<string, Look>;
 
 /** Source height of every band master after the build step. */
