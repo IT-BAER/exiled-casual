@@ -386,3 +386,18 @@ Doorways between map tiles are wider everywhere, and open ground has no lattice 
 <td width="100%"><img src="screenshots/2026-09-28-strand-cliffs.jpeg" alt="The character on the Strand's sand below a tall sandstone cliff, braziers burning on its ledges and scree blending into the beach" width="100%"><br><sub>A tall cliff with scree at its foot.</sub></td>
 </tr>
 </table>
+
+## 2026-09-28 · Swarms of small monsters
+
+Every biome now fields bigger packs of smaller monsters: Sand Skitterers in the desert and on the
+Strand, Bramble Whelps in the forest, and in the swamp the Drowned Grubling, the first creature built from a generated mesh.
+Pack members now spawn at least a metre apart, so a swarm no longer hides several bodies on one
+spot, and a monster's first swing in view now plays its strike.
+
+<table>
+<tr>
+<td width="33%"><img src="screenshots/2026-09-28-desert-swarm-packs.jpeg" alt="The Ironsworn in the desert between two packs of Sand Skitterers with glowing eyes" width="100%"><br><sub>Sand Skitterers in the desert.</sub></td>
+<td width="33%"><img src="screenshots/2026-09-28-strand-swarm.jpeg" alt="A swarm of Sand Skitterers closing on the character beside a weeded boulder on the Strand" width="100%"><br><sub>Sand Skitterers on the Strand.</sub></td>
+<td width="33%"><img src="screenshots/2026-09-28-swamp-grublings.jpeg" alt="Drowned Grublings, small grey creatures, around the character in a lamplit swamp clearing" width="100%"><br><sub>Drowned Grublings in the swamp.</sub></td>
+</tr>
+</table>
