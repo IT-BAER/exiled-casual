@@ -222,6 +222,25 @@ describe("pool-driven spawning", () => {
     expect(stuck).toEqual([]);
   });
 
+  it("no two monsters of a map spawn on the same spot", () => {
+    const stacked: string[] = [];
+    for (const node of ["node.the_wrackline", "node.emberfall", "node.ossuary_steps", "node.cinder_vault"]) {
+      for (let seed = 0; seed < 30; seed++) {
+        const world = new World();
+        const session = { ...mapSessionAtTier(1), mapSeed: seed, activeNodeId: node };
+        buildArea(world, "map", session, generateArea(seed, CONTENT_VERSION, grammarForNode(node)));
+        const seen = new Set<string>();
+        for (const e of world.query("monster", "position")) {
+          const p = world.get<Position>(e, "position")!;
+          const at = `${p.x},${p.y}`;
+          if (seen.has(at)) stacked.push(`${node} seed ${seed} at ${at}`);
+          seen.add(at);
+        }
+      }
+    }
+    expect(stacked).toEqual([]);
+  });
+
   it("exactly one rare, and it is still on the last layout socket", () => {
     const { world, session, layout } = mapFixture({ mapSeed: 21 });
     buildArea(world, "map", session, layout);

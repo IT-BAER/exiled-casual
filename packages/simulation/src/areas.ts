@@ -318,6 +318,11 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
     const col = gridCollision(layout.grid, layout.objectiveAnchors
       .filter((a) => a.id.startsWith("reward."))
       .map((a) => ({ x: fp(a.x), y: fp(a.y), r: fp(BLOCK_RADIUS.container!) })));
+    // Every body placed so far; a new one keeps a metre from all of them.
+    // ponytail: linear scan per body, a spatial hash if a map ever fields thousands.
+    const placed: { x: number; y: number }[] = [];
+    const gap2 = fp(1) * fp(1);
+    const free = (x: number, y: number) => placed.every((p) => fpDist2(x, y, p.x, p.y) >= gap2);
     for (let i = 0; i < spawns.length; i++) {
       const s = spawns[i]!;
       const sx = fp(s.x), sy = fp(s.y);
@@ -340,11 +345,14 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
         const useFar = fpDist2(startX, startY, farX, farY) > fpDist2(startX, startY, nearX, nearY);
         // Entrance-mirroring preference is first, never the nearer offset: that side
         // could land within AGGRO_RADIUS where the preferred was safely a wall. The
-        // fallback is the nearest room round the socket, at most 3 units off it.
-        const preferred = useFar ? { x: farX, y: farY } : { x: nearX, y: nearY };
-        const pos = col.isWalkable(preferred.x, preferred.y, def.radiusFixed)
-          ? preferred
-          : fitBody(col, sx, sy, def.radiusFixed);
+        // fallback is the nearest room round the socket, at most 5 units off it.
+        // The mirror maps slot k onto slot k+1's spot, so each side must be free.
+        const [first, other] = useFar
+          ? [{ x: farX, y: farY }, { x: nearX, y: nearY }]
+          : [{ x: nearX, y: nearY }, { x: farX, y: farY }];
+        const fits = (p: { x: number; y: number }) => col.isWalkable(p.x, p.y, def.radiusFixed) && free(p.x, p.y);
+        const pos = fits(first) ? first : fits(other) ? other : fitBody(col, sx, sy, def.radiusFixed, free);
+        placed.push(pos);
         spawnMonster(world, def, pos.x, pos.y, rare, scale);
       }
     }
@@ -354,7 +362,7 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
     // biomes, four monster pools, four tilesets — ended on the same warden.
     const boss = anchor(layout, "boss");
     const bossDef = withMonsterRes(bossFor(biomeId), ws.monsterResAdd);
-    const bossAt = fitBody(col, fp(boss.x), fp(boss.y), bossDef.radiusFixed);
+    const bossAt = fitBody(col, fp(boss.x), fp(boss.y), bossDef.radiusFixed, free);
     spawnMonster(world, bossDef, bossAt.x, bossAt.y, false, scale);
 
     // Every reward anchor is a CONTAINER now, not loot lying on the floor: a
@@ -493,17 +501,20 @@ export function spillContainer(
  * a body of radius `r` fits. Mapgen promises an anchor floor, not room: a body
  * placed against a pillar can never take a step and nothing can reach it.
  */
-function fitBody(col: Collision, x: number, y: number, r: number): { x: number; y: number } {
-  if (col.isWalkable(x, y, r)) return { x, y };
+function fitBody(
+  col: Collision, x: number, y: number, r: number,
+  free: (x: number, y: number) => boolean = () => true,
+): { x: number; y: number } {
+  if (col.isWalkable(x, y, r) && free(x, y)) return { x, y };
   const step = fp(0.5);
-  for (let ring = 1; ring <= 6; ring++) {
+  for (let ring = 1; ring <= 10; ring++) {
     let best: { x: number; y: number } | undefined;
     let bestD = Infinity;
     for (let dy = -ring; dy <= ring; dy++) {
       for (let dx = -ring; dx <= ring; dx++) {
         if (Math.max(Math.abs(dx), Math.abs(dy)) !== ring || dx * dx + dy * dy >= bestD) continue;
         const px = x + dx * step, py = y + dy * step;
-        if (!col.isWalkable(px, py, r) || !hasLineOfSight(col, x, y, px, py)) continue;
+        if (!col.isWalkable(px, py, r) || !free(px, py) || !hasLineOfSight(col, x, y, px, py)) continue;
         best = { x: px, y: py };
         bestD = dx * dx + dy * dy;
       }
