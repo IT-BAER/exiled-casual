@@ -211,8 +211,10 @@ class DissolvePlugin extends MaterialPluginBase {
       `,
       // Added after tone mapping rather than into the albedo, or the edge would
       // be a lit surface the braziers get a vote on instead of its own light.
+      // PBR calls the output `finalColor`, StandardMaterial `color`; the rig's
+      // bowstring and arrow are Standard, and one failed compile keeps him unseen.
       CUSTOM_FRAGMENT_BEFORE_FRAGCOLOR: `
-        finalColor.rgb += dissolveColor * dissolveGlow * dissolveGain;
+        ${this._material.getClassName() === "StandardMaterial" ? "color" : "finalColor"}.rgb += dissolveColor * dissolveGlow * dissolveGain;
       `,
     };
   }
