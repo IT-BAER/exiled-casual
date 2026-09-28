@@ -1,22 +1,22 @@
-"""Add directional locomotion to `anim-library.glb`: the walk and jog run off the hips.
+"""Add the jog's sidesteps to `anim-library.glb`.
 
-The free pack has forward locomotion only. A run-and-gun body faces the cursor
-while the keys carry it any way, so the legs need a clip per direction. Every
-one here is the forward walk or jog with each foot's track turned about its own
-mean offset from the hip, thigh and calf re-solved by two-bone IK onto it. The
-source's timing is kept, never reversed, so every clip of a gait shares one
-stride phase and the runtime can blend any two neighbours frame for frame.
+The walks in every direction are UAL2's authored takes (`import_ual2_clips.py`),
+and a running backpedal plays the back walks; UAL2 has no directional jog. So the
+jog's strafes are still made here. Each is the forward jog with each foot's
+track turned about its own mean offset from the hip, thigh and calf re-solved by
+two-bone IK onto it. The source's timing is kept, never reversed, so the strafes
+share the jog's stride phase (`LEFT_PLANT` in rig.ts).
 
 Directions are yaw off the hips (`DIRECTIONS`); the rig turns the hips the rest
-of the way toward the move. Past a sidestep the clip turns into a backpedal by
-its share of backwardness b = max(0, -cos(yaw)):
+of the way toward the move. Past a sidestep (no clip here is, today) a clip
+turns into a backpedal by its share of backwardness b = max(0, -cos(yaw)):
   - landing and push-off on the ball of the foot, never the heel;
   - the source's forward trunk lean taken out, a little back lean put in;
   - shorter steps (`STRIDE_CUT`) at the source's hip height: lowered, the knees never straighten;
   - at a full backpedal the chest and arms run half a cycle on, so the
     shoulders still turn and swing against the legs.
 
-Keep DIRECTIONS and STRIDE_CUT in step with `DIRECTIONS` in apps/web/src/render/rig.ts.
+Keep DIRECTIONS in step with `DIRECTIONS.run` in apps/web/src/render/rig.ts.
 Re-running replaces the clips it added last time, so this is idempotent.
 
     blender --background --factory-startup --disable-autoexec \
@@ -44,13 +44,10 @@ SCRATCH = os.path.join(tempfile.gettempdir(), "exiled-direction-clips.glb")
 DIRECTIONS = {
     "Strafe_L": 55,
     "Strafe_R": -55,
-    "BackDiag_L": 110,
-    "BackDiag_R": -110,
-    "Back": 180,
 }
-GAITS = {"Walk": "Rig|Walk_Loop", "Jog": "Rig|Jog_Fwd_Loop"}
+GAITS = {"Jog": "Rig|Jog_Fwd_Loop"}
 # Clips this tool's predecessors wrote and nothing reads any more.
-RETIRED = ()
+RETIRED = ("Rig|Jog_Back_Loop", "Rig|Jog_BackDiag_L_Loop", "Rig|Jog_BackDiag_R_Loop")
 # Share of the track's line the knee and foot follow; the rest is the hip's.
 KNEE_FOLLOW = 0.4
 # Each foot set out this far (rig units, 0.0003 = 3 cm) from the midline at a

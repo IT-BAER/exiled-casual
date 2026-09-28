@@ -31,11 +31,11 @@ import { ARROW_LENGTH, buildArrow, swingTrail } from "./skill-fx";
  * every bone name, so a clip drives the rig without retargeting machinery.
  */
 
-/** Clips the game can actually trigger today. The library ships 45. */
+/** Clips the game can actually trigger today. */
 export type RigClip =
-  | "idle" | "walk" | "run" | "walkBack" | "runBack"
+  | "idle" | "walk" | "run" | "walkBack"
   | "walkStrafeL" | "walkStrafeR" | "runStrafeL" | "runStrafeR"
-  | "walkBackL" | "walkBackR" | "runBackL" | "runBackR" | "cast" | "bow" | "strikeA" | "strikeB";
+  | "walkFwdL" | "walkFwdR" | "walkBackL" | "walkBackR" | "cast" | "bow" | "strikeA" | "strikeB";
 export type StrikeClip = "strikeA" | "strikeB";
 
 /** Alternated melee takes: two sword-derived slashes with opposite motion. */
@@ -50,20 +50,20 @@ export const STRIKE_CLIPS: readonly StrikeClip[] = ["strikeA", "strikeB"];
  */
 export const CLIP_NAME: Record<RigClip, string> = {
   idle: "Rig|Idle_Loop",
-  walk: "Rig|Walk_Loop",
+  // The eight walks are UAL2's authored takes (`tools/import_ual2_clips.py`).
+  // UAL2 has no jog off the forward line: the jog's sidesteps are made from it by
+  // `tools/build_direction_clips.py`, and a running backpedal plays the back walks.
+  walk: "Rig|Walk_Fwd_Loop",
   run: "Rig|Jog_Fwd_Loop",
-  // The pack's free set has forward locomotion only: every other direction is
-  // made from the walk and the jog by `tools/build_direction_clips.py`.
-  walkBack: "Rig|Walk_Back_Loop",
-  runBack: "Rig|Jog_Back_Loop",
-  walkStrafeL: "Rig|Walk_Strafe_L_Loop",
-  walkStrafeR: "Rig|Walk_Strafe_R_Loop",
+  walkFwdL: "Rig|Walk_Fwd_L_Loop",
+  walkFwdR: "Rig|Walk_Fwd_R_Loop",
+  walkStrafeL: "Rig|Walk_L_Loop",
+  walkStrafeR: "Rig|Walk_R_Loop",
+  walkBackL: "Rig|Walk_Bwd_L_Loop",
+  walkBackR: "Rig|Walk_Bwd_R_Loop",
+  walkBack: "Rig|Walk_Bwd_Loop",
   runStrafeL: "Rig|Jog_Strafe_L_Loop",
   runStrafeR: "Rig|Jog_Strafe_R_Loop",
-  walkBackL: "Rig|Walk_BackDiag_L_Loop",
-  walkBackR: "Rig|Walk_BackDiag_R_Loop",
-  runBackL: "Rig|Jog_BackDiag_L_Loop",
-  runBackR: "Rig|Jog_BackDiag_R_Loop",
   cast: "Rig|Spell_Simple_Shoot_R",
   // No bow take in the pack: keyed on the wardrobe skeleton by `tools/build_bow_clip.py`.
   bow: "Rig|Bow_Shoot",
@@ -79,15 +79,14 @@ const CLIP_LOOPS: Record<RigClip, boolean> = {
   walk: true,
   run: true,
   walkBack: true,
-  runBack: true,
   walkStrafeL: true,
   walkStrafeR: true,
   runStrafeL: true,
   runStrafeR: true,
+  walkFwdL: true,
+  walkFwdR: true,
   walkBackL: true,
   walkBackR: true,
-  runBackL: true,
-  runBackR: true,
   cast: false,
   bow: false,
   strikeA: false,
@@ -122,7 +121,8 @@ const CLIP_SPEED: Record<"walk" | "run", number> = { walk: 1.4, run: 4.0 };
 const CADENCE: Record<"walk" | "run", number> = { walk: 1, run: 1.32 };
 
 const MIN_RATIO = 0.5;
-const MAX_RATIO = 1.8;
+// A running backpedal plays the back walk (1.68 u/s authored) at 3.5: 2.08.
+const MAX_RATIO = 2.1;
 
 /** Below this the actor counts as standing still. */
 const IDLE_SPEED = 0.15;
@@ -152,38 +152,48 @@ export function clipForSpeed(speed: number, current?: RigClip): RigClip {
   return speed < RUN_SPEED ? "walk" : "run";
 }
 
-/** Share a full backpedal cuts off the forward step (`STRIDE_CUT` in the tool). */
-const STRIDE_CUT = 0.25;
+export type Gait = "walk" | "run";
+
+/** Which gait's pace a locomotion clip was authored at, or null for any other clip. */
+export function gaitOf(clip: RigClip): Gait | null {
+  if (clip === "run" || clip === "runStrafeL" || clip === "runStrafeR") return "run";
+  return clip.startsWith("walk") ? "walk" : null;
+}
 
 /**
- * The ways the legs run off the hips, in yaw order, positive to his right
- * (`tools/build_direction_clips.py`, keep in step). Every one is made from the
- * forward walk or jog without reversing it, so all of a gait share one stride
- * phase and any two neighbours blend frame for frame. `stride` is the share of
- * the forward step each takes: a backpedal steps shorter, and quicker to match.
+ * The ways the legs move off the hips, per gait, in yaw order, positive to his
+ * right. `stride` is each clip's step against its gait's forward one, off the
+ * stance foot's sweep in anim-library.glb: UAL2's back walks step 1.2x the
+ * forward walk, its sidesteps 0.66x. A running backpedal plays the back walks
+ * faster rather than a jog, because UAL2 has no directional jog.
  */
-export const DIRECTIONS: readonly { yaw: number; walk: RigClip; run: RigClip; stride: number }[] = (
-  [
-    [-180, "walkBack", "runBack"],
-    [-110, "walkBackL", "runBackL"],
-    [-55, "walkStrafeL", "runStrafeL"],
-    [0, "walk", "run"],
-    [55, "walkStrafeR", "runStrafeR"],
-    [110, "walkBackR", "runBackR"],
-    [180, "walkBack", "runBack"],
-  ] as const
-).map(([deg, walk, run]) => {
-  const yaw = (deg * Math.PI) / 180;
-  return { yaw, walk, run, stride: 1 - STRIDE_CUT * Math.max(0, -Math.cos(yaw)) };
-});
+export const DIRECTIONS: Record<Gait, readonly { yaw: number; clip: RigClip; stride: number }[]> = {
+  walk: ([
+    [-180, "walkBack", 1.2], [-135, "walkBackL", 1.2], [-90, "walkStrafeL", 0.66], [-45, "walkFwdL", 1],
+    [0, "walk", 1], [45, "walkFwdR", 1], [90, "walkStrafeR", 0.66], [135, "walkBackR", 1.2], [180, "walkBack", 1.2],
+  ] as const).map(([deg, clip, stride]) => ({ yaw: (deg * Math.PI) / 180, clip, stride })),
+  run: ([
+    [-180, "walkBack", 1.2], [-135, "walkBackL", 1.2], [-55, "runStrafeL", 1],
+    [0, "run", 1], [55, "runStrafeR", 1], [135, "walkBackR", 1.2], [180, "walkBack", 1.2],
+  ] as const).map(([deg, clip, stride]) => ({ yaw: (deg * Math.PI) / 180, clip, stride })),
+};
 
-/** The forward clip a directional clip was made from, or the clip itself. */
-function forwardOf(clip: RigClip): RigClip {
-  for (const d of DIRECTIONS) {
-    if (d.walk === clip) return "walk";
-    if (d.run === clip) return "run";
-  }
-  return clip;
+/**
+ * Where each locomotion clip plants the left foot, as a fraction of its cycle
+ * (FK over anim-library.glb). The walks and the jog share neither a length nor a
+ * phase, so a blend or a switch maps between them through this, not by frame.
+ */
+export const LEFT_PLANT: Partial<Record<RigClip, number>> = {
+  walk: 0.958, walkFwdL: 0.958, walkFwdR: 0.958, walkStrafeL: 0.158, walkStrafeR: 0.183,
+  walkBackL: 0.158, walkBack: 0.158, walkBackR: 0.158, run: 0.008, runStrafeL: 0.017, runStrafeR: 0.017,
+};
+
+/** Frame of `to` in step with `frame` of `from`: the same share of a stride past the left plant. */
+export function framePhaseMatched(from: RigClip, fromRange: readonly [number, number], frame: number,
+  to: RigClip, toRange: readonly [number, number]): number {
+  const span = (r: readonly [number, number]) => Math.max(1e-6, r[1] - r[0]);
+  const u = (frame - fromRange[0]) / span(fromRange) - (LEFT_PLANT[from] ?? 0) + (LEFT_PLANT[to] ?? 0);
+  return toRange[0] + (u - Math.floor(u)) * span(toRange);
 }
 
 /**
@@ -210,12 +220,13 @@ export function hipTurn(rel: number): number {
  * hips) and the weight of the second, linear in yaw, so the legs turn with the
  * move instead of switching clips at a border.
  */
-export function directionBlend(legYaw: number): { from: number; to: number; w: number } {
+export function directionBlend(legYaw: number, gait: Gait): { from: number; to: number; w: number } {
+  const dirs = DIRECTIONS[gait];
   const y = wrapPi(legYaw);
   let i = 0;
-  while (i < DIRECTIONS.length - 2 && y > DIRECTIONS[i + 1]!.yaw) i++;
-  const a = DIRECTIONS[i]!.yaw;
-  const b = DIRECTIONS[i + 1]!.yaw;
+  while (i < dirs.length - 2 && y > dirs[i + 1]!.yaw) i++;
+  const a = dirs[i]!.yaw;
+  const b = dirs[i + 1]!.yaw;
   return { from: i, to: i + 1, w: Math.min(1, Math.max(0, (y - a) / (b - a))) };
 }
 
@@ -387,8 +398,8 @@ export function restartAtCurrentFrame(group: AnimationGroup, loop: boolean): voi
 }
 
 export function speedRatioFor(clip: RigClip, speed: number): number {
-  const gait = forwardOf(clip);
-  if (gait !== "walk" && gait !== "run") return 1;
+  const gait = gaitOf(clip);
+  if (gait === null) return 1;
   const matched = (speed / CLIP_SPEED[gait]) * CADENCE[gait];
   return Math.min(MAX_RATIO, Math.max(MIN_RATIO, matched));
 }
@@ -858,9 +869,9 @@ export const isLayeredClip = (clip: RigClip): boolean => UPPER_BODY_CLIPS.has(cl
  * Locomotion is exempt on purpose: those clips slide the feet anyway.
  */
 export const HIPS_BOB: Record<RigClip, number> = {
-  idle: 1, walk: 0.65, run: 0.65, walkBack: 0.65, runBack: 0.65,
+  idle: 1, walk: 0.65, run: 0.65, walkBack: 0.65,
   walkStrafeL: 0.65, walkStrafeR: 0.65, runStrafeL: 0.65, runStrafeR: 0.65,
-  walkBackL: 0.65, walkBackR: 0.65, runBackL: 0.65, runBackR: 0.65, cast: 1, bow: 1, strikeA: 1, strikeB: 1,
+  walkFwdL: 0.65, walkFwdR: 0.65, walkBackL: 0.65, walkBackR: 0.65, cast: 1, bow: 1, strikeA: 1, strikeB: 1,
 };
 
 /**
@@ -1083,6 +1094,7 @@ export class RigActor {
   private legs = 0;
   /** The direction clip blended over the playing one, and its weight (`directionBlend`). */
   private blendTo: AnimationGroup | null = null;
+  private blendClip: RigClip | null = null;
   private blendW = 0;
   /** Seconds this body has been standing still, for the breath to settle over. */
   private standing = 0;
@@ -1227,9 +1239,10 @@ export class RigActor {
 
   /** Pick and pace the locomotion clip from the actor's real ground speed. */
   setLocomotion(speed: number): void {
-    let clip = clipForSpeed(speed, forwardOf(this.locomotion));
+    let clip = clipForSpeed(speed, gaitOf(this.locomotion) ?? "idle");
     let stride = 1;
     this.blendTo = null;
+    this.blendClip = null;
     this.blendW = 0;
     if (clip === "idle") {
       this.legsTarget = 0;
@@ -1237,14 +1250,16 @@ export class RigActor {
       const gait = clip === "run" ? "run" : "walk";
       this.legsTarget = hipTurn(this.moveRel);
       // Off the hips as they ARE, mid-turn, so the feet always travel the real move.
-      const b = directionBlend(this.moveRel - this.legs);
+      const b = directionBlend(this.moveRel - this.legs, gait);
       // The heavier clip plays, the lighter one is blended in: straight behind
       // sits on the +-PI seam, and there the pair flips every frame.
       const [main, over, w] = b.w > 0.5 ? [b.to, b.from, 1 - b.w] : [b.from, b.to, b.w];
-      clip = DIRECTIONS[main]![gait];
-      this.blendTo = this.groups.get(DIRECTIONS[over]![gait]) ?? null;
+      const dirs = DIRECTIONS[gait];
+      clip = dirs[main]!.clip;
+      this.blendClip = dirs[over]!.clip;
+      this.blendTo = this.groups.get(this.blendClip) ?? null;
       this.blendW = w;
-      stride = DIRECTIONS[main]!.stride + (DIRECTIONS[over]!.stride - DIRECTIONS[main]!.stride) * w;
+      stride = dirs[main]!.stride + (dirs[over]!.stride - dirs[main]!.stride) * w;
     }
     this.locomotion = clip;
     const group = this.groups.get(clip);
@@ -1255,7 +1270,7 @@ export class RigActor {
       if (group) group.speedRatio = idleRatio(this.standing);
     } else {
       this.standing = 0;
-      if (group) group.speedRatio = Math.min(MAX_RATIO, speedRatioFor(clip, speed) / stride);
+      if (group) group.speedRatio = speedRatioFor(clip, speed / stride);
     }
     this.switchTo(clip);
   }
@@ -1379,14 +1394,15 @@ export class RigActor {
    * and buys the blend-in from wherever the action pose left the arms.
    */
   /**
-   * Pull the pose toward the second direction clip by its weight, sampled at the
-   * playing clip's frame: the two share a stride phase, so the feet stay one
-   * step. Under a layered cast or strike, the legs and hips only.
+   * Pull the pose toward the second direction clip by its weight, sampled in
+   * step with the playing clip (`framePhaseMatched`), so the feet stay one step.
+   * Under a layered cast or strike, the legs and hips only.
    */
   private blendDirection(): void {
     const other = this.blendTo;
-    const frame = this.active?.animatables[0]?.masterFrame;
-    if (!other || this.blendW < 1e-3 || frame === undefined) return;
+    const at = this.active?.animatables[0]?.masterFrame;
+    if (!other || !this.active || !this.activeClip || !this.blendClip || this.blendW < 1e-3 || at === undefined) return;
+    const frame = framePhaseMatched(this.activeClip, [this.active.from, this.active.to], at, this.blendClip, [other.from, other.to]);
     const layered = [...UPPER_BODY_CLIPS].some((c) => this.groups.get(c)?.isPlaying);
     for (const { animation, target } of other.targetedAnimations) {
       const node = target as TransformNode;
@@ -1407,10 +1423,12 @@ export class RigActor {
   private switchTo(clip: RigClip): void {
     const group = this.groups.get(clip);
     if (!group || this.activeClip === clip) return;
-    // Directions of one gait share a stride phase: carry it over, or every turn
-    // of the legs restarts the step.
-    const carry = this.activeClip !== null && this.activeClip !== "idle" && forwardOf(this.activeClip) === forwardOf(clip)
-      ? this.active?.animatables[0]?.masterFrame
+    // Carry the stride phase from one locomotion clip to the next, or every
+    // turn of the legs restarts the step.
+    const from = this.activeClip;
+    const at = this.active?.animatables[0]?.masterFrame;
+    const carry = from !== null && gaitOf(from) !== null && gaitOf(clip) !== null && this.active && at !== undefined
+      ? framePhaseMatched(from, [this.active.from, this.active.to], at, clip, [group.from, group.to])
       : undefined;
     this.active?.stop();
     group.start(CLIP_LOOPS[clip], group.speedRatio);

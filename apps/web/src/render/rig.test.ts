@@ -23,6 +23,8 @@ import {
   CLIP_NAME,
   directionBlend,
   DIRECTIONS,
+  LEFT_PLANT,
+  framePhaseMatched,
   hipTurn,
   HIP_TURN,
   type RigClip,
@@ -81,8 +83,8 @@ describe("clipForSpeed", () => {
 describe("directionBlend", () => {
   const deg = (d: number) => (d * Math.PI) / 180;
   const clipsAt = (legYaw: number) => {
-    const b = directionBlend(legYaw);
-    return { from: DIRECTIONS[b.from]!.run, to: DIRECTIONS[b.to]!.run, w: b.w };
+    const b = directionBlend(legYaw, "run");
+    return { from: DIRECTIONS.run[b.from]!.clip, to: DIRECTIONS.run[b.to]!.clip, w: b.w };
   };
 
   it("turns the hips part way to a sidestep, never a quarter turn, and not at all ahead or behind", () => {
@@ -107,8 +109,9 @@ describe("directionBlend", () => {
       return c.w === 0 ? c.from : c.w === 1 ? c.to : "blend";
     };
     expect(only(0)).toBe("run");
-    expect(only(Math.PI)).toBe("runBack");
-    expect(only(-Math.PI)).toBe("runBack");
+    // UAL2 has no backward jog: a running backpedal is the authored back walk, faster.
+    expect(only(Math.PI)).toBe("walkBack");
+    expect(only(-Math.PI)).toBe("walkBack");
   });
 
   it("blends the two neighbours in between, weight rising with the yaw", () => {
@@ -117,33 +120,65 @@ describe("directionBlend", () => {
     expect([a.from, a.to]).toEqual(["run", "runStrafeR"]);
     expect(b.w).toBeGreaterThan(a.w);
     const back = clipsAt(deg(-150));
-    expect([back.from, back.to].sort()).toEqual(["runBack", "runBackL"]);
+    expect([back.from, back.to].sort()).toEqual(["walkBack", "walkBackL"]);
   });
 
   it("is continuous: a hair either side of every clip's yaw gives nearly the same pose", () => {
-    const pose = (y: number) => {
-      const b = directionBlend(y);
-      const m = new Map<number, number>();
-      m.set(b.from, (m.get(b.from) ?? 0) + 1 - b.w);
-      m.set(b.to, (m.get(b.to) ?? 0) + b.w);
-      return m;
-    };
-    for (const d of DIRECTIONS) {
-      const lo = pose(d.yaw - 1e-6);
-      const hi = pose(d.yaw + 1e-6);
-      const same = (DIRECTIONS.findIndex((x) => x.run === d.run));
-      const weightOf = (m: Map<number, number>) =>
-        [...m].filter(([i]) => DIRECTIONS[i]!.run === DIRECTIONS[same]!.run).reduce((t, [, w]) => t + w, 0);
-      expect(weightOf(lo)).toBeCloseTo(1, 4);
-      expect(weightOf(hi)).toBeCloseTo(1, 4);
+    for (const gait of ["walk", "run"] as const) {
+      const dirs = DIRECTIONS[gait];
+      const pose = (y: number) => {
+        const b = directionBlend(y, gait);
+        const m = new Map<number, number>();
+        m.set(b.from, (m.get(b.from) ?? 0) + 1 - b.w);
+        m.set(b.to, (m.get(b.to) ?? 0) + b.w);
+        return m;
+      };
+      for (const d of dirs) {
+        const weightOf = (m: Map<number, number>) =>
+          [...m].filter(([i]) => dirs[i]!.clip === d.clip).reduce((t, [, w]) => t + w, 0);
+        expect(weightOf(pose(d.yaw - 1e-6))).toBeCloseTo(1, 4);
+        expect(weightOf(pose(d.yaw + 1e-6))).toBeCloseTo(1, 4);
+      }
     }
   });
 
-  it("shortens the backpedal's stride and keeps the others whole", () => {
-    const stride = (clip: RigClip) => DIRECTIONS.find((d) => d.run === clip)!.stride;
-    expect(stride("run")).toBe(1);
-    expect(stride("runStrafeR")).toBe(1);
-    expect(stride("runBack")).toBeLessThan(0.8);
+  it("walks eight authored ways, 45 degrees apart", () => {
+    expect(DIRECTIONS.walk.map((d) => Math.round((d.yaw * 180) / Math.PI))).toEqual([-180, -135, -90, -45, 0, 45, 90, 135, 180]);
+    expect(DIRECTIONS.walk.map((d) => d.clip)).toEqual(
+      ["walkBack", "walkBackL", "walkStrafeL", "walkFwdL", "walk", "walkFwdR", "walkStrafeR", "walkBackR", "walkBack"]);
+  });
+
+  it("paces each clip on its own measured step: back walks long, sidesteps short", () => {
+    const stride = (clip: RigClip) => DIRECTIONS.walk.find((d) => d.clip === clip)!.stride;
+    expect(stride("walk")).toBe(1);
+    expect(stride("walkBack")).toBeGreaterThan(1);
+    expect(stride("walkStrafeL")).toBeLessThan(0.8);
+    expect(DIRECTIONS.run.find((d) => d.clip === "runStrafeR")!.stride).toBe(1);
+  });
+});
+
+describe("framePhaseMatched", () => {
+  it("lands the left plant of one clip on the left plant of the other", () => {
+    const walk: [number, number] = [0, 40];
+    const jog: [number, number] = [0, 28];
+    const plant = LEFT_PLANT.walk! * 40;
+    expect(framePhaseMatched("walk", walk, plant, "run", jog)).toBeCloseTo(LEFT_PLANT.run! * 28, 6);
+    expect(framePhaseMatched("walk", walk, plant, "walkBack", walk)).toBeCloseTo(LEFT_PLANT.walkBack! * 40, 6);
+  });
+
+  it("is the identity on its own clip and stays inside the target's range", () => {
+    expect(framePhaseMatched("walkStrafeL", [5, 45], 17, "walkStrafeL", [5, 45])).toBeCloseTo(17, 6);
+    for (let f = 0; f <= 40; f += 5) {
+      const g = framePhaseMatched("walk", [0, 40], f, "walkStrafeR", [10, 38]);
+      expect(g).toBeGreaterThanOrEqual(10);
+      expect(g).toBeLessThan(38);
+    }
+  });
+
+  it("knows the plant of every locomotion clip", () => {
+    for (const gait of ["walk", "run"] as const) {
+      for (const d of DIRECTIONS[gait]) expect(LEFT_PLANT[d.clip]).toBeDefined();
+    }
   });
 });
 
@@ -172,10 +207,14 @@ describe("speedRatioFor", () => {
   });
 
   it("paces a backpedal on the same stride as its forward clip", () => {
-    expect(speedRatioFor("runBack", 3.5)).toBe(speedRatioFor("run", 3.5));
     expect(speedRatioFor("walkBack", 1.4)).toBe(speedRatioFor("walk", 1.4));
     expect(speedRatioFor("runStrafeL", 3.5)).toBe(speedRatioFor("run", 3.5));
     expect(speedRatioFor("walkStrafeR", 1.4)).toBe(speedRatioFor("walk", 1.4));
+  });
+
+  it("runs the backpedal's authored back walk fast enough to keep the feet planted", () => {
+    const back = DIRECTIONS.run.find((d) => d.clip === "walkBack")!.stride;
+    expect(speedRatioFor("walkBack", 3.5 / back)).toBeCloseTo(3.5 / (1.4 * back), 5);
   });
 
   it("still scales with speed so the legs track the movement", () => {
@@ -185,7 +224,7 @@ describe("speedRatioFor", () => {
 
   it("clamps extremes and leaves one-shots alone", () => {
     expect(speedRatioFor("run", 0.01)).toBe(0.5);
-    expect(speedRatioFor("walk", 100)).toBe(1.8);
+    expect(speedRatioFor("walk", 100)).toBe(2.1);
     expect(speedRatioFor("cast", 3.5)).toBe(1);
     expect(speedRatioFor("idle", 0)).toBe(1);
   });
