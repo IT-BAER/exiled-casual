@@ -198,7 +198,8 @@ export function attachBindings(
   onSnapshot: (snap: Snapshot) => void;
   approach: (entityId: number, x: number, y: number) => void;
   /** Where the cursor points right now, for the arm that tracks it. */
-  getAim: () => { x: number; y: number };
+  /** Null until the cursor has been over the canvas. */
+  getAim: () => { x: number; y: number } | null;
 } {
   // Movement keys currently held, oldest→newest. Needed so releasing one key
   // resumes another still-held direction, and releasing the last sends "stop".
@@ -584,5 +585,5 @@ export function attachBindings(
     post({ kind: "moveTo", ...pointerToWorld({ x, z: y }) });
   }
 
-  return { detach, onSnapshot, approach, getAim: () => aimAt(AIM_HEIGHT) };
+  return { detach, onSnapshot, approach, getAim: () => (lastScreen ? aimAt(AIM_HEIGHT) : null) };
 }

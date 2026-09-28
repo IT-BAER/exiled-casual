@@ -105,6 +105,25 @@ describe("buildSnapshot", () => {
     expect(arrows()).toBe(1);
   });
 
+  /**
+   * PoE2's run-and-gun: casting behind him, he turns to the target and keeps
+   * running on the keys. Facing is the target's side; the heading stays the run's.
+   */
+  it("faces the skill target while casting on the run, then gives the facing back", () => {
+    const { world, sim, playerEntity } = createCombatSim(42);
+    const run: Intent = { kind: "moveDir", dx: 1, dy: 0 };
+    sim.step([intentToCommand(run, playerEntity, 0)]);
+    const cast: Intent = { kind: "useSkill", skillId: "skill.ember_bolt.v1", tx: fp(-5), ty: fp(0) };
+    sim.step([intentToCommand(cast, playerEntity, sim.tick)]);
+    let snap = buildSnapshot(world, sim, sim.tick, CONTENT_VERSION);
+    expect(snap.player.heading!.x).toBeGreaterThan(0.99);
+    expect(snap.player.facing!.x).toBeLessThan(-0.99);
+    for (let i = 0; i < 40; i++) sim.step();
+    snap = buildSnapshot(world, sim, sim.tick, CONTENT_VERSION);
+    expect(snap.player.facing).toBeUndefined();
+    expect(snap.player.heading!.x).toBeGreaterThan(0.99);
+  });
+
   it("reports the last melee swing's tick and hit count, and nothing before one", () => {
     const { world, sim, playerEntity } = createCombatSim(42);
     expect(buildSnapshot(world, sim, 0, CONTENT_VERSION).player.strikeTick).toBeUndefined();

@@ -12,7 +12,7 @@ import type {
   Health, Mana, Position, Cooldowns, CastingC, StrikeC, MonsterC,
   AilmentC, ProjectileC, GroundAreaC, BossC, TelegraphC,
   SessionC, InteractableC, ContainerC, ItemC, GoldC, InventoryC, StashC, VendorC, EquipmentC, FlasksC, DefensesC, OffenseC, ProgressC,
-  EnergyShieldC, ShardsC, MoveDir, SkillsC,
+  EnergyShieldC, ShardsC, MoveDir, SkillsC, SkillHoldC,
 } from "./components";
 
 /**
@@ -23,6 +23,9 @@ import type {
  * than read from MONSTERS so removing a monster cannot silently move the sheet.
  */
 const SHEET_REFERENCE_HIT = fp(6);
+
+/** Ticks the body keeps facing a skill's target after the button is let go (0.4 s). */
+const FACE_LINGER_TICKS = 12;
 
 /**
  * Shared range check: is (px,py) within `radius` of (tx,ty)?
@@ -438,6 +441,18 @@ export function buildSnapshot(
         const d = world.get<MoveDir>(playerEntity, "moveDir");
         if (d && (d.hx !== 0 || d.hy !== 0)) return { x: toNumber(d.hx), y: toNumber(d.hy) };
         return undefined;
+      })(),
+      facing: (() => {
+        // PoE2's run-and-gun: a held skill turns him to its target while the
+        // keys keep the heading, and he gives the facing back a beat after.
+        const h = world.get<SkillHoldC>(playerEntity, "skillHold");
+        if (!h || h.tx === undefined || h.ty === undefined || tick >= h.untilTick + FACE_LINGER_TICKS) {
+          return undefined;
+        }
+        const dx = toNumber(h.tx - pp.x);
+        const dy = toNumber(h.ty - pp.y);
+        const len = Math.hypot(dx, dy);
+        return len > 1e-6 ? { x: dx / len, y: dy / len } : undefined;
       })(),
       buffs: (() => {
         const out: { id: string; kind: "buff" | "debuff"; remainingSec: number }[] = [];

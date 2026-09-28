@@ -353,6 +353,12 @@ export interface Snapshot {
      */
     heading?: { x: number; y: number };
     /**
+     * Unit direction to a held skill's target, while it is held and a beat
+     * after. The body faces this and moves on `heading`, so casting behind him
+     * he runs backwards. Absent when no skill is held.
+     */
+    facing?: { x: number; y: number };
+    /**
      * Timed effects on the player, display-ready for the HUD's buff bar.
      * `remainingSec` is whole seconds, already rounded up. Absent on a sim
      * built without a session.

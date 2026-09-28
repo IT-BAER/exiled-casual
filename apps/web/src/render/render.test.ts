@@ -492,6 +492,24 @@ describe("SnapshotRenderer", () => {
     expect(mesh.rotation.y).toBeCloseTo(spawnYaw + 0.25 * (0 - spawnYaw), 4);
   });
 
+  it("faces the player at the cursor while the keys carry him away from it (PoE2 WASD)", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const renderer = new SnapshotRenderer(scene);
+
+    let prev = makeSnapshot({ player: testPlayer() });
+    renderer.apply(null, prev, 1);
+    const mesh = scene.getMeshByName("entity-0")!;
+    // Running +x on the keys, heading +x, no skill held; the cursor sits at -x.
+    renderer.setAim(-10, 0);
+    for (let i = 1; i <= 40; i++) {
+      const next = makeSnapshot({ player: testPlayer({ x: i * 0.1, heading: { x: 1, y: 0 } }) });
+      renderer.apply(prev, next, 1);
+      prev = next;
+    }
+    expect(Math.cos(mesh.rotation.y + Math.PI / 2)).toBeGreaterThan(0.999);
+  });
+
   it("banks into a turn and stands back up on the straight", () => {
     engine = new NullEngine();
     const { scene } = createScene(engine);
@@ -622,7 +640,7 @@ describe("SnapshotRenderer", () => {
     scene.getMeshByName("entity-0")!.metadata = {
       rig: {
         setLooks: () => {}, setAimTarget: () => {}, dispose: () => {},
-        setLocomotion: () => {}, setFacing: () => {}, update: () => {},
+        setLocomotion: () => {}, setMoveAngle: () => {}, setFacing: () => {}, update: () => {},
         castPoint: () => HAND,
       },
     };
@@ -671,7 +689,7 @@ describe("SnapshotRenderer", () => {
     scene.getMeshByName("entity-0")!.metadata = {
       rig: {
         setLooks: () => {}, setAimTarget: () => {}, dispose: () => {},
-        setLocomotion: () => {}, setFacing: () => {}, update: () => {},
+        setLocomotion: () => {}, setMoveAngle: () => {}, setFacing: () => {}, update: () => {},
         castPoint: () => HAND,
       },
     };

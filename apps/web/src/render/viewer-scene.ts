@@ -75,6 +75,8 @@ export interface ViewerClip {
   label: string;
   /** Locomotion speed that selects this clip, or undefined for a one-shot. */
   speed?: number;
+  /** The move's yaw off the facing: PI backpedals, PI/2 sidesteps. */
+  rel?: number;
 }
 
 export const VIEWER_CLIPS: readonly ViewerClip[] = [
@@ -84,6 +86,9 @@ export const VIEWER_CLIPS: readonly ViewerClip[] = [
   { key: "4", clip: "cast", label: "Cast" },
   { key: "5", clip: "strikeA", label: "Strike" },
   { key: "6", clip: "bow", label: "Bow" },
+  { key: "7", clip: "runBack", label: "Back", speed: 3.5, rel: Math.PI },
+  { key: "8", clip: "runStrafeR", label: "Right", speed: 3.5, rel: Math.PI / 2 },
+  { key: "9", clip: "runStrafeL", label: "Left", speed: 3.5, rel: -Math.PI / 2 },
 ];
 
 /**
@@ -315,6 +320,7 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
     play(entry) {
       if (rig === null) return;
       if (entry.speed !== undefined) {
+        rig.setMoveAngle(entry.rel ?? 0);
         rig.setLocomotion(entry.speed);
         return;
       }

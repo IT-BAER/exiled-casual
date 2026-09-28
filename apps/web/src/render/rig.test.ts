@@ -21,6 +21,9 @@ import {
   HEAD_MAX,
   clipForSpeed,
   CLIP_NAME,
+  legGait,
+  LEG_TWIST_MAX,
+  STRAFE_ANGLE,
   idleRatio,
   indexRigSubtree,
   weaponTipLocal,
@@ -69,6 +72,55 @@ describe("clipForSpeed", () => {
   });
 });
 
+/**
+ * PoE2's run-and-gun: the body faces the target and the keys carry it, so the
+ * legs walk the move's way off the facing. `rel` is the move's yaw off the facing.
+ */
+describe("legGait", () => {
+  const deg = (d: number) => (d * Math.PI) / 180;
+
+  it("runs forward with straight hips when the move is the facing", () => {
+    expect(legGait(0, "fwd")).toEqual({ gait: "fwd", legs: 0 });
+  });
+
+  it("backpedals with straight hips when the move is behind him", () => {
+    const g = legGait(Math.PI, "fwd");
+    expect(g.gait).toBe("back");
+    expect(Math.abs(g.legs)).toBeLessThan(1e-9);
+  });
+
+  it("strafes to the side with the hips turned part way, not a quarter turn", () => {
+    const right = legGait(Math.PI / 2, "fwd");
+    expect(right.gait).toBe("right");
+    expect(right.legs).toBeCloseTo(Math.PI / 2 - STRAFE_ANGLE, 9);
+    const left = legGait(-Math.PI / 2, "fwd");
+    expect(left.gait).toBe("left");
+    expect(left.legs).toBeCloseTo(-(Math.PI / 2 - STRAFE_ANGLE), 9);
+    // A natural turn: well short of the quarter turn a forward clip needed.
+    expect(Math.abs(right.legs)).toBeGreaterThan(deg(20));
+    expect(Math.abs(right.legs)).toBeLessThan(deg(50));
+  });
+
+  it("holds its gait across each border, so the legs do not flicker", () => {
+    for (const [a, b, rel] of [["fwd", "right", deg(30)], ["right", "back", deg(118)]] as const) {
+      expect(legGait(rel, a).gait).toBe(a);
+      expect(legGait(rel, b).gait).toBe(b);
+    }
+    expect(legGait(deg(45), "fwd").gait).toBe("right");
+    expect(legGait(deg(15), "right").gait).toBe("fwd");
+    expect(legGait(deg(135), "right").gait).toBe("back");
+    expect(legGait(deg(100), "back").gait).toBe("right");
+  });
+
+  it("never turns the hips past the twist limit", () => {
+    for (let d = -180; d <= 180; d += 5) {
+      for (const was of ["fwd", "back", "left", "right"] as const) {
+        expect(Math.abs(legGait(deg(d), was).legs)).toBeLessThanOrEqual(LEG_TWIST_MAX);
+      }
+    }
+  });
+});
+
 describe("speedRatioFor", () => {
   it("matches the walk stride to the actor's ground speed", () => {
     expect(speedRatioFor("walk", 1.4)).toBeCloseTo(1, 5);
@@ -91,6 +143,13 @@ describe("speedRatioFor", () => {
     expect(clipForSpeed(2.0, "walk")).toBe("walk");
     // Far enough down and it really is a walk again, whatever it was doing.
     expect(clipForSpeed(1.5, "run")).toBe("walk");
+  });
+
+  it("paces a backpedal on the same stride as its forward clip", () => {
+    expect(speedRatioFor("runBack", 3.5)).toBe(speedRatioFor("run", 3.5));
+    expect(speedRatioFor("walkBack", 1.4)).toBe(speedRatioFor("walk", 1.4));
+    expect(speedRatioFor("runStrafeL", 3.5)).toBe(speedRatioFor("run", 3.5));
+    expect(speedRatioFor("walkStrafeR", 1.4)).toBe(speedRatioFor("walk", 1.4));
   });
 
   it("still scales with speed so the legs track the movement", () => {

@@ -584,12 +584,13 @@ export function GameView({
       if (!curSnap) return;
       // ponytail: float alpha for lerp — never fed into sim
       const alpha = Math.min(1, (performance.now() - prevTickTime) / MS_PER_TICK);
-      renderer.apply(prevSnap, curSnap, alpha);
-      // The aim target updates every frame so the arm tracks the cursor live.
-      // A bot has no cursor: its arm points where the sim turned it, which a cast sets.
-      const h = curSnap.player.heading;
+      // The aim target updates every frame so the arm and the body track the
+      // cursor live, and before `apply` so the body turns to THIS frame's cursor.
+      // A bot has no cursor: its arm points where its skill is aimed, else where it runs.
+      const h = curSnap.player.facing ?? curSnap.player.heading;
       const aim = bot && h ? { x: curSnap.player.x + h.x * 6, y: curSnap.player.y + h.y * 6 } : getAim();
-      renderer.setAim(aim.x, aim.y);
+      if (aim) renderer.setAim(aim.x, aim.y);
+      renderer.apply(prevSnap, curSnap, alpha);
       // Camera follows the player (interpolated) so they stay centred like an ARPG.
       // The 4th arg (cloneAlphaBetaRadius=true) keeps the orbit fixed and moves the
       // camera WITH the target; the default recomputes the angles and drifts.

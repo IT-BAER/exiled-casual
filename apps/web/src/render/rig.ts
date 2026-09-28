@@ -32,7 +32,9 @@ import { ARROW_LENGTH, buildArrow, swingTrail } from "./skill-fx";
  */
 
 /** Clips the game can actually trigger today. The library ships 45. */
-export type RigClip = "idle" | "walk" | "run" | "cast" | "bow" | "strikeA" | "strikeB";
+export type RigClip =
+  | "idle" | "walk" | "run" | "walkBack" | "runBack"
+  | "walkStrafeL" | "walkStrafeR" | "runStrafeL" | "runStrafeR" | "cast" | "bow" | "strikeA" | "strikeB";
 export type StrikeClip = "strikeA" | "strikeB";
 
 /** Alternated melee takes: two sword-derived slashes with opposite motion. */
@@ -49,6 +51,16 @@ export const CLIP_NAME: Record<RigClip, string> = {
   idle: "Rig|Idle_Loop",
   walk: "Rig|Walk_Loop",
   run: "Rig|Jog_Fwd_Loop",
+  // The pack's free set has no backward locomotion: `tools/build_back_clips.py`
+  // reverses the walk and the jog.
+  walkBack: "Rig|Walk_Back_Loop",
+  runBack: "Rig|Jog_Back_Loop",
+  // Walk and jog with the legs run STRAFE_ANGLE off the hips, both sides, by
+  // `tools/build_strafe_clips.py`.
+  walkStrafeL: "Rig|Walk_Strafe_L_Loop",
+  walkStrafeR: "Rig|Walk_Strafe_R_Loop",
+  runStrafeL: "Rig|Jog_Strafe_L_Loop",
+  runStrafeR: "Rig|Jog_Strafe_R_Loop",
   cast: "Rig|Spell_Simple_Shoot_R",
   // No bow take in the pack: keyed on the wardrobe skeleton by `tools/build_bow_clip.py`.
   bow: "Rig|Bow_Shoot",
@@ -63,6 +75,12 @@ const CLIP_LOOPS: Record<RigClip, boolean> = {
   idle: true,
   walk: true,
   run: true,
+  walkBack: true,
+  runBack: true,
+  walkStrafeL: true,
+  walkStrafeR: true,
+  runStrafeL: true,
+  runStrafeR: true,
   cast: false,
   bow: false,
   strikeA: false,
@@ -125,6 +143,67 @@ export function clipForSpeed(speed: number, current?: RigClip): RigClip {
   if (!(speed >= IDLE_SPEED)) return "idle";
   if (current === "run") return speed < WALK_SPEED ? "walk" : "run";
   return speed < RUN_SPEED ? "walk" : "run";
+}
+
+/** Which way the legs run off the hips: the clip family a locomotion clip belongs to. */
+export type Gait = "fwd" | "back" | "left" | "right";
+const GAIT_CLIPS: Record<Gait, { walk: RigClip; run: RigClip }> = {
+  fwd: { walk: "walk", run: "run" },
+  back: { walk: "walkBack", run: "runBack" },
+  left: { walk: "walkStrafeL", run: "runStrafeL" },
+  right: { walk: "walkStrafeR", run: "runStrafeR" },
+};
+
+function gaitOf(clip: RigClip): Gait {
+  for (const gait of Object.keys(GAIT_CLIPS) as Gait[]) {
+    if (GAIT_CLIPS[gait].walk === clip || GAIT_CLIPS[gait].run === clip) return gait;
+  }
+  return "fwd";
+}
+
+/** The forward clip a backpedal or strafe was made from, or the clip itself. */
+function forwardOf(clip: RigClip): RigClip {
+  const gait = gaitOf(clip);
+  return gait === "fwd" ? clip : GAIT_CLIPS[gait].walk === clip ? "walk" : "run";
+}
+
+/**
+ * Yaw the strafe clips run the legs off the hips (`tools/build_strafe_clips.py`).
+ * The hips turn the rest of a sidestep, 90 - 55 = 35 deg, toward the move: a
+ * full quarter turn of hips reads as running across the chest.
+ */
+export const STRAFE_ANGLE = Math.PI * (55 / 180);
+/** Farthest the hips turn off the chest. */
+export const LEG_TWIST_MAX = Math.PI / 2;
+/** Bone yaw against host yaw: the glTF root's handedness flip runs one against the other. */
+const LEG_YAW_SIGN = -1;
+/** Time constant the hips ease toward their turn over. */
+const LEG_EASE_SEC = 0.08;
+/**
+ * Borders between the gaits, as yaw off the facing: halfway between the ways
+ * the clips run (0, STRAFE_ANGLE, PI), each widened by GAIT_BAND on the side of
+ * the gait already playing so a move along a border does not flicker.
+ */
+const FWD_SIDE = Math.PI * (30 / 180);
+const SIDE_BACK = Math.PI * (118 / 180);
+const GAIT_BAND = Math.PI * (8 / 180);
+
+/**
+ * PoE2's run-and-gun gait: `rel` is the move's yaw off the way the body faces
+ * (positive to his right). The legs run forward, strafe or backpedal, and the
+ * hips turn by what the clip leaves over, so the feet travel the real move.
+ * `was` is the gait already playing.
+ */
+export function legGait(rel: number, was: Gait): { gait: Gait; legs: number } {
+  const r = wrapPi(rel);
+  const off = Math.abs(r);
+  const side = was === "left" || was === "right";
+  const fwdEdge = FWD_SIDE + (was === "fwd" ? GAIT_BAND : side ? -GAIT_BAND : 0);
+  const backEdge = SIDE_BACK + (was === "back" ? -GAIT_BAND : side ? GAIT_BAND : 0);
+  const gait: Gait = off < fwdEdge ? "fwd" : off > backEdge ? "back" : r > 0 ? "right" : "left";
+  const runs = gait === "fwd" ? 0 : gait === "back" ? Math.PI : gait === "right" ? STRAFE_ANGLE : -STRAFE_ANGLE;
+  const legs = wrapPi(r - runs);
+  return { gait, legs: Math.max(-LEG_TWIST_MAX, Math.min(LEG_TWIST_MAX, legs)) };
 }
 
 /**
@@ -295,8 +374,9 @@ export function restartAtCurrentFrame(group: AnimationGroup, loop: boolean): voi
 }
 
 export function speedRatioFor(clip: RigClip, speed: number): number {
-  if (clip !== "walk" && clip !== "run") return 1;
-  const matched = (speed / CLIP_SPEED[clip]) * CADENCE[clip];
+  const gait = forwardOf(clip);
+  if (gait !== "walk" && gait !== "run") return 1;
+  const matched = (speed / CLIP_SPEED[gait]) * CADENCE[gait];
   return Math.min(MAX_RATIO, Math.max(MIN_RATIO, matched));
 }
 
@@ -765,7 +845,8 @@ export const isLayeredClip = (clip: RigClip): boolean => UPPER_BODY_CLIPS.has(cl
  * Locomotion is exempt on purpose: those clips slide the feet anyway.
  */
 export const HIPS_BOB: Record<RigClip, number> = {
-  idle: 1, walk: 0.65, run: 0.65, cast: 1, bow: 1, strikeA: 1, strikeB: 1,
+  idle: 1, walk: 0.65, run: 0.65, walkBack: 0.65, runBack: 0.65,
+  walkStrafeL: 0.65, walkStrafeR: 0.65, runStrafeL: 0.65, runStrafeR: 0.65, cast: 1, bow: 1, strikeA: 1, strikeB: 1,
 };
 
 /**
@@ -982,6 +1063,10 @@ export class RigActor {
   private activeClip: RigClip | null = null;
   private nextStrikeIndex = 0;
   private locomotion: RigClip = "idle";
+  /** The move's yaw off the body's facing, and the hip turn eased toward it. */
+  private moveRel = 0;
+  private legsTarget = 0;
+  private legs = 0;
   /** Seconds this body has been standing still, for the breath to settle over. */
   private standing = 0;
 
@@ -1010,6 +1095,8 @@ export class RigActor {
   private aimTarget: { x: number; z: number } | null = null;
   /** Observer that applies aim rotation after the animation system runs. */
   private aimObserver: Observer<Scene> | null = null;
+  private legsObserver: Observer<Scene> | null = null;
+  private legsRestore: Observer<Scene> | null = null;
   /** The swing in flight and the rates it is paced by; null between swings. */
   private strike: { group: AnimationGroup; pace: StrikePace } | null = null;
   private trail: ReturnType<typeof swingTrail> | null = null;
@@ -1116,9 +1203,21 @@ export class RigActor {
     this.setLocomotion(0);
   }
 
+  /** Where the body is moving, as yaw off the way it faces (0 ahead, PI behind). */
+  setMoveAngle(rel: number): void {
+    this.moveRel = rel;
+  }
+
   /** Pick and pace the locomotion clip from the actor's real ground speed. */
   setLocomotion(speed: number): void {
-    const clip = clipForSpeed(speed, this.locomotion);
+    let clip = clipForSpeed(speed, forwardOf(this.locomotion));
+    if (clip === "idle") {
+      this.legsTarget = 0;
+    } else {
+      const gait = legGait(this.moveRel, gaitOf(this.locomotion));
+      this.legsTarget = gait.legs;
+      clip = GAIT_CLIPS[gait.gait][clip === "run" ? "run" : "walk"];
+    }
     this.locomotion = clip;
     const group = this.groups.get(clip);
     if (clip === "idle") {
@@ -1358,6 +1457,42 @@ export class RigActor {
         rot.multiplyInPlace(this.delta);
       }
     };
+
+    // Hips toward the move, chest back onto the facing, before the aim reads the
+    // chest. Eased, so a backpedal starting or a sidestep flipping sides turns
+    // the hips over a few frames instead of snapping them round.
+    const pelvisNode = byName.get(HIPS_BONE);
+    const waist = ["spine_01", "spine_02"].map((n) => byName.get(n)).filter((n): n is TransformNode => n instanceof TransformNode);
+    // World-up yaw applied in the bone's PARENT frame (delta * rot): the hips
+    // turn about the floor's normal, not about whatever axis the pelvis rests on.
+    const yawInParent = (bone: TransformNode, angle: number) => {
+      const parent = bone.parent as TransformNode | null;
+      const rot = bone.rotationQuaternion;
+      if (!parent || !rot) return;
+      parent.computeWorldMatrix(true).invertToRef(parentInv);
+      Vector3.TransformNormalToRef(worldUp, parentInv, localAxis);
+      Quaternion.RotationAxisToRef(localAxis.normalize(), angle, this.delta);
+      this.delta.multiplyToRef(rot, rot);
+    };
+    // Not every clip keys every one of these bones, and an unkeyed bone keeps
+    // last frame's turn: each pose is put back before the clips run, or it spins.
+    const twisted = [pelvisNode, ...waist].filter((n): n is TransformNode => n instanceof TransformNode);
+    const untwisted = twisted.map((n) => n.rotationQuaternion?.clone() ?? null);
+    let turned = false;
+    this.legsRestore = this.scene.onBeforeAnimationsObservable.add(() => {
+      if (!turned) return;
+      twisted.forEach((n, i) => { if (untwisted[i]) n.rotationQuaternion?.copyFrom(untwisted[i]!); });
+      turned = false;
+    });
+    this.legsObserver = this.scene.onAfterAnimationsObservable.add(() => {
+      const dt = (this.scene.getEngine?.()?.getDeltaTime?.() ?? 16) / 1000;
+      this.legs += wrapPi(this.legsTarget - this.legs) * Math.min(1, dt / LEG_EASE_SEC);
+      if (Math.abs(this.legs) < 1e-4 || !(pelvisNode instanceof TransformNode)) return;
+      twisted.forEach((n, i) => { if (n.rotationQuaternion) untwisted[i]?.copyFrom(n.rotationQuaternion); });
+      turned = true;
+      yawInParent(pelvisNode, LEG_YAW_SIGN * this.legs);
+      for (const bone of waist) yawInParent(bone, -LEG_YAW_SIGN * this.legs / waist.length);
+    });
 
     this.aimObserver = this.scene.onAfterAnimationsObservable.add(() => {
       if (!this.aimTarget) return;
@@ -1691,7 +1826,11 @@ export class RigActor {
     this.aimBones = [];
     this.aimTarget = null;
     if (this.aimObserver) this.scene.onAfterAnimationsObservable.remove(this.aimObserver);
+    if (this.legsObserver) this.scene.onAfterAnimationsObservable.remove(this.legsObserver);
     this.aimObserver = null;
+    this.legsObserver = null;
+    if (this.legsRestore) this.scene.onBeforeAnimationsObservable.remove(this.legsRestore);
+    this.legsRestore = null;
     if (this.strikeObserver) this.scene.onBeforeAnimationsObservable.remove(this.strikeObserver);
     this.strikeObserver = null;
     this.strike = null;

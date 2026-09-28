@@ -33,6 +33,8 @@ const FACE_CAMERA_YAW = Math.PI / 2 - CAMERA_ALPHA;
  * difference between a usable screenshot and a shot of a hood.
  */
 const SPAWN_YAW = FACE_CAMERA_YAW;
+/** A cursor this close to the player (units) has no direction worth turning to. */
+const AIM_DEAD_ZONE = 0.3;
 
 /**
  * The sim's fixed yaws (the portal arc, the stash, the vendor) are authored for
@@ -226,6 +228,8 @@ export class SnapshotRenderer {
   private now = 0;
   /** Last cursor point fed in by the render loop; the target a new bolt flies at. */
   private aim: { x: number; y: number } | null = null;
+  /** The player's last facing off the cursor, held while the cursor sits on top of him. */
+  private aimFacing: { x: number; y: number } | null = null;
   /** Newborn bolts offset to the casting hand: where each was launched and how
    *  far it has to go, which is the rate the offset is spent at. */
   private readonly fromHand = new Map<number, { offset: Vector3; from: { x: number; y: number }; range: number; join: number }>();
@@ -338,6 +342,16 @@ export class SnapshotRenderer {
         this.kinds.delete(next.player.id);
       }
     }
+    // PoE2 WASD: the body always faces the cursor and the keys carry it, so the
+    // legs strafe or backpedal. The sim's facing covers a player with no cursor.
+    if (this.aim) {
+      const px = lerp(prev?.player.x ?? next.player.x, next.player.x, alpha);
+      const py = lerp(prev?.player.y ?? next.player.y, next.player.y, alpha);
+      const ax = this.aim.x - px;
+      const ay = this.aim.y - py;
+      const d = Math.hypot(ax, ay);
+      if (d > AIM_DEAD_ZONE) this.aimFacing = { x: ax / d, y: ay / d };
+    }
     if (next.player.alive) this.syncMesh(
       next.player.id,
       "player",
@@ -349,6 +363,8 @@ export class SnapshotRenderer {
       undefined,
       undefined,
       next.player.heading,
+      undefined,
+      this.aimFacing ?? next.player.facing,
     );
 
     // Dress the character from what the sim says he is wearing. Asserted every
@@ -731,6 +747,7 @@ export class SnapshotRenderer {
     species?: string,
     heading?: { x: number; y: number },
     skillId?: string,
+    facing?: { x: number; y: number },
   ): void {
     let mesh = this.meshes.get(id);
     const fresh = !mesh;
@@ -784,8 +801,12 @@ export class SnapshotRenderer {
     // And a sent heading turns him whether or not he is moving, which is the
     // only way a man standing still can face what he is casting at. Zero is not
     // a direction — a heading nobody has written yet would snap him to +z.
-    const sent = heading && (heading.x !== 0 || heading.y !== 0)
-      ? Math.atan2(heading.x, heading.y)
+    //
+    // A held skill's `facing` outranks the heading: the body turns to the target
+    // and the keys keep carrying it, so the legs sidestep or backpedal (PoE2).
+    const turnTo = facing ?? heading;
+    const sent = turnTo && (turnTo.x !== 0 || turnTo.y !== 0)
+      ? Math.atan2(turnTo.x, turnTo.y)
       : null;
     if (dx * dx + dz * dz > 1e-6 || sent !== null) {
       const wasYaw = mesh.rotation.y;
@@ -793,9 +814,14 @@ export class SnapshotRenderer {
       mesh.rotation.y = lerpAngle(wasYaw, aim, 0.25);
       yawStep = mesh.rotation.y - wasYaw;
     }
+    const moving = dx * dx + dz * dz > 1e-6;
+    const rel = moving ? Math.atan2(dx, dz) - mesh.rotation.y : 0;
+    rigOf(mesh)?.setMoveAngle(rel);
     // A stopped actor still needs frames to settle back upright. Skipping this
-    // call used to freeze the last running bank indefinitely.
-    this.lean(id, mesh, kind, yawStep, speed);
+    // call used to freeze the last running bank indefinitely. Turning to a
+    // target is not a corner, and a backpedal does not lead with the chest.
+    if (facing) this.lean(id, mesh, kind, 0, speed * Math.max(0, Math.cos(rel)));
+    else this.lean(id, mesh, kind, yawStep, speed);
   }
 
   /**
