@@ -4,7 +4,7 @@ Run:
   "/c/Program Files/Blender Foundation/Blender 5.2/blender.exe" --background \
       --factory-startup --python tools/preview_monsters.py -- \
       [--species a,b,c] [--clip walk] [--view quarter|game] [--frames 6] \
-      [--tile 256] [--out review/creature-walk.png]
+      [--tile 256] [--out review/creature-walk.png] [--glb path] [--shading clay|texture]
 
 Why it reads the GLB and not the build scene
 --------------------------------------------
@@ -50,7 +50,8 @@ VIEWS = {"quarter": (0.85, -1.0, 0.42), "game": (0.428, 0.428, 0.796)}
 def args():
     tail = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     out = {"species": DEFAULT, "clip": "walk", "tile": TILE, "view": "quarter",
-           "frames": COLUMNS, "out": os.path.join(ROOT, "review", "creature-walk.png")}
+           "frames": COLUMNS, "out": os.path.join(ROOT, "review", "creature-walk.png"),
+           "glb": GLB, "shading": "clay"}
     for i in range(0, len(tail) - 1, 2):
         key, value = tail[i].lstrip("-"), tail[i + 1]
         out[key] = value.split(",") if key == "species" else value
@@ -59,14 +60,14 @@ def args():
     return out
 
 
-def setup(scene):
+def setup(scene, shading_mode):
     scene.render.engine = "BLENDER_WORKBENCH"
     scene.render.resolution_x = scene.render.resolution_y = TILE
     scene.render.film_transparent = False
     scene.render.image_settings.file_format = "PNG"
     shading = scene.display.shading
     shading.light = "STUDIO"
-    shading.color_type = "SINGLE"
+    shading.color_type = "TEXTURE" if shading_mode == "texture" else "SINGLE"
     shading.single_color = (0.62, 0.60, 0.58)
     shading.show_shadows = True
     shading.show_cavity = True
@@ -126,8 +127,8 @@ def main():
     for obj in list(bpy.data.objects):
         bpy.data.objects.remove(obj, do_unlink=True)
     scene = bpy.context.scene
-    cam = setup(scene)
-    bpy.ops.import_scene.gltf(filepath=GLB)
+    cam = setup(scene, opts["shading"])
+    bpy.ops.import_scene.gltf(filepath=opts["glb"])
 
     rows = []
     tmp = os.path.join(ROOT, "review", "_tile.png")
@@ -135,7 +136,7 @@ def main():
     for species in opts["species"]:
         arm = bpy.data.objects.get(species)
         if arm is None or arm.type != "ARMATURE":
-            sys.exit("no armature named %s in %s" % (species, GLB))
+            sys.exit("no armature named %s in %s" % (species, opts["glb"]))
         mesh = next((c for c in arm.children if c.type == "MESH"), None)
         if mesh is None:
             sys.exit("%s carries no mesh" % species)
