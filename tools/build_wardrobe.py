@@ -320,7 +320,7 @@ SUIT_CAP_INBOARD = 0.08
 # stand 40 to 100 mm out. Read from this far below the shoulder joint up.
 SUIT_FLARE_PROUD = 0.04
 SUIT_FLARE_BELOW_SHOULDER = 0.04
-# Where the suit's shins are cut off into `chest.ironsworn.greave`, below the knee.
+# Where each suit's shins are cut off and dropped (`cut_greaves`), below the knee.
 # 30 mm under the sabaton rim (`BOOT_TOP`): the suit is still wider than the
 # boot there, so its edge laps the rim from outside.
 SUIT_GREAVE_BELOW_KNEE = 0.06
@@ -395,11 +395,10 @@ BODY_REGIONS = {
     "foot_r": ("foot_r", "ball_r"),
 }
 BODY_REGION_WEIGHT = 0.5    # summed weight over a region's bones to belong to it
-# The chest closes the legs, but every greave's hem stands up to 0.37 above the
-# ankle at the back while the foot piece ends near it: only a boot closes that
-# band. So the leg below this share of ankle-to-knee is its own `shin_*` piece,
-# which boots close and a chest does not. Above the highest hem, below the boots.
-SHIN_SHARE = 0.69
+# Every suit ends at its greave plane below the knee (`cut_greaves`), so the leg
+# below it is its own `shin_*` piece, which boots close and a chest does not. It
+# rises this far above that plane, under the suit's hem, so no band opens there.
+SHIN_TUCK = 0.02
 
 # Both class hoods come from `tools/prep_hood.py` already skinned, crown to
 # capelet, on the joints the hood and the coat or robe under its capelet ride.
@@ -484,10 +483,9 @@ RIGID_GEAR = (
         "src": "emberbound-robe-20k-v1.glb", "bone": "spine_03", "fit": "soft_suit",
         "deform": SUIT_BONES,
         # Its donor wears trousers under the skirt, 15-18 cm clear of it below
-        # the knee; the clearance keeps them on the legs. Their shins are the
-        # greave, cut inside `SOFT_GREAVE_RADIUS` so the floor-length skirt
-        # stays whole, and tucked into the boot: worn over it, the boot cuff
-        # came out through the trouser leg.
+        # the knee; the clearance keeps them on the legs. Their shins are cut
+        # away inside `SOFT_GREAVE_RADIUS` so the floor-length skirt stays
+        # whole: worn over a boot, the boot cuff came out through the trouser leg.
         "matte": True, "clean": True, "greaves": "shins", "skirt_floor": False,
         "skirt": 1.7,
     },
@@ -3317,8 +3315,7 @@ def split_body_regions(body, look):
     rig = body.find_armature()
     for side in "lr":
         knee = (rig.matrix_world @ rig.data.bones[f"calf_{side}"].head_local).z
-        ankle = (rig.matrix_world @ rig.data.bones[f"foot_{side}"].head_local).z
-        top = ankle + SHIN_SHARE * (knee - ankle)
+        top = knee - SUIT_GREAVE_BELOW_KNEE + SHIN_TUCK
         leg = cores[f"leg_{side}"]
         cores[f"shin_{side}"] = {i for i in leg if (body.matrix_world @ bm.verts[i].co).z < top}
         cores[f"leg_{side}"] = leg - cores[f"shin_{side}"]
@@ -3535,37 +3532,23 @@ def mirrored(right, rig, name):
     return left
 
 
-def split_greaves(suit, rig, name, below_knee, region=None):
-    """Cut the suit's shins off into their own piece, below both knees.
+def cut_greaves(suit, rig, below_knee, region=None):
+    """Cut the suit's shins off below both knees and drop them.
 
-    A sabaton carries its own shin plate, and the suit's greave inside it is
-    the same radius give or take a centimetre, so worn together the two cross
-    down the whole shin and the suit's ankle flange stands out through the boot.
-    The runtime hides this piece under boots (`COVERED_BY` in `rig.ts`); the
-    suit's edge left above then laps the sabaton rim from outside.
+    The donors' shins are open shells (the plate suit is open on the inner
+    calf, the leathers torn through), so without boots the bare shin shows
+    from under the suit's hem to the foot, and with boots the sabaton's own
+    shin plate closes it.
     """
     knee = sum((rig.matrix_world @ rig.data.bones[b].head_local).z
                for b in ("calf_l", "calf_r")) / 2
     z = knee - below_knee
-    shin = suit.copy()
-    shin.data = suit.data.copy()
-    for coll in suit.users_collection:
-        coll.objects.link(shin)
-    shin.name = name
-    shin.data.name = name
     M = suit.matrix_world
-    kept = cut_donor(suit, M, Vector((0, 0, z)), Vector((0, 0, -1)), region=region)
-    cut = cut_donor(shin, M, Vector((0, 0, z)), Vector((0, 0, 1)), region=region)
-    if region is not None:
-        # The copy keeps everything outside the region too; only the shins are its.
-        _cut_verts(shin, [v.index for v in shin.data.vertices
-                          if not region(M @ v.co) or (M @ v.co).z > z + 1e-4])
-    if not kept or not cut:
-        raise SystemExit(f"the greave plane at {z:.4f} m left one side empty")
+    if not cut_donor(suit, M, Vector((0, 0, z)), Vector((0, 0, -1)), region=region):
+        raise SystemExit(f"the greave plane at {z:.4f} m left the suit empty")
     scraps = _drop_islands_below(suit, M, z)
     return {"greave_cut_z": round(z, 4), "greave_below_knee_mm": round(below_knee * 1000, 1),
-            "greave_scrap_verts_dropped": scraps,
-            "greave_triangles": sum(len(p.vertices) - 2 for p in shin.data.polygons)}
+            "greave_scrap_verts_dropped": scraps}
 
 
 def assert_symmetric(rig):
@@ -3758,8 +3741,7 @@ def build_rigid_gear(rig, body):
                           * spec.get("greave_radius", SOFT_GREAVE_RADIUS))
                          for b in ("calf_l", "calf_r")]
                 region = lambda p: any(math.hypot(p.x - c.x, p.y - c.y) <= r for c, r in shins)
-            detail.update(split_greaves(donor, rig, f"{spec['slot']}.{spec['look']}.greave",
-                                        SUIT_GREAVE_BELOW_KNEE, region))
+            detail.update(cut_greaves(donor, rig, SUIT_GREAVE_BELOW_KNEE, region))
         tris = sum(len(p.vertices) - 2 for p in donor.data.polygons)
         detail.update({"bone": spec["bone"], "fit": spec["fit"], "triangles": tris,
                        "source": spec["src"]})

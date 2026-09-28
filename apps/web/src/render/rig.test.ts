@@ -308,7 +308,7 @@ describe("what worn gear hides of the body", () => {
     expect([...hiddenBaseParts({ ...BASE_LOOKS, gloves: "plate" })].sort())
       .toEqual(["hand_l", "hand_r"]);
     expect([...hiddenBaseParts({ ...BASE_LOOKS, boots: "plate" })].sort())
-      .toEqual(["foot_l", "foot_r", "greave", "shin_l", "shin_r"]);
+      .toEqual(["foot_l", "foot_r", "shin_l", "shin_r"]);
     expect([...hiddenBaseParts({ ...BASE_LOOKS, chest: "plate" })].sort())
       .toEqual(["collar", "leg_l", "leg_r", "torso"]);
   });
@@ -341,7 +341,7 @@ describe("what worn gear hides of the body", () => {
     const dressed = { ...BASE_LOOKS, chest: "plate", gloves: "plate", boots: "plate" };
     const hidden = hiddenBaseParts(dressed);
     expect([...hidden].sort()).toEqual([
-      "collar", "foot_l", "foot_r", "greave", "hand_l", "hand_r", "leg_l", "leg_r", "shin_l", "shin_r", "torso",
+      "collar", "foot_l", "foot_r", "hand_l", "hand_r", "leg_l", "leg_r", "shin_l", "shin_r", "torso",
     ]);
   });
 
@@ -359,16 +359,13 @@ describe("what worn gear hides of the body", () => {
   });
 
   /**
-   * A sabaton carries its own shin plate, so the suit's greave inside it is
-   * switched off; without boots the greave is drawn over the bare shin.
+   * The suits' shins were open shells, so a suit ends below the knee and the
+   * bare shin runs from under its hem to the foot; a boot closes both.
    */
-  it("swaps the suit's shins for the sabaton's", () => {
-    expect(hiddenBaseParts({ ...BASE_LOOKS, chest: "plate" }).has("greave")).toBe(false);
-    // The greave's hem stands a hand above the ankle at the back: the bare shin
-    // under it is what fills that band, and only a boot closes it.
+  it("leaves the shins bare under a suit and closes them under boots", () => {
     expect(hiddenBaseParts({ ...BASE_LOOKS, chest: "plate" }).has("shin_l")).toBe(false);
     expect(hiddenBaseParts({ ...BASE_LOOKS, chest: "plate" }).has("shin_r")).toBe(false);
-    expect(hiddenBaseParts({ ...BASE_LOOKS, chest: "plate", boots: "plate" }).has("greave"))
+    expect(hiddenBaseParts({ ...BASE_LOOKS, chest: "plate", boots: "plate" }).has("shin_l"))
       .toBe(true);
   });
 });
@@ -410,12 +407,12 @@ describe("wardrobe asset", () => {
       "base.male.leg_l", "base.male.leg_r", "base.male.shin_l", "base.male.shin_r",
       "helmet.ironsworn.helm", "helmet.stalker.hood", "helmet.ember.cowl", "weapon1.emberwand.mesh", "weapon2.buckler.mesh",
       "weapon1.ironswornhammer.mesh", "weapon1.stalkerbow.mesh", "weapon2.towershield.mesh",
-      "chest.ironsworn.cuirass", "chest.ironsworn.gorget", "chest.ironsworn.greave", "chest.ironsworn.backing",
+      "chest.ironsworn.cuirass", "chest.ironsworn.gorget", "chest.ironsworn.backing",
       "chest.ironsworn.backing_arm_l", "chest.ironsworn.backing_arm_r",
-      "chest.stalker.coat", "chest.stalker.gorget", "chest.stalker.greave", "chest.stalker.backing",
+      "chest.stalker.coat", "chest.stalker.gorget", "chest.stalker.backing",
       "chest.stalker.backing_arm_l", "chest.stalker.backing_arm_r",
       "chest.stalker.backing_leg_l", "chest.stalker.backing_leg_r",
-      "chest.ember.robe", "chest.ember.gorget", "chest.ember.greave", "chest.ember.backing",
+      "chest.ember.robe", "chest.ember.gorget", "chest.ember.backing",
       "chest.ember.backing_arm_l", "chest.ember.backing_arm_r",
       "chest.ember.backing_leg_l", "chest.ember.backing_leg_r",
       "boots.ironsworn.sabaton_l", "boots.ironsworn.sabaton_r",

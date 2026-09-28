@@ -103,7 +103,7 @@ describe("floorParts against the real wardrobe", () => {
       expect(robe.isVerticesDataPresent(VertexBuffer.MatricesIndicesKind)).toBe(true);
       // Fillers under the cloth and the leg pieces are not the item.
       expect(floorParts(wardrobe, "base.ember_robe", GEAR_LOOKS["base.ember_robe"]!)
-        .some((p) => /backing|gorget|greave/.test(p.name))).toBe(false);
+        .some((p) => /backing|gorget/.test(p.name))).toBe(false);
     } finally {
       (globalThis as { FileReader?: unknown }).FileReader = original;
     }

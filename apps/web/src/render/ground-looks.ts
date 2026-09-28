@@ -51,7 +51,7 @@ export function groundLookFor(baseId: string | undefined): GroundLook | null {
  * Not the item: skin pushed out under the cloth, and the leg pieces, which make
  * a body armour lying on the floor read as a body.
  */
-const FILLER = /^(backing|gorget|greave)/;
+const FILLER = /^(backing|gorget)/;
 /** A drop is a token of the item, not the item at the size it is worn. */
 export const FLOOR_SCALE = 0.6;
 /** Held at a wrist angle, so their flattest side is not on an axis. */

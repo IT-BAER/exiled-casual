@@ -394,9 +394,8 @@ const SKIRTED_CHEST: ReadonlySet<string> = new Set(["stalker", "ember"]);
 const COVERED_BY: Partial<Record<Slot, readonly string[]>> = {
   helmet: ["hair"],
   gloves: ["hand_l", "hand_r"],
-  // `greave` is the suit's own shins: a sabaton carries its own shin plate. The
-  // bare `shin_*` fills the band between a greave's hem and the foot.
-  boots: ["foot_l", "foot_r", "greave", "shin_l", "shin_r"],
+  // A suit ends below the knee: the bare `shin_*` runs from under its hem to the foot.
+  boots: ["foot_l", "foot_r", "shin_l", "shin_r"],
   chest: ["torso", "collar", "leg_l", "leg_r"],
 };
 
