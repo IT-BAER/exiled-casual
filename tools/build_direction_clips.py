@@ -1,15 +1,13 @@
-"""Add the jog's sidesteps to `anim-library.glb`.
+"""Add the jog's sidesteps and backpedal to `anim-library.glb`.
 
 The walks in every direction are UAL2's authored takes (`import_ual2_clips.py`),
-and a running backpedal plays the back walks; UAL2 has no directional jog. So the
-jog's strafes are still made here. Each is the forward jog with each foot's
+but UAL2 has no directional jog, so the jog's strafes and backpedal are made here. Each is the forward jog with each foot's
 track turned about its own mean offset from the hip, thigh and calf re-solved by
 two-bone IK onto it. The source's timing is kept, never reversed, so the strafes
 share the jog's stride phase (`LEFT_PLANT` in rig.ts).
 
 Directions are yaw off the hips (`DIRECTIONS`); the rig turns the hips the rest
-of the way toward the move. Past a sidestep (no clip here is, today) a clip
-turns into a backpedal by its share of backwardness b = max(0, -cos(yaw)):
+of the way toward the move. Past a sidestep a clip turns into a backpedal by its share of backwardness b = max(0, -cos(yaw)):
   - landing and push-off on the ball of the foot, never the heel;
   - the source's forward trunk lean taken out, a little back lean put in;
   - shorter steps (`STRIDE_CUT`) at the source's hip height: lowered, the knees never straighten;
@@ -44,10 +42,13 @@ SCRATCH = os.path.join(tempfile.gettempdir(), "exiled-direction-clips.glb")
 DIRECTIONS = {
     "Strafe_L": 55,
     "Strafe_R": -55,
+    "BackDiag_L": 110,
+    "BackDiag_R": -110,
+    "Back": 180,
 }
 GAITS = {"Jog": "Rig|Jog_Fwd_Loop"}
 # Clips this tool's predecessors wrote and nothing reads any more.
-RETIRED = ("Rig|Jog_Back_Loop", "Rig|Jog_BackDiag_L_Loop", "Rig|Jog_BackDiag_R_Loop")
+RETIRED = ()
 # Share of the track's line the knee and foot follow; the rest is the hip's.
 KNEE_FOLLOW = 0.4
 # Each foot set out this far (rig units, 0.0003 = 3 cm) from the midline at a

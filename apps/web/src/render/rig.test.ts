@@ -25,6 +25,7 @@ import {
   DIRECTIONS,
   LEFT_PLANT,
   framePhaseMatched,
+  gaitOf,
   hipTurn,
   HIP_TURN,
   type RigClip,
@@ -50,7 +51,6 @@ import {
   SKIRT_COLLIDERS,
   STRIKE_TIMING,
   type StrikeClip,
-  strikeLunge,
   strikePace,
   strikeRatioAt,
 } from "./rig";
@@ -110,9 +110,10 @@ describe("directionBlend", () => {
       return c.w === 0 ? c.from : c.w === 1 ? c.to : "blend";
     };
     expect(only(0)).toBe("run");
-    // UAL2 has no backward jog: a running backpedal is the authored back walk, faster.
-    expect(only(Math.PI)).toBe("walkBack");
-    expect(only(-Math.PI)).toBe("walkBack");
+    // UAL2 has no backward jog: a running backpedal is the jog, turned backwards
+    // by tools/build_direction_clips.py. A back walk sped up reads as a walk.
+    expect(only(Math.PI)).toBe("runBack");
+    expect(only(-Math.PI)).toBe("runBack");
   });
 
   it("blends the two neighbours in between, weight rising with the yaw", () => {
@@ -121,7 +122,7 @@ describe("directionBlend", () => {
     expect([a.from, a.to]).toEqual(["run", "runStrafeR"]);
     expect(b.w).toBeGreaterThan(a.w);
     const back = clipsAt(deg(-150));
-    expect([back.from, back.to].sort()).toEqual(["walkBack", "walkBackL"]);
+    expect([back.from, back.to].sort()).toEqual(["runBack", "runBackL"]);
   });
 
   it("is continuous: a hair either side of every clip's yaw gives nearly the same pose", () => {
@@ -213,9 +214,8 @@ describe("speedRatioFor", () => {
     expect(speedRatioFor("walkStrafeR", 1.4)).toBe(speedRatioFor("walk", 1.4));
   });
 
-  it("runs the backpedal's authored back walk fast enough to keep the feet planted", () => {
-    const back = DIRECTIONS.run.find((d) => d.clip === "walkBack")!.stride;
-    expect(speedRatioFor("walkBack", 3.5 / back)).toBeCloseTo(3.5 / (1.4 * back), 5);
+  it("runs every running direction on a jog, never a walk sped up", () => {
+    for (const d of DIRECTIONS.run) expect(gaitOf(d.clip), d.clip).toBe("run");
   });
 
   it("still scales with speed so the legs track the movement", () => {
@@ -225,7 +225,7 @@ describe("speedRatioFor", () => {
 
   it("clamps extremes and leaves one-shots alone", () => {
     expect(speedRatioFor("run", 0.01)).toBe(0.5);
-    expect(speedRatioFor("walk", 100)).toBe(2.1);
+    expect(speedRatioFor("walk", 100)).toBe(1.8);
     expect(speedRatioFor("cast", 3.5)).toBe(1);
     expect(speedRatioFor("idle", 0)).toBe(1);
   });
@@ -1840,15 +1840,6 @@ describe("a melee swing lands heavy and on the hit", () => {
   it("falls back to one even rate when the sim sent no wind-up", () => {
     const r = actionRatio(1.4, BEAT);
     expect(strikePace(1.4, STRIKE_TIMING.strikeA, undefined, BEAT)).toEqual({ raise: r, drop: r, follow: r });
-  });
-
-  it("steps in on the drop, holds through contact and settles back", () => {
-    const t = STRIKE_TIMING.strikeA;
-    expect(strikeLunge(0, t)).toBe(0);
-    expect(strikeLunge(t.drop, t)).toBe(0);
-    expect(strikeLunge(t.contact, t)).toBe(1);
-    expect(strikeLunge((t.drop + t.contact) / 2, t)).toBeGreaterThan(0.5);
-    expect(strikeLunge(0.95, t)).toBe(0);
   });
 
   it.each(STRIKE_CLIPS)("%s drops and stops where its arm speed says", (clip) => {

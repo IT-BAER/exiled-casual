@@ -33,7 +33,7 @@ import { ARROW_LENGTH, buildArrow, swingTrail } from "./skill-fx";
 
 /** Clips the game can actually trigger today. */
 export type RigClip =
-  | "idle" | "walk" | "run" | "walkBack"
+  | "idle" | "walk" | "run" | "walkBack" | "runBack" | "runBackL" | "runBackR"
   | "walkStrafeL" | "walkStrafeR" | "runStrafeL" | "runStrafeR"
   | "walkFwdL" | "walkFwdR" | "walkBackL" | "walkBackR" | "cast" | "bow" | "strikeA" | "strikeB" | "strikeC"
   | "hit" | "drink" | "open";
@@ -56,8 +56,8 @@ export const REACTION_CLIPS: readonly ReactionClip[] = ["hit", "drink", "open"];
 export const CLIP_NAME: Record<RigClip, string> = {
   idle: "Rig|Idle_Loop",
   // The eight walks are UAL2's authored takes (`tools/import_ual2_clips.py`).
-  // UAL2 has no jog off the forward line: the jog's sidesteps are made from it by
-  // `tools/build_direction_clips.py`, and a running backpedal plays the back walks.
+  // UAL2 has no jog off the forward line: the jog's sidesteps and backpedal are
+  // made from it by `tools/build_direction_clips.py`.
   walk: "Rig|Walk_Fwd_Loop",
   run: "Rig|Jog_Fwd_Loop",
   walkFwdL: "Rig|Walk_Fwd_L_Loop",
@@ -69,6 +69,9 @@ export const CLIP_NAME: Record<RigClip, string> = {
   walkBack: "Rig|Walk_Bwd_Loop",
   runStrafeL: "Rig|Jog_Strafe_L_Loop",
   runStrafeR: "Rig|Jog_Strafe_R_Loop",
+  runBack: "Rig|Jog_Back_Loop",
+  runBackL: "Rig|Jog_BackDiag_L_Loop",
+  runBackR: "Rig|Jog_BackDiag_R_Loop",
   cast: "Rig|Spell_Simple_Shoot_R",
   // No bow take in the pack: keyed on the wardrobe skeleton by `tools/build_bow_clip.py`.
   bow: "Rig|Bow_Shoot",
@@ -90,6 +93,9 @@ const CLIP_LOOPS: Record<RigClip, boolean> = {
   walkStrafeR: true,
   runStrafeL: true,
   runStrafeR: true,
+  runBack: true,
+  runBackL: true,
+  runBackR: true,
   walkFwdL: true,
   walkFwdR: true,
   walkBackL: true,
@@ -132,8 +138,7 @@ const CLIP_SPEED: Record<"walk" | "run", number> = { walk: 1.4, run: 4.0 };
 const CADENCE: Record<"walk" | "run", number> = { walk: 1, run: 1.32 };
 
 const MIN_RATIO = 0.5;
-// A running backpedal plays the back walk (1.68 u/s authored) at 3.5: 2.08.
-const MAX_RATIO = 2.1;
+const MAX_RATIO = 1.8;
 
 /** Below this the actor counts as standing still. */
 const IDLE_SPEED = 0.15;
@@ -167,7 +172,7 @@ export type Gait = "walk" | "run";
 
 /** Which gait's pace a locomotion clip was authored at, or null for any other clip. */
 export function gaitOf(clip: RigClip): Gait | null {
-  if (clip === "run" || clip === "runStrafeL" || clip === "runStrafeR") return "run";
+  if (clip.startsWith("run")) return "run";
   return clip.startsWith("walk") ? "walk" : null;
 }
 
@@ -175,8 +180,9 @@ export function gaitOf(clip: RigClip): Gait | null {
  * The ways the legs move off the hips, per gait, in yaw order, positive to his
  * right. `stride` is each clip's step against its gait's forward one, off the
  * stance foot's sweep in anim-library.glb: UAL2's back walks step 1.2x the
- * forward walk, its sidesteps 0.66x. A running backpedal plays the back walks
- * faster rather than a jog, because UAL2 has no directional jog.
+ * forward walk, its sidesteps 0.66x. The jog's backpedal is made from the jog
+ * with a shorter step (`STRIDE_CUT` in `tools/build_direction_clips.py`):
+ * 1 - 0.25 * max(0, -cos(yaw)).
  */
 export const DIRECTIONS: Record<Gait, readonly { yaw: number; clip: RigClip; stride: number }[]> = {
   walk: ([
@@ -184,8 +190,8 @@ export const DIRECTIONS: Record<Gait, readonly { yaw: number; clip: RigClip; str
     [0, "walk", 1], [45, "walkFwdR", 1], [90, "walkStrafeR", 0.66], [135, "walkBackR", 1.2], [180, "walkBack", 1.2],
   ] as const).map(([deg, clip, stride]) => ({ yaw: (deg * Math.PI) / 180, clip, stride })),
   run: ([
-    [-180, "walkBack", 1.2], [-135, "walkBackL", 1.2], [-55, "runStrafeL", 1],
-    [0, "run", 1], [55, "runStrafeR", 1], [135, "walkBackR", 1.2], [180, "walkBack", 1.2],
+    [-180, "runBack", 0.75], [-110, "runBackL", 0.914], [-55, "runStrafeL", 1],
+    [0, "run", 1], [55, "runStrafeR", 1], [110, "runBackR", 0.914], [180, "runBack", 0.75],
   ] as const).map(([deg, clip, stride]) => ({ yaw: (deg * Math.PI) / 180, clip, stride })),
 };
 
@@ -197,6 +203,7 @@ export const DIRECTIONS: Record<Gait, readonly { yaw: number; clip: RigClip; str
 export const LEFT_PLANT: Partial<Record<RigClip, number>> = {
   walk: 0.958, walkFwdL: 0.958, walkFwdR: 0.958, walkStrafeL: 0.158, walkStrafeR: 0.183,
   walkBackL: 0.158, walkBack: 0.158, walkBackR: 0.158, run: 0.008, runStrafeL: 0.017, runStrafeR: 0.017,
+  runBack: 0.017, runBackL: 0.017, runBackR: 0.017,
 };
 
 /** Frame of `to` in step with `frame` of `from`: the same share of a stride past the left plant. */
@@ -299,11 +306,8 @@ export const STRIKE_TIMING: Record<StrikeClip, StrikeTiming> = {
 const STRIKE_RAISE_SHARE = 0.7;
 /** The drop may run faster than any other action: that speed is the weight. */
 const STRIKE_DROP_MAX = 4;
-/** Units the body steps in on the drop, in the host's own space (+z is forward). */
-const STRIKE_LUNGE = 0.2;
-/** The step is held from contact to here, then eased back by LUNGE_BACK. */
-const LUNGE_HOLD = 0.5;
-const LUNGE_BACK = 0.8;
+/** Where the swing ribbon ends, as a fraction of the clip. */
+const TRAIL_END = 0.5;
 
 export interface StrikePace { raise: number; drop: number; follow: number }
 
@@ -332,18 +336,6 @@ export function strikePace(clipSeconds: number, t: StrikeTiming, windupSeconds?:
 /** The rate for the phase `frac` (0..1 through the clip) is in. */
 export function strikeRatioAt(frac: number, pace: StrikePace, t: StrikeTiming): number {
   return frac < t.drop ? pace.raise : frac < t.contact ? pace.drop : pace.follow;
-}
-
-/** How far into its step-in the body is at `frac`, 0..1. */
-export function strikeLunge(frac: number, t: StrikeTiming): number {
-  if (frac <= t.drop || frac >= LUNGE_BACK) return 0;
-  if (frac < t.contact) {
-    const u = (frac - t.drop) / (t.contact - t.drop);
-    return 1 - (1 - u) * (1 - u);
-  }
-  if (frac < LUNGE_HOLD) return 1;
-  const u = (frac - LUNGE_HOLD) / (LUNGE_BACK - LUNGE_HOLD);
-  return 1 - u * u * (3 - 2 * u);
 }
 
 /**
@@ -892,6 +884,7 @@ export const isLayeredClip = (clip: RigClip): boolean => UPPER_BODY_CLIPS.has(cl
  */
 export const HIPS_BOB: Record<RigClip, number> = {
   idle: 1, walk: 0.65, run: 0.65, walkBack: 0.65,
+  runBack: 0.65, runBackL: 0.65, runBackR: 0.65,
   walkStrafeL: 0.65, walkStrafeR: 0.65, runStrafeL: 0.65, runStrafeR: 0.65,
   walkFwdL: 0.65, walkFwdR: 0.65, walkBackL: 0.65, walkBackR: 0.65, cast: 1, bow: 1, strikeA: 1, strikeB: 1, strikeC: 1, hit: 1, drink: 1, open: 1,
 };
@@ -1374,13 +1367,12 @@ export class RigActor {
     for (const strike of STRIKE_CLIPS) this.groups.get(strike)?.stop();
   }
 
-  /** Per frame, before the clips advance: the phase's rate and the step-in. */
+  /** Per frame, before the clips advance: the phase's rate and the ribbon. */
   private paceStrike = (): void => {
     const strike = this.strike;
     const frame = strike?.group.isPlaying ? strike.group.animatables[0]?.masterFrame : undefined;
     if (!strike || frame === undefined) {
       this.strike = null;
-      this.pivot.position.z = 0;
       this.trail?.dispose();
       this.trail = null;
       return;
@@ -1389,9 +1381,8 @@ export class RigActor {
     const frac = (frame - group.from) / Math.max(1e-6, group.to - group.from);
     const ratio = strikeRatioAt(frac, pace, timing);
     if (group.speedRatio !== ratio) group.speedRatio = ratio;
-    this.pivot.position.z = STRIKE_LUNGE * strikeLunge(frac, timing);
     // The ribbon is the drop and nothing else: on the raise it is a slow smear.
-    const tip = frac >= timing.drop && frac < LUNGE_HOLD ? this.castPoint() : null;
+    const tip = frac >= timing.drop && frac < TRAIL_END ? this.castPoint() : null;
     if (tip) {
       this.trail ??= swingTrail(this.scene);
       this.trail.follow(tip);
@@ -1947,7 +1938,6 @@ export class RigActor {
     if (this.strikeObserver) this.scene.onBeforeAnimationsObservable.remove(this.strikeObserver);
     this.strikeObserver = null;
     this.strike = null;
-    this.pivot.position.z = 0;
     this.trail?.dispose();
     this.trail = null;
     this.anchorsWorld.length = 0;

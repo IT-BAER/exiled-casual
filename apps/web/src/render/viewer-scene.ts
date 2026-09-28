@@ -88,10 +88,10 @@ export const VIEWER_CLIPS: readonly ViewerClip[] = [
   { key: "4", clip: "cast", label: "Cast" },
   { key: "5", clip: "strikeA", label: "Strike" },
   { key: "6", clip: "bow", label: "Bow" },
-  { key: "7", clip: "walkBack", label: "Back", speed: 3.5, rel: Math.PI },
+  { key: "7", clip: "runBack", label: "Back", speed: 3.5, rel: Math.PI },
   { key: "8", clip: "runStrafeR", label: "Right", speed: 3.5, rel: Math.PI / 2 },
   { key: "9", clip: "runStrafeL", label: "Left", speed: 3.5, rel: -Math.PI / 2 },
-  { key: "0", clip: "walkBackR", label: "Back-right", speed: 3.5, rel: (Math.PI * 3) / 4 },
+  { key: "0", clip: "runBackR", label: "Back-right", speed: 3.5, rel: (Math.PI * 3) / 4 },
 ];
 
 /**

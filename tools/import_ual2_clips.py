@@ -48,12 +48,9 @@ CLIPS = {
     "Rig|Chest_Open": "Chest_Open",
 }
 # Clips this import supersedes: `build_direction_clips.py`'s generated walks and
-# backpedal, and `build_slash_variant.py`'s backhand.
+# `build_slash_variant.py`'s backhand.
 RETIRED = (
     "Rig|Sword_Attack_Back",
-    "Rig|Jog_Back_Loop",
-    "Rig|Jog_BackDiag_L_Loop",
-    "Rig|Jog_BackDiag_R_Loop",
     "Rig|Walk_Loop",
     "Rig|Walk_Back_Loop",
     "Rig|Walk_BackDiag_L_Loop",
