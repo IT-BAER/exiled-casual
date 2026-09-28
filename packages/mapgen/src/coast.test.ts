@@ -91,6 +91,18 @@ describe("generateCoast", () => {
     }
   });
 
+  it("keeps every pack out of the boss bay: the boss fight is the boss", () => {
+    // Half the bay's 34 cells: a socket inside it wakes with the boss, and the
+    // last socket also carries the map's rare.
+    for (const seed of SEEDS) {
+      const l = generateCoast(seed, V, 16);
+      const boss = l.objectiveAnchors.find((a) => a.id === "boss")!;
+      for (const s of l.spawnSockets) {
+        expect(Math.hypot(s.x - boss.x, s.y - boss.y), `seed ${seed} ${s.id}`).toBeGreaterThan(17 * CELL_SIZE);
+      }
+    }
+  });
+
   it("puts the way out at the player's back, not between him and the map", () => {
     for (const seed of SEEDS) {
       const l = generateCoast(seed, V, 16);

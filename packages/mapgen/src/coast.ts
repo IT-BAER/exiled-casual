@@ -300,8 +300,10 @@ export function generateCoast(
     { id: "exit", ...cellCentre(COAST_CELLS, exitCell.cx, exitCell.cy) },
   ];
   const start = objectiveAnchors[0]!;
+  const bossAt = objectiveAnchors.find((a) => a.id === "boss")!;
   const farEnough = (p: { x: number; y: number }): boolean =>
-    Math.hypot(p.x - start.x, p.y - start.y) >= SPAWN_SAFE_RADIUS;
+    Math.hypot(p.x - start.x, p.y - start.y) >= SPAWN_SAFE_RADIUS &&
+    Math.hypot(p.x - bossAt.x, p.y - bossAt.y) > (BOWL_LEN / 2) * CELL_SIZE;
 
   // Spawns walk the shore. Evenly spaced ALONG it and jittered across it, which
   // is the same rule the assembler follows for the same reason: packs bunched at
@@ -309,7 +311,9 @@ export function generateCoast(
   const spawnRng = createStream(seed, `${contentVersion}.coast.spawns`);
   const spawnSockets: Socket[] = [];
   const firstX = startX + 12;
-  const lastX = bossX - 4;
+  // The line ends where the bay starts, the rocks' own bound, and `farEnough`
+  // drops a socket the snap pulled back in: a pack there wakes with the boss.
+  const lastX = COAST_CELLS - 1 - END_MARGIN - BOWL_LEN;
   for (let i = 0; i < spawnTarget; i++) {
     const x = Math.round(firstX + ((lastX - firstX) * i) / (spawnTarget - 1));
     const lo = Math.ceil(profile.cliff[x]!) + 2;
