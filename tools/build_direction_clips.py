@@ -12,7 +12,7 @@ of the way toward the move. Past a sidestep the clip turns into a backpedal by
 its share of backwardness b = max(0, -cos(yaw)):
   - landing and push-off on the ball of the foot, never the heel;
   - the source's forward trunk lean taken out, a little back lean put in;
-  - shorter steps (`STRIDE_CUT`), hips lower, so the knees bend more;
+  - shorter steps (`STRIDE_CUT`) at the source's hip height: lowered, the knees never straighten;
   - at a full backpedal the chest and arms run half a cycle on, so the
     shoulders still turn and swing against the legs.
 
@@ -57,10 +57,9 @@ KNEE_FOLLOW = 0.4
 # sidestep, up to three times that on a back diagonal: the source's narrow jog
 # brings the diagonal tracks within 2-5 cm, boot on boot.
 WIDEN = 0.0003
-# At a full backpedal: steps this much shorter, hips this much lower (rig
-# units), trunk leaning back this far past upright, foot pitched toe-down.
+# At a full backpedal: steps this much shorter, trunk leaning back this far
+# past upright.
 STRIDE_CUT = 0.25
-HIPS_DROP = 0.0004
 BACK_LEAN = math.radians(4)
 # Share of the jog's 22 cm hip bounce a full backpedal loses: it shuffles, it does not bound.
 BOUNCE_CUT = 0.4
@@ -71,8 +70,9 @@ BOUNCE_CUT = 0.4
 SWING_ARC = 0.0012
 SWING_PITCH = math.radians(8)
 BALL_PITCH = math.radians(12)
-# An ankle within this of its lowest (rig units) is on the ground.
-STANCE_BAND = 0.0003
+# An ankle within this of its lowest (rig units) is on the ground. The heel lifts
+# 4-6 cm before toe-off: a tighter band cuts the stance, and so the step, to a third.
+STANCE_BAND = 0.0006
 # The pack is authored at 30 fps: importing at 30 lands every key on a frame.
 FPS = 30
 LEGS = (("thigh_l", "calf_l", "foot_l", "foot_end_l"), ("thigh_r", "calf_r", "foot_r", "foot_end_r"))
@@ -269,7 +269,7 @@ def build(arm, name, source, degrees, up, forward, rest_pitch):
             # solved after, so only the body above them leans.
             pelvis = bones["pelvis"]
             tilt = Matrix.Rotation((lean + BACK_LEAN) * back, 3, forward.cross(up).normalized())
-            drop = HIPS_DROP * back + (hips[index] - mean_hips) * BOUNCE_CUT * back
+            drop = (hips[index] - mean_hips) * BOUNCE_CUT * back
             pelvis.matrix = Matrix.Translation(-up * drop) @ about(pelvis.head.copy(), tilt) @ pelvis.matrix
             bpy.context.view_layer.update()
             if index == 0:
