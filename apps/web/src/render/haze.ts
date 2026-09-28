@@ -1,4 +1,4 @@
-import { Color4, NoiseProceduralTexture, ParticleSystem, Texture, Vector3 } from "@babylonjs/core";
+import { Color4, ParticleSystem, Texture, Vector3 } from "@babylonjs/core";
 import type { ArcRotateCamera, Scene } from "@babylonjs/core";
 
 /** Looked up by name from `applyBiomeTint`, the same way the lights are. */
@@ -131,8 +131,47 @@ function setHazeColor(ps: ParticleSystem, nr: number, ng: number, nb: number): v
 /** Motes are looked up by name too, but only by the tests: they take no tint. */
 export const MOTES_NAME = "motes";
 
-/** The wander field the motes are advected through. Named so a test can find it. */
-export const MOTES_NOISE_NAME = "motes-drift";
+const fract = (x: number) => x - Math.floor(x);
+
+/** One lattice corner of Babylon's `noise.fragment`: hash22 gradient dotted with the offset. */
+function corner(ix: number, iy: number, fx: number, fy: number, t: number): number {
+  const hx = -1 + 2 * fract(Math.sin(127.1 * ix + 311.7 * iy) * 43758.5453123);
+  const hy = -1 + 2 * fract(Math.sin(269.5 * ix + 183.3 * iy) * 43758.5453123);
+  return Math.sin(hx * 6.283 + t) * fx + Math.sin(hy * 6.283 + t) * fy;
+}
+
+function gradientNoise(x: number, y: number, t: number): number {
+  const ix = Math.floor(x);
+  const iy = Math.floor(y);
+  const fx = x - ix;
+  const fy = y - iy;
+  const wx = fx * fx * (3 - 2 * fx);
+  const wy = fy * fy * (3 - 2 * fy);
+  const f00 = corner(ix, iy, fx, fy, t);
+  const f10 = corner(ix + 1, iy, fx - 1, fy, t);
+  const f01 = corner(ix, iy + 1, fx, fy - 1, t);
+  const f11 = corner(ix + 1, iy + 1, fx - 1, fy - 1, t);
+  const bottom = f00 + (f10 - f00) * wx;
+  return bottom + (f01 + (f11 - f01) * wx - bottom) * wy;
+}
+
+/**
+ * The wander field the motes are advected through: Babylon's NoiseProceduralTexture
+ * (3 octaves, persistence 0.8, brightness 0.5) as the -1..1 force it decodes to,
+ * evaluated on the CPU because a noiseTexture is read back with a sync readPixels
+ * every frame, which stalls an iGPU's whole frame.
+ */
+export function moteDrift(x: number, y: number, t: number): number {
+  let sum = 0;
+  for (let i = 0; i < 3; i++) sum += gradientNoise(x * 2 ** i, y * 2 ** i, t) * 0.8 ** i;
+  return Math.max(-1, Math.min(1, sum));
+}
+
+/** The texture's clock: `animationSpeedFactor` 1.4 at Babylon's 0.01 per frame. */
+const DRIFT_RATE = 1.4 * 0.01;
+
+/** A particle's fixed lookup in the field, as Babylon's `_fetchR` lands it: 0.5..1. */
+const seat = (id: number, k: number) => 0.5 + 0.5 * fract(Math.sin(id * 12.9898 + k * 78.233) * 43758.5453);
 
 /** Small enough to read as a speck and no smaller. The camera shows about 19
  *  world units across a ~2000px canvas, so one world unit is ~100px and this
@@ -197,18 +236,24 @@ export function createMotes(scene: Scene, camera: ArcRotateCamera): ParticleSyst
 
   // ...and the wander on top of it. A launch direction alone gives every speck
   // one straight line for its whole life, which at this size reads as rain.
-  // Babylon samples this field per particle and ADDS it to the direction, so it
-  // is a force and not an offset: small numbers, or the field turns into a
-  // draught with a shape.
-  const drift = new NoiseProceduralTexture(MOTES_NOISE_NAME, 32, scene);
-  drift.animationSpeedFactor = 1.4;
-  // 0.5 is the centre of the range Babylon remaps to -1..1, so the field pushes
-  // both ways. Brighter and every mote drifts the same way, which is a wind.
-  drift.brightness = 0.5;
-  drift.octaves = 3;
-  drift.persistence = 0.8;
-  ps.noiseTexture = drift;
+  // The field is sampled per particle and ADDED to the direction, so it is a
+  // force and not an offset: small numbers, or it turns into a draught with a
+  // shape. Centred on zero, or every mote drifts the same way, which is a wind.
   ps.noiseStrength = new Vector3(0.12, 0.08, 0.12);
+  const update = ps.updateFunction;
+  let time = 0;
+  ps.updateFunction = (particles) => {
+    time += scene.getAnimationRatio() * DRIFT_RATE;
+    const step = ps._scaledUpdateSpeed;
+    const s = ps.noiseStrength;
+    for (const p of particles) {
+      const id = p.id;
+      p.direction.x += moteDrift(seat(id, 0), seat(id, 1), time) * s.x * step;
+      p.direction.y += moteDrift(seat(id, 2), seat(id, 3), time) * s.y * step;
+      p.direction.z += moteDrift(seat(id, 4), seat(id, 5), time) * s.z * step;
+    }
+    update(particles);
+  };
 
   ps.preWarmCycles = 120;
   ps.preWarmStepOffset = 3;

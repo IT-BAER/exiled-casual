@@ -17,7 +17,7 @@ import {
 import { applyAtmosphere, BETA_AT_DEFAULT, createScene, VOID_COLOR } from "./engine";
 import { applyBiomeTint } from "./level";
 import { LIGHT_POOL } from "./lights";
-import { HAZE_HEIGHT, HAZE_MAX_SIZE, HAZE_NAME, MOTES_NAME, MOTES_NOISE_NAME } from "./haze";
+import { HAZE_HEIGHT, HAZE_MAX_SIZE, HAZE_NAME, MOTES_NAME, moteDrift } from "./haze";
 import { BIOMES } from "@exiled/content-runtime";
 import { blowFrom, SnapshotRenderer, syncActionAnimation } from "./renderer";
 import { makeMesh, updateTelegraph } from "./meshes";
@@ -381,8 +381,20 @@ describe("atmosphere", () => {
     expect(motes.gravity.y).toBe(0);
     // ...and each one wanders instead of running its launch direction in a
     // straight line for eleven seconds.
-    expect(motes.noiseTexture?.name).toBe(MOTES_NOISE_NAME);
-    expect(motes.noiseStrength.x).toBeGreaterThan(0);
+    // The wander is evaluated on the CPU: a noiseTexture is read back from the
+    // GPU with a sync readPixels every frame, ~40% of an iGPU's frame rate.
+    expect(motes.noiseTexture).toBeFalsy();
+    const a = moteDrift(0.6, 0.7, 0);
+    expect(a).not.toBe(moteDrift(0.6, 0.7, 1));
+    expect(a).not.toBe(moteDrift(0.9, 0.55, 0));
+    for (let i = 0; i < 200; i++) {
+      const d = moteDrift(0.5 + (i % 20) / 40, 0.5 + i / 400, i * 0.1);
+      expect(Math.abs(d)).toBeLessThanOrEqual(1);
+    }
+    const p = motes.particles[0]!;
+    const before = p.direction.clone();
+    motes.updateFunction([p]);
+    expect(p.direction.equals(before)).toBe(false);
 
     const stops = motes.getColorGradients()!;
     expect(stops[0]!.color1.a).toBe(0);
