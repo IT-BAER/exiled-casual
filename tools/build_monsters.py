@@ -1764,6 +1764,28 @@ def bog_drowned():
     return c
 
 
+def drowned_grubling():
+    """The Drowned at half size and twice the belly: the swamp's pack of eight."""
+    c = Creature("monster.drowned_grubling.v1", "swamp", 0.25, 0.95)
+    spine = c.body.chain(
+        [(0, -0.02, 0.38), (0, 0.01, 0.55), (0, 0.03, 0.69), (0, 0.02, 0.78)],
+        [(0.15, 0.13), (0.25, 0.19), (0.20, 0.14), (0.13, 0.10)])
+    neck = c.body.chain([(0.03, 0.08, 0.83)], [0.065], parent=spine[-1])
+    # A head too big for the body, hanging forward: what reads as young from above.
+    c.body.chain([(0.07, 0.18, 0.86), (0.08, 0.27, 0.83)], [0.11, 0.065], parent=neck[-1])
+    c.body.add(slab((-0.10, 0.16, 0.60), (0.10, 0.05, 0.22), tilt=0.22), BONES)
+    c.body.add(slab((-0.10, 0.19, 0.60), (0.055, 0.035, 0.16), tilt=0.22), GLOWS)
+    for side in (-1, 1):
+        c.body.add(ellipsoid((0.07 + side * 0.035, 0.27, 0.88), (0.02, 0.02, 0.02), 6, 4), GLOWS)
+        c.body.add(slab((side * 0.21, -0.04, 0.69), (0.15, 0.19, 0.06), tilt=0.25))
+    for i, side in enumerate((-1, 1)):
+        c.arm(i, [(side * 0.20, 0.0, 0.72), (side * 0.28, 0.09, 0.45), (side * 0.24, 0.19, 0.14)],
+              [0.055, 0.045, 0.035])
+    for i, side in enumerate((-1, 1)):
+        c.leg(i, (side * 0.12, 0.0, 0.40), (side * 0.15, 0.01, 0.0), 0.065, 0.045, bend=0.04)
+    return c
+
+
 def thornhide_boar():
     """Bark plates over a boar's mass, tusks up, head carried low to charge."""
     c = Creature("monster.thornhide_boar.v1", "forest", 0.35, 1.4)
@@ -2040,6 +2062,7 @@ BOSS_FAMILIES = {
 SPECIES = [
     cinder_imp, vaal_husk, sand_skitterer, bramble_whelp,
     dune_spitter, fen_wisp, hoarfrost_spitter,
+    drowned_grubling,
     vaal_construct, bog_drowned, thornhide_boar,
     blood_sentinel, sunbaked_colossus, rotting_behemoth,
     cinder_warden, sirrath, mother_vhal, ghaltrek,

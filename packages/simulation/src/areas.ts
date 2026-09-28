@@ -177,11 +177,12 @@ export function spawnPortalRing(world: World, count: number): void {
  * Where the members of one pack stand relative to the socket they share. Literal
  * fixed-point, never trig: the sim stays deterministic.
  *
- * Eight entries, because the largest pack is a swarm of 4 and a 100% pack-size
- * roll doubles it. At five entries the extras landed back on top of the first
- * three and a doubled swarm read as four monsters, not eight.
+ * Sixteen entries, because the largest pack is a swarm of 8 and a 100% pack-size
+ * roll doubles it. With too few entries the extras land back on top of the first
+ * ones and a doubled swarm reads as half its count. Every pair stands at least a
+ * metre apart, room for two swarm bodies.
  */
-const PACK_SPREAD: readonly { dx: number; dy: number }[] = [
+export const PACK_SPREAD: readonly { dx: number; dy: number }[] = [
   { dx: fp(0), dy: fp(0) },
   { dx: fp(1.4), dy: fp(0.9) },
   { dx: fp(-1.4), dy: fp(-0.9) },
@@ -190,6 +191,14 @@ const PACK_SPREAD: readonly { dx: number; dy: number }[] = [
   { dx: fp(0), dy: fp(1.7) },
   { dx: fp(0), dy: fp(-1.7) },
   { dx: fp(2.2), dy: fp(0) },
+  { dx: fp(-2.2), dy: fp(0) },
+  { dx: fp(1.3), dy: fp(2.6) },
+  { dx: fp(-1.3), dy: fp(-2.6) },
+  { dx: fp(1.3), dy: fp(-2.6) },
+  { dx: fp(-1.3), dy: fp(2.6) },
+  { dx: fp(3.2), dy: fp(0) },
+  { dx: fp(-3.2), dy: fp(0) },
+  { dx: fp(0), dy: fp(3.2) },
 ];
 
 // Same idiom as rules/items.ts and rules/vendor.ts: every consumer of

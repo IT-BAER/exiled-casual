@@ -118,10 +118,11 @@ export interface GoldPile { amount: number; jackpot: boolean }
  * 50..150%, so a tier-1 normal pile averages 5 against a 64-gold magic item.
  *
  * @param roll deterministic hash from the caller, on a stream of its own.
+ * @param sharePct the kill's share of a whole monster: scales the chance, never the pile.
  */
-export function goldDrop(roll: number, monsterRarity: number, areaLevel: number): GoldPile | null {
+export function goldDrop(roll: number, monsterRarity: number, areaLevel: number, sharePct = 100): GoldPile | null {
   const r = roll >>> 0;
-  if (r % 1000 >= (GOLD_CHANCE_PERMILLE[monsterRarity] ?? 0)) return null;
+  if (r % 1000 >= Math.trunc(((GOLD_CHANCE_PERMILLE[monsterRarity] ?? 0) * sharePct) / 100)) return null;
   const base = (1 + Math.trunc(Math.max(0, areaLevel) / 2)) * (GOLD_RARITY_MULT[monsterRarity] ?? 1);
   const amount = Math.max(1, Math.trunc((base * (50 + ((r >>> 10) % 101))) / 100));
   const jackpot = (r >>> 17) % GOLD_JACKPOT_ONE_IN === 0;

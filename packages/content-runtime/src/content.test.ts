@@ -15,6 +15,7 @@ import {
   RARE_TEMPLATES,
   rareTemplate,
   MONSTER_POOLS,
+  PACK_COUNT,
   pickPack,
   DEFAULT_ATTACK_BY_CLASS,
 } from "./index.js";
@@ -211,11 +212,19 @@ describe("monster pools", () => {
     }
   });
 
-  it("no two biomes field the same mix of archetypes", () => {
-    const sigs = BIOME_IDS.map((id) =>
-      MONSTER_POOLS[id].map((e) => MONSTERS.get(e.defId)!.archetype).sort().join(","),
-    );
+  it("no two biomes field the same set of species", () => {
+    const sigs = BIOME_IDS.map((id) => MONSTER_POOLS[id].map((e) => e.defId).sort().join(","));
     expect(new Set(sigs).size).toBe(BIOME_IDS.length);
+  });
+
+  // PoE's trash is a crowd: every area has a pack you clear by the handful.
+  it("every biome fields a swarm, and a swarm is the biggest pack of eight or more", () => {
+    for (const id of BIOME_IDS) {
+      const kinds = MONSTER_POOLS[id].map((e) => MONSTERS.get(e.defId)!.archetype);
+      expect(kinds, id).toContain("swarm");
+    }
+    expect(PACK_COUNT.swarm).toBeGreaterThanOrEqual(8);
+    for (const a of MONSTER_ARCHETYPES) if (a !== "swarm") expect(PACK_COUNT[a]).toBeLessThan(PACK_COUNT.swarm);
   });
 
   it("every archetype appears in some biome", () => {

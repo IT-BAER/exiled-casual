@@ -12,7 +12,7 @@ import {
   splitGemXp, gainGemXp, maxGemLevel,
 } from "@exiled/rules";
 import { recomputePlayerStats } from "../derived";
-import { ITEM_POOLS, baseOf, currencyItem, currencyForRoll, waystoneItem, FREE_ATTACKS } from "@exiled/content-runtime";
+import { ITEM_POOLS, baseOf, currencyItem, currencyForRoll, waystoneItem, FREE_ATTACKS, killSharePct } from "@exiled/content-runtime";
 import { grantSkills } from "../persist";
 import { dropGold } from "./gold";
 import type { CollisionRef } from "../collision";
@@ -67,6 +67,7 @@ export function registerDeath(sim: Simulation, collisionRef?: CollisionRef): voi
       const s = sessionE !== undefined ? world.get<SessionC>(sessionE, "session") : undefined;
       const isBoss = world.has(e, "boss");
       const isRare = world.get<MonsterC>(e, "monster")?.rare === 1;
+      const share = isBoss || isRare ? 100 : killSharePct(world.get<MonsterC>(e, "monster")?.defId ?? "");
 
       // A dying map boss completes the active Atlas node before it is destroyed.
       if (isBoss && s && s.area === "map" && s.activeNodeId !== "") {
@@ -125,7 +126,7 @@ export function registerDeath(sim: Simulation, collisionRef?: CollisionRef): voi
         if (pos) {
           const mr = isBoss ? MR_UNIQUE : isRare ? MR_RARE : MR_NORMAL;
           const ws = waystoneScaleFor(s.waystoneSeed);
-          const area = quantityScaleMilli(MR_NORMAL, ws.quantityPct, 0);
+          const area = Math.trunc((quantityScaleMilli(MR_NORMAL, ws.quantityPct, 0) * share) / 100);
           // A boss can never pay nothing: docs/09 rule 4, the map closes on a
           // guaranteed payout. Everything above the floor stays fully variable.
           const count = Math.max(dropCount(fnv1a32(`count:${s.mapSeed}:${tick}:${e}`), mr, area), isBoss ? 1 : 0);
@@ -151,7 +152,7 @@ export function registerDeath(sim: Simulation, collisionRef?: CollisionRef): voi
             world.set<Position>(ge, "position", { x: pos.x + off.dx + ring, y: pos.y + off.dy + ring });
             world.set<ItemC>(ge, "item", { item, w: base.w, h: base.h });
           }
-          dropGold(world, pos.x, pos.y, `${s.mapSeed}:${tick}:${e}`, mr, areaLevel(s.areaTier));
+          dropGold(world, pos.x, pos.y, `${s.mapSeed}:${tick}:${e}`, mr, areaLevel(s.areaTier), null, share);
         }
       }
 
@@ -166,7 +167,7 @@ export function registerDeath(sim: Simulation, collisionRef?: CollisionRef): voi
           // The stone's experience modifier is the last thing applied, so it
           // scales what the kill was actually worth after the level penalty.
           const base = xpAward(prog.level, areaLevel(s.areaTier), kind);
-          const gain = Math.trunc((base * (100 + waystoneScaleFor(s.waystoneSeed).experiencePct)) / 100);
+          const gain = Math.trunc((Math.trunc((base * share) / 100) * (100 + waystoneScaleFor(s.waystoneSeed).experiencePct)) / 100);
           const next = gainXp(prog.level, prog.xp, gain);
           world.set<ProgressC>(sessionE, "progress", { ...next, gold: prog.gold });
 

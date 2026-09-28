@@ -91,6 +91,7 @@ const MATERIAL: Record<string, string> = {
   "monster.sand_skitterer.v1": "husk",
   "monster.dune_spitter.v1": "husk",
   "monster.bog_drowned.v1": "bog",
+  "monster.drowned_grubling.v1": "bog",
   "monster.rotting_behemoth.v1": "bog",
   "monster.mother_vhal.v1": "bog",
   "monster.blood_sentinel.v1": "beast",

@@ -8,7 +8,7 @@ import type { BiomeId, MonsterDef } from "@exiled/content-schema";
 import { makeRare } from "@exiled/rules";
 import { createCombatSim, spawnLabActors } from "./combat-sim";
 import { gridCollision, sweep } from "./collision";
-import { spawnMonster } from "./areas";
+import { spawnMonster, PACK_SPREAD } from "./areas";
 import { Simulation } from "./loop";
 import type { Command } from "./loop";
 import type { World, Entity } from "./ecs";
@@ -530,21 +530,22 @@ function secondsToClearPack(def: MonsterDef, count: number): number {
 }
 
 /**
- * Spawn one socket of every species in the biome (PACK_COUNT per archetype)
+ * Spawn one socket of every species in the biome (PACK_COUNT per archetype),
+ * each clustered on the map's own PACK_SPREAD round a socket 4 m from the next,
  * and return the seconds until an idle, non-casting player dies. Models the
  * "worst pack room" for the biome at Tier 1 with no gear.
  */
 function secondsToKillIdlePlayer(biomeId: BiomeId): number {
   const r = rig();
-  let offset = 0;
-  for (const entry of MONSTER_POOLS[biomeId]) {
+  const pool = MONSTER_POOLS[biomeId];
+  pool.forEach((entry, k) => {
     const def = MONSTERS.get(entry.defId)!;
-    const count = PACK_COUNT[def.archetype];
-    for (let i = 0; i < count; i++) {
-      spawnMonster(r.world, def, fp((offset + i) * 1.5 - 2), SPAWN_Y, false);
+    const sx = fp((k - (pool.length - 1) / 2) * 4);
+    for (let i = 0; i < PACK_COUNT[def.archetype]; i++) {
+      const slot = PACK_SPREAD[i % PACK_SPREAD.length]!;
+      spawnMonster(r.world, def, sx + slot.dx, SPAWN_Y + slot.dy, false);
     }
-    offset += count;
-  }
+  });
   return ticksToDeath(r) / HZ;
 }
 
@@ -572,6 +573,8 @@ describe("archetype time-to-kill (Tier 1, reference character)", () => {
 
 it("a full biome pack kills a stationary reference character in under 12s", () => {
   // One socket of each of Vaal Stone's three archetypes (swarm+brute+heavy), no dodge.
+  // Measured with swarm 8 x (life 28, hit 0.9): vaal_stone 9.7s, desert 8.0, swamp 7.8,
+  // forest 10.5, coast 7.8. A pack spread along a line never lands together.
   const seconds = secondsToKillIdlePlayer("vaal_stone");
   expect(seconds).toBeLessThan(12);
 });

@@ -129,6 +129,14 @@ describe("goldDrop", () => {
     expect(hits(3)).toBe(20000);
   });
 
+  it("a half share halves the chance, never the pile", () => {
+    const all = rolls(20000);
+    const half = all.filter((r) => goldDrop(r, 0, 8, 50) !== null);
+    expect(half.length / 20000).toBeGreaterThan(0.075);
+    expect(half.length / 20000).toBeLessThan(0.125);
+    for (const r of half) expect(goldDrop(r, 0, 8, 50)).toEqual(goldDrop(r, 0, 8));
+  });
+
   it("varies the pile between half and one and a half times its base, jackpots aside", () => {
     const amounts = rolls(20000).map((r) => goldDrop(r, 2, 8)).filter((g) => g !== null && !g.jackpot).map((g) => g!.amount);
     const base = (1 + 8 / 2) * GOLD_RARITY_MULT[2]!;

@@ -353,7 +353,7 @@ describe("registerDeath", () => {
   /** A world with a session at `area`/`areaTier`, a progress row, and one dead monster. */
   function makeXpKill(opts: {
     area: "hideout" | "map"; areaTier: number; xp: number; level?: number;
-    rare?: 0 | 1; boss?: boolean;
+    rare?: 0 | 1; boss?: boolean; defId?: string;
   }) {
     const sim = new Simulation();
     registerDeath(sim);
@@ -373,7 +373,7 @@ describe("registerDeath", () => {
     w.set(sessionE, "equipment", { slots: {} });
 
     const m = w.create();
-    w.set(m, "monster", { defId: "d", moveSpeed: 0, bodyRadius: 0, attackRange: 0, attackCooldownTicks: 0, attackDamage: 0, attackType: 1, attackReadyTick: 0, state: "idle", rare: opts.rare ?? 0, summoned: 0 });
+    w.set(m, "monster", { defId: opts.defId ?? "d", moveSpeed: 0, bodyRadius: 0, attackRange: 0, attackCooldownTicks: 0, attackDamage: 0, attackType: 1, attackReadyTick: 0, state: "idle", rare: opts.rare ?? 0, summoned: 0 });
     w.set(m, "health", { life: 0, maxLife: fp(10) });
     if (opts.boss) w.set(m, "boss", { phase: 1, nextAbilityTick: 0, spawnX: 0, spawnY: 0, rootedUntilTick: 0 });
 
@@ -389,6 +389,21 @@ describe("registerDeath", () => {
     const { sim, world, sessionE } = makeXpKill({ area: "map", areaTier: 3, xp: 0, level: 20 });
     sim.step([]);
     expect(world.get<ProgressC>(sessionE, "progress")).toEqual({ level: 20, xp: 34, gold: 0 });
+  });
+
+  it("a swarm body is worth half a normal: a pack of eight pays what four did", () => {
+    const { sim, world, sessionE } = makeXpKill({ area: "map", areaTier: 3, xp: 0, level: 20, defId: "monster.vaal_husk.v1" });
+    sim.step([]);
+    expect(world.get<ProgressC>(sessionE, "progress")!.xp).toBe(17);
+  });
+
+  it("a rare swarm body is still a whole rare", () => {
+    const whole = makeXpKill({ area: "map", areaTier: 3, xp: 0, level: 20, rare: 1 });
+    const swarm = makeXpKill({ area: "map", areaTier: 3, xp: 0, level: 20, rare: 1, defId: "monster.vaal_husk.v1" });
+    whole.sim.step([]);
+    swarm.sim.step([]);
+    expect(swarm.world.get<ProgressC>(swarm.sessionE, "progress")!.xp)
+      .toBe(whole.world.get<ProgressC>(whole.sessionE, "progress")!.xp);
   });
 
   it("a boss is worth forty normals", () => {

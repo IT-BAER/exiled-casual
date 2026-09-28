@@ -30,18 +30,21 @@ import {
 // Density pass: more bodies per map (mapgen SPAWN_TARGET), each one weaker, so
 // a pack reads as a swarm rather than a slower version of the same fight.
 const LIFE = {
-  swarm: fp(56),    // was 66, x0.85
+  swarm: fp(28),    // was 56: a pack of eight weighs what four did
   brute: fp(293),   // was 345, x0.85
   shooter: fp(69),  // was 81, x0.85
   heavy: fp(306),   // was 360, x0.85
   boss: fp(630),    // unchanged
 } as const;
 const HIT = {
-  swarm: fp(1.8),   // was 3, x0.6
+  swarm: fp(0.9),   // was 1.8, halved with the life for twice the bodies
   brute: fp(5.4),   // was 9, x0.6
   shooter: fp(3.6), // was 6, x0.6
   heavy: fp(3.6),   // was 6, x0.6
 } as const;
+
+// Eight to a pack need room to stand in one: a smaller body than any other kind.
+const SWARM_RADIUS = fp(0.32);
 
 const MONSTER_DEFS: MonsterDef[] = [
   {
@@ -191,7 +194,7 @@ const MONSTER_DEFS: MonsterDef[] = [
     id: "monster.vaal_husk.v1", name: "Vaal Husk", archetype: "swarm",
     maxLifeFixed: LIFE.swarm, moveSpeedFixed: fp(2.6), attackRangeFixed: fp(1.1),
     attackDamage: { type: "physical", amountFixed: HIT.swarm },
-    attackCooldownTicks: 40, radiusFixed: fp(0.42),
+    attackCooldownTicks: 40, radiusFixed: SWARM_RADIUS,
     defenses: { resPct: resBlock(), armourFixed: fp(0) },
   },
   {
@@ -215,7 +218,7 @@ const MONSTER_DEFS: MonsterDef[] = [
     id: "monster.sand_skitterer.v1", name: "Sand Skitterer", archetype: "swarm",
     maxLifeFixed: LIFE.swarm, moveSpeedFixed: fp(2.6), attackRangeFixed: fp(1.1),
     attackDamage: { type: "physical", amountFixed: HIT.swarm },
-    attackCooldownTicks: 40, radiusFixed: fp(0.42),
+    attackCooldownTicks: 40, radiusFixed: SWARM_RADIUS,
     defenses: { resPct: resBlock({ fire: 20 }), armourFixed: fp(0) },
   },
   {
@@ -237,7 +240,14 @@ const MONSTER_DEFS: MonsterDef[] = [
     heavy: { windupTicks: 30, radiusFixed: fp(2.6), damageFixed: fp(15), cooldownTicks: 150, rangeFixed: fp(6.5) },
   },
 
-  // --- Swamp: brute, shooter, heavy. Slow, wet, and nothing you can outrun in a line.
+  // --- Swamp: all four. Slow, wet, and nothing you can outrun in a line.
+  {
+    id: "monster.drowned_grubling.v1", name: "Drowned Grubling", archetype: "swarm",
+    maxLifeFixed: LIFE.swarm, moveSpeedFixed: fp(2.6), attackRangeFixed: fp(1.1),
+    attackDamage: { type: "physical", amountFixed: HIT.swarm },
+    attackCooldownTicks: 40, radiusFixed: SWARM_RADIUS,
+    defenses: { resPct: resBlock({ cold: 10 }), armourFixed: fp(0) },
+  },
   {
     id: "monster.bog_drowned.v1", name: "Bog Drowned", archetype: "brute",
     maxLifeFixed: LIFE.brute, moveSpeedFixed: fp(1.8), attackRangeFixed: fp(1.6),
@@ -270,7 +280,7 @@ const MONSTER_DEFS: MonsterDef[] = [
     id: "monster.bramble_whelp.v1", name: "Bramble Whelp", archetype: "swarm",
     maxLifeFixed: LIFE.swarm, moveSpeedFixed: fp(2.6), attackRangeFixed: fp(1.1),
     attackDamage: { type: "physical", amountFixed: HIT.swarm },
-    attackCooldownTicks: 40, radiusFixed: fp(0.42),
+    attackCooldownTicks: 40, radiusFixed: SWARM_RADIUS,
     defenses: { resPct: resBlock(), armourFixed: fp(0) },
   },
   {
@@ -362,25 +372,36 @@ export function rareTemplate(n: number, archetype?: MonsterArchetype): RareModif
 
 /**
  * How many of an archetype stand at one spawn socket. Content's number, not the
- * generator's: "a swarm is four" is a fact about the monster. The layout still
+ * generator's: "a swarm is eight" is a fact about the monster. The layout still
  * owns *where* a fight may stand — a modifier must never be able to put a
  * monster inside a wall.
  */
 export const PACK_COUNT: Record<MonsterArchetype, number> = {
-  swarm: 4, brute: 1, shooter: 2, heavy: 1,
+  swarm: 8, brute: 1, shooter: 2, heavy: 1,
 };
+
+/**
+ * What one ordinary kill pays (drop chance, gold chance, experience) as a percent
+ * of a whole monster. A swarm of eight pays what the swarm of four it replaced
+ * did; a rare or a boss is always whole.
+ */
+export const KILL_SHARE_PCT: Record<MonsterArchetype, number> = {
+  swarm: 50, brute: 100, shooter: 100, heavy: 100,
+};
+
+/** The share for one def id; an unknown id (a test double, a summon) is whole. */
+export function killSharePct(defId: string): number {
+  const def = MONSTERS.get(defId);
+  return def ? KILL_SHARE_PCT[def.archetype] : 100;
+}
 
 export interface PoolEntry { defId: string; weight: number }
 
 /**
- * A different mix of archetypes per biome, so no two biomes ask the same
- * question. A heavy is the rarest roll in any pool because it is the loudest:
- * three in a map is a fight, ten is a chore.
- *
- * Four biomes took the four distinct three-of-four mixes and exhausted them, so
- * the strand fields all FOUR archetypes rather than a fifth three that would
- * have to repeat one. That is the right shape for it anyway: it is the first map
- * anyone runs, and meeting one of each is how a player learns there are kinds.
+ * A different mix of species per biome. Every biome fields a swarm, because
+ * PoE's trash is a crowd cleared by the handful; what changes is the rest. A
+ * heavy is the rarest roll in any pool because it is the loudest: three in a map
+ * is a fight, ten is a chore.
  */
 export const MONSTER_POOLS: Record<BiomeId, readonly PoolEntry[]> = {
   vaal_stone: [
@@ -394,6 +415,7 @@ export const MONSTER_POOLS: Record<BiomeId, readonly PoolEntry[]> = {
     { defId: "monster.sunbaked_colossus.v1", weight: 1 },
   ],
   swamp: [
+    { defId: "monster.drowned_grubling.v1", weight: 3 },
     { defId: "monster.bog_drowned.v1", weight: 2 },
     { defId: "monster.fen_wisp.v1", weight: 2 },
     { defId: "monster.rotting_behemoth.v1", weight: 1 },

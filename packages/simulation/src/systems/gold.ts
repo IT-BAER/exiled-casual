@@ -17,9 +17,9 @@ const GOLD_OFFSET = { dx: fp(0), dy: fp(1.1) };
  */
 export function dropGold(
   world: World, x: number, y: number, key: string, monsterRarity: number, level: number,
-  collision?: Collision | null,
+  collision?: Collision | null, sharePct = 100,
 ): void {
-  const pile = goldDrop(fnv1a32(`gold:${key}`), monsterRarity, level);
+  const pile = goldDrop(fnv1a32(`gold:${key}`), monsterRarity, level, sharePct);
   if (pile === null) return;
   const px = x + GOLD_OFFSET.dx, py = y + GOLD_OFFSET.dy;
   const on = collision && !collision.isWalkable(px, py, fp(0.3)) ? { x, y } : { x: px, y: py };
