@@ -28,7 +28,7 @@ import sys
 import bpy
 from mathutils import Vector
 
-WARDROBE = "D:/VSC/exiled-casual/apps/web/public/models/wardrobe.glb"
+WARDROBE = "D:/VSC/exiled-casual/assets/characters/wardrobe.glb"
 
 RIG_OF = {"male": "Armature", "female": "Armature_female"}
 

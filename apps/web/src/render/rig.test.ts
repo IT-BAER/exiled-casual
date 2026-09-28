@@ -370,8 +370,9 @@ describe("what worn gear hides of the body", () => {
 });
 
 describe("wardrobe asset", () => {
-  const MODELS = fileURLToPath(new URL("../../public/models/", import.meta.url));
-  const glb = readFileSync(`${MODELS}wardrobe.glb`);
+  // Blender's unpacked output: this suite reads raw float accessors, and the
+  // served copy is meshopt-packed. The loader-driven suites below read that one.
+  const glb = readFileSync(fileURLToPath(new URL("../../../../assets/characters/wardrobe.glb", import.meta.url)));
   const json = JSON.parse(
     glb.subarray(20, 20 + glb.readUInt32LE(12)).toString("utf8"),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

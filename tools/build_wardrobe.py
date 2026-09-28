@@ -28,7 +28,7 @@ from mathutils import Matrix, Vector
 
 SRC = "D:/VSC/exiled-casual/assets/characters/"
 GEAR_SRC = "D:/VSC/exiled-casual/assets/props/source/trellis_local/"
-OUT = "D:/VSC/exiled-casual/apps/web/public/models/wardrobe.glb"
+OUT = "D:/VSC/exiled-casual/assets/characters/wardrobe.glb"
 FIT_REPORT = "D:/VSC/exiled-casual/assets/characters/gear-fit.json"
 
 # The armature the runtime drives. Only the male is wired today; the female

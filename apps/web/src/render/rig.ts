@@ -10,6 +10,7 @@ import {
   TransformNode,
   Vector3,
   LoadAssetContainerAsync,
+  MeshoptCompression,
   type AssetContainer,
   type IAnimationKey,
   type InstantiatedEntries,
@@ -18,6 +19,7 @@ import {
   type Scene,
 } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
+import { MeshoptDecoder } from "meshoptimizer/decoder";
 import { SkirtSim, type SkirtCollider } from "./skirt";
 import { ARROW_LENGTH, buildArrow, swingTrail } from "./skill-fx";
 
@@ -309,6 +311,16 @@ export function speedRatioFor(clip: RigClip, speed: number): number {
  * what keeps a mid-stride swap from restarting the walk cycle.
  */
 const WARDROBE_URL = "/models/wardrobe.glb";
+
+// The served wardrobe is meshopt-packed (`tools/pack_wardrobe.mjs`). Babylon's
+// default decoder is a script tag off its CDN, which the CSP blocks and node
+// tests cannot load, so the loader gets the bundled decoder instead.
+(MeshoptCompression as unknown as { _Default: unknown })._Default = {
+  async decodeGltfBufferAsync(source: Uint8Array, count: number, stride: number, mode: string, filter?: string) {
+    await MeshoptDecoder.ready;
+    return MeshoptDecoder.decodeGltfBufferAsync(count, stride, source, mode, filter);
+  },
+};
 
 /** The skeleton the runtime drives. The wardrobe also ships `Armature_female`,
  * whose 65 bones carry the same names, and nothing selects her yet. */

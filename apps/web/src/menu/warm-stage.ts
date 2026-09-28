@@ -3,7 +3,7 @@
  *
  * Reaching the roster otherwise starts the whole chain at once and strictly in
  * order: the lazy stage chunk (Babylon, ~3.9 MB built), then wardrobe.glb and
- * anim-library.glb (~7 MB together), then the parse, then the shader compile,
+ * anim-library.glb (~15 MB together), then the parse, then the shader compile,
  * and only then does anybody appear in the hall. None of it depends on which
  * character is picked, so all of it can happen during the seconds spent reading
  * the menu and choosing local or online.

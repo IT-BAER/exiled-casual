@@ -39,7 +39,7 @@ from build_cast_mirror import read_glb, write_glb  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ANIMS = os.path.join(ROOT, "apps/web/public/models/anim-library.glb")
-WARDROBE = os.path.join(ROOT, "apps/web/public/models/wardrobe.glb")
+WARDROBE = os.path.join(ROOT, "assets/characters/wardrobe.glb")
 SCRATCH = os.path.join(tempfile.gettempdir(), "exiled-bow-clip.glb")
 
 CLIP = "Rig|Bow_Shoot"
