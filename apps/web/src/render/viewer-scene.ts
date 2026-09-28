@@ -89,6 +89,7 @@ export const VIEWER_CLIPS: readonly ViewerClip[] = [
   { key: "7", clip: "runBack", label: "Back", speed: 3.5, rel: Math.PI },
   { key: "8", clip: "runStrafeR", label: "Right", speed: 3.5, rel: Math.PI / 2 },
   { key: "9", clip: "runStrafeL", label: "Left", speed: 3.5, rel: -Math.PI / 2 },
+  { key: "0", clip: "runBackR", label: "Back-right", speed: 3.5, rel: (Math.PI * 3) / 4 },
 ];
 
 /**
@@ -260,6 +261,14 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
 
   let host: Mesh | null = null;
   let rig: RigActor | null = null;
+  // Locomotion is re-asserted every frame, as the game does: the hips ease into
+  // their turn and the direction blend follows them.
+  let moving: ViewerClip | null = null;
+  scene.onBeforeRenderObservable.add(() => {
+    if (!rig || !moving || moving.speed === undefined) return;
+    rig.setMoveAngle(moving.rel ?? 0);
+    rig.setLocomotion(moving.speed);
+  });
   let looks: Looks | null = null;
 
   const takeDown = () => {
@@ -320,6 +329,7 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
     play(entry) {
       if (rig === null) return;
       if (entry.speed !== undefined) {
+        moving = entry;
         rig.setMoveAngle(entry.rel ?? 0);
         rig.setLocomotion(entry.speed);
         return;

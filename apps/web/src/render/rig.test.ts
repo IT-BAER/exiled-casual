@@ -21,9 +21,11 @@ import {
   HEAD_MAX,
   clipForSpeed,
   CLIP_NAME,
-  legGait,
-  LEG_TWIST_MAX,
-  STRAFE_ANGLE,
+  directionBlend,
+  DIRECTIONS,
+  hipTurn,
+  HIP_TURN,
+  type RigClip,
   idleRatio,
   indexRigSubtree,
   weaponTipLocal,
@@ -76,48 +78,72 @@ describe("clipForSpeed", () => {
  * PoE2's run-and-gun: the body faces the target and the keys carry it, so the
  * legs walk the move's way off the facing. `rel` is the move's yaw off the facing.
  */
-describe("legGait", () => {
+describe("directionBlend", () => {
   const deg = (d: number) => (d * Math.PI) / 180;
+  const clipsAt = (legYaw: number) => {
+    const b = directionBlend(legYaw);
+    return { from: DIRECTIONS[b.from]!.run, to: DIRECTIONS[b.to]!.run, w: b.w };
+  };
 
-  it("runs forward with straight hips when the move is the facing", () => {
-    expect(legGait(0, "fwd")).toEqual({ gait: "fwd", legs: 0 });
+  it("turns the hips part way to a sidestep, never a quarter turn, and not at all ahead or behind", () => {
+    expect(hipTurn(0)).toBeCloseTo(0, 9);
+    expect(hipTurn(Math.PI)).toBeCloseTo(0, 9);
+    expect(hipTurn(Math.PI / 2)).toBeCloseTo(HIP_TURN, 9);
+    expect(hipTurn(-Math.PI / 2)).toBeCloseTo(-HIP_TURN, 9);
+    expect(HIP_TURN).toBeGreaterThan(deg(20));
+    expect(HIP_TURN).toBeLessThan(deg(50));
   });
 
-  it("backpedals with straight hips when the move is behind him", () => {
-    const g = legGait(Math.PI, "fwd");
-    expect(g.gait).toBe("back");
-    expect(Math.abs(g.legs)).toBeLessThan(1e-9);
+  it("lands a sidestep's leftover yaw on the strafe clip alone", () => {
+    const right = clipsAt(Math.PI / 2 - hipTurn(Math.PI / 2));
+    expect(right.w === 0 ? right.from : right.w === 1 ? right.to : "blend").toBe("runStrafeR");
+    const left = clipsAt(-Math.PI / 2 - hipTurn(-Math.PI / 2));
+    expect(left.w === 0 ? left.from : left.w === 1 ? left.to : "blend").toBe("runStrafeL");
   });
 
-  it("strafes to the side with the hips turned part way, not a quarter turn", () => {
-    const right = legGait(Math.PI / 2, "fwd");
-    expect(right.gait).toBe("right");
-    expect(right.legs).toBeCloseTo(Math.PI / 2 - STRAFE_ANGLE, 9);
-    const left = legGait(-Math.PI / 2, "fwd");
-    expect(left.gait).toBe("left");
-    expect(left.legs).toBeCloseTo(-(Math.PI / 2 - STRAFE_ANGLE), 9);
-    // A natural turn: well short of the quarter turn a forward clip needed.
-    expect(Math.abs(right.legs)).toBeGreaterThan(deg(20));
-    expect(Math.abs(right.legs)).toBeLessThan(deg(50));
+  it("plays one clip straight ahead and straight behind", () => {
+    const only = (y: number) => {
+      const c = clipsAt(y);
+      return c.w === 0 ? c.from : c.w === 1 ? c.to : "blend";
+    };
+    expect(only(0)).toBe("run");
+    expect(only(Math.PI)).toBe("runBack");
+    expect(only(-Math.PI)).toBe("runBack");
   });
 
-  it("holds its gait across each border, so the legs do not flicker", () => {
-    for (const [a, b, rel] of [["fwd", "right", deg(30)], ["right", "back", deg(118)]] as const) {
-      expect(legGait(rel, a).gait).toBe(a);
-      expect(legGait(rel, b).gait).toBe(b);
+  it("blends the two neighbours in between, weight rising with the yaw", () => {
+    const a = clipsAt(deg(20));
+    const b = clipsAt(deg(40));
+    expect([a.from, a.to]).toEqual(["run", "runStrafeR"]);
+    expect(b.w).toBeGreaterThan(a.w);
+    const back = clipsAt(deg(-150));
+    expect([back.from, back.to].sort()).toEqual(["runBack", "runBackL"]);
+  });
+
+  it("is continuous: a hair either side of every clip's yaw gives nearly the same pose", () => {
+    const pose = (y: number) => {
+      const b = directionBlend(y);
+      const m = new Map<number, number>();
+      m.set(b.from, (m.get(b.from) ?? 0) + 1 - b.w);
+      m.set(b.to, (m.get(b.to) ?? 0) + b.w);
+      return m;
+    };
+    for (const d of DIRECTIONS) {
+      const lo = pose(d.yaw - 1e-6);
+      const hi = pose(d.yaw + 1e-6);
+      const same = (DIRECTIONS.findIndex((x) => x.run === d.run));
+      const weightOf = (m: Map<number, number>) =>
+        [...m].filter(([i]) => DIRECTIONS[i]!.run === DIRECTIONS[same]!.run).reduce((t, [, w]) => t + w, 0);
+      expect(weightOf(lo)).toBeCloseTo(1, 4);
+      expect(weightOf(hi)).toBeCloseTo(1, 4);
     }
-    expect(legGait(deg(45), "fwd").gait).toBe("right");
-    expect(legGait(deg(15), "right").gait).toBe("fwd");
-    expect(legGait(deg(135), "right").gait).toBe("back");
-    expect(legGait(deg(100), "back").gait).toBe("right");
   });
 
-  it("never turns the hips past the twist limit", () => {
-    for (let d = -180; d <= 180; d += 5) {
-      for (const was of ["fwd", "back", "left", "right"] as const) {
-        expect(Math.abs(legGait(deg(d), was).legs)).toBeLessThanOrEqual(LEG_TWIST_MAX);
-      }
-    }
+  it("shortens the backpedal's stride and keeps the others whole", () => {
+    const stride = (clip: RigClip) => DIRECTIONS.find((d) => d.run === clip)!.stride;
+    expect(stride("run")).toBe(1);
+    expect(stride("runStrafeR")).toBe(1);
+    expect(stride("runBack")).toBeLessThan(0.8);
   });
 });
 
