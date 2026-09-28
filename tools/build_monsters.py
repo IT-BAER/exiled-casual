@@ -69,6 +69,7 @@ enough that an unlit creature is a hole.
 Textures are downscaled to 512 and re-encoded as JPEG on the way in: the 1024
 PNG masters embed as ~2.5MB each and no imp on this camera is worth that.
 """
+import importlib.util
 import math
 import os
 import sys
@@ -1768,26 +1769,60 @@ def bog_drowned():
     return c
 
 
+# Image-to-3D, not the node graph: a /codex-imagegen reference through local
+# TRELLIS, cut to 3k triangles by the generate-local-3d-asset skill
+# (review/3d/drowned-grubling). Rigged at build time by rig_humanoid.py.
+GRUBLING_SOURCE = os.path.join(TEX_DIR, "source", "drowned_grubling_v1.glb")
+
+
+class GeneratedCreature:
+    """A species whose mesh was generated: rigged and animated by
+    `rig_humanoid.py`, dressed in its own sheet by the same hide rule as the
+    roster. It faces -Y as imported, where a turned node-graph root ends up."""
+
+    def __init__(self, def_id, source, family, height):
+        self.def_id, self.source, self.family, self.height = def_id, source, family, height
+
+    def emit(self, mats):
+        spec = importlib.util.spec_from_file_location(
+            "rig_humanoid", os.path.join(ROOT, "tools", "rig_humanoid.py"))
+        rig = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(rig)
+        if not os.path.exists(self.source):
+            sys.exit("missing generated creature: " + self.source)
+        mesh = rig.load_mesh(self.source, self.height, False)
+
+        # TRELLIS ships a metallic-roughness sheet that reads as wet metal with
+        # no environment map; only its albedo is kept.
+        bsdf = next(n for n in mesh.data.materials[0].node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+        img = bsdf.inputs["Base Color"].links[0].from_node.image
+        if max(img.size) > TEX_SIZE:
+            img.scale(TEX_SIZE, TEX_SIZE)
+        name = self.def_id.split(".")[1]
+        colour = os.path.join(BUILD_DIR, name + ".jpg")
+        img.save_render(filepath=colour, scene=bpy.context.scene)
+        luma = srgb_luma(img)
+        target = max(HIDE_FLOOR, FLOOR_LUMA[self.family] * HIDE_RATIO)
+        gain = min(1.0, (target / luma) ** 2.2)
+        print("  hide %-7s luma %5.1f floor %5.1f tint %.3f" % (name, luma, FLOOR_LUMA[self.family], gain))
+        mesh.data.materials.clear()
+        mesh.data.materials.append(hide_material("hide_" + name, colour, None, (gain, gain, gain)))
+
+        arm = rig.build_armature(self.def_id, rig.landmarks(mesh, self.height))
+        mesh.name = mesh.data.name = self.def_id + ".mesh"
+        rig.skin(mesh, arm)
+        # No baked occlusion: white, so the runtime's multiply leaves the sheet alone.
+        layer = mesh.data.color_attributes.new("Col", "BYTE_COLOR", "CORNER")
+        layer.data.foreach_set("color", numpy.ones(len(mesh.data.loops) * 4, dtype=numpy.float32))
+        mesh.data.color_attributes.active_color = layer
+        rig.author(arm, self.height)
+        self.root = arm
+        return arm
+
+
 def drowned_grubling():
     """The Drowned at half size and twice the belly: the swamp's pack of eight."""
-    c = Creature("monster.drowned_grubling.v1", "swamp", 0.25, 0.95)
-    spine = c.body.chain(
-        [(0, -0.02, 0.38), (0, 0.01, 0.55), (0, 0.03, 0.69), (0, 0.02, 0.78)],
-        [(0.15, 0.13), (0.25, 0.19), (0.20, 0.14), (0.13, 0.10)])
-    neck = c.body.chain([(0.03, 0.08, 0.83)], [0.065], parent=spine[-1])
-    # A head too big for the body, hanging forward: what reads as young from above.
-    c.body.chain([(0.07, 0.18, 0.86), (0.08, 0.27, 0.83)], [0.11, 0.065], parent=neck[-1])
-    c.body.add(slab((-0.10, 0.16, 0.60), (0.10, 0.05, 0.22), tilt=0.22), BONES)
-    c.body.add(slab((-0.10, 0.19, 0.60), (0.055, 0.035, 0.16), tilt=0.22), GLOWS)
-    for side in (-1, 1):
-        c.body.add(ellipsoid((0.07 + side * 0.035, 0.27, 0.88), (0.02, 0.02, 0.02), 6, 4), GLOWS)
-        c.body.add(slab((side * 0.21, -0.04, 0.69), (0.15, 0.19, 0.06), tilt=0.25))
-    for i, side in enumerate((-1, 1)):
-        c.arm(i, [(side * 0.20, 0.0, 0.72), (side * 0.28, 0.09, 0.45), (side * 0.24, 0.19, 0.14)],
-              [0.055, 0.045, 0.035])
-    for i, side in enumerate((-1, 1)):
-        c.leg(i, (side * 0.12, 0.0, 0.40), (side * 0.15, 0.01, 0.0), 0.065, 0.045, bend=0.04)
-    return c
+    return GeneratedCreature("monster.drowned_grubling.v1", GRUBLING_SOURCE, "swamp", 0.95)
 
 
 def thornhide_boar():

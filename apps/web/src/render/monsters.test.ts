@@ -230,6 +230,9 @@ describe("monsters asset", () => {
    * 6.75MB since the attack clip: seventeen more clips at fifteen frames each
    * measured 29KB in total, so the third clip per species is a rounding against
    * the mesh and the hides. The lever is still compression.
+   *
+   * 7.0MB since the Drowned Grubling became a generated mesh with its own sheet:
+   * measured +242KB (6,744,556 -> 6,986,708).
    */
   /**
    * The shader warm that ends the map-entry stall. Every instance of a species
@@ -274,7 +277,7 @@ describe("monsters asset", () => {
   it("embeds compressed textures and stays within budget", () => {
     for (const image of json.images) expect(image.mimeType).toBe("image/jpeg");
     expect(json.images.length).toBeLessThanOrEqual(12);
-    expect(glb.byteLength).toBeLessThan(6_750_000);
+    expect(glb.byteLength).toBeLessThan(7_000_000);
   });
 });
 
