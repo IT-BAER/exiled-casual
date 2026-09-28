@@ -426,7 +426,7 @@ describe("skill unlocks and growth", () => {
     "skill.piercing_shot.v1": {
       own: { field: "maxRangeFixed", perMille: 20 },
       breakpoints: [
-        { atLevel: 5, patch: { pierceCount: 2 } },
+        { atLevel: 5, patch: { pierceCount: 3 } },
         { atLevel: 15, patch: { pierceCount: 4 } },
       ],
     },

@@ -131,7 +131,7 @@ const SKILL_DEFS: SkillDef[] = [
     growth: {
       perLevel: { damagePct: 6, manaPct: 4, own: { field: "maxRangeFixed", perMille: 20 } },
       breakpoints: [
-        { atLevel: 5, text: "Pierces two enemies", patch: { pierceCount: 2 } },
+        { atLevel: 5, text: "Pierces three enemies", patch: { pierceCount: 3 } },
         { atLevel: 15, text: "Pierces four enemies", patch: { pierceCount: 4 } },
       ],
     },
@@ -151,6 +151,8 @@ const SKILL_DEFS: SkillDef[] = [
   /*
    * The other two classes' Cinder Ground: each class's level-8 answer to a pack,
    * at its cost and beat. Ground Slam is PoE1/PoE2's; Split Arrow is PoE1's.
+   * Split Arrow fires twice as often and hits harder: packs spawn a metre apart,
+   * and at level 10 the Stalker cleared 1.46x slower than the Ironsworn without it.
    */
   {
     id: "skill.ground_slam.v1",
@@ -184,7 +186,7 @@ const SKILL_DEFS: SkillDef[] = [
     description: "Looses a fan of arrows at once.",
     classId: "class.stalker",
     manaCostFixed: fp(20),
-    cooldownTicks: 60,
+    cooldownTicks: 30,
     castTicks: 9,
     critChancePct: 7,
     unlockLevel: 8,
@@ -202,7 +204,7 @@ const SKILL_DEFS: SkillDef[] = [
         speedPerSecFixed: fp(22),
         radiusFixed: fp(0.3),
         maxRangeFixed: fp(14),
-        damage: { type: "physical", amountFixed: fp(30) },
+        damage: { type: "physical", amountFixed: fp(40) },
         pierceCount: 0,
         count: 5,
         spreadDegrees: 40,
