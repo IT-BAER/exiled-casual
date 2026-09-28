@@ -308,7 +308,7 @@ describe("what worn gear hides of the body", () => {
     expect([...hiddenBaseParts({ ...BASE_LOOKS, gloves: "plate" })].sort())
       .toEqual(["hand_l", "hand_r"]);
     expect([...hiddenBaseParts({ ...BASE_LOOKS, boots: "plate" })].sort())
-      .toEqual(["foot_l", "foot_r", "greave"]);
+      .toEqual(["foot_l", "foot_r", "greave", "shin_l", "shin_r"]);
     expect([...hiddenBaseParts({ ...BASE_LOOKS, chest: "plate" })].sort())
       .toEqual(["collar", "leg_l", "leg_r", "torso"]);
   });
@@ -341,7 +341,7 @@ describe("what worn gear hides of the body", () => {
     const dressed = { ...BASE_LOOKS, chest: "plate", gloves: "plate", boots: "plate" };
     const hidden = hiddenBaseParts(dressed);
     expect([...hidden].sort()).toEqual([
-      "collar", "foot_l", "foot_r", "greave", "hand_l", "hand_r", "leg_l", "leg_r", "torso",
+      "collar", "foot_l", "foot_r", "greave", "hand_l", "hand_r", "leg_l", "leg_r", "shin_l", "shin_r", "torso",
     ]);
   });
 
@@ -360,10 +360,14 @@ describe("what worn gear hides of the body", () => {
 
   /**
    * A sabaton carries its own shin plate, so the suit's greave inside it is
-   * switched off; without boots the suit's shins are drawn down to the ankle.
+   * switched off; without boots the greave is drawn over the bare shin.
    */
   it("swaps the suit's shins for the sabaton's", () => {
     expect(hiddenBaseParts({ ...BASE_LOOKS, chest: "plate" }).has("greave")).toBe(false);
+    // The greave's hem stands a hand above the ankle at the back: the bare shin
+    // under it is what fills that band, and only a boot closes it.
+    expect(hiddenBaseParts({ ...BASE_LOOKS, chest: "plate" }).has("shin_l")).toBe(false);
+    expect(hiddenBaseParts({ ...BASE_LOOKS, chest: "plate" }).has("shin_r")).toBe(false);
     expect(hiddenBaseParts({ ...BASE_LOOKS, chest: "plate", boots: "plate" }).has("greave"))
       .toBe(true);
   });
@@ -397,13 +401,13 @@ describe("wardrobe asset", () => {
       "base.female.foot_l", "base.female.foot_r",
       "base.female.arm_l", "base.female.arm_r", "base.female.collar",
       "base.female.neck",
-      "base.female.leg_l", "base.female.leg_r",
+      "base.female.leg_l", "base.female.leg_r", "base.female.shin_l", "base.female.shin_r",
       "base.male.body", "base.male.brows", "base.male.eyes", "base.male.hair",
       "base.male.torso", "base.male.hand_l", "base.male.hand_r",
       "base.male.foot_l", "base.male.foot_r",
       "base.male.arm_l", "base.male.arm_r", "base.male.collar",
       "base.male.neck",
-      "base.male.leg_l", "base.male.leg_r",
+      "base.male.leg_l", "base.male.leg_r", "base.male.shin_l", "base.male.shin_r",
       "helmet.ironsworn.helm", "helmet.stalker.hood", "helmet.ember.cowl", "weapon1.emberwand.mesh", "weapon2.buckler.mesh",
       "weapon1.ironswornhammer.mesh", "weapon1.stalkerbow.mesh", "weapon2.towershield.mesh",
       "chest.ironsworn.cuirass", "chest.ironsworn.gorget", "chest.ironsworn.greave", "chest.ironsworn.backing",

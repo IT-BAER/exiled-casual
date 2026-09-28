@@ -395,6 +395,11 @@ BODY_REGIONS = {
     "foot_r": ("foot_r", "ball_r"),
 }
 BODY_REGION_WEIGHT = 0.5    # summed weight over a region's bones to belong to it
+# The chest closes the legs, but every greave's hem stands up to 0.37 above the
+# ankle at the back while the foot piece ends near it: only a boot closes that
+# band. So the leg below this share of ankle-to-knee is its own `shin_*` piece,
+# which boots close and a chest does not. Above the highest hem, below the boots.
+SHIN_SHARE = 0.69
 
 # Both class hoods come from `tools/prep_hood.py` already skinned, crown to
 # capelet, on the joints the hood and the coat or robe under its capelet ride.
@@ -3309,6 +3314,14 @@ def split_body_regions(body, look):
     bm = bmesh.new()
     bm.from_mesh(body.data)
     cores = region_cores(body, bm)
+    rig = body.find_armature()
+    for side in "lr":
+        knee = (rig.matrix_world @ rig.data.bones[f"calf_{side}"].head_local).z
+        ankle = (rig.matrix_world @ rig.data.bones[f"foot_{side}"].head_local).z
+        top = ankle + SHIN_SHARE * (knee - ankle)
+        leg = cores[f"leg_{side}"]
+        cores[f"shin_{side}"] = {i for i in leg if (body.matrix_world @ bm.verts[i].co).z < top}
+        cores[f"leg_{side}"] = leg - cores[f"shin_{side}"]
     regions, claimed = [], set()
     for region, core in cores.items():
         faces = {f.index for f in bm.faces if any(v.index in core for v in f.verts)}
