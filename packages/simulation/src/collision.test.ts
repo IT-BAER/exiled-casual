@@ -157,6 +157,22 @@ describe("blockerCollision", () => {
     expect(r.x).toBe(fp(-1.6)); // into it, cancelled
     expect(r.y).toBe(fp(0.4)); // past it, allowed
   });
+
+  /**
+   * A swarm body (0.32) pressed against a chest (0.28) on the coast, its route
+   * cell straight past the chest's curve: both axes clip the disc, so a slide
+   * that gives up on a blocked diagonal left it chasing on the spot for good.
+   */
+  it("a diagonal pressed against a round blocker steps round it", () => {
+    const chest = blockerCollision([{ x: 0, y: 0, r: fp(0.28) }]);
+    const r = fp(0.32);
+    let pos = { x: -559, y: 220 };
+    for (let i = 0; i < 20; i++) {
+      pos = slide(chest, pos.x, pos.y, 7, -86, r);
+      expect(chest.isWalkable(pos.x, pos.y, r), `step ${i} walked into it`).toBe(true);
+    }
+    expect(pos.y).toBeLessThan(fp(-0.6));
+  });
 });
 
 describe("slide", () => {
