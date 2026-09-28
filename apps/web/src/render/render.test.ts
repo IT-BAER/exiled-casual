@@ -19,7 +19,7 @@ import { applyBiomeTint } from "./level";
 import { LIGHT_POOL } from "./lights";
 import { HAZE_HEIGHT, HAZE_MAX_SIZE, HAZE_NAME, MOTES_NAME, moteDrift, moteDriftBasis } from "./haze";
 import { BIOMES } from "@exiled/content-runtime";
-import { blowFrom, SnapshotRenderer, syncActionAnimation } from "./renderer";
+import { blowFrom, reactionFor, SnapshotRenderer, syncActionAnimation } from "./renderer";
 import { makeMesh, updateTelegraph } from "./meshes";
 import { ARROW_NAME } from "./skill-fx";
 import type { Snapshot } from "@exiled/protocol";
@@ -82,6 +82,50 @@ describe("sustained casting animation", () => {
     expect(rig.playBow).toHaveBeenCalledTimes(1);
     expect(rig.playBow).toHaveBeenCalledWith(0.5, 0.25);
     expect(rig.playCast).not.toHaveBeenCalled();
+  });
+});
+
+describe("the player's own reactions", () => {
+  const at = (player: Partial<Snapshot["player"]> = {}, entities: Snapshot["entities"] = []) => {
+    const base = makeSnapshot();
+    return makeSnapshot({ entities, player: { ...base.player, ...player } });
+  };
+
+  it("staggers on a heavy hit and shrugs off a chip", () => {
+    expect(reactionFor(at(), at({ life: 80 }))).toBe("hit");
+    expect(reactionFor(at(), at({ life: 95 }))).toBeNull();
+    // Energy shield is the same pool in front of life.
+    expect(reactionFor(at({ energyShield: 50, maxEnergyShield: 50 }), at({ energyShield: 20, maxEnergyShield: 50 }))).toBe("hit");
+  });
+
+  it("does not stagger when a maximum shrank", () => {
+    // Unequipping the life gear lowers life with its maximum: not a blow.
+    expect(reactionFor(at(), at({ life: 70, maxLife: 70 }))).toBeNull();
+  });
+
+  it("drinks when a flask charge is spent", () => {
+    const flasks = { lifeCharges: 7, lifeMax: 7, manaCharges: 7, manaMax: 7 };
+    expect(reactionFor(at(), at({ flasks: { ...flasks, lifeCharges: 6 } }))).toBe("drink");
+    expect(reactionFor(at(), at({ flasks: { ...flasks, manaCharges: 6 } }))).toBe("drink");
+    // A charge regained is not a drink.
+    expect(reactionFor(at({ flasks: { ...flasks, lifeCharges: 6 } }), at())).toBeNull();
+  });
+
+  it("opens a container the tick it flips to opened", () => {
+    const chest = { id: 9, kind: "container" as const, x: 1, y: 0 };
+    expect(reactionFor(at({}, [chest]), at({}, [{ ...chest, opened: true }]))).toBe("open");
+    expect(reactionFor(at({}, [{ ...chest, opened: true }]), at({}, [{ ...chest, opened: true }]))).toBeNull();
+    // Arriving in an area where one already stands open is not opening it.
+    expect(reactionFor(at(), at({}, [{ ...chest, opened: true }]))).toBeNull();
+  });
+
+  it("puts the blow first when a tick holds more than one", () => {
+    const flasks = { lifeCharges: 6, lifeMax: 7, manaCharges: 7, manaMax: 7 };
+    expect(reactionFor(at(), at({ life: 70, flasks }))).toBe("hit");
+  });
+
+  it("does nothing for a dead player", () => {
+    expect(reactionFor(at(), at({ life: 0, alive: false }))).toBeNull();
   });
 });
 

@@ -7,6 +7,7 @@ import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
 import { animateActor, keepGroundBlobFlat, makeMesh, setHitFlash, updateTelegraph, updatePortal, updateMapDevice, updateStash, updateVendor, updateContainer, updateGroundItem, updateRareElement, portalAppear, portalVanish, isPortalMesh, PORTAL_STAGGER_MS, Y_LIFT } from "./meshes";
 import type { MeshKind } from "./meshes";
 import { rigOf } from "./rig";
+import type { ReactionClip } from "./rig";
 import { looksForEquipment } from "./gear-looks";
 import { creatureOf } from "./meshes";
 import { CORPSE_SECONDS, SINK_SECONDS, disposeRagdoll, dropDead, freezeRagdoll, sinkDepth } from "./ragdoll";
@@ -122,6 +123,27 @@ export function syncActionAnimation(
     else if (action === "bow") rig.playBow(seconds, releaseSeconds);
     else rig.playCast(seconds);
   }
+}
+
+/** Share of the whole pool (life plus energy shield) one tick must take to stagger. */
+const HEAVY_HIT = 0.1;
+
+/**
+ * The player's own reaction to what this tick did to him, off the snapshot diff
+ * like the soundscape's cues: a heavy blow, a flask charge spent, a container
+ * flipped to opened. The blow wins a shared tick; a chip hit is not a stagger.
+ */
+export function reactionFor(prev: Snapshot, next: Snapshot): ReactionClip | null {
+  const p = next.player, b = prev.player;
+  if (!p.alive) return null;
+  // A pool that shrank is gear coming off, not damage (the soundscape's rule).
+  const held = p.maxLife >= b.maxLife && p.maxEnergyShield >= b.maxEnergyShield;
+  const lost = b.life - p.life + b.energyShield - p.energyShield;
+  if (held && lost >= HEAVY_HIT * (p.maxLife + p.maxEnergyShield)) return "hit";
+  if (p.flasks.lifeCharges < b.flasks.lifeCharges || p.flasks.manaCharges < b.flasks.manaCharges) return "drink";
+  const opened = next.entities.some((e) => e.kind === "container" && e.opened === true
+    && prev.entities.some((was) => was.id === e.id && was.opened !== true));
+  return opened ? "open" : null;
 }
 
 /** Height the death impulse is aimed above the floor, so a body topples rather
@@ -679,6 +701,11 @@ export class SnapshotRenderer {
           next.player.castTicks === undefined ? undefined : next.player.castTicks / TICKS_PER_SEC,
           next.player.castWindupTicks === undefined ? undefined : next.player.castWindupTicks / TICKS_PER_SEC,
         );
+      }
+      const reaction = prev ? reactionFor(prev, next) : null;
+      if (reaction) {
+        const playerMesh = this.meshes.get(next.player.id);
+        (playerMesh ? rigOf(playerMesh) : undefined)?.playReaction(reaction);
       }
       if (prev) {
         const dx = next.player.x - prev.player.x;

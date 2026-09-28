@@ -43,6 +43,9 @@ CLIPS = {
     "Rig|Sword_Regular_A": ("Sword_Regular_A", "Sword_Regular_A_Rec"),
     "Rig|Sword_Regular_B": ("Sword_Regular_B", "Sword_Regular_B_Rec"),
     "Rig|Sword_Regular_C": "Sword_Regular_C",  # its recovery is in the take
+    "Rig|Hit_Knockback": "Hit_Knockback",
+    "Rig|Consume": "Consume",
+    "Rig|Chest_Open": "Chest_Open",
 }
 # Clips this import supersedes: `build_direction_clips.py`'s generated walks and
 # backpedal, and `build_slash_variant.py`'s backhand.

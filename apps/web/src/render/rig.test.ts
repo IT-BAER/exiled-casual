@@ -42,6 +42,7 @@ import {
   SLOTS,
   HIPS_BOB,
   STRIKE_CLIPS,
+  REACTION_CLIPS,
   isLayeredClip,
   hiddenBaseParts,
   SKIRT_CHAINS,
@@ -1141,6 +1142,11 @@ describe("the cast clip drives the weapon arm", () => {
       // recovery walks both back to guard: the weapon arm leads, it does not own it.
       expect(right, clip).toBeGreaterThan(left * 1.2);
     }
+  });
+
+  it("plays UAL2's knockback, drink and chest-open takes over the legs", () => {
+    expect([CLIP_NAME.hit, CLIP_NAME.drink, CLIP_NAME.open]).toEqual(["Rig|Hit_Knockback", "Rig|Consume", "Rig|Chest_Open"]);
+    for (const clip of REACTION_CLIPS) expect(isLayeredClip(clip), clip).toBe(true);
   });
 
   /** Sideways position of the right hand, in the clip's root frame, at a share of the clip. */

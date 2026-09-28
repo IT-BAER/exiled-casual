@@ -35,6 +35,8 @@ import {
   BASE_LOOKS,
   NO_LOOKS,
   SLOTS,
+  REACTION_CLIPS,
+  type ReactionClip,
   type Looks,
   type RigActor,
   type RigClip,
@@ -336,6 +338,7 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
       }
       if (entry.clip === "cast") rig.playCast();
       else if (entry.clip === "bow") rig.playBow();
+      else if ((REACTION_CLIPS as readonly string[]).includes(entry.clip)) rig.playReaction(entry.clip as ReactionClip);
       else rig.playStrike();
     },
     dispose() {

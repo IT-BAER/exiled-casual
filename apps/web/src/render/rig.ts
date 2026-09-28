@@ -35,11 +35,16 @@ import { ARROW_LENGTH, buildArrow, swingTrail } from "./skill-fx";
 export type RigClip =
   | "idle" | "walk" | "run" | "walkBack"
   | "walkStrafeL" | "walkStrafeR" | "runStrafeL" | "runStrafeR"
-  | "walkFwdL" | "walkFwdR" | "walkBackL" | "walkBackR" | "cast" | "bow" | "strikeA" | "strikeB" | "strikeC";
+  | "walkFwdL" | "walkFwdR" | "walkBackL" | "walkBackR" | "cast" | "bow" | "strikeA" | "strikeB" | "strikeC"
+  | "hit" | "drink" | "open";
 export type StrikeClip = "strikeA" | "strikeB" | "strikeC";
 
 /** Melee takes played in turn: UAL2's regular sword chain, forehand, backhand, finisher. */
 export const STRIKE_CLIPS: readonly StrikeClip[] = ["strikeA", "strikeB", "strikeC"];
+
+/** The player's one-shot reactions: staggered by a heavy blow, a flask drunk, a chest opened. */
+export type ReactionClip = "hit" | "drink" | "open";
+export const REACTION_CLIPS: readonly ReactionClip[] = ["hit", "drink", "open"];
 
 /** Clip names inside anim-library.glb — FBX2glTF prefixes every take with "Rig|". */
 /**
@@ -71,6 +76,9 @@ export const CLIP_NAME: Record<RigClip, string> = {
   strikeA: "Rig|Sword_Regular_A",
   strikeB: "Rig|Sword_Regular_B",
   strikeC: "Rig|Sword_Regular_C",
+  hit: "Rig|Hit_Knockback",
+  drink: "Rig|Consume",
+  open: "Rig|Chest_Open",
 };
 
 const CLIP_LOOPS: Record<RigClip, boolean> = {
@@ -91,6 +99,9 @@ const CLIP_LOOPS: Record<RigClip, boolean> = {
   strikeA: false,
   strikeB: false,
   strikeC: false,
+  hit: false,
+  drink: false,
+  open: false,
 };
 
 /**
@@ -849,8 +860,11 @@ const WEAPON_HAND: ReadonlySet<string> = new Set([
   "pinky_01_r", "pinky_02_r", "pinky_03_r", "pinky_04_end_r",
 ]);
 
+/** Attacks: a reaction never interrupts one, and one always cuts a reaction short. */
+const ACTION_CLIPS: readonly RigClip[] = ["cast", "bow", ...STRIKE_CLIPS];
+
 /** Clips that layer over locomotion instead of replacing it. */
-const UPPER_BODY_CLIPS: ReadonlySet<RigClip> = new Set<RigClip>(["cast", "bow", ...STRIKE_CLIPS]);
+const UPPER_BODY_CLIPS: ReadonlySet<RigClip> = new Set<RigClip>([...ACTION_CLIPS, ...REACTION_CLIPS]);
 
 /** Whether locomotion keeps ownership of the pelvis and legs under this clip. */
 export const isLayeredClip = (clip: RigClip): boolean => UPPER_BODY_CLIPS.has(clip);
@@ -879,7 +893,7 @@ export const isLayeredClip = (clip: RigClip): boolean => UPPER_BODY_CLIPS.has(cl
 export const HIPS_BOB: Record<RigClip, number> = {
   idle: 1, walk: 0.65, run: 0.65, walkBack: 0.65,
   walkStrafeL: 0.65, walkStrafeR: 0.65, runStrafeL: 0.65, runStrafeR: 0.65,
-  walkFwdL: 0.65, walkFwdR: 0.65, walkBackL: 0.65, walkBackR: 0.65, cast: 1, bow: 1, strikeA: 1, strikeB: 1, strikeC: 1,
+  walkFwdL: 0.65, walkFwdR: 0.65, walkBackL: 0.65, walkBackR: 0.65, cast: 1, bow: 1, strikeA: 1, strikeB: 1, strikeC: 1, hit: 1, drink: 1, open: 1,
 };
 
 /**
@@ -1310,6 +1324,7 @@ export class RigActor {
   private playOnce(clip: "cast" | "bow", seconds?: number, paced?: number): void {
     const group = this.groups.get(clip);
     if (!group) return;
+    this.stopReactions();
     group.stop();
     const ratio = paced ?? actionRatio(clipSeconds(group), seconds);
     group.speedRatio = ratio;
@@ -1328,6 +1343,7 @@ export class RigActor {
     const clip = STRIKE_CLIPS[this.nextStrikeIndex]!;
     const group = this.groups.get(clip);
     if (!group) return;
+    this.stopReactions();
     for (const strike of STRIKE_CLIPS) this.groups.get(strike)?.stop();
     const timing = STRIKE_TIMING[clip];
     const pace = strikePace(clipSeconds(group), timing, releaseSeconds, seconds);
@@ -1337,6 +1353,20 @@ export class RigActor {
     this.strike = { group, pace, timing };
     this.strikeObserver ??= this.scene.onBeforeAnimationsObservable.add(this.paceStrike);
     this.nextStrikeIndex = (this.nextStrikeIndex + 1) % STRIKE_CLIPS.length;
+  }
+
+  /** A reaction over the legs at the authored pace; skipped while an attack plays. */
+  playReaction(clip: ReactionClip): void {
+    const group = this.groups.get(clip);
+    if (!group || ACTION_CLIPS.some((c) => this.groups.get(c)?.isPlaying)) return;
+    this.stopReactions();
+    group.speedRatio = 1;
+    group.start(false, 1);
+    group.onAnimationGroupEndObservable.addOnce(this.easeOutToLocomotion);
+  }
+
+  private stopReactions(): void {
+    for (const clip of REACTION_CLIPS) this.groups.get(clip)?.stop();
   }
 
   /** Cancel a strike when the actor is removed or otherwise reset. */
