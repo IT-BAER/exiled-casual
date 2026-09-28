@@ -11,7 +11,7 @@ Directions are yaw off the hips (`DIRECTIONS`); the rig turns the hips the rest
 of the way toward the move. Past a sidestep the clip turns into a backpedal by
 its share of backwardness b = max(0, -cos(yaw)):
   - landing and push-off on the ball of the foot, never the heel;
-  - most of the source's forward trunk lean taken out: leaning back reads as falling;
+  - the source's forward trunk lean taken out, a little back lean put in;
   - shorter steps (`STRIDE_CUT`) at the source's hip height: lowered, the knees never straighten;
   - at a full backpedal the chest and arms run half a cycle on, so the
     shoulders still turn and swing against the legs.
@@ -57,17 +57,17 @@ KNEE_FOLLOW = 0.4
 # sidestep, up to three times that on a back diagonal: the source's narrow jog
 # brings the diagonal tracks within 2-5 cm, boot on boot.
 WIDEN = 0.0003
-# At a full backpedal: steps this much shorter, trunk leaning this far forward.
+# At a full backpedal: steps this much shorter, trunk leaning back this far
+# past upright.
 STRIDE_CUT = 0.25
-LEAN = math.radians(8)
+BACK_LEAN = math.radians(4)
 # Share of the jog's 22 cm hip bounce a full backpedal loses: it shuffles, it does not bound.
-BOUNCE_CUT = 0.8
-# A backpedal's swing: a low arc front to back (ankle lift, rig units), eased
-# out so the foot is behind the hips early and the knee never comes up in front,
-# the foot pointed a little toe-down through it and onto the ball at each end of
+BOUNCE_CUT = 0.4
+# A backpedal's swing: a low arc front to back (ankle lift, rig units), the
+# foot pointed a little toe-down through it and onto the ball at each end of
 # the stance. A forward jog's swing kicks the heel 50 cm up behind him; turned
 # round, that is a knee raised in front, which reads as sitting.
-SWING_ARC = 0.0006
+SWING_ARC = 0.0012
 SWING_PITCH = math.radians(8)
 BALL_PITCH = math.radians(12)
 # An ankle within this of its lowest (rig units) is on the ground. The heel lifts
@@ -164,8 +164,8 @@ def pitch_of(toe, up):
     return math.atan2(toe.dot(up), horizontal(toe, up).length)
 
 
-def ease_out(u):
-    return 1.0 - (1.0 - u) ** 2
+def smooth(u):
+    return u * u * (3.0 - 2.0 * u)
 
 
 def phases(heights):
@@ -203,7 +203,7 @@ def track(frames, i, cycle, spin, stride, neutral, widen, back, up, rest_pitch):
             a = next(k for k in range(1, cycle) if heights[(t - k) % cycle] < min(heights) + STANCE_BAND)
             c = next(k for k in range(1, cycle) if heights[(t + k) % cycle] < min(heights) + STANCE_BAND)
             u = a / (a + c)
-            glide = base[(t - a) % cycle].lerp(base[(t + c) % cycle], ease_out(u))
+            glide = base[(t - a) % cycle].lerp(base[(t + c) % cycle], smooth(u))
             arc = heights[(t - a) % cycle] + (heights[(t + c) % cycle] - heights[(t - a) % cycle]) * u
             arc += SWING_ARC * math.sin(math.pi * u)
             where = where.lerp(glide, back)
@@ -268,7 +268,7 @@ def build(arm, name, source, degrees, up, forward, rest_pitch):
             # On the pelvis, the one trunk bone every clip keys: the legs are
             # solved after, so only the body above them leans.
             pelvis = bones["pelvis"]
-            tilt = Matrix.Rotation((lean - LEAN) * back, 3, forward.cross(up).normalized())
+            tilt = Matrix.Rotation((lean + BACK_LEAN) * back, 3, forward.cross(up).normalized())
             drop = (hips[index] - mean_hips) * BOUNCE_CUT * back
             pelvis.matrix = Matrix.Translation(-up * drop) @ about(pelvis.head.copy(), tilt) @ pelvis.matrix
             bpy.context.view_layer.update()
