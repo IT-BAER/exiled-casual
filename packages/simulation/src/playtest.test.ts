@@ -45,16 +45,21 @@ describe("first tier-1 map, fresh character (bot)", () => {
 
 /** Level 10 holds every class's level-8 area skill, which a level-1 map never sees. */
 describe("three maps at level 10 (bot)", () => {
-  const sum = Object.fromEntries(CLASS_IDS.map((c) =>
-    [c, summarize([1, 2, 3, 4, 5, 6].flatMap((s) => campaign(c, 400 + s, 3, {}, 10)))])) as Record<string, Summary>;
+  const runs = Object.fromEntries(CLASS_IDS.map((c) => [c, SEEDS.flatMap((s) => campaign(c, 400 + s, 3, {}, 10))]));
+  const sum = Object.fromEntries(CLASS_IDS.map((c) => [c, summarize(runs[c]!)])) as Record<string, Summary>;
 
   it.each(CLASS_IDS)("%s clears every map and rarely dies", (c) => {
     expect(sum[c]!.clearRate).toBe(1);
     expect(sum[c]!.deathsPerMap).toBeLessThan(0.5);
   });
 
+  // Each campaign opens nodes off its own stone drops, so the classes are timed
+  // on the nodes all of them played, each node weighted once.
   it("the classes clear within 25% of each other", () => {
-    const t = CLASS_IDS.map((c) => sum[c]!.meanClearSec);
+    const nodes = [...new Set(runs[CLASS_IDS[0]!]!.map((r) => r.node))]
+      .filter((n) => CLASS_IDS.every((c) => runs[c]!.some((r) => r.node === n && r.cleared)));
+    const t = CLASS_IDS.map((c) => nodes.reduce((a, n) =>
+      a + summarize(runs[c]!.filter((r) => r.node === n)).meanClearSec, 0) / nodes.length);
     expect(Math.max(...t) / Math.min(...t)).toBeLessThan(1.25);
   });
 });
