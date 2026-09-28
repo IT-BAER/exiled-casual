@@ -211,6 +211,21 @@ describe("monsters asset", () => {
     ends.forEach((fn) => fn());
     rig.setLocomotion(3);
     expect(started).toEqual([`${species}|walk`]);
+
+    // First sight with no swing yet: the first swing after it is a real edge.
+    const fresh = new CreatureRig(
+      {
+        animationGroups: ["walk", "idle", "attack"].map((c) => group(`${species}|${c}`)),
+        rootNodes: [],
+        skeletons: [],
+        dispose: () => {},
+      } as unknown as InstantiatedEntries,
+      species,
+    );
+    started.length = 0;
+    fresh.noteAttack(undefined);
+    fresh.noteAttack(200);
+    expect(started, "the first swing while in view").toEqual([`${species}|attack:once`]);
   });
 
   /**

@@ -468,7 +468,7 @@ export class SnapshotRenderer {
         if (e.spent) mesh.metadata = { ...(mesh.metadata ?? {}), struck: true };
       }
       // The sim swung: one-shot strike over whatever locomotion was playing.
-      if (e.attackTick !== undefined) creatureOf(mesh)?.noteAttack(e.attackTick);
+      creatureOf(mesh)?.noteAttack(e.attackTick);
       // Struck: life is the only report of a hit the client gets, and it is the
       // honest one — a swing that missed or was absorbed never moves it.
       if (newTick && e.life !== undefined && prevE?.life !== undefined && e.life < prevE.life) {

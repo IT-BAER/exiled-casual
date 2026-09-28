@@ -153,6 +153,7 @@ export class CreatureRig {
   private striking = false;
   /** Last swing tick seen, so only the change fires the clip. */
   private lastAttackTick: number | undefined;
+  private seen = false;
   /** Seconds stood still, so the breath can settle the way the player's does. */
   private standing = 0;
   private readonly scene: Scene | null;
@@ -203,13 +204,12 @@ export class CreatureRig {
    * edge — its value never schedules anything client-side.
    */
   noteAttack(tick: number | undefined): void {
+    // The first report only seeds the edge, "no swing yet" included. A creature
+    // that comes into view carrying a swing from before it was drawn must not
+    // greet the camera with one, but its first swing in view must play.
+    if (!this.seen) { this.seen = true; this.lastAttackTick = tick; return; }
     if (tick === undefined || tick === this.lastAttackTick) return;
-    // The first report only seeds the edge. A creature that comes into view
-    // carrying a swing from before it was drawn must not greet the camera
-    // with one.
-    const seeding = this.lastAttackTick === undefined;
     this.lastAttackTick = tick;
-    if (seeding) return;
     const group = this.groups.get("attack");
     if (!group) return;
     this.striking = true;
