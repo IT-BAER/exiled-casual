@@ -66,6 +66,7 @@ export class Bot {
   private goalFrom: Position = { x: 0, y: 0 };
   private target: Entity | undefined;
   private targetAt = -REACTION_TICKS;
+  private hurt: { e: Entity; since: number; life: number } | undefined;
   private lastFlask = -999;
   private last: Position = { x: 0, y: 0 };
   private still = 0;
@@ -149,6 +150,7 @@ export class Bot {
       }
       const skill = this.pickSkill(p, target);
       if (skill) out.push(cmd({ type: "useSkill", skillId: skill, data: { tx: target.p.x, ty: target.p.y } }));
+      this.checkHurting(skill ? target.e : undefined, tick);
       // Backing off is for when it hurts; at health a caster stands and casts.
       if (!this.melee && near && dist(p, near.p) < fp(1.5) && h.life * 2 < h.maxLife && !world.has(near.e, "boss")) {
         out.push(cmd({ type: "moveTo", data: this.escape(p, near.p, fp(2.5)) }));
@@ -289,12 +291,26 @@ export class Bot {
     }
     // With the boss down the map is over: only what comes at him is worth a shot.
     const seen = this.monsters()
+      .filter((x) => (this.skip.get(x.e) ?? 0) <= tick)
       .filter((x) => (!bossDead || x.awake) && this.inSight(p, x.p) && this.clearShot(p, x))
       .sort((a, b) => Number(b.awake) - Number(a.awake) || dist(p, a.p) - dist(p, b.p));
     const t = seen[0];
     this.target = t?.e;
     this.targetAt = tick;
     return t;
+  }
+
+  /**
+   * A clear shot by clearShot's test can still meet a wall corner the bolt does not
+   * pass: a target that has lost no life in 5 s of shooting is given up, like a goal.
+   */
+  private checkHurting(e: Entity | undefined, tick: number): void {
+    if (e === undefined) { this.hurt = undefined; return; }
+    const life = this.g.world.get<Health>(e, "health")!.life;
+    if (this.hurt?.e !== e) { this.hurt = { e, since: tick, life }; return; }
+    if (tick - this.hurt.since < 5 * HZ) return;
+    if (life >= this.hurt.life) this.skip.set(e, tick + 30 * HZ);
+    this.hurt = { e, since: tick, life };
   }
 
   /**
