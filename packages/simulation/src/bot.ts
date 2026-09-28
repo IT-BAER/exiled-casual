@@ -413,7 +413,8 @@ export class Bot {
     const base = Math.atan2(p.y - from.y, p.x - from.x);
     // Out of one fire and into the next is no escape: clear ground first, any ground second.
     for (const clear of [true, false]) {
-      for (const turn of [0, 0.6, -0.6, 1.2, -1.2, 1.8, -1.8]) {
+      // The full circle: fire centred on him has no "away", so the first guess can be a wall.
+      for (const turn of [0, 0.6, -0.6, 1.2, -1.2, 1.8, -1.8, 2.4, -2.4, Math.PI]) {
         const x = p.x + Math.round(Math.cos(base + turn) * d);
         const y = p.y + Math.round(Math.sin(base + turn) * d);
         if (clear && this.hostileFireAt({ x, y })) continue;

@@ -66,6 +66,29 @@ describe("Bot", () => {
     expect(out.some((c) => c.type === "stop")).toBe(true);
   });
 
+  /**
+   * Mother Vhal's burning ground lands centred on him, so "away from it" has no
+   * direction and reads as east. With a wall there he stood in it until he died.
+   */
+  it("leaves fire centred on him even when the only way out is behind the side it first tries", () => {
+    const g = newCharacter("class.ironsworn", 1, 10);
+    const me = g.world.get<Position>(g.player, "position")!;
+    // A dead end open only to the west: every direction the old search tried is wall.
+    const wallEast: Collision = {
+      isWalkable: (x, y, r) => x + r < me.x + fp(1) && Math.abs(y - me.y) + r < fp(1),
+    };
+    const fire = g.world.create();
+    g.world.set<Position>(fire, "position", { x: me.x, y: me.y });
+    g.world.set<GroundAreaC>(fire, "groundArea", {
+      radius: fp(5), expiryTick: 9999, nextTick: 0, ailmentKind: "burning", stacksPerApply: 1,
+      dps: fp(3), ailmentDuration: 60, maxStacks: 5, team: 1,
+    });
+    const move = new Bot(g, wallEast, {}).decide(false).find((c) => c.type === "moveTo");
+    const to = move?.data as { x: number; y: number } | undefined;
+    expect(to, "no move at all").toBeDefined();
+    expect(Math.hypot(to!.x - me.x, to!.y - me.y)).toBeGreaterThan(fp(5));
+  });
+
   it("a Stalker looses Piercing Shot from where it stands", () => {
     expect(skillOf(setupAs("class.stalker", [0, 4]).bot.decide(false))).toBe("skill.piercing_shot.v1");
   });
