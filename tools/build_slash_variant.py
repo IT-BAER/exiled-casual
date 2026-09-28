@@ -1,5 +1,8 @@
 """Add a backhand slash clip to `anim-library.glb`.
 
+RETIRED: the runtime plays UAL2's sword chain (`tools/import_ual2_clips.py`, which
+removes this clip). Do not run it; other tools still import its glb helpers.
+
 The pack ships exactly one sword swing, `Rig|Sword_Attack`, a forehand. This
 authors `Rig|Sword_Attack_Back`, the return stroke: it winds up into the
 forehand's contact pose and swings back to the forehand's raised pose, so the

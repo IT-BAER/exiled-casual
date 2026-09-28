@@ -47,8 +47,8 @@ import {
   SKIRT_CHAINS,
   SKIRT_JOINTS,
   SKIRT_COLLIDERS,
-  STRIKE_CONTACT,
-  STRIKE_DROP,
+  STRIKE_TIMING,
+  type StrikeClip,
   strikeLunge,
   strikePace,
   strikeRatioAt,
@@ -1129,20 +1129,17 @@ describe("the cast clip drives the weapon arm", () => {
     expect(json.buffers[0].byteLength).toBeLessThanOrEqual(live);
   });
 
-  it("ships two sword-derived weapon-arm attacks and layers both over locomotion", () => {
-    expect(STRIKE_CLIPS).toHaveLength(2);
-    expect(new Set(STRIKE_CLIPS.map((clip) => CLIP_NAME[clip])).size).toBe(2);
-    expect(CLIP_NAME.strikeA).toBe("Rig|Sword_Attack");
-    // Both takes are slashes: the second is the first's backhand, authored by
-    // tools/build_slash_variant.py, not the pack's bare-fisted punch.
-    expect(CLIP_NAME.strikeB).toBe("Rig|Sword_Attack_Back");
+  it("chains UAL2's three regular sword takes and layers each over locomotion", () => {
+    expect(STRIKE_CLIPS.map((clip) => CLIP_NAME[clip])).toEqual([
+      "Rig|Sword_Regular_A", "Rig|Sword_Regular_B", "Rig|Sword_Regular_C",
+    ]);
     for (const clip of STRIKE_CLIPS) {
       expect(isLayeredClip(clip)).toBe(true);
       const right = travel(CLIP_NAME[clip], "upperarm_r") + travel(CLIP_NAME[clip], "lowerarm_r");
       const left = travel(CLIP_NAME[clip], "upperarm_l") + travel(CLIP_NAME[clip], "lowerarm_l");
-      // A sword take swings one arm and counterbalances with the other, so the
-      // weapon arm leads by about 2x rather than owning the clip outright.
-      expect(right, clip).toBeGreaterThan(left * 1.8);
+      // A sword take swings one arm and counterbalances with the other, and the
+      // recovery walks both back to guard: the weapon arm leads, it does not own it.
+      expect(right, clip).toBeGreaterThan(left * 1.2);
     }
   });
 
@@ -1198,9 +1195,9 @@ describe("the cast clip drives the weapon arm", () => {
     return p[0]!;
   }
 
-  it("alternates a forehand and a backhand: the hand crosses the body in opposite directions", () => {
-    const sweep = STRIKE_CLIPS.map((clip) =>
-      handSide(CLIP_NAME[clip], STRIKE_CONTACT) - handSide(CLIP_NAME[clip], STRIKE_DROP));
+  it("opens with a forehand and a backhand: the hand crosses the body in opposite directions", () => {
+    const sweep = (["strikeA", "strikeB"] as const).map((clip) =>
+      handSide(CLIP_NAME[clip], STRIKE_TIMING[clip].contact) - handSide(CLIP_NAME[clip], STRIKE_TIMING[clip].drop));
     const [a, b] = sweep as [number, number];
     expect(Math.sign(a), `sweeps ${sweep}`).not.toBe(Math.sign(b));
     // Both are real swings, not one swing and a twitch.
@@ -1797,73 +1794,84 @@ describe("idleRatio", () => {
 });
 
 describe("a melee swing lands heavy and on the hit", () => {
-  const CLIP = 1.533;
-  const WINDUP = 8 / 30;
+  const WINDUP = 7 / 30;
   const BEAT = 21 / 30;
+  const MODELS = fileURLToPath(new URL("../../public/models/", import.meta.url));
+  const glb = readFileSync(`${MODELS}anim-library.glb`);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const json = JSON.parse(glb.subarray(20, 20 + glb.readUInt32LE(12)).toString("utf8")) as any;
+  const bin = 20 + glb.readUInt32LE(12) + 8;
+  const floats = (i: number, width: number) => {
+    const a = json.accessors[i];
+    const start = bin + (json.bufferViews[a.bufferView].byteOffset ?? 0) + (a.byteOffset ?? 0);
+    return (k: number, c: number) => glb.readFloatLE(start + (k * width + c) * 4);
+  };
+  const anim = (clip: StrikeClip) => json.animations.find((a: { name: string }) => a.name === CLIP_NAME[clip]);
+  const seconds = (clip: StrikeClip) => Math.max(...anim(clip).samplers.map((s: { input: number }) => json.accessors[s.input].max[0]));
 
-  it("reaches the contact pose on the tick the sim resolves the swing", () => {
-    const p = strikePace(CLIP, WINDUP, BEAT);
-    const toContact = (CLIP * STRIKE_DROP) / p.raise + (CLIP * (STRIKE_CONTACT - STRIKE_DROP)) / p.drop;
-    expect(toContact).toBeCloseTo(WINDUP, 3);
+  it.each(STRIKE_CLIPS)("%s reaches the contact pose on the tick the sim resolves the swing", (clip) => {
+    const t = STRIKE_TIMING[clip];
+    const clipS = seconds(clip);
+    const p = strikePace(clipS, t, WINDUP, BEAT);
+    const toContact = (clipS * t.drop) / p.raise + (clipS * (t.contact - t.drop)) / p.drop;
+    // Within a tick: the finisher's feint is a long raise and runs at the rate cap.
+    expect(Math.abs(toContact - WINDUP)).toBeLessThan(1 / 30);
     // The follow-through fills the rest of the beat, so a held button chains swings.
-    expect(toContact + (CLIP * (1 - STRIKE_CONTACT)) / p.follow).toBeCloseTo(BEAT, 3);
+    expect(toContact + (clipS * (1 - t.contact)) / p.follow).toBeCloseTo(BEAT, 1);
   });
 
   it("raises slow and drops fast", () => {
-    const p = strikePace(CLIP, WINDUP, BEAT);
-    expect(p.drop).toBeGreaterThan(p.raise * 1.5);
-    expect(strikeRatioAt(0.1, p)).toBe(p.raise);
-    expect(strikeRatioAt((STRIKE_DROP + STRIKE_CONTACT) / 2, p)).toBe(p.drop);
-    expect(strikeRatioAt(0.9, p)).toBe(p.follow);
+    for (const clip of ["strikeA", "strikeB"] as const) {
+      const t = STRIKE_TIMING[clip];
+      const p = strikePace(seconds(clip), t, WINDUP, BEAT);
+      expect(p.drop, clip).toBeGreaterThan(p.raise * 1.5);
+      expect(strikeRatioAt(t.drop / 2, p, t)).toBe(p.raise);
+      expect(strikeRatioAt((t.drop + t.contact) / 2, p, t)).toBe(p.drop);
+      expect(strikeRatioAt(0.9, p, t)).toBe(p.follow);
+    }
   });
 
   it("falls back to one even rate when the sim sent no wind-up", () => {
-    const r = actionRatio(CLIP, BEAT);
-    expect(strikePace(CLIP, undefined, BEAT)).toEqual({ raise: r, drop: r, follow: r });
+    const r = actionRatio(1.4, BEAT);
+    expect(strikePace(1.4, STRIKE_TIMING.strikeA, undefined, BEAT)).toEqual({ raise: r, drop: r, follow: r });
   });
 
   it("steps in on the drop, holds through contact and settles back", () => {
-    expect(strikeLunge(0)).toBe(0);
-    expect(strikeLunge(STRIKE_DROP)).toBe(0);
-    expect(strikeLunge(STRIKE_CONTACT)).toBe(1);
-    expect(strikeLunge((STRIKE_DROP + STRIKE_CONTACT) / 2)).toBeGreaterThan(0.5);
-    expect(strikeLunge(0.95)).toBe(0);
+    const t = STRIKE_TIMING.strikeA;
+    expect(strikeLunge(0, t)).toBe(0);
+    expect(strikeLunge(t.drop, t)).toBe(0);
+    expect(strikeLunge(t.contact, t)).toBe(1);
+    expect(strikeLunge((t.drop + t.contact) / 2, t)).toBeGreaterThan(0.5);
+    expect(strikeLunge(0.95, t)).toBe(0);
   });
 
-  it("puts the contact where both sword takes stop their fastest arm travel", () => {
-    const MODELS = fileURLToPath(new URL("../../public/models/", import.meta.url));
-    const glb = readFileSync(`${MODELS}anim-library.glb`);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const json = JSON.parse(glb.subarray(20, 20 + glb.readUInt32LE(12)).toString("utf8")) as any;
-    const bin = 20 + glb.readUInt32LE(12) + 8;
-    const floats = (i: number, width: number) => {
-      const a = json.accessors[i];
-      const start = bin + (json.bufferViews[a.bufferView].byteOffset ?? 0) + (a.byteOffset ?? 0);
-      return (k: number, c: number) => glb.readFloatLE(start + (k * width + c) * 4);
-    };
-    for (const clip of STRIKE_CLIPS) {
-      const anim = json.animations.find((a: { name: string }) => a.name === CLIP_NAME[clip]);
-      let speed: number[] = [];
-      let times: number[] = [];
-      for (const ch of anim.channels) {
-        const bone = json.nodes[ch.target.node].name as string;
-        if (ch.target.path !== "rotation" || !["upperarm_r", "lowerarm_r", "hand_r", "spine_03"].includes(bone)) continue;
-        const smp = anim.samplers[ch.sampler];
-        const t = floats(smp.input, 1);
-        const q = floats(smp.output, 4);
-        const n = json.accessors[smp.input].count as number;
-        if (times.length === 0) { times = Array.from({ length: n }, (_, k) => t(k, 0)); speed = new Array(n).fill(0); }
-        for (let k = 1; k < n; k++) {
-          let dot = 0;
-          for (let c = 0; c < 4; c++) dot += q(k, c) * q(k - 1, c);
-          speed[k]! += (2 * Math.acos(Math.min(1, Math.abs(dot)))) / (times[k]! - times[k - 1]!);
-        }
+  it.each(STRIKE_CLIPS)("%s drops and stops where its arm speed says", (clip) => {
+    const a = anim(clip);
+    let speed: number[] = [];
+    let times: number[] = [];
+    for (const ch of a.channels) {
+      const bone = json.nodes[ch.target.node].name as string;
+      if (ch.target.path !== "rotation" || !["upperarm_r", "lowerarm_r", "hand_r", "spine_03"].includes(bone)) continue;
+      const smp = a.samplers[ch.sampler];
+      const t = floats(smp.input, 1);
+      const q = floats(smp.output, 4);
+      const n = json.accessors[smp.input].count as number;
+      if (times.length === 0) { times = Array.from({ length: n }, (_, k) => t(k, 0)); speed = new Array(n).fill(0); }
+      for (let k = 1; k < n; k++) {
+        let dot = 0;
+        for (let c = 0; c < 4; c++) dot += q(k, c) * q(k - 1, c);
+        speed[k]! += (2 * Math.acos(Math.min(1, Math.abs(dot)))) / (times[k]! - times[k - 1]!);
       }
-      const peak = speed.indexOf(Math.max(...speed));
-      let stop = peak;
-      while (stop < speed.length - 1 && speed[stop]! > speed[peak]! * 0.1) stop++;
-      const frac = times[stop]! / times[times.length - 1]!;
-      expect(Math.abs(frac - STRIKE_CONTACT), clip).toBeLessThan(0.03);
     }
+    const end = times[times.length - 1]!;
+    const peak = speed.indexOf(Math.max(...speed));
+    // The drop is the burst around the fastest frame: speed above half the peak.
+    let drop = peak;
+    while (drop > 1 && speed[drop - 1]! >= speed[peak]! * 0.5) drop--;
+    // The contact is where the blade has all but stopped after it.
+    let stop = peak;
+    while (stop < speed.length - 1 && speed[stop]! > speed[peak]! * 0.1) stop++;
+    expect(Math.abs(times[drop - 1]! / end - STRIKE_TIMING[clip].drop), "drop").toBeLessThan(0.02);
+    expect(Math.abs(times[stop]! / end - STRIKE_TIMING[clip].contact), "contact").toBeLessThan(0.02);
   });
 });

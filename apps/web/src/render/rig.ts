@@ -35,11 +35,11 @@ import { ARROW_LENGTH, buildArrow, swingTrail } from "./skill-fx";
 export type RigClip =
   | "idle" | "walk" | "run" | "walkBack"
   | "walkStrafeL" | "walkStrafeR" | "runStrafeL" | "runStrafeR"
-  | "walkFwdL" | "walkFwdR" | "walkBackL" | "walkBackR" | "cast" | "bow" | "strikeA" | "strikeB";
-export type StrikeClip = "strikeA" | "strikeB";
+  | "walkFwdL" | "walkFwdR" | "walkBackL" | "walkBackR" | "cast" | "bow" | "strikeA" | "strikeB" | "strikeC";
+export type StrikeClip = "strikeA" | "strikeB" | "strikeC";
 
-/** Alternated melee takes: two sword-derived slashes with opposite motion. */
-export const STRIKE_CLIPS: readonly StrikeClip[] = ["strikeA", "strikeB"];
+/** Melee takes played in turn: UAL2's regular sword chain, forehand, backhand, finisher. */
+export const STRIKE_CLIPS: readonly StrikeClip[] = ["strikeA", "strikeB", "strikeC"];
 
 /** Clip names inside anim-library.glb — FBX2glTF prefixes every take with "Rig|". */
 /**
@@ -67,11 +67,10 @@ export const CLIP_NAME: Record<RigClip, string> = {
   cast: "Rig|Spell_Simple_Shoot_R",
   // No bow take in the pack: keyed on the wardrobe skeleton by `tools/build_bow_clip.py`.
   bow: "Rig|Bow_Shoot",
-  strikeA: "Rig|Sword_Attack",
-  // The pack ships one sword swing, a forehand. The backhand is authored from it
-  // by `tools/build_slash_variant.py`: it winds up into the forehand's contact
-  // pose and swings back across the body, on the same phase fractions.
-  strikeB: "Rig|Sword_Attack_Back",
+  // UAL2's attack takes joined to their `_Rec` recovery (`tools/import_ual2_clips.py`).
+  strikeA: "Rig|Sword_Regular_A",
+  strikeB: "Rig|Sword_Regular_B",
+  strikeC: "Rig|Sword_Regular_C",
 };
 
 const CLIP_LOOPS: Record<RigClip, boolean> = {
@@ -91,6 +90,7 @@ const CLIP_LOOPS: Record<RigClip, boolean> = {
   bow: false,
   strikeA: false,
   strikeB: false,
+  strikeC: false,
 };
 
 /**
@@ -272,13 +272,18 @@ export const ACTION_RATIO_MAX = 3;
 /** Where `Rig|Bow_Shoot` looses, as a fraction of it: `RELEASE / LAST` in `tools/build_bow_clip.py`. */
 export const BOW_RELEASE = 12 / 30;
 
+export interface StrikeTiming { drop: number; contact: number }
+
 /**
- * Where both sword takes start their drop and where the blade stops, as
- * fractions of the clip, off the arm's angular speed in anim-library.glb: the
- * raise runs to 0.30s, the drop peaks at 0.40s and stops at 0.53s of 1.53s.
+ * Where each sword take starts its drop and where the blade stops, as fractions
+ * of the clip, off the arm's angular speed in anim-library.glb (rig.test.ts
+ * re-measures them). C opens with a feint, so its raise is the long one.
  */
-export const STRIKE_DROP = 0.2;
-export const STRIKE_CONTACT = 0.345;
+export const STRIKE_TIMING: Record<StrikeClip, StrikeTiming> = {
+  strikeA: { drop: 0.143, contact: 0.238 },
+  strikeB: { drop: 0.128, contact: 0.213 },
+  strikeC: { drop: 0.3, contact: 0.417 },
+};
 /** Share of the wind-up the raise gets. The drop gets the rest, so it snaps. */
 const STRIKE_RAISE_SHARE = 0.7;
 /** The drop may run faster than any other action: that speed is the weight. */
@@ -296,30 +301,33 @@ export interface StrikePace { raise: number; drop: number; follow: number }
  * reach the contact pose when the sim resolves the hit, then a follow-through
  * that fills the rest of the beat. No wind-up from the sim: one even rate.
  */
-export function strikePace(clipSeconds: number, windupSeconds?: number, beatSeconds?: number): StrikePace {
+export function strikePace(clipSeconds: number, t: StrikeTiming, windupSeconds?: number, beatSeconds?: number): StrikePace {
   if (!(clipSeconds > 0) || !(windupSeconds !== undefined && windupSeconds > 0)) {
     const r = actionRatio(clipSeconds, beatSeconds);
     return { raise: r, drop: r, follow: r };
   }
   const clamp = (v: number, max: number) => Math.min(max, Math.max(ACTION_RATIO_MIN, v));
   const rest = (beatSeconds ?? 0) - windupSeconds;
+  const raise = clamp((clipSeconds * t.drop) / (windupSeconds * STRIKE_RAISE_SHARE), ACTION_RATIO_MAX);
+  // The drop gets what the raise left: a capped raise (C's feint) makes it snap harder.
+  const left = Math.max(1e-6, windupSeconds - (clipSeconds * t.drop) / raise);
   return {
-    raise: clamp((clipSeconds * STRIKE_DROP) / (windupSeconds * STRIKE_RAISE_SHARE), ACTION_RATIO_MAX),
-    drop: clamp((clipSeconds * (STRIKE_CONTACT - STRIKE_DROP)) / (windupSeconds * (1 - STRIKE_RAISE_SHARE)), STRIKE_DROP_MAX),
-    follow: rest > 0 ? clamp((clipSeconds * (1 - STRIKE_CONTACT)) / rest, ACTION_RATIO_MAX) : ACTION_RATIO_MAX,
+    raise,
+    drop: clamp((clipSeconds * (t.contact - t.drop)) / left, STRIKE_DROP_MAX),
+    follow: rest > 0 ? clamp((clipSeconds * (1 - t.contact)) / rest, ACTION_RATIO_MAX) : ACTION_RATIO_MAX,
   };
 }
 
 /** The rate for the phase `frac` (0..1 through the clip) is in. */
-export function strikeRatioAt(frac: number, pace: StrikePace): number {
-  return frac < STRIKE_DROP ? pace.raise : frac < STRIKE_CONTACT ? pace.drop : pace.follow;
+export function strikeRatioAt(frac: number, pace: StrikePace, t: StrikeTiming): number {
+  return frac < t.drop ? pace.raise : frac < t.contact ? pace.drop : pace.follow;
 }
 
 /** How far into its step-in the body is at `frac`, 0..1. */
-export function strikeLunge(frac: number): number {
-  if (frac <= STRIKE_DROP || frac >= LUNGE_BACK) return 0;
-  if (frac < STRIKE_CONTACT) {
-    const u = (frac - STRIKE_DROP) / (STRIKE_CONTACT - STRIKE_DROP);
+export function strikeLunge(frac: number, t: StrikeTiming): number {
+  if (frac <= t.drop || frac >= LUNGE_BACK) return 0;
+  if (frac < t.contact) {
+    const u = (frac - t.drop) / (t.contact - t.drop);
     return 1 - (1 - u) * (1 - u);
   }
   if (frac < LUNGE_HOLD) return 1;
@@ -871,7 +879,7 @@ export const isLayeredClip = (clip: RigClip): boolean => UPPER_BODY_CLIPS.has(cl
 export const HIPS_BOB: Record<RigClip, number> = {
   idle: 1, walk: 0.65, run: 0.65, walkBack: 0.65,
   walkStrafeL: 0.65, walkStrafeR: 0.65, runStrafeL: 0.65, runStrafeR: 0.65,
-  walkFwdL: 0.65, walkFwdR: 0.65, walkBackL: 0.65, walkBackR: 0.65, cast: 1, bow: 1, strikeA: 1, strikeB: 1,
+  walkFwdL: 0.65, walkFwdR: 0.65, walkBackL: 0.65, walkBackR: 0.65, cast: 1, bow: 1, strikeA: 1, strikeB: 1, strikeC: 1,
 };
 
 /**
@@ -1127,7 +1135,7 @@ export class RigActor {
   private legsObserver: Observer<Scene> | null = null;
   private legsRestore: Observer<Scene> | null = null;
   /** The swing in flight and the rates it is paced by; null between swings. */
-  private strike: { group: AnimationGroup; pace: StrikePace } | null = null;
+  private strike: { group: AnimationGroup; pace: StrikePace; timing: StrikeTiming } | null = null;
   private trail: ReturnType<typeof swingTrail> | null = null;
   private strikeObserver: Observer<Scene> | null = null;
   private colliders: (SkirtCollider & {
@@ -1321,11 +1329,12 @@ export class RigActor {
     const group = this.groups.get(clip);
     if (!group) return;
     for (const strike of STRIKE_CLIPS) this.groups.get(strike)?.stop();
-    const pace = strikePace(clipSeconds(group), releaseSeconds, seconds);
+    const timing = STRIKE_TIMING[clip];
+    const pace = strikePace(clipSeconds(group), timing, releaseSeconds, seconds);
     group.speedRatio = pace.raise;
     group.start(false, pace.raise);
     group.onAnimationGroupEndObservable.addOnce(this.easeOutToLocomotion);
-    this.strike = { group, pace };
+    this.strike = { group, pace, timing };
     this.strikeObserver ??= this.scene.onBeforeAnimationsObservable.add(this.paceStrike);
     this.nextStrikeIndex = (this.nextStrikeIndex + 1) % STRIKE_CLIPS.length;
   }
@@ -1346,13 +1355,13 @@ export class RigActor {
       this.trail = null;
       return;
     }
-    const { group, pace } = strike;
+    const { group, pace, timing } = strike;
     const frac = (frame - group.from) / Math.max(1e-6, group.to - group.from);
-    const ratio = strikeRatioAt(frac, pace);
+    const ratio = strikeRatioAt(frac, pace, timing);
     if (group.speedRatio !== ratio) group.speedRatio = ratio;
-    this.pivot.position.z = STRIKE_LUNGE * strikeLunge(frac);
+    this.pivot.position.z = STRIKE_LUNGE * strikeLunge(frac, timing);
     // The ribbon is the drop and nothing else: on the raise it is a slow smear.
-    const tip = frac >= STRIKE_DROP && frac < LUNGE_HOLD ? this.castPoint() : null;
+    const tip = frac >= timing.drop && frac < LUNGE_HOLD ? this.castPoint() : null;
     if (tip) {
       this.trail ??= swingTrail(this.scene);
       this.trail.follow(tip);

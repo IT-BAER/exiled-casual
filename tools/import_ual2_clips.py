@@ -29,7 +29,8 @@ ANIMS = os.path.join(ROOT, "apps/web/public/models/anim-library.glb")
 SOURCE_ZIP = "D:/Downloads/Universal Animation Library 2[Source].zip"
 SOURCE_GLB = "Unreal-Godot/UAL2.glb"  # the in-place export; UAL2_RM bakes root motion
 
-# library clip name -> UAL2 take
+# library clip name -> UAL2 take, or takes played back to back. A sword attack
+# stops on its impact pose and its `_Rec` take starts on it, so a strike is both.
 CLIPS = {
     "Rig|Walk_Fwd_Loop": "Walk_Fwd_Loop",
     "Rig|Walk_Fwd_L_Loop": "Walk_Fwd_L_Loop",
@@ -39,9 +40,14 @@ CLIPS = {
     "Rig|Walk_Bwd_Loop": "Walk_Bwd_Loop",
     "Rig|Walk_Bwd_L_Loop": "Walk_Bwd_L_Loop",
     "Rig|Walk_Bwd_R_Loop": "Walk_Bwd_R_Loop",
+    "Rig|Sword_Regular_A": ("Sword_Regular_A", "Sword_Regular_A_Rec"),
+    "Rig|Sword_Regular_B": ("Sword_Regular_B", "Sword_Regular_B_Rec"),
+    "Rig|Sword_Regular_C": "Sword_Regular_C",  # its recovery is in the take
 }
-# Clips this import supersedes: `build_direction_clips.py`'s generated walks and backpedal.
+# Clips this import supersedes: `build_direction_clips.py`'s generated walks and
+# backpedal, and `build_slash_variant.py`'s backhand.
 RETIRED = (
+    "Rig|Sword_Attack_Back",
     "Rig|Jog_Back_Loop",
     "Rig|Jog_BackDiag_L_Loop",
     "Rig|Jog_BackDiag_R_Loop",
@@ -85,8 +91,9 @@ def splice(src_zip):
         add, extra = parse_glb(pack.read(SOURCE_GLB))
 
     by_name = {n["name"]: i for i, n in enumerate(doc["nodes"]) if "name" in n}
+    sources = {name: (take,) if isinstance(take, str) else take for name, take in CLIPS.items()}
     takes = {a["name"]: a for a in add["animations"]}
-    missing = sorted(set(CLIPS.values()) - set(takes))
+    missing = sorted({t for seq in sources.values() for t in seq} - set(takes))
     assert not missing, f"not in {SOURCE_GLB}: {missing}"
     doc["animations"] = [a for a in doc["animations"] if a.get("name") not in set(CLIPS) | set(RETIRED)]
     blob = bytearray(blob)
@@ -98,32 +105,54 @@ def splice(src_zip):
         doc["accessors"].append(dict(accessor, bufferView=len(doc["bufferViews"]) - 1, byteOffset=0))
         return len(doc["accessors"]) - 1
 
-    for name, take in CLIPS.items():
-        clip = takes[take]
-        out = {"name": name, "channels": [], "samplers": []}
-        inputs = {}
+    def floats(index):
+        data = accessor_bytes(add, extra, index)
+        return list(struct.unpack(f"<{len(data) // 4}f", data))
+
+    def kept(clip):
+        """(bone, path) -> sampler for the channels the library keeps."""
+        out = {}
         for channel in clip["channels"]:
             bone = add["nodes"][channel["target"]["node"]].get("name")
             path = channel["target"]["path"]
             if bone not in by_name or bone == "root":
                 continue
-            if not (path == "rotation" or (path == "translation" and bone == "pelvis")):
-                continue
-            sampler = clip["samplers"][channel["sampler"]]
-            if sampler["input"] not in inputs:
-                inputs[sampler["input"]] = append(accessor_bytes(add, extra, sampler["input"]), add["accessors"][sampler["input"]])
-            values = accessor_bytes(add, extra, sampler["output"])
-            source = add["accessors"][sampler["output"]]
+            if path == "rotation" or (path == "translation" and bone == "pelvis"):
+                out[(bone, path)] = clip["samplers"][channel["sampler"]]
+        return out
+
+    for name, seq in sources.items():
+        parts = [kept(takes[t]) for t in seq]
+        assert all(p.keys() == parts[0].keys() for p in parts), f"{name}: takes key different channels"
+        out = {"name": name, "channels": [], "samplers": []}
+        inputs = {}
+        for (bone, path), first in parts[0].items():
+            samplers = [p[(bone, path)] for p in parts]
+            key = tuple(s["input"] for s in samplers)
+            width = 4 if path == "rotation" else 3
+            times, values, offset = [], [], 0.0
+            # Each later take starts on the pose the one before it ended on: drop
+            # that duplicate key, since glTF times must strictly increase.
+            for i, s in enumerate(samplers):
+                t, v = floats(s["input"]), floats(s["output"])
+                skip = 1 if i else 0
+                times += [x + offset for x in t[skip:]]
+                values += v[skip * width:]
+                offset += t[-1]
             if path == "translation":
-                floats = [v * UNIT for v in struct.unpack(f"<{len(values) // 4}f", values)]
-                values = struct.pack(f"<{len(floats)}f", *floats)
-                source = {k: v for k, v in source.items() if k not in ("min", "max")}
-            out["samplers"].append({"input": inputs[sampler["input"]], "output": append(values, source),
-                                    "interpolation": sampler.get("interpolation", "LINEAR")})
+                values = [v * UNIT for v in values]
+            if key not in inputs:
+                inputs[key] = append(struct.pack(f"<{len(times)}f", *times),
+                                     {"componentType": 5126, "type": "SCALAR", "count": len(times),
+                                      "min": [times[0]], "max": [times[-1]]})
+            source = {k: v for k, v in add["accessors"][first["output"]].items() if k not in ("min", "max")}
+            source["count"] = len(times)
+            out["samplers"].append({"input": inputs[key], "output": append(struct.pack(f"<{len(values)}f", *values), source),
+                                    "interpolation": first.get("interpolation", "LINEAR")})
             out["channels"].append({"sampler": len(out["samplers"]) - 1, "target": {"node": by_name[bone], "path": path}})
-        assert any(c["target"]["path"] == "translation" for c in out["channels"]), f"{take}: no pelvis translation"
+        assert any(c["target"]["path"] == "translation" for c in out["channels"]), f"{name}: no pelvis translation"
         doc["animations"].append(out)
-        print(f"{name}: {len(out['channels'])} channels")
+        print(f"{name}: {len(out['channels'])} channels, {offset:.3f}s")
 
     doc["buffers"][0]["byteLength"] = len(blob)
     write_glb(ANIMS, doc, compact(doc, bytes(blob)))
