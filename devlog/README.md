@@ -374,3 +374,15 @@ tipped forward.
 <td width="100%"><img src="screenshots/2026-09-27-bow-archer-grip.jpeg" alt="The Stalker at full draw seen from eight sides: bow fist upright, arrow on the knuckles, draw hand at the jaw" width="100%"><br><sub>Full draw from eight sides.</sub></td>
 </tr>
 </table>
+
+## 2026-09-28 · Cliffs over the Strand
+
+The Strand's landward edge is now a tall cliff instead of a low rock wall. Its foot sinks into a
+scree that blends into the sand, and the cliff fades out where it would hide the character.
+Doorways between map tiles are wider everywhere, and open ground has no lattice seams left.
+
+<table>
+<tr>
+<td width="100%"><img src="screenshots/2026-09-28-strand-cliffs.jpeg" alt="The character on the Strand's sand below a tall sandstone cliff, braziers burning on its ledges and scree blending into the beach" width="100%"><br><sub>A tall cliff with scree at its foot.</sub></td>
+</tr>
+</table>
