@@ -42,6 +42,7 @@ import { BuffBar } from "./hud/BuffBar";
 import { DebugStats } from "./hud/DebugStats";
 import { Divider, FramedPanel, GOLD, MenuButton, DISPLAY, SERIF } from "./menu/frames";
 import { LoadingScreen, LOADING_ART, FADE_MS } from "./LoadingScreen";
+import { settleGate } from "./settle";
 import { pickTip } from "./tips";
 import { OptionsPanel } from "./menu/OptionsPanel";
 import { DEFAULT_SETTINGS, MOUSE_SLOT_BASE, MOVE_SOCKET, type Settings } from "./settings";
@@ -190,7 +191,7 @@ export function GameView({
   const workerRef = useRef<Worker | null>(null);
   /**
    * The loading plate. True from mount, and true again from the moment an `area`
-   * message lands until a frame has actually been PAINTED for that area.
+   * message lands until frames for that area arrive at a playable pace (`settle.ts`).
    *
    * There is no timer anywhere in this path on purpose (`docs/09` rule 8). The
    * three other facts — assets loaded, level built, textures ready — are all
@@ -198,7 +199,9 @@ export function GameView({
    * only starts after `loadPlayerRig`/`loadProps`/`loadRocks`/`loadMonsters` resolve, and the
    * paint is only armed once `scene.executeWhenReady` says the new area's
    * materials are in. A scene can report every other kind of ready and still
-   * draw one black frame, which is the frame the player would have seen.
+   * draw one black frame, which is the frame the player would have seen, and
+   * a GPU compiles a first-seen shader on its first draw, so the frames after it
+   * can still take seconds each.
    */
   const [loading, setLoading] = useState(true);
   /** The world is ready and the plate is dissolving off it. Cleared by the next area. */
@@ -246,13 +249,13 @@ export function GameView({
     let curSnap: Snapshot | null = null;
     let prevTickTime = performance.now();
     /**
-     * Armed by an `area` message once the scene reports ready, cleared by the
-     * first frame painted after it. A local rather than a ref because it is only
+     * Armed by an `area` message once the scene reports ready, fed every frame
+     * painted after it, cleared once it says the frames have settled. A local rather than a ref because it is only
      * ever read and written inside this effect, and it must die with the scene
      * it describes — this component's own cleanup is the only correct lifetime
      * for it, StrictMode's second mount included.
      */
-    let needsPaint = false;
+    let settled: ((now: number) => boolean) | null = null;
     /** Pending unmount of the plate, one fade after ready. Cancelled by a new area. */
     let fadeTimer: ReturnType<typeof setTimeout> | undefined;
     /**
@@ -396,7 +399,7 @@ export function GameView({
     /**
      * When to stop waiting and show whatever we are standing in.
      *
-     * The loading plate is held up for the whole hideout leg (see `needsPaint`),
+     * The loading plate is held up for the whole hideout leg (see `settled`),
      * which is the only way `?play&map=<node>` opens ON the beach instead of
      * showing a hideout, a walk and a portal first. The cost of that is a black
      * screen if the harness ever gets stuck — a node the sim quietly refuses, a
@@ -518,7 +521,7 @@ export function GameView({
         // Cover the swap before it starts. Disarming first matters: a frame
         // already in flight for the OLD area must not be allowed to report the
         // new one ready.
-        needsPaint = false;
+        settled = null;
         // The one sound the player makes and never hears an entity for: the
         // crossing itself. Every id in the new area is new, so the diff has to
         // start over or the whole old population would be reported dead.
@@ -573,7 +576,7 @@ export function GameView({
         // Arms the paint only once this area's materials and textures are in.
         // Babylon defers this through a timeout even when nothing is pending, so
         // the plate always gets at least one render to appear in.
-        scene.executeWhenReady(() => { needsPaint = true; });
+        scene.executeWhenReady(() => { settled = settleGate(performance.now()); });
       }
     };
 
@@ -600,9 +603,9 @@ export function GameView({
         true,
       );
       scene.render();
-      // The one place the loading plate is allowed to come down: a frame for
-      // this area is now on the glass. Guarded by the flag rather than by state,
-      // so this costs one boolean read per frame and sets React state once.
+      // The one place the loading plate is allowed to come down: frames for
+      // this area are on the glass at a playable pace. Guarded by a local rather
+      // than by state, so this costs one call per frame and sets React state once.
       // Held up for the whole `?play&map=<node>` leg: the harness's hideout,
       // its walk and its portal are staging, not a place, and showing them was
       // the difference between "the URL opens the map" and "the URL watches
@@ -610,8 +613,8 @@ export function GameView({
       // `harness` is already "done" in normal play, so this costs nothing there,
       // and it gives up on its own after twenty seconds (HARNESS_GIVE_UP_TICKS)
       // rather than hanging on a black plate.
-      if (needsPaint && harness === "done") {
-        needsPaint = false;
+      if (settled?.(performance.now()) && harness === "done") {
+        settled = null;
         // Dissolve rather than cut. The world under it is finished either way —
         // this fade costs the player nothing, because the frame behind it is
         // already the one they were waiting for.

@@ -124,6 +124,7 @@ vi.mock("./input/bindings", () => ({
 
 import { GameView } from "./GameView";
 import { FADE_MS } from "./LoadingScreen";
+import { SETTLE_FRAMES } from "./settle";
 import { playSfx } from "./audio/sfx";
 
 const makeSnap = (): Snapshot => ({
@@ -337,6 +338,11 @@ describe("GameView", () => {
     act(() => { hoisted.frame?.(); });
   }
 
+  /** Back-to-back frames: a pace the settle gate accepts. */
+  function paintSettled() {
+    for (let i = 0; i < SETTLE_FRAMES; i++) paintFrame();
+  }
+
   /**
    * Let the plate finish dissolving. It stays mounted at opacity 0 for FADE_MS
    * after the world is ready, so "gone" is a state the test has to wait for
@@ -346,7 +352,7 @@ describe("GameView", () => {
     await act(async () => { await new Promise((r) => setTimeout(r, FADE_MS + 40)); });
   }
 
-  it("covers the screen from mount and stays up until a frame is actually painted", async () => {
+  it("covers the screen from mount and stays up until frames arrive at a playable pace", async () => {
     await mountGame();
     // Up before anything: the canvas at this point is a black rectangle.
     expect(screen.getByTestId("loading-screen")).toBeTruthy();
@@ -358,7 +364,10 @@ describe("GameView", () => {
     // before the player is shown anything.
     becomeReady();
     expect(screen.getByTestId("loading-screen")).toBeTruthy();
+    // One painted frame is not enough: the first draws compile shaders on the GPU.
     paintFrame();
+    expect(screen.getByTestId("loading-screen").getAttribute("data-leaving")).toBeNull();
+    paintSettled();
     // Ready means it starts dissolving, not that it vanishes: a cut from a
     // painting to a game reads as a glitch.
     expect(screen.getByTestId("loading-screen").getAttribute("data-leaving")).toBe("");
@@ -376,7 +385,7 @@ describe("GameView", () => {
     expect(screen.getByTestId("loading-screen")).toBeTruthy();
 
     becomeReady();
-    paintFrame();
+    paintSettled();
     await finishFade();
     expect(screen.queryByTestId("loading-screen")).toBeNull();
   });
@@ -385,7 +394,7 @@ describe("GameView", () => {
     await mountGame();
     sendArea("map.desert");
     becomeReady();
-    paintFrame();
+    paintSettled();
     await finishFade();
     expect(screen.queryByTestId("loading-screen")).toBeNull();
 
@@ -397,7 +406,7 @@ describe("GameView", () => {
     // And it is back at full opacity, not still carrying the last dissolve.
     expect(screen.getByTestId("loading-screen").getAttribute("data-leaving")).toBeNull();
     becomeReady();
-    paintFrame();
+    paintSettled();
     await finishFade();
     expect(screen.queryByTestId("loading-screen")).toBeNull();
   });
