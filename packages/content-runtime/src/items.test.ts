@@ -1,4 +1,6 @@
+import { existsSync } from "node:fs";
 import { describe, it, expect } from "vitest";
+import { FAMILY_BY_CLASS, familyOf } from "@exiled/rules";
 import { ITEM_POOLS, baseOf, describeItem, itemStatMods } from "./items.js";
 
 describe("ITEM_POOLS", () => {
@@ -70,6 +72,13 @@ describe("uniques", () => {
     }
   });
 
+  it("gives every class family the same number of uniques", () => {
+    const perFamily: Record<string, number> = {};
+    for (const f of Object.values(FAMILY_BY_CLASS)) perFamily[f] = 0;
+    for (const u of ITEM_POOLS.uniques ?? []) perFamily[familyOf(u.baseId)]! += 1;
+    expect(perFamily).toEqual({ ironsworn: 3, stalker: 3, ember: 3 });
+  });
+
   it("describeItem attaches the flavour line for a unique and nothing else", () => {
     const u = ITEM_POOLS.uniques![0]!;
     const d = describeItem({ baseId: u.baseId, rarity: "unique", itemLevel: 82, affixes: [], name: u.name });
@@ -86,6 +95,12 @@ describe("uniques", () => {
       expect(u.icon).toBeTruthy();
       expect(d.icon).toBe(u.icon);
       expect(d.icon).not.toBe(baseOf(u.baseId).icon);
+    }
+  });
+
+  it("ship the art they name, or the drop is a reward nobody sees", () => {
+    for (const u of ITEM_POOLS.uniques ?? []) {
+      expect(existsSync(new URL(`../../../apps/web/public${u.icon}`, import.meta.url)), u.icon).toBe(true);
     }
   });
 });

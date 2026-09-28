@@ -351,6 +351,80 @@ const UNIQUES: UniqueItem[] = [
       { affixId: "affix.fire_res", min: 20, max: 30 },
     ],
   },
+  // Ironsworn and Stalker mirror Ember's three: the weapon, the off-hand, the body, so
+  // no class family has fewer uniques to find than another.
+  {
+    id: "unique.oathbreaker",
+    name: "Oathbreaker",
+    baseId: "base.ironsworn_hammer",
+    flavour: "Every vow it kept, it kept by force.",
+    icon: "/textures/items/unique_oathbreaker.png",
+    mods: [
+      { affixId: "affix.added_phys", min: 12, max: 18 },
+      { affixId: "affix.phys_dmg_pct", min: 45, max: 60 },
+      { affixId: "affix.strength", min: 20, max: 30 },
+    ],
+  },
+  {
+    id: "unique.gravewall",
+    name: "Gravewall",
+    baseId: "base.ironsworn_tower_shield",
+    flavour: "They buried the town behind it. The wall held.",
+    icon: "/textures/items/unique_gravewall.png",
+    mods: [
+      { affixId: "affix.life", min: 40, max: 60 },
+      { affixId: "affix.armour", min: 70, max: 110 },
+      { affixId: "affix.lightning_res", min: 25, max: 35 },
+    ],
+  },
+  {
+    id: "unique.anvilheart",
+    name: "Anvilheart",
+    baseId: "base.ironsworn_plate",
+    flavour: "Struck a thousand times, it only grew harder.",
+    icon: "/textures/items/unique_anvilheart.png",
+    mods: [
+      { affixId: "affix.life", min: 50, max: 75 },
+      { affixId: "affix.increased_armour", min: 35, max: 50 },
+      { affixId: "affix.chaos_res", min: 15, max: 25 },
+    ],
+  },
+  {
+    id: "unique.quietus",
+    name: "Quietus",
+    baseId: "base.stalker_bow",
+    flavour: "The last thing the herd heard was nothing.",
+    icon: "/textures/items/unique_quietus.png",
+    mods: [
+      { affixId: "affix.phys_dmg_pct", min: 40, max: 55 },
+      { affixId: "affix.crit_chance", min: 28, max: 40 },
+      { affixId: "affix.cold_dmg", min: 14, max: 22 },
+    ],
+  },
+  {
+    id: "unique.thornward",
+    name: "Thornward",
+    baseId: "base.stalker_buckler",
+    flavour: "A hunter's second skin is patience.",
+    icon: "/textures/items/unique_thornward.png",
+    mods: [
+      { affixId: "affix.life", min: 30, max: 45 },
+      { affixId: "affix.cold_res", min: 30, max: 40 },
+      { affixId: "affix.lightning_res", min: 20, max: 30 },
+    ],
+  },
+  {
+    id: "unique.mossback",
+    name: "Mossback",
+    baseId: "base.stalker_leathers",
+    flavour: "It smells of rain, and of the thing that waited in it.",
+    icon: "/textures/items/unique_mossback.png",
+    mods: [
+      { affixId: "affix.life", min: 45, max: 65 },
+      { affixId: "affix.cold_res", min: 20, max: 30 },
+      { affixId: "affix.chaos_res", min: 15, max: 25 },
+    ],
+  },
 ];
 
 // Validate at module load; bad content is a programmer error, fail fast.

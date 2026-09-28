@@ -81,6 +81,13 @@ ICONS: list[tuple[str, str, int, int]] = [
     ("stalker_boots_v1", "stalker_boots", 2, 2),
     ("ember_slippers_v1", "ember_slippers", 2, 2),
     ("ember_cowl_v1", "ember_cowl", 2, 2),
+    # Uniques, on their base's footprint. Ember's three predate this list.
+    ("unique_oathbreaker_v1", "unique_oathbreaker", 2, 3),
+    ("unique_gravewall_v1", "unique_gravewall", 2, 3),
+    ("unique_anvilheart_v1", "unique_anvilheart", 2, 3),
+    ("unique_quietus_v1", "unique_quietus", 2, 4),
+    ("unique_thornward_v1", "unique_thornward", 2, 2),
+    ("unique_mossback_v1", "unique_mossback", 2, 3),
     # The scroll replaces the one hand-authored SVG in the pool.
     ("wisdom_scroll_v1", "wisdom_scroll", 1, 1),
 ]

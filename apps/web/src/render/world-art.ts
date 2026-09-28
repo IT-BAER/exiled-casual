@@ -85,6 +85,12 @@ export const WORLD_ART: readonly string[] = [
   "/textures/items/unique_ashmaw.png",
   "/textures/items/unique_cinderveil.png",
   "/textures/items/unique_emberchoir.png",
+  "/textures/items/unique_anvilheart.png",
+  "/textures/items/unique_gravewall.png",
+  "/textures/items/unique_mossback.png",
+  "/textures/items/unique_oathbreaker.png",
+  "/textures/items/unique_quietus.png",
+  "/textures/items/unique_thornward.png",
   "/textures/items/wisdom_scroll.png",
 ];
 
