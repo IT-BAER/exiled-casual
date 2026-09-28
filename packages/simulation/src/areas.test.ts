@@ -211,7 +211,7 @@ describe("pool-driven spawning", () => {
         const session = { ...mapSessionAtTier(1), mapSeed: seed, activeNodeId: node };
         const layout = generateArea(seed, CONTENT_VERSION, grammarForNode(node));
         buildArea(world, "map", session, layout);
-        const col = gridCollision(layout.grid);
+        const col = areaCollision(world, "map", layout);
         for (const e of world.query("monster", "position")) {
           const p = world.get<Position>(e, "position")!;
           const r = MONSTERS.get(world.get<MonsterC>(e, "monster")!.defId)!.radiusFixed;

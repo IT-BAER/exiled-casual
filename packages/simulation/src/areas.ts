@@ -313,8 +313,11 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
     // Build collision once so every spread position can be validated against
     // the grid before use. Sockets are guaranteed on floor cells by mapgen;
     // the ring offsets are not, so a member could embed in a thick wall and
-    // be stuck for the entire run without this guard.
-    const col = gridCollision(layout.grid);
+    // be stuck for the entire run without this guard. The containers stood up
+    // below are in it too: a body inside one's blocker cannot move either.
+    const col = gridCollision(layout.grid, layout.objectiveAnchors
+      .filter((a) => a.id.startsWith("reward."))
+      .map((a) => ({ x: fp(a.x), y: fp(a.y), r: fp(BLOCK_RADIUS.container!) })));
     for (let i = 0; i < spawns.length; i++) {
       const s = spawns[i]!;
       const sx = fp(s.x), sy = fp(s.y);
