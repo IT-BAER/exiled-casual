@@ -1,48 +1,50 @@
-"""Add a second slash clip to `anim-library.glb`.
+"""Add a backhand slash clip to `anim-library.glb`.
 
-The pack ships exactly one sword swing, `Rig|Sword_Attack`, so alternating melee
-takes had to borrow `Rig|Punch_Cross` — a punch, not a slash. This authors
-`Rig|Sword_Attack_Down`: the same swing, rolled about the character's forward
-axis so the arc comes down diagonally instead of across.
+The pack ships exactly one sword swing, `Rig|Sword_Attack`, a forehand. This
+authors `Rig|Sword_Attack_Back`, the return stroke: it winds up into the
+forehand's contact pose and swings back to the forehand's raised pose, so the
+two alternate as a slash and its backhand.
 
-The roll is applied as a RIGID transform of the whole weapon arm about the
-shoulder head, not as a per-channel offset: rotating the chain about its own
-pivot keeps the hand attached to the shoulder and keeps elbow and wrist roll
-exactly as authored, so the swing still reads as a swing. Everything below the
-clavicle moves together; the rest of the body is the source's, so the two clips
-blend against the same torso.
+Every phase lands at the same share of the clip as the source's, because the
+runtime paces both takes with one set of fractions (`STRIKE_DROP`,
+`STRIKE_CONTACT` in `apps/web/src/render/rig.ts`):
+  raise   0 .. DROP        ease from the source's first pose into its contact pose
+  drop    DROP .. CONTACT  the source's drop run backwards, re-timed to ACCELERATE
+                           into contact (reversed as-is it would be fastest first)
+  follow  CONTACT .. end   ease from the source's drop-start pose back to its first
 
-Same splice as `tools/build_cast_mirror.py`, for the same reason: the library is
-a vendored FBX2glTF conversion and re-exporting it would rewrite all 45 clips.
-Re-running replaces the clip it added last time, so this is idempotent.
+Same splice as `tools/build_cast_mirror.py`, and its `compact` drops the keys of
+the clip it replaces. Re-running replaces the clip it added last time, so this
+is idempotent.
 
-    blender --background --factory-startup --disable-autoexec \
-        --python-exit-code 1 --python tools/build_slash_variant.py
+    blender --background --factory-startup --disable-autoexec         --python-exit-code 1 --python tools/build_slash_variant.py
 """
 
 import json
-import math
 import os
 import struct
 import sys
 import tempfile
 
 import bpy
-from mathutils import Matrix, Vector
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from build_cast_mirror import compact  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ANIMS = os.path.join(ROOT, "apps/web/public/models/anim-library.glb")
 SCRATCH = os.path.join(tempfile.gettempdir(), "exiled-slash-variant.glb")
 
 SOURCE_CLIP = "Rig|Sword_Attack"
-VARIANT_CLIP = "Rig|Sword_Attack_Down"
+VARIANT_CLIP = "Rig|Sword_Attack_Back"
+# Clips this tool authored before; the splice removes them.
+RETIRED = ("Rig|Sword_Attack_Down",)
 
-# Root of the rigid rotation. Its whole subtree rides along.
-ARM_ROOT = "upperarm_r"
-# glTF's -Z forward lands on +Y after the importer's axis conversion, so a roll
-# about +Y tips the swing plane down toward the floor without turning the body.
-ROLL_AXIS = Vector((0.0, 1.0, 0.0))
-ROLL_DEGREES = -38.0
+# Keep in step with STRIKE_DROP / STRIKE_CONTACT in apps/web/src/render/rig.ts.
+DROP = 0.2
+CONTACT = 0.345
+# The hand the drop is re-timed by: its path length, not the frame count.
+HAND = "hand_r"
 
 
 def read_glb(path):
@@ -75,6 +77,15 @@ def write_glb(path, doc, blob):
         handle.write(struct.pack("<III", 0x46546C67, 2, 12 + len(body)) + body)
 
 
+def smooth(u):
+    return u * u * (3.0 - 2.0 * u)
+
+
+def blend(a, b, u):
+    """Per-bone local pose between two sampled poses."""
+    return {n: (a[n][0].lerp(b[n][0], u), a[n][1].slerp(b[n][1], u)) for n in a}
+
+
 def build_variant():
     bpy.ops.import_scene.gltf(filepath=ANIMS)
     arm = next(o for o in bpy.data.objects if o.type == "ARMATURE")
@@ -86,41 +97,66 @@ def build_variant():
 
     scene = bpy.context.scene
     start, end = (int(round(v)) for v in source.frame_range)
-    order = [b.name for b in arm.pose.bones]
-    order.sort(key=lambda n: len(arm.data.bones[n].parent_recursive))
+    names = [b.name for b in arm.pose.bones]
+    for b in arm.pose.bones:
+        b.rotation_mode = "QUATERNION"
 
-    poses = []
+    poses, hand = [], []
     for frame in range(start, end + 1):
         scene.frame_set(frame)
         bpy.context.view_layer.update()
-        poses.append({b.name: b.matrix.copy() for b in arm.pose.bones})
+        poses.append({b.name: (b.location.copy(), b.rotation_quaternion.copy()) for b in arm.pose.bones})
+        hand.append(arm.pose.bones[HAND].head.copy())
+    last = len(poses) - 1
 
-    subtree = {ARM_ROOT} | {b.name for b in arm.data.bones[ARM_ROOT].children_recursive}
+    def pose_at(x):
+        i = min(int(x), last - 1)
+        return blend(poses[i], poses[i + 1], x - i)
+
+    drop_at, contact_at = DROP * last, CONTACT * last
+    # Path length of the hand along the source drop, sampled finely, so the
+    # reversed drop can be re-timed by distance travelled.
+    steps = 200
+    xs = [drop_at + (contact_at - drop_at) * k / steps for k in range(steps + 1)]
+    def hand_at(x):
+        i = min(int(x), last - 1)
+        return hand[i].lerp(hand[i + 1], x - i)
+    arc = [0.0]
+    for k in range(1, steps + 1):
+        arc.append(arc[-1] + (hand_at(xs[k]) - hand_at(xs[k - 1])).length)
+    total = arc[-1]
+
+    def reversed_drop(s):
+        """Source frame for share s of the backhand drop: ease-in by hand distance."""
+        want = total * (1.0 - s * s)  # distance from the source drop START
+        k = next((k for k in range(1, steps + 1) if arc[k] >= want), steps)
+        f = (want - arc[k - 1]) / max(1e-9, arc[k] - arc[k - 1])
+        return xs[k - 1] + (xs[k] - xs[k - 1]) * f
+
+    first, top, hit = poses[0], pose_at(drop_at), pose_at(contact_at)
+    # The backhand's own phase edges sit ON frames, or the hit pose falls between
+    # two keys and the blade is still moving on the frame after contact.
+    b_drop, b_contact = round(drop_at), int(contact_at)
 
     anim.action = None
-    stale = bpy.data.actions.get(VARIANT_CLIP)
-    if stale is not None:
-        bpy.data.actions.remove(stale)
+    for name in (VARIANT_CLIP,) + RETIRED:
+        stale = bpy.data.actions.get(name)
+        if stale is not None:
+            bpy.data.actions.remove(stale)
     variant = bpy.data.actions.new(VARIANT_CLIP)
     arm.animation_data.action = variant
 
-    # Forward, never reversed: the source lands its hit near the END, so a
-    # back-to-front take would strike on frame one and finish with the sword
-    # raised. Only the swing PLANE changes.
-    for index, pose in enumerate(poses):
+    for index in range(last + 1):
         frame = start + index
-        scene.frame_set(frame)
-        pivot = pose[ARM_ROOT].to_translation()
-        roll = (
-            Matrix.Translation(pivot)
-            @ Matrix.Rotation(math.radians(ROLL_DEGREES), 4, ROLL_AXIS)
-            @ Matrix.Translation(-pivot)
-        )
-        for name in order:
-            arm.pose.bones[name].matrix = roll @ pose[name] if name in subtree else pose[name]
-            bpy.context.view_layer.update()
-        for name in order:
+        if index <= b_drop:
+            pose = blend(first, hit, smooth(index / b_drop))
+        elif index <= b_contact:
+            pose = pose_at(reversed_drop((index - b_drop) / (b_contact - b_drop)))
+        else:
+            pose = blend(top, first, smooth((index - b_contact) / (last - b_contact)))
+        for name in names:
             bone = arm.pose.bones[name]
+            bone.location, bone.rotation_quaternion = pose[name]
             bone.keyframe_insert("location", frame=frame)
             bone.keyframe_insert("rotation_quaternion", frame=frame)
 
@@ -150,7 +186,7 @@ def splice():
     by_name = {n["name"]: i for i, n in enumerate(doc["nodes"]) if "name" in n}
     from_add = {i: n.get("name") for i, n in enumerate(add["nodes"])}
 
-    doc["animations"] = [a for a in doc.get("animations", []) if a.get("name") != VARIANT_CLIP]
+    doc["animations"] = [a for a in doc.get("animations", []) if a.get("name") not in (VARIANT_CLIP,) + RETIRED]
 
     accessor_base = len(doc["accessors"])
     blob += b"\0" * (-len(blob) % 4)
@@ -186,8 +222,7 @@ def splice():
     assert kept, "no channel matched a library node by name"
 
     doc["animations"].append(clip)
-    doc["buffers"][0]["byteLength"] = len(blob) + (-len(blob) % 4)
-    write_glb(ANIMS, doc, blob)
+    write_glb(ANIMS, doc, compact(doc, blob))
     os.remove(SCRATCH)
     return len(kept)
 

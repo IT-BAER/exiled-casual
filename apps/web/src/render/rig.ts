@@ -53,10 +53,10 @@ export const CLIP_NAME: Record<RigClip, string> = {
   // No bow take in the pack: keyed on the wardrobe skeleton by `tools/build_bow_clip.py`.
   bow: "Rig|Bow_Shoot",
   strikeA: "Rig|Sword_Attack",
-  // The pack ships one sword swing. The second take is that swing rolled onto a
-  // downward diagonal and played back to front by `tools/build_slash_variant.py`
-  // — a slash from the other side, not the pack's bare-fisted punch.
-  strikeB: "Rig|Sword_Attack_Down",
+  // The pack ships one sword swing, a forehand. The backhand is authored from it
+  // by `tools/build_slash_variant.py`: it winds up into the forehand's contact
+  // pose and swings back across the body, on the same phase fractions.
+  strikeB: "Rig|Sword_Attack_Back",
 };
 
 const CLIP_LOOPS: Record<RigClip, boolean> = {

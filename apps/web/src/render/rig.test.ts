@@ -1008,9 +1008,9 @@ describe("the cast clip drives the weapon arm", () => {
     expect(STRIKE_CLIPS).toHaveLength(2);
     expect(new Set(STRIKE_CLIPS.map((clip) => CLIP_NAME[clip])).size).toBe(2);
     expect(CLIP_NAME.strikeA).toBe("Rig|Sword_Attack");
-    // Both takes are slashes: the second is the first rolled onto another swing
-    // plane by tools/build_slash_variant.py, not the pack's bare-fisted punch.
-    expect(CLIP_NAME.strikeB).toBe("Rig|Sword_Attack_Down");
+    // Both takes are slashes: the second is the first's backhand, authored by
+    // tools/build_slash_variant.py, not the pack's bare-fisted punch.
+    expect(CLIP_NAME.strikeB).toBe("Rig|Sword_Attack_Back");
     for (const clip of STRIKE_CLIPS) {
       expect(isLayeredClip(clip)).toBe(true);
       const right = travel(CLIP_NAME[clip], "upperarm_r") + travel(CLIP_NAME[clip], "lowerarm_r");
@@ -1019,6 +1019,67 @@ describe("the cast clip drives the weapon arm", () => {
       // weapon arm leads by about 2x rather than owning the clip outright.
       expect(right, clip).toBeGreaterThan(left * 1.8);
     }
+  });
+
+  /** Sideways position of the right hand, in the clip's root frame, at a share of the clip. */
+  function handSide(clipName: string, frac: number): number {
+    const clip = json.animations.find((a: { name: string }) => a.name === clipName);
+    const floatsAt = (i: number): number[][] => {
+      const a = json.accessors[i];
+      const n = a.type === "SCALAR" ? 1 : a.type === "VEC3" ? 3 : 4;
+      const start = bin + (json.bufferViews[a.bufferView].byteOffset ?? 0) + (a.byteOffset ?? 0);
+      return Array.from({ length: a.count }, (_, k) =>
+        Array.from({ length: n }, (_, c) => glb.readFloatLE(start + (k * n + c) * 4)));
+    };
+    const tracks = new Map<string, number[]>();
+    let duration = 0;
+    for (const ch of clip.channels) {
+      const s = clip.samplers[ch.sampler];
+      const t = floatsAt(s.input).map((r) => r[0]!);
+      duration = Math.max(duration, t[t.length - 1]!);
+      tracks.set(`${ch.target.node}.${ch.target.path}`, [s.input, s.output]);
+    }
+    const sample = (node: number, path: string, fallback: number[]): number[] => {
+      const key = tracks.get(`${node}.${path}`);
+      if (!key) return fallback;
+      const t = floatsAt(key[0]!).map((r) => r[0]!);
+      const v = floatsAt(key[1]!);
+      const time = frac * duration;
+      let i = 0;
+      while (i < t.length - 2 && t[i + 1]! < time) i++;
+      const f = Math.min(1, Math.max(0, (time - t[i]!) / (t[i + 1]! - t[i]!)));
+      return v[i]!.map((x, c) => x + (v[i + 1]![c]! - x) * f);
+    };
+    const parent = new Map<number, number>();
+    json.nodes.forEach((n: { children?: number[] }, i: number) => (n.children ?? []).forEach((c) => parent.set(c, i)));
+    // Position of hand_r in the frame of the top node, by walking the chain up.
+    let p = [0, 0, 0];
+    for (let i = json.nodes.findIndex((n: { name: string }) => n.name === "hand_r"); i !== undefined; i = parent.get(i)!) {
+      const node = json.nodes[i];
+      const [x, y, z, w] = sample(i, "rotation", node.rotation ?? [0, 0, 0, 1]) as [number, number, number, number];
+      const s = sample(i, "scale", node.scale ?? [1, 1, 1]);
+      const t = sample(i, "translation", node.translation ?? [0, 0, 0]);
+      const [px, py, pz] = [p[0]! * s[0]!, p[1]! * s[1]!, p[2]! * s[2]!];
+      // q * v * q^-1, then the node's translation.
+      const ix = w * px + y * pz - z * py, iy = w * py + z * px - x * pz;
+      const iz = w * pz + x * py - y * px, iw = -x * px - y * py - z * pz;
+      p = [
+        ix * w + iw * -x + iy * -z - iz * -y + t[0]!,
+        iy * w + iw * -y + iz * -x - ix * -z + t[1]!,
+        iz * w + iw * -z + ix * -y - iy * -x + t[2]!,
+      ];
+      if (!parent.has(i)) break;
+    }
+    return p[0]!;
+  }
+
+  it("alternates a forehand and a backhand: the hand crosses the body in opposite directions", () => {
+    const sweep = STRIKE_CLIPS.map((clip) =>
+      handSide(CLIP_NAME[clip], STRIKE_CONTACT) - handSide(CLIP_NAME[clip], STRIKE_DROP));
+    const [a, b] = sweep as [number, number];
+    expect(Math.sign(a), `sweeps ${sweep}`).not.toBe(Math.sign(b));
+    // Both are real swings, not one swing and a twitch.
+    expect(Math.min(Math.abs(a), Math.abs(b)), `sweeps ${sweep}`).toBeGreaterThan(Math.max(Math.abs(a), Math.abs(b)) * 0.4);
   });
 
   it("swings the right arm and not the left", () => {
