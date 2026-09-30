@@ -342,11 +342,6 @@ SUIT_RIM_LIP = 0.006
 # How far inboard of the shoulder joint the pauldron cap still counts as cap
 # and escapes the collar plane, metres.
 SUIT_CAP_INBOARD = 0.08
-# Collar steel this far off the trapezius is a torn flap, not a plate: measured
-# on the v9 harness, the shell over that skin sits inside 30 mm and the fins
-# stand 40 to 100 mm out. Read from this far below the shoulder joint up.
-SUIT_FLARE_PROUD = 0.04
-SUIT_FLARE_BELOW_SHOULDER = 0.04
 # Where each suit's shins are cut off and dropped (`cut_greaves`), below the knee.
 # 30 mm under the sabaton rim (`BOOT_TOP`): the suit is still wider than the
 # boot there, so its edge laps the rim from outside.
@@ -2169,35 +2164,6 @@ def lift_gorget(donor, M, body, rig):
     }
 
 
-def trim_collar_flare(donor, M, body, rig, shoulder):
-    """Drop the collar steel that stands off the trapezius instead of on it.
-
-    The decode tears the collar into flaps between the throat ring and the
-    pauldron cap, and a flap keeps the angle it was torn at: from behind they
-    are a stack of fins standing over the shoulder. A collar lies ON the
-    trapezius, so steel more than `SUIT_FLARE_PROUD` off that skin, inboard of
-    the shoulder joint, is a flap and not a plate. What it leaves bare is the
-    collar region, which `build_gorget` closes with its own plate.
-    """
-    skin = bvh_of(body, body.matrix_world)
-    floor = shoulder.z - SUIT_FLARE_BELOW_SHOULDER
-    bm = bmesh.new()
-    bm.from_mesh(donor.data)
-    doomed = []
-    for f in bm.faces:
-        p = M @ f.calc_center_median()
-        if p.z > floor and abs(p.x) < abs(shoulder.x) \
-                and skin.find_nearest(p)[3] > SUIT_FLARE_PROUD:
-            doomed.append(f)
-    if doomed:
-        bmesh.ops.delete(bm, geom=doomed, context="FACES")
-        bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
-    bm.to_mesh(donor.data)
-    bm.free()
-    donor.data.update()
-    return len(doomed)
-
-
 def inflate_pauldrons(donor, M, body, rig, per_vertex=False):
     """Grow each shoulder cap about the arm's own axis until the deltoid is in.
 
@@ -2524,7 +2490,6 @@ def fit_plate_suit(donor, body, rig, trunk_band=(PLATE_TRUNK_FROM, PLATE_TRUNK_T
                              region=in_sleeve,
                              lip=lambda p: Vector((0, shoulder.y - p.y, shoulder.z - p.z)))
                    for s in (1, -1))
-    cut_flare = 0 if soft else trim_collar_flare(donor, placement, body, rig, shoulder)
     caps = inflate_pauldrons(donor, placement, body, rig, per_vertex=soft)
     cleared = clear_skin(donor, placement, body)
     if not cut_feet or not cut_arms:
@@ -2549,7 +2514,6 @@ def fit_plate_suit(donor, body, rig, trunk_band=(PLATE_TRUNK_FROM, PLATE_TRUNK_T
         "gorget_pin_z": round(neck.z, 4),
         "gorget_axis_bound_m": round(collar_bound, 4),
         "cut_verts_gorget": cut_gorget,
-        "cut_faces_collar_flare": cut_flare,
         **caps,
         **cleared,
         "neck_gap_p01_mm": round(neck_p01 * 1000, 2),
