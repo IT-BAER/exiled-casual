@@ -446,13 +446,11 @@ describe("what worn gear hides of the body", () => {
     expect([...hiddenBaseParts({ ...BASE_LOOKS, helmet: "iron" })]).toEqual(["hair"]);
   });
 
-  /**
-   * The ember cowl's wool runs from over its hood down over the robe, so the
-   * neck under it is closed: drawn, it came out through the wool at a jog.
-   */
-  it("closes the neck under the ember cowl alone", () => {
-    expect([...hiddenBaseParts({ ...BASE_LOOKS, helmet: "ember" })].sort()).toEqual(["hair", "neck"]);
-    expect(hiddenBaseParts({ ...BASE_LOOKS, helmet: "ironsworn" }).has("neck")).toBe(false);
+  /** The cowl is open at the throat: a hidden neck is a black hole under the chin. */
+  it("keeps the neck under every helmet", () => {
+    for (const helmet of ["ember", "stalker", "ironsworn"]) {
+      expect(hiddenBaseParts({ ...BASE_LOOKS, helmet }).has("neck")).toBe(false);
+    }
   });
 
   /**
