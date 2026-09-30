@@ -3,6 +3,7 @@ import type { DeathRecap as Recap, MonsterElement, PlayerStats } from "@exiled/p
 import { MONSTERS } from "@exiled/content-runtime";
 import { RES_CAP } from "@exiled/rules";
 import { SERIF } from "../menu/frames";
+import { ElementIcon } from "./ElementIcon";
 
 /** The sim's name for a burning tick's source (simulation/death-recap.ts). */
 const BURNING = "ailment.burning";
@@ -70,7 +71,8 @@ export function DeathRecap({ recap, stats }: { recap: Recap; stats: PlayerStats 
           <div style={{ color: "#7d7469", fontSize: 11, letterSpacing: 2, textTransform: "uppercase" }}>Killing blow</div>
           <div>
             <span style={{ color: "#e2d6c4" }}>{sourceName(kb.species, kb.rare)}</span>
-            {" "}for <span style={{ color: kbEl.tint }}>{kb.damage} {kbEl.label}</span>
+            {" "}for <ElementIcon of={kb.element} size={16} />{" "}
+            <span style={{ color: kbEl.tint }}>{kb.damage} {kbEl.label}</span>
           </div>
         </div>
       </div>
@@ -84,7 +86,9 @@ export function DeathRecap({ recap, stats }: { recap: Recap; stats: PlayerStats 
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
                 <span>{sourceName(s.species, s.rare)} <span style={{ color: "#7d7469" }}>x{s.hits}</span></span>
-                <span style={{ color: el.tint }}>{s.damage} {el.label}</span>
+                <span style={{ color: el.tint, whiteSpace: "nowrap" }}>
+                  <ElementIcon of={s.element} size={16} /> {s.damage} {el.label}
+                </span>
               </div>
               <div style={{ height: 4, marginTop: 4, background: "rgba(255,255,255,0.06)" }}>
                 <div style={{ width: `${share}%`, height: "100%", background: el.tint, opacity: 0.8 }} />

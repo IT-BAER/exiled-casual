@@ -34,7 +34,15 @@ describe("DeathRecap", () => {
     expect(kb.textContent).toContain("Cinder Imp");
     expect(kb.textContent).toContain("42");
     expect(kb.textContent).toContain("Fire");
-    expect(kb.querySelector("img")!.getAttribute("src")).toBe("/hud/monsters/cinder_imp.webp");
+    expect(kb.querySelector("img:not([data-element])")!.getAttribute("src")).toBe("/hud/monsters/cinder_imp.webp");
+  });
+
+  it("marks every damage number with its element's icon", () => {
+    render(<DeathRecap recap={recap()} stats={stats()} />);
+    const icon = (el: Element) => el.querySelector("img[data-element]")!.getAttribute("src");
+    expect(icon(screen.getByTestId("recap-killing-blow"))).toBe("/hud/elements/fire.webp");
+    const rows = screen.getAllByTestId("recap-source");
+    expect(rows.map(icon)).toEqual(["/hud/elements/fire.webp", "/hud/elements/physical.webp", "/hud/elements/fire.webp"]);
   });
 
   it("lists the top sources with hit counts, a rare marked as rare, a burn as Burning", () => {
@@ -45,7 +53,7 @@ describe("DeathRecap", () => {
     expect(rows[0]!.textContent).toContain("x3");
     expect(rows[1]!.textContent).toContain("Rare Vaal Husk");
     expect(rows[2]!.textContent).toContain("Burning");
-    expect(rows[2]!.querySelector("img")).toBeNull();
+    expect(rows[2]!.querySelector("img:not([data-element])")).toBeNull();
   });
 
   it("an uncapped fire resistance is the tip when fire did the most", () => {

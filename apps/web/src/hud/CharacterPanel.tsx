@@ -4,6 +4,7 @@ import { RES_CAP, ES_RECHARGE_PCT_PER_SEC, ES_RECHARGE_DELAY_TICKS } from "@exil
 import { SERIF, PARCHMENT, PANE, PaneHeader } from "./InventoryPanel";
 import { PANEL_PAD, CELL_VW } from "./layout";
 import { ORB_RISE } from "./Hud";
+import { ElementIcon } from "./ElementIcon";
 
 // PoE2's character sheet (C), matched to reference-screenshots/character-stats.png.
 // The stone, the carved header band with its gold cartouche, the arch niches
@@ -22,10 +23,11 @@ import { ORB_RISE } from "./Hud";
 // spell damage would otherwise be invisible everywhere.
 
 /**
- * The four stat icons ship as one 2x2 sheet, so a quadrant is picked by moving a
- * 200%-scaled background rather than by loading four files.
+ * The stat icons ship as one 2x2 sheet, so a quadrant is picked by moving a
+ * 200%-scaled background rather than by loading four files. Its fire quadrant
+ * is unused: resistances draw `ElementIcon`, the same glyphs as the death recap.
  */
-const ICON_QUADRANT = { life: "0% 0%", mana: "100% 0%", armour: "0% 100%", fire: "100% 100%" } as const;
+const ICON_QUADRANT = { life: "0% 0%", mana: "100% 0%", armour: "0% 100%" } as const;
 
 function Icon({ of, size = 38 }: { of: keyof typeof ICON_QUADRANT; size?: number | string }) {
   return (
@@ -92,40 +94,6 @@ function Niche({ id, label, value, icon, w }: {
  * The two numbers only differ once gear pushes past RES_CAP, which is the whole
  * point of showing both: the sheet is where wasted overcap becomes visible.
  */
-/**
- * Cold, lightning and chaos glyphs. The icon sheet only carries fire (it was cut
- * when fire was the only resistance), so these are drawn instead of shipping
- * three more PNGs: a snowflake, a bolt and a spiral, tinted the way the
- * reference tints them.
- */
-const ELEMENT_GLYPH = {
-  cold: { tint: "#8fd0ef", d: "M12 2v20M4 7l16 10M20 7L4 17" },
-  lightning: { tint: "#f2d55a", d: "M13 2 5 13h5l-1 9 8-11h-5z" },
-  chaos: { tint: "#c98fdd", d: "M17 9a5 5 0 1 0-5 5 3 3 0 1 0 3-3" },
-} as const;
-
-function ElementGlyph({ of }: { of: keyof typeof ELEMENT_GLYPH }) {
-  const g = ELEMENT_GLYPH[of];
-  const filled = of === "lightning";
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 24 24"
-      width={20}
-      height={20}
-      style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.9))" }}
-    >
-      <path
-        d={g.d}
-        fill={filled ? g.tint : "none"}
-        stroke={g.tint}
-        strokeWidth={filled ? 0 : 2}
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
 /**
  * The reference's energy-shield crest, drawn rather than sprited: the icon sheet
  * is a fixed 2x2 of life/mana/armour/fire and a fifth stat would mean reflowing
@@ -287,10 +255,10 @@ export function CharacterPanel({ player, onClose }: { player: Snapshot["player"]
             (reference-screenshots/character-stats.png). */}
         {/* One column once a pill (Lightning, 172px) no longer fits in half the pane. */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(max(180px, calc(50% - 3px)), 1fr))", gap: 6 }}>
-          <ResPill id="fire" label="Fire" pct={s.res.fire} icon={<Icon of="fire" size={20} />} />
-          <ResPill id="cold" label="Cold" pct={s.res.cold} icon={<ElementGlyph of="cold" />} />
-          <ResPill id="lightning" label="Lightning" pct={s.res.lightning} icon={<ElementGlyph of="lightning" />} />
-          <ResPill id="chaos" label="Chaos" pct={s.res.chaos} icon={<ElementGlyph of="chaos" />} />
+          <ResPill id="fire" label="Fire" pct={s.res.fire} icon={<ElementIcon of="fire" />} />
+          <ResPill id="cold" label="Cold" pct={s.res.cold} icon={<ElementIcon of="cold" />} />
+          <ResPill id="lightning" label="Lightning" pct={s.res.lightning} icon={<ElementIcon of="lightning" />} />
+          <ResPill id="chaos" label="Chaos" pct={s.res.chaos} icon={<ElementIcon of="chaos" />} />
         </div>
 
         {/* The reference drops the stone for a flat dark list at the bottom. The
