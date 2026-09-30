@@ -102,7 +102,13 @@ A recalc re-orients every face from one seed; on this suit it flipped half of
 them and the breastplate rendered as black shards with skin between. Only the
 new caps get their winding decided, each against the ring it closes.
 
-The suit worn today is `plate-suit-20k-v9.glb`, and it is CLEANED in the build
+The suit worn today is `plate-suit-20k-v10.glb`: v9's reference edited through
+`/codex-imagegen` so each pauldron is ONE smooth dome instead of 3-4 stacked
+lames, padded to v9's 88% frame fill, decoded by local TRELLIS (`--res 512`,
+seed 42, 142 860 tris) and optimised to 19 997 tris with a 512 px texture. v9's
+lames decoded as torn, concentric shells, so its sleeve cut left 4 ragged rim
+loops per armhole; v10's cut leaves 2-3. v9 stays on disk as the rollback.
+It is CLEANED in the build
 rather than by a repaired copy on disk (`"clean": True` in `RIGID_GEAR`): welded
 at 0.5 mm, every boundary loop fanned shut (233 of them, the largest a 36 mm
 crack at an ankle - the decode is a solid figure with an inner and an outer

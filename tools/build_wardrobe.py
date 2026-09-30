@@ -494,7 +494,7 @@ RIGID_GEAR = (
     },
     {
         "slot": "chest", "look": "ironsworn", "part": "cuirass",
-        "src": "plate-suit-20k-v9.glb", "bone": "spine_03", "fit": "plate_suit",
+        "src": "plate-suit-20k-v10.glb", "bone": "spine_03", "fit": "plate_suit",
         "deform": SUIT_BONES,
         "matte": True, "clean": True, "greaves": True,
     },
