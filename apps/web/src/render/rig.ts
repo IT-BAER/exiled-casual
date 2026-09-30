@@ -412,6 +412,9 @@ export function restartAtCurrentFrame(group: AnimationGroup, loop: boolean): voi
 export const TURN_STEP_RATE = 1.5;
 /** How far the feet sit off the pivot (units): a turn at `rate` moves them rate x this. */
 const TURN_FOOT_RADIUS = 0.25;
+/** The shuffle's own pace range: the turn is over in a quarter second, so the walk's 0.5..1.8 is a stroll. */
+const TURN_RATIO_MIN = 1.6;
+const TURN_RATIO_MAX = 3;
 /** Seconds the shuffle outlasts the turn, so a flick still lands one whole step. */
 const TURN_STEP_HOLD = 0.4;
 
@@ -419,7 +422,8 @@ const TURN_STEP_HOLD = 0.4;
 export function turnStep(rate: number): { clip: RigClip; ratio: number } | null {
   if (!(Math.abs(rate) >= TURN_STEP_RATE)) return null;
   const clip: RigClip = rate > 0 ? "walkStrafeR" : "walkStrafeL";
-  return { clip, ratio: speedRatioFor(clip, Math.abs(rate) * TURN_FOOT_RADIUS) };
+  const matched = (Math.abs(rate) * TURN_FOOT_RADIUS) / CLIP_SPEED.walk;
+  return { clip, ratio: Math.min(TURN_RATIO_MAX, Math.max(TURN_RATIO_MIN, matched)) };
 }
 
 export function speedRatioFor(clip: RigClip, speed: number): number {
@@ -1277,7 +1281,9 @@ export class RigActor {
       // A body turning on the spot steps round instead of swivelling on planted feet.
       const step = turnStep(this.yawStep / Math.max(dt, 1e-3));
       if (step) {
-        this.turning = step;
+        // The turn decelerates into its end: hold its fastest pace, not its last.
+        const held = this.turnHold > 0 && this.turning?.clip === step.clip ? this.turning.ratio : 0;
+        this.turning = { clip: step.clip, ratio: Math.max(held, step.ratio) };
         this.turnHold = TURN_STEP_HOLD;
       } else {
         this.turnHold -= dt;

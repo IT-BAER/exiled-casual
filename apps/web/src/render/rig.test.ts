@@ -94,9 +94,14 @@ describe("turnStep", () => {
 
   it("steps faster for a faster turn, inside the clip's pace limits", () => {
     const slow = turnStep(TURN_STEP_RATE * 1.2)!.ratio;
-    const fast = turnStep(TURN_STEP_RATE * 3)!.ratio;
+    const fast = turnStep(12)!.ratio;
     expect(fast).toBeGreaterThan(slow);
     expect(turnStep(1000)!.ratio).toBe(turnStep(2000)!.ratio);
+  });
+
+  it("never shuffles slower than a brisk step, or the turn ends before the foot lands", () => {
+    expect(turnStep(TURN_STEP_RATE)!.ratio).toBeGreaterThanOrEqual(1.5);
+    expect(turnStep(1000)!.ratio).toBeGreaterThan(2.5);
   });
 });
 
