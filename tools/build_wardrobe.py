@@ -192,21 +192,48 @@ def build_look(spec):
             tint(mesh, HAIR_TINT)
         named.append(part)
 
-    hair_objs = import_gltf(spec["hair"])
-    hair_rig, hair_meshes = split(hair_objs)
-    if len(hair_meshes) != 1:
-        raise SystemExit(f"{spec['look']}: expected one hair mesh, got {len(hair_meshes)}")
-    hair = hair_meshes[0]
-    hair.name = f"base.{spec['look']}.hair"
-    hair.data.name = hair.name
-    tint(hair, HAIR_TINT)
-    rebind(hair, rig)
+    import_hair(spec["hair"], f"base.{spec['look']}.hair", rig)
     named.append("hair")
-    # The hair's own skeleton is a duplicate of the body's; keep one.
-    drop(hair_rig)
 
     print(f"built base.{spec['look']}: {joints} joints, parts {sorted(named)}")
     return sorted(named)
+
+
+def import_hair(src, name, rig):
+    hair_rig, hair_meshes = split(import_gltf(src))
+    if len(hair_meshes) != 1:
+        raise SystemExit(f"{name}: expected one hair mesh, got {len(hair_meshes)}")
+    hair = hair_meshes[0]
+    hair.name = name
+    hair.data.name = name
+    tint(hair, HAIR_TINT)
+    rebind(hair, rig)
+    # The hair's own skeleton is a duplicate of the body's; keep one.
+    drop(hair_rig)
+    return hair
+
+
+# How far inside a hood's inner wall tucked hair stops.
+TUCK_MARGIN = 0.008
+
+
+def tuck_inside(obj, shell, origin):
+    """Pull every vertex that stands outside `shell`, seen from `origin`, back
+    to `TUCK_MARGIN` inside the first wall a ray from `origin` meets."""
+    bvh = bvh_of(shell, shell.matrix_world)
+    to_world, to_local = obj.matrix_world, obj.matrix_world.inverted()
+    moved = 0
+    for v in obj.data.vertices:
+        co = to_world @ v.co
+        ray = co - origin
+        hit = bvh.ray_cast(origin, ray.normalized(), ray.length)[0]
+        if hit is None:
+            continue
+        reach = (hit - origin).length - TUCK_MARGIN
+        v.co = to_local @ (origin + ray.normalized() * max(reach, 0.0))
+        moved += 1
+    obj.data.update()
+    print(f"{obj.name}: tucked {moved}/{len(obj.data.vertices)} vertices inside {shell.name}")
 
 
 # --------------------------------------------------------------------------
@@ -4657,6 +4684,14 @@ def main():
     male_rig = bpy.data.objects[MALE_RIG]
     male_body = bpy.data.objects["base.male.body"]
     fitted = build_rigid_gear(male_rig, male_body)
+    # Every helmet hides the hair; the ember cowl is open enough to show it, so
+    # a copy tucked inside the cowl ships as a part of that helmet look. It takes
+    # the cowl's weights, or Head-rigid tips swing out through the nape while
+    # the cowl follows the neck.
+    cowl = bpy.data.objects["helmet.ember.cowl"]
+    locks = import_hair(LOOKS[0]["hair"], "helmet.ember.locks", male_rig)
+    skin_by_transfer(locks, cowl, male_rig, HOOD_BONES)
+    tuck_inside(locks, cowl, male_rig.matrix_world @ male_rig.data.bones["Head"].head_local)
     worn = [o for o in bpy.data.objects if o.type == "MESH" and o.name.startswith("chest.")]
     # Each chest look closes the collar and the trunk, so each gets a collar
     # plate and a torso backing of its own colour. The v9 suit is cracked
