@@ -442,3 +442,19 @@ that dealt the most in the last five seconds, each with a portrait of the creatu
 and its element. It ends with one tip against your current defences: a resistance under its 75%
 cap, low armour, or chaos, which energy shield takes double. Neither PoE has a death recap; players
 of both have asked for one for years.
+
+Every damage number on the recap now carries its element's icon: a sword for physical, a flame, a
+snowflake, a bolt and a chaos skull. The character sheet's resistances use the same five.
+
+## 2026-09-30 · Sorting the backpack and the stash
+
+A Sort button in the inventory and the stash packs the grid: gear from the left, currency and
+waystones from the right.
+
+## 2026-09-30 · Stepping round, running clean
+
+Turning on the spot no longer swivels him on planted feet: he sidesteps round, paced by how fast he
+turns, and stops as the turn ends. The generated side, back-diagonal and backpedal jogs lost three
+faults found frame by frame: a backpedalling foot that flipped toe-down into the floor, knees that
+locked straight for a few frames and then jumped before each landing, and knees that knocked on
+the back diagonals.
