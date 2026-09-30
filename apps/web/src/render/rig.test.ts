@@ -27,6 +27,8 @@ import {
   framePhaseMatched,
   gaitOf,
   hipTurn,
+  turnStep,
+  TURN_STEP_RATE,
   HIP_TURN,
   type RigClip,
   idleRatio,
@@ -74,6 +76,27 @@ describe("clipForSpeed", () => {
     // baseCasterStats moveSpeed is 3.5 u/s, and it must read as a jog. Handing
     // that speed to the walk clip played fast is a power-walk, not a run.
     expect(clipForSpeed(3.5)).toBe("run");
+  });
+});
+
+describe("turnStep", () => {
+  it("keeps the idle for a drift too slow to be a step", () => {
+    expect(turnStep(0)).toBeNull();
+    expect(turnStep(TURN_STEP_RATE * 0.9)).toBeNull();
+    expect(turnStep(-TURN_STEP_RATE * 0.9)).toBeNull();
+    expect(turnStep(Number.NaN)).toBeNull();
+  });
+
+  it("sidesteps toward the turn: positive yaw is his right", () => {
+    expect(turnStep(TURN_STEP_RATE * 2)?.clip).toBe("walkStrafeR");
+    expect(turnStep(-TURN_STEP_RATE * 2)?.clip).toBe("walkStrafeL");
+  });
+
+  it("steps faster for a faster turn, inside the clip's pace limits", () => {
+    const slow = turnStep(TURN_STEP_RATE * 1.2)!.ratio;
+    const fast = turnStep(TURN_STEP_RATE * 3)!.ratio;
+    expect(fast).toBeGreaterThan(slow);
+    expect(turnStep(1000)!.ratio).toBe(turnStep(2000)!.ratio);
   });
 });
 

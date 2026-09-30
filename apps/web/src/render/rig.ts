@@ -408,6 +408,20 @@ export function restartAtCurrentFrame(group: AnimationGroup, loop: boolean): voi
   group.goToFrame(frame);
 }
 
+/** Yaw rate (rad/s) under which a standing body only drifts round; above it the feet step. */
+export const TURN_STEP_RATE = 1.5;
+/** How far the feet sit off the pivot (units): a turn at `rate` moves them rate x this. */
+const TURN_FOOT_RADIUS = 0.25;
+/** Seconds the shuffle outlasts the turn, so a flick still lands one whole step. */
+const TURN_STEP_HOLD = 0.4;
+
+/** The sidestep a standing turn at `rate` (rad/s, positive to his right) shuffles through, and its pace. */
+export function turnStep(rate: number): { clip: RigClip; ratio: number } | null {
+  if (!(Math.abs(rate) >= TURN_STEP_RATE)) return null;
+  const clip: RigClip = rate > 0 ? "walkStrafeR" : "walkStrafeL";
+  return { clip, ratio: speedRatioFor(clip, Math.abs(rate) * TURN_FOOT_RADIUS) };
+}
+
 export function speedRatioFor(clip: RigClip, speed: number): number {
   const gait = gaitOf(clip);
   if (gait === null) return 1;
@@ -1100,6 +1114,10 @@ export class RigActor {
   private blendW = 0;
   /** Seconds this body has been standing still, for the breath to settle over. */
   private standing = 0;
+  /** This frame's yaw change, and the standing shuffle it started with the seconds it has left. */
+  private yawStep = 0;
+  private turning: { clip: RigClip; ratio: number } | null = null;
+  private turnHold = 0;
 
   /** Every wardrobe part, grouped `slot` -> `look` -> meshes. */
   private readonly parts = new Map<string, Map<string, Mesh[]>>();
@@ -1234,21 +1252,42 @@ export class RigActor {
     this.setLocomotion(0);
   }
 
-  /** Where the body is moving, as yaw off the way it faces (0 ahead, PI behind). */
-  setMoveAngle(rel: number): void {
+  /**
+   * Where the body is moving, as yaw off the way it faces (0 ahead, PI behind),
+   * and how far it turned this frame (radians, positive to his right).
+   */
+  setMoveAngle(rel: number, yawStep = 0): void {
     this.moveRel = rel;
+    this.yawStep = yawStep;
   }
 
   /** Pick and pace the locomotion clip from the actor's real ground speed. */
   setLocomotion(speed: number): void {
+    // Real seconds off the engine, not a tick count: this is a render-side
+    // flourish and the sim never hears about it.
+    const dt = (this.scene.getEngine?.()?.getDeltaTime?.() ?? 16) / 1000;
     let clip = clipForSpeed(speed, gaitOf(this.locomotion) ?? "idle");
     let stride = 1;
     this.blendTo = null;
     this.blendClip = null;
     this.blendW = 0;
+    let shuffle: { clip: RigClip; ratio: number } | null = null;
     if (clip === "idle") {
       this.legsTarget = 0;
+      // A body turning on the spot steps round instead of swivelling on planted feet.
+      const step = turnStep(this.yawStep / Math.max(dt, 1e-3));
+      if (step) {
+        this.turning = step;
+        this.turnHold = TURN_STEP_HOLD;
+      } else {
+        this.turnHold -= dt;
+      }
+      if (this.turnHold > 0 && this.turning) {
+        shuffle = this.turning;
+        clip = shuffle.clip;
+      }
     } else {
+      this.turnHold = 0;
       const gait = clip === "run" ? "run" : "walk";
       this.legsTarget = hipTurn(this.moveRel);
       // Off the hips as they ARE, mid-turn, so the feet always travel the real move.
@@ -1266,10 +1305,11 @@ export class RigActor {
     this.locomotion = clip;
     const group = this.groups.get(clip);
     if (clip === "idle") {
-      // Real seconds off the engine, not a tick count: this is a render-side
-      // flourish and the sim never hears about it.
-      this.standing += (this.scene.getEngine?.()?.getDeltaTime?.() ?? 16) / 1000;
+      this.standing += dt;
       if (group) group.speedRatio = idleRatio(this.standing);
+    } else if (shuffle) {
+      this.standing = 0;
+      if (group) group.speedRatio = shuffle.ratio;
     } else {
       this.standing = 0;
       if (group) group.speedRatio = speedRatioFor(clip, speed / stride);

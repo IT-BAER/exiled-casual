@@ -843,7 +843,7 @@ export class SnapshotRenderer {
     }
     const moving = dx * dx + dz * dz > 1e-6;
     const rel = moving ? Math.atan2(dx, dz) - mesh.rotation.y : 0;
-    rigOf(mesh)?.setMoveAngle(rel);
+    rigOf(mesh)?.setMoveAngle(rel, yawStep);
     // A stopped actor still needs frames to settle back upright. Skipping this
     // call used to freeze the last running bank indefinitely. Turning to a
     // target is not a corner, and a backpedal does not lead with the chest.
