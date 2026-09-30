@@ -401,3 +401,44 @@ spot, and a monster's first swing in view now plays its strike.
 <td width="33%"><img src="screenshots/2026-09-28-swamp-grublings.jpeg" alt="Drowned Grublings, small grey creatures, around the character in a lamplit swamp clearing" width="100%"><br><sub>Drowned Grublings in the swamp.</sub></td>
 </tr>
 </table>
+
+## 2026-09-27 · Melee hits land
+
+A sword swing now lands: sparks, dust and a flash on up to four struck bodies, a short hit-stop,
+a small camera shake and an impact thud of its own. The blade stops on the tick the hit resolves,
+and swings alternate forehand and backhand. The boss bar wears a bronze PoE2 frame, names the
+boss, and rises only when the boss wakes.
+
+## 2026-09-28 · Uniques for every class
+
+The Ironsworn and the Stalker get three uniques each (weapon, off-hand, body): Oathbreaker,
+Gravewall and Anvilheart; Quietus, Thornward and Mossback. Loot now picks a class family first,
+so every family drops equally, with kills, containers and the vendor favouring the player's own
+class 40/30/30. PoE picks by drop level and ignores class; that bias is ours.
+
+## 2026-09-28 · Faster to load, lighter to run
+
+The character file ships packed, 30.1 MB down to 12.0 MB. The loading plate now stays up until
+frames arrive at a playable pace, so a cold graphics driver no longer stutters through the first
+seconds. Inside a map, braziers far from the player stop re-rendering their shadows and distant
+monsters sleep, which lifted a throttled test machine from 23-27 to 34-39 fps.
+
+## 2026-09-28 · Moving like PoE2
+
+The character always faces the cursor while the keys carry him, the way PoE2 plays: the legs run
+forward, strafe or backpedal depending on where he moves against where he aims. Walks in eight
+directions, the three-strike sword chain, a stagger when a hit takes a tenth of his life, drinking
+a flask and opening a chest all come from Quaternius's second animation library.
+
+## 2026-09-30 · Hair under the Emberbound's cowl
+
+The cowl's open throat now shows the neck beneath it instead of empty space, and short hair sits
+tucked inside the hood and moves with it.
+
+## 2026-09-30 · What killed you
+
+The death screen now says what killed you. It names the killing blow, then the three monsters
+that dealt the most in the last five seconds, each with a portrait of the creature, its hit count
+and its element. It ends with one tip against your current defences: a resistance under its 75%
+cap, low armour, or chaos, which energy shield takes double. Neither PoE has a death recap; players
+of both have asked for one for years.
