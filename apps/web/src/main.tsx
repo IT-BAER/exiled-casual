@@ -19,6 +19,10 @@ addEventListener(
   { capture: true },
 );
 
+// React 19.2's DEV build logs every render as a `performance.measure` with a cloned
+// detail; the HUD renders per snapshot, and the kept timeline grew the tab ~5 GB/h.
+if (import.meta.env.DEV) setInterval(() => performance.clearMeasures(), 5000);
+
 const root = document.getElementById("root");
 if (!root) throw new Error("no #root element");
 
