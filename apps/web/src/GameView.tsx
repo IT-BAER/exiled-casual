@@ -40,6 +40,7 @@ import { warmSkillFx } from "./render/skill-fx";
 import { Minimap } from "./hud/Minimap";
 import { BuffBar } from "./hud/BuffBar";
 import { DebugStats } from "./hud/DebugStats";
+import { DeathRecap } from "./hud/DeathRecap";
 import { Divider, FramedPanel, GOLD, MenuButton, DISPLAY, SERIF } from "./menu/frames";
 import { LoadingScreen, LOADING_ART, FADE_MS } from "./LoadingScreen";
 import { settleGate } from "./settle";
@@ -910,6 +911,7 @@ export function GameView({
         <DeathScreen
           portalsLeft={snapshot.portalsLeft}
           inMap={snapshot.area === "map" && snapshot.mapOpen}
+          recap={snapshot.deathRecap && <DeathRecap recap={snapshot.deathRecap} stats={snapshot.player.stats} />}
           onRevive={(where) => {
             sendIntent({ kind: "revive", where });
             // Every overlay goes with the body: coming back is a fresh screen.
@@ -947,10 +949,12 @@ export function GameView({
 function DeathScreen({
   portalsLeft,
   inMap,
+  recap,
   onRevive,
 }: {
   portalsLeft: number;
   inMap: boolean;
+  recap?: React.ReactNode;
   onRevive: (where: "checkpoint" | "hideout") => void;
 }) {
   const canCheckpoint = inMap && portalsLeft > 1;
@@ -977,6 +981,7 @@ function DeathScreen({
           You have died
         </div>
         <Divider style={{ margin: "12px 0 14px" }} />
+        {recap}
         <div style={{
           fontFamily: SERIF, fontSize: 13, color: "#9a9187",
           textAlign: "center", marginBottom: 16,

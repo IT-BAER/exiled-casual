@@ -130,6 +130,26 @@ export interface Resistances { fire: number; cold: number; lightning: number; ch
  */
 export type MonsterElement = "fire" | "cold" | "lightning" | "chaos" | "physical";
 
+/** One source on the death screen: a species (or `ailment.burning`), rare or not. */
+export interface DeathRecapSource {
+  species: string;
+  rare: boolean;
+  /** Damage it dealt in the window, after mitigation, to life and shield together. */
+  damage: number;
+  hits: number;
+  /** The element it dealt most. */
+  element: MonsterElement;
+}
+
+/** What killed him, over the last seconds before the killing blow. Display integers. */
+export interface DeathRecap {
+  killingBlow: { species: string; rare: boolean; damage: number; element: MonsterElement; pctOfLife: number };
+  /** The three sources that dealt the most, most first. */
+  sources: DeathRecapSource[];
+  total: number;
+  byElement: Partial<Record<MonsterElement, number>>;
+}
+
 /** Rarity tint for a display-ready item. Protocol-local; no content-schema import. */
 export type ItemRarity = "normal" | "magic" | "rare" | "unique";
 
@@ -311,6 +331,8 @@ export interface Snapshot {
   atlasSeed: number;
   /** Atlas node ids already completed this session. */
   completedNodes: string[];
+  /** Present only while the player is dead and something hit him before it. */
+  deathRecap?: DeathRecap;
   player: {
     id: number; x: number; y: number;
     life: number; maxLife: number; mana: number; maxMana: number;

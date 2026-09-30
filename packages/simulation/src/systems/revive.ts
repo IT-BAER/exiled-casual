@@ -66,6 +66,7 @@ export function registerRevive(sim: Simulation): void {
           });
         }
       }
+      sim.recentHits = [];
       return; // one revive per death, whatever else is in the queue
     }
   });

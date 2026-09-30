@@ -2,6 +2,7 @@ import { fp, toNumber, fpDist2 } from "@exiled/fixed-point";
 import { PICKUP_RADIUS } from "@exiled/protocol";
 import type { DisplaySkill, Intent, Snapshot, SnapshotEntity, MonsterElement } from "@exiled/protocol";
 import { damageTypeOf } from "./damage-types";
+import { summarizeHits } from "./death-recap";
 import { VENDOR_COLS, VENDOR_ROWS } from "./vendor";
 import { physicalMitigationPct, scalePct, xpToNext, START_LEVEL, vendorBuyPrice, passivePoints, DEFAULT_CLASS_ID, effectiveSkill, reachedBreakpoints, nextBreakpoint, gemXpToNext } from "@exiled/rules";
 import { resBlock } from "@exiled/content-schema";
@@ -204,7 +205,7 @@ function describeSkills(
 // carries no version field, so it is intentionally unused here.
 export function buildSnapshot(
   world: World,
-  _sim: Simulation,
+  sim: Simulation,
   tick: number,
   _contentVersion: string,
 ): Snapshot {
@@ -402,6 +403,9 @@ export function buildSnapshot(
     areaTier: session?.areaTier ?? 0,
     atlasSeed: session?.atlasSeed ?? 0,
     completedNodes: session?.completedNodes ?? [],
+    ...(ph.life <= 0 && sim.recentHits.length > 0
+      ? { deathRecap: summarizeHits(sim.recentHits, toNumber(ph.maxLife)) }
+      : {}),
     player: {
       id: playerEntity,
       x: toNumber(pp.x), y: toNumber(pp.y),

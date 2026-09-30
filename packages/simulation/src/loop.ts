@@ -1,6 +1,7 @@
 import type { EquipSlotId } from "@exiled/protocol";
 import { World, type Entity } from "./ecs";
 import type { DamageEvent } from "./components";
+import type { RecapHit } from "./death-recap";
 
 export interface Command {
   tick: number;
@@ -38,6 +39,8 @@ export class Simulation {
   tick = 0;
   /** Per-tick damage queue. Cleared at the start of each step; drained by damageResolve. */
   damageQueue: DamageEvent[] = [];
+  /** Hits on the living player over the recap window, for the death screen only (death-recap.ts). */
+  recentHits: RecapHit[] = [];
   private readonly systems: { name: string; fn: System }[] = [];
 
   register(name: string, fn: System): void {

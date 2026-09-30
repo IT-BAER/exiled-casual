@@ -4,6 +4,10 @@ import type {
   Health, DefensesC, FlasksC, EnergyShieldC, MonsterC, SessionC, Position, CastingC,
 } from "../components";
 import { damageTypeOf } from "../damage-types";
+import { BURNING_SOURCE, RECAP_WINDOW_TICKS } from "../death-recap";
+import type { World } from "../ecs";
+import type { DamageEvent } from "../components";
+import { toNumber } from "@exiled/fixed-point";
 
 /** Spawn grace: 10 seconds at 30 Hz, or until the player moves or casts. */
 export const SPAWN_GRACE_TICKS = 300;
@@ -69,6 +73,8 @@ export function registerDamageResolve(sim: Simulation): void {
         });
       }
 
+      if (health.life > 0 && final > 0 && world.has(ev.target, "player")) recordHit(sim, world, ev, final, tick);
+
       const after = Math.max(0, health.life - toLife);
       world.set<Health>(ev.target, "health", { ...health, life: after });
 
@@ -98,4 +104,13 @@ export function registerDamageResolve(sim: Simulation): void {
       }
     }
   });
+}
+
+/** The death screen's memory. A burn names its victim as source; a dead shooter has no species left. */
+function recordHit(sim: Simulation, world: World, ev: DamageEvent, final: number, tick: number): void {
+  const mon = ev.source === ev.target ? undefined : world.get<MonsterC>(ev.source, "monster");
+  const species = ev.source === ev.target ? BURNING_SOURCE : (mon?.defId ?? "");
+  const hits = sim.recentHits.filter((h) => h.tick > tick - RECAP_WINDOW_TICKS);
+  hits.push({ tick, species, rare: mon?.rare === 1, type: ev.type, amount: toNumber(final) });
+  sim.recentHits = hits;
 }
