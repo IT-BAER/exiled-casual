@@ -36,6 +36,8 @@ export type Intent =
    * existed replays byte-identically.
    */
   | { kind: "moveItem"; x: number; y: number; toX: number; toY: number; from?: ContainerId; to?: ContainerId }
+  /** Sort one grid in place: backpack by default, or the stash. */
+  | { kind: "sortItems"; container?: "backpack" | "stash" }
   | { kind: "useFlask"; slot: "life" | "mana" }
   /** Spend one Scroll of Wisdom on the unidentified backpack item at its ORIGIN cell. */
   | { kind: "applyCurrency"; fromX: number; fromY: number; x: number; y: number }
@@ -80,7 +82,7 @@ export type Intent =
    */
   | { kind: "setSkillBar"; bar: (string | null)[] };
 
-export type CommandType = "moveTo" | "moveDir" | "useSkill" | "stop" | "interact" | "activateMap" | "pickupItem" | "equipItem" | "unequipItem" | "dropItem" | "moveItem" | "useFlask" | "applyCurrency" | "sellItem" | "buyItem" | "revive" | "usePortalScroll" | "allocatePassive" | "refundPassive" | "respecPassives" | "setSkillBar";
+export type CommandType = "moveTo" | "moveDir" | "useSkill" | "stop" | "interact" | "activateMap" | "pickupItem" | "equipItem" | "unequipItem" | "dropItem" | "moveItem" | "sortItems" | "useFlask" | "applyCurrency" | "sellItem" | "buyItem" | "revive" | "usePortalScroll" | "allocatePassive" | "refundPassive" | "respecPassives" | "setSkillBar";
 
 // ---------------------------------------------------------------------------
 // Run loop
@@ -572,6 +574,14 @@ export function validateIntent(v: unknown): Intent {
         toX: obj["toX"] as number, toY: obj["toY"] as number,
         ...(obj["from"] !== undefined ? { from: obj["from"] as ContainerId } : {}),
         ...(obj["to"] !== undefined ? { to: obj["to"] as ContainerId } : {}),
+      };
+    }
+    case "sortItems": {
+      if (obj["container"] !== undefined && obj["container"] !== "backpack" && obj["container"] !== "stash")
+        throw new Error("validateIntent sortItems: container must be \"backpack\" or \"stash\"");
+      return {
+        kind: "sortItems",
+        ...(obj["container"] !== undefined ? { container: obj["container"] as "backpack" | "stash" } : {}),
       };
     }
     case "useFlask": {

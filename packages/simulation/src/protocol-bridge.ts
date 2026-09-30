@@ -75,6 +75,9 @@ export function intentToCommand(intent: Intent, player: Entity, tick: number): C
       return { tick, entity: player, type: "unequipItem", slot: intent.slot };
     case "dropItem":
       return { tick, entity: player, type: "dropItem", data: { x: intent.x, y: intent.y } };
+    case "sortItems":
+      // 0 = backpack, 1 = stash, as moveItem numbers them.
+      return { tick, entity: player, type: "sortItems", data: { container: intent.container === "stash" ? 1 : 0 } };
     case "moveItem":
       return {
         tick, entity: player, type: "moveItem",

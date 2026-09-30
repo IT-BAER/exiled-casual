@@ -120,8 +120,10 @@ export const PANE: React.CSSProperties = {
  * cream, and the round stud of a close button in the corner. `bleed` is the
  * pane's own padding, which the band has to pull back over to reach the frame.
  */
-export function PaneHeader({ title, bleed, onClose, testId }: {
+export function PaneHeader({ title, bleed, onClose, testId, onSort, sortTestId }: {
   title: string; bleed?: string; onClose: () => void; testId: string;
+  /** A grid pane's Sort, in the corner opposite the close stud. Neither PoE has one. */
+  onSort?: () => void; sortTestId?: string;
 }) {
   return (
     <div
@@ -166,6 +168,23 @@ export function PaneHeader({ title, bleed, onClose, testId }: {
       >
         ×
       </button>
+      {onSort && (
+        <button
+          data-testid={sortTestId}
+          onClick={onSort}
+          title="Sort"
+          style={{
+            position: "absolute", top: 6, left: 8, height: 22, padding: "0 8px",
+            borderRadius: 11,
+            background: "linear-gradient(#5a4526, #2c2012)",
+            border: "1px solid #140d05", color: "#f2dfae",
+            boxShadow: "0 1px 4px rgba(0,0,0,0.9), inset 0 1px 0 rgba(255,220,160,0.3)",
+            fontFamily: DISPLAY, fontSize: 11, letterSpacing: 1.5, textTransform: "uppercase", lineHeight: 1,
+          }}
+        >
+          Sort
+        </button>
+      )}
     </div>
   );
 }
@@ -827,7 +846,8 @@ export function InventoryPanel({
           data-hud-panel=""
           style={{ ...PANE, padding: PANEL_PAD }}
         >
-          <PaneHeader title="Stash" bleed={PANEL_PAD} onClose={() => onCloseStash?.()} testId="stash-close" />
+          <PaneHeader title="Stash" bleed={PANEL_PAD} onClose={() => onCloseStash?.()} testId="stash-close"
+            onSort={() => onIntent?.({ kind: "sortItems", container: "stash" })} sortTestId="stash-sort" />
           {renderGrid("stash")}
         </div>
       </div>
@@ -959,7 +979,8 @@ export function InventoryPanel({
         // one down the pane's gilt edge reads as a browser, not as the game.
         style={{ ...PANE, overflowY: "auto", scrollbarWidth: "none" }}
       >
-        <PaneHeader title="Inventory" onClose={onClose} testId="inventory-close" />
+        <PaneHeader title="Inventory" onClose={onClose} testId="inventory-close"
+          onSort={() => onIntent?.({ kind: "sortItems" })} sortTestId="inventory-sort" />
 
         {/* The extra foot of padding is the band the mana globe rises into: the
             strip below is pinned to the bottom of this column, so without it the

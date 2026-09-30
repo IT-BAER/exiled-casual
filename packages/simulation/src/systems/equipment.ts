@@ -2,7 +2,7 @@ import { baseOf, isCurrency, canonicalBaseId, currencyItem } from "@exiled/conte
 import { disenchantYield, SHARDS_PER_ORB, vendorBuyPrice, vendorSellPrice } from "@exiled/rules";
 import { Simulation } from "../loop";
 import { isStaple } from "../vendor";
-import { placeFirstFit, canPlaceAt } from "../inventory";
+import { placeFirstFit, canPlaceAt, sortInventory } from "../inventory";
 import { canEquip } from "../equipment";
 import { recomputePlayerStats } from "../derived";
 import type { Position, ItemC, InventoryC, VendorC, EquipmentC, ShardsC, ProgressC } from "../components";
@@ -80,6 +80,15 @@ export function registerEquipmentSystem(sim: Simulation): void {
           items: [...inv.items, { x: fit.x, y: fit.y, w: base.w, h: base.h, item }],
         });
         recomputePlayerStats(world);
+        continue;
+      }
+
+      // ── sortItems ──────────────────────────────────────────────────────────
+      if (cmd.type === "sortItems") {
+        const comp = cmd.data?.["container"] === 1 ? "stash" : "inventory";
+        const inv = world.get<InventoryC>(sessionE, comp);
+        const sorted = inv && sortInventory(inv);
+        if (sorted) world.set<InventoryC>(sessionE, comp, sorted);
         continue;
       }
 

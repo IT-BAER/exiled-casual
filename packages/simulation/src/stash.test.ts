@@ -143,3 +143,25 @@ describe("stash - persistence", () => {
     expect(getStash(b.world).items).toEqual([]);
   });
 });
+
+describe("sortItems", () => {
+  it("sorts the backpack and leaves the stash alone, and the other way round", () => {
+    const { sim, world, playerEntity } = makeWorld();
+    const messy = [
+      { x: 11, y: 4, w: 1, h: 1, count: 2, item: TRANSMUTE },
+      { x: 5, y: 2, w: 1, h: 2, item: WAND },
+      { x: 0, y: 4, w: 1, h: 1, count: 3, item: TRANSMUTE },
+    ];
+    setInv(world, messy);
+    setStash(world, messy);
+    sim.step([intentToCommand({ kind: "sortItems" }, playerEntity, sim.tick)]);
+    expect(getInv(world).items).toEqual([
+      { x: 0, y: 0, w: 1, h: 2, item: WAND },
+      { x: 11, y: 0, w: 1, h: 1, count: 5, item: TRANSMUTE },
+    ]);
+    expect(getStash(world).items).toEqual(messy);
+
+    sim.step([intentToCommand({ kind: "sortItems", container: "stash" }, playerEntity, sim.tick)]);
+    expect(getStash(world).items).toEqual(getInv(world).items);
+  });
+});

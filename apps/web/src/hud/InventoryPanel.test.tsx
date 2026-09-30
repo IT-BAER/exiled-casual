@@ -553,3 +553,13 @@ describe("InventoryPanel - panels that close take their tooltip with them", () =
     expect(screen.queryByTestId("item-tooltip")).toBeNull();
   });
 });
+
+describe("InventoryPanel sort", () => {
+  it("each pane's Sort sends a sort for its own grid", () => {
+    const intents: unknown[] = [];
+    render(<InventoryPanel inventory={inv} stash={{ cols: 12, rows: 12, items: [] }} onIntent={(i) => intents.push(i)} onClose={() => {}} />);
+    fireEvent.click(screen.getByTestId("inventory-sort"));
+    fireEvent.click(screen.getByTestId("stash-sort"));
+    expect(intents).toEqual([{ kind: "sortItems" }, { kind: "sortItems", container: "stash" }]);
+  });
+});

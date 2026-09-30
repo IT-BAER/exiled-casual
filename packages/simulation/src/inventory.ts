@@ -1,5 +1,5 @@
-import { permanentWaystone, isPermanentWaystone } from "@exiled/content-runtime";
-import type { InventoryC } from "./components";
+import { permanentWaystone, isPermanentWaystone, isCurrency, isWaystone, canonicalBaseId, baseOf } from "@exiled/content-runtime";
+import type { InventoryC, PlacedItem } from "./components";
 
 function overlaps(ax: number, ay: number, aw: number, ah: number, bx: number, by: number, bw: number, bh: number): boolean {
   return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
@@ -51,4 +51,60 @@ export function withPermanentWaystone(inv: InventoryC): InventoryC {
   const cell = placeFirstFit(inv, 1, 1);
   if (!cell) return inv;
   return { ...inv, items: [...inv.items, { x: cell.x, y: cell.y, w: 1, h: 1, item: permanentWaystone() }] };
+}
+
+/** Paper-doll order: weapons, off-hands, then head to toe. Anything unknown sorts after the belt. */
+const CLASS_ORDER = ["mace", "wand", "bow", "shield", "focus", "helmet", "body", "gloves", "boots", "belt"];
+const RARITY_ORDER = ["unique", "rare", "magic", "normal"];
+
+function classRank(p: PlacedItem): number {
+  let cls = "";
+  try { cls = baseOf(p.item.baseId).itemClass; } catch { /* a base the content lost sorts last */ }
+  const i = CLASS_ORDER.indexOf(cls);
+  return i < 0 ? CLASS_ORDER.length : i;
+}
+
+/** Top-left for a w x h piece, scanning down each column, columns from one edge. */
+function placeColumnMajor(inv: InventoryC, w: number, h: number, fromRight: boolean): { x: number; y: number } | null {
+  for (let i = 0; i <= inv.cols - w; i++) {
+    const x = fromRight ? inv.cols - w - i : i;
+    for (let y = 0; y <= inv.rows - h; y++) if (canPlaceAt(inv, w, h, x, y)) return { x, y };
+  }
+  return null;
+}
+
+/**
+ * The bag sorted: same-currency stacks merged, gear by slot then rarity packed down
+ * the columns from the left, currency then waystones (highest tier first) from the
+ * right. Ties keep their reading order, so a sorted bag sorts to itself. Null when
+ * the pieces cannot all be repacked: a sort never drops an item.
+ */
+export function sortInventory(inv: InventoryC): InventoryC | null {
+  const reading = [...inv.items].sort((a, b) => a.y - b.y || a.x - b.x);
+  const merged: PlacedItem[] = [];
+  for (const p of reading) {
+    const same = isCurrency(p.item)
+      ? merged.find((m) => isCurrency(m.item) && canonicalBaseId(m.item.baseId) === canonicalBaseId(p.item.baseId))
+      : undefined;
+    if (same) same.count = (same.count ?? 1) + (p.count ?? 1);
+    else merged.push({ ...p });
+  }
+  const stackable = (p: PlacedItem) => isCurrency(p.item) || isWaystone(p.item);
+  const gear = merged.filter((p) => !stackable(p)).sort((a, b) =>
+    classRank(a) - classRank(b) ||
+    RARITY_ORDER.indexOf(a.item.rarity) - RARITY_ORDER.indexOf(b.item.rarity) ||
+    b.h - a.h || b.w - a.w);
+  const rest = merged.filter(stackable).sort((a, b) =>
+    Number(isWaystone(a.item)) - Number(isWaystone(b.item)) ||
+    (b.item.waystone?.tier ?? 0) - (a.item.waystone?.tier ?? 0));
+
+  const out: InventoryC = { cols: inv.cols, rows: inv.rows, items: [] };
+  for (const [list, fromRight] of [[gear, false], [rest, true]] as const) {
+    for (const p of list) {
+      const at = placeColumnMajor(out, p.w, p.h, fromRight);
+      if (!at) return null;
+      out.items.push({ ...p, x: at.x, y: at.y });
+    }
+  }
+  return out;
 }
