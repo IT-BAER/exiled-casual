@@ -67,10 +67,17 @@ BOUNCE_CUT = 0.4
 # round, that is a knee raised in front, which reads as sitting.
 SWING_ARC = 0.0012
 SWING_PITCH = math.radians(8)
+# Share of the planted foot's speed a backpedal's swing leaves and lands with. All of it
+# carries the foot ~40 cm past the stance and locks the knee; none stops it dead.
+SWING_CARRY = 0.4
 BALL_PITCH = math.radians(12)
 # An ankle within this of its lowest (rig units) is on the ground. The heel lifts
 # 4-6 cm before toe-off: a tighter band cuts the stance, and so the step, to a third.
 STANCE_BAND = 0.0006
+# Share of the leg's length the IK eases over as the ankle target nears full reach.
+SOFT_REACH = 0.04
+# Build fails below this knee-to-knee gap (rig units, 0.0008 = 8 cm): closer, the knees pass through each other.
+KNEE_GAP = 0.0008
 # The pack is authored at 30 fps: importing at 30 lands every key on a frame.
 FPS = 30
 LEGS = (("thigh_l", "calf_l", "foot_l", "foot_end_l"), ("thigh_r", "calf_r", "foot_r", "foot_end_r"))
@@ -104,7 +111,14 @@ def solve_leg(arm, leg, target, foot_rot):
     foot_before = foot.matrix.copy()
 
     reach = target - hip
-    span = min(reach.length, (upper + lower) * 0.999)
+    # Soft reach: the last SOFT_REACH of the leg is eased into, never hit, so an
+    # ankle target past the leg's length slows the foot instead of locking the knee.
+    full = upper + lower
+    ease = full * SOFT_REACH
+    span = reach.length
+    if span > full - ease:
+        span = full - ease + ease * (1.0 - math.exp(-(span - full + ease) / ease))
+    span = min(span, full * 0.999)
     aim = reach.normalized()
     straight = (ankle - hip).normalized()
     bend = foot_rot @ ((knee - hip) - straight * (knee - hip).dot(straight))
@@ -162,10 +176,6 @@ def pitch_of(toe, up):
     return math.atan2(toe.dot(up), horizontal(toe, up).length)
 
 
-def smooth(u):
-    return u * u * (3.0 - 2.0 * u)
-
-
 def phases(heights):
     """Per frame of a cycle: (on the ground, share of the way through its stance or swing)."""
     n = len(heights)
@@ -179,8 +189,8 @@ def phases(heights):
     return out
 
 
-def track(frames, i, cycle, spin, stride, neutral, widen, back, up, rest_pitch):
-    """Ankle target (offset from the mid-hip, height) and foot pitch change per frame of leg i."""
+def track(frames, i, cycle, spin, stride, neutral, widen, back, up):
+    """Ankle target (offset from the mid-hip, height) and the foot's wanted pitch off rest, per frame of leg i."""
     base = []
     for _pose, legs, _t in frames[:cycle]:
         hip_mid = (legs[0][0] + legs[1][0]) / 2
@@ -190,10 +200,9 @@ def track(frames, i, cycle, spin, stride, neutral, widen, back, up, rest_pitch):
         flat.x = neutral.x
         base.append(neutral + spin @ (flat - neutral) * stride + widen)
     heights = [legs[i][1].dot(up) for _p, legs, _t in frames[:cycle]]
-    source_pitch = [pitch_of(legs[i][2] - legs[i][1], up) - rest_pitch for _p, legs, _t in frames[:cycle]]
     out = []
     for t, (ground, share) in enumerate(phases(heights)):
-        where, height, pitch = base[t], heights[t], source_pitch[t]
+        where, height = base[t], heights[t]
         if ground:
             want = -BALL_PITCH * (1 - math.sin(math.pi * share))
         else:
@@ -201,13 +210,19 @@ def track(frames, i, cycle, spin, stride, neutral, widen, back, up, rest_pitch):
             a = next(k for k in range(1, cycle) if heights[(t - k) % cycle] < min(heights) + STANCE_BAND)
             c = next(k for k in range(1, cycle) if heights[(t + k) % cycle] < min(heights) + STANCE_BAND)
             u = a / (a + c)
-            glide = base[(t - a) % cycle].lerp(base[(t + c) % cycle], smooth(u))
+            # Hermite, leaving and landing at the planted foot's own speed: a smoothstep
+            # stops the foot dead at lift-off and drops it onto a moving ground at touchdown.
+            off, on = (t - a) % cycle, (t + c) % cycle
+            leave = (base[off] - base[(off - 1) % cycle]) * SWING_CARRY
+            land = (base[(on + 1) % cycle] - base[on]) * SWING_CARRY
+            glide = (base[off] * (2 * u**3 - 3 * u**2 + 1) + leave * ((u**3 - 2 * u**2 + u) * (a + c))
+                     + base[on] * (3 * u**2 - 2 * u**3) + land * ((u**3 - u**2) * (a + c)))
             arc = heights[(t - a) % cycle] + (heights[(t + c) % cycle] - heights[(t - a) % cycle]) * u
             arc += SWING_ARC * math.sin(math.pi * u)
             where = where.lerp(glide, back)
             height += (arc - height) * back
             want = -SWING_PITCH
-        out.append((where, height, (want - pitch) * back))
+        out.append((where, height, want))
     return out + out[:1]
 
 
@@ -248,11 +263,19 @@ def build(arm, name, source, degrees, up, forward, rest_pitch):
     # behind him the whole cycle.
     for n in neutral:
         n -= ahead * n.dot(ahead) * back
+    # Across the line the feet travel, not the hips' side axis: on a back diagonal
+    # that axis runs almost along the line and slides the feet past each other.
+    across = (spin @ lateral).normalized()
     for i in range(len(LEGS)):
-        widen.append(lateral * (WIDEN if frames[0][1][i][0].x > 0 else -WIDEN) * math.sin(abs(yaw)) * (1 + 2 * back))
-    tracks = [track(frames, i, cycle, spin, stride, neutral[i], widen[i], back, up, rest_pitch) for i in range(len(LEGS))]
+        outward = across if (frames[0][1][i][0] - frames[0][1][1 - i][0]).dot(across) > 0 else -across
+        widen.append(outward * WIDEN * math.sin(abs(yaw)) * (1 + 2 * back))
+    tracks = [track(frames, i, cycle, spin, stride, neutral[i], widen[i], back, up) for i in range(len(LEGS))]
+    # The foot's own forward and the axis its pitch turns about: signed pitch off
+    # these runs past vertical, where `pitch_of` folds back and flips the foot.
+    facing = horizontal(knee_rot @ forward, up).normalized()
+    side = facing.cross(up).normalized()
 
-    posed, gaps = [], []
+    posed, gaps, knee_gaps, toes = [], [], [], []
     for index, (pose, legs, _trunk) in enumerate(frames):
         pose = dict(pose)
         if back > 0.5:
@@ -275,22 +298,22 @@ def build(arm, name, source, degrees, up, forward, rest_pitch):
                 print(f"  lean {math.degrees(lean):.1f} -> {math.degrees(math.atan2(trunk.dot(forward), trunk.dot(up))):.1f} deg")
         ankles = []
         for i, leg in enumerate(LEGS):
-            _hip, ankle, toe = legs[i]
-            moved, height, pitch = tracks[i][index]
+            moved, height, want = tracks[i][index]
             foot_rot = knee_rot.copy()
-            if abs(pitch) > 1e-6:
-                reach = foot_rot @ (toe - ankle)
-                side = horizontal(reach, up).cross(up).normalized()
-                tip = Matrix.Rotation(pitch, 3, side)
-                if (pitch_of(tip @ reach, up) < pitch_of(reach, up)) != (pitch < 0):
-                    tip = Matrix.Rotation(-pitch, 3, side)
-                foot_rot = tip @ foot_rot
+            if back > 0:
+                # Off the foot as it hangs NOW: the pelvis tilt above has already turned it.
+                reach = foot_rot @ (bones[leg[3]].head - bones[leg[2]].head)
+                now = math.atan2(reach.dot(up), reach.dot(facing))
+                turn = (rest_pitch + want - now + math.pi) % (2 * math.pi) - math.pi
+                foot_rot = Matrix.Rotation(turn * back, 3, side) @ foot_rot
                 # On the ball, the heel lifts: never the toe through the floor.
-                height += max(0.0, floor - (height + (foot_rot @ (toe - ankle)).dot(up)))
+                height += max(0.0, floor - (height + (foot_rot @ (bones[leg[3]].head - bones[leg[2]].head)).dot(up)))
             mid = (bones[LEGS[0][0]].head + bones[LEGS[1][0]].head) / 2
             target = horizontal(mid, up) + moved + up * height
             ankles.append(solve_leg(arm, leg, target, foot_rot))
         gaps.append(horizontal(ankles[0] - ankles[1], up))
+        knee_gaps.append(horizontal(bones[LEGS[0][1]].head - bones[LEGS[1][1]].head, up).length)
+        toes.append(min(bones[leg[3]].head.dot(up) for leg in LEGS))
         posed.append({b.name: (b.location.copy(), b.rotation_quaternion.copy()) for b in bones})
 
     stale = bpy.data.actions.get(name)
@@ -305,9 +328,10 @@ def build(arm, name, source, degrees, up, forward, rest_pitch):
             bone.keyframe_insert("location", frame=start + index)
             bone.keyframe_insert("rotation_quaternion", frame=start + index)
     arm.animation_data.action = None
-    across = (spin @ lateral).normalized()
     # Rig units are hundredths of a world metre (the armature is scaled 100).
     print(f"{name}: {len(posed)} frames, narrowest track gap {min(abs(g.dot(across)) for g in gaps) * 1e4:.1f} cm")
+    assert min(knee_gaps) >= KNEE_GAP, f"{name}: knees {min(knee_gaps) * 1e4:.1f} cm apart at frame {knee_gaps.index(min(knee_gaps))}"
+    assert min(toes) >= floor - 1e-5, f"{name}: toe {(floor - min(toes)) * 1e4:.1f} cm through the floor at frame {toes.index(min(toes))}"
     return action
 
 
