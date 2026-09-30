@@ -415,8 +415,8 @@ const TURN_FOOT_RADIUS = 0.25;
 /** The shuffle's own pace range: the turn is over in a quarter second, so the walk's 0.5..1.8 is a stroll. */
 const TURN_RATIO_MIN = 1.6;
 const TURN_RATIO_MAX = 3;
-/** Seconds the shuffle outlasts the turn, so a flick still lands one whole step. */
-const TURN_STEP_HOLD = 0.4;
+/** Seconds the shuffle outlasts the turn, bridging a turn's slow tail; the idle crossfade adds ~0.14 s. */
+const TURN_STEP_HOLD = 0.1;
 
 /** The sidestep a standing turn at `rate` (rad/s, positive to his right) shuffles through, and its pace. */
 export function turnStep(rate: number): { clip: RigClip; ratio: number } | null {
