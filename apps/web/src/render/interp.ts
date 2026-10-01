@@ -16,14 +16,17 @@ export function lerpAngle(a: number, b: number, alpha: number): number {
 
 /**
  * One exact step of a critically damped spring pulling `angle` toward `target`
- * (shortest way round): eases in and settles without overshoot, at any frame rate.
+ * (shortest way round): eases in and settles without overshoot, at any frame rate,
+ * never faster than `maxRate` rad/s.
  */
-export function springAngle(angle: number, vel: number, target: number, omega: number, dt: number): { angle: number; vel: number } {
+export function springAngle(angle: number, vel: number, target: number, omega: number, dt: number, maxRate = Infinity): { angle: number; vel: number } {
   const twoPi = Math.PI * 2;
   let x = (angle - target) % twoPi;
   if (x > Math.PI) x -= twoPi;
   if (x < -Math.PI) x += twoPi;
   const decay = Math.exp(-omega * dt);
   const t = (vel + omega * x) * dt;
-  return { angle: angle - x + (x + t) * decay, vel: (vel - omega * t) * decay };
+  const step = Math.max(-maxRate * dt, Math.min(maxRate * dt, (x + t) * decay - x));
+  const v = Math.max(-maxRate, Math.min(maxRate, (vel - omega * t) * decay));
+  return { angle: angle + step, vel: v };
 }

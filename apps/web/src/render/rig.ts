@@ -384,8 +384,8 @@ export function aimAngles(
     head: Math.max(-HEAD_MAX, Math.min(HEAD_MAX, head)) * HEAD_FOLLOW,
   };
 }
-/** Farthest the neck and head turn off the chest together (~70 degrees), and the neck's share. */
-export const LOOK_MAX = 1.22;
+/** Farthest the neck and head turn off the chest together (~85 degrees), and the neck's share. */
+export const LOOK_MAX = 1.48;
 export const NECK_SHARE = 0.4;
 /** Time constant the gaze eases over: quick, so the eyes lead a turn the body is still making. */
 const LOOK_EASE_SEC = 0.1;

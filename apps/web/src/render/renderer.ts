@@ -189,6 +189,8 @@ const TILT_EASE_SEC = 0.13;
  * into a turn and settles out of it, ~95 percent of the way in 0.19 s.
  */
 const TURN_OMEGA = 25;
+/** Fastest a body turns (rad/s): a half turn takes at least a quarter second. */
+const TURN_MAX_RATE = 12;
 
 /**
  * Where the killing blow came FROM, in world space.
@@ -850,7 +852,7 @@ export class SnapshotRenderer {
       const wasYaw = mesh.rotation.y;
       const aim = sent ?? Math.atan2(dx, dz);
       const dt = Math.max(this.scene.getEngine().getDeltaTime(), 1) / 1000;
-      const s = springAngle(wasYaw, this.yawVel.get(id) ?? 0, aim, TURN_OMEGA, Math.min(dt, 0.1));
+      const s = springAngle(wasYaw, this.yawVel.get(id) ?? 0, aim, TURN_OMEGA, Math.min(dt, 0.1), TURN_MAX_RATE);
       mesh.rotation.y = s.angle;
       this.yawVel.set(id, s.vel);
       yawStep = mesh.rotation.y - wasYaw;

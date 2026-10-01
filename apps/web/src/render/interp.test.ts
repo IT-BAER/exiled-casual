@@ -26,6 +26,17 @@ describe("springAngle", () => {
     expect(Math.max(...path)).toBeLessThanOrEqual(2);
     expect(path.at(-1)).toBeCloseTo(2, 3);
   });
+  it("never turns faster than its rate cap, at any frame rate", () => {
+    for (const hz of [60, 165]) {
+      let s = { angle: 0, vel: 0 };
+      for (let i = 0; i < hz; i++) {
+        const was = s.angle;
+        s = springAngle(s.angle, s.vel, Math.PI - 0.01, 25, 1 / hz, 12);
+        expect(Math.abs(s.angle - was)).toBeLessThanOrEqual(12 / hz + 1e-9);
+      }
+      expect(s.angle).toBeCloseTo(Math.PI - 0.01, 2);
+    }
+  });
   it("takes the short way across the +-PI seam", () => {
     expect(run(60, 0.05, 3, -3).angle).toBeGreaterThan(3);
   });
