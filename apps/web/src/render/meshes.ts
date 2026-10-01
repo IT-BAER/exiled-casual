@@ -14,7 +14,7 @@ import {
 } from "@babylonjs/core";
 import { attachProp, type PropKind } from "./props";
 import { attachCreature, type CreatureRig } from "./monsters";
-import { attachArrowStreak, attachBoltTrail, attachCinderFX, buildArrow, cinderGlow, fxProfile } from "./skill-fx";
+import { attachArrowStreak, attachBoltTrail, attachCinderFX, buildArrow, cinderGlow, fxProfile, PROJECTILE_ARROW_SCALE } from "./skill-fx";
 import { attachRig, rigOf, BASE_LOOKS, type RigParts } from "./rig";
 import { attachGroundModel } from "./ground-looks";
 import { hasRim, HIT_TINT, HIT_ALPHA } from "./rim";
@@ -1619,6 +1619,7 @@ export function makeMesh(
 
   if (kind === "projectile" && fxProfile(skillId).arrow) {
     const arrow = buildArrow(scene, name);
+    arrow.scaling.setAll(PROJECTILE_ARROW_SCALE);
     if (at) {
       arrow.position.copyFrom(at);
       arrow.computeWorldMatrix(true);

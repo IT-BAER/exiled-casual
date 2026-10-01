@@ -28,6 +28,7 @@ import {
   swingTrail,
   SWING_TRAIL_NAME,
   ARROW_LENGTH,
+  PROJECTILE_ARROW_SCALE,
 } from "./skill-fx";
 
 let engine: NullEngine | undefined;
@@ -276,8 +277,10 @@ describe("arrows", () => {
       const scene = newScene();
       const arrow = makeMesh(scene, "projectile", "entity-1", Vector3.Zero(), undefined, id);
       arrow.computeWorldMatrix(true);
-      const { minimum: min, maximum: max } = arrow.getBoundingInfo().boundingBox;
-      expect(max.z - min.z, id).toBeGreaterThan(ARROW_LENGTH);
+      const { minimumWorld: min, maximumWorld: max } = arrow.getBoundingInfo().boundingBox;
+      // Smaller in flight than on the string: at full bow size it read as a javelin.
+      expect(max.z - min.z, id).toBeGreaterThan(ARROW_LENGTH * PROJECTILE_ARROW_SCALE);
+      expect(max.z - min.z, id).toBeLessThan(ARROW_LENGTH);
       expect(max.x - min.x, id).toBeLessThan(0.2);
       expect(systems(scene, BOLT_TRAIL_NAME), id).toHaveLength(0);
     }

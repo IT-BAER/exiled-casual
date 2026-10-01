@@ -442,6 +442,8 @@ export const ARROW_NAME = "fx-arrow";
  * 0.9 it read as a spear.
  */
 export const ARROW_LENGTH = 0.75;
+/** The loosed arrow against the nocked one: at full bow size it read as a javelin in flight. */
+export const PROJECTILE_ARROW_SCALE = 0.7;
 
 function arrowMaterial(scene: Scene, part: string, colour: Color3, glow: number): StandardMaterial {
   const name = `${ARROW_NAME}-${part}-mat`;
@@ -531,7 +533,8 @@ export function attachArrowStreak(scene: Scene, mesh: Mesh, fx: FxProfile): Mesh
 export function setStreakLength(arrow: Mesh, flown: number): void {
   const streak = arrow.getChildMeshes(true).find((m) => m.name === `${ARROW_NAME}-streak`);
   if (!streak) return;
-  const length = Math.max(0.001, Math.min(STREAK_LENGTH, flown));
+  // `flown` is world units; the streak lives in the arrow's scaled frame.
+  const length = Math.max(0.001, Math.min(STREAK_LENGTH, flown / (arrow.scaling.z || 1)));
   streak.scaling.y = length / STREAK_LENGTH;
   streak.position.z = -ARROW_LENGTH / 2 - length / 2 + 0.1;
 }
