@@ -1258,9 +1258,11 @@ export function Hud({
           gap: 0,
         }}
       >
-        {/* The chest heads the mouse row at the bar's left edge; the row keeps the right. */}
-        <div style={{ alignSelf: "stretch", display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
-        <InventoryChest onClick={onToggleInventory} hotkey={inventoryKey} />
+        {/* The chest sits centred over slot 1's column, level with the mouse row; the row keeps the right. */}
+        <div style={{ alignSelf: "stretch", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div data-testid="inventory-chest-cell" style={{ width: SLOT, display: "flex", justifyContent: "center" }}>
+          <InventoryChest onClick={onToggleInventory} hotkey={inventoryKey} />
+        </div>
         {/* The mouse row closes on a warm hairline, drawn as a shadow so it costs no height. */}
         <div style={{ display: "flex", gap: `${SLOT_GAP}px`, boxShadow: "0 1px 0 rgba(101,81,49,0.85)" }}>
           {MOUSE_KEYS.map((_, i) => {
