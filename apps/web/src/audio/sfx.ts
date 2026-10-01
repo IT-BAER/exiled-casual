@@ -66,8 +66,8 @@ const VOICES: Record<string, Voice> = {
   "skill-blink":              { gain: 0.30, wet: 0.12, vary: 0.05 },
   "skill-bow-release":        { gain: 0.26, wet: 0.08, vary: 0.08 },
   "skill-arrow-impact":       { gain: 0.30, wet: 0.12, vary: 0.10 },
-  "skill-strike-swing":       { gain: 0.24, wet: 0.08, vary: 0.08 },
-  "skill-strike-impact":      { gain: 0.34, wet: 0.12, vary: 0.10 },
+  "skill-strike-swing":       { gain: 0.15, wet: 0.08, vary: 0.08 },
+  "skill-strike-impact":      { gain: 0.21, wet: 0.12, vary: 0.10 },
   "monster-melee-hit":        { gain: 0.17, wet: 0.16, vary: 0.10 },
   // The generic pair is the fallback for a species with no material (soundscape.ts),
   // never the cue a known monster gets. The six below are the ones actually heard.
