@@ -84,7 +84,7 @@ function Soon(): React.ReactElement {
         <span style={{ position: "relative", display: "inline-block", ...GILT }}>
           SOON
           {/* Absolutely placed, not a <sup>: superscript aligns to the baseline
-              through the font's own metrics, and Cinzel is an all-caps face
+              through the font's own metrics, and an all-caps face
               whose ascender sits well above its cap height, so the mark floated
               off the top of the S. This pins it to the cap line instead. */}
           <span

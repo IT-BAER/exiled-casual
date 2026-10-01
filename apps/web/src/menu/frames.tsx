@@ -19,12 +19,8 @@ export const MENU_ART = "/textures/ui/menu";
 
 /** Matches the HUD, so a menu button and an inventory header are the same voice. */
 /**
- * The reading face: everything that is a word rather than a title.
- *
- * Cinzel, which used to be this, is a Trajan — a capitals-only alphabet
- * whose "lower case" is small capitals. Set a sentence in it and the
- * sentence comes out shouting, which is what every panel here was doing.
- * It is still the face of every title; see DISPLAY.
+ * The reading face: everything that is a word rather than a title. A
+ * capitals-only face set a sentence shouting; Marcellus has a lower case.
  */
 export const SERIF = '"Marcellus", Georgia, "Times New Roman", serif';
 /** The carved face, for titles, labels and anything already uppercase. */

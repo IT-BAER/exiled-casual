@@ -7,20 +7,8 @@ import type { ItemStatLine } from "@exiled/protocol";
 // All four rarities roll today; the sim still does not model weapon base stats or
 // requirements beyond what the base carries, so those rows are absent when unknown.
 /**
- * The display face: titles, labels, numbers, everything short.
- *
- * Cinzel is a Trajan, which is the letter PoE's own furniture is carved in. It
- * is shipped with the client (`/fonts`, declared in index.html) rather than
- * merely named, which it was until now — the fallback everyone actually saw was
- * Georgia.
- */
-/**
- * The reading face: everything that is a word rather than a title.
- *
- * Cinzel, which used to be this, is a Trajan — a capitals-only alphabet
- * whose "lower case" is small capitals. Set a sentence in it and the
- * sentence comes out shouting, which is what every panel here was doing.
- * It is still the face of every title; see DISPLAY.
+ * The reading face: everything that is a word rather than a title. A
+ * capitals-only face set a sentence shouting; Marcellus has a lower case.
  */
 export const SERIF = '"Marcellus", Georgia, "Times New Roman", serif';
 /** The carved face, for titles, labels and anything already uppercase. */
