@@ -36,6 +36,11 @@ const FACE_CAMERA_YAW = Math.PI / 2 - CAMERA_ALPHA;
 const SPAWN_YAW = FACE_CAMERA_YAW;
 /** A cursor this close to the player (units) has no direction worth turning to. */
 const AIM_DEAD_ZONE = 0.3;
+/**
+ * Standing still, the head follows the cursor and the body holds until the
+ * cursor is this far off it (radians, ~75 degrees, inside the head's 85).
+ */
+const STAND_TURN_AT = 1.3;
 
 /**
  * The sim's fixed yaws (the portal arc, the stash, the vendor) are authored for
@@ -261,6 +266,8 @@ export class SnapshotRenderer {
   private aim: { x: number; y: number } | null = null;
   /** The player's last facing off the cursor, held while the cursor sits on top of him. */
   private aimFacing: { x: number; y: number } | null = null;
+  /** Where a standing body faces while the head alone follows the cursor. */
+  private restFacing: { x: number; y: number } | null = null;
   /** Newborn bolts offset to the casting hand: where each was launched and how
    *  far it has to go, which is the rate the offset is spent at. */
   private readonly fromHand = new Map<number, { offset: Vector3; from: { x: number; y: number }; range: number; join: number }>();
@@ -385,6 +392,13 @@ export class SnapshotRenderer {
       const d = Math.hypot(ax, ay);
       if (d > AIM_DEAD_ZONE) this.aimFacing = { x: ax / d, y: ay / d };
     }
+    const standing = prev !== null && prev.player.x === next.player.x && prev.player.y === next.player.y
+      && !next.player.casting && next.player.facing === undefined;
+    const rest = this.restFacing;
+    if (this.aimFacing && (!standing || !rest
+      || this.aimFacing.x * rest.x + this.aimFacing.y * rest.y < Math.cos(STAND_TURN_AT))) {
+      this.restFacing = this.aimFacing;
+    }
     if (next.player.alive) this.syncMesh(
       next.player.id,
       "player",
@@ -397,7 +411,7 @@ export class SnapshotRenderer {
       undefined,
       next.player.heading,
       undefined,
-      this.aimFacing ?? next.player.facing,
+      (standing ? this.restFacing : this.aimFacing) ?? next.player.facing,
     );
 
     // Dress the character from what the sim says he is wearing. Asserted every

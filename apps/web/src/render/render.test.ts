@@ -541,6 +541,29 @@ describe("SnapshotRenderer", () => {
     expect(mesh.rotation.y).toBeCloseTo(0, 2);
   });
 
+  it("standing, lets the head follow a cursor near his facing and turns the body only past it", () => {
+    engine = new NullEngine();
+    vi.spyOn(engine, "getDeltaTime").mockReturnValue(1000 / 60);
+    const { scene } = createScene(engine);
+    const renderer = new SnapshotRenderer(scene);
+    const still = makeSnapshot({ player: testPlayer() });
+    renderer.apply(null, still, 1);
+    const mesh = scene.getMeshByName("entity-0")!;
+    const settle = () => { for (let i = 0; i < 60; i++) renderer.apply(still, still, 1); };
+    const yawTo = (a: number) => renderer.setAim(Math.sin(a) * 5, Math.cos(a) * 5);
+    yawTo(0);
+    settle();
+    expect(Math.cos(mesh.rotation.y)).toBeGreaterThan(0.999);
+    // 40 degrees off: the head's to take, the body stays.
+    yawTo(0.7);
+    settle();
+    expect(Math.cos(mesh.rotation.y)).toBeGreaterThan(0.999);
+    // 110 degrees off: past the head, so the body comes about onto it.
+    yawTo(1.92);
+    settle();
+    expect(Math.cos(mesh.rotation.y - 1.92)).toBeGreaterThan(0.999);
+  });
+
   it("faces the player at the cursor while the keys carry him away from it (PoE2 WASD)", () => {
     engine = new NullEngine();
     vi.spyOn(engine, "getDeltaTime").mockReturnValue(1000 / 60);
