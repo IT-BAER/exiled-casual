@@ -72,9 +72,9 @@ type DragSource = { kind: "grid"; container: ContainerId; x: number; y: number }
  * sentence comes out shouting, which is what every panel here was doing.
  * It is still the face of every title; see DISPLAY.
  */
-export const SERIF = '"EB Garamond", Georgia, "Times New Roman", serif';
+export const SERIF = '"Marcellus", Georgia, "Times New Roman", serif';
 /** The carved face, for titles, labels and anything already uppercase. */
-export const DISPLAY = '"Cinzel", "Trajan Pro", Georgia, "Times New Roman", serif';
+export const DISPLAY = '"Marcellus SC", Georgia, "Times New Roman", serif';
 export const GOLD = "#c8a44d";
 export const GOLD_DIM = "#7a5c22";
 export const PARCHMENT = "#e8dcc0";

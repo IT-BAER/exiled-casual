@@ -1,6 +1,6 @@
 Both faces shipped in this folder are under the SIL Open Font License 1.1.
-  cinzel-latin.woff2      Cinzel, Copyright 2020 The Cinzel Project Authors
-  ebgaramond-latin.woff2  EB Garamond, Copyright 2017 The EB Garamond Project Authors
+  marcellus-sc-latin.woff2  Marcellus SC, Copyright (c) 2012, Brian J. Bonislawsky DBA Astigmatic (AOETI), Reserved Font Name "Marcellus"
+  marcellus-latin.woff2     Marcellus, Copyright (c) 2012, Brian J. Bonislawsky DBA Astigmatic (AOETI), Reserved Font Name "Marcellus"
 Latin subsets, as served by Google Fonts.
 
 Copyright 2020 The Cinzel Project Authors (https://github.com/NDISCOVER/Cinzel)

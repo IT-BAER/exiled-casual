@@ -151,6 +151,9 @@ function socketFor(bar: (string | null)[], i: number, names?: ReadonlyMap<string
  * (reference-screenshots/poe1-lower-bar.png): the mouse buttons sit in their own row
  * above the numbered slots, and both rows draw the same tile.
  */
+/** The chest's size against a skill tile: furniture beside the row, not a fourth socket. */
+const CHEST_SCALE = 0.62;
+
 /** The inventory's chest on the skill bar: a mouse way in, named with its key on hover. */
 function InventoryChest({ onClick, hotkey }: { onClick?: () => void; hotkey: string }) {
   const [hover, setHover] = React.useState(false);
@@ -163,7 +166,7 @@ function InventoryChest({ onClick, hotkey }: { onClick?: () => void; hotkey: str
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
-        position: "relative", width: SLOT, height: SLOT, padding: 0, cursor: "pointer",
+        position: "relative", width: `calc(${SLOT} * ${CHEST_SCALE})`, height: `calc(${SLOT} * ${CHEST_SCALE})`, padding: 0, cursor: "pointer",
         background: "none", border: "none",
         filter: hover ? "brightness(1.25) drop-shadow(0 0 6px rgba(217,176,74,0.55))" : "none",
       }}

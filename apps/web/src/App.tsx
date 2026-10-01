@@ -380,7 +380,7 @@ function Toast({ text, onDismiss }: { text: string; onDismiss: () => void }): Re
         background: "rgba(24,8,6,0.94)",
         border: "1px solid #7a3524",
         color: "#e8b7a2",
-        fontFamily: '"Cinzel", Georgia, serif',
+        fontFamily: '"Marcellus SC", Georgia, serif',
         fontSize: 13,
         letterSpacing: 1.2,
       }}

@@ -47,9 +47,9 @@ interface Props {
  * sentence comes out shouting, which is what every panel here was doing.
  * It is still the face of every title; see DISPLAY.
  */
-const SERIF = '"EB Garamond", Georgia, "Times New Roman", serif';
+const SERIF = '"Marcellus", Georgia, "Times New Roman", serif';
 /** The carved face, for titles, labels and anything already uppercase. */
-const DISPLAY = '"Cinzel", "Trajan Pro", Georgia, "Times New Roman", serif';
+const DISPLAY = '"Marcellus SC", Georgia, "Times New Roman", serif';
 const GOLD = "#c8a44d";
 const GOLD_DIM = "#7a5c22";
 const PARCHMENT = "#e8dcc0";

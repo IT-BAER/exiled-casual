@@ -14,7 +14,7 @@ import { Atmosphere } from "./menu/atmos";
 import { BRAZIERS } from "./menu/braziers";
 
 const MENU_ART = "/textures/ui/menu";
-const DISPLAY = '"Cinzel", "Trajan Pro", Georgia, "Times New Roman", serif';
+const DISPLAY = '"Marcellus SC", Georgia, "Times New Roman", serif';
 const GOLD = "#c8a44d";
 
 /**

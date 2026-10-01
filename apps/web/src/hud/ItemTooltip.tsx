@@ -22,9 +22,9 @@ import type { ItemStatLine } from "@exiled/protocol";
  * sentence comes out shouting, which is what every panel here was doing.
  * It is still the face of every title; see DISPLAY.
  */
-export const SERIF = '"EB Garamond", Georgia, "Times New Roman", serif';
+export const SERIF = '"Marcellus", Georgia, "Times New Roman", serif';
 /** The carved face, for titles, labels and anything already uppercase. */
-export const DISPLAY = '"Cinzel", "Trajan Pro", Georgia, "Times New Roman", serif';
+export const DISPLAY = '"Marcellus SC", Georgia, "Times New Roman", serif';
 
 const AFFIX_BLUE = "#8f97ff";
 const CLASS_TAN = "#8a8065";
