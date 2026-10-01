@@ -223,6 +223,10 @@ export const HIP_TURN = Math.PI * (35 / 180);
 const LEG_YAW_SIGN = -1;
 /** Time constant the hips ease toward their turn over: long enough to read as a turn, not a snap. */
 const LEG_EASE_SEC = 0.25;
+/** Radians the spine stands up from the jog's forward lean at a full sidestep. */
+const STRAFE_UPRIGHT = 0.28;
+/** Pitch about the body's right axis against "chest back", after the glTF handedness flip. */
+const UPRIGHT_SIGN = 1;
 /** Time constant the move's yaw off the chest eases over, so the direction blend sweeps. */
 const MOVE_EASE_SEC = 0.08;
 /** Crossfade lengths (s): locomotion short so a stop plants the feet, actions softer. */
@@ -1636,15 +1640,17 @@ export class RigActor {
     const waist = ["spine_01", "spine_02"].map((n) => byName.get(n)).filter((n): n is TransformNode => n instanceof TransformNode);
     // World-up yaw applied in the bone's PARENT frame (delta * rot): the hips
     // turn about the floor's normal, not about whatever axis the pelvis rests on.
-    const yawInParent = (bone: TransformNode, angle: number) => {
+    const turnInParent = (bone: TransformNode, axis: Vector3, angle: number) => {
       const parent = bone.parent as TransformNode | null;
       const rot = bone.rotationQuaternion;
       if (!parent || !rot) return;
       parent.computeWorldMatrix(true).invertToRef(parentInv);
-      Vector3.TransformNormalToRef(worldUp, parentInv, localAxis);
+      Vector3.TransformNormalToRef(axis, parentInv, localAxis);
       Quaternion.RotationAxisToRef(localAxis.normalize(), angle, this.delta);
       this.delta.multiplyToRef(rot, rot);
     };
+    const yawInParent = (bone: TransformNode, angle: number) => turnInParent(bone, worldUp, angle);
+    const bodyRight = new Vector3();
     // Not every clip keys every one of these bones, and an unkeyed bone keeps
     // last frame's turn: each pose is put back before the clips run, or it spins.
     const twisted = [pelvisNode, ...waist].filter((n): n is TransformNode => n instanceof TransformNode);
@@ -1676,6 +1682,14 @@ export class RigActor {
       turned = true;
       yawInParent(pelvisNode, LEG_YAW_SIGN * this.legs);
       for (const bone of waist) yawInParent(bone, -LEG_YAW_SIGN * this.legs / waist.length);
+      // The jog leans its chest into the run; carried sideways, that lean points
+      // at nothing. Stand the spine up by how sideways the move is.
+      const upright = gaitOf(this.locomotion) === "run" ? STRAFE_UPRIGHT * Math.abs(Math.sin(this.moveRel)) : 0;
+      if (upright > 1e-3 && waist[0]) {
+        const yaw = this.host.rotation.y;
+        bodyRight.set(Math.cos(yaw), 0, -Math.sin(yaw));
+        turnInParent(waist[0], bodyRight, UPRIGHT_SIGN * upright);
+      }
     });
 
     this.aimObserver = this.scene.onAfterAnimationsObservable.add(() => {
