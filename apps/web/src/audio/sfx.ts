@@ -64,7 +64,7 @@ const VOICES: Record<string, Voice> = {
   // the master's peaks, which are cracks rather than body.
   "skill-cinder-ground-loop": { gain: 0.45, wet: 0.24, vary: 0.03 },
   "skill-blink":              { gain: 0.30, wet: 0.12, vary: 0.05 },
-  "skill-bow-release":        { gain: 0.26, wet: 0.08, vary: 0.08 },
+  "skill-bow-release":        { gain: 0.21, wet: 0.08, vary: 0.08 },
   "skill-arrow-impact":       { gain: 0.30, wet: 0.12, vary: 0.10 },
   "skill-strike-swing":       { gain: 0.15, wet: 0.08, vary: 0.08 },
   "skill-strike-impact":      { gain: 0.21, wet: 0.12, vary: 0.10 },
