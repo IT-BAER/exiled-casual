@@ -1488,6 +1488,7 @@ export class RigActor {
   private easeOutToLocomotion = (): void => {
     const group = this.groups.get(this.locomotion);
     if (group) restartAtCurrentFrame(group, CLIP_LOOPS[this.locomotion]);
+    this.scene.sortActiveAnimatables();
   };
 
   private switchTo(clip: RigClip): void {
@@ -1503,6 +1504,9 @@ export class RigActor {
     this.active?.stop();
     group.start(CLIP_LOOPS[clip], group.speedRatio);
     if (carry !== undefined) group.goToFrame(carry);
+    // Babylon applies animatables in list order and a start appends: without the
+    // sort a leg clip switched mid-swing takes the arms back and cuts the action off.
+    this.scene.sortActiveAnimatables();
     this.active = group;
     this.activeClip = clip;
   }
@@ -1721,6 +1725,8 @@ export class RigActor {
         continue;
       }
       group.normalize(source.from, source.to);
+      // Layered clips apply after locomotion whenever the list is sorted (`switchTo`).
+      if (upperOnly) group.playOrder = 1;
       group.enableBlending = true;
       // A 60Hz frame's worth until the first frame re-sets it off the real one.
       group.blendingSpeed = 1 / 60 / (isLayeredClip(clip) ? ACTION_BLEND_SEC : LOCO_BLEND_SEC);
