@@ -2,7 +2,7 @@ import { Vector3 } from "@babylonjs/core";
 import type { Scene } from "@babylonjs/core";
 import type { Mesh } from "@babylonjs/core";
 import { blinkBurst, fxProfile, meleeImpact, setStreakLength } from "./skill-fx";
-import { HIT_STOP_SCALE, addTrauma, decayTrauma, hitStopMs, shakeOffset } from "./juice";
+import { HIT_STOP_SCALE, addTrauma, decayTrauma, hitStopMs, shakeOffset, swingWeight } from "./juice";
 import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
 import { animateActor, keepGroundBlobFlat, makeMesh, setHitFlash, updateTelegraph, updatePortal, updateMapDevice, updateStash, updateVendor, updateContainer, updateGroundItem, updateRareElement, portalAppear, portalVanish, isPortalMesh, PORTAL_STAGGER_MS, Y_LIFT } from "./meshes";
 import type { MeshKind } from "./meshes";
@@ -357,6 +357,8 @@ export class SnapshotRenderer {
     const strikeHits = newTick && prev !== null && next.player.strikeTick !== undefined
       && next.player.strikeTick !== prev.player.strikeTick ? next.player.strikeHits ?? 0 : 0;
     let meleeBursts = 0;
+    /** Largest share of max life one body lost to this tick's swing: how hard the camera jolts. */
+    let swingShare = 0;
 
     // Player
     this.playerId = next.player.id;
@@ -531,6 +533,7 @@ export class SnapshotRenderer {
         this.hit.set(e.id, next.tick);
         const meleeHit = strikeHits > 0 && e.kind === "monster"
           && Math.hypot(e.x - next.player.x, e.y - next.player.y) <= MELEE_FX_REACH;
+        if (meleeHit) swingShare = Math.max(swingShare, (prevE.life - Math.max(0, e.life)) / (e.maxLife ?? prevE.life));
         if (meleeHit && meleeBursts < MAX_MELEE_BURSTS) {
           meleeBursts++;
           meleeImpact(this.scene, new Vector3(e.x, Y_LIFT.projectile, e.y), e.x - next.player.x, e.y - next.player.y);
@@ -675,7 +678,7 @@ export class SnapshotRenderer {
       // The pose holds on the real clock, never the sim's: the world keeps running.
       this.scene.animationTimeScale = HIT_STOP_SCALE;
       this.hitStopUntil = performance.now() + hitStopMs(strikeHits);
-      this.shakeTrauma = addTrauma(this.shakeTrauma, strikeHits);
+      this.shakeTrauma = addTrauma(this.shakeTrauma, strikeHits, swingWeight(swingShare));
     }
 
     // Faded on the sim's clock, like every other timing in the client: a wall
@@ -859,6 +862,7 @@ export class SnapshotRenderer {
     // is turning INTO its move, and the lag of that turn is not a sidestep.
     const rel = moving && facing ? Math.atan2(dx, dz) - mesh.rotation.y : 0;
     rigOf(mesh)?.setMoveAngle(rel, yawStep);
+    rigOf(mesh)?.setLookYaw(moving ? (sent ?? Math.atan2(dx, dz)) : null);
     // A stopped actor still needs frames to settle back upright. Skipping this
     // call used to freeze the last running bank indefinitely. Turning to a
     // target is not a corner, and a backpedal does not lead with the chest.

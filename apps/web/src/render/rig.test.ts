@@ -37,6 +37,8 @@ import {
   IDLE_SETTLE_SEC,
   IDLE_SETTLED,
   isRigReady,
+  lookOffset,
+  LOOK_MAX,
   loadPlayerRig,
   resetPlayerRig,
   speedRatioFor,
@@ -310,6 +312,21 @@ describe("aimAngles", () => {
     // pins WHICH, because a silent flip here would read as a twitch.
     expect(aimAngles(-Math.PI + 0.1, 0).arm).toBe(-ARM_MAX);
     expect(aimAngles(-Math.PI + 0.5, 0).arm).toBe(ARM_MAX);
+  });
+});
+
+describe("lookOffset", () => {
+  it("is zero looking where the body faces, across the seam too", () => {
+    expect(lookOffset(0.3, 0.3)).toBeCloseTo(0, 9);
+    expect(lookOffset(Math.PI - 0.1, Math.PI - 0.1 - 2 * Math.PI)).toBeCloseTo(0, 9);
+  });
+  it("turns the same way the cast's head aim does", () => {
+    expect(Math.sign(lookOffset(0.5, 0))).toBe(Math.sign(aimAngles(0.5, 0).head));
+    expect(lookOffset(0.5, 0)).toBeCloseTo(-0.5, 9);
+  });
+  it("never turns the head past its limit, even for a look behind him", () => {
+    expect(lookOffset(2.5, 0)).toBe(-LOOK_MAX);
+    expect(lookOffset(-2.5, 0)).toBe(LOOK_MAX);
   });
 });
 

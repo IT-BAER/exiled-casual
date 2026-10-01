@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { HIT_STOP_MAX_MS, SHAKE_UNITS, addTrauma, decayTrauma, hitStopMs, shakeOffset } from "./juice";
+import { HIT_STOP_MAX_MS, SHAKE_UNITS, addTrauma, decayTrauma, hitStopMs, shakeOffset, swingWeight } from "./juice";
 
 describe("melee juice", () => {
   it("holds the world only for a swing that connected, longer for more bodies, never past the cap", () => {
@@ -17,6 +17,14 @@ describe("melee juice", () => {
     expect(one).toBeGreaterThan(0);
     expect(addTrauma(0, 4)).toBeGreaterThan(one);
     expect(addTrauma(0.9, 10)).toBe(1);
+  });
+
+  it("shakes a chip hit far less than a heavy one, and a heavy one as before", () => {
+    expect(addTrauma(0, 1, 1)).toBe(addTrauma(0, 1));
+    expect(addTrauma(0, 1, swingWeight(0.02))).toBeLessThan(addTrauma(0, 1) / 3);
+    expect(swingWeight(0.25)).toBe(1);
+    expect(swingWeight(0.6)).toBe(1);
+    expect(swingWeight(0)).toBeGreaterThan(0);
   });
 
   it("decays trauma to rest and never below it", () => {

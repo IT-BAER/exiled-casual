@@ -692,7 +692,7 @@ describe("SnapshotRenderer", () => {
     scene.getMeshByName("entity-0")!.metadata = {
       rig: {
         setLooks: () => {}, setAimTarget: () => {}, dispose: () => {},
-        setLocomotion: () => {}, setMoveAngle: () => {}, setFacing: () => {}, update: () => {},
+        setLocomotion: () => {}, setMoveAngle: () => {}, setLookYaw: () => {}, setFacing: () => {}, update: () => {},
         castPoint: () => HAND,
       },
     };
@@ -741,7 +741,7 @@ describe("SnapshotRenderer", () => {
     scene.getMeshByName("entity-0")!.metadata = {
       rig: {
         setLooks: () => {}, setAimTarget: () => {}, dispose: () => {},
-        setLocomotion: () => {}, setMoveAngle: () => {}, setFacing: () => {}, update: () => {},
+        setLocomotion: () => {}, setMoveAngle: () => {}, setLookYaw: () => {}, setFacing: () => {}, update: () => {},
         castPoint: () => HAND,
       },
     };

@@ -15,7 +15,7 @@ const PEAK = 0.2;
 /** Share of max life at which a hit flinches at full strength. */
 const FULL_AT = 0.25;
 /** Weakest flinch, so a chip hit still reads. */
-const MIN_STRENGTH = 0.3;
+const MIN_STRENGTH = 0.15;
 /** A heavier body gives less: a boss that wobbles on every bolt reads as weightless. */
 const TIER_DAMPING = { monster: 1, rare: 0.6, boss: 0.35 } as const;
 

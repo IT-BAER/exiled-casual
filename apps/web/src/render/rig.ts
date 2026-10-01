@@ -384,6 +384,18 @@ export function aimAngles(
     head: Math.max(-HEAD_MAX, Math.min(HEAD_MAX, head)) * HEAD_FOLLOW,
   };
 }
+/** Farthest the neck and head turn off the chest together (~70 degrees), and the neck's share. */
+export const LOOK_MAX = 1.22;
+export const NECK_SHARE = 0.4;
+/** Time constant the gaze eases over: quick, so the eyes lead a turn the body is still making. */
+const LOOK_EASE_SEC = 0.1;
+/** The aim chain's share of a cast that the chest carries; the head looks past it. */
+const CHEST_AIM = 0.3;
+
+/** How far the head turns off the body's facing to look along `lookYaw`, in bone yaw, clamped. */
+export function lookOffset(lookYaw: number, bodyYaw: number): number {
+  return Math.max(-LOOK_MAX, Math.min(LOOK_MAX, wrapPi(-(lookYaw - bodyYaw))));
+}
 export function actionRatio(authoredSeconds: number, windowSeconds: number | undefined): number {
   if (!(authoredSeconds > 0) || !(windowSeconds !== undefined && windowSeconds > 0)) return 1;
   const matched = authoredSeconds / windowSeconds;
@@ -1151,6 +1163,9 @@ export class RigActor {
   private aimBones: TransformNode[] = [];
   /** World-space aim target (x = Babylon x, z = Babylon z). */
   private aimTarget: { x: number; z: number } | null = null;
+  private lookYaw: number | null = null;
+  /** The gaze's current turn off the chest, eased (bone yaw, radians). */
+  private look = 0;
   /** Observer that applies aim rotation after the animation system runs. */
   private aimObserver: Observer<Scene> | null = null;
   private legsObserver: Observer<Scene> | null = null;
@@ -1265,6 +1280,11 @@ export class RigActor {
    * Where the body is moving, as yaw off the way it faces (0 ahead, PI behind),
    * and how far it turned this frame (radians, positive to his right).
    */
+  /** The yaw the body is turning to while it moves, which the head looks along; null to watch the cursor. */
+  setLookYaw(yaw: number | null): void {
+    this.lookYaw = yaw;
+  }
+
   setMoveAngle(rel: number, yawStep = 0): void {
     // Eased: the move only changes on a 30 Hz tick, and a step there would step the direction blend.
     const dt = (this.scene.getEngine?.()?.getDeltaTime?.() ?? 16) / 1000;
@@ -1564,9 +1584,9 @@ export class RigActor {
     // because the child inherits the parent and the clip's own baked direction
     // already biases the arm, so they have to over-correct.
     const AIM_CHAIN: { name: string; weight: number }[] = [
-      { name: "spine_03", weight: 0.5 },
+      { name: "spine_03", weight: CHEST_AIM },
       { name: "clavicle_r", weight: 0.7 },
-      { name: "upperarm_r", weight: 1.0 },
+      { name: "upperarm_r", weight: 1.2 },
     ];
     const HEAD_BONE_NAME = "Head";
     this.aimBones = [];
@@ -1581,6 +1601,10 @@ export class RigActor {
     }
     const hb = byName.get(HEAD_BONE_NAME);
     if (hb instanceof TransformNode) headBone = hb;
+    const nb = byName.get("neck_01");
+    const gaze = [nb instanceof TransformNode ? nb : null, headBone];
+    const ungazed = gaze.map((n) => n?.rotationQuaternion?.clone() ?? null);
+    let looked = false;
 
     // Scratch vectors for the aim solver.
     const worldUp = new Vector3(0, 1, 0);
@@ -1635,6 +1659,10 @@ export class RigActor {
         blendDt = dt;
         for (const [clip, group] of this.groups) group.blendingSpeed = dt / (isLayeredClip(clip) ? ACTION_BLEND_SEC : LOCO_BLEND_SEC);
       }
+      if (looked) {
+        gaze.forEach((n, i) => { if (ungazed[i]) n?.rotationQuaternion?.copyFrom(ungazed[i]!); });
+        looked = false;
+      }
       if (!turned) return;
       twisted.forEach((n, i) => { if (untwisted[i]) n.rotationQuaternion?.copyFrom(untwisted[i]!); });
       turned = false;
@@ -1651,35 +1679,42 @@ export class RigActor {
     });
 
     this.aimObserver = this.scene.onAfterAnimationsObservable.add(() => {
-      if (!this.aimTarget) return;
+      const dt = (this.scene.getEngine?.()?.getDeltaTime?.() ?? 16) / 1000;
       const castGroup = this.groups.get("cast");
       const casting = castGroup !== undefined && castGroup.isPlaying;
       const drawing = !casting && this.isDrawingBow();
-      if (!casting && !drawing) return;
 
       this.pivot.computeWorldMatrix(true);
+      const tdx = this.aimTarget ? this.aimTarget.x - this.pivot.absolutePosition.x : 0;
+      const tdz = this.aimTarget ? this.aimTarget.z - this.pivot.absolutePosition.z : 0;
+      const aimYaw = tdx * tdx + tdz * tdz >= 0.01 ? Math.atan2(tdx, tdz) : null;
+      const bodyYaw = this.host.rotation.y;
 
-      const px = this.pivot.absolutePosition.x;
-      const pz = this.pivot.absolutePosition.z;
-      const tdx = this.aimTarget.x - px;
-      const tdz = this.aimTarget.z - pz;
-      if (tdx * tdx + tdz * tdz < 0.01) return;
-
-      if (drawing) {
+      // How far the head still has to turn past what the chest already carries.
+      let want = 0;
+      if (drawing && aimYaw !== null) {
         // An archer aims with his chest: the clip holds both arms on the arrow
         // line, so turning the top of the spine turns bow, string and head as one.
-        const { arm } = aimAngles(Math.atan2(tdx, tdz), this.host.rotation.y, 0);
+        const { arm } = aimAngles(aimYaw, bodyYaw, 0);
         const chest = this.aimBones[0];
         if (chest) aimBone(chest, Math.max(-HEAD_MAX, Math.min(HEAD_MAX, arm)));
-        return;
+      } else if (casting && aimYaw !== null) {
+        const { arm } = aimAngles(aimYaw, bodyYaw);
+        for (let i = 0; i < this.aimBones.length; i++) {
+          aimBone(this.aimBones[i]!, arm * aimWeights[i]!);
+        }
+        want = lookOffset(aimYaw, bodyYaw) - CHEST_AIM * arm;
+      } else {
+        // The eyes lead: where the body is turning to while it moves, the cursor while it stands.
+        const yaw = this.lookYaw ?? aimYaw;
+        if (yaw !== null) want = lookOffset(yaw, bodyYaw);
       }
-
-      const { arm, head } = aimAngles(Math.atan2(tdx, tdz), this.host.rotation.y);
-      for (let i = 0; i < this.aimBones.length; i++) {
-        aimBone(this.aimBones[i]!, arm * aimWeights[i]!);
-      }
-      // The head follows the aim too, but on its own angle: see `aimAngles`.
-      if (headBone) aimBone(headBone, head);
+      this.look += (want - this.look) * (1 - Math.exp(-dt / LOOK_EASE_SEC));
+      if (Math.abs(this.look) < 1e-4) return;
+      gaze.forEach((n, i) => { if (n?.rotationQuaternion) ungazed[i]?.copyFrom(n.rotationQuaternion); });
+      looked = true;
+      if (gaze[0]) aimBone(gaze[0], this.look * NECK_SHARE);
+      if (gaze[1]) aimBone(gaze[1], this.look * (gaze[0] ? 1 - NECK_SHARE : 1));
     });
 
     // Read the hips rest pose before any clip starts and could move it.
@@ -1980,6 +2015,7 @@ export class RigActor {
     this.bowString = null;
     this.aimBones = [];
     this.aimTarget = null;
+    this.look = 0;
     if (this.aimObserver) this.scene.onAfterAnimationsObservable.remove(this.aimObserver);
     if (this.legsObserver) this.scene.onAfterAnimationsObservable.remove(this.legsObserver);
     this.aimObserver = null;

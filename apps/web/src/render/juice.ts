@@ -28,9 +28,18 @@ export function hitStopMs(hits: number): number {
   return Math.min(HIT_STOP_MAX_MS, HIT_STOP_MS + HIT_STOP_PER_HIT_MS * (hits - 1));
 }
 
-export function addTrauma(trauma: number, hits: number): number {
+/** Share of a body's max life at which a swing shakes in full, and the floor a chip hit keeps. */
+const SWING_FULL_AT = 0.25;
+const SWING_MIN = 0.15;
+
+/** How heavy a swing reads, 0..1, off the largest share of max life it took from one body. */
+export function swingWeight(share: number): number {
+  return Math.min(1, SWING_MIN + (1 - SWING_MIN) * Math.max(0, share) / SWING_FULL_AT);
+}
+
+export function addTrauma(trauma: number, hits: number, weight = 1): number {
   if (hits <= 0) return trauma;
-  return Math.min(1, trauma + TRAUMA_HIT + TRAUMA_PER_EXTRA * (hits - 1));
+  return Math.min(1, trauma + (TRAUMA_HIT + TRAUMA_PER_EXTRA * (hits - 1)) * weight);
 }
 
 export function decayTrauma(trauma: number, seconds: number): number {
