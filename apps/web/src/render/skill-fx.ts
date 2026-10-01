@@ -443,7 +443,7 @@ export const ARROW_NAME = "fx-arrow";
  */
 export const ARROW_LENGTH = 0.75;
 /** The loosed arrow against the nocked one: at full bow size it read as a javelin in flight. */
-export const PROJECTILE_ARROW_SCALE = 0.7;
+export const PROJECTILE_ARROW_SCALE = 0.6;
 
 function arrowMaterial(scene: Scene, part: string, colour: Color3, glow: number): StandardMaterial {
   const name = `${ARROW_NAME}-${part}-mat`;

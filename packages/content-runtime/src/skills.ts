@@ -139,7 +139,7 @@ const SKILL_DEFS: SkillDef[] = [
     effects: [
       {
         type: "spawnProjectile",
-        speedPerSecFixed: fp(22),
+        speedPerSecFixed: fp(25),
         radiusFixed: fp(0.35),
         maxRangeFixed: fp(20),
         damage: { type: "physical", amountFixed: fp(30) },
@@ -201,7 +201,7 @@ const SKILL_DEFS: SkillDef[] = [
     effects: [
       {
         type: "spawnProjectile",
-        speedPerSecFixed: fp(22),
+        speedPerSecFixed: fp(25),
         radiusFixed: fp(0.3),
         maxRangeFixed: fp(14),
         damage: { type: "physical", amountFixed: fp(40) },
@@ -279,7 +279,7 @@ const SKILL_DEFS: SkillDef[] = [
       {
         type: "spawnProjectile",
         // Faster and thinner than Ember Bolt: an arrow, not a lobbed flame.
-        speedPerSecFixed: fp(20),
+        speedPerSecFixed: fp(23),
         radiusFixed: fp(0.3),
         maxRangeFixed: fp(14),
         damage: { type: "physical", amountFixed: fp(16) },
