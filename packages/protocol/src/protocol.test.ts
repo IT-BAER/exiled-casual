@@ -254,3 +254,14 @@ describe("validateIntent — sortItems", () => {
     expect(() => validateIntent({ kind: "sortItems", mode: "colour" })).toThrow(/mode/);
   });
 });
+
+describe("validateIntent — dropItem", () => {
+  test("a backpack cell or an equipment slot", () => {
+    expect(validateIntent({ kind: "dropItem", x: 1, y: 2 })).toEqual({ kind: "dropItem", x: 1, y: 2 });
+    expect(validateIntent({ kind: "dropItem", slot: "helmet" })).toEqual({ kind: "dropItem", slot: "helmet" });
+  });
+
+  test("rejects an unknown slot", () => {
+    expect(() => validateIntent({ kind: "dropItem", slot: "tail" })).toThrow(/slot/);
+  });
+});

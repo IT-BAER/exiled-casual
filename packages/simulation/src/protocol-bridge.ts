@@ -74,6 +74,7 @@ export function intentToCommand(intent: Intent, player: Entity, tick: number): C
     case "unequipItem":
       return { tick, entity: player, type: "unequipItem", slot: intent.slot };
     case "dropItem":
+      if ("slot" in intent) return { tick, entity: player, type: "dropItem", slot: intent.slot };
       return { tick, entity: player, type: "dropItem", data: { x: intent.x, y: intent.y } };
     case "sortItems":
       // 0 = backpack, 1 = stash, as moveItem numbers them; mode is its SORT_MODES index.

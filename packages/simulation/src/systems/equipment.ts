@@ -248,6 +248,22 @@ export function registerEquipmentSystem(sim: Simulation): void {
       }
 
       // ── dropItem ───────────────────────────────────────────────────────────
+      if (cmd.type === "dropItem" && cmd.slot !== undefined) {
+        const equip = world.get<EquipmentC>(sessionE, "equipment")!;
+        const item: Item | undefined = equip.slots[cmd.slot];
+        const playerPos = world.get<Position>(cmd.entity, "position");
+        if (item === undefined || !playerPos) continue;
+        const slots = { ...equip.slots };
+        delete slots[cmd.slot];
+        world.set<EquipmentC>(sessionE, "equipment", { slots });
+        recomputePlayerStats(world);
+        const base = baseOf(item.baseId);
+        const ge = world.create();
+        world.set<Position>(ge, "position", { x: playerPos.x, y: playerPos.y });
+        world.set<ItemC>(ge, "item", { item, w: base.w, h: base.h });
+        continue;
+      }
+
       if (cmd.type === "dropItem") {
         const x = cmd.data?.["x"];
         const y = cmd.data?.["y"];

@@ -508,9 +508,9 @@ export function InventoryPanel({
       // Another open HUD panel is not the world — the character sheet overlaps
       // this one, and releasing on it must not silently throw the item away.
       const onOtherPanel = !!target?.closest("[data-hud-panel]");
-      if (!insidePanel && !onOtherPanel && drag.from.kind === "grid" && drag.from.container === "backpack") {
-        onIntent?.({ kind: "dropItem", x: drag.from.x, y: drag.from.y });
-      }
+      if (insidePanel || onOtherPanel) return;
+      if (drag.from.kind === "slot") onIntent?.({ kind: "dropItem", slot: drag.from.slot });
+      else if (drag.from.container === "backpack") onIntent?.({ kind: "dropItem", x: drag.from.x, y: drag.from.y });
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);

@@ -30,6 +30,8 @@ export type Intent =
   | { kind: "unequipItem"; slot: EquipSlotId }
   /** Drop a backpack item (by ORIGIN cell) as a ground entity at the player's feet. */
   | { kind: "dropItem"; x: number; y: number }
+  /** Drop what an equipment slot holds straight to the ground. */
+  | { kind: "dropItem"; slot: EquipSlotId }
   /**
    * Move an item from its (x, y) origin cell to another one. `from`/`to` name the
    * container and both default to the backpack, so a move recorded before the stash
@@ -560,6 +562,11 @@ export function validateIntent(v: unknown): Intent {
       };
     }
     case "dropItem": {
+      if (obj["slot"] !== undefined) {
+        if (!EQUIP_SLOT_IDS.has(obj["slot"] as string))
+          throw new Error("validateIntent dropItem: slot must be a valid EquipSlotId");
+        return { kind: "dropItem", slot: obj["slot"] as EquipSlotId };
+      }
       if (!Number.isInteger(obj["x"])) throw new Error("validateIntent dropItem: x must be an integer");
       if (!Number.isInteger(obj["y"])) throw new Error("validateIntent dropItem: y must be an integer");
       return { kind: "dropItem", x: obj["x"] as number, y: obj["y"] as number };

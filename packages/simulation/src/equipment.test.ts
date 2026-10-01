@@ -283,6 +283,20 @@ describe("equipment system — dropItem", () => {
     expect(pos.y).toBe(playerPos.y);
   });
 
+  it("drops an equipped item straight from its slot and recomputes the stats", () => {
+    const { sim, world, playerEntity } = makeWorld();
+    clearInv(world);
+    world.set<EquipmentC>(sessionE(world), "equipment", { slots: { weapon1: WAND } });
+
+    sim.step([intentToCommand({ kind: "dropItem", slot: "weapon1" }, playerEntity, 0)]);
+
+    expect(getEquip(world).slots.weapon1).toBeUndefined();
+    expect(getInv(world).items).toHaveLength(0);
+    const ground = world.query("item", "position");
+    expect(ground).toHaveLength(1);
+    expect(world.get<{ item: unknown }>(ground[0]!, "item")!.item).toEqual(WAND);
+  });
+
   it("no-op when no item at the given origin cell", () => {
     const { sim, world, playerEntity } = makeWorld();
     clearInv(world);

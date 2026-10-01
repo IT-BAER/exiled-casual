@@ -154,6 +154,16 @@ describe("InventoryPanel", () => {
     expect(intents).toEqual([{ kind: "unequipItem", slot: "weapon1" }]);
   });
 
+  it("drops an equipped item to the ground when released outside the panel", () => {
+    const intents: unknown[] = [];
+    const equipped = { weapon1: { rarity: "magic" as const, name: "Ember Wand", itemClass: "wand", lines: [] } };
+    render(<InventoryPanel inventory={{ ...inv, items: [] }} equipment={equipped} onIntent={(i) => intents.push(i)} onClose={() => {}} />);
+
+    dragFrom(screen.getByTestId("equip-slot-weapon1"));
+    fireEvent.pointerUp(screen.getByTestId("inventory-panel"));
+    expect(intents).toEqual([{ kind: "dropItem", slot: "weapon1" }]);
+  });
+
   it("releasing a drag over another open HUD panel is a no-op, not a drop to the floor", () => {
     const intents: unknown[] = [];
     const sheet = document.createElement("div");
