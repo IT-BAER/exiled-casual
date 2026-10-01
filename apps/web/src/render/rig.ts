@@ -1133,6 +1133,8 @@ export class RigActor {
   private moveRel = 0;
   private legsTarget = 0;
   private legs = 0;
+  /** Share of STRAFE_UPRIGHT applied, eased to 0 while a layered clip owns the spine. */
+  private uprightGain = 1;
   /** The direction clip blended over the playing one, and its weight (`directionBlend`). */
   private blendTo: AnimationGroup | null = null;
   private blendClip: RigClip | null = null;
@@ -1677,14 +1679,17 @@ export class RigActor {
       const dt = (this.scene.getEngine?.()?.getDeltaTime?.() ?? 16) / 1000;
       this.legs += wrapPi(this.legsTarget - this.legs) * Math.min(1, dt / LEG_EASE_SEC);
       this.blendDirection();
+      const layered = [...UPPER_BODY_CLIPS].some((c) => this.groups.get(c)?.isPlaying);
+      this.uprightGain += ((layered ? 0 : 1) - this.uprightGain) * Math.min(1, dt / ACTION_BLEND_SEC);
       if (Math.abs(this.legs) < 1e-4 || !(pelvisNode instanceof TransformNode)) return;
       twisted.forEach((n, i) => { if (n.rotationQuaternion) untwisted[i]?.copyFrom(n.rotationQuaternion); });
       turned = true;
       yawInParent(pelvisNode, LEG_YAW_SIGN * this.legs);
       for (const bone of waist) yawInParent(bone, -LEG_YAW_SIGN * this.legs / waist.length);
       // The jog leans its chest into the run; carried sideways, that lean points
-      // at nothing. Stand the spine up by how sideways the move is.
-      const upright = gaitOf(this.locomotion) === "run" ? STRAFE_UPRIGHT * Math.abs(Math.sin(this.moveRel)) : 0;
+      // at nothing. Stand the spine up by how sideways the move is. A layered clip
+      // (bow, cast, strike) already holds the spine upright, so the pitch fades out under it.
+      const upright = gaitOf(this.locomotion) === "run" ? this.uprightGain * STRAFE_UPRIGHT * Math.abs(Math.sin(this.moveRel)) : 0;
       if (upright > 1e-3 && waist[0]) {
         const yaw = this.host.rotation.y;
         bodyRight.set(Math.cos(yaw), 0, -Math.sin(yaw));
