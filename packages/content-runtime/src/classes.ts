@@ -26,7 +26,7 @@ export const CLASSES: Record<string, CharacterClass> = {
       belt: "base.ironsworn_girdle",
       weapon1: "base.ironsworn_hammer",
     },
-    portrait: "/textures/ui/menu/portrait_ironsworn.png",
+    portrait: "/textures/ui/menu/portrait_ironsworn.webp",
   },
   "class.stalker": {
     id: "class.stalker",
@@ -41,7 +41,7 @@ export const CLASSES: Record<string, CharacterClass> = {
       belt: "base.stalker_strap",
       weapon1: "base.stalker_bow",
     },
-    portrait: "/textures/ui/menu/portrait_stalker.png",
+    portrait: "/textures/ui/menu/portrait_stalker.webp",
   },
   "class.emberbound": {
     id: "class.emberbound",
@@ -56,7 +56,7 @@ export const CLASSES: Record<string, CharacterClass> = {
       belt: "base.ember_sash",
       weapon1: "base.ember_kindling_wand",
     },
-    portrait: "/textures/ui/menu/portrait_emberbound.png",
+    portrait: "/textures/ui/menu/portrait_emberbound.webp",
   },
 };
 
