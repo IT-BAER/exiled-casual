@@ -539,6 +539,31 @@ export function setStreakLength(arrow: Mesh, flown: number): void {
   streak.position.z = -ARROW_LENGTH / 2 - length / 2 + 0.1;
 }
 
+export const STUCK_ARROW_NAME = `${ARROW_NAME}-stuck`;
+/** How long a hit arrow stays in its monster: 4 s at the sim's 30 Hz. */
+export const STUCK_ARROW_TICKS = 120;
+/** Arrows one body carries at once; another pulls the oldest. */
+export const STUCK_ARROWS_MAX = 5;
+/** Share of the shaft driven into the body past the point it struck. */
+const STUCK_DEPTH = 0.35;
+
+/**
+ * Leave `flying` in `body`: a copy at the same size and heading, driven a third of
+ * its length in and parented so it rides the body. The flying arrow's splinter
+ * burst is cancelled, since it did not shatter on anything.
+ */
+export function stickArrow(scene: Scene, flying: Mesh, body: Mesh): Mesh {
+  flying.computeWorldMatrix(true);
+  const stuck = buildArrow(scene, STUCK_ARROW_NAME);
+  stuck.scaling.copyFrom(flying.scaling);
+  stuck.rotation.copyFrom(flying.rotation);
+  const ahead = flying.getDirection(Vector3.Forward()).normalize().scale(ARROW_LENGTH * flying.scaling.z * STUCK_DEPTH);
+  stuck.position.copyFrom(flying.getAbsolutePosition().add(ahead));
+  stuck.setParent(body);
+  flying.metadata = { ...(flying.metadata ?? {}), struck: false };
+  return stuck;
+}
+
 export const SPLINTER_NAME = "fx-splinters";
 const SPLINTERS = 10;
 const SPLINTER_LIFE = 0.55;

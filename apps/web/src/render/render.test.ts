@@ -21,7 +21,7 @@ import { HAZE_HEIGHT, HAZE_MAX_SIZE, HAZE_NAME, MOTES_NAME, moteDrift, moteDrift
 import { BIOMES } from "@exiled/content-runtime";
 import { blowFrom, reactionFor, SnapshotRenderer, syncActionAnimation } from "./renderer";
 import { makeMesh, updateTelegraph } from "./meshes";
-import { ARROW_NAME } from "./skill-fx";
+import { ARROW_NAME, STUCK_ARROW_NAME, STUCK_ARROW_TICKS, STUCK_ARROWS_MAX, SPLINTER_NAME } from "./skill-fx";
 import type { Snapshot } from "@exiled/protocol";
 import { testPlayer, testStats } from "../test-fixtures";
 import { columnHit } from "../input/bindings";
@@ -389,6 +389,37 @@ describe("atmosphere", () => {
     expect(Math.abs(head().z)).toBeLessThan(1e-3);
     expect(mesh.scaling.y).toBeCloseTo(base);
     expect(mesh.scaling.x).toBeCloseTo(base);
+  });
+
+  it("an arrow that hits a monster sticks in it for a while, a few at most, and does not splinter", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const renderer = new SnapshotRenderer(scene);
+    const monster = { id: 1, kind: "monster" as const, x: 5, y: 0, life: 100, maxLife: 100 };
+    const arrow = (id: number) => ({ id, kind: "projectile" as const, x: 4.6, y: 0, radius: 0.2, team: 0, skillId: "skill.snap_shot.v1", spent: true });
+    let tick = 1;
+    let prev = makeSnapshot({ tick, entities: [monster] });
+    renderer.apply(null, prev, 1);
+    const step = (entities: object[]) => {
+      const next = makeSnapshot({ tick: ++tick, entities: entities as never });
+      renderer.apply(prev, next, 1);
+      prev = next;
+    };
+    const stuck = () => scene.getMeshByName("entity-1")!.getChildMeshes(true).filter((m) => m.name === STUCK_ARROW_NAME);
+
+    step([monster, arrow(10)]);
+    step([monster]);
+    expect(stuck()).toHaveLength(1);
+    expect(scene.meshes.filter((m) => m.name === SPLINTER_NAME)).toHaveLength(0);
+
+    for (let i = 0; i < STUCK_ARROWS_MAX + 2; i++) {
+      step([monster, arrow(20 + i)]);
+      step([monster]);
+    }
+    expect(stuck()).toHaveLength(STUCK_ARROWS_MAX);
+
+    for (let i = 0; i <= STUCK_ARROW_TICKS; i++) step([monster]);
+    expect(stuck()).toHaveLength(0);
   });
 
   it("the killing blow does not flinch the body it kills", () => {
