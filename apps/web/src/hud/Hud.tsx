@@ -151,6 +151,37 @@ function socketFor(bar: (string | null)[], i: number, names?: ReadonlyMap<string
  * (reference-screenshots/poe1-lower-bar.png): the mouse buttons sit in their own row
  * above the numbered slots, and both rows draw the same tile.
  */
+/** The inventory's chest on the skill bar: a mouse way in, named with its key on hover. */
+function InventoryChest({ onClick, hotkey }: { onClick?: () => void; hotkey: string }) {
+  const [hover, setHover] = React.useState(false);
+  return (
+    <button
+      type="button"
+      data-testid="inventory-open-button"
+      aria-label={`Inventory (${hotkey.toUpperCase()})`}
+      onClick={() => onClick?.()}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        position: "relative", width: SLOT, height: SLOT, padding: 0, cursor: "pointer",
+        background: "none", border: "none",
+        filter: hover ? "brightness(1.25) drop-shadow(0 0 6px rgba(217,176,74,0.55))" : "none",
+      }}
+    >
+      <img src="/hud/inventory-chest.webp" alt="" draggable={false} style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }} />
+      {hover && (
+        <span style={{
+          position: "absolute", bottom: "calc(100% + 6px)", left: 0, whiteSpace: "nowrap",
+          padding: "4px 8px", background: "rgba(8,7,6,0.94)", border: "1px solid #6e5a2f",
+          color: "#e8d6ad", fontFamily: SERIF, fontSize: 13, pointerEvents: "none",
+        }}>
+          Inventory ({hotkey.toUpperCase()})
+        </span>
+      )}
+    </button>
+  );
+}
+
 function SkillTile({ slot, n, cooldowns, onHover, drag, onAssignRequest, flash }: {
   slot: SkillSlot;
   n: number;
@@ -491,6 +522,9 @@ interface HudProps {
   onSkillBarChange?: (next: (string | null)[]) => void;
   /** Open the passive tree — the plus button beside the flasks, PoE1's own affordance. */
   onOpenPassives?: () => void;
+  /** Toggle the inventory from the chest at the head of the mouse row, and the key bound to it. */
+  onToggleInventory?: () => void;
+  inventoryKey?: string;
 }
 
 /**
@@ -720,6 +754,8 @@ export function Hud({
   orbNumbers = DEFAULT_SETTINGS.ui.orbNumbers,
   onSkillBarChange,
   onOpenPassives,
+  onToggleInventory,
+  inventoryKey = "i",
 }: HudProps) {
   const [hoveredSkill, setHoveredSkill] = React.useState<string | null>(null);
   // Length-normalised here rather than trusted: the bar rides in the save, and a
@@ -1219,6 +1255,9 @@ export function Hud({
           gap: 0,
         }}
       >
+        {/* The chest heads the mouse row at the bar's left edge; the row keeps the right. */}
+        <div style={{ alignSelf: "stretch", display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+        <InventoryChest onClick={onToggleInventory} hotkey={inventoryKey} />
         {/* The mouse row closes on a warm hairline, drawn as a shadow so it costs no height. */}
         <div style={{ display: "flex", gap: `${SLOT_GAP}px`, boxShadow: "0 1px 0 rgba(101,81,49,0.85)" }}>
           {MOUSE_KEYS.map((_, i) => {
@@ -1236,6 +1275,7 @@ export function Hud({
               />
             );
           })}
+        </div>
         </div>
         {/* PoE1 recesses a rail between the two rows rather than leaving a gap: 18px of
             shadow on the reference, closed underneath by a brighter hairline that runs the

@@ -812,6 +812,8 @@ export function GameView({
         orbNumbers={settings.ui.orbNumbers}
         onSkillBarChange={(bar) => sendIntent({ kind: "setSkillBar", bar })}
         onOpenPassives={() => setPassivesOpen(true)}
+        onToggleInventory={() => { setInventoryOpen((v) => !v); setStashOpen(false); }}
+        inventoryKey={settings.ui.keybinds.inventory}
       />
       {settings.ui.minimap && (
         <Minimap
