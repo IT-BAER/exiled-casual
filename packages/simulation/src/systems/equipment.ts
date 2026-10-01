@@ -1,5 +1,6 @@
 import { baseOf, isCurrency, canonicalBaseId, currencyItem } from "@exiled/content-runtime";
 import { disenchantYield, SHARDS_PER_ORB, vendorBuyPrice, vendorSellPrice } from "@exiled/rules";
+import { SORT_MODES } from "@exiled/protocol";
 import { Simulation } from "../loop";
 import { isStaple } from "../vendor";
 import { placeFirstFit, canPlaceAt, sortInventory } from "../inventory";
@@ -87,7 +88,7 @@ export function registerEquipmentSystem(sim: Simulation): void {
       if (cmd.type === "sortItems") {
         const comp = cmd.data?.["container"] === 1 ? "stash" : "inventory";
         const inv = world.get<InventoryC>(sessionE, comp);
-        const sorted = inv && sortInventory(inv);
+        const sorted = inv && sortInventory(inv, SORT_MODES[cmd.data?.["mode"] ?? 0] ?? "type");
         if (sorted) world.set<InventoryC>(sessionE, comp, sorted);
         continue;
       }

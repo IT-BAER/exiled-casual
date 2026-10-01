@@ -560,6 +560,16 @@ describe("InventoryPanel sort", () => {
     render(<InventoryPanel inventory={inv} stash={{ cols: 12, rows: 12, items: [] }} onIntent={(i) => intents.push(i)} onClose={() => {}} />);
     fireEvent.click(screen.getByTestId("inventory-sort"));
     fireEvent.click(screen.getByTestId("stash-sort"));
-    expect(intents).toEqual([{ kind: "sortItems" }, { kind: "sortItems", container: "stash" }]);
+    expect(intents).toEqual([{ kind: "sortItems", mode: "type" }, { kind: "sortItems", container: "stash", mode: "type" }]);
+  });
+
+  it("each click sorts by the next mode, and the button names the one it will use", () => {
+    const intents: { mode?: string }[] = [];
+    render(<InventoryPanel inventory={inv} onIntent={(i) => intents.push(i as { mode?: string })} onClose={() => {}} />);
+    const btn = screen.getByTestId("inventory-sort");
+    const titles: (string | null)[] = [];
+    for (let i = 0; i < 4; i++) { titles.push(btn.getAttribute("title")); fireEvent.click(btn); }
+    expect(intents.map((i) => i.mode)).toEqual(["type", "rarity", "size", "type"]);
+    expect(titles).toEqual(["Sort by type", "Sort by rarity", "Sort by size", "Sort by type"]);
   });
 });

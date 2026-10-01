@@ -37,7 +37,7 @@ export type Intent =
    */
   | { kind: "moveItem"; x: number; y: number; toX: number; toY: number; from?: ContainerId; to?: ContainerId }
   /** Sort one grid in place: backpack by default, or the stash. */
-  | { kind: "sortItems"; container?: "backpack" | "stash" }
+  | { kind: "sortItems"; container?: "backpack" | "stash"; mode?: SortMode }
   | { kind: "useFlask"; slot: "life" | "mana" }
   /** Spend one Scroll of Wisdom on the unidentified backpack item at its ORIGIN cell. */
   | { kind: "applyCurrency"; fromX: number; fromY: number; x: number; y: number }
@@ -81,6 +81,10 @@ export type Intent =
    * unlocked, so a client that offers a locked skill can still only be told no.
    */
   | { kind: "setSkillBar"; bar: (string | null)[] };
+
+/** How a sort packs the grid; the Sort button steps through them in this order. */
+export const SORT_MODES = ["type", "rarity", "size"] as const;
+export type SortMode = (typeof SORT_MODES)[number];
 
 export type CommandType = "moveTo" | "moveDir" | "useSkill" | "stop" | "interact" | "activateMap" | "pickupItem" | "equipItem" | "unequipItem" | "dropItem" | "moveItem" | "sortItems" | "useFlask" | "applyCurrency" | "sellItem" | "buyItem" | "revive" | "usePortalScroll" | "allocatePassive" | "refundPassive" | "respecPassives" | "setSkillBar";
 
@@ -579,9 +583,12 @@ export function validateIntent(v: unknown): Intent {
     case "sortItems": {
       if (obj["container"] !== undefined && obj["container"] !== "backpack" && obj["container"] !== "stash")
         throw new Error("validateIntent sortItems: container must be \"backpack\" or \"stash\"");
+      if (obj["mode"] !== undefined && !SORT_MODES.includes(obj["mode"] as SortMode))
+        throw new Error(`validateIntent sortItems: mode must be one of ${SORT_MODES.join(", ")}`);
       return {
         kind: "sortItems",
         ...(obj["container"] !== undefined ? { container: obj["container"] as "backpack" | "stash" } : {}),
+        ...(obj["mode"] !== undefined ? { mode: obj["mode"] as SortMode } : {}),
       };
     }
     case "useFlask": {

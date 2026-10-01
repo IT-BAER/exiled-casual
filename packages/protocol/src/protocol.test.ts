@@ -243,3 +243,14 @@ describe("validateIntent covers every intent kind", () => {
     expect(() => validateIntent({ kind: "revive", where: "somewhere else" })).toThrow();
   });
 });
+
+describe("validateIntent — sortItems", () => {
+  test("passes each mode through", () => {
+    for (const mode of ["type", "rarity", "size"] as const)
+      expect(validateIntent({ kind: "sortItems", container: "stash", mode })).toEqual({ kind: "sortItems", container: "stash", mode });
+  });
+
+  test("rejects an unknown mode", () => {
+    expect(() => validateIntent({ kind: "sortItems", mode: "colour" })).toThrow(/mode/);
+  });
+});

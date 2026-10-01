@@ -99,4 +99,44 @@ describe("sortInventory", () => {
     ] };
     expect(sortInventory({ ...tight, rows: 5 })).toBeNull();
   });
+
+  const order = (inv: InventoryC) =>
+    inv.items.map((p) => p.item.waystone ? `stone${p.item.waystone.tier}` : `${p.item.baseId}:${p.item.rarity}`);
+  const noOverlaps = (inv: InventoryC) => {
+    for (const [i, a] of inv.items.entries())
+      for (const b of inv.items.slice(i + 1))
+        expect(a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y).toBe(true);
+  };
+
+  it("by rarity: uniques first, then rare, magic, normal, packed row by row from the top left", () => {
+    const out = sortInventory(messy(), "rarity")!;
+    expect(order(out)).toEqual([
+      "base.ironsworn_hammer:unique",
+      "base.ironsworn_helm:unique",
+      "base.ironsworn_plate:rare",
+      "base.ironsworn_helm:normal",
+      "currency.wisdom:normal",
+      "stone5",
+      "stone2",
+    ]);
+    expect(out.items.slice(0, 3).map((p) => [p.x, p.y])).toEqual([[0, 0], [1, 0], [3, 0]]);
+    noOverlaps(out);
+    expect(sortInventory(out, "rarity")).toEqual(out);
+  });
+
+  it("by size: largest footprint first, row by row from the top left", () => {
+    const out = sortInventory(messy(), "size")!;
+    expect(order(out)).toEqual([
+      "base.ironsworn_plate:rare",
+      "base.ironsworn_helm:unique",
+      "base.ironsworn_helm:normal",
+      "base.ironsworn_hammer:unique",
+      "currency.wisdom:normal",
+      "stone5",
+      "stone2",
+    ]);
+    expect(out.items.slice(0, 4).map((p) => [p.x, p.y])).toEqual([[0, 0], [2, 0], [4, 0], [6, 0]]);
+    noOverlaps(out);
+    expect(sortInventory(out, "size")).toEqual(out);
+  });
 });

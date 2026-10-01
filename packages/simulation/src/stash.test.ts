@@ -164,4 +164,18 @@ describe("sortItems", () => {
     sim.step([intentToCommand({ kind: "sortItems", container: "stash" }, playerEntity, sim.tick)]);
     expect(getStash(world).items).toEqual(getInv(world).items);
   });
+
+  it("carries the mode: by rarity packs row by row from the top left", () => {
+    const { sim, world, playerEntity } = makeWorld();
+    setInv(world, [
+      { x: 11, y: 4, w: 1, h: 1, count: 2, item: TRANSMUTE },
+      { x: 5, y: 2, w: 1, h: 2, item: WAND },
+    ]);
+    sim.step([intentToCommand({ kind: "sortItems", mode: "rarity" }, playerEntity, sim.tick)]);
+    expect(getInv(world).items).toEqual([
+      { x: 0, y: 0, w: 1, h: 2, item: WAND },
+      { x: 1, y: 0, w: 1, h: 1, count: 2, item: TRANSMUTE },
+    ]);
+  });
 });
+

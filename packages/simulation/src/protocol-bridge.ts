@@ -1,5 +1,5 @@
 import { fp, toNumber, fpDist2 } from "@exiled/fixed-point";
-import { PICKUP_RADIUS } from "@exiled/protocol";
+import { PICKUP_RADIUS, SORT_MODES } from "@exiled/protocol";
 import type { DisplaySkill, Intent, Snapshot, SnapshotEntity, MonsterElement } from "@exiled/protocol";
 import { damageTypeOf } from "./damage-types";
 import { summarizeHits } from "./death-recap";
@@ -76,8 +76,11 @@ export function intentToCommand(intent: Intent, player: Entity, tick: number): C
     case "dropItem":
       return { tick, entity: player, type: "dropItem", data: { x: intent.x, y: intent.y } };
     case "sortItems":
-      // 0 = backpack, 1 = stash, as moveItem numbers them.
-      return { tick, entity: player, type: "sortItems", data: { container: intent.container === "stash" ? 1 : 0 } };
+      // 0 = backpack, 1 = stash, as moveItem numbers them; mode is its SORT_MODES index.
+      return { tick, entity: player, type: "sortItems", data: {
+        container: intent.container === "stash" ? 1 : 0,
+        mode: Math.max(0, SORT_MODES.indexOf(intent.mode ?? "type")),
+      } };
     case "moveItem":
       return {
         tick, entity: player, type: "moveItem",

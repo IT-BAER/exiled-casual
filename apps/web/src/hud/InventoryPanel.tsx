@@ -1,5 +1,6 @@
 import React from "react";
 import type { ContainerId, DisplayItem, EquipSlotId, Intent, Snapshot } from "@exiled/protocol";
+import { SORT_MODES } from "@exiled/protocol";
 import { canEquip } from "@exiled/simulation";
 import { currencyAccepts, currencyResultRarity, SHARDS_PER_ORB } from "@exiled/rules";
 import { ItemTooltip } from "./ItemTooltip";
@@ -412,6 +413,8 @@ export function InventoryPanel({
   }, [armed]);
   /** The vendor window's keyword box. Local: it dims the shelf, nothing else. */
   const [highlight, setHighlight] = React.useState("");
+  // Per grid: the SORT_MODES index its next Sort click will use.
+  const [sortNext, setSortNext] = React.useState<Partial<Record<ContainerId, number>>>({});
   const boxRef = React.useRef<HTMLDivElement | null>(null);
   const gridRefs = React.useRef<Partial<Record<ContainerId, HTMLDivElement | null>>>({});
 
@@ -564,8 +567,13 @@ export function InventoryPanel({
   // One grid, rendered for either container. Both share the drag, the hover
   // tooltip and the armed-currency cursor, so an item behaves the same in the
   // stash as in the bag rather than through a second copy of this markup.
-  const renderGrid = (container: ContainerId, onSort?: () => void) => {
+  const renderGrid = (container: ContainerId, sortable = false) => {
     const g = grids[container]!;
+    const sortMode = SORT_MODES[sortNext[container] ?? 0]!;
+    const onSort = () => {
+      onIntent?.({ kind: "sortItems", ...(container === "stash" ? { container: "stash" as const } : {}), mode: sortMode });
+      setSortNext((s) => ({ ...s, [container]: ((s[container] ?? 0) + 1) % SORT_MODES.length }));
+    };
     return (
           <div
             data-drop-grid={container}
@@ -598,12 +606,12 @@ export function InventoryPanel({
             }}
           >
             {/* Sort sits on the grid's top-right corner, just above the cells it rearranges. Neither PoE has one. */}
-            {onSort && (
+            {sortable && (
               <button
                 type="button"
                 data-testid={`${TID[container]}-sort`}
-                aria-label="Sort"
-                title="Sort"
+                aria-label={`Sort by ${sortMode}`}
+                title={`Sort by ${sortMode}`}
                 onClick={onSort}
                 style={{
                   position: "absolute", right: 0, bottom: "calc(100% + 3px)", zIndex: 2,
@@ -843,7 +851,7 @@ export function InventoryPanel({
           style={{ ...PANE, padding: PANEL_PAD }}
         >
           <PaneHeader title="Stash" bleed={PANEL_PAD} onClose={() => onCloseStash?.()} testId="stash-close" />
-          {renderGrid("stash", () => onIntent?.({ kind: "sortItems", container: "stash" }))}
+          {renderGrid("stash", true)}
         </div>
       </div>
     )}
@@ -1014,7 +1022,7 @@ export function InventoryPanel({
 
           {/* Backpack grid (functional) */}
           <SectionRule>Backpack</SectionRule>
-          {renderGrid("backpack", () => onIntent?.({ kind: "sortItems" }))}
+          {renderGrid("backpack", true)}
 
           {/* Currency strip. PoE's inventory does not end at the last grid row: a
               band of currency and charm sockets runs under it, which is what keeps

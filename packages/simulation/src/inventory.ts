@@ -1,4 +1,5 @@
 import { permanentWaystone, isPermanentWaystone, isCurrency, isWaystone, canonicalBaseId, baseOf } from "@exiled/content-runtime";
+import type { SortMode } from "@exiled/protocol";
 import type { InventoryC, PlacedItem } from "./components";
 
 function overlaps(ax: number, ay: number, aw: number, ah: number, bx: number, by: number, bw: number, bh: number): boolean {
@@ -73,13 +74,23 @@ function placeColumnMajor(inv: InventoryC, w: number, h: number, fromRight: bool
   return null;
 }
 
+const rarityRank = (p: PlacedItem) => RARITY_ORDER.indexOf(p.item.rarity);
+const bySize = (a: PlacedItem, b: PlacedItem) => b.h - a.h || b.w - a.w;
+const GEAR_ORDER: Record<SortMode, (a: PlacedItem, b: PlacedItem) => number> = {
+  type: (a, b) => classRank(a) - classRank(b) || rarityRank(a) - rarityRank(b) || bySize(a, b),
+  rarity: (a, b) => rarityRank(a) - rarityRank(b) || classRank(a) - classRank(b) || bySize(a, b),
+  size: (a, b) => b.w * b.h - a.w * a.h || bySize(a, b) || classRank(a) - classRank(b) || rarityRank(a) - rarityRank(b),
+};
+
 /**
- * The bag sorted: same-currency stacks merged, gear by slot then rarity packed down
- * the columns from the left, currency then waystones (highest tier first) from the
- * right. Ties keep their reading order, so a sorted bag sorts to itself. Null when
- * the pieces cannot all be repacked: a sort never drops an item.
+ * The bag sorted: same-currency stacks merged, then currency and waystones (highest
+ * tier first) after the gear. `type` orders gear by slot then rarity down the columns
+ * from the left, with the stackables from the right; `rarity` and `size` pack
+ * everything row by row from the top left. Ties keep their reading order, so a sorted
+ * bag sorts to itself. Null when the pieces cannot all be repacked: a sort never drops
+ * an item.
  */
-export function sortInventory(inv: InventoryC): InventoryC | null {
+export function sortInventory(inv: InventoryC, mode: SortMode = "type"): InventoryC | null {
   const reading = [...inv.items].sort((a, b) => a.y - b.y || a.x - b.x);
   const merged: PlacedItem[] = [];
   for (const p of reading) {
@@ -90,10 +101,7 @@ export function sortInventory(inv: InventoryC): InventoryC | null {
     else merged.push({ ...p });
   }
   const stackable = (p: PlacedItem) => isCurrency(p.item) || isWaystone(p.item);
-  const gear = merged.filter((p) => !stackable(p)).sort((a, b) =>
-    classRank(a) - classRank(b) ||
-    RARITY_ORDER.indexOf(a.item.rarity) - RARITY_ORDER.indexOf(b.item.rarity) ||
-    b.h - a.h || b.w - a.w);
+  const gear = merged.filter((p) => !stackable(p)).sort(GEAR_ORDER[mode]);
   const rest = merged.filter(stackable).sort((a, b) =>
     Number(isWaystone(a.item)) - Number(isWaystone(b.item)) ||
     (b.item.waystone?.tier ?? 0) - (a.item.waystone?.tier ?? 0));
@@ -101,7 +109,7 @@ export function sortInventory(inv: InventoryC): InventoryC | null {
   const out: InventoryC = { cols: inv.cols, rows: inv.rows, items: [] };
   for (const [list, fromRight] of [[gear, false], [rest, true]] as const) {
     for (const p of list) {
-      const at = placeColumnMajor(out, p.w, p.h, fromRight);
+      const at = mode === "type" ? placeColumnMajor(out, p.w, p.h, fromRight) : placeFirstFit(out, p.w, p.h);
       if (!at) return null;
       out.items.push({ ...p, x: at.x, y: at.y });
     }
