@@ -223,6 +223,11 @@ export const HIP_TURN = Math.PI * (35 / 180);
 const LEG_YAW_SIGN = -1;
 /** Time constant the hips ease toward their turn over: long enough to read as a turn, not a snap. */
 const LEG_EASE_SEC = 0.25;
+/** Time constant the move's yaw off the chest eases over, so the direction blend sweeps. */
+const MOVE_EASE_SEC = 0.08;
+/** Crossfade lengths (s): locomotion short so a stop plants the feet, actions softer. */
+const LOCO_BLEND_SEC = 0.14;
+const ACTION_BLEND_SEC = 0.28;
 
 /**
  * PoE2's run-and-gun: `rel` is the move's yaw off the way the chest faces
@@ -1261,7 +1266,9 @@ export class RigActor {
    * and how far it turned this frame (radians, positive to his right).
    */
   setMoveAngle(rel: number, yawStep = 0): void {
-    this.moveRel = rel;
+    // Eased: the move only changes on a 30 Hz tick, and a step there would step the direction blend.
+    const dt = (this.scene.getEngine?.()?.getDeltaTime?.() ?? 16) / 1000;
+    this.moveRel = wrapPi(this.moveRel + wrapPi(rel - this.moveRel) * (1 - Math.exp(-dt / MOVE_EASE_SEC)));
     this.yawStep = yawStep;
   }
 
@@ -1615,7 +1622,15 @@ export class RigActor {
     const twisted = [pelvisNode, ...waist].filter((n): n is TransformNode => n instanceof TransformNode);
     const untwisted = twisted.map((n) => n.rotationQuaternion?.clone() ?? null);
     let turned = false;
+    let blendDt = 0;
     this.legsRestore = this.scene.onBeforeAnimationsObservable.add(() => {
+      // blendingSpeed is a per-FRAME linear step, so it is re-set off this frame's
+      // seconds, or a crossfade lasts a third as long at 165Hz as at 60Hz.
+      const dt = Math.min(0.1, (this.scene.getEngine?.()?.getDeltaTime?.() ?? 16) / 1000);
+      if (Math.abs(dt - blendDt) > blendDt * 0.1) {
+        blendDt = dt;
+        for (const [clip, group] of this.groups) group.blendingSpeed = dt / (isLayeredClip(clip) ? ACTION_BLEND_SEC : LOCO_BLEND_SEC);
+      }
       if (!turned) return;
       twisted.forEach((n, i) => { if (untwisted[i]) n.rotationQuaternion?.copyFrom(untwisted[i]!); });
       turned = false;
@@ -1707,11 +1722,8 @@ export class RigActor {
       }
       group.normalize(source.from, source.to);
       group.enableBlending = true;
-      // blendingSpeed is a per-frame lerp factor, so the ease shortens as the
-      // display speeds up: 0.12 is ~130ms at 60Hz but ~50ms at 165Hz, which is
-      // where "the cast snaps in" came from. Action clips take a softer ramp;
-      // locomotion keeps the tighter one so a stop still plants the feet.
-      group.blendingSpeed = isLayeredClip(clip) ? 0.06 : 0.12;
+      // A 60Hz frame's worth until the first frame re-sets it off the real one.
+      group.blendingSpeed = 1 / 60 / (isLayeredClip(clip) ? ACTION_BLEND_SEC : LOCO_BLEND_SEC);
       this.groups.set(clip, group);
     }
 

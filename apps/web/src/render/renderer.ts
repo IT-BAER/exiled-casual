@@ -12,7 +12,7 @@ import { looksForEquipment } from "./gear-looks";
 import { creatureOf } from "./meshes";
 import { CORPSE_SECONDS, SINK_SECONDS, disposeRagdoll, dropDead, freezeRagdoll, sinkDepth } from "./ragdoll";
 import { CAMERA_ALPHA } from "./engine";
-import { lerp, lerpAngle } from "./interp";
+import { lerp, springAngle } from "./interp";
 import { FLINCH_TICKS, flinchPose, flinchStrength, kick, leanToTilt } from "./hit-reaction";
 import type { Flinch } from "./hit-reaction";
 
@@ -182,8 +182,13 @@ const MAX_ROLL = 0.16;
 const RUN_PITCH = 0.05;
 /** Sim units per second that count as a full run, for scaling both tilts. */
 const RUN_SPEED = 3;
-/** Per-frame ease onto the target tilt, so the body settles rather than snaps. */
-const TILT_EASE = 0.12;
+/** Time constant (s) of the ease onto the target tilt, so the body settles rather than snaps. */
+const TILT_EASE_SEC = 0.13;
+/**
+ * Stiffness (rad/s) of the critically damped spring a body turns on: it eases
+ * into a turn and settles out of it, ~95 percent of the way in 0.19 s.
+ */
+const TURN_OMEGA = 25;
 
 /**
  * Where the killing blow came FROM, in world space.
@@ -242,6 +247,8 @@ export class SnapshotRenderer {
   private readonly gait = new Map<number, number>();
   /** Current [roll, pitch] per entity, eased toward the lean the run asks for. */
   private readonly tilt = new Map<number, [number, number]>();
+  /** Yaw rate (rad/s) per entity, the spring's state between frames. */
+  private readonly yawVel = new Map<number, number>();
   /** The tick each entity was last struck on. Absent means it is not lit. */
   private readonly hit = new Map<number, number>();
   /** The flinch each struck monster is in, and the root scale it squashes from. */
@@ -632,6 +639,7 @@ export class SnapshotRenderer {
         this.kinds.delete(id);
         this.gait.delete(id);
         this.tilt.delete(id);
+        this.yawVel.delete(id);
         this.hit.delete(id);
         this.flinch.delete(id);
         this.fromHand.delete(id);
@@ -838,11 +846,18 @@ export class SnapshotRenderer {
     if (dx * dx + dz * dz > 1e-6 || sent !== null) {
       const wasYaw = mesh.rotation.y;
       const aim = sent ?? Math.atan2(dx, dz);
-      mesh.rotation.y = lerpAngle(wasYaw, aim, 0.25);
+      const dt = Math.max(this.scene.getEngine().getDeltaTime(), 1) / 1000;
+      const s = springAngle(wasYaw, this.yawVel.get(id) ?? 0, aim, TURN_OMEGA, Math.min(dt, 0.1));
+      mesh.rotation.y = s.angle;
+      this.yawVel.set(id, s.vel);
       yawStep = mesh.rotation.y - wasYaw;
+    } else {
+      this.yawVel.set(id, 0);
     }
     const moving = dx * dx + dz * dz > 1e-6;
-    const rel = moving ? Math.atan2(dx, dz) - mesh.rotation.y : 0;
+    // Only a held skill's facing parts the legs from the chest. Otherwise the body
+    // is turning INTO its move, and the lag of that turn is not a sidestep.
+    const rel = moving && facing ? Math.atan2(dx, dz) - mesh.rotation.y : 0;
     rigOf(mesh)?.setMoveAngle(rel, yawStep);
     // A stopped actor still needs frames to settle back upright. Skipping this
     // call used to freeze the last running bank indefinitely. Turning to a
@@ -873,8 +888,9 @@ export class SnapshotRenderer {
     const rollTo = Math.max(-MAX_ROLL, Math.min(MAX_ROLL, raw));
     const pitchTo = RUN_PITCH * runFrac;
     const [roll, pitch] = this.tilt.get(id) ?? [0, 0];
-    const nextRoll = lerp(roll, rollTo, TILT_EASE);
-    const nextPitch = lerp(pitch, pitchTo, TILT_EASE);
+    const ease = 1 - Math.exp(-dt / TILT_EASE_SEC);
+    const nextRoll = lerp(roll, rollTo, ease);
+    const nextPitch = lerp(pitch, pitchTo, ease);
     this.tilt.set(id, [nextRoll, nextPitch]);
     // The flinch rides on top of the run's lean and is never eased into it: the
     // snap IS the hit, and the tilt state stays the run's alone.

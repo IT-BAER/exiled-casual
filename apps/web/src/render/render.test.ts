@@ -500,6 +500,7 @@ describe("SnapshotRenderer", () => {
 
   it("turns the player to face its movement direction", () => {
     engine = new NullEngine();
+    vi.spyOn(engine, "getDeltaTime").mockReturnValue(1000 / 60);
     const { scene } = createScene(engine);
     const renderer = new SnapshotRenderer(scene);
 
@@ -512,14 +513,18 @@ describe("SnapshotRenderer", () => {
     expect(mesh.rotation.y).toBeCloseTo(spawnYaw, 6);
 
     // Move +x (world +x). Heading yaw = atan2(dx=5, dz=0) = PI/2; the shortest
-    // path from 3PI/4 is -PI/4, eased by 0.25 → 3PI/4 - PI/16.
+    // path from 3PI/4 is -PI/4, which the turn spring eases into.
     const s1 = makeSnapshot({ player: testPlayer({ x: 5 }) });
     renderer.apply(s0, s1, 1);
-    expect(mesh.rotation.y).toBeCloseTo(spawnYaw - Math.PI / 16, 4);
+    expect(mesh.rotation.y).toBeLessThan(spawnYaw);
+    expect(mesh.rotation.y).toBeGreaterThan(spawnYaw - Math.PI / 16);
+    for (let i = 0; i < 30; i++) renderer.apply(s0, s1, 1);
+    expect(mesh.rotation.y).toBeCloseTo(Math.PI / 2, 2);
   });
 
   it("faces the player by the sim's heading, not by the step it took", () => {
     engine = new NullEngine();
+    vi.spyOn(engine, "getDeltaTime").mockReturnValue(1000 / 60);
     const { scene } = createScene(engine);
     const renderer = new SnapshotRenderer(scene);
 
@@ -532,12 +537,13 @@ describe("SnapshotRenderer", () => {
     // still turned +y. Facing the step would put him at PI/2; facing the heading
     // holds him near 0, which is what stops the cursor pivoting him on the spot.
     const s1 = makeSnapshot({ player: testPlayer({ x: 0.2, heading: { x: 0, y: 1 } }) });
-    renderer.apply(s0, s1, 1);
-    expect(mesh.rotation.y).toBeCloseTo(spawnYaw + 0.25 * (0 - spawnYaw), 4);
+    for (let i = 0; i < 30; i++) renderer.apply(s0, s1, 1);
+    expect(mesh.rotation.y).toBeCloseTo(0, 2);
   });
 
   it("faces the player at the cursor while the keys carry him away from it (PoE2 WASD)", () => {
     engine = new NullEngine();
+    vi.spyOn(engine, "getDeltaTime").mockReturnValue(1000 / 60);
     const { scene } = createScene(engine);
     const renderer = new SnapshotRenderer(scene);
 
@@ -556,6 +562,7 @@ describe("SnapshotRenderer", () => {
 
   it("banks into a turn and stands back up on the straight", () => {
     engine = new NullEngine();
+    vi.spyOn(engine, "getDeltaTime").mockReturnValue(1000 / 60);
     const { scene } = createScene(engine);
     const renderer = new SnapshotRenderer(scene);
 
@@ -595,6 +602,7 @@ describe("SnapshotRenderer", () => {
 
   it("stands upright after stopping in the middle of a turn", () => {
     engine = new NullEngine();
+    vi.spyOn(engine, "getDeltaTime").mockReturnValue(1000 / 60);
     const { scene } = createScene(engine);
     const renderer = new SnapshotRenderer(scene);
 
@@ -602,7 +610,7 @@ describe("SnapshotRenderer", () => {
     renderer.apply(null, stopped, 1);
     const mesh = scene.getMeshByName("entity-0")!;
     const turning = makeSnapshot({ player: testPlayer({ x: 0.1 }) });
-    renderer.apply(stopped, turning, 1);
+    for (let frame = 0; frame < 4; frame++) renderer.apply(stopped, turning, 1);
     const banked = Math.abs(mesh.rotation.z);
     expect(banked).toBeGreaterThan(0.01);
 
