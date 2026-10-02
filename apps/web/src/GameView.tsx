@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Engine, Matrix, Vector3 } from "@babylonjs/core";
 import type { Scene } from "@babylonjs/core";
 import { applyGraphics, createScene, setMapFill } from "./render/engine";
@@ -30,6 +30,7 @@ import { preloadWorldArt } from "./render/world-art";
 import { setTitle } from "./title";
 import { FeedbackDialog, type FeedbackKind } from "./menu/FeedbackDialog";
 import { Hud, BAR_H, ORB_RISE } from "./hud/Hud";
+import { share } from "./share";
 import { PreparationPanel } from "./hud/PreparationPanel";
 import { InventoryPanel } from "./hud/InventoryPanel";
 import { CharacterPanel } from "./hud/CharacterPanel";
@@ -164,6 +165,19 @@ export function GameView({
     workerRef.current?.postMessage({ type: "spawn", what } satisfies ToWorker);
   }, []);
   const closePassives = useCallback(() => setPassivesOpen(false), []);
+  // Stable, so the memo'd atlas and inventory panels skip the renders their data did not cause.
+  const ejectStone = useCallback(() => setSocketedCell(null), []);
+  const openInventory = useCallback(() => setInventoryOpen(true), []);
+  const closeAtlas = useCallback(() => { setPanelOpen(false); setSocketedCell(null); }, []);
+  const activateMap = useCallback((atlasNodeId: string, x: number, y: number) => {
+    sendIntent({ kind: "activateMap", atlasNodeId, x, y });
+    setPanelOpen(false);
+    setSocketedCell(null);
+  }, [sendIntent]);
+  const closeStash = useCallback(() => setStashOpen(false), []);
+  const closeVendor = useCallback(() => setVendorOpen(false), []);
+  const socketWaystone = useCallback((x: number, y: number) => setSocketedCell({ x, y }), []);
+  const closeInventory = useCallback(() => { setInventoryOpen(false); setStashOpen(false); setVendorOpen(false); }, []);
 
   /**
    * Down and waiting on the death screen. Same mirror-ref trick as above, and for
@@ -225,10 +239,12 @@ export function GameView({
         (i) => i.x === socketedCell.x && i.y === socketedCell.y && i.baseId === "map.waystone",
       ) ?? null
     : null;
-  // ponytail: derive socketedStone inline; a separate useEffect would re-render twice per snapshot.
-  const socketedStone = socketedItem?.waystone
-    ? { ...socketedCell!, ...socketedItem.waystone }
-    : null;
+  // Memoised: a fresh object each render would defeat PreparationPanel's memo.
+  const waystone = socketedItem?.waystone;
+  const socketedStone = useMemo(
+    () => (waystone ? { ...socketedCell!, ...waystone } : null),
+    [socketedCell, waystone],
+  );
   // Clear the cell reference once the item moves away (consumed, moved, or picked up).
   useEffect(() => {
     if (socketedCell && !socketedItem) setSocketedCell(null);
@@ -249,6 +265,8 @@ export function GameView({
 
     let prevSnap: Snapshot | null = null;
     let curSnap: Snapshot | null = null;
+    /** What React last rendered; `share` keeps its unchanged branches so `memo` panels skip. */
+    let shownSnap: Snapshot | null = null;
     let prevTickTime = performance.now();
     /**
      * Armed by an `area` message once the scene reports ready, fed every frame
@@ -496,7 +514,10 @@ export function GameView({
         prevTickTime = performance.now();
         soundscape.observe(msg.snapshot);
         debugLog(msg.snapshot);
-        setSnapshot(msg.snapshot);
+        // An idle frame moves only `tick`, which nothing in React reads, so it renders nothing.
+        const ticked = shownSnap && { ...shownSnap, tick: msg.snapshot.tick };
+        const shown = share(ticked, msg.snapshot);
+        if (shown !== ticked) { shownSnap = shown; setSnapshot(shown); }
         // The RISING edge, not the state: the device opens with a run already
         // running now, and a flat `if (mapOpen)` closed that panel again on the
         // very next snapshot.
@@ -849,32 +870,28 @@ export function GameView({
           completedNodes={snapshot.completedNodes}
           socketedStone={socketedStone}
           mapOpen={snapshot.mapOpen}
-          onEject={() => setSocketedCell(null)}
-          onNodeSelect={() => setInventoryOpen(true)}
-          onClose={() => { setPanelOpen(false); setSocketedCell(null); }}
-          onActivate={(atlasNodeId, x, y) => {
-            sendIntent({ kind: "activateMap", atlasNodeId, x, y });
-            setPanelOpen(false);
-            setSocketedCell(null);
-          }}
+          onEject={ejectStone}
+          onNodeSelect={openInventory}
+          onClose={closeAtlas}
+          onActivate={activateMap}
         />
       )}
       {inventoryOpen && snapshot && (
         <InventoryPanel
           inventory={snapshot.inventory}
           {...(stashOpen ? { stash: snapshot.stash } : {})}
-          onCloseStash={() => setStashOpen(false)}
+          onCloseStash={closeStash}
           shards={snapshot.shards}
           vendorOpen={vendorOpen}
           vendor={snapshot.vendor}
           gold={snapshot.player.gold}
-          onCloseVendor={() => setVendorOpen(false)}
+          onCloseVendor={closeVendor}
           equipment={snapshot.equipment}
           // socketWanted: panel is open and the socket is empty, so ctrl+click / drag sockets a stone.
           socketWanted={panelOpen && socketedStone === null}
-          onSocketWaystone={(x, y) => setSocketedCell({ x, y })}
+          onSocketWaystone={socketWaystone}
           onIntent={sendIntent}
-          onClose={() => { setInventoryOpen(false); setStashOpen(false); setVendorOpen(false); }}
+          onClose={closeInventory}
         />
       )}
       {/* After the inventory so it paints above that panel's backdrop when both are open. */}

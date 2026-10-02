@@ -470,7 +470,8 @@ function NodePopup(props: {
   );
 }
 
-export function PreparationPanel({ atlasSeed, completedNodes, socketedStone, onEject, onActivate, onNodeSelect, mapOpen = false, onClose }: Props) {
+// memo: GameView renders at 30 Hz while monsters move; this panel only when its own props change.
+export const PreparationPanel = React.memo(function PreparationPanel({ atlasSeed, completedNodes, socketedStone, onEject, onActivate, onNodeSelect, mapOpen = false, onClose }: Props) {
   const nodes = atlasGraph(atlasSeed);
   const [nodeId, setNodeId] = useState<string | null>(null);
   // The place has to accept the stone. Selecting a node and then a weaker stone
@@ -576,4 +577,4 @@ export function PreparationPanel({ atlasSeed, completedNodes, socketedStone, onE
 
     </div>
   );
-}
+});

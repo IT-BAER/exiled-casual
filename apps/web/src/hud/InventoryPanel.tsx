@@ -308,7 +308,8 @@ function SectionRule({ children }: { children?: React.ReactNode }) {
   );
 }
 
-export function InventoryPanel({
+// memo: GameView renders at 30 Hz while monsters move; this panel only when its own props change.
+export const InventoryPanel = React.memo(function InventoryPanel({
   inventory, stash, vendor = EMPTY_SHELF, gold = 0, equipment = {}, shards = {}, vendorOpen = false,
   socketWanted = false,
   onClose, onCloseStash, onCloseVendor, onIntent, onSocketWaystone,
@@ -1101,4 +1102,4 @@ export function InventoryPanel({
     </div>
     </>
   );
-}
+});
