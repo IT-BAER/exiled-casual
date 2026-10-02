@@ -908,9 +908,18 @@ export const BLINK_ALPHA = 0.48;
  * fresh map. Every burst here self-disposes, and the flash is zeroed AFTER
  * emberBurst raised it, so the warm-up draws nothing the player can see.
  */
+export const FX_KEEPALIVE_NAME = "fx-keepalive";
+
 export function warmSkillFx(scene: Scene): void {
+  // Never started, never drawn: they hold the particle effect and the sheet, which
+  // Babylon frees with the last system using them and every next cast re-linked.
+  if (!scene.particleSystems.some((p) => p.name === FX_KEEPALIVE_NAME)) {
+    for (const ps of [fireSystem(scene, FX_KEEPALIVE_NAME, 1), wispSystem(scene, FX_KEEPALIVE_NAME, 1)]) ps.isReady();
+  }
   emberBurst(scene, Vector3.Zero());
   splinterBurst(scene, Vector3.Zero(), 0, SKILL_FX["skill.snap_shot.v1"]!);
+  const splinters = scene.getMeshByName(SPLINTER_NAME);
+  if (splinters) splinters.alwaysSelectAsActiveMesh = true;
   meleeImpact(scene, Vector3.Zero(), 1, 0);
   const light = scene.getLightByName(FLASH_NAME) as PointLight | null;
   if (light) light.intensity = 0;

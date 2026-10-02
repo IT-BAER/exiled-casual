@@ -1,9 +1,10 @@
 // @vitest-environment node
 import { describe, it, expect, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
-import { Light, NullEngine, ParticleSystem, PointLight, Scene, StandardMaterial, Texture, Vector3 } from "@babylonjs/core";
+import { Effect, Light, NullEngine, ParticleSystem, PointLight, Scene, StandardMaterial, Texture, Vector3 } from "@babylonjs/core";
 import { SKILLS } from "@exiled/content-runtime";
-import { makeMesh } from "./meshes";
+import { makeMesh, warmProjectiles } from "./meshes";
+import { createScene } from "./engine";
 import {
   blinkBurst,
   BLINK_NAME,
@@ -19,6 +20,7 @@ import {
   RING_NAME,
   SPLINTER_NAME,
   warmSkillFx,
+  FX_KEEPALIVE_NAME,
   fxProfile,
   FALLBACK_FX,
   SKILL_FX,
@@ -327,6 +329,17 @@ describe("warmSkillFx", () => {
     expect(systems(scene, BOLT_BURST_NAME)).toHaveLength(1);
     expect(scene.getMeshByName(RING_NAME)).not.toBeNull();
     expect(scene.getMeshByName(SPLINTER_NAME)).not.toBeNull();
+    // Built at the origin, which the camera may not see: culled, it compiles nothing.
+    expect(scene.getMeshByName(SPLINTER_NAME)!.alwaysSelectAsActiveMesh).toBe(true);
+  });
+
+  it("keeps a fire and a wisp system alive, so a burst never frees the shared shader and sheet", () => {
+    const scene = newScene();
+    warmSkillFx(scene);
+    warmSkillFx(scene);
+    const keep = systems(scene, FX_KEEPALIVE_NAME);
+    expect(keep).toHaveLength(2);
+    expect(keep.every((p) => !p.isStarted() && p.particleTexture !== null)).toBe(true);
   });
 
   it("is idempotent per area: a second warm leaves one flash light", () => {
@@ -334,6 +347,30 @@ describe("warmSkillFx", () => {
     warmSkillFx(scene);
     warmSkillFx(scene);
     expect(scene.lights.filter((l) => l.name === FLASH_NAME)).toHaveLength(1);
+  });
+});
+
+describe("game scene", () => {
+  it("keeps compiled shaders when the last burst using one is gone, so the next cast links nothing", () => {
+    engine = new NullEngine();
+    createScene(engine);
+    expect(Effect.PersistentMode).toBe(true);
+  });
+});
+
+describe("warmProjectiles", () => {
+  it("draws every projectile look once, arrow wake shortened, then lets it go", async () => {
+    const scene = newScene();
+    warmProjectiles(scene);
+    const warm = scene.meshes.filter((m) => m.name.startsWith("warm-projectile-"));
+    expect(warm).toHaveLength(Object.keys(SKILL_FX).length);
+    // Culling must not skip them: an undrawn mesh compiles nothing.
+    expect(warm.every((m) => m.alwaysSelectAsActiveMesh)).toBe(true);
+    // A flying arrow's wake is cut short on one axis, which is its own shader variant.
+    const arrow = warm.find((m) => m.name === "warm-projectile-skill.snap_shot.v1")!;
+    expect(arrow.getChildMeshes(true).some((c) => c.scaling.y < 1)).toBe(true);
+    await scene.whenReadyAsync();
+    expect(scene.meshes.some((m) => m.name.startsWith("warm-projectile-"))).toBe(false);
   });
 });
 

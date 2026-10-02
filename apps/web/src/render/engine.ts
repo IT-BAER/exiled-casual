@@ -4,6 +4,7 @@ import {
   Color3,
   Color4,
   DirectionalLight,
+  Effect,
   GlowLayer,
   HemisphericLight,
   Light,
@@ -434,6 +435,9 @@ export interface SceneHandle {
 }
 
 export function createScene(engine: Engine): SceneHandle {
+  // Babylon frees a shader with the last material or system using it, so every
+  // short-lived burst re-linked its program on the next cast: a stall per shot on Arc.
+  Effect.PersistentMode = true;
   const scene = new Scene(engine);
   // Reaching the scene from the devtools console is the only way to inspect what
   // the renderer actually built; Babylon is bundled, so there is no other handle.

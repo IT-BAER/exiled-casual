@@ -14,7 +14,7 @@ import {
 } from "@babylonjs/core";
 import { attachProp, type PropKind } from "./props";
 import { attachCreature, type CreatureRig } from "./monsters";
-import { attachArrowStreak, attachBoltTrail, attachCinderFX, buildArrow, cinderGlow, fxProfile, PROJECTILE_ARROW_SCALE } from "./skill-fx";
+import { attachArrowStreak, attachBoltTrail, attachCinderFX, buildArrow, cinderGlow, fxProfile, PROJECTILE_ARROW_SCALE, setStreakLength, SKILL_FX } from "./skill-fx";
 import { attachRig, rigOf, BASE_LOOKS, type RigParts } from "./rig";
 import { attachGroundModel } from "./ground-looks";
 import { hasRim, HIT_TINT, HIT_ALPHA } from "./rim";
@@ -1668,4 +1668,21 @@ export function makeMesh(
   if (kind === "projectile") attachBoltTrail(scene, mesh, fxProfile(skillId));
   else attachCinderFX(scene, mesh);
   return mesh;
+}
+
+/**
+ * Every projectile look built once behind the loading plate and dropped when the
+ * scene is ready, so a class's first shot compiles nothing: on a cold cache the
+ * arrow's one-axis wake and the bolt's trail were each a first-cast stall.
+ */
+export function warmProjectiles(scene: Scene): void {
+  for (const skillId of Object.keys(SKILL_FX)) {
+    const mesh = makeMesh(scene, "projectile", `warm-projectile-${skillId}`, Vector3.Zero(), undefined, skillId);
+    if (fxProfile(skillId).arrow) setStreakLength(mesh, 0.5);
+    for (const part of [mesh, ...mesh.getChildMeshes()]) {
+      part.alwaysSelectAsActiveMesh = true;
+      part.computeWorldMatrix(true);
+    }
+    scene.executeWhenReady(() => mesh.dispose());
+  }
 }

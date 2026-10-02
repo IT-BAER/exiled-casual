@@ -39,6 +39,7 @@ import { LootLabels } from "./hud/LootLabels";
 import { NpcLabels } from "./hud/NpcLabels";
 import { MonsterHealthBars } from "./hud/MonsterHealthBars";
 import { warmSkillFx } from "./render/skill-fx";
+import { warmProjectiles } from "./render/meshes";
 import { Minimap } from "./hud/Minimap";
 import { BuffBar } from "./hud/BuffBar";
 import { DebugStats } from "./hud/DebugStats";
@@ -596,6 +597,7 @@ export function GameView({
         // per area: buildLevel just replaced the level materials, so the flash
         // light's fourth-light recompile has to be paid again for the new set.
         warmSkillFx(scene);
+        warmProjectiles(scene);
         // Arms the paint only once this area's materials and textures are in.
         // Babylon defers this through a timeout even when nothing is pending, so
         // the plate always gets at least one render to appear in.
