@@ -10,15 +10,9 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
-### Changed
+## [0.2.0] - 2026-10-02
 
-- New characters start at level 1 instead of level 65, and the climb now runs
-  the whole way to 100. The Atlas starts at area level 8 and the highest tier
-  sits at 92, so the first map is a fair fight for someone just out of
-  character creation instead of a shove into the deep end. Life and mana from
-  levelling, and points on the passive tree, are spread across the longer
-  climb rather than handed out all at once, so a level still feels like
-  something happened.
+Alpha. A save may not survive an update yet.
 
 ### Added
 
@@ -38,9 +32,18 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
   attack levels too, on its own account: it takes nothing from the skills you
   chose, but it does not stay a level-1 stick forever either, and the Ironsworn
   who keeps swinging eventually sweeps the whole circle around him.
+- The hideout keeps your life, mana, energy shield and both flasks full, the way
+  a town does in Path of Exile.
 
 ### Changed
 
+- New characters start at level 1 instead of level 65, and the climb now runs
+  the whole way to 100. The Atlas starts at area level 8 and the highest tier
+  sits at 92, so the first map is a fair fight for someone just out of
+  character creation instead of a shove into the deep end. Life and mana from
+  levelling, and points on the passive tree, are spread across the longer
+  climb rather than handed out all at once, so a level still feels like
+  something happened.
 - Ember Bolt pauses between bolts when you hold the button. Its cooldown used to
   sit under its own wind-up, so holding the button chained casts nose to tail and
   only the first bolt ever looked like it cost anything. Each bolt now starts
@@ -53,12 +56,12 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 - Boulders stand at the edge of a map now instead of inland, and the rock is
   darker, so a cave reads as a cave without a cliff growing between you and your
   own character.
-
-### Changed (animation)
-
 - Melee alternates two real slashes now. The second is the first swing carried
   round onto a downward diagonal, so hitting twice reads as two cuts instead of
   a sword swing followed by a punch.
+- Character select and creation show each class in its starting kit, standing
+  on the painted floor at the angle the hall was painted from, with fire burning
+  in the braziers behind him.
 
 ### Fixed
 
@@ -78,6 +81,13 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 - Pressing R stopped emptying your inventory and your equipment. It was a
   leftover greybox key that replaced the character with an empty one and then
   saved it.
+- Keys typed into a text field (a bug report, the vendor's highlight search) no
+  longer walk, cast or open panels.
+- The skill picker offers only your own class's free attack, not the other
+  classes' Strike, Snap Shot and Ember Spark.
+- An equipped item can be dropped on the ground by releasing it outside the
+  inventory panel.
+- The HUD no longer redraws thirty times a second while nothing on it changes.
 
 ## [0.1.0] - 2026-07-30
 

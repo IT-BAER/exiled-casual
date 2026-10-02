@@ -46,7 +46,9 @@ export function parseChangelog(text) {
       entries[entries.length - 1] += ` ${line.trim()}`;
     }
   }
-  return { version, date, entries: entries.slice(0, HEADLINE_MAX) };
+  // The changelog explains, the menu announces: an entry's first sentence is its headline.
+  const headline = (e) => /^.+?[.!?](?=\s|$)/.exec(e)?.[0] ?? e;
+  return { version, date, entries: entries.slice(0, HEADLINE_MAX).map(headline) };
 }
 
 export function render({ version, date, entries }) {

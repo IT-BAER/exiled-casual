@@ -26,4 +26,9 @@ describe("the menu's LATEST panel", () => {
     expect(parsed.version).toBe("0.1.0");
     expect(parsed.entries).toEqual(["shipped"]);
   });
+
+  it("shows only each entry's first sentence, so the panel stays a headline", () => {
+    const parsed = parseChangelog("## [0.2.0] - 2026-10-02\n\n- The braziers burn. Every bowl\n  stands a flame.\n- One line only\n");
+    expect(parsed.entries).toEqual(["The braziers burn.", "One line only"]);
+  });
 });
