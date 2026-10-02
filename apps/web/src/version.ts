@@ -9,4 +9,4 @@
  * `<major>.<minor> <Phase>`: the phase is the promise (Alpha means saves may not
  * survive, Beta means they should), the numbers are the shape of the game.
  */
-export const GAME_VERSION = "v0.1 Alpha";
+export const GAME_VERSION = "v0.2 Alpha";
