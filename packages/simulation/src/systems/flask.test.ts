@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest";
 import { fp } from "@exiled/fixed-point";
 import { Simulation } from "../loop";
 import { registerFlaskSystem } from "./flask";
-import type { FlasksC, Health, Mana } from "../components";
+import type { EnergyShieldC, FlasksC, Health, Mana } from "../components";
+import { createCombatSim } from "../combat-sim";
 
 function makeWorld() {
   const sim = new Simulation();
@@ -66,5 +67,34 @@ describe("flask system", () => {
     world.set<Health>(p, "health", { life: fp(90), maxLife: fp(100) });
     sim.step([{ tick: 0, entity: p, type: "useFlask", flask: "life" }]);
     expect(world.get<Health>(p, "health")!.life).toBe(fp(100));
+  });
+});
+
+describe("hideout rest", () => {
+  function drained(area: "hideout" | "map") {
+    const { sim, world, playerEntity: p } = createCombatSim(42, { area });
+    const h = world.get<Health>(p, "health")!;
+    const m = world.get<Mana>(p, "mana")!;
+    world.set<Health>(p, "health", { ...h, life: 1 });
+    world.set<Mana>(p, "mana", { ...m, mana: 0, regen: 0 });
+    world.set<EnergyShieldC>(p, "energyShield", { es: 0, maxEs: fp(50), rechargeAtTick: 1_000_000 });
+    world.set<FlasksC>(p, "flasks", { lifeCharges: 0, lifeMax: 7, manaCharges: 0, manaMax: 7 });
+    sim.step([]);
+    return { world, p, maxLife: h.maxLife, maxMana: m.maxMana };
+  }
+
+  it("the hideout fills life, mana, energy shield and every flask", () => {
+    const { world, p, maxLife, maxMana } = drained("hideout");
+    expect(world.get<Health>(p, "health")!.life).toBe(maxLife);
+    expect(world.get<Mana>(p, "mana")!.mana).toBe(maxMana);
+    expect(world.get<EnergyShieldC>(p, "energyShield")!.es).toBe(fp(50));
+    const f = world.get<FlasksC>(p, "flasks")!;
+    expect([f.lifeCharges, f.manaCharges]).toEqual([7, 7]);
+  });
+
+  it("a map gives nothing back", () => {
+    const { world, p } = drained("map");
+    expect(world.get<Health>(p, "health")!.life).toBe(1);
+    expect(world.get<FlasksC>(p, "flasks")!.lifeCharges).toBe(0);
   });
 });

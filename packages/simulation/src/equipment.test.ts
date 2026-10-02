@@ -423,7 +423,8 @@ describe("derived player stats", () => {
   });
 
   it("keeps current life where it was, so equipping never heals", () => {
-    const { world, sim, playerEntity } = makeWorld();
+    // In a map: the hideout refills every pool on its own.
+    const { world, sim, playerEntity } = createCombatSim(7, { area: "map" });
     clearInv(world);
     const h = world.get<Health>(playerEntity, "health")!;
     world.set<Health>(playerEntity, "health", { ...h, life: fp(30) });
