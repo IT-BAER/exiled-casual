@@ -552,7 +552,7 @@ describe("buildSnapshot - skills", () => {
     const ids = new Set(snap.skills!.map((s) => s.id));
     const own = [...SKILLS.values()].filter((d) => !d.classId || d.classId === "class.emberbound").map((d) => d.id);
     expect(ids).toEqual(new Set(own));
-    expect(ids.size).toBe(7);
+    expect(ids.size).toBe(5);
   });
 
   it("quotes the gem's numbers, not the def's", () => {

@@ -154,8 +154,8 @@ function sanitizeGems(
 /**
  * Stamps the class's own default attack into its mouse slot once, gated on
  * `SkillsC.attackReseeded`: an unflagged save may carry the `""` classId
- * fallback, and a player may legally slot another class's basic attack, so
- * nothing structural can tell those two apart. Once stamped, a no-op.
+ * fallback, and a player may clear the slot on purpose, so nothing structural
+ * can tell those apart from the seeding bug. Once stamped, a no-op.
  */
 export function reseedDefaultAttack(skills: SkillsC, classId: string): SkillsC {
   if (skills.attackReseeded) return skills;

@@ -284,13 +284,9 @@ describe("loadCharacterInto / saveCharacterTo", () => {
     expect(get<SkillsC>(reboot, "skills").bar[MOUSE_SLOT_BASE + 2]).toBe("skill.blink.v1");
   });
 
-  // setSkillBar makes the mouse-right slot player-writable, including a
-  // cross-class basic attack — a legal choice the old structural heuristic
-  // ("some class's default attack that isn't mine") could not tell apart from
-  // the seeding bug it existed to catch. This fails against that heuristic:
-  // Snap Shot IS a class's default attack, so an unflagged reseed would stomp
-  // it back to Strike on this second load.
-  it("survives a deliberate cross-class basic attack across a second load", async () => {
+  // A default attack belongs to its class, so another class's one saved in the
+  // mouse slot is dropped on load, and the one-shot reseed must not put it back.
+  it("drops another class's basic attack on load, without reseeding over it", async () => {
     const kv = await withOneCharacter("class.ironsworn");
     const world = fresh();
     // First load: the one-shot repair runs and sets attackReseeded.
@@ -304,7 +300,7 @@ describe("loadCharacterInto / saveCharacterTo", () => {
 
     const reboot = fresh();
     await loadCharacterInto(kv, reboot, "vess");
-    expect(get<SkillsC>(reboot, "skills").bar[MOUSE_SLOT_BASE + 2]).toBe("skill.snap_shot.v1");
+    expect(get<SkillsC>(reboot, "skills").bar[MOUSE_SLOT_BASE + 2]).toBeNull();
   });
 
   it("round-trips one character's progress", async () => {

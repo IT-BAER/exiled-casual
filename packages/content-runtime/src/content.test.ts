@@ -294,6 +294,12 @@ describe("DEFAULT_ATTACK_BY_CLASS", () => {
     }
   });
 
+  it("belongs to its own class, so no other class is offered it", () => {
+    for (const [classId, id] of Object.entries(DEFAULT_ATTACK_BY_CLASS)) {
+      expect(SKILLS.get(id)!.classId).toBe(classId);
+    }
+  });
+
   it("costs no mana: it is what you fall back to when dry", () => {
     for (const id of Object.values(DEFAULT_ATTACK_BY_CLASS)) {
       expect(SKILLS.get(id)!.manaCostFixed).toBe(0);
@@ -360,8 +366,11 @@ describe("skill unlocks and growth", () => {
     }
   });
 
-  it("each class owns its mana skills, and the free attacks and utility are classless", () => {
+  it("each class owns its mana skills and its free attack, and only utility is classless", () => {
     const owner: Record<string, string> = {
+      "skill.strike.v1": "class.ironsworn",
+      "skill.snap_shot.v1": "class.stalker",
+      "skill.ember_spark.v1": "class.emberbound",
       "skill.ember_bolt.v1": "class.emberbound",
       "skill.cinder_ground.v1": "class.emberbound",
       "skill.heavy_strike.v1": "class.ironsworn",

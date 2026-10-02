@@ -222,7 +222,7 @@ describe("skills persistence", () => {
     const before = world.get<SkillsC>(e, "skills")!;
     world.set<SkillsC>(e, "skills", {
       gems: { ...before.gems, "skill.ember_bolt.v1": { level: 6, xp: 42 } },
-      bar: ["skill.ember_bolt.v1", "skill.blink.v1", null, null, null, MOVE_SOCKET, null, "skill.snap_shot.v1"],
+      bar: ["skill.ember_bolt.v1", "skill.blink.v1", null, null, null, MOVE_SOCKET, null, "skill.ember_spark.v1"],
     });
 
     const snap = snapshot(world)!;
