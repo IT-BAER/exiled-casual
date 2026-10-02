@@ -17,11 +17,13 @@
 import {
   Color3,
   Color4,
+  type Camera,
   DynamicTexture,
   Engine,
   FreeCamera,
   HemisphericLight,
   Light,
+  Matrix,
   Mesh,
   MeshBuilder,
   PointLight,
@@ -40,30 +42,42 @@ import {
 import { dissolveAway, dissolveIn, primeDissolve } from "./dissolve";
 
 /**
- * The painted floor is BELOW the scene's own origin, and by half a unit.
- *
- * There is no reason it would not be. The hall is a matte, so its floor is
- * wherever the painter put it, and y=0 is only where the rig's feet happen to
- * be; nothing was ever making the two agree. Standing him at y=0 put his soles
- * a little above the far edge of the painted floor — on nothing, level with the
- * wall behind — which is exactly what "floating" looks like.
- *
- * Held here rather than by moving the camera in, because the camera is what
- * decides how big he is and that was already right. `floorScreenY` below is the
- * check: it says where the soles land on the canvas, and the painting's floor
- * runs from about 0.73 down.
+ * The scene's floor height. Arbitrary: the camera is solved from the painting
+ * (below), so only `EYE` above this matters. The lights are placed against it.
  */
 const FLOOR_Y = -0.5;
 
+/** `select_backdrop.jpg`'s width over its height. The camera is solved in its pixels. */
+const BACKDROP_ASPECT = 1672 / 941;
 /**
- * Where the character's feet sit, in the backdrop's floor.
- *
- * Left of the throne on screen, which is +X: the camera looks down -Z, and in
- * Babylon's left-handed world that flips which side +X lands on. The throne's
- * plinth runs up the middle of the painting and a figure standing in front of it
- * loses its silhouette against carved stone.
+ * The plate's horizon, as a fraction down the image: where its floor seams meet
+ * (Hough lines on the tile joints, both diagonals). The painting is a LEVEL
+ * camera, its columns stay vertical, so the 3D camera is level too and the
+ * horizon is placed by shifting the lens, never by tilting it.
  */
-const FEET = new Vector3(0.5, FLOOR_Y, 0);
+const HORIZON = 0.66;
+/**
+ * Camera height above the floor: a standing man's shoulder, which is where the
+ * horizon crosses a figure in PoE's own select screen. A floor painted from one
+ * height under a body rendered from another is what read as the wrong angle.
+ */
+const EYE = 1.35;
+/** How far in front of the camera he stands. With `EYE` this fixes the focal length. */
+const DISTANCE = 8.4;
+/**
+ * Where his soles land, as fractions of the image. Near the bottom like PoE's
+ * line-up, and no lower: a 21:9 window crops `cover` to 0.88 of the image.
+ * Left of the throne, which keeps his silhouette off the carved plinth.
+ */
+export const FEET_IMAGE = { x: 0.29, y: 0.86 };
+/** Focal length in image heights, solved so the soles land on `FEET_IMAGE.y`. */
+const FOCAL = ((FEET_IMAGE.y - HORIZON) * DISTANCE) / EYE;
+/**
+ * Where the character's feet sit. +X is LEFT on screen: the camera looks down
+ * -Z, and Babylon's left-handed world flips which side +X lands on.
+ */
+export const FEET = new Vector3(((0.5 - FEET_IMAGE.x) * BACKDROP_ASPECT * DISTANCE) / FOCAL, FLOOR_Y, 0);
+const CAMERA = new Vector3(0, FLOOR_Y + EYE, DISTANCE);
 
 /**
  * The shadow is CAST, not pooled: long toward the camera, narrow across.
@@ -84,7 +98,7 @@ const FEET = new Vector3(0.5, FLOOR_Y, 0);
  * angle a shadow is believable in proportion to how LONG and how FAINT it is,
  * and any of it dark enough to have an edge is a mark on the floor instead.
  */
-const SHADOW_SIZE = { width: 1.45, depth: 4.0 };
+const SHADOW_SIZE = { width: 1.45, depth: 2.4 };
 /** Alpha where it touches the boots. Everything past that is falloff. */
 const SHADOW_STRENGTH = 0.75;
 /**
@@ -150,32 +164,6 @@ const CONTACT_OFFSET = { x: -0.09, z: 0.12 };
  * side and a shadow side on the same nose.
  */
 const FACING = -0.15;
-/**
- * Where the virtual camera stands.
- *
- * Set by eye against `select_backdrop.jpg`, and the two numbers that matter are
- * the distance and the height: the distance decides how much of the canvas the
- * character occupies (at this fov he is a little under half its height, which is
- * where PoE's own select screen puts him), and the height has to sit near the
- * painting's horizon or he stands on the floor at one angle while the hall runs
- * at another.
- *
- * The plate is shot LOW — its floor tiles converge somewhere around three
- * quarters down the frame, which is a camera near a standing man's chest, not
- * above his head. So the eye sits at 0.78 and looks UP (`LOOK_AT` is above it),
- * where it used to sit at 1.5 and look down. Matching the plate's horizon
- * exactly is not available at this framing: it would need a hard upward tilt,
- * and the distance that then puts a man on the floor makes him tiny.
- *
- * Dropping the eye is nearly free at this distance, which is why it can be done
- * by eye and by taste: the tilt it adds pushes the figure back down the frame
- * almost exactly as far as the lower eye lifted it, so `floorScreenY` barely
- * moves (1.1 and 0.78 differ by two thousandths of the canvas) and only the
- * ANGLE changes. What it does cost is floor: every centimetre down foreshortens
- * the tiles further, and the shadow lying on them with it.
- */
-const CAMERA = new Vector3(0, 0.78, 8.4);
-const LOOK_AT = new Vector3(0, 0.98, 0);
 
 /** Cold wash from the dome, and the one knob that says how much of the face you
  *  get. Weak on purpose: this room is lit by fire, not by sky, and the plate
@@ -196,8 +184,8 @@ const BRAZIER_RANGE = 14;
  * downstage would have been prettier on the armour and wrong about the room.
  */
 const BRAZIERS: readonly Vector3[] = [
-  new Vector3(-3.4, 0.6, -2.2),
-  new Vector3(3.4, 0.6, -2.2),
+  new Vector3(FEET.x - 3.9, 0.6, -2.2),
+  new Vector3(FEET.x + 2.9, 0.6, -2.2),
 ];
 
 /**
@@ -207,40 +195,42 @@ const BRAZIERS: readonly Vector3[] = [
 const RIM_COLOR = new Color3(0.62, 0.74, 0.95);
 const RIM_INTENSITY = 4.6;
 
-const FOV = 0.62;
-
-/**
- * Where the character's soles land on the canvas, 0 at the top edge and 1 at the
- * bottom, under the camera constants above.
- *
- * The one number this file has to get right and the one nothing else can check:
- * a rig standing on a painted floor is right or wrong by pixels, and every knob
- * that moves it (camera height, distance, look-at, fov, `FLOOR_Y`) moves it
- * silently. Exact for a pinhole with a fixed vertical fov, which is Babylon's
- * default `fovMode`.
- */
-function screenY(y: number, z: number): number {
-  const pitch = Math.atan((CAMERA.y - LOOK_AT.y) / CAMERA.z); // axis, below horizontal
-  const point = Math.atan((CAMERA.y - y) / (CAMERA.z - z)); // the point, below horizontal
-  return 0.5 + Math.tan(point - pitch) / (2 * Math.tan(FOV / 2));
+/** Where a floor-level or body point lands, as a fraction down the backdrop image. */
+function imageY(y: number, z: number): number {
+  return HORIZON + (FOCAL * (CAMERA.y - y)) / (CAMERA.z - z);
 }
 
-export function floorScreenY(): number {
-  return screenY(FEET.y, FEET.z);
+/** Where the soles land, as a fraction down the backdrop image. */
+export function floorImageY(): number {
+  return imageY(FEET.y, FEET.z);
 }
 
 /**
- * Where the far end of the shadow lands on the canvas, same convention.
- *
- * Its dark end is pinned to the soles by construction, so what is left to get
- * wrong is the other end: the floor is nearly edge-on here, so world units buy
- * very little canvas, and a shadow can be several units long and still be a band
- * the boots cover. This minus `floorScreenY()` is how much of it the eye gets.
+ * Solve the camera against the backdrop as `cover` lays it out in a boxW x boxH
+ * box, for a w x h canvas at that box's top-left corner (it spans only the open
+ * half of the hall): same focal length in image pixels, the lens's centre on the
+ * painted horizon. So the figure stands on the same spot of the painting in
+ * every window shape. Any one unit, CSS pixels or drawing-buffer pixels.
  */
-export function shadowReachScreenY(): number {
+export function frameCamera(
+  camera: Camera, w: number, h: number, boxW: number, boxH: number, halfZRange = false,
+): void {
+  const shown = Math.max(boxW / BACKDROP_ASPECT, boxH); // the image's drawn height
+  const focal = FOCAL * shown;
+  const horizon = (boxH - shown) / 2 + HORIZON * shown; // from the canvas's top
+  const centre = boxW / 2; // from the canvas's left
+  const lens = Matrix.PerspectiveFovLH(2 * Math.atan(h / (2 * focal)), w / h, camera.minZ, camera.maxZ, halfZRange);
+  camera.freezeProjectionMatrix(lens.multiply(Matrix.Translation((2 * centre) / w - 1, 1 - (2 * horizon) / h, 0)));
+}
+
+/**
+ * Where the far end of the shadow lands, same convention. Its dark end is pinned
+ * to the soles, so this minus `floorImageY()` is how much of it the eye gets.
+ */
+export function shadowReachImageY(): number {
   const dir = Math.hypot(SHADOW_CAST.x, SHADOW_CAST.z);
   const forward = SHADOW_SIZE.depth * (1 - SHADOW_CONTACT);
-  return screenY(FEET.y, FEET.z + (SHADOW_CAST.z / dir) * forward);
+  return imageY(FEET.y, FEET.z + (SHADOW_CAST.z / dir) * forward);
 }
 
 /**
@@ -338,6 +328,15 @@ export interface MenuStage {
   dispose(): void;
 }
 
+/** The level camera `frameCamera` solves the lens for. */
+export function createMenuCamera(scene: Scene): FreeCamera {
+  const camera = new FreeCamera("menu-cam", CAMERA.clone(), scene);
+  camera.setTarget(CAMERA.subtract(new Vector3(0, 0, 1)));
+  camera.minZ = 0.1;
+  camera.maxZ = 40;
+  return camera;
+}
+
 /**
  * Build the stage on `canvas`, or resolve null when the wardrobe could not be
  * fetched. Null is not an error: the select screen keeps its backdrop and its
@@ -357,11 +356,17 @@ export async function createMenuStage(canvas: HTMLCanvasElement): Promise<MenuSt
     (globalThis as { __menuScene?: Scene }).__menuScene = scene;
   }
 
-  const camera = new FreeCamera("menu-cam", CAMERA.clone(), scene);
-  camera.setTarget(LOOK_AT);
-  camera.fov = FOV;
-  camera.minZ = 0.1;
-  camera.maxZ = 40;
+  const camera = createMenuCamera(scene);
+  // Re-solved whenever the drawing buffer changes size, which is not only on a
+  // window resize: at creation the canvas may not have its layout size yet.
+  let framed = "";
+  const frame = () => {
+    const box = canvas.parentElement ?? canvas;
+    const sizes = [canvas.clientWidth, canvas.clientHeight, box.clientWidth, box.clientHeight] as const;
+    if (sizes.join() === framed || sizes.some((n) => n === 0)) return;
+    framed = sizes.join();
+    frameCamera(camera, ...sizes, engine.isNDCHalfZRange);
+  };
 
   const fill = new HemisphericLight("menu-fill", new Vector3(0, 1, 0), scene);
   fill.intensity = FILL_INTENSITY;
@@ -377,7 +382,7 @@ export async function createMenuStage(canvas: HTMLCanvasElement): Promise<MenuSt
     b.falloffType = Light.FALLOFF_GLTF;
   }
 
-  const rim = new PointLight("menu-rim", new Vector3(0.9, 2.6, -3.2), scene);
+  const rim = new PointLight("menu-rim", new Vector3(FEET.x + 0.4, 2.6, -3.2), scene);
   rim.diffuse = RIM_COLOR;
   rim.specular = RIM_COLOR;
   rim.intensity = RIM_INTENSITY;
@@ -402,7 +407,8 @@ export async function createMenuStage(canvas: HTMLCanvasElement): Promise<MenuSt
   // characters at +Z (see RIG_YAW in rig.ts) and the camera stands on +Z, so
   // zero is square-on to the viewer and a half turn shows his back — which,
   // from behind a hood, looks enough like a face to be worth stating.
-  host.rotation.y = FACING;
+  // Turned against the line to the camera, not the world's Z: he stands off-axis.
+  host.rotation.y = FACING + Math.atan2(-FEET.x, DISTANCE);
   const rig: RigActor | null = attachRig(scene, host);
   // Standing still is a locomotion speed of zero, which is the idle clip. Asking
   // for the clip by name would duplicate the walk/run hysteresis that already
@@ -479,7 +485,7 @@ export async function createMenuStage(canvas: HTMLCanvasElement): Promise<MenuSt
   contact.material = contactMat;
 
 
-  const render = () => scene.render();
+  const render = () => { frame(); scene.render(); };
   engine.runRenderLoop(render);
 
   const onResize = () => engine.resize();

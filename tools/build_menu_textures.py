@@ -29,7 +29,7 @@ DST = pathlib.Path(__file__).resolve().parent.parent / "apps" / "web" / "public"
 # master stem -> (output name, target width or None to keep, jpeg/webp quality or None for lossless webp)
 PLAN: dict[str, tuple[str, int | None, int | None]] = {
     "menu_backdrop_v3": ("menu_backdrop.jpg", None, 86),
-    "select_backdrop_v1": ("select_backdrop.jpg", None, 86),
+    "select_backdrop_v3": ("select_backdrop.jpg", None, 86),
     # WebP, not PNG: the logo is the menu's LCP element, and at q90 it is a
     # quarter of the PNG's 620 KB with no visible loss over the backdrop.
     "logo_v4": ("logo.webp", 1024, 90),

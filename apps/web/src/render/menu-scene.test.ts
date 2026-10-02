@@ -1,10 +1,10 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { NullEngine, Scene } from "@babylonjs/core";
+import { Matrix, NullEngine, Scene, Vector3 } from "@babylonjs/core";
 import { CLASS_IDS } from "@exiled/rules";
 import { BASE_LOOKS, SLOTS, resetPlayerRig } from "./rig";
-import { floorScreenY, shadowReachScreenY } from "./menu-scene";
+import { createMenuCamera, FEET, FEET_IMAGE, floorImageY, frameCamera, shadowReachImageY } from "./menu-scene";
 import { looksForClass } from "../menu/class-looks";
 
 let engine: InstanceType<typeof NullEngine> | undefined;
@@ -71,31 +71,42 @@ describe("class looks", () => {
 
   /**
    * Where the soles land is a matter of pixels, and nothing else can see it: the
-   * scene needs WebGL and the floor it stands on is a JPEG. Every knob that moves
-   * the figure (camera height, distance, look-at, fov, the floor's own height)
-   * moves it silently.
-   *
-   * The painted hall's floor runs from about 0.73 of the canvas down to the
-   * bottom edge; its far edge is where it meets the throne's plinth. Above 0.73
-   * is wall, and soles against a wall is exactly what floating looked like.
+   * scene needs WebGL and the floor it stands on is a JPEG. Fractions of the
+   * backdrop image: its floor starts at 0.69 (below that is the plinth and the
+   * wall), and a 21:9 window crops `cover` to 0.88 of it.
    */
-  it("stands the character on the painted floor, not above its far edge", () => {
-    const y = floorScreenY();
-    expect(y).toBeGreaterThan(0.73);
-    expect(y).toBeLessThan(0.82);
+  it("stands the character on the painted floor and inside a wide window", () => {
+    const y = floorImageY();
+    expect(y).toBeGreaterThan(0.7);
+    expect(y).toBeLessThan(0.88);
+  });
+
+  /** The shadow runs forward from the soles: visible past the boots, not a runway. */
+  it("throws the shadow far enough forward to clear the boots", () => {
+    const reach = shadowReachImageY() - floorImageY();
+    expect(reach).toBeGreaterThan(0.03);
+    expect(reach).toBeLessThan(0.08);
   });
 
   /**
-   * The shadow starts at the soles and runs forward, so the failure left is the
-   * one the eye cannot argue with: too short to see. The floor is nearly edge-on
-   * at this camera, where world units buy very little canvas — three units of
-   * ground is a twentieth of the frame — so the length has to be checked where it
-   * is actually looked at, on screen, not in the scene.
+   * The real lens, not the arithmetic above: in every window shape the soles
+   * must project onto the spot of the painting `cover` draws there.
    */
-  it("throws the shadow far enough forward to clear the boots", () => {
-    const reach = shadowReachScreenY() - floorScreenY();
-    expect(reach).toBeGreaterThan(0.04); // forward, and past his own feet
-    expect(reach).toBeLessThan(0.2); // still a shadow, not a runway
+  it("keeps him on the same spot of the painting in every window shape", () => {
+    engine = new NullEngine();
+    const scene = new Scene(engine);
+    const camera = createMenuCamera(scene);
+    const aspect = 1672 / 941;
+    for (const [boxW, boxH] of [[2048, 962], [1920, 1080], [1280, 1024], [2560, 1080]] as const) {
+      // The stage canvas spans the left 68% of the screen the backdrop covers.
+      const w = boxW * 0.68;
+      const h = boxH;
+      frameCamera(camera, w, h, boxW, boxH);
+      const shown = Math.max(boxW / aspect, boxH);
+      const at = Vector3.Project(FEET, Matrix.Identity(), camera.getViewMatrix(true).multiply(camera.getProjectionMatrix()), camera.viewport.toGlobal(w, h));
+      expect(at.x, `${boxW}x${boxH}`).toBeCloseTo((boxW - shown * aspect) / 2 + FEET_IMAGE.x * shown * aspect, 0);
+      expect(at.y, `${boxW}x${boxH}`).toBeCloseTo((boxH - shown) / 2 + FEET_IMAGE.y * shown, 0);
+    }
   });
 
   it("builds a scene without a wardrobe rather than throwing", async () => {

@@ -15,13 +15,13 @@ import { INPUT_STYLE } from "./CharacterSelect";
 import { Divider, FramedPanel, GOLD, GOLD_DIM, MENU_ART, MenuButton, PARCHMENT, DISPLAY, SERIF } from "./frames";
 
 /**
- * The hall's two braziers, as fractions of `select_backdrop.jpg`. `flame: 0`:
- * the painting draws its own fire and these two are thirty pixels tall across
- * the room, so all this layer owes them is the flicker.
+ * The hall's two braziers, as fractions of `select_backdrop.jpg`. The art holds
+ * cold coals (`select_backdrop_v3`), so this layer draws the fire, as the main
+ * menu's does: a painted flame cannot move.
  */
 const BRAZIERS: readonly BrazierSpot[] = [
-  { x: 0.224, y: 0.611, r: 0.052, flame: 0, phase: 0 },
-  { x: 0.776, y: 0.615, r: 0.052, flame: 0, phase: 3.1 },
+  { x: 0.224, y: 0.611, r: 0.052, flame: 0.02, phase: 0 },
+  { x: 0.776, y: 0.615, r: 0.052, flame: 0.02, phase: 3.1 },
 ];
 
 export interface CreateCharacterProps {
