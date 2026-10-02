@@ -18,7 +18,6 @@ import {
   CINDER_NAME,
   FLASH_NAME,
   RING_NAME,
-  SPLINTER_NAME,
   warmSkillFx,
   FX_KEEPALIVE_NAME,
   fxProfile,
@@ -301,15 +300,16 @@ describe("arrows", () => {
     expect(count()).toBe(after);
   });
 
-  it("splinters only when it struck something", () => {
+  it("a struck arrow lands a hit, one that ran out of range just drops", () => {
     const scene = newScene();
     const spent = makeMesh(scene, "projectile", "entity-1", Vector3.Zero(), undefined, "skill.snap_shot.v1");
     const lapsed = makeMesh(scene, "projectile", "entity-2", Vector3.Zero(), undefined, "skill.snap_shot.v1");
     lapsed.dispose();
-    expect(scene.getMeshByName(SPLINTER_NAME)).toBeNull();
+    expect(systems(scene, MELEE_SPARKS_NAME)).toHaveLength(0);
     spent.metadata = { struck: true };
     spent.dispose();
-    expect(scene.getMeshByName(SPLINTER_NAME)).not.toBeNull();
+    expect(systems(scene, MELEE_SPARKS_NAME)).toHaveLength(1);
+    expect(scene.getMeshByName(RING_NAME)).not.toBeNull();
   });
 });
 
@@ -328,9 +328,6 @@ describe("warmSkillFx", () => {
     // behind the loading plate instead of on the first cast.
     expect(systems(scene, BOLT_BURST_NAME)).toHaveLength(1);
     expect(scene.getMeshByName(RING_NAME)).not.toBeNull();
-    expect(scene.getMeshByName(SPLINTER_NAME)).not.toBeNull();
-    // Built at the origin, which the camera may not see: culled, it compiles nothing.
-    expect(scene.getMeshByName(SPLINTER_NAME)!.alwaysSelectAsActiveMesh).toBe(true);
   });
 
   it("keeps a fire and a wisp system alive, so a burst never frees the shared shader and sheet", () => {

@@ -7,7 +7,6 @@ import {
   Light,
   PointLight,
   Quaternion,
-  SolidParticleSystem,
   StandardMaterial,
   Texture,
   TrailMesh,
@@ -262,7 +261,7 @@ export interface FxProfile {
   impactCue: string | null;
   /** Played when a player projectile appears: the loose, for a bow. */
   launchCue?: string;
-  /** Drawn as an arrow with a bare streak and a splinter hit, not a burning bolt. */
+  /** Drawn as an arrow with a bare streak and a melee-style hit, not a burning bolt. */
   arrow?: boolean;
 }
 
@@ -500,8 +499,8 @@ const STREAK_LENGTH = 1.3;
 /**
  * An arrow's wake: a faint additive cone riding behind the shaft, so it is the
  * same streak at any frame rate and never comes adrift of the arrow. A hit
- * (`metadata.struck`, set by the renderer on the spent tick) throws splinters;
- * an arrow that ran out of range just drops.
+ * (`metadata.struck`, set by the renderer on the spent tick) lands the melee hit
+ * through the body; an arrow that ran out of range just drops.
  */
 export function attachArrowStreak(scene: Scene, mesh: Mesh, fx: FxProfile): Mesh {
   const streak = MeshBuilder.CreateCylinder(`${ARROW_NAME}-streak`, {
@@ -523,7 +522,8 @@ export function attachArrowStreak(scene: Scene, mesh: Mesh, fx: FxProfile): Mesh
   streak.material = mat;
   mesh.onDisposeObservable.addOnce(() => {
     if ((mesh.metadata as { struck?: boolean } | null)?.struck) {
-      splinterBurst(scene, mesh.getAbsolutePosition().clone(), mesh.rotation.y, fx);
+      const yaw = mesh.rotation.y;
+      meleeImpact(scene, mesh.getAbsolutePosition().clone(), Math.sin(yaw), Math.cos(yaw), fx.burstRadius, fx.burstColour);
     }
   });
   return streak;
@@ -537,89 +537,6 @@ export function setStreakLength(arrow: Mesh, flown: number): void {
   const length = Math.max(0.001, Math.min(STREAK_LENGTH, flown / (arrow.scaling.z || 1)));
   streak.scaling.y = length / STREAK_LENGTH;
   streak.position.z = -ARROW_LENGTH / 2 - length / 2 + 0.1;
-}
-
-export const STUCK_ARROW_NAME = `${ARROW_NAME}-stuck`;
-/** How long a hit arrow stays in its monster: 4 s at the sim's 30 Hz. */
-export const STUCK_ARROW_TICKS = 120;
-/** Arrows one body carries at once; another pulls the oldest. */
-export const STUCK_ARROWS_MAX = 5;
-/** Share of the shaft driven into the body past the point it struck. */
-const STUCK_DEPTH = 0.35;
-
-/**
- * Leave `flying` in `body`: a copy at the same size and heading, driven a third of
- * its length in and parented so it rides the body. The flying arrow's splinter
- * burst is cancelled, since it did not shatter on anything.
- */
-export function stickArrow(scene: Scene, flying: Mesh, body: Mesh): Mesh {
-  flying.computeWorldMatrix(true);
-  const stuck = buildArrow(scene, STUCK_ARROW_NAME);
-  stuck.scaling.copyFrom(flying.scaling);
-  stuck.rotation.copyFrom(flying.rotation);
-  const ahead = flying.getDirection(Vector3.Forward()).normalize().scale(ARROW_LENGTH * flying.scaling.z * STUCK_DEPTH);
-  stuck.position.copyFrom(flying.getAbsolutePosition().add(ahead));
-  stuck.setParent(body);
-  flying.metadata = { ...(flying.metadata ?? {}), struck: false };
-  return stuck;
-}
-
-export const SPLINTER_NAME = "fx-splinters";
-const SPLINTERS = 10;
-const SPLINTER_LIFE = 0.55;
-const SPLINTER_GRAVITY = 9;
-
-/**
- * The hit: the shaft breaking into slivers thrown back off the target, which
- * tumble, bounce once off the floor and shrink away. Real geometry, not a
- * sprite, plus the profile's floor ring for the beat of contact.
- */
-export function splinterBurst(scene: Scene, at: Vector3, yaw: number, fx: FxProfile): void {
-  shockwave(scene, at, fx.burstRadius, fx.burstColour);
-  const sps = new SolidParticleSystem(SPLINTER_NAME, scene, { updatable: true });
-  const shard = MeshBuilder.CreateBox(`${SPLINTER_NAME}-shard`, { width: 0.02, height: 0.02, depth: 0.14 }, scene);
-  sps.addShape(shard, SPLINTERS);
-  shard.dispose();
-  const mesh = sps.buildMesh();
-  mesh.material = arrowMaterial(scene, "shaft", new Color3(0.5, 0.33, 0.17), 0.2);
-  mesh.isPickable = false;
-  mesh.position.copyFrom(at);
-
-  const back = new Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
-  const velocity: Vector3[] = [];
-  const spin: Vector3[] = [];
-  const size: number[] = [];
-  for (const p of sps.particles) {
-    const out = new Vector3(Math.random() - 0.5, Math.random() * 0.8 + 0.2, Math.random() - 0.5).normalize();
-    velocity.push(back.scale(0.8).addInPlace(out).normalize().scaleInPlace(2.5 + Math.random() * 3));
-    spin.push(new Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).scaleInPlace(24));
-    size.push(0.6 + Math.random() * 0.7);
-    p.rotation.set(Math.random() * 6, Math.random() * 6, Math.random() * 6);
-  }
-
-  let age = 0;
-  const floor = 0.02 - at.y;
-  const observer = scene.onBeforeRenderObservable.add(() => {
-    const dt = Math.min(scene.getEngine().getDeltaTime() / 1000, 0.05);
-    age += dt;
-    const left = 1 - Math.min(1, age / SPLINTER_LIFE);
-    sps.particles.forEach((p, i) => {
-      const v = velocity[i]!;
-      v.y -= SPLINTER_GRAVITY * dt;
-      p.position.addInPlace(v.scale(dt));
-      if (p.position.y < floor) {
-        p.position.y = floor;
-        v.set(v.x * 0.4, Math.abs(v.y) * 0.3, v.z * 0.4);
-      }
-      p.rotation.addInPlace(spin[i]!.scale(dt));
-      p.scaling.setAll(size[i]! * Math.sqrt(left));
-    });
-    sps.setParticles();
-    if (left <= 0) {
-      scene.onBeforeRenderObservable.remove(observer);
-      sps.dispose();
-    }
-  });
 }
 
 export const BOLT_BURST_NAME = "fx-bolt-burst";
@@ -654,8 +571,10 @@ const MELEE_RING_RADIUS = 1.5;
  * A weapon landing on a body: sparks thrown off the contact AWAY from the
  * swinger, dust kicked off the floor under it, a tight ring and the shared flash.
  */
-export function meleeImpact(scene: Scene, at: Vector3, awayX: number, awayZ: number): void {
-  shockwave(scene, at, MELEE_RING_RADIUS, MELEE_RING);
+export function meleeImpact(
+  scene: Scene, at: Vector3, awayX: number, awayZ: number, ringRadius = MELEE_RING_RADIUS, ringColour = MELEE_RING,
+): void {
+  shockwave(scene, at, ringRadius, ringColour);
   flash(scene, at);
 
   const len = Math.hypot(awayX, awayZ) || 1;
@@ -917,9 +836,6 @@ export function warmSkillFx(scene: Scene): void {
     for (const ps of [fireSystem(scene, FX_KEEPALIVE_NAME, 1), wispSystem(scene, FX_KEEPALIVE_NAME, 1)]) ps.isReady();
   }
   emberBurst(scene, Vector3.Zero());
-  splinterBurst(scene, Vector3.Zero(), 0, SKILL_FX["skill.snap_shot.v1"]!);
-  const splinters = scene.getMeshByName(SPLINTER_NAME);
-  if (splinters) splinters.alwaysSelectAsActiveMesh = true;
   meleeImpact(scene, Vector3.Zero(), 1, 0);
   const light = scene.getLightByName(FLASH_NAME) as PointLight | null;
   if (light) light.intensity = 0;

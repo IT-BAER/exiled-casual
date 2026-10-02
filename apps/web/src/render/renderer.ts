@@ -1,7 +1,7 @@
 import { Vector3 } from "@babylonjs/core";
 import type { Scene } from "@babylonjs/core";
 import type { Mesh } from "@babylonjs/core";
-import { blinkBurst, fxProfile, meleeImpact, setStreakLength, stickArrow, STUCK_ARROW_TICKS, STUCK_ARROWS_MAX } from "./skill-fx";
+import { blinkBurst, fxProfile, meleeImpact, setStreakLength } from "./skill-fx";
 import { HIT_STOP_SCALE, addTrauma, decayTrauma, hitStopMs, shakeOffset, swingWeight } from "./juice";
 import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
 import { animateActor, keepGroundBlobFlat, makeMesh, setHitFlash, updateTelegraph, updatePortal, updateMapDevice, updateStash, updateVendor, updateContainer, updateGroundItem, updateRareElement, portalAppear, portalVanish, isPortalMesh, PORTAL_STAGGER_MS, Y_LIFT } from "./meshes";
@@ -270,8 +270,6 @@ export class SnapshotRenderer {
   private restFacing: { x: number; y: number } | null = null;
   /** Newborn bolts offset to the casting hand: where each was launched and how
    *  far it has to go, which is the rate the offset is spent at. */
-  /** Arrows left in each body, oldest first, with the tick each one comes out on. */
-  private readonly stuck = new Map<Mesh, { arrow: Mesh; until: number }[]>();
   private readonly fromHand = new Map<number, { offset: Vector3; from: { x: number; y: number }; range: number; join: number }>();
   /** What each entity is drawn as, so a dead one can be told from a closed portal. */
   private readonly kinds = new Map<number, MeshKind>();
@@ -348,43 +346,6 @@ export class SnapshotRenderer {
     this.hoveredEntityId = id;
   }
 
-  /** Leave a spent arrow in the monster it struck, if one stands within reach of the strike point. */
-  private stickInBody(arrow: Mesh, x: number, z: number, next: Snapshot): void {
-    let body: Mesh | undefined;
-    let bodyId = -1;
-    let best = HIT_REACH;
-    for (const e of next.entities) {
-      if (e.kind !== "monster") continue;
-      const d = Math.hypot(e.x - x, e.y - z);
-      const m = this.meshes.get(e.id);
-      if (d < best && m) { best = d; body = m; bodyId = e.id; }
-    }
-    if (!body) return;
-    const list = this.stuck.get(body) ?? [];
-    if (list.length >= STUCK_ARROWS_MAX) list.shift()!.arrow.dispose();
-    // Parented against the body's rest scale: caught mid-flinch, the squash would shear the arrow for good.
-    const squashed = body.scaling.clone();
-    const base = this.flinch.get(bodyId)?.base;
-    if (base !== undefined) { body.scaling.setAll(base); body.computeWorldMatrix(true); }
-    list.push({ arrow: stickArrow(this.scene, arrow, body), until: this.now + STUCK_ARROW_TICKS });
-    body.scaling.copyFrom(squashed);
-    this.stuck.set(body, list);
-  }
-
-  /** Expire stuck arrows, and forget bodies that were disposed with theirs. */
-  private pullStuckArrows(): void {
-    for (const [body, list] of this.stuck) {
-      const kept = list.filter((s) => {
-        if (s.arrow.isDisposed()) return false;
-        if (s.until > this.now) return true;
-        s.arrow.dispose();
-        return false;
-      });
-      if (kept.length === 0 || body.isDisposed()) this.stuck.delete(body);
-      else this.stuck.set(body, kept);
-    }
-  }
-
   apply(prev: Snapshot | null, next: Snapshot, alpha: number): void {
     // Collect the full set of ids that should exist after this call
     const liveIds = new Set<number>();
@@ -392,7 +353,6 @@ export class SnapshotRenderer {
     // that reacts to a CHANGE has to know which of those frames is the first.
     const newTick = next.tick !== this.lastTick;
     this.now = next.tick + alpha;
-    this.pullStuckArrows();
     this.lastSnapshot = next;
     const ms = performance.now();
     if (this.lastFrameMs > 0) this.shakeTrauma = decayTrauma(this.shakeTrauma, (ms - this.lastFrameMs) / 1000);
@@ -690,7 +650,6 @@ export class SnapshotRenderer {
           // through the last interpolated step toward it.
           const last = prev?.entities.find((p) => p.id === id);
           if (last?.spent) { mesh.position.x = last.x; mesh.position.z = last.y; mesh.computeWorldMatrix(true); }
-          if (last?.spent && last.kind === "projectile" && fxProfile(last.skillId).arrow) this.stickInBody(mesh, last.x, last.y, next);
           rigOf(mesh)?.dispose();
           creatureOf(mesh)?.dispose();
           mesh.dispose();
