@@ -2,13 +2,14 @@
  * What a class looks like on the rig.
  *
  * Its own module, and not part of `MenuStage`, so the answer can be checked
- * without a canvas. Every class shares the one wired body, so the answer is a
- * constant; the function stays so a class that ever earns its own silhouette
- * has one place to change.
+ * without a canvas. A class is shown in the kit it starts with, dressed by the
+ * same lookup the game uses, so the menu never shows gear the game would not.
  */
-import { BASE_LOOKS, type Looks } from "../render/rig";
+import { characterClass } from "@exiled/content-runtime";
+import { looksForEquipment } from "../render/gear-looks";
+import type { Looks } from "../render/rig";
 
-/** The look every class shows: there is no per-class wardrobe any more. */
-export function looksForClass(_classId: string): Looks {
-  return BASE_LOOKS;
+export function looksForClass(classId: string): Looks {
+  const gear = characterClass(classId).startingGear;
+  return looksForEquipment(Object.fromEntries(Object.entries(gear).map(([slot, baseId]) => [slot, { baseId }])));
 }

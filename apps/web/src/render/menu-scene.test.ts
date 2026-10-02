@@ -55,14 +55,18 @@ describe("class looks", () => {
     }
   });
 
-  it("dresses every class in the same wired look, since there is no per-class wardrobe", () => {
+  it("dresses every class in its own starting kit, head to foot and weapon in hand", () => {
+    const family = { "class.ironsworn": "ironsworn", "class.stalker": "stalker", "class.emberbound": "ember" };
     for (const classId of CLASS_IDS) {
-      expect(looksForClass(classId)).toEqual(BASE_LOOKS);
+      const looks = looksForClass(classId);
+      for (const slot of ["helmet", "chest", "gloves", "boots"] as const) expect(looks[slot], classId).toBe(family[classId]);
+      expect(looks.weapon1, classId).not.toBeNull();
+      expect(looks.base).toBe(BASE_LOOKS.base);
     }
   });
 
   it("an unknown class still dresses somebody", () => {
-    expect(looksForClass("class.nope")).toEqual(BASE_LOOKS);
+    expect(looksForClass("class.nope").chest).not.toBeNull();
   });
 
   /**
