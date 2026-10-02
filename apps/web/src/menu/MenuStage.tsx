@@ -28,7 +28,9 @@ export function MenuStage({ classId }: { classId: string | null }): React.ReactE
       .then((stage) => {
         if (dead) { stage?.dispose(); return; }
         stageRef.current = stage;
-        stage?.setLooks(classId === null ? null : looksForClass(classId));
+        // The wardrobe takes seconds: dress whoever is chosen NOW, not at mount.
+        const now = wasThere.current;
+        stage?.setLooks(now === null ? null : looksForClass(now));
       })
       // No WebGL, no wardrobe, no stage. The screen is still a screen.
       .catch(() => undefined);
