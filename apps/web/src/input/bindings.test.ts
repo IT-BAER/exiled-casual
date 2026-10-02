@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { attachBindings } from "./bindings";
+import { isTextEntry } from "./text-entry";
 import type { Scene } from "@babylonjs/core";
 import type { Snapshot } from "@exiled/protocol";
 import { testPlayer } from "../test-fixtures";
@@ -359,6 +360,34 @@ describe("attachBindings hold-to-move", () => {
         (c) => c[0]?.type === "intent" && c[0]?.intent?.kind === "useSkill",
       ).length,
     ).toBe(1);
+  });
+
+  it("keys typed into a text field never reach the game", () => {
+    const w = { postMessage: vi.fn() };
+    const c = document.createElement("canvas");
+    document.body.appendChild(c);
+    const { detach: d, onSnapshot } = attachBindings(
+      c, w as unknown as Worker, fakeScene(), undefined, undefined, undefined, undefined, defaultSkillForKey,
+    );
+    onSnapshot(makeSnap([{ id: 55, kind: "groundItem", x: 0, y: 0, inRange: true }]));
+    for (const tag of ["textarea", "input"]) {
+      const field = document.createElement(tag);
+      document.body.appendChild(field);
+      for (const [key, code] of [["g", "KeyG"], ["w", "KeyW"], ["1", "Digit1"], ["1", "Numpad1"]] as const) {
+        field.dispatchEvent(new KeyboardEvent("keydown", { key, code, bubbles: true }));
+      }
+      field.remove();
+    }
+    expect(w.postMessage).not.toHaveBeenCalled();
+    d();
+    c.remove();
+  });
+
+  it("a focused slider still lets game keys through", () => {
+    const slider = document.createElement("input");
+    slider.type = "range";
+    expect(isTextEntry(slider)).toBe(false);
+    expect(isTextEntry(document.createElement("textarea"))).toBe(true);
   });
 });
 

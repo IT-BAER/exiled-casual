@@ -1,4 +1,5 @@
 import type { Intent, Snapshot, SpawnKind, ToWorker } from "@exiled/protocol";
+import { isTextEntry } from "./text-entry";
 import { heldToMoveIntent, keyToIntent, pointerToWorld } from "./intents";
 import type { Node, Scene } from "@babylonjs/core";
 import { DEFAULT_KEYBINDS, MOVE_SOCKET, type Keybinds } from "../settings";
@@ -300,6 +301,7 @@ export function attachBindings(
   }
 
   function onKeyDown(e: KeyboardEvent) {
+    if (isTextEntry(e.target)) return;
     // Checked before the skill row, which shares these keys' `key` values.
     const spawn = SPAWN_KEYS[e.code];
     if (spawn) {

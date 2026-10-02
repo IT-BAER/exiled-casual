@@ -280,6 +280,16 @@ describe("GameView", () => {
     expect(screen.queryByTestId("character-panel")).toBeNull();
   });
 
+  it("a key typed into a text field opens no panel", () => {
+    mountWithSnapshot();
+    const field = document.createElement("textarea");
+    document.body.appendChild(field);
+    act(() => { fireEvent.keyDown(field, { key: "c" }); fireEvent.keyDown(field, { key: "i" }); });
+    expect(screen.queryByTestId("character-panel")).toBeNull();
+    expect(screen.queryByTestId("inventory-panel")).toBeNull();
+    field.remove();
+  });
+
   // The sheet is cut from the stash's pane and docks in the same place, so two of
   // them up at once is one pane hidden exactly behind the other.
   it("the left dock holds one of stash, vendor and character sheet", () => {

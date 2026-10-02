@@ -21,6 +21,7 @@ import {
   SKY_COLOR,
 } from "./render/environment";
 import { attachBindings } from "./input/bindings";
+import { isTextEntry } from "./input/text-entry";
 import { ALL_SFX, CORE_SFX, playSfx, preloadSfx, setAmbient, stopAmbient } from "./audio/sfx";
 import { createSoundscape } from "./audio/soundscape";
 import { createDebugSnapshotLog, dlog } from "./debug";
@@ -666,6 +667,8 @@ export function GameView({
     // Escape clears the screen: every overlay at once, not just the topmost. A player
     // who wants the world back should not have to count the panels they opened.
     const onInvKey = (ev: KeyboardEvent) => {
+      // Typing is not play: a field's own Escape still closes its dialog.
+      if (isTextEntry(ev.target)) return;
       // Before the death gate: a perf readout is diagnostics, not play.
       if (ev.key === "F3") {
         ev.preventDefault();
