@@ -450,18 +450,24 @@ export const InventoryPanel = React.memo(function InventoryPanel({
 
   // Pointer events, not HTML5 drag-and-drop: the release target can be the Babylon
   // canvas behind the panel (drop to ground), which native DnD does not reach.
+  // The pointer as of the last event, written outside React: a slow frame can
+  // deliver the moves and the release before the moved `drag` is committed.
+  const pointerRef = React.useRef({ x: NaN, y: NaN });
   React.useEffect(() => {
     if (!drag) return;
-    const move = (e: PointerEvent) => setDrag((d) => (d ? { ...d, x: e.clientX, y: e.clientY } : d));
+    const move = (e: PointerEvent) => {
+      pointerRef.current = { x: e.clientX, y: e.clientY };
+      setDrag((d) => (d ? { ...d, x: e.clientX, y: e.clientY } : d));
+    };
     const up = (e: PointerEvent) => {
       // A press released without travelling is a PICKUP, not a drag that ended
       // where it began: the piece rides the cursor and the NEXT release commits
       // it. Both of PoE's gestures therefore work, and which one you used is
       // decided by the pointer rather than by a timer. Travel is measured from
-      // the press against `drag.x/y`, which only `pointermove` writes, so a
+      // the press against `pointerRef`, which only the press and `pointermove` write, so a
       // release event's own coordinates -- absent on a synthetic one, and 0,0 on
       // a click fired at an element rather than a point -- cannot decide it.
-      const travel = Math.hypot(drag.x - drag.ox, drag.y - drag.oy);
+      const travel = Math.hypot(pointerRef.current.x - drag.ox, pointerRef.current.y - drag.oy);
       // `!(travel >= SLOP)` rather than `travel < SLOP`, because travel is NaN
       // whenever the press carried no coordinates -- every synthetic pointerdown
       // in jsdom, and any event source that omits them. NaN loses both
@@ -488,6 +494,11 @@ export const InventoryPanel = React.memo(function InventoryPanel({
       if (target?.closest("[data-drop-socket]")) {
         if (drag.from.kind === "grid" && drag.from.container === "backpack" && drag.item.baseId === "map.waystone") {
           onSocketWaystone?.(drag.from.x, drag.from.y);
+          // This release is also a click on the socket, whose click ejects the stone.
+          // A click follows its pointerup in the same task, so the guard ends there.
+          const swallow = (c: MouseEvent) => c.stopPropagation();
+          window.addEventListener("click", swallow, { capture: true, once: true });
+          setTimeout(() => window.removeEventListener("click", swallow, { capture: true }), 0);
         }
         return;
       }
@@ -530,6 +541,7 @@ export const InventoryPanel = React.memo(function InventoryPanel({
     // on the way there is what made using an orb look like moving it.
     if (e.button === 2) return;
     setHover(null);
+    pointerRef.current = { x: e.clientX, y: e.clientY };
     setDrag({ from, item, w, h, x: e.clientX, y: e.clientY, ox: e.clientX, oy: e.clientY, carried: false });
   };
   const slotHighlight = (slot: EquipSlotId): "legal" | "illegal" | "none" => {

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, act } from "@testing-library/react";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { ITEM_POOLS, baseOf, WISDOM_SCROLL_BASE_ID } from "@exiled/content-runtime";
@@ -142,6 +142,45 @@ describe("InventoryPanel", () => {
     dragFrom(item);
     fireEvent.pointerUp(screen.getByTestId("inventory-panel"));
     expect(intents[1]).toEqual({ kind: "dropItem", x: 0, y: 0 });
+  });
+
+  it("a held drag released before the panel re-rendered its travel still drops, not lifts", async () => {
+    // A slow frame (the atlas behind the panel) can deliver the moves and the
+    // release before React commits the moved position, so the release must not
+    // read travel from the last render.
+    const intents: unknown[] = [];
+    render(<InventoryPanel inventory={inv} equipment={{}} onIntent={(i) => intents.push(i)} onClose={() => {}} />);
+    press(screen.getByTestId("inventory-item-0"), 10, 10);
+    const slot = screen.getByTestId("equip-slot-weapon1");
+    slot.dispatchEvent(new MouseEvent("pointermove", { bubbles: true, clientX: 50, clientY: 50 }));
+    slot.dispatchEvent(new MouseEvent("pointerup", { bubbles: true, clientX: 50, clientY: 50 }));
+    await act(async () => {});
+    expect(intents).toEqual([{ kind: "equipItem", x: 0, y: 0, slot: "weapon1" }]);
+    expect(screen.queryByTestId("drag-ghost")).toBeNull();
+  });
+
+  it("a carried waystone placed on the map-device socket by a click stays seated", () => {
+    // The socket's own click takes a stone back out, and the click that places
+    // one is a click on the socket too.
+    const stone = { ...inv.items[0]!, name: "Waystone", baseId: "map.waystone", itemClass: "waystone", w: 1, h: 1 };
+    const seated: unknown[] = [];
+    let ejected = 0;
+    render(
+      <>
+        <button data-drop-socket="" data-testid="socket" onClick={() => { ejected++; }} />
+        <InventoryPanel inventory={{ ...inv, items: [stone] }} equipment={{}} onSocketWaystone={(x, y) => seated.push([x, y])} onClose={() => {}} />
+      </>,
+    );
+    fireEvent.pointerDown(screen.getByTestId("inventory-item-0"));
+    fireEvent.pointerUp(screen.getByTestId("inventory-item-0"));
+    fireEvent.pointerDown(screen.getByTestId("socket"));
+    fireEvent.pointerUp(screen.getByTestId("socket"));
+    fireEvent.click(screen.getByTestId("socket"));
+    expect(seated).toEqual([[0, 0]]);
+    expect(ejected).toBe(0);
+    // The guard is one-shot: the next click on the socket still takes it out.
+    fireEvent.click(screen.getByTestId("socket"));
+    expect(ejected).toBe(1);
   });
 
   it("drags an equipped item back to the grid to unequip it", () => {
