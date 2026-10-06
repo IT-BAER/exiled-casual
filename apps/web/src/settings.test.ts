@@ -65,10 +65,10 @@ describe("sanitize", () => {
     expect(sanitize({ ui: { lootLabels: "no" } }).ui.lootLabels).toBe(true);
   });
 
-  it("defaults monster health bars OFF and keeps a saved true", () => {
-    expect(sanitize(null).ui.monsterHealthBars).toBe(false);
-    expect(sanitize({ ui: { monsterHealthBars: true } }).ui.monsterHealthBars).toBe(true);
-    expect(sanitize({ ui: { monsterHealthBars: "yes" } }).ui.monsterHealthBars).toBe(false);
+  it("defaults monster health bars ON and keeps a saved false", () => {
+    expect(sanitize(null).ui.monsterHealthBars).toBe(true);
+    expect(sanitize({ ui: { monsterHealthBars: false } }).ui.monsterHealthBars).toBe(false);
+    expect(sanitize({ ui: { monsterHealthBars: "yes" } }).ui.monsterHealthBars).toBe(true);
   });
 
   it("refuses an enum member it has never heard of", () => {

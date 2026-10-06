@@ -63,9 +63,8 @@ export interface UiSettings {
    */
   overlayMapOpacity: number;
   /**
-   * A thin life bar over any damaged monster. Default OFF: the flash on hit is
-   * the game's answer, this is the readout for players who want the number-ish
-   * version. Bosses keep their own big bar either way.
+   * A thin life bar over any damaged monster. Default ON; a player who finds it
+   * busy turns it off. Bosses keep their own big bar either way.
    */
   monsterHealthBars: boolean;
   /** What the non-skill keys do. See KEYBIND_ACTIONS. */
@@ -152,7 +151,7 @@ export const DEFAULT_SETTINGS: Settings = {
     lootLabels: true,
     orbNumbers: true,
     overlayMapOpacity: 0.6,
-    monsterHealthBars: false,
+    monsterHealthBars: true,
     keybinds: { ...DEFAULT_KEYBINDS },
     debugLogging: false,
   },

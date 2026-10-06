@@ -14,7 +14,7 @@ const BAR_H = 5;
 
 /**
  * A thin life bar over every damaged monster, behind `ui.monsterHealthBars`
- * (mounted only when it is on; default off).
+ * (mounted only when it is on; default on).
  *
  * "Damaged" is the filter, per his TODO wording: a full-life monster shows
  * nothing, so the screen is not wallpapered with bars, and the bar itself is
