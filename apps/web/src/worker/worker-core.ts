@@ -146,6 +146,16 @@ export class WorkerCore {
     return out;
   }
 
+  /**
+   * One tick while the clock is stopped, and only for a waiting intent: a point
+   * spent in the paused passive tree still has to reach the sim through a tick.
+   */
+  stepPaused(): Snapshot[] {
+    if (this.pending.length === 0) return [];
+    this.accMs = 0;
+    return this.advance(MS_PER_TICK);
+  }
+
   /** Cheap fingerprint of the durable state — node progress + both grids' contents. */
   private durableSig(): string {
     const e = this.world.query("session")[0];

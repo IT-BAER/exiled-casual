@@ -108,14 +108,15 @@ export function GameView({
    * lives in a worker with its own clock, so pausing is one message and the
    * clock stops — no tick is skipped and the run resumes exactly where it was.
    *
-   * Only the pause menu pauses. The inventory, the Atlas and the character sheet
-   * are all things PoE leaves the world running behind, and a game that freezes
-   * whenever a panel is open is a game you can stand still in to think.
+   * The pause menu and the passive tree pause; the tree covers the whole screen,
+   * so nothing behind it can be watched. The inventory, the Atlas and the
+   * character sheet are things PoE leaves the world running behind.
    */
+  const paused = gameMenuOpen || passivesOpen;
   useEffect(() => {
-    dlog("sim", gameMenuOpen ? "paused" : "resumed");
-    workerRef.current?.postMessage({ type: "pause", paused: gameMenuOpen } satisfies ToWorker);
-  }, [gameMenuOpen]);
+    dlog("sim", paused ? "paused" : "resumed");
+    workerRef.current?.postMessage({ type: "pause", paused } satisfies ToWorker);
+  }, [paused]);
   const [optionsOpen, setOptionsOpen] = useState(false);
   // F3 performance readout. Render-only; toggleable even on the death screen.
   const [statsOpen, setStatsOpen] = useState(false);

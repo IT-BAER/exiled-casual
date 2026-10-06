@@ -249,6 +249,14 @@ describe("GameView", () => {
     expect(screen.queryByTestId("debug-stats")).toBeNull();
   });
 
+  it("the passive tree pauses the sim while it is open", () => {
+    mountWithSnapshot();
+    act(() => { fireEvent.keyDown(window, { key: "p" }); });
+    expect(hoisted.worker?.postMessage).toHaveBeenLastCalledWith({ type: "pause", paused: true });
+    act(() => { fireEvent.keyDown(window, { key: "p" }); });
+    expect(hoisted.worker?.postMessage).toHaveBeenLastCalledWith({ type: "pause", paused: false });
+  });
+
   it("Escape closes every open overlay at once", () => {
     mountWithSnapshot();
     act(() => {

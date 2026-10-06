@@ -75,6 +75,17 @@ describe("WorkerCore", () => {
     expect(monsters(core).length).toBe(0);
   });
 
+  it("while paused, a waiting intent costs exactly one tick and an idle pause costs none", () => {
+    const core = new WorkerCore(42);
+    core.advance(34);
+    expect(core.stepPaused()).toEqual([]);
+    expect(core.snapshot()!.tick).toBe(1);
+    core.pushIntent({ kind: "allocatePassive", nodeId: "nope" });
+    const snaps = core.stepPaused();
+    expect(snaps.map((s) => s.tick)).toEqual([2]);
+    expect(core.stepPaused()).toEqual([]);
+  });
+
   it("a pushed moveTo intent moves the player toward the target", () => {
     const core = new WorkerCore(42);
     // Player spawns at origin (0,0); target is +x/+y, so both coords must increase.

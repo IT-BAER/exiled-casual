@@ -7,7 +7,7 @@ import type { FromWorker } from "@exiled/protocol";
 const MS_PER_TICK = 1000 / 30;
 
 let core: WorkerCore | null = null;
-/** True while the pause menu is open. The clock stops; nothing else changes. */
+/** True while the pause menu or the passive tree is open. The clock stops; a waiting intent still gets its tick. */
 let paused = false;
 
 self.onmessage = (e: MessageEvent) => {
@@ -45,8 +45,8 @@ self.onmessage = (e: MessageEvent) => {
 
 // Drive the sim at MS_PER_TICK regardless of message rate.
 setInterval(() => {
-  if (!core || paused) return;
-  const snaps = core.advance(MS_PER_TICK);
+  if (!core) return;
+  const snaps = paused ? core.stepPaused() : core.advance(MS_PER_TICK);
   // A portal transition swaps the level; re-send `area` before the snapshots so
   // the renderer rebuilds (or clears) walls before drawing the new positions.
   if (core.consumeAreaChange()) {
