@@ -579,7 +579,10 @@ export function GameView({
           name: biome?.name ?? "Hideout",
           art: `${LOADING_ART}/${base?.biomeId ?? "hideout"}.jpg`,
         });
-        buildLevel(scene, grid, base?.tilesetId);
+        buildLevel(
+          scene, grid, base?.tilesetId,
+          msg.area === "map" ? msg.layout.objectiveAnchors.filter((a) => a.id.startsWith("reward.")) : [],
+        );
         buildSea(scene, grid, base ? BIOMES[base.biomeId].sea === true : false);
         setMapFill(scene, msg.area === "map");
         // Furniture, and only in the hideout: a map is a place you pass through.

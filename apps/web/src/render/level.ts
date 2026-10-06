@@ -41,6 +41,7 @@ import {
   LEDGE_MESH_PREFIX,
   WEED_MESH_PREFIX,
   type RockCell,
+  type RockPlacement,
 } from "./rocks";
 import { attachProp } from "./props";
 import { standGroundBlob } from "./meshes";
@@ -369,7 +370,7 @@ const BONES_BAND: [number, number] = [2.0, 10];
  * the alternative is baking the prop's own node transform into every matrix.
  * ponytail: revisit if a frame profile shows the draw count mattering.
  */
-function dressBeach(scene: Scene, grid: WalkableGrid): void {
+function dressBeach(scene: Scene, grid: WalkableGrid, keepClear: readonly { x: number; y: number }[]): void {
   const shore = grid.shore;
   if (!shore) return;
   const { cols, rows, cellSize, originX, originY, cells } = grid;
@@ -406,6 +407,9 @@ function dressBeach(scene: Scene, grid: WalkableGrid): void {
       const wz = shore.along === "x" ? cross : along;
       // A rock in the water has no floor cell under it, and that is the point.
       if (kind !== "coastRock" && !isFloorAt(wx, wz)) continue;
+      // A log is two metres long; anything else here is a hand's width.
+      const reach = CONTAINER_CLEAR + (kind === "driftwood" || kind === "wreckTimber" ? 1.2 : 0.3);
+      if (keepClear.some((c) => Math.hypot(wx - c.x, wz - c.y) < reach)) continue;
       const root = new Mesh(`${BEACH_PROP_PREFIX}${kind}-${i}`, scene);
       root.position.set(wx, 0, wz);
       root.rotation.y = rnd(i, 7) * Math.PI * 2;
@@ -464,6 +468,10 @@ function dressBeach(scene: Scene, grid: WalkableGrid): void {
  * toward (docs/09: anticipation is the mechanism).
  */
 const FIRE_SPACING = 11;
+
+/** World units a reward container keeps free around its centre: the widest, a
+ *  0.82 chest, is half that across, plus a margin. */
+const CONTAINER_CLEAR = 0.6;
 const FIRE_MAX = 10;
 
 /** World units between a bowl's centre and the nearest rock: its 0.40 radius plus a margin. */
@@ -553,12 +561,14 @@ function standBraziers(
   grid: WalkableGrid,
   isFloor: (x: number, y: number) => boolean,
   isSea: (x: number, y: number) => boolean,
+  keepClear: readonly { x: number; y: number }[],
 ): void {
   for (const node of [...scene.meshes, ...scene.transformNodes]) {
     if (node.name.startsWith(AREA_BRAZIER_PREFIX)) node.dispose(false, false);
   }
 
-  const spots = brazierSpots(grid, isFloor, isSea);
+  const spots = brazierSpots(grid, isFloor, isSea)
+    .filter((s) => keepClear.every((c) => Math.hypot(s.x - c.x, s.z - c.y) >= CONTAINER_CLEAR + FIRE_CLEARANCE));
   for (let i = 0; i < spots.length; i++) {
     const s = spots[i]!;
     const root = new Mesh(`${AREA_BRAZIER_PREFIX}${i}`, scene);
@@ -585,6 +595,7 @@ export function buildLevel(
   scene: Scene,
   grid: WalkableGrid | null,
   tilesetId: string = DEFAULT_TILESET,
+  keepClear: readonly { x: number; y: number }[] = [],
 ): LevelResult {
   // Area swaps (and the open hideout) call this again; drop the previous walls.
   scene.getMeshByName(WALL_MESH_NAME)?.dispose();
@@ -767,11 +778,11 @@ export function buildLevel(
   // Fires along the walls, before the merge: `floorCells` is already the list of
   // open cells this sweep collected, and a brazier wants one that has a wall to
   // stand against.
-  standBraziers(scene, grid, isFloor, isSea);
+  standBraziers(scene, grid, isFloor, isSea, keepClear);
   // The shore's own dressing. After the braziers because it uses the same
   // sweep's knowledge of where the floor is, and before the merge for no reason
   // other than keeping every "stand something up" call in one place.
-  dressBeach(scene, grid);
+  dressBeach(scene, grid, keepClear);
 
   if (wallCells === 0) return { walls: null, wallCells: 0 };
 
@@ -792,6 +803,11 @@ export function buildLevel(
     false,
   );
   const material = wallMaterial(scene, tilesetId);
+  // No rock, pebble or plant inside a reward container: the caches stand on
+  // these spots (mapgen keeps them off the walls), the dressing keeps off them.
+  const clear = (ps: RockPlacement[]): RockPlacement[] => keepClear.length === 0 ? ps : ps.filter(
+    (p) => keepClear.every((k) => Math.hypot(p.x - k.x, p.z - k.y) > CONTAINER_CLEAR + p.width / 2),
+  );
   if (rocky) {
     // Walked as a ring rather than folded into the sweep above: that sweep scans
     // horizontal runs and skips ahead past them, so it cannot see a single cell
@@ -833,19 +849,19 @@ export function buildLevel(
       const behind = ledgeCells.flatMap((c) =>
         LEDGE_ROWS.map((d) => ({ ...c, x: c.x + (c.nx ?? 0) * d, z: c.z + (c.nz ?? 0) * d })),
       );
-      buildRocks(scene, scatterLedge(behind, ledgeCells), stone, LEDGE_MESH_PREFIX);
-      buildRocks(scene, scatterDune(rockCells, cellSize), stone, DUNE_MESH_PREFIX);
+      buildRocks(scene, clear(scatterLedge(behind, ledgeCells)), stone, LEDGE_MESH_PREFIX);
+      buildRocks(scene, clear(scatterDune(rockCells, cellSize)), stone, DUNE_MESH_PREFIX);
       // Sparser than a dungeon floor: `beach-map.jpg` keeps its open sand almost
       // clean of loose stone, and at the dungeon spacing the pebbles read as
       // dirt across the whole beach.
-      buildRocks(scene, scatterDebris(floorCells, 3.4), material, DEBRIS_MESH_PREFIX);
+      buildRocks(scene, clear(scatterDebris(floorCells, 3.4)), material, DEBRIS_MESH_PREFIX);
       buildRocks(scene, scatterDuneRim(edgeCells), stone, DUNE_RIM_MESH_PREFIX);
       // Scrub: a mat over the low blobs standing in the sand, and a fringe where
       // the tall ledge meets the beach. Both references put green in both
       // places, and neither has a hard line where the wall meets the floor.
       buildRocks(
         scene,
-        [...scatterWeed(rockCells), ...scatterLedgeWeed(ledgeCells)],
+        clear([...scatterWeed(rockCells), ...scatterLedgeWeed(ledgeCells)]),
         weed,
         WEED_MESH_PREFIX,
       );
@@ -853,7 +869,7 @@ export function buildLevel(
       // carries its own photograph — see `buildRocks`.
       buildRocks(
         scene,
-        scatterFlora([...ledgeCells, ...rockCells]),
+        clear(scatterFlora([...ledgeCells, ...rockCells])),
         null,
         FLORA_MESH_PREFIX,
       );
@@ -861,8 +877,8 @@ export function buildLevel(
       // The wall is one rock mass (cliffs.ts), tall only where it hides nothing;
       // a sparse fall of stone at its foot breaks the line it meets the floor on.
       buildCliffs(scene, grid, material);
-      buildRocks(scene, scatterRubble(rockCells, cellSize), material);
-      buildRocks(scene, scatterDebris(floorCells), material, DEBRIS_MESH_PREFIX);
+      buildRocks(scene, clear(scatterRubble(rockCells, cellSize)), material);
+      buildRocks(scene, clear(scatterDebris(floorCells)), material, DEBRIS_MESH_PREFIX);
       buildRocks(scene, scatterRampart(edgeCells), material, RAMPART_MESH_PREFIX);
     }
   }

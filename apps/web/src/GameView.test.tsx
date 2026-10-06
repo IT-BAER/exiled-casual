@@ -332,7 +332,7 @@ describe("GameView", () => {
         data: {
           type: "area",
           area: mapBaseId ? "map" : "hideout",
-          layout: { grid: { w: 1, h: 1, cells: [0] } },
+          layout: { grid: { w: 1, h: 1, cells: [0] }, objectiveAnchors: [] },
           mapBaseId,
         },
       });
@@ -470,7 +470,7 @@ describe("GameView", () => {
       hoisted.worker?.onmessage?.({
         data: {
           type: "area", area: "map",
-          layout: { grid: { w: 1, h: 1, cells: [0] } }, mapBaseId: "map.swamp",
+          layout: { grid: { w: 1, h: 1, cells: [0] }, objectiveAnchors: [] }, mapBaseId: "map.swamp",
         },
       });
     });

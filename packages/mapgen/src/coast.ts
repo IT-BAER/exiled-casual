@@ -355,6 +355,8 @@ export function generateCoast(
     spawnSockets,
     chosenVariantIds: [`coast:${frame.flipX ? "x" : "-"}${frame.flipY ? "y" : "-"}`],
     spawnTarget,
+    // Open sand: a cache may walk further off the cliff and round a dune.
+    rewardSearch: 16,
   });
   // The water mask rides on the grid rather than through a second channel: the
   // renderer already receives the grid, and which cells are SEA cannot be
