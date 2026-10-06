@@ -117,9 +117,8 @@ export function intentToCommand(intent: Intent, player: Entity, tick: number): C
       return { tick, entity: player, type: "setSkillBar", bar: intent.bar };
     case "usePortalScroll":
       // The scroll's right-click IS the Portal skill: one action, one cast time,
-      // one cooldown. Two implementations of "open the way home" is how a hotkey
-      // ends up obeying a cooldown that the inventory icon walks straight past.
-      return { tick, entity: player, type: "useSkill", skillId: TOWN_PORTAL_SKILL };
+      // one cooldown. It differs from the free Y key only in spending the scroll.
+      return { tick, entity: player, type: "useSkill", skillId: TOWN_PORTAL_SKILL, data: { scroll: 1 } };
     case "revive":
       // `data` is numbers-only, so the choice rides as a flag rather than a word.
       return {

@@ -384,8 +384,12 @@ describe("Portal Scroll", () => {
   /** Press Y and hold still until the doorway is torn open. The skill has a
    *  wind-up, so nothing at all has happened on the tick of the press. */
   const CAST_TICKS = SKILLS.get(TOWN_PORTAL_SKILL)!.castTicks!;
-  function castPortal(sim: Simulation, player: number): void {
-    sim.step([{ tick: sim.tick, entity: player, type: "useSkill", skillId: TOWN_PORTAL_SKILL }]);
+  /** `scroll` is the right-click on a Portal Scroll; without it, the free Y key. */
+  function castPortal(sim: Simulation, player: number, scroll = true): void {
+    sim.step([{
+      tick: sim.tick, entity: player, type: "useSkill", skillId: TOWN_PORTAL_SKILL,
+      ...(scroll ? { data: { scroll: 1 } } : {}),
+    }]);
     for (let t = 0; t < CAST_TICKS; t++) sim.step([]);
   }
   const portals = (world: World) => world
@@ -396,12 +400,12 @@ describe("Portal Scroll", () => {
     return held === undefined ? 0 : held.count ?? 1;
   };
 
-  it("opens a portal at the player's feet and spends one scroll", () => {
+  it("opens a portal a step toward the aim and spends one scroll", () => {
     const { sim, world, player, sessionE } = inMap(6, 3);
-    castPortal(sim, player);
+    castPortal(sim, player); // aimed at the origin, from (0, 8)
     const open = portals(world);
     expect(open).toHaveLength(1);
-    expect(world.get<Position>(open[0]!, "position")).toEqual({ x: fp(0), y: fp(8) });
+    expect(world.get<Position>(open[0]!, "position")).toEqual({ x: fp(0), y: fp(6.4) });
     expect(scrollsLeft(world, sessionE)).toBe(2);
     // Opening it is not walking through it: the portal budget is untouched.
     expect(world.get<SessionC>(sessionE, "session")!.portalsLeft).toBe(6);
@@ -412,6 +416,31 @@ describe("Portal Scroll", () => {
     castPortal(sim, player);
     expect(world.get<InventoryC>(sessionE, "inventory")!.items).toHaveLength(0);
     expect(portals(world)).toHaveLength(1);
+  });
+
+  /** Y is PoE2's way home: free inside an open map, held back by the cooldown alone. */
+  it("Y opens a portal with no scroll in the bag", () => {
+    const { sim, world, player } = inMap(6, 0);
+    castPortal(sim, player, false);
+    expect(portals(world)).toHaveLength(1);
+  });
+
+  it("Y spends no scroll even when the bag holds some", () => {
+    const { sim, world, player, sessionE } = inMap(6, 2);
+    castPortal(sim, player, false);
+    expect(portals(world)).toHaveLength(1);
+    expect(scrollsLeft(world, sessionE)).toBe(2);
+  });
+
+  /** A press that cannot open anything never starts the wind-up: an animation
+   *  that ends in nothing reads as a broken key. */
+  it("a cast that cannot open a portal is refused before the wind-up", () => {
+    const hideout = makeWorld();
+    hideout.sim.step([{ tick: hideout.sim.tick, entity: hideout.player, type: "useSkill", skillId: TOWN_PORTAL_SKILL }]);
+    expect(hideout.world.get(hideout.player, "casting")).toBeUndefined();
+    const empty = inMap(6, 0);
+    empty.sim.step([{ tick: empty.sim.tick, entity: empty.player, type: "useSkill", skillId: TOWN_PORTAL_SKILL, data: { scroll: 1 } }]);
+    expect(empty.world.get(empty.player, "casting")).toBeUndefined();
   });
 
   it("no scroll, no portal", () => {
@@ -453,7 +482,8 @@ describe("Portal Scroll", () => {
     castPortal(sim, player);
     const open = portals(world);
     expect(open).toHaveLength(1);
-    expect(world.get<Position>(open[0]!, "position")).toEqual({ x: fp(30), y: fp(30) });
+    // 1.6 from (30, 30) toward the origin the test aims at.
+    expect(world.get<Position>(open[0]!, "position")).toEqual({ x: 28869, y: 28869 });
     expect(scrollsLeft(world, sessionE)).toBe(0);
   });
 

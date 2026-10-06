@@ -30,11 +30,12 @@ describe("keyToIntent", () => {
     expect(keyToIntent("W", aim)).toEqual({ kind: "moveDir", dx: -1, dy: 1 });
   });
 
-  // Y is the way home, and it arrives as the scroll intent so the key and the
-  // right-click on a Portal Scroll are one action all the way down.
-  it("y → usePortalScroll", () => {
-    expect(keyToIntent("y", aim)).toEqual({ kind: "usePortalScroll" });
-    expect(keyToIntent("Y", aim)).toEqual({ kind: "usePortalScroll" });
+  // Y is the free way home: the Portal skill itself, not the scroll intent that
+  // spends one.
+  it("y → the Portal skill", () => {
+    const portal = { kind: "useSkill", skillId: "skill.town_portal.v1", tx: fp(aim.x), ty: fp(aim.y) };
+    expect(keyToIntent("y", aim)).toEqual(portal);
+    expect(keyToIntent("Y", aim)).toEqual(portal);
   });
 
   /**
@@ -138,7 +139,7 @@ describe("rebound keys", () => {
     expect(keyToIntent("w", aim, undefined, binds)).toBeNull();
     expect(keyToIntent("f", aim, undefined, binds)).toEqual({ kind: "useFlask", slot: "life" });
     expect(keyToIntent("q", aim, undefined, binds)).toBeNull();
-    expect(keyToIntent("h", aim, undefined, binds)).toEqual({ kind: "usePortalScroll" });
+    expect(keyToIntent("h", aim, undefined, binds)).toMatchObject({ kind: "useSkill", skillId: "skill.town_portal.v1" });
   });
 
   it("an unbound action fires on nothing", () => {

@@ -1,4 +1,4 @@
-import { fpClamp, fpStepToward, isqrt } from "@exiled/fixed-point";
+import { fp, fpClamp, fpStepToward, isqrt } from "@exiled/fixed-point";
 import { createStream } from "../rng";
 import { scalePct, effectiveSkill } from "@exiled/rules";
 import type { SkillDef } from "@exiled/content-schema";
@@ -9,7 +9,10 @@ import { sweep, type Collision, type CollisionRef } from "../collision";
 import type { Position, PlayerC, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC, CastingC, OffenseC, Health, SkillHoldC, SkillsC, StrikeC } from "../components";
 import { damageCode } from "../damage-types";
 import { bodyRadiusOf } from "../body";
-import { spendScrollAndOpenPortal } from "../areas";
+import { canOpenPortal, openPortalAt } from "../areas";
+
+/** How far in front of the caster the Portal skill opens its doorway, toward the aim. */
+const PORTAL_OFFSET = fp(1.6);
 
 /** sin(5k degrees) x 10000 for k = 0..18. Literal, not trig: the sim never depends on Math.sin rounding. */
 const SIN5 = [
@@ -66,6 +69,7 @@ export function registerSkillCast(
     didCrit: boolean,
     casterTeam: number,
     collision: Collision | undefined,
+    scroll = false,
   ): void {
     const pos = world.get<Position>(caster, "position");
     if (!pos) return;
@@ -176,13 +180,20 @@ export function registerSkillCast(
           y: fpClamp(pos.y + dy, WORLD_MIN, WORLD_MAX),
         });
       } else if (effect.type === "openPortal") {
-        // The one effect that spends something other than mana, so it is the one
-        // that can fail at the END of its own cast: a scroll can be dropped, or
-        // the map can close, in the two seconds the doorway takes to tear open.
-        // A failure refunds the cooldown — the player pressed a key and got
-        // nothing, and charging ten seconds for nothing is how a hotkey earns a
-        // reputation for being broken.
-        if (!spendScrollAndOpenPortal(world, caster)) {
+        // Checked again at the END of the cast: a scroll can be dropped, or the
+        // map can close, in the two seconds the doorway takes to tear open. A
+        // failure refunds the cooldown, so ten seconds are never charged for nothing.
+        // PoE opens the doorway a step in front of the caster, never around him.
+        const step = fpStepToward(pos.x, pos.y, tx, ty, PORTAL_OFFSET);
+        let dx = step.dx;
+        let dy = step.dy;
+        if (collision) {
+          const body = world.get<PlayerC>(caster, "player")?.bodyRadius ?? 0;
+          const reach = sweep(collision, pos.x, pos.y, step.dx, step.dy, body);
+          dx = reach.dx;
+          dy = reach.dy;
+        }
+        if (!openPortalAt(world, caster, scroll, { x: pos.x + dx, y: pos.y + dy })) {
           const cds = world.get<Cooldowns>(caster, "cooldowns");
           if (cds) world.set<Cooldowns>(caster, "cooldowns", { ...cds, [skill.id]: 0 });
         }
@@ -215,6 +226,7 @@ export function registerSkillCast(
             casting.didCrit === 1,
             casting.team ?? world.get<Faction>(caster, "faction")?.team ?? 0,
             collision,
+            casting.scroll === 1,
           );
         }
       }
@@ -247,6 +259,11 @@ export function registerSkillCast(
 
       const cds = world.get<Cooldowns>(caster, "cooldowns") ?? {};
       if ((cds[cmd.skillId] ?? 0) > tick) continue; // on cooldown
+
+      // A Portal that could not open is refused before the wind-up: an animation
+      // that ends in nothing reads as a broken key.
+      const scroll = cmd.data?.["scroll"] === 1;
+      if (base.effects.some((e) => e.type === "openPortal") && !canOpenPortal(world, caster, scroll)) continue;
 
       const gemLevel = gemLevelFor(world, cmd.skillId);
       const skill = effectiveSkill(base, gemLevel);
@@ -322,6 +339,7 @@ export function registerSkillCast(
           action: actionFor(skill),
           ticks: beatTicks,
           gemLevel,
+          ...(scroll ? { scroll: 1 as const } : {}),
         });
         continue;
       }

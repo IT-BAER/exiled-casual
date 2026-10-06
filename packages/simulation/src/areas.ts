@@ -99,16 +99,12 @@ export function openReturnPortal(world: World, x: number, y: number): void {
 }
 
 /**
- * A character's way home: spend one Portal Scroll and tear the doorway open where
- * `caster` stands. Returns false and spends nothing when there is nothing to buy.
- *
- * This is the whole rule for the Portal skill (`skill.town_portal.v1`), which is
- * what both the Y key and the right-click on a scroll fire. It lives here rather
- * than in the skill system because it is a fact about the SESSION — where a
- * portal may be opened, and what it costs — and the skill system only knows
- * about mana and cooldowns.
+ * Could `caster` open a way home here? Inside an open map, outside any doorway
+ * already standing, and holding a Portal Scroll when the cast is to spend one.
+ * Read before the wind-up and again at its end, so a press that cannot work
+ * never animates and a scroll dropped mid-cast is never spent twice.
  */
-export function spendScrollAndOpenPortal(world: World, caster: Entity): boolean {
+export function canOpenPortal(world: World, caster: Entity, scroll: boolean): boolean {
   const sessionE = world.query("session")[0];
   if (sessionE === undefined) return false;
   const session = world.get<SessionC>(sessionE, "session")!;
@@ -117,30 +113,49 @@ export function spendScrollAndOpenPortal(world: World, caster: Entity): boolean 
   if (session.area !== "map" || session.mapOpen !== 1) return false;
   const pos = world.get<Position>(caster, "position");
   if (!pos) return false;
-
-  // Standing in a doorway already: the scroll would buy nothing, so it is not
-  // spent — the same rule the map device follows about a run already open.
+  // Standing in a doorway already: a second one would buy nothing.
   for (const e of world.query("interactable", "position")) {
     const ia = world.get<InteractableC>(e, "interactable")!;
     if (ia.kind !== "portal") continue;
     const p = world.get<Position>(e, "position")!;
     if (fpDist2(pos.x, pos.y, p.x, p.y) <= ia.radius * ia.radius) return false;
   }
-
+  if (!scroll) return true;
   const inv = world.get<InventoryC>(sessionE, "inventory");
-  const index = inv ? inv.items.findIndex((p) => isPortalScroll(p.item)) : -1;
-  if (index === -1) return false;
-  const held = inv!.items[index]!;
-  // Currency stacks, so a stack of five spends one and keeps four.
-  const left = (held.count ?? 1) - 1;
-  world.set<InventoryC>(sessionE, "inventory", {
-    ...inv!,
-    items: left > 0
-      ? inv!.items.map((p, i) => (i === index ? { ...p, count: left } : p))
-      : inv!.items.filter((_, i) => i !== index),
-  });
+  return inv !== undefined && inv.items.some((p) => isPortalScroll(p.item));
+}
 
-  openReturnPortal(world, pos.x, pos.y);
+/**
+ * A character's way home, torn open where `caster` stands. The Y key is PoE2's
+ * free portal; the right-click on a Portal Scroll (`scroll`) spends one, PoE1's.
+ * `at` is where the doorway stands, the caster's feet when omitted.
+ * Returns false and spends nothing when `canOpenPortal` refuses.
+ *
+ * This is the whole rule for the Portal skill (`skill.town_portal.v1`). It lives
+ * here rather than in the skill system because it is a fact about the SESSION —
+ * where a portal may be opened, and what it costs — and the skill system only
+ * knows about mana and cooldowns.
+ */
+export function openPortalAt(
+  world: World, caster: Entity, scroll: boolean, at?: { x: number; y: number },
+): boolean {
+  if (!canOpenPortal(world, caster, scroll)) return false;
+  const pos = world.get<Position>(caster, "position")!;
+  if (scroll) {
+    const sessionE = world.query("session")[0]!;
+    const inv = world.get<InventoryC>(sessionE, "inventory")!;
+    const index = inv.items.findIndex((p) => isPortalScroll(p.item));
+    const held = inv.items[index]!;
+    // Currency stacks, so a stack of five spends one and keeps four.
+    const left = (held.count ?? 1) - 1;
+    world.set<InventoryC>(sessionE, "inventory", {
+      ...inv,
+      items: left > 0
+        ? inv.items.map((p, i) => (i === index ? { ...p, count: left } : p))
+        : inv.items.filter((_, i) => i !== index),
+    });
+  }
+  openReturnPortal(world, at?.x ?? pos.x, at?.y ?? pos.y);
   return true;
 }
 

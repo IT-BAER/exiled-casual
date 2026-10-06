@@ -200,6 +200,8 @@ export interface CastingC {
    *  a level-up landing inside a two-second Portal wind-up must not retroactively
    *  change what that cast does, and must not change it back either. */
   gemLevel?: number;
+  /** A Portal cast from a Portal Scroll's right-click, which spends one at the end. */
+  scroll?: 1;
 }
 /**
  * The last melee swing this caster resolved: the tick it landed and how many

@@ -1,5 +1,6 @@
 import type { Intent } from "@exiled/protocol";
 import { fp } from "@exiled/fixed-point";
+import { TOWN_PORTAL_SKILL } from "@exiled/content-runtime";
 import { DEFAULT_KEYBINDS, type KeybindAction, type Keybinds } from "../settings";
 
 // Rotated 45° to match the camera yaw (engine.ts, alpha=-π/4): screen-up is
@@ -73,11 +74,9 @@ export function keyToIntent(
   if (action === "flaskLife") return { kind: "useFlask", slot: "life" };
   if (action === "flaskMana") return { kind: "useFlask", slot: "mana" };
 
-  // The way home rides the Portal Scroll intent rather than a bare useSkill so
-  // both entry points — this key and the right-click on the scroll itself —
-  // arrive as the same command (protocol-bridge.ts turns it into the Portal
-  // skill, cast time and cooldown included).
-  if (action === "portal") return { kind: "usePortalScroll" };
+  // The way home is PoE2's: free inside an open map, held back by its cooldown.
+  // The right-click on a Portal Scroll casts the same skill and spends the scroll.
+  if (action === "portal") return { kind: "useSkill", skillId: TOWN_PORTAL_SKILL, tx: fp(aim.x), ty: fp(aim.y) };
 
   const skillId = skillForKey?.(key);
   if (skillId) {

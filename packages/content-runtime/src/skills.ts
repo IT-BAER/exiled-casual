@@ -319,10 +319,9 @@ const SKILL_DEFS: SkillDef[] = [
   },
   {
     /**
-     * The way home, on Y. PoE1's Portal Scroll, not PoE2's free return: it spends
-     * a scroll, which is why it is also what the inventory's right-click on a
-     * scroll fires — one action with one set of rules, rather than a hotkey that
-     * quietly ignores the cooldown the icon obeys.
+     * The way home, on Y. PoE2's free return inside an open map; the inventory's
+     * right-click on a Portal Scroll fires the same skill and spends the scroll,
+     * so both obey one cooldown.
      *
      * Two seconds of wind-up and ten of cooldown are the whole answer to "so it
      * doesn't get spammed": long enough that opening one mid-fight is a decision,
@@ -330,7 +329,7 @@ const SKILL_DEFS: SkillDef[] = [
      */
     id: "skill.town_portal.v1",
     name: "Portal",
-    description: "Tears open a doorway back to the hideout. Costs one Portal Scroll and replaces any other way home already standing in this area.",
+    description: "Tears open a doorway back to the hideout. Replaces any other way home already standing in this area.",
     manaCostFixed: 0,
     cooldownTicks: 300,
     castTicks: 60,
