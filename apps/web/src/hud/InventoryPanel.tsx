@@ -730,6 +730,16 @@ export const InventoryPanel = React.memo(function InventoryPanel({
                     onIntent?.({ kind: "usePortalScroll" });
                     return;
                   }
+                  // Shift spends the stack on every item it accepts, one unit each,
+                  // in one sim action; the sim stops when the stack runs out.
+                  if (e.shiftKey && container === "backpack" && it.itemClass === "currency") {
+                    setArmed(null);
+                    const first = g.items.find((t) => accepts(it, t));
+                    if (!first) return;
+                    playDropSound(currencyResultRarity(it.baseId ?? "") ?? first.rarity);
+                    onIntent?.({ kind: "applyCurrencyAll", fromX: it.x, fromY: it.y });
+                    return;
+                  }
                   // Right-clicking the armed currency again, or anything that is not
                   // currency at all, puts what is on the cursor back in the bag.
                   setArmed((a) => (container === "backpack" && it.itemClass === "currency" && a?.x !== it.x ? it : null));

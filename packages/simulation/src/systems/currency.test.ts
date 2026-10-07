@@ -115,3 +115,37 @@ describe("currency system", () => {
     expect(roll()).toEqual(roll());
   });
 });
+
+describe("applying a stack to every target", () => {
+  const applyAll = (sim: Simulation, from: [number, number]) =>
+    sim.step([{ tick: 1, entity: 0, type: "applyCurrencyAll", data: { fromX: from[0], fromY: from[1] } }]);
+  const unid = () => wand({ rarity: "magic", affixes: [{ affixId: "affix.mana", value: 9 }], unidentified: true });
+
+  it("spends one scroll per unidentified item until the stack runs out, in reading order", () => {
+    const { sim, inv } = bench([
+      cell(0, 0, currencyItem("currency.wisdom"), 2),
+      cell(5, 1, unid()),
+      cell(2, 0, unid()),
+      cell(3, 0, wand()),
+      cell(1, 1, unid()),
+    ]);
+    applyAll(sim, [0, 0]);
+    const at = (x: number, y: number) => inv().items.find((p) => p.x === x && p.y === y)!;
+    expect(at(2, 0).item.unidentified).toBeUndefined();
+    expect(at(1, 1).item.unidentified).toBeUndefined();
+    expect(at(5, 1).item.unidentified).toBe(true);
+    expect(at(3, 0).item.rarity).toBe("normal");
+    expect(inv().items.some((p) => p.x === 0 && p.y === 0)).toBe(false);
+  });
+
+  it("keeps what is left of the stack once every target is done", () => {
+    const { sim, inv } = bench([
+      cell(0, 0, currencyItem("currency.wisdom"), 5),
+      cell(2, 0, unid()),
+      cell(3, 0, unid()),
+    ]);
+    applyAll(sim, [0, 0]);
+    expect(inv().items.filter((p) => p.item.unidentified)).toHaveLength(0);
+    expect(inv().items.find((p) => p.x === 0 && p.y === 0)!.count).toBe(3);
+  });
+});

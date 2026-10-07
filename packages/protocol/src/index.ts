@@ -43,6 +43,8 @@ export type Intent =
   | { kind: "useFlask"; slot: "life" | "mana" }
   /** Spend one Scroll of Wisdom on the unidentified backpack item at its ORIGIN cell. */
   | { kind: "applyCurrency"; fromX: number; fromY: number; x: number; y: number }
+  /** One unit of the stack at (fromX,fromY) on every backpack item it accepts, until it runs out. */
+  | { kind: "applyCurrencyAll"; fromX: number; fromY: number }
   /**
    * Sell the item whose ORIGIN cell is (x,y) to the disenchanter. `from` defaults
    * to the backpack, matching moveItem's convention so the two share a read path.
@@ -88,7 +90,7 @@ export type Intent =
 export const SORT_MODES = ["type", "rarity", "size"] as const;
 export type SortMode = (typeof SORT_MODES)[number];
 
-export type CommandType = "moveTo" | "moveDir" | "useSkill" | "stop" | "interact" | "activateMap" | "pickupItem" | "equipItem" | "unequipItem" | "dropItem" | "moveItem" | "sortItems" | "useFlask" | "applyCurrency" | "sellItem" | "buyItem" | "revive" | "usePortalScroll" | "allocatePassive" | "refundPassive" | "respecPassives" | "setSkillBar";
+export type CommandType = "moveTo" | "moveDir" | "useSkill" | "stop" | "interact" | "activateMap" | "pickupItem" | "equipItem" | "unequipItem" | "dropItem" | "moveItem" | "sortItems" | "useFlask" | "applyCurrency" | "applyCurrencyAll" | "sellItem" | "buyItem" | "revive" | "usePortalScroll" | "allocatePassive" | "refundPassive" | "respecPassives" | "setSkillBar";
 
 // ---------------------------------------------------------------------------
 // Run loop
@@ -560,6 +562,12 @@ export function validateIntent(v: unknown): Intent {
         fromX: obj["fromX"] as number, fromY: obj["fromY"] as number,
         x: obj["x"] as number, y: obj["y"] as number,
       };
+    }
+    case "applyCurrencyAll": {
+      for (const k of ["fromX", "fromY"]) {
+        if (!Number.isInteger(obj[k])) throw new Error(`validateIntent applyCurrencyAll: ${k} must be an integer`);
+      }
+      return { kind: "applyCurrencyAll", fromX: obj["fromX"] as number, fromY: obj["fromY"] as number };
     }
     case "dropItem": {
       if (obj["slot"] !== undefined) {

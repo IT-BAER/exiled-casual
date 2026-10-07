@@ -29,6 +29,12 @@ describe("validateIntent — valid intents pass through", () => {
   test("stop", () => {
     expect(validateIntent({ kind: "stop" })).toEqual({ kind: "stop" });
   });
+
+  test("applyCurrencyAll", () => {
+    const intent = { kind: "applyCurrencyAll", fromX: 11, fromY: 0 } as const;
+    expect(validateIntent(intent)).toEqual(intent);
+    expect(() => validateIntent({ kind: "applyCurrencyAll", fromX: 1.5, fromY: 0 })).toThrow();
+  });
 });
 
 describe("validateIntent — malformed inputs throw", () => {

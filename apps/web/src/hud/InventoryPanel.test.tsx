@@ -430,6 +430,22 @@ describe("spending currency on an item", () => {
     expect(seen).toEqual([{ kind: "applyCurrency", fromX: 0, fromY: 0, x: 4, y: 0 }]);
   });
 
+  it("shift+right-click spends the stack on every item it accepts, without arming", () => {
+    const seen: unknown[] = [];
+    render(<InventoryPanel inventory={withScroll} onClose={() => {}} onIntent={(i) => seen.push(i)} />);
+    fireEvent.contextMenu(screen.getByTestId("inventory-item-0"), { shiftKey: true });
+    expect(seen).toEqual([{ kind: "applyCurrencyAll", fromX: 0, fromY: 0 }]);
+    expect(screen.queryByTestId("armed-icon")).toBeNull();
+  });
+
+  it("shift+right-click sends nothing when no item accepts the currency", () => {
+    const seen: unknown[] = [];
+    const nothingToRead = { ...withScroll, items: [withScroll.items[0]!] };
+    render(<InventoryPanel inventory={nothingToRead} onClose={() => {}} onIntent={(i) => seen.push(i)} />);
+    fireEvent.contextMenu(screen.getByTestId("inventory-item-0"), { shiftKey: true });
+    expect(seen).toEqual([]);
+  });
+
   /**
    * The payoff of an orb is the lines it wrote, and the click that spends it is
    * also the click that would close the tooltip reading them. It stays, and it

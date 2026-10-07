@@ -71,6 +71,8 @@ export function intentToCommand(intent: Intent, player: Entity, tick: number): C
         tick, entity: player, type: "applyCurrency",
         data: { fromX: intent.fromX, fromY: intent.fromY, x: intent.x, y: intent.y },
       };
+    case "applyCurrencyAll":
+      return { tick, entity: player, type: "applyCurrencyAll", data: { fromX: intent.fromX, fromY: intent.fromY } };
     case "unequipItem":
       return { tick, entity: player, type: "unequipItem", slot: intent.slot };
     case "dropItem":
