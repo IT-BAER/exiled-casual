@@ -46,6 +46,7 @@ import { setDebugLogging } from "./debug";
 import { setSoundMix } from "./audio/drop-sound";
 import { preloadSfx } from "./audio/sfx";
 import { warmMenuStage } from "./menu/warm-stage";
+import { gpuRenderer } from "./gpu";
 import {
   capFor,
   createCharacter,
@@ -107,7 +108,7 @@ export function App(): React.ReactElement {
     void readRoster().then((r) => {
       if (!live) return;
       setRoster(r);
-      setSettings(settingsOf(r));
+      setSettings(settingsOf(r, gpuRenderer()));
       const first = r.lastPlayedId ?? r.characters[0]?.id ?? null;
       setSelectedId(first);
       // `?play` walks straight into the world with the last character, so a
@@ -277,7 +278,7 @@ export function App(): React.ReactElement {
                 if (!window.confirm("Importing replaces the current local save. Continue?")) return;
                 return importRoster(text).then((next) => {
                   setRoster(next);
-                  setSettings(settingsOf(next));
+                  setSettings(settingsOf(next, gpuRenderer()));
                   setSelectedId(next.lastPlayedId ?? next.characters[0]?.id ?? null);
                 });
               }).catch((e: unknown) => setError(String(e instanceof Error ? e.message : e)));

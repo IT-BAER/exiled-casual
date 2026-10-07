@@ -15,7 +15,7 @@
 import { SKILL_SLOT_COUNT, MOUSE_SLOT_BASE, MOVE_SOCKET } from "@exiled/protocol";
 export { SKILL_SLOT_COUNT, MOUSE_SLOT_BASE, MOVE_SOCKET };
 
-export type ShadowQuality = "off" | "low" | "high";
+export type ShadowQuality = "off" | "low" | "medium" | "high";
 
 /**
  * Structurally the renderer's `AtmospherePreset`, deliberately re-declared here
@@ -25,6 +25,8 @@ export type ShadowQuality = "off" | "low" | "high";
 export type AtmosphereName = "soft" | "heavy";
 
 export interface GraphicsSettings {
+  /** The game picked the preset and may step it down when frames run slow. Any knob turned by hand clears it. */
+  auto: boolean;
   shadows: ShadowQuality;
   ambientOcclusion: boolean;
   bloom: boolean;
@@ -130,6 +132,7 @@ export const MIN_RESOLUTION_SCALE = 0.5;
 
 export const DEFAULT_SETTINGS: Settings = {
   graphics: {
+    auto: true,
     shadows: "high",
     ambientOcclusion: true,
     bloom: true,
@@ -157,7 +160,55 @@ export const DEFAULT_SETTINGS: Settings = {
   },
 };
 
-const SHADOW_QUALITIES: readonly ShadowQuality[] = ["off", "low", "high"];
+const SHADOW_QUALITIES: readonly ShadowQuality[] = ["off", "low", "medium", "high"];
+
+export type GraphicsPreset = "low" | "medium" | "high" | "ultra";
+
+/** Cheapest first. The knobs a preset sets are the ones measured to cost GPU time. */
+export const PRESET_ORDER: readonly GraphicsPreset[] = ["low", "medium", "high", "ultra"];
+
+type PresetKnobs = Pick<GraphicsSettings, "shadows" | "ambientOcclusion" | "bloom" | "resolutionScale">;
+
+/**
+ * Wrackline on an RTX 5060 Ti at 2048x962, GPU ms per frame: all on 7.4; fire
+ * shadows, SSAO and bloom about 2 each; all three plus the torch off 2.5.
+ */
+export const GRAPHICS_PRESETS: Readonly<Record<GraphicsPreset, PresetKnobs>> = {
+  low: { shadows: "off", ambientOcclusion: false, bloom: false, resolutionScale: 0.75 },
+  medium: { shadows: "low", ambientOcclusion: false, bloom: true, resolutionScale: 1 },
+  high: { shadows: "medium", ambientOcclusion: true, bloom: true, resolutionScale: 1 },
+  ultra: { shadows: "high", ambientOcclusion: true, bloom: true, resolutionScale: 1 },
+};
+
+/** The preset these knobs are, or null for a hand-made mix. */
+export function presetOf(g: GraphicsSettings): GraphicsPreset | null {
+  return PRESET_ORDER.find((p) => {
+    const k = GRAPHICS_PRESETS[p];
+    return k.shadows === g.shadows && k.ambientOcclusion === g.ambientOcclusion
+      && k.bloom === g.bloom && k.resolutionScale === g.resolutionScale;
+  }) ?? null;
+}
+
+/** One preset cheaper, keeping the taste knobs; null at Low or on a hand-made mix. */
+export function stepDown(g: GraphicsSettings): GraphicsSettings | null {
+  const at = presetOf(g);
+  const i = at === null ? 0 : PRESET_ORDER.indexOf(at);
+  return i > 0 ? { ...g, ...GRAPHICS_PRESETS[PRESET_ORDER[i - 1]!] } : null;
+}
+
+/**
+ * Starting preset from the WebGL renderer string. An integrated GPU starts at
+ * Medium (an Arc 140T ran the all-on frame at 22-37 fps); unknown starts at High.
+ */
+export function presetForRenderer(renderer: string): GraphicsPreset {
+  if (/swiftshader|llvmpipe|software|basic render/i.test(renderer)) return "low";
+  if (/nvidia|geforce|quadro/i.test(renderer)) return "ultra";
+  if (/intel/i.test(renderer)) return /arc\(tm\)? [ab]\d{3}/i.test(renderer) ? "ultra" : "medium";
+  if (/amd|radeon/i.test(renderer)) return /\brx\b|radeon pro/i.test(renderer) ? "ultra" : "medium";
+  if (/mali|adreno|powervr/i.test(renderer)) return "low";
+  return "high";
+}
+
 const ATMOSPHERES: readonly AtmosphereName[] = ["soft", "heavy"];
 
 function obj(raw: unknown): Record<string, unknown> {
@@ -182,25 +233,34 @@ function member<T extends string>(raw: unknown, allowed: readonly T[], fallback:
     : fallback;
 }
 
-export function sanitize(raw: unknown): Settings {
+/**
+ * `renderer` is the WebGL renderer string, read only for a save with no graphics
+ * yet: that first launch takes the detected preset. Saved graphics never re-detect.
+ */
+export function sanitize(raw: unknown, renderer?: string): Settings {
   const root = obj(raw);
   const g = obj(root["graphics"]);
   const s = obj(root["sound"]);
   const u = obj(root["ui"]);
   const d = DEFAULT_SETTINGS;
+  const fresh = Object.keys(g).length === 0;
+  const dg = fresh && renderer !== undefined
+    ? { ...d.graphics, ...GRAPHICS_PRESETS[presetForRenderer(renderer)] }
+    : d.graphics;
   return {
     graphics: {
-      shadows: member(g["shadows"], SHADOW_QUALITIES, d.graphics.shadows),
-      ambientOcclusion: bool(g["ambientOcclusion"], d.graphics.ambientOcclusion),
-      bloom: bool(g["bloom"], d.graphics.bloom),
-      atmosphere: member(g["atmosphere"], ATMOSPHERES, d.graphics.atmosphere),
+      auto: bool(g["auto"], fresh),
+      shadows: member(g["shadows"], SHADOW_QUALITIES, dg.shadows),
+      ambientOcclusion: bool(g["ambientOcclusion"], dg.ambientOcclusion),
+      bloom: bool(g["bloom"], dg.bloom),
+      atmosphere: member(g["atmosphere"], ATMOSPHERES, dg.atmosphere),
       resolutionScale: num(
         g["resolutionScale"],
         MIN_RESOLUTION_SCALE,
         1,
-        d.graphics.resolutionScale,
+        dg.resolutionScale,
       ),
-      torchWarmth: num(g["torchWarmth"], 0, 1, d.graphics.torchWarmth),
+      torchWarmth: num(g["torchWarmth"], 0, 1, dg.torchWarmth),
     },
     sound: {
       master: num(s["master"], 0, 1, d.sound.master),

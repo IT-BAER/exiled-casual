@@ -49,7 +49,8 @@ import { LoadingScreen, LOADING_ART, FADE_MS } from "./LoadingScreen";
 import { settleGate } from "./settle";
 import { pickTip } from "./tips";
 import { OptionsPanel } from "./menu/OptionsPanel";
-import { DEFAULT_SETTINGS, MOUSE_SLOT_BASE, MOVE_SOCKET, type Settings } from "./settings";
+import { DEFAULT_SETTINGS, MOUSE_SLOT_BASE, MOVE_SOCKET, presetOf, stepDown, type Settings } from "./settings";
+import { FpsGuard } from "./fps-guard";
 import type { FrameHook, Projector } from "./hud/LootLabels";
 import type { AreaLayout } from "@exiled/mapgen";
 import { BIOMES, mapBase } from "@exiled/content-runtime";
@@ -199,6 +200,13 @@ export function GameView({
   // The keybinds, mirrored for the same reason again.
   const keybindsRef = useRef(settings.ui.keybinds);
   keybindsRef.current = settings.ui.keybinds;
+  // The whole settings and their setter, for the Auto graphics guard's timer.
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
+  const onSettingsChangeRef = useRef(onSettingsChange);
+  onSettingsChangeRef.current = onSettingsChange;
+  /** One line saying Auto just lowered the preset; cleared after a few seconds. */
+  const [graphicsNote, setGraphicsNote] = useState<string | null>(null);
   // The map's layout, kept for the minimap. Null in the hideout, which has none.
   const [areaLayout, setAreaLayout] = useState<AreaLayout | null>(null);
   const [project, setProject] = useState<Projector | null>(null);
@@ -790,6 +798,33 @@ export function GameView({
   }, [settings.graphics]);
 
   /**
+   * Auto graphics: from the plate lifting until the next area, one fps reading a
+   * second; a slow window steps the preset down once (`FpsGuard`). Never up.
+   */
+  useEffect(() => {
+    if (loading) return;
+    const guard = new FpsGuard();
+    const timer = window.setInterval(() => {
+      const engine = engineRef.current;
+      const s = settingsRef.current;
+      if (!engine || !s.graphics.auto || document.hidden) return;
+      if (!guard.sample(engine.getFps())) return;
+      const next = stepDown(s.graphics);
+      if (!next) return;
+      onSettingsChangeRef.current?.({ ...s, graphics: next });
+      const name = presetOf(next) ?? "";
+      setGraphicsNote(`Graphics lowered to ${name.charAt(0).toUpperCase()}${name.slice(1)} to hold the frame rate.`);
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [loading]);
+
+  useEffect(() => {
+    if (graphicsNote === null) return;
+    const t = window.setTimeout(() => setGraphicsNote(null), 5000);
+    return () => window.clearTimeout(t);
+  }, [graphicsNote]);
+
+  /**
    * A panel coming up gets one rustle of leather and parchment.
    *
    * Watched as a count rather than hooked at each call site: these open from the
@@ -820,6 +855,18 @@ export function GameView({
           leaving={leaving}
           {...(area.art ? { wallpaper: area.art } : {})}
         />
+      )}
+      {graphicsNote && (
+        <div
+          data-testid="graphics-note"
+          style={{
+            position: "absolute", top: "9%", left: 0, right: 0, textAlign: "center",
+            pointerEvents: "none", fontFamily: SERIF, fontSize: 14, color: "#c8b48a",
+            textShadow: "0 1px 3px #000",
+          }}
+        >
+          {graphicsNote}
+        </div>
       )}
       {/* Stays mounted with the plates off: the drop CUE is played from inside
           LootLabels, and a HUD toggle that also silenced every drop would be a

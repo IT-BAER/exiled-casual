@@ -94,9 +94,9 @@ export async function importRoster(text: string, target: KvStore = kv()): Promis
   return roster;
 }
 
-/** What the player has set, proven safe. A roster with no settings reads as defaults. */
-export function settingsOf(roster: RosterBlob): Settings {
-  return sanitize(roster.settings);
+/** What the player has set, proven safe. A roster with no graphics yet takes `renderer`'s preset. */
+export function settingsOf(roster: RosterBlob, renderer?: string): Settings {
+  return sanitize(roster.settings, renderer);
 }
 
 /**

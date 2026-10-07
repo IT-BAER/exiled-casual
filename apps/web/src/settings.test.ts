@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { DEFAULT_SETTINGS, MIN_RESOLUTION_SCALE, sanitize } from "./settings";
+import { DEFAULT_SETTINGS, GRAPHICS_PRESETS, MIN_RESOLUTION_SCALE, presetForRenderer, presetOf, sanitize, stepDown, type GraphicsPreset, type GraphicsSettings } from "./settings";
 
 describe("the keybinds ride in the settings", () => {
   const binds = (raw: unknown) => sanitize({ ui: { keybinds: raw } }).ui.keybinds;
@@ -141,5 +141,57 @@ describe("the skill bar is the character's, not the settings'", () => {
   it("ignores a stale skillBar key in a saved settings blob without throwing", () => {
     const parsed = sanitize({ ui: { skillBar: ["skill.a.v1"] } });
     expect(parsed.ui).not.toHaveProperty("skillBar");
+  });
+});
+
+describe("graphics presets and auto-detect", () => {
+  it("tiers a GPU off the renderer string", () => {
+    const cases: [string, GraphicsPreset][] = [
+      ["ANGLE (Intel, Intel(R) Arc(TM) 140T GPU (16GB) Direct3D11 vs_5_0 ps_5_0, D3D11)", "medium"],
+      ["ANGLE (Intel, Intel(R) UHD Graphics 620 Direct3D11 vs_5_0 ps_5_0, D3D11)", "medium"],
+      ["ANGLE (Intel, Intel(R) Arc(TM) A770 Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)", "ultra"],
+      ["ANGLE (AMD, AMD Radeon(TM) Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)", "medium"],
+      ["ANGLE (AMD, AMD Radeon RX 7800 XT Direct3D11 vs_5_0 ps_5_0, D3D11)", "ultra"],
+      ["ANGLE (NVIDIA, NVIDIA GeForce RTX 5060 Ti Direct3D11 vs_5_0 ps_5_0, D3D11)", "ultra"],
+      ["ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)), SwiftShader driver)", "low"],
+      ["llvmpipe (LLVM 15.0.7, 256 bits)", "low"],
+      ["Apple M2", "high"],
+      ["", "high"],
+    ];
+    for (const [renderer, want] of cases) expect([renderer, presetForRenderer(renderer)]).toEqual([renderer, want]);
+  });
+
+  it("a first launch takes the detected preset and stays on auto", () => {
+    const got = sanitize(undefined, "ANGLE (Intel, Intel(R) Arc(TM) 140T GPU)").graphics;
+    expect(presetOf(got)).toBe("medium");
+    expect(got.auto).toBe(true);
+    expect(sanitize({ sound: { muted: true } }, "Intel(R) UHD Graphics").graphics.shadows).toBe(GRAPHICS_PRESETS.medium.shadows);
+  });
+
+  it("saved graphics are never re-detected, and an old save is not auto", () => {
+    const got = sanitize({ graphics: { shadows: "high" } }, "Intel(R) UHD Graphics").graphics;
+    expect(got.shadows).toBe("high");
+    expect(got.auto).toBe(false);
+    expect(sanitize({ graphics: { auto: true } }).graphics.auto).toBe(true);
+  });
+
+  it("knows a preset by its knobs and calls anything else custom", () => {
+    for (const p of ["low", "medium", "high", "ultra"] as const) {
+      expect(presetOf({ ...DEFAULT_SETTINGS.graphics, ...GRAPHICS_PRESETS[p] })).toBe(p);
+    }
+    expect(presetOf({ ...DEFAULT_SETTINGS.graphics, ...GRAPHICS_PRESETS.ultra, bloom: false })).toBeNull();
+  });
+
+  it("steps down one preset at a time and stops at low", () => {
+    let g: GraphicsSettings | null = { ...DEFAULT_SETTINGS.graphics, ...GRAPHICS_PRESETS.ultra, torchWarmth: 0.2 };
+    const seen: (GraphicsPreset | null)[] = [];
+    while ((g = stepDown(g))) seen.push(presetOf(g));
+    expect(seen).toEqual(["high", "medium", "low"]);
+    expect(stepDown({ ...DEFAULT_SETTINGS.graphics, ...GRAPHICS_PRESETS.high, bloom: false })).toBeNull();
+    expect(stepDown({ ...DEFAULT_SETTINGS.graphics, ...GRAPHICS_PRESETS.high })!.torchWarmth).toBe(DEFAULT_SETTINGS.graphics.torchWarmth);
+  });
+
+  it("accepts the medium shadow step", () => {
+    expect(sanitize({ graphics: { shadows: "medium" } }).graphics.shadows).toBe("medium");
   });
 });

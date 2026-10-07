@@ -16,7 +16,8 @@
  */
 import React from "react";
 import { DISPLAY, SERIF, Divider, FramedPanel, GOLD, GOLD_DIM, MENU_ART, MenuButton, PARCHMENT } from "./frames";
-import { DEFAULT_KEYBINDS, DEFAULT_SETTINGS, MIN_RESOLUTION_SCALE, type KeybindAction, type Keybinds, type Settings, type ShadowQuality } from "../settings";
+import { DEFAULT_KEYBINDS, DEFAULT_SETTINGS, GRAPHICS_PRESETS, MIN_RESOLUTION_SCALE, presetForRenderer, presetOf, type GraphicsPreset, type KeybindAction, type Keybinds, type Settings, type ShadowQuality } from "../settings";
+import { gpuRenderer } from "../gpu";
 import { playSoundPreview, type SoundPreviewCategory } from "../audio/bus";
 // hud/layout.ts imports nothing, so the menu bundle gains two numbers, not the HUD.
 import { PANEL_W } from "../hud/layout";
@@ -89,6 +90,12 @@ export function OptionsPanel({
 
   const setGraphics = (patch: Partial<Settings["graphics"]>): void =>
     onChange({ ...settings, graphics: { ...settings.graphics, ...patch } });
+  // A knob a preset sets, turned by hand: the player owns the preset from here.
+  const setCost = (patch: Partial<Settings["graphics"]>): void => setGraphics({ ...patch, auto: false });
+  const pickPreset = (p: GraphicsPreset | "auto"): void =>
+    p === "auto"
+      ? setGraphics({ ...GRAPHICS_PRESETS[presetForRenderer(gpuRenderer())], auto: true })
+      : setCost(GRAPHICS_PRESETS[p]);
   const setSound = (patch: Partial<Settings["sound"]>): void =>
     onChange({ ...settings, sound: { ...settings.sound, ...patch } });
   const setUi = (patch: Partial<Settings["ui"]>): void =>
@@ -148,6 +155,20 @@ export function OptionsPanel({
           {tab === "graphics" ? (
             <>
               <Group>Detail</Group>
+              <Row label="Preset" note={settings.graphics.auto ? "Steps down by itself if a place runs under 55 fps." : undefined}>
+                <Choice<GraphicsPreset | "auto" | "custom">
+                  label="Preset"
+                  value={settings.graphics.auto ? "auto" : presetOf(settings.graphics) ?? "custom"}
+                  options={[
+                    { value: "auto", label: "Auto" },
+                    { value: "low", label: "Low" },
+                    { value: "medium", label: "Medium" },
+                    { value: "high", label: "High" },
+                    { value: "ultra", label: "Ultra" },
+                  ]}
+                  onPick={(p) => { if (p !== "custom") pickPreset(p); }}
+                />
+              </Row>
               <Row label="Shadows">
                 <Choice<ShadowQuality>
                   label="Shadows"
@@ -155,23 +176,24 @@ export function OptionsPanel({
                   options={[
                     { value: "off", label: "Off" },
                     { value: "low", label: "Low" },
+                    { value: "medium", label: "Medium" },
                     { value: "high", label: "High" },
                   ]}
-                  onPick={(shadows) => setGraphics({ shadows })}
+                  onPick={(shadows) => setCost({ shadows })}
                 />
               </Row>
               <Row label="Ambient Occlusion">
                 <Gem
                   label="Ambient Occlusion"
                   on={settings.graphics.ambientOcclusion}
-                  onToggle={(ambientOcclusion) => setGraphics({ ambientOcclusion })}
+                  onToggle={(ambientOcclusion) => setCost({ ambientOcclusion })}
                 />
               </Row>
               <Row label="Bloom">
                 <Gem
                   label="Bloom"
                   on={settings.graphics.bloom}
-                  onToggle={(bloom) => setGraphics({ bloom })}
+                  onToggle={(bloom) => setCost({ bloom })}
                 />
               </Row>
 
@@ -209,7 +231,7 @@ export function OptionsPanel({
                   max={1}
                   step={0.05}
                   format={(v) => `${Math.round(v * 100)}%`}
-                  onSet={(resolutionScale) => setGraphics({ resolutionScale })}
+                  onSet={(resolutionScale) => setCost({ resolutionScale })}
                 />
               </Row>
 

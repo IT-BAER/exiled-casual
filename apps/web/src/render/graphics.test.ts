@@ -97,6 +97,19 @@ describe("applyGraphics", () => {
     engine.dispose();
   });
 
+  it("medium is the torch and the two nearest fires", () => {
+    const { engine, scene } = bareScene();
+    const torch = new PointLight("torch", new Vector3(0, 2, 0), scene);
+    const fires = [0, 1, 2, 3].map((i) => new PointLight(`firelight-${i}`, new Vector3(i, 2, 0), scene));
+    new ShadowGenerator(128, torch);
+    for (const f of fires) new ShadowGenerator(128, f);
+
+    applyGraphics(scene, engine, { ...DEFAULT_SETTINGS.graphics, shadows: "medium" });
+    expect(torch.shadowEnabled).toBe(true);
+    expect(fires.map((f) => f.shadowEnabled)).toEqual([true, true, false, false]);
+    engine.dispose();
+  });
+
   it("moves the fog band when the atmosphere changes", () => {
     const { engine, scene } = bareScene();
     applyGraphics(scene, engine, { ...DEFAULT_SETTINGS.graphics, atmosphere: "soft" });

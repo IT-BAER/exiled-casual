@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup, within } from "@testing-library/react";
 import { playSoundPreview } from "../audio/bus";
 import { OptionsPanel } from "./OptionsPanel";
-import { DEFAULT_SETTINGS, type Settings } from "../settings";
+import { DEFAULT_SETTINGS, GRAPHICS_PRESETS, presetOf, type Settings } from "../settings";
 
 vi.mock("../audio/bus", async (importOriginal) => ({
   ...await importOriginal<typeof import("../audio/bus")>(),
@@ -112,12 +112,12 @@ describe("OptionsPanel", () => {
     expect(box.getAttribute("aria-checked")).toBe("false");
   });
 
-  it("the shadow row offers exactly off, low and high, and marks the current one", () => {
+  it("the shadow row offers off, low, medium and high, and marks the current one", () => {
     setup({ graphics: { ...DEFAULT_SETTINGS.graphics, shadows: "low" } });
     const group = screen.getByRole("radiogroup", { name: /shadows/i });
     const names = Array.from(group.querySelectorAll('[role="radio"]')).map((n) => n.textContent);
-    expect(names).toEqual(["Off", "Low", "High"]);
-    expect(screen.getByRole("radio", { name: /^low$/i }).getAttribute("aria-checked")).toBe("true");
+    expect(names).toEqual(["Off", "Low", "Medium", "High"]);
+    expect(within(group).getByRole("radio", { name: /^low$/i }).getAttribute("aria-checked")).toBe("true");
   });
 
   it("the slider reports its new value", () => {
@@ -221,6 +221,43 @@ describe("the Options route", () => {
     // 20s, not the default 5: this is the only test that boots the whole client
     // module graph, and it passes in 3.6s alone but not against a loaded machine.
   }, 20000);
+});
+
+describe("graphics presets", () => {
+  const presetRadio = (name: RegExp) =>
+    within(screen.getByRole("radiogroup", { name: /preset/i })).getByRole("radio", { name });
+
+  it("a preset sets its knobs and hands the choice to the player", () => {
+    const { onChange } = setup({ graphics: { ...DEFAULT_SETTINGS.graphics, torchWarmth: 0.1 } });
+    fireEvent.click(presetRadio(/^low$/i));
+    const next = onChange.mock.calls[0]![0] as Settings;
+    expect(next.graphics).toEqual({ ...DEFAULT_SETTINGS.graphics, ...GRAPHICS_PRESETS.low, torchWarmth: 0.1, auto: false });
+  });
+
+  it("marks Auto while the game owns the preset, else the preset the knobs match", () => {
+    setup({ graphics: { ...DEFAULT_SETTINGS.graphics, auto: true } });
+    expect(presetRadio(/^auto$/i).getAttribute("aria-checked")).toBe("true");
+    cleanup();
+    setup({ graphics: { ...DEFAULT_SETTINGS.graphics, ...GRAPHICS_PRESETS.high, auto: false } });
+    expect(presetRadio(/^high$/i).getAttribute("aria-checked")).toBe("true");
+    expect(presetRadio(/^auto$/i).getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("turning a cost knob by hand takes Auto off; a taste knob leaves it", () => {
+    const { onChange } = setup({ graphics: { ...DEFAULT_SETTINGS.graphics, auto: true } });
+    fireEvent.click(screen.getByRole("checkbox", { name: /bloom/i }));
+    expect((onChange.mock.calls[0]![0] as Settings).graphics.auto).toBe(false);
+    fireEvent.change(screen.getByLabelText("Torch Warmth"), { target: { value: "0.2" } });
+    expect((onChange.mock.calls[1]![0] as Settings).graphics.auto).toBe(true);
+  });
+
+  it("Auto gives the choice back to the game", () => {
+    const { onChange } = setup({ graphics: { ...DEFAULT_SETTINGS.graphics, ...GRAPHICS_PRESETS.low, auto: false } });
+    fireEvent.click(presetRadio(/^auto$/i));
+    const next = onChange.mock.calls[0]![0] as Settings;
+    expect(next.graphics.auto).toBe(true);
+    expect(presetOf(next.graphics)).not.toBeNull();
+  });
 });
 
 describe("graphics defaults", () => {
