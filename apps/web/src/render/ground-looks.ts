@@ -38,6 +38,9 @@ const PROP_LOOKS: Readonly<Record<string, PropKind>> = {
   "map.waystone": "waystone",
 };
 
+/** Every base that lies on the floor as its own model rather than the marker. */
+export const GROUND_LOOK_BASES: readonly string[] = [...Object.keys(GEAR_LOOKS), ...Object.keys(PROP_LOOKS)];
+
 export function groundLookFor(baseId: string | undefined): GroundLook | null {
   if (baseId === undefined) return null;
   const id = canonicalBaseId(baseId);

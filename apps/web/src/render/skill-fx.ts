@@ -837,6 +837,18 @@ export function warmSkillFx(scene: Scene): void {
   }
   emberBurst(scene, Vector3.Zero());
   meleeImpact(scene, Vector3.Zero(), 1, 0);
+  // The first swing's ribbon compiled its glow and shadow-map variants mid-fight,
+  // squashed and not (see warmEntityLooks).
+  for (const squash of [1, 0.98]) {
+    const trail = swingTrail(scene);
+    trail.follow(Vector3.Zero());
+    const ribbon = scene.meshes[scene.meshes.length - 1];
+    if (ribbon) {
+      ribbon.alwaysSelectAsActiveMesh = true;
+      ribbon.scaling.y = squash;
+    }
+    scene.executeWhenReady(() => trail.dispose());
+  }
   const light = scene.getLightByName(FLASH_NAME) as PointLight | null;
   if (light) light.intensity = 0;
 }

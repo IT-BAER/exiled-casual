@@ -317,6 +317,15 @@ export function attachCreature(scene: Scene, root: Mesh, species: string): Creat
   return new CreatureRig(entries, species, scene);
 }
 
+/** Every species the loaded file carries, named as the sim names them. Empty until it loads. */
+export function creatureSpecies(scene: Scene): string[] {
+  if (!loaded || loaded.scene !== scene) return [];
+  return loaded.container.rootNodes
+    .flatMap((r) => r.getChildren())
+    .map((n) => n.name)
+    .filter((name) => name.startsWith("monster."));
+}
+
 function hasChild(node: Node, name: string): boolean {
   if (node.name === name) return true;
   return node.getChildren().some((c) => hasChild(c, name));

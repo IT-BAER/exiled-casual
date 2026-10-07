@@ -3,7 +3,8 @@ import { describe, it, expect, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { Effect, Light, NullEngine, ParticleSystem, PointLight, Scene, StandardMaterial, Texture, Vector3 } from "@babylonjs/core";
 import { SKILLS } from "@exiled/content-runtime";
-import { makeMesh, warmProjectiles } from "./meshes";
+import { makeMesh, warmEntityLooks, warmProjectiles, WARM_LOOK_PREFIX } from "./meshes";
+import { GROUND_LOOK_BASES } from "./ground-looks";
 import { createScene } from "./engine";
 import {
   blinkBurst,
@@ -368,6 +369,37 @@ describe("warmProjectiles", () => {
     expect(arrow.getChildMeshes(true).some((c) => c.scaling.y < 1)).toBe(true);
     await scene.whenReadyAsync();
     expect(scene.meshes.some((m) => m.name.startsWith("warm-projectile-"))).toBe(false);
+  });
+});
+
+describe("warmEntityLooks", () => {
+  it("draws every look the sim can spawn mid-run until released", async () => {
+    const scene = newScene();
+    const release = warmEntityLooks(scene);
+    const warm = scene.meshes.filter((m) => m.name.startsWith(WARM_LOOK_PREFIX));
+    const roots = warm.filter((m) => !m.parent);
+    // Telegraph, portal, a heap and a jackpot heap, a monster, and every drop that has a floor model,
+    // each once as built and once squashed.
+    expect(roots.length).toBe(2 * (5 + GROUND_LOOK_BASES.length));
+    expect(roots.filter((m) => m.scaling.y !== m.scaling.x)).toHaveLength(5 + GROUND_LOOK_BASES.length);
+    expect(GROUND_LOOK_BASES).toContain("currency.wisdom");
+    expect(warm.every((m) => m.alwaysSelectAsActiveMesh)).toBe(true);
+    // Still drawn once ready: the fire pool's lights come on in the first frames after that.
+    await scene.whenReadyAsync();
+    expect(scene.meshes.some((m) => m.name.startsWith(WARM_LOOK_PREFIX))).toBe(true);
+    release();
+    expect(scene.meshes.some((m) => m.name.startsWith(WARM_LOOK_PREFIX))).toBe(false);
+  });
+});
+
+describe("warmSkillFx swing trail", () => {
+  it("draws a weapon's swing ribbon once, then lets it go", async () => {
+    const scene = newScene();
+    warmSkillFx(scene);
+    const trail = scene.getMeshByName(SWING_TRAIL_NAME);
+    expect(trail?.alwaysSelectAsActiveMesh).toBe(true);
+    await scene.whenReadyAsync();
+    expect(scene.getMeshByName(SWING_TRAIL_NAME)).toBeNull();
   });
 });
 

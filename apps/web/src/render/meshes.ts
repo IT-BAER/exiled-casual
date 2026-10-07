@@ -13,10 +13,10 @@ import {
   type Scene,
 } from "@babylonjs/core";
 import { attachProp, type PropKind } from "./props";
-import { attachCreature, type CreatureRig } from "./monsters";
+import { attachCreature, creatureSpecies, type CreatureRig } from "./monsters";
 import { attachArrowStreak, attachBoltTrail, attachCinderFX, buildArrow, cinderGlow, fxProfile, PROJECTILE_ARROW_SCALE, setStreakLength, SKILL_FX } from "./skill-fx";
 import { attachRig, rigOf, BASE_LOOKS, type RigParts } from "./rig";
-import { attachGroundModel } from "./ground-looks";
+import { attachGroundModel, GROUND_LOOK_BASES } from "./ground-looks";
 import { hasRim, HIT_TINT, HIT_ALPHA } from "./rim";
 import { playSfx, worldSfxMix } from "../audio/sfx";
 
@@ -770,10 +770,18 @@ export function beamTransform(): { x: number; y: number; rz: number } {
  * top. One texture shared by every beam — a cylinder UV runs v=0 at the bottom,
  * which is the bottom row of the image.
  */
-function beamGradient(scene: Scene): DynamicTexture {
+function beamGradient(scene: Scene): DynamicTexture | null {
   const existing = scene.getTextureByName("loot-beam-falloff");
   if (existing) return existing as DynamicTexture;
-  const tex = new DynamicTexture("loot-beam-falloff", { width: 4, height: 64 }, scene, false);
+  // No canvas under NullEngine: headless, the beam is a flat shaft.
+  let tex: DynamicTexture;
+  try {
+    tex = new DynamicTexture("loot-beam-falloff", { width: 4, height: 64 }, scene, false);
+  } catch {
+    // The constructor registers the texture before it throws; a next beam must not find it.
+    scene.getTextureByName("loot-beam-falloff")?.dispose();
+    return null;
+  }
   const ctx = tex.getContext() as unknown as CanvasRenderingContext2D;
   const grad = ctx.createLinearGradient(0, 0, 0, 64);
   grad.addColorStop(0, "#000"); // top of the image = top of the beam
@@ -1685,4 +1693,43 @@ export function warmProjectiles(scene: Scene): void {
     }
     scene.executeWhenReady(() => mesh.dispose());
   }
+}
+
+export const WARM_LOOK_PREFIX = "warm-look-";
+
+/**
+ * One of everything the sim spawns mid-run, built behind the loading plate and
+ * dropped when the scene is ready: each creature, telegraph, portal, gold heap
+ * and floor model compiled its shaders on the frame it first appeared. Per area,
+ * because each map's lights change the material variants. Released by the
+ * caller once the plate settles, not on first ready: the fire pool switches its
+ * lights on in the first frames, and a disabled light is its own variant.
+ */
+export function warmEntityLooks(scene: Scene): () => void {
+  const species = creatureSpecies(scene);
+  const looks: [MeshKind, string | undefined][] = [
+    ["telegraph", undefined],
+    ["portal", undefined],
+    ["gold", "gold:1:0"],
+    ["gold", "gold:1:1"],
+    ...(species.length > 0 ? species : [undefined]).map((s): [MeshKind, string | undefined] => ["monster", s]),
+    ...GROUND_LOOK_BASES.map((b): [MeshKind, string | undefined] => ["groundItem", b]),
+  ];
+  // Twice: a flinch's squash, a telegraph's radius or a parent's lean is a
+  // non-uniform scale, which is its own shader variant (NONUNIFORMSCALING).
+  const meshes = [...looks, ...looks].map(([kind, look], i) => {
+    const mesh = makeMesh(scene, kind, `${WARM_LOOK_PREFIX}${i}`, Vector3.Zero(), look);
+    if (i >= looks.length) mesh.scaling.y *= 0.98;
+    for (const part of [mesh, ...mesh.getChildMeshes()]) {
+      part.alwaysSelectAsActiveMesh = true;
+      part.computeWorldMatrix(true);
+    }
+    return mesh;
+  });
+  return () => {
+    for (const mesh of meshes) {
+      creatureOf(mesh)?.dispose();
+      mesh.dispose();
+    }
+  };
 }

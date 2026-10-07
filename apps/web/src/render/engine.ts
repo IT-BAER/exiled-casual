@@ -88,9 +88,9 @@ export const MAP_FILL_INTENSITY = 0.18;
 // reads as in PoE, and turning it down is what lets a brazier be seen at all.
 const TORCH_INTENSITY = 175;
 /** Every light that can stand in a room at once: the fill, the sun, the torch,
- *  and the whole brazier pool. Materials are capped to exactly this, see
- *  `createScene` — Babylon's own default of four drops the rest without a word. */
-const SCENE_LIGHTS = 3 + LIGHT_POOL;
+ *  the hit flash (skill-fx.ts) and the whole brazier pool. Materials are capped to
+ *  exactly this, see `createScene` — Babylon's own default of four drops the rest without a word. */
+const SCENE_LIGHTS = 4 + LIGHT_POOL;
 /** Where the pool stops. GLTF falloff windows the inverse square to this, so the
  *  edge is defined instead of trailing off across the whole map.
  *

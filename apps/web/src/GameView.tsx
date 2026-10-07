@@ -39,7 +39,7 @@ import { LootLabels } from "./hud/LootLabels";
 import { NpcLabels } from "./hud/NpcLabels";
 import { MonsterHealthBars } from "./hud/MonsterHealthBars";
 import { warmSkillFx } from "./render/skill-fx";
-import { warmProjectiles } from "./render/meshes";
+import { warmEntityLooks, warmProjectiles } from "./render/meshes";
 import { Minimap } from "./hud/Minimap";
 import { BuffBar } from "./hud/BuffBar";
 import { DebugStats } from "./hud/DebugStats";
@@ -278,6 +278,8 @@ export function GameView({
      * for it, StrictMode's second mount included.
      */
     let settled: ((now: number) => boolean) | null = null;
+    /** Drops the warm-up copies of every spawnable look. Held until the plate settles. */
+    let releaseWarm: (() => void) | null = null;
     /** Pending unmount of the plate, one fade after ready. Cancelled by a new area. */
     let fadeTimer: ReturnType<typeof setTimeout> | undefined;
     /**
@@ -602,6 +604,8 @@ export function GameView({
         // light's fourth-light recompile has to be paid again for the new set.
         warmSkillFx(scene);
         warmProjectiles(scene);
+        releaseWarm?.();
+        releaseWarm = warmEntityLooks(scene);
         // Arms the paint only once this area's materials and textures are in.
         // Babylon defers this through a timeout even when nothing is pending, so
         // the plate always gets at least one render to appear in.
@@ -645,6 +649,8 @@ export function GameView({
       // rather than hanging on a black plate.
       if (settled?.(performance.now()) && harness === "done") {
         settled = null;
+        releaseWarm?.();
+        releaseWarm = null;
         // Dissolve rather than cut. The world under it is finished either way —
         // this fade costs the player nothing, because the frame behind it is
         // already the one they were waiting for.

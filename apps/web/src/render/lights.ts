@@ -162,8 +162,10 @@ export function createFireLights(scene: Scene): PointLight[] {
     light.diffuse = fireColour();
     light.specular = new Color3(0, 0, 0);
     light.range = FIRE_RANGE;
+    // Dark, never disabled: a light enabled later is appended behind the hit
+    // flash on every mesh already built, and that light order is its own shader.
     light.intensity = 0;
-    light.setEnabled(false);
+    light.setEnabled(true);
     pool.push(light);
   }
   for (const light of pool) castFrom(scene, light);
@@ -193,7 +195,7 @@ function reachesCaster(light: PointLight, mesh: AbstractMesh): boolean {
  * Every pooled light casts: one caster popped its shadow to whichever fire was
  * nearest, so a lit brazier at the frame's edge threw nothing. A point light
  * means a CUBE map, six faces every frame, so this is the expensive choice made
- * knowingly; a disabled light's map is not rendered, so only bowls actually lit
+ * knowingly; a dark light's map is never re-armed, so only bowls actually lit
  * pay it.
  */
 function castFrom(scene: Scene, light: PointLight | undefined): void {
@@ -289,7 +291,7 @@ export function setFireSpots(next: readonly FireSpot[]): void {
 /** What the lights are doing, for tests: name, whether lit, and where. */
 export function fireLightState(): { on: boolean; x: number; z: number; intensity: number }[] {
   return pool.map((l) => ({
-    on: l.isEnabled(),
+    on: l.isEnabled() && l.intensity > 0,
     x: l.position.x,
     z: l.position.z,
     intensity: l.intensity,
@@ -325,7 +327,7 @@ export function updateFireLights(scene: Scene, at: Vector3, deltaMs: number): vo
     const light = pool[i]!;
     const found = near[i];
     if (!found) {
-      light.setEnabled(false);
+      light.intensity = 0;
       continue;
     }
     const { s } = found;
@@ -335,7 +337,6 @@ export function updateFireLights(scene: Scene, at: Vector3, deltaMs: number): vo
     const wobble = Math.sin(t * 3.1) * 0.66 + Math.sin(t * 1.27 + 1.7) * 0.34;
     light.intensity = FIRE_INTENSITY * (1 + FLICKER_INTENSITY * wobble);
     light.range = FIRE_RANGE * zoom * (1 + FLICKER_RANGE * wobble);
-    light.setEnabled(true);
     if (moved) light.getShadowGenerator()?.getShadowMap()?.resetRefreshCounter();
   }
 
@@ -349,7 +350,7 @@ export function updateFireLights(scene: Scene, at: Vector3, deltaMs: number): vo
   for (let i = 0; i < pool.length; i++) {
     const light = pool[i]!;
     const found = near[i];
-    if (!found || !light.isEnabled()) continue;
+    if (!found || light.intensity === 0) continue;
     const reach = FLAME_RANGE * zoom + light.range;
     if (found.d <= reach * reach) light.getShadowGenerator()?.getShadowMap()?.resetRefreshCounter();
   }

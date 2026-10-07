@@ -69,6 +69,18 @@ describe("the fires a place is lit by", () => {
     expect(state[0]!.z).toBe(2);
   });
 
+  it("never disables a pool light, so every mesh sees the same lights in the same order", () => {
+    const s = scene();
+    const pool = createFireLights(s);
+    expect(pool.every((l) => l.isEnabled())).toBe(true);
+    // Three fires, then four: a light switched on later is appended BEHIND the
+    // hit flash on every mesh already built, and that order is its own shader.
+    setFireSpots([0, 6, 12].map((x, i) => ({ x, z: 0, phase: i })));
+    updateFireLights(s, Vector3.Zero(), 16);
+    expect(pool.every((l) => l.isEnabled())).toBe(true);
+    expect(pool[3]!.intensity).toBe(0);
+  });
+
   it("does not render shadow casters beyond the fire's own light", () => {
     const s = scene();
     // A point light computes no shadow projection at all with no active camera
