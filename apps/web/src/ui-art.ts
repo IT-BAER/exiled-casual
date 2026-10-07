@@ -66,10 +66,16 @@ export const UI_ART: readonly string[] = [
  * and in jsdom or a worker it does nothing at all.
  */
 export function preloadUiArt(): void {
-  if (typeof Image === "undefined") return;
+  if (typeof Image === "undefined" || warmed.length > 0) return;
   for (const url of UI_ART) {
     const img = new Image();
     img.decoding = "async";
     img.src = url;
+    // Fetched is not decoded: the Atlas's 1920x1080 plate decoded on its first paint.
+    // Held so the browser keeps the decoded copy.
+    img.decode?.().catch(() => {});
+    warmed.push(img);
   }
 }
+
+const warmed: HTMLImageElement[] = [];

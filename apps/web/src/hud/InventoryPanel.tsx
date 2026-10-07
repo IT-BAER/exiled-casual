@@ -57,6 +57,14 @@ function matchesHighlight(it: GridItem, keyword: string): boolean {
 
 /** Where a drag started, which decides the intent it turns into on release. */
 type DragSource = { kind: "grid"; container: ContainerId; x: number; y: number } | { kind: "slot"; slot: EquipSlotId };
+type DropTarget = { container: ContainerId; x: number; y: number; ok: boolean };
+
+function sameTarget(a: DropTarget | null, b: DropTarget | null): boolean {
+  return a === b || (!!a && !!b && a.container === b.container && a.x === b.x && a.y === b.y && a.ok === b.ok);
+}
+/** The carried piece hangs from its centre, `w` x `h` cells. */
+const ghostLeft = (d: { w: number }, px: number): string => `calc(${px}px - ${d.w} * ${CELL} / 2)`;
+const ghostTop = (d: { h: number }, py: number): string => `calc(${py}px - ${d.h} * ${CELL} / 2)`;
 
 // PoE2 inventory+equipment screen. The 12x5 backpack grid is functional (fed by
 // snapshot.inventory, the real drop->pickup path). The equipment paper-doll,
@@ -393,10 +401,20 @@ export const InventoryPanel = React.memo(function InventoryPanel({
   const [armed, setArmed] = React.useState<GridItem | null>(null);
   // Where the armed orb's bare icon rides. Deliberately NOT the drag ghost: no
   // rarity border, no glow, smaller than a cell — using is not moving.
+  // State only for its first appearance; after that the move handler drags the img
+  // itself, because a panel render per pointer move is what halved the fps.
   const [armedPos, setArmedPos] = React.useState<{ x: number; y: number } | null>(null);
+  const armedAt = React.useRef({ x: 0, y: 0 });
+  const armedIconRef = React.useRef<HTMLImageElement | null>(null);
   React.useEffect(() => {
     if (!armed) { setArmedPos(null); return; }
-    const onMove = (e: PointerEvent) => setArmedPos({ x: e.clientX, y: e.clientY });
+    const onMove = (e: PointerEvent) => {
+      armedAt.current = { x: e.clientX, y: e.clientY };
+      const icon = armedIconRef.current;
+      if (!icon) { setArmedPos(armedAt.current); return; }
+      icon.style.left = `${e.clientX + 10}px`;
+      icon.style.top = `${e.clientY + 10}px`;
+    };
     // While armed, ANY right-click dismisses — and never reaches the browser's
     // own menu, which the panel's empty ground otherwise let through. Capture
     // phase, so the grid cells' own contextmenu handlers cannot re-arm first.
@@ -429,24 +447,33 @@ export const InventoryPanel = React.memo(function InventoryPanel({
   // The cell the held item would land on. PoE carries a piece by its centre rather
   // than by the corner you grabbed, so the target is the item's centre rounded to
   // the grid, not the cursor's own cell. Null while the cursor is off the grid.
-  const dropTarget = React.useMemo(() => {
-    if (!drag || drag.from.kind !== "grid") return null;
-    for (const [id, g] of Object.entries(grids) as [ContainerId, Inventory][]) {
+  // Read from the pointer handlers, so the grids come through a ref, never a stale render.
+  const gridsRef = React.useRef(grids);
+  gridsRef.current = grids;
+  const targetAt = (d: NonNullable<typeof drag>, px: number, py: number): DropTarget | null => {
+    if (d.from.kind !== "grid") return null;
+    for (const [id, g] of Object.entries(gridsRef.current) as [ContainerId, Inventory][]) {
       // The shelf is never a drop target. Goods leave it by being bought, and a
       // drop onto it would be a way to hand an item over without being paid.
       if (id === "vendor") continue;
       const r = gridRefs.current[id]?.getBoundingClientRect();
       if (!r) continue;
-      if (drag.x < r.left || drag.x >= r.right || drag.y < r.top || drag.y >= r.bottom) continue;
+      if (px < r.left || px >= r.right || py < r.top || py >= r.bottom) continue;
       // Each grid measures its OWN width: the two have different column counts, so
       // one shared cell size would land the drop a cell out in the other grid.
       const c = r.width / g.cols;
-      const x = Math.round((drag.x - r.left - (drag.w * c) / 2) / c);
-      const y = Math.round((drag.y - r.top - (drag.h * c) / 2) / c);
-      return { container: id, x, y, ok: fitsAt(g, drag.item, drag.w, drag.h, x, y) };
+      const x = Math.round((px - r.left - (d.w * c) / 2) / c);
+      const y = Math.round((py - r.top - (d.h * c) / 2) / c);
+      return { container: id, x, y, ok: fitsAt(g, d.item, d.w, d.h, x, y) };
     }
     return null;
-  }, [drag]);
+  };
+  // State only for the highlight, and it changes only when the cell does: a mouse
+  // reports hundreds of moves a second, and re-rendering the panel on each halved the fps.
+  const [dropTarget, setDropTarget] = React.useState<DropTarget | null>(null);
+  // Compared here, not in a setState updater: React can render once even for an equal value.
+  const targetRef = React.useRef<DropTarget | null>(null);
+  const ghostRef = React.useRef<HTMLDivElement | null>(null);
 
   // Pointer events, not HTML5 drag-and-drop: the release target can be the Babylon
   // canvas behind the panel (drop to ground), which native DnD does not reach.
@@ -454,10 +481,19 @@ export const InventoryPanel = React.memo(function InventoryPanel({
   // deliver the moves and the release before the moved `drag` is committed.
   const pointerRef = React.useRef({ x: NaN, y: NaN });
   React.useEffect(() => {
-    if (!drag) return;
+    if (!drag) { targetRef.current = null; setDropTarget(null); return; }
     const move = (e: PointerEvent) => {
       pointerRef.current = { x: e.clientX, y: e.clientY };
-      setDrag((d) => (d ? { ...d, x: e.clientX, y: e.clientY } : d));
+      const ghost = ghostRef.current;
+      if (ghost) {
+        ghost.style.left = ghostLeft(drag, e.clientX);
+        ghost.style.top = ghostTop(drag, e.clientY);
+      }
+      const t = targetAt(drag, e.clientX, e.clientY);
+      if (!sameTarget(targetRef.current, t)) {
+        targetRef.current = t;
+        setDropTarget(t);
+      }
     };
     const up = (e: PointerEvent) => {
       // A press released without travelling is a PICKUP, not a drag that ended
@@ -478,6 +514,7 @@ export const InventoryPanel = React.memo(function InventoryPanel({
         return;
       }
       setDrag(null);
+      const dropTarget = targetAt(drag, pointerRef.current.x, pointerRef.current.y);
       // e.target is the topmost element under the pointer (nothing captures it, and
       // the drag ghost is pointer-transparent); elementFromPoint covers synthetic events.
       const target = e.target instanceof Element ? e.target : document.elementFromPoint(e.clientX, e.clientY);
@@ -530,7 +567,7 @@ export const InventoryPanel = React.memo(function InventoryPanel({
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
     };
-  }, [drag, dropTarget, onIntent]);
+  }, [drag, onIntent]);
 
   const grab = (from: DragSource, item: DisplayItem, w: number, h: number, e: React.PointerEvent) => {
     e.preventDefault();
@@ -1068,12 +1105,13 @@ export const InventoryPanel = React.memo(function InventoryPanel({
       {armed && armedPos && !drag && armed.icon && (
         <img
           data-testid="armed-icon"
+          ref={armedIconRef}
           src={armed.icon}
           alt=""
           style={{
             position: "fixed",
-            left: armedPos.x + 10,
-            top: armedPos.y + 10,
+            left: armedAt.current.x + 10,
+            top: armedAt.current.y + 10,
             width: 28,
             height: 28,
             objectFit: "contain",
@@ -1089,10 +1127,12 @@ export const InventoryPanel = React.memo(function InventoryPanel({
           // The world's pointer handling reads this to know a press is placing the
           // piece rather than commanding a walk. See `bindings.ts` onPointerDown.
           data-carrying=""
+          ref={ghostRef}
           style={{
             position: "fixed",
-            left: `calc(${drag.x}px - ${drag.w} * ${CELL} / 2)`,
-            top: `calc(${drag.y}px - ${drag.h} * ${CELL} / 2)`,
+            // The pointer handler moves it between renders; a render puts it where the pointer is now.
+            left: ghostLeft(drag, Number.isNaN(pointerRef.current.x) ? drag.x : pointerRef.current.x),
+            top: ghostTop(drag, Number.isNaN(pointerRef.current.y) ? drag.y : pointerRef.current.y),
             width: `calc(${drag.w} * ${CELL})`,
             height: `calc(${drag.h} * ${CELL})`,
             pointerEvents: "none",

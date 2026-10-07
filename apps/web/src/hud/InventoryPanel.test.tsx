@@ -4,6 +4,7 @@ import { render, screen, cleanup, fireEvent, act } from "@testing-library/react"
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { ITEM_POOLS, baseOf, WISDOM_SCROLL_BASE_ID } from "@exiled/content-runtime";
+import { Profiler } from "react";
 import { InventoryPanel } from "./InventoryPanel";
 import { VENDOR_NAME, VENDOR_TITLE } from "../npc";
 
@@ -239,6 +240,29 @@ describe("InventoryPanel", () => {
   });
 
 
+  it("carries a piece without re-rendering the panel on every pointer move", () => {
+    // A mouse reports hundreds of moves a second, and each one used to re-render
+    // the whole panel: frame time doubled on a desktop while a waystone rode the cursor.
+    const CELL = 43.008;
+    let commits = 0;
+    render(
+      <Profiler id="inv" onRender={() => { commits++; }}>
+        <InventoryPanel inventory={inv} onClose={() => {}} />
+      </Profiler>,
+    );
+    const grid = document.querySelector("[data-drop-grid]") as HTMLElement;
+    grid.getBoundingClientRect = () =>
+      ({ left: 1000, top: 500, width: 12 * CELL, height: 5 * CELL, right: 1000 + 12 * CELL, bottom: 500 + 5 * CELL }) as DOMRect;
+    press(screen.getByTestId("inventory-item-0"), 1000 + 10 * CELL, 500 + 4 * CELL);
+    moveTo(grid, 1000 + 10 * CELL + 1, 500 + 4 * CELL);
+    const before = commits;
+    // Ten moves that keep the piece over the same cells.
+    for (let i = 2; i < 12; i++) moveTo(grid, 1000 + 10 * CELL + i, 500 + 4 * CELL + i / 2);
+    expect(commits).toBe(before);
+    // The ghost still follows the pointer: its left edge is hung off the last x.
+    expect(screen.getByTestId("drag-ghost").style.left).toContain(`${1000 + 10 * CELL + 11}px`);
+  });
+
   it("drags an item across into the stash, resolving the cell against the stash's own grid", () => {
     // The two grids have different column counts, so the drop must be measured on
     // whichever grid the cursor is over. A shared cell size lands a cell out.
@@ -448,6 +472,25 @@ describe("spending currency on an item", () => {
     expect(screen.queryByTestId("drag-ghost")).toBeNull();
     fireEvent.pointerMove(window, { clientX: 100, clientY: 120 });
     expect(screen.getByTestId("armed-icon").getAttribute("src")).toBe("/textures/currency/wisdom.png");
+  });
+
+  it("an armed orb follows the pointer without re-rendering the panel", () => {
+    const withIcon = {
+      ...withScroll,
+      items: [{ ...withScroll.items[0]!, icon: "/textures/currency/wisdom.png" }, withScroll.items[1]!],
+    };
+    let commits = 0;
+    render(
+      <Profiler id="inv" onRender={() => { commits++; }}>
+        <InventoryPanel inventory={withIcon} onClose={() => {}} />
+      </Profiler>,
+    );
+    fireEvent.contextMenu(screen.getByTestId("inventory-item-0"));
+    fireEvent(window, new MouseEvent("pointermove", { clientX: 50, clientY: 50 }));
+    const before = commits;
+    for (let i = 1; i <= 10; i++) fireEvent(window, new MouseEvent("pointermove", { clientX: 50 + i, clientY: 50 + i }));
+    expect(commits).toBe(before);
+    expect(screen.getByTestId("armed-icon").style.left).toBe("70px");
   });
 
   it("a second right-click dismisses the armed orb and never reaches the browser menu", () => {
