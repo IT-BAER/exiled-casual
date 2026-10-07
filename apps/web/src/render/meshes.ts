@@ -1709,6 +1709,7 @@ export function warmEntityLooks(scene: Scene): () => void {
   const species = creatureSpecies(scene);
   const looks: [MeshKind, string | undefined][] = [
     ["telegraph", undefined],
+    ["groundArea", undefined],
     ["portal", undefined],
     ["gold", "gold:1:0"],
     ["gold", "gold:1:1"],

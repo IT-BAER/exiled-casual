@@ -378,10 +378,10 @@ describe("warmEntityLooks", () => {
     const release = warmEntityLooks(scene);
     const warm = scene.meshes.filter((m) => m.name.startsWith(WARM_LOOK_PREFIX));
     const roots = warm.filter((m) => !m.parent);
-    // Telegraph, portal, a heap and a jackpot heap, a monster, and every drop that has a floor model,
-    // each once as built and once squashed.
-    expect(roots.length).toBe(2 * (5 + GROUND_LOOK_BASES.length));
-    expect(roots.filter((m) => m.scaling.y !== m.scaling.x)).toHaveLength(5 + GROUND_LOOK_BASES.length);
+    // Telegraph, ground area, portal, a heap and a jackpot heap, a monster, and every drop that
+    // has a floor model, each once as built and once squashed.
+    expect(roots.length).toBe(2 * (6 + GROUND_LOOK_BASES.length));
+    expect(roots.filter((m) => m.scaling.y !== m.scaling.x)).toHaveLength(6 + GROUND_LOOK_BASES.length);
     expect(GROUND_LOOK_BASES).toContain("currency.wisdom");
     expect(warm.every((m) => m.alwaysSelectAsActiveMesh)).toBe(true);
     // Still drawn once ready: the fire pool's lights come on in the first frames after that.
