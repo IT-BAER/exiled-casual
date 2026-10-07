@@ -438,6 +438,12 @@ export class SnapshotRenderer {
     }
     const playerFacing = (standing ? this.restFacing : this.aimFacing) ?? next.player.facing;
     this.playerTurn = playerFacing ?? next.player.heading;
+    // A cast keeps the direction the sim fixed on the press. Strafing moves him
+    // under the cursor during the wind-up, so following the cursor would swing
+    // one way and hit another. `playerTurn` stays on the cursor: it is what
+    // cancels the cast when he turns away (castDir null).
+    const bodyFacing = next.player.casting && next.player.facing && this.castDir
+      ? next.player.facing : playerFacing;
     if (next.player.alive) this.syncMesh(
       next.player.id,
       "player",
@@ -450,7 +456,7 @@ export class SnapshotRenderer {
       undefined,
       next.player.heading,
       undefined,
-      playerFacing,
+      bodyFacing,
     );
 
     // Dress the character from what the sim says he is wearing. Asserted every

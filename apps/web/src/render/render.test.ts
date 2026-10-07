@@ -616,6 +616,29 @@ describe("SnapshotRenderer", () => {
     expect(Math.cos(mesh.rotation.y + Math.PI / 2)).toBeGreaterThan(0.999);
   });
 
+  it("holds the body on the cast's own direction while the cursor drifts during it", () => {
+    engine = new NullEngine();
+    vi.spyOn(engine, "getDeltaTime").mockReturnValue(1000 / 60);
+    const { scene } = createScene(engine);
+    const renderer = new SnapshotRenderer(scene);
+
+    let prev = makeSnapshot({ player: testPlayer() });
+    renderer.apply(null, prev, 1);
+    const mesh = scene.getMeshByName("entity-0")!;
+    // Strafing +x through a cast the sim aimed straight +y; the cursor sits
+    // 0.5 rad off that line, as it does once he has moved under it.
+    renderer.setAim(Math.sin(0.5) * 5, Math.cos(0.5) * 5);
+    for (let i = 1; i <= 40; i++) {
+      const next = makeSnapshot({
+        tick: i + 1,
+        player: testPlayer({ x: i * 0.02, heading: { x: 1, y: 0 }, casting: true, facing: { x: 0, y: 1 } }),
+      });
+      renderer.apply(prev, next, 1);
+      prev = next;
+    }
+    expect(Math.cos(mesh.rotation.y)).toBeGreaterThan(0.999);
+  });
+
   it("banks into a turn and stands back up on the straight", () => {
     engine = new NullEngine();
     vi.spyOn(engine, "getDeltaTime").mockReturnValue(1000 / 60);
