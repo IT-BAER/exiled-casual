@@ -93,6 +93,16 @@ const CORPSE_TICKS = Math.round(CORPSE_SECONDS * TICKS_PER_SEC);
 /** How long the sink takes, in ticks. */
 const SINK_TICKS = Math.round(SINK_SECONDS * TICKS_PER_SEC);
 
+/**
+ * How long a ground patch takes to burn out once the sim has removed it. Every
+ * patch today is fire, so it goes the way a fire on the floor does: it pulls in
+ * from its edge and dims while the embers stop rising off it.
+ */
+export const GROUND_FADE_TICKS = Math.round(0.6 * TICKS_PER_SEC);
+
+/** How far in a patch pulls before it is gone, as a share of its radius. */
+const GROUND_FADE_SHRINK = 0.2;
+
 /** Kinds that fall over when they die. Everything else just stops existing. */
 const BODIES = new Set<MeshKind>(["player", "monster", "rare", "boss"]);
 
@@ -302,6 +312,8 @@ export class SnapshotRenderer {
    *  to sink on; `restY` is the height they settled at, the sink measured down
    *  from it. */
   private readonly corpses: { mesh: Mesh; until: number; restY?: number }[] = [];
+  /** Ground patches the sim has removed, burning out from tick `from`. */
+  private readonly embers: { mesh: Mesh; from: number; width: number }[] = [];
   private static readonly GAIT_PER_UNIT = 3.2;
   /** apply() runs several times per snapshot while interpolating; once-per-tick
    *  work (like firing a cast animation) is gated on this. */
@@ -658,7 +670,11 @@ export class SnapshotRenderer {
       }
       this.corpses.length = 0;
     }
-    if (areaChanged) hitSpray(this.scene).clear();
+    if (areaChanged) {
+      hitSpray(this.scene).clear();
+      for (const patch of this.embers) patch.mesh.dispose();
+      this.embers.length = 0;
+    }
 
     // Dispose meshes for entities that no longer exist. A rig owns scene-level
     // animation groups that mesh.dispose() would leave behind.
@@ -677,6 +693,11 @@ export class SnapshotRenderer {
           && this.fell(mesh, next, prev)) {
           // Kept: it is a corpse now, and owned by `corpses` rather than by the
           // entity id, which the sim is free to hand to something else.
+        } else if (!areaChanged && this.kinds.get(id) === "groundArea") {
+          // visibility, not a material change: the disc's material is shared and
+          // compiled, and a per-mesh alpha costs no new shader variant.
+          for (const ps of this.scene.particleSystems) if (ps.emitter === mesh) ps.stop();
+          this.embers.push({ mesh, from: next.tick, width: mesh.scaling.x });
         } else {
           // Its burst fires on dispose: put it on the struck point first, not partway
           // through the last interpolated step toward it.
@@ -720,6 +741,21 @@ export class SnapshotRenderer {
         continue;
       }
       corpse.mesh.position.y = corpse.restY - sinkDepth(done / SINK_TICKS);
+    }
+
+    for (let i = this.embers.length - 1; i >= 0; i--) {
+      const patch = this.embers[i]!;
+      const t = (next.tick - patch.from) / GROUND_FADE_TICKS;
+      // Kept past its own fade until the last rising ember has run its life:
+      // the embers belong to the disc and go when it is disposed.
+      if (t >= 2) {
+        patch.mesh.dispose();
+        this.embers.splice(i, 1);
+        continue;
+      }
+      const k = Math.min(1, t);
+      patch.mesh.visibility = (1 - k) * (1 - k);
+      patch.mesh.scaling.x = patch.mesh.scaling.z = patch.width * (1 - GROUND_FADE_SHRINK * k);
     }
 
     if (strikeHits > 0) {
