@@ -19,7 +19,7 @@ import { applyBiomeTint } from "./level";
 import { LIGHT_POOL } from "./lights";
 import { HAZE_HEIGHT, HAZE_MAX_SIZE, HAZE_NAME, MOTES_NAME, moteDrift, moteDriftBasis } from "./haze";
 import { BIOMES } from "@exiled/content-runtime";
-import { blowFrom, reactionFor, SnapshotRenderer, syncActionAnimation } from "./renderer";
+import { blowFrom, cancelTurnedAction, reactionFor, SnapshotRenderer, syncActionAnimation } from "./renderer";
 import { makeMesh, updateTelegraph } from "./meshes";
 import { ARROW_NAME, MELEE_SPARKS_NAME } from "./skill-fx";
 import type { Snapshot } from "@exiled/protocol";
@@ -82,6 +82,22 @@ describe("sustained casting animation", () => {
     expect(rig.playBow).toHaveBeenCalledTimes(1);
     expect(rig.playBow).toHaveBeenCalledWith(0.5, 0.25);
     expect(rig.playCast).not.toHaveBeenCalled();
+  });
+
+  it("cancels the clip once the body turns away from the cast", () => {
+    const rig = { cancelAction: vi.fn() };
+
+    expect(cancelTurnedAction(rig, { x: 0, y: 1 }, { x: 0, y: -1 })).toBe(true);
+    expect(rig.cancelAction).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the clip through a sidestep or a backpedal shot", () => {
+    const rig = { cancelAction: vi.fn() };
+
+    expect(cancelTurnedAction(rig, { x: 0, y: 1 }, { x: 1, y: 0 })).toBe(false);
+    expect(cancelTurnedAction(rig, { x: 0, y: 1 }, { x: 0, y: 1 })).toBe(false);
+    expect(cancelTurnedAction(rig, null, { x: 0, y: -1 })).toBe(false);
+    expect(rig.cancelAction).not.toHaveBeenCalled();
   });
 });
 

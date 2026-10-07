@@ -1428,6 +1428,14 @@ export class RigActor {
     for (const clip of REACTION_CLIPS) this.groups.get(clip)?.stop();
   }
 
+  /** Let go of a cast, bow or strike mid-clip; the end observer eases back to locomotion. */
+  cancelAction(): void {
+    for (const clip of ACTION_CLIPS) {
+      const group = this.groups.get(clip);
+      if (group?.isPlaying) group.stop();
+    }
+  }
+
   /** Cancel a strike when the actor is removed or otherwise reset. */
   stopStrike(): void {
     for (const strike of STRIKE_CLIPS) this.groups.get(strike)?.stop();

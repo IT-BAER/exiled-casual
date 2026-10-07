@@ -130,6 +130,26 @@ export function syncActionAnimation(
   }
 }
 
+/** Turn off the cast direction past which the action clip lets go (120 degrees). */
+const CANCEL_TURN_DOT = -0.5;
+
+/**
+ * Drop the action clip when the body turns away from where the cast was aimed.
+ * The sim still resolves at the cast-start target; only the arm stops lying about it.
+ * A sidestep or a backpedal shot keeps the body on the target and never cancels.
+ */
+export function cancelTurnedAction(
+  rig: { cancelAction(): void } | null,
+  cast: { x: number; y: number } | null,
+  turnTo: { x: number; y: number } | undefined,
+): boolean {
+  if (!rig || !cast || !turnTo) return false;
+  const len = Math.hypot(cast.x, cast.y) * Math.hypot(turnTo.x, turnTo.y);
+  if (len < 1e-9 || (cast.x * turnTo.x + cast.y * turnTo.y) / len >= CANCEL_TURN_DOT) return false;
+  rig.cancelAction();
+  return true;
+}
+
 /** Share of the whole pool (life plus energy shield) one tick must take to stagger. */
 const HEAVY_HIT = 0.1;
 
@@ -268,6 +288,10 @@ export class SnapshotRenderer {
   private aimFacing: { x: number; y: number } | null = null;
   /** Where a standing body faces while the head alone follows the cursor. */
   private restFacing: { x: number; y: number } | null = null;
+  /** Where the action clip playing now was aimed, latched on its cast's rising edge. */
+  private castDir: { x: number; y: number } | null = null;
+  /** What the player's body turns to this frame (`syncMesh`'s facing, else heading). */
+  private playerTurn: { x: number; y: number } | undefined;
   /** Newborn bolts offset to the casting hand: where each was launched and how
    *  far it has to go, which is the rate the offset is spent at. */
   private readonly fromHand = new Map<number, { offset: Vector3; from: { x: number; y: number }; range: number; join: number }>();
@@ -399,6 +423,8 @@ export class SnapshotRenderer {
       || this.aimFacing.x * rest.x + this.aimFacing.y * rest.y < Math.cos(STAND_TURN_AT))) {
       this.restFacing = this.aimFacing;
     }
+    const playerFacing = (standing ? this.restFacing : this.aimFacing) ?? next.player.facing;
+    this.playerTurn = playerFacing ?? next.player.heading;
     if (next.player.alive) this.syncMesh(
       next.player.id,
       "player",
@@ -411,7 +437,7 @@ export class SnapshotRenderer {
       undefined,
       next.player.heading,
       undefined,
-      (standing ? this.restFacing : this.aimFacing) ?? next.player.facing,
+      playerFacing,
     );
 
     // Dress the character from what the sim says he is wearing. Asserted every
@@ -716,9 +742,12 @@ export class SnapshotRenderer {
       // The sim owns the whole recovery window. Start the looping upper-body
       // clip on its rising edge and stop it on the falling edge, so holding a
       // skill cannot leave the arm frozen while the cast is still active.
+      const playerMesh = this.meshes.get(next.player.id);
+      const rig = playerMesh ? rigOf(playerMesh) : null;
       if (!prev || next.player.casting !== prev.player.casting || next.player.castingAction !== prev.player.castingAction) {
-        const playerMesh = this.meshes.get(next.player.id);
-        const rig = playerMesh ? rigOf(playerMesh) : null;
+        if (next.player.casting) {
+          this.castDir = next.player.facing ?? next.player.heading ?? this.aimFacing;
+        }
         syncActionAnimation(
           rig,
           prev?.player.casting ?? false,
@@ -729,6 +758,7 @@ export class SnapshotRenderer {
           next.player.castWindupTicks === undefined ? undefined : next.player.castWindupTicks / TICKS_PER_SEC,
         );
       }
+      if (cancelTurnedAction(rig, this.castDir, this.playerTurn)) this.castDir = null;
       const reaction = prev ? reactionFor(prev, next) : null;
       if (reaction) {
         const playerMesh = this.meshes.get(next.player.id);
