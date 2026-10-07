@@ -225,6 +225,13 @@ const LEG_YAW_SIGN = -1;
 const LEG_EASE_SEC = 0.25;
 /** Radians the spine stands up from the jog's forward lean at a full sidestep. */
 const STRAFE_UPRIGHT = 0.28;
+/**
+ * Radians the spine comes forward under an action clip at a full jogged
+ * backpedal. That clip tilts the pelvis back (`BACK_LEAN` in
+ * tools/build_direction_clips.py) and an upper-body clip does not key the
+ * pelvis, so without this a shot or swing is thrown leaning backwards.
+ */
+const BACKPEDAL_FORWARD = 0.12;
 /** Pitch about the body's right axis against "chest back", after the glTF handedness flip. */
 const UPRIGHT_SIGN = 1;
 /** Time constant the move's yaw off the chest eases over, so the direction blend sweeps. */
@@ -397,6 +404,18 @@ const LOOK_EASE_SEC = 0.1;
 const CHEST_AIM = 0.3;
 
 /** How far the head turns off the body's facing to look along `lookYaw`, in bone yaw, clamped. */
+/**
+ * Pitch the spine takes on top of the clips, about the body's right axis
+ * (positive stands it up). `actionFree` is 1 with no upper-body clip playing
+ * and 0 under one; `moveRel` is the move's yaw off the facing.
+ */
+export function spinePitch(gait: Gait | null, moveRel: number, actionFree: number): number {
+  if (gait !== "run") return 0;
+  const sideways = actionFree * STRAFE_UPRIGHT * Math.abs(Math.sin(moveRel));
+  const backpedal = (1 - actionFree) * BACKPEDAL_FORWARD * Math.max(0, -Math.cos(moveRel));
+  return sideways - backpedal;
+}
+
 export function lookOffset(lookYaw: number, bodyYaw: number): number {
   return Math.max(-LOOK_MAX, Math.min(LOOK_MAX, wrapPi(-(lookYaw - bodyYaw))));
 }
@@ -1133,7 +1152,7 @@ export class RigActor {
   private moveRel = 0;
   private legsTarget = 0;
   private legs = 0;
-  /** Share of STRAFE_UPRIGHT applied, eased to 0 while a layered clip owns the spine. */
+  /** 1 with no layered clip playing, eased to 0 while one owns the spine (see `spinePitch`). */
   private uprightGain = 1;
   /** The direction clip blended over the playing one, and its weight (`directionBlend`). */
   private blendTo: AnimationGroup | null = null;
@@ -1689,19 +1708,23 @@ export class RigActor {
       this.blendDirection();
       const layered = [...UPPER_BODY_CLIPS].some((c) => this.groups.get(c)?.isPlaying);
       this.uprightGain += ((layered ? 0 : 1) - this.uprightGain) * Math.min(1, dt / ACTION_BLEND_SEC);
-      if (Math.abs(this.legs) < 1e-4 || !(pelvisNode instanceof TransformNode)) return;
+      // The jog leans its chest into the run; carried sideways, that lean points
+      // at nothing, so the spine stands up by how sideways the move is. A layered
+      // clip (bow, cast, strike) holds the spine itself, but not the pelvis a
+      // backpedal tilts back, so under one the spine comes forward instead.
+      const pitch = spinePitch(gaitOf(this.locomotion), this.moveRel, this.uprightGain);
+      const twist = Math.abs(this.legs) >= 1e-4;
+      if ((!twist && Math.abs(pitch) <= 1e-3) || !(pelvisNode instanceof TransformNode)) return;
       twisted.forEach((n, i) => { if (n.rotationQuaternion) untwisted[i]?.copyFrom(n.rotationQuaternion); });
       turned = true;
-      yawInParent(pelvisNode, LEG_YAW_SIGN * this.legs);
-      for (const bone of waist) yawInParent(bone, -LEG_YAW_SIGN * this.legs / waist.length);
-      // The jog leans its chest into the run; carried sideways, that lean points
-      // at nothing. Stand the spine up by how sideways the move is. A layered clip
-      // (bow, cast, strike) already holds the spine upright, so the pitch fades out under it.
-      const upright = gaitOf(this.locomotion) === "run" ? this.uprightGain * STRAFE_UPRIGHT * Math.abs(Math.sin(this.moveRel)) : 0;
-      if (upright > 1e-3 && waist[0]) {
+      if (twist) {
+        yawInParent(pelvisNode, LEG_YAW_SIGN * this.legs);
+        for (const bone of waist) yawInParent(bone, -LEG_YAW_SIGN * this.legs / waist.length);
+      }
+      if (Math.abs(pitch) > 1e-3 && waist[0]) {
         const yaw = this.host.rotation.y;
         bodyRight.set(Math.cos(yaw), 0, -Math.sin(yaw));
-        turnInParent(waist[0], bodyRight, UPRIGHT_SIGN * upright);
+        turnInParent(waist[0], bodyRight, UPRIGHT_SIGN * pitch);
       }
     });
 

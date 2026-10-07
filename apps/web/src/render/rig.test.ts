@@ -57,6 +57,7 @@ import {
   type StrikeClip,
   strikePace,
   strikeRatioAt,
+  spinePitch,
 } from "./rig";
 
 let engine: InstanceType<typeof NullEngine>;
@@ -277,6 +278,25 @@ describe("actionRatio", () => {
   it("falls back to the authored rate when the window is unknown", () => {
     expect(actionRatio(1, undefined)).toBe(1);
     expect(actionRatio(0, 0.5)).toBe(1);
+  });
+});
+
+describe("spinePitch", () => {
+  const behind = Math.PI;
+  it("stands the jog up on a sidestep, and not under an action clip", () => {
+    expect(spinePitch("run", Math.PI / 2, 1)).toBeGreaterThan(0.2);
+    expect(spinePitch("run", Math.PI / 2, 0)).toBeCloseTo(0);
+  });
+  it("leaves a plain backpedal its own back lean", () => {
+    expect(spinePitch("run", behind, 1)).toBeCloseTo(0);
+  });
+  it("brings an attack over a backpedal forward, opposite the sidestep's turn", () => {
+    expect(spinePitch("run", behind, 0)).toBeLessThan(-0.05);
+    expect(spinePitch("run", behind, 0.5)).toBeCloseTo(spinePitch("run", behind, 0) / 2);
+  });
+  it("does nothing running ahead or walking", () => {
+    expect(spinePitch("run", 0, 0)).toBeCloseTo(0);
+    expect(spinePitch("walk", behind, 0)).toBeCloseTo(0);
   });
 });
 
