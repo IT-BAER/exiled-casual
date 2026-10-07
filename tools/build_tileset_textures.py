@@ -91,6 +91,11 @@ WALL_MIN_LUMA = 120.0
 # fighting the art.
 FLOOR_GRADE = {"coast": (1.24, 1.02, 0.74)}
 
+# Same job for a wall scan whose hue fights its floor. The desert's sandstone
+# comes off the scan a saturated orange (205/113/47) against a tan floor; pulled
+# most of the way to the floor's hue it reads as the same ground standing up.
+WALL_GRADE = {"desert": (0.85, 1.1, 1.45)}
+
 # The Coast scan is TRAMPLED: footprint pits and scuffed brown patches that at
 # game distance read as dirt strewn over the beach, where the reference's sand
 # is smooth wave ripple. Compressing luma below the median toward it fades the
@@ -232,7 +237,7 @@ def build(biome: str) -> bool:
     dst = OUT / biome
     dst.mkdir(parents=True, exist_ok=True)
 
-    wall = plate(MASTERS / biome / "wall_master_v1.png", (SHIP_W, SHIP_H), WALL_MIN_LUMA)
+    wall = plate(MASTERS / biome / "wall_master_v1.png", (SHIP_W, SHIP_H), WALL_MIN_LUMA, WALL_GRADE.get(biome))
     if wall is None:
         return False
     wall_img, wall_note = wall

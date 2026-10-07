@@ -37,6 +37,8 @@ export const HIDE_PER_UNIT = Math.tan(BETA_LIMIT.max);
 /** Height of one rock ledge, and how far toward a flat shelf each ledge is pulled. */
 const STRATUM = 0.55;
 const STRATA = 0.65;
+/** Cycles per world unit of the noise that swaps between the plate's two reads: ~6 units a patch. */
+const VARY_FREQ = 0.17;
 /** World units per texture repeat; must match TILE in level.ts. */
 const TILE = 2;
 
@@ -326,9 +328,30 @@ class CliffPlugin extends MaterialPluginBase {
           if (cliffFade > cliffNoise) discard;
         }
       `,
-      // The floor plate up the scree, broken by the rock's own grain so the line
-      // wanders; the normal leans to the floor's so the light agrees too.
+      // A second read of the plate, turned and rescaled, faded in and out by
+      // world-space noise a few tiles wide: one plate along a whole cliff line
+      // repeats every 2 units otherwise. Then the floor plate up the scree,
+      // broken by the rock's own grain so the line wanders; the normal leans to
+      // the floor's so the light agrees too.
       CUSTOM_FRAGMENT_UPDATE_ALPHA: `
+        #ifdef ALBEDO
+        {
+          vec2 cliffCell = vPositionW.xz * ${f3(VARY_FREQ)};
+          vec2 cliffI = floor(cliffCell), cliffF = fract(cliffCell);
+          vec2 cliffS = cliffF * cliffF * (3.0 - 2.0 * cliffF);
+          #define CLIFF_HASH(p) fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453)
+          float cliffN = mix(mix(CLIFF_HASH(cliffI), CLIFF_HASH(cliffI + vec2(1.0, 0.0)), cliffS.x),
+                             mix(CLIFF_HASH(cliffI + vec2(0.0, 1.0)), CLIFF_HASH(cliffI + vec2(1.0, 1.0)), cliffS.x), cliffS.y);
+          float cliffW = smoothstep(0.3, 0.7, cliffN);
+          vec2 cliffUV2 = mat2(0.4536, -0.8912, 0.8912, 0.4536) * vAlbedoUV * 0.73 + vec2(0.37, 0.61);
+          vec3 cliffAlt = texture2D(albedoSampler, cliffUV2).rgb;
+          #ifdef GAMMAALBEDO
+            cliffAlt = toLinearSpace(cliffAlt);
+          #endif
+          cliffAlt *= vAlbedoInfos.y * vAlbedoColor.rgb;
+          surfaceAlbedo = mix(surfaceAlbedo, cliffAlt, cliffW);
+        }
+        #endif
         #ifdef CLIFF_FLOOR
         {
           float cliffGrain = dot(surfaceAlbedo, vec3(0.333)) / max(dot(vAlbedoColor.rgb, vec3(0.333)), 1e-3);
