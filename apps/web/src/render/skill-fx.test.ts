@@ -6,6 +6,7 @@ import { SKILLS } from "@exiled/content-runtime";
 import { makeMesh, warmEntityLooks, warmProjectiles, WARM_LOOK_PREFIX } from "./meshes";
 import { GROUND_LOOK_BASES } from "./ground-looks";
 import { createScene } from "./engine";
+import { SPRAY_NAME } from "./hit-spray";
 import {
   blinkBurst,
   BLINK_NAME,
@@ -18,7 +19,6 @@ import {
   emberBurst,
   CINDER_NAME,
   FLASH_NAME,
-  RING_NAME,
   warmSkillFx,
   FX_KEEPALIVE_NAME,
   fxProfile,
@@ -158,11 +158,8 @@ describe("ember bolt", () => {
     // bolt that has landed leaves nothing behind but its burst.
     expect(systems(scene, BOLT_TRAIL_NAME)).toHaveLength(0);
 
-    // Sparks alone read as a small hit. The ring says how big it was and the
-    // light is what puts it on the floor.
-    const ring = scene.getMeshByName(RING_NAME);
-    expect(ring).not.toBeNull();
-    expect(ring!.position.y).toBeLessThan(0.2); // on the floor, not at bolt height
+    // No floor ring: how big a hit was is the struck body's spray, not a decal.
+    expect(scene.getMeshByName("fx-shockwave")).toBeNull();
     const light = scene.getLightByName(FLASH_NAME) as PointLight | null;
     expect(light).not.toBeNull();
     expect(light!.intensity).toBeGreaterThan(0);
@@ -243,13 +240,23 @@ describe("ember bolt", () => {
 });
 
 describe("melee", () => {
-  it("a landed blow throws sparks and dust, rings the floor and lights it", () => {
+  it("a landed blow throws sparks and dust and lights the floor, with no ring", () => {
     const scene = newScene();
     meleeImpact(scene, new Vector3(1, 0.8, 0), 1, 0);
     expect(systems(scene, MELEE_SPARKS_NAME)).toHaveLength(1);
     expect(systems(scene, MELEE_DUST_NAME)).toHaveLength(1);
-    expect(scene.getMeshByName(RING_NAME)).not.toBeNull();
+    expect(scene.getMeshByName("fx-shockwave")).toBeNull();
     expect((scene.getLightByName(FLASH_NAME) as PointLight).intensity).toBeGreaterThan(0);
+  });
+
+  it("lights a chip dimmer than a heavy blow", () => {
+    const scene = newScene();
+    meleeImpact(scene, new Vector3(1, 0.8, 0), 1, 0, 0.35);
+    const light = scene.getLightByName(FLASH_NAME) as PointLight;
+    const chip = light.intensity;
+    light.intensity = 0;
+    meleeImpact(scene, new Vector3(1, 0.8, 0), 1, 0, 1);
+    expect(chip).toBeLessThan(light.intensity * 0.5);
   });
 
   it("a swing ribbon follows its node and leaves nothing behind when cut", () => {
@@ -310,7 +317,6 @@ describe("arrows", () => {
     spent.metadata = { struck: true };
     spent.dispose();
     expect(systems(scene, MELEE_SPARKS_NAME)).toHaveLength(1);
-    expect(scene.getMeshByName(RING_NAME)).not.toBeNull();
   });
 });
 
@@ -325,10 +331,11 @@ describe("warmSkillFx", () => {
     expect(light).not.toBeNull();
     expect(light!.intensity).toBe(0);
 
-    // The burst and ring are live, so the particle and glow shaders compile
-    // behind the loading plate instead of on the first cast.
+    // The burst and the spray hosts are live, so their shaders compile behind
+    // the loading plate instead of on the first hit.
     expect(systems(scene, BOLT_BURST_NAME)).toHaveLength(1);
-    expect(scene.getMeshByName(RING_NAME)).not.toBeNull();
+    expect(scene.getMeshByName(`${SPRAY_NAME}-blood`)).not.toBeNull();
+    expect(scene.getMeshByName(`${SPRAY_NAME}-grit`)).not.toBeNull();
   });
 
   it("keeps a fire and a wisp system alive, so a burst never frees the shared shader and sheet", () => {
@@ -525,6 +532,12 @@ describe("fx profiles", () => {
     expect(spark.sizeStart).toBeLessThan(bolt.sizeStart);
     expect(spark.emitRate).toBeLessThan(bolt.emitRate);
     expect(spark.trailWidth).toBeLessThan(bolt.trailWidth);
-    expect(spark.burstRadius).toBeLessThan(bolt.burstRadius);
+  });
+
+  it("lights a starter's impact softer than the real cast's", () => {
+    const bolt = SKILL_FX["skill.ember_bolt.v1"]!;
+    const spark = SKILL_FX["skill.ember_spark.v1"]!;
+    expect(spark.flash).toBeLessThan(bolt.flash);
+    for (const fx of Object.values(SKILL_FX)) expect(fx.flash).toBeLessThanOrEqual(1);
   });
 });

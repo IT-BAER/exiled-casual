@@ -15,6 +15,7 @@ import {
 } from "@babylonjs/core";
 import { Mesh } from "@babylonjs/core";
 import type { AbstractMesh, Scene } from "@babylonjs/core";
+import { hitSpray } from "./hit-spray";
 
 /**
  * Fire FX for the three starter skills. Kept out of `meshes.ts` because almost
@@ -22,8 +23,8 @@ import type { AbstractMesh, Scene } from "@babylonjs/core";
  *
  * Look source: reference-screenshots/inside-map-battle.webp (PoE2). What makes
  * that frame read as expensive is that no effect is ONE thing — a hit is a
- * flipbook flame, a shockwave ring, a light on the floor and a spray of sparks
- * arriving together. A single soft dot sprite, however well tuned, reads as a
+ * flipbook flame, a light on the floor and a spray of sparks arriving together;
+ * how big it was is the struck body's own spray (`hit-spray.ts`). A single soft dot sprite, however well tuned, reads as a
  * placeholder. Everything here is additive, so intensity is the only knob and
  * one loud moment beats six quiet ones (docs/09-reward-psychology.md).
  */
@@ -119,7 +120,7 @@ function burst(ps: ParticleSystem, count: number, maxLife: number): ParticleSyst
   return ps;
 }
 
-/** Additive, unlit material for the one-shot geometry (ring, streak). */
+/** Additive, unlit material for the one-shot geometry (streaks, ribbons). */
 function glowMaterial(scene: Scene, name: string, color: Color3): StandardMaterial {
   const m = new StandardMaterial(name, scene);
   m.emissiveColor = color;
@@ -134,7 +135,7 @@ function glowMaterial(scene: Scene, name: string, color: Color3): StandardMateri
 /**
  * Fade a mesh out over `seconds` while thinning it, WITHOUT moving either end.
  *
- * `playOnce` below scales uniformly, which is right for a ring and wrong for
+ * A uniform scale is right for a ring and wrong for
  * anything pinned between two points: a streak scaled to 0.15 pulls both of its
  * ends in toward its own centre, so the smear that was supposed to join where he
  * left to where he arrived visibly lets go of both while you watch. Here only the
@@ -155,29 +156,6 @@ function thinOut(
     const k = Math.min(1, t / seconds);
     const r = from + (to - from) * k;
     mesh.scaling.set(r, 1, r);
-    mat.alpha = alpha * (1 - k) * (1 - k);
-    if (k >= 1) {
-      scene.onBeforeRenderObservable.remove(tick);
-      mesh.dispose();
-      mat.dispose();
-    }
-  });
-}
-
-/**
- * Drive a one-shot mesh: grow it and fade it out over `seconds`, then dispose
- * it and its material. Driven off the engine's delta time rather than a frame
- * count, so it lasts the same 0.25s at 60Hz and at 165Hz.
- */
-function playOnce(scene: Scene, mesh: Mesh, seconds: number, from: number, to: number, alpha: number): void {
-  const mat = mesh.material as StandardMaterial;
-  let t = 0;
-  const tick = scene.onBeforeRenderObservable.add(() => {
-    t += scene.getEngine().getDeltaTime() / 1000;
-    const k = Math.min(1, t / seconds);
-    mesh.scaling.setAll(from + (to - from) * k);
-    // Squared, so the ring is bright for the first third of its life and then
-    // gets out of the way instead of dimming evenly across the whole thing.
     mat.alpha = alpha * (1 - k) * (1 - k);
     if (k >= 1) {
       scene.onBeforeRenderObservable.remove(tick);
@@ -208,7 +186,7 @@ const FLASH_DECAY = 4.5; // per second, multiplicative
  * one instance means two hits in the same tick share a flash, which is a far
  * cheaper lie than the torch blinking out.
  */
-function flash(scene: Scene, at: Vector3): void {
+function flash(scene: Scene, at: Vector3, level = 1): void {
   let light = scene.getLightByName(FLASH_NAME) as PointLight | null;
   if (!light) {
     light = new PointLight(FLASH_NAME, at.clone(), scene);
@@ -226,20 +204,11 @@ function flash(scene: Scene, at: Vector3): void {
       l.intensity *= Math.max(0, 1 - (FLASH_DECAY * scene.getEngine().getDeltaTime()) / 1000);
     });
   }
+  // Never dimmed by a smaller hit in the same moment: the bigger one owns the light.
+  const want = FLASH_INTENSITY * Math.min(1, Math.max(0, level));
+  if (want < light.intensity) return;
   light.position.set(at.x, FLASH_Y, at.z);
-  light.intensity = FLASH_INTENSITY;
-}
-
-export const RING_NAME = "fx-shockwave";
-
-/** Expanding ring on the floor. The one part of an impact that says how big the
- *  hit was, and the reason a burst of sparks alone always reads as small. */
-function shockwave(scene: Scene, at: Vector3, to: number, color: Color3): void {
-  const ring = MeshBuilder.CreateTorus(RING_NAME, { diameter: 1, thickness: 0.13, tessellation: 40 }, scene);
-  ring.position.set(at.x, 0.09, at.z); // on the floor, not at the hit height
-  ring.material = glowMaterial(scene, `${RING_NAME}-mat`, color);
-  ring.isPickable = false;
-  playOnce(scene, ring, 0.32, 0.35, to, 0.9);
+  light.intensity = want;
 }
 
 /**
@@ -255,8 +224,8 @@ export interface FxProfile {
   sizeEnd: number;
   lifeMin: number;
   lifeMax: number;
-  burstColour: Color3;
-  burstRadius: number;
+  /** Impact light, 0..1 of FLASH_INTENSITY: a starter's chip must not light the room. */
+  flash: number;
   flightCue: string | null;
   impactCue: string | null;
   /** Played when a player projectile appears: the loose, for a bow. */
@@ -275,8 +244,7 @@ export const FALLBACK_FX: FxProfile = {
   sizeEnd: 0.1,
   lifeMin: 0.05,
   lifeMax: 0.1,
-  burstColour: new Color3(1, 0.55, 0.18),
-  burstRadius: 2.2,
+  flash: 0.5,
   flightCue: "skill-ember-bolt-flight",
   impactCue: "skill-ember-bolt-impact",
 };
@@ -295,8 +263,7 @@ const DRAWN_ARROW_FX: FxProfile = {
   sizeEnd: 0.05,
   lifeMin: 0.04,
   lifeMax: 0.08,
-  burstColour: new Color3(0.85, 0.82, 0.72),
-  burstRadius: 1.3,
+  flash: 0.4,
   flightCue: null,
 };
 
@@ -310,8 +277,7 @@ export const SKILL_FX: Record<string, FxProfile> = {
     emitRate: 110,
     sizeStart: 0.6,
     sizeEnd: 0.12,
-    burstColour: new Color3(1, 0.5, 0.14),
-    burstRadius: 2.6,
+    flash: 0.6,
   },
   // The free fallback, and it must read as one: a small pale mote, thin and dry.
   "skill.ember_spark.v1": {
@@ -324,8 +290,7 @@ export const SKILL_FX: Record<string, FxProfile> = {
     sizeEnd: 0.06,
     lifeMin: 0.03,
     lifeMax: 0.07,
-    burstColour: new Color3(1, 0.75, 0.3),
-    burstRadius: 1.2,
+    flash: 0.3,
   },
   // Not fire at all: an arrow, so the wake is dust off the shaft, not flame.
   "skill.snap_shot.v1": {
@@ -341,8 +306,7 @@ export const SKILL_FX: Record<string, FxProfile> = {
     sizeEnd: 0.05,
     lifeMin: 0.03,
     lifeMax: 0.06,
-    burstColour: new Color3(0.8, 0.78, 0.7),
-    burstRadius: 0.9,
+    flash: 0.3,
     flightCue: null,
   },
   "skill.piercing_shot.v1": DRAWN_ARROW_FX,
@@ -354,8 +318,7 @@ export const SKILL_FX: Record<string, FxProfile> = {
     ...FALLBACK_FX,
     core: new Color3(1, 0.42, 0.1),
     wake: new Color3(0.7, 0.2, 0.05),
-    burstColour: new Color3(1, 0.42, 0.1),
-    burstRadius: 3.2,
+    flash: 0.8,
   },
   "skill.blink.v1": FALLBACK_FX,
   "skill.town_portal.v1": FALLBACK_FX,
@@ -523,7 +486,7 @@ export function attachArrowStreak(scene: Scene, mesh: Mesh, fx: FxProfile): Mesh
   mesh.onDisposeObservable.addOnce(() => {
     if ((mesh.metadata as { struck?: boolean } | null)?.struck) {
       const yaw = mesh.rotation.y;
-      meleeImpact(scene, mesh.getAbsolutePosition().clone(), Math.sin(yaw), Math.cos(yaw), fx.burstRadius, fx.burstColour);
+      meleeImpact(scene, mesh.getAbsolutePosition().clone(), Math.sin(yaw), Math.cos(yaw), fx.flash);
     }
   });
   return streak;
@@ -541,11 +504,9 @@ export function setStreakLength(arrow: Mesh, flown: number): void {
 
 export const BOLT_BURST_NAME = "fx-bolt-burst";
 
-/** Impact: flame thrown outward, a ring across the floor and a real flash of
- *  light on it, all on the same frame. */
+/** Impact: flame thrown outward and a flash of light on the floor, on the same frame. */
 export function emberBurst(scene: Scene, at: Vector3, fx: FxProfile = FALLBACK_FX): ParticleSystem {
-  shockwave(scene, at, fx.burstRadius, fx.burstColour);
-  flash(scene, at);
+  flash(scene, at, fx.flash);
 
   const ps = fireSystem(scene, BOLT_BURST_NAME, 40);
   ps.emitter = at;
@@ -563,19 +524,13 @@ export function emberBurst(scene: Scene, at: Vector3, fx: FxProfile = FALLBACK_F
 
 export const MELEE_SPARKS_NAME = "fx-melee-sparks";
 export const MELEE_DUST_NAME = "fx-melee-dust";
-/** Steel on hide, not fire: a pale warm ring, tighter than a bolt's. */
-const MELEE_RING = new Color3(1, 0.86, 0.62);
-const MELEE_RING_RADIUS = 1.5;
 
 /**
  * A weapon landing on a body: sparks thrown off the contact AWAY from the
- * swinger, dust kicked off the floor under it, a tight ring and the shared flash.
+ * swinger, dust kicked off the floor under it and the shared flash at `flashLevel`.
  */
-export function meleeImpact(
-  scene: Scene, at: Vector3, awayX: number, awayZ: number, ringRadius = MELEE_RING_RADIUS, ringColour = MELEE_RING,
-): void {
-  shockwave(scene, at, ringRadius, ringColour);
-  flash(scene, at);
+export function meleeImpact(scene: Scene, at: Vector3, awayX: number, awayZ: number, flashLevel = 1): void {
+  flash(scene, at, flashLevel);
 
   const len = Math.hypot(awayX, awayZ) || 1;
   const ax = awayX / len;
@@ -821,7 +776,7 @@ export const BLINK_ALPHA = 0.48;
  * Fire the whole impact vocabulary once, dark, behind the loading plate.
  *
  * The first REAL hit used to pay three one-off compiles on the main thread —
- * the particle shader (fire sheet + fog variant), the ring's glow material, and
+ * the particle shader (fire sheet + fog variant), the spray's droplet materials, and
  * worst the FLASH light's arrival, which recompiles every material in the scene
  * for a fourth light — and that is the stutter on the first Ember Bolt of a
  * fresh map. Every burst here self-disposes, and the flash is zeroed AFTER
@@ -837,6 +792,7 @@ export function warmSkillFx(scene: Scene): void {
   }
   emberBurst(scene, Vector3.Zero());
   meleeImpact(scene, Vector3.Zero(), 1, 0);
+  hitSpray(scene);
   // The first swing's ribbon compiled its glow and shadow-map variants mid-fight,
   // squashed and not (see warmEntityLooks).
   for (const squash of [1, 0.98]) {
@@ -880,11 +836,8 @@ export function blinkBurst(scene: Scene, from: Vector3, to: Vector3): void {
     // Thins in place rather than shrinking: a uniform scale drags both ends to the
     // middle, and the streak's whole job is to still be touching them.
     //
-    // BLINK_ALPHA and not the 0.85 this used to hand playOnce. The note beside the
-    // old `mat.alpha = 0.3` was right about the wash and never took effect, because
-    // playOnce overwrites the material's alpha on its first frame: what actually
-    // shipped was a near-opaque additive bar five units long, and at peak it
-    // clipped to white and lost the violet that says which skill it was.
+    // BLINK_ALPHA, low: a near-opaque additive bar five units long clips to white
+    // at peak and loses the violet that says which skill it was.
     thinOut(scene, streak, 0.35, BLINK_ALPHA, 1, 0.25);
   }
   // No impact flash. A teleport lands nothing, and the shared 900-intensity

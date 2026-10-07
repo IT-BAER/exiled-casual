@@ -23,6 +23,7 @@ import {
 } from "@babylonjs/core";
 import { DEFAULT_SETTINGS, type GraphicsSettings } from "../settings";
 import { isScatterDressing } from "./rocks";
+import { SPRAY_NAME } from "./hit-spray";
 import { SEA_MESH_NAME } from "./sea";
 import { createHaze, createMotes } from "./haze";
 import { FLAME_MESH } from "./flames";
@@ -833,7 +834,9 @@ export function createScene(engine: Engine): SceneHandle {
         // Dressing scatter never casts — see isScatterDressing. The range cull
         // above cannot save it: a thin-instance host's bounding sphere spans
         // every instance, so it is always "in reach".
-        || isScatterDressing(mesh.name));
+        || isScatterDressing(mesh.name)
+        // Thin-instance droplets: one host spans the whole floor, a few cm tall.
+        || mesh.name.startsWith(SPRAY_NAME));
     };
     // Nothing is registered as a caster any more, because the sun renders no
     // shadow map to put one in. What used to run here was an observer on EVERY

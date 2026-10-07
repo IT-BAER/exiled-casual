@@ -15,6 +15,7 @@ import { CAMERA_ALPHA } from "./engine";
 import { lerp, springAngle } from "./interp";
 import { FLINCH_TICKS, flinchPose, flinchStrength, kick, leanToTilt } from "./hit-reaction";
 import type { Flinch } from "./hit-reaction";
+import { flashPeak, hitSpray, hitStrength, sprayKindOf } from "./hit-spray";
 
 /** Sim rate. Consecutive snapshots are one tick apart, which is what turns a
  *  position delta into a ground speed for the animation state machine. */
@@ -276,8 +277,8 @@ export class SnapshotRenderer {
   private readonly tilt = new Map<number, [number, number]>();
   /** Yaw rate (rad/s) per entity, the spring's state between frames. */
   private readonly yawVel = new Map<number, number>();
-  /** The tick each entity was last struck on. Absent means it is not lit. */
-  private readonly hit = new Map<number, number>();
+  /** The tick each entity was last struck on and how bright, by the hit's share. Absent means it is not lit. */
+  private readonly hit = new Map<number, { tick: number; peak: number }>();
   /** The flinch each struck monster is in, and the root scale it squashes from. */
   private readonly flinch = new Map<number, { f: Flinch; base: number }>();
   /** Render time in ticks (snapshot tick plus interpolation), the flinch's clock. */
@@ -572,14 +573,17 @@ export class SnapshotRenderer {
       // Struck: life is the only report of a hit the client gets, and it is the
       // honest one — a swing that missed or was absorbed never moves it.
       if (newTick && e.life !== undefined && prevE?.life !== undefined && e.life < prevE.life) {
-        this.hit.set(e.id, next.tick);
+        const share = (prevE.life - Math.max(0, e.life)) / (e.maxLife ?? prevE.life);
+        const strength = hitStrength(share, e.life <= 0);
+        this.hit.set(e.id, { tick: next.tick, peak: flashPeak(strength) });
         const meleeHit = strikeHits > 0 && e.kind === "monster"
           && Math.hypot(e.x - next.player.x, e.y - next.player.y) <= MELEE_FX_REACH;
-        if (meleeHit) swingShare = Math.max(swingShare, (prevE.life - Math.max(0, e.life)) / (e.maxLife ?? prevE.life));
+        if (meleeHit) swingShare = Math.max(swingShare, share);
         if (meleeHit && meleeBursts < MAX_MELEE_BURSTS) {
           meleeBursts++;
-          meleeImpact(this.scene, new Vector3(e.x, Y_LIFT.projectile, e.y), e.x - next.player.x, e.y - next.player.y);
+          meleeImpact(this.scene, new Vector3(e.x, Y_LIFT.projectile, e.y), e.x - next.player.x, e.y - next.player.y, flashPeak(strength));
         }
+        if (e.kind === "monster") this.spray(e, strength, prev, next);
         if (e.kind === "monster" && e.life > 0) {
           const from = blowFrom(e.x, e.y, prev, next);
           const was = this.flinch.get(e.id);
@@ -654,6 +658,7 @@ export class SnapshotRenderer {
       }
       this.corpses.length = 0;
     }
+    if (areaChanged) hitSpray(this.scene).clear();
 
     // Dispose meshes for entities that no longer exist. A rig owns scene-level
     // animation groups that mesh.dispose() would leave behind.
@@ -662,6 +667,7 @@ export class SnapshotRenderer {
         // A body dies at its own size: a squash caught mid-flinch would freeze into the corpse.
         const struck = this.flinch.get(id);
         if (struck) mesh.scaling.setAll(struck.base);
+        if (!areaChanged) this.sprayKill(id, prev, next);
         // A closing portal outlives the entity that was it: nothing else holds a
         // reference any more, so the collapse disposes it when it finishes.
         if (!areaChanged && isPortalMesh(mesh)) {
@@ -726,7 +732,7 @@ export class SnapshotRenderer {
     // Faded on the sim's clock, like every other timing in the client: a wall
     // clock would also have to survive a paused engine reporting no time passing,
     // and a body left permanently white is a worse bug than a flash one tick long.
-    for (const [id, hitTick] of this.hit) {
+    for (const [id, { tick: hitTick, peak }] of this.hit) {
       const mesh = this.meshes.get(id);
       const left = HIT_FLASH_TICKS - (next.tick - hitTick);
       if (!mesh || left <= 0) {
@@ -734,7 +740,7 @@ export class SnapshotRenderer {
         this.hit.delete(id);
         continue;
       }
-      setHitFlash(mesh, left / HIT_FLASH_TICKS);
+      setHitFlash(mesh, (left / HIT_FLASH_TICKS) * peak);
     }
 
     if (next.tick !== this.lastTick) {
@@ -784,6 +790,21 @@ export class SnapshotRenderer {
         }
       }
     }
+  }
+
+  /** Spill what a struck monster is made of, away from whatever hit it. */
+  private spray(e: SnapshotEntity, strength: number, prev: Snapshot | null, next: Snapshot): void {
+    const kind = sprayKindOf(e.species);
+    if (!kind) return;
+    const from = blowFrom(e.x, e.y, prev, next);
+    hitSpray(this.scene).emit(new Vector3(e.x, Y_LIFT.projectile, e.y), e.x - from.x, e.y - from.z, strength, kind);
+  }
+
+  /** A monster gone while last seen alive took a killing blow never drawn at life 0. */
+  private sprayKill(id: number, prev: Snapshot | null, next: Snapshot): void {
+    const last = prev?.entities.find((p) => p.id === id);
+    if (last?.kind !== "monster" || last.life === undefined || last.life <= 0) return;
+    this.spray(last, hitStrength(last.life / (last.maxLife ?? last.life), true), prev, next);
   }
 
   /**
