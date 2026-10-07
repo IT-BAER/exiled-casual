@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { fp } from "@exiled/fixed-point";
 import { Simulation } from "../loop";
 import { registerResourceRegen } from "./resource";
-import { ES_RECHARGE_DELAY_TICKS, esRechargePerTick } from "@exiled/rules";
+import { ES_RECHARGE_DELAY_TICKS, esRechargePerTick, esRegenPerTick } from "@exiled/rules";
 import type { Mana, EnergyShieldC } from "../components";
 
 describe("registerResourceRegen", () => {
@@ -63,12 +63,13 @@ describe("energy shield recharge", () => {
     return w.get<EnergyShieldC>(p, "energyShield")!.es;
   }
 
-  it("stays empty until the delay has passed", () => {
-    expect(shieldAfter(60, ES_RECHARGE_DELAY_TICKS)).toBe(0);
+  it("only regenerates slowly while the delay runs", () => {
+    expect(esRegenPerTick(fp(300))).toBeGreaterThan(0);
+    expect(shieldAfter(60, ES_RECHARGE_DELAY_TICKS)).toBe(esRegenPerTick(fp(300)) * 60);
   });
 
   it("refills the whole pool in eight seconds once it starts", () => {
-    expect(shieldAfter(30, 0)).toBe(esRechargePerTick(fp(300)) * 30);
+    expect(shieldAfter(30, 0)).toBe((esRechargePerTick(fp(300)) + esRegenPerTick(fp(300))) * 30);
     expect(shieldAfter(8 * 30 + 2, 0)).toBe(fp(300));
   });
 

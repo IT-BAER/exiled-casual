@@ -15,6 +15,13 @@ export const ES_RECHARGE_DELAY_TICKS = 120; // 4s at 30 Hz
 export const ES_RECHARGE_PCT_PER_SEC = 125; // per-mille, i.e. 12.5%
 
 /**
+ * Base regeneration under the recharge, per-mille of max a second. Not PoE's:
+ * there a shield regenerates only from mods. A casual pool that sits empty
+ * while one stray hit a second keeps resetting the delay reads as broken.
+ */
+export const ES_REGEN_PCT_PER_SEC = 10; // per-mille, i.e. 1%
+
+/**
  * Chaos removes twice as much energy shield as it does life — PoE2's rule, and
  * the one thing that stops a big shield from answering every element at once.
  * (PoE1 instead lets chaos bypass the shield entirely; PoE2's double drain is
@@ -25,6 +32,11 @@ export const ES_CHAOS_MULT = 2;
 /** Per-tick recharge, truncated to an integer Fixed so it stays replay-safe. */
 export function esRechargePerTick(maxEsFixed: Fixed): Fixed {
   return Math.trunc((maxEsFixed * ES_RECHARGE_PCT_PER_SEC) / 1000 / 30);
+}
+
+/** Per-tick base regeneration, truncated like the recharge. */
+export function esRegenPerTick(maxEsFixed: Fixed): Fixed {
+  return Math.trunc((maxEsFixed * ES_REGEN_PCT_PER_SEC) / 1000 / 30);
 }
 
 /**

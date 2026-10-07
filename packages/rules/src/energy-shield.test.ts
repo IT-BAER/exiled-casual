@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { fp } from "@exiled/fixed-point";
 import {
-  absorbWithEnergyShield, esRechargePerTick,
+  absorbWithEnergyShield, esRechargePerTick, esRegenPerTick,
   ES_RECHARGE_PCT_PER_SEC, ES_CHAOS_MULT,
 } from "./energy-shield.js";
 
@@ -37,5 +37,15 @@ describe("esRechargePerTick", () => {
 
   it("a pool too small to divide recharges at zero rather than fractionally", () => {
     expect(esRechargePerTick(1)).toBe(0);
+  });
+});
+
+describe("esRegenPerTick", () => {
+  it("regenerates 1% of the pool a second, as an integer", () => {
+    const max = fp(300);
+    const perTick = esRegenPerTick(max);
+    expect(Number.isInteger(perTick)).toBe(true);
+    expect(perTick * 30).toBeLessThanOrEqual(Math.trunc(max / 100));
+    expect(perTick * 30).toBeGreaterThan(Math.trunc(max / 100) - 30);
   });
 });
