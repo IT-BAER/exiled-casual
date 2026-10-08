@@ -65,6 +65,15 @@ describe("LootLabels", () => {
     expect(vi.mocked(playDropSound).mock.calls.map((c) => c[0])).toEqual(["gold", "gold-jackpot"]);
   });
 
+  it("announces a new currency item with the currency cue, whatever its rarity", () => {
+    const { rerender } = render(<LootLabels project={null} snapshot={snapWith([])} />);
+    rerender(<LootLabels project={null} snapshot={snapWith([
+      { id: 41, kind: "groundItem", x: 1, y: 0, rarity: "normal", name: "Orb of Alteration", itemClass: "currency" },
+    ])} />);
+    expect(playDropSound).toHaveBeenCalledOnce();
+    expect(vi.mocked(playDropSound).mock.calls[0]![0]).toBe("currency");
+  });
+
   it("positions a new ground-item cue relative to the player", () => {
     const { rerender } = render(<LootLabels project={null} snapshot={snapWith([])} />);
     rerender(<LootLabels project={null} snapshot={snapWith([

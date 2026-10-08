@@ -103,7 +103,10 @@ export function LootLabels({ snapshot, project, afterFrame, onPick, plates = tru
             e.x - snapshot.player.x,
             e.y - snapshot.player.y,
           );
-          playDropSound(e.kind === "gold" ? (e.jackpot ? "gold-jackpot" : "gold") : e.rarity, volume, pan);
+          const tier = e.kind === "gold"
+            ? (e.jackpot ? "gold-jackpot" : "gold")
+            : e.itemClass === "currency" ? "currency" : e.rarity;
+          playDropSound(tier, volume, pan);
         }
       }
       // Forget picked-up ids so a re-drop of the same entity id chimes again.
