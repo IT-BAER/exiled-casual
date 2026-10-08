@@ -518,6 +518,32 @@ describe("environment", () => {
   });
 });
 
+describe("container open cue", () => {
+  const chest = (opened?: boolean): SnapshotEntity =>
+    ({ id: 9, kind: "container", x: 1, y: 0, ...(opened === undefined ? {} : { opened }) });
+  const opens = (seq: Snapshot[]) => run(seq).filter((n) => n === "container-open").length;
+
+  it("creaks once when a chest goes from shut to open", () => {
+    expect(opens([
+      snap({ tick: 1, entities: [chest(false)] }),
+      snap({ tick: 2, entities: [chest(true)] }),
+      snap({ tick: 3, entities: [chest(true)] }),
+    ])).toBe(1);
+    expect(opens([
+      snap({ tick: 1, entities: [chest()] }),
+      snap({ tick: 2, entities: [chest(true)] }),
+    ])).toBe(1);
+  });
+
+  it("is silent for a chest that arrives open, and on the first snapshot", () => {
+    expect(opens([snap({ tick: 1, entities: [chest(true)] })])).toBe(0);
+    expect(opens([
+      snap({ tick: 1, entities: [] }),
+      snap({ tick: 2, entities: [chest(true)] }),
+    ])).toBe(0);
+  });
+});
+
 describe("gold pickup cue", () => {
   const pile = (id: number): SnapshotEntity => ({ id, kind: "gold", x: 1, y: 0, amount: 12, jackpot: false });
   const coins = (seq: Snapshot[]) => {

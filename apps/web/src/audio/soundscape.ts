@@ -311,6 +311,13 @@ export function createSoundscape(opts: Options = {}): Soundscape {
         }
       }
 
+      // A chest the sim just paid. One that arrives open (a restored area) never rang.
+      for (const [id, e] of now) {
+        if (e.kind === "container" && e.opened && was.get(id)?.kind === "container" && !was.get(id)!.opened) {
+          play("container-open", ...at(e));
+        }
+      }
+
       // A voice already running follows its source: a bolt crossing the screen and a
       // fire the player walks away from both have to move in the mix, or the level
       // they started at is the level they keep until they stop.
