@@ -20,7 +20,7 @@ import { LIGHT_POOL } from "./lights";
 import { HAZE_HEIGHT, HAZE_MAX_SIZE, HAZE_NAME, MOTES_NAME, moteDrift, moteDriftBasis } from "./haze";
 import { BIOMES } from "@exiled/content-runtime";
 import { blowFrom, cancelTurnedAction, reactionFor, SnapshotRenderer, syncActionAnimation } from "./renderer";
-import { makeMesh, updateTelegraph } from "./meshes";
+import { makeMesh, updateTelegraph, VENDOR_LOOKS } from "./meshes";
 import { ARROW_NAME, MELEE_SPARKS_NAME } from "./skill-fx";
 import type { Snapshot } from "@exiled/protocol";
 import { testPlayer, testStats } from "../test-fixtures";
@@ -1000,6 +1000,14 @@ describe("SnapshotRenderer — new kinds", () => {
     const mesh = scene.getMeshByName("entity-6");
     expect(mesh).not.toBeNull();
     expect(mesh!.scaling.x).toBeCloseTo(3.5);
+  });
+
+  it("dresses the disenchanter in one whole set, with nothing in his hands", () => {
+    const worn = [VENDOR_LOOKS.helmet, VENDOR_LOOKS.chest, VENDOR_LOOKS.gloves, VENDOR_LOOKS.boots];
+    expect(VENDOR_LOOKS.base).toBe("male");
+    expect(worn.every((look) => look !== null && look === worn[0])).toBe(true);
+    expect(VENDOR_LOOKS.weapon1).toBeNull();
+    expect(VENDOR_LOOKS.weapon2).toBeNull();
   });
 
   // The hideout props are authored square to a camera due south (yaw PI). The

@@ -15,7 +15,8 @@ import {
 import { attachProp, type PropKind } from "./props";
 import { attachCreature, creatureSpecies, type CreatureRig } from "./monsters";
 import { attachArrowStreak, attachBoltTrail, attachCinderFX, buildArrow, cinderGlow, fxProfile, PROJECTILE_ARROW_SCALE, setStreakLength, SKILL_FX } from "./skill-fx";
-import { attachRig, rigOf, BASE_LOOKS, type RigParts } from "./rig";
+import { attachRig, rigOf, type Looks, type RigParts } from "./rig";
+import { looksForEquipment } from "./gear-looks";
 import { attachGroundModel, GROUND_LOOK_BASES } from "./ground-looks";
 import { hasRim, HIT_TINT, HIT_ALPHA } from "./rim";
 import { playSfx, worldSfxMix } from "../audio/sfx";
@@ -1397,12 +1398,20 @@ function buildVendor(scene: Scene, root: Mesh): void {
   // failed fetch), which leaves the ring standing on its own.
   const rig = attachRig(scene, root);
   if (rig) {
-    rig.setLooks(BASE_LOOKS);
+    rig.setLooks(VENDOR_LOOKS);
     rig.setLocomotion(0); // stand and breathe; he never goes anywhere
   }
 
   root.metadata = { markMat, interactKind: "vendor", ...(rig ? { rig } : {}) };
 }
+
+/** The disenchanter wears the whole Ember set, a robed caster, and holds nothing. */
+export const VENDOR_LOOKS: Looks = looksForEquipment({
+  helmet: { baseId: "base.ember_cowl" },
+  chest: { baseId: "base.ember_robe" },
+  gloves: { baseId: "base.ember_wraps" },
+  boots: { baseId: "base.ember_slippers" },
+});
 
 /** Warm the ring at his feet when the cursor is on him. */
 export function updateVendor(root: Mesh, hovered: boolean): void {
