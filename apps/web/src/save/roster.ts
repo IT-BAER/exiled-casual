@@ -19,6 +19,7 @@ import {
   asRoster,
   emptyRoster,
   headers,
+  loadRoster,
   putSettings,
   removeCharacter,
   saveRoster,
@@ -114,17 +115,18 @@ let settingsWrite: Promise<void> = Promise.resolve();
 /**
  * Write settings at most once per burst; the last call wins.
  *
- * ponytail: the roster is captured per call, so a write scheduled here and a
- * character created before it fires would save the older roster. Settings only
- * change from the Options panel, where no character can be created, so the
- * window does not exist today. Re-read the roster here if that ever stops being
- * true.
+ * The roster is re-read at write time: settings change in the game too, where
+ * the worker saves the character into the same blob, and the caller's copy is
+ * the menu's, from before Play. `roster` only stands in when nothing is stored.
+ * shortcut: read-then-write, not atomic; a worker save landing between the two
+ * is lost until its next save. A shared write queue closes that if it matters.
  */
 export function saveSettingsSoon(roster: RosterBlob, settings: Settings): void {
   if (settingsTimer !== null) clearTimeout(settingsTimer);
   settingsTimer = setTimeout(() => {
     settingsTimer = null;
-    settingsWrite = saveRoster(kv(), putSettings(roster, settings));
+    settingsWrite = loadRoster(kv()).then((stored) =>
+      saveRoster(kv(), putSettings(stored ?? roster, settings)));
   }, SETTINGS_DEBOUNCE_MS);
 }
 

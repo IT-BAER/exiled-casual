@@ -16,7 +16,7 @@
  */
 import React from "react";
 import { DISPLAY, SERIF, Divider, FramedPanel, GOLD, GOLD_DIM, MENU_ART, MenuButton, PARCHMENT } from "./frames";
-import { DEFAULT_KEYBINDS, DEFAULT_SETTINGS, GRAPHICS_PRESETS, MIN_RESOLUTION_SCALE, presetForRenderer, presetOf, type GraphicsPreset, type KeybindAction, type Keybinds, type Settings, type ShadowQuality } from "../settings";
+import { DEFAULT_KEYBINDS_BY_MODE, DEFAULT_SETTINGS, MOVE_ACTIONS, controlModeOf, type ControlMode, GRAPHICS_PRESETS, MIN_RESOLUTION_SCALE, presetForRenderer, presetOf, type GraphicsPreset, type KeybindAction, type Keybinds, type Settings, type ShadowQuality } from "../settings";
 import { gpuRenderer } from "../gpu";
 import { playSoundPreview, type SoundPreviewCategory } from "../audio/bus";
 // hud/layout.ts imports nothing, so the menu bundle gains two numbers, not the HUD.
@@ -36,6 +36,11 @@ const KEYBIND_ROWS: readonly { action: KeybindAction; label: string }[] = [
   { action: "moveDown", label: "Move Down" },
   { action: "moveLeft", label: "Move Left" },
   { action: "moveRight", label: "Move Right" },
+  { action: "skill1", label: "Skill 1" },
+  { action: "skill2", label: "Skill 2" },
+  { action: "skill3", label: "Skill 3" },
+  { action: "skill4", label: "Skill 4" },
+  { action: "skill5", label: "Skill 5" },
   { action: "flaskLife", label: "Life Flask" },
   { action: "flaskMana", label: "Mana Flask" },
   { action: "portal", label: "Portal to Hideout" },
@@ -46,8 +51,11 @@ const KEYBIND_ROWS: readonly { action: KeybindAction; label: string }[] = [
   { action: "passives", label: "Passive Tree" },
 ];
 
-/** Escape closes the panel and the skill row is drawn 1-5: neither is for taking. */
-const UNBINDABLE = new Set(["escape", "1", "2", "3", "4", "5"]);
+/** Escape closes the panel: it is not for taking. */
+const UNBINDABLE = new Set(["escape"]);
+
+/** Click to move has no movement keys to show; the left mouse button walks. */
+const MOUSE_HIDDEN: ReadonlySet<KeybindAction> = new Set(MOVE_ACTIONS);
 
 /** How a stored key reads on the button. */
 function keyLabel(key: string): string {
@@ -61,6 +69,7 @@ export function OptionsPanel({
   onChange,
   onClose,
   dock,
+  characterId,
 }: {
   settings: Settings;
   onChange: (next: Settings) => void;
@@ -73,9 +82,16 @@ export function OptionsPanel({
    * what tells the window which of its two lives it is living.
    */
   dock?: { bottom: string; clear: string };
+  /** The character being played. Its control mode is what the keymap switch sets. */
+  characterId?: string;
 }): React.ReactElement {
   const inGame = dock !== undefined;
   const [tab, setTab] = React.useState<TabId>("graphics");
+  // Which keymap the Keybinds tab edits. In the game it opens on the character's
+  // own mode and switching it changes how he moves; on the menu it only picks a map.
+  const [shownMode, setShownMode] = React.useState<ControlMode>(
+    characterId !== undefined ? controlModeOf(settings, characterId) : "mouse",
+  );
   const previewTimer = React.useRef<number | null>(null);
 
   React.useEffect(() => {
@@ -289,20 +305,41 @@ export function OptionsPanel({
           ) : tab === "keybinds" ? (
             <>
               <Group>Keybinds</Group>
-              {KEYBIND_ROWS.map(({ action, label }) => (
+              <Row
+                label={characterId !== undefined ? "Movement" : "Keymap"}
+                note={characterId !== undefined
+                  ? "How this character moves. Each has its own keymap."
+                  : "Each way of moving has its own keymap."}
+              >
+                <Choice<ControlMode>
+                  label="Movement"
+                  value={shownMode}
+                  options={[
+                    { value: "mouse", label: "Click to move" },
+                    { value: "wasd", label: "WASD" },
+                  ]}
+                  onPick={(mode) => {
+                    setShownMode(mode);
+                    if (characterId !== undefined) {
+                      setUi({ controls: { ...settings.ui.controls, [characterId]: mode } });
+                    }
+                  }}
+                />
+              </Row>
+              {KEYBIND_ROWS.filter(({ action }) => shownMode === "wasd" || !MOUSE_HIDDEN.has(action)).map(({ action, label }) => (
                 <Row key={action} label={label}>
                   <KeyButton
                     label={label}
-                    value={settings.ui.keybinds[action]}
+                    value={settings.ui.keybinds[shownMode][action]}
                     onSet={(key) => {
-                      const binds: Keybinds = { ...settings.ui.keybinds };
+                      const binds: Keybinds = { ...settings.ui.keybinds[shownMode] };
                       // A key can serve one action: the action that held it
                       // takes this one's old key, so nothing goes silently dead.
                       for (const other of Object.keys(binds) as KeybindAction[]) {
                         if (other !== action && binds[other] === key) binds[other] = binds[action];
                       }
                       binds[action] = key;
-                      setUi({ keybinds: binds });
+                      setUi({ keybinds: { ...settings.ui.keybinds, [shownMode]: binds } });
                     }}
                   />
                 </Row>
@@ -311,7 +348,9 @@ export function OptionsPanel({
                 <MenuButton
                   height={34}
                   style={{ minWidth: 190 }}
-                  onClick={() => setUi({ keybinds: { ...DEFAULT_KEYBINDS } })}
+                  onClick={() => setUi({
+                    keybinds: { ...settings.ui.keybinds, [shownMode]: { ...DEFAULT_KEYBINDS_BY_MODE[shownMode] } },
+                  })}
                 >
                   Reset to Default
                 </MenuButton>

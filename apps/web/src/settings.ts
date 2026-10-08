@@ -69,8 +69,10 @@ export interface UiSettings {
    * busy turns it off. Bosses keep their own big bar either way.
    */
   monsterHealthBars: boolean;
-  /** What the non-skill keys do. See KEYBIND_ACTIONS. */
-  keybinds: Keybinds;
+  /** What each key does, one map per control mode. See KEYBIND_ACTIONS. */
+  keybinds: Record<ControlMode, Keybinds>;
+  /** Each character's control mode by character id. Absent: never chose, plays mouse. */
+  controls: Record<string, ControlMode>;
   /**
    * Print what the sim is doing to the browser console (see debug.ts). Default
    * OFF: it is a firehose, and it is here for the session where something needs
@@ -79,9 +81,17 @@ export interface UiSettings {
   debugLogging: boolean;
 }
 
-/** Everything a key can be told to do. Escape and the skill row (1-5) stay fixed. */
+/**
+ * How the character moves, PoE2's two schemes. `mouse`: left click walks and the
+ * movement keys do nothing. `wasd`: the keys walk and left click attacks.
+ */
+export type ControlMode = "mouse" | "wasd";
+export const CONTROL_MODES: readonly ControlMode[] = ["mouse", "wasd"];
+
+/** Everything a key can be told to do. Escape stays fixed. */
 export const KEYBIND_ACTIONS = [
   "moveUp", "moveDown", "moveLeft", "moveRight",
+  "skill1", "skill2", "skill3", "skill4", "skill5",
   "flaskLife", "flaskMana", "portal", "pickup",
   "overlayMap", "inventory", "character", "passives",
 ] as const;
@@ -89,36 +99,88 @@ export type KeybindAction = (typeof KEYBIND_ACTIONS)[number];
 /** Values are lower-cased `KeyboardEvent.key`s; "" is unbound. */
 export type Keybinds = Record<KeybindAction, string>;
 
-export const DEFAULT_KEYBINDS: Keybinds = {
-  moveUp: "w", moveDown: "s", moveLeft: "a", moveRight: "d",
-  flaskLife: "q", flaskMana: "e", portal: "y", pickup: "g",
+/** The numbered sockets' keys, socket 1 first. */
+export const SKILL_ACTIONS = ["skill1", "skill2", "skill3", "skill4", "skill5"] as const;
+export const MOVE_ACTIONS = ["moveUp", "moveDown", "moveLeft", "moveRight"] as const;
+
+const SHARED_BINDS = {
+  flaskLife: "1", flaskMana: "2", portal: "y", pickup: "g",
   overlayMap: "tab", inventory: "i", character: "c", passives: "p",
+} as const;
+
+/**
+ * PoE2's defaults per scheme. Click to move keeps skills on QWERT; WASD takes W
+ * for walking, so that socket moves to F. Flasks sit on 1 and 2 in both.
+ */
+export const DEFAULT_KEYBINDS_BY_MODE: Readonly<Record<ControlMode, Keybinds>> = {
+  mouse: {
+    moveUp: "", moveDown: "", moveLeft: "", moveRight: "",
+    skill1: "q", skill2: "w", skill3: "e", skill4: "r", skill5: "t",
+    ...SHARED_BINDS,
+  },
+  wasd: {
+    moveUp: "w", moveDown: "s", moveLeft: "a", moveRight: "d",
+    skill1: "q", skill2: "e", skill3: "r", skill4: "t", skill5: "f",
+    ...SHARED_BINDS,
+  },
 };
 
-/** Keys no action may take: the menu key, and the skill row the HUD draws. */
-const RESERVED_KEYS = new Set(["escape", "1", "2", "3", "4", "5"]);
+/** The map a caller with no settings falls back to. */
+export const DEFAULT_KEYBINDS: Keybinds = DEFAULT_KEYBINDS_BY_MODE.wasd;
+
+/** Keys no action may take: the menu key. */
+const RESERVED_KEYS = new Set(["escape"]);
 
 /**
  * A saved keybind map, proven: each action a non-reserved, short, lower-cased
  * key, defaulting per entry. One key on two actions would fire both off one
  * press, so the first claimant (in KEYBIND_ACTIONS order) keeps it and the
  * later one goes unbound — the UI's own swap never produces that state, only a
- * hand-edited save does.
+ * hand-edited save does. Mouse mode's movement keys stay unbound whatever is saved.
  */
-function keybinds(raw: unknown): Keybinds {
+function keybinds(raw: unknown, mode: ControlMode): Keybinds {
   const src = obj(raw);
+  const defaults = DEFAULT_KEYBINDS_BY_MODE[mode];
   const out = {} as Keybinds;
   const claimed = new Set<string>();
   for (const action of KEYBIND_ACTIONS) {
     const v = src[action];
     let key = typeof v === "string" && v.length > 0 && v.length <= 24
-      ? v.toLowerCase() : DEFAULT_KEYBINDS[action];
-    if (RESERVED_KEYS.has(key)) key = DEFAULT_KEYBINDS[action];
+      ? v.toLowerCase() : defaults[action];
+    if (RESERVED_KEYS.has(key)) key = defaults[action];
+    if (mode === "mouse" && (MOVE_ACTIONS as readonly string[]).includes(action)) key = "";
     if (claimed.has(key)) key = "";
     if (key !== "") claimed.add(key);
     out[action] = key;
   }
   return out;
+}
+
+/** A save from before the two modes holds one flat map; it reads as the new defaults. */
+function keybindProfiles(raw: unknown): Record<ControlMode, Keybinds> {
+  const src = obj(raw);
+  return { mouse: keybinds(src["mouse"], "mouse"), wasd: keybinds(src["wasd"], "wasd") };
+}
+
+/** More characters than any roster holds; a bound on what a hand-edited save can grow. */
+const MAX_CONTROL_ENTRIES = 64;
+
+function controls(raw: unknown): Record<string, ControlMode> {
+  const out: Record<string, ControlMode> = {};
+  let n = 0;
+  for (const [id, mode] of Object.entries(obj(raw))) {
+    if (n >= MAX_CONTROL_ENTRIES) break;
+    if (id.length === 0 || id.length > 64 || !CONTROL_MODES.includes(mode as ControlMode)) continue;
+    out[id] = mode as ControlMode;
+    n++;
+  }
+  return out;
+}
+
+/** The mode a character plays in: mouse until he has chosen. */
+export function controlModeOf(settings: Settings, characterId: string): ControlMode {
+  const controls = settings.ui.controls;
+  return Object.hasOwn(controls, characterId) ? controls[characterId]! : "mouse";
 }
 
 export interface Settings {
@@ -155,7 +217,8 @@ export const DEFAULT_SETTINGS: Settings = {
     orbNumbers: true,
     overlayMapOpacity: 0.6,
     monsterHealthBars: true,
-    keybinds: { ...DEFAULT_KEYBINDS },
+    keybinds: { mouse: { ...DEFAULT_KEYBINDS_BY_MODE.mouse }, wasd: { ...DEFAULT_KEYBINDS_BY_MODE.wasd } },
+    controls: {},
     debugLogging: false,
   },
 };
@@ -277,7 +340,8 @@ export function sanitize(raw: unknown, renderer?: string): Settings {
       orbNumbers: bool(u["orbNumbers"], d.ui.orbNumbers),
       overlayMapOpacity: num(u["overlayMapOpacity"], 0.15, 1, d.ui.overlayMapOpacity),
       monsterHealthBars: bool(u["monsterHealthBars"], d.ui.monsterHealthBars),
-      keybinds: keybinds(u["keybinds"]),
+      keybinds: keybindProfiles(u["keybinds"]),
+      controls: controls(u["controls"]),
       debugLogging: bool(u["debugLogging"], d.ui.debugLogging),
     },
   };

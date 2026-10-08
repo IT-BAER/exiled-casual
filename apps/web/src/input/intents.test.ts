@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { heldToMoveIntent, keyToIntent, pointerToWorld } from "./intents";
-import { DEFAULT_SETTINGS, MOVE_SOCKET } from "../settings";
+import { DEFAULT_KEYBINDS, MOVE_SOCKET } from "../settings";
+import { socketForKey } from "../controls";
 import { fp } from "@exiled/fixed-point";
 
 describe("keyToIntent", () => {
@@ -39,19 +40,20 @@ describe("keyToIntent", () => {
   });
 
   /**
-   * The key row IS the skill bar's order now: what 1 fires is whatever the player
-   * dragged into the first socket, so the mapping comes in as a lookup rather than
-   * living here.
+   * The skill keys fire the bar's sockets in order, so what Q fires is whatever
+   * the player dragged into the first socket; the mapping comes in as a lookup
+   * rather than living here. Keys are PoE2's WASD defaults: Q E R T F.
    */
   const defaultBar = [
     "skill.ember_bolt.v1", "skill.cinder_ground.v1", "skill.blink.v1", null, null,
     MOVE_SOCKET, null, null,
   ];
-  const barLookup = (bar: (string | null)[]) => (key: string) => bar[Number(key) - 1] ?? null;
+  const barLookup = (bar: (string | null)[]) => (key: string) =>
+    bar[socketForKey(key, DEFAULT_KEYBINDS)] ?? null;
 
-  it("1 → useSkill ember_bolt aimed at aim point", () => {
+  it("q → useSkill ember_bolt aimed at aim point", () => {
     const aimPt = { x: 3.2, y: -1.7 };
-    const i = keyToIntent("1", aimPt, barLookup(defaultBar));
+    const i = keyToIntent("q", aimPt, barLookup(defaultBar));
     expect(i).toEqual({
       kind: "useSkill",
       skillId: "skill.ember_bolt.v1",
@@ -59,40 +61,41 @@ describe("keyToIntent", () => {
       ty: fp(-1.7),
     });
   });
-  it("2 → useSkill cinder_ground", () => {
-    const i = keyToIntent("2", aim, barLookup(defaultBar));
+  it("e → useSkill cinder_ground", () => {
+    const i = keyToIntent("e", aim, barLookup(defaultBar));
     expect((i as { skillId: string }).skillId).toBe("skill.cinder_ground.v1");
   });
-  it("3 → useSkill blink", () => {
-    const i = keyToIntent("3", aim, barLookup(defaultBar));
+  it("r → useSkill blink", () => {
+    const i = keyToIntent("r", aim, barLookup(defaultBar));
     expect((i as { skillId: string }).skillId).toBe("skill.blink.v1");
   });
 
-  it("follows the bar: a skill dragged to socket 5 fires on 5", () => {
+  it("follows the bar: a skill dragged to socket 5 fires on F", () => {
     const moved = ["skill.cinder_ground.v1", null, "skill.blink.v1", null, "skill.ember_bolt.v1"];
-    expect((keyToIntent("5", aim, barLookup(moved)) as { skillId: string }).skillId)
+    expect((keyToIntent("f", aim, barLookup(moved)) as { skillId: string }).skillId)
       .toBe("skill.ember_bolt.v1");
-    expect(keyToIntent("2", aim, barLookup(moved))).toBeNull();
+    expect(keyToIntent("e", aim, barLookup(moved))).toBeNull();
   });
 
-  it("with no bar at all, the number keys do nothing", () => {
-    expect(keyToIntent("1", aim)).toBeNull();
+  it("with no bar at all, the skill keys do nothing", () => {
+    expect(keyToIntent("q", aim)).toBeNull();
   });
 
   it("unmapped key → null", () => {
     expect(keyToIntent("Enter", aim)).toBeNull();
   });
 
-  it("q → useFlask life", () => {
-    expect(keyToIntent("q", aim)).toEqual({ kind: "useFlask", slot: "life" });
+  it("1 → useFlask life", () => {
+    expect(keyToIntent("1", aim)).toEqual({ kind: "useFlask", slot: "life" });
   });
 
-  it("e → useFlask mana", () => {
-    expect(keyToIntent("e", aim)).toEqual({ kind: "useFlask", slot: "mana" });
+  it("2 → useFlask mana", () => {
+    expect(keyToIntent("2", aim)).toEqual({ kind: "useFlask", slot: "mana" });
   });
 
-  it("Q (uppercase) → useFlask life", () => {
-    expect(keyToIntent("Q", aim)).toEqual({ kind: "useFlask", slot: "life" });
+  it("Q (uppercase) fires the same socket as q", () => {
+    expect((keyToIntent("Q", aim, barLookup(defaultBar)) as { skillId: string }).skillId)
+      .toBe("skill.ember_bolt.v1");
   });
 });
 
@@ -132,18 +135,18 @@ describe("heldToMoveIntent", () => {
 
 describe("rebound keys", () => {
   const aim = { x: 0, y: 0 };
-  const binds = { ...DEFAULT_SETTINGS.ui.keybinds, moveUp: "z", flaskLife: "f", portal: "h" };
+  const binds = { ...DEFAULT_KEYBINDS, moveUp: "z", flaskLife: "v", portal: "h" };
 
   it("keyToIntent follows the map: the new key fires, the old one is dead", () => {
     expect(keyToIntent("z", aim, undefined, binds)).toEqual({ kind: "moveDir", dx: -1, dy: 1 });
     expect(keyToIntent("w", aim, undefined, binds)).toBeNull();
-    expect(keyToIntent("f", aim, undefined, binds)).toEqual({ kind: "useFlask", slot: "life" });
-    expect(keyToIntent("q", aim, undefined, binds)).toBeNull();
+    expect(keyToIntent("v", aim, undefined, binds)).toEqual({ kind: "useFlask", slot: "life" });
+    expect(keyToIntent("1", aim, undefined, binds)).toBeNull();
     expect(keyToIntent("h", aim, undefined, binds)).toMatchObject({ kind: "useSkill", skillId: "skill.town_portal.v1" });
   });
 
   it("an unbound action fires on nothing", () => {
-    const unbound = { ...DEFAULT_SETTINGS.ui.keybinds, pickup: "" };
+    const unbound = { ...DEFAULT_KEYBINDS, pickup: "" };
     expect(keyToIntent("", aim, undefined, unbound)).toBeNull();
   });
 

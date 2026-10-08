@@ -11,7 +11,7 @@
  */
 export const TIPS: readonly string[] = [
   "Hold the mouse button to keep moving. The character walks to where you point, not where you click once.",
-  "Q drinks the life flask, E the mana flask. Both refill on the kills you were going to make anyway.",
+  "1 drinks the life flask, 2 the mana flask. Both refill on the kills you were going to make anyway.",
   "A rare monster carries an element in its name. The colour it glows is the resistance it is about to test.",
   "Waystones open maps at the device in your hideout. The tier on the stone is the tier of the map.",
   "Unidentified items hide their mods, not their base. A good base is worth the scroll.",

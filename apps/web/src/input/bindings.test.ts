@@ -6,7 +6,8 @@ import type { Scene } from "@babylonjs/core";
 import type { Snapshot } from "@exiled/protocol";
 import { testPlayer } from "../test-fixtures";
 import { fp } from "@exiled/fixed-point";
-import { MOVE_SOCKET } from "../settings";
+import { DEFAULT_KEYBINDS_BY_MODE, MOUSE_SLOT_BASE, MOVE_SOCKET, type ControlMode } from "../settings";
+import { socketForKey } from "../controls";
 
 /**
  * The skill row's mapping, which the bar owns now: `1` fires whatever sits in the
@@ -17,7 +18,7 @@ const DEFAULT_BAR = [
   MOVE_SOCKET, null, null,
 ];
 const defaultSkillForKey = (key: string): string | null =>
-  DEFAULT_BAR[Number(key) - 1] ?? null;
+  DEFAULT_BAR[socketForKey(key, DEFAULT_KEYBINDS_BY_MODE.wasd)] ?? null;
 
 /**
  * A ray straight down from above `(x, z)`, so the floor intersection at y=0 is
@@ -346,18 +347,18 @@ describe("attachBindings hold-to-move", () => {
     c.remove();
   });
 
-  it("a numpad key never doubles as its skill-row twin", () => {
-    // Both report key "1"; only the code separates spawning from casting.
+  it("a numpad key never doubles as its number-row twin", () => {
+    // Both report key "1"; only the code separates spawning from drinking.
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "1", code: "Numpad1", bubbles: true }));
-    const casts = worker.postMessage.mock.calls.filter(
-      (c) => c[0]?.type === "intent" && c[0]?.intent?.kind === "useSkill",
+    const drinks = worker.postMessage.mock.calls.filter(
+      (c) => c[0]?.type === "intent" && c[0]?.intent?.kind === "useFlask",
     );
-    expect(casts.length).toBe(0);
+    expect(drinks.length).toBe(0);
 
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "1", code: "Digit1", bubbles: true }));
     expect(
       worker.postMessage.mock.calls.filter(
-        (c) => c[0]?.type === "intent" && c[0]?.intent?.kind === "useSkill",
+        (c) => c[0]?.type === "intent" && c[0]?.intent?.kind === "useFlask",
       ).length,
     ).toBe(1);
   });
@@ -425,7 +426,7 @@ describe("attachBindings aim", () => {
   const move = (c: HTMLCanvasElement) =>
     c.dispatchEvent(new MouseEvent("pointermove", { button: 0, buttons: 0, clientX: 50, clientY: 50, bubbles: true }));
   const cast = (key: string) =>
-    window.dispatchEvent(new KeyboardEvent("keydown", { key, code: `Digit${key}`, bubbles: true }));
+    window.dispatchEvent(new KeyboardEvent("keydown", { key, code: `Key${key.toUpperCase()}`, bubbles: true }));
 
   it("re-picks the cursor's world point when the camera moved under a still mouse", () => {
     // Hold-to-move keeps the mouse perfectly still while the camera follows the
@@ -435,7 +436,7 @@ describe("attachBindings aim", () => {
     const { c, w, cleanup } = attach(slantScene(at));
     move(c);
     at.x = 9; at.z = 4; // the player ran; the camera came with him
-    cast("1");
+    cast("q");
     expect(lastIntent(w.postMessage, "useSkill")).toMatchObject({ tx: fp(9 - 0.8), ty: fp(4) });
     cleanup();
   });
@@ -443,7 +444,7 @@ describe("attachBindings aim", () => {
   it("aims a projectile at the height it flies at, not the floor under the cursor", () => {
     const { c, w, cleanup } = attach(slantScene({ x: 6, z: 3 }));
     move(c);
-    cast("1"); // ember bolt
+    cast("q"); // ember bolt
     expect(lastIntent(w.postMessage, "useSkill")).toMatchObject({ tx: fp(6 - 0.8), ty: fp(3) });
     cleanup();
   });
@@ -451,7 +452,7 @@ describe("attachBindings aim", () => {
   it("aims a ground-targeted skill at the floor, where its cinders are painted", () => {
     const { c, w, cleanup } = attach(slantScene({ x: 6, z: 3 }));
     move(c);
-    cast("2"); // cinder ground
+    cast("e"); // cinder ground
     expect(lastIntent(w.postMessage, "useSkill")).toMatchObject({ tx: fp(6), ty: fp(3) });
     cleanup();
   });
@@ -459,7 +460,7 @@ describe("attachBindings aim", () => {
   it("aims a blink at the floor: the destination is a place to stand", () => {
     const { c, w, cleanup } = attach(slantScene({ x: 6, z: 3 }));
     move(c);
-    cast("3"); // blink
+    cast("r"); // blink
     expect(lastIntent(w.postMessage, "useSkill")).toMatchObject({ tx: fp(6), ty: fp(3) });
     cleanup();
   });
@@ -796,10 +797,10 @@ describe("attachBindings releases what the browser never reports", () => {
   });
 
   const kinds = () => worker.postMessage.mock.calls.map((c) => c[0]?.intent?.kind);
-  // The report: left button held walking, `1` held casting, strafing.
+  // The report: left button held walking, a skill key held casting, strafing.
   function holdWalkAndCast() {
     canvas.dispatchEvent(new MouseEvent("pointerdown", { button: 0, buttons: 1, clientX: 5, clientY: 5, bubbles: true }));
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "1", code: "Digit1" }));
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "q", code: "KeyQ" }));
   }
   function afterNextSnapshot(): unknown[] {
     worker.postMessage.mockClear();
@@ -847,14 +848,14 @@ describe("attachBindings releases what the browser never reports", () => {
 
   it("releases a skill key that came up as a different character under Shift", () => {
     holdWalkAndCast();
-    window.dispatchEvent(new KeyboardEvent("keyup", { key: "!", code: "Digit1", shiftKey: true }));
+    window.dispatchEvent(new KeyboardEvent("keyup", { key: "Q", code: "KeyQ", shiftKey: true }));
     window.dispatchEvent(new MouseEvent("pointerup", { button: 0, buttons: 0, bubbles: true }));
     expect(afterNextSnapshot()).toEqual([]);
   });
 
   it("reads a lost release off the next move over the HUD", () => {
     holdWalkAndCast();
-    window.dispatchEvent(new KeyboardEvent("keyup", { key: "1", code: "Digit1" }));
+    window.dispatchEvent(new KeyboardEvent("keyup", { key: "q", code: "KeyQ" }));
     hud.dispatchEvent(new MouseEvent("pointermove", { buttons: 0, clientX: 6, clientY: 6, bubbles: true }));
     expect(afterNextSnapshot()).toEqual([]);
   });
@@ -864,5 +865,74 @@ describe("attachBindings releases what the browser never reports", () => {
     hud.dispatchEvent(new MouseEvent("pointermove", { buttons: 1, clientX: 6, clientY: 6, bubbles: true }));
     expect(kinds()).toEqual([]);
     expect(afterNextSnapshot()).toEqual([]);
+  });
+});
+
+describe("attachBindings control modes", () => {
+  const ATTACK = "skill.ember_bolt.v1";
+  let canvas: HTMLCanvasElement;
+  let worker: { postMessage: ReturnType<typeof vi.fn> };
+  let b: ReturnType<typeof attachBindings>;
+
+  function attach(mode: ControlMode, bar: (string | null)[], scene: Scene = fakeScene()) {
+    canvas = document.createElement("canvas");
+    document.body.appendChild(canvas);
+    worker = { postMessage: vi.fn() };
+    const binds = DEFAULT_KEYBINDS_BY_MODE[mode];
+    b = attachBindings(
+      canvas, worker as unknown as Worker, scene,
+      undefined, undefined, undefined, undefined,
+      (key) => bar[socketForKey(key, binds)] ?? null,
+      (button) => bar[MOUSE_SLOT_BASE + button] ?? null,
+      () => binds,
+      () => mode,
+    );
+  }
+
+  afterEach(() => {
+    b.detach();
+    canvas.remove();
+  });
+
+  const kinds = () => worker.postMessage.mock.calls.map((c) => c[0]?.intent?.kind);
+  const key = (k: string) => window.dispatchEvent(new KeyboardEvent("keydown", { key: k }));
+  const leftClick = () => canvas.dispatchEvent(
+    new MouseEvent("pointerdown", { button: 0, buttons: 1, clientX: 5, clientY: 5, bubbles: true }));
+
+  it("mouse mode: W fires its skill and never walks", () => {
+    attach("mouse", [null, ATTACK, null, null, null, MOVE_SOCKET, null, null]);
+    key("w");
+    expect(kinds()).toEqual(["useSkill"]);
+  });
+
+  it("WASD mode: W walks", () => {
+    attach("wasd", [ATTACK, null, null, null, null, null, null, null]);
+    key("w");
+    expect(kinds()).toEqual(["moveDir"]);
+  });
+
+  it("both modes: 1 drinks the life flask", () => {
+    attach("wasd", [ATTACK, null, null, null, null, null, null, null]);
+    key("1");
+    expect(kinds()).toEqual(["useFlask"]);
+  });
+
+  it("WASD mode: a left click on the ground attacks and does not walk", () => {
+    attach("wasd", [null, null, null, null, null, ATTACK, null, null]);
+    leftClick();
+    expect(kinds()).toEqual(["useSkill"]);
+  });
+
+  it("WASD mode: a left click on furniture walks to it instead of swinging at it", () => {
+    attach("wasd", [null, null, null, null, null, ATTACK, null, null], fakeInteractScene(42));
+    leftClick();
+    expect(kinds()).toEqual(["moveTo"]);
+  });
+
+  it("WASD mode: a Move left over on the bar never walks", () => {
+    attach("wasd", [null, null, null, null, null, MOVE_SOCKET, null, null]);
+    leftClick();
+    b.onSnapshot(makeSnap());
+    expect(kinds()).toEqual([]);
   });
 });

@@ -2,7 +2,10 @@
 import { describe, it, expect, vi, beforeAll, afterEach } from "vitest";
 import { render, screen, fireEvent, act, cleanup } from "@testing-library/react";
 import { testPlayer } from "./test-fixtures";
-import { DEFAULT_SETTINGS } from "./settings";
+import { DEFAULT_SETTINGS, MOVE_SOCKET, type Settings } from "./settings";
+import { defaultAttackFor } from "@exiled/content-runtime";
+import { DEFAULT_CLASS_ID } from "@exiled/rules";
+import React from "react";
 import type { Snapshot } from "@exiled/protocol";
 
 // The GameView effect instantiates a real Babylon Engine (WebGL) + Worker, neither of
@@ -550,5 +553,42 @@ describe("GameView", () => {
     expect(screen.queryByTestId("inventory-panel")).toBeNull();
     expect(screen.queryByTestId("game-menu")).toBeNull();
     expect(screen.getByTestId("death-screen")).toBeTruthy();
+  });
+});
+
+describe("GameView control mode", () => {
+  const BAR = ["skill.a", null, null, null, null, MOVE_SOCKET, null, null];
+
+  function Harness({ fresh }: { fresh: boolean }) {
+    const [settings, setSettings] = React.useState<Settings>(DEFAULT_SETTINGS);
+    return <GameView characterId="hero" fresh={fresh} settings={settings} onSettingsChange={setSettings} />;
+  }
+
+  function pushBar() {
+    act(() => {
+      hoisted.worker?.onmessage?.({ data: { type: "snapshot", snapshot: { ...makeSnap(), skillBar: BAR } } });
+    });
+  }
+
+  const sentBars = () => vi.mocked(hoisted.worker!.postMessage).mock.calls
+    .map(([m]) => m as { type: string; intent?: { kind: string; bar?: unknown[] } })
+    .filter((m) => m.type === "intent" && m.intent?.kind === "setSkillBar")
+    .map((m) => m.intent!.bar);
+
+  it("asks a fresh character how he moves, and lays his bar out for WASD", () => {
+    render(<Harness fresh />);
+    pushBar();
+    expect(screen.getByTestId("controls-dialog")).toBeTruthy();
+    expect(sentBars()).toEqual([]);
+    fireEvent.click(screen.getByRole("button", { name: /play with wasd/i }));
+    expect(screen.queryByTestId("controls-dialog")).toBeNull();
+    const attack = defaultAttackFor(testPlayer().classId ?? DEFAULT_CLASS_ID);
+    expect(sentBars()).toEqual([["skill.a", null, null, null, null, attack, null, null]]);
+  });
+
+  it("never asks a character that has played before", () => {
+    render(<Harness fresh={false} />);
+    pushBar();
+    expect(screen.queryByTestId("controls-dialog")).toBeNull();
   });
 });

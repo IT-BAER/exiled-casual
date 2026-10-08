@@ -8,6 +8,7 @@ import { playDropSound } from "../audio/drop-sound";
 import "@testing-library/jest-dom/vitest";
 import { render, screen, cleanup, fireEvent, act } from "@testing-library/react";
 import { Hud, SKILL_ART } from "./Hud";
+import { DEFAULT_KEYBINDS_BY_MODE } from "../settings";
 import { SKILLS } from "@exiled/content-runtime";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
@@ -143,8 +144,9 @@ describe("Hud", () => {
 
   it("renders five keyed skill slots then the three mouse buttons", () => {
     render(<Hud snapshot={makeSnap({ cooldowns: {} })} />);
-    for (let i = 1; i <= 5; i++) {
-      expect(screen.getByTestId(`skill-slot-${i}`)).toHaveTextContent(String(i));
+    // Mouse mode's default keymap: PoE2's QWERT row.
+    for (const [i, label] of [[1, "Q"], [2, "W"], [3, "E"], [4, "R"], [5, "T"]] as const) {
+      expect(screen.getByTestId(`skill-slot-${i}`)).toHaveTextContent(label);
     }
     for (const [i, label] of [[6, "L"], [7, "M"], [8, "R"]] as const) {
       expect(screen.getByTestId(`skill-slot-${i}`)).toHaveTextContent(label);
@@ -198,13 +200,30 @@ describe("Hud", () => {
 
   // --- flask row ---
 
-  it("renders one life flask on Q and one mana flask on E", () => {
+  it("renders one life flask on 1 and one mana flask on 2, PoE2's keys", () => {
     render(<Hud snapshot={makeSnap({})} />);
-    const row = screen.getByTestId("flask-row");
-    expect(screen.getByTestId("flask-life")).toBeInTheDocument();
-    expect(screen.getByTestId("flask-mana")).toBeInTheDocument();
-    expect(row).toHaveTextContent("Q");
-    expect(row).toHaveTextContent("E");
+    expect(screen.getByTestId("flask-life")).toHaveTextContent("1");
+    expect(screen.getByTestId("flask-mana")).toHaveTextContent("2");
+  });
+
+  it("captions each flask and numbered socket with the key bound to it now", () => {
+    const keybinds = { ...DEFAULT_KEYBINDS_BY_MODE.wasd, flaskLife: "v" };
+    render(<Hud snapshot={makeSnap({})} skillBar={BAR} keybinds={keybinds} controlMode="wasd" />);
+    expect(screen.getByTestId("flask-life")).toHaveTextContent("V");
+    expect(screen.getByTestId("skill-slot-2")).toHaveTextContent("E");
+    expect(screen.getByTestId("skill-slot-5")).toHaveTextContent("F");
+  });
+
+  it("mouse mode: left click is Move and cannot be reassigned", () => {
+    render(<Hud snapshot={makeSnap({})} skillBar={BAR} />);
+    fireEvent.click(screen.getByTestId("skill-slot-6"));
+    expect(screen.queryByTestId("skill-picker")).toBeNull();
+  });
+
+  it("WASD mode: left click takes any skill", async () => {
+    render(<Hud snapshot={makeSnap({})} skillBar={BAR} controlMode="wasd" keybinds={DEFAULT_KEYBINDS_BY_MODE.wasd} />);
+    fireEvent.click(screen.getByTestId("skill-slot-6"));
+    expect(await screen.findByTestId("skill-picker")).toBeTruthy();
   });
 
   it("runs both bars to the screen edge and scales them off the globe", () => {
@@ -543,10 +562,10 @@ describe("Hud skill tooltip", () => {
     const picker = await screen.findByTestId("skill-picker");
     expect(picker).toHaveTextContent("Actions");
     expect(picker).toHaveTextContent("Skills");
-    // Ember Bolt sits on socket 1, so its tile wears "1".
-    expect(screen.getByTestId("pick-skill.ember_bolt.v1")).toHaveTextContent("1");
-    // Move and Clear are the built-in actions, always offered.
-    expect(screen.getByTestId("pick-builtin.move")).toBeTruthy();
+    // Ember Bolt sits on socket 1, so its tile wears that socket's key.
+    expect(screen.getByTestId("pick-skill.ember_bolt.v1")).toHaveTextContent("Q");
+    // Move is never offered: mouse mode keeps it on left click, WASD walks on the keys.
+    expect(screen.queryByTestId("pick-builtin.move")).toBeNull();
     expect(screen.getByTestId("pick-clear")).toBeTruthy();
     // Hovering a tile shows the same detail tooltip the bar does.
     fireEvent.pointerEnter(screen.getByTestId("pick-skill.ember_bolt.v1"));

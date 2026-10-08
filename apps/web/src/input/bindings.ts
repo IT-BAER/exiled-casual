@@ -2,7 +2,7 @@ import type { Intent, Snapshot, SpawnKind, ToWorker } from "@exiled/protocol";
 import { isTextEntry } from "./text-entry";
 import { heldToMoveIntent, keyToIntent, pointerToWorld } from "./intents";
 import type { Node, Scene } from "@babylonjs/core";
-import { DEFAULT_KEYBINDS, MOVE_SOCKET, type Keybinds } from "../settings";
+import { DEFAULT_KEYBINDS, MOVE_SOCKET, type ControlMode, type Keybinds } from "../settings";
 import { SKILLS } from "@exiled/content-runtime";
 import { Y_LIFT } from "../render/meshes";
 import { dlog } from "../debug";
@@ -11,7 +11,7 @@ import { dlog } from "../debug";
 
 /**
  * Lab spawn keys. Keyed on `event.code`, not `event.key`: the numpad digits
- * report the same `key` as the skill row, so only the code tells them apart.
+ * report the same `key` as the number row, so only the code tells them apart.
  */
 const SPAWN_KEYS: Record<string, SpawnKind> = {
   Numpad1: "imp",
@@ -194,6 +194,8 @@ export function attachBindings(
   skillForMouse?: (button: number) => string | null,
   /** The rebindable keys, read fresh on every press like the skill bar above. */
   keybinds?: () => Keybinds,
+  /** How this character moves. In WASD mode a click never walks, whatever the bar holds. */
+  controlMode?: () => ControlMode,
 ): {
   detach: () => void;
   onSnapshot: (snap: Snapshot) => void;
@@ -421,33 +423,37 @@ export function attachBindings(
       return;
     }
     // Left button: three states. MOVE_SOCKET = walk (fall through below).
-    // A skill id = cast. null (cleared) = do nothing.
-    const leftAction = skillForMouse ? skillForMouse(0) : MOVE_SOCKET;
-    if (leftAction !== null && leftAction !== MOVE_SOCKET) {
+    // A skill id = cast. null (cleared) = do nothing. WASD walks on the keys, so
+    // a Move still sitting on the bar there is dead too.
+    const raw = skillForMouse ? skillForMouse(0) : MOVE_SOCKET;
+    const leftAction = raw === MOVE_SOCKET && controlMode?.() === "wasd" ? null : raw;
+    if (leftAction === null) return; // cleared: left button is dead
+    // A piece is riding the cursor with no button held, so this press is the one
+    // that puts it down. The inventory's drop-to-ground path reads the RELEASE,
+    // which means without this the same click both drops the item and sets the
+    // player walking (or swinging) at where it landed. Read off the ghost element
+    // rather than plumbed through three components: the ghost IS the carried
+    // piece, and this is a one-way signal from the panel to the world.
+    if (document.querySelector("[data-carrying]")) return;
+    const floor = planePoint(scene, e.clientX, e.clientY);
+    // PoE-style: clicking directly on a portal or map device auto-walks to it and
+    // queues an interact, a skill on left click included (PoE2's WASD mode). Do
+    // NOT start hold-to-move steering for this case.
+    const interactable = interactAt(e.clientX, e.clientY);
+    if (interactable !== null && floor) {
+      const world = pointerToWorld(floor);
+      post({ kind: "moveTo", x: world.x, y: world.y });
+      pendingInteractId = interactable;
+      return;
+    }
+    if (leftAction !== MOVE_SOCKET) {
       lastScreen = { x: e.clientX, y: e.clientY };
       castFromMouse(0, e.clientX, e.clientY);
       skillButtonsHeld.add(0);
       return;
     }
-    if (leftAction === null) return; // cleared: left button is dead
-    // A piece is riding the cursor with no button held, so this press is the one
-    // that puts it down. The inventory's drop-to-ground path reads the RELEASE,
-    // which means without this the same click both drops the item and sets the
-    // player walking to where it landed. Read off the ghost element rather than
-    // plumbed through three components: the ghost IS the carried piece, and this
-    // is a one-way signal from the panel to the world, not shared state.
-    if (document.querySelector("[data-carrying]")) return;
-    const floor = planePoint(scene, e.clientX, e.clientY);
     if (!floor) return;
     const world = pointerToWorld(floor);
-    // PoE-style: clicking directly on a portal or map device auto-walks to it and
-    // queues an interact. Do NOT start hold-to-move steering for this case.
-    const interactable = interactAt(e.clientX, e.clientY);
-    if (interactable !== null) {
-      post({ kind: "moveTo", x: world.x, y: world.y });
-      pendingInteractId = interactable;
-      return;
-    }
     // Ground or other non-interactable click: normal move + cancel any queued interact.
     post({ kind: "moveTo", x: world.x, y: world.y });
     pendingInteractId = null;

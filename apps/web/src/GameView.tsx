@@ -50,11 +50,13 @@ import { LoadingScreen, LOADING_ART, FADE_MS } from "./LoadingScreen";
 import { settleGate } from "./settle";
 import { pickTip } from "./tips";
 import { OptionsPanel } from "./menu/OptionsPanel";
-import { DEFAULT_SETTINGS, MOUSE_SLOT_BASE, MOVE_SOCKET, presetOf, stepDown, type Settings } from "./settings";
+import { DEFAULT_SETTINGS, MOUSE_SLOT_BASE, MOVE_SOCKET, SKILL_SLOT_COUNT, controlModeOf, presetOf, stepDown, type ControlMode, type Settings } from "./settings";
+import { enforceMode, socketForKey } from "./controls";
+import { ControlsDialog } from "./menu/ControlsDialog";
 import { FpsGuard } from "./fps-guard";
 import type { FrameHook, Projector } from "./hud/LootLabels";
 import type { AreaLayout } from "@exiled/mapgen";
-import { BIOMES, mapBase } from "@exiled/content-runtime";
+import { BIOMES, defaultAttackFor, mapBase } from "@exiled/content-runtime";
 import type { Snapshot, FromWorker, Intent, ToWorker, SpawnKind } from "@exiled/protocol";
 import { atlasGraph, atlasNodeTier, isNodeReachable, mapBaseIdForNode, DEFAULT_CLASS_ID } from "@exiled/rules";
 
@@ -74,6 +76,8 @@ export interface GameViewProps {
   settings?: Settings;
   /** Report a change up; App is what applies sound and persists. */
   onSettingsChange?: (next: Settings) => void;
+  /** Never played before: a character with no control mode yet is asked for one. */
+  fresh?: boolean;
 }
 
 export function GameView({
@@ -81,6 +85,7 @@ export function GameView({
   onExit,
   settings = DEFAULT_SETTINGS,
   onSettingsChange,
+  fresh = false,
 }: GameViewProps = {}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
@@ -198,9 +203,28 @@ export function GameView({
    */
   const skillBarRef = useRef<(string | null)[]>([]);
   skillBarRef.current = snapshot?.skillBar ?? [];
-  // The keybinds, mirrored for the same reason again.
-  const keybindsRef = useRef(settings.ui.keybinds);
-  keybindsRef.current = settings.ui.keybinds;
+  // The control mode and its keymap, mirrored for the same reason again.
+  const controlMode = controlModeOf(settings, characterId);
+  const keybinds = settings.ui.keybinds[controlMode];
+  const controlModeRef = useRef<ControlMode>(controlMode);
+  controlModeRef.current = controlMode;
+  const keybindsRef = useRef(keybinds);
+  keybindsRef.current = keybinds;
+  // A bar that breaks the mode is put right the moment it arrives: an old
+  // character's, and a fresh one's as soon as his mode is chosen.
+  const liveBar = snapshot?.skillBar;
+  const classId = snapshot?.player.classId ?? DEFAULT_CLASS_ID;
+  const sentBarRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!liveBar || liveBar.length !== SKILL_SLOT_COUNT) return;
+    const fixed = enforceMode(liveBar, controlMode, defaultAttackFor(classId));
+    if (fixed === liveBar) { sentBarRef.current = null; return; }
+    // Once per distinct fix: a bar the sim refused is not asked for again every tick.
+    const key = JSON.stringify(fixed);
+    if (sentBarRef.current === key) return;
+    sentBarRef.current = key;
+    sendIntent({ kind: "setSkillBar", bar: [...fixed] });
+  }, [liveBar, controlMode, classId, sendIntent]);
   // The whole settings and their setter, for the Auto graphics guard's timer.
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
@@ -392,13 +416,14 @@ export function GameView({
       // the inventory up, which is the case where it IS the player's own panel.
       (open) => { setStashOpen(open); setInventoryOpen(open); if (open) { setVendorOpen(false); setCharacterOpen(false); } },
       (open) => { setVendorOpen(open); setInventoryOpen(open); if (open) { setStashOpen(false); setCharacterOpen(false); } },
-      // The key row IS the bar's order: `1` fires the first socket, whatever the
-      // player last dragged into it.
-      (key) => skillBarRef.current[Number(key) - 1] ?? null,
+      // The skill keys ARE the bar's order: the first one fires the first socket,
+      // whatever the player last dragged into it.
+      (key) => skillBarRef.current[socketForKey(key, keybindsRef.current)] ?? null,
       // Returns the raw socket value: MOVE_SOCKET, a skill id, or null (cleared).
       // The bindings layer decides what each means.
       (button) => skillBarRef.current[MOUSE_SLOT_BASE + button] ?? null,
       () => keybindsRef.current,
+      () => controlModeRef.current,
     );
 
     // Loot plates are DOM, so their click has to reach the same approach-then-act
@@ -897,7 +922,9 @@ export function GameView({
         onSkillBarChange={(bar) => sendIntent({ kind: "setSkillBar", bar })}
         onOpenPassives={() => setPassivesOpen(true)}
         onToggleInventory={() => { setInventoryOpen((v) => !v); setStashOpen(false); }}
-        inventoryKey={settings.ui.keybinds.inventory}
+        inventoryKey={keybinds.inventory}
+        keybinds={keybinds}
+        controlMode={controlMode}
       />
       {settings.ui.minimap && (
         <Minimap
@@ -987,8 +1014,17 @@ export function GameView({
           onChange={onSettingsChange ?? (() => {})}
           onClose={() => setOptionsOpen(false)}
           dock={{ bottom: BAR_H, clear: ORB_RISE }}
+          characterId={characterId === "" ? undefined : characterId}
         />
       </Presence>
+      {fresh && characterId !== "" && !Object.hasOwn(settings.ui.controls, characterId) && (
+        <ControlsDialog
+          onPick={(mode) => onSettingsChange?.({
+            ...settings,
+            ui: { ...settings.ui, controls: { ...settings.ui.controls, [characterId]: mode } },
+          })}
+        />
+      )}
       {/* Last in the tree, so it paints over every other overlay: nothing behind
           it is a decision the player can still act on. */}
       {snapshot && !snapshot.player.alive && (

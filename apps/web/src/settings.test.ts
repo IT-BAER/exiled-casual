@@ -1,35 +1,56 @@
 import { describe, it, expect } from "vitest";
-import { DEFAULT_SETTINGS, GRAPHICS_PRESETS, MIN_RESOLUTION_SCALE, presetForRenderer, presetOf, sanitize, stepDown, type GraphicsPreset, type GraphicsSettings } from "./settings";
+import { DEFAULT_SETTINGS, GRAPHICS_PRESETS, MIN_RESOLUTION_SCALE, controlModeOf, presetForRenderer, presetOf, sanitize, stepDown, type ControlMode, type GraphicsPreset, type GraphicsSettings } from "./settings";
 
 describe("the keybinds ride in the settings", () => {
-  const binds = (raw: unknown) => sanitize({ ui: { keybinds: raw } }).ui.keybinds;
+  const binds = (raw: unknown, mode: ControlMode = "wasd") =>
+    sanitize({ ui: { keybinds: { [mode]: raw } } }).ui.keybinds[mode];
 
-  it("defaults to the keys the game shipped with", () => {
-    expect(sanitize(null).ui.keybinds).toEqual({
-      moveUp: "w", moveDown: "s", moveLeft: "a", moveRight: "d",
-      flaskLife: "q", flaskMana: "e", portal: "y", pickup: "g",
+  it("defaults to PoE2's click-to-move keys: skills on QWERT, flasks on 1 and 2", () => {
+    expect(sanitize(null).ui.keybinds.mouse).toEqual({
+      moveUp: "", moveDown: "", moveLeft: "", moveRight: "",
+      skill1: "q", skill2: "w", skill3: "e", skill4: "r", skill5: "t",
+      flaskLife: "1", flaskMana: "2", portal: "y", pickup: "g",
       overlayMap: "tab", inventory: "i", character: "c", passives: "p",
     });
   });
 
+  it("defaults to PoE2's WASD keys: the W skill moves to F", () => {
+    expect(sanitize(null).ui.keybinds.wasd).toEqual({
+      moveUp: "w", moveDown: "s", moveLeft: "a", moveRight: "d",
+      skill1: "q", skill2: "e", skill3: "r", skill4: "t", skill5: "f",
+      flaskLife: "1", flaskMana: "2", portal: "y", pickup: "g",
+      overlayMap: "tab", inventory: "i", character: "c", passives: "p",
+    });
+  });
+
+  it("never lets a movement key into mouse mode, saved or not", () => {
+    const got = binds({ moveUp: "w", pickup: "x" }, "mouse");
+    expect(got.moveUp).toBe("");
+    expect(got.pickup).toBe("x");
+  });
+
+  it("reads a save from before the two modes as the new defaults", () => {
+    const legacy = { moveUp: "w", flaskLife: "q", flaskMana: "e", pickup: "f" };
+    expect(sanitize({ ui: { keybinds: legacy } }).ui.keybinds).toEqual(DEFAULT_SETTINGS.ui.keybinds);
+  });
+
   it("keeps a saved rebind and defaults the rest", () => {
-    const got = binds({ pickup: "f", portal: "t" });
-    expect(got.pickup).toBe("f");
-    expect(got.portal).toBe("t");
+    const got = binds({ pickup: "v", portal: "z" });
+    expect(got.pickup).toBe("v");
+    expect(got.portal).toBe("z");
     expect(got.moveUp).toBe("w");
   });
 
   it("lower-cases and refuses junk per entry", () => {
-    expect(binds({ pickup: "F" }).pickup).toBe("f");
+    expect(binds({ pickup: "V" }).pickup).toBe("v");
     expect(binds({ pickup: 3 }).pickup).toBe("g");
     expect(binds({ pickup: "" }).pickup).toBe("g");
     expect(binds({ pickup: "x".repeat(40) }).pickup).toBe("g");
-    expect(binds("not an object")).toEqual(DEFAULT_SETTINGS.ui.keybinds);
+    expect(binds("not an object")).toEqual(DEFAULT_SETTINGS.ui.keybinds.wasd);
   });
 
-  it("never hands out Escape or a skill-row digit", () => {
+  it("never hands out Escape", () => {
     expect(binds({ pickup: "escape" }).pickup).toBe("g");
-    expect(binds({ portal: "3" }).portal).toBe("y");
   });
 
   /** One key on two actions fires both off one press. First claim wins,
@@ -38,6 +59,34 @@ describe("the keybinds ride in the settings", () => {
     const got = binds({ flaskLife: "g" });
     expect(got.flaskLife).toBe("g");
     expect(got.pickup).toBe("");
+  });
+});
+
+describe("the control mode is chosen per character", () => {
+  const controls = (raw: unknown) => sanitize({ ui: { controls: raw } }).ui.controls;
+
+  it("starts with no character having chosen", () => {
+    expect(sanitize(null).ui.controls).toEqual({});
+  });
+
+  it("keeps a valid choice and drops junk entries", () => {
+    expect(controls({ a: "wasd", b: "mouse", c: "keyboard", d: 1 })).toEqual({ a: "wasd", b: "mouse" });
+    expect(controls(["wasd"])).toEqual({});
+  });
+
+  it("caps how many characters a hand-edited save can list", () => {
+    const many = Object.fromEntries(Array.from({ length: 500 }, (_, i) => [`c${i}`, "wasd"]));
+    expect(Object.keys(controls(many)).length).toBe(64);
+  });
+
+  it("reads a character that never chose as mouse movement", () => {
+    expect(controlModeOf(sanitize(null), "nobody")).toBe("mouse");
+    expect(controlModeOf(sanitize({ ui: { controls: { x: "wasd" } } }), "x")).toBe("wasd");
+  });
+
+  it("reads only a character's own entry, never what every object inherits", () => {
+    expect(controlModeOf(sanitize(null), "constructor")).toBe("mouse");
+    expect(controlModeOf(sanitize(null), "toString")).toBe("mouse");
   });
 });
 

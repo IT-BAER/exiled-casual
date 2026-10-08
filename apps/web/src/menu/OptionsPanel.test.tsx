@@ -280,22 +280,32 @@ describe("graphics defaults", () => {
 
 describe("keybinds tab", () => {
   const openTab = () => fireEvent.click(screen.getByRole("tab", { name: /keybinds/i }));
+  const pickWasd = () => fireEvent.click(screen.getByRole("radio", { name: /wasd/i }));
 
-  it("shows every action with its bound key", () => {
+  it("shows the click-to-move keymap first, with no movement keys in it", () => {
     setup();
     openTab();
-    expect(screen.getByRole("button", { name: /move up key/i }).textContent).toBe("W");
+    expect(screen.queryByRole("button", { name: /move up key/i })).toBeNull();
+    expect(screen.getByRole("button", { name: /skill 2 key/i }).textContent).toBe("W");
     expect(screen.getByRole("button", { name: /overlay map key/i }).textContent).toBe("Tab");
   });
 
-  it("rebinds on the next press and reports the whole settings object", () => {
+  it("switches to the WASD keymap, movement keys included", () => {
+    setup();
+    openTab();
+    pickWasd();
+    expect(screen.getByRole("button", { name: /move up key/i }).textContent).toBe("W");
+    expect(screen.getByRole("button", { name: /skill 5 key/i }).textContent).toBe("F");
+  });
+
+  it("rebinds on the next press in the keymap shown, leaving the other alone", () => {
     const { onChange } = setup();
     openTab();
     fireEvent.click(screen.getByRole("button", { name: /pick up item key/i }));
-    fireEvent.keyDown(window, { key: "f" });
+    fireEvent.keyDown(window, { key: "v" });
     const next = onChange.mock.calls[0]![0] as Settings;
-    expect(next.ui.keybinds.pickup).toBe("f");
-    expect(next.ui.keybinds.moveUp).toBe("w");
+    expect(next.ui.keybinds.mouse.pickup).toBe("v");
+    expect(next.ui.keybinds.wasd).toEqual(DEFAULT_SETTINGS.ui.keybinds.wasd);
   });
 
   it("a stolen key swaps: the other action takes the old one", () => {
@@ -304,8 +314,8 @@ describe("keybinds tab", () => {
     fireEvent.click(screen.getByRole("button", { name: /life flask key/i }));
     fireEvent.keyDown(window, { key: "g" });
     const next = onChange.mock.calls[0]![0] as Settings;
-    expect(next.ui.keybinds.flaskLife).toBe("g");
-    expect(next.ui.keybinds.pickup).toBe("q");
+    expect(next.ui.keybinds.mouse.flaskLife).toBe("g");
+    expect(next.ui.keybinds.mouse.pickup).toBe("1");
   });
 
   it("Escape cancels the listen without closing the panel or binding", () => {
@@ -317,22 +327,41 @@ describe("keybinds tab", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it("refuses a skill-row digit", () => {
+  it("takes a digit: the number row is no longer fixed to the skills", () => {
     const { onChange } = setup();
     openTab();
     fireEvent.click(screen.getByRole("button", { name: /portal to hideout key/i }));
     fireEvent.keyDown(window, { key: "3" });
-    expect(onChange).not.toHaveBeenCalled();
+    expect((onChange.mock.calls[0]![0] as Settings).ui.keybinds.mouse.portal).toBe("3");
   });
 
-  it("resets the keybinds alone", () => {
-    const { onChange } = setup({
-      ui: { ...DEFAULT_SETTINGS.ui, keybinds: { ...DEFAULT_SETTINGS.ui.keybinds, pickup: "f" } },
-    });
+  it("resets the keymap shown alone", () => {
+    const keybinds = {
+      mouse: { ...DEFAULT_SETTINGS.ui.keybinds.mouse, pickup: "v" },
+      wasd: { ...DEFAULT_SETTINGS.ui.keybinds.wasd, pickup: "v" },
+    };
+    const { onChange } = setup({ ui: { ...DEFAULT_SETTINGS.ui, keybinds } });
     openTab();
     fireEvent.click(screen.getByText("Reset to Default"));
     const next = onChange.mock.calls[0]![0] as Settings;
-    expect(next.ui.keybinds).toEqual(DEFAULT_SETTINGS.ui.keybinds);
+    expect(next.ui.keybinds.mouse).toEqual(DEFAULT_SETTINGS.ui.keybinds.mouse);
+    expect(next.ui.keybinds.wasd.pickup).toBe("v");
     expect(next.graphics).toEqual(DEFAULT_SETTINGS.graphics);
   });
+
+  it("in the game, the switch is the character's own movement and opens on it", () => {
+    const onChange = vi.fn();
+    const settings: Settings = { ...DEFAULT_SETTINGS, ui: { ...DEFAULT_SETTINGS.ui, controls: { hero: "wasd" } } };
+    render(
+      <OptionsPanel
+        settings={settings} onChange={onChange} onClose={() => {}}
+        dock={{ bottom: "0px", clear: "0px" }} characterId="hero"
+      />,
+    );
+    openTab();
+    expect(screen.getByRole("button", { name: /move up key/i }).textContent).toBe("W");
+    fireEvent.click(screen.getByRole("radio", { name: /click to move/i }));
+    expect((onChange.mock.calls[0]![0] as Settings).ui.controls).toEqual({ hero: "mouse" });
+  });
 });
+

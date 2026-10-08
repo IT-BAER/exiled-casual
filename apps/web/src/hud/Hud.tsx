@@ -7,7 +7,7 @@ import { PANEL_W } from "./layout";
 import { SkillTooltip } from "./SkillTooltip";
 import { XpBar } from "./XpBar";
 import { playDropSound } from "../audio/drop-sound";
-import { DEFAULT_SETTINGS, MOUSE_SLOT_BASE, MOVE_SOCKET, SKILL_SLOT_COUNT } from "../settings";
+import { DEFAULT_KEYBINDS_BY_MODE, DEFAULT_SETTINGS, MOUSE_SLOT_BASE, MOVE_SOCKET, SKILL_ACTIONS, SKILL_SLOT_COUNT, type ControlMode, type Keybinds } from "../settings";
 import { VENDOR_NAME, VENDOR_TITLE } from "../npc";
 
 // Bottom HUD geometry, measured off reference-screenshots/poe1-lower-bar.png, a 2558x388 crop
@@ -91,11 +91,9 @@ const PLUS_W = `${(ORB_VW * 0.22).toFixed(2)}vw`;
 // already sits between the bar's edge and its first slot.
 const BAR_PAD = `calc(${BAR_PAD_EXPR})`;
 
-// Five skill slots on keys 1-5, then the three mouse buttons, as PoE1's bar does:
-// left, middle and right click each hold a skill of their own. Only three skills
-// exist, the rest render as empty sockets.
-// PoE2 itself puts skills on QWERT and flasks on the digits — we swap the two, so
-// the movement hand keeps the flasks. Deliberate, not a parity miss.
+// Five numbered skill slots, then the three mouse buttons, as PoE1's bar does:
+// left, middle and right click each hold a skill of their own. The numbered
+// slots' keys come from the keymap: PoE2's QWERT, or QERTF when WASD walks.
 type SkillSlot = {
   id: string | null; key: string; mouse?: boolean;
   icon?: string; glow?: string; label?: string;
@@ -130,11 +128,16 @@ const MOUSE_KEYS: readonly string[] = ["L", "M", "R"];
 
 /** Socket `i` of the bar. Works for both rows: past MOUSE_SLOT_BASE the key is
  *  a mouse letter, and MOVE_SOCKET gets a label instead of an icon. */
-function socketFor(bar: (string | null)[], i: number, names?: ReadonlyMap<string, string>): SkillSlot {
+function socketFor(
+  bar: (string | null)[],
+  i: number,
+  keybinds: Keybinds,
+  names?: ReadonlyMap<string, string>,
+): SkillSlot {
   const id = bar[i] ?? null;
   const art = id ? SKILL_ART[id] : undefined;
   const mouse = i >= MOUSE_SLOT_BASE;
-  const key = mouse ? MOUSE_KEYS[i - MOUSE_SLOT_BASE]! : String(i + 1);
+  const key = socketKeyLabel(i, keybinds);
   // A label only stands in for art that does not exist; Move has its own icon now.
   const label = art ? undefined
     : id === MOVE_SOCKET ? "Move"
@@ -320,8 +323,8 @@ function SkillTile({ slot, n, cooldowns, onHover, drag, onAssignRequest, flash }
 const PICK_TILE = 40;
 
 /** The key caption a socket index wears, matching the bar's own two rows. */
-function socketKeyLabel(i: number): string {
-  return i >= MOUSE_SLOT_BASE ? MOUSE_KEYS[i - MOUSE_SLOT_BASE]! : String(i + 1);
+function socketKeyLabel(i: number, keybinds: Keybinds): string {
+  return i >= MOUSE_SLOT_BASE ? MOUSE_KEYS[i - MOUSE_SLOT_BASE]! : keybinds[SKILL_ACTIONS[i]!].toUpperCase();
 }
 
 /** One choosable tile in the picker: art if the entry has any, else its initial. */
@@ -374,8 +377,9 @@ function PickTile({ id, name, bound, selected, onPick, onHover }: {
  * (PoE2's own socket picker, circled bottom right): a titled panel of icon TILES in
  * labelled sections, each captioned with the key it is bound to, not a text menu.
  */
-function SkillPicker({ skills, details, bar, current, onPick, onClose }: {
+function SkillPicker({ skills, details, bar, keybinds, current, onPick, onClose }: {
   skills: ReadonlyMap<string, string>;
+  keybinds: Keybinds;
   /** Full skill records, so a hovered tile shows the same tooltip the bar does. */
   details: Snapshot["skills"];
   bar: readonly (string | null)[];
@@ -396,11 +400,12 @@ function SkillPicker({ skills, details, bar, current, onPick, onClose }: {
   const boundKey = (id: string | null): string | null => {
     if (id === null) return null;
     const i = bar.indexOf(id);
-    return i === -1 ? null : socketKeyLabel(i);
+    return i === -1 ? null : socketKeyLabel(i, keybinds);
   };
 
   const sections: { title: string; items: { id: string | null; name: string }[] }[] = [
-    { title: "Actions", items: [{ id: MOVE_SOCKET, name: "Move" }, { id: null, name: "Clear" }] },
+    // No Move: mouse mode keeps it on left click, and WASD walks on the keys.
+    { title: "Actions", items: [{ id: null, name: "Clear" }] },
     { title: "Skills", items: [...skills].map(([id, name]) => ({ id: id as string | null, name })) },
   ];
 
@@ -442,10 +447,10 @@ function SkillPicker({ skills, details, bar, current, onPick, onClose }: {
   );
 }
 
-// One life flask on Q, one mana flask on E.
+// One life flask, one mana flask, on whatever keys the keymap gives them.
 const FLASKS = [
-  { kind: "life", key: "Q" },
-  { kind: "mana", key: "E" },
+  { kind: "life", action: "flaskLife" },
+  { kind: "mana", action: "flaskMana" },
 ] as const;
 
 /** A single flask: recessed PoE2 socket holding the painted vial, hotkey at its foot. */
@@ -528,6 +533,10 @@ interface HudProps {
   /** Toggle the inventory from the chest at the head of the mouse row, and the key bound to it. */
   onToggleInventory?: () => void;
   inventoryKey?: string;
+  /** The active keymap, for the captions under the flasks and the numbered sockets. */
+  keybinds?: Keybinds;
+  /** Mouse mode keeps left click on Move: that socket is fixed. */
+  controlMode?: ControlMode;
 }
 
 /**
@@ -759,6 +768,8 @@ export function Hud({
   onOpenPassives,
   onToggleInventory,
   inventoryKey = "i",
+  keybinds = DEFAULT_KEYBINDS_BY_MODE.mouse,
+  controlMode = "mouse",
 }: HudProps) {
   const [hoveredSkill, setHoveredSkill] = React.useState<string | null>(null);
   // Length-normalised here rather than trusted: the bar rides in the save, and a
@@ -1164,7 +1175,7 @@ export function Hud({
           const max = f.kind === "life"
             ? snapshot.player.flasks.lifeMax
             : snapshot.player.flasks.manaMax;
-          return <Flask key={f.key} kind={f.kind} hotkey={f.key} charges={charges} max={max} />;
+          return <Flask key={f.kind} kind={f.kind} hotkey={keybinds[f.action].toUpperCase()} charges={charges} max={max} />;
         })}
       </div>
 
@@ -1267,15 +1278,16 @@ export function Hud({
         <div style={{ display: "flex", gap: `${SLOT_GAP}px`, boxShadow: "0 1px 0 rgba(101,81,49,0.85)" }}>
           {MOUSE_KEYS.map((_, i) => {
             const idx = MOUSE_SLOT_BASE + i;
+            const fixed = controlMode === "mouse" && idx === MOUSE_SLOT_BASE;
             return (
               <SkillTile
                 key={MOUSE_KEYS[i]}
-                slot={socketFor(bar, idx, skillNames)}
+                slot={socketFor(bar, idx, keybinds, skillNames)}
                 n={idx + 1}
                 cooldowns={cooldowns}
                 onHover={setHoveredSkill}
-                drag={{ index: idx, onDrop: swapSockets }}
-                onAssignRequest={() => setAssigning(idx)}
+                drag={fixed ? undefined : { index: idx, onDrop: swapSockets }}
+                onAssignRequest={fixed ? undefined : () => setAssigning(idx)}
                 flash={bar[idx] !== null && flashing.has(bar[idx]!)}
               />
             );
@@ -1299,7 +1311,7 @@ export function Hud({
           {bar.slice(0, MOUSE_SLOT_BASE).map((_, i) => (
             <SkillTile
               key={i}
-              slot={socketFor(bar, i, skillNames)}
+              slot={socketFor(bar, i, keybinds, skillNames)}
               n={i + 1}
               cooldowns={cooldowns}
               onHover={setHoveredSkill}
@@ -1321,6 +1333,7 @@ export function Hud({
           skills={skillNames}
           details={snapshot.skills}
           bar={bar}
+          keybinds={keybinds}
           current={bar[assigning] ?? null}
           onPick={(id) => assignSocket(assigning, id)}
           onClose={() => setAssigning(null)}

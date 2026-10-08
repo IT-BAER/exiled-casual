@@ -12,7 +12,7 @@
  * is one copy in the client and it is never re-read behind a screen's back.
  */
 import React from "react";
-import type { RosterBlob } from "@exiled/persistence";
+import { putSettings, type RosterBlob } from "@exiled/persistence";
 import { emptyRoster, headers } from "@exiled/persistence";
 import { DEFAULT_CLASS_ID } from "@exiled/rules";
 import { MainMenu } from "./menu/MainMenu";
@@ -66,8 +66,13 @@ type Screen =
   | { kind: "select" }
   | { kind: "create" }
   | { kind: "info"; which: "about" }
-  | { kind: "game"; characterId: string }
+  | { kind: "game"; characterId: string; fresh: boolean }
   | { kind: "viewer" };
+
+/** Never played: the save is written on first entry, so a null state is a new character. */
+function isFresh(roster: RosterBlob, id: string): boolean {
+  return roster.characters.find((c) => c.id === id)?.state === null;
+}
 
 /** `?play` in the URL: see the roster effect below. Read once, outside render. */
 const AUTOPLAY =
@@ -116,7 +121,7 @@ export function App(): React.ReactElement {
       // driven browser can reach the game without three clicks it cannot see
       // (the menus are canvas-adjacent and the mode dialog remounts under a
       // snapshot). DEV only: this is a test hook, not a shortcut we ship.
-      if (DEV && first && AUTOPLAY && !VIEWER) setScreen({ kind: "game", characterId: first });
+      if (DEV && first && AUTOPLAY && !VIEWER) setScreen({ kind: "game", characterId: first, fresh: isFresh(r, first) });
     });
     return () => { live = false; };
   }, []);
@@ -132,6 +137,8 @@ export function App(): React.ReactElement {
       setSettings(next);
       setSoundMix(next.sound);
       saveSettingsSoon(roster, next);
+      // The copy a later create or delete saves from must carry them too.
+      setRoster((r) => putSettings(r, next));
     },
     [roster],
   );
@@ -218,6 +225,7 @@ export function App(): React.ReactElement {
         >
           <GameView
             characterId={screen.characterId}
+            fresh={screen.fresh}
             settings={settings}
             onSettingsChange={changeSettings}
             onExit={() => setScreen({ kind: "select" })}
@@ -269,7 +277,7 @@ export function App(): React.ReactElement {
             selectedId={selectedId}
             cap={cap}
             onSelect={setSelectedId}
-            onPlay={(id) => setScreen({ kind: "game", characterId: id })}
+            onPlay={(id) => setScreen({ kind: "game", characterId: id, fresh: isFresh(roster, id) })}
             onCreate={() => setScreen({ kind: "create" })}
             onDelete={(id) => {
               void deleteCharacter(roster, id).then((next) => {

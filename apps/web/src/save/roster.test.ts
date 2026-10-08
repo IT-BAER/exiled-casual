@@ -78,4 +78,18 @@ describe("saveSettingsSoon", () => {
     const saved = await loadRoster(store);
     expect(saved!.stash).toEqual({ keep: true });
   });
+
+  it("never puts back a character save the game wrote after the menu read the roster", async () => {
+    // The menu's copy is from before Play; the worker then saved the character.
+    const stale = { ...emptyRoster(), characters: [{
+      id: "c1", name: "Hero", classId: "class.ember", level: 1, league: "Local", createdAt: 1, state: null,
+    }] };
+    await saveRoster(store, { ...stale, characters: [{ ...stale.characters[0]!, state: { played: true }, level: 2 }] });
+    saveSettingsSoon(stale, DEFAULT_SETTINGS);
+    await vi.advanceTimersByTimeAsync(SETTINGS_DEBOUNCE_MS + 10);
+    await flushSettingsSave();
+    const saved = await loadRoster(store);
+    expect(saved!.characters[0]!.state).toEqual({ played: true });
+    expect(saved!.settings).toEqual(DEFAULT_SETTINGS);
+  });
 });
