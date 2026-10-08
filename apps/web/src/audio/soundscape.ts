@@ -4,7 +4,7 @@ import {
   startSfxLoop, setSfxLoopVolume, stopSfxLoop, stopAllSfxLoops,
   worldSfxMix,
 } from "./sfx";
-import { setRoom } from "./bus";
+import { setRoom, type RoomProfile } from "./bus";
 import { playCoinPickup } from "./drop-sound";
 import { fxProfile } from "../render/skill-fx";
 
@@ -129,23 +129,26 @@ const GROUND: Record<string, string> = {
 const DEFAULT_GROUND = "stone";
 
 /**
- * How much of each cue's own reverb the place gives back, as a multiplier.
+ * The acoustics of each place: `amount` is how much of each cue's own reverb it
+ * gives back, as a multiplier, and the rest shape the impulse, the floor and the air.
  *
  * The axis is enclosure, not biome: a stone hall and a cave return almost
  * everything, open sand returns nearly nothing, and trees sit between because
  * they scatter what they do not swallow. The hideout is a vault with a roof, so
  * it is wetter than one, and it is what an unlisted area falls back to.
  */
-const ROOM: Record<string, number> = {
-  vaal_stone: 1.6,
-  swamp: 0.7,
-  forest: 0.55,
-  desert: 0.3,
+export const ROOM_PROFILE: Record<string, RoomProfile> = {
+  vaal_stone: { amount: 1.6, seconds: 2.4, decay: 1.8, preDelay: 0.020, reflections: 6, wetFloor: 0.20, airHz: 6000, airDb: -3 },
+  swamp: { amount: 0.7, seconds: 1.0, decay: 2.6, preDelay: 0.010, reflections: 3, wetFloor: 0.14, airHz: 5000, airDb: -4 },
+  forest: { amount: 0.55, seconds: 0.9, decay: 2.8, preDelay: 0.008, reflections: 5, wetFloor: 0.14, airHz: 7000, airDb: -2.5 },
+  desert: { amount: 0.3, seconds: 0.35, decay: 3.0, preDelay: 0.004, reflections: 3, wetFloor: 0.12, airHz: 8000, airDb: -2 },
   // The most open place in the game: sand underfoot and water on one side, so
-  // there is nothing at all to give a cue back.
-  coast: 0.2,
+  // there is almost nothing to give a cue back but a short slap off the cliff.
+  coast: { amount: 0.2, seconds: 0.35, decay: 3.0, preDelay: 0.004, reflections: 2, wetFloor: 0.12, airHz: 7000, airDb: -3 },
 };
-const HIDEOUT_ROOM = 1.15;
+export const HIDEOUT_PROFILE: RoomProfile = {
+  amount: 1.15, seconds: 1.4, decay: 2.2, preDelay: 0.012, reflections: 4, wetFloor: 0.16, airHz: 6000, airDb: -2,
+};
 /** Falls per ground on disk, `footstep-<ground>-1..N`. */
 const GROUND_VARIANTS = 3;
 /**
@@ -185,7 +188,7 @@ interface Options {
   play?: (name: string, volume?: number, distance?: number, pan?: number) => void;
   loop?: (name: string, key: string, volume?: number, distance?: number, pan?: number) => void;
   loopVolume?: (key: string, volume: number, distance?: number, pan?: number) => void;
-  room?: (amount: number) => void;
+  room?: (profile: RoomProfile) => void;
   stopLoop?: (key: string) => void;
   stopAllLoops?: () => void;
   /** Gold collected. Synthesized, like the drop cues it answers (drop-sound.ts). */
@@ -238,7 +241,7 @@ export function createSoundscape(opts: Options = {}): Soundscape {
     lastStepTick = 0;
     if (biomeId === undefined) return;
     ground = GROUND[biomeId ?? ""] ?? DEFAULT_GROUND;
-    room(biomeId === null ? HIDEOUT_ROOM : ROOM[biomeId] ?? HIDEOUT_ROOM);
+    room(biomeId === null ? HIDEOUT_PROFILE : ROOM_PROFILE[biomeId] ?? HIDEOUT_PROFILE);
     // Ahead of the first step rather than on it: an area message arrives well
     // before the player has walked anywhere in the place it describes.
     void preloadSfx(Array.from(

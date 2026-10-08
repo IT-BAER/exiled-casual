@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
 import { testPlayer } from "../test-fixtures";
-import { createSoundscape } from "./soundscape";
+import { createSoundscape, ROOM_PROFILE, HIDEOUT_PROFILE } from "./soundscape";
+import type { RoomProfile } from "./bus";
 import { ambientCue, AMBIENT_BY_BIOME } from "./sfx";
 import { BIOMES } from "@exiled/content-runtime";
 
@@ -458,10 +459,10 @@ describe("sustained skills", () => {
 });
 
 describe("environment", () => {
-  /** Every reset's room amount, in order. */
-  function rooms(biomeId: string | null): number[] {
-    const seen: number[] = [];
-    createSoundscape({ room: (a) => seen.push(a) }).reset(biomeId);
+  /** Every reset's room profile, in order. */
+  function rooms(biomeId: string | null | undefined): RoomProfile[] {
+    const seen: RoomProfile[] = [];
+    createSoundscape({ room: (p) => seen.push(p) }).reset(biomeId);
     return seen;
   }
 
@@ -469,8 +470,21 @@ describe("environment", () => {
     const [stone] = rooms("vaal_stone");
     const [sand] = rooms("desert");
     const [hideout] = rooms(null);
-    expect(stone!).toBeGreaterThan(hideout!);
-    expect(hideout!).toBeGreaterThan(sand!);
+    expect(stone!.amount).toBeGreaterThan(hideout!.amount);
+    expect(hideout!.amount).toBeGreaterThan(sand!.amount);
+  });
+
+  it("hands the matching profile over, and the hideout's for null and unknown ids", () => {
+    for (const [id, profile] of Object.entries(ROOM_PROFILE)) expect(rooms(id)).toEqual([profile]);
+    expect(rooms(null)).toEqual([HIDEOUT_PROFILE]);
+    expect(rooms("not_a_biome")).toEqual([HIDEOUT_PROFILE]);
+    expect(rooms(undefined)).toEqual([]);
+  });
+
+  it("has a room profile for every biome with an ambient loop", () => {
+    for (const id of Object.keys(AMBIENT_BY_BIOME)) {
+      expect(ROOM_PROFILE[id], `${id} has no room profile`).toBeDefined();
+    }
   });
 
   it("reports how far a cue was as well as how loud, so it can be muffled", () => {
