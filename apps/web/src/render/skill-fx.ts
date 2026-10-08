@@ -16,6 +16,7 @@ import {
 import { Mesh } from "@babylonjs/core";
 import type { AbstractMesh, Scene } from "@babylonjs/core";
 import { hitSpray } from "./hit-spray";
+import { hitSparkle } from "./hit-sparkle";
 
 /**
  * Fire FX for the three starter skills. Kept out of `meshes.ts` because almost
@@ -793,6 +794,7 @@ export function warmSkillFx(scene: Scene): void {
   emberBurst(scene, Vector3.Zero());
   meleeImpact(scene, Vector3.Zero(), 1, 0);
   hitSpray(scene);
+  hitSparkle(scene);
   // The first swing's ribbon compiled its glow and shadow-map variants mid-fight,
   // squashed and not (see warmEntityLooks).
   for (const squash of [1, 0.98]) {

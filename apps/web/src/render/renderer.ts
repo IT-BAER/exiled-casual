@@ -17,6 +17,7 @@ import { FLINCH_TICKS, flinchPose, flinchStrength, kick, leanToTilt } from "./hi
 import type { Flinch } from "./hit-reaction";
 import { flashPeak, hitSpray, hitStrength, sprayKindOf } from "./hit-spray";
 import { contactPoint } from "./contact";
+import { hitSparkle } from "./hit-sparkle";
 
 /** Sim rate. Consecutive snapshots are one tick apart, which is what turns a
  *  position delta into a ground speed for the animation state machine. */
@@ -608,6 +609,7 @@ export class SnapshotRenderer {
           if (burst) {
             meleeBursts++;
             meleeImpact(this.scene, at, e.x - blow.x, e.y - blow.z, flashPeak(strength));
+            hitSparkle(this.scene).emit(at, new Vector3(blow.x - e.x, 0, blow.z - e.y), strength);
           }
           this.spray(e, strength, blow, at);
         }
@@ -687,6 +689,7 @@ export class SnapshotRenderer {
     }
     if (areaChanged) {
       hitSpray(this.scene).clear();
+      hitSparkle(this.scene).clear();
       for (const patch of this.embers) patch.mesh.dispose();
       this.embers.length = 0;
     }
@@ -717,7 +720,7 @@ export class SnapshotRenderer {
           // Its burst fires on dispose: put it on the struck body's skin first, not
           // partway through the last interpolated step toward it.
           const last = prev?.entities.find((p) => p.id === id);
-          if (last?.spent) this.placeImpact(mesh, last, prev!);
+          if (last?.spent) this.placeImpact(mesh, last, prev!, next);
           rigOf(mesh)?.dispose();
           creatureOf(mesh)?.dispose();
           mesh.dispose();
@@ -855,11 +858,12 @@ export class SnapshotRenderer {
   }
 
   /** A spent projectile's mesh moved onto the body it struck, where its dispose bursts. */
-  private placeImpact(mesh: Mesh, last: SnapshotEntity, prev: Snapshot): void {
+  private placeImpact(mesh: Mesh, last: SnapshotEntity, prev: Snapshot, next: Snapshot): void {
     const struck = new Vector3(last.x, mesh.position.y, last.y);
-    let body: { id: number; x: number; y: number } | null = null;
+    type Body = { id: number; x: number; y: number; life?: number; maxLife?: number };
+    let body: Body | null = null;
     let bodyDist = HIT_REACH;
-    const candidates: { id: number; x: number; y: number }[] = (last.team ?? 0) === 0
+    const candidates: Body[] = (last.team ?? 0) === 0
       ? prev.entities.filter((p) => p.kind === "monster") : [prev.player];
     for (const c of candidates) {
       const d = Math.hypot(c.x - last.x, c.y - last.y);
@@ -875,6 +879,13 @@ export class SnapshotRenderer {
       const from = back.lengthSquared() > 1e-8 ? mesh.position.subtract(back.normalize()) : mesh.position.clone();
       const hit = contactPoint(target, from, centre, this.freePicks-- > 0);
       if (hit !== centre) at = hit;
+      const was = body.life ?? 0;
+      const now = body.id === next.player.id ? next.player : next.entities.find((n) => n.id === body.id);
+      const left = Math.max(0, now?.life ?? 0);
+      if (was > left) {
+        const strength = hitStrength((was - left) / (body.maxLife ?? was), left <= 0);
+        hitSparkle(this.scene).emit(at, from.subtract(at), strength);
+      }
     }
     mesh.position.copyFrom(at);
     mesh.computeWorldMatrix(true);
