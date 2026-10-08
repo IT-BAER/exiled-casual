@@ -5,9 +5,9 @@ import { bus, send, type Bus, type SoundCategory } from "./bus";
  *
  * Every master is a commercial library recording, curated rather than generated:
  * `tools/import_sfx.py` names the source file per cue and runs it through
- * `tools/trim_sfx.py` to Opus in WebM — 43 sounds in 490 KB. They share the bus with
- * the synthesised drop cue, so the Options volume covers everything and nothing
- * fights it for a context.
+ * `tools/trim_sfx.py` to Opus in WebM; the reward cues are layered from several
+ * library parts by `tools/build_reward_sfx.py` — 55 sounds in all. They share one
+ * bus, so the Options volume covers everything and nothing fights it for a context.
  *
  * Nothing here is model-rendered any more. The first two passes were, and generation
  * is what made everything sound like the same soft object: a stone construct and a bog
@@ -128,6 +128,18 @@ const VOICES: Record<string, Voice> = {
   // by a lot. Anything that competes with the click is a menu that buzzes.
   "ui-hover":                 { gain: 0.012, wet: 0.04, vary: 0.05 },
   "ui-panel-open":            { gain: 0.24, wet: 0.10, vary: 0.04 },
+  // Reward cues. Mean volume (ffmpeg volumedetect): monster-death -16.0 dB, drop-unique -16.9 dB,
+  // so the shared gain is 0.34 * 10^(0.9/20) = 0.377. Tonal cues never vary: the pitch is the signal.
+  "drop-normal":              { gain: 0.377, wet: 0.10, vary: 0 },
+  "drop-magic":               { gain: 0.377, wet: 0.22, vary: 0 },
+  "drop-rare":                { gain: 0.377, wet: 0.34, vary: 0 },
+  "drop-unique":              { gain: 0.377, wet: 0.50, vary: 0 },
+  "drop-currency":            { gain: 0.377, wet: 0.20, vary: 0 },
+  "drop-gold":                { gain: 0.189, wet: 0.12, vary: 0.06 },
+  "drop-gold-jackpot":        { gain: 0.377, wet: 0.30, vary: 0 },
+  "coin-pickup":              { gain: 0.377, wet: 0.08, vary: 0.08 },
+  "level-up":                 { gain: 0.377, wet: 0.30, vary: 0 },
+  "container-open":           { gain: 0.377, wet: 0.16, vary: 0.04 },
 };
 
 export type SfxName = keyof typeof VOICES & string;
@@ -136,6 +148,7 @@ export function sfxCategory(name: string): SoundCategory {
   if (name.startsWith("ambient-")) return "music";
   if (name.startsWith("skill-")) return "skills";
   if (name.startsWith("ui-")) return "interface";
+  if (/^(drop|coin|level|container)-/.test(name)) return "loot";
   return "environment";
 }
 
@@ -193,6 +206,9 @@ export const CORE_SFX: readonly string[] = [
   "skill-ember-bolt-flight", "skill-cinder-ground-loop",
   "monster-melee-hit", "monster-hurt", "monster-death", "player-hurt",
   "footstep-stone-1", "footstep-stone-2", "footstep-stone-3", "flask-drink",
+  // A drop must never be a silent first play.
+  "drop-normal", "drop-magic", "drop-rare", "drop-unique", "drop-currency", "drop-gold",
+  "drop-gold-jackpot", "coin-pickup", "level-up", "container-open",
 ];
 
 /**

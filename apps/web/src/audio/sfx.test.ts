@@ -154,7 +154,9 @@ describe("worldSfxMix", () => {
         ? "music"
         : name.startsWith("skill-")
         ? "skills"
-        : name.startsWith("ui-") ? "interface" : "environment";
+        : name.startsWith("ui-")
+        ? "interface"
+        : /^(drop|coin|level|container)-/.test(name) ? "loot" : "environment";
       expect(sfxCategory(name), name).toBe(expected);
     }
   });
