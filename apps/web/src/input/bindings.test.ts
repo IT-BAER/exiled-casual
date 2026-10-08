@@ -936,3 +936,166 @@ describe("attachBindings control modes", () => {
     expect(kinds()).toEqual([]);
   });
 });
+
+describe("attachBindings attack-move (mouse mode)", () => {
+  // Strike: melee, reach 1.6 to the target's surface.
+  const STRIKE = "skill.strike.v1";
+  const MONSTER = 9;
+  let canvas: HTMLCanvasElement;
+  let worker: { postMessage: ReturnType<typeof vi.fn> };
+  let b: ReturnType<typeof attachBindings>;
+
+  /** The cursor sits straight above (5, 7), where the monster stands unless moved. */
+  function attach(mode: ControlMode = "mouse") {
+    canvas = document.createElement("canvas");
+    document.body.appendChild(canvas);
+    worker = { postMessage: vi.fn() };
+    const bar: (string | null)[] = Array(8).fill(null);
+    bar[MOUSE_SLOT_BASE] = MOVE_SOCKET;
+    bar[MOUSE_SLOT_BASE + 2] = STRIKE;
+    bar[1] = STRIKE;
+    const binds = DEFAULT_KEYBINDS_BY_MODE[mode];
+    const scene = {
+      createPickingRay: () => downRay(5, 7),
+      pick: () => ({ hit: true, pickedPoint: { x: 5, z: 7 }, pickedMesh: null }),
+    } as unknown as Scene;
+    b = attachBindings(
+      canvas, worker as unknown as Worker, scene,
+      undefined, undefined, undefined, undefined,
+      (key) => bar[socketForKey(key, binds)] ?? null,
+      (button) => bar[MOUSE_SLOT_BASE + button] ?? null,
+      () => binds,
+      () => mode,
+    );
+  }
+
+  afterEach(() => {
+    b.detach();
+    canvas.remove();
+  });
+
+  const monster = (x = 5, y = 7) => ({ id: MONSTER, kind: "monster" as const, x, y, radius: 0.5 });
+  function snapWith(m: ReturnType<typeof monster> | null, casting = false): Snapshot {
+    const s = makeSnap(m ? [m] : []);
+    s.player.casting = casting;
+    return s;
+  }
+  const intents = () => worker.postMessage.mock.calls.map((c) => c[0]?.intent).filter(Boolean);
+  const kinds = () => intents().map((i) => i.kind);
+  function feed(s: Snapshot): string[] {
+    worker.postMessage.mockClear();
+    b.onSnapshot(s);
+    return kinds();
+  }
+  const rightPress = (shiftKey = false) => canvas.dispatchEvent(
+    new MouseEvent("pointerdown", { button: 2, buttons: 2, clientX: 5, clientY: 5, shiftKey, bubbles: true }));
+  const rightRelease = () => window.dispatchEvent(new MouseEvent("pointerup", { button: 2, buttons: 0, bubbles: true }));
+
+  it("an attack on a monster out of reach runs at it instead of swinging at air", () => {
+    attach();
+    b.onSnapshot(snapWith(monster()));
+    rightPress();
+    expect(intents()).toEqual([{ kind: "moveTo", x: fp(5), y: fp(7) }]);
+  });
+
+  it("swings once on arriving in reach, aimed at the monster, and stops there", () => {
+    attach();
+    b.onSnapshot(snapWith(monster()));
+    rightPress();
+    rightRelease();
+    worker.postMessage.mockClear();
+    b.onSnapshot(snapWith(monster(1.5, 0)));
+    expect(intents()).toEqual([
+      { kind: "stop" },
+      { kind: "useSkill", skillId: STRIKE, tx: fp(1.5), ty: fp(0) },
+    ]);
+    expect(feed(snapWith(monster(1.5, 0)))).toEqual([]);
+  });
+
+  it("follows a monster that moves while he runs at it", () => {
+    attach();
+    b.onSnapshot(snapWith(monster()));
+    rightPress();
+    rightRelease();
+    worker.postMessage.mockClear();
+    b.onSnapshot(snapWith(monster(6, 8)));
+    expect(intents()).toEqual([{ kind: "moveTo", x: fp(6), y: fp(8) }]);
+  });
+
+  it("gives up when the monster is gone", () => {
+    attach();
+    b.onSnapshot(snapWith(monster()));
+    rightPress();
+    rightRelease();
+    expect(feed(snapWith(null))).toEqual([]);
+    expect(feed(snapWith(monster(1, 0)))).toEqual([]);
+  });
+
+  it("waits for a cast already winding up before it swings", () => {
+    attach();
+    b.onSnapshot(snapWith(monster()));
+    rightPress();
+    rightRelease();
+    expect(feed(snapWith(monster(1, 0), true))).not.toContain("useSkill");
+    expect(feed(snapWith(monster(1, 0)))).toEqual(["stop", "useSkill"]);
+  });
+
+  it("a monster already in reach is struck at once, without a walk", () => {
+    attach();
+    b.onSnapshot(snapWith(monster(1, 0)));
+    // The cursor still points at (5, 7): nothing is there, so this is a ground cast.
+    rightPress();
+    expect(kinds()).toEqual(["useSkill"]);
+  });
+
+  it("an attack on bare ground swings where he stands, as before", () => {
+    attach();
+    b.onSnapshot(snapWith(null));
+    rightPress();
+    expect(kinds()).toEqual(["useSkill"]);
+  });
+
+  it("Shift attacks in place, PoE's Attack in Place", () => {
+    attach();
+    b.onSnapshot(snapWith(monster()));
+    rightPress(true);
+    expect(kinds()).toEqual(["useSkill"]);
+  });
+
+  it("a skill key on a monster out of reach runs at it too", () => {
+    attach();
+    b.onSnapshot(snapWith(monster()));
+    canvas.dispatchEvent(new MouseEvent("pointermove", { buttons: 0, clientX: 5, clientY: 5, bubbles: true }));
+    worker.postMessage.mockClear();
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "w", code: "KeyW" }));
+    expect(kinds()).toEqual(["moveTo"]);
+  });
+
+  it("WASD mode keeps swinging where he stands", () => {
+    attach("wasd");
+    b.onSnapshot(snapWith(monster()));
+    rightPress();
+    expect(kinds()).toEqual(["useSkill"]);
+  });
+
+  it("a ground click calls the run off", () => {
+    attach();
+    b.onSnapshot(snapWith(monster()));
+    rightPress();
+    rightRelease();
+    b.onSnapshot(snapWith(monster(6, 8))); // still out there, still being chased
+    canvas.dispatchEvent(new MouseEvent("pointerdown", { button: 0, buttons: 1, clientX: 5, clientY: 5, bubbles: true }));
+    window.dispatchEvent(new MouseEvent("pointerup", { button: 0, buttons: 0, bubbles: true }));
+    expect(feed(snapWith(monster(1, 0)))).toEqual([]);
+  });
+
+  it("losing focus mid-run stops him and drops the attack", () => {
+    attach();
+    b.onSnapshot(snapWith(monster()));
+    rightPress();
+    worker.postMessage.mockClear();
+    window.dispatchEvent(new Event("blur"));
+    expect(kinds()).toEqual(["stop"]);
+    expect(feed(snapWith(monster(1, 0)))).toEqual([]);
+  });
+});

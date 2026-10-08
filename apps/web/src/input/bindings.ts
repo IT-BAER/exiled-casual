@@ -1,4 +1,5 @@
-import type { Intent, Snapshot, SpawnKind, ToWorker } from "@exiled/protocol";
+import type { Intent, Snapshot, SnapshotEntity, SpawnKind, ToWorker } from "@exiled/protocol";
+import { toNumber } from "@exiled/fixed-point";
 import { isTextEntry } from "./text-entry";
 import { heldToMoveIntent, keyToIntent, pointerToWorld } from "./intents";
 import type { Node, Scene } from "@babylonjs/core";
@@ -84,6 +85,27 @@ function aimHeightFor(skillId: string): number {
 }
 
 /**
+ * How far a skill aimed at a body reaches, in world units, or null for one aimed
+ * at a spot. A swing counts to the target's surface (`skill-cast.ts`). The level-1
+ * reach is the shortest the gem can have, so the run never stops short of a hit.
+ */
+function reachOf(skillId: string): number | null {
+  for (const e of SKILLS.get(skillId)?.effects ?? []) {
+    if (e.type === "meleeStrike") return toNumber(e.reachFixed);
+    if (e.type === "spawnProjectile") return toNumber(e.maxRangeFixed);
+  }
+  return null;
+}
+
+/** Slack under the reach: a tick of the monster's own walk plus the wind-up it swings through. */
+const REACH_MARGIN = 0.2;
+
+/** Whether a skill with `reach` lands on `m` from where the player stands. */
+function inReach(snap: Snapshot, m: SnapshotEntity, reach: number): boolean {
+  return Math.hypot(m.x - snap.player.x, m.y - snap.player.y) <= reach + (m.radius ?? 0) - REACH_MARGIN;
+}
+
+/**
  * The column a click on an interactable is really tested against, in world units:
  * a man's width and a man's height, standing at his feet.
  *
@@ -123,6 +145,7 @@ export function columnHit(
   ray: { origin: { x: number; y: number; z: number }; direction: { x: number; y: number; z: number } },
   cx: number,
   cz: number,
+  radius = PICK_RADIUS,
 ): number | null {
   const ox = ray.origin.x - cx;
   const oz = ray.origin.z - cz;
@@ -130,7 +153,7 @@ export function columnHit(
   const dz = ray.direction.z;
   const a = dx * dx + dz * dz;
   const b = 2 * (ox * dx + oz * dz);
-  const c = ox * ox + oz * oz - PICK_RADIUS * PICK_RADIUS;
+  const c = ox * ox + oz * oz - radius * radius;
   // Straight down the axis: inside the disc or nowhere near it.
   if (a < 1e-9) return c <= 0 ? -ray.origin.y / ray.direction.y : null;
   const disc = b * b - 4 * a * c;
@@ -253,6 +276,12 @@ export function attachBindings(
   // nothing is pending. Cleared on interact fire, entity disappearance, or a
   // subsequent non-interactable click (so clicking away cancels the approach).
   let pendingInteractId: number | null = null;
+  // An attack pressed on a monster out of its reach: run at the monster, swing
+  // once in reach (PoE's default). Cleared by the swing, the monster leaving the
+  // snapshot, a ground click, another cast, or lost focus.
+  let pendingAttack: { skillId: string; targetId: number } | null = null;
+  // Shift held at the press is PoE's Attack in Place: swing from here, never run.
+  let shiftHeld = false;
   // Kinds of furniture whose panel is open because the player walked up to it,
   // so the walk away can close it again.
   const openedNear = new Set<"mapDevice" | "stash" | "vendor">();
@@ -289,6 +318,56 @@ export function attachBindings(
     return best === null ? null : best.id;
   }
 
+  /** The monster under a screen pixel, by a column a body's width at least. */
+  function monsterAt(sx: number, sy: number): SnapshotEntity | null {
+    if (!latestSnap) return null;
+    const ray = scene.createPickingRay(sx, sy, null, null);
+    let best: { e: SnapshotEntity; t: number } | null = null;
+    for (const e of latestSnap.entities) {
+      if (e.kind !== "monster") continue;
+      const t = columnHit(ray, e.x, e.y, Math.max(e.radius ?? 0, PICK_RADIUS));
+      if (t !== null && (best === null || t < best.t)) best = { e, t };
+    }
+    return best?.e ?? null;
+  }
+
+  /**
+   * Start the run at the monster under the cursor when `skillId` cannot reach it
+   * from here. True when the run started and the cast waits for arrival. Mouse
+   * mode only: in WASD the keys walk, and a cast must never steer him.
+   */
+  function approachToAttack(skillId: string, sx: number, sy: number): boolean {
+    if (controlMode?.() === "wasd" || shiftHeld || !latestSnap) return false;
+    const reach = reachOf(skillId);
+    if (reach === null) return false;
+    const m = monsterAt(sx, sy);
+    if (!m || inReach(latestSnap, m, reach)) return false;
+    pendingAttack = { skillId, targetId: m.id };
+    pendingInteractId = null;
+    post({ kind: "moveTo", ...pointerToWorld({ x: m.x, z: m.y }) });
+    return true;
+  }
+
+  /** One snapshot of the run: follow the monster, then swing once it is in reach. */
+  function chaseAttack(snap: Snapshot, attack: { skillId: string; targetId: number }): void {
+    const m = snap.entities.find((e) => e.id === attack.targetId && e.kind === "monster");
+    if (!m) {
+      pendingAttack = null; // dead or gone with the area
+      return;
+    }
+    const at = pointerToWorld({ x: m.x, z: m.y });
+    if (!inReach(snap, m, reachOf(attack.skillId) ?? 0)) {
+      post({ kind: "moveTo", ...at });
+      return;
+    }
+    // A wind-up still landing would make the sim drop this swing.
+    if (snap.player.casting) return;
+    // A cast does not stop a walk, so without the stop he swings while running through it.
+    post({ kind: "stop" });
+    post({ kind: "useSkill", skillId: attack.skillId, tx: at.x, ty: at.y });
+    pendingAttack = null;
+  }
+
   function setHover(id: number | null) {
     if (id === hoveredEntityId) return; // no change — avoid spurious re-renders
     hoveredEntityId = id;
@@ -305,6 +384,7 @@ export function attachBindings(
 
   function onKeyDown(e: KeyboardEvent) {
     if (isTextEntry(e.target)) return;
+    shiftHeld = e.shiftKey;
     // Checked before the skill row, which shares these keys' `key` values.
     const spawn = SPAWN_KEYS[e.code];
     if (spawn) {
@@ -342,13 +422,17 @@ export function attachBindings(
     // resolves it again for the intent itself (a bar lookup, not work worth saving).
     const keySkill = skillForKey?.(e.key);
     const intent = keyToIntent(e.key, aimAt(keySkill ? aimHeightFor(keySkill) : AIM_HEIGHT), skillForKey, binds());
-    if (intent) {
-      post(intent);
-      if (intent.kind === "useSkill") skillKeysHeld.set(e.code || e.key, e.key);
+    if (!intent) return;
+    if (intent.kind === "useSkill") {
+      skillKeysHeld.set(e.code || e.key, e.key);
+      if (lastScreen && approachToAttack(intent.skillId, lastScreen.x, lastScreen.y)) return;
+      pendingAttack = null;
     }
+    post(intent);
   }
 
   function onKeyUp(e: KeyboardEvent) {
+    shiftHeld = e.shiftKey;
     skillKeysHeld.delete(e.code || e.key);
     const k = e.key.toLowerCase();
     // Membership is the held list itself, not the current binds: a key rebound
@@ -362,6 +446,7 @@ export function attachBindings(
   }
 
   function onPointerMove(e: PointerEvent) {
+    shiftHeld = e.shiftKey;
     // A chorded press or release arrives here, not on pointerdown/up. See syncButtons.
     syncButtons(e, e.buttons);
     lastScreen = { x: e.clientX, y: e.clientY };
@@ -385,9 +470,11 @@ export function attachBindings(
   function castFromMouse(button: number, sx: number, sy: number): boolean {
     const skillId = skillForMouse?.(button);
     if (!skillId || skillId === MOVE_SOCKET) return false;
+    if (approachToAttack(skillId, sx, sy)) return true;
     const at = planePoint(scene, sx, sy, aimHeightFor(skillId));
     if (!at) return true; // bound, just no ground under the cursor this frame
     const aim = pointerToWorld(at);
+    pendingAttack = null;
     post({ kind: "useSkill", skillId, tx: aim.x, ty: aim.y });
     return true;
   }
@@ -444,6 +531,7 @@ export function attachBindings(
       const world = pointerToWorld(floor);
       post({ kind: "moveTo", x: world.x, y: world.y });
       pendingInteractId = interactable;
+      pendingAttack = null;
       return;
     }
     if (leftAction !== MOVE_SOCKET) {
@@ -457,6 +545,7 @@ export function attachBindings(
     // Ground or other non-interactable click: normal move + cancel any queued interact.
     post({ kind: "moveTo", x: world.x, y: world.y });
     pendingInteractId = null;
+    pendingAttack = null;
     lastScreen = { x: e.clientX, y: e.clientY };
     pointerHeld = true;
   }
@@ -470,6 +559,7 @@ export function attachBindings(
   // OR/AND the event's own button in, because a synthetic event may carry a
   // `buttons` that has not caught up with the button it reports.
   function onPointerDown(e: PointerEvent) {
+    shiftHeld = e.shiftKey;
     if (e.button === 1 || e.button === 2) e.preventDefault();
     syncButtons(e, e.buttons | (BUTTON_BIT[e.button] ?? 0));
   }
@@ -494,6 +584,11 @@ export function attachBindings(
     buttonsMask = 0;
     skillButtonsHeld.clear();
     skillKeysHeld.clear();
+    shiftHeld = false;
+    if (pendingAttack) {
+      pendingAttack = null;
+      post({ kind: "stop" });
+    }
     if (held.length === 0) return;
     held.length = 0;
     post(heldToMoveIntent(held, binds()));
@@ -511,20 +606,26 @@ export function attachBindings(
    */
   function onSnapshot(snap: Snapshot): void {
     latestSnap = snap;
+    // A run at a monster owns this snapshot: the held re-fires below would start
+    // the same run again, or swing at air, on the tick it lands its own swing.
+    const attack = pendingAttack;
+    if (attack) chaseAttack(snap, attack);
     // Hold-to-move: while the button is held, re-pick the world point under the
     // cursor and steer there every snapshot. Because the camera tracks the player,
     // that point drifts as the player advances, so the player keeps moving in the
     // cursor's direction even when the mouse is perfectly still.
-    if (skillButtonsHeld.size > 0 && lastScreen && !snap.player.casting) {
+    if (!attack && skillButtonsHeld.size > 0 && lastScreen && !snap.player.casting) {
       for (const button of skillButtonsHeld) castFromMouse(button, lastScreen.x, lastScreen.y);
     }
     // Held skill keys re-fire exactly as the mouse buttons above do, which both
     // keeps the cast chain going and keeps the sim's skillHold window fed.
-    if (skillKeysHeld.size > 0 && !snap.player.casting) {
+    if (!attack && skillKeysHeld.size > 0 && !snap.player.casting) {
       for (const key of skillKeysHeld.values()) {
         const skill = skillForKey?.(key);
         const intent = keyToIntent(key, aimAt(skill ? aimHeightFor(skill) : AIM_HEIGHT), skillForKey, binds());
-        if (intent?.kind === "useSkill") post(intent);
+        if (intent?.kind !== "useSkill") continue;
+        if (lastScreen && approachToAttack(intent.skillId, lastScreen.x, lastScreen.y)) break;
+        post(intent);
       }
     }
     if (pointerHeld && lastScreen) {

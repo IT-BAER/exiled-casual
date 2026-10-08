@@ -253,6 +253,8 @@ export function buildSnapshot(
       id: e,
       kind: "monster",
       x: toNumber(mp.x), y: toNumber(mp.y),
+      // A swing's reach counts to the body's surface, so the client needs it too.
+      radius: toNumber(mon.bodyRadius),
       life: toNumber(mh.life), maxLife: toNumber(mh.maxLife),
       rare: mon.rare === 1,
       species: mon.defId,

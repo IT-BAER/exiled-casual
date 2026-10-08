@@ -8,6 +8,7 @@ import { rollItem, effectiveSkill } from "@exiled/rules";
 import type { Intent } from "@exiled/protocol";
 import { World } from "./ecs";
 import { spawnMonster } from "./areas";
+import { bodyRadiusOf } from "./body";
 import { grantSkills } from "./persist";
 import type {
   Position, Health, Mana, MonsterC, BossC, TelegraphC, SessionC, InteractableC, SkillsC, ProgressC, StrikeC,
@@ -168,6 +169,15 @@ describe("buildSnapshot", () => {
     expect(monsters.filter(e => e.rare).length).toBe(1);
     for (const m of monsters) {
       expect(m.life).toBeCloseTo(m.maxLife!, 5);
+    }
+  });
+
+  it("a monster entity carries its body radius, so the client can measure reach to its surface", () => {
+    const { world, sim } = createCombatSim(42);
+    const snap = buildSnapshot(world, sim, 0, CONTENT_VERSION);
+    for (const m of snap.entities.filter(e => e.kind === "monster")) {
+      expect(m.radius).toBeCloseTo(toNumber(bodyRadiusOf(world, m.id)), 5);
+      expect(m.radius).toBeGreaterThan(0);
     }
   });
 
