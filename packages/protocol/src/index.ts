@@ -364,6 +364,8 @@ export interface Snapshot {
      *  A change is the swing landing, which a held button never shows as a cast edge. */
     strikeTick?: number;
     strikeHits?: number;
+    /** Skill id of that swing, so the renderer can weigh its shake. */
+    strikeSkill?: string;
     /** Charge state for the two utility flasks (life on Q, mana on E). */
     flasks: { lifeCharges: number; lifeMax: number; manaCharges: number; manaMax: number };
     /** Gear-derived totals for the character sheet. Life and mana stay above, where the HUD reads them. */

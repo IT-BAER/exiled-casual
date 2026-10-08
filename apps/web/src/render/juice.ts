@@ -16,7 +16,7 @@ export const HIT_STOP_MAX_MS = 95;
 export const HIT_STOP_SCALE = 0.04;
 
 /** Trauma one connecting swing adds, and the extra per additional body. */
-const TRAUMA_HIT = 0.32;
+const TRAUMA_HIT = 0.24;
 const TRAUMA_PER_EXTRA = 0.1;
 /** Trauma lost per second: one pack's jolt is over in about a fifth of a second. */
 const TRAUMA_DECAY = 3;
@@ -35,6 +35,18 @@ const SWING_MIN = 0.15;
 /** How heavy a swing reads, 0..1, off the largest share of max life it took from one body. */
 export function swingWeight(share: number): number {
   return Math.min(1, SWING_MIN + (1 - SWING_MIN) * Math.max(0, share) / SWING_FULL_AT);
+}
+
+/** Shake per melee skill: a light swing that lands all fight long must not rock the camera. */
+const SKILL_SHAKE: Record<string, number> = {
+  "skill.strike.v1": 0.25,
+  "skill.heavy_strike.v1": 0.6,
+  "skill.ground_slam.v1": 1,
+};
+const SKILL_SHAKE_UNKNOWN = 0.5;
+
+export function skillShakeWeight(skillId: string | undefined): number {
+  return (skillId !== undefined ? SKILL_SHAKE[skillId] : undefined) ?? SKILL_SHAKE_UNKNOWN;
 }
 
 export function addTrauma(trauma: number, hits: number, weight = 1): number {

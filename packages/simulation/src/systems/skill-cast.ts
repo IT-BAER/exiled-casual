@@ -163,7 +163,7 @@ export function registerSkillCast(
           });
           hits++;
         }
-        world.set<StrikeC>(caster, "strike", { tick, hits });
+        world.set<StrikeC>(caster, "strike", { tick, hits, skill: skill.id });
       } else if (effect.type === "teleport") {
         const step = fpStepToward(pos.x, pos.y, tx, ty, effect.distanceFixed);
         let dx = step.dx;

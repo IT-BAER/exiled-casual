@@ -210,6 +210,8 @@ export interface CastingC {
 export interface StrikeC {
   tick: number;
   hits: number;
+  /** The skill that swung. Render-only: kept out of the checksum. */
+  skill?: string;
 }
 export interface MonsterC {
   defId: string;

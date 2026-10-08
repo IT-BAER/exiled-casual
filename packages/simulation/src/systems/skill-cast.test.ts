@@ -572,9 +572,9 @@ describe("registerSkillCast", () => {
       makeEnemy(sim, fp(1.5), 0);
       makeEnemy(sim, fp(1.2), fp(0.6));
       cleave(sim, caster, fp(5), 0);
-      expect(sim.world.get<StrikeC>(caster, "strike")).toEqual({ tick: 0, hits: 2 });
+      expect(sim.world.get<StrikeC>(caster, "strike")).toEqual({ tick: 0, hits: 2, skill: CLEAVE.id });
       sim.step([{ tick: 1, entity: caster, type: "useSkill", skillId: CLEAVE.id, data: { tx: fp(-5), ty: 0 } }]);
-      expect(sim.world.get<StrikeC>(caster, "strike")).toEqual({ tick: 1, hits: 0 });
+      expect(sim.world.get<StrikeC>(caster, "strike")).toEqual({ tick: 1, hits: 0, skill: CLEAVE.id });
     });
 
     it("aimed at the caster's own feet, still hits what stands there", () => {

@@ -133,6 +133,14 @@ describe("buildSnapshot", () => {
     expect(snap.player.strikeHits).toBe(3);
   });
 
+  it("names the skill that swung, from the cast itself", () => {
+    const { world, sim, playerEntity } = createCombatSim(42);
+    const intent: Intent = { kind: "useSkill", skillId: "skill.heavy_strike.v1", tx: fp(5), ty: fp(0) };
+    sim.step([intentToCommand(intent, playerEntity, 0)]);
+    for (let i = 0; i < 60 && world.get<StrikeC>(playerEntity, "strike") === undefined; i++) sim.step();
+    expect(buildSnapshot(world, sim, sim.tick, CONTENT_VERSION).player.strikeSkill).toBe("skill.heavy_strike.v1");
+  });
+
   it("a spell keeps the spell action", () => {
     const { world, sim, playerEntity } = createCombatSim(42);
     const intent: Intent = { kind: "useSkill", skillId: "skill.ember_bolt.v1", tx: fp(5), ty: fp(0) };

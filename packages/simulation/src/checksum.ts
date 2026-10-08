@@ -48,6 +48,9 @@ export function serializeWorld(world: World): string {
         // varies between runs of the same area, so it cannot mask a divergence —
         // and hashing a cosmetic float would trip the integer guard below.
         if (key === "yaw") continue;
+        // StrikeC.skill names the swing for the renderer's shake; it follows from
+        // the cast command, so leaving it out keeps replay checksums unchanged.
+        if (comp === "strike" && key === "skill") continue;
         parts.push(`${key}=${stableValue(data[key])}`);
       }
     }

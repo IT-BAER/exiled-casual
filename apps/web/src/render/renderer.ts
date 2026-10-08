@@ -2,7 +2,7 @@ import { Vector3 } from "@babylonjs/core";
 import type { Scene } from "@babylonjs/core";
 import type { Mesh } from "@babylonjs/core";
 import { blinkBurst, fxProfile, meleeImpact, setStreakLength } from "./skill-fx";
-import { HIT_STOP_SCALE, addTrauma, decayTrauma, hitStopMs, shakeOffset, swingWeight } from "./juice";
+import { HIT_STOP_SCALE, addTrauma, decayTrauma, hitStopMs, shakeOffset, skillShakeWeight, swingWeight } from "./juice";
 import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
 import { animateActor, keepGroundBlobFlat, makeMesh, setHitFlash, updateTelegraph, updatePortal, updateMapDevice, updateStash, updateVendor, updateContainer, updateGroundItem, updateRareElement, portalAppear, portalVanish, isPortalMesh, PORTAL_STAGGER_MS, Y_LIFT } from "./meshes";
 import type { MeshKind } from "./meshes";
@@ -768,7 +768,8 @@ export class SnapshotRenderer {
       // The pose holds on the real clock, never the sim's: the world keeps running.
       this.scene.animationTimeScale = HIT_STOP_SCALE;
       this.hitStopUntil = performance.now() + hitStopMs(strikeHits);
-      this.shakeTrauma = addTrauma(this.shakeTrauma, strikeHits, swingWeight(swingShare));
+      this.shakeTrauma = addTrauma(this.shakeTrauma, strikeHits,
+        skillShakeWeight(next.player.strikeSkill) * swingWeight(swingShare));
     }
 
     // Faded on the sim's clock, like every other timing in the client: a wall

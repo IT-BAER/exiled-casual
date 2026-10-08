@@ -441,6 +441,7 @@ export function buildSnapshot(
       })(),
       strikeTick: world.get<StrikeC>(playerEntity, "strike")?.tick,
       strikeHits: world.get<StrikeC>(playerEntity, "strike")?.hits,
+      strikeSkill: world.get<StrikeC>(playerEntity, "strike")?.skill,
       flasks: (() => {
         const f = world.get<FlasksC>(playerEntity, "flasks");
         return f

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { HIT_STOP_MAX_MS, SHAKE_UNITS, addTrauma, decayTrauma, hitStopMs, shakeOffset, swingWeight } from "./juice";
+import { HIT_STOP_MAX_MS, SHAKE_UNITS, addTrauma, decayTrauma, hitStopMs, shakeOffset, skillShakeWeight, swingWeight } from "./juice";
 
 describe("melee juice", () => {
   it("holds the world only for a swing that connected, longer for more bodies, never past the cap", () => {
@@ -25,6 +25,16 @@ describe("melee juice", () => {
     expect(swingWeight(0.25)).toBe(1);
     expect(swingWeight(0.6)).toBe(1);
     expect(swingWeight(0)).toBeGreaterThan(0);
+  });
+
+  it("shakes a light Strike at most a quarter of a Ground Slam, both at full share", () => {
+    const strike = addTrauma(0, 1, skillShakeWeight("skill.strike.v1") * swingWeight(1));
+    const slam = addTrauma(0, 1, skillShakeWeight("skill.ground_slam.v1") * swingWeight(1));
+    expect(strike).toBeGreaterThan(0);
+    expect(strike).toBeLessThanOrEqual(slam / 4);
+    expect(skillShakeWeight("skill.heavy_strike.v1")).toBeGreaterThan(skillShakeWeight("skill.strike.v1"));
+    expect(skillShakeWeight(undefined)).toBe(0.5);
+    expect(skillShakeWeight("skill.unknown.v1")).toBe(0.5);
   });
 
   it("decays trauma to rest and never below it", () => {

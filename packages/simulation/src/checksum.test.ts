@@ -19,6 +19,14 @@ describe("checksum", () => {
     expect(checksumWorld(a)).toBe(checksumWorld(b));
   });
 
+  test("the strike's skill id is render-only and leaves the checksum unchanged", () => {
+    const a = new World();
+    a.set(a.create(), "strike", { tick: 4, hits: 2 });
+    const b = new World();
+    b.set(b.create(), "strike", { tick: 4, hits: 2, skill: "skill.strike.v1" });
+    expect(checksumWorld(a)).toBe(checksumWorld(b));
+  });
+
   test("different state produces a different checksum", () => {
     const a = new World();
     const e = a.create();
