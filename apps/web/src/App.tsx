@@ -17,6 +17,7 @@ import { emptyRoster, headers } from "@exiled/persistence";
 import { DEFAULT_CLASS_ID } from "@exiled/rules";
 import { MainMenu } from "./menu/MainMenu";
 import { ModeDialog } from "./menu/ModeDialog";
+import { Presence, ScreenFade } from "./presence";
 import { CharacterSelect } from "./menu/CharacterSelect";
 import { CreateCharacter } from "./menu/CreateCharacter";
 import { LoadingScreen, LOADING_ART } from "./LoadingScreen";
@@ -198,38 +199,52 @@ export function App(): React.ReactElement {
     if (screen.kind !== "game") setTitle(where[screen.kind] ?? null);
   }, [screen.kind]);
 
+  // Mode is a dialog over the menu and create shares select's stage: neither is a new screen.
+  const fade = (
+    <ScreenFade screen={screen.kind === "mode" ? "menu" : screen.kind === "create" ? "select" : screen.kind} />
+  );
+
   if (screen.kind === "game") {
     return (
       // The plate covers the chunk arriving as well as the world being built:
       // GameView raises its own the moment it mounts, so the two are continuous
       // and the player sees one screen rather than a gap and then a screen.
       // "Hideout" is not a guess — a session always begins standing in it.
-      <React.Suspense
-        fallback={
-          <LoadingScreen areaName="Hideout" tip={bootTip} wallpaper={`${LOADING_ART}/hideout.jpg`} />
-        }
-      >
-        <GameView
-          characterId={screen.characterId}
-          settings={settings}
-          onSettingsChange={changeSettings}
-          onExit={() => setScreen({ kind: "select" })}
-        />
-      </React.Suspense>
+      <>
+        <React.Suspense
+          fallback={
+            <LoadingScreen areaName="Hideout" tip={bootTip} wallpaper={`${LOADING_ART}/hideout.jpg`} />
+          }
+        >
+          <GameView
+            characterId={screen.characterId}
+            settings={settings}
+            onSettingsChange={changeSettings}
+            onExit={() => setScreen({ kind: "select" })}
+          />
+        </React.Suspense>
+        {fade}
+      </>
     );
   }
 
   if (screen.kind === "viewer") {
     return (
-      <React.Suspense fallback={null}>
-        <AssetViewer onExit={() => setScreen({ kind: "menu" })} />
-      </React.Suspense>
+      <>
+        <React.Suspense fallback={null}>
+          <AssetViewer onExit={() => setScreen({ kind: "menu" })} />
+        </React.Suspense>
+        {fade}
+      </>
     );
   }
 
   if (screen.kind === "info") {
     return (
-      <InfoScreen title="About" body={CREDITS_TEXT} onBack={() => setScreen({ kind: "menu" })} />
+      <>
+        <InfoScreen title="About" body={CREDITS_TEXT} onBack={() => setScreen({ kind: "menu" })} />
+        {fade}
+      </>
     );
   }
 
@@ -304,13 +319,14 @@ export function App(): React.ReactElement {
           />
         )}
         {error !== null && <Toast text={error} onDismiss={() => setError(null)} />}
-        {optionsOpen && (
+        <Presence open={optionsOpen}>
           <OptionsPanel
             settings={settings}
             onChange={changeSettings}
             onClose={() => setOptionsOpen(false)}
           />
-        )}
+        </Presence>
+        {fade}
       </>
     );
   }
@@ -341,7 +357,7 @@ export function App(): React.ReactElement {
           assets
         </button>
       )}
-      {screen.kind === "mode" && (
+      <Presence open={screen.kind === "mode"}>
         <ModeDialog
           onCancel={() => setScreen({ kind: "menu" })}
           onPick={(picked) => {
@@ -349,14 +365,15 @@ export function App(): React.ReactElement {
             setScreen({ kind: "select" });
           }}
         />
-      )}
-      {optionsOpen && (
+      </Presence>
+      <Presence open={optionsOpen}>
         <OptionsPanel
           settings={settings}
           onChange={changeSettings}
           onClose={() => setOptionsOpen(false)}
         />
-      )}
+      </Presence>
+      {fade}
     </>
   );
 }

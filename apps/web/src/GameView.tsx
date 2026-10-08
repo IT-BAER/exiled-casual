@@ -4,6 +4,7 @@ import type { Scene } from "@babylonjs/core";
 import { applyGraphics, createScene, setMapFill } from "./render/engine";
 import { buildLevel, applyBiomeTint, applyTilesetFloor } from "./render/level";
 import { buildSea } from "./render/sea";
+import { Presence } from "./presence";
 import { buildHideoutDecor, clearHideoutDecor } from "./render/hideout";
 import { SnapshotRenderer } from "./render/renderer";
 import { loadProps, resetProps } from "./render/props";
@@ -923,7 +924,7 @@ export function GameView({
           onClose={() => setSpawnerOpen(false)}
         />
       )}
-      {panelOpen && snapshot && (
+      <Presence open={panelOpen && !!snapshot}>{snapshot && (
         <PreparationPanel
           atlasSeed={snapshot.atlasSeed}
           completedNodes={snapshot.completedNodes}
@@ -934,8 +935,8 @@ export function GameView({
           onClose={closeAtlas}
           onActivate={activateMap}
         />
-      )}
-      {inventoryOpen && snapshot && (
+      )}</Presence>
+      <Presence open={inventoryOpen && !!snapshot}>{snapshot && (
         <InventoryPanel
           inventory={snapshot.inventory}
           {...(stashOpen ? { stash: snapshot.stash } : {})}
@@ -952,12 +953,12 @@ export function GameView({
           onIntent={sendIntent}
           onClose={closeInventory}
         />
-      )}
+      )}</Presence>
       {/* After the inventory so it paints above that panel's backdrop when both are open. */}
-      {characterOpen && snapshot && (
+      <Presence open={characterOpen && !!snapshot}>{snapshot && (
         <CharacterPanel player={snapshot.player} onClose={() => setCharacterOpen(false)} />
-      )}
-      {snapshot && (
+      )}</Presence>
+      <Presence open={passivesOpen && !!snapshot}>{snapshot && (
         <PassiveTreePanel
           open={passivesOpen}
           classId={snapshot.player.classId ?? DEFAULT_CLASS_ID}
@@ -966,8 +967,8 @@ export function GameView({
           onIntent={sendIntent}
           onClose={closePassives}
         />
-      )}
-      {gameMenuOpen && (
+      )}</Presence>
+      <Presence open={gameMenuOpen}>
         <GameMenu
           onResume={() => setGameMenuOpen(false)}
           // Closing the menu first is this file's existing rule: overlays do not
@@ -976,16 +977,18 @@ export function GameView({
           onReport={(kind) => { setGameMenuOpen(false); setFeedback(kind); }}
           onExit={onExit}
         />
-      )}
-      {feedback && <FeedbackDialog kind={feedback} onClose={() => setFeedback(null)} />}
-      {optionsOpen && (
+      </Presence>
+      <Presence open={feedback !== null}>
+        {feedback && <FeedbackDialog kind={feedback} onClose={() => setFeedback(null)} />}
+      </Presence>
+      <Presence open={optionsOpen}>
         <OptionsPanel
           settings={settings}
           onChange={onSettingsChange ?? (() => {})}
           onClose={() => setOptionsOpen(false)}
           dock={{ bottom: BAR_H, clear: ORB_RISE }}
         />
-      )}
+      </Presence>
       {/* Last in the tree, so it paints over every other overlay: nothing behind
           it is a decision the player can still act on. */}
       {snapshot && !snapshot.player.alive && (
