@@ -876,8 +876,8 @@ export function Hud({
     // A boss kill can pay both at once. Rule 3 says concentrate rather than spread,
     // so they share one banner and one sound instead of queueing two.
     setBanner((prev) => ({ text: lines.join("   ·   "), seq: (prev?.seq ?? 0) + 1 }));
-    // A breakpoint is the loudest of the three, then a character level, then a gem.
-    playDropSound(crossed || level > was.level ? "unique" : "rare");
+    // A breakpoint or a character level rings the level-up cue; a bare gem level, "rare".
+    playDropSound(crossed || level > was.level ? "level-up" : "rare");
   }, [level, stones, gems, snapshot?.skills, skillNames]);
 
   React.useEffect(() => {

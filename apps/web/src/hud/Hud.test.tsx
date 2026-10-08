@@ -587,7 +587,7 @@ describe("Hud reward banner", () => {
     const { rerender } = render(<Hud snapshot={makeSnap({ level: 12 })} />);
     rerender(<Hud snapshot={makeSnap({ level: 13 })} />);
     expect(screen.getByTestId("reward-banner")).toHaveTextContent("Level 13");
-    expect(playDropSound).toHaveBeenCalled();
+    expect(playDropSound).toHaveBeenCalledWith("level-up");
   });
 
   it("rings and counts the stones a cleared map hands back", () => {
@@ -671,9 +671,8 @@ describe("Hud gem levels and breakpoints", () => {
       <Hud snapshot={makeSnap({ skills: [{ ...emberBolt, breakpoints: ["Level 4: Adds Burning"] }] })} />,
     );
     expect(screen.getByTestId("reward-banner")).toHaveTextContent("Adds Burning");
-    // A breakpoint is the loudest of the three: it must ring the "unique" sound,
-    // not the plain "rare" a bare gem level-up gets.
-    expect(playDropSound).toHaveBeenCalledWith("unique");
+    // A breakpoint rings the level-up cue, not the plain "rare" a bare gem level-up gets.
+    expect(playDropSound).toHaveBeenCalledWith("level-up");
   });
 
   it("announces every breakpoint crossed in one tick, not just the last", () => {
