@@ -935,6 +935,31 @@ export const HIPS_BOB: Record<RigClip, number> = {
 };
 
 /**
+ * Share of `Idle_Loop`'s pelvis and leg motion the idle keeps. The take sinks the
+ * hips each breath and bends the knees 6-9 degrees under it while the chest moves
+ * 1-3. Every listed bone is pulled toward the SAME frame, so the soles stay planted.
+ */
+export const IDLE_LEG_BREATH = 0.4;
+export const IDLE_CALM_BONES: ReadonlySet<string> = new Set([
+  HIPS_BONE, "thigh_l", "calf_l", "foot_l", "ball_l", "thigh_r", "calf_r", "foot_r", "ball_r",
+]);
+
+/** A copy of a linear curve with each key kept at `share` of its distance from the first. */
+export function calmTowardFirst(source: Animation, share: number): Animation {
+  const keys = source.getKeys();
+  const first = keys[0]?.value as Quaternion | Vector3 | undefined;
+  const calmed = source.clone();
+  if (!first) return calmed;
+  calmed.setKeys(keys.map((key) => ({
+    ...key,
+    value: first instanceof Quaternion
+      ? Quaternion.Slerp(first, key.value as Quaternion, share)
+      : Vector3.Lerp(first, key.value as Vector3, share),
+  })));
+  return calmed;
+}
+
+/**
  * Re-express a hips translation curve in the target rig's proportions: keep the
  * target's rest position, and add the clip's motion away from its own rest,
  * scaled by how much bigger this rig's hips offset is. The bounce is then
@@ -1790,9 +1815,12 @@ export class RigActor {
         const target = byName.get(sourceNode.name);
         if (!target) continue;
         const property = targeted.animation.targetProperty;
+        const curve = clip === "idle" && IDLE_CALM_BONES.has(sourceNode.name)
+          ? calmTowardFirst(targeted.animation, IDLE_LEG_BREATH)
+          : targeted.animation;
 
         if (property === ROTATION) {
-          group.addTargetedAnimation(targeted.animation, target);
+          group.addTargetedAnimation(curve, target);
         } else if (
           property === TRANSLATION &&
           sourceNode.name === HIPS_BONE &&
@@ -1800,7 +1828,7 @@ export class RigActor {
           sourceNode instanceof TransformNode
         ) {
           group.addTargetedAnimation(
-            remapHips(targeted.animation, sourceNode.position, hipsRest, HIPS_BOB[clip]),
+            remapHips(curve, sourceNode.position, hipsRest, HIPS_BOB[clip]),
             target,
           );
         }

@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect, afterEach } from "vitest";
-import { LoadAssetContainerAsync, Mesh, NullEngine, Quaternion, TransformNode, Vector3 } from "@babylonjs/core";
+import { Animation, LoadAssetContainerAsync, Mesh, NullEngine, Quaternion, TransformNode, Vector3 } from "@babylonjs/core";
 import { createScene } from "./engine";
 import { ARROW_LENGTH } from "./skill-fx";
 import { makeMesh } from "./meshes";
@@ -58,6 +58,9 @@ import {
   strikePace,
   strikeRatioAt,
   spinePitch,
+  calmTowardFirst,
+  IDLE_CALM_BONES,
+  IDLE_LEG_BREATH,
 } from "./rig";
 
 let engine: InstanceType<typeof NullEngine>;
@@ -1396,23 +1399,36 @@ describe("the idle clip leaves the soles planted", () => {
   const hipsTrack = tracks.get(HIPS)!.translation!;
   const low = [0, 1, 2].map((k) => Math.min(...hipsTrack.v.map((v) => v[k]!)));
 
+  /** A keyed value pulled toward the clip's first frame, `calm` of the way kept. */
+  function calmed(track: Track, time: number, calm: number): number[] {
+    const first = track.v[0]!;
+    const now = at(track, time);
+    const sign = now.length === 4 && now.reduce((d, x, k) => d + x * first[k]!, 0) < 0 ? -1 : 1;
+    const v = now.map((x, k) => first[k]! + (sign * x - first[k]!) * calm);
+    if (v.length !== 4) return v;
+    const n = Math.hypot(...v);
+    return v.map((x) => x / n);
+  }
+
   /** World Y of one joint at one time, for a given share of the hips curve. */
-  function worldY(name: string, time: number, bob: number): number {
+  function worldY(name: string, time: number, bob: number, calm = 1): number {
     let m: number[] | null = null;
     let i = nodeOf(name);
     while (i !== undefined && i >= 0) {
       const node = rig.json.nodes[i];
       const track = tracks.get(node.name as string) ?? {};
       const hips = node.name === HIPS && track.translation;
+      const c = IDLE_CALM_BONES.has(node.name as string) ? calm : 1;
+      const hipsAt = hips ? calmed(track.translation!, time, c) : [];
       const t = hips
         ? [0, 1, 2].map(
             (k) =>
               outfitRest[k]! +
-              (low[k]! + (at(track.translation!, time)[k]! - low[k]!) * bob - animRest[k]!) * scale,
+              (low[k]! + (hipsAt[k]! - low[k]!) * bob - animRest[k]!) * scale,
           )
         : ((node.translation as number[] | undefined) ?? [0, 0, 0]);
       const q = track.rotation
-        ? at(track.rotation, time)
+        ? calmed(track.rotation, time, c)
         : ((node.rotation as number[] | undefined) ?? [0, 0, 0, 1]);
       const local = trs(t, q, (node.scale as number[] | undefined) ?? [1, 1, 1]);
       m = m ? mul(m, local) : local;
@@ -1422,9 +1438,9 @@ describe("the idle clip leaves the soles planted", () => {
   }
 
   /** Peak-to-peak travel of a joint across the whole clip, in metres. */
-  function travel(name: string, bob: number): number {
+  function travel(name: string, bob: number, calm = 1): number {
     const ys: number[] = [];
-    for (let k = 0; k <= 40; k++) ys.push(worldY(name, (k / 40) * duration, bob));
+    for (let k = 0; k <= 40; k++) ys.push(worldY(name, (k / 40) * duration, bob, calm));
     return Math.max(...ys) - Math.min(...ys);
   }
 
@@ -1438,6 +1454,17 @@ describe("the idle clip leaves the soles planted", () => {
     // ~7% shorter than this one's, which no single scalar takes out.
     expect(travel("foot_l", HIPS_BOB.idle)).toBeLessThan(0.0025);
     expect(travel("foot_r", HIPS_BOB.idle)).toBeLessThan(0.0025);
+  });
+
+  it("breathes through the chest, not the knees", () => {
+    // The pack's take sinks the hips 10.4mm a breath and bends the knees under
+    // it; the calmed legs keep a share of that and the soles stay put.
+    const full = travel(HIPS, HIPS_BOB.idle);
+    const calm = travel(HIPS, HIPS_BOB.idle, IDLE_LEG_BREATH);
+    expect(calm).toBeGreaterThan(0.002);
+    expect(calm).toBeLessThan(full * 0.45);
+    expect(travel("foot_l", HIPS_BOB.idle, IDLE_LEG_BREATH)).toBeLessThan(0.0025);
+    expect(travel("foot_r", HIPS_BOB.idle, IDLE_LEG_BREATH)).toBeLessThan(0.0025);
   });
 
   it("floats him again if the hips curve is compressed", () => {
@@ -1849,6 +1876,25 @@ describe("the robe's leg backing stays under its trousers", () => {
       (globalThis as { FileReader?: unknown }).FileReader = original;
     }
   }, 60_000);
+});
+
+describe("calmTowardFirst", () => {
+  it("keeps a share of each key's distance from the first, and leaves the source alone", () => {
+    const rot = new Animation("r", "rotationQuaternion", 30, Animation.ANIMATIONTYPE_QUATERNION);
+    rot.setKeys([
+      { frame: 0, value: Quaternion.Identity() },
+      { frame: 10, value: Quaternion.RotationAxis(Vector3.Right(), 0.2) },
+    ]);
+    const pos = new Animation("p", "position", 30, Animation.ANIMATIONTYPE_VECTOR3);
+    pos.setKeys([{ frame: 0, value: new Vector3(0, 1, 0) }, { frame: 10, value: new Vector3(0, 0.9, 0.1) }]);
+    const r = calmTowardFirst(rot, 0.4).getKeys()[1]!.value as Quaternion;
+    const angle = 2 * Math.acos(Math.min(1, Math.abs(r.w)));
+    expect(angle).toBeCloseTo(0.08, 6);
+    const p = calmTowardFirst(pos, 0.4).getKeys()[1]!.value as Vector3;
+    expect(p.y).toBeCloseTo(0.96, 6);
+    expect(p.z).toBeCloseTo(0.04, 6);
+    expect((rot.getKeys()[1]!.value as Quaternion).equalsWithEpsilon(Quaternion.RotationAxis(Vector3.Right(), 0.2))).toBe(true);
+  });
 });
 
 describe("idleRatio", () => {
