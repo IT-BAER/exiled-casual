@@ -166,8 +166,8 @@ export class HitSparkle {
       const shown = len * (1 - 0.6 * ts);
       const head = len * (0.25 + 1.1 * Math.sqrt(ts));
       scratchDir.set(this.dir[j * 3]!, this.dir[j * 3 + 1]!, this.dir[j * 3 + 2]!);
-      scratchPos.set(this.at[i * 3]!, this.at[i * 3 + 1]!, this.at[i * 3 + 2]!)
-        .addInPlace(scratchDir.scale(head - shown / 2));
+      scratchPos.set(this.at[i * 3]!, this.at[i * 3 + 1]!, this.at[i * 3 + 2]!);
+      scratchDir.scaleAndAddToRef(head - shown / 2, scratchPos);
       Quaternion.FromUnitVectorsToRef(FORWARD, scratchDir, scratchRot);
       const thick = SHARD_THICK * (1 - 0.5 * ts);
       scratchScale.set(thick, thick, shown);

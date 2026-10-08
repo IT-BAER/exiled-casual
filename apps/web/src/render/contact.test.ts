@@ -37,6 +37,22 @@ describe("contactPoint", () => {
     expect(hit.x).toBeLessThan(3.75);
   });
 
+  it("ignores a rare's aura ring wider than the body", () => {
+    const scene = newScene();
+    const root = new TransformNode("root", scene);
+    root.position.set(4, 0, 0);
+    const body = MeshBuilder.CreateBox("body", { size: 1 }, scene);
+    body.parent = root;
+    body.position.y = 1;
+    const aura = MeshBuilder.CreateTorus("rare-aura", { diameter: 3, thickness: 0.1 }, scene);
+    aura.parent = root;
+    aura.position.y = 1;
+    for (const m of [body, aura]) m.computeWorldMatrix(true);
+    const centre = new Vector3(4, 1, 0);
+    expect(contactPoint(root, new Vector3(0, 1, 0), centre, false).x).toBeCloseTo(3.5, 3);
+    expect(contactPoint(root, new Vector3(0, 1, 0), centre, true).x).toBeCloseTo(3.5, 3);
+  });
+
   it("picks a visible child of an empty root", () => {
     const scene = newScene();
     const root = new TransformNode("root", scene);

@@ -37,13 +37,18 @@ export function contactPoint(
     if (best) return best;
   }
 
-  const { min, max } = target.getHierarchyBoundingVectors(true, (m) => m.isVisible && m.isEnabled());
+  const { min, max } = target.getHierarchyBoundingVectors(true, (m) => m.isVisible && m.isEnabled() && !isDecor(m));
   const t = slabEntry(from, dir, min, max);
   return t === null || t > dist * 2 ? fallback : from.add(dir.scale(t));
 }
 
+/** Marks drawn around a body, not the body: a rare's aura ring, the ground blob. */
+function isDecor(m: AbstractMesh): boolean {
+  return m.name === "rare-aura" || m.name.startsWith("groundblob-");
+}
+
 function bodyMeshes(target: TransformNode): AbstractMesh[] {
-  const visible = (m: AbstractMesh): boolean => m.isVisible && m.isEnabled() && m.getTotalVertices() > 0;
+  const visible = (m: AbstractMesh): boolean => m.isVisible && m.isEnabled() && m.getTotalVertices() > 0 && !isDecor(m);
   const all = target.getChildMeshes(false).filter(visible);
   const self = target as AbstractMesh;
   if (typeof self.getTotalVertices === "function" && visible(self)) all.push(self);
