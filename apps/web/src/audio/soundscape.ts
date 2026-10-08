@@ -191,7 +191,7 @@ interface Options {
   room?: (profile: RoomProfile) => void;
   stopLoop?: (key: string) => void;
   stopAllLoops?: () => void;
-  /** Gold collected. Synthesized, like the drop cues it answers (drop-sound.ts). */
+  /** Gold collected: the sampled coin-pickup cue (drop-sound.ts). */
   coins?: (volume?: number, pan?: number) => void;
 }
 
