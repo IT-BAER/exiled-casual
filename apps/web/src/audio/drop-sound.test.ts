@@ -1,7 +1,42 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { setSoundLevel, setSoundMix, soundLevel, soundMix } from "./drop-sound";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import { playCoinPickup, playDropSound, setSoundLevel, setSoundMix, soundLevel, soundMix } from "./drop-sound";
+import { playSfx } from "./sfx";
 
-beforeEach(() => setSoundLevel(0.8, false));
+vi.mock("./sfx", () => ({ playSfx: vi.fn() }));
+
+beforeEach(() => {
+  setSoundLevel(0.8, false);
+  vi.mocked(playSfx).mockClear();
+});
+
+describe("playDropSound", () => {
+  it.each([
+    ["normal", "drop-normal"],
+    ["magic", "drop-magic"],
+    ["rare", "drop-rare"],
+    ["unique", "drop-unique"],
+    ["currency", "drop-currency"],
+    ["gold", "drop-gold"],
+    ["gold-jackpot", "drop-gold-jackpot"],
+    ["level-up", "level-up"],
+  ])("plays %s as %s", (tier, cue) => {
+    playDropSound(tier, 0.5, -0.25);
+    expect(playSfx).toHaveBeenCalledWith(cue, 0.5, 0, -0.25);
+  });
+
+  it("falls back to the normal drop for no tier or an unknown one", () => {
+    playDropSound(undefined);
+    playDropSound("mythic");
+    expect(vi.mocked(playSfx).mock.calls.map((c) => c[0])).toEqual(["drop-normal", "drop-normal"]);
+  });
+});
+
+describe("playCoinPickup", () => {
+  it("plays the coin cue", () => {
+    playCoinPickup(0.7, 0.1);
+    expect(playSfx).toHaveBeenCalledWith("coin-pickup", 0.7, 0, 0.1);
+  });
+});
 
 describe("setSoundLevel", () => {
   it("is the volume when it is not muted", () => {
