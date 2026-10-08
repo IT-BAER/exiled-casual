@@ -215,7 +215,8 @@ export function attachBindings(
   // Skill KEYS held, re-fired the same way. The browser's own auto-repeat used
   // to stand in for this, but its half-second initial delay left a gap where
   // the sim saw no command and the walk burst back to a run mid-hold.
-  const skillKeysHeld = new Set<string>();
+  // Keyed by `code`: Shift pressed mid-hold makes `1` come up as `!`.
+  const skillKeysHeld = new Map<string, string>();
   // Last cursor screen position, so held-move can re-pick the world point every
   // snapshot. The camera follows the player, so a stationary cursor sits over a
   // DIFFERENT world point each frame — re-picking is what keeps the player moving
@@ -341,12 +342,12 @@ export function attachBindings(
     const intent = keyToIntent(e.key, aimAt(keySkill ? aimHeightFor(keySkill) : AIM_HEIGHT), skillForKey, binds());
     if (intent) {
       post(intent);
-      if (intent.kind === "useSkill") skillKeysHeld.add(e.key);
+      if (intent.kind === "useSkill") skillKeysHeld.set(e.code || e.key, e.key);
     }
   }
 
   function onKeyUp(e: KeyboardEvent) {
-    skillKeysHeld.delete(e.key);
+    skillKeysHeld.delete(e.code || e.key);
     const k = e.key.toLowerCase();
     // Membership is the held list itself, not the current binds: a key rebound
     // mid-hold must still release the movement it started.
@@ -471,6 +472,31 @@ export function attachBindings(
     syncButtons(e, e.buttons & ~(BUTTON_BIT[e.button] ?? 0));
   }
 
+  // A move anywhere may report a release the page never got as a pointerup, but
+  // only releases: a press over the HUD is an inventory drag, not a walk.
+  function onWindowPointerMove(e: PointerEvent) {
+    syncButtons(e, buttonsMask & e.buttons);
+  }
+
+  /**
+   * Drop every held key and button. A release that lands while the page has no
+   * focus (alt-tab, the Windows key, a browser menu) never arrives, and without
+   * this the walk and the cast it held run on until the same key is pressed again.
+   */
+  function releaseAll() {
+    pointerHeld = false;
+    buttonsMask = 0;
+    skillButtonsHeld.clear();
+    skillKeysHeld.clear();
+    if (held.length === 0) return;
+    held.length = 0;
+    post(heldToMoveIntent(held, binds()));
+  }
+
+  const onVisibility = () => {
+    if (document.hidden) releaseAll();
+  };
+
   /**
    * Feed each incoming snapshot from the worker to this function.
    * When `pendingInteractId` is set and that entity reports `inRange`, fires
@@ -489,7 +515,7 @@ export function attachBindings(
     // Held skill keys re-fire exactly as the mouse buttons above do, which both
     // keeps the cast chain going and keeps the sim's skillHold window fed.
     if (skillKeysHeld.size > 0 && !snap.player.casting) {
-      for (const key of skillKeysHeld) {
+      for (const key of skillKeysHeld.values()) {
         const skill = skillForKey?.(key);
         const intent = keyToIntent(key, aimAt(skill ? aimHeightFor(skill) : AIM_HEIGHT), skillForKey, binds());
         if (intent?.kind === "useSkill") post(intent);
@@ -553,9 +579,12 @@ export function attachBindings(
     }
   }
 
-  // Suppress the browser context menu on the canvas so right-click casts.
-  const onContextMenu = (e: Event) => e.preventDefault();
-  canvas.addEventListener("contextmenu", onContextMenu);
+  // No browser menu anywhere in the game, HUD included: right-click casts, and an
+  // open menu swallows the releases that follow it. Text fields keep theirs.
+  const onContextMenu = (e: Event) => {
+    if (!isTextEntry(e.target)) e.preventDefault();
+  };
+  window.addEventListener("contextmenu", onContextMenu);
   // Suppress middle-click autoscroll.
   const onAuxClick = (e: Event) => e.preventDefault();
   canvas.addEventListener("auxclick", onAuxClick);
@@ -566,9 +595,15 @@ export function attachBindings(
   canvas.addEventListener("pointerdown", onPointerDown);
   // Listen on window so releasing outside the canvas still ends hold-to-move.
   window.addEventListener("pointerup", onPointerUp);
+  window.addEventListener("pointermove", onWindowPointerMove);
+  window.addEventListener("blur", releaseAll);
+  document.addEventListener("visibilitychange", onVisibility);
 
   function detach() {
-    canvas.removeEventListener("contextmenu", onContextMenu);
+    window.removeEventListener("contextmenu", onContextMenu);
+    window.removeEventListener("pointermove", onWindowPointerMove);
+    window.removeEventListener("blur", releaseAll);
+    document.removeEventListener("visibilitychange", onVisibility);
     canvas.removeEventListener("auxclick", onAuxClick);
     window.removeEventListener("keydown", onKeyDown);
     window.removeEventListener("keyup", onKeyUp);

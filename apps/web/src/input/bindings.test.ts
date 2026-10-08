@@ -771,3 +771,98 @@ describe("attachBindings hover", () => {
     canvas.remove();
   });
 });
+
+describe("attachBindings releases what the browser never reports", () => {
+  let canvas: HTMLCanvasElement;
+  let hud: HTMLDivElement;
+  let worker: { postMessage: ReturnType<typeof vi.fn> };
+  let b: ReturnType<typeof attachBindings>;
+
+  beforeEach(() => {
+    canvas = document.createElement("canvas");
+    hud = document.createElement("div");
+    document.body.append(canvas, hud);
+    worker = { postMessage: vi.fn() };
+    b = attachBindings(
+      canvas, worker as unknown as Worker, fakeScene(),
+      undefined, undefined, undefined, undefined, defaultSkillForKey,
+    );
+  });
+
+  afterEach(() => {
+    b.detach();
+    canvas.remove();
+    hud.remove();
+  });
+
+  const kinds = () => worker.postMessage.mock.calls.map((c) => c[0]?.intent?.kind);
+  // The report: left button held walking, `1` held casting, strafing.
+  function holdWalkAndCast() {
+    canvas.dispatchEvent(new MouseEvent("pointerdown", { button: 0, buttons: 1, clientX: 5, clientY: 5, bubbles: true }));
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "1", code: "Digit1" }));
+  }
+  function afterNextSnapshot(): unknown[] {
+    worker.postMessage.mockClear();
+    b.onSnapshot(makeSnap());
+    return kinds();
+  }
+
+  it("lets go of everything when the window loses focus mid-hold", () => {
+    // Alt-tab, the Windows key or an open menu: the releases land elsewhere.
+    holdWalkAndCast();
+    window.dispatchEvent(new Event("blur"));
+    expect(afterNextSnapshot()).toEqual([]);
+  });
+
+  it("lets go of everything when the tab is hidden mid-hold", () => {
+    holdWalkAndCast();
+    const hidden = vi.spyOn(document, "hidden", "get").mockReturnValue(true);
+    document.dispatchEvent(new Event("visibilitychange"));
+    hidden.mockRestore();
+    expect(afterNextSnapshot()).toEqual([]);
+  });
+
+  it("stops a key walk on focus loss rather than leaving it running", () => {
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "w", code: "KeyW" }));
+    worker.postMessage.mockClear();
+    window.dispatchEvent(new Event("blur"));
+    expect(kinds()).toEqual(["stop"]);
+  });
+
+  it("opens no browser menu on a right-click over the HUD", () => {
+    // The menu that opens swallows every release that follows it.
+    const e = new MouseEvent("contextmenu", { button: 2, bubbles: true, cancelable: true });
+    hud.dispatchEvent(e);
+    expect(e.defaultPrevented).toBe(true);
+  });
+
+  it("keeps the browser menu in a text field, where paste lives", () => {
+    const field = document.createElement("textarea");
+    document.body.appendChild(field);
+    const e = new MouseEvent("contextmenu", { button: 2, bubbles: true, cancelable: true });
+    field.dispatchEvent(e);
+    field.remove();
+    expect(e.defaultPrevented).toBe(false);
+  });
+
+  it("releases a skill key that came up as a different character under Shift", () => {
+    holdWalkAndCast();
+    window.dispatchEvent(new KeyboardEvent("keyup", { key: "!", code: "Digit1", shiftKey: true }));
+    window.dispatchEvent(new MouseEvent("pointerup", { button: 0, buttons: 0, bubbles: true }));
+    expect(afterNextSnapshot()).toEqual([]);
+  });
+
+  it("reads a lost release off the next move over the HUD", () => {
+    holdWalkAndCast();
+    window.dispatchEvent(new KeyboardEvent("keyup", { key: "1", code: "Digit1" }));
+    hud.dispatchEvent(new MouseEvent("pointermove", { buttons: 0, clientX: 6, clientY: 6, bubbles: true }));
+    expect(afterNextSnapshot()).toEqual([]);
+  });
+
+  it("never starts a walk from a press made over the HUD", () => {
+    // Dragging an inventory piece holds the left button over the panel.
+    hud.dispatchEvent(new MouseEvent("pointermove", { buttons: 1, clientX: 6, clientY: 6, bubbles: true }));
+    expect(kinds()).toEqual([]);
+    expect(afterNextSnapshot()).toEqual([]);
+  });
+});
