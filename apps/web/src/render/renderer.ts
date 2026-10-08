@@ -701,7 +701,13 @@ export class SnapshotRenderer {
         // A body dies at its own size: a squash caught mid-flinch would freeze into the corpse.
         const struck = this.flinch.get(id);
         if (struck) mesh.scaling.setAll(struck.base);
-        if (!areaChanged) this.sprayKill(id, mesh, prev, next);
+        if (!areaChanged) {
+          const share = this.sprayKill(id, mesh, prev, next, strikeHits > 0 && meleeBursts < MAX_MELEE_BURSTS);
+          if (share > 0) {
+            meleeBursts++;
+            swingShare = Math.max(swingShare, share);
+          }
+        }
         // A closing portal outlives the entity that was it: nothing else holds a
         // reference any more, so the collapse disposes it when it finishes.
         if (!areaChanged && isPortalMesh(mesh)) {
@@ -898,12 +904,25 @@ export class SnapshotRenderer {
     hitSpray(this.scene).emit(at, e.x - blow.x, e.y - blow.z, strength, kind);
   }
 
-  /** A monster gone while last seen alive took a killing blow never drawn at life 0. */
-  private sprayKill(id: number, mesh: Mesh, prev: Snapshot | null, next: Snapshot): void {
+  /**
+   * A monster gone while last seen alive took a killing blow never drawn at life 0.
+   * When `swing` and it stood in reach, the swing burst lands on it too. Returns the
+   * share of max life a melee kill took, else 0.
+   */
+  private sprayKill(id: number, mesh: Mesh, prev: Snapshot | null, next: Snapshot, swing: boolean): number {
     const last = prev?.entities.find((p) => p.id === id);
-    if (last?.kind !== "monster" || last.life === undefined || last.life <= 0) return;
-    const blow = blowFrom(last.x, last.y, prev, next);
-    this.spray(last, hitStrength(last.life / (last.maxLife ?? last.life), true), blow, this.contactOn(mesh, last, blow));
+    if (last?.kind !== "monster" || last.life === undefined || last.life <= 0) return 0;
+    const share = last.life / (last.maxLife ?? last.life);
+    const strength = hitStrength(share, true);
+    const melee = swing && Math.hypot(last.x - next.player.x, last.y - next.player.y) <= MELEE_FX_REACH;
+    const blow = melee ? new Vector3(next.player.x, 0, next.player.y) : blowFrom(last.x, last.y, prev, next);
+    const at = this.contactOn(mesh, last, blow, melee);
+    if (melee) {
+      meleeImpact(this.scene, at, last.x - blow.x, last.y - blow.z, flashPeak(strength));
+      hitSparkle(this.scene).emit(at, new Vector3(blow.x - last.x, 0, blow.z - last.y), strength);
+    }
+    this.spray(last, strength, blow, at);
+    return melee ? share : 0;
   }
 
   /**

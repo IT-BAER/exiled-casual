@@ -21,6 +21,7 @@ import { HAZE_HEIGHT, HAZE_MAX_SIZE, HAZE_NAME, MOTES_NAME, moteDrift, moteDrift
 import { BIOMES } from "@exiled/content-runtime";
 import { blowFrom, cancelTurnedAction, reactionFor, SnapshotRenderer, syncActionAnimation } from "./renderer";
 import { makeMesh, updateTelegraph, VENDOR_LOOKS } from "./meshes";
+import { hitSparkle } from "./hit-sparkle";
 import { ARROW_NAME, MELEE_SPARKS_NAME } from "./skill-fx";
 import type { Snapshot } from "@exiled/protocol";
 import { testPlayer, testStats } from "../test-fixtures";
@@ -871,6 +872,21 @@ describe("SnapshotRenderer", () => {
     expect(sparks()).toBe(1);
     expect(scene.animationTimeScale).toBeLessThan(1);
     expect(renderer.shakeTrauma).toBeGreaterThan(0);
+  });
+
+  it("a swing that kills outright still sparks on the body it took", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const renderer = new SnapshotRenderer(scene);
+    const monster = { id: 7, kind: "monster" as const, x: 1.2, y: 0, radius: 0.5, life: 40, maxLife: 40 };
+    const a = makeSnapshot({ tick: 1, entities: [monster] });
+    renderer.apply(null, a, 1);
+    // The killing blow lands and the sim drops the body in the same snapshot.
+    const s = makeSnapshot({ tick: 2, entities: [] });
+    const b = { ...s, player: { ...s.player, strikeTick: 2, strikeHits: 1 } };
+    renderer.apply(a, b, 1);
+    expect(scene.particleSystems.filter((p) => p.name === "fx-melee-sparks").length).toBe(1);
+    expect(hitSparkle(scene).live).toBe(1);
   });
 
   it("disposes the mesh when an entity disappears in a subsequent snapshot", () => {
