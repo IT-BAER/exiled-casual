@@ -6,7 +6,8 @@ import { toNumber } from "@exiled/fixed-point";
 import { partOfCreature, CreatureRig, loadMonsters, isMonstersReady, attachCreature, resetMonsters } from "./monsters";
 import { setHitFlash } from "./meshes";
 import { hasRim } from "./rim";
-import { Mesh, NullEngine, Scene } from "@babylonjs/core";
+import { Mesh, NullEngine, Scene, Vector3 } from "@babylonjs/core";
+import { contactPoint } from "./contact";
 import { warmContainer } from "./warm-shaders";
 import type { AnimationGroup, AssetContainer, InstantiatedEntries } from "@babylonjs/core";
 
@@ -352,6 +353,34 @@ class NodeFileReader {
  * whole species.
  */
 describe("creature instances", () => {
+  it("finds a blow's contact on the creature's skinned pose, inside its box", async () => {
+    const original = (globalThis as { FileReader?: unknown }).FileReader;
+    (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    try {
+      await loadMonsters(scene);
+      const root = new Mesh("body", scene);
+      root.position.set(4, 0, 0);
+      expect(attachCreature(scene, root, [...MONSTERS.keys()][0]!)).not.toBeNull();
+      root.computeWorldMatrix(true);
+      for (const m of root.getChildMeshes(false)) m.computeWorldMatrix(true);
+      const from = new Vector3(0, 0.4, 0);
+      const centre = new Vector3(4, 0.4, 0);
+      const skin = contactPoint(root, from, centre, true);
+      const box = contactPoint(root, from, centre, false);
+      expect(skin).not.toBe(centre);
+      expect(box).not.toBe(centre);
+      // The skin lies inside the box the ray entered first, short of the centre.
+      expect(skin.x).toBeGreaterThan(box.x + 1e-3);
+      expect(skin.x).toBeLessThan(4);
+    } finally {
+      resetMonsters();
+      engine.dispose();
+      (globalThis as { FileReader?: unknown }).FileReader = original;
+    }
+  });
+
   it("flash alone when struck", async () => {
     const original = (globalThis as { FileReader?: unknown }).FileReader;
     (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;

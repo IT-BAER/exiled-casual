@@ -16,6 +16,7 @@ import { lerp, springAngle } from "./interp";
 import { FLINCH_TICKS, flinchPose, flinchStrength, kick, leanToTilt } from "./hit-reaction";
 import type { Flinch } from "./hit-reaction";
 import { flashPeak, hitSpray, hitStrength, sprayKindOf } from "./hit-spray";
+import { contactPoint } from "./contact";
 
 /** Sim rate. Consecutive snapshots are one tick apart, which is what turns a
  *  position delta into a ground speed for the animation state machine. */
@@ -291,6 +292,8 @@ export class SnapshotRenderer {
   private readonly hit = new Map<number, { tick: number; peak: number }>();
   /** The flinch each struck monster is in, and the root scale it squashes from. */
   private readonly flinch = new Map<number, { f: Flinch; base: number }>();
+  /** Skinned contact picks left this frame for blows other than the swing's own bursts. */
+  private freePicks = 0;
   /** Render time in ticks (snapshot tick plus interpolation), the flinch's clock. */
   private now = 0;
   /** Last cursor point fed in by the render loop; the target a new bolt flies at. */
@@ -403,6 +406,7 @@ export class SnapshotRenderer {
     const strikeHits = newTick && prev !== null && next.player.strikeTick !== undefined
       && next.player.strikeTick !== prev.player.strikeTick ? next.player.strikeHits ?? 0 : 0;
     let meleeBursts = 0;
+    this.freePicks = MAX_MELEE_BURSTS;
     /** Largest share of max life one body lost to this tick's swing: how hard the camera jolts. */
     let swingShare = 0;
 
@@ -597,11 +601,16 @@ export class SnapshotRenderer {
         const meleeHit = strikeHits > 0 && e.kind === "monster"
           && Math.hypot(e.x - next.player.x, e.y - next.player.y) <= MELEE_FX_REACH;
         if (meleeHit) swingShare = Math.max(swingShare, share);
-        if (meleeHit && meleeBursts < MAX_MELEE_BURSTS) {
-          meleeBursts++;
-          meleeImpact(this.scene, new Vector3(e.x, Y_LIFT.projectile, e.y), e.x - next.player.x, e.y - next.player.y, flashPeak(strength));
+        if (e.kind === "monster") {
+          const burst = meleeHit && meleeBursts < MAX_MELEE_BURSTS;
+          const blow = meleeHit ? new Vector3(next.player.x, 0, next.player.y) : blowFrom(e.x, e.y, prev, next);
+          const at = this.contactOn(mesh, e, blow, burst);
+          if (burst) {
+            meleeBursts++;
+            meleeImpact(this.scene, at, e.x - blow.x, e.y - blow.z, flashPeak(strength));
+          }
+          this.spray(e, strength, blow, at);
         }
-        if (e.kind === "monster") this.spray(e, strength, prev, next);
         if (e.kind === "monster" && e.life > 0) {
           const from = blowFrom(e.x, e.y, prev, next);
           const was = this.flinch.get(e.id);
@@ -689,7 +698,7 @@ export class SnapshotRenderer {
         // A body dies at its own size: a squash caught mid-flinch would freeze into the corpse.
         const struck = this.flinch.get(id);
         if (struck) mesh.scaling.setAll(struck.base);
-        if (!areaChanged) this.sprayKill(id, prev, next);
+        if (!areaChanged) this.sprayKill(id, mesh, prev, next);
         // A closing portal outlives the entity that was it: nothing else holds a
         // reference any more, so the collapse disposes it when it finishes.
         if (!areaChanged && isPortalMesh(mesh)) {
@@ -705,10 +714,10 @@ export class SnapshotRenderer {
           for (const ps of this.scene.particleSystems) if (ps.emitter === mesh) ps.stop();
           this.embers.push({ mesh, from: next.tick, width: mesh.scaling.x });
         } else {
-          // Its burst fires on dispose: put it on the struck point first, not partway
-          // through the last interpolated step toward it.
+          // Its burst fires on dispose: put it on the struck body's skin first, not
+          // partway through the last interpolated step toward it.
           const last = prev?.entities.find((p) => p.id === id);
-          if (last?.spent) { mesh.position.x = last.x; mesh.position.z = last.y; mesh.computeWorldMatrix(true); }
+          if (last?.spent) this.placeImpact(mesh, last, prev!);
           rigOf(mesh)?.dispose();
           creatureOf(mesh)?.dispose();
           mesh.dispose();
@@ -835,19 +844,55 @@ export class SnapshotRenderer {
     }
   }
 
-  /** Spill what a struck monster is made of, away from whatever hit it. */
-  private spray(e: SnapshotEntity, strength: number, prev: Snapshot | null, next: Snapshot): void {
+  /**
+   * Where a blow from `blow` (floor point) meets `e`'s drawn body at chest height.
+   * `precise` picks the skinned pose; past that, a few free picks a frame, then its box.
+   */
+  private contactOn(mesh: Mesh | undefined, e: SnapshotEntity, blow: Vector3, precise = false): Vector3 {
+    const centre = new Vector3(e.x, Y_LIFT.projectile, e.y);
+    const pick = precise || this.freePicks-- > 0;
+    return contactPoint(mesh, new Vector3(blow.x, Y_LIFT.projectile, blow.z), centre, pick);
+  }
+
+  /** A spent projectile's mesh moved onto the body it struck, where its dispose bursts. */
+  private placeImpact(mesh: Mesh, last: SnapshotEntity, prev: Snapshot): void {
+    const struck = new Vector3(last.x, mesh.position.y, last.y);
+    let body: { id: number; x: number; y: number } | null = null;
+    let bodyDist = HIT_REACH;
+    const candidates: { id: number; x: number; y: number }[] = (last.team ?? 0) === 0
+      ? prev.entities.filter((p) => p.kind === "monster") : [prev.player];
+    for (const c of candidates) {
+      const d = Math.hypot(c.x - last.x, c.y - last.y);
+      if (d < bodyDist) { bodyDist = d; body = c; }
+    }
+    const target = body ? this.meshes.get(body.id) : undefined;
+    let at = struck;
+    if (body && target) {
+      // From one unit back along its approach, so a bolt drawn inside the body still enters it.
+      const centre = new Vector3(body.x, mesh.position.y, body.y);
+      const back = centre.subtract(mesh.position);
+      back.y = 0;
+      const from = back.lengthSquared() > 1e-8 ? mesh.position.subtract(back.normalize()) : mesh.position.clone();
+      const hit = contactPoint(target, from, centre, this.freePicks-- > 0);
+      if (hit !== centre) at = hit;
+    }
+    mesh.position.copyFrom(at);
+    mesh.computeWorldMatrix(true);
+  }
+
+  /** Spill what a struck monster is made of from where the blow met it, away from whatever hit it. */
+  private spray(e: SnapshotEntity, strength: number, blow: Vector3, at: Vector3): void {
     const kind = sprayKindOf(e.species);
     if (!kind) return;
-    const from = blowFrom(e.x, e.y, prev, next);
-    hitSpray(this.scene).emit(new Vector3(e.x, Y_LIFT.projectile, e.y), e.x - from.x, e.y - from.z, strength, kind);
+    hitSpray(this.scene).emit(at, e.x - blow.x, e.y - blow.z, strength, kind);
   }
 
   /** A monster gone while last seen alive took a killing blow never drawn at life 0. */
-  private sprayKill(id: number, prev: Snapshot | null, next: Snapshot): void {
+  private sprayKill(id: number, mesh: Mesh, prev: Snapshot | null, next: Snapshot): void {
     const last = prev?.entities.find((p) => p.id === id);
     if (last?.kind !== "monster" || last.life === undefined || last.life <= 0) return;
-    this.spray(last, hitStrength(last.life / (last.maxLife ?? last.life), true), prev, next);
+    const blow = blowFrom(last.x, last.y, prev, next);
+    this.spray(last, hitStrength(last.life / (last.maxLife ?? last.life), true), blow, this.contactOn(mesh, last, blow));
   }
 
   /**
