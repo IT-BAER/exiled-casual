@@ -36,7 +36,11 @@ const DIR = "/audio";
  * rather than as an event. Anything that only fires once a minute (a portal, a
  * waystone) is left alone, because there is nothing to compare it against.
  */
-interface Voice { gain: number; wet: number; vary: number }
+interface Voice {
+  gain: number; wet: number; vary: number;
+  /** Files `<cue>-1..N` the cue draws from; absent means the one file `<cue>.webm`. */
+  takes?: number;
+}
 
 const VOICES: Record<string, Voice> = {
   "ambient-hideout":          { gain: 0.12, wet: 0.08, vary: 0 },
@@ -103,23 +107,15 @@ const VOICES: Record<string, Voice> = {
   // 0.045 was still the loudest thing in a quiet hideout. This is a third of that —
   // under a fight it disappears, which is the point.
   //
-  // One ground per biome, three falls each (soundscape.ts picks). `vary` is nearly
+  // One ground per biome, three takes each (`takes`). `vary` is nearly
   // twice what the rest of the table uses, because a footstep fires every third of a
   // second for the whole game and is the one cue with no headroom for repetition;
   // level jitter comes from the caller, since only it knows a step from a hit.
   // `wet` is the ROOM the ground implies: a flagstone hall rings, a bog swallows.
-  "footstep-stone-1":         { gain: 0.014, wet: 0.14, vary: 0.16 },
-  "footstep-stone-2":         { gain: 0.014, wet: 0.14, vary: 0.16 },
-  "footstep-stone-3":         { gain: 0.014, wet: 0.14, vary: 0.16 },
-  "footstep-dirt-1":          { gain: 0.014, wet: 0.06, vary: 0.16 },
-  "footstep-dirt-2":          { gain: 0.014, wet: 0.06, vary: 0.16 },
-  "footstep-dirt-3":          { gain: 0.014, wet: 0.06, vary: 0.16 },
-  "footstep-grass-1":         { gain: 0.014, wet: 0.05, vary: 0.16 },
-  "footstep-grass-2":         { gain: 0.014, wet: 0.05, vary: 0.16 },
-  "footstep-grass-3":         { gain: 0.014, wet: 0.05, vary: 0.16 },
-  "footstep-mud-1":           { gain: 0.014, wet: 0.04, vary: 0.16 },
-  "footstep-mud-2":           { gain: 0.014, wet: 0.04, vary: 0.16 },
-  "footstep-mud-3":           { gain: 0.014, wet: 0.04, vary: 0.16 },
+  "footstep-stone":          { gain: 0.014, wet: 0.14, vary: 0.16, takes: 3 },
+  "footstep-dirt":           { gain: 0.014, wet: 0.06, vary: 0.16, takes: 3 },
+  "footstep-grass":          { gain: 0.014, wet: 0.05, vary: 0.16, takes: 3 },
+  "footstep-mud":            { gain: 0.014, wet: 0.04, vary: 0.16, takes: 3 },
   // Twelve dB under where they started, in two passes of six, because the first
   // pass was still audibly the loudest thing on the screen. A UI cue is a
   // confirmation that a press landed, not an event in its own right.
@@ -152,11 +148,34 @@ export function sfxCategory(name: string): SoundCategory {
   return "environment";
 }
 
-/** Decoded buffers, and the in-flight fetches, keyed by name. */
+/** Decoded buffers, and the in-flight fetches, keyed by file (one per take). */
 const buffers = new Map<string, AudioBuffer>();
 const loading = new Map<string, Promise<void>>();
-/** Names that failed once. Never retried: a 404 is not going to change. */
+/** Files that failed once. Never retried: a 404 is not going to change. */
 const dead = new Set<string>();
+/** The file each cue played last, so a pool never repeats itself back to back. */
+const lastTake = new Map<string, string>();
+
+/** The files of a cue: itself, or `<cue>-1..N` for a pool. */
+function files(name: string): string[] {
+  const n = VOICES[name]?.takes ?? 1;
+  return n < 2 ? [name] : Array.from({ length: n }, (_, i) => `${name}-${i + 1}`);
+}
+
+/**
+ * A loaded, live take of the cue, uniform over them but for the one it played last.
+ * Null when none is ready, after starting the loads for the ones that are not.
+ */
+function pickTake(name: string): AudioBuffer | null {
+  const live = files(name).filter((f) => !dead.has(f));
+  const ready = live.filter((f) => buffers.has(f));
+  if (ready.length === 0) { for (const f of live) void load(f); return null; }
+  const last = lastTake.get(name);
+  const pool = ready.length > 1 ? ready.filter((f) => f !== last) : ready;
+  const file = pool[Math.floor(Math.random() * pool.length)]!;
+  lastTake.set(name, file);
+  return buffers.get(file)!;
+}
 
 function load(name: string): Promise<void> {
   const already = loading.get(name);
@@ -186,7 +205,8 @@ function load(name: string): Promise<void> {
  */
 export function preloadSfx(names: readonly string[]): Promise<void> {
   if (!bus()) return Promise.resolve();
-  return Promise.all(names.filter((n) => !buffers.has(n) && !dead.has(n)).map(load)).then(() => undefined);
+  return Promise.all(names.flatMap(files).filter((f) => !buffers.has(f) && !dead.has(f)).map(load))
+    .then(() => undefined);
 }
 
 /**
@@ -205,7 +225,7 @@ export const CORE_SFX: readonly string[] = [
   // hear now — there is no queue, the flight is over.
   "skill-ember-bolt-flight", "skill-cinder-ground-loop",
   "monster-melee-hit", "monster-hurt", "monster-death", "player-hurt",
-  "footstep-stone-1", "footstep-stone-2", "footstep-stone-3", "flask-drink",
+  "footstep-stone", "flask-drink",
   // A drop must never be a silent first play.
   "drop-normal", "drop-magic", "drop-rare", "drop-unique", "drop-currency", "drop-gold",
   "drop-gold-jackpot", "coin-pickup", "level-up", "container-open",
@@ -222,6 +242,9 @@ export const CORE_SFX: readonly string[] = [
  */
 export const ALL_SFX: readonly string[] = Object.keys(VOICES);
 
+/** Per-play level wander of a one-shot, in dB either way. Loops hold their level. */
+const LEVEL_JITTER_DB = 1.5;
+
 /**
  * Play one sound. First call for a name starts the fetch and returns silently, so
  * an unpreloaded sound costs its first occurrence and nothing after it.
@@ -231,17 +254,17 @@ export const ALL_SFX: readonly string[] = Object.keys(VOICES);
  */
 export function playSfx(name: string, volume = 1, distance = 0, pan = 0): void {
   const voice = VOICES[name];
-  if (!voice || dead.has(name)) return;
+  if (!voice) return;
   const b = bus();
   if (!b) return;
-  const buf = buffers.get(name);
-  if (!buf) { void load(name); return; }
+  const buf = pickTake(name);
+  if (!buf) return;
 
   const src = b.ctx.createBufferSource();
   src.buffer = buf;
   if (voice.vary > 0) src.playbackRate.value = 1 + (Math.random() * 2 - 1) * voice.vary;
   const g = b.ctx.createGain();
-  g.gain.value = voice.gain * clamp(volume);
+  g.gain.value = voice.gain * clamp(volume) * 10 ** (((Math.random() * 2 - 1) * LEVEL_JITTER_DB) / 20);
   src.connect(g);
   // Room grows with distance as well: what reaches the ear from across a hall is
   // mostly the hall.
@@ -304,12 +327,12 @@ const LOOP_FADE_OUT = 0.14;
 export function startSfxLoop(name: string, key: string, volume = 1, distance = 0, pan = 0): void {
   if (loops.has(key)) return;
   const voice = VOICES[name];
-  if (!voice || dead.has(name)) { note(`novoice:${name}`); publish(); return; }
+  if (!voice || files(name).every((f) => dead.has(f))) { note(`novoice:${name}`); publish(); return; }
   const b = bus();
   if (!b) { note("nobus"); publish(); return; }
-  const buf = buffers.get(name);
+  const buf = pickTake(name);
   // The flight is over before a fetch lands, so this one is a miss, not a wait.
-  if (!buf) { note(`unloaded:${name}`); publish(); void load(name); return; }
+  if (!buf) { note(`unloaded:${name}`); publish(); return; }
 
   const src = b.ctx.createBufferSource();
   src.buffer = buf;
@@ -464,4 +487,5 @@ export function resetSfx(): void {
   buffers.clear();
   loading.clear();
   dead.clear();
+  lastTake.clear();
 }

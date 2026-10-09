@@ -1,18 +1,40 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { readFileSync } from "node:fs";
 import { MONSTERS } from "@exiled/content-runtime";
-import { CORE_SFX, distanceCutoff, distanceGain, playSfx, sfxCategory, worldSfxMix } from "./sfx";
+import {
+  CORE_SFX, distanceCutoff, distanceGain, playSfx, preloadSfx, resetSfx, sfxCategory,
+  startSfxLoop, stopSfxLoop, worldSfxMix,
+} from "./sfx";
+
+/** `fake.ctx` is null until a test installs a stand-in context, as in headless jsdom. */
+const fake = vi.hoisted(() => ({ ctx: null as unknown }));
+vi.mock("./bus", async (orig) => ({
+  ...(await orig<typeof import("./bus")>()),
+  bus: () => (fake.ctx ? { ctx: fake.ctx } : null),
+  send: () => null,
+}));
 
 const DIR = resolve(__dirname, "../../public/audio");
 const SRC = resolve(__dirname, "sfx.ts");
 
-/** Voice names, read out of the source so the list cannot drift from the table. */
-function voiceNames(): string[] {
+/** Cue name -> takes, read out of the source so the list cannot drift from the table. */
+function voiceTakes(): Record<string, number> {
   const body = readFileSync(SRC, "utf8");
   const table = body.slice(body.indexOf("const VOICES"), body.indexOf("export type SfxName"));
-  return [...table.matchAll(/"([a-z0-9-]+)":\s*\{/g)].map((m) => m[1]!);
+  return Object.fromEntries([...table.matchAll(/"([a-z0-9-]+)":\s*\{[^}]*\}/g)]
+    .map((m) => [m[1]!, Number(/takes:\s*(\d+)/.exec(m[0])?.[1] ?? 1)]));
+}
+
+function voiceNames(): string[] {
+  return Object.keys(voiceTakes());
+}
+
+/** Every file the cues need on disk, without the extension: `<cue>-1..n` for a pool. */
+function voiceFiles(): string[] {
+  return Object.entries(voiceTakes()).flatMap(([name, n]) =>
+    n < 2 ? [name] : Array.from({ length: n }, (_, i) => `${name}-${i + 1}`));
 }
 
 function voiceGain(name: string): number {
@@ -28,7 +50,7 @@ describe("sfx assets", () => {
    * pin and impossible to spot by eye.
    */
   it("every voice has a file and every file has a voice", () => {
-    const voices = voiceNames();
+    const voices = voiceFiles();
     expect(voices.length).toBeGreaterThan(10);
     const onDisk = readdirSync(DIR).filter((f) => f.endsWith(".webm")).map((f) => f.slice(0, -5));
     expect([...voices].sort()).toEqual([...onDisk].sort());
@@ -75,32 +97,24 @@ describe("sfx assets", () => {
   });
 
   /**
-   * Footstep cues are built from the ground and a random fall, so they are invisible
-   * to the literal scan above — the same blind spot as `cueFor`. A ground one file
-   * short would not be silent, it would quietly stop varying.
+   * Footstep cues are built from the ground, so they are invisible to the literal
+   * scan above — the same blind spot as `cueFor`. A ground one take short would not
+   * be silent, it would quietly stop varying.
    */
-  it("every ground has all of its falls, and the fallback ground is one of them", () => {
+  it("every ground is a three-take cue, and the fallback ground is one of them", () => {
     const body = readFileSync(resolve(__dirname, "soundscape.ts"), "utf8");
     const table = body.slice(body.indexOf("const GROUND:"), body.indexOf("const DEFAULT_GROUND"));
     // Deduped: GROUND is keyed on what the ear hears, so two biomes may name the
-    // same floor (the strand and the desert both walk on dirt) and that must not
-    // read as a missing file or as a shipped byte nobody plays.
+    // same floor (the strand and the desert both walk on dirt).
     const grounds = [...new Set([...table.matchAll(/:\s*"([a-z]+)",/g)].map((m) => m[1]!))];
-    const variants = Number(/const GROUND_VARIANTS = (\d+)/.exec(body)?.[1]);
     const fallback = /const DEFAULT_GROUND = "([a-z]+)"/.exec(body)?.[1];
-    const voices = new Set(voiceNames());
+    const takes = voiceTakes();
 
     expect(grounds.length).toBeGreaterThan(1);
-    expect(variants).toBeGreaterThan(1);
     expect(grounds).toContain(fallback);
-    for (const ground of grounds) {
-      for (let i = 1; i <= variants; i++) {
-        expect(voices.has(`footstep-${ground}-${i}`), `footstep-${ground}-${i}`).toBe(true);
-      }
-    }
+    for (const ground of grounds) expect(takes[`footstep-${ground}`], ground).toBe(3);
     // And nothing else: a leftover from a renamed ground ships bytes nobody plays.
-    const shipped = [...voices].filter((n) => n.startsWith("footstep"));
-    expect(shipped.length).toBe(grounds.length * variants);
+    expect(Object.keys(takes).filter((n) => n.startsWith("footstep")).length).toBe(grounds.length);
   });
 
   /**
@@ -186,5 +200,105 @@ describe("distanceCutoff", () => {
 
   it("never rises with distance", () => {
     for (let d = 0; d < 20; d++) expect(distanceCutoff(d + 1)).toBeLessThanOrEqual(distanceCutoff(d));
+  });
+});
+
+describe("take pools", () => {
+  const urls: string[] = [];
+  const played: string[] = [];
+  const gainNodes: Array<{ gain: { value: number } }> = [];
+  let missing = new Set<string>();
+
+  beforeEach(() => {
+    resetSfx();
+    urls.length = 0; played.length = 0; gainNodes.length = 0; missing = new Set();
+    vi.stubGlobal("fetch", (url: string) => {
+      urls.push(url);
+      return Promise.resolve({ ok: !missing.has(url), status: 404, arrayBuffer: () => Promise.resolve(url) });
+    });
+    fake.ctx = {
+      currentTime: 0,
+      decodeAudioData: (url: string) => Promise.resolve({ url }),
+      createBufferSource: () => ({
+        buffer: null as { url: string } | null, loop: false, playbackRate: { value: 1 },
+        connect: () => {},
+        start() { played.push(this.buffer!.url); },
+        stop: () => {},
+      }),
+      createGain: () => {
+        const node = { gain: { value: 1, setTargetAtTime: () => {} }, connect: () => {} };
+        gainNodes.push(node);
+        return node;
+      },
+      createBiquadFilter: () => ({ type: "", frequency: { value: 0, setTargetAtTime: () => {} }, connect: () => {} }),
+    };
+  });
+  afterEach(() => { fake.ctx = null; vi.unstubAllGlobals(); });
+
+  const take = (n: number) => `/audio/footstep-stone-${n}.webm`;
+
+  it("a three-take cue fetches exactly its three takes", async () => {
+    await preloadSfx(["footstep-stone"]);
+    expect([...urls].sort()).toEqual([1, 2, 3].map(take));
+  });
+
+  it("a single-take cue still fetches <cue>.webm", async () => {
+    await preloadSfx(["ui-click"]);
+    expect(urls).toEqual(["/audio/ui-click.webm"]);
+  });
+
+  it("an unloaded cue loads every take and plays nothing", async () => {
+    playSfx("footstep-stone");
+    await preloadSfx(["footstep-stone"]);
+    expect(played).toEqual([]);
+    expect([...urls].sort()).toEqual([1, 2, 3].map(take));
+  });
+
+  it("never repeats a take back to back, and uses every one", async () => {
+    await preloadSfx(["footstep-stone"]);
+    for (let i = 0; i < 300; i++) playSfx("footstep-stone");
+    expect(played.length).toBe(300);
+    for (let i = 1; i < played.length; i++) expect(played[i]).not.toBe(played[i - 1]);
+    expect(new Set(played)).toEqual(new Set([1, 2, 3].map(take)));
+  });
+
+  it("a dead take is skipped alone while the others play", async () => {
+    missing.add(take(2));
+    await preloadSfx(["footstep-stone"]);
+    for (let i = 0; i < 100; i++) playSfx("footstep-stone");
+    expect(new Set(played)).toEqual(new Set([take(1), take(3)]));
+    expect(urls.filter((u) => u === take(2)).length).toBe(1);
+  });
+
+  it("a sole surviving take still plays", async () => {
+    missing.add(take(1)); missing.add(take(3));
+    await preloadSfx(["footstep-stone"]);
+    playSfx("footstep-stone"); playSfx("footstep-stone");
+    expect(played).toEqual([take(2), take(2)]);
+  });
+
+  it("a loop instance picks one take and the next instance a different one", async () => {
+    await preloadSfx(["footstep-stone"]);
+    startSfxLoop("footstep-stone", "k1");
+    startSfxLoop("footstep-stone", "k2");
+    expect(played.length).toBe(2);
+    expect(played[0]).not.toBe(played[1]);
+    stopSfxLoop("k1"); stopSfxLoop("k2");
+  });
+
+  it("one-shot level stays within 1.5 dB of voice gain x volume, on both sides", async () => {
+    await preloadSfx(["ui-click"]);
+    const base = voiceGain("ui-click") * 0.8;
+    const lo = base * 10 ** (-1.5 / 20);
+    const hi = base * 10 ** (1.5 / 20);
+    for (let i = 0; i < 200; i++) playSfx("ui-click", 0.8);
+    const levels = gainNodes.map((g) => g.gain.value);
+    expect(levels.length).toBe(200);
+    for (const v of levels) {
+      expect(v).toBeGreaterThanOrEqual(lo - 1e-12);
+      expect(v).toBeLessThanOrEqual(hi + 1e-12);
+    }
+    expect(Math.min(...levels)).toBeLessThan(base);
+    expect(Math.max(...levels)).toBeGreaterThan(base);
   });
 });

@@ -312,8 +312,7 @@ describe("createSoundscape", () => {
    */
   it("feet take the ground the biome is made of", () => {
     const groundOf = (biome: string | null): Set<string> =>
-      new Set(run(walk(), biome).filter((n) => n.startsWith("footstep"))
-        .map((n) => n.replace(/-\d+$/, "")));
+      new Set(run(walk(), biome).filter((n) => n.startsWith("footstep")));
     expect(groundOf("swamp")).toEqual(new Set(["footstep-mud"]));
     expect(groundOf("forest")).toEqual(new Set(["footstep-grass"]));
     expect(groundOf("desert")).toEqual(new Set(["footstep-dirt"]));
@@ -325,13 +324,10 @@ describe("createSoundscape", () => {
   });
 
   /**
-   * The complaint this exists to answer is not that a step was wrong, it is that it
-   * was the SAME: two samples alternating is a rhythm, and a rhythm is heard as one
-   * repeating sound however good the sample is. Three things differ per footfall —
-   * which fall, its pitch (`vary`, sfx.ts) and its level — and two of them are
-   * observable here.
+   * Which take plays is `playSfx`'s to pick; what the caller owns is the cue and the
+   * level of each footfall, which has to differ from step to step.
    */
-  it("no footfall repeats the one before it, and each one lands at its own level", () => {
+  it("each footfall plays the ground's cue at its own level", () => {
     const heard: Array<[string, number | undefined]> = [];
     const s = createSoundscape({ play: (n, v) => heard.push([n, v]) });
     s.reset("forest");
@@ -339,10 +335,7 @@ describe("createSoundscape", () => {
 
     const steps = heard.filter(([n]) => n.startsWith("footstep"));
     expect(steps.length).toBeGreaterThan(30);
-    for (let i = 1; i < steps.length; i++) expect(steps[i]![0]).not.toBe(steps[i - 1]![0]);
-    // Every fall on disk gets used, so a mistyped index is a sample nobody hears.
-    expect(new Set(steps.map(([n]) => n))).toEqual(
-      new Set(["footstep-grass-1", "footstep-grass-2", "footstep-grass-3"]));
+    for (const [n] of steps) expect(n).toBe("footstep-grass");
 
     const levels = steps.map(([, v]) => v!);
     for (const v of levels) expect(v).toBeGreaterThan(0.6);
@@ -360,7 +353,7 @@ describe("createSoundscape", () => {
     const rebuilt = [...walk(20), ...walk(20)]; // second half restarts at tick 1
     const steps = run(rebuilt, "swamp").filter((n) => n.startsWith("footstep"));
     expect(steps.length).toBeGreaterThan(2);
-    for (const s of steps) expect(s).toMatch(/^footstep-mud-\d$/);
+    for (const s of steps) expect(s).toBe("footstep-mud");
   });
 
   it("a corpse does not walk", () => {

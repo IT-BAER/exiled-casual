@@ -149,13 +149,11 @@ export const ROOM_PROFILE: Record<string, RoomProfile> = {
 export const HIDEOUT_PROFILE: RoomProfile = {
   amount: 1.15, seconds: 1.4, decay: 2.2, preDelay: 0.012, reflections: 4, wetFloor: 0.16, airHz: 6000, airDb: -2,
 };
-/** Falls per ground on disk, `footstep-<ground>-1..N`. */
-const GROUND_VARIANTS = 3;
 /**
  * Quietest a footfall may be, as a fraction of its voice's own level.
  *
- * Three samples is not enough variety on its own for a cue that fires every third
- * of a second all game: the sample is only one of three things that differ per step,
+ * Three takes are not enough variety on their own for a cue that fires every third
+ * of a second all game: the take is only one of three things that differ per step,
  * the other two being pitch (`vary` in sfx.ts) and this. Down-only, because the
  * voice's gain is a ceiling that `playSfx` clamps to.
  */
@@ -226,8 +224,6 @@ export function createSoundscape(opts: Options = {}): Soundscape {
   let dealt = hitGate();
   let taken = hitGate();
   let lastStepTick = 0;
-  /** 0-based index of the sample the last footfall used, so the next one differs. */
-  let stepVariant = 0;
   let ground = DEFAULT_GROUND;
 
   const reset = (biomeId?: string | null): void => {
@@ -244,8 +240,7 @@ export function createSoundscape(opts: Options = {}): Soundscape {
     room(biomeId === null ? HIDEOUT_PROFILE : ROOM_PROFILE[biomeId] ?? HIDEOUT_PROFILE);
     // Ahead of the first step rather than on it: an area message arrives well
     // before the player has walked anywhere in the place it describes.
-    void preloadSfx(Array.from(
-      { length: GROUND_VARIANTS }, (_, i) => `footstep-${ground}-${i + 1}`));
+    void preloadSfx([`footstep-${ground}`]);
   };
 
   return {
@@ -384,14 +379,7 @@ export function createSoundscape(opts: Options = {}): Soundscape {
       if (moved > STEP_MIN_MOVE && snap.player.alive) {
         if (snap.tick - lastStepTick >= STEP_TICKS) {
           lastStepTick = snap.tick;
-          // Advance by one or two, never by zero: uniform over the OTHER samples,
-          // with no loop and no chance of the same one twice running. Strict
-          // alternation of a pair — what this used to do — is a rhythm the ear locks
-          // onto by the third step, and then every step after it is the same step.
-          stepVariant = (stepVariant + 1 + Math.floor(Math.random() * (GROUND_VARIANTS - 1)))
-            % GROUND_VARIANTS;
-          play(`footstep-${ground}-${stepVariant + 1}`,
-            STEP_LEVEL_FLOOR + Math.random() * (1 - STEP_LEVEL_FLOOR));
+          play(`footstep-${ground}`, STEP_LEVEL_FLOOR + Math.random() * (1 - STEP_LEVEL_FLOOR));
         }
       } else {
         // Standing still re-arms the next footfall, so the first step off a stop
