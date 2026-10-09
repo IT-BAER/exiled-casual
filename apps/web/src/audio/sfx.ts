@@ -202,7 +202,10 @@ function pickTake(name: string): AudioBuffer | null {
 function load(name: string): Promise<void> {
   const already = loading.get(name);
   if (already) return already;
-  const p = fetch(`${DIR}/${name}.webm`)
+  const v = import.meta.env?.VITE_AUDIO_VERSION;
+  // A content hash of public/audio (vite.config.ts): files keep their names across
+  // rebuilds, so without it a 4 h browser cache plays the old sound.
+  const p = fetch(`${DIR}/${name}.webm${v ? `?v=${v}` : ""}`)
     .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))))
     .then((bytes) => {
       const b = bus();

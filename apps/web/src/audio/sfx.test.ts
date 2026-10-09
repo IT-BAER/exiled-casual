@@ -312,6 +312,17 @@ describe("take pools", () => {
     expect(urls).toEqual(["/audio/level-up.webm"]);
   });
 
+  it("tags every fetch with the build's audio version, so a rebuilt sound is never a stale cache hit", async () => {
+    vi.stubEnv("VITE_AUDIO_VERSION", "ab12cd34ef");
+    try {
+      await preloadSfx(["level-up", "footstep-stone"]);
+      expect([...urls].sort()).toEqual([
+        "/audio/footstep-stone-1.webm?v=ab12cd34ef", "/audio/footstep-stone-2.webm?v=ab12cd34ef",
+        "/audio/footstep-stone-3.webm?v=ab12cd34ef", "/audio/level-up.webm?v=ab12cd34ef",
+      ]);
+    } finally { vi.unstubAllEnvs(); }
+  });
+
   it("an unloaded cue loads every take and plays nothing", async () => {
     playSfx("footstep-stone");
     await preloadSfx(["footstep-stone"]);
