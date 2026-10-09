@@ -250,8 +250,10 @@ describe("distanceCutoff", () => {
   it("keeps a close sound whole and takes the top off a far one", () => {
     expect(distanceCutoff(0)).toBe(20000);
     expect(distanceCutoff(2)).toBe(20000);
+    expect(distanceCutoff(6)).toBe(20000);
     expect(distanceCutoff(8)).toBeLessThan(20000);
-    expect(distanceCutoff(14)).toBeCloseTo(900, 0);
+    expect(distanceCutoff(10)).toBeCloseTo(8944, 0);
+    expect(distanceCutoff(14)).toBeCloseTo(4000, 0);
   });
 
   it("never rises with distance", () => {

@@ -43,16 +43,16 @@ interface Voice {
 }
 
 const VOICES: Record<string, Voice> = {
-  "ambient-hideout":          { gain: 0.12, wet: 0.08, vary: 0 },
-  "ambient-cave":             { gain: 0.10, wet: 0.24, vary: 0 },
-  "ambient-wind":             { gain: 0.09, wet: 0.04, vary: 0 },
+  "ambient-hideout":          { gain: 0.156, wet: 0.08, vary: 0 },
+  "ambient-cave":             { gain: 0.082, wet: 0.24, vary: 0 },
+  "ambient-wind":             { gain: 0.088, wet: 0.04, vary: 0 },
   "ambient-swamp":            { gain: 0.08, wet: 0.10, vary: 0 },
-  "ambient-forest":           { gain: 0.08, wet: 0.08, vary: 0 },
+  "ambient-forest":           { gain: 0.07, wet: 0.08, vary: 0 },
   // Open coast: almost no reverb, because there is nothing out there to reflect.
-  "ambient-shore":            { gain: 0.08, wet: 0.03, vary: 0 },
-  "skill-ember-bolt-cast":    { gain: 0.18, wet: 0.14, vary: 0.06, takes: 3 },
-  "skill-ember-bolt-impact":  { gain: 0.34, wet: 0.18, vary: 0.08, takes: 3 },
-  "skill-cinder-ground-cast": { gain: 0.32, wet: 0.22, vary: 0.04, takes: 3 },
+  "ambient-shore":            { gain: 0.071, wet: 0.03, vary: 0 },
+  "skill-ember-bolt-cast":    { gain: 0.183, wet: 0.14, vary: 0.06, takes: 3 },
+  "skill-ember-bolt-impact":  { gain: 0.295, wet: 0.18, vary: 0.08, takes: 3 },
+  "skill-cinder-ground-cast": { gain: 0.247, wet: 0.22, vary: 0.04, takes: 3 },
   // The two sustained voices (`startSfxLoop`). These numbers are MEASURED against
   // the one-shot they play under, not guessed: the masters are levelled apart (a
   // bed is normalised to -23 LUFS, an event by the trimmer to far louder), so equal
@@ -62,67 +62,67 @@ const VOICES: Record<string, Voice> = {
   // now deliberately quieter than the travelling bed, so direction follows the
   // projectile instead of the transient masking it. `vary` is per voice and set
   // once, so two bolts in the air are not one doubled bolt.
-  "skill-ember-bolt-flight":  { gain: 0.40, wet: 0.10, vary: 0.05, takes: 3 },
+  "skill-ember-bolt-flight":  { gain: 0.389, wet: 0.10, vary: 0.05, takes: 3 },
   // Higher still: the burning ground IS the skill for its whole duration, so its
   // bed is the event and the cast is only the whoomp that opens it. Held down by
   // the master's peaks, which are cracks rather than body.
   "skill-cinder-ground-loop": { gain: 0.45, wet: 0.24, vary: 0.03, takes: 3 },
-  "skill-blink":              { gain: 0.30, wet: 0.12, vary: 0.05, takes: 3 },
-  "skill-bow-release":        { gain: 0.21, wet: 0.08, vary: 0.08, takes: 3 },
-  "skill-arrow-impact":       { gain: 0.30, wet: 0.12, vary: 0.10, takes: 3 },
-  "skill-strike-swing":       { gain: 0.15, wet: 0.08, vary: 0.08, takes: 3 },
-  "skill-strike-impact":      { gain: 0.21, wet: 0.12, vary: 0.10, takes: 3 },
-  "skill-heavy-strike-impact": { gain: 0.26, wet: 0.14, vary: 0.08, takes: 3 },
-  "skill-ground-slam-impact": { gain: 0.36, wet: 0.22, vary: 0.05, takes: 3 },
+  "skill-blink":              { gain: 0.282, wet: 0.12, vary: 0.05, takes: 3 },
+  "skill-bow-release":        { gain: 0.202, wet: 0.08, vary: 0.08, takes: 3 },
+  "skill-arrow-impact":       { gain: 0.293, wet: 0.12, vary: 0.10, takes: 3 },
+  "skill-strike-swing":       { gain: 0.144, wet: 0.08, vary: 0.08, takes: 3 },
+  "skill-strike-impact":      { gain: 0.189, wet: 0.12, vary: 0.10, takes: 3 },
+  "skill-heavy-strike-impact": { gain: 0.273, wet: 0.14, vary: 0.08, takes: 3 },
+  "skill-ground-slam-impact": { gain: 0.337, wet: 0.22, vary: 0.05, takes: 3 },
   // The free attack: smaller than the bolt in level as in looks, and no flight bed.
-  "skill-ember-spark-cast":   { gain: 0.15, wet: 0.10, vary: 0.08, takes: 3 },
-  "skill-ember-spark-impact": { gain: 0.26, wet: 0.14, vary: 0.10, takes: 3 },
-  "monster-melee-hit":        { gain: 0.17, wet: 0.16, vary: 0.10, takes: 3 },
+  "skill-ember-spark-cast":   { gain: 0.171, wet: 0.10, vary: 0.08, takes: 3 },
+  "skill-ember-spark-impact": { gain: 0.288, wet: 0.14, vary: 0.10, takes: 3 },
+  "monster-melee-hit":        { gain: 0.142, wet: 0.16, vary: 0.10, takes: 3 },
   // The generic pair is the fallback for a species with no material (soundscape.ts),
   // never the cue a known monster gets. The six below are the ones actually heard.
   "monster-hurt":             { gain: 0.13, wet: 0.12, vary: 0.12, takes: 3 },
   "monster-death":            { gain: 0.34, wet: 0.24, vary: 0.09, takes: 3 },
-  "monster-hurt-stone":       { gain: 0.13, wet: 0.14, vary: 0.12, takes: 3 },
-  "monster-death-stone":      { gain: 0.34, wet: 0.26, vary: 0.09, takes: 3 },
+  "monster-hurt-stone":       { gain: 0.125, wet: 0.14, vary: 0.12, takes: 3 },
+  "monster-death-stone":      { gain: 0.336, wet: 0.26, vary: 0.09, takes: 3 },
   // Clicks with no body: mean -30 dB against the other hurts' -16, peak -2.5. Lifted
-  // 11.7 dB, short of a mean match, because a transient reads louder than its mean.
-  "monster-hurt-husk":        { gain: 0.50, wet: 0.10, vary: 0.12, takes: 3 },
-  "monster-death-husk":       { gain: 0.34, wet: 0.18, vary: 0.09, takes: 3 },
-  "monster-hurt-bog":         { gain: 0.13, wet: 0.14, vary: 0.12, takes: 3 },
-  "monster-death-bog":        { gain: 0.34, wet: 0.24, vary: 0.09, takes: 3 },
-  "monster-hurt-beast":       { gain: 0.13, wet: 0.12, vary: 0.12, takes: 3 },
-  "monster-death-beast":      { gain: 0.34, wet: 0.22, vary: 0.09, takes: 3 },
-  "monster-hurt-ember":       { gain: 0.13, wet: 0.12, vary: 0.12, takes: 3 },
+  // 11.5 dB, short of a mean match, because a transient reads louder than its mean.
+  "monster-hurt-husk":        { gain: 0.485, wet: 0.10, vary: 0.12, takes: 3 },
+  "monster-death-husk":       { gain: 0.353, wet: 0.18, vary: 0.09, takes: 3 },
+  "monster-hurt-bog":         { gain: 0.131, wet: 0.14, vary: 0.12, takes: 3 },
+  "monster-death-bog":        { gain: 0.336, wet: 0.24, vary: 0.09, takes: 3 },
+  "monster-hurt-beast":       { gain: 0.132, wet: 0.12, vary: 0.12, takes: 3 },
+  "monster-death-beast":      { gain: 0.343, wet: 0.22, vary: 0.09, takes: 3 },
+  "monster-hurt-ember":       { gain: 0.132, wet: 0.12, vary: 0.12, takes: 3 },
   "monster-death-ember":      { gain: 0.34, wet: 0.22, vary: 0.09, takes: 3 },
   // A wisp has no body, so it gets the most room of the six.
-  "monster-hurt-spirit":      { gain: 0.13, wet: 0.20, vary: 0.12, takes: 3 },
+  "monster-hurt-spirit":      { gain: 0.126, wet: 0.20, vary: 0.12, takes: 3 },
   "monster-death-spirit":     { gain: 0.34, wet: 0.32, vary: 0.09, takes: 3 },
-  "monster-spit":             { gain: 0.26, wet: 0.14, vary: 0.10, takes: 3 },
-  "monster-slam-windup":      { gain: 0.30, wet: 0.20, vary: 0.03, takes: 3 },
-  "monster-slam-impact":      { gain: 0.42, wet: 0.30, vary: 0.04, takes: 3 },
-  "player-hurt":              { gain: 0.19, wet: 0.10, vary: 0.08, takes: 3 },
-  "player-death":             { gain: 0.34, wet: 0.20, vary: 0.03, takes: 3 },
+  "monster-spit":             { gain: 0.28, wet: 0.14, vary: 0.10, takes: 3 },
+  "monster-slam-windup":      { gain: 0.28, wet: 0.20, vary: 0.03, takes: 3 },
+  "monster-slam-impact":      { gain: 0.409, wet: 0.30, vary: 0.04, takes: 3 },
+  "player-hurt":              { gain: 0.194, wet: 0.10, vary: 0.08, takes: 3 },
+  "player-death":             { gain: 0.36, wet: 0.20, vary: 0.03, takes: 3 },
   // Varkis (varkis-voice.ts). A voice never wanders in pitch: that is a different man.
   "npc-varkis-greet-1":       { gain: 0.5, wet: 0.06, vary: 0, takes: 2 },
   "npc-varkis-greet-2":       { gain: 0.5, wet: 0.06, vary: 0, takes: 2 },
-  "npc-varkis-greet-3":       { gain: 0.5, wet: 0.06, vary: 0, takes: 2 },
-  "npc-varkis-greet-4":       { gain: 0.5, wet: 0.06, vary: 0, takes: 2 },
-  "npc-varkis-shop-1":        { gain: 0.5, wet: 0.06, vary: 0, takes: 2 },
-  "npc-varkis-shop-2":        { gain: 0.5, wet: 0.06, vary: 0, takes: 2 },
-  "npc-varkis-shop-3":        { gain: 0.5, wet: 0.06, vary: 0, takes: 2 },
-  "npc-varkis-shop-4":        { gain: 0.5, wet: 0.06, vary: 0, takes: 2 },
-  "npc-varkis-bye-1":         { gain: 0.5, wet: 0.06, vary: 0, takes: 2 },
-  "npc-varkis-bye-2":         { gain: 0.5, wet: 0.06, vary: 0, takes: 2 },
-  "npc-varkis-bye-3":         { gain: 0.5, wet: 0.06, vary: 0, takes: 2 },
+  "npc-varkis-greet-3":       { gain: 0.512, wet: 0.06, vary: 0, takes: 2 },
+  "npc-varkis-greet-4":       { gain: 0.497, wet: 0.06, vary: 0, takes: 2 },
+  "npc-varkis-shop-1":        { gain: 0.53, wet: 0.06, vary: 0, takes: 2 },
+  "npc-varkis-shop-2":        { gain: 0.509, wet: 0.06, vary: 0, takes: 2 },
+  "npc-varkis-shop-3":        { gain: 0.506, wet: 0.06, vary: 0, takes: 2 },
+  "npc-varkis-shop-4":        { gain: 0.518, wet: 0.06, vary: 0, takes: 2 },
+  "npc-varkis-bye-1":         { gain: 0.503, wet: 0.06, vary: 0, takes: 2 },
+  "npc-varkis-bye-2":         { gain: 0.506, wet: 0.06, vary: 0, takes: 2 },
+  "npc-varkis-bye-3":         { gain: 0.518, wet: 0.06, vary: 0, takes: 2 },
   // Down 3.5 dB from the tonal vortex this replaced. Both masters measure the
   // same integrated loudness; a broadband gust simply reads louder than a
   // narrow pitched band does at that level, and this one lands beside the
   // crossing whoosh when a map arrives.
-  "portal-open":              { gain: 0.16, wet: 0.34, vary: 0, takes: 3 },
-  "portal-close":             { gain: 0.20, wet: 0.30, vary: 0, takes: 3 },
-  "portal-enter":             { gain: 0.24, wet: 0.24, vary: 0, takes: 3 },
-  "waystone-activate":        { gain: 0.36, wet: 0.28, vary: 0, takes: 3 },
-  "flask-drink":              { gain: 0.30, wet: 0.08, vary: 0.05, takes: 3 },
+  "portal-open":              { gain: 0.171, wet: 0.34, vary: 0, takes: 3 },
+  "portal-close":             { gain: 0.202, wet: 0.30, vary: 0, takes: 3 },
+  "portal-enter":             { gain: 0.233, wet: 0.24, vary: 0, takes: 3 },
+  "waystone-activate":        { gain: 0.361, wet: 0.28, vary: 0, takes: 3 },
+  "flask-drink":              { gain: 0.339, wet: 0.08, vary: 0.05, takes: 3 },
   // Feet are meant to be felt, not listened to: PoE barely gives the player any, and
   // 0.045 was still the loudest thing in a quiet hideout. This is a third of that —
   // under a fight it disappears, which is the point.
@@ -132,30 +132,31 @@ const VOICES: Record<string, Voice> = {
   // second for the whole game and is the one cue with no headroom for repetition;
   // level jitter comes from the caller, since only it knows a step from a hit.
   // `wet` is the ROOM the ground implies: a flagstone hall rings, a bog swallows.
-  "footstep-stone":          { gain: 0.014, wet: 0.14, vary: 0.16, takes: 3 },
-  "footstep-dirt":           { gain: 0.014, wet: 0.06, vary: 0.16, takes: 3 },
+  "footstep-stone":          { gain: 0.016, wet: 0.14, vary: 0.16, takes: 3 },
+  "footstep-dirt":           { gain: 0.013, wet: 0.06, vary: 0.16, takes: 3 },
   "footstep-grass":          { gain: 0.014, wet: 0.05, vary: 0.16, takes: 3 },
   "footstep-mud":            { gain: 0.014, wet: 0.04, vary: 0.16, takes: 3 },
   // Twelve dB under where they started, in two passes of six, because the first
   // pass was still audibly the loudest thing on the screen. A UI cue is a
   // confirmation that a press landed, not an event in its own right.
-  "ui-click":                 { gain: 0.075, wet: 0.05, vary: 0.03, takes: 3 },
+  "ui-click":                 { gain: 0.063, wet: 0.05, vary: 0.03, takes: 3 },
   // A hover fires on every pixel of travel across a menu, so it sits under the click
   // by a lot. Anything that competes with the click is a menu that buzzes.
-  "ui-hover":                 { gain: 0.012, wet: 0.04, vary: 0.05, takes: 3 },
-  "ui-panel-open":            { gain: 0.24, wet: 0.10, vary: 0.04, takes: 3 },
-  // Reward cues. Mean volume (ffmpeg volumedetect): monster-death -16.0 dB, drop-unique -16.9 dB,
-  // so the shared gain is 0.34 * 10^(0.9/20) = 0.377. Tonal cues never vary: the pitch is the signal.
-  "drop-normal":              { gain: 0.377, wet: 0.10, vary: 0, takes: 3 },
+  "ui-hover":                 { gain: 0.011, wet: 0.04, vary: 0.05, takes: 3 },
+  "ui-panel-open":            { gain: 0.229, wet: 0.10, vary: 0.04, takes: 3 },
+  // Reward cues. Mean volume (ffmpeg volumedetect): monster-death -16.0 dB, drop-unique -17.37 dB,
+  // so drop-unique's gain is 0.34 * 10^(1.37/20) = 0.398; the rest keep their balance against it.
+  // Tonal cues never vary: the pitch is the signal.
+  "drop-normal":              { gain: 0.392, wet: 0.10, vary: 0, takes: 3 },
   "drop-magic":               { gain: 0.377, wet: 0.22, vary: 0 },
-  "drop-rare":                { gain: 0.377, wet: 0.34, vary: 0, takes: 3 },
-  "drop-unique":              { gain: 0.377, wet: 0.50, vary: 0, takes: 3 },
+  "drop-rare":                { gain: 0.398, wet: 0.34, vary: 0, takes: 3 },
+  "drop-unique":              { gain: 0.398, wet: 0.50, vary: 0, takes: 3 },
   "drop-currency":            { gain: 0.377, wet: 0.20, vary: 0, takes: 3 },
-  "drop-gold":                { gain: 0.189, wet: 0.12, vary: 0.06, takes: 3 },
-  "drop-gold-jackpot":        { gain: 0.377, wet: 0.30, vary: 0, takes: 3 },
-  "coin-pickup":              { gain: 0.377, wet: 0.08, vary: 0.08, takes: 3 },
-  "level-up":                 { gain: 0.377, wet: 0.30, vary: 0 },
-  "container-open":           { gain: 0.377, wet: 0.16, vary: 0.04, takes: 3 },
+  "drop-gold":                { gain: 0.188, wet: 0.12, vary: 0.06, takes: 3 },
+  "drop-gold-jackpot":        { gain: 0.39, wet: 0.30, vary: 0, takes: 3 },
+  "coin-pickup":              { gain: 0.38, wet: 0.08, vary: 0.08, takes: 3 },
+  "level-up":                 { gain: 0.36, wet: 0.30, vary: 0 },
+  "container-open":           { gain: 0.368, wet: 0.16, vary: 0.04, takes: 3 },
 };
 
 export type SfxName = keyof typeof VOICES & string;
@@ -257,7 +258,7 @@ export const CORE_SFX: readonly string[] = [
 /**
  * Every voice there is, for the loading screen to swallow whole.
  *
- * The whole library is 1.2 MB of Opus across fifty-odd files: less than one of
+ * The whole library is 5.5 MB of Opus across 192 files: less than one of
  * the character's textures, and cheaper to fetch all of than to reason about
  * which biome needs which. `CORE_SFX` still exists and still goes first, because
  * ordering is the only thing that matters once cost stops mattering — the first
@@ -617,13 +618,14 @@ export function distanceRolloff(distance: number): number {
 /** Past this a world one-shot does not start and a world loop is silent: the frame is
  *  about 19 units across, and a map's worth of monsters must not mix into mud. */
 const AUDIBLE = 14;
-/** Inside this, air has taken nothing off the top yet. */
-const NEAR = 2.5;
+/** Inside this, air has taken nothing off the top yet: about a third of the frame. */
+const NEAR = 6;
 const OPEN_HZ = 20000;
-const FAR_HZ = 900;
+const FAR_HZ = 4000;
 
 /**
- * Corner frequency for something `distance` units away.
+ * Corner frequency for something `distance` units away: full band to NEAR, then
+ * geometric down to FAR_HZ at AUDIBLE (8.9 kHz at 10 units).
  *
  * Distance does not only make a thing quieter, it makes it duller: air and
  * everything in the way eat the top octaves first, which is the cue the ear
