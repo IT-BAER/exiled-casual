@@ -282,9 +282,9 @@ let listenerCtx: BaseAudioContext | null = null;
 const GLIDE = 0.05;
 
 /**
- * Sim (x, y) into WebAudio listener space, as [x, z] with y = 0. The camera (engine.ts,
+ * Sim (x, y) into WebAudio listener space, as [x, z] on the ground y = 0. The camera (engine.ts,
  * alpha -PI/4) shows sim (+1,+1) as screen-right and (-1,+1) as screen-up (intents.ts
- * WASD); the default listener faces -Z with +X on its right. A rotation, so distance holds.
+ * WASD); the listener looks down with -Z as its up, so +X is its right. Distance holds.
  */
 export function toListenerSpace(x: number, y: number): [number, number] {
   return [(x + y) / Math.SQRT2, (x - y) / Math.SQRT2];
@@ -301,16 +301,16 @@ function placeListener(ctx: BaseAudioContext, smooth: boolean): void {
   try {
     if (l.positionX) {
       glide(ctx, l.positionX, x, smooth);
-      glide(ctx, l.positionY, 0, smooth);
+      glide(ctx, l.positionY, LISTENER_HEIGHT, smooth);
       glide(ctx, l.positionZ, z, smooth);
       if (!smooth) {
-        l.forwardX.value = 0; l.forwardY.value = 0; l.forwardZ.value = -1;
-        l.upX.value = 0; l.upY.value = 1; l.upZ.value = 0;
+        l.forwardX.value = 0; l.forwardY.value = -1; l.forwardZ.value = 0;
+        l.upX.value = 0; l.upY.value = 0; l.upZ.value = -1;
       }
     } else {
       // Firefox: no AudioParams on the listener, so no glide either.
-      l.setPosition(x, 0, z);
-      if (!smooth) l.setOrientation(0, 0, -1, 0, 1, 0);
+      l.setPosition(x, LISTENER_HEIGHT, z);
+      if (!smooth) l.setOrientation(0, -1, 0, 0, 0, -1);
     }
   } catch { /* a listener we cannot place leaves every voice centred */ }
 }
@@ -357,7 +357,7 @@ function pannerAt(b: Bus, at: At): PannerNode | null {
   p.panningModel = "equalpower";
   p.distanceModel = "inverse";
   p.refDistance = REF_DISTANCE;
-  p.rolloffFactor = 1;
+  p.rolloffFactor = ROLLOFF;
   p.coneInnerAngle = 360;
   p.coneOuterAngle = 360;
   placePanner(b.ctx, p, at, false);
@@ -594,16 +594,24 @@ export function stopAmbient(): void {
   stopSfxLoop("ambient");
 }
 
-/** Inverse-distance reference, in sim units: nothing inside it is attenuated. */
-const REF_DISTANCE = 2;
+/**
+ * The ear hangs this far above the player, looking down like the camera. On the ground
+ * a source half a unit aside is 90 degrees off and equal-power pans it hard; from up
+ * here only the screen edge pans hard (atan(1.5/5) = 17 degrees for a man beside you).
+ */
+const LISTENER_HEIGHT = 5;
+/** Inverse model from the listener: nothing nearer than the player's own spot is cut. */
+const REF_DISTANCE = LISTENER_HEIGHT;
+const ROLLOFF = 3;
 
 /**
- * How loud something `distance` units from the player is: WebAudio's "inverse"
- * model at refDistance 2, rolloffFactor 1, which every world panner is built with
- * (-10.9 dB at 7 units, -15.6 dB at 12). Used by hand where there is no panner.
+ * How loud something `distance` ground units from the player is: WebAudio's "inverse"
+ * model as every world panner is built, heard from LISTENER_HEIGHT up
+ * (-1.8 dB at 2 units, -10.0 at 7, -15.3 at 12). Used by hand where there is no panner.
  */
 export function distanceRolloff(distance: number): number {
-  return REF_DISTANCE / Math.max(distance, REF_DISTANCE);
+  const d = Math.max(Math.hypot(distance, LISTENER_HEIGHT), REF_DISTANCE);
+  return REF_DISTANCE / (REF_DISTANCE + ROLLOFF * (d - REF_DISTANCE));
 }
 
 /** Past this a world one-shot does not start and a world loop is silent: the frame is

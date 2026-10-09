@@ -153,22 +153,22 @@ describe("sfx assets", () => {
 describe("distanceRolloff", () => {
   const db = (g: number) => 20 * Math.log10(g);
 
-  /** WebAudio's "inverse" model at refDistance 2, rolloffFactor 1: 2 / max(d, 2). */
-  it("is whole inside the reference distance and inverse past it", () => {
+  /** WebAudio's "inverse" model at refDistance 5, rolloffFactor 3, heard from 5 units up. */
+  it("is whole under the listener and inverse past it", () => {
     expect(distanceRolloff(0)).toBe(1);
-    expect(db(distanceRolloff(2))).toBeCloseTo(0, 1);
-    expect(Math.abs(db(distanceRolloff(7)) - -10.9)).toBeLessThan(0.5);
-    expect(Math.abs(db(distanceRolloff(12)) - -15.6)).toBeLessThan(0.5);
+    expect(Math.abs(db(distanceRolloff(2)) - -1.8)).toBeLessThan(0.3);
+    expect(Math.abs(db(distanceRolloff(7)) - -10.0)).toBeLessThan(0.3);
+    expect(Math.abs(db(distanceRolloff(12)) - -15.3)).toBeLessThan(0.3);
   });
 
-  it("falls off monotonically past the reference", () => {
-    for (let d = 3; d < 14; d++) expect(distanceRolloff(d)).toBeLessThan(distanceRolloff(d - 1));
+  it("falls off monotonically with distance", () => {
+    for (let d = 1; d < 14; d++) expect(distanceRolloff(d)).toBeLessThan(distanceRolloff(d - 1));
   });
 });
 
 describe("toListenerSpace", () => {
   // Camera yaw -PI/4 (engine.ts): sim (+1,+1) is screen-right, (-1,+1) screen-up (intents.ts).
-  // WebAudio's default listener faces -Z with +X to its right.
+  // The listener looks down with -Z as its up and +X to its right.
   it("puts a source screen-right of the player on the listener's right", () => {
     const [x, z] = toListenerSpace(1, 1);
     expect(x).toBeGreaterThan(0);
@@ -438,7 +438,7 @@ describe("positional voices", () => {
     expect(panners).toHaveLength(1);
     const p = panners[0]!;
     expect(p).toMatchObject({
-      panningModel: "equalpower", distanceModel: "inverse", refDistance: 2, rolloffFactor: 1,
+      panningModel: "equalpower", distanceModel: "inverse", refDistance: 5, rolloffFactor: 3,
       coneInnerAngle: 360, coneOuterAngle: 360,
     });
     const [x, z] = toListenerSpace(3, 1);
@@ -447,6 +447,35 @@ describe("positional voices", () => {
     expect(p.positionZ.value).toBeCloseTo(z, 10);
     // The panner sits on the dry path only; the room return stays diffuse.
     expect(fake.sends[0]!.spatial).toBe(p);
+  });
+
+  /** Equal-power azimuth as the WebAudio spec derives it: the source direction projected
+   *  onto the plane normal to the listener's up, measured from its front, in degrees. */
+  function azimuth(src: Panner): number {
+    const l = listener as Record<string, FakeParam>;
+    const v = [src.positionX.value - l.positionX!.value, src.positionY.value - l.positionY!.value,
+      src.positionZ.value - l.positionZ!.value];
+    const f = [l.forwardX!.value, l.forwardY!.value, l.forwardZ!.value];
+    const u = [l.upX!.value, l.upY!.value, l.upZ!.value];
+    const dot = (a: number[], b: number[]) => a[0]! * b[0]! + a[1]! * b[1]! + a[2]! * b[2]!;
+    const r = [f[1]! * u[2]! - f[2]! * u[1]!, f[2]! * u[0]! - f[0]! * u[2]!, f[0]! * u[1]! - f[1]! * u[0]!];
+    const along = dot(v, u);
+    const proj = v.map((c, i) => c - along * u[i]!);
+    return (Math.atan2(dot(proj, r), dot(proj, f)) * 180) / Math.PI;
+  }
+
+  it("hears a voice beside the player near the middle and the screen edge hard to one side", async () => {
+    install();
+    await preloadSfx(["npc-varkis-greet-1", "npc-varkis-greet-2", "npc-varkis-greet-3"]);
+    // Varkis a step and a half screen-right: sim (+1,+1) is screen-right.
+    playSfxAt("npc-varkis-greet-1", 1.06, 1.06);
+    const near = azimuth(panners[0]!);
+    expect(near).toBeGreaterThan(0);
+    expect(near).toBeLessThan(25);
+    playSfxAt("npc-varkis-greet-2", 6.7, 6.7);
+    expect(azimuth(panners[1]!)).toBeGreaterThan(55);
+    playSfxAt("npc-varkis-greet-3", -1.06, -1.06);
+    expect(azimuth(panners[2]!)).toBeLessThan(0);
   });
 
   it("does not start a world one-shot at or past the audible edge", async () => {
@@ -485,10 +514,10 @@ describe("positional voices", () => {
     await preloadSfx(["monster-death"]);
     playSfxAt("monster-death", 3, 0);
     const [x, z] = toListenerSpace(2, 0);
-    expect(listener["setPosition"]).toHaveBeenLastCalledWith(x, 0, z);
+    expect(listener["setPosition"]).toHaveBeenLastCalledWith(x, 5, z);
     setSfxListener(4, 1);
     const [x2, z2] = toListenerSpace(4, 1);
-    expect(listener["setPosition"]).toHaveBeenLastCalledWith(x2, 0, z2);
+    expect(listener["setPosition"]).toHaveBeenLastCalledWith(x2, 5, z2);
   });
 
   it("muffles a far one-shot and gives it more room, scaled with its level", async () => {
