@@ -5,12 +5,13 @@ Why this exists
 `trim_sfx.py` was written for MOSS renders: 48 kHz 16-bit mono, five seconds, two or
 three takes in it. A commercial library file is none of those — the Sonniss masters are
 96 kHz 24-bit stereo and run from one second to two minutes — so it cannot be fed to the
-trimmer directly (the trimmer exits on anything that is not 16-bit mono, by design: a
-silent format mismatch is how you ship a cue at half speed).
+trimmer directly (the trimmer exits on anything that is not 16-bit mono or stereo, by
+design: a silent format mismatch is how you ship a cue at half speed).
 
-So this is the front half of the same pipeline:
+So this is the front half of the same pipeline, keeping the source's channels (a stereo
+master ships stereo, a mono one mono):
 
-  source .wav  ->  48 kHz 16-bit mono  ->  trim_sfx.py (find a take, shape it)  ->  Opus
+  source .wav  ->  48 kHz 16-bit  ->  trim_sfx.py (find a take, shape it)  ->  Opus
 
 The mapping from cue name to source file lives in `SOURCES` below, one line per cue,
 with the library it came from in the comment: an attribution the licence does not
@@ -284,6 +285,20 @@ LOOP_SOURCES: dict[str, str | list[str]] = {
 CROSSFADE = 0.5
 
 
+def channels_of(path: str) -> int:
+    """1 or 2: the source's own channel count, anything wider folded to stereo."""
+    out = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries", "stream=channels",
+         "-of", "csv=p=0", path],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    return 1 if int(out) == 1 else 2
+
+
+def layout(channels: int) -> str:
+    return "mono" if channels == 1 else "stereo"
+
+
 def to_loop(src: str, dst: str, start: float, duration: float) -> None:
     """Cut a seamless loop of exactly `duration` seconds.
 
@@ -302,14 +317,14 @@ def to_loop(src: str, dst: str, start: float, duration: float) -> None:
         f"[a][b]acrossfade=d={CROSSFADE}:c1=tri:c2=tri,"
         # One-pass loudnorm: a bed is held for seconds under one-shots, so it is
         # levelled well below the trimmer's target for events and trimmed of peaks.
-        "loudnorm=I=-23:TP=-3.0,aformat=sample_fmts=s16:sample_rates=48000:channel_layouts=mono",
+        f"loudnorm=I=-23:TP=-3.0,aformat=sample_fmts=s16:sample_rates=48000:channel_layouts={layout(channels_of(src))}",
         "-c:a", "pcm_s16le", dst,
     ]
     subprocess.run(cmd, check=True)
 
 
-def to_mono48(src: str, dst: str, start: float, duration: float) -> None:
-    """Downmix and resample the window we care about, without touching level.
+def to_48k(src: str, dst: str, start: float, duration: float) -> None:
+    """Resample the window we care about, in the source's channels, without touching level.
 
     `start`/`duration` pick a region out of a long recording BEFORE the trimmer looks
     for a transient: on a 60-second pebble drop the loudest take is not necessarily the
@@ -321,7 +336,7 @@ def to_mono48(src: str, dst: str, start: float, duration: float) -> None:
     cmd += ["-i", src]
     if duration > 0:
         cmd += ["-t", f"{duration:.3f}"]
-    cmd += ["-ac", "1", "-ar", "48000", "-c:a", "pcm_s16le", dst]
+    cmd += ["-ac", str(channels_of(src)), "-ar", "48000", "-c:a", "pcm_s16le", dst]
     subprocess.run(cmd, check=True)
 
 
@@ -338,26 +353,28 @@ def regain(path: str, db: float) -> None:
 
 
 def to_layered(lib: str, layers: list, dst: str) -> None:
-    """Mix `(path@start:duration, semitones, gain_db, at_ms)` layers to 48 kHz 16-bit mono."""
+    """Mix `(path@start:duration, semitones, gain_db, at_ms)` layers to 48 kHz 16-bit,
+    stereo when any layer is (a mono layer sits centred in it)."""
     cmd, chains = ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error"], []
+    channels = max(channels_of(os.path.join(lib, spec.partition("@")[0])) for spec, *_ in layers)
     for i, (spec, semis, gain, at_ms) in enumerate(layers):
         rel, _, window = spec.partition("@")
         start, _, dur = window.partition(":")
         cmd += ["-ss", start or "0", "-t", dur or "30", "-i", os.path.join(lib, rel)]
         rate = 48000 * 2 ** (semis / 12)
-        chains.append(f"[{i}:a]aformat=channel_layouts=mono,aresample=48000,asetrate={rate:.1f},"
+        chains.append(f"[{i}:a]aformat=channel_layouts={layout(channels)},aresample=48000,asetrate={rate:.1f},"
                       f"aresample=48000,volume={gain}dB,adelay={at_ms}[l{i}]")
     mix = "".join(f"[l{i}]" for i in range(len(layers)))
     cmd += ["-filter_complex", ";".join(chains) + f";{mix}amix=inputs={len(layers)}:normalize=0",
-            "-ac", "1", "-ar", "48000", "-c:a", "pcm_s16le", dst]
+            "-ac", str(channels), "-ar", "48000", "-c:a", "pcm_s16le", dst]
     subprocess.run(cmd, check=True)
 
 
 def to_opus(src: str, dst: str) -> None:
     subprocess.run(
         ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", src,
-         "-c:a", "libopus", "-b:a", "128k", "-vbr", "on", "-application", "audio",
-         "-ac", "1", "-ar", "48000", dst],
+         "-c:a", "libopus", "-b:a", "160k", "-vbr", "on", "-application", "audio",
+         "-ar", "48000", dst],
         check=True,
     )
 
@@ -413,7 +430,7 @@ def main() -> None:
                 to_loop(src, done, float(start or 0), float(dur or 0))
             else:
                 staged = os.path.join(tmp, cue + ".wav")
-                to_mono48(src, staged, float(start or 0), float(dur or 0))
+                to_48k(src, staged, float(start or 0), float(dur or 0))
                 shaped = os.path.join(tmp, "out")
                 subprocess.run([sys.executable, trimmer, staged, "--out", shaped], check=True)
                 done = os.path.join(shaped, cue + ".wav")

@@ -7,6 +7,7 @@ level, in every take.
 
 Each recipe is a list of parts out of the Sonniss library, cut, pitch-shifted (tape-style:
 pitch and length move together), filtered, faded and layered at an offset, then peak-set.
+A take is stereo when any of its parts is (a mono part sits centred), mono otherwise.
 The build is deterministic. The result is NOT passed through trim_sfx.py: it would cut
 the level-up's lead-in swell and re-EQ the sound.
 
@@ -228,31 +229,30 @@ def seg(src, start, dur):
         a = int(start * info.samplerate)
         x, sr = sf.read(os.path.join(LIB, src), start=a, frames=int(dur * info.samplerate) + 1,
                         always_2d=True, dtype="float64")
-        x = x.mean(axis=1)
         g = math.gcd(int(sr), SR)
-        _cache[key] = resample_poly(x, SR // g, int(sr) // g)
+        _cache[key] = resample_poly(x[:, :2], SR // g, int(sr) // g, axis=0)
     return _cache[key].copy()
 
 
 def mix(layers):
-    """Sum the layers, unscaled."""
+    """Sum the layers, unscaled: (samples, channels), stereo if any layer is."""
     parts = []
     for src, start, dur, semis, gain, at_ms, fade_ms, hp, lp in layers:
         x = seg(src, start, dur)
         rate = 2 ** (semis / 12)
         if abs(semis) > 1e-3:
-            x = resample(x, max(1, int(round(len(x) / rate))))
+            x = resample(x, max(1, int(round(len(x) / rate))), axis=0)
         if hp:
-            x = sosfilt(butter(2, hp, "highpass", fs=SR, output="sos"), x)
+            x = sosfilt(butter(2, hp, "highpass", fs=SR, output="sos"), x, axis=0)
         if lp:
-            x = sosfilt(butter(2, lp, "lowpass", fs=SR, output="sos"), x)
-        x[:48] *= np.linspace(0, 1, 48)  # 1 ms de-click
+            x = sosfilt(butter(2, lp, "lowpass", fs=SR, output="sos"), x, axis=0)
+        x[:48] *= np.linspace(0, 1, 48)[:, None]  # 1 ms de-click
         nf = min(len(x), int(fade_ms * SR / 1000))
-        x[len(x) - nf:] *= np.linspace(1, 0, nf) ** 2
+        x[len(x) - nf:] *= (np.linspace(1, 0, nf) ** 2)[:, None]
         x /= max(1e-9, np.abs(x).max())
         parts.append((int(at_ms * SR / 1000), x * 10 ** (gain / 20)))
     n = max(o + len(x) for o, x in parts)
-    out = np.zeros(n)
+    out = np.zeros((n, max(x.shape[1] for _, x in parts)))
     for o, x in parts:
         out[o:o + len(x)] += x
     return out
@@ -284,8 +284,8 @@ def takes_of(recipe):
 def to_opus(src: str, dst: str) -> None:
     subprocess.run(
         ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", src,
-         "-c:a", "libopus", "-b:a", "128k", "-vbr", "on", "-application", "audio",
-         "-ac", "1", "-ar", "48000", dst],
+         "-c:a", "libopus", "-b:a", "160k", "-vbr", "on", "-application", "audio",
+         "-ar", "48000", dst],
         check=True,
     )
 

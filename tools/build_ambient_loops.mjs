@@ -41,7 +41,8 @@ function decode(buffer) {
   const bits = view.getUint16(fmt.at + 14, true);
   const bytes = bits / 8;
   const frames = Math.floor(data.size / (channels * bytes));
-  const mono = new Float32Array(frames);
+  // The source's own channels, anything wider than stereo folded onto two.
+  const out = Array.from({ length: Math.min(channels, 2) }, () => new Float32Array(frames));
   const sample = (at) => {
     if (format === 3 && bits === 32) return view.getFloat32(at, true);
     if (format !== 1) throw new Error(`unsupported WAV format ${format}`);
@@ -55,51 +56,99 @@ function decode(buffer) {
     throw new Error(`unsupported ${bits}-bit WAV`);
   };
   for (let i = 0; i < frames; i++) {
-    let total = 0;
-    for (let c = 0; c < channels; c++) total += sample(data.at + (i * channels + c) * bytes);
-    mono[i] = total / channels;
+    for (let c = 0; c < channels; c++) out[Math.min(c, out.length - 1)][i] += sample(data.at + (i * channels + c) * bytes);
   }
-  return { rate, mono };
+  for (let c = 0; c < out.length; c++) {
+    const share = c === out.length - 1 ? channels - c : 1;
+    if (share > 1) for (let i = 0; i < frames; i++) out[c][i] /= share;
+  }
+  return { rate, chans: out };
 }
 
-function loop({ rate, mono }) {
-  const length = Math.min(Math.floor(rate * SECONDS), mono.length - Math.floor(rate * FADE));
+function loop({ rate, chans }) {
+  const frames = chans[0].length;
+  const length = Math.min(Math.floor(rate * SECONDS), frames - Math.floor(rate * FADE));
   const fade = Math.min(Math.floor(rate * FADE), Math.floor(length / 4));
-  const out = mono.slice(0, length);
-  for (let i = 0; i < fade; i++) {
-    const t = i / fade;
-    out[length - fade + i] = out[length - fade + i] * (1 - t) + out[i] * t;
-  }
-  return { rate, mono: out };
+  return {
+    rate,
+    // The body starts where the head that was folded under the tail ends, so the last
+    // sample runs straight into the first and the seam is not a step.
+    chans: chans.map((ch) => {
+      const out = ch.slice(fade, length);
+      for (let i = 0; i < fade; i++) {
+        const t = i / fade;
+        out[out.length - fade + i] = ch[length - fade + i] * (1 - t) + ch[i] * t;
+      }
+      return out;
+    }),
+  };
 }
 
-function event({ rate, mono }) {
+/**
+ * Subsonic cut, run over the loop twice and kept from the second pass so the filter is
+ * as settled at the head as at the tail. Opus rejects near-DC itself with a filter that
+ * starts at rest, so a drone's slow drift otherwise comes back as a step at the seam.
+ */
+function circularHighpass({ rate, chans }, hz = 20) {
+  const w = (2 * Math.PI * hz) / rate, q = Math.SQRT1_2;
+  const alpha = Math.sin(w) / (2 * q), cos = Math.cos(w), a0 = 1 + alpha;
+  const b0 = (1 + cos) / 2 / a0, b1 = -(1 + cos) / a0, b2 = b0;
+  const a1 = (-2 * cos) / a0, a2 = (1 - alpha) / a0;
+  return {
+    rate,
+    chans: chans.map((ch) => {
+      const out = new Float32Array(ch.length);
+      let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+      for (let pass = 0; pass < 2; pass++) {
+        for (let i = 0; i < ch.length; i++) {
+          const x = ch[i], y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
+          x2 = x1; x1 = x; y2 = y1; y1 = y;
+          if (pass === 1) out[i] = y;
+        }
+      }
+      return out;
+    }),
+  };
+}
+
+function event({ rate, chans }) {
+  const frames = chans[0].length;
   const window = Math.max(1, Math.floor(rate * 0.1));
   let best = 0, bestEnergy = -1;
-  for (let at = 0; at + window < mono.length; at += window) {
+  for (let at = 0; at + window < frames; at += window) {
     let energy = 0;
-    for (let i = 0; i < window; i++) energy += mono[at + i] ** 2;
+    for (const ch of chans) for (let i = 0; i < window; i++) energy += ch[at + i] ** 2;
     if (energy > bestEnergy) { bestEnergy = energy; best = at; }
   }
-  const length = Math.min(Math.floor(rate * 2.5), mono.length);
-  const start = Math.max(0, Math.min(mono.length - length, best - Math.floor(length * 0.35)));
-  const out = mono.slice(start, start + length);
+  const length = Math.min(Math.floor(rate * 2.5), frames);
+  const start = Math.max(0, Math.min(frames - length, best - Math.floor(length * 0.35)));
   const fade = Math.floor(rate * 0.04);
-  for (let i = 0; i < fade; i++) {
-    out[i] *= i / fade;
-    out[out.length - 1 - i] *= i / fade;
-  }
-  return { rate, mono: out };
+  return {
+    rate,
+    chans: chans.map((ch) => {
+      const out = ch.slice(start, start + length);
+      for (let i = 0; i < fade; i++) {
+        out[i] *= i / fade;
+        out[out.length - 1 - i] *= i / fade;
+      }
+      return out;
+    }),
+  };
 }
 
-function encode({ rate, mono }) {
-  const out = Buffer.alloc(44 + mono.length * 2);
+function encode({ rate, chans }) {
+  const n = chans.length, frames = chans[0].length;
+  const out = Buffer.alloc(44 + frames * n * 2);
   out.write("RIFF", 0); out.writeUInt32LE(out.length - 8, 4); out.write("WAVEfmt ", 8);
-  out.writeUInt32LE(16, 16); out.writeUInt16LE(1, 20); out.writeUInt16LE(1, 22);
-  out.writeUInt32LE(rate, 24); out.writeUInt32LE(rate * 2, 28);
-  out.writeUInt16LE(2, 32); out.writeUInt16LE(16, 34); out.write("data", 36);
-  out.writeUInt32LE(mono.length * 2, 40);
-  for (let i = 0; i < mono.length; i++) out.writeInt16LE(Math.max(-32768, Math.min(32767, Math.round(mono[i] * 32767))), 44 + i * 2);
+  out.writeUInt32LE(16, 16); out.writeUInt16LE(1, 20); out.writeUInt16LE(n, 22);
+  out.writeUInt32LE(rate, 24); out.writeUInt32LE(rate * n * 2, 28);
+  out.writeUInt16LE(n * 2, 32); out.writeUInt16LE(16, 34); out.write("data", 36);
+  out.writeUInt32LE(frames * n * 2, 40);
+  for (let i = 0; i < frames; i++) {
+    for (let c = 0; c < n; c++) {
+      out.writeInt16LE(Math.max(-32768, Math.min(32767, Math.round(chans[c][i] * 32767))), 44 + (i * n + c) * 2);
+    }
+  }
   return out;
 }
 
@@ -107,7 +156,7 @@ for (const [name, source] of Object.entries(SOURCES)) {
   const decoded = decode(await readFile(resolve(ROOT, source)));
   const wav = resolve(OUT, `${name}.wav`);
   const webm = resolve(OUT, `${name}.webm`);
-  await writeFile(wav, encode(name.startsWith("ambient-") ? loop(decoded) : event(decoded)));
-  await run(FFMPEG, ["-y", "-hide_banner", "-loglevel", "error", "-i", wav, "-c:a", "libopus", "-b:a", "64k", webm]);
+  await writeFile(wav, encode(name.startsWith("ambient-") ? circularHighpass(loop(decoded)) : event(decoded)));
+  await run(FFMPEG, ["-y", "-hide_banner", "-loglevel", "error", "-i", wav, "-c:a", "libopus", "-b:a", "160k", "-vbr", "on", "-application", "audio", "-ar", "48000", webm]);
   await unlink(wav);
 }

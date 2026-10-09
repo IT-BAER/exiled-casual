@@ -73,27 +73,14 @@ TARGET_PEAK_DB = -2.5
 # a pile of compensation.
 TARGET_RMS_DB = -16.0
 
-# Where each cue is high-passed. MOSS puts a great deal of energy under 100 Hz in
-# almost everything, and on a cue that is not MEANT to be felt in the chest it is
-# rumble: it eats the headroom the body of the sound should have had. The ones with a
-# low number here are the ones whose weight is the point.
-HIGHPASS_HZ: dict[str, int] = {
-    "monster-slam-impact": 45,
-    "monster-death": 70,
-    "waystone-activate": 70,
-    "portal-open": 80,
-    "portal-close": 90,
-    "monster-hurt": 90,
-    "player-hurt": 90,
-    "monster-melee-hit": 100,
-}
-DEFAULT_HIGHPASS_HZ = 130
-# A gentle octave-wide lift where detail lives. The model is short of 2-5 kHz on most
-# of these — a leather tap measured 24 dB down at 500-2k — and while EQ cannot invent
-# what was never rendered, it does recover the difference between a dull thud and one
-# you can hear the material of.
+# Every cue is high-passed here, for rumble only: sub-sonic energy eats the headroom the
+# audible body should have had. Higher cuts were for model renders and thinned the
+# library masters, whose low end is part of the sound.
+HIGHPASS_HZ = 40
+# A gentle octave-wide lift where detail lives: the difference between a dull thud
+# and one you can hear the material of. Kept small, a library master is not short of it.
 PRESENCE_HZ = 3000
-PRESENCE_GAIN_DB = 3.5
+PRESENCE_GAIN_DB = 1.5
 # Shortest take worth keeping; below this the render found nothing.
 MIN_TAKE_MS = 40
 
@@ -134,18 +121,19 @@ def max_for(name: str) -> float:
     return hit if hit is not None else 2.0
 
 
-def read_wav(path: str) -> tuple[array.array, int]:
+def read_wav(path: str) -> tuple[array.array, int, int]:
+    """Interleaved 16-bit samples, rate, channels. Anything but 16-bit mono or stereo exits."""
     with wave.open(path) as w:
-        if w.getsampwidth() != 2 or w.getnchannels() != 1:
-            sys.exit(f"{path}: expected 16-bit mono, got {w.getsampwidth()*8}-bit x{w.getnchannels()}")
+        if w.getsampwidth() != 2 or w.getnchannels() not in (1, 2):
+            sys.exit(f"{path}: expected 16-bit mono or stereo, got {w.getsampwidth()*8}-bit x{w.getnchannels()}")
         a = array.array("h")
         a.frombytes(w.readframes(w.getnframes()))
-        return a, w.getframerate()
+        return a, w.getframerate(), w.getnchannels()
 
 
-def write_wav(path: str, samples: array.array, rate: int) -> None:
+def write_wav(path: str, samples: array.array, rate: int, channels: int) -> None:
     with wave.open(path, "wb") as w:
-        w.setnchannels(1)
+        w.setnchannels(channels)
         w.setsampwidth(2)
         w.setframerate(rate)
         w.writeframes(samples.tobytes())
@@ -160,9 +148,17 @@ def envelope(a: array.array, win: int) -> list[float]:
     return out
 
 
-def trim(a: array.array, rate: int, max_s: float) -> tuple[array.array, dict]:
+def mid(a: array.array, channels: int) -> array.array:
+    """The channels summed (averaged): what the take is found on, so both cut alike."""
+    if channels == 1:
+        return a
+    return array.array("h", (sum(a[i:i + channels]) // channels for i in range(0, len(a), channels)))
+
+
+def trim(a: array.array, rate: int, max_s: float, channels: int = 1) -> tuple[array.array, dict]:
     win = max(1, rate // 50)  # 20 ms
-    env = envelope(a, win)
+    m = mid(a, channels)
+    env = envelope(m, win)
     peak = max(env) if env else 0.0
     if peak <= 0.0:
         return array.array("h"), {"peak": 0.0, "start": 0.0, "len": 0.0}
@@ -188,35 +184,32 @@ def trim(a: array.array, rate: int, max_s: float) -> tuple[array.array, dict]:
         end += 1
 
     start_i = max(0, onset * win - int(rate * PRE_ROLL_MS / 1000))
-    end_i = min(len(a), (end + 1) * win)
+    end_i = min(len(m), (end + 1) * win)
     end_i = min(end_i, start_i + int(rate * max_s))
-    cut = a[start_i:end_i]
-    if len(cut) < rate * MIN_TAKE_MS / 1000:
-        return array.array("h"), {"peak": peak, "start": start_i / rate, "len": len(cut) / rate}
+    cut = a[start_i * channels:end_i * channels]
+    frames = len(cut) // channels
+    if frames < rate * MIN_TAKE_MS / 1000:
+        return array.array("h"), {"peak": peak, "start": start_i / rate, "len": frames / rate}
+
+    def scale(frame: int, k: float) -> None:
+        for c in range(frame * channels, frame * channels + channels):
+            cut[c] = int(cut[c] * k)
 
     # Fade the tail, so a cut mid-decay is not a click.
-    fade = min(int(rate * FADE_OUT_MS / 1000), len(cut))
+    fade = min(int(rate * FADE_OUT_MS / 1000), frames)
     for i in range(fade):
-        cut[len(cut) - fade + i] = int(cut[len(cut) - fade + i] * (1.0 - i / fade))
+        scale(frames - fade + i, 1.0 - i / fade)
     # And the first two milliseconds, for the same reason at the other end.
-    lead = min(int(rate * 0.002), len(cut))
+    lead = min(int(rate * 0.002), frames)
     for i in range(lead):
-        cut[i] = int(cut[i] * (i / lead))
+        scale(i, i / lead)
 
     # Deliberately NOT normalised here. Peak-normalising was the mistake: when a
     # cue's peak is a sub-bass thump — and nine of these measured within 4 dB of
     # their whole spectrum below 100 Hz — scaling by that peak leaves everything
     # audible 20 dB down, which is what "muddy and quiet" actually was. `shape()`
     # high-passes first and then sets level by LOUDNESS.
-    return cut, {"peak": peak, "start": start_i / rate, "len": len(cut) / rate}
-
-
-def highpass_for(name: str) -> int:
-    best, hit = 0, None
-    for prefix, hz in HIGHPASS_HZ.items():
-        if name.startswith(prefix) and len(prefix) > best:
-            best, hit = len(prefix), hz
-    return hit if hit is not None else DEFAULT_HIGHPASS_HZ
+    return cut, {"peak": peak, "start": start_i / rate, "len": frames / rate}
 
 
 def _measure(path: str, chain: str) -> tuple[float, float]:
@@ -240,7 +233,7 @@ def shape(path: str, name: str) -> dict:
     measures the rumble, which is how the first pass ended up with the audible part of
     a body hit sitting 20 dB below its own peak.
     """
-    hp = highpass_for(name)
+    hp = HIGHPASS_HZ
     chain = (
         f"highpass=f={hp}:poles=2,"
         f"equalizer=f={PRESENCE_HZ}:width_type=o:width=1.4:g={PRESENCE_GAIN_DB},"
@@ -284,14 +277,14 @@ def main() -> None:
     bad = 0
     for path in paths:
         name = os.path.basename(path)
-        a, rate = read_wav(path)
-        cut, info = trim(a, rate, args.max or max_for(name[:-4]))
+        a, rate, channels = read_wav(path)
+        cut, info = trim(a, rate, args.max or max_for(name[:-4]), channels)
         if not len(cut):
             print(f"{name:30} EMPTY (peak {info['peak']:.3f}) -- regenerate this one")
             bad += 1
             continue
         dst = os.path.join(args.out, name)
-        write_wav(dst, cut, rate)
+        write_wav(dst, cut, rate, channels)
         sh = shape(dst, name[:-4])
         print(f"{name:30} take {info['start']:5.2f}s +{info['len']:4.2f}s  "
               f"src peak {info['peak']:.3f}  hp {sh['hp']:>3}Hz  "
