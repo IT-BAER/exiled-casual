@@ -2,7 +2,6 @@ import React, { useEffect, useRef } from "react";
 import type { Snapshot } from "@exiled/protocol";
 import { RARITY, SERIF } from "./ItemTooltip";
 import { playDropSound } from "../audio/drop-sound";
-import { worldSfxMix } from "../audio/sfx";
 
 /** Screen-space position of a world point, in CSS pixels of the canvas. */
 export interface ScreenPoint {
@@ -99,14 +98,10 @@ export function LootLabels({ snapshot, project, afterFrame, onPick, plates = tru
       for (const e of items) {
         if (!seen.has(e.id)) {
           seen.add(e.id);
-          const [volume, , pan] = worldSfxMix(
-            e.x - snapshot.player.x,
-            e.y - snapshot.player.y,
-          );
           const tier = e.kind === "gold"
             ? (e.jackpot ? "gold-jackpot" : "gold")
             : e.itemClass === "currency" ? "currency" : e.rarity;
-          playDropSound(tier, volume, pan);
+          playDropSound(tier, { x: e.x, y: e.y });
         }
       }
       // Forget picked-up ids so a re-drop of the same entity id chimes again.

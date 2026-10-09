@@ -74,16 +74,14 @@ describe("LootLabels", () => {
     expect(vi.mocked(playDropSound).mock.calls[0]![0]).toBe("currency");
   });
 
-  it("positions a new ground-item cue relative to the player", () => {
+  it("sounds a new ground-item cue from where it landed", () => {
     const { rerender } = render(<LootLabels project={null} snapshot={snapWith([])} />);
     rerender(<LootLabels project={null} snapshot={snapWith([
-      { id: 11, kind: "groundItem", x: 6, y: 0, rarity: "rare", name: "Doom Gaze" },
+      { id: 11, kind: "groundItem", x: 6, y: -2, rarity: "rare", name: "Doom Gaze" },
     ])} />);
 
     expect(playDropSound).toHaveBeenCalledOnce();
-    const [, volume, pan] = vi.mocked(playDropSound).mock.calls[0]!;
-    expect(volume).toBeLessThan(1);
-    expect(pan).toBeGreaterThan(0);
+    expect(vi.mocked(playDropSound).mock.calls[0]).toEqual(["rare", { x: 6, y: -2 }]);
   });
 
   it("plates every ground item and skips other entities", () => {

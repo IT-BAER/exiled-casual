@@ -1,4 +1,4 @@
-import { playSfx } from "./sfx";
+import { playSfx, playSfxAt } from "./sfx";
 
 /**
  * Drop and reward cues, one sampled cue per tier (`tools/build_reward_sfx.py`).
@@ -20,14 +20,21 @@ const CUE: Record<string, string> = {
   "level-up": "level-up",
 };
 
-/** Play the drop sound for one tier. Silent (and safe) without WebAudio. */
-export function playDropSound(tier: string | undefined, volume = 1, pan = 0): void {
-  playSfx(CUE[tier ?? "normal"] ?? "drop-normal", volume, 0, pan);
+interface At { x: number; y: number }
+
+/**
+ * Play the drop sound for one tier, from where it landed (sim units), or on the
+ * player when it has no place (a level-up, a craft). Silent (and safe) without WebAudio.
+ */
+export function playDropSound(tier: string | undefined, at?: At, volume = 1): void {
+  const cue = CUE[tier ?? "normal"] ?? "drop-normal";
+  if (at) playSfxAt(cue, at.x, at.y, volume);
+  else playSfx(cue, volume);
 }
 
-/** Gold collected. */
-export function playCoinPickup(volume = 1, pan = 0): void {
-  playSfx("coin-pickup", volume, 0, pan);
+/** Gold collected, where the pile lay. */
+export function playCoinPickup(at: At, volume = 1): void {
+  playSfxAt("coin-pickup", at.x, at.y, volume);
 }
 
 // Re-exported so App.tsx and the tests keep one import for "the game's volume",

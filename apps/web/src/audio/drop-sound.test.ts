@@ -1,12 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { playCoinPickup, playDropSound, setSoundLevel, setSoundMix, soundLevel, soundMix } from "./drop-sound";
-import { playSfx } from "./sfx";
+import { playSfx, playSfxAt } from "./sfx";
 
-vi.mock("./sfx", () => ({ playSfx: vi.fn() }));
+vi.mock("./sfx", () => ({ playSfx: vi.fn(), playSfxAt: vi.fn() }));
 
 beforeEach(() => {
   setSoundLevel(0.8, false);
   vi.mocked(playSfx).mockClear();
+  vi.mocked(playSfxAt).mockClear();
 });
 
 describe("playDropSound", () => {
@@ -19,9 +20,16 @@ describe("playDropSound", () => {
     ["gold", "drop-gold"],
     ["gold-jackpot", "drop-gold-jackpot"],
     ["level-up", "level-up"],
-  ])("plays %s as %s", (tier, cue) => {
-    playDropSound(tier, 0.5, -0.25);
-    expect(playSfx).toHaveBeenCalledWith(cue, 0.5, 0, -0.25);
+  ])("plays %s as %s, at the drop", (tier, cue) => {
+    playDropSound(tier, { x: 3, y: -1 }, 0.5);
+    expect(playSfxAt).toHaveBeenCalledWith(cue, 3, -1, 0.5);
+    expect(playSfx).not.toHaveBeenCalled();
+  });
+
+  it("plays a reward with no place (level-up, the inventory) on the player", () => {
+    playDropSound("level-up");
+    expect(playSfx).toHaveBeenCalledWith("level-up", 1);
+    expect(playSfxAt).not.toHaveBeenCalled();
   });
 
   it("falls back to the normal drop for no tier or an unknown one", () => {
@@ -32,9 +40,9 @@ describe("playDropSound", () => {
 });
 
 describe("playCoinPickup", () => {
-  it("plays the coin cue", () => {
-    playCoinPickup(0.7, 0.1);
-    expect(playSfx).toHaveBeenCalledWith("coin-pickup", 0.7, 0, 0.1);
+  it("plays the coin cue where the pile lay", () => {
+    playCoinPickup({ x: 1, y: 2 }, 0.7);
+    expect(playSfxAt).toHaveBeenCalledWith("coin-pickup", 1, 2, 0.7);
   });
 });
 

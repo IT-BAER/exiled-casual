@@ -212,7 +212,7 @@ export function playSoundPreview(category: SoundPreviewCategory): void {
   gain.gain.exponentialRampToValueAtTime(0.12, at + 0.006);
   gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.12);
   osc.connect(gain);
-  send(b, gain, 0.05, 0, false, category === "master" ? null : category);
+  send(b, gain, 0.05, category === "master" ? null : category);
   osc.start(at);
   osc.stop(at + 0.13);
 }
@@ -275,33 +275,23 @@ export function bus(): Bus | null {
   return { ctx, dry: dryBus, wet: wetBus };
 }
 
-/** Route one voice into the direct and reverb paths. The direct sound keeps its
- * bearing while the room return stays diffuse and centered. */
+/** Route one voice into the direct and reverb paths. `spatial` (a world voice's panner) sits
+ * on the direct path only, so the room return stays diffuse; returns the reverb send. */
 export function send(
   b: Bus,
   node: AudioNode,
   wetAmount: number,
-  panAmount = 0,
-  moving = false,
   category: SoundCategory | null = "environment",
-): StereoPannerNode | null {
+  spatial: AudioNode | null = null,
+): GainNode {
   const wet = effectiveWet(wetAmount, category, room);
   const d = b.ctx.createGain();
   d.gain.value = 1 - wet * 0.5;
-  const pan = Number.isFinite(panAmount) ? Math.max(-1, Math.min(1, panAmount)) : 0;
-  const create = (b.ctx as AudioContext & {
-    createStereoPanner?: () => StereoPannerNode;
-  }).createStereoPanner;
-  let panner: StereoPannerNode | null = null;
-  if ((moving || pan !== 0) && typeof create === "function") {
-    panner = create.call(b.ctx);
-    panner.pan.value = pan;
-    node.connect(panner).connect(d).connect(category ? categoryDry.get(category) ?? b.dry : b.dry);
-  } else {
-    node.connect(d).connect(category ? categoryDry.get(category) ?? b.dry : b.dry);
-  }
+  (spatial ? node.connect(spatial) : node)
+    .connect(d)
+    .connect(category ? categoryDry.get(category) ?? b.dry : b.dry);
   const w = b.ctx.createGain();
   w.gain.value = wet;
   node.connect(w).connect(category ? categoryWet.get(category) ?? b.wet : b.wet);
-  return panner;
+  return w;
 }

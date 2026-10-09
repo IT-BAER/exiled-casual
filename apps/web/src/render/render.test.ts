@@ -27,11 +27,12 @@ import type { Snapshot } from "@exiled/protocol";
 import { testPlayer, testStats } from "../test-fixtures";
 import { columnHit } from "../input/bindings";
 import { restartAtCurrentFrame } from "./rig";
-import { playSfx } from "../audio/sfx";
+import { playSfx, playSfxAt } from "../audio/sfx";
 
 vi.mock("../audio/sfx", async (importOriginal) => ({
   ...await importOriginal<typeof import("../audio/sfx")>(),
   playSfx: vi.fn(),
+  playSfxAt: vi.fn(),
 }));
 
 describe("sustained casting animation", () => {
@@ -184,6 +185,7 @@ let engine: InstanceType<typeof NullEngine>;
 afterEach(() => {
   engine?.dispose();
   vi.mocked(playSfx).mockClear();
+  vi.mocked(playSfxAt).mockClear();
 });
 
 describe("torch", () => {
@@ -1267,7 +1269,13 @@ describe("portals arrive one at a time", () => {
 
     for (let i = 0; i < 6; i++) scene.onBeforeRenderObservable.notifyObservers(scene);
 
-    expect(vi.mocked(playSfx).mock.calls.map(([name]) => name)).toEqual(["portal-open"]);
+    // A portal is in the world: heard from where it stands, never centred on the player.
+    expect(vi.mocked(playSfx)).not.toHaveBeenCalled();
+    expect(vi.mocked(playSfxAt).mock.calls.map(([name]) => name)).toEqual(["portal-open"]);
+    // Sim (x, y) is world (x, z); the ring stands at x 0..5 on y 0.
+    const [, x, y] = vi.mocked(playSfxAt).mock.calls[0]!;
+    expect([0, 1, 2, 3, 4, 5]).toContain(Math.round(x));
+    expect(y).toBeCloseTo(0, 5);
   });
 
   /**
@@ -1290,6 +1298,7 @@ describe("portals arrive one at a time", () => {
     for (let i = 0; i < 6; i++) scene.onBeforeRenderObservable.notifyObservers(scene);
 
     expect(vi.mocked(playSfx).mock.calls.map(([name]) => name)).toEqual([]);
+    expect(vi.mocked(playSfxAt).mock.calls.map(([name]) => name)).toEqual([]);
     // ...and they are standing, not stuck shut at 0.001 waiting for a sequence
     // that will never run.
     const standing = scene.getMeshByName("entity-101")!;

@@ -163,9 +163,9 @@ export type SfxName = keyof typeof VOICES & string;
 export function sfxCategory(name: string): SoundCategory {
   if (name.startsWith("ambient-")) return "music";
   if (name.startsWith("skill-")) return "skills";
-  // A voice is heard like the interface: the Options panel has no slider of its own for it.
-  if (name.startsWith("ui-") || name.startsWith("npc-")) return "interface";
+  if (name.startsWith("ui-")) return "interface";
   if (/^(drop|coin|level|container)-/.test(name)) return "loot";
+  // Monsters and Varkis (`npc-`): a voice standing in the room gets the room.
   return "environment";
 }
 
@@ -266,40 +266,154 @@ export const CORE_SFX: readonly string[] = [
 export const ALL_SFX: readonly string[] = Object.keys(VOICES);
 
 /** Per-play level wander of a one-shot, in dB either way. Loops hold their level. */
-const LEVEL_JITTER_DB = 1.5;
+const LEVEL_JITTER_DB = 1.0;
+
+/** A point in simulation units. */
+interface At { x: number; y: number }
+
+/**
+ * Where the ear is: the player, in simulation units, set every snapshot. World
+ * voices are placed absolutely, so a line already sounding pans and fades as he walks.
+ */
+const listener: At = { x: 0, y: 0 };
+/** The context the listener node was last written to; a new context starts unplaced. */
+let listenerCtx: BaseAudioContext | null = null;
+/** Glide for every position write: a 30 Hz step written raw is a zipper. */
+const GLIDE = 0.05;
+
+/**
+ * Sim (x, y) into WebAudio listener space, as [x, z] with y = 0. The camera (engine.ts,
+ * alpha -PI/4) shows sim (+1,+1) as screen-right and (-1,+1) as screen-up (intents.ts
+ * WASD); the default listener faces -Z with +X on its right. A rotation, so distance holds.
+ */
+export function toListenerSpace(x: number, y: number): [number, number] {
+  return [(x + y) / Math.SQRT2, (x - y) / Math.SQRT2];
+}
+
+function glide(ctx: BaseAudioContext, p: AudioParam, v: number, smooth: boolean): void {
+  if (smooth) p.setTargetAtTime(v, ctx.currentTime, GLIDE);
+  else p.value = v;
+}
+
+function placeListener(ctx: BaseAudioContext, smooth: boolean): void {
+  const [x, z] = toListenerSpace(listener.x, listener.y);
+  const l = ctx.listener;
+  try {
+    if (l.positionX) {
+      glide(ctx, l.positionX, x, smooth);
+      glide(ctx, l.positionY, 0, smooth);
+      glide(ctx, l.positionZ, z, smooth);
+      if (!smooth) {
+        l.forwardX.value = 0; l.forwardY.value = 0; l.forwardZ.value = -1;
+        l.upX.value = 0; l.upY.value = 1; l.upZ.value = 0;
+      }
+    } else {
+      // Firefox: no AudioParams on the listener, so no glide either.
+      l.setPosition(x, 0, z);
+      if (!smooth) l.setOrientation(0, 0, -1, 0, 1, 0);
+    }
+  } catch { /* a listener we cannot place leaves every voice centred */ }
+}
+
+/** First world voice on a context: put the listener where the player already is. */
+function syncListener(b: Bus): void {
+  if (listenerCtx === b.ctx) return;
+  listenerCtx = b.ctx;
+  placeListener(b.ctx, false);
+}
+
+/** Move the ear to the player. Sim units; call once per snapshot. Safe without WebAudio. */
+export function setSfxListener(x: number, y: number): void {
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+  listener.x = x;
+  listener.y = y;
+  if (listenerCtx) placeListener(listenerCtx, true);
+}
+
+function distanceTo(at: At): number {
+  return Math.hypot(at.x - listener.x, at.y - listener.y);
+}
+
+function placePanner(ctx: BaseAudioContext, p: PannerNode, at: At, smooth: boolean): void {
+  const [x, z] = toListenerSpace(at.x, at.y);
+  try {
+    if (p.positionX) {
+      glide(ctx, p.positionX, x, smooth);
+      glide(ctx, p.positionY, 0, smooth);
+      glide(ctx, p.positionZ, z, smooth);
+    } else {
+      p.setPosition(x, 0, z);
+    }
+  } catch { /* unplaced reads as centred, which is still a sound */ }
+}
+
+/**
+ * The panner a world voice sounds through, or null where WebAudio has none (the
+ * caller then applies `distanceRolloff` itself). Its model is `distanceRolloff`'s.
+ */
+function pannerAt(b: Bus, at: At): PannerNode | null {
+  if (typeof b.ctx.createPanner !== "function") return null;
+  const p = b.ctx.createPanner();
+  p.panningModel = "equalpower";
+  p.distanceModel = "inverse";
+  p.refDistance = REF_DISTANCE;
+  p.rolloffFactor = 1;
+  p.coneInnerAngle = 360;
+  p.coneOuterAngle = 360;
+  placePanner(b.ctx, p, at, false);
+  return p;
+}
 
 /**
  * Play one sound. First call for a name starts the fetch and returns silently, so
  * an unpreloaded sound costs its first occurrence and nothing after it.
  *
- * `volume` scales the voice's own gain, `distance` muffles it, and `pan` places
- * world cues across the fixed isometric view. Player and UI cues stay centered.
- * Returns how many seconds it will sound, 0 when nothing started.
+ * For cues on the player or the UI: centred, unmuffled. `volume` scales the voice's
+ * own gain. Returns how many seconds it will sound, 0 when nothing started.
  */
-export function playSfx(name: string, volume = 1, distance = 0, pan = 0): number {
+export function playSfx(name: string, volume = 1): number {
+  return playVoice(name, volume, null);
+}
+
+/**
+ * Play a world cue at sim (x, y): panned and attenuated against the listener as it
+ * moves, muffled and given more room by its distance at the start. A source at or
+ * past `AUDIBLE` from the player does not start. Returns seconds, like `playSfx`.
+ */
+export function playSfxAt(name: string, x: number, y: number, volume = 1): number {
+  return playVoice(name, volume, { x, y });
+}
+
+function playVoice(name: string, volume: number, at: At | null): number {
   const voice = VOICES[name];
   if (!voice) return 0;
+  const distance = at ? distanceTo(at) : 0;
+  if (!(distance < AUDIBLE)) return 0;
   const b = bus();
   if (!b) return 0;
   const buf = pickTake(name);
   if (!buf) return 0;
+  if (at) syncListener(b);
+  const panner = at ? pannerAt(b, at) : null;
+  const roll = distanceRolloff(distance);
 
   const src = b.ctx.createBufferSource();
   src.buffer = buf;
   if (voice.vary > 0) src.playbackRate.value = 1 + (Math.random() * 2 - 1) * voice.vary;
   const g = b.ctx.createGain();
-  g.gain.value = voice.gain * clamp(volume) * 10 ** (((Math.random() * 2 - 1) * LEVEL_JITTER_DB) / 20);
+  g.gain.value = voice.gain * clamp(volume) * 10 ** (((Math.random() * 2 - 1) * LEVEL_JITTER_DB) / 20)
+    * (at && !panner ? roll : 1);
   src.connect(g);
-  // Room grows with distance as well: what reaches the ear from across a hall is
-  // mostly the hall.
-  send(
+  // Room grows with distance: what reaches the ear from across a hall is mostly the
+  // hall. The send is taken before the panner, so it carries the rolloff itself.
+  const wet = send(
     b,
     muffle(b, g, distance),
-    voice.wet * (1 + distance / AUDIBLE),
-    pan,
-    false,
+    voice.wet * (1 + (2 * distance) / AUDIBLE),
     sfxCategory(name),
+    panner,
   );
+  if (panner && wet) wet.gain.value *= roll;
   src.start();
   return buf.duration / src.playbackRate.value;
 }
@@ -313,8 +427,12 @@ const loops = new Map<string, {
   /** Always present, unlike a one-shot's: a bolt crosses the screen while it
    *  sounds, so its muffling has to be swept and not decided at the start. */
   lp: BiquadFilterNode;
-  /** Stereo position follows moving sources without rebuilding their graph. */
-  pan: StereoPannerNode | null;
+  /** World loops only: the panner it sounds through and its reverb send, whose
+   *  level at no distance is `wetBase`. */
+  panner: PannerNode | null;
+  wet: GainNode | null;
+  wetBase: number;
+  world: boolean;
 }>();
 
 /**
@@ -348,8 +466,24 @@ const LOOP_FADE_OUT = 0.14;
  * meant to avoid rather than cause.
  *
  * Calling it twice for one key is a no-op, so a caller may say it every tick.
+ * This one is centred (the ambience); a loop with a source is `startSfxLoopAt`.
  */
-export function startSfxLoop(name: string, key: string, volume = 1, distance = 0, pan = 0): void {
+export function startSfxLoop(name: string, key: string, volume = 1): void {
+  startLoop(name, key, volume, null);
+}
+
+/** A loop at sim (x, y), followed by `moveSfxLoop`. Silent while past `AUDIBLE`. */
+export function startSfxLoopAt(name: string, key: string, x: number, y: number, volume = 1): void {
+  startLoop(name, key, volume, { x, y });
+}
+
+/** The level a world loop's gain holds: nothing past the edge, rolloff by hand without a panner. */
+function loopLevel(peak: number, volume: number, distance: number, panner: PannerNode | null): number {
+  if (!(distance < AUDIBLE)) return 0;
+  return peak * clamp(volume) * (panner ? 1 : distanceRolloff(distance));
+}
+
+function startLoop(name: string, key: string, volume: number, at: At | null): void {
   if (loops.has(key)) return;
   const voice = VOICES[name];
   if (!voice || files(name).every((f) => dead.has(f))) { note(`novoice:${name}`); publish(); return; }
@@ -358,6 +492,9 @@ export function startSfxLoop(name: string, key: string, volume = 1, distance = 0
   const buf = pickTake(name);
   // The flight is over before a fetch lands, so this one is a miss, not a wait.
   if (!buf) { note(`unloaded:${name}`); publish(); return; }
+  if (at) syncListener(b);
+  const distance = at ? distanceTo(at) : 0;
+  const panner = at ? pannerAt(b, at) : null;
 
   const src = b.ctx.createBufferSource();
   src.buffer = buf;
@@ -367,28 +504,39 @@ export function startSfxLoop(name: string, key: string, volume = 1, distance = 0
   const g = b.ctx.createGain();
   const peak = voice.gain;
   g.gain.value = 0;
-  g.gain.setTargetAtTime(peak * clamp(volume), b.ctx.currentTime, LOOP_FADE_IN);
+  g.gain.setTargetAtTime(loopLevel(peak, volume, distance, panner), b.ctx.currentTime, LOOP_FADE_IN);
   src.connect(g);
   const lp = b.ctx.createBiquadFilter();
   lp.type = "lowpass";
   lp.frequency.value = distanceCutoff(distance);
   g.connect(lp);
-  const panNode = send(b, lp, voice.wet, pan, true, sfxCategory(name));
+  const wet = send(b, lp, voice.wet, sfxCategory(name), panner);
+  const wetBase = wet ? wet.gain.value : 0;
+  if (panner && wet) wet.gain.value = wetBase * distanceRolloff(distance);
   src.start();
-  loops.set(key, { src, gain: g, peak, lp, pan: panNode });
+  loops.set(key, { src, gain: g, peak, lp, panner, wet, wetBase, world: at !== null });
   debug.started++;
   publish();
 }
 
-/** Follow a live loop's source as it moves relative to the player. */
-export function setSfxLoopVolume(key: string, volume: number, distance = 0, pan = 0): void {
+/**
+ * Follow a world loop's source to sim (x, y), against wherever the listener is now.
+ * Unknown keys, and centred loops, are ignored.
+ */
+export function moveSfxLoop(key: string, x: number, y: number, volume = 1): void {
   const live = loops.get(key);
+  if (!live?.world) return;
   const b = bus();
-  if (!live || !b) return;
-  live.gain.gain.setTargetAtTime(live.peak * clamp(volume), b.ctx.currentTime, LOOP_FADE_IN);
+  if (!b) return;
+  const now = b.ctx.currentTime;
+  const distance = distanceTo({ x, y });
+  live.gain.gain.setTargetAtTime(loopLevel(live.peak, volume, distance, live.panner), now, LOOP_FADE_IN);
   // Same constant as the level: a filter that jumped per snapshot is a zipper.
-  live.lp.frequency.setTargetAtTime(distanceCutoff(distance), b.ctx.currentTime, LOOP_FADE_IN);
-  live.pan?.pan.setTargetAtTime(clampPan(pan), b.ctx.currentTime, LOOP_FADE_IN);
+  live.lp.frequency.setTargetAtTime(distanceCutoff(distance), now, LOOP_FADE_IN);
+  if (live.panner) {
+    placePanner(b.ctx, live.panner, { x, y }, true);
+    live.wet?.gain.setTargetAtTime(live.wetBase * distanceRolloff(distance), now, LOOP_FADE_IN);
+  }
 }
 
 /** Fade a loop out and let it go. Unknown keys are silently ignored. */
@@ -446,23 +594,20 @@ export function stopAmbient(): void {
   stopSfxLoop("ambient");
 }
 
-function clampPan(v: number): number {
-  return Number.isFinite(v) ? Math.max(-1, Math.min(1, v)) : 0;
-}
+/** Inverse-distance reference, in sim units: nothing inside it is attenuated. */
+const REF_DISTANCE = 2;
 
 /**
- * How loud something at `distance` world units from the player should be.
- *
- * Linear rolloff to a floor rather than inverse-square: the camera only shows
- * about 19 units across, so everything audible is close, and true attenuation over
- * that range is inaudible at one end and a cliff at the other. Past the frame it is
- * silent, which is also what stops a map's worth of monsters mixing into mud.
+ * How loud something `distance` units from the player is: WebAudio's "inverse"
+ * model at refDistance 2, rolloffFactor 1, which every world panner is built with
+ * (-10.9 dB at 7 units, -15.6 dB at 12). Used by hand where there is no panner.
  */
-export function distanceGain(distance: number): number {
-  if (distance >= AUDIBLE) return 0;
-  return 1 - (distance / AUDIBLE) * 0.8;
+export function distanceRolloff(distance: number): number {
+  return REF_DISTANCE / Math.max(distance, REF_DISTANCE);
 }
 
+/** Past this a world one-shot does not start and a world loop is silent: the frame is
+ *  about 19 units across, and a map's worth of monsters must not mix into mud. */
 const AUDIBLE = 14;
 /** Inside this, air has taken nothing off the top yet. */
 const NEAR = 2.5;
@@ -496,21 +641,11 @@ function muffle(b: Bus, node: AudioNode, distance: number): AudioNode {
   return f;
 }
 
-/** Volume, distance, and stereo bearing for a source offset in simulation space. */
-export function worldSfxMix(dx: number, dy: number): [number, number, number] {
-  const distance = Math.hypot(dx, dy);
-  if (distance === 0) return [1, 0, 0];
-  // The fixed camera projects both world +X and sim +Y toward screen-right. Divide
-  // by the audible radius, not by source distance: normalizing the direction made
-  // a bolt one metre away sound as far sideways as one at the edge of the screen.
-  const pan = Math.max(-1, Math.min(1, (dx + dy) / (Math.SQRT2 * AUDIBLE)));
-  return [distanceGain(distance), distance, pan];
-}
-
 /** Test seam: forget every decoded buffer and failure. */
 export function resetSfx(): void {
   buffers.clear();
   loading.clear();
   dead.clear();
   lastTake.clear();
+  listenerCtx = null;
 }

@@ -4,17 +4,28 @@ import { resolve } from "node:path";
 import { readFileSync } from "node:fs";
 import { MONSTERS } from "@exiled/content-runtime";
 import {
-  CORE_SFX, distanceCutoff, distanceGain, playSfx, preloadSfx, resetSfx, sfxCategory,
-  startSfxLoop, stopSfxLoop, worldSfxMix,
+  CORE_SFX, distanceCutoff, distanceRolloff, moveSfxLoop, playSfx, playSfxAt, preloadSfx, resetSfx,
+  setSfxListener, sfxCategory, startSfxLoop, startSfxLoopAt, stopSfxLoop, toListenerSpace,
 } from "./sfx";
 import { VARKIS_SFX } from "./varkis-voice";
 
-/** `fake.ctx` is null until a test installs a stand-in context, as in headless jsdom. */
-const fake = vi.hoisted(() => ({ ctx: null as unknown }));
+/** `fake.ctx` is null until a test installs a stand-in context, as in headless jsdom.
+ *  `sends` records every `send(b, node, wet, category, spatial)` and hands back its wet gain. */
+const fake = vi.hoisted(() => ({
+  ctx: null as unknown,
+  sends: [] as Array<{
+    wet: number; category: unknown; spatial: unknown;
+    out: { gain: { value: number; setTargetAtTime: (v: number) => void } };
+  }>,
+}));
 vi.mock("./bus", async (orig) => ({
   ...(await orig<typeof import("./bus")>()),
   bus: () => (fake.ctx ? { ctx: fake.ctx } : null),
-  send: () => null,
+  send: (_b: unknown, _node: unknown, wet: number, category: unknown, spatial: unknown) => {
+    const out = { gain: { value: wet, setTargetAtTime(v: number) { this.value = v; } } };
+    fake.sends.push({ wet, category, spatial, out });
+    return out;
+  },
 }));
 
 const DIR = resolve(__dirname, "../../public/audio");
@@ -139,37 +150,53 @@ describe("sfx assets", () => {
   });
 });
 
-describe("distanceGain", () => {
-  it("is loudest underfoot and silent past the frame", () => {
-    expect(distanceGain(0)).toBe(1);
-    expect(distanceGain(14)).toBe(0);
-    expect(distanceGain(40)).toBe(0);
+describe("distanceRolloff", () => {
+  const db = (g: number) => 20 * Math.log10(g);
+
+  /** WebAudio's "inverse" model at refDistance 2, rolloffFactor 1: 2 / max(d, 2). */
+  it("is whole inside the reference distance and inverse past it", () => {
+    expect(distanceRolloff(0)).toBe(1);
+    expect(db(distanceRolloff(2))).toBeCloseTo(0, 1);
+    expect(Math.abs(db(distanceRolloff(7)) - -10.9)).toBeLessThan(0.5);
+    expect(Math.abs(db(distanceRolloff(12)) - -15.6)).toBeLessThan(0.5);
   });
 
-  it("falls off monotonically", () => {
-    for (let d = 1; d < 14; d++) expect(distanceGain(d)).toBeLessThan(distanceGain(d - 1));
+  it("falls off monotonically past the reference", () => {
+    for (let d = 3; d < 14; d++) expect(distanceRolloff(d)).toBeLessThan(distanceRolloff(d - 1));
   });
 });
 
-describe("worldSfxMix", () => {
-  it("moves across stereo space as the source actually travels", () => {
-    const near = worldSfxMix(1, 0)[2];
-    const middle = worldSfxMix(7, 0)[2];
-    const edge = worldSfxMix(14, 0)[2];
-
-    expect(near).toBeGreaterThan(0);
-    expect(near).toBeLessThan(0.1);
-    expect(middle).toBeGreaterThan(near);
-    expect(edge).toBeGreaterThan(middle);
+describe("toListenerSpace", () => {
+  // Camera yaw -PI/4 (engine.ts): sim (+1,+1) is screen-right, (-1,+1) screen-up (intents.ts).
+  // WebAudio's default listener faces -Z with +X to its right.
+  it("puts a source screen-right of the player on the listener's right", () => {
+    const [x, z] = toListenerSpace(1, 1);
+    expect(x).toBeGreaterThan(0);
+    expect(z).toBeCloseTo(0, 10);
+    expect(toListenerSpace(-1, -1)[0]).toBeLessThan(0);
   });
 
+  it("puts a source screen-up of the player in front of the listener", () => {
+    const [x, z] = toListenerSpace(-1, 1);
+    expect(x).toBeCloseTo(0, 10);
+    expect(z).toBeLessThan(0);
+    expect(toListenerSpace(1, -1)[1]).toBeGreaterThan(0);
+  });
+
+  it("keeps distance, so rolloff in listener space is rolloff in the sim", () => {
+    const [x, z] = toListenerSpace(3, 4);
+    expect(Math.hypot(x, z)).toBeCloseTo(5, 10);
+  });
+});
+
+describe("sfxCategory", () => {
   it("routes every sampled cue into one player-facing volume category", () => {
     for (const name of voiceNames()) {
       const expected = name.startsWith("ambient-")
         ? "music"
         : name.startsWith("skill-")
         ? "skills"
-        : name.startsWith("ui-") || name.startsWith("npc-")
+        : name.startsWith("ui-")
         ? "interface"
         : /^(drop|coin|level|container)-/.test(name) ? "loot" : "environment";
       expect(sfxCategory(name), name).toBe(expected);
@@ -208,6 +235,14 @@ describe("playSfx without WebAudio", () => {
   it("is silent and safe, which is what every headless test relies on", () => {
     expect(() => playSfx("ui-click")).not.toThrow();
     expect(() => playSfx("not-a-sound")).not.toThrow();
+    expect(() => setSfxListener(3, 4)).not.toThrow();
+    expect(playSfxAt("monster-death", 1, 1)).toBe(0);
+    expect(() => startSfxLoopAt("skill-ember-bolt-flight", "k", 1, 1)).not.toThrow();
+    expect(() => moveSfxLoop("k", 2, 2)).not.toThrow();
+  });
+
+  it("gives Varkis the room: an npc cue is a world cue", () => {
+    expect(sfxCategory("npc-varkis-greet-1")).toBe("environment");
   });
 });
 
@@ -314,11 +349,11 @@ describe("take pools", () => {
     stopSfxLoop("k1"); stopSfxLoop("k2");
   });
 
-  it("one-shot level stays within 1.5 dB of voice gain x volume, on both sides", async () => {
+  it("one-shot level stays within 1.0 dB of voice gain x volume, on both sides", async () => {
     await preloadSfx(["ui-click"]);
     const base = voiceGain("ui-click") * 0.8;
-    const lo = base * 10 ** (-1.5 / 20);
-    const hi = base * 10 ** (1.5 / 20);
+    const lo = base * 10 ** (-1.0 / 20);
+    const hi = base * 10 ** (1.0 / 20);
     for (let i = 0; i < 200; i++) playSfx("ui-click", 0.8);
     const levels = gainNodes.map((g) => g.gain.value);
     expect(levels.length).toBe(200);
@@ -328,5 +363,176 @@ describe("take pools", () => {
     }
     expect(Math.min(...levels)).toBeLessThan(base);
     expect(Math.max(...levels)).toBeGreaterThan(base);
+  });
+});
+
+/** A fake AudioParam: `to` is where it is going, set directly or by a glide. */
+interface FakeParam { value: number; to: number; setTargetAtTime(v: number): void }
+function param(v = 0): FakeParam {
+  const p = {
+    to: v,
+    get value() { return this.to; },
+    set value(x: number) { this.to = x; },
+    setTargetAtTime(t: number) { this.to = t; },
+  };
+  return p;
+}
+
+describe("positional voices", () => {
+  interface Panner {
+    panningModel: string; distanceModel: string; refDistance: number; rolloffFactor: number;
+    coneInnerAngle: number; coneOuterAngle: number;
+    positionX: FakeParam; positionY: FakeParam; positionZ: FakeParam;
+  }
+  let panners: Panner[];
+  let gains: Array<{ gain: FakeParam }>;
+  let filters: Array<{ frequency: FakeParam }>;
+  let played: number;
+  let listener: Record<string, unknown>;
+
+  function install(modernListener = true): void {
+    resetSfx();
+    panners = []; gains = []; filters = []; played = 0; fake.sends.length = 0;
+    vi.stubGlobal("fetch", (url: string) =>
+      Promise.resolve({ ok: true, status: 200, arrayBuffer: () => Promise.resolve(url) }));
+    listener = modernListener
+      ? {
+          positionX: param(), positionY: param(), positionZ: param(),
+          forwardX: param(), forwardY: param(), forwardZ: param(-1),
+          upX: param(), upY: param(1), upZ: param(),
+        }
+      : { setPosition: vi.fn(), setOrientation: vi.fn() };
+    fake.ctx = {
+      currentTime: 0,
+      listener,
+      decodeAudioData: (url: string) => Promise.resolve({ url, duration: 5 }),
+      createBufferSource: () => ({
+        buffer: null, loop: false, playbackRate: { value: 1 },
+        connect: () => {}, start() { played++; }, stop: () => {},
+      }),
+      createGain: () => { const n = { gain: param(1), connect: () => {} }; gains.push(n); return n; },
+      createBiquadFilter: () => {
+        const n = { type: "", frequency: param(0), connect: () => {} };
+        filters.push(n);
+        return n;
+      },
+      createPanner: () => {
+        const n = {
+          panningModel: "HRTF", distanceModel: "", refDistance: 1, rolloffFactor: 0,
+          coneInnerAngle: 0, coneOuterAngle: 0,
+          positionX: param(), positionY: param(), positionZ: param(),
+          connect: () => {},
+        };
+        panners.push(n);
+        return n;
+      },
+    };
+    setSfxListener(0, 0);
+  }
+  afterEach(() => { fake.ctx = null; setSfxListener(0, 0); vi.unstubAllGlobals(); });
+
+  it("places a world one-shot through an equal-power inverse panner at its source", async () => {
+    install();
+    await preloadSfx(["npc-varkis-greet-1"]);
+    expect(playSfxAt("npc-varkis-greet-1", 3, 1)).toBeGreaterThan(4);
+    expect(panners).toHaveLength(1);
+    const p = panners[0]!;
+    expect(p).toMatchObject({
+      panningModel: "equalpower", distanceModel: "inverse", refDistance: 2, rolloffFactor: 1,
+      coneInnerAngle: 360, coneOuterAngle: 360,
+    });
+    const [x, z] = toListenerSpace(3, 1);
+    expect(p.positionX.value).toBeCloseTo(x, 10);
+    expect(p.positionY.value).toBe(0);
+    expect(p.positionZ.value).toBeCloseTo(z, 10);
+    // The panner sits on the dry path only; the room return stays diffuse.
+    expect(fake.sends[0]!.spatial).toBe(p);
+  });
+
+  it("does not start a world one-shot at or past the audible edge", async () => {
+    install();
+    await preloadSfx(["monster-death"]);
+    expect(playSfxAt("monster-death", 14, 0)).toBe(0);
+    expect(playSfxAt("monster-death", 10, 10)).toBe(0);
+    expect(played).toBe(0);
+    expect(playSfxAt("monster-death", 13.9, 0)).toBeGreaterThan(0);
+    expect(played).toBe(1);
+    // Measured from the listener, not the origin.
+    setSfxListener(20, 0);
+    expect(playSfxAt("monster-death", 26, 0)).toBeGreaterThan(0);
+  });
+
+  it("an already playing voice moves in the mix as the listener walks", async () => {
+    install();
+    await preloadSfx(["npc-varkis-greet-1"]);
+    playSfxAt("npc-varkis-greet-1", 5, 0);
+    const p = panners[0]!;
+    const lx = listener["positionX"] as FakeParam;
+    const lz = listener["positionZ"] as FakeParam;
+    const rel = () => [p.positionX.value - lx.value, p.positionZ.value - lz.value] as const;
+    expect(rel()[0]).toBeGreaterThan(0); // sim +x is partly screen-right
+    setSfxListener(5, 0);
+    expect(rel()[0]).toBeCloseTo(0, 10);
+    expect(rel()[1]).toBeCloseTo(0, 10);
+    // Walk past him toward screen-right: now he is on the left.
+    setSfxListener(8, 3);
+    expect(rel()[0]).toBeLessThan(0);
+  });
+
+  it("falls back to listener.setPosition where AudioParams are missing", async () => {
+    install(false);
+    setSfxListener(2, 0);
+    await preloadSfx(["monster-death"]);
+    playSfxAt("monster-death", 3, 0);
+    const [x, z] = toListenerSpace(2, 0);
+    expect(listener["setPosition"]).toHaveBeenLastCalledWith(x, 0, z);
+    setSfxListener(4, 1);
+    const [x2, z2] = toListenerSpace(4, 1);
+    expect(listener["setPosition"]).toHaveBeenLastCalledWith(x2, 0, z2);
+  });
+
+  it("muffles a far one-shot and gives it more room, scaled with its level", async () => {
+    install();
+    await preloadSfx(["monster-death"]);
+    playSfxAt("monster-death", 7, 0);
+    // monster-death wet 0.24: 1 + 2 * 7/14 = 2x the room.
+    expect(fake.sends[0]!.wet).toBeCloseTo(0.48, 10);
+    expect(fake.sends[0]!.out.gain.value).toBeCloseTo(0.48 * distanceRolloff(7), 10);
+    expect(filters.map((f) => f.frequency.value)).toContain(distanceCutoff(7));
+  });
+
+  it("a drop under the player is neither muffled nor panned off-centre", async () => {
+    install();
+    await preloadSfx(["drop-rare"]);
+    playSfxAt("drop-rare", 0, 0);
+    expect(filters).toEqual([]);
+    expect(panners[0]!.positionX.value).toBe(0);
+  });
+
+  it("player-attached and UI cues stay centred, with no panner", async () => {
+    install();
+    await preloadSfx(["ui-click"]);
+    playSfx("ui-click");
+    expect(panners).toEqual([]);
+    expect(fake.sends[0]!.spatial ?? null).toBeNull();
+  });
+
+  it("a moving loop follows its source, sweeps its muffle, and falls silent past the edge", async () => {
+    install();
+    await preloadSfx(["skill-ember-bolt-flight"]);
+    startSfxLoopAt("skill-ember-bolt-flight", "bolt", 1, 0);
+    const p = panners[0]!;
+    const lp = filters[0]!;
+    expect(lp.frequency.value).toBe(distanceCutoff(1));
+    moveSfxLoop("bolt", 6, 4);
+    const [x, z] = toListenerSpace(6, 4);
+    expect(p.positionX.value).toBeCloseTo(x, 10);
+    expect(p.positionZ.value).toBeCloseTo(z, 10);
+    expect(lp.frequency.value).toBeCloseTo(distanceCutoff(Math.hypot(6, 4)), 6);
+    const level = gains[0]!.gain;
+    expect(level.value).toBeGreaterThan(0);
+    moveSfxLoop("bolt", 14, 0);
+    expect(level.value).toBe(0);
+    stopSfxLoop("bolt");
   });
 });

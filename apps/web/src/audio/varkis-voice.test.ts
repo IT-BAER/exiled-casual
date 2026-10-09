@@ -87,6 +87,31 @@ describe("Varkis's voice", () => {
     expect(new Set(bye).size).toBe(3);
   });
 
+  it("greets from where he stands, not from the middle of the head", () => {
+    const at: unknown[] = [];
+    const voice = createVarkisVoice({ play: (_n, where) => { at.push(where); return 2; }, now: () => 0 });
+    voice.observe(snap("hideout", 9));
+    expect(at).toEqual([{ x: 10, y: 0 }]);
+  });
+
+  it("speaks his shop and parting lines from where the last hideout snapshot saw him", () => {
+    const at: unknown[] = [];
+    let t = 0;
+    const voice = createVarkisVoice({ play: (_n, where) => { at.push(where); return 1; }, now: () => t });
+    voice.observe(snap("hideout", 0)); // too far to greet
+    voice.window(true); t += 5;
+    voice.observe(snap("map", 0)); // leaving the hideout does not move him
+    voice.window(false);
+    expect(at).toEqual([{ x: 10, y: 0 }, { x: 10, y: 0 }]);
+  });
+
+  it("with no sight of him yet, a line still plays, on the player", () => {
+    const at: unknown[] = [];
+    const voice = createVarkisVoice({ play: (_n, where) => { at.push(where); return 1; }, now: () => 0 });
+    voice.window(true);
+    expect(at).toEqual([null]);
+  });
+
   it("a line that could not play does not hold the voice", () => {
     const heard: string[] = [];
     const voice = createVarkisVoice({ play: (n) => { heard.push(n); return 0; }, now: () => 0 });

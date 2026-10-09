@@ -1,8 +1,7 @@
 import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
 import {
-  playSfx, preloadSfx,
-  startSfxLoop, setSfxLoopVolume, stopSfxLoop, stopAllSfxLoops,
-  worldSfxMix,
+  playSfx, playSfxAt, preloadSfx, setSfxListener,
+  startSfxLoopAt, moveSfxLoop, stopSfxLoop, stopAllSfxLoops,
 } from "./sfx";
 import { setRoom, type RoomProfile } from "./bus";
 import { playCoinPickup } from "./drop-sound";
@@ -190,15 +189,25 @@ export interface Soundscape {
   reset(biomeId?: string | null): void;
 }
 
+interface At { x: number; y: number }
+
 interface Options {
-  play?: (name: string, volume?: number, distance?: number, pan?: number) => void;
-  loop?: (name: string, key: string, volume?: number, distance?: number, pan?: number) => void;
-  loopVolume?: (key: string, volume: number, distance?: number, pan?: number) => void;
+  /** A cue at a world position (sim units), or on the player when `at` is absent. */
+  play?: (name: string, volume?: number, at?: At) => void;
+  loop?: (name: string, key: string, x: number, y: number) => void;
+  moveLoop?: (key: string, x: number, y: number) => void;
+  /** Where the ear is: the player, every snapshot. */
+  listener?: (x: number, y: number) => void;
   room?: (profile: RoomProfile) => void;
   stopLoop?: (key: string) => void;
   stopAllLoops?: () => void;
   /** Gold collected: the sampled coin-pickup cue (drop-sound.ts). */
-  coins?: (volume?: number, pan?: number) => void;
+  coins?: (at: At) => void;
+}
+
+function playAnywhere(name: string, volume = 1, at?: At): void {
+  if (at) playSfxAt(name, at.x, at.y, volume);
+  else playSfx(name, volume);
 }
 
 /**
@@ -214,9 +223,10 @@ function sustainedCue(e: SnapshotEntity): string | null {
 }
 
 export function createSoundscape(opts: Options = {}): Soundscape {
-  const play = opts.play ?? playSfx;
-  const loop = opts.loop ?? startSfxLoop;
-  const loopVolume = opts.loopVolume ?? setSfxLoopVolume;
+  const play = opts.play ?? playAnywhere;
+  const loop = opts.loop ?? startSfxLoopAt;
+  const moveLoop = opts.moveLoop ?? moveSfxLoop;
+  const listener = opts.listener ?? setSfxListener;
   const stopLoop = opts.stopLoop ?? stopSfxLoop;
   const stopAllLoops = opts.stopAllLoops ?? stopAllSfxLoops;
   const room = opts.room ?? setRoom;
@@ -254,6 +264,8 @@ export function createSoundscape(opts: Options = {}): Soundscape {
   return {
     reset,
     observe(snap: Snapshot): void {
+      // First, so every cue below and every voice already sounding is heard from here.
+      listener(snap.player.x, snap.player.y);
       const before = prev;
       prev = snap;
       if (before === null) return;
@@ -266,13 +278,8 @@ export function createSoundscape(opts: Options = {}): Soundscape {
       const now = new Map<number, SnapshotEntity>();
       for (const e of snap.entities) now.set(e.id, e);
 
-      // Level, distance and direction are spread into the call: volume, muffling,
-      // and stereo bearing are related but independent parts of world position.
-      const at = (e: SnapshotEntity): [number, number, number] => {
-        const dx = e.x - snap.player.x;
-        const dy = e.y - snap.player.y;
-        return worldSfxMix(dx, dy);
-      };
+      // Where a world cue sounds from; sfx.ts makes level, bearing and muffle of it.
+      const at = (e: SnapshotEntity): At => ({ x: e.x, y: e.y });
 
       // ── Gone ────────────────────────────────────────────────────────────────
       let deaths = 0;
@@ -280,20 +287,19 @@ export function createSoundscape(opts: Options = {}): Soundscape {
         if (now.has(id)) continue;
         if (e.kind === "monster" && deaths < MAX_PER_KIND) {
           deaths++;
-          play(cueFor("monster-death", e.species), ...at(e));
+          play(cueFor("monster-death", e.species), 1, at(e));
         } else if (e.kind === "telegraph") {
           // A ring only ever leaves the world by landing.
-          play("monster-slam-impact", ...at(e));
+          play("monster-slam-impact", 1, at(e));
         } else if (e.kind === "projectile" && (e.team ?? 0) === 0) {
           // His own bolt, spent: it either hit something or ran out of range, and
           // both are the same burst as far as the ear is concerned.
           const fx = fxProfile(e.skillId);
           // An arrow that ran out of range falls silent; only a hit thuds.
-          if (fx.impactCue && (!fx.arrow || e.spent)) play(fx.impactCue, ...at(e));
+          if (fx.impactCue && (!fx.arrow || e.spent)) play(fx.impactCue, 1, at(e));
         } else if (e.kind === "gold") {
           // A pile only leaves the floor it lies on by being walked over.
-          const [volume, , pan] = at(e);
-          coins(volume, pan);
+          coins(at(e));
         }
         // Whatever it was, it is not sounding any more.
         const key = sustained.get(id);
@@ -303,24 +309,24 @@ export function createSoundscape(opts: Options = {}): Soundscape {
       // ── Arrived ─────────────────────────────────────────────────────────────
       for (const [id, e] of now) {
         if (was.has(id)) continue;
-        if (e.kind === "telegraph") play("monster-slam-windup", ...at(e));
-        else if (e.kind === "projectile" && (e.team ?? 0) !== 0) play("monster-spit", ...at(e));
+        if (e.kind === "telegraph") play("monster-slam-windup", 1, at(e));
+        else if (e.kind === "projectile" && (e.team ?? 0) !== 0) play("monster-spit", 1, at(e));
         else if (e.kind === "projectile") {
           const launch = fxProfile(e.skillId).launchCue;
-          if (launch) play(launch, ...at(e));
+          if (launch) play(launch, 1, at(e));
         }
         const cue = sustainedCue(e);
         if (cue) {
           const key = `${cue}#${id}`;
           sustained.set(id, key);
-          loop(cue, key, ...at(e));
+          loop(cue, key, e.x, e.y);
         }
       }
 
       // A chest the sim just paid. One that arrives open (a restored area) never rang.
       for (const [id, e] of now) {
         if (e.kind === "container" && e.opened && was.get(id)?.kind === "container" && !was.get(id)!.opened) {
-          play("container-open", ...at(e));
+          play("container-open", 1, at(e));
         }
       }
 
@@ -329,7 +335,7 @@ export function createSoundscape(opts: Options = {}): Soundscape {
       // they started at is the level they keep until they stop.
       for (const [id, key] of sustained) {
         const e = now.get(id);
-        if (e) loopVolume(key, ...at(e));
+        if (e) moveLoop(key, e.x, e.y);
       }
 
       // ── Hurt ────────────────────────────────────────────────────────────────
@@ -340,7 +346,7 @@ export function createSoundscape(opts: Options = {}): Soundscape {
         // Every hit is counted, one in five to ten is heard, so the gate must be
         // asked about all of them and never short-circuited past.
         if (!dealt()) continue;
-        play(cueFor("monster-hurt", e.species), ...at(e));
+        play(cueFor("monster-hurt", e.species), 1, at(e));
       }
 
       // The player taking a hit: something's hands if anything is standing on him,

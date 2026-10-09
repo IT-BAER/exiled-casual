@@ -19,7 +19,7 @@ import { attachRig, rigOf, type Looks, type RigParts } from "./rig";
 import { looksForEquipment } from "./gear-looks";
 import { attachGroundModel, GROUND_LOOK_BASES } from "./ground-looks";
 import { hasRim, HIT_TINT, HIT_ALPHA } from "./rim";
-import { playSfx, worldSfxMix } from "../audio/sfx";
+import { playSfxAt } from "../audio/sfx";
 
 export type MeshKind = "player" | "monster" | "rare" | "boss" | "projectile" | "groundArea" | "telegraph" | "portal" | "mapDevice" | "stash" | "vendor" | "container" | "groundItem" | "gold";
 
@@ -913,7 +913,7 @@ export function portalAppear(scene: Scene, root: Mesh, delayMs: number, withCue:
   root.scaling.setAll(0.001);
   if (delayMs <= 0) {
     root.setEnabled(true);
-    if (withCue) playPortalSfx(scene, root, "portal-open");
+    if (withCue) playPortalSfx(root, "portal-open");
     scalePortal(scene, root, PORTAL_OPEN_MS, 0.001, 1);
     return;
   }
@@ -924,7 +924,7 @@ export function portalAppear(scene: Scene, root: Mesh, delayMs: number, withCue:
     if (t < delayMs) return;
     scene.onBeforeRenderObservable.remove(wait);
     root.setEnabled(true);
-    if (withCue) playPortalSfx(scene, root, "portal-open");
+    if (withCue) playPortalSfx(root, "portal-open");
     scalePortal(scene, root, PORTAL_OPEN_MS, 0.001, 1);
   });
 }
@@ -936,19 +936,17 @@ export function portalAppear(scene: Scene, root: Mesh, delayMs: number, withCue:
  * it — which is exactly why the animation owns that.
  */
 export function portalVanish(scene: Scene, root: Mesh): void {
-  playPortalSfx(scene, root, "portal-close");
+  playPortalSfx(root, "portal-close");
   scalePortal(scene, root, PORTAL_CLOSE_MS, root.scaling.x, 0.001, () => {
     if (!root.isDisposed()) root.dispose();
   });
 }
 
-/** Portals live in the world, unlike menu cues. The camera target follows the
- * player, so it is the listener position already available at this render seam. */
-function playPortalSfx(scene: Scene, root: Mesh, name: "portal-open" | "portal-close"): void {
-  const target = (scene.activeCamera as { target?: Vector3 } | null)?.target;
-  if (!target) { playSfx(name); return; }
+/** Portals live in the world, unlike menu cues: heard from where they stand. World
+ * (x, z) is sim (x, y); the listener is the player, set by the soundscape. */
+function playPortalSfx(root: Mesh, name: "portal-open" | "portal-close"): void {
   const source = root.getAbsolutePosition();
-  playSfx(name, ...worldSfxMix(source.x - target.x, source.z - target.z));
+  playSfxAt(name, source.x, source.z);
 }
 
 /** Is this root a portal? Read off the metadata the builder already stamps. */

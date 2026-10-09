@@ -524,48 +524,45 @@ describe("environment", () => {
     }
   });
 
-  it("reports how far a cue was as well as how loud, so it can be muffled", () => {
-    const calls: [string, number | undefined, number | undefined][] = [];
-    const s = createSoundscape({ play: (n, v, d) => calls.push([n, v, d]) });
+  it("places a world cue at its source, and leaves the player's own cues on him", () => {
+    const calls: Array<[string, { x: number; y: number } | undefined]> = [];
+    const s = createSoundscape({ play: (n, _v, at) => calls.push([n, at]) });
     s.reset(null);
-    s.observe(snap({ tick: 1, entities: [monster(1, 9)] }));
-    s.observe(snap({ tick: 2, entities: [] }));
-    const death = calls.find((c) => c[0].startsWith("monster-death"))!;
-    expect(death[2]!).toBeCloseTo(9, 5);
-    expect(death[1]!).toBeLessThan(1);
+    s.observe(snap({ tick: 1, entities: [{ ...monster(1, 9), y: -2 }, monster(2, -6)] }));
+    s.observe(snap({ tick: 2, player: testPlayer({ cooldowns: { "skill.ember_bolt.v1": 0.4 } }), entities: [] }));
+
+    const deaths = calls.filter(([n]) => n.startsWith("monster-death"));
+    expect(deaths.map(([, at]) => at)).toEqual([{ x: 9, y: -2 }, { x: -6, y: 0 }]);
+    expect(calls.find(([n]) => n === "skill-ember-bolt-cast")?.[1]).toBeUndefined();
   });
 
-  it("reports which side of the fixed isometric camera a world cue comes from", () => {
-    const calls: Array<[string, number | undefined]> = [];
-    const s = createSoundscape({ play: (name, _volume, _distance, pan) => calls.push([name, pan]) });
+  it("moves the listener to the player on every snapshot, before any cue of it", () => {
+    const log: string[] = [];
+    const s = createSoundscape({
+      play: (n) => log.push(n),
+      listener: (x, y) => log.push(`ear ${x},${y}`),
+    });
     s.reset(null);
-    s.observe(snap({ tick: 1, entities: [
-      { ...monster(1, 6), y: 0 },
-      { ...monster(2, -6), y: 0 },
-    ] }));
-    s.observe(snap({ tick: 2, entities: [] }));
-
-    const deaths = calls.filter(([name]) => name.startsWith("monster-death"));
-    expect(deaths).toHaveLength(2);
-    expect(deaths[0]![1]).toBeGreaterThan(0);
-    expect(deaths[1]![1]).toBeLessThan(0);
+    s.observe(snap({ tick: 1, player: testPlayer({ x: 1, y: 2 }), entities: [monster(1, 3)] }));
+    s.observe(snap({ tick: 2, player: testPlayer({ x: 1, y: 2 }), entities: [] }));
+    expect(log).toEqual(["ear 1,2", "ear 1,2", "monster-death"]);
   });
 
   it("keeps a sustained cue bound to the source as it travels away", () => {
-    const pans: number[] = [];
+    const started: Array<[number, number]> = [];
+    const moved: Array<[number, number]> = [];
     const s = createSoundscape({
       play: () => {},
-      loop: () => {},
-      loopVolume: (_key, _volume, _distance, pan) => { if (pan !== undefined) pans.push(pan); },
+      loop: (_name, _key, x, y) => started.push([x, y]),
+      moveLoop: (_key, x, y) => moved.push([x, y]),
     });
     s.reset(null);
     s.observe(snap({ tick: 1 }));
     s.observe(snap({ tick: 2, entities: [{ id: 9, kind: "projectile", x: 1, y: 0, team: 0 }] }));
-    s.observe(snap({ tick: 3, entities: [{ id: 9, kind: "projectile", x: 8, y: 0, team: 0 }] }));
+    s.observe(snap({ tick: 3, entities: [{ id: 9, kind: "projectile", x: 8, y: 2, team: 0 }] }));
 
-    expect(pans[0]).toBeGreaterThan(0);
-    expect(pans[0]).toBeLessThan(0.1);
-    expect(pans.at(-1)).toBeGreaterThan(pans[0]!);
+    expect(started).toEqual([[1, 0]]);
+    expect(moved.at(-1)).toEqual([8, 2]);
   });
 });
 
@@ -610,6 +607,15 @@ describe("gold pickup cue", () => {
       snap({ tick: 1, entities: [pile(5), pile(6)] }),
       snap({ tick: 2, entities: [] }),
     ])).toBe(2);
+  });
+
+  it("jingles where the pile lay", () => {
+    const at: Array<{ x: number; y: number }> = [];
+    const s = createSoundscape({ play: () => {}, coins: (p) => { at.push(p); } });
+    s.reset(null);
+    s.observe(snap({ tick: 1, entities: [pile(5)] }));
+    s.observe(snap({ tick: 2, entities: [] }));
+    expect(at).toEqual([{ x: 1, y: 0 }]);
   });
 
   it("stays quiet when the area changed under the piles", () => {
