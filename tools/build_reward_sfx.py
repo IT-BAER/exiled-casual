@@ -1,5 +1,10 @@
 """Build the layered reward cues (drops, coins, level-up, container) from library parts.
 
+A cue is one recipe or a list of them, a pool of takes: take 1 ships as `<cue>.webm`, take k
+as `<cue>-<k>.webm`. Takes differ ONLY in unpitched layers (coins, latches, thumps, knocks):
+the pitched core is the conditioned reinforcer (docs/09) and is identical, at one absolute
+level, in every take.
+
 Each recipe is a list of parts out of the Sonniss library, cut, pitch-shifted (tape-style:
 pitch and length move together), filtered, faded and layered at an offset, then peak-set.
 The build is deterministic. The result is NOT passed through trim_sfx.py: it would cut
@@ -57,6 +62,8 @@ REVGLASS = "Mechanical Wave - Glass/GLASMisc_Reverse Glass Effect_04_MWSFX_GL.wa
 STONE41 = "BluezoneCorp - Stone Impact/Bluezone_BC0297_stone_impact_041.wav"  # 1.7 kHz crack @0.09
 GLASSBOT = "Mechanical Wave - Glass/GLASMisc_Glass Bottle Open_01_MWSFX_GL.wav"  # glass hit 4.4 kHz @1.34
 MANYCOINS = "CB Sound Design - Essential Sounds Vol.01 Coins/many_coins_12.wav"
+COUNTER = "Epic Stock Media - HD Lock And Mechanism Sound Design Kit/MACHMech_Mechanism Counting Machine Interact Loose Container Short 01_ESM_HDLM.wav"  # LATCH's pack
+IMPACT38 = "344 Audio - Epic Impacts Vol. 1/Impact 038.wav"  # low peak 56.4 Hz where 021 measures 41.8
 CLINK = "TheWorkRoom Audio Post - Champagne & Wine Commercials/CWSD002.wav"  # glass clink 3.3 kHz @0.75
 GLASSYSNAP = "Cinematic Sound Design - Interface & Infographics/Interface Accept Glassy Snap.wav"  # 932/1862/3725 Hz @0.01
 ROCK011 = "Sonic Bat - Videogame Foley Essentials Vol. II/SBvfe2_Medium Rock Dropping 011.wav"  # 621 Hz landing @0.01
@@ -72,51 +79,118 @@ F_CHURCH = 310.0
 
 #      src, start, dur, semis, gain, at_ms, fade_ms, hp, lp
 RECIPES = {
-    "drop-normal": [
+    "drop-normal": [[
         (SPADE, 0.06, 0.25, -3, -2, 0, 120, 300, 0),
         (LATCH, 0.01, 0.12, 0, -10, 0, 60, 80, 0),
-    ],
+    ], [
+        (SPADE, 0.06, 0.25, -3, -2, 0, 120, 300, 0),
+        (COUNTER, 0.02, 0.12, 0, -10, 0, 60, 80, 0),
+    ], [
+        (SPADE, 0.06, 0.25, -3, -2, 0, 120, 300, 0),
+        (LATCH, 0.01, 0.12, 0, -8, 25, 60, 80, 0),
+    ]],
+    # drop-magic and level-up are one take each: every layer in them carries pitch.
     "drop-magic": [  # 12leveling: A tone ~0.6 s
         (MBOX_A, 0.05, 1.0, st(F_MBOX, 880), 0, 0, 400, 0, 0),
         (CLOCK, 41.18, 0.9, st(F_CLOCK, 440), -6, 0, 450, 0, 0),
         (IRON, 1.79, 0.12, -5, -16, 0, 60, 1500, 0),
     ],
-    "drop-rare": [  # 3uniques: 75 Hz thud + G#/C# dyad
+    "drop-rare": [[  # 3uniques: 75 Hz thud + G#/C# dyad
         (IMPACT21, 0.01, 0.6, st(64, 75), -3, 0, 350, 0, 400),
         (CLOCK, 41.18, 0.9, st(F_CLOCK, 554.4), -2, 10, 450, 0, 0),
         (MBOX_A, 0.05, 0.9, st(F_MBOX, 830.6), -4, 60, 400, 0, 0),
-    ],
-    "drop-unique": [  # 6veryvaluable: 65 Hz boom, hits 90/140/210 ms
+    ], [  # the sibling thud, its low peak moved onto 021's
+        (IMPACT38, 0.01, 0.6, st(64, 75) + st(56.4, 41.8), -3, 0, 350, 0, 400),
+        (CLOCK, 41.18, 0.9, st(F_CLOCK, 554.4), -2, 10, 450, 0, 0),
+        (MBOX_A, 0.05, 0.9, st(F_MBOX, 830.6), -4, 60, 400, 0, 0),
+    ], [
+        (IMPACT21, 0.01, 0.6, st(64, 75), -5, 12, 350, 0, 400),
+        (CLOCK, 41.18, 0.9, st(F_CLOCK, 554.4), -2, 10, 450, 0, 0),
+        (MBOX_A, 0.05, 0.9, st(F_MBOX, 830.6), -4, 60, 400, 0, 0),
+    ]],
+    "drop-unique": [[  # 6veryvaluable: 65 Hz boom, hits 90/140/210 ms
         (BOOM3, 0.84, 0.9, st(70, 65), 2, 0, 500, 0, 300),
         (IMPACT21, 0.01, 0.4, st(64, 65), -4, 0, 250, 0, 250),
         (CLOCK, 41.18, 1.0, st(F_CLOCK, 554.4), -3, 90, 500, 0, 0),
         (CLOCK, 41.18, 1.0, st(F_CLOCK, 740.0), -3, 140, 500, 0, 0),
         (MBOX_A, 0.05, 1.0, st(F_MBOX, 987.8), -3, 210, 500, 0, 0),
         (XMAS, 13.40, 0.9, 0, -14, 210, 500, 2500, 0),
-    ],
-    "drop-currency": [  # A: orb landing, glass-led: bottle set down (580 Hz) + rock, short brass-bell ring
+    ], [
+        (BOOM3, 0.84, 0.9, st(70, 65), 2, 0, 500, 0, 300),
+        (IMPACT38, 0.01, 0.4, st(64, 65) + st(56.4, 41.8), -4, 0, 250, 0, 250),
+        (CLOCK, 41.18, 1.0, st(F_CLOCK, 554.4), -3, 90, 500, 0, 0),
+        (CLOCK, 41.18, 1.0, st(F_CLOCK, 740.0), -3, 140, 500, 0, 0),
+        (MBOX_A, 0.05, 1.0, st(F_MBOX, 987.8), -3, 210, 500, 0, 0),
+        (XMAS, 13.40, 0.9, 0, -14, 210, 500, 2500, 0),
+    ], [
+        (BOOM3, 0.84, 0.9, st(70, 65), 2, 20, 500, 0, 300),
+        (IMPACT21, 0.01, 0.4, st(64, 65), -6, 0, 250, 0, 250),
+        (CLOCK, 41.18, 1.0, st(F_CLOCK, 554.4), -3, 90, 500, 0, 0),
+        (CLOCK, 41.18, 1.0, st(F_CLOCK, 740.0), -3, 140, 500, 0, 0),
+        (MBOX_A, 0.05, 1.0, st(F_MBOX, 987.8), -3, 210, 500, 0, 0),
+        (XMAS, 13.40, 0.9, 0, -14, 210, 500, 2500, 0),
+    ]],
+    "drop-currency": [[  # A: orb landing, glass-led: bottle set down (580 Hz) + rock, short brass-bell ring
         (GLASSBOT, 3.12, 0.12, 0, 0, 0, 70, 120, 0),
         (ROCK011, 0.01, 0.12, 0, -8, 0, 70, 150, 0),
         (HANDBELL, 0.05, 0.24, 0, -9, 10, 80, 2000, 0),
         (CLINK, 0.75, 0.10, 0, -10, 10, 60, 1500, 0),
-    ],
-    "drop-gold-jackpot": [  # big coin cascade, A5 + G6 bells as a quiet accent
+    ], [  # the rock is the one unpitched part and has no sibling: timing and level only
+        (GLASSBOT, 3.12, 0.12, 0, 0, 0, 70, 120, 0),
+        (ROCK011, 0.01, 0.12, 0, -6, 4, 70, 150, 0),
+        (HANDBELL, 0.05, 0.24, 0, -9, 10, 80, 2000, 0),
+        (CLINK, 0.75, 0.10, 0, -10, 10, 60, 1500, 0),
+    ], [
+        (GLASSBOT, 3.12, 0.12, 0, 0, 0, 70, 120, 0),
+        (ROCK011, 0.01, 0.12, 0, -10, 18, 70, 150, 0),
+        (HANDBELL, 0.05, 0.24, 0, -9, 10, 80, 2000, 0),
+        (CLINK, 0.75, 0.10, 0, -10, 10, 60, 1500, 0),
+    ]],
+    "drop-gold-jackpot": [[  # big coin cascade, A5 + G6 bells as a quiet accent
         (CLOCK, 41.18, 1.0, st(F_CLOCK, 880), -14, 0, 600, 0, 0),
         (MBOX_A, 0.05, 1.0, st(F_MBOX, 1568), -15, 0, 500, 0, 0),
         (XMAS, 13.40, 0.6, 0, -16, 0, 350, 3000, 0),
         (MANYCOINS, 0.01, 0.45, 0, 0, 0, 200, 200, 0),
         (COINS9, 0.03, 0.85, 0, -2, 40, 300, 200, 0),
         (FALLCOINS, 0.01, 1.2, 0, -4, 80, 500, 200, 0),
-    ],
-    "drop-gold": [  # 2-3 coins on stone, dry, < 0.3 s
+    ], [
+        (CLOCK, 41.18, 1.0, st(F_CLOCK, 880), -14, 0, 600, 0, 0),
+        (MBOX_A, 0.05, 1.0, st(F_MBOX, 1568), -15, 0, 500, 0, 0),
+        (XMAS, 13.40, 0.6, 0, -16, 0, 350, 3000, 0),
+        (MANYCOINS, 0.01, 0.45, 0, -1, 0, 200, 200, 0),
+        (COINS9, 0.03, 0.85, 0, -3, 80, 300, 200, 0),
+        (FALLCOINS, 0.01, 1.2, 0, -3, 40, 500, 200, 0),
+    ], [
+        (CLOCK, 41.18, 1.0, st(F_CLOCK, 880), -14, 0, 600, 0, 0),
+        (MBOX_A, 0.05, 1.0, st(F_MBOX, 1568), -15, 0, 500, 0, 0),
+        (XMAS, 13.40, 0.6, 0, -16, 0, 350, 3000, 0),
+        (HANDCOINS, 0.01, 0.45, 0, 0, 0, 200, 200, 0),
+        (COINS9, 0.23, 0.85, 0, 0, 40, 300, 200, 0),
+        (FALLCOINS, 0.01, 1.2, 0, -2, 80, 500, 200, 0),
+    ]],
+    "drop-gold": [[  # 2-3 coins on stone, dry, < 0.3 s
         (COINS9, 0.03, 0.22, 0, 0, 0, 120, 300, 0),
         (COINFLIP, 0.20, 0.10, 0, -6, 60, 60, 1000, 0),
         (STONE15, 0.28, 0.08, 0, -12, 0, 50, 800, 0),
-    ],
-    "coin-pickup": [  # drop-gold, shorter and quieter (PEAK_DB)
+    ], [
+        (HANDCOINS, 0.01, 0.22, 0, 0, 0, 120, 300, 0),
+        (COINFLIP, 0.20, 0.10, 0, -6, 60, 60, 1000, 0),
+        (STONE15, 0.28, 0.08, 0, -12, 0, 50, 800, 0),
+    ], [
+        (COINS9, 0.23, 0.22, 0, 0, 0, 120, 300, 0),
+        (COINFLIP, 0.20, 0.10, 0, -4, 80, 60, 1000, 0),
+        (STONE15, 0.28, 0.08, 0, -12, 0, 50, 800, 0),
+    ]],
+    "coin-pickup": [[  # drop-gold, shorter and quieter (PEAK_DB)
         (COINS9, 0.03, 0.12, 0, 0, 0, 80, 300, 0),
         (STONE15, 0.28, 0.06, 0, -14, 0, 40, 800, 0),
-    ],
+    ], [
+        (COINS9, 0.23, 0.12, 0, 0, 0, 80, 300, 0),
+        (STONE15, 0.28, 0.06, 0, -14, 0, 40, 800, 0),
+    ], [
+        (COINS9, 0.14, 0.12, 0, 0, 0, 80, 300, 0),
+        (STONE15, 0.28, 0.06, 0, -12, 10, 40, 800, 0),
+    ]],
     "level-up": [  # reverse-glass swell into one deep gong + bell strike, shimmer tail, no melody
         (REVGLASS, 0.35, 0.50, 0, -6, 0, 40, 1500, 0),
         (REVMETAL, 2.05, 0.50, 0, -10, 0, 40, 0, 0),
@@ -124,12 +198,22 @@ RECIPES = {
         (CHURCH, 15.26, 1.6, 0, -8, 480, 1000, 120, 0),
         (XMAS, 13.40, 1.0, 0, -10, 480, 700, 3000, 0),
     ],
-    "container-open": [  # latch, then a tight wooden chest lid: mid knock, little low end
+    "container-open": [[  # latch, then a tight wooden chest lid: mid knock, little low end
         (CHESSLATCH, 0.04, 0.12, 0, -4, 0, 70, 300, 0),
         (WOODDROP, 0.03, 0.15, 0, 0, 70, 90, 200, 0),
         (CASTLING, 0.31, 0.15, 0, -3, 70, 90, 120, 0),
         (WOODHEAVY, 2.25, 0.20, 0, -12, 70, 120, 150, 0),
-    ],
+    ], [  # the next latch, knock and hit in the same recordings
+        (CHESSLATCH, 0.28, 0.12, 0, -4, 0, 70, 300, 0),
+        (WOODDROP, 0.03, 0.15, 0, 0, 70, 90, 200, 0),
+        (CASTLING, 0.69, 0.15, 0, -3, 70, 90, 120, 0),
+        (WOODHEAVY, 13.29, 0.20, 0, -12, 70, 120, 150, 0),
+    ], [
+        (CHESSLATCH, 0.04, 0.12, 0, -4, 0, 70, 300, 0),
+        (WOODDROP, 0.03, 0.15, 0, -1, 85, 90, 200, 0),
+        (CASTLING, 1.61, 0.15, 0, -3, 85, 90, 120, 0),
+        (WOODHEAVY, 20.85, 0.20, 0, -12, 85, 120, 150, 0),
+    ]],
 }
 
 PEAK_DB = {"coin-pickup": -9.0}  # default -2.5 dBFS
@@ -150,7 +234,8 @@ def seg(src, start, dur):
     return _cache[key].copy()
 
 
-def build(layers, peak_db=-2.5):
+def mix(layers):
+    """Sum the layers, unscaled."""
     parts = []
     for src, start, dur, semis, gain, at_ms, fade_ms, hp, lp in layers:
         x = seg(src, start, dur)
@@ -170,7 +255,30 @@ def build(layers, peak_db=-2.5):
     out = np.zeros(n)
     for o, x in parts:
         out[o:o + len(x)] += x
+    return out
+
+
+def build(layers, peak_db=-2.5):
+    out = mix(layers)
     return out * (10 ** (peak_db / 20) / np.abs(out).max())
+
+
+def build_takes(takes, peak_db=-2.5):
+    """Every take at take 1's scale, so the shared pitched core lands at one level;
+    a take whose own peak would pass the ceiling is pulled back to it."""
+    ceiling = 10 ** (peak_db / 20)
+    first = mix(takes[0])
+    scale = ceiling / np.abs(first).max()
+    out = [first * scale]
+    for layers in takes[1:]:
+        y = mix(layers) * scale
+        out.append(y * min(1.0, ceiling / np.abs(y).max()))
+    return out
+
+
+def takes_of(recipe):
+    """A recipe, or a list of recipes (takes)."""
+    return recipe if isinstance(recipe[0], list) else [recipe]
 
 
 def to_opus(src: str, dst: str) -> None:
@@ -195,16 +303,18 @@ def main() -> None:
     if not wanted:
         sys.exit("nothing to do: --only matched no cue in RECIPES")
     os.makedirs(args.out, exist_ok=True)
-    for cue, layers in wanted.items():
-        for src, *_ in layers:
+    for cue, recipe in wanted.items():
+        takes = takes_of(recipe)
+        for src, *_ in (layer for layers in takes for layer in layers):
             if not os.path.exists(os.path.join(LIB, src)):
                 sys.exit(f"{cue}: MISSING {src}")
-        y = build(layers, PEAK_DB.get(cue, -2.5))
-        with tempfile.TemporaryDirectory() as tmp:
-            wav = os.path.join(tmp, cue + ".wav")
-            sf.write(wav, y.astype(np.float32), SR, subtype="PCM_16")
-            to_opus(wav, os.path.join(args.out, cue + ".webm"))
-        print(f"{cue:18} {len(y) / SR:4.2f}s")
+        for k, y in enumerate(build_takes(takes, PEAK_DB.get(cue, -2.5)), 1):
+            name = cue if k == 1 else f"{cue}-{k}"
+            with tempfile.TemporaryDirectory() as tmp:
+                wav = os.path.join(tmp, name + ".wav")
+                sf.write(wav, y.astype(np.float32), SR, subtype="PCM_16")
+                to_opus(wav, os.path.join(args.out, name + ".webm"))
+            print(f"{name:20} {len(y) / SR:4.2f}s")
 
 
 if __name__ == "__main__":

@@ -31,7 +31,11 @@ import tempfile
 
 # cue name -> path under the library root, optionally `@start:duration` to pick a
 # region out of a long recording. A name absent here keeps whatever is already
-# shipped, so this can be filled a few at a time.
+# shipped, so this can be filled a few at a time. A LIST is a pool of takes of the
+# same event: entry 1 ships as `<cue>.webm`, entry k as `<cue>-<k>.webm`. A third field,
+# `@start:duration:gain_db`, levels a take against take 1 after shaping. A take may also
+# be a dict `{"layers": [(path@start:duration, semitones, gain_db, at_ms), ...], "gain": db}`:
+# the layers are mixed (tape-style pitch) before the trimmer, for a library with no sibling.
 #
 # The six materials come from `MATERIAL` in `apps/web/src/audio/soundscape.ts`, and
 # the choices are literal rather than clever: a construct is hit with a hammer on
@@ -39,7 +43,7 @@ import tempfile
 # snaps; a bog thing gurgles and bursts. Ember is the weak one — these three years of
 # the bundle hold fire textures and fireworks but no fire IMPACT, so its death is a
 # fire being put out, which is at least the right event.
-SOURCES: dict[str, str] = {
+SOURCES: dict[str, str | list[str | dict]] = {
     # Vaal Construct, Sunbaked Colossus — carved stone.
     "monster-hurt-stone": "BluezoneCorp - Stone Impact/Bluezone_BC0297_stone_impact_015.wav",
     "monster-death-stone": "Justsoundeffects - Stones and Debris/DESTRClpse_Massive Wall Collapsing_JSE_SD.wav",
@@ -83,23 +87,68 @@ SOURCES: dict[str, str] = {
     "monster-slam-windup": "Justsoundeffects - Transition Whooshes Vol. 1/WHSH_Whoosh Low 07_JSE_TW1.wav",
     "monster-slam-impact": "344 Audio - Epic Impacts Vol. 1/Impact 038.wav",
     # The other half of the same event: a spell landing on the player from range.
-    "player-hurt": "344 Audio - Screaming/VOXScrm_Male in Shock 4_344 Audio_Screaming.wav",
+    # Takes 2, 3: two sharp gasps of one male voice from another pack.
+    "player-hurt": [
+        "344 Audio - Screaming/VOXScrm_Male in Shock 4_344 Audio_Screaming.wav",
+        "Pole Position Production - The Grunts Library/Male 1 - Breathing - Gasping - Ehrlund M1.wav@13.60:0.60:1.7",
+        "Pole Position Production - The Grunts Library/Male 1 - Breathing - Gasping - Ehrlund M1.wav@3.72:0.60:2.1",
+    ],
 
     # ── Skills ──────────────────────────────────────────────────────────────────
-    "skill-ember-bolt-cast": "Epic Stock Media - Elemental Mutation Whooshes and Impacts/FIREWhsh_Whoosh Fire Deep Growl Monster Saturated Crisp 03_ESM_EMWI.wav",
-    "skill-ember-bolt-impact": "DavidDumais - Explosion SFX Pack/EXPLReal_Medium Realistic Explosion 15_DDUMAIS_NONE.wav",
+    # Takes 2, 3 are built: no other fire whoosh exists. The same growl a tone down over a
+    # fire bed, and a burning fireworks launch over the same bed.
+    "skill-ember-bolt-cast": [
+        "Epic Stock Media - Elemental Mutation Whooshes and Impacts/FIREWhsh_Whoosh Fire Deep Growl Monster Saturated Crisp 03_ESM_EMWI.wav",
+        {"layers": [('Epic Stock Media - Elemental Mutation Whooshes and Impacts/FIREWhsh_Whoosh Fire Deep Growl Monster Saturated Crisp 03_ESM_EMWI.wav', -2, 0, 0), ('Epic Stock Media - Synthesized Nature Loops and Sounds/FIREBurn_Loop Elements Fire Crackling Crunchy Flame Burn 03_ESM_SNLS.wav@4.20:1.50', 0, -10, 0)]},
+        {"layers": [('InspectorJ - Essentials 03 Fireworks/FRWKComr_InsJ_Fireworks_Launch_Close_01-03.wav@0.00:2.00', 0, 0, 0), ('Epic Stock Media - Synthesized Nature Loops and Sounds/FIREBurn_Loop Elements Fire Crackling Crunchy Flame Burn 03_ESM_SNLS.wav@0.50:1.50', 0, -8, 0)], "gain": 3.9},
+    ],
+    # Takes 2, 3: other packs' blasts, the mortar with a fireworks crackle for the fire.
+    "skill-ember-bolt-impact": [
+        "DavidDumais - Explosion SFX Pack/EXPLReal_Medium Realistic Explosion 15_DDUMAIS_NONE.wav",
+        "Epic Stock Media - Anime Game/EXPLDsgn_Explosion Small Blast Enemy Death Crunchy Boom Cartoon Noisy Crash Impact Delay 03_ESM_AG.wav",
+        {"layers": [('BluezoneCorp - Detonation - Explosion/Bluezone_BC0277_explosion_mortar_002_01.wav', 0, 0, 0), ('InspectorJ - Essentials 03 Fireworks/FRWKComr_InsJ_Fireworks_Multi_Close_01-04-Crackle.wav@1.96:0.60', 0, -10, 30)], "gain": -4.2},
+    ],
     # Cinder ground burns for its whole duration, so this one is a fire LOOP cut to
     # its loudest 1.4s rather than a one-shot with a decay.
-    "skill-cinder-ground-cast": "Epic Stock Media - Synthesized Nature Loops and Sounds/FIREBurn_Loop Elements Fire Crackling Crunchy Flame Burn 03_ESM_SNLS.wav",
-    "skill-blink": "CB Sound Design - Whoosh And Push/W_a_P_Spell_Whoosh_19.wav",
+    "skill-cinder-ground-cast": [
+        "Epic Stock Media - Synthesized Nature Loops and Sounds/FIREBurn_Loop Elements Fire Crackling Crunchy Flame Burn 03_ESM_SNLS.wav",
+        "Epic Stock Media - Synthesized Nature Loops and Sounds/FIREBurn_Loop Elements Fire Crackling Crunchy Flame Burn 03_ESM_SNLS.wav@0.50:1.00:-4.6",
+        "Epic Stock Media - Synthesized Nature Loops and Sounds/FIREBurn_Loop Elements Fire Crackling Crunchy Flame Burn 03_ESM_SNLS.wav@4.20:1.00:-4.6",
+    ],
+    # Takes 2, 3: other short airy whooshes.
+    "skill-blink": [
+        "CB Sound Design - Whoosh And Push/W_a_P_Spell_Whoosh_19.wav",
+        "Rescopic Sound - Distinct Whooshes/WHSH_Pure SciFi-Whoosh Fast 03_RSCPC_DW.wav@0.30:0.55:-3.4",
+        "Justsoundeffects - Transition Whooshes Vol. 1/WHSH_Whoosh Short 06_JSE_TW1.wav@2.80:0.60",
+    ],
     # The bundles hold no bow at all (the 2024 "Nocked" sampler is not extracted): a
     # wooden stick cutting the air for the loose, a spear shaft striking for the hit.
-    "skill-bow-release": "Justsoundeffects - Transition Whooshes Vol. 1/SWSH_Woodstick Swish 03_JSE_TW1.wav",
-    "skill-arrow-impact": "344 Audio - Historical Weapons Vol. 2/WEAPBlnt_Spear And Stick Impact, Wooden MKH 2_344 Audio_Medieval Weapons Vol 2.wav",
+    # Takes 2, 3: two more swishes of the same stick in the same recording.
+    "skill-bow-release": [
+        "Justsoundeffects - Transition Whooshes Vol. 1/SWSH_Woodstick Swish 03_JSE_TW1.wav",
+        "Justsoundeffects - Transition Whooshes Vol. 1/SWSH_Woodstick Swish 03_JSE_TW1.wav@3.90:1.00",
+        "Justsoundeffects - Transition Whooshes Vol. 1/SWSH_Woodstick Swish 03_JSE_TW1.wav@6.05:1.00",
+    ],
+    # Takes 2, 3: other strikes of the same shaft in the same recording.
+    "skill-arrow-impact": [
+        "344 Audio - Historical Weapons Vol. 2/WEAPBlnt_Spear And Stick Impact, Wooden MKH 2_344 Audio_Medieval Weapons Vol 2.wav",
+        "344 Audio - Historical Weapons Vol. 2/WEAPBlnt_Spear And Stick Impact, Wooden MKH 2_344 Audio_Medieval Weapons Vol 2.wav@4.30:0.60:-3.2",
+        "344 Audio - Historical Weapons Vol. 2/WEAPBlnt_Spear And Stick Impact, Wooden MKH 2_344 Audio_Medieval Weapons Vol 2.wav@8.50:0.60",
+    ],
     # Melee: one large swing for every weapon skill, and a two-hander biting into a
     # body for the landing, because what it lands on is always flesh or hide.
-    "skill-strike-swing": "David Dumais Audio - Melee Weapons Sound Effects Pack 1/SWSH_Swing 3 Large 03_DDUMAIS_NONE.wav",
-    "skill-strike-impact": "Justsoundeffects - Melee Weapons/WEAPAxe_Long Two-Handed Axe Flesh Hit_JSE_MW.wav",
+    # Takes 2, 3: a long-blade swing and a layered sword swish from other packs.
+    "skill-strike-swing": [
+        "David Dumais Audio - Melee Weapons Sound Effects Pack 1/SWSH_Swing 3 Large 03_DDUMAIS_NONE.wav",
+        "David Dumais Audio - Melee Weapons Sound Effects Pack 2/METLFric_SWING SCRAPE Swift Melee Weapon Swing With A Long Blade 14_DDUMAIS_MWP2.wav@0.00:0.30:-1.8",
+        "Epic Stock Media - Tower Defense Game/DSGNStngr_Action Deploy Units Sword Slice Special Move Layered Swish 04_ESM_TDG.wav@0.25:0.30:-1.5",
+    ],
+    # Takes 2, 3: the second and fifth axe hits in the same recording.
+    "skill-strike-impact": [
+        "Justsoundeffects - Melee Weapons/WEAPAxe_Long Two-Handed Axe Flesh Hit_JSE_MW.wav",
+        "Justsoundeffects - Melee Weapons/WEAPAxe_Long Two-Handed Axe Flesh Hit_JSE_MW.wav@2.38:1.20",
+        "Justsoundeffects - Melee Weapons/WEAPAxe_Long Two-Handed Axe Flesh Hit_JSE_MW.wav@9.58:1.20",
+    ],
 
     # ── Portals and the map device ──────────────────────────────────────────────
     # An airy gust that swells and falls away. The designed sci-fi vortex this
@@ -107,17 +156,42 @@ SOURCES: dict[str, str] = {
     # portal-close was already re-picked for: it read as a struck synth string,
     # and the return portal opens at the instant a map arrives, so it was heard
     # as the map's own sound.
-    "portal-open": "Rescopic Sound - Distinct Whooshes/WHSH_Airy-Whoosh Wind Gust 11_RSCPC_DW.wav",
+    # Takes 2, 3: two more wind gusts that swell and fall.
+    "portal-open": [
+        "Rescopic Sound - Distinct Whooshes/WHSH_Airy-Whoosh Wind Gust 11_RSCPC_DW.wav",
+        "344 Audio - Geophonic Design Vol. 2/WHSH_Whoosh 1_344 Audio_Geophonic Design Vol 2.wav@0.50:1.60:1.8",
+        "toneglowlibraries - Wind and Rain Interior/Wind, Interior, Rooftop, Soft, Whoosh.wav@83.60:1.60",
+    ],
     # Keep crossing distinct from the opening vortex above: a single spell whoosh is
     # the same inward gesture without the glass-shard material the old pick had.
-    "portal-enter": "CB Sound Design - Whoosh And Push/W_a_P_Spell_Whoosh_19.wav",
+    # Takes 2, 3: other short whooshes.
+    "portal-enter": [
+        "CB Sound Design - Whoosh And Push/W_a_P_Spell_Whoosh_19.wav",
+        "Justsoundeffects - Transition Whooshes Vol. 1/WHSH_Whoosh Short 06_JSE_TW1.wav@5.50:0.60",
+        "Marek Klemczak - ARTA Cinematic Sound FX Pack/WHSH_Whoosh_Chef Audio_Cinematic Sound FX_03.wav@0.25:0.60",
+    ],
     # Air rushing out, not a power-down: the resonant electric whoosh read as a
     # guitar string; a plain wind rush is the same falling gesture with no synth.
-    "portal-close": "344 Audio - Elemental Palette Designed Vol. 1/WINDDsgn_Wind, Rush, Whoosh, Long x5 01_344 Audio_Elemental Palette Designed Vol 1.wav",
-    "waystone-activate": "Alexander Kopeikin - Emotion and Magic/magic, action gesture, evil presence, onslaught-004.wav",
+    # Takes 2, 3: the falling half of two other gusts.
+    "portal-close": [
+        "344 Audio - Elemental Palette Designed Vol. 1/WINDDsgn_Wind, Rush, Whoosh, Long x5 01_344 Audio_Elemental Palette Designed Vol 1.wav",
+        "Rescopic Sound - Distinct Whooshes/WHSH_Airy-Whoosh Wind Gust 11_RSCPC_DW.wav@1.40:1.20:-3.1",
+        "toneglowlibraries - Wind and Rain Interior/Wind, Interior, Rooftop, Soft, Whoosh.wav@107.10:1.20:-1.9",
+    ],
+    # Takes 2, 3: later rising surges of the same onslaught.
+    "waystone-activate": [
+        "Alexander Kopeikin - Emotion and Magic/magic, action gesture, evil presence, onslaught-004.wav",
+        "Alexander Kopeikin - Emotion and Magic/magic, action gesture, evil presence, onslaught-004.wav@9.60:1.80",
+        "Alexander Kopeikin - Emotion and Magic/magic, action gesture, evil presence, onslaught-004.wav@16.20:1.80",
+    ],
 
     # ── Flask, feet, UI ─────────────────────────────────────────────────────────
-    "flask-drink": "Eiravaein Works - Flask/OBJCont_Flask,glass,figuredbottle,realcork,liquid,remove,squeak,slosh,alt4_EWKR.wav",
+    # Takes 2, 3: liquid gurgling in a glass bottle, and a bottle opened over the same gurgle.
+    "flask-drink": [
+        "Eiravaein Works - Flask/OBJCont_Flask,glass,figuredbottle,realcork,liquid,remove,squeak,slosh,alt4_EWKR.wav",
+        "LukasTvrdon - Design Source 192/Bubbles in Glass Bottle Small, Gurgles, Higher Pitched.wav@14.10:0.35:2.2",
+        {"layers": [("SmartSoundFX - Everyday Life 01/BOTTLE Glass Open Scratch 01.wav@0.80:0.15", 0, 0, 0), ("LukasTvrdon - Design Source 192/Bubbles in Glass Bottle Small, Gurgles, Higher Pitched.wav@2.30:0.20", 0, 0, 40)], "gain": 6.5},
+    ],
     # ── Feet, four grounds, three falls each ────────────────────────────────────
     # Every variant of one ground comes out of ONE recording — same ground, same mic,
     # a different fall — because two materials alternating is heard as a limp, not as
@@ -153,11 +227,26 @@ SOURCES: dict[str, str] = {
     # synthesised, so picking on the word "UIClick" and on crest factor got a menu that
     # sounded like a spaceship. These menus are iron: a lock tinkers under the pointer
     # and a latch drops when you commit. Physical foley, one material, two weights.
-    "ui-click": "Epic Stock Media - HD Lock And Mechanism Sound Design Kit/MECHLtch_Click Deep Mechanism Latch Button Nearfield Thunk 02_ESM_HDLM.wav",
-    "ui-hover": "344 Audio - Antique Small Metals/METLMvmt_  Tinkering Antique Lock_344 Audio_Antique Small Metals.wav",
+    # Takes 2, 3: an antique suitcase lock and a small lever, the same iron.
+    "ui-click": [
+        "Epic Stock Media - HD Lock And Mechanism Sound Design Kit/MECHLtch_Click Deep Mechanism Latch Button Nearfield Thunk 02_ESM_HDLM.wav",
+        "344 Audio - Antique Luggage/OBJLug_Suitcase Being Locked, Antique Suitcase 1_344 Audio_Antiques - Luggage.wav@2.18:0.30:-3.5",
+        "BluezoneCorp - Industrial Lever Switch/Bluezone_BC0302_industrial_lever_switch_small_003.wav@0.06:0.18:-7.1",
+    ],
+    # Takes 2, 3: earlier tinkers on the same lock.
+    "ui-hover": [
+        "344 Audio - Antique Small Metals/METLMvmt_  Tinkering Antique Lock_344 Audio_Antique Small Metals.wav",
+        "344 Audio - Antique Small Metals/METLMvmt_  Tinkering Antique Lock_344 Audio_Antique Small Metals.wav@0.10:0.50:1.8",
+        "344 Audio - Antique Small Metals/METLMvmt_  Tinkering Antique Lock_344 Audio_Antique Small Metals.wav@2.40:0.40:2.5",
+    ],
     # Not the sci-fi window slide: a panel in this game is leather and canvas, and the
     # fantasy kit ships the inventory-open it was recorded for.
-    "ui-panel-open": "Epic Stock Media - Fantasy Game 2 - Sound Kit for Enchanted Realms/CLOTHFlp_Action Inventory Open Flip Cloth Canvas Bag Slide Light 02_ESM_FG2.wav",
+    # Takes 2, 3: two cloth movements of another foley pack.
+    "ui-panel-open": [
+        "Epic Stock Media - Fantasy Game 2 - Sound Kit for Enchanted Realms/CLOTHFlp_Action Inventory Open Flip Cloth Canvas Bag Slide Light 02_ESM_FG2.wav",
+        "InMotionAudio - Foley T-Shirt/FOLYClth_ClothMovement24_InMotionAudio_FoleyT-Shirt.wav@1.40:0.45:6.2",
+        "InMotionAudio - Foley T-Shirt/FOLYClth_ClothMovement29_InMotionAudio_FoleyT-Shirt.wav@0.70:0.45:-3.4",
+    ],
 }
 
 
@@ -168,17 +257,27 @@ SOURCES: dict[str, str] = {
 #
 # `duration` is the loop LENGTH; CROSSFADE seconds beyond it are consumed making the
 # seam, so the source has to hold that much more material after the region.
-LOOP_SOURCES: dict[str, str] = {
+LOOP_SOURCES: dict[str, str | list[str]] = {
     # A fireball in flight is a rocket, the way it has always been done: the middle of
     # a blast-off, after the ignition transient and before it thins out. The bolt's own
     # cast whoosh still fires over the top of this.
-    "skill-ember-bolt-flight": "344 Audio - Air Designed/AEROJet_Blast Off Clean_344 Audio_Air Designed.wav@3.10:2.00",
+    # Takes 2, 3: the same blast-off before and after take 1's region.
+    "skill-ember-bolt-flight": [
+        "344 Audio - Air Designed/AEROJet_Blast Off Clean_344 Audio_Air Designed.wav@3.10:2.00",
+        "344 Audio - Air Designed/AEROJet_Blast Off Clean_344 Audio_Air Designed.wav@1.10:2.00",
+        "344 Audio - Air Designed/AEROJet_Blast Off Clean_344 Audio_Air Designed.wav@5.60:2.00",
+    ],
     # Not the cast sample looped: that one is cut to its loudest 1.4s, so looping it is
     # the same crackle over and over. Chosen by EVENNESS rather than by the word fire:
     # scored as the spread of 100ms block levels across the region, the woodstove that
     # was here first came out at 0.98 (near-silence with one crack in it, which loops as
     # a pop every 2.4 seconds) against this one's 0.24.
-    "skill-cinder-ground-loop": "344 Audio - Haunting Ambiences Vol. 5/FIRECrkl_Fire Crackling, Popping, Witch's Cauldron_344 Audio_Haunting Ambiences Vol 5.wav@0.50:2.40",
+    # Takes 2, 3: regions of the same cauldron as even as take 1 and as poppy (crest 28-29 dB against 29).
+    "skill-cinder-ground-loop": [
+        "344 Audio - Haunting Ambiences Vol. 5/FIRECrkl_Fire Crackling, Popping, Witch's Cauldron_344 Audio_Haunting Ambiences Vol 5.wav@0.50:2.40",
+        "344 Audio - Haunting Ambiences Vol. 5/FIRECrkl_Fire Crackling, Popping, Witch's Cauldron_344 Audio_Haunting Ambiences Vol 5.wav@136.50:2.40",
+        "344 Audio - Haunting Ambiences Vol. 5/FIRECrkl_Fire Crackling, Popping, Witch's Cauldron_344 Audio_Haunting Ambiences Vol 5.wav@100.50:2.40:-7.1",
+    ],
 }
 
 # Seconds of the tail folded back over the head to hide the seam.
@@ -226,6 +325,34 @@ def to_mono48(src: str, dst: str, start: float, duration: float) -> None:
     subprocess.run(cmd, check=True)
 
 
+def regain(path: str, db: float) -> None:
+    """Move a shaped take by `db`, under trim_sfx's own -2.5 dBFS limiter."""
+    tmp = path + ".gain.wav"
+    subprocess.run(
+        ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", path, "-af",
+         f"volume={db:.2f}dB,alimiter=level_in=1:level_out=1:limit=0.750:level=disabled",
+         "-c:a", "pcm_s16le", tmp],
+        check=True,
+    )
+    os.replace(tmp, path)
+
+
+def to_layered(lib: str, layers: list, dst: str) -> None:
+    """Mix `(path@start:duration, semitones, gain_db, at_ms)` layers to 48 kHz 16-bit mono."""
+    cmd, chains = ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error"], []
+    for i, (spec, semis, gain, at_ms) in enumerate(layers):
+        rel, _, window = spec.partition("@")
+        start, _, dur = window.partition(":")
+        cmd += ["-ss", start or "0", "-t", dur or "30", "-i", os.path.join(lib, rel)]
+        rate = 48000 * 2 ** (semis / 12)
+        chains.append(f"[{i}:a]aformat=channel_layouts=mono,aresample=48000,asetrate={rate:.1f},"
+                      f"aresample=48000,volume={gain}dB,adelay={at_ms}[l{i}]")
+    mix = "".join(f"[l{i}]" for i in range(len(layers)))
+    cmd += ["-filter_complex", ";".join(chains) + f";{mix}amix=inputs={len(layers)}:normalize=0",
+            "-ac", "1", "-ar", "48000", "-c:a", "pcm_s16le", dst]
+    subprocess.run(cmd, check=True)
+
+
 def to_opus(src: str, dst: str) -> None:
     subprocess.run(
         ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", src,
@@ -252,17 +379,36 @@ def main() -> None:
         os.makedirs(args.keep_wav, exist_ok=True)
 
     trimmer = os.path.join(os.path.dirname(os.path.abspath(__file__)), "trim_sfx.py")
+    jobs = []
+    for cue, specs in sorted(wanted.items()):
+        if isinstance(specs, str):
+            jobs.append((cue, cue, specs))
+        else:
+            jobs += [(cue, cue if k == 1 else f"{cue}-{k}", s) for k, s in enumerate(specs, 1)]
     missing = 0
-    for cue, spec in sorted(wanted.items()):
-        rel, _, window = spec.partition("@")
-        start, _, dur = window.partition(":")
-        src = os.path.join(args.lib, rel)
-        if not os.path.exists(src):
-            print(f"{cue:28} MISSING {rel}")
+    for cue, name, spec in jobs:
+        if isinstance(spec, dict):
+            layers, gain = spec["layers"], spec.get("gain", "")
+            rels = [layer[0].partition("@")[0] for layer in layers]
+        else:
+            rel, _, window = spec.partition("@")
+            start, _, rest = window.partition(":")
+            dur, _, gain = rest.partition(":")
+            rels = [rel]
+        gone = [r for r in rels if not os.path.exists(os.path.join(args.lib, r))]
+        if gone:
+            print(f"{name:30} MISSING {gone}")
             missing += 1
             continue
+        src = os.path.join(args.lib, rels[0])
         with tempfile.TemporaryDirectory() as tmp:
-            if cue in LOOP_SOURCES:
+            if isinstance(spec, dict):
+                staged = os.path.join(tmp, cue + ".wav")
+                to_layered(args.lib, layers, staged)
+                shaped = os.path.join(tmp, "out")
+                subprocess.run([sys.executable, trimmer, staged, "--out", shaped], check=True)
+                done = os.path.join(shaped, cue + ".wav")
+            elif cue in LOOP_SOURCES:
                 done = os.path.join(tmp, cue + ".wav")
                 to_loop(src, done, float(start or 0), float(dur or 0))
             else:
@@ -271,13 +417,16 @@ def main() -> None:
                 shaped = os.path.join(tmp, "out")
                 subprocess.run([sys.executable, trimmer, staged, "--out", shaped], check=True)
                 done = os.path.join(shaped, cue + ".wav")
-            to_opus(done, os.path.join(args.out, cue + ".webm"))
+            if gain:
+                regain(done, float(gain))
+            to_opus(done, os.path.join(args.out, name + ".webm"))
             if args.keep_wav:
                 # shutil, not os.replace: the temp dir is on C: and the repo is on D:.
-                shutil.move(done, os.path.join(args.keep_wav, cue + ".wav"))
-        print(f"{cue:28} <- {rel}")
+                shutil.move(done, os.path.join(args.keep_wav, name + ".wav"))
+        print(f"{name:30} <- {spec}")
     if missing:
         sys.exit(f"{missing} source file(s) not found under {args.lib}")
 
 
-main()
+if __name__ == "__main__":
+    main()
