@@ -25,6 +25,7 @@ import { attachBindings } from "./input/bindings";
 import { isTextEntry } from "./input/text-entry";
 import { ALL_SFX, CORE_SFX, playSfx, preloadSfx, setAmbient, stopAmbient } from "./audio/sfx";
 import { createSoundscape } from "./audio/soundscape";
+import { createVarkisVoice, VARKIS_SFX } from "./audio/varkis-voice";
 import { createDebugSnapshotLog, dlog } from "./debug";
 import { preloadUiArt } from "./ui-art";
 import { preloadWorldArt } from "./render/world-art";
@@ -98,6 +99,9 @@ export function GameView({
   const [stashOpen, setStashOpen] = useState(false);
   // The bench takes the same left-hand slot as the stash, so one closes the other.
   const [vendorOpen, setVendorOpen] = useState(false);
+  const [varkis] = useState(createVarkisVoice);
+  // The window's state, not the click: he speaks only for a window that really opened or closed.
+  useEffect(() => { varkis.window(vendorOpen); }, [varkis, vendorOpen]);
   const [characterOpen, setCharacterOpen] = useState(false);
   // The passive tree (P). Fullscreen, like PoE's own, and render-only until a
   // node is clicked — the sim owns whether that click is allowed.
@@ -551,6 +555,7 @@ export function GameView({
         }
         prevTickTime = performance.now();
         soundscape.observe(msg.snapshot);
+        varkis.observe(msg.snapshot);
         debugLog(msg.snapshot);
         // An idle frame moves only `tick`, which nothing in React reads, so it renders nothing.
         const ticked = shownSnap && { ...shownSnap, tick: msg.snapshot.tick };
@@ -623,7 +628,7 @@ export function GameView({
         buildSea(scene, grid, base ? BIOMES[base.biomeId].sea === true : false);
         setMapFill(scene, msg.area === "map");
         // Furniture, and only in the hideout: a map is a place you pass through.
-        if (msg.area === "hideout") buildHideoutDecor(scene);
+        if (msg.area === "hideout") { buildHideoutDecor(scene); void preloadSfx(VARKIS_SFX); }
         else clearHideoutDecor(scene);
         applyTilesetFloor(scene, base?.tilesetId ?? null);
         applyBiomeTint(

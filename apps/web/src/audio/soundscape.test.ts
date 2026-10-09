@@ -203,6 +203,50 @@ describe("createSoundscape", () => {
     expect(run([at(1, 0, 8, 1), at(2, 0, 8, 1)])).toEqual([]);
   });
 
+  it("each melee skill lands with its own impact, and an unnamed swing with Strike's", () => {
+    const landed = (strikeSkill?: string) => run([
+      snap({ tick: 1, player: { ...testPlayer() } }),
+      snap({ tick: 2, player: { ...testPlayer(), strikeTick: 2, strikeHits: 1, strikeSkill } }),
+    ]);
+    expect(landed("skill.strike.v1")).toEqual(["skill-strike-impact"]);
+    expect(landed("skill.heavy_strike.v1")).toEqual(["skill-heavy-strike-impact"]);
+    expect(landed("skill.ground_slam.v1")).toEqual(["skill-ground-slam-impact"]);
+    expect(landed(undefined)).toEqual(["skill-strike-impact"]);
+  });
+
+  it("Ember Spark casts and lands with its own cues and carries no flight bed", () => {
+    const spark: SnapshotEntity = { id: 4, kind: "projectile", x: 1, y: 0, team: 0, skillId: "skill.ember_spark.v1" };
+    const loops: string[] = [];
+    const heard: string[] = [];
+    const s = createSoundscape({ play: (n) => heard.push(n), loop: (n) => loops.push(n), stopLoop: () => {} });
+    s.reset(null);
+    for (const it of [
+      snap({ tick: 1, player: testPlayer({ cooldowns: {} }) }),
+      snap({ tick: 2, player: testPlayer({ cooldowns: { "skill.ember_spark.v1": 0.5 } }), entities: [spark] }),
+      snap({ tick: 3, player: testPlayer({ cooldowns: { "skill.ember_spark.v1": 0.4 } }), entities: [] }),
+    ]) s.observe(it);
+    expect(heard).toEqual(["skill-ember-spark-cast", "skill-ember-spark-impact"]);
+    expect(loops).toEqual([]);
+  });
+
+  it("the player dying is heard once, on the edge, and never for a corpse loaded or carried across", () => {
+    const p = (alive: boolean) => testPlayer({ alive, life: alive ? 50 : 0 });
+    const deaths = (seq: Snapshot[]) => run(seq).filter((n) => n === "player-death");
+    expect(deaths([
+      snap({ tick: 1, player: p(true) }),
+      snap({ tick: 2, player: p(false) }),
+      snap({ tick: 3, player: p(false) }),
+      snap({ tick: 4, player: p(false) }),
+    ])).toEqual(["player-death"]);
+    // Loaded dead, or arriving dead in a new area: no edge was seen.
+    expect(deaths([snap({ tick: 1, player: p(false) }), snap({ tick: 2, player: p(false) })])).toEqual([]);
+    expect(deaths([
+      snap({ tick: 1, area: "map", player: p(true) }),
+      snap({ tick: 2, area: "hideout", player: p(false) }),
+      snap({ tick: 3, area: "hideout", player: p(false) }),
+    ])).toEqual([]);
+  });
+
   /** The portals are the renderer's: it staggers them, so it sounds them. */
   it("says nothing about portals", () => {
     const portal: SnapshotEntity = { id: 7, kind: "portal", x: 0, y: 1 };

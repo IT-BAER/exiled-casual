@@ -292,6 +292,9 @@ export const SKILL_FX: Record<string, FxProfile> = {
     lifeMin: 0.03,
     lifeMax: 0.07,
     flash: 0.3,
+    // The fire bed is Ember Bolt's: a free mote carrying it would sound like the big spell.
+    flightCue: null,
+    impactCue: "skill-ember-spark-impact",
   },
   // Not fire at all: an arrow, so the wake is dust off the shaft, not flame.
   "skill.snap_shot.v1": {

@@ -7,6 +7,7 @@ import {
   CORE_SFX, distanceCutoff, distanceGain, playSfx, preloadSfx, resetSfx, sfxCategory,
   startSfxLoop, stopSfxLoop, worldSfxMix,
 } from "./sfx";
+import { VARKIS_SFX } from "./varkis-voice";
 
 /** `fake.ctx` is null until a test installs a stand-in context, as in headless jsdom. */
 const fake = vi.hoisted(() => ({ ctx: null as unknown }));
@@ -168,10 +169,30 @@ describe("worldSfxMix", () => {
         ? "music"
         : name.startsWith("skill-")
         ? "skills"
-        : name.startsWith("ui-")
+        : name.startsWith("ui-") || name.startsWith("npc-")
         ? "interface"
         : /^(drop|coin|level|container)-/.test(name) ? "loot" : "environment";
       expect(sfxCategory(name), name).toBe(expected);
+    }
+  });
+
+  it("pools the generated monster and NPC cues and the new combat cues as take sets", () => {
+    const takes = voiceTakes();
+    const monster = [
+      "monster-hurt", "monster-death", "monster-melee-hit", "monster-spit",
+      "monster-slam-windup", "monster-slam-impact",
+      ...["stone", "husk", "bog", "beast", "ember", "spirit"]
+        .flatMap((m) => [`monster-hurt-${m}`, `monster-death-${m}`]),
+    ];
+    const combat = [
+      "skill-ember-spark-cast", "skill-ember-spark-impact", "skill-heavy-strike-impact",
+      "skill-ground-slam-impact", "player-death",
+    ];
+    for (const name of [...monster, ...combat]) expect(takes[name], name).toBe(3);
+    for (const name of combat) expect(CORE_SFX, name).toContain(name);
+    for (const name of VARKIS_SFX) {
+      expect(takes[name], name).toBe(2);
+      expect(CORE_SFX, name).not.toContain(name);
     }
   });
 
@@ -218,7 +239,7 @@ describe("take pools", () => {
     });
     fake.ctx = {
       currentTime: 0,
-      decodeAudioData: (url: string) => Promise.resolve({ url }),
+      decodeAudioData: (url: string) => Promise.resolve({ url, duration: 1.5 }),
       createBufferSource: () => ({
         buffer: null as { url: string } | null, loop: false, playbackRate: { value: 1 },
         connect: () => {},
@@ -242,9 +263,16 @@ describe("take pools", () => {
     expect([...urls].sort()).toEqual([1, 2, 3].map(take));
   });
 
-  it("a single-take cue still fetches <cue>.webm", async () => {
+  it("a one-shot reports how long it sounds, and 0 when nothing played", async () => {
+    expect(playSfx("ui-click")).toBe(0);
     await preloadSfx(["ui-click"]);
-    expect(urls).toEqual(["/audio/ui-click.webm"]);
+    expect(playSfx("ui-click")).toBeGreaterThan(1.5 / 1.1);
+    expect(playSfx("not-a-sound")).toBe(0);
+  });
+
+  it("a single-take cue still fetches <cue>.webm", async () => {
+    await preloadSfx(["level-up"]);
+    expect(urls).toEqual(["/audio/level-up.webm"]);
   });
 
   it("an unloaded cue loads every take and plays nothing", async () => {

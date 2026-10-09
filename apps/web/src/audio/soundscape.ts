@@ -162,11 +162,19 @@ const STEP_LEVEL_FLOOR = 0.65;
 /** Which cue a skill's own cast makes. A skill with no entry casts silently. */
 const CAST_SFX: Record<string, string> = {
   "skill.ember_bolt.v1": "skill-ember-bolt-cast",
+  "skill.ember_spark.v1": "skill-ember-spark-cast",
   "skill.cinder_ground.v1": "skill-cinder-ground-cast",
   "skill.blink.v1": "skill-blink",
   "skill.strike.v1": "skill-strike-swing",
   "skill.heavy_strike.v1": "skill-strike-swing",
   "skill.ground_slam.v1": "skill-strike-swing",
+};
+
+/** The thud of a landed swing, per melee skill; an unnamed swing lands as Strike. */
+const STRIKE_IMPACT: Record<string, string> = {
+  "skill.strike.v1": "skill-strike-impact",
+  "skill.heavy_strike.v1": "skill-heavy-strike-impact",
+  "skill.ground_slam.v1": "skill-ground-slam-impact",
 };
 
 export interface Soundscape {
@@ -367,8 +375,16 @@ export function createSoundscape(opts: Options = {}): Soundscape {
 
       // A melee swing landing is the one hit the player's own hands made: one thud
       // per swing however many it caught, and none for a whiff.
+      // Which skill swung is `strikeSkill`, stamped by the sim beside the tick it
+      // landed on (render-only, outside the checksum), so no cooldown has to be guessed.
       if (snap.player.strikeTick !== undefined && snap.player.strikeTick !== before.player.strikeTick
-        && (snap.player.strikeHits ?? 0) > 0) play("skill-strike-impact");
+        && (snap.player.strikeHits ?? 0) > 0) {
+        play(STRIKE_IMPACT[snap.player.strikeSkill ?? ""] ?? "skill-strike-impact");
+      }
+
+      // The edge, not the state: a save restored dead or an area entered dead has no
+      // previous snapshot to fall from, so it is never heard.
+      if (before.player.alive && !snap.player.alive) play("player-death");
 
       // ── Flask, map device, feet ─────────────────────────────────────────────
       const f = snap.player.flasks;
