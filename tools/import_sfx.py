@@ -33,7 +33,7 @@ import tempfile
 # cue name -> path under the library root, optionally `@start:duration` to pick a
 # region out of a long recording. A name absent here keeps whatever is already
 # shipped, so this can be filled a few at a time. A LIST is a pool of takes of the
-# same event: entry 1 ships as `<cue>.webm`, entry k as `<cue>-<k>.webm`. A third field,
+# same event: entry k ships as `<cue>-<k>.webm`, what sfx.ts fetches for a pool. A third field,
 # `@start:duration:gain_db`, levels a take against take 1 after shaping. A take may also
 # be a dict `{"layers": [(path@start:duration, semitones, gain_db, at_ms), ...], "gain": db}`:
 # the layers are mixed (tape-style pitch) before the trimmer, for a library with no sibling.
@@ -187,11 +187,12 @@ SOURCES: dict[str, str | list[str | dict]] = {
     ],
 
     # ── Flask, feet, UI ─────────────────────────────────────────────────────────
-    # Takes 2, 3: liquid gurgling in a glass bottle, and a bottle opened over the same gurgle.
+    # Takes 2, 3: the same bottle a size smaller and a size larger (tape pitch), because
+    # the pack holds one glass flask and a different flask was heard as a different drink.
     "flask-drink": [
         "Eiravaein Works - Flask/OBJCont_Flask,glass,figuredbottle,realcork,liquid,remove,squeak,slosh,alt4_EWKR.wav",
-        "LukasTvrdon - Design Source 192/Bubbles in Glass Bottle Small, Gurgles, Higher Pitched.wav@14.10:0.35:2.2",
-        {"layers": [("SmartSoundFX - Everyday Life 01/BOTTLE Glass Open Scratch 01.wav@0.80:0.15", 0, 0, 0), ("LukasTvrdon - Design Source 192/Bubbles in Glass Bottle Small, Gurgles, Higher Pitched.wav@2.30:0.20", 0, 0, 40)], "gain": 6.5},
+        {"layers": [("Eiravaein Works - Flask/OBJCont_Flask,glass,figuredbottle,realcork,liquid,remove,squeak,slosh,alt4_EWKR.wav@0:1.58", 1.5, 0, 0)]},
+        {"layers": [("Eiravaein Works - Flask/OBJCont_Flask,glass,figuredbottle,realcork,liquid,remove,squeak,slosh,alt4_EWKR.wav@0:1.58", -1.5, 0, 0)]},
     ],
     # ── Feet, four grounds, three falls each ────────────────────────────────────
     # Every variant of one ground comes out of ONE recording — same ground, same mic,
@@ -247,6 +248,58 @@ SOURCES: dict[str, str | list[str | dict]] = {
         "Epic Stock Media - Fantasy Game 2 - Sound Kit for Enchanted Realms/CLOTHFlp_Action Inventory Open Flip Cloth Canvas Bag Slide Light 02_ESM_FG2.wav",
         "InMotionAudio - Foley T-Shirt/FOLYClth_ClothMovement24_InMotionAudio_FoleyT-Shirt.wav@1.40:0.45:6.2",
         "InMotionAudio - Foley T-Shirt/FOLYClth_ClothMovement29_InMotionAudio_FoleyT-Shirt.wav@0.70:0.45:-3.4",
+    ],
+
+    # ── Ambient details (sfx.ts AMBIENT_DETAIL) ──────────────────────────────────────
+    # One-shots dropped around the player over a biome's bed. Cut by event detection
+    # (20 ms level against a 3 s rolling median) and kept WHOLE by trim_sfx.py: a drip's
+    # cave tail and an owl's second hoot are the sound. Gulls and frogs are ElevenLabs
+    # takes (the library has neither), kept beside the library in audio-libs/elevenlabs.
+    "ambient-hideout-detail": [
+        "InspectorJ - Essentials 04 Chains/CHAINMvmt_InsJ_Chains_Metal_Movement_Distant_Short_01-02.wav",
+        "InspectorJ - Essentials 04 Chains/CHAINMvmt_InsJ_Chains_Metal_Movement_Distant_Very-Short_03-01.wav",
+        "InspectorJ - Essentials 04 Chains/CHAINMvmt_InsJ_Chains_Metal_Movement_Distant_Moderate_02-01.wav",
+        "Ivo Vicic - Campfire - Bonfire FX/24 Campfire, Dropping Fresh Pine Branches in Fire, Crackling, Sizzling Strong, Close 02.wav@42.26:0.56",
+        "Ivo Vicic - Campfire - Bonfire FX/24 Campfire, Dropping Fresh Pine Branches in Fire, Crackling, Sizzling Strong, Close 02.wav@115.64:0.56",
+    ],
+    "ambient-cave-detail": [
+        "InMotionAudio - Cave Design/WATRDrip_SingleDripDesign05_InMotionAudio_CaveDesign.wav@0:2.50",
+        "InMotionAudio - Cave Design/WATRDrip_SingleDrip03_InMotionAudio_CaveDesign.wav",
+        "Justsoundeffects - Stones and Debris/DIRTCrsh_Stone Sand Trickle Reverberant 01_JSE_SD.wav@9.72:1.94",
+        "Justsoundeffects - Stones and Debris/DIRTCrsh_Stone Sand Trickle Reverberant 01_JSE_SD.wav@18.86:2.10",
+        "Justsoundeffects - Stones and Debris/DIRTCrsh_Stone Sand Trickle Reverberant 01_JSE_SD.wav@3.08:1.26",
+        "BluezoneCorp - Annihilation - Mech/Bluezone_BC0287_annihilation_debris_falling_rock_001.wav",
+    ],
+    "ambient-wind-detail": [
+        "Jake Fielding - Red Kite/BIRDPrey_Red Kite Call, Screech, Bird of Prey, Hawk,_Jake Fielding_Red Kite_02.wav@12.82:1.46",
+        "Jake Fielding - Red Kite/BIRDPrey_Red Kite Call, Screech, Bird of Prey, Hawk,_Jake Fielding_Red Kite_02.wav@9.20:1.90",
+        "Jake Fielding - Red Kite/BIRDPrey_Red Kite Call, Screech, Bird of Prey, Hawk,_Jake Fielding_Red Kite_02.wav@6.82:0.52",
+        "Jake Fielding - Red Kite/BIRDPrey_Red Kite Call, Screech, Bird of Prey, Hawk,_Jake Fielding_Red Kite_02.wav@5.40:0.70",
+        "Justsoundeffects - Stones and Debris/DIRTCrsh_Stone Sand Trickle Reverberant 01_JSE_SD.wav@27.14:1.06",
+    ],
+    "ambient-swamp-detail": [
+        "../elevenlabs/ambient/frog-1.mp3",
+        "../elevenlabs/ambient/frog-2.mp3",
+        "../elevenlabs/ambient/frog-3.mp3",
+        "../elevenlabs/ambient/frog-4.mp3",
+        "Hzandbits - Microbes/LIQMvmt_Liquid Movement Plop Slosh Single 07_HZBIT_Microbes_MKH60.Wav@0:0.58",
+        "Epic Stock Media - Synthesized Nature Loops and Sounds/ANMLAmph_Animal Frog Echo Short Squished Frequency Formant 03_ESM_SNLS.wav",
+        "Hzandbits - Microbes/CREASmall_ Small Species A Voices Skitter Squeak Phrase 02_HZBIT_Microbes.Wav",
+    ],
+    "ambient-forest-detail": [
+        "Justsoundeffects - Forest Ambiences/BIRDPrey_Spring Night Deciduous Forest Many Tawny Owls Wind Leaves Rustling_JSE_FA.wav@7.24:1.34",
+        "Justsoundeffects - Forest Ambiences/BIRDPrey_Spring Night Deciduous Forest Many Tawny Owls Wind Leaves Rustling_JSE_FA.wav@19.78:1.54",
+        "Justsoundeffects - Forest Ambiences/BIRDPrey_Spring Night Deciduous Forest Many Tawny Owls Wind Leaves Rustling_JSE_FA.wav@0:1.32",
+        "BluezoneCorp - Forest Textures/Bluezone_BC0279_forest_tree_wood_texture_creaking_016.wav",
+        "BluezoneCorp - Forest Textures/Bluezone_BC0279_forest_wood_log_debris_falling_3_007.wav",
+        "Omar Alvarado - Minimal ambiences/ambience outdoors late night, cold winter air, pack of canine howling into the night and man made water fountain.wav@36.5:4.0",
+        "Omar Alvarado - Minimal ambiences/ambience outdoors late night, cold winter air, pack of canine howling into the night and man made water fountain.wav@117.3:3.0",
+    ],
+    "ambient-shore-detail": [
+        "../elevenlabs/ambient/gull-1.mp3",
+        "../elevenlabs/ambient/gull-2.mp3",
+        "../elevenlabs/ambient/gull-3.mp3",
+        "../elevenlabs/ambient/gull-4.mp3",
     ],
 }
 
@@ -401,7 +454,7 @@ def main() -> None:
         if isinstance(specs, str):
             jobs.append((cue, cue, specs))
         else:
-            jobs += [(cue, cue if k == 1 else f"{cue}-{k}", s) for k, s in enumerate(specs, 1)]
+            jobs += [(cue, f"{cue}-{k}", s) for k, s in enumerate(specs, 1)]
     missing = 0
     for cue, name, spec in jobs:
         if isinstance(spec, dict):

@@ -6,12 +6,12 @@ import { bus, send, type Bus, type SoundCategory } from "./bus";
  * Every master is a commercial library recording, curated rather than generated:
  * `tools/import_sfx.py` names the source file per cue and runs it through
  * `tools/trim_sfx.py` to Opus in WebM; the reward cues are layered from several
- * library parts by `tools/build_reward_sfx.py` — 192 files in all. They share one
+ * library parts by `tools/build_reward_sfx.py` — 226 files in all. They share one
  * bus, so the Options volume covers everything and nothing fights it for a context.
  *
  * The monster cues and Varkis's voice are ElevenLabs-generated masters, a take pool per
- * material so a stone construct and a bog thing never die the same way; everything else
- * is a library recording. The library also fixes the
+ * material so a stone construct and a bog thing never die the same way, and so are the
+ * shore's gulls and the swamp's frogs; everything else is a library recording. The library also fixes the
  * level problem outright — a 24-bit recording peaking 23 dB down still has 70+ dB
  * under it, so bringing it to the loudness target lifts nothing audible with it.
  *
@@ -50,6 +50,14 @@ const VOICES: Record<string, Voice> = {
   "ambient-forest":           { gain: 0.07, wet: 0.08, vary: 0 },
   // Open coast: almost no reverb, because there is nothing out there to reflect.
   "ambient-shore":            { gain: 0.071, wet: 0.03, vary: 0 },
+  // Details over the beds (AMBIENT_DETAIL), heard 6-12 units off and so already 6-14 dB
+  // down by distance before this gain.
+  "ambient-hideout-detail":   { gain: 0.25, wet: 0.12, vary: 0.06, takes: 5 },
+  "ambient-cave-detail":      { gain: 0.25, wet: 0.30, vary: 0.06, takes: 6 },
+  "ambient-wind-detail":      { gain: 0.25, wet: 0.10, vary: 0.06, takes: 5 },
+  "ambient-swamp-detail":     { gain: 0.25, wet: 0.10, vary: 0.06, takes: 7 },
+  "ambient-forest-detail":    { gain: 0.25, wet: 0.12, vary: 0.06, takes: 7 },
+  "ambient-shore-detail":     { gain: 0.25, wet: 0.06, vary: 0.06, takes: 4 },
   "skill-ember-bolt-cast":    { gain: 0.183, wet: 0.14, vary: 0.06, takes: 3 },
   "skill-ember-bolt-impact":  { gain: 0.295, wet: 0.18, vary: 0.08, takes: 3 },
   "skill-cinder-ground-cast": { gain: 0.247, wet: 0.22, vary: 0.04, takes: 3 },
@@ -261,7 +269,7 @@ export const CORE_SFX: readonly string[] = [
 /**
  * Every voice there is, for the loading screen to swallow whole.
  *
- * The whole library is 5.5 MB of Opus across 192 files: less than one of
+ * The whole library is 6.8 MB of Opus across 226 files: less than one of
  * the character's textures, and cheaper to fetch all of than to reason about
  * which biome needs which. `CORE_SFX` still exists and still goes first, because
  * ordering is the only thing that matters once cost stops mattering — the first
@@ -582,13 +590,55 @@ export function ambientCue(biomeId: string | null): string {
   return biomeId === null ? "ambient-hideout" : (AMBIENT_BY_BIOME[biomeId] ?? "ambient-cave");
 }
 
+/**
+ * A bed's one-shot pool, dropped around the player at random gaps (PoE's "random sounds"):
+ * a loop alone is heard as the same loop again within a minute, a creak or a far call
+ * at an unpredictable place and time is heard as the place.
+ */
+export const AMBIENT_DETAIL: Record<string, string> = {
+  "ambient-hideout": "ambient-hideout-detail",
+  "ambient-cave": "ambient-cave-detail",
+  "ambient-wind": "ambient-wind-detail",
+  "ambient-swamp": "ambient-swamp-detail",
+  "ambient-forest": "ambient-forest-detail",
+  "ambient-shore": "ambient-shore-detail",
+};
+/** Seconds between two details, uniform. */
+export const DETAIL_GAP_S: readonly [number, number] = [8, 25];
+/** Ground units from the player, inside `AUDIBLE`: off-screen to the side, never underfoot. */
+export const DETAIL_RADIUS: readonly [number, number] = [6, 12];
+
 let wantedAmbient: string | null = null;
+let detailTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleDetail(cue: string): void {
+  const pool = AMBIENT_DETAIL[cue];
+  if (!pool) return;
+  const [lo, hi] = DETAIL_GAP_S;
+  detailTimer = setTimeout(() => {
+    detailTimer = null;
+    if (wantedAmbient !== cue) return;
+    const angle = Math.random() * 2 * Math.PI;
+    const r = DETAIL_RADIUS[0] + Math.random() * (DETAIL_RADIUS[1] - DETAIL_RADIUS[0]);
+    playSfxAt(pool, listener.x + r * Math.cos(angle), listener.y + r * Math.sin(angle));
+    scheduleDetail(cue);
+  }, (lo + Math.random() * (hi - lo)) * 1000);
+}
+
+function stopDetails(): void {
+  if (detailTimer !== null) clearTimeout(detailTimer);
+  detailTimer = null;
+}
+
 export function setAmbient(biomeId: string | null): void {
   const cue = ambientCue(biomeId);
   if (wantedAmbient === cue && loops.has("ambient")) return;
   wantedAmbient = cue;
   stopSfxLoop("ambient");
-  void preloadSfx([cue]).then(() => {
+  stopDetails();
+  scheduleDetail(cue);
+  const pool = AMBIENT_DETAIL[cue];
+  void preloadSfx(pool ? [cue, pool] : [cue]).then(() => {
     if (wantedAmbient === cue) startSfxLoop(cue, "ambient");
   });
 }
@@ -596,6 +646,7 @@ export function setAmbient(biomeId: string | null): void {
 export function stopAmbient(): void {
   wantedAmbient = null;
   stopSfxLoop("ambient");
+  stopDetails();
 }
 
 /**

@@ -4,8 +4,9 @@ import { resolve } from "node:path";
 import { readFileSync } from "node:fs";
 import { MONSTERS } from "@exiled/content-runtime";
 import {
-  CORE_SFX, distanceCutoff, distanceRolloff, moveSfxLoop, playSfx, playSfxAt, preloadSfx, resetSfx,
-  setSfxListener, sfxCategory, startSfxLoop, startSfxLoopAt, stopSfxLoop, toListenerSpace,
+  AMBIENT_BY_BIOME, AMBIENT_DETAIL, CORE_SFX, DETAIL_GAP_S, DETAIL_RADIUS, ambientCue, distanceCutoff,
+  distanceRolloff, moveSfxLoop, playSfx, playSfxAt, preloadSfx, resetSfx, setAmbient, setSfxListener,
+  sfxCategory, startSfxLoop, startSfxLoopAt, stopAmbient, stopSfxLoop, toListenerSpace,
 } from "./sfx";
 import { VARKIS_SFX } from "./varkis-voice";
 
@@ -557,6 +558,66 @@ describe("positional voices", () => {
     playSfx("ui-click");
     expect(panners).toEqual([]);
     expect(fake.sends[0]!.spatial ?? null).toBeNull();
+  });
+
+  describe("ambient details", () => {
+    const fetched = () => (vi.mocked(fetch).mock.calls as unknown as Array<[string]>).map(([u]) => u);
+    function installTimed(): void {
+      install();
+      vi.stubGlobal("fetch", vi.fn((url: string) =>
+        Promise.resolve({ ok: true, status: 200, arrayBuffer: () => Promise.resolve(url) })));
+      vi.useFakeTimers();
+    }
+    afterEach(() => { stopAmbient(); vi.useRealTimers(); vi.restoreAllMocks(); });
+
+    it("every bed has a detail pool of several takes", () => {
+      const takes = voiceTakes();
+      for (const bed of new Set([ambientCue(null), ...Object.values(AMBIENT_BY_BIOME)])) {
+        const pool = AMBIENT_DETAIL[bed];
+        expect(pool, bed).toBeDefined();
+        expect(takes[pool!], pool).toBeGreaterThanOrEqual(3);
+        expect(sfxCategory(pool!)).toBe(sfxCategory(bed));
+      }
+    });
+
+    it("drops one-shots around the player at random gaps while the bed plays", async () => {
+      installTimed();
+      vi.spyOn(Math, "random").mockReturnValue(0);
+      setSfxListener(10, 4);
+      setAmbient("forest");
+      // Shortest gap, nearest ring.
+      await vi.advanceTimersByTimeAsync(DETAIL_GAP_S[0] * 1000 - 1);
+      expect(panners).toHaveLength(0);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(panners).toHaveLength(1);
+      vi.spyOn(Math, "random").mockReturnValue(0.5);
+      await vi.advanceTimersByTimeAsync(DETAIL_GAP_S[0] * 1000);
+      expect(panners).toHaveLength(2);
+      const mid = (DETAIL_GAP_S[0] + DETAIL_GAP_S[1]) / 2;
+      await vi.advanceTimersByTimeAsync(mid * 1000);
+      expect(panners).toHaveLength(3);
+      const [lx, lz] = toListenerSpace(10, 4);
+      const ring = (p: Panner) => Math.hypot(p.positionX.value - lx, p.positionZ.value - lz);
+      expect(ring(panners[0]!)).toBeCloseTo(DETAIL_RADIUS[0], 9);
+      expect(ring(panners[2]!)).toBeCloseTo((DETAIL_RADIUS[0] + DETAIL_RADIUS[1]) / 2, 9);
+      expect(fetched().some((u) => u.includes("/ambient-forest-detail-"))).toBe(true);
+    });
+
+    it("stops with the bed, and a new biome draws from its own pool", async () => {
+      installTimed();
+      vi.spyOn(Math, "random").mockReturnValue(0.999);
+      setAmbient("forest");
+      setAmbient("forest");
+      await vi.advanceTimersByTimeAsync(DETAIL_GAP_S[1] * 1000);
+      expect(panners).toHaveLength(1); // asking twice does not double the rate
+      stopAmbient();
+      await vi.advanceTimersByTimeAsync(DETAIL_GAP_S[1] * 3000);
+      expect(panners).toHaveLength(1);
+      setAmbient("swamp");
+      await vi.advanceTimersByTimeAsync(DETAIL_GAP_S[1] * 1000);
+      expect(panners).toHaveLength(2);
+      expect(fetched().some((u) => u.includes("/ambient-swamp-detail-"))).toBe(true);
+    });
   });
 
   it("a moving loop follows its source, sweeps its muffle, and falls silent past the edge", async () => {

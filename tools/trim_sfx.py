@@ -112,6 +112,13 @@ MAX_SECONDS: dict[str, float] = {
 }
 
 
+# Ambient details keep the region they were cut at: a drip's cave tail, the second hoot
+# of an owl and the rest of a howl are the sound, and the take walk below cuts all three.
+WHOLE_PREFIXES = ("ambient-",)
+# Their region ends inside a recording's room tone, so the fade is long enough to be a decay.
+WHOLE_FADE_MS = 150
+
+
 def max_for(name: str) -> float:
     best = 0.0
     hit = None
@@ -155,13 +162,28 @@ def mid(a: array.array, channels: int) -> array.array:
     return array.array("h", (sum(a[i:i + channels]) // channels for i in range(0, len(a), channels)))
 
 
-def trim(a: array.array, rate: int, max_s: float, channels: int = 1) -> tuple[array.array, dict]:
+def trim(a: array.array, rate: int, max_s: float, channels: int = 1,
+         whole: bool = False) -> tuple[array.array, dict]:
     win = max(1, rate // 50)  # 20 ms
     m = mid(a, channels)
     env = envelope(m, win)
     peak = max(env) if env else 0.0
     if peak <= 0.0:
         return array.array("h"), {"peak": 0.0, "start": 0.0, "len": 0.0}
+
+    if whole:
+        cut = a[:]
+        frames = len(cut) // channels
+        fade = min(int(rate * WHOLE_FADE_MS / 1000), frames)
+        lead = min(int(rate * 0.002), frames)
+        for f in range(frames - fade, frames):
+            k = (frames - f) / fade
+            for c in range(f * channels, f * channels + channels):
+                cut[c] = int(cut[c] * k)
+        for f in range(lead):
+            for c in range(f * channels, f * channels + channels):
+                cut[c] = int(cut[c] * f / lead)
+        return cut, {"peak": peak, "start": 0.0, "len": frames / rate}
 
     loudest = env.index(peak)
     # Back off to the start of THIS take: the last window before it that was quiet.
@@ -278,7 +300,8 @@ def main() -> None:
     for path in paths:
         name = os.path.basename(path)
         a, rate, channels = read_wav(path)
-        cut, info = trim(a, rate, args.max or max_for(name[:-4]), channels)
+        cut, info = trim(a, rate, args.max or max_for(name[:-4]), channels,
+                         whole=name.startswith(WHOLE_PREFIXES))
         if not len(cut):
             print(f"{name:30} EMPTY (peak {info['peak']:.3f}) -- regenerate this one")
             bad += 1
