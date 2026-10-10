@@ -2008,11 +2008,12 @@ COLOSSUS_NORMAL = os.path.join(TEX_DIR, "source", "sunbaked_colossus_v1_n.png")
 def sunbaked_colossus():
     """All shoulder: a quadruped bull whose head is nearly an afterthought.
 
-    Generated (review/3d/sunbaked-colossus), 4k triangles. Joints measured off
-    sunbaked_colossus_v1.glb by tools/measure_generated.py --flip 1.
+    Generated (review/3d/sunbaked-colossus), torn plate edges cut off by a
+    volumetric opening (tools/open_volume.py --res 240 --radius 2), 4k triangles.
+    Joints measured off sunbaked_colossus_v1.glb by tools/measure_generated.py --flip 1.
     """
     c = GeneratedSkin("monster.sunbaked_colossus.v1", COLOSSUS_SOURCE, COLOSSUS_NORMAL,
-                      "desert", 1.8, (-0.212, 0.601), tex=512, flip=True)
+                      "desert", 1.8, (-0.199, 0.752), tex=512, flip=True)
     # Rooted over the hind hips: the attack pitches the trunk about its first node,
     # and from a root mid-body it lifted the near-straight hind legs 23% past reach.
     spine = c.body.chain([(0, -0.55, 1.15), (0, -0.10, 1.20), (0, 0.50, 1.25)], [0.1] * 3)
@@ -2020,13 +2021,13 @@ def sunbaked_colossus():
     # The head hangs low and forward of the hump, the tail is a short stub.
     c.body.chain([(-0.05, 0.95, 0.95), (-0.13, 1.22, 0.80)], [0.1] * 2, parent=spine[-1])
     c.body.chain([(-0.15, -1.00, 0.85), (-0.25, -1.05, 0.65)], [0.05] * 2, parent=rump[-1])
+    # The measured fore knees sit a hand above the hoof, a shin too short to
+    # take the lunge (+36%); these are mid-leg at the back of the leg column.
     for i, (hip, knee, foot) in enumerate([
-        ((-0.321, 0.536, 0.808), (-0.389, 0.377, 0.664), (-0.417, 0.521, 0.000)),
-        ((0.320, 0.614, 0.758), (0.410, 0.552, 0.629), (0.442, 0.771, 0.003)),
-        ((-0.236, -0.582, 0.697), (-0.298, -0.847, 0.226), (-0.340, -0.720, 0.000)),
-        # Measured knee (0.221, -0.661, 0.403) left this hind leg a straight column
-        # that the lunge stretched 23%; set back inside the column like its pair.
-        ((0.208, -0.559, 0.702), (0.240, -0.690, 0.370), (0.316, -0.571, 0.004)),
+        ((-0.262, 0.397, 0.648), (-0.330, 0.367, 0.320), (-0.397, 0.635, 0.000)),
+        ((0.287, 0.558, 0.662), (0.404, 0.490, 0.330), (0.521, 0.785, 0.000)),
+        ((-0.245, -0.660, 0.637), (-0.273, -0.838, 0.272), (-0.445, -0.808, 0.000)),
+        ((0.179, -0.585, 0.651), (0.210, -0.683, 0.435), (0.321, -0.612, 0.000)),
     ]):
         c.leg_through(i, hip, knee, foot)
     return c
