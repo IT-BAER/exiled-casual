@@ -1613,11 +1613,12 @@ WHELP_NORMAL = os.path.join(TEX_DIR, "source", "bramble_whelp_v1_n.png")
 def bramble_whelp():
     """Bark hound: long legs, a ridge of thorns from skull to tail.
 
-    Generated (review/3d/bramble-whelp), 4k triangles. Joints measured off
-    bramble_whelp_v1.glb by tools/measure_generated.py --flip 1.
+    Generated (review/3d/bramble-whelp), thin thorns cut off by a volumetric
+    opening (tools/open_volume.py --res 240 --radius 2), 4k triangles. Joints
+    measured off bramble_whelp_v1.glb by tools/measure_generated.py --flip 1.
     """
     c = GeneratedSkin("monster.bramble_whelp.v1", WHELP_SOURCE, WHELP_NORMAL,
-                      "forest", 0.95, (0.0, 0.078), tex=512, flip=True)
+                      "forest", 0.95, (-0.010, 0.070), tex=512, flip=True)
     # Rooted over the fore hips, the near-straight pair: rooted at the rump the
     # lunge stretched a leg 24% past reach.
     spine = c.body.chain([(0, 0.20, 0.64), (0, 0.0, 0.62), (0, -0.25, 0.58)], [0.1] * 3)
@@ -1625,12 +1626,10 @@ def bramble_whelp():
     c.body.chain([(0, 0.34, 0.76), (0, 0.48, 0.70)], [0.1] * 2, parent=spine[0])
     c.body.chain([(0, -0.38, 0.40), (0, -0.52, 0.36)], [0.05] * 2, parent=spine[-1])
     for i, (hip, knee, foot) in enumerate([
-        ((-0.104, 0.201, 0.475), (-0.122, 0.215, 0.143), (-0.143, 0.263, 0.000)),
-        ((0.131, 0.215, 0.485), (0.120, 0.209, 0.165), (0.144, 0.263, 0.000)),
-        ((-0.075, -0.196, 0.420), (-0.116, -0.316, 0.197), (-0.174, -0.247, 0.000)),
-        # Measured knee (0.116, -0.322, 0.197) left the lunge stretching this leg
-        # 18%; set back like its pair's bend.
-        ((0.070, -0.215, 0.456), (0.116, -0.350, 0.205), (0.173, -0.279, 0.001)),
+        ((-0.137, 0.190, 0.476), (-0.134, 0.210, 0.075), (-0.163, 0.276, 0.000)),
+        ((0.118, 0.193, 0.483), (0.121, 0.201, 0.138), (0.151, 0.261, 0.000)),
+        ((-0.086, -0.223, 0.434), (-0.128, -0.342, 0.200), (-0.185, -0.268, 0.001)),
+        ((0.080, -0.216, 0.439), (0.118, -0.345, 0.202), (0.197, -0.269, 0.002)),
     ]):
         c.leg_through(i, hip, knee, foot)
     return c
