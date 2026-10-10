@@ -912,7 +912,10 @@ class Poser:
                 head = head + offset
             rot = default.to_3x3()
             aim = dir_for(name, head, posed)
-            if aim is not None and aim.length_squared > 1e-12:
+            if isinstance(aim, Matrix):
+                # A whole rotation off rest, not a direction: no twist inherited.
+                rot = aim @ self.rest[name].to_3x3()
+            elif aim is not None and aim.length_squared > 1e-12:
                 current = (rot @ Vector((0.0, 1.0, 0.0))).normalized()
                 rot = current.rotation_difference(aim.normalized()).to_matrix() @ rot
             mat = Matrix.Translation(head) @ rot.to_4x4()
@@ -1178,10 +1181,11 @@ class Gait:
         self._dirs[bones[1].name] = (ankle - knee).normalized()
         if len(bones) > 2 and len(rest) > 3:
             # The foot keeps its rest angle to the ground and rolls at push-off,
-            # which is the difference between a step and a stamp.
-            toe = rest[3] + delta
-            roll = Matrix.Rotation(-0.30 * math.sin(2.0 * math.pi * (t + leg["phase"])), 3, "X")
-            self._dirs[bones[2].name] = roll @ (toe - ankle).normalized()
+            # which is the difference between a step and a stamp. Standing, it
+            # is planted: no push-off, no roll.
+            angle = -0.30 * math.sin(2.0 * math.pi * (t + leg["phase"])) if moving else 0.0
+            # The whole rotation, not an aim: an aim lets the shin twist the paw.
+            self._dirs[bones[2].name] = Matrix.Rotation(angle, 3, "X")
             for bone in bones[3:]:
                 self._dirs[bone.name] = (bone.tail - bone.head).normalized()
 

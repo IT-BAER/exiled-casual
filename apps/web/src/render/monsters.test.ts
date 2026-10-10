@@ -6,10 +6,10 @@ import { toNumber } from "@exiled/fixed-point";
 import { partOfCreature, CreatureRig, loadMonsters, isMonstersReady, attachCreature, resetMonsters } from "./monsters";
 import { setHitFlash } from "./meshes";
 import { hasRim } from "./rim";
-import { Mesh, NullEngine, Scene, Vector3 } from "@babylonjs/core";
+import { LoadAssetContainerAsync, Mesh, NullEngine, Scene, Vector3 } from "@babylonjs/core";
 import { contactPoint } from "./contact";
 import { warmContainer } from "./warm-shaders";
-import type { AnimationGroup, AssetContainer, InstantiatedEntries } from "@babylonjs/core";
+import type { AnimationGroup, AssetContainer, InstantiatedEntries, TransformNode } from "@babylonjs/core";
 
 // `loadMonsters` fetches a URL; node has no server, so hand the loader the file on disk.
 vi.mock("@babylonjs/core", async (importOriginal) => {
@@ -417,6 +417,47 @@ describe("creature instances", () => {
       expect(flash(other!).every((f) => f === 0)).toBe(true);
     } finally {
       resetMonsters();
+      engine.dispose();
+      (globalThis as { FileReader?: unknown }).FileReader = original;
+    }
+  });
+  /**
+   * The idle is breathing, and a paw is planted while the body breathes over it.
+   * The walk's push-off roll run on the idle rocks each foot 17 degrees about its
+   * ankle while the creature stands still.
+   */
+  it("keeps every foot at one angle to the ground through the idle", async () => {
+    const original = (globalThis as { FileReader?: unknown }).FileReader;
+    (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    try {
+      const container = await LoadAssetContainerAsync("/models/monsters.glb", scene);
+      container.addAllToScene();
+      const depth = (n: TransformNode) => { let d = 0; for (let p = n.parent; p; p = p.parent) d++; return d; };
+      const nodes = [...container.transformNodes].sort((a, b) => depth(a) - depth(b));
+      const idles = container.animationGroups.filter((g) => g.name.endsWith("|idle"));
+      expect(idles.length).toBeGreaterThan(0);
+      for (const group of idles) {
+        const feet = [...new Set(group.targetedAnimations.map((a) => a.target as TransformNode))]
+          .filter((t) => /^leg\d+_2$/.test(t.name));
+        group.start(true);
+        group.pause();
+        const first = new Map<TransformNode, import("@babylonjs/core").Quaternion>();
+        let worst = 0;
+        for (let k = 0; k <= 12; k++) {
+          group.goToFrame(group.from + ((group.to - group.from) * k) / 12);
+          for (const n of nodes) n.computeWorldMatrix(true);
+          for (const foot of feet) {
+            const q = foot.absoluteRotationQuaternion.clone();
+            const q0 = first.get(foot) ?? (first.set(foot, q), q);
+            worst = Math.max(worst, 2 * Math.acos(Math.min(1, Math.abs(q.dot(q0)))));
+          }
+        }
+        group.stop();
+        expect(worst, `${group.name} rocks a foot by ${worst.toFixed(3)} rad`).toBeLessThan(0.02);
+      }
+    } finally {
       engine.dispose();
       (globalThis as { FileReader?: unknown }).FileReader = original;
     }
