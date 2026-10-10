@@ -287,6 +287,9 @@ describe("monsters asset", () => {
    *
    * 7.0MB since the Drowned Grubling became a generated mesh with its own sheet:
    * measured +242KB (6,744,556 -> 6,986,708).
+   *
+   * 8.25MB since the Sand Skitterer became a generated mesh at 8k triangles with
+   * a 1024 sheet and a baked normal map: measured +1.2MB (6,987,528 -> 8,186,100).
    */
   /**
    * The shader warm that ends the map-entry stall. Every instance of a species
@@ -330,8 +333,8 @@ describe("monsters asset", () => {
 
   it("embeds compressed textures and stays within budget", () => {
     for (const image of json.images) expect(image.mimeType).toBe("image/jpeg");
-    expect(json.images.length).toBeLessThanOrEqual(12);
-    expect(glb.byteLength).toBeLessThan(7_000_000);
+    expect(json.images.length).toBeLessThanOrEqual(13);
+    expect(glb.byteLength).toBeLessThan(8_250_000);
   });
 });
 

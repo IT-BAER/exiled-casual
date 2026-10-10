@@ -1017,7 +1017,7 @@ class Gait:
             drop = offset.z + self.crouch
             room = reach * reach - offset.x * offset.x - drop * drop
             arc = math.sqrt(room) if room > 0.0 else 0.0
-            want = STRIDE_K * span / 2.0
+            want = creature.stride_k * span / 2.0
             # **The stance centre is not automatically where the foot was
             # sculpted.** A foreleg authored planted well ahead of its hip has
             # already spent most of the reach budget on that pose, and taking
@@ -1267,6 +1267,8 @@ class Creature:
         self.crag = height * 0.10
         self.body = Part("body", subdiv=subdiv, displace=self.displace, crag=self.crag)
         self.limbs = []
+        # Stride as a fraction of leg span; a splayed six-legged body takes short steps.
+        self.stride_k = STRIDE_K
 
     def limb(self, name, origin):
         # Limbs displace half as hard as the trunk: a crag across a 6cm shin is
@@ -1571,23 +1573,37 @@ def vaal_husk():
     return c
 
 
+# Image-to-3D like the Grubling, but six-legged: a /codex-imagegen reference
+# through local TRELLIS (review/3d/sand-skitterer), cut to 8k triangles, with a
+# normal map baked off the TRELLIS source by tools/bake_generated_normal.py.
+SKITTERER_SOURCE = os.path.join(TEX_DIR, "source", "sand_skitterer_v1.glb")
+SKITTERER_NORMAL = os.path.join(TEX_DIR, "source", "sand_skitterer_v1_n.png")
+
+
 def sand_skitterer():
-    """Wider than it is long: a flat carapace on six splayed legs."""
-    c = Creature("monster.sand_skitterer.v1", "desert", 0.25, 0.6)
-    spine = c.body.chain([(0, -0.30, 0.34), (0, -0.04, 0.36), (0, 0.26, 0.34)],
-                         [(0.22, 0.11), (0.44, 0.17), (0.28, 0.13)])
-    c.body.chain([(0, 0.44, 0.30), (0, 0.56, 0.27)], [(0.15, 0.10), 0.08], parent=spine[-1])
-    c.body.add(slab((0, -0.10, 0.46), (0.56, 0.52, 0.06), tilt=-0.12))
-    for side in (-1, 1):
-        c.body.add(ellipsoid((side * 0.07, 0.50, 0.36), (0.038, 0.042, 0.033), 6, 4), GLOWS)
-        # Mandibles: the only thing out front, so they carry the facing.
-        c.body.add(horn([(side * 0.09, 0.56, 0.24), (side * 0.20, 0.78, 0.28),
-                         (side * 0.09, 0.92, 0.22)], [0.044, 0.03, 0.0]), BONES)
-    for i, (x, y) in enumerate([(-0.28, 0.24), (0.28, 0.24), (-0.30, -0.02), (0.30, -0.02),
-                                (-0.28, -0.28), (0.28, -0.28)]):
-        # Knee ABOVE the body: a spider's stance, and the reason the outline is
-        # legs first and carapace second.
-        c.leg(i, (x, y, 0.36), (x * 2.4, y * 1.25, 0.0), 0.05, 0.026, bend=0.0)
+    """Wider than it is long: a flat carapace on six splayed legs, knees above it.
+
+    Every joint below is MEASURED off sand_skitterer_v1.glb at height 0.6 (feet
+    as the lowest vertex per direction, knees as the highest along each foot's
+    ray), so a regenerated mesh needs them measured again. The left and right
+    mid legs are not mirrored because TRELLIS did not mirror them.
+    """
+    c = GeneratedSkin("monster.sand_skitterer.v1", SKITTERER_SOURCE, SKITTERER_NORMAL,
+                      "desert", 0.6, (0.002, 0.352))
+    spine = c.body.chain([(0, -0.36, 0.36), (0, 0.0, 0.40), (0, 0.34, 0.36)], [0.1] * 3)
+    c.body.chain([(0, 0.52, 0.30), (0, 0.72, 0.27)], [0.05] * 2, parent=spine[-1])
+    # Front pair first, then mid, then rear: Gait reads that order as a tripod.
+    for i, (hip, knee, foot) in enumerate([
+        ((-0.20, 0.18, 0.38), (-0.446, 0.407, 0.518), (-0.656, 0.576, 0.00)),
+        ((0.17, 0.17, 0.38), (0.377, 0.376, 0.594), (0.658, 0.560, 0.02)),
+        ((-0.22, 0.05, 0.38), (-0.481, 0.109, 0.548), (-0.816, 0.118, 0.01)),
+        ((0.22, -0.03, 0.38), (0.492, -0.074, 0.537), (0.757, -0.174, 0.01)),
+        ((-0.14, -0.13, 0.38), (-0.317, -0.298, 0.599), (-0.638, -0.560, 0.03)),
+        ((0.16, -0.13, 0.38), (0.353, -0.299, 0.600), (0.694, -0.521, 0.04)),
+    ]):
+        c.leg_through(i, hip, knee, foot)
+    # At the roster's 0.78 a foot swept a third of the body width.
+    c.stride_k = 0.45
     return c
 
 
@@ -1775,6 +1791,35 @@ def bog_drowned():
 GRUBLING_SOURCE = os.path.join(TEX_DIR, "source", "drowned_grubling_v1.glb")
 
 
+def generated_hide(mesh, name, family, normal=None, size=TEX_SIZE):
+    """Dress a generated mesh in its own albedo by the roster's hide rule.
+
+    TRELLIS ships a metallic-roughness sheet that reads as wet metal with no
+    environment map; only its albedo is kept.
+    """
+    bsdf = next(n for n in mesh.data.materials[0].node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+    img = bsdf.inputs["Base Color"].links[0].from_node.image
+    if max(img.size) > size:
+        img.scale(size, size)
+    colour = os.path.join(BUILD_DIR, name + ".jpg")
+    img.save_render(filepath=colour, scene=bpy.context.scene)
+    luma = srgb_luma(img)
+    target = max(HIDE_FLOOR, FLOOR_LUMA[family] * HIDE_RATIO)
+    gain = min(1.0, (target / luma) ** 2.2)
+    print("  hide %-7s luma %5.1f floor %5.1f tint %.3f" % (name, luma, FLOOR_LUMA[family], gain))
+    if normal is not None:
+        # Re-encoded like the hide normals: a 1024 PNG embeds at several MB.
+        nimg = bpy.data.images.load(normal)
+        if max(nimg.size) > size:
+            nimg.scale(size, size)
+        nimg.file_format = "JPEG"
+        normal = os.path.join(BUILD_DIR, name + "_n.jpg")
+        nimg.save(filepath=normal, quality=92)
+        bpy.data.images.remove(nimg)
+    mesh.data.materials.clear()
+    mesh.data.materials.append(hide_material("hide_" + name, colour, normal, (gain, gain, gain)))
+
+
 class GeneratedCreature:
     """A species whose mesh was generated: rigged and animated by
     `rig_humanoid.py`, dressed in its own sheet by the same hide rule as the
@@ -1791,22 +1836,7 @@ class GeneratedCreature:
         if not os.path.exists(self.source):
             sys.exit("missing generated creature: " + self.source)
         mesh = rig.load_mesh(self.source, self.height, False)
-
-        # TRELLIS ships a metallic-roughness sheet that reads as wet metal with
-        # no environment map; only its albedo is kept.
-        bsdf = next(n for n in mesh.data.materials[0].node_tree.nodes if n.type == "BSDF_PRINCIPLED")
-        img = bsdf.inputs["Base Color"].links[0].from_node.image
-        if max(img.size) > TEX_SIZE:
-            img.scale(TEX_SIZE, TEX_SIZE)
-        name = self.def_id.split(".")[1]
-        colour = os.path.join(BUILD_DIR, name + ".jpg")
-        img.save_render(filepath=colour, scene=bpy.context.scene)
-        luma = srgb_luma(img)
-        target = max(HIDE_FLOOR, FLOOR_LUMA[self.family] * HIDE_RATIO)
-        gain = min(1.0, (target / luma) ** 2.2)
-        print("  hide %-7s luma %5.1f floor %5.1f tint %.3f" % (name, luma, FLOOR_LUMA[self.family], gain))
-        mesh.data.materials.clear()
-        mesh.data.materials.append(hide_material("hide_" + name, colour, None, (gain, gain, gain)))
+        generated_hide(mesh, self.def_id.split(".")[1], self.family)
 
         arm = rig.build_armature(self.def_id, rig.landmarks(mesh, self.height))
         mesh.name = mesh.data.name = self.def_id + ".mesh"
@@ -1818,6 +1848,85 @@ class GeneratedCreature:
         rig.author(arm, self.height)
         self.root = arm
         return arm
+
+
+class GeneratedSkin(Creature):
+    """A generated mesh worn over a DECLARED skeleton, for bodies `rig_humanoid`
+    cannot read: the species states its spine and legs at joints measured off the
+    mesh, and the roster's own bone graph, weights and gait drive it. The mesh
+    must face +Y as imported, as every node-graph species is authored."""
+
+    def __init__(self, def_id, source, normal, family, height, offset):
+        super().__init__(def_id, family, 0.25, height)
+        self.source, self.normal = source, normal
+        self.offset = offset
+
+    def leg_through(self, index, hip, knee, foot):
+        """Hip, knee, ankle, toe at measured points; the ankle sits just above the
+        tip, so the shin is the long bone and the toe is the claw."""
+        ankle = tuple(foot[k] + (knee[k] - foot[k]) * 0.18 for k in range(3))
+        part = self.limb(f"leg{index}", hip)
+        part.chain([hip, knee, ankle, foot], [0.03] * 4)
+        return part
+
+    def emit(self, mats):
+        spec = importlib.util.spec_from_file_location(
+            "rig_humanoid", os.path.join(ROOT, "tools", "rig_humanoid.py"))
+        rig = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(rig)
+        for path in (self.source, self.normal):
+            if not os.path.exists(path):
+                sys.exit("missing generated creature: " + path)
+        mesh = rig.load_mesh(self.source, self.height, False)
+        # load_mesh centres on the mid-height mass; the stance centre is where
+        # the sim's body radius belongs.
+        dx, dy = self.offset
+        for vert in mesh.data.vertices:
+            vert.co.x += dx
+            vert.co.y += dy
+        mesh.data.update()
+        name = self.def_id.split(".")[1]
+        generated_hide(mesh, name, self.family, self.normal, 1024)
+
+        parts = [self.body] + self.limbs
+        bones = bone_graph(parts)
+        arm = make_armature(self.def_id, bones)
+        arm.rotation_euler = (0.0, 0.0, math.pi)  # see Creature.emit
+        self.root = arm
+        mesh.name = mesh.data.name = self.def_id + ".mesh"
+        mesh.parent = arm
+        skin(mesh, bones, nearest_part(mesh, bones), self.height)
+        # No baked occlusion: white, so the runtime's multiply leaves the sheet alone.
+        layer = mesh.data.color_attributes.new("Col", "BYTE_COLOR", "CORNER")
+        layer.data.foreach_set("color", numpy.ones(len(mesh.data.loops) * 4, dtype=numpy.float32))
+        mesh.data.color_attributes.active_color = layer
+        gait = Gait(self, bones)
+        author_clips(arm, gait, bones)
+        print("  bones %d verts %d legs %d cycle %d frames reach %+.1f%% stride %.2f"
+              % (len(bones), len(mesh.data.vertices), len(gait.legs), gait.frames(),
+                 gait.reach_error * 100.0, gait.stride_ratio))
+        return arm
+
+
+def nearest_part(mesh, bones):
+    """Which part each vertex of a welded generated mesh belongs to: its nearest
+    bone's. The trunk wins near a tie (`BODY_BIAS`), so the carapace rim over a
+    hip stays on the body instead of riding the leg."""
+    co = numpy.empty(len(mesh.data.vertices) * 3, dtype=numpy.float64)
+    mesh.data.vertices.foreach_get("co", co)
+    co = co.reshape(-1, 3)
+    dist = numpy.empty((len(co), len(bones)))
+    for j, b in enumerate(bones):
+        a, ab = numpy.array(b.head), numpy.array(b.tail) - numpy.array(b.head)
+        t = numpy.clip((co - a) @ ab / max(ab @ ab, 1e-12), 0.0, 1.0)
+        dist[:, j] = numpy.linalg.norm(co - (a + t[:, None] * ab), axis=1)
+        if b.part == 0:
+            dist[:, j] *= BODY_BIAS
+    part = numpy.array([b.part for b in bones])
+    return part[dist.argmin(axis=1)].tolist()
+
+
+BODY_BIAS = 0.6
 
 
 def drowned_grubling():
