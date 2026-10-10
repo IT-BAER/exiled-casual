@@ -8,8 +8,8 @@ Loads the mesh exactly as `GeneratedSkin.emit` does (rig_humanoid.load_mesh), th
   feet   - local low points below `foot-z` x height, each with its sole around it;
   origin - the feet centroid, printed as the declaration's `offset`;
   legs   - walked up from each foot over the SURFACE: rings of equal geodesic distance
-           are leg cross-sections, their centres the leg's axis. The hip is where the
-           ring widens into the body for good; the knee is the axis point
+           are leg cross-sections, their centres the leg's axis. The hip is where this
+           foot's front meets another foot's; the knee is the axis point
            furthest off the foot-hip chord. Works for splayed and upright legs alike.
 Prints a Python stub in the post-offset frame, legs front pair first, left first.
 """
@@ -73,21 +73,24 @@ def geodesic(sources, adj, n):
     return dist
 
 
-def trace_leg(foot_patch, co, adj, edges, H):
-    """Axis points from the foot up to where the cross-section widens into the body.
+def trace_leg(dist, rival, co, edges, H):
+    """Axis points from the foot up to the hip.
 
     A cross-section is where one geodesic level crosses the edges, interpolated
-    along each edge: a decimated shin has edges longer than any band of vertices."""
-    dist = geodesic(foot_patch, adj, len(co))
+    along each edge: a decimated shin has edges longer than any band of vertices.
+    The hip is the last section before this foot's front meets another foot's
+    (`rival`, the nearest other foot's distance): two legs' fronts can only meet
+    in the trunk, however thick the legs are."""
     du, dv = dist[edges[:, 0]], dist[edges[:, 1]]
     ok = numpy.isfinite(du) & numpy.isfinite(dv) & (du != dv)
     edges, du, dv = edges[ok], du[ok], dv[ok]
+    near = numpy.minimum(rival[edges[:, 0]], rival[edges[:, 1]])
     step = 0.03 * H
     axis, radii = [], []
     level = step
     while level < 2.0 * H:
         cross = (numpy.minimum(du, dv) < level) & (numpy.maximum(du, dv) >= level)
-        if cross.sum() < 3:
+        if cross.sum() < 3 or (near[cross] <= level).any():
             break
         t = ((level - du[cross]) / (dv[cross] - du[cross]))[:, None]
         ring = co[edges[cross, 0]] + t * (co[edges[cross, 1]] - co[edges[cross, 0]])
@@ -97,14 +100,6 @@ def trace_leg(foot_patch, co, adj, edges, H):
         level += step
     if os.environ.get("MEASURE_DEBUG"):
         print("  radii", [round(r, 3) for r in radii], "z", [round(float(p[2]), 2) for p in axis])
-    # The body is where the section widens FOR GOOD: knee knobs and a claw rim widen
-    # it for a few levels and narrow again, the trunk never does.
-    leg_r = float(numpy.median(radii[2:max(5, len(radii) // 4)]))
-    wide = max(2.0 * leg_r, 0.12 * H)
-    narrow = [i for i, r in enumerate(radii) if r <= wide]
-    if narrow:
-        k = narrow[-1] + 1
-        return numpy.array(axis[:k]), radii[:k]
     return numpy.array(axis), radii
 
 
@@ -126,24 +121,39 @@ def main():
     low = co[idx]
     near = numpy.linalg.norm(low[:, None, :2] - low[None, :, :2], axis=2) < 0.08 * H
     minima = [i for i in range(len(idx)) if low[i, 2] <= low[near[i], 2].min()]
+    # A cloven or clawed foot has several low points; the closest groups merge until
+    # there is one per leg, since two feet stand further apart than one hoof is wide.
+    groups = [[i] for i in minima]
+    while len(groups) > legs:
+        best = None
+        for g in range(len(groups)):
+            for h in range(g + 1, len(groups)):
+                d = numpy.linalg.norm(low[groups[g]][:, None, :2] - low[groups[h]][None, :, :2], axis=2).min()
+                if best is None or d < best[0]:
+                    best = (d, g, h)
+        _, g, h = best
+        groups[g] += groups.pop(h)
+    if len(groups) != legs:
+        for g in groups:
+            print("  foot at %s" % low[g[0]].round(3))
+        sys.exit("found %d feet, expected %d: adjust --foot-z" % (len(groups), legs))
     merged = []
-    for i in sorted(minima, key=lambda i: low[i, 2]):
-        if any(numpy.linalg.norm(low[i, :2] - co[m[0], :2]) < 0.08 * H for m in merged):
-            continue
-        sole = (numpy.linalg.norm(low[:, :2] - low[i, :2], axis=1) < 0.05 * H) & (low[:, 2] < low[i, 2] + 0.02 * H)
-        merged.append([int(idx[i])] + [int(j) for j in idx[sole] if j != idx[i]])
-    if len(merged) != legs:
-        for m in merged:
-            print("  foot at %s" % co[m[0]].round(3))
-        sys.exit("found %d feet, expected %d: adjust --foot-z" % (len(merged), legs))
+    for g in groups:
+        floor = low[g, 2].min()
+        sole = numpy.zeros(len(idx), dtype=bool)
+        for i in g:
+            sole |= (numpy.linalg.norm(low[:, :2] - low[i, :2], axis=1) < 0.05 * H) & (low[:, 2] < floor + 0.02 * H)
+        merged.append([int(j) for j in idx[sole]])
 
     feet = [numpy.array([*co[m, :2].mean(axis=0), co[m, 2].min()]) for m in merged]
     centre = numpy.mean([f[:2] for f in feet], axis=0)
     shift = numpy.array([-centre[0], -centre[1], 0.0])
 
+    dists = numpy.array([geodesic(m, adj, len(co)) for m in merged])
     out = []
-    for m, foot in zip(merged, feet):
-        axis, radii = trace_leg(m, co, adj, edges, H)
+    for i, foot in enumerate(feet):
+        rival = numpy.delete(dists, i, axis=0).min(axis=0)
+        axis, radii = trace_leg(dists[i], rival, co, edges, H)
         if len(axis) < 2:
             sys.exit("leg at %s did not trace: the foot patch is not a limb end" % foot.round(3))
         hip = axis[-1]
@@ -164,10 +174,14 @@ def main():
     y0, y1 = float(core[:, 1].min()), float(core[:, 1].max())
     zc = float(numpy.median(core[:, 2]))
 
+    f3 = lambda p: "(%.3f, %.3f, %.3f)" % tuple(p)
     print("bounds", (co + shift).min(0).round(3), (co + shift).max(0).round(3), "verts", len(co))
     print("offset = (%.3f, %.3f)" % (shift[0], shift[1]))
     print("spine y %.3f..%.3f at z %.3f" % (y0, y1, zc))
-    f3 = lambda p: "(%.3f, %.3f, %.3f)" % tuple(p)
+    allv = co + shift
+    for name, end in (("front", allv[:, 1] > allv[:, 1].max() - 0.1 * H),
+                      ("rear", allv[:, 1] < allv[:, 1].min() + 0.1 * H)):
+        print("%s tip %s" % (name, f3(allv[end].mean(axis=0))))
     for l in out:
         print("    (%s, %s, %s),  # bend %.2f leg r %.3f" % (
             f3(l["hip"]), f3(l["knee"]), f3(l["foot"]), l["bend"], l["radius"]))
