@@ -458,3 +458,17 @@ turns, and stops as the turn ends. The generated side, back-diagonal and backped
 faults found frame by frame: a backpedalling foot that flipped toe-down into the floor, knees that
 locked straight for a few frames and then jumped before each landing, and knees that knocked on
 the back diagonals.
+
+## 2026-10-10 · Nine generated creatures, flaps cut off
+
+<table>
+<tr>
+<td width="100%"><img src="screenshots/2026-10-10-monster-lineup-cleaned.jpeg" alt="Nine generated creatures in a three by three grid: Cinder Imp, Bramble Whelp, Thornhide Boar, Sand Skitterer, Dune Spitter, Sunbaked Colossus, Vaal Husk, Rotting Behemoth and Ghaltrek" width="100%"><br><sub>The generated roster after the clean-up.</sub></td>
+</tr>
+</table>
+
+Nine creatures now wear meshes generated from a reference image, and none of them carries the thin
+torn sheets that image-to-3D leaves on spikes, plates and moss. A volumetric opening fills each
+body, cuts away every part too thin to hold a solid core and rebuilds a closed surface, so a spine
+stays a cone and a flap disappears. The Vaal Husk, Dune Spitter, Rotting Behemoth (six legs, as it
+was generated) and Ghaltrek joined the five that had them already.
