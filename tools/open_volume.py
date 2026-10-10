@@ -7,7 +7,8 @@ TRELLIS surfaces are shell soup with flaps, bristles and spike plates as open sh
 No surface smoothing removes a sheet, so the mesh is voxelised instead: triangle samples
 mark a surface band, a flood fill from the grid boundary finds the outside, and
 everything else is solid. A binary opening with a ball of `radius` voxels erases what is
-thinner than about two radii, the largest component is kept, and marching cubes on the
+thinner than about two radii, the largest component is kept (with `--keep`, any at least
+that share of it too), and marching cubes on the
 blurred solid gives a closed surface. Coordinates stay in the input's frame.
 in.npz holds float `verts` (N,3) and int `faces` (M,3); out.npz the same.
 """
@@ -45,6 +46,9 @@ def main():
     ap.add_argument("--radius", type=int, default=3, help="opening ball radius in voxels")
     ap.add_argument("--band", type=int, help="hole-closing dilation in voxels (default ~2%% of size)")
     ap.add_argument("--sigma", type=float, default=1.0, help="blur before marching cubes")
+    ap.add_argument("--keep", type=float, default=0.0,
+                    help="also keep components at least this share of the largest: TRELLIS can "
+                         "leave a limb as a separate shell (the spitter's shin)")
     a = ap.parse_args()
 
     d = np.load(a.inp)
@@ -77,7 +81,7 @@ def main():
     lab, n = ndimage.label(opened)
     if n > 1:
         sizes = ndimage.sum(opened, lab, range(1, n + 1))
-        opened = lab == 1 + int(np.argmax(sizes))
+        opened = np.isin(lab, 1 + np.nonzero(sizes >= (a.keep or 1.0) * sizes.max())[0])
     after = int(opened.sum())
 
     field = ndimage.gaussian_filter(opened.astype(np.float32), a.sigma) if a.sigma else opened.astype(np.float32)

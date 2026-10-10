@@ -309,6 +309,9 @@ describe("monsters asset", () => {
    *
    * Twenty-three images since the Vaal Husk did the same: measured 5,350,232 ->
    * 5,530,408 packed, inside 6.25MB because the volumetric opening shrank the rest.
+   *
+   * Twenty-five images since the Dune Spitter did the same: measured 5,530,408 ->
+   * 5,659,900 packed.
    */
   /**
    * The shader warm that ends the map-entry stall. Every instance of a species
@@ -352,7 +355,7 @@ describe("monsters asset", () => {
 
   it("embeds compressed textures and stays within budget", () => {
     for (const image of json.images) expect(image.mimeType).toBe("image/jpeg");
-    expect(json.images.length).toBeLessThanOrEqual(23);
+    expect(json.images.length).toBeLessThanOrEqual(25);
     expect(json.extensionsRequired).toContain("EXT_meshopt_compression");
     expect(glb.byteLength).toBeLessThan(6_250_000);
   });

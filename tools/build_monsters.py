@@ -1634,22 +1634,32 @@ def bramble_whelp():
 # the shooters: tall, thin, and they keep their distance
 # --------------------------------------------------------------------------
 
+SPITTER_SOURCE = os.path.join(TEX_DIR, "source", "dune_spitter_v1.glb")
+SPITTER_NORMAL = os.path.join(TEX_DIR, "source", "dune_spitter_v1_n.png")
+
+
 def dune_spitter():
-    """A sac carried high on four stilts, with a spout aimed forward."""
-    c = Creature("monster.dune_spitter.v1", "desert", 0.3, 1.4)
-    body = c.body.chain([(0, -0.18, 1.04), (0, 0.02, 1.10), (0, 0.22, 1.12)],
-                        [(0.11, 0.14), (0.31, 0.20), (0.22, 0.16)])
-    head = c.body.chain([(0, 0.40, 1.14), (0, 0.52, 1.12)], [(0.15, 0.12), 0.11],
-                        parent=body[-1])
-    c.body.chain([(0, 0.70, 1.06), (0, 0.82, 1.02)], [0.07, 0.03], parent=head[-1])
-    c.body.add(ellipsoid((0, -0.04, 0.94), (0.17, 0.19, 0.13), 10, 6), GLOWS)
-    for side in (-1, 1):
-        c.body.add(ellipsoid((side * 0.07, 0.52, 1.20), (0.032, 0.032, 0.032), 6, 4), GLOWS)
-        c.body.add(slab((side * 0.24, -0.04, 1.24), (0.07, 0.30, 0.26), tilt=0.2))
-    for i, (x, y) in enumerate([(-0.16, 0.14), (0.16, 0.14), (-0.16, -0.16), (0.16, -0.16)]):
-        # The knee stands well above the body: a wading bird, not a table.
-        c.leg(i, (x, y, 1.02), (x * 2.7, y * 1.8, 0.0), 0.07, 0.032,
-              bend=0.17 if y > 0 else -0.17)
+    """A sac carried high on four stilts, with a spout aimed forward.
+
+    Generated (review/3d/dune-spitter), volumetric opening (tools/open_volume.py --res 240 --radius 2) with --keep 0.01: TRELLIS built
+    the rear left stilt as its own shell. 4k triangles. Joints measured off
+    dune_spitter_v1.glb by tools/measure_generated.py --flip 0 (the spout faces +Y
+    as built).
+    """
+    c = GeneratedSkin("monster.dune_spitter.v1", SPITTER_SOURCE, SPITTER_NORMAL,
+                      "desert", 1.4, (-0.073, 0.011), tex=512)
+    spine = c.body.chain([(0, -0.30, 0.88), (0, 0.0, 0.88), (0, 0.30, 0.88)], [0.1] * 3)
+    c.body.chain([(0, 0.44, 0.86), (0, 0.55, 0.86)], [0.05] * 2, parent=spine[-1])
+    # The knee stands well above the body: a wading bird, not a table. The rear
+    # left stilt measures straight (knee at the claw), so its knee is set high
+    # like the other three.
+    for i, (hip, knee, foot) in enumerate([
+        ((-0.176, 0.022, 1.142), (-0.498, 0.164, 1.042), (-0.611, 0.490, 0.000)),
+        ((0.104, 0.154, 1.066), (0.362, 0.276, 1.010), (0.651, 0.417, 0.004)),
+        ((-0.364, -0.228, 1.088), (-0.520, -0.340, 1.000), (-0.640, -0.449, 0.012)),
+        ((0.115, -0.100, 1.140), (0.386, -0.208, 1.012), (0.600, -0.458, 0.014)),
+    ]):
+        c.leg_through(i, hip, knee, foot)
     return c
 
 
