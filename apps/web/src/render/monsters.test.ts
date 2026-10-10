@@ -318,6 +318,9 @@ describe("monsters asset", () => {
    *
    * 6.5MB and twenty-nine images since Ghaltrek did the same at 8k triangles with
    * two 1024 sheets: measured 5,855,316 -> 6,308,124 packed.
+   *
+   * 6.75MB and thirty-one images since the Bog Drowned did the same: measured
+   * 6,308,124 -> 6,509,768 packed.
    */
   /**
    * The shader warm that ends the map-entry stall. Every instance of a species
@@ -361,9 +364,9 @@ describe("monsters asset", () => {
 
   it("embeds compressed textures and stays within budget", () => {
     for (const image of json.images) expect(image.mimeType).toBe("image/jpeg");
-    expect(json.images.length).toBeLessThanOrEqual(29);
+    expect(json.images.length).toBeLessThanOrEqual(31);
     expect(json.extensionsRequired).toContain("EXT_meshopt_compression");
-    expect(glb.byteLength).toBeLessThan(6_500_000);
+    expect(glb.byteLength).toBeLessThan(6_750_000);
   });
 });
 

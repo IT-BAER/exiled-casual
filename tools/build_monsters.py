@@ -1765,29 +1765,18 @@ def vaal_construct():
     return c
 
 
+BOG_DROWNED_SOURCE = os.path.join(TEX_DIR, "source", "bog_drowned_v1.glb")
+BOG_DROWNED_NORMAL = os.path.join(TEX_DIR, "source", "bog_drowned_v1_n.png")
+
+
 def bog_drowned():
-    """Hunched, bloated, arms to the floor, head hanging off a broken neck."""
-    c = Creature("monster.bog_drowned.v1", "swamp", 0.325, 1.7)
-    spine = c.body.chain(
-        [(0, -0.04, 0.70), (0, 0.02, 1.00), (0, 0.06, 1.26), (0, 0.04, 1.42)],
-        [(0.26, 0.22), (0.40, 0.28), (0.35, 0.23), (0.23, 0.18)])
-    neck = c.body.chain([(0.05, 0.14, 1.50)], [0.11], parent=spine[-1])
-    c.body.chain([(0.12, 0.30, 1.54), (0.14, 0.42, 1.50)], [0.15, 0.09], parent=neck[-1])
-    # Ribs split open on the left — the asymmetry is what stops it reading human.
-    c.body.add(slab((-0.17, 0.26, 1.10), (0.19, 0.09, 0.40), tilt=0.22), BONES)
-    c.body.add(slab((-0.17, 0.32, 1.10), (0.10, 0.06, 0.30), tilt=0.22), GLOWS)
-    for side in (-1, 1):
-        c.body.add(ellipsoid((0.12 + side * 0.06, 0.42, 1.56), (0.03, 0.03, 0.03), 6, 4), GLOWS)
-        # A paddle off each flank, laid nearly flat: from overhead this is what
-        # the shoulders are, and a thin upright fin at the same place is nothing.
-        c.body.add(slab((side * 0.38, -0.08, 1.26), (0.28, 0.34, 0.11), tilt=0.25))
-    for i, side in enumerate((-1, 1)):
-        # Knuckles nearly on the floor: the whole reason it reads as drowned.
-        c.arm(i, [(side * 0.37, 0.0, 1.30), (side * 0.50, 0.16, 0.82), (side * 0.44, 0.34, 0.26)],
-              [0.095, 0.076, 0.06])
-    for i, side in enumerate((-1, 1)):
-        c.leg(i, (side * 0.22, 0.0, 0.72), (side * 0.28, 0.02, 0.0), 0.115, 0.075, bend=0.07)
-    return c
+    """Bloated, rag-skirted, arms hanging to the knee, head pushed forward.
+
+    Generated (review/3d/bog-drowned), rag flaps cut by a volumetric opening
+    (tools/open_volume.py --res 240 --radius 2), 4k triangles, rig_humanoid.
+    """
+    return GeneratedCreature("monster.bog_drowned.v1", BOG_DROWNED_SOURCE, "swamp", 1.7,
+                             normal=BOG_DROWNED_NORMAL)
 
 
 # Image-to-3D, not the node graph: a /codex-imagegen reference through local
@@ -1830,18 +1819,20 @@ class GeneratedCreature:
     `rig_humanoid.py`, dressed in its own sheet by the same hide rule as the
     roster. It faces -Y as imported, where a turned node-graph root ends up."""
 
-    def __init__(self, def_id, source, family, height):
+    def __init__(self, def_id, source, family, height, normal=None, tex=TEX_SIZE):
         self.def_id, self.source, self.family, self.height = def_id, source, family, height
+        self.normal, self.tex = normal, tex
 
     def emit(self, mats):
         spec = importlib.util.spec_from_file_location(
             "rig_humanoid", os.path.join(ROOT, "tools", "rig_humanoid.py"))
         rig = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(rig)
-        if not os.path.exists(self.source):
-            sys.exit("missing generated creature: " + self.source)
+        for path in filter(None, (self.source, self.normal)):
+            if not os.path.exists(path):
+                sys.exit("missing generated creature: " + path)
         mesh = rig.load_mesh(self.source, self.height, False)
-        generated_hide(mesh, self.def_id.split(".")[1], self.family)
+        generated_hide(mesh, self.def_id.split(".")[1], self.family, self.normal, self.tex)
 
         arm = rig.build_armature(self.def_id, rig.landmarks(mesh, self.height))
         mesh.name = mesh.data.name = self.def_id + ".mesh"
