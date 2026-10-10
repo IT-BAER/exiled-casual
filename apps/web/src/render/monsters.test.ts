@@ -300,6 +300,9 @@ describe("monsters asset", () => {
    *
    * 5.75MB and seventeen images since the Bramble Whelp did the same: measured
    * 5,430,556 -> 5,664,344 packed.
+   *
+   * 6.0MB and nineteen images since the Cinder Imp did the same: measured
+   * 5,662,876 -> 5,895,208 packed.
    */
   /**
    * The shader warm that ends the map-entry stall. Every instance of a species
@@ -343,9 +346,9 @@ describe("monsters asset", () => {
 
   it("embeds compressed textures and stays within budget", () => {
     for (const image of json.images) expect(image.mimeType).toBe("image/jpeg");
-    expect(json.images.length).toBeLessThanOrEqual(17);
+    expect(json.images.length).toBeLessThanOrEqual(19);
     expect(json.extensionsRequired).toContain("EXT_meshopt_compression");
-    expect(glb.byteLength).toBeLessThan(5_750_000);
+    expect(glb.byteLength).toBeLessThan(6_000_000);
   });
 });
 
@@ -379,8 +382,9 @@ describe("creature instances", () => {
       expect(attachCreature(scene, root, [...MONSTERS.keys()][0]!)).not.toBeNull();
       root.computeWorldMatrix(true);
       for (const m of root.getChildMeshes(false)) m.computeWorldMatrix(true);
-      const from = new Vector3(0, 0.4, 0);
-      const centre = new Vector3(4, 0.4, 0);
+      // Through the trunk: lower, the ray passes under the first species' belly.
+      const from = new Vector3(0, 0.55, 0);
+      const centre = new Vector3(4, 0.55, 0);
       const skin = contactPoint(root, from, centre, true);
       const box = contactPoint(root, from, centre, false);
       expect(skin).not.toBe(centre);

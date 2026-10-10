@@ -1510,38 +1510,30 @@ def build_materials():
 # the swarm: small, low, four-to-six legged, dies in threes
 # --------------------------------------------------------------------------
 
+IMP_SOURCE = os.path.join(TEX_DIR, "source", "cinder_imp_v1.glb")
+IMP_NORMAL = os.path.join(TEX_DIR, "source", "cinder_imp_v1_n.png")
+
+
 def cinder_imp():
-    """Humped quadruped, horns swept back, a whip tail. The one everybody meets."""
-    c = Creature("monster.cinder_imp.v1", "cinder", 0.275, 0.85)
-    # (across, up) per node. The hump is a rib cage — deep and NARROW — over a
-    # pelvis that is wide and flat, with a waist between them you can see the
-    # floor under. One radius per node makes all three the same circle, which is
-    # the bean this creature used to be.
-    spine = c.body.chain(
-        [(0, -0.34, 0.42), (0, -0.16, 0.46), (0, 0.02, 0.52), (0, 0.20, 0.54), (0, 0.34, 0.48)],
-        [(0.19, 0.12), (0.12, 0.13), (0.15, 0.24), (0.17, 0.21), (0.13, 0.15)])
-    neck = c.body.chain([(0, 0.48, 0.44), (0, 0.60, 0.42)],
-                        [(0.075, 0.09), (0.15, 0.13)], parent=spine[-1])
-    c.body.chain([(0, 0.74, 0.38), (0, 0.86, 0.34)], [(0.10, 0.085), 0.045], parent=neck[-1])
-    c.body.chain([(0, -0.54, 0.44), (0, -0.74, 0.54), (0, -0.90, 0.34)],
-                 [0.075, 0.045, 0.018], parent=spine[0])
-    for side in (-1, 1):
-        c.body.add(ellipsoid((side * 0.09, 0.70, 0.50), (0.042, 0.042, 0.042), 6, 4), GLOWS)
-        c.body.add(horn([(side * 0.11, 0.56, 0.56), (side * 0.18, 0.44, 0.78),
-                         (side * 0.20, 0.28, 0.92)], [0.06, 0.038, 0.0]), BONES)
-        # A shoulder blade standing proud of the hide, where the foreleg hangs.
-        c.body.add(horn([(side * 0.09, 0.28, 0.58), (side * 0.16, 0.21, 0.70)],
-                        [0.05, 0.0], 5), BONES)
-    # Three plates down the back, not a comb of spines. The top edge is the line
-    # this camera reads first, and a round spine three percent of the creature
-    # across is sub-pixel at seventy pixels tall — a blade of the same length
-    # holds its own value against the floor and actually breaks the outline.
-    for a, b, tip in [((0, 0.24, 0.68), (0, 0.04, 0.74), (0, 0.13, 0.94)),
-                      ((0, 0.02, 0.74), (0, -0.16, 0.62), (0, -0.05, 0.90)),
-                      ((0, -0.18, 0.58), (0, -0.34, 0.50), (0, -0.24, 0.72))]:
-        c.body.add(fin(a, b, tip, 0.040, lean=0.02), BONES)
-    for i, (x, y) in enumerate([(-0.17, 0.20), (0.17, 0.20), (-0.18, -0.26), (0.18, -0.26)]):
-        c.leg(i, (x, y, 0.44), (x * 1.25, y, 0.0), 0.085, 0.05, bend=0.06)
+    """Humped quadruped, horns swept back, a whip tail. The one everybody meets.
+
+    Generated (review/3d/cinder-imp), 4k triangles. Joints measured off
+    cinder_imp_v1.glb by tools/measure_generated.py --flip 1.
+    """
+    c = GeneratedSkin("monster.cinder_imp.v1", IMP_SOURCE, IMP_NORMAL,
+                      "cinder", 0.85, (-0.020, 0.028), tex=512, flip=True)
+    spine = c.body.chain([(0, -0.24, 0.50), (0, -0.02, 0.56), (0, 0.18, 0.52)], [0.1] * 3)
+    c.body.chain([(0, 0.30, 0.60), (0, 0.42, 0.63)], [0.1] * 2, parent=spine[-1])
+    # The whip tail curls off to the left as TRELLIS built it.
+    c.body.chain([(0, -0.42, 0.50), (-0.10, -0.58, 0.40), (-0.30, -0.64, 0.30)],
+                 [0.05] * 3, parent=spine[0])
+    for i, (hip, knee, foot) in enumerate([
+        ((-0.067, 0.176, 0.411), (-0.088, 0.118, 0.131), (-0.149, 0.196, 0.001)),
+        ((0.090, 0.166, 0.425), (0.141, 0.166, 0.327), (0.137, 0.304, 0.023)),
+        ((-0.074, -0.233, 0.417), (-0.155, -0.340, 0.068), (-0.212, -0.251, 0.000)),
+        ((0.075, -0.233, 0.453), (0.167, -0.292, 0.234), (0.224, -0.249, 0.008)),
+    ]):
+        c.leg_through(i, hip, knee, foot)
     return c
 
 
