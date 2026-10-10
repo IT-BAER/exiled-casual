@@ -82,7 +82,7 @@ from mathutils.bvhtree import BVHTree
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TEX_DIR = os.path.join(ROOT, "assets", "monsters")
 BUILD_DIR = os.path.join(TEX_DIR, "build")
-OUT = os.path.join(ROOT, "apps", "web", "public", "models", "monsters.glb")
+OUT = os.path.join(ROOT, "assets", "monsters", "monsters.glb")
 
 # Hide sheet per biome family. The cinder sheet is the one the imp already wore,
 # so the starting lab fight looks exactly as it did.

@@ -24,7 +24,7 @@ import bpy
 import numpy
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-GLB = os.path.join(ROOT, "apps", "web", "public", "models", "monsters.glb")
+GLB = os.path.join(ROOT, "assets", "monsters", "monsters.glb")
 
 # Four body plans, because a fault in the gait usually shows on one of them
 # only: the quadruped trot, the biped, the six-legged tripod, and the radial

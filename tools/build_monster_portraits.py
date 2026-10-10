@@ -5,7 +5,7 @@ Run:
       --disable-autoexec --python-exit-code 1 --python tools/build_monster_portraits.py -- \
       [--species a,b] [--size 128] [--out apps/web/public/hud/monsters] [--glb path]
 
-Reads the shipped monsters.glb (the same file the browser loads), poses each armature on the
+Reads assets/monsters/monsters.glb (what the browser loads, before the meshopt pack), poses each armature on the
 first frame of its idle clip, and renders it textured on a transparent background from the
 front quarter the preview tool calls "quarter" (the creature faces -Y). Writes
 `<out>/<species id without "monster." and ".v1">.webp`, which `monsterPortrait()` in the
@@ -18,7 +18,7 @@ import bpy
 from mathutils import Vector
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-GLB = os.path.join(ROOT, "apps", "web", "public", "models", "monsters.glb")
+GLB = os.path.join(ROOT, "assets", "monsters", "monsters.glb")
 OUT = os.path.join(ROOT, "apps", "web", "public", "hud", "monsters")
 # Front, a little above: high enough to see a back, low enough to keep the face.
 VIEW = Vector((0.55, -1.0, 0.55)).normalized()

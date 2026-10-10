@@ -46,6 +46,7 @@ describe("monsters asset", () => {
     accessors: { min?: number[]; max?: number[] }[];
     materials: { name: string }[];
     images: { mimeType: string }[];
+    extensionsRequired?: string[];
     skins: { joints: number[] }[];
     animations: { name: string }[];
   };
@@ -290,6 +291,9 @@ describe("monsters asset", () => {
    *
    * 8.25MB since the Sand Skitterer became a generated mesh at 8k triangles with
    * a 1024 sheet and a baked normal map: measured +1.2MB (6,987,528 -> 8,186,100).
+   *
+   * 5.25MB once `tools/pack_monsters.mjs` meshopt-packs the geometry: measured
+   * 8,186,100 -> 5,157,736. WebP hides measured LARGER than these JPEGs.
    */
   /**
    * The shader warm that ends the map-entry stall. Every instance of a species
@@ -334,7 +338,8 @@ describe("monsters asset", () => {
   it("embeds compressed textures and stays within budget", () => {
     for (const image of json.images) expect(image.mimeType).toBe("image/jpeg");
     expect(json.images.length).toBeLessThanOrEqual(13);
-    expect(glb.byteLength).toBeLessThan(8_250_000);
+    expect(json.extensionsRequired).toContain("EXT_meshopt_compression");
+    expect(glb.byteLength).toBeLessThan(5_250_000);
   });
 });
 
