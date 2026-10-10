@@ -85,6 +85,7 @@ describe("setSoundMix", () => {
       master: 0.7,
       muted: false,
       music: 0.1,
+      ambience: 0.15,
       interface: 0.2,
       skills: 0.3,
       loot: 2,
@@ -93,6 +94,7 @@ describe("setSoundMix", () => {
     expect(soundLevel()).toBeCloseTo(0.7);
     expect(soundMix()).toEqual({
       music: 0.1,
+      ambience: 0.15,
       interface: 0.2,
       skills: 0.3,
       loot: 1,

@@ -56,7 +56,7 @@ let airFilter: BiquadFilterNode | null = null;
 /** Time constant: three of them is the ~0.4 s an area change takes to settle. */
 const ROOM_FADE = 0.4 / 3;
 
-export type SoundCategory = "music" | "interface" | "skills" | "loot" | "environment";
+export type SoundCategory = "music" | "ambience" | "interface" | "skills" | "loot" | "environment";
 export type SoundPreviewCategory = SoundCategory | "master";
 export type SoundMix = Record<SoundCategory, number>;
 export interface SoundLevels extends SoundMix {
@@ -65,10 +65,11 @@ export interface SoundLevels extends SoundMix {
 }
 
 const CATEGORIES: readonly SoundCategory[] = [
-  "music", "interface", "skills", "loot", "environment",
+  "music", "ambience", "interface", "skills", "loot", "environment",
 ];
 let mix: SoundMix = {
   music: 1,
+  ambience: 1,
   interface: 1,
   skills: 1,
   loot: 1,
@@ -132,6 +133,7 @@ export function setSoundMix(next: SoundLevels): void {
   setSoundLevel(next.master, next.muted);
   mix = {
     music: unit(next.music),
+    ambience: unit(next.ambience),
     interface: unit(next.interface),
     skills: unit(next.skills),
     loot: unit(next.loot),

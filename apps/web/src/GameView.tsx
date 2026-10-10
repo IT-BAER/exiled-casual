@@ -24,6 +24,7 @@ import {
 import { attachBindings } from "./input/bindings";
 import { isTextEntry } from "./input/text-entry";
 import { ALL_SFX, CORE_SFX, playSfx, preloadSfx, setAmbient, stopAmbient } from "./audio/sfx";
+import { setMusic, stopMusic } from "./audio/music";
 import { createSoundscape } from "./audio/soundscape";
 import { createVarkisVoice, VARKIS_SFX } from "./audio/varkis-voice";
 import { createDebugSnapshotLog, dlog } from "./debug";
@@ -602,6 +603,7 @@ export function GameView({
         // The base also says what the floor is, which is what his boots land on.
         soundscape.reset(base?.biomeId ?? null);
         setAmbient(base?.biomeId ?? null);
+        setMusic(base?.biomeId ?? null);
         // Nothing the player had open belongs to the place they just left. The
         // inventory in particular: opening a map from the device leaves it up, and
         // stepping through the portal used to land you in the map reading a bag.
@@ -809,6 +811,7 @@ export function GameView({
       resetPhysics();
       resetRocks();
       stopAmbient();
+      stopMusic();
       sceneRef.current = null;
       engineRef.current = null;
       engine.dispose();

@@ -1,0 +1,860 @@
+{
+ "about": "Every ElevenLabs generation that ships or may ship in Exiled Casual. Kept because commercial rights depend on the subscription plan at generation time (owner on a paid plan, 2026). Workspace 9275c80008d541b2aef82d7aef8c428c.",
+ "earlier": [
+  {
+   "kind": "sfx",
+   "what": "seagull and bullfrog takes (review/audio/batch-c/detail/el/gull-1..4, frog-1..4) for the coast and swamp ambient details",
+   "flow_id": "1tR2VdZ3Z7vfD7HmjMGh",
+   "nodes": {
+    "gull": "SneGjfv6HaWGfDDyOec1",
+    "frog": "CbH5QVA7KSB6Wrs3lle7"
+   },
+   "model_id": "eleven_text_to_sound_v2",
+   "date": "2026-10-09",
+   "note": "per-take generation ids not exposed by the connector; flow and node ids identify them"
+  },
+  {
+   "kind": "sfx",
+   "what": "monster hurt/death/attack cues (apps/web/public/audio/monster-*)",
+   "generations": {
+    "monster-hurt": [
+     {
+      "id": "jb9kvkIkeMvHfQkFXNtE",
+      "file": "monster-hurt-1.mp3"
+     },
+     {
+      "id": "Akbmr5lzpbjEy2Fzxl5g",
+      "file": "monster-hurt-2.mp3"
+     },
+     {
+      "id": "fWxPEJLHFRW1jDOLkxhl",
+      "file": "monster-hurt-3.mp3"
+     }
+    ],
+    "monster-death": [
+     {
+      "id": "Yyn8JT7KSXDWVYrfMteC",
+      "file": "monster-death-1.mp3"
+     },
+     {
+      "id": "w9icR9siZWn77QBkzU3z",
+      "file": "monster-death-2.mp3"
+     },
+     {
+      "id": "i9vReZPIZeSMXtCSQ680",
+      "file": "monster-death-3.mp3"
+     }
+    ],
+    "monster-hurt-stone": [
+     {
+      "id": "W3iQzlbjxXFLFmY8JC1a",
+      "file": "monster-hurt-stone-1.mp3"
+     },
+     {
+      "id": "WH8AMRrPbvDa2vaBq7fd",
+      "file": "monster-hurt-stone-2.mp3"
+     },
+     {
+      "id": "iYw9wTSPnS60YVrb2BxL",
+      "file": "monster-hurt-stone-3.mp3"
+     }
+    ],
+    "monster-death-stone": [
+     {
+      "id": "232g6f1lmZ4EYdIPjxyw",
+      "file": "monster-death-stone-1.mp3"
+     },
+     {
+      "id": "Uf1mhfH5qXcZqm0Rq4R1",
+      "file": "monster-death-stone-2.mp3"
+     },
+     {
+      "id": "GUavUPg9oCuTkAbervKH",
+      "file": "monster-death-stone-3.mp3"
+     }
+    ],
+    "monster-hurt-husk": [
+     {
+      "id": "JT1MNzTAGNzMy3GeAV7w",
+      "file": "monster-hurt-husk-1.mp3"
+     },
+     {
+      "id": "vnpXVD7RSqGWboYDrNCE",
+      "file": "monster-hurt-husk-2.mp3"
+     },
+     {
+      "id": "YDeXVkQbuwFkbOP7AamR",
+      "file": "monster-hurt-husk-3.mp3"
+     }
+    ],
+    "monster-death-husk": [
+     {
+      "id": "7vLbZ8DSxSuXYJx6GTpu",
+      "file": "monster-death-husk-1.mp3"
+     },
+     {
+      "id": "efA6aufMVGoEG27c031s",
+      "file": "monster-death-husk-2.mp3"
+     },
+     {
+      "id": "W7f6AfjELb86cNmi2ogI",
+      "file": "monster-death-husk-3.mp3"
+     }
+    ],
+    "monster-hurt-bog": [
+     {
+      "id": "v7atWj0ffeRcWqAyt0Of",
+      "file": "monster-hurt-bog-1.mp3"
+     },
+     {
+      "id": "92r3bx2NeODQXKNzjl2t",
+      "file": "monster-hurt-bog-2.mp3"
+     },
+     {
+      "id": "kSAz9h8L8bsnzpPtBDO5",
+      "file": "monster-hurt-bog-3.mp3"
+     }
+    ],
+    "monster-death-bog": [
+     {
+      "id": "WSMRqmsSBanRBi0OdOty",
+      "file": "monster-death-bog-1.mp3"
+     },
+     {
+      "id": "Ar7XLryEa2Asj0V4vKRI",
+      "file": "monster-death-bog-2.mp3"
+     },
+     {
+      "id": "BDeo7HSsCqxJLanfPPXO",
+      "file": "monster-death-bog-3.mp3"
+     }
+    ],
+    "monster-hurt-beast": [
+     {
+      "id": "CIf0P1K308GE3I9zqXYe",
+      "file": "monster-hurt-beast-1.mp3"
+     },
+     {
+      "id": "e6gYqTFxkSQAsYKjhm0E",
+      "file": "monster-hurt-beast-2.mp3"
+     },
+     {
+      "id": "oLI1APzar72gMAxZGNUg",
+      "file": "monster-hurt-beast-3.mp3"
+     }
+    ],
+    "monster-death-beast": [
+     {
+      "id": "XB6FVeYEOkqW5Qvgr7Uv",
+      "file": "monster-death-beast-1.mp3"
+     },
+     {
+      "id": "36qgDMBJP8GiWAD1a47Q",
+      "file": "monster-death-beast-2.mp3"
+     },
+     {
+      "id": "6SZZnzyAmUdk7f4dpmOc",
+      "file": "monster-death-beast-3.mp3"
+     }
+    ],
+    "monster-hurt-ember": [
+     {
+      "id": "EtFZKQVCQVXrpYvGUs6g",
+      "file": "monster-hurt-ember-1.mp3"
+     },
+     {
+      "id": "xce8ZNLfu5ZqOqu4s86l",
+      "file": "monster-hurt-ember-2.mp3"
+     },
+     {
+      "id": "Mpp2rLG3sFf8BopkH8vE",
+      "file": "monster-hurt-ember-3.mp3"
+     }
+    ],
+    "monster-death-ember": [
+     {
+      "id": "llh9NI8S84abDIMdXyP4",
+      "file": "monster-death-ember-1.mp3"
+     },
+     {
+      "id": "GGhapgvFC53Jn5VKn2hJ",
+      "file": "monster-death-ember-2.mp3"
+     },
+     {
+      "id": "5XSOFselOxIu2sNKfr1g",
+      "file": "monster-death-ember-3.mp3"
+     }
+    ],
+    "monster-hurt-spirit": [
+     {
+      "id": "uUY8olBa867MchwlcKtz",
+      "file": "monster-hurt-spirit-1.mp3"
+     },
+     {
+      "id": "jdwH1Rj37ed4A7smEWuc",
+      "file": "monster-hurt-spirit-2.mp3"
+     },
+     {
+      "id": "mj3NWEgbWvpsGsOk6hsG",
+      "file": "monster-hurt-spirit-3.mp3"
+     }
+    ],
+    "monster-death-spirit": [
+     {
+      "id": "QU9Om7LyhBqW6s2tj47l",
+      "file": "monster-death-spirit-1.mp3"
+     },
+     {
+      "id": "gJ3PMo4GPCMYQQYknlso",
+      "file": "monster-death-spirit-2.mp3"
+     },
+     {
+      "id": "SGzAyGgeoANEplb35U5S",
+      "file": "monster-death-spirit-3.mp3"
+     }
+    ],
+    "monster-melee-hit": [
+     {
+      "id": "awZTZCYpH2INltaUmpF0",
+      "file": "monster-melee-hit-1.mp3"
+     },
+     {
+      "id": "pTJfPfOJjvKf2SsRLVp3",
+      "file": "monster-melee-hit-2.mp3"
+     },
+     {
+      "id": "1xwNI42dcwJ48OfMuYAk",
+      "file": "monster-melee-hit-3.mp3"
+     }
+    ],
+    "monster-spit": [
+     {
+      "id": "XmwmuiZ8QyqV0r8W7iM2",
+      "file": "monster-spit-1.mp3"
+     },
+     {
+      "id": "1Sm2f79Snadtv8cuXODg",
+      "file": "monster-spit-2.mp3"
+     },
+     {
+      "id": "oZ7WXA8p9R1RVA8K3FEU",
+      "file": "monster-spit-3.mp3"
+     }
+    ],
+    "monster-slam-windup": [
+     {
+      "id": "GMZTAP3rbf7pv4jTgF9L",
+      "file": "monster-slam-windup-1.mp3"
+     },
+     {
+      "id": "qhpQu6D27RkT14oPxQ4Z",
+      "file": "monster-slam-windup-2.mp3"
+     },
+     {
+      "id": "rLYKu1tJOyi4H9mdugcD",
+      "file": "monster-slam-windup-3.mp3"
+     }
+    ],
+    "monster-slam-impact": [
+     {
+      "id": "F79hkvYKOedHsGUCf6HP",
+      "file": "monster-slam-impact-1.mp3"
+     },
+     {
+      "id": "CCFivnrEhQWjgIfo5C3E",
+      "file": "monster-slam-impact-2.mp3"
+     },
+     {
+      "id": "C150fPtMPvNFTTUEFWXk",
+      "file": "monster-slam-impact-3.mp3"
+     }
+    ]
+   },
+   "date": "2026-10-09",
+   "source": "review/audio/combat/el/manifest.json"
+  },
+  {
+   "kind": "speech",
+   "what": "Varkis NPC lines (apps/web/public/audio/npc-varkis-*)",
+   "flow_id": "vqdEAjonUDHj9kBEYsfQ",
+   "designed_voice_candidates": {
+    "voice-1": "07MbSEwELd2dDCsDn1Wx",
+    "voice-2": "UwheczwyEEPXdwr6z232",
+    "voice-3": "4TJJOTXtEwWWB7FiTgf8"
+   },
+   "generations": [
+    {
+     "take": "greet-1-a",
+     "generation_id": "YUdPfLVcUpGUri7kHabg"
+    },
+    {
+     "take": "greet-1-b",
+     "generation_id": "p3Y0VVW8RGaSn1PBUxJR"
+    },
+    {
+     "take": "greet-2-a",
+     "generation_id": "f9jCqycp6zXCLGZnGYTs"
+    },
+    {
+     "take": "greet-2-b",
+     "generation_id": "wJq4wzazetnxfxuJ6Owm"
+    },
+    {
+     "take": "greet-3-a",
+     "generation_id": "csTfN3uENQTNaE7CeN8w"
+    },
+    {
+     "take": "greet-3-b",
+     "generation_id": "ohUDRwtkyFSy4lTKrhte"
+    },
+    {
+     "take": "greet-4-a",
+     "generation_id": "e9nVHJW3SbS0ufeKLnlf"
+    },
+    {
+     "take": "greet-4-b",
+     "generation_id": "1EGpqtyFl2hu3VTEb44C"
+    },
+    {
+     "take": "shop-1-a",
+     "generation_id": "619T862bOWhROZRAxpzd"
+    },
+    {
+     "take": "shop-1-b",
+     "generation_id": "Oxm0jr7M6BVUzh4SoYsx"
+    },
+    {
+     "take": "shop-2-a",
+     "generation_id": "14KO7QooSW1wT6LQtGS6"
+    },
+    {
+     "take": "shop-2-b",
+     "generation_id": "dvhbYy69kAdA06l1PwDl"
+    },
+    {
+     "take": "shop-3-a",
+     "generation_id": "lLVLUHkVINXYh2T3TywD"
+    },
+    {
+     "take": "shop-3-b",
+     "generation_id": "boGYfKuIp7fxfJDktzb7"
+    },
+    {
+     "take": "shop-4-a",
+     "generation_id": "FCEeYLEDyKspwBPW1bJE"
+    },
+    {
+     "take": "shop-4-b",
+     "generation_id": "sGQtVnGyqBKc553dW9u3"
+    },
+    {
+     "take": "bye-1-a",
+     "generation_id": "13upibNT1zk22xpL5S7L"
+    },
+    {
+     "take": "bye-1-b",
+     "generation_id": "bO3RbqoNK4Ts3rQOLexR"
+    },
+    {
+     "take": "bye-2-a",
+     "generation_id": "zEtNhRu09jLxXaVKz8DM"
+    },
+    {
+     "take": "bye-2-b",
+     "generation_id": "T0rJunXthxB24qw9nZD6"
+    },
+    {
+     "take": "bye-3-a",
+     "generation_id": "Y3jSKJHxVAuZmjnX7YE7"
+    },
+    {
+     "take": "bye-3-b",
+     "generation_id": "VzgnEwlx5x0nTTIf6162"
+    }
+   ],
+   "date": "2026-10-09"
+  }
+ ],
+ "generations": [
+  {
+   "kind": "music",
+   "file": "audio-libs/elevenlabs/music/hideout-1-1.mp3",
+   "slot": "hideout-1",
+   "take": 1,
+   "via": "ElevenLabs Flows (claude.ai full connector)",
+   "flow_id": "FOUguRW3uRhYc7h1x2Fi",
+   "node_id": "sfIb9UGYBsnvXCFM8WwI",
+   "session_id": "LxrtpLqM5movy71avicd",
+   "generation_id": "VrLdR11TiNneAvW4NKon",
+   "model_id": "eleven_music_v2_5",
+   "duration_seconds": 95,
+   "instrumental": true,
+   "prompt": "Instrumental ambient background score for a dark fantasy action RPG. Passive and steady: no intro, no ending, no build-up, no climax, no drums, no beat, no percussion, constant dynamics from the first second to the last, so it can loop. A safe hearth by the fire: warm low strings, soft harp, slow, gentle, comforting.",
+   "plan": "review/audio/music-plan.md",
+   "generated_at": "2026-10-10",
+   "credits": 1425,
+   "bytes": 2299283,
+   "downloaded_at": "2026-10-10T08:27:24+00:00"
+  },
+  {
+   "kind": "music",
+   "file": "audio-libs/elevenlabs/music/hideout-1-2.mp3",
+   "slot": "hideout-1",
+   "take": 2,
+   "via": "ElevenLabs Flows (claude.ai full connector)",
+   "flow_id": "FOUguRW3uRhYc7h1x2Fi",
+   "node_id": "sfIb9UGYBsnvXCFM8WwI",
+   "session_id": "l2Z0tDSv36JWsdoYxf8k",
+   "generation_id": "8tPh7fzUPfuiaxBufVHg",
+   "model_id": "eleven_music_v2_5",
+   "duration_seconds": 95,
+   "instrumental": true,
+   "prompt": "Instrumental ambient background score for a dark fantasy action RPG. Passive and steady: no intro, no ending, no build-up, no climax, no drums, no beat, no percussion, constant dynamics from the first second to the last, so it can loop. A safe hearth by the fire: warm low strings, soft harp, slow, gentle, comforting.",
+   "plan": "review/audio/music-plan.md",
+   "generated_at": "2026-10-10",
+   "credits": 1425,
+   "bytes": 2299283,
+   "downloaded_at": "2026-10-10T08:27:26+00:00"
+  },
+  {
+   "kind": "music",
+   "file": "audio-libs/elevenlabs/music/hideout-1-3.mp3",
+   "slot": "hideout-1",
+   "take": 3,
+   "via": "ElevenLabs Flows (claude.ai full connector)",
+   "flow_id": "FOUguRW3uRhYc7h1x2Fi",
+   "node_id": "sfIb9UGYBsnvXCFM8WwI",
+   "session_id": "J6pVwzni35oA3Q86hmfg",
+   "generation_id": "fbJBikiQPIW9mBjKdh6H",
+   "model_id": "eleven_music_v2_5",
+   "duration_seconds": 95,
+   "instrumental": true,
+   "prompt": "Instrumental ambient background score for a dark fantasy action RPG. Passive and steady: no intro, no ending, no build-up, no climax, no drums, no beat, no percussion, constant dynamics from the first second to the last, so it can loop. A safe hearth by the fire: warm low strings, soft harp, slow, gentle, comforting.",
+   "plan": "review/audio/music-plan.md",
+   "generated_at": "2026-10-10",
+   "credits": 1425,
+   "bytes": 2299283,
+   "downloaded_at": "2026-10-10T08:27:27+00:00"
+  },
+  {
+   "kind": "music",
+   "file": "audio-libs/elevenlabs/music/hideout-2-1.mp3",
+   "slot": "hideout-2",
+   "take": 1,
+   "via": "ElevenLabs Flows (claude.ai full connector)",
+   "flow_id": "FOUguRW3uRhYc7h1x2Fi",
+   "node_id": "eUAadhe5evQsHKtvMCc8",
+   "session_id": "2F81RJHPSaE1zyWPMEEz",
+   "generation_id": "OCj9an3NEEWeGLYrFEvr",
+   "model_id": "eleven_music_v2_5",
+   "duration_seconds": 95,
+   "instrumental": true,
+   "prompt": "Instrumental ambient background score for a dark fantasy action RPG. Passive and steady: no intro, no ending, no build-up, no climax, no drums, no beat, no percussion, constant dynamics from the first second to the last, so it can loop. A quiet refuge at dusk: melancholy low strings and a distant soft choir pad, slow, wistful.",
+   "plan": "review/audio/music-plan.md",
+   "generated_at": "2026-10-10",
+   "credits": 1425,
+   "bytes": 2299283,
+   "downloaded_at": "2026-10-10T08:27:28+00:00"
+  },
+  {
+   "kind": "music",
+   "file": "audio-libs/elevenlabs/music/hideout-2-2.mp3",
+   "slot": "hideout-2",
+   "take": 2,
+   "via": "ElevenLabs Flows (claude.ai full connector)",
+   "flow_id": "FOUguRW3uRhYc7h1x2Fi",
+   "node_id": "eUAadhe5evQsHKtvMCc8",
+   "session_id": "jkRoWKRygecX9oh9jmyK",
+   "generation_id": "E9cFcHW7obuoFXvqGLvC",
+   "model_id": "eleven_music_v2_5",
+   "duration_seconds": 95,
+   "instrumental": true,
+   "prompt": "Instrumental ambient background score for a dark fantasy action RPG. Passive and steady: no intro, no ending, no build-up, no climax, no drums, no beat, no percussion, constant dynamics from the first second to the last, so it can loop. A quiet refuge at dusk: melancholy low strings and a distant soft choir pad, slow, wistful.",
+   "plan": "review/audio/music-plan.md",
+   "generated_at": "2026-10-10",
+   "credits": 1425,
+   "bytes": 2299283,
+   "downloaded_at": "2026-10-10T08:27:30+00:00"
+  },
+  {
+   "kind": "music",
+   "file": "audio-libs/elevenlabs/music/hideout-2-3.mp3",
+   "slot": "hideout-2",
+   "take": 3,
+   "via": "ElevenLabs Flows (claude.ai full connector)",
+   "flow_id": "FOUguRW3uRhYc7h1x2Fi",
+   "node_id": "eUAadhe5evQsHKtvMCc8",
+   "session_id": "bA6W7iiVq4U03asDnJ98",
+   "generation_id": "ttIlZjLVxaaf8ZCUN2bj",
+   "model_id": "eleven_music_v2_5",
+   "duration_seconds": 95,
+   "instrumental": true,
+   "prompt": "Instrumental ambient background score for a dark fantasy action RPG. Passive and steady: no intro, no ending, no build-up, no climax, no drums, no beat, no percussion, constant dynamics from the first second to the last, so it can loop. A quiet refuge at dusk: melancholy low strings and a distant soft choir pad, slow, wistful.",
+   "plan": "review/audio/music-plan.md",
+   "generated_at": "2026-10-10",
+   "credits": 1425,
+   "bytes": 2299283,
+   "downloaded_at": "2026-10-10T08:27:31+00:00"
+  },
+  {
+   "kind": "music",
+   "file": "audio-libs/elevenlabs/music/hideout-3-1.mp3",
+   "slot": "hideout-3",
+   "take": 1,
+   "via": "ElevenLabs Flows (claude.ai full connector)",
+   "flow_id": "FOUguRW3uRhYc7h1x2Fi",
+   "node_id": "P6iAMChvyExkrz9PK74k",
+   "session_id": "15YZmummBaYMTojpsfo4",
+   "generation_id": "tAVNSswjROiQgaMRrKqM",
+   "model_id": "eleven_music_v2_5",
+   "duration_seconds": 95,
+   "instrumental": true,
+   "prompt": "Instrumental ambient background score for a dark fantasy action RPG. Passive and steady: no intro, no ending, no build-up, no climax, no drums, no beat, no percussion, constant dynamics from the first second to the last, so it can loop. A mystic sanctum: soft harp arpeggios over a distant choir pad and a low drone, slow, otherworldly.",
+   "plan": "review/audio/music-plan.md",
+   "generated_at": "2026-10-10",
+   "credits": 1425,
+   "bytes": 2298707,
+   "downloaded_at": "2026-10-10T08:27:33+00:00"
+  },
+  {
+   "kind": "music",
+   "file": "audio-libs/elevenlabs/music/hideout-3-2.mp3",
+   "slot": "hideout-3",
+   "take": 2,
+   "via": "ElevenLabs Flows (claude.ai full connector)",
+   "flow_id": "FOUguRW3uRhYc7h1x2Fi",
+   "node_id": "P6iAMChvyExkrz9PK74k",
+   "session_id": "DyIboUaM2hlU0OQYzYe8",
+   "generation_id": "IUT8fqmtrkycHtwk9wzb",
+   "model_id": "eleven_music_v2_5",
+   "duration_seconds": 95,
+   "instrumental": true,
+   "prompt": "Instrumental ambient background score for a dark fantasy action RPG. Passive and steady: no intro, no ending, no build-up, no climax, no drums, no beat, no percussion, constant dynamics from the first second to the last, so it can loop. A mystic sanctum: soft harp arpeggios over a distant choir pad and a low drone, slow, otherworldly.",
+   "plan": "review/audio/music-plan.md",
+   "generated_at": "2026-10-10",
+   "credits": 1425,
+   "bytes": 2299283,
+   "downloaded_at": "2026-10-10T08:27:34+00:00"
+  },
+  {
+   "kind": "music",
+   "file": "audio-libs/elevenlabs/music/hideout-3-3.mp3",
+   "slot": "hideout-3",
+   "take": 3,
+   "via": "ElevenLabs Flows (claude.ai full connector)",
+   "flow_id": "FOUguRW3uRhYc7h1x2Fi",
+   "node_id": "P6iAMChvyExkrz9PK74k",
+   "session_id": "TIEKQPhkOPTCyKknBN8d",
+   "generation_id": "zjiiOetQcdqlugZgqMY8",
+   "model_id": "eleven_music_v2_5",
+   "duration_seconds": 95,
+   "instrumental": true,
+   "prompt": "Instrumental ambient background score for a dark fantasy action RPG. Passive and steady: no intro, no ending, no build-up, no climax, no drums, no beat, no percussion, constant dynamics from the first second to the last, so it can loop. A mystic sanctum: soft harp arpeggios over a distant choir pad and a low drone, slow, otherworldly.",
+   "plan": "review/audio/music-plan.md",
+   "generated_at": "2026-10-10",
+   "credits": 1425,
+   "bytes": 2299283,
+   "downloaded_at": "2026-10-10T08:27:35+00:00"
+  },
+  {
+   "kind": "music",
+   "file": "audio-libs/elevenlabs/music/vaal_stone-1.mp3",
+   "slot": "vaal_stone",
+   "take": 1,
+   "via": "ElevenLabs Flows (claude.ai full connector)",
+   "flow_id": "FOUguRW3uRhYc7h1x2Fi",
+   "node_id": "SmYgZ6KhMby47bYfb11Y",
+   "session_id": "yBtG5ydBLQed9pqHjvLt",
+   "generation_id": "eUTpfx0asRHZMmjrorNn",
+   "model_id": "eleven_music_v2_5",
+   "duration_seconds": 95,
+   "instrumental": true,
+   "prompt": "Instrumental ambient background score for a dark fantasy action RPG. Passive and steady: no intro, no ending, no build-up, no climax, no drums, no beat, no percussion, constant dynamics from the first second to the last, so it can loop. An ancient ruin: low drone, sparse metallic chimes, a faint ritual undertone, cold stone, dread.",
+   "plan": "review/audio/music-plan.md",
+   "generated_at": "2026-10-10",
+   "credits": 1425,
+   "bytes": 2299283,
+   "downloaded_at": "2026-10-10T08:28:21+00:00"
+  },
+  {
+   "kind": "music",
+   "file": "audio-libs/elevenlabs/music/vaal_stone-2.mp3",
+   "slot": "vaal_stone",
+   "take": 2,
+   "via": "ElevenLabs Flows (claude.ai full connector)",
+   "flow_id": "FOUguRW3uRhYc7h1x2Fi",
+   "node_id": "SmYgZ6KhMby47bYfb11Y",
+   "session_id": "T7TLycenwsIrjU35oHvB",
+   "generation_id": "a5Kmdy5cf9Z7IoYa7tQb",
+   "model_id": "eleven_music_v2_5",
+   "duration_seconds": 95,
+   "instrumental": true,
+   "prompt": "Instrumental ambient background score for a dark fantasy action RPG. Passive and steady: no intro, no ending, no build-up, no climax, no drums, no beat, no percussion, constant dynamics from the first second to the last, so it can loop. An ancient ruin: low drone, sparse metallic chimes, a faint ritual undertone, cold stone, dread.",
+   "plan": "review/audio/music-plan.md",
+   "generated_at": "2026-10-10",
+   "credits": 1425,
+   "bytes": 2299283,
+   "downloaded_at": "2026-10-10T08:28:23+00:00"
+  },
+  {
+   "kind": "music",
+   "file": "audio-libs/elevenlabs/music/vaal_stone-3.mp3",
+   "slot": "vaal_stone",
+   "take": 3,
+   "via": "ElevenLabs Flows (claude.ai full connector)",
+   "flow_id": "FOUguRW3uRhYc7h1x2Fi",
+   "node_id": "SmYgZ6KhMby47bYfb11Y",
+   "session_id": "HIt1f6IZvSF4WWggQEJU",
+   "generation_id": "7VyV9RKbjpabOGdB49fB",
+   "model_id": "eleven_music_v2_5",
+   "duration_seconds": 95,
+   "instrumental": true,
+   "prompt": "Instrumental ambient background score for a dark fantasy action RPG. Passive and steady: no intro, no ending, no build-up, no climax, no drums, no beat, no percussion, constant dynamics from the first second to the last, so it can loop. An ancient ruin: low drone, sparse metallic chimes, a faint ritual undertone, cold stone, dread.",
+   "plan": "review/audio/music-plan.md",
+   "generated_at": "2026-10-10",
+   "credits": 1425,
+   "bytes": 2299283,
+   "downloaded_at": "2026-10-10T08:28:24+00:00"
+  },
+  {
+   "kind": "music",
+   "file": "audio-libs/elevenlabs/music/desert-1.mp3",
+   "slot": "desert",
+   "take": 1,
+   "via": "ElevenLabs Flows (claude.ai full connector)",
+   "flow_id": "FOUguRW3uRhYc7h1x2Fi",
+   "node_id": "GohNViAjfYq0ZbKf810N",
+   "session_id": "AQyexJkD2QzYpXkv1a3s",
+   "generation_id": "ERPrdR2eyQL9V2oHBRMm",
+   "model_id": "eleven_music_v2_5",
+   "duration_seconds": 95,
+   "instrumental": true,
+   "prompt": "Instrumental ambient background score for a dark fantasy action RPG. Passive and steady: no intro, no ending, no build-up, no climax, no drums, no beat, no percussion, constant dynamics from the first second to the last, so it can loop. An empty desert: sparse oud and duduk phrases over a dry sustained drone, heat, emptiness.",
+   "plan": "review/audio/music-plan.md",
+   "generated_at": "2026-10-10",
+   "credits": 1425,
+   "bytes": 2299283,
+   "downloaded_at": "2026-10-10T08:28:26+00:00"
+  },
+  {
+   "kind": "music",
+   "file": "audio-libs/elevenlabs/music/desert-2.mp3",
+   "slot": "desert",
+   "take": 2,
+   "via": "ElevenLabs Flows (claude.ai full connector)",
+   "flow_id": "FOUguRW3uRhYc7h1x2Fi",
+   "node_id": "GohNViAjfYq0ZbKf810N",
+   "session_id": "s96XESnsfS4BCo8oTvrJ",
+   "generation_id": "esJEnwE91ITZf9u4kyJb",
+   "model_id": "eleven_music_v2_5",
+   "duration_seconds": 95,
+   "instrumental": true,
+   "prompt": "Instrumental ambient background score for a dark fantasy action RPG. Passive and steady: no intro, no ending, no build-up, no climax, no drums, no beat, no percussion, constant dynamics from the first second to the last, so it can loop. An empty desert: sparse oud and duduk phrases over a dry sustained drone, heat, emptiness.",
+   "plan": "review/audio/music-plan.md",
+   "generated_at": "2026-10-10",
+   "credits": 1425,
+   "bytes": 2298707,
+   "downloaded_at": "2026-10-10T08:28:27+00:00"
+  },
+  {
+   "kind": "music",
+   "file": "audio-libs/elevenlabs/music/desert-3.mp3",
+   "slot": "desert",
+   "take": 3,
+   "via": "ElevenLabs Flows (claude.ai full connector)",
+   "flow_id": "FOUguRW3uRhYc7h1x2Fi",
+   "node_id": "GohNViAjfYq0ZbKf810N",
+   "session_id": "FgEGwvLkvniM6YXH3etQ",
+   "generation_id": "IWnI0DcEoHRksfVHkwdZ",
+   "model_id": "eleven_music_v2_5",
+   "duration_seconds": 95,
+   "instrumental": true,
+   "prompt": "Instrumental ambient background score for a dark fantasy action RPG. Passive and steady: no intro, no ending, no build-up, no climax, no drums, no beat, no percussion, constant dynamics from the first second to the last, so it can loop. An empty desert: sparse oud and duduk phrases over a dry sustained drone, heat, emptiness.",
+   "plan": "review/audio/music-plan.md",
+   "generated_at": "2026-10-10",
+   "credits": 1425,
+   "bytes": 2298707,
+   "downloaded_at": "2026-10-10T08:28:29+00:00"
+  },
+  {
+   "kind": "music",
+   "file": "audio-libs/elevenlabs/music/swamp-1.mp3",
+   "slot": "swamp",
+   "take": 1,
+   "via": "ElevenLabs Flows (claude.ai full connector)",
+   "flow_id": "FOUguRW3uRhYc7h1x2Fi",
+   "node_id": "hnuqLN0jU0FIuw5LPXt1",
+   "session_id": "oH8Duo0ynLoEZObPwk25",
+   "generation_id": "vwKfp40nrp9vcxUGxrV7",
+   "model_id": "eleven_music_v2_5",
+   "duration_seconds": 95,
+   "instrumental": true,
+   "prompt": "Instrumental ambient background score for a dark fantasy action RPG. Passive and steady: no intro, no ending, no build-up, no climax, no drums, no beat, no percussion, constant dynamics from the first second to the last, so it can loop. A murky swamp: low murky pads, detuned woodwind, a slow heavy pulse in the pads, oppressive.",
+   "plan": "review/audio/music-plan.md",
+   "generated_at": "2026-10-10",
+   "credits": 1425,
+   "bytes": 2298707,
+   "downloaded_at": "2026-10-10T08:29:24+00:00"
+  },
+  {
+   "kind": "music",
+   "file": "audio-libs/elevenlabs/music/swamp-2.mp3",
+   "slot": "swamp",
+   "take": 2,
+   "via": "ElevenLabs Flows (claude.ai full connector)",
+   "flow_id": "FOUguRW3uRhYc7h1x2Fi",
+   "node_id": "hnuqLN0jU0FIuw5LPXt1",
+   "session_id": "BScCbDWxIEDtMpEjt9U2",
+   "generation_id": "zazA7XhLwx1x02faJgHm",
+   "model_id": "eleven_music_v2_5",
+   "duration_seconds": 95,
+   "instrumental": true,
+   "prompt": "Instrumental ambient background score for a dark fantasy action RPG. Passive and steady: no intro, no ending, no build-up, no climax, no drums, no beat, no percussion, constant dynamics from the first second to the last, so it can loop. A murky swamp: low murky pads, detuned woodwind, a slow heavy pulse in the pads, oppressive.",
+   "plan": "review/audio/music-plan.md",
+   "generated_at": "2026-10-10",
+   "credits": 1425,
+   "bytes": 2298707,
+   "downloaded_at": "2026-10-10T08:29:25+00:00"
+  },
+  {
+   "kind": "music",
+   "file": "audio-libs/elevenlabs/music/swamp-3.mp3",
+   "slot": "swamp",
+   "take": 3,
+   "via": "ElevenLabs Flows (claude.ai full connector)",
+   "flow_id": "FOUguRW3uRhYc7h1x2Fi",
+   "node_id": "hnuqLN0jU0FIuw5LPXt1",
+   "session_id": "tM491VFIpda1CDuEwPPt",
+   "generation_id": "63yDT8T81oOUIuS3ngdg",
+   "model_id": "eleven_music_v2_5",
+   "duration_seconds": 95,
+   "instrumental": true,
+   "prompt": "Instrumental ambient background score for a dark fantasy action RPG. Passive and steady: no intro, no ending, no build-up, no climax, no drums, no beat, no percussion, constant dynamics from the first second to the last, so it can loop. A murky swamp: low murky pads, detuned woodwind, a slow heavy pulse in the pads, oppressive.",
+   "plan": "review/audio/music-plan.md",
+   "generated_at": "2026-10-10",
+   "credits": 1425,
+   "bytes": 2299283,
+   "downloaded_at": "2026-10-10T08:29:26+00:00"
+  },
+  {
+   "kind": "music",
+   "file": "audio-libs/elevenlabs/music/forest-1.mp3",
+   "slot": "forest",
+   "take": 1,
+   "via": "ElevenLabs Flows (claude.ai full connector)",
+   "flow_id": "FOUguRW3uRhYc7h1x2Fi",
+   "node_id": "hlNMvzXK3kuhxST8xwXw",
+   "session_id": "R01hbiNpZogxivDjI1bs",
+   "generation_id": "aL69AWlT7TiRteKMhlGG",
+   "model_id": "eleven_music_v2_5",
+   "duration_seconds": 95,
+   "instrumental": true,
+   "prompt": "Instrumental ambient background score for a dark fantasy action RPG. Passive and steady: no intro, no ending, no build-up, no climax, no drums, no beat, no percussion, constant dynamics from the first second to the last, so it can loop. A night forest: soft cello and flute over wide pads, mysterious, wide, still.",
+   "plan": "review/audio/music-plan.md",
+   "generated_at": "2026-10-10",
+   "credits": 1425,
+   "bytes": 2298707,
+   "downloaded_at": "2026-10-10T08:29:28+00:00"
+  },
+  {
+   "kind": "music",
+   "file": "audio-libs/elevenlabs/music/forest-2.mp3",
+   "slot": "forest",
+   "take": 2,
+   "via": "ElevenLabs Flows (claude.ai full connector)",
+   "flow_id": "FOUguRW3uRhYc7h1x2Fi",
+   "node_id": "hlNMvzXK3kuhxST8xwXw",
+   "session_id": "VvHb3nTA5W2mzWMEw5qK",
+   "generation_id": "v7qEvevdrf0zZRLEkYsK",
+   "model_id": "eleven_music_v2_5",
+   "duration_seconds": 95,
+   "instrumental": true,
+   "prompt": "Instrumental ambient background score for a dark fantasy action RPG. Passive and steady: no intro, no ending, no build-up, no climax, no drums, no beat, no percussion, constant dynamics from the first second to the last, so it can loop. A night forest: soft cello and flute over wide pads, mysterious, wide, still.",
+   "plan": "review/audio/music-plan.md",
+   "generated_at": "2026-10-10",
+   "credits": 1425,
+   "bytes": 2298707,
+   "downloaded_at": "2026-10-10T08:29:29+00:00"
+  },
+  {
+   "kind": "music",
+   "file": "audio-libs/elevenlabs/music/forest-3.mp3",
+   "slot": "forest",
+   "take": 3,
+   "via": "ElevenLabs Flows (claude.ai full connector)",
+   "flow_id": "FOUguRW3uRhYc7h1x2Fi",
+   "node_id": "hlNMvzXK3kuhxST8xwXw",
+   "session_id": "mD3d5X5zyoJ76Rrv9iV1",
+   "generation_id": "uQdtuylPcZsCTYUzFcWH",
+   "model_id": "eleven_music_v2_5",
+   "duration_seconds": 95,
+   "instrumental": true,
+   "prompt": "Instrumental ambient background score for a dark fantasy action RPG. Passive and steady: no intro, no ending, no build-up, no climax, no drums, no beat, no percussion, constant dynamics from the first second to the last, so it can loop. A night forest: soft cello and flute over wide pads, mysterious, wide, still.",
+   "plan": "review/audio/music-plan.md",
+   "generated_at": "2026-10-10",
+   "credits": 1425,
+   "bytes": 2299283,
+   "downloaded_at": "2026-10-10T08:29:31+00:00"
+  },
+  {
+   "kind": "music",
+   "file": "audio-libs/elevenlabs/music/coast-1.mp3",
+   "slot": "coast",
+   "take": 1,
+   "via": "ElevenLabs Flows (claude.ai full connector)",
+   "flow_id": "FOUguRW3uRhYc7h1x2Fi",
+   "node_id": "t23BIznAEEYBcRnGdESs",
+   "session_id": "urUpplvUc5rXQRyrmUMA",
+   "generation_id": "fZ9lfRKXE4mZbiIgs3iY",
+   "model_id": "eleven_music_v2_5",
+   "duration_seconds": 95,
+   "instrumental": true,
+   "prompt": "Instrumental ambient background score for a dark fantasy action RPG. Passive and steady: no intro, no ending, no build-up, no climax, no drums, no beat, no percussion, constant dynamics from the first second to the last, so it can loop. A cold open sea coast: airy pads, a slow low brass swell, lonely, wide, grey.",
+   "plan": "review/audio/music-plan.md",
+   "generated_at": "2026-10-10",
+   "credits": 1425,
+   "bytes": 2298707,
+   "downloaded_at": "2026-10-10T08:29:32+00:00"
+  },
+  {
+   "kind": "music",
+   "file": "audio-libs/elevenlabs/music/coast-3.mp3",
+   "slot": "coast",
+   "take": 3,
+   "via": "ElevenLabs Flows (claude.ai full connector)",
+   "flow_id": "FOUguRW3uRhYc7h1x2Fi",
+   "node_id": "t23BIznAEEYBcRnGdESs",
+   "session_id": "9toA0PIvJIBzB2025smv",
+   "generation_id": "bHX4pY1BELHdHjicb7RJ",
+   "model_id": "eleven_music_v2_5",
+   "duration_seconds": 95,
+   "instrumental": true,
+   "prompt": "Instrumental ambient background score for a dark fantasy action RPG. Passive and steady: no intro, no ending, no build-up, no climax, no drums, no beat, no percussion, constant dynamics from the first second to the last, so it can loop. A cold open sea coast: airy pads, a slow low brass swell, lonely, wide, grey.",
+   "plan": "review/audio/music-plan.md",
+   "generated_at": "2026-10-10",
+   "credits": 1425,
+   "bytes": 2299283,
+   "downloaded_at": "2026-10-10T08:29:34+00:00"
+  },
+  {
+   "kind": "music",
+   "file": "audio-libs/elevenlabs/music/coast-2.mp3",
+   "slot": "coast",
+   "take": 2,
+   "via": "ElevenLabs Flows (claude.ai full connector)",
+   "flow_id": "FOUguRW3uRhYc7h1x2Fi",
+   "node_id": "t23BIznAEEYBcRnGdESs",
+   "session_id": "L68rmLT4F4IiKoao4rd1",
+   "generation_id": "Q7gh3HyimBRQzG6C8TAE",
+   "model_id": "eleven_music_v2_5",
+   "duration_seconds": 95,
+   "instrumental": true,
+   "prompt": "Instrumental ambient background score for a dark fantasy action RPG. Passive and steady: no intro, no ending, no build-up, no climax, no drums, no beat, no percussion, constant dynamics from the first second to the last, so it can loop. A cold open sea coast: airy pads, a slow low brass swell, lonely, wide, grey.",
+   "plan": "review/audio/music-plan.md",
+   "generated_at": "2026-10-10",
+   "credits": 1425,
+   "bytes": 2299283,
+   "downloaded_at": "2026-10-10T08:29:51+00:00"
+  }
+ ]
+}

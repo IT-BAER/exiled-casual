@@ -277,6 +277,7 @@ export function OptionsPanel({
               </Row>
               {([
                 ["Music", "music"],
+                ["Ambience", "ambience"],
                 ["Interface", "interface"],
                 ["Skills", "skills"],
                 ["Loot", "loot"],

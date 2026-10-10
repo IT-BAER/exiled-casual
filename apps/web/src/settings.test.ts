@@ -147,6 +147,7 @@ describe("sanitize", () => {
   it("keeps every saved sound category and defaults older saves", () => {
     expect(sanitize({ sound: {
       music: 0.1,
+      ambience: 0.15,
       interface: 0.2,
       skills: 0.3,
       loot: 0.4,
@@ -154,6 +155,7 @@ describe("sanitize", () => {
     } }).sound).toEqual({
       ...DEFAULT_SETTINGS.sound,
       music: 0.1,
+      ambience: 0.15,
       interface: 0.2,
       skills: 0.3,
       loot: 0.4,
@@ -163,6 +165,10 @@ describe("sanitize", () => {
       ...DEFAULT_SETTINGS.sound,
       master: 0.6,
     });
+  });
+
+  it("gives a save from before the ambience slider its old music level for the beds", () => {
+    expect(sanitize({ sound: { music: 0.2 } }).sound).toMatchObject({ music: 0.2, ambience: 0.2 });
   });
 
   it("drops keys it does not know rather than passing them through", () => {

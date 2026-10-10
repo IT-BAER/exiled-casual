@@ -50,14 +50,15 @@ const VOICES: Record<string, Voice> = {
   "ambient-forest":           { gain: 0.07, wet: 0.08, vary: 0 },
   // Open coast: almost no reverb, because there is nothing out there to reflect.
   "ambient-shore":            { gain: 0.071, wet: 0.03, vary: 0 },
-  // Details over the beds (AMBIENT_DETAIL), heard 6-12 units off and so already 6-14 dB
-  // down by distance before this gain.
-  "ambient-hideout-detail":   { gain: 0.25, wet: 0.12, vary: 0.06, takes: 5 },
+  // Details over the beds (AMBIENT_DETAIL), heard 6-12 units off and so 9-15 dB down by
+  // distance. Per pool: the median take's loudest 400 ms at 9 units sits 15 dB under an
+  // Ember Bolt cast, so a gull is the place and never a hit. Cave stays at 0.25 (cap).
+  "ambient-hideout-detail":   { gain: 0.16, wet: 0.12, vary: 0.06, takes: 5 },
   "ambient-cave-detail":      { gain: 0.25, wet: 0.30, vary: 0.06, takes: 6 },
-  "ambient-wind-detail":      { gain: 0.25, wet: 0.10, vary: 0.06, takes: 5 },
-  "ambient-swamp-detail":     { gain: 0.25, wet: 0.10, vary: 0.06, takes: 7 },
-  "ambient-forest-detail":    { gain: 0.25, wet: 0.12, vary: 0.06, takes: 7 },
-  "ambient-shore-detail":     { gain: 0.25, wet: 0.06, vary: 0.06, takes: 4 },
+  "ambient-wind-detail":      { gain: 0.115, wet: 0.10, vary: 0.06, takes: 5 },
+  "ambient-swamp-detail":     { gain: 0.165, wet: 0.10, vary: 0.06, takes: 7 },
+  "ambient-forest-detail":    { gain: 0.11, wet: 0.12, vary: 0.06, takes: 7 },
+  "ambient-shore-detail":     { gain: 0.09, wet: 0.06, vary: 0.06, takes: 4 },
   "skill-ember-bolt-cast":    { gain: 0.183, wet: 0.14, vary: 0.06, takes: 3 },
   "skill-ember-bolt-impact":  { gain: 0.295, wet: 0.18, vary: 0.08, takes: 3 },
   "skill-cinder-ground-cast": { gain: 0.247, wet: 0.22, vary: 0.04, takes: 3 },
@@ -170,7 +171,7 @@ const VOICES: Record<string, Voice> = {
 export type SfxName = keyof typeof VOICES & string;
 
 export function sfxCategory(name: string): SoundCategory {
-  if (name.startsWith("ambient-")) return "music";
+  if (name.startsWith("ambient-")) return "ambience";
   if (name.startsWith("skill-")) return "skills";
   if (name.startsWith("ui-")) return "interface";
   if (/^(drop|coin|level|container)-/.test(name)) return "loot";

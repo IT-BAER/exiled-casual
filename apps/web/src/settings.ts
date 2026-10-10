@@ -45,6 +45,8 @@ export interface SoundSettings {
   /** 0..1, linear on the slider and on the gain. */
   master: number;
   music: number;
+  /** Area beds and their details. */
+  ambience: number;
   interface: number;
   skills: number;
   loot: number;
@@ -205,6 +207,7 @@ export const DEFAULT_SETTINGS: Settings = {
   sound: {
     master: 0.8,
     music: 1,
+    ambience: 1,
     interface: 1,
     skills: 1,
     loot: 1,
@@ -328,6 +331,8 @@ export function sanitize(raw: unknown, renderer?: string): Settings {
     sound: {
       master: num(s["master"], 0, 1, d.sound.master),
       music: num(s["music"], 0, 1, d.sound.music),
+      // Before the ambience slider, the music slider carried the beds.
+      ambience: num(s["ambience"], 0, 1, num(s["music"], 0, 1, d.sound.ambience)),
       interface: num(s["interface"], 0, 1, d.sound.interface),
       skills: num(s["skills"], 0, 1, d.sound.skills),
       loot: num(s["loot"], 0, 1, d.sound.loot),
