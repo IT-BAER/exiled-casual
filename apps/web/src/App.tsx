@@ -46,6 +46,7 @@ import { setTitle } from "./title";
 import { setDebugLogging } from "./debug";
 import { setSoundMix } from "./audio/drop-sound";
 import { preloadSfx } from "./audio/sfx";
+import { MENU_MUSIC, setMusic } from "./audio/music";
 import { warmMenuStage } from "./menu/warm-stage";
 import { gpuRenderer } from "./gpu";
 import {
@@ -162,6 +163,13 @@ export function App(): React.ReactElement {
   React.useEffect(() => {
     void preloadSfx(["ui-click", "ui-hover", "ui-panel-open"]);
   }, []);
+
+  // Every screen outside the game shares one menu track, so moving between them
+  // never restarts it; GameView takes over on mount and stops on unmount, which
+  // runs before this effect brings the menu track back. Silent until the first input.
+  React.useEffect(() => {
+    if (screen.kind !== "game" && screen.kind !== "viewer") setMusic(MENU_MUSIC);
+  }, [screen.kind]);
 
   // The figure in the hall, fetched from the menu rather than by the click that
   // reaches him. His chunk, his wardrobe and his clips are the same whoever is

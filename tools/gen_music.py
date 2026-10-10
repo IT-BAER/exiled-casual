@@ -40,6 +40,8 @@ SLOTS = {
     "swamp": "A murky swamp: low murky pads, detuned woodwind, a slow heavy pulse in the pads, oppressive.",
     "forest": "A night forest: soft cello and flute over wide pads, mysterious, wide, still.",
     "coast": "A cold open sea coast: airy pads, a slow low brass swell, lonely, wide, grey.",
+    "menu": "The title screen: a slow brooding theme, a lone cello melody over low strings, a distant "
+             "choir pad and a deep drone, solemn, ancient, cinematic, embers in the dark.",
 }
 
 

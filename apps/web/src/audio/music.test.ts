@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { BIOMES } from "@exiled/content-runtime";
-import { HIDEOUT_MOODS, MUSIC_BY_BIOME, MUSIC_TAKES, pickTrack, trackPool } from "./music";
+import { HIDEOUT_MOODS, MENU_MUSIC, MUSIC_BY_BIOME, MUSIC_TAKES, pickTrack, trackPool } from "./music";
 
 /** `fake.ctx` is null until a test installs a stand-in context, as in headless jsdom. */
 const fake = vi.hoisted(() => ({ ctx: null as unknown, categories: [] as unknown[] }));
@@ -28,6 +28,12 @@ describe("trackPool", () => {
   it("gives the hideout every take of every mood", () => {
     expect(trackPool(null)).toHaveLength(HIDEOUT_MOODS.length * MUSIC_TAKES);
     expect(trackPool(null)).toContain("hideout-2-3");
+  });
+
+  it("gives the menus their own takes, shared with no area", () => {
+    expect(trackPool(MENU_MUSIC)).toEqual(["menu-1", "menu-2", "menu-3"]);
+    const areas = [null, ...Object.keys(BIOMES)].flatMap(trackPool);
+    for (const t of trackPool(MENU_MUSIC)) expect(areas).not.toContain(t);
   });
 
   it("is empty for a biome it has no music for", () => {

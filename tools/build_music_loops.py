@@ -92,6 +92,10 @@ def main():
     jobs = [(m, (PUBLIC if args.publish else CAND) / f"{m.stem}.webm") for m in sorted(MASTERS.glob("*.mp3"))]
     if not jobs:
         sys.exit(f"no masters in {MASTERS}")
+    # Opus in WebM is not byte-stable, so a rebuild of an unchanged master is a diff of nothing.
+    jobs = [(m, d) for m, d in jobs if not d.exists() or d.stat().st_mtime < m.stat().st_mtime]
+    if not jobs:
+        print("every loop is newer than its master")
     report = [build(m, d) for m, d in jobs]
     for r in report:
         print(json.dumps(r))

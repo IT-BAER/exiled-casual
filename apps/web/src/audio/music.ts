@@ -11,6 +11,8 @@ import { bus, send, type Bus } from "./bus";
 /** Takes per slot in public/music: `<slot>-1..N.webm`. */
 export const MUSIC_TAKES = 3;
 export const HIDEOUT_MOODS = ["hideout-1", "hideout-2", "hideout-3"] as const;
+/** The "area" every screen outside the game plays: `setMusic(MENU_MUSIC)`. */
+export const MENU_MUSIC = "menu";
 
 /** One slot per biome, pinned against BIOMES by the test. */
 export const MUSIC_BY_BIOME: Record<string, string> = {
@@ -23,10 +25,10 @@ export const MUSIC_BY_BIOME: Record<string, string> = {
 
 const takes = (slot: string) => Array.from({ length: MUSIC_TAKES }, (_, i) => `${slot}-${i + 1}`);
 
-/** Every track an area (`biomeId` null is the hideout) can play. */
+/** Every track an area (`biomeId` null is the hideout, MENU_MUSIC the menus) can play. */
 export function trackPool(biomeId: string | null): string[] {
   if (biomeId === null) return HIDEOUT_MOODS.flatMap(takes);
-  const slot = MUSIC_BY_BIOME[biomeId];
+  const slot = biomeId === MENU_MUSIC ? MENU_MUSIC : MUSIC_BY_BIOME[biomeId];
   return slot ? takes(slot) : [];
 }
 
