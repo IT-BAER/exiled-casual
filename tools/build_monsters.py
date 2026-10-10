@@ -1582,23 +1582,23 @@ SKITTERER_NORMAL = os.path.join(TEX_DIR, "source", "sand_skitterer_v1_n.png")
 def sand_skitterer():
     """Wider than it is long: a flat carapace on six splayed legs, knees above it.
 
-    Every joint below is MEASURED off sand_skitterer_v1.glb at height 0.6 (feet
-    as the lowest vertex per direction, knees as the highest along each foot's
-    ray), so a regenerated mesh needs them measured again. The left and right
-    mid legs are not mirrored because TRELLIS did not mirror them.
+    Thin spurs cut off by a volumetric opening (tools/open_volume.py --res 240
+    --radius 2). Every joint below is measured off sand_skitterer_v1.glb by
+    tools/measure_generated.py, so a regenerated mesh needs them measured again.
+    The left and right mid legs are not mirrored because TRELLIS did not mirror them.
     """
     c = GeneratedSkin("monster.sand_skitterer.v1", SKITTERER_SOURCE, SKITTERER_NORMAL,
-                      "desert", 0.6, (0.002, 0.352))
+                      "desert", 0.6, (-0.074, 0.134))
     spine = c.body.chain([(0, -0.36, 0.36), (0, 0.0, 0.40), (0, 0.34, 0.36)], [0.1] * 3)
     c.body.chain([(0, 0.52, 0.30), (0, 0.72, 0.27)], [0.05] * 2, parent=spine[-1])
     # Front pair first, then mid, then rear: Gait reads that order as a tripod.
     for i, (hip, knee, foot) in enumerate([
-        ((-0.20, 0.18, 0.38), (-0.446, 0.407, 0.518), (-0.656, 0.576, 0.00)),
-        ((0.17, 0.17, 0.38), (0.377, 0.376, 0.594), (0.658, 0.560, 0.02)),
-        ((-0.22, 0.05, 0.38), (-0.481, 0.109, 0.548), (-0.816, 0.118, 0.01)),
-        ((0.22, -0.03, 0.38), (0.492, -0.074, 0.537), (0.757, -0.174, 0.01)),
-        ((-0.14, -0.13, 0.38), (-0.317, -0.298, 0.599), (-0.638, -0.560, 0.03)),
-        ((0.16, -0.13, 0.38), (0.353, -0.299, 0.600), (0.694, -0.521, 0.04)),
+        ((-0.257, 0.290, 0.340), (-0.554, 0.483, 0.384), (-0.692, 0.594, 0.001)),
+        ((0.249, 0.293, 0.358), (0.510, 0.436, 0.473), (0.691, 0.592, 0.014)),
+        ((-0.350, 0.072, 0.328), (-0.628, 0.119, 0.442), (-0.851, 0.136, 0.009)),
+        ((0.291, -0.016, 0.351), (0.593, -0.036, 0.433), (0.788, -0.172, 0.000)),
+        ((-0.199, -0.220, 0.342), (-0.431, -0.429, 0.477), (-0.654, -0.589, 0.044)),
+        ((0.252, -0.272, 0.340), (0.469, -0.390, 0.506), (0.718, -0.560, 0.046)),
     ]):
         c.leg_through(i, hip, knee, foot)
     # At the roster's 0.78 a foot swept a third of the body width.
