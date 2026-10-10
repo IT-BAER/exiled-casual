@@ -1540,35 +1540,30 @@ def cinder_imp():
     return c
 
 
+HUSK_SOURCE = os.path.join(TEX_DIR, "source", "vaal_husk_v1.glb")
+HUSK_NORMAL = os.path.join(TEX_DIR, "source", "vaal_husk_v1_n.png")
+
+
 def vaal_husk():
-    """Hauls itself on long forelimbs; the hind legs are stubs that drag."""
-    c = Creature("monster.vaal_husk.v1", "vaal", 0.25, 0.9)
-    # Wide flat haunches, a narrow deep waist, and a chest wider than either: the
-    # cross-section has to change down the trunk or a hauler is a bean with arms.
-    spine = c.body.chain(
-        [(0, -0.30, 0.30), (0, -0.06, 0.42), (0, 0.16, 0.52), (0, 0.28, 0.52)],
-        [(0.20, 0.10), (0.17, 0.22), (0.30, 0.20), (0.25, 0.17)])
-    neck = c.body.chain([(0, 0.34, 0.62), (0, 0.42, 0.74)], [(0.10, 0.12), (0.15, 0.13)],
-                        parent=spine[-1])
-    c.body.chain([(0, 0.54, 0.74)], [0.08], parent=neck[-1])
-    # The split chest is what says "hollow" from above.
-    c.body.add(slab((0, 0.26, 0.52), (0.12, 0.11, 0.30), tilt=0.30), GLOWS)
-    for side in (-1, 1):
-        c.body.add(ellipsoid((side * 0.06, 0.52, 0.78), (0.033, 0.033, 0.033), 6, 4), GLOWS)
-        c.body.add(horn([(side * 0.12, 0.40, 0.86), (side * 0.34, 0.30, 0.94)],
-                        [0.05, 0.0]), BONES)
-        # A shoulder blade broken out through the hide, one side bent further.
-        # It leans OUT rather than up: from 53 degrees of elevation a blade that
-        # rises is a dot, and the same blade laid over the flank is a fin.
-        c.body.add(horn([(side * 0.14, 0.06, 0.46), (side * 0.30, 0.02, 0.60),
-                         (side * (0.42 + side * 0.06), -0.12, 0.60)],
-                        [0.09, 0.06, 0.0], 5), BONES)
-    for i, side in enumerate((-1, 1)):
-        c.leg(i, (side * 0.26, 0.14, 0.50), (side * 0.36, 0.44, 0.0), 0.072, 0.048, bend=0.11)
-    for i, side in enumerate((-1, 1), start=2):
-        # Not wider than the rump is: a hip further out than the hull reaches is a
-        # stub standing beside the animal with daylight between them.
-        c.leg(i, (side * 0.18, -0.22, 0.32), (side * 0.25, -0.34, 0.0), 0.062, 0.04)
+    """Hauls itself on long forelimbs; the hind legs are stubs that drag.
+
+    Generated (review/3d/vaal-husk), thin ribs cut off by a
+    volumetric opening (tools/open_volume.py --res 240 --radius 2), 4k triangles. Joints
+    measured off vaal_husk_v1.glb by tools/measure_generated.py --flip 1.
+    """
+    c = GeneratedSkin("monster.vaal_husk.v1", HUSK_SOURCE, HUSK_NORMAL,
+                      "vaal", 0.9, (0.012, 0.212), tex=512, flip=True)
+    spine = c.body.chain([(0, -0.45, 0.40), (0, -0.05, 0.64), (0, 0.22, 0.66)], [0.1] * 3)
+    # The skull hangs low between the forelimbs.
+    c.body.chain([(0, 0.34, 0.64), (0, 0.44, 0.54)], [0.1] * 2, parent=spine[-1])
+    # The forelimbs splay out at the elbow, which sits at shoulder height.
+    for i, (hip, knee, foot) in enumerate([
+        ((-0.049, 0.268, 0.593), (-0.145, 0.285, 0.595), (-0.430, 0.328, 0.000)),
+        ((0.126, 0.334, 0.632), (0.268, 0.364, 0.489), (0.370, 0.572, 0.000)),
+        ((-0.101, -0.389, 0.380), (-0.264, -0.522, 0.194), (-0.296, -0.453, 0.000)),
+        ((0.128, -0.382, 0.362), (0.319, -0.523, 0.119), (0.356, -0.447, 0.001)),
+    ]):
+        c.leg_through(i, hip, knee, foot)
     return c
 
 

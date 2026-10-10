@@ -306,6 +306,9 @@ describe("monsters asset", () => {
    *
    * 6.25MB and twenty-one images since the Thornhide Boar did the same: measured
    * 5,895,208 -> 6,080,492 packed.
+   *
+   * Twenty-three images since the Vaal Husk did the same: measured 5,350,232 ->
+   * 5,530,408 packed, inside 6.25MB because the volumetric opening shrank the rest.
    */
   /**
    * The shader warm that ends the map-entry stall. Every instance of a species
@@ -349,7 +352,7 @@ describe("monsters asset", () => {
 
   it("embeds compressed textures and stays within budget", () => {
     for (const image of json.images) expect(image.mimeType).toBe("image/jpeg");
-    expect(json.images.length).toBeLessThanOrEqual(21);
+    expect(json.images.length).toBeLessThanOrEqual(23);
     expect(json.extensionsRequired).toContain("EXT_meshopt_compression");
     expect(glb.byteLength).toBeLessThan(6_250_000);
   });
