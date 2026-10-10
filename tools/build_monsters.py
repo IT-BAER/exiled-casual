@@ -1397,6 +1397,31 @@ def srgb_luma(img):
     return float((rgb @ numpy.array([0.299, 0.587, 0.114], dtype=numpy.float32)).mean() * 255.0)
 
 
+def hide_gain(img, target):
+    """The tint that lands a sheet's mean luma on `target` after the runtime's
+    linear multiply, measured texel by texel: (target / mean) ** 2.2 misses a
+    high-contrast sheet by up to a fifth. Down only, never up. Every texel
+    counts, as in `srgb_luma`, so a sheet that rule leaves alone stays alone."""
+    buf = numpy.empty(len(img.pixels), dtype=numpy.float32)
+    img.pixels.foreach_get(buf)
+    rgb = numpy.clip(buf.reshape(-1, 4)[:, :3], 0.0, 1.0)
+    lin = numpy.where(rgb <= 0.04045, rgb / 12.92, ((rgb + 0.055) / 1.055) ** 2.4)
+    weights = numpy.array([0.299, 0.587, 0.114], dtype=numpy.float32)
+
+    def luma(gain):
+        c = lin * gain
+        enc = numpy.where(c <= 0.0031308, c * 12.92, 1.055 * c ** (1 / 2.4) - 0.055)
+        return float((enc @ weights).mean() * 255.0)
+
+    if luma(1.0) <= target:
+        return 1.0
+    lo, hi = 0.0, 1.0
+    for _ in range(24):
+        mid = (lo + hi) / 2
+        lo, hi = (mid, hi) if luma(mid) < target else (lo, mid)
+    return (lo + hi) / 2
+
+
 def prepare_textures():
     """Downscale, re-encode, and derive a normal map for each hide sheet."""
     os.makedirs(BUILD_DIR, exist_ok=True)
@@ -1419,8 +1444,7 @@ def prepare_textures():
         # The sheet is tinted DOWN to the target, never up: a hide already dark
         # enough is left alone rather than lifted to meet a number.
         luma = srgb_luma(img)
-        target = max(HIDE_FLOOR, FLOOR_LUMA[name] * HIDE_RATIO)
-        gain = min(1.0, (target / luma) ** 2.2)
+        gain = hide_gain(img, max(HIDE_FLOOR, FLOOR_LUMA[name] * HIDE_RATIO))
         print("  hide %-7s luma %5.1f floor %5.1f tint %.3f" % (name, luma, FLOOR_LUMA[name], gain))
         bpy.data.images.remove(img)
         out[name] = (colour, normal, gain)
@@ -1798,8 +1822,7 @@ def generated_hide(mesh, name, family, normal=None, size=TEX_SIZE):
     colour = os.path.join(BUILD_DIR, name + ".jpg")
     img.save_render(filepath=colour, scene=bpy.context.scene)
     luma = srgb_luma(img)
-    target = max(HIDE_FLOOR, FLOOR_LUMA[family] * HIDE_RATIO)
-    gain = min(1.0, (target / luma) ** 2.2)
+    gain = hide_gain(img, max(HIDE_FLOOR, FLOOR_LUMA[family] * HIDE_RATIO))
     print("  hide %-7s luma %5.1f floor %5.1f tint %.3f" % (name, luma, FLOOR_LUMA[family], gain))
     if normal is not None:
         # Re-encoded like the hide normals: a 1024 PNG embeds at several MB.
