@@ -427,7 +427,8 @@ describe("registerDeath", () => {
     expect(world.get<ProgressC>(sessionE, "progress")).toEqual({ level: 11, xp: 0, gold: 0 });
     // levelBonus is total-based (210 life over 99 levels), so crossing 10->11
     // grants +2 life (21 at level 11, 19 at level 10), not a flat per-level rate.
-    expect(world.get<{ maxLife: number; life: number }>(p, "health")).toEqual({ maxLife: fp(121), life: fp(100) });
+    // The level is headroom, not a heal; the 4.84 on top is the kill's own 4% of 121.
+    expect(world.get<{ maxLife: number; life: number }>(p, "health")).toEqual({ maxLife: fp(121), life: fp(104.84) });
   });
 
   // ── Gem experience ───────────────────────────────────────────────────────
@@ -648,6 +649,27 @@ describe("registerDeath", () => {
     const f = w.get(p, "flasks") as { lifeCharges: number; lifeMax: number; manaCharges: number; manaMax: number };
     expect(f.lifeCharges).toBe(4);    // 3 + 1
     expect(f.manaCharges).toBe(7);    // clamped at max
+  });
+
+  it("each kill heals the player 4% of max life, never past it", () => {
+    const sim = new Simulation();
+    registerDeath(sim);
+    const w = sim.world;
+    const hurt = w.create();
+    w.set(hurt, "player", { moveSpeed: 0, bodyRadius: fp(0.5) });
+    w.set(hurt, "health", { life: fp(50), maxLife: fp(100) });
+    const full = w.create();
+    w.set(full, "player", { moveSpeed: 0, bodyRadius: fp(0.5) });
+    w.set(full, "health", { life: fp(99), maxLife: fp(100) });
+    for (let i = 0; i < 2; i++) {
+      const m = w.create();
+      w.set(m, "monster", { defId: "d", moveSpeed: 0, bodyRadius: 0, attackRange: 0, attackCooldownTicks: 0, attackDamage: 0, attackType: 1, attackReadyTick: 0, state: "idle", rare: 0, summoned: 0 });
+      w.set(m, "health", { life: 0, maxLife: fp(10) });
+    }
+
+    sim.step([]);
+    expect((w.get(hurt, "health") as { life: number }).life).toBe(fp(58)); // 50 + 2 x 4
+    expect((w.get(full, "health") as { life: number }).life).toBe(fp(100));
   });
 
   it("does not drop when an ordinary (non-rare, non-boss) monster dies", () => {

@@ -571,10 +571,14 @@ describe("archetype time-to-kill (Tier 1, reference character)", () => {
   }
 });
 
-it("a full biome pack kills a stationary reference character in under 12s", () => {
-  // One socket of each of Vaal Stone's three archetypes (swarm+brute+heavy), no dodge.
-  // Measured with swarm 8 x (life 28, hit 0.9): vaal_stone 9.7s, desert 8.0, swamp 7.8,
-  // forest 10.5, coast 7.8. A pack spread along a line never lands together.
-  const seconds = secondsToKillIdlePlayer("vaal_stone");
-  expect(seconds).toBeLessThan(12);
+it("every full biome pack needs 13-20s to kill a stationary reference character", () => {
+  // One socket of each species in the pool, no dodge. Measured after the second
+  // casual pass (hits ~x0.55): vaal_stone 16.5s, desert 14.5, swamp 13.8, forest
+  // 18.0, coast 13.8; before it, 7.8s on the first map. Under 13 is a level-1
+  // character dying while he reads a tooltip; over 20 and a pack is no threat.
+  for (const biome of ["vaal_stone", "desert", "swamp", "forest", "coast"] as const) {
+    const seconds = secondsToKillIdlePlayer(biome);
+    expect(seconds, biome).toBeGreaterThanOrEqual(13);
+    expect(seconds, biome).toBeLessThanOrEqual(20);
+  }
 });

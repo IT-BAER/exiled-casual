@@ -27,6 +27,8 @@ import type { CollisionRef } from "../collision";
 const MR_NORMAL = 0;
 const MR_RARE = 2;
 const MR_UNIQUE = 3;
+/** Percent of max life each kill heals the player. */
+const LIFE_ON_KILL_PCT = 4;
 
 /**
  * Where each item of a burst lands relative to the corpse. Literal fixed-point
@@ -210,6 +212,15 @@ export function registerDeath(sim: Simulation, collisionRef?: CollisionRef): voi
             grantSkills(world);
           }
         }
+      }
+
+      // Every kill heals: the casual answer to a 100-life character with no
+      // regeneration, paid by the same act that drops the loot. A corpse stays one.
+      for (const pe of world.query("player", "health")) {
+        const h = world.get<Health>(pe, "health")!;
+        if (h.life <= 0) continue;
+        const heal = Math.trunc((h.maxLife * LIFE_ON_KILL_PCT) / 100);
+        world.set<Health>(pe, "health", { ...h, life: Math.min(h.maxLife, h.life + heal) });
       }
 
       // Grant flask charges to every player entity with flasks before destroy.

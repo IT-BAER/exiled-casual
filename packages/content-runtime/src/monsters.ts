@@ -36,12 +36,15 @@ const LIFE = {
   heavy: fp(306),   // was 360, x0.85
   boss: fp(630),    // unchanged
 } as const;
+// Second casual pass, about x0.55 on every hit and the heavies' slam: a full
+// first-map room took 7.8s to kill a player standing still. Bosses keep their own.
 const HIT = {
-  swarm: fp(0.9),   // was 1.8, halved with the life for twice the bodies
-  brute: fp(5.4),   // was 9, x0.6
-  shooter: fp(3.6), // was 6, x0.6
-  heavy: fp(3.6),   // was 6, x0.6
+  swarm: fp(0.5),
+  brute: fp(3),
+  shooter: fp(2),
+  heavy: fp(2),
 } as const;
+const HEAVY_SLAM = fp(8);
 
 // Eight to a pack need room to stand in one: a smaller body than any other kind.
 const SWARM_RADIUS = fp(0.32);
@@ -210,7 +213,7 @@ const MONSTER_DEFS: MonsterDef[] = [
     attackDamage: { type: "chaos", amountFixed: HIT.heavy },
     attackCooldownTicks: 45, radiusFixed: fp(0.8),
     defenses: { resPct: resBlock({ chaos: 30 }), armourFixed: fp(2) },
-    heavy: { windupTicks: 30, radiusFixed: fp(2.6), damageFixed: fp(15), cooldownTicks: 150, rangeFixed: fp(6.5) },
+    heavy: { windupTicks: 30, radiusFixed: fp(2.6), damageFixed: HEAVY_SLAM, cooldownTicks: 150, rangeFixed: fp(6.5) },
   },
 
   // --- Desert: swarm, shooter, heavy. Nothing here holds a line; it circles.
@@ -237,7 +240,7 @@ const MONSTER_DEFS: MonsterDef[] = [
     attackDamage: { type: "fire", amountFixed: HIT.heavy },
     attackCooldownTicks: 45, radiusFixed: fp(0.8),
     defenses: { resPct: resBlock({ fire: 25 }), armourFixed: fp(2) },
-    heavy: { windupTicks: 30, radiusFixed: fp(2.6), damageFixed: fp(15), cooldownTicks: 150, rangeFixed: fp(6.5) },
+    heavy: { windupTicks: 30, radiusFixed: fp(2.6), damageFixed: HEAVY_SLAM, cooldownTicks: 150, rangeFixed: fp(6.5) },
   },
 
   // --- Swamp: all four. Slow, wet, and nothing you can outrun in a line.
@@ -271,7 +274,7 @@ const MONSTER_DEFS: MonsterDef[] = [
     attackDamage: { type: "physical", amountFixed: HIT.heavy },
     attackCooldownTicks: 45, radiusFixed: fp(0.8),
     defenses: { resPct: resBlock({ chaos: 20 }), armourFixed: fp(2) },
-    heavy: { windupTicks: 30, radiusFixed: fp(2.6), damageFixed: fp(15), cooldownTicks: 150, rangeFixed: fp(6.5) },
+    heavy: { windupTicks: 30, radiusFixed: fp(2.6), damageFixed: HEAVY_SLAM, cooldownTicks: 150, rangeFixed: fp(6.5) },
   },
 
   // --- Forest: swarm, brute, shooter. The only biome with nothing to dodge,
