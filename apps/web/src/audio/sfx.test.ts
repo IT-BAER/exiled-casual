@@ -9,6 +9,7 @@ import {
   sfxCategory, startSfxLoop, startSfxLoopAt, stopAmbient, stopSfxLoop, toListenerSpace,
 } from "./sfx";
 import { VARKIS_SFX } from "./varkis-voice";
+import { ITEM_MATERIALS } from "./soundscape";
 
 /** `fake.ctx` is null until a test installs a stand-in context, as in headless jsdom.
  *  `sends` records every `send(b, node, wet, category, spatial)` and hands back its wet gain. */
@@ -93,6 +94,15 @@ describe("sfx assets", () => {
    * added to the bestiary with no material silently falls back to the generic cue,
    * which is exactly the "sounds generic" complaint this work exists to fix.
    */
+  it("every item material can be set down and worn, and the bench and the cursor have theirs", () => {
+    const voices = new Set(voiceNames());
+    for (const m of ITEM_MATERIALS) {
+      expect(voices.has(`item-place-${m}`), `place ${m}`).toBe(true);
+      expect(voices.has(`item-equip-${m}`), `equip ${m}`).toBe(true);
+    }
+    for (const name of ["item-lift", "trade-sell", "trade-buy"]) expect(voices.has(name), name).toBe(true);
+  });
+
   it("every material has both cues, and every monster has a material", () => {
     const body = readFileSync(resolve(__dirname, "soundscape.ts"), "utf8");
     const table = body.slice(body.indexOf("const MATERIAL"), body.indexOf("function cueFor"));
@@ -197,10 +207,16 @@ describe("sfxCategory", () => {
         ? "ambience"
         : name.startsWith("skill-")
         ? "skills"
-        : name.startsWith("ui-")
+        : /^(ui|item|trade)-/.test(name)
         ? "interface"
         : /^(drop|coin|level|container)-/.test(name) ? "loot" : "environment";
       expect(sfxCategory(name), name).toBe(expected);
+    }
+  });
+
+  it("moving, wearing and trading items is the interface, beside the click", () => {
+    for (const name of ["item-lift", "item-place-metal", "item-equip-wood", "trade-sell", "trade-buy"]) {
+      expect(sfxCategory(name), name).toBe("interface");
     }
   });
 

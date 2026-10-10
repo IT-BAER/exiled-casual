@@ -5,6 +5,7 @@ import { canEquip } from "@exiled/simulation";
 import { currencyAccepts, currencyResultRarity, SHARDS_PER_ORB } from "@exiled/rules";
 import { ItemTooltip } from "./ItemTooltip";
 import { playDropSound } from "../audio/drop-sound";
+import { playSfx } from "../audio/sfx";
 import { VENDOR_NAME, VENDOR_TITLE } from "../npc";
 import { BAR_H, ORB_RISE } from "./Hud";
 import { CELL, CELL_VW, PANEL_PAD, PANEL_W } from "./layout";
@@ -354,7 +355,7 @@ export const InventoryPanel = React.memo(function InventoryPanel({
     container === "vendor" ? (it as ShelfItem).price : 0;
 
   // Sound the bench off the shard count rather than off the click, so the two
-  // outcomes are audibly different: banking a shard ticks, and the tenth one
+  // outcomes are audibly different: banking a shard is a sale, and the tenth one
   // spends the pile on an orb, which drops the total and rings like a unique.
   // docs/09 rule 2 - a reward the player cannot hear did not happen.
   const shardTotal = Object.values(shards).reduce((a, b) => a + b, 0);
@@ -363,7 +364,8 @@ export const InventoryPanel = React.memo(function InventoryPanel({
     const prev = lastShardTotal.current;
     lastShardTotal.current = shardTotal;
     if (prev === null || prev === shardTotal) return;
-    playDropSound(shardTotal > prev ? "normal" : "unique");
+    if (shardTotal > prev) playSfx("trade-sell");
+    else playDropSound("unique");
   }, [shardTotal]);
   // Keyed by WHERE the cursor is, not by the item that was under it: a cell and a
   // paper-doll slot both address one place, and the sim rebuilds every item object
@@ -580,6 +582,8 @@ export const InventoryPanel = React.memo(function InventoryPanel({
     setHover(null);
     pointerRef.current = { x: e.clientX, y: e.clientY };
     setDrag({ from, item, w, h, x: e.clientX, y: e.clientY, ox: e.clientX, oy: e.clientY, carried: false });
+    // Lifting is the cursor's alone, so nothing the sim says can make it untrue.
+    playSfx("item-lift");
   };
   const slotHighlight = (slot: EquipSlotId): "legal" | "illegal" | "none" => {
     if (!drag || drag.from.kind === "slot") return "none";
@@ -759,9 +763,7 @@ export const InventoryPanel = React.memo(function InventoryPanel({
                     e.preventDefault();
                     if (priceOf(container, it) > gold) return;
                     setHover(null);
-                    // The purchase sounds at the rarity it lands at, so the loud
-                    // ones are loud here too (docs/09 rule 2).
-                    playDropSound(it.rarity);
+                    // Heard as coins once the sim takes the gold (soundscape.ts), not here.
                     onIntent?.({ kind: "buyItem", x: it.x, y: it.y });
                     return;
                   }

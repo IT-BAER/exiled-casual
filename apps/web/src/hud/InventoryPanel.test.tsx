@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, cleanup, fireEvent, act } from "@testing-library/react";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
@@ -7,8 +7,12 @@ import { ITEM_POOLS, baseOf, WISDOM_SCROLL_BASE_ID } from "@exiled/content-runti
 import { Profiler } from "react";
 import { InventoryPanel } from "./InventoryPanel";
 import { VENDOR_NAME, VENDOR_TITLE } from "../npc";
+import { playSfx } from "../audio/sfx";
 
-afterEach(cleanup);
+vi.mock("../audio/sfx", async (orig) => ({ ...(await orig<typeof import("../audio/sfx")>()), playSfx: vi.fn() }));
+const heard = () => vi.mocked(playSfx).mock.calls.map((c) => c[0]);
+
+afterEach(() => { cleanup(); vi.mocked(playSfx).mockClear(); });
 
 // jsdom has no PointerEvent, so `fireEvent.pointerDown` drops clientX/clientY and the
 // press lands at undefined. A MouseEvent under the pointer event's name carries them,
@@ -679,5 +683,26 @@ describe("InventoryPanel sort", () => {
     for (let i = 0; i < 4; i++) { titles.push(btn.getAttribute("title")); fireEvent.click(btn); }
     expect(intents.map((i) => i.mode)).toEqual(["type", "rarity", "size", "type"]);
     expect(titles).toEqual(["Sort by type", "Sort by rarity", "Sort by size", "Sort by type"]);
+  });
+});
+
+describe("InventoryPanel sounds", () => {
+  it("lifts a piece onto the cursor with a sound of its own", () => {
+    render(<InventoryPanel inventory={inv} onClose={() => {}} />);
+    press(screen.getByTestId("inventory-item-0"), 10, 10);
+    expect(heard()).toEqual(["item-lift"]);
+  });
+
+  it("a shard banked at the bench is a sale; ten becoming an orb still rings", () => {
+    const { rerender } = render(<InventoryPanel inventory={inv} vendorOpen shards={{ "currency.elevation": 3 }} onClose={() => {}} />);
+    rerender(<InventoryPanel inventory={inv} vendorOpen shards={{ "currency.elevation": 4 }} onClose={() => {}} />);
+    rerender(<InventoryPanel inventory={inv} vendorOpen shards={{ "currency.elevation": 0 }} onClose={() => {}} />);
+    expect(heard()).toEqual(["trade-sell", "drop-unique"]);
+  });
+
+  it("a purchase is not heard at the click; the purse and the bag say whether it happened", () => {
+    render(<InventoryPanel inventory={inv} vendorOpen vendor={shelf} gold={500} onClose={() => {}} />);
+    fireEvent.pointerDown(screen.getByTestId("vendor-item-0"));
+    expect(heard()).toEqual([]);
   });
 });

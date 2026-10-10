@@ -250,6 +250,71 @@ SOURCES: dict[str, str | list[str | dict]] = {
         "InMotionAudio - Foley T-Shirt/FOLYClth_ClothMovement29_InMotionAudio_FoleyT-Shirt.wav@0.70:0.45:-3.4",
     ],
 
+    # ── Items and trade (inventory grid, equipment, sell, buy) ──────────────────────
+    # Physical foley only, one recording per cue so the three takes are one event.
+    # Takes 2, 3: two more cloth grabs of the same T-shirt foley pack.
+    "item-lift": [
+        "InMotionAudio - Foley T-Shirt/FOLYClth_ClothMovement24_InMotionAudio_FoleyT-Shirt.wav@0.50:0.30:6.8",
+        "InMotionAudio - Foley T-Shirt/FOLYClth_ClothMovement29_InMotionAudio_FoleyT-Shirt.wav@0.78:0.30:-4.7",
+        "InMotionAudio - Foley T-Shirt/FOLYClth_ClothMovement24_InMotionAudio_FoleyT-Shirt.wav@1.35:0.30:-4.6",
+    ],
+    # Metal: a buckler set down on a floor. Leather: an antique suitcase thumped shut.
+    # Wood: a tile dropped on wood. Stone: pebbles dropped on pebbles. Takes are other hits of each.
+    "item-place-metal": [
+        "344 Audio - Historical Weapons Vol. 2/WEAPArmr_Metal Shield Spin On Floor, Buckler MKH_344 Audio_Medieval Weapons Vol 2.wav@2.78:0.35:-2.1",
+        "344 Audio - Historical Weapons Vol. 2/WEAPArmr_Metal Shield Spin On Floor, Buckler MKH_344 Audio_Medieval Weapons Vol 2.wav@3.13:0.35:-2.3",
+        "344 Audio - Historical Weapons Vol. 2/WEAPArmr_Metal Shield Spin On Floor, Buckler MKH_344 Audio_Medieval Weapons Vol 2.wav@3.45:0.35:-3.4",
+    ],
+    "item-place-leather": [
+        "344 Audio - Antique Luggage/OBJLug_Suitcase Opening and Closing, Antique Suitcase_344 Audio_Antiques - Luggage_01.wav@1.38:0.35:-1.0",
+        "344 Audio - Antique Luggage/OBJLug_Suitcase Opening and Closing, Antique Suitcase_344 Audio_Antiques - Luggage_01.wav@5.68:0.35:0.2",
+        "344 Audio - Antique Luggage/OBJLug_Suitcase Opening and Closing, Antique Suitcase_344 Audio_Antiques - Luggage_01.wav@6.42:0.35:-3.5",
+    ],
+    "item-place-wood": [
+        "UberDuo - Game Night Audio Props/GAMEBoard_Scrabble, Shotgun, Tiles, Drop_UberDuo_Game.wav@0.22:0.30:-2.8",
+        "UberDuo - Game Night Audio Props/GAMEBoard_Scrabble, Shotgun, Tiles, Drop_UberDuo_Game.wav@0.49:0.30:1.0",
+        "UberDuo - Game Night Audio Props/GAMEBoard_Scrabble, Shotgun, Tiles, Drop_UberDuo_Game.wav@0.76:0.30:0.8",
+    ],
+    "item-place-stone": [
+        "Pole Position Production - The Stone & Sand Library/Pebbles - DROP - Dense - Mono.wav@12.33:0.30:-1.0",
+        "Pole Position Production - The Stone & Sand Library/Pebbles - DROP - Dense - Mono.wav@23.60:0.30:0.0",
+        "Pole Position Production - The Stone & Sand Library/Pebbles - DROP - Dense - Mono.wav@38.18:0.30:-2.4",
+    ],
+    # Equip: the same materials heavier, a belt buckle jingled in under each hit.
+    "item-equip-metal": [
+        {"layers": [("Justsoundeffects - Melee Weapons/WEAPArmr_Metal Shield Block Hits_JSE_MW.wav@2.40:0.60", 0, 0, 0), ("Sonic Bat - Videogame Foley Essentials Vol. I/SBvfe1_Jiggling Belt Buckle 004.wav@0.70:0.40", 0, -8, 30)], "gain": -1.6},
+        {"layers": [("Justsoundeffects - Melee Weapons/WEAPArmr_Metal Shield Block Hits_JSE_MW.wav@4.78:0.60", 0, 0, 0), ("Sonic Bat - Videogame Foley Essentials Vol. I/SBvfe1_Jiggling Belt Buckle 004.wav@0.70:0.40", 0, -8, 30)], "gain": -1.2},
+        {"layers": [("Justsoundeffects - Melee Weapons/WEAPArmr_Metal Shield Block Hits_JSE_MW.wav@7.25:0.60", 0, 0, 0), ("Sonic Bat - Videogame Foley Essentials Vol. I/SBvfe1_Jiggling Belt Buckle 004.wav@0.70:0.40", 0, -8, 30)], "gain": -2.1},
+    ],
+    "item-equip-leather": [
+        {"layers": [("344 Audio - Antique Luggage/OBJLug_Suitcase Opening and Closing, Antique Suitcase_344 Audio_Antiques - Luggage_01.wav@1.38:0.60", 0, 0, 0), ("Sonic Bat - Videogame Foley Essentials Vol. I/SBvfe1_Jiggling Belt Buckle 004.wav@0.70:0.40", 0, -8, 30)], "gain": 1.0},
+        {"layers": [("344 Audio - Antique Luggage/OBJLug_Suitcase Opening and Closing, Antique Suitcase_344 Audio_Antiques - Luggage_01.wav@5.68:0.60", 0, 0, 0), ("Sonic Bat - Videogame Foley Essentials Vol. I/SBvfe1_Jiggling Belt Buckle 004.wav@0.70:0.40", 0, -8, 30)], "gain": -0.2},
+        {"layers": [("344 Audio - Antique Luggage/OBJLug_Suitcase Opening and Closing, Antique Suitcase_344 Audio_Antiques - Luggage_01.wav@6.42:0.60", 0, 0, 0), ("Sonic Bat - Videogame Foley Essentials Vol. I/SBvfe1_Jiggling Belt Buckle 004.wav@0.70:0.40", 0, -8, 30)], "gain": -3.2},
+    ],
+    # Take 3 is take 2's box hit a minor third up and a different buckle shake (one box, two hits).
+    "item-equip-wood": [
+        {"layers": [("Sonic Bat - Videogame Foley Essentials Vol. II/SBvfe2_Shaking Small Wooden Box 030.wav@0.33:0.60", 0, 0, 0), ("Sonic Bat - Videogame Foley Essentials Vol. I/SBvfe1_Jiggling Belt Buckle 004.wav@0.70:0.40", 0, -8, 30)], "gain": -2.4},
+        {"layers": [("Sonic Bat - Videogame Foley Essentials Vol. II/SBvfe2_Shaking Small Wooden Box 030.wav@1.41:0.60", 0, 0, 0), ("Sonic Bat - Videogame Foley Essentials Vol. I/SBvfe1_Jiggling Belt Buckle 004.wav@0.70:0.40", 0, -8, 30)], "gain": 0.7},
+        {"layers": [("Sonic Bat - Videogame Foley Essentials Vol. II/SBvfe2_Shaking Small Wooden Box 030.wav@1.41:0.60", 3, 0, 0), ("Sonic Bat - Videogame Foley Essentials Vol. I/SBvfe1_Jiggling Belt Buckle 004.wav@0.70:0.40", 0, -8, 30)], "gain": 1.8},
+    ],
+    "item-equip-stone": [
+        {"layers": [("Pole Position Production - The Stone & Sand Library/Pebbles - DROP - Dense - Mono.wav@51.09:0.60", 0, 0, 0), ("Sonic Bat - Videogame Foley Essentials Vol. I/SBvfe1_Jiggling Belt Buckle 004.wav@0.70:0.40", 0, -8, 30)], "gain": -4.4},
+        {"layers": [("Pole Position Production - The Stone & Sand Library/Pebbles - DROP - Dense - Mono.wav@87.34:0.60", 0, 0, 0), ("Sonic Bat - Videogame Foley Essentials Vol. I/SBvfe1_Jiggling Belt Buckle 004.wav@0.70:0.40", 0, -8, 30)], "gain": 1.9},
+        {"layers": [("Pole Position Production - The Stone & Sand Library/Pebbles - DROP - Dense - Mono.wav@12.33:0.60", 0, 0, 0), ("Sonic Bat - Videogame Foley Essentials Vol. I/SBvfe1_Jiggling Belt Buckle 004.wav@0.70:0.40", 0, -8, 30)], "gain": -2.8},
+    ],
+    # Disenchant: crushed rock pouring, the first stones landing as the soft tick.
+    "trade-sell": [
+        "Pole Position Production - The Stone & Sand Library/Crushed Rock - DROP - Thick - Mono.wav@23.40:0.50:1.0",
+        "Pole Position Production - The Stone & Sand Library/Crushed Rock - DROP - Thick - Mono.wav@34.45:0.50:2.4",
+        "Pole Position Production - The Stone & Sand Library/Crushed Rock - DROP - Thick - Mono.wav@29.00:0.50:-2.6",
+    ],
+    # Paying coins: a handful of coins set down.
+    "trade-buy": [
+        "CB Sound Design - Essential Sounds Vol.01 Coins/coins_9.wav@0.20:0.50:-1.6",
+        "CB Sound Design - Essential Sounds Vol.01 Coins/coins_9.wav@0.50:0.50:1.2",
+        "CB Sound Design - Essential Sounds Vol.01 Coins/handling_coins_7.wav@0.20:0.40:0.9",
+    ],
+
     # ── Ambient details (sfx.ts AMBIENT_DETAIL) ──────────────────────────────────────
     # One-shots dropped around the player over a biome's bed. Cut by event detection
     # (20 ms level against a 3 s rolling median) and kept WHOLE by trim_sfx.py: a drip's

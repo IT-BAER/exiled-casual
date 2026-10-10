@@ -625,3 +625,89 @@ describe("gold pickup cue", () => {
     ])).toBe(0);
   });
 });
+
+describe("item and trade cues", () => {
+  type Cell = Snapshot["inventory"]["items"][number];
+  const item = (x: number, y: number, baseId: string, itemClass: string, count?: number): Cell =>
+    ({ rarity: "normal", name: baseId, baseId, itemClass, lines: [], x, y, w: 1, h: 1, ...(count ? { count } : {}) });
+  const bag = (...items: Cell[]): Snapshot["inventory"] => ({ cols: 12, rows: 5, items });
+
+  it("an item landing on a new cell is set down in its material", () => {
+    expect(run([
+      snap({ tick: 1, inventory: bag(item(0, 0, "mace.a", "mace")) }),
+      snap({ tick: 2, inventory: bag(item(3, 0, "mace.a", "mace")) }),
+    ])).toEqual(["item-place-metal"]);
+  });
+
+  it("armour sounds by family: Ironsworn is plate, Stalker is leather", () => {
+    const moved = (baseId: string, itemClass: string) => run([
+      snap({ tick: 1, inventory: bag() }),
+      snap({ tick: 2, inventory: bag(item(0, 0, baseId, itemClass)) }),
+    ]);
+    expect(moved("base.ironsworn_plate", "body")).toEqual(["item-place-metal"]);
+    expect(moved("base.stalker_leathers", "body")).toEqual(["item-place-leather"]);
+    expect(moved("base.ember_wand", "wand")).toEqual(["item-place-wood"]);
+    expect(moved("map.waystone", "waystone")).toEqual(["item-place-stone"]);
+  });
+
+  it("a currency stack that grew was picked up; one that shrank was spent, silently", () => {
+    const orbs = (n: number) => bag(item(0, 0, "currency.wisdom", "currency", n));
+    expect(run([snap({ tick: 1, inventory: orbs(3) }), snap({ tick: 2, inventory: orbs(4) })]))
+      .toEqual(["item-place-stone"]);
+    expect(run([snap({ tick: 1, inventory: orbs(3) }), snap({ tick: 2, inventory: orbs(2) })])).toEqual([]);
+  });
+
+  it("an item changed where it lies (identified, crafted) or gone from the grid is silent", () => {
+    const plain = item(0, 0, "mace.a", "mace");
+    expect(run([
+      snap({ tick: 1, inventory: bag(plain) }),
+      snap({ tick: 2, inventory: bag({ ...plain, rarity: "rare", name: "Doom Knell" }) }),
+      snap({ tick: 3, inventory: bag() }),
+    ])).toEqual([]);
+  });
+
+  it("a whole grid rearranged at once is one set-down", () => {
+    expect(run([
+      snap({ tick: 1, inventory: bag(item(0, 0, "mace.a", "mace"), item(1, 0, "wand.a", "wand")) }),
+      snap({ tick: 2, inventory: bag(item(5, 0, "mace.a", "mace"), item(6, 0, "wand.a", "wand")) }),
+    ])).toHaveLength(1);
+  });
+
+  it("a slot that took a new piece is an equip, and the swapped-out piece is not also set down", () => {
+    const plate = { rarity: "normal" as const, name: "Plate", baseId: "base.ironsworn_plate", itemClass: "body", lines: [] };
+    const robe = { rarity: "magic" as const, name: "Robe", baseId: "base.ember_robe", itemClass: "body", lines: [] };
+    expect(run([
+      snap({ tick: 1, equipment: { body: plate }, inventory: bag(item(0, 0, "base.ember_robe", "body")) }),
+      snap({ tick: 2, equipment: { body: robe }, inventory: bag(item(0, 0, "base.ironsworn_plate", "body")) }),
+    ])).toEqual(["item-equip-leather"]);
+  });
+
+  it("a slot emptied into the bag is a set-down, not an equip", () => {
+    const plate = { rarity: "normal" as const, name: "Plate", baseId: "base.ironsworn_plate", itemClass: "body", lines: [] };
+    expect(run([
+      snap({ tick: 1, equipment: { body: plate }, inventory: bag() }),
+      snap({ tick: 2, equipment: {}, inventory: bag(item(0, 0, "base.ironsworn_plate", "body")) }),
+    ])).toEqual(["item-place-metal"]);
+  });
+
+  it("gold that left the purse for a piece in the bag is a purchase, and only that", () => {
+    expect(run([
+      snap({ tick: 1, player: testPlayer({ gold: 100 }), inventory: bag() }),
+      snap({ tick: 2, player: testPlayer({ gold: 60 }), inventory: bag(item(0, 0, "mace.a", "mace")) }),
+    ])).toEqual(["trade-buy"]);
+  });
+
+  it("gold spent on nothing that landed in the bag is not a purchase", () => {
+    expect(run([
+      snap({ tick: 1, player: testPlayer({ gold: 100 }) }),
+      snap({ tick: 2, player: testPlayer({ gold: 60 }) }),
+    ])).toEqual([]);
+  });
+
+  it("says nothing about items across an area change", () => {
+    expect(run([
+      snap({ tick: 1, inventory: bag() }),
+      snap({ tick: 2, area: "hideout", inventory: bag(item(0, 0, "mace.a", "mace")) }),
+    ])).toEqual([]);
+  });
+});

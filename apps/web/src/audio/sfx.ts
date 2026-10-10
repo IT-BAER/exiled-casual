@@ -6,7 +6,7 @@ import { bus, send, type Bus, type SoundCategory } from "./bus";
  * Every master is a commercial library recording, curated rather than generated:
  * `tools/import_sfx.py` names the source file per cue and runs it through
  * `tools/trim_sfx.py` to Opus in WebM; the reward cues are layered from several
- * library parts by `tools/build_reward_sfx.py` — 226 files in all. They share one
+ * library parts by `tools/build_reward_sfx.py` — 259 files in all. They share one
  * bus, so the Options volume covers everything and nothing fights it for a context.
  *
  * The monster cues and Varkis's voice are ElevenLabs-generated masters, a take pool per
@@ -153,6 +153,19 @@ const VOICES: Record<string, Voice> = {
   // by a lot. Anything that competes with the click is a menu that buzzes.
   "ui-hover":                 { gain: 0.011, wet: 0.04, vary: 0.05, takes: 3 },
   "ui-panel-open":            { gain: 0.229, wet: 0.10, vary: 0.04, takes: 3 },
+  // Items in hand. Gains put each pool's mean (volumedetect) against ui-click's: a lift
+  // 4 dB under it, a set-down level with it, an equip 2 dB over, the bench and shelf level.
+  "item-lift":                { gain: 0.036, wet: 0.04, vary: 0.05, takes: 3 },
+  "item-place-metal":         { gain: 0.04, wet: 0.05, vary: 0.05, takes: 3 },
+  "item-place-leather":       { gain: 0.044, wet: 0.05, vary: 0.05, takes: 3 },
+  "item-place-wood":          { gain: 0.067, wet: 0.05, vary: 0.05, takes: 3 },
+  "item-place-stone":         { gain: 0.045, wet: 0.05, vary: 0.05, takes: 3 },
+  "item-equip-metal":         { gain: 0.05, wet: 0.06, vary: 0.04, takes: 3 },
+  "item-equip-leather":       { gain: 0.059, wet: 0.06, vary: 0.04, takes: 3 },
+  "item-equip-wood":          { gain: 0.118, wet: 0.06, vary: 0.04, takes: 3 },
+  "item-equip-stone":         { gain: 0.064, wet: 0.06, vary: 0.04, takes: 3 },
+  "trade-sell":               { gain: 0.105, wet: 0.06, vary: 0.05, takes: 3 },
+  "trade-buy":                { gain: 0.082, wet: 0.06, vary: 0.05, takes: 3 },
   // Reward cues. Mean volume (ffmpeg volumedetect): monster-death -16.0 dB, drop-unique -17.37 dB,
   // so drop-unique's gain is 0.34 * 10^(1.37/20) = 0.398; the rest keep their balance against it.
   // Tonal cues never vary: the pitch is the signal.
@@ -173,7 +186,7 @@ export type SfxName = keyof typeof VOICES & string;
 export function sfxCategory(name: string): SoundCategory {
   if (name.startsWith("ambient-")) return "ambience";
   if (name.startsWith("skill-")) return "skills";
-  if (name.startsWith("ui-")) return "interface";
+  if (/^(ui|item|trade)-/.test(name)) return "interface";
   if (/^(drop|coin|level|container)-/.test(name)) return "loot";
   // Monsters and Varkis (`npc-`): a voice standing in the room gets the room.
   return "environment";
@@ -270,7 +283,7 @@ export const CORE_SFX: readonly string[] = [
 /**
  * Every voice there is, for the loading screen to swallow whole.
  *
- * The whole library is 6.8 MB of Opus across 226 files: less than one of
+ * The whole library is 7.1 MB of Opus across 259 files: less than one of
  * the character's textures, and cheaper to fetch all of than to reason about
  * which biome needs which. `CORE_SFX` still exists and still goes first, because
  * ordering is the only thing that matters once cost stops mattering — the first

@@ -128,6 +128,34 @@ const GROUND: Record<string, string> = {
 const DEFAULT_GROUND = "stone";
 
 /**
+ * What an item is made of, which is what setting it down sounds like. Armour goes
+ * by family (Ironsworn is plate, the rest leather and cloth); anything else by class.
+ */
+export const ITEM_MATERIALS = ["metal", "leather", "wood", "stone"] as const;
+type ItemMaterial = typeof ITEM_MATERIALS[number];
+
+const ITEM_MATERIAL: Record<string, ItemMaterial> = {
+  mace: "metal", shield: "metal",
+  wand: "wood", focus: "wood",
+  currency: "stone", waystone: "stone",
+};
+
+function materialOf(it: { baseId?: string; itemClass?: string }): ItemMaterial {
+  if (it.baseId?.startsWith("base.ironsworn_")) return "metal";
+  return ITEM_MATERIAL[it.itemClass ?? ""] ?? "leather";
+}
+
+type GridItem = Snapshot["inventory"]["items"][number];
+
+/** Grid items by where they lie and what they are; a craft or identify keeps the key. */
+function gridKeys(snap: Snapshot): Map<string, GridItem> {
+  const keys = new Map<string, GridItem>();
+  for (const it of snap.inventory.items) keys.set(`b:${it.x}:${it.y}:${it.baseId}`, it);
+  for (const it of snap.stash.items) keys.set(`s:${it.x}:${it.y}:${it.baseId}`, it);
+  return keys;
+}
+
+/**
  * The acoustics of each place: `amount` is how much of each cue's own reverb it
  * gives back, as a multiplier, and the rest shape the impulse, the floor and the air.
  *
@@ -391,6 +419,25 @@ export function createSoundscape(opts: Options = {}): Soundscape {
       // The edge, not the state: a save restored dead or an area entered dead has no
       // previous snapshot to fall from, so it is never heard.
       if (before.player.alive && !snap.player.alive) play("player-death");
+
+      // ── Items ───────────────────────────────────────────────────────────────
+      // One cue per snapshot however many cells changed, so a sort is one set-down.
+      const had = gridKeys(before);
+      let landed: GridItem | undefined;
+      for (const [key, it] of gridKeys(snap)) {
+        const old = had.get(key);
+        if (!old || (it.count ?? 0) > (old.count ?? 0)) { landed = it; break; }
+      }
+      // A slot holding a different piece than before was dressed; the piece it gave
+      // back lands in the bag in the same tick and is part of the same gesture.
+      const worn = Object.entries(snap.equipment).find(([slot, it]) => {
+        const old = before.equipment[slot as keyof Snapshot["equipment"]];
+        return it && (old?.baseId !== it.baseId || old?.name !== it.name);
+      })?.[1];
+      // Gold leaving the purse while a piece arrives is the vendor's shelf, not the floor.
+      if (worn) play(`item-equip-${materialOf(worn)}`);
+      else if (landed && snap.player.gold < before.player.gold) play("trade-buy");
+      else if (landed) play(`item-place-${materialOf(landed)}`);
 
       // ── Flask, map device, feet ─────────────────────────────────────────────
       const f = snap.player.flasks;
