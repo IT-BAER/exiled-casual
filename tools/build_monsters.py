@@ -1856,10 +1856,14 @@ class GeneratedSkin(Creature):
     mesh, and the roster's own bone graph, weights and gait drive it. The mesh
     must face +Y as imported, as every node-graph species is authored."""
 
-    def __init__(self, def_id, source, normal, family, height, offset):
+    def __init__(self, def_id, source, normal, family, height, offset, tex=1024, flip=False):
         super().__init__(def_id, family, 0.25, height)
         self.source, self.normal = source, normal
         self.offset = offset
+        # Sheet size: 512 for a mob, 1024 for a boss, which fills far more screen.
+        self.tex = tex
+        # TRELLIS faces a mesh whichever way its reference looked: turn it to +Y.
+        self.flip = flip
 
     def leg_through(self, index, hip, knee, foot):
         """Hip, knee, ankle, toe at measured points; the ankle sits just above the
@@ -1877,7 +1881,7 @@ class GeneratedSkin(Creature):
         for path in (self.source, self.normal):
             if not os.path.exists(path):
                 sys.exit("missing generated creature: " + path)
-        mesh = rig.load_mesh(self.source, self.height, False)
+        mesh = rig.load_mesh(self.source, self.height, self.flip)
         # load_mesh centres on the mid-height mass; the stance centre is where
         # the sim's body radius belongs.
         dx, dy = self.offset
@@ -1886,7 +1890,7 @@ class GeneratedSkin(Creature):
             vert.co.y += dy
         mesh.data.update()
         name = self.def_id.split(".")[1]
-        generated_hide(mesh, name, self.family, self.normal, 1024)
+        generated_hide(mesh, name, self.family, self.normal, self.tex)
 
         parts = [self.body] + self.limbs
         bones = bone_graph(parts)
@@ -1998,32 +2002,34 @@ def blood_sentinel():
     return c
 
 
+COLOSSUS_SOURCE = os.path.join(TEX_DIR, "source", "sunbaked_colossus_v1.glb")
+COLOSSUS_NORMAL = os.path.join(TEX_DIR, "source", "sunbaked_colossus_v1_n.png")
+
+
 def sunbaked_colossus():
-    """All shoulder: a quadruped bull whose head is nearly an afterthought."""
-    c = Creature("monster.sunbaked_colossus.v1", "desert", 0.425, 1.8)
-    spine = c.body.chain(
-        [(0, -0.76, 1.02), (0, -0.34, 1.08), (0, 0.14, 1.24), (0, 0.44, 1.18)],
-        [(0.24, 0.16), (0.48, 0.31), (0.62, 0.40), (0.50, 0.34)])
-    # The hump: a bull's mass sits over the FRONT legs, which is what makes the
-    # head look small instead of the body look long.
-    c.body.chain([(0, 0.24, 1.52)], [(0.44, 0.30)], parent=spine[2])
-    neck = c.body.chain([(0, 0.66, 1.04)], [(0.32, 0.26)], parent=spine[-1])
-    c.body.chain([(0, 0.94, 0.88), (0, 1.12, 0.84)], [0.21, 0.13], parent=neck[-1])
-    c.body.chain([(0, -0.90, 1.06), (0, -1.12, 0.92), (0, -1.24, 0.68)],
-                 [0.09, 0.06, 0.024], parent=spine[0])
-    for side in (-1, 1):
-        c.body.add(ellipsoid((side * 0.11, 1.00, 0.96), (0.048, 0.048, 0.048), 6, 4), GLOWS)
-        c.body.add(horn([(side * 0.18, 0.92, 1.02), (side * 0.52, 0.98, 1.22),
-                         (side * 0.62, 1.18, 1.06)], [0.075, 0.048, 0.0]), BONES)
-        # Shoulder armour swept out of the hump itself, and a second, smaller
-        # plate over the haunch: two masses per flank give the plan view a waist
-        # between them, which one continuous barrel never has.
-        c.body.add(horn([(side * 0.14, 0.30, 1.36), (side * 0.54, 0.24, 1.52),
-                         (side * 0.68, 0.06, 1.44)], [0.20, 0.14, 0.0], 5))
-        c.body.add(horn([(side * 0.16, -0.52, 1.16), (side * 0.48, -0.58, 1.26),
-                         (side * 0.58, -0.74, 1.18)], [0.15, 0.10, 0.0], 5))
-    for i, (x, y) in enumerate([(-0.38, 0.28), (0.38, 0.28), (-0.38, -0.46), (0.38, -0.46)]):
-        c.leg(i, (x, y, 0.96), (x * 1.15, y, 0.0), 0.15, 0.10, bend=0.07)
+    """All shoulder: a quadruped bull whose head is nearly an afterthought.
+
+    Generated (review/3d/sunbaked-colossus), 4k triangles. Joints measured off
+    sunbaked_colossus_v1.glb by tools/measure_generated.py --flip 1.
+    """
+    c = GeneratedSkin("monster.sunbaked_colossus.v1", COLOSSUS_SOURCE, COLOSSUS_NORMAL,
+                      "desert", 1.8, (-0.212, 0.601), tex=512, flip=True)
+    # Rooted over the hind hips: the attack pitches the trunk about its first node,
+    # and from a root mid-body it lifted the near-straight hind legs 23% past reach.
+    spine = c.body.chain([(0, -0.55, 1.15), (0, -0.10, 1.20), (0, 0.50, 1.25)], [0.1] * 3)
+    rump = c.body.chain([(0, -0.85, 1.05)], [0.1], parent=spine[0])
+    # The head hangs low and forward of the hump, the tail is a short stub.
+    c.body.chain([(-0.05, 0.95, 0.95), (-0.13, 1.22, 0.80)], [0.1] * 2, parent=spine[-1])
+    c.body.chain([(-0.15, -1.00, 0.85), (-0.25, -1.05, 0.65)], [0.05] * 2, parent=rump[-1])
+    for i, (hip, knee, foot) in enumerate([
+        ((-0.321, 0.536, 0.808), (-0.389, 0.377, 0.664), (-0.417, 0.521, 0.000)),
+        ((0.320, 0.614, 0.758), (0.410, 0.552, 0.629), (0.442, 0.771, 0.003)),
+        ((-0.236, -0.582, 0.697), (-0.298, -0.847, 0.226), (-0.340, -0.720, 0.000)),
+        # Measured knee (0.221, -0.661, 0.403) left this hind leg a straight column
+        # that the lunge stretched 23%; set back inside the column like its pair.
+        ((0.208, -0.559, 0.702), (0.240, -0.690, 0.370), (0.316, -0.571, 0.004)),
+    ]):
+        c.leg_through(i, hip, knee, foot)
     return c
 
 

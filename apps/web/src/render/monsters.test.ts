@@ -294,6 +294,9 @@ describe("monsters asset", () => {
    *
    * 5.25MB once `tools/pack_monsters.mjs` meshopt-packs the geometry: measured
    * 8,186,100 -> 5,157,736. WebP hides measured LARGER than these JPEGs.
+   *
+   * 5.5MB and fifteen images since the Sunbaked Colossus became a generated mesh
+   * at 4k triangles with two 512 sheets: measured 5,157,736 -> 5,428,792 packed.
    */
   /**
    * The shader warm that ends the map-entry stall. Every instance of a species
@@ -337,9 +340,9 @@ describe("monsters asset", () => {
 
   it("embeds compressed textures and stays within budget", () => {
     for (const image of json.images) expect(image.mimeType).toBe("image/jpeg");
-    expect(json.images.length).toBeLessThanOrEqual(13);
+    expect(json.images.length).toBeLessThanOrEqual(15);
     expect(json.extensionsRequired).toContain("EXT_meshopt_compression");
-    expect(glb.byteLength).toBeLessThan(5_250_000);
+    expect(glb.byteLength).toBeLessThan(5_500_000);
   });
 });
 

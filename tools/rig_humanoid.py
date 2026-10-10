@@ -13,7 +13,7 @@ import sys
 
 import bpy
 import numpy
-from mathutils import Quaternion, Vector
+from mathutils import Matrix, Quaternion, Vector
 
 FPS = 30
 
@@ -40,7 +40,8 @@ def load_mesh(path, height, flip):
     mesh = meshes[0]
     mesh.parent = None
     if flip:
-        mesh.rotation_euler.z += math.pi
+        # The glTF importer leaves the object in QUATERNION mode, which ignores rotation_euler.
+        mesh.matrix_world = Matrix.Rotation(math.pi, 4, "Z") @ mesh.matrix_world
     bpy.context.view_layer.objects.active = mesh
     with bpy.context.temp_override(active_object=mesh, selected_editable_objects=[mesh]):
         bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
