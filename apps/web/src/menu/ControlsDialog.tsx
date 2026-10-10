@@ -104,9 +104,13 @@ export function ControlsDialog({ onPick }: { onPick: (mode: ControlMode) => void
                 ))}
               </div>
             </div>
-            <MenuButton tone="primary" onClick={() => onPick(s.mode)} autoFocus={i === 0} style={{ width: 190 }}>
-              {s.action}
-            </MenuButton>
+            {/* MenuButton's 7% padding resolves against its parent: a button-sized
+                parent keeps it 7% of the button and clear of the label. */}
+            <div style={{ width: 230, flexShrink: 0 }}>
+              <MenuButton tone="primary" onClick={() => onPick(s.mode)} autoFocus={i === 0} style={{ width: "100%" }}>
+                {s.action}
+              </MenuButton>
+            </div>
           </div>
         ))}
         <div style={{ fontFamily: SERIF, fontSize: 12, color: GOLD_DIM, textAlign: "center", marginTop: 8 }}>

@@ -40,8 +40,9 @@ export function pickTrack(
   return pool[Math.floor(rng() * pool.length)] ?? pool[0] ?? null;
 }
 
-/** Peak gain on the music slider; the loop builder brings every track to one loudness. */
-export const MUSIC_GAIN = 0.3;
+/** Peak gain on the music slider; the loop builder brings every track to -18 LUFS, so
+ *  this is -38: about 10 dB under a skill cast, level with the beds. */
+export const MUSIC_GAIN = 0.1;
 /** Seconds. Linear ramps, so the new track is fully in exactly when it says. */
 const FADE_IN = 3;
 const FADE_OUT = 2;
