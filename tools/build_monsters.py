@@ -1803,10 +1803,8 @@ def bog_drowned():
                              normal=BOG_DROWNED_NORMAL)
 
 
-# Image-to-3D, not the node graph: a /codex-imagegen reference through local
-# TRELLIS, cut to 3k triangles by the generate-local-3d-asset skill
-# (review/3d/drowned-grubling). Rigged at build time by rig_humanoid.py.
 GRUBLING_SOURCE = os.path.join(TEX_DIR, "source", "drowned_grubling_v1.glb")
+GRUBLING_NORMAL = os.path.join(TEX_DIR, "source", "drowned_grubling_v1_n.png")
 
 
 def generated_hide(mesh, name, family, normal=None, size=TEX_SIZE):
@@ -1842,9 +1840,13 @@ class GeneratedCreature:
     `rig_humanoid.py`, dressed in its own sheet by the same hide rule as the
     roster. It faces -Y as imported, where a turned node-graph root ends up."""
 
-    def __init__(self, def_id, source, family, height, normal=None, tex=TEX_SIZE):
+    def __init__(self, def_id, source, family, height, normal=None, tex=TEX_SIZE,
+                 offset=(0.0, 0.0)):
         self.def_id, self.source, self.family, self.height = def_id, source, family, height
         self.normal, self.tex = normal, tex
+        # load_mesh centres on the mid-height vertex median, which moves with
+        # vertex density; the hips are placed at x 0, so the stance must be there.
+        self.offset = offset
 
     def emit(self, mats):
         spec = importlib.util.spec_from_file_location(
@@ -1855,6 +1857,11 @@ class GeneratedCreature:
             if not os.path.exists(path):
                 sys.exit("missing generated creature: " + path)
         mesh = rig.load_mesh(self.source, self.height, False)
+        dx, dy = self.offset
+        for vert in mesh.data.vertices:
+            vert.co.x += dx
+            vert.co.y += dy
+        mesh.data.update()
         generated_hide(mesh, self.def_id.split(".")[1], self.family, self.normal, self.tex)
 
         arm = rig.build_armature(self.def_id, rig.landmarks(mesh, self.height))
@@ -1953,8 +1960,14 @@ BODY_BIAS = 0.6
 
 
 def drowned_grubling():
-    """The Drowned at half size and twice the belly: the swamp's pack of eight."""
-    return GeneratedCreature("monster.drowned_grubling.v1", GRUBLING_SOURCE, "swamp", 0.95)
+    """The Drowned at half size and twice the belly: the swamp's pack of eight.
+
+    Generated (review/3d/drowned-grubling), opened by tools/open_volume.py
+    --res 240 --radius 2, 4k triangles, rig_humanoid. Ankles measured at x 0.315
+    and -0.133 as loaded: the offset centres the stance.
+    """
+    return GeneratedCreature("monster.drowned_grubling.v1", GRUBLING_SOURCE, "swamp", 0.95,
+                             normal=GRUBLING_NORMAL, offset=(-0.091, 0.0))
 
 
 BOAR_SOURCE = os.path.join(TEX_DIR, "source", "thornhide_boar_v1.glb")

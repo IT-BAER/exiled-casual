@@ -321,6 +321,9 @@ describe("monsters asset", () => {
    *
    * 6.75MB and thirty-one images since the Bog Drowned did the same: measured
    * 6,308,124 -> 6,509,768 packed.
+   *
+   * Thirty-two images since the Drowned Grubling was opened and given a baked
+   * normal map: measured 6,509,744 -> 6,535,012 packed.
    */
   /**
    * The shader warm that ends the map-entry stall. Every instance of a species
@@ -364,7 +367,7 @@ describe("monsters asset", () => {
 
   it("embeds compressed textures and stays within budget", () => {
     for (const image of json.images) expect(image.mimeType).toBe("image/jpeg");
-    expect(json.images.length).toBeLessThanOrEqual(31);
+    expect(json.images.length).toBeLessThanOrEqual(32);
     expect(json.extensionsRequired).toContain("EXT_meshopt_compression");
     expect(glb.byteLength).toBeLessThan(6_750_000);
   });
