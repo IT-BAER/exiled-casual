@@ -12,6 +12,8 @@ source's albedo onto it selected-to-active, so the sheet keeps TRELLIS's colours
 shape without flaps. `--high` is the dense opened surface: bake the normal map from
 it (tools/bake_generated_normal.py), never from the source, or the flaps return as
 shading. Every stage shares the glTF importer's frame with transforms applied.
+`--yaw` (degrees, about +Z) turns source and surface together, for a TRELLIS body
+built at an angle: GeneratedSkin can only flip a mesh, not turn it.
 """
 import argparse
 import math
@@ -21,6 +23,7 @@ import sys
 import bmesh
 import bpy
 import numpy as np
+from mathutils import Matrix
 
 DECIMATE_PASSES = 4
 
@@ -35,6 +38,7 @@ def args():
     p.add_argument("--high")
     p.add_argument("--triangles", type=int, default=4000)
     p.add_argument("--tex", type=int, default=512)
+    p.add_argument("--yaw", type=float, default=0.0)
     return p.parse_args(tail)
 
 
@@ -134,6 +138,11 @@ def rebuild_stage(a):
     clear()
     src = load_source(a.source)
     dense = mesh_from_npz(a.npz, "opened")
+    if a.yaw:
+        turn = Matrix.Rotation(math.radians(a.yaw), 4, "Z")
+        for o in (src, dense):
+            o.data.transform(turn)
+            o.data.update()
     if a.high:
         export_glb(dense, a.high)
     low = dense

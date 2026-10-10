@@ -2038,38 +2038,36 @@ def sunbaked_colossus():
     return c
 
 
+BEHEMOTH_SOURCE = os.path.join(TEX_DIR, "source", "rotting_behemoth_v1.glb")
+BEHEMOTH_NORMAL = os.path.join(TEX_DIR, "source", "rotting_behemoth_v1_n.png")
+
+
 def rotting_behemoth():
-    """A sack of rot on four short legs, split down the spine and lit from inside."""
-    c = Creature("monster.rotting_behemoth.v1", "swamp", 0.4, 2.0)
-    spine = c.body.chain(
-        [(0, -0.70, 1.08), (0, -0.28, 1.20), (0, 0.24, 1.24), (0, 0.58, 1.08)],
-        [(0.28, 0.17), (0.60, 0.34), (0.68, 0.37), (0.46, 0.27)])
-    neck = c.body.chain([(0, 0.82, 0.94)], [(0.32, 0.25)], parent=spine[-1])
-    c.body.chain([(0, 1.06, 0.84), (0, 1.20, 0.80)], [0.20, 0.12], parent=neck[-1])
-    for side in (-1, 1):
-        c.body.add(ellipsoid((side * 0.10, 1.12, 0.90), (0.042, 0.042, 0.042), 6, 4), GLOWS)
-    # The back has split, and what is inside is lit. Two bone lips hold the wound
-    # open and the light sits BETWEEN them, below the skin line — a bar laid on
-    # top of the spine was a glowstick taped to a pig.
-    # The lips ride OUT along the shoulder of the back instead of standing up
-    # beside the split. Held near the spine they were a two-centimetre bump on a
-    # body 1.3 across; carried onto the flank they are the row of teeth that makes
-    # a potato into something that has been opened.
-    for side in (-1, 1):
-        for k in range(5):
-            y = 0.44 - k * 0.28
-            c.body.add(horn([(side * 0.08, y, 1.36), (side * 0.42, y - 0.02, 1.46),
-                             (side * 0.54, y - 0.10, 1.36)], [0.11, 0.08, 0.0], 5), BONES)
-    for k in range(5):
-        y = 0.44 - k * 0.28
-        c.body.add(ellipsoid((0, y, 1.44), (0.11, 0.13, 0.10), 10, 6), GLOWS)
-    # Sacs swelling out of the flank, half inside it, hide-coloured: growths are
-    # part of the animal, and a grey cap on a stalk is a mushroom.
-    for i, (x, y, r) in enumerate(((0.56, 0.24, 0.22), (-0.62, -0.10, 0.26),
-                                   (0.48, -0.46, 0.18), (-0.40, 0.52, 0.16))):
-        c.body.add(ellipsoid((x, y, 1.20 + r * 0.3), (r, r * 1.15, r * 0.85), 12, 7))
-    for i, (x, y) in enumerate([(-0.44, 0.30), (0.44, 0.30), (-0.44, -0.42), (0.44, -0.42)]):
-        c.leg(i, (x, y, 0.88), (x * 1.2, y, 0.0), 0.155, 0.10, bend=0.05)
+    """A sack of rot on six short legs, split down the spine and lit from inside.
+
+    Generated (review/3d/rotting-behemoth), hanging strands cut off by a
+    volumetric opening (tools/open_volume.py --res 240 --radius 2); TRELLIS built it 35 degrees off axis, so
+    the rebuild turned it (reshape_generated.py --yaw 35.4). 4k triangles. Joints
+    measured off rotting_behemoth_v1.glb by tools/measure_generated.py --flip 1.
+    """
+    c = GeneratedSkin("monster.rotting_behemoth.v1", BEHEMOTH_SOURCE, BEHEMOTH_NORMAL,
+                      "swamp", 2.0, (0.299, 0.501), tex=512, flip=True)
+    spine = c.body.chain([(0, -0.95, 1.10), (0, 0.0, 1.15), (0, 0.95, 1.10)], [0.1] * 3)
+    c.body.chain([(0, 1.45, 1.00), (0, 1.90, 0.95)], [0.1] * 2, parent=spine[-1])
+    c.body.chain([(0, -1.25, 0.95)], [0.1], parent=spine[0])
+    # Front pair first, then mid, then rear, as TRELLIS staggered them. The right
+    # mid foot hangs a quarter metre up as built: it walks in the air. The first
+    # three measured near straight (+57% reach); their knees sit mid-leg at the
+    # back of the leg column.
+    for i, (hip, knee, foot) in enumerate([
+        ((-0.463, 1.011, 0.578), (-0.480, 0.900, 0.290), (-0.497, 1.295, 0.002)),
+        ((0.547, 0.601, 0.605), (0.581, 0.440, 0.304), (0.615, 0.702, 0.003)),
+        ((-0.555, 0.223, 0.487), (-0.569, 0.028, 0.245), (-0.583, 0.193, 0.002)),
+        ((0.433, -0.472, 0.528), (0.450, -0.532, 0.347), (0.401, -0.527, 0.235)),
+        ((-0.296, -0.592, 0.512), (-0.409, -0.594, 0.149), (-0.345, -0.640, 0.000)),
+        ((0.397, -1.083, 0.505), (0.364, -1.140, 0.223), (0.409, -1.022, 0.000)),
+    ]):
+        c.leg_through(i, hip, knee, foot)
     return c
 
 
