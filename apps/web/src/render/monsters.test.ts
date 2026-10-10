@@ -315,6 +315,9 @@ describe("monsters asset", () => {
    *
    * Twenty-seven images since the Rotting Behemoth did the same: measured
    * 5,659,900 -> 5,855,316 packed.
+   *
+   * 6.5MB and twenty-nine images since Ghaltrek did the same at 8k triangles with
+   * two 1024 sheets: measured 5,855,316 -> 6,308,124 packed.
    */
   /**
    * The shader warm that ends the map-entry stall. Every instance of a species
@@ -358,9 +361,9 @@ describe("monsters asset", () => {
 
   it("embeds compressed textures and stays within budget", () => {
     for (const image of json.images) expect(image.mimeType).toBe("image/jpeg");
-    expect(json.images.length).toBeLessThanOrEqual(27);
+    expect(json.images.length).toBeLessThanOrEqual(29);
     expect(json.extensionsRequired).toContain("EXT_meshopt_compression");
-    expect(glb.byteLength).toBeLessThan(6_250_000);
+    expect(glb.byteLength).toBeLessThan(6_500_000);
   });
 });
 

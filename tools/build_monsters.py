@@ -2171,41 +2171,32 @@ def mother_vhal():
     return c
 
 
+GHALTREK_SOURCE = os.path.join(TEX_DIR, "source", "ghaltrek_v1.glb")
+GHALTREK_NORMAL = os.path.join(TEX_DIR, "source", "ghaltrek_v1_n.png")
+
+
 def ghaltrek():
-    """Forest. Antler rack wider than the corridor it comes down, head already low."""
-    c = Creature("monster.ghaltrek.v1", "forest", 0.45, 2.5)
-    spine = c.body.chain(
-        [(0, -1.10, 1.38), (0, -0.52, 1.50), (0, 0.24, 1.64), (0, 0.78, 1.54)],
-        [(0.30, 0.21), (0.60, 0.42), (0.76, 0.52), (0.64, 0.44)])
-    c.body.chain([(0, 0.42, 1.94)], [(0.52, 0.36)], parent=spine[2])
-    neck = c.body.chain([(0, 1.08, 1.30)], [(0.36, 0.29)], parent=spine[-1])
-    c.body.chain([(0, 1.46, 1.10), (0, 1.70, 1.02)], [0.24, 0.15], parent=neck[-1])
-    c.body.chain([(0, -1.24, 1.44), (0, -1.48, 1.56)], [0.10, 0.035], parent=spine[0])
-    for side in (-1, 1):
-        c.body.add(ellipsoid((side * 0.15, 1.52, 1.18), (0.05, 0.05, 0.05), 6, 4), GLOWS)
-        # Tusks forward, so the charge has a point on it.
-        c.body.add(horn([(side * 0.15, 1.64, 0.92), (side * 0.26, 2.04, 1.06)],
-                        [0.06, 0.0]), BONES)
-        # The rack. 1.3 units across per side — wider than she is long, and the
-        # only thing about this fight anybody will describe afterwards.
-        beam = [(side * 0.24, 1.24, 1.58), (side * 0.72, 1.10, 2.12),
-                (side * 1.14, 0.66, 2.38), (side * 1.30, 0.10, 2.32)]
-        c.body.add(horn(beam, [0.135, 0.10, 0.068, 0.0], 7), BONES)
-        for t, out, up in ((0.35, 0.10, 0.42), (0.75, 0.16, 0.46), (1.15, 0.20, 0.38),
-                           (1.60, 0.16, 0.34), (2.30, 0.14, 0.30)):
-            i0 = min(int(t), len(beam) - 2)
-            f = t - i0
-            p = [beam[i0][k] + (beam[i0 + 1][k] - beam[i0][k]) * f for k in range(3)]
-            c.body.add(horn([tuple(p), (p[0] + side * out, p[1] - 0.14, p[2] + up)],
-                            [0.072, 0.0]), BONES)
-        # Bark ridges growing out of the flank, rooted well inside it.
-        for k in range(4):
-            y = 0.42 - k * 0.44
-            c.body.add(horn([(side * 0.24, y + 0.06, 1.62), (side * 0.58, y, 1.92),
-                             (side * 0.66, y - 0.12, 2.06)],
-                            [0.13, 0.09, 0.0], 5), BONES)
-    for i, (x, y) in enumerate([(-0.50, 0.42), (0.50, 0.42), (-0.50, -0.68), (0.50, -0.68)]):
-        c.leg(i, (x, y, 1.20), (x * 1.15, y, 0.0), 0.185, 0.115, bend=0.10)
+    """Forest. Antler rack wider than the corridor it comes down, head already low.
+
+    Generated (review/3d/ghaltrek), hanging moss cut off by a
+    volumetric opening (tools/open_volume.py --res 240 --radius 2), 8k triangles on a 1024 sheet. Joints
+    measured off ghaltrek_v1.glb by tools/measure_generated.py --flip 1.
+    """
+    c = GeneratedSkin("monster.ghaltrek.v1", GHALTREK_SOURCE, GHALTREK_NORMAL,
+                      "forest", 2.5, (-0.021, 0.923), tex=1024, flip=True)
+    spine = c.body.chain([(0, -0.90, 1.15), (0, 0.0, 1.25), (0, 0.90, 1.35)], [0.1] * 3)
+    # The antlers ride the head bone: nothing else is near them.
+    c.body.chain([(0, 1.35, 1.45), (0, 1.80, 1.40)], [0.1] * 2, parent=spine[-1])
+    c.body.chain([(0, -1.25, 0.95)], [0.1], parent=spine[0])
+    # The measured fore knees sit a hand above the hoof (+35% reach); these are
+    # mid-leg at the back of the leg column.
+    for i, (hip, knee, foot) in enumerate([
+        ((-0.268, 0.679, 0.796), (-0.308, 0.560, 0.398), (-0.347, 0.907, 0.000)),
+        ((0.265, 0.740, 0.763), (0.312, 0.560, 0.382), (0.359, 0.860, 0.000)),
+        ((-0.166, -0.774, 0.732), (-0.230, -0.983, 0.504), (-0.340, -0.921, 0.001)),
+        ((0.285, -0.761, 0.722), (0.364, -1.009, 0.345), (0.328, -0.846, 0.001)),
+    ]):
+        c.leg_through(i, hip, knee, foot)
     return c
 
 
