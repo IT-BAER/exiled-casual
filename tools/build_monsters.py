@@ -1936,34 +1936,33 @@ def drowned_grubling():
     return GeneratedCreature("monster.drowned_grubling.v1", GRUBLING_SOURCE, "swamp", 0.95)
 
 
+BOAR_SOURCE = os.path.join(TEX_DIR, "source", "thornhide_boar_v1.glb")
+BOAR_NORMAL = os.path.join(TEX_DIR, "source", "thornhide_boar_v1_n.png")
+
+
 def thornhide_boar():
-    """Bark plates over a boar's mass, tusks up, head carried low to charge."""
-    c = Creature("monster.thornhide_boar.v1", "forest", 0.35, 1.4)
-    spine = c.body.chain(
-        [(0, -0.58, 0.88), (0, -0.24, 0.96), (0, 0.16, 1.02), (0, 0.44, 0.92)],
-        [(0.22, 0.15), (0.40, 0.28), (0.48, 0.33), (0.37, 0.27)])
-    neck = c.body.chain([(0, 0.68, 0.78)], [(0.30, 0.24)], parent=spine[-1])
-    c.body.chain([(0, 0.92, 0.66), (0, 1.06, 0.62)], [0.19, 0.11], parent=neck[-1])
-    c.body.chain([(0, -0.72, 0.94), (0, -0.88, 1.02)], [0.07, 0.028], parent=spine[0])
-    for side in (-1, 1):
-        c.body.add(ellipsoid((side * 0.10, 0.94, 0.74), (0.042, 0.042, 0.042), 6, 4), GLOWS)
-        c.body.add(horn([(side * 0.11, 1.00, 0.54), (side * 0.22, 1.16, 0.76),
-                         (side * 0.14, 1.06, 0.94)], [0.055, 0.034, 0.0]), BONES)
-    # Bark growing THROUGH the hide, not resting on it: each plate is a wedge
-    # rooted below the surface and leaning back, in a staggered double row. Flat
-    # boxes laid on a spine are the thing that reads as a model kit.
-    for i in range(4):
-        y = 0.34 - i * 0.32
-        r = 0.42 - abs(y) * 0.16
-        for side in (-1, 1):
-            c.body.add(horn([(side * r * 0.30, y + 0.06, 0.94),
-                             (side * r * 0.46, y - 0.02, 1.30),
-                             (side * r * 0.52, y - 0.14, 1.46)],
-                            [0.10, 0.075, 0.0], 5), BONES)
-        c.body.add(horn([(0, y + 0.08, 1.02), (0, y - 0.04, 1.36), (0, y - 0.18, 1.54)],
-                        [0.12, 0.09, 0.0], 5), BONES)
-    for i, (x, y) in enumerate([(-0.32, 0.28), (0.32, 0.28), (-0.32, -0.36), (0.32, -0.36)]):
-        c.leg(i, (x, y, 0.78), (x * 1.15, y, 0.0), 0.125, 0.072, bend=0.08)
+    """Bark plates over a boar's mass, tusks up, head carried low to charge.
+
+    Generated (review/3d/thornhide-boar), thin flaps cut off by a volumetric
+    opening (tools/open_volume.py --res 240 --radius 2), 4k triangles. Joints
+    measured off thornhide_boar_v1.glb by tools/measure_generated.py --flip 1.
+    """
+    c = GeneratedSkin("monster.thornhide_boar.v1", BOAR_SOURCE, BOAR_NORMAL,
+                      "forest", 1.4, (-0.017, -0.015), tex=512, flip=True)
+    spine = c.body.chain([(0, -0.50, 0.78), (0, -0.05, 0.82), (0, 0.36, 0.82)], [0.1] * 3)
+    c.body.chain([(0, 0.62, 0.74), (0, 0.86, 0.58)], [0.1] * 2, parent=spine[-1])
+    c.body.chain([(0, -0.70, 0.70), (0, -0.80, 0.62)], [0.05] * 2, parent=spine[0])
+    # The measured knees sit a hand above the hoof, leaving a shin too short to
+    # take any lunge; these are mid-leg. Rooted at the rump, the coil lifts the
+    # near-straight forelegs 29% past reach, so their knees sit at the back of
+    # the leg column.
+    for i, (hip, knee, foot) in enumerate([
+        ((-0.157, 0.295, 0.426), (-0.186, 0.235, 0.215), (-0.215, 0.408, 0.007)),
+        ((0.205, 0.378, 0.426), (0.222, 0.318, 0.215), (0.238, 0.515, 0.004)),
+        ((-0.157, -0.501, 0.431), (-0.192, -0.560, 0.220), (-0.227, -0.489, 0.006)),
+        ((0.138, -0.462, 0.433), (0.170, -0.520, 0.220), (0.203, -0.435, 0.000)),
+    ]):
+        c.leg_through(i, hip, knee, foot)
     return c
 
 
