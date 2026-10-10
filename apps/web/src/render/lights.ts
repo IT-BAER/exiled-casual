@@ -5,6 +5,7 @@ import {
   ShadowGenerator,
   Vector3,
   type AbstractMesh,
+  type InstancedMesh,
   type Scene,
 } from "@babylonjs/core";
 import {
@@ -135,6 +136,8 @@ export interface FireSpot {
  */
 let spots: FireSpot[] = [];
 let pool: PointLight[] = [];
+/** The bowl each pool light is on, by index. See `updateFireLights`. */
+let held: (FireSpot | undefined)[] = [];
 let clock = 0;
 /** Rebuilt whenever the scene's mesh count moves. See `excludeBowls`. */
 let lastMeshCount = -1;
@@ -254,6 +257,7 @@ function castFrom(scene: Scene, light: PointLight | undefined): void {
 export function resetFireLights(): void {
   pool = [];
   spots = [];
+  held = [];
   clock = 0;
   lastMeshCount = -1;
   zoom = 1;
@@ -274,8 +278,16 @@ export function resetFireLights(): void {
 function excludeBowls(scene: Scene): void {
   if (scene.meshes.length === lastMeshCount) return;
   lastMeshCount = scene.meshes.length;
-  const bowls: AbstractMesh[] = scene.meshes.filter((m) => m.name.includes("brazier"));
-  for (const light of pool) light.excludedMeshes = bowls;
+  // An instance is lit with its SOURCE's lights, and a prop's source is a
+  // template outside `scene.meshes`, so both go on the list.
+  const bowls = new Set<AbstractMesh>();
+  for (const m of scene.meshes) {
+    if (!m.name.includes("brazier")) continue;
+    bowls.add(m);
+    const source = (m as Partial<Pick<InstancedMesh, "sourceMesh">>).sourceMesh;
+    if (source) bowls.add(source);
+  }
+  for (const light of pool) light.excludedMeshes = [...bowls];
 }
 
 /** How much of the authored framing the camera is showing. See `zoom`. */
@@ -286,6 +298,7 @@ export function setFireLightZoom(k: number): void {
 /** The fires in the area that has just been built. Replaces the last set. */
 export function setFireSpots(next: readonly FireSpot[]): void {
   spots = [...next];
+  held = [];
 }
 
 /** What the lights are doing, for tests: name, whether lit, and where. */
@@ -323,9 +336,21 @@ export function updateFireLights(scene: Scene, at: Vector3, deltaMs: number): vo
     clock,
   );
 
+  // A bowl keeps its light while it stays among the nearest: the lights are not
+  // interchangeable (Medium shadows only the first two), so a bowl handed to
+  // another light when two distances cross gains or loses its shadows in a frame.
+  const lit = near.slice(0, pool.length);
+  const slots = held.map((s) => lit.find((n) => n.s === s));
+  for (const n of lit) {
+    if (slots.includes(n)) continue;
+    const free = slots.findIndex((x) => !x);
+    slots[free === -1 ? slots.length : free] = n;
+  }
+  held = slots.map((n) => n?.s);
+
   for (let i = 0; i < pool.length; i++) {
     const light = pool[i]!;
-    const found = near[i];
+    const found = slots[i];
     if (!found) {
       light.intensity = 0;
       continue;
@@ -349,7 +374,7 @@ export function updateFireLights(scene: Scene, at: Vector3, deltaMs: number): vo
   // over the map that light no pixel. Left enabled, so no material recompiles.
   for (let i = 0; i < pool.length; i++) {
     const light = pool[i]!;
-    const found = near[i];
+    const found = slots[i];
     if (!found || light.intensity === 0) continue;
     const reach = FLAME_RANGE * zoom + light.range;
     if (found.d <= reach * reach) light.getShadowGenerator()?.getShadowMap()?.resetRefreshCounter();

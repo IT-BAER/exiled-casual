@@ -227,8 +227,8 @@ export function applyGraphics(scene: Scene, engine: Engine | null, g: GraphicsSe
     const map = torch.getShadowGenerator()?.getShadowMap();
     if (map) map.refreshRate = g.shadows === "high" ? 1 : 2;
   }
-  // High turns the braziers into real casters, Medium the two nearest (the pool
-  // is pointed nearest-first, so that is firelight-0 and -1); Low and Off leave
+  // High turns the braziers into real casters, Medium firelight-0 and -1 (a bowl
+  // keeps its light while lit, so its shadows never pop on); Low and Off leave
   // the torch alone with blobs under the actors. The generators are already
   // built (lights.ts `castFrom`), so a lit bowl throws a real shadow of
   // everything near it, actors included. Looking them up by prefix covers a

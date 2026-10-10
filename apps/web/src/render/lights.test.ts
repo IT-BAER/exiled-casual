@@ -38,6 +38,49 @@ describe("the fires a place is lit by", () => {
     expect(lit.every((l) => l.intensity > 0)).toBe(true);
   });
 
+  it("keeps each lit bowl on the same light however the distances reorder", () => {
+    // The pool's lights are not interchangeable: at Medium shadows only the first
+    // two cast. A bowl handed to another light when two distances cross gains or
+    // loses its shadows in one frame, which the hideout showed as one side of
+    // the room brightening while the other dimmed.
+    const s = scene();
+    createFireLights(s);
+    setFireSpots([{ x: 3, z: -3, phase: 0 }, { x: -7, z: -3, phase: 1 }, { x: 3, z: 7, phase: 2 }]);
+    updateFireLights(s, new Vector3(3, 0, -2), 16);
+    const before = fireLightState().map((l) => `${l.x},${l.z}`);
+    // Walk until the bowl at (-7,-3) is nearer than the one at (3,7), then nearest.
+    for (const x of [0, -2, -4, -6]) updateFireLights(s, new Vector3(x, 0, -3), 16);
+    expect(fireLightState().map((l) => `${l.x},${l.z}`)).toEqual(before);
+  });
+
+  it("hands a bowl entering the lit set the light of the bowl that left it", () => {
+    const s = scene();
+    createFireLights(s);
+    // Five fires on a line; the pool covers four.
+    setFireSpots([0, 6, 12, 18, 24].map((x, i) => ({ x, z: 0, phase: i })));
+    updateFireLights(s, new Vector3(0, 0, 0), 16);
+    const before = fireLightState().map((l) => l.x);
+    expect([...before].sort((a, b) => a - b)).toEqual([0, 6, 12, 18]);
+    updateFireLights(s, new Vector3(24, 0, 0), 16);
+    const after = fireLightState().map((l) => l.x);
+    // Bowl 0 left, bowl 24 came in on its light; the other three never moved.
+    expect(after).toEqual(before.map((x) => (x === 0 ? 24 : x)));
+  });
+
+  it("keeps the fire out of an instanced bowl", () => {
+    // Hideout props are instances of a template held outside `scene.meshes`, and
+    // an instance is lit with its SOURCE's lights: excluding only the instance
+    // left the coals under the lamp, blown to a white saucer.
+    const s = scene();
+    createFireLights(s);
+    const source = MeshBuilder.CreateBox("brazier_coals", { size: 1 }, s);
+    source.createInstance("brazier_coals");
+    s.removeMesh(source);
+    setFireSpots([{ x: 0, z: 0, phase: 0 }]);
+    updateFireLights(s, Vector3.Zero(), 16);
+    expect(source.lightSources.filter((l) => l.name.startsWith("firelight-"))).toEqual([]);
+  });
+
   it("re-renders a bowl's shadow cube only while its pool can reach the frame", () => {
     const s = scene();
     const pool = createFireLights(s);
