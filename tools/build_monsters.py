@@ -1607,31 +1607,33 @@ def sand_skitterer():
     return c
 
 
+WHELP_SOURCE = os.path.join(TEX_DIR, "source", "bramble_whelp_v1.glb")
+WHELP_NORMAL = os.path.join(TEX_DIR, "source", "bramble_whelp_v1_n.png")
+
+
 def bramble_whelp():
-    """Bark hound: long legs, a ridge of thorns from skull to tail."""
-    c = Creature("monster.bramble_whelp.v1", "forest", 0.25, 0.95)
-    spine = c.body.chain(
-        [(0, -0.38, 0.54), (0, -0.12, 0.60), (0, 0.14, 0.62), (0, 0.32, 0.58)],
-        [(0.10, 0.13), (0.24, 0.18), (0.26, 0.20), (0.20, 0.16)])
-    neck = c.body.chain([(0, 0.48, 0.54), (0, 0.62, 0.50)], [(0.12, 0.14), (0.17, 0.15)],
-                        parent=spine[-1])
-    c.body.chain([(0, 0.78, 0.44), (0, 0.88, 0.42)], [0.10, 0.055], parent=neck[-1])
-    c.body.chain([(0, -0.52, 0.56), (0, -0.70, 0.62), (0, -0.86, 0.46)],
-                 [0.07, 0.045, 0.018], parent=spine[0])
-    for side in (-1, 1):
-        c.body.add(ellipsoid((side * 0.07, 0.74, 0.54), (0.036, 0.036, 0.036), 6, 4), GLOWS)
-    # The thorns. Six of them stood along the spine at x=0 and could not be seen
-    # at all: a comb aimed straight up is edge-on to this camera and lands inside
-    # the body's own outline. The same six rooted in the flanks and swept out and
-    # back are the whole animal from above, and cost not one extra face.
-    for i in range(3):
-        y = 0.24 - i * 0.34
-        for side in (-1, 1):
-            c.body.add(horn([(side * 0.10, y + 0.06, 0.64), (side * 0.30, y - 0.06, 0.80),
-                             (side * 0.42, y - 0.22, 0.74)],
-                            [0.055 - i * 0.008, 0.036, 0.0], 5), BONES)
-    for i, (x, y) in enumerate([(-0.22, 0.18), (0.22, 0.18), (-0.22, -0.22), (0.22, -0.22)]):
-        c.leg(i, (x, y, 0.56), (x * 1.2, y, 0.0), 0.075, 0.044, bend=0.08)
+    """Bark hound: long legs, a ridge of thorns from skull to tail.
+
+    Generated (review/3d/bramble-whelp), 4k triangles. Joints measured off
+    bramble_whelp_v1.glb by tools/measure_generated.py --flip 1.
+    """
+    c = GeneratedSkin("monster.bramble_whelp.v1", WHELP_SOURCE, WHELP_NORMAL,
+                      "forest", 0.95, (0.0, 0.078), tex=512, flip=True)
+    # Rooted over the fore hips, the near-straight pair: rooted at the rump the
+    # lunge stretched a leg 24% past reach.
+    spine = c.body.chain([(0, 0.20, 0.64), (0, 0.0, 0.62), (0, -0.25, 0.58)], [0.1] * 3)
+    # The head rides high over the forelegs, the tail hangs low off the rump.
+    c.body.chain([(0, 0.34, 0.76), (0, 0.48, 0.70)], [0.1] * 2, parent=spine[0])
+    c.body.chain([(0, -0.38, 0.40), (0, -0.52, 0.36)], [0.05] * 2, parent=spine[-1])
+    for i, (hip, knee, foot) in enumerate([
+        ((-0.104, 0.201, 0.475), (-0.122, 0.215, 0.143), (-0.143, 0.263, 0.000)),
+        ((0.131, 0.215, 0.485), (0.120, 0.209, 0.165), (0.144, 0.263, 0.000)),
+        ((-0.075, -0.196, 0.420), (-0.116, -0.316, 0.197), (-0.174, -0.247, 0.000)),
+        # Measured knee (0.116, -0.322, 0.197) left the lunge stretching this leg
+        # 18%; set back like its pair's bend.
+        ((0.070, -0.215, 0.456), (0.116, -0.350, 0.205), (0.173, -0.279, 0.001)),
+    ]):
+        c.leg_through(i, hip, knee, foot)
     return c
 
 

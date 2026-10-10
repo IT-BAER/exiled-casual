@@ -297,6 +297,9 @@ describe("monsters asset", () => {
    *
    * 5.5MB and fifteen images since the Sunbaked Colossus became a generated mesh
    * at 4k triangles with two 512 sheets: measured 5,157,736 -> 5,428,792 packed.
+   *
+   * 5.75MB and seventeen images since the Bramble Whelp did the same: measured
+   * 5,430,556 -> 5,664,344 packed.
    */
   /**
    * The shader warm that ends the map-entry stall. Every instance of a species
@@ -340,9 +343,9 @@ describe("monsters asset", () => {
 
   it("embeds compressed textures and stays within budget", () => {
     for (const image of json.images) expect(image.mimeType).toBe("image/jpeg");
-    expect(json.images.length).toBeLessThanOrEqual(15);
+    expect(json.images.length).toBeLessThanOrEqual(17);
     expect(json.extensionsRequired).toContain("EXT_meshopt_compression");
-    expect(glb.byteLength).toBeLessThan(5_500_000);
+    expect(glb.byteLength).toBeLessThan(5_750_000);
   });
 });
 
