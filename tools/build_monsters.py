@@ -1517,21 +1517,24 @@ IMP_NORMAL = os.path.join(TEX_DIR, "source", "cinder_imp_v1_n.png")
 def cinder_imp():
     """Humped quadruped, horns swept back, a whip tail. The one everybody meets.
 
-    Generated (review/3d/cinder-imp), 4k triangles. Joints measured off
-    cinder_imp_v1.glb by tools/measure_generated.py --flip 1.
+    Generated (review/3d/cinder-imp), thin spikes cut off by a volumetric
+    opening (tools/open_volume.py --res 240 --radius 2), 4k triangles. Joints
+    measured off cinder_imp_v1.glb by tools/measure_generated.py --flip 1.
     """
     c = GeneratedSkin("monster.cinder_imp.v1", IMP_SOURCE, IMP_NORMAL,
-                      "cinder", 0.85, (-0.020, 0.028), tex=512, flip=True)
+                      "cinder", 0.85, (-0.015, -0.032), tex=512, flip=True)
     spine = c.body.chain([(0, -0.24, 0.50), (0, -0.02, 0.56), (0, 0.18, 0.52)], [0.1] * 3)
     c.body.chain([(0, 0.30, 0.60), (0, 0.42, 0.63)], [0.1] * 2, parent=spine[-1])
     # The whip tail curls off to the left as TRELLIS built it.
     c.body.chain([(0, -0.42, 0.50), (-0.10, -0.58, 0.40), (-0.30, -0.64, 0.30)],
                  [0.05] * 3, parent=spine[0])
+    # The right foreleg was measured near straight; its knee sits at the back of
+    # the leg column, or the walk stretches it 21% past reach.
     for i, (hip, knee, foot) in enumerate([
-        ((-0.067, 0.176, 0.411), (-0.088, 0.118, 0.131), (-0.149, 0.196, 0.001)),
-        ((0.090, 0.166, 0.425), (0.141, 0.166, 0.327), (0.137, 0.304, 0.023)),
-        ((-0.074, -0.233, 0.417), (-0.155, -0.340, 0.068), (-0.212, -0.251, 0.000)),
-        ((0.075, -0.233, 0.453), (0.167, -0.292, 0.234), (0.224, -0.249, 0.008)),
+        ((-0.050, 0.152, 0.396), (-0.074, 0.139, 0.076), (-0.150, 0.205, 0.002)),
+        ((0.085, 0.185, 0.417), (0.145, 0.195, 0.127), (0.159, 0.324, 0.022)),
+        ((-0.066, -0.218, 0.409), (-0.149, -0.343, 0.092), (-0.219, -0.263, 0.000)),
+        ((0.071, -0.233, 0.455), (0.181, -0.293, 0.206), (0.209, -0.267, 0.006)),
     ]):
         c.leg_through(i, hip, knee, foot)
     return c

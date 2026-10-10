@@ -168,6 +168,14 @@ def rebuild_stage(a):
     bake.use_pass_indirect = False
     bake.use_pass_color = True
     bake.margin = 8
+    # A DIFFUSE colour pass reads metal as black, and TRELLIS drives Metallic
+    # from a map (the imp's sits near 1.0): bake the base colour as dielectric.
+    for m in src.data.materials:
+        b = next((n for n in m.node_tree.nodes if n.type == "BSDF_PRINCIPLED"), None)
+        if b:
+            for link in list(b.inputs["Metallic"].links):
+                m.node_tree.links.remove(link)
+            b.inputs["Metallic"].default_value = 0.0
     for o in scene.objects:
         o.select_set(o in (src, low))
     bpy.context.view_layer.objects.active = low
