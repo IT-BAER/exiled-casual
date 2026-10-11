@@ -1718,39 +1718,17 @@ def fen_wisp():
     return c
 
 
+HOARFROST_SPITTER_SOURCE = os.path.join(TEX_DIR, "source", "hoarfrost_spitter_v1.glb")
+HOARFROST_SPITTER_NORMAL = os.path.join(TEX_DIR, "source", "hoarfrost_spitter_v1_n.png")
+
+
 def hoarfrost_spitter():
-    """Antlered biped, frost in every crack, arms long enough to throw with."""
-    c = Creature("monster.hoarfrost_spitter.v1", "forest", 0.275, 2.0)
-    # An upright chain takes its pair as (across, front-to-back), so a torso that
-    # is wide and shallow is one number apart from the barrel it used to be.
-    spine = c.body.chain(
-        [(0, -0.04, 0.72), (0, 0.06, 1.06), (0, 0.02, 1.36), (0, -0.02, 1.52)],
-        [(0.16, 0.18), (0.31, 0.21), (0.33, 0.20), (0.18, 0.14)])
-    # Shoulders swept out of the spine, or a thrower has nothing to throw with.
-    for side in (-1, 1):
-        c.body.chain([(side * 0.24, 0.0, 1.40), (side * 0.34, 0.0, 1.30)],
-                     [0.15, 0.11], parent=spine[-2])
-    neck = c.body.chain([(0, 0.06, 1.60)], [0.10], parent=spine[-1])
-    c.body.chain([(0, 0.12, 1.72), (0, 0.24, 1.68)], [0.16, 0.09], parent=neck[-1])
-    c.body.add(slab((0, 0.20, 1.14), (0.10, 0.06, 0.38)), GLOWS)
-    for side in (-1, 1):
-        c.body.add(ellipsoid((side * 0.07, 0.26, 1.72), (0.032, 0.032, 0.032), 6, 4), GLOWS)
-        # The rack is the outline: a swept beam with three tines, reaching half
-        # the skull's height again above it and a third of the body out sideways.
-        # Thicker than it looks right in the sculpt: a 0.055 beam on a 2-unit
-        # creature is under three percent of its height and renders as a scratch.
-        beam = [(side * 0.11, 0.04, 1.82), (side * 0.40, -0.10, 2.10), (side * 0.66, 0.08, 2.24)]
-        c.body.add(horn(beam, [0.075, 0.05, 0.0]), BONES)
-        c.body.add(horn([(side * 0.26, -0.04, 1.96), (side * 0.44, -0.32, 2.06)],
-                        [0.042, 0.0]), BONES)
-        c.body.add(horn([(side * 0.50, -0.02, 2.16), (side * 0.62, -0.26, 2.28)],
-                        [0.036, 0.0]), BONES)
-    for i, side in enumerate((-1, 1)):
-        c.arm(i, [(side * 0.34, 0.0, 1.28), (side * 0.44, 0.14, 0.90), (side * 0.36, 0.32, 0.54)],
-              [0.075, 0.055, 0.036])
-    for i, side in enumerate((-1, 1)):
-        c.leg(i, (side * 0.17, 0.0, 0.74), (side * 0.22, 0.0, 0.0), 0.09, 0.05, bend=0.09)
-    return c
+    """Antlered biped, frost in the chest cracks, arms long enough to throw with.
+
+    Generated (review/3d/hoarfrost-spitter), 4k triangles, rig_humanoid.
+    """
+    return GeneratedCreature("monster.hoarfrost_spitter.v1", HOARFROST_SPITTER_SOURCE, "forest", 2.0,
+                             normal=HOARFROST_SPITTER_NORMAL)
 
 
 # --------------------------------------------------------------------------
