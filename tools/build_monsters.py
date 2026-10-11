@@ -2062,36 +2062,32 @@ def cinder_warden():
                              normal=CINDER_WARDEN_NORMAL, tex=1024)
 
 
-def sirrath():
-    """Desert. A sun-priest on six stilts, carrying its own censers.
+SIRRATH_SOURCE = os.path.join(TEX_DIR, "source", "sirrath_v1.glb")
+SIRRATH_NORMAL = os.path.join(TEX_DIR, "source", "sirrath_v1_n.png")
 
-    Three bare glowing balls on sticks read as a toy. Each sac now hangs INSIDE a
-    split chitin husk that only opens toward the front, so the light is a slot
-    seen edge-on from behind and a furnace seen head-on — which is exactly the
-    information a player wants about a thing that is winding up a volley."""
-    c = Creature("monster.sirrath.v1", "desert", 0.45, 2.8)
-    spine = c.body.chain([(0, -0.04, 1.42), (0, 0.06, 1.82), (0, 0.02, 2.16), (0, -0.02, 2.32)],
-                         [(0.26, 0.18), (0.46, 0.30), (0.42, 0.26), (0.30, 0.20)])
-    c.body.shape((0.82, 1.0, 1.0), pivot=(0, 0, 1.4))
-    c.body.chain([(0, 0.22, 2.24), (0, 0.36, 2.20)], [0.15, 0.18], parent=spine[-2])
-    for dx, dy in ((0.0, 0.30), (-0.40, 0.02), (0.40, 0.02)):
-        c.body.chain([(dx * 0.4, dy * 0.4, 2.28), (dx, dy, 2.54)], [0.10, 0.15],
-                     parent=spine[-1])
-        c.body.add(ellipsoid((dx, dy, 2.68), (0.15, 0.15, 0.17), 12, 7), GLOWS)
-        # The husk: two shells clamped round the sac, open toward +y.
-        for sh in (-1, 1):
-            c.body.add(horn([(dx + sh * 0.20, dy - 0.20, 2.60), (dx + sh * 0.22, dy - 0.02, 2.76),
-                             (dx + sh * 0.12, dy + 0.16, 2.84)],
-                            [0.075, 0.085, 0.045]), BONES)
-    for side in (-1, 1):
-        c.body.add(ellipsoid((side * 0.08, 0.48, 2.24), (0.04, 0.04, 0.04), 6, 4), GLOWS)
-        # Robe: a long shell down each flank, half sunk into the body and now
-        # standing clear of it, so the plan outline is three masses and not one.
-        c.body.add(slab((side * 0.46, 0.02, 1.80), (0.22, 0.44, 0.86), tilt=0.08))
-    for i, (x, y) in enumerate([(-0.30, 0.24), (0.30, 0.24), (-0.34, 0.0), (0.34, 0.0),
-                                (-0.30, -0.26), (0.30, -0.26)]):
-        c.leg(i, (x, y, 1.46), (x * 3.4, y * 2.4, 0.0), 0.11, 0.046,
-              bend=0.26 if y > 0 else -0.26)
+
+def sirrath():
+    """Desert. A hooded sun-priest on six bone stilts, censers hung under the robe.
+
+    Generated (review/3d/sirrath), volumetric opening res 240 r 2 with --keep 0.01:
+    the left mid stilt and both censers are their own shells (the chains are too
+    thin to survive). 8k triangles on a 1024 sheet. Joints measured off
+    sirrath_v1.glb by tools/measure_generated.py --flip 1; the stilt tips end at
+    different heights as built.
+    """
+    c = GeneratedSkin("monster.sirrath.v1", SIRRATH_SOURCE, SIRRATH_NORMAL,
+                      "desert", 2.8, (-0.061, 0.009), flip=True)
+    spine = c.body.chain([(0, -0.52, 2.03), (0, -0.10, 2.10), (0, 0.32, 2.03)], [0.2] * 3)
+    c.body.chain([(0, 0.40, 2.30), (0, 0.46, 2.60)], [0.1] * 2, parent=spine[-1])
+    for i, (hip, knee, foot) in enumerate([
+        ((-0.383, 0.187, 1.996), (-0.569, 0.901, 1.198), (-0.668, 1.233, 0.067)),
+        ((0.218, 0.100, 2.076), (0.510, 0.478, 1.860), (0.800, 1.186, 0.104)),
+        ((-0.451, 0.032, 1.856), (-0.842, 0.025, 1.978), (-1.408, -0.049, 0.139)),
+        ((0.465, -0.118, 1.812), (0.918, -0.119, 1.966), (1.498, -0.031, 0.150)),
+        ((-0.459, -0.274, 2.018), (-0.743, -0.592, 2.082), (-1.139, -0.950, 0.000)),
+        ((0.265, -0.391, 2.050), (0.482, -0.830, 2.167), (0.917, -1.388, 0.033)),
+    ]):
+        c.leg_through(i, hip, knee, foot)
     return c
 
 
