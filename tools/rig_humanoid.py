@@ -177,6 +177,7 @@ def skin(mesh, arm):
             d[medial < -0.05 * H, i] *= 3.0
     # Below the wrist, outside the empty gap beside the thigh, is whatever hangs
     # from the hand (net, chain): the widest run of empty 1%-of-H columns.
+    held = []
     for s, t in ((1, "l"), (-1, "r")):
         wrist = bones[index["hand_" + t]].head_local
         low = v[(v[:, 2] > 0.25 * H) & (v[:, 2] < wrist.z)]
@@ -191,6 +192,7 @@ def skin(mesh, arm):
         gap = (best[1] - best[0] / 2 + 0.5) * 0.01 * H
         print("hand %s: hanging beyond x %.3f" % (t, gap))
         hangs = (s * v[:, 0] > gap) & (v[:, 2] < wrist.z)
+        held.append((hangs, wrist.z, index["hand_" + t]))
         for i, b in enumerate(bones):
             if b.name not in ("hand_" + t, "arm_lower_" + t):
                 d[hangs, i] *= 3.0
@@ -221,6 +223,30 @@ def skin(mesh, arm):
     acc = numpy.zeros((weld.max() + 1, W.shape[1]))
     numpy.add.at(acc, weld, W)
     W = acc[weld] / numpy.bincount(weld)[weld, None]
+    # What the hand holds is rigid with the hand: a forearm/hand blend along a
+    # blade far from both bones bends it like rubber through the walk. Only the
+    # pieces that reach up to the wrist are held: a wide foot is also out there.
+    # Connectivity runs on welded points: UV seams cut a blade into islands.
+    ew = weld[e]
+    for hangs, wz, hand in held:
+        hw = numpy.zeros(weld.max() + 1, dtype=bool)
+        hw[weld[hangs]] = True
+        label = numpy.where(hw, numpy.arange(len(hw)), -1)
+        inner = ew[hw[ew[:, 0]] & hw[ew[:, 1]]]
+        while True:
+            low = numpy.minimum(label[inner[:, 0]], label[inner[:, 1]])
+            before = label.copy()
+            numpy.minimum.at(label, inner[:, 0], low)
+            numpy.minimum.at(label, inner[:, 1], low)
+            label[hw] = label[label[hw]]
+            if (label == before).all():
+                break
+        top = numpy.full(len(hw), -numpy.inf)
+        numpy.maximum.at(top, label[weld[hangs]], v[hangs, 2])
+        grip = hangs & (top[numpy.maximum(label[weld], 0)] > wz - 0.1 * H)
+        print("  held by %s: %d vertices" % (bones[hand].name, grip.sum()))
+        W[grip] = 0.0
+        W[grip, hand] = 1.0
     keep = numpy.argsort(-W, axis=1)[:, :4]
     groups = [mesh.vertex_groups.new(name=b.name) for b in bones]
     for vi in range(len(v)):

@@ -1965,33 +1965,18 @@ def thornhide_boar():
 # the heavies: the loudest thing in a pack, and the slowest
 # --------------------------------------------------------------------------
 
+BLOOD_SENTINEL_SOURCE = os.path.join(TEX_DIR, "source", "blood_sentinel_v1.glb")
+BLOOD_SENTINEL_NORMAL = os.path.join(TEX_DIR, "source", "blood_sentinel_v1_n.png")
+
+
 def blood_sentinel():
-    """A statue with a mantle and one blade too big for the arm holding it."""
-    c = Creature("monster.blood_sentinel.v1", "vaal", 0.4, 2.1)
-    spine = c.body.chain([(0, 0, 0.86), (0, 0.03, 1.22), (0, 0.02, 1.62), (0, 0, 1.82)],
-                         [(0.27, 0.21), (0.25, 0.19), (0.40, 0.25), (0.32, 0.21)])
-    # The mantle is BUILT, not bolted: two shoulder masses swept out of the neck,
-    # with a thin ridge over them. A 1.08-wide board across the back was a shelf.
-    for side in (-1, 1):
-        c.body.chain([(side * 0.28, -0.02, 1.76), (side * 0.50, -0.04, 1.62),
-                      (side * 0.60, -0.02, 1.42)],
-                     [0.26, 0.22, 0.14], parent=spine[-1])
-        c.body.add(slab((side * 0.40, -0.03, 1.84), (0.44, 0.42, 0.09), tilt=0.22))
-        c.body.add(horn([(side * 0.34, -0.06, 1.90), (side * 0.48, -0.22, 2.32)],
-                        [0.08, 0.0]), BONES)
-        c.body.add(slab((side * 0.16, 0.20, 1.28), (0.10, 0.06, 0.80)))
-    # No skull: a helm slit sunk into the collar between the shoulders.
-    c.body.chain([(0, 0.10, 1.96), (0, 0.20, 1.94)], [0.16, 0.13], parent=spine[-1])
-    c.body.add(slab((0, 0.30, 1.96), (0.20, 0.05, 0.05)), GLOWS)
-    # The blade arm: right side only. Symmetry is what made the old imp read as
-    # a toy — one oversized limb is the whole silhouette.
-    blade = c.limb("arm0", (0.50, 0.0, 1.62))
-    blade.chain([(0.50, 0.0, 1.62), (0.66, 0.10, 1.16)], [0.14, 0.115])
-    blade.add(slab((0.72, 0.42, 0.98), (0.11, 1.10, 0.34), tilt=0.22), BONES)
-    c.arm(1, [(-0.46, 0.0, 1.62), (-0.56, 0.16, 1.14), (-0.50, 0.28, 0.84)], [0.10, 0.08, 0.062])
-    for i, side in enumerate((-1, 1)):
-        c.leg(i, (side * 0.24, 0.0, 0.86), (side * 0.30, 0.0, 0.0), 0.145, 0.10, bend=0.05)
-    return c
+    """A hooded statue in a mantle, one blade too big for the arm holding it.
+
+    Generated (review/3d/blood-sentinel), volumetric opening res 240 r 2,
+    4k triangles, rig_humanoid.
+    """
+    return GeneratedCreature("monster.blood_sentinel.v1", BLOOD_SENTINEL_SOURCE, "vaal", 2.1,
+                             normal=BLOOD_SENTINEL_NORMAL)
 
 
 COLOSSUS_SOURCE = os.path.join(TEX_DIR, "source", "sunbaked_colossus_v1.glb")
