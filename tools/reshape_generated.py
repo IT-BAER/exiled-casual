@@ -25,6 +25,8 @@ import bpy
 import numpy as np
 from mathutils import Matrix
 
+# Never beautify_fill between passes: it folds thin and sharp parts (sentinel
+# blade p99 error 0.016 diag with it, 0.0013 without).
 DECIMATE_PASSES = 4
 
 
@@ -107,11 +109,6 @@ def decimate(obj, target):
         m.use_collapse_triangulate = True
         with bpy.context.temp_override(object=obj, active_object=obj):
             bpy.ops.object.modifier_apply(modifier=m.name)
-        bm = bmesh.new()
-        bm.from_mesh(obj.data)
-        bmesh.ops.beautify_fill(bm, faces=bm.faces, edges=bm.edges)
-        bm.to_mesh(obj.data)
-        bm.free()
     obj.data.shade_smooth()
 
 
