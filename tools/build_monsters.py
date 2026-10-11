@@ -2048,30 +2048,18 @@ def rotting_behemoth():
 # the bosses: one per biome, and each one is the room's silhouette
 # --------------------------------------------------------------------------
 
+CINDER_WARDEN_SOURCE = os.path.join(TEX_DIR, "source", "cinder_warden_v1.glb")
+CINDER_WARDEN_NORMAL = os.path.join(TEX_DIR, "source", "cinder_warden_v1_n.png")
+
+
 def cinder_warden():
-    """Vaal Stone. A furnace on two legs, carrying the slab it slams with."""
-    c = Creature("monster.cinder_warden.v1", "cinder", 0.5, 2.9)
-    spine = c.body.chain([(0, 0, 1.16), (0, 0.04, 1.74), (0, 0, 2.30)],
-                         [(0.44, 0.33), (0.54, 0.36), (0.48, 0.31)])
-    c.body.chain([(0, 0.06, 2.52), (0, 0.14, 2.72)], [0.20, 0.26], parent=spine[-1])
-    c.body.add(ellipsoid((0, 0.30, 1.86), (0.38, 0.22, 0.44), 12, 7), GLOWS)
-    c.body.add(slab((0, 0, 2.42), (1.46, 0.78, 0.30), tilt=0.10))
-    for side in (-1, 1):
-        c.body.add(ellipsoid((side * 0.11, 0.36, 2.78), (0.055, 0.055, 0.055), 6, 4), GLOWS)
-        # The crown rakes outward as much as up: the tips end up over the
-        # shoulders, where the plan view still has them.
-        for dx, dz in ((0.16, 0.40), (0.46, 0.28), (0.72, 0.10)):
-            c.body.add(horn([(side * (0.14 + dx * 0.5), 0.02, 2.76),
-                             (side * (0.28 + dx), -0.16, 2.76 + dz)], [0.08, 0.0]), BONES)
-    # The slab arm is the tell: it is what the telegraph is about to come from.
-    hammer = c.limb("arm0", (0.70, 0.0, 2.22))
-    hammer.chain([(0.70, 0.0, 2.22), (1.02, 0.16, 1.52)], [0.22, 0.18])
-    hammer.add(slab((1.12, 0.24, 1.08), (0.54, 0.76, 0.52)))
-    hammer.add(slab((1.12, 0.24, 1.08), (0.58, 0.24, 0.14)), GLOWS)
-    c.arm(1, [(-0.70, 0.0, 2.22), (-0.90, 0.20, 1.62), (-0.82, 0.38, 1.16)], [0.17, 0.14, 0.12])
-    for i, side in enumerate((-1, 1)):
-        c.leg(i, (side * 0.38, 0.0, 1.16), (side * 0.48, 0.0, 0.0), 0.24, 0.16, bend=0.09)
-    return c
+    """Vaal Stone. A furnace on two legs, carrying the slab it slams with.
+
+    Generated (review/3d/cinder-warden), volumetric opening res 240 r 2,
+    8k triangles on a 1024 sheet, rig_humanoid.
+    """
+    return GeneratedCreature("monster.cinder_warden.v1", CINDER_WARDEN_SOURCE, "cinder", 2.9,
+                             normal=CINDER_WARDEN_NORMAL, tex=1024)
 
 
 def sirrath():

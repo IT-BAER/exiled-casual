@@ -327,6 +327,9 @@ describe("monsters asset", () => {
    *
    * Thirty-four images since the Vaal Construct became a generated mesh with two
    * 512 sheets: measured 6,428,688 -> 6,622,052 packed.
+   *
+   * 7.0MB since the Cinder Warden became a generated mesh at 8k triangles with
+   * two 1024 sheets: measured 6,521,388 -> 6,829,176 packed.
    */
   /**
    * The shader warm that ends the map-entry stall. Every instance of a species
@@ -372,7 +375,7 @@ describe("monsters asset", () => {
     for (const image of json.images) expect(image.mimeType).toBe("image/jpeg");
     expect(json.images.length).toBeLessThanOrEqual(34);
     expect(json.extensionsRequired).toContain("EXT_meshopt_compression");
-    expect(glb.byteLength).toBeLessThan(6_750_000);
+    expect(glb.byteLength).toBeLessThan(7_000_000);
   });
 });
 
