@@ -10,6 +10,71 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-11
+
+Alpha. A save may not survive an update yet.
+
+### Added
+
+- Monsters and bosses have real bodies. Thirteen monsters and all four bosses,
+  the Cinder Warden, Sirrath, Mother Vhal and Ghaltrek, are full creature meshes
+  now instead of stacked shapes, each walking and idling on its own rig, and the
+  Fen Wisp floats. The death recap shows the creature that killed you.
+- The world has music and sounds like a place. Every area plays its own music,
+  picked at random and never the take it played last, and the main menu has its
+  own. Sounds come from where they happen and travel the way they would in a
+  cave, a swamp or out on the beach, every effect has several takes so nothing
+  repeats, items lift and land in their own material, and Varkis speaks.
+  Ambience has its own volume slider.
+- Maps are different every run. Opening a map rolls a fresh layout every time,
+  even from the permanent Waystone, so the same node is never the same walk twice.
+- A new character chooses click-to-move or WASD, Path of Exile 2's two control
+  schemes, and the keys follow the choice. Options switch it later.
+- In click-to-move, clicking a monster out of reach runs to it and swings once
+  you get there, the way Path of Exile does it. Shift attacks in place.
+- Graphics presets, a medium shadow setting, and Auto, which picks a preset for
+  your graphics card and steps down when the game drops under 55 frames a second.
+- Shift and right-click on a currency stack spends it on every item in your
+  backpack that accepts it, one each, until the stack runs out.
+- Energy shield always regenerates 1% of its maximum a second, with the delayed
+  recharge on top.
+
+### Changed
+
+- The first maps are kinder. Monsters hit about half as hard, bosses keep their
+  own numbers, and every kill heals you 4% of your maximum life.
+- A boss stays in its arena. Lead it more than 16 units from where it stood and
+  it walks back home, with the life it had left.
+- Burning ground catches from its middle outward and burns out from its rim,
+  with a glowing edge, instead of popping in and shrinking away.
+- Y opens a portal for free in an open map, the way Path of Exile 2 does it.
+  Portal Scrolls only come from the vendor, so most characters had none.
+- A hit shows: the body flashes, glowing shards fly off the side that was struck,
+  a few dark drops fall away from the blow, and the screen shakes by how heavy
+  the skill is.
+- Desert, forest and swamp cliffs are real rock instead of masonry.
+- Panels and dialogs fade in and out, and each menu screen rises out of black.
+- Varkis wears the full Ember set instead of the bare body.
+- The passive tree pauses the game while it is open.
+- Monster health bars are on by default.
+
+### Fixed
+
+- A map can no longer trap you. A chest or a brazier in a narrow doorway could
+  close off the room behind it, and a monster could spawn where nothing could
+  reach it.
+- A held walk or cast no longer keeps going after you let go of the key.
+- Melee hits, bolt impacts and arrows land on the body they hit, not on its
+  centre or its aura ring.
+- First casts and newly spawned monsters no longer stutter: everything compiles
+  under the loading screen.
+- A waystone dropped onto the map device stays seated.
+- Reward chests no longer stand inside cliff rock.
+- A brazier keeps its fire light.
+- The body holds a cast's direction through the wind-up and no longer leans back
+  when you attack while backing away.
+- The create screen dresses the class you picked while it was still loading.
+
 ## [0.2.0] - 2026-10-02
 
 Alpha. A save may not survive an update yet.
