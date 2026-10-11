@@ -26,7 +26,7 @@ import {
 } from "@babylonjs/core";
 import { buildSkyEnvironment, ENVIRONMENT_INTENSITY, GROUND_COLOR, SKY_COLOR } from "./environment";
 import { attachProp, loadProps, PROP_KINDS, type PropKind } from "./props";
-import { attachCreature, loadMonsters } from "./monsters";
+import { attachCreature, loadMonsters, type CreatureRig } from "./monsters";
 import { SPAWNABLE, type Spawnable } from "./gallery";
 import {
   attachRig,
@@ -263,6 +263,7 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
 
   let host: Mesh | null = null;
   let rig: RigActor | null = null;
+  let creature: CreatureRig | null = null;
   // Locomotion is re-asserted every frame, as the game does: the hips ease into
   // their turn and the direction blend follows them.
   let moving: ViewerClip | null = null;
@@ -276,7 +277,11 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
   const takeDown = () => {
     rig?.dispose();
     rig = null;
-    host?.dispose(false, true);
+    creature?.dispose();
+    creature = null;
+    // Every exhibit shares its container's materials: disposing them here
+    // leaves the next copy of that prop or creature untextured white.
+    host?.dispose();
     host = null;
   };
 
@@ -314,7 +319,7 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
       } else if ((PROP_KINDS as readonly string[]).includes(id)) {
         attachProp(scene, host, id as PropKind, true);
       } else {
-        attachCreature(scene, host, id);
+        creature = attachCreature(scene, host, id);
       }
       // The skinned meshes only take their bind pose once the scene has stepped,
       // so a bounding box read in this tick frames the subject at the origin.
