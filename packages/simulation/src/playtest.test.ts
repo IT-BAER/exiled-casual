@@ -45,7 +45,10 @@ describe("first tier-1 map, fresh character (bot)", () => {
 
 /** Level 10 holds every class's level-8 area skill, which a level-1 map never sees. */
 describe("three maps at level 10 (bot)", () => {
-  const runs = Object.fromEntries(CLASS_IDS.map((c) => [c, SEEDS.flatMap((s) => campaign(c, 400 + s, 3, {}, 10))]));
+  // Thirty, not ten: on ten, moving a few braziers swung the parity ratio 1.20 -> 1.31
+  // while thirty seeds of the same code read 1.14.
+  const PARITY_SEEDS = Array.from({ length: 30 }, (_, i) => i + 1);
+  const runs = Object.fromEntries(CLASS_IDS.map((c) => [c, PARITY_SEEDS.flatMap((s) => campaign(c, 400 + s, 3, {}, 10))]));
   const sum = Object.fromEntries(CLASS_IDS.map((c) => [c, summarize(runs[c]!)])) as Record<string, Summary>;
 
   it.each(CLASS_IDS)("%s clears every map and rarely dies", (c) => {

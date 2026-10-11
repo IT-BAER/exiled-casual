@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { generateArea } from "@exiled/mapgen";
+import { generateArea, brazierSpotsFor, SPAWN_SAFE_RADIUS } from "@exiled/mapgen";
 import { fp } from "@exiled/fixed-point";
 import { CONTENT_VERSION, MONSTERS, MONSTER_POOLS, PACK_COUNT, bossFor, mapBase, hideoutFootprints } from "@exiled/content-runtime";
 import { familyOf, mapBaseIdForNode, monsterTierScale } from "@exiled/rules";
@@ -132,7 +132,8 @@ describe("pool-driven spawning", () => {
     for (const r of rewards) {
       const near = containers.some((e) => {
         const p = world.get<Position>(e, "position")!;
-        return p.x === fp(r.x) && p.y === fp(r.y);
+        // On its anchor, or nudged off a door it would shut (two units at most).
+        return Math.hypot(p.x - fp(r.x), p.y - fp(r.y)) <= fp(2);
       });
       expect(near, `${r.id} has no container`).toBe(true);
     }
@@ -235,7 +236,7 @@ describe("pool-driven spawning", () => {
       }
     }
     expect(stuck).toEqual([]);
-  });
+  }, 20_000);
 
   it("no two monsters of a map spawn on the same spot", () => {
     const stacked: string[] = [];
@@ -254,7 +255,7 @@ describe("pool-driven spawning", () => {
       }
     }
     expect(stacked).toEqual([]);
-  });
+  }, 20_000);
 
   it("exactly one rare, and it is still on the last layout socket", () => {
     const { world, session, layout } = mapFixture({ mapSeed: 21 });
@@ -289,6 +290,71 @@ describe("areaCollision", () => {
     expect(col.isWalkable(fp(-4.95), fp(-2.121), fp(0.5))).toBe(false);
     expect(col.isWalkable(fp(2.121), fp(4.95), fp(0.5))).toBe(false);
   });
+
+  it("map: a brazier is solid where the renderer stands it", () => {
+    const { world, session, layout } = mapFixture({ mapSeed: 7 });
+    buildArea(world, "map", session, layout);
+    const col = areaCollision(world, "map", layout);
+    const spots = brazierSpotsFor(layout);
+    expect(spots.length).toBeGreaterThan(0);
+    for (const s of spots) {
+      expect(col.isWalkable(fp(s.x), fp(s.z), 0), `${s.x},${s.z}`).toBe(false);
+    }
+  });
+
+  it("map: everything a map fields has a nav route from the start", () => {
+    // Strongrooms whose door held a container and a bowl 1.5 units apart, a fen pocket
+    // with a bowl in its 1.5-unit mouth, and three maps where a bowl left the boss
+    // reachable only between cell centres, where the nav (and every chase) cannot go.
+    const cases = [["node.cinder_vault", 1463906733], ["node.blackmire", 707292778], ["node.blackmire", 3830032802],
+      ["node.blackmire", 94326951], ["node.cinder_vault", 3750417493], ["node.cinder_vault", 4057393686]] as const;
+    const shut: string[] = [];
+    for (const [node, mapSeed] of cases) {
+      const layout = generateArea(mapSeed, CONTENT_VERSION, grammarForNode(node));
+      const { world, session } = mapFixture({ mapSeed, activeNodeId: node });
+      buildArea(world, "map", session, layout);
+      const col = areaCollision(world, "map", layout);
+      const start = layout.objectiveAnchors.find((a) => a.id === "start")!;
+      // What the map actually fields: every monster (boss included) and every container.
+      const targets = [...world.query("monster", "position"), ...world.query("container", "position")].map((e) => {
+        const p = world.get<Position>(e, "position")!;
+        return { id: `${world.has(e, "container") ? "container" : world.get<MonsterC>(e, "monster")!.defId}@${p.x},${p.y}`, x: p.x / 1000, y: p.y / 1000 };
+      });
+      // Some standable cell within reach of it has a nav route back to the start (a
+      // container's own centre is solid, so the target itself cannot be the question).
+      const g = layout.grid;
+      const reachable = (t: { x: number; y: number }) => {
+        const c0 = Math.round((t.x - g.originX) / g.cellSize), r0 = Math.round((t.y - g.originY) / g.cellSize);
+        for (let dr = -3; dr <= 3; dr++) for (let dc = -3; dc <= 3; dc++) {
+          const x = fp(g.originX + (c0 + dc) * g.cellSize), y = fp(g.originY + (r0 + dr) * g.cellSize);
+          if (col.isWalkable(x, y, fp(0.5)) && col.nav!.waypoint(x, y, fp(start.x), fp(start.y), fp(0.5))) return true;
+        }
+        return false;
+      };
+      for (const t of targets) if (!reachable(t)) shut.push(`${node} ${mapSeed} ${t.id}`);
+    }
+    expect(shut).toEqual([]);
+  });
+
+  it("map: no pack member stands inside the start's safe radius", () => {
+    const near: string[] = [];
+    for (const node of ["node.the_wrackline", "node.emberfall", "node.cinder_vault", "node.blackmire", "node.thornwake"]) {
+      for (let seed = 1; seed <= 15; seed++) {
+        const mapSeed = seed * 104729;
+        const layout = generateArea(mapSeed, CONTENT_VERSION, grammarForNode(node));
+        const { world, session } = mapFixture({ mapSeed, activeNodeId: node });
+        buildArea(world, "map", session, layout);
+        const start = layout.objectiveAnchors.find((a) => a.id === "start")!;
+        const from = (x: number, y: number) => Math.hypot(x - start.x, y - start.y);
+        for (const e of world.query("monster")) {
+          const p = world.get<Position>(e, "position")!;
+          const d = from(p.x / 1000, p.y / 1000);
+          if (d < SPAWN_SAFE_RADIUS) near.push(`${node} ${mapSeed}: ${d.toFixed(1)}`);
+        }
+      }
+    }
+    expect(near).toEqual([]);
+  }, 20_000);
 
   it("map: a container is solid, and its walls are still walls", () => {
     const { world, session, layout } = mapFixture({ mapSeed: 7 });

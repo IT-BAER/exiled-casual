@@ -4,7 +4,8 @@ import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { NullEngine, Color3, Mesh, VertexBuffer } from "@babylonjs/core";
 import { createScene } from "./engine";
-import { buildLevel, applyBiomeTint, applyTilesetFloor, brazierSpots, tilesetDir } from "./level";
+import { buildLevel, applyBiomeTint, applyTilesetFloor, tilesetDir } from "./level";
+import { brazierSpots } from "@exiled/mapgen";
 import { MAP_BASES, BIOMES } from "@exiled/content-runtime";
 import type { WalkableGrid } from "@exiled/mapgen";
 
@@ -244,7 +245,6 @@ describe("brazierSpots", () => {
   }
   const floorOf = (g: WalkableGrid) => (x: number, y: number) =>
     x >= 0 && y >= 0 && x < g.cols && y < g.rows && g.cells[y * g.cols + x] === 1;
-  const noSea = () => false;
 
   /** Distance from a point to the nearest wall cell's square, cells centred on x * cellSize. */
   function clearance(g: WalkableGrid, px: number, pz: number): number {
@@ -262,7 +262,7 @@ describe("brazierSpots", () => {
 
   it("stands every bowl clear of the rock it lights", () => {
     const g = room(40, 40);
-    const spots = brazierSpots(g, floorOf(g), noSea);
+    const spots = brazierSpots(g);
     expect(spots.length).toBeGreaterThan(0);
     // The bowl is 0.40 across its radius; a boulder face sits on the cell edge.
     for (const s of spots) expect(clearance(g, s.x, s.z)).toBeGreaterThanOrEqual(0.5);
@@ -270,6 +270,6 @@ describe("brazierSpots", () => {
 
   it("never stands one in a lane too narrow to walk around it", () => {
     const g = room(40, 3);
-    expect(brazierSpots(g, floorOf(g), noSea)).toEqual([]);
+    expect(brazierSpots(g)).toEqual([]);
   });
 });

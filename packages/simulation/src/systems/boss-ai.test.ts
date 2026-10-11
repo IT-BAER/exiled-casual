@@ -5,7 +5,7 @@ import { resBlock, type MonsterDef } from "@exiled/content-schema";
 import { Simulation } from "../loop";
 import { World } from "../ecs";
 import type { Position, MonsterC, Faction, PlayerC, BossC, TelegraphC, Health, SessionC } from "../components";
-import { registerBossAI, BOSS_AGGRO_RADIUS } from "./boss-ai";
+import { registerBossAI, BOSS_AGGRO_RADIUS, BOSS_LEASH_RADIUS } from "./boss-ai";
 import { createCombatSim } from "../combat-sim";
 import { gridCollision } from "../collision";
 import { makeGrid } from "../test-grid";
@@ -147,6 +147,24 @@ describe("registerBossAI", () => {
 
     expect(world.get<Position>(boss, "position")!.x).toBeGreaterThan(fp(0));
     expect(world.get<MonsterC>(boss, "monster")!.state).toBe("chase");
+  });
+
+  it("a woken boss walks home and sleeps once the player is past BOSS_LEASH_RADIUS of its spawn", () => {
+    const sim = new Simulation();
+    registerBossAI(sim, testMonsters);
+    const { world } = sim;
+
+    const boss = makeBossEntity(world, fp(0), fp(0));
+    world.set<Position>(boss, "position", { x: fp(8), y: fp(0) }); // pulled off its spawn
+    makePlayerEntity(world, BOSS_LEASH_RADIUS + fp(4), fp(0));
+    wake(world, boss);
+
+    sim.step();
+    expect(world.get<Position>(boss, "position")!.x).toBeLessThan(fp(8)); // away from the player
+
+    for (let i = 0; i < 300; i++) sim.step();
+    expect(world.get<Position>(boss, "position")).toEqual({ x: fp(0), y: fp(0) });
+    expect(world.get<MonsterC>(boss, "monster")!.state).toBe("idle");
   });
 
   it("boss within attackRange melees — damage enqueued, state = attack", () => {

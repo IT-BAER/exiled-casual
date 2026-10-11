@@ -183,7 +183,8 @@ describe("generateArea", () => {
       }
       expect(fallbacks, `${profile} fallbacks`).toBeLessThan(8);
     }
-  });
+    // 320 full generations: ~2 s alone, past the 5 s default under the parallel suite.
+  }, 20_000);
 
   it("walls the whole outer boundary so the player can't leave the field", () => {
     const { grid } = generateArea(11, V);

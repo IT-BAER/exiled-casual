@@ -4,9 +4,9 @@ import { Bot } from "./bot";
 import { newCharacter } from "./playtest";
 import { spawnLabActors } from "./combat-sim";
 import { spawnMonster } from "./areas";
-import { MONSTERS } from "@exiled/content-runtime";
+import { MONSTERS, waystoneItem } from "@exiled/content-runtime";
 import type { Collision } from "./collision";
-import type { Position, GroundAreaC, MonsterC, PlayerC } from "./components";
+import type { Position, GroundAreaC, MonsterC, PlayerC, ItemC } from "./components";
 
 const OPEN: Collision = { isWalkable: () => true };
 const GROUND = "skill.cinder_ground.v1";
@@ -64,6 +64,56 @@ describe("Bot", () => {
     });
     const out = bot.decide(false);    expect(out.some((c) => c.type === "moveTo")).toBe(false);
     expect(out.some((c) => c.type === "stop")).toBe(true);
+  });
+
+  it("a back-off keeps its point while the monster follows, rather than re-aiming every tick", () => {
+    // A corner W eats a bolt (0.55 wide) but not the imp's body: no shot, so he backs
+    // off. Re-aimed off a follower each tick, he flipped ends of a narrow lane and paced.
+    const { g, me } = setupAs("class.stalker", [-0.9, 0]);
+    const imp = g.world.query("monster")[0]!;
+    const ip = g.world.get<Position>(imp, "position")!;
+    const W = { x: (me.x + ip.x) / 2 + Math.round(fp(0.32)), y: (me.y + ip.y) / 2 - Math.round(fp(0.32)) };
+    const corner: Collision = { isWalkable: (x, y, r) => Math.hypot(x - W.x, y - W.y) >= r };
+    const bot = new Bot(g, corner, {});
+    const first = bot.decide(false).find((c) => c.type === "moveTo")?.data;
+    expect(first, "no back-off").toBeDefined();
+    g.world.set<Position>(imp, "position", { x: ip.x + Math.round(fp(0.6)), y: ip.y - Math.round(fp(0.6)) });
+    const second = bot.decide(false).find((c) => c.type === "moveTo")?.data;
+    expect(second).toEqual(first);
+  });
+
+  it("a walk to loot commits like a walk to a monster: stepping back past 8 units does not drop it", () => {
+    // The route to an item 7.9 units off bent away from it; past 8 it lost the goal
+    // to a monster whose route led back inside 8, and the bot paced on the spot.
+    const { g, me } = setupAs("class.stalker", [0, 30]);
+    const at = (u: number) => ({ x: me.x - Math.round(fp(u / Math.SQRT2)), y: me.y - Math.round(fp(u / Math.SQRT2)) });
+    const stone = g.world.create();
+    g.world.set<Position>(stone, "position", at(7.9));
+    g.world.set<ItemC>(stone, "item", { item: waystoneItem(1, 3), w: 1, h: 1 });
+    g.world.set<MonsterC>(g.world.query("monster")[0]!, "monster", { ...g.world.get<MonsterC>(g.world.query("monster")[0]!, "monster")!, state: "idle" });
+    const bot = new Bot(g, OPEN, {});
+    bot.decide(false);
+    g.world.set<Position>(g.player, "position", at(-0.5));
+    const to = bot.decide(false).find((c) => c.type === "moveTo")?.data;
+    expect(to, "no walk").toBeDefined();
+    expect(Math.hypot(to!["x"]! - at(7.9).x, to!["y"]! - at(7.9).y)).toBeLessThan(fp(0.5));
+  });
+
+  it("waiting at the edge of fire over the loot is not being stuck: the stone is still wanted after it", () => {
+    const { g, me, bot } = setupAs("class.stalker");
+    const at = (u: number) => ({ x: me.x + Math.round(fp(u / Math.SQRT2)), y: me.y + Math.round(fp(u / Math.SQRT2)) });
+    const stone = g.world.create();
+    g.world.set<Position>(stone, "position", at(5));
+    g.world.set<ItemC>(stone, "item", { item: waystoneItem(1, 3), w: 1, h: 1 });
+    const fire = g.world.create();
+    g.world.set<Position>(fire, "position", at(2));
+    g.world.set<GroundAreaC>(fire, "groundArea", {
+      radius: fp(1.2), expiryTick: 9999, nextTick: 0, ailmentKind: "burning", stacksPerApply: 1,
+      dps: fp(3), ailmentDuration: 60, maxStacks: 5, team: 1,
+    });
+    for (let t = 0; t < 4 * 30; t++) g.sim.step(bot.decide(true));
+    expect(g.world.alive.has(stone)).toBe(true);
+    expect(bot.hasLootLeft()).toBe(true);
   });
 
   /**

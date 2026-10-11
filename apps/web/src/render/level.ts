@@ -46,7 +46,7 @@ import {
 import { attachProp } from "./props";
 import { standGroundBlob } from "./meshes";
 import { setFireSpots, type FireSpot } from "./lights";
-import type { WalkableGrid } from "@exiled/mapgen";
+import { CONTAINER_CLEAR, type BrazierSpot, type WalkableGrid } from "@exiled/mapgen";
 
 /** Wall height in world units, capped at roughly the player's own 1.8. At 3.5 a
  *  wall cell was seven times taller than it was thick and every isolated one
@@ -460,85 +460,6 @@ function dressBeach(scene: Scene, grid: WalkableGrid, keepClear: readonly { x: n
 }
 
 /**
- * How far apart two fires must stand, in world units, and how many an area gets.
- *
- * The camera shows about nineteen units across, so this spacing puts at most a
- * couple in frame at once — which is the point. A corridor lit end to end is a
- * corridor with no dark in it, and dark is what makes the lit part worth walking
- * toward (docs/09: anticipation is the mechanism).
- */
-const FIRE_SPACING = 11;
-
-/** World units a reward container keeps free around its centre: the widest, a
- *  0.82 chest, is half that across, plus a margin. */
-const CONTAINER_CLEAR = 0.6;
-const FIRE_MAX = 10;
-
-/** World units between a bowl's centre and the nearest rock: its 0.40 radius plus a margin. */
-const FIRE_CLEARANCE = 0.5;
-/** Floor cells a brazier needs in front of it, and to either side along its wall, so it never plugs a lane. */
-const FIRE_LANE_CELLS = 3;
-
-/**
- * Where the braziers stand: against one flat wall side, half a cell out from it
- * (a boulder's face is ON the cell edge, and a bowl pushed into it sits in the
- * rock), with open floor in front so it never stands in a walking lane.
- */
-export function brazierSpots(
-  grid: WalkableGrid,
-  isFloor: (x: number, y: number) => boolean,
-  isSea: (x: number, y: number) => boolean,
-): FireSpot[] {
-  const { cols, rows, cellSize, originX, originY } = grid;
-  const half = cellSize / 2;
-  const clear = (px: number, pz: number, cx: number, cy: number): boolean => {
-    for (let y = cy - 2; y <= cy + 2; y++) {
-      for (let x = cx - 2; x <= cx + 2; x++) {
-        if (isFloor(x, y)) continue;
-        const dx = Math.max(0, Math.abs(px - (originX + x * cellSize)) - half);
-        const dz = Math.max(0, Math.abs(pz - (originY + y * cellSize)) - half);
-        if (Math.hypot(dx, dz) < FIRE_CLEARANCE) return false;
-      }
-    }
-    return true;
-  };
-  const spots: FireSpot[] = [];
-  for (let y = 1; y < rows - 1 && spots.length < FIRE_MAX; y++) {
-    for (let x = 1; x < cols - 1 && spots.length < FIRE_MAX; x++) {
-      if (!isFloor(x, y)) continue;
-      // Against a wall, and only where the wall is one flat side: a cell in a
-      // corner takes a bowl that reads as jammed into the masonry.
-      const wallN = !isFloor(x, y - 1);
-      const wallS = !isFloor(x, y + 1);
-      const wallW = !isFloor(x - 1, y);
-      const wallE = !isFloor(x + 1, y);
-      const sides = Number(wallN) + Number(wallS) + Number(wallW) + Number(wallE);
-      if (sides !== 1) continue;
-      // Never against the sea. Water is "wall" to this test, so on a beach every
-      // candidate lined the tide line and the whole map was lit from the water —
-      // a row of standing fires in the surf, which is the one place a fire cannot
-      // be. A brazier belongs against the cliff.
-      if (isSea(x, y - 1) || isSea(x, y + 1) || isSea(x - 1, y) || isSea(x + 1, y)) continue;
-      // Unit step INTO the wall.
-      const dx = wallE ? 1 : wallW ? -1 : 0;
-      const dy = wallS ? 1 : wallN ? -1 : 0;
-      let lane = true;
-      for (let k = 1; k <= FIRE_LANE_CELLS && lane; k++) {
-        lane = isFloor(x - dx * k, y - dy * k) && isFloor(x + dy * k, y + dx * k) && isFloor(x - dy * k, y - dx * k);
-      }
-      if (!lane) continue;
-      const wx = originX + (x - dx / 2) * cellSize;
-      const wz = originY + (y - dy / 2) * cellSize;
-      if (!clear(wx, wz, x, y)) continue;
-      if (spots.some((s) => Math.hypot(s.x - wx, s.z - wz) < FIRE_SPACING)) continue;
-      // Seconds of offset, spread so no two flames breathe together.
-      spots.push({ x: wx, z: wz, phase: spots.length * 1.7 });
-    }
-  }
-  return spots;
-}
-
-/**
  * Stand a brazier against a wall every so often, and tell the light pool where
  * they are.
  *
@@ -558,17 +479,12 @@ function freezeTree(root: Mesh): void {
 
 function standBraziers(
   scene: Scene,
-  grid: WalkableGrid,
-  isFloor: (x: number, y: number) => boolean,
-  isSea: (x: number, y: number) => boolean,
-  keepClear: readonly { x: number; y: number }[],
+  spots: readonly BrazierSpot[],
 ): void {
   for (const node of [...scene.meshes, ...scene.transformNodes]) {
     if (node.name.startsWith(AREA_BRAZIER_PREFIX)) node.dispose(false, false);
   }
 
-  const spots = brazierSpots(grid, isFloor, isSea)
-    .filter((s) => keepClear.every((c) => Math.hypot(s.x - c.x, s.z - c.y) >= CONTAINER_CLEAR + FIRE_CLEARANCE));
   for (let i = 0; i < spots.length; i++) {
     const s = spots[i]!;
     const root = new Mesh(`${AREA_BRAZIER_PREFIX}${i}`, scene);
@@ -596,6 +512,7 @@ export function buildLevel(
   grid: WalkableGrid | null,
   tilesetId: string = DEFAULT_TILESET,
   keepClear: readonly { x: number; y: number }[] = [],
+  fires: readonly BrazierSpot[] = [],
 ): LevelResult {
   // Area swaps (and the open hideout) call this again; drop the previous walls.
   scene.getMeshByName(WALL_MESH_NAME)?.dispose();
@@ -778,7 +695,7 @@ export function buildLevel(
   // Fires along the walls, before the merge: `floorCells` is already the list of
   // open cells this sweep collected, and a brazier wants one that has a wall to
   // stand against.
-  standBraziers(scene, grid, isFloor, isSea, keepClear);
+  standBraziers(scene, fires);
   // The shore's own dressing. After the braziers because it uses the same
   // sweep's knowledge of where the floor is, and before the merge for no reason
   // other than keeping every "stand something up" call in one place.

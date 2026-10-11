@@ -20,7 +20,7 @@ import { AREA_TILES, UNREACHED, generateSkeleton } from "./skeleton";
 export const ASSEMBLED_CELLS = AREA_TILES * TILE_CELLS; // 144
 
 /** World units of breathing room the player gets around the start. */
-const SPAWN_SAFE_RADIUS = 10;
+export const SPAWN_SAFE_RADIUS = 10;
 
 interface Marker {
   ch: string;
@@ -90,7 +90,10 @@ function tileCentreCell(cells: Uint8Array, tx: number, ty: number): { cx: number
  * The disc is the same sinusoidal wobble the old open-field generator used; it
  * was the one part of that generator worth keeping.
  */
-function carveOrganicRim(cells: Uint8Array, masks: Uint8Array, rng: RandomStream): void {
+function carveOrganicRim(
+  cells: Uint8Array, masks: Uint8Array, bossTile: { tx: number; ty: number }, rng: RandomStream,
+): Uint8Array {
+  const carved = new Uint8Array(cells.length);
   const mid = (ASSEMBLED_CELLS - 1) / 2;
   // 0.32 of the grid, plus at most 10 cells of wobble, keeps the carve inside
   // the 71.5-cell half-width with room to spare: the outer ring must stay wall.
@@ -105,10 +108,108 @@ function carveOrganicRim(cells: Uint8Array, masks: Uint8Array, rng: RandomStream
     for (let x = 0; x < ASSEMBLED_CELLS; x++) {
       const tile = Math.floor(y / TILE_CELLS) * AREA_TILES + Math.floor(x / TILE_CELLS);
       if (masks[tile] !== 0) continue; // a stamped chunk owns this cell
+      const bx = Math.floor(x / TILE_CELLS) - bossTile.tx, by = Math.floor(y / TILE_CELLS) - bossTile.ty;
+      if (bx >= 0 && bx <= 1 && by >= 0 && by <= 1) continue; // so does the boss arena
       const dx = x - mid, dy = y - mid;
       const ang = Math.atan2(dy, dx);
       const r = radius + a1 * Math.sin(3 * ang + p1) + a2 * Math.sin(5 * ang + p2);
-      if (Math.hypot(dx, dy) <= r) cells[y * ASSEMBLED_CELLS + x] = 1;
+      const i = y * ASSEMBLED_CELLS + x;
+      if (Math.hypot(dx, dy) <= r && cells[i] === 0) { cells[i] = 1; carved[i] = 1; }
+    }
+  }
+  return carved;
+}
+
+/** Deepest a rim door digs into either tile looking for floor. */
+const RIM_DOOR_DEPTH = 7;
+
+/**
+ * Doors from route tiles into the carved ground beside them. A chunk is walled
+ * on every edge it was not routed through, so without these the carved ground
+ * meets the route only where a seam happens to be open, and a ruin loop meets
+ * its fen nowhere. A door is 4 cells wide at the edge's centre and is kept only
+ * if it reaches floor on both sides.
+ */
+function openRimDoors(cells: Uint8Array, masks: Uint8Array, carved: Uint8Array): void {
+  const N = ASSEMBLED_CELLS;
+  for (let ty = 0; ty < AREA_TILES; ty++) {
+    for (let tx = 0; tx < AREA_TILES; tx++) {
+      if (masks[ty * AREA_TILES + tx] === 0) continue;
+      for (let d = 0; d < 4; d++) {
+        const nx = tx + DIR_VEC[d]![0], ny = ty + DIR_VEC[d]![1];
+        if (nx < 0 || ny < 0 || nx >= AREA_TILES || ny >= AREA_TILES) continue;
+        if (masks[ny * AREA_TILES + nx] !== 0) continue;
+        // Cell index at `depth` from the shared seam into tile (ox,oy), lateral 6..9.
+        const at = (ox: number, oy: number, side: number, depth: number, lat: number): number => {
+          const far = TILE_CELLS - 1 - depth;
+          const [x, y] = side === 0 ? [lat, depth] : side === 2 ? [lat, far] : side === 3 ? [depth, lat] : [far, lat];
+          return (oy * TILE_CELLS + y) * N + ox * TILE_CELLS + x;
+        };
+        const dig = (ox: number, oy: number, side: number, needCarved: boolean): number[] | null => {
+          const dug: number[] = [];
+          for (let depth = 0; depth <= RIM_DOOR_DEPTH; depth++) {
+            const row = [6, 7, 8, 9].map((lat) => at(ox, oy, side, depth, lat));
+            if (row.every((i) => cells[i] === 1 && (!needCarved || carved[i] === 1))) return dug;
+            for (const i of row) if (cells[i] === 0) dug.push(i);
+          }
+          return null;
+        };
+        const near = dig(tx, ty, d, false);
+        const far = near && dig(nx, ny, (d + 2) % 4, true);
+        if (!near || !far) continue;
+        for (const i of [...near, ...far]) cells[i] = 1;
+      }
+    }
+  }
+}
+
+/** Blob candidates drawn per tile; the moat rule turns most down in rooms. */
+const BLOBS_PER_TILE = 5;
+/** Floor a blob keeps between itself and any wall, a body's width: so no blob
+ *  narrows a corridor below one, closes a door, or seals off any ground. */
+const BLOB_MOAT = 3;
+
+/**
+ * Dot wide open ground with obstacle blobs of mixed size, a few units apart:
+ * PoE's open ground is never bare (reference-screenshots/map-layout-1.jpeg). A
+ * blob only goes where it keeps BLOB_MOAT clear of every wall, so it lands in
+ * carved fields and merged flats and never in a corridor, a room or the arena.
+ * Each blob stays inside one tile: across a seam it is a wall line on the lattice.
+ */
+function dressOpenGround(
+  cells: Uint8Array, markers: Marker[], bossTile: { tx: number; ty: number }, rng: RandomStream,
+): void {
+  const N = ASSEMBLED_CELLS;
+  for (let ty = 0; ty < AREA_TILES; ty++) {
+    for (let tx = 0; tx < AREA_TILES; tx++) {
+      const bx = tx - bossTile.tx, by = ty - bossTile.ty;
+      const inBoss = bx >= 0 && bx <= 1 && by >= 0 && by <= 1;
+      for (let k = 0; k < BLOBS_PER_TILE; k++) {
+        const size = rng.nextInt(0, 9);
+        const phase = (rng.nextU32() / 0x1_0000_0000) * Math.PI * 2;
+        // Mostly stones a body wide, some boulders, the odd outcrop.
+        const r = size < 6 ? 1.5 + (size % 3) * 0.5 : size < 9 ? 3 : 4.5;
+        const reach = Math.ceil(r * 1.25);
+        const cx = tx * TILE_CELLS + rng.nextInt(reach, TILE_CELLS - 1 - reach);
+        const cy = ty * TILE_CELLS + rng.nextInt(reach, TILE_CELLS - 1 - reach);
+        if (inBoss) continue;
+        if (markers.some((m) => Math.abs(m.cx - cx) <= reach + 2 && Math.abs(m.cy - cy) <= reach + 2)) continue;
+        const clear = reach + BLOB_MOAT;
+        let open = true;
+        for (let dy = -clear; dy <= clear && open; dy++) {
+          for (let dx = -clear; dx <= clear; dx++) {
+            const x = cx + dx, y = cy + dy;
+            if (x < 0 || y < 0 || x >= N || y >= N || cells[y * N + x] === 0) { open = false; break; }
+          }
+        }
+        if (!open) continue;
+        for (let dy = -reach; dy <= reach; dy++) {
+          for (let dx = -reach; dx <= reach; dx++) {
+            const wobble = 1 + 0.25 * Math.sin(3 * Math.atan2(dy, dx) + phase);
+            if (Math.hypot(dx, dy) <= r * wobble) cells[(cy + dy) * N + cx + dx] = 0;
+          }
+        }
+      }
     }
   }
 }
@@ -202,6 +303,23 @@ function openSeams(cells: Uint8Array, bossTile: { tx: number; ty: number }): voi
   }
 }
 
+/** 4-connected steps from `start` to every floor cell; 0xffff where unreached. */
+function walkDistances(cells: Uint8Array, start: { cx: number; cy: number }): Uint16Array {
+  const N = ASSEMBLED_CELLS;
+  const dist = new Uint16Array(cells.length).fill(0xffff);
+  const queue = [start.cy * N + start.cx];
+  dist[queue[0]!] = 0;
+  for (let head = 0; head < queue.length; head++) {
+    const i = queue[head]!, x = i % N;
+    for (const j of [x > 0 ? i - 1 : -1, x < N - 1 ? i + 1 : -1, i - N, i + N]) {
+      if (j < 0 || j >= cells.length || cells[j] !== 1 || dist[j] !== 0xffff) continue;
+      dist[j] = dist[i]! + 1;
+      queue.push(j);
+    }
+  }
+  return dist;
+}
+
 /**
  * Erase floor the player can never stand on. The rim carve can leave a pocket
  * cut off from the route, which would read as open ground behind a wall.
@@ -290,12 +408,17 @@ export function assembleArea(seed: number, contentVersion: string, grammar: Gram
 
   // Break up the lattice: carve the unused tiles with a wobbly disc so the
   // boundary is not the edge of a 9x9 square. Route tiles are never touched.
+  let carved: Uint8Array | null = null;
   if (grammar.organicRim) {
-    carveOrganicRim(cells, skeleton.masks, createStream(seed, `${contentVersion}.layout.rim`));
+    carved = carveOrganicRim(cells, skeleton.masks, skeleton.bossTile, createStream(seed, `${contentVersion}.layout.rim`));
+    openRimDoors(cells, skeleton.masks, carved);
   }
 
   widenDoors(cells, skeleton.masks);
   if (grammar.openSeams) openSeams(cells, skeleton.bossTile);
+  if (grammar.organicRim) {
+    dressOpenGround(cells, markers, skeleton.bossTile, createStream(seed, `${contentVersion}.layout.blobs`));
+  }
 
   // Stage 3: anchors. The player arrives by portal, so the start is a point
   // inside a rim tile, not a door in the outer wall.
@@ -317,8 +440,31 @@ export function assembleArea(seed: number, contentVersion: string, grammar: Gram
   ];
   const start = objectiveAnchors[0]!;
 
+  // Carved ground holds monsters too, or it is a free walk past the fight: one
+  // spawn point per carved tile with room for a pack, ordered by walking
+  // distance the way route tiles are ordered by route distance.
+  const routeDist = skeleton.routeDist.slice();
+  if (carved) {
+    const walk = walkDistances(cells, startCell);
+    for (let tile = 0; tile < routeDist.length; tile++) {
+      const tx = tile % AREA_TILES, ty = (tile - tx) / AREA_TILES;
+      if (skeleton.masks[tile] !== 0) continue;
+      if (tx - skeleton.bossTile.tx >= 0 && tx - skeleton.bossTile.tx <= 1 &&
+        ty - skeleton.bossTile.ty >= 0 && ty - skeleton.bossTile.ty <= 1) continue;
+      let open = 0;
+      for (let y = 0; y < TILE_CELLS; y++) for (let x = 0; x < TILE_CELLS; x++) {
+        open += cells[(ty * TILE_CELLS + y) * ASSEMBLED_CELLS + tx * TILE_CELLS + x]!;
+      }
+      if (open < (TILE_CELLS * TILE_CELLS) / 3) continue;
+      const c = tileCentreCell(cells, tx, ty);
+      if (!c || !bodyFits(cells, c.cx, c.cy)) continue;
+      markersByTile.set(tile, [{ ch: "s", cx: c.cx, cy: c.cy }]);
+      routeDist[tile] = Math.min(UNREACHED - 1, Math.round(walk[c.cy * ASSEMBLED_CELLS + c.cx]! / TILE_CELLS));
+    }
+  }
+
   const farthestFirst = [...markersByTile.keys()].sort((a, b) => {
-    const d = (skeleton.routeDist[b] ?? UNREACHED) - (skeleton.routeDist[a] ?? UNREACHED);
+    const d = (routeDist[b] ?? UNREACHED) - (routeDist[a] ?? UNREACHED);
     return d !== 0 ? d : a - b;
   });
 

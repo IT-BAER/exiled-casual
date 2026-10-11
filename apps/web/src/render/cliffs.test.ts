@@ -53,6 +53,37 @@ describe("cliffs", () => {
     }
   });
 
+  it("stands a visible rock on every obstacle standing in the open", () => {
+    // A wall island is all scree by depth alone, and scree wears the floor plate:
+    // a two-unit obstacle drew as flat sand that the sim still collides against.
+    for (const [g, seed] of [["open-field", 5], ["open-field", 9], ["sunken-ruins", 3]] as const) {
+      const grid = generateArea(seed, "v", g).grid;
+      const { cols, rows, cells } = grid;
+      const f = cliffHeights(grid);
+      const seen = new Uint8Array(cols * rows);
+      for (let s = 0; s < cells.length; s++) {
+        if (cells[s] !== 0 || seen[s]) continue;
+        const comp = [s];
+        seen[s] = 1;
+        let edge = false;
+        for (let h = 0; h < comp.length; h++) {
+          const i = comp[h]!, x = i % cols, y = (i - x) / cols;
+          if (x === 0 || y === 0 || x === cols - 1 || y === rows - 1) edge = true;
+          for (const j of [x > 0 ? i - 1 : -1, x < cols - 1 ? i + 1 : -1, i - cols, i + cols]) {
+            if (j >= 0 && j < cells.length && cells[j] === 0 && !seen[j]) { seen[j] = 1; comp.push(j); }
+          }
+        }
+        if (edge || comp.length < 9) continue;
+        let peak = 0;
+        for (const i of comp) {
+          const x = i % cols, y = (i - x) / cols;
+          peak = Math.max(peak, f.heights[(y * 2 + 1) * f.nx + x * 2 + 1]!);
+        }
+        expect(peak, `${g} ${seed}: island of ${comp.length} at cell ${comp[0]! % cols},${Math.floor(comp[0]! / cols)}`).toBeGreaterThanOrEqual(1);
+      }
+    }
+  });
+
   it("stands well over the player where the camera looks at solid rock", () => {
     const f = cliffHeights(generateArea(1, "v", "loop").grid);
     let tall = 0, raised = 0;

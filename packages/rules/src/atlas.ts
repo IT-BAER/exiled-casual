@@ -20,9 +20,9 @@ export function atlasNodeFlavour(index: number): string {
  * A node on the Atlas graph: a *place*, with a position on the world map and the
  * routes leading out of it. PoE2's Atlas is generated per account, so this one is
  * too — the seed is the character's `atlasSeed`. What it deliberately does NOT
- * carry is difficulty: the Waystone brings the tier, the node brings the layout,
- * which is why running the same place twice gives the same rooms at whatever tier
- * you can afford (atlas-maps.webp: a node is a location, its icon is its content).
+ * carry is difficulty: the Waystone brings the tier, the node brings the biome
+ * and grammar, and every run draws a fresh layout from both (`mapSeedFor`)
+ * (atlas-maps.webp: a node is a location, its icon is its content).
  */
 export interface AtlasGraphNode extends AtlasNode {
   /** Position on the world map, 0..1 on both axes. */

@@ -198,6 +198,13 @@ describe("slide", () => {
     expect(r.y).toBe(fp(3)); // parallel to it — allowed
   });
 
+  it("a body pinned between two wall corners takes the diagonal neither axis allows", () => {
+    // A notch: each axis alone runs into a corner, the whole step passes between them.
+    const step = fp(0.1);
+    const notch = { isWalkable: (x: number, y: number) => (x === 0 && y === 0) || (x === step && y === step) };
+    expect(slide(notch, 0, 0, step, step, fp(0.32))).toEqual({ x: step, y: step });
+  });
+
   it("a body caught on a wall's tip steps around it instead of standing still", () => {
     const tip = gridCollision(makeGrid(["..#..", "..#..", ".....", ".....", "....."]));
     const r = fp(0.4);

@@ -39,6 +39,11 @@ const STRATUM = 0.55;
 const STRATA = 0.65;
 /** Cycles per world unit of the noise that swaps between the plate's two reads: ~6 units a patch. */
 const VARY_FREQ = 0.17;
+/** An obstacle standing in the open: how tall, and over what depth it gets there.
+ *  Under the head-height rule for boulders (rocks.ts MAX_ASPECT), so nothing hides
+ *  the player and no fade is owed. */
+const ISLAND_PEAK = 1.4;
+const ISLAND_RISE = 0.3;
 /** World units per texture repeat; must match TILE in level.ts. */
 const TILE = 2;
 
@@ -108,6 +113,26 @@ export function cliffHeights(grid: WalkableGrid): CliffField {
     }
   }
 
+  // Wall the border flood never reaches stands in the open: by depth alone it is
+  // all scree, and scree wears the floor plate, so it would draw as flat ground.
+  const island = new Uint8Array(cols * rows).fill(1);
+  const stack: number[] = [];
+  const seed = (cx: number, cy: number) => {
+    const c = cy * cols + cx;
+    if (cells[c] === 0 && island[c]) { island[c] = 0; stack.push(c); }
+  };
+  for (let cx = 0; cx < cols; cx++) { seed(cx, 0); seed(cx, rows - 1); }
+  for (let cy = 0; cy < rows; cy++) { seed(0, cy); seed(cols - 1, cy); }
+  while (stack.length) {
+    const c = stack.pop()!, cx = c % cols, cy = (c - cx) / cols;
+    if (cx > 0) seed(cx - 1, cy);
+    if (cx < cols - 1) seed(cx + 1, cy);
+    if (cy > 0) seed(cx, cy - 1);
+    if (cy < rows - 1) seed(cx, cy + 1);
+  }
+  const islandAt = (cx: number, cy: number) =>
+    cx >= 0 && cy >= 0 && cx < cols && cy < rows && cells[cy * cols + cx] === 0 && island[cy * cols + cx] === 1;
+
   // Chamfer distance to the nearest open vertex, two passes.
   const depth = new Float32Array(nx * nz).fill(1e9);
   for (let k = 0; k < open.length; k++) if (open[k]) depth[k] = 0;
@@ -147,7 +172,13 @@ export function cliffHeights(grid: WalkableGrid): CliffField {
       const rise = scree + (CLIFF_MAX - SCREE_H) * (1 - Math.exp(-face / RISE)) * (0.72 + 0.28 * n);
       const cap = Math.max(CLIFF_FRONT * (0.8 + 0.2 * n), (view - MARGIN) / HIDE_PER_UNIT);
       // Strata: ledges rounded DOWN, so they can only ever lower a vertex under its cap.
-      const h = Math.min(rise, cap);
+      let h = Math.min(rise, cap);
+      const cy1 = Math.floor(j / per), cy0 = j % per === 0 ? cy1 - 1 : cy1;
+      const cx1 = Math.floor(i / per), cx0 = i % per === 0 ? cx1 - 1 : cx1;
+      if (islandAt(cx0, cy0) || islandAt(cx1, cy0) || islandAt(cx0, cy1) || islandAt(cx1, cy1)) {
+        const v = Math.min(1, d / ISLAND_RISE);
+        h = Math.max(h, Math.min(cap, ISLAND_PEAK * v * v * (3 - 2 * v) * (0.85 + 0.3 * n)));
+      }
       const shelf = STRATUM * (0.8 + 0.4 * noise(x, z, 2.2, 3));
       heights[k] = h - (h % shelf) * STRATA;
     }

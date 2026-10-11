@@ -152,6 +152,41 @@ describe("generateSkeleton", () => {
       expect(edges, `seed ${seed}`).toBe(nodes);
     }
   });
+
+  it("varies the loop's overall shape instead of always circling the edge", () => {
+    // Tiles the loop encloses, flooding in from the lattice border; a ring round
+    // the outer edge encloses ~25-49 every time, which reads as one map.
+    const N = AREA_TILES;
+    const enclosed: number[] = [];
+    let ringsTheEdge = 0;
+    for (let seed = 0; seed < 200; seed++) {
+      const s = build(seed, 7);
+      if (!s) continue;
+      const routed = (i: number): boolean => s.masks[i]! !== 0;
+      const out = new Uint8Array(N * N);
+      const queue: number[] = [];
+      for (let i = 0; i < N * N; i++) {
+        const x = i % N, y = (i - x) / N;
+        if ((x === 0 || y === 0 || x === N - 1 || y === N - 1) && !routed(i)) { out[i] = 1; queue.push(i); }
+      }
+      for (let h = 0; h < queue.length; h++) {
+        const i = queue[h]!, x = i % N;
+        for (const j of [x > 0 ? i - 1 : -1, x < N - 1 ? i + 1 : -1, i - N, i + N]) {
+          if (j >= 0 && j < N * N && !out[j] && !routed(j)) { out[j] = 1; queue.push(j); }
+        }
+      }
+      let inside = 0;
+      for (let i = 0; i < N * N; i++) if (!out[i] && !routed(i) && !bossTiles(s).includes(i)) inside++;
+      enclosed.push(inside);
+      const onEdge = (f: (x: number, y: number) => boolean): boolean =>
+        Array.from(s.masks).some((m, i) => m !== 0 && f(i % N, Math.floor(i / N)));
+      if (onEdge((_, y) => y === 0) && onEdge((_, y) => y === N - 1) &&
+        onEdge((x) => x === 0) && onEdge((x) => x === N - 1)) ringsTheEdge++;
+    }
+    expect(Math.min(...enclosed), "some loops are small").toBeLessThanOrEqual(10);
+    expect(Math.max(...enclosed), "some loops are large").toBeGreaterThanOrEqual(30);
+    expect(ringsTheEdge, "most loops leave an edge of the lattice untouched").toBeLessThan(100);
+  });
 });
 
 /**

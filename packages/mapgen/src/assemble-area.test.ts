@@ -4,6 +4,7 @@ import { LOOP_GRAMMAR, type Grammar } from "./loop-grammar";
 import { FIELD_GRAMMAR } from "./field-grammar";
 import { TILE_CELLS } from "./chunks";
 import { STRAND_GRAMMAR } from "./strand-grammar";
+import { SUNKEN_GRAMMAR } from "./sunken-grammar";
 import { SPAWN_TARGET } from "./grid";
 import { AREA_TILES } from "./skeleton";
 
@@ -290,6 +291,60 @@ describe("assembleArea, strand", () => {
     for (let seed = 0; seed < 60; seed++) {
       const narrow = seamRuns(LOOP_GRAMMAR, seed).runs.filter((r) => r < 8);
       expect(narrow, `seed ${seed}`).toEqual([]);
+    }
+  });
+
+  it("keeps the boss arena walled, one door in, in every grammar", () => {
+    // The arena is the 2x2 tile block holding the boss marker; of the four
+    // tile-aligned blocks that could be it, the walled one has the fewest open
+    // perimeter cells, and those are its single widened door.
+    for (const grammar of [LOOP_GRAMMAR, FIELD_GRAMMAR, SUNKEN_GRAMMAR]) {
+      for (let seed = 0; seed < 40; seed++) {
+        const { grid, objectiveAnchors, usedFallback } = assembleArea(seed, V, grammar);
+        if (usedFallback) continue;
+        const boss = objectiveAnchors.find((a) => a.id === "boss")!;
+        const bx = Math.floor((boss.x - grid.originX) / grid.cellSize / TILE_CELLS + 1e-9);
+        const by = Math.floor((boss.y - grid.originY) / grid.cellSize / TILE_CELLS + 1e-9);
+        const open = (x0: number, y0: number): number => {
+          let n = 0;
+          for (let i = 0; i < 2 * TILE_CELLS; i++) {
+            for (const [x, y] of [[x0 + i, y0], [x0 + i, y0 + 31], [x0, y0 + i], [x0 + 31, y0 + i]]) {
+              n += grid.cells[y! * grid.cols + x!]!;
+            }
+          }
+          return n;
+        };
+        let best = Infinity;
+        for (const [ox, oy] of [[0, 0], [-1, 0], [0, -1], [-1, -1]]) {
+          const tx = bx + ox!, ty = by + oy!;
+          if (tx < 0 || ty < 0 || tx + 1 >= AREA_TILES || ty + 1 >= AREA_TILES) continue;
+          best = Math.min(best, open(tx * TILE_CELLS, ty * TILE_CELLS));
+        }
+        expect(best, `${grammar.id} seed ${seed}`).toBeLessThanOrEqual(8);
+      }
+    }
+  });
+
+  it("breaks open ground with obstacles: never a screen of bare floor", () => {
+    // PoE's open maps (reference-screenshots/map-layout-1.jpeg) are open ground
+    // dotted with blobs. The camera shows ~19 units (38 cells) across, so a
+    // bare square is held under one.
+    const widestSquare = (cells: Uint8Array, n: number): number => {
+      const dp = new Uint16Array(n * n);
+      let best = 0;
+      for (let i = 0; i < n * n; i++) {
+        if (!cells[i]) continue;
+        const x = i % n;
+        dp[i] = x > 0 && i >= n ? 1 + Math.min(dp[i - 1]!, dp[i - n]!, dp[i - n - 1]!) : 1;
+        best = Math.max(best, dp[i]!);
+      }
+      return best;
+    };
+    for (const [grammar, widest] of [[FIELD_GRAMMAR, 32], [SUNKEN_GRAMMAR, 32]] as const) {
+      for (let seed = 0; seed < 40; seed++) {
+        const { grid } = assembleArea(seed, V, grammar);
+        expect(widestSquare(grid.cells, grid.cols), `${grammar.id} seed ${seed}`).toBeLessThanOrEqual(widest);
+      }
     }
   });
 

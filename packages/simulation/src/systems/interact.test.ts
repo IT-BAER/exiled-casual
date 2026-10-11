@@ -327,6 +327,17 @@ describe("registerInteractSystem", () => {
       expect(isPermanentWaystone(after[0]!.item)).toBe(true);
     });
 
+    it("draws a new map every run, even on the same node", () => {
+      const { sim, world, player, sessionE } = makeWorld();
+      onlyPermanent(world, sessionE);
+      const seeds = new Set<number>();
+      for (let run = 0; run < 5; run++) {
+        sim.step([activateCmd(player, "node.the_wrackline", { x: 3, y: 2 })]);
+        seeds.add(world.get<SessionC>(sessionE, "session")!.mapSeed);
+      }
+      expect(seeds.size, "five runs, five layouts").toBe(5);
+    });
+
     it("stays white: normal rarity, no modifiers, and says so", () => {
       const described = describeItem(permanentWaystone());
       expect(described.rarity).toBe("normal");

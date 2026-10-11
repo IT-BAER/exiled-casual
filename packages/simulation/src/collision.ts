@@ -58,6 +58,8 @@ export function slide(
   if (dx !== 0 && collision.isWalkable(x + dx, y, bodyRadius)) nx = x + dx;
   if (dy !== 0 && collision.isWalkable(nx, y + dy, bodyRadius)) ny = y + dy;
   if (nx !== x || ny !== y) return { x: nx, y: ny };
+  // Pinned between two corners, each axis alone runs into one; the whole step passes.
+  if (dx !== 0 && dy !== 0 && collision.isWalkable(x + dx, y + dy, bodyRadius)) return { x: x + dx, y: y + dy };
   // A move clipping a wall's tip or a round blocker has no free axis to slide on,
   // so the body steps square to it, whichever side clears; a flat wall clears neither.
   const k = dy - dx > 0 ? 1 : -1;

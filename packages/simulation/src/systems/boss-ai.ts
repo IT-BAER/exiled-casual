@@ -25,11 +25,17 @@ const SUMMON_RING: readonly { dx: number; dy: number }[] = [
  * HUD raises the boss bar off `bossAwake` (this wake), so the bar and the fight start together.
  *
  * A unit wider than `slam.rangeFixed` (9), which leaves the narrow band where a woken
- * boss closes on foot instead of opening with a slam. Waking is one-way, carried by
- * MonsterC.state exactly as trash carries it in monster-ai.ts — nothing leashes the boss
- * back to `BossC.spawnX/spawnY` once it is pulled.
+ * boss closes on foot instead of opening with a slam. Waking is carried by MonsterC.state
+ * exactly as trash carries it in monster-ai.ts; only BOSS_LEASH_RADIUS puts it back to sleep.
  */
 export const BOSS_AGGRO_RADIUS: number = fp(10);
+
+/**
+ * How far from `BossC.spawnX/spawnY` the player may go before a woken boss gives up,
+ * walks home and sleeps (PoE2's arena leash). Measured from the spawn, not the walls,
+ * because the coast's bay has none; twice the 2x2 boss block's half-width.
+ */
+export const BOSS_LEASH_RADIUS: number = fp(16);
 
 export function registerBossAI(
   sim: Simulation,
@@ -103,7 +109,20 @@ export function registerBossAI(
         continue;
       }
 
-      // 2. Asleep and still outside its room: hold. Sits below the phase-2 check on
+      // 2. Leashed: the player left the arena, so walk home and sleep on arrival. No
+      //    slam or melee on the way, and life is kept, so backing off to flask is free.
+      if (mon.state !== "idle"
+        && fpDist2(boss.spawnX, boss.spawnY, ppos.x, ppos.y) > BOSS_LEASH_RADIUS * BOSS_LEASH_RADIUS) {
+        const home = chaseStep(
+          collision, bpos.x, bpos.y, boss.spawnX, boss.spawnY, mon.moveSpeed, mon.bodyRadius,
+        );
+        const arrived = home.x === boss.spawnX && home.y === boss.spawnY;
+        world.set<Position>(e, "position", home);
+        world.set<MonsterC>(e, "monster", { ...mon, state: arrived ? "idle" : "chase" });
+        continue;
+      }
+
+      // 3. Asleep and still outside its room: hold. Sits below the phase-2 check on
       //    purpose — a boss being shot from off-screen still transitions, it just does
       //    not walk. Nothing is written, so an unvisited boss room costs the checksum
       //    nothing, same as monster-ai's sleeping packs.
@@ -114,7 +133,7 @@ export function registerBossAI(
         && (dist2 > BOSS_AGGRO_RADIUS * BOSS_AGGRO_RADIUS
           || !hasLineOfSight(collision, bpos.x, bpos.y, ppos.x, ppos.y))) continue;
 
-      // 3. Slam: fire when off cooldown and player is within slam range.
+      // 4. Slam: fire when off cooldown and player is within slam range.
       if (tick >= boss.nextAbilityTick && dist2 <= slam.rangeFixed * slam.rangeFixed) {
         const bossFaction = world.get<Faction>(e, "faction")!;
         const tele = world.create();
@@ -152,7 +171,7 @@ export function registerBossAI(
         continue;
       }
 
-      // 4. Chase / melee — mirrors monster-ai.ts exactly, routing on collision.
+      // 5. Chase / melee — mirrors monster-ai.ts exactly, routing on collision.
       const ar = mon.attackRange;
       if (dist2 <= ar * ar) {
         let { attackReadyTick } = mon;

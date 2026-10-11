@@ -10,10 +10,11 @@ import { recomputePlayerStats } from "../derived";
 import { spawnPortalRing, spillContainer } from "../areas";
 import { inRangeOf } from "../protocol-bridge";
 import type { CollisionRef } from "../collision";
+import { fnv1a32 } from "../rng";
 
 
 export function registerInteractSystem(sim: Simulation, collisionRef?: CollisionRef): void {
-  sim.register("interact", (world, _tick, commands) => {
+  sim.register("interact", (world, tick, commands) => {
     // Require a session singleton; legacy sims without one are no-ops.
     const sessionEntities = world.query("session");
     if (sessionEntities.length === 0) return;
@@ -52,7 +53,13 @@ export function registerInteractSystem(sim: Simulation, collisionRef?: Collision
         // a mechanic rather than a menu. The permanent stone is the exception
         // and the only one — it is Tier 1 with no modifiers, so what it buys is
         // the right to keep playing, never a better run than an earned stone.
-        if (!isPermanentWaystone(placed.item)) {
+        const permanent = isPermanentWaystone(placed.item);
+        // The permanent stone has no seed of its own (it is never spent), so a
+        // run draws one from the last map, the character and the tick.
+        const stoneSeed = permanent
+          ? fnv1a32(`permanent:${session.atlasSeed}:${session.mapSeed}:${tick}`)
+          : ws.seed;
+        if (!permanent) {
           world.set<InventoryC>(sessionE, "inventory", {
             ...inv!,
             items: inv!.items.filter((_, i) => i !== index),
@@ -62,7 +69,7 @@ export function registerInteractSystem(sim: Simulation, collisionRef?: Collision
           ...session,
           // The place is half the seed: the same Waystone run at two nodes has to
           // draw two different maps, or the route decision buys nothing.
-          mapSeed: mapSeedFor(ws.seed, atlasNodeId),
+          mapSeed: mapSeedFor(stoneSeed, atlasNodeId),
           waystoneSeed: ws.seed,
           areaTier: ws.tier,
           activeNodeId: atlasNodeId,

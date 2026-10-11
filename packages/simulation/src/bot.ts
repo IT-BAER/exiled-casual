@@ -71,6 +71,7 @@ export class Bot {
   private last: Position = { x: 0, y: 0 };
   private still = 0;
   private nudge: { until: number; to: Record<string, number> } | undefined;
+  private backOff: { until: number; to: Record<string, number> } | undefined;
 
   constructor(private readonly g: BotGame, private readonly collision: Collision, opts: BotOptions) {
     this.body = g.world.get<PlayerC>(g.player, "player")!.bodyRadius;
@@ -175,8 +176,13 @@ export class Bot {
     if (!this.melee) {
       const near = this.monsters().find((x) => x.awake && dist(p, x.p) < fp(3)
         && !MONSTERS.get(world.get<MonsterC>(x.e, "monster")!.defId)?.ranged && this.reaches(x.e, x.p, p));
-      const away = near && this.escape(p, near.p, fp(3));
+      // Kept for a second or until reached: re-aimed every tick off a monster that
+      // follows, a back-off flipped between the ends of a narrow lane and paced.
+      const held = this.backOff && tick < this.backOff.until
+        && dist(p, { x: this.backOff.to["x"]!, y: this.backOff.to["y"]! }) > fp(0.3) ? this.backOff.to : undefined;
+      const away = near && (held ?? this.escape(p, near.p, fp(3)));
       if (away && (away["x"] !== p.x || away["y"] !== p.y)) {
+        if (!held) this.backOff = { to: away, until: tick + HZ };
         out.push(cmd({ type: "moveTo", data: away }));
         return out;
       }
@@ -198,7 +204,12 @@ export class Bot {
     const to = this.route(p, goal.p);
     // No route at all: behind water or in a pocket the body does not fit.
     if (!to) { this.skip.set(goal.e, tick + 60 * HZ); return out; }
-    out.push(cmd(this.intoFire(p, to) ? { type: "stop" } : { type: "moveTo", data: to }));
+    // Waiting out fire over loot is not being stuck: without the reset, a boss's last
+    // burning patch over its drops skips the stone and the run ends with it on the floor.
+    if (this.intoFire(p, to)) {
+      if (goal.kind === "item") { this.goalSince = tick; this.goalFrom = p; }
+      out.push(cmd({ type: "stop" }));
+    } else out.push(cmd({ type: "moveTo", data: to }));
     return out;
   }
 
@@ -373,11 +384,14 @@ export class Bot {
     const ok = (e: Entity) => (this.skip.get(e) ?? 0) <= tick;
     const near = (xs: { e: Entity; p: Position }[]) => xs.sort((a, b) => dist(p, a.p) - dist(p, b.p))[0];
 
-    const item = near(this.loot().filter((x) => dist(p, x.p) < fp(bossDead ? 30 : 8)));
-    const chest = near(w.query("container", "position")
+    // A walk to loot or a chest commits like one to a monster: a route bending away
+    // from it carried the bot past the radius, the other goal led back, and it paced.
+    const loot = this.loot();
+    const item = loot.find((x) => x.e === this.goal) ?? near(loot.filter((x) => dist(p, x.p) < fp(bossDead ? 30 : 8)));
+    const chests = w.query("container", "position")
       .filter((e) => ok(e) && w.get<ContainerC>(e, "container")!.opened === 0)
-      .map((e) => ({ e, p: w.get<Position>(e, "position")! }))
-      .filter((x) => dist(p, x.p) < fp(10)));
+      .map((e) => ({ e, p: w.get<Position>(e, "position")! }));
+    const chest = chests.find((x) => x.e === this.goal) ?? near(chests.filter((x) => dist(p, x.p) < fp(10)));
     // A walk commits to its monster: two at nearly the same distance otherwise
     // swap places as "nearest" with every step and the bot paces on the spot.
     const mobs = this.monsters().filter((x) => ok(x.e));

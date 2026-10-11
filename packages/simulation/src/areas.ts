@@ -10,7 +10,7 @@ import {
   ITEM_POOLS, baseOf, currencyItem, currencyForRoll, hideoutFootprints, isPortalScroll,
 } from "@exiled/content-runtime";
 import { ELEMENTS, type MonsterDef } from "@exiled/content-schema";
-import type { AreaLayout } from "@exiled/mapgen";
+import { brazierSpotsFor, shutsFloor, BRAZIER_RADIUS, SPAWN_SAFE_RADIUS, type AreaLayout } from "@exiled/mapgen";
 import type { World, Entity } from "./ecs";
 import { damageCode } from "./damage-types";
 import { fnv1a32 } from "./rng";
@@ -330,9 +330,26 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
     // the ring offsets are not, so a member could embed in a thick wall and
     // be stuck for the entire run without this guard. The containers stood up
     // below are in it too: a body inside one's blocker cannot move either.
-    const col = gridCollision(layout.grid, layout.objectiveAnchors
-      .filter((a) => a.id.startsWith("reward."))
-      .map((a) => ({ x: fp(a.x), y: fp(a.y), r: fp(BLOCK_RADIUS.container!) })));
+    const chests = containerSpots(layout);
+    const col = gridCollision(layout.grid, [...[...chests.values()]
+      .map((c) => ({ x: fp(c.x), y: fp(c.y), r: fp(BLOCK_RADIUS.container!) })), ...brazierBlockers(layout)]);
+    // A pack in a pocket the nav has no route out of (a gap a body squeezes through
+    // only between cell centres) cannot follow anyone out of it: it is not fielded.
+    const half = fp(0.5);
+    const routes = (s: { x: number; y: number }): boolean => {
+      const g = layout.grid;
+      const c0 = Math.round((s.x - g.originX) / g.cellSize), r0 = Math.round((s.y - g.originY) / g.cellSize);
+      for (let dr = -3; dr <= 3; dr++) {
+        for (let dc = -3; dc <= 3; dc++) {
+          const x = fp(g.originX + (c0 + dc) * g.cellSize), y = fp(g.originY + (r0 + dr) * g.cellSize);
+          if (!col.isWalkable(x, y, half)) continue;
+          if (col.nav!.waypoint(x, y, startX, startY, half)) return true;
+        }
+      }
+      return false;
+    };
+    const live = spawns.map(routes);
+    const lastLive = live.lastIndexOf(true);
     // Every body placed so far; a new one keeps a metre from all of them.
     // ponytail: linear scan per body, a spatial hash if a map ever fields thousands.
     const placed: { x: number; y: number }[] = [];
@@ -342,15 +359,17 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
       const s = spawns[i]!;
       const sx = fp(s.x), sy = fp(s.y);
       const base = withMonsterRes(pickPack(biomeId, frac()), ws.monsterResAdd);
+      if (!live[i]) continue;
       // Pack size adds to the pack the socket already has. The generator owns
       // where a fight can stand, so a modifier adds bodies to a sanctioned
       // socket and never invents a new one.
+      const safe2 = Math.min(fpDist2(startX, startY, sx, sy), fp(SPAWN_SAFE_RADIUS) * fp(SPAWN_SAFE_RADIUS));
       const packed = PACK_COUNT[base.archetype];
       const count = packed + Math.trunc((packed * ws.packSizePct) / 100);
       for (let j = 0; j < count; j++) {
         // The first member of the last socket carries the rare, so a big pack-size
         // roll means more to kill rather than more rares to answer.
-        const rare = i === spawns.length - 1 && j === 0;
+        const rare = i === lastLive && j === 0;
         // The map's own seed picks the rare's element, so a given map always
         // demands the same resistance and a replay of it stays identical.
         const def = rare ? makeRare(base, rareTemplate(session.mapSeed, base.archetype)) : base;
@@ -365,8 +384,14 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
         const [first, other] = useFar
           ? [{ x: farX, y: farY }, { x: nearX, y: nearY }]
           : [{ x: nearX, y: nearY }, { x: farX, y: farY }];
-        const fits = (p: { x: number; y: number }) => col.isWalkable(p.x, p.y, def.radiusFixed) && free(p.x, p.y);
-        const pos = fits(first) ? first : fits(other) ? other : fitBody(col, sx, sy, def.radiusFixed, free);
+        // The fallbacks keep out of the start's safe radius too: one that drifted toward
+        // the portal stood inside aggro range of the player arriving. A member with no
+        // room left outside it is not spawned; the pack is one short instead.
+        const outward = (x: number, y: number) => free(x, y) && fpDist2(startX, startY, x, y) >= safe2;
+        const fits = (p: { x: number; y: number }) => col.isWalkable(p.x, p.y, def.radiusFixed) && outward(p.x, p.y);
+        const kept = () => { const k = fitBody(col, sx, sy, def.radiusFixed, outward); return fits(k) ? k : undefined; };
+        const pos = fits(first) ? first : fits(other) ? other : kept();
+        if (!pos) continue;
         placed.push(pos);
         spawnMonster(world, def, pos.x, pos.y, rare, scale);
       }
@@ -390,7 +415,8 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
       if (!a.id.startsWith("reward.")) continue;
       const pick = fnv1a32(`container:${session.mapSeed}:${a.id}`);
       const ce = world.create();
-      world.set<Position>(ce, "position", { x: fp(a.x), y: fp(a.y) });
+      const at = chests.get(a.id)!;
+      world.set<Position>(ce, "position", { x: fp(at.x), y: fp(at.y) });
       world.set<InteractableC>(ce, "interactable", {
         kind: "container",
         radius: fp(2),
@@ -461,7 +487,49 @@ export function areaCollision(world: World, area: AreaKind, layout: AreaLayout):
     for (const f of hideoutFootprints()) blockers.push({ x: fp(f.x), y: fp(f.z), r: fp(f.r) });
     return blockerCollision(blockers);
   }
-  return gridCollision(layout.grid, blockers);
+  return gridCollision(layout.grid, [...blockers, ...brazierBlockers(layout)]);
+}
+
+/**
+ * Where each reward container stands: on its anchor, unless a container there shuts
+ * a door for a body (one at a corridor mouth closed the room behind it to the nav),
+ * then on the nearest floor cell within two units that does not. Deterministic: the
+ * anchors in order, the cells nearest first, ties in scan order.
+ */
+/** Cell offsets within four cells (two units), nearest first, ties in scan order. */
+const RING_NEAREST_FIRST: readonly (readonly [number, number])[] = (() => {
+  const out: [number, number, number][] = [];
+  for (let dr = -4; dr <= 4; dr++) for (let dc = -4; dc <= 4; dc++) if (dc * dc + dr * dr <= 16) out.push([dc, dr, dc * dc + dr * dr]);
+  return out.sort((p, q) => p[2] - q[2]).map(([dc, dr]) => [dc, dr] as const);
+})();
+
+function containerSpots(layout: AreaLayout): Map<string, { x: number; y: number }> {
+  const g = layout.grid;
+  const r = BLOCK_RADIUS.container!;
+  const placed = brazierSpotsFor(layout).map((b) => ({ x: b.x, y: b.z, r: BRAZIER_RADIUS }));
+  const out = new Map<string, { x: number; y: number }>();
+  for (const a of layout.objectiveAnchors) {
+    if (!a.id.startsWith("reward.")) continue;
+    const c0 = Math.round((a.x - g.originX) / g.cellSize), r0 = Math.round((a.y - g.originY) / g.cellSize);
+    let at = { x: a.x, y: a.y };
+    for (const [dc, dr] of RING_NEAREST_FIRST) {
+      const cx = c0 + dc, cy = r0 + dr;
+      if (cx < 0 || cy < 0 || cx >= g.cols || cy >= g.rows || g.cells[cy * g.cols + cx] !== 1) continue;
+      const x = g.originX + cx * g.cellSize, y = g.originY + cy * g.cellSize;
+      // The player's body only: a brute going round a crate is fine, a player shut out is not.
+      if (shutsFloor(g, cx, cy, x, y, r, placed, [0.5])) continue;
+      at = { x, y };
+      break;
+    }
+    placed.push({ ...at, r });
+    out.set(a.id, at);
+  }
+  return out;
+}
+
+/** The braziers the renderer stands against a map's walls: the same pure list. */
+function brazierBlockers(layout: AreaLayout): Blocker[] {
+  return brazierSpotsFor(layout).map((b) => ({ x: fp(b.x), y: fp(b.z), r: fp(BRAZIER_RADIUS) }));
 }
 
 /** The looks a reward container can wear, indexed by the anchor's seed. */

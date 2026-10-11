@@ -57,7 +57,7 @@ import { enforceMode, socketForKey } from "./controls";
 import { ControlsDialog } from "./menu/ControlsDialog";
 import { FpsGuard } from "./fps-guard";
 import type { FrameHook, Projector } from "./hud/LootLabels";
-import type { AreaLayout } from "@exiled/mapgen";
+import { brazierSpotsFor, type AreaLayout } from "@exiled/mapgen";
 import { BIOMES, defaultAttackFor, mapBase } from "@exiled/content-runtime";
 import type { Snapshot, FromWorker, Intent, ToWorker, SpawnKind } from "@exiled/protocol";
 import { atlasGraph, atlasNodeTier, isNodeReachable, mapBaseIdForNode, DEFAULT_CLASS_ID } from "@exiled/rules";
@@ -626,6 +626,8 @@ export function GameView({
         buildLevel(
           scene, grid, base?.tilesetId,
           msg.area === "map" ? msg.layout.objectiveAnchors.filter((a) => a.id.startsWith("reward.")) : [],
+          // brazierSpotsFor is the list the sim collides against (areaCollision).
+          msg.area === "map" ? brazierSpotsFor(msg.layout) : [],
         );
         buildSea(scene, grid, base ? BIOMES[base.biomeId].sea === true : false);
         setMapFill(scene, msg.area === "map");
@@ -640,6 +642,8 @@ export function GameView({
           base ? BIOMES[base.biomeId].sea === true : false,
         );
         setAreaLayout(msg.area === "map" ? msg.layout : null);
+        // DEV: the layout the client drew, so a map's seed and grid can be read from the console.
+        if (import.meta.env?.DEV) (window as unknown as { __layout?: unknown }).__layout = msg.layout;
         // The first hit's one-off shader compiles happen here, under the plate,
         // per area: buildLevel just replaced the level materials, so the flash
         // light's fourth-light recompile has to be paid again for the new set.

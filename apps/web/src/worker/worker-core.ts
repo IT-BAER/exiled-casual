@@ -12,12 +12,13 @@ import {
   MemoryKv,
   Bot,
   areaCollision,
+  placeFirstFit,
 } from "@exiled/simulation";
 import type { Simulation, World, Entity, Position, SessionC, InventoryC, SkillsC, KvStore } from "@exiled/simulation";
 import type { Intent, Snapshot, SpawnKind, AreaKind } from "@exiled/protocol";
-import { CONTENT_VERSION } from "@exiled/content-runtime";
+import { CONTENT_VERSION, waystoneItem } from "@exiled/content-runtime";
 import { generateArea, type AreaLayout } from "@exiled/mapgen";
-import { mapBaseIdForNode, classIdOr } from "@exiled/rules";
+import { mapBaseIdForNode, classIdOr, atlasGraph, WAYSTONE_MAX_TIER } from "@exiled/rules";
 
 // Wall-clock pacing constant (client-side only) — never fed into the sim.
 // ponytail: float constant is intentional; the accumulator drives integer tick steps.
@@ -88,7 +89,32 @@ export class WorkerCore {
   async hydrate(): Promise<void> {
     if (this.characterId === "") await loadInto(this.kv, this.world);
     else await loadCharacterInto(this.kv, this.world, this.characterId);
+    if (this.botMode) this.openAtlasForBot();
     this.lastSig = this.durableSig();
+  }
+
+  /**
+   * `?bot` never saves, so its character never clears a node and the fog keeps
+   * every biome but the first shut. Opens the whole Atlas with a fresh stone per
+   * tier, so `?play&map=<node>&bot` can watch any place on a new layout.
+   */
+  private openAtlasForBot(): void {
+    const e = this.world.query("session")[0];
+    if (e === undefined) return;
+    const s = this.world.get<SessionC>(e, "session")!;
+    this.world.set<SessionC>(e, "session", {
+      ...s, completedNodes: atlasGraph(s.atlasSeed).map((n) => n.id),
+    });
+    const held = this.world.get<InventoryC>(e, "inventory")!;
+    // Only fresh stones, or the harness keeps taking the same starting one.
+    let inv = { ...held, items: held.items.filter((p) => !p.item.waystone || p.item.waystone.permanent) };
+    for (let tier = 1; tier <= WAYSTONE_MAX_TIER; tier++) {
+      const cell = placeFirstFit(inv, 1, 1);
+      if (!cell) break;
+      const item = waystoneItem((Math.random() * 0x100000000) >>> 0, tier);
+      inv = { ...inv, items: [...inv.items, { ...cell, w: 1, h: 1, item }] };
+    }
+    this.world.set<InventoryC>(e, "inventory", inv);
   }
 
   /** The current area kind — the renderer draws dungeon walls only for "map". */

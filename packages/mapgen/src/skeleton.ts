@@ -175,6 +175,13 @@ function ribbonPath(rng: RandomStream): TileXY[] | null {
   return null;
 }
 
+/** Loop length, in tiles, the bulging stops at: about a full-lattice ring's, so
+ *  the map's size holds steady while its shape varies. */
+const LOOP_MIN_TILES = 30;
+const LOOP_MAX_TILES = 40;
+/** Bulges attempted before a loop is accepted short; a bulge can find no room. */
+const LOOP_BULGE_TRIES = 80;
+
 export function generateSkeleton(
   rng: RandomStream,
   branchCount: number,
@@ -187,11 +194,13 @@ export function generateSkeleton(
     if (!path) return null;
     loop = path;
   } else {
-    const x0 = rng.nextInt(0, 1), x1 = rng.nextInt(N - 2, N - 1);
-    const y0 = rng.nextInt(0, 1), y1 = rng.nextInt(N - 2, N - 1);
+    // Any rectangle 4-9 tiles a side, anywhere on the lattice, bulged out to
+    // LOOP_MIN..MAX tiles: where the loop sits and how it winds is per seed.
+    const x0 = rng.nextInt(0, N - 4), x1 = rng.nextInt(x0 + 3, N - 1);
+    const y0 = rng.nextInt(0, N - 4), y1 = rng.nextInt(y0 + 3, N - 1);
     loop = ringCycle(x0, y0, x1, y1);
-    const bulges = rng.nextInt(3, 6);
-    for (let k = 0; k < bulges; k++) bulge(loop, rng);
+    const length = rng.nextInt(LOOP_MIN_TILES, LOOP_MAX_TILES);
+    for (let k = 0; k < LOOP_BULGE_TRIES && loop.length < length; k++) bulge(loop, rng);
   }
 
   const masks = new Uint8Array(N * N);

@@ -15,8 +15,8 @@ import { MONSTERS } from "@exiled/content-runtime";
  * Waking is one-way (the state field carries it): a pulled pack follows you out
  * of the room, because a monster that gave up the chase at a line on the floor
  * would make every fight optional. PoE leashes bosses, not trash; the boss has
- * its own wider radius in boss-ai.ts (BOSS_AGGRO_RADIUS) but no leash either —
- * BossC.spawnX/spawnY is recorded and never read back.
+ * its own wider radius and its arena leash in boss-ai.ts (BOSS_AGGRO_RADIUS,
+ * BOSS_LEASH_RADIUS).
  */
 export const AGGRO_RADIUS: number = fp(9);
 
