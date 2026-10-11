@@ -30,6 +30,7 @@ import { createHaze, createMotes } from "./haze";
 import { FLAME_MESH } from "./flames";
 import { createFireLights, LIGHT_POOL, setFireLightZoom, updateFireLights } from "./lights";
 import { cullShadowCasters } from "./shadow-cull";
+import { glowFollowsErosion } from "./ground-fx";
 
 /**
  * Light intensities for a PBR scene. Roughly PI times the values the old
@@ -702,6 +703,7 @@ export function createScene(engine: Engine): SceneHandle {
     // meshes blooming becomes a problem.
     const gl = new GlowLayer("glow", scene);
     gl.intensity = 0.85;
+    glowFollowsErosion(gl);
   } catch {
     /* GlowLayer needs a render target; silently skipped under NullEngine in tests */
   }

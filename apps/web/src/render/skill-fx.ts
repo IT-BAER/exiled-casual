@@ -651,6 +651,9 @@ function smoke(scene: Scene, at: Vector3): ParticleSystem {
 
 export const CINDER_NAME = "fx-cinder";
 
+/** Embers a second off a burning patch at rest. */
+export const CINDER_RATE = 52;
+
 /**
  * Cinder ground: embers rising off the whole disc.
  *
@@ -670,7 +673,7 @@ export function attachCinderFX(scene: Scene, mesh: AbstractMesh): ParticleSystem
   // Additive overlap goes as rate x lifetime, so a patch this wide saturates to
   // a flat white disc long before it looks dense. Fewer, smaller, shorter
   // flames read as separate tongues, which is what fire on the floor looks like.
-  ps.emitRate = 52;
+  ps.emitRate = CINDER_RATE;
   ps.direction1 = new Vector3(-0.25, 1, -0.25);
   ps.direction2 = new Vector3(0.25, 1, 0.25);
   ps.minEmitPower = 0.5;

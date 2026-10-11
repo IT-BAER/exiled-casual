@@ -18,6 +18,7 @@ import { attachArrowStreak, attachBoltTrail, attachCinderFX, buildArrow, cinderG
 import { attachRig, rigOf, type Looks, type RigParts } from "./rig";
 import { looksForEquipment } from "./gear-looks";
 import { attachGroundModel, GROUND_LOOK_BASES } from "./ground-looks";
+import { groundMaterial } from "./ground-fx";
 import { hasRim, HIT_TINT, HIT_ALPHA } from "./rim";
 import { playSfxAt } from "../audio/sfx";
 
@@ -1674,14 +1675,22 @@ export function makeMesh(
       : // Flat enough that the additive side wall never shows: with a falloff on
         // the cap, a visible rim is the one thing that gives the decal away.
         MeshBuilder.CreateCylinder(name, { diameter: 2, height: 0.04, tessellation: 24 }, scene);
-  mesh.material = m;
   mesh.isPickable = false;
   if (at) {
     mesh.position.copyFrom(at);
     mesh.computeWorldMatrix(true); // the trail reads the bounding box, not the position
   }
-  if (kind === "projectile") attachBoltTrail(scene, mesh, fxProfile(skillId));
-  else attachCinderFX(scene, mesh);
+  if (kind === "projectile") {
+    mesh.material = m;
+    attachBoltTrail(scene, mesh, fxProfile(skillId));
+    return mesh;
+  }
+  // The shared material is the template; each patch wears its own copy so it can
+  // catch and burn out on its own clock (`ground-fx.ts`). The copy goes with it.
+  const own = groundMaterial(scene, `${name}-mat`, m);
+  mesh.material = own;
+  mesh.onDisposeObservable.addOnce(() => own.dispose());
+  mesh.metadata = { embers: attachCinderFX(scene, mesh) };
   return mesh;
 }
 
