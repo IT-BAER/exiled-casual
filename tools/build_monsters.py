@@ -1735,36 +1735,19 @@ def hoarfrost_spitter():
 # the brutes: mid-sized, slow, and they close on you
 # --------------------------------------------------------------------------
 
+VAAL_CONSTRUCT_SOURCE = os.path.join(TEX_DIR, "source", "vaal_construct_v1.glb")
+VAAL_CONSTRUCT_NORMAL = os.path.join(TEX_DIR, "source", "vaal_construct_v1_n.png")
+
+
 def vaal_construct():
-    """A walking pillar: shoulders carved wider than the waist, and a socket of
-    light where a head should be. Its mass is in the SKELETON, not in plates
-    stuck on the outside of one — a shoulder that is a box floating beside a
-    torso is the single loudest amateur tell on this whole roster."""
-    c = Creature("monster.vaal_construct.v1", "vaal", 0.375, 1.9)
-    # Wider across than it is deep at every height, and widest at the shoulder:
-    # "carved wider than the waist" was written in the docstring and then built
-    # as a round column, which is the whole reason this one read as a box.
-    spine = c.body.chain([(0, 0, 0.76), (0, 0.03, 1.08), (0, 0.02, 1.42), (0, 0, 1.62)],
-                         [(0.29, 0.22), (0.23, 0.21), (0.45, 0.26), (0.38, 0.23)])
-    for side in (-1, 1):
-        c.body.chain([(side * 0.34, 0.0, 1.58), (side * 0.52, 0.0, 1.46)],
-                     [0.24, 0.19], parent=spine[-1])
-        # Sunk to HALF its thickness: a plate is set into the stone, not resting
-        # on it, and the shadow line where it enters is what sells it.
-        c.body.add(slab((side * 0.34, 0.20, 1.20), (0.20, 0.07, 0.62), tilt=0.05))
-        # The crown spikes rake back over the shoulders instead of standing up.
-        c.body.add(horn([(side * 0.30, -0.14, 1.70), (side * 0.66, -0.40, 1.82)],
-                        [0.07, 0.0]), BONES)
-    # The socket: a recessed collar with the glyph burning at the bottom of it,
-    # so the light has somewhere to come FROM.
-    c.body.add(slab((0, 0.08, 1.70), (0.34, 0.30, 0.16), tilt=0.10))
-    c.body.add(ellipsoid((0, 0.14, 1.76), (0.13, 0.11, 0.11), 10, 6), GLOWS)
-    for i, side in enumerate((-1, 1)):
-        c.arm(i, [(side * 0.58, 0.0, 1.42), (side * 0.68, 0.14, 1.02), (side * 0.64, 0.24, 0.66)],
-              [0.15, 0.12, 0.17])
-    for i, side in enumerate((-1, 1)):
-        c.leg(i, (side * 0.26, 0.0, 0.78), (side * 0.34, 0.0, 0.0), 0.16, 0.11, bend=0.06)
-    return c
+    """A walking pillar of carved stone, shoulders wider than the waist, and a
+    socket of green light where a head should be.
+
+    Generated (review/3d/vaal-construct), volumetric opening res 240 r 2,
+    4k triangles, rig_humanoid.
+    """
+    return GeneratedCreature("monster.vaal_construct.v1", VAAL_CONSTRUCT_SOURCE, "vaal", 1.9,
+                             normal=VAAL_CONSTRUCT_NORMAL)
 
 
 BOG_DROWNED_SOURCE = os.path.join(TEX_DIR, "source", "bog_drowned_v1.glb")

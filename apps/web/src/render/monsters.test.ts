@@ -324,6 +324,9 @@ describe("monsters asset", () => {
    *
    * Thirty-two images since the Drowned Grubling was opened and given a baked
    * normal map: measured 6,509,744 -> 6,535,012 packed.
+   *
+   * Thirty-four images since the Vaal Construct became a generated mesh with two
+   * 512 sheets: measured 6,428,688 -> 6,622,052 packed.
    */
   /**
    * The shader warm that ends the map-entry stall. Every instance of a species
@@ -367,7 +370,7 @@ describe("monsters asset", () => {
 
   it("embeds compressed textures and stays within budget", () => {
     for (const image of json.images) expect(image.mimeType).toBe("image/jpeg");
-    expect(json.images.length).toBeLessThanOrEqual(32);
+    expect(json.images.length).toBeLessThanOrEqual(34);
     expect(json.extensionsRequired).toContain("EXT_meshopt_compression");
     expect(glb.byteLength).toBeLessThan(6_750_000);
   });
