@@ -70,6 +70,7 @@ describe("monsters asset", () => {
    * skin here has quietly regressed to that, and the symptom in the browser is
    * a monster that walks like a robot rather than one that does not walk.
    */
+  const FLOATERS: ReadonlySet<string> = new Set(["monster.fen_wisp.v1"]);
   it("ships one skinned mesh per creature, with a real leg chain in it", () => {
     for (const root of species) {
       const node = json.nodes.find((n) => n.name === root)!;
@@ -79,6 +80,8 @@ describe("monsters asset", () => {
       expect(mesh!.skin, `${root} is not skinned`).toBeTypeOf("number");
 
       const joints = json.skins[mesh!.skin!]!.joints.map((i) => json.nodes[i]!.name);
+      // A floater has no legs to regress: it is a body chain that bobs.
+      if (FLOATERS.has(root)) continue;
       // A leg has to be a CHAIN — hip, knee, ankle — or the knee cannot bend.
       const legs = joints.filter((j) => j.startsWith("leg"));
       expect(legs.length, `${root} has no leg bones`).toBeGreaterThanOrEqual(2);

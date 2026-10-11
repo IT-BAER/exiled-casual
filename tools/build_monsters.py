@@ -1687,34 +1687,20 @@ def dune_spitter():
     return c
 
 
-def fen_wisp():
-    """A drowned skull wrapped in weed, with the light still on inside it.
+FEN_WISP_SOURCE = os.path.join(TEX_DIR, "source", "fen_wisp_v1.glb")
+FEN_WISP_NORMAL = os.path.join(TEX_DIR, "source", "fen_wisp_v1_n.png")
 
-    A symmetric cage of six staves round a ball is a lantern, and a lantern is
-    not frightening. This is a broken skull tipped forward, half wrapped, with
-    the glow behind the eye sockets and weed trailing off the back of it — the
-    asymmetry is what turns a prop into a thing that is looking at you."""
-    c = Creature("monster.fen_wisp.v1", "swamp", 0.225, 1.2)
-    skull = c.body.chain([(0, -0.14, 1.14), (0, 0.06, 1.10), (0, 0.22, 1.02)],
-                         [(0.19, 0.13), (0.21, 0.15), (0.13, 0.10)])
-    c.body.chain([(0, -0.24, 1.24), (0, -0.30, 1.34)], [0.10, 0.05], parent=skull[0])
-    c.body.add(ellipsoid((0, 0.02, 1.08), (0.12, 0.14, 0.12), 12, 7), GLOWS)
-    for side in (-1, 1):
-        # Eye sockets: the glow is behind the hole, not on the outside of it.
-        c.body.add(ellipsoid((side * 0.07, 0.16, 1.12), (0.035, 0.035, 0.035), 6, 4), GLOWS)
-        # Weed: three strands, different lengths, all trailing to one side.
-        for k, (out, back, drop) in enumerate(((0.16, 0.34, 0.40), (0.24, 0.22, 0.56),
-                                               (0.10, 0.44, 0.30))):
-            c.body.add(horn([(side * 0.10, -0.06, 1.06),
-                             (side * (0.10 + out), -0.06 - back * 0.5, 1.06 - drop * 0.45),
-                             (side * (0.06 + out * 0.6), -0.06 - back, 1.06 - drop)],
-                            [0.035, 0.026, 0.0]), BONES)
-    for i in range(4):
-        a = 2.0 * math.pi * i / 4 + 0.4
-        x, y = 0.11 * math.cos(a), 0.11 * math.sin(a)
-        part = c.limb(f"leg{i}", (x, y, 0.94))
-        part.chain([(x, y, 0.94), (x * 2.4, y * 2.4, 0.56), (x * 3.2, y * 3.2, 0.14)],
-                   [0.042, 0.026, 0.012])
+
+def fen_wisp():
+    """A drowned skull wrapped in weed, the light still on behind the sockets.
+
+    Generated (review/3d/fen-wisp), volumetric opening res 240 r 2, 4k
+    triangles. No legs: a body-only GeneratedSkin lifted 0.15 off the floor, so
+    the weed trailing under the skull hangs and never touches.
+    """
+    c = GeneratedSkin("monster.fen_wisp.v1", FEN_WISP_SOURCE, FEN_WISP_NORMAL,
+                      "swamp", 1.15, (0.0, 0.0, 0.15), tex=512, flip=True)
+    c.body.chain([(0, 0, 0.25), (0, 0, 0.55), (0, 0, 0.90), (0, 0.02, 1.25)], [0.1] * 4)
     return c
 
 
@@ -1870,11 +1856,12 @@ class GeneratedSkin(Creature):
                 sys.exit("missing generated creature: " + path)
         mesh = rig.load_mesh(self.source, self.height, self.flip)
         # load_mesh centres on the mid-height mass; the stance centre is where
-        # the sim's body radius belongs.
-        dx, dy = self.offset
+        # the sim's body radius belongs. A third component lifts a legless body.
+        dx, dy, dz = (tuple(self.offset) + (0.0,))[:3]
         for vert in mesh.data.vertices:
             vert.co.x += dx
             vert.co.y += dy
+            vert.co.z += dz
         mesh.data.update()
         name = self.def_id.split(".")[1]
         generated_hide(mesh, name, self.family, self.normal, self.tex)
