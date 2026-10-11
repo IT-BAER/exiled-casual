@@ -2091,40 +2091,37 @@ def sirrath():
     return c
 
 
-def mother_vhal():
-    """Swamp. A cathedral of ribs over a brood sac, on eight heaving tendrils.
+MOTHER_VHAL_SOURCE = os.path.join(TEX_DIR, "source", "mother_vhal_v1.glb")
+MOTHER_VHAL_NORMAL = os.path.join(TEX_DIR, "source", "mother_vhal_v1_n.png")
 
-    The first version was one 0.9-radius node and read as an egg, which is what
-    happens whenever a boss's mass is a single sphere: nothing casts a shadow on
-    anything. The mass is now a LOW, WIDE abdomen carried between rib arches, so
-    the outline from above is a cage with light coming through it."""
-    c = Creature("monster.mother_vhal.v1", "swamp", 0.475, 3.1)
-    spine = c.body.chain(
-        [(0, -1.00, 0.96), (0, -0.46, 1.10), (0, 0.16, 1.18), (0, 0.66, 1.06), (0, 0.94, 1.34)],
-        [0.26, 0.62, 0.70, 0.52, 0.40])
-    # Flattened: an abdomen wider than it is tall, so the ribs stand clear of it.
-    c.body.shape((1.35, 1.0, 0.72), pivot=(0, 0, 0.30))
-    neck = c.body.chain([(0, 1.10, 1.86), (0, 1.16, 2.36)], [0.34, 0.26], parent=spine[-1])
-    c.body.chain([(0, 1.26, 2.68), (0, 1.40, 2.62)], [0.28, 0.17], parent=neck[-1])
-    c.body.add(ellipsoid((0, 0.06, 0.86), (0.74, 0.94, 0.42), 14, 8), GLOWS)
-    for side in (-1, 1):
-        c.body.add(ellipsoid((side * 0.13, 1.46, 2.70), (0.06, 0.06, 0.06), 6, 4), GLOWS)
-        c.body.add(horn([(side * 0.22, 1.18, 2.86), (side * 0.46, 0.94, 3.24)],
-                        [0.09, 0.0]), BONES)
-        # Five arches per side, springing from the spine and closing under the
-        # sac. They are the outline, and the sac only glows between them.
-        for k in range(5):
-            y = 0.72 - k * 0.36
-            c.body.add(horn([(side * 0.10, y, 1.52), (side * 0.86, y - 0.03, 1.28),
-                             (side * 1.02, y - 0.05, 0.74), (side * 0.66, y - 0.06, 0.34)],
-                            [0.10, 0.085, 0.07, 0.04]), BONES)
-    for i in range(8):
-        a = 2.0 * math.pi * i / 8 + 0.2
-        x, y = 0.92 * math.cos(a), 1.02 * math.sin(a)
-        part = c.limb(f"leg{i}", (x, y, 0.74))
-        part.chain([(x, y, 0.74), (x * 1.45, y * 1.35, 0.40), (x * 1.75, y * 1.6, 0.04)],
-                   [0.15, 0.10, 0.055])
-        part.add(ellipsoid((x * 1.75, y * 1.6, 0.05), (0.10, 0.10, 0.05), 8, 5))
+
+def mother_vhal():
+    """Swamp. A brood sac caged in rib arches, low and wide on nine tendrils.
+
+    Generated (review/3d/mother-vhal, reference v2), volumetric opening res 240
+    r 2, 8k triangles on a 1024 sheet. Height 1.5, not the old 3.1: the body is
+    three times wider than tall, and at 3.1 it covered 8.7 units of floor.
+    Joints measured off mother_vhal_v1.glb by tools/measure_generated.py
+    --legs 9 --flip 1, except two. The left fore-mid tendril runs into its
+    neighbour and traced under the body: its foot is the --legs 10 trace's. The
+    left fore tendril traced its hip at the tip: hip and knee mirror the right's.
+    """
+    c = GeneratedSkin("monster.mother_vhal.v1", MOTHER_VHAL_SOURCE, MOTHER_VHAL_NORMAL,
+                      "swamp", 1.5, (-0.322, 0.281), flip=True)
+    spine = c.body.chain([(0, -1.20, 0.85), (0, 0.0, 0.95), (0, 1.20, 0.85)], [0.3] * 3)
+    c.body.chain([(0, 1.40, 0.70), (0, 1.60, 0.55)], [0.15] * 2, parent=spine[-1])
+    for i, (hip, knee, foot) in enumerate([
+        ((-0.550, 1.250, 0.490), (-0.852, 1.681, 0.420), (-0.937, 1.802, 0.000)),
+        ((0.466, 1.129, 0.492), (0.608, 1.446, 0.436), (0.647, 1.550, 0.001)),
+        ((-0.860, 0.864, 0.409), (-1.550, 0.840, 0.450), (-1.840, 0.783, 0.000)),
+        ((0.618, 0.587, 0.321), (1.091, 0.858, 0.422), (1.252, 1.004, 0.000)),
+        ((-1.218, -0.243, 0.326), (-1.712, -0.625, 0.500), (-1.870, -0.751, 0.001)),
+        ((0.735, 0.048, 0.331), (1.384, -0.007, 0.455), (1.536, 0.079, 0.000)),
+        ((-0.893, -0.671, 0.330), (-0.945, -1.299, 0.507), (-0.893, -1.611, 0.000)),
+        ((0.493, -0.433, 0.366), (0.991, -0.862, 0.460), (1.130, -1.082, 0.000)),
+        ((-0.039, -0.755, 0.392), (0.016, -1.459, 0.443), (0.042, -1.801, 0.000)),
+    ]):
+        c.leg_through(i, hip, knee, foot)
     return c
 
 

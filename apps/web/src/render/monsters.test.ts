@@ -330,6 +330,9 @@ describe("monsters asset", () => {
    *
    * 7.0MB since the Cinder Warden became a generated mesh at 8k triangles with
    * two 1024 sheets: measured 6,521,388 -> 6,829,176 packed.
+   *
+   * 7.25MB and thirty-six images since Mother Vhal did the same: measured
+   * 6,623,960 -> 7,050,236 packed.
    */
   /**
    * The shader warm that ends the map-entry stall. Every instance of a species
@@ -373,9 +376,9 @@ describe("monsters asset", () => {
 
   it("embeds compressed textures and stays within budget", () => {
     for (const image of json.images) expect(image.mimeType).toBe("image/jpeg");
-    expect(json.images.length).toBeLessThanOrEqual(34);
+    expect(json.images.length).toBeLessThanOrEqual(36);
     expect(json.extensionsRequired).toContain("EXT_meshopt_compression");
-    expect(glb.byteLength).toBeLessThan(7_000_000);
+    expect(glb.byteLength).toBeLessThan(7_250_000);
   });
 });
 
