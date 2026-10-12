@@ -1,13 +1,15 @@
 import { describe, it, expect } from "vitest";
 import { fp, fpDist2 } from "@exiled/fixed-point";
-import { MONSTERS } from "@exiled/content-runtime";
+import { MONSTERS, CONTENT_VERSION } from "@exiled/content-runtime";
 import { resBlock, type MonsterDef } from "@exiled/content-schema";
 import { Simulation } from "../loop";
 import { World } from "../ecs";
 import type { Position, MonsterC, Faction, PlayerC, BossC, TelegraphC, Health, SessionC } from "../components";
 import { registerBossAI, BOSS_AGGRO_RADIUS, BOSS_LEASH_RADIUS } from "./boss-ai";
 import { createCombatSim } from "../combat-sim";
-import { gridCollision } from "../collision";
+import { gridCollision, hasLineOfSight } from "../collision";
+import { generateArea } from "@exiled/mapgen";
+import { grammarForNode } from "./area-transition";
 import { makeGrid } from "../test-grid";
 
 // Minimal boss fixture — does NOT import real content (except the integration test below).
@@ -596,5 +598,26 @@ describe("on a generated map", () => {
     world.set<Position>(playerEntity, "position", spot);
     for (let i = 0; i < 30; i++) sim.step();
     expect(world.get<MonsterC>(boss, "monster")!.state).toBe("idle");
+  });
+  // A playtest froze the Warden here for 900+ ticks: it had slid between pillars
+  // to a spot no cell centre around holds a 1.4 body, so the nav had no route home.
+  it("a warden pulled off the lattice among pillars still walks home and sleeps", () => {
+    const layout = generateArea(18342063, CONTENT_VERSION, grammarForNode("node.cinder_vault"));
+    const { sim, world, playerEntity } = createCombatSim(1, { area: "map", boss: true, monsters: false, layout });
+    const boss = world.query("boss")[0]!;
+    const b = world.get<BossC>(boss, "boss")!;
+    const wedged = { x: fp(-1.359), y: fp(-1.657) };
+    const r = world.get<MonsterC>(boss, "monster")!.bodyRadius;
+    // The premise: the layout still puts the spawn where the freeze was seen, and
+    // the straight line home is blocked, so only the nav can get it there.
+    expect({ x: b.spawnX, y: b.spawnY }).toEqual({ x: fp(4.25), y: fp(-3.75) });
+    expect(hasLineOfSight(gridCollision(layout.grid), wedged.x, wedged.y, b.spawnX, b.spawnY, r)).toBe(false);
+
+    world.set<Position>(boss, "position", wedged);
+    wake(world, boss);
+    world.set<Position>(playerEntity, "position", { x: fp(-14.578), y: fp(-0.208) });
+    for (let i = 0; i < 900; i++) sim.step();
+    expect(world.get<MonsterC>(boss, "monster")!.state).toBe("idle");
+    expect(world.get<Position>(boss, "position")).toEqual({ x: b.spawnX, y: b.spawnY });
   });
 });

@@ -400,11 +400,19 @@ function gridNav(
       const cx = toCol(fromX);
       const cy = toRow(fromY);
       if (cx < 0 || cy < 0 || cx >= cols || cy >= rows) return null;
-      const dist = fieldFor(bodyRadius, toCol(toX), toRow(toY));
+      let dist = fieldFor(bodyRadius, toCol(toX), toRow(toY));
 
       // Strictly downhill: equal-or-worse means arrived or cut off, and a null
       // there hands the caller back to its straight step instead of a shuffle.
-      const first = downhill(dist, cx, cy);
+      let first = downhill(dist, cx, cy);
+      // A wide body can slide through a gap whose cell CENTRES are too tight for it,
+      // landing where no cell around it is routed; it takes the half-cell-narrower
+      // lattice until it is back on its own, or it freezes behind a pillar.
+      const half = Math.trunc(cs / 2);
+      if (first === null && dist[cy * cols + cx] === UNREACHABLE && bodyRadius > half) {
+        dist = fieldFor(bodyRadius - half, toCol(toX), toRow(toY));
+        first = downhill(dist, cx, cy);
+      }
       if (first === null) return null;
 
       /**
