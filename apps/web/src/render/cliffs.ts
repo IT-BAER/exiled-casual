@@ -246,11 +246,14 @@ export function cliffVertexData(field: CliffField): VertexData | null {
 
 /** Rock under this height never fades, so his feet keep their ground contact. */
 const FADE_FOOT = 0.6;
-/** Radius of the clear column around the camera-to-player line, and its soft edge. */
-const FADE_RADIUS = 1.3;
-const FADE_FEATHER = 1.1;
-/** A faded wall keeps this much of itself: the stipple still says rock. */
-const FADE_KEEP = 0.12;
+/** Radius of the clear column around the camera-to-player line, and its soft edge.
+ *  About his own width: at 1.3 + 1.1 the hole was wider than a pack and read as a
+ *  window cut in the map rather than as seeing him through the rock. */
+const FADE_RADIUS = 0.6;
+const FADE_FEATHER = 0.7;
+/** A faded wall keeps this much of itself: enough stipple that it is still rock
+ *  in front of him, not a gap he is standing in. */
+const FADE_KEEP = 0.4;
 /** Where the line is aimed: his chest, not his feet. */
 const FOCUS_Y = 1;
 /** Height the floor plate climbs up the scree before the rock takes over. */
