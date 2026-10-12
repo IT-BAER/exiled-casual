@@ -428,6 +428,11 @@ export function scatterWeed(cells: readonly RockCell[]): RockPlacement[] {
   return [...scatter(cells, WEED_CREST), ...scatter(cells, WEED_FOOT)];
 }
 
+/** Scrub at the foot of a cliff, spilling onto the ground: `scatterWeed` without the crest mat. */
+export function scatterFootWeed(cells: readonly RockCell[]): RockPlacement[] {
+  return scatter(cells, WEED_FOOT);
+}
+
 /**
  * Scrub at the foot of the LEDGE, and only at its foot.
  *

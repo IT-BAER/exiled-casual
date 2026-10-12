@@ -35,6 +35,7 @@ import {
   scatterRampart,
   scatterRubble,
   scatterWeed,
+  scatterFootWeed,
   DUNE_MESH_PREFIX,
   DUNE_RIM_MESH_PREFIX,
   FLORA_MESH_PREFIX,
@@ -43,7 +44,7 @@ import {
   type RockCell,
   type RockPlacement,
 } from "./rocks";
-import { attachProp } from "./props";
+import { attachProp, type PropKind } from "./props";
 import { standGroundBlob } from "./meshes";
 import { setFireSpots, type FireSpot } from "./lights";
 import { CONTAINER_CLEAR, type BrazierSpot, type WalkableGrid } from "@exiled/mapgen";
@@ -133,6 +134,9 @@ const ROCK_ALBEDO = 0.18;
 /** The same number for a coast — see `wallMaterial` for why it is higher. */
 const SEA_ROCK_ALBEDO = 0.22;
 
+/** Tilesets lit by open daylight, whose rock takes the coast's warm material. */
+const WARM_TILESETS: ReadonlySet<string> = new Set(["tileset.desert"]);
+
 /** Weathered stone. Lower than the ground's 0.92 on purpose: a rock face is
  *  smoother than loose dirt, and the small sheen difference is what separates
  *  the two materials now that both are lit by the same physical model. */
@@ -170,6 +174,9 @@ export function tilesetDir(tilesetId: string): string {
  * exists at all.
  */
 function wallMaterial(scene: Scene, tilesetId: string, sea = false): PBRMaterial {
+  // The desert is daylight on warm stone too: its plate is sandstone, and the
+  // cold bias turned it to grey slate against the sand.
+  sea ||= WARM_TILESETS.has(tilesetId);
   const name = `${WALL_MAT_NAME}-${tilesetId}${sea ? "-sea" : ""}`;
   const existing = scene.getMaterialByName(name) as PBRMaterial | null;
   if (existing) return existing;
@@ -459,6 +466,134 @@ function dressBeach(scene: Scene, grid: WalkableGrid, keepClear: readonly { x: n
   place("bones", BONES_COUNT, BONES_BAND);
 }
 
+/** Prefix for a non-coast biome's ground dressing, cleared with the beach's. */
+const GROUND_PROP_PREFIX = "ground-prop-";
+
+/** One kind of ground dressing: how many, its footprint radius in world units, and
+ *  whether it stands tall enough to hide the player walking behind it. */
+interface GroundKind { kind: PropKind; count: number; radius: number; tall?: boolean; cluster?: number }
+
+/**
+ * What dresses each tileset's open ground. All of it stands at the foot of the
+ * rock, never mid-route, since the sim does not collide against any of it. The
+ * desert is PoE2's: dead trees, beast bones, broken sandstone and pottery.
+ */
+const GROUND_SETS: Readonly<Record<string, readonly GroundKind[]>> = {
+  "tileset.desert": [
+    { kind: "deadTree", count: 6, radius: 1.0, tall: true },
+    { kind: "ruinWall", count: 4, radius: 1.5, tall: true },
+    { kind: "ribcage", count: 3, radius: 1.25, tall: true },
+    { kind: "pot", count: 6, radius: 0.25, cluster: 3 },
+    { kind: "skull", count: 10, radius: 0.36 },
+    { kind: "bones", count: 10, radius: 0.4 },
+  ],
+};
+
+/** Tall props keep this far apart, everything else GROUND_GAP: a scatter, not a pile. */
+const TALL_GAP = 7;
+const GROUND_GAP = 2.5;
+
+export interface GroundPlacement { kind: PropKind; x: number; z: number; yaw: number; scale: number }
+
+/**
+ * Where a tileset's ground dressing stands. Deterministic and RNG-free like
+ * `dressBeach`: a hash of the index picks a floor cell beside the rock.
+ *
+ * A tall prop only stands where rock lies behind it on screen. The camera looks
+ * toward world (-x, +z) (CAMERA_ALPHA), so with wall a unit that way nobody can
+ * walk behind it and be hidden.
+ */
+export function groundPlacements(
+  grid: WalkableGrid,
+  tilesetId: string,
+  keepClear: readonly { x: number; y: number }[],
+): GroundPlacement[] {
+  const set = GROUND_SETS[tilesetId];
+  if (!set || grid.shore) return [];
+  const { cols, rows, cellSize, originX, originY, cells } = grid;
+  const rnd = (i: number, salt: number): number => {
+    const x = Math.sin(i * 127.1 + salt * 311.7) * 43758.5453;
+    return x - Math.floor(x);
+  };
+  const isFloor = (cx: number, cy: number): boolean =>
+    cx >= 0 && cy >= 0 && cx < cols && cy < rows && cells[cy * cols + cx] === 1;
+  const floorAt = (wx: number, wz: number): boolean =>
+    isFloor(Math.round((wx - originX) / cellSize), Math.round((wz - originY) / cellSize));
+  const nearRock = (wx: number, wz: number): boolean =>
+    [-cellSize, 0, cellSize].some((dx) => [-cellSize, 0, cellSize].some((dz) => !floorAt(wx + dx, wz + dz)));
+
+  // Floor cells with rock in their 8-neighbourhood, and which way the rock lies.
+  const foot: { x: number; z: number; nx: number; nz: number }[] = [];
+  for (let cy = 1; cy < rows - 1; cy++)
+    for (let cx = 1; cx < cols - 1; cx++) {
+      if (!isFloor(cx, cy)) continue;
+      let nx = 0, nz = 0;
+      for (let dy = -1; dy <= 1; dy++)
+        for (let dx = -1; dx <= 1; dx++)
+          if ((dx || dy) && !isFloor(cx + dx, cy + dy)) { nx += dx; nz += dy; }
+      if (nx === 0 && nz === 0) continue;
+      const len = Math.hypot(nx, nz);
+      foot.push({ x: originX + cx * cellSize, z: originY + cy * cellSize, nx: nx / len, nz: nz / len });
+    }
+  if (foot.length === 0) return [];
+
+  const up = Math.SQRT1_2;
+  const out: GroundPlacement[] = [];
+  const tallKind = new Set(set.filter((g) => g.tall).map((g) => g.kind));
+  const fits = (g: GroundKind, x: number, z: number): boolean =>
+    floorAt(x, z)
+    && keepClear.every((k) => Math.hypot(x - k.x, z - k.y) > CONTAINER_CLEAR + Math.max(0.5, g.radius))
+    && out.every((p) => Math.hypot(x - p.x, z - p.z) > (g.tall || tallKind.has(p.kind) ? TALL_GAP : GROUND_GAP));
+  set.forEach((g, k) => {
+    let placed = 0;
+    for (let i = 0; placed < g.count && i < g.count * 40; i++) {
+      const c = foot[Math.floor(rnd(i, 31 + k * 7) * foot.length)]!;
+      if (g.tall && floorAt(c.x - up, c.z + up)) continue;
+      if (!fits(g, c.x, c.z)) continue;
+      // A tall prop turns its face to the rock it stands at; the small ones lie
+      // where they fell, at any angle.
+      const yaw = g.tall ? Math.atan2(-c.nx, -c.nz) : rnd(i, 41 + k) * Math.PI * 2;
+      out.push({ kind: g.kind, x: c.x, z: c.z, yaw, scale: 0.85 + rnd(i, 51 + k) * 0.3 });
+      placed++;
+      // A cluster's others stand within a stride of the first, unspaced from it.
+      for (let j = 1; j < (g.cluster ?? 1); j++) {
+        const a = rnd(i * 5 + j, 61 + k) * Math.PI * 2;
+        const x = c.x + Math.cos(a) * 0.6, z = c.z + Math.sin(a) * 0.6;
+        if (!floorAt(x, z) || !nearRock(x, z)) continue;
+        out.push({ kind: g.kind, x, z, yaw: rnd(i * 5 + j, 71 + k) * Math.PI * 2, scale: 0.75 + rnd(i * 5 + j, 81 + k) * 0.35 });
+      }
+    }
+  });
+  return out;
+}
+
+/** Stand `groundPlacements` up. One shared instance per prop, like the beach's. */
+function dressGround(
+  scene: Scene,
+  grid: WalkableGrid,
+  tilesetId: string,
+  keepClear: readonly { x: number; y: number }[],
+): void {
+  const ps = groundPlacements(grid, tilesetId, keepClear);
+  for (let i = 0; i < ps.length; i++) {
+    const p = ps[i]!;
+    const root = new Mesh(`${GROUND_PROP_PREFIX}${p.kind}-${i}`, scene);
+    root.position.set(p.x, 0, p.z);
+    root.rotation.y = p.yaw;
+    root.scaling.setAll(p.scale);
+    root.isPickable = false;
+    if (attachProp(scene, root, p.kind, true) === null) {
+      root.dispose(false, false);
+      return; // no props asset: headless or a failed fetch, so drop the lot
+    }
+    for (const mesh of root.getChildMeshes()) {
+      mesh.isPickable = false;
+      mesh.receiveShadows = true;
+    }
+    freezeTree(root);
+  }
+}
+
 /**
  * Stand a brazier against a wall every so often, and tell the light pool where
  * they are.
@@ -521,6 +656,7 @@ export function buildLevel(
   // (no grid), which left a map's braziers standing there for good.
   for (const node of [...scene.meshes, ...scene.transformNodes]) {
     if (node.name.startsWith(BEACH_PROP_PREFIX)
+      || node.name.startsWith(GROUND_PROP_PREFIX)
       || node.name.startsWith(AREA_BRAZIER_PREFIX)) node.dispose(false, false);
   }
   clearRocks();
@@ -700,6 +836,8 @@ export function buildLevel(
   // sweep's knowledge of where the floor is, and before the merge for no reason
   // other than keeping every "stand something up" call in one place.
   dressBeach(scene, grid, keepClear);
+  // Braziers stand at the rock foot too, so the ground dressing keeps off them.
+  dressGround(scene, grid, tilesetId, [...keepClear, ...fires.map((f) => ({ x: f.x, y: f.z }))]);
 
   if (wallCells === 0) return { walls: null, wallCells: 0 };
 
@@ -797,6 +935,8 @@ export function buildLevel(
       buildRocks(scene, clear(scatterRubble(rockCells, cellSize)), material);
       buildRocks(scene, clear(scatterDebris(floorCells)), material, DEBRIS_MESH_PREFIX);
       buildRocks(scene, scatterRampart(edgeCells), material, RAMPART_MESH_PREFIX);
+      // Dry scrub where a dressed biome's rock meets the ground, as on the coast.
+      if (GROUND_SETS[tilesetId]) buildRocks(scene, clear(scatterFootWeed(rockCells)), weedMaterial(scene), WEED_MESH_PREFIX);
     }
   }
   if (merged) {

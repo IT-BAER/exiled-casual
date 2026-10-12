@@ -4,9 +4,9 @@ import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { NullEngine, Color3, Mesh, VertexBuffer } from "@babylonjs/core";
 import { createScene } from "./engine";
-import { buildLevel, applyBiomeTint, applyTilesetFloor, tilesetDir } from "./level";
-import { brazierSpots } from "@exiled/mapgen";
-import { MAP_BASES, BIOMES } from "@exiled/content-runtime";
+import { buildLevel, applyBiomeTint, applyTilesetFloor, tilesetDir, groundPlacements } from "./level";
+import { brazierSpots, generateArea } from "@exiled/mapgen";
+import { MAP_BASES, BIOMES, CONTENT_VERSION } from "@exiled/content-runtime";
 import type { WalkableGrid } from "@exiled/mapgen";
 
 let engine: InstanceType<typeof NullEngine>;
@@ -169,6 +169,50 @@ describe("buildLevel", () => {
  * else. The data and the files on disk must agree. Rebuild with
  * `python tools/build_tileset_textures.py`.
  */
+describe("groundPlacements", () => {
+  const { grid, objectiveAnchors } = generateArea(12345, CONTENT_VERSION, "open-field");
+  const rewards = objectiveAnchors.filter((a) => a.id.startsWith("reward."));
+  const desert = groundPlacements(grid, "tileset.desert", rewards);
+  const isWall = (wx: number, wz: number) => {
+    const cx = Math.round((wx - grid.originX) / grid.cellSize);
+    const cy = Math.round((wz - grid.originY) / grid.cellSize);
+    return cx < 0 || cy < 0 || cx >= grid.cols || cy >= grid.rows || grid.cells[cy * grid.cols + cx] !== 1;
+  };
+
+  it("dresses the desert's open ground, and no biome without a set", () => {
+    expect(desert.length).toBeGreaterThan(30);
+    for (const kind of ["deadTree", "ribcage", "ruinWall", "skull", "pot", "bones"]) {
+      expect(desert.some((p) => p.kind === kind), kind).toBe(true);
+    }
+    expect(groundPlacements(grid, "tileset.vaal_stone", rewards)).toEqual([]);
+  });
+
+  it("stands everything on floor, at the foot of the rock", () => {
+    for (const p of desert) {
+      expect(isWall(p.x, p.z), `${p.kind} at ${p.x},${p.z}`).toBe(false);
+      const c = grid.cellSize;
+      const near = [-c, 0, c].some((dx) => [-c, 0, c].some((dz) => isWall(p.x + dx, p.z + dz)));
+      expect(near, `${p.kind} at ${p.x},${p.z}`).toBe(true);
+    }
+  });
+
+  it("stands a tall prop only with rock behind it on screen, so nobody walks behind one", () => {
+    // The camera looks toward world (-x, +z): screen-up, away from the viewer.
+    const up = Math.SQRT1_2;
+    for (const p of desert.filter((q) => ["deadTree", "ribcage", "ruinWall"].includes(q.kind))) {
+      expect(isWall(p.x - up, p.z + up), `${p.kind} at ${p.x},${p.z}`).toBe(true);
+    }
+  });
+
+  it("keeps clear of every container", () => {
+    for (const p of desert) for (const r of rewards) expect(Math.hypot(p.x - r.x, p.z - r.y)).toBeGreaterThan(1.1);
+  });
+
+  it("places the same props for the same layout", () => {
+    expect(groundPlacements(grid, "tileset.desert", rewards)).toEqual(desert);
+  });
+});
+
 describe("biome tilesets", () => {
   const publicDir = fileURLToPath(new URL("../../public", import.meta.url));
 
