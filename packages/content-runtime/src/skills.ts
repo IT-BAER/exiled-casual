@@ -87,9 +87,9 @@ const SKILL_DEFS: SkillDef[] = [
   },
   /*
    * The other two classes' Ember Bolt: each class's first mana skill, at Ember
-   * Bolt's cost and beat. Heavy Strike hits harder and wider because a swing
-   * also pays the walk in: at 40 in a 100 degree arc the Ironsworn cleared
-   * 1.26x slower than the casters (playtest.test.ts). Heavy Strike is PoE1's;
+   * Bolt's cost and beat. Heavy Strike hits as hard as Ember Bolt because its
+   * wedge takes the whole pack: at 56 the Ironsworn cleared a first map 1.44x
+   * faster than the casters (playtest.test.ts). Heavy Strike is PoE1's;
    * Piercing Shot is a name of our own.
    */
   {
@@ -114,7 +114,7 @@ const SKILL_DEFS: SkillDef[] = [
         type: "meleeStrike",
         reachFixed: fp(1.8),
         arcDegrees: 140,
-        damage: { type: "physical", amountFixed: fp(56) },
+        damage: { type: "physical", amountFixed: fp(36) },
       },
     ],
   },
@@ -226,8 +226,8 @@ const SKILL_DEFS: SkillDef[] = [
    * 0.5s repeat gate (15 ticks) on top of the 7-tick cast means ~1.4 attacks/sec.
    * The ranged two hit for under half of Ember Bolt's 36, so a default attack is a
    * floor to fall back to and never the better choice. Strike swings slower (21
-   * ticks) because a swing hits the whole wedge: the playtest bot has the three
-   * classes clearing a first map within 10% of each other at these numbers.
+   * ticks) and lighter (10) because a swing hits the whole wedge: the playtest bot
+   * has the three classes clearing a first map within 12% of each other at these numbers.
    */
   {
     id: "skill.strike.v1",
@@ -255,7 +255,7 @@ const SKILL_DEFS: SkillDef[] = [
         // Wide enough that two bodies in a doorway both take it, narrow enough
         // that turning around is a real cost.
         arcDegrees: 120,
-        damage: { type: "physical", amountFixed: fp(14) },
+        damage: { type: "physical", amountFixed: fp(10) },
       },
     ],
   },

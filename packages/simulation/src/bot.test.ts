@@ -40,6 +40,14 @@ describe("Bot", () => {
     expect(skillOf(setupAs("class.ironsworn", [0, 1.2]).bot.decide(false))).toBe("skill.heavy_strike.v1");
   });
 
+  it("an Ironsworn swings at a wide body by its surface, as the strike resolves reach", () => {
+    // The Cinder Warden (radius 1.4) holds at its own melee range of 2.2.
+    const { g, bot } = setupAs("class.ironsworn", [0, 2.2]);
+    const e = g.world.query("monster").at(-1)!;
+    g.world.set<MonsterC>(e, "monster", { ...g.world.get<MonsterC>(e, "monster")!, bodyRadius: fp(1.4) });
+    expect(skillOf(bot.decide(false))).toBe("skill.heavy_strike.v1");
+  });
+
   it("an Ironsworn waits at the edge of a boss's fire rather than walking in to swing", () => {
     const { g, me, bot } = setupAs("class.ironsworn", [0, 4]);
     const fire = g.world.create();

@@ -36,6 +36,8 @@ const BLINK = "skill.blink.v1";
  * bolt every 0.4, so a line that grazes a wall corner at 0.4 still eats the bolt.
  */
 const AIM_CLEARANCE = fp(0.55);
+/** The client's REACH_MARGIN (input/bindings.ts): a tick of the target's walk plus the wind-up. */
+const REACH_MARGIN = fp(0.2);
 /**
  * What the client camera shows around the player, in screen axes (u right, v up;
  * the camera looks down world +x+y rotated 45 degrees). Measured by ground-picking
@@ -158,7 +160,7 @@ export class Bot {
       } else if (!skill && !(this.melee && (this.hostileFireAt(target.p)
         // Already in a swing's reach with every swing cooling down: walking on
         // takes him to the target's centre, where the swing has nothing to aim at.
-        || dist(p, target.p) <= this.shortestReach()))) {
+        || dist(p, target.p) <= this.shortestReach(target.e)))) {
         const to = this.route(p, target.p);
         if (to) out.push(cmd(this.intoFire(p, to) ? { type: "stop" } : { type: "moveTo", data: to }));
       } else {
@@ -282,15 +284,15 @@ export class Bot {
     return dist(p, at) < this.range() && Math.abs(u) <= SCREEN.u && v <= SCREEN.up && -v <= SCREEN.down;
   }
 
-  /** How close a swing needs to stand: reach counts to the target's surface, so a body's width is spare. */
-  private reach(id: string): number {
+  /** How close a swing needs to stand: the client's `inReach`, to the target's surface less its margin. */
+  private reach(id: string, target: Entity): number {
     const s = SKILLS.get(id)!.effects.find((e) => e.type === "meleeStrike");
-    return s && s.type === "meleeStrike" ? s.reachFixed + fp(0.3) : Infinity;
+    return s && s.type === "meleeStrike" ? s.reachFixed + bodyRadiusOf(this.g.world, target) - REACH_MARGIN : Infinity;
   }
 
   /** The shortest reach of any swing on the bar: inside it, every swing he has can land. */
-  private shortestReach(): number {
-    return Math.min(...[this.attack, this.signature, this.area].filter((id) => this.onBar(id)).map((id) => this.reach(id)));
+  private shortestReach(target: Entity): number {
+    return Math.min(...[this.attack, this.signature, this.area].filter((id) => this.onBar(id)).map((id) => this.reach(id, target)));
   }
 
   /** Nearest awake monster with a clear line, re-chosen only at human speed. */
@@ -359,10 +361,10 @@ export class Bot {
       return a.team === 0 && dist(t.p, w.get<Position>(e, "position")!) < a.radius;
     });
     const d = dist(p, t.p);
-    if ((packed || big) && !burning && this.ready(this.area) && d <= this.reach(this.area)) return this.area;
-    if (this.ready(this.signature) && d <= this.reach(this.signature)) return this.signature;
+    if ((packed || big) && !burning && this.ready(this.area) && d <= this.reach(this.area, t.e)) return this.area;
+    if (this.ready(this.signature) && d <= this.reach(this.signature, t.e)) return this.signature;
     // Out of reach of a swing: undefined walks him in.
-    return this.onBar(this.attack) && d <= this.reach(this.attack) ? this.attack : undefined;
+    return this.onBar(this.attack) && d <= this.reach(this.attack, t.e) ? this.attack : undefined;
   }
 
   private loot(): { e: Entity; p: Position }[] {
