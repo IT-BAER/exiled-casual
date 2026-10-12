@@ -426,6 +426,243 @@ function clearStubs(cells: Uint8Array, bossTile: { tx: number; ty: number }): vo
   }
 }
 
+/** Radius a concave corner of wall is rounded by, in cells: chosen by noise per place. */
+const ROUND_MIN = 2;
+const ROUND_MAX = 4;
+/** Radius of a rock outcrop standing off a long face, in cells. */
+const OUTCROP_MIN = 2;
+const OUTCROP_MAX = 4;
+/** Floor an outcrop must leave past its tip: two bodies abreast, in cells. */
+const OUTCROP_ROOM = 4;
+/** Face length per outcrop slot, and the chance a slot gets one. */
+const OUTCROP_SPACING = 8;
+const OUTCROP_CHANCE = 0.7;
+
+/**
+ * Walled maps must not show the ruler their chunks were drawn with. Their walls
+ * are too thin to bite into (a room wall is 4-7 cells, and the partition IS the
+ * route), so rock is added instead: every concave corner of wall closed by a
+ * radius the noise picks, and outcrops standing off long faces. Nothing goes
+ * near a marker or into the boss block, and a feature that leaves a body fewer
+ * markers to reach, or splits the floor, is found and taken back.
+ */
+export function softenWalls(
+  cells: Uint8Array, markers: readonly Marker[], bossTile: { tx: number; ty: number }, rng: RandomStream,
+): void {
+  const N = ASSEMBLED_CELLS;
+  const seed = rng.nextU32();
+  const before = cells.slice();
+  const floor = (x: number, y: number): boolean => x >= 0 && y >= 0 && x < N && y < N && before[y * N + x] === 1;
+  const nearBoss = (x: number, y: number): boolean => {
+    const bx = x - bossTile.tx * TILE_CELLS, by = y - bossTile.ty * TILE_CELLS;
+    return bx >= -2 && bx < 2 * TILE_CELLS + 2 && by >= -2 && by < 2 * TILE_CELLS + 2;
+  };
+  const nearMarker = (i: number): boolean => {
+    const x = i % N, y = (i - x) / N;
+    return markers.some((m) => Math.abs(m.cx - x) <= MARKER_CLEAR && Math.abs(m.cy - y) <= MARKER_CLEAR);
+  };
+  const chance = (p: number): boolean => rng.nextU32() / 0x1_0000_0000 < p;
+  // What is planned so far: an outcrop checks its room against this, so two never
+  // face each other across one corridor.
+  const plan = cells.slice();
+  const features: number[][] = [];
+  const add = (cut: number[]): void => {
+    const kept = cut.filter((i) => plan[i] === 1 && !nearMarker(i));
+    if (kept.length === 0) return;
+    for (const i of kept) plan[i] = 0;
+    features.push(kept);
+  };
+
+  // Corners: the wall closed by a disc (dilate, then erode). Each connected
+  // patch it fills is one feature, so a narrows it seals goes back on its own.
+  const toWall = seedDistance2((i) => before[i] !== 1, true);
+  const closedBy = (r: number): Uint8Array => {
+    const r2 = r * r;
+    const toOpen = seedDistance2((i) => toWall[i]! > r2, false);
+    const out = new Uint8Array(N * N);
+    for (let i = 0; i < N * N; i++) out[i] = toOpen[i]! > r2 ? 1 : 0;
+    return out;
+  };
+  const closed: Uint8Array[] = [];
+  for (let r = ROUND_MIN; r <= ROUND_MAX; r++) closed[r] = closedBy(r);
+  const fill = new Uint8Array(N * N);
+  for (let y = 1; y < N - 1; y++) for (let x = 1; x < N - 1; x++) {
+    const i = y * N + x;
+    if (before[i] !== 1 || nearBoss(x, y)) continue;
+    const n = valueNoise(x, y, FRAY_SCALE, seed);
+    const r = Math.min(ROUND_MAX, ROUND_MIN + Math.floor(n * (ROUND_MAX - ROUND_MIN + 1)));
+    if (closed[r]![i]) fill[i] = 1;
+  }
+  for (let s = 0; s < N * N; s++) {
+    if (!fill[s]) continue;
+    const patch = [s];
+    fill[s] = 0;
+    for (let h = 0; h < patch.length; h++) {
+      const i = patch[h]!, x = i % N, y = (i - x) / N;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        const j = (y + dy) * N + x + dx;
+        if (fill[j]) { fill[j] = 0; patch.push(j); }
+      }
+    }
+    add(patch);
+  }
+
+  // Outcrops: a half disc off a straight run of face, centred well inside it.
+  for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]] as const) {
+    const alongX = dx === 0;
+    for (let a = 1; a < N - 1; a++) {
+      const at = (t: number): [number, number] => (alongX ? [t, a] : [a, t]);
+      const face = (t: number): boolean => {
+        const [x, y] = at(t);
+        return !floor(x, y) && floor(x + dx, y + dy);
+      };
+      let b = 0;
+      while (b < N) {
+        if (!face(b)) { b++; continue; }
+        const start = b;
+        while (b < N && face(b)) b++;
+        for (let slot = start; slot + OUTCROP_SPACING <= b; slot += OUTCROP_SPACING) {
+          if (!chance(OUTCROP_CHANCE)) continue;
+          const r = rng.nextInt(OUTCROP_MIN, OUTCROP_MAX);
+          // Off the run's ends, which are door jambs and corners.
+          const lo = Math.max(slot, start + r + 2), hi = Math.min(slot + OUTCROP_SPACING - 1, b - r - 3);
+          if (lo > hi) continue;
+          const c = rng.nextInt(lo, hi);
+          const [cx, cy] = at(c);
+          if (nearBoss(cx, cy)) continue;
+          let room = true;
+          for (let u = -r; u <= r && room; u++) {
+            for (let v = 1; v <= r + OUTCROP_ROOM && room; v++) {
+              const [x, y] = at(c + u);
+              const fx = x + dx * v, fy = y + dy * v;
+              room = fx >= 0 && fy >= 0 && fx < N && fy < N && plan[fy * N + fx] === 1;
+            }
+          }
+          if (!room) continue;
+          const cut: number[] = [];
+          for (let u = -r; u <= r; u++) for (let v = 1; v <= r; v++) {
+            if (u * u + (v - 0.5) * (v - 0.5) > r * r) continue;
+            const [x, y] = at(c + u);
+            cut.push((y + dy * v) * N + x + dx * v);
+          }
+          add(cut);
+        }
+      }
+    }
+  }
+
+  // Keep every feature that leaves the body's reach and the floor whole: all at
+  // once when they do, else halves until the ones that do not are isolated.
+  const score = (): number => bodyReach(cells, markers) * 4096 - floorComponents(cells);
+  const want = score();
+  const attempt = (group: readonly number[][]): void => {
+    for (const f of group) for (const i of f) cells[i] = 0;
+    if (score() === want) return;
+    for (const f of group) for (const i of f) cells[i] = 1;
+    if (group.length === 1) return;
+    attempt(group.slice(0, group.length >> 1));
+    attempt(group.slice(group.length >> 1));
+  };
+  attempt(features);
+}
+
+/** Squared Euclidean distance from every cell to the nearest seed (Felzenszwalb);
+ *  with `edge`, everything off the grid is a seed too. */
+function seedDistance2(seed: (i: number) => boolean, edge: boolean): Float64Array {
+  const N = ASSEMBLED_CELLS, M = N + 2, FAR = 1e20;
+  const g = new Float64Array(M * M);
+  for (let y = 0; y < M; y++) for (let x = 0; x < M; x++) {
+    const inside = x > 0 && y > 0 && x <= N && y <= N;
+    g[y * M + x] = (inside ? seed((y - 1) * N + x - 1) : edge) ? 0 : FAR;
+  }
+  const f = new Float64Array(M), d = new Float64Array(M), z = new Float64Array(M + 1), v = new Int32Array(M);
+  const pass = (at: (line: number, q: number) => number): void => {
+    for (let line = 0; line < M; line++) {
+      for (let q = 0; q < M; q++) f[q] = g[at(line, q)]!;
+      let k = 0;
+      v[0] = 0; z[0] = -Infinity; z[1] = Infinity;
+      for (let q = 1; q < M; q++) {
+        let s = (f[q]! + q * q - f[v[k]!]! - v[k]! * v[k]!) / (2 * (q - v[k]!));
+        while (s <= z[k]!) { k--; s = (f[q]! + q * q - f[v[k]!]! - v[k]! * v[k]!) / (2 * (q - v[k]!)); }
+        k++; v[k] = q; z[k] = s; z[k + 1] = Infinity;
+      }
+      k = 0;
+      for (let q = 0; q < M; q++) {
+        while (z[k + 1]! < q) k++;
+        d[q] = (q - v[k]!) * (q - v[k]!) + f[v[k]!]!;
+      }
+      for (let q = 0; q < M; q++) g[at(line, q)] = d[q]!;
+    }
+  };
+  pass((y, x) => y * M + x);
+  pass((x, y) => y * M + x);
+  const out = new Float64Array(N * N);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) out[y * N + x] = g[(y + 1) * M + x + 1]!;
+  return out;
+}
+
+/** How many markers a 3x3 body standing next to them can reach from the boss's. */
+function bodyReach(cells: Uint8Array, markers: readonly Marker[]): number {
+  const N = ASSEMBLED_CELLS;
+  // fits[i]: a 3x3 body centred on cell i stands on floor only.
+  const rows = new Uint8Array(N * N), fit = new Uint8Array(N * N);
+  for (let y = 0; y < N; y++) for (let x = 1; x < N - 1; x++) {
+    const i = y * N + x;
+    rows[i] = cells[i - 1]! & cells[i]! & cells[i + 1]! & 1;
+  }
+  for (let y = 1; y < N - 1; y++) for (let x = 1; x < N - 1; x++) {
+    const i = y * N + x;
+    fit[i] = rows[i - N]! & rows[i]! & rows[i + N]!;
+  }
+  const boss = markers.find((m) => m.ch === "b");
+  if (!boss) return 0;
+  const seen = new Uint8Array(N * N);
+  const stack = new Int32Array(N * N);
+  let top = 0;
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+    const x = boss.cx + dx, y = boss.cy + dy, i = y * N + x;
+    if (x >= 0 && y >= 0 && x < N && y < N && fit[i]) { seen[i] = 1; stack[top++] = i; }
+  }
+  // A fitting cell is never on the border, so its 4 neighbours are on the grid.
+  while (top) {
+    const i = stack[--top]!;
+    if (fit[i + 1] && !seen[i + 1]) { seen[i + 1] = 1; stack[top++] = i + 1; }
+    if (fit[i - 1] && !seen[i - 1]) { seen[i - 1] = 1; stack[top++] = i - 1; }
+    if (fit[i + N] && !seen[i + N]) { seen[i + N] = 1; stack[top++] = i + N; }
+    if (fit[i - N] && !seen[i - N]) { seen[i - N] = 1; stack[top++] = i - N; }
+  }
+  return markers.filter((m) => {
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const nx = m.cx + dx, ny = m.cy + dy;
+      if (nx >= 0 && ny >= 0 && nx < N && ny < N && seen[ny * N + nx]) return true;
+    }
+    return false;
+  }).length;
+}
+
+/** Number of 4-connected floor regions. */
+function floorComponents(cells: Uint8Array): number {
+  const N = ASSEMBLED_CELLS;
+  const seen = new Uint8Array(N * N);
+  const stack = new Int32Array(N * N);
+  let n = 0;
+  for (let s = 0; s < N * N; s++) {
+    if (cells[s] !== 1 || seen[s]) continue;
+    n++;
+    seen[s] = 1;
+    let top = 0;
+    stack[top++] = s;
+    while (top) {
+      const i = stack[--top]!, x = i % N;
+      if (x > 0 && cells[i - 1] === 1 && !seen[i - 1]) { seen[i - 1] = 1; stack[top++] = i - 1; }
+      if (x < N - 1 && cells[i + 1] === 1 && !seen[i + 1]) { seen[i + 1] = 1; stack[top++] = i + 1; }
+      if (i >= N && cells[i - N] === 1 && !seen[i - N]) { seen[i - N] = 1; stack[top++] = i - N; }
+      if (i < N * N - N && cells[i + N] === 1 && !seen[i + N]) { seen[i + N] = 1; stack[top++] = i + N; }
+    }
+  }
+  return n;
+}
+
 /** A routed doorway is widened to cells DOOR_LO..DOOR_HI of its edge: 8 cells,
  *  4 units, still centred, so a rotated or mirrored map widens the same way. */
 const DOOR_LO = 4;
@@ -634,6 +871,7 @@ export function assembleArea(seed: number, contentVersion: string, grammar: Gram
     if (grammar.openSeams) openSeams(cells, skeleton.bossTile);
     clearStubs(cells, skeleton.bossTile);
   }
+  if (grammar.softEdges) softenWalls(cells, markers, skeleton.bossTile, createStream(seed, `${contentVersion}.layout.soften`));
   if (grammar.organicRim) {
     dressOpenGround(cells, markers, skeleton.bossTile, createStream(seed, `${contentVersion}.layout.blobs`));
   }

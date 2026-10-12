@@ -11,4 +11,5 @@ export const SUNKEN_GRAMMAR: Grammar = {
   branchCount: 8,
   spawnTarget: 26,
   organicRim: true,
+  softEdges: true,
 };

@@ -40,6 +40,9 @@ export interface Grammar {
   /** Fray the open ground's walls into a natural edge and clear the stubs and
    *  square islands the chunks leave in it (`naturalizeEdges`). Open ground only. */
   naturalEdges?: boolean;
+  /** Round room corners and stand rock outcrops off long faces, so walled maps
+   *  lose the chunks' straight lines without cutting a route (`softenWalls`). */
+  softEdges?: boolean;
 }
 
 export type MaskClass = "solid" | "cap" | "straight" | "corner" | "tee" | "cross";
@@ -507,6 +510,7 @@ export const LOOP_GRAMMAR: Grammar = {
   bossChunk: BOSS_HALL,
   branchCount: 7,
   spawnTarget: SPAWN_TARGET,
+  softEdges: true,
 };
 
 // Authoring guard: the canonical masks must be what the borders actually say.

@@ -43,8 +43,9 @@ describe("assembleArea", () => {
   });
 
   it("has no wall facing floor across any tile seam", () => {
+    // The stamp as matched, before softenWalls bites across a seam on purpose.
     for (let seed = 0; seed < 50; seed++) {
-      const { grid, usedFallback } = gen(seed);
+      const { grid, usedFallback } = assembleArea(seed, V, { ...LOOP_GRAMMAR, softEdges: false });
       if (usedFallback) continue;
       const at = (x: number, y: number) => grid.cells[y * grid.cols + x]!;
       for (let tx = 1; tx < AREA_TILES; tx++) {
@@ -293,10 +294,11 @@ describe("assembleArea, strand", () => {
   };
 
   it("opens every routed doorway at least 8 cells wide", () => {
-    // The loop has no rim carve, so every seam contact is a routed door. The
-    // swamp runs the same pass, but its rim floor meets rim floor at any length.
+    // The loop has no rim carve, so every seam contact is a routed door until
+    // softenWalls bites across one. The swamp runs the same pass, but its rim
+    // floor meets rim floor at any length.
     for (let seed = 0; seed < 60; seed++) {
-      const narrow = seamRuns(LOOP_GRAMMAR, seed).runs.filter((r) => r < 8);
+      const narrow = seamRuns({ ...LOOP_GRAMMAR, softEdges: false }, seed).runs.filter((r) => r < 8);
       expect(narrow, `seed ${seed}`).toEqual([]);
     }
   });
@@ -445,4 +447,164 @@ describe("assembleArea, strand", () => {
       expect({ walls, posts }, `seed ${seed}`).toEqual({ walls: 0, posts: 0 });
     }
   });
+});
+
+describe("assembleArea, walled grammars", () => {
+  const WALLED: [string, Grammar][] = [["loop", LOOP_GRAMMAR], ["sunken-ruins", SUNKEN_GRAMMAR]];
+  const hard = (g: Grammar): Grammar => ({ ...g, softEdges: false });
+
+  /** Longest run of wall cells in one row or column all facing floor on the same
+   *  side, outside the boss block (authored, and left so). */
+  const longestFace = (layout: ReturnType<typeof assembleArea>): number => {
+    const { grid: { cells, originX, originY, cellSize }, objectiveAnchors } = layout;
+    const N = ASSEMBLED_CELLS;
+    const boss = objectiveAnchors.find((a) => a.id === "boss")!;
+    const bx = Math.round((boss.x - originX) / cellSize), by = Math.round((boss.y - originY) / cellSize);
+    const nearBoss = (x: number, y: number) => Math.abs(x - bx) <= 2 * TILE_CELLS && Math.abs(y - by) <= 2 * TILE_CELLS;
+    let best = 0;
+    for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]] as const) {
+      const alongX = dx === 0;
+      for (let a = 0; a < N; a++) {
+        let run = 0;
+        for (let b = 0; b < N; b++) {
+          const [x, y] = alongX ? [b, a] : [a, b];
+          const fx = x + dx, fy = y + dy;
+          const facing = fx >= 0 && fy >= 0 && fx < N && fy < N && cells[y * N + x] === 0 &&
+            cells[fy * N + fx] === 1 && !nearBoss(x, y);
+          run = facing ? run + 1 : 0;
+          best = Math.max(best, run);
+        }
+      }
+    }
+    return best;
+  };
+
+  /** Floor 4-components and wall 8-components: a breach or an opened pocket changes one. */
+  const topology = (cells: Uint8Array, N: number): { floor: number; wall: number } => {
+    const count = (value: number, nb: readonly (readonly [number, number])[]): number => {
+      const seen = new Uint8Array(N * N);
+      let n = 0;
+      for (let s = 0; s < N * N; s++) {
+        if (cells[s] !== value || seen[s]) continue;
+        n++;
+        seen[s] = 1;
+        const stack = [s];
+        while (stack.length) {
+          const i = stack.pop()!, x = i % N, y = (i - x) / N;
+          for (const [dx, dy] of nb) {
+            const nx = x + dx, ny = y + dy;
+            if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
+            const j = ny * N + nx;
+            if (cells[j] === value && !seen[j]) { seen[j] = 1; stack.push(j); }
+          }
+        }
+      }
+      return n;
+    };
+    const N4 = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const;
+    const N8 = [...N4, [1, 1], [1, -1], [-1, 1], [-1, -1]] as const;
+    return { floor: count(1, N4), wall: count(0, N8) };
+  };
+
+  /** Cells a 3x3 body can stand on, flooded from the boss marker: the markers it can reach. */
+  const reachableMarkers = (layout: ReturnType<typeof assembleArea>): number => {
+    const { grid: { cells, originX, originY, cellSize }, objectiveAnchors } = layout;
+    const N = ASSEMBLED_CELLS;
+    const cell = (a: { x: number; y: number }) => ({
+      x: Math.round((a.x - originX) / cellSize), y: Math.round((a.y - originY) / cellSize),
+    });
+    const fits = (x: number, y: number) => {
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= N || ny >= N || cells[ny * N + nx] !== 1) return false;
+      }
+      return true;
+    };
+    const seen = new Uint8Array(N * N);
+    const near = (p: { x: number; y: number }) => {
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (fits(p.x + dx, p.y + dy)) return (p.y + dy) * N + p.x + dx;
+      return -1;
+    };
+    const s0 = near(cell(objectiveAnchors.find((a) => a.id === "boss")!));
+    if (s0 < 0) return 0;
+    const stack = [s0];
+    seen[s0] = 1;
+    while (stack.length) {
+      const i = stack.pop()!, x = i % N, y = (i - x) / N;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        const nx = x + dx, ny = y + dy, j = ny * N + nx;
+        if (nx >= 0 && ny >= 0 && nx < N && ny < N && !seen[j] && fits(nx, ny)) { seen[j] = 1; stack.push(j); }
+      }
+    }
+    return objectiveAnchors.filter((a) => {
+      const c = cell(a);
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (seen[(c.y + dy) * N + c.x + dx]) return true;
+      return false;
+    }).length;
+  };
+
+  /** Floor cells in a sharp room corner: wall along both edges for three cells, floor in the square. */
+  const sharpCorners = (cells: Uint8Array, N: number): number => {
+    let n = 0;
+    const floor = (x: number, y: number) => x >= 0 && y >= 0 && x < N && y < N && cells[y * N + x] === 1;
+    for (let y = 1; y < N - 4; y++) for (let x = 1; x < N - 4; x++) {
+      for (const [sx, sy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]] as const) {
+        let ok = true;
+        for (let k = 0; k < 3 && ok; k++) {
+          ok = !floor(x - sx, y + sy * k) && !floor(x + sx * k, y - sy);
+          for (let m = 0; m < 3 && ok; m++) ok = floor(x + sx * k, y + sy * m);
+        }
+        if (ok) n++;
+      }
+    }
+    return n;
+  };
+
+  it("breaks the long straight walls the chunks stamp", () => {
+    for (const [name, grammar] of WALLED) {
+      const before: number[] = [], after: number[] = [];
+      for (let seed = 0; seed < 30; seed++) {
+        const a = assembleArea(seed, V, hard(grammar)), b = assembleArea(seed, V, grammar);
+        if (a.usedFallback || b.usedFallback) continue;
+        before.push(longestFace(a));
+        after.push(longestFace(b));
+      }
+      before.sort((x, y) => x - y);
+      after.sort((x, y) => x - y);
+      const median = (v: number[]) => v[v.length >> 1]!;
+      expect(median(after), `${name}: median ${median(before)} before`).toBeLessThanOrEqual(median(before) * 0.6);
+    }
+  }, 60_000);
+
+  it("never seals off floor or opens a new way through a wall", () => {
+    // Floor regions only: a closed corner may join a pillar to its wall. Loop
+    // only, since the swamp's blobs land differently once its walls move.
+    for (let seed = 0; seed < 30; seed++) {
+      const a = assembleArea(seed, V, hard(LOOP_GRAMMAR)), b = assembleArea(seed, V, LOOP_GRAMMAR);
+      if (a.usedFallback || b.usedFallback) continue;
+      expect(topology(b.grid.cells, ASSEMBLED_CELLS).floor, `seed ${seed}`).toBe(topology(a.grid.cells, ASSEMBLED_CELLS).floor);
+      expect(a.grid.cells.every((v, i) => v === 1 || b.grid.cells[i] === 0), `seed ${seed}: wall removed`).toBe(true);
+    }
+  }, 60_000);
+
+  it("keeps every marker a body could reach within its reach", () => {
+    for (const [name, grammar] of WALLED) {
+      for (let seed = 0; seed < 30; seed++) {
+        const a = assembleArea(seed, V, hard(grammar)), b = assembleArea(seed, V, grammar);
+        if (a.usedFallback || b.usedFallback) continue;
+        expect(reachableMarkers(b), `${name} seed ${seed}`).toBe(reachableMarkers(a));
+      }
+    }
+  }, 60_000);
+
+  it("rounds the rooms' corners", () => {
+    let before = 0, after = 0;
+    for (let seed = 0; seed < 20; seed++) {
+      const a = assembleArea(seed, V, hard(LOOP_GRAMMAR)), b = assembleArea(seed, V, LOOP_GRAMMAR);
+      if (a.usedFallback || b.usedFallback) continue;
+      before += sharpCorners(a.grid.cells, ASSEMBLED_CELLS);
+      after += sharpCorners(b.grid.cells, ASSEMBLED_CELLS);
+    }
+    expect(after, `${before} before`).toBeLessThanOrEqual(before * 0.4);
+  }, 60_000);
 });
