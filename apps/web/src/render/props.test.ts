@@ -91,10 +91,11 @@ describe("props asset", () => {
     // Raised from 1.2MB when the two downloaded chests (stash, lootChest) came
     // in, again for the downloaded barrel and crate, again for the beach set
     // (driftwood, shell), again for the wreck debris (wreckTimber, bones), and
-    // again for the ground drops (two leathers, two scrolls, the alchemy flask).
+    // again for the ground drops (two leathers, two scrolls, the alchemy flask),
+    // and again for the desert set (dead tree, skull, ribcage, ruin wall, pot).
     // Each costs one 512 JPEG; a dropped downscale would cost ten megabytes,
     // which is what this number is really watching for.
-    expect(glb.byteLength).toBeLessThan(2_500_000);
+    expect(glb.byteLength).toBeLessThan(3_500_000);
   });
 });
 

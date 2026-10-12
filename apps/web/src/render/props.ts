@@ -42,6 +42,8 @@ export const PROP_KINDS = [
   "rug", "table", "bench", "crate", "barrel", "pillar",
   // The beach set, placed by render/level.ts along a coast's shoreline.
   "driftwood", "shell", "coastRock", "wreckTimber", "bones",
+  // The desert set, placed by render/level.ts over open ground.
+  "deadTree", "skull", "ribcage", "ruinWall", "pot",
   // The one prop that is also a light. `render/lights.ts` finds these by their
   // root name and hangs a real point light over each bowl.
   "brazier",

@@ -386,13 +386,14 @@ def asset_material(name, image_name, gain, roughness, palette=None, tint=None):
         px = numpy.empty(len(img.pixels), dtype=numpy.float32)
         img.pixels.foreach_get(px)
         rgb = px.reshape(-1, 4)[:, :3]
-        numpy.clip(rgb * gain * numpy.asarray(tint or (1.0, 1.0, 1.0), dtype=numpy.float32), 0.0, 1.0, out=rgb)
         if palette:
             ramp = _palette_ramp(palette)
             lum = rgb @ LUMA
             span = numpy.quantile(lum, (PALETTE_CLIP, 1.0 - PALETTE_CLIP))
             t = numpy.clip((lum - span[0]) / max(span[1] - span[0], 1e-6), 0.0, 1.0)
             rgb[:] = ramp[(t * (len(ramp) - 1)).astype(numpy.int32)]
+        # After the palette, so a palettized texture can still be exposed for its scene.
+        numpy.clip(rgb * gain * numpy.asarray(tint or (1.0, 1.0, 1.0), dtype=numpy.float32), 0.0, 1.0, out=rgb)
         img.pixels.foreach_set(px)
     dst = os.path.join(BUILD_DIR, name + ".jpg")
     img.save_render(filepath=dst, scene=bpy.context.scene)
@@ -567,6 +568,9 @@ def build_appended(name, mat_name, blend_name, budgets, image, gain, roughness, 
     mat = asset_material(mat_name, image, gain=gain, roughness=roughness, palette=palette)
     for obj in parts:
         decimate_to(obj, budgets[obj.name])
+        # glTF multiplies COLOR_0 into the albedo; a source's paint-mask layers are not colour.
+        for attr in list(obj.data.color_attributes):
+            obj.data.color_attributes.remove(attr)
         obj.data.materials.clear()
         obj.data.materials.append(mat)
         smooth_by_angle(obj, 40)
@@ -739,6 +743,153 @@ def build_bones():
         bone.rotation_euler = (math.pi / 2, 0.0, yaw)
         bone.location = (dx, dy, 0.024 * 2.1)
         bone.parent = root
+    return root
+
+
+# --------------------------------------------------------------------------
+# the desert set
+# --------------------------------------------------------------------------
+#
+# What PoE2's Vastiri has lying on its sand and an empty dune does not: dead
+# trees, beast bones, broken sandstone and pottery. All BlenderKit downloads
+# (ids and licences in assets/props/SOURCE.md), placed by render/level.ts.
+# Every texture is exposed to come out DARKER than the sand: the desert floor
+# plate averages luma ~162, and a prop that bright under the same sun is a
+# white cut-out with no shading left in it.
+#
+# Mr. Naseriyan's Stylized Dead Tree, 3.05 tall at its own scale. Its bark is
+# painted salmon and blue; it wears the driftwood's bleached grey instead.
+DEAD_TREE_W = 1.97
+DEAD_TREE_BUDGET = {"stylized dead tree": 2800}
+# Alexander Handjiev's Cow Skull scan, lying on its palate with the nose at -Y.
+SKULL_W = 0.72
+SKULL_BUDGET = {"Cow Skull": 1600}
+# Remnants of Eden Pierre's Small Bone Pile 2 at four times its size: spine,
+# ribs and the long bones. The hand, jaw and teeth stay behind, because a
+# human hand that size reads as a giant's, not a beast's.
+RIBCAGE_W = 2.5
+RIBCAGE_BUDGET = {
+    "vertebrae.013": 900, "vertebrae.011": 220, "vertebrae.009": 150,
+    "vertebrae.010": 150, "vertebrae.012": 150, "humerus.004": 180,
+    "humerus.005": 180, "radius.002": 120, "ulna.002": 100,
+}
+# Box-projection tile for the ribcage's bone material, in SOURCE units (x4 in game).
+RIBCAGE_UV_TILE = 0.12
+# Dennis Hafemann's Broken Stone Wall: a stepped course of blocks with its
+# rubble spilled at -Y. Two atlases, so two materials, both re-dressed in the
+# desert cliff's own sandstone.
+RUIN_WALL_W = 3.0
+RUIN_WALL_BUDGET = {"Wall": 1600, "Pieces": 900}
+DESERT_SANDSTONE = os.path.join(ROOT, "apps", "web", "public", "textures", "tilesets", "desert", "wall_color.jpg")
+# Nico's Amphora. Its iron stand is cut away and the pointed foot is pushed
+# into the sand at a lean: abandoned, not displayed.
+POT_W = 0.5
+POT_BUDGET = {"Amphora": 1200}
+POT_SINK = 0.12
+POT_LEAN = math.radians(9.0)
+
+
+def build_dead_tree():
+    return build_appended(
+        "deadTree", "desert_tree", "stylized_dead_tree.blend", DEAD_TREE_BUDGET,
+        "Material.002_BaseColor.jpg", gain=0.72, roughness=0.9, width=DEAD_TREE_W,
+        renames={"stylized dead tree": "deadTree_body"},
+        palette=os.path.join(BUILD_DIR, "driftwood.jpg"),
+    )
+
+
+def build_skull():
+    return build_appended(
+        "skull", "desert_skull", "cow_skull.blend", SKULL_BUDGET,
+        "CowSkull_diffuse", gain=0.6, roughness=0.7, width=SKULL_W,
+        renames={"Cow Skull": "skull_body"},
+    )
+
+
+def _keep_largest_island(obj):
+    """Delete every loose part but the one with the most faces."""
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    seen, islands = set(), []
+    for face in bm.faces:
+        if face in seen:
+            continue
+        seen.add(face)
+        stack, island = [face], []
+        while stack:
+            f = stack.pop()
+            island.append(f)
+            for edge in f.edges:
+                for g in edge.link_faces:
+                    if g not in seen:
+                        seen.add(g)
+                        stack.append(g)
+        islands.append(island)
+    islands.sort(key=len)
+    bmesh.ops.delete(bm, geom=[f for island in islands[:-1] for f in island], context="FACES")
+    bm.to_mesh(obj.data)
+    bm.free()
+
+
+def build_pot():
+    root = _root("pot")
+    root.rotation_euler = (0.0, 0.0, math.pi)  # front at -Y, see build_appended
+    body, = append_objects("amphora.blend", list(POT_BUDGET))
+    _keep_largest_island(body)
+    decimate_to(body, POT_BUDGET["Amphora"])
+    body.data.materials.clear()
+    # Terracotta, a shade under the sand: the scan's clay is the sand's own beige.
+    body.data.materials.append(asset_material(
+        "desert_pot", "Amphore_Material_BaseColor.jpg", gain=0.9, roughness=0.85, tint=(1.0, 0.74, 0.58)))
+    smooth_by_angle(body, 40)
+    body.name = "pot_body"
+    carrier = _carry("pot", [body], POT_W)
+    carrier.location.z -= POT_SINK
+    carrier.rotation_euler = (POT_LEAN, 0.0, 0.0)
+    carrier.parent = root
+    return root
+
+
+def build_ribcage():
+    root = _root("ribcage")
+    root.rotation_euler = (0.0, 0.0, math.pi)
+    path = os.path.join(SOURCE_DIR, "mat-organic-bone.blend")
+    with bpy.data.libraries.load(path, link=False) as (src, dst):
+        dst.images = ["Organic Bone_BaseColor.jpg"]
+    mat = asset_material("desert_bone", dst.images[0].name, gain=0.66, roughness=0.65, tint=(1.0, 0.95, 0.86))
+    parts = append_objects("small_bone_pile_2.blend", list(RIBCAGE_BUDGET))
+    for i, obj in enumerate(parts):
+        decimate_to(obj, RIBCAGE_BUDGET[obj.name])
+        # The pile ships a procedural bone shader; a tiling scan goes on by box projection.
+        while obj.data.uv_layers:
+            obj.data.uv_layers.remove(obj.data.uv_layers[0])
+        uv_box(obj, RIBCAGE_UV_TILE)
+        obj.data.materials.clear()
+        obj.data.materials.append(mat)
+        smooth_by_angle(obj, 40)
+        obj.name = f"ribcage_{i}"
+    carrier = _carry("ribcage", parts, RIBCAGE_W)
+    # The source's own z=0 is its ground: the spine dips under it, half-buried.
+    carrier.location.z = 0.0
+    carrier.parent = root
+    return root
+
+
+def build_ruin_wall():
+    root = _root("ruinWall")
+    root.rotation_euler = (0.0, 0.0, math.pi)
+    parts = append_objects("broken_stone_wall.blend", list(RUIN_WALL_BUDGET))
+    images = {"Wall": ("desert_ruin", "wall_diffuse.jpg"), "Pieces": ("desert_ruin_rubble", "pieces_diffuse.jpg")}
+    for obj in parts:
+        decimate_to(obj, RUIN_WALL_BUDGET[obj.name])
+        name, image = images[obj.name]
+        obj.data.materials.clear()
+        obj.data.materials.append(asset_material(
+            name, image, gain=0.72, roughness=0.92, palette=DESERT_SANDSTONE))
+        smooth_by_angle(obj, 40)
+    for obj in parts:
+        obj.name = {"Wall": "ruinWall_wall", "Pieces": "ruinWall_rubble"}[obj.name]
+    _carry("ruinWall", parts, RUIN_WALL_W).parent = root
     return root
 
 
@@ -1387,6 +1538,11 @@ def main():
     build_coast_rock()
     build_wreck_timber()
     build_bones()
+    build_dead_tree()  # after the driftwood: it is palettized onto its texture
+    build_skull()
+    build_ribcage()
+    build_ruin_wall()
+    build_pot()
     build_rug(mats)
     build_table(mats)
     build_bench(mats)
