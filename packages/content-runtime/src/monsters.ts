@@ -45,6 +45,15 @@ const HIT = {
   heavy: fp(2),
 } as const;
 const HEAVY_SLAM = fp(8);
+/**
+ * Every trash brute's charge: 0.6s rooted tell, then 3x its 1.8 walk to where the
+ * player stood. About one and a third brute swings, and the circle sits still for
+ * the wind-up plus the dash, so a walking player is never in it when it lands.
+ */
+const BRUTE_CHARGE = {
+  windupTicks: 18, speedFixed: fp(5.4), minRangeFixed: fp(3), maxRangeFixed: fp(7),
+  cooldownTicks: 150, damageFixed: fp(4), radiusFixed: fp(1.1),
+};
 
 // Eight to a pack need room to stand in one: a smaller body than any other kind.
 const SWARM_RADIUS = fp(0.32);
@@ -206,6 +215,7 @@ const MONSTER_DEFS: MonsterDef[] = [
     attackDamage: { type: "physical", amountFixed: HIT.brute },
     attackCooldownTicks: 75, radiusFixed: fp(0.85),
     defenses: { resPct: resBlock(), armourFixed: fp(4) },
+    charge: BRUTE_CHARGE,
   },
   {
     id: "monster.blood_sentinel.v1", name: "Blood Sentinel", archetype: "heavy",
@@ -259,11 +269,14 @@ const MONSTER_DEFS: MonsterDef[] = [
     // (mesh reach 0.58) and the copied radius detonated bolts on empty air.
     attackCooldownTicks: 75, radiusFixed: fp(0.55),
     defenses: { resPct: resBlock({ cold: 20 }), armourFixed: fp(3) },
+    charge: BRUTE_CHARGE,
   },
   {
     id: "monster.fen_wisp.v1", name: "Fen Wisp", archetype: "shooter",
     maxLifeFixed: LIFE.shooter, moveSpeedFixed: fp(1.6), attackRangeFixed: fp(7.5),
-    attackDamage: { type: "lightning", amountFixed: HIT.shooter },
+    // Under HIT.shooter, with the Behemoth's lighter slam: the swamp and coast packs
+    // wake whole (pack wake) and must still need 13s to kill an idle player.
+    attackDamage: { type: "lightning", amountFixed: fp(1.5) },
     attackCooldownTicks: 70, radiusFixed: fp(0.5),
     defenses: { resPct: resBlock({ lightning: 30 }), armourFixed: fp(0.5) },
     ranged: { speedFixed: fp(9), radiusFixed: fp(0.22) },
@@ -274,7 +287,7 @@ const MONSTER_DEFS: MonsterDef[] = [
     attackDamage: { type: "physical", amountFixed: HIT.heavy },
     attackCooldownTicks: 45, radiusFixed: fp(0.8),
     defenses: { resPct: resBlock({ chaos: 20 }), armourFixed: fp(2) },
-    heavy: { windupTicks: 30, radiusFixed: fp(2.6), damageFixed: HEAVY_SLAM, cooldownTicks: 150, rangeFixed: fp(6.5) },
+    heavy: { windupTicks: 30, radiusFixed: fp(2.6), damageFixed: fp(6), cooldownTicks: 150, rangeFixed: fp(6.5) },
   },
 
   // --- Forest: swarm, brute, shooter. The only biome with nothing to dodge,
@@ -292,6 +305,7 @@ const MONSTER_DEFS: MonsterDef[] = [
     attackDamage: { type: "physical", amountFixed: HIT.brute },
     attackCooldownTicks: 75, radiusFixed: fp(0.85),
     defenses: { resPct: resBlock({ cold: 15 }), armourFixed: fp(3) },
+    charge: BRUTE_CHARGE,
   },
   {
     id: "monster.hoarfrost_spitter.v1", name: "Hoarfrost Spitter", archetype: "shooter",

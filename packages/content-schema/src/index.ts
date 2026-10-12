@@ -192,6 +192,21 @@ export interface SlamSpec {
   rangeFixed: Fixed;
 }
 
+/**
+ * A brute's charge: a rooted wind-up, then a dash at `speedFixed` (per second)
+ * to where the player stood. A telegraph at that point carries the hit, so
+ * leaving the circle is the dodge. Triggers between min and max range only.
+ */
+export interface ChargeSpec {
+  windupTicks: number;
+  speedFixed: Fixed;
+  minRangeFixed: Fixed;
+  maxRangeFixed: Fixed;
+  cooldownTicks: number;
+  damageFixed: Fixed;
+  radiusFixed: Fixed;
+}
+
 /** A shooter's bolt. `speedFixed` is per second; the sim divides by 30, as it does for moveSpeed. */
 export interface RangedSpec {
   speedFixed: Fixed;
@@ -227,6 +242,8 @@ export interface MonsterDef {
   /** Required iff archetype === "heavy", forbidden otherwise. Distinct from
    *  BossSpec.slam: `boss` being present is what makes a monster a boss. */
   heavy?: SlamSpec;
+  /** Optional, and only on a brute that is not a boss (boss-ai owns those). */
+  charge?: ChargeSpec;
   boss?: BossSpec;
 }
 
@@ -565,6 +582,11 @@ export function validateMonsterDef(v: unknown): ValidationResult {
     ["speedFixed", "radiusFixed"], errors);
   validateSubSpec(v["heavy"], archetype === "heavy", "heavy",
     ["windupTicks", "radiusFixed", "damageFixed", "cooldownTicks", "rangeFixed"], errors);
+  if (v["charge"] !== undefined) {
+    validateSubSpec(v["charge"], archetype === "brute" && v["boss"] === undefined, "charge",
+      ["windupTicks", "speedFixed", "minRangeFixed", "maxRangeFixed", "cooldownTicks", "damageFixed", "radiusFixed"],
+      errors);
+  }
   if (v["boss"] !== undefined) {
     const b = v["boss"];
     if (!isObj(b)) {

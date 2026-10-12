@@ -711,3 +711,196 @@ describe("heavies", () => {
     expect(world.get<Health>(player, "health")!.life).toBe(before);
   });
 });
+
+describe("pack wake", () => {
+  const sleeper = (world: Simulation["world"], x: number) =>
+    spawnMonster(world, MONSTERS.get("monster.vaal_husk.v1")!, x, fp(0), false);
+  const target = (world: Simulation["world"]) => {
+    const p = world.create();
+    world.set<Position>(p, "position", { x: fp(0), y: fp(0) });
+    world.set<Faction>(p, "faction", { team: 0 });
+    world.set<PlayerC>(p, "player", { moveSpeed: 0, bodyRadius: fp(0.5) });
+    return p;
+  };
+  const state = (world: Simulation["world"], m: number) => world.get<MonsterC>(m, "monster")!.state;
+
+  it("a monster that notices the player wakes its pack, chained, without their own sight", () => {
+    const sim = new Simulation();
+    registerMonsterAI(sim);
+    const { world } = sim;
+    target(world);
+    const a = sleeper(world, fp(8));       // inside AGGRO_RADIUS: wakes on its own
+    const b = sleeper(world, fp(12));      // 4 from a, outside AGGRO_RADIUS
+    const c = sleeper(world, fp(16));      // 4 from b only: a chained wake
+    const far = sleeper(world, fp(30));    // in nobody's pack
+    expect(fp(12)).toBeGreaterThan(AGGRO_RADIUS);
+
+    sim.step();
+    expect(state(world, a)).not.toBe("idle");
+    expect(state(world, b)).not.toBe("idle");
+    expect(state(world, c)).not.toBe("idle");
+    expect(state(world, far)).toBe("idle");
+  });
+
+  it("a monster woken by a hit wakes its pack", () => {
+    const sim = new Simulation();
+    registerMonsterAI(sim);
+    const { world } = sim;
+    const p = target(world);
+    const a = sleeper(world, fp(30));
+    const b = sleeper(world, fp(33));
+    // step() clears the queue first, so the hit is enqueued from inside the tick.
+    sim.register("hit", () => sim.enqueueDamage({ target: a, source: p, amountFixed: fp(1), type: 0 }));
+    registerDamageResolve(sim);
+    sim.step();
+    expect(state(world, a)).not.toBe("idle");
+    expect(state(world, b)).not.toBe("idle");
+  });
+
+  it("never wakes a boss", () => {
+    const sim = new Simulation();
+    registerMonsterAI(sim);
+    const { world } = sim;
+    target(world);
+    sleeper(world, fp(8));
+    const boss = sleeper(world, fp(11));
+    world.set<BossC>(boss, "boss", { phase: 1, nextAbilityTick: 0, spawnX: fp(11), spawnY: 0, rootedUntilTick: 0 });
+    sim.step();
+    expect(state(world, boss)).toBe("idle");
+  });
+});
+
+describe("shooter kiting", () => {
+  const spitter = () => MONSTERS.get("monster.dune_spitter.v1")!;
+  const dist2 = (world: Simulation["world"], a: number, b: number) => {
+    const p = world.get<Position>(a, "position")!;
+    const q = world.get<Position>(b, "position")!;
+    return fpDist2(p.x, p.y, q.x, q.y);
+  };
+
+  it("backs away from a player inside its comfort range, no faster than it walks", () => {
+    const { sim, world, monster, player } = aiFixture({
+      def: spitter(), monsterAt: { x: fp(0), y: fp(0) }, playerAt: { x: fp(2), y: fp(0) },
+    });
+    const speed = world.get<MonsterC>(monster, "monster")!.moveSpeed;
+    const before = dist2(world, monster, player);
+    sim.step();
+    expect(dist2(world, monster, player)).toBeGreaterThan(before);
+    const x = world.get<Position>(monster, "position")!.x;
+    expect(x).toBeLessThan(0);
+    expect(-x).toBeLessThanOrEqual(speed);
+    expect(speed).toBeLessThan(Math.trunc(fp(4.2) / 30));
+  });
+
+  it("cornered against a wall it stands and shoots", () => {
+    const sim = new Simulation();
+    const collision = gridCollision(makeGrid(["#.....", "#.....", "#....."]));
+    registerMonsterAI(sim, { active: collision });
+    const { world } = sim;
+    const player = world.create();
+    world.set<Position>(player, "position", { x: fp(3.5), y: fp(1.5) });
+    world.set<Faction>(player, "faction", { team: 0 });
+    world.set<PlayerC>(player, "player", { moveSpeed: 0, bodyRadius: fp(0.5) });
+    const m = spawnMonster(world, spitter(), fp(1.5), fp(1.5), false);
+    world.set<MonsterC>(m, "monster", { ...world.get<MonsterC>(m, "monster")!, state: "chase" });
+    for (let i = 0; i < 20; i++) {
+      sim.step();
+      const p = world.get<Position>(m, "position")!;
+      expect(collision.isWalkable(p.x, p.y, fp(0.5))).toBe(true);
+    }
+    expect(world.query("projectile").length).toBeGreaterThan(0);
+  });
+
+  it("strafes sideways between shots, flipping side on a fixed cadence", () => {
+    const run = () => {
+      const { sim, world, monster } = aiFixture({
+        def: spitter(), monsterAt: { x: fp(0), y: fp(0) }, playerAt: { x: fp(5), y: fp(0) },
+      });
+      const ys: number[] = [];
+      for (let i = 0; i < 120; i++) { sim.step(); ys.push(world.get<Position>(monster, "position")!.y); }
+      return { ys, bolts: world.query("projectile").length };
+    };
+    const { ys, bolts } = run();
+    expect(bolts).toBeGreaterThanOrEqual(2);   // 70-tick cooldown: still fires on time
+    const steps = ys.slice(1).map((y, i) => Math.sign(y - ys[i]!));
+    expect(steps).toContain(1);
+    expect(steps).toContain(-1);
+    expect(run().ys).toEqual(ys);
+  });
+});
+
+describe("brute charge", () => {
+  const construct = () => MONSTERS.get("monster.vaal_construct.v1")!;
+
+  it("every non-boss brute carries a charge", () => {
+    for (const id of ["monster.vaal_construct.v1", "monster.bog_drowned.v1", "monster.thornhide_boar.v1"]) {
+      expect(MONSTERS.get(id)!.charge).toBeDefined();
+    }
+  });
+
+  it("winds up rooted under a telegraph on the player, then dashes to it", () => {
+    const { sim, world, monster } = aiFixture({
+      def: construct(), monsterAt: { x: fp(0), y: fp(0) }, playerAt: { x: fp(5), y: fp(0) },
+    });
+    const charge = construct().charge!;
+    sim.step();
+    const teles = world.query("telegraph");
+    expect(teles.length).toBe(1);
+    const tg = world.get<TelegraphC>(teles[0]!, "telegraph")!;
+    expect(world.get<Position>(teles[0]!, "position")).toEqual({ x: fp(5), y: fp(0) });
+    expect(tg.radius).toBe(charge.radiusFixed);
+    expect(tg.leavesGroundTicks).toBe(0);
+    expect(tg.impactTick).toBeGreaterThan(charge.windupTicks);
+    expect(world.get<MonsterC>(monster, "monster")!.lastAttackTick).toBe(0);
+
+    for (let i = 1; i < charge.windupTicks; i++) sim.step();
+    expect(world.get<Position>(monster, "position")).toEqual({ x: fp(0), y: fp(0) });
+    sim.step();
+    sim.step();
+    // Faster than a walk: two dash ticks cover more than three walking ones.
+    expect(world.get<Position>(monster, "position")!.x)
+      .toBeGreaterThan(3 * world.get<MonsterC>(monster, "monster")!.moveSpeed);
+    for (let i = 0; i < 60; i++) sim.step();
+    expect(world.get<Position>(monster, "position")!.x).toBeGreaterThan(fp(3));
+  });
+
+  it("the telegraph carries the hit: standing in it hurts, leaving it does not", () => {
+    const hit = (dodge: boolean) => {
+      const { sim, world, player } = aiFixture({
+        def: construct(), monsterAt: { x: fp(0), y: fp(0) }, playerAt: { x: fp(5), y: fp(0) },
+        withTelegraphResolve: true,
+      });
+      sim.step();
+      const tg = world.get<TelegraphC>(world.query("telegraph")[0]!, "telegraph")!;
+      if (dodge) world.set<Position>(player, "position", { x: fp(5), y: fp(20) });
+      for (let t = 1; t <= tg.impactTick; t++) sim.step();
+      return world.get<Health>(player, "health")!.life;
+    };
+    expect(hit(false)).toBeLessThan(fp(100));
+    expect(hit(true)).toBe(fp(100));
+  });
+
+  it("does not charge inside its minimum or past its maximum range", () => {
+    for (const x of [fp(2), fp(8.5)]) {
+      const { sim, world } = aiFixture({
+        def: construct(), monsterAt: { x: fp(0), y: fp(0) }, playerAt: { x, y: fp(0) },
+      });
+      sim.step();
+      expect(world.query("telegraph").length).toBe(0);
+    }
+  });
+
+  it("does not charge without a line to the player", () => {
+    const sim = new Simulation();
+    registerMonsterAI(sim, { active: gridCollision(makeGrid(["...#....", "...#....", "...#...."])) });
+    const { world } = sim;
+    const player = world.create();
+    world.set<Position>(player, "position", { x: fp(6.5), y: fp(1.5) });
+    world.set<Faction>(player, "faction", { team: 0 });
+    world.set<PlayerC>(player, "player", { moveSpeed: 0, bodyRadius: fp(0.5) });
+    const m = spawnMonster(world, construct(), fp(1), fp(1.5), false);
+    world.set<MonsterC>(m, "monster", { ...world.get<MonsterC>(m, "monster")!, state: "chase" });
+    sim.step();
+    expect(world.query("telegraph").length).toBe(0);
+  });
+});

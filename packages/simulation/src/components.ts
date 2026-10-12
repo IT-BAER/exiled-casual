@@ -242,6 +242,15 @@ export interface MonsterC {
    * save/checksum reason as SessionC.dead: absent and never-attacked agree.
    */
   lastAttackTick?: number;
+  /**
+   * A brute's charge (MonsterDef.charge): ready again at `chargeReadyTick`, and
+   * dashing to (dashX, dashY) from the end of its root until `dashUntilTick`.
+   * Optional for the same reason as lastAttackTick: written only by a charge.
+   */
+  chargeReadyTick?: number;
+  dashX?: Fixed;
+  dashY?: Fixed;
+  dashUntilTick?: number;
   /** 1 = rare, 0 = normal */
   rare: 0 | 1;
   /** 1 = boss add, 0 = normal spawn */

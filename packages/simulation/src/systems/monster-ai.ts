@@ -3,6 +3,7 @@ import { WORLD_MIN, WORLD_MAX } from "../movement";
 import { chaseStep, hasLineOfSight, slide, type Collision, type CollisionRef } from "../collision";
 import { Simulation } from "../loop";
 import type { Position, MonsterC, Faction, Health, ProjectileC, TelegraphC, SessionC, PlayerC } from "../components";
+import type { Entity, World } from "../ecs";
 import { mapDangerScale } from "../areas";
 import { MONSTERS } from "@exiled/content-runtime";
 
@@ -19,6 +20,46 @@ import { MONSTERS } from "@exiled/content-runtime";
  * BOSS_LEASH_RADIUS).
  */
 export const AGGRO_RADIUS: number = fp(9);
+
+/**
+ * How far a waking monster's alarm carries: every sleeping non-boss within it
+ * wakes too, with or without its own line to the player (PoE's pack aggro).
+ */
+export const PACK_ALERT_RADIUS: number = fp(5);
+
+/**
+ * Wake everything asleep within PACK_ALERT_RADIUS of `origin`, and chain from
+ * each one woken, all inside this call: a pack strung out wider than the radius
+ * still comes as one. Breadth-first in ascending entity id, so it is
+ * deterministic. Both ways of waking call it: noticing the player (here) and
+ * being hit (damage-resolve.ts). Bosses are never woken: boss-ai owns them.
+ */
+export function alertPack(world: World, origin: Entity): void {
+  const r2 = PACK_ALERT_RADIUS * PACK_ALERT_RADIUS;
+  const sleepers = world.query("monster", "position").filter((e) => e !== origin
+    && !world.has(e, "boss") && world.get<MonsterC>(e, "monster")!.state === "idle");
+  const woken: Entity[] = [origin];
+  for (let i = 0; i < woken.length; i++) {
+    const o = world.get<Position>(woken[i]!, "position")!;
+    for (const e of sleepers) {
+      const mon = world.get<MonsterC>(e, "monster")!;
+      if (mon.state !== "idle") continue;
+      const p = world.get<Position>(e, "position")!;
+      if (fpDist2(o.x, o.y, p.x, p.y) > r2) continue;
+      world.set<MonsterC>(e, "monster", { ...mon, state: "chase" });
+      woken.push(e);
+    }
+  }
+}
+
+/**
+ * A shooter backs off a player standing inside KITE_PCT of its attack range, and
+ * between shots strafes at STRAFE_PCT of its walk, switching side every
+ * STRAFE_FLIP_TICKS, offset by entity id so two shooters do not mirror.
+ */
+const KITE_PCT = 45;
+const STRAFE_PCT = 50;
+const STRAFE_FLIP_TICKS = 45;
 
 /** One body in the separation pass. */
 export interface PackBody { e: number; x: Fixed; y: Fixed; r: Fixed }
@@ -159,6 +200,7 @@ export function registerMonsterAI(sim: Simulation, collisionRef?: CollisionRef):
       if (mon.state === "idle"
         && (nearestD2 > AGGRO_RADIUS * AGGRO_RADIUS
           || !hasLineOfSight(collision, mpos.x, mpos.y, ppos.x, ppos.y))) continue;
+      if (mon.state === "idle") alertPack(world, m);
 
       // Rooted mid-wind-up: hold. Sits above the slam and the melee checks so a
       // heavy cannot re-aim what it has already committed to — the dodge is only
@@ -168,7 +210,60 @@ export function registerMonsterAI(sim: Simulation, collisionRef?: CollisionRef):
         continue;
       }
 
-      const heavy = MONSTERS.get(mon.defId)?.heavy;
+      // Mid-dash: run the locked line until the point, a wall, or the tick the
+      // telegraph lands, whichever is first. No push: a charge is not shouldered.
+      if (mon.dashUntilTick !== undefined && tick < mon.dashUntilTick) {
+        const speed = Math.trunc(MONSTERS.get(mon.defId)!.charge!.speedFixed / 30);
+        const step = fpStepToward(mpos.x, mpos.y, mon.dashX!, mon.dashY!, speed);
+        const out = shove(collision, mpos.x, mpos.y, step, mon.bodyRadius);
+        const arrived = out.x === mon.dashX && out.y === mon.dashY;
+        const blocked = out.x === mpos.x && out.y === mpos.y;
+        world.set<Position>(m, "position", {
+          x: fpClamp(out.x, WORLD_MIN, WORLD_MAX),
+          y: fpClamp(out.y, WORLD_MIN, WORLD_MAX),
+        });
+        world.set<MonsterC>(m, "monster", {
+          ...mon, state: "chase", ...(arrived || blocked ? { dashUntilTick: tick } : {}),
+        });
+        continue;
+      }
+
+      const def = MONSTERS.get(mon.defId);
+      const charge = def?.charge;
+      // The line is tested at the body's own width, so the dash it commits to is
+      // one it can run; the telegraph waits out the wind-up plus the run.
+      if (charge && tick >= (mon.chargeReadyTick ?? 0)
+        && nearestD2 >= charge.minRangeFixed * charge.minRangeFixed
+        && nearestD2 <= charge.maxRangeFixed * charge.maxRangeFixed
+        && hasLineOfSight(collision, mpos.x, mpos.y, ppos.x, ppos.y, mon.bodyRadius)) {
+        const speed = Math.trunc(charge.speedFixed / 30);
+        const until = tick + charge.windupTicks + Math.ceil(isqrt(nearestD2) / speed);
+        const tele = world.create();
+        world.set<Position>(tele, "position", { x: ppos.x, y: ppos.y });
+        world.set<TelegraphC>(tele, "telegraph", {
+          ownerId: m,
+          team: world.get<Faction>(m, "faction")!.team,
+          radius: charge.radiusFixed,
+          startTick: tick,
+          impactTick: until,
+          damage: fpMul(charge.damageFixed, dmgMilli),
+          damageType: mon.attackType,
+          leavesGroundTicks: 0,
+        });
+        world.set<MonsterC>(m, "monster", {
+          ...mon,
+          state: "attack",
+          rootedUntilTick: tick + charge.windupTicks,
+          chargeReadyTick: tick + charge.cooldownTicks,
+          dashX: ppos.x,
+          dashY: ppos.y,
+          dashUntilTick: until,
+          lastAttackTick: tick,
+        });
+        continue;
+      }
+
+      const heavy = def?.heavy;
       // Gate on slamReadyTick, not attackReadyTick, so the auto-attack timer
       // survives a slam and the heavy keeps swinging in the cooldown gap.
       if (heavy && tick >= mon.slamReadyTick && nearestD2 <= heavy.rangeFixed * heavy.rangeFixed) {
@@ -212,15 +307,21 @@ export function registerMonsterAI(sim: Simulation, collisionRef?: CollisionRef):
 
       // A shooter stands only where its bolt reaches: the bolt dies on the first
       // wall its own radius touches, so one in range behind rock keeps walking.
-      const ranged = MONSTERS.get(mon.defId)?.ranged;
+      const ranged = def?.ranged;
+      // A shooter too close for comfort steps straight back; pinned flat against
+      // a wall the step comes back zero and it stands and shoots instead.
+      const kite = Math.trunc((ar * KITE_PCT) / 100);
+      let away: { dx: Fixed; dy: Fixed } | undefined;
+      if (ranged && nearestD2 < kite * kite) {
+        const toward = fpStepToward(mpos.x, mpos.y, ppos.x, ppos.y, mon.moveSpeed);
+        const back = shove(collision, mpos.x, mpos.y, { dx: -toward.dx, dy: -toward.dy }, mon.bodyRadius);
+        if (back.x !== mpos.x || back.y !== mpos.y) away = { dx: back.x - mpos.x, dy: back.y - mpos.y };
+      }
       if (nearestD2 <= ar * ar
         && (!ranged || hasLineOfSight(collision, mpos.x, mpos.y, ppos.x, ppos.y, ranged.radiusFixed))) {
         let { attackReadyTick } = mon;
         if (tick >= attackReadyTick) {
-          const def = MONSTERS.get(mon.defId);
           if (def?.ranged) {
-            // A shooter's range is its attack range, so chase already stops it
-            // where it should stand: no kiting AI, and none needed.
             const speedPerTick = Math.trunc(def.ranged.speedFixed / 30);
             const step = fpStepToward(mpos.x, mpos.y, ppos.x, ppos.y, speedPerTick);
             // Standing exactly on the player: nothing to aim at, so fall through
@@ -256,13 +357,30 @@ export function registerMonsterAI(sim: Simulation, collisionRef?: CollisionRef):
           // A swing happened exactly when the cooldown advanced this tick.
           ...(attackReadyTick !== mon.attackReadyTick ? { lastAttackTick: tick } : {}),
         });
-        const out = shove(collision, mpos.x, mpos.y, push, mon.bodyRadius);
+        let from = mpos;
+        if (away) {
+          from = { x: mpos.x + away.dx, y: mpos.y + away.dy };
+        } else if (ranged && tick < attackReadyTick) {
+          // Strafe square to the player between shots; slide keeps it off walls.
+          const side = (Math.trunc(tick / STRAFE_FLIP_TICKS) + m) % 2 === 0 ? 1 : -1;
+          const t = fpStepToward(mpos.x, mpos.y, ppos.x, ppos.y,
+            Math.trunc((mon.moveSpeed * STRAFE_PCT) / 100));
+          from = shove(collision, mpos.x, mpos.y, { dx: -t.dy * side, dy: t.dx * side }, mon.bodyRadius);
+        }
+        const out = shove(collision, from.x, from.y, push, mon.bodyRadius);
         if (out.x !== mpos.x || out.y !== mpos.y) {
           world.set<Position>(m, "position", {
             x: fpClamp(out.x, WORLD_MIN, WORLD_MAX),
             y: fpClamp(out.y, WORLD_MIN, WORLD_MAX),
           });
         }
+      } else if (away) {
+        const out = shove(collision, mpos.x + away.dx, mpos.y + away.dy, push, mon.bodyRadius);
+        world.set<Position>(m, "position", {
+          x: fpClamp(out.x, WORLD_MIN, WORLD_MAX),
+          y: fpClamp(out.y, WORLD_MIN, WORLD_MAX),
+        });
+        world.set<MonsterC>(m, "monster", { ...mon, state: "chase" });
       } else {
         const moved = chaseStep(
           collision, mpos.x, mpos.y, ppos.x, ppos.y, mon.moveSpeed, mon.bodyRadius,

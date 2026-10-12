@@ -8,6 +8,7 @@ import { BURNING_SOURCE, RECAP_WINDOW_TICKS } from "../death-recap";
 import type { World } from "../ecs";
 import type { DamageEvent } from "../components";
 import { toNumber } from "@exiled/fixed-point";
+import { alertPack } from "./monster-ai";
 
 /** Spawn grace: 10 seconds at 30 Hz, or until the player moves or casts. */
 export const SPAWN_GRACE_TICKS = 300;
@@ -85,6 +86,7 @@ export function registerDamageResolve(sim: Simulation): void {
       const mon = world.get<MonsterC>(ev.target, "monster");
       if (mon?.state === "idle" && !world.has(ev.target, "boss")) {
         world.set<MonsterC>(ev.target, "monster", { ...mon, state: "chase" });
+        alertPack(world, ev.target);
       }
 
       // A boss pays flask charges as it bleeds, not when it dies: see

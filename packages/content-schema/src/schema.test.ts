@@ -475,6 +475,30 @@ describe("validateMonsterDef archetypes", () => {
     expect(r.ok).toBe(false);
     expect(r.errors.join(" ")).toMatch(/heavy/);
   });
+
+  const charge = {
+    windupTicks: 18, speedFixed: fp(5.4), minRangeFixed: fp(3), maxRangeFixed: fp(7),
+    cooldownTicks: 150, damageFixed: fp(6), radiusFixed: fp(1.1),
+  };
+
+  it("accepts a brute with or without a charge", () => {
+    expect(validateMonsterDef({ ...base, archetype: "brute" }).ok).toBe(true);
+    expect(validateMonsterDef({ ...base, archetype: "brute", charge }).ok).toBe(true);
+  });
+
+  it("rejects a charge on a non-brute or a boss", () => {
+    const swarm = validateMonsterDef({ ...base, charge });
+    expect(swarm.ok).toBe(false);
+    expect(swarm.errors.join(" ")).toMatch(/charge/);
+    const boss = validateMonsterDef({ ...base, archetype: "brute", charge, boss: {} });
+    expect(boss.errors.join(" ")).toMatch(/charge/);
+  });
+
+  it("rejects a charge with a bad field", () => {
+    const r = validateMonsterDef({ ...base, archetype: "brute", charge: { ...charge, speedFixed: -1 } });
+    expect(r.ok).toBe(false);
+    expect(r.errors.join(" ")).toMatch(/charge\.speedFixed/);
+  });
 });
 
 describe("validateSkillDef: gem growth", () => {
