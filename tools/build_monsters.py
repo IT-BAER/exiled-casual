@@ -1592,32 +1592,33 @@ def vaal_husk():
 
 
 # Image-to-3D like the Grubling, but six-legged: a /codex-imagegen reference
-# through local TRELLIS (review/3d/sand-skitterer), cut to 8k triangles, with a
-# normal map baked off the TRELLIS source by tools/bake_generated_normal.py.
-SKITTERER_SOURCE = os.path.join(TEX_DIR, "source", "sand_skitterer_v1.glb")
-SKITTERER_NORMAL = os.path.join(TEX_DIR, "source", "sand_skitterer_v1_n.png")
+# through local TRELLIS (review/3d/sand-skitterer-v2), cut to 4k triangles, with a
+# normal map baked off the opened TRELLIS source by tools/bake_generated_normal.py.
+SKITTERER_SOURCE = os.path.join(TEX_DIR, "source", "sand_skitterer_v2.glb")
+SKITTERER_NORMAL = os.path.join(TEX_DIR, "source", "sand_skitterer_v2_n.png")
 
 
 def sand_skitterer():
-    """Wider than it is long: a flat carapace on six splayed legs, knees above it.
+    """A scarab: one low bronze dome over six stubby splayed legs.
 
-    Thin spurs cut off by a volumetric opening (tools/open_volume.py --res 240
-    --radius 2). Every joint below is measured off sand_skitterer_v1.glb by
-    tools/measure_generated.py, so a regenerated mesh needs them measured again.
-    The left and right mid legs are not mirrored because TRELLIS did not mirror them.
+    Volumetric opening (tools/open_volume.py --res 240 --radius 2), 4k triangles.
+    Every joint below is measured off sand_skitterer_v2.glb by
+    tools/measure_generated.py --flip 1, so a regenerated mesh needs them measured
+    again. The belly rests on the floor and reads as a foot: the six real feet are
+    picked by position. TRELLIS did not mirror the legs, so neither do these.
     """
     c = GeneratedSkin("monster.sand_skitterer.v1", SKITTERER_SOURCE, SKITTERER_NORMAL,
-                      "desert", 0.6, (-0.074, 0.134))
-    spine = c.body.chain([(0, -0.36, 0.36), (0, 0.0, 0.40), (0, 0.34, 0.36)], [0.1] * 3)
-    c.body.chain([(0, 0.52, 0.30), (0, 0.72, 0.27)], [0.05] * 2, parent=spine[-1])
+                      "desert", 0.36, (0.012, 0.015), tex=512, flip=True)
+    spine = c.body.chain([(0, -0.30, 0.17), (0, 0.0, 0.19), (0, 0.26, 0.17)], [0.1] * 3)
+    c.body.chain([(0, 0.36, 0.15), (0, 0.46, 0.14)], [0.05] * 2, parent=spine[-1])
     # Front pair first, then mid, then rear: Gait reads that order as a tripod.
     for i, (hip, knee, foot) in enumerate([
-        ((-0.257, 0.290, 0.340), (-0.554, 0.483, 0.384), (-0.692, 0.594, 0.001)),
-        ((0.249, 0.293, 0.358), (0.510, 0.436, 0.473), (0.691, 0.592, 0.014)),
-        ((-0.350, 0.072, 0.328), (-0.628, 0.119, 0.442), (-0.851, 0.136, 0.009)),
-        ((0.291, -0.016, 0.351), (0.593, -0.036, 0.433), (0.788, -0.172, 0.000)),
-        ((-0.199, -0.220, 0.342), (-0.431, -0.429, 0.477), (-0.654, -0.589, 0.044)),
-        ((0.252, -0.272, 0.340), (0.469, -0.390, 0.506), (0.718, -0.560, 0.046)),
+        ((-0.147, 0.185, 0.159), (-0.356, 0.346, 0.143), (-0.391, 0.349, 0.012)),
+        ((0.169, 0.228, 0.152), (0.333, 0.348, 0.104), (0.345, 0.343, 0.007)),
+        ((-0.301, -0.038, 0.138), (-0.491, 0.027, 0.189), (-0.623, 0.026, 0.006)),
+        ((0.366, -0.007, 0.142), (0.544, 0.063, 0.185), (0.596, 0.102, 0.012)),
+        ((-0.232, -0.308, 0.150), (-0.426, -0.403, 0.185), (-0.520, -0.437, 0.006)),
+        ((0.299, -0.306, 0.148), (0.533, -0.382, 0.198), (0.593, -0.384, 0.016)),
     ]):
         c.leg_through(i, hip, knee, foot)
     # At the roster's 0.78 a foot swept a third of the body width.
@@ -1658,30 +1659,31 @@ def bramble_whelp():
 # the shooters: tall, thin, and they keep their distance
 # --------------------------------------------------------------------------
 
-SPITTER_SOURCE = os.path.join(TEX_DIR, "source", "dune_spitter_v1.glb")
-SPITTER_NORMAL = os.path.join(TEX_DIR, "source", "dune_spitter_v1_n.png")
+SPITTER_SOURCE = os.path.join(TEX_DIR, "source", "dune_spitter_v2.glb")
+SPITTER_NORMAL = os.path.join(TEX_DIR, "source", "dune_spitter_v2_n.png")
 
 
 def dune_spitter():
-    """A sac carried high on four stilts, with a spout aimed forward.
+    """A squat sand toad, mouth open over a swollen violet throat sac.
 
-    Generated (review/3d/dune-spitter), volumetric opening (tools/open_volume.py --res 240 --radius 2) with --keep 0.01: TRELLIS built
-    the rear left stilt as its own shell. 4k triangles. Joints measured off
-    dune_spitter_v1.glb by tools/measure_generated.py --flip 0 (the spout faces +Y
-    as built).
+    Generated (review/3d/dune-spitter-v2), volumetric opening (tools/open_volume.py
+    --res 240 --radius 2), 4k triangles. Joints measured off dune_spitter_v2.glb by
+    tools/measure_generated.py --flip 1, the four feet picked by position: the belly
+    and the sac rest on the floor and read as feet too.
     """
     c = GeneratedSkin("monster.dune_spitter.v1", SPITTER_SOURCE, SPITTER_NORMAL,
-                      "desert", 1.4, (-0.073, 0.011), tex=512)
-    spine = c.body.chain([(0, -0.30, 0.88), (0, 0.0, 0.88), (0, 0.30, 0.88)], [0.1] * 3)
-    c.body.chain([(0, 0.44, 0.86), (0, 0.55, 0.86)], [0.05] * 2, parent=spine[-1])
-    # The knee stands well above the body: a wading bird, not a table. The rear
-    # left stilt measures straight (knee at the claw), so its knee is set high
-    # like the other three.
+                      "desert", 0.6, (-0.009, -0.326), tex=512, flip=True)
+    # Rooted over the hind hips, like the other squat bodies.
+    spine = c.body.chain([(0, -0.42, 0.33), (0, -0.10, 0.36), (0, 0.18, 0.34)], [0.1] * 3)
+    c.body.chain([(0, -0.70, 0.25)], [0.1], parent=spine[0])
+    c.body.chain([(0, 0.30, 0.30), (0, 0.40, 0.26)], [0.05] * 2, parent=spine[-1])
+    # The front left trace ran into the sac and put its knee at the toes; that
+    # knee is set mid-limb and outboard, like the measured front right.
     for i, (hip, knee, foot) in enumerate([
-        ((-0.176, 0.022, 1.142), (-0.498, 0.164, 1.042), (-0.611, 0.490, 0.000)),
-        ((0.104, 0.154, 1.066), (0.362, 0.276, 1.010), (0.651, 0.417, 0.004)),
-        ((-0.364, -0.228, 1.088), (-0.520, -0.340, 1.000), (-0.640, -0.449, 0.012)),
-        ((0.115, -0.100, 1.140), (0.386, -0.208, 1.012), (0.600, -0.458, 0.014)),
+        ((-0.105, 0.077, 0.188), (-0.250, 0.150, 0.110), (-0.228, 0.211, 0.000)),
+        ((0.283, 0.112, 0.213), (0.379, 0.260, 0.076), (0.287, 0.380, 0.007)),
+        ((-0.342, -0.420, 0.206), (-0.506, -0.381, 0.194), (-0.614, -0.302, 0.018)),
+        ((0.242, -0.425, 0.233), (0.456, -0.386, 0.205), (0.555, -0.289, 0.017)),
     ]):
         c.leg_through(i, hip, knee, foot)
     return c
@@ -1966,33 +1968,29 @@ def blood_sentinel():
                              normal=BLOOD_SENTINEL_NORMAL)
 
 
-COLOSSUS_SOURCE = os.path.join(TEX_DIR, "source", "sunbaked_colossus_v1.glb")
-COLOSSUS_NORMAL = os.path.join(TEX_DIR, "source", "sunbaked_colossus_v1_n.png")
+COLOSSUS_SOURCE = os.path.join(TEX_DIR, "source", "sunbaked_colossus_v2.glb")
+COLOSSUS_NORMAL = os.path.join(TEX_DIR, "source", "sunbaked_colossus_v2_n.png")
 
 
 def sunbaked_colossus():
-    """All shoulder: a quadruped bull whose head is nearly an afterthought.
+    """A sandstone golem that knuckle-walks: the fists are its forefeet.
 
-    Generated (review/3d/sunbaked-colossus), torn plate edges cut off by a
-    volumetric opening (tools/open_volume.py --res 240 --radius 2), 4k triangles.
-    Joints measured off sunbaked_colossus_v1.glb by tools/measure_generated.py --flip 1.
+    Generated (review/3d/sunbaked-colossus-v2), volumetric opening
+    (tools/open_volume.py --res 240 --radius 2), 4k triangles. Joints measured off
+    sunbaked_colossus_v2.glb by tools/measure_generated.py --flip 1.
     """
     c = GeneratedSkin("monster.sunbaked_colossus.v1", COLOSSUS_SOURCE, COLOSSUS_NORMAL,
-                      "desert", 1.8, (-0.199, 0.752), tex=512, flip=True)
-    # Rooted over the hind hips: the attack pitches the trunk about its first node,
-    # and from a root mid-body it lifted the near-straight hind legs 23% past reach.
-    spine = c.body.chain([(0, -0.55, 1.15), (0, -0.10, 1.20), (0, 0.50, 1.25)], [0.1] * 3)
-    rump = c.body.chain([(0, -0.85, 1.05)], [0.1], parent=spine[0])
-    # The head hangs low and forward of the hump, the tail is a short stub.
-    c.body.chain([(-0.05, 0.95, 0.95), (-0.13, 1.22, 0.80)], [0.1] * 2, parent=spine[-1])
-    c.body.chain([(-0.15, -1.00, 0.85), (-0.25, -1.05, 0.65)], [0.05] * 2, parent=rump[-1])
-    # The measured fore knees sit a hand above the hoof, a shin too short to
-    # take the lunge (+36%); these are mid-leg at the back of the leg column.
+                      "desert", 1.8, (0.043, -0.004), tex=512, flip=True)
+    # Rooted over the hind hips: the attack pitches the trunk about its first node.
+    spine = c.body.chain([(0, -0.65, 1.00), (0, -0.20, 1.30), (0, 0.30, 1.35)], [0.1] * 3)
+    c.body.chain([(0, -0.90, 0.85)], [0.1], parent=spine[0])
+    # The head sits sunk low between the shoulders, ahead of the hump.
+    c.body.chain([(0, 0.52, 1.20), (0, 0.68, 1.12)], [0.1] * 2, parent=spine[-1])
     for i, (hip, knee, foot) in enumerate([
-        ((-0.262, 0.397, 0.648), (-0.330, 0.367, 0.320), (-0.397, 0.635, 0.000)),
-        ((0.287, 0.558, 0.662), (0.404, 0.490, 0.330), (0.521, 0.785, 0.000)),
-        ((-0.245, -0.660, 0.637), (-0.273, -0.838, 0.272), (-0.445, -0.808, 0.000)),
-        ((0.179, -0.585, 0.651), (0.210, -0.683, 0.435), (0.321, -0.612, 0.000)),
+        ((-0.460, 0.122, 0.910), (-0.692, 0.322, 0.572), (-0.605, 0.610, 0.087)),
+        ((0.529, 0.165, 0.992), (0.683, 0.420, 0.659), (0.578, 0.827, 0.110)),
+        ((-0.227, -0.730, 0.605), (-0.487, -0.741, 0.415), (-0.520, -0.796, 0.000)),
+        ((0.342, -0.634, 0.616), (0.520, -0.556, 0.472), (0.547, -0.640, 0.008)),
     ]):
         c.leg_through(i, hip, knee, foot)
     return c
