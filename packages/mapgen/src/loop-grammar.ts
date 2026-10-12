@@ -37,6 +37,9 @@ export interface Grammar {
   /** Knock out the seam walls and corner posts the lattice leaves in open
    *  ground (see `openSeams` in assemble-area.ts). Open ground only. */
   openSeams?: boolean;
+  /** Fray the open ground's walls into a natural edge and clear the stubs and
+   *  square islands the chunks leave in it (`naturalizeEdges`). Open ground only. */
+  naturalEdges?: boolean;
 }
 
 export type MaskClass = "solid" | "cap" | "straight" | "corner" | "tee" | "cross";

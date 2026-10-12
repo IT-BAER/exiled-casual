@@ -164,17 +164,18 @@ function openRimDoors(cells: Uint8Array, masks: Uint8Array, carved: Uint8Array):
 }
 
 /** Blob candidates drawn per tile; the moat rule turns most down in rooms. */
-const BLOBS_PER_TILE = 5;
+const BLOBS_PER_TILE = 10;
 /** Floor a blob keeps between itself and any wall, a body's width: so no blob
  *  narrows a corridor below one, closes a door, or seals off any ground. */
 const BLOB_MOAT = 3;
+/** Floor between a blob's edge and any marker: a pack stands round its socket. */
+const MARKER_GAP = 2;
 
 /**
  * Dot wide open ground with obstacle blobs of mixed size, a few units apart:
  * PoE's open ground is never bare (reference-screenshots/map-layout-1.jpeg). A
  * blob only goes where it keeps BLOB_MOAT clear of every wall, so it lands in
  * carved fields and merged flats and never in a corridor, a room or the arena.
- * Each blob stays inside one tile: across a seam it is a wall line on the lattice.
  */
 function dressOpenGround(
   cells: Uint8Array, markers: Marker[], bossTile: { tx: number; ty: number }, rng: RandomStream,
@@ -187,30 +188,241 @@ function dressOpenGround(
       for (let k = 0; k < BLOBS_PER_TILE; k++) {
         const size = rng.nextInt(0, 9);
         const phase = (rng.nextU32() / 0x1_0000_0000) * Math.PI * 2;
-        // Mostly stones a body wide, some boulders, the odd outcrop.
-        const r = size < 6 ? 1.5 + (size % 3) * 0.5 : size < 9 ? 3 : 4.5;
-        const reach = Math.ceil(r * 1.25);
-        const cx = tx * TILE_CELLS + rng.nextInt(reach, TILE_CELLS - 1 - reach);
-        const cy = ty * TILE_CELLS + rng.nextInt(reach, TILE_CELLS - 1 - reach);
-        if (inBoss) continue;
-        if (markers.some((m) => Math.abs(m.cx - cx) <= reach + 2 && Math.abs(m.cy - cy) <= reach + 2)) continue;
-        const clear = reach + BLOB_MOAT;
-        let open = true;
-        for (let dy = -clear; dy <= clear && open; dy++) {
-          for (let dx = -clear; dx <= clear; dx++) {
-            const x = cx + dx, y = cy + dy;
-            if (x < 0 || y < 0 || x >= N || y >= N || cells[y * N + x] === 0) { open = false; break; }
-          }
+        // Mostly stones a body wide, some boulders, the odd outcrop. Two cells is
+        // the least radius that never stamps a 3x3 square.
+        const r = size < 6 ? 2 + (size % 3) * 0.5 : size < 9 ? 3 : 4;
+        const cx = tx * TILE_CELLS + rng.nextInt(0, TILE_CELLS - 1);
+        const cy = ty * TILE_CELLS + rng.nextInt(0, TILE_CELLS - 1);
+        // A boulder or an outcrop gathers smaller stones against it, so the
+        // ground reads as formations rather than as one stone per tile.
+        const discs = [{ cx, cy, r, phase }];
+        const satellites = size < 6 ? 0 : rng.nextInt(1, 2);
+        for (let s = 0; s < satellites; s++) {
+          const a = (rng.nextU32() / 0x1_0000_0000) * Math.PI * 2;
+          const sr = r * (0.45 + (rng.nextInt(0, 3) * 0.05));
+          discs.push({
+            cx: cx + Math.round(Math.cos(a) * r * 1.1), cy: cy + Math.round(Math.sin(a) * r * 1.1), r: sr, phase: a,
+          });
         }
-        if (!open) continue;
-        for (let dy = -reach; dy <= reach; dy++) {
-          for (let dx = -reach; dx <= reach; dx++) {
-            const wobble = 1 + 0.25 * Math.sin(3 * Math.atan2(dy, dx) + phase);
-            if (Math.hypot(dx, dy) <= r * wobble) cells[(cy + dy) * N + cx + dx] = 0;
+        if (inBoss) continue;
+        const fits = discs.every((d) => {
+          const dr = Math.ceil(d.r * 1.25);
+          // Off the boss block, which keeps its own cover; seams are open ground
+          // by now (openSeams), so a blob may sit across one.
+          const btx = Math.floor(d.cx / TILE_CELLS) - bossTile.tx, bty = Math.floor(d.cy / TILE_CELLS) - bossTile.ty;
+          if (btx >= -1 && btx <= 2 && bty >= -1 && bty <= 2) return false;
+          // Round, from the blob's own edge: a box round every spawn covered most
+          // of the tile it stood in, and those tiles stayed bare.
+          if (markers.some((m) => Math.hypot(m.cx - d.cx, m.cy - d.cy) < d.r * 1.25 + MARKER_GAP)) return false;
+          const clear = dr + BLOB_MOAT;
+          for (let dy = -clear; dy <= clear; dy++) {
+            for (let dx = -clear; dx <= clear; dx++) {
+              const x = d.cx + dx, y = d.cy + dy;
+              if (x < 0 || y < 0 || x >= N || y >= N || cells[y * N + x] === 0) return false;
+            }
+          }
+          return true;
+        });
+        if (!fits) continue;
+        for (const d of discs) {
+          const dr = Math.ceil(d.r * 1.25);
+          for (let dy = -dr; dy <= dr; dy++) {
+            for (let dx = -dr; dx <= dr; dx++) {
+              const wobble = 1 + 0.25 * Math.sin(3 * Math.atan2(dy, dx) + d.phase);
+              if (Math.hypot(dx, dy) <= d.r * wobble) cells[(d.cy + dy) * N + d.cx + dx] = 0;
+            }
           }
         }
       }
     }
+  }
+}
+
+/** Smooth value noise in [0,1) over the cell grid, one lattice point per `scale` cells. */
+function valueNoise(x: number, y: number, scale: number, seed: number): number {
+  const hash = (a: number, b: number): number => {
+    let h = Math.imul(a ^ seed, 0x85ebca6b) ^ Math.imul(b + 0x9e3779b9, 0xc2b2ae35);
+    h ^= h >>> 13;
+    h = Math.imul(h, 0x27d4eb2f);
+    return ((h ^ (h >>> 16)) >>> 0) / 0x1_0000_0000;
+  };
+  const fx = x / scale, fy = y / scale;
+  const ix = Math.floor(fx), iy = Math.floor(fy);
+  const tx = fx - ix, ty = fy - iy;
+  const sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty);
+  const top = hash(ix, iy) + (hash(ix + 1, iy) - hash(ix, iy)) * sx;
+  const bot = hash(ix, iy + 1) + (hash(ix + 1, iy + 1) - hash(ix, iy + 1)) * sx;
+  return top + (bot - top) * sy;
+}
+
+/** Deepest the frayed edge eats into a wall, and grows off the grid's border, in cells. */
+const FRAY_DEPTH = 6;
+/** How hard the fray's noise is pushed toward its extremes. */
+const FRAY_CONTRAST = 2.4;
+/** Cycles of the fray's noise: a bay or a spit every few units, not every cell. */
+const FRAY_SCALE = 5;
+/** A free-standing wall this big is rock with a face, and frays like the rim. */
+const MASS_CELLS = 60;
+/** An obstacle under this many cells is a stub, not a blob. */
+const STUB_CELLS = 12;
+/** Floor kept around every marker while the border grows, so no spawn, reward or
+ *  arena mouth is ever walled over. */
+const MARKER_CLEAR = 2;
+
+/**
+ * Open ground must not show the chunks it was stamped from. The field chunks wall
+ * every unrouted edge with a ruler-straight 16-cell line, and their islands are
+ * squares: rock does not come in either shape (map-layout-1.jpeg is ragged
+ * ground with blobs in it). Two steps, the boss block untouched by both:
+ *  1. eat into every wall mass by a noisy 0..FRAY_DEPTH;
+ *  2. grow the grid's own border inward by the same, clear of every marker, since
+ *     a route tile on the lattice's edge has nothing past its wall to eat into.
+ * Step 2 is the only one that adds wall, and it gives back whatever cuts a marker
+ * off. `clearStubs` then removes the small and square obstacles.
+ */
+export function naturalizeEdges(
+  cells: Uint8Array, markers: readonly Marker[], bossTile: { tx: number; ty: number }, rng: RandomStream,
+): void {
+  const N = ASSEMBLED_CELLS;
+  const seedA = rng.nextU32(), seedB = rng.nextU32();
+  const inBoss = (x: number, y: number): boolean => {
+    const bx = Math.floor(x / TILE_CELLS) - bossTile.tx, by = Math.floor(y / TILE_CELLS) - bossTile.ty;
+    return bx >= 0 && bx <= 1 && by >= 0 && by <= 1;
+  };
+  const edge = (x: number, y: number): number => Math.min(x, y, N - 1 - x, N - 1 - y);
+  // A fine octave over the coarse one, or a plateau of the noise draws a
+  // straight run as long as the plateau.
+  // Contrast-stretched, because the sum of two noises sits near its middle and a
+  // middle value everywhere is a straight line one level in.
+  const fray = (x: number, y: number, seed: number, scale = FRAY_SCALE): number => {
+    const n = 0.65 * valueNoise(x, y, scale, seed) + 0.35 * valueNoise(x, y, 2, seed ^ 0x5bd1e995);
+    const k = Math.min(1, Math.max(0, (n - 0.5) * FRAY_CONTRAST + 0.5));
+    return Math.min(FRAY_DEPTH, Math.floor(k * (FRAY_DEPTH + 1)));
+  };
+  const NB4 = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const;
+
+  // Which wall is a MASS — the outer region, or a block of rock big enough to
+  // have a face — as opposed to a thin feature such as a compound wall, which
+  // fraying would only shred into stubs.
+  const outer = new Uint8Array(N * N);
+  const seenMass = new Uint8Array(N * N);
+  for (let i = 0; i < N * N; i++) {
+    if (cells[i] !== 0 || seenMass[i]) continue;
+    const comp = [i];
+    seenMass[i] = 1;
+    let border = false;
+    for (let h = 0; h < comp.length; h++) {
+      const c = comp[h]!, x = c % N, y = (c - x) / N;
+      if (edge(x, y) === 0) border = true;
+      for (const [dx, dy] of NB4) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
+        const j = ny * N + nx;
+        if (cells[j] === 0 && !seenMass[j]) { seenMass[j] = 1; comp.push(j); }
+      }
+    }
+    if (border || comp.length >= MASS_CELLS) for (const c of comp) outer[c] = 1;
+  }
+
+  // 1. Steps from the nearest floor through outer wall, then open the near ones.
+  const depth = new Uint8Array(N * N).fill(255);
+  const queue: number[] = [];
+  for (let i = 0; i < N * N; i++) if (cells[i] === 1) { depth[i] = 0; queue.push(i); }
+  for (let head = 0; head < queue.length; head++) {
+    const i = queue[head]!, x = i % N, y = (i - x) / N;
+    if (depth[i]! >= FRAY_DEPTH) continue;
+    for (const [dx, dy] of NB4) {
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
+      const j = ny * N + nx;
+      if (!outer[j] || depth[j] !== 255) continue;
+      depth[j] = depth[i]! + 1;
+      queue.push(j);
+    }
+  }
+  for (let y = 1; y < N - 1; y++) {
+    for (let x = 1; x < N - 1; x++) {
+      const i = y * N + x;
+      if (outer[i] && depth[i]! <= fray(x, y, seedA) && !inBoss(x, y)) cells[i] = 1;
+    }
+  }
+
+  // 2. The border grows in where the noise says, never near a marker.
+  const grown: number[] = [];
+  for (let y = 1; y < N - 1; y++) {
+    for (let x = 1; x < N - 1; x++) {
+      // Finer than the erosion's: the border is one long line, and a low patch
+      // of coarse noise along it is a straight run as long as the patch.
+      if (edge(x, y) > fray(x, y, seedB, 3) || inBoss(x, y)) continue;
+      if (markers.some((m) => Math.abs(m.cx - x) <= MARKER_CLEAR && Math.abs(m.cy - y) <= MARKER_CLEAR)) continue;
+      if (cells[y * N + x] === 1) grown.push(y * N + x);
+      cells[y * N + x] = 0;
+    }
+  }
+  // Growth spares a marker's own cells but can still ring them off from the
+  // route; give back the grown wall round any marker the arena can no longer reach.
+  const boss = markers.find((m) => m.ch === "b");
+  for (let pass = 0; boss && pass < 4; pass++) {
+    const reached = bfsReachable(cells, N, boss);
+    const lost = markers.filter((m) => reached[m.cy * N + m.cx] !== 1);
+    if (lost.length === 0) break;
+    const reach = pass < 3 ? 6 * (pass + 1) : N;
+    for (const i of grown) {
+      const x = i % N, y = (i - x) / N;
+      if (lost.some((m) => Math.abs(m.cx - x) <= reach && Math.abs(m.cy - y) <= reach)) cells[i] = 1;
+    }
+  }
+
+  // Smooth what the noise leaves one cell wide: a notch with wall on three sides
+  // fills, a spike with floor on three sides goes.
+  for (let pass = 0; pass < 2; pass++) {
+    for (let y = 1; y < N - 1; y++) {
+      for (let x = 1; x < N - 1; x++) {
+        if (inBoss(x, y)) continue;
+        const i = y * N + x;
+        let walls = 0;
+        for (const [dx, dy] of NB4) walls += cells[(y + dy) * N + x + dx] === 0 ? 1 : 0;
+        if (cells[i] === 0 && walls <= 1) cells[i] = 1;
+        else if (cells[i] === 1 && walls >= 3 &&
+          !markers.some((m) => Math.abs(m.cx - x) <= MARKER_CLEAR && Math.abs(m.cy - y) <= MARKER_CLEAR)) cells[i] = 0;
+      }
+    }
+  }
+
+}
+
+/**
+ * Erase every free-standing wall under STUB_CELLS or shaped as a rectangle: the
+ * stubs openSeams and the fray leave, and the chunks' square islands.
+ * `dressOpenGround` puts shaped blobs back. The border region never goes.
+ */
+function clearStubs(cells: Uint8Array, bossTile: { tx: number; ty: number }): void {
+  const N = ASSEMBLED_CELLS;
+  const inBoss = (x: number, y: number): boolean => {
+    const bx = Math.floor(x / TILE_CELLS) - bossTile.tx, by = Math.floor(y / TILE_CELLS) - bossTile.ty;
+    return bx >= 0 && bx <= 1 && by >= 0 && by <= 1;
+  };
+  const edge = (x: number, y: number): number => Math.min(x, y, N - 1 - x, N - 1 - y);
+  const NB4 = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const;
+  const seen = new Uint8Array(N * N);
+  for (let i = 0; i < N * N; i++) {
+    if (cells[i] !== 0 || seen[i]) continue;
+    const comp = [i];
+    seen[i] = 1;
+    let border = false, x0 = N, y0 = N, x1 = 0, y1 = 0;
+    for (let h = 0; h < comp.length; h++) {
+      const c = comp[h]!, x = c % N, y = (c - x) / N;
+      if (edge(x, y) === 0 || inBoss(x, y)) border = true;
+      x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y);
+      for (const [dx, dy] of NB4) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
+        const j = ny * N + nx;
+        if (cells[j] === 0 && !seen[j]) { seen[j] = 1; comp.push(j); }
+      }
+    }
+    const square = comp.length === (x1 - x0 + 1) * (y1 - y0 + 1);
+    if (!border && (comp.length < STUB_CELLS || square)) for (const c of comp) cells[c] = 1;
   }
 }
 
@@ -416,6 +628,12 @@ export function assembleArea(seed: number, contentVersion: string, grammar: Gram
 
   widenDoors(cells, skeleton.masks);
   if (grammar.openSeams) openSeams(cells, skeleton.bossTile);
+  if (grammar.naturalEdges) {
+    naturalizeEdges(cells, markers, skeleton.bossTile, createStream(seed, `${contentVersion}.layout.edges`));
+    // Fraying can put floor behind a seam wall the first pass had to leave.
+    if (grammar.openSeams) openSeams(cells, skeleton.bossTile);
+    clearStubs(cells, skeleton.bossTile);
+  }
   if (grammar.organicRim) {
     dressOpenGround(cells, markers, skeleton.bossTile, createStream(seed, `${contentVersion}.layout.blobs`));
   }

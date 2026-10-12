@@ -251,23 +251,30 @@ describe("assembleArea, strand", () => {
     const boss = objectiveAnchors.find((a) => a.id === "boss")!;
     const btx = Math.floor((boss.x - grid.originX) / grid.cellSize / TILE_CELLS);
     const bty = Math.floor((boss.y - grid.originY) / grid.cellSize / TILE_CELLS);
+    // So does the frayed band along the grid's border, where wall is meant to
+    // stand in lumps of any shape, a seam or not (naturalizeEdges).
     const nearBoss = (x: number, y: number) =>
-      Math.abs(Math.floor(x / TILE_CELLS) - btx) <= 1 && Math.abs(Math.floor(y / TILE_CELLS) - bty) <= 1;
+      (Math.abs(Math.floor(x / TILE_CELLS) - btx) <= 1 && Math.abs(Math.floor(y / TILE_CELLS) - bty) <= 1) ||
+      Math.min(x, y, cols - 1 - x, cols - 1 - y) <= 6;
     const runs: number[] = [];
     let walls = 0, posts = 0;
     for (let k = 1; k < AREA_TILES; k++) {
       const s = k * TILE_CELLS; // first cell of the next tile
       for (const vertical of [true, false]) {
         const across = (i: number, d: number) => vertical ? floor(s + d, i) : floor(i, s + d);
-        let run = 0;
+        let run = 0, line = 0;
         for (let i = 0; i <= cols; i++) {
           const open = i < cols && across(i, -1) && across(i, 0);
-          if (open) { run++; continue; }
+          if (open) { run++; line = 0; continue; }
           if (run > 0) runs.push(run);
           run = 0;
-          // A one-cell wall line on each side of the seam with floor beyond both.
+          // A one-cell wall line on each side of the seam with floor beyond both,
+          // three cells long: shorter is a frayed edge crossing the seam, not a line.
           const [wx, wy] = vertical ? [s, i] : [i, s];
-          if (i < cols && !nearBoss(wx, wy) && !nearBoss(vertical ? s - 1 : i, vertical ? i : s - 1) && !across(i, -1) && !across(i, 0) && across(i, -2) && across(i, 1)) walls++;
+          const seamWall = i < cols && !nearBoss(wx, wy) && !nearBoss(vertical ? s - 1 : i, vertical ? i : s - 1) &&
+            !across(i, -1) && !across(i, 0) && across(i, -2) && across(i, 1);
+          line = seamWall ? line + 1 : 0;
+          if (line === 3) walls++;
         }
       }
     }
@@ -347,6 +354,90 @@ describe("assembleArea, strand", () => {
       }
     }
   });
+
+  /** Cells of the 2x2 tile block holding the boss, plus a one-cell margin. */
+  const bossBlock = (grammar: Grammar, seed: number) => {
+    const { grid, objectiveAnchors } = assembleArea(seed, V, grammar);
+    const boss = objectiveAnchors.find((a) => a.id === "boss")!;
+    const bx = Math.round((boss.x - grid.originX) / grid.cellSize);
+    const by = Math.round((boss.y - grid.originY) / grid.cellSize);
+    return (x: number, y: number) => Math.abs(x - bx) <= 2 * TILE_CELLS && Math.abs(y - by) <= 2 * TILE_CELLS;
+  };
+
+  it("stands no stub or square block in open ground: every obstacle is a shaped blob", () => {
+    // A wall component the outer region never touches is an obstacle in the
+    // open. Under five cells it is a pillar a body can barely see; a solid
+    // rectangle is a crate of rock, the one shape nothing in nature is.
+    for (let seed = 0; seed < 40; seed++) {
+      const { grid, usedFallback } = assembleArea(seed, V, FIELD_GRAMMAR);
+      if (usedFallback) continue;
+      const { cols, rows, cells } = grid;
+      const nearBoss = bossBlock(FIELD_GRAMMAR, seed);
+      const seen = new Uint8Array(cols * rows);
+      const outer = (x: number, y: number) => x === 0 || y === 0 || x === cols - 1 || y === rows - 1;
+      const bad: string[] = [];
+      for (let i = 0; i < cells.length; i++) {
+        if (cells[i] !== 0 || seen[i]) continue;
+        const comp: number[] = [i];
+        seen[i] = 1;
+        let touchesOuter = false;
+        for (let h = 0; h < comp.length; h++) {
+          const c = comp[h]!, x = c % cols, y = (c - x) / cols;
+          if (outer(x, y)) touchesOuter = true;
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+            const nx = x + dx, ny = y + dy;
+            if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+            const j = ny * cols + nx;
+            if (cells[j] === 0 && !seen[j]) { seen[j] = 1; comp.push(j); }
+          }
+        }
+        if (touchesOuter) continue;
+        const xs = comp.map((c) => c % cols), ys = comp.map((c) => Math.floor(c / cols));
+        const x0 = Math.min(...xs), y0 = Math.min(...ys);
+        if (nearBoss(x0, y0)) continue;
+        const w = Math.max(...xs) - x0 + 1, h = Math.max(...ys) - y0 + 1;
+        if (comp.length < 5) bad.push(`stub ${comp.length} at ${x0},${y0}`);
+        else if (comp.length === w * h) bad.push(`block ${w}x${h} at ${x0},${y0}`);
+      }
+      expect(bad, `seed ${seed}`).toEqual([]);
+    }
+  }, 30_000);
+
+  it("draws the edge of open ground ragged, never a long ruler-straight wall", () => {
+    // Longest run of wall cells in one row or column that all face floor on the
+    // same side. A chunk's border is 16 cells of exactly that.
+    const longest = (seed: number): number => {
+      const { grid } = assembleArea(seed, V, FIELD_GRAMMAR);
+      const { cols, rows, cells } = grid;
+      const nearBoss = bossBlock(FIELD_GRAMMAR, seed);
+      const wallFacing = (x: number, y: number, dx: number, dy: number) =>
+        x + dx >= 0 && y + dy >= 0 && x + dx < cols && y + dy < rows &&
+        cells[y * cols + x] === 0 && cells[(y + dy) * cols + x + dx] === 1 && !nearBoss(x, y);
+      let best = 0;
+      for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]] as const) {
+        const alongX = dx === 0;
+        for (let a = 0; a < (alongX ? rows : cols); a++) {
+          let run = 0;
+          for (let b = 0; b < (alongX ? cols : rows); b++) {
+            const [x, y] = alongX ? [b, a] : [a, b];
+            run = wallFacing(x, y, dx, dy) ? run + 1 : 0;
+            best = Math.max(best, run);
+          }
+        }
+      }
+      return best;
+    };
+    // Before the fray every chunk border ran 16 cells and the grid's own border
+    // the whole map (126 on seed 0). Noise still leaves the odd longer plateau,
+    // so the bound is on the worst seed and the typical one separately.
+    const runs: number[] = [];
+    for (let seed = 0; seed < 40; seed++) {
+      runs.push(longest(seed));
+      expect(runs[seed], `seed ${seed}`).toBeLessThanOrEqual(20);
+    }
+    runs.sort((a, b) => a - b);
+    expect(runs[20], "median").toBeLessThanOrEqual(12);
+  }, 30_000);
 
   it("leaves no seam wall or lattice post standing in open ground", () => {
     for (let seed = 0; seed < 30; seed++) {
