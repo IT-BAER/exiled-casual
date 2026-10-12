@@ -1,7 +1,8 @@
 // The inland wall as one continuous rock mass instead of a row of boulders.
 //
-// A height field over every wall cell: zero at the collision face, a low scree
-// apron, then a cliff climbing well over the player's head. A wall in front of a
+// A height field over every wall cell: zero at a rounded, wandering foot near the
+// collision face (never under the player's body), a low scree apron, then a cliff
+// climbing well over the player's head. A wall in front of a
 // room is held to CLIFF_FRONT by the view rule in `cliffHeights`; whatever still
 // stands between the camera and the player stipples away around him (CliffPlugin),
 // PoE's see-through wall. The same plugin paints the floor plate up the scree so
@@ -71,6 +72,110 @@ function noise(x: number, z: number, scale: number, seed: number): number {
   return top + (bot - top) * sz;
 }
 
+/** Corner radii of the foot: rock corners pushed back, room corners filled. Under
+ *  the 0.5 body radius, so neither opens a gap or covers ground he stands on. */
+const ROUND_OUT = 0.625;
+const ROUND_IN = 0.625;
+/** The most the rounding may cut back or fill at any point, so it turns corners
+ *  without shaving a small obstacle away or closing a narrow bay. */
+const ROUND_MAX = 0.3;
+/** How far the foot wanders off the collision face: back into the rock, out onto floor. */
+const RECEDE = 0.25;
+const BULGE = 0.12;
+/** Depth the field dips under the floor past the foot. */
+const FOOT_SINK = 0.1;
+
+/** Euclidean distance in world units from each vertex to the nearest set one (Felzenszwalb). */
+function distanceTo(mask: Uint8Array, nx: number, nz: number): Float32Array {
+  const INF = 1e12;
+  const g = new Float64Array(nx * nz);
+  for (let k = 0; k < g.length; k++) g[k] = mask[k] ? 0 : INF;
+  const n = Math.max(nx, nz);
+  const f = new Float64Array(n), d = new Float64Array(n), z = new Float64Array(n + 1);
+  const v = new Int32Array(n);
+  const pass = (len: number, at: (q: number) => number) => {
+    for (let q = 0; q < len; q++) f[q] = g[at(q)]!;
+    let k = 0;
+    v[0] = 0; z[0] = -INF; z[1] = INF;
+    for (let q = 1; q < len; q++) {
+      let s = ((f[q]! + q * q) - (f[v[k]!]! + v[k]! * v[k]!)) / (2 * q - 2 * v[k]!);
+      while (s <= z[k]!) { k--; s = ((f[q]! + q * q) - (f[v[k]!]! + v[k]! * v[k]!)) / (2 * q - 2 * v[k]!); }
+      k++; v[k] = q; z[k] = s; z[k + 1] = INF;
+    }
+    k = 0;
+    for (let q = 0; q < len; q++) {
+      while (z[k + 1]! < q) k++;
+      d[q] = (q - v[k]!) * (q - v[k]!) + f[v[k]!]!;
+    }
+    for (let q = 0; q < len; q++) g[at(q)] = d[q]!;
+  };
+  for (let j = 0; j < nz; j++) pass(nx, (q) => j * nx + q);
+  for (let i = 0; i < nx; i++) pass(nz, (q) => q * nx + i);
+  const out = new Float32Array(nx * nz);
+  for (let k = 0; k < out.length; k++) out[k] = Math.sqrt(g[k]!) * STEP;
+  return out;
+}
+
+/** Signed distance to a vertex set's edge, positive inside; zero halfway between neighbours. */
+function signedDistance(inside: Uint8Array, nx: number, nz: number): Float32Array {
+  const toIn = distanceTo(inside, nx, nz);
+  const toOut = distanceTo(inside.map((b) => 1 - b), nx, nz);
+  return toIn.map((d, k) => (inside[k] ? toOut[k]! - STEP / 2 : -(d - STEP / 2)));
+}
+
+/**
+ * Signed distance from each vertex to the rock's foot, positive into the rock.
+ * The cell staircase, opened and closed by a radius so its corners turn round,
+ * blurred off the lattice, then pushed in and out by noise so no face runs ruler-
+ * straight. Euclidean throughout: a chamfer distance drew every ledge as a square.
+ */
+function footDistance(
+  open: Uint8Array, nx: number, nz: number, x0: number, z0: number,
+): { foot: Float32Array; base: Float32Array } {
+  // Shifted half a step so the crossing sits ON the last open vertex, the collision face.
+  const base = signedDistance(open.map((o) => 1 - o), nx, nz).map((v) => v + STEP / 2);
+  let s = signedDistance(Uint8Array.from(base, (v) => (v > ROUND_OUT ? 1 : 0)), nx, nz)
+    .map((v, k) => Math.max(v + ROUND_OUT, base[k]! - ROUND_MAX));
+  s = signedDistance(Uint8Array.from(s, (v) => (v > -ROUND_IN ? 1 : 0)), nx, nz)
+    .map((v, k) => Math.min(v - ROUND_IN, base[k]! + ROUND_MAX));
+  const W = [0.135, 0.607, 1, 0.607, 0.135], SUM = W.reduce((a, b) => a + b, 0);
+  const blur = (src: Float32Array, di: number, dj: number) => {
+    const out = new Float32Array(src.length);
+    for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+      let acc = 0;
+      for (let t = -2; t <= 2; t++) {
+        const a = Math.min(nx - 1, Math.max(0, i + t * di)), b = Math.min(nz - 1, Math.max(0, j + t * dj));
+        acc += src[b * nx + a]! * W[t + 2]!;
+      }
+      out[j * nx + i] = acc / SUM;
+    }
+    return out;
+  };
+  s = blur(blur(s, 1, 0), 0, 1);
+  for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+    const x = x0 + i * STEP, z = z0 + j * STEP;
+    const n = noise(x, z, 1.6, 5) * 0.65 + noise(x, z, 0.55, 6) * 0.35;
+    const w = Math.min(1, Math.max(0, (n - 0.5) * 2 + 0.5));
+    s[j * nx + i] = s[j * nx + i]! - RECEDE + (RECEDE + BULGE) * w;
+  }
+  // A wall one cell thin is all foot: cut it back like a thick one and it is gone,
+  // while the sim still collides with it. The cut grows with the rock's thickness.
+  const widest = (src: Float32Array, di: number, dj: number) => {
+    const out = new Float32Array(src.length);
+    for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+      let m = -Infinity;
+      for (let t = -3; t <= 3; t++) {
+        const a = Math.min(nx - 1, Math.max(0, i + t * di)), b = Math.min(nz - 1, Math.max(0, j + t * dj));
+        m = Math.max(m, src[b * nx + a]!);
+      }
+      out[j * nx + i] = m;
+    }
+    return out;
+  };
+  const thick = widest(widest(base, 1, 0), 0, 1);
+  return { foot: s.map((v, k) => Math.max(v, base[k]! - Math.max(0, (thick[k]! - STEP) * 1.1))), base };
+}
+
 export interface CliffField {
   /** Vertices per row and per column. */
   nx: number;
@@ -79,15 +184,15 @@ export interface CliffField {
   x0: number;
   z0: number;
   step: number;
-  /** Height per vertex, row-major; 0 wherever a floor cell touches the vertex. */
+  /** Height per vertex, row-major; dips under the floor past the foot. */
   heights: Float32Array;
-  /** World distance from each vertex to the nearest floor-touching vertex. */
+  /** World distance from each vertex in to the foot; 0 outside the rock. */
   depth: Float32Array;
 }
 
 /**
- * The height field. A vertex touching any floor cell is 0, so the rock begins
- * exactly on the face the sim collides against and never stands on walkable floor.
+ * The height field. The rock begins on the foot (`footDistance`), which keeps
+ * within reach of the face the sim collides against and off any floor he can stand on.
  *
  * The cap is the whole point. Seen from the camera at its flattest pitch, a point
  * of height h hides h * HIDE_PER_UNIT of ground behind it, away from the camera.
@@ -133,31 +238,17 @@ export function cliffHeights(grid: WalkableGrid): CliffField {
   const islandAt = (cx: number, cy: number) =>
     cx >= 0 && cy >= 0 && cx < cols && cy < rows && cells[cy * cols + cx] === 0 && island[cy * cols + cx] === 1;
 
-  // Chamfer distance to the nearest open vertex, two passes.
-  const depth = new Float32Array(nx * nz).fill(1e9);
-  for (let k = 0; k < open.length; k++) if (open[k]) depth[k] = 0;
-  const D = STEP, DD = STEP * Math.SQRT2;
-  const relax = (k: number, i: number, j: number, di: number, dj: number, w: number) => {
-    const a = i + di, b = j + dj;
-    if (a < 0 || b < 0 || a >= nx || b >= nz) return;
-    const v = depth[b * nx + a]! + w;
-    if (v < depth[k]!) depth[k] = v;
-  };
-  for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
-    const k = j * nx + i;
-    relax(k, i, j, -1, 0, D); relax(k, i, j, 0, -1, D); relax(k, i, j, -1, -1, DD); relax(k, i, j, 1, -1, DD);
-  }
-  for (let j = nz - 1; j >= 0; j--) for (let i = nx - 1; i >= 0; i--) {
-    const k = j * nx + i;
-    relax(k, i, j, 1, 0, D); relax(k, i, j, 0, 1, D); relax(k, i, j, 1, 1, DD); relax(k, i, j, -1, 1, DD);
-  }
+  const { foot, base } = footDistance(open, nx, nz, x0, z0);
+  const depth = foot.map((s) => Math.max(0, s));
 
   const reach = CLIFF_MAX * HIDE_PER_UNIT + MARGIN;
   const heights = new Float32Array(nx * nz);
   for (let j = 0; j < nz; j++) {
     for (let i = 0; i < nx; i++) {
       const k = j * nx + i;
-      if (open[k]) continue;
+      // Under the floor, so the ground plane cuts the rock on the smooth zero line
+      // rather than on whichever lattice vertex was last open.
+      if (foot[k]! <= 0) { heights[k] = Math.max(-FOOT_SINK, foot[k]!); continue; }
       const x = x0 + i * STEP, z = z0 + j * STEP;
       let view = reach;
       for (let t = STEP; t < reach; t += STEP / 2) {
@@ -176,7 +267,8 @@ export function cliffHeights(grid: WalkableGrid): CliffField {
       const cy1 = Math.floor(j / per), cy0 = j % per === 0 ? cy1 - 1 : cy1;
       const cx1 = Math.floor(i / per), cx0 = i % per === 0 ? cx1 - 1 : cx1;
       if (islandAt(cx0, cy0) || islandAt(cx1, cy0) || islandAt(cx0, cy1) || islandAt(cx1, cy1)) {
-        const v = Math.min(1, d / ISLAND_RISE);
+        // By the collision depth: rounding shaves a small obstacle's middle too.
+        const v = Math.min(1, Math.max(d, base[k]!) / ISLAND_RISE);
         h = Math.max(h, Math.min(cap, ISLAND_PEAK * v * v * (3 - 2 * v) * (0.85 + 0.3 * n)));
       }
       const shelf = STRATUM * (0.8 + 0.4 * noise(x, z, 2.2, 3));
@@ -225,7 +317,7 @@ export function cliffVertexData(field: CliffField): VertexData | null {
   for (let j = 0; j + 1 < nz; j++) {
     for (let i = 0; i + 1 < nx; i++) {
       const a = j * nx + i, b = a + 1, c = a + nx, d = c + 1;
-      if (heights[a]! + heights[b]! + heights[c]! + heights[d]! <= 0) continue;
+      if (Math.max(heights[a]!, heights[b]!, heights[c]!, heights[d]!) <= 0) continue;
       const va = vertex(i, j), vb = vertex(i + 1, j), vc = vertex(i, j + 1), vd = vertex(i + 1, j + 1);
       // Alternate the diagonal so the facets do not all lean one way.
       if ((i + j) % 2 === 0) indices.push(va, vb, vc, vb, vd, vc);

@@ -1,27 +1,61 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { generateArea, type GrammarId } from "@exiled/mapgen";
+import { generateArea, type GrammarId, type WalkableGrid } from "@exiled/mapgen";
 import { NullEngine, VertexBuffer } from "@babylonjs/core";
 import { createScene, BETA_LIMIT, CAMERA_ALPHA } from "./engine";
-import { buildCliffs, cliffHeights, cliffMaterial, cliffVertexData, CLIFF_FRONT } from "./cliffs";
+import { buildCliffs, cliffHeights, cliffMaterial, cliffVertexData, CLIFF_FRONT, type CliffField } from "./cliffs";
 import { PBRMaterial } from "@babylonjs/core";
 
 const MAPS: [GrammarId, number][] = [["loop", 1], ["loop", 7], ["sunken-ruins", 3], ["open-field", 5]];
 
 describe("cliffs", () => {
-  it("never raises rock over a walkable cell", () => {
+  it("never stands rock where the player's body reaches", () => {
+    // The foot may wander off the collision face, but rock deeper than SINK into
+    // a disc the sim lets him stand in would cover his feet.
+    const R = 0.5, SINK = 0.15;
     for (const [g, seed] of MAPS) {
       const grid = generateArea(seed, "v", g).grid;
       const f = cliffHeights(grid);
-      let raised = 0;
-      for (let cy = 0; cy < grid.rows; cy++) for (let cx = 0; cx < grid.cols; cx++) {
-        if (grid.cells[cy * grid.cols + cx] !== 1) continue;
-        for (let dj = 0; dj <= 2; dj++) for (let di = 0; di <= 2; di++) {
-          if (f.heights[(cy * 2 + dj) * f.nx + cx * 2 + di] !== 0) raised++;
+      const bad: string[] = [];
+      for (let j = 0; j < f.nz; j++) for (let i = 0; i < f.nx; i++) {
+        if (f.heights[j * f.nx + i]! <= 0.02 || f.depth[j * f.nx + i]! > 1.5) continue;
+        const x = f.x0 + i * f.step, z = f.z0 + j * f.step;
+        if (wallDistance(grid, x, z) >= R) { bad.push(`${x},${z}`); continue; }
+        for (let a = 0; a < 16 && bad.length < 5; a++) {
+          const cx = x + Math.cos((a * Math.PI) / 8) * (R - SINK), cz = z + Math.sin((a * Math.PI) / 8) * (R - SINK);
+          if (wallDistance(grid, cx, cz) >= R) { bad.push(`${x},${z}`); break; }
         }
       }
-      expect(raised, `${g} ${seed}`).toBe(0);
+      expect(bad, `${g} ${seed}`).toEqual([]);
     }
+  }, 30_000);
+
+  it("rounds the corners of an obstacle", () => {
+    // 36 square islands: the foot starts further in on a corner's diagonal than on
+    // a face, by the rounding radius, averaged so the wobble cancels.
+    const S = 8, P = 20;
+    const grid = gridOf(120, 120, (x, y) => x % P >= 6 && x % P < 6 + S && y % P >= 6 && y % P < 6 + S);
+    const f = cliffHeights(grid);
+    const corner: number[] = [], face: number[] = [];
+    const edge = (c: number) => c * grid.cellSize - grid.cellSize / 2;
+    for (let a = 6; a < 120; a += P) for (let b = 6; b < 120; b += P) {
+      const x0 = edge(a), x1 = edge(a + S), z0 = edge(b), z1 = edge(b + S);
+      const r = Math.SQRT1_2;
+      corner.push(foot(f, x0, z0, r, r), foot(f, x1, z0, -r, r), foot(f, x0, z1, r, -r), foot(f, x1, z1, -r, -r));
+      face.push(foot(f, (x0 + x1) / 2, z0, 0, 1), foot(f, (x0 + x1) / 2, z1, 0, -1),
+        foot(f, x0, (z0 + z1) / 2, 1, 0), foot(f, x1, (z0 + z1) / 2, -1, 0));
+    }
+    expect(mean(corner) - mean(face)).toBeGreaterThan(0.12);
+  });
+
+  it("wobbles a straight wall face instead of ruling it", () => {
+    const grid = gridOf(120, 120, (x) => x < 60);
+    const f = cliffHeights(grid);
+    const feet: number[] = [];
+    for (let z = 10; z < 50; z += 0.1) feet.push(31.5 - foot(f, 31.5, z, -1, 0));
+    const m = mean(feet);
+    const sd = Math.sqrt(mean(feet.map((v) => (v - m) ** 2)));
+    expect(sd).toBeGreaterThan(0.06);
   });
 
   it("hides no floor behind anything taller than the front cap, at the flattest pitch", () => {
@@ -126,3 +160,43 @@ describe("cliffs", () => {
     engine.dispose();
   });
 });
+
+function gridOf(cols: number, rows: number, wall: (x: number, y: number) => boolean): WalkableGrid {
+  const cells = new Uint8Array(cols * rows);
+  for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) cells[y * cols + x] = wall(x, y) ? 0 : 1;
+  return { cols, rows, cellSize: 0.5, originX: 0, originY: 0, cells };
+}
+
+/** Bilinear height of the field at world (x, z). */
+function heightAt(f: CliffField, x: number, z: number): number {
+  const i = (x - f.x0) / f.step, j = (z - f.z0) / f.step;
+  const i0 = Math.floor(i), j0 = Math.floor(j);
+  if (i0 < 0 || j0 < 0 || i0 + 1 >= f.nx || j0 + 1 >= f.nz) return 0;
+  const h = (a: number, b: number) => f.heights[b * f.nx + a]!;
+  const ti = i - i0, tj = j - j0;
+  return (h(i0, j0) * (1 - ti) + h(i0 + 1, j0) * ti) * (1 - tj) + (h(i0, j0 + 1) * (1 - ti) + h(i0 + 1, j0 + 1) * ti) * tj;
+}
+
+/** Distance marched from (x, z) along (dx, dz) to where rock first stands up. */
+function foot(f: CliffField, x: number, z: number, dx: number, dz: number): number {
+  for (let t = 0; t < 3; t += 0.01) if (heightAt(f, x + dx * t, z + dz * t) > 0.002) return t;
+  return 3;
+}
+
+/** World distance from (x, z) to the nearest wall cell's box; off-grid is wall. */
+function wallDistance(grid: WalkableGrid, x: number, z: number): number {
+  const { cols, rows, cellSize: cs, originX, originY, cells } = grid;
+  const cx = Math.round((x - originX) / cs), cy = Math.round((z - originY) / cs);
+  let best = Infinity;
+  for (let y = cy - 3; y <= cy + 3; y++) for (let xx = cx - 3; xx <= cx + 3; xx++) {
+    if (xx >= 0 && y >= 0 && xx < cols && y < rows && cells[y * cols + xx] === 1) continue;
+    const gx = Math.max(0, Math.abs(x - (originX + xx * cs)) - cs / 2);
+    const gz = Math.max(0, Math.abs(z - (originY + y * cs)) - cs / 2);
+    best = Math.min(best, Math.hypot(gx, gz));
+  }
+  return best;
+}
+
+function mean(v: readonly number[]): number {
+  return v.reduce((a, b) => a + b, 0) / v.length;
+}
