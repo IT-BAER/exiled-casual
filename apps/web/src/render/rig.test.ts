@@ -2180,3 +2180,44 @@ describe("a sword strike moves the legs only while standing", () => {
     expect(off("run", "thigh_l"), "thigh on the run").toBeLessThan(2);
   }), 60_000);
 });
+
+/**
+ * Standing, the knee comes forward a few millimetres with every breath. A calf
+ * capsule whose round head stood ON the knee reached 12cm up the thigh, so that
+ * touch decided whether the robe's front panel hung straight or wrapped over a
+ * ball: the panel swung 11cm out and back in time with the breath.
+ */
+describe("the robe hangs still while he stands and breathes", () => {
+  const MODELS = fileURLToPath(new URL("../../public/models/", import.meta.url));
+
+  it("moves no skirt joint more than a few centimetres over a breath", async () => {
+    const original = (globalThis as { FileReader?: unknown }).FileReader;
+    (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
+    try {
+      engine = new NullEngine();
+      engine.getDeltaTime = () => 16;
+      const { scene } = createScene(engine);
+      scene.useConstantAnimationDeltaTime = true;
+      new FreeCamera("eye", new Vector3(0, 2, -6), scene);
+      const file = (name: string) => new File([readFileSync(`${MODELS}${name}`)], name, { type: "model/gltf-binary" });
+      await loadPlayerRig(scene, { anims: file("anim-library.glb"), wardrobe: file("wardrobe.glb") });
+      const rig = attachRig(scene, new Mesh("hero", scene))!;
+      rig.setLooks({ ...BASE_LOOKS, helmet: "ember", chest: "ember", boots: "ember", gloves: "ember" });
+      rig.standSettled();
+      const frame = () => { rig.setLocomotion(0); scene.render(); };
+      for (let i = 0; i < 200; i++) frame();
+      const joints = scene.transformNodes.filter((n) => /^skirt_\d+_0[2-6]$/.test(n.name));
+      expect(joints.length).toBe(SKIRT_CHAINS * (SKIRT_JOINTS - 1));
+      const start = joints.map((n) => n.getAbsolutePosition().clone());
+      let worst = 0;
+      // A breath is about 2.2s: 150 frames of 16ms hold one whole.
+      for (let f = 0; f < 150; f++) {
+        frame();
+        joints.forEach((n, k) => { worst = Math.max(worst, Vector3.Distance(n.getAbsolutePosition(), start[k]!)); });
+      }
+      expect(worst).toBeLessThan(0.04);
+    } finally {
+      (globalThis as { FileReader?: unknown }).FileReader = original;
+    }
+  }, 60_000);
+});

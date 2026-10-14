@@ -642,6 +642,13 @@ const skirtJointName = (chain: number, joint: number): string =>
  * capsule on the bone holds the robe up to 12cm off a boot. About the shaft,
  * the three shipped boots fit 11.4cm.
  *
+ * The worn calf capsule's head end starts 8cm down the shin (`shaft`; `toe`
+ * keeps its tail on the ankle). On the knee joint its round head reached 12cm
+ * up the thigh, where no boot is, and the few millimetres the knee comes
+ * forward with each idle breath decided whether the robe's front panel hung
+ * straight or wrapped over that ball: it swung 11cm out and back with the
+ * breath. 8cm still holds every boot's rim, which stops 4cm under the knee.
+ *
  * The worn foot capsule is laid along the sole instead, heel to past the toe:
  * `shaft` shifts its head end and `toe` its tail end, both in the foot bone's
  * frame. Round the ankle joint it needed 18cm to reach heel and sole, stood as
@@ -654,8 +661,8 @@ export const SKIRT_COLLIDERS: readonly {
 }[] = [
   { from: "thigh_l", to: "calf_l", radius: 0.0956 },
   { from: "thigh_r", to: "calf_r", radius: 0.0956 },
-  { from: "calf_l", to: "foot_l", radius: 0.121, worn: 0.1223, shaft: [0.02, 0, 0.0325] },
-  { from: "calf_r", to: "foot_r", radius: 0.121, worn: 0.1223, shaft: [-0.02, 0, 0.0325] },
+  { from: "calf_l", to: "foot_l", radius: 0.121, worn: 0.1223, shaft: [0.02, 0.08, 0.0325], toe: [0.02, 0, 0.0325] },
+  { from: "calf_r", to: "foot_r", radius: 0.121, worn: 0.1223, shaft: [-0.02, 0.08, 0.0325], toe: [-0.02, 0, 0.0325] },
   { from: "foot_l", to: "ball_l", radius: 0.1079, worn: 0.1219,
     shaft: [0.02, -0.0575, 0.02], toe: [0.02, 0.06, -0.04] },
   { from: "foot_r", to: "ball_r", radius: 0.1079, worn: 0.1219,
