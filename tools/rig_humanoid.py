@@ -80,8 +80,9 @@ def landmarks(mesh, H):
     j["head"] = Vector((0, column_y(0.86, 0.90), 0.87 * H))
     j["top"] = Vector((0, j["head"].y, H))
     for side, s in (("l", 1), ("r", -1)):
-        # Hand tip: the far end of the arm, among the vertices above the knee.
-        upper = v[(v[:, 2] > 0.3 * H) & (s * v[:, 0] > 0)]
+        # Hand tip: the far end of the arm, among the vertices above the knee and
+        # below the shoulder, or antlers wider than the reach become the hands.
+        upper = v[(v[:, 2] > 0.3 * H) & (v[:, 2] < 0.80 * H) & (s * v[:, 0] > 0)]
         far = upper[numpy.argsort(-s * upper[:, 0])[:max(5, len(upper) // 400)]]
         tip = Vector(far.mean(axis=0))
         shoulder = Vector((s * 0.105 * H, j["chest"].y, 0.80 * H))
@@ -148,6 +149,21 @@ def seg_dist(p, a, b):
     return numpy.linalg.norm(p - (a + t[:, None] * ab), axis=1)
 
 
+def pieces(inside, ew):
+    """Connected pieces of the welded points flagged `inside`, joined by edges with
+    both ends inside: one label per point, -1 outside."""
+    label = numpy.where(inside, numpy.arange(len(inside)), -1)
+    inner = ew[inside[ew[:, 0]] & inside[ew[:, 1]]]
+    while True:
+        low = numpy.minimum(label[inner[:, 0]], label[inner[:, 1]])
+        before = label.copy()
+        numpy.minimum.at(label, inner[:, 0], low)
+        numpy.minimum.at(label, inner[:, 1], low)
+        label[inside] = label[label[inside]]
+        if (label == before).all():
+            return label
+
+
 def skin(mesh, arm):
     """Nearest-bone weights, restricted to that bone and its direct neighbours.
 
@@ -196,6 +212,28 @@ def skin(mesh, arm):
         for i, b in enumerate(bones):
             if b.name not in ("hand_" + t, "arm_lower_" + t):
                 d[hangs, i] *= 3.0
+    e = numpy.empty(len(mesh.data.edges) * 2, dtype=numpy.int64)
+    mesh.data.edges.foreach_get("vertices", e)
+    e = e.reshape(-1, 2)
+    # A UV seam splits one surface point into several vertices the edge pass
+    # never joins: connectivity and weights run on the welded points.
+    _, weld = numpy.unique(numpy.round(v / (1e-4 * H)), axis=0, return_inverse=True)
+    weld = weld.ravel()
+    ew = weld[e]
+    # Below the hips a fist hanging to the knee and the thigh beside it are
+    # separate pieces of surface, and the shin can still be the nearer bone: a
+    # piece mostly nearest an arm is the arm, and no leg claims any of it.
+    below = numpy.zeros(weld.max() + 1, dtype=bool)
+    below[weld] = v[:, 2] < bones[index["hips"]].head_local.z
+    piece = pieces(below, ew)[weld]
+    armish = numpy.array([b.name.startswith(("arm_", "hand_")) for b in bones])
+    legs = numpy.array([b.name.startswith("leg") for b in bones])
+    inside = piece >= 0
+    share = numpy.bincount(piece[inside], armish[d.argmin(axis=1)][inside], minlength=len(below))
+    share /= numpy.maximum(numpy.bincount(piece[inside], minlength=len(below)), 1)
+    hung = inside & (share[numpy.maximum(piece, 0)] > 0.5)
+    print("arm pieces below the hips: %d vertices" % hung.sum())
+    d[numpy.ix_(hung, legs)] = numpy.inf
     W = numpy.zeros_like(d)
     nearest = d.argmin(axis=1)
     for vi, b0 in enumerate(nearest):
@@ -207,19 +245,13 @@ def skin(mesh, arm):
         w = 1.0 / numpy.maximum(d[vi, cand], 1e-3) ** 4
         W[vi, cand] = w / w.sum()
     # Four passes of neighbour averaging along the edges soften the joint seams.
-    e = numpy.empty(len(mesh.data.edges) * 2, dtype=numpy.int64)
-    mesh.data.edges.foreach_get("vertices", e)
-    e = e.reshape(-1, 2)
     deg = numpy.bincount(e.ravel(), minlength=len(v)).astype(float)[:, None]
     for _ in range(4):
         acc = numpy.zeros_like(W)
         numpy.add.at(acc, e[:, 0], W[e[:, 1]])
         numpy.add.at(acc, e[:, 1], W[e[:, 0]])
         W = 0.5 * W + 0.5 * numpy.where(deg > 0, acc / numpy.maximum(deg, 1), W)
-    # A UV seam splits one surface point into several vertices the edge pass
-    # never joins: give coincident vertices one weight, or the seam cracks open.
-    _, weld = numpy.unique(numpy.round(v / (1e-4 * H)), axis=0, return_inverse=True)
-    weld = weld.ravel()
+    # Coincident vertices take one weight, or the seam cracks open.
     acc = numpy.zeros((weld.max() + 1, W.shape[1]))
     numpy.add.at(acc, weld, W)
     W = acc[weld] / numpy.bincount(weld)[weld, None]
@@ -227,20 +259,10 @@ def skin(mesh, arm):
     # blade far from both bones bends it like rubber through the walk. Only the
     # pieces that reach up to the wrist are held: a wide foot is also out there.
     # Connectivity runs on welded points: UV seams cut a blade into islands.
-    ew = weld[e]
     for hangs, wz, hand in held:
         hw = numpy.zeros(weld.max() + 1, dtype=bool)
         hw[weld[hangs]] = True
-        label = numpy.where(hw, numpy.arange(len(hw)), -1)
-        inner = ew[hw[ew[:, 0]] & hw[ew[:, 1]]]
-        while True:
-            low = numpy.minimum(label[inner[:, 0]], label[inner[:, 1]])
-            before = label.copy()
-            numpy.minimum.at(label, inner[:, 0], low)
-            numpy.minimum.at(label, inner[:, 1], low)
-            label[hw] = label[label[hw]]
-            if (label == before).all():
-                break
+        label = pieces(hw, ew)
         top = numpy.full(len(hw), -numpy.inf)
         numpy.maximum.at(top, label[weld[hangs]], v[hangs, 2])
         grip = hangs & (top[numpy.maximum(label[weld], 0)] > wz - 0.1 * H)
