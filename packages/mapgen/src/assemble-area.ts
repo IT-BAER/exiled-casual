@@ -426,25 +426,31 @@ function clearStubs(cells: Uint8Array, bossTile: { tx: number; ty: number }): vo
   }
 }
 
-/** Radius a concave corner of wall is rounded by, in cells: chosen by noise per place. */
+/** Radius a concave corner of wall is rounded by, in cells: picked by noise per
+ *  place, then shrunk until the floor around the corner holds it. */
 const ROUND_MIN = 2;
-const ROUND_MAX = 4;
-/** Radius of a rock outcrop standing off a long face, in cells. */
+const ROUND_MAX = 6;
+/** Floor a fillet leaves round a marker: the marker's own 3x3, in cells. */
+const FILLET_CLEAR = 1;
+/** Radius of a rock outcrop standing off a long face, in cells: a random pick,
+ *  shrunk until the floor in front holds it. */
 const OUTCROP_MIN = 2;
 const OUTCROP_MAX = 4;
-/** Floor an outcrop must leave past its tip: two bodies abreast, in cells. */
+/** Floor an outcrop must leave past its tip, in cells. */
 const OUTCROP_ROOM = 4;
-/** Face length per outcrop slot, and the chance a slot gets one. */
+/** Face length per outcrop slot. Every slot with room gets one: one slot skipped
+ *  is one long face left. */
 const OUTCROP_SPACING = 8;
-const OUTCROP_CHANCE = 0.7;
 
 /**
  * Walled maps must not show the ruler their chunks were drawn with. Their walls
  * are too thin to bite into (a room wall is 4-7 cells, and the partition IS the
- * route), so rock is added instead: every concave corner of wall closed by a
- * radius the noise picks, and outcrops standing off long faces. Nothing goes
- * near a marker or into the boss block, and a feature that leaves a body fewer
- * markers to reach, or splits the floor, is found and taken back.
+ * route), so rock is added instead: every concave corner filled outside a
+ * quarter disc, and outcrops standing off long faces. Each corner is its own
+ * feature: a fillet that rides along with a sealed passage is a corner left
+ * square. Nothing goes near a marker or into the boss block, and a feature that
+ * leaves a body fewer markers to reach, or splits the floor, is found and taken
+ * back.
  */
 export function softenWalls(
   cells: Uint8Array, markers: readonly Marker[], bossTile: { tx: number; ty: number }, rng: RandomStream,
@@ -457,55 +463,51 @@ export function softenWalls(
     const bx = x - bossTile.tx * TILE_CELLS, by = y - bossTile.ty * TILE_CELLS;
     return bx >= -2 && bx < 2 * TILE_CELLS + 2 && by >= -2 && by < 2 * TILE_CELLS + 2;
   };
-  const nearMarker = (i: number): boolean => {
+  const nearMarker = (i: number, clear: number): boolean => {
     const x = i % N, y = (i - x) / N;
-    return markers.some((m) => Math.abs(m.cx - x) <= MARKER_CLEAR && Math.abs(m.cy - y) <= MARKER_CLEAR);
+    return markers.some((m) => Math.abs(m.cx - x) <= clear && Math.abs(m.cy - y) <= clear);
   };
-  const chance = (p: number): boolean => rng.nextU32() / 0x1_0000_0000 < p;
-  // What is planned so far: an outcrop checks its room against this, so two never
-  // face each other across one corridor.
+  // What is planned so far: a feature checks its room against this, so two never
+  // meet across one corridor.
   const plan = cells.slice();
+  const open = (x: number, y: number): boolean => x >= 0 && y >= 0 && x < N && y < N && plan[y * N + x] === 1;
   const features: number[][] = [];
-  const add = (cut: number[]): void => {
-    const kept = cut.filter((i) => plan[i] === 1 && !nearMarker(i));
+  const add = (cut: number[], clear = MARKER_CLEAR): void => {
+    const kept = cut.filter((i) => plan[i] === 1 && !nearMarker(i, clear));
     if (kept.length === 0) return;
     for (const i of kept) plan[i] = 0;
     features.push(kept);
   };
 
-  // Corners: the wall closed by a disc (dilate, then erode). Each connected
-  // patch it fills is one feature, so a narrows it seals goes back on its own.
-  const toWall = seedDistance2((i) => before[i] !== 1, true);
-  const closedBy = (r: number): Uint8Array => {
-    const r2 = r * r;
-    const toOpen = seedDistance2((i) => toWall[i]! > r2, false);
-    const out = new Uint8Array(N * N);
-    for (let i = 0; i < N * N; i++) out[i] = toOpen[i]! > r2 ? 1 : 0;
-    return out;
-  };
-  const closed: Uint8Array[] = [];
-  for (let r = ROUND_MIN; r <= ROUND_MAX; r++) closed[r] = closedBy(r);
-  const fill = new Uint8Array(N * N);
-  for (let y = 1; y < N - 1; y++) for (let x = 1; x < N - 1; x++) {
-    const i = y * N + x;
-    if (before[i] !== 1 || nearBoss(x, y)) continue;
-    const n = valueNoise(x, y, FRAY_SCALE, seed);
-    const r = Math.min(ROUND_MAX, ROUND_MIN + Math.floor(n * (ROUND_MAX - ROUND_MIN + 1)));
-    if (closed[r]![i]) fill[i] = 1;
-  }
-  for (let s = 0; s < N * N; s++) {
-    if (!fill[s]) continue;
-    const patch = [s];
-    fill[s] = 0;
-    for (let h = 0; h < patch.length; h++) {
-      const i = patch[h]!, x = i % N, y = (i - x) / N;
-      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
-        const j = (y + dy) * N + x + dx;
-        if (fill[j]) { fill[j] = 0; patch.push(j); }
+  // Corners: each concave corner of `shape` filled outside a quarter disc, the
+  // largest the floor around it holds.
+  const roundCorners = (shape: Uint8Array): void => {
+    const wall = (x: number, y: number): boolean => !(x >= 0 && y >= 0 && x < N && y < N && shape[y * N + x] === 1);
+    const holds = (x: number, y: number, sx: number, sy: number, r: number): boolean => {
+      for (let k = 0; k <= r; k++) if (!wall(x - sx, y + sy * k) || !wall(x + sx * k, y - sy)) return false;
+      for (let j = 0; j <= r; j++) for (let i = 0; i <= r; i++) if (!open(x + sx * i, y + sy * j)) return false;
+      return true;
+    };
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      if (shape[y * N + x] !== 1 || nearBoss(x, y)) continue;
+      for (const [sx, sy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]] as const) {
+        if (!wall(x - sx, y) || !wall(x, y - sy)) continue;
+        const n = valueNoise(x, y, FRAY_SCALE, seed);
+        let r = Math.min(ROUND_MAX, ROUND_MIN + Math.floor(n * (ROUND_MAX - ROUND_MIN + 1)));
+        while (r >= ROUND_MIN && !holds(x, y, sx, sy, r)) r--;
+        if (r < ROUND_MIN) continue;
+        const cut: number[] = [];
+        for (let j = 0; j < r; j++) for (let i = 0; i < r; i++) {
+          if ((r - i - 0.5) ** 2 + (r - j - 0.5) ** 2 > r * r) cut.push((y + sy * j) * N + x + sx * i);
+        }
+        // A fillet hugs the wall: a body still stands on every marker's own 3x3.
+        add(cut, FILLET_CLEAR);
       }
     }
-    add(patch);
-  }
+  };
+  // Before the outcrops, which would take the floor a fillet needs, and again
+  // after, for their feet.
+  roundCorners(before);
 
   // Outcrops: a half disc off a straight run of face, centred well inside it.
   for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]] as const) {
@@ -522,34 +524,41 @@ export function softenWalls(
         const start = b;
         while (b < N && face(b)) b++;
         for (let slot = start; slot + OUTCROP_SPACING <= b; slot += OUTCROP_SPACING) {
-          if (!chance(OUTCROP_CHANCE)) continue;
-          const r = rng.nextInt(OUTCROP_MIN, OUTCROP_MAX);
-          // Off the run's ends, which are door jambs and corners.
-          const lo = Math.max(slot, start + r + 2), hi = Math.min(slot + OUTCROP_SPACING - 1, b - r - 3);
-          if (lo > hi) continue;
-          const c = rng.nextInt(lo, hi);
-          const [cx, cy] = at(c);
-          if (nearBoss(cx, cy)) continue;
-          let room = true;
-          for (let u = -r; u <= r && room; u++) {
-            for (let v = 1; v <= r + OUTCROP_ROOM && room; v++) {
+          const fits = (c: number, r: number): boolean => {
+            for (let u = -r; u <= r; u++) for (let v = 1; v <= r + OUTCROP_ROOM; v++) {
               const [x, y] = at(c + u);
-              const fx = x + dx * v, fy = y + dy * v;
-              room = fx >= 0 && fy >= 0 && fx < N && fy < N && plan[fy * N + fx] === 1;
+              if (!open(x + dx * v, y + dy * v)) return false;
+            }
+            return true;
+          };
+          let placed = false;
+          for (let r = rng.nextInt(OUTCROP_MIN, OUTCROP_MAX); r >= OUTCROP_MIN && !placed; r--) {
+            // Off the run's ends, which are door jambs and corners.
+            const lo = Math.max(slot, start + r + 2), hi = Math.min(slot + OUTCROP_SPACING - 1, b - r - 3);
+            if (lo > hi) continue;
+            // Every place in the slot, from a random one round: one pillar in
+            // front must not leave the whole face straight.
+            const first = rng.nextInt(lo, hi);
+            for (let k = 0; k <= hi - lo && !placed; k++) {
+              const c = lo + ((first - lo + k) % (hi - lo + 1));
+              const [cx, cy] = at(c);
+              if (nearBoss(cx, cy) || !fits(c, r)) continue;
+              const cut: number[] = [];
+              for (let u = -r; u <= r; u++) for (let v = 1; v <= r; v++) {
+                if (u * u + (v - 0.5) * (v - 0.5) > r * r) continue;
+                const [x, y] = at(c + u);
+                cut.push((y + dy * v) * N + x + dx * v);
+              }
+              add(cut);
+              placed = true;
             }
           }
-          if (!room) continue;
-          const cut: number[] = [];
-          for (let u = -r; u <= r; u++) for (let v = 1; v <= r; v++) {
-            if (u * u + (v - 0.5) * (v - 0.5) > r * r) continue;
-            const [x, y] = at(c + u);
-            cut.push((y + dy * v) * N + x + dx * v);
-          }
-          add(cut);
         }
       }
     }
   }
+
+  roundCorners(plan.slice());
 
   // Keep every feature that leaves the body's reach and the floor whole: all at
   // once when they do, else halves until the ones that do not are isolated.
@@ -564,41 +573,6 @@ export function softenWalls(
     attempt(group.slice(group.length >> 1));
   };
   attempt(features);
-}
-
-/** Squared Euclidean distance from every cell to the nearest seed (Felzenszwalb);
- *  with `edge`, everything off the grid is a seed too. */
-function seedDistance2(seed: (i: number) => boolean, edge: boolean): Float64Array {
-  const N = ASSEMBLED_CELLS, M = N + 2, FAR = 1e20;
-  const g = new Float64Array(M * M);
-  for (let y = 0; y < M; y++) for (let x = 0; x < M; x++) {
-    const inside = x > 0 && y > 0 && x <= N && y <= N;
-    g[y * M + x] = (inside ? seed((y - 1) * N + x - 1) : edge) ? 0 : FAR;
-  }
-  const f = new Float64Array(M), d = new Float64Array(M), z = new Float64Array(M + 1), v = new Int32Array(M);
-  const pass = (at: (line: number, q: number) => number): void => {
-    for (let line = 0; line < M; line++) {
-      for (let q = 0; q < M; q++) f[q] = g[at(line, q)]!;
-      let k = 0;
-      v[0] = 0; z[0] = -Infinity; z[1] = Infinity;
-      for (let q = 1; q < M; q++) {
-        let s = (f[q]! + q * q - f[v[k]!]! - v[k]! * v[k]!) / (2 * (q - v[k]!));
-        while (s <= z[k]!) { k--; s = (f[q]! + q * q - f[v[k]!]! - v[k]! * v[k]!) / (2 * (q - v[k]!)); }
-        k++; v[k] = q; z[k] = s; z[k + 1] = Infinity;
-      }
-      k = 0;
-      for (let q = 0; q < M; q++) {
-        while (z[k + 1]! < q) k++;
-        d[q] = (q - v[k]!) * (q - v[k]!) + f[v[k]!]!;
-      }
-      for (let q = 0; q < M; q++) g[at(line, q)] = d[q]!;
-    }
-  };
-  pass((y, x) => y * M + x);
-  pass((x, y) => y * M + x);
-  const out = new Float64Array(N * N);
-  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) out[y * N + x] = g[(y + 1) * M + x + 1]!;
-  return out;
 }
 
 /** How many markers a 3x3 body standing next to them can reach from the boss's. */
