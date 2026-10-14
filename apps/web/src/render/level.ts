@@ -19,6 +19,7 @@ import {
   WALL_MESH_NAME,
 } from "./engine";
 import { buildCliffs, CLIFF_MESH_NAME } from "./cliffs";
+import { setContactBand } from "./contact-band";
 import { tintHaze } from "./haze";
 import {
   DEBRIS_MESH_PREFIX,
@@ -661,7 +662,12 @@ export function buildLevel(
   }
   clearRocks();
   fitGround(scene, grid);
-  if (!grid) return { walls: null, wallCells: 0 };
+  if (!grid) {
+    setContactBand(scene, null, null);
+    return { walls: null, wallCells: 0 };
+  }
+  // Before the cliffs: their scree shades its floor plate with the same band.
+  setContactBand(scene, grid, wallMaterial(scene, tilesetId, !!grid.shore), !!grid.shore);
 
   const { cols, rows, cellSize, originX, originY, cells } = grid;
   const isFloor = (x: number, y: number): boolean =>

@@ -16,6 +16,10 @@ import type { PBRMaterial } from "@babylonjs/core/Materials/PBR/pbrMaterial";
 import type { ArcRotateCamera } from "@babylonjs/core/Cameras/arcRotateCamera";
 import { MaterialPluginBase } from "@babylonjs/core/Materials/materialPluginBase";
 import type { WalkableGrid } from "@exiled/mapgen";
+import {
+  bindContact, contactDefines, contactReady, contactTextures,
+  CONTACT_GLSL, CONTACT_SAMPLERS, CONTACT_UBO, CONTACT_UNIFORMS_GLSL,
+} from "./contact-band";
 import { BETA_AT_DEFAULT, BETA_LIMIT, CAMERA_ALPHA, GROUND_SIZE } from "./engine";
 
 export const CLIFF_MESH_NAME = "wallrun-cliff";
@@ -348,15 +352,17 @@ const FADE_FEATHER = 0.7;
 const FADE_KEEP = 0.4;
 /** Where the line is aimed: his chest, not his feet. */
 const FOCUS_Y = 1;
-/** Height the floor plate climbs up the scree before the rock takes over. */
+/** Height the floor plate climbs up the scree before the rock takes over, and how
+ *  far noise moves that line up and down, as a fraction of it. */
 const BLEND_H = 0.75;
+const BLEND_WANDER = 0.45;
 
 const PLUGIN = "ExiledCliff";
 const f3 = (v: number) => v.toFixed(3);
 
 class CliffPlugin extends MaterialPluginBase {
   constructor(material: Material) {
-    super(material, PLUGIN, 200, { CLIFF_FLOOR: false });
+    super(material, PLUGIN, 200, { CLIFF_FLOOR: false, CONTACT_BAND: false });
     // Same ES-module serialisation trap as rim.ts.
     this.doNotSerialize = true;
     this.registerForExtraEvents = true;
@@ -373,25 +379,27 @@ class CliffPlugin extends MaterialPluginBase {
     return (mat?.albedoTexture as Texture | null) ?? null;
   }
 
-  override prepareDefines(defines: MaterialDefines): void {
+  override prepareDefines(defines: MaterialDefines, scene: Scene): void {
     defines["CLIFF_FLOOR"] = !!this.floor();
+    contactDefines(defines, scene);
   }
 
-  override isReadyForSubMesh(): boolean {
-    return this.floor()?.isReady() ?? true;
+  override isReadyForSubMesh(_defines: MaterialDefines, scene: Scene): boolean {
+    return (this.floor()?.isReady() ?? true) && contactReady(scene);
   }
 
   override getSamplers(samplers: string[]): void {
-    samplers.push("cliffFloorSampler");
+    samplers.push("cliffFloorSampler", ...CONTACT_SAMPLERS);
   }
 
   override getActiveTextures(active: BaseTexture[]): void {
     const tex = this.floor();
     if (tex) active.push(tex);
+    active.push(...contactTextures(this._material.getScene()));
   }
 
   override hasTexture(texture: BaseTexture): boolean {
-    return texture === this.floor();
+    return texture === this.floor() || contactTextures(this._material.getScene()).includes(texture);
   }
 
   override getUniforms(): { ubo: { name: string; size: number; type: string }[]; fragment: string } {
@@ -400,11 +408,13 @@ class CliffPlugin extends MaterialPluginBase {
         { name: "cliffEye", size: 3, type: "vec3" },
         { name: "cliffFocus", size: 3, type: "vec3" },
         { name: "cliffFloorUV", size: 4, type: "vec4" },
+        ...CONTACT_UBO,
       ],
       fragment: `
         uniform vec3 cliffEye;
         uniform vec3 cliffFocus;
         uniform vec4 cliffFloorUV;
+        ${CONTACT_UNIFORMS_GLSL}
       `,
     };
   }
@@ -425,6 +435,7 @@ class CliffPlugin extends MaterialPluginBase {
     const kv = tex.vScale / (GROUND_SIZE * ground.scaling.z);
     ubo.updateFloat4("cliffFloorUV", ku, kv, tex.uScale / 2 - ground.position.x * ku, tex.vScale / 2 - ground.position.z * kv);
     ubo.setTexture("cliffFloorSampler", tex);
+    bindContact(ubo, scene);
   }
 
   override getCustomCode(shaderType: string): Record<string, string> | null {
@@ -435,6 +446,14 @@ class CliffPlugin extends MaterialPluginBase {
         #ifdef CLIFF_FLOOR
           uniform sampler2D cliffFloorSampler;
         #endif
+        ${CONTACT_GLSL}
+        float cliffNoise(vec2 p) {
+          vec2 i = floor(p), f = fract(p);
+          vec2 s = f * f * (3.0 - 2.0 * f);
+          #define CLIFF_NHASH(q) fract(sin(dot(q, vec2(269.5, 183.3))) * 43758.5453)
+          return mix(mix(CLIFF_NHASH(i), CLIFF_NHASH(i + vec2(1.0, 0.0)), s.x),
+                     mix(CLIFF_NHASH(i + vec2(0.0, 1.0)), CLIFF_NHASH(i + vec2(1.0, 1.0)), s.x), s.y);
+        }
       `,
       // Stippled, not blended: a translucent wall needs sorting against every
       // creature behind it, a discard needs nothing.
@@ -482,11 +501,17 @@ class CliffPlugin extends MaterialPluginBase {
         {
           float cliffGrain = dot(surfaceAlbedo, vec3(0.333)) / max(dot(vAlbedoColor.rgb, vec3(0.333)), 1e-3);
           float cliffH = vPositionW.y + (cliffGrain - 0.5) * 0.35;
+          // The line the floor reaches wanders up and down the scree, a few
+          // units a swing, so no contour of the rock shows as a ruled edge.
+          float cliffTop = ${f3(BLEND_H)} * (1.0 + (cliffNoise(vPositionW.xz * 0.45) - 0.5) * ${f3(2 * BLEND_WANDER)});
           // A top-down projection smears into streaks where the face turns steep.
-          float cliffMix = (1.0 - smoothstep(${f3(BLEND_H * 0.35)}, ${f3(BLEND_H)}, cliffH))
+          float cliffMix = (1.0 - smoothstep(cliffTop * 0.35, cliffTop, cliffH))
             * smoothstep(0.55, 0.8, normalW.y);
           vec2 cliffUV = vPositionW.xz * cliffFloorUV.xy + cliffFloorUV.zw;
           vec3 cliffGround = toLinearSpace(texture2D(cliffFloorSampler, cliffUV).rgb);
+          #ifdef CONTACT_BAND
+            cliffGround = contactShade(cliffGround, vPositionW);
+          #endif
           surfaceAlbedo = mix(surfaceAlbedo, cliffGround, cliffMix);
           normalW = normalize(mix(normalW, vec3(0.0, 1.0, 0.0), cliffMix * 0.8));
         }
