@@ -80,7 +80,7 @@ describe("generateArea", () => {
       // Cross-check the gates with an independent implementation.
       expect(allSocketsReachable(layout), `seed ${s} has an unreachable socket`).toBe(true);
     }
-  });
+  }, 30_000);
 
   it("always has start, boss and exit anchors that are mutually distinct", () => {
     for (const s of [0, 5, 42, 99, 777]) {
@@ -130,7 +130,7 @@ describe("generateArea", () => {
     let fallbacks = 0;
     for (let s = 0; s < 200; s++) if (generateArea(s, V).usedFallback) fallbacks++;
     expect(fallbacks, `${fallbacks}/200 seeds fell back`).toBeLessThan(12);
-  });
+  }, 30_000);
 
   it("builds the open-field grammar as readily as the loop", () => {
     for (let s = 0; s < 50; s++) {

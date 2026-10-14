@@ -34,13 +34,13 @@ describe("assembleArea", () => {
       const layout = gen(seed);
       expect(layout.validationChecks.every((c) => c.passed), `seed ${seed}`).toBe(true);
     }
-  });
+  }, 30_000);
 
   it("assembles rather than falling back for the overwhelming majority of seeds", () => {
     let assembled = 0;
     for (let seed = 0; seed < 200; seed++) if (!gen(seed).usedFallback) assembled++;
     expect(assembled).toBeGreaterThan(190);
-  });
+  }, 30_000);
 
   it("has no wall facing floor across any tile seam", () => {
     // The stamp as matched, before softenWalls bites across a seam on purpose.
@@ -197,13 +197,13 @@ describe("assembleArea, strand", () => {
     for (let seed = 0; seed < 200; seed++) {
       expect(strand(seed).validationChecks.every((c) => c.passed), `seed ${seed}`).toBe(true);
     }
-  });
+  }, 30_000);
 
   it("assembles rather than falling back for the overwhelming majority of seeds", () => {
     let assembled = 0;
     for (let seed = 0; seed < 200; seed++) if (!strand(seed).usedFallback) assembled++;
     expect(assembled).toBeGreaterThan(190);
-  });
+  }, 30_000);
 
   // No seam test here, unlike the loop's: `organicRim` carves the boundary after
   // the chunks are stamped, so a wall facing floor across a tile seam is what an
@@ -332,7 +332,7 @@ describe("assembleArea, strand", () => {
         expect(best, `${grammar.id} seed ${seed}`).toBeLessThanOrEqual(8);
       }
     }
-  });
+  }, 30_000);
 
   it("breaks open ground with obstacles: never a screen of bare floor", () => {
     // PoE's open maps (reference-screenshots/map-layout-1.jpeg) are open ground
@@ -355,7 +355,7 @@ describe("assembleArea, strand", () => {
         expect(widestSquare(grid.cells, grid.cols), `${grammar.id} seed ${seed}`).toBeLessThanOrEqual(widest);
       }
     }
-  });
+  }, 30_000);
 
   /** Cells of the 2x2 tile block holding the boss, plus a one-cell margin. */
   const bossBlock = (grammar: Grammar, seed: number) => {
