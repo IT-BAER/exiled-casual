@@ -941,18 +941,18 @@ export const HIPS_BOB: Record<RigClip, number> = {
  */
 export const IDLE_LEG_BREATH = 0.4;
 /**
- * Share of a sword take's hips and legs a standing strike keeps, pulled toward
- * the take's standing last key. The whole take lunges and crouches 30cm deep.
+ * Share of a sword take's hips and legs a standing strike keeps, carried onto the
+ * idle stance (`swayOnto`). The whole take lunges and crouches 30cm deep.
  */
 export const STRIKE_LEG_SHARE = 0.15;
 export const IDLE_CALM_BONES: ReadonlySet<string> = new Set([
   HIPS_BONE, "thigh_l", "calf_l", "foot_l", "ball_l", "thigh_r", "calf_r", "foot_r", "ball_r",
 ]);
 
-/** A copy of a linear curve with each key kept at `share` of its distance from the first (or last) key. */
-export function calmTowardFirst(source: Animation, share: number, anchor: "first" | "last" = "first"): Animation {
+/** A copy of a linear curve with each key kept at `share` of its distance from the first key. */
+export function calmTowardFirst(source: Animation, share: number): Animation {
   const keys = source.getKeys();
-  const first = keys[anchor === "first" ? 0 : keys.length - 1]?.value as Quaternion | Vector3 | undefined;
+  const first = keys[0]?.value as Quaternion | Vector3 | undefined;
   const calmed = source.clone();
   if (!first) return calmed;
   calmed.setKeys(keys.map((key) => ({
@@ -964,63 +964,82 @@ export function calmTowardFirst(source: Animation, share: number, anchor: "first
   return calmed;
 }
 
-/** The toe joints a stance stands on, lowest one first in contact. */
-const SOLES = ["ball_l", "ball_r"] as const;
-
-/** World height of the lower sole, its ancestors recomputed top-down so the pose is this frame's. */
-function lowestSole(soles: readonly TransformNode[]): number {
-  let low = Infinity;
-  for (const sole of soles) {
-    const chain: TransformNode[] = [];
-    for (let n: Node | null = sole; n instanceof TransformNode; n = n.parent) chain.unshift(n);
-    for (const n of chain) n.computeWorldMatrix(true);
-    low = Math.min(low, sole.getAbsolutePosition().y);
-  }
-  return low;
+/**
+ * A copy of a take's curve that moves `share` of the way the take moves off its
+ * last key, carried onto `anchor`: it starts its sway from and ends exactly on it.
+ */
+export function swayOnto(source: Animation, anchor: Quaternion | Vector3, share: number): Animation {
+  const keys = source.getKeys();
+  const last = keys[keys.length - 1]?.value as Quaternion | Vector3 | undefined;
+  const swayed = source.clone();
+  if (!last) return swayed;
+  swayed.setKeys(keys.map((key) => ({
+    ...key,
+    value: last instanceof Quaternion
+      ? (anchor as Quaternion).multiply(Quaternion.Slerp(Quaternion.Identity(), Quaternion.Inverse(last).multiply(key.value as Quaternion), share))
+      : (anchor as Vector3).add((key.value as Vector3).subtract(last).scaleInPlace(share)),
+  })));
+  return swayed;
 }
 
-/** World matrices posed off curves alone, each node's keyed values over its own rest: nothing moves. */
-function posedWorld(targeted: readonly { target: unknown; animation: Animation }[]): (node: TransformNode, frame: number) => Matrix {
-  const keyed = new Map<unknown, Animation[]>();
-  for (const t of targeted) keyed.set(t.target, [...(keyed.get(t.target) ?? []), t.animation]);
-  return (node, frame) => {
-    let m = Matrix.Identity();
-    for (let n: Node | null = node; n instanceof TransformNode; n = n.parent) {
-      let rot = n.rotationQuaternion ?? Quaternion.FromEulerVector(n.rotation);
-      let pos = n.position;
-      for (const a of keyed.get(n) ?? []) {
-        if (a.targetProperty === ROTATION) rot = a.evaluate(frame) as Quaternion;
-        else if (a.targetProperty === TRANSLATION) pos = a.evaluate(frame) as Vector3;
-      }
-      m = m.multiply(Matrix.Compose(n.scaling, rot, pos));
-    }
-    return m;
-  };
-}
-
-/** World heights of the lower sole and of the hips in a posed frame. */
-function stanceAt(world: (node: TransformNode, frame: number) => Matrix, soles: readonly TransformNode[], hips: TransformNode, frame: number): { sole: number; hips: number } {
-  return { sole: Math.min(...soles.map((n) => world(n, frame).m[13]!)), hips: world(hips, frame).m[13]! };
+/** Recompute a node's world matrix with its ancestors' top-down, so it is this frame's pose. */
+function freshWorld(node: TransformNode): void {
+  const chain: TransformNode[] = [];
+  for (let n: Node | null = node; n instanceof TransformNode; n = n.parent) chain.unshift(n);
+  for (const n of chain) n.computeWorldMatrix(true);
 }
 
 /**
- * How high a take lifts its lower sole over where the take ends (every sword take
- * ends standing), per frame from `from`, and the hips' height over that sole there.
+ * Turn a bone so its world direction `from` points along `to`. Solved in the
+ * parent's own frame, so the glTF mirror over the rig cannot flip the turn.
  */
-function soleLift(
-  targeted: readonly { target: unknown; animation: Animation }[],
-  from: number,
-  to: number,
-  nodes: readonly TransformNode[],
-): { lift: number[]; hips: number } {
-  const soles = SOLES.map((name) => nodes.find((n) => n.name === name)).filter((n): n is TransformNode => n !== undefined);
-  const hips = nodes.find((n) => n.name === HIPS_BONE);
-  if (soles.length !== SOLES.length || !hips) return { lift: [], hips: 0 };
-  const world = posedWorld(targeted);
-  const rest = stanceAt(world, soles, hips, to);
-  const lift: number[] = [];
-  for (let f = from; f <= to; f++) lift.push(stanceAt(world, soles, hips, f).sole - rest.sole);
-  return { lift, hips: rest.hips - rest.sole };
+function swing(bone: TransformNode, from: Vector3, to: Vector3): void {
+  const parent = bone.parent;
+  const rot = bone.rotationQuaternion;
+  if (!(parent instanceof TransformNode) || !rot) return;
+  const inverse = parent.getWorldMatrix().clone().invert();
+  const f = Vector3.TransformNormal(from, inverse).normalize();
+  const t = Vector3.TransformNormal(to, inverse).normalize();
+  Quaternion.FromUnitVectorsToRef(f, t, new Quaternion()).multiplyToRef(rot, rot);
+  bone.computeWorldMatrix(true);
+}
+
+/** A leg held where it stood: the foot's world matrix over the rig pivot's. */
+interface PlantedLeg {
+  thigh: TransformNode;
+  calf: TransformNode;
+  foot: TransformNode;
+  rel: Matrix;
+}
+
+/**
+ * Two-bone IK: bend the knee in the plane it already bends in so the ankle reaches
+ * where it was planted, then give the foot back the world turn it stood on.
+ */
+function plantLeg({ thigh, calf, foot, rel }: PlantedLeg, pivot: Matrix): void {
+  freshWorld(foot);
+  const want = rel.multiply(pivot);
+  const target = want.getTranslation();
+  const a = thigh.getAbsolutePosition().clone();
+  const b = calf.getAbsolutePosition().clone();
+  const upper = Vector3.Distance(a, b);
+  const lower = Vector3.Distance(b, foot.getAbsolutePosition());
+  const reach = target.subtract(a);
+  const d = Math.min(Math.max(reach.length(), Math.abs(upper - lower) + 1e-4), (upper + lower) * 0.9999);
+  const dir = reach.normalize();
+  const bend = b.subtract(a);
+  bend.subtractInPlace(dir.scale(Vector3.Dot(bend, dir)));
+  if (bend.lengthSquared() < 1e-12) return;
+  bend.normalize();
+  const cos = (upper * upper + d * d - lower * lower) / (2 * upper * d);
+  const knee = a.add(dir.scale(upper * cos)).addInPlace(bend.scaleInPlace(upper * Math.sqrt(Math.max(0, 1 - cos * cos))));
+  swing(thigh, b.subtract(a), knee.subtract(a));
+  calf.computeWorldMatrix(true);
+  foot.computeWorldMatrix(true);
+  const k = calf.getAbsolutePosition();
+  swing(calf, foot.getAbsolutePosition().subtract(k), target.subtract(k));
+  want.multiply(calf.getWorldMatrix().clone().invert()).decompose(undefined, foot.rotationQuaternion ?? undefined);
+  foot.computeWorldMatrix(true);
 }
 
 /**
@@ -1237,8 +1256,8 @@ export class RigActor {
   /** Each strike's own hips and legs, played only while nothing else is moving them. */
   private readonly strikeLegs = new Map<RigClip, AnimationGroup>();
   /** Per strike, its sole's lift over the floor per frame, already in this rig's proportions. */
-  private readonly strikeLift = new Map<RigClip, number[]>();
-  private groundObserver: Observer<Scene> | null = null;
+  private readonly planted: PlantedLeg[] = [];
+  private plantObserver: Observer<Scene> | null = null;
 
   private entries: InstantiatedEntries | null = null;
   private active: AnimationGroup | null = null;
@@ -1529,6 +1548,9 @@ export class RigActor {
     group.start(false, pace.raise);
     const legs = this.locomotion === "idle" ? this.strikeLegs.get(clip) ?? null : null;
     if (legs) {
+      // Last frame's pose, the one on screen: the body may already be turning this tick.
+      const toPivot = this.pivot.getWorldMatrix().clone().invert();
+      for (const leg of this.planted) leg.foot.getWorldMatrix().multiplyToRef(toPivot, leg.rel);
       legs.speedRatio = pace.raise;
       legs.start(false, pace.raise);
       this.scene.sortActiveAnimatables();
@@ -1891,8 +1913,17 @@ export class RigActor {
     // has moved anything, because it is the shape the cloth springs back to.
     if (hipsNode instanceof TransformNode) this.buildSkirt(hipsNode, byName);
 
-    const takes = new Map<RigClip, { lift: number[]; hips: number }>();
-    const strikeCalm = (a: Animation) => calmTowardFirst(a, STRIKE_LEG_SHARE, "last");
+    // A standing strike sways off the idle's first pose and ends on it; a bone the
+    // idle does not key stands at its rest.
+    const idleTake = loaded.anims.animationGroups.find((g) => g.name === CLIP_NAME.idle);
+    const strikeSway = (a: Animation, bone: Node): Animation => {
+      const keyed = idleTake?.targetedAnimations.find((t) => t.target === bone && t.animation.targetProperty === a.targetProperty);
+      const node = bone as TransformNode;
+      const anchor = keyed
+        ? keyed.animation.evaluate(idleTake!.from) as Quaternion | Vector3
+        : a.targetProperty === ROTATION ? node.rotationQuaternion ?? Quaternion.FromEulerVector(node.rotation) : node.position;
+      return swayOnto(a, anchor, STRIKE_LEG_SHARE);
+    };
     for (const clip of Object.keys(CLIP_NAME) as RigClip[]) {
       const source = loaded.anims.animationGroups.find((g) => g.name === CLIP_NAME[clip]);
       if (!source) continue;
@@ -1901,7 +1932,7 @@ export class RigActor {
       // container, which is read-only, so instances cost only the group; the
       // hips curve is the one that has to be rebuilt per rig.
       const upperOnly = isLayeredClip(clip);
-      const retarget = (name: string, keep: (bone: string) => boolean, calm?: (a: Animation) => Animation): AnimationGroup | null => {
+      const retarget = (name: string, keep: (bone: string) => boolean, calm?: (a: Animation, bone: Node) => Animation): AnimationGroup | null => {
         const group = new AnimationGroup(name, this.scene);
         for (const targeted of source.targetedAnimations) {
           const sourceNode = targeted.target as Node;
@@ -1911,7 +1942,7 @@ export class RigActor {
           const property = targeted.animation.targetProperty;
           const curve = clip === "idle" && IDLE_CALM_BONES.has(sourceNode.name)
             ? calmTowardFirst(targeted.animation, IDLE_LEG_BREATH)
-            : calm?.(targeted.animation) ?? targeted.animation;
+            : calm?.(targeted.animation, sourceNode) ?? targeted.animation;
 
           if (property === ROTATION) {
             group.addTargetedAnimation(curve, target);
@@ -1943,48 +1974,24 @@ export class RigActor {
         !upperOnly || !(LOWER_BODY.has(bone) || (WEAPON_HAND.has(bone) && clip !== "bow")));
       if (group) this.groups.set(clip, group);
       const legs = (STRIKE_CLIPS as readonly RigClip[]).includes(clip)
-        ? retarget(`${this.host.name}-${clip}-legs`, (bone) => LOWER_BODY.has(bone), strikeCalm)
+        ? retarget(`${this.host.name}-${clip}-legs`, (bone) => LOWER_BODY.has(bone), strikeSway)
         : null;
-      if (legs) {
-        this.strikeLegs.set(clip, legs);
-        const calmed = source.targetedAnimations.map((t) => LOWER_BODY.has((t.target as Node).name)
-          ? { target: t.target, animation: strikeCalm(t.animation) }
-          : t);
-        takes.set(clip, soleLift(calmed, source.from, source.to, loaded.anims.transformNodes));
-      }
+      if (legs) this.strikeLegs.set(clip, legs);
     }
 
-    // The take's hips drop is retargeted and its leg angles are not, and the two
-    // rigs' legs differ in proportion: left alone, a lunge sinks a sole 8cm and a
-    // crouch hovers 5cm. The hips are moved so the lower sole stands where the take
-    // puts it, over the floor the idle stands its lower sole on.
-    const soles = SOLES.map((name) => byName.get(name)).filter((n): n is TransformNode => n instanceof TransformNode);
-    const idle = this.groups.get("idle");
-    if (idle && soles.length === SOLES.length && hipsNode instanceof TransformNode) {
-      const stance = stanceAt(posedWorld(idle.targetedAnimations), soles, hipsNode, idle.from);
-      this.pivot.computeWorldMatrix(true);
-      const floor = stance.sole - this.pivot.getAbsolutePosition().y;
-      for (const [clip, take] of takes) {
-        // Clamped at the floor: C's take sinks a sole 2cm under its own rest.
-        if (take.hips > 0) this.strikeLift.set(clip, take.lift.map((y) => Math.max(0, y * (stance.hips - stance.sole) / take.hips)));
+    // The take's legs are retargeted raw onto legs of other proportions, and the
+    // pelvis it sways carries them: IK holds each foot where the strike found it.
+    for (const side of ["l", "r"]) {
+      const [thigh, calf, foot] = ["thigh", "calf", "foot"].map((b) => byName.get(`${b}_${side}`));
+      if (thigh instanceof TransformNode && calf instanceof TransformNode && foot instanceof TransformNode) {
+        this.planted.push({ thigh, calf, foot, rel: Matrix.Identity() });
       }
-      const up = new Vector3();
-      const inverse = new Matrix();
-      this.groundObserver = this.scene.onAfterAnimationsObservable.add(() => {
-        const legs = this.strike?.legs;
-        const lift = this.strike && legs?.isPlaying ? this.strikeLift.get(this.strike.clip) : undefined;
-        const frame = legs?.animatables[0]?.masterFrame;
-        if (!lift || lift.length < 2 || frame === undefined) return;
-        const at = Math.max(0, Math.min(lift.length - 1, frame - legs!.from));
-        const i = Math.min(lift.length - 2, Math.floor(at));
-        const want = lift[i]! + (lift[i + 1]! - lift[i]!) * (at - i);
-        this.pivot.computeWorldMatrix(true);
-        const gap = want - (lowestSole(soles) - (this.pivot.getAbsolutePosition().y + floor));
-        const parent = hipsNode.parent;
-        if (!(parent instanceof TransformNode) || Math.abs(gap) < 1e-5) return;
-        parent.getWorldMatrix().invertToRef(inverse);
-        Vector3.TransformNormalToRef(up.set(0, gap, 0), inverse, up);
-        hipsNode.position.addInPlace(up);
+    }
+    if (this.planted.length === 2) {
+      this.plantObserver = this.scene.onAfterAnimationsObservable.add(() => {
+        if (!this.strike?.legs?.isPlaying) return;
+        freshWorld(this.pivot);
+        for (const leg of this.planted) plantLeg(leg, this.pivot.getWorldMatrix());
       });
     }
 
@@ -2254,9 +2261,9 @@ export class RigActor {
     this.groups.clear();
     for (const group of this.strikeLegs.values()) group.dispose();
     this.strikeLegs.clear();
-    this.strikeLift.clear();
-    if (this.groundObserver) this.scene.onAfterAnimationsObservable.remove(this.groundObserver);
-    this.groundObserver = null;
+    this.planted.length = 0;
+    if (this.plantObserver) this.scene.onAfterAnimationsObservable.remove(this.plantObserver);
+    this.plantObserver = null;
     this.parts.clear();
     this.entries?.dispose();
     this.entries = null;

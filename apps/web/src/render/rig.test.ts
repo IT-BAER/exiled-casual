@@ -2015,7 +2015,8 @@ describe("a sword strike moves the legs only while standing", () => {
     const lowFoot = () => Math.min(...balls.map((b) => b.getAbsolutePosition().y));
     const pelvis = legs.targetedAnimations.find((t) => (t.target as TransformNode).name === "pelvis")!.target as TransformNode;
     const pelvisY = () => pelvis.getAbsolutePosition().y;
-    return { scene, rig: rig!, off, lowFoot, pelvisY };
+    const legsOf = (clip: RigClip) => scene.animationGroups.find((g) => g.name === `hero-${clip}-legs`)!;
+    return { scene, rig: rig!, off, lowFoot, pelvisY, balls, pelvis, legsOf };
   }
 
   async function withFiles<T>(run: () => Promise<T>): Promise<T> {
@@ -2073,6 +2074,50 @@ describe("a sword strike moves the legs only while standing", () => {
       // C's hop survives only as a share of its 13cm.
       expect(Math.max(...low), `${"ABC"[i]} never floats`).toBeLessThan(0.03);
     });
+  }), 60_000);
+
+  it("keeps both soles planted where the idle stood them through all three strikes", () => withFiles(async () => {
+    const { scene, rig, balls } = await rigged();
+    const frame = () => { rig.setLocomotion(0); scene.render(); };
+    rig.standSettled();
+    for (let i = 0; i < 30; i++) frame();
+    for (const [i, frames] of [100, 110, 140].entries()) {
+      const planted = balls.map((b) => b.getAbsolutePosition().clone());
+      rig.playStrike();
+      let drift = 0;
+      for (let f = 0; f < frames; f++) {
+        frame();
+        balls.forEach((b, k) => {
+          const p = b.getAbsolutePosition();
+          drift = Math.max(drift, Math.hypot(p.x - planted[k]!.x, p.z - planted[k]!.z));
+        });
+      }
+      expect(drift, `${"ABC"[i]} sole drift`).toBeLessThan(0.01);
+    }
+  }), 60_000);
+
+  it("ends each strike on the idle stance, so nothing slides home after it", () => withFiles(async () => {
+    const { scene, rig, off, pelvis, legsOf } = await rigged();
+    const frame = () => { rig.setLocomotion(0); scene.render(); };
+    rig.standSettled();
+    for (let i = 0; i < 30; i++) frame();
+    for (const clip of ["strikeA", "strikeB", "strikeC"] as const) {
+      const standing = pelvis.getAbsolutePosition().clone();
+      rig.playStrike();
+      const legs = legsOf(clip);
+      let last: { pelvis: number; thigh: number; shift: number } | null = null;
+      for (let f = 0; f < 140 && (f < 5 || legs.isPlaying); f++) {
+        frame();
+        if (!legs.isPlaying) break;
+        const p = pelvis.getAbsolutePosition();
+        last = { pelvis: off("idle", "pelvis"), thigh: off("idle", "thigh_l"), shift: Math.hypot(p.x - standing.x, p.z - standing.z) };
+      }
+      expect(last, `${clip} legs played`).not.toBeNull();
+      expect(last!.pelvis, `${clip} pelvis off the idle on its last frame`).toBeLessThan(2);
+      expect(last!.thigh, `${clip} thigh off the idle on its last frame`).toBeLessThan(2);
+      expect(last!.shift, `${clip} pelvis shift on its last frame`).toBeLessThan(0.01);
+      for (let f = 0; f < 30; f++) frame();
+    }
   }), 60_000);
 
   it("leaves the legs on the run while moving", () => withFiles(async () => {
