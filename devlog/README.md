@@ -472,3 +472,16 @@ torn sheets that image-to-3D leaves on spikes, plates and moss. A volumetric ope
 body, cuts away every part too thin to hold a solid core and rebuilds a closed surface, so a spine
 stays a cone and a flap disappears. The Vaal Husk, Dune Spitter, Rotting Behemoth (six legs, as it
 was generated) and Ghaltrek joined the five that had them already.
+
+## 2026-10-14 · Walls that meet the floor
+
+<table>
+<tr>
+<td width="100%"><img src="screenshots/2026-10-14-walls-meet-the-floor.jpeg" alt="Blackmire: rock walls with rounded corners and outcrops, a dark band and scattered dust where the rock meets the floor" width="100%"><br><sub>Blackmire with rounded corners, outcrops and the contact band.</sub></td>
+</tr>
+</table>
+
+Walled maps lost most of their square corners and long straight faces: room corners round off into
+curves of varying size, and rock stands out of the longer faces. Where rock meets the floor, the
+ground now darkens into a shadow band and picks up rock dust, so a wall sits on the floor instead of
+being cut into it.
