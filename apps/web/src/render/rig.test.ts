@@ -2120,6 +2120,43 @@ describe("a sword strike moves the legs only while standing", () => {
     }
   }), 60_000);
 
+  it("keeps the knees pointing over the feet through all three strikes", () => withFiles(async () => {
+    const { scene, rig } = await rigged();
+    const node = (n: string) => scene.transformNodes.find((t) => t.name === n)!;
+    const frame = () => { rig.setLocomotion(0); scene.render(); };
+    const wrap = (d: number) => ((d + 540) % 360) - 180;
+    /** Which way the knee points: its offset off the hip-to-ankle line, as a yaw. */
+    const kneeYaw = (side: string) => {
+      const a = node(`thigh_${side}`).getAbsolutePosition();
+      const c = node(`foot_${side}`).getAbsolutePosition();
+      const axis = c.subtract(a).normalize();
+      const bend = node(`calf_${side}`).getAbsolutePosition().subtract(a);
+      bend.subtractInPlace(axis.scale(Vector3.Dot(bend, axis)));
+      return Math.atan2(bend.x, bend.z) * 180 / Math.PI;
+    };
+    rig.standSettled();
+    for (let i = 0; i < 30; i++) frame();
+    const idle = { l: kneeYaw("l"), r: kneeYaw("r") };
+    for (const [i, frames] of [100, 110, 140].entries()) {
+      rig.playStrike();
+      const prev = { ...idle };
+      let turn = 0;
+      let step = 0;
+      for (let f = 0; f < frames; f++) {
+        frame();
+        for (const side of ["l", "r"] as const) {
+          const yaw = kneeYaw(side);
+          turn = Math.max(turn, Math.abs(wrap(yaw - idle[side])));
+          step = Math.max(step, Math.abs(wrap(yaw - prev[side])));
+          prev[side] = yaw;
+        }
+      }
+      // Without the IK the swayed take turns a knee 25 degrees at most.
+      expect(turn, `${"ABC"[i]} knee turn off the idle`).toBeLessThan(30);
+      expect(step, `${"ABC"[i]} knee turn in one frame`).toBeLessThan(5);
+    }
+  }), 60_000);
+
   it("leaves the legs on the run while moving", () => withFiles(async () => {
     const { scene, rig, off } = await rigged();
     const frame = () => { rig.setMoveAngle(0); rig.setLocomotion(3.5); scene.render(); };

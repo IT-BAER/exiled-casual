@@ -967,18 +967,31 @@ export function calmTowardFirst(source: Animation, share: number): Animation {
 /**
  * A copy of a take's curve that moves `share` of the way the take moves off its
  * last key, carried onto `anchor`: it starts its sway from and ends exactly on it.
+ * A turn past half a circle keeps its side, where a slerp would flip and jump.
  */
 export function swayOnto(source: Animation, anchor: Quaternion | Vector3, share: number): Animation {
   const keys = source.getKeys();
   const last = keys[keys.length - 1]?.value as Quaternion | Vector3 | undefined;
   const swayed = source.clone();
   if (!last) return swayed;
-  swayed.setKeys(keys.map((key) => ({
-    ...key,
-    value: last instanceof Quaternion
-      ? (anchor as Quaternion).multiply(Quaternion.Slerp(Quaternion.Identity(), Quaternion.Inverse(last).multiply(key.value as Quaternion), share))
-      : (anchor as Vector3).add((key.value as Vector3).subtract(last).scaleInPlace(share)),
-  })));
+  if (!(last instanceof Quaternion)) {
+    swayed.setKeys(keys.map((key) => ({ ...key, value: (anchor as Vector3).add((key.value as Vector3).subtract(last).scaleInPlace(share)) })));
+    return swayed;
+  }
+  const back = Quaternion.Inverse(last);
+  let side = Quaternion.Identity();
+  const values: Quaternion[] = [];
+  for (let k = keys.length - 1; k >= 0; k--) {
+    const d = back.multiply(keys[k]!.value as Quaternion);
+    if (Quaternion.Dot(side, d) < 0) d.scaleInPlace(-1);
+    side = d;
+    // atan2, not acos(w): the take's keys are not all unit length.
+    const sin = Math.hypot(d.x, d.y, d.z);
+    values[k] = sin < 1e-9
+      ? (anchor as Quaternion).clone()
+      : (anchor as Quaternion).multiply(Quaternion.RotationAxis(new Vector3(d.x / sin, d.y / sin, d.z / sin), 2 * Math.atan2(sin, d.w) * share));
+  }
+  swayed.setKeys(keys.map((key, k) => ({ ...key, value: values[k]! })));
   return swayed;
 }
 
@@ -1004,19 +1017,21 @@ function swing(bone: TransformNode, from: Vector3, to: Vector3): void {
   bone.computeWorldMatrix(true);
 }
 
-/** A leg held where it stood: the foot's world matrix over the rig pivot's. */
+/** A leg held where it stood: the foot's world matrix and the knee over the rig pivot's. */
 interface PlantedLeg {
   thigh: TransformNode;
   calf: TransformNode;
   foot: TransformNode;
   rel: Matrix;
+  knee: Vector3;
 }
 
 /**
- * Two-bone IK: bend the knee in the plane it already bends in so the ankle reaches
- * where it was planted, then give the foot back the world turn it stood on.
+ * Two-bone IK: bend the knee toward where it stood so the ankle reaches where it
+ * was planted, then give the foot back the world turn it stood on. The animated
+ * knee is no pole: off a planted ankle it swaps sides and the knee whirls.
  */
-function plantLeg({ thigh, calf, foot, rel }: PlantedLeg, pivot: Matrix): void {
+function plantLeg({ thigh, calf, foot, rel, knee: stood }: PlantedLeg, pivot: Matrix): void {
   freshWorld(foot);
   const want = rel.multiply(pivot);
   const target = want.getTranslation();
@@ -1027,7 +1042,7 @@ function plantLeg({ thigh, calf, foot, rel }: PlantedLeg, pivot: Matrix): void {
   const reach = target.subtract(a);
   const d = Math.min(Math.max(reach.length(), Math.abs(upper - lower) + 1e-4), (upper + lower) * 0.9999);
   const dir = reach.normalize();
-  const bend = b.subtract(a);
+  const bend = Vector3.TransformCoordinates(stood, pivot).subtractInPlace(a);
   bend.subtractInPlace(dir.scale(Vector3.Dot(bend, dir)));
   if (bend.lengthSquared() < 1e-12) return;
   bend.normalize();
@@ -1550,7 +1565,10 @@ export class RigActor {
     if (legs) {
       // Last frame's pose, the one on screen: the body may already be turning this tick.
       const toPivot = this.pivot.getWorldMatrix().clone().invert();
-      for (const leg of this.planted) leg.foot.getWorldMatrix().multiplyToRef(toPivot, leg.rel);
+      for (const leg of this.planted) {
+        leg.foot.getWorldMatrix().multiplyToRef(toPivot, leg.rel);
+        Vector3.TransformCoordinatesToRef(leg.calf.getAbsolutePosition(), toPivot, leg.knee);
+      }
       legs.speedRatio = pace.raise;
       legs.start(false, pace.raise);
       this.scene.sortActiveAnimatables();
@@ -1984,7 +2002,7 @@ export class RigActor {
     for (const side of ["l", "r"]) {
       const [thigh, calf, foot] = ["thigh", "calf", "foot"].map((b) => byName.get(`${b}_${side}`));
       if (thigh instanceof TransformNode && calf instanceof TransformNode && foot instanceof TransformNode) {
-        this.planted.push({ thigh, calf, foot, rel: Matrix.Identity() });
+        this.planted.push({ thigh, calf, foot, rel: Matrix.Identity(), knee: Vector3.Zero() });
       }
     }
     if (this.planted.length === 2) {
