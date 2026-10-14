@@ -959,6 +959,60 @@ export function calmTowardFirst(source: Animation, share: number): Animation {
   return calmed;
 }
 
+/** The toe joints a stance stands on, lowest one first in contact. */
+const SOLES = ["ball_l", "ball_r"] as const;
+
+/** World height of the lower sole, its ancestors recomputed top-down so the pose is this frame's. */
+function lowestSole(soles: readonly TransformNode[]): number {
+  let low = Infinity;
+  for (const sole of soles) {
+    const chain: TransformNode[] = [];
+    for (let n: Node | null = sole; n instanceof TransformNode; n = n.parent) chain.unshift(n);
+    for (const n of chain) n.computeWorldMatrix(true);
+    low = Math.min(low, sole.getAbsolutePosition().y);
+  }
+  return low;
+}
+
+/** World matrices posed off curves alone, each node's keyed values over its own rest: nothing moves. */
+function posedWorld(targeted: readonly { target: unknown; animation: Animation }[]): (node: TransformNode, frame: number) => Matrix {
+  const keyed = new Map<unknown, Animation[]>();
+  for (const t of targeted) keyed.set(t.target, [...(keyed.get(t.target) ?? []), t.animation]);
+  return (node, frame) => {
+    let m = Matrix.Identity();
+    for (let n: Node | null = node; n instanceof TransformNode; n = n.parent) {
+      let rot = n.rotationQuaternion ?? Quaternion.FromEulerVector(n.rotation);
+      let pos = n.position;
+      for (const a of keyed.get(n) ?? []) {
+        if (a.targetProperty === ROTATION) rot = a.evaluate(frame) as Quaternion;
+        else if (a.targetProperty === TRANSLATION) pos = a.evaluate(frame) as Vector3;
+      }
+      m = m.multiply(Matrix.Compose(n.scaling, rot, pos));
+    }
+    return m;
+  };
+}
+
+/** World heights of the lower sole and of the hips in a posed frame. */
+function stanceAt(world: (node: TransformNode, frame: number) => Matrix, soles: readonly TransformNode[], hips: TransformNode, frame: number): { sole: number; hips: number } {
+  return { sole: Math.min(...soles.map((n) => world(n, frame).m[13]!)), hips: world(hips, frame).m[13]! };
+}
+
+/**
+ * How high a take lifts its lower sole over where the take ends (every sword take
+ * ends standing), per frame from `from`, and the hips' height over that sole there.
+ */
+function soleLift(source: AnimationGroup, nodes: readonly TransformNode[]): { lift: number[]; hips: number } {
+  const soles = SOLES.map((name) => nodes.find((n) => n.name === name)).filter((n): n is TransformNode => n !== undefined);
+  const hips = nodes.find((n) => n.name === HIPS_BONE);
+  if (soles.length !== SOLES.length || !hips) return { lift: [], hips: 0 };
+  const world = posedWorld(source.targetedAnimations);
+  const rest = stanceAt(world, soles, hips, source.to);
+  const lift: number[] = [];
+  for (let f = source.from; f <= source.to; f++) lift.push(stanceAt(world, soles, hips, f).sole - rest.sole);
+  return { lift, hips: rest.hips - rest.sole };
+}
+
 /**
  * Re-express a hips translation curve in the target rig's proportions: keep the
  * target's rest position, and add the clip's motion away from its own rest,
@@ -1040,7 +1094,10 @@ let pending: { scene: Scene; promise: Promise<void> } | null = null;
  * Failure is not fatal: headless tests and offline loads leave `loaded` null and
  * every caller falls back to the primitive actor, so the lab still runs.
  */
-export function loadPlayerRig(scene: Scene): Promise<void> {
+export function loadPlayerRig(
+  scene: Scene,
+  sources: { anims: string | File; wardrobe: string | File } = { anims: ANIM_URL, wardrobe: WARDROBE_URL },
+): Promise<void> {
   if (loaded?.scene === scene) return Promise.resolve();
   if (pending?.scene === scene) return pending.promise;
 
@@ -1052,8 +1109,8 @@ export function loadPlayerRig(scene: Scene): Promise<void> {
     .then(async () => {
       if (loaded?.scene === scene) return;
       const [anims, wardrobe] = await Promise.all([
-        LoadAssetContainerAsync(ANIM_URL, scene),
-        LoadAssetContainerAsync(WARDROBE_URL, scene),
+        LoadAssetContainerAsync(sources.anims, scene),
+        LoadAssetContainerAsync(sources.wardrobe, scene),
       ]);
       loaded = { scene, anims, wardrobe };
     })
@@ -1167,6 +1224,11 @@ export class RigActor {
   private readonly host: Mesh;
   private readonly pivot: TransformNode;
   private readonly groups = new Map<RigClip, AnimationGroup>();
+  /** Each strike's own hips and legs, played only while nothing else is moving them. */
+  private readonly strikeLegs = new Map<RigClip, AnimationGroup>();
+  /** Per strike, its sole's lift over the floor per frame, already in this rig's proportions. */
+  private readonly strikeLift = new Map<RigClip, number[]>();
+  private groundObserver: Observer<Scene> | null = null;
 
   private entries: InstantiatedEntries | null = null;
   private active: AnimationGroup | null = null;
@@ -1221,7 +1283,7 @@ export class RigActor {
   private legsObserver: Observer<Scene> | null = null;
   private legsRestore: Observer<Scene> | null = null;
   /** The swing in flight and the rates it is paced by; null between swings. */
-  private strike: { group: AnimationGroup; pace: StrikePace; timing: StrikeTiming } | null = null;
+  private strike: { clip: RigClip; group: AnimationGroup; legs: AnimationGroup | null; pace: StrikePace; timing: StrikeTiming } | null = null;
   private trail: ReturnType<typeof swingTrail> | null = null;
   private strikeObserver: Observer<Scene> | null = null;
   private colliders: (SkirtCollider & {
@@ -1386,6 +1448,8 @@ export class RigActor {
       stride = dirs[main]!.stride + (dirs[over]!.stride - dirs[main]!.stride) * w;
     }
     this.locomotion = clip;
+    // A gait or a turning step owns the legs; its start blends from the strike's pose.
+    if (clip !== "idle") this.stopStrikeLegs();
     const group = this.groups.get(clip);
     if (clip === "idle") {
       this.standing += dt;
@@ -1439,21 +1503,31 @@ export class RigActor {
   }
 
   /**
-   * Alternate authored weapon-arm attacks while locomotion keeps the legs. Paced
-   * per phase (`strikePace`) so the blade stops on the tick the sim lands the hit.
+   * Alternate authored weapon-arm attacks. A moving body keeps its gait's legs; a
+   * standing one plays the take's own hips and legs. Paced per phase
+   * (`strikePace`) so the blade stops on the tick the sim lands the hit.
    */
   playStrike(seconds?: number, releaseSeconds?: number): void {
     const clip = STRIKE_CLIPS[this.nextStrikeIndex]!;
     const group = this.groups.get(clip);
     if (!group) return;
     this.stopReactions();
-    for (const strike of STRIKE_CLIPS) this.groups.get(strike)?.stop();
+    this.stopStrike();
     const timing = STRIKE_TIMING[clip];
     const pace = strikePace(clipSeconds(group), timing, releaseSeconds, seconds);
     group.speedRatio = pace.raise;
     group.start(false, pace.raise);
-    group.onAnimationGroupEndObservable.addOnce(this.easeOutToLocomotion);
-    this.strike = { group, pace, timing };
+    const legs = this.locomotion === "idle" ? this.strikeLegs.get(clip) ?? null : null;
+    if (legs) {
+      legs.speedRatio = pace.raise;
+      legs.start(false, pace.raise);
+      this.scene.sortActiveAnimatables();
+    }
+    group.onAnimationGroupEndObservable.addOnce(() => {
+      this.stopStrikeLegs();
+      this.easeOutToLocomotion();
+    });
+    this.strike = { clip, group, legs, pace, timing };
     this.strikeObserver ??= this.scene.onBeforeAnimationsObservable.add(this.paceStrike);
     this.nextStrikeIndex = (this.nextStrikeIndex + 1) % STRIKE_CLIPS.length;
   }
@@ -1483,6 +1557,11 @@ export class RigActor {
   /** Cancel a strike when the actor is removed or otherwise reset. */
   stopStrike(): void {
     for (const strike of STRIKE_CLIPS) this.groups.get(strike)?.stop();
+    this.stopStrikeLegs();
+  }
+
+  private stopStrikeLegs(): void {
+    for (const legs of this.strikeLegs.values()) if (legs.isPlaying) legs.stop();
   }
 
   /** Per frame, before the clips advance: the phase's rate and the ribbon. */
@@ -1495,10 +1574,11 @@ export class RigActor {
       this.trail = null;
       return;
     }
-    const { group, pace, timing } = strike;
+    const { group, legs, pace, timing } = strike;
     const frac = (frame - group.from) / Math.max(1e-6, group.to - group.from);
     const ratio = strikeRatioAt(frac, pace, timing);
     if (group.speedRatio !== ratio) group.speedRatio = ratio;
+    if (legs && legs.speedRatio !== ratio) legs.speedRatio = ratio;
     // The ribbon is the drop and nothing else: on the raise it is a slow smear.
     const tip = frac >= timing.drop && frac < TRAIL_END ? this.castPoint() : null;
     if (tip) {
@@ -1718,6 +1798,7 @@ export class RigActor {
       if (Math.abs(dt - blendDt) > blendDt * 0.1) {
         blendDt = dt;
         for (const [clip, group] of this.groups) group.blendingSpeed = dt / (isLayeredClip(clip) ? ACTION_BLEND_SEC : LOCO_BLEND_SEC);
+        for (const group of this.strikeLegs.values()) group.blendingSpeed = dt / ACTION_BLEND_SEC;
       }
       if (looked) {
         gaze.forEach((n, i) => { if (ungazed[i]) n?.rotationQuaternion?.copyFrom(ungazed[i]!); });
@@ -1800,6 +1881,7 @@ export class RigActor {
     // has moved anything, because it is the shape the cloth springs back to.
     if (hipsNode instanceof TransformNode) this.buildSkirt(hipsNode, byName);
 
+    const takes = new Map<RigClip, { lift: number[]; hips: number }>();
     for (const clip of Object.keys(CLIP_NAME) as RigClip[]) {
       const source = loaded.anims.animationGroups.find((g) => g.name === CLIP_NAME[clip]);
       if (!source) continue;
@@ -1808,42 +1890,88 @@ export class RigActor {
       // container, which is read-only, so instances cost only the group; the
       // hips curve is the one that has to be rebuilt per rig.
       const upperOnly = isLayeredClip(clip);
-      const group = new AnimationGroup(`${this.host.name}-${clip}`, this.scene);
-      for (const targeted of source.targetedAnimations) {
-        const sourceNode = targeted.target as Node;
-        if (upperOnly && (LOWER_BODY.has(sourceNode.name) || (WEAPON_HAND.has(sourceNode.name) && clip !== "bow"))) continue;
-        const target = byName.get(sourceNode.name);
-        if (!target) continue;
-        const property = targeted.animation.targetProperty;
-        const curve = clip === "idle" && IDLE_CALM_BONES.has(sourceNode.name)
-          ? calmTowardFirst(targeted.animation, IDLE_LEG_BREATH)
-          : targeted.animation;
+      const retarget = (name: string, keep: (bone: string) => boolean): AnimationGroup | null => {
+        const group = new AnimationGroup(name, this.scene);
+        for (const targeted of source.targetedAnimations) {
+          const sourceNode = targeted.target as Node;
+          if (!keep(sourceNode.name)) continue;
+          const target = byName.get(sourceNode.name);
+          if (!target) continue;
+          const property = targeted.animation.targetProperty;
+          const curve = clip === "idle" && IDLE_CALM_BONES.has(sourceNode.name)
+            ? calmTowardFirst(targeted.animation, IDLE_LEG_BREATH)
+            : targeted.animation;
 
-        if (property === ROTATION) {
-          group.addTargetedAnimation(curve, target);
-        } else if (
-          property === TRANSLATION &&
-          sourceNode.name === HIPS_BONE &&
-          hipsRest &&
-          sourceNode instanceof TransformNode
-        ) {
-          group.addTargetedAnimation(
-            remapHips(curve, sourceNode.position, hipsRest, HIPS_BOB[clip]),
-            target,
-          );
+          if (property === ROTATION) {
+            group.addTargetedAnimation(curve, target);
+          } else if (
+            property === TRANSLATION &&
+            sourceNode.name === HIPS_BONE &&
+            hipsRest &&
+            sourceNode instanceof TransformNode
+          ) {
+            group.addTargetedAnimation(
+              remapHips(curve, sourceNode.position, hipsRest, HIPS_BOB[clip]),
+              target,
+            );
+          }
         }
+        if (group.targetedAnimations.length === 0) {
+          group.dispose();
+          return null;
+        }
+        group.normalize(source.from, source.to);
+        // Layered clips apply after locomotion whenever the list is sorted (`switchTo`).
+        if (upperOnly) group.playOrder = 1;
+        group.enableBlending = true;
+        // A 60Hz frame's worth until the first frame re-sets it off the real one.
+        group.blendingSpeed = 1 / 60 / (upperOnly ? ACTION_BLEND_SEC : LOCO_BLEND_SEC);
+        return group;
+      };
+      const group = retarget(`${this.host.name}-${clip}`, (bone) =>
+        !upperOnly || !(LOWER_BODY.has(bone) || (WEAPON_HAND.has(bone) && clip !== "bow")));
+      if (group) this.groups.set(clip, group);
+      const legs = (STRIKE_CLIPS as readonly RigClip[]).includes(clip)
+        ? retarget(`${this.host.name}-${clip}-legs`, (bone) => LOWER_BODY.has(bone))
+        : null;
+      if (legs) {
+        this.strikeLegs.set(clip, legs);
+        takes.set(clip, soleLift(source, loaded.anims.transformNodes));
       }
-      if (group.targetedAnimations.length === 0) {
-        group.dispose();
-        continue;
+    }
+
+    // The take's hips drop is retargeted and its leg angles are not, and the two
+    // rigs' legs differ in proportion: left alone, a lunge sinks a sole 8cm and a
+    // crouch hovers 5cm. The hips are moved so the lower sole stands where the take
+    // puts it, over the floor the idle stands its lower sole on.
+    const soles = SOLES.map((name) => byName.get(name)).filter((n): n is TransformNode => n instanceof TransformNode);
+    const idle = this.groups.get("idle");
+    if (idle && soles.length === SOLES.length && hipsNode instanceof TransformNode) {
+      const stance = stanceAt(posedWorld(idle.targetedAnimations), soles, hipsNode, idle.from);
+      this.pivot.computeWorldMatrix(true);
+      const floor = stance.sole - this.pivot.getAbsolutePosition().y;
+      for (const [clip, take] of takes) {
+        // Clamped at the floor: C's take sinks a sole 2cm under its own rest.
+        if (take.hips > 0) this.strikeLift.set(clip, take.lift.map((y) => Math.max(0, y * (stance.hips - stance.sole) / take.hips)));
       }
-      group.normalize(source.from, source.to);
-      // Layered clips apply after locomotion whenever the list is sorted (`switchTo`).
-      if (upperOnly) group.playOrder = 1;
-      group.enableBlending = true;
-      // A 60Hz frame's worth until the first frame re-sets it off the real one.
-      group.blendingSpeed = 1 / 60 / (isLayeredClip(clip) ? ACTION_BLEND_SEC : LOCO_BLEND_SEC);
-      this.groups.set(clip, group);
+      const up = new Vector3();
+      const inverse = new Matrix();
+      this.groundObserver = this.scene.onAfterAnimationsObservable.add(() => {
+        const legs = this.strike?.legs;
+        const lift = this.strike && legs?.isPlaying ? this.strikeLift.get(this.strike.clip) : undefined;
+        const frame = legs?.animatables[0]?.masterFrame;
+        if (!lift || lift.length < 2 || frame === undefined) return;
+        const at = Math.max(0, Math.min(lift.length - 1, frame - legs!.from));
+        const i = Math.min(lift.length - 2, Math.floor(at));
+        const want = lift[i]! + (lift[i + 1]! - lift[i]!) * (at - i);
+        this.pivot.computeWorldMatrix(true);
+        const gap = want - (lowestSole(soles) - (this.pivot.getAbsolutePosition().y + floor));
+        const parent = hipsNode.parent;
+        if (!(parent instanceof TransformNode) || Math.abs(gap) < 1e-5) return;
+        parent.getWorldMatrix().invertToRef(inverse);
+        Vector3.TransformNormalToRef(up.set(0, gap, 0), inverse, up);
+        hipsNode.position.addInPlace(up);
+      });
     }
 
     const carried = loaded.anims.animationGroups.find((g) => g.name === BOW_CARRY);
@@ -2110,6 +2238,11 @@ export class RigActor {
     this.coatVisible = false;
     for (const group of this.groups.values()) group.dispose();
     this.groups.clear();
+    for (const group of this.strikeLegs.values()) group.dispose();
+    this.strikeLegs.clear();
+    this.strikeLift.clear();
+    if (this.groundObserver) this.scene.onAfterAnimationsObservable.remove(this.groundObserver);
+    this.groundObserver = null;
     this.parts.clear();
     this.entries?.dispose();
     this.entries = null;

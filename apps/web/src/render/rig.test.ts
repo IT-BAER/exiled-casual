@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect, afterEach } from "vitest";
-import { Animation, LoadAssetContainerAsync, Mesh, NullEngine, Quaternion, TransformNode, Vector3 } from "@babylonjs/core";
+import { Animation, FreeCamera, LoadAssetContainerAsync, Mesh, NullEngine, Quaternion, TransformNode, Vector3 } from "@babylonjs/core";
 import { createScene } from "./engine";
 import { ARROW_LENGTH } from "./skill-fx";
 import { makeMesh } from "./meshes";
@@ -39,6 +39,7 @@ import {
   isRigReady,
   lookOffset,
   LOOK_MAX,
+  attachRig,
   loadPlayerRig,
   resetPlayerRig,
   speedRatioFor,
@@ -1980,4 +1981,116 @@ describe("a melee swing lands heavy and on the hit", () => {
     expect(Math.abs(times[drop - 1]! / end - STRIKE_TIMING[clip].drop), "drop").toBeLessThan(0.02);
     expect(Math.abs(times[stop]! / end - STRIKE_TIMING[clip].contact), "contact").toBeLessThan(0.02);
   });
+});
+
+/**
+ * A sword take is a full-body move, and standing still nothing else owns the
+ * legs: the strike's own hips and legs play there. Moving, the gait keeps them.
+ */
+describe("a sword strike moves the legs only while standing", () => {
+  const MODELS = fileURLToPath(new URL("../../public/models/", import.meta.url));
+  const FRAME_MS = 16;
+  const deg = (a: Quaternion, b: Quaternion) => (2 * Math.acos(Math.min(1, Math.abs(Quaternion.Dot(a, b))))) * 180 / Math.PI;
+
+  async function rigged() {
+    engine = new NullEngine();
+    engine.getDeltaTime = () => FRAME_MS;
+    const { scene } = createScene(engine);
+    scene.useConstantAnimationDeltaTime = true;
+    new FreeCamera("eye", new Vector3(0, 2, -6), scene);
+    const file = (name: string) => new File([readFileSync(`${MODELS}${name}`)], name, { type: "model/gltf-binary" });
+    await loadPlayerRig(scene, { anims: file("anim-library.glb"), wardrobe: file("wardrobe.glb") });
+    const rig = attachRig(scene, new Mesh("hero", scene));
+    expect(rig).not.toBeNull();
+    /** How far a bone sits off what a locomotion clip keys for it at that clip's current frame. */
+    const off = (clip: RigClip, bone: string): number => {
+      const group = scene.animationGroups.find((g) => g.name === `hero-${clip}`)!;
+      const track = group.targetedAnimations.find((t) => (t.target as TransformNode).name === bone && t.animation.targetProperty === "rotationQuaternion")!;
+      const frame = group.animatables[0]!.masterFrame;
+      return deg((track.target as TransformNode).rotationQuaternion!, track.animation.evaluate(frame) as Quaternion);
+    };
+    const legs = scene.animationGroups.find((g) => g.name === "hero-strikeA-legs")!;
+    const balls = ["ball_l", "ball_r"].map((n) => legs.targetedAnimations.find((t) => (t.target as TransformNode).name === n)!.target as TransformNode);
+    /** The lower foot's height over the floor the body stands on. */
+    const lowFoot = () => Math.min(...balls.map((b) => b.getAbsolutePosition().y));
+    return { scene, rig: rig!, off, lowFoot };
+  }
+
+  async function withFiles<T>(run: () => Promise<T>): Promise<T> {
+    const original = (globalThis as { FileReader?: unknown }).FileReader;
+    (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
+    try {
+      return await run();
+    } finally {
+      (globalThis as { FileReader?: unknown }).FileReader = original;
+    }
+  }
+
+  it("swings the hips and legs from the take while standing, and hands them back to the idle after", () => withFiles(async () => {
+    const { scene, rig, off } = await rigged();
+    const frame = () => { rig.setLocomotion(0); scene.render(); };
+    rig.standSettled();
+    for (let i = 0; i < 30; i++) frame();
+    rig.playStrike();
+    let pelvis = 0;
+    let thigh = 0;
+    // Sword_Regular_A is 1.40 s at its own pace.
+    for (let i = 0; i < 100; i++) {
+      frame();
+      pelvis = Math.max(pelvis, off("idle", "pelvis"));
+      thigh = Math.max(thigh, off("idle", "thigh_l"));
+    }
+    expect(pelvis, "pelvis off the idle mid-strike").toBeGreaterThan(20);
+    expect(thigh, "thigh off the idle mid-strike").toBeGreaterThan(20);
+    for (let i = 0; i < 60; i++) frame();
+    expect(off("idle", "pelvis"), "pelvis back on the idle").toBeLessThan(2);
+    expect(off("idle", "thigh_l"), "thigh back on the idle").toBeLessThan(2);
+  }), 60_000);
+
+  it("keeps the feet on the floor through the lunges and lifts them only where the take hops", () => withFiles(async () => {
+    const { scene, rig, lowFoot } = await rigged();
+    const frame = () => { rig.setLocomotion(0); scene.render(); };
+    rig.standSettled();
+    for (let i = 0; i < 30; i++) frame();
+    const floor = lowFoot();
+    const lows: number[][] = [];
+    // A, B and C, each from a settled stance: their own lengths plus the blend home.
+    for (const frames of [100, 110, 140]) {
+      rig.playStrike();
+      const low: number[] = [];
+      for (let i = 0; i < frames; i++) { frame(); low.push(lowFoot() - floor); }
+      lows.push(low);
+    }
+    const [a, b, c] = lows as [number[], number[], number[]];
+    for (const [name, low] of [["A", a], ["B", b], ["C", c]] as const) {
+      expect(Math.min(...low), `${name} never sinks into the floor`).toBeGreaterThan(-0.015);
+    }
+    // B crouches from 0.31 s to 0.78 s with both soles planted in the take.
+    expect(Math.max(...b.slice(25, 45)), "B's crouch stays planted").toBeLessThan(0.015);
+    // C hops at 0.5 s: its lower foot 0.13 over its rest in the take.
+    expect(Math.max(...c.slice(25, 35)), "C still hops").toBeGreaterThan(0.08);
+  }), 60_000);
+
+  it("leaves the legs on the run while moving", () => withFiles(async () => {
+    const { scene, rig, off } = await rigged();
+    const frame = () => { rig.setMoveAngle(0); rig.setLocomotion(3.5); scene.render(); };
+    for (let i = 0; i < 40; i++) frame();
+    rig.playStrike();
+    let thigh = 0;
+    for (let i = 0; i < 60; i++) {
+      frame();
+      thigh = Math.max(thigh, off("run", "thigh_l"));
+    }
+    expect(thigh, "thigh off the run mid-strike").toBeLessThan(2);
+  }), 60_000);
+
+  it("gives the legs back to the gait when he starts moving mid-strike", () => withFiles(async () => {
+    const { scene, rig, off } = await rigged();
+    rig.standSettled();
+    for (let i = 0; i < 30; i++) { rig.setLocomotion(0); scene.render(); }
+    rig.playStrike();
+    for (let i = 0; i < 20; i++) { rig.setLocomotion(0); scene.render(); }
+    for (let i = 0; i < 40; i++) { rig.setMoveAngle(0); rig.setLocomotion(3.5); scene.render(); }
+    expect(off("run", "thigh_l"), "thigh on the run").toBeLessThan(2);
+  }), 60_000);
 });
