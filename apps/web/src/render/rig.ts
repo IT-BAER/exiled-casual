@@ -940,14 +940,19 @@ export const HIPS_BOB: Record<RigClip, number> = {
  * 1-3. Every listed bone is pulled toward the SAME frame, so the soles stay planted.
  */
 export const IDLE_LEG_BREATH = 0.4;
+/**
+ * Share of a sword take's hips and legs a standing strike keeps, pulled toward
+ * the take's standing last key. The whole take lunges and crouches 30cm deep.
+ */
+export const STRIKE_LEG_SHARE = 0.15;
 export const IDLE_CALM_BONES: ReadonlySet<string> = new Set([
   HIPS_BONE, "thigh_l", "calf_l", "foot_l", "ball_l", "thigh_r", "calf_r", "foot_r", "ball_r",
 ]);
 
-/** A copy of a linear curve with each key kept at `share` of its distance from the first. */
-export function calmTowardFirst(source: Animation, share: number): Animation {
+/** A copy of a linear curve with each key kept at `share` of its distance from the first (or last) key. */
+export function calmTowardFirst(source: Animation, share: number, anchor: "first" | "last" = "first"): Animation {
   const keys = source.getKeys();
-  const first = keys[0]?.value as Quaternion | Vector3 | undefined;
+  const first = keys[anchor === "first" ? 0 : keys.length - 1]?.value as Quaternion | Vector3 | undefined;
   const calmed = source.clone();
   if (!first) return calmed;
   calmed.setKeys(keys.map((key) => ({
@@ -1002,14 +1007,19 @@ function stanceAt(world: (node: TransformNode, frame: number) => Matrix, soles: 
  * How high a take lifts its lower sole over where the take ends (every sword take
  * ends standing), per frame from `from`, and the hips' height over that sole there.
  */
-function soleLift(source: AnimationGroup, nodes: readonly TransformNode[]): { lift: number[]; hips: number } {
+function soleLift(
+  targeted: readonly { target: unknown; animation: Animation }[],
+  from: number,
+  to: number,
+  nodes: readonly TransformNode[],
+): { lift: number[]; hips: number } {
   const soles = SOLES.map((name) => nodes.find((n) => n.name === name)).filter((n): n is TransformNode => n !== undefined);
   const hips = nodes.find((n) => n.name === HIPS_BONE);
   if (soles.length !== SOLES.length || !hips) return { lift: [], hips: 0 };
-  const world = posedWorld(source.targetedAnimations);
-  const rest = stanceAt(world, soles, hips, source.to);
+  const world = posedWorld(targeted);
+  const rest = stanceAt(world, soles, hips, to);
   const lift: number[] = [];
-  for (let f = source.from; f <= source.to; f++) lift.push(stanceAt(world, soles, hips, f).sole - rest.sole);
+  for (let f = from; f <= to; f++) lift.push(stanceAt(world, soles, hips, f).sole - rest.sole);
   return { lift, hips: rest.hips - rest.sole };
 }
 
@@ -1882,6 +1892,7 @@ export class RigActor {
     if (hipsNode instanceof TransformNode) this.buildSkirt(hipsNode, byName);
 
     const takes = new Map<RigClip, { lift: number[]; hips: number }>();
+    const strikeCalm = (a: Animation) => calmTowardFirst(a, STRIKE_LEG_SHARE, "last");
     for (const clip of Object.keys(CLIP_NAME) as RigClip[]) {
       const source = loaded.anims.animationGroups.find((g) => g.name === CLIP_NAME[clip]);
       if (!source) continue;
@@ -1890,7 +1901,7 @@ export class RigActor {
       // container, which is read-only, so instances cost only the group; the
       // hips curve is the one that has to be rebuilt per rig.
       const upperOnly = isLayeredClip(clip);
-      const retarget = (name: string, keep: (bone: string) => boolean): AnimationGroup | null => {
+      const retarget = (name: string, keep: (bone: string) => boolean, calm?: (a: Animation) => Animation): AnimationGroup | null => {
         const group = new AnimationGroup(name, this.scene);
         for (const targeted of source.targetedAnimations) {
           const sourceNode = targeted.target as Node;
@@ -1900,7 +1911,7 @@ export class RigActor {
           const property = targeted.animation.targetProperty;
           const curve = clip === "idle" && IDLE_CALM_BONES.has(sourceNode.name)
             ? calmTowardFirst(targeted.animation, IDLE_LEG_BREATH)
-            : targeted.animation;
+            : calm?.(targeted.animation) ?? targeted.animation;
 
           if (property === ROTATION) {
             group.addTargetedAnimation(curve, target);
@@ -1932,11 +1943,14 @@ export class RigActor {
         !upperOnly || !(LOWER_BODY.has(bone) || (WEAPON_HAND.has(bone) && clip !== "bow")));
       if (group) this.groups.set(clip, group);
       const legs = (STRIKE_CLIPS as readonly RigClip[]).includes(clip)
-        ? retarget(`${this.host.name}-${clip}-legs`, (bone) => LOWER_BODY.has(bone))
+        ? retarget(`${this.host.name}-${clip}-legs`, (bone) => LOWER_BODY.has(bone), strikeCalm)
         : null;
       if (legs) {
         this.strikeLegs.set(clip, legs);
-        takes.set(clip, soleLift(source, loaded.anims.transformNodes));
+        const calmed = source.targetedAnimations.map((t) => LOWER_BODY.has((t.target as Node).name)
+          ? { target: t.target, animation: strikeCalm(t.animation) }
+          : t);
+        takes.set(clip, soleLift(calmed, source.from, source.to, loaded.anims.transformNodes));
       }
     }
 

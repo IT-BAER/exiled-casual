@@ -2013,7 +2013,9 @@ describe("a sword strike moves the legs only while standing", () => {
     const balls = ["ball_l", "ball_r"].map((n) => legs.targetedAnimations.find((t) => (t.target as TransformNode).name === n)!.target as TransformNode);
     /** The lower foot's height over the floor the body stands on. */
     const lowFoot = () => Math.min(...balls.map((b) => b.getAbsolutePosition().y));
-    return { scene, rig: rig!, off, lowFoot };
+    const pelvis = legs.targetedAnimations.find((t) => (t.target as TransformNode).name === "pelvis")!.target as TransformNode;
+    const pelvisY = () => pelvis.getAbsolutePosition().y;
+    return { scene, rig: rig!, off, lowFoot, pelvisY };
   }
 
   async function withFiles<T>(run: () => Promise<T>): Promise<T> {
@@ -2026,28 +2028,33 @@ describe("a sword strike moves the legs only while standing", () => {
     }
   }
 
-  it("swings the hips and legs from the take while standing, and hands them back to the idle after", () => withFiles(async () => {
-    const { scene, rig, off } = await rigged();
+  it("sways the hips and legs a little with the take while standing, and hands them back to the idle after", () => withFiles(async () => {
+    const { scene, rig, off, pelvisY } = await rigged();
     const frame = () => { rig.setLocomotion(0); scene.render(); };
     rig.standSettled();
     for (let i = 0; i < 30; i++) frame();
+    const standing = pelvisY();
     rig.playStrike();
     let pelvis = 0;
     let thigh = 0;
+    let drop = 0;
     // Sword_Regular_A is 1.40 s at its own pace.
     for (let i = 0; i < 100; i++) {
       frame();
       pelvis = Math.max(pelvis, off("idle", "pelvis"));
       thigh = Math.max(thigh, off("idle", "thigh_l"));
+      drop = Math.max(drop, standing - pelvisY());
     }
-    expect(pelvis, "pelvis off the idle mid-strike").toBeGreaterThan(20);
-    expect(thigh, "thigh off the idle mid-strike").toBeGreaterThan(20);
+    expect(pelvis, "pelvis off the idle mid-strike").toBeGreaterThan(5);
+    expect(thigh, "thigh off the idle mid-strike").toBeGreaterThan(2);
+    // The whole take crouches 31cm: a sway, not a lunge.
+    expect(drop, "pelvis drop").toBeLessThan(0.05);
     for (let i = 0; i < 60; i++) frame();
     expect(off("idle", "pelvis"), "pelvis back on the idle").toBeLessThan(2);
     expect(off("idle", "thigh_l"), "thigh back on the idle").toBeLessThan(2);
   }), 60_000);
 
-  it("keeps the feet on the floor through the lunges and lifts them only where the take hops", () => withFiles(async () => {
+  it("keeps the feet on the floor through all three strikes", () => withFiles(async () => {
     const { scene, rig, lowFoot } = await rigged();
     const frame = () => { rig.setLocomotion(0); scene.render(); };
     rig.standSettled();
@@ -2061,14 +2068,11 @@ describe("a sword strike moves the legs only while standing", () => {
       for (let i = 0; i < frames; i++) { frame(); low.push(lowFoot() - floor); }
       lows.push(low);
     }
-    const [a, b, c] = lows as [number[], number[], number[]];
-    for (const [name, low] of [["A", a], ["B", b], ["C", c]] as const) {
-      expect(Math.min(...low), `${name} never sinks into the floor`).toBeGreaterThan(-0.015);
-    }
-    // B crouches from 0.31 s to 0.78 s with both soles planted in the take.
-    expect(Math.max(...b.slice(25, 45)), "B's crouch stays planted").toBeLessThan(0.015);
-    // C hops at 0.5 s: its lower foot 0.13 over its rest in the take.
-    expect(Math.max(...c.slice(25, 35)), "C still hops").toBeGreaterThan(0.08);
+    lows.forEach((low, i) => {
+      expect(Math.min(...low), `${"ABC"[i]} never sinks into the floor`).toBeGreaterThan(-0.015);
+      // C's hop survives only as a share of its 13cm.
+      expect(Math.max(...low), `${"ABC"[i]} never floats`).toBeLessThan(0.03);
+    });
   }), 60_000);
 
   it("leaves the legs on the run while moving", () => withFiles(async () => {
