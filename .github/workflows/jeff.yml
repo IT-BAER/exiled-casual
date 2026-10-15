@@ -59,6 +59,7 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           allowed_bots: "claude[bot]"
+          show_full_output: true
           settings: .jeff/settings.json
           # Only GitHub-generated identifiers and the project file path go into the prompt.
           prompt: |
