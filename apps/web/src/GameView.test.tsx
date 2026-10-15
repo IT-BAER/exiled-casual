@@ -42,6 +42,7 @@ vi.mock("@babylonjs/core", () => ({
     dispose = vi.fn();
     getRenderWidth = () => 1920;
     getRenderHeight = () => 1080;
+    getHardwareScalingLevel = () => 1;
   },
   Vector3: class { static Project = vi.fn(() => ({ x: 0, y: 0, z: 0.5 })); },
   Matrix: { Identity: vi.fn() },

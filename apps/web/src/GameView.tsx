@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Engine, Matrix, Vector3 } from "@babylonjs/core";
+import { Engine, Vector3 } from "@babylonjs/core";
 import type { Scene } from "@babylonjs/core";
 import { applyGraphics, createScene, setMapFill } from "./render/engine";
+import { canvasProjector } from "./render/projector";
 import { buildLevel, applyBiomeTint, applyTilesetFloor } from "./render/level";
 import { buildSea } from "./render/sea";
 import { Presence } from "./presence";
@@ -369,16 +370,8 @@ export function GameView({
     const renderer = new SnapshotRenderer(scene);
 
     // Ground-item name plates live in the DOM, so they need the camera's
-    // world -> canvas projection. Sim (x, y) maps to world (x, z).
-    setProject(() => (x: number, y: number, worldY = 0) => {
-      const p = Vector3.Project(
-        new Vector3(x, worldY, y),
-        Matrix.Identity(),
-        scene.getTransformMatrix(),
-        camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight()),
-      );
-      return { x: p.x, y: p.y, visible: p.z > 0 && p.z < 1 };
-    });
+    // world -> canvas projection.
+    setProject(() => canvasProjector(scene, camera, engine));
 
     // Monster health bars follow the mesh, not the snapshot: the renderer
     // interpolates positions per frame and a bar pinned to 30 Hz stutters.
