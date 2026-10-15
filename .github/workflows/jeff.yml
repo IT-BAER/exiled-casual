@@ -26,12 +26,17 @@ permissions:
 
 jobs:
   jeff:
+    # Only the owner (or Jeff's own pushes) can start a run; outsiders can open issues and PRs
+    # on a public repo but cannot label them, and their comments and reviews are ignored here.
     if: >-
-      (github.event_name == 'issues' && github.event.label.name == 'jeff') ||
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'failure' && startsWith(github.event.workflow_run.head_branch, 'jeff/')) ||
-      (github.event_name == 'pull_request_review' && github.event.review.state == 'changes_requested' && startsWith(github.event.pull_request.head.ref, 'jeff/')) ||
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@jeff')) ||
-      github.event_name == 'schedule'
+      (github.actor == 'IT-BAER' || github.actor == 'claude[bot]' || github.event_name == 'schedule') &&
+      (
+        (github.event_name == 'issues' && github.event.label.name == 'jeff') ||
+        (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'failure' && startsWith(github.event.workflow_run.head_branch, 'jeff/') && github.event.workflow_run.head_repository.full_name == github.repository) ||
+        (github.event_name == 'pull_request_review' && github.event.review.state == 'changes_requested' && startsWith(github.event.pull_request.head.ref, 'jeff/')) ||
+        (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@jeff')) ||
+        github.event_name == 'schedule'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
