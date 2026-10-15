@@ -557,6 +557,7 @@ export class SnapshotRenderer {
         e.species ?? e.look ?? e.baseId ?? (e.kind === "gold" ? `gold:${e.amount ?? 1}:${e.jackpot ? 1 : 0}` : undefined),
         undefined,
         e.skillId,
+        e.facing,
       );
       const mesh = this.meshes.get(e.id);
       if (!mesh) continue;

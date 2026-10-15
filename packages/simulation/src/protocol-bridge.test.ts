@@ -272,6 +272,17 @@ describe("buildSnapshot — boss & telegraph", () => {
     expect(buildSnapshot(world, {} as never, 0, "test").entities.find(x => x.boss)!.bossAwake).toBe(true);
   });
 
+  it("an attacking monster faces the player; a chasing one faces where it runs", () => {
+    const { world } = makeMinimalWorld();
+    const e = addMonster(world, 3, 4);
+    const monster = () => buildSnapshot(world, {} as never, 0, "test").entities.find((x) => x.id === e)!;
+    world.set<MonsterC>(e, "monster", { ...world.get<MonsterC>(e, "monster")!, state: "chase" });
+    expect(monster().facing).toBeUndefined();
+    world.set<MonsterC>(e, "monster", { ...world.get<MonsterC>(e, "monster")!, state: "attack" });
+    expect(monster().facing!.x).toBeCloseTo(-0.6, 6);
+    expect(monster().facing!.y).toBeCloseTo(-0.8, 6);
+  });
+
   it("plain monster does NOT carry boss or bossPhase keys", () => {
     const { world } = makeMinimalWorld();
     addMonster(world, 2, 2);

@@ -263,6 +263,10 @@ export function buildSnapshot(
     // element, so the attack type IS the theme and nothing has to be stored.
     if (mon.rare === 1) entry.element = damageTypeOf(mon.attackType) as MonsterElement;
     if (mon.lastAttackTick !== undefined) entry.attackTick = mon.lastAttackTick;
+    if (mon.state === "attack") {
+      const tx = toNumber(pp.x - mp.x), ty = toNumber(pp.y - mp.y), td = Math.hypot(tx, ty);
+      if (td > 0) entry.facing = { x: tx / td, y: ty / td };
+    }
     if (ail !== undefined) entry.ailmentStacks = ail.stacks;
     if (world.has(e, "boss")) {
       const bc = world.get<BossC>(e, "boss")!;

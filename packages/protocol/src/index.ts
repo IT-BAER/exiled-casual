@@ -254,6 +254,11 @@ export interface SnapshotEntity {
    * when the value changes; the tick itself only serves as that edge.
    */
   attackTick?: number;
+  /**
+   * monster only: unit direction to the player while it fights him. The body
+   * faces this, not its step, which a pack's shove or a strafe points anywhere.
+   */
+  facing?: { x: number; y: number };
   /** true for the boss monster; kind stays "monster" so existing consumers keep working */
   boss?: boolean;
   /** boss phase, present only when boss === true */

@@ -577,6 +577,25 @@ describe("SnapshotRenderer", () => {
     expect(mesh.rotation.y).toBeCloseTo(0, 2);
   });
 
+  it("keeps an attacking monster facing its target while a shove carries it away", () => {
+    engine = new NullEngine();
+    vi.spyOn(engine, "getDeltaTime").mockReturnValue(1000 / 60);
+    const { scene } = createScene(engine);
+    const renderer = new SnapshotRenderer(scene);
+    const at = (x: number) => makeSnapshot({
+      entities: [{ id: 1, kind: "monster", x, y: 0, life: 10, maxLife: 10, facing: { x: -1, y: 0 } }],
+    });
+    let prev = at(1);
+    renderer.apply(null, prev, 1);
+    for (let i = 1; i <= 40; i++) {
+      const next = at(1 + i * 0.02);
+      renderer.apply(prev, next, 1);
+      prev = next;
+    }
+    // Facing -x is yaw -PI/2; the step alone would turn it to +PI/2.
+    expect(Math.cos(scene.getMeshByName("entity-1")!.rotation.y + Math.PI / 2)).toBeGreaterThan(0.999);
+  });
+
   it("standing, lets the head follow a cursor near his facing and turns the body only past it", () => {
     engine = new NullEngine();
     vi.spyOn(engine, "getDeltaTime").mockReturnValue(1000 / 60);
