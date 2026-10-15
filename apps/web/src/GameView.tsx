@@ -22,6 +22,7 @@ import {
   SKY_COLOR,
 } from "./render/environment";
 import { attachBindings } from "./input/bindings";
+import { portalIntent } from "./input/intents";
 import { isTextEntry } from "./input/text-entry";
 import { ALL_SFX, CORE_SFX, playSfx, preloadSfx, setAmbient, stopAmbient } from "./audio/sfx";
 import { setMusic, stopMusic } from "./audio/music";
@@ -167,6 +168,8 @@ export function GameView({
     allocRef.current = alloc;
   }
   const allocatedPassives = allocRef.current;
+  // The cursor's world point, published by the bindings for the HUD's Portal button.
+  const getAimRef = useRef<(() => { x: number; y: number } | null) | null>(null);
   const sendIntent = useCallback((intent: Intent) => {
     // Logged where it is SENT rather than diffed out of a snapshot: an intent the
     // sim refused leaves no trace in the world, and that is exactly the case the
@@ -658,6 +661,7 @@ export function GameView({
       }
     };
 
+    getAimRef.current = getAim;
     const renderFrame = () => {
       if (!curSnap) return;
       // ponytail: float alpha for lerp — never fed into sim
@@ -935,6 +939,10 @@ export function GameView({
         onOpenPassives={() => setPassivesOpen(true)}
         onToggleInventory={() => { setInventoryOpen((v) => !v); setStashOpen(false); }}
         inventoryKey={keybinds.inventory}
+        onPortal={() => {
+          if (!snapshot) return;
+          sendIntent(portalIntent(getAimRef.current?.() ?? { x: snapshot.player.x, y: snapshot.player.y }));
+        }}
         keybinds={keybinds}
         controlMode={controlMode}
       />

@@ -48,6 +48,11 @@ export function heldToMoveIntent(held: readonly string[], binds: Keybinds = DEFA
   return { kind: "moveDir", dx: Math.sign(dx) as -1 | 0 | 1, dy: Math.sign(dy) as -1 | 0 | 1 };
 }
 
+/** The Portal cast, aimed in raw world floats; the key and the HUD button both send it. */
+export function portalIntent(aim: { x: number; y: number }): Intent {
+  return { kind: "useSkill", skillId: TOWN_PORTAL_SKILL, tx: fp(aim.x), ty: fp(aim.y) };
+}
+
 /**
  * Pure: map a KeyboardEvent.key + current world-space aim point to an Intent.
  * Returns null for unmapped keys.
@@ -76,7 +81,7 @@ export function keyToIntent(
 
   // The way home is PoE2's: free inside an open map, held back by its cooldown.
   // The right-click on a Portal Scroll casts the same skill and spends the scroll.
-  if (action === "portal") return { kind: "useSkill", skillId: TOWN_PORTAL_SKILL, tx: fp(aim.x), ty: fp(aim.y) };
+  if (action === "portal") return portalIntent(aim);
 
   const skillId = skillForKey?.(key);
   if (skillId) {

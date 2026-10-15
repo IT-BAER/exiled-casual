@@ -142,6 +142,20 @@ describe("Hud", () => {
     expect(screen.getByTestId("skill-slot-2")).toHaveTextContent("2.0s");
   });
 
+  it("puts a Portal button left of the inventory chest, named with its bound key", () => {
+    const onPortal = vi.fn();
+    const keybinds = { ...DEFAULT_KEYBINDS_BY_MODE.mouse, portal: "h" };
+    render(<Hud snapshot={makeSnap({})} onPortal={onPortal} keybinds={keybinds} />);
+    const portal = screen.getByTestId("portal-button");
+    const chest = screen.getByTestId("inventory-open-button");
+    expect(portal.compareDocumentPosition(chest) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(portal).toHaveAccessibleName("Portal (H)");
+    fireEvent.mouseEnter(portal);
+    expect(portal).toHaveTextContent("Portal (H)");
+    fireEvent.click(portal);
+    expect(onPortal).toHaveBeenCalledTimes(1);
+  });
+
   it("renders five keyed skill slots then the three mouse buttons", () => {
     render(<Hud snapshot={makeSnap({ cooldowns: {} })} />);
     // Mouse mode's default keymap: PoE2's QWERT row.
