@@ -1,0 +1,75 @@
+name: Release
+# A release is a GitHub release with that version's CHANGELOG.md section as notes
+# and the built game (apps/web/dist) as a tarball. Two ways in, same job:
+#   - a pushed tag v<version> (the owner ran tools/release.mjs and pushed with tags)
+#   - a push to main that changes package.json to a version without a tag yet
+#     (a merged "release <version>" PR, for example from Jeff); the job tags it.
+on:
+  push:
+    tags: ["v*"]
+    branches: [main]
+    paths: [package.json]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .node-version
+      - name: Version, tag and notes
+        id: meta
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pkg="$(node -p "require('./package.json').version")"
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            version="${GITHUB_REF_NAME#v}"
+            if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+              echo "$GITHUB_REF_NAME already has a release; nothing to do"
+              echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0
+            fi
+            if [ "$version" != "$pkg" ]; then
+              echo "tag v$version but package.json says $pkg" >&2; exit 1
+            fi
+          else
+            version="$pkg"
+            if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null; then
+              echo "v$version is already tagged; nothing to release"
+              echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0
+            fi
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "v$version" -m "release $version"
+            git push origin "refs/tags/v$version"
+          fi
+          node tools/release_notes.mjs "$version" > notes.md
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          case "$version" in *-*) echo "prerelease=--prerelease" >> "$GITHUB_OUTPUT";; esac
+      - if: steps.meta.outputs.skip != 'true'
+        run: npm ci
+      - if: steps.meta.outputs.skip != 'true'
+        run: npm run typecheck
+      - if: steps.meta.outputs.skip != 'true'
+        run: npm test
+      - if: steps.meta.outputs.skip != 'true'
+        run: npm run build -w apps/web
+      - name: Pack the game
+        if: steps.meta.outputs.skip != 'true'
+        run: tar -czf "exiled-casual-${{ steps.meta.outputs.version }}.tar.gz" -C apps/web/dist .
+      - name: Create the release
+        if: steps.meta.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "v${{ steps.meta.outputs.version }}"
+          --title "v${{ steps.meta.outputs.version }}"
+          --notes-file notes.md
+          ${{ steps.meta.outputs.prerelease }}
+          "exiled-casual-${{ steps.meta.outputs.version }}.tar.gz"
