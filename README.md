@@ -139,10 +139,10 @@ git push --follow-tags
 The tag starts [`release.yml`](.github/workflows/release.yml): it checks the tag
 against `package.json`, runs typecheck and tests, builds the game, and publishes
 a GitHub release with that version's changelog section as notes and
-`exiled-casual-<version>.tar.gz`
-(the contents of `apps/web/dist`) as the asset. A `-` in the version marks a
-prerelease. `version.test.ts` fails when the version sources (both `package.json` files, the
-changelog, `GAME_VERSION`) drift.
+`exiled-casual-<version>.tar.gz` (the contents of `apps/web/dist`) as the asset.
+A `-` in the version marks a prerelease. `version.test.ts` fails when the
+version sources (both `package.json` files, the changelog, `GAME_VERSION`)
+drift.
 
 The same workflow also runs when a push to `main` changes the version in
 `package.json` to one without a tag: it creates the tag itself and publishes.
