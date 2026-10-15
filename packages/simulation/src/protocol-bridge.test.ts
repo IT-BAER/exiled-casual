@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { fp, toNumber } from "@exiled/fixed-point";
 import { createCombatSim } from "./combat-sim";
 import { intentToCommand, buildSnapshot } from "./protocol-bridge";
-import { CONTENT_VERSION, MONSTERS, SKILLS } from "@exiled/content-runtime";
+import { CONTENT_VERSION, MONSTERS, SKILLS, UTILITY_SKILLS } from "@exiled/content-runtime";
 import { ITEM_POOLS, baseOf } from "@exiled/content-runtime";
 import { rollItem, effectiveSkill } from "@exiled/rules";
 import type { Intent } from "@exiled/protocol";
@@ -557,8 +557,8 @@ describe("buildSnapshot - skills", () => {
     const { world, sim } = setupSkillsWorld(42, 1, 0);
     const snap = buildSnapshot(world, sim, 0, CONTENT_VERSION);
     const ids = snap.skills!.map((s) => s.id);
-    // cinder_ground (unlockLevel 8) and town_portal (unlockLevel 10) are locked
-    // at level 1; ember_bolt (unlockLevel 1) is not.
+    // cinder_ground (unlockLevel 8) is locked at level 1; ember_bolt
+    // (unlockLevel 1) is not. town_portal is a utility skill and never listed.
     expect(ids).not.toContain("skill.cinder_ground.v1");
     expect(ids).not.toContain("skill.town_portal.v1");
     expect(ids).toContain("skill.ember_bolt.v1");
@@ -568,9 +568,17 @@ describe("buildSnapshot - skills", () => {
     const { world, sim } = setupSkillsWorld(42, 100, 0);
     const snap = buildSnapshot(world, sim, 0, CONTENT_VERSION);
     const ids = new Set(snap.skills!.map((s) => s.id));
-    const own = [...SKILLS.values()].filter((d) => !d.classId || d.classId === "class.emberbound").map((d) => d.id);
+    const own = [...SKILLS.values()]
+      .filter((d) => !UTILITY_SKILLS.has(d.id) && (!d.classId || d.classId === "class.emberbound"))
+      .map((d) => d.id);
     expect(ids).toEqual(new Set(own));
-    expect(ids.size).toBe(5);
+    expect(ids.size).toBe(4);
+  });
+
+  it("never lists a utility skill, even at the level that used to open it", () => {
+    const { world, sim } = setupSkillsWorld(42, 10);
+    const snap = buildSnapshot(world, sim, 0, CONTENT_VERSION);
+    expect(snap.skills!.map((s) => s.id)).not.toContain("skill.town_portal.v1");
   });
 
   it("quotes the gem's numbers, not the def's", () => {
