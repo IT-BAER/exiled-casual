@@ -1,11 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { fp, fpClamp, fpDist2, type Fixed } from "@exiled/fixed-point";
 import { Simulation } from "../loop";
-import { registerPlayerMovement, CASTING_MOVE_PCT } from "./player-movement";
+import { registerPlayerMovement, CASTING_MOVE_PCT, rollStep, ROLL_DISTANCE, ROLL_TICKS } from "./player-movement";
 import { WORLD_MIN, WORLD_MAX, ARENA_RADIUS } from "../movement";
 import { gridCollision } from "../collision";
 import { makeGrid } from "../test-grid";
-import type { Position, PlayerC, MoveTarget, MoveDir, Faction, CastingC, SkillHoldC } from "../components";
+import type {
+  Position, PlayerC, MoveTarget, MoveDir, Faction, CastingC, SkillHoldC, RollC, Mana, Cooldowns,
+} from "../components";
 
 function makePlayer(sim: Simulation, x = 0, y = 0, moveSpeed = fp(3)) {
   const e = sim.world.create();
@@ -527,5 +529,142 @@ describe("click-to-move routes around what it cannot walk through", () => {
     const end = sim.world.get<Position>(p, "position")!;
     expect(end.y).toBe(fp(1)); // never left the line
     expect(end.x).toBeGreaterThan(fp(5));
+  });
+});
+
+describe("dodge roll", () => {
+  const dodge = (tick: number, entity: number, tx: Fixed, ty: Fixed) =>
+    ({ tick, entity, type: "dodge", data: { tx, ty } });
+  const at = (sim: Simulation, e: number): Position => ({ ...sim.world.get<Position>(e, "position")! });
+
+  it("rollStep covers exactly the roll distance, most of it up front", () => {
+    let sum = 0;
+    let firstHalf = 0;
+    for (let i = 1; i <= ROLL_TICKS; i++) {
+      sum += rollStep(i);
+      if (i <= ROLL_TICKS / 2) firstHalf += rollStep(i);
+    }
+    expect(ROLL_DISTANCE).toBe(fp(3.7));
+    expect(sum).toBe(fp(3.7));
+    expect(firstHalf).toBeGreaterThan(fp(3.7) / 2);
+  });
+
+  it("rolls a standing player the full distance toward the target, front-loaded", () => {
+    const sim = new Simulation();
+    registerPlayerMovement(sim);
+    const p = makePlayer(sim);
+    sim.step([dodge(0, p, fp(10), 0)]);
+    for (let t = 1; t < 9; t++) sim.step();
+    expect(at(sim, p).x).toBeGreaterThan(fp(3.7) / 2);
+    for (let t = 9; t < ROLL_TICKS; t++) sim.step();
+    expect(at(sim, p)).toEqual({ x: fp(3.7), y: 0 });
+    // Over: he stays put.
+    sim.step();
+    expect(at(sim, p)).toEqual({ x: fp(3.7), y: 0 });
+    expect(sim.world.has(p, "roll")).toBe(false);
+  });
+
+  it("rolls along an off-axis aim to within rounding of the full distance", () => {
+    const sim = new Simulation();
+    registerPlayerMovement(sim);
+    const p = makePlayer(sim);
+    sim.step([dodge(0, p, fp(3), fp(4))]);
+    for (let t = 1; t < ROLL_TICKS; t++) sim.step();
+    const { x, y } = at(sim, p);
+    // One truncation per tick per axis at most.
+    expect(Math.abs(x - Math.trunc((fp(3.7) * 3) / 5))).toBeLessThanOrEqual(ROLL_TICKS);
+    expect(Math.abs(y - Math.trunc((fp(3.7) * 4) / 5))).toBeLessThanOrEqual(ROLL_TICKS);
+  });
+
+  it("ignores a second dodge issued mid-roll", () => {
+    const run = (again: boolean) => {
+      const sim = new Simulation();
+      registerPlayerMovement(sim);
+      const p = makePlayer(sim);
+      const path: Position[] = [];
+      sim.step([dodge(0, p, fp(10), 0)]);
+      for (let t = 1; t <= ROLL_TICKS + 2; t++) {
+        sim.step(again && t === 4 ? [dodge(t, p, 0, fp(10))] : []);
+        path.push(at(sim, p));
+        if (t === ROLL_TICKS - 1) {
+          expect(sim.world.get<RollC>(p, "roll")).toMatchObject({ startTick: 0, untilTick: ROLL_TICKS });
+        }
+      }
+      return path;
+    };
+    expect(run(true)).toEqual(run(false));
+  });
+
+  it("ends a roll into a wall against the wall, not inside it", () => {
+    const sim = new Simulation();
+    registerPlayerMovement(sim, {
+      active: gridCollision(makeGrid([
+        "......#...",
+        "......#...",
+        "......#...",
+        "......#...",
+        "......#...",
+      ])),
+    });
+    const p = sim.world.create();
+    sim.world.set<Position>(p, "position", { x: fp(4), y: fp(2) });
+    sim.world.set<PlayerC>(p, "player", { moveSpeed: fp(0.2), bodyRadius: 0 });
+    sim.world.set<Faction>(p, "faction", { team: 0 });
+    sim.step([dodge(0, p, fp(9), fp(2))]);
+    for (let t = 1; t < ROLL_TICKS; t++) sim.step();
+    const { x, y } = at(sim, p);
+    expect(x).toBeLessThan(fp(6));
+    // Within one roll step of the face: a blocked step is refused whole, as on a walk.
+    expect(x).toBeGreaterThan(fp(5));
+    expect(y).toBe(fp(2));
+  });
+
+  it("keeps a click made mid-roll until the roll ends, then walks to it", () => {
+    const sim = new Simulation();
+    registerPlayerMovement(sim);
+    const p = makePlayer(sim, 0, 0, fp(0.2));
+    sim.step([dodge(0, p, fp(10), 0)]);
+    for (let t = 1; t < ROLL_TICKS; t++) {
+      sim.step(t === 3 ? [{ tick: t, entity: p, type: "moveTo", data: { x: 0, y: fp(10) } }] : []);
+      expect(at(sim, p).y).toBe(0);
+    }
+    expect(at(sim, p).x).toBe(fp(3.7));
+    for (let t = 0; t < 6; t++) sim.step();
+    expect(at(sim, p).y).toBeGreaterThan(0);
+    expect(sim.world.get<MoveTarget>(p, "moveTarget")).toEqual({ x: 0, y: fp(10), active: 1 });
+  });
+
+  it("costs no mana and starts no cooldown", () => {
+    const sim = new Simulation();
+    registerPlayerMovement(sim);
+    const p = makePlayer(sim);
+    sim.world.set<Mana>(p, "mana", { mana: fp(20), maxMana: fp(60), regen: 0 });
+    sim.world.set<Cooldowns>(p, "cooldowns", { "skill.x": 3 });
+    sim.step([dodge(0, p, fp(10), 0)]);
+    for (let t = 1; t <= ROLL_TICKS; t++) sim.step();
+    expect(sim.world.get<Mana>(p, "mana")).toEqual({ mana: fp(20), maxMana: fp(60), regen: 0 });
+    expect(sim.world.get<Cooldowns>(p, "cooldowns")).toEqual({ "skill.x": 3 });
+  });
+
+  it("cancels a wind-up in progress", () => {
+    const sim = new Simulation();
+    registerPlayerMovement(sim);
+    const p = makePlayer(sim);
+    sim.world.set<CastingC>(p, "casting", { untilTick: 10 });
+    sim.step([dodge(0, p, fp(10), 0)]);
+    expect(sim.world.has(p, "casting")).toBe(false);
+  });
+
+  it("aimed at his own feet, rolls along the heading, and with no heading does nothing", () => {
+    const sim = new Simulation();
+    registerPlayerMovement(sim);
+    const p = makePlayer(sim, fp(1), fp(1));
+    sim.step([dodge(0, p, fp(1), fp(1))]);
+    expect(sim.world.has(p, "roll")).toBe(false);
+    expect(at(sim, p)).toEqual({ x: fp(1), y: fp(1) });
+    sim.world.set<MoveDir>(p, "moveDir", { dx: 0, dy: 0, hx: 0, hy: -fp(1) });
+    sim.step([dodge(1, p, fp(1), fp(1))]);
+    expect(sim.world.get<RollC>(p, "roll")).toMatchObject({ dirX: 0, dirY: -fp(1) });
+    expect(at(sim, p).y).toBeLessThan(fp(1));
   });
 });

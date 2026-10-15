@@ -204,6 +204,19 @@ export interface CastingC {
   scroll?: 1;
 }
 /**
+ * A dodge roll in flight. Active while tick < untilTick. dirX/dirY is the unit
+ * heading (Fixed) fixed at the start; the roll never steers. `pending` is the last
+ * movement command that arrived mid-roll; it is applied the tick the roll ends,
+ * so a click during the roll is kept, not lost and not obeyed early.
+ */
+export interface RollC {
+  startTick: number;
+  untilTick: number;
+  dirX: Fixed;
+  dirY: Fixed;
+  pending?: { type: "moveTo" | "moveDir" | "stop"; data?: Record<string, number> };
+}
+/**
  * The last melee swing this caster resolved: the tick it landed and how many
  * bodies were in the wedge. A render edge only; a whiff records 0 hits.
  */
@@ -342,6 +355,8 @@ export interface DamageEvent {
   amountFixed: Fixed;
   /** DAMAGE_TYPES index (see damage-types.ts) */
   type: number;
+  /** How the hit arrived. Only a dodge roll reads it: its first ticks let projectiles and melee pass, slams and ground still land. Absent = anything else. */
+  via?: "projectile" | "melee";
 }
 
 /** Two utility flasks: life on Q, mana on E. Charges are plain integers, not Fixed. */

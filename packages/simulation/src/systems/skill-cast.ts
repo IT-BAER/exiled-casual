@@ -6,7 +6,7 @@ import { Simulation } from "../loop";
 import type { World } from "../ecs";
 import { WORLD_MIN, WORLD_MAX } from "../movement";
 import { sweep, type Collision, type CollisionRef } from "../collision";
-import type { Position, PlayerC, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC, CastingC, OffenseC, Health, SkillHoldC, SkillsC, StrikeC } from "../components";
+import type { Position, PlayerC, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC, CastingC, OffenseC, Health, SkillHoldC, SkillsC, StrikeC, RollC } from "../components";
 import { damageCode } from "../damage-types";
 import { bodyRadiusOf } from "../body";
 import { canOpenPortal, openPortalAt } from "../areas";
@@ -242,6 +242,10 @@ export function registerSkillCast(
       // A corpse does not cast, same rule movement follows. Absent health reads
       // as alive so the health-less test casters are untouched.
       if ((world.get<Health>(caster, "health")?.life ?? 1) <= 0) continue;
+      // Mid-roll the button does not exist, not even as a hold: a hold would turn
+      // him toward the aim the tick the roll ends, which nobody asked for yet.
+      const roll = world.get<RollC>(caster, "roll");
+      if (roll && tick < roll.untilTick) continue;
       // Every command, refused or not, marks the button as held: the client
       // re-issues per snapshot, so a short window bridges the gaps and movement
       // never bursts back to a run between casts (player-movement reads it).

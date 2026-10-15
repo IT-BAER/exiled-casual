@@ -16,6 +16,8 @@ export type Intent =
   | { kind: "moveTo"; x: Fixed; y: Fixed }
   | { kind: "moveDir"; dx: -1 | 0 | 1; dy: -1 | 0 | 1 }
   | { kind: "useSkill"; skillId: string; tx: Fixed; ty: Fixed }
+  /** Roll a short fixed distance toward a world point. The sim ignores one mid-roll. */
+  | { kind: "dodge"; tx: Fixed; ty: Fixed }
   | { kind: "stop" }
   /** Activate a clicked interactable (map device, portal). Sim re-checks range. */
   | { kind: "interact"; targetId: number }
@@ -90,7 +92,7 @@ export type Intent =
 export const SORT_MODES = ["type", "rarity", "size"] as const;
 export type SortMode = (typeof SORT_MODES)[number];
 
-export type CommandType = "moveTo" | "moveDir" | "useSkill" | "stop" | "interact" | "activateMap" | "pickupItem" | "equipItem" | "unequipItem" | "dropItem" | "moveItem" | "sortItems" | "useFlask" | "applyCurrency" | "applyCurrencyAll" | "sellItem" | "buyItem" | "revive" | "usePortalScroll" | "allocatePassive" | "refundPassive" | "respecPassives" | "setSkillBar";
+export type CommandType = "moveTo" | "moveDir" | "useSkill" | "dodge" | "stop" | "interact" | "activateMap" | "pickupItem" | "equipItem" | "unequipItem" | "dropItem" | "moveItem" | "sortItems" | "useFlask" | "applyCurrency" | "applyCurrencyAll" | "sellItem" | "buyItem" | "revive" | "usePortalScroll" | "allocatePassive" | "refundPassive" | "respecPassives" | "setSkillBar";
 
 // ---------------------------------------------------------------------------
 // Run loop
@@ -360,6 +362,10 @@ export interface Snapshot {
     /** Length of the active wind-up in ticks, cast speed already applied, so the
      *  renderer can pace the clip to end on the hit. Absent outside a cast. */
     castTicks?: number;
+    /** Mid dodge roll this tick. Absent outside a roll. */
+    rolling?: boolean;
+    /** Ticks of the roll still to go, this one included. Absent outside a roll. */
+    rollTicks?: number;
     /** Tick the last melee swing resolved on, and how many it hit (0 = a whiff).
      *  A change is the swing landing, which a held button never shows as a cast edge. */
     strikeTick?: number;
@@ -518,6 +524,11 @@ export function validateIntent(v: unknown): Intent {
         tx: obj["tx"] as Fixed,
         ty: obj["ty"] as Fixed,
       };
+    }
+    case "dodge": {
+      if (!Number.isInteger(obj["tx"])) throw new Error("validateIntent dodge: tx must be an integer");
+      if (!Number.isInteger(obj["ty"])) throw new Error("validateIntent dodge: ty must be an integer");
+      return { kind: "dodge", tx: obj["tx"] as Fixed, ty: obj["ty"] as Fixed };
     }
     case "stop":
       return { kind: "stop" };

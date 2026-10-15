@@ -935,6 +935,55 @@ describe("attachBindings control modes", () => {
     b.onSnapshot(makeSnap());
     expect(kinds()).toEqual([]);
   });
+
+  const intentsOf = (kind: string) => worker.postMessage.mock.calls
+    .map((c) => c[0]?.intent).filter((i) => i?.kind === kind);
+  const hover = () => canvas.dispatchEvent(
+    new MouseEvent("pointermove", { buttons: 0, clientX: 5, clientY: 5, bubbles: true }));
+  const space = (target: EventTarget = window) => {
+    const e = new KeyboardEvent("keydown", { key: " ", code: "Space", bubbles: true, cancelable: true });
+    target.dispatchEvent(e);
+    return e;
+  };
+
+  it("mouse mode: Space rolls toward the cursor, and the page does not scroll", () => {
+    attach("mouse", [null, ATTACK, null, null, null, MOVE_SOCKET, null, null]);
+    b.onSnapshot({ ...makeSnap(), player: testPlayer({ x: 10, y: 20 }) });
+    hover();
+    const e = space();
+    expect(intentsOf("dodge")).toEqual([{ kind: "dodge", tx: fp(1), ty: fp(2) }]);
+    expect(e.defaultPrevented).toBe(true);
+  });
+
+  it("WASD mode: Space with W held rolls the way W walks, not at the cursor", () => {
+    attach("wasd", [ATTACK, null, null, null, null, null, null, null]);
+    b.onSnapshot({ ...makeSnap(), player: testPlayer({ x: 10, y: 20 }) });
+    hover();
+    key("w");
+    space();
+    const [roll] = intentsOf("dodge");
+    // moveUp is world (-1, +1); the cursor at (1, 2) would pull both coordinates down.
+    expect(roll.tx).toBeLessThan(fp(10));
+    expect(roll.ty).toBeGreaterThan(fp(20));
+  });
+
+  it("WASD mode: Space with nothing held rolls toward the cursor", () => {
+    attach("wasd", [ATTACK, null, null, null, null, null, null, null]);
+    b.onSnapshot({ ...makeSnap(), player: testPlayer({ x: 10, y: 20 }) });
+    hover();
+    space();
+    expect(intentsOf("dodge")).toEqual([{ kind: "dodge", tx: fp(1), ty: fp(2) }]);
+  });
+
+  it("Space typed into a text field never rolls", () => {
+    attach("wasd", [ATTACK, null, null, null, null, null, null, null]);
+    const field = document.createElement("input");
+    document.body.appendChild(field);
+    const e = space(field);
+    field.remove();
+    expect(worker.postMessage).not.toHaveBeenCalled();
+    expect(e.defaultPrevented).toBe(false);
+  });
 });
 
 describe("attachBindings attack-move (mouse mode)", () => {
