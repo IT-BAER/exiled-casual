@@ -1,3 +1,2 @@
-// Type declaration for release_notes.mjs. It mirrors that file's public export
-// and must change with it.
+/** Types for the release-notes slicer, so a TS test can import it directly. */
 export function sectionFor(text: string, version: string): string;
