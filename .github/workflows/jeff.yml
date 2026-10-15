@@ -54,20 +54,20 @@ jobs:
           # A fix round starts from Jeff's own push (claude[bot]); the actor check must let it through.
           allowed_bots: "claude[bot]"
           settings: .github/jeff/settings.json
+          # Only GitHub-generated identifiers go into the prompt. Issue, PR and comment text is never
+          # interpolated here: Jeff fetches it with gh and treats it as data under the contract in the
+          # system prompt (see --append-system-prompt-file).
           prompt: |
-            You are Jeff, the unattended developer of this repository. Read .github/jeff/PROMPT.md first and
-            follow it exactly. Event: ${{ github.event_name }}. Issue number: ${{ github.event.issue.number }}.
-            PR number: ${{ github.event.pull_request.number }}. Failed CI head branch: ${{ github.event.workflow_run.head_branch }}.
-            Failed CI run id: ${{ github.event.workflow_run.id }}. Review state: ${{ github.event.review.state }}.
-            Comment author: ${{ github.event.comment.user.login }}. Comment body follows between the markers.
-            <comment>
-            ${{ github.event.comment.body }}
-            </comment>
+            Event: ${{ github.event_name }}. Issue number: ${{ github.event.issue.number }}.
+            PR number: ${{ github.event.pull_request.number }}. Failed CI run id: ${{ github.event.workflow_run.id }}.
+            Comment id: ${{ github.event.comment.id }}. Review id: ${{ github.event.review.id }}.
+            Follow the contract in your system prompt.
           claude_args: |
             --model claude-fable-5-1
             --effort high
             --fallback-model claude-opus-5-5
             --max-turns 150
+            --append-system-prompt-file .github/jeff/PROMPT.md
             --agents .github/jeff/agents.json
             --allowedTools "Read,Edit,Write,Glob,Grep,Agent,Bash(npm:*),Bash(npx vitest:*),Bash(npx playwright:*),Bash(git:*),Bash(gh:*),Bash(node:*),Bash(cat:*),Bash(ls:*),Bash(mkdir:*)"
       - uses: actions/upload-artifact@v4
