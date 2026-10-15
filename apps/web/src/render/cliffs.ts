@@ -44,11 +44,11 @@ const STRATUM = 0.55;
 const STRATA = 0.65;
 /** Cycles per world unit of the noise that swaps between the plate's two reads: ~6 units a patch. */
 const VARY_FREQ = 0.17;
-/** An obstacle standing in the open: how tall, and over what depth it gets there.
- *  Under the head-height rule for boulders (rocks.ts MAX_ASPECT), so nothing hides
- *  the player and no fade is owed. */
-const ISLAND_PEAK = 1.4;
-const ISLAND_RISE = 0.3;
+/** The kerb every wall stands at its foot: how tall, and over what collision depth.
+ *  Under the head-height rule for boulders (rocks.ts MAX_ASPECT), so an obstacle in
+ *  the open hides nobody and no fade is owed. */
+const KERB_PEAK = 1.4;
+const KERB_RISE = 0.3;
 /** World units per texture repeat; must match TILE in level.ts. */
 const TILE = 2;
 
@@ -86,6 +86,9 @@ const ROUND_MAX = 0.3;
 /** How far the foot wanders off the collision face: back into the rock, out onto floor. */
 const RECEDE = 0.25;
 const BULGE = 0.12;
+/** The furthest the foot may stand behind the collision face, every cut together.
+ *  Under the half cell a one-cell spur or bump is deep, so neither is cut away. */
+const MAX_CUT = 0.24;
 /** Depth the field dips under the floor past the foot. */
 const FOOT_SINK = 0.1;
 
@@ -177,7 +180,7 @@ function footDistance(
     return out;
   };
   const thick = widest(widest(base, 1, 0), 0, 1);
-  return { foot: s.map((v, k) => Math.max(v, base[k]! - Math.max(0, (thick[k]! - STEP) * 1.1))), base };
+  return { foot: s.map((v, k) => Math.max(v, base[k]! - Math.min(MAX_CUT, Math.max(0, (thick[k]! - STEP) * 1.1)))), base };
 }
 
 export interface CliffField {
@@ -222,26 +225,6 @@ export function cliffHeights(grid: WalkableGrid): CliffField {
     }
   }
 
-  // Wall the border flood never reaches stands in the open: by depth alone it is
-  // all scree, and scree wears the floor plate, so it would draw as flat ground.
-  const island = new Uint8Array(cols * rows).fill(1);
-  const stack: number[] = [];
-  const seed = (cx: number, cy: number) => {
-    const c = cy * cols + cx;
-    if (cells[c] === 0 && island[c]) { island[c] = 0; stack.push(c); }
-  };
-  for (let cx = 0; cx < cols; cx++) { seed(cx, 0); seed(cx, rows - 1); }
-  for (let cy = 0; cy < rows; cy++) { seed(0, cy); seed(cols - 1, cy); }
-  while (stack.length) {
-    const c = stack.pop()!, cx = c % cols, cy = (c - cx) / cols;
-    if (cx > 0) seed(cx - 1, cy);
-    if (cx < cols - 1) seed(cx + 1, cy);
-    if (cy > 0) seed(cx, cy - 1);
-    if (cy < rows - 1) seed(cx, cy + 1);
-  }
-  const islandAt = (cx: number, cy: number) =>
-    cx >= 0 && cy >= 0 && cx < cols && cy < rows && cells[cy * cols + cx] === 0 && island[cy * cols + cx] === 1;
-
   const { foot, base } = footDistance(open, nx, nz, x0, z0);
   const depth = foot.map((s) => Math.max(0, s));
 
@@ -268,13 +251,10 @@ export function cliffHeights(grid: WalkableGrid): CliffField {
       const cap = Math.max(CLIFF_FRONT * (0.8 + 0.2 * n), (view - MARGIN) / HIDE_PER_UNIT);
       // Strata: ledges rounded DOWN, so they can only ever lower a vertex under its cap.
       let h = Math.min(rise, cap);
-      const cy1 = Math.floor(j / per), cy0 = j % per === 0 ? cy1 - 1 : cy1;
-      const cx1 = Math.floor(i / per), cx0 = i % per === 0 ? cx1 - 1 : cx1;
-      if (islandAt(cx0, cy0) || islandAt(cx1, cy0) || islandAt(cx0, cy1) || islandAt(cx1, cy1)) {
-        // By the collision depth: rounding shaves a small obstacle's middle too.
-        const v = Math.min(1, Math.max(d, base[k]!) / ISLAND_RISE);
-        h = Math.max(h, Math.min(cap, ISLAND_PEAK * v * v * (3 - 2 * v) * (0.85 + 0.3 * n)));
-      }
+      // A kerb on every wall, by the collision depth: scree alone stays under the
+      // floor blend for a unit and reads as ground the sim still blocks.
+      const v = Math.min(1, Math.max(d, base[k]!) / KERB_RISE);
+      h = Math.max(h, Math.min(cap, KERB_PEAK * v * v * (3 - 2 * v) * (0.85 + 0.3 * n)));
       const shelf = STRATUM * (0.8 + 0.4 * noise(x, z, 2.2, 3));
       heights[k] = h - (h % shelf) * STRATA;
     }

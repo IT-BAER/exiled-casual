@@ -45,7 +45,8 @@ describe("cliffs", () => {
       face.push(foot(f, (x0 + x1) / 2, z0, 0, 1), foot(f, (x0 + x1) / 2, z1, 0, -1),
         foot(f, x0, (z0 + z1) / 2, 1, 0), foot(f, x1, (z0 + z1) / 2, -1, 0));
     }
-    expect(mean(corner) - mean(face)).toBeGreaterThan(0.12);
+    // Bounded by MAX_CUT, which keeps a one-cell bump from being rounded away.
+    expect(mean(corner) - mean(face)).toBeGreaterThan(0.08);
   });
 
   it("wobbles a straight wall face instead of ruling it", () => {
@@ -118,20 +119,41 @@ describe("cliffs", () => {
     }
   });
 
+  it("stands visible rock at the collision edge of every wall, thin ones too", () => {
+    // Low scree inside the blocked cells reads as floor: the player stops on open
+    // ground short of the rock. March from each face into the wall it bounds.
+    const VIS = 0.3, GAP = 0.5;
+    for (const [g, seed] of [...MAPS, ["open-field", 9], ["sunken-ruins", 8]] as const) {
+      const grid = generateArea(seed, "v", g).grid;
+      const { cols, rows, cells, cellSize: cs, originX, originY } = grid;
+      const f = cliffHeights(grid);
+      const isWall = (x: number, z: number) => {
+        const cx = Math.round((x - originX) / cs), cy = Math.round((z - originY) / cs);
+        return !(cx >= 0 && cy >= 0 && cx < cols && cy < rows && cells[cy * cols + cx] === 1);
+      };
+      const bad: string[] = [];
+      for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
+        if (cells[y * cols + x] !== 1) continue;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+          const wx = x + dx, wy = y + dy;
+          if (wx < 2 || wy < 2 || wx >= cols - 2 || wy >= rows - 2 || cells[wy * cols + wx] !== 0) continue;
+          const fx = originX + (x + dx / 2) * cs, fz = originY + (y + dy / 2) * cs;
+          let seen = false;
+          for (let t = 0.02; t <= GAP && isWall(fx + dx * t, fz + dy * t); t += 0.02) {
+            if (heightAt(f, fx + dx * t, fz + dy * t) >= VIS) { seen = true; break; }
+          }
+          if (!seen) bad.push(`${wx},${wy}`);
+        }
+      }
+      expect(bad.length, `${g} ${seed}: flat faces at ${bad.slice(0, 6).join(" ")}`).toBe(0);
+    }
+  }, 60_000);
+
   it("stands well over the player where the camera looks at solid rock", () => {
     const f = cliffHeights(generateArea(1, "v", "loop").grid);
     let tall = 0, raised = 0;
     for (const h of f.heights) { if (h > 0) raised++; if (h > 3.5) tall++; }
     expect(tall / raised).toBeGreaterThan(0.05);
-  });
-
-  it("meets the floor on a scree slope, not a sheer face", () => {
-    // The floor plate climbs to BLEND_H; the slope must hold it for a visible width.
-    const f = cliffHeights(generateArea(1, "v", "loop").grid);
-    const near: number[] = [];
-    for (let k = 0; k < f.heights.length; k++) if (f.depth[k]! > 0.4 && f.depth[k]! <= 0.8) near.push(f.heights[k]!);
-    near.sort((a, b) => a - b);
-    expect(near[near.length >> 1]).toBeLessThan(0.6);
   });
 
   it("builds a mesh whose rock tops face up", () => {
