@@ -79,3 +79,6 @@ assets/props/source/tripo_plate_cuirass.glb
 
 # Headless smoke output (tools/smoke)
 smoke-out/
+
+# Jeff's private contract, checked out by .github/workflows/jeff.yml in CI
+.jeff/
