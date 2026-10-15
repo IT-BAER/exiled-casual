@@ -124,6 +124,11 @@ version's changelog section as notes and `exiled-casual-<version>.tar.gz`
 (the contents of `apps/web/dist`) as the asset. A `-` in the version marks a
 prerelease. `version.test.ts` fails when the three version sources drift.
 
+The same workflow also runs when a push to `main` changes the version in
+`package.json` to one without a tag: it creates the tag itself and publishes.
+That is the path for a release PR (`node tools/release.mjs 0.4.0 --no-git`,
+commit as `release 0.4.0`, merge), which is how Jeff releases on request.
+
 ## Legal
 
 This is an unofficial fan project. It is not affiliated with, endorsed by, or connected to

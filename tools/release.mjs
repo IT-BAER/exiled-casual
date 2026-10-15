@@ -6,6 +6,9 @@
  * lockfile root, rewrites the number in GAME_VERSION (the phase word stays),
  * regenerates the menu news, commits and tags v<version>. It does not push:
  * `git push --follow-tags` is the moment the release workflow starts.
+ *
+ * `--no-git` stops after writing the files: for a release PR (Jeff's path),
+ * where the merge to main is what tags and publishes.
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -13,9 +16,11 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const version = process.argv[2];
+const args = process.argv.slice(2);
+const noGit = args.includes("--no-git");
+const version = args.find((a) => !a.startsWith("--"));
 if (!/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/.test(version ?? "")) {
-  console.error("usage: node tools/release.mjs <major.minor.patch[-pre]>");
+  console.error("usage: node tools/release.mjs <major.minor.patch[-pre]> [--no-git]");
   process.exit(2);
 }
 const git = (...args) => execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
@@ -68,6 +73,10 @@ writeFileSync(
 
 execFileSync("node", [join(root, "tools/changelog_to_news.mjs")], { cwd: root, stdio: "inherit" });
 
+if (noGit) {
+  console.log(`files written for ${version}; commit them as "release ${version}" and open the PR`);
+  process.exit(0);
+}
 git("add", "CHANGELOG.md", "package.json", "apps/web/package.json", "package-lock.json", "apps/web/src/version.ts", "apps/web/src/news.generated.ts");
 git("commit", "-m", `release ${version}`);
 git("tag", "-a", `v${version}`, "-m", `release ${version}`);
