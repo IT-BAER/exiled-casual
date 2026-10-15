@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import type { Snapshot } from "@exiled/protocol";
 import { RARITY, SERIF } from "./ItemTooltip";
 import { playDropSound } from "../audio/drop-sound";
@@ -53,6 +53,12 @@ const PLATE_BG: Record<string, string> = {
   rare: "rgba(34,25,8,0.82)",
   unique: "rgba(38,17,7,0.86)",
 };
+const PLATE_BG_HOVER: Record<string, string> = {
+  normal: "rgba(26,26,26,0.84)",
+  magic: "rgba(30,38,66,0.86)",
+  rare: "rgba(54,42,16,0.86)",
+  unique: "rgba(60,32,16,0.9)",
+};
 
 export interface LootLabelsProps {
   snapshot: Snapshot | null;
@@ -85,11 +91,16 @@ export function LootLabels({ snapshot, project, afterFrame, onPick, plates = tru
   /** Ids already announced. Null until the first snapshot, so items lying on the
    *  ground when the page loads do not all chime at once. */
   const heard = useRef<Set<number> | null>(null);
+  // Hover is state because the plate styles are inline, where CSS :hover cannot reach.
+  const [hovered, setHovered] = useState<number | null>(null);
 
   // Ground items are static, so the world position can come from the last
   // snapshot even between ticks; only the projection has to be per-frame.
   const items = (snapshot?.entities ?? []).filter((e) => e.kind === "groundItem" || e.kind === "gold");
   for (const e of items) positions.current.set(e.id, { x: e.x, y: e.y });
+  // A picked-up plate never gets a pointerleave and ids are reused, so a stale hover must not carry over.
+  const hoverId = hovered !== null && items.some((e) => e.id === hovered) ? hovered : null;
+  if (hovered !== null && hoverId === null) setHovered(null);
 
   if (snapshot) {
     const seen = heard.current;
@@ -193,6 +204,9 @@ export function LootLabels({ snapshot, project, afterFrame, onPick, plates = tru
             key={e.id}
             data-testid={`loot-label-${e.id}`}
             data-rarity={e.rarity ?? "normal"}
+            data-hover={String(hoverId === e.id)}
+            onPointerEnter={() => setHovered(e.id)}
+            onPointerLeave={() => setHovered((h) => (h === e.id ? null : h))}
             ref={(node) => {
               if (node) nodes.current.set(e.id, node);
               else nodes.current.delete(e.id);
@@ -207,8 +221,9 @@ export function LootLabels({ snapshot, project, afterFrame, onPick, plates = tru
               top: 0,
               visibility: "hidden", // until the first projection places it
               padding: base ? "4px 14px 5px" : "3px 14px 4px",
-              background: PLATE_BG[rarity] ?? PLATE_BG["normal"],
-              border: `1px solid ${look.frame}66`, // the reference plate is filled, not outlined
+              background: (hoverId === e.id ? PLATE_BG_HOVER : PLATE_BG)[rarity] ?? PLATE_BG["normal"],
+              border: `1px solid ${look.frame}${hoverId === e.id ? "" : "66"}`, // the reference plate is filled, not outlined
+              transition: "background 120ms, border-color 120ms",
               color: look.text,
               font: `16px ${SERIF}`,
               fontVariant: "small-caps",
