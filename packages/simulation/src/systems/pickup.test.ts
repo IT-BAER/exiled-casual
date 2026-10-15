@@ -3,6 +3,7 @@ import { Simulation } from "../loop";
 import { registerPickupSystem } from "./pickup";
 import type { Item } from "@exiled/content-schema";
 import { wisdomScroll } from "@exiled/content-runtime";
+import { checksumWorld } from "../checksum";
 
 const ITEM: Item = { baseId: "b0", rarity: "normal", itemLevel: 65, affixes: [] };
 
@@ -30,6 +31,7 @@ describe("registerPickupSystem", () => {
     expect(w.alive.has(ge)).toBe(false);
     const inv = w.get(sessionE, "inventory") as { items: unknown[] };
     expect(inv.items.length).toBe(1);
+    expect(sim.pickupRefusedTick).toBeUndefined();
   });
 
   it("is a no-op when the item is out of range", () => {
@@ -37,6 +39,7 @@ describe("registerPickupSystem", () => {
     sim.step([pickup(player, ge)]);
     expect(w.alive.has(ge)).toBe(true);
     expect((w.get(sessionE, "inventory") as { items: unknown[] }).items.length).toBe(0);
+    expect(sim.pickupRefusedTick).toBeUndefined();
   });
 
   it("is a no-op with no ownership change when the grid is full", () => {
@@ -45,6 +48,17 @@ describe("registerPickupSystem", () => {
     sim.step([pickup(player, ge)]);
     expect(w.alive.has(ge)).toBe(true);
     expect((w.get(sessionE, "inventory") as { items: unknown[] }).items.length).toBe(1);
+    expect(sim.pickupRefusedTick).toBe(0);
+  });
+
+  it("records the refusal off the world, so the checksum matches a step with no command", () => {
+    const full = [{ x: 0, y: 0, w: 12, h: 5, item: ITEM }];
+    const a = setup([1000, 1000], [1001, 1001], full);
+    a.sim.step([pickup(a.player, a.ge)]);
+    const b = setup([1000, 1000], [1001, 1001], full);
+    b.sim.step();
+    expect(a.sim.pickupRefusedTick).toBe(0);
+    expect(checksumWorld(a.w)).toBe(checksumWorld(b.w));
   });
 });
 
@@ -60,6 +74,21 @@ describe("currency stacking", () => {
     const inv = w.get(sessionE, "inventory") as { items: { count?: number }[] };
     expect(inv.items.length).toBe(1);
     expect(inv.items[0]!.count).toBe(4);
+    expect(sim.pickupRefusedTick).toBeUndefined();
+  });
+
+  it("joins an existing pile even when the grid has no free cell, without a refusal", () => {
+    const { sim, w, player, sessionE, ge } = setup([1000, 1000], [1001, 1001], [
+      { x: 0, y: 0, w: 1, h: 1, item: scroll, count: 3 },
+      { x: 1, y: 0, w: 11, h: 5, item: ITEM },
+      { x: 0, y: 1, w: 1, h: 4, item: ITEM },
+    ]);
+    w.set(ge, "item", { item: scroll, w: 1, h: 1 });
+    sim.step([pickup(player, ge)]);
+    const inv = w.get(sessionE, "inventory") as { items: { count?: number }[] };
+    expect(inv.items[0]!.count).toBe(4);
+    expect(w.alive.has(ge)).toBe(false);
+    expect(sim.pickupRefusedTick).toBeUndefined();
   });
 
   it("stacks onto a pile saved under the base id the scroll used to have", () => {
