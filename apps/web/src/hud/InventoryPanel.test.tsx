@@ -321,6 +321,47 @@ describe("InventoryPanel", () => {
     expect(intents).toEqual([{ kind: "sellItem", x: 4, y: 4, from: "stash" }]);
   });
 
+  it("sells a backpack item dragged onto the vendor window", () => {
+    const intents: unknown[] = [];
+    render(<InventoryPanel inventory={inv} vendorOpen shards={{}} onIntent={(i) => intents.push(i)} onClose={() => {}} />);
+    dragFrom(screen.getByTestId("inventory-item-0"));
+    fireEvent.pointerUp(screen.getByTestId("vendor-panel"));
+    expect(intents).toEqual([{ kind: "sellItem", x: 0, y: 0 }]);
+  });
+
+  it("sells a stash item dragged onto the vendor window with the container named", () => {
+    const intents: unknown[] = [];
+    const stash = { cols: 12, rows: 12, items: [{ x: 4, y: 4, w: 1, h: 1, rarity: "rare" as const, name: "Old Wand", lines: [] }] };
+    render(<InventoryPanel inventory={inv} stash={stash} vendorOpen shards={{}} onIntent={(i) => intents.push(i)} onClose={() => {}} />);
+    dragFrom(screen.getByTestId("stash-item-0"));
+    fireEvent.pointerUp(screen.getByTestId("vendor-panel"));
+    expect(intents).toEqual([{ kind: "sellItem", x: 4, y: 4, from: "stash" }]);
+  });
+
+  it("does nothing when an equipped item is dragged onto the vendor window", () => {
+    const intents: unknown[] = [];
+    const equipment = { weapon1: { rarity: "magic" as const, name: "Ember Wand", itemClass: "wand", lines: [] } };
+    render(<InventoryPanel inventory={{ ...inv, items: [] }} equipment={equipment} vendorOpen shards={{}} onIntent={(i) => intents.push(i)} onClose={() => {}} />);
+    dragFrom(screen.getByTestId("equip-slot-weapon1"));
+    fireEvent.pointerUp(screen.getByTestId("vendor-panel"));
+    expect(intents).toEqual([]);
+  });
+
+  it("sells a backpack item released on the shelf grid itself", () => {
+    const intents: unknown[] = [];
+    render(<InventoryPanel inventory={inv} vendorOpen vendor={shelf} gold={500} onIntent={(i) => intents.push(i)} onClose={() => {}} />);
+    dragFrom(screen.getByTestId("inventory-item-0"));
+    const grid = screen.getByTestId("vendor-panel").querySelector("[data-drop-grid]");
+    expect(grid).not.toBeNull();
+    fireEvent.pointerUp(grid!);
+    expect(intents).toEqual([{ kind: "sellItem", x: 0, y: 0 }]);
+  });
+
+  it("has no vendor window to release on while the vendor is closed", () => {
+    render(<InventoryPanel inventory={inv} onClose={() => {}} />);
+    expect(screen.queryByTestId("vendor-panel")).toBeNull();
+  });
+
   it("shows the banked shards as a count out of ten", () => {
     render(<InventoryPanel inventory={inv} vendorOpen shards={{ "currency.elevation": 7 }} onClose={() => {}} />);
     expect(screen.getByTestId("shard-currency.elevation").textContent).toContain("7 / 10");

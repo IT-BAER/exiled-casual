@@ -541,6 +541,17 @@ export const InventoryPanel = React.memo(function InventoryPanel({
         }
         return;
       }
+      // A release anywhere on the vendor window is a sale, the shelf grid included;
+      // the sim re-checks the price. Equipped pieces have no sell form, so they stay put.
+      if (target?.closest("[data-drop-vendor]")) {
+        if (drag.from.kind === "grid") {
+          onIntent?.({
+            kind: "sellItem", x: drag.from.x, y: drag.from.y,
+            ...(drag.from.container === "stash" ? { from: "stash" as const } : {}),
+          });
+        }
+        return;
+      }
       if (onGrid) {
         // Unequipping always lands in the backpack — the sim has no stash path for it.
         if (drag.from.kind === "slot") onIntent?.({ kind: "unequipItem", slot: drag.from.slot });
@@ -926,6 +937,7 @@ export const InventoryPanel = React.memo(function InventoryPanel({
         <div
           data-testid="vendor-panel"
           data-hud-panel=""
+          data-drop-vendor=""
           style={{ ...PANE, padding: PANEL_PAD, overflowY: "auto", scrollbarWidth: "none" }}
         >
           {/* His name, not the transaction: the window belongs to a person. */}
@@ -1011,7 +1023,7 @@ export const InventoryPanel = React.memo(function InventoryPanel({
             );
           })}
           <div style={{ fontSize: 11, color: "#8c8069", lineHeight: 1.45, marginTop: 2 }}>
-            Click the shelf to buy. Ctrl-click your own to sell: all of it pays gold,
+            Click the shelf to buy. Ctrl-click your own, or drag it onto this window, to sell: all of it pays gold,
             magic and better also break into shards.
           </div>
         </div>
