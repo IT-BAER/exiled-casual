@@ -25,10 +25,16 @@ jobs:
           node-version-file: .node-version
       - name: Version, tag and notes
         id: meta
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           pkg="$(node -p "require('./package.json').version")"
           if [ "$GITHUB_REF_TYPE" = "tag" ]; then
             version="${GITHUB_REF_NAME#v}"
+            if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+              echo "$GITHUB_REF_NAME already has a release; nothing to do"
+              echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0
+            fi
             if [ "$version" != "$pkg" ]; then
               echo "tag v$version but package.json says $pkg" >&2; exit 1
             fi
