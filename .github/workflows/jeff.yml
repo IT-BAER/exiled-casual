@@ -48,6 +48,8 @@ jobs:
           repository: IT-BAER/jeff
           token: ${{ secrets.JEFF_REPO_TOKEN }}
           path: .jeff
+          # The token must not stay in .jeff/.git/config where the agent's shell could read it.
+          persist-credentials: false
       - uses: actions/setup-node@v5
         with:
           node-version-file: .node-version
