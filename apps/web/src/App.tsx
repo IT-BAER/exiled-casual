@@ -41,7 +41,7 @@ const MenuStage = React.lazy(() => import("./menu/MenuStage").then((m) => ({ def
 const AssetViewer = React.lazy(() =>
   import("./dev/AssetViewer").then((m) => ({ default: m.AssetViewer })),
 );
-import { DEFAULT_SETTINGS, type Settings } from "./settings";
+import { DEFAULT_SETTINGS, type ControlMode, type Settings } from "./settings";
 import { setTitle } from "./title";
 import { setDebugLogging } from "./debug";
 import { setSoundMix } from "./audio/drop-sound";
@@ -90,6 +90,15 @@ const VIEWER =
   typeof window !== "undefined" && new URLSearchParams(window.location.search).has("viewer");
 const DEV = import.meta.env?.DEV === true;
 
+/**
+ * `?play&control=mouse|wasd`: the answer the controls dialog would ask for, so a
+ * driven browser never meets a modal it cannot click through. DEV only, with ?play.
+ */
+const CONTROL: ControlMode | null = (() => {
+  const v = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("control") : null;
+  return v === "mouse" || v === "wasd" ? v : null;
+})();
+
 /** The stage warms on the first sign of a person, never on a timer: an unattended
  *  load (a crawler, a speed audit) must not pay 17 MB for a figure nobody will see. */
 const WARM_ON = ["pointermove", "pointerdown", "keydown", "touchstart"] as const;
@@ -112,17 +121,29 @@ export function App(): React.ReactElement {
   // player who only looks at the menu still has their old blob intact.
   React.useEffect(() => {
     let live = true;
-    void readRoster().then((r) => {
+    void readRoster().then(async (r) => {
       if (!live) return;
+      const harness = DEV && AUTOPLAY && !VIEWER;
+      let first = r.lastPlayedId ?? r.characters[0]?.id ?? null;
+      // A fresh browser (a CI runner) has nobody to play: the harness makes one.
+      if (harness && first === null) {
+        r = (await createCharacter(r, { name: "Harness", classId: DEFAULT_CLASS_ID }, "local")).roster;
+        first = r.characters[0]?.id ?? null;
+        if (!live) return;
+      }
       setRoster(r);
-      setSettings(settingsOf(r, gpuRenderer()));
-      const first = r.lastPlayedId ?? r.characters[0]?.id ?? null;
+      const s = settingsOf(r, gpuRenderer());
+      setSettings(
+        harness && first !== null && CONTROL !== null
+          ? { ...s, ui: { ...s.ui, controls: { ...s.ui.controls, [first]: CONTROL } } }
+          : s,
+      );
       setSelectedId(first);
       // `?play` walks straight into the world with the last character, so a
       // driven browser can reach the game without three clicks it cannot see
       // (the menus are canvas-adjacent and the mode dialog remounts under a
       // snapshot). DEV only: this is a test hook, not a shortcut we ship.
-      if (DEV && first && AUTOPLAY && !VIEWER) setScreen({ kind: "game", characterId: first, fresh: isFresh(r, first) });
+      if (harness && first) setScreen({ kind: "game", characterId: first, fresh: isFresh(r, first) });
     });
     return () => { live = false; };
   }, []);

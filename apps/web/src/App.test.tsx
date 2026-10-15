@@ -8,8 +8,8 @@ import { setKv } from "./save/roster";
 // exists in jsdom. Stubbing them is also the assertion this file cares about:
 // the router either mounted the game or it did not.
 vi.mock("./GameView", () => ({
-  GameView: ({ characterId }: { characterId?: string }) => (
-    <div data-testid="game-view">{characterId}</div>
+  GameView: ({ characterId, settings }: { characterId?: string; settings?: { ui: { controls: unknown } } }) => (
+    <div data-testid="game-view" data-controls={JSON.stringify(settings?.ui.controls ?? {})}>{characterId}</div>
   ),
 }));
 vi.mock("./menu/MenuStage", () => ({
@@ -167,6 +167,27 @@ describe("App routing", () => {
     expect(info.textContent).toMatch(/original fan project/i);
     fireEvent.click(screen.getByRole("button", { name: /back/i }));
     expect(await screen.findByTestId("main-menu")).toBeTruthy();
+  });
+
+  it("?play on an empty roster creates a character, seeds &control, and enters the game", async () => {
+    // The driven-browser harness (DEV only): a fresh browser has no character and
+    // would otherwise need menu clicks, and the controls dialog would block the keys.
+    window.history.replaceState({}, "", "/?play&control=wasd");
+    vi.resetModules();
+    try {
+      const rosterMod = await import("./save/roster");
+      rosterMod.setKv(kv);
+      const { App: HarnessApp } = await import("./App");
+      render(<HarnessApp />);
+      const view = await screen.findByTestId("game-view");
+      const saved = await loadRoster(kv);
+      expect(saved?.characters.length).toBe(1);
+      const id = saved?.characters[0]?.id;
+      expect(view.textContent).toBe(id);
+      expect(JSON.parse(view.getAttribute("data-controls")!)).toEqual({ [id!]: "wasd" });
+    } finally {
+      window.history.replaceState({}, "", "/");
+    }
   });
 
   it("a pre-roster save is migrated into a listed character", async () => {

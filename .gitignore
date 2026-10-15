@@ -76,3 +76,6 @@ docs/handoffs/
 # prepped glbs beside them and in trellis_local/, and those are tracked.
 assets/props/source/trellis_test/
 assets/props/source/tripo_plate_cuirass.glb
+
+# Headless smoke output (tools/smoke)
+smoke-out/
