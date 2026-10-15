@@ -43,18 +43,31 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      # Jeff acts as his own GitHub App (jeff-it-baer[bot]); the token lives for this job only.
+      # Jeff acts as his own GitHub App (jeff-it-baer[bot]). Two short-lived tokens: the contract
+      # repo is read-only so the agent can never edit his own rules; the write token covers this repo only.
+      - id: contract-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.JEFF_APP_ID }}
+          private-key: ${{ secrets.JEFF_APP_PRIVATE_KEY }}
+          owner: IT-BAER
+          repositories: jeff
+          permission-contents: read
       - id: jeff-token
         uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ secrets.JEFF_APP_ID }}
           private-key: ${{ secrets.JEFF_APP_PRIVATE_KEY }}
           owner: IT-BAER
-          repositories: exiled-casual,jeff
+          repositories: exiled-casual
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write
+          permission-actions: read
       - uses: actions/checkout@v5
         with:
           repository: IT-BAER/jeff
-          token: ${{ steps.jeff-token.outputs.token }}
+          token: ${{ steps.contract-token.outputs.token }}
           path: .jeff
           # The token must not stay in .jeff/.git/config where the agent's shell could read it.
           persist-credentials: false
