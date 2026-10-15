@@ -88,6 +88,11 @@ named seeded stream, so a run replays to an identical checksum.
 
 ## Quick start
 
+Prerequisites: Node 22.16.0 or newer, as pinned in [`.node-version`](.node-version) (`nvm use`
+or `fnm use` picks it up), and npm 11.7.0, as declared by `packageManager` in
+[`package.json`](package.json). CI installs the same version through `actions/setup-node` and
+`.node-version`.
+
 ```bash
 npm install
 npm run dev -w apps/web   # http://localhost:5173
