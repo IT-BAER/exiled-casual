@@ -29,7 +29,7 @@ jobs:
   jeff:
     # Only the owner (or Jeff's own pushes) can start a run.
     if: >-
-      (github.actor == 'IT-BAER' || github.actor == 'claude[bot]' || github.event_name == 'schedule') &&
+      (github.actor == 'IT-BAER' || github.actor == 'jeff-it-baer[bot]' || github.event_name == 'schedule') &&
       (
         (github.event_name == 'issues' && github.event.label.name == 'jeff') ||
         (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'failure' && startsWith(github.event.workflow_run.head_branch, 'jeff/') && github.event.workflow_run.head_repository.full_name == github.repository) ||
@@ -43,10 +43,18 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
+      # Jeff acts as his own GitHub App (jeff-it-baer[bot]); the token lives for this job only.
+      - id: jeff-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.JEFF_APP_ID }}
+          private-key: ${{ secrets.JEFF_APP_PRIVATE_KEY }}
+          owner: IT-BAER
+          repositories: exiled-casual,jeff
       - uses: actions/checkout@v5
         with:
           repository: IT-BAER/jeff
-          token: ${{ secrets.JEFF_REPO_TOKEN }}
+          token: ${{ steps.jeff-token.outputs.token }}
           path: .jeff
           # The token must not stay in .jeff/.git/config where the agent's shell could read it.
           persist-credentials: false
@@ -58,7 +66,10 @@ jobs:
       - uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          allowed_bots: "claude[bot]"
+          github_token: ${{ steps.jeff-token.outputs.token }}
+          bot_name: "jeff-it-baer[bot]"
+          bot_id: "343050521"
+          allowed_bots: "jeff-it-baer[bot]"
           show_full_output: true
           settings: .jeff/settings.json
           # Only GitHub-generated identifiers and the project file path go into the prompt.
