@@ -283,7 +283,10 @@ export function registerEquipmentSystem(sim: Simulation): void {
 
         const ge = world.create();
         world.set<Position>(ge, "position", { x: playerPos.x, y: playerPos.y });
-        world.set<ItemC>(ge, "item", { item: placed.item, w: placed.w, h: placed.h });
+        world.set<ItemC>(ge, "item", {
+          item: placed.item, w: placed.w, h: placed.h,
+          ...(placed.count !== undefined ? { count: placed.count } : {}),
+        });
         continue;
       }
     }

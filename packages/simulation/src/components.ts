@@ -351,7 +351,11 @@ export interface FlasksC {
 }
 
 /** A committed item lying on the ground; lives on an entity with Position. */
-export interface ItemC { item: Item; w: number; h: number }
+export interface ItemC {
+  item: Item; w: number; h: number;
+  /** Currency dropped from a stack: how many lie here. Absent means one. */
+  count?: number;
+}
 /** One placed stack in the grid inventory. */
 export interface PlacedItem {
   x: number; y: number; w: number; h: number; item: Item;

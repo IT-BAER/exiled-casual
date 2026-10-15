@@ -24,6 +24,7 @@ export function registerPickupSystem(sim: Simulation): void {
 
       const ic = world.get<ItemC>(targetId, "item")!;
       const inv = world.get<InventoryC>(sessionE, "inventory")!;
+      const n = ic.count ?? 1;
 
       // Currency stacks: a scroll lands on the pile it belongs to, and only takes
       // a cell of its own when there is no pile yet. The comparison goes through
@@ -34,7 +35,7 @@ export function registerPickupSystem(sim: Simulation): void {
         const at = inv.items.findIndex((p) => canonicalBaseId(p.item.baseId) === id);
         if (at >= 0) {
           const items = inv.items.slice();
-          items[at] = { ...items[at]!, count: (items[at]!.count ?? 1) + 1 };
+          items[at] = { ...items[at]!, count: (items[at]!.count ?? 1) + n };
           world.set<InventoryC>(sessionE, "inventory", { ...inv, items });
           world.destroy(targetId);
           continue;
@@ -46,7 +47,7 @@ export function registerPickupSystem(sim: Simulation): void {
 
       world.set<InventoryC>(sessionE, "inventory", {
         ...inv,
-        items: [...inv.items, { x: slot.x, y: slot.y, w: ic.w, h: ic.h, item: ic.item, ...(isCurrency(ic.item) ? { count: 1 } : {}) }],
+        items: [...inv.items, { x: slot.x, y: slot.y, w: ic.w, h: ic.h, item: ic.item, ...(isCurrency(ic.item) ? { count: n } : {}) }],
       });
       world.destroy(targetId);
     }

@@ -6,7 +6,7 @@ import { createCombatSim } from "./combat-sim";
 import { intentToCommand, buildSnapshot } from "./protocol-bridge";
 import { saveTo, loadInto, VERSION } from "./persist";
 import { canEquip, EQUIP_SLOTS_BY_CLASS } from "./equipment";
-import { CONTENT_VERSION } from "@exiled/content-runtime";
+import { CONTENT_VERSION, wisdomScroll } from "@exiled/content-runtime";
 import type { InventoryC, EquipmentC, Position, Health, Mana, DefensesC, OffenseC } from "./components";
 
 // ---------------------------------------------------------------------------
@@ -322,6 +322,21 @@ describe("equipment system — dropItem", () => {
 
     expect(getInv(world).items).toHaveLength(1);
     expect(world.alive.has(groundEntity)).toBe(false);
+  });
+
+  it("a dropped stack comes back whole when picked up", () => {
+    const { sim, world, playerEntity } = makeWorld();
+    const inv = getInv(world);
+    world.set<InventoryC>(sessionE(world), "inventory", {
+      ...inv, items: [{ x: 0, y: 0, w: 1, h: 1, item: wisdomScroll(), count: 5 }],
+    });
+
+    sim.step([intentToCommand({ kind: "dropItem", x: 0, y: 0 }, playerEntity, 0)]);
+    expect(getInv(world).items).toHaveLength(0);
+    const groundEntity = world.query("item", "position")[0]!;
+    sim.step([intentToCommand({ kind: "pickupItem", entityId: groundEntity }, playerEntity, 1)]);
+
+    expect(getInv(world).items.map((p) => p.count)).toEqual([5]);
   });
 });
 
