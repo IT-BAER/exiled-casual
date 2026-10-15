@@ -63,7 +63,7 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
           permission-issues: write
-          permission-actions: read
+          permission-actions: write
       - uses: actions/checkout@v5
         with:
           repository: IT-BAER/jeff
