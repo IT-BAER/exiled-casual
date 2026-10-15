@@ -366,6 +366,9 @@ export interface Snapshot {
     strikeHits?: number;
     /** Skill id of that swing, so the renderer can weigh its shake. */
     strikeSkill?: string;
+    /** Tick of the last pickup refused for lack of room in the grid.
+     *  A change is the edge the HUD reacts to. */
+    pickupRefusedTick?: number;
     /** Charge state for the two utility flasks (life on Q, mana on E). */
     flasks: { lifeCharges: number; lifeMax: number; manaCharges: number; manaMax: number };
     /** Gear-derived totals for the character sheet. Life and mana stay above, where the HUD reads them. */

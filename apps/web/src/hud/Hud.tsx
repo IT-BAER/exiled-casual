@@ -895,6 +895,29 @@ export function Hud({
     return () => clearTimeout(t);
   }, [banner]);
 
+  // A refused pickup (inventory full) arrives as a changed `pickupRefusedTick`.
+  // Its own state, not the reward banner: it is feedback, not a reward. `seq`
+  // lets a second refusal restart the dismissal timer without a second element.
+  const [inventoryFull, setInventoryFull] = React.useState<{ seq: number } | null>(null);
+  const refusedTick = snapshot?.player.pickupRefusedTick;
+  const hasSnapshot = snapshot !== null && snapshot !== undefined;
+  const lastRefusedTick = React.useRef<{ tick: number | undefined } | null>(null);
+  React.useEffect(() => {
+    if (!hasSnapshot) return;
+    const was = lastRefusedTick.current;
+    lastRefusedTick.current = { tick: refusedTick };
+    // The first snapshot is the baseline, so a reload never replays an old refusal.
+    if (!was) return;
+    if (refusedTick === undefined || refusedTick === was.tick) return;
+    setInventoryFull((prev) => ({ seq: (prev?.seq ?? 0) + 1 }));
+  }, [hasSnapshot, refusedTick]);
+
+  React.useEffect(() => {
+    if (!inventoryFull) return;
+    const t = setTimeout(() => setInventoryFull(null), 1600);
+    return () => clearTimeout(t);
+  }, [inventoryFull]);
+
   /**
    * The experience rail runs BETWEEN the two panels, never under them: the
    * panels' stone is opaque to the floor, so a rail crossing behind it hid the
@@ -1066,6 +1089,30 @@ export function Hud({
           }}
         >
           {banner.text}
+        </div>
+      )}
+
+      {/* Quieter than the reward banner on purpose: a refusal is feedback, not a
+          reward, so it is smaller, lower and silent. */}
+      {inventoryFull && (
+        <div
+          data-testid="inventory-full"
+          style={{
+            position: "absolute",
+            top: "34%",
+            left: 0,
+            right: 0,
+            textAlign: "center",
+            fontFamily: DISPLAY,
+            fontSize: 16,
+            letterSpacing: 2,
+            textTransform: "uppercase",
+            color: "rgba(242,215,154,0.8)",
+            textShadow: "0 1px 4px #000",
+            pointerEvents: "none",
+          }}
+        >
+          Inventory Full
         </div>
       )}
 

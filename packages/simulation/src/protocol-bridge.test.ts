@@ -134,6 +134,13 @@ describe("buildSnapshot", () => {
     expect(snap.player.strikeHits).toBe(3);
   });
 
+  it("reports the tick of the last pickup refused for lack of room, and nothing before one", () => {
+    const { world, sim } = createCombatSim(42);
+    expect(buildSnapshot(world, sim, 0, CONTENT_VERSION).player.pickupRefusedTick).toBeUndefined();
+    sim.pickupRefusedTick = 5;
+    expect(buildSnapshot(world, sim, 6, CONTENT_VERSION).player.pickupRefusedTick).toBe(5);
+  });
+
   it("names the skill that swung, from the cast itself", () => {
     const { world, sim, playerEntity } = createCombatSim(42);
     const intent: Intent = { kind: "useSkill", skillId: "skill.heavy_strike.v1", tx: fp(5), ty: fp(0) };
