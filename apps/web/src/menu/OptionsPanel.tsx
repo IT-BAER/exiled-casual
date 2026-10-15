@@ -45,6 +45,7 @@ const KEYBIND_ROWS: readonly { action: KeybindAction; label: string }[] = [
   { action: "flaskMana", label: "Mana Flask" },
   { action: "portal", label: "Portal to Hideout" },
   { action: "pickup", label: "Pick Up Item" },
+  { action: "dodge", label: "Dodge Roll" },
   { action: "overlayMap", label: "Overlay Map" },
   { action: "inventory", label: "Inventory" },
   { action: "character", label: "Character Sheet" },

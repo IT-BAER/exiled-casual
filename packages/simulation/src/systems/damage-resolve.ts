@@ -1,8 +1,9 @@
 import { applyDamage, bossChargeSteps, absorbWithEnergyShield, ES_RECHARGE_DELAY_TICKS } from "@exiled/rules";
 import { Simulation } from "../loop";
 import type {
-  Health, DefensesC, FlasksC, EnergyShieldC, MonsterC, SessionC, Position, CastingC,
+  Health, DefensesC, FlasksC, EnergyShieldC, MonsterC, SessionC, Position, CastingC, RollC,
 } from "../components";
+import { ROLL_AVOID_TICKS } from "./player-movement";
 import { damageTypeOf } from "../damage-types";
 import { BURNING_SOURCE, RECAP_WINDOW_TICKS } from "../death-recap";
 import type { World } from "../ecs";
@@ -51,6 +52,12 @@ export function registerDamageResolve(sim: Simulation): void {
       // Spawn grace swallows the hit entirely: no life, no shield, no recharge
       // delay. The monster still noticed him when it decided to attack.
       if (graced && world.has(ev.target, "player")) continue;
+      // The opening of a roll is the same total swallow, but only for what can be
+      // stepped out of: a slam's circle or burning ground is still under him.
+      if (ev.via !== undefined && world.has(ev.target, "player")) {
+        const roll = world.get<RollC>(ev.target, "roll");
+        if (roll && tick - roll.startTick < ROLL_AVOID_TICKS) continue;
+      }
       const health = world.get<Health>(ev.target, "health");
       const def = world.get<DefensesC>(ev.target, "defenses");
       if (!health || !def) continue;

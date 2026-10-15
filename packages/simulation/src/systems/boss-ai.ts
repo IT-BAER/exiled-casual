@@ -181,6 +181,7 @@ export function registerBossAI(
             source: e,
             amountFixed: mon.attackDamage,
             type: mon.attackType,
+            via: "melee",
           });
           attackReadyTick = tick + mon.attackCooldownTicks;
         }

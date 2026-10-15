@@ -41,6 +41,9 @@ export class Simulation {
   damageQueue: DamageEvent[] = [];
   /** Hits on the living player over the recap window, for the death screen only (death-recap.ts). */
   recentHits: RecapHit[] = [];
+  /** Tick of the last pickup refused for lack of room. Display-only: kept on the
+   *  Simulation, never in the World, so it cannot touch saves or replay checksums. */
+  pickupRefusedTick: number | undefined = undefined;
   private readonly systems: { name: string; fn: System }[] = [];
 
   register(name: string, fn: System): void {

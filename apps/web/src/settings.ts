@@ -94,7 +94,7 @@ export const CONTROL_MODES: readonly ControlMode[] = ["mouse", "wasd"];
 export const KEYBIND_ACTIONS = [
   "moveUp", "moveDown", "moveLeft", "moveRight",
   "skill1", "skill2", "skill3", "skill4", "skill5",
-  "flaskLife", "flaskMana", "portal", "pickup",
+  "flaskLife", "flaskMana", "portal", "pickup", "dodge",
   "overlayMap", "inventory", "character", "passives",
 ] as const;
 export type KeybindAction = (typeof KEYBIND_ACTIONS)[number];
@@ -106,7 +106,7 @@ export const SKILL_ACTIONS = ["skill1", "skill2", "skill3", "skill4", "skill5"] 
 export const MOVE_ACTIONS = ["moveUp", "moveDown", "moveLeft", "moveRight"] as const;
 
 const SHARED_BINDS = {
-  flaskLife: "1", flaskMana: "2", portal: "y", pickup: "g",
+  flaskLife: "1", flaskMana: "2", portal: "y", pickup: "g", dodge: " ",
   overlayMap: "tab", inventory: "i", character: "c", passives: "p",
 } as const;
 

@@ -43,6 +43,7 @@ function makeSnap(overrides: {
   /** Waystone items to seed into inventory.items for the reward-banner tests. */
   waystoneItems?: number;
   passivePoints?: number;
+  pickupRefusedTick?: number;
 }): Snapshot {
   // Build a minimal inventory with `waystoneItems` 1x1 waystone cells, if any.
   const waystoneInv = overrides.waystoneItems
@@ -80,6 +81,7 @@ function makeSnap(overrides: {
       gold: 0,
       flasks: overrides.flasks ?? { lifeCharges: 7, lifeMax: 7, manaCharges: 7, manaMax: 7 },
       ...(overrides.passivePoints === undefined ? {} : { passivePoints: overrides.passivePoints }),
+      ...(overrides.pickupRefusedTick === undefined ? {} : { pickupRefusedTick: overrides.pickupRefusedTick }),
       stats: testStats(),
     },
     entities: overrides.entities ?? [],
@@ -640,6 +642,58 @@ describe("Hud reward banner", () => {
     rerender(<Hud snapshot={makeSnap({ waystoneItems: 0 })} />);
     expect(screen.queryByTestId("reward-banner")).toBeNull();
     expect(playDropSound).not.toHaveBeenCalled();
+  });
+});
+
+describe("Hud inventory full message", () => {
+  it("says nothing on the first snapshot it ever sees", () => {
+    render(<Hud snapshot={makeSnap({ pickupRefusedTick: 7 })} />);
+    expect(screen.queryByTestId("inventory-full")).toBeNull();
+  });
+
+  it("shows Inventory Full when a refusal arrives", () => {
+    const { rerender } = render(<Hud snapshot={makeSnap({})} />);
+    rerender(<Hud snapshot={makeSnap({ pickupRefusedTick: 7 })} />);
+    expect(screen.getByTestId("inventory-full")).toHaveTextContent("Inventory Full");
+    expect(playDropSound).not.toHaveBeenCalled();
+  });
+
+  it("stays quiet on a steady-state snapshot with no new refusal", () => {
+    const { rerender } = render(<Hud snapshot={makeSnap({ pickupRefusedTick: 7 })} />);
+    rerender(<Hud snapshot={makeSnap({ pickupRefusedTick: 7 })} />);
+    expect(screen.queryByTestId("inventory-full")).toBeNull();
+  });
+
+  it("fades on its own", () => {
+    vi.useFakeTimers();
+    try {
+      const { rerender } = render(<Hud snapshot={makeSnap({})} />);
+      rerender(<Hud snapshot={makeSnap({ pickupRefusedTick: 7 })} />);
+      expect(screen.getByTestId("inventory-full")).toBeTruthy();
+      act(() => { vi.advanceTimersByTime(2000); });
+      expect(screen.queryByTestId("inventory-full")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("two refusals within the timeout show one message, not two", () => {
+    vi.useFakeTimers();
+    try {
+      const { rerender } = render(<Hud snapshot={makeSnap({})} />);
+      rerender(<Hud snapshot={makeSnap({ pickupRefusedTick: 7 })} />);
+      act(() => { vi.advanceTimersByTime(500); });
+      rerender(<Hud snapshot={makeSnap({ pickupRefusedTick: 20 })} />);
+      expect(screen.getAllByTestId("inventory-full")).toHaveLength(1);
+      // The second refusal restarted the 1600 ms timer: 1500 ms later it is still up.
+      act(() => { vi.advanceTimersByTime(1500); });
+      expect(screen.getByTestId("inventory-full")).toBeTruthy();
+      // 1700 ms after the second refusal, the restarted 1600 ms timer has fired.
+      act(() => { vi.advanceTimersByTime(200); });
+      expect(screen.queryByTestId("inventory-full")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

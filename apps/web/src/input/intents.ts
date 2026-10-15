@@ -53,6 +53,11 @@ export function portalIntent(aim: { x: number; y: number }): Intent {
   return { kind: "useSkill", skillId: TOWN_PORTAL_SKILL, tx: fp(aim.x), ty: fp(aim.y) };
 }
 
+/** The dodge roll toward a point in raw world floats; only its direction from the player counts. */
+export function dodgeIntent(aim: { x: number; y: number }): Intent {
+  return { kind: "dodge", tx: fp(aim.x), ty: fp(aim.y) };
+}
+
 /**
  * Pure: map a KeyboardEvent.key + current world-space aim point to an Intent.
  * Returns null for unmapped keys.
@@ -82,6 +87,7 @@ export function keyToIntent(
   // The way home is PoE2's: free inside an open map, held back by its cooldown.
   // The right-click on a Portal Scroll casts the same skill and spends the scroll.
   if (action === "portal") return portalIntent(aim);
+  if (action === "dodge") return dodgeIntent(aim);
 
   const skillId = skillForKey?.(key);
   if (skillId) {

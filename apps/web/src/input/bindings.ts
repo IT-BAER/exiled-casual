@@ -1,7 +1,7 @@
 import type { Intent, Snapshot, SnapshotEntity, SpawnKind, ToWorker } from "@exiled/protocol";
 import { toNumber } from "@exiled/fixed-point";
 import { isTextEntry } from "./text-entry";
-import { heldToMoveIntent, keyToIntent, pointerToWorld } from "./intents";
+import { dodgeIntent, heldToMoveIntent, keyToIntent, pointerToWorld } from "./intents";
 import type { Node, Scene } from "@babylonjs/core";
 import { DEFAULT_KEYBINDS, MOVE_SOCKET, type ControlMode, type Keybinds } from "../settings";
 import { SKILLS } from "@exiled/content-runtime";
@@ -409,6 +409,18 @@ export function attachBindings(
           (a.x - px) ** 2 + (a.y - py) ** 2 <= (b.x - px) ** 2 + (b.y - py) ** 2 ? a : b);
         post({ kind: "pickupItem", entityId: nearest.id });
       }
+      return;
+    }
+    // The roll goes the way the keys are walking him, else at the cursor (mouse
+    // mode has no movement keys, so it always lands on the cursor).
+    if (k === binds().dodge && k !== "") {
+      const walk = heldToMoveIntent(held, binds());
+      const aim = walk.kind === "moveDir" && latestSnap
+        ? { x: latestSnap.player.x + walk.dx, y: latestSnap.player.y + walk.dy }
+        : aimAt(AIM_HEIGHT);
+      post(dodgeIntent(aim));
+      // Space otherwise scrolls the page or presses whatever button has focus.
+      e.preventDefault();
       return;
     }
     // Movement is the sum of everything held, so W+D is the diagonal between
