@@ -10,6 +10,59 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-15
+
+Alpha. A save may not survive an update yet.
+
+### Added
+
+- The desert is dressed. Dead trees, ruined walls, ribcages, skulls, bones and
+  clusters of pots stand at the foot of the rock, dry scrub grows along the
+  cliffs, and the rock itself is warm sandstone instead of cold dungeon stone.
+  Nothing tall stands where you could walk behind it.
+- Monsters fight as a pack. One that wakes rouses every sleeper near it,
+  shooters back away when you close in and strafe between shots, and the Vaal
+  Construct, the Bog Drowned and the Thornhide Boar wind up and charge from a
+  few units out. Bosses still wake alone.
+- The desert's creatures have new bodies. The Sand Skitterer is a scarab, the
+  Dune Spitter a sand toad and the Sunbaked Colossus a sandstone golem, each on
+  its own rig.
+- A Portal button sits left of the inventory chest and opens the same portal
+  as its key.
+- A pickup that fails for lack of room says so. An Inventory Full message
+  shows for a moment instead of the item silently staying on the ground.
+- A ground item's name plate brightens under the pointer, so you can see which
+  one a click will pick up.
+
+### Changed
+
+- Rock meets the floor like rock. The cliff foot is a rounded, wandering curve
+  instead of a staircase of cells, the floor darkens and dusts toward the wall,
+  and the scree agrees with the ground where they meet.
+- Maps have natural edges. Open desert and forest ground frays its wall masses
+  instead of standing square mounds, and walled maps round their room corners
+  and stand outcrops off long flat faces.
+- A sword strike swung standing still moves the body with it. The hips and
+  legs sway a share of the take, each foot stays planted where it stood, the
+  knee bends toward where it was instead of whirling, and the stance settles
+  back on the idle instead of sliding home afterwards.
+- The see-through hole behind a cliff is smaller and softer.
+- The Ironsworn's Strike and Heavy Strike hit lighter, now that the first-map
+  pace is measured against a swing that actually lands. The Fen Wisp's hit and
+  the Rotting Behemoth's slam are lighter too, to pay for the packs waking
+  together.
+
+### Fixed
+
+- A boss no longer freezes in place. The Cinder Warden could slide between
+  pillars to a spot with no path home and stand there chasing forever; it now
+  finds its way back.
+- The Hoarfrost Spitter's arms follow its shoulders instead of its legs, and
+  the Vaal Construct's hanging fist walks with its arm, so its attack no longer
+  tears the arm into a sheet from shoulder to knee.
+- The robe's front panel hangs still while he breathes instead of swinging out
+  from the shin.
+
 ## [0.3.0] - 2026-10-11
 
 Alpha. A save may not survive an update yet.
