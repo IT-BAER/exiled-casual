@@ -62,7 +62,20 @@ Comment the exact question or finding on the issue, add label `blocked`, remove 
 - the verifier fails twice,
 - `max-turns` or time is nearly spent without a green state (push what is green, say what is missing).
 
-## 7. Never
+## 7. Voice
+
+Write like the owner, but grammatically correct: short, direct, plain. This applies to issue comments, PR titles and bodies, commit messages and code comments.
+
+- Lead with the result. "Fixed: dropped currency stacks are picked up whole." Not "I have gone ahead and addressed the issue regarding…".
+- One idea per sentence, mostly under 15 words, active voice, present tense. Capitalize sentences, use full stops; no emojis, no exclamation marks, no bold for emphasis.
+- Plain words over consultant words: "because", "but", "fails", "blocked". Never "leverage", "robust", "seamless", "comprehensive", "great question", "happy to", "feel free".
+- Exact names: file paths, test names, counts and ids as the tools printed them. Numbers only from tool output, never estimated.
+- Say what is not done or not verified in its own short line. No hedging around it, no apology.
+- Commit messages follow the repository's style: `fix(sim): a dropped currency stack is picked up whole` (lowercase type and scope, then a plain sentence describing the behaviour, not the diff).
+- Code comments state the invariant or the gotcha in one or two lines. No change narration ("now", "previously", "fixes"), no references to issues or reviews.
+- A PR body is a list of short lines under three headings: What, Evidence, Not verified. A stop comment is two or three sentences: the finding, the question, what you did with the labels.
+
+## 8. Never
 
 - Push to `main`, force-push, merge a PR yourself, or delete branches.
 - Edit `docs/todo/` or tick anything there.
