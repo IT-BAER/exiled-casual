@@ -205,7 +205,9 @@ const MONSTER_DEFS: MonsterDef[] = [
   {
     id: "monster.vaal_husk.v1", name: "Vaal Husk", archetype: "swarm",
     maxLifeFixed: LIFE.swarm, moveSpeedFixed: fp(2.6), attackRangeFixed: fp(1.1),
-    attackDamage: { type: "physical", amountFixed: HIT.swarm },
+    // Its pack shares the ring round the player with a construct and a sentinel,
+    // so fewer husks reach him than skitterers do: each hit carries more.
+    attackDamage: { type: "physical", amountFixed: fp(0.6) },
     attackCooldownTicks: 40, radiusFixed: SWARM_RADIUS,
     defenses: { resPct: resBlock(), armourFixed: fp(0) },
   },
@@ -231,7 +233,9 @@ const MONSTER_DEFS: MonsterDef[] = [
     id: "monster.sand_skitterer.v1", name: "Sand Skitterer", archetype: "swarm",
     maxLifeFixed: LIFE.swarm, moveSpeedFixed: fp(2.6), attackRangeFixed: fp(1.1),
     attackDamage: { type: "physical", amountFixed: HIT.swarm },
-    attackCooldownTicks: 40, radiusFixed: SWARM_RADIUS,
+    // Its own body, not the swarm's: the scarab's shell is drawn 0.8 across, and a
+    // 0.32 body let a pack stand with their shells through each other.
+    attackCooldownTicks: 40, radiusFixed: fp(0.42),
     defenses: { resPct: resBlock({ fire: 20 }), armourFixed: fp(0) },
   },
   {

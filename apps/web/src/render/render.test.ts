@@ -605,7 +605,7 @@ describe("SnapshotRenderer", () => {
     const { scene } = createScene(engine);
     const renderer = new SnapshotRenderer(scene);
     const at = (x: number) => makeSnapshot({
-      entities: [{ id: 1, kind: "monster", x, y: 0, life: 10, maxLife: 10, facing: { x: -1, y: 0 } }],
+      entities: [{ id: 1, kind: "monster", x, y: 0, life: 10, maxLife: 10, heading: { x: -1, y: 0 } }],
     });
     let prev = at(1);
     renderer.apply(null, prev, 1);
@@ -614,7 +614,7 @@ describe("SnapshotRenderer", () => {
       renderer.apply(prev, next, 1);
       prev = next;
     }
-    // Facing -x is yaw -PI/2; the step alone would turn it to +PI/2.
+    // Heading -x is yaw -PI/2; the step alone would turn it to +PI/2.
     expect(Math.cos(scene.getMeshByName("entity-1")!.rotation.y + Math.PI / 2)).toBeGreaterThan(0.999);
   });
 

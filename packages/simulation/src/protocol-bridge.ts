@@ -266,8 +266,10 @@ export function buildSnapshot(
     if (mon.rare === 1) entry.element = damageTypeOf(mon.attackType) as MonsterElement;
     if (mon.lastAttackTick !== undefined) entry.attackTick = mon.lastAttackTick;
     if (mon.state === "attack") {
-      const tx = toNumber(pp.x - mp.x), ty = toNumber(pp.y - mp.y), td = Math.hypot(tx, ty);
-      if (td > 0) entry.facing = { x: tx / td, y: ty / td };
+      const hx = toNumber(pp.x - mp.x);
+      const hy = toNumber(pp.y - mp.y);
+      const len = Math.hypot(hx, hy);
+      if (len > 0) entry.heading = { x: hx / len, y: hy / len };
     }
     if (ail !== undefined) entry.ailmentStacks = ail.stacks;
     if (world.has(e, "boss")) {

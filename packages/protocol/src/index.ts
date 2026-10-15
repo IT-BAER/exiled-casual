@@ -257,10 +257,11 @@ export interface SnapshotEntity {
    */
   attackTick?: number;
   /**
-   * monster only: unit direction to the player while it fights him. The body
-   * faces this, not its step, which a pack's shove or a strafe points anywhere.
+   * monster only: unit direction to its target while it stands attacking. The
+   * renderer turns the body to it, so a monster shouldered sideways in a crowd
+   * still faces what it hits instead of the way it was pushed.
    */
-  facing?: { x: number; y: number };
+  heading?: { x: number; y: number };
   /** true for the boss monster; kind stays "monster" so existing consumers keep working */
   boss?: boolean;
   /** boss phase, present only when boss === true */

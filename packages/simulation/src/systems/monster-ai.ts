@@ -115,6 +115,69 @@ export function packPush(
   return { dx: Math.trunc((px * maxPush) / len), dy: Math.trunc((py * maxPush) / len) };
 }
 
+/**
+ * How far into other bodies `self` would stand at (x, y), summed. The push only
+ * gives back half a step, so a chase step that raises this is refused: the back
+ * of a pack walks round the front or waits behind it, never through it.
+ */
+export function crowding(pack: readonly PackBody[], self: number, x: Fixed, y: Fixed, r: Fixed): Fixed {
+  let sum = 0;
+  for (const o of pack) {
+    if (o.e === self) continue;
+    const dx = x - o.x;
+    const dy = y - o.y;
+    const min = r + o.r;
+    const d2 = dx * dx + dy * dy;
+    if (d2 < min * min) sum += min - isqrt(d2);
+  }
+  return sum;
+}
+
+/**
+ * 24 bearings 15 degrees apart, unit vectors in thousandths: the spots a ring of
+ * attackers can stand in round the player. Written out, not Math.cos, so every
+ * engine rounds them the same.
+ */
+const QUARTER = [1000, 966, 866, 707, 500, 259, 0];
+const BEARINGS: readonly (readonly [number, number])[] = Array.from({ length: 24 }, (_, i) => {
+  const c = QUARTER[i % 6]!;
+  const s = QUARTER[6 - (i % 6)]!;
+  const q = Math.trunc(i / 6);
+  return q === 0 ? [c, s] : q === 1 ? [-s, c] : q === 2 ? [-c, -s] : [s, -c];
+});
+
+/**
+ * The nearest spot on a ring of `ringR` round (px, py) that no other body and
+ * no wall stands on, counted out from `self`'s own bearing on the `side` its id picks.
+ * Undefined when the ring is full: then it waits where it is.
+ */
+export function freeSpot(
+  collision: Collision | undefined, pack: readonly PackBody[], self: number, x: Fixed, y: Fixed, r: Fixed,
+  px: Fixed, py: Fixed, ringR: Fixed, side: number,
+): { x: Fixed; y: Fixed; side: number; round: number } | undefined {
+  let own = 0;
+  let best = -Infinity;
+  BEARINGS.forEach(([bx, by], i) => {
+    const d = (x - px) * bx + (y - py) * by;
+    if (d > best) { best = d; own = i; }
+  });
+  for (let k = 0; k <= 12; k++) {
+    for (const s of k === 0 || k === 12 ? [side] : [side, -side]) {
+      const [bx, by] = BEARINGS[(own + s * k + 24) % 24]!;
+      const sx = px + Math.trunc((ringR * bx) / 1000);
+      const sy = py + Math.trunc((ringR * by) / 1000);
+      if ((!collision || collision.isWalkable(sx, sy, r))
+        && pack.every((o) => o.e === self || fpDist2(sx, sy, o.x, o.y) >= (r + o.r) * (r + o.r))) {
+        return { x: sx, y: sy, side: s, round: k };
+      }
+    }
+  }
+  return undefined;
+}
+
+/** Round the outside of a pack: square to the player, then out and round (cos, sin in thousandths). */
+const ROUND_TURNS: readonly (readonly [number, number])[] = [[0, 1000], [-707, 707]];
+
 /** Offset a body that has already taken its own step, without entering a wall. */
 function shove(
   collision: Collision | undefined,
@@ -155,6 +218,9 @@ export function registerMonsterAI(sim: Simulation, collisionRef?: CollisionRef):
       const p = world.get<Position>(e, "position")!;
       return { e, x: p.x, y: p.y, r: world.get<MonsterC>(e, "monster")!.bodyRadius };
     });
+    // The crowd a chase step may not walk into: monsters only. His own body is
+    // the target, and the push already shoulders a monster off it.
+    const herd = pack.slice();
     for (const e of players) {
       const p = world.get<Position>(e, "position")!;
       pack.push({ e, x: p.x, y: p.y, r: world.get<PlayerC>(e, "player")!.bodyRadius });
@@ -383,9 +449,45 @@ export function registerMonsterAI(sim: Simulation, collisionRef?: CollisionRef):
         });
         world.set<MonsterC>(m, "monster", { ...mon, state: "chase" });
       } else {
-        const moved = chaseStep(
+        let moved = chaseStep(
           collision, mpos.x, mpos.y, ppos.x, ppos.y, mon.moveSpeed, mon.bodyRadius,
         );
+        const here = crowding(herd, m, mpos.x, mpos.y, mon.bodyRadius);
+        if (crowding(herd, m, moved.x, moved.y, mon.bodyRadius) > here) {
+          // Into a body: find the nearest free spot on the ring he is fought
+          // from. Beside it, step straight in; otherwise walk the outside of the
+          // pack toward it. Ring full: wait behind it.
+          const target = moved;
+          const sx = moved.x - mpos.x;
+          const sy = moved.y - mpos.y;
+          moved = mpos;
+          const touch = mon.bodyRadius + world.get<PlayerC>(nearest, "player")!.bodyRadius;
+          const spot = freeSpot(collision, herd, m, mpos.x, mpos.y, mon.bodyRadius, ppos.x, ppos.y,
+            touch + Math.trunc((Math.max(ar, touch) - touch) / 2), m % 2 === 0 ? 1 : -1);
+          const clear = (t: { x: Fixed; y: Fixed }) => (t.x !== mpos.x || t.y !== mpos.y)
+            && crowding(herd, m, t.x, t.y, mon.bodyRadius) <= here;
+          const direct = spot && spot.round <= 1 && shove(collision, mpos.x, mpos.y,
+            fpStepToward(mpos.x, mpos.y, spot.x, spot.y, mon.moveSpeed), mon.bodyRadius);
+          if (direct && clear(direct)) moved = direct;
+          else if (spot) {
+            // The step points IN, so turning it the spot's way round the player
+            // is the opposite sign: bearings count counterclockwise.
+            const s = -spot.side;
+            for (const [cos, sin] of ROUND_TURNS) {
+              const t = shove(collision, mpos.x, mpos.y, {
+                dx: Math.trunc((sx * cos - s * sy * sin) / 1000),
+                dy: Math.trunc((s * sx * sin + sy * cos) / 1000),
+              }, mon.bodyRadius);
+              // A wall can slide the turned step straight back out of the pack;
+              // only a step that gains ground round toward the spot counts.
+              const gain = s * (sx * (t.y - mpos.y) - sy * (t.x - mpos.x));
+              if (gain > 0 && clear(t)) { moved = t; break; }
+            }
+            // Wedged with a spot still open (two bodies in a passage, each in
+            // the other's way): the plain step, and the push sorts it out.
+            if (moved === mpos) moved = target;
+          }
+        }
         const out = shove(collision, moved.x, moved.y, push, mon.bodyRadius);
         world.set<Position>(m, "position", {
           x: fpClamp(out.x, WORLD_MIN, WORLD_MAX),

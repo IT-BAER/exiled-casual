@@ -212,6 +212,20 @@ describe("buildSnapshot", () => {
     }
   });
 
+  it("an attacking monster is headed at the player; a chasing one carries no heading", () => {
+    const { world, sim, playerEntity } = createCombatSim(42);
+    const pp = world.get<Position>(playerEntity, "position")!;
+    const [a, b] = world.query("monster", "position").filter((e) => !world.has(e, "boss"));
+    world.set<Position>(a!, "position", { x: pp.x + fp(1), y: pp.y + fp(1) });
+    world.set<MonsterC>(a!, "monster", { ...world.get<MonsterC>(a!, "monster")!, state: "attack" });
+    world.set<MonsterC>(b!, "monster", { ...world.get<MonsterC>(b!, "monster")!, state: "chase" });
+    const snap = buildSnapshot(world, sim, 0, CONTENT_VERSION);
+    const ea = snap.entities.find((e) => e.id === a)!;
+    expect(ea.heading!.x).toBeCloseTo(-Math.SQRT1_2, 3);
+    expect(ea.heading!.y).toBeCloseTo(-Math.SQRT1_2, 3);
+    expect(snap.entities.find((e) => e.id === b)!.heading).toBeUndefined();
+  });
+
   it("a spawned projectile appears as a projectile entity", () => {
     const { world, sim, playerEntity } = createCombatSim(42);
     const intent: Intent = { kind: "useSkill", skillId: "skill.ember_bolt.v1", tx: fp(5), ty: fp(0) };
@@ -301,17 +315,6 @@ describe("buildSnapshot — boss & telegraph", () => {
     expect(buildSnapshot(world, {} as never, 0, "test").entities.find(x => x.boss)!.bossAwake).toBe(false);
     world.set<MonsterC>(e, "monster", { ...world.get<MonsterC>(e, "monster")!, state: "chase" });
     expect(buildSnapshot(world, {} as never, 0, "test").entities.find(x => x.boss)!.bossAwake).toBe(true);
-  });
-
-  it("an attacking monster faces the player; a chasing one faces where it runs", () => {
-    const { world } = makeMinimalWorld();
-    const e = addMonster(world, 3, 4);
-    const monster = () => buildSnapshot(world, {} as never, 0, "test").entities.find((x) => x.id === e)!;
-    world.set<MonsterC>(e, "monster", { ...world.get<MonsterC>(e, "monster")!, state: "chase" });
-    expect(monster().facing).toBeUndefined();
-    world.set<MonsterC>(e, "monster", { ...world.get<MonsterC>(e, "monster")!, state: "attack" });
-    expect(monster().facing!.x).toBeCloseTo(-0.6, 6);
-    expect(monster().facing!.y).toBeCloseTo(-0.8, 6);
   });
 
   it("plain monster does NOT carry boss or bossPhase keys", () => {

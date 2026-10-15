@@ -579,6 +579,9 @@ it("every full biome pack needs 13-20s to kill a stationary reference character"
   // Pack wake and the brute charge (undodged here) measured vaal_stone 15.3,
   // desert 14.5, swamp 13.8, forest 17.1, coast 13.8, with the Fen Wisp at 1.5
   // and the Behemoth's slam at 6: both packs' edge sockets now wake with them.
+  // A pack that queues behind the ring instead of standing in him measured
+  // vaal_stone 18.8 (husk hit 0.6), desert 18.5 (skitterer body 0.42), swamp
+  // 17.3, forest 19.6, coast 17.3.
   for (const biome of ["vaal_stone", "desert", "swamp", "forest", "coast"] as const) {
     const seconds = secondsToKillIdlePlayer(biome);
     expect(seconds, biome).toBeGreaterThanOrEqual(13);

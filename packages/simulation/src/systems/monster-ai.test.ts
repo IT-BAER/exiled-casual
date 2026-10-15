@@ -465,6 +465,41 @@ describe("pack separation", () => {
     expect(p).toEqual(run());
   });
 
+  /**
+   * More bodies than fit round him: the ones that cannot reach queue behind the
+   * ring instead of pressing into it. Without this the back rows walked into the
+   * front at full step while the push gave back half, and the pack piled up
+   * inside the player and inside each other.
+   */
+  it("a pack bigger than the ring round the player stands neither in him nor in each other", () => {
+    const sim = new Simulation();
+    registerMonsterAI(sim);
+    const { world } = sim;
+    playerAt(world, fp(0), fp(0));
+    const def = MONSTERS.get("monster.sand_skitterer.v1")!;
+    const ids: number[] = [];
+    for (let i = 0; i < 12; i++) {
+      const e = spawnMonster(world, def, fp(6 + (i % 4) * 0.4), fp(Math.floor(i / 4) * 0.4 - 0.4), false);
+      world.set<MonsterC>(e, "monster", { ...world.get<MonsterC>(e, "monster")!, state: "chase" });
+      ids.push(e);
+    }
+    for (let i = 0; i < 240; i++) sim.step();
+
+    const r = def.radiusFixed;
+    // 90% of contact: the push fires only below contact, so a pair settles just inside it.
+    const near = (a: number) => Math.trunc((a * 9) / 10);
+    for (let i = 0; i < ids.length; i++) {
+      const p = world.get<Position>(ids[i]!, "position")!;
+      expect(fpDist2(p.x, p.y, 0, 0)).toBeGreaterThanOrEqual(near(r + fp(0.5)) ** 2);
+      for (let j = i + 1; j < ids.length; j++) {
+        const q = world.get<Position>(ids[j]!, "position")!;
+        expect(fpDist2(p.x, p.y, q.x, q.y)).toBeGreaterThanOrEqual(near(2 * r) ** 2);
+      }
+    }
+    // The front rank still reaches him.
+    expect(ids.filter((e) => world.get<MonsterC>(e, "monster")!.state === "attack").length).toBeGreaterThan(3);
+  });
+
   it("the push never shoves a body into a wall", () => {
     // One-cell corridor along row 2; two bodies crammed into it.
     const collision = gridCollision(

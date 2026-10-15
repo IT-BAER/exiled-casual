@@ -568,9 +568,8 @@ export class SnapshotRenderer {
         // The shared string channel: species for monsters, the furniture look
         // for containers, the base id for ground items (makeMesh reads it per kind).
         e.species ?? e.look ?? e.baseId ?? (e.kind === "gold" ? `gold:${e.amount ?? 1}:${e.jackpot ? 1 : 0}` : undefined),
-        undefined,
+        e.heading,
         e.skillId,
-        e.facing,
       );
       const mesh = this.meshes.get(e.id);
       if (!mesh) continue;
