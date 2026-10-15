@@ -59,6 +59,25 @@ describe("cliffs", () => {
     expect(sd).toBeGreaterThan(0.06);
   });
 
+  it("keeps the foot's round, wandering outline up the kerb, not the cell staircase", () => {
+    // Driven by collision depth alone, the kerb drew every wall as ruled, square-cornered blocks.
+    const H = 0.7;
+    const wall = cliffHeights(gridOf(120, 120, (x) => x < 60));
+    const feet: number[] = [];
+    for (let z = 10; z < 50; z += 0.1) feet.push(foot(wall, 31.5, z, -1, 0, H));
+    const m = mean(feet);
+    expect(Math.sqrt(mean(feet.map((v) => (v - m) ** 2)))).toBeGreaterThan(0.06);
+    const isles = cliffHeights(gridOf(120, 120, (x, y) => x % 20 >= 6 && x % 20 < 14 && y % 20 >= 6 && y % 20 < 14));
+    const corner: number[] = [], face: number[] = [];
+    const edge = (c: number) => c * 0.5 - 0.25, r = Math.SQRT1_2;
+    for (let a = 6; a < 120; a += 20) for (let b = 6; b < 120; b += 20) {
+      const x0 = edge(a), x1 = edge(a + 8), z0 = edge(b), z1 = edge(b + 8);
+      corner.push(foot(isles, x0, z0, r, r, H), foot(isles, x1, z1, -r, -r, H));
+      face.push(foot(isles, (x0 + x1) / 2, z0, 0, 1, H), foot(isles, x1, (z0 + z1) / 2, -1, 0, H));
+    }
+    expect(mean(corner) - mean(face)).toBeGreaterThan(0.2);
+  });
+
   it("hides no floor behind anything taller than the front cap, at the flattest pitch", () => {
     // Walk from every floor cell toward the camera. Rock may block the line only
     // where it is low (a wall in front of the room, as the boulders always were).
@@ -199,9 +218,9 @@ function heightAt(f: CliffField, x: number, z: number): number {
   return (h(i0, j0) * (1 - ti) + h(i0 + 1, j0) * ti) * (1 - tj) + (h(i0, j0 + 1) * (1 - ti) + h(i0 + 1, j0 + 1) * ti) * tj;
 }
 
-/** Distance marched from (x, z) along (dx, dz) to where rock first stands up. */
-function foot(f: CliffField, x: number, z: number, dx: number, dz: number): number {
-  for (let t = 0; t < 3; t += 0.01) if (heightAt(f, x + dx * t, z + dz * t) > 0.002) return t;
+/** Distance marched from (x, z) along (dx, dz) to where rock first stands over `level`. */
+function foot(f: CliffField, x: number, z: number, dx: number, dz: number, level = 0.002): number {
+  for (let t = 0; t < 3; t += 0.01) if (heightAt(f, x + dx * t, z + dz * t) > level) return t;
   return 3;
 }
 

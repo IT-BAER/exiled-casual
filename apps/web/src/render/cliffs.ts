@@ -49,6 +49,9 @@ const VARY_FREQ = 0.17;
  *  the open hides nobody and no fade is owed. */
 const KERB_PEAK = 1.4;
 const KERB_RISE = 0.3;
+/** Depth the kerb already has at the foot. Lifts it past the tallest first ledge
+ *  (STRATUM * 1.2) on a one-cell spur the foot cut leaves 0.01 deep, so none is flat. */
+const KERB_LEAD = 0.16;
 /** World units per texture repeat; must match TILE in level.ts. */
 const TILE = 2;
 
@@ -138,7 +141,7 @@ function signedDistance(inside: Uint8Array, nx: number, nz: number): Float32Arra
  */
 function footDistance(
   open: Uint8Array, nx: number, nz: number, x0: number, z0: number,
-): { foot: Float32Array; base: Float32Array } {
+): Float32Array {
   // Shifted half a step so the crossing sits ON the last open vertex, the collision face.
   const base = signedDistance(open.map((o) => 1 - o), nx, nz).map((v) => v + STEP / 2);
   let s = signedDistance(Uint8Array.from(base, (v) => (v > ROUND_OUT ? 1 : 0)), nx, nz)
@@ -180,7 +183,7 @@ function footDistance(
     return out;
   };
   const thick = widest(widest(base, 1, 0), 0, 1);
-  return { foot: s.map((v, k) => Math.max(v, base[k]! - Math.min(MAX_CUT, Math.max(0, (thick[k]! - STEP) * 1.1)))), base };
+  return s.map((v, k) => Math.max(v, base[k]! - Math.min(MAX_CUT, Math.max(0, (thick[k]! - STEP) * 1.1))));
 }
 
 export interface CliffField {
@@ -225,7 +228,7 @@ export function cliffHeights(grid: WalkableGrid): CliffField {
     }
   }
 
-  const { foot, base } = footDistance(open, nx, nz, x0, z0);
+  const foot = footDistance(open, nx, nz, x0, z0);
   const depth = foot.map((s) => Math.max(0, s));
 
   const reach = CLIFF_MAX * HIDE_PER_UNIT + MARGIN;
@@ -251,9 +254,9 @@ export function cliffHeights(grid: WalkableGrid): CliffField {
       const cap = Math.max(CLIFF_FRONT * (0.8 + 0.2 * n), (view - MARGIN) / HIDE_PER_UNIT);
       // Strata: ledges rounded DOWN, so they can only ever lower a vertex under its cap.
       let h = Math.min(rise, cap);
-      // A kerb on every wall, by the collision depth: scree alone stays under the
-      // floor blend for a unit and reads as ground the sim still blocks.
-      const v = Math.min(1, Math.max(d, base[k]!) / KERB_RISE);
+      // A kerb on every wall, on the rounded foot so it keeps its outline: scree
+      // alone stays under the floor blend for a unit and reads as ground the sim still blocks.
+      const v = Math.min(1, (d + KERB_LEAD) / KERB_RISE);
       h = Math.max(h, Math.min(cap, KERB_PEAK * v * v * (3 - 2 * v) * (0.85 + 0.3 * n)));
       const shelf = STRATUM * (0.8 + 0.4 * noise(x, z, 2.2, 3));
       heights[k] = h - (h % shelf) * STRATA;
