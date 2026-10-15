@@ -160,7 +160,9 @@ function AtlasMap(props: {
             <button
               key={n.id}
               data-testid={`prep-node-${n.id}`}
-              disabled={st !== "open" && st !== "cleared"}
+              // Under-tier opens too: its panel says which tier it wants and is
+              // where a seated stone that is too weak gets taken back out.
+              disabled={st === "fog"}
               onClick={() => onSelect(n.id)}
               title={tip}
               style={{

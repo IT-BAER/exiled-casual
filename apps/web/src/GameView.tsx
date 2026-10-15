@@ -183,11 +183,10 @@ export function GameView({
   // Stable, so the memo'd atlas and inventory panels skip the renders their data did not cause.
   const ejectStone = useCallback(() => setSocketedCell(null), []);
   const openInventory = useCallback(() => setInventoryOpen(true), []);
-  const closeAtlas = useCallback(() => { setPanelOpen(false); setSocketedCell(null); }, []);
+  const closeAtlas = useCallback(() => setPanelOpen(false), []);
   const activateMap = useCallback((atlasNodeId: string, x: number, y: number) => {
     sendIntent({ kind: "activateMap", atlasNodeId, x, y });
     setPanelOpen(false);
-    setSocketedCell(null);
   }, [sendIntent]);
   const closeStash = useCallback(() => setStashOpen(false), []);
   const closeVendor = useCallback(() => setVendorOpen(false), []);
@@ -286,6 +285,11 @@ export function GameView({
     () => (waystone ? { ...socketedCell!, ...waystone } : null),
     [socketedCell, waystone],
   );
+  // Every way the device closes (button, Escape, walking off, activation, area change,
+  // revive) hands the stone back, or it sits seated in a node you cannot open.
+  useEffect(() => {
+    if (!panelOpen) setSocketedCell(null);
+  }, [panelOpen]);
   // Clear the cell reference once the item moves away (consumed, moved, or picked up).
   useEffect(() => {
     if (socketedCell && !socketedItem) setSocketedCell(null);

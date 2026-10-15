@@ -4,7 +4,7 @@ import { render, screen, fireEvent, act, cleanup } from "@testing-library/react"
 import { testPlayer } from "./test-fixtures";
 import { DEFAULT_SETTINGS, MOVE_SOCKET, type Settings } from "./settings";
 import { defaultAttackFor } from "@exiled/content-runtime";
-import { DEFAULT_CLASS_ID } from "@exiled/rules";
+import { DEFAULT_CLASS_ID, atlasGraph } from "@exiled/rules";
 import React from "react";
 import type { Snapshot } from "@exiled/protocol";
 
@@ -454,6 +454,26 @@ describe("GameView", () => {
       });
     });
     expect(screen.getByTestId("prep-panel")).toBeTruthy();
+  });
+
+  it("a waystone left in the device goes back to the bag however the device is closed", () => {
+    const stone = {
+      rarity: "normal" as const, name: "Waystone", baseId: "map.waystone", itemClass: "waystone", lines: [],
+      x: 0, y: 0, w: 1, h: 1, waystone: { seed: 1, tier: 1 },
+    };
+    mountWithSnapshot();
+    act(() => {
+      hoisted.worker?.onmessage?.({
+        data: { type: "snapshot", snapshot: { ...makeSnap(), tick: 2, inventory: { cols: 12, rows: 5, items: [stone] } } },
+      });
+    });
+    act(() => { hoisted.openPanel?.(true); });
+    act(() => { fireEvent.pointerDown(screen.getByTestId("inventory-item-0"), { ctrlKey: true, button: 0 }); });
+    act(() => { fireEvent.keyDown(window, { key: "Escape" }); });
+    act(() => { hoisted.openPanel?.(true); });
+    fireEvent.click(screen.getByTestId(`prep-node-${atlasGraph(0)[0]!.id}`));
+    expect(screen.getByTestId("prep-popup")).toBeTruthy();
+    expect(screen.queryByTestId("prep-socket-stone")).toBeNull();
   });
 
   it("opening a map puts the device and the bag away", () => {

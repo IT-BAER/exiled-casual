@@ -203,6 +203,23 @@ describe("a place demands a Waystone of its own tier", () => {
     expect(screen.getByTestId("prep-undertier").textContent).toContain(String(need));
   });
 
+  it("a place the seated stone is too weak for still opens, so the stone can be taken out there", () => {
+    const neighbour = graph[0]!.links[0]!;
+    const need = atlasNodeTier(graph, neighbour);
+    const onEject = vi.fn();
+    render(
+      <PreparationPanel
+        atlasSeed={atlasSeed} completedNodes={[graph[0]!.id]}
+        socketedStone={stone({ tier: need - 1 })}
+        onEject={onEject} onActivate={() => {}} onClose={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByTestId(`prep-node-${neighbour}`));
+    expect(screen.getByTestId("prep-undertier").textContent).toContain(String(need));
+    fireEvent.click(screen.getByTestId("prep-socket"));
+    expect(onEject).toHaveBeenCalledOnce();
+  });
+
   it("activates once the stone is good enough", () => {
     const neighbour = graph[0]!.links[0]!;
     const need = atlasNodeTier(graph, neighbour);
