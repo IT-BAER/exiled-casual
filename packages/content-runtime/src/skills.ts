@@ -326,6 +326,8 @@ const SKILL_DEFS: SkillDef[] = [
      * Two seconds of wind-up and ten of cooldown are the whole answer to "so it
      * doesn't get spammed": long enough that opening one mid-fight is a decision,
      * short enough that a full bag is never a walk back to the entrance.
+     *
+     * Not a gem: it never takes a bar socket and never levels (persist.ts skips it).
      */
     id: "skill.town_portal.v1",
     name: "Portal",
@@ -333,7 +335,7 @@ const SKILL_DEFS: SkillDef[] = [
     manaCostFixed: 0,
     cooldownTicks: 300,
     castTicks: 60,
-    unlockLevel: 10,
+    unlockLevel: 1,
     growth: { perLevel: { damagePct: 6, manaPct: 4 }, breakpoints: [] },
     effects: [{ type: "openPortal" }],
   },

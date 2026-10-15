@@ -350,7 +350,7 @@ describe("skill unlocks and growth", () => {
     "skill.cinder_ground.v1": 8,
     "skill.ground_slam.v1": 8,
     "skill.split_arrow.v1": 8,
-    "skill.town_portal.v1": 10,
+    "skill.town_portal.v1": 1,
   };
 
   it("pins the unlock level of every skill, with no skill missing from the table", () => {

@@ -568,20 +568,20 @@ describe("buildSnapshot - skills", () => {
     const { world, sim } = setupSkillsWorld(42, 1, 0);
     const snap = buildSnapshot(world, sim, 0, CONTENT_VERSION);
     const ids = snap.skills!.map((s) => s.id);
-    // cinder_ground (unlockLevel 8) and town_portal (unlockLevel 10) are locked
-    // at level 1; ember_bolt (unlockLevel 1) is not.
+    // cinder_ground (unlockLevel 8) is locked at level 1, town_portal is never a
+    // gem; ember_bolt (unlockLevel 1) is held.
     expect(ids).not.toContain("skill.cinder_ground.v1");
     expect(ids).not.toContain("skill.town_portal.v1");
     expect(ids).toContain("skill.ember_bolt.v1");
   });
 
-  it("emits every skill the class may hold once the level has opened them all", () => {
+  it("emits every skill the class may hold once the level has opened them all, but never Portal", () => {
     const { world, sim } = setupSkillsWorld(42, 100, 0);
     const snap = buildSnapshot(world, sim, 0, CONTENT_VERSION);
     const ids = new Set(snap.skills!.map((s) => s.id));
-    const own = [...SKILLS.values()].filter((d) => !d.classId || d.classId === "class.emberbound").map((d) => d.id);
+    const own = [...SKILLS.values()].filter((d) => (!d.classId || d.classId === "class.emberbound") && d.id !== "skill.town_portal.v1").map((d) => d.id);
     expect(ids).toEqual(new Set(own));
-    expect(ids.size).toBe(5);
+    expect(ids.size).toBe(4);
   });
 
   it("quotes the gem's numbers, not the def's", () => {

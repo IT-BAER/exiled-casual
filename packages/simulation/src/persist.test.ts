@@ -164,7 +164,9 @@ describe("skills persistence", () => {
     const skills = world.get<SkillsC>(e, "skills")!;
     expect(skills.gems["skill.blink.v1"]).toEqual({ level: 1, xp: 0 });
     expect(skills.gems["skill.cinder_ground.v1"]).toEqual({ level: 1, xp: 0 });
-    expect(skills.gems["skill.town_portal.v1"]).toEqual({ level: 1, xp: 0 });
+    // Portal is a key, not a gem: no level, no socket, no share of a kill.
+    expect(Object.hasOwn(skills.gems, "skill.town_portal.v1")).toBe(false);
+    expect(skills.bar).not.toContain("skill.town_portal.v1");
     // The gem already held was left exactly as it was, not reset by the grant.
     expect(skills.gems["skill.ember_bolt.v1"]).toEqual({ level: 5, xp: 77 });
   });
@@ -200,7 +202,7 @@ describe("skills persistence", () => {
     const e = sessionEntity(world);
     const full: (string | null)[] = [
       "skill.ember_bolt.v1", "skill.strike.v1", "skill.snap_shot.v1", "skill.ember_spark.v1",
-      "skill.town_portal.v1", MOVE_SOCKET, null, null,
+      "skill.cinder_ground.v1", MOVE_SOCKET, null, null,
     ];
     world.set<SkillsC>(e, "skills", { ...world.get<SkillsC>(e, "skills")!, bar: full });
     world.set<ProgressC>(e, "progress", { ...world.get<ProgressC>(e, "progress")!, level: 4 });
@@ -276,6 +278,27 @@ describe("skills persistence", () => {
     // first free socket. What must hold is that the locked skill is off the bar.
     expect(skills.bar).not.toContain("skill.cinder_ground.v1");
     expect(Object.hasOwn(skills.gems, "skill.cinder_ground.v1")).toBe(false);
+  });
+
+  it("restore takes Portal off an old save's bar and drops its gem", () => {
+    const { world } = createCombatSim(7, { area: "hideout", classId: "class.emberbound" });
+    const base = snapshot(world)!;
+    const bar = defaultBar("class.emberbound");
+    bar[1] = "skill.town_portal.v1";
+    const state: PersistedState = {
+      ...base,
+      progress: { level: 12, xp: 0, gold: 0 },
+      skills: { gems: { "skill.ember_bolt.v1": { level: 4, xp: 0 }, "skill.town_portal.v1": { level: 6, xp: 50 } }, bar },
+    };
+
+    const fresh = createCombatSim(9, { area: "hideout", classId: "class.emberbound" }).world;
+    restore(fresh, state);
+
+    const skills = fresh.get<SkillsC>(sessionEntity(fresh), "skills")!;
+    expect(skills.bar).not.toContain("skill.town_portal.v1");
+    expect(Object.hasOwn(skills.gems, "skill.town_portal.v1")).toBe(false);
+    // A dropped Portal gem is not a stripped class skill: the next grant opens at 1.
+    expect(skills.gems["skill.cinder_ground.v1"]).toEqual({ level: 1, xp: 0 });
   });
 
   describe("class kits", () => {
@@ -461,7 +484,6 @@ describe("skills persistence", () => {
     // restore() always runs after sanitizing) legitimately re-grants them at
     // level 1 rather than leaving the character locked out of a skill it owns.
     expect(skills.gems["skill.blink.v1"]).toEqual({ level: 1, xp: 0 });
-    expect(skills.gems["skill.town_portal.v1"]).toEqual({ level: 1, xp: 0 });
     expect(skills.gems["skill.cinder_ground.v1"]!.level).toBe(1);
     expect(skills.gems["skill.cinder_ground.v1"]!.xp).toBe(0);
     // Not a real skill id: nothing grants it back, so it stays gone for good.

@@ -5,7 +5,7 @@ import { stockVendor } from "./vendor";
 import { withPermanentWaystone } from "./inventory";
 import { recomputePlayerStats } from "./derived";
 import { START_LEVEL, isUnlocked, maxGemLevel, MAX_GEM_LEVEL, gemXpToNext, classIdOr } from "@exiled/rules";
-import { SKILLS, defaultAttackFor, FREE_ATTACKS } from "@exiled/content-runtime";
+import { SKILLS, defaultAttackFor, FREE_ATTACKS, TOWN_PORTAL_SKILL } from "@exiled/content-runtime";
 import { SKILL_SLOT_COUNT, MOUSE_SLOT_BASE, MOVE_SOCKET } from "@exiled/protocol";
 
 /**
@@ -107,7 +107,7 @@ export function filterUnlockedBar(
   return bar.map((id) => {
     if (id === null || id === MOVE_SOCKET) return id;
     const def = SKILLS.get(id);
-    return def && isUnlocked(def, charLevel, classId) ? id : null;
+    return def && id !== TOWN_PORTAL_SKILL && isUnlocked(def, charLevel, classId) ? id : null;
   });
 }
 
@@ -132,8 +132,9 @@ function sanitizeGems(
   for (const [id, v] of Object.entries(src)) {
     const def = SKILLS.get(id);
     const gem = v as { level?: unknown; xp?: unknown };
+    // Portal is a key, not a gem; an older save may still hold one.
     if (
-      !def || typeof gem?.level !== "number" || !Number.isFinite(gem.level) ||
+      !def || id === TOWN_PORTAL_SKILL || typeof gem?.level !== "number" || !Number.isFinite(gem.level) ||
       typeof gem?.xp !== "number" || !Number.isFinite(gem.xp)
     ) continue;
     const savedLevel = Math.max(1, Math.trunc(gem.level));
@@ -181,7 +182,8 @@ export function grantSkills(world: World, classStart = 1): void {
   const gems = { ...(current?.gems ?? {}) };
   const bar = [...(current?.bar ?? defaultBar(classId))];
   for (const def of SKILLS.values()) {
-    if (!isUnlocked(def, level, classId)) continue;
+    // Portal is cast from its key and its scroll: no gem, so no socket and no xp.
+    if (def.id === TOWN_PORTAL_SKILL || !isUnlocked(def, level, classId)) continue;
     if (gems[def.id] !== undefined) continue;
     gems[def.id] = { level: def.classId ? classStart : 1, xp: 0 };
     // A skill nobody can see was not a reward (docs/09 rule 1), so the one the
