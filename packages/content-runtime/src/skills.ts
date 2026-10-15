@@ -395,3 +395,10 @@ export function defaultAttackFor(classId: string): string {
  * share of a kill's gem experience and none of it is auto-slotted on a level.
  */
 export const FREE_ATTACKS: ReadonlySet<string> = new Set(Object.values(DEFAULT_ATTACK_BY_CLASS));
+
+/**
+ * Utility actions, not skill gems. A utility skill never holds a gem and is
+ * never granted, slotted, described or paid experience; it casts at def level 1
+ * through its `SKILLS` entry.
+ */
+export const UTILITY_SKILLS: ReadonlySet<string> = new Set([TOWN_PORTAL_SKILL]);

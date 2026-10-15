@@ -524,6 +524,22 @@ describe("registerDeath", () => {
     expect(skills.gems[MOVE_SOCKET]).toBeUndefined();
   });
 
+  it("gives a socketed Portal no share of a kill's experience", () => {
+    // Same award (23 xp). Portal in a socket is not in the denominator and earns
+    // nothing: ember_bolt takes splitGemXp(23, 1) = 23.
+    const { sim, world, sessionE } = makeGemKill({
+      area: "map", areaTier: 1, level: 10, xp: 0,
+      skills: {
+        gems: { "skill.ember_bolt.v1": { level: 1, xp: 0 } },
+        bar: ["skill.ember_bolt.v1", "skill.town_portal.v1", null, null, null, MOVE_SOCKET, null, null],
+      },
+    });
+    sim.step([]);
+    const skills = world.get<SkillsC>(sessionE, "skills")!;
+    expect(skills.gems["skill.ember_bolt.v1"]).toEqual({ level: 1, xp: 23 });
+    expect(skills.gems["skill.town_portal.v1"]).toBeUndefined();
+  });
+
   it("pays a skill that is on the bar and never cast", () => {
     // Same award (23 xp) but one occupied slot: splitGemXp(23, 1) = 23. Nothing in
     // this scenario ever casts the skill — only the death system runs — so the

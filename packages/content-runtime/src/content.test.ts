@@ -18,6 +18,7 @@ import {
   PACK_COUNT,
   pickPack,
   DEFAULT_ATTACK_BY_CLASS,
+  UTILITY_SKILLS,
 } from "./index.js";
 import { CLASS_IDS } from "@exiled/rules";
 
@@ -350,11 +351,21 @@ describe("skill unlocks and growth", () => {
     "skill.cinder_ground.v1": 8,
     "skill.ground_slam.v1": 8,
     "skill.split_arrow.v1": 8,
-    "skill.town_portal.v1": 10,
   };
+  const GEM_SKILLS = [...SKILLS.keys()].filter((id) => !UTILITY_SKILLS.has(id));
+
+  it("pins the utility skills: Portal alone, classless and free to cast", () => {
+    expect(UTILITY_SKILLS).toEqual(new Set(["skill.town_portal.v1"]));
+    for (const id of UTILITY_SKILLS) {
+      const def = SKILLS.get(id);
+      expect(def, id).toBeDefined();
+      expect(def!.classId, id).toBeUndefined();
+      expect(def!.manaCostFixed, id).toBe(0);
+    }
+  });
 
   it("pins the unlock level of every skill, with no skill missing from the table", () => {
-    expect(new Set(SKILLS.keys())).toEqual(new Set(Object.keys(UNLOCK)));
+    expect(new Set(GEM_SKILLS)).toEqual(new Set(Object.keys(UNLOCK)));
     for (const [id, level] of Object.entries(UNLOCK)) {
       expect(SKILLS.get(id)!.unlockLevel, id).toBe(level);
     }
@@ -464,11 +475,10 @@ describe("skill unlocks and growth", () => {
         { atLevel: 15, patch: { radiusFixed: fp(4.5) } },
       ],
     },
-    "skill.town_portal.v1": { breakpoints: [] },
   };
 
   it("pins every authored own-scalar and breakpoint number exactly", () => {
-    expect(new Set(Object.keys(GEM_NUMBERS))).toEqual(new Set(SKILLS.keys()));
+    expect(new Set(Object.keys(GEM_NUMBERS))).toEqual(new Set(GEM_SKILLS));
     for (const [id, expected] of Object.entries(GEM_NUMBERS)) {
       const growth = SKILLS.get(id)!.growth;
       if (expected.own) {

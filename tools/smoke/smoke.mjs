@@ -105,7 +105,11 @@ async function runNode(browser, node) {
 
   const dialogOpen = await page.getByTestId("controls-dialog").isVisible().catch(() => false);
   const snap1 = await page.evaluate(readSnap);
-  await page.screenshot({ path: path.join(OUT, `${node}.png`) });
+  // On SwiftShader the compositor frame the capture needs can take well over 30 s,
+  // so the Playwright default timeout is too short.
+  const tShot = Date.now();
+  await page.screenshot({ path: path.join(OUT, `${node}.png`), timeout: 120000 });
+  timings.screenshotMs = Date.now() - tShot;
   await page.waitForTimeout(SAMPLE_GAP_MS);
   const snap2 = await page.evaluate(readSnap);
   timings.totalMs = Date.now() - t0;
