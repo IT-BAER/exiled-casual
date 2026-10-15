@@ -92,9 +92,9 @@ jobs:
             Comment id: ${{ github.event.comment.id }}. Review id: ${{ github.event.review.id }}.
             Project file: .jeff/projects/exiled-casual.md. Follow the contract in your system prompt.
           claude_args: |
-            --model claude-fable-5-1
-            --effort high
-            --fallback-model claude-opus-5-5
+            --model claude-opus-5-5
+            --effort xhigh
+            --fallback-model claude-fable-5-1
             --max-turns 150
             --append-system-prompt-file .jeff/PROMPT.md
             --agents .jeff/agents.json
