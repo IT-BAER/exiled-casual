@@ -109,6 +109,21 @@ npm run build -w apps/web
 CI runs typecheck, tests, and the web build on every push (see
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
 
+## Releasing
+
+Write the entries under `## [Unreleased]` in `CHANGELOG.md`, then:
+
+```bash
+node tools/release.mjs 0.4.0   # changelog section, versions, GAME_VERSION, news, commit, tag v0.4.0
+git push --follow-tags
+```
+
+The tag starts [`release.yml`](.github/workflows/release.yml): it checks the tag
+against `package.json`, builds the game, and publishes a GitHub release with that
+version's changelog section as notes and `exiled-casual-<version>.tar.gz`
+(the contents of `apps/web/dist`) as the asset. A `-` in the version marks a
+prerelease. `version.test.ts` fails when the three version sources drift.
+
 ## Legal
 
 This is an unofficial fan project. It is not affiliated with, endorsed by, or connected to
