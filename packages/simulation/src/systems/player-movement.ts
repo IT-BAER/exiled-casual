@@ -2,10 +2,38 @@ import { FP_SCALE, fp, fpClamp, fpStepToward, isqrt, type Fixed } from "@exiled/
 import { Simulation } from "../loop";
 import { WORLD_MIN, WORLD_MAX } from "../movement";
 import { slide, hasLineOfSight, type Collision, type CollisionRef } from "../collision";
-import type { Position, PlayerC, MoveTarget, MoveDir, CastingC, Health, SkillHoldC } from "../components";
+import type { Command } from "../loop";
+import type { Position, PlayerC, MoveTarget, MoveDir, CastingC, Health, SkillHoldC, RollC } from "../components";
 
 /** Player moves at this percent of moveSpeed during post-cast recovery. */
 export const CASTING_MOVE_PCT = 40;
+
+// The three roll numbers are first values, picked to read well on screen; tune freely.
+/** How far a dodge roll carries him, in total. */
+export const ROLL_DISTANCE: Fixed = fp(3.7);
+/** How long a roll lasts: 0.6 s at 30 Hz. Nothing else he asks for happens inside it. */
+export const ROLL_TICKS = 18;
+/** The opening ticks of a roll in which projectiles and melee miss him. Slams and ground still land. */
+export const ROLL_AVOID_TICKS = 9;
+
+/**
+ * The distance a roll covers on its tick `i` (1..ROLL_TICKS).
+ *
+ * Front-loaded: the cumulative distance is D(1 - ((n - i) / n)^2), so the burst is
+ * at the start and it eases into the landing. Integer only, since replay checksums
+ * hash the position, and differenced off the cumulative so the truncations cancel
+ * and the steps sum to exactly ROLL_DISTANCE.
+ */
+export function rollStep(i: number): Fixed {
+  const n = ROLL_TICKS;
+  const cum = (k: number) => ROLL_DISTANCE - Math.trunc((ROLL_DISTANCE * (n - k) * (n - k)) / (n * n));
+  return cum(i) - cum(i - 1);
+}
+
+/** A roll that has not yet ended. Expired ones linger until the next tick's expiry pass removes them. */
+function activeRoll(roll: RollC | undefined, tick: number): roll is RollC {
+  return roll !== undefined && tick < roll.untilTick;
+}
 
 /**
  * How far the heading swings in one tick: 35 degrees, as fixed-point cos/sin,
@@ -182,6 +210,34 @@ export function registerPlayerMovement(sim: Simulation, collisionRef?: Collision
     // Read the live level collision (mutated by area transitions); null off-map.
     const collision = collisionRef?.active ?? undefined;
 
+    const applyMoveCommand = (e: number, type: Command["type"], data: Command["data"]): void => {
+      if (type === "moveTo") {
+        const x = fpClamp(data?.["x"] ?? 0, WORLD_MIN, WORLD_MAX);
+        const y = fpClamp(data?.["y"] ?? 0, WORLD_MIN, WORLD_MAX);
+        world.set<MoveTarget>(e, "moveTarget", { x, y, active: 1 });
+      } else if (type === "moveDir") {
+        const dx = data?.["dx"] ?? 0;
+        const dy = data?.["dy"] ?? 0;
+        // The heading survives the command: a new key changes where the player
+        // is being asked to go, not where they are already going.
+        const prev = world.get<MoveDir>(e, "moveDir");
+        world.set<MoveDir>(e, "moveDir", { dx, dy, hx: prev?.hx ?? 0, hy: prev?.hy ?? 0 });
+      } else if (type === "stop") {
+        const mt = world.get<MoveTarget>(e, "moveTarget");
+        if (mt) world.set<MoveTarget>(e, "moveTarget", { x: mt.x, y: mt.y, active: 0 });
+        world.set<MoveDir>(e, "moveDir", { dx: 0, dy: 0, hx: 0, hy: 0 });
+      }
+    };
+
+    // 0. A finished roll hands control back, and the last move asked for during
+    // it is obeyed now, before this tick's own commands can override it.
+    for (const e of world.query("position", "player", "roll")) {
+      const roll = world.get<RollC>(e, "roll")!;
+      if (tick < roll.untilTick) continue;
+      world.remove(e, "roll");
+      if (roll.pending) applyMoveCommand(e, roll.pending.type, roll.pending.data);
+    }
+
     // 1. Apply commands to moveTarget / moveDir components.
     for (const cmd of commands) {
       if (cmd.entity === undefined) continue;
@@ -191,21 +247,33 @@ export function registerPlayerMovement(sim: Simulation, collisionRef?: Collision
       // Absent health reads as alive, so every legacy fixture is unchanged.
       if ((world.get<Health>(cmd.entity, "health")?.life ?? 1) <= 0) continue;
       const e = cmd.entity;
-      if (cmd.type === "moveTo") {
-        const x = fpClamp(cmd.data?.["x"] ?? 0, WORLD_MIN, WORLD_MAX);
-        const y = fpClamp(cmd.data?.["y"] ?? 0, WORLD_MIN, WORLD_MAX);
-        world.set<MoveTarget>(e, "moveTarget", { x, y, active: 1 });
-      } else if (cmd.type === "moveDir") {
-        const dx = cmd.data?.["dx"] ?? 0;
-        const dy = cmd.data?.["dy"] ?? 0;
-        // The heading survives the command: a new key changes where the player
-        // is being asked to go, not where they are already going.
+      const roll = world.get<RollC>(e, "roll");
+      if (cmd.type === "dodge") {
+        if (activeRoll(roll, tick)) continue;
+        const pos = world.get<Position>(e, "position");
+        if (!pos) continue;
+        const tx = fpClamp(cmd.data?.["tx"] ?? 0, WORLD_MIN, WORLD_MAX);
+        const ty = fpClamp(cmd.data?.["ty"] ?? 0, WORLD_MIN, WORLD_MAX);
         const prev = world.get<MoveDir>(e, "moveDir");
-        world.set<MoveDir>(e, "moveDir", { dx, dy, hx: prev?.hx ?? 0, hy: prev?.hy ?? 0 });
-      } else if (cmd.type === "stop") {
-        const mt = world.get<MoveTarget>(e, "moveTarget");
-        if (mt) world.set<MoveTarget>(e, "moveTarget", { x: mt.x, y: mt.y, active: 0 });
-        world.set<MoveDir>(e, "moveDir", { dx: 0, dy: 0, hx: 0, hy: 0 });
+        let dir = unit(tx - pos.x, ty - pos.y);
+        // Aimed at his own feet: roll the way he is already going, or not at all.
+        if (dir.x === 0 && dir.y === 0) dir = { x: prev?.hx ?? 0, y: prev?.hy ?? 0 };
+        if (dir.x === 0 && dir.y === 0) continue;
+        world.set<RollC>(e, "roll", { startTick: tick, untilTick: tick + ROLL_TICKS, dirX: dir.x, dirY: dir.y });
+        world.set<MoveDir>(e, "moveDir", { dx: prev?.dx ?? 0, dy: prev?.dy ?? 0, hx: dir.x, hy: dir.y });
+        // The roll cancels a wind-up: removed here, it can neither resolve nor
+        // keep slowing him. Mana and cooldown already paid for it stay paid.
+        world.remove(e, "casting");
+      } else if (cmd.type === "moveTo" || cmd.type === "moveDir" || cmd.type === "stop") {
+        if (activeRoll(roll, tick)) {
+          // Last one wins; only plain JSON goes on a component the checksum hashes.
+          world.set<RollC>(e, "roll", {
+            ...roll,
+            pending: cmd.data ? { type: cmd.type, data: { ...cmd.data } } : { type: cmd.type },
+          });
+          continue;
+        }
+        applyMoveCommand(e, cmd.type, cmd.data);
       }
     }
 
@@ -232,7 +300,14 @@ export function registerPlayerMovement(sim: Simulation, collisionRef?: Collision
       let ddx = 0;
       let ddy = 0;
       const dirActive = moveDir && (moveDir.dx !== 0 || moveDir.dy !== 0);
-      if (dirActive && moveDir) {
+      const roll = world.get<RollC>(e, "roll");
+      if (activeRoll(roll, tick)) {
+        // A roll does not steer and is not slowed; the walk it interrupts, if
+        // any, picks up where it was once the roll ends.
+        const step = rollStep(tick - roll.startTick + 1);
+        ddx = Math.trunc((roll.dirX * step) / FP_SCALE);
+        ddy = Math.trunc((roll.dirY * step) / FP_SCALE);
+      } else if (dirActive && moveDir) {
         const want = unit(moveDir.dx * FP_SCALE, moveDir.dy * FP_SCALE);
         // Standing still has no heading to turn from, so the first step is the
         // key itself; after that the keys steer a heading that already exists.

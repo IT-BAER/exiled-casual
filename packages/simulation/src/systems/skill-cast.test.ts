@@ -2,11 +2,12 @@ import { describe, it, expect } from "vitest";
 import { fp } from "@exiled/fixed-point";
 import { Simulation } from "../loop";
 import { registerSkillCast } from "./skill-cast";
+import { registerPlayerMovement } from "./player-movement";
 import { createCombatSim } from "../combat-sim";
 import { gridCollision } from "../collision";
 import { makeGrid } from "../test-grid";
 import type { SkillDef } from "@exiled/content-schema";
-import type { Position, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC, CastingC, OffenseC, Health, SessionC, SkillsC, StrikeC } from "../components";
+import type { Position, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC, CastingC, OffenseC, Health, SessionC, SkillsC, StrikeC, PlayerC } from "../components";
 
 // Authored skill defs matching the contract tables exactly.
 const EMBER_BOLT: SkillDef = {
@@ -126,6 +127,41 @@ function makeEnemyForCastTest(sim: Simulation, x: number, y: number) {
   sim.world.set<Faction>(e, "faction", { team: 1 });
   return e;
 }
+
+describe("a dodge roll and casting", () => {
+  /** Skill cast before movement, the order the real sim registers them in. */
+  function rollingSim() {
+    const sim = new Simulation();
+    registerSkillCast(sim, ALL_SKILLS);
+    registerPlayerMovement(sim);
+    const caster = makeCaster(sim, fp(60));
+    sim.world.set<PlayerC>(caster, "player", { moveSpeed: fp(0.2), bodyRadius: fp(0.5) });
+    return { sim, caster };
+  }
+
+  it("refuses a skill used mid-roll: no mana, no cooldown, no wind-up, no hold", () => {
+    const { sim, caster } = rollingSim();
+    sim.step([{ tick: 0, entity: caster, type: "dodge", data: { tx: fp(10), ty: 0 } }]);
+    sim.step([{ tick: 1, entity: caster, type: "useSkill", skillId: EMBER_BOLT.id, data: { tx: fp(10), ty: 0 } }]);
+    sim.step([{ tick: 2, entity: caster, type: "useSkill", skillId: DELAYED_BOLT.id, data: { tx: fp(10), ty: 0 } }]);
+    expect(sim.world.get<Mana>(caster, "mana")!.mana).toBe(fp(60));
+    expect(sim.world.get<Cooldowns>(caster, "cooldowns")).toEqual({});
+    expect(sim.world.has(caster, "casting")).toBe(false);
+    expect(sim.world.has(caster, "skillHold")).toBe(false);
+    expect(sim.world.query("projectile")).toHaveLength(0);
+  });
+
+  it("cancels a wind-up, which then never resolves", () => {
+    const { sim, caster } = rollingSim();
+    sim.step([{ tick: 0, entity: caster, type: "useSkill", skillId: DELAYED_BOLT.id, data: { tx: fp(10), ty: 0 } }]);
+    expect(sim.world.get<CastingC>(caster, "casting")?.untilTick).toBe(3);
+    sim.step([{ tick: 1, entity: caster, type: "dodge", data: { tx: fp(10), ty: 0 } }]);
+    expect(sim.world.has(caster, "casting")).toBe(false);
+    for (let t = 2; t < 25; t++) sim.step();
+    expect(sim.world.has(caster, "casting")).toBe(false);
+    expect(sim.world.query("projectile")).toHaveLength(0);
+  });
+});
 
 describe("registerSkillCast", () => {
   it("holds a delayed spell until its cast window ends", () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { DEFAULT_SETTINGS, GRAPHICS_PRESETS, MIN_RESOLUTION_SCALE, controlModeOf, presetForRenderer, presetOf, sanitize, stepDown, type ControlMode, type GraphicsPreset, type GraphicsSettings } from "./settings";
+import { DEFAULT_KEYBINDS_BY_MODE, DEFAULT_SETTINGS, KEYBIND_ACTIONS, GRAPHICS_PRESETS, MIN_RESOLUTION_SCALE, controlModeOf, presetForRenderer, presetOf, sanitize, stepDown, type ControlMode, type GraphicsPreset, type GraphicsSettings } from "./settings";
 
 describe("the keybinds ride in the settings", () => {
   const binds = (raw: unknown, mode: ControlMode = "wasd") =>
@@ -9,7 +9,7 @@ describe("the keybinds ride in the settings", () => {
     expect(sanitize(null).ui.keybinds.mouse).toEqual({
       moveUp: "", moveDown: "", moveLeft: "", moveRight: "",
       skill1: "q", skill2: "w", skill3: "e", skill4: "r", skill5: "t",
-      flaskLife: "1", flaskMana: "2", portal: "y", pickup: "g",
+      flaskLife: "1", flaskMana: "2", portal: "y", pickup: "g", dodge: " ",
       overlayMap: "tab", inventory: "i", character: "c", passives: "p",
     });
   });
@@ -18,7 +18,7 @@ describe("the keybinds ride in the settings", () => {
     expect(sanitize(null).ui.keybinds.wasd).toEqual({
       moveUp: "w", moveDown: "s", moveLeft: "a", moveRight: "d",
       skill1: "q", skill2: "e", skill3: "r", skill4: "t", skill5: "f",
-      flaskLife: "1", flaskMana: "2", portal: "y", pickup: "g",
+      flaskLife: "1", flaskMana: "2", portal: "y", pickup: "g", dodge: " ",
       overlayMap: "tab", inventory: "i", character: "c", passives: "p",
     });
   });
@@ -47,6 +47,15 @@ describe("the keybinds ride in the settings", () => {
     expect(binds({ pickup: "" }).pickup).toBe("g");
     expect(binds({ pickup: "x".repeat(40) }).pickup).toBe("g");
     expect(binds("not an object")).toEqual(DEFAULT_SETTINGS.ui.keybinds.wasd);
+  });
+
+  it("rolls on Space in both modes, and a saved Space survives", () => {
+    expect(KEYBIND_ACTIONS).toContain("dodge");
+    expect(DEFAULT_KEYBINDS_BY_MODE.mouse.dodge).toBe(" ");
+    expect(DEFAULT_KEYBINDS_BY_MODE.wasd.dodge).toBe(" ");
+    expect(binds({ dodge: " " }, "mouse").dodge).toBe(" ");
+    const saved = JSON.parse(JSON.stringify(sanitize(null)));
+    expect(sanitize(saved).ui.keybinds.wasd.dodge).toBe(" ");
   });
 
   it("never hands out Escape", () => {

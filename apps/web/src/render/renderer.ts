@@ -134,6 +134,19 @@ export function syncActionAnimation(
   }
 }
 
+/**
+ * Start the roll clip on the rising edge of the sim's `rolling` flag only; the
+ * clip is paced to `seconds` and ends on its own as the roll does.
+ */
+export function syncRollAnimation(
+  rig: { playRoll(seconds?: number): void } | null,
+  wasRolling: boolean,
+  isRolling: boolean,
+  seconds?: number,
+): void {
+  if (rig && isRolling && !wasRolling) rig.playRoll(seconds);
+}
+
 /** Turn off the cast direction past which the action clip lets go (120 degrees). */
 const CANCEL_TURN_DOT = -0.5;
 
@@ -819,6 +832,15 @@ export class SnapshotRenderer {
           next.player.castWindupTicks === undefined ? undefined : next.player.castWindupTicks / TICKS_PER_SEC,
         );
       }
+      // The sim cancels any cast when the roll starts.
+      const rolling = next.player.rolling ?? false;
+      if (rolling && !(prev?.player.rolling ?? false)) this.castDir = null;
+      syncRollAnimation(
+        rig,
+        prev?.player.rolling ?? false,
+        rolling,
+        next.player.rollTicks === undefined ? undefined : next.player.rollTicks / TICKS_PER_SEC,
+      );
       if (cancelTurnedAction(rig, this.castDir, this.playerTurn)) this.castDir = null;
       const reaction = prev ? reactionFor(prev, next) : null;
       if (reaction) {
