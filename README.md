@@ -6,8 +6,9 @@ An original browser-native action RPG inspired by Path of Exile 1 **and** 2, tak
 either where they differ. It is not a clone of either game. Borrowed design ideas name their
 source in the code and docs, while the implementation, world, art, and content remain original.
 
-The public website is a teaser. The game itself is an active work in progress and currently runs
-locally.
+The game is playable in the browser at [exiledcasual.com](https://exiledcasual.com). The site serves
+the latest release and updates on its own when a new release is published. It is an alpha: a save
+may not survive an update yet.
 
 ## What is playable now
 

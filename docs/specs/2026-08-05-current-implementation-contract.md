@@ -13,8 +13,9 @@ the stronger interaction or presentation choice from either game when they diffe
 source of borrowed design grammar. Names, fiction, code, balance, art, and shipped content are
 original or appropriately licensed.
 
-The game is a local work in progress. `https://exiledcasual.com` is a public teaser, not a playable
-deployment. There is no account service, remote game server, multiplayer, or public economy.
+The game is an alpha work in progress. `https://exiledcasual.com` serves the latest GitHub release as
+a playable single-player browser build; publishing a release deploys it automatically. There is no
+account service, remote game server, multiplayer, or public economy.
 
 ## 2. Runtime architecture
 
