@@ -19,6 +19,7 @@ ICONS = [
     "life", "brawn", "mana", "spell", "cast", "crit", "armour", "ward",
     "fireRes", "coldRes", "lightRes", "chaosRes", "travel",
 ]
+ICONS_V2 = ["attack", "attackSpeed"]
 
 SIZE = 256  # longest side of a shipped asset
 
@@ -66,6 +67,7 @@ def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     slice_sheet(ROOT / "assets" / "passives" / "frames-sheet-v1.png", FRAMES)
     slice_sheet(ROOT / "assets" / "passives" / "icons-sheet-v1.png", ICONS)
+    slice_sheet(ROOT / "assets" / "passives" / "icons-sheet-v3.png", ICONS_V2)
 
 
 if __name__ == "__main__":
