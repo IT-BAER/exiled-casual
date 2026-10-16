@@ -69,6 +69,11 @@ describe("canEquip", () => {
     expect(canEquip("shield", "weapon1")).toBe(false);
   });
 
+  it("holds a sword in the main hand and never in the off hand", () => {
+    expect(canEquip("sword", "weapon1")).toBe(true);
+    expect(canEquip("sword", "weapon2")).toBe(false);
+  });
+
   it("rejects wand in helmet slot", () => {
     expect(canEquip("wand", "helmet")).toBe(false);
   });

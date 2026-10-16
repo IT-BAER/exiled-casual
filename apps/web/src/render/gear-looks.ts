@@ -38,6 +38,7 @@ export const GEAR_LOOKS: Readonly<Record<string, GearLook>> = {
   // The starter wand is a lesser Ember Wand in the hand; the icon tells them apart.
   "base.ember_kindling_wand": { slot: "weapon1", look: "emberwand" },
   "base.ironsworn_hammer": { slot: "weapon1", look: "ironswornhammer" },
+  "base.ironsworn_broadsword": { slot: "weapon1", look: "broadsword" },
   "base.stalker_bow": { slot: "weapon1", look: "stalkerbow" },
   "base.stalker_buckler": { slot: "weapon2", look: "buckler" },
   "base.ironsworn_tower_shield": { slot: "weapon2", look: "towershield" },

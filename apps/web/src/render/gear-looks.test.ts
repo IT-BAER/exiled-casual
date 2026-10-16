@@ -19,6 +19,10 @@ describe("dressing the character from what he has equipped", () => {
     expect(looks.base).toBe("male");
   });
 
+  it("shows the broadsword in the main hand", () => {
+    expect(looksForEquipment({ weapon1: { baseId: "base.ironsworn_broadsword" } }).weapon1).toBe("broadsword");
+  });
+
   /**
    * Most bases have no mesh yet. An unmapped one has to leave its slot empty
    * rather than fall back to some other piece: a tower shield that renders as a

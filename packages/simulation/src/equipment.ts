@@ -13,6 +13,7 @@ import type { EquipSlotId } from "@exiled/protocol";
 export const EQUIP_SLOTS_BY_CLASS: Record<string, EquipSlotId[]> = {
   wand:   ["weapon1"],
   mace:   ["weapon1"],
+  sword:  ["weapon1"],
   // ponytail: PoE's bow is two-handed; nothing blocks a buckler beside it until a quiver exists.
   bow:    ["weapon1"],
   focus:  ["weapon2"],

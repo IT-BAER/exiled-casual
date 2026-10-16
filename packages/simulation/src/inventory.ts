@@ -55,7 +55,7 @@ export function withPermanentWaystone(inv: InventoryC): InventoryC {
 }
 
 /** Paper-doll order: weapons, off-hands, then head to toe. Anything unknown sorts after the belt. */
-const CLASS_ORDER = ["mace", "wand", "bow", "shield", "focus", "helmet", "body", "gloves", "boots", "belt"];
+const CLASS_ORDER = ["mace", "sword", "wand", "bow", "shield", "focus", "helmet", "body", "gloves", "boots", "belt"];
 const RARITY_ORDER = ["unique", "rare", "magic", "normal"];
 
 function classRank(p: PlacedItem): number {

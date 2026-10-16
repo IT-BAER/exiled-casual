@@ -647,6 +647,7 @@ describe("item and trade cues", () => {
     expect(moved("base.ironsworn_plate", "body")).toEqual(["item-place-metal"]);
     expect(moved("base.stalker_leathers", "body")).toEqual(["item-place-leather"]);
     expect(moved("base.ember_wand", "wand")).toEqual(["item-place-wood"]);
+    expect(moved("base.ironsworn_broadsword", "sword")).toEqual(["item-place-metal"]);
     expect(moved("map.waystone", "waystone")).toEqual(["item-place-stone"]);
   });
 

@@ -184,6 +184,20 @@ describe("unidentified items", () => {
   });
 });
 
+describe("the Ironsworn Broadsword", () => {
+  it("is a plate-family one-hand sword on PoE2's Shortsword block", () => {
+    const sword = baseOf("base.ironsworn_broadsword");
+    expect(familyOf(sword.id)).toBe(FAMILY_BY_CLASS["class.ironsworn"]);
+    expect(sword).toMatchObject({ itemClass: "sword", w: 1, h: 3, icon: "/textures/items/broadsword.webp" });
+    expect(sword.stats).toEqual({ physMin: 6, physMax: 9, critPct: 5, aps: 1.55, reqLevel: 1 });
+  });
+
+  it("rolls every damage mod the hammer rolls", () => {
+    const pool = (cls: string) => ITEM_POOLS.affixes.filter((a) => a.itemClasses?.includes(cls)).map((a) => a.id);
+    expect(pool("sword")).toEqual(pool("mace"));
+  });
+});
+
 describe("affix pools per item class", () => {
   // A rare fills 3 prefixes and 3 suffixes; a class with fewer than that eligible
   // at item level 1 rolls a rare with holes in it.

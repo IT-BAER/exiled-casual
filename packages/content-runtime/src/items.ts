@@ -6,7 +6,7 @@ import { waystoneRarity, waystoneMods } from "@exiled/rules";
 //
 // One family per class and nothing else: `ironsworn_*` is the plate set,
 // `stalker_*` the leather set, `ember_*` the cloth set, and every piece a
-// character wears is one of the eighteen below. A base outside the three
+// character wears is one of the bases below. A base outside the three
 // families would be a drop the wardrobe has no look for, and a drop the player
 // cannot read is a reward that did not happen (docs/09).
 const ITEM_BASES: ItemBase[] = [
@@ -44,6 +44,16 @@ const ITEM_BASES: ItemBase[] = [
     h: 3,
     stats: { physMin: 6, physMax: 10, critPct: 5, aps: 1.45, reqLevel: 1 },
     icon: "/textures/items/ironsworn_hammer.webp",
+  },
+  // A broadsword model on PoE2's level-1 Shortsword block (poe2db: 6-9, 1.55 APS).
+  {
+    id: "base.ironsworn_broadsword",
+    name: "Ironsworn Broadsword",
+    itemClass: "sword",
+    w: 1,
+    h: 3,
+    stats: { physMin: 6, physMax: 9, critPct: 5, aps: 1.55, reqLevel: 1 },
+    icon: "/textures/items/broadsword.webp",
   },
 
   // Stalker, the leather set. No implicit anywhere: PoE2's Dex bases are
@@ -294,8 +304,8 @@ const AFFIXES: Affix[] = [
   { id: "affix.energy_shield", kind: "prefix", nameWord: "Ghostly", stat: "energyShield", label: "to maximum Energy Shield", minItemLevel: 1, min: 5, max: 35, itemClasses: ["shield", "focus", "helmet", "body", "gloves", "boots"] },
   { id: "affix.increased_armour", kind: "prefix", nameWord: "Reinforced", stat: "armourPct", label: "% increased Armour", minItemLevel: 1, min: 10, max: 30, itemClasses: ["shield", "helmet", "body", "gloves", "boots", "belt"] },
   { id: "affix.spell_damage", kind: "prefix", nameWord: "Runic", stat: "spellDamagePct", label: "% increased Spell Damage", minItemLevel: 1, min: 10, max: 25, itemClasses: ["wand", "focus"] },
-  { id: "affix.fire_dmg", kind: "prefix", nameWord: "Smoldering", stat: "fireDamage", label: "to Fire Damage", minItemLevel: 1, min: 2, max: 18, itemClasses: ["wand", "focus", "mace", "bow"] },
-  { id: "affix.cold_dmg", kind: "prefix", nameWord: "Glacial", stat: "coldDamage", label: "to Cold Damage", minItemLevel: 1, min: 2, max: 16, itemClasses: ["wand", "focus", "mace", "bow"] },
+  { id: "affix.fire_dmg", kind: "prefix", nameWord: "Smoldering", stat: "fireDamage", label: "to Fire Damage", minItemLevel: 1, min: 2, max: 18, itemClasses: ["wand", "focus", "mace", "sword", "bow"] },
+  { id: "affix.cold_dmg", kind: "prefix", nameWord: "Glacial", stat: "coldDamage", label: "to Cold Damage", minItemLevel: 1, min: 2, max: 16, itemClasses: ["wand", "focus", "mace", "sword", "bow"] },
   { id: "affix.armour", kind: "prefix", nameWord: "Plated", stat: "armour", label: "to Armour", minItemLevel: 8, min: 10, max: 60, itemClasses: ["shield", "helmet", "body", "gloves", "boots", "belt"] },
   { id: "affix.increased_es", kind: "prefix", nameWord: "Spectral", stat: "energyShieldPct", label: "% increased Energy Shield", minItemLevel: 8, min: 10, max: 30, itemClasses: ["shield", "focus", "helmet", "body", "gloves", "boots"] },
   { id: "affix.fire_res", kind: "suffix", nameWord: "of the Furnace", stat: "fireResPct", label: "% to Fire Resistance", minItemLevel: 1, min: 5, max: 25 },
@@ -303,12 +313,12 @@ const AFFIXES: Affix[] = [
   { id: "affix.lightning_res", kind: "suffix", nameWord: "of the Squall", stat: "lightningResPct", label: "% to Lightning Resistance", minItemLevel: 1, min: 5, max: 25 },
   { id: "affix.strength", kind: "suffix", nameWord: "of the Brute", stat: "strength", label: "to Strength", minItemLevel: 1, min: 5, max: 20 },
   { id: "affix.mana_regen", kind: "suffix", nameWord: "of the Spring", stat: "manaRegenPct", label: "% increased Mana Regeneration Rate", minItemLevel: 4, min: 10, max: 35 },
-  { id: "affix.crit_chance", kind: "suffix", nameWord: "of Menace", stat: "critChancePct", label: "% increased Critical Strike Chance", minItemLevel: 8, min: 8, max: 25, itemClasses: ["wand", "focus", "mace", "bow"] },
+  { id: "affix.crit_chance", kind: "suffix", nameWord: "of Menace", stat: "critChancePct", label: "% increased Critical Strike Chance", minItemLevel: 8, min: 8, max: 25, itemClasses: ["wand", "focus", "mace", "sword", "bow"] },
   { id: "affix.cast_speed", kind: "suffix", nameWord: "of Casting", stat: "castSpeedPct", label: "% increased Cast Speed", minItemLevel: 12, min: 3, max: 12, itemClasses: ["wand", "focus"] },
   { id: "affix.chaos_res", kind: "suffix", nameWord: "of the Outcast", stat: "chaosResPct", label: "% to Chaos Resistance", minItemLevel: 15, min: 4, max: 15 },
   // The attack weapons' own prefixes, appended so no earlier roll moves.
-  { id: "affix.added_phys", kind: "prefix", nameWord: "Honed", stat: "physicalDamage", label: "to Physical Damage", minItemLevel: 1, min: 1, max: 12, itemClasses: ["mace", "bow"] },
-  { id: "affix.phys_dmg_pct", kind: "prefix", nameWord: "Weighted", stat: "physicalDamagePct", label: "% increased Physical Damage", minItemLevel: 1, min: 15, max: 40, itemClasses: ["mace", "bow"] },
+  { id: "affix.added_phys", kind: "prefix", nameWord: "Honed", stat: "physicalDamage", label: "to Physical Damage", minItemLevel: 1, min: 1, max: 12, itemClasses: ["mace", "sword", "bow"] },
+  { id: "affix.phys_dmg_pct", kind: "prefix", nameWord: "Weighted", stat: "physicalDamagePct", label: "% increased Physical Damage", minItemLevel: 1, min: 15, max: 40, itemClasses: ["mace", "sword", "bow"] },
 ];
 
 // Named items bound to one base each. Mod ranges are the unique's own and deliberately
