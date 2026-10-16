@@ -237,7 +237,7 @@ describe("biome tilesets", () => {
     expect(mat.albedoTexture?.url).toContain("desert/floor_color.jpg");
 
     applyTilesetFloor(scene, null);
-    expect(mat.albedoTexture?.url).toContain("floor.png");
+    expect(mat.albedoTexture?.url).toContain("floor.webp");
   });
 
   it("every biome carries a usable tint", () => {

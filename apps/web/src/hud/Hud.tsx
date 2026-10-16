@@ -107,20 +107,20 @@ type SkillSlot = {
  * without the icons walking off with the numbers.
  */
 export const SKILL_ART: Record<string, { icon: string; glow: string }> = {
-  "skill.ember_bolt.v1": { icon: "/textures/skills/ember_bolt.png", glow: "#ff7a2f" },
-  "skill.cinder_ground.v1": { icon: "/textures/skills/cinder_ground.png", glow: "#e0492b" },
-  "skill.blink.v1": { icon: "/textures/skills/blink.png", glow: "#3fb6ff" },
-  "skill.strike.v1": { icon: "/textures/skills/strike.png", glow: "#c4a45a" },
-  "skill.snap_shot.v1": { icon: "/textures/skills/snap_shot.png", glow: "#9ab0c4" },
-  "skill.ember_spark.v1": { icon: "/textures/skills/ember_spark.png", glow: "#e8993a" },
-  "skill.heavy_strike.v1": { icon: "/textures/skills/heavy_strike.png", glow: "#e0873a" },
-  "skill.piercing_shot.v1": { icon: "/textures/skills/piercing_shot.png", glow: "#a9c4dc" },
-  "skill.ground_slam.v1": { icon: "/textures/skills/ground_slam.png", glow: "#d9a14a" },
-  "skill.split_arrow.v1": { icon: "/textures/skills/split_arrow.png", glow: "#b6d4a8" },
-  "skill.town_portal.v1": { icon: "/textures/skills/town_portal.png", glow: "#4fb8ff" },
+  "skill.ember_bolt.v1": { icon: "/textures/skills/ember_bolt.webp", glow: "#ff7a2f" },
+  "skill.cinder_ground.v1": { icon: "/textures/skills/cinder_ground.webp", glow: "#e0492b" },
+  "skill.blink.v1": { icon: "/textures/skills/blink.webp", glow: "#3fb6ff" },
+  "skill.strike.v1": { icon: "/textures/skills/strike.webp", glow: "#c4a45a" },
+  "skill.snap_shot.v1": { icon: "/textures/skills/snap_shot.webp", glow: "#9ab0c4" },
+  "skill.ember_spark.v1": { icon: "/textures/skills/ember_spark.webp", glow: "#e8993a" },
+  "skill.heavy_strike.v1": { icon: "/textures/skills/heavy_strike.webp", glow: "#e0873a" },
+  "skill.piercing_shot.v1": { icon: "/textures/skills/piercing_shot.webp", glow: "#a9c4dc" },
+  "skill.ground_slam.v1": { icon: "/textures/skills/ground_slam.webp", glow: "#d9a14a" },
+  "skill.split_arrow.v1": { icon: "/textures/skills/split_arrow.webp", glow: "#b6d4a8" },
+  "skill.town_portal.v1": { icon: "/textures/skills/town_portal.webp", glow: "#4fb8ff" },
   // Not a skill: the built-in walk action a mouse socket can hold. It lives here
   // so the bar draws it exactly like everything else instead of special-casing it.
-  [MOVE_SOCKET]: { icon: "/textures/skills/move.png", glow: "#9c8a6a" },
+  [MOVE_SOCKET]: { icon: "/textures/skills/move.webp", glow: "#9c8a6a" },
 };
 
 /** The mouse row, in PointerEvent.button order. */
@@ -159,10 +159,11 @@ const CHEST_SCALE = 0.62;
 
 /**
  * A mouse way in to a keyed action at the head of the mouse row, named with its key
- * on hover. `screen` drops a square icon's black ground into the dark bar.
+ * on hover. The art must carry its own transparency: the hover filter isolates the
+ * button, so a blend mode would show the art's ground (tools/build_inventory_icon.py).
  */
-function BarIconButton({ testId, art, label, hotkey, onClick, screen = false }: {
-  testId: string; art: string; label: string; hotkey: string; onClick?: () => void; screen?: boolean;
+function BarIconButton({ testId, art, label, hotkey, onClick }: {
+  testId: string; art: string; label: string; hotkey: string; onClick?: () => void;
 }) {
   const [hover, setHover] = React.useState(false);
   const name = `${label} (${hotkey.toUpperCase()})`;
@@ -176,11 +177,13 @@ function BarIconButton({ testId, art, label, hotkey, onClick, screen = false }: 
       onMouseLeave={() => setHover(false)}
       style={{
         position: "relative", width: `calc(${SLOT} * ${CHEST_SCALE})`, height: `calc(${SLOT} * ${CHEST_SCALE})`, padding: 0, cursor: "pointer",
+        // The hover filter makes the button a stacking context; lift it so its tooltip clears the skill tiles.
+        zIndex: hover ? 3 : undefined,
         background: "none", border: "none",
         filter: hover ? "brightness(1.25) drop-shadow(0 0 6px rgba(217,176,74,0.55))" : "none",
       }}
     >
-      <img src={art} alt="" draggable={false} style={{ width: "100%", height: "100%", objectFit: "contain", display: "block", mixBlendMode: screen ? "screen" : undefined }} />
+      <img src={art} alt="" draggable={false} style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }} />
       {hover && (
         <span style={{
           position: "absolute", bottom: "calc(100% + 6px)", left: 0, whiteSpace: "nowrap",
@@ -480,7 +483,7 @@ function Flask(props: { kind: "life" | "mana"; hotkey: string; charges: number; 
       }}
     >
       <img
-        src={`/textures/ui/flask_${kind}.png`}
+        src={`/textures/ui/flask_${kind}.webp`}
         alt=""
         style={{
           width: "100%",
@@ -579,7 +582,7 @@ const connectStyle: React.CSSProperties = {
   height: CONNECT_H,
   borderStyle: "solid",
   borderWidth: `${BAR_TOP} 0 ${BAR_BOTTOM} 0`,
-  borderImageSource: "url(/hud/bar-panel-v3.png)",
+  borderImageSource: "url(/hud/bar-panel-v3.webp)",
   borderImageSlice: "26 0 44 0 fill",
   zIndex: 1,
 };
@@ -595,12 +598,12 @@ const barStyle: React.CSSProperties = {
   gap: "0.25vw",
   borderStyle: "solid",
   borderWidth: `${BAR_TOP} ${BAR_SIDE}px ${BAR_BOTTOM} ${BAR_SIDE}px`,
-  // bar-panel-v3.png, 1024x185: v2 with its top 24 rows of merlons cut off. The
+  // bar-panel-v3.webp, 1024x185: v2 with its top 24 rows of merlons cut off. The
   // battlement squeezed into a 14px border read as a dashed checkerboard against the
   // world; PoE1's panel tops out in a plain stepped cornice over its gold rail, which
   // is what is left underneath. Both ends still close in the art, inside the 78px side
   // slice, rather than in a CSS fade.
-  borderImageSource: "url(/hud/bar-panel-v3.png)",
+  borderImageSource: "url(/hud/bar-panel-v3.webp)",
   borderImageSlice: "26 78 44 78 fill",
   filter: "drop-shadow(0 2px 8px rgba(0,0,0,0.7))",
 };
@@ -710,7 +713,7 @@ function Orb(props: {
       {/* Braided ring (generated art). Its alpha is baked in: the hole is ORB_HOLE of the
           file's width, so at ORB_FRAME the ring lands exactly on the liquid sphere. */}
       <img
-        src="/hud/orb-ring-v6.png"
+        src="/hud/orb-ring-v6.webp"
         alt=""
         style={{
           position: "absolute",
@@ -1064,7 +1067,7 @@ export function Hud({
               {boss.bossPhase === 2 ? "II" : "I"}
             </div>
           </div>
-          <img src="/hud/boss-bar-frame-v1.png" alt="" style={{ position: "relative", display: "block", width: "100%" }} />
+          <img src="/hud/boss-bar-frame-v1.webp" alt="" style={{ position: "relative", display: "block", width: "100%" }} />
         </div>
       )}
 
@@ -1183,8 +1186,8 @@ export function Hud({
         shieldPct={shieldPct}
         fillTestId="life-orb-fill"
         readoutTestId="life-readout"
-        art="/hud/orb-life-v2.png"
-        figure="/hud/orb-figure-life-v5.png"
+        art="/hud/orb-life-v2.webp"
+        figure="/hud/orb-figure-life-v5.webp"
         label="Life"
         value={
           maxEnergyShield > 0
@@ -1198,8 +1201,8 @@ export function Hud({
         pct={manaPct}
         fillTestId="mana-orb-fill"
         readoutTestId="mana-readout"
-        art="/hud/orb-mana-v2.png"
-        figure="/hud/orb-figure-mana-v5.png"
+        art="/hud/orb-mana-v2.webp"
+        figure="/hud/orb-figure-mana-v5.webp"
         label="Mana"
         value={`${Math.round(mana)}/${Math.round(maxMana)}`}
         side="right"
@@ -1263,7 +1266,7 @@ export function Hud({
         }}
       >
         <img
-          src="/hud/passive-plus.png"
+          src="/hud/passive-plus.webp"
           alt=""
           draggable={false}
           style={{
@@ -1329,7 +1332,7 @@ export function Hud({
         <div style={{ alignSelf: "stretch", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ display: "flex", gap: `${SLOT_GAP}px` }}>
           <div style={{ width: SLOT, display: "flex", justifyContent: "center" }}>
-            <BarIconButton testId="portal-button" art="/textures/skills/town_portal.png" label="Portal" hotkey={keybinds.portal} onClick={onPortal} screen />
+            <BarIconButton testId="portal-button" art="/hud/portal.webp" label="Portal" hotkey={keybinds.portal} onClick={onPortal} />
           </div>
           <div data-testid="inventory-chest-cell" style={{ width: SLOT, display: "flex", justifyContent: "center" }}>
             <BarIconButton testId="inventory-open-button" art="/hud/inventory-chest.webp" label="Inventory" hotkey={inventoryKey} onClick={onToggleInventory} />

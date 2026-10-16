@@ -35,7 +35,7 @@ function Icon({ of, size = 38 }: { of: keyof typeof ICON_QUADRANT; size?: number
       aria-hidden="true"
       style={{
         width: size, height: size, flex: "none",
-        backgroundImage: "url(/textures/ui/char_icons_v1.png)",
+        backgroundImage: "url(/textures/ui/char_icons_v1.webp)",
         backgroundSize: "200% 200%",
         backgroundPosition: ICON_QUADRANT[of],
         filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.9))",
@@ -52,12 +52,12 @@ function Icon({ of, size = 38 }: { of: keyof typeof ICON_QUADRANT; size?: number
  * in vw off the viewport rather than in pixels.
  */
 const BAND_VW = 12 * CELL_VW;
-/** char_niche_v2.png is 320x224; a niche keeps that ratio or the arch shears. */
+/** char_niche_v2.webp is 320x224; a niche keeps that ratio or the arch shears. */
 const NICHE_RATIO = 224 / 320;
 
 /**
  * One arched niche, `w` vw wide. The art's recess does not fill its frame, so the
- * label and value are inset by the fractions of char_niche_v2.png that the carved
+ * label and value are inset by the fractions of char_niche_v2.webp that the carved
  * stone occupies. Those fractions are vw off `w`, not percentages: percentage
  * padding resolves against the *containing block's* width, so on a tile that is a
  * flex item it measured the whole band and inset each 129px tile by 72px.
@@ -71,7 +71,7 @@ function Niche({ id, label, value, icon, w }: {
       data-testid={`char-stat-${id}`}
       style={{
         width: `${w}vw`, height: vw(NICHE_RATIO),
-        backgroundImage: "url(/textures/ui/char_niche_v2.png)",
+        backgroundImage: "url(/textures/ui/char_niche_v2.webp)",
         backgroundSize: "100% 100%",
         display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
         gap: vw(0.01),

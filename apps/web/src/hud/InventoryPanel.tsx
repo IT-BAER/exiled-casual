@@ -114,7 +114,7 @@ export const PANE: React.CSSProperties = {
   flexDirection: "column",
   // Carved stone inside a dark metal frame, not a flat gradient (stash.png).
   backgroundImage:
-    "linear-gradient(180deg, rgba(8,7,5,0.55), rgba(8,7,5,0.78)), url(/textures/ui/char_stone_v1.png)",
+    "linear-gradient(180deg, rgba(8,7,5,0.55), rgba(8,7,5,0.78)), url(/textures/ui/char_stone_v1.webp)",
   backgroundSize: "auto, 256px 256px",
   border: `1px solid ${GOLD_DIM}`,
   boxShadow: "inset 0 0 0 4px #1b1710, inset 0 0 0 5px #000, 0 14px 48px rgba(0,0,0,0.85)",
@@ -132,7 +132,7 @@ export function PaneHeader({ title, bleed, onClose, testId }: {
   return (
     <div
       style={{
-        // The band keeps char_header_v1.png's 1024x160 or the relief shears.
+        // The band keeps char_header_v1.webp's 1024x160 or the relief shears.
         margin: bleed ? `calc(-1 * ${bleed}) calc(-1 * ${bleed}) 10px` : "0 0 10px",
         // 12.8% of the pane's width, measured off the reference's band.
         height: `calc(12 * ${CELL} * 0.128)`,
@@ -144,7 +144,7 @@ export function PaneHeader({ title, bleed, onClose, testId }: {
         top: bleed ? `calc(-1 * ${bleed})` : 0,
         zIndex: 2,
         display: "flex", alignItems: "center", justifyContent: "center",
-        backgroundImage: "url(/textures/ui/char_header_v1.png)",
+        backgroundImage: "url(/textures/ui/char_header_v1.webp)",
         backgroundSize: "100% 100%",
         borderBottom: "1px solid #000",
       }}
@@ -287,7 +287,7 @@ function Flask({ kind, hotkey }: { kind: "life" | "mana"; hotkey: string }) {
         }}
       >
         <img
-          src={`/textures/ui/flask_${kind}.png`}
+          src={`/textures/ui/flask_${kind}.webp`}
           alt=""
           style={{ width: "100%", height: "100%", objectFit: "contain", filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.8))" }}
         />
@@ -652,7 +652,7 @@ export const InventoryPanel = React.memo(function InventoryPanel({
               backgroundImage: [
                 `repeating-linear-gradient(to right, ${LATTICE} 0 1px, transparent 1px ${CELL})`,
                 `repeating-linear-gradient(to bottom, ${LATTICE} 0 1px, transparent 1px ${CELL})`,
-                "url(/textures/ui/stash_cell_v4.png)",
+                "url(/textures/ui/stash_cell_v4.webp)",
               ].join(","),
               backgroundSize: `auto, auto, ${CELL} ${CELL}`,
               border: `1px solid ${GOLD_DIM}`,

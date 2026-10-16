@@ -71,10 +71,10 @@ const RING: Record<NodeState, string> = {
  * readable without 200 more textures.
  */
 const FRAME_SRC: Record<PassiveNode["kind"], string> = {
-  minor: "/hud/passives/frame-minor.png",
-  notable: "/hud/passives/frame-notable.png",
-  keystone: "/hud/passives/frame-keystone.png",
-  start: "/hud/passives/frame-start.png",
+  minor: "/hud/passives/frame-minor.webp",
+  notable: "/hud/passives/frame-notable.webp",
+  keystone: "/hud/passives/frame-keystone.webp",
+  start: "/hud/passives/frame-start.webp",
 };
 /** How far past the hit radius the frame art reaches. */
 const FRAME_OVER: Record<PassiveNode["kind"], number> = {
@@ -251,7 +251,7 @@ const TreeWeb = React.memo(function TreeWeb({ classId, allocated, onHover, onHov
             )}
             {theme && (
               <image
-                href={`/hud/passives/${theme}.png`}
+                href={`/hud/passives/${theme}.webp`}
                 x={node.x - ih} y={node.y - ih} width={ih * 2} height={ih * 2}
                 pointerEvents="none"
               />

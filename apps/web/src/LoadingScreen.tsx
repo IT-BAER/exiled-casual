@@ -11,7 +11,7 @@
  * signal. There is no timer in this file, and adding one is the regression.
  *
  * The furniture is the game's own, not a second invention: the band is the
- * bottom bar's carved stone (`/hud/bar-panel-v3.png`), the rule is the warm
+ * bottom bar's carved stone (`/hud/bar-panel-v3.webp`), the rule is the warm
  * hairline the skill rows are split by, and the type is the HUD serif.
  */
 import React from "react";
@@ -142,7 +142,7 @@ export function LoadingScreen({ areaName, tip, wallpaper, leaving }: LoadingScre
           // band's height reads as a smear rather than as carving.
           borderStyle: "solid",
           borderWidth: "0.74vw 78px 0.27vw 78px",
-          borderImageSource: "url(/hud/bar-panel-v3.png)",
+          borderImageSource: "url(/hud/bar-panel-v3.webp)",
           borderImageSlice: "26 78 44 78 fill",
         }}
       >
@@ -241,7 +241,7 @@ function Spinner(): React.ReactElement {
         width: size,
         height: size,
         flex: "0 0 auto",
-        backgroundImage: `url(${LOADING_ART}/spinner.png)`,
+        backgroundImage: `url(${LOADING_ART}/spinner.webp)`,
         // The sheet is scaled so ONE cell fills the box.
         backgroundSize: `${FRAME_COLS * 100}% ${FRAME_ROWS * 100}%`,
         backgroundRepeat: "no-repeat",

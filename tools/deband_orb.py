@@ -25,7 +25,8 @@ script says so and writes nothing.
 import numpy as np
 from PIL import Image
 
-FILES = ("apps/web/public/hud/orb-life-v2.png", "apps/web/public/hud/orb-mana-v2.png")
+# The masters; tools/build_ui_webp.py scales them to the shipped WebP afterwards.
+FILES = ("assets/hud/orb-life-v2.png", "assets/hud/orb-mana-v2.png")
 
 #: Rows over which the shading is considered smooth. Well above the seventy-row
 #: band, so the split cannot put any of the horizon into the "lighting" half.

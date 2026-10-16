@@ -42,16 +42,16 @@ export const UI_ART: readonly string[] = [
   `${MENU}/tooltip_header_rare.webp`,
   `${MENU}/tooltip_header_unique.webp`,
   // Inventory, stash, character sheet.
-  "/textures/ui/char_header_v1.png",
-  "/textures/ui/char_stone_v1.png",
-  "/textures/ui/char_niche_v2.png",
-  "/textures/ui/char_icons_v1.png",
-  "/textures/ui/stash_cell_v4.png",
+  "/textures/ui/char_header_v1.webp",
+  "/textures/ui/char_stone_v1.webp",
+  "/textures/ui/char_niche_v2.webp",
+  "/textures/ui/char_icons_v1.webp",
+  "/textures/ui/stash_cell_v4.webp",
   // The map device's Atlas. The world plate is the largest single file in the UI.
   "/textures/ui/atlas_world_v1.jpg",
-  "/textures/ui/atlas_node_header_v1.png",
-  "/textures/ui/atlas_node_socket_v2.png",
-  "/textures/ui/waystone_icon_v1.png",
+  "/textures/ui/atlas_node_header_v1.webp",
+  "/textures/ui/atlas_node_socket_v2.webp",
+  "/textures/ui/waystone_icon_v1.webp",
 ];
 
 /**

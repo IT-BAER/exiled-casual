@@ -44,6 +44,13 @@ function newScene(): Scene {
   return new Scene(engine);
 }
 
+/** Whether a shipped lossless WebP (VP8L) carries alpha: bit 28 of the header word after the 0x2f signature. */
+function webpHasAlpha(url: string): boolean {
+  const b = readFileSync(new URL(`../../public${url}`, import.meta.url));
+  expect(b.toString("ascii", 12, 16), url).toBe("VP8L");
+  return ((b.readUInt32LE(21) >>> 28) & 1) === 1;
+}
+
 function systems(scene: Scene, name: string): ParticleSystem[] {
   return scene.particleSystems.filter((p) => p.name === name) as ParticleSystem[];
 }
@@ -177,10 +184,9 @@ describe("ember bolt", () => {
   it("gives the flame sheet an alpha channel, or fog tints the black around each flame into a square", () => {
     const scene = newScene();
     const url = (emberBurst(scene, Vector3.Zero()).particleTexture as Texture).url;
-    const png = readFileSync(new URL(`../../public${url}`, import.meta.url));
-    // IHDR colour type: 6 is RGBA. An opaque sheet is additive black that fog
-    // turns into fog colour, and a burst stacks those quads into grey boxes.
-    expect(png[25]).toBe(6);
+    // An opaque sheet is additive black that fog turns into fog colour, and a
+    // burst stacks those quads into grey boxes.
+    expect(webpHasAlpha(url)).toBe(true);
   });
 
   it("leaves soft smoke over the hit that outlives the fire", () => {
@@ -197,7 +203,7 @@ describe("ember bolt", () => {
     expect(smoke.disposeOnStop).toBe(true);
     // Its shape is the texture's alpha: an opaque sheet here IS a grey square.
     const url = (smoke.particleTexture as Texture).url;
-    expect(readFileSync(new URL(`../../public${url}`, import.meta.url))[25]).toBe(6);
+    expect(webpHasAlpha(url)).toBe(true);
   });
 
   it("bursts as a small fireball that swells, and the smoke stays second to the fire", () => {

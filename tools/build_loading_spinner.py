@@ -27,7 +27,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 BLENDER = pathlib.Path(r"C:\Program Files\Blender Foundation\Blender 5.2\blender.exe")
 SCENE = ROOT / "tools" / "render_loading_spinner.py"
 WORK = ROOT / "assets" / "loading" / "build" / "spinner"
-OUT = ROOT / "apps" / "web" / "public" / "textures" / "loading" / "spinner.png"
+OUT = ROOT / "apps" / "web" / "public" / "textures" / "loading" / "spinner.webp"
 
 FRAMES = 48
 SIZE = 128
@@ -72,8 +72,9 @@ def compose() -> None:
     # banding that costs shows only in the soft falloff at several times the
     # size the ring is ever drawn at. FASTOCTREE because it is the quantizer
     # that keeps the alpha channel; the default one drops it and the ring ships
-    # on a black square.
-    sheet.quantize(colors=PALETTE, method=Image.FASTOCTREE).save(OUT, "PNG", optimize=True)
+    # on a black square. Lossless WebP of the quantized sheet is a further fifth smaller.
+    sheet = sheet.quantize(colors=PALETTE, method=Image.FASTOCTREE).convert("RGBA")
+    sheet.save(OUT, "WEBP", lossless=True, method=6)
     print(f"{FRAMES} frames -> {OUT.name} {sheet.size} {OUT.stat().st_size // 1024}kB")
 
 

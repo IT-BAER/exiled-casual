@@ -14,7 +14,7 @@ const ITEM_BASES: ItemBase[] = [
   // slot alone, so the helm, gauntlets, sabatons and girdle carry none. Base
   // Armour is PoE2's lowest Str base per slot (poe2db: body 45, helmet 29,
   // gloves 15, boots 22); no belt has any.
-  { id: "base.ironsworn_helm", name: "Ironsworn Helm", itemClass: "helmet", w: 2, h: 2, stats: { armour: 29 }, icon: "/textures/items/ironsworn_helm.png" },
+  { id: "base.ironsworn_helm", name: "Ironsworn Helm", itemClass: "helmet", w: 2, h: 2, stats: { armour: 29 }, icon: "/textures/items/ironsworn_helm.webp" },
   {
     id: "base.ironsworn_plate",
     name: "Ironsworn Plate",
@@ -24,15 +24,15 @@ const ITEM_BASES: ItemBase[] = [
     stats: { armour: 45 },
     // PoE2's Str body bases carry +(10-20) to Strength.
     implicit: { stat: "strength", label: "to Strength", value: 12 },
-    icon: "/textures/items/ironsworn_plate.png",
+    icon: "/textures/items/ironsworn_plate.webp",
   },
-  { id: "base.ironsworn_gauntlets", name: "Ironsworn Gauntlets", itemClass: "gloves", w: 2, h: 2, stats: { armour: 15 }, icon: "/textures/items/ironsworn_gauntlets.png" },
-  { id: "base.ironsworn_sabatons", name: "Ironsworn Sabatons", itemClass: "boots", w: 2, h: 2, stats: { armour: 22 }, icon: "/textures/items/ironsworn_sabatons.png" },
-  { id: "base.ironsworn_girdle", name: "Ironsworn Girdle", itemClass: "belt", w: 2, h: 1, icon: "/textures/items/ironsworn_girdle.png" },
+  { id: "base.ironsworn_gauntlets", name: "Ironsworn Gauntlets", itemClass: "gloves", w: 2, h: 2, stats: { armour: 15 }, icon: "/textures/items/ironsworn_gauntlets.webp" },
+  { id: "base.ironsworn_sabatons", name: "Ironsworn Sabatons", itemClass: "boots", w: 2, h: 2, stats: { armour: 22 }, icon: "/textures/items/ironsworn_sabatons.webp" },
+  { id: "base.ironsworn_girdle", name: "Ironsworn Girdle", itemClass: "belt", w: 2, h: 1, icon: "/textures/items/ironsworn_girdle.webp" },
   // PoE2 gives every shield an implicit block chance and nothing here blocks
   // yet, so the two shields take the armour side of the base instead and roll
   // armour and life like the rest of the armour classes.
-  { id: "base.ironsworn_tower_shield", name: "Ironsworn Tower Shield", itemClass: "shield", w: 2, h: 3, icon: "/textures/items/ironsworn_tower_shield.png" },
+  { id: "base.ironsworn_tower_shield", name: "Ironsworn Tower Shield", itemClass: "shield", w: 2, h: 3, icon: "/textures/items/ironsworn_tower_shield.webp" },
   // The starter weapons copy PoE2's own level-1 bases (poe2db): the hammer is the
   // Wooden Club's block, the bow the Crude Bow's. Weapon damage is tooltip-only
   // until attacks read the weapon; the default attack is still class-keyed.
@@ -43,18 +43,18 @@ const ITEM_BASES: ItemBase[] = [
     w: 2,
     h: 3,
     stats: { physMin: 6, physMax: 10, critPct: 5, aps: 1.45, reqLevel: 1 },
-    icon: "/textures/items/ironsworn_hammer.png",
+    icon: "/textures/items/ironsworn_hammer.webp",
   },
 
   // Stalker, the leather set. No implicit anywhere: PoE2's Dex bases are
   // evasion bases, there is no evasion stat here, and inventing one would open
   // a balance surface for a cosmetic.
-  { id: "base.stalker_hood", name: "Stalker Hood", itemClass: "helmet", w: 2, h: 2, icon: "/textures/items/stalker_hood.png" },
-  { id: "base.stalker_leathers", name: "Stalker Leathers", itemClass: "body", w: 2, h: 3, icon: "/textures/items/stalker_leathers.png" },
-  { id: "base.stalker_gloves", name: "Stalker Gloves", itemClass: "gloves", w: 2, h: 2, icon: "/textures/items/stalker_gloves.png" },
-  { id: "base.stalker_boots", name: "Stalker Boots", itemClass: "boots", w: 2, h: 2, icon: "/textures/items/stalker_boots.png" },
-  { id: "base.stalker_strap", name: "Stalker Strap", itemClass: "belt", w: 2, h: 1, icon: "/textures/items/stalker_strap.png" },
-  { id: "base.stalker_buckler", name: "Stalker Buckler", itemClass: "shield", w: 2, h: 2, icon: "/textures/items/stalker_buckler.png" },
+  { id: "base.stalker_hood", name: "Stalker Hood", itemClass: "helmet", w: 2, h: 2, icon: "/textures/items/stalker_hood.webp" },
+  { id: "base.stalker_leathers", name: "Stalker Leathers", itemClass: "body", w: 2, h: 3, icon: "/textures/items/stalker_leathers.webp" },
+  { id: "base.stalker_gloves", name: "Stalker Gloves", itemClass: "gloves", w: 2, h: 2, icon: "/textures/items/stalker_gloves.webp" },
+  { id: "base.stalker_boots", name: "Stalker Boots", itemClass: "boots", w: 2, h: 2, icon: "/textures/items/stalker_boots.webp" },
+  { id: "base.stalker_strap", name: "Stalker Strap", itemClass: "belt", w: 2, h: 1, icon: "/textures/items/stalker_strap.webp" },
+  { id: "base.stalker_buckler", name: "Stalker Buckler", itemClass: "shield", w: 2, h: 2, icon: "/textures/items/stalker_buckler.webp" },
   {
     id: "base.stalker_bow",
     name: "Stalker Bow",
@@ -62,12 +62,12 @@ const ITEM_BASES: ItemBase[] = [
     w: 2,
     h: 4,
     stats: { physMin: 6, physMax: 9, critPct: 5, aps: 1.2, reqLevel: 1 },
-    icon: "/textures/items/stalker_bow.png",
+    icon: "/textures/items/stalker_bow.webp",
   },
 
   // Ember, the cloth set, and the only family that carries the two hands: a
   // wand and a focus.
-  { id: "base.ember_cowl", name: "Ember Cowl", itemClass: "helmet", w: 2, h: 2, icon: "/textures/items/ember_cowl.png" },
+  { id: "base.ember_cowl", name: "Ember Cowl", itemClass: "helmet", w: 2, h: 2, icon: "/textures/items/ember_cowl.webp" },
   {
     id: "base.ember_robe",
     name: "Ember Robe",
@@ -76,11 +76,11 @@ const ITEM_BASES: ItemBase[] = [
     h: 3,
     // The Int body implicit, after PoE2's Enlightened Robe.
     implicit: { stat: "manaRegenPct", label: "% increased Mana Regeneration Rate", value: 30 },
-    icon: "/textures/items/ember_robe.png",
+    icon: "/textures/items/ember_robe.webp",
   },
-  { id: "base.ember_wraps", name: "Ember Wraps", itemClass: "gloves", w: 2, h: 2, icon: "/textures/items/ember_wraps.png" },
-  { id: "base.ember_slippers", name: "Ember Slippers", itemClass: "boots", w: 2, h: 2, icon: "/textures/items/ember_slippers.png" },
-  { id: "base.ember_sash", name: "Ember Sash", itemClass: "belt", w: 2, h: 1, icon: "/textures/items/ember_sash.png" },
+  { id: "base.ember_wraps", name: "Ember Wraps", itemClass: "gloves", w: 2, h: 2, icon: "/textures/items/ember_wraps.webp" },
+  { id: "base.ember_slippers", name: "Ember Slippers", itemClass: "boots", w: 2, h: 2, icon: "/textures/items/ember_slippers.webp" },
+  { id: "base.ember_sash", name: "Ember Sash", itemClass: "belt", w: 2, h: 1, icon: "/textures/items/ember_sash.webp" },
   {
     id: "base.ember_wand",
     name: "Ember Wand",
@@ -92,7 +92,7 @@ const ITEM_BASES: ItemBase[] = [
     // in the sim can honour, so this borrows the implicit of the base whose stat block the
     // wand already copies: PoE1's Goat's Horn, (10-15)% increased Spell Damage.
     implicit: { stat: "spellDamagePct", label: "% increased Spell Damage", value: 12 },
-    icon: "/textures/items/ember_wand.png",
+    icon: "/textures/items/ember_wand.webp",
   },
   // PoE2's Withered Wand asks nothing of its wielder; this is the wand a new
   // Emberbound can hold, and the Ember Wand above is what replaces it.
@@ -104,10 +104,10 @@ const ITEM_BASES: ItemBase[] = [
     h: 2,
     stats: { physMin: 3, physMax: 6, critPct: 7, aps: 1.4, reqLevel: 1 },
     implicit: { stat: "spellDamagePct", label: "% increased Spell Damage", value: 6 },
-    icon: "/textures/items/ember_kindling_wand.png",
+    icon: "/textures/items/ember_kindling_wand.webp",
   },
   // Foci carry no implicit: poe2db lists them with energy shield alone.
-  { id: "base.ember_focus", name: "Ember Focus", itemClass: "focus", w: 2, h: 2, icon: "/textures/items/ember_focus.png" },
+  { id: "base.ember_focus", name: "Ember Focus", itemClass: "focus", w: 2, h: 2, icon: "/textures/items/ember_focus.webp" },
 ];
 
 /**
@@ -149,13 +149,13 @@ const RENAMED_BASES: Record<string, string> = {
  * transition table in `@exiled/rules` so a base id is all the sim has to carry.
  */
 const CURRENCY_BASES: ItemBase[] = [
-  { id: "currency.wisdom", name: "Scroll of Wisdom", itemClass: "currency", w: 1, h: 1, icon: "/textures/items/wisdom_scroll.png" },
-  { id: "currency.transmutation", name: "Orb of Transmutation", itemClass: "currency", w: 1, h: 1, icon: "/textures/items/orb_transmutation.png" },
-  { id: "currency.augmentation", name: "Orb of Augmentation", itemClass: "currency", w: 1, h: 1, icon: "/textures/items/orb_augmentation.png" },
-  { id: "currency.elevation", name: "Orb of Elevation", itemClass: "currency", w: 1, h: 1, icon: "/textures/items/orb_elevation.png" },
-  { id: "currency.alchemy", name: "Orb of Alchemy", itemClass: "currency", w: 1, h: 1, icon: "/textures/items/orb_alchemy.png" },
-  { id: "currency.embers", name: "Orb of Embers", itemClass: "currency", w: 1, h: 1, icon: "/textures/items/orb_embers.png" },
-  { id: "currency.portal", name: "Portal Scroll", itemClass: "currency", w: 1, h: 1, icon: "/textures/items/portal_scroll.png" },
+  { id: "currency.wisdom", name: "Scroll of Wisdom", itemClass: "currency", w: 1, h: 1, icon: "/textures/items/wisdom_scroll.webp" },
+  { id: "currency.transmutation", name: "Orb of Transmutation", itemClass: "currency", w: 1, h: 1, icon: "/textures/items/orb_transmutation.webp" },
+  { id: "currency.augmentation", name: "Orb of Augmentation", itemClass: "currency", w: 1, h: 1, icon: "/textures/items/orb_augmentation.webp" },
+  { id: "currency.elevation", name: "Orb of Elevation", itemClass: "currency", w: 1, h: 1, icon: "/textures/items/orb_elevation.webp" },
+  { id: "currency.alchemy", name: "Orb of Alchemy", itemClass: "currency", w: 1, h: 1, icon: "/textures/items/orb_alchemy.webp" },
+  { id: "currency.embers", name: "Orb of Embers", itemClass: "currency", w: 1, h: 1, icon: "/textures/items/orb_embers.webp" },
+  { id: "currency.portal", name: "Portal Scroll", itemClass: "currency", w: 1, h: 1, icon: "/textures/items/portal_scroll.webp" },
 ];
 
 export const WISDOM_SCROLL_BASE_ID = "currency.wisdom";
@@ -188,7 +188,7 @@ export const WAYSTONE_BASE_ID = "map.waystone";
 
 const WAYSTONE_BASE: ItemBase = {
   id: WAYSTONE_BASE_ID, name: "Waystone", itemClass: "waystone", w: 1, h: 1,
-  icon: "/textures/ui/waystone_icon_v1.png",
+  icon: "/textures/ui/waystone_icon_v1.webp",
 };
 
 /** One waystone, as it drops and as it sits in the grid. */
@@ -320,7 +320,7 @@ const UNIQUES: UniqueItem[] = [
     name: "Ashmaw",
     baseId: "base.ember_wand",
     flavour: "It was a torch, once, before the ash learned to bite.",
-    icon: "/textures/items/unique_ashmaw.png",
+    icon: "/textures/items/unique_ashmaw.webp",
     mods: [
       { affixId: "affix.fire_dmg", min: 22, max: 34 },
       { affixId: "affix.cast_speed", min: 14, max: 20 },
@@ -332,7 +332,7 @@ const UNIQUES: UniqueItem[] = [
     name: "Emberchoir",
     baseId: "base.ember_focus",
     flavour: "Every voice it kept is a voice that burned.",
-    icon: "/textures/items/unique_emberchoir.png",
+    icon: "/textures/items/unique_emberchoir.webp",
     mods: [
       { affixId: "affix.fire_res", min: 30, max: 45 },
       { affixId: "affix.mana", min: 35, max: 50 },
@@ -344,7 +344,7 @@ const UNIQUES: UniqueItem[] = [
     name: "Cinderveil",
     baseId: "base.ember_robe",
     flavour: "The fire spared her. Nothing else did.",
-    icon: "/textures/items/unique_cinderveil.png",
+    icon: "/textures/items/unique_cinderveil.webp",
     mods: [
       { affixId: "affix.life", min: 45, max: 70 },
       { affixId: "affix.armour", min: 70, max: 110 },
@@ -358,7 +358,7 @@ const UNIQUES: UniqueItem[] = [
     name: "Oathbreaker",
     baseId: "base.ironsworn_hammer",
     flavour: "Every vow it kept, it kept by force.",
-    icon: "/textures/items/unique_oathbreaker.png",
+    icon: "/textures/items/unique_oathbreaker.webp",
     mods: [
       { affixId: "affix.added_phys", min: 12, max: 18 },
       { affixId: "affix.phys_dmg_pct", min: 45, max: 60 },
@@ -370,7 +370,7 @@ const UNIQUES: UniqueItem[] = [
     name: "Gravewall",
     baseId: "base.ironsworn_tower_shield",
     flavour: "They buried the town behind it. The wall held.",
-    icon: "/textures/items/unique_gravewall.png",
+    icon: "/textures/items/unique_gravewall.webp",
     mods: [
       { affixId: "affix.life", min: 40, max: 60 },
       { affixId: "affix.armour", min: 70, max: 110 },
@@ -382,7 +382,7 @@ const UNIQUES: UniqueItem[] = [
     name: "Anvilheart",
     baseId: "base.ironsworn_plate",
     flavour: "Struck a thousand times, it only grew harder.",
-    icon: "/textures/items/unique_anvilheart.png",
+    icon: "/textures/items/unique_anvilheart.webp",
     mods: [
       { affixId: "affix.life", min: 50, max: 75 },
       { affixId: "affix.increased_armour", min: 35, max: 50 },
@@ -394,7 +394,7 @@ const UNIQUES: UniqueItem[] = [
     name: "Quietus",
     baseId: "base.stalker_bow",
     flavour: "The last thing the herd heard was nothing.",
-    icon: "/textures/items/unique_quietus.png",
+    icon: "/textures/items/unique_quietus.webp",
     mods: [
       { affixId: "affix.phys_dmg_pct", min: 40, max: 55 },
       { affixId: "affix.crit_chance", min: 28, max: 40 },
@@ -406,7 +406,7 @@ const UNIQUES: UniqueItem[] = [
     name: "Thornward",
     baseId: "base.stalker_buckler",
     flavour: "A hunter's second skin is patience.",
-    icon: "/textures/items/unique_thornward.png",
+    icon: "/textures/items/unique_thornward.webp",
     mods: [
       { affixId: "affix.life", min: 30, max: 45 },
       { affixId: "affix.cold_res", min: 30, max: 40 },
@@ -418,7 +418,7 @@ const UNIQUES: UniqueItem[] = [
     name: "Mossback",
     baseId: "base.stalker_leathers",
     flavour: "It smells of rain, and of the thing that waited in it.",
-    icon: "/textures/items/unique_mossback.png",
+    icon: "/textures/items/unique_mossback.webp",
     mods: [
       { affixId: "affix.life", min: 45, max: 65 },
       { affixId: "affix.cold_res", min: 20, max: 30 },

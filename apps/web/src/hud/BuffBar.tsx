@@ -16,7 +16,7 @@ const INSET_VW = 0.6;
 /** The face each effect id wears. An id with no art still gets a tile: an
  *  effect the player cannot see is worse than an ugly square. */
 const BUFF_ART: Record<string, { icon: string; name: string }> = {
-  grace: { icon: "/textures/buffs/grace.png", name: "Spawn Grace" },
+  grace: { icon: "/textures/buffs/grace.webp", name: "Spawn Grace" },
 };
 
 type Buff = NonNullable<Snapshot["player"]["buffs"]>[number];

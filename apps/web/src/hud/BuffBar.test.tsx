@@ -23,7 +23,7 @@ describe("BuffBar", () => {
     render(<BuffBar snapshot={snap([{ id: "grace", kind: "buff", remainingSec: 7 }])} />);
     const bar = screen.getByTestId("buff-bar");
     expect(bar.textContent).toContain("7");
-    expect(bar.querySelector("img")!.getAttribute("src")).toBe("/textures/buffs/grace.png");
+    expect(bar.querySelector("img")!.getAttribute("src")).toBe("/textures/buffs/grace.webp");
   });
 
   it("splits debuffs into a second row", () => {

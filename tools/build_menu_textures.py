@@ -47,8 +47,9 @@ PLAN: dict[str, tuple[str, int | None, int | None]] = {
     # The Options panel's controls. The gems are one plate each rather than a
     # tint of the other: an unlit gem and a lit one differ in more than
     # brightness, and the bezel picks up the glow.
-    "gem_check_off_v1": ("gem_check_off.webp", 128, None),
-    "gem_check_on_v1": ("gem_check_on.webp", 128, None),
+    # 56: twice the 28px checkbox they are drawn at.
+    "gem_check_off_v1": ("gem_check_off.webp", 56, None),
+    "gem_check_on_v1": ("gem_check_on.webp", 56, None),
     "slider_track_v1": ("slider_track.webp", 512, None),
     "slider_handle_v1": ("slider_handle.webp", 64, None),
     # One tab plate, tinted by CSS for active/inactive, the same rule the button
@@ -75,9 +76,9 @@ SRCSET_COPIES: dict[str, tuple[str, int]] = {"logo_v4": ("logo-512.webp", 512)}
 # scale step is identical.
 ITEMS_DST = pathlib.Path(__file__).resolve().parent.parent / "apps" / "web" / "public" / "textures" / "items"
 ITEM_ICONS: dict[str, tuple[str, int]] = {
-    "icon_ironsworn_plate_v1": ("ironsworn_plate.png", 256),
-    "icon_stalker_leathers_v1": ("stalker_leathers.png", 256),
-    "icon_ember_robe_v1": ("ember_robe.png", 256),
+    "icon_ironsworn_plate_v1": ("ironsworn_plate.webp", 256),
+    "icon_stalker_leathers_v1": ("stalker_leathers.webp", 256),
+    "icon_ember_robe_v1": ("ember_robe.webp", 256),
 }
 
 
@@ -160,7 +161,7 @@ def main() -> int:
         if im.height != height:
             im = im.resize((max(1, round(im.width * height / im.height)), height), Image.LANCZOS)
         out = ITEMS_DST / out_name
-        im.convert("RGBA").save(out, optimize=True)
+        im.convert("RGBA").save(out, lossless=True, method=6)
         print(f"{out_name:26} {im.width}x{im.height}  {out.stat().st_size // 1024} KiB  (item icon)")
 
     if missing:

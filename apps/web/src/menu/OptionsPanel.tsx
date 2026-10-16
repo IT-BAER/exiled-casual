@@ -148,7 +148,7 @@ export function OptionsPanel({
       <FramedPanel
         // The character sheet's own stone. The default fill is 94% dark, which
         // let the life globe's "100/100" read straight through the window.
-        fill="linear-gradient(180deg, rgba(8,7,5,0.55), rgba(8,7,5,0.78)), url(/textures/ui/char_stone_v1.png)"
+        fill="linear-gradient(180deg, rgba(8,7,5,0.55), rgba(8,7,5,0.78)), url(/textures/ui/char_stone_v1.webp)"
         style={{
           backgroundSize: "auto, 256px 256px",
           // The character sheet's pane, to the pixel: same width, same top line,

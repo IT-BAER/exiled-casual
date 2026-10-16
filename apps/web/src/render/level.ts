@@ -974,7 +974,7 @@ export function buildLevel(
 export function applyTilesetFloor(scene: Scene, tilesetId: string | null): void {
   const mat = scene.getMaterialByName("groundMat") as PBRMaterial | null;
   if (!mat) return;
-  const url = tilesetId ? `${tilesetDir(tilesetId)}/floor_color.jpg` : "/textures/floor.png";
+  const url = tilesetId ? `${tilesetDir(tilesetId)}/floor_color.jpg` : "/textures/floor.webp";
   const current = mat.albedoTexture as Texture | null;
   if (current?.url === url) return;
   try {

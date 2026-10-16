@@ -18,14 +18,14 @@ const COVERED = ["buffs", "fx", "items", "skills", "walls", "water", "world"];
  * player one of these. They come off this list the moment a base claims one.
  */
 const UNCLAIMED = new Set([
-  "/textures/items/ashen_bracers.png",
-  "/textures/items/ashen_quarterstaff.png",
-  "/textures/items/ashfall_axe.png",
-  "/textures/items/cindercleave_blade.png",
-  "/textures/items/cinderfang_dirk.png",
-  "/textures/items/emberbone_circlet.png",
-  "/textures/items/emberhead_maul.png",
-  "/textures/items/emberstep_shoes.png",
+  "/textures/items/ashen_bracers.webp",
+  "/textures/items/ashen_quarterstaff.webp",
+  "/textures/items/ashfall_axe.webp",
+  "/textures/items/cindercleave_blade.webp",
+  "/textures/items/cinderfang_dirk.webp",
+  "/textures/items/emberbone_circlet.webp",
+  "/textures/items/emberhead_maul.webp",
+  "/textures/items/emberstep_shoes.webp",
 ]);
 
 function filesUnder(dir: string): string[] {

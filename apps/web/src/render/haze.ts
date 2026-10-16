@@ -50,7 +50,7 @@ const ALPHA = 0.15;
  */
 export function createHaze(scene: Scene, camera: ArcRotateCamera): ParticleSystem {
   const ps = new ParticleSystem(HAZE_NAME, CAPACITY, scene);
-  ps.particleTexture = new Texture("/textures/fx/haze.png", scene);
+  ps.particleTexture = new Texture("/textures/fx/haze.webp", scene);
   ps.blendMode = ParticleSystem.BLENDMODE_ADD;
   // Off by default in Babylon, and leaving it off is what made the field flat:
   // every sprite came back at the same brightness whether it was at the player's
@@ -225,7 +225,7 @@ const MOTE_COLOR: [number, number, number] = [1.0, 0.78, 0.5];
  */
 export function createMotes(scene: Scene, camera: ArcRotateCamera): ParticleSystem {
   const ps = new ParticleSystem(MOTES_NAME, 90, scene);
-  ps.particleTexture = new Texture("/textures/fx/haze.png", scene);
+  ps.particleTexture = new Texture("/textures/fx/haze.webp", scene);
   ps.blendMode = ParticleSystem.BLENDMODE_ADD;
   ps.applyFog = true; // same reason as the haze: distance has to cost brightness
 

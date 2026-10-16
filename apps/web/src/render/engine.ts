@@ -647,7 +647,7 @@ export function createScene(engine: Engine): SceneHandle {
   try {
     // Real flagstone floor, tiled across the plane. Texture load is async and
     // non-fatal under NullEngine (no canvas), so tests keep the unloaded texture.
-    const floor = new Texture("/textures/floor.png", scene);
+    const floor = new Texture("/textures/floor.webp", scene);
     floor.uScale = FLOOR_TILES;
     floor.vScale = FLOOR_TILES;
     groundMat.albedoTexture = floor;

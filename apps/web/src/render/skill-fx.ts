@@ -31,17 +31,17 @@ import { hitSparkle } from "./hit-sparkle";
  */
 
 /** 4x4 flipbook, 256px cells, one ember burning out over the 16 frames. */
-const FIRE_SHEET = "/textures/fx/fire_sheet_v1.png";
+const FIRE_SHEET = "/textures/fx/fire_sheet_v1.webp";
 const CELL = 256;
 const LAST_CELL = 15;
 /** Glowing crack network for the cinder patch. Tiles, so it is scaled up rather
  *  than stretched across whatever radius the disc happens to have. */
-const EMBER_CRACKS = "/textures/fx/ember_cracks_v1.png";
+const EMBER_CRACKS = "/textures/fx/ember_cracks_v1.webp";
 /** Soft round blob, shared with the ambient haze. Arcane wisps want no shape of
  *  their own: the colour gradient is the whole effect. */
-const WISP = "/textures/fx/haze.png";
+const WISP = "/textures/fx/haze.webp";
 /** The same blob as RGBA, white with the blob as alpha, for normally blended smoke. */
-const SMOKE_PUFF = "/textures/fx/smoke_puff.png";
+const SMOKE_PUFF = "/textures/fx/smoke_puff.webp";
 
 /**
  * The sheet is already orange, so the colour gradient is an ALPHA envelope and

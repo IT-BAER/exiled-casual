@@ -38,7 +38,7 @@ ICON_CELL = 128
 # Alpha at or under this counts as transparent. See the film in `build()`.
 ALPHA_FLOOR = 24
 
-# Currency ships at twice the cell resolution: `portal_scroll.png` is 256 square in
+# Currency ships at twice the cell resolution: `portal_scroll.webp` is 256 square in
 # a 1x1 cell, because a 1x1 icon at 128 is the smallest thing in the panel and it
 # was the first to look soft. A new currency icon matches its sibling, not the rule.
 CURRENCY_CELL = 256
@@ -132,7 +132,7 @@ def build(master: Path, out: Path, cells_w: int, cells_h: int, cell: int = ICON_
     canvas = Image.new("RGBA", target, (0, 0, 0, 0))
     canvas.paste(im, ((target[0] - im.width) // 2, (target[1] - im.height) // 2))
     out.parent.mkdir(parents=True, exist_ok=True)
-    canvas.save(out)
+    canvas.save(out, "WEBP", lossless=True, method=6)
     return f"{master.name} {box[2] - box[0]}x{box[3] - box[1]} cropped -> {out.name} {target[0]}x{target[1]}"
 
 
@@ -166,7 +166,7 @@ def main() -> None:
             missing.append(master.name)
             continue
         cell = CURRENCY_CELL if out_stem.endswith("_scroll") else ICON_CELL
-        print(build(master, OUT / f"{out_stem}.png", w, h, cell))
+        print(build(master, OUT / f"{out_stem}.webp", w, h, cell))
     for name in missing:
         print(f"SKIP (no master yet): {name}")
     if not picks or any(p in "favicon" for p in picks):

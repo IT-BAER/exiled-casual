@@ -193,7 +193,7 @@ describe("Hud", () => {
     expect(screen.getByTestId("boss-name")).toHaveTextContent("Mother Vhal, the Drowned");
     // PoE2's bronze frame over the fill (boss-fight.png), sized to the screen like the globes.
     const bar = screen.getByTestId("boss-bar");
-    expect(bar.querySelector("img")).toHaveAttribute("src", "/hud/boss-bar-frame-v1.png");
+    expect(bar.querySelector("img")).toHaveAttribute("src", "/hud/boss-bar-frame-v1.webp");
     expect(bar.style.width).toMatch(/vw$/);
     expect(screen.getByTestId("boss-fill")).toHaveStyle({ width: "60%" });
   });

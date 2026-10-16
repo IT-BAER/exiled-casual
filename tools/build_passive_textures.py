@@ -1,4 +1,4 @@
-"""Slice the passive-tree sprite sheets into per-asset PNGs.
+"""Slice the passive-tree sprite sheets into per-asset lossless WebPs.
 
 Masters (codex-imagegen output) live in assets/passives/; each sheet lays its
 items out with clear transparent gutters, so the split is found from the alpha
@@ -58,8 +58,8 @@ def slice_sheet(sheet: Path, names: list[str]) -> None:
         crop = im.crop((x0, y0, x1, y1))
         crop = crop.crop(crop.getbbox())  # tighten within the cell
         crop.thumbnail((SIZE, SIZE), Image.LANCZOS)
-        crop.save(OUT / f"{name}.png")
-        print(f"{name}.png {crop.size[0]}x{crop.size[1]}")
+        crop.save(OUT / f"{name}.webp", "WEBP", lossless=True, method=6)
+        print(f"{name}.webp {crop.size[0]}x{crop.size[1]}")
 
 
 def main() -> None:

@@ -109,7 +109,7 @@ function AtlasMap(props: {
         // Full-bleed painted world, per atlas-maps.webp: the map IS the screen,
         // darkened at the edges so the docked bar and banner still read.
         backgroundImage:
-          "radial-gradient(ellipse at 50% 45%, rgba(4,6,6,0.3) 35%, rgba(6,8,8,0.9) 100%),url(/textures/ui/atlas_world_v1.jpg), url(/textures/ui/char_stone_v1.png)",
+          "radial-gradient(ellipse at 50% 45%, rgba(4,6,6,0.3) 35%, rgba(6,8,8,0.9) 100%),url(/textures/ui/atlas_world_v1.jpg), url(/textures/ui/char_stone_v1.webp)",
         // Carved stone tiles under the painting, so a missing world art file
         // degrades to the character sheet's surface rather than to black.
         backgroundSize: "cover, cover, 420px",
@@ -236,11 +236,11 @@ function AtlasMap(props: {
   );
 }
 
-/** atlas_node_header_v1.png is 512x72; the band keeps that ratio or the filigree shears. */
+/** atlas_node_header_v1.webp is 512x72; the band keeps that ratio or the filigree shears. */
 const POPUP_W = 340;
 const HEADER_H = Math.round((POPUP_W * 72) / 512);
 /**
- * atlas_node_socket_v2.png is 512x464 and its disc fills 76% of that width, so this
+ * atlas_node_socket_v2.webp is 512x464 and its disc fills 76% of that width, so this
  * puts the disc at 40% of the panel, which is the ratio in poe2-atlas-node-popup.png.
  * v1 was scrapped for an oval ring: it measured 802 wide by 668 tall.
  */
@@ -306,7 +306,7 @@ function NodePopup(props: {
       <div
         style={{
           height: HEADER_H,
-          backgroundImage: "url(/textures/ui/atlas_node_header_v1.png)",
+          backgroundImage: "url(/textures/ui/atlas_node_header_v1.webp)",
           backgroundSize: "100% 100%",
           display: "flex",
           alignItems: "center",
@@ -384,7 +384,7 @@ function NodePopup(props: {
           position: "relative",
           padding: 0,
           border: "none",
-          background: "url(/textures/ui/atlas_node_socket_v2.png) center/100% 100% no-repeat",
+          background: "url(/textures/ui/atlas_node_socket_v2.webp) center/100% 100% no-repeat",
         }}
       >
         {stone && (
@@ -401,7 +401,7 @@ function NodePopup(props: {
               transform: "translate(-50%, -50%)",
               width: Math.round(SLOT_W * 1.15),
               height: Math.round(SLOT_H * 1.15),
-              backgroundImage: "url(/textures/ui/waystone_icon_v1.png)",
+              backgroundImage: "url(/textures/ui/waystone_icon_v1.webp)",
               backgroundSize: "contain",
               backgroundPosition: "center",
               backgroundRepeat: "no-repeat",
