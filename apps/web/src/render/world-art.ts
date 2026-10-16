@@ -60,6 +60,7 @@ export const WORLD_ART: readonly string[] = [
   "/textures/items/ember_wand.webp",
   "/textures/items/ember_kindling_wand.webp",
   "/textures/items/ironsworn_hammer.webp",
+  "/textures/items/broadsword.webp",
   "/textures/items/stalker_bow.webp",
   "/textures/items/ember_wraps.webp",
   "/textures/items/ironsworn_gauntlets.webp",
