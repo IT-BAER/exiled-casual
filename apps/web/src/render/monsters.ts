@@ -200,6 +200,11 @@ export class CreatureRig {
     this.groups.clear();
   }
 
+  /** Each clip's group, read-only: the asset viewer's timeline reads them. */
+  get clipGroups(): ReadonlyMap<string, AnimationGroup> {
+    return this.groups;
+  }
+
   /**
    * The sim swung (snapshot `attackTick` changed): play the strike once, over
    * whatever locomotion asks for, then hand the body back. The tick is only an

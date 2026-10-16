@@ -1195,6 +1195,11 @@ export function isRigReady(scene: Scene): boolean {
   return loaded !== null && loaded.scene === scene;
 }
 
+/** Every take in this scene's animation library, by name. Empty before it lands. */
+export function libraryClips(scene: Scene): string[] {
+  return loaded?.scene === scene ? loaded.anims.animationGroups.map((g) => g.name) : [];
+}
+
 /** This scene's wardrobe import, or null before it lands. Never a second import. */
 export function wardrobeFor(scene: Scene): AssetContainer | null {
   return loaded?.scene === scene ? loaded.wardrobe : null;
@@ -1297,6 +1302,10 @@ export class RigActor {
   private plantObserver: Observer<Scene> | null = null;
 
   private entries: InstantiatedEntries | null = null;
+  /** The wired skeleton by bone name, and the hips' rest: what a library take retargets onto. */
+  private bones = new Map<string, Node>();
+  private hipsRest: Vector3 | null = null;
+  private raw: AnimationGroup | null = null;
   private active: AnimationGroup | null = null;
   private activeClip: RigClip | null = null;
   private nextStrikeIndex = 0;
@@ -1642,6 +1651,60 @@ export class RigActor {
     for (const clip of REACTION_CLIPS) this.groups.get(clip)?.stop();
   }
 
+  /** Each clip's group, read-only: the asset viewer's timeline reads them. */
+  get clipGroups(): ReadonlyMap<RigClip, AnimationGroup> {
+    return this.groups;
+  }
+
+  /** The locomotion clip `setLocomotion` last picked. */
+  get locomotionClip(): RigClip {
+    return this.locomotion;
+  }
+
+  /** The library take `playRaw` is looping, if any. */
+  get rawGroup(): AnimationGroup | null {
+    return this.raw;
+  }
+
+  /**
+   * Loop any take in the library over the whole body, above every other clip: the
+   * asset viewer's raw browser. Rotations as-is and the hips rescaled, as the clip
+   * table is retargeted, but none of its layering, calming or pacing, so a take the
+   * game plays can look different here. Null when the library has no such take.
+   */
+  playRaw(name: string): AnimationGroup | null {
+    this.stopRaw();
+    const source = loaded?.anims.animationGroups.find((g) => g.name === name);
+    if (!source) return null;
+    const group = new AnimationGroup(`${this.host.name}-raw`, this.scene);
+    for (const { animation, target } of source.targetedAnimations) {
+      const node = target as Node;
+      const bone = this.bones.get(node.name);
+      if (!bone) continue;
+      if (animation.targetProperty === ROTATION) {
+        group.addTargetedAnimation(animation, bone);
+      } else if (animation.targetProperty === TRANSLATION && node.name === HIPS_BONE
+        && this.hipsRest && node instanceof TransformNode) {
+        group.addTargetedAnimation(remapHips(animation, node.position, this.hipsRest, 1), bone);
+      }
+    }
+    if (group.targetedAnimations.length === 0) {
+      group.dispose();
+      return null;
+    }
+    group.normalize(source.from, source.to);
+    group.playOrder = 2;
+    group.start(true);
+    this.scene.sortActiveAnimatables();
+    this.raw = group;
+    return group;
+  }
+
+  stopRaw(): void {
+    this.raw?.dispose();
+    this.raw = null;
+  }
+
   /** Let go of a cast, bow or strike mid-clip; the end observer eases back to locomotion. */
   cancelAction(): void {
     for (const clip of ACTION_CLIPS) {
@@ -1973,6 +2036,8 @@ export class RigActor {
     // Read the hips rest pose before any clip starts and could move it.
     const hipsNode = byName.get(HIPS_BONE);
     const hipsRest = hipsNode instanceof TransformNode ? hipsNode.position.clone() : null;
+    this.bones = byName;
+    this.hipsRest = hipsRest;
 
     // Same window: the coat's bind pose has to be measured before an animation
     // has moved anything, because it is the shape the cloth springs back to.
@@ -2332,6 +2397,9 @@ export class RigActor {
     if (this.plantObserver) this.scene.onAfterAnimationsObservable.remove(this.plantObserver);
     this.plantObserver = null;
     this.parts.clear();
+    this.stopRaw();
+    this.bones = new Map();
+    this.hipsRest = null;
     this.entries?.dispose();
     this.entries = null;
     this.active = null;

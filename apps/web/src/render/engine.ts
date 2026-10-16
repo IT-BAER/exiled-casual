@@ -55,6 +55,8 @@ import { glowFollowsErosion } from "./ground-fx";
  */
 export const SUN_INTENSITY = 6.0;
 export const FILL_INTENSITY = 0.45;
+/** The low raking sun's direction; the asset viewer's "in game" light reuses it. */
+export const SUN_DIRECTION = [-0.62, -0.38, -0.45] as const;
 // Maps drop the sky fill further than the hideout: a place you pass through
 // should read as lit by what's actually placed in it (torches, braziers),
 // not by ambient light that relights every shadowed pixel regardless of
@@ -89,7 +91,7 @@ export const MAP_FILL_INTENSITY = 0.18;
 // the lamp on the belt no longer has to be the only reason anything is visible.
 // It is a pool the player carries between other people's fires, which is what it
 // reads as in PoE, and turning it down is what lets a brazier be seen at all.
-const TORCH_INTENSITY = 175;
+export const TORCH_INTENSITY = 175;
 /** Every light that can stand in a room at once: the fill, the sun, the torch,
  *  the hit flash (skill-fx.ts) and the whole brazier pool. Materials are capped to
  *  exactly this, see `createScene` — Babylon's own default of four drops the rest without a word. */
@@ -102,11 +104,11 @@ const SCENE_LIGHTS = 4 + LIGHT_POOL;
  *  light the player carries. At 7.8 (down from 9.3 on the owner's lantern call)
  *  it reaches about two thirds of the way out and there is cold stone outside
  *  it to read the warm edge against. */
-const TORCH_RANGE = 6.5;
+export const TORCH_RANGE = 6.5;
 /** Above the floor, not at the feet: at 0 the pool is a hot spot under the
  *  character, and the falloff eats the whole radius within a step. Kept above
  *  head height for the reason in TORCH_INTENSITY. */
-const TORCH_HEIGHT = 3.8;
+export const TORCH_HEIGHT = 3.8;
 /**
  * Firelight, not a flashlight — and how far either way the player may push it.
  *
@@ -284,7 +286,7 @@ const GROUND_ROUGHNESS = 0.92;
  * authored framing instead of 40, which is where the parallax comes from, while
  * a wall at the frame edge still leans only a few degrees.
  */
-const CAMERA_FOV = 0.5;
+export const CAMERA_FOV = 0.5;
 
 /**
  * Half-height of the orthographic view in world units (smaller = more zoomed in).
@@ -526,7 +528,7 @@ export function createScene(engine: Engine): SceneHandle {
   // ...and a low key light raking across the arena. The long shadows it throws
   // are what sell the ground plane, so it is deliberately closer to the horizon
   // than to overhead. Declared before the zoom below, which resizes its frustum.
-  const sun = new DirectionalLight("sun", new Vector3(-0.62, -0.38, -0.45), scene);
+  const sun = new DirectionalLight("sun", new Vector3(...SUN_DIRECTION), scene);
   sun.intensity = SUN_INTENSITY;
   // ...and the light the player carries. Declared here with the others, not when
   // a map loads: adding a light forces every PBR material to recompile, and doing
