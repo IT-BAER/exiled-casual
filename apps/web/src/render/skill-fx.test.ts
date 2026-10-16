@@ -45,7 +45,8 @@ function newScene(): Scene {
 }
 
 /** Whether a shipped lossless WebP (VP8L) carries alpha: bit 28 of the header word after the 0x2f signature. */
-function webpHasAlpha(url: string): boolean {
+function webpHasAlpha(url: string | null): boolean {
+  if (url === null) throw new Error("texture has no url");
   const b = readFileSync(new URL(`../../public${url}`, import.meta.url));
   expect(b.toString("ascii", 12, 16), url).toBe("VP8L");
   return ((b.readUInt32LE(21) >>> 28) & 1) === 1;
