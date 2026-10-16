@@ -95,6 +95,7 @@ jobs:
             --max-turns 150
             --append-system-prompt-file .jeff/PROMPT.md
             --agents .jeff/agents.json
+            --disallowedTools "SendMessage,Monitor,TaskOutput"
             --allowedTools "Read,Edit,Write,Glob,Grep,Agent,Bash(npm:*),Bash(npx vitest:*),Bash(npx playwright:*),Bash(git:*),Bash(gh:*),Bash(node:*),Bash(cat:*),Bash(ls:*),Bash(mkdir:*),Bash(tail:*),Bash(head:*),Bash(grep:*),Bash(wc:*),Bash(echo:*)"
       - uses: actions/upload-artifact@v4
         if: always()
