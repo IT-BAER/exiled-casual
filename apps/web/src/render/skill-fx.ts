@@ -596,6 +596,8 @@ export function swingTrail(scene: Scene): { follow(at: Vector3): void; dispose()
       ribbon.isPickable = false;
     },
     dispose(): void {
+      // stop() first: only it removes the ribbon's update() observer (see attachBoltTrail).
+      ribbon?.stop();
       ribbon?.material?.dispose();
       ribbon?.dispose();
       node.dispose();

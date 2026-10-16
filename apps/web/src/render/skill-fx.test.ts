@@ -282,6 +282,23 @@ describe("melee", () => {
     expect(scene.materials.length).toBe(after);
     expect(scene.transformNodes.filter((n) => n.name.startsWith(SWING_TRAIL_NAME))).toHaveLength(0);
   });
+
+  /** Same trap as the bolt ribbon: a swing that is only disposed keeps its update() loop. */
+  it("takes a swing ribbon's per-frame observer with it when cut", async () => {
+    const scene = newScene();
+    const trailObservers = () =>
+      scene.onBeforeRenderObservable.observers.filter((o) =>
+        String(o.callback).includes("this.update()")).length;
+    const before = trailObservers();
+    for (let i = 0; i < 3; i++) {
+      const trail = swingTrail(scene);
+      trail.follow(new Vector3(0, 1, 0.5));
+      trail.dispose();
+    }
+    // Observable.remove splices on a setTimeout(0); see the bolt test above.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(trailObservers()).toBe(before);
+  });
 });
 
 describe("arrows", () => {
