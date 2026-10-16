@@ -58,6 +58,7 @@ import {
   CHARACTER_SUBJECT,
   mainGroup,
   ONE_SHOTS,
+  rawClipLabel,
   type CreatureAction,
   type FxPreview,
   type ViewerCamera,
@@ -71,45 +72,12 @@ import {
   BASE_LOOKS,
   NO_LOOKS,
   SLOTS,
-  REACTION_CLIPS,
   type ReactionClip,
   type Looks,
   type RigActor,
-  type RigClip,
 } from "./rig";
 
 export { CHARACTER_SUBJECT, VIEWER_SUBJECTS, type ViewerSubject } from "./viewer-catalogue";
-
-/**
- * Clips on the number row.
- *
- * These are the clips a RigActor can be ASKED for from outside. Locomotion is a
- * speed rather than a name (`clipForSpeed` owns the walk/run hysteresis and
- * duplicating its thresholds here would let the viewer lie about which clip play
- * actually picks), so idle, walk and run are speeds and the rest are calls.
- */
-export interface ViewerClip {
-  key: string;
-  clip: RigClip;
-  label: string;
-  /** Locomotion speed that selects this clip, or undefined for a one-shot. */
-  speed?: number;
-  /** The move's yaw off the facing: PI backpedals, PI/2 sidesteps. */
-  rel?: number;
-}
-
-export const VIEWER_CLIPS: readonly ViewerClip[] = [
-  { key: "1", clip: "idle", label: "Idle", speed: 0 },
-  { key: "2", clip: "walk", label: "Walk", speed: 2 },
-  { key: "3", clip: "run", label: "Run", speed: 6 },
-  { key: "4", clip: "cast", label: "Cast" },
-  { key: "5", clip: "strikeA", label: "Strike" },
-  { key: "6", clip: "bow", label: "Bow" },
-  { key: "7", clip: "runBack", label: "Back", speed: 3.5, rel: Math.PI },
-  { key: "8", clip: "runStrafeR", label: "Right", speed: 3.5, rel: Math.PI / 2 },
-  { key: "9", clip: "runStrafeL", label: "Left", speed: 3.5, rel: -Math.PI / 2 },
-  { key: "0", clip: "runBackR", label: "Back-right", speed: 3.5, rel: (Math.PI * 3) / 4 },
-];
 
 /**
  * The looks each slot ships, read off `slot.look.part` mesh names.
@@ -218,9 +186,11 @@ export interface ViewerScene {
   setLooks(looks: Looks): void;
   /** What the wardrobe ships, `slot` -> looks. Empty until the character loads. */
   vocabulary(): Record<string, string[]>;
-  /** Play a clip by its hotkey entry. */
-  play(clip: ViewerClip): void;
-  /** Walk or run the subject at `speed` toward `rel` off its facing; 0 stands. */
+  /**
+   * Walk or run the subject at `speed` toward `rel` off its facing; 0 stands.
+   * A speed, never a clip name: `clipForSpeed` and the direction blend pick the
+   * clip as in play, so the viewer cannot show one play would not.
+   */
   locomote(speed: number, rel: number): void;
   /** One of `ONE_SHOTS` on the character. */
   oneShot(id: string): void;
@@ -374,6 +344,7 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
   // their turn and the direction blend follows them.
   let moving: { speed: number; rel: number } | null = null;
   let attackTick = 0;
+  let rawName: string | null = null;
   let dead = false;
   let paused = false;
   let repeat = false;
@@ -483,6 +454,7 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
     clearGround();
     lastAction = null;
     moving = null;
+    rawName = null;
     rig?.dispose();
     rig = null;
     creature?.dispose();
@@ -605,19 +577,6 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
     vocabulary() {
       return looksFromPartNames(scene.meshes.map((m) => m.name));
     },
-    play(entry) {
-      if (rig === null) return;
-      if (entry.speed !== undefined) {
-        moving = { speed: entry.speed, rel: entry.rel ?? 0 };
-        rig.setMoveAngle(entry.rel ?? 0);
-        rig.setLocomotion(entry.speed);
-        return;
-      }
-      if (entry.clip === "cast") rig.playCast();
-      else if (entry.clip === "bow") rig.playBow();
-      else if ((REACTION_CLIPS as readonly string[]).includes(entry.clip)) rig.playReaction(entry.clip as ReactionClip);
-      else rig.playStrike();
-    },
     locomote(speed, rel) {
       moving = { speed, rel };
     },
@@ -665,6 +624,7 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
     playRaw(name) {
       if (rig === null) return false;
       lastAction = null;
+      rawName = name;
       if (name === null) {
         rig.stopRaw();
         return true;
@@ -687,7 +647,7 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
       if (group === null) return null;
       const raw = rig?.rawGroup === group;
       return {
-        label: raw ? "raw" : groupLabel(group),
+        label: raw ? `raw ${rawClipLabel(rawName ?? "")}` : groupLabel(group),
         frame: group.animatables[0]?.masterFrame ?? group.from,
         from: group.from,
         to: group.to,

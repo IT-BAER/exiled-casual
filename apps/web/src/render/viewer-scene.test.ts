@@ -2,10 +2,9 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
-import { BASE_LOOKS, CLIP_NAME, SLOTS, type RigClip } from "./rig";
+import { BASE_LOOKS, SLOTS } from "./rig";
 import { SPAWNABLE } from "./gallery";
 import {
-  VIEWER_CLIPS,
   VIEWER_SUBJECTS,
   CHARACTER_SUBJECT,
   dressedFromVocabulary,
@@ -38,20 +37,6 @@ describe("viewer subjects", () => {
   it("gives every subject a distinct id", () => {
     const ids = VIEWER_SUBJECTS.map((s) => s.id);
     expect(new Set(ids).size).toBe(ids.length);
-  });
-});
-
-describe("viewer clips", () => {
-  it("binds each hotkey to a clip the rig actually has", () => {
-    for (const entry of VIEWER_CLIPS) {
-      expect(Object.keys(CLIP_NAME)).toContain(entry.clip satisfies RigClip);
-    }
-  });
-
-  it("uses distinct digit keys", () => {
-    const keys = VIEWER_CLIPS.map((c) => c.key);
-    expect(new Set(keys).size).toBe(keys.length);
-    for (const k of keys) expect(k).toMatch(/^[0-9]$/);
   });
 });
 
