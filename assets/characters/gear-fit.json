@@ -178,16 +178,16 @@
  "weapon2.towershield.mesh": {
   "scale": 1.12468,
   "height_m": 1.1281,
-  "arm_reach_mm": 95.59,
+  "arm_reach_mm": 27.3,
   "face_world": [
-   0.32,
-   -0.95,
+   0.99,
+   -0.1,
    0.0
   ],
   "hang_from_bottom": 0.58,
   "strap_back_inset_mm": 48.06,
-  "arm_gap_p01_mm": 67.15,
-  "arm_gap_median_mm": 127.45,
+  "arm_gap_p01_mm": 4.38,
+  "arm_gap_median_mm": 56.87,
   "bone": "lowerarm_l",
   "fit": "tower_strap",
   "triangles": 9998,

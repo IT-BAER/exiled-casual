@@ -670,11 +670,10 @@ TOWER_ALONG = 0.95         # 0 at the elbow, 1 at the wrist; a bracer rides near
 # sits at. Lower than this and the top edge falls to the belt, leaving a plank
 # beside the leg that guards nothing.
 TOWER_HANG_FROM_BOTTOM = 0.58  # strap height up the shield's own span, 0 at its foot
-# A tall board does not look where a buckler looks. Hung on the buckler's own
-# outward face it stands edge-on to the front, so from the game camera it is a
-# plank beside the leg and covers nothing. This one faces mostly ahead with
-# enough of his left in it that the board clears the thigh.
-TOWER_FACE = (0.32, -0.95, 0.0)
+# The board runs along the forearm, face out to his left with its front edge
+# toed a little toward him (owner's top-down mark, 16 October 2026). Facing
+# ahead, it lay across his front like a door.
+TOWER_FACE = (0.99, -0.1, 0.0)
 
 # A rigid piece is measured in the idle and carried back through the clip's own
 # transform, because it rides one joint and the mesh must be authored in the
