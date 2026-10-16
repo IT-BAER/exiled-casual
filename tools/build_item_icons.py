@@ -48,6 +48,7 @@ ICONS: list[tuple[str, str, int, int]] = [
     # One-handed weapons: tall and narrow, the same 1x3 footprint PoE gives a
     # one-hander, except the dirk which has to read as the small one.
     ("cindercleave_blade_v1", "cindercleave_blade", 1, 3),
+    ("broadsword_v1", "broadsword", 1, 3),
     ("ashfall_axe_v1", "ashfall_axe", 2, 3),
     ("emberhead_maul_v1", "emberhead_maul", 2, 3),
     ("cinderfang_dirk_v1", "cinderfang_dirk", 1, 2),
