@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { fp } from "@exiled/fixed-point";
-import { AILMENT_TICK_INTERVAL, burningTickDamage } from "@exiled/rules";
+import { AILMENT_TICK_INTERVAL, burningTickDamage, dotTickDamage } from "@exiled/rules";
 import { Simulation } from "../loop";
 import { registerAilmentTick } from "./ailment";
 import type { AilmentC, DamageEvent } from "../components";
@@ -70,5 +70,52 @@ describe("registerAilmentTick", () => {
       if (sim.damageQueue.length > 0) enqueuedCount++;
     }
     expect(enqueuedCount).toBe(2); // ticks 0 and 6
+  });
+});
+
+describe("poison and bleeding tick", () => {
+  function carrying(kind: "poison" | "bleeding", dps: number, expiryTick: number) {
+    const sim = new Simulation();
+    registerAilmentTick(sim);
+    const e = sim.world.create();
+    sim.world.set<AilmentC>(e, kind, { kind, stacks: 1, dps, expiryTick });
+    return { sim, e };
+  }
+
+  it("poison deals chaos, one interval's share of its dps, tagged as poison", () => {
+    const { sim, e } = carrying("poison", fp(2), 60);
+    sim.step();
+    expect(sim.damageQueue).toEqual([
+      { target: e, source: e, amountFixed: dotTickDamage(fp(2)), type: 4, ailment: "poison" },
+    ]);
+  });
+
+  it("bleeding deals physical, tagged as bleeding", () => {
+    const { sim, e } = carrying("bleeding", fp(1.5), 150);
+    sim.step();
+    expect(sim.damageQueue).toEqual([
+      { target: e, source: e, amountFixed: dotTickDamage(fp(1.5)), type: 1, ailment: "bleeding" },
+    ]);
+  });
+
+  it("both expire on their own tick", () => {
+    for (const kind of ["poison", "bleeding"] as const) {
+      const { sim, e } = carrying(kind, fp(2), 2);
+      sim.step();
+      sim.step();
+      expect(sim.world.get(e, kind)).toBeDefined();
+      sim.step();
+      expect(sim.world.get(e, kind)).toBeUndefined();
+    }
+  });
+
+  it("burning, poison and bleeding on one body tick side by side", () => {
+    const sim = new Simulation();
+    registerAilmentTick(sim);
+    const e = makeEntityWithAilment(sim, 1, 60);
+    sim.world.set<AilmentC>(e, "poison", { kind: "poison", stacks: 1, dps: fp(2), expiryTick: 60 });
+    sim.world.set<AilmentC>(e, "bleeding", { kind: "bleeding", stacks: 1, dps: fp(3), expiryTick: 60 });
+    sim.step();
+    expect(sim.damageQueue.map((d) => d.type)).toEqual([0, 4, 1]);
   });
 });

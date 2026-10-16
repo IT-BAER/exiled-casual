@@ -210,6 +210,7 @@ const MONSTER_DEFS: MonsterDef[] = [
     attackDamage: { type: "physical", amountFixed: fp(0.6) },
     attackCooldownTicks: 40, radiusFixed: SWARM_RADIUS,
     defenses: { resPct: resBlock(), armourFixed: fp(0) },
+    onHit: { ailment: "bleeding", chancePct: 25 },
   },
   {
     id: "monster.vaal_construct.v1", name: "Vaal Construct", archetype: "brute",
@@ -225,6 +226,7 @@ const MONSTER_DEFS: MonsterDef[] = [
     attackDamage: { type: "chaos", amountFixed: HIT.heavy },
     attackCooldownTicks: 45, radiusFixed: fp(0.8),
     defenses: { resPct: resBlock({ chaos: 30 }), armourFixed: fp(2) },
+    onHit: { ailment: "poison", chancePct: 50 },
     heavy: { windupTicks: 30, radiusFixed: fp(2.6), damageFixed: HEAVY_SLAM, cooldownTicks: 150, rangeFixed: fp(6.5) },
   },
 
@@ -237,6 +239,7 @@ const MONSTER_DEFS: MonsterDef[] = [
     // 0.32 body let a pack stand with their shells through each other.
     attackCooldownTicks: 40, radiusFixed: fp(0.42),
     defenses: { resPct: resBlock({ fire: 20 }), armourFixed: fp(0) },
+    onHit: { ailment: "bleeding", chancePct: 25 },
   },
   {
     id: "monster.dune_spitter.v1", name: "Dune Spitter", archetype: "shooter",
@@ -244,6 +247,7 @@ const MONSTER_DEFS: MonsterDef[] = [
     attackDamage: { type: "chaos", amountFixed: HIT.shooter },
     attackCooldownTicks: 70, radiusFixed: fp(0.5),
     defenses: { resPct: resBlock({ chaos: 25 }), armourFixed: fp(0.5) },
+    onHit: { ailment: "poison", chancePct: 100 },
     ranged: { speedFixed: fp(9), radiusFixed: fp(0.22) },
   },
   {
@@ -264,6 +268,7 @@ const MONSTER_DEFS: MonsterDef[] = [
     attackDamage: { type: "physical", amountFixed: HIT.swarm },
     attackCooldownTicks: 40, radiusFixed: SWARM_RADIUS,
     defenses: { resPct: resBlock({ cold: 10 }), armourFixed: fp(0) },
+    onHit: { ailment: "poison", chancePct: 25 },
   },
   {
     id: "monster.bog_drowned.v1", name: "Bog Drowned", archetype: "brute",
@@ -291,6 +296,7 @@ const MONSTER_DEFS: MonsterDef[] = [
     attackDamage: { type: "physical", amountFixed: HIT.heavy },
     attackCooldownTicks: 45, radiusFixed: fp(0.8),
     defenses: { resPct: resBlock({ chaos: 20 }), armourFixed: fp(2) },
+    onHit: { ailment: "poison", chancePct: 50 },
     heavy: { windupTicks: 30, radiusFixed: fp(2.6), damageFixed: fp(6), cooldownTicks: 150, rangeFixed: fp(6.5) },
   },
 
@@ -302,6 +308,7 @@ const MONSTER_DEFS: MonsterDef[] = [
     attackDamage: { type: "physical", amountFixed: HIT.swarm },
     attackCooldownTicks: 40, radiusFixed: SWARM_RADIUS,
     defenses: { resPct: resBlock(), armourFixed: fp(0) },
+    onHit: { ailment: "bleeding", chancePct: 25 },
   },
   {
     id: "monster.thornhide_boar.v1", name: "Thornhide Boar", archetype: "brute",
@@ -309,6 +316,7 @@ const MONSTER_DEFS: MonsterDef[] = [
     attackDamage: { type: "physical", amountFixed: HIT.brute },
     attackCooldownTicks: 75, radiusFixed: fp(0.85),
     defenses: { resPct: resBlock({ cold: 15 }), armourFixed: fp(3) },
+    onHit: { ailment: "bleeding", chancePct: 50 },
     charge: BRUTE_CHARGE,
   },
   {

@@ -5,8 +5,12 @@ import { RES_CAP } from "@exiled/rules";
 import { SERIF } from "../menu/frames";
 import { ElementIcon } from "./ElementIcon";
 
-/** The sim's name for a burning tick's source (simulation/death-recap.ts). */
-const BURNING = "ailment.burning";
+/** The sim's names for a damaging ailment's ticks (simulation/death-recap.ts). */
+const AILMENT_NAME: Record<string, string> = {
+  "ailment.burning": "Burning",
+  "ailment.poison": "Poison",
+  "ailment.bleeding": "Bleeding",
+};
 /** A killing blow this big is its own lesson: one hit, not attrition. */
 const BIG_HIT_PCT = 50;
 
@@ -24,7 +28,8 @@ export function monsterPortrait(species: string): string | null {
 }
 
 function sourceName(species: string, rare: boolean): string {
-  if (species === BURNING) return "Burning";
+  const ailment = AILMENT_NAME[species];
+  if (ailment) return ailment;
   const name = MONSTERS.get(species)?.name ?? "Unknown";
   return rare ? `Rare ${name}` : name;
 }

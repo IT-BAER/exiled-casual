@@ -11,6 +11,7 @@ import { spawnMonster } from "./areas";
 import { bodyRadiusOf } from "./body";
 import { grantSkills } from "./persist";
 import type {
+  AilmentC,
   Position, Health, Mana, MonsterC, BossC, TelegraphC, SessionC, InteractableC, SkillsC, ProgressC, StrikeC,
 } from "./components";
 
@@ -419,6 +420,35 @@ describe("buildSnapshot — session fields and interactables", () => {
     expect(buildSnapshot(world, {} as never, 5, "test").player.buffs)
       .toEqual([{ id: "grace", kind: "buff", remainingSec: 10 }]);
     expect(buildSnapshot(world, {} as never, 300, "test").player.buffs).toEqual([]);
+  });
+
+  it("reports burning, poison and bleeding as debuffs after the grace buff, and nothing once clean", () => {
+    const { world, playerEntity: p } = makeMinimalWorld();
+    const sessionE = world.create();
+    world.set<SessionC>(sessionE, "session", {
+      area: "map", atlasSeed: 0, mapSeed: 0, waystoneSeed: 0, areaTier: 1, activeNodeId: "",
+      completedNodes: [], portalsLeft: 6, mapOpen: 1, pendingArea: "",
+      graceUntilTick: 300, graceX: 0, graceY: 0,
+    });
+    world.set<AilmentC>(p, "bleeding", { kind: "bleeding", stacks: 1, dps: fp(2), expiryTick: 150 });
+    world.set<AilmentC>(p, "poison", { kind: "poison", stacks: 1, dps: fp(2), expiryTick: 61 });
+    world.set<AilmentC>(p, "ailment", { kind: "burning", stacks: 3, dps: fp(8), expiryTick: 31 });
+    expect(buildSnapshot(world, {} as never, 0, "test").player.buffs).toEqual([
+      { id: "grace", kind: "buff", remainingSec: 10 },
+      { id: "burning", kind: "debuff", remainingSec: 2, stacks: 3 },
+      { id: "poison", kind: "debuff", remainingSec: 3 },
+      { id: "bleeding", kind: "debuff", remainingSec: 5 },
+    ]);
+    // Expired but not yet removed by the tick system: not shown.
+    expect(buildSnapshot(world, {} as never, 150, "test").player.buffs).toEqual([
+      { id: "grace", kind: "buff", remainingSec: 5 },
+    ]);
+    world.remove(p, "ailment");
+    world.remove(p, "poison");
+    world.remove(p, "bleeding");
+    expect(buildSnapshot(world, {} as never, 0, "test").player.buffs).toEqual([
+      { id: "grace", kind: "buff", remainingSec: 10 },
+    ]);
   });
 
   it("snapshot carries areaTier, atlasSeed, completedNodes from session", () => {

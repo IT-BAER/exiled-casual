@@ -18,6 +18,7 @@ import type { Flinch } from "./hit-reaction";
 import { flashPeak, hitSpray, hitStrength, sprayKindOf } from "./hit-spray";
 import { contactPoint } from "./contact";
 import { burnOutGround, igniteGround, EMBER_TAIL_TICKS, GROUND_FADE_TICKS } from "./ground-fx";
+import { PlayerAilmentFx } from "./player-ailment-fx";
 import { hitSparkle } from "./hit-sparkle";
 
 /** Sim rate. Consecutive snapshots are one tick apart, which is what turns a
@@ -340,9 +341,12 @@ export class SnapshotRenderer {
   /** Real ms the hit-stop lets go at; 0 when the world is running. */
   private hitStopUntil = 0;
   private lastFrameMs = 0;
+  /** What the player's debuffs look like on his body. */
+  private readonly ailmentFx: PlayerAilmentFx;
 
   constructor(scene: Scene) {
     this.scene = scene;
+    this.ailmentFx = new PlayerAilmentFx(scene);
     // DEV handle, like `window.__sfx` and `window.__scene`: a death is the one
     // thing that cannot be staged from a driven page (it needs a fight), and a
     // ragdoll that never falls looks exactly like one that was never asked to.
@@ -476,6 +480,10 @@ export class SnapshotRenderer {
     // rebuilt underneath us.
     const playerMesh = this.meshes.get(next.player.id);
     if (playerMesh) rigOf(playerMesh)?.setLooks(looksForEquipment(next.equipment ?? {}));
+    this.ailmentFx.update(
+      next.player.alive && playerMesh ? next.player.buffs : undefined,
+      playerMesh?.position.x ?? next.player.x, playerMesh?.position.z ?? next.player.y,
+    );
 
     // Portals arriving this snapshot, in ring order (spawnPortalRing creates them
     // in that order, so ascending entity id IS the arc). Their index is what the

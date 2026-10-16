@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { fp } from "@exiled/fixed-point";
-import { AILMENT_TICK_INTERVAL, refreshBurning, burningTickDamage, type AilmentState } from "./ailment.js";
+import {
+  AILMENT_TICK_INTERVAL, refreshBurning, burningTickDamage, applySingleAilment, dotTickDamage, type AilmentState,
+} from "./ailment.js";
 
 describe("AILMENT_TICK_INTERVAL", () => {
   it("=== 6", () => {
@@ -54,5 +56,37 @@ describe("burningTickDamage", () => {
   it("stacks=1, dps=fp(30): trunc(1 * 30000 * 6 / 30) === 6000", () => {
     const a: AilmentState = { kind: "burning", stacks: 1, dpsFixed: fp(30), expiryTick: 999 };
     expect(burningTickDamage(a)).toBe(6000);
+  });
+});
+
+describe("applySingleAilment (poison, bleeding)", () => {
+  it("poison takes 20% of a physical or chaos hit for 2 s", () => {
+    expect(applySingleAilment("poison", undefined, fp(10), "chaos", 5)).toEqual({ dpsFixed: fp(2), expiryTick: 65 });
+    expect(applySingleAilment("poison", undefined, fp(10), "physical", 5)).toEqual({ dpsFixed: fp(2), expiryTick: 65 });
+  });
+
+  it("bleeding takes 15% of a physical hit for 5 s", () => {
+    expect(applySingleAilment("bleeding", undefined, fp(10), "physical", 0)).toEqual({ dpsFixed: fp(1.5), expiryTick: 150 });
+  });
+
+  it("a hit of the wrong type carries nothing", () => {
+    expect(applySingleAilment("poison", undefined, fp(10), "fire", 0)).toBeUndefined();
+    expect(applySingleAilment("bleeding", undefined, fp(10), "chaos", 0)).toBeUndefined();
+    const live = { dpsFixed: fp(1), expiryTick: 30 };
+    expect(applySingleAilment("bleeding", live, fp(10), "cold", 0)).toBe(live);
+  });
+
+  it("a weaker hit leaves the live one alone; a stronger or equal one replaces and refreshes", () => {
+    const live = { dpsFixed: fp(2), expiryTick: 30 };
+    expect(applySingleAilment("poison", live, fp(5), "chaos", 20)).toBe(live);
+    expect(applySingleAilment("poison", live, fp(10), "chaos", 20)).toEqual({ dpsFixed: fp(2), expiryTick: 80 });
+    expect(applySingleAilment("poison", live, fp(20), "chaos", 20)).toEqual({ dpsFixed: fp(4), expiryTick: 80 });
+  });
+});
+
+describe("dotTickDamage", () => {
+  it("is one interval's share of the dps, truncated", () => {
+    expect(dotTickDamage(fp(2))).toBe(Math.trunc(fp(2) * AILMENT_TICK_INTERVAL / 30));
+    expect(dotTickDamage(7)).toBe(1);
   });
 });

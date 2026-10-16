@@ -40,7 +40,7 @@ type SuspendedEntity = readonly (readonly [string, unknown])[];
  * monster that was carrying it. Burning does not politely wait in a hallway.
  */
 const TRANSIENT_ENTITY = ["projectile", "groundArea", "telegraph"];
-const TRANSIENT_COMPONENT = ["ailment"];
+const TRANSIENT_COMPONENT = ["ailment", "poison", "bleeding"];
 
 /**
  * Absolute tick fields that have to be rebased on the way back, and what they

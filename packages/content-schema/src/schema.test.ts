@@ -632,3 +632,32 @@ describe("validateSkillDef: gem growth", () => {
     expect(validateSkillDef({ ...base, classId: "class.stalker" }).ok).toBe(true);
   });
 });
+
+describe("validateMonsterDef — onHit", () => {
+  it("accepts poison and bleeding at 1..100%", () => {
+    for (const ailment of ["poison", "bleeding"] as const) {
+      for (const chancePct of [1, 50, 100]) {
+        const r = validateMonsterDef({ ...validMonster, onHit: { ailment, chancePct } });
+        expect(r.ok, `${ailment} ${chancePct}: ${r.errors.join(", ")}`).toBe(true);
+      }
+    }
+  });
+
+  it("rejects an unknown ailment", () => {
+    const r = validateMonsterDef({ ...validMonster, onHit: { ailment: "burning", chancePct: 50 } });
+    expect(r.ok).toBe(false);
+    expect(r.errors.some((e) => e.includes("onHit.ailment"))).toBe(true);
+  });
+
+  it("rejects a chance outside 1..100 or fractional", () => {
+    for (const chancePct of [0, 101, 12.5, "50"]) {
+      const r = validateMonsterDef({ ...validMonster, onHit: { ailment: "poison", chancePct } });
+      expect(r.ok, String(chancePct)).toBe(false);
+      expect(r.errors.some((e) => e.includes("onHit.chancePct"))).toBe(true);
+    }
+  });
+
+  it("rejects a non-object", () => {
+    expect(validateMonsterDef({ ...validMonster, onHit: "poison" }).ok).toBe(false);
+  });
+});

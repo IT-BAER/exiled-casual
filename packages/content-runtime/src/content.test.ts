@@ -515,3 +515,22 @@ describe("skill unlocks and growth", () => {
     }
   });
 });
+
+describe("on-hit ailments", () => {
+  it("exactly these species poison or bleed, at these chances", () => {
+    const appliers = [...MONSTERS.values()]
+      .filter((d) => d.onHit)
+      .map((d) => [d.id, d.onHit!.ailment, d.onHit!.chancePct])
+      .sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+    expect(appliers).toEqual([
+      ["monster.blood_sentinel.v1", "poison", 50],
+      ["monster.bramble_whelp.v1", "bleeding", 25],
+      ["monster.drowned_grubling.v1", "poison", 25],
+      ["monster.dune_spitter.v1", "poison", 100],
+      ["monster.rotting_behemoth.v1", "poison", 50],
+      ["monster.sand_skitterer.v1", "bleeding", 25],
+      ["monster.thornhide_boar.v1", "bleeding", 50],
+      ["monster.vaal_husk.v1", "bleeding", 25],
+    ]);
+  });
+});

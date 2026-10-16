@@ -33,3 +33,39 @@ export function refreshBurning(
 export function burningTickDamage(a: AilmentState): Fixed {
   return Math.trunc(a.stacks * a.dpsFixed * AILMENT_TICK_INTERVAL / 30);
 }
+
+/** One-instance damaging ailments a monster's hit leaves on the player: dps is a share of the hit before mitigation. */
+export const SINGLE_AILMENTS = {
+  poison: { dpsPct: 20, durationTicks: 60, from: ["physical", "chaos"] },
+  // Flat: PoE2's bleed hurts more while moving; this one does not.
+  bleeding: { dpsPct: 15, durationTicks: 150, from: ["physical"] },
+} as const;
+export type SingleAilmentKind = keyof typeof SINGLE_AILMENTS;
+
+export interface SingleAilment {
+  dpsFixed: Fixed;
+  expiryTick: number;
+}
+
+/**
+ * The instance after a hit of `hitType` lands. A type that cannot carry the
+ * ailment, or a weaker hit, returns `prev` itself; stronger or equal replaces and refreshes.
+ */
+export function applySingleAilment(
+  kind: SingleAilmentKind,
+  prev: SingleAilment | undefined,
+  hitAmountFixed: Fixed,
+  hitType: string,
+  nowTick: number,
+): SingleAilment | undefined {
+  const spec = SINGLE_AILMENTS[kind];
+  if (!(spec.from as readonly string[]).includes(hitType)) return prev;
+  const dpsFixed = Math.trunc(hitAmountFixed * spec.dpsPct / 100);
+  if (prev && dpsFixed < prev.dpsFixed) return prev;
+  return { dpsFixed, expiryTick: nowTick + spec.durationTicks };
+}
+
+/** Damage of one tick of a single-instance DoT: trunc(dpsFixed * AILMENT_TICK_INTERVAL / 30). */
+export function dotTickDamage(dpsFixed: Fixed): Fixed {
+  return Math.trunc(dpsFixed * AILMENT_TICK_INTERVAL / 30);
+}

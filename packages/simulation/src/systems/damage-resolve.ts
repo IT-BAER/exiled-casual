@@ -1,7 +1,11 @@
-import { applyDamage, bossChargeSteps, absorbWithEnergyShield, ES_RECHARGE_DELAY_TICKS } from "@exiled/rules";
+import {
+  applyDamage, bossChargeSteps, absorbWithEnergyShield, ES_RECHARGE_DELAY_TICKS, applySingleAilment,
+} from "@exiled/rules";
+import { MONSTERS } from "@exiled/content-runtime";
+import type { MonsterDef } from "@exiled/content-schema";
 import { Simulation } from "../loop";
 import type {
-  Health, DefensesC, FlasksC, EnergyShieldC, MonsterC, SessionC, Position, CastingC, RollC,
+  Health, DefensesC, FlasksC, EnergyShieldC, MonsterC, SessionC, Position, CastingC, RollC, AilmentC,
 } from "../components";
 import { ROLL_AVOID_TICKS } from "./player-movement";
 import { damageTypeOf } from "../damage-types";
@@ -10,11 +14,19 @@ import type { World } from "../ecs";
 import type { DamageEvent } from "../components";
 import { toNumber } from "@exiled/fixed-point";
 import { alertPack } from "./monster-ai";
+import { createStream, type RandomStream } from "../rng";
 
 /** Spawn grace: 10 seconds at 30 Hz, or until the player moves or casts. */
 export const SPAWN_GRACE_TICKS = 300;
 
-export function registerDamageResolve(sim: Simulation): void {
+export function registerDamageResolve(
+  sim: Simulation,
+  seed = 0,
+  monsters: ReadonlyMap<string, MonsterDef> = MONSTERS,
+): void {
+  // One stream for every on-hit ailment roll, drawn only when the hitter's
+  // species has an onHit: a run with no applier consumes nothing.
+  const ailmentRolls = createStream(seed, "ailment");
   sim.register("damageResolve", (world, tick) => {
     // Maintain the spawn grace every tick, not only when damage arrives: the
     // break is one-way, so "he cast three seconds ago" must already have
@@ -82,6 +94,9 @@ export function registerDamageResolve(sim: Simulation): void {
       }
 
       if (health.life > 0 && final > 0 && world.has(ev.target, "player")) recordHit(sim, world, ev, final, tick);
+      if (health.life > 0 && ev.source !== ev.target && world.has(ev.target, "player")) {
+        applyOnHit(world, monsters, ailmentRolls, ev, tick);
+      }
 
       const after = Math.max(0, health.life - toLife);
       world.set<Health>(ev.target, "health", { ...health, life: after });
@@ -115,10 +130,29 @@ export function registerDamageResolve(sim: Simulation): void {
   });
 }
 
-/** The death screen's memory. A burn names its victim as source; a dead shooter has no species left. */
+/**
+ * The hitter's onHit ailment, rolled on the pre-mitigation hit. A dead hitter
+ * (a bolt or slam outliving its monster) has no species left, so rolls nothing.
+ */
+function applyOnHit(
+  world: World, monsters: ReadonlyMap<string, MonsterDef>, rolls: RandomStream, ev: DamageEvent, tick: number,
+): void {
+  const mon = world.get<MonsterC>(ev.source, "monster");
+  const onHit = mon ? monsters.get(mon.defId)?.onHit : undefined;
+  if (!onHit || rolls.nextInt(0, 99) >= onHit.chancePct) return;
+  const kind = onHit.ailment;
+  const prev = world.get<AilmentC>(ev.target, kind);
+  const live = prev ? { dpsFixed: prev.dps, expiryTick: prev.expiryTick } : undefined;
+  const next = applySingleAilment(kind, live, ev.amountFixed, damageTypeOf(ev.type), tick);
+  if (next === undefined || next === live) return;
+  world.set<AilmentC>(ev.target, kind, { kind, stacks: 1, dps: next.dpsFixed, expiryTick: next.expiryTick });
+}
+
+/** The death screen's memory. A DoT names its victim as source; a dead shooter has no species left. */
 function recordHit(sim: Simulation, world: World, ev: DamageEvent, final: number, tick: number): void {
   const mon = ev.source === ev.target ? undefined : world.get<MonsterC>(ev.source, "monster");
-  const species = ev.source === ev.target ? BURNING_SOURCE : (mon?.defId ?? "");
+  const species = ev.source !== ev.target ? (mon?.defId ?? "")
+    : ev.ailment !== undefined ? `ailment.${ev.ailment}` : BURNING_SOURCE;
   const hits = sim.recentHits.filter((h) => h.tick > tick - RECAP_WINDOW_TICKS);
   hits.push({ tick, species, rare: mon?.rare === 1, type: ev.type, amount: toNumber(final) });
   sim.recentHits = hits;

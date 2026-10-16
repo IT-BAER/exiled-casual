@@ -34,4 +34,19 @@ describe("BuffBar", () => {
     const bar = screen.getByTestId("buff-bar");
     expect(bar.children.length).toBe(2);
   });
+
+  it("gives every ailment its own face and name, and a stacked one its count", () => {
+    render(<BuffBar snapshot={snap([
+      { id: "burning", kind: "debuff", remainingSec: 2, stacks: 4 },
+      { id: "poison", kind: "debuff", remainingSec: 1 },
+      { id: "bleeding", kind: "debuff", remainingSec: 5 },
+    ])} />);
+    for (const [id, name] of [["burning", "Burning"], ["poison", "Poisoned"], ["bleeding", "Bleeding"]]) {
+      const tile = screen.getByTitle(name!);
+      expect(tile.querySelector("img")!.getAttribute("src")).toBe(`/textures/buffs/${id}.webp`);
+    }
+    expect(screen.getByTestId("buff-stacks").textContent).toBe("4");
+    // One stack is no count at all: only burning stacks.
+    expect(screen.getAllByTestId("buff-stacks")).toHaveLength(1);
+  });
 });

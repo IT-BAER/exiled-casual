@@ -78,7 +78,7 @@ export function createCombatSim(
   // Impacts land before damageResolve so a telegraph hits on its own impact tick.
   registerTelegraphResolve(sim);
   registerAilmentTick(sim);
-  registerDamageResolve(sim);
+  registerDamageResolve(sim, seed);
   registerDeath(sim, collisionRef);
   registerExpiry(sim);
 

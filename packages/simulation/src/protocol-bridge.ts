@@ -502,11 +502,21 @@ export function buildSnapshot(
         return len > 1e-6 ? { x: dx / len, y: dy / len } : undefined;
       })(),
       buffs: (() => {
-        const out: { id: string; kind: "buff" | "debuff"; remainingSec: number }[] = [];
+        const out: { id: string; kind: "buff" | "debuff"; remainingSec: number; stacks?: number }[] = [];
         // Spawn grace (damage-resolve). 30 Hz; rounded up so it never shows 0
         // while still active.
         if (session?.graceUntilTick !== undefined && session.graceUntilTick > tick) {
           out.push({ id: "grace", kind: "buff", remainingSec: Math.ceil((session.graceUntilTick - tick) / 30) });
+        }
+        // Ailments in a fixed order; only burning stacks. Live until its expiry
+        // tick, the same test the ailment system removes it on.
+        for (const [comp, id] of [["ailment", "burning"], ["poison", "poison"], ["bleeding", "bleeding"]] as const) {
+          const a = world.get<AilmentC>(playerEntity, comp);
+          if (!a || a.expiryTick <= tick) continue;
+          const remainingSec = Math.ceil((a.expiryTick - tick) / 30);
+          out.push(id === "burning"
+            ? { id, kind: "debuff", remainingSec, stacks: a.stacks }
+            : { id, kind: "debuff", remainingSec });
         }
         return out;
       })(),

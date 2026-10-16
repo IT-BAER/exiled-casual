@@ -257,7 +257,7 @@ export function registerDeath(sim: Simulation, collisionRef?: CollisionRef): voi
       const session = world.get<SessionC>(sessionE, "session")!;
       if (session.dead === 1) continue;
       clearMovement(world, e);
-      world.remove(e, "ailment");
+      clearAilments(world, e);
       world.set<SessionC>(sessionE, "session", { ...session, dead: 1 });
     }
   });
@@ -271,8 +271,14 @@ export function reviveVitals(world: World, e: number): void {
   if (mn) world.set<Mana>(e, "mana", { ...mn, mana: mn.maxMana });
   const es = world.get<EnergyShieldC>(e, "energyShield");
   if (es) world.set<EnergyShieldC>(e, "energyShield", { ...es, es: es.maxEs, rechargeAtTick: 0 });
-  world.remove(e, "ailment");
+  clearAilments(world, e);
   clearMovement(world, e);
+}
+
+function clearAilments(world: World, e: number): void {
+  world.remove(e, "ailment");
+  world.remove(e, "poison");
+  world.remove(e, "bleeding");
 }
 
 function clearMovement(world: World, e: number): void {

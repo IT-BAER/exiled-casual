@@ -345,6 +345,7 @@ export interface TelegraphC {
     maxStacks: number;
   };
 }
+/** Burning on "ailment"; poison and bleeding reuse the shape on their own components, stacks always 1. */
 export interface AilmentC {
   kind: string;
   stacks: number;
@@ -359,6 +360,8 @@ export interface DamageEvent {
   type: number;
   /** How the hit arrived. Only a dodge roll reads it: its first ticks let every tagged hit pass, ground and ailments still land. Absent = anything else. */
   via?: "projectile" | "melee" | "slam";
+  /** The single-instance DoT this tick belongs to. Absent on a burning tick and on every hit. */
+  ailment?: "poison" | "bleeding";
 }
 
 /** Two utility flasks: life on Q, mana on E. Charges are plain integers, not Fixed. */

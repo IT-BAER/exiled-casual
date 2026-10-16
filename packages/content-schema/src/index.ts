@@ -245,6 +245,15 @@ export interface MonsterDef {
   /** Optional, and only on a brute that is not a boss (boss-ai owns those). */
   charge?: ChargeSpec;
   boss?: BossSpec;
+  /** A chance per landed hit to leave this ailment on the player; the hit's type must be able to carry it. */
+  onHit?: MonsterOnHit;
+}
+
+export const ON_HIT_AILMENTS = ["poison", "bleeding"] as const;
+export interface MonsterOnHit {
+  ailment: (typeof ON_HIT_AILMENTS)[number];
+  /** Integer 1..100. */
+  chancePct: number;
 }
 
 export interface ValidationResult {
@@ -586,6 +595,20 @@ export function validateMonsterDef(v: unknown): ValidationResult {
     validateSubSpec(v["charge"], archetype === "brute" && v["boss"] === undefined, "charge",
       ["windupTicks", "speedFixed", "minRangeFixed", "maxRangeFixed", "cooldownTicks", "damageFixed", "radiusFixed"],
       errors);
+  }
+  if (v["onHit"] !== undefined) {
+    const h = v["onHit"];
+    if (!isObj(h)) {
+      errors.push("onHit: must be an object");
+    } else {
+      if (!(ON_HIT_AILMENTS as readonly unknown[]).includes(h["ailment"])) {
+        errors.push(`onHit.ailment: must be one of ${ON_HIT_AILMENTS.join(", ")}, got "${String(h["ailment"])}"`);
+      }
+      const c = h["chancePct"];
+      if (typeof c !== "number" || !Number.isInteger(c) || c < 1 || c > 100) {
+        errors.push("onHit.chancePct: must be an integer in 1..100");
+      }
+    }
   }
   if (v["boss"] !== undefined) {
     const b = v["boss"];

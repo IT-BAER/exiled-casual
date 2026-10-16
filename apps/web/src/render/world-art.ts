@@ -49,6 +49,9 @@ export const WORLD_ART: readonly string[] = [
   "/textures/skills/ember_spark.webp",
   "/textures/skills/move.webp",
   "/textures/buffs/grace.webp",
+  "/textures/buffs/burning.webp",
+  "/textures/buffs/poison.webp",
+  "/textures/buffs/bleeding.webp",
   // Level dressing: the sea. Wall plates are per biome, under tilesets/.
   "/textures/water/water_normal.jpg",
   // Item icons: one drop is one icon, and a boss drops five at once.

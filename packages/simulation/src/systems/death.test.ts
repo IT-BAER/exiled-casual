@@ -64,10 +64,14 @@ describe("registerDeath", () => {
     world.set(p, "moveTarget", { x: fp(9), y: fp(9), active: 1 });
     world.set(p, "moveDir", { dx: 1, dy: 0 });
     world.set(p, "ailment", { kind: "burning", stacks: 3, dps: fp(8), expiryTick: 999 });
+    world.set(p, "poison", { kind: "poison", stacks: 1, dps: fp(2), expiryTick: 999 });
+    world.set(p, "bleeding", { kind: "bleeding", stacks: 1, dps: fp(2), expiryTick: 999 });
     sim.step();
     expect(world.get<{ active: number }>(p, "moveTarget")!.active).toBe(0);
     expect(world.get<{ dx: number; dy: number }>(p, "moveDir")).toEqual({ dx: 0, dy: 0, hx: 0, hy: 0 });
     expect(world.get(p, "ailment")).toBeUndefined();
+    expect(world.get(p, "poison")).toBeUndefined();
+    expect(world.get(p, "bleeding")).toBeUndefined();
     // existing respawn guarantees still hold:
     expect(world.get<{ life: number }>(p, "health")!.life).toBe(fp(100));
     expect(world.get<{ x: number; y: number }>(p, "position")).toEqual({ x: 0, y: 0 });
@@ -138,6 +142,17 @@ describe("registerDeath", () => {
 
     return { sim, world, p, sessionE };
   }
+
+  it("a map death peels every ailment off the corpse", () => {
+    const { sim, world, p } = makePlayerWithSession("map", 6);
+    world.set(p, "ailment", { kind: "burning", stacks: 3, dps: fp(8), expiryTick: 999 });
+    world.set(p, "poison", { kind: "poison", stacks: 1, dps: fp(2), expiryTick: 999 });
+    world.set(p, "bleeding", { kind: "bleeding", stacks: 1, dps: fp(2), expiryTick: 999 });
+    sim.step();
+    expect(world.get(p, "ailment")).toBeUndefined();
+    expect(world.get(p, "poison")).toBeUndefined();
+    expect(world.get(p, "bleeding")).toBeUndefined();
+  });
 
   /**
    * Death is now a question, not an outcome: it raises the screen and spends

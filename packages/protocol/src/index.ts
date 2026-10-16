@@ -416,9 +416,9 @@ export interface Snapshot {
     /**
      * Timed effects on the player, display-ready for the HUD's buff bar.
      * `remainingSec` is whole seconds, already rounded up. Absent on a sim
-     * built without a session.
+     * built without a session. `stacks` only on an ailment that stacks (burning).
      */
-    buffs?: { id: string; kind: "buff" | "debuff"; remainingSec: number }[];
+    buffs?: { id: string; kind: "buff" | "debuff"; remainingSec: number; stacks?: number }[];
     /** Passive nodes taken. The tree itself is content the client already has,
      *  so only the allocation crosses the wire. Optional like every other field
      *  added to this shape: absent and empty are the same character. */

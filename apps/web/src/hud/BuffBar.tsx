@@ -17,6 +17,9 @@ const INSET_VW = 0.6;
  *  effect the player cannot see is worse than an ugly square. */
 const BUFF_ART: Record<string, { icon: string; name: string }> = {
   grace: { icon: "/textures/buffs/grace.webp", name: "Spawn Grace" },
+  burning: { icon: "/textures/buffs/burning.webp", name: "Burning" },
+  poison: { icon: "/textures/buffs/poison.webp", name: "Poisoned" },
+  bleeding: { icon: "/textures/buffs/bleeding.webp", name: "Bleeding" },
 };
 
 type Buff = NonNullable<Snapshot["player"]["buffs"]>[number];
@@ -62,6 +65,24 @@ function Tile({ b }: { b: Buff }): React.JSX.Element {
       >
         {b.remainingSec}
       </div>
+      {(b.stacks ?? 1) > 1 && (
+        // PoE's stack count sits in the upper right, clear of the seconds plate.
+        <div
+          data-testid="buff-stacks"
+          style={{
+            position: "absolute",
+            right: "0.1vw",
+            top: "0.05vw",
+            fontFamily: SERIF,
+            fontSize: "0.75vw",
+            lineHeight: "1vw",
+            color: "#f0e6cc",
+            textShadow: "0 0 2px #000, 0 0 2px #000",
+          }}
+        >
+          {b.stacks}
+        </div>
+      )}
     </div>
   );
 }

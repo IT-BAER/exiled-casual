@@ -31,7 +31,8 @@ PLAN: list[tuple[Path, Path, int]] = [
     (ASSETS / "hud" / "orb-figure-life-v5.png", PUBLIC / "hud" / "orb-figure-life-v5.webp", 456),
     (ASSETS / "hud" / "orb-figure-mana-v5.png", PUBLIC / "hud" / "orb-figure-mana-v5.webp", 456),
     # Buff bar tile, 2.4vw less its 1px border.
-    (ASSETS / "buffs" / "grace.png", PUBLIC / "textures" / "buffs" / "grace.webp", 95),
+    *[(ASSETS / "buffs" / f"{n}.png", PUBLIC / "textures" / "buffs" / f"{n}.webp", 95)
+      for n in ("grace", "burning", "poison", "bleeding")],
     # 2x2 sheet drawn at background-size 200%: 83 px per quadrant, so the quadrants stay whole.
     (ASSETS / "ui" / "char_icons_v1.png", PUBLIC / "textures" / "ui" / "char_icons_v1.webp", 166),
     # Skill tile content box (SLOT minus its 1px border).
