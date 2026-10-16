@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
 import {
   PASSIVE_TREE, canAllocate, canRefund, isStartNode, passiveLines, passiveNode,
-  passivePoints, passiveStatMods, startNodeId,
+  passivePoints, passiveStatMods, passiveTheme, startNodeId,
 } from "./passives";
 import { CLASS_IDS } from "./classes";
 import { MAX_LEVEL, START_LEVEL } from "./xp";
@@ -74,6 +75,65 @@ describe("the passive tree's shape", () => {
           expect(d, `${a.id} -> ${bid} passes through ${n.id}`).toBeGreaterThan(RADII[n.kind] + 2);
         }
       }
+    }
+  });
+
+  it("holds between 280 and 330 nodes", () => {
+    expect(PASSIVE_TREE.length).toBeGreaterThanOrEqual(280);
+    expect(PASSIVE_TREE.length).toBeLessThanOrEqual(330);
+  });
+
+  it("has exactly one keystone per spoke, each hung off its own spoke's outer cluster", () => {
+    const keystones = PASSIVE_TREE.filter((n) => n.kind === "keystone");
+    expect(keystones.length).toBe(8);
+    const spokes = new Set<string>();
+    for (const ks of keystones) {
+      expect(ks.links.length, ks.id).toBe(1);
+      const m = /^p\.(\w+)\.3\.\d+$/.exec(ks.links[0]!);
+      expect(m, `${ks.id} hangs off ${ks.links[0]}`).not.toBeNull();
+      spokes.add(m![1]!);
+    }
+    expect(spokes.size).toBe(8);
+  });
+
+  it("themes every outer-ring cluster node and every bridge", () => {
+    const ids = PASSIVE_TREE.map((n) => n.id).filter((id) => /^p\.\w+\.4\./.test(id) || id.startsWith("p.bridge.0."));
+    expect(ids.length).toBeGreaterThan(0);
+    for (const id of ids) expect(passiveTheme(id), id).not.toBeNull();
+    for (const id of ids.filter((i) => i.startsWith("p.bridge."))) expect(passiveTheme(id)).toBe("travel");
+  });
+
+  it("joins every outer-ring cluster to the ring-3 clusters of both spokes it sits between", () => {
+    const spokeOf = (id: string) => /^p\.(\w+)\.(\d)\./.exec(id);
+    const order = ["ember", "ash", "cinder", "stone", "bulwark", "veil", "storm", "hearth"];
+    order.forEach((spoke, si) => {
+      const members = PASSIVE_TREE.filter((n) => n.id.startsWith(`p.${spoke}.4.`));
+      expect(members.length, spoke).toBe(7);
+      const reached = new Set<string>();
+      for (const n of members) {
+        for (const l of n.links) {
+          const m = spokeOf(l);
+          if (m && m[2] === "3") reached.add(m[1]!);
+        }
+      }
+      expect([...reached].sort(), spoke).toEqual([spoke, order[(si + 1) % 8]!].sort());
+    });
+  });
+
+  /**
+   * The tree only grows: a saved character's allocation names ids, so an id, a
+   * link or a mod that moved would silently change or strand what he owns.
+   */
+  it("keeps every node, link and mod of the 239-node tree it grew from", () => {
+    const before = JSON.parse(
+      readFileSync(new URL("./passives.before-ring4.json", import.meta.url), "utf8"),
+    ) as Record<string, { links: string[]; mods: unknown }>;
+    expect(Object.keys(before).length).toBe(239);
+    for (const [id, old] of Object.entries(before)) {
+      const now = passiveNode(id);
+      expect(now, `${id} is gone`).toBeDefined();
+      for (const l of old.links) expect(now!.links, `${id} lost its link to ${l}`).toContain(l);
+      expect(now!.mods, `${id} changed its mods`).toEqual(old.mods);
     }
   });
 });
@@ -229,7 +289,7 @@ describe("the passive budget over a 1-100 climb", () => {
   });
 
   it("reaches the same budget at the cap the 65-94 era ended on", () => {
-    // 99 points in a 239-node tree: enough to walk two disciplines and a
+    // 99 points in a 315-node tree: enough to walk two disciplines and a
     // keystone, never enough to walk all eight. That budget is the design.
     expect(passivePoints(MAX_LEVEL)).toBe(99);
   });
@@ -260,6 +320,18 @@ describe("tooltips", () => {
       (n) => n.mods.some((m) => m.value < 0 && !m.stat.endsWith("Pct")),
     )!;
     expect(passiveLines(flat).some((l) => l.startsWith("-"))).toBe(true);
+  });
+
+  it("words every keystone's every mod, never a raw stat name", () => {
+    const keystones = PASSIVE_TREE.filter((n) => n.kind === "keystone");
+    for (const ks of keystones) {
+      const lines = passiveLines(ks);
+      expect(lines.length, ks.id).toBe(ks.mods.length);
+      for (const [i, line] of lines.entries()) {
+        expect(line, ks.id).toMatch(/^[+-]?\d+%?\s\S/);
+        expect(line, `${ks.id} prints its raw stat`).not.toContain(ks.mods[i]!.stat);
+      }
+    }
   });
 
   it("says something for every mod on every node", () => {

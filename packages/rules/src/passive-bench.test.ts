@@ -10,6 +10,9 @@ import { CLASS_IDS } from "./classes";
  * with every step legal (a notable's majority of minors included); a unit is one
  * minor of the stat's own theme (`PASSIVE_BENCH_STATS`).
  *
+ * BEFORE: the 239-node tree (four rings per spoke, bridges on rings 1-2, four
+ * keystones).
+ *
  *   points to          ironsworn  stalker  emberbound
  *   notable  spell          6        16         7
  *            cast          10         7        11
@@ -40,13 +43,55 @@ import { CLASS_IDS } from "./classes";
  *
  *   travel share at 99   offence 2% / 5% / 2%   defence 0% / 6% / 4%
  *
- * At 99 points the offence walk runs out of offence before it runs out of points
- * (84 / 87 / 89 spent), so the column is the whole tree's offence for every door.
+ * At 99 points the offence walk ran out of offence before it ran out of points
+ * (84 / 87 / 89 spent), so the column was the whole tree's offence for every door.
+ *
+ * AFTER: the 315-node tree (an outer ring between the spokes, bridges on rings
+ * 0-2, one keystone per spoke).
+ *
+ *   points to          ironsworn  stalker  emberbound
+ *   notable  spell          6        13         7
+ *            cast          10         7        10
+ *            crit           4        11        12
+ *            life           8         7         4
+ *            brawn          6        13        18
+ *            armour         4         9        16
+ *            ward          12         4        12
+ *            fire/cold/lightning res  17/20/16  10/14/4  7/14/8
+ *            chaos res     13        13        16
+ *            mana           8         7         8
+ *   spoke    ember/ash/cinder/stone    12/8/4/4     12/16/15/11   4/8/12/16
+ *            bulwark/veil/storm/hearth 8/12/16/16   7/4/4/8       16/12/8/4
+ *   keystone ashen heart   12        20        17
+ *            rooted        15        15        22
+ *            glass ward    19        13        18
+ *            live wire     20        14        16
+ *            pyre oath     18        17        14
+ *            overflow      15        21        16
+ *            iron skin     13        18        20
+ *            hearthbound   21        16        13
+ *
+ *   axis totals at 10 / 20 / 50 / 99 points
+ *   offence  ironsworn   13.42 / 38.83 / 87.58 / 144.67
+ *            stalker      8.67 / 29.75 / 80.83 / 141.67
+ *            emberbound   7.67 / 25.33 / 78.67 / 139.58
+ *   defence  ironsworn   16.01 / 38.80 / 86.59 / 163.98
+ *            stalker     15.19 / 32.19 / 88.70 / 162.98
+ *            emberbound  14.25 / 28.92 / 78.06 / 159.26
+ *   min/max  offence      0.57 /  0.65 /  0.90 /   0.96
+ *            defence      0.89 /  0.75 /  0.88 /   0.97
+ *
+ *   travel share at 99   offence 0% / 2% / 2%   defence 4% / 0% / 4%
+ *
+ * At 99 points every walk spends all 99 on both axes: the tree holds 161 units
+ * of offence, more than any door's budget reaches, so the 99 column is the
+ * budget's limit, not the tree's.
  *
  * Against `PASSIVE_BENCH_TARGET` (measured here, not asserted): every keystone is
- * within 60 of every door and every door reaches an offence notable and a defence
- * notable within 12 points (offence 4 / 7 / 7, defence 4 / 4 / 4), but the 0.90
- * axis ratio holds only at 99 points, on both axes.
+ * within 60 of every door (the farthest is 22) and every door reaches an offence
+ * notable and a defence notable within 12 points (offence 4 / 7 / 7, defence
+ * 4 / 4 / 4). The 0.90 axis ratio holds only at 99 points, on both axes; offence
+ * at 50 is 0.898, just under.
  */
 
 const BENCH = passiveBench();
@@ -91,7 +136,9 @@ describe("the passive bench", () => {
     }
   });
 
-  it("is deterministic", () => {
+  // A whole second bench run: about 3 s alone, past the 5 s default under a
+  // full parallel suite.
+  it("is deterministic", { timeout: 30_000 }, () => {
     expect(passiveBench()).toEqual(BENCH);
   });
 
@@ -112,24 +159,28 @@ describe("the passive bench", () => {
           "defence": [
             16.01,
             38.8,
-            86.57,
-            142.78,
+            86.59,
+            163.98,
           ],
           "keystone": {
             "p.keystone.ashen_heart": 12,
             "p.keystone.glass_ward": 19,
+            "p.keystone.hearthbound": 21,
+            "p.keystone.iron_skin": 13,
             "p.keystone.live_wire": 20,
+            "p.keystone.overflow": 15,
+            "p.keystone.pyre_oath": 18,
             "p.keystone.rooted": 15,
           },
           "notableBySpoke": {
-            "ash": 10,
-            "bulwark": 9,
+            "ash": 8,
+            "bulwark": 8,
             "cinder": 4,
-            "ember": 15,
-            "hearth": 20,
+            "ember": 12,
+            "hearth": 16,
             "stone": 4,
-            "storm": 19,
-            "veil": 14,
+            "storm": 16,
+            "veil": 12,
           },
           "notableByTheme": {
             "armour": 4,
@@ -139,21 +190,21 @@ describe("the passive bench", () => {
             "coldRes": 20,
             "crit": 4,
             "fireRes": 17,
-            "life": 11,
-            "lightRes": 21,
-            "mana": 12,
+            "life": 8,
+            "lightRes": 16,
+            "mana": 8,
             "spell": 6,
-            "ward": 16,
+            "ward": 12,
           },
           "offence": [
             13.42,
-            33.33,
-            75.33,
-            110.42,
+            38.83,
+            87.58,
+            144.67,
           ],
           "travelShare": {
-            "defence": 0,
-            "offence": 0.02,
+            "defence": 0.04,
+            "offence": 0,
           },
         },
         {
@@ -161,93 +212,101 @@ describe("the passive bench", () => {
           "defence": [
             15.19,
             32.19,
-            82.55,
-            142.31,
+            88.7,
+            162.98,
           ],
           "keystone": {
-            "p.keystone.ashen_heart": 21,
+            "p.keystone.ashen_heart": 20,
             "p.keystone.glass_ward": 13,
+            "p.keystone.hearthbound": 16,
+            "p.keystone.iron_skin": 18,
             "p.keystone.live_wire": 14,
+            "p.keystone.overflow": 21,
+            "p.keystone.pyre_oath": 17,
             "p.keystone.rooted": 15,
           },
           "notableBySpoke": {
-            "ash": 21,
-            "bulwark": 11,
-            "cinder": 21,
-            "ember": 16,
-            "hearth": 11,
-            "stone": 16,
+            "ash": 16,
+            "bulwark": 7,
+            "cinder": 15,
+            "ember": 12,
+            "hearth": 8,
+            "stone": 11,
             "storm": 4,
             "veil": 4,
           },
           "notableByTheme": {
-            "armour": 11,
-            "brawn": 16,
+            "armour": 9,
+            "brawn": 13,
             "cast": 7,
-            "chaosRes": 14,
+            "chaosRes": 13,
             "coldRes": 14,
             "crit": 11,
-            "fireRes": 11,
-            "life": 13,
+            "fireRes": 10,
+            "life": 7,
             "lightRes": 4,
             "mana": 7,
-            "spell": 16,
+            "spell": 13,
             "ward": 4,
           },
           "offence": [
             8.67,
             29.75,
-            66.92,
-            110.42,
+            80.83,
+            141.67,
           ],
           "travelShare": {
-            "defence": 0.06,
-            "offence": 0.05,
+            "defence": 0,
+            "offence": 0.02,
           },
         },
         {
           "classId": "class.emberbound",
           "defence": [
             14.25,
-            25.08,
-            77.01,
-            145.03,
+            28.92,
+            78.06,
+            159.26,
           ],
           "keystone": {
             "p.keystone.ashen_heart": 17,
             "p.keystone.glass_ward": 18,
+            "p.keystone.hearthbound": 13,
+            "p.keystone.iron_skin": 20,
             "p.keystone.live_wire": 16,
+            "p.keystone.overflow": 16,
+            "p.keystone.pyre_oath": 14,
             "p.keystone.rooted": 22,
           },
           "notableBySpoke": {
-            "ash": 11,
-            "bulwark": 22,
-            "cinder": 16,
+            "ash": 8,
+            "bulwark": 16,
+            "cinder": 12,
             "ember": 4,
             "hearth": 4,
-            "stone": 21,
-            "storm": 12,
-            "veil": 17,
+            "stone": 16,
+            "storm": 8,
+            "veil": 12,
           },
           "notableByTheme": {
-            "armour": 22,
-            "brawn": 21,
-            "cast": 11,
-            "chaosRes": 25,
+            "armour": 16,
+            "brawn": 18,
+            "cast": 10,
+            "chaosRes": 16,
             "coldRes": 14,
-            "crit": 15,
+            "crit": 12,
             "fireRes": 7,
             "life": 4,
-            "lightRes": 14,
-            "mana": 11,
+            "lightRes": 8,
+            "mana": 8,
             "spell": 7,
-            "ward": 17,
+            "ward": 12,
           },
           "offence": [
             7.67,
-            22.83,
-            66.58,
-            110.42,
+            25.33,
+            78.67,
+            139.58,
           ],
           "travelShare": {
             "defence": 0.04,
