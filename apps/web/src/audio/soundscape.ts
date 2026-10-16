@@ -434,8 +434,12 @@ export function createSoundscape(opts: Options = {}): Soundscape {
         const old = before.equipment[slot as keyof Snapshot["equipment"]];
         return it && (old?.baseId !== it.baseId || old?.name !== it.name);
       })?.[1];
-      // Gold leaving the purse while a piece arrives is the vendor's shelf, not the floor.
+      // Gold leaving the purse while a piece arrives is the vendor's shelf, not the floor;
+      // gold arriving while a piece leaves is the counter paying, whatever it minted.
+      const has = gridKeys(snap);
+      const left = [...had.keys()].some((key) => !has.has(key));
       if (worn) play(`item-equip-${materialOf(worn)}`);
+      else if (left && snap.player.gold > before.player.gold) play("trade-sell");
       else if (landed && snap.player.gold < before.player.gold) play("trade-buy");
       else if (landed) play(`item-place-${materialOf(landed)}`);
 

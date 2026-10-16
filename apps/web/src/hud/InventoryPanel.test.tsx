@@ -321,6 +321,59 @@ describe("InventoryPanel", () => {
     expect(intents).toEqual([{ kind: "sellItem", x: 4, y: 4, from: "stash" }]);
   });
 
+  it("drags a backpack item onto the shelf grid to sell it; the rest of the window is not a counter", () => {
+    const intents: unknown[] = [];
+    render(<InventoryPanel inventory={inv} vendorOpen vendor={shelf} gold={500} onIntent={(i) => intents.push(i)} onClose={() => {}} />);
+    dragFrom(screen.getByTestId("inventory-item-0"));
+    fireEvent.pointerUp(screen.getByTestId("vendor-panel"));
+    expect(intents).toEqual([]);
+    dragFrom(screen.getByTestId("inventory-item-0"));
+    fireEvent.pointerUp(screen.getByTestId("vendor-cell-5-5"));
+    // A stocked cell is still the counter: the sale is never a buy or a swap.
+    dragFrom(screen.getByTestId("inventory-item-0"));
+    fireEvent.pointerUp(screen.getByTestId("vendor-item-0"));
+    expect(intents).toEqual([{ kind: "sellItem", x: 0, y: 0 }, { kind: "sellItem", x: 0, y: 0 }]);
+  });
+
+  it("drags a stash item onto the shelf grid with the container named", () => {
+    const intents: unknown[] = [];
+    const stash = { cols: 12, rows: 12, items: [{ x: 4, y: 4, w: 1, h: 1, rarity: "rare" as const, name: "Old Wand", lines: [] }] };
+    render(<InventoryPanel inventory={inv} stash={stash} vendorOpen onIntent={(i) => intents.push(i)} onClose={() => {}} />);
+    dragFrom(screen.getByTestId("stash-item-0"));
+    fireEvent.pointerUp(screen.getByTestId("vendor-cell-0-0"));
+    expect(intents).toEqual([{ kind: "sellItem", x: 4, y: 4, from: "stash" }]);
+  });
+
+  it("an equipped piece or one the counter refuses dropped on the shelf sells nothing and stays put", () => {
+    const intents: unknown[] = [];
+    const equipped = { weapon1: { rarity: "magic" as const, name: "Ember Wand", itemClass: "wand", lines: [] } };
+    const unread = { ...inv, items: [{ ...inv.items[0]!, unidentified: true }] };
+    render(<InventoryPanel inventory={unread} equipment={equipped} vendorOpen onIntent={(i) => intents.push(i)} onClose={() => {}} />);
+    dragFrom(screen.getByTestId("equip-slot-weapon1"));
+    fireEvent.pointerUp(screen.getByTestId("vendor-cell-0-0"));
+    dragFrom(screen.getByTestId("inventory-item-0"));
+    fireEvent.pointerUp(screen.getByTestId("vendor-cell-0-0"));
+    expect(intents).toEqual([]);
+  });
+
+  it("the shelf grid shows whether it will take the piece held over it", () => {
+    const orb = { ...inv.items[0]!, x: 4, y: 0, w: 1, h: 1, name: "Orb", itemClass: "currency", baseId: "currency.transmutation" };
+    render(<InventoryPanel inventory={{ ...inv, items: [inv.items[0]!, orb] }} vendorOpen onClose={() => {}} />);
+    const grid = document.querySelector('[data-drop-grid="vendor"]') as HTMLElement;
+    expect(grid.dataset["sell"]).toBeUndefined();
+
+    press(screen.getByTestId("inventory-item-0"), 10, 10);
+    moveTo(screen.getByTestId("vendor-cell-3-3"), 60, 60);
+    expect(grid.dataset["sell"]).toBe("ok");
+    moveTo(screen.getByTestId("vendor-panel"), 70, 70);
+    expect(grid.dataset["sell"]).toBeUndefined();
+    fireEvent.pointerUp(screen.getByTestId("inventory-panel"));
+
+    press(screen.getByTestId("inventory-item-1"), 10, 10);
+    moveTo(screen.getByTestId("vendor-cell-3-3"), 60, 60);
+    expect(grid.dataset["sell"]).toBe("refused");
+  });
+
   it("shows the banked shards as a count out of ten", () => {
     render(<InventoryPanel inventory={inv} vendorOpen shards={{ "currency.elevation": 7 }} onClose={() => {}} />);
     expect(screen.getByTestId("shard-currency.elevation").textContent).toContain("7 / 10");
@@ -693,11 +746,11 @@ describe("InventoryPanel sounds", () => {
     expect(heard()).toEqual(["item-lift"]);
   });
 
-  it("a shard banked at the bench is a sale; ten becoming an orb still rings", () => {
+  it("a banked shard is left to the soundscape's sale cue; ten becoming an orb still rings", () => {
     const { rerender } = render(<InventoryPanel inventory={inv} vendorOpen shards={{ "currency.elevation": 3 }} onClose={() => {}} />);
     rerender(<InventoryPanel inventory={inv} vendorOpen shards={{ "currency.elevation": 4 }} onClose={() => {}} />);
     rerender(<InventoryPanel inventory={inv} vendorOpen shards={{ "currency.elevation": 0 }} onClose={() => {}} />);
-    expect(heard()).toEqual(["trade-sell", "drop-unique"]);
+    expect(heard()).toEqual(["drop-unique"]);
   });
 
   it("a purchase is not heard at the click; the purse and the bag say whether it happened", () => {

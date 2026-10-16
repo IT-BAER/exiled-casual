@@ -698,6 +698,31 @@ describe("item and trade cues", () => {
     ])).toEqual(["trade-buy"]);
   });
 
+  it("gold paid for a piece that left either grid is a sale, a plain one included", () => {
+    expect(run([
+      snap({ tick: 1, player: testPlayer({ gold: 100 }), inventory: bag(item(0, 0, "mace.a", "mace")) }),
+      snap({ tick: 2, player: testPlayer({ gold: 101 }), inventory: bag() }),
+    ])).toEqual(["trade-sell"]);
+    expect(run([
+      snap({ tick: 1, player: testPlayer({ gold: 100 }), stash: bag(item(3, 3, "wand.a", "wand")) }),
+      snap({ tick: 2, player: testPlayer({ gold: 140 }), stash: bag() }),
+    ])).toEqual(["trade-sell"]);
+  });
+
+  it("a sale that mints an orb into the bag is heard as the sale, not as a set-down", () => {
+    expect(run([
+      snap({ tick: 1, player: testPlayer({ gold: 100 }), inventory: bag(item(0, 0, "mace.a", "mace")) }),
+      snap({ tick: 2, player: testPlayer({ gold: 140 }), inventory: bag(item(1, 0, "currency.elevation", "currency")) }),
+    ])).toEqual(["trade-sell"]);
+  });
+
+  it("gold that arrived while nothing left the grids is not a sale", () => {
+    expect(run([
+      snap({ tick: 1, player: testPlayer({ gold: 100 }), inventory: bag(item(0, 0, "mace.a", "mace")) }),
+      snap({ tick: 2, player: testPlayer({ gold: 140 }), inventory: bag(item(0, 0, "mace.a", "mace")) }),
+    ])).toEqual([]);
+  });
+
   it("gold spent on nothing that landed in the bag is not a purchase", () => {
     expect(run([
       snap({ tick: 1, player: testPlayer({ gold: 100 }) }),

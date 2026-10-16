@@ -354,18 +354,15 @@ export const InventoryPanel = React.memo(function InventoryPanel({
   const priceOf = (container: ContainerId, it: GridItem): number =>
     container === "vendor" ? (it as ShelfItem).price : 0;
 
-  // Sound the bench off the shard count rather than off the click, so the two
-  // outcomes are audibly different: banking a shard is a sale, and the tenth one
-  // spends the pile on an orb, which drops the total and rings like a unique.
+  // The sale itself is the soundscape's (gold in, piece out). The tenth shard
+  // spends the pile on an orb, which drops the total and rings like a unique on top.
   // docs/09 rule 2 - a reward the player cannot hear did not happen.
   const shardTotal = Object.values(shards).reduce((a, b) => a + b, 0);
   const lastShardTotal = React.useRef<number | null>(null);
   React.useEffect(() => {
     const prev = lastShardTotal.current;
     lastShardTotal.current = shardTotal;
-    if (prev === null || prev === shardTotal) return;
-    if (shardTotal > prev) playSfx("trade-sell");
-    else playDropSound("unique");
+    if (prev !== null && shardTotal < prev) playDropSound("unique");
   }, [shardTotal]);
   // Keyed by WHERE the cursor is, not by the item that was under it: a cell and a
   // paper-doll slot both address one place, and the sim rebuilds every item object
@@ -476,6 +473,12 @@ export const InventoryPanel = React.memo(function InventoryPanel({
   // Compared here, not in a setState updater: React can render once even for an equal value.
   const targetRef = React.useRef<DropTarget | null>(null);
   const ghostRef = React.useRef<HTMLDivElement | null>(null);
+  // Whether the vendor window under the held piece will take it. Same rule as
+  // the sim's vendorSellPrice: currency and unread items are refused.
+  const [sellHover, setSellHover] = React.useState<"ok" | "refused" | null>(null);
+  const sellRef = React.useRef<"ok" | "refused" | null>(null);
+  const sellable = (d: NonNullable<typeof drag>): boolean =>
+    d.from.kind === "grid" && d.item.itemClass !== "currency" && !d.item.unidentified;
 
   // Pointer events, not HTML5 drag-and-drop: the release target can be the Babylon
   // canvas behind the panel (drop to ground), which native DnD does not reach.
@@ -483,9 +486,15 @@ export const InventoryPanel = React.memo(function InventoryPanel({
   // deliver the moves and the release before the moved `drag` is committed.
   const pointerRef = React.useRef({ x: NaN, y: NaN });
   React.useEffect(() => {
-    if (!drag) { targetRef.current = null; setDropTarget(null); return; }
+    if (!drag) { targetRef.current = null; setDropTarget(null); sellRef.current = null; setSellHover(null); return; }
     const move = (e: PointerEvent) => {
       pointerRef.current = { x: e.clientX, y: e.clientY };
+      const overSell = e.target instanceof Element && !!e.target.closest("[data-drop-sell]");
+      const sell = overSell ? (sellable(drag) ? "ok" : "refused") : null;
+      if (sellRef.current !== sell) {
+        sellRef.current = sell;
+        setSellHover(sell);
+      }
       const ghost = ghostRef.current;
       if (ghost) {
         ghost.style.left = ghostLeft(drag, e.clientX);
@@ -538,6 +547,17 @@ export const InventoryPanel = React.memo(function InventoryPanel({
           const swallow = (c: MouseEvent) => c.stopPropagation();
           window.addEventListener("click", swallow, { capture: true, once: true });
           setTimeout(() => window.removeEventListener("click", swallow, { capture: true }), 0);
+        }
+        return;
+      }
+      // Dropped on the shelf grid: a sale, which the sim prices and may still
+      // refuse. Ahead of onGrid, or the shelf would read as a move.
+      if (target?.closest("[data-drop-sell]")) {
+        if (drag.from.kind === "grid" && sellable(drag)) {
+          onIntent?.({
+            kind: "sellItem", x: drag.from.x, y: drag.from.y,
+            ...(drag.from.container === "stash" ? { from: "stash" as const } : {}),
+          });
         }
         return;
       }
@@ -628,9 +648,14 @@ export const InventoryPanel = React.memo(function InventoryPanel({
       onIntent?.({ kind: "sortItems", ...(container === "stash" ? { container: "stash" as const } : {}), mode: sortMode });
       setSortNext((s) => ({ ...s, [container]: ((s[container] ?? 0) + 1) % SORT_MODES.length }));
     };
+    // The shelf grid is the counter: a piece released on it is sold, and while one is
+    // held over it the grid answers first, gilt to take it, red to refuse it.
+    const sell = container === "vendor" ? sellHover : null;
     return (
           <div
             data-drop-grid={container}
+            data-drop-sell={container === "vendor" ? "" : undefined}
+            data-sell={sell ?? undefined}
             ref={(el) => { gridRefs.current[container] = el; }}
             style={{
               position: "relative",
@@ -657,6 +682,12 @@ export const InventoryPanel = React.memo(function InventoryPanel({
               backgroundSize: `auto, auto, ${CELL} ${CELL}`,
               border: `1px solid ${GOLD_DIM}`,
               boxShadow: "inset 0 0 14px rgba(0,0,0,0.8)",
+              // A 1px border and a faint glow vanished on the dark stone in-game.
+              ...(sell && {
+                outline: `2px solid ${sell === "ok" ? GOLD : "#d05a4e"}`,
+                outlineOffset: -2,
+                boxShadow: `inset 0 0 40px ${sell === "ok" ? `${GOLD}8c` : "#d05a4e80"}`,
+              }),
             }}
           >
             {/* Sort sits on the grid's top-right corner, just above the cells it rearranges. Neither PoE has one. */}
@@ -1011,7 +1042,7 @@ export const InventoryPanel = React.memo(function InventoryPanel({
             );
           })}
           <div style={{ fontSize: 11, color: "#8c8069", lineHeight: 1.45, marginTop: 2 }}>
-            Click the shelf to buy. Ctrl-click your own to sell: all of it pays gold,
+            Click the shelf to buy. Drag your own onto it or ctrl-click it to sell: all of it pays gold,
             magic and better also break into shards.
           </div>
         </div>
