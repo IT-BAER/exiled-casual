@@ -3,7 +3,7 @@ name: Jeff
 # checked out into .jeff/ (gitignored) with a read-only token. Project rules: .jeff/projects/<repo>.md.
 on:
   issues:
-    types: [labeled]
+    types: [labeled, closed]
   workflow_run:
     workflows: [CI]
     types: [completed]
@@ -103,3 +103,32 @@ jobs:
           name: jeff-smoke-out
           path: smoke-out/
           if-no-files-found: ignore
+
+  # A closed issue releases the issues waiting on it. No agent: a "Blocked on #<n>." line in a
+  # comment by Jeff or the owner names each blocker; when all are closed, `jeff` is set again.
+  unblock:
+    if: github.event_name == 'issues' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - id: jeff-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.JEFF_APP_ID }}
+          private-key: ${{ secrets.JEFF_APP_PRIVATE_KEY }}
+          owner: IT-BAER
+          repositories: exiled-casual
+          permission-issues: write
+      - env:
+          GH_TOKEN: ${{ steps.jeff-token.outputs.token }}
+          CLOSED: ${{ github.event.issue.number }}
+        run: |
+          for i in $(gh issue list -R "$GITHUB_REPOSITORY" --label blocked --state open --json number --jq '.[].number'); do
+            deps=$(gh issue view "$i" -R "$GITHUB_REPOSITORY" --json comments --jq '[.comments[] | select(.author.login == "jeff-it-baer" or .author.login == "IT-BAER") | select(.body | test("Blocked on #[0-9]+"))] | last | .body // ""' | grep -oE 'Blocked on #[0-9]+' | grep -oE '[0-9]+' | sort -u)
+            grep -qx "$CLOSED" <<<"$deps" || continue
+            waiting=""
+            for d in $deps; do [ "$(gh issue view "$d" -R "$GITHUB_REPOSITORY" --json state --jq .state)" = OPEN ] && waiting="$waiting #$d"; done
+            if [ -n "$waiting" ]; then echo "#$i still waits on$waiting"; continue; fi
+            gh issue edit "$i" -R "$GITHUB_REPOSITORY" --remove-label blocked --remove-label jeff
+            gh issue edit "$i" -R "$GITHUB_REPOSITORY" --add-label jeff
+            echo "#$i unblocked"
+          done
