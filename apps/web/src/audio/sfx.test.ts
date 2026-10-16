@@ -3,8 +3,10 @@ import { existsSync, readdirSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { readFileSync } from "node:fs";
 import { MONSTERS } from "@exiled/content-runtime";
+import type { Shoreline } from "@exiled/mapgen";
 import {
-  AMBIENT_BY_BIOME, AMBIENT_DETAIL, CORE_SFX, DETAIL_GAP_S, DETAIL_RADIUS, ambientCue, distanceCutoff,
+  AMBIENT_BY_BIOME, AMBIENT_DETAIL, BED_DRIFT_PAN, BED_SWELL_DB, BED_SWELL_S, CORE_SFX, DETAIL_GAP_S,
+  DETAIL_LEVEL_DB, DETAIL_MIN_TURN, DETAIL_RADIUS, SEA_PAN, ambientCue, distanceCutoff,
   distanceRolloff, moveSfxLoop, playSfx, playSfxAt, preloadSfx, resetSfx, setAmbient, setSfxListener,
   sfxCategory, startSfxLoop, startSfxLoopAt, stopAmbient, stopSfxLoop, toListenerSpace,
 } from "./sfx";
@@ -417,12 +419,13 @@ describe("positional voices", () => {
   let panners: Panner[];
   let gains: Array<{ gain: FakeParam }>;
   let filters: Array<{ frequency: FakeParam }>;
+  let stereos: Array<{ pan: FakeParam }>;
   let played: number;
   let listener: Record<string, unknown>;
 
   function install(modernListener = true): void {
     resetSfx();
-    panners = []; gains = []; filters = []; played = 0; fake.sends.length = 0;
+    panners = []; gains = []; filters = []; stereos = []; played = 0; fake.sends.length = 0;
     vi.stubGlobal("fetch", (url: string) =>
       Promise.resolve({ ok: true, status: 200, arrayBuffer: () => Promise.resolve(url) }));
     listener = modernListener
@@ -456,6 +459,7 @@ describe("positional voices", () => {
         panners.push(n);
         return n;
       },
+      createStereoPanner: () => { const n = { pan: param(0), connect: () => {} }; stereos.push(n); return n; },
     };
     setSfxListener(0, 0);
   }
@@ -633,6 +637,96 @@ describe("positional voices", () => {
       await vi.advanceTimersByTimeAsync(DETAIL_GAP_S[1] * 1000);
       expect(panners).toHaveLength(2);
       expect(fetched().some((u) => u.includes("/ambient-swamp-detail-"))).toBe(true);
+    });
+
+    it("plays each detail at its own level, most of them faint", async () => {
+      installTimed();
+      vi.spyOn(Math, "random").mockReturnValue(0);
+      setAmbient("forest");
+      await vi.advanceTimersByTimeAsync(DETAIL_GAP_S[0] * 1000);
+      const peak = voiceGain("ambient-forest-detail");
+      // Level jitter at random 0 is -1 dB, at the top +1 dB.
+      expect(gains.at(-1)!.gain.value).toBeCloseTo(peak * 10 ** ((DETAIL_LEVEL_DB[0] - 1) / 20), 9);
+      vi.spyOn(Math, "random").mockReturnValue(0.5);
+      await vi.advanceTimersByTimeAsync(DETAIL_GAP_S[0] * 1000);
+      const mid = gains.at(-1)!.gain.value / peak;
+      // Halfway up the draw is still in the quiet half of the range.
+      expect(20 * Math.log10(mid)).toBeLessThan((DETAIL_LEVEL_DB[0] + DETAIL_LEVEL_DB[1]) / 2);
+      vi.spyOn(Math, "random").mockReturnValue(0.999999);
+      await vi.advanceTimersByTimeAsync(((DETAIL_GAP_S[0] + DETAIL_GAP_S[1]) / 2) * 1000);
+      expect(gains.at(-1)!.gain.value).toBeCloseTo(peak * 10 ** ((DETAIL_LEVEL_DB[1] + 1) / 20), 4);
+    });
+
+    it("never drops two details in a row from the same side", async () => {
+      installTimed();
+      const seq = [0.93, 0.02, 0.51, 0.77, 0.33, 0.98, 0.11, 0.64, 0.45, 0.07, 0.86];
+      let i = 0;
+      vi.spyOn(Math, "random").mockImplementation(() => seq[i++ % seq.length]!);
+      setSfxListener(10, 4);
+      setAmbient("forest");
+      await vi.advanceTimersByTimeAsync(DETAIL_GAP_S[1] * 1000 * 12);
+      expect(panners.length).toBeGreaterThanOrEqual(8);
+      const [lx, lz] = toListenerSpace(10, 4);
+      const angles = panners.map((p) => Math.atan2(p.positionZ.value - lz, p.positionX.value - lx));
+      for (let k = 1; k < angles.length; k++) {
+        const d = Math.abs(angles[k]! - angles[k - 1]!) % (2 * Math.PI);
+        expect(Math.min(d, 2 * Math.PI - d)).toBeGreaterThanOrEqual(DETAIL_MIN_TURN - 1e-9);
+      }
+    });
+
+    it("the bed swells and drifts slowly within its bounds, and stops with it", async () => {
+      installTimed();
+      vi.spyOn(Math, "random").mockReturnValue(0);
+      setAmbient("forest");
+      await vi.advanceTimersByTimeAsync(0);
+      const bedGain = gains[0]!;
+      const pan = stereos[0]!;
+      expect(fake.sends[0]!.spatial).toBe(pan);
+      const peak = voiceGain("ambient-forest");
+      expect(bedGain.gain.value).toBeCloseTo(peak, 9);
+      expect(pan.pan.value).toBe(0);
+      await vi.advanceTimersByTimeAsync(BED_SWELL_S[0] * 1000);
+      expect(bedGain.gain.value).toBeCloseTo(peak * 10 ** (-BED_SWELL_DB / 20), 9);
+      expect(pan.pan.value).toBeCloseTo(-BED_DRIFT_PAN, 9);
+      vi.spyOn(Math, "random").mockReturnValue(0.999999);
+      await vi.advanceTimersByTimeAsync(BED_SWELL_S[0] * 1000);
+      expect(bedGain.gain.value).toBeCloseTo(peak * 10 ** (BED_SWELL_DB / 20), 4);
+      expect(pan.pan.value).toBeCloseTo(BED_DRIFT_PAN, 4);
+      stopAmbient();
+      expect(bedGain.gain.value).toBe(0);
+      vi.spyOn(Math, "random").mockReturnValue(0.5);
+      await vi.advanceTimersByTimeAsync(BED_SWELL_S[1] * 3000);
+      expect(bedGain.gain.value).toBe(0);
+    });
+
+    it("hears the Strand's surf from the sea side, louder near the water", async () => {
+      installTimed();
+      vi.spyOn(Math, "random").mockReturnValue(0.5); // no swell, no drift
+      const shore = (seaSide: 1 | -1): Shoreline => ({
+        along: "x", start: -40, step: 0.5, cross: new Float32Array(161).fill(10), seaSide,
+      });
+      setSfxListener(0, -10);
+      setAmbient("coast", shore(1));
+      await vi.advanceTimersByTimeAsync(0);
+      const bedGain = gains[0]!;
+      const pan = stereos[0]!;
+      const peak = voiceGain("ambient-shore");
+      // Sea at greater sim y: screen-right and up, so the surf leans right.
+      expect(pan.pan.value).toBeGreaterThan(0.2);
+      expect(pan.pan.value).toBeLessThanOrEqual(SEA_PAN);
+      const far = bedGain.gain.value;
+      expect(far).toBeLessThan(peak);
+      setSfxListener(0, 9);
+      expect(bedGain.gain.value).toBeCloseTo(peak, 9);
+      expect(bedGain.gain.value).toBeGreaterThan(far);
+      // The same map mirrored puts the water, and the surf, on the other side.
+      setSfxListener(0, 30);
+      setAmbient("coast", shore(-1));
+      expect(pan.pan.value).toBeLessThan(-0.2);
+      // Every other biome keeps a centred bed.
+      setAmbient("forest");
+      await vi.advanceTimersByTimeAsync(0);
+      expect(stereos.at(-1)!.pan.value).toBe(0);
     });
   });
 

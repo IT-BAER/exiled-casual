@@ -1,3 +1,4 @@
+import type { Shoreline } from "@exiled/mapgen";
 import { bus, send, type Bus, type SoundCategory } from "./bus";
 
 /**
@@ -43,22 +44,23 @@ interface Voice {
 }
 
 const VOICES: Record<string, Voice> = {
-  "ambient-hideout":          { gain: 0.156, wet: 0.08, vary: 0 },
-  "ambient-cave":             { gain: 0.082, wet: 0.24, vary: 0 },
-  "ambient-wind":             { gain: 0.088, wet: 0.04, vary: 0 },
-  "ambient-swamp":            { gain: 0.08, wet: 0.10, vary: 0 },
-  "ambient-forest":           { gain: 0.07, wet: 0.08, vary: 0 },
+  // Beds sit 3 dB under where they were first balanced: the place is the background.
+  "ambient-hideout":          { gain: 0.110, wet: 0.08, vary: 0 },
+  "ambient-cave":             { gain: 0.058, wet: 0.24, vary: 0 },
+  "ambient-wind":             { gain: 0.062, wet: 0.04, vary: 0 },
+  "ambient-swamp":            { gain: 0.057, wet: 0.10, vary: 0 },
+  "ambient-forest":           { gain: 0.050, wet: 0.08, vary: 0 },
   // Open coast: almost no reverb, because there is nothing out there to reflect.
-  "ambient-shore":            { gain: 0.071, wet: 0.03, vary: 0 },
-  // Details over the beds (AMBIENT_DETAIL), heard 6-12 units off and so 9-15 dB down by
-  // distance. Per pool: the median take's loudest 400 ms at 9 units sits 15 dB under an
-  // Ember Bolt cast, so a gull is the place and never a hit. Cave stays at 0.25 (cap).
-  "ambient-hideout-detail":   { gain: 0.16, wet: 0.12, vary: 0.06, takes: 5 },
-  "ambient-cave-detail":      { gain: 0.25, wet: 0.30, vary: 0.06, takes: 6 },
-  "ambient-wind-detail":      { gain: 0.115, wet: 0.10, vary: 0.06, takes: 5 },
-  "ambient-swamp-detail":     { gain: 0.165, wet: 0.10, vary: 0.06, takes: 7 },
-  "ambient-forest-detail":    { gain: 0.11, wet: 0.12, vary: 0.06, takes: 7 },
-  "ambient-shore-detail":     { gain: 0.09, wet: 0.06, vary: 0.06, takes: 4 },
+  "ambient-shore":            { gain: 0.050, wet: 0.03, vary: 0 },
+  // Details over the beds (AMBIENT_DETAIL), heard 5-13 units off and so 7-16 dB down by
+  // distance, then DETAIL_LEVEL_DB more. At the top of that draw the median take's
+  // loudest 400 ms at 9 units sits 19 dB under an Ember Bolt cast: the place, never a hit.
+  "ambient-hideout-detail":   { gain: 0.101, wet: 0.12, vary: 0.06, takes: 5 },
+  "ambient-cave-detail":      { gain: 0.158, wet: 0.30, vary: 0.06, takes: 6 },
+  "ambient-wind-detail":      { gain: 0.073, wet: 0.10, vary: 0.06, takes: 5 },
+  "ambient-swamp-detail":     { gain: 0.104, wet: 0.10, vary: 0.06, takes: 7 },
+  "ambient-forest-detail":    { gain: 0.069, wet: 0.12, vary: 0.06, takes: 7 },
+  "ambient-shore-detail":     { gain: 0.057, wet: 0.06, vary: 0.06, takes: 4 },
   "skill-ember-bolt-cast":    { gain: 0.183, wet: 0.14, vary: 0.06, takes: 3 },
   "skill-ember-bolt-impact":  { gain: 0.295, wet: 0.18, vary: 0.08, takes: 3 },
   "skill-cinder-ground-cast": { gain: 0.247, wet: 0.22, vary: 0.04, takes: 3 },
@@ -354,6 +356,7 @@ export function setSfxListener(x: number, y: number): void {
   listener.x = x;
   listener.y = y;
   if (listenerCtx) placeListener(listenerCtx, true);
+  if (bed.shore) applyBed();
 }
 
 function distanceTo(at: At): number {
@@ -459,6 +462,8 @@ const loops = new Map<string, {
   wet: GainNode | null;
   wetBase: number;
   world: boolean;
+  /** Centred loops that lean (the bed): a stereo position, not a place in the world. */
+  stereo: StereoPannerNode | null;
 }>();
 
 /**
@@ -509,7 +514,7 @@ function loopLevel(peak: number, volume: number, distance: number, panner: Panne
   return peak * clamp(volume) * (panner ? 1 : distanceRolloff(distance));
 }
 
-function startLoop(name: string, key: string, volume: number, at: At | null): void {
+function startLoop(name: string, key: string, volume: number, at: At | null, lean = false): void {
   if (loops.has(key)) return;
   const voice = VOICES[name];
   if (!voice || files(name).every((f) => dead.has(f))) { note(`novoice:${name}`); publish(); return; }
@@ -536,11 +541,12 @@ function startLoop(name: string, key: string, volume: number, at: At | null): vo
   lp.type = "lowpass";
   lp.frequency.value = distanceCutoff(distance);
   g.connect(lp);
-  const wet = send(b, lp, voice.wet, sfxCategory(name), panner);
+  const stereo = !at && lean && typeof b.ctx.createStereoPanner === "function" ? b.ctx.createStereoPanner() : null;
+  const wet = send(b, lp, voice.wet, sfxCategory(name), panner ?? stereo);
   const wetBase = wet ? wet.gain.value : 0;
   if (panner && wet) wet.gain.value = wetBase * distanceRolloff(distance);
   src.start();
-  loops.set(key, { src, gain: g, peak, lp, panner, wet, wetBase, world: at !== null });
+  loops.set(key, { src, gain: g, peak, lp, panner, wet, wetBase, world: at !== null, stereo });
   debug.started++;
   publish();
 }
@@ -617,50 +623,139 @@ export const AMBIENT_DETAIL: Record<string, string> = {
   "ambient-forest": "ambient-forest-detail",
   "ambient-shore": "ambient-shore-detail",
 };
-/** Seconds between two details, uniform. */
-export const DETAIL_GAP_S: readonly [number, number] = [8, 25];
+/** Seconds between two details, uniform. Rare enough that none becomes a pattern. */
+export const DETAIL_GAP_S: readonly [number, number] = [12, 35];
 /** Ground units from the player, inside `AUDIBLE`: off-screen to the side, never underfoot. */
-export const DETAIL_RADIUS: readonly [number, number] = [6, 12];
+export const DETAIL_RADIUS: readonly [number, number] = [5, 13];
+/** A detail's level under its voice gain, drawn squared toward the quiet end: most are faint. */
+export const DETAIL_LEVEL_DB: readonly [number, number] = [-9, 0];
+/** Radians the next detail turns away from the last, at least: they come from all round. */
+export const DETAIL_MIN_TURN = Math.PI / 2;
+
+/** The bed's slow swell: a new level and lean every BED_SWELL_S, glided over BED_GLIDE. */
+export const BED_SWELL_DB = 2.5;
+export const BED_DRIFT_PAN = 0.3;
+export const BED_SWELL_S: readonly [number, number] = [12, 30];
+/** Time constant (s) of every bed move: about three of them to arrive, never a step. */
+const BED_GLIDE = 2;
+/** The Strand's surf: how hard it leans toward the water, and how far inland it fades. */
+export const SEA_PAN = 0.5;
+const SEA_NEAR = 4;
+const SEA_FAR = 20;
+const SEA_FAR_DB = -6;
+/** Units past the waterline the surf is heard from, so standing at it still has a side. */
+const SEA_DEPTH = 3;
 
 let wantedAmbient: string | null = null;
 let detailTimer: ReturnType<typeof setTimeout> | null = null;
+let swellTimer: ReturnType<typeof setTimeout> | null = null;
+let lastDetailAngle: number | null = null;
+const bed = { swellDb: 0, drift: 0, shore: null as Shoreline | null };
+
+function between([lo, hi]: readonly [number, number]): number {
+  return lo + Math.random() * (hi - lo);
+}
 
 function scheduleDetail(cue: string): void {
   const pool = AMBIENT_DETAIL[cue];
   if (!pool) return;
-  const [lo, hi] = DETAIL_GAP_S;
   detailTimer = setTimeout(() => {
     detailTimer = null;
     if (wantedAmbient !== cue) return;
-    const angle = Math.random() * 2 * Math.PI;
-    const r = DETAIL_RADIUS[0] + Math.random() * (DETAIL_RADIUS[1] - DETAIL_RADIUS[0]);
-    playSfxAt(pool, listener.x + r * Math.cos(angle), listener.y + r * Math.sin(angle));
+    const angle = lastDetailAngle === null
+      ? Math.random() * 2 * Math.PI
+      : lastDetailAngle + DETAIL_MIN_TURN + Math.random() * (2 * Math.PI - 2 * DETAIL_MIN_TURN);
+    lastDetailAngle = angle;
+    const r = between(DETAIL_RADIUS);
+    const u = Math.random();
+    const db = DETAIL_LEVEL_DB[0] + (DETAIL_LEVEL_DB[1] - DETAIL_LEVEL_DB[0]) * u * u;
+    playSfxAt(pool, listener.x + r * Math.cos(angle), listener.y + r * Math.sin(angle), 10 ** (db / 20));
     scheduleDetail(cue);
-  }, (lo + Math.random() * (hi - lo)) * 1000);
+  }, between(DETAIL_GAP_S) * 1000);
 }
 
-function stopDetails(): void {
+function scheduleSwell(cue: string): void {
+  swellTimer = setTimeout(() => {
+    swellTimer = null;
+    if (wantedAmbient !== cue) return;
+    bed.swellDb = (Math.random() * 2 - 1) * BED_SWELL_DB;
+    bed.drift = (Math.random() * 2 - 1) * BED_DRIFT_PAN;
+    applyBed();
+    scheduleSwell(cue);
+  }, between(BED_SWELL_S) * 1000);
+}
+
+/**
+ * Where the Strand's surf is heard from: a lean toward the water on screen, and a level
+ * that fades inland. Centred and full anywhere without a shore.
+ */
+function seaBearing(): { pan: number; level: number } {
+  const s = bed.shore;
+  if (!s || s.cross.length === 0) return { pan: 0, level: 1 };
+  let best = Infinity;
+  let px = 0;
+  let py = 0;
+  for (let i = 0; i < s.cross.length; i++) {
+    const a = s.start + i * s.step;
+    const c = s.cross[i]!;
+    const x = s.along === "x" ? a : c;
+    const y = s.along === "x" ? c : a;
+    const d = Math.hypot(x - listener.x, y - listener.y);
+    if (d < best) { best = d; px = x; py = y; }
+  }
+  // Into the water along the cross axis, which is the side the sea is on.
+  const dx = px - listener.x + (s.along === "y" ? s.seaSide * SEA_DEPTH : 0);
+  const dy = py - listener.y + (s.along === "x" ? s.seaSide * SEA_DEPTH : 0);
+  // Screen-right is toListenerSpace's first axis.
+  const right = (dx + dy) / Math.SQRT2 / (Math.hypot(dx, dy) || 1);
+  const t = Math.min(1, Math.max(0, (best - SEA_NEAR) / (SEA_FAR - SEA_NEAR)));
+  return { pan: right * SEA_PAN, level: 10 ** ((SEA_FAR_DB * t) / 20) };
+}
+
+/** Glide the bed to its swell, its drift and, on a coast, the sea's side. */
+function applyBed(): void {
+  const live = loops.get("ambient");
+  const b = bus();
+  if (!live || !b) return;
+  const now = b.ctx.currentTime;
+  const sea = seaBearing();
+  live.gain.gain.setTargetAtTime(live.peak * 10 ** (bed.swellDb / 20) * sea.level, now, BED_GLIDE);
+  live.stereo?.pan.setTargetAtTime(Math.max(-1, Math.min(1, bed.drift + sea.pan)), now, BED_GLIDE);
+}
+
+function stopBedMotion(): void {
   if (detailTimer !== null) clearTimeout(detailTimer);
+  if (swellTimer !== null) clearTimeout(swellTimer);
   detailTimer = null;
+  swellTimer = null;
+  lastDetailAngle = null;
+  bed.swellDb = 0;
+  bed.drift = 0;
 }
 
-export function setAmbient(biomeId: string | null): void {
+/** The area's bed and details. `shore` (the Strand's waterline) puts the surf on the sea's side. */
+export function setAmbient(biomeId: string | null, shore: Shoreline | null = null): void {
   const cue = ambientCue(biomeId);
-  if (wantedAmbient === cue && loops.has("ambient")) return;
+  bed.shore = shore;
+  if (wantedAmbient === cue && loops.has("ambient")) { applyBed(); return; }
   wantedAmbient = cue;
   stopSfxLoop("ambient");
-  stopDetails();
+  stopBedMotion();
   scheduleDetail(cue);
+  scheduleSwell(cue);
   const pool = AMBIENT_DETAIL[cue];
   void preloadSfx(pool ? [cue, pool] : [cue]).then(() => {
-    if (wantedAmbient === cue) startSfxLoop(cue, "ambient");
+    if (wantedAmbient !== cue) return;
+    startLoop(cue, "ambient", 1, null, true);
+    applyBed();
   });
 }
 
 export function stopAmbient(): void {
   wantedAmbient = null;
+  bed.shore = null;
   stopSfxLoop("ambient");
-  stopDetails();
+  stopBedMotion();
 }
 
 /**

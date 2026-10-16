@@ -602,7 +602,7 @@ export function GameView({
         stoodIn = msg.area;
         // The base also says what the floor is, which is what his boots land on.
         soundscape.reset(base?.biomeId ?? null);
-        setAmbient(base?.biomeId ?? null);
+        setAmbient(base?.biomeId ?? null, grid?.shore ?? null);
         setMusic(base?.biomeId ?? null);
         // Nothing the player had open belongs to the place they just left. The
         // inventory in particular: opening a map from the device leaves it up, and
