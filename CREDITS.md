@@ -24,8 +24,8 @@ Build tooling (not shipped): the animation pack's matching Unreal FBX was conver
 
 Created for this project (AI-generated or hand-made), all rights reserved:
 
-- `apps/web/public/hud/orb-frame-v1.png`
-- `apps/web/public/textures/` (floor, walls, skins, cloth)
+- `apps/web/public/hud/` and its masters in `assets/hud/` and `assets/passives/` (orbs, bars, frames, passive icons)
+- `apps/web/public/textures/` (floor, skins, cloth)
 - `art/concepts/` (caster, imp, rare)
 
 ## Visual reference

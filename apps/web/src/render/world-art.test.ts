@@ -10,7 +10,7 @@ const PUBLIC = resolve(__dirname, "../../public");
  * preload, and the ones that belong to somebody else. See `world-art.ts` for why
  * each exclusion is an exclusion; this is the machine-checkable half of it.
  */
-const COVERED = ["buffs", "fx", "items", "skills", "walls", "water", "world"];
+const COVERED = ["buffs", "fx", "items", "skills", "water"];
 
 /**
  * Icons whose master is drawn but whose item base does not exist yet. They are

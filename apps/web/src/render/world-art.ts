@@ -15,11 +15,12 @@
  * - `textures/tilesets/**` and `textures/loading/**`: per-area, and the loading
  *   plate already waits on them — it comes down on `scene.executeWhenReady`
  *   plus a painted frame, and both are built during the area message.
- * - `floor.webp`, `imp_skin.png`, `rare_skin.png`, `robe_cloth.png`: 9 MB between
- *   them, and all four are the GREYBOX fallback — what gets drawn when
- *   `monsters.glb` or `wardrobe.glb` did not load at all. Preloading the
- *   fallback for a failure that already ruins the frame is 9 MB spent on the
- *   worst case of the worst case.
+ * - `floor.webp`: the hideout floor (and the floor of an area without a
+ *   tileset), already drawn by the time the loading plate comes down.
+ * - `imp_skin.png`, `rare_skin.png`, `robe_cloth.png`: 9 MB between them, and
+ *   all three are the GREYBOX fallback — what gets drawn when `monsters.glb` or
+ *   `wardrobe.glb` did not load at all. Preloading the fallback for a failure
+ *   that already ruins the frame is 9 MB spent on the worst case of the worst case.
  *
  * This file imports nothing, for the same reason `ui-art.ts` imports nothing:
  * the list has to be readable by a test that cannot mount a renderer. And
