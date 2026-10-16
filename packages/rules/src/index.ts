@@ -15,3 +15,4 @@ export * from "./disenchant.js";
 export * from "./loot.js";
 export * from "./vendor.js";
 export * from "./passives.js";
+export * from "./passive-bench.js";
