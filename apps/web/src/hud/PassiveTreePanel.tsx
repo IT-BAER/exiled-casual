@@ -28,7 +28,7 @@ import { Divider, GOLD_DIM, MenuButton } from "../menu/frames";
 
 /** How much of the tree is on screen at zoom 1. Tree units, see passives.ts. */
 const VIEW = 1750;
-// The whole web is 1600 units across, so anything under this is zooming out
+// The whole web is about 1620 units across, so anything under this is zooming out
 // past the tree into empty field.
 const ZOOM_MIN = 0.85;
 const ZOOM_MAX = 3.2;

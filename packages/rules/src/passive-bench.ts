@@ -258,9 +258,13 @@ export function passiveBenchWalk(classId: string, axis: BenchAxis, budget: numbe
   return { nodes: walk, total: round2(walk.reduce((s, id) => s + passiveAxisValue(id, axis), 0)) };
 }
 
-function cheapestOf(classId: string, ids: readonly string[]): number {
+/** Points to the cheapest of `ids`. `cost` memoises per node: a notable is priced by theme and by spoke. */
+function cheapestOf(classId: string, ids: readonly string[], cost: Map<string, number>): number {
   let best = Infinity;
-  for (const id of ids) best = Math.min(best, cheapestPassivePath(classId, id)?.length ?? Infinity);
+  for (const id of ids) {
+    if (!cost.has(id)) cost.set(id, cheapestPassivePath(classId, id)?.length ?? Infinity);
+    best = Math.min(best, cost.get(id)!);
+  }
   return best;
 }
 
@@ -286,11 +290,12 @@ export function passiveBench(): PassiveBenchClass[] {
       const travel = full.filter((id) => passiveTheme(id) === "travel").length;
       travelShare[axis] = full.length === 0 ? 0 : round2(travel / full.length);
     }
+    const cost = new Map<string, number>();
     return {
       classId,
-      notableByTheme: Object.fromEntries([...byTheme].map(([t, ids]) => [t, cheapestOf(classId, ids)])),
-      notableBySpoke: Object.fromEntries([...bySpoke].map(([s, ids]) => [s, cheapestOf(classId, ids)])),
-      keystone: Object.fromEntries(keystones.map((id) => [id, cheapestOf(classId, [id])])),
+      notableByTheme: Object.fromEntries([...byTheme].map(([t, ids]) => [t, cheapestOf(classId, ids, cost)])),
+      notableBySpoke: Object.fromEntries([...bySpoke].map(([s, ids]) => [s, cheapestOf(classId, ids, cost)])),
+      keystone: Object.fromEntries(keystones.map((id) => [id, cheapestOf(classId, [id], cost)])),
       walks,
       travelShare,
     };

@@ -15,7 +15,7 @@ import type { ItemStatMod } from "./stats";
  * keystone at the end of a long run, and one bright allocated path through it.
  *
  * It is GENERATED from the tables below rather than authored node by node,
- * because 200 hand-placed dots is 200 chances for a link to go somewhere there
+ * because 300 hand-placed dots is 300 chances for a link to go somewhere there
  * is no node. What is authored is the part that carries the design: which
  * disciplines exist, what each cluster is about, and what the keystones cost.
  * The geometry is a rule — clusters out along a spoke, minors round their
@@ -149,36 +149,46 @@ type ThemeId = keyof typeof THEMES;
 // ---------------------------------------------------------------------------
 
 /**
- * Eight disciplines round the core, each four clusters deep. A spoke is a
- * DIRECTION rather than a class's property: any character can walk any of them,
- * and what a class decides is only where the walk starts — which is PoE1's rule
- * and the reason two Rangers can end up nothing alike.
+ * Eight disciplines round the core, each four clusters deep along its spoke,
+ * and a fifth ring outside them: one cluster between every spoke and the next,
+ * joined to the outer cluster of both. A spoke is a DIRECTION rather than a
+ * class's property: any character can walk any of them, and what a class
+ * decides is only where the walk starts — which is PoE1's rule and the reason
+ * two Rangers can end up nothing alike.
  *
  * The themes run defensive-first on purpose. The nearest cluster on every spoke
  * is something a character can use as soon as he has a point to spend, and the
  * specialised ones are two clusters out, so the first ten points are never wasted.
+ * `themes[4]` is the outer-ring cluster that sits clockwise of the spoke.
  */
-const SPOKES: readonly { name: string; themes: readonly [ThemeId, ThemeId, ThemeId, ThemeId] }[] = [
-  { name: "Ember",   themes: ["life", "spell", "fireRes", "spell"] },
-  { name: "Ash",     themes: ["mana", "cast", "spell", "cast"] },
-  { name: "Cinder",  themes: ["crit", "spell", "crit", "cast"] },
-  { name: "Stone",   themes: ["armour", "brawn", "armour", "life"] },
-  { name: "Bulwark", themes: ["life", "armour", "chaosRes", "brawn"] },
-  { name: "Veil",    themes: ["ward", "mana", "ward", "coldRes"] },
-  { name: "Storm",   themes: ["lightRes", "cast", "crit", "ward"] },
-  { name: "Hearth",  themes: ["life", "fireRes", "mana", "coldRes"] },
+const SPOKES: readonly { name: string; themes: readonly [ThemeId, ThemeId, ThemeId, ThemeId, ThemeId] }[] = [
+  { name: "Ember",   themes: ["life", "spell", "fireRes", "spell", "crit"] },
+  { name: "Ash",     themes: ["mana", "cast", "spell", "cast", "spell"] },
+  { name: "Cinder",  themes: ["crit", "spell", "crit", "cast", "cast"] },
+  { name: "Stone",   themes: ["armour", "brawn", "armour", "life", "brawn"] },
+  { name: "Bulwark", themes: ["life", "armour", "chaosRes", "brawn", "armour"] },
+  { name: "Veil",    themes: ["ward", "mana", "ward", "coldRes", "ward"] },
+  { name: "Storm",   themes: ["lightRes", "cast", "crit", "ward", "cast"] },
+  { name: "Hearth",  themes: ["life", "fireRes", "mana", "coldRes", "chaosRes"] },
 ];
 
-/** How far out each ring of clusters sits, and how many minors it carries. */
-const RING_RADIUS = [230, 360, 500, 650] as const;
-const RING_MINORS = [4, 5, 6, 6] as const;
+/**
+ * How far out each ring of clusters sits, and how many minors it carries. Rings
+ * 0-3 stand on their spoke; ring 4 stands half a spoke step clockwise of it, so
+ * it never shares a line with a keystone.
+ */
+const RING_RADIUS = [230, 360, 500, 650, 790] as const;
+const RING_MINORS = [4, 5, 6, 6, 6] as const;
+/** The rings that stand on their own spoke and climb it as a ladder. */
+const SPOKE_RINGS = 4;
+const OUTER_RING = 4;
 /** How far a minor sits from the notable it belongs to. */
 const CLUSTER_SPREAD = 46;
 /** Where the three class doors stand. */
 const START_RADIUS = 96;
 
 /**
- * The keystones, one at the far end of a spoke and each a TRADE.
+ * The keystones, one per spoke at its far end, and each a TRADE.
  *
  * A keystone that is only a bigger notable is a notable, so every one of these
  * gives up something the character was already relying on. They are also the one
@@ -201,6 +211,25 @@ const KEYSTONES: readonly { spoke: string; name: string; mods: readonly ItemStat
   {
     spoke: "Storm", name: "Live Wire",
     mods: [{ stat: "castSpeedPct", value: 25 }, { stat: "critChancePct", value: 40 }, { stat: "armourPct", value: -50 }],
+  },
+  {
+    spoke: "Ember", name: "Pyre Oath",
+    mods: [{ stat: "spellDamagePct", value: 35 }, { stat: "fireResPct", value: -25 }],
+  },
+  {
+    spoke: "Ash", name: "Overflow",
+    mods: [{ stat: "castSpeedPct", value: 30 }, { stat: "manaRegenPct", value: -40 }],
+  },
+  {
+    spoke: "Stone", name: "Iron Skin",
+    mods: [{ stat: "armourPct", value: 80 }, { stat: "energyShieldPct", value: -60 }],
+  },
+  {
+    spoke: "Hearth", name: "Hearthbound",
+    mods: [
+      { stat: "fireResPct", value: 12 }, { stat: "coldResPct", value: 12 },
+      { stat: "lightningResPct", value: 12 }, { stat: "critChancePct", value: -40 },
+    ],
   },
 ];
 
@@ -274,68 +303,77 @@ function build(): PassiveNode[] {
     }));
   });
 
-  // One column of clusters per spoke, running outward.
   /** Each cluster's minors and centre, so every outgoing link can pick `nearest`. */
   const clusterAt = new Map<string, { minors: string[]; x: number; y: number }>();
-  const lastOfSpoke = new Map<string, string>();
+  /**
+   * One cluster: a notable at (cx, cy) and its ring of minors, turned from
+   * `angle`. Its ids and wobble keys carry only its spoke and ring, so a
+   * cluster's shape depends on nothing built before it.
+   */
+  const rosette = (si: number, ri: number, angle: number, cx: number, cy: number): string[] => {
+    const spoke = SPOKES[si]!;
+    const theme = THEMES[spoke.themes[ri]!];
+    const notable = add({
+      id: `p.${spoke.name.toLowerCase()}.${ri}.hub`,
+      name: `${theme.title} of ${spoke.name}`,
+      kind: "notable",
+      x: round1(cx), y: round1(cy),
+      mods: theme.notable,
+      links: [],
+    });
+    // Minors ring their notable, and the ring starts turned by the cluster's
+    // own index so two clusters on one spoke never draw the same rosette.
+    const count = RING_MINORS[ri]!;
+    const minors: string[] = [];
+    for (let m = 0; m < count; m++) {
+      const key = `${spoke.name}:${ri}:${m}`;
+      const a = angle + 40 + (360 / count) * m + ri * 17 + wobble(`${key}:a`, 9);
+      const spread = CLUSTER_SPREAD + wobble(`${key}:s`, 9);
+      minors.push(add({
+        id: `p.${spoke.name.toLowerCase()}.${ri}.${m}`,
+        name: theme.title,
+        kind: "minor",
+        x: round1(cx + Math.cos(a * RAD) * spread),
+        y: round1(cy + Math.sin(a * RAD) * spread),
+        mods: theme.minor,
+        links: [],
+      }));
+    }
+    // A chain round the rosette, so a cluster can be walked into and through
+    // rather than only fanned out from — one minor is the way in, the notable
+    // is bought with the rest.
+    minors.forEach((id, m) => link(id, minors[(m + 1) % minors.length]!));
+    link(notable, minors[0]!);
+    link(notable, minors[Math.floor(count / 2)]!);
+    clusterAt.set(`${si}:${ri}`, { minors, x: cx, y: cy });
+    return minors;
+  };
+
+  // One column of clusters per spoke, running outward.
   SPOKES.forEach((spoke, si) => {
     const angle = (360 / SPOKES.length) * si + wobble(`${spoke.name}:spoke`, 5);
-    spoke.themes.forEach((themeId, ri) => {
-      const theme = THEMES[themeId];
+    for (let ri = 0; ri < SPOKE_RINGS; ri++) {
       const radius = RING_RADIUS[ri]! + wobble(`${spoke.name}:${ri}:r`, 26);
       const lean = angle + wobble(`${spoke.name}:${ri}:a`, 7);
       const cx = Math.cos(lean * RAD) * radius;
       const cy = Math.sin(lean * RAD) * radius;
-      const notable = add({
-        id: `p.${spoke.name.toLowerCase()}.${ri}.hub`,
-        name: `${theme.title} of ${spoke.name}`,
-        kind: "notable",
-        x: round1(cx), y: round1(cy),
-        mods: theme.notable,
-        links: [],
-      });
-      // Minors ring their notable, and the ring starts turned by the cluster's
-      // own index so two clusters on one spoke never draw the same rosette.
-      const count = RING_MINORS[ri]!;
-      const minors: string[] = [];
-      for (let m = 0; m < count; m++) {
-        const key = `${spoke.name}:${ri}:${m}`;
-        const a = angle + 40 + (360 / count) * m + ri * 17 + wobble(`${key}:a`, 9);
-        const spread = CLUSTER_SPREAD + wobble(`${key}:s`, 9);
-        minors.push(add({
-          id: `p.${spoke.name.toLowerCase()}.${ri}.${m}`,
-          name: theme.title,
-          kind: "minor",
-          x: round1(cx + Math.cos(a * RAD) * spread),
-          y: round1(cy + Math.sin(a * RAD) * spread),
-          mods: theme.minor,
-          links: [],
-        }));
-      }
-      // A chain round the rosette, so a cluster can be walked into and through
-      // rather than only fanned out from — one minor is the way in, the notable
-      // is bought with the rest.
-      minors.forEach((id, m) => link(id, minors[(m + 1) % minors.length]!));
-      link(notable, minors[0]!);
-      link(notable, minors[Math.floor(count / 2)]!);
+      const minors = rosette(si, ri, angle, cx, cy);
       if (ri > 0) {
         // The spoke's own ladder: the previous cluster's minor facing this one
         // to this cluster's minor facing back.
         const prev = clusterAt.get(`${si}:${ri - 1}`)!;
         link(nearest(prev.minors, cx, cy), nearest(minors, prev.x, prev.y));
       }
-      lastOfSpoke.set(spoke.name, notable);
-      clusterAt.set(`${si}:${ri}`, { minors, x: cx, y: cy });
-    });
+    }
   });
 
-  // Bridges between neighbouring spokes, two rings in.
+  // Bridges between neighbouring spokes on the three inner rings.
   //
   // Without them the tree is eight ladders that only meet at the rim, and the
   // route decision — the thing a tree is FOR — collapses into "which ladder".
   // Each bridge is a pair of cheap travel nodes, PoE's own answer: what they buy
   // is the crossing, and paying two points for it is the cost of the crossing.
-  for (const ri of [1, 2]) {
+  for (const ri of [0, 1, 2]) {
     SPOKES.forEach((spoke, si) => {
       const from = clusterAt.get(`${si}:${ri}`)!;
       const to = clusterAt.get(`${(si + 1) % SPOKES.length}:${ri}`)!;
@@ -381,12 +419,28 @@ function build(): PassiveNode[] {
     }
   });
 
-  // The rim: neighbouring spokes joined at their outermost clusters, which is
+  // The rim: neighbouring spokes joined at the last cluster on each spoke, which is
   // what turns eight dead ends into one web you can cross the long way round.
   SPOKES.forEach((_, si) => {
     const from = clusterAt.get(`${si}:3`)!;
     const to = clusterAt.get(`${(si + 1) % SPOKES.length}:3`)!;
     link(nearest(from.minors, to.x, to.y), nearest(to.minors, from.x, from.y));
+  });
+
+  // The outer ring: a cluster outside the rim between every spoke and the next,
+  // half a spoke step off both so it never stands on a keystone's line, and
+  // joined to the outer cluster of each — a second, costlier way round.
+  SPOKES.forEach((spoke, si) => {
+    const next = (si + 1) % SPOKES.length;
+    const angle = (360 / SPOKES.length) * (si + 0.5) + wobble(`${spoke.name}:${OUTER_RING}:a`, 4);
+    const radius = RING_RADIUS[OUTER_RING] + wobble(`${spoke.name}:${OUTER_RING}:r`, 16);
+    const cx = Math.cos(angle * RAD) * radius;
+    const cy = Math.sin(angle * RAD) * radius;
+    const minors = rosette(si, OUTER_RING, angle, cx, cy);
+    for (const side of [si, next]) {
+      const inner = clusterAt.get(`${side}:3`)!;
+      link(nearest(inner.minors, cx, cy), nearest(minors, inner.x, inner.y));
+    }
   });
 
   // Keystones hang one step past the end of their spoke.
@@ -444,7 +498,7 @@ export function isStartNode(id: string): boolean {
 /**
  * How many points a character of this level has spent-able.
  *
- * One a level from 1 to 100 is 99 points in a web of 239 nodes: the same budget
+ * One a level from 1 to 100 is 99 points in a web of 315 nodes: the same budget
  * the 65-to-94 era ended on, which is roughly PoE's own reach, enough to walk
  * two disciplines and a keystone, never enough to walk all eight. A level-1
  * character opens with nothing, because his first point is his first level-up
