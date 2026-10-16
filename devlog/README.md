@@ -485,3 +485,16 @@ Walled maps lost most of their square corners and long straight faces: room corn
 curves of varying size, and rock stands out of the longer faces. Where rock meets the floor, the
 ground now darkens into a shadow band and picks up rock dust, so a wall sits on the floor instead of
 being cut into it.
+
+## 2026-10-16 · Asset viewer
+
+<table>
+<tr>
+<td width="100%"><img src="screenshots/2026-10-16-asset-viewer.jpeg" alt="Asset viewer: searchable subject list on the left, the Ironsworn character walking with a broadsword and tower shield under game light, a timeline below and an inspector with looks, motion, actions and skill effects on the right" width="100%"><br><sub>The Ironsworn set with the new broadsword, walking under game light.</sub></td>
+</tr>
+</table>
+
+The development viewer (`?viewer`) now covers every mesh and motion in the game: the character in any
+mix of looks, every creature with its idle, walk, attack and ragdoll death, every raw library take and
+every skill effect. A timeline pauses, scrubs and steps frame by frame, game light and game camera
+show an asset as the player sees it, and the view lives in the URL so a link reopens it.
