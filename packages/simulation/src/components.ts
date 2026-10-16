@@ -216,6 +216,8 @@ export interface RollC {
   dirY: Fixed;
   pending?: { type: "moveTo" | "moveDir" | "stop"; data?: Record<string, number> };
 }
+/** The first tick a new roll may start (ROLL_COOLDOWN_TICKS after the last one began). Absent until the first roll. */
+export interface RollReadyC { tick: number }
 /**
  * The last melee swing this caster resolved: the tick it landed and how many
  * bodies were in the wedge. A render edge only; a whiff records 0 hits.
@@ -355,8 +357,8 @@ export interface DamageEvent {
   amountFixed: Fixed;
   /** DAMAGE_TYPES index (see damage-types.ts) */
   type: number;
-  /** How the hit arrived. Only a dodge roll reads it: its first ticks let projectiles and melee pass, slams and ground still land. Absent = anything else. */
-  via?: "projectile" | "melee";
+  /** How the hit arrived. Only a dodge roll reads it: its first ticks let every tagged hit pass, ground and ailments still land. Absent = anything else. */
+  via?: "projectile" | "melee" | "slam";
 }
 
 /** Two utility flasks: life on Q, mana on E. Charges are plain integers, not Fixed. */

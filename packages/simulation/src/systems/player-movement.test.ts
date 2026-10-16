@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { fp, fpClamp, fpDist2, type Fixed } from "@exiled/fixed-point";
 import { Simulation } from "../loop";
-import { registerPlayerMovement, CASTING_MOVE_PCT, rollStep, ROLL_DISTANCE, ROLL_TICKS } from "./player-movement";
+import { registerPlayerMovement, CASTING_MOVE_PCT, rollStep, ROLL_DISTANCE, ROLL_TICKS, ROLL_COOLDOWN_TICKS } from "./player-movement";
 import { WORLD_MIN, WORLD_MAX, ARENA_RADIUS } from "../movement";
 import { gridCollision } from "../collision";
 import { makeGrid } from "../test-grid";
@@ -593,6 +593,29 @@ describe("dodge roll", () => {
       return path;
     };
     expect(run(true)).toEqual(run(false));
+  });
+
+  it("refuses a new roll until the cooldown since the last one started has run out", () => {
+    const sim = new Simulation();
+    registerPlayerMovement(sim);
+    const p = makePlayer(sim);
+    sim.step([dodge(0, p, fp(10), 0)]);
+    for (let t = 1; t < ROLL_COOLDOWN_TICKS; t++) sim.step([dodge(t, p, fp(10), 0)]);
+    // Every press inside the cooldown was refused: one roll's distance, no more.
+    expect(at(sim, p)).toEqual({ x: fp(3.7), y: 0 });
+    sim.step([dodge(ROLL_COOLDOWN_TICKS, p, fp(10), 0)]);
+    expect(sim.world.get<RollC>(p, "roll")).toMatchObject({ startTick: ROLL_COOLDOWN_TICKS });
+  });
+
+  it("covers less ground spamming the roll than running the same time", () => {
+    const run = fp(4.2);
+    const ticks = 90;
+    const sim = new Simulation();
+    registerPlayerMovement(sim);
+    const p = makePlayer(sim, 0, 0, Math.trunc(run / 30));
+    for (let t = 0; t < ticks; t++) sim.step([dodge(t, p, fp(100), 0)]);
+    expect(ROLL_COOLDOWN_TICKS).toBe(45);
+    expect(at(sim, p).x).toBeLessThan(Math.trunc((run * ticks) / 30));
   });
 
   it("ends a roll into a wall against the wall, not inside it", () => {

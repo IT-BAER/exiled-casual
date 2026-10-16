@@ -22,7 +22,7 @@ export function registerTelegraphResolve(sim: Simulation): void {
         const threshold = tg.radius + bodyRadiusOf(world, e);
         if (fpDist2(tgPos.x, tgPos.y, ePos.x, ePos.y) > threshold * threshold) continue;
 
-        sim.enqueueDamage({ target: e, source: tg.ownerId, amountFixed: tg.damage, type: tg.damageType });
+        sim.enqueueDamage({ target: e, source: tg.ownerId, amountFixed: tg.damage, type: tg.damageType, via: "slam" });
       }
 
       // A phase-2 slam leaves a burning patch on the impact footprint. Field names

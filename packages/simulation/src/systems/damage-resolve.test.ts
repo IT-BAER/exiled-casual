@@ -224,21 +224,21 @@ describe("a dodge roll's opening ticks", () => {
     return w.get<Health>(p, "health")!.life;
   }
 
-  it("let projectiles and melee pass from the first roll tick through the last avoid tick", () => {
-    expect(ROLL_AVOID_TICKS).toBe(9);
-    for (const via of ["projectile", "melee"] as const) {
+  it("let projectiles, melee and slams pass through the first 80% of the roll", () => {
+    expect(ROLL_AVOID_TICKS).toBe(Math.round((ROLL_TICKS * 4) / 5));
+    for (const via of ["projectile", "melee", "slam"] as const) {
       expect(lifeAfter(1, via)).toBe(fp(100));
       expect(lifeAfter(ROLL_AVOID_TICKS, via)).toBe(fp(100));
     }
   });
 
   it("stop letting them pass on the tick after", () => {
-    for (const via of ["projectile", "melee"] as const) {
+    for (const via of ["projectile", "melee", "slam"] as const) {
       expect(lifeAfter(ROLL_AVOID_TICKS + 1, via)).toBeLessThan(fp(100));
     }
   });
 
-  it("never let a slam through", () => {
+  it("never skip a ground or ailment tick, which outlasts any roll", () => {
     expect(lifeAfter(1, undefined)).toBeLessThan(fp(100));
   });
 });

@@ -3,7 +3,7 @@ import { Simulation } from "../loop";
 import { WORLD_MIN, WORLD_MAX } from "../movement";
 import { slide, hasLineOfSight, type Collision, type CollisionRef } from "../collision";
 import type { Command } from "../loop";
-import type { Position, PlayerC, MoveTarget, MoveDir, CastingC, Health, SkillHoldC, RollC } from "../components";
+import type { Position, PlayerC, MoveTarget, MoveDir, CastingC, Health, SkillHoldC, RollC, RollReadyC } from "../components";
 
 /** Player moves at this percent of moveSpeed during post-cast recovery. */
 export const CASTING_MOVE_PCT = 40;
@@ -13,8 +13,14 @@ export const CASTING_MOVE_PCT = 40;
 export const ROLL_DISTANCE: Fixed = fp(3.7);
 /** How long a roll lasts: 0.6 s at 30 Hz. Nothing else he asks for happens inside it. */
 export const ROLL_TICKS = 18;
-/** The opening ticks of a roll in which projectiles and melee miss him. Slams and ground still land. */
-export const ROLL_AVOID_TICKS = 9;
+/** The opening 80% of a roll, in which melee, projectiles and slams miss him. Ground and ailments still land. */
+export const ROLL_AVOID_TICKS = 14;
+/**
+ * Start to start, 1.5 s. A roll outruns a run, so spamming one must not: at this
+ * gap Space alone covers 2.5 u/s against a 4.2 run, and the dodge window above
+ * stays a fraction of the time rather than a shield.
+ */
+export const ROLL_COOLDOWN_TICKS = 45;
 
 /**
  * The distance a roll covers on its tick `i` (1..ROLL_TICKS).
@@ -250,6 +256,7 @@ export function registerPlayerMovement(sim: Simulation, collisionRef?: Collision
       const roll = world.get<RollC>(e, "roll");
       if (cmd.type === "dodge") {
         if (activeRoll(roll, tick)) continue;
+        if (tick < (world.get<RollReadyC>(e, "rollReady")?.tick ?? 0)) continue;
         const pos = world.get<Position>(e, "position");
         if (!pos) continue;
         const tx = fpClamp(cmd.data?.["tx"] ?? 0, WORLD_MIN, WORLD_MAX);
@@ -260,6 +267,7 @@ export function registerPlayerMovement(sim: Simulation, collisionRef?: Collision
         if (dir.x === 0 && dir.y === 0) dir = { x: prev?.hx ?? 0, y: prev?.hy ?? 0 };
         if (dir.x === 0 && dir.y === 0) continue;
         world.set<RollC>(e, "roll", { startTick: tick, untilTick: tick + ROLL_TICKS, dirX: dir.x, dirY: dir.y });
+        world.set<RollReadyC>(e, "rollReady", { tick: tick + ROLL_COOLDOWN_TICKS });
         world.set<MoveDir>(e, "moveDir", { dx: prev?.dx ?? 0, dy: prev?.dy ?? 0, hx: dir.x, hy: dir.y });
         // The roll cancels a wind-up: removed here, it can neither resolve nor
         // keep slowing him. Mana and cooldown already paid for it stay paid.
