@@ -1,8 +1,12 @@
 /** One sample a second, so this is the window in seconds. */
 export const GUARD_SAMPLES = 10;
 
-/** Below this median the preset steps down. Under 60 so a 60 Hz panel's vsync jitter never trips it. */
-export const GUARD_FLOOR_FPS = 55;
+/**
+ * Below this median the preset steps down. 45, because a 60 Hz panel's
+ * per-second readings jitter down to about 48, and a window at the bottom of
+ * that band keeps its median above the floor.
+ */
+export const GUARD_FLOOR_FPS = 45;
 
 /**
  * Says when Auto graphics should step down: once per instance (one per area),
