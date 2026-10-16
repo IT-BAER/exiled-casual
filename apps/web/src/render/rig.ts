@@ -646,12 +646,17 @@ const skirtJointName = (chain: number, joint: number): string =>
  * capsule on the bone holds the robe up to 12cm off a boot. About the shaft,
  * the three shipped boots fit 11.4cm.
  *
- * The worn calf capsule's head end starts 8cm down the shin (`shaft`; `toe`
- * keeps its tail on the ankle). On the knee joint its round head reached 12cm
- * up the thigh, where no boot is, and the few millimetres the knee comes
- * forward with each idle breath decided whether the robe's front panel hung
- * straight or wrapped over that ball: it swung 11cm out and back with the
- * breath. 8cm still holds every boot's rim, which stops 4cm under the knee.
+ * The left worn calf capsule's head end starts 8cm down the shin (`shaft`;
+ * `toe` keeps its tail on the ankle). That is the leg the idle stands
+ * forward on, and on the knee joint its round head reached 12cm up the thigh,
+ * where no boot is: the few millimetres the knee comes forward with each
+ * breath decided whether the robe's front panel hung straight or wrapped over
+ * that ball, and it swung 11cm out and back with the breath. The rear leg
+ * keeps its head on the knee. Lowered, the head's curve sat at the boot's rim,
+ * the back chains bent over it there, and the robe drawn across that bend cut
+ * the corner: the rim showed 3.8cm through the robe's back.
+ * Bare legs lower both heads 6cm (`bareShaft`): no rim shows through, and at
+ * 8cm the back hem slid round the heel and stayed there, on the same idle.
  *
  * The worn foot capsule is laid along the sole instead, heel to past the toe:
  * `shaft` shifts its head end and `toe` its tail end, both in the foot bone's
@@ -662,16 +667,22 @@ export const SKIRT_COLLIDERS: readonly {
   from: string; to: string; radius: number; worn?: number;
   shaft?: readonly [number, number, number];
   toe?: readonly [number, number, number];
+  bareShaft?: readonly [number, number, number];
 }[] = [
   { from: "thigh_l", to: "calf_l", radius: 0.0956 },
   { from: "thigh_r", to: "calf_r", radius: 0.0956 },
-  { from: "calf_l", to: "foot_l", radius: 0.121, worn: 0.1223, shaft: [0.02, 0.08, 0.0325], toe: [0.02, 0, 0.0325] },
-  { from: "calf_r", to: "foot_r", radius: 0.121, worn: 0.1223, shaft: [-0.02, 0.08, 0.0325], toe: [-0.02, 0, 0.0325] },
+  { from: "calf_l", to: "foot_l", radius: 0.121, worn: 0.1223, shaft: [0.02, 0.08, 0.0325], toe: [0.02, 0, 0.0325],
+    bareShaft: [0, 0.06, 0] },
+  { from: "calf_r", to: "foot_r", radius: 0.121, worn: 0.1223, shaft: [-0.02, 0, 0.0325],
+    bareShaft: [0, 0.06, 0] },
   { from: "foot_l", to: "ball_l", radius: 0.1079, worn: 0.1219,
     shaft: [0.02, -0.0575, 0.02], toe: [0.02, 0.06, -0.04] },
   { from: "foot_r", to: "ball_r", radius: 0.1079, worn: 0.1219,
     shaft: [-0.02, -0.0575, 0.02], toe: [-0.02, 0.06, -0.04] },
 ];
+
+/** A tail end left on its joint; read, never written. */
+const NO_SHIFT = Vector3.Zero();
 
 /** Down the bone: glTF joints out of Blender point along their own +Y. */
 const BONE_AXIS = new Vector3(0, 1, 0);
@@ -1350,9 +1361,10 @@ export class RigActor {
     /** Bare skin and booted radii; `radius` is whichever the looks call for. */
     bare: number;
     worn: number;
-    /** The worn ends' shifts in the head bone's frame, and the pair in use. */
+    /** The worn ends' shifts in the head bone's frame, the bare head's, and the pair in use. */
     shaft: Vector3 | null;
     toe: Vector3 | null;
+    bareShaft: Vector3 | null;
     offset: Vector3 | null;
     tailOffset: Vector3 | null;
   })[] = [];
@@ -1406,8 +1418,8 @@ export class RigActor {
     const booted = this.looks.boots !== null;
     for (const collider of this.colliders) {
       collider.radius = booted ? collider.worn : collider.bare;
-      collider.offset = booted ? collider.shaft : null;
-      collider.tailOffset = booted ? collider.toe ?? collider.shaft : null;
+      collider.offset = booted ? collider.shaft : collider.bareShaft;
+      collider.tailOffset = booted ? collider.toe ?? collider.shaft : collider.bareShaft && NO_SHIFT;
     }
   }
 
@@ -2129,7 +2141,7 @@ export class RigActor {
       for (let j = 0; j < SKIRT_JOINTS; j++) this.restsWorld.push(new Vector3());
     }
 
-    for (const { from, to, radius, worn, shaft, toe } of SKIRT_COLLIDERS) {
+    for (const { from, to, radius, worn, shaft, toe, bareShaft } of SKIRT_COLLIDERS) {
       const head = byName.get(from);
       const tail = byName.get(to);
       if (head instanceof TransformNode && tail instanceof TransformNode) {
@@ -2140,6 +2152,7 @@ export class RigActor {
           radius,
           bare: radius, worn: worn ?? radius,
           shaft: shaft ? Vector3.FromArray(shaft) : null, toe: toe ? Vector3.FromArray(toe) : null,
+          bareShaft: bareShaft ? Vector3.FromArray(bareShaft) : null,
           offset: null, tailOffset: null,
           initialized: false,
         });
