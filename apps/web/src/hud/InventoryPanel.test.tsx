@@ -698,6 +698,57 @@ describe("InventoryPanel - purchase window", () => {
   });
 });
 
+const page = {
+  cols: 12,
+  rows: 8,
+  items: [
+    { x: 0, y: 0, w: 1, h: 2, rarity: "rare" as const, name: "Sold Wand", itemClass: "wand", lines: [], price: 67, refused: false },
+    { x: 1, y: 0, w: 1, h: 2, rarity: "rare" as const, name: "Spent Wand", itemClass: "wand", lines: [], price: 67, refused: true },
+    { x: 2, y: 0, w: 2, h: 2, rarity: "unique" as const, name: "Dear Shroud", itemClass: "body", lines: [], price: 900, refused: false },
+  ],
+};
+
+describe("InventoryPanel - buyback page", () => {
+  const open = (intents: unknown[] = []) => render(
+    <InventoryPanel inventory={inv} vendorOpen vendor={shelf} buyback={page} gold={500} onIntent={(i) => intents.push(i)} onClose={() => {}} />,
+  );
+
+  it("opens on the shelf and turns to the buyback page from its tab", () => {
+    open();
+    expect(screen.getByTestId("vendor-item-0")).toBeTruthy();
+    expect(screen.queryByTestId("buyback-item-0")).toBeNull();
+    fireEvent.click(screen.getByTestId("buyback-tab"));
+    expect(screen.queryByTestId("vendor-item-0")).toBeNull();
+    expect(screen.getByTestId("buyback-price-0").textContent).toBe("67");
+    fireEvent.click(screen.getByTestId("vendor-tab"));
+    expect(screen.getByTestId("vendor-item-0")).toBeTruthy();
+  });
+
+  it("buys back the piece that was clicked", () => {
+    const intents: unknown[] = [];
+    open(intents);
+    fireEvent.click(screen.getByTestId("buyback-tab"));
+    fireEvent.pointerDown(screen.getByTestId("buyback-item-0"));
+    expect(intents).toEqual([{ kind: "buybackItem", x: 0, y: 0 }]);
+  });
+
+  it("sends nothing for a sale the purse or a spent orb cannot undo", () => {
+    const intents: unknown[] = [];
+    open(intents);
+    fireEvent.click(screen.getByTestId("buyback-tab"));
+    fireEvent.pointerDown(screen.getByTestId("buyback-item-1"));
+    fireEvent.pointerDown(screen.getByTestId("buyback-item-2"));
+    expect(intents).toEqual([]);
+    expect(screen.getByTestId("buyback-item-1").style.opacity).toBe("0.45");
+  });
+
+  it("still takes a sale dropped on the buyback page", () => {
+    open();
+    fireEvent.click(screen.getByTestId("buyback-tab"));
+    expect(document.querySelector('[data-drop-grid="buyback"]')!.hasAttribute("data-drop-sell")).toBe(true);
+  });
+});
+
 describe("InventoryPanel - panels that close take their tooltip with them", () => {
   it("drops the tooltip when the shelf closes under it", () => {
     const { rerender } = render(<InventoryPanel inventory={inv} vendorOpen vendor={shelf} gold={5000} onClose={() => {}} />);

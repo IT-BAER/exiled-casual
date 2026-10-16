@@ -1,6 +1,6 @@
 import type { KvStore } from "@exiled/persistence";
 import type { World } from "./ecs";
-import type { SessionC, InventoryC, StashC, VendorC, EquipmentC, ProgressC, ShardsC, SkillsC } from "./components";
+import type { SessionC, InventoryC, StashC, VendorC, BuybackC, EquipmentC, ProgressC, ShardsC, SkillsC } from "./components";
 import { stockVendor } from "./vendor";
 import { withPermanentWaystone } from "./inventory";
 import { recomputePlayerStats } from "./derived";
@@ -42,6 +42,8 @@ export interface PersistedState {
    * deterministic, so a fresh roll would silently restock whatever was just bought.
    */
   vendor?: VendorC;
+  /** The buyback page. Absent when nothing was sold since the last restock. */
+  buyback?: BuybackC;
 }
 
 /** Read the durable state off the session singleton, or null if there is none. */
@@ -57,9 +59,11 @@ export function snapshot(world: World): PersistedState | null {
   const shards = world.get<ShardsC>(e, "shards") ?? { counts: {} };
   const vendor = world.get<VendorC>(e, "vendor");
   const skills = world.get<SkillsC>(e, "skills");
+  const buyback = world.get<BuybackC>(e, "buyback");
   return {
     version: VERSION, session, inventory, stash, equipment, progress, shards,
     ...(vendor ? { vendor } : {}),
+    ...(buyback ? { buyback } : {}),
     ...(skills ? { skills } : {}),
   };
 }
@@ -258,6 +262,8 @@ export function restore(world: World, state: PersistedState): void {
   grantSkills(world, stripped);
   world.set<ShardsC>(e, "shards", state.shards ?? { counts: {} });
   world.set<VendorC>(e, "vendor", state.vendor ?? stockVendor(state.session.atlasSeed, progress.level, state.session.classId));
+  if (state.buyback) world.set<BuybackC>(e, "buyback", state.buyback);
+  else world.remove(e, "buyback");
   // Saved gear has to reach the player, not just the equipment panel. Life and
   // mana are not persisted, so a restored session starts full.
   recomputePlayerStats(world, { refill: true });

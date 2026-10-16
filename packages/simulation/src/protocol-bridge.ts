@@ -3,7 +3,7 @@ import { PICKUP_RADIUS, SORT_MODES } from "@exiled/protocol";
 import type { DisplaySkill, Intent, Snapshot, SnapshotEntity, MonsterElement } from "@exiled/protocol";
 import { damageTypeOf } from "./damage-types";
 import { summarizeHits } from "./death-recap";
-import { VENDOR_COLS, VENDOR_ROWS } from "./vendor";
+import { VENDOR_COLS, VENDOR_ROWS, unpayShards } from "./vendor";
 import { physicalMitigationPct, scalePct, xpToNext, START_LEVEL, vendorBuyPrice, passivePoints, DEFAULT_CLASS_ID, effectiveSkill, reachedBreakpoints, nextBreakpoint, gemXpToNext } from "@exiled/rules";
 import { resBlock } from "@exiled/content-schema";
 import { describeItem, SKILLS, TOWN_PORTAL_SKILL } from "@exiled/content-runtime";
@@ -13,7 +13,7 @@ import type {
   Health, Mana, Position, Cooldowns, CastingC, StrikeC, MonsterC,
   AilmentC, ProjectileC, GroundAreaC, BossC, TelegraphC,
   SessionC, InteractableC, ContainerC, ItemC, GoldC, InventoryC, StashC, VendorC, EquipmentC, FlasksC, DefensesC, OffenseC, ProgressC,
-  EnergyShieldC, ShardsC, MoveDir, SkillsC, SkillHoldC, RollC,
+  EnergyShieldC, ShardsC, BuybackC, MoveDir, SkillsC, SkillHoldC, RollC,
 } from "./components";
 
 /**
@@ -111,6 +111,8 @@ export function intentToCommand(intent: Intent, player: Entity, tick: number): C
       };
     case "buyItem":
       return { tick, entity: player, type: "buyItem", data: { x: intent.x, y: intent.y } };
+    case "buybackItem":
+      return { tick, entity: player, type: "buybackItem", data: { x: intent.x, y: intent.y } };
     case "allocatePassive":
       return { tick, entity: player, type: "allocatePassive", passiveId: intent.nodeId };
     case "refundPassive":
@@ -395,6 +397,19 @@ export function buildSnapshot(
     // describeGrid preserves order, so index i is the same placed item in both.
     items: shelfGrid.items.map((d, i) => ({ ...d, price: vendorBuyPrice(shelf!.items[i]!.item) })),
   };
+  // Refused is the sim's own undo check, so the page can never offer a sale it would turn down.
+  const page = sessionE !== undefined ? world.get<BuybackC>(sessionE, "buyback") : undefined;
+  const pageGrid = describeGrid(page, VENDOR_COLS, VENDOR_ROWS);
+  const bag = sessionE !== undefined ? world.get<InventoryC>(sessionE, "inventory") : undefined;
+  const banked = (sessionE !== undefined ? world.get<ShardsC>(sessionE, "shards")?.counts : undefined) ?? {};
+  const buyback: Snapshot["buyback"] = {
+    cols: pageGrid.cols,
+    rows: pageGrid.rows,
+    items: pageGrid.items.map((d, i) => {
+      const sale = page!.items[i]!;
+      return { ...d, price: sale.gold, refused: !bag || unpayShards(bag, banked, sale) === null };
+    }),
+  };
 
   const equipC = sessionE !== undefined ? world.get<EquipmentC>(sessionE, "equipment") : undefined;
   const equipment: Snapshot["equipment"] = {};
@@ -524,6 +539,7 @@ export function buildSnapshot(
     inventory,
     stash,
     vendor,
+    buyback,
     equipment,
     shards: (sessionE !== undefined ? world.get<ShardsC>(sessionE, "shards") : undefined)?.counts ?? {},
     skills: describeSkills(

@@ -8,9 +8,10 @@ import type { AreaLayout } from "@exiled/mapgen";
 /**
  * Which grid a read addresses. `vendor` is the shop's shelf: it can be read from
  * and bought out of, but never moved into or out of — goods change hands through
- * `buyItem`, which is the only path that charges for them.
+ * `buyItem`, which is the only path that charges for them. `buyback` is the same
+ * window's second page, what was sold since the last restock, left via `buybackItem`.
  */
-export type ContainerId = "backpack" | "stash" | "vendor";
+export type ContainerId = "backpack" | "stash" | "vendor" | "buyback";
 
 export type Intent =
   | { kind: "moveTo"; x: Fixed; y: Fixed }
@@ -59,6 +60,11 @@ export type Intent =
    */
   | { kind: "buyItem"; x: number; y: number }
   /**
+   * Undo the sale whose ORIGIN cell on the buyback page is (x,y): the piece comes
+   * back for the gold it fetched, and the shards it paid come off the counter.
+   */
+  | { kind: "buybackItem"; x: number; y: number }
+  /**
    * Answer the death screen. `where` is the only decision death leaves the
    * player: "checkpoint" wakes him at the map's entrance, "hideout" walks him
    * out. Both spend one of the map's portals — see systems/revive.ts — and the
@@ -92,7 +98,7 @@ export type Intent =
 export const SORT_MODES = ["type", "rarity", "size"] as const;
 export type SortMode = (typeof SORT_MODES)[number];
 
-export type CommandType = "moveTo" | "moveDir" | "useSkill" | "dodge" | "stop" | "interact" | "activateMap" | "pickupItem" | "equipItem" | "unequipItem" | "dropItem" | "moveItem" | "sortItems" | "useFlask" | "applyCurrency" | "applyCurrencyAll" | "sellItem" | "buyItem" | "revive" | "usePortalScroll" | "allocatePassive" | "refundPassive" | "respecPassives" | "setSkillBar";
+export type CommandType = "moveTo" | "moveDir" | "useSkill" | "dodge" | "stop" | "interact" | "activateMap" | "pickupItem" | "equipItem" | "unequipItem" | "dropItem" | "moveItem" | "sortItems" | "useFlask" | "applyCurrency" | "applyCurrencyAll" | "sellItem" | "buyItem" | "buybackItem" | "revive" | "usePortalScroll" | "allocatePassive" | "refundPassive" | "respecPassives" | "setSkillBar";
 
 // ---------------------------------------------------------------------------
 // Run loop
@@ -442,6 +448,16 @@ export interface Snapshot {
     cols: number; rows: number;
     items: (DisplayItem & { x: number; y: number; w: number; h: number; count?: number; price: number })[];
   };
+  /**
+   * The vendor's buyback page: pieces sold since his last restock, each priced at
+   * the gold it fetched. `refused` marks one whose shard payout already became an
+   * orb that is no longer in the backpack, so the sale cannot be undone exactly.
+   * Absent on a snapshot built without a session.
+   */
+  buyback?: {
+    cols: number; rows: number;
+    items: (DisplayItem & { x: number; y: number; w: number; h: number; count?: number; price: number; refused?: boolean })[];
+  };
   /** Equipped gear by slot. Absent keys mean an empty slot. Absent field means no session. */
   equipment: Partial<Record<EquipSlotId, DisplayItem>>;
   /** Loose disenchant shards on the session singleton, orb baseId -> count. Empty when none. */
@@ -648,6 +664,11 @@ export function validateIntent(v: unknown): Intent {
       if (!Number.isInteger(obj["x"])) throw new Error("validateIntent buyItem: x must be an integer");
       if (!Number.isInteger(obj["y"])) throw new Error("validateIntent buyItem: y must be an integer");
       return { kind: "buyItem", x: obj["x"] as number, y: obj["y"] as number };
+    }
+    case "buybackItem": {
+      if (!Number.isInteger(obj["x"])) throw new Error("validateIntent buybackItem: x must be an integer");
+      if (!Number.isInteger(obj["y"])) throw new Error("validateIntent buybackItem: y must be an integer");
+      return { kind: "buybackItem", x: obj["x"] as number, y: obj["y"] as number };
     }
     case "revive": {
       if (obj["where"] !== "checkpoint" && obj["where"] !== "hideout")

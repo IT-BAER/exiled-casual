@@ -16,6 +16,12 @@ describe("validateIntent — valid intents pass through", () => {
     expect(validateIntent(intent)).toEqual(intent);
   });
 
+  test("buybackItem with integer cell", () => {
+    const intent = { kind: "buybackItem", x: 3, y: 1 };
+    expect(validateIntent(intent)).toEqual(intent);
+    expect(() => validateIntent({ kind: "buybackItem", x: 0.5, y: 1 })).toThrow(/buybackItem/);
+  });
+
   test("moveDir with all zeros", () => {
     const intent = { kind: "moveDir", dx: 0 as const, dy: 0 as const };
     expect(validateIntent(intent)).toEqual(intent);

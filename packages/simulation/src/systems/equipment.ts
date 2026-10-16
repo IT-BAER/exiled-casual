@@ -2,11 +2,11 @@ import { baseOf, isCurrency, canonicalBaseId, currencyItem } from "@exiled/conte
 import { disenchantYield, SHARDS_PER_ORB, vendorBuyPrice, vendorSellPrice } from "@exiled/rules";
 import { SORT_MODES } from "@exiled/protocol";
 import { Simulation } from "../loop";
-import { isStaple } from "../vendor";
+import { isStaple, recordSale, unpayShards } from "../vendor";
 import { placeFirstFit, canPlaceAt, sortInventory } from "../inventory";
 import { canEquip } from "../equipment";
 import { recomputePlayerStats } from "../derived";
-import type { Position, ItemC, InventoryC, VendorC, EquipmentC, ShardsC, ProgressC } from "../components";
+import type { Position, ItemC, InventoryC, VendorC, BuybackC, EquipmentC, ShardsC, ProgressC } from "../components";
 import type { Item } from "@exiled/content-schema";
 
 export function registerEquipmentSystem(sim: Simulation): void {
@@ -175,6 +175,11 @@ export function registerEquipmentSystem(sim: Simulation): void {
           ...container,
           items: container.items.filter((p) => !(p.x === x && p.y === y)),
         });
+        // Selling has no confirm, so the vendor keeps the piece and its receipt.
+        world.set<BuybackC>(sessionE, "buyback", recordSale(world.get<BuybackC>(sessionE, "buyback"), {
+          w: placed.w, h: placed.h, item: placed.item, gold,
+          ...(yld ? { orbBaseId: yld.orbBaseId, shards: yld.shards } : {}),
+        }));
 
         const prog = world.get<ProgressC>(sessionE, "progress")!;
         world.set<ProgressC>(sessionE, "progress", { ...prog, gold: prog.gold + gold });
@@ -244,6 +249,39 @@ export function registerEquipmentSystem(sim: Simulation): void {
           });
         }
         world.set<ProgressC>(sessionE, "progress", { ...prog, gold: prog.gold - price });
+        continue;
+      }
+
+      // ── buybackItem ────────────────────────────────────────────────────────
+      if (cmd.type === "buybackItem") {
+        const x = cmd.data?.["x"];
+        const y = cmd.data?.["y"];
+        if (x === undefined || y === undefined) continue;
+
+        const page = world.get<BuybackC>(sessionE, "buyback");
+        const sale = page?.items.find((p) => p.x === x && p.y === y);
+        if (!page || !sale) continue;
+
+        const prog = world.get<ProgressC>(sessionE, "progress")!;
+        if (prog.gold < sale.gold) continue;
+        // Every check before any change: the orb comes out first because taking
+        // it can free the very cell the piece needs.
+        const undone = unpayShards(
+          world.get<InventoryC>(sessionE, "inventory")!,
+          world.get<ShardsC>(sessionE, "shards")!.counts,
+          sale,
+        );
+        if (undone === null) continue;
+        const fit = placeFirstFit(undone.inv, sale.w, sale.h);
+        if (fit === null) continue;
+
+        world.set<InventoryC>(sessionE, "inventory", {
+          ...undone.inv,
+          items: [...undone.inv.items, { x: fit.x, y: fit.y, w: sale.w, h: sale.h, item: sale.item }],
+        });
+        world.set<ShardsC>(sessionE, "shards", { counts: undone.counts });
+        world.set<ProgressC>(sessionE, "progress", { ...prog, gold: prog.gold - sale.gold });
+        world.set<BuybackC>(sessionE, "buyback", { ...page, items: page.items.filter((p) => p !== sale) });
         continue;
       }
 

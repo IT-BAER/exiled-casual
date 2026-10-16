@@ -26,13 +26,16 @@ type Equipment = Snapshot["equipment"];
 /** An inventory entry: the display item plus where and how big it sits in the grid. */
 type GridItem = Inventory["items"][number];
 /** A shelf entry is a grid entry that also knows its price. */
-type ShelfItem = Snapshot["vendor"]["items"][number];
+type ShelfItem = NonNullable<Snapshot["buyback"]>["items"][number];
 
 /** What the window shows before a snapshot has a shelf in it: the frame, no goods. */
 const EMPTY_SHELF: Snapshot["vendor"] = { cols: 12, rows: 8, items: [] };
 
 /** The testid prefix a container's cells and items carry. */
-const TID: Record<ContainerId, string> = { backpack: "inventory", stash: "stash", vendor: "vendor" };
+const TID: Record<ContainerId, string> = { backpack: "inventory", stash: "stash", vendor: "vendor", buyback: "buyback" };
+
+/** The vendor's two pages: both are bought from by a click, neither is ever dragged into. */
+const isShop = (c: ContainerId): boolean => c === "vendor" || c === "buyback";
 
 /**
  * Would spending `currency` on `it` do anything? Legality is the sim's call; this is
@@ -319,13 +322,15 @@ function SectionRule({ children }: { children?: React.ReactNode }) {
 
 // memo: GameView renders at 30 Hz while monsters move; this panel only when its own props change.
 export const InventoryPanel = React.memo(function InventoryPanel({
-  inventory, stash, vendor = EMPTY_SHELF, gold = 0, equipment = {}, shards = {}, vendorOpen = false,
+  inventory, stash, vendor = EMPTY_SHELF, buyback = EMPTY_SHELF, gold = 0, equipment = {}, shards = {}, vendorOpen = false,
   socketWanted = false,
   onClose, onCloseStash, onCloseVendor, onIntent, onSocketWaystone,
 }: {
   inventory: Inventory; stash?: Inventory; equipment?: Equipment;
   /** The vendor's shelf, priced per cell. Absent on a snapshot built without a session. */
   vendor?: Snapshot["vendor"];
+  /** What was sold since his last restock, priced at what it fetched (PoE2's Buyback tab). */
+  buyback?: Snapshot["buyback"];
   /** Gold on hand, which is what decides whether a shelf cell reads as affordable. */
   gold?: number;
   /** Loose shards banked at the bench, orb base id to count. Always known, so the
@@ -348,11 +353,17 @@ export const InventoryPanel = React.memo(function InventoryPanel({
     ...(stash ? { stash } : {}),
     // Only while the shop is open: the shelf must not be a drag target sitting
     // invisibly under the cursor when the window is shut.
-    ...(vendorOpen ? { vendor } : {}),
+    ...(vendorOpen ? { vendor, buyback } : {}),
   };
-  /** What the shop is charging for the piece in this cell, or 0 if it is not a shelf cell. */
+  /** What the shop is charging for the piece in this cell, or 0 if it is not a shop cell. */
   const priceOf = (container: ContainerId, it: GridItem): number =>
-    container === "vendor" ? (it as ShelfItem).price : 0;
+    isShop(container) ? (it as ShelfItem).price : 0;
+  /** A shop cell the click would be refused on: short of gold, or a sale whose orb is spent. */
+  const barred = (container: ContainerId, it: GridItem): boolean =>
+    isShop(container) && (priceOf(container, it) > gold || (it as ShelfItem).refused === true);
+  // Which of the vendor's pages is showing. Every visit opens on his goods.
+  const [vendorPage, setVendorPage] = React.useState<"vendor" | "buyback">("vendor");
+  React.useEffect(() => { if (!vendorOpen) setVendorPage("vendor"); }, [vendorOpen]);
 
   // The sale itself is the soundscape's (gold in, piece out). The tenth shard
   // spends the pile on an orb, which drops the total and rings like a unique on top.
@@ -378,7 +389,7 @@ export const InventoryPanel = React.memo(function InventoryPanel({
   // over the world. Whenever a container comes or goes, the hover goes with it.
   const shelfOpen = vendorOpen;
   const stashShown = stash !== undefined;
-  React.useEffect(() => { setHover(null); }, [shelfOpen, stashShown]);
+  React.useEffect(() => { setHover(null); }, [shelfOpen, stashShown, vendorPage]);
   /** The item the cursor is over, as the CURRENT snapshot has it. Gone from its
    *  cell means gone from the screen, which is what a sold or consumed piece is. */
   const at = hover?.at;
@@ -454,7 +465,7 @@ export const InventoryPanel = React.memo(function InventoryPanel({
     for (const [id, g] of Object.entries(gridsRef.current) as [ContainerId, Inventory][]) {
       // The shelf is never a drop target. Goods leave it by being bought, and a
       // drop onto it would be a way to hand an item over without being paid.
-      if (id === "vendor") continue;
+      if (isShop(id)) continue;
       const r = gridRefs.current[id]?.getBoundingClientRect();
       if (!r) continue;
       if (px < r.left || px >= r.right || py < r.top || py >= r.bottom) continue;
@@ -650,11 +661,11 @@ export const InventoryPanel = React.memo(function InventoryPanel({
     };
     // The shelf grid is the counter: a piece released on it is sold, and while one is
     // held over it the grid answers first, gilt to take it, red to refuse it.
-    const sell = container === "vendor" ? sellHover : null;
+    const sell = isShop(container) ? sellHover : null;
     return (
           <div
             data-drop-grid={container}
-            data-drop-sell={container === "vendor" ? "" : undefined}
+            data-drop-sell={isShop(container) ? "" : undefined}
             data-sell={sell ?? undefined}
             ref={(el) => { gridRefs.current[container] = el; }}
             style={{
@@ -790,12 +801,12 @@ export const InventoryPanel = React.memo(function InventoryPanel({
                   if (e.button === 2) { e.preventDefault(); return; }
                   // A shelf cell is bought, never dragged: one click is the whole
                   // transaction, and the sim re-checks the price and the room.
-                  if (container === "vendor") {
+                  if (isShop(container)) {
                     e.preventDefault();
-                    if (priceOf(container, it) > gold) return;
+                    if (barred(container, it)) return;
                     setHover(null);
                     // Heard as coins once the sim takes the gold (soundscape.ts), not here.
-                    onIntent?.({ kind: "buyItem", x: it.x, y: it.y });
+                    onIntent?.({ kind: container === "vendor" ? "buyItem" : "buybackItem", x: it.x, y: it.y });
                     return;
                   }
                   // Ctrl-click breaks an item down, but only while the bench is open:
@@ -871,10 +882,10 @@ export const InventoryPanel = React.memo(function InventoryPanel({
                     // PoE's keyword box HIGHLIGHTS rather than filters: the goods
                     // stay where they are and everything else falls back, so the
                     // shelf never reshuffles under a half-typed word.
-                    : container === "vendor" && highlight !== "" && !matchesHighlight(it, highlight) ? 0.18
-                    : container === "vendor" && priceOf(container, it) > gold ? 0.45
+                    : isShop(container) && highlight !== "" && !matchesHighlight(it, highlight) ? 0.18
+                    : barred(container, it) ? 0.45
                     : 1,
-                  cursor: container === "vendor" && priceOf(container, it) > gold ? "not-allowed" : undefined,
+                  cursor: barred(container, it) ? "not-allowed" : undefined,
                 }}
               >
                 {it.icon ? (
@@ -898,12 +909,12 @@ export const InventoryPanel = React.memo(function InventoryPanel({
                 )}
                 {/* The price rides in the cell's bottom-left, opposite the stack
                     count, and turns red when the purse cannot cover it. */}
-                {container === "vendor" && (
+                {isShop(container) && (
                   <span
-                    data-testid={`vendor-price-${i}`}
+                    data-testid={`${TID[container]}-price-${i}`}
                     style={{
                       position: "absolute", left: 2, bottom: 1, fontSize: 10,
-                      color: priceOf(container, it) > gold ? "#d05a4e" : "#f0d789",
+                      color: barred(container, it) ? "#d05a4e" : "#f0d789",
                       textShadow: "0 1px 2px #000", pointerEvents: "none",
                     }}
                   >
@@ -962,24 +973,32 @@ export const InventoryPanel = React.memo(function InventoryPanel({
           {/* His name, not the transaction: the window belongs to a person. */}
           <PaneHeader title={VENDOR_NAME} bleed={PANEL_PAD} onClose={() => onCloseVendor?.()} testId="vendor-close" />
 
-          {/* The reference labels the shelf and then tabs it. One shelf is one
-              page, so the tab is a single chip: PoE1 draws it that way too when a
-              vendor's stock does not overflow. */}
+          {/* The reference labels the shelf and then tabs it: PoE1's page chip for
+              his goods, then PoE2's Buyback tab, because a sale has no confirm. */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
             <span style={{ fontSize: 11, letterSpacing: 1.5, color: "#b7ac8e" }}>{VENDOR_TITLE}</span>
-            <span
-              data-testid="vendor-tab"
-              style={{
-                fontSize: 10, letterSpacing: 1, color: GOLD, padding: "1px 10px",
-                background: "linear-gradient(180deg,#221c11,#12100a)",
-                border: `1px solid ${GOLD_DIM}`, borderBottom: "none",
-              }}
-            >
-              -1-
+            <span style={{ display: "flex", gap: 2 }}>
+              {(["vendor", "buyback"] as const).map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  data-testid={`${p}-tab`}
+                  aria-pressed={vendorPage === p}
+                  onClick={() => setVendorPage(p)}
+                  style={{
+                    fontFamily: SERIF, fontSize: 10, letterSpacing: 1, padding: "1px 10px", cursor: "pointer",
+                    color: vendorPage === p ? GOLD : "#8a7f66",
+                    background: vendorPage === p ? "linear-gradient(180deg,#221c11,#12100a)" : "#0b0a07",
+                    border: `1px solid ${GOLD_DIM}`, borderBottom: "none",
+                  }}
+                >
+                  {p === "vendor" ? "-1-" : "Buyback"}
+                </button>
+              ))}
             </span>
           </div>
 
-          {renderGrid("vendor")}
+          {renderGrid(vendorPage)}
 
           {/* Highlight, not filter — see matchesHighlight. */}
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>

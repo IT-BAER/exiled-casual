@@ -988,6 +988,7 @@ export function GameView({
           shards={snapshot.shards}
           vendorOpen={vendorOpen}
           vendor={snapshot.vendor}
+          buyback={snapshot.buyback}
           gold={snapshot.player.gold}
           onCloseVendor={closeVendor}
           equipment={snapshot.equipment}

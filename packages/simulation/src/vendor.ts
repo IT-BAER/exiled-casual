@@ -1,8 +1,9 @@
-import { ITEM_POOLS, baseOf, currencyItem, isPortalScroll, PORTAL_SCROLL_BASE_ID, WISDOM_SCROLL_BASE_ID } from "@exiled/content-runtime";
-import { familyForClass, rollVendorStock } from "@exiled/rules";
+import { ITEM_POOLS, baseOf, canonicalBaseId, currencyItem, isPortalScroll, PORTAL_SCROLL_BASE_ID, WISDOM_SCROLL_BASE_ID } from "@exiled/content-runtime";
+import { familyForClass, rollVendorStock, SHARDS_PER_ORB } from "@exiled/rules";
 import { placeFirstFit } from "./inventory";
 import type { Item } from "@exiled/content-schema";
-import type { VendorC } from "./components";
+import type { BuybackC, BuybackItem, InventoryC, SessionC, VendorC } from "./components";
+import type { Entity, World } from "./ecs";
 
 /**
  * PoE1's purchase window is a 12x12 square, but its vendors stock a whole page and
@@ -37,6 +38,51 @@ export const STAPLE_COUNT = STAPLES.length;
 /** Bought without emptying its cell. See STAPLES. */
 export function isStaple(item: Item): boolean {
   return isPortalScroll(item) || item.baseId === WISDOM_SCROLL_BASE_ID;
+}
+
+/**
+ * The buyback page with one more sale on it, borrowed from PoE2's Buyback tab.
+ * Same size as the shelf; when the piece does not fit, the oldest sales make way.
+ */
+export function recordSale(page: BuybackC | undefined, sale: Omit<BuybackItem, "x" | "y">): BuybackC {
+  let items = page?.items ?? [];
+  for (;;) {
+    const grid: BuybackC = { cols: VENDOR_COLS, rows: VENDOR_ROWS, items };
+    const at = placeFirstFit(grid, sale.w, sale.h);
+    if (at !== null) return { ...grid, items: [...items, { ...sale, x: at.x, y: at.y }] };
+    if (items.length === 0) return grid; // a piece larger than the page is not kept
+    items = items.slice(1);
+  }
+}
+
+/**
+ * The backpack and shard counter with a sale's shards taken back, or null when
+ * they cannot be. Shards the counter no longer holds became an orb, and that orb
+ * comes back out of the backpack; if it is gone, the sale cannot be undone exactly.
+ */
+export function unpayShards(
+  inv: InventoryC, counts: Record<string, number>, sale: BuybackItem,
+): { inv: InventoryC; counts: Record<string, number> } | null {
+  if (sale.orbBaseId === undefined || sale.shards === undefined) return { inv, counts };
+  const orb = canonicalBaseId(sale.orbBaseId);
+  let left = (counts[sale.orbBaseId] ?? 0) - sale.shards;
+  let items = inv.items;
+  while (left < 0) {
+    const i = items.findIndex((p) => canonicalBaseId(p.item.baseId) === orb);
+    if (i < 0) return null;
+    items = (items[i]!.count ?? 1) > 1
+      ? items.map((p, j) => (j === i ? { ...p, count: (p.count ?? 1) - 1 } : p))
+      : items.filter((_, j) => j !== i);
+    left += SHARDS_PER_ORB;
+  }
+  return { inv: { ...inv, items }, counts: { ...counts, [sale.orbBaseId]: left } };
+}
+
+/** New goods for `level`, and the buyback page goes with the old ones (PoE2 clears it too). */
+export function restockVendor(world: World, sessionE: Entity, level: number): void {
+  const s = world.get<SessionC>(sessionE, "session")!;
+  world.set<VendorC>(sessionE, "vendor", stockVendor(s.atlasSeed, level, s.classId));
+  world.remove(sessionE, "buyback");
 }
 
 export function stockVendor(worldSeed: number, level: number, classId?: string): VendorC {

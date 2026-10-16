@@ -390,6 +390,18 @@ export type StashC = InventoryC;
  * a derived list because buying has to take a piece off it and leave a hole.
  */
 export type VendorC = InventoryC;
+/** One sale the vendor will undo: the piece, the gold it fetched and the shards it paid. */
+export interface BuybackItem extends PlacedItem {
+  gold: number;
+  /** Absent when the sale paid gold only (a normal item). */
+  orbBaseId?: string;
+  shards?: number;
+}
+/**
+ * The vendor's buyback page, oldest sale first. Absent until the first sale and
+ * removed on restock, so a session that never sells hashes as it always did.
+ */
+export interface BuybackC { cols: number; rows: number; items: BuybackItem[] }
 /** Equipped gear on the session singleton, keyed by slot id. */
 export interface EquipmentC { slots: Partial<Record<string, Item>> }
 /**

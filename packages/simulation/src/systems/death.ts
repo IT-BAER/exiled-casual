@@ -1,7 +1,7 @@
 import { Simulation } from "../loop";
 import type { World } from "../ecs";
-import type { Health, Mana, MoveTarget, MoveDir, SessionC, MonsterC, Position, ItemC, FlasksC, ProgressC, EnergyShieldC, VendorC, SkillsC } from "../components";
-import { stockVendor } from "../vendor";
+import type { Health, Mana, MoveTarget, MoveDir, SessionC, MonsterC, Position, ItemC, FlasksC, ProgressC, EnergyShieldC, SkillsC } from "../components";
+import { restockVendor } from "../vendor";
 import { openReturnPortal } from "../areas";
 import { fp } from "@exiled/fixed-point";
 import { fnv1a32 } from "../rng";
@@ -206,7 +206,7 @@ export function registerDeath(sim: Simulation, collisionRef?: CollisionRef): voi
             // A level-up restocks the shelf (docs/02 §17). It is also the one moment
             // the shop is worth walking back to, so the new level and the new goods
             // land together rather than the goods arriving unannounced.
-            world.set<VendorC>(sessionE, "vendor", stockVendor(s.atlasSeed, next.level, s.classId));
+            restockVendor(world, sessionE, next.level);
             // The level may have opened a skill. Granting its gem here rather than
             // only on load is what makes it slottable in the moment it is earned.
             grantSkills(world);
