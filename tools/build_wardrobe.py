@@ -432,13 +432,19 @@ HOOD_BONES = ("Head", "neck_01", "spine_02", "spine_03", "clavicle_l", "clavicle
 # world axes: the hammer's striking face ahead of him, the bow's string at his
 # side (his left is +X, so -X is toward the body).
 HAMMER_LEN_RATIO = 0.32
-HAMMER_AIM = (-0.18, -0.62, 0.76)   # the wand's, see WAND_AIM
+# 34 degrees over the horizontal, out of the fist along the forearm's line; the
+# wand's 50 (WAND_AIM) stood a haft steeper than the fist holds it.
+HAMMER_AIM = (-0.18, -0.805, 0.56)
 HAMMER_FACE = (0.0, -1.0, 0.0)
 BOW_LEN_RATIO = 0.64
 # None: measured off the fist. A stave runs along the knuckles with the string
 # toward the wrist, or the wrist bends to hold it up and the fist closes on air.
 BOW_AIM = None
 BOW_FACE = None
+# A one-handed sword, edge ahead of him like the hammer's face.
+SWORD_LEN_RATIO = 0.5
+SWORD_AIM = HAMMER_AIM
+SWORD_FACE = HAMMER_FACE
 
 RIGID_GEAR = (
     {
@@ -478,6 +484,12 @@ RIGID_GEAR = (
                      "face": BOW_FACE},
         # The donor's string is rigid; `rig.ts` draws it from these two nocks.
         "unstring": ("stalkerbow_nock_top", "stalkerbow_nock_bottom"),
+    },
+    {
+        "slot": "weapon1", "look": "broadsword", "part": "mesh",
+        "src": "sword-3000-v1.glb", "bone": "hand_r", "fit": "held",
+        "fit_args": {"side": "r", "length_ratio": SWORD_LEN_RATIO, "aim": SWORD_AIM,
+                     "face": SWORD_FACE},
     },
     {
         "slot": "weapon2", "look": "buckler", "part": "mesh",

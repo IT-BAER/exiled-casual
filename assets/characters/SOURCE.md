@@ -166,9 +166,9 @@ ember the BlenderKit "Wool fabric" (`d5ca8a6b-dd40-4f0c-a5c7-e030af0912c5`), bot
 levelled to grey, box-projected at 512 px and tinted by vertex colour (shell, lining,
 hem). Outputs `hood-stalker-v2.glb`, `hood-ember-v2.glb`.
 
-## Starter held weapons (`weapon1.ironswornhammer.mesh`, `weapon1.stalkerbow.mesh`)
+## Held weapons (`weapon1.ironswornhammer.mesh`, `weapon1.stalkerbow.mesh`, `weapon1.broadsword.mesh`)
 
-Both donors are built by `tools/prep_held_weapons.py` into
+The donors are built by `tools/prep_held_weapons.py` into
 `assets/props/source/trellis_local/` (`hammer-3000-v1.glb`, `bow-3000-v1.glb`), each one
 mesh and one material with its colour and metal/roughness baked into a 512 atlas, and
 fitted by `fit_held` in `tools/build_wardrobe.py` (grip at the donor's origin, aimed and
@@ -184,3 +184,8 @@ rolled in the idle clip's fist).
   BlenderKit material "Wood Grain" (`8903140f-d18e-4536-a2f6-19e8d329e83e`, CC0, by
   PBRPX, `assets/props/source/mat-wood-grain.blend`), the grip wrap the "Aged Dark
   Leather" above.
+- Sword (`weapon1.broadsword.mesh`, `sword-3000-v1.glb`): BlenderKit "Stylized Sword"
+  (`bd139cc8-a102-4e1f-ade9-0d155cdafc8d`, royalty free, by Sebastian Villanueva), kept at
+  `assets/props/source/stylized_sword.blend`. Its twisted grip is thinned to 0.45 and
+  lengthened 1.3 to take a fist, the pommel thinned to 0.6; it keeps its own UV and its
+  1K colour, metallic and roughness are baked to the 512 atlas.

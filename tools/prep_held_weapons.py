@@ -1,4 +1,4 @@
-"""Build the two starter held weapons' donors: the Ironsworn hammer and the Stalker bow.
+"""Build the held weapons' donors: the Ironsworn hammer, the Stalker bow and the first sword.
 
 Both land in `assets/props/source/trellis_local/` beside the wand, in the donor
 contract `fit_held` in `tools/build_wardrobe.py` reads: one mesh, one material,
@@ -16,17 +16,22 @@ closes on at the origin.
   in BlenderKit "Wood Grain" (8903140f-d18e-4536-a2f6-19e8d329e83e, cc_zero,
   PBRPX), with a grip wrap in the wardrobe's "Aged Dark Leather"
   (d583c044-b586-4ecf-b3a1-12de1d032b3f, royalty_free).
+* Sword: BlenderKit "Stylized Sword" (bd139cc8-a102-4e1f-ade9-0d155cdafc8d,
+  royalty_free, Sebastian Villanueva). Its twisted grip is 6 cm thick and 7 cm
+  long, so it is thinned to the fist and lengthened to hold one; the pommel rides down.
 
 Every source surface is baked, colour and metal/roughness, into one 512 atlas
-over a smart-projected UV, so each weapon is a single glTF primitive.
+over a smart-projected UV (the sword keeps its own single UV), so each weapon
+is a single glTF primitive. Names after `--` build only those (`sword`).
 
     "/c/Program Files/Blender Foundation/Blender 5.2/blender.exe" \
         --background --factory-startup --disable-autoexec --python-exit-code 1 \
-        --python tools/prep_held_weapons.py
+        --python tools/prep_held_weapons.py [-- hammer bow sword]
 """
 
 import math
 import os
+import sys
 
 import bmesh
 import bpy
@@ -64,6 +69,18 @@ BOW_STRING_R = 0.0025
 WOOD_TINT = (0.55, 0.42, 0.32)   # light oak -> a worn brown stave
 WOOD_TILE = 0.25             # metres of stave per texture repeat along the grain
 STRING_COLOUR = (0.55, 0.5, 0.4)
+
+# The sword's own measurements (source metres, lying flat, tip at +Y): the guard
+# starts at y -0.315, the grip runs down to the pommel at -0.385 about x 0, z 0.032.
+SWORD_GUARD_Y = -0.315
+SWORD_POMMEL_Y = -0.385
+SWORD_AXIS_Z = 0.032
+SWORD_GRIP_LONG = 1.3        # 7 cm grip -> 9 cm, one fist between guard and pommel
+SWORD_GRIP_THIN = 0.45       # 60 mm -> 27 mm, ~30 mm once fitted
+SWORD_POMMEL_THIN = 0.6
+# The source blade is metallic 1 at roughness ~0.4, black without an environment
+# to reflect: scaled to the hammer's iron, roughness floored.
+SWORD_ROUGH_FLOOR = 0.5
 
 
 def clear():
@@ -197,9 +214,12 @@ def final_material(name, colour, orm):
     return mat
 
 
-def finish(obj, stem, passes):
+def finish(obj, stem, passes, own_uv=False):
     """Atlas, bake, collapse to one material, export as a donor."""
-    atlas_uv(obj)
+    if own_uv:
+        obj.data.uv_layers[0].name = "atlas"
+    else:
+        atlas_uv(obj)
     images = bake(obj, stem, passes)
     colour = save_jpeg(images["colour"], OUT_DIR + f"{stem}_colour.jpg")
     orm = save_jpeg(images["orm"], OUT_DIR + f"{stem}_orm.jpg")
@@ -409,6 +429,63 @@ def build_bow():
     finish(obj, f"bow-{BUDGET}-v1", [("colour", colour, "sRGB"), ("orm", orm, "Non-Color")])
 
 
+# --------------------------------------------------------------------------
+# sword
+
+def build_sword():
+    clear()
+    dst = append("stylized_sword.blend", names=["M_Stylized_Sword"])
+    src = dst.objects[0]
+    obj = evaluated_copy(src, "sword")
+    bpy.data.objects.remove(src, do_unlink=True)
+    me = obj.data
+    if len(me.materials) != 1 or len(me.uv_layers) != 1:
+        raise SystemExit(f"unexpected sword {[m.name for m in me.materials]} {[u.name for u in me.uv_layers]}")
+    drop = (SWORD_POMMEL_Y - SWORD_GUARD_Y) * (SWORD_GRIP_LONG - 1)
+    for v in me.vertices:
+        if v.co.y >= SWORD_GUARD_Y:
+            continue
+        if v.co.y >= SWORD_POMMEL_Y:
+            v.co.y = SWORD_GUARD_Y + (v.co.y - SWORD_GUARD_Y) * SWORD_GRIP_LONG
+            thin = SWORD_GRIP_THIN
+        else:
+            v.co.y += drop
+            thin = SWORD_POMMEL_THIN
+        v.co.x *= thin
+        v.co.z = SWORD_AXIS_Z + (v.co.z - SWORD_AXIS_Z) * thin
+    # Tip at +Z, edges stay on X; the fist closes on the middle of the grip.
+    grip = (SWORD_GUARD_Y + SWORD_POMMEL_Y + drop) / 2
+    me.transform(Matrix.Translation((0.0, -grip, -SWORD_AXIS_Z)))
+    me.transform(Matrix.Rotation(math.pi / 2, 4, "X"))
+    me.update()
+    decimate_to(obj, BUDGET)
+    nodes = me.materials[0].node_tree.nodes
+    base, metal, rough = (next(n for n in nodes if n.type == "TEX_IMAGE" and n.image.name == f"T_Sword_low_{k}")
+                          for k in ("BaseColor.png", "Metallic.jpg", "Roughness.jpg"))
+
+    def colour(mat, src):
+        emit_into(mat, mat.node_tree.nodes[base.name].outputs["Color"])
+
+    def orm(mat, src):
+        t = mat.node_tree
+        comb = node(t, "ShaderNodeCombineColor")
+        comb.inputs["Red"].default_value = 1.0
+        floor = node(t, "ShaderNodeMath", operation="MAXIMUM")
+        floor.inputs[1].default_value = SWORD_ROUGH_FLOOR
+        t.links.new(floor.inputs[0], t.nodes[rough.name].outputs["Color"])
+        t.links.new(comb.inputs["Green"], floor.outputs["Value"])
+        iron = node(t, "ShaderNodeMath", operation="MULTIPLY")
+        iron.inputs[1].default_value = IRON_METALLIC
+        t.links.new(iron.inputs[0], t.nodes[metal.name].outputs["Color"])
+        t.links.new(comb.inputs["Blue"], iron.outputs["Value"])
+        emit_into(mat, comb.outputs["Color"])
+
+    finish(obj, f"sword-{BUDGET}-v1", [("colour", colour, "sRGB"), ("orm", orm, "Non-Color")], own_uv=True)
+
+
+BUILDS = {"hammer": build_hammer, "bow": build_bow, "sword": build_sword}
+
 if __name__ == "__main__":
-    build_hammer()
-    build_bow()
+    wanted = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else list(BUILDS)
+    for name in wanted:
+        BUILDS[name]()
