@@ -1,0 +1,104 @@
+name: Jeff
+# Thin public stub. Jeff's contract, agents and settings live in the private repo IT-BAER/jeff,
+# checked out into .jeff/ (gitignored) with a read-only token. Project rules: .jeff/projects/<repo>.md.
+on:
+  issues:
+    types: [labeled]
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+  pull_request_review:
+    types: [submitted]
+  issue_comment:
+    types: [created]
+  schedule:
+    - cron: "30 2 * * *"
+
+concurrency:
+  group: jeff-${{ github.event.issue.number || github.event.pull_request.number || github.event.workflow_run.head_branch || 'nightly' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+  actions: read
+
+jobs:
+  jeff:
+    # Only the owner (or Jeff's own pushes) can start a run.
+    if: >-
+      (github.actor == 'IT-BAER' || github.actor == 'jeff-it-baer[bot]' || github.event_name == 'schedule') &&
+      (
+        (github.event_name == 'issues' && github.event.label.name == 'jeff') ||
+        (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'failure' && startsWith(github.event.workflow_run.head_branch, 'jeff/') && github.event.workflow_run.head_repository.full_name == github.repository) ||
+        (github.event_name == 'pull_request_review' && github.event.review.state == 'changes_requested' && startsWith(github.event.pull_request.head.ref, 'jeff/')) ||
+        (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@jeff')) ||
+        github.event_name == 'schedule'
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      # Jeff acts as his own GitHub App (jeff-it-baer[bot]). Two short-lived tokens: the contract
+      # repo is read-only so the agent can never edit his own rules; the write token covers this repo only.
+      - id: contract-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.JEFF_APP_ID }}
+          private-key: ${{ secrets.JEFF_APP_PRIVATE_KEY }}
+          owner: IT-BAER
+          repositories: jeff
+          permission-contents: read
+      - id: jeff-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.JEFF_APP_ID }}
+          private-key: ${{ secrets.JEFF_APP_PRIVATE_KEY }}
+          owner: IT-BAER
+          repositories: exiled-casual
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write
+          permission-actions: write
+      - uses: actions/checkout@v5
+        with:
+          repository: IT-BAER/jeff
+          token: ${{ steps.contract-token.outputs.token }}
+          path: .jeff
+          # The token must not stay in .jeff/.git/config where the agent's shell could read it.
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .node-version
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ steps.jeff-token.outputs.token }}
+          bot_name: "jeff-it-baer[bot]"
+          bot_id: "343050521"
+          allowed_bots: "jeff-it-baer[bot]"
+          show_full_output: true
+          settings: .jeff/settings.json
+          # Only GitHub-generated identifiers and the project file path go into the prompt.
+          prompt: |
+            Event: ${{ github.event_name }}. Issue number: ${{ github.event.issue.number }}.
+            PR number: ${{ github.event.pull_request.number }}. Failed CI run id: ${{ github.event.workflow_run.id }}.
+            Comment id: ${{ github.event.comment.id }}. Review id: ${{ github.event.review.id }}.
+            Project file: .jeff/projects/exiled-casual.md. Follow the contract in your system prompt.
+          claude_args: |
+            --max-turns 150
+            --append-system-prompt-file .jeff/PROMPT.md
+            --agents .jeff/agents.json
+            --allowedTools "Read,Edit,Write,Glob,Grep,Agent,Bash(npm:*),Bash(npx vitest:*),Bash(npx playwright:*),Bash(git:*),Bash(gh:*),Bash(node:*),Bash(cat:*),Bash(ls:*),Bash(mkdir:*),Bash(tail:*),Bash(head:*),Bash(grep:*),Bash(wc:*),Bash(echo:*)"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: jeff-smoke-out
+          path: smoke-out/
+          if-no-files-found: ignore

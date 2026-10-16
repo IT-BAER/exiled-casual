@@ -8,7 +8,8 @@ import { START_LEVEL, waystoneMods, atlasGraph } from "@exiled/rules";
 import { WISDOM_SCROLL_BASE_ID, isCurrency } from "@exiled/content-runtime";
 import { MOVE_SOCKET } from "@exiled/protocol";
 import type { World } from "../ecs";
-import type { SessionC, ProgressC, SkillsC, Position, Health } from "../components";
+import { registerPlayerMovement, ROLL_TICKS } from "./player-movement";
+import type { SessionC, ProgressC, SkillsC, Position, Health, RollC, MoveTarget } from "../components";
 
 /** Ground equipment only: any kill can also pay currency. */
 const equipmentDrops = (w: World) =>
@@ -70,6 +71,50 @@ describe("registerDeath", () => {
     // existing respawn guarantees still hold:
     expect(world.get<{ life: number }>(p, "health")!.life).toBe(fp(100));
     expect(world.get<{ x: number; y: number }>(p, "position")).toEqual({ x: 0, y: 0 });
+  });
+
+  describe("a roll does not outlive the man rolling", () => {
+    /** Killed on roll tick 3, with a click already waiting for the roll to end. */
+    function diedMidRoll(withSession: boolean) {
+      const sim = new Simulation();
+      // Movement before death, as the real sim registers them.
+      registerPlayerMovement(sim);
+      registerDeath(sim);
+      const { world } = sim;
+      const p = world.create();
+      world.set(p, "player", { moveSpeed: fp(0.2), bodyRadius: fp(0.5) });
+      world.set(p, "health", { life: 0, maxLife: fp(100) });
+      world.set(p, "mana", { mana: fp(10), maxMana: fp(60), regen: 0 });
+      world.set(p, "position", { x: fp(3), y: fp(3) });
+      world.set<RollC>(p, "roll", {
+        startTick: -2, untilTick: ROLL_TICKS - 2, dirX: fp(1), dirY: 0,
+        pending: { type: "moveTo", data: { x: fp(-9), y: fp(-9) } },
+      });
+      if (withSession) {
+        world.set<SessionC>(world.create(), "session", {
+          area: "map", atlasSeed: 0, areaTier: 0, activeNodeId: "", completedNodes: [],
+          mapSeed: 0, waystoneSeed: 0, portalsLeft: 6, mapOpen: 1, pendingArea: "",
+        });
+      }
+      sim.step();
+      return { sim, world, p };
+    }
+
+    it("map death ends the roll, and the corpse neither slides nor walks to the waiting click", () => {
+      const { sim, world, p } = diedMidRoll(true);
+      expect(world.has(p, "roll")).toBe(false);
+      const fell = { ...world.get<Position>(p, "position")! };
+      for (let i = 0; i < ROLL_TICKS + 5; i++) sim.step();
+      expect(world.get<Position>(p, "position")).toEqual(fell);
+      expect(world.get<MoveTarget>(p, "moveTarget")?.active ?? 0).toBe(0);
+    });
+
+    it("the legacy respawn ends it too, so he stands at the origin", () => {
+      const { sim, world, p } = diedMidRoll(false);
+      expect(world.has(p, "roll")).toBe(false);
+      for (let i = 0; i < ROLL_TICKS + 5; i++) sim.step();
+      expect(world.get<Position>(p, "position")).toEqual({ x: 0, y: 0 });
+    });
   });
 
   // ── Session-aware death tests ────────────────────────────────────────────
@@ -477,6 +522,22 @@ describe("registerDeath", () => {
     expect(skills.gems["skill.ember_bolt.v1"]).toEqual({ level: 1, xp: 11 });
     expect(skills.gems["skill.blink.v1"]).toEqual({ level: 1, xp: 11 });
     expect(skills.gems[MOVE_SOCKET]).toBeUndefined();
+  });
+
+  it("gives a socketed Portal no share of a kill's experience", () => {
+    // Same award (23 xp). Portal in a socket is not in the denominator and earns
+    // nothing: ember_bolt takes splitGemXp(23, 1) = 23.
+    const { sim, world, sessionE } = makeGemKill({
+      area: "map", areaTier: 1, level: 10, xp: 0,
+      skills: {
+        gems: { "skill.ember_bolt.v1": { level: 1, xp: 0 } },
+        bar: ["skill.ember_bolt.v1", "skill.town_portal.v1", null, null, null, MOVE_SOCKET, null, null],
+      },
+    });
+    sim.step([]);
+    const skills = world.get<SkillsC>(sessionE, "skills")!;
+    expect(skills.gems["skill.ember_bolt.v1"]).toEqual({ level: 1, xp: 23 });
+    expect(skills.gems["skill.town_portal.v1"]).toBeUndefined();
   });
 
   it("pays a skill that is on the bar and never cast", () => {

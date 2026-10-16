@@ -21,6 +21,7 @@ import {
   HEAD_MAX,
   clipForSpeed,
   CLIP_NAME,
+  clipLoops,
   directionBlend,
   DIRECTIONS,
   LEFT_PLANT,
@@ -1216,6 +1217,14 @@ describe("the cast clip drives the weapon arm", () => {
     for (const clip of REACTION_CLIPS) expect(isLayeredClip(clip), clip).toBe(true);
   });
 
+  it("rolls the whole body once on the library's roll take", () => {
+    expect(CLIP_NAME.roll).toBe("Rig|Roll");
+    expect(clipLoops("roll")).toBe(false);
+    expect(clipLoops("run")).toBe(true);
+    // It owns the legs too: a roll over a running stride is a body doing two things.
+    expect(isLayeredClip("roll")).toBe(false);
+  });
+
   /** Sideways position of the right hand, in the clip's root frame, at a share of the clip. */
   function handSide(clipName: string, frac: number): number {
     const clip = json.animations.find((a: { name: string }) => a.name === clipName);
@@ -2179,4 +2188,71 @@ describe("a sword strike moves the legs only while standing", () => {
     for (let i = 0; i < 40; i++) { rig.setMoveAngle(0); rig.setLocomotion(3.5); scene.render(); }
     expect(off("run", "thigh_l"), "thigh on the run").toBeLessThan(2);
   }), 60_000);
+
+  // The roll's ground speed hands locomotion from the idle to the jog mid-roll;
+  // that switch starts the jog last, and last applied is what shows.
+  it("keeps the whole body on the roll through a gait switch, then hands it to the gait", () => withFiles(async () => {
+    const { scene, rig, off } = await rigged();
+    rig.standSettled();
+    for (let i = 0; i < 30; i++) { rig.setLocomotion(0); scene.render(); }
+    rig.playStrike();
+    for (let i = 0; i < 5; i++) { rig.setLocomotion(0); scene.render(); }
+    rig.playRoll(0.6);
+    const roll = scene.animationGroups.find((g) => g.name === "hero-roll")!;
+    expect(roll.isPlaying).toBe(true);
+    expect(scene.animationGroups.find((g) => g.name === "hero-strikeA")!.isPlaying, "the swing is cut").toBe(false);
+    let worst = 0;
+    // 0.6 s is ~37 frames; past the crossfade in, every frame is the roll's own pose.
+    for (let i = 0; i < 30; i++) {
+      rig.setMoveAngle(0);
+      rig.setLocomotion(6);
+      scene.render();
+      if (i >= 12) for (const bone of ["thigh_l", "calf_r", "spine_02", "upperarm_r"]) worst = Math.max(worst, off("roll", bone));
+    }
+    expect(worst, "worst bone off the roll mid-roll").toBeLessThan(2);
+    for (let i = 0; i < 40; i++) { rig.setMoveAngle(0); rig.setLocomotion(3.5); scene.render(); }
+    expect(roll.isPlaying, "the roll plays once").toBe(false);
+    expect(off("run", "thigh_l"), "thigh back on the run").toBeLessThan(2);
+  }), 60_000);
+});
+
+/**
+ * Standing, the knee comes forward a few millimetres with every breath. A calf
+ * capsule whose round head stood ON the knee reached 12cm up the thigh, so that
+ * touch decided whether the robe's front panel hung straight or wrapped over a
+ * ball: the panel swung 11cm out and back in time with the breath.
+ */
+describe("the robe hangs still while he stands and breathes", () => {
+  const MODELS = fileURLToPath(new URL("../../public/models/", import.meta.url));
+
+  it("moves no skirt joint more than a few centimetres over a breath", async () => {
+    const original = (globalThis as { FileReader?: unknown }).FileReader;
+    (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
+    try {
+      engine = new NullEngine();
+      engine.getDeltaTime = () => 16;
+      const { scene } = createScene(engine);
+      scene.useConstantAnimationDeltaTime = true;
+      new FreeCamera("eye", new Vector3(0, 2, -6), scene);
+      const file = (name: string) => new File([readFileSync(`${MODELS}${name}`)], name, { type: "model/gltf-binary" });
+      await loadPlayerRig(scene, { anims: file("anim-library.glb"), wardrobe: file("wardrobe.glb") });
+      const rig = attachRig(scene, new Mesh("hero", scene))!;
+      rig.setLooks({ ...BASE_LOOKS, helmet: "ember", chest: "ember", boots: "ember", gloves: "ember" });
+      rig.standSettled();
+      const frame = () => { rig.setLocomotion(0); scene.render(); };
+      for (let i = 0; i < 200; i++) frame();
+      const joints = scene.transformNodes.filter((n) => /^skirt_\d+_0[2-6]$/.test(n.name));
+      expect(joints.length).toBe(SKIRT_CHAINS * (SKIRT_JOINTS - 1));
+      const start = joints.map((n) => n.getAbsolutePosition().clone());
+      let worst = 0;
+      // A breath is about 2.2s: 150 frames of 16ms hold one whole.
+      for (let f = 0; f < 150; f++) {
+        frame();
+        joints.forEach((n, k) => { worst = Math.max(worst, Vector3.Distance(n.getAbsolutePosition(), start[k]!)); });
+      }
+      expect(worst).toBeLessThan(0.04);
+    } finally {
+      (globalThis as { FileReader?: unknown }).FileReader = original;
+    }
+  }, 60_000);
 });

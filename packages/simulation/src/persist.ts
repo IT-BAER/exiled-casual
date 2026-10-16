@@ -5,7 +5,7 @@ import { stockVendor } from "./vendor";
 import { withPermanentWaystone } from "./inventory";
 import { recomputePlayerStats } from "./derived";
 import { START_LEVEL, isUnlocked, maxGemLevel, MAX_GEM_LEVEL, gemXpToNext, classIdOr } from "@exiled/rules";
-import { SKILLS, defaultAttackFor, FREE_ATTACKS, TOWN_PORTAL_SKILL } from "@exiled/content-runtime";
+import { SKILLS, defaultAttackFor, FREE_ATTACKS, UTILITY_SKILLS } from "@exiled/content-runtime";
 import { SKILL_SLOT_COUNT, MOUSE_SLOT_BASE, MOVE_SOCKET } from "@exiled/protocol";
 
 /**
@@ -97,7 +97,7 @@ export function normalizeBar(raw: unknown): (string | null)[] {
  * locked skill sitting in a socket with no gem behind it. `null` and
  * `MOVE_SOCKET` pass through untouched since neither is a skill. Shared by
  * the load path (`restore`, below) and the live intent (`systems/skills.ts`)
- * so the two provably can't drift apart.
+ * so the two provably can't drift apart. A utility skill is never socketed.
  */
 export function filterUnlockedBar(
   bar: (string | null)[],
@@ -106,8 +106,9 @@ export function filterUnlockedBar(
 ): (string | null)[] {
   return bar.map((id) => {
     if (id === null || id === MOVE_SOCKET) return id;
+    if (UTILITY_SKILLS.has(id)) return null;
     const def = SKILLS.get(id);
-    return def && id !== TOWN_PORTAL_SKILL && isUnlocked(def, charLevel, classId) ? id : null;
+    return def && isUnlocked(def, charLevel, classId) ? id : null;
   });
 }
 
@@ -119,7 +120,7 @@ export function filterUnlockedBar(
  * xp beside it is clamped along with it: banked xp computed against a ceiling
  * that no longer holds must not carry past what the clamped level allows, or
  * the gem re-levels the instant it earns a single point once the character
- * level catches back up.
+ * level catches back up. A utility skill's gem is dropped like an unknown id.
  */
 function sanitizeGems(
   raw: unknown, cap: number, classId: string,
@@ -132,9 +133,8 @@ function sanitizeGems(
   for (const [id, v] of Object.entries(src)) {
     const def = SKILLS.get(id);
     const gem = v as { level?: unknown; xp?: unknown };
-    // Portal is a key, not a gem; an older save may still hold one.
     if (
-      !def || id === TOWN_PORTAL_SKILL || typeof gem?.level !== "number" || !Number.isFinite(gem.level) ||
+      !def || UTILITY_SKILLS.has(id) || typeof gem?.level !== "number" || !Number.isFinite(gem.level) ||
       typeof gem?.xp !== "number" || !Number.isFinite(gem.xp)
     ) continue;
     const savedLevel = Math.max(1, Math.trunc(gem.level));
@@ -171,7 +171,8 @@ export function reseedDefaultAttack(skills: SkillsC, classId: string): SkillsC {
  * it is, and nothing is ever taken away. Called on every load and on every
  * character level, which is why unlock can be derived rather than stored.
  * `classStart` is the gem level a class skill opens at (the load path's
- * stand-in for the other class's gems it just took away).
+ * stand-in for the other class's gems it just took away). A utility skill is
+ * never granted.
  */
 export function grantSkills(world: World, classStart = 1): void {
   const e = world.query("session")[0];
@@ -182,8 +183,8 @@ export function grantSkills(world: World, classStart = 1): void {
   const gems = { ...(current?.gems ?? {}) };
   const bar = [...(current?.bar ?? defaultBar(classId))];
   for (const def of SKILLS.values()) {
-    // Portal is cast from its key and its scroll: no gem, so no socket and no xp.
-    if (def.id === TOWN_PORTAL_SKILL || !isUnlocked(def, level, classId)) continue;
+    if (UTILITY_SKILLS.has(def.id)) continue;
+    if (!isUnlocked(def, level, classId)) continue;
     if (gems[def.id] !== undefined) continue;
     gems[def.id] = { level: def.classId ? classStart : 1, xp: 0 };
     // A skill nobody can see was not a reward (docs/09 rule 1), so the one the

@@ -17,7 +17,7 @@ later vertical slices were pulled forward before all breadth gates in earlier ph
 | 5: Atlas meta-progression | Partial: 15-node seeded graph, fog, tier gates, modifiers, sustain; no Atlas passives, towers, or fortresses |
 | 6: content alpha | Not reached at the breadth targets below |
 | 7: multiplayer and market | Not started |
-| 8: public operations | Teaser site only; no playable deployment |
+| 8: public operations | Partial: exiledcasual.com serves the latest release, deployed automatically; no accounts or online services |
 
 The living as-built boundary is the
 [current implementation contract](specs/2026-08-05-current-implementation-contract.md).

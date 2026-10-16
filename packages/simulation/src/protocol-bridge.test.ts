@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { fp, toNumber } from "@exiled/fixed-point";
 import { createCombatSim } from "./combat-sim";
 import { intentToCommand, buildSnapshot } from "./protocol-bridge";
-import { CONTENT_VERSION, MONSTERS, SKILLS } from "@exiled/content-runtime";
+import { CONTENT_VERSION, MONSTERS, SKILLS, UTILITY_SKILLS } from "@exiled/content-runtime";
 import { ITEM_POOLS, baseOf } from "@exiled/content-runtime";
 import { rollItem, effectiveSkill } from "@exiled/rules";
 import type { Intent } from "@exiled/protocol";
@@ -65,6 +65,12 @@ describe("intentToCommand", () => {
     const cmd = intentToCommand(intent, 1, 3);
     expect(cmd).toEqual({ tick: 3, entity: 1, type: "stop" });
   });
+
+  it("dodge maps to a dodge command with its aim in data", () => {
+    const intent: Intent = { kind: "dodge", tx: fp(4), ty: fp(-1) };
+    expect(intentToCommand(intent, 1, 7))
+      .toEqual({ tick: 7, entity: 1, type: "dodge", data: { tx: fp(4), ty: fp(-1) } });
+  });
 });
 
 describe("buildSnapshot", () => {
@@ -88,6 +94,24 @@ describe("buildSnapshot", () => {
     sim.step([intentToCommand(intent, playerEntity, 0)]); // castTicks 9 → untilTick 9
     const snap = buildSnapshot(world, sim, sim.tick, CONTENT_VERSION);
     expect(snap.player.casting).toBe(true);
+  });
+
+  it("reports a dodge roll and the ticks it has left, and nothing once it is over", () => {
+    const { world, sim, playerEntity } = createCombatSim(42);
+    const snap = () => buildSnapshot(world, sim, sim.tick, CONTENT_VERSION).player;
+    expect(snap().rolling).toBeUndefined();
+    const t = sim.tick;
+    sim.step([intentToCommand({ kind: "dodge", tx: fp(5), ty: fp(0) }, playerEntity, t)]);
+    // The roll's first tick as a snapshot of that tick would read it.
+    expect(buildSnapshot(world, sim, t, CONTENT_VERSION).player.rollTicks).toBe(18);
+    const seen: number[] = [];
+    while (snap().rolling) {
+      seen.push(snap().rollTicks!);
+      sim.step();
+    }
+    expect(seen).toEqual(Array.from({ length: 17 }, (_, i) => 17 - i));
+    expect(snap().rolling).toBeUndefined();
+    expect(snap().rollTicks).toBeUndefined();
   });
 
   it("a bow skill casts as 'bow' and says how many ticks remain until the arrow leaves", () => {
@@ -132,6 +156,13 @@ describe("buildSnapshot", () => {
     const snap = buildSnapshot(world, sim, 6, CONTENT_VERSION);
     expect(snap.player.strikeTick).toBe(5);
     expect(snap.player.strikeHits).toBe(3);
+  });
+
+  it("reports the tick of the last pickup refused for lack of room, and nothing before one", () => {
+    const { world, sim } = createCombatSim(42);
+    expect(buildSnapshot(world, sim, 0, CONTENT_VERSION).player.pickupRefusedTick).toBeUndefined();
+    sim.pickupRefusedTick = 5;
+    expect(buildSnapshot(world, sim, 6, CONTENT_VERSION).player.pickupRefusedTick).toBe(5);
   });
 
   it("names the skill that swung, from the cast itself", () => {
@@ -568,20 +599,28 @@ describe("buildSnapshot - skills", () => {
     const { world, sim } = setupSkillsWorld(42, 1, 0);
     const snap = buildSnapshot(world, sim, 0, CONTENT_VERSION);
     const ids = snap.skills!.map((s) => s.id);
-    // cinder_ground (unlockLevel 8) is locked at level 1, town_portal is never a
-    // gem; ember_bolt (unlockLevel 1) is held.
+    // cinder_ground (unlockLevel 8) is locked at level 1; ember_bolt
+    // (unlockLevel 1) is not. town_portal is a utility skill and never listed.
     expect(ids).not.toContain("skill.cinder_ground.v1");
     expect(ids).not.toContain("skill.town_portal.v1");
     expect(ids).toContain("skill.ember_bolt.v1");
   });
 
-  it("emits every skill the class may hold once the level has opened them all, but never Portal", () => {
+  it("emits every skill the class may hold once the level has opened them all", () => {
     const { world, sim } = setupSkillsWorld(42, 100, 0);
     const snap = buildSnapshot(world, sim, 0, CONTENT_VERSION);
     const ids = new Set(snap.skills!.map((s) => s.id));
-    const own = [...SKILLS.values()].filter((d) => (!d.classId || d.classId === "class.emberbound") && d.id !== "skill.town_portal.v1").map((d) => d.id);
+    const own = [...SKILLS.values()]
+      .filter((d) => !UTILITY_SKILLS.has(d.id) && (!d.classId || d.classId === "class.emberbound"))
+      .map((d) => d.id);
     expect(ids).toEqual(new Set(own));
     expect(ids.size).toBe(4);
+  });
+
+  it("never lists a utility skill, even at the level that used to open it", () => {
+    const { world, sim } = setupSkillsWorld(42, 10);
+    const snap = buildSnapshot(world, sim, 0, CONTENT_VERSION);
+    expect(snap.skills!.map((s) => s.id)).not.toContain("skill.town_portal.v1");
   });
 
   it("quotes the gem's numbers, not the def's", () => {

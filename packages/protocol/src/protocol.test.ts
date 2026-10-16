@@ -166,6 +166,22 @@ describe("validateIntent — useFlask", () => {
   });
 });
 
+describe("validateIntent — dodge", () => {
+  test("round-trips with integer coords", () => {
+    expect(validateIntent({ kind: "dodge", tx: fp(3), ty: fp(-4) })).toEqual({ kind: "dodge", tx: fp(3), ty: fp(-4) });
+  });
+
+  test("missing coordinate throws", () => {
+    expect(() => validateIntent({ kind: "dodge", tx: fp(3) })).toThrow("ty must be an integer");
+    expect(() => validateIntent({ kind: "dodge", ty: fp(3) })).toThrow("tx must be an integer");
+  });
+
+  test("non-integer coordinate throws", () => {
+    expect(() => validateIntent({ kind: "dodge", tx: 1.5, ty: fp(3) })).toThrow("tx must be an integer");
+    expect(() => validateIntent({ kind: "dodge", tx: fp(3), ty: "4" })).toThrow("ty must be an integer");
+  });
+});
+
 describe("validateIntent — setSkillBar", () => {
   it("validates setSkillBar and refuses a bar that is not an array of ids", () => {
     expect(validateIntent({ kind: "setSkillBar", bar: ["skill.a.v1", null] }))

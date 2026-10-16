@@ -171,6 +171,37 @@ describe("LootLabels", () => {
     expect(screen.getByTestId("loot-label-6")).not.toHaveTextContent("Waystone (Tier 1)Waystone");
   });
 
+  it("brightens the plate under the pointer and reverts when it leaves", () => {
+    render(
+      <LootLabels
+        project={null}
+        snapshot={snapWith([
+          { id: 1, kind: "groundItem", x: 0, y: 0, rarity: "rare", name: "One" },
+          { id: 2, kind: "groundItem", x: 0, y: 0, rarity: "rare", name: "Two" },
+        ])}
+      />,
+    );
+    const one = screen.getByTestId("loot-label-1");
+    const two = screen.getByTestId("loot-label-2");
+    fireEvent.pointerEnter(one);
+    expect(one.dataset["hover"]).toBe("true");
+    expect(one.style.background).not.toBe(two.style.background);
+    expect(two.dataset["hover"]).toBe("false");
+    fireEvent.pointerLeave(one);
+    expect(one.dataset["hover"]).toBe("false");
+    expect(one.style.background).toBe(two.style.background);
+  });
+
+  it("forgets the hover when the hovered item is picked up", () => {
+    const drop = () => snapWith([{ id: 1, kind: "groundItem", x: 0, y: 0, rarity: "rare", name: "One" }]);
+    const { rerender } = render(<LootLabels project={null} snapshot={drop()} />);
+    fireEvent.pointerEnter(screen.getByTestId("loot-label-1"));
+    expect(screen.getByTestId("loot-label-1").dataset["hover"]).toBe("true");
+    rerender(<LootLabels project={null} snapshot={snapWith([])} />);
+    rerender(<LootLabels project={null} snapshot={drop()} />);
+    expect(screen.getByTestId("loot-label-1").dataset["hover"]).toBe("false");
+  });
+
   it("asks to pick the item up when its plate is clicked", () => {
     const onPick = vi.fn();
     render(

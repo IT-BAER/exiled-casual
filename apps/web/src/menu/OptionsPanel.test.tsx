@@ -298,6 +298,14 @@ describe("keybinds tab", () => {
     expect(screen.getByRole("button", { name: /skill 5 key/i }).textContent).toBe("F");
   });
 
+  it("offers the dodge roll, on Space in both keymaps", () => {
+    setup();
+    openTab();
+    expect(screen.getByRole("button", { name: /dodge roll key/i }).textContent).toBe("Space");
+    pickWasd();
+    expect(screen.getByRole("button", { name: /dodge roll key/i }).textContent).toBe("Space");
+  });
+
   it("rebinds on the next press in the keymap shown, leaving the other alone", () => {
     const { onChange } = setup();
     openTab();

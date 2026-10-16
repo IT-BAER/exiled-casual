@@ -36,7 +36,7 @@ export type RigClip =
   | "idle" | "walk" | "run" | "walkBack" | "runBack" | "runBackL" | "runBackR"
   | "walkStrafeL" | "walkStrafeR" | "runStrafeL" | "runStrafeR"
   | "walkFwdL" | "walkFwdR" | "walkBackL" | "walkBackR" | "cast" | "bow" | "strikeA" | "strikeB" | "strikeC"
-  | "hit" | "drink" | "open";
+  | "hit" | "drink" | "open" | "roll";
 export type StrikeClip = "strikeA" | "strikeB" | "strikeC";
 
 /** Melee takes played in turn: UAL2's regular sword chain, forehand, backhand, finisher. */
@@ -82,6 +82,7 @@ export const CLIP_NAME: Record<RigClip, string> = {
   hit: "Rig|Hit_Knockback",
   drink: "Rig|Consume",
   open: "Rig|Chest_Open",
+  roll: "Rig|Roll",
 };
 
 const CLIP_LOOPS: Record<RigClip, boolean> = {
@@ -108,7 +109,10 @@ const CLIP_LOOPS: Record<RigClip, boolean> = {
   hit: false,
   drink: false,
   open: false,
+  roll: false,
 };
+
+export const clipLoops = (clip: RigClip): boolean => CLIP_LOOPS[clip];
 
 /**
  * Ground speed (units/sec) each locomotion clip was authored at.
@@ -642,6 +646,13 @@ const skirtJointName = (chain: number, joint: number): string =>
  * capsule on the bone holds the robe up to 12cm off a boot. About the shaft,
  * the three shipped boots fit 11.4cm.
  *
+ * The worn calf capsule's head end starts 8cm down the shin (`shaft`; `toe`
+ * keeps its tail on the ankle). On the knee joint its round head reached 12cm
+ * up the thigh, where no boot is, and the few millimetres the knee comes
+ * forward with each idle breath decided whether the robe's front panel hung
+ * straight or wrapped over that ball: it swung 11cm out and back with the
+ * breath. 8cm still holds every boot's rim, which stops 4cm under the knee.
+ *
  * The worn foot capsule is laid along the sole instead, heel to past the toe:
  * `shaft` shifts its head end and `toe` its tail end, both in the foot bone's
  * frame. Round the ankle joint it needed 18cm to reach heel and sole, stood as
@@ -654,8 +665,8 @@ export const SKIRT_COLLIDERS: readonly {
 }[] = [
   { from: "thigh_l", to: "calf_l", radius: 0.0956 },
   { from: "thigh_r", to: "calf_r", radius: 0.0956 },
-  { from: "calf_l", to: "foot_l", radius: 0.121, worn: 0.1223, shaft: [0.02, 0, 0.0325] },
-  { from: "calf_r", to: "foot_r", radius: 0.121, worn: 0.1223, shaft: [-0.02, 0, 0.0325] },
+  { from: "calf_l", to: "foot_l", radius: 0.121, worn: 0.1223, shaft: [0.02, 0.08, 0.0325], toe: [0.02, 0, 0.0325] },
+  { from: "calf_r", to: "foot_r", radius: 0.121, worn: 0.1223, shaft: [-0.02, 0.08, 0.0325], toe: [-0.02, 0, 0.0325] },
   { from: "foot_l", to: "ball_l", radius: 0.1079, worn: 0.1219,
     shaft: [0.02, -0.0575, 0.02], toe: [0.02, 0.06, -0.04] },
   { from: "foot_r", to: "ball_r", radius: 0.1079, worn: 0.1219,
@@ -931,7 +942,7 @@ export const HIPS_BOB: Record<RigClip, number> = {
   idle: 1, walk: 0.65, run: 0.65, walkBack: 0.65,
   runBack: 0.65, runBackL: 0.65, runBackR: 0.65,
   walkStrafeL: 0.65, walkStrafeR: 0.65, runStrafeL: 0.65, runStrafeR: 0.65,
-  walkFwdL: 0.65, walkFwdR: 0.65, walkBackL: 0.65, walkBackR: 0.65, cast: 1, bow: 1, strikeA: 1, strikeB: 1, strikeC: 1, hit: 1, drink: 1, open: 1,
+  walkFwdL: 0.65, walkFwdR: 0.65, walkBackL: 0.65, walkBackR: 0.65, cast: 1, bow: 1, strikeA: 1, strikeB: 1, strikeC: 1, hit: 1, drink: 1, open: 1, roll: 1,
 };
 
 /**
@@ -1582,10 +1593,33 @@ export class RigActor {
     this.nextStrikeIndex = (this.nextStrikeIndex + 1) % STRIKE_CLIPS.length;
   }
 
-  /** A reaction over the legs at the authored pace; skipped while an attack plays. */
+  /**
+   * The dodge roll: the whole body, paced so the take fills `seconds`. The
+   * locomotion clip keeps running (and switching) underneath and comes back
+   * eased when the roll ends.
+   */
+  playRoll(seconds?: number): void {
+    const group = this.groups.get("roll");
+    if (!group) return;
+    this.stopReactions();
+    this.cancelAction();
+    this.stopStrike();
+    group.stop();
+    const ratio = actionRatio(clipSeconds(group), seconds);
+    group.speedRatio = ratio;
+    group.start(false, ratio);
+    this.scene.sortActiveAnimatables();
+    group.onAnimationGroupEndObservable.addOnce(this.easeOutToLocomotion);
+  }
+
+  private isRolling(): boolean {
+    return this.groups.get("roll")?.isPlaying === true;
+  }
+
+  /** A reaction over the legs at the authored pace; skipped while an attack or the roll plays. */
   playReaction(clip: ReactionClip): void {
     const group = this.groups.get(clip);
-    if (!group || ACTION_CLIPS.some((c) => this.groups.get(c)?.isPlaying)) return;
+    if (!group || this.isRolling() || ACTION_CLIPS.some((c) => this.groups.get(c)?.isPlaying)) return;
     this.stopReactions();
     group.speedRatio = 1;
     group.start(false, 1);
@@ -1679,7 +1713,8 @@ export class RigActor {
   private blendDirection(): void {
     const other = this.blendTo;
     const at = this.active?.animatables[0]?.masterFrame;
-    if (!other || !this.active || !this.activeClip || !this.blendClip || this.blendW < 1e-3 || at === undefined) return;
+    // Runs after every clip: under the roll it would pull the whole body back toward a stride.
+    if (!other || !this.active || !this.activeClip || !this.blendClip || this.blendW < 1e-3 || at === undefined || this.isRolling()) return;
     const frame = framePhaseMatched(this.activeClip, [this.active.from, this.active.to], at, this.blendClip, [other.from, other.to]);
     const layered = [...UPPER_BODY_CLIPS].some((c) => this.groups.get(c)?.isPlaying);
     for (const { animation, target } of other.targetedAnimations) {
@@ -1981,8 +2016,9 @@ export class RigActor {
           return null;
         }
         group.normalize(source.from, source.to);
-        // Layered clips apply after locomotion whenever the list is sorted (`switchTo`).
-        if (upperOnly) group.playOrder = 1;
+        // Layered clips and the roll apply after locomotion whenever the list is
+        // sorted (`switchTo`); the roll keys every bone, so it covers the gait whole.
+        if (upperOnly || clip === "roll") group.playOrder = 1;
         group.enableBlending = true;
         // A 60Hz frame's worth until the first frame re-sets it off the real one.
         group.blendingSpeed = 1 / 60 / (upperOnly ? ACTION_BLEND_SEC : LOCO_BLEND_SEC);
@@ -2023,7 +2059,7 @@ export class RigActor {
     if (this.carry.length > 0) {
       this.carryObserver = this.scene.onAfterAnimationsObservable.add(() => {
         const worn = this.looks.weapon1 === BOW_LOOK;
-        const busy = [...UPPER_BODY_CLIPS].some((c) => this.groups.get(c)?.isPlaying);
+        const busy = this.isRolling() || [...UPPER_BODY_CLIPS].some((c) => this.groups.get(c)?.isPlaying);
         const step = (this.scene.getEngine?.()?.getDeltaTime?.() ?? 16) / 1000 / CARRY_EASE_SEC;
         this.carryWeight = worn && !busy ? Math.min(1, this.carryWeight + step) : Math.max(0, this.carryWeight - step);
         if (this.carryWeight <= 0) return;

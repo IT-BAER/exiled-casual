@@ -157,14 +157,20 @@ function socketFor(
 /** The chest's size against a skill tile: furniture beside the row, not a fourth socket. */
 const CHEST_SCALE = 0.62;
 
-/** The inventory's chest on the skill bar: a mouse way in, named with its key on hover. */
-function InventoryChest({ onClick, hotkey }: { onClick?: () => void; hotkey: string }) {
+/**
+ * A mouse way in to a keyed action at the head of the mouse row, named with its key
+ * on hover. `screen` drops a square icon's black ground into the dark bar.
+ */
+function BarIconButton({ testId, art, label, hotkey, onClick, screen = false }: {
+  testId: string; art: string; label: string; hotkey: string; onClick?: () => void; screen?: boolean;
+}) {
   const [hover, setHover] = React.useState(false);
+  const name = `${label} (${hotkey.toUpperCase()})`;
   return (
     <button
       type="button"
-      data-testid="inventory-open-button"
-      aria-label={`Inventory (${hotkey.toUpperCase()})`}
+      data-testid={testId}
+      aria-label={name}
       onClick={() => onClick?.()}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
@@ -174,14 +180,14 @@ function InventoryChest({ onClick, hotkey }: { onClick?: () => void; hotkey: str
         filter: hover ? "brightness(1.25) drop-shadow(0 0 6px rgba(217,176,74,0.55))" : "none",
       }}
     >
-      <img src="/hud/inventory-chest.webp" alt="" draggable={false} style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }} />
+      <img src={art} alt="" draggable={false} style={{ width: "100%", height: "100%", objectFit: "contain", display: "block", mixBlendMode: screen ? "screen" : undefined }} />
       {hover && (
         <span style={{
           position: "absolute", bottom: "calc(100% + 6px)", left: 0, whiteSpace: "nowrap",
           padding: "4px 8px", background: "rgba(8,7,6,0.94)", border: "1px solid #6e5a2f",
           color: "#e8d6ad", fontFamily: SERIF, fontSize: 13, pointerEvents: "none",
         }}>
-          Inventory ({hotkey.toUpperCase()})
+          {name}
         </span>
       )}
     </button>
@@ -533,6 +539,8 @@ interface HudProps {
   /** Toggle the inventory from the chest at the head of the mouse row, and the key bound to it. */
   onToggleInventory?: () => void;
   inventoryKey?: string;
+  /** Cast Portal from the button left of the chest; same cast as the portal key. */
+  onPortal?: () => void;
   /** The active keymap, for the captions under the flasks and the numbered sockets. */
   keybinds?: Keybinds;
   /** Mouse mode keeps left click on Move: that socket is fixed. */
@@ -768,6 +776,7 @@ export function Hud({
   onOpenPassives,
   onToggleInventory,
   inventoryKey = "i",
+  onPortal,
   keybinds = DEFAULT_KEYBINDS_BY_MODE.mouse,
   controlMode = "mouse",
 }: HudProps) {
@@ -885,6 +894,29 @@ export function Hud({
     const t = setTimeout(() => { setBanner(null); setFlashing(new Set()); }, 2400);
     return () => clearTimeout(t);
   }, [banner]);
+
+  // A refused pickup (inventory full) arrives as a changed `pickupRefusedTick`.
+  // Its own state, not the reward banner: it is feedback, not a reward. `seq`
+  // lets a second refusal restart the dismissal timer without a second element.
+  const [inventoryFull, setInventoryFull] = React.useState<{ seq: number } | null>(null);
+  const refusedTick = snapshot?.player.pickupRefusedTick;
+  const hasSnapshot = snapshot !== null && snapshot !== undefined;
+  const lastRefusedTick = React.useRef<{ tick: number | undefined } | null>(null);
+  React.useEffect(() => {
+    if (!hasSnapshot) return;
+    const was = lastRefusedTick.current;
+    lastRefusedTick.current = { tick: refusedTick };
+    // The first snapshot is the baseline, so a reload never replays an old refusal.
+    if (!was) return;
+    if (refusedTick === undefined || refusedTick === was.tick) return;
+    setInventoryFull((prev) => ({ seq: (prev?.seq ?? 0) + 1 }));
+  }, [hasSnapshot, refusedTick]);
+
+  React.useEffect(() => {
+    if (!inventoryFull) return;
+    const t = setTimeout(() => setInventoryFull(null), 1600);
+    return () => clearTimeout(t);
+  }, [inventoryFull]);
 
   /**
    * The experience rail runs BETWEEN the two panels, never under them: the
@@ -1057,6 +1089,30 @@ export function Hud({
           }}
         >
           {banner.text}
+        </div>
+      )}
+
+      {/* Quieter than the reward banner on purpose: a refusal is feedback, not a
+          reward, so it is smaller, lower and silent. */}
+      {inventoryFull && (
+        <div
+          data-testid="inventory-full"
+          style={{
+            position: "absolute",
+            top: "34%",
+            left: 0,
+            right: 0,
+            textAlign: "center",
+            fontFamily: DISPLAY,
+            fontSize: 16,
+            letterSpacing: 2,
+            textTransform: "uppercase",
+            color: "rgba(242,215,154,0.8)",
+            textShadow: "0 1px 4px #000",
+            pointerEvents: "none",
+          }}
+        >
+          Inventory Full
         </div>
       )}
 
@@ -1269,10 +1325,15 @@ export function Hud({
           gap: 0,
         }}
       >
-        {/* The chest sits centred over slot 1's column, level with the mouse row; the row keeps the right. */}
+        {/* Portal and chest sit centred over slots 1 and 2, level with the mouse row; the row keeps the right. */}
         <div style={{ alignSelf: "stretch", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div data-testid="inventory-chest-cell" style={{ width: SLOT, display: "flex", justifyContent: "center" }}>
-          <InventoryChest onClick={onToggleInventory} hotkey={inventoryKey} />
+        <div style={{ display: "flex", gap: `${SLOT_GAP}px` }}>
+          <div style={{ width: SLOT, display: "flex", justifyContent: "center" }}>
+            <BarIconButton testId="portal-button" art="/textures/skills/town_portal.png" label="Portal" hotkey={keybinds.portal} onClick={onPortal} screen />
+          </div>
+          <div data-testid="inventory-chest-cell" style={{ width: SLOT, display: "flex", justifyContent: "center" }}>
+            <BarIconButton testId="inventory-open-button" art="/hud/inventory-chest.webp" label="Inventory" hotkey={inventoryKey} onClick={onToggleInventory} />
+          </div>
         </div>
         {/* The mouse row closes on a warm hairline, drawn as a shadow so it costs no height. */}
         <div style={{ display: "flex", gap: `${SLOT_GAP}px`, boxShadow: "0 1px 0 rgba(101,81,49,0.85)" }}>

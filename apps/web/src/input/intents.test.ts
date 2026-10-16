@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { heldToMoveIntent, keyToIntent, pointerToWorld } from "./intents";
-import { DEFAULT_KEYBINDS, MOVE_SOCKET } from "../settings";
+import { dodgeIntent, heldToMoveIntent, keyToIntent, pointerToWorld } from "./intents";
+import { DEFAULT_KEYBINDS, DEFAULT_KEYBINDS_BY_MODE, MOVE_SOCKET } from "../settings";
 import { socketForKey } from "../controls";
 import { fp } from "@exiled/fixed-point";
 
@@ -33,6 +33,14 @@ describe("keyToIntent", () => {
 
   // Y is the free way home: the Portal skill itself, not the scroll intent that
   // spends one.
+  it("Space → the dodge roll toward the aim, in both control modes", () => {
+    const at = { x: 3.5, y: -2.25 };
+    const roll = { kind: "dodge", tx: fp(at.x), ty: fp(at.y) };
+    expect(keyToIntent(" ", at, undefined, DEFAULT_KEYBINDS_BY_MODE.mouse)).toEqual(roll);
+    expect(keyToIntent(" ", at, undefined, DEFAULT_KEYBINDS_BY_MODE.wasd)).toEqual(roll);
+    expect(dodgeIntent(at)).toEqual(roll);
+  });
+
   it("y → the Portal skill", () => {
     const portal = { kind: "useSkill", skillId: "skill.town_portal.v1", tx: fp(aim.x), ty: fp(aim.y) };
     expect(keyToIntent("y", aim)).toEqual(portal);

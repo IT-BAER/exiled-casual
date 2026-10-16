@@ -19,7 +19,7 @@ import { applyBiomeTint } from "./level";
 import { LIGHT_POOL } from "./lights";
 import { HAZE_HEIGHT, HAZE_MAX_SIZE, HAZE_NAME, MOTES_NAME, moteDrift, moteDriftBasis } from "./haze";
 import { BIOMES } from "@exiled/content-runtime";
-import { blowFrom, cancelTurnedAction, reactionFor, SnapshotRenderer, syncActionAnimation } from "./renderer";
+import { blowFrom, cancelTurnedAction, reactionFor, SnapshotRenderer, syncActionAnimation, syncRollAnimation } from "./renderer";
 import { makeMesh, updateTelegraph, VENDOR_LOOKS } from "./meshes";
 import { hitSparkle } from "./hit-sparkle";
 import { ARROW_NAME, MELEE_SPARKS_NAME } from "./skill-fx";
@@ -34,6 +34,28 @@ vi.mock("../audio/sfx", async (importOriginal) => ({
   playSfx: vi.fn(),
   playSfxAt: vi.fn(),
 }));
+
+describe("dodge roll animation", () => {
+  it("starts the roll once, on the rising edge, paced to the ticks left", () => {
+    const rig = { playRoll: vi.fn() };
+
+    syncRollAnimation(rig, false, true, 17 / 30);
+    syncRollAnimation(rig, true, true, 16 / 30);
+
+    expect(rig.playRoll).toHaveBeenCalledTimes(1);
+    expect(rig.playRoll).toHaveBeenCalledWith(17 / 30);
+  });
+
+  it("does nothing when the roll ends or while he is not rolling", () => {
+    const rig = { playRoll: vi.fn() };
+
+    syncRollAnimation(rig, true, false);
+    syncRollAnimation(rig, false, false);
+    syncRollAnimation(null, false, true, 0.5);
+
+    expect(rig.playRoll).not.toHaveBeenCalled();
+  });
+});
 
 describe("sustained casting animation", () => {
   it("starts on the casting edge and is not restarted while the cast runs", () => {

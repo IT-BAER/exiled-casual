@@ -348,6 +348,7 @@ export function registerMonsterAI(sim: Simulation, collisionRef?: CollisionRef):
               source: m,
               amountFixed: mon.attackDamage,
               type: mon.attackType,
+              via: "melee",
             });
             attackReadyTick = tick + mon.attackCooldownTicks;
           }

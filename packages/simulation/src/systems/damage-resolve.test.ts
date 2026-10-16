@@ -4,7 +4,8 @@ import { resBlock } from "@exiled/content-schema";
 import { Simulation } from "../loop";
 import { registerDamageResolve, SPAWN_GRACE_TICKS } from "./damage-resolve";
 import { ES_RECHARGE_DELAY_TICKS } from "@exiled/rules";
-import type { Health, DefensesC, FlasksC, EnergyShieldC, SessionC } from "../components";
+import { ROLL_AVOID_TICKS, ROLL_TICKS } from "./player-movement";
+import type { Health, DefensesC, FlasksC, EnergyShieldC, SessionC, RollC, DamageEvent } from "../components";
 
 it("applies two enqueued events, floored at 0", () => {
   const sim = new Simulation();
@@ -200,5 +201,44 @@ describe("energy shield stands in front of life", () => {
   it("any hit pushes the recharge back by the full delay", () => {
     const r = hitPlayer({ es: fp(50), maxEs: fp(50), hit: fp(1), type: 1 });
     expect(r.shield.rechargeAtTick).toBe(ES_RECHARGE_DELAY_TICKS);
+  });
+});
+
+describe("a dodge roll's opening ticks", () => {
+  const T = 5;
+
+  /** Life after one hit tagged `via` lands on roll tick `k` (sim tick T + k - 1). */
+  function lifeAfter(k: number, via: DamageEvent["via"]): number {
+    const sim = new Simulation();
+    const w = sim.world;
+    const p = w.create();
+    w.set(p, "player", { moveSpeed: 0, bodyRadius: fp(0.5) });
+    w.set<Health>(p, "health", { life: fp(100), maxLife: fp(100) });
+    w.set<DefensesC>(p, "defenses", { res: resBlock(), armour: 0 });
+    w.set<RollC>(p, "roll", { startTick: T, untilTick: T + ROLL_TICKS, dirX: fp(1), dirY: 0 });
+    sim.register("testProducer", (_w, tick) => {
+      if (tick === T + k - 1) sim.enqueueDamage({ target: p, source: 99, amountFixed: fp(10), type: 1, via });
+    });
+    registerDamageResolve(sim);
+    while (sim.tick < T + k) sim.step();
+    return w.get<Health>(p, "health")!.life;
+  }
+
+  it("let projectiles and melee pass from the first roll tick through the last avoid tick", () => {
+    expect(ROLL_AVOID_TICKS).toBe(9);
+    for (const via of ["projectile", "melee"] as const) {
+      expect(lifeAfter(1, via)).toBe(fp(100));
+      expect(lifeAfter(ROLL_AVOID_TICKS, via)).toBe(fp(100));
+    }
+  });
+
+  it("stop letting them pass on the tick after", () => {
+    for (const via of ["projectile", "melee"] as const) {
+      expect(lifeAfter(ROLL_AVOID_TICKS + 1, via)).toBeLessThan(fp(100));
+    }
+  });
+
+  it("never let a slam through", () => {
+    expect(lifeAfter(1, undefined)).toBeLessThan(fp(100));
   });
 });

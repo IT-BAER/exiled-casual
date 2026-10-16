@@ -10,6 +10,48 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-15
+
+Alpha. A save may not survive an update yet.
+
+### Added
+
+- Space rolls you a short way toward the cursor, or along the held keys in WASD.
+  Projectiles and melee swings pass through you early in the roll. It costs
+  nothing and can be rebound in Options.
+- The desert is dressed with dead trees, ruin walls, ribcages, skulls and pots
+  at the foot of the rock, and its rock is warm sandstone.
+- A Portal button left of the inventory chest opens the same portal as its key.
+- A pickup with no room in the backpack shows an Inventory Full message.
+- A ground item's label brightens under the pointer.
+
+### Changed
+
+- Monster packs fight together. One that wakes alerts its neighbours, shooters
+  back off and strafe between shots, and brutes charge from a few steps away.
+  The Fen Wisp and the Rotting Behemoth's slam hit a little softer to make up
+  for it.
+- The desert monsters have new bodies. The Sand Skitterer is a scarab, the Dune
+  Spitter a sand toad and the Sunbaked Colossus a sandstone golem.
+- Rock meets the floor through a soft contact shadow and dust instead of a hard
+  line, and cliff feet are rounded curves instead of a staircase.
+- Maps have rounder corners and fewer long straight walls. Open desert and
+  forest ground has natural edges instead of square mounds.
+- Standing still, a sword strike moves the legs with the swing and keeps the
+  feet planted.
+- The Ironsworn hits less hard: Heavy Strike and Strike lost the bonus that
+  made the first maps much faster for him than for the casters.
+- The see-through hole behind cliffs is smaller and softer.
+
+### Fixed
+
+- Portal is no longer a skill gem. It never takes a slot on the skill bar.
+- The Cinder Warden no longer freezes between pillars on its way home.
+- A robe's front panel hangs still while the character breathes.
+- A knee no longer whirls around during a strike.
+- The Vaal Construct's fist no longer walks with its feet, and the Hoarfrost
+  Spitter's antlers are no longer its hands.
+
 ## [0.3.0] - 2026-10-11
 
 Alpha. A save may not survive an update yet.

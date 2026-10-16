@@ -6,7 +6,7 @@ import { placeFirstFit } from "../inventory";
 import type { Position, ItemC, InventoryC } from "../components";
 
 export function registerPickupSystem(sim: Simulation): void {
-  sim.register("pickup", (world, _tick, commands) => {
+  sim.register("pickup", (world, tick, commands) => {
     const sessionE = world.query("session")[0];
     if (sessionE === undefined) return;
 
@@ -43,7 +43,12 @@ export function registerPickupSystem(sim: Simulation): void {
       }
 
       const slot = placeFirstFit(inv, ic.w, ic.h);
-      if (slot === null) continue; // no room: no-op, no ownership change
+      if (slot === null) {
+        // No room: the world is untouched, no ownership change. The refusal is
+        // noted on the Simulation only, for the HUD.
+        sim.pickupRefusedTick = tick;
+        continue;
+      }
 
       world.set<InventoryC>(sessionE, "inventory", {
         ...inv,

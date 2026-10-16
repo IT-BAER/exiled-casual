@@ -280,4 +280,6 @@ function clearMovement(world: World, e: number): void {
   if (mt) world.set<MoveTarget>(e, "moveTarget", { ...mt, active: 0 });
   const md = world.get<MoveDir>(e, "moveDir");
   if (md) world.set<MoveDir>(e, "moveDir", { dx: 0, dy: 0, hx: 0, hy: 0 });
+  // A roll is movement too, and the click it was holding for later dies with it.
+  world.remove(e, "roll");
 }

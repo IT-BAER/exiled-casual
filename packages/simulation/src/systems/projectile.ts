@@ -51,6 +51,7 @@ export function registerProjectileMove(sim: Simulation, collisionRef?: Collision
             source: proj.ownerId,
             amountFixed: proj.damageAmount,
             type: proj.damageType,
+            via: "projectile",
           });
           if (pierceLeft > 0) {
             pierceLeft--;

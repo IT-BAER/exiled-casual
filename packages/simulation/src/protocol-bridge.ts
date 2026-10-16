@@ -13,7 +13,7 @@ import type {
   Health, Mana, Position, Cooldowns, CastingC, StrikeC, MonsterC,
   AilmentC, ProjectileC, GroundAreaC, BossC, TelegraphC,
   SessionC, InteractableC, ContainerC, ItemC, GoldC, InventoryC, StashC, VendorC, EquipmentC, FlasksC, DefensesC, OffenseC, ProgressC,
-  EnergyShieldC, ShardsC, MoveDir, SkillsC, SkillHoldC,
+  EnergyShieldC, ShardsC, MoveDir, SkillsC, SkillHoldC, RollC,
 } from "./components";
 
 /**
@@ -53,6 +53,8 @@ export function intentToCommand(intent: Intent, player: Entity, tick: number): C
         skillId: intent.skillId,
         data: { tx: intent.tx, ty: intent.ty },
       };
+    case "dodge":
+      return { tick, entity: player, type: "dodge", data: { tx: intent.tx, ty: intent.ty } };
     case "stop":
       return { tick, entity: player, type: "stop" };
     case "interact":
@@ -445,9 +447,18 @@ export function buildSnapshot(
         const c = world.get<CastingC>(playerEntity, "casting");
         return c !== undefined && c.untilTick > tick ? c.ticks : undefined;
       })(),
+      rolling: (() => {
+        const r = world.get<RollC>(playerEntity, "roll");
+        return r !== undefined && tick < r.untilTick ? true : undefined;
+      })(),
+      rollTicks: (() => {
+        const r = world.get<RollC>(playerEntity, "roll");
+        return r !== undefined && tick < r.untilTick ? r.untilTick - tick : undefined;
+      })(),
       strikeTick: world.get<StrikeC>(playerEntity, "strike")?.tick,
       strikeHits: world.get<StrikeC>(playerEntity, "strike")?.hits,
       strikeSkill: world.get<StrikeC>(playerEntity, "strike")?.skill,
+      pickupRefusedTick: sim.pickupRefusedTick,
       flasks: (() => {
         const f = world.get<FlasksC>(playerEntity, "flasks");
         return f
