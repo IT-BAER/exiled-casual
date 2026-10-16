@@ -2225,22 +2225,28 @@ describe("a sword strike moves the legs only while standing", () => {
 describe("the robe hangs still while he stands and breathes", () => {
   const MODELS = fileURLToPath(new URL("../../public/models/", import.meta.url));
 
-  it("moves no skirt joint more than a few centimetres over a breath", async () => {
+  /** The ember set on the real rig, 200 idle frames in. */
+  const standing = async (boots: "ember" | null) => {
+    engine = new NullEngine();
+    engine.getDeltaTime = () => 16;
+    const { scene } = createScene(engine);
+    scene.useConstantAnimationDeltaTime = true;
+    new FreeCamera("eye", new Vector3(0, 2, -6), scene);
+    const file = (name: string) => new File([readFileSync(`${MODELS}${name}`)], name, { type: "model/gltf-binary" });
+    await loadPlayerRig(scene, { anims: file("anim-library.glb"), wardrobe: file("wardrobe.glb") });
+    const rig = attachRig(scene, new Mesh("hero", scene))!;
+    rig.setLooks({ ...BASE_LOOKS, helmet: "ember", chest: "ember", boots, gloves: "ember" });
+    rig.standSettled();
+    const frame = () => { rig.setLocomotion(0); scene.render(); };
+    for (let i = 0; i < 200; i++) frame();
+    return { scene, frame };
+  };
+
+  it.each([["boots", "ember"], ["bare legs", null]] as const)("moves no skirt joint more than a few centimetres over a breath, %s", async (_, boots) => {
     const original = (globalThis as { FileReader?: unknown }).FileReader;
     (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
     try {
-      engine = new NullEngine();
-      engine.getDeltaTime = () => 16;
-      const { scene } = createScene(engine);
-      scene.useConstantAnimationDeltaTime = true;
-      new FreeCamera("eye", new Vector3(0, 2, -6), scene);
-      const file = (name: string) => new File([readFileSync(`${MODELS}${name}`)], name, { type: "model/gltf-binary" });
-      await loadPlayerRig(scene, { anims: file("anim-library.glb"), wardrobe: file("wardrobe.glb") });
-      const rig = attachRig(scene, new Mesh("hero", scene))!;
-      rig.setLooks({ ...BASE_LOOKS, helmet: "ember", chest: "ember", boots: "ember", gloves: "ember" });
-      rig.standSettled();
-      const frame = () => { rig.setLocomotion(0); scene.render(); };
-      for (let i = 0; i < 200; i++) frame();
+      const { scene, frame } = await standing(boots);
       const joints = scene.transformNodes.filter((n) => /^skirt_\d+_0[2-6]$/.test(n.name));
       expect(joints.length).toBe(SKIRT_CHAINS * (SKIRT_JOINTS - 1));
       const start = joints.map((n) => n.getAbsolutePosition().clone());
@@ -2255,4 +2261,63 @@ describe("the robe hangs still while he stands and breathes", () => {
       (globalThis as { FileReader?: unknown }).FileReader = original;
     }
   }, 60_000);
+
+  /**
+   * The cloth chains can sit on a capsule while the robe drawn between their
+   * joints cuts the corner where a chain bends over the capsule's round head.
+   * A head at the rear boot's rim showed that rim 3.8cm through the robe's back.
+   */
+  it("keeps the rear boot's rim under the robe", async () => {
+    const original = (globalThis as { FileReader?: unknown }).FileReader;
+    (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
+    try {
+      const { scene, frame } = await standing("ember");
+      const mesh = (name: string) => scene.meshes.find((m) => m.name === name) as Mesh;
+      const world = (m: Mesh) => {
+        const p = m.getPositionData(true, true)!;
+        const out: Vector3[] = [];
+        for (let i = 0; i < p.length; i += 3) {
+          out.push(Vector3.TransformCoordinatesFromFloatsToRef(p[i]!, p[i + 1]!, p[i + 2]!, m.getWorldMatrix(), new Vector3()));
+        }
+        return out;
+      };
+      const robe = mesh("chest.ember.robe");
+      const ri = robe.getIndices()!;
+      const pelvis = scene.transformNodes.find((n) => n.name === "pelvis")!;
+      let worst = 0;
+      for (let f = 0; f < 150; f++) {
+        frame();
+        if (f % 15) continue;
+        const rp = world(robe);
+        const c = pelvis.getAbsolutePosition();
+        // Above the shin's lower half: lower down the hem flutters round the ankle on its own.
+        for (const v of world(mesh("boots.ember.slipper_r")).filter((p) => p.y > 0.3)) {
+          const d = new Vector3(v.x - c.x, 0, v.z - c.z);
+          const r = d.length();
+          d.scaleInPlace(1 / r);
+          // Where the robe stands, out from the body's axis toward this vertex.
+          let robeAt = -1;
+          for (let t = 0; t < ri.length; t += 3) {
+            const [a, b, e] = [rp[ri[t]!]!, rp[ri[t + 1]!]!, rp[ri[t + 2]!]!];
+            if (v.y < Math.min(a.y, b.y, e.y) || v.y > Math.max(a.y, b.y, e.y)) continue;
+            const e1 = b.subtract(a), e2 = e.subtract(a);
+            const q = Vector3.Cross(d, e2);
+            const det = Vector3.Dot(e1, q);
+            if (Math.abs(det) < 1e-12) continue;
+            const s = new Vector3(c.x, v.y, c.z).subtractInPlace(a);
+            const u = Vector3.Dot(s, q) / det;
+            const k = Vector3.Cross(s, e1);
+            const w = Vector3.Dot(d, k) / det;
+            if (u < 0 || w < 0 || u + w > 1) continue;
+            robeAt = Math.max(robeAt, Vector3.Dot(e2, k) / det);
+          }
+          if (robeAt > 0) worst = Math.max(worst, r - robeAt);
+        }
+      }
+      // With the head on the knee the rim stays within 0.6cm of the robe's face.
+      expect(worst).toBeLessThan(0.015);
+    } finally {
+      (globalThis as { FileReader?: unknown }).FileReader = original;
+    }
+  }, 120_000);
 });
