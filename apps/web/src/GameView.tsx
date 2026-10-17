@@ -310,8 +310,11 @@ export function GameView({
       { type: "module" },
     );
     workerRef.current = worker;
-    const bot = new URLSearchParams(window.location.search).has("bot");
-    worker.postMessage({ type: "init", seed: LAB_SEED, characterId, bot });
+    const query = new URLSearchParams(window.location.search);
+    const bot = query.has("bot");
+    // ?tour: bot mode's open Atlas and no saving, with the player at the controls.
+    const tour = import.meta.env?.DEV === true && query.has("tour");
+    worker.postMessage({ type: "init", seed: LAB_SEED, characterId, bot, tour });
 
     let prevSnap: Snapshot | null = null;
     let curSnap: Snapshot | null = null;

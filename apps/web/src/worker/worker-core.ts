@@ -60,10 +60,12 @@ export class WorkerCore {
   private lastSig = "";
   /** ?bot mode: the playtest bot plays every map. Never saves, so a run cannot touch a real character. */
   private readonly botMode: boolean;
+  /** False under ?tour: the Atlas opens as for ?bot, never saves, and the player drives. */
+  private readonly autopilot: boolean;
   /** Rebuilt on every map entry; its bosses decide when the map counts as cleared. */
   private bot: { bot: Bot; bosses: Entity[] } | null = null;
 
-  constructor(seed: number, kv?: KvStore, characterId = "", bot = false) {
+  constructor(seed: number, kv?: KvStore, characterId = "", bot = false, autopilot = bot) {
     // The lab starts empty. Monsters and the boss arrive on the numpad spawn
     // keys, so a model, an animation, or an effect can be looked at in peace.
     this.seed = seed;
@@ -71,6 +73,7 @@ export class WorkerCore {
     this.kv = kv ?? (typeof indexedDB !== "undefined" ? new IndexedDbKv() : new MemoryKv());
     this.characterId = characterId;
     this.botMode = bot;
+    this.autopilot = autopilot;
     const { sim, world, playerEntity, layout } = createCombatSim(seed, { area: this.area });
     this.sim = sim;
     this.world = world;
@@ -246,7 +249,7 @@ export class WorkerCore {
       grammarForNode(session.activeNodeId),
     );
     this.mapBaseId = this.area === "map" ? mapBaseIdForNode(session.activeNodeId) : "";
-    this.bot = this.botMode && this.area === "map" ? this.newBot(sessionE, session) : null;
+    this.bot = this.botMode && this.autopilot && this.area === "map" ? this.newBot(sessionE, session) : null;
     this.areaDirty = true;
   }
 
