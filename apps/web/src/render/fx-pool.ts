@@ -1,5 +1,5 @@
-import { Color3, Color4, MeshBuilder, Quaternion, SolidParticleSystem, StandardMaterial, Vector3 } from "@babylonjs/core";
-import type { GlowLayer, Mesh, Scene, SolidParticle } from "@babylonjs/core";
+import { Color3, Color4, MaterialPluginBase, MeshBuilder, Quaternion, SolidParticleSystem, StandardMaterial, Vector3 } from "@babylonjs/core";
+import type { GlowLayer, Material, Mesh, Scene, SolidParticle } from "@babylonjs/core";
 
 /**
  * Pooled geometric particles for every skill effect: sparks, embers, flame
@@ -37,6 +37,33 @@ const FIELDS = 24;
 // Slot layout in one Float32Array: cheaper than an object per particle.
 const X = 0, Y = 1, Z = 2, VX = 3, VY = 4, VZ = 5, AGE = 6, LIFE = 7, S0 = 8, S1 = 9;
 const TH = 10, ST = 11, R = 12, G = 13, B = 14, A = 15, R1 = 16, G1 = 17, B1 = 18, GR = 19, DR = 20;
+
+export const SMOKE_EDGE_PLUGIN = "ExiledSmokeEdge";
+/** How fast smoke thins toward its outline: alpha x facing^power, 0 where the ball turns edge-on. */
+const SMOKE_EDGE_POWER = 1.6;
+
+/** A flat-alpha ball reads as a hard grey disc on the floor; this feathers it out to its silhouette. */
+class SmokeEdgePlugin extends MaterialPluginBase {
+  constructor(material: Material) {
+    super(material, SMOKE_EDGE_PLUGIN, 200, {});
+    // Same ES-module serialisation trap as rim.ts.
+    this.doNotSerialize = true;
+    this._enable(true);
+  }
+
+  override getClassName(): string {
+    return SMOKE_EDGE_PLUGIN;
+  }
+
+  override getCustomCode(shaderType: string): Record<string, string> | null {
+    if (shaderType !== "fragment") return null;
+    return {
+      CUSTOM_FRAGMENT_BEFORE_FRAGCOLOR: `
+        color.a *= pow(abs(dot(normalW, viewDirectionW)), ${SMOKE_EDGE_POWER.toFixed(2)});
+      `,
+    };
+  }
+}
 
 const FORWARD = new Vector3(0, 0, 1);
 const scratchDir = new Vector3();
@@ -79,6 +106,7 @@ export class FxPool {
     // Overlap is the look: a slot writing depth would reject the slots behind it.
     mat.disableDepthWrite = true;
     if (blend === "add") mat.alphaMode = 1; // ALPHA_ADD
+    else new SmokeEdgePlugin(mat);
     this.mesh.material = mat;
     // Transparent pass and `alpha *= vColor.a`; without it the pool draws opaque.
     this.mesh.hasVertexAlpha = true;

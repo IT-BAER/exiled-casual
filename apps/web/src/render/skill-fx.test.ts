@@ -30,7 +30,7 @@ import {
   ARROW_LENGTH,
   PROJECTILE_ARROW_SCALE,
 } from "./skill-fx";
-import { FX_SHARDS_NAME, fxPools } from "./fx-pool";
+import { FX_SHARDS_NAME, fxPools, SMOKE_EDGE_PLUGIN } from "./fx-pool";
 import { SWING_ARC_NAME, swingArcs, swingStyle } from "./swing-arc";
 
 let engine: NullEngine | undefined;
@@ -497,6 +497,18 @@ describe("warmSkillFx swing trail", () => {
     expect(arcs.length).toBeGreaterThan(0);
     expect(arcs.every((m) => m.alwaysSelectAsActiveMesh)).toBe(true);
     for (const pool of Object.values(fxPools(scene))) expect(pool.mesh.alwaysSelectAsActiveMesh).toBe(true);
+  });
+});
+
+describe("smoke pool edge", () => {
+  it("fades smoke to nothing at its outline, so a puff has no hard rim, and leaves the additive pools alone", () => {
+    const scene = newScene();
+    const pools = fxPools(scene);
+    const code = (m: { material: unknown }) =>
+      (m.material as StandardMaterial).pluginManager?.getPlugin(SMOKE_EDGE_PLUGIN)?.getCustomCode("fragment") ?? null;
+    const frag = code(pools.smoke.mesh)?.CUSTOM_FRAGMENT_BEFORE_FRAGCOLOR ?? "";
+    expect(frag).toMatch(/color\.a \*= pow\(.*dot\(.*normalW.*viewDirectionW/);
+    for (const pool of [pools.shards, pools.glow, pools.ring]) expect(code(pool.mesh)).toBeNull();
   });
 });
 
