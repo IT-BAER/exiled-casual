@@ -26,7 +26,7 @@ import { attachBindings } from "./input/bindings";
 import { portalIntent } from "./input/intents";
 import { isTextEntry } from "./input/text-entry";
 import { ALL_SFX, CORE_SFX, playSfx, preloadSfx, setAmbient, stopAmbient } from "./audio/sfx";
-import { setMusic, stopMusic } from "./audio/music";
+import { setMusic, setMusicDead, stopMusic } from "./audio/music";
 import { createSoundscape } from "./audio/soundscape";
 import { createVarkisVoice, VARKIS_SFX } from "./audio/varkis-voice";
 import { createDebugSnapshotLog, dlog } from "./debug";
@@ -204,6 +204,8 @@ export function GameView({
    */
   const deadRef = useRef(false);
   deadRef.current = snapshot !== null && !snapshot.player.alive;
+  const isDead = deadRef.current;
+  useEffect(() => { setMusicDead(isDead); }, [isDead]);
   /**
    * The skill bar, mirrored for the same reason: `attachBindings` is called once on
    * mount and its key handler has to fire whatever is in the socket NOW, not

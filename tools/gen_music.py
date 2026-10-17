@@ -42,6 +42,9 @@ SLOTS = {
     "coast": "A cold open sea coast: airy pads, a slow low brass swell, lonely, wide, grey.",
     "menu": "The title screen: a slow brooding theme, a lone cello melody over low strings, a distant "
              "choir pad and a deep drone, solemn, ancient, cinematic, embers in the dark.",
+    "death": "The death screen: mournful, sparse and dark, very slow at about 65 bpm, low sustained strings "
+             "and a distant choir pad, long held notes, silence between them, no melodic hook or repeating "
+             "phrase that tires on loop, cold, hollow, grieving, ending where it begins so it loops seamlessly.",
 }
 
 
