@@ -5,6 +5,7 @@ import type { WalkableGrid } from "@exiled/mapgen";
 import { createScene } from "./engine";
 import { buildLevel } from "./level";
 import { contactActive, contactField, CONTACT_PLUGIN } from "./contact-band";
+import { setGroundPatch, PATCH_PLUGIN } from "./ground-patch";
 
 /** 24x12 at 0.5-unit cells: wall in columns 0..3, floor right of it, and `sea`
  *  columns from the right edge in as water. */
@@ -48,6 +49,21 @@ describe("contact band", () => {
     expect(contactActive(scene)).toBe(true);
     buildLevel(scene, null);
     expect(contactActive(scene)).toBe(false);
+    engine.dispose();
+  });
+
+  // Babylon 9 hands hardBindForSubMesh only to plugins on this list: off it, the
+  // band's uniforms stay zero and the floor draws no band at all.
+  it("binds its uniforms, as do the ground patches", () => {
+    const engine = new NullEngine();
+    const { scene } = createScene(engine);
+    buildLevel(scene, shoreGrid());
+    setGroundPatch(scene, "tileset.forest", () => "/none");
+    const extra = (scene.getMaterialByName("groundMat")!.pluginManager as unknown as {
+      _activePluginsForExtraEvents: { name: string }[];
+    })._activePluginsForExtraEvents.map((p) => p.name);
+    expect(extra).toContain(CONTACT_PLUGIN);
+    expect(extra).toContain(PATCH_PLUGIN);
     engine.dispose();
   });
 });

@@ -144,6 +144,9 @@ export function bindContact(ubo: UniformBuffer, scene: Scene): void {
 class GroundContactPlugin extends MaterialPluginBase {
   constructor(material: Material) {
     super(material, CONTACT_PLUGIN, 210, { CONTACT_BAND: false });
+    // Babylon 9 calls hardBindForSubMesh only for plugins on the extra-events
+    // list; without this the band's uniforms stay zero and the floor shows none of it.
+    this.registerForExtraEvents = true;
     // Same ES-module serialisation trap as rim.ts.
     this.doNotSerialize = true;
     this._enable(true);

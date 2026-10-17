@@ -3,7 +3,8 @@ import { Engine, Vector3 } from "@babylonjs/core";
 import type { Scene } from "@babylonjs/core";
 import { applyGraphics, createScene, setMapFill } from "./render/engine";
 import { canvasProjector } from "./render/projector";
-import { buildLevel, applyBiomeTint, applyTilesetFloor } from "./render/level";
+import { buildLevel, applyBiomeTint, applyTilesetFloor, tilesetDir } from "./render/level";
+import { setGroundPatch } from "./render/ground-patch";
 import { buildSea } from "./render/sea";
 import { Presence } from "./presence";
 import { buildHideoutDecor, clearHideoutDecor } from "./render/hideout";
@@ -640,6 +641,7 @@ export function GameView({
         if (msg.area === "hideout") { buildHideoutDecor(scene); void preloadSfx(VARKIS_SFX); }
         else clearHideoutDecor(scene);
         applyTilesetFloor(scene, base?.tilesetId ?? null);
+        setGroundPatch(scene, base?.tilesetId ?? null, tilesetDir);
         applyBiomeTint(
           scene,
           base ? BIOMES[base.biomeId].tint : null,

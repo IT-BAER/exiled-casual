@@ -12,6 +12,9 @@ export const BIOMES: Record<BiomeId, Biome> = {
     name: "Vaal Stone",
     // Cold green-grey: cut stone under a sky that has not been seen in centuries.
     tint: [0.62, 0.70, 0.68],
+    // Underground, so still the darkest place: lifted from frame median 32 to
+    // about 45, the floor of PoE's own darkest map (boss-fight.png, 34).
+    light: 1.4,
   },
   desert: {
     id: "desert",
@@ -24,12 +27,17 @@ export const BIOMES: Record<BiomeId, Biome> = {
     name: "Swamp",
     // Sunk green, low and heavy.
     tint: [0.55, 0.68, 0.52],
+    // Open fen under cloud: frame median 58 -> about 65.
+    light: 1.15,
   },
   forest: {
     id: "forest",
     name: "Forest",
     // Filtered through a canopy: dim, cool, a little blue.
     tint: [0.66, 0.74, 0.62],
+    // Dim under the canopy, not night: frame median 35 -> about 55, inside the
+    // 34-118 the PoE map references measure.
+    light: 1.6,
   },
   coast: {
     id: "coast",

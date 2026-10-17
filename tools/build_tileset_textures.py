@@ -14,6 +14,7 @@ Masters:  assets/tilesets/<biome>/wall_master_v1.png    (committed)
 Output:   apps/web/public/textures/tilesets/<biome>/wall_color.jpg
           apps/web/public/textures/tilesets/<biome>/wall_normal.jpg
           apps/web/public/textures/tilesets/<biome>/floor_color.jpg
+          apps/web/public/textures/tilesets/<biome>/patch_color.jpg (when patch_master_v1.png exists)
 
 `level.ts` looks these up by tileset id, and `level.test.ts` fails if a biome in
 MAP_BASES has no files here.
@@ -38,6 +39,7 @@ BIOMES = ["vaal_stone", "desert", "swamp", "forest", "coast"]
 # matches the old floor.png at 1024 square.
 SHIP_W, SHIP_H = 1024, 512
 FLOOR_SHIP = 1024
+PATCH_SHIP = 512
 
 # Fraction of each axis spent cross-fading the wrap. Wide enough to hide a hard
 # mismatch, narrow enough that the blended band is not a visible smear: at 0.12
@@ -259,6 +261,18 @@ def build(biome: str) -> bool:
     floor_img, floor_note = floor
     floor_img.save(dst / "floor_color.jpg", quality=92)
     print(f"  {biome:11s} floor  {floor_note}  ->  {dst.relative_to(ROOT)}")
+
+    # Optional second floor plate, blended in world-space blobs by
+    # apps/web/src/render/ground-patch.ts. Lifted like the floor: it covers half
+    # of it, and the actors must read against both.
+    src = MASTERS / biome / "patch_master_v1.png"
+    if src.exists():
+        patch = plate(src, (PATCH_SHIP, PATCH_SHIP), FLOOR_MIN_LUMA)
+        if patch is None:
+            return False
+        patch_img, patch_note = patch
+        patch_img.save(dst / "patch_color.jpg", quality=90)
+        print(f"  {biome:11s} patch  {patch_note}")
     return True
 
 
