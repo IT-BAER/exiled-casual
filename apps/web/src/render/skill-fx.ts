@@ -235,6 +235,13 @@ export interface FxProfile {
   launchCue?: string;
   /** Drawn as an arrow with a bare streak and a melee-style hit, not a burning bolt. */
   arrow?: boolean;
+  /** Arrow wake length in the arrow's frame, and its peak alpha. */
+  streakLength?: number;
+  streakAlpha?: number;
+  /** Tracer motes an arrow sheds per unit flown. */
+  motes?: number;
+  /** How an arrow lands: a chip back off the face, a spray out the far side, or a few splinters. */
+  arrowImpact?: "chip" | "pierce" | "splinter";
 }
 
 /** What a monster's bolt and any unmapped skill draw: today's ember bolt. */
@@ -252,22 +259,14 @@ export const FALLBACK_FX: FxProfile = {
   impactCue: "skill-ember-bolt-impact",
 };
 
-/** Snap Shot's arrow drawn harder: a longer, brighter streak and a bigger spray. */
-const DRAWN_ARROW_FX: FxProfile = {
+/** The bow's base: an arrow, no flight bed, a melee-style hit. */
+const ARROW_FX: FxProfile = {
   ...FALLBACK_FX,
   arrow: true,
   launchCue: "skill-bow-release",
   impactCue: "skill-arrow-impact",
-  core: new Color3(0.95, 0.92, 0.82),
-  wake: new Color3(0.66, 0.63, 0.56),
-  trailWidth: 0.06,
-  emitRate: 40,
-  sizeStart: 0.26,
-  sizeEnd: 0.05,
-  lifeMin: 0.04,
-  lifeMax: 0.08,
-  flash: 0.4,
   flightCue: null,
+  emitRate: 0,
 };
 
 export const SKILL_FX: Record<string, FxProfile> = {
@@ -298,32 +297,44 @@ export const SKILL_FX: Record<string, FxProfile> = {
     flightCue: null,
     impactCue: "skill-ember-spark-impact",
   },
-  // Not fire at all: an arrow, so the wake is dust off the shaft, not flame.
+  // Snap Shot: a quick pale dust streak and a chip off the face. The plain arrow.
   "skill.snap_shot.v1": {
-    ...FALLBACK_FX,
-    arrow: true,
-    launchCue: "skill-bow-release",
-    impactCue: "skill-arrow-impact",
+    ...ARROW_FX,
     core: new Color3(0.85, 0.82, 0.72),
     wake: new Color3(0.6, 0.58, 0.52),
     trailWidth: 0.04,
-    emitRate: 25,
-    sizeStart: 0.2,
-    sizeEnd: 0.05,
-    lifeMin: 0.03,
-    lifeMax: 0.06,
+    streakLength: 1.1,
+    streakAlpha: 0.3,
     flash: 0.3,
-    flightCue: null,
+    arrowImpact: "chip",
   },
+  // Piercing Shot: a long white-blue tracer shedding motes, and a hit that sprays
+  // out of the far side of the body because the arrow went through it.
   "skill.piercing_shot.v1": {
-    ...DRAWN_ARROW_FX,
+    ...ARROW_FX,
     launchCue: "skill-piercing-shot-release",
     impactCue: "skill-piercing-shot-impact",
+    core: new Color3(0.9, 0.97, 1),
+    wake: new Color3(0.7, 0.88, 1),
+    trailWidth: 0.075,
+    streakLength: 2.8,
+    streakAlpha: 0.55,
+    motes: 2,
+    flash: 0.45,
+    arrowImpact: "pierce",
   },
+  // Split Arrow: a fan of short amber shards, each landing as a few splinters.
   "skill.split_arrow.v1": {
-    ...DRAWN_ARROW_FX,
+    ...ARROW_FX,
     launchCue: "skill-split-arrow-release",
     impactCue: "skill-split-arrow-impact",
+    core: new Color3(1, 0.85, 0.55),
+    wake: new Color3(1, 0.68, 0.3),
+    trailWidth: 0.05,
+    streakLength: 0.75,
+    streakAlpha: 0.42,
+    flash: 0.25,
+    arrowImpact: "splinter",
   },
   "skill.strike.v1": FALLBACK_FX,
   "skill.heavy_strike.v1": FALLBACK_FX,
@@ -480,39 +491,103 @@ const STREAK_LENGTH = 1.3;
  * through the body; an arrow that ran out of range just drops.
  */
 export function attachArrowStreak(scene: Scene, mesh: Mesh, fx: FxProfile): Mesh {
+  const full = fx.streakLength ?? STREAK_LENGTH;
   const streak = MeshBuilder.CreateCylinder(`${ARROW_NAME}-streak`, {
-    height: STREAK_LENGTH, diameterTop: fx.trailWidth, diameterBottom: 0, tessellation: 8,
+    height: full, diameterTop: fx.trailWidth, diameterBottom: 0, tessellation: 8,
   }, scene);
   streak.rotation.x = Math.PI / 2;
-  streak.position.z = -ARROW_LENGTH / 2 - STREAK_LENGTH / 2 + 0.1;
+  streak.position.z = -ARROW_LENGTH / 2 - full / 2 + 0.1;
   streak.parent = mesh;
   streak.isPickable = false;
+  streak.metadata = { full };
   const name = `${ARROW_NAME}-streak-mat-${fx.wake.toHexString()}`;
   let mat = scene.getMaterialByName(name) as StandardMaterial | null;
   if (!mat) {
     // Half the wake colour: the GlowLayer blooms emissive, and at full it
     // outshone the arrow it trails.
     mat = glowMaterial(scene, name, fx.wake.scale(0.5));
-    mat.alpha = 0.3;
+    mat.alpha = fx.streakAlpha ?? 0.3;
     mat.alphaMode = 1; // ALPHA_ADD
   }
   streak.material = mat;
+  const motes = fx.motes ?? 0;
+  let shed = 0;
+  let last: Vector3 | null = null;
+  const tick = motes > 0
+    ? scene.onBeforeRenderObservable.add(() => {
+      const now = mesh.getAbsolutePosition();
+      if (last) {
+        shed += motes * Math.min(3, Vector3.Distance(last, now));
+        for (; shed >= 1; shed--) {
+          const k = Math.random();
+          fxPools(scene).shards.emit({
+            x: last.x + (now.x - last.x) * k, y: last.y + (now.y - last.y) * k, z: last.z + (now.z - last.z) * k,
+            vx: rand(-0.3, 0.3), vy: rand(0, 0.4), vz: rand(-0.3, 0.3), drag: 2,
+            life: rand(0.15, 0.35), size: 0.05, thick: 0.015,
+            r: fx.core.r, g: fx.core.g, b: fx.core.b, a: 0.8, r1: fx.wake.r * 0.5, g1: fx.wake.g * 0.5, b1: fx.wake.b * 0.6,
+          });
+        }
+      }
+      last = now.clone();
+    })
+    : null;
   mesh.onDisposeObservable.addOnce(() => {
+    if (tick) scene.onBeforeRenderObservable.remove(tick);
     if ((mesh.metadata as { struck?: boolean } | null)?.struck) {
       const yaw = mesh.rotation.y;
-      meleeImpact(scene, mesh.getAbsolutePosition().clone(), Math.sin(yaw), Math.cos(yaw), fx.flash);
+      arrowImpact(scene, mesh.getAbsolutePosition().clone(), Math.sin(yaw), Math.cos(yaw), fx);
     }
   });
   return streak;
+}
+
+/** Splinters a Split Arrow throws, and the spray Piercing Shot drives out of the far side. */
+const SPLINTERS = 4;
+const PIERCE_SPRAY = 14;
+const PIERCE_SPEED = 8;
+
+/** An arrow landing, in its skill's own way; `dirX/dirZ` is the way it was flying. */
+function arrowImpact(scene: Scene, at: Vector3, dirX: number, dirZ: number, fx: FxProfile): void {
+  if (fx.arrowImpact === "pierce") {
+    flash(scene, at, fx.flash);
+    const base = Math.atan2(dirX, dirZ);
+    for (let i = 0; i < PIERCE_SPRAY; i++) {
+      const yaw = base + rand(-0.35, 0.35);
+      const speed = PIERCE_SPEED * rand(0.6, 1.3);
+      fxPools(scene).shards.emit({
+        x: at.x, y: at.y, z: at.z,
+        vx: Math.sin(yaw) * speed, vy: rand(-0.5, 1.5), vz: Math.cos(yaw) * speed,
+        gravity: -6, drag: 2, life: rand(0.12, 0.28), size: 0.2, thick: 0.018, stretch: 0.03,
+        r: fx.core.r, g: fx.core.g, b: fx.core.b, a: 1, r1: fx.wake.r * 0.4, g1: fx.wake.g * 0.5, b1: fx.wake.b * 0.7,
+      });
+    }
+    fxPools(scene).glow.emit({ x: at.x, y: at.y, z: at.z, life: 0.08, size: 0.15, sizeEnd: 0.4, r: 0.85, g: 0.95, b: 1, a: 0.7 });
+    return;
+  }
+  if (fx.arrowImpact === "splinter") {
+    flash(scene, at, fx.flash);
+    for (let i = 0; i < SPLINTERS; i++) {
+      const yaw = Math.atan2(-dirX, -dirZ) + rand(-1.2, 1.2);
+      const speed = rand(2, 4);
+      fxPools(scene).shards.emit({
+        x: at.x, y: at.y, z: at.z, vx: Math.sin(yaw) * speed, vy: rand(1, 3), vz: Math.cos(yaw) * speed,
+        gravity: -12, life: rand(0.15, 0.3), size: 0.1, thick: 0.02,
+        r: fx.core.r, g: fx.core.g, b: fx.core.b, a: 1, r1: 0.6, g1: 0.3, b1: 0.1,
+      });
+    }
+    return;
+  }
+  meleeImpact(scene, at, dirX, dirZ, fx.flash);
 }
 
 /** Cut the wake to `flown` units: a fresh arrow's full wake pokes out behind the archer's back. */
 export function setStreakLength(arrow: Mesh, flown: number): void {
   const streak = arrow.getChildMeshes(true).find((m) => m.name === `${ARROW_NAME}-streak`);
   if (!streak) return;
+  const full = (streak.metadata as { full?: number } | null)?.full ?? STREAK_LENGTH;
   // `flown` is world units; the streak lives in the arrow's scaled frame.
-  const length = Math.max(0.001, Math.min(STREAK_LENGTH, flown / (arrow.scaling.z || 1)));
-  streak.scaling.y = length / STREAK_LENGTH;
+  const length = Math.max(0.001, Math.min(full, flown / (arrow.scaling.z || 1)));
+  streak.scaling.y = length / full;
   streak.position.z = -ARROW_LENGTH / 2 - length / 2 + 0.1;
 }
 

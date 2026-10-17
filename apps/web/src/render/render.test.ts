@@ -888,11 +888,12 @@ describe("SnapshotRenderer", () => {
       const arrow = scene.getMeshByName("entity-2");
       if (!arrow) continue;
       const streak = arrow.getChildMeshes(false).find((m) => m.name === `${ARROW_NAME}-streak`)!;
-      const length = streak.scaling.y * 1.3 * arrow.scaling.z;
+      const fullLength = (streak.metadata as { full: number }).full;
+      const length = streak.scaling.y * fullLength * arrow.scaling.z;
       const flown = Math.hypot(arrow.position.x - HAND.x, arrow.position.z - HAND.z);
       expect(length).toBeLessThanOrEqual(flown + 0.002);
-      if (flown > 1.3) {
-        expect(length).toBeCloseTo(1.3 * arrow.scaling.z, 5);
+      if (flown > fullLength) {
+        expect(length).toBeCloseTo(fullLength * arrow.scaling.z, 5);
         full = true;
       }
     }

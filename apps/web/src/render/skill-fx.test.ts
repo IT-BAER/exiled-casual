@@ -380,6 +380,48 @@ describe("arrows", () => {
     expect(count()).toBe(after);
   });
 
+  it("draws three different arrows: a quick streak, a long bright tracer, a fan of short shards", () => {
+    const snap = SKILL_FX["skill.snap_shot.v1"]!;
+    const pierce = SKILL_FX["skill.piercing_shot.v1"]!;
+    const split = SKILL_FX["skill.split_arrow.v1"]!;
+    expect(pierce.streakLength!).toBeGreaterThan(snap.streakLength! * 1.5);
+    expect(split.streakLength!).toBeLessThan(snap.streakLength!);
+    const wakes = [snap, pierce, split].map((f) => f.wake.toHexString());
+    expect(new Set(wakes).size).toBe(3);
+    expect(new Set([snap, pierce, split].map((f) => f.arrowImpact)).size).toBe(3);
+  });
+
+  it("a piercing shot sheds tracer motes in flight and lets go of them when it lands", async () => {
+    const scene = newScene();
+    const observers = () => scene.onBeforeRenderObservable.observers.length;
+    fxPools(scene);
+    const before = observers();
+    const arrow = makeMesh(scene, "projectile", "entity-1", Vector3.Zero(), undefined, "skill.piercing_shot.v1");
+    for (let i = 0; i < 10; i++) {
+      arrow.position.z += 0.5;
+      arrow.computeWorldMatrix(true);
+      scene.onBeforeRenderObservable.notifyObservers(scene);
+    }
+    expect(fxPools(scene).shards.emitted).toBeGreaterThan(0);
+    arrow.dispose();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(observers()).toBe(before);
+  });
+
+  it("a piercing shot punches through: its hit sprays forward, out the far side", () => {
+    const scene = newScene();
+    const arrow = makeMesh(scene, "projectile", "entity-1", new Vector3(0, 0.8, 0), undefined, "skill.piercing_shot.v1");
+    arrow.rotation.y = 0; // flying down +z
+    arrow.metadata = { struck: true };
+    const pools = fxPools(scene);
+    const start = pools.shards.emitted;
+    arrow.dispose();
+    expect(pools.shards.emitted).toBeGreaterThan(start);
+    pools.shards.step(0.05);
+    const zs = pools.shards.positions().map((p) => p.z);
+    expect(zs.reduce((a, b) => a + b, 0) / zs.length).toBeGreaterThan(0.05);
+  });
+
   it("a struck arrow lands a hit, one that ran out of range just drops", () => {
     const scene = newScene();
     const spent = makeMesh(scene, "projectile", "entity-1", Vector3.Zero(), undefined, "skill.snap_shot.v1");
