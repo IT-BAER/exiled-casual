@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { fp } from "@exiled/fixed-point";
 import type { WalkableGrid } from "@exiled/mapgen";
-import { blockerCollision, gridCollision, slide } from "./collision";
+import { blockerCollision, chaseStep, gridCollision, slide } from "./collision";
 
 // Build a WalkableGrid from an ASCII map. '.' = walkable, '#' = wall.
 // cellSize 1 and origin 0 make cell (cx,cy) sit at world (cx,cy) for readability.
@@ -237,5 +237,47 @@ describe("slide", () => {
     );
     const r = slide(door, fp(1), fp(2), fp(2), 0, 0);
     expect(r.x).toBe(fp(3)); // walked straight through the gap
+  });
+});
+
+describe("chaseStep out of a cell too tight for the body", () => {
+  // A real map's corner (cinder_vault, 0.5-unit cells): a swarm body slid into the
+  // pinch between a wall's end and a one-cell pillar, where no cell beside it
+  // stands a 0.32 body and the narrower lattice routes it through the 0.5 gap.
+  const rows = [
+    "................#...#",
+    "................#...#",
+    "....................#",
+    "...#................#",
+    "..##########........#",
+    ".#########........###",
+    "##########........###",
+    "##########........###",
+    "##########........###",
+    "##########........###",
+    "##########........###",
+    ".########..#.......##",
+    "..#........#.......##",
+    "...........#.......##",
+    ".................####",
+    "...................##",
+    "...................##",
+    "...................##",
+    "...........#.......##",
+    "..#........#.......##",
+    "...........#.......##",
+  ];
+  const cells = new Uint8Array(21 * 21);
+  rows.forEach((row, y) => { for (let x = 0; x < 21; x++) cells[y * 21 + x] = row[x] === "." ? 1 : 0; });
+  const c = gridCollision({ cols: 21, rows: 21, cellSize: 0.5, originX: 0, originY: 0, cells });
+
+  it("steps back onto its own lattice and walks round instead of freezing", () => {
+    const r = fp(0.32);
+    let x = fp(5.07), y = fp(4.985);
+    const tx = fp(3.991), ty = fp(7.585);
+    expect(c.isWalkable(x, y, r)).toBe(true);
+    const d0 = Math.hypot(tx - x, ty - y);
+    for (let i = 0; i < 150; i++) ({ x, y } = chaseStep(c, x, y, tx, ty, 86, r));
+    expect(Math.hypot(tx - x, ty - y)).toBeLessThan(d0 / 4);
   });
 });
