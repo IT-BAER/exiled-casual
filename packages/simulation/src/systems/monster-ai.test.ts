@@ -8,7 +8,7 @@ import { registerTelegraphResolve } from "./telegraph-resolve";
 import { gridCollision } from "../collision";
 import { makeGrid } from "../test-grid";
 import { MONSTERS } from "@exiled/content-runtime";
-import { spawnMonster } from "../areas";
+import { spawnMonster, PACK_SPREAD } from "../areas";
 import type { MonsterDef } from "@exiled/content-schema";
 import { resBlock } from "@exiled/content-schema";
 
@@ -498,6 +498,71 @@ describe("pack separation", () => {
     }
     // The front rank still reaches him.
     expect(ids.filter((e) => world.get<MonsterC>(e, "monster")!.state === "attack").length).toBeGreaterThan(3);
+  });
+
+  /**
+   * A swarm closing on a stationary player, laid out as areas.ts lays a pack. What
+   * reads wrong on screen: a body turning back on itself (a visible step, >90
+   * degrees off its last visible one), stopping and starting again inside a third
+   * of a second, and standing deep inside a neighbour.
+   */
+  const swarmRun = (defId: string, n: number) => {
+    const sim = new Simulation();
+    registerMonsterAI(sim);
+    const { world } = sim;
+    playerAt(world, fp(0), fp(0));
+    const def = MONSTERS.get(defId)!;
+    const ids = PACK_SPREAD.slice(0, n).map((o) => {
+      const e = spawnMonster(world, def, fp(8) + o.dx, o.dy, false);
+      world.set<MonsterC>(e, "monster", { ...world.get<MonsterC>(e, "monster")!, state: "chase" });
+      return e;
+    });
+    const visible = Math.trunc(def.moveSpeedFixed / 30 / 10);
+    const last = ids.map(() => ({ dx: 0, dy: 0 }));
+    const still = ids.map(() => -1);
+    let reversals = 0;
+    let restarts = 0;
+    let minSep = Infinity;
+    const ticks = 240;
+    for (let t = 0; t < ticks; t++) {
+      const before = ids.map((e) => ({ ...world.get<Position>(e, "position")! }));
+      sim.step();
+      ids.forEach((e, i) => {
+        const a = world.get<Position>(e, "position")!;
+        const dx = a.x - before[i]!.x;
+        const dy = a.y - before[i]!.y;
+        if (dx * dx + dy * dy < visible * visible) { if (still[i]! >= 0) still[i]!++; return; }
+        if (dx * last[i]!.dx + dy * last[i]!.dy < 0) reversals++;
+        if (still[i]! > 0 && still[i]! < 10) restarts++;
+        still[i] = 0;
+        last[i] = { dx, dy };
+      });
+      if (t < 30) continue;
+      for (let i = 0; i < n; i++) {
+        for (let j = i + 1; j < n; j++) {
+          const p = world.get<Position>(ids[i]!, "position")!;
+          const q = world.get<Position>(ids[j]!, "position")!;
+          minSep = Math.min(minSep, Math.sqrt(fpDist2(p.x, p.y, q.x, q.y)) / (2 * def.radiusFixed));
+        }
+      }
+    }
+    const attackers = ids.filter((e) => world.get<MonsterC>(e, "monster")!.state === "attack").length;
+    return { reversalsPerSec: reversals / n / (ticks / 30), restartsEach: restarts / n, minSep, attackers };
+  };
+
+  it.each([
+    ["monster.bramble_whelp.v1", 8], ["monster.bramble_whelp.v1", 16],
+    ["monster.sand_skitterer.v1", 8], ["monster.sand_skitterer.v1", 16],
+  ] as const)("a swarm of %s x%i flows in without jitter or overlap", (defId, n) => {
+    const m = swarmRun(defId, n);
+    // A turn-back more than once every four seconds per body reads as shuffling.
+    expect(m.reversalsPerSec).toBeLessThanOrEqual(0.25);
+    // Stop-and-go: at most one restart per body over the whole approach.
+    expect(m.restartsEach).toBeLessThanOrEqual(1);
+    // 90% of contact: the push fires only below contact, so a pair settles just inside it.
+    expect(m.minSep).toBeGreaterThanOrEqual(0.9);
+    // The front rank still fills: five skitterer shells span most of the ring.
+    expect(m.attackers).toBeGreaterThanOrEqual(5);
   });
 
   it("the push never shoves a body into a wall", () => {

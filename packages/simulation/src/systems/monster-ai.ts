@@ -116,21 +116,39 @@ export function packPush(
 }
 
 /**
- * How far into other bodies `self` would stand at (x, y), summed. The push only
- * gives back half a step, so a chase step that raises this is refused: the back
- * of a pack walks round the front or waits behind it, never through it.
+ * The room a chaser keeps from other monsters, as a multiple of contact. Inside
+ * it the part of its step that closes on a neighbour fades out, gone at contact.
  */
-export function crowding(pack: readonly PackBody[], self: number, x: Fixed, y: Fixed, r: Fixed): Fixed {
-  let sum = 0;
-  for (const o of pack) {
+const SPACE_NUM = 5;
+const SPACE_DEN = 4;
+
+/**
+ * The step (dx, dy) with the part that closes on each monster inside personal
+ * space taken out: straight behind a body it stops, off its line it slides past.
+ * Never pushes away, so a crowd cannot ring like a spring; overlap is packPush's.
+ */
+export function giveWay(
+  herd: readonly PackBody[], self: number, x: Fixed, y: Fixed, r: Fixed, dx: Fixed, dy: Fixed,
+): { dx: Fixed; dy: Fixed } {
+  let vx = dx;
+  let vy = dy;
+  for (const o of herd) {
     if (o.e === self) continue;
-    const dx = x - o.x;
-    const dy = y - o.y;
-    const min = r + o.r;
-    const d2 = dx * dx + dy * dy;
-    if (d2 < min * min) sum += min - isqrt(d2);
+    const contact = r + o.r;
+    const space = Math.trunc((contact * SPACE_NUM) / SPACE_DEN);
+    const rx = o.x - x;
+    const ry = o.y - y;
+    const d2 = rx * rx + ry * ry;
+    if (d2 === 0 || d2 >= space * space) continue;
+    const closing = vx * rx + vy * ry;
+    if (closing <= 0) continue;
+    const d = isqrt(d2);
+    const fade = Math.min(space - d, space - contact);
+    const den = d2 * (space - contact);
+    vx -= Math.trunc((rx * closing * fade) / den);
+    vy -= Math.trunc((ry * closing * fade) / den);
   }
-  return sum;
+  return { dx: vx, dy: vy };
 }
 
 /**
@@ -149,12 +167,12 @@ const BEARINGS: readonly (readonly [number, number])[] = Array.from({ length: 24
 /**
  * The nearest spot on a ring of `ringR` round (px, py) that no other body and
  * no wall stands on, counted out from `self`'s own bearing on the `side` its id picks.
- * Undefined when the ring is full: then it waits where it is.
+ * Undefined when the ring is full: then it queues behind it.
  */
 export function freeSpot(
   collision: Collision | undefined, pack: readonly PackBody[], self: number, x: Fixed, y: Fixed, r: Fixed,
   px: Fixed, py: Fixed, ringR: Fixed, side: number,
-): { x: Fixed; y: Fixed; side: number; round: number } | undefined {
+): { x: Fixed; y: Fixed } | undefined {
   let own = 0;
   let best = -Infinity;
   BEARINGS.forEach(([bx, by], i) => {
@@ -168,15 +186,12 @@ export function freeSpot(
       const sy = py + Math.trunc((ringR * by) / 1000);
       if ((!collision || collision.isWalkable(sx, sy, r))
         && pack.every((o) => o.e === self || fpDist2(sx, sy, o.x, o.y) >= (r + o.r) * (r + o.r))) {
-        return { x: sx, y: sy, side: s, round: k };
+        return { x: sx, y: sy };
       }
     }
   }
   return undefined;
 }
-
-/** Round the outside of a pack: square to the player, then out and round (cos, sin in thousandths). */
-const ROUND_TURNS: readonly (readonly [number, number])[] = [[0, 1000], [-707, 707]];
 
 /** Offset a body that has already taken its own step, without entering a wall. */
 function shove(
@@ -452,40 +467,21 @@ export function registerMonsterAI(sim: Simulation, collisionRef?: CollisionRef):
         let moved = chaseStep(
           collision, mpos.x, mpos.y, ppos.x, ppos.y, mon.moveSpeed, mon.bodyRadius,
         );
-        const here = crowding(herd, m, mpos.x, mpos.y, mon.bodyRadius);
-        if (crowding(herd, m, moved.x, moved.y, mon.bodyRadius) > here) {
-          // Into a body: find the nearest free spot on the ring he is fought
-          // from. Beside it, step straight in; otherwise walk the outside of the
-          // pack toward it. Ring full: wait behind it.
-          const target = moved;
-          const sx = moved.x - mpos.x;
-          const sy = moved.y - mpos.y;
-          moved = mpos;
+        // A body in the way of the step at HIM is what sends a chaser at a free spot
+        // on his ring instead; judged off that step alone, so the choice cannot flip-flop.
+        let step = { dx: moved.x - mpos.x, dy: moved.y - mpos.y };
+        let eased = giveWay(herd, m, mpos.x, mpos.y, mon.bodyRadius, step.dx, step.dy);
+        if (eased.dx !== step.dx || eased.dy !== step.dy) {
           const touch = mon.bodyRadius + world.get<PlayerC>(nearest, "player")!.bodyRadius;
           const spot = freeSpot(collision, herd, m, mpos.x, mpos.y, mon.bodyRadius, ppos.x, ppos.y,
             touch + Math.trunc((Math.max(ar, touch) - touch) / 2), m % 2 === 0 ? 1 : -1);
-          const clear = (t: { x: Fixed; y: Fixed }) => (t.x !== mpos.x || t.y !== mpos.y)
-            && crowding(herd, m, t.x, t.y, mon.bodyRadius) <= here;
-          const direct = spot && spot.round <= 1 && shove(collision, mpos.x, mpos.y,
-            fpStepToward(mpos.x, mpos.y, spot.x, spot.y, mon.moveSpeed), mon.bodyRadius);
-          if (direct && clear(direct)) moved = direct;
-          else if (spot) {
-            // The step points IN, so turning it the spot's way round the player
-            // is the opposite sign: bearings count counterclockwise.
-            const s = -spot.side;
-            for (const [cos, sin] of ROUND_TURNS) {
-              const t = shove(collision, mpos.x, mpos.y, {
-                dx: Math.trunc((sx * cos - s * sy * sin) / 1000),
-                dy: Math.trunc((s * sx * sin + sy * cos) / 1000),
-              }, mon.bodyRadius);
-              // A wall can slide the turned step straight back out of the pack;
-              // only a step that gains ground round toward the spot counts.
-              const gain = s * (sx * (t.y - mpos.y) - sy * (t.x - mpos.x));
-              if (gain > 0 && clear(t)) { moved = t; break; }
-            }
-            // Wedged with a spot still open (two bodies in a passage, each in
-            // the other's way): the plain step, and the push sorts it out.
-            if (moved === mpos) moved = target;
+          if (spot) {
+            moved = chaseStep(collision, mpos.x, mpos.y, spot.x, spot.y, mon.moveSpeed, mon.bodyRadius);
+            step = { dx: moved.x - mpos.x, dy: moved.y - mpos.y };
+            eased = giveWay(herd, m, mpos.x, mpos.y, mon.bodyRadius, step.dx, step.dy);
+          }
+          if (eased.dx !== step.dx || eased.dy !== step.dy) {
+            moved = shove(collision, mpos.x, mpos.y, eased, mon.bodyRadius);
           }
         }
         const out = shove(collision, moved.x, moved.y, push, mon.bodyRadius);

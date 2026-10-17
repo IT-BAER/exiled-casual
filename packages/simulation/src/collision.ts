@@ -300,6 +300,7 @@ export function gridCollision(grid: WalkableGrid, blockers: readonly Blocker[] =
 const UNREACHABLE = 0xffff;
 /** Fixed expansion order — the flood must not depend on iteration luck. */
 const NEIGHBOURS: readonly (readonly [number, number])[] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+const DIAGONALS: readonly (readonly [number, number])[] = [[1, 1], [-1, 1], [1, -1], [-1, -1]];
 
 /**
  * The BFS field, over a lattice rather than over a grid: it asks `isWalkable`
@@ -405,6 +406,21 @@ function gridNav(
       // Strictly downhill: equal-or-worse means arrived or cut off, and a null
       // there hands the caller back to its straight step instead of a shuffle.
       let first = downhill(dist, cx, cy);
+      const me: Collision = { isWalkable };
+      // Off its own lattice with no routed side neighbour: a routed diagonal it can
+      // walk to puts it back on, before the narrower lattice sends it into a pinch.
+      if (first === null && dist[cy * cols + cx] === UNREACHABLE) {
+        let best = UNREACHABLE;
+        for (const [dx, dy] of DIAGONALS) {
+          const nx = cx + dx;
+          const ny = cy + dy;
+          if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+          const d = dist[ny * cols + nx]!;
+          if (d < best && hasLineOfSight(me, fromX, fromY, centreX(nx), centreY(ny), bodyRadius)) {
+            best = d; first = [nx, ny];
+          }
+        }
+      }
       // A wide body can slide through a gap whose cell CENTRES are too tight for it,
       // landing where no cell around it is routed; it takes the half-cell-narrower
       // lattice until it is back on its own, or it freezes behind a pillar.
@@ -426,7 +442,6 @@ function gridNav(
        * straight leg to the corner and one away from it, and the target holds
        * still for the whole leg rather than moving every tick.
        */
-      const me: Collision = { isWalkable };
       let [bx, by] = first;
       let [px, py] = first;
       for (let i = 1; i < PULL_LOOKAHEAD; i++) {
