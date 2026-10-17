@@ -158,6 +158,8 @@ export class CreatureRig {
   private standing = 0;
   /** Off screen and paused: clip changes are remembered, not played. See `setAwake`. */
   private awake = true;
+  /** Cross-fade on a clip start. Applied AT a start only, so a ramp already running never snaps. */
+  private blend = true;
   private readonly scene: Scene | null;
 
   constructor(
@@ -178,7 +180,7 @@ export class CreatureRig {
         group.dispose();
         continue;
       }
-      group.enableBlending = true;
+      group.enableBlending = this.blend;
       group.blendingSpeed = 0.1;
       this.groups.set(clip, group);
     }
@@ -224,6 +226,7 @@ export class CreatureRig {
     this.striking = true;
     for (const [name, other] of this.groups) if (name !== "attack") other.stop();
     group.speedRatio = ATTACK_RATIO;
+    group.enableBlending = this.blend;
     group.start(false, ATTACK_RATIO);
     group.onAnimationGroupEndObservable.addOnce(() => {
       this.striking = false;
@@ -270,7 +273,13 @@ export class CreatureRig {
     if (!clip) return;
     for (const [name, other] of this.groups) if (name !== clip) other.stop();
     const group = this.groups.get(clip);
+    if (group) group.enableBlending = this.blend;
     group?.start(true, group.speedRatio);
+  }
+
+  /** Far bodies cut between clips instead of blending; takes effect at the next clip start. */
+  setBlending(on: boolean): void {
+    this.blend = on;
   }
 
   /** Let go of the body. A clip still running would drive the bones the physics
@@ -286,6 +295,7 @@ export class CreatureRig {
     if (!group) return;
     group.speedRatio = ratio;
     if (this.playing === clip) return;
+    group.enableBlending = this.blend;
     if (!this.awake) {
       this.playing = clip; // started by setAwake(true)
       return;
