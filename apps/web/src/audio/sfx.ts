@@ -79,7 +79,7 @@ const VOICES: Record<string, Voice> = {
   // the master's peaks, which are cracks rather than body.
   "skill-cinder-ground-loop": { gain: 0.45, wet: 0.24, vary: 0.03, takes: 3 },
   "skill-blink":              { gain: 0.282, wet: 0.12, vary: 0.05, takes: 3 },
-  "skill-bow-release":        { gain: 0.202, wet: 0.08, vary: 0.08, takes: 3 },
+  "skill-bow-release":        { gain: 0.202, wet: 0.08, vary: 0.08 },
   "skill-arrow-impact":       { gain: 0.293, wet: 0.12, vary: 0.10, takes: 3 },
   "skill-strike-swing":       { gain: 0.144, wet: 0.08, vary: 0.08, takes: 3 },
   "skill-strike-impact":      { gain: 0.189, wet: 0.12, vary: 0.10, takes: 3 },
@@ -90,7 +90,7 @@ const VOICES: Record<string, Voice> = {
   "skill-ground-slam-swing":  { gain: 0.190, wet: 0.14, vary: 0.05, takes: 3 },
   "skill-piercing-shot-release": { gain: 0.200, wet: 0.08, vary: 0.06 },
   "skill-piercing-shot-impact":  { gain: 0.280, wet: 0.12, vary: 0.08, takes: 3 },
-  "skill-split-arrow-release": { gain: 0.200, wet: 0.08, vary: 0.08, takes: 3 },
+  "skill-split-arrow-release": { gain: 0.200, wet: 0.08, vary: 0.08 },
   "skill-split-arrow-impact":  { gain: 0.250, wet: 0.10, vary: 0.10, takes: 3 },
   "skill-ground-slam-impact": { gain: 0.337, wet: 0.22, vary: 0.05, takes: 3 },
   // The free attack: smaller than the bolt in level as in looks, and no flight bed.

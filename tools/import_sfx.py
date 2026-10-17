@@ -122,15 +122,13 @@ SOURCES: dict[str, str | dict | list[str | dict]] = {
         "Rescopic Sound - Distinct Whooshes/WHSH_Pure SciFi-Whoosh Fast 03_RSCPC_DW.wav@0.30:0.55:-3.4",
         "Justsoundeffects - Transition Whooshes Vol. 1/WHSH_Whoosh Short 06_JSE_TW1.wav@2.80:0.60",
     ],
-    # The bundles hold no bow at all (the 2024 "Nocked" sampler is not extracted): a
-    # wooden stick cutting the air for the loose, a spear shaft striking for the hit.
-    # Takes 2, 3: two more swishes of the same stick in the same recording.
-    "skill-bow-release": [
-        "Justsoundeffects - Transition Whooshes Vol. 1/SWSH_Woodstick Swish 03_JSE_TW1.wav",
-        "Justsoundeffects - Transition Whooshes Vol. 1/SWSH_Woodstick Swish 03_JSE_TW1.wav@3.90:1.00",
-        "Justsoundeffects - Transition Whooshes Vol. 1/SWSH_Woodstick Swish 03_JSE_TW1.wav@6.05:1.00",
-    ],
-    # Takes 2, 3: other strikes of the same shaft in the same recording.
+    # Bows are real recorded looses, the only ones in the bundles: the Nocked sampler
+    # and one Super Heroes shot, both GDC 2019 (the 2024 manifest lists them, its zips
+    # do not hold them). Model renders and stick swishes never read as a bow.
+    # Snap Shot: the Pinaka bow's light, quick loose.
+    "skill-bow-release":
+        "Eiravaein Works - Nocked/Nocked,archery,firing,loose,Pinakabow,mythic,midflight,wide,hum,sizzle,energy,alt8.wav",
+    # A spear shaft striking for the hit. Takes 2, 3: other strikes in the same recording.
     "skill-arrow-impact": [
         "344 Audio - Historical Weapons Vol. 2/WEAPBlnt_Spear And Stick Impact, Wooden MKH 2_344 Audio_Medieval Weapons Vol 2.wav",
         "344 Audio - Historical Weapons Vol. 2/WEAPBlnt_Spear And Stick Impact, Wooden MKH 2_344 Audio_Medieval Weapons Vol 2.wav@4.30:0.60:-3.2",
@@ -163,23 +161,18 @@ SOURCES: dict[str, str | dict | list[str | dict]] = {
         "Chupapsound - Essential Scifi/WHOOSH PASS SF LOW.wav",
         {"layers": [('Rescopic Sound - Distinct Whooshes/WHSH_Deviant-Whoosh Flabby Slow 09_RSCPC_DW.wav', -3, 0, 0), ('InspectorJ - 96 General Library/WHSH_InsJ_Whooshing_Low_Double_01-01.wav', -4, -6, 0)]},
     ],
-    # Piercing Shot: a whip crack under a stick swish, the string snapping harder than
-    # Snap Shot's. One take: the Ricochet Metallic jet reads as a sci-fi laser.
+    # Piercing Shot: the Vaeyan bow's sleek loose with the shaft rattling away.
     "skill-piercing-shot-release":
-        {"layers": [('David Dumais Audio - Melee Weapons Sound Effects Pack 2/WEAPWhip_WHIP Snap Crack 05_DDUMAIS_MWP2.wav', 0, -4, 0), ('Justsoundeffects - Transition Whooshes Vol. 1/SWSH_Woodstick Swish 03_JSE_TW1.wav@3.90:1.00', 2, 0, 0)]},
+        "Eiravaein Works - Nocked/Nocked,archery,firing,loose,Vaeyanbow,midflight,wide,mythic,sleek,swirl,rattle,alt14.wav",
     # It lands as a blade going through rather than a shaft stopping.
     "skill-piercing-shot-impact": [
         "David Dumais Audio - Melee Weapons Sound Effects Pack 1/SWSH_Sword Slash Impact V2 Assorted 18_DDUMAIS_NONE.wav",
         {"layers": [('David Dumais Audio - Melee Weapons Sound Effects Pack 1/SWSH_Sword Slash Impact V2 Assorted 18_DDUMAIS_NONE.wav', -2, 0, 0), ('344 Audio - Historical Weapons Vol. 2/WEAPBlnt_Spear And Stick Impact, Wooden MKH 2_344 Audio_Medieval Weapons Vol 2.wav@4.30:0.60', 0, -6, 0)]},
         {"layers": [('David Dumais Audio - Melee Weapons Sound Effects Pack 1/SWSH_Sword Slash Impact V2 Assorted 18_DDUMAIS_NONE.wav', 2, 0, 0)]},
     ],
-    # Split Arrow: one loose of several shafts, so three swishes staggered by a few
-    # tens of ms at different pitches; takes 2, 3 reorder them and add leaf swishes.
-    "skill-split-arrow-release": [
-        {"layers": [('Justsoundeffects - Transition Whooshes Vol. 1/SWSH_Woodstick Swish 03_JSE_TW1.wav@0:1.0', 2, 0, 0), ('Justsoundeffects - Transition Whooshes Vol. 1/SWSH_Woodstick Swish 03_JSE_TW1.wav@3.90:1.00', 0, -2, 40), ('Justsoundeffects - Transition Whooshes Vol. 1/SWSH_Woodstick Swish 03_JSE_TW1.wav@6.05:1.00', 4, -3, 80)]},
-        {"layers": [('Justsoundeffects - Transition Whooshes Vol. 1/SWSH_Woodstick Swish 03_JSE_TW1.wav@6.05:1.00', 1, 0, 0), ('Justsoundeffects - Transition Whooshes Vol. 1/SWSH_Woodstick Swish 03_JSE_TW1.wav@0:1.0', 3, -2, 35), ('Justsoundeffects - Transition Whooshes Vol. 1/SWSH_Woodstick Swish 03_JSE_TW1.wav@3.90:1.00', -1, -3, 75)]},
-        {"layers": [('Rogue Waves - Druid Magic/SWSH_Dry Bamboo Leaf Swishes 1_RogueWaves_DruidMagic.wav@0:0.6', 0, -2, 0), ('Justsoundeffects - Transition Whooshes Vol. 1/SWSH_Woodstick Swish 03_JSE_TW1.wav@3.90:1.00', 2, -3, 30)]},
-    ],
+    # Split Arrow: a plain bow-and-arrow shot with its flight.
+    "skill-split-arrow-release":
+        "2496SoundEffects - Super Heroes Sound Design/Hawk's Arrow Flies Bow and Arrow shoot 2.wav",
     "skill-split-arrow-impact": [
         "David Dumais Audio - Melee Weapons Sound Effects Pack 1/WOODImpt_Impact Wood 23_DDUMAIS_NONE.wav",
         "Cinematic Sound Design - Cartoon Bloopers/Arrow Hit Rattle.wav",
