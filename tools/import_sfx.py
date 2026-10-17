@@ -150,6 +150,43 @@ SOURCES: dict[str, str | list[str | dict]] = {
         "Justsoundeffects - Melee Weapons/WEAPAxe_Long Two-Handed Axe Flesh Hit_JSE_MW.wav@2.38:1.20",
         "Justsoundeffects - Melee Weapons/WEAPAxe_Long Two-Handed Axe Flesh Hit_JSE_MW.wav@9.58:1.20",
     ],
+    # Heavy Strike: plate and haft through a slow arc. The rattling metal pass, a
+    # low double whoosh, and the metal pass a tone down over a slow flabby whoosh.
+    "skill-heavy-strike-swing": [
+        "344 Audio - Elemental Palette Designed Vol. 1/METLMisc_Metal, Slow Whoosh, Rattle, Pass By x4 01_344 Audio_Elemental Palette Designed Vol 1.wav",
+        "InspectorJ - 96 General Library/WHSH_InsJ_Whooshing_Low_Double_01-01.wav",
+        {"layers": [('344 Audio - Elemental Palette Designed Vol. 1/METLMisc_Metal, Slow Whoosh, Rattle, Pass By x4 01_344 Audio_Elemental Palette Designed Vol 1.wav', -2, 0, 0), ('Rescopic Sound - Distinct Whooshes/WHSH_Deviant-Whoosh Flabby Slow 09_RSCPC_DW.wav', 0, -8, 0)]},
+    ],
+    # Ground Slam: the heave overhead before the floor breaks, deeper than any swing.
+    "skill-ground-slam-swing": [
+        "CB Sound Design - Whoosh And Push/W_a_P_Epic_Whoosh_8.wav",
+        "Chupapsound - Essential Scifi/WHOOSH PASS SF LOW.wav",
+        {"layers": [('Rescopic Sound - Distinct Whooshes/WHSH_Deviant-Whoosh Flabby Slow 09_RSCPC_DW.wav', -3, 0, 0), ('InspectorJ - 96 General Library/WHSH_InsJ_Whooshing_Low_Double_01-01.wav', -4, -6, 0)]},
+    ],
+    # Piercing Shot: a sharp metallic jet for the tracer, and a whip crack under a
+    # stick swish; it lands as a blade going through rather than a shaft stopping.
+    "skill-piercing-shot-release": [
+        "Pole Position Production - The Cinematic Transformation Library/CINEMATIC - WHOOSH - Upfront Short - 2 Jet Sharp Ricochet Metallic Sliding Whipping.wav",
+        {"layers": [('Pole Position Production - The Cinematic Transformation Library/CINEMATIC - WHOOSH - Upfront Short - 2 Jet Sharp Ricochet Metallic Sliding Whipping.wav@0:2.0', 2, 0, 0), ('Justsoundeffects - Transition Whooshes Vol. 1/SWSH_Woodstick Swish 03_JSE_TW1.wav@0:1.0', 3, -6, 0)]},
+        {"layers": [('David Dumais Audio - Melee Weapons Sound Effects Pack 2/WEAPWhip_WHIP Snap Crack 05_DDUMAIS_MWP2.wav', 0, -4, 0), ('Justsoundeffects - Transition Whooshes Vol. 1/SWSH_Woodstick Swish 03_JSE_TW1.wav@3.90:1.00', 2, 0, 0)]},
+    ],
+    "skill-piercing-shot-impact": [
+        "David Dumais Audio - Melee Weapons Sound Effects Pack 1/SWSH_Sword Slash Impact V2 Assorted 18_DDUMAIS_NONE.wav",
+        {"layers": [('David Dumais Audio - Melee Weapons Sound Effects Pack 1/SWSH_Sword Slash Impact V2 Assorted 18_DDUMAIS_NONE.wav', -2, 0, 0), ('344 Audio - Historical Weapons Vol. 2/WEAPBlnt_Spear And Stick Impact, Wooden MKH 2_344 Audio_Medieval Weapons Vol 2.wav@4.30:0.60', 0, -6, 0)]},
+        {"layers": [('David Dumais Audio - Melee Weapons Sound Effects Pack 1/SWSH_Sword Slash Impact V2 Assorted 18_DDUMAIS_NONE.wav', 2, 0, 0)]},
+    ],
+    # Split Arrow: one loose of several shafts, so three swishes staggered by a few
+    # tens of ms at different pitches; takes 2, 3 reorder them and add leaf swishes.
+    "skill-split-arrow-release": [
+        {"layers": [('Justsoundeffects - Transition Whooshes Vol. 1/SWSH_Woodstick Swish 03_JSE_TW1.wav@0:1.0', 2, 0, 0), ('Justsoundeffects - Transition Whooshes Vol. 1/SWSH_Woodstick Swish 03_JSE_TW1.wav@3.90:1.00', 0, -2, 40), ('Justsoundeffects - Transition Whooshes Vol. 1/SWSH_Woodstick Swish 03_JSE_TW1.wav@6.05:1.00', 4, -3, 80)]},
+        {"layers": [('Justsoundeffects - Transition Whooshes Vol. 1/SWSH_Woodstick Swish 03_JSE_TW1.wav@6.05:1.00', 1, 0, 0), ('Justsoundeffects - Transition Whooshes Vol. 1/SWSH_Woodstick Swish 03_JSE_TW1.wav@0:1.0', 3, -2, 35), ('Justsoundeffects - Transition Whooshes Vol. 1/SWSH_Woodstick Swish 03_JSE_TW1.wav@3.90:1.00', -1, -3, 75)]},
+        {"layers": [('Rogue Waves - Druid Magic/SWSH_Dry Bamboo Leaf Swishes 1_RogueWaves_DruidMagic.wav@0:0.6', 0, -2, 0), ('Justsoundeffects - Transition Whooshes Vol. 1/SWSH_Woodstick Swish 03_JSE_TW1.wav@3.90:1.00', 2, -3, 30)]},
+    ],
+    "skill-split-arrow-impact": [
+        "David Dumais Audio - Melee Weapons Sound Effects Pack 1/WOODImpt_Impact Wood 23_DDUMAIS_NONE.wav",
+        "Cinematic Sound Design - Cartoon Bloopers/Arrow Hit Rattle.wav",
+        {"layers": [('David Dumais Audio - Melee Weapons Sound Effects Pack 1/WOODImpt_Impact Wood 23_DDUMAIS_NONE.wav', 3, 0, 0), ('344 Audio - Historical Weapons Vol. 2/WEAPBlnt_Spear And Stick Impact, Wooden MKH 2_344 Audio_Medieval Weapons Vol 2.wav@8.50:0.60', 0, -8, 0)]},
+    ],
 
     # ── Portals and the map device ──────────────────────────────────────────────
     # An airy gust that swells and falls away. The designed sci-fi vortex this

@@ -313,8 +313,16 @@ export const SKILL_FX: Record<string, FxProfile> = {
     flash: 0.3,
     flightCue: null,
   },
-  "skill.piercing_shot.v1": DRAWN_ARROW_FX,
-  "skill.split_arrow.v1": DRAWN_ARROW_FX,
+  "skill.piercing_shot.v1": {
+    ...DRAWN_ARROW_FX,
+    launchCue: "skill-piercing-shot-release",
+    impactCue: "skill-piercing-shot-impact",
+  },
+  "skill.split_arrow.v1": {
+    ...DRAWN_ARROW_FX,
+    launchCue: "skill-split-arrow-release",
+    impactCue: "skill-split-arrow-impact",
+  },
   "skill.strike.v1": FALLBACK_FX,
   "skill.heavy_strike.v1": FALLBACK_FX,
   "skill.ground_slam.v1": FALLBACK_FX,

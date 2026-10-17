@@ -214,6 +214,61 @@ describe("createSoundscape", () => {
     expect(landed(undefined)).toEqual(["skill-strike-impact"]);
   });
 
+  const CLASS_SKILLS = [
+    "skill.strike.v1", "skill.heavy_strike.v1", "skill.ground_slam.v1",
+    "skill.snap_shot.v1", "skill.piercing_shot.v1", "skill.split_arrow.v1",
+    "skill.ember_spark.v1", "skill.ember_bolt.v1", "skill.cinder_ground.v1",
+  ];
+  const BOW = new Set(["skill.snap_shot.v1", "skill.piercing_shot.v1", "skill.split_arrow.v1"]);
+
+  it("gives each of the nine class skills a cast cue of its own", () => {
+    const castOf = (skillId: string) => {
+      const arrow: SnapshotEntity = { id: 4, kind: "projectile", x: 1, y: 0, team: 0, skillId };
+      return run([
+        snap({ tick: 1, player: testPlayer({ cooldowns: {} }) }),
+        // A bow is heard on the loose, everything else on the cooldown the cast set.
+        snap({ tick: 2, player: testPlayer({ cooldowns: { [skillId]: 0.5 } }), entities: BOW.has(skillId) ? [arrow] : [] }),
+      ]);
+    };
+    const cues = CLASS_SKILLS.map((id) => {
+      const heard = castOf(id);
+      expect(heard, id).toHaveLength(1);
+      return heard[0];
+    });
+    expect(new Set(cues).size).toBe(CLASS_SKILLS.length);
+  });
+
+  it("gives every class skill that hits an impact cue of its own", () => {
+    const impactOf = (skillId: string) => {
+      if (!BOW.has(skillId) && !skillId.includes("ember")) {
+        return run([
+          snap({ tick: 1 }),
+          snap({ tick: 2, player: testPlayer({ strikeTick: 2, strikeHits: 1, strikeSkill: skillId }) }),
+        ]);
+      }
+      const p: SnapshotEntity = { id: 4, kind: "projectile", x: 1, y: 0, team: 0, skillId };
+      return run([
+        snap({ tick: 1, entities: [p] }),
+        snap({ tick: 2, entities: [{ ...p, spent: true }] }),
+        snap({ tick: 3, entities: [] }),
+      ]);
+    };
+    const hitting = CLASS_SKILLS.filter((id) => id !== "skill.cinder_ground.v1");
+    const cues = hitting.map((id) => {
+      const heard = impactOf(id);
+      expect(heard, id).toHaveLength(1);
+      return heard[0];
+    });
+    expect(new Set(cues).size).toBe(hitting.length);
+  });
+
+  it("hears a fan of arrows loosed together as one release", () => {
+    const fan = [4, 5, 6, 7, 8].map((id): SnapshotEntity =>
+      ({ id, kind: "projectile", x: 1, y: 0, team: 0, skillId: "skill.split_arrow.v1" }));
+    const heard = run([snap({ tick: 1 }), snap({ tick: 2, entities: fan })]);
+    expect(heard).toEqual(["skill-split-arrow-release"]);
+  });
+
   it("Ember Spark casts and lands with its own cues and carries no flight bed", () => {
     const spark: SnapshotEntity = { id: 4, kind: "projectile", x: 1, y: 0, team: 0, skillId: "skill.ember_spark.v1" };
     const loops: string[] = [];
