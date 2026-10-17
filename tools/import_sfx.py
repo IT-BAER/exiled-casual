@@ -44,7 +44,7 @@ import tempfile
 # snaps; a bog thing gurgles and bursts. Ember is the weak one — these three years of
 # the bundle hold fire textures and fireworks but no fire IMPACT, so its death is a
 # fire being put out, which is at least the right event.
-SOURCES: dict[str, str | list[str | dict]] = {
+SOURCES: dict[str, str | dict | list[str | dict]] = {
     # Vaal Construct, Sunbaked Colossus — carved stone.
     "monster-hurt-stone": "BluezoneCorp - Stone Impact/Bluezone_BC0297_stone_impact_015.wav",
     "monster-death-stone": "Justsoundeffects - Stones and Debris/DESTRClpse_Massive Wall Collapsing_JSE_SD.wav",
@@ -163,13 +163,11 @@ SOURCES: dict[str, str | list[str | dict]] = {
         "Chupapsound - Essential Scifi/WHOOSH PASS SF LOW.wav",
         {"layers": [('Rescopic Sound - Distinct Whooshes/WHSH_Deviant-Whoosh Flabby Slow 09_RSCPC_DW.wav', -3, 0, 0), ('InspectorJ - 96 General Library/WHSH_InsJ_Whooshing_Low_Double_01-01.wav', -4, -6, 0)]},
     ],
-    # Piercing Shot: a sharp metallic jet for the tracer, and a whip crack under a
-    # stick swish; it lands as a blade going through rather than a shaft stopping.
-    "skill-piercing-shot-release": [
-        "Pole Position Production - The Cinematic Transformation Library/CINEMATIC - WHOOSH - Upfront Short - 2 Jet Sharp Ricochet Metallic Sliding Whipping.wav",
-        {"layers": [('Pole Position Production - The Cinematic Transformation Library/CINEMATIC - WHOOSH - Upfront Short - 2 Jet Sharp Ricochet Metallic Sliding Whipping.wav@0:2.0', 2, 0, 0), ('Justsoundeffects - Transition Whooshes Vol. 1/SWSH_Woodstick Swish 03_JSE_TW1.wav@0:1.0', 3, -6, 0)]},
+    # Piercing Shot: a whip crack under a stick swish, the string snapping harder than
+    # Snap Shot's. One take: the Ricochet Metallic jet reads as a sci-fi laser.
+    "skill-piercing-shot-release":
         {"layers": [('David Dumais Audio - Melee Weapons Sound Effects Pack 2/WEAPWhip_WHIP Snap Crack 05_DDUMAIS_MWP2.wav', 0, -4, 0), ('Justsoundeffects - Transition Whooshes Vol. 1/SWSH_Woodstick Swish 03_JSE_TW1.wav@3.90:1.00', 2, 0, 0)]},
-    ],
+    # It lands as a blade going through rather than a shaft stopping.
     "skill-piercing-shot-impact": [
         "David Dumais Audio - Melee Weapons Sound Effects Pack 1/SWSH_Sword Slash Impact V2 Assorted 18_DDUMAIS_NONE.wav",
         {"layers": [('David Dumais Audio - Melee Weapons Sound Effects Pack 1/SWSH_Sword Slash Impact V2 Assorted 18_DDUMAIS_NONE.wav', -2, 0, 0), ('344 Audio - Historical Weapons Vol. 2/WEAPBlnt_Spear And Stick Impact, Wooden MKH 2_344 Audio_Medieval Weapons Vol 2.wav@4.30:0.60', 0, -6, 0)]},
@@ -553,7 +551,7 @@ def main() -> None:
     trimmer = os.path.join(os.path.dirname(os.path.abspath(__file__)), "trim_sfx.py")
     jobs = []
     for cue, specs in sorted(wanted.items()):
-        if isinstance(specs, str):
+        if isinstance(specs, (str, dict)):
             jobs.append((cue, cue, specs))
         else:
             jobs += [(cue, f"{cue}-{k}", s) for k, s in enumerate(specs, 1)]

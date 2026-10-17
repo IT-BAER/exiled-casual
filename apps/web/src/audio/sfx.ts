@@ -88,7 +88,7 @@ const VOICES: Record<string, Voice> = {
   // a low overhead heave, a sharp tracer crack, and a volley of shafts.
   "skill-heavy-strike-swing": { gain: 0.170, wet: 0.10, vary: 0.06, takes: 3 },
   "skill-ground-slam-swing":  { gain: 0.190, wet: 0.14, vary: 0.05, takes: 3 },
-  "skill-piercing-shot-release": { gain: 0.200, wet: 0.08, vary: 0.06, takes: 3 },
+  "skill-piercing-shot-release": { gain: 0.200, wet: 0.08, vary: 0.06 },
   "skill-piercing-shot-impact":  { gain: 0.280, wet: 0.12, vary: 0.08, takes: 3 },
   "skill-split-arrow-release": { gain: 0.200, wet: 0.08, vary: 0.08, takes: 3 },
   "skill-split-arrow-impact":  { gain: 0.250, wet: 0.10, vary: 0.10, takes: 3 },
