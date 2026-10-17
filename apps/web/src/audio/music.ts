@@ -13,6 +13,8 @@ export const MUSIC_TAKES = 3;
 export const HIDEOUT_MOODS = ["hideout-1", "hideout-2", "hideout-3"] as const;
 /** The "area" every screen outside the game plays: `setMusic(MENU_MUSIC)`. */
 export const MENU_MUSIC = "menu";
+/** The slot `setMusicDead(true)` plays over whatever area is current. */
+export const DEATH_MUSIC = "death";
 
 /** One slot per biome, pinned against BIOMES by the test. */
 export const MUSIC_BY_BIOME: Record<string, string> = {
@@ -28,7 +30,7 @@ const takes = (slot: string) => Array.from({ length: MUSIC_TAKES }, (_, i) => `$
 /** Every track an area (`biomeId` null is the hideout, MENU_MUSIC the menus) can play. */
 export function trackPool(biomeId: string | null): string[] {
   if (biomeId === null) return HIDEOUT_MOODS.flatMap(takes);
-  const slot = biomeId === MENU_MUSIC ? MENU_MUSIC : MUSIC_BY_BIOME[biomeId];
+  const slot = biomeId === MENU_MUSIC || biomeId === DEATH_MUSIC ? biomeId : MUSIC_BY_BIOME[biomeId];
   return slot ? takes(slot) : [];
 }
 
@@ -49,8 +51,11 @@ export const MUSIC_GAIN = 0.1;
 const FADE_IN = 3;
 const FADE_OUT = 2;
 
-/** The area playing: its biome id, null for the hideout, undefined for none. */
+/** The slot playing: a biome id, null for the hideout, DEATH_MUSIC, undefined for none. */
 let area: string | null | undefined;
+/** The area the game last asked for, which death music covers and a revive returns to. */
+let base: string | null | undefined;
+let dead = false;
 let wanted: string | null = null;
 /** Per area, the track it played last, so a return visit starts on another. */
 const lastByArea = new Map<string | null, string>();
@@ -59,10 +64,31 @@ let rotation: ReturnType<typeof setTimeout> | null = null;
 
 /** Called on every area change, beside `setAmbient`. The same area twice is a no-op. */
 export function setMusic(biomeId: string | null): void {
-  if (area === biomeId && wanted !== null) return;
-  stopMusic();
-  area = biomeId;
-  play(pickTrack(biomeId, lastByArea.get(biomeId) ?? null), false);
+  base = biomeId;
+  if (biomeId === MENU_MUSIC) dead = false;
+  sync(false);
+}
+
+/**
+ * The player is down (or back up). The death take crossfades in over the area's, a missing
+ * death file leaves the area music playing, and a revive crossfades back.
+ */
+export function setMusicDead(isDead: boolean): void {
+  if (dead === isDead) return;
+  dead = isDead;
+  sync(true);
+}
+
+/** Play what the state calls for. `soft` keeps the old track until the new one has decoded. */
+function sync(soft: boolean): void {
+  const target = dead ? DEATH_MUSIC : base;
+  if (target === undefined || (area === target && wanted !== null)) return;
+  if (soft) {
+    if (rotation !== null) clearTimeout(rotation);
+    rotation = null;
+  } else halt();
+  area = target;
+  play(pickTrack(target, lastByArea.get(target) ?? null), soft);
 }
 
 /**
@@ -121,6 +147,12 @@ function fadeOut(b: Bus | null): void {
 
 /** Fade the current track out and stop rotating; it is released once stopped. */
 export function stopMusic(): void {
+  base = undefined;
+  dead = false;
+  halt();
+}
+
+function halt(): void {
   area = undefined;
   wanted = null;
   if (rotation !== null) clearTimeout(rotation);

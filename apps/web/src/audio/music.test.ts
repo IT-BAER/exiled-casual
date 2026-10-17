@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { BIOMES } from "@exiled/content-runtime";
-import { HIDEOUT_MOODS, MENU_MUSIC, MUSIC_BY_BIOME, MUSIC_TAKES, pickTrack, trackPool } from "./music";
+import { DEATH_MUSIC, HIDEOUT_MOODS, MENU_MUSIC, MUSIC_BY_BIOME, MUSIC_TAKES, pickTrack, trackPool } from "./music";
 
 /** `fake.ctx` is null until a test installs a stand-in context, as in headless jsdom. */
 const fake = vi.hoisted(() => ({ ctx: null as unknown, categories: [] as unknown[] }));
@@ -34,6 +34,12 @@ describe("trackPool", () => {
     expect(trackPool(MENU_MUSIC)).toEqual(["menu-1", "menu-2", "menu-3"]);
     const areas = [null, ...Object.keys(BIOMES)].flatMap(trackPool);
     for (const t of trackPool(MENU_MUSIC)) expect(areas).not.toContain(t);
+  });
+
+  it("gives the death screen its own takes, shared with no area", () => {
+    expect(trackPool(DEATH_MUSIC)).toEqual(["death-1", "death-2", "death-3"]);
+    const areas = [null, MENU_MUSIC, ...Object.keys(BIOMES)].flatMap(trackPool);
+    for (const t of trackPool(DEATH_MUSIC)) expect(areas).not.toContain(t);
   });
 
   it("is empty for a biome it has no music for", () => {
@@ -219,6 +225,77 @@ describe("setMusic", () => {
     music.setMusic("desert");
     await vi.advanceTimersByTimeAsync(87_000);
     expect(fetched.map(area)).toEqual(["forest", "forest", "desert", "desert"]);
+  });
+
+  it("crossfades from the area take to a death take on death, and back on a same-area revive", async () => {
+    music.setMusic("forest");
+    await flush();
+    music.setMusicDead(true);
+    await flush();
+    expect(fetched.map(area)).toEqual(["forest", "death"]);
+    const [forest, death] = sources;
+    expect(forest!.stopAt).toBe(12);
+    expect(death).toMatchObject({ loop: true, started: true, stopAt: null });
+    expect(death!.ramps.at(-1)).toEqual({ to: music.MUSIC_GAIN, at: 13 });
+    music.setMusicDead(true);
+    music.setMusic("forest");
+    await flush();
+    expect(fetched).toHaveLength(2);
+    music.setMusicDead(false);
+    await flush();
+    expect(fetched.map(area)).toEqual(["forest", "death", "forest"]);
+    expect(track(fetched[2]!)).not.toBe(track(fetched[0]!));
+    expect(death!.stopAt).toBe(12);
+    expect(sources[2]!.started).toBe(true);
+  });
+
+  it("keeps the death music while dead through an area change, and plays the new area on revive", async () => {
+    music.setMusic("forest");
+    await flush();
+    music.setMusicDead(true);
+    await flush();
+    music.setMusic("desert");
+    await flush();
+    expect(fetched.map(area)).toEqual(["forest", "death"]);
+    music.setMusicDead(false);
+    await flush();
+    expect(fetched.map(area)).toEqual(["forest", "death", "desert"]);
+  });
+
+  it("plays death music when the area is entered or loaded already dead", async () => {
+    music.setMusicDead(true);
+    music.setMusic("forest");
+    await flush();
+    expect(fetched.map(area)).toEqual(["death"]);
+  });
+
+  it("chains death takes without repeating one", async () => {
+    vi.useFakeTimers();
+    music.setMusic("forest");
+    await vi.advanceTimersByTimeAsync(0);
+    music.setMusicDead(true);
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(87_000);
+    await vi.advanceTimersByTimeAsync(87_000);
+    const deaths = fetched.map(track).filter((t) => t?.startsWith("death"));
+    expect(deaths).toHaveLength(3);
+    expect(deaths[1]).not.toBe(deaths[0]);
+    expect(deaths[2]).not.toBe(deaths[1]);
+  });
+
+  it("keeps the area music playing when the death takes are missing", async () => {
+    vi.stubGlobal("fetch", (url: string) => {
+      fetched.push(url);
+      return Promise.resolve(url.includes("death")
+        ? { ok: false, status: 404, arrayBuffer: () => Promise.resolve("") }
+        : { ok: true, status: 200, arrayBuffer: () => Promise.resolve(url) });
+    });
+    music.setMusic("forest");
+    await flush();
+    expect(() => music.setMusicDead(true)).not.toThrow();
+    await flush();
+    expect(sources).toHaveLength(1);
+    expect(sources[0]!.stopAt).toBeNull();
   });
 
   it("is silent and fetches nothing without WebAudio", async () => {
