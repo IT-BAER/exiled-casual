@@ -226,7 +226,8 @@ const MONSTER_DEFS: MonsterDef[] = [
     attackDamage: { type: "chaos", amountFixed: HIT.heavy },
     attackCooldownTicks: 45, radiusFixed: fp(0.8),
     defenses: { resPct: resBlock({ chaos: 30 }), armourFixed: fp(2) },
-    onHit: { ailment: "poison", chancePct: 50 },
+    // Its slam carries the roll too, and a slam-sized poison alone was a quarter of the first map's damage at 50.
+    onHit: { ailment: "poison", chancePct: 25 },
     heavy: { windupTicks: 30, radiusFixed: fp(2.6), damageFixed: HEAVY_SLAM, cooldownTicks: 150, rangeFixed: fp(6.5) },
   },
 

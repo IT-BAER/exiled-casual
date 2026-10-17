@@ -74,9 +74,10 @@ export function registerDamageResolve(
       const def = world.get<DefensesC>(ev.target, "defenses");
       if (!health || !def) continue;
 
+      // Armour stops hits, never a DoT tick (both PoE games); a DoT names its victim as source.
       const final = applyDamage(
         { type: damageTypeOf(ev.type), amountFixed: ev.amountFixed },
-        { resPct: def.res, armourFixed: def.armour },
+        { resPct: def.res, armourFixed: ev.source === ev.target ? 0 : def.armour },
       );
       // Energy shield stands in front of life and pays double for chaos. Every
       // hit that touches the shield — even one it fully stops — pushes the
@@ -84,7 +85,10 @@ export function registerDamageResolve(
       let toLife = final;
       const shield = world.get<EnergyShieldC>(ev.target, "energyShield");
       if (shield && shield.maxEs > 0) {
-        const split = absorbWithEnergyShield(final, shield.es, damageTypeOf(ev.type) === "chaos");
+        // Poison and bleeding bypass the shield (PoE2) but, as any damage taken, still delay its recharge.
+        const split = ev.ailment !== undefined
+          ? { toLife: final, esCost: 0 }
+          : absorbWithEnergyShield(final, shield.es, damageTypeOf(ev.type) === "chaos");
         toLife = split.toLife;
         world.set<EnergyShieldC>(ev.target, "energyShield", {
           ...shield,

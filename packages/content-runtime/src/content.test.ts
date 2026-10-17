@@ -523,7 +523,7 @@ describe("on-hit ailments", () => {
       .map((d) => [d.id, d.onHit!.ailment, d.onHit!.chancePct])
       .sort((a, b) => String(a[0]).localeCompare(String(b[0])));
     expect(appliers).toEqual([
-      ["monster.blood_sentinel.v1", "poison", 50],
+      ["monster.blood_sentinel.v1", "poison", 25],
       ["monster.bramble_whelp.v1", "bleeding", 25],
       ["monster.drowned_grubling.v1", "poison", 25],
       ["monster.dune_spitter.v1", "poison", 100],

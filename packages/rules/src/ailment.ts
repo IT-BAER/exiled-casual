@@ -34,11 +34,15 @@ export function burningTickDamage(a: AilmentState): Fixed {
   return Math.trunc(a.stacks * a.dpsFixed * AILMENT_TICK_INTERVAL / 30);
 }
 
-/** One-instance damaging ailments a monster's hit leaves on the player: dps is a share of the hit before mitigation. */
+/**
+ * One-instance damaging ailments a monster's hit leaves on the player: dps is a share of the hit before mitigation.
+ * PoE2's single-instance rule, but far above its 20%/2s and 15%/5s: the casual passes shrank monster hits to
+ * fractions of a point, and at PoE2's numbers both dealt 3-7% of what kills a pack's target (`balance.test.ts`).
+ */
 export const SINGLE_AILMENTS = {
-  poison: { dpsPct: 20, durationTicks: 60, from: ["physical", "chaos"] },
+  poison: { dpsPct: 50, durationTicks: 150, from: ["physical", "chaos"] },
   // Flat: PoE2's bleed hurts more while moving; this one does not.
-  bleeding: { dpsPct: 15, durationTicks: 150, from: ["physical"] },
+  bleeding: { dpsPct: 60, durationTicks: 210, from: ["physical"] },
 } as const;
 export type SingleAilmentKind = keyof typeof SINGLE_AILMENTS;
 

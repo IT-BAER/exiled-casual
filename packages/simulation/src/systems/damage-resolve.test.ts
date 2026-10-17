@@ -27,6 +27,31 @@ it("applies two enqueued events, floored at 0", () => {
   expect(world.get<Health>(t2, "health")!.life).toBe(fp(30) - fp(10));
 });
 
+it("armour stops part of a physical hit but none of a bleeding tick", () => {
+  const sim = new Simulation();
+  const { world } = sim;
+  const t = world.create();
+  world.set<Health>(t, "health", { life: fp(40), maxLife: fp(40) });
+  world.set<DefensesC>(t, "defenses", { res: resBlock(), armour: fp(89) });
+  sim.register("testProducer", () => {
+    sim.enqueueDamage({ target: t, source: t, amountFixed: fp(0.5), type: 1, ailment: "bleeding" });
+  });
+  registerDamageResolve(sim);
+  sim.step();
+  expect(world.get<Health>(t, "health")!.life).toBe(fp(40) - fp(0.5));
+
+  const hit = new Simulation();
+  const h = hit.world.create();
+  hit.world.set<Health>(h, "health", { life: fp(40), maxLife: fp(40) });
+  hit.world.set<DefensesC>(h, "defenses", { res: resBlock(), armour: fp(89) });
+  hit.register("testProducer", () => {
+    hit.enqueueDamage({ target: h, source: 99, amountFixed: fp(0.5), type: 1 });
+  });
+  registerDamageResolve(hit);
+  hit.step();
+  expect(hit.world.get<Health>(h, "health")!.life).toBeGreaterThan(fp(40) - fp(0.5));
+});
+
 it("life floors at 0, never negative", () => {
   const sim = new Simulation();
   const { world } = sim;
@@ -161,7 +186,7 @@ describe("spawn grace", () => {
 });
 
 describe("energy shield stands in front of life", () => {
-  function hitPlayer(opts: { es: number; maxEs: number; hit: number; type: number; tick?: number }) {
+  function hitPlayer(opts: { es: number; maxEs: number; hit: number; type: number; tick?: number; ailment?: "poison" | "bleeding" }) {
     const sim = new Simulation();
     const w = sim.world;
     const p = w.create();
@@ -169,7 +194,9 @@ describe("energy shield stands in front of life", () => {
     w.set<DefensesC>(p, "defenses", { res: resBlock(), armour: 0 });
     w.set<EnergyShieldC>(p, "energyShield", { es: opts.es, maxEs: opts.maxEs, rechargeAtTick: 0 });
     sim.register("testProducer", () => {
-      sim.enqueueDamage({ target: p, source: 99, amountFixed: opts.hit, type: opts.type });
+      sim.enqueueDamage(opts.ailment
+        ? { target: p, source: p, amountFixed: opts.hit, type: opts.type, ailment: opts.ailment }
+        : { target: p, source: 99, amountFixed: opts.hit, type: opts.type });
     });
     registerDamageResolve(sim);
     sim.step();
@@ -201,6 +228,15 @@ describe("energy shield stands in front of life", () => {
   it("any hit pushes the recharge back by the full delay", () => {
     const r = hitPlayer({ es: fp(50), maxEs: fp(50), hit: fp(1), type: 1 });
     expect(r.shield.rechargeAtTick).toBe(ES_RECHARGE_DELAY_TICKS);
+  });
+
+  it("poison and bleeding go past it to life, and still push the recharge back", () => {
+    for (const [ailment, type] of [["poison", 4], ["bleeding", 1]] as const) {
+      const r = hitPlayer({ es: fp(50), maxEs: fp(50), hit: fp(2), type, ailment });
+      expect(r.shield.es, ailment).toBe(fp(50));
+      expect(r.life, ailment).toBe(fp(98));
+      expect(r.shield.rechargeAtTick, ailment).toBe(ES_RECHARGE_DELAY_TICKS);
+    }
   });
 });
 
@@ -284,16 +320,16 @@ describe("a monster's hit leaves its ailment on the player", () => {
     return { poison: w.get<AilmentC>(p, "poison"), bleeding: w.get<AilmentC>(p, "bleeding"), sim };
   }
 
-  it("a certain chance poisons for 2 s at 20% of the hit before mitigation", () => {
+  it("a certain chance poisons for 5 s at 50% of the hit before mitigation", () => {
     const r = hits("m.poisoner", [{ amount: fp(10), type: 4 }], (w, p) =>
       w.set<DefensesC>(p, "defenses", { res: resBlock({ chaos: 75 }), armour: 0 }));
-    expect(r.poison).toEqual({ kind: "poison", stacks: 1, dps: fp(2), expiryTick: 60 });
+    expect(r.poison).toEqual({ kind: "poison", stacks: 1, dps: fp(5), expiryTick: 150 });
     expect(r.bleeding).toBeUndefined();
   });
 
-  it("a certain chance bleeds for 5 s at 15% of a physical hit", () => {
+  it("a certain chance bleeds for 7 s at 60% of a physical hit", () => {
     const r = hits("m.bleeder", [{ amount: fp(10), type: 1 }]);
-    expect(r.bleeding).toEqual({ kind: "bleeding", stacks: 1, dps: fp(1.5), expiryTick: 150 });
+    expect(r.bleeding).toEqual({ kind: "bleeding", stacks: 1, dps: fp(6), expiryTick: 210 });
   });
 
   it("a species without onHit leaves nothing", () => {
@@ -343,11 +379,11 @@ describe("a monster's hit leaves its ailment on the player", () => {
 
   it("a weaker hit never replaces a stronger poison; an equal or stronger one refreshes it", () => {
     const weaker = hits("m.poisoner", [{ tick: 0, amount: fp(20), type: 4 }, { tick: 10, amount: fp(10), type: 4 }]);
-    expect(weaker.poison).toEqual({ kind: "poison", stacks: 1, dps: fp(4), expiryTick: 60 });
+    expect(weaker.poison).toEqual({ kind: "poison", stacks: 1, dps: fp(10), expiryTick: 150 });
     const equal = hits("m.poisoner", [{ tick: 0, amount: fp(20), type: 4 }, { tick: 10, amount: fp(20), type: 4 }]);
-    expect(equal.poison).toEqual({ kind: "poison", stacks: 1, dps: fp(4), expiryTick: 70 });
+    expect(equal.poison).toEqual({ kind: "poison", stacks: 1, dps: fp(10), expiryTick: 160 });
     const stronger = hits("m.poisoner", [{ tick: 0, amount: fp(10), type: 4 }, { tick: 10, amount: fp(30), type: 4 }]);
-    expect(stronger.poison).toEqual({ kind: "poison", stacks: 1, dps: fp(6), expiryTick: 70 });
+    expect(stronger.poison).toEqual({ kind: "poison", stacks: 1, dps: fp(15), expiryTick: 160 });
   });
 
   it("the death recap names each DoT tick by its own ailment", () => {

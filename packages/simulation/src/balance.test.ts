@@ -537,16 +537,20 @@ function secondsToClearPack(def: MonsterDef, count: number): number {
  */
 function secondsToKillIdlePlayer(biomeId: BiomeId): number {
   const r = rig();
+  spawnBiomePack(r.world, biomeId);
+  return ticksToDeath(r) / HZ;
+}
+
+function spawnBiomePack(world: World, biomeId: BiomeId): void {
   const pool = MONSTER_POOLS[biomeId];
   pool.forEach((entry, k) => {
     const def = MONSTERS.get(entry.defId)!;
     const sx = fp((k - (pool.length - 1) / 2) * 4);
     for (let i = 0; i < PACK_COUNT[def.archetype]; i++) {
       const slot = PACK_SPREAD[i % PACK_SPREAD.length]!;
-      spawnMonster(r.world, def, sx + slot.dx, SPAWN_Y + slot.dy, false);
+      spawnMonster(world, def, sx + slot.dx, SPAWN_Y + slot.dy, false);
     }
   });
-  return ticksToDeath(r) / HZ;
 }
 
 describe("archetype time-to-kill (Tier 1, reference character)", () => {
@@ -568,6 +572,34 @@ describe("archetype time-to-kill (Tier 1, reference character)", () => {
       expect(seconds).toBeGreaterThanOrEqual(band.min);
       expect(seconds).toBeLessThanOrEqual(band.max);
     });
+  }
+});
+
+it("poison and bleeding deal 12-28% of what kills a stationary character, in every biome", () => {
+  // A debuff on the bar and on the body that deals 3% of the damage is noise.
+  // Averaged over seeds, because one heavy's slam rolling poison or not swings a
+  // single run by 20 points. Measured: vaal_stone 17%, desert 19, swamp 15,
+  // forest 23, coast 16 (poison 50%/s for 5s, bleed 60%/s for 7s).
+  for (const biome of ["vaal_stone", "desert", "swamp", "forest", "coast"] as const) {
+    let dot = 0;
+    let all = 0;
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+      const { sim, world, playerEntity } = createCombatSim(seed, { monsters: false });
+      spawnBiomePack(world, biome);
+      const enqueue = sim.enqueueDamage.bind(sim);
+      // Reference character: no armour, no resistance, so the queued amount is what lands.
+      sim.enqueueDamage = (ev) => {
+        if (ev.target === playerEntity) {
+          all += ev.amountFixed;
+          if (ev.ailment !== undefined) dot += ev.amountFixed;
+        }
+        enqueue(ev);
+      };
+      ticksToDeath({ sim, world, player: playerEntity });
+    }
+    const pct = (100 * dot) / all;
+    expect(pct, biome).toBeGreaterThanOrEqual(12);
+    expect(pct, biome).toBeLessThanOrEqual(28);
   }
 });
 

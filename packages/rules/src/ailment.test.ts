@@ -60,13 +60,13 @@ describe("burningTickDamage", () => {
 });
 
 describe("applySingleAilment (poison, bleeding)", () => {
-  it("poison takes 20% of a physical or chaos hit for 2 s", () => {
-    expect(applySingleAilment("poison", undefined, fp(10), "chaos", 5)).toEqual({ dpsFixed: fp(2), expiryTick: 65 });
-    expect(applySingleAilment("poison", undefined, fp(10), "physical", 5)).toEqual({ dpsFixed: fp(2), expiryTick: 65 });
+  it("poison takes 50% of a physical or chaos hit for 5 s", () => {
+    expect(applySingleAilment("poison", undefined, fp(10), "chaos", 5)).toEqual({ dpsFixed: fp(5), expiryTick: 155 });
+    expect(applySingleAilment("poison", undefined, fp(10), "physical", 5)).toEqual({ dpsFixed: fp(5), expiryTick: 155 });
   });
 
-  it("bleeding takes 15% of a physical hit for 5 s", () => {
-    expect(applySingleAilment("bleeding", undefined, fp(10), "physical", 0)).toEqual({ dpsFixed: fp(1.5), expiryTick: 150 });
+  it("bleeding takes 60% of a physical hit for 7 s", () => {
+    expect(applySingleAilment("bleeding", undefined, fp(10), "physical", 0)).toEqual({ dpsFixed: fp(6), expiryTick: 210 });
   });
 
   it("a hit of the wrong type carries nothing", () => {
@@ -77,10 +77,10 @@ describe("applySingleAilment (poison, bleeding)", () => {
   });
 
   it("a weaker hit leaves the live one alone; a stronger or equal one replaces and refreshes", () => {
-    const live = { dpsFixed: fp(2), expiryTick: 30 };
+    const live = { dpsFixed: fp(5), expiryTick: 30 };
     expect(applySingleAilment("poison", live, fp(5), "chaos", 20)).toBe(live);
-    expect(applySingleAilment("poison", live, fp(10), "chaos", 20)).toEqual({ dpsFixed: fp(2), expiryTick: 80 });
-    expect(applySingleAilment("poison", live, fp(20), "chaos", 20)).toEqual({ dpsFixed: fp(4), expiryTick: 80 });
+    expect(applySingleAilment("poison", live, fp(10), "chaos", 20)).toEqual({ dpsFixed: fp(5), expiryTick: 170 });
+    expect(applySingleAilment("poison", live, fp(20), "chaos", 20)).toEqual({ dpsFixed: fp(10), expiryTick: 170 });
   });
 });
 
