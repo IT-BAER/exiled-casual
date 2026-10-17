@@ -1,4 +1,4 @@
-import { Vector3 } from "@babylonjs/core";
+import { Frustum, Plane, Vector3 } from "@babylonjs/core";
 import type { Scene } from "@babylonjs/core";
 import type { Mesh } from "@babylonjs/core";
 import { blinkBurst, fxProfile, meleeImpact, setStreakLength } from "./skill-fx";
@@ -71,12 +71,14 @@ const BLINK_Y = 0.9;
  * rhythm of hits rather than a monster that is permanently white.
  */
 const HIT_FLASH_TICKS = 3;
-/**
- * A monster this far from the player is past any frame the camera can show (the
- * ground reaches ~10.6 units at full zoom-out, ~13 on an ultrawide), so it is
- * disabled and its clips paused until it walks back into range.
- */
+/** A monster this far from the player sleeps whatever the camera says (the ground reaches ~10.6-13 units). */
 const SLEEP_RANGE = 20;
+/** A monster sleeps once its bounding sphere is this far outside the view frustum, so it is posed before it shows. */
+const SLEEP_MARGIN = 2;
+/** Bounding sphere of a monster body, before the margin. */
+const BODY_RADIUS = 1.5;
+/** Past this distance a visible monster cuts between clips instead of cross-fading. */
+const BLEND_RANGE = 9;
 
 /**
  * How far a bolt is assumed to be flying when the cursor's own point is not
@@ -118,6 +120,19 @@ export interface ActionAnimation {
  * edge showed the first 30% of a one-second swing, and the bolt left a hand that
  * was still lifting.
  */
+/** Fresh planes each call: `getTransformationMatrix()` is a cached product that lags a frame behind. */
+function viewPlanes(scene: Scene): Plane[] | null {
+  const camera = scene.activeCamera;
+  if (!camera) return null;
+  return Frustum.GetPlanes(camera.getViewMatrix().multiply(camera.getProjectionMatrix()));
+}
+
+/** Whether a body's sphere, grown by SLEEP_MARGIN, touches the frustum. */
+function inFrustum(planes: Plane[], at: Vector3): boolean {
+  const reach = BODY_RADIUS + SLEEP_MARGIN;
+  return planes.every((p) => p.signedDistanceTo(new Vector3(at.x, at.y + 1, at.z)) >= -reach);
+}
+
 export function syncActionAnimation(
   rig: ActionAnimation | null,
   wasCasting: boolean,
@@ -503,6 +518,7 @@ export class SnapshotRenderer {
       : [];
 
     // Entities
+    const view = viewPlanes(this.scene);
     for (const e of next.entities) {
       liveIds.add(e.id);
       const prevE = prev?.entities.find((p) => p.id === e.id);
@@ -582,9 +598,12 @@ export class SnapshotRenderer {
       const mesh = this.meshes.get(e.id);
       if (!mesh) continue;
       if (e.kind === "monster") {
-        const far = Math.hypot(e.x - next.player.x, e.y - next.player.y) > SLEEP_RANGE;
+        const dist = Math.hypot(e.x - next.player.x, e.y - next.player.y);
+        const far = dist > SLEEP_RANGE || (view !== null && !inFrustum(view, mesh.position));
         if (mesh.isEnabled(false) === far) mesh.setEnabled(!far);
-        creatureOf(mesh)?.setAwake(!far);
+        const rig = creatureOf(mesh);
+        rig?.setAwake(!far);
+        rig?.setBlending(dist <= BLEND_RANGE);
       }
       if (e.kind === "projectile" && fxProfile(e.skillId).arrow) {
         // Floored at the aim point: past it the arrow flies level, not into the floor.

@@ -433,6 +433,31 @@ describe("atmosphere", () => {
     expect(mesh.scaling.x).toBeCloseTo(base);
   });
 
+  it("monsters outside the view frustum plus margin sleep, and wake before they can be seen", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const renderer = new SnapshotRenderer(scene);
+    const at = (tick: number, xs: number[]) =>
+      makeSnapshot({ tick, entities: xs.map((x, i) => ({ id: i + 1, kind: "monster" as const, x, y: 0, life: 100, maxLife: 100 })) });
+    const awake = (id: number) => scene.getMeshByName(`entity-${id}`)!.isEnabled(false);
+    renderer.apply(null, at(1, [4, 40, 40]), 1);
+    expect(awake(1), "on screen").toBe(true);
+    expect(awake(2), "far").toBe(false);
+    // Walks in from beyond the distance cap, one body at a time.
+    let x = 40;
+    const seen: number[] = [];
+    for (let t = 2; x > 4; t++) {
+      x -= 1;
+      renderer.apply(null, at(t, [4, x, 40]), 1);
+      if (awake(2)) seen.push(x);
+    }
+    expect(seen.length).toBeGreaterThan(0);
+    // Awake no later than the edge of the ground the camera reaches, margin included.
+    expect(Math.max(...seen)).toBeGreaterThanOrEqual(12);
+    expect(Math.max(...seen), "not merely inside the 20-unit cap").toBeLessThanOrEqual(17);
+    expect(awake(3)).toBe(false);
+  });
+
   it("an arrow that hits a monster lands a hit and leaves nothing in the body", () => {
     engine = new NullEngine();
     const { scene } = createScene(engine);

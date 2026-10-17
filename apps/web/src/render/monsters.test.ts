@@ -270,6 +270,48 @@ describe("monsters asset", () => {
     expect(log.filter((l) => l.startsWith("start"))).toEqual([`start ${species}|walk`]);
   });
 
+  it("blends clips only while near: far bodies cut, and the flag changes at a start, never mid-ramp", () => {
+    const groups = new Map<string, { enableBlending: boolean }>();
+    const group = (name: string): AnimationGroup => {
+      const g = {
+        name,
+        speedRatio: 1,
+        enableBlending: false,
+        blendingSpeed: 0,
+        start: () => {},
+        stop: () => {},
+        dispose: () => {},
+        onAnimationGroupEndObservable: { addOnce: () => {} },
+      };
+      groups.set(name, g);
+      return g as unknown as AnimationGroup;
+    };
+    const species = "monster.cinder_imp.v1";
+    const rig = new CreatureRig(
+      {
+        animationGroups: ["walk", "idle", "attack"].map((c) => group(`${species}|${c}`)),
+        rootNodes: [],
+        skeletons: [],
+        dispose: () => {},
+      } as unknown as InstantiatedEntries,
+      species,
+    );
+    const walk = groups.get(`${species}|walk`)!;
+    rig.setLocomotion(3);
+    expect(walk.enableBlending, "near: cross-fades").toBe(true);
+
+    rig.setBlending(false);
+    expect(walk.enableBlending, "a running clip keeps its ramp").toBe(true);
+    rig.setLocomotion(0);
+    rig.setLocomotion(3);
+    expect(walk.enableBlending, "far: the next start cuts").toBe(false);
+
+    rig.setBlending(true);
+    rig.setLocomotion(0);
+    rig.setLocomotion(3);
+    expect(walk.enableBlending, "back inside: blends again").toBe(true);
+  });
+
   /**
    * Seventeen creatures share four hide sheets and one bone material. If that
    * ever stops being true the file is carrying per-species textures, and the
