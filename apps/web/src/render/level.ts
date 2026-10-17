@@ -20,6 +20,7 @@ import {
 } from "./engine";
 import { buildCliffs, CLIFF_MESH_NAME } from "./cliffs";
 import { setContactBand } from "./contact-band";
+import { edgeFadeMaterial } from "./edge-fade";
 import { tintHaze } from "./haze";
 import {
   DEBRIS_MESH_PREFIX,
@@ -940,7 +941,7 @@ export function buildLevel(
       buildCliffs(scene, grid, material);
       buildRocks(scene, clear(scatterRubble(rockCells, cellSize)), material);
       buildRocks(scene, clear(scatterDebris(floorCells)), material, DEBRIS_MESH_PREFIX);
-      buildRocks(scene, scatterRampart(edgeCells), material, RAMPART_MESH_PREFIX);
+      buildRocks(scene, scatterRampart(edgeCells), edgeFadeMaterial(scene, material, grid), RAMPART_MESH_PREFIX);
       // Dry scrub where a dressed biome's rock meets the ground, as on the coast.
       if (GROUND_SETS[tilesetId]) buildRocks(scene, clear(scatterFootWeed(rockCells)), weedMaterial(scene), WEED_MESH_PREFIX);
     }
