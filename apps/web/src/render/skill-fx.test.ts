@@ -12,10 +12,7 @@ import {
   BLINK_NAME,
   BLINK_STREAK_NAME,
   BLINK_ALPHA,
-  BOLT_BURST_NAME,
   BOLT_TRAIL_NAME,
-  BOLT_SMOKE_NAME,
-  BOLT_BLAST_NAME,
   emberBurst,
   CINDER_NAME,
   FLASH_NAME,
@@ -30,8 +27,8 @@ import {
   ARROW_LENGTH,
   PROJECTILE_ARROW_SCALE,
 } from "./skill-fx";
-import { fxPools } from "./fx-pool";
-import { SWING_ARC_NAME, swingStyle } from "./swing-arc";
+import { FX_SHARDS_NAME, fxPools } from "./fx-pool";
+import { SWING_ARC_NAME, swingArcs, swingStyle } from "./swing-arc";
 
 let engine: NullEngine | undefined;
 afterEach(() => {
@@ -57,16 +54,36 @@ function systems(scene: Scene, name: string): ParticleSystem[] {
 }
 
 describe("ember bolt", () => {
-  it("flies with a spark trail emitted from the bolt itself", () => {
+  it("sheds flame and embers from wherever the bolt flies, left behind in the world", () => {
     const scene = newScene();
-    const mesh = makeMesh(scene, "projectile", "entity-7");
+    const mesh = makeMesh(scene, "projectile", "entity-7", Vector3.Zero(), undefined, "skill.ember_bolt.v1");
+    const pools = fxPools(scene);
+    for (let i = 1; i <= 8; i++) {
+      mesh.position.set(i * 0.5, 0.8, 0);
+      mesh.computeWorldMatrix(true);
+      scene.onBeforeRenderObservable.notifyObservers(scene);
+    }
+    expect(pools.shards.emitted).toBeGreaterThan(0);
+    expect(pools.glow.emitted).toBeGreaterThan(0);
+    // Along the path it flew, not riding on the head.
+    const xs = pools.glow.positions().map((p) => p.x);
+    expect(Math.min(...xs)).toBeLessThan(3);
+    expect(Math.max(...xs)).toBeLessThanOrEqual(4.01);
+  });
 
-    const [trail] = systems(scene, BOLT_TRAIL_NAME);
-    expect(trail).toBeDefined();
-    // The mesh, not a Vector3: the emit point has to follow the bolt, while the
-    // particles it already dropped stay behind in world space.
-    expect(trail!.emitter).toBe(mesh);
-    expect(trail!.blendMode).toBe(ParticleSystem.BLENDMODE_ADD);
+  it("draws no fire with a particle system, a flipbook or a sprite sheet", () => {
+    const scene = newScene();
+    for (const id of ["skill.ember_bolt.v1", "skill.ember_spark.v1"]) {
+      const mesh = makeMesh(scene, "projectile", `entity-${id}`, Vector3.Zero(), undefined, id);
+      mesh.dispose();
+    }
+    emberBurst(scene, Vector3.Zero());
+    warmSkillFx(scene);
+    for (const ps of scene.particleSystems as ParticleSystem[]) {
+      expect(ps.isAnimationSheetEnabled, ps.name).toBe(false);
+      expect((ps.particleTexture as Texture | null)?.url ?? "", ps.name).not.toContain("fire_sheet");
+    }
+    expect(scene.textures.some((t) => (t as Texture).url?.includes("fire_sheet"))).toBe(false);
   });
 
   it("strings its ribbon at the bolt, never back to the world origin", () => {
@@ -116,58 +133,20 @@ describe("ember bolt", () => {
     expect(trailObservers()).toBe(0);
   });
 
-  it("burns each spark through the flipbook over its own lifetime", () => {
-    const scene = newScene();
-    makeMesh(scene, "projectile", "entity-7");
-    const trail = systems(scene, BOLT_TRAIL_NAME)[0]!;
-
-    expect(trail.isAnimationSheetEnabled).toBe(true);
-    expect(trail.startSpriteCellID).toBe(0);
-    expect(trail.endSpriteCellID).toBeGreaterThan(0);
-    // 0 does not mean "no animation": it means Babylon fits the whole sheet to
-    // the particle's life, which is the only reason the flame dies in step with
-    // its own fade.
-    expect(trail.spriteCellChangeSpeed).toBe(0);
-  });
-
-  it("shrinks its sparks by size gradient, which is what actually sets the size", () => {
-    const scene = newScene();
-    makeMesh(scene, "projectile", "entity-7");
-    const trail = systems(scene, BOLT_TRAIL_NAME)[0]!;
-
-    // Once a size gradient exists Babylon stops reading minSize/maxSize at all,
-    // so the curve is the only place the size can come from.
-    const stops = trail.getSizeGradients() ?? [];
-    expect(stops.length).toBeGreaterThan(1);
-    expect(stops[stops.length - 1]!.factor1).toBeLessThan(stops[0]!.factor1);
-    expect(trail.maxScaleX).toBeGreaterThan(trail.minScaleX);
-  });
-
   it("bursts where it died, because the sim disposing the mesh IS the impact", () => {
     const scene = newScene();
     const mesh = makeMesh(scene, "projectile", "entity-7");
     mesh.position.set(4, 0.8, -2);
     mesh.computeWorldMatrix(true);
-
-    expect(systems(scene, BOLT_BURST_NAME)).toHaveLength(0);
+    const pools = fxPools(scene);
+    const before = pools.shards.emitted + pools.glow.emitted;
     mesh.dispose();
-
-    const [impact] = systems(scene, BOLT_BURST_NAME);
-    expect(impact).toBeDefined();
-    expect(impact!.emitter).toBeInstanceOf(Vector3);
-    expect((impact!.emitter as Vector3).x).toBeCloseTo(4);
-    expect((impact!.emitter as Vector3).z).toBeCloseTo(-2);
-    // One shot that cleans itself up, or every cast leaks a system.
-    expect(impact!.manualEmitCount).toBeGreaterThan(0);
-    expect(impact!.disposeOnStop).toBe(true);
-    expect(impact!.targetStopDuration).toBeGreaterThan(0);
-
-    // Babylon disposes any system emitting from the mesh along with it, so a
-    // bolt that has landed leaves nothing behind but its burst.
-    expect(systems(scene, BOLT_TRAIL_NAME)).toHaveLength(0);
+    expect(pools.shards.emitted + pools.glow.emitted).toBeGreaterThan(before);
+    const near = pools.glow.positions().filter((p) => Math.hypot(p.x - 4, p.z + 2) < 0.5);
+    expect(near.length).toBeGreaterThan(0);
 
     // No floor ring: how big a hit was is the struck body's spray, not a decal.
-    expect(scene.getMeshByName("fx-shockwave")).toBeNull();
+    expect(pools.ring.live).toBe(0);
     const light = scene.getLightByName(FLASH_NAME) as PointLight | null;
     expect(light).not.toBeNull();
     expect(light!.intensity).toBeGreaterThan(0);
@@ -176,50 +155,43 @@ describe("ember bolt", () => {
     expect(light!.position.x).toBeCloseTo(4);
     expect(light!.position.z).toBeCloseTo(-2);
     expect(light!.position.y).toBeGreaterThanOrEqual(1.5);
-    // A pool around the hit, not the view: PBR ignores `range` unless the
-    // falloff is glTF's, which fades to zero at it.
     expect(light!.falloffType).toBe(Light.FALLOFF_GLTF);
     expect(light!.range).toBeLessThanOrEqual(5);
   });
 
-  it("gives the flame sheet an alpha channel, or fog tints the black around each flame into a square", () => {
+  it("stops shedding the moment it lands: no per-frame loop outlives the bolt", async () => {
     const scene = newScene();
-    const url = (emberBurst(scene, Vector3.Zero()).particleTexture as Texture).url;
-    // An opaque sheet is additive black that fog turns into fog colour, and a
-    // burst stacks those quads into grey boxes.
-    expect(webpHasAlpha(url)).toBe(true);
+    // The shared flash and pools stand once per scene; only per-bolt loops may not stay.
+    warmSkillFx(scene);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const before = scene.onBeforeRenderObservable.observers.length;
+    for (let i = 0; i < 4; i++) makeMesh(scene, "projectile", `entity-${i}`, Vector3.Zero(), undefined, "skill.ember_bolt.v1").dispose();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(scene.onBeforeRenderObservable.observers.length).toBe(before);
   });
 
-  it("leaves soft smoke over the hit that outlives the fire", () => {
-    const scene = newScene();
-    const fire = emberBurst(scene, new Vector3(4, 0.8, -2));
-    const smoke = systems(scene, BOLT_SMOKE_NAME)[0]!;
-    expect(smoke).toBeTruthy();
-    // Normally blended, so it can darken and veil what is behind it; additive
-    // "smoke" is only ever light.
-    expect(smoke.blendMode).toBe(ParticleSystem.BLENDMODE_STANDARD);
-    expect((smoke.emitter as Vector3).x).toBeCloseTo(4);
-    expect((smoke.emitter as Vector3).z).toBeCloseTo(-2);
-    expect(smoke.maxLifeTime).toBeGreaterThan(fire.maxLifeTime * 2);
-    expect(smoke.disposeOnStop).toBe(true);
-    // Its shape is the texture's alpha: an opaque sheet here IS a grey square.
-    const url = (smoke.particleTexture as Texture).url;
-    expect(webpHasAlpha(url)).toBe(true);
+  it("lands Ember Bolt as a fireball with smoke, and Ember Spark as a small dry pop", () => {
+    const burstOf = (id: string) => {
+      const scene = newScene();
+      emberBurst(scene, new Vector3(4, 0.8, -2), SKILL_FX[id]);
+      const p = fxPools(scene);
+      const out = { shards: p.shards.emitted, glow: p.glow.emitted, smoke: p.smoke.emitted };
+      engine?.dispose();
+      return out;
+    };
+    const bolt = burstOf("skill.ember_bolt.v1");
+    const spark = burstOf("skill.ember_spark.v1");
+    expect(bolt.glow).toBeGreaterThan(spark.glow);
+    expect(bolt.shards).toBeGreaterThan(spark.shards);
+    expect(bolt.smoke).toBeGreaterThan(0);
+    expect(spark.smoke).toBe(0);
+    expect(SKILL_FX["skill.ember_bolt.v1"]!.blast!).toBeGreaterThan(SKILL_FX["skill.ember_spark.v1"]!.blast! * 2);
   });
 
-  it("bursts as a small fireball that swells, and the smoke stays second to the fire", () => {
-    const scene = newScene();
-    const sparks = emberBurst(scene, new Vector3(4, 0.8, -2));
-    const blast = systems(scene, BOLT_BLAST_NAME)[0]!;
-    expect(blast).toBeTruthy();
-    expect(blast.blendMode).toBe(ParticleSystem.BLENDMODE_ADD);
-    const size = blast.getSizeGradients()!;
-    expect(size[size.length - 1]!.factor1).toBeGreaterThan(size[0]!.factor1);
-    expect(blast.disposeOnStop).toBe(true);
-    // A starter skill: a few big flames, not a second spark shower.
-    expect(blast.manualEmitCount).toBeLessThanOrEqual(8);
-    const smoke = systems(scene, BOLT_SMOKE_NAME)[0]!;
-    expect(smoke.manualEmitCount * 4).toBeLessThanOrEqual(sparks.manualEmitCount);
+  it("crackles Ember Spark sideways in flight, which Ember Bolt's heavy wake does not", () => {
+    expect(SKILL_FX["skill.ember_spark.v1"]!.crackle!).toBeGreaterThan(0);
+    expect(SKILL_FX["skill.ember_bolt.v1"]!.crackle ?? 0).toBe(0);
+    expect(SKILL_FX["skill.ember_bolt.v1"]!.flames!).toBeGreaterThan(SKILL_FX["skill.ember_spark.v1"]!.flames ?? 0);
   });
 
   it("colours its head from its own skill, not whichever projectile spawned first", () => {
@@ -445,19 +417,19 @@ describe("warmSkillFx", () => {
     expect(light).not.toBeNull();
     expect(light!.intensity).toBe(0);
 
-    // The burst and the spray hosts are live, so their shaders compile behind
+    // The pools and the spray hosts are live, so their shaders compile behind
     // the loading plate instead of on the first hit.
-    expect(systems(scene, BOLT_BURST_NAME)).toHaveLength(1);
+    expect(scene.getMeshByName(FX_SHARDS_NAME)).not.toBeNull();
     expect(scene.getMeshByName(`${SPRAY_NAME}-blood`)).not.toBeNull();
     expect(scene.getMeshByName(`${SPRAY_NAME}-grit`)).not.toBeNull();
   });
 
-  it("keeps a fire and a wisp system alive, so a burst never frees the shared shader and sheet", () => {
+  it("keeps a wisp system alive, so a blink never frees the shared shader and texture", () => {
     const scene = newScene();
     warmSkillFx(scene);
     warmSkillFx(scene);
     const keep = systems(scene, FX_KEEPALIVE_NAME);
-    expect(keep).toHaveLength(2);
+    expect(keep).toHaveLength(1);
     expect(keep.every((p) => !p.isStarted() && p.particleTexture !== null)).toBe(true);
   });
 

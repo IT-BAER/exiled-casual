@@ -17,7 +17,7 @@ import { Mesh } from "@babylonjs/core";
 import type { AbstractMesh, Scene } from "@babylonjs/core";
 import { hitSpray } from "./hit-spray";
 import { hitSparkle } from "./hit-sparkle";
-import { fxPools } from "./fx-pool";
+import { clearFxPools, fxPools } from "./fx-pool";
 import { swingArcs, swingStyle } from "./swing-arc";
 
 /**
@@ -43,7 +43,6 @@ const EMBER_CRACKS = "/textures/fx/ember_cracks_v1.webp";
  *  their own: the colour gradient is the whole effect. */
 const WISP = "/textures/fx/haze.webp";
 /** The same blob as RGBA, white with the blob as alpha, for normally blended smoke. */
-const SMOKE_PUFF = "/textures/fx/smoke_puff.webp";
 
 /**
  * The sheet is already orange, so the colour gradient is an ALPHA envelope and
@@ -242,6 +241,14 @@ export interface FxProfile {
   motes?: number;
   /** How an arrow lands: a chip back off the face, a spray out the far side, or a few splinters. */
   arrowImpact?: "chip" | "pierce" | "splinter";
+  /** Flame tongues a fire bolt leaves per unit flown: swelling geometric balls. */
+  flames?: number;
+  /** Sideways crackle sparks per unit flown. */
+  crackle?: number;
+  /** Fireball diameter at the impact, shards it throws, and smoke puffs it leaves. */
+  blast?: number;
+  burstShards?: number;
+  smoke?: number;
 }
 
 /** What a monster's bolt and any unmapped skill draw: today's ember bolt. */
@@ -257,6 +264,10 @@ export const FALLBACK_FX: FxProfile = {
   flash: 0.5,
   flightCue: "skill-ember-bolt-flight",
   impactCue: "skill-ember-bolt-impact",
+  flames: 3,
+  blast: 1.2,
+  burstShards: 22,
+  smoke: 3,
 };
 
 /** The bow's base: an arrow, no flight bed, a melee-style hit. */
@@ -279,7 +290,13 @@ export const SKILL_FX: Record<string, FxProfile> = {
     emitRate: 110,
     sizeStart: 0.6,
     sizeEnd: 0.12,
+    lifeMin: 0.18,
+    lifeMax: 0.32,
     flash: 0.6,
+    flames: 5,
+    blast: 1.9,
+    burstShards: 32,
+    smoke: 5,
   },
   // The free fallback, and it must read as one: a small pale mote, thin and dry.
   "skill.ember_spark.v1": {
@@ -293,6 +310,11 @@ export const SKILL_FX: Record<string, FxProfile> = {
     lifeMin: 0.03,
     lifeMax: 0.07,
     flash: 0.3,
+    flames: 0,
+    crackle: 2.5,
+    blast: 0.45,
+    burstShards: 10,
+    smoke: 0,
     // The fire bed is Ember Bolt's: a free mote carrying it would sound like the big spell.
     flightCue: null,
     impactCue: "skill-ember-spark-impact",
@@ -354,6 +376,8 @@ export function fxProfile(skillId: string | undefined): FxProfile {
 }
 
 export const BOLT_TRAIL_NAME = "fx-bolt-trail";
+/** The speed a profile's `emitRate` is quoted at (Ember Bolt's 12 u/s): it sheds per unit flown. */
+const BOLT_NOMINAL_SPEED = 12;
 
 /**
  * Ember bolt: the tail. The head stays a mesh (`meshes.ts` shrank it to a
@@ -364,34 +388,57 @@ export const BOLT_TRAIL_NAME = "fx-bolt-trail";
  * spawned at wherever it was that frame and then left behind in world space,
  * which is what makes the tail a tail instead of a fur coat that flies along.
  */
-export function attachBoltTrail(scene: Scene, mesh: AbstractMesh, fx: FxProfile = FALLBACK_FX): ParticleSystem {
-  const ps = fireSystem(scene, BOLT_TRAIL_NAME, 140);
-  ps.emitter = mesh;
-  ps.minEmitBox = new Vector3(-0.04, -0.04, -0.04);
-  ps.maxEmitBox = new Vector3(0.04, 0.04, 0.04);
+export function attachBoltTrail(scene: Scene, mesh: AbstractMesh, fx: FxProfile = FALLBACK_FX): void {
+  // Shed per unit FLOWN, not per frame, so the wake is as dense at 30 fps as at 144.
+  const embers = fx.emitRate / BOLT_NOMINAL_SPEED;
+  const flames = fx.flames ?? 0;
+  const crackle = fx.crackle ?? 0;
+  const owed = { embers: 0, flames: 0, crackle: 0 };
+  let last: Vector3 | null = null;
+  const pools = fxPools(scene);
+  const tick = scene.onBeforeRenderObservable.add(() => {
+    const now = mesh.getAbsolutePosition();
+    if (last) {
+      const run = Math.min(3, Vector3.Distance(last, now));
+      owed.embers += embers * run;
+      owed.flames += flames * run;
+      owed.crackle += crackle * run;
+      const at = (k: number) => [last!.x + (now.x - last!.x) * k, last!.y + (now.y - last!.y) * k, last!.z + (now.z - last!.z) * k] as const;
+      for (; owed.flames >= 1; owed.flames--) {
+        const [x, y, z] = at(Math.random());
+        // A tongue: born small at the core, swelling and cooling as it is left behind.
+        pools.glow.emit({
+          x, y, z, vx: rand(-0.2, 0.2), vy: rand(0.2, 0.7), vz: rand(-0.2, 0.2), drag: 3,
+          life: rand(fx.lifeMin, fx.lifeMax), size: fx.sizeStart * 0.35, sizeEnd: fx.sizeStart,
+          r: fx.core.r, g: fx.core.g, b: fx.core.b, a: 0.38, r1: fx.wake.r * 0.6, g1: fx.wake.g * 0.4, b1: fx.wake.b * 0.3,
+        });
+      }
+      for (; owed.embers >= 1; owed.embers--) {
+        const [x, y, z] = at(Math.random());
+        // Sideways and slightly up, then gravity takes them down out of the flight path.
+        pools.shards.emit({
+          x, y, z, vx: rand(-0.6, 0.6), vy: rand(-0.1, 0.6), vz: rand(-0.6, 0.6), gravity: -2.5, drag: 1,
+          life: rand(0.2, 0.5), size: fx.sizeStart * 0.12, thick: fx.trailWidth * 0.25, stretch: 0.05,
+          r: fx.core.r, g: fx.core.g, b: fx.core.b, a: 0.9, r1: fx.wake.r * 0.7, g1: fx.wake.g * 0.35, b1: 0.05,
+        });
+      }
+      for (; owed.crackle >= 1; owed.crackle--) {
+        const [x, y, z] = at(Math.random());
+        const a = Math.random() * Math.PI * 2;
+        const speed = rand(3, 6);
+        // A crackle: a quick bright spit off the side, gone before it falls.
+        pools.shards.emit({
+          x, y, z, vx: Math.cos(a) * speed, vy: rand(0.5, 2), vz: Math.sin(a) * speed, drag: 4,
+          life: rand(0.06, 0.14), size: 0.08, thick: 0.012, stretch: 0.02,
+          r: 1, g: 0.95, b: 0.7, a: 1, r1: fx.wake.r, g1: fx.wake.g * 0.6, b1: 0.1,
+        });
+      }
+    }
+    last = now.clone();
+  });
 
-  // Far bigger than a spark would suggest. The flame occupies barely half of
-  // its 256px cell and the rest is black, so the quad has to be oversized
-  // before the fire is anything but a few pixels: at 0.6 the whole tail came
-  // out as a dotted red line behind a white ball.
-  sizeOverLife(ps, fx.sizeStart, fx.sizeEnd);
-  ps.minLifeTime = fx.lifeMin;
-  ps.maxLifeTime = fx.lifeMax;
-  ps.emitRate = fx.emitRate;
-
-  // Sideways and slightly up, then gravity takes them down. Sparks that fall out
-  // of the flight path are what sells it as burning matter and not a light.
-  ps.direction1 = new Vector3(-0.3, -0.05, -0.3);
-  ps.direction2 = new Vector3(0.3, 0.25, 0.3);
-  ps.minEmitPower = 0.1;
-  ps.maxEmitPower = 0.5;
-  ps.gravity = new Vector3(0, -2.0, 0);
-  ps.start();
-
-  // The ribbon. Particles alone cannot draw a continuous streak — they are
-  // discrete, so a fast bolt always breaks its own tail into a dotted line —
-  // and a streak is the single thing that separates a fireball from a comet
-  // sprite in the reference frame.
+  // The ribbon: shed geometry is discrete, and only a continuous streak keeps a
+  // fast bolt from breaking its own tail into a dotted line.
   const ribbon = new TrailMesh(`${BOLT_TRAIL_NAME}-ribbon`, mesh, scene, fx.trailWidth, 10, true);
   ribbon.material = glowMaterial(scene, `${BOLT_TRAIL_NAME}-ribbon-mat`, fx.wake);
   ribbon.material.alpha = 0.4;
@@ -399,26 +446,15 @@ export function attachBoltTrail(scene: Scene, mesh: AbstractMesh, fx: FxProfile 
 
   // The bolt mesh is disposed the tick the sim kills the projectile, i.e. on
   // impact, so its dispose IS the impact event.
-  //
-  // Nothing to clean up here: Babylon disposes every particle system whose
-  // emitter is the mesh as part of `mesh.dispose()`, which also means the tail
-  // is CUT at impact rather than left to fall. The burst goes off in the same
-  // place on the same frame and covers it.
   mesh.onDisposeObservable.addOnce(() => {
+    scene.onBeforeRenderObservable.remove(tick);
     emberBurst(scene, mesh.getAbsolutePosition().clone(), fx);
-    // The trail is NOT auto-disposed with its generator, and one left standing
-    // keeps trying to sample a mesh that no longer exists.
-    //
-    // stop() BEFORE dispose(), and it is not a nicety: TrailMesh registers its
-    // own onBeforeRenderObservable observer in start() and has no dispose()
-    // override of its own (Babylon 9.20.0), so disposing it leaves that observer
-    // running update() over the vertex buffers of a mesh that is gone — one dead
-    // loop per frame, per bolt, for the rest of the session.
+    // stop() BEFORE dispose(): TrailMesh registers its own observer in start() and
+    // only stop() removes it (Babylon 9.20.0); dispose alone leaves update() running.
     ribbon.stop();
     ribbon.material?.dispose();
     ribbon.dispose();
   });
-  return ps;
 }
 
 export const ARROW_NAME = "fx-arrow";
@@ -591,25 +627,55 @@ export function setStreakLength(arrow: Mesh, flown: number): void {
   streak.position.z = -ARROW_LENGTH / 2 - length / 2 + 0.1;
 }
 
-export const BOLT_BURST_NAME = "fx-bolt-burst";
-
-/** Impact: flame thrown outward and a flash of light on the floor, on the same frame. */
-export function emberBurst(scene: Scene, at: Vector3, fx: FxProfile = FALLBACK_FX): ParticleSystem {
+/**
+ * Impact: a fireball swelling out of the hit, flame thrown outward, embers, smoke
+ * that outlives the fire, and the shared flash on the floor, all on one frame.
+ * Sized by the profile, so Ember Spark pops and Ember Bolt booms.
+ */
+export function emberBurst(scene: Scene, at: Vector3, fx: FxProfile = FALLBACK_FX): void {
   flash(scene, at, fx.flash);
-
-  const ps = fireSystem(scene, BOLT_BURST_NAME, 40);
-  ps.emitter = at;
-  ps.createSphereEmitter(0.1, 1);
-  sizeOverLife(ps, 0.9, 0.18);
-  ps.minLifeTime = 0.15;
-  ps.maxLifeTime = 0.4;
-  ps.minEmitPower = 2;
-  ps.maxEmitPower = 5;
-  ps.gravity = new Vector3(0, -7, 0);
-  blast(scene, at);
-  smoke(scene, at);
-  return burst(ps, 32, 0.4);
+  const pools = fxPools(scene);
+  const blast = fx.blast ?? 1;
+  // The core: white-hot, swelling fast and cooling to the wake colour.
+  pools.glow.emit({
+    x: at.x, y: at.y, z: at.z, life: 0.22, size: blast * 0.3, sizeEnd: blast,
+    r: fx.core.r, g: fx.core.g, b: fx.core.b, a: 0.75, r1: fx.wake.r, g1: fx.wake.g * 0.5, b1: fx.wake.b * 0.3,
+  });
+  // Flame balls rolled out of it, fewer and smaller on a small hit.
+  const balls = Math.round(blast * BURST_BALLS_PER_UNIT);
+  for (let i = 0; i < balls; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const speed = rand(0.8, 2.2) * blast;
+    pools.glow.emit({
+      x: at.x, y: at.y, z: at.z, vx: Math.cos(a) * speed, vy: rand(0.3, 1.6), vz: Math.sin(a) * speed, drag: 5,
+      life: rand(0.22, 0.4), size: blast * 0.15, sizeEnd: blast * 0.45,
+      r: 1, g: 0.75, b: 0.4, a: 0.45, r1: fx.wake.r * 0.6, g1: fx.wake.g * 0.3, b1: 0.04,
+    });
+  }
+  for (let i = 0; i < (fx.burstShards ?? 0); i++) {
+    const a = Math.random() * Math.PI * 2;
+    const up = rand(-0.2, 1);
+    const speed = rand(2, 6);
+    pools.shards.emit({
+      x: at.x, y: at.y, z: at.z, vx: Math.cos(a) * speed, vy: up * speed, vz: Math.sin(a) * speed,
+      gravity: -7, drag: 1.2, life: rand(0.2, 0.5), size: 0.12, thick: 0.022, stretch: 0.03,
+      r: 1, g: 0.85, b: 0.55, a: 1, r1: fx.wake.r, g1: fx.wake.g * 0.4, b1: 0.05,
+    });
+  }
+  // Warm grey smoke after the fire: the fire says "now", the smoke "something burned here".
+  for (let i = 0; i < (fx.smoke ?? 0); i++) {
+    const a = Math.random() * Math.PI * 2;
+    pools.smoke.emit({
+      x: at.x + Math.cos(a) * 0.2, y: at.y, z: at.z + Math.sin(a) * 0.2,
+      vx: Math.cos(a) * 0.5, vy: rand(0.4, 0.9), vz: Math.sin(a) * 0.5, drag: 1.5,
+      life: rand(0.7, 1.1), delay: 0.08, size: 0.45, sizeEnd: 1.3,
+      r: 0.3, g: 0.27, b: 0.25, a: 0.32, r1: 0.4, g1: 0.38, b1: 0.36,
+    });
+  }
 }
+
+/** Flame balls a fireball rolls out per unit of its diameter. */
+const BURST_BALLS_PER_UNIT = 4;
 
 /** How one melee skill's blow lands on a body. Every count is per landed hit. */
 export interface MeleeImpactStyle {
@@ -751,52 +817,6 @@ export function swingTrail(scene: Scene, skillId?: string): { follow(at: Vector3
       done = true;
     },
   };
-}
-
-export const BOLT_BLAST_NAME = "fx-bolt-blast";
-
-/** The fireball: a handful of big flames swelling out of the hit point. Small on
- *  purpose, this is the starter skill; the sparks carry the spray. */
-function blast(scene: Scene, at: Vector3): ParticleSystem {
-  const ps = fireSystem(scene, BOLT_BLAST_NAME, 8);
-  ps.emitter = at.clone();
-  ps.createSphereEmitter(0.15, 1);
-  sizeOverLife(ps, 0.55, 1.35, 0.25);
-  ps.minLifeTime = 0.22;
-  ps.maxLifeTime = 0.38;
-  ps.minEmitPower = 0.4;
-  ps.maxEmitPower = 1.1;
-  ps.gravity = new Vector3(0, 1.5, 0);
-  ps.minInitialRotation = 0;
-  ps.maxInitialRotation = Math.PI * 2;
-  return burst(ps, 6, 0.38);
-}
-
-export const BOLT_SMOKE_NAME = "fx-bolt-smoke";
-
-/** Warm grey smoke that swells and climbs off the hit after the fire is gone:
- *  the fire says "now", the smoke says "something burned here". */
-function smoke(scene: Scene, at: Vector3): ParticleSystem {
-  const ps = new ParticleSystem(BOLT_SMOKE_NAME, 6, scene);
-  ps.particleTexture = new Texture(SMOKE_PUFF, scene);
-  ps.blendMode = ParticleSystem.BLENDMODE_STANDARD;
-  ps.applyFog = true;
-  ps.emitter = at.clone();
-  ps.createSphereEmitter(0.25, 1);
-  ps.addColorGradient(0, new Color4(0.5, 0.45, 0.4, 0));
-  ps.addColorGradient(0.15, new Color4(0.45, 0.41, 0.36, 0.22));
-  ps.addColorGradient(1, new Color4(0.36, 0.34, 0.32, 0));
-  sizeOverLife(ps, 0.45, 1.2, 0.3);
-  ps.minLifeTime = 0.5;
-  ps.maxLifeTime = 0.9;
-  ps.minEmitPower = 0.3;
-  ps.maxEmitPower = 0.9;
-  ps.gravity = new Vector3(0, 0.6, 0);
-  ps.minInitialRotation = 0;
-  ps.maxInitialRotation = Math.PI * 2;
-  ps.minAngularSpeed = -0.6;
-  ps.maxAngularSpeed = 0.6;
-  return burst(ps, 5, 0.9);
 }
 
 export const CINDER_NAME = "fx-cinder";
@@ -945,10 +965,12 @@ export function warmSkillFx(scene: Scene): void {
   // Never started, never drawn: they hold the particle effect and the sheet, which
   // Babylon frees with the last system using them and every next cast re-linked.
   if (!scene.particleSystems.some((p) => p.name === FX_KEEPALIVE_NAME)) {
-    for (const ps of [fireSystem(scene, FX_KEEPALIVE_NAME, 1), wispSystem(scene, FX_KEEPALIVE_NAME, 1)]) ps.isReady();
+    wispSystem(scene, FX_KEEPALIVE_NAME, 1).isReady();
   }
   emberBurst(scene, Vector3.Zero());
   meleeImpact(scene, Vector3.Zero(), 1, 0);
+  // The pools are shared, so the warm-up's own sparks must not show on arrival.
+  clearFxPools(scene);
   hitSpray(scene);
   hitSparkle(scene);
   // Pools and arcs are drawn from birth (alwaysSelectAsActiveMesh, empty slots
