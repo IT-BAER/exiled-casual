@@ -193,8 +193,8 @@ const CAST_SFX: Record<string, string> = {
   "skill.cinder_ground.v1": "skill-cinder-ground-cast",
   "skill.blink.v1": "skill-blink",
   "skill.strike.v1": "skill-strike-swing",
-  "skill.heavy_strike.v1": "skill-strike-swing",
-  "skill.ground_slam.v1": "skill-strike-swing",
+  "skill.heavy_strike.v1": "skill-heavy-strike-swing",
+  "skill.ground_slam.v1": "skill-ground-slam-swing",
 };
 
 /** The thud of a landed swing, per melee skill; an unnamed swing lands as Strike. */
@@ -335,13 +335,18 @@ export function createSoundscape(opts: Options = {}): Soundscape {
       }
 
       // ── Arrived ─────────────────────────────────────────────────────────────
+      // One loose is one release however many arrows it put in the air.
+      const loosed = new Set<string>();
       for (const [id, e] of now) {
         if (was.has(id)) continue;
         if (e.kind === "telegraph") play("monster-slam-windup", 1, at(e));
         else if (e.kind === "projectile" && (e.team ?? 0) !== 0) play("monster-spit", 1, at(e));
         else if (e.kind === "projectile") {
           const launch = fxProfile(e.skillId).launchCue;
-          if (launch) play(launch, 1, at(e));
+          if (launch && !loosed.has(launch)) {
+            loosed.add(launch);
+            play(launch, 1, at(e));
+          }
         }
         const cue = sustainedCue(e);
         if (cue) {

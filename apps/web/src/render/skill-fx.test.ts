@@ -5,6 +5,7 @@ import { Effect, Light, NullEngine, ParticleSystem, PointLight, Scene, StandardM
 import { SKILLS } from "@exiled/content-runtime";
 import { makeMesh, warmEntityLooks, warmProjectiles, WARM_LOOK_PREFIX } from "./meshes";
 import { GROUND_LOOK_BASES } from "./ground-looks";
+import { GROUND_LOOKS } from "./ground-fx";
 import { createScene } from "./engine";
 import { SPRAY_NAME } from "./hit-spray";
 import {
@@ -12,12 +13,11 @@ import {
   BLINK_NAME,
   BLINK_STREAK_NAME,
   BLINK_ALPHA,
-  BOLT_BURST_NAME,
   BOLT_TRAIL_NAME,
-  BOLT_SMOKE_NAME,
-  BOLT_BLAST_NAME,
   emberBurst,
-  CINDER_NAME,
+  CINDER_GLOW,
+  CINDER_RATE,
+  type GroundEmbers,
   FLASH_NAME,
   warmSkillFx,
   FX_KEEPALIVE_NAME,
@@ -25,13 +25,13 @@ import {
   FALLBACK_FX,
   SKILL_FX,
   meleeImpact,
-  MELEE_SPARKS_NAME,
-  MELEE_DUST_NAME,
+  groundSlam,
   swingTrail,
-  SWING_TRAIL_NAME,
   ARROW_LENGTH,
   PROJECTILE_ARROW_SCALE,
 } from "./skill-fx";
+import { FX_SHARDS_NAME, fxPools } from "./fx-pool";
+import { SWING_ARC_NAME, swingArcs, swingStyle } from "./swing-arc";
 
 let engine: NullEngine | undefined;
 afterEach(() => {
@@ -57,16 +57,37 @@ function systems(scene: Scene, name: string): ParticleSystem[] {
 }
 
 describe("ember bolt", () => {
-  it("flies with a spark trail emitted from the bolt itself", () => {
+  it("sheds flame and embers from wherever the bolt flies, left behind in the world", () => {
     const scene = newScene();
-    const mesh = makeMesh(scene, "projectile", "entity-7");
+    const mesh = makeMesh(scene, "projectile", "entity-7", Vector3.Zero(), undefined, "skill.ember_bolt.v1");
+    const pools = fxPools(scene);
+    for (let i = 1; i <= 8; i++) {
+      mesh.position.set(i * 0.5, 0.8, 0);
+      mesh.computeWorldMatrix(true);
+      scene.onBeforeRenderObservable.notifyObservers(scene);
+    }
+    expect(pools.shards.emitted).toBeGreaterThan(0);
+    expect(pools.glow.emitted).toBeGreaterThan(0);
+    // Along the path it flew, not riding on the head.
+    const xs = pools.glow.positions().map((p) => p.x);
+    expect(Math.min(...xs)).toBeLessThan(3);
+    expect(Math.max(...xs)).toBeLessThanOrEqual(4.01);
+  });
 
-    const [trail] = systems(scene, BOLT_TRAIL_NAME);
-    expect(trail).toBeDefined();
-    // The mesh, not a Vector3: the emit point has to follow the bolt, while the
-    // particles it already dropped stay behind in world space.
-    expect(trail!.emitter).toBe(mesh);
-    expect(trail!.blendMode).toBe(ParticleSystem.BLENDMODE_ADD);
+  it("draws no fire with a particle system, a flipbook or a sprite sheet", () => {
+    const scene = newScene();
+    for (const id of ["skill.ember_bolt.v1", "skill.ember_spark.v1"]) {
+      const mesh = makeMesh(scene, "projectile", `entity-${id}`, Vector3.Zero(), undefined, id);
+      mesh.dispose();
+    }
+    makeMesh(scene, "groundArea", "entity-9");
+    emberBurst(scene, Vector3.Zero());
+    warmSkillFx(scene);
+    for (const ps of scene.particleSystems as ParticleSystem[]) {
+      expect(ps.isAnimationSheetEnabled, ps.name).toBe(false);
+      expect((ps.particleTexture as Texture | null)?.url ?? "", ps.name).not.toContain("fire_sheet");
+    }
+    expect(scene.textures.some((t) => (t as Texture).url?.includes("fire_sheet"))).toBe(false);
   });
 
   it("strings its ribbon at the bolt, never back to the world origin", () => {
@@ -116,58 +137,20 @@ describe("ember bolt", () => {
     expect(trailObservers()).toBe(0);
   });
 
-  it("burns each spark through the flipbook over its own lifetime", () => {
-    const scene = newScene();
-    makeMesh(scene, "projectile", "entity-7");
-    const trail = systems(scene, BOLT_TRAIL_NAME)[0]!;
-
-    expect(trail.isAnimationSheetEnabled).toBe(true);
-    expect(trail.startSpriteCellID).toBe(0);
-    expect(trail.endSpriteCellID).toBeGreaterThan(0);
-    // 0 does not mean "no animation": it means Babylon fits the whole sheet to
-    // the particle's life, which is the only reason the flame dies in step with
-    // its own fade.
-    expect(trail.spriteCellChangeSpeed).toBe(0);
-  });
-
-  it("shrinks its sparks by size gradient, which is what actually sets the size", () => {
-    const scene = newScene();
-    makeMesh(scene, "projectile", "entity-7");
-    const trail = systems(scene, BOLT_TRAIL_NAME)[0]!;
-
-    // Once a size gradient exists Babylon stops reading minSize/maxSize at all,
-    // so the curve is the only place the size can come from.
-    const stops = trail.getSizeGradients() ?? [];
-    expect(stops.length).toBeGreaterThan(1);
-    expect(stops[stops.length - 1]!.factor1).toBeLessThan(stops[0]!.factor1);
-    expect(trail.maxScaleX).toBeGreaterThan(trail.minScaleX);
-  });
-
   it("bursts where it died, because the sim disposing the mesh IS the impact", () => {
     const scene = newScene();
     const mesh = makeMesh(scene, "projectile", "entity-7");
     mesh.position.set(4, 0.8, -2);
     mesh.computeWorldMatrix(true);
-
-    expect(systems(scene, BOLT_BURST_NAME)).toHaveLength(0);
+    const pools = fxPools(scene);
+    const before = pools.shards.emitted + pools.glow.emitted;
     mesh.dispose();
-
-    const [impact] = systems(scene, BOLT_BURST_NAME);
-    expect(impact).toBeDefined();
-    expect(impact!.emitter).toBeInstanceOf(Vector3);
-    expect((impact!.emitter as Vector3).x).toBeCloseTo(4);
-    expect((impact!.emitter as Vector3).z).toBeCloseTo(-2);
-    // One shot that cleans itself up, or every cast leaks a system.
-    expect(impact!.manualEmitCount).toBeGreaterThan(0);
-    expect(impact!.disposeOnStop).toBe(true);
-    expect(impact!.targetStopDuration).toBeGreaterThan(0);
-
-    // Babylon disposes any system emitting from the mesh along with it, so a
-    // bolt that has landed leaves nothing behind but its burst.
-    expect(systems(scene, BOLT_TRAIL_NAME)).toHaveLength(0);
+    expect(pools.shards.emitted + pools.glow.emitted).toBeGreaterThan(before);
+    const near = pools.glow.positions().filter((p) => Math.hypot(p.x - 4, p.z + 2) < 0.5);
+    expect(near.length).toBeGreaterThan(0);
 
     // No floor ring: how big a hit was is the struck body's spray, not a decal.
-    expect(scene.getMeshByName("fx-shockwave")).toBeNull();
+    expect(pools.ring.live).toBe(0);
     const light = scene.getLightByName(FLASH_NAME) as PointLight | null;
     expect(light).not.toBeNull();
     expect(light!.intensity).toBeGreaterThan(0);
@@ -176,50 +159,43 @@ describe("ember bolt", () => {
     expect(light!.position.x).toBeCloseTo(4);
     expect(light!.position.z).toBeCloseTo(-2);
     expect(light!.position.y).toBeGreaterThanOrEqual(1.5);
-    // A pool around the hit, not the view: PBR ignores `range` unless the
-    // falloff is glTF's, which fades to zero at it.
     expect(light!.falloffType).toBe(Light.FALLOFF_GLTF);
     expect(light!.range).toBeLessThanOrEqual(5);
   });
 
-  it("gives the flame sheet an alpha channel, or fog tints the black around each flame into a square", () => {
+  it("stops shedding the moment it lands: no per-frame loop outlives the bolt", async () => {
     const scene = newScene();
-    const url = (emberBurst(scene, Vector3.Zero()).particleTexture as Texture).url;
-    // An opaque sheet is additive black that fog turns into fog colour, and a
-    // burst stacks those quads into grey boxes.
-    expect(webpHasAlpha(url)).toBe(true);
+    // The shared flash and pools stand once per scene; only per-bolt loops may not stay.
+    warmSkillFx(scene);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const before = scene.onBeforeRenderObservable.observers.length;
+    for (let i = 0; i < 4; i++) makeMesh(scene, "projectile", `entity-${i}`, Vector3.Zero(), undefined, "skill.ember_bolt.v1").dispose();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(scene.onBeforeRenderObservable.observers.length).toBe(before);
   });
 
-  it("leaves soft smoke over the hit that outlives the fire", () => {
-    const scene = newScene();
-    const fire = emberBurst(scene, new Vector3(4, 0.8, -2));
-    const smoke = systems(scene, BOLT_SMOKE_NAME)[0]!;
-    expect(smoke).toBeTruthy();
-    // Normally blended, so it can darken and veil what is behind it; additive
-    // "smoke" is only ever light.
-    expect(smoke.blendMode).toBe(ParticleSystem.BLENDMODE_STANDARD);
-    expect((smoke.emitter as Vector3).x).toBeCloseTo(4);
-    expect((smoke.emitter as Vector3).z).toBeCloseTo(-2);
-    expect(smoke.maxLifeTime).toBeGreaterThan(fire.maxLifeTime * 2);
-    expect(smoke.disposeOnStop).toBe(true);
-    // Its shape is the texture's alpha: an opaque sheet here IS a grey square.
-    const url = (smoke.particleTexture as Texture).url;
-    expect(webpHasAlpha(url)).toBe(true);
+  it("lands Ember Bolt as a fireball with smoke, and Ember Spark as a small dry pop", () => {
+    const burstOf = (id: string) => {
+      const scene = newScene();
+      emberBurst(scene, new Vector3(4, 0.8, -2), SKILL_FX[id]);
+      const p = fxPools(scene);
+      const out = { shards: p.shards.emitted, glow: p.glow.emitted, smoke: p.smoke.emitted };
+      engine?.dispose();
+      return out;
+    };
+    const bolt = burstOf("skill.ember_bolt.v1");
+    const spark = burstOf("skill.ember_spark.v1");
+    expect(bolt.glow).toBeGreaterThan(spark.glow);
+    expect(bolt.shards).toBeGreaterThan(spark.shards);
+    expect(bolt.smoke).toBeGreaterThan(0);
+    expect(spark.smoke).toBe(0);
+    expect(SKILL_FX["skill.ember_bolt.v1"]!.blast!).toBeGreaterThan(SKILL_FX["skill.ember_spark.v1"]!.blast! * 2);
   });
 
-  it("bursts as a small fireball that swells, and the smoke stays second to the fire", () => {
-    const scene = newScene();
-    const sparks = emberBurst(scene, new Vector3(4, 0.8, -2));
-    const blast = systems(scene, BOLT_BLAST_NAME)[0]!;
-    expect(blast).toBeTruthy();
-    expect(blast.blendMode).toBe(ParticleSystem.BLENDMODE_ADD);
-    const size = blast.getSizeGradients()!;
-    expect(size[size.length - 1]!.factor1).toBeGreaterThan(size[0]!.factor1);
-    expect(blast.disposeOnStop).toBe(true);
-    // A starter skill: a few big flames, not a second spark shower.
-    expect(blast.manualEmitCount).toBeLessThanOrEqual(8);
-    const smoke = systems(scene, BOLT_SMOKE_NAME)[0]!;
-    expect(smoke.manualEmitCount * 4).toBeLessThanOrEqual(sparks.manualEmitCount);
+  it("crackles Ember Spark sideways in flight, which Ember Bolt's heavy wake does not", () => {
+    expect(SKILL_FX["skill.ember_spark.v1"]!.crackle!).toBeGreaterThan(0);
+    expect(SKILL_FX["skill.ember_bolt.v1"]!.crackle ?? 0).toBe(0);
+    expect(SKILL_FX["skill.ember_bolt.v1"]!.flames!).toBeGreaterThan(SKILL_FX["skill.ember_spark.v1"]!.flames ?? 0);
   });
 
   it("colours its head from its own skill, not whichever projectile spawned first", () => {
@@ -247,13 +223,39 @@ describe("ember bolt", () => {
 });
 
 describe("melee", () => {
-  it("a landed blow throws sparks and dust and lights the floor, with no ring", () => {
+  const MELEE = ["skill.strike.v1", "skill.heavy_strike.v1", "skill.ground_slam.v1"];
+
+  it("a landed blow throws pooled sparks and dust and lights the floor, with no ring", () => {
     const scene = newScene();
     meleeImpact(scene, new Vector3(1, 0.8, 0), 1, 0);
-    expect(systems(scene, MELEE_SPARKS_NAME)).toHaveLength(1);
-    expect(systems(scene, MELEE_DUST_NAME)).toHaveLength(1);
-    expect(scene.getMeshByName("fx-shockwave")).toBeNull();
+    const pools = fxPools(scene);
+    expect(pools.shards.live).toBeGreaterThan(0);
+    expect(pools.smoke.live).toBeGreaterThan(0);
+    expect(pools.ring.live).toBe(0);
+    expect(scene.particleSystems).toHaveLength(0);
     expect((scene.getLightByName(FLASH_NAME) as PointLight).intensity).toBeGreaterThan(0);
+  });
+
+  it("reuses its pools: twenty blows add no system, mesh or material", () => {
+    const scene = newScene();
+    meleeImpact(scene, new Vector3(1, 0.8, 0), 1, 0);
+    const counts = () => [scene.particleSystems.length, scene.meshes.length, scene.materials.length, scene.textures.length];
+    const before = counts();
+    const emitted = fxPools(scene).shards.emitted;
+    for (let i = 0; i < 20; i++) meleeImpact(scene, new Vector3(i, 0.8, 0), 1, 0, 1, MELEE[i % 3]);
+    expect(counts()).toEqual(before);
+    expect(fxPools(scene).shards.emitted).toBeGreaterThan(emitted);
+  });
+
+  it("lands a Heavy Strike harder than a Strike", () => {
+    const thrown = (skillId: string) => {
+      const scene = newScene();
+      meleeImpact(scene, new Vector3(1, 0.8, 0), 1, 0, 1, skillId);
+      const n = fxPools(scene).shards.emitted + fxPools(scene).glow.emitted;
+      engine?.dispose();
+      return n;
+    };
+    expect(thrown("skill.heavy_strike.v1")).toBeGreaterThan(thrown("skill.strike.v1"));
   });
 
   it("lights a chip dimmer than a heavy blow", () => {
@@ -266,38 +268,60 @@ describe("melee", () => {
     expect(chip).toBeLessThan(light.intensity * 0.5);
   });
 
-  it("a swing ribbon follows its node and leaves nothing behind when cut", () => {
-    const scene = newScene();
-    const swing = () => {
-      const trail = swingTrail(scene);
-      trail.follow(new Vector3(0, 1, 0.5));
-      expect(scene.getMeshByName(SWING_TRAIL_NAME)).not.toBeNull();
-      trail.dispose();
-      expect(scene.getMeshByName(SWING_TRAIL_NAME)).toBeNull();
-    };
-    // The first one also brings the scene's shared default material in.
-    swing();
-    const after = scene.materials.length;
-    for (let i = 0; i < 4; i++) swing();
-    expect(scene.materials.length).toBe(after);
-    expect(scene.transformNodes.filter((n) => n.name.startsWith(SWING_TRAIL_NAME))).toHaveLength(0);
+  it("cuts each melee skill its own arc, widening and lingering with the weight", () => {
+    const [strike, heavy, slam] = MELEE.map((id) => swingStyle(id));
+    expect(strike!.width).toBeLessThan(heavy!.width);
+    expect(heavy!.width).toBeLessThan(slam!.width);
+    expect(strike!.seconds).toBeLessThan(heavy!.seconds);
+    expect(strike!.colour.equals(heavy!.colour)).toBe(false);
+    expect(heavy!.colour.equals(slam!.colour)).toBe(false);
   });
 
-  /** Same trap as the bolt ribbon: a swing that is only disposed keeps its update() loop. */
-  it("takes a swing ribbon's per-frame observer with it when cut", async () => {
+  it("draws the swing as a real crescent mesh from the tip in toward the chest", () => {
     const scene = newScene();
-    const trailObservers = () =>
-      scene.onBeforeRenderObservable.observers.filter((o) =>
-        String(o.callback).includes("this.update()")).length;
-    const before = trailObservers();
-    for (let i = 0; i < 3; i++) {
-      const trail = swingTrail(scene);
+    const swing = swingTrail(scene, "skill.heavy_strike.v1");
+    const centre = new Vector3(0, 1.1, 0);
+    swing.follow(new Vector3(1.4, 1.2, 0), centre);
+    swing.follow(new Vector3(0, 1.2, 1.4), centre);
+    const lit = (m: { getVerticesData(k: string): ArrayLike<number> | null }) =>
+      Array.from(m.getVerticesData("color") ?? []).some((v, i) => i % 4 === 3 && v > 0);
+    const arc = scene.meshes.find((m) => m.name.startsWith(SWING_ARC_NAME) && lit(m))!;
+    expect(arc).toBeDefined();
+    const pos = arc.getVerticesData("position")!;
+    let inward = 0;
+    for (let i = 0; i < pos.length; i += 3) inward = Math.max(inward, 1.4 - Math.hypot(pos[i]!, pos[i + 2]!));
+    // The inner side reaches toward the chest by about the style's width.
+    expect(inward).toBeGreaterThan(swingStyle("skill.heavy_strike.v1").width * 0.6);
+  });
+
+  it("reuses its arc meshes and material across swings, and leaves no per-frame loop", async () => {
+    const scene = newScene();
+    const swing = () => {
+      const trail = swingTrail(scene, "skill.strike.v1");
       trail.follow(new Vector3(0, 1, 0.5));
+      trail.follow(new Vector3(0.5, 1, 0));
       trail.dispose();
-    }
-    // Observable.remove splices on a setTimeout(0); see the bolt test above.
+    };
+    swing();
+    const counts = () => [scene.meshes.length, scene.materials.length, scene.transformNodes.length];
+    const observers = scene.onBeforeRenderObservable.observers.length;
+    const before = counts();
+    for (let i = 0; i < 6; i++) swing();
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(trailObservers()).toBe(before);
+    expect(counts()).toEqual(before);
+    expect(scene.onBeforeRenderObservable.observers.length).toBe(observers);
+  });
+
+  it("slams the floor: a shockwave ring, dust running out along the cone, and thrown grit", () => {
+    const scene = newScene();
+    groundSlam(scene, new Vector3(3, 0, 2), 0, 1);
+    const pools = fxPools(scene);
+    expect(pools.ring.live).toBeGreaterThan(0);
+    expect(pools.smoke.live).toBeGreaterThan(3);
+    // Dust lies ahead of him along the facing, out toward the slam's reach.
+    const far = Math.max(...pools.smoke.positions().map((p) => p.z - 2));
+    expect(far).toBeGreaterThan(2);
+    expect(scene.particleSystems).toHaveLength(0);
   });
 });
 
@@ -332,15 +356,57 @@ describe("arrows", () => {
     expect(count()).toBe(after);
   });
 
+  it("draws three different arrows: a quick streak, a long bright tracer, a fan of short shards", () => {
+    const snap = SKILL_FX["skill.snap_shot.v1"]!;
+    const pierce = SKILL_FX["skill.piercing_shot.v1"]!;
+    const split = SKILL_FX["skill.split_arrow.v1"]!;
+    expect(pierce.streakLength!).toBeGreaterThan(snap.streakLength! * 1.5);
+    expect(split.streakLength!).toBeLessThan(snap.streakLength!);
+    const wakes = [snap, pierce, split].map((f) => f.wake.toHexString());
+    expect(new Set(wakes).size).toBe(3);
+    expect(new Set([snap, pierce, split].map((f) => f.arrowImpact)).size).toBe(3);
+  });
+
+  it("a piercing shot sheds tracer motes in flight and lets go of them when it lands", async () => {
+    const scene = newScene();
+    const observers = () => scene.onBeforeRenderObservable.observers.length;
+    fxPools(scene);
+    const before = observers();
+    const arrow = makeMesh(scene, "projectile", "entity-1", Vector3.Zero(), undefined, "skill.piercing_shot.v1");
+    for (let i = 0; i < 10; i++) {
+      arrow.position.z += 0.5;
+      arrow.computeWorldMatrix(true);
+      scene.onBeforeRenderObservable.notifyObservers(scene);
+    }
+    expect(fxPools(scene).shards.emitted).toBeGreaterThan(0);
+    arrow.dispose();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(observers()).toBe(before);
+  });
+
+  it("a piercing shot punches through: its hit sprays forward, out the far side", () => {
+    const scene = newScene();
+    const arrow = makeMesh(scene, "projectile", "entity-1", new Vector3(0, 0.8, 0), undefined, "skill.piercing_shot.v1");
+    arrow.rotation.y = 0; // flying down +z
+    arrow.metadata = { struck: true };
+    const pools = fxPools(scene);
+    const start = pools.shards.emitted;
+    arrow.dispose();
+    expect(pools.shards.emitted).toBeGreaterThan(start);
+    pools.shards.step(0.05);
+    const zs = pools.shards.positions().map((p) => p.z);
+    expect(zs.reduce((a, b) => a + b, 0) / zs.length).toBeGreaterThan(0.05);
+  });
+
   it("a struck arrow lands a hit, one that ran out of range just drops", () => {
     const scene = newScene();
     const spent = makeMesh(scene, "projectile", "entity-1", Vector3.Zero(), undefined, "skill.snap_shot.v1");
     const lapsed = makeMesh(scene, "projectile", "entity-2", Vector3.Zero(), undefined, "skill.snap_shot.v1");
     lapsed.dispose();
-    expect(systems(scene, MELEE_SPARKS_NAME)).toHaveLength(0);
+    expect(fxPools(scene).shards.emitted).toBe(0);
     spent.metadata = { struck: true };
     spent.dispose();
-    expect(systems(scene, MELEE_SPARKS_NAME)).toHaveLength(1);
+    expect(fxPools(scene).shards.emitted).toBeGreaterThan(0);
   });
 });
 
@@ -355,19 +421,19 @@ describe("warmSkillFx", () => {
     expect(light).not.toBeNull();
     expect(light!.intensity).toBe(0);
 
-    // The burst and the spray hosts are live, so their shaders compile behind
+    // The pools and the spray hosts are live, so their shaders compile behind
     // the loading plate instead of on the first hit.
-    expect(systems(scene, BOLT_BURST_NAME)).toHaveLength(1);
+    expect(scene.getMeshByName(FX_SHARDS_NAME)).not.toBeNull();
     expect(scene.getMeshByName(`${SPRAY_NAME}-blood`)).not.toBeNull();
     expect(scene.getMeshByName(`${SPRAY_NAME}-grit`)).not.toBeNull();
   });
 
-  it("keeps a fire and a wisp system alive, so a burst never frees the shared shader and sheet", () => {
+  it("keeps a wisp system alive, so a blink never frees the shared shader and texture", () => {
     const scene = newScene();
     warmSkillFx(scene);
     warmSkillFx(scene);
     const keep = systems(scene, FX_KEEPALIVE_NAME);
-    expect(keep).toHaveLength(2);
+    expect(keep).toHaveLength(1);
     expect(keep.every((p) => !p.isStarted() && p.particleTexture !== null)).toBe(true);
   });
 
@@ -424,28 +490,75 @@ describe("warmEntityLooks", () => {
 });
 
 describe("warmSkillFx swing trail", () => {
-  it("draws a weapon's swing ribbon once, then lets it go", async () => {
+  it("stands the swing arcs and every fx pool up drawn, so the first swing compiles nothing", () => {
     const scene = newScene();
     warmSkillFx(scene);
-    const trail = scene.getMeshByName(SWING_TRAIL_NAME);
-    expect(trail?.alwaysSelectAsActiveMesh).toBe(true);
-    await scene.whenReadyAsync();
-    expect(scene.getMeshByName(SWING_TRAIL_NAME)).toBeNull();
+    const arcs = scene.meshes.filter((m) => m.name.startsWith(SWING_ARC_NAME));
+    expect(arcs.length).toBeGreaterThan(0);
+    expect(arcs.every((m) => m.alwaysSelectAsActiveMesh)).toBe(true);
+    for (const pool of Object.values(fxPools(scene))) expect(pool.mesh.alwaysSelectAsActiveMesh).toBe(true);
   });
 });
 
 describe("cinder ground", () => {
-  it("emits its embers from the disc, so they cover the entity's real radius", () => {
+  type Embers = GroundEmbers & { step(dt: number): void; cracks: Float32Array };
+  const embersOf = (mesh: { metadata: unknown }) => (mesh.metadata as { embers: Embers }).embers;
+
+  it("throws embers only from its cracks, rising, at the patch's real radius", () => {
+    const scene = newScene();
+    const mesh = makeMesh(scene, "groundArea", "entity-9", new Vector3(5, 0.05, -3));
+    mesh.scaling.set(2.5, 1, 2.5);
+    mesh.computeWorldMatrix(true);
+    const embers = embersOf(mesh);
+    embers.step(1);
+    const pools = fxPools(scene);
+    const born = pools.shards.positions();
+    expect(born.length).toBeGreaterThan(0);
+    // Every ember sits on a crack segment (local, radius 1), give or take its first frame.
+    const segs = embers.cracks;
+    const onCrack = (p: Vector3) => {
+      const x = (p.x - 5) / 2.5, z = (p.z + 3) / 2.5;
+      for (let k = 0; k < segs.length; k += 4) {
+        const ax = segs[k]!, az = segs[k + 1]!, bx = segs[k + 2]!, bz = segs[k + 3]!;
+        const dx = bx - ax, dz = bz - az;
+        const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz || 1)));
+        if (Math.hypot(x - (ax + dx * t), z - (az + dz * t)) < 0.06) return true;
+      }
+      return false;
+    };
+    expect(born.every(onCrack)).toBe(true);
+    const y0 = born.map((p) => p.y);
+    pools.shards.step(0.2);
+    const y1 = pools.shards.positions().map((p) => p.y);
+    expect(y1.reduce((a, b) => a + b, 0) / y1.length).toBeGreaterThan(y0.reduce((a, b) => a + b, 0) / y0.length);
+  });
+
+  it("burns about half as loud as it did: glow, bloom gain and ember rate all cut", () => {
     const scene = newScene();
     const mesh = makeMesh(scene, "groundArea", "entity-9");
+    const mat = mesh.material as StandardMaterial;
+    expect(mat.alpha).toBeLessThanOrEqual(0.45);
+    expect(CINDER_GLOW).toBeLessThanOrEqual(0.5);
+    expect(mat.emissiveColor.r).toBeLessThanOrEqual(0.55);
+    expect(GROUND_LOOKS.fire.gain).toBeLessThanOrEqual(1.5);
+    expect(CINDER_RATE).toBeLessThanOrEqual(26);
+  });
 
-    const [cinders] = systems(scene, CINDER_NAME);
-    expect(cinders).toBeDefined();
-    // The renderer scales the disc x/z to the radius; only a mesh emitter picks
-    // that up, since Babylon pushes emitted points through its world matrix.
-    expect(cinders!.emitter).toBe(mesh);
-    // Rising, not falling: these are cinders off a hot patch.
-    expect(cinders!.gravity.y).toBeGreaterThan(0);
+  it("lies on a dark scorch base, and keeps a readable rim at its true radius", () => {
+    const scene = newScene();
+    const mesh = makeMesh(scene, "groundArea", "entity-9");
+    const scorch = mesh.getChildMeshes(true).find((m) => m.name.endsWith("-scorch"))!;
+    expect(scorch).toBeDefined();
+    const sm = scorch.material as StandardMaterial;
+    // Normally blended, so it darkens the floor; additive could only lighten it.
+    expect(sm.alphaMode).not.toBe(1);
+    expect(sm.diffuseColor.r + sm.emissiveColor.r).toBeLessThan(0.15);
+    expect(scorch.position.y).toBeLessThan(0);
+    const rim = mesh.getChildMeshes(true).find((m) => m.name.endsWith("-rim"))!;
+    expect(rim).toBeDefined();
+    rim.computeWorldMatrix(true);
+    const { minimum: min, maximum: max } = rim.getBoundingInfo().boundingBox;
+    expect((max.x - min.x) / 2).toBeCloseTo(1, 1);
   });
 
   it("fades the disc out at its rim instead of ending on a hard edge", () => {

@@ -9,8 +9,8 @@
  * from its rim inward — the same field run backwards, so both ends match.
  */
 import { Color3, MaterialPluginBase, StandardMaterial } from "@babylonjs/core";
-import type { AbstractEngine, AbstractMesh, CylinderParticleEmitter, GlowLayer, Material, ParticleSystem, Scene, SubMesh, UniformBuffer } from "@babylonjs/core";
-import { CINDER_RATE } from "./skill-fx";
+import type { AbstractEngine, AbstractMesh, GlowLayer, Material, Scene, SubMesh, UniformBuffer } from "@babylonjs/core";
+import { CINDER_RATE, type GroundEmbers } from "./skill-fx";
 
 const TICKS_PER_SEC = 30;
 
@@ -40,7 +40,7 @@ interface GroundLook {
  * telling the client which a patch is.
  */
 export const GROUND_LOOKS = {
-  fire: { edge: new Color3(1.0, 0.6, 0.2), gain: 3.0, cool: new Color3(0.55, 0.2, 0.07) },
+  fire: { edge: new Color3(1.0, 0.6, 0.2), gain: 1.5, cool: new Color3(0.55, 0.2, 0.07) },
 } satisfies Record<string, GroundLook>;
 export type GroundElement = keyof typeof GROUND_LOOKS;
 
@@ -95,7 +95,9 @@ class GroundErosionPlugin extends MaterialPluginBase {
     ubo.updateFloat("groundErosion", this.amount);
     ubo.updateFloat("groundGain", this.look.gain);
     // Centre on the floor and radius: the disc is built at radius 1 and scaled.
-    ubo.updateFloat3("groundDisc", mesh.position.x, mesh.position.z, Math.max(mesh.scaling.x, 1e-3));
+    // Absolute, so a patch's children (scorch, fissures, rim) erode on the parent's disc.
+    const at = mesh.getAbsolutePosition();
+    ubo.updateFloat3("groundDisc", at.x, at.z, Math.max(mesh.absoluteScaling.x, 1e-3));
     ubo.updateColor3("groundEdgeColor", this.look.edge);
     ubo.updateColor3("groundCool", this.look.cool);
   }
@@ -183,8 +185,16 @@ export function groundErosion(mesh: AbstractMesh): number {
   return erosionOf(mesh)?.amount ?? 0;
 }
 
-function embersOf(mesh: AbstractMesh): ParticleSystem | undefined {
-  return (mesh.metadata as { embers?: ParticleSystem } | null)?.embers;
+function embersOf(mesh: AbstractMesh): GroundEmbers | undefined {
+  return (mesh.metadata as { embers?: GroundEmbers } | null)?.embers;
+}
+
+/** Erode the patch and everything dressed on it together. */
+function setErosion(mesh: AbstractMesh, amount: number): void {
+  for (const part of [mesh, ...mesh.getChildMeshes(true)]) {
+    const plugin = erosionOf(part);
+    if (plugin) plugin.amount = amount;
+  }
 }
 
 /**
@@ -213,19 +223,17 @@ const easeInOut = (k: number) => (k < 0.5 ? 4 * k * k * k : 1 - (-2 * k + 2) ** 
 /** A patch `ticks` after it appeared: catching from the middle, embers flaring where it has caught. */
 export function igniteGround(mesh: AbstractMesh, ticks: number): void {
   const k = Math.min(1, Math.max(0, ticks / IGNITE_TICKS));
-  const plugin = erosionOf(mesh);
-  if (plugin) plugin.amount = 1 - easeOut(k);
+  setErosion(mesh, 1 - easeOut(k));
   const embers = embersOf(mesh);
   if (!embers) return;
   embers.emitRate = CINDER_RATE * (1 + IGNITE_FLARE * (1 - k));
-  (embers.particleEmitterType as CylinderParticleEmitter).radius = 0.2 + 0.8 * easeOut(k);
+  embers.radius = 0.2 + 0.8 * easeOut(k);
 }
 
 /** A patch `ticks` after the sim removed it: burning out from the rim, embers thinning with it. */
 export function burnOutGround(mesh: AbstractMesh, ticks: number): void {
   const k = Math.min(1, Math.max(0, ticks / GROUND_FADE_TICKS));
-  const plugin = erosionOf(mesh);
-  if (plugin) plugin.amount = easeInOut(k);
+  setErosion(mesh, easeInOut(k));
   const embers = embersOf(mesh);
   if (!embers) return;
   // Stopped, not disposed: what is already in the air rises out its own life.

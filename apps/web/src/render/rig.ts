@@ -328,6 +328,8 @@ const STRIKE_RAISE_SHARE = 0.7;
 const STRIKE_DROP_MAX = 4;
 /** Where the swing ribbon ends, as a fraction of the clip. */
 const TRAIL_END = 0.5;
+/** The swing arc's inner side reaches toward this point over the feet: the chest. */
+const SWING_CENTRE = new Vector3(0, 1.1, 0);
 
 export interface StrikePace { raise: number; drop: number; follow: number }
 
@@ -1360,6 +1362,8 @@ export class RigActor {
   /** The swing in flight and the rates it is paced by; null between swings. */
   private strike: { clip: RigClip; group: AnimationGroup; legs: AnimationGroup | null; pace: StrikePace; timing: StrikeTiming } | null = null;
   private trail: ReturnType<typeof swingTrail> | null = null;
+  /** Skill of the swing in flight, which picks its arc. */
+  private strikeSkill: string | undefined;
   private strikeObserver: Observer<Scene> | null = null;
   private colliders: (SkirtCollider & {
     head: TransformNode;
@@ -1583,7 +1587,8 @@ export class RigActor {
    * standing one plays the take's own hips and legs. Paced per phase
    * (`strikePace`) so the blade stops on the tick the sim lands the hit.
    */
-  playStrike(seconds?: number, releaseSeconds?: number): void {
+  playStrike(seconds?: number, releaseSeconds?: number, skillId?: string): void {
+    this.strikeSkill = skillId;
     const clip = STRIKE_CLIPS[this.nextStrikeIndex]!;
     const group = this.groups.get(clip);
     if (!group) return;
@@ -1741,8 +1746,8 @@ export class RigActor {
     // The ribbon is the drop and nothing else: on the raise it is a slow smear.
     const tip = frac >= timing.drop && frac < TRAIL_END ? this.castPoint() : null;
     if (tip) {
-      this.trail ??= swingTrail(this.scene);
-      this.trail.follow(tip);
+      this.trail ??= swingTrail(this.scene, this.strikeSkill);
+      this.trail.follow(tip, this.pivot.getAbsolutePosition().add(SWING_CENTRE));
     } else if (this.trail) {
       this.trail.dispose();
       this.trail = null;

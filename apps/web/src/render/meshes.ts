@@ -14,7 +14,7 @@ import {
 } from "@babylonjs/core";
 import { attachProp, type PropKind } from "./props";
 import { attachCreature, creatureSpecies, type CreatureRig } from "./monsters";
-import { attachArrowStreak, attachBoltTrail, attachCinderFX, buildArrow, cinderGlow, fxProfile, PROJECTILE_ARROW_SCALE, setStreakLength, SKILL_FX } from "./skill-fx";
+import { attachArrowStreak, attachBoltTrail, attachCinderFX, buildArrow, CINDER_DISC_ALPHA, cinderGlow, fxProfile, PROJECTILE_ARROW_SCALE, setStreakLength, SKILL_FX } from "./skill-fx";
 import { attachRig, rigOf, type Looks, type RigParts } from "./rig";
 import { looksForEquipment } from "./gear-looks";
 import { attachGroundModel, GROUND_LOOK_BASES } from "./ground-looks";
@@ -1663,7 +1663,7 @@ export function makeMesh(
       // dim diffuse under it is the hit area, which has to stay readable
       // between the cracks — it is gameplay information first.
       m.diffuseColor = new Color3(r * 0.22, g * 0.22, b * 0.22);
-      m.alpha = 0.9;
+      m.alpha = CINDER_DISC_ALPHA;
       m.alphaMode = 1; // ALPHA_ADD
       cinderGlow(scene, m);
     }
@@ -1690,7 +1690,14 @@ export function makeMesh(
   const own = groundMaterial(scene, `${name}-mat`, m);
   mesh.material = own;
   mesh.onDisposeObservable.addOnce(() => own.dispose());
-  mesh.metadata = { embers: attachCinderFX(scene, mesh) };
+  const embers = attachCinderFX(scene, mesh);
+  // Scorch, fissures and rim erode with the patch, each on its own copy.
+  for (const child of mesh.getChildMeshes(true)) {
+    const worn = groundMaterial(scene, `${child.name}-mat`, child.material as StandardMaterial);
+    child.material = worn;
+    child.onDisposeObservable.addOnce(() => worn.dispose());
+  }
+  mesh.metadata = { embers };
   return mesh;
 }
 

@@ -84,6 +84,14 @@ const VOICES: Record<string, Voice> = {
   "skill-strike-swing":       { gain: 0.144, wet: 0.08, vary: 0.08, takes: 3 },
   "skill-strike-impact":      { gain: 0.189, wet: 0.12, vary: 0.10, takes: 3 },
   "skill-heavy-strike-impact": { gain: 0.273, wet: 0.14, vary: 0.08, takes: 3 },
+  // Each class skill casts with its own cue: plate rattling through a slow arc,
+  // a low overhead heave, a sharp tracer crack, and a volley of shafts.
+  "skill-heavy-strike-swing": { gain: 0.170, wet: 0.10, vary: 0.06, takes: 3 },
+  "skill-ground-slam-swing":  { gain: 0.190, wet: 0.14, vary: 0.05, takes: 3 },
+  "skill-piercing-shot-release": { gain: 0.200, wet: 0.08, vary: 0.06, takes: 3 },
+  "skill-piercing-shot-impact":  { gain: 0.280, wet: 0.12, vary: 0.08, takes: 3 },
+  "skill-split-arrow-release": { gain: 0.200, wet: 0.08, vary: 0.08, takes: 3 },
+  "skill-split-arrow-impact":  { gain: 0.250, wet: 0.10, vary: 0.10, takes: 3 },
   "skill-ground-slam-impact": { gain: 0.337, wet: 0.22, vary: 0.05, takes: 3 },
   // The free attack: smaller than the bolt in level as in looks, and no flight bed.
   "skill-ember-spark-cast":   { gain: 0.171, wet: 0.10, vary: 0.08, takes: 3 },
@@ -270,6 +278,9 @@ export const CORE_SFX: readonly string[] = [
   "skill-ember-bolt-cast", "skill-ember-bolt-impact", "skill-cinder-ground-cast", "skill-blink",
   "skill-bow-release", "skill-arrow-impact", "skill-strike-swing", "skill-strike-impact",
   "skill-heavy-strike-impact", "skill-ground-slam-impact",
+  "skill-heavy-strike-swing", "skill-ground-slam-swing",
+  "skill-piercing-shot-release", "skill-piercing-shot-impact",
+  "skill-split-arrow-release", "skill-split-arrow-impact",
   "skill-ember-spark-cast", "skill-ember-spark-impact", "player-death",
   // The sustained pair especially: a loop that arrives after the bolt has landed is
   // a loop that never plays, because `startSfxLoop` will not start what it cannot
