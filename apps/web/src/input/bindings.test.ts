@@ -627,6 +627,37 @@ describe("attachBindings hover", () => {
     canvas.remove();
   });
 
+  it("ray-tests only the meshes that belong to an interactable", () => {
+    // A fight holds hundreds of floor, decor and actor meshes; testing each on
+    // every pointer move cost about a millisecond a frame.
+    const root = { name: "entity-42", metadata: { interactKind: "portal" }, parent: null };
+    const meshes = [
+      { name: "entity-42-pi", metadata: null, parent: root },
+      { name: "ground", metadata: null, parent: null },
+      { name: "entity-9", metadata: null, parent: null },
+    ].map((m) => ({ ...m, isEnabled: () => true, isVisible: true, isPickable: true }));
+    const tested: string[] = [];
+    const scene = {
+      createPickingRay: () => downRay(5, 7),
+      pick: (_x: number, _y: number, predicate?: (m: (typeof meshes)[number]) => boolean) => {
+        const hits = meshes.filter((m) => !predicate || predicate(m));
+        tested.push(...hits.map((m) => m.name));
+        return { hit: hits.length > 0, pickedMesh: hits[0] ?? null };
+      },
+    } as unknown as Scene;
+    const canvas = document.createElement("canvas");
+    document.body.appendChild(canvas);
+    const onHover = vi.fn();
+    const { detach } = attachBindings(canvas, { postMessage: vi.fn() } as unknown as Worker, scene, onHover);
+
+    move(canvas);
+    expect(onHover).toHaveBeenCalledWith(42);
+    expect(tested).toEqual(["entity-42-pi"]);
+
+    detach();
+    canvas.remove();
+  });
+
   it("moving within the same entity does NOT invoke the callback again", () => {
     const canvas = document.createElement("canvas");
     document.body.appendChild(canvas);

@@ -2,7 +2,7 @@ import type { Intent, Snapshot, SnapshotEntity, SpawnKind, ToWorker } from "@exi
 import { toNumber } from "@exiled/fixed-point";
 import { isTextEntry } from "./text-entry";
 import { dodgeIntent, heldToMoveIntent, keyToIntent, pointerToWorld } from "./intents";
-import type { Node, Scene } from "@babylonjs/core";
+import type { AbstractMesh, Node, Scene } from "@babylonjs/core";
 import { DEFAULT_KEYBINDS, MOVE_SOCKET, type ControlMode, type Keybinds } from "../settings";
 import { SKILLS } from "@exiled/content-runtime";
 import { Y_LIFT } from "../render/meshes";
@@ -187,6 +187,11 @@ function findInteractRoot(node: Node | null): { entityId: number } | null {
   return null;
 }
 
+/** Only an interactable's meshes are ray-tested: the floor and decor answered nothing and cost the hover a millisecond. */
+function isInteractMesh(m: AbstractMesh): boolean {
+  return m.isEnabled() && m.isVisible && m.isPickable && findInteractRoot(m) !== null;
+}
+
 /**
  * Attach keyboard + pointer listeners to the canvas.
  * Requires an initialised Babylon scene for ground-plane raycasting.
@@ -303,7 +308,7 @@ export function attachBindings(
    * his feet would light up on a pixel the click then refuses.
    */
   function interactAt(sx: number, sy: number): number | null {
-    const pick = scene.pick(sx, sy);
+    const pick = scene.pick(sx, sy, isInteractMesh);
     const exact = pick.pickedMesh ? findInteractRoot(pick.pickedMesh) : null;
     if (exact) return exact.entityId;
     if (!latestSnap) return null;

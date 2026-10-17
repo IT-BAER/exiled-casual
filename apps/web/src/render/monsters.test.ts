@@ -233,7 +233,7 @@ describe("monsters asset", () => {
     expect(started, "the first swing while in view").toEqual([`${species}|attack:once`]);
   });
 
-  it("pauses its clip while asleep and resumes the latest one on waking", () => {
+  it("stops its clip while asleep and starts the latest one on waking", () => {
     const log: string[] = [];
     const group = (name: string): AnimationGroup => ({
       name,
@@ -241,8 +241,7 @@ describe("monsters asset", () => {
       enableBlending: false,
       blendingSpeed: 0,
       start: (loop: boolean) => log.push(`start ${name}${loop ? "" : ":once"}`),
-      stop: () => {},
-      pause: () => log.push(`pause ${name}`),
+      stop: () => log.push(`stop ${name}`),
       dispose: () => {},
       onAnimationGroupEndObservable: { addOnce: () => {} },
     } as unknown as AnimationGroup);
@@ -260,7 +259,7 @@ describe("monsters asset", () => {
     log.length = 0;
 
     rig.setAwake(false);
-    expect(log).toEqual([`pause ${species}|idle`]);
+    expect(log).toEqual([`stop ${species}|idle`]);
     // Asleep, nothing drives the bones: a walk is only remembered, a swing unseen.
     log.length = 0;
     rig.setLocomotion(3);
@@ -268,7 +267,7 @@ describe("monsters asset", () => {
     expect(log).toEqual([]);
 
     rig.setAwake(true);
-    expect(log).toEqual([`start ${species}|walk`]);
+    expect(log.filter((l) => l.startsWith("start"))).toEqual([`start ${species}|walk`]);
   });
 
   /**
@@ -425,6 +424,31 @@ describe("creature instances", () => {
       // The skin lies inside the box the ray entered first, short of the centre.
       expect(skin.x).toBeGreaterThan(box.x + 1e-3);
       expect(skin.x).toBeLessThan(4);
+    } finally {
+      resetMonsters();
+      engine.dispose();
+      (globalThis as { FileReader?: unknown }).FileReader = original;
+    }
+  });
+
+  /**
+   * A paused group still counts as started, so `start` on waking returned early
+   * and the creature came back into view frozen mid-step.
+   */
+  it("lets go of its bones while asleep and moves them again on waking", async () => {
+    const original = (globalThis as { FileReader?: unknown }).FileReader;
+    (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    try {
+      await loadMonsters(scene);
+      const rig = attachCreature(scene, new Mesh("body", scene), [...MONSTERS.keys()][0]!)!;
+      const idle = rig.clipGroups.get("idle")!;
+      expect(idle.isPlaying).toBe(true);
+      rig.setAwake(false);
+      expect(idle.animatables.length, "asleep, nothing left for Scene.animate to walk").toBe(0);
+      rig.setAwake(true);
+      expect(idle.isPlaying, "awake again, the idle runs").toBe(true);
     } finally {
       resetMonsters();
       engine.dispose();

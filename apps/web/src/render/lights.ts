@@ -1,5 +1,7 @@
 import {
   Color3,
+  Frustum,
+  Matrix,
   PointLight,
   RenderTargetTexture,
   ShadowGenerator,
@@ -290,6 +292,23 @@ function excludeBowls(scene: Scene): void {
   for (const light of pool) light.excludedMeshes = [...bowls];
 }
 
+const viewMatrix = new Matrix();
+const viewPlanes = Frustum.GetPlanes(Matrix.Identity());
+const plumeCentre = new Vector3();
+/** Bounding sphere of a bowl's plume: embers stay within 2 of the bowl and under 4 high. */
+const PLUME_LIFT = 1;
+const PLUME_RADIUS = 3;
+
+/**
+ * Whether any of a bowl's fire can be on screen. Its 312 particles are rewritten
+ * every frame, seen or not; the light is not culled, its pool can reach the screen.
+ */
+function plumeInView(s: FireSpot): boolean {
+  plumeCentre.set(s.x, BRAZIER_FLAME_Y + PLUME_LIFT, s.z);
+  for (const plane of viewPlanes) if (plane.dotCoordinate(plumeCentre) < -PLUME_RADIUS) return false;
+  return true;
+}
+
 /** How much of the authored framing the camera is showing. See `zoom`. */
 export function setFireLightZoom(k: number): void {
   zoom = k;
@@ -331,8 +350,11 @@ export function updateFireLights(scene: Scene, at: Vector3, deltaMs: number): vo
   // The same list the pool is about to be pointed at, cut at the distance a
   // bowl leaves the frame. The flame's own cap is `LIGHT_POOL` too, so a bowl
   // is never lit with nothing burning in it or alight with no pool under it.
+  const camera = scene.activeCamera;
+  // Not `getTransformationMatrix`: that multiplies cached matrices, last frame's or none.
+  if (camera) Frustum.GetPlanesToRef(camera.getViewMatrix().multiplyToRef(camera.getProjectionMatrix(), viewMatrix), viewPlanes);
   updateFireFlames(
-    near.filter((n) => n.d <= FLAME_RANGE * FLAME_RANGE).map((n) => n.s),
+    near.filter((n) => n.d <= FLAME_RANGE * FLAME_RANGE && (!camera || plumeInView(n.s))).map((n) => n.s),
     clock,
   );
 

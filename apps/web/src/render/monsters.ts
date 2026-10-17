@@ -248,9 +248,10 @@ export class CreatureRig {
   }
 
   /**
-   * Pause the bones of a creature nobody can see, and pick up where locomotion
+   * Stop the bones of a creature nobody can see, and pick up where locomotion
    * says it should be when it comes back. Every monster in a map animating off
-   * screen was an eighth of a mid-range CPU's frame.
+   * screen was an eighth of a mid-range CPU's frame. Stop, not pause: a paused
+   * group stays in `Scene.animate` and counts as started, so `start` would no-op.
    */
   setAwake(awake: boolean): void {
     if (awake === this.awake) return;
@@ -262,7 +263,7 @@ export class CreatureRig {
         this.playing = null;
       }
       const group = this.playing ? this.groups.get(this.playing) : undefined;
-      group?.pause();
+      group?.stop();
       return;
     }
     const clip = this.playing;

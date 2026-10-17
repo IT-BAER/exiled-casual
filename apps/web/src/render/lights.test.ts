@@ -265,4 +265,26 @@ describe("the fire in the bowl", () => {
     updateFireLights(s, new Vector3(60, 0, -3), 16);
     expect(flameParticleCount()).toBe(0);
   });
+
+  it("burns only the bowls the camera can see", () => {
+    // 312 particles a bowl, rewritten every frame: a bowl in range but off
+    // screen cost the frame about 0.3 ms for nothing.
+    const s = scene();
+    const camera = new FreeCamera("cam", new Vector3(0, 10, 0), s);
+    camera.setTarget(new Vector3(0, 0, 10));
+    createFireLights(s);
+    // Both within FLAME_RANGE of the player at the origin; one is far off to the side.
+    setFireSpots([{ x: 0, z: 6, phase: 0 }, { x: 12, z: 0, phase: 1 }]);
+    updateFireLights(s, Vector3.Zero(), 16);
+    const pos = (s.getMeshByName(FLAME_MESH) as Mesh).getVerticesData("position")!;
+    const near = (x: number, z: number) => {
+      let n = 0;
+      for (let i = 0; i < pos.length; i += 3) if (Math.hypot(pos[i]! - x, pos[i + 2]! - z) < 2 && pos[i + 1]! > 0.5) n++;
+      return n;
+    };
+    expect(near(0, 6), "the bowl in view burns").toBeGreaterThan(0);
+    expect(near(12, 0), "vertices burning over the bowl off screen").toBe(0);
+    // The light still stands over both: its pool can reach the screen.
+    expect(fireLightState().filter((l) => l.on)).toHaveLength(2);
+  });
 });

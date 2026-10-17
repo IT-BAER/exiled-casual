@@ -282,6 +282,38 @@ const scratchNear = new Vector3();
 const scratchSample = new Vector3();
 const scratchSweepA = new Vector3();
 const scratchSweepB = new Vector3();
+// `place` runs 576 times a substep; these keep it from allocating. Not shared
+// with `clampToCone`, which it calls and which writes `scratch`/`scratchPerp`.
+const placeDirection = new Vector3();
+const placeRest = new Vector3();
+const placeFree = new Vector3();
+const placeAbove = new Vector3();
+
+const sweptCorner = new Vector3();
+
+/**
+ * The box a limb sweeps through between `sweepStart` and `sweepEnd`, grown by
+ * its radius, into `out[at..at+5]` as min x/y/z then max x/y/z. Every sample
+ * `collideSegment` takes lies inside it: the corners are its four extreme lerps.
+ */
+function sweptBox(collider: SkirtCollider, sweepStart: number, sweepEnd: number, out: Float64Array, at: number): void {
+  const pa = collider.previousA ?? collider.a;
+  const pb = collider.previousB ?? collider.b;
+  out.fill(Infinity, at, at + 3);
+  out.fill(-Infinity, at + 3, at + 6);
+  for (let k = 0; k < 4; k++) {
+    Vector3.LerpToRef(k < 2 ? pa : pb, k < 2 ? collider.a : collider.b, k % 2 ? sweepEnd : sweepStart, sweptCorner);
+    out[at] = Math.min(out[at]!, sweptCorner.x);
+    out[at + 1] = Math.min(out[at + 1]!, sweptCorner.y);
+    out[at + 2] = Math.min(out[at + 2]!, sweptCorner.z);
+    out[at + 3] = Math.max(out[at + 3]!, sweptCorner.x);
+    out[at + 4] = Math.max(out[at + 4]!, sweptCorner.y);
+    out[at + 5] = Math.max(out[at + 5]!, sweptCorner.z);
+  }
+  // The margin covers the rounding of the in-between lerps.
+  const grow = collider.radius + 1e-6;
+  for (let k = 0; k < 3; k++) { out[at + k] = out[at + k]! - grow; out[at + 3 + k] = out[at + 3 + k]! + grow; }
+}
 
 /**
  * Rotate `dir` toward `rest` until it is within `cosLimit` of it. Both are unit
@@ -381,6 +413,8 @@ export class SkirtSim {
    * cloth extra travel: the passes share one budget instead of each taking one.
    */
   private readonly budget: Float64Array;
+  /** Each collider's swept box for the current collision pass. See `sweptBox`. */
+  private boxes = new Float64Array(0);
   /**
    * Last frame's pose, and the per-substep interpolation between it and this
    * frame's. The colliders learned this lesson first (`previousA`/`previousB`):
@@ -633,18 +667,18 @@ export class SkirtSim {
     point: Vector3, base: Vector3, rest: Vector3, restBase: Vector3,
     above: Vector3 | null, previous: Vector3,
   ): void {
-    const direction = point.subtract(base);
+    const direction = placeDirection.copyFrom(point).subtractInPlace(base);
     const length = direction.length();
     if (length < 1e-6) direction.copyFrom(rest).subtractInPlace(restBase);
     direction.normalize();
 
-    const restDirection = rest.subtract(restBase).normalize();
+    const restDirection = placeRest.copyFrom(rest).subtractInPlace(restBase).normalize();
     clampToCone(direction, restDirection, MAX_DEVIATION);
     if (above && this.still > 0) {
-      const free = direction.clone();
-      clampToCone(direction, base.subtract(above).normalize(), MAX_BEND);
+      const free = placeFree.copyFrom(direction);
+      clampToCone(direction, placeAbove.copyFrom(base).subtractInPlace(above).normalize(), MAX_BEND);
       direction.subtractInPlace(free).scaleInPlace(this.still * BEND_PULL).addInPlace(free).normalize();
-      previous.addInPlace(direction.subtract(free).scaleInPlace(this.segment));
+      previous.addInPlace(placeAbove.copyFrom(direction).subtractInPlace(free).scaleInPlace(this.segment));
     }
 
     point.copyFrom(base).addInPlace(direction.scaleInPlace(this.segment));
@@ -668,6 +702,8 @@ export class SkirtSim {
   ): boolean {
     const n = this.perChain;
     let moved = false;
+    if (this.boxes.length < colliders.length * 6) this.boxes = new Float64Array(colliders.length * 6);
+    for (let k = 0; k < colliders.length; k++) sweptBox(colliders[k]!, sweepStart, sweepEnd, this.boxes, k * 6);
     for (let chain = 0; chain < this.anchors.length; chain++) {
       for (let j = 0; j < n; j++) {
         const i = chain * n + j;
@@ -703,8 +739,16 @@ export class SkirtSim {
     sweepEnd: number,
   ): boolean {
     let moved = false;
-    for (const collider of colliders) {
+    const box = this.boxes;
+    for (let k = 0; k < colliders.length; k++) {
+      const collider = colliders[k]!;
       if (this.budget[index]! <= 0) return moved;
+      // A limb whose swept box this segment's box misses cannot touch it at any
+      // sample, so the samples are skipped. Most of the ring, most of the time.
+      const at = k * 6;
+      if (Math.max(base.x, end.x) < box[at]! || Math.min(base.x, end.x) > box[at + 3]!
+        || Math.max(base.y, end.y) < box[at + 1]! || Math.min(base.y, end.y) > box[at + 4]!
+        || Math.max(base.z, end.z) < box[at + 2]! || Math.min(base.z, end.z) > box[at + 5]!) continue;
       const previousA = collider.previousA ?? collider.a;
       const previousB = collider.previousB ?? collider.b;
       const travel = Math.max(
