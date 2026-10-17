@@ -92,10 +92,11 @@ describe("props asset", () => {
     // in, again for the downloaded barrel and crate, again for the beach set
     // (driftwood, shell), again for the wreck debris (wreckTimber, bones), and
     // again for the ground drops (two leathers, two scrolls, the alchemy flask),
-    // and again for the desert set (dead tree, skull, ribcage, ruin wall, pot).
+    // and again for the desert set (dead tree, skull, ribcage, ruin wall, pot),
+    // and again for the forest, swamp and vaal stone sets (5.06MB served).
     // Each costs one 512 JPEG; a dropped downscale would cost ten megabytes,
     // which is what this number is really watching for.
-    expect(glb.byteLength).toBeLessThan(3_500_000);
+    expect(glb.byteLength).toBeLessThan(5_500_000);
   });
 });
 

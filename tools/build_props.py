@@ -366,7 +366,7 @@ def _palette_ramp(path, steps=256):
     return rgb[order[pick]]
 
 
-def asset_material(name, image_name, gain, roughness, palette=None, tint=None):
+def asset_material(name, image_name, gain, roughness, palette=None, tint=None, sat=1.0):
     """A textured_material built from an image PACKED in an appended .blend.
 
     `palette` re-dresses the texture in another one's colours: the source is
@@ -382,7 +382,7 @@ def asset_material(name, image_name, gain, roughness, palette=None, tint=None):
     if img is None:
         sys.exit("appended asset carries no image named " + image_name)
     img.scale(TEX_SIZE, TEX_SIZE)
-    if gain != 1.0 or palette or tint:
+    if gain != 1.0 or palette or tint or sat != 1.0:
         px = numpy.empty(len(img.pixels), dtype=numpy.float32)
         img.pixels.foreach_get(px)
         rgb = px.reshape(-1, 4)[:, :3]
@@ -392,6 +392,9 @@ def asset_material(name, image_name, gain, roughness, palette=None, tint=None):
             span = numpy.quantile(lum, (PALETTE_CLIP, 1.0 - PALETTE_CLIP))
             t = numpy.clip((lum - span[0]) / max(span[1] - span[0], 1e-6), 0.0, 1.0)
             rgb[:] = ramp[(t * (len(ramp) - 1)).astype(numpy.int32)]
+        if sat != 1.0:
+            lum = (rgb @ LUMA)[:, None]
+            rgb[:] = lum + (rgb - lum) * sat
         # After the palette, so a palettized texture can still be exposed for its scene.
         numpy.clip(rgb * gain * numpy.asarray(tint or (1.0, 1.0, 1.0), dtype=numpy.float32), 0.0, 1.0, out=rgb)
         img.pixels.foreach_set(px)
@@ -891,6 +894,446 @@ def build_ruin_wall():
         obj.name = {"Wall": "ruinWall_wall", "Pieces": "ruinWall_rubble"}[obj.name]
     _carry("ruinWall", parts, RUIN_WALL_W).parent = root
     return root
+
+
+# --------------------------------------------------------------------------
+# the forest, swamp and vaal stone sets
+# --------------------------------------------------------------------------
+#
+# Free BlenderKit downloads (ids and licences in assets/props/SOURCE.md), placed
+# by render/level.ts at the rock foot and, for the trees, on the wall mass itself.
+# Every scan is cut to a game budget; the stylized trees already sit under one.
+
+TILESETS = os.path.join(ROOT, "apps", "web", "public", "textures", "tilesets")
+VAAL_STONE = os.path.join(TILESETS, "vaal_stone", "wall_color.jpg")
+
+
+def _apply_shape_mods(obj):
+    """Bake geometry-nodes and bevel stacks into the mesh, drop subdivision.
+
+    `decimate_to` clears every modifier, which is right for a subsurf over a
+    sculpt but deletes the leaves a geometry-nodes stack scatters over a crown.
+    """
+    for m in list(obj.modifiers):
+        if m.type in ("SUBSURF", "MULTIRES"):
+            obj.modifiers.remove(m)
+    if obj.modifiers:
+        deps = bpy.context.evaluated_depsgraph_get()
+        mesh = bpy.data.meshes.new_from_object(obj.evaluated_get(deps))
+        obj.modifiers.clear()
+        obj.data = mesh
+
+
+def _image_of(obj, hint):
+    """The image node in `obj`'s materials whose image name contains `hint`."""
+    for slot in obj.material_slots:
+        if slot.material and slot.material.node_tree:
+            for n in slot.material.node_tree.nodes:
+                if n.type == "TEX_IMAGE" and n.image and hint in n.image.name:
+                    return n.image.name
+    sys.exit(f"{obj.name} has no image matching {hint!r}")
+
+
+def _scan(name, blend, budgets, hint, width, gain, roughness, palette=None, tint=None, mat_name=None):
+    """build_appended for sources whose image names collide or whose shape lives in modifiers."""
+    root = _root(name)
+    root.rotation_euler = (0.0, 0.0, math.pi)  # front at -Y, see build_appended
+    parts = append_objects(blend, list(budgets))
+    image = _image_of(parts[0], hint)
+    mat = asset_material(mat_name or name, image, gain=gain, roughness=roughness, palette=palette, tint=tint)
+    for obj, budget in zip(parts, budgets.values()):
+        _apply_shape_mods(obj)
+        decimate_to(obj, budget)
+        for attr in list(obj.data.color_attributes):
+            obj.data.color_attributes.remove(attr)
+        obj.data.materials.clear()
+        obj.data.materials.append(mat)
+        smooth_by_angle(obj, 40)
+    for i, obj in enumerate(parts):
+        obj.name = f"{name}_{i}"
+    carrier = _carry(name, parts, width)
+    carrier.parent = root
+    return root, carrier, parts
+
+
+# Crowns are SOLID lobes, not leaf cards. Hundreds of small cards on a 256px cut-
+# out mip down at this camera into one feathered disc with no shading; a few big
+# rounded masses with ambient occlusion between them read as a canopy (PoE's).
+LEAF_LIGHT = (0.30, 0.38, 0.19)  # sRGB, lit leaf
+LEAF_DARK = (0.17, 0.23, 0.12)   # sRGB, the gaps between leaves
+LEAF_TILE = 0.45                 # game units per repeat of the leaf grain
+CROWN_TRIS = 1800
+
+
+def _vertex_shaded(mat):
+    """Multiply the material's base colour by COLOR_0 ("Col"): baked shade or tint."""
+    nt = mat.node_tree
+    bsdf = nt.nodes["Principled BSDF"]
+    src = bsdf.inputs["Base Color"].links[0].from_socket
+    shade = nt.nodes.new("ShaderNodeVertexColor")
+    shade.layer_name = "Col"
+    mul = nt.nodes.new("ShaderNodeMix")
+    mul.data_type = "RGBA"
+    mul.blend_type = "MULTIPLY"
+    mul.inputs["Factor"].default_value = 1.0
+    nt.links.new(mul.inputs["A"], src)
+    nt.links.new(mul.inputs["B"], shade.outputs["Color"])
+    nt.links.new(bsdf.inputs["Base Color"], mul.outputs["Result"])
+    return mat
+
+
+def crown_material(name, mask_image):
+    """Opaque leaf grain: the source's leaf mask painted between two greens."""
+    src = bpy.data.images[mask_image]
+    src.scale(256, 256)
+    px = numpy.empty(len(src.pixels), dtype=numpy.float32)
+    src.pixels.foreach_get(px)
+    rgba = px.reshape(-1, 4)
+    m = numpy.clip(rgba[:, :3] @ LUMA, 0.0, 1.0)[:, None]
+    out = numpy.ones_like(rgba)
+    lo, hi = numpy.asarray(LEAF_DARK, numpy.float32), numpy.asarray(LEAF_LIGHT, numpy.float32)
+    out[:, :3] = lo + (hi - lo) * m  # sRGB: an 8-bit file stores it as written
+    img = bpy.data.images.new(name, 256, 256)
+    img.pixels.foreach_set(out.ravel())
+    path = os.path.join(BUILD_DIR, name + ".jpg")
+    img.filepath_raw = path
+    img.file_format = "JPEG"
+    img.save()
+    mat = textured_material(name, path, 0.9)
+    mat.node_tree.nodes["Principled BSDF"].inputs["Emission Strength"].default_value = EMISSION * 0.5
+    return _vertex_shaded(mat)
+
+
+def _kmeans(points, k, iters=16):
+    """Deterministic k-means: seeds spread along the points sorted by height."""
+    order = numpy.lexsort((points[:, 0], points[:, 2]))
+    centres = points[order[numpy.linspace(0, len(points) - 1, k).astype(int)]].copy()
+    for _ in range(iters):
+        label = ((points[:, None, :] - centres[None]) ** 2).sum(-1).argmin(1)
+        for i in range(k):
+            if (label == i).any():
+                centres[i] = points[label == i].mean(0)
+    return centres, label
+
+
+def _bake_ao(obj, distance):
+    """Cycles ambient occlusion into the "Col" point colours, scene cleared around it."""
+    scene = bpy.context.scene
+    hidden = [o for o in scene.objects if o.type == "MESH" and o is not obj and not o.hide_render]
+    for o in hidden:
+        o.hide_render = True
+    engine = scene.render.engine
+    scene.render.engine = "CYCLES"
+    scene.cycles.samples = 64
+    scene.cycles.device = "CPU"
+    if scene.world is None:
+        scene.world = bpy.data.worlds.new("bake")
+    scene.world.light_settings.distance = distance
+    for o in bpy.context.selected_objects:
+        o.select_set(False)
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.bake(type="AO", target="VERTEX_COLORS")
+    scene.render.engine = engine
+    for o in hidden:
+        o.hide_render = False
+
+
+def lobe_crown(cards, lobes, mat, width_game):
+    """Replace a leaf-card cloud with `lobes` fused rounded masses, AO baked in.
+
+    k-means over the cards' vertices puts each lobe where the leaves are dense,
+    a sphere per cluster is voxel-remeshed into one closed surface and smoothed,
+    then cut to budget. Lobe normals do all the shading.
+    """
+    _apply_shape_mods(cards)
+    pts = numpy.array([tuple(cards.matrix_world @ v.co) for v in cards.data.vertices], dtype=numpy.float32)
+    centres, label = _kmeans(pts, lobes)
+    span = float(max(numpy.ptp(pts[:, 0]), numpy.ptp(pts[:, 1])))
+    bm = bmesh.new()
+    for i, c in enumerate(centres):
+        member = pts[label == i]
+        r = max(float(numpy.percentile(numpy.linalg.norm(member - c, axis=1), 70)) * 1.1, span * 0.16)
+        geom = bmesh.ops.create_icosphere(bm, subdivisions=3, radius=r)
+        bmesh.ops.scale(bm, vec=(1.0, 1.0, 0.85), verts=geom["verts"])
+        bmesh.ops.translate(bm, vec=mathutils.Vector(c.tolist()), verts=geom["verts"])
+    me = bpy.data.meshes.new(cards.name + "_lobes")
+    bm.to_mesh(me)
+    bm.free()
+    name = cards.name
+    bpy.data.objects.remove(cards, do_unlink=True)
+    obj = bpy.data.objects.new(name, me)
+    bpy.context.scene.collection.objects.link(obj)
+    bpy.context.view_layer.objects.active = obj
+    rm = obj.modifiers.new("remesh", "REMESH")
+    rm.mode = "VOXEL"
+    rm.voxel_size = span / 40.0
+    sm = obj.modifiers.new("smooth", "SMOOTH")
+    sm.factor = 0.6
+    sm.iterations = 4
+    for m in list(obj.modifiers):
+        bpy.ops.object.modifier_apply(modifier=m.name)
+    decimate_to(obj, CROWN_TRIS)
+    obj.data.polygons.foreach_set("use_smooth", [True] * len(obj.data.polygons))
+    # The leaf grain at LEAF_TILE game units, whatever the source's own scale is.
+    uv_box(obj, LEAF_TILE * span / width_game)
+    obj.data.materials.append(mat)
+    attr = obj.data.color_attributes.new("Col", "BYTE_COLOR", "POINT")
+    obj.data.color_attributes.active_color = attr
+    _bake_ao(obj, span * 0.35)
+    # Contrast: the gaps between lobes go dark, the crown tops stay lit.
+    for d in obj.data.color_attributes["Col"].data:
+        k = 0.28 + 0.72 * d.color[0] ** 1.6
+        d.color = (k, k, k, 1.0)
+    return obj
+
+
+def _stylized_tree(name, blend, trunk, leaves, trunk_hint, width, crown_mat, gain, lobes):
+    """A Phixer Art stylized tree: its own bark, its crown remade as solid lobes."""
+    root = _root(name)
+    root.rotation_euler = (0.0, 0.0, math.pi)
+    body, cards = append_objects(blend, [trunk, leaves])
+    crown_mat = crown_mat or crown_material("forest_leaves", _image_of(cards, "Leaves04"))
+    # Desaturated: the painted bark is orange, and a brazier lights it red-hot.
+    bark = asset_material(name + "_bark", _image_of(body, trunk_hint), gain=gain, roughness=0.9, sat=0.4)
+    _apply_shape_mods(body)
+    for attr in list(body.data.color_attributes):
+        body.data.color_attributes.remove(attr)
+    body.data.materials.clear()
+    body.data.materials.append(bark)
+    smooth_by_angle(body, 60)
+    crown = lobe_crown(cards, lobes, crown_mat, width)
+    body.name, crown.name = name + "_trunk", name + "_crown"
+    _carry(name, [body, crown], width).parent = root
+    return root
+
+
+# The forest. Phixer Art's Stylized Tree 01 (broad, 3.8 wide) and 03 (slender);
+# 03's crown is painted magenta at source and wears 01's green here. In game a
+# tree stands 3.5-4.5 tall: two players, which only the wall mass and the rock
+# foot with rock behind it can afford.
+FOREST_TREE_W = 3.6
+FOREST_TREE2_W = 2.7
+BUSH_W = 1.5
+STUMP_W = 0.95
+STUMP_BUDGET = {"3DModel_Custom": 900}
+MOSS_LOG_W = 2.3
+MOSS_LOG_BUDGET = {"log": 900}
+MOSS_ROCK_W = 1.35
+MOSS_ROCK_BUDGET = {"Mossy Rock": 1000}
+# (x, y, scale, lean) of each cap in the cluster, in cluster units.
+TOADSTOOLS = ((0.0, 0.0, 1.0, 0.05), (0.32, 0.12, 0.7, 0.2), (-0.2, 0.28, 0.55, -0.15),
+              (0.1, -0.3, 0.45, 0.25), (-0.3, -0.12, 0.35, -0.3))
+TOADSTOOL_H = 0.42
+
+
+def build_forest():
+    _stylized_tree("forestTree", "stylized_tree_01.blend", "SM_Trunk01", "SM_Trunk01_Leaves02",
+                   "T_SM_Trunk01_WithMoss_A.png", FOREST_TREE_W, None, gain=0.6, lobes=12)
+    leaf_mat = bpy.data.materials["forest_leaves"]
+    _stylized_tree("forestTree2", "stylized_tree_03.blend", "SM_Trunk02", "SM_Trunk02_Leaves01",
+                   "SM_Trunk02_basecolor", FOREST_TREE2_W, leaf_mat, gain=0.6, lobes=9)
+    # A bush is tree 01's crown on the ground in six lobes: squashed, half sunk.
+    root = _root("bush")
+    cards, = append_objects("stylized_tree_01.blend", ["SM_Trunk01_Leaves02"])
+    crown = lobe_crown(cards, 6, leaf_mat, BUSH_W)
+    crown.name = "bush_crown"
+    carrier = _carry("bush", [crown], BUSH_W)
+    carrier.scale.z *= 0.7
+    carrier.location.z -= 0.15
+    carrier.parent = root
+    _scan("stump", "stump_scan.blend", STUMP_BUDGET, "3DModel_Custom", STUMP_W, gain=0.75, roughness=0.9)
+    # The scan's lichen is lilac; it wears tree 01's bark instead, and a fatter
+    # cross-section, or at this camera it is a branch rather than a fallen trunk.
+    _, carrier, _ = _scan("mossLog", "large_log.blend", MOSS_LOG_BUDGET, "Log_COL", MOSS_LOG_W, gain=1.0,
+                          roughness=0.9, palette=os.path.join(BUILD_DIR, "forestTree_bark.jpg"))
+    carrier.scale.y *= 1.4
+    carrier.scale.z *= 1.4
+    _scan("mossRock", "mossy_rock.blend", MOSS_ROCK_BUDGET, "Base_color", MOSS_ROCK_W, gain=0.7, roughness=0.88)
+    build_toadstools()
+
+
+def _toadstool_profile(h, cap_r, stem_r):
+    """Amanita in (radius, z), top pole first: domed cap, gill shelf, swollen foot."""
+    return [(0.0, h), (cap_r * 0.5, h - cap_r * 0.12), (cap_r * 0.85, h - cap_r * 0.32),
+            (cap_r, h - cap_r * 0.55), (cap_r * 0.92, h - cap_r * 0.68), (stem_r * 1.3, h - cap_r * 0.6),
+            (stem_r, h - cap_r * 0.62), (stem_r * 1.05, h * 0.45), (stem_r * 1.45, 0.03), (0.0, 0.0)]
+
+
+def build_toadstools():
+    """Five amanitas of falling size as one prop: a cluster reads, one cap is a dot.
+
+    Turned here, not decimated: the scan is 270k triangles and cut to a few
+    hundred it fell apart into floating flakes. Its cap photograph is kept,
+    planar-mapped from above, which is the only side this camera sees.
+    """
+    root = _root("toadstools")
+    src, = append_objects("toadstool.blend", ["toadstool."])
+    cap = asset_material("toadstool_cap", _image_of(src, "rot.jpg"), gain=0.85, roughness=0.6)
+    bpy.data.objects.remove(src, do_unlink=True)
+    stem = flat_material("toadstool_stem", (0.80, 0.76, 0.66), 0.8)
+    for i, (x, y, s, lean) in enumerate(TOADSTOOLS):
+        h = TOADSTOOL_H * s
+        verts, faces = lathe(_toadstool_profile(h, 0.17 * s, 0.035 * s), 10)
+        obj = mesh_object(f"toadstools_{i}", verts, faces)
+        _outward(obj)
+        uv_unit(obj, 0.34 * s, 0.34 * s)
+        obj.data.materials.append(cap)
+        obj.data.materials.append(stem)
+        for poly in obj.data.polygons:
+            # The cap is everything above the gill shelf that faces up or out.
+            poly.material_index = 0 if poly.center.z > h - 0.17 * s * 0.6 and poly.normal.z > -0.3 else 1
+        smooth_by_angle(obj, 50)
+        obj.location = (x, y, -0.02)
+        obj.rotation_euler = (lean, 0.0, i * 1.3)
+        obj.parent = root
+    return root
+
+
+# The swamp: a drowned dead tree and reeds, with the forest's stump, log and
+# toadstools. The tree is the desert's chunky stylized snag again (a thin-twig
+# scan read as grey wire mesh at this camera), in dark wet bark with moss
+# climbing from the waterline, carried as a COLOR_0 tint.
+SWAMP_TREE_W = 2.9  # ~4.5 tall
+SWAMP_MOSS = (0.50, 0.68, 0.40)  # sRGB multiplier at the foot, fading out by 45% up
+REEDS_W = 0.9
+REEDS_H = 1.25
+# sRGB along a blade: green at the root, olive, tan at the tip.
+REEDS_RAMP = ((0.0, (0.16, 0.24, 0.10)), (0.55, (0.34, 0.40, 0.18)), (1.0, (0.62, 0.55, 0.33)))
+
+
+def _height_colours(obj, fn):
+    """A "Col" point colour from each vertex's height fraction, through `fn`."""
+    me = obj.data
+    zs = [v.co.z for v in me.vertices]
+    lo, hi = min(zs), max(zs)
+    attr = me.color_attributes.new("Col", "BYTE_COLOR", "POINT")
+    for v, d in zip(me.vertices, attr.data):
+        d.color_srgb = (*fn((v.co.z - lo) / max(hi - lo, 1e-6)), 1.0)
+    me.color_attributes.active_color = attr
+
+
+def _lerp3(a, b, t):
+    return tuple(x + (y - x) * t for x, y in zip(a, b))
+
+
+def build_swamp():
+    root = _root("swampTree")
+    root.rotation_euler = (0.0, 0.0, math.pi)
+    body, = append_objects("stylized_dead_tree.blend", list(DEAD_TREE_BUDGET))
+    bark = asset_material("swamp_bark", _image_of(body, "Material.002_BaseColor"), gain=0.7, roughness=0.7,
+                          palette=os.path.join(BUILD_DIR, "forestTree_bark.jpg"))
+    decimate_to(body, DEAD_TREE_BUDGET["stylized dead tree"])
+    for attr in list(body.data.color_attributes):
+        body.data.color_attributes.remove(attr)
+    body.data.materials.clear()
+    body.data.materials.append(_vertex_shaded(bark))
+    smooth_by_angle(body, 40)
+    _height_colours(body, lambda t: _lerp3(SWAMP_MOSS, (1.0, 1.0, 1.0), min(1.0, t / 0.45)))
+    body.name = "swampTree_body"
+    _carry("swampTree", [body], SWAMP_TREE_W).parent = root
+    # Reeds: solid blades coloured root to tip in COLOR_0, no texture needed.
+    root = _root("reeds")
+    clump, = append_objects("high_grass_clump.blend", ["High grass clump"])
+    _apply_shape_mods(clump)
+    clump.data.materials.clear()
+    mat = bpy.data.materials.new("reeds")
+    mat.use_nodes = True
+    mat.use_backface_culling = False
+    nt = mat.node_tree
+    bsdf = nt.nodes["Principled BSDF"]
+    col = nt.nodes.new("ShaderNodeVertexColor")
+    col.layer_name = "Col"
+    nt.links.new(bsdf.inputs["Base Color"], col.outputs["Color"])
+    bsdf.inputs["Metallic"].default_value = 0.0
+    bsdf.inputs["Roughness"].default_value = 0.85
+    clump.data.materials.append(mat)
+    smooth_by_angle(clump, 60)
+
+    def ramp(t):
+        for (t0, c0), (t1, c1) in zip(REEDS_RAMP, REEDS_RAMP[1:]):
+            if t <= t1:
+                return _lerp3(c0, c1, (t - t0) / (t1 - t0))
+        return REEDS_RAMP[-1][1]
+    _height_colours(clump, ramp)
+    clump.name = "reeds_blades"
+    carrier = _carry("reeds", [clump], REEDS_W)
+    lo, hi = bounds([clump])
+    carrier.scale.z *= REEDS_H / ((hi.z - lo.z) * carrier.scale.x)
+    carrier.parent = root
+
+
+# Vaal stone: an underground ruin. Everything wears the vaal wall plate as a
+# palette so a broken column and the cliff behind it are the same cold stone.
+# The upright pieces take a torch square on, and at the block's exposure they came
+# out white beside a wall drawn at ROCK_ALBEDO 0.18. This lands them near the
+# wall's own value, in the wall material's cold bias (level.ts wallMaterial).
+VAAL_TALL_GAIN = 0.5
+VAAL_COLD = (0.94, 1.0, 1.1)
+VAAL_COLUMN_W = 0.95
+VAAL_COLUMN_BUDGET = {"Pillar": 2400}
+VAAL_COLUMN_CUT = 0.5   # of the source height, tilted: the column broke, not sawn
+VAAL_IDOL_W = 0.8
+VAAL_IDOL_BUDGET = {"Mesoamerican Statuette": 3000}
+VAAL_BLOCK_W = 0.85
+VAAL_BLOCK_BUDGET = {"Square Shaped Stone Block.003": 500}
+VAAL_URN_W = 0.55
+VAAL_URN_BUDGET = {"Retopo_3DModel": 600}
+
+
+def _break_top(obj, frac, tilt):
+    """Cut a column off at `frac` of its height on a tilted plane, and cap it."""
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    zs = [v.co.z for v in bm.verts]
+    z = min(zs) + (max(zs) - min(zs)) * frac
+    normal = mathutils.Vector((math.sin(tilt), 0.0, math.cos(tilt)))
+    res = bmesh.ops.bisect_plane(bm, geom=bm.verts[:] + bm.edges[:] + bm.faces[:],
+                                 plane_co=(0.0, 0.0, z), plane_no=normal, clear_outer=True)
+    edges = [e for e in res["geom_cut"] if isinstance(e, bmesh.types.BMEdge)]
+    bmesh.ops.holes_fill(bm, edges=edges, sides=0)
+    bmesh.ops.triangulate(bm, faces=bm.faces[:])
+    bm.to_mesh(obj.data)
+    bm.free()
+
+
+def build_vaal():
+    root = _root("vaalColumn")
+    root.rotation_euler = (0.0, 0.0, math.pi)
+    col, = append_objects("carved_temple_column.blend", ["Pillar"])
+    mat = asset_material("vaal_column", _image_of(col, "Base_color"), gain=VAAL_TALL_GAIN, roughness=0.92,
+                         palette=VAAL_STONE, tint=VAAL_COLD)
+    _apply_shape_mods(col)
+    _break_top(col, VAAL_COLUMN_CUT, math.radians(18))
+    decimate_to(col, VAAL_COLUMN_BUDGET["Pillar"])
+    col.data.materials.clear()
+    col.data.materials.append(mat)
+    smooth_by_angle(col, 40)
+    col.name = "vaalColumn_body"
+    _carry("vaalColumn", [col], VAAL_COLUMN_W).parent = root
+    _scan("vaalIdol", "mesoamerican_statuette.blend", VAAL_IDOL_BUDGET, "Color", VAAL_IDOL_W,
+          gain=VAAL_TALL_GAIN, roughness=0.9, palette=VAAL_STONE, tint=VAAL_COLD)
+    _scan("vaalBlock", "square_stone_block.blend", VAAL_BLOCK_BUDGET, "3DModel", VAAL_BLOCK_W,
+          gain=0.75, roughness=0.92, palette=VAAL_STONE)
+    # The bowl keeps its own red and green paint: the one colour in a grey ruin.
+    _scan("vaalUrn", "ancient_stone_bowl.blend", VAAL_URN_BUDGET, "3DModel_Custom.jpg", VAAL_URN_W,
+          gain=0.7, roughness=0.85)
+    # The desert's broken wall in the vaal plate's stone.
+    root = _root("vaalRuinWall")
+    root.rotation_euler = (0.0, 0.0, math.pi)
+    parts = append_objects("broken_stone_wall.blend", list(RUIN_WALL_BUDGET))
+    for obj in parts:
+        hint = "wall_diffuse" if obj.name.startswith("Wall") else "pieces_diffuse"
+        image = _image_of(obj, hint)
+        decimate_to(obj, RUIN_WALL_BUDGET["Wall" if hint == "wall_diffuse" else "Pieces"])
+        obj.data.materials.clear()
+        obj.data.materials.append(asset_material(
+            "vaal_ruin" if hint == "wall_diffuse" else "vaal_ruin_rubble", image,
+            gain=0.72, roughness=0.92, palette=VAAL_STONE))
+        smooth_by_angle(obj, 40)
+    for obj in parts:
+        obj.name = "vaalRuinWall_wall" if obj.name.startswith("Wall") else "vaalRuinWall_rubble"
+    _carry("vaalRuinWall", parts, RUIN_WALL_W).parent = root
 
 
 # --------------------------------------------------------------------------
@@ -1543,6 +1986,9 @@ def main():
     build_ribcage()
     build_ruin_wall()
     build_pot()
+    build_forest()
+    build_swamp()
+    build_vaal()  # after the ruin wall: it re-dresses the same source
     build_rug(mats)
     build_table(mats)
     build_bench(mats)

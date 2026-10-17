@@ -44,6 +44,11 @@ export const PROP_KINDS = [
   "driftwood", "shell", "coastRock", "wreckTimber", "bones",
   // The desert set, placed by render/level.ts over open ground.
   "deadTree", "skull", "ribcage", "ruinWall", "pot",
+  // The forest, swamp and vaal stone sets, placed the same way; the trees also
+  // stand on the wall mass as canopy (`canopyPlacements`).
+  "forestTree", "forestTree2", "bush", "stump", "mossLog", "mossRock", "toadstools",
+  "swampTree", "reeds",
+  "vaalColumn", "vaalIdol", "vaalBlock", "vaalUrn", "vaalRuinWall",
   // The one prop that is also a light. `render/lights.ts` finds these by their
   // root name and hangs a real point light over each bowl.
   "brazier",

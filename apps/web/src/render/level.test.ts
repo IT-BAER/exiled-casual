@@ -4,8 +4,11 @@ import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { NullEngine, Color3, Mesh, VertexBuffer } from "@babylonjs/core";
 import { createScene } from "./engine";
-import { buildLevel, applyBiomeTint, applyTilesetFloor, tilesetDir, groundPlacements } from "./level";
-import { brazierSpots, generateArea } from "@exiled/mapgen";
+import {
+  buildLevel, applyBiomeTint, applyTilesetFloor, tilesetDir, groundPlacements, canopyPlacements,
+  CANOPY_BAND, CANOPY_FLOOR_CLEAR,
+} from "./level";
+import { brazierSpots, generateArea, CONTAINER_CLEAR } from "@exiled/mapgen";
 import { MAP_BASES, BIOMES, CONTENT_VERSION } from "@exiled/content-runtime";
 import type { WalkableGrid } from "@exiled/mapgen";
 
@@ -184,7 +187,7 @@ describe("groundPlacements", () => {
     for (const kind of ["deadTree", "ribcage", "ruinWall", "skull", "pot", "bones"]) {
       expect(desert.some((p) => p.kind === kind), kind).toBe(true);
     }
-    expect(groundPlacements(grid, "tileset.vaal_stone", rewards)).toEqual([]);
+    expect(groundPlacements(grid, "tileset.coast", rewards)).toEqual([]);
   });
 
   it("stands everything on floor, at the foot of the rock", () => {
@@ -210,6 +213,139 @@ describe("groundPlacements", () => {
 
   it("places the same props for the same layout", () => {
     expect(groundPlacements(grid, "tileset.desert", rewards)).toEqual(desert);
+  });
+});
+
+/** The other dressed biomes, each on the grammar its maps use. */
+const BIOME_SETS = [
+  { tileset: "tileset.vaal_stone", grammar: "loop", tall: ["vaalColumn", "vaalIdol", "vaalRuinWall"] },
+  { tileset: "tileset.swamp", grammar: "loop", tall: ["swampTree"] },
+  { tileset: "tileset.forest", grammar: "open-field", tall: ["forestTree", "forestTree2"] },
+] as const;
+
+function wallTest(grid: WalkableGrid) {
+  return (wx: number, wz: number): boolean => {
+    const cx = Math.round((wx - grid.originX) / grid.cellSize);
+    const cy = Math.round((wz - grid.originY) / grid.cellSize);
+    return cx < 0 || cy < 0 || cx >= grid.cols || cy >= grid.rows || grid.cells[cy * grid.cols + cx] !== 1;
+  };
+}
+
+describe.each(BIOME_SETS)("$tileset dressing", ({ tileset, grammar, tall }) => {
+  for (const seed of [12345, 777, 4242]) {
+    const { grid, objectiveAnchors } = generateArea(seed, CONTENT_VERSION, grammar);
+    const rewards = objectiveAnchors.filter((a) => a.id.startsWith("reward."));
+    const ps = groundPlacements(grid, tileset, rewards);
+    const isWall = wallTest(grid);
+    const c = grid.cellSize;
+
+    it(`seed ${seed}: holds a desert's worth of dressing, every kind present`, () => {
+      expect(ps.length).toBeGreaterThanOrEqual(40);
+      expect(ps.length).toBeLessThanOrEqual(60);
+      for (const kind of tall) expect(ps.some((p) => p.kind === kind), kind).toBe(true);
+    });
+
+    it(`seed ${seed}: stands on floor at the rock foot, off every container`, () => {
+      for (const p of ps) {
+        expect(isWall(p.x, p.z), `${p.kind} at ${p.x},${p.z}`).toBe(false);
+        const near = [-c, 0, c].some((dx) => [-c, 0, c].some((dz) => isWall(p.x + dx, p.z + dz)));
+        expect(near, `${p.kind} at ${p.x},${p.z}`).toBe(true);
+        for (const r of rewards) expect(Math.hypot(p.x - r.x, p.z - r.y)).toBeGreaterThan(CONTAINER_CLEAR);
+      }
+    });
+
+    it(`seed ${seed}: stands a tall prop only with rock behind it`, () => {
+      const up = Math.SQRT1_2;
+      for (const p of ps.filter((q) => (tall as readonly string[]).includes(q.kind))) {
+        expect(isWall(p.x - up, p.z + up), `${p.kind} at ${p.x},${p.z}`).toBe(true);
+      }
+    });
+
+    it(`seed ${seed}: places the same props for the same layout`, () => {
+      expect(groundPlacements(grid, tileset, rewards)).toEqual(ps);
+      expect(canopyPlacements(grid, tileset)).toEqual(canopyPlacements(grid, tileset));
+    });
+  }
+});
+
+describe("canopyPlacements", () => {
+  /** Chebyshev distance in cells from a world point to the nearest floor cell, capped. */
+  function floorDistance(grid: WalkableGrid, wx: number, wz: number, cap: number): number {
+    const cx = Math.round((wx - grid.originX) / grid.cellSize);
+    const cy = Math.round((wz - grid.originY) / grid.cellSize);
+    for (let r = 0; r <= cap; r++)
+      for (let dy = -r; dy <= r; dy++)
+        for (let dx = -r; dx <= r; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+          const x = cx + dx, y = cy + dy;
+          if (x >= 0 && y >= 0 && x < grid.cols && y < grid.rows && grid.cells[y * grid.cols + x] === 1) return r;
+        }
+    return cap + 1;
+  }
+
+  it("puts a forest on the forest's rock, a few snags on the swamp's, nothing underground", () => {
+    const forest = generateArea(777, CONTENT_VERSION, "open-field").grid;
+    const swamp = generateArea(777, CONTENT_VERSION, "loop").grid;
+    expect(canopyPlacements(forest, "tileset.forest").length).toBeGreaterThan(60);
+    const snags = canopyPlacements(swamp, "tileset.swamp");
+    expect(snags.length).toBeGreaterThan(10);
+    expect(snags.length).toBeLessThan(canopyPlacements(swamp, "tileset.forest").length);
+    expect(canopyPlacements(swamp, "tileset.vaal_stone")).toEqual([]);
+    expect(canopyPlacements(forest, "tileset.desert")).toEqual([]);
+  });
+
+  it.each([12345, 777, 4242])("seed %i: never on or beside the floor, nor over it either way down the screen", (seed) => {
+    const grid = generateArea(seed, CONTENT_VERSION, "open-field").grid;
+    const trees = canopyPlacements(grid, "tileset.forest");
+    for (const t of trees) {
+      // Trunk jitter is a quarter cell, so the cell it reads is the cell it was placed on.
+      expect(floorDistance(grid, t.x, t.z, CANOPY_FLOOR_CLEAR), `tree at ${t.x},${t.z}`).toBeGreaterThan(CANOPY_FLOOR_CLEAR);
+      // Screen-down (+x, -z) and screen-up (-x, +z), out to CANOPY_BAND.
+      for (const sign of [1, -1])
+        for (let d = grid.cellSize; d <= CANOPY_BAND; d += grid.cellSize) {
+          const k = d * Math.SQRT1_2;
+          expect(floorDistance(grid, t.x + sign * k, t.z - sign * k, 0), `tree at ${t.x},${t.z}, ${sign * d} down`).toBeGreaterThan(0);
+        }
+    }
+  });
+});
+
+describe("dressing and inland water", () => {
+  /** The forest layout with a 7x7 pool sunk around each of the first trees and props. */
+  function flooded() {
+    const { grid, objectiveAnchors } = generateArea(777, CONTENT_VERSION, "open-field");
+    const rewards = objectiveAnchors.filter((a) => a.id.startsWith("reward."));
+    const cells = grid.cells.slice();
+    const water = new Uint8Array(cells.length);
+    const at = (wx: number, wz: number) => [
+      Math.round((wx - grid.originX) / grid.cellSize), Math.round((wz - grid.originY) / grid.cellSize),
+    ] as const;
+    const pools = [
+      ...groundPlacements(grid, "tileset.forest", rewards).slice(0, 12),
+      ...canopyPlacements(grid, "tileset.forest").slice(0, 12),
+    ];
+    for (const p of pools) {
+      const [cx, cy] = at(p.x, p.z);
+      for (let dy = -3; dy <= 3; dy++)
+        for (let dx = -3; dx <= 3; dx++) {
+          const i = (cy + dy) * grid.cols + cx + dx;
+          cells[i] = 0;
+          water[i] = 1;
+        }
+    }
+    return { grid: { ...grid, cells, water }, rewards, at };
+  }
+
+  it("keeps every ground prop and canopy tree off water and a cell clear of it", () => {
+    const { grid, rewards, at } = flooded();
+    const all = [...groundPlacements(grid, "tileset.forest", rewards), ...canopyPlacements(grid, "tileset.forest")];
+    expect(all.length).toBeGreaterThan(30);
+    for (const p of all) {
+      const [cx, cy] = at(p.x, p.z);
+      for (let dy = -1; dy <= 1; dy++)
+        for (let dx = -1; dx <= 1; dx++)
+          expect(grid.water[(cy + dy) * grid.cols + cx + dx], `${p.kind} at ${p.x},${p.z}`).not.toBe(1);
+    }
   });
 });
 

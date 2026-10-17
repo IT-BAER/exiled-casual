@@ -41,6 +41,7 @@ import {
   DUNE_MESH_PREFIX,
   DUNE_RIM_MESH_PREFIX,
   FLORA_MESH_PREFIX,
+  CANOPY_MESH_PREFIX,
   LEDGE_MESH_PREFIX,
   WEED_MESH_PREFIX,
   type RockCell,
@@ -243,18 +244,35 @@ const LEDGE_ROWS = [1.15, 2.3];
 const WEED_COLOR = new Color3(0.46, 0.41, 0.21);
 const WEED_MAT_NAME = "level-weed-mat";
 
-function weedMaterial(scene: Scene): PBRMaterial {
-  const existing = scene.getMaterialByName(WEED_MAT_NAME) as PBRMaterial | null;
+/** Cliff-foot growth per tileset. Desert keeps the coast's dry scrub; swamp and
+ *  forest grow green, the swamp's sunk toward olive. Vaal Stone is underground
+ *  and grows none. */
+const FOOT_WEED: Readonly<Record<string, Color3>> = {
+  "tileset.desert": WEED_COLOR,
+  "tileset.swamp": new Color3(0.27, 0.33, 0.15),
+  "tileset.forest": new Color3(0.24, 0.36, 0.14),
+};
+
+/** Albedo of the coast's scanned ferns where they grow under a dungeon's light:
+ *  the coast's 0.34 is trimmed for its 2.4x sun, and at 1x that is black leaf. */
+const FOOT_FLORA_ALBEDO: Readonly<Record<string, number>> = {
+  "tileset.swamp": 0.6,
+  "tileset.forest": 0.65,
+};
+
+function weedMaterial(scene: Scene, color: Color3 = WEED_COLOR): PBRMaterial {
+  const name = color === WEED_COLOR ? WEED_MAT_NAME : `${WEED_MAT_NAME}-${color.toHexString()}`;
+  const existing = scene.getMaterialByName(name) as PBRMaterial | null;
   if (existing) return existing;
-  const mat = new PBRMaterial(WEED_MAT_NAME, scene);
+  const mat = new PBRMaterial(name, scene);
   mat.metallic = 0;
   mat.roughness = 0.95;
-  mat.albedoColor = WEED_COLOR;
+  mat.albedoColor = color;
   mat.backFaceCulling = false;
   // Dry grass is thin enough that the sun comes through it. A little emission
   // stands in for the transmission a leaf shader would do, and without it a
   // clump on the shaded side of the berm goes to a black smudge.
-  mat.emissiveColor = WEED_COLOR.scale(0.18);
+  mat.emissiveColor = color.scale(0.18);
   mat.freeze();
   return mat;
 }
@@ -489,6 +507,37 @@ const GROUND_SETS: Readonly<Record<string, readonly GroundKind[]>> = {
     { kind: "skull", count: 10, radius: 0.36 },
     { kind: "bones", count: 10, radius: 0.4 },
   ],
+  // An underground ruin: broken columns, an idol, the vaal plate's broken wall,
+  // fallen blocks and painted bowls, and the dead.
+  "tileset.vaal_stone": [
+    { kind: "vaalColumn", count: 5, radius: 0.6, tall: true },
+    { kind: "vaalIdol", count: 3, radius: 0.5, tall: true },
+    { kind: "vaalRuinWall", count: 4, radius: 1.5, tall: true },
+    { kind: "vaalBlock", count: 6, radius: 0.45, cluster: 3 },
+    { kind: "vaalUrn", count: 6, radius: 0.3, cluster: 3 },
+    { kind: "skull", count: 6, radius: 0.36 },
+    { kind: "bones", count: 10, radius: 0.4 },
+  ],
+  // Sunk, low and wet: drowned snags, reeds, rot and toadstools.
+  "tileset.swamp": [
+    { kind: "swampTree", count: 6, radius: 1.6, tall: true },
+    { kind: "mossLog", count: 6, radius: 1.1 },
+    { kind: "stump", count: 6, radius: 0.5 },
+    { kind: "reeds", count: 8, radius: 0.45, cluster: 3 },
+    { kind: "toadstools", count: 6, radius: 0.45 },
+    { kind: "bones", count: 6, radius: 0.4 },
+    { kind: "skull", count: 4, radius: 0.36 },
+  ],
+  // Under the canopy: trees at the rock foot, deadfall, undergrowth and stone.
+  "tileset.forest": [
+    { kind: "forestTree", count: 4, radius: 1.6, tall: true },
+    { kind: "forestTree2", count: 4, radius: 1.3, tall: true },
+    { kind: "mossRock", count: 8, radius: 0.7 },
+    { kind: "mossLog", count: 6, radius: 1.1 },
+    { kind: "stump", count: 6, radius: 0.5 },
+    { kind: "bush", count: 9, radius: 0.75 },
+    { kind: "toadstools", count: 8, radius: 0.45 },
+  ],
 };
 
 /** Tall props keep this far apart, everything else GROUND_GAP: a scatter, not a pile. */
@@ -523,12 +572,15 @@ export function groundPlacements(
     isFloor(Math.round((wx - originX) / cellSize), Math.round((wz - originY) / cellSize));
   const nearRock = (wx: number, wz: number): boolean =>
     [-cellSize, 0, cellSize].some((dx) => [-cellSize, 0, cellSize].some((dz) => !floorAt(wx + dx, wz + dz)));
+  const wet = wetWithin(grid, 1);
+  const wetAt = (wx: number, wz: number): boolean =>
+    wet(Math.round((wx - originX) / cellSize), Math.round((wz - originY) / cellSize));
 
   // Floor cells with rock in their 8-neighbourhood, and which way the rock lies.
   const foot: { x: number; z: number; nx: number; nz: number }[] = [];
   for (let cy = 1; cy < rows - 1; cy++)
     for (let cx = 1; cx < cols - 1; cx++) {
-      if (!isFloor(cx, cy)) continue;
+      if (!isFloor(cx, cy) || wet(cx, cy)) continue;
       let nx = 0, nz = 0;
       for (let dy = -1; dy <= 1; dy++)
         for (let dx = -1; dx <= 1; dx++)
@@ -561,7 +613,7 @@ export function groundPlacements(
       for (let j = 1; j < (g.cluster ?? 1); j++) {
         const a = rnd(i * 5 + j, 61 + k) * Math.PI * 2;
         const x = c.x + Math.cos(a) * 0.6, z = c.z + Math.sin(a) * 0.6;
-        if (!floorAt(x, z) || !nearRock(x, z)) continue;
+        if (!floorAt(x, z) || !nearRock(x, z) || wetAt(x, z)) continue;
         out.push({ kind: g.kind, x, z, yaw: rnd(i * 5 + j, 71 + k) * Math.PI * 2, scale: 0.75 + rnd(i * 5 + j, 81 + k) * 0.35 });
       }
     }
@@ -591,6 +643,156 @@ function dressGround(
     for (const mesh of root.getChildMeshes()) {
       mesh.isPickable = false;
       mesh.receiveShadows = true;
+    }
+    freezeTree(root);
+  }
+}
+
+/**
+ * Whether a cell lies within `reach` cells (Chebyshev) of standing water.
+ * `grid.water` is wall to the sim; dressing keeps off it and off its rim, the
+ * way `isSea` keeps rock off a shoreline. Always false on a dry map.
+ */
+function wetWithin(grid: WalkableGrid, reach: number): (cx: number, cy: number) => boolean {
+  const { water, cols, rows } = grid;
+  if (!water) return () => false;
+  return (cx, cy) => {
+    for (let dy = -reach; dy <= reach; dy++)
+      for (let dx = -reach; dx <= reach; dx++) {
+        const x = cx + dx, y = cy + dy;
+        if (x >= 0 && y >= 0 && x < cols && y < rows && water[y * cols + x] === 1) return true;
+      }
+    return false;
+  };
+}
+
+/** Prefix for the canopy roots, cleared with the ground dressing. */
+const CANOPY_PROP_PREFIX = "canopy-prop-";
+
+/** Trees on a tileset's wall mass: which, how far apart, and how many at most. */
+interface CanopySet { kinds: readonly PropKind[]; gap: number; max: number }
+
+/**
+ * Woodland on the rock. Forest is dense; swamp has a few drowned snags; Vaal
+ * Stone is underground and has none.
+ */
+const CANOPY_SETS: Readonly<Record<string, CanopySet>> = {
+  "tileset.forest": { kinds: ["forestTree", "forestTree2"], gap: 2.4, max: 320 },
+  "tileset.swamp": { kinds: ["swampTree"], gap: 5.5, max: 45 },
+};
+
+/** A canopy tree's trunk stands more than this many cells from any floor cell. */
+export const CANOPY_FLOOR_CLEAR = 2;
+/** World units along the screen diagonal, both ways, that must hold no floor. */
+export const CANOPY_BAND = 5;
+/** Cells either side of that line that must hold no floor either: the crown is wide. */
+export const CANOPY_BAND_SIDE = 1;
+
+/**
+ * Where canopy trees stand on a tileset's wall mass. Pure, deterministic and
+ * RNG-free, hashed like `groundPlacements`.
+ *
+ * Never over a floor cell's view. The camera looks toward world (-x, +z), so a
+ * tree hides the ground BEHIND it (that way) for about 0.75x its height, and the
+ * brief's rule names the screen-down side (+x, -z). Both sides are held to
+ * CANOPY_BAND, plus CANOPY_FLOOR_CLEAR around the trunk, so neither reading can
+ * put a crown over the play space. Water cells and their rim are skipped.
+ */
+export function canopyPlacements(grid: WalkableGrid, tilesetId: string): GroundPlacement[] {
+  const set = CANOPY_SETS[tilesetId];
+  if (!set || grid.shore) return [];
+  const { cols, rows, cellSize, originX, originY, cells } = grid;
+  const rnd = (i: number, salt: number): number => {
+    const x = Math.sin(i * 127.1 + salt * 311.7) * 43758.5453;
+    return x - Math.floor(x);
+  };
+  // Chebyshev distance in cells to the nearest floor cell: one multi-source BFS.
+  const dist = new Int32Array(cols * rows).fill(-1);
+  const queue: number[] = [];
+  for (let i = 0; i < cells.length; i++) if (cells[i] === 1) { dist[i] = 0; queue.push(i); }
+  for (let h = 0; h < queue.length; h++) {
+    const i = queue[h]!;
+    const x = i % cols, y = (i - x) / cols;
+    for (let dy = -1; dy <= 1; dy++)
+      for (let dx = -1; dx <= 1; dx++) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+        const j = ny * cols + nx;
+        if (dist[j] === -1) { dist[j] = dist[i]! + 1; queue.push(j); }
+      }
+  }
+  const clearAt = (cx: number, cy: number, need: number): boolean =>
+    cx < 0 || cy < 0 || cx >= cols || cy >= rows || dist[cy * cols + cx] === -1 || dist[cy * cols + cx]! > need;
+  const wet = wetWithin(grid, 1);
+  const steps = Math.ceil(CANOPY_BAND / cellSize);
+  const bandClear = (cx: number, cy: number): boolean => {
+    for (const sign of [-1, 1])
+      for (let k = 1; k <= steps; k++) {
+        const t = k * Math.SQRT1_2; // step k is k cells along the diagonal
+        if (!clearAt(Math.round(cx + sign * t), Math.round(cy - sign * t), CANOPY_BAND_SIDE)) return false;
+      }
+    return true;
+  };
+
+  const candidates: number[] = [];
+  for (let cy = 1; cy < rows - 1; cy++)
+    for (let cx = 1; cx < cols - 1; cx++) {
+      const i = cy * cols + cx;
+      if (cells[i] === 1 || !clearAt(cx, cy, CANOPY_FLOOR_CLEAR) || wet(cx, cy) || !bandClear(cx, cy)) continue;
+      candidates.push(i);
+    }
+  // Visited in hashed order, so the gap rule does not comb the trees into rows.
+  const order = candidates.map((i) => ({ i, k: rnd(i, 91) })).sort((a, b) => a.k - b.k || a.i - b.i);
+
+  const out: GroundPlacement[] = [];
+  const bucket = new Map<number, GroundPlacement[]>();
+  const key = (bx: number, bz: number): number => bx * 100003 + bz;
+  for (const { i } of order) {
+    if (out.length >= set.max) break;
+    const cx = i % cols, cy = (i - cx) / cols;
+    const x = originX + cx * cellSize + (rnd(i, 93) - 0.5) * cellSize * 0.5;
+    const z = originY + cy * cellSize + (rnd(i, 95) - 0.5) * cellSize * 0.5;
+    const bx = Math.floor(x / set.gap), bz = Math.floor(z / set.gap);
+    let blocked = false;
+    for (let dx = -1; dx <= 1 && !blocked; dx++)
+      for (let dz = -1; dz <= 1 && !blocked; dz++)
+        for (const p of bucket.get(key(bx + dx, bz + dz)) ?? [])
+          if (Math.hypot(p.x - x, p.z - z) < set.gap) { blocked = true; break; }
+    if (blocked) continue;
+    const p: GroundPlacement = {
+      kind: set.kinds[Math.floor(rnd(i, 97) * set.kinds.length)]!,
+      x, z,
+      yaw: rnd(i, 99) * Math.PI * 2,
+      scale: 0.85 + rnd(i, 101) * 0.4,
+    };
+    out.push(p);
+    const b = bucket.get(key(bx, bz));
+    if (b) b.push(p); else bucket.set(key(bx, bz), [p]);
+  }
+  return out;
+}
+
+/**
+ * Stand `canopyPlacements` up. Shared instances, unpickable, frozen, and renamed
+ * under CANOPY_MESH_PREFIX so no torch or fire cube draws them (see rocks.ts).
+ */
+function dressCanopy(scene: Scene, grid: WalkableGrid, tilesetId: string): void {
+  const ps = canopyPlacements(grid, tilesetId);
+  for (let i = 0; i < ps.length; i++) {
+    const p = ps[i]!;
+    const root = new Mesh(`${CANOPY_PROP_PREFIX}${p.kind}-${i}`, scene);
+    root.position.set(p.x, 0, p.z);
+    root.rotation.y = p.yaw;
+    root.scaling.setAll(p.scale);
+    root.isPickable = false;
+    if (attachProp(scene, root, p.kind, true) === null) {
+      root.dispose(false, false);
+      return; // no props asset: headless or a failed fetch, so drop the lot
+    }
+    for (const mesh of root.getChildMeshes()) {
+      mesh.isPickable = false;
+      mesh.receiveShadows = true;
+      mesh.name = `${CANOPY_MESH_PREFIX}${mesh.name}`;
     }
     freezeTree(root);
   }
@@ -659,6 +861,7 @@ export function buildLevel(
   for (const node of [...scene.meshes, ...scene.transformNodes]) {
     if (node.name.startsWith(BEACH_PROP_PREFIX)
       || node.name.startsWith(GROUND_PROP_PREFIX)
+      || node.name.startsWith(CANOPY_PROP_PREFIX)
       || node.name.startsWith(AREA_BRAZIER_PREFIX)) node.dispose(false, false);
   }
   clearRocks();
@@ -845,6 +1048,7 @@ export function buildLevel(
   dressBeach(scene, grid, keepClear);
   // Braziers stand at the rock foot too, so the ground dressing keeps off them.
   dressGround(scene, grid, tilesetId, [...keepClear, ...fires.map((f) => ({ x: f.x, y: f.z }))]);
+  dressCanopy(scene, grid, tilesetId);
 
   if (wallCells === 0) return { walls: null, wallCells: 0 };
 
@@ -939,11 +1143,22 @@ export function buildLevel(
       // The wall is one rock mass (cliffs.ts), tall only where it hides nothing;
       // a sparse fall of stone at its foot breaks the line it meets the floor on.
       buildCliffs(scene, grid, material);
-      buildRocks(scene, clear(scatterRubble(rockCells, cellSize)), material);
-      buildRocks(scene, clear(scatterDebris(floorCells)), material, DEBRIS_MESH_PREFIX);
+      // Inland water (swamp pools) is wall to the sim: nothing loose lies in it
+      // or on its rim. A no-op on a dry map.
+      const wet = wetWithin(grid, 1);
+      const dry = (ps: RockPlacement[]): RockPlacement[] => !grid.water ? ps : ps.filter(
+        (p) => !wet(Math.round((p.x - originX) / cellSize), Math.round((p.z - originY) / cellSize)),
+      );
+      buildRocks(scene, dry(clear(scatterRubble(rockCells, cellSize))), material);
+      buildRocks(scene, dry(clear(scatterDebris(floorCells))), material, DEBRIS_MESH_PREFIX);
       buildRocks(scene, scatterRampart(edgeCells), edgeFadeMaterial(scene, material, grid), RAMPART_MESH_PREFIX);
-      // Dry scrub where a dressed biome's rock meets the ground, as on the coast.
-      if (GROUND_SETS[tilesetId]) buildRocks(scene, clear(scatterFootWeed(rockCells)), weedMaterial(scene), WEED_MESH_PREFIX);
+      // Growth where a dressed biome's rock meets the ground, as on the coast:
+      // dry scrub in the desert, green in swamp and forest with the coast's
+      // scanned ferns among it.
+      const weedColor = FOOT_WEED[tilesetId];
+      if (weedColor) buildRocks(scene, dry(clear(scatterFootWeed(rockCells))), weedMaterial(scene, weedColor), WEED_MESH_PREFIX);
+      const flora = FOOT_FLORA_ALBEDO[tilesetId];
+      if (flora !== undefined) buildRocks(scene, dry(clear(scatterFlora(rockCells))), null, FLORA_MESH_PREFIX, flora);
     }
   }
   if (merged) {

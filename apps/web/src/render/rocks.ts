@@ -491,9 +491,14 @@ export const WEED_MESH_PREFIX = "wallrun-weed-";
  *  is a whole extra depth pass for a fern. */
 export const FLORA_MESH_PREFIX = "wallrun-flora-";
 
+/** Trees level.ts stands on the wall mass (`canopyPlacements`). Never casts: a
+ *  forest's few hundred crowns in every torch and fire cube, for shadows that
+ *  can only fall further into rock nobody walks on. */
+export const CANOPY_MESH_PREFIX = "wallrun-canopy-";
+
 const DRESSING_PREFIXES = [
   DEBRIS_MESH_PREFIX, RAMPART_MESH_PREFIX, DUNE_MESH_PREFIX,
-  DUNE_RIM_MESH_PREFIX, WEED_MESH_PREFIX, FLORA_MESH_PREFIX,
+  DUNE_RIM_MESH_PREFIX, WEED_MESH_PREFIX, FLORA_MESH_PREFIX, CANOPY_MESH_PREFIX,
 ] as const;
 
 /**
@@ -820,14 +825,17 @@ function scatter(cells: readonly RockCell[], cfg: ScatterConfig): RockPlacement[
  */
 const FLORA_ALBEDO = 0.34;
 
-function dressFlora(mat: PBRMaterial): void {
-  if (!mat || mat.metadata?.["floraDressed"] === true) return;
-  mat.metadata = { ...(mat.metadata ?? {}), floraDressed: true };
-  mat.albedoColor = new Color3(FLORA_ALBEDO, FLORA_ALBEDO, FLORA_ALBEDO);
+function dressFlora(mat: PBRMaterial, albedo: number): void {
+  if (!mat) return;
+  // Shared and re-dressed on every area build, at the biome's own albedo, so the
+  // authored emission is kept once and every call scales from it, never compounds.
+  const authored = (mat.metadata?.["floraEmissive"] as Color3 | undefined) ?? mat.emissiveColor.clone();
+  mat.metadata = { ...(mat.metadata ?? {}), floraEmissive: authored };
+  mat.albedoColor = new Color3(albedo, albedo, albedo);
   // The 6% self-lighting the plant was authored with is 6% of a texture that is
   // now being read three times darker; left alone it becomes the brightest part
   // of the leaf.
-  mat.emissiveColor = mat.emissiveColor.scale(FLORA_ALBEDO);
+  mat.emissiveColor = authored.scale(albedo);
 }
 
 function sourceMeshes(container: AssetContainer, prefix: string): AbstractMesh[] {
@@ -870,6 +878,7 @@ export function buildRocks(
   placements: readonly RockPlacement[],
   material: Material | null,
   prefix: string = ROCK_MESH_PREFIX,
+  floraAlbedo: number = FLORA_ALBEDO,
 ): Mesh[] | null {
   for (const mesh of placed.get(prefix) ?? []) mesh.dispose();
   placed.delete(prefix);
@@ -922,7 +931,7 @@ export function buildRocks(
       // frame is real cost for leaves that only ever needed a cutout.
       mesh.material.transparencyMode = 1; // Material.MATERIAL_ALPHATEST
       mesh.material.backFaceCulling = false;
-      dressFlora(mesh.material as PBRMaterial);
+      dressFlora(mesh.material as PBRMaterial, floraAlbedo);
     }
     mesh.receiveShadows = true;
     mesh.isPickable = false;
