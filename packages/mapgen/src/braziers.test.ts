@@ -15,4 +15,22 @@ describe("brazierSpotsFor", () => {
       }
     }
   }, 30_000);
+
+  it("never stands a bowl against a fen pool", () => {
+    let wet = 0;
+    for (let seed = 0; seed < 20; seed++) {
+      const layout = generateArea(seed, "v", "sunken-ruins");
+      const { water, cols, cellSize, originX, originY } = layout.grid;
+      if (!water) continue;
+      wet++;
+      for (const s of brazierSpotsFor(layout)) {
+        // The bowl sits half a cell off the wall it backs onto; that cell is never water.
+        for (const [dx, dz] of [[0.25, 0], [-0.25, 0], [0, 0.25], [0, -0.25]] as const) {
+          const cx = Math.round((s.x + dx - originX) / cellSize), cy = Math.round((s.z + dz - originY) / cellSize);
+          expect(water[cy * cols + cx], `seed ${seed} at ${s.x},${s.z}`).not.toBe(1);
+        }
+      }
+    }
+    expect(wet).toBeGreaterThan(0);
+  });
 });

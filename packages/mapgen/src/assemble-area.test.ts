@@ -622,3 +622,56 @@ describe("assembleArea, walled grammars", () => {
     expect(after, `${before} before`).toBeLessThanOrEqual(before * 0.45);
   }, 60_000);
 });
+
+describe("assembleArea, fen pools", () => {
+  const SEEDS = Array.from({ length: 20 }, (_, i) => i);
+  const dry: Grammar = { ...SUNKEN_GRAMMAR, fenPools: undefined };
+
+  it("floods part of the swamp's open-ground blobs on most seeds", () => {
+    let wet = 0;
+    for (const seed of SEEDS) {
+      const { grid, usedFallback } = assembleArea(seed, V, SUNKEN_GRAMMAR);
+      if (usedFallback) continue;
+      let n = 0;
+      for (const w of grid.water ?? []) n += w;
+      if (n > 0) wet++;
+    }
+    expect(wet).toBeGreaterThanOrEqual(SEEDS.length * 0.7);
+  }, 60_000);
+
+  it("only floods wall cells, never the boss block, never a lone cell, and leaves the sim's grid alone", () => {
+    for (const seed of SEEDS) {
+      const wet = assembleArea(seed, V, SUNKEN_GRAMMAR), base = assembleArea(seed, V, dry);
+      expect(Array.from(wet.grid.cells), `seed ${seed}`).toEqual(Array.from(base.grid.cells));
+      expect(wet.hash).toBe(base.hash);
+      expect(wet.spawnSockets).toEqual(base.spawnSockets);
+      expect(wet.objectiveAnchors).toEqual(base.objectiveAnchors);
+      expect(base.grid.water).toBeUndefined();
+      const { cells, water, cols } = wet.grid;
+      if (!water) continue;
+      const boss = wet.objectiveAnchors.find((a) => a.id === "boss")!;
+      for (let i = 0; i < water.length; i++) {
+        if (!water[i]) continue;
+        expect(cells[i], `seed ${seed} cell ${i}`).toBe(0);
+        // A pool cell has a pool neighbour: no single-cell puddles.
+        const x = i % cols;
+        const nb = (x > 0 && water[i - 1]) || (x < cols - 1 && water[i + 1]) || water[i - cols] || water[i + cols];
+        expect(nb, `seed ${seed} lone cell ${i}`).toBeTruthy();
+        // The boss block is 2 tiles (16 units) square around its arena.
+        const wx = (x + 0.5) * wet.grid.cellSize + wet.grid.originX - 0.25;
+        const wz = (Math.floor(i / cols) + 0.5) * wet.grid.cellSize + wet.grid.originY - 0.25;
+        expect(Math.hypot(wx - boss.x, wz - boss.y), `seed ${seed} pool by the boss`).toBeGreaterThan(4);
+      }
+    }
+  }, 60_000);
+
+  it("keeps every other grammar dry and byte-identical", () => {
+    for (const g of [LOOP_GRAMMAR, FIELD_GRAMMAR, STRAND_GRAMMAR]) {
+      for (const seed of [1, 5, 9]) {
+        const a = assembleArea(seed, V, g);
+        expect(a.grid.water, `${g.id} ${seed}`).toBeUndefined();
+        expect(a.hash).toBe(assembleArea(seed, V, { ...g, fenPools: undefined }).hash);
+      }
+    }
+  }, 60_000);
+});

@@ -5,11 +5,11 @@ import {
   Texture,
   VertexData,
   VertexBuffer,
-  type Nullable,
   type Observer,
   type Scene,
 } from "@babylonjs/core";
 import type { Shoreline, WalkableGrid } from "@exiled/mapgen";
+import { dressFenWater } from "./fen-water";
 
 /** The single merged water mesh. Born with this name, never renamed: engine.ts
  *  filters shadow casters on `onNewMeshAddedObservable`, which reads a name ONCE
@@ -126,7 +126,26 @@ const SEA_ALPHA = 1;
  *  frame to reflect a black void (see the note on the material). */
 const SEA_SKY = new Color3(0.035, 0.06, 0.062);
 
-let scrollObserver: Nullable<Observer<Scene>> = null;
+/** Which water: the strand's sea, or the fen's standing pools (swamp). A pool
+ *  is still and murky: no surf, no breaker, a slow drift instead of a swell. */
+export type SeaLook = "coast" | "fen";
+const FEN_MAT_NAME = "fen-mat";
+const FEN_COLOR = new Color3(0.06, 0.068, 0.04);
+const FEN_SKY = new Color3(0.012, 0.018, 0.012);
+const FEN_ROUGHNESS = 0.3;
+/** Bank-to-middle tint: silt brown at the edge, black-green where it is deep. */
+const FEN_SHALLOW_TINT: [number, number, number] = [1.6, 1.35, 1.0];
+const FEN_DEEP_TINT: [number, number, number] = [0.6, 0.85, 0.55];
+/** Cells to full depth: pools are a few metres across, not a sea. */
+const FEN_DEPTH_CELLS = 5;
+/** Corner depth past the collision face at which a pool is opaque; a corner
+ *  shared by two bank cells reads -1 (see `cornerDepth`). */
+const FEN_BANK = 1.5;
+/** Wave scroll as a share of the sea's: barely moving, so it reads as still. */
+const FEN_SCROLL = 0.2;
+const FEN_BUMP = 0.35;
+
+const scrollObservers = new Map<string, Observer<Scene>>();
 
 /**
  * The water material, cached by name across area builds. Deliberately NOT
@@ -136,15 +155,18 @@ let scrollObserver: Nullable<Observer<Scene>> = null;
  * pass per frame to reflect a scene that is black past the rim anyway; the read
  * comes from the moving normals against the low sun instead.
  */
-function seaMaterial(scene: Scene): PBRMaterial {
-  const existing = scene.getMaterialByName(SEA_MAT_NAME) as PBRMaterial | null;
+function seaMaterial(scene: Scene, look: SeaLook = "coast"): PBRMaterial {
+  const fen = look === "fen";
+  const name = fen ? FEN_MAT_NAME : SEA_MAT_NAME;
+  const existing = scene.getMaterialByName(name) as PBRMaterial | null;
   if (existing) return existing;
-  const mat = new PBRMaterial(SEA_MAT_NAME, scene);
+  const mat = new PBRMaterial(name, scene);
   mat.metallic = 0;
-  mat.roughness = SEA_ROUGHNESS;
-  mat.albedoColor = SEA_COLOR;
+  mat.roughness = fen ? FEN_ROUGHNESS : SEA_ROUGHNESS;
+  mat.albedoColor = fen ? FEN_COLOR : SEA_COLOR;
   mat.alpha = SEA_ALPHA;
-  mat.emissiveColor = SEA_SKY;
+  mat.emissiveColor = fen ? FEN_SKY : SEA_SKY;
+  if (fen) dressFenWater(mat);
   // The sand under the shallows has to show through, and the sea is drawn after
   // the ground so back-to-front is already the order it needs.
   mat.transparencyMode = PBRMaterial.MATERIAL_ALPHABLEND;
@@ -152,6 +174,7 @@ function seaMaterial(scene: Scene): PBRMaterial {
     const bump = new Texture("/textures/water/water_normal.jpg", scene);
     bump.uScale = 1;
     bump.vScale = 1;
+    if (fen) bump.level = FEN_BUMP;
     mat.bumpTexture = bump;
     // The second wave layer. Babylon's detail map is the only way to get a
     // second normal onto one PBR material without a custom shader, and it costs
@@ -164,7 +187,7 @@ function seaMaterial(scene: Scene): PBRMaterial {
     detail.vScale = WAVE_TILE / DETAIL_TILE;
     mat.detailMap.texture = detail;
     mat.detailMap.isEnabled = true;
-    mat.detailMap.bumpLevel = 0.8;
+    mat.detailMap.bumpLevel = fen ? 0.8 * FEN_BUMP : 0.8;
     mat.detailMap.diffuseBlendLevel = 0;
     mat.detailMap.roughnessBlendLevel = 0;
   } catch {
@@ -175,10 +198,10 @@ function seaMaterial(scene: Scene): PBRMaterial {
 
 /** Drive both normal layers. Registered once per scene and left running: it
  *  touches only the material, which outlives the mesh. */
-function startScroll(scene: Scene, mat: PBRMaterial): void {
-  if (scrollObserver) return;
-  scrollObserver = scene.onBeforeRenderObservable.add(() => {
-    const dt = scene.getEngine().getDeltaTime() / 1000;
+function startScroll(scene: Scene, mat: PBRMaterial, rate = 1): void {
+  if (scrollObservers.has(mat.name)) return;
+  scrollObservers.set(mat.name, scene.onBeforeRenderObservable.add(() => {
+    const dt = (scene.getEngine().getDeltaTime() / 1000) * rate;
     const bump = mat.bumpTexture as Texture | null;
     if (bump) {
       bump.uOffset = (bump.uOffset + WAVE_SPEED_U * dt) % 1;
@@ -189,7 +212,7 @@ function startScroll(scene: Scene, mat: PBRMaterial): void {
       detail.uOffset = (detail.uOffset + DETAIL_SPEED_U * dt) % 1;
       detail.vOffset = (detail.vOffset + DETAIL_SPEED_V * dt) % 1;
     }
-  });
+  }));
 }
 
 /**
@@ -357,16 +380,19 @@ function buildShoreSea(scene: Scene, grid: WalkableGrid, shore: Shoreline): SeaR
   return { mesh, waterCells: n * bands };
 }
 
+/** `true` is the coast's sea; `"fen"` draws `grid.water` as still swamp pools. */
 export function buildSea(
   scene: Scene,
   grid: WalkableGrid | null,
-  enabled: boolean,
+  enabled: boolean | SeaLook,
 ): SeaResult {
   // Disposed per area build, exactly like the wall runs: a mesh left in the
   // render list is the leak the wall boxes already had once.
   scene.getMeshByName(SEA_MESH_NAME)?.dispose();
   if (!grid || !enabled) return { mesh: null, waterCells: 0 };
-  lastSeaArgs = { scene, grid };
+  const look: SeaLook = enabled === true ? "coast" : enabled;
+  const fen = look === "fen";
+  lastSeaArgs = { scene, grid, look };
   if (import.meta.env?.DEV && typeof window !== "undefined") {
     (window as unknown as { __sea?: unknown }).__sea = tuneSea;
   }
@@ -375,7 +401,9 @@ export function buildSea(
   // involved at all: the sea is a strip laid along it. Everything below this is
   // the older path, which floods the void outside a dungeon rim — there the void
   // has no shape of its own and cell squares are the honest answer.
-  if (grid.shore) return buildShoreSea(scene, grid, grid.shore);
+  if (grid.shore && !fen) return buildShoreSea(scene, grid, grid.shore);
+  // A fen floods only what the generator marked; it has no void to fill.
+  if (fen && !grid.water) return { mesh: null, waterCells: 0 };
 
   const { cols, rows, cellSize, originX, originY, cells } = grid;
   const isFloor = (x: number, y: number): boolean => cells[y * cols + x] === 1;
@@ -431,7 +459,10 @@ export function buildSea(
         queue.push(i);
       }
     }
-  for (let d = 1; d <= DEPTH_CELLS && queue.length; d++) {
+  const depthCells = fen ? FEN_DEPTH_CELLS : DEPTH_CELLS;
+  const shallowTint = fen ? FEN_SHALLOW_TINT : SHALLOW_TINT;
+  const deepTint = fen ? FEN_DEEP_TINT : DEEP_TINT;
+  for (let d = 1; d <= depthCells && queue.length; d++) {
     const next: number[] = [];
     for (const i of queue) {
       const x = i % cols;
@@ -466,10 +497,10 @@ export function buildSea(
   // across the shore instead of at a cell boundary.
   const LAND_DEPTH = -2;
   const depthOfCell = (x: number, y: number): number => {
-    if (x < 0 || y < 0 || x >= cols || y >= rows) return DEPTH_CELLS;
+    if (x < 0 || y < 0 || x >= cols || y >= rows) return depthCells;
     const i = y * cols + x;
     if (!water[i]) return LAND_DEPTH;
-    return dist[i]! < 0 ? DEPTH_CELLS : dist[i]!;
+    return dist[i]! < 0 ? depthCells : dist[i]!;
   };
   /** Corner (x,y) is the top-left of cell (x,y) and touches four cells. */
   const cornerDepth = (x: number, y: number): number =>
@@ -483,13 +514,17 @@ export function buildSea(
     // quads are cut up.
     uvs.push(px / WAVE_TILE, pz / WAVE_TILE);
     const d = Math.max(0, depth);
-    const deep = Math.min(1, d / DEPTH_CELLS);
-    const foam = Math.max(0, 1 - d / FOAM_CELLS) ** 1.5 * FOAM_ADD;
+    const deep = Math.min(1, d / depthCells);
+    const foam = fen ? 0 : Math.max(0, 1 - d / FOAM_CELLS) ** 1.5 * FOAM_ADD;
     colors.push(
-      SHALLOW_TINT[0] + (DEEP_TINT[0] - SHALLOW_TINT[0]) * deep + foam,
-      SHALLOW_TINT[1] + (DEEP_TINT[1] - SHALLOW_TINT[1]) * deep + foam,
-      SHALLOW_TINT[2] + (DEEP_TINT[2] - SHALLOW_TINT[2]) * deep + foam,
-      Math.min(1, Math.max(0, depth) / WET_CELLS),
+      shallowTint[0] + (deepTint[0] - shallowTint[0]) * deep + foam,
+      shallowTint[1] + (deepTint[1] - shallowTint[1]) * deep + foam,
+      shallowTint[2] + (deepTint[2] - shallowTint[2]) * deep + foam,
+      // A pool fades in from its collision face, so the bank is silt-dark water
+      // thinning to nothing, never a polygon edge.
+      fen
+        ? Math.min(1, Math.max(0, depth + 1) / FEN_BANK)
+        : Math.min(1, Math.max(0, depth) / WET_CELLS),
     );
   };
 
@@ -542,13 +577,13 @@ export function buildSea(
   const R = SKIRT_REACH;
   for (let x = 0; x < cols; x++) {
     const wx = originX + x * cellSize;
-    if (water[x]) quad(wx - half, minZ - R, wx + half, minZ, DEPTH_CELLS);
-    if (water[(rows - 1) * cols + x]) quad(wx - half, maxZ, wx + half, maxZ + R, DEPTH_CELLS);
+    if (water[x]) quad(wx - half, minZ - R, wx + half, minZ, depthCells);
+    if (water[(rows - 1) * cols + x]) quad(wx - half, maxZ, wx + half, maxZ + R, depthCells);
   }
   for (let y = 0; y < rows; y++) {
     const wz = originY + y * cellSize;
-    if (water[y * cols]) quad(minX - R, wz - half, minX, wz + half, DEPTH_CELLS);
-    if (water[y * cols + cols - 1]) quad(maxX, wz - half, maxX + R, wz + half, DEPTH_CELLS);
+    if (water[y * cols]) quad(minX - R, wz - half, minX, wz + half, depthCells);
+    if (water[y * cols + cols - 1]) quad(maxX, wz - half, maxX + R, wz + half, depthCells);
   }
 
   const mesh = new Mesh(SEA_MESH_NAME, scene);
@@ -561,7 +596,7 @@ export function buildSea(
   data.applyToMesh(mesh);
   // The shoreline ramp lives in the vertex alpha, so it has to be read.
   mesh.hasVertexAlpha = true;
-  const mat = seaMaterial(scene);
+  const mat = seaMaterial(scene, look);
   mesh.material = mat;
   // Click-to-move raycasts the floor plane analytically, but a pickable sheet
   // over the whole void would still catch anything that does pick meshes.
@@ -571,7 +606,7 @@ export function buildSea(
   mesh.receiveShadows = false;
   mesh.freezeWorldMatrix();
   mesh.doNotSyncBoundingInfo = true;
-  startScroll(scene, mat);
+  startScroll(scene, mat, fen ? FEN_SCROLL : 1);
   return { mesh, waterCells };
 }
 
@@ -589,7 +624,7 @@ export function seaColors(mesh: Mesh): Float32Array | null {
  * the map, which costs a Waystone — so the numbers below were guessed rather
  * than looked at, which is how the first surf ended up invisible.
  */
-let lastSeaArgs: { scene: Scene; grid: WalkableGrid } | null = null;
+let lastSeaArgs: { scene: Scene; grid: WalkableGrid; look: SeaLook } | null = null;
 
 export function tuneSea(patch: Record<string, unknown>): string {
   const table: Record<string, (v: unknown) => void> = {
@@ -607,6 +642,6 @@ export function tuneSea(patch: Record<string, unknown>): string {
     DEEP_TINT: (v) => { DEEP_TINT = v as [number, number, number]; },
   };
   for (const [k, v] of Object.entries(patch)) table[k]?.(v);
-  if (lastSeaArgs) buildSea(lastSeaArgs.scene, lastSeaArgs.grid, true);
+  if (lastSeaArgs) buildSea(lastSeaArgs.scene, lastSeaArgs.grid, lastSeaArgs.look);
   return JSON.stringify({ FOAM_AT, FOAM_WIDTH, FOAM_ADD, WET_UNITS, DEPTH_CELLS, SHALLOW_TINT, DEEP_TINT, WET_SAND_REACH, WET_SAND_DARKEN, BREAKER_AT, BREAKER_WIDTH, BREAKER_ADD });
 }

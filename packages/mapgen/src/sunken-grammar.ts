@@ -12,4 +12,5 @@ export const SUNKEN_GRAMMAR: Grammar = {
   spawnTarget: 26,
   organicRim: true,
   softEdges: true,
+  fenPools: 0.55,
 };

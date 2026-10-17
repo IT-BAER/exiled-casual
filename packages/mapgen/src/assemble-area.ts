@@ -179,8 +179,9 @@ const MARKER_GAP = 2;
  */
 function dressOpenGround(
   cells: Uint8Array, markers: Marker[], bossTile: { tx: number; ty: number }, rng: RandomStream,
-): void {
+): Uint8Array {
   const N = ASSEMBLED_CELLS;
+  const stamped = new Uint8Array(N * N);
   for (let ty = 0; ty < AREA_TILES; ty++) {
     for (let tx = 0; tx < AREA_TILES; tx++) {
       const bx = tx - bossTile.tx, by = ty - bossTile.ty;
@@ -229,13 +230,66 @@ function dressOpenGround(
           for (let dy = -dr; dy <= dr; dy++) {
             for (let dx = -dr; dx <= dr; dx++) {
               const wobble = 1 + 0.25 * Math.sin(3 * Math.atan2(dy, dx) + d.phase);
-              if (Math.hypot(dx, dy) <= d.r * wobble) cells[(d.cy + dy) * N + d.cx + dx] = 0;
+              if (Math.hypot(dx, dy) <= d.r * wobble) {
+                cells[(d.cy + dy) * N + d.cx + dx] = 0;
+                stamped[(d.cy + dy) * N + d.cx + dx] = 1;
+              }
             }
           }
         }
       }
     }
   }
+  return stamped;
+}
+
+/** Least cells a pool needs to read as water rather than a wet stone. */
+const POOL_MIN_CELLS = 6;
+/** An interior wall mass this big floods as a lake whatever made it; under it
+ *  only the open ground's blobs do, since a chunk's pillars would read as tanks. */
+const LAKE_MIN_CELLS = 48;
+
+/**
+ * Flood a `share` of the interior wall components into standing water: still
+ * wall to the sim, only the renderer reads the mask. A candidate never touches
+ * the grid border (the rim), the boss block, or a spawn or reward marker's 3x3,
+ * and is either a blob of at least POOL_MIN_CELLS or a mass of LAKE_MIN_CELLS.
+ */
+function pickPools(
+  cells: Uint8Array, stamped: Uint8Array, markers: readonly Marker[],
+  bossTile: { tx: number; ty: number }, share: number, rng: RandomStream,
+): Uint8Array | null {
+  const N = ASSEMBLED_CELLS;
+  const water = new Uint8Array(N * N);
+  const seen = new Uint8Array(N * N);
+  const sockets = markers.filter((m) => m.ch === "s" || m.ch === "r");
+  let any = false;
+  for (let s = 0; s < N * N; s++) {
+    if (seen[s] || cells[s] !== 0) continue;
+    const comp = [s];
+    seen[s] = 1;
+    let ok = true, blob = true;
+    for (let h = 0; h < comp.length; h++) {
+      const i = comp[h]!, x = i % N, y = (i - x) / N;
+      if (!stamped[i]) blob = false;
+      const tx = Math.floor(x / TILE_CELLS) - bossTile.tx, ty = Math.floor(y / TILE_CELLS) - bossTile.ty;
+      if (tx >= 0 && tx <= 1 && ty >= 0 && ty <= 1) ok = false;
+      if (ok && sockets.some((m) => Math.abs(m.cx - x) <= 2 && Math.abs(m.cy - y) <= 2)) ok = false;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= N || ny >= N) { ok = false; continue; }
+        const j = ny * N + nx;
+        if (cells[j] !== 0 || seen[j]) continue;
+        seen[j] = 1;
+        comp.push(j);
+      }
+    }
+    if (!ok || comp.length < (blob ? POOL_MIN_CELLS : LAKE_MIN_CELLS)) continue;
+    if (rng.nextU32() / 0x1_0000_0000 >= share) continue;
+    for (const i of comp) water[i] = 1;
+    any = true;
+  }
+  return any ? water : null;
 }
 
 /** Smooth value noise in [0,1) over the cell grid, one lattice point per `scale` cells. */
@@ -846,8 +900,9 @@ export function assembleArea(seed: number, contentVersion: string, grammar: Gram
     clearStubs(cells, skeleton.bossTile);
   }
   if (grammar.softEdges) softenWalls(cells, markers, skeleton.bossTile, createStream(seed, `${contentVersion}.layout.soften`));
+  let stamped: Uint8Array | null = null;
   if (grammar.organicRim) {
-    dressOpenGround(cells, markers, skeleton.bossTile, createStream(seed, `${contentVersion}.layout.blobs`));
+    stamped = dressOpenGround(cells, markers, skeleton.bossTile, createStream(seed, `${contentVersion}.layout.blobs`));
   }
 
   // Stage 3: anchors. The player arrives by portal, so the start is a point
@@ -964,8 +1019,18 @@ export function assembleArea(seed: number, contentVersion: string, grammar: Gram
     }
   }
 
+  let water = stamped && grammar.fenPools
+    ? pickPools(
+      cells, stamped, [...markers, ...[...markersByTile.values()].flat()], skeleton.bossTile,
+      grammar.fenPools, createStream(seed, `${contentVersion}.layout.pools`),
+    )
+    : null;
+
   const turns = createStream(seed, `${contentVersion}.layout.dressing`).nextInt(0, 3);
-  for (let t = 0; t < turns; t++) cells = rotateCells(cells, ASSEMBLED_CELLS);
+  for (let t = 0; t < turns; t++) {
+    cells = rotateCells(cells, ASSEMBLED_CELLS);
+    if (water) water = rotateCells(water, ASSEMBLED_CELLS);
+  }
   const spun = (s: Socket): Socket => rotateSocket(s, ASSEMBLED_CELLS, turns);
   objectiveAnchors = objectiveAnchors.map(spun);
 
@@ -983,5 +1048,7 @@ export function assembleArea(seed: number, contentVersion: string, grammar: Gram
   if (!layout.validationChecks.every((c) => c.passed)) {
     return fallbackLayout(seed, contentVersion, grammar.spawnTarget);
   }
+  // Rides on the grid like the coast's sea; never hashed, since the sim ignores it.
+  if (water) layout.grid.water = water;
   return layout;
 }

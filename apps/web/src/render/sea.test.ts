@@ -169,4 +169,45 @@ describe("buildSea", () => {
     for (const biome of Object.values(BIOMES))
       if (biome.id !== "coast") expect(biome.sea).toBeUndefined();
   });
+
+  it("draws a fen's pools as still water: only the marked cells, no surf, faded to nothing at the bank", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    // 11x11 open floor with one 3x3 interior pool at cells 4..6: the grid border
+    // is wall, but a fen floods only what the generator marked.
+    const cells = new Uint8Array(121);
+    for (let y = 1; y <= 9; y++) for (let x = 1; x <= 9; x++) cells[y * 11 + x] = 1;
+    const water = new Uint8Array(121);
+    for (let y = 4; y <= 6; y++) for (let x = 4; x <= 6; x++) { cells[y * 11 + x] = 0; water[y * 11 + x] = 1; }
+    const grid: WalkableGrid = { cols: 11, rows: 11, cellSize: 0.5, originX: 0, originY: 0, cells, water };
+
+    const { mesh, waterCells } = buildSea(scene, grid, "fen");
+    expect(waterCells).toBe(9);
+    expect(mesh!.name).toBe(SEA_MESH_NAME);
+    expect(mesh!.material!.name).toBe("fen-mat");
+    expect(mesh!.receiveShadows).toBe(false);
+    const pos = mesh!.getVerticesData(VertexBuffer.PositionKind)!;
+    const col = mesh!.getVerticesData(VertexBuffer.ColorKind)!;
+    let opaque = 0;
+    for (let v = 0; v < pos.length / 3; v++) {
+      expect(pos[v * 3 + 1]).toBeCloseTo(0.02, 6);
+      // No foam: murky, never brighter than the silt tint.
+      expect(col[v * 4]!).toBeLessThan(2);
+      const x = pos[v * 3]!, z = pos[v * 3 + 2]!;
+      // The pool's outline (cells 4..6 span 1.75..3.25) is the collision face:
+      // transparent there, so the bank is a gradient, not an edge.
+      const onEdge = Math.abs(x - 1.75) < 1e-6 || Math.abs(x - 3.25) < 1e-6 ||
+        Math.abs(z - 1.75) < 1e-6 || Math.abs(z - 3.25) < 1e-6;
+      if (onEdge) expect(col[v * 4 + 3], `${x},${z}`).toBe(0);
+      if (col[v * 4 + 3]! > 0.6) opaque++;
+    }
+    // And it does fill in: the middle reads as water, not a wet stain.
+    expect(opaque).toBeGreaterThan(0);
+  });
+
+  it("draws no fen without a water mask", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    expect(buildSea(scene, coveGrid(), "fen").mesh).toBeNull();
+  });
 });

@@ -215,8 +215,10 @@ export function cliffHeights(grid: WalkableGrid): CliffField {
   const per = Math.round(cellSize / STEP);
   const nx = cols * per + 1, nz = rows * per + 1;
   const x0 = originX - cellSize / 2, z0 = originY - cellSize / 2;
+  // Water is wall to the sim only: a pool is open ground the rock stands back from.
   const floorAt = (cx: number, cy: number) =>
-    cx >= 0 && cy >= 0 && cx < cols && cy < rows && cells[cy * cols + cx] === 1;
+    cx >= 0 && cy >= 0 && cx < cols && cy < rows &&
+    (cells[cy * cols + cx] === 1 || grid.water?.[cy * cols + cx] === 1);
 
   // Open: some cell this vertex lies in or on the edge of is floor.
   const open = new Uint8Array(nx * nz);

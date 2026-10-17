@@ -43,6 +43,9 @@ export interface Grammar {
   /** Round room corners and stand rock outcrops off long faces, so walled maps
    *  lose the chunks' straight lines without cutting a route (`softenWalls`). */
   softEdges?: boolean;
+  /** Share (0..1) of the open-ground blobs drawn as standing water rather than
+   *  rock. Render-only: the cells stay wall, so collision and routes are unchanged. */
+  fenPools?: number;
 }
 
 export type MaskClass = "solid" | "cap" | "straight" | "corner" | "tee" | "cross";

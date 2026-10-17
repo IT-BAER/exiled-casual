@@ -635,7 +635,8 @@ export function GameView({
           // brazierSpotsFor is the list the sim collides against (areaCollision).
           msg.area === "map" ? brazierSpotsFor(msg.layout) : [],
         );
-        buildSea(scene, grid, base ? BIOMES[base.biomeId].sea === true : false);
+        // The strand's sea, or the fen pools a swamp marks in `grid.water`.
+        buildSea(scene, grid, base && BIOMES[base.biomeId].sea === true ? true : grid?.water && !grid.shore ? "fen" : false);
         setMapFill(scene, msg.area === "map");
         // Furniture, and only in the hideout: a map is a place you pass through.
         if (msg.area === "hideout") { buildHideoutDecor(scene); void preloadSfx(VARKIS_SFX); }

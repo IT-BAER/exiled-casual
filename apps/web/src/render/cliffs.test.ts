@@ -107,6 +107,22 @@ describe("cliffs", () => {
     }
   });
 
+  it("raises no rock over a fen pool", () => {
+    let wet = 0;
+    for (const seed of [0, 5, 6, 14]) {
+      const grid = generateArea(seed, "v", "sunken-ruins").grid;
+      const { cols, rows, water } = grid;
+      if (!water) continue;
+      const f = cliffHeights(grid);
+      for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
+        if (!water[y * cols + x]) continue;
+        wet++;
+        expect(f.heights[(y * 2 + 1) * f.nx + x * 2 + 1]!, `seed ${seed} cell ${x},${y}`).toBeLessThanOrEqual(0);
+      }
+    }
+    expect(wet).toBeGreaterThan(0);
+  });
+
   it("stands a visible rock on every obstacle standing in the open", () => {
     // A wall island is all scree by depth alone, and scree wears the floor plate:
     // a two-unit obstacle drew as flat sand that the sim still collides against.
@@ -127,7 +143,7 @@ describe("cliffs", () => {
             if (j >= 0 && j < cells.length && cells[j] === 0 && !seen[j]) { seen[j] = 1; comp.push(j); }
           }
         }
-        if (edge || comp.length < 9) continue;
+        if (edge || comp.length < 9 || grid.water?.[s]) continue;
         let peak = 0;
         for (const i of comp) {
           const x = i % cols, y = (i - x) / cols;
@@ -156,6 +172,7 @@ describe("cliffs", () => {
         for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
           const wx = x + dx, wy = y + dy;
           if (wx < 2 || wy < 2 || wx >= cols - 2 || wy >= rows - 2 || cells[wy * cols + wx] !== 0) continue;
+          if (grid.water?.[wy * cols + wx]) continue; // a pool's face is its bank, not rock
           const fx = originX + (x + dx / 2) * cs, fz = originY + (y + dy / 2) * cs;
           let seen = false;
           for (let t = 0.02; t <= GAP && isWall(fx + dx * t, fz + dy * t); t += 0.02) {
