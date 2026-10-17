@@ -30,8 +30,7 @@
 
 /** In load order: what the first ten seconds in a map can ask for, first. */
 export const WORLD_ART: readonly string[] = [
-  // Skill effects. The fire sheet is the first thing a cast wants.
-  "/textures/fx/fire_sheet_v1.webp",
+  // Skill effects that still read a texture (fire is geometry, fx-pool.ts).
   "/textures/fx/haze.webp",
   "/textures/fx/smoke_puff.webp",
   "/textures/fx/ember_cracks_v1.webp",

@@ -4,6 +4,7 @@ import { Color3, Color4, MeshBuilder, NullEngine, StandardMaterial } from "@baby
 import type { AbstractMesh, GlowLayer, Mesh } from "@babylonjs/core";
 import { createScene } from "./engine";
 import { SnapshotRenderer } from "./renderer";
+import type { GroundEmbers } from "./skill-fx";
 import { glowFollowsErosion, groundErosion, GROUND_FADE_TICKS, IGNITE_TICKS } from "./ground-fx";
 import type { AreaKind, Snapshot, SnapshotEntity } from "@exiled/protocol";
 import { testPlayer } from "../test-fixtures";
@@ -33,7 +34,7 @@ describe("a ground effect the sim spawned", () => {
     const { scene, r } = setup();
     r.apply(null, snap(1, [patch]), 1);
     const mesh = scene.getMeshByName("entity-7")!;
-    const embers = scene.particleSystems.find((p) => p.emitter === mesh)!;
+    const embers = (mesh.metadata as { embers: GroundEmbers }).embers;
     expect(groundErosion(mesh)).toBeGreaterThan(0.8);
     const flare = embers.emitRate;
 
@@ -92,7 +93,7 @@ describe("a ground effect the sim removed", () => {
     const width = mesh.scaling.x;
     const mat = mesh.material as StandardMaterial;
     const cracks = mat.emissiveTexture!;
-    const embers = scene.particleSystems.find((p) => p.emitter === mesh)!;
+    const embers = (mesh.metadata as { embers: GroundEmbers }).embers;
     const stop = vi.spyOn(embers, "stop");
 
     let prev = snap(2 + IGNITE_TICKS);

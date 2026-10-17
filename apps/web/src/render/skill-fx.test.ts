@@ -5,6 +5,7 @@ import { Effect, Light, NullEngine, ParticleSystem, PointLight, Scene, StandardM
 import { SKILLS } from "@exiled/content-runtime";
 import { makeMesh, warmEntityLooks, warmProjectiles, WARM_LOOK_PREFIX } from "./meshes";
 import { GROUND_LOOK_BASES } from "./ground-looks";
+import { GROUND_LOOKS } from "./ground-fx";
 import { createScene } from "./engine";
 import { SPRAY_NAME } from "./hit-spray";
 import {
@@ -14,7 +15,9 @@ import {
   BLINK_ALPHA,
   BOLT_TRAIL_NAME,
   emberBurst,
-  CINDER_NAME,
+  CINDER_GLOW,
+  CINDER_RATE,
+  type GroundEmbers,
   FLASH_NAME,
   warmSkillFx,
   FX_KEEPALIVE_NAME,
@@ -77,6 +80,7 @@ describe("ember bolt", () => {
       const mesh = makeMesh(scene, "projectile", `entity-${id}`, Vector3.Zero(), undefined, id);
       mesh.dispose();
     }
+    makeMesh(scene, "groundArea", "entity-9");
     emberBurst(scene, Vector3.Zero());
     warmSkillFx(scene);
     for (const ps of scene.particleSystems as ParticleSystem[]) {
@@ -497,17 +501,64 @@ describe("warmSkillFx swing trail", () => {
 });
 
 describe("cinder ground", () => {
-  it("emits its embers from the disc, so they cover the entity's real radius", () => {
+  type Embers = GroundEmbers & { step(dt: number): void; cracks: Float32Array };
+  const embersOf = (mesh: { metadata: unknown }) => (mesh.metadata as { embers: Embers }).embers;
+
+  it("throws embers only from its cracks, rising, at the patch's real radius", () => {
+    const scene = newScene();
+    const mesh = makeMesh(scene, "groundArea", "entity-9", new Vector3(5, 0.05, -3));
+    mesh.scaling.set(2.5, 1, 2.5);
+    mesh.computeWorldMatrix(true);
+    const embers = embersOf(mesh);
+    embers.step(1);
+    const pools = fxPools(scene);
+    const born = pools.shards.positions();
+    expect(born.length).toBeGreaterThan(0);
+    // Every ember sits on a crack segment (local, radius 1), give or take its first frame.
+    const segs = embers.cracks;
+    const onCrack = (p: Vector3) => {
+      const x = (p.x - 5) / 2.5, z = (p.z + 3) / 2.5;
+      for (let k = 0; k < segs.length; k += 4) {
+        const ax = segs[k]!, az = segs[k + 1]!, bx = segs[k + 2]!, bz = segs[k + 3]!;
+        const dx = bx - ax, dz = bz - az;
+        const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz || 1)));
+        if (Math.hypot(x - (ax + dx * t), z - (az + dz * t)) < 0.06) return true;
+      }
+      return false;
+    };
+    expect(born.every(onCrack)).toBe(true);
+    const y0 = born.map((p) => p.y);
+    pools.shards.step(0.2);
+    const y1 = pools.shards.positions().map((p) => p.y);
+    expect(y1.reduce((a, b) => a + b, 0) / y1.length).toBeGreaterThan(y0.reduce((a, b) => a + b, 0) / y0.length);
+  });
+
+  it("burns about half as loud as it did: glow, bloom gain and ember rate all cut", () => {
     const scene = newScene();
     const mesh = makeMesh(scene, "groundArea", "entity-9");
+    const mat = mesh.material as StandardMaterial;
+    expect(mat.alpha).toBeLessThanOrEqual(0.45);
+    expect(CINDER_GLOW).toBeLessThanOrEqual(0.5);
+    expect(mat.emissiveColor.r).toBeLessThanOrEqual(0.55);
+    expect(GROUND_LOOKS.fire.gain).toBeLessThanOrEqual(1.5);
+    expect(CINDER_RATE).toBeLessThanOrEqual(26);
+  });
 
-    const [cinders] = systems(scene, CINDER_NAME);
-    expect(cinders).toBeDefined();
-    // The renderer scales the disc x/z to the radius; only a mesh emitter picks
-    // that up, since Babylon pushes emitted points through its world matrix.
-    expect(cinders!.emitter).toBe(mesh);
-    // Rising, not falling: these are cinders off a hot patch.
-    expect(cinders!.gravity.y).toBeGreaterThan(0);
+  it("lies on a dark scorch base, and keeps a readable rim at its true radius", () => {
+    const scene = newScene();
+    const mesh = makeMesh(scene, "groundArea", "entity-9");
+    const scorch = mesh.getChildMeshes(true).find((m) => m.name.endsWith("-scorch"))!;
+    expect(scorch).toBeDefined();
+    const sm = scorch.material as StandardMaterial;
+    // Normally blended, so it darkens the floor; additive could only lighten it.
+    expect(sm.alphaMode).not.toBe(1);
+    expect(sm.diffuseColor.r + sm.emissiveColor.r).toBeLessThan(0.15);
+    expect(scorch.position.y).toBeLessThan(0);
+    const rim = mesh.getChildMeshes(true).find((m) => m.name.endsWith("-rim"))!;
+    expect(rim).toBeDefined();
+    rim.computeWorldMatrix(true);
+    const { minimum: min, maximum: max } = rim.getBoundingInfo().boundingBox;
+    expect((max.x - min.x) / 2).toBeCloseTo(1, 1);
   });
 
   it("fades the disc out at its rim instead of ending on a hard edge", () => {

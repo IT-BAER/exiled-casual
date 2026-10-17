@@ -13,7 +13,7 @@ import {
   TransformNode,
   Vector3,
 } from "@babylonjs/core";
-import { Mesh } from "@babylonjs/core";
+import { Mesh, VertexData } from "@babylonjs/core";
 import type { AbstractMesh, Scene } from "@babylonjs/core";
 import { hitSpray } from "./hit-spray";
 import { hitSparkle } from "./hit-sparkle";
@@ -21,43 +21,22 @@ import { clearFxPools, fxPools } from "./fx-pool";
 import { swingArcs, swingStyle } from "./swing-arc";
 
 /**
- * Fire FX for the three starter skills. Kept out of `meshes.ts` because almost
- * none of this is geometry: the mesh is usually only the anchor.
+ * Skill FX: each class skill's flight, swing and impact.
  *
  * Look source: reference-screenshots/inside-map-battle.webp (PoE2). What makes
- * that frame read as expensive is that no effect is ONE thing — a hit is a
- * flipbook flame, a light on the floor and a spray of sparks arriving together;
- * how big it was is the struck body's own spray (`hit-spray.ts`). A single soft dot sprite, however well tuned, reads as a
- * placeholder. Everything here is additive, so intensity is the only knob and
+ * that frame read as expensive is that no effect is ONE thing: a hit is a
+ * swelling flame, a light on the floor and a spray of sparks arriving together;
+ * how big it was is the struck body's own spray (`hit-spray.ts`). Every piece is
+ * geometry from the scene's pools (`fx-pool.ts`), never a sprite or flipbook, and
  * one loud moment beats six quiet ones (docs/09-reward-psychology.md).
  */
 
-/** 4x4 flipbook, 256px cells, one ember burning out over the 16 frames. */
-const FIRE_SHEET = "/textures/fx/fire_sheet_v1.webp";
-const CELL = 256;
-const LAST_CELL = 15;
 /** Glowing crack network for the cinder patch. Tiles, so it is scaled up rather
  *  than stretched across whatever radius the disc happens to have. */
 const EMBER_CRACKS = "/textures/fx/ember_cracks_v1.webp";
 /** Soft round blob, shared with the ambient haze. Arcane wisps want no shape of
  *  their own: the colour gradient is the whole effect. */
 const WISP = "/textures/fx/haze.webp";
-/** The same blob as RGBA, white with the blob as alpha, for normally blended smoke. */
-
-/**
- * The sheet is already orange, so the colour gradient is an ALPHA envelope and
- * nothing else: gradients multiply the texture, and a second fire ramp on top
- * of a fire texture only ever eats the white core.
- *
- * Colour gradients also override color1/color2/colorDead entirely, and a
- * particle starts AT its first stop, so the whole envelope has to live here.
- */
-function fireColors(ps: ParticleSystem): void {
-  ps.addColorGradient(0, new Color4(1, 1, 1, 0));
-  ps.addColorGradient(0.12, new Color4(1, 1, 1, 1));
-  ps.addColorGradient(0.75, new Color4(1, 0.94, 0.86, 0.9));
-  ps.addColorGradient(1, new Color4(1, 0.7, 0.5, 0));
-}
 
 /**
  * Size gradients set the size ABSOLUTELY: the moment one exists, minSize and
@@ -70,27 +49,6 @@ function sizeOverLife(ps: ParticleSystem, from: number, to: number, spread = 0.4
   ps.addSizeGradient(1, to);
   ps.minScaleX = ps.minScaleY = 1 - spread;
   ps.maxScaleX = ps.maxScaleY = 1 + spread;
-}
-
-function fireSystem(scene: Scene, name: string, capacity: number): ParticleSystem {
-  const ps = new ParticleSystem(name, capacity, scene);
-  ps.particleTexture = new Texture(FIRE_SHEET, scene);
-  ps.blendMode = ParticleSystem.BLENDMODE_ADD;
-  ps.applyFog = true; // distance has to cost brightness, same as the haze
-
-  // Play the whole sheet across each particle's own lifetime. That is what
-  // `spriteCellChangeSpeed = 0` means here, and it is the point of the sheet:
-  // the flame is born, licks, breaks up and dies in step with its own fade,
-  // which no amount of tuning on a static blob can imitate.
-  ps.isAnimationSheetEnabled = true;
-  ps.spriteCellWidth = CELL;
-  ps.spriteCellHeight = CELL;
-  ps.startSpriteCellID = 0;
-  ps.endSpriteCellID = LAST_CELL;
-  ps.spriteCellChangeSpeed = 0;
-
-  fireColors(ps);
-  return ps;
 }
 
 /**
@@ -819,77 +777,212 @@ export function swingTrail(scene: Scene, skillId?: string): { follow(at: Vector3
   };
 }
 
-export const CINDER_NAME = "fx-cinder";
+/** Embers a second off a burning patch at rest, all of them from its cracks. */
+export const CINDER_RATE = 26;
+/** Low flame licks a second along the cracks: heat, not a bonfire. */
+export const CINDER_FLAME_RATE = 5;
+/** Brightness of the fine crack veins in the disc, of the main fissures, and of the rim line. */
+export const CINDER_GLOW = 0.5;
+export const CINDER_CRACK_GLOW = 0.85;
+export const CINDER_RIM_GLOW = 0.35;
+/** Alpha of the additive glow disc, and of the dark scorch under it. */
+export const CINDER_DISC_ALPHA = 0.45;
+export const CINDER_SCORCH_ALPHA = 0.6;
+/** Main fissures per patch, and their width at radius 1 (the patch scales them). */
+const CRACK_BRANCHES = 6;
+const CRACK_WIDTH = 0.03;
+const RIM_THICKNESS = 0.03;
 
-/** Embers a second off a burning patch at rest. */
-export const CINDER_RATE = 52;
+/** What `ground-fx.ts` drives on a patch while it catches and burns out. */
+export interface GroundEmbers {
+  /** Embers a second right now. */
+  emitRate: number;
+  /** Share of the patch radius, from the centre, that has caught. */
+  radius: number;
+  stop(): void;
+}
 
-/**
- * Cinder ground: embers rising off the whole disc.
- *
- * The emitter is the disc mesh, so the cylinder emitter below is authored at
- * radius 1 and comes out at the entity's real radius — the renderer scales the
- * mesh x/z and Babylon pushes emitted positions through that world matrix.
- */
-export function attachCinderFX(scene: Scene, mesh: AbstractMesh): ParticleSystem {
-  const ps = fireSystem(scene, CINDER_NAME, 220);
-  ps.emitter = mesh;
-  ps.createCylinderEmitter(1, 0.05, 1, 0);
+/** A crack network at radius 1: segments as ax, az, bx, bz, radiating from near the centre. */
+function crackNetwork(): Float32Array {
+  const segs: number[] = [];
+  const a0 = Math.random() * Math.PI * 2;
+  const grow = (x: number, z: number, angle: number, steps: number, fork: boolean) => {
+    for (let s = 0; s < steps; s++) {
+      angle += rand(-0.5, 0.5);
+      const len = rand(0.12, 0.2);
+      const nx = x + Math.cos(angle) * len, nz = z + Math.sin(angle) * len;
+      if (Math.hypot(nx, nz) > 0.92) return;
+      segs.push(x, z, nx, nz);
+      if (fork && Math.random() < 0.3) grow(nx, nz, angle + (Math.random() < 0.5 ? -0.8 : 0.8), 2, false);
+      x = nx; z = nz;
+    }
+  };
+  for (let b = 0; b < CRACK_BRANCHES; b++) {
+    const angle = a0 + (b / CRACK_BRANCHES) * Math.PI * 2 + rand(-0.3, 0.3);
+    const r = rand(0.04, 0.18);
+    grow(Math.cos(angle) * r, Math.sin(angle) * r, angle, 6, true);
+  }
+  return new Float32Array(segs);
+}
 
-  sizeOverLife(ps, 0.78, 0.12);
-  // Long enough to climb clear of the disc and be seen against the dark.
-  ps.minLifeTime = 0.5;
-  ps.maxLifeTime = 1.1;
-  // Additive overlap goes as rate x lifetime, so a patch this wide saturates to
-  // a flat white disc long before it looks dense. Fewer, smaller, shorter
-  // flames read as separate tongues, which is what fire on the floor looks like.
-  ps.emitRate = CINDER_RATE;
-  ps.direction1 = new Vector3(-0.25, 1, -0.25);
-  ps.direction2 = new Vector3(0.25, 1, 0.25);
-  ps.minEmitPower = 0.5;
-  ps.maxEmitPower = 1.9;
-  // Up, not down: these are cinders carried by the heat of the patch they sit
-  // on. Falling embers would read as debris landing from something overhead.
-  ps.gravity = new Vector3(0, 0.5, 0);
-  ps.minAngularSpeed = -2;
-  ps.maxAngularSpeed = 2;
-  ps.start();
-  // Disposed with the disc by Babylon, since the disc is its emitter.
-  return ps;
+/** The fissures as flat quads on the disc, hotter toward the middle. */
+function crackMesh(scene: Scene, name: string, segs: Float32Array): Mesh {
+  const pos: number[] = [];
+  const col: number[] = [];
+  const idx: number[] = [];
+  for (let k = 0; k < segs.length; k += 4) {
+    const ax = segs[k]!, az = segs[k + 1]!, bx = segs[k + 2]!, bz = segs[k + 3]!;
+    const len = Math.hypot(bx - ax, bz - az) || 1;
+    const px = -(bz - az) / len * CRACK_WIDTH / 2, pz = (bx - ax) / len * CRACK_WIDTH / 2;
+    const v = pos.length / 3;
+    pos.push(ax + px, 0, az + pz, ax - px, 0, az - pz, bx + px, 0, bz + pz, bx - px, 0, bz - pz);
+    for (const [x, z] of [[ax, az], [ax, az], [bx, bz], [bx, bz]] as const) col.push(1, 1, 1, 1 - 0.6 * Math.hypot(x, z));
+    idx.push(v, v + 2, v + 1, v + 1, v + 2, v + 3);
+  }
+  const mesh = new Mesh(name, scene);
+  const vd = new VertexData();
+  vd.positions = pos;
+  vd.colors = col;
+  vd.indices = idx;
+  vd.applyToMesh(mesh);
+  mesh.hasVertexAlpha = true;
+  return mesh;
+}
+
+const crackPulse = new WeakMap<Scene, Color3>();
+
+function patchTemplate(scene: Scene, name: string, build: (m: StandardMaterial) => void): StandardMaterial {
+  const found = scene.getMaterialByName(name) as StandardMaterial | null;
+  if (found) return found;
+  const m = new StandardMaterial(name, scene);
+  m.diffuseColor = Color3.Black();
+  m.specularColor = Color3.Black();
+  m.disableLighting = true;
+  m.backFaceCulling = false;
+  build(m);
+  return m;
 }
 
 /**
- * Dress the cinder disc's material: a crack network that crawls and pulses,
- * masked by a radial falloff.
- *
- * The crawl is the whole point. A patch of fire that holds still is a decal no
- * matter how good the texture is, and it is the cheapest possible way to buy
- * motion: two UV offsets moving at different speeds read as burning.
- *
- * Shared material, so this is registered ONCE, when `meshes.ts` first builds it.
+ * Dress a cinder patch: a dark scorch base under it, the glowing fissures, a dim
+ * rim at its true radius (the hit area stays readable), and the embers that rise
+ * only from the fissures. The children wear shared templates; `meshes.ts` gives
+ * each patch its own eroding copy.
+ */
+export function attachCinderFX(scene: Scene, mesh: AbstractMesh): GroundEmbers {
+  const scorch = MeshBuilder.CreateDisc(`${mesh.name}-scorch`, { radius: 1, tessellation: 48 }, scene);
+  scorch.rotation.x = Math.PI / 2;
+  // Just over the floor, under the glow disc: it darkens the ground the fire sits on.
+  scorch.position.y = -0.045;
+  scorch.material = patchTemplate(scene, "cinder-scorch-mat", (m) => {
+    m.emissiveColor = new Color3(0.035, 0.022, 0.015);
+    m.alpha = CINDER_SCORCH_ALPHA;
+    const falloff = scorchFalloff(scene);
+    if (falloff) m.opacityTexture = falloff;
+  });
+
+  const segs = crackNetwork();
+  const cracks = crackMesh(scene, `${mesh.name}-cracks`, segs);
+  cracks.position.y = 0.022;
+  cracks.material = patchTemplate(scene, "cinder-crack-mat", (m) => {
+    m.emissiveColor = crackPulse.get(scene) ?? new Color3(1, 0.45, 0.14).scale(CINDER_CRACK_GLOW);
+    m.alphaMode = 1; // ALPHA_ADD
+  });
+
+  const rim = MeshBuilder.CreateTorus(`${mesh.name}-rim`, { diameter: 2, thickness: RIM_THICKNESS, tessellation: 64 }, scene);
+  rim.position.y = -0.01;
+  rim.material = patchTemplate(scene, "cinder-rim-mat", (m) => {
+    m.emissiveColor = new Color3(1, 0.42, 0.12).scale(CINDER_RIM_GLOW);
+    m.alphaMode = 1; // ALPHA_ADD
+  });
+
+  for (const child of [scorch, cracks, rim]) {
+    child.parent = mesh;
+    child.isPickable = false;
+  }
+
+  const pools = fxPools(scene);
+  let owed = 0;
+  let licks = 0;
+  const embers = {
+    emitRate: CINDER_RATE,
+    radius: 1,
+    cracks: segs,
+    stopped: false,
+    stop(): void {
+      embers.stopped = true;
+    },
+    step(dt: number): void {
+      if (embers.stopped || segs.length === 0) return;
+      owed += embers.emitRate * dt;
+      licks += CINDER_FLAME_RATE * (embers.emitRate / CINDER_RATE) * dt;
+      const c = mesh.getAbsolutePosition();
+      const sx = mesh.absoluteScaling.x, sz = mesh.absoluteScaling.z;
+      const point = (): [number, number] => {
+        // Only a crack whose start has caught throws anything.
+        for (let tries = 0; tries < 6; tries++) {
+          const k = Math.floor(Math.random() * (segs.length / 4)) * 4;
+          if (Math.hypot(segs[k]!, segs[k + 1]!) > embers.radius && tries < 5) continue;
+          const t = Math.random();
+          return [segs[k]! + (segs[k + 2]! - segs[k]!) * t, segs[k + 1]! + (segs[k + 3]! - segs[k + 1]!) * t];
+        }
+        return [segs[0]!, segs[1]!];
+      };
+      for (; owed >= 1; owed--) {
+        const [lx, lz] = point();
+        pools.shards.emit({
+          x: c.x + lx * sx, y: c.y + 0.03, z: c.z + lz * sz,
+          vx: rand(-0.15, 0.15), vy: rand(0.4, 1.2), vz: rand(-0.15, 0.15), gravity: 0.5, drag: 0.4,
+          life: rand(0.6, 1.2), size: 0.05, thick: 0.014, stretch: 0.04,
+          r: 1, g: 0.72, b: 0.32, a: 0.9, r1: 0.6, g1: 0.14, b1: 0.03,
+        });
+      }
+      for (; licks >= 1; licks--) {
+        const [lx, lz] = point();
+        pools.glow.emit({
+          x: c.x + lx * sx, y: c.y + 0.05, z: c.z + lz * sz, vy: rand(0.3, 0.6), drag: 1,
+          life: rand(0.3, 0.5), size: 0.08, sizeEnd: 0.24,
+          r: 1, g: 0.5, b: 0.15, a: 0.22, r1: 0.5, g1: 0.12, b1: 0.02,
+        });
+      }
+    },
+  };
+  const tick = scene.onBeforeRenderObservable.add(() => embers.step(Math.min(0.05, scene.getEngine().getDeltaTime() / 1000)));
+  mesh.onDisposeObservable.addOnce(() => scene.onBeforeRenderObservable.remove(tick));
+  return embers;
+}
+
+/**
+ * Dress the cinder disc's material: fine crack veins that hold still (ground
+ * does not crawl) and breathe, masked by a radial falloff. Shared material, so
+ * this is registered ONCE, when `meshes.ts` first builds it.
  */
 export function cinderGlow(scene: Scene, mat: StandardMaterial): void {
   const cracks = new Texture(EMBER_CRACKS, scene);
   cracks.uScale = cracks.vScale = 2.2; // tile, so the crack size stops depending on the radius
   mat.emissiveTexture = cracks;
-  // Ember-tinted, NOT white. The disc is additive under a glow layer, so a
-  // white emissive clips all three channels together in the middle and the
-  // patch reads as a hole in the floor. Holding green and blue down means the
-  // brightest part of the fire is still orange.
-  mat.emissiveColor = new Color3(1, 0.5, 0.18);
+  // Ember-tinted, NOT white: green and blue held down keep the brightest part orange.
+  mat.emissiveColor = new Color3(1, 0.5, 0.18).scale(CINDER_GLOW);
   const falloff = cinderFalloff(scene);
   if (falloff) mat.opacityTexture = falloff;
+  const fissures = new Color3(1, 0.45, 0.14).scale(CINDER_CRACK_GLOW);
+  crackPulse.set(scene, fissures);
 
   let t = 0;
   scene.onBeforeRenderObservable.add(() => {
     t += scene.getEngine().getDeltaTime() / 1000;
-    cracks.vOffset = t * 0.045;
-    cracks.uOffset = Math.sin(t * 0.35) * 0.05;
-    // Breathing, not blinking: two beats a second at a tenth of the range is
-    // enough for the eye to call it alive.
-    const pulse = 0.9 + 0.1 * Math.sin(t * 4.2);
-    mat.emissiveColor.set(pulse, pulse * 0.5, pulse * 0.18);
+    // Breathing, not blinking: two detuned beats at a tenth of the range.
+    const pulse = 0.9 + 0.06 * Math.sin(t * 4.2) + 0.04 * Math.sin(t * 7.3 + 1.1);
+    mat.emissiveColor.set(pulse * CINDER_GLOW, pulse * 0.5 * CINDER_GLOW, pulse * 0.18 * CINDER_GLOW);
+    fissures.set(pulse * CINDER_CRACK_GLOW, pulse * 0.45 * CINDER_CRACK_GLOW, pulse * 0.14 * CINDER_CRACK_GLOW);
   });
+}
+
+export const SCORCH_FALLOFF_NAME = "cinder-scorch-falloff";
+
+/** The scorch's mask: dark nearly to the rim, then a short soft edge. Null under NullEngine. */
+function scorchFalloff(scene: Scene): DynamicTexture | null {
+  return paintedFalloff(scene, SCORCH_FALLOFF_NAME, [[0, "#fff"], [0.7, "#e6e6e6"], [0.93, "#707070"], [1, "#000"]]);
 }
 
 /** Radial falloff for the cinder disc, so the patch bleeds off at its edge
@@ -898,14 +991,18 @@ export function cinderGlow(scene: Scene, mat: StandardMaterial): void {
 export const CINDER_FALLOFF_NAME = "cinder-falloff";
 
 export function cinderFalloff(scene: Scene): DynamicTexture | null {
-  const existing = scene.getTextureByName(CINDER_FALLOFF_NAME);
+  // Hot centre, most of the radius spent dimming, nothing at all at the rim.
+  return paintedFalloff(scene, CINDER_FALLOFF_NAME, [[0, "#fff"], [0.45, "#b4b4b4"], [0.85, "#2a2a2a"], [1, "#000"]]);
+}
+
+function paintedFalloff(scene: Scene, name: string, stops: [number, string][]): DynamicTexture | null {
+  const existing = scene.getTextureByName(name);
   if (existing) return existing as DynamicTexture;
   // Null under NullEngine: painting one needs a real 2D canvas, which node has
-  // no OffscreenCanvas for and jsdom hands back without a context. Same reason
-  // props.ts falls back to primitives — the headless tests still have to run.
+  // no OffscreenCanvas for and jsdom hands back without a context.
   try {
     const size = 128;
-    const tex = new DynamicTexture(CINDER_FALLOFF_NAME, { width: size, height: size }, scene, false);
+    const tex = new DynamicTexture(name, { width: size, height: size }, scene, false);
     const ctx = tex.getContext() as unknown as CanvasRenderingContext2D | null;
     if (!ctx) {
       tex.dispose();
@@ -913,11 +1010,7 @@ export function cinderFalloff(scene: Scene): DynamicTexture | null {
     }
     const r = size / 2;
     const grad = ctx.createRadialGradient(r, r, 0, r, r, r);
-    // Hot centre, most of the radius spent dimming, nothing at all at the rim.
-    grad.addColorStop(0, "#fff");
-    grad.addColorStop(0.45, "#b4b4b4");
-    grad.addColorStop(0.85, "#2a2a2a");
-    grad.addColorStop(1, "#000");
+    for (const [at, colour] of stops) grad.addColorStop(at, colour);
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, size, size);
     tex.update();
