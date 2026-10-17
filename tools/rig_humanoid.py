@@ -164,7 +164,7 @@ def pieces(inside, ew):
             return label
 
 
-def skin(mesh, arm):
+def skin(mesh, arm, thigh=None):
     """Nearest-bone weights, restricted to that bone and its direct neighbours.
 
     Bone heat fails on these generated shells, even on a watertight voxel copy.
@@ -193,6 +193,12 @@ def skin(mesh, arm):
             d[medial < -0.05 * H, i] *= 3.0
     # Below the wrist, outside the empty gap beside the thigh, is whatever hangs
     # from the hand (net, chain): the widest run of empty 1%-of-H columns.
+    # `thigh`: the thighs' outer edge as a fraction of H, for fists that hang
+    # touching them; no leg bone claims anything outside it above the knee.
+    if thigh is not None:
+        legs = numpy.array([b.name.startswith("leg") for b in bones])
+        out = (numpy.abs(v[:, 0]) > thigh * H) & (v[:, 2] > 0.25 * H)
+        d[numpy.ix_(out, legs)] = numpy.inf
     held = []
     for s, t in ((1, "l"), (-1, "r")):
         wrist = bones[index["hand_" + t]].head_local
@@ -306,7 +312,9 @@ X, Y, Z = Vector((1, 0, 0)), Vector((0, 1, 0)), Vector((0, 0, 1))
 HUNCH = 0.22
 
 
-def clip_walk(k, n=36):
+def clip_walk(k, n=36, carry=None):
+    """`carry` names the side holding a long blade: that elbow stays near straight
+    and its swing drops to a third, or each stride lifts the blade forward."""
     for f in range(n + 1):
         p = 2 * math.pi * (f % n) / n
         rot, H = {}, k.H
@@ -317,8 +325,12 @@ def clip_walk(k, n=36):
             rot["leg%s_knee" % side] = [(X, knee)]
             rot["leg%s_ankle" % side] = [(X, -0.5 * (swing + knee) + 0.1)]
             a = side.lower()
-            rot["arm_upper_" + a] = [(X, 0.30 * math.sin(ph) - 0.15)]
-            rot["arm_lower_" + a] = [(X, -0.35 - 0.25 * max(0.0, -math.sin(ph)))]
+            if a == carry:
+                rot["arm_upper_" + a] = [(X, 0.10 * math.sin(ph) - 0.05)]
+                rot["arm_lower_" + a] = [(X, -0.08)]
+            else:
+                rot["arm_upper_" + a] = [(X, 0.30 * math.sin(ph) - 0.15)]
+                rot["arm_lower_" + a] = [(X, -0.35 - 0.25 * max(0.0, -math.sin(ph)))]
         rot["hips"] = [(Z, 0.10 * math.sin(p)), (Y, 0.05 * math.cos(p))]
         rot["spine"] = [(X, HUNCH), (Z, -0.08 * math.sin(p))]
         rot["chest"] = [(X, 0.10), (Z, -0.10 * math.sin(p))]
@@ -388,10 +400,11 @@ def clip_attack(k):
     return n
 
 
-def author(arm, H):
+def author(arm, H, carry=None):
     k = Keyer(arm, H)
     arm.animation_data_create()
-    for clip, fn in (("walk", clip_walk), ("idle", clip_idle), ("attack", clip_attack)):
+    walk = lambda k: clip_walk(k, carry=carry)
+    for clip, fn in (("walk", walk), ("idle", clip_idle), ("attack", clip_attack)):
         action = bpy.data.actions.new("%s|%s" % (arm.name, clip))
         action.use_fake_user = True
         slot = action.slots.new("OBJECT", arm.name)

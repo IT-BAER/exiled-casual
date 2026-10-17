@@ -1564,28 +1564,29 @@ def cinder_imp():
     return c
 
 
-HUSK_SOURCE = os.path.join(TEX_DIR, "source", "vaal_husk_v1.glb")
-HUSK_NORMAL = os.path.join(TEX_DIR, "source", "vaal_husk_v1_n.png")
+HUSK_SOURCE = os.path.join(TEX_DIR, "source", "vaal_husk_v2.glb")
+HUSK_NORMAL = os.path.join(TEX_DIR, "source", "vaal_husk_v2_n.png")
 
 
 def vaal_husk():
-    """Hauls itself on long forelimbs; the hind legs are stubs that drag.
+    """A segmented stone shell with one green eye, arched over two long fists.
 
-    Generated (review/3d/vaal-husk), thin ribs cut off by a
-    volumetric opening (tools/open_volume.py --res 240 --radius 2), 4k triangles. Joints
-    measured off vaal_husk_v1.glb by tools/measure_generated.py --flip 1.
+    Generated (review/3d/vaal-husk-v2), volumetric opening (tools/open_volume.py
+    --res 240 --radius 2), 4k triangles. Feet measured off vaal_husk_v2.glb as
+    loaded with --flip 1; the rest by hand, see below.
     """
     c = GeneratedSkin("monster.vaal_husk.v1", HUSK_SOURCE, HUSK_NORMAL,
-                      "vaal", 0.9, (0.012, 0.212), tex=512, flip=True)
-    spine = c.body.chain([(0, -0.45, 0.40), (0, -0.05, 0.64), (0, 0.22, 0.66)], [0.1] * 3)
-    # The skull hangs low between the forelimbs.
-    c.body.chain([(0, 0.34, 0.64), (0, 0.44, 0.54)], [0.1] * 2, parent=spine[-1])
-    # The forelimbs splay out at the elbow, which sits at shoulder height.
+                      "vaal", 0.55, (-0.012, 0.018), tex=512, flip=True)
+    spine = c.body.chain([(0, -0.22, 0.30), (0, -0.02, 0.38), (0, 0.12, 0.38)], [0.1] * 3)
+    # The eye sits low between the shoulders.
+    c.body.chain([(0, 0.20, 0.32), (0, 0.26, 0.28)], [0.1] * 2, parent=spine[-1])
+    # measure_generated split a split-fingered forefoot into two feet and lost a
+    # hind one; these are cross-section centres, knees pushed back off the chord.
     for i, (hip, knee, foot) in enumerate([
-        ((-0.049, 0.268, 0.593), (-0.145, 0.285, 0.595), (-0.430, 0.328, 0.000)),
-        ((0.126, 0.334, 0.632), (0.268, 0.364, 0.489), (0.370, 0.572, 0.000)),
-        ((-0.101, -0.389, 0.380), (-0.264, -0.522, 0.194), (-0.296, -0.453, 0.000)),
-        ((0.128, -0.382, 0.362), (0.319, -0.523, 0.119), (0.356, -0.447, 0.001)),
+        ((-0.272, 0.058, 0.400), (-0.340, 0.050, 0.210), (-0.344, 0.207, 0.000)),
+        ((0.268, 0.078, 0.400), (0.340, 0.050, 0.210), (0.381, 0.157, 0.000)),
+        ((-0.122, -0.172, 0.240), (-0.180, -0.200, 0.120), (-0.166, -0.173, 0.004)),
+        ((0.098, -0.192, 0.240), (0.160, -0.210, 0.120), (0.130, -0.189, 0.009)),
     ]):
         c.leg_through(i, hip, knee, foot)
     return c
@@ -1723,19 +1724,21 @@ def hoarfrost_spitter():
 # the brutes: mid-sized, slow, and they close on you
 # --------------------------------------------------------------------------
 
-VAAL_CONSTRUCT_SOURCE = os.path.join(TEX_DIR, "source", "vaal_construct_v1.glb")
-VAAL_CONSTRUCT_NORMAL = os.path.join(TEX_DIR, "source", "vaal_construct_v1_n.png")
+VAAL_CONSTRUCT_SOURCE = os.path.join(TEX_DIR, "source", "vaal_construct_v2.glb")
+VAAL_CONSTRUCT_NORMAL = os.path.join(TEX_DIR, "source", "vaal_construct_v2_n.png")
 
 
 def vaal_construct():
-    """A walking pillar of carved stone, shoulders wider than the waist, and a
-    socket of green light where a head should be.
+    """A blocky stone golem, huge banded forearms and fists, green glyphs, a green
+    gem sunk between the shoulders for a head.
 
-    Generated (review/3d/vaal-construct), volumetric opening res 240 r 2,
-    4k triangles, rig_humanoid.
+    Generated (review/3d/vaal-construct-v2), volumetric opening res 240 r 2,
+    4k triangles, rig_humanoid. Ankles measured at x 0.237 and -0.342 as loaded:
+    the offset centres the stance. The fists touch the thighs, whose outer edge
+    measures 0.22 H: past it the thighs claimed ~80 fist vertices a side.
     """
-    return GeneratedCreature("monster.vaal_construct.v1", VAAL_CONSTRUCT_SOURCE, "vaal", 1.9,
-                             normal=VAAL_CONSTRUCT_NORMAL)
+    return GeneratedCreature("monster.vaal_construct.v1", VAAL_CONSTRUCT_SOURCE, "vaal", 2.0,
+                             normal=VAAL_CONSTRUCT_NORMAL, offset=(0.052, 0.0), thigh=0.225)
 
 
 BOG_DROWNED_SOURCE = os.path.join(TEX_DIR, "source", "bog_drowned_v1.glb")
@@ -1790,8 +1793,12 @@ class GeneratedCreature:
     roster. It faces -Y as imported, where a turned node-graph root ends up."""
 
     def __init__(self, def_id, source, family, height, normal=None, tex=TEX_SIZE,
-                 offset=(0.0, 0.0)):
+                 offset=(0.0, 0.0), carry=None, thigh=None):
         self.def_id, self.source, self.family, self.height = def_id, source, family, height
+        # "l"/"r": the hand carrying a long blade, held low through the walk.
+        self.carry = carry
+        # Fraction of H: the thighs' outer edge, when the fists hang against them.
+        self.thigh = thigh
         self.normal, self.tex = normal, tex
         # load_mesh centres on the mid-height vertex median, which moves with
         # vertex density; the hips are placed at x 0, so the stance must be there.
@@ -1815,12 +1822,12 @@ class GeneratedCreature:
 
         arm = rig.build_armature(self.def_id, rig.landmarks(mesh, self.height))
         mesh.name = mesh.data.name = self.def_id + ".mesh"
-        rig.skin(mesh, arm)
+        rig.skin(mesh, arm, self.thigh)
         # No baked occlusion: white, so the runtime's multiply leaves the sheet alone.
         layer = mesh.data.color_attributes.new("Col", "BYTE_COLOR", "CORNER")
         layer.data.foreach_set("color", numpy.ones(len(mesh.data.loops) * 4, dtype=numpy.float32))
         mesh.data.color_attributes.active_color = layer
-        rig.author(arm, self.height)
+        rig.author(arm, self.height, self.carry)
         self.root = arm
         return arm
 
@@ -1954,18 +1961,20 @@ def thornhide_boar():
 # the heavies: the loudest thing in a pack, and the slowest
 # --------------------------------------------------------------------------
 
-BLOOD_SENTINEL_SOURCE = os.path.join(TEX_DIR, "source", "blood_sentinel_v1.glb")
-BLOOD_SENTINEL_NORMAL = os.path.join(TEX_DIR, "source", "blood_sentinel_v1_n.png")
+BLOOD_SENTINEL_SOURCE = os.path.join(TEX_DIR, "source", "blood_sentinel_v2.glb")
+BLOOD_SENTINEL_NORMAL = os.path.join(TEX_DIR, "source", "blood_sentinel_v2_n.png")
 
 
 def blood_sentinel():
-    """A hooded statue in a mantle, one blade too big for the arm holding it.
+    """A faceless hooded knight in dark plate trimmed blood red, a broad sword
+    point-down in the right hand.
 
-    Generated (review/3d/blood-sentinel), volumetric opening res 240 r 2,
-    4k triangles, rig_humanoid.
+    Generated (review/3d/blood-sentinel-v2), volumetric opening res 240 r 2,
+    4k triangles, rig_humanoid. Ankles measured at x 0.325 and -0.375 as loaded:
+    the offset centres the stance.
     """
     return GeneratedCreature("monster.blood_sentinel.v1", BLOOD_SENTINEL_SOURCE, "vaal", 2.1,
-                             normal=BLOOD_SENTINEL_NORMAL)
+                             normal=BLOOD_SENTINEL_NORMAL, offset=(0.022, 0.0), carry="r")
 
 
 COLOSSUS_SOURCE = os.path.join(TEX_DIR, "source", "sunbaked_colossus_v2.glb")
