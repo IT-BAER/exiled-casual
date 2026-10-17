@@ -19,10 +19,11 @@ import { applyBiomeTint } from "./level";
 import { LIGHT_POOL } from "./lights";
 import { HAZE_HEIGHT, HAZE_MAX_SIZE, HAZE_NAME, MOTES_NAME, moteDrift, moteDriftBasis } from "./haze";
 import { BIOMES } from "@exiled/content-runtime";
-import { blowFrom, cancelTurnedAction, reactionFor, SnapshotRenderer, syncActionAnimation, syncRollAnimation } from "./renderer";
+import { blowFrom, cancelTurnedAction, castSkillOf, reactionFor, SnapshotRenderer, syncActionAnimation, syncRollAnimation } from "./renderer";
 import { makeMesh, updateTelegraph, VENDOR_LOOKS } from "./meshes";
 import { hitSparkle } from "./hit-sparkle";
-import { ARROW_NAME, MELEE_SPARKS_NAME } from "./skill-fx";
+import { ARROW_NAME, STRIKE_IMPACT } from "./skill-fx";
+import { fxPools } from "./fx-pool";
 import type { Snapshot } from "@exiled/protocol";
 import { testPlayer, testStats } from "../test-fixtures";
 import { columnHit } from "../input/bindings";
@@ -95,6 +96,15 @@ describe("sustained casting animation", () => {
     expect(rig.playStrike).toHaveBeenCalledTimes(1);
     expect(rig.playCast).not.toHaveBeenCalled();
     expect(rig.stopStrike).not.toHaveBeenCalled();
+  });
+
+  it("tells the swing which skill it is, read off the cooldown the cast just set", () => {
+    const rig = { playCast: vi.fn(), playBow: vi.fn(), playStrike: vi.fn(), stopStrike: vi.fn() };
+    const skill = castSkillOf({ "skill.strike.v1": 0.2 }, { "skill.strike.v1": 0.1, "skill.heavy_strike.v1": 1 });
+    expect(skill).toBe("skill.heavy_strike.v1");
+    expect(castSkillOf({ "skill.strike.v1": 0.4 }, { "skill.strike.v1": 0.3 })).toBeUndefined();
+    syncActionAnimation(rig, false, true, undefined, "melee", 0.5, 0.3, skill);
+    expect(rig.playStrike).toHaveBeenCalledWith(0.5, 0.3, "skill.heavy_strike.v1");
   });
 
   it("draws the bow for a bow cast, told both the beat and when the arrow leaves", () => {
@@ -446,7 +456,7 @@ describe("atmosphere", () => {
     renderer.apply(flying, makeSnapshot({ tick: 3, entities: [monster] }), 1);
     // It sat on the hitbox, not the model: a body full of floating arrows.
     expect(scene.getMeshByName("entity-1")!.getChildMeshes(false).some((m) => m.name.startsWith(ARROW_NAME))).toBe(false);
-    expect(scene.particleSystems.some((p) => p.name === MELEE_SPARKS_NAME)).toBe(true);
+    expect(fxPools(scene).shards.emitted).toBeGreaterThan(0);
   });
 
   it("the killing blow does not flinch the body it kills", () => {
@@ -898,7 +908,7 @@ describe("SnapshotRenderer", () => {
       const s = makeSnapshot({ tick, entities: [monster(life)] });
       return { ...s, player: { ...s.player, strikeTick, strikeHits } };
     };
-    const sparks = () => scene.particleSystems.filter((p) => p.name === "fx-melee-sparks").length;
+    const sparks = () => fxPools(scene).shards.emitted / STRIKE_IMPACT.sparks;
 
     // Hurt by something else (no new swing): no melee juice.
     const a = at(1, 50, 0, 1);
@@ -928,7 +938,7 @@ describe("SnapshotRenderer", () => {
     const s = makeSnapshot({ tick: 2, entities: [] });
     const b = { ...s, player: { ...s.player, strikeTick: 2, strikeHits: 1 } };
     renderer.apply(a, b, 1);
-    expect(scene.particleSystems.filter((p) => p.name === "fx-melee-sparks").length).toBe(1);
+    expect(fxPools(scene).shards.emitted / STRIKE_IMPACT.sparks).toBe(1);
     expect(hitSparkle(scene).live).toBe(1);
   });
 

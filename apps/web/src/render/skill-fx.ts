@@ -17,6 +17,8 @@ import { Mesh } from "@babylonjs/core";
 import type { AbstractMesh, Scene } from "@babylonjs/core";
 import { hitSpray } from "./hit-spray";
 import { hitSparkle } from "./hit-sparkle";
+import { fxPools } from "./fx-pool";
+import { swingArcs, swingStyle } from "./swing-arc";
 
 /**
  * Fire FX for the three starter skills. Kept out of `meshes.ts` because almost
@@ -534,81 +536,144 @@ export function emberBurst(scene: Scene, at: Vector3, fx: FxProfile = FALLBACK_F
   return burst(ps, 32, 0.4);
 }
 
-export const MELEE_SPARKS_NAME = "fx-melee-sparks";
-export const MELEE_DUST_NAME = "fx-melee-dust";
+/** How one melee skill's blow lands on a body. Every count is per landed hit. */
+export interface MeleeImpactStyle {
+  sparks: number;
+  sparkSpeed: number;
+  sparkLength: number;
+  sparkColour: Color3;
+  /** Swelling core at the contact, diameter 0 for none. */
+  core: number;
+  dust: number;
+}
+
+/** Strike: a small bright chip, a few fast white sparks. */
+export const STRIKE_IMPACT: MeleeImpactStyle = {
+  sparks: 7, sparkSpeed: 7, sparkLength: 0.16, sparkColour: new Color3(1, 0.92, 0.75), core: 0, dust: 1,
+};
+/** Heavy Strike: a crunch, a hot core and a thick fan of heavy sparks. */
+export const HEAVY_STRIKE_IMPACT: MeleeImpactStyle = {
+  sparks: 16, sparkSpeed: 6, sparkLength: 0.26, sparkColour: new Color3(1, 0.72, 0.35), core: 0.55, dust: 3,
+};
+/** Ground Slam on a body: the floor's shockwave carries the size, so the hit stays mid. */
+export const GROUND_SLAM_IMPACT: MeleeImpactStyle = {
+  sparks: 10, sparkSpeed: 5, sparkLength: 0.22, sparkColour: new Color3(1, 0.6, 0.28), core: 0.35, dust: 4,
+};
+const MELEE_IMPACT: Record<string, MeleeImpactStyle> = {
+  "skill.strike.v1": STRIKE_IMPACT,
+  "skill.heavy_strike.v1": HEAVY_STRIKE_IMPACT,
+  "skill.ground_slam.v1": GROUND_SLAM_IMPACT,
+};
+
+const rand = (lo: number, hi: number) => lo + Math.random() * (hi - lo);
+
+/** Warm floor dust, alpha-blended so it veils rather than glows. */
+function dustPuff(scene: Scene, x: number, z: number, size: number, delay = 0, drift = 0.8): void {
+  const a = Math.random() * Math.PI * 2;
+  fxPools(scene).smoke.emit({
+    x: x + Math.cos(a) * 0.15, y: 0.12, z: z + Math.sin(a) * 0.15,
+    vx: Math.cos(a) * drift, vy: 0.35, vz: Math.sin(a) * drift, drag: 2.5,
+    life: rand(0.45, 0.8), delay, size: size * 0.5, sizeEnd: size * 1.5,
+    r: 0.46, g: 0.4, b: 0.32, a: 0.32, r1: 0.36, g1: 0.33, b1: 0.3,
+  });
+}
 
 /**
  * A weapon landing on a body: sparks thrown off the contact AWAY from the
- * swinger, dust kicked off the floor under it and the shared flash at `flashLevel`.
+ * swinger, dust kicked off the floor under it and the shared flash at
+ * `flashLevel`. Every piece comes from the scene's pools; nothing is built.
  */
-export function meleeImpact(scene: Scene, at: Vector3, awayX: number, awayZ: number, flashLevel = 1): void {
+export function meleeImpact(
+  scene: Scene, at: Vector3, awayX: number, awayZ: number, flashLevel = 1, skillId?: string,
+): void {
   flash(scene, at, flashLevel);
-
+  const style = (skillId === undefined ? undefined : MELEE_IMPACT[skillId]) ?? STRIKE_IMPACT;
+  const pools = fxPools(scene);
   const len = Math.hypot(awayX, awayZ) || 1;
-  const ax = awayX / len;
-  const az = awayZ / len;
-  const sparks = fireSystem(scene, MELEE_SPARKS_NAME, 24);
-  sparks.emitter = at.clone();
-  // A fan out of the far side of the body and up: the blow carries through it.
-  sparks.createPointEmitter(
-    new Vector3(ax - az * 0.9, 0.3, az + ax * 0.9),
-    new Vector3(ax + az * 0.9, 1.1, az - ax * 0.9),
-  );
-  sizeOverLife(sparks, 0.3, 0.04, 0.5);
-  sparks.minLifeTime = 0.12;
-  sparks.maxLifeTime = 0.3;
-  sparks.minEmitPower = 4;
-  sparks.maxEmitPower = 8;
-  sparks.gravity = new Vector3(0, -12, 0);
-  burst(sparks, 20, 0.3);
-
-  const dust = new ParticleSystem(MELEE_DUST_NAME, 8, scene);
-  dust.particleTexture = new Texture(SMOKE_PUFF, scene);
-  dust.blendMode = ParticleSystem.BLENDMODE_STANDARD;
-  dust.applyFog = true;
-  dust.emitter = new Vector3(at.x, 0.12, at.z);
-  dust.createSphereEmitter(0.35, 1);
-  dust.addColorGradient(0, new Color4(0.46, 0.4, 0.32, 0));
-  dust.addColorGradient(0.12, new Color4(0.44, 0.38, 0.3, 0.3));
-  dust.addColorGradient(1, new Color4(0.38, 0.34, 0.3, 0));
-  sizeOverLife(dust, 0.5, 1.4, 0.3);
-  dust.minLifeTime = 0.35;
-  dust.maxLifeTime = 0.7;
-  dust.minEmitPower = 0.8;
-  dust.maxEmitPower = 1.6;
-  dust.gravity = new Vector3(0, 0.3, 0);
-  dust.minInitialRotation = 0;
-  dust.maxInitialRotation = Math.PI * 2;
-  burst(dust, 6, 0.7);
+  const base = Math.atan2(awayX / len, awayZ / len);
+  const c = style.sparkColour;
+  for (let i = 0; i < style.sparks; i++) {
+    // A fan out of the far side of the body and up: the blow carries through it.
+    const yaw = base + ((i + Math.random()) / style.sparks * 2 - 1) * 0.9;
+    const speed = style.sparkSpeed * rand(0.6, 1.3);
+    pools.shards.emit({
+      x: at.x, y: at.y, z: at.z,
+      vx: Math.sin(yaw) * speed, vy: speed * rand(0.15, 0.6), vz: Math.cos(yaw) * speed,
+      gravity: -12, drag: 1.5, life: rand(0.12, 0.3),
+      size: style.sparkLength, thick: 0.02, stretch: 0.03,
+      r: c.r, g: c.g, b: c.b, a: 1, r1: 1, g1: 0.35, b1: 0.1,
+    });
+  }
+  if (style.core > 0) {
+    pools.glow.emit({
+      x: at.x, y: at.y, z: at.z, life: 0.12, size: style.core * 0.4, sizeEnd: style.core,
+      r: 1, g: 0.9, b: 0.7, a: 0.7, r1: 1, g1: 0.5, b1: 0.2,
+    });
+  }
+  for (let i = 0; i < style.dust; i++) dustPuff(scene, at.x, at.z, 0.7);
 }
 
-export const SWING_TRAIL_NAME = "fx-swing-trail";
-/** Pale steel, dimmer than a bolt's wake: the swing is the arm, not a spell. */
-const SWING_TRAIL_COLOUR = new Color3(0.95, 0.9, 0.78);
-const SWING_TRAIL_WIDTH = 0.09;
-/** Frames of history (TrailMesh counts frames, not seconds). */
-const SWING_TRAIL_FRAMES = 7;
+/** Ground Slam's reach (skills.ts `reachFixed` 3.5) and how fast its wave runs out to it. */
+export const SLAM_REACH = 3.5;
+export const SLAM_WAVE_SPEED = 12;
+/** Half-angle of the cone the dust runs along, wider than the 70° hit cone so it reads. */
+const SLAM_CONE = 0.75;
+const SLAM_DUST_ROWS = 5;
+const SLAM_DUST_PER_ROW = 3;
+const SLAM_GRIT = 22;
+const SLAM_RING_COLOUR = new Color3(1, 0.72, 0.4);
 
-/** A ribbon off the weapon tip for the fast part of a swing. The caller moves it. */
-export function swingTrail(scene: Scene): { follow(at: Vector3): void; dispose(): void } {
-  const node = new TransformNode(`${SWING_TRAIL_NAME}-tip`, scene);
-  let ribbon: TrailMesh | null = null;
+/**
+ * Ground Slam landing: a ring of light racing out across the floor from the
+ * weapon, dust bursting up row by row along the cone as the wave reaches it,
+ * and grit thrown off the crater.
+ */
+export function groundSlam(scene: Scene, at: Vector3, facingX: number, facingZ: number): void {
+  const pools = fxPools(scene);
+  const len = Math.hypot(facingX, facingZ) || 1;
+  const fx = facingX / len, fz = facingZ / len;
+  const ringLife = SLAM_REACH / SLAM_WAVE_SPEED * 1.6;
+  for (const [k, delay] of [[1, 0], [0.7, 0.06]] as const) {
+    pools.ring.emit({
+      x: at.x, y: 0.06, z: at.z, life: ringLife, delay,
+      size: 0.4, sizeEnd: SLAM_REACH * 2 * k,
+      r: SLAM_RING_COLOUR.r, g: SLAM_RING_COLOUR.g, b: SLAM_RING_COLOUR.b, a: 0.9 * k, r1: 0.6, g1: 0.25, b1: 0.08,
+    });
+  }
+  pools.glow.emit({ x: at.x, y: 0.15, z: at.z, life: 0.18, size: 0.5, sizeEnd: 1.4, r: 1, g: 0.75, b: 0.45, a: 0.55 });
+  for (let row = 1; row <= SLAM_DUST_ROWS; row++) {
+    const d = (row / SLAM_DUST_ROWS) * SLAM_REACH;
+    for (let i = 0; i < SLAM_DUST_PER_ROW; i++) {
+      const yaw = Math.atan2(fx, fz) + ((i + 0.5) / SLAM_DUST_PER_ROW * 2 - 1) * SLAM_CONE;
+      dustPuff(scene, at.x + Math.sin(yaw) * d, at.z + Math.cos(yaw) * d, 0.8 + 0.25 * row, d / SLAM_WAVE_SPEED, 1.2);
+    }
+  }
+  for (let i = 0; i < SLAM_GRIT; i++) {
+    const yaw = Math.atan2(fx, fz) + rand(-1, 1) * SLAM_CONE * 1.4;
+    const speed = rand(2, 6);
+    pools.shards.emit({
+      x: at.x, y: 0.1, z: at.z,
+      vx: Math.sin(yaw) * speed, vy: rand(3, 7), vz: Math.cos(yaw) * speed,
+      gravity: -16, life: rand(0.35, 0.6), size: 0.07, thick: 0.05,
+      r: 1, g: 0.6, b: 0.3, a: 0.8, r1: 0.35, g1: 0.18, b1: 0.08,
+    });
+  }
+  hitSpray(scene).emit(new Vector3(at.x, 0.2, at.z), fx, fz, 1, "grit");
+}
+
+/**
+ * The swing's crescent for the fast part of a strike, in the skill's own style.
+ * The caller moves it each frame; `dispose` only lets go, the arc fades on its own.
+ */
+export function swingTrail(scene: Scene, skillId?: string): { follow(at: Vector3, centre?: Vector3): void; dispose(): void } {
+  const swing = swingArcs(scene).begin(swingStyle(skillId));
+  let done = false;
   return {
-    follow(at: Vector3): void {
-      node.position.copyFrom(at);
-      if (ribbon) return;
-      // Built on the first point, so its history starts at the tip, not the origin.
-      ribbon = new TrailMesh(SWING_TRAIL_NAME, node, scene, SWING_TRAIL_WIDTH, SWING_TRAIL_FRAMES, true);
-      ribbon.material = glowMaterial(scene, `${SWING_TRAIL_NAME}-mat`, SWING_TRAIL_COLOUR);
-      ribbon.material.alpha = 0.45;
-      ribbon.isPickable = false;
+    follow(at: Vector3, centre?: Vector3): void {
+      if (!done) swing.follow(at, centre);
     },
     dispose(): void {
-      // stop() first: only it removes the ribbon's update() observer (see attachBoltTrail).
-      ribbon?.stop();
-      ribbon?.material?.dispose();
-      ribbon?.dispose();
-      node.dispose();
+      done = true;
     },
   };
 }
@@ -811,18 +876,10 @@ export function warmSkillFx(scene: Scene): void {
   meleeImpact(scene, Vector3.Zero(), 1, 0);
   hitSpray(scene);
   hitSparkle(scene);
-  // The first swing's ribbon compiled its glow and shadow-map variants mid-fight,
-  // squashed and not (see warmEntityLooks).
-  for (const squash of [1, 0.98]) {
-    const trail = swingTrail(scene);
-    trail.follow(Vector3.Zero());
-    const ribbon = scene.meshes[scene.meshes.length - 1];
-    if (ribbon) {
-      ribbon.alwaysSelectAsActiveMesh = true;
-      ribbon.scaling.y = squash;
-    }
-    scene.executeWhenReady(() => trail.dispose());
-  }
+  // Pools and arcs are drawn from birth (alwaysSelectAsActiveMesh, empty slots
+  // at zero scale), so standing them up here compiles them behind the plate.
+  fxPools(scene);
+  swingArcs(scene);
   const light = scene.getLightByName(FLASH_NAME) as PointLight | null;
   if (light) light.intensity = 0;
 }

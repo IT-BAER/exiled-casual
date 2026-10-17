@@ -1,7 +1,8 @@
 import { Vector3 } from "@babylonjs/core";
 import type { Scene } from "@babylonjs/core";
 import type { Mesh } from "@babylonjs/core";
-import { blinkBurst, fxProfile, meleeImpact, setStreakLength } from "./skill-fx";
+import { blinkBurst, fxProfile, groundSlam, meleeImpact, setStreakLength } from "./skill-fx";
+import { clearFxPools } from "./fx-pool";
 import { HIT_STOP_SCALE, addTrauma, decayTrauma, hitStopMs, shakeOffset, skillShakeWeight, swingWeight } from "./juice";
 import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
 import { animateActor, keepGroundBlobFlat, makeMesh, setHitFlash, updateTelegraph, updatePortal, updateMapDevice, updateStash, updateVendor, updateContainer, updateGroundItem, updateRareElement, portalAppear, portalVanish, isPortalMesh, PORTAL_STAGGER_MS, Y_LIFT } from "./meshes";
@@ -97,13 +98,18 @@ const CORPSE_TICKS = Math.round(CORPSE_SECONDS * TICKS_PER_SEC);
 /** How long the sink takes, in ticks. */
 const SINK_TICKS = Math.round(SINK_SECONDS * TICKS_PER_SEC);
 
+/** Units in front of the player where the slammed weapon meets the floor. */
+const SLAM_FORWARD = 0.9;
+/** Share of a landed slam's shake a slam into empty floor still gives. */
+const SLAM_WHIFF_SHAKE = 0.5;
+
 /** Kinds that fall over when they die. Everything else just stops existing. */
 const BODIES = new Set<MeshKind>(["player", "monster", "rare", "boss"]);
 
 export interface ActionAnimation {
   playCast(seconds?: number): void;
   playBow(seconds?: number, releaseSeconds?: number): void;
-  playStrike(seconds?: number, releaseSeconds?: number): void;
+  playStrike(seconds?: number, releaseSeconds?: number, skillId?: string): void;
   stopStrike(): void;
 }
 
@@ -126,13 +132,25 @@ export function syncActionAnimation(
   action: "spell" | "melee" | "bow" | undefined,
   seconds?: number,
   releaseSeconds?: number,
+  skillId?: string,
 ): void {
   if (!rig) return;
   if (isCasting && (!wasCasting || wasAction !== action)) {
-    if (action === "melee") rig.playStrike(seconds, releaseSeconds);
+    if (action === "melee") rig.playStrike(seconds, releaseSeconds, skillId);
     else if (action === "bow") rig.playBow(seconds, releaseSeconds);
     else rig.playCast(seconds);
   }
+}
+
+/**
+ * The skill a cast just started: the one whose cooldown went UP, which the sim
+ * sets on the tick it accepts the cast (the soundscape reads casts the same way).
+ */
+export function castSkillOf(before: Record<string, number> | undefined, now: Record<string, number>): string | undefined {
+  for (const [skillId, remaining] of Object.entries(now)) {
+    if (remaining > (before?.[skillId] ?? 0)) return skillId;
+  }
+  return undefined;
 }
 
 /**
@@ -622,7 +640,7 @@ export class SnapshotRenderer {
           const at = this.contactOn(mesh, e, blow, burst);
           if (burst) {
             meleeBursts++;
-            meleeImpact(this.scene, at, e.x - blow.x, e.y - blow.z, flashPeak(strength));
+            meleeImpact(this.scene, at, e.x - blow.x, e.y - blow.z, flashPeak(strength), next.player.strikeSkill);
             hitSparkle(this.scene).emit(at, new Vector3(blow.x - e.x, 0, blow.z - e.y), strength);
           }
           this.spray(e, strength, blow, at);
@@ -709,6 +727,7 @@ export class SnapshotRenderer {
     if (areaChanged) {
       hitSpray(this.scene).clear();
       hitSparkle(this.scene).clear();
+      clearFxPools(this.scene);
       for (const patch of this.embers) patch.mesh.dispose();
       this.embers.length = 0;
     }
@@ -797,6 +816,15 @@ export class SnapshotRenderer {
       burnOutGround(patch.mesh, ticks);
     }
 
+    // Ground Slam breaks the floor whether or not anything stood in the cone.
+    if (newTick && prev !== null && next.player.strikeTick !== undefined
+      && next.player.strikeTick !== prev.player.strikeTick && next.player.strikeSkill === "skill.ground_slam.v1") {
+      const face = next.player.facing ?? next.player.heading ?? { x: 0, y: 1 };
+      groundSlam(this.scene, new Vector3(next.player.x + face.x * SLAM_FORWARD, 0, next.player.y + face.y * SLAM_FORWARD), face.x, face.y);
+      // The floor itself was struck: a slam into nothing still thumps the camera.
+      if (strikeHits === 0) this.shakeTrauma = addTrauma(this.shakeTrauma, 1, skillShakeWeight(next.player.strikeSkill) * SLAM_WHIFF_SHAKE);
+    }
+
     if (strikeHits > 0) {
       // The pose holds on the real clock, never the sim's: the world keeps running.
       this.scene.animationTimeScale = HIT_STOP_SCALE;
@@ -838,6 +866,7 @@ export class SnapshotRenderer {
           next.player.castingAction,
           next.player.castTicks === undefined ? undefined : next.player.castTicks / TICKS_PER_SEC,
           next.player.castWindupTicks === undefined ? undefined : next.player.castWindupTicks / TICKS_PER_SEC,
+          castSkillOf(prev?.player.cooldowns, next.player.cooldowns),
         );
       }
       // The sim cancels any cast when the roll starts.
@@ -942,7 +971,7 @@ export class SnapshotRenderer {
     const blow = melee ? new Vector3(next.player.x, 0, next.player.y) : blowFrom(last.x, last.y, prev, next);
     const at = this.contactOn(mesh, last, blow, melee);
     if (melee) {
-      meleeImpact(this.scene, at, last.x - blow.x, last.y - blow.z, flashPeak(strength));
+      meleeImpact(this.scene, at, last.x - blow.x, last.y - blow.z, flashPeak(strength), next.player.strikeSkill);
       hitSparkle(this.scene).emit(at, new Vector3(blow.x - last.x, 0, blow.z - last.y), strength);
     }
     this.spray(last, strength, blow, at);

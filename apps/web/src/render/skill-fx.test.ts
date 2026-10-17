@@ -25,13 +25,13 @@ import {
   FALLBACK_FX,
   SKILL_FX,
   meleeImpact,
-  MELEE_SPARKS_NAME,
-  MELEE_DUST_NAME,
+  groundSlam,
   swingTrail,
-  SWING_TRAIL_NAME,
   ARROW_LENGTH,
   PROJECTILE_ARROW_SCALE,
 } from "./skill-fx";
+import { fxPools } from "./fx-pool";
+import { SWING_ARC_NAME, swingStyle } from "./swing-arc";
 
 let engine: NullEngine | undefined;
 afterEach(() => {
@@ -247,13 +247,39 @@ describe("ember bolt", () => {
 });
 
 describe("melee", () => {
-  it("a landed blow throws sparks and dust and lights the floor, with no ring", () => {
+  const MELEE = ["skill.strike.v1", "skill.heavy_strike.v1", "skill.ground_slam.v1"];
+
+  it("a landed blow throws pooled sparks and dust and lights the floor, with no ring", () => {
     const scene = newScene();
     meleeImpact(scene, new Vector3(1, 0.8, 0), 1, 0);
-    expect(systems(scene, MELEE_SPARKS_NAME)).toHaveLength(1);
-    expect(systems(scene, MELEE_DUST_NAME)).toHaveLength(1);
-    expect(scene.getMeshByName("fx-shockwave")).toBeNull();
+    const pools = fxPools(scene);
+    expect(pools.shards.live).toBeGreaterThan(0);
+    expect(pools.smoke.live).toBeGreaterThan(0);
+    expect(pools.ring.live).toBe(0);
+    expect(scene.particleSystems).toHaveLength(0);
     expect((scene.getLightByName(FLASH_NAME) as PointLight).intensity).toBeGreaterThan(0);
+  });
+
+  it("reuses its pools: twenty blows add no system, mesh or material", () => {
+    const scene = newScene();
+    meleeImpact(scene, new Vector3(1, 0.8, 0), 1, 0);
+    const counts = () => [scene.particleSystems.length, scene.meshes.length, scene.materials.length, scene.textures.length];
+    const before = counts();
+    const emitted = fxPools(scene).shards.emitted;
+    for (let i = 0; i < 20; i++) meleeImpact(scene, new Vector3(i, 0.8, 0), 1, 0, 1, MELEE[i % 3]);
+    expect(counts()).toEqual(before);
+    expect(fxPools(scene).shards.emitted).toBeGreaterThan(emitted);
+  });
+
+  it("lands a Heavy Strike harder than a Strike", () => {
+    const thrown = (skillId: string) => {
+      const scene = newScene();
+      meleeImpact(scene, new Vector3(1, 0.8, 0), 1, 0, 1, skillId);
+      const n = fxPools(scene).shards.emitted + fxPools(scene).glow.emitted;
+      engine?.dispose();
+      return n;
+    };
+    expect(thrown("skill.heavy_strike.v1")).toBeGreaterThan(thrown("skill.strike.v1"));
   });
 
   it("lights a chip dimmer than a heavy blow", () => {
@@ -266,38 +292,60 @@ describe("melee", () => {
     expect(chip).toBeLessThan(light.intensity * 0.5);
   });
 
-  it("a swing ribbon follows its node and leaves nothing behind when cut", () => {
-    const scene = newScene();
-    const swing = () => {
-      const trail = swingTrail(scene);
-      trail.follow(new Vector3(0, 1, 0.5));
-      expect(scene.getMeshByName(SWING_TRAIL_NAME)).not.toBeNull();
-      trail.dispose();
-      expect(scene.getMeshByName(SWING_TRAIL_NAME)).toBeNull();
-    };
-    // The first one also brings the scene's shared default material in.
-    swing();
-    const after = scene.materials.length;
-    for (let i = 0; i < 4; i++) swing();
-    expect(scene.materials.length).toBe(after);
-    expect(scene.transformNodes.filter((n) => n.name.startsWith(SWING_TRAIL_NAME))).toHaveLength(0);
+  it("cuts each melee skill its own arc, widening and lingering with the weight", () => {
+    const [strike, heavy, slam] = MELEE.map((id) => swingStyle(id));
+    expect(strike!.width).toBeLessThan(heavy!.width);
+    expect(heavy!.width).toBeLessThan(slam!.width);
+    expect(strike!.seconds).toBeLessThan(heavy!.seconds);
+    expect(strike!.colour.equals(heavy!.colour)).toBe(false);
+    expect(heavy!.colour.equals(slam!.colour)).toBe(false);
   });
 
-  /** Same trap as the bolt ribbon: a swing that is only disposed keeps its update() loop. */
-  it("takes a swing ribbon's per-frame observer with it when cut", async () => {
+  it("draws the swing as a real crescent mesh from the tip in toward the chest", () => {
     const scene = newScene();
-    const trailObservers = () =>
-      scene.onBeforeRenderObservable.observers.filter((o) =>
-        String(o.callback).includes("this.update()")).length;
-    const before = trailObservers();
-    for (let i = 0; i < 3; i++) {
-      const trail = swingTrail(scene);
+    const swing = swingTrail(scene, "skill.heavy_strike.v1");
+    const centre = new Vector3(0, 1.1, 0);
+    swing.follow(new Vector3(1.4, 1.2, 0), centre);
+    swing.follow(new Vector3(0, 1.2, 1.4), centre);
+    const lit = (m: { getVerticesData(k: string): ArrayLike<number> | null }) =>
+      Array.from(m.getVerticesData("color") ?? []).some((v, i) => i % 4 === 3 && v > 0);
+    const arc = scene.meshes.find((m) => m.name.startsWith(SWING_ARC_NAME) && lit(m))!;
+    expect(arc).toBeDefined();
+    const pos = arc.getVerticesData("position")!;
+    let inward = 0;
+    for (let i = 0; i < pos.length; i += 3) inward = Math.max(inward, 1.4 - Math.hypot(pos[i]!, pos[i + 2]!));
+    // The inner side reaches toward the chest by about the style's width.
+    expect(inward).toBeGreaterThan(swingStyle("skill.heavy_strike.v1").width * 0.6);
+  });
+
+  it("reuses its arc meshes and material across swings, and leaves no per-frame loop", async () => {
+    const scene = newScene();
+    const swing = () => {
+      const trail = swingTrail(scene, "skill.strike.v1");
       trail.follow(new Vector3(0, 1, 0.5));
+      trail.follow(new Vector3(0.5, 1, 0));
       trail.dispose();
-    }
-    // Observable.remove splices on a setTimeout(0); see the bolt test above.
+    };
+    swing();
+    const counts = () => [scene.meshes.length, scene.materials.length, scene.transformNodes.length];
+    const observers = scene.onBeforeRenderObservable.observers.length;
+    const before = counts();
+    for (let i = 0; i < 6; i++) swing();
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(trailObservers()).toBe(before);
+    expect(counts()).toEqual(before);
+    expect(scene.onBeforeRenderObservable.observers.length).toBe(observers);
+  });
+
+  it("slams the floor: a shockwave ring, dust running out along the cone, and thrown grit", () => {
+    const scene = newScene();
+    groundSlam(scene, new Vector3(3, 0, 2), 0, 1);
+    const pools = fxPools(scene);
+    expect(pools.ring.live).toBeGreaterThan(0);
+    expect(pools.smoke.live).toBeGreaterThan(3);
+    // Dust lies ahead of him along the facing, out toward the slam's reach.
+    const far = Math.max(...pools.smoke.positions().map((p) => p.z - 2));
+    expect(far).toBeGreaterThan(2);
+    expect(scene.particleSystems).toHaveLength(0);
   });
 });
 
@@ -337,10 +385,10 @@ describe("arrows", () => {
     const spent = makeMesh(scene, "projectile", "entity-1", Vector3.Zero(), undefined, "skill.snap_shot.v1");
     const lapsed = makeMesh(scene, "projectile", "entity-2", Vector3.Zero(), undefined, "skill.snap_shot.v1");
     lapsed.dispose();
-    expect(systems(scene, MELEE_SPARKS_NAME)).toHaveLength(0);
+    expect(fxPools(scene).shards.emitted).toBe(0);
     spent.metadata = { struck: true };
     spent.dispose();
-    expect(systems(scene, MELEE_SPARKS_NAME)).toHaveLength(1);
+    expect(fxPools(scene).shards.emitted).toBeGreaterThan(0);
   });
 });
 
@@ -424,13 +472,13 @@ describe("warmEntityLooks", () => {
 });
 
 describe("warmSkillFx swing trail", () => {
-  it("draws a weapon's swing ribbon once, then lets it go", async () => {
+  it("stands the swing arcs and every fx pool up drawn, so the first swing compiles nothing", () => {
     const scene = newScene();
     warmSkillFx(scene);
-    const trail = scene.getMeshByName(SWING_TRAIL_NAME);
-    expect(trail?.alwaysSelectAsActiveMesh).toBe(true);
-    await scene.whenReadyAsync();
-    expect(scene.getMeshByName(SWING_TRAIL_NAME)).toBeNull();
+    const arcs = scene.meshes.filter((m) => m.name.startsWith(SWING_ARC_NAME));
+    expect(arcs.length).toBeGreaterThan(0);
+    expect(arcs.every((m) => m.alwaysSelectAsActiveMesh)).toBe(true);
+    for (const pool of Object.values(fxPools(scene))) expect(pool.mesh.alwaysSelectAsActiveMesh).toBe(true);
   });
 });
 
