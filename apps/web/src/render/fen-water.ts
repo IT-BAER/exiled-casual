@@ -63,7 +63,9 @@ class FenWaterPlugin extends MaterialPluginBase {
           vec2 d = q + vec2(fenTime * 0.02, fenTime * 0.013);
           float raft = fenNoise(d * 0.6) * 0.65 + fenNoise(d * 1.8) * 0.35;
           float clump = fenNoise(d * 7.0);
-          fenWeed = smoothstep(0.54, 0.6, raft) * smoothstep(0.25, 0.45, clump) * step(0.05, alpha);
+          // Off the bank ramp: weed is opaque, and reaching the thin edge it drew
+          // the cell staircase the ramp exists to soften.
+          fenWeed = smoothstep(0.54, 0.6, raft) * smoothstep(0.25, 0.45, clump) * smoothstep(0.25, 0.6, alpha);
           // Scum where the water thins out over the bank (the vertex alpha ramp).
           float ring = smoothstep(0.15, 0.45, alpha) * (1.0 - smoothstep(0.55, 0.9, alpha));
           surfaceAlbedo = mix(surfaceAlbedo, ${SCUM}, ring * (0.5 + 0.5 * fenNoise(q * 4.0)));
