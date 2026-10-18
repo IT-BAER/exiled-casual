@@ -1690,20 +1690,22 @@ def dune_spitter():
     return c
 
 
-FEN_WISP_SOURCE = os.path.join(TEX_DIR, "source", "fen_wisp_v1.glb")
-FEN_WISP_NORMAL = os.path.join(TEX_DIR, "source", "fen_wisp_v1_n.png")
+FEN_WISP_SOURCE = os.path.join(TEX_DIR, "source", "fen_wisp_v2.glb")
+FEN_WISP_NORMAL = os.path.join(TEX_DIR, "source", "fen_wisp_v2_n.png")
 
 
 def fen_wisp():
-    """A drowned skull wrapped in weed, the light still on behind the sockets.
+    """A drowned skull in one thick band of weed that spirals down into a tail,
+    the light still on behind the sockets.
 
-    Generated (review/3d/fen-wisp), volumetric opening res 240 r 2, 4k
+    Generated (review/3d/fen-wisp-v2), volumetric opening res 240 r 2 band 8, 4k
     triangles. No legs: a body-only GeneratedSkin lifted 0.15 off the floor, so
-    the weed trailing under the skull hangs and never touches.
+    the tail under the skull hangs and never touches. Height 1.75: the shape is
+    twice as tall as wide, and below that the sim's 0.5 body sticks out of it.
     """
     c = GeneratedSkin("monster.fen_wisp.v1", FEN_WISP_SOURCE, FEN_WISP_NORMAL,
-                      "swamp", 1.15, (0.0, 0.0, 0.15), tex=512, flip=True)
-    c.body.chain([(0, 0, 0.25), (0, 0, 0.55), (0, 0, 0.90), (0, 0.02, 1.25)], [0.1] * 4)
+                      "swamp", 1.75, (0.0, 0.0, 0.15), tex=512, flip=True)
+    c.body.chain([(0, 0, 0.38), (0, 0, 0.84), (0, 0, 1.37), (0, 0.03, 1.90)], [0.15] * 4)
     return c
 
 
@@ -1741,18 +1743,20 @@ def vaal_construct():
                              normal=VAAL_CONSTRUCT_NORMAL, offset=(0.052, 0.0), thigh=0.225)
 
 
-BOG_DROWNED_SOURCE = os.path.join(TEX_DIR, "source", "bog_drowned_v1.glb")
-BOG_DROWNED_NORMAL = os.path.join(TEX_DIR, "source", "bog_drowned_v1_n.png")
+BOG_DROWNED_SOURCE = os.path.join(TEX_DIR, "source", "bog_drowned_v2.glb")
+BOG_DROWNED_NORMAL = os.path.join(TEX_DIR, "source", "bog_drowned_v2_n.png")
 
 
 def bog_drowned():
-    """Bloated, rag-skirted, arms hanging to the knee, head pushed forward.
+    """A bloated grey-green brute, moss cushions on the shoulders, a mud-brown
+    waist wrap, huge hands at the knee, small head pushed forward.
 
-    Generated (review/3d/bog-drowned), rag flaps cut by a volumetric opening
-    (tools/open_volume.py --res 240 --radius 2), 4k triangles, rig_humanoid.
+    Generated (review/3d/bog-drowned-v2), opened by tools/open_volume.py --res 240
+    --radius 2 --band 8, 4k triangles, rig_humanoid. Feet centroid measured at
+    x 0.015 as loaded: the offset centres the stance.
     """
     return GeneratedCreature("monster.bog_drowned.v1", BOG_DROWNED_SOURCE, "swamp", 1.7,
-                             normal=BOG_DROWNED_NORMAL)
+                             normal=BOG_DROWNED_NORMAL, offset=(-0.015, 0.0))
 
 
 GRUBLING_SOURCE = os.path.join(TEX_DIR, "source", "drowned_grubling_v2.glb")
