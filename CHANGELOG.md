@@ -10,6 +10,8 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-18
+
 ### Fixed
 
 - The death music plays. 0.4.0 announced it but shipped without its tracks, so
