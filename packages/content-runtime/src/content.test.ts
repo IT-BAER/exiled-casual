@@ -525,6 +525,7 @@ describe("on-hit ailments", () => {
     expect(appliers).toEqual([
       ["monster.blood_sentinel.v1", "poison", 25],
       ["monster.bramble_whelp.v1", "bleeding", 25],
+      ["monster.brine_scuttler.v1", "bleeding", 25],
       ["monster.drowned_grubling.v1", "poison", 25],
       ["monster.dune_spitter.v1", "poison", 100],
       ["monster.rotting_behemoth.v1", "poison", 50],

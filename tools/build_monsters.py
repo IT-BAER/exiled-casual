@@ -128,7 +128,8 @@ BONE = (0.16, 0.15, 0.12)
 # Rec.601 luma of `assets/tilesets/<biome>/floor_master_v1.png` AFTER
 # `build_tileset_textures.py` lifts anything below 55 — re-measure there if a
 # biome plate is regenerated.
-FLOOR_LUMA = {"cinder": 75.0, "vaal": 75.0, "desert": 162.0, "swamp": 55.0, "forest": 55.0}
+FLOOR_LUMA = {"cinder": 75.0, "vaal": 75.0, "desert": 162.0, "swamp": 55.0, "forest": 55.0,
+              "coast": 135.0}
 HIDE_RATIO = 0.45
 # Swamp and forest floors are themselves at the playable minimum, and 45% of a
 # floor that dark is a creature with no readable interior at all — only an
@@ -1628,6 +1629,39 @@ def sand_skitterer():
     return c
 
 
+SCUTTLER_SOURCE = os.path.join(TEX_DIR, "source", "brine_scuttler_v1.glb")
+SCUTTLER_NORMAL = os.path.join(TEX_DIR, "source", "brine_scuttler_v1_n.png")
+
+
+def brine_scuttler():
+    """A hermit crab under a barnacled whelk shell, two fat claws in front, teal
+    eyes on stalks: the Strand's swarm.
+
+    Generated (review/3d/brine-scuttler-v2), volumetric opening res 240 r 2, 4k
+    triangles. Joints measured off brine_scuttler_v1.glb by
+    tools/measure_generated.py --legs 6 --flip 1, the feet picked by position:
+    the claw tips and the shell lip rest on the floor and read as feet too. Each
+    side's front and middle feet share one floor patch, so four legs are rigged
+    and the middle pair rides the front.
+    """
+    c = GeneratedSkin("monster.brine_scuttler.v1", SCUTTLER_SOURCE, SCUTTLER_NORMAL,
+                      "coast", 0.5, (0.036, 0.093), tex=512, flip=True)
+    spine = c.body.chain([(0, -0.30, 0.27), (0, -0.02, 0.29), (0, 0.18, 0.27)], [0.1] * 3)
+    # The claws and eye stalks ride the head bone.
+    c.body.chain([(0, 0.24, 0.18), (0, 0.32, 0.10)], [0.05] * 2, parent=spine[-1])
+    # Front pair first, then rear. The traced knees sat on the clover feet and
+    # left no slack, so the lunge stretched the rear legs 8.7% past reach: they
+    # sit at the outer bend of the leg instead.
+    for i, (hip, knee, foot) in enumerate([
+        ((-0.201, 0.078, 0.135), (-0.285, 0.140, 0.110), (-0.294, 0.162, 0.003)),
+        ((0.156, -0.001, 0.121), (0.300, 0.090, 0.110), (0.330, 0.121, 0.003)),
+        ((-0.251, -0.144, 0.123), (-0.355, -0.143, 0.110), (-0.382, -0.143, 0.000)),
+        ((0.201, -0.149, 0.133), (0.350, -0.140, 0.110), (0.375, -0.138, 0.001)),
+    ]):
+        c.leg_through(i, hip, knee, foot)
+    return c
+
+
 WHELP_SOURCE = os.path.join(TEX_DIR, "source", "bramble_whelp_v2.glb")
 WHELP_NORMAL = os.path.join(TEX_DIR, "source", "bramble_whelp_v2_n.png")
 
@@ -2178,7 +2212,7 @@ BOSS_FAMILIES = {
 }
 
 SPECIES = [
-    cinder_imp, vaal_husk, sand_skitterer, bramble_whelp,
+    cinder_imp, vaal_husk, sand_skitterer, bramble_whelp, brine_scuttler,
     dune_spitter, fen_wisp, hoarfrost_spitter,
     drowned_grubling,
     vaal_construct, bog_drowned, thornhide_boar,

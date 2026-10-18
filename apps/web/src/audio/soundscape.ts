@@ -88,6 +88,7 @@ const MATERIAL: Record<string, string> = {
   "monster.sunbaked_colossus.v1": "stone",
   "monster.vaal_husk.v1": "husk",
   "monster.sand_skitterer.v1": "husk",
+  "monster.brine_scuttler.v1": "husk",
   "monster.dune_spitter.v1": "husk",
   "monster.bog_drowned.v1": "bog",
   "monster.drowned_grubling.v1": "bog",
