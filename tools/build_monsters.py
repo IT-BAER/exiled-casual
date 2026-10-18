@@ -1755,8 +1755,8 @@ def bog_drowned():
                              normal=BOG_DROWNED_NORMAL)
 
 
-GRUBLING_SOURCE = os.path.join(TEX_DIR, "source", "drowned_grubling_v1.glb")
-GRUBLING_NORMAL = os.path.join(TEX_DIR, "source", "drowned_grubling_v1_n.png")
+GRUBLING_SOURCE = os.path.join(TEX_DIR, "source", "drowned_grubling_v2.glb")
+GRUBLING_NORMAL = os.path.join(TEX_DIR, "source", "drowned_grubling_v2_n.png")
 
 
 def generated_hide(mesh, name, family, normal=None, size=TEX_SIZE):
@@ -1917,14 +1917,16 @@ BODY_BIAS = 0.6
 
 
 def drowned_grubling():
-    """The Drowned at half size and twice the belly: the swamp's pack of eight.
+    """A squat toad on two legs, pot belly, glowing eyes and a moss clump on one
+    shoulder: the swamp's pack of eight.
 
-    Generated (review/3d/drowned-grubling), opened by tools/open_volume.py
-    --res 240 --radius 2, 4k triangles, rig_humanoid. Ankles measured at x 0.315
-    and -0.133 as loaded: the offset centres the stance.
+    Generated (review/3d/drowned-grubling-v2), opened by tools/open_volume.py
+    --res 240 --radius 2 --band 8 (the default band leaked into the body and kept
+    one leg), 4k triangles, rig_humanoid. Feet centroid measured at x 0.015 as
+    loaded: the offset centres the stance.
     """
     return GeneratedCreature("monster.drowned_grubling.v1", GRUBLING_SOURCE, "swamp", 0.95,
-                             normal=GRUBLING_NORMAL, offset=(-0.091, 0.0))
+                             normal=GRUBLING_NORMAL, offset=(-0.015, 0.0))
 
 
 BOAR_SOURCE = os.path.join(TEX_DIR, "source", "thornhide_boar_v1.glb")
