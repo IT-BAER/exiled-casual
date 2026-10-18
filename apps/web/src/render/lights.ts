@@ -152,7 +152,9 @@ let lastMeshCount = -1;
  * reach with it: the fires are composed for the shot, not for the metre.
  */
 let zoom = 1;
-/** Which lit bowl re-renders its shadow cube this frame. See `castFrom`. */
+/** Shadow cubes re-rendered per frame, and the round-robin's place. See `updateFireLights`. */
+const CUBES_PER_FRAME = 2;
+let nextCube = 0;
 /**
  * Build the pool. Call once per scene, with the other lights.
  *
@@ -240,11 +242,10 @@ function castFrom(scene: Scene, light: PointLight | undefined): void {
       // frame, measured live). It keeps casting from the TORCH — the pool the
       // player reads — and gives up the decorative fire shadows.
       && !mesh.name.startsWith(LEDGE_MESH_PREFIX);
-    // Rendered on demand only: `updateFireLights` re-arms ONE map per frame,
-    // round-robin. Four cube maps every frame were half the whole frame budget
-    // (54 -> 110 fps in the hideout, measured live); staggered at a third of the
-    // frame rate each, firelight shadows are soft and flickering anyway and the
-    // lag is not readable.
+    // Rendered on demand only: `updateFireLights` re-arms CUBES_PER_FRAME maps a
+    // frame, round-robin. Four cube maps every frame were half the whole frame budget
+    // (54 -> 110 fps in the hideout, measured live); at half the frame rate each,
+    // firelight shadows are soft and flickering anyway and the lag is not readable.
     gen.getShadowMap()!.refreshRate = RenderTargetTexture.REFRESHRATE_RENDER_ONCE;
     // ...and only the casters each face can see. A bowl's reach is 11 units in a
     // room the whole level is a caster in, so this is where the cube stops being
@@ -261,6 +262,7 @@ export function resetFireLights(): void {
   spots = [];
   held = [];
   clock = 0;
+  nextCube = 0;
   lastMeshCount = -1;
   zoom = 1;
   resetFireFlames();
@@ -392,18 +394,23 @@ export function updateFireLights(scene: Scene, at: Vector3, deltaMs: number): vo
     if (moved) light.getShadowGenerator()?.getShadowMap()?.resetRefreshCounter();
   }
 
-  // Every lit bowl's cube re-armed every frame. The maps are RENDER_ONCE; this
-  // is the only thing that re-arms them. The old one-cube-per-frame round-robin
-  // predates per-face caster culling and read as low-framerate shadows; if this
-  // is what keeps high under 100 fps, drop back to re-arming two per frame.
-  // ...but only while its pool can reach the frame: the pool follows the four
+  // The maps are RENDER_ONCE; this is the only thing that re-arms them, at most
+  // CUBES_PER_FRAME a frame, round-robin. All four every frame held High at
+  // 66-97 fps in a fight: every monster near a bowl is drawn on six faces of each
+  // cube. One a frame read as low-framerate shadows.
+  // ...and only while its pool can reach the frame: the pool follows the four
   // NEAREST bowls however far they are, and a cube past the screen is six passes
   // over the map that light no pixel. Left enabled, so no material recompiles.
+  const due: PointLight[] = [];
   for (let i = 0; i < pool.length; i++) {
     const light = pool[i]!;
     const found = slots[i];
     if (!found || light.intensity === 0) continue;
     const reach = FLAME_RANGE * zoom + light.range;
-    if (found.d <= reach * reach) light.getShadowGenerator()?.getShadowMap()?.resetRefreshCounter();
+    if (found.d <= reach * reach) due.push(light);
   }
+  for (let k = 0; k < Math.min(CUBES_PER_FRAME, due.length); k++) {
+    due[(nextCube + k) % due.length]!.getShadowGenerator()?.getShadowMap()?.resetRefreshCounter();
+  }
+  nextCube += CUBES_PER_FRAME;
 }

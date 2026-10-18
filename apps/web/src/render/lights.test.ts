@@ -101,6 +101,29 @@ describe("the fires a place is lit by", () => {
     expect(fireLightState().filter((l) => l.on)).toHaveLength(2);
   });
 
+  it("re-renders at most two shadow cubes a frame, each lit bowl in turn", () => {
+    // Four armed cubes every frame held High at 66-97 fps in a fight on the
+    // Wrackline, every monster near a bowl drawn 24 times (measured live).
+    const s = scene();
+    const pool = createFireLights(s);
+    const rearmed: number[] = [];
+    pool.forEach((light, i) => {
+      light.getShadowGenerator = (() => ({
+        getShadowMap: () => ({ resetRefreshCounter: () => rearmed.push(i) }),
+      })) as unknown as typeof light.getShadowGenerator;
+    });
+    setFireSpots([0, 2, 4, 6].map((x, i) => ({ x, z: 0, phase: i })));
+    updateFireLights(s, Vector3.Zero(), 16);
+    const frames: number[][] = [];
+    for (let f = 0; f < 4; f++) {
+      rearmed.length = 0;
+      updateFireLights(s, Vector3.Zero(), 16);
+      frames.push([...rearmed]);
+    }
+    expect(frames.every((f) => f.length <= 2)).toBe(true);
+    expect(new Set(frames.slice(0, 2).flat()).size).toBe(4);
+  });
+
   it("switches a light off when there is no fire for it", () => {
     const s = scene();
     createFireLights(s);

@@ -955,7 +955,9 @@ export class SnapshotRenderer {
       const back = centre.subtract(mesh.position);
       back.y = 0;
       const from = back.lengthSquared() > 1e-8 ? mesh.position.subtract(back.normalize()) : mesh.position.clone();
-      const hit = contactPoint(target, from, centre, this.freePicks-- > 0);
+      // Never the player's own skin: his worn set is ~93k skinned vertices, and
+      // re-posing it on the CPU for one spark was a 15-22 ms frame. His box serves.
+      const hit = contactPoint(target, from, centre, body !== prev.player && this.freePicks-- > 0);
       if (hit !== centre) at = hit;
       const was = body.life ?? 0;
       const now = body.id === next.player.id ? next.player : next.entities.find((n) => n.id === body.id);

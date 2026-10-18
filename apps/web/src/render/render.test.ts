@@ -6,10 +6,12 @@ import {
   Camera,
   ImageProcessingConfiguration,
   Matrix,
+  MeshBuilder,
   NullEngine,
   ParticleSystem,
   PointLight,
   Scene,
+  Skeleton,
   StandardMaterial,
   TransformNode,
   Vector3,
@@ -482,6 +484,25 @@ describe("atmosphere", () => {
     // It sat on the hitbox, not the model: a body full of floating arrows.
     expect(scene.getMeshByName("entity-1")!.getChildMeshes(false).some((m) => m.name.startsWith(ARROW_NAME))).toBe(false);
     expect(fxPools(scene).shards.emitted).toBeGreaterThan(0);
+  });
+
+  it("a monster bolt landing on the player never re-poses his skinned meshes", () => {
+    // His worn set is ~93k skinned vertices: one CPU re-pose to place a spark was a
+    // 15-22 ms frame, every time a spitter's bolt landed (measured live, 2026-10-18).
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const renderer = new SnapshotRenderer(scene);
+    const first = makeSnapshot({ tick: 1 });
+    renderer.apply(null, first, 1);
+    const armour = MeshBuilder.CreateBox("chest.ironsworn.cuirass", { size: 1 }, scene);
+    armour.parent = scene.getMeshByName("entity-0");
+    armour.skeleton = new Skeleton("worn", "worn", scene);
+    const repose = vi.spyOn(armour, "refreshBoundingInfo");
+    const bolt = { id: 10, kind: "projectile" as const, x: 0.4, y: 0, radius: 0.2, team: 1, skillId: "skill.ember_bolt.v1", spent: true };
+    const flying = makeSnapshot({ tick: 2, entities: [bolt] as never });
+    renderer.apply(first, flying, 1);
+    renderer.apply(flying, makeSnapshot({ tick: 3, player: { ...first.player, life: 90 } }), 1);
+    expect(repose).not.toHaveBeenCalled();
   });
 
   it("the killing blow does not flinch the body it kills", () => {
