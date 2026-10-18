@@ -90,7 +90,8 @@ const MONSTER_DEFS: MonsterDef[] = [
     attackRangeFixed: fp(2.2),
     attackDamage: { type: "physical", amountFixed: fp(7) },
     attackCooldownTicks: 60,
-    radiusFixed: fp(1.4),
+    // Its torso is 0.32 deep and the arms span 2.8: at 1.4 bolts burst a metre short.
+    radiusFixed: fp(0.7),
     defenses: { resPct: resBlock({ fire: 25 }), armourFixed: fp(3) },
     boss: {
       phase2AtLifePct: 50,
@@ -129,7 +130,7 @@ const MONSTER_DEFS: MonsterDef[] = [
     attackRangeFixed: fp(2.0),
     attackDamage: { type: "fire", amountFixed: fp(6) },
     attackCooldownTicks: 60,
-    radiusFixed: fp(1.4),
+    radiusFixed: fp(0.95),
     defenses: { resPct: resBlock({ fire: 25 }), armourFixed: fp(2) },
     boss: {
       phase2AtLifePct: 50,
@@ -216,7 +217,8 @@ const MONSTER_DEFS: MonsterDef[] = [
     id: "monster.vaal_construct.v1", name: "Vaal Construct", archetype: "brute",
     maxLifeFixed: LIFE.brute, moveSpeedFixed: fp(1.8), attackRangeFixed: fp(1.6),
     attackDamage: { type: "physical", amountFixed: HIT.brute },
-    attackCooldownTicks: 75, radiusFixed: fp(0.85),
+    // A torso 0.29 deep between arms held 0.8 out.
+    attackCooldownTicks: 75, radiusFixed: fp(0.45),
     defenses: { resPct: resBlock(), armourFixed: fp(4) },
     charge: BRUTE_CHARGE,
   },
@@ -224,7 +226,7 @@ const MONSTER_DEFS: MonsterDef[] = [
     id: "monster.blood_sentinel.v1", name: "Blood Sentinel", archetype: "heavy",
     maxLifeFixed: LIFE.heavy, moveSpeedFixed: fp(1.55), attackRangeFixed: fp(1.8),
     attackDamage: { type: "chaos", amountFixed: HIT.heavy },
-    attackCooldownTicks: 45, radiusFixed: fp(0.8),
+    attackCooldownTicks: 45, radiusFixed: fp(0.4),
     defenses: { resPct: resBlock({ chaos: 30 }), armourFixed: fp(2) },
     // Its slam carries the roll too, and a slam-sized poison alone was a quarter of the first map's damage at 50.
     onHit: { ailment: "poison", chancePct: 25 },
@@ -267,7 +269,7 @@ const MONSTER_DEFS: MonsterDef[] = [
     id: "monster.drowned_grubling.v1", name: "Drowned Grubling", archetype: "swarm",
     maxLifeFixed: LIFE.swarm, moveSpeedFixed: fp(2.6), attackRangeFixed: fp(1.1),
     attackDamage: { type: "physical", amountFixed: HIT.swarm },
-    attackCooldownTicks: 40, radiusFixed: SWARM_RADIUS,
+    attackCooldownTicks: 40, radiusFixed: fp(0.25),
     defenses: { resPct: resBlock({ cold: 10 }), armourFixed: fp(0) },
     onHit: { ailment: "poison", chancePct: 25 },
   },
@@ -275,9 +277,9 @@ const MONSTER_DEFS: MonsterDef[] = [
     id: "monster.bog_drowned.v1", name: "Bog Drowned", archetype: "brute",
     maxLifeFixed: LIFE.brute, moveSpeedFixed: fp(1.8), attackRangeFixed: fp(1.6),
     attackDamage: { type: "physical", amountFixed: HIT.brute },
-    // 0.55, not the brute archetype's 0.85: the drowned is a slim humanoid
-    // (mesh reach 0.58) and the copied radius detonated bolts on empty air.
-    attackCooldownTicks: 75, radiusFixed: fp(0.55),
+    // Not the brute archetype's 0.85: the drowned is a slim humanoid and the
+    // copied radius detonated bolts on empty air.
+    attackCooldownTicks: 75, radiusFixed: fp(0.5),
     defenses: { resPct: resBlock({ cold: 20 }), armourFixed: fp(3) },
     charge: BRUTE_CHARGE,
   },
@@ -287,7 +289,7 @@ const MONSTER_DEFS: MonsterDef[] = [
     // Under HIT.shooter, with the Behemoth's lighter slam: the swamp and coast packs
     // wake whole (pack wake) and must still need 13s to kill an idle player.
     attackDamage: { type: "lightning", amountFixed: fp(1.5) },
-    attackCooldownTicks: 70, radiusFixed: fp(0.5),
+    attackCooldownTicks: 70, radiusFixed: fp(0.45),
     defenses: { resPct: resBlock({ lightning: 30 }), armourFixed: fp(0.5) },
     ranged: { speedFixed: fp(9), radiusFixed: fp(0.22) },
   },
@@ -324,7 +326,7 @@ const MONSTER_DEFS: MonsterDef[] = [
     id: "monster.hoarfrost_spitter.v1", name: "Hoarfrost Spitter", archetype: "shooter",
     maxLifeFixed: LIFE.shooter, moveSpeedFixed: fp(1.6), attackRangeFixed: fp(7.5),
     attackDamage: { type: "cold", amountFixed: HIT.shooter },
-    attackCooldownTicks: 70, radiusFixed: fp(0.5),
+    attackCooldownTicks: 70, radiusFixed: fp(0.35),
     defenses: { resPct: resBlock({ cold: 30 }), armourFixed: fp(0.5) },
     ranged: { speedFixed: fp(9), radiusFixed: fp(0.22) },
   },
@@ -343,8 +345,7 @@ const MONSTER_DEFS: MonsterDef[] = [
     id: "monster.wrack_drowned.v1", name: "Wrack Drowned", archetype: "brute",
     maxLifeFixed: LIFE.brute, moveSpeedFixed: fp(1.8), attackRangeFixed: fp(1.6),
     attackDamage: { type: "physical", amountFixed: HIT.brute },
-    // The torso measures 0.59 from the midline, not counting the anchor.
-    attackCooldownTicks: 75, radiusFixed: fp(0.6),
+    attackCooldownTicks: 75, radiusFixed: fp(0.55),
     defenses: { resPct: resBlock({ cold: 20 }), armourFixed: fp(3) },
     charge: BRUTE_CHARGE,
   },

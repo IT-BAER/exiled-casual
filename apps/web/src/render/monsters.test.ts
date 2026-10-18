@@ -6,7 +6,7 @@ import { toNumber } from "@exiled/fixed-point";
 import { partOfCreature, CreatureRig, loadMonsters, isMonstersReady, attachCreature, resetMonsters } from "./monsters";
 import { setHitFlash } from "./meshes";
 import { hasRim } from "./rim";
-import { LoadAssetContainerAsync, Mesh, NullEngine, Scene, Vector3 } from "@babylonjs/core";
+import { FreeCamera, LoadAssetContainerAsync, Mesh, NullEngine, Scene, Vector3 } from "@babylonjs/core";
 import { contactPoint } from "./contact";
 import { warmContainer } from "./warm-shaders";
 import type { AnimationGroup, AssetContainer, InstantiatedEntries, TransformNode } from "@babylonjs/core";
@@ -107,33 +107,6 @@ describe("monsters asset", () => {
       expect(names).toContain(`${root}|attack`);
     }
     expect(names.length).toBe(species.length * 3);
-  });
-
-  /**
-   * The sim's body radius must fit inside the art it stands for. The two are
-   * authored apart — `radiusFixed` in content-runtime, the mesh in Blender — and
-   * nothing else compares them, so a copy-pasted archetype radius on a slim
-   * model surfaces only as bolts detonating on empty air a step in front of the
-   * body (the Bog Drowned shipped at 0.85 against a 0.58-wide mesh). One-sided
-   * on purpose: a radius smaller than a sprawling mesh is a forgiving hitbox,
-   * not a floating impact.
-   */
-  it("keeps every sim body radius inside its mesh's footprint", () => {
-    for (const root of species) {
-      const node = json.nodes.find((n) => n.name === root)!;
-      const meshNode = (node.children ?? []).map((i) => json.nodes[i]!).find((c) => c.mesh !== undefined)!;
-      let reach = 0;
-      for (const prim of json.meshes[meshNode.mesh!]!.primitives) {
-        const acc = json.accessors[prim.attributes["POSITION"]!]!;
-        // Horizontal reach from the origin: glTF x/z are the ground plane.
-        for (const i of [0, 2] as const) {
-          reach = Math.max(reach, Math.abs(acc.min![i]!), Math.abs(acc.max![i]!));
-        }
-      }
-      const radius = toNumber(MONSTERS.get(root)!.radiusFixed);
-      expect(radius, `${root} sim radius ${radius} sticks out past its mesh (reach ${reach.toFixed(2)})`)
-        .toBeLessThanOrEqual(reach * 1.2);
-    }
   });
 
   /**
@@ -442,6 +415,46 @@ class NodeFileReader {
   }
 }
 
+/** The share of a circle of radius `r` round the origin that the meshes' skinned plan view covers, on a 1cm grid. */
+function circleCoverage(meshes: Mesh[], r: number): number {
+  const cell = 0.01;
+  const n = Math.ceil(r / cell);
+  const side = 2 * n;
+  const grid = new Uint8Array(side * side);
+  for (const m of meshes) {
+    const p = m.getPositionData(true, true);
+    const idx = m.getIndices();
+    if (!p || !idx) continue;
+    m.computeWorldMatrix(true);
+    const w: Vector3[] = [];
+    for (let i = 0; i < p.length; i += 3) {
+      w.push(Vector3.TransformCoordinatesFromFloatsToRef(p[i]!, p[i + 1]!, p[i + 2]!, m.getWorldMatrix(), new Vector3()));
+    }
+    for (let t = 0; t < idx.length; t += 3) {
+      const a = w[idx[t]!]!, b = w[idx[t + 1]!]!, c = w[idx[t + 2]!]!;
+      const d = (b.x - a.x) * (c.z - a.z) - (c.x - a.x) * (b.z - a.z);
+      if (Math.abs(d) < 1e-12) continue;
+      const x0 = Math.max(-n, Math.floor(Math.min(a.x, b.x, c.x) / cell));
+      const x1 = Math.min(n - 1, Math.ceil(Math.max(a.x, b.x, c.x) / cell));
+      const z0 = Math.max(-n, Math.floor(Math.min(a.z, b.z, c.z) / cell));
+      const z1 = Math.min(n - 1, Math.ceil(Math.max(a.z, b.z, c.z) / cell));
+      for (let gx = x0; gx <= x1; gx++) for (let gz = z0; gz <= z1; gz++) {
+        const px = (gx + 0.5) * cell, pz = (gz + 0.5) * cell;
+        const u = ((b.x - px) * (c.z - pz) - (c.x - px) * (b.z - pz)) / d;
+        const v = ((c.x - px) * (a.z - pz) - (a.x - px) * (c.z - pz)) / d;
+        if (u >= 0 && v >= 0 && u + v <= 1) grid[(gz + n) * side + gx + n] = 1;
+      }
+    }
+  }
+  let inside = 0, body = 0;
+  for (let gz = -n; gz < n; gz++) for (let gx = -n; gx < n; gx++) {
+    if (Math.hypot((gx + 0.5) * cell, (gz + 0.5) * cell) > r) continue;
+    inside++;
+    body += grid[(gz + n) * side + gx + n]!;
+  }
+  return body / inside;
+}
+
 /**
  * `instantiateModelsToScene` hands every clone the container mesh's metadata
  * OBJECT, and the hit flash rides that metadata: one struck monster lit its
@@ -470,6 +483,38 @@ describe("creature instances", () => {
       // The skin lies inside the box the ray entered first, short of the centre.
       expect(skin.x).toBeGreaterThan(box.x + 1e-3);
       expect(skin.x).toBeLessThan(4);
+    } finally {
+      resetMonsters();
+      engine.dispose();
+      (globalThis as { FileReader?: unknown }).FileReader = original;
+    }
+  });
+
+  /**
+   * The sim's body radius is every hitbox a monster has: bolts, swings and slams
+   * all land on that circle. Authored apart from the mesh, an archetype radius on
+   * a slim body detonates bolts on empty air (the Warden shipped 1.4 wide round a
+   * torso 0.32 deep). Scored as how much of the circle the skinned idle silhouette
+   * fills from above, never the bounding box, which an outstretched arm sets.
+   * One-sided: a circle smaller than a sprawling mesh is a forgiving hitbox.
+   */
+  it("keeps every sim body radius on its creature's silhouette", async () => {
+    const original = (globalThis as { FileReader?: unknown }).FileReader;
+    (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    new FreeCamera("cam", new Vector3(0, 10, -10), scene);
+    try {
+      await loadMonsters(scene);
+      for (const id of MONSTERS.keys()) {
+        const root = new Mesh(id, scene);
+        attachCreature(scene, root, id)!.setLocomotion(0);
+        scene.render();
+        const r = toNumber(MONSTERS.get(id)!.radiusFixed);
+        const cover = circleCoverage(root.getChildMeshes(false) as Mesh[], r);
+        expect(cover, `${id}: ${Math.round(cover * 100)}% of its ${r} circle is body`).toBeGreaterThanOrEqual(0.7);
+        root.dispose();
+      }
     } finally {
       resetMonsters();
       engine.dispose();

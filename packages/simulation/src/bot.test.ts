@@ -205,7 +205,7 @@ describe("Bot", () => {
   });
 
   it("does not back off a brute that cannot route to him: it would never follow", () => {
-    // Same block, and a nav that lets his body through but not the Construct's.
+    // Same block, and a nav that lets his body through but not the Boar's.
     const { g, me } = setupAs("class.stalker");
     const x0 = me.x + fp(0.5), x1 = me.x + fp(1.5), y1 = me.y - fp(0.3), y0 = me.y - fp(5);
     const block: Collision = {
@@ -215,7 +215,7 @@ describe("Bot", () => {
       },
       nav: { waypoint: (_fx, _fy, tx, ty, r) => (r > fp(0.6) ? null : { x: tx, y: ty }) },
     };
-    const brute = spawnMonster(g.world, MONSTERS.get("monster.vaal_construct.v1")!, me.x + fp(1.9), me.y - fp(1.2), false);
+    const brute = spawnMonster(g.world, MONSTERS.get("monster.thornhide_boar.v1")!, me.x + fp(1.9), me.y - fp(1.2), false);
     g.world.set<MonsterC>(brute, "monster", { ...g.world.get<MonsterC>(brute, "monster")!, state: "chase" });
     const out = new Bot(g, block, {}).decide(false);
     for (const c of out.filter((x) => x.type === "moveTo")) expect(c.data!["x"]!).toBeGreaterThanOrEqual(me.x);
