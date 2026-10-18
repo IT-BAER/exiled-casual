@@ -339,6 +339,15 @@ const MONSTER_DEFS: MonsterDef[] = [
     defenses: { resPct: resBlock({ cold: 10 }), armourFixed: fp(0) },
     onHit: { ailment: "bleeding", chancePct: 25 },
   },
+  {
+    id: "monster.wrack_drowned.v1", name: "Wrack Drowned", archetype: "brute",
+    maxLifeFixed: LIFE.brute, moveSpeedFixed: fp(1.8), attackRangeFixed: fp(1.6),
+    attackDamage: { type: "physical", amountFixed: HIT.brute },
+    // The torso measures 0.59 from the midline, not counting the anchor.
+    attackCooldownTicks: 75, radiusFixed: fp(0.6),
+    defenses: { resPct: resBlock({ cold: 20 }), armourFixed: fp(3) },
+    charge: BRUTE_CHARGE,
+  },
 ];
 
 // Validate at module load — bad content is a programmer error, fail fast.
@@ -471,7 +480,7 @@ export const MONSTER_POOLS: Record<BiomeId, readonly PoolEntry[]> = {
   // what came in on the last storm and did not go back out.
   coast: [
     { defId: "monster.brine_scuttler.v1", weight: 3 },
-    { defId: "monster.bog_drowned.v1", weight: 2 },
+    { defId: "monster.wrack_drowned.v1", weight: 2 },
     { defId: "monster.fen_wisp.v1", weight: 2 },
     { defId: "monster.rotting_behemoth.v1", weight: 1 },
   ],

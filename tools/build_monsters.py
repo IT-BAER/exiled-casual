@@ -1798,6 +1798,26 @@ def bog_drowned():
                              normal=BOG_DROWNED_NORMAL, offset=(-0.015, 0.0))
 
 
+WRACK_DROWNED_SOURCE = os.path.join(TEX_DIR, "source", "wrack_drowned_v1.glb")
+WRACK_DROWNED_NORMAL = os.path.join(TEX_DIR, "source", "wrack_drowned_v1_n.png")
+
+
+def wrack_drowned():
+    """A drowned sailor gone to bloat, barnacles crusting the shoulders, a
+    striped sash, a rusted anchor hanging from the right hand.
+
+    Generated (review/3d/wrack-drowned-v2), volumetric opening res 240 r 2, 4k
+    triangles, rig_humanoid. The anchor's flukes hang into the foot band and
+    touch the right foot, one piece with it: the foot ends at 0.29 H from the
+    midline and the flukes start at 0.32 H, so past 0.31 H it is the anchor.
+    Feet midpoint measured at x 0.04 H as loaded: the offset centres the stance.
+    The empty left hand hangs to 0.21 H against a thigh whose outer edge is 0.20 H.
+    """
+    return GeneratedCreature("monster.wrack_drowned.v1", WRACK_DROWNED_SOURCE, "coast", 1.8,
+                             normal=WRACK_DROWNED_NORMAL, offset=(-0.072, 0.0),
+                             carry="r", held=0.31, thigh=0.225, knee=0.20)
+
+
 GRUBLING_SOURCE = os.path.join(TEX_DIR, "source", "drowned_grubling_v2.glb")
 GRUBLING_NORMAL = os.path.join(TEX_DIR, "source", "drowned_grubling_v2_n.png")
 
@@ -2215,7 +2235,7 @@ SPECIES = [
     cinder_imp, vaal_husk, sand_skitterer, bramble_whelp, brine_scuttler,
     dune_spitter, fen_wisp, hoarfrost_spitter,
     drowned_grubling,
-    vaal_construct, bog_drowned, thornhide_boar,
+    vaal_construct, bog_drowned, thornhide_boar, wrack_drowned,
     blood_sentinel, sunbaked_colossus, rotting_behemoth,
     cinder_warden, sirrath, mother_vhal, ghaltrek,
 ]

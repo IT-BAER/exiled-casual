@@ -233,17 +233,21 @@ def skin(mesh, arm, thigh=None, knee=0.25, carry=None, held_at=None):
             if run and (best is None or run > best[0]):
                 best = (run, c)
         fused = None
-        if best is not None:
-            gap = (best[1] - best[0] / 2 + 0.5) * 0.01 * H
-        elif t == carry and held_at is not None:
-            # A slab standing against the leg leaves no empty column: the
-            # declared floor split (see `landmarks`) stands in for the gap.
-            gap = held_at * H
+        if t == carry and held_at is not None:
+            # What the hand carries touches the leg: a slab standing against it
+            # leaves no empty column, and the declared floor split (see
+            # `landmarks`) stands in for the gap; an anchor touching the foot
+            # leaves one above the knee, but below the scan only the split holds.
+            gap = held_at * H if best is None else (best[1] - best[0] / 2 + 0.5) * 0.01 * H
             fused = bones[index["leg%s_ankle" % t.upper()]].head_local.x
+        elif best is not None:
+            gap = (best[1] - best[0] / 2 + 0.5) * 0.01 * H
         else:
             continue
         print("hand %s: hanging beyond x %.3f" % (t, gap))
         hangs = (s * v[:, 0] > gap) & (v[:, 2] < wrist.z)
+        if fused is not None:
+            hangs &= (s * v[:, 0] > held_at * H) | (v[:, 2] > 0.25 * H)
         held.append((hangs, wrist.z, index["hand_" + t], s, fused))
         for i, b in enumerate(bones):
             if b.name not in ("hand_" + t, "arm_lower_" + t):
