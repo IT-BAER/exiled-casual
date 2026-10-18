@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { BIOMES } from "@exiled/content-runtime";
 import { DEATH_MUSIC, HIDEOUT_MOODS, MENU_MUSIC, MUSIC_BY_BIOME, MUSIC_TAKES, pickTrack, trackPool } from "./music";
@@ -40,6 +42,12 @@ describe("trackPool", () => {
     expect(trackPool(DEATH_MUSIC)).toEqual(["death-1", "death-2", "death-3"]);
     const areas = [null, MENU_MUSIC, ...Object.keys(BIOMES)].flatMap(trackPool);
     for (const t of trackPool(DEATH_MUSIC)) expect(areas).not.toContain(t);
+  });
+
+  it("ships a file for every track any screen plays", () => {
+    const dir = resolve(__dirname, "../../public/music");
+    const tracks = [null, MENU_MUSIC, DEATH_MUSIC, ...Object.keys(BIOMES)].flatMap(trackPool);
+    expect(tracks.filter((t) => !existsSync(resolve(dir, `${t}.webm`)))).toEqual([]);
   });
 
   it("is empty for a biome it has no music for", () => {

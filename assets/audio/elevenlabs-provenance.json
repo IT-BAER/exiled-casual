@@ -915,6 +915,39 @@
    "credits": 1425,
    "bytes": 2299283,
    "downloaded_at": "2026-10-10T08:50:20+00:00"
+  },
+  {
+   "kind": "music-derived",
+   "file": "audio-libs/elevenlabs/music/death-1.mp3",
+   "slot": "death",
+   "take": 1,
+   "source": "audio-libs/elevenlabs/music/hideout-2-1.mp3",
+   "tool": "tools/derive_death_music.py",
+   "processing": "tape slow -4 st, low-pass 3500 Hz, hall RT60 4.5 s wet 0.45",
+   "generated_at": "2026-10-18T14:31:04+00:00",
+   "bytes": 2875437
+  },
+  {
+   "kind": "music-derived",
+   "file": "audio-libs/elevenlabs/music/death-2.mp3",
+   "slot": "death",
+   "take": 2,
+   "source": "audio-libs/elevenlabs/music/hideout-2-2.mp3",
+   "tool": "tools/derive_death_music.py",
+   "processing": "tape slow -5 st, low-pass 3500 Hz, hall RT60 4.5 s wet 0.45",
+   "generated_at": "2026-10-18T14:31:08+00:00",
+   "bytes": 3045933
+  },
+  {
+   "kind": "music-derived",
+   "file": "audio-libs/elevenlabs/music/death-3.mp3",
+   "slot": "death",
+   "take": 3,
+   "source": "audio-libs/elevenlabs/music/hideout-2-3.mp3",
+   "tool": "tools/derive_death_music.py",
+   "processing": "tape slow -3 st, low-pass 3500 Hz, hall RT60 4.5 s wet 0.45",
+   "generated_at": "2026-10-18T14:31:12+00:00",
+   "bytes": 2714157
   }
  ]
 }
