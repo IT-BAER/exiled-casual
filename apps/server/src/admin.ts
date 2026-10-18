@@ -5,7 +5,7 @@ import type { Admins } from "./auth";
 import { ABSOLUTE_MS } from "./auth";
 import type { Monitor } from "./health";
 import { HttpError, readJson, refuse, send } from "./http";
-import { clientIp } from "./ip";
+import { clientIp, isPrivateIp } from "./ip";
 import type { LiveOps } from "./liveops";
 import { validateLiveConfig } from "./liveops";
 import type { Logger } from "./log";
@@ -122,17 +122,21 @@ export function createAdminHandler(d: AdminDeps) {
     if (path === "/admin/api/login") {
       if (method !== "POST") throw new HttpError(405, "method not allowed");
       const ip = clientIp(req);
-      if (d.loginFailures.blocked(ip)) {
-        audit("-", "login.blocked", "too many failures");
-        throw new HttpError(429, "too many attempts, try again later");
-      }
       const body = (await readJson(req, MAX_ADMIN_BODY)) as Partial<LoginRequest> | null;
       const user = typeof body?.user === "string" ? body.user.slice(0, 40) : "";
       const password = typeof body?.password === "string" ? body.password.slice(0, 1024) : "";
       const totp = typeof body?.totp === "string" ? body.totp.trim() : "";
+      // Per ip AND per user, and reserved before the slow scrypt check, so parallel
+      // attempts and rotating addresses both stop at the same five.
+      const keys = [`ip:${ip}`, `user:${user.toLowerCase()}`];
+      if (keys.some((k) => d.loginFailures.blocked(k))) {
+        audit(user || "-", "login.blocked", "too many failures");
+        throw new HttpError(429, "too many attempts, try again later");
+      }
+      for (const k of keys) d.loginFailures.fail(k);
       const result = await d.admins.login(user, password, totp);
+      if (result.ok) for (const k of keys) d.loginFailures.forgive(k);
       if (!result.ok) {
-        d.loginFailures.fail(ip);
         audit(user || "-", "login.failed", "");
         d.log.warn("admin login failed", { user });
         throw new HttpError(401, LOGIN_FAILED);
@@ -198,6 +202,17 @@ export function createAdminHandler(d: AdminDeps) {
 
   return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     for (const [k, v] of Object.entries(SECURITY_HEADERS)) res.setHeader(k, v);
+    // The console exists only for the private network. A public client address, the
+    // public host name or any Cloudflare header means a proxy was pointed here by
+    // mistake: answer as if nothing lives here.
+    const host = String(req.headers.host ?? "").toLowerCase();
+    const viaCloudflare = Object.keys(req.headers).some((h) => h.startsWith("cf-"));
+    if (host.includes("exiledcasual") || viaCloudflare || !isPrivateIp(clientIp(req))) {
+      d.log.warn("admin refused non-private request", { host: host.slice(0, 80), cf: viaCloudflare });
+      res.statusCode = 404;
+      res.end();
+      return;
+    }
     let url: URL;
     try {
       url = new URL(req.url ?? "/", "http://admin.local");

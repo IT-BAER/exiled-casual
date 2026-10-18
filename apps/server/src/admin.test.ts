@@ -102,6 +102,18 @@ describe("admin auth", () => {
     expect((await login(s.admin, s.code())).status).toBe(200);
   });
 
+  it("counts concurrent failures before the slow password check, per ip and per user", async () => {
+    const s = await setup();
+    const codes = await Promise.all(Array.from({ length: 12 }, () => login(s.admin, "000000", "wrong password!!").then((r) => r.status)));
+    expect(codes.filter((c) => c === 401).length).toBeLessThanOrEqual(5);
+    expect(codes.filter((c) => c === 429).length).toBeGreaterThanOrEqual(7);
+    s.setNow(T0 + 16 * 60_000);
+    for (let i = 0; i < 5; i++) {
+      expect((await login(s.admin, "000000", "wrong password!!", { ...H, "x-real-ip": `10.10.30.${i + 1}` })).status).toBe(401);
+    }
+    expect((await login(s.admin, s.code(), PASSWORD, { ...H, "x-real-ip": "10.10.30.99" })).status).toBe(429);
+  });
+
   it("requires the session cookie on every api route", async () => {
     const s = await setup();
     for (const p of ["me", "overview", "live", "sessions", "retention", "geo", "gameplay", "perf", "errors", "health", "logs", "traffic", "liveops", "builds", "audit"]) {
@@ -139,6 +151,47 @@ describe("admin auth", () => {
     expect(res.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
     expect(res.headers.get("x-content-type-options")).toBe("nosniff");
     expect(res.headers.get("referrer-policy")).toBe("no-referrer");
+  });
+});
+
+describe("build registry", () => {
+  it("never takes a build time from the future or raises one already stored", async () => {
+    const s = await setup();
+    await post(`${s.ingest}/api/t`, batch({ build: "0.3.1+abc1234", builtAt: 1_000 }));
+    await post(`${s.ingest}/api/t`, batch({ build: "0.3.1+abc1234", builtAt: 9_000_000_000_000 }));
+    await post(`${s.ingest}/api/t`, batch({ build: "0.9.9+fffffff", builtAt: 9_000_000_000_000 }), { "x-real-ip": "203.0.113.7" });
+    const { get } = await loggedIn(s);
+    const builds = (await j(get("/admin/api/builds"))) as { build: string; builtAt: number }[];
+    expect(builds.find((b) => b.build === "0.3.1+abc1234")?.builtAt).toBe(1_000);
+    expect(builds.find((b) => b.build === "0.9.9+fffffff")?.builtAt).toBeLessThanOrEqual(T0);
+  });
+});
+
+describe("admin isolation", () => {
+  it("refuses anything that looks like it came from the public site", async () => {
+    const s = await setup();
+    const me = (headers: Record<string, string>) => fetch(`${s.admin}/admin/api/me`, { headers }).then((r) => r.status);
+    expect(await me({})).toBe(401);
+    expect(await me({ "x-real-ip": "10.10.30.100" })).toBe(401);
+    expect(await me({ "x-real-ip": "203.0.113.9" })).toBe(404);
+    expect(await me({ "x-real-ip": "2a01:e0a::1" })).toBe(404);
+    // fetch drops a custom Host header, so the host cases go through node:http.
+    const rawHost = (host: string, path = "/admin/api/me") => new Promise<{ status: number; body: string }>((done, fail) => {
+      const r = request(`${s.admin}${path}`, { headers: { host } }, (res) => {
+        let body = "";
+        res.on("data", (c) => (body += c));
+        res.on("end", () => done({ status: res.statusCode ?? 0, body }));
+      });
+      r.on("error", fail);
+      r.end();
+    });
+    expect((await rawHost("exiledcasual.com")).status).toBe(404);
+    expect((await rawHost("www.ExiledCasual.com:443")).status).toBe(404);
+    expect(await me({ "cf-ray": "a4c74ee619e75d3b-VIE" })).toBe(404);
+    expect(await me({ "cf-connecting-ip": "10.10.30.100" })).toBe(404);
+    const page = await rawHost("exiledcasual.com", "/");
+    expect(page.status).toBe(404);
+    expect(page.body).toBe("");
   });
 });
 

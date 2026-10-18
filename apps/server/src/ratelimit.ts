@@ -48,6 +48,14 @@ export class FailureWindow {
     this.hits.set(key, [...this.live(key), this.now()]);
   }
 
+  /** Takes back the newest failure: a login reserves one before its slow check and returns it on success. */
+  forgive(key: string): void {
+    const list = this.live(key);
+    list.pop();
+    if (list.length) this.hits.set(key, list);
+    else this.hits.delete(key);
+  }
+
   prune(): void {
     for (const k of [...this.hits.keys()]) this.live(k);
   }

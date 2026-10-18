@@ -93,8 +93,8 @@ export class Store {
   private touchBuild(batch: Batch, now: number): void {
     this.db.prepare(
       `INSERT INTO builds (build, built_at, first_seen, last_seen) VALUES (?, ?, ?, ?)
-       ON CONFLICT(build) DO UPDATE SET last_seen = MAX(last_seen, excluded.last_seen), built_at = MAX(built_at, excluded.built_at)`,
-    ).run(batch.build, batch.builtAt, now, now);
+       ON CONFLICT(build) DO UPDATE SET last_seen = MAX(last_seen, excluded.last_seen)`,
+    ).run(batch.build, Math.min(batch.builtAt, now), now, now);
   }
 
   private openSession(batch: Batch, client: ClientInfo, now: number): SessionRow {

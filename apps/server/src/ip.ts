@@ -12,6 +12,20 @@ export function clientIp(req: IncomingMessage): string {
 
 const V4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
 
+/** Loopback, RFC 1918, IPv6 ULA and link-local. Anything else is the internet. */
+export function isPrivateIp(ip: string): boolean {
+  const v = ip.trim().replace(/^::ffff:/i, "");
+  const m = V4.exec(v);
+  if (m) {
+    const [a, b] = [Number(m[1]), Number(m[2])];
+    return a === 10 || a === 127 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+  }
+  const g = expandV6(v.toLowerCase());
+  if (!g) return false;
+  const first = parseInt(g[0]!, 16);
+  return g.join(":") === "0:0:0:0:0:0:0:1" || (first & 0xfe00) === 0xfc00 || (first & 0xffc0) === 0xfe80;
+}
+
 function expandV6(ip: string): string[] | null {
   if (!/^[0-9a-f:]+$/i.test(ip)) return null;
   const halves = ip.split("::");
