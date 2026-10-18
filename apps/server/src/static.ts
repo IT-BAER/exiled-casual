@@ -68,7 +68,7 @@ export function serveStatic(root: string | undefined, req: IncomingMessage, res:
     return;
   }
   if (!root) return notFound();
-  const path = pathname.replace(/^\/admin(?=\/|$)/, "") || "/";
+  const path = pathname || "/";
   const full = safeJoin(root, path);
   if (!full) return notFound();
   const head = req.method === "HEAD";

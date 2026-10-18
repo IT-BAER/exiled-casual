@@ -74,7 +74,7 @@ export function PerformanceView({ p, days }: { p: Perf; days: number }) {
 
 export function Performance({ query }: { query: Record<string, string> }) {
   const days = rangeDays(query, [1, 7, 30, 90], 7);
-  const st = useApi("GET /admin/api/perf", { query: { days } });
+  const st = useApi("GET /api/perf", { query: { days } });
   return (
     <div className="page">
       <PageHead title="Performance" lede="Frame rates by hardware and browser, and how long the menu and the game take to appear." />

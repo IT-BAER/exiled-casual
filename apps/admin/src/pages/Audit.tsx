@@ -31,7 +31,7 @@ export function AuditTable({ rows }: { rows: AuditRow[] }) {
 }
 
 export function Audit() {
-  const st = useApi("GET /admin/api/audit");
+  const st = useApi("GET /api/audit");
   return (
     <div className="page">
       <PageHead title="Audit" lede="What was done from this console and by whom, newest first." />

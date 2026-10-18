@@ -111,8 +111,8 @@ describe("POST /api/t", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("cache-control")).toBe("no-store");
     expect(await res.json()).toEqual({ flags: {}, telemetry: true });
-    expect((await fetch(`${url}/admin/api/me`)).status).toBe(404);
-    expect((await fetch(`${url}/admin/api/overview`)).status).toBe(404);
+    expect((await fetch(`${url}/api/me`)).status).toBe(404);
+    expect((await fetch(`${url}/api/overview`)).status).toBe(404);
     expect((await fetch(`${url}/`)).status).toBe(404);
   });
 });

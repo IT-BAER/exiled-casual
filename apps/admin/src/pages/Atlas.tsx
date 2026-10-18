@@ -152,7 +152,7 @@ export function AtlasView({ rows }: { rows: GeoRow[] }) {
 
 export function Atlas({ query }: { query: Record<string, string> }) {
   const days = rangeDays(query, [1, 7, 30, 90], 7);
-  const st = useApi("GET /admin/api/geo", { query: { days } });
+  const st = useApi("GET /api/geo", { query: { days } });
   return (
     <div className="page">
       <PageHead title="Atlas" lede="Sessions by place, from the country and city Cloudflare reports. Places without coordinates appear in the tables only." />

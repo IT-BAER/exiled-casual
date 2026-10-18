@@ -57,7 +57,7 @@ export function RetentionView({ r }: { r: RetentionData }) {
 
 export function Retention({ query }: { query: Record<string, string> }) {
   const days = rangeDays(query, OPTIONS, 30);
-  const st = useApi("GET /admin/api/retention", { query: { days } });
+  const st = useApi("GET /api/retention", { query: { days } });
   return (
     <div className="page">
       <PageHead title="Retention" lede="Who comes back, read from the age of the character a save already holds, never from an id." />

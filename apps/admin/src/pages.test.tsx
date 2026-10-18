@@ -119,7 +119,7 @@ afterEach(() => {
 
 describe("pages render typed data", () => {
   it("dashboard: readings, unlocked milestones first, error count in red", async () => {
-    stubApi({ "/admin/api/overview": overview });
+    stubApi({ "/api/overview": overview });
     const { container } = render(<Dashboard />);
     expect(await screen.findByText("Exiles online")).toBeTruthy();
     expect(screen.getByText("42")).toBeTruthy();
@@ -132,30 +132,30 @@ describe("pages render typed data", () => {
   });
 
   it("live: party cards, warn fps, and the empty state", async () => {
-    stubApi({ "/admin/api/live": live });
+    stubApi({ "/api/live": live });
     render(<Live />);
     expect(await screen.findByText("Ironsworn")).toBeTruthy();
     expect(screen.getByText("Strand, tier 3")).toBeTruthy();
     expect(screen.getByText("22").className).toBe("n warn");
     expect(screen.getByText(/Berlin/)).toBeTruthy();
     cleanup();
-    stubApi({ "/admin/api/live": [] });
+    stubApi({ "/api/live": [] });
     render(<Live />);
     expect(await screen.findByText("No exile is in the world right now.")).toBeTruthy();
   });
 
   it("sessions: table, paging and search query", async () => {
-    const fetch = stubApi({ "/admin/api/sessions": sessions });
+    const fetch = stubApi({ "/api/sessions": sessions });
     const { container } = render(<Sessions query={{ q: "ember" }} />);
     expect(await screen.findByText("Firefox on Linux")).toBeTruthy();
-    expect(String(fetch.mock.calls[0]![0])).toBe("/admin/api/sessions?q=ember&page=1&pageSize=50");
+    expect(String(fetch.mock.calls[0]![0])).toBe("/api/sessions?q=ember&page=1&pageSize=50");
     expect(screen.getByText("Older").getAttribute("href")).toBe("#/sessions?q=ember&page=2");
     expect(screen.queryByText("Newer")).toBeNull();
     expect([...container.querySelectorAll(".n.fail")].map((e) => e.textContent)).toEqual(["3"]);
   });
 
   it("session detail: facts, timeline, same-day links", async () => {
-    stubApi({ [`/admin/api/sessions/${row.sid}`]: detail });
+    stubApi({ [`/api/sessions/${row.sid}`]: detail });
     const { container } = render(<SessionDetailPage sid={row.sid} />);
     expect(await screen.findByText("203.0.113.0/24")).toBeTruthy();
     expect(container.querySelector("td.key")?.textContent).toBe("killer=Sirrath  tier=2");
@@ -163,16 +163,16 @@ describe("pages render typed data", () => {
   });
 
   it("retention: totals and age buckets", async () => {
-    const fetch = stubApi({ "/admin/api/retention": retention });
+    const fetch = stubApi({ "/api/retention": retention });
     render(<Retention query={{ days: "7" }} />);
     expect(await screen.findByText("Game entries by character age")).toBeTruthy();
-    expect(String(fetch.mock.calls[0]![0])).toBe("/admin/api/retention?days=7");
+    expect(String(fetch.mock.calls[0]![0])).toBe("/api/retention?days=7");
     expect(screen.getByText("71 %")).toBeTruthy();
     expect(screen.getAllByText("30+ days").length).toBeGreaterThan(0);
   });
 
   it("atlas: map nodes only for rows with coordinates, tables for all", async () => {
-    stubApi({ "/admin/api/geo": geo });
+    stubApi({ "/api/geo": geo });
     const { container } = render(<Atlas query={{}} />);
     expect(await screen.findByText("By country")).toBeTruthy();
     expect(container.querySelectorAll(".atlas-map .city")).toHaveLength(1);
@@ -181,7 +181,7 @@ describe("pages render typed data", () => {
   });
 
   it("gameplay: rare killer in rare colour, loot by rarity", async () => {
-    stubApi({ "/admin/api/gameplay": gameplay });
+    stubApi({ "/api/gameplay": gameplay });
     render(<Gameplay query={{ days: "30" }} />);
     expect((await screen.findByText("Ghaltrek")).className).toBe("rc r-rare");
     expect(screen.getByText("Unique").className).toBe("rc r-unique");
@@ -189,7 +189,7 @@ describe("pages render typed data", () => {
   });
 
   it("performance: load readings, low fps flagged, empty game load hatched", async () => {
-    stubApi({ "/admin/api/perf": perf });
+    stubApi({ "/api/perf": perf });
     render(<Performance query={{}} />);
     expect(await screen.findByText("1.8")).toBeTruthy();
     expect(screen.getByText("9").className).toBe("n fail");
@@ -198,15 +198,15 @@ describe("pages render typed data", () => {
   });
 
   it("errors: impact tier badge and status filter", async () => {
-    const fetch = stubApi({ "/admin/api/errors": [group] });
+    const fetch = stubApi({ "/api/errors": [group] });
     render(<Errors query={{ status: "all" }} />);
     expect((await screen.findByText("unique 55")).className).toBe("badge r-unique");
-    expect(String(fetch.mock.calls[0]![0])).toBe("/admin/api/errors");
+    expect(String(fetch.mock.calls[0]![0])).toBe("/api/errors");
     expect(screen.getByText("All").getAttribute("aria-current")).toBe("true");
   });
 
   it("error detail: stack, hits, and Resolve posts with the CSRF header", async () => {
-    const fetch = stubApi({ "/admin/api/errors/fp1": errDetail }, (_url, init) =>
+    const fetch = stubApi({ "/api/errors/fp1": errDetail }, (_url, init) =>
       init?.method === "POST" ? { body: { ...group, status: "resolved" } } : undefined,
     );
     render(<ErrorDetailPage fp="fp1" />);
@@ -214,14 +214,14 @@ describe("pages render typed data", () => {
     fireEvent.click(screen.getByRole("button", { name: "Resolve" }));
     expect(await screen.findByText("Marked resolved.")).toBeTruthy();
     const post = fetch.mock.calls.find((c) => c[1]?.method === "POST")!;
-    expect(post[0]).toBe("/admin/api/errors/fp1");
+    expect(post[0]).toBe("/api/errors/fp1");
     expect(new Headers(post[1]!.headers).get("X-EC-Admin")).toBe("1");
     expect(post[1]!.body).toBe(JSON.stringify({ status: "resolved" }));
     expect(screen.getByRole("button", { name: "Reopen" })).toBeTruthy();
   });
 
   it("health: orbs, facts and checks", async () => {
-    stubApi({ "/admin/api/health": health });
+    stubApi({ "/api/health": health });
     const { container } = render(<Health />);
     expect(await screen.findByRole("img", { name: "Life: 100 %" })).toBeTruthy();
     expect(screen.getByRole("img", { name: "Mana: 75 %" })).toBeTruthy();
@@ -230,14 +230,14 @@ describe("pages render typed data", () => {
   });
 
   it("logs: access lines with status colour and bots toggle in the query", async () => {
-    const fetch = stubApi({ "/admin/api/logs": logs });
+    const fetch = stubApi({ "/api/logs": logs });
     render(<Logs query={{ source: "access", bots: "1" }} />);
     expect((await screen.findByText("502")).className).toBe("n fail");
-    expect(String(fetch.mock.calls[0]![0])).toBe("/admin/api/logs?source=access&bots=1&limit=200");
+    expect(String(fetch.mock.calls[0]![0])).toBe("/api/logs?source=access&bots=1&limit=200");
   });
 
   it("traffic: readings and tables", async () => {
-    stubApi({ "/admin/api/traffic": traffic });
+    stubApi({ "/api/traffic": traffic });
     render(<Traffic query={{}} />);
     expect(await screen.findByText("Bounced before boot")).toBeTruthy();
     expect(screen.getByText("reddit.com")).toBeTruthy();
@@ -245,7 +245,7 @@ describe("pages render typed data", () => {
   });
 
   it("builds and audit tables", async () => {
-    stubApi({ "/admin/api/builds": builds, "/admin/api/audit": audit });
+    stubApi({ "/api/builds": builds, "/api/audit": audit });
     render(<Builds />);
     expect(await screen.findByText("0.3.1+abc")).toBeTruthy();
     cleanup();
@@ -254,7 +254,7 @@ describe("pages render typed data", () => {
   });
 
   it("live ops: publishes the edited form as LiveConfig with one PUT", async () => {
-    const fetch = stubApi({ "/admin/api/liveops": liveops, "/admin/api/builds": builds }, (_url, init) =>
+    const fetch = stubApi({ "/api/liveops": liveops, "/api/builds": builds }, (_url, init) =>
       init?.method === "PUT" ? { body: JSON.parse(String(init.body)) } : undefined,
     );
     render(<LiveOps />);
@@ -274,9 +274,9 @@ describe("pages render typed data", () => {
 describe("app shell", () => {
   it("shows the gate on 401 and enters the console after sign-in", async () => {
     let signedIn = false;
-    stubApi({ "/admin/api/overview": overview }, (url, init) => {
-      if (url === "/admin/api/me") return signedIn ? { body: { user: "baer", since: T } } : { status: 401, body: { error: "no session" } };
-      if (url === "/admin/api/login" && init?.method === "POST") {
+    stubApi({ "/api/overview": overview }, (url, init) => {
+      if (url === "/api/me") return signedIn ? { body: { user: "baer", since: T } } : { status: 401, body: { error: "no session" } };
+      if (url === "/api/login" && init?.method === "POST") {
         signedIn = true;
         return { body: { user: "baer", since: T } };
       }
@@ -294,8 +294,8 @@ describe("app shell", () => {
   });
 
   it("returns to the gate when a page call gets 401", async () => {
-    stubApi({ "/admin/api/me": { user: "baer", since: T } }, (url) =>
-      url === "/admin/api/overview" ? { status: 401, body: { error: "expired" } } : undefined,
+    stubApi({ "/api/me": { user: "baer", since: T } }, (url) =>
+      url === "/api/overview" ? { status: 401, body: { error: "expired" } } : undefined,
     );
     render(<App />);
     expect(await screen.findByRole("button", { name: "Enter" })).toBeTruthy();

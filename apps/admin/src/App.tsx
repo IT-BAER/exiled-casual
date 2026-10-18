@@ -54,7 +54,7 @@ export function App() {
 
   useEffect(() => {
     setUnauthorizedHandler(() => setMe(null));
-    call("GET /admin/api/me").then(setMe, (e: unknown) => {
+    call("GET /api/me").then(setMe, (e: unknown) => {
       if (!(e instanceof UnauthorizedError)) setBootError(e instanceof Error ? e.message : String(e));
       setMe(null);
     });
@@ -81,7 +81,7 @@ export function App() {
   }
 
   const signOut = () => {
-    call("POST /admin/api/logout").catch(() => undefined).finally(() => setMe(null));
+    call("POST /api/logout").catch(() => undefined).finally(() => setMe(null));
   };
 
   const crumb = route.id !== undefined ? <>{title} <span className="mono">{route.id}</span></> : title;

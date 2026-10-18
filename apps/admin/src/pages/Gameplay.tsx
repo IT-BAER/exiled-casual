@@ -106,7 +106,7 @@ export function GameplayView({ g }: { g: GameplayData }) {
 
 export function Gameplay({ query }: { query: Record<string, string> }) {
   const days = rangeDays(query, [1, 7, 30, 90], 7);
-  const st = useApi("GET /admin/api/gameplay", { query: { days } });
+  const st = useApi("GET /api/gameplay", { query: { days } });
   return (
     <div className="page">
       <PageHead title="Gameplay" lede="What exiles pick, how far they get, what kills them and what drops." />

@@ -59,6 +59,6 @@ export default defineConfig({
   base: "./",
   plugins: [react(), gameArt()],
   server: {
-    proxy: { "/admin/api": "http://127.0.0.1:8082" },
+    proxy: { "/api": "http://127.0.0.1:8082" },
   },
 });

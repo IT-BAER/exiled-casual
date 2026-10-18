@@ -1,6 +1,6 @@
 /**
  * The admin console's wire contract: what `apps/server` answers under
- * `/admin/api/*` and what `apps/admin` renders. Times are ms epoch, durations
+ * `/api/*` and what `apps/admin` renders. Times are ms epoch, durations
  * are seconds unless a name says otherwise, and every list is newest first
  * unless it says otherwise.
  */
@@ -259,25 +259,25 @@ export interface AuditRow { t: number; user: string; action: string; detail: str
 
 /** Every route the console calls, with what it returns. */
 export interface AdminRoutes {
-  "GET /admin/api/me": Me;
-  "POST /admin/api/login": Me;
-  "POST /admin/api/logout": { ok: true };
-  "GET /admin/api/overview": Overview;
-  "GET /admin/api/live": LiveSession[];
-  "GET /admin/api/sessions": Page<SessionRow>;
-  "GET /admin/api/sessions/:sid": SessionDetail;
-  "GET /admin/api/retention": Retention;
-  "GET /admin/api/geo": GeoRow[];
-  "GET /admin/api/gameplay": Gameplay;
-  "GET /admin/api/perf": Perf;
-  "GET /admin/api/errors": ErrorGroup[];
-  "GET /admin/api/errors/:fp": ErrorDetail;
-  "POST /admin/api/errors/:fp": ErrorGroup;
-  "GET /admin/api/health": Health;
-  "GET /admin/api/logs": LogLine[];
-  "GET /admin/api/traffic": Traffic;
-  "GET /admin/api/liveops": LiveConfig;
-  "PUT /admin/api/liveops": LiveConfig;
-  "GET /admin/api/builds": BuildRow[];
-  "GET /admin/api/audit": AuditRow[];
+  "GET /api/me": Me;
+  "POST /api/login": Me;
+  "POST /api/logout": { ok: true };
+  "GET /api/overview": Overview;
+  "GET /api/live": LiveSession[];
+  "GET /api/sessions": Page<SessionRow>;
+  "GET /api/sessions/:sid": SessionDetail;
+  "GET /api/retention": Retention;
+  "GET /api/geo": GeoRow[];
+  "GET /api/gameplay": Gameplay;
+  "GET /api/perf": Perf;
+  "GET /api/errors": ErrorGroup[];
+  "GET /api/errors/:fp": ErrorDetail;
+  "POST /api/errors/:fp": ErrorGroup;
+  "GET /api/health": Health;
+  "GET /api/logs": LogLine[];
+  "GET /api/traffic": Traffic;
+  "GET /api/liveops": LiveConfig;
+  "PUT /api/liveops": LiveConfig;
+  "GET /api/builds": BuildRow[];
+  "GET /api/audit": AuditRow[];
 }

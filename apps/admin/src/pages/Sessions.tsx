@@ -100,7 +100,7 @@ export function SessionsTable({ page, query }: { page: Page<SessionRow>; query: 
 export function Sessions({ query }: { query: Record<string, string> }) {
   const q = query.q ?? "";
   const pageNo = Math.max(1, Number(query.page) || 1);
-  const st = useApi("GET /admin/api/sessions", { query: { q, page: pageNo, pageSize: PAGE_SIZE } });
+  const st = useApi("GET /api/sessions", { query: { q, page: pageNo, pageSize: PAGE_SIZE } });
   const [text, setText] = useState(q);
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -223,7 +223,7 @@ export function SessionDetailView({ d }: { d: SessionDetail }) {
 }
 
 export function SessionDetailPage({ sid }: { sid: string }) {
-  const st = useApi("GET /admin/api/sessions/:sid", { params: { sid } });
+  const st = useApi("GET /api/sessions/:sid", { params: { sid } });
   return (
     <div className="page">
       <PageHead title="Session" id={sid} lede={<a href={hrefFor({ page: "sessions" })}>All sessions</a>} />

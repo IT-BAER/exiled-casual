@@ -84,7 +84,7 @@ export function LiveView({ sessions, now }: { sessions: LiveSession[]; now: numb
 }
 
 export function Live() {
-  const st = useApi("GET /admin/api/live", {}, 10_000);
+  const st = useApi("GET /api/live", {}, 10_000);
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);

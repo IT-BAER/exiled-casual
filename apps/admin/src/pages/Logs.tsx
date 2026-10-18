@@ -78,7 +78,7 @@ export function Logs({ query }: { query: Record<string, string> }) {
   const bots = query.bots === "1";
   const tail = query.tail === "1";
   const st = useApi(
-    "GET /admin/api/logs",
+    "GET /api/logs",
     { query: { source, q, status: source === "access" ? status : undefined, bots: source === "access" ? (bots ? 1 : 0) : undefined, limit: LIMIT } },
     tail ? 5_000 : undefined,
   );

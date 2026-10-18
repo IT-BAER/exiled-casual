@@ -15,7 +15,7 @@ export function Gate({ onSignedIn, bootError = null }: { onSignedIn: (me: Me) =>
     setBusy(true);
     setError(null);
     try {
-      onSignedIn(await call("POST /admin/api/login", { body: { user, password, totp } }));
+      onSignedIn(await call("POST /api/login", { body: { user, password, totp } }));
     } catch (err) {
       setPassword("");
       setTotp("");

@@ -153,7 +153,7 @@ export function HealthView({ h, at }: { h: HealthData; at: number | null }) {
 }
 
 export function Health() {
-  const st = useApi("GET /admin/api/health", {}, 15_000);
+  const st = useApi("GET /api/health", {}, 15_000);
   return (
     <div className="page">
       <PageHead title="Health" lede="Host, nginx and the telemetry server, refreshed every 15 seconds." />

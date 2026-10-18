@@ -83,7 +83,7 @@ export function TrafficView({ t }: { t: TrafficData }) {
 
 export function Traffic({ query }: { query: Record<string, string> }) {
   const days = rangeDays(query, [1, 7, 30, 90], 7);
-  const st = useApi("GET /admin/api/traffic", { query: { days } });
+  const st = useApi("GET /api/traffic", { query: { days } });
   return (
     <div className="page">
       <PageHead title="Traffic" lede="Page loads from nginx against sessions from telemetry: who arrives, who is a bot, who leaves before the game boots." />

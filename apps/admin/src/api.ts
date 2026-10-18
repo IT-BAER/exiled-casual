@@ -37,7 +37,7 @@ export interface CallOptions {
 
 const SAFE = new Set(["GET", "HEAD"]);
 
-/** One typed call per contract route: `call("GET /admin/api/errors/:fp", { params: { fp } })`. */
+/** One typed call per contract route: `call("GET /api/errors/:fp", { params: { fp } })`. */
 export async function call<K extends RouteKey>(route: K, opts: CallOptions = {}): Promise<AdminRoutes[K]> {
   const space = route.indexOf(" ");
   const method = route.slice(0, space);

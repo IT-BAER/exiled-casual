@@ -40,7 +40,7 @@ export function BuildsTable({ rows }: { rows: BuildRow[] }) {
 }
 
 export function Builds() {
-  const st = useApi("GET /admin/api/builds");
+  const st = useApi("GET /api/builds");
   return (
     <div className="page">
       <PageHead title="Builds" lede="Every client build that has sent telemetry. Live ops can tell builds older than one of these to reload." />

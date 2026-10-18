@@ -70,7 +70,7 @@ export function ErrorsTable({ groups, filter }: { groups: ErrorGroup[]; filter: 
 
 export function Errors({ query }: { query: Record<string, string> }) {
   const filter: Filter = (FILTERS as readonly string[]).includes(query.status ?? "") ? (query.status as Filter) : "open";
-  const st = useApi("GET /admin/api/errors", { query: { status: filter === "all" ? undefined : filter } });
+  const st = useApi("GET /api/errors", { query: { status: filter === "all" ? undefined : filter } });
   return (
     <div className="page">
       <PageHead title="Errors" lede="Client errors grouped by fingerprint. Impact wears the rarity of how many sessions it touched: normal 1, magic 2-9, rare 10-49, unique 50+." />
@@ -158,7 +158,7 @@ export function ErrorDetailView({ d, onStatus, busy }: { d: ErrorDetail; onStatu
 }
 
 export function ErrorDetailPage({ fp }: { fp: string }) {
-  const st = useApi("GET /admin/api/errors/:fp", { params: { fp } });
+  const st = useApi("GET /api/errors/:fp", { params: { fp } });
   const [group, setGroup] = useState<ErrorGroup | null>(null);
   const [busy, setBusy] = useState<ErrorStatus | null>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -169,7 +169,7 @@ export function ErrorDetailPage({ fp }: { fp: string }) {
     setDone(null);
     setFail(null);
     try {
-      const g = await call("POST /admin/api/errors/:fp", { params: { fp }, body: { status } });
+      const g = await call("POST /api/errors/:fp", { params: { fp }, body: { status } });
       setGroup(g);
       setDone(status === "open" ? "Reopened." : status === "resolved" ? "Marked resolved." : "Ignored.");
     } catch (e) {

@@ -39,7 +39,7 @@ export function LiveOpsEditor({ initial, builds, onPublished }: { initial: LiveC
     setBusy(true);
     setFail(null);
     try {
-      const saved = await call("PUT /admin/api/liveops", { body: res.config });
+      const saved = await call("PUT /api/liveops", { body: res.config });
       setPrev(saved);
       setForm(formFromConfig(saved));
       setDone("Published. Clients pick it up from /api/config.");
@@ -193,8 +193,8 @@ export function LiveOpsEditor({ initial, builds, onPublished }: { initial: LiveC
 }
 
 export function LiveOps() {
-  const cfg = useApi("GET /admin/api/liveops");
-  const builds = useApi("GET /admin/api/builds");
+  const cfg = useApi("GET /api/liveops");
+  const builds = useApi("GET /api/builds");
   return (
     <div className="page">
       <PageHead title="Live ops" lede="What every client reads from /api/config: the menu banner, maintenance, the minimum build, remote flags and the telemetry switch." />

@@ -129,7 +129,7 @@ export function DashboardView({ o }: { o: Overview }) {
 }
 
 export function Dashboard() {
-  const st = useApi("GET /admin/api/overview", {}, 30_000);
+  const st = useApi("GET /api/overview", {}, 30_000);
   return (
     <div className="page">
       <Loaded state={st}>{(o) => <DashboardView o={o} />}</Loaded>

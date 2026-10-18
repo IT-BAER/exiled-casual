@@ -119,7 +119,7 @@ export function createAdminHandler(d: AdminDeps) {
     const mutating = method === "POST" || method === "PUT" || method === "DELETE";
     if (mutating) checkCsrf(req);
 
-    if (path === "/admin/api/login") {
+    if (path === "/api/login") {
       if (method !== "POST") throw new HttpError(405, "method not allowed");
       const ip = clientIp(req);
       const body = (await readJson(req, MAX_ADMIN_BODY)) as Partial<LoginRequest> | null;
@@ -153,7 +153,7 @@ export function createAdminHandler(d: AdminDeps) {
     if (!me) throw new HttpError(401, "not logged in");
 
     const ok = (body: unknown) => send(res, 200, body);
-    const seg = path.split("/").slice(3);
+    const seg = path.split("/").slice(2);
     const route = `${method} /${seg[0] ?? ""}${seg.length > 1 ? "/:id" : ""}`;
     if (seg.length > 2) throw new HttpError(404, "no such route");
     const id = seg[1] ? decodeURIComponent(seg[1]) : "";
@@ -220,7 +220,7 @@ export function createAdminHandler(d: AdminDeps) {
       refuse(res, 400, "bad url");
       return;
     }
-    if (url.pathname === "/admin/api" || url.pathname.startsWith("/admin/api/")) {
+    if (url.pathname === "/api" || url.pathname.startsWith("/api/")) {
       res.setHeader("cache-control", "no-store");
       try {
         await api(req, res, url);
