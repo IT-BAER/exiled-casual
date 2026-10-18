@@ -13,7 +13,8 @@ shape without flaps. `--high` is the dense opened surface: bake the normal map f
 it (tools/bake_generated_normal.py), never from the source, or the flaps return as
 shading. Every stage shares the glTF importer's frame with transforms applied.
 `--yaw` (degrees, about +Z) turns source and surface together, for a TRELLIS body
-built at an angle: GeneratedSkin can only flip a mesh, not turn it.
+built at an angle: GeneratedSkin can only flip a mesh, not turn it. `--pitch`
+(degrees, about +X, after the yaw) levels a body TRELLIS stood nose-down.
 """
 import argparse
 import math
@@ -41,6 +42,7 @@ def args():
     p.add_argument("--triangles", type=int, default=4000)
     p.add_argument("--tex", type=int, default=512)
     p.add_argument("--yaw", type=float, default=0.0)
+    p.add_argument("--pitch", type=float, default=0.0)
     return p.parse_args(tail)
 
 
@@ -135,8 +137,8 @@ def rebuild_stage(a):
     clear()
     src = load_source(a.source)
     dense = mesh_from_npz(a.npz, "opened")
-    if a.yaw:
-        turn = Matrix.Rotation(math.radians(a.yaw), 4, "Z")
+    if a.yaw or a.pitch:
+        turn = Matrix.Rotation(math.radians(a.pitch), 4, "X") @ Matrix.Rotation(math.radians(a.yaw), 4, "Z")
         for o in (src, dense):
             o.data.transform(turn)
             o.data.update()

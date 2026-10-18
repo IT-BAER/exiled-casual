@@ -2011,34 +2011,34 @@ def sunbaked_colossus():
     return c
 
 
-BEHEMOTH_SOURCE = os.path.join(TEX_DIR, "source", "rotting_behemoth_v1.glb")
-BEHEMOTH_NORMAL = os.path.join(TEX_DIR, "source", "rotting_behemoth_v1_n.png")
+BEHEMOTH_SOURCE = os.path.join(TEX_DIR, "source", "rotting_behemoth_v2.glb")
+BEHEMOTH_NORMAL = os.path.join(TEX_DIR, "source", "rotting_behemoth_v2_n.png")
 
 
 def rotting_behemoth():
-    """A sack of rot on six short legs, split down the spine and lit from inside.
+    """A bloated slug-tick on six stumps, its back split and glowing, pustules
+    lit along the flanks.
 
-    Generated (review/3d/rotting-behemoth), hanging strands cut off by a
-    volumetric opening (tools/open_volume.py --res 240 --radius 2); TRELLIS built it 35 degrees off axis, so
-    the rebuild turned it (reshape_generated.py --yaw 35.4). 4k triangles. Joints
-    measured off rotting_behemoth_v1.glb by tools/measure_generated.py --flip 1.
+    Generated (review/3d/rotting-behemoth-v2), volumetric opening res 240 r 2
+    band 8, 4k triangles. TRELLIS stood it nose-down, so the rebuild levelled it
+    (reshape_generated.py --pitch -4.3). Height 1.2, not 2.0: the body is twice as
+    long as tall, and at 1.4 it was 2.9 wide against a 2-unit tile opening.
+    Joints measured off rotting_behemoth_v2.glb by tools/measure_generated.py
+    --flip 1 --foot-z 0.03; the default band read the belly as a foot.
     """
     c = GeneratedSkin("monster.rotting_behemoth.v1", BEHEMOTH_SOURCE, BEHEMOTH_NORMAL,
-                      "swamp", 2.0, (0.299, 0.501), tex=512, flip=True)
-    spine = c.body.chain([(0, -0.95, 1.10), (0, 0.0, 1.15), (0, 0.95, 1.10)], [0.1] * 3)
-    c.body.chain([(0, 1.45, 1.00), (0, 1.90, 0.95)], [0.1] * 2, parent=spine[-1])
-    c.body.chain([(0, -1.25, 0.95)], [0.1], parent=spine[0])
-    # Front pair first, then mid, then rear, as TRELLIS staggered them. The right
-    # mid foot hangs a quarter metre up as built: it walks in the air. The first
-    # three measured near straight (+57% reach); their knees sit mid-leg at the
-    # back of the leg column.
+                      "swamp", 1.2, (-0.035, 0.268), tex=512, flip=True)
+    spine = c.body.chain([(0, -0.80, 0.74), (0, 0.10, 0.78), (0, 0.95, 0.74)], [0.1] * 3)
+    c.body.chain([(0, 1.20, 0.68), (0, 1.42, 0.62)], [0.1] * 2, parent=spine[-1])
+    c.body.chain([(0, -1.10, 0.66)], [0.1], parent=spine[0])
+    # Front pair first, then mid, then rear.
     for i, (hip, knee, foot) in enumerate([
-        ((-0.463, 1.011, 0.578), (-0.480, 0.900, 0.290), (-0.497, 1.295, 0.002)),
-        ((0.547, 0.601, 0.605), (0.581, 0.440, 0.304), (0.615, 0.702, 0.003)),
-        ((-0.555, 0.223, 0.487), (-0.569, 0.028, 0.245), (-0.583, 0.193, 0.002)),
-        ((0.433, -0.472, 0.528), (0.450, -0.532, 0.347), (0.401, -0.527, 0.235)),
-        ((-0.296, -0.592, 0.512), (-0.409, -0.594, 0.149), (-0.345, -0.640, 0.000)),
-        ((0.397, -1.083, 0.505), (0.364, -1.140, 0.223), (0.409, -1.022, 0.000)),
+        ((-0.439, 0.666, 0.396), (-0.695, 0.930, 0.251), (-0.740, 0.806, 0.005)),
+        ((0.394, 0.671, 0.393), (0.622, 0.977, 0.254), (0.691, 0.768, 0.004)),
+        ((-0.789, -0.029, 0.358), (-0.978, 0.094, 0.185), (-1.066, 0.000, 0.032)),
+        ((0.789, -0.051, 0.362), (0.944, 0.066, 0.177), (1.134, 0.015, 0.033)),
+        ((-0.606, -0.781, 0.332), (-0.865, -0.705, 0.182), (-0.931, -0.812, 0.000)),
+        ((0.616, -0.710, 0.328), (0.849, -0.703, 0.199), (0.911, -0.777, 0.005)),
     ]):
         c.leg_through(i, hip, knee, foot)
     return c
