@@ -111,8 +111,9 @@ vi.mock("./render/hideout", () => ({
   buildHideoutDecor: vi.fn(), clearHideoutDecor: vi.fn(),
 }));
 vi.mock("./render/level", () => ({
-  buildLevel: vi.fn(), applyTilesetFloor: vi.fn(), applyBiomeTint: vi.fn(),
+  buildLevel: vi.fn(), applyTilesetFloor: vi.fn(), applyBiomeTint: vi.fn(), tilesetDir: vi.fn(),
 }));
+vi.mock("./render/ground-patch", () => ({ setGroundPatch: vi.fn() }));
 vi.mock("./input/bindings", () => ({
   attachBindings: (
     _canvas: unknown, _worker: unknown, _scene: unknown, _hover: unknown,
