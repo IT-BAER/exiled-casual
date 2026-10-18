@@ -219,8 +219,8 @@ describe("groundPlacements", () => {
 /** The other dressed biomes, each on the grammar its maps use. */
 const BIOME_SETS = [
   { tileset: "tileset.vaal_stone", grammar: "loop", tall: ["vaalColumn", "vaalIdol", "vaalRuinWall"] },
-  { tileset: "tileset.swamp", grammar: "loop", tall: ["swampTree"] },
-  { tileset: "tileset.forest", grammar: "open-field", tall: ["forestTree", "forestTree2"] },
+  { tileset: "tileset.swamp", grammar: "loop", tall: [] },
+  { tileset: "tileset.forest", grammar: "open-field", tall: [] },
 ] as const;
 
 function wallTest(grid: WalkableGrid) {
@@ -243,6 +243,11 @@ describe.each(BIOME_SETS)("$tileset dressing", ({ tileset, grammar, tall }) => {
       expect(ps.length).toBeGreaterThanOrEqual(40);
       expect(ps.length).toBeLessThanOrEqual(60);
       for (const kind of tall) expect(ps.some((p) => p.kind === kind), kind).toBe(true);
+    });
+
+    it(`seed ${seed}: stands no tree at the rock foot, where its crown would hide the player`, () => {
+      const trees = ["forestTree", "forestTree2", "swampTree"];
+      expect(ps.filter((p) => trees.includes(p.kind))).toEqual([]);
     });
 
     it(`seed ${seed}: stands on floor at the rock foot, off every container`, () => {

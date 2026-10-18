@@ -18,7 +18,10 @@ import {
   VOID_COLOR,
   WALL_MESH_NAME,
 } from "./engine";
-import { buildCliffs, CLIFF_MESH_NAME } from "./cliffs";
+import { buildCliffs, cliffField, cliffHeightAt, CLIFF_MESH_NAME } from "./cliffs";
+
+/** Height of a canopy tree's crown that stands clear of the rock it grows from. */
+const CANOPY_SHOW = 1.8;
 import { setContactBand } from "./contact-band";
 import { edgeFadeMaterial } from "./edge-fade";
 import { tintHaze } from "./haze";
@@ -518,25 +521,25 @@ const GROUND_SETS: Readonly<Record<string, readonly GroundKind[]>> = {
     { kind: "skull", count: 6, radius: 0.36 },
     { kind: "bones", count: 10, radius: 0.4 },
   ],
-  // Sunk, low and wet: drowned snags, reeds, rot and toadstools.
+  // Sunk, low and wet: reeds, rot and toadstools. The drowned snags stand on the
+  // wall mass only (CANOPY_SETS): at the rock foot one hides the player outright.
   "tileset.swamp": [
-    { kind: "swampTree", count: 6, radius: 1.6, tall: true },
-    { kind: "mossLog", count: 6, radius: 1.1 },
-    { kind: "stump", count: 6, radius: 0.5 },
+    { kind: "mossLog", count: 8, radius: 1.1 },
+    { kind: "stump", count: 9, radius: 0.5 },
     { kind: "reeds", count: 8, radius: 0.45, cluster: 3 },
     { kind: "toadstools", count: 6, radius: 0.45 },
     { kind: "bones", count: 6, radius: 0.4 },
     { kind: "skull", count: 4, radius: 0.36 },
   ],
-  // Under the canopy: trees at the rock foot, deadfall, undergrowth and stone.
+  // Under the canopy: deadfall, undergrowth and stone. Trees stand on the wall
+  // mass only (CANOPY_SETS): a 1.5-unit crown at the rock foot hides the player.
+  // A bush tops out under 0.7, below his shoulder.
   "tileset.forest": [
-    { kind: "forestTree", count: 4, radius: 1.6, tall: true },
-    { kind: "forestTree2", count: 4, radius: 1.3, tall: true },
-    { kind: "mossRock", count: 8, radius: 0.7 },
-    { kind: "mossLog", count: 6, radius: 1.1 },
-    { kind: "stump", count: 6, radius: 0.5 },
+    { kind: "mossRock", count: 11, radius: 0.7 },
+    { kind: "mossLog", count: 8, radius: 1.1 },
+    { kind: "stump", count: 9, radius: 0.5 },
     { kind: "bush", count: 9, radius: 0.75 },
-    { kind: "toadstools", count: 8, radius: 0.45 },
+    { kind: "toadstools", count: 10, radius: 0.45 },
   ],
 };
 
@@ -778,6 +781,9 @@ export function canopyPlacements(grid: WalkableGrid, tilesetId: string): GroundP
  */
 function dressCanopy(scene: Scene, grid: WalkableGrid, tilesetId: string): void {
   const ps = canopyPlacements(grid, tilesetId);
+  // The trees stand on the wall mass, inside rock taller than they are: each is
+  // lifted so CANOPY_SHOW of its crown clears the rock under it.
+  const field = ps.length > 0 ? cliffField(grid) : null;
   for (let i = 0; i < ps.length; i++) {
     const p = ps[i]!;
     const root = new Mesh(`${CANOPY_PROP_PREFIX}${p.kind}-${i}`, scene);
@@ -793,6 +799,12 @@ function dressCanopy(scene: Scene, grid: WalkableGrid, tilesetId: string): void 
       mesh.isPickable = false;
       mesh.receiveShadows = true;
       mesh.name = `${CANOPY_MESH_PREFIX}${mesh.name}`;
+    }
+    if (field) {
+      root.computeWorldMatrix(true);
+      for (const mesh of root.getChildMeshes()) mesh.computeWorldMatrix(true);
+      const top = root.getHierarchyBoundingVectors(true).max.y;
+      root.position.y = Math.max(0, cliffHeightAt(field, p.x, p.z) + CANOPY_SHOW - top);
     }
     freezeTree(root);
   }

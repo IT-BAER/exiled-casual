@@ -532,10 +532,28 @@ export function cliffMaterial(wall: Material): Material {
   return mat;
 }
 
+let last: { grid: WalkableGrid; field: CliffField } | null = null;
+
+/** `cliffHeights` for the grid last asked about: the dressing stands on the same field. */
+export function cliffField(grid: WalkableGrid): CliffField {
+  if (last?.grid !== grid) last = { grid, field: cliffHeights(grid) };
+  return last.field;
+}
+
+/** Bilinear rock height at world (x, z); 0 off the field. */
+export function cliffHeightAt(f: CliffField, x: number, z: number): number {
+  const i = (x - f.x0) / f.step, j = (z - f.z0) / f.step;
+  const i0 = Math.floor(i), j0 = Math.floor(j);
+  if (i0 < 0 || j0 < 0 || i0 + 1 >= f.nx || j0 + 1 >= f.nz) return 0;
+  const h = (a: number, b: number) => f.heights[b * f.nx + a]!;
+  const ti = i - i0, tj = j - j0;
+  return (h(i0, j0) * (1 - ti) + h(i0 + 1, j0) * ti) * (1 - tj) + (h(i0, j0 + 1) * (1 - ti) + h(i0 + 1, j0 + 1) * ti) * tj;
+}
+
 /** Build the cliff mesh for a grid, or nothing when the grid has no rock to raise. */
 export function buildCliffs(scene: Scene, grid: WalkableGrid, material: Material): Mesh | null {
   scene.getMeshByName(CLIFF_MESH_NAME)?.dispose();
-  const data = cliffVertexData(cliffHeights(grid));
+  const data = cliffVertexData(cliffField(grid));
   if (!data) return null;
   const mesh = new Mesh(CLIFF_MESH_NAME, scene);
   data.applyToMesh(mesh, false);
