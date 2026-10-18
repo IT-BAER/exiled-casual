@@ -93,10 +93,11 @@ describe("props asset", () => {
     // (driftwood, shell), again for the wreck debris (wreckTimber, bones), and
     // again for the ground drops (two leathers, two scrolls, the alchemy flask),
     // and again for the desert set (dead tree, skull, ribcage, ruin wall, pot),
-    // and again for the forest, swamp and vaal stone sets (5.06MB served).
+    // and again for the forest, swamp and vaal stone sets (5.06MB served), and
+    // again for the three crowns' normal maps (5.68MB).
     // Each costs one 512 JPEG; a dropped downscale would cost ten megabytes,
     // which is what this number is really watching for.
-    expect(glb.byteLength).toBeLessThan(5_500_000);
+    expect(glb.byteLength).toBeLessThan(6_000_000);
   });
 });
 

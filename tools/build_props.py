@@ -41,6 +41,7 @@ Textures are downscaled to 512 and re-encoded as JPEG before they go in: the fou
 """
 import math
 import os
+import random
 import sys
 
 import bmesh
@@ -957,17 +958,19 @@ def _scan(name, blend, budgets, hint, width, gain, roughness, palette=None, tint
 
 
 # Crowns are SOLID lobes, not leaf cards. Hundreds of small cards on a 256px cut-
-# out mip down at this camera into one feathered disc with no shading; a few big
-# rounded masses with ambient occlusion between them read as a canopy (PoE's).
-# The lobes wear the cards themselves, baked: a tiled leaf grain on round lobes
-# read as a stack of melons.
-LEAF_LIGHT = (0.30, 0.38, 0.19)  # sRGB, lit leaf
-LEAF_DARK = (0.17, 0.23, 0.12)   # sRGB, the dark of a leaf card
-LEAF_HOLE = (0.09, 0.12, 0.06)   # sRGB, where the bake ray found no card
-LEAF_VARY = 0.3                  # +-15% brightness per card, so no two clusters match
-CROWN_TRIS = 1800
-CROWN_BAKE = 512                 # px per crown, its own texture
-CROWN_RAGGED = 0.15              # noise amplitude as a fraction of a lobe radius
+# out mip down at this camera into one feathered disc with no shading; masses
+# with ambient occlusion between them read as a canopy (PoE's). A dozen smooth
+# lobes of one size read as melons, and the cards baked onto them as stripes, so
+# each lobe buds smaller clumps and wears leaf clusters painted in 3D, not cards.
+LEAF_LIGHT = (0.34, 0.42, 0.19)  # sRGB, the lit heart of a leaf cluster
+LEAF_DARK = (0.10, 0.15, 0.07)   # sRGB, the shadow between clusters
+LEAF_VARY = 0.35                 # +-17% brightness per cluster, so no two match
+LEAF_CELLS = 16.0                # leaf clusters across a crown's width
+LEAF_RELIEF = 0.012              # bump depth of a cluster dome, as a fraction of crown width
+CROWN_TRIS = 2600
+CROWN_BAKE = 512                 # px per crown, colour and normal map each
+CROWN_RAGGED = 0.22              # noise amplitude as a fraction of a lobe radius
+CROWN_CLUMPS = 7                 # clumps budded off each lobe, mostly upward and out
 
 
 def _vertex_shaded(mat):
@@ -987,93 +990,127 @@ def _vertex_shaded(mat):
     return mat
 
 
-def _card_bake_material(cards):
-    """Emit (leaf mask, per-card random, 1) off the cards, for a linear float bake.
+def _leaf_graph(nt, span):
+    """(height, per-cluster random) sockets of leaf clusters laid in object space.
 
-    The source shades its cards with a height ramp and uses the leaf photo only as
-    alpha, so the photo is the structure worth keeping; the colour is ours.
+    A Voronoi cell is a leaf cluster, a dome at its heart falling to a crease at
+    its rim, with a finer cell grid over it for single leaves. Object space, not
+    UV: a pattern laid in UVs breaks at every seam and stretches across islands.
     """
-    src = next(s.material for s in cards.material_slots if s.material)
-    image = bpy.data.images[_image_of(cards, "Leaves04")]
-    mapping = next(n for n in src.node_tree.nodes if n.type == "MAPPING")
-    mat = bpy.data.materials.new(cards.name + "_bake")
-    mat.use_nodes = True
-    nt = mat.node_tree
-    nt.nodes.remove(nt.nodes["Principled BSDF"])
-    uv = nt.nodes.new("ShaderNodeTexCoord")
-    mp = nt.nodes.new("ShaderNodeMapping")
-    for k in ("Location", "Rotation", "Scale"):
-        mp.inputs[k].default_value = mapping.inputs[k].default_value
-    tex = nt.nodes.new("ShaderNodeTexImage")
-    tex.image = image
+    coord = nt.nodes.new("ShaderNodeTexCoord")
+    domes = []
+    for scale, reach in ((LEAF_CELLS / span, 0.7), (LEAF_CELLS * 2.6 / span, 0.6)):
+        cells = nt.nodes.new("ShaderNodeTexVoronoi")
+        cells.inputs["Scale"].default_value = scale
+        nt.links.new(cells.inputs["Vector"], coord.outputs["Object"])
+        dome = nt.nodes.new("ShaderNodeMapRange")
+        dome.interpolation_type = "SMOOTHSTEP"
+        dome.inputs["From Min"].default_value = 0.0
+        dome.inputs["From Max"].default_value = reach
+        dome.inputs["To Min"].default_value = 1.0
+        dome.inputs["To Max"].default_value = 0.0
+        nt.links.new(dome.inputs["Value"], cells.outputs["Distance"])
+        domes.append((cells, dome))
+    small = nt.nodes.new("ShaderNodeMath")
+    small.operation = "MULTIPLY"
+    small.inputs[1].default_value = 0.35
+    nt.links.new(small.inputs[0], domes[1][1].outputs["Result"])
+    height = nt.nodes.new("ShaderNodeMath")
+    height.operation = "MULTIPLY_ADD"  # big * 0.65 + small * 0.35
+    height.inputs[1].default_value = 0.65
+    nt.links.new(height.inputs[0], domes[0][1].outputs["Result"])
+    nt.links.new(height.inputs[2], small.outputs["Value"])
     grey = nt.nodes.new("ShaderNodeRGBToBW")
-    geo = nt.nodes.new("ShaderNodeNewGeometry")
-    comb = nt.nodes.new("ShaderNodeCombineColor")
-    comb.inputs["Blue"].default_value = 1.0
-    emit = nt.nodes.new("ShaderNodeEmission")
-    nt.links.new(mp.inputs["Vector"], uv.outputs["UV"])
-    nt.links.new(tex.inputs["Vector"], mp.outputs["Vector"])
-    nt.links.new(grey.inputs["Color"], tex.outputs["Color"])
-    nt.links.new(comb.inputs["Red"], grey.outputs["Val"])
-    nt.links.new(comb.inputs["Green"], geo.outputs["Random Per Island"])
-    nt.links.new(emit.inputs["Color"], comb.outputs["Color"])
-    nt.links.new(nt.nodes["Material Output"].inputs["Surface"], emit.outputs["Emission"])
-    return mat
+    nt.links.new(grey.inputs["Color"], domes[0][0].outputs["Color"])
+    return height.outputs["Value"], grey.outputs["Val"]
 
 
-def _bake_cards(obj, cards, name, extrusion, reach):
-    """Bake the card cloud's leaves onto `obj`'s UVs as the crown's own sRGB texture.
-
-    Selected-to-active from a cage pushed `extrusion` out of the lobe surface, so a
-    card just outside it projects too. A pixel whose ray found no card is a hole.
-    """
-    emit = _card_bake_material(cards)
-    cards.data.materials.clear()
-    cards.data.materials.append(emit)
-    target = bpy.data.images.new(name + "_bake", CROWN_BAKE, CROWN_BAKE, float_buffer=True)
-    mat = bpy.data.materials.new(name + "_target")
-    mat.use_nodes = True
+def _bake_pass(obj, mat, image, kind):
+    """Bake `kind` of `mat` on `obj` into `image` through Cycles, then drop `mat`."""
     node = mat.node_tree.nodes.new("ShaderNodeTexImage")
-    node.image = target
+    node.image = image
     mat.node_tree.nodes.active = node
+    obj.data.materials.clear()
     obj.data.materials.append(mat)
     scene = bpy.context.scene
     engine = scene.render.engine
     scene.render.engine = "CYCLES"
     scene.cycles.device = "CPU"
-    scene.cycles.samples = 16
+    scene.cycles.samples = 4
     for o in bpy.context.selected_objects:
         o.select_set(False)
-    cards.select_set(True)
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
-    bpy.ops.object.bake(type="EMIT", use_selected_to_active=True, cage_extrusion=extrusion,
-                        max_ray_distance=reach, margin=4, margin_type="EXTEND", use_clear=True,
-                        target="IMAGE_TEXTURES")
+    bpy.ops.object.bake(type=kind, normal_space="TANGENT", margin=4, margin_type="EXTEND",
+                        use_clear=True, target="IMAGE_TEXTURES")
     scene.render.engine = engine
     obj.data.materials.clear()
     bpy.data.materials.remove(mat)
-    px = numpy.empty(CROWN_BAKE * CROWN_BAKE * 4, dtype=numpy.float32)
-    target.pixels.foreach_get(px)
-    bpy.data.images.remove(target)
-    rgba = px.reshape(-1, 4)
-    hit = numpy.clip(rgba[:, 2:3], 0.0, 1.0)
-    inv = 1.0 / numpy.maximum(hit, 1e-4)  # antialiased edges arrive premultiplied by coverage
-    mask = numpy.clip(rgba[:, 0:1] * inv, 0.0, 1.0)
-    vary = 1.0 - LEAF_VARY / 2 + LEAF_VARY * numpy.clip(rgba[:, 1:2] * inv, 0.0, 1.0)
-    lo, hi = numpy.asarray(LEAF_DARK, numpy.float32), numpy.asarray(LEAF_LIGHT, numpy.float32)
-    leaf = (lo + (hi - lo) * mask) * vary  # sRGB: an 8-bit file stores it as written
-    out = numpy.ones_like(rgba)
-    out[:, :3] = numpy.clip(numpy.asarray(LEAF_HOLE, numpy.float32) * (1.0 - hit) + leaf * hit, 0.0, 1.0)
-    img = bpy.data.images.new(name, CROWN_BAKE, CROWN_BAKE)
-    img.pixels.foreach_set(out.ravel())
-    path = os.path.join(BUILD_DIR, name + ".jpg")
+
+
+def _save_jpeg(img, path):
     img.filepath_raw = path
     img.file_format = "JPEG"
     img.save()
     bpy.data.images.remove(img)
+
+
+def _bake_leaves(obj, name, span):
+    """Bake the leaf clusters onto `obj`'s UVs: the crown's own sRGB colour and normal map.
+
+    The normal map is what makes a cluster a leaf cluster: each one turns its own
+    face to the sun, where colour alone only spotted a smooth lobe.
+    """
+    mat = bpy.data.materials.new(name + "_leafcolour")
+    mat.use_nodes = True
+    nt = mat.node_tree
+    nt.nodes.remove(nt.nodes["Principled BSDF"])
+    height, rand = _leaf_graph(nt, span)
+    comb = nt.nodes.new("ShaderNodeCombineColor")
+    emit = nt.nodes.new("ShaderNodeEmission")
+    nt.links.new(comb.inputs["Red"], height)
+    nt.links.new(comb.inputs["Green"], rand)
+    nt.links.new(emit.inputs["Color"], comb.outputs["Color"])
+    nt.links.new(nt.nodes["Material Output"].inputs["Surface"], emit.outputs["Emission"])
+    target = bpy.data.images.new(name + "_bake", CROWN_BAKE, CROWN_BAKE, float_buffer=True)
+    _bake_pass(obj, mat, target, "EMIT")
+    px = numpy.empty(CROWN_BAKE * CROWN_BAKE * 4, dtype=numpy.float32)
+    target.pixels.foreach_get(px)
+    bpy.data.images.remove(target)
+    rgba = px.reshape(-1, 4)
+    mask = numpy.clip(rgba[:, 0:1], 0.0, 1.0)
+    vary = 1.0 - LEAF_VARY / 2 + LEAF_VARY * numpy.clip(rgba[:, 1:2], 0.0, 1.0)
+    lo, hi = numpy.asarray(LEAF_DARK, numpy.float32), numpy.asarray(LEAF_LIGHT, numpy.float32)
+    out = numpy.ones_like(rgba)
+    out[:, :3] = numpy.clip((lo + (hi - lo) * mask) * vary, 0.0, 1.0)  # sRGB, stored as written
+    img = bpy.data.images.new(name, CROWN_BAKE, CROWN_BAKE)
+    img.pixels.foreach_set(out.ravel())
+    path = os.path.join(BUILD_DIR, name + ".jpg")
+    _save_jpeg(img, path)
+
+    mat = bpy.data.materials.new(name + "_leafbump")
+    mat.use_nodes = True
+    nt = mat.node_tree
+    height, _ = _leaf_graph(nt, span)
+    bump = nt.nodes.new("ShaderNodeBump")
+    bump.inputs["Distance"].default_value = span * LEAF_RELIEF
+    nt.links.new(bump.inputs["Height"], height)
+    nt.links.new(nt.nodes["Principled BSDF"].inputs["Normal"], bump.outputs["Normal"])
+    normals = bpy.data.images.new(name + "_n", CROWN_BAKE, CROWN_BAKE)
+    normals.colorspace_settings.name = "Non-Color"
+    _bake_pass(obj, mat, normals, "NORMAL")
+    npath = os.path.join(BUILD_DIR, name + "_n.jpg")
+    _save_jpeg(normals, npath)
+
     mat = textured_material(name, path, 0.9)
-    mat.node_tree.nodes["Principled BSDF"].inputs["Emission Strength"].default_value = EMISSION * 0.5
+    nt = mat.node_tree
+    tex = nt.nodes.new("ShaderNodeTexImage")
+    tex.image = bpy.data.images.load(npath)
+    tex.image.colorspace_settings.name = "Non-Color"
+    nmap = nt.nodes.new("ShaderNodeNormalMap")
+    nt.links.new(nmap.inputs["Color"], tex.outputs["Color"])
+    nt.links.new(nt.nodes["Principled BSDF"].inputs["Normal"], nmap.outputs["Normal"])
+    nt.nodes["Principled BSDF"].inputs["Emission Strength"].default_value = EMISSION * 0.5
     return _vertex_shaded(mat)
 
 
@@ -1122,26 +1159,43 @@ def _ragged(verts, centre, r):
         v.co += n * (CROWN_RAGGED * r * d)
 
 
-def lobe_crown(cards, lobes, name):
-    """Replace a leaf-card cloud with `lobes` fused ragged masses, the cards baked on, AO in COLOR_0.
+def _blob(bm, centre, r, squash=0.85):
+    geom = bmesh.ops.create_icosphere(bm, subdivisions=3, radius=r)
+    _ragged(geom["verts"], centre, r)
+    bmesh.ops.scale(bm, vec=(1.0, 1.0, squash), verts=geom["verts"])
+    bmesh.ops.translate(bm, vec=centre, verts=geom["verts"])
 
-    k-means over the cards' vertices puts each lobe where the leaves are dense,
-    a noise-displaced sphere per cluster is voxel-remeshed into one closed surface
-    and smoothed, then cut to budget, unwrapped, and the cards baked onto it.
+
+def lobe_crown(cards, lobes, name):
+    """Replace a leaf-card cloud with `lobes` fused ragged masses, leaf clusters baked on, AO in COLOR_0.
+
+    k-means over the cards' vertices puts each lobe where the leaves are dense;
+    each lobe buds CROWN_CLUMPS smaller clumps, mostly up and out, so the outline
+    is a cloud of mixed sizes rather than a few equal spheres. All of it is
+    voxel-remeshed into one closed surface, cut to budget, unwrapped and baked.
     """
     _apply_shape_mods(cards)
     pts = numpy.array([tuple(cards.matrix_world @ v.co) for v in cards.data.vertices], dtype=numpy.float32)
     centres, label = _kmeans(pts, lobes)
     span = float(max(numpy.ptp(pts[:, 0]), numpy.ptp(pts[:, 1])))
+    mid = mathutils.Vector(pts.mean(0).tolist())
+    rng = random.Random(name)
     bm = bmesh.new()
     for i, c in enumerate(centres):
         member = pts[label == i]
-        r = max(float(numpy.percentile(numpy.linalg.norm(member - c, axis=1), 70)) * 1.1, span * 0.16)
+        r = max(float(numpy.percentile(numpy.linalg.norm(member - c, axis=1), 70)), span * 0.13)
         centre = mathutils.Vector(c.tolist())
-        geom = bmesh.ops.create_icosphere(bm, subdivisions=4, radius=r)
-        _ragged(geom["verts"], centre, r)
-        bmesh.ops.scale(bm, vec=(1.0, 1.0, 0.85), verts=geom["verts"])
-        bmesh.ops.translate(bm, vec=centre, verts=geom["verts"])
+        _blob(bm, centre, r * 0.9)
+        out = centre - mid
+        out.z = 0.0
+        out = out.normalized() if out.length > 1e-6 else mathutils.Vector((1.0, 0.0, 0.0))
+        for _ in range(CROWN_CLUMPS):
+            phi = rng.uniform(0.0, 2.0 * math.pi)
+            z = rng.uniform(-0.3, 1.0)
+            d = mathutils.Vector((math.cos(phi), math.sin(phi), 0.0)) * math.sqrt(1.0 - z * z)
+            d.z = z
+            d = (d + out * 0.6).normalized()  # bud away from the trunk, never into the crown
+            _blob(bm, centre + d * r * rng.uniform(0.7, 0.95), r * rng.uniform(0.32, 0.55), 0.9)
     me = bpy.data.meshes.new(cards.name + "_lobes")
     bm.to_mesh(me)
     bm.free()
@@ -1150,10 +1204,10 @@ def lobe_crown(cards, lobes, name):
     bpy.context.view_layer.objects.active = obj
     rm = obj.modifiers.new("remesh", "REMESH")
     rm.mode = "VOXEL"
-    rm.voxel_size = span / 60.0
+    rm.voxel_size = span / 90.0
     sm = obj.modifiers.new("smooth", "SMOOTH")
-    sm.factor = 0.5
-    sm.iterations = 2
+    sm.factor = 0.4
+    sm.iterations = 1
     for m in list(obj.modifiers):
         bpy.ops.object.modifier_apply(modifier=m.name)
     decimate_to(obj, CROWN_TRIS)
@@ -1165,15 +1219,18 @@ def lobe_crown(cards, lobes, name):
     bpy.ops.mesh.select_all(action="SELECT")
     bpy.ops.uv.smart_project(angle_limit=math.radians(66), island_margin=0.01)
     bpy.ops.object.mode_set(mode="OBJECT")
-    mat = _bake_cards(obj, cards, name, extrusion=span * 0.06, reach=span * 0.3)
+    mat = _bake_leaves(obj, name, span)
     bpy.data.objects.remove(cards, do_unlink=True)
     obj.data.materials.append(mat)
     attr = obj.data.color_attributes.new("Col", "BYTE_COLOR", "POINT")
     obj.data.color_attributes.active_color = attr
     _bake_ao(obj, span * 0.35)
-    # Contrast: the gaps between lobes go dark, the crown tops stay lit.
-    for d in obj.data.color_attributes["Col"].data:
-        k = 0.28 + 0.72 * d.color[0] ** 1.6
+    # Contrast: the gaps between clumps go dark, and the underside of the crown
+    # darker still, so the top is the one lit face this camera sees.
+    zs = [v.co.z for v in obj.data.vertices]
+    lo, hi = min(zs), max(zs)
+    for v, d in zip(obj.data.vertices, obj.data.color_attributes["Col"].data):
+        k = (0.28 + 0.72 * d.color[0] ** 1.6) * (0.55 + 0.45 * (v.co.z - lo) / (hi - lo))
         d.color = (k, k, k, 1.0)
     obj.name = name
     return obj
