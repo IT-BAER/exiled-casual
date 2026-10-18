@@ -1,0 +1,25 @@
+/* Fonts and game art. Served verbatim (not bundled) so every url() is relative to this file, which
+   sits beside fonts/ and textures/ in the build and in dev. Layout and colour live in src/app.css. */
+@font-face { font-family: "Geist"; src: url(fonts/geist.woff2) format("woff2"); font-weight: 100 900; font-style: normal; font-display: swap; }
+@font-face { font-family: "Geist Mono"; src: url(fonts/geist-mono.woff2) format("woff2"); font-weight: 100 900; font-style: normal; font-display: swap; }
+@font-face { font-family: "Marcellus"; src: url(fonts/marcellus-latin.woff2) format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Marcellus SC"; src: url(fonts/marcellus-sc-latin.woff2) format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+
+/* Gate: the game's atlas, darkened to a ground, under one framed card. */
+.gate { background-image: linear-gradient(rgba(11, 9, 6, 0.84), rgba(11, 9, 6, 0.95)), url(textures/ui/atlas_world_v1.jpg); }
+.divider { background-image: url(textures/ui/menu/divider.webp); }
+
+/* The menu's nine-slice frame on an overlay (::before) so its dimming filter leaves the content alone.
+   Slice and width are the game's, measured in apps/web/src/menu/frames.tsx. */
+.framed::before { border-image-source: url(textures/ui/menu/panel_frame.webp); border-image-slice: 44 45 44 45; border-image-repeat: round; }
+
+/* Rarity bands from the item tooltip headers. */
+.plaque-band.r-normal { background-image: url(textures/ui/menu/tooltip_header_normal.webp); }
+.plaque-band.r-magic { background-image: url(textures/ui/menu/tooltip_header_magic.webp); }
+.plaque-band.r-rare { background-image: url(textures/ui/menu/tooltip_header_rare.webp); }
+.plaque-band.r-unique { background-image: url(textures/ui/menu/tooltip_header_unique.webp); }
+
+/* Gilt: the one primary action per view; the party frame's name plate; the current segment. */
+.primary, .btn.primary { background-image: url(textures/ui/menu/gilt_metal.webp); }
+.party-head { background-image: url(textures/ui/menu/row_plate.webp); }
+.seg a[aria-current] { background-image: url(textures/ui/menu/tab_plate.webp); }

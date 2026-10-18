@@ -29,6 +29,9 @@ import { isTextEntry } from "./input/text-entry";
 import { ALL_SFX, CORE_SFX, playSfx, preloadSfx, setAmbient, stopAmbient } from "./audio/sfx";
 import { setMusic, setMusicDead, stopMusic } from "./audio/music";
 import { createSoundscape } from "./audio/soundscape";
+import { telemetry } from "./telemetry/client";
+import { reportError } from "./telemetry/errors";
+import { createGameObserver } from "./telemetry/observe";
 import { createVarkisVoice, VARKIS_SFX } from "./audio/varkis-voice";
 import { createDebugSnapshotLog, dlog } from "./debug";
 import { preloadUiArt } from "./ui-art";
@@ -311,6 +314,10 @@ export function GameView({
       { type: "module" },
     );
     workerRef.current = worker;
+    worker.onerror = (e) => reportError("worker", e.message || "worker error", undefined, e.filename);
+    worker.onmessageerror = () => reportError("worker", "worker messageerror");
+    const mountedAt = performance.now();
+    let gameMsSent = false;
     const query = new URLSearchParams(window.location.search);
     const bot = query.has("bot");
     // ?tour: bot mode's open Atlas and no saving, with the player at the controls.
@@ -343,6 +350,13 @@ export function GameView({
     const soundscape = createSoundscape();
     /** The same snapshots, said out loud, when ui.debugLogging is on. */
     const debugLog = createDebugSnapshotLog();
+    /** The same snapshots, counted for telemetry: read-only, never an intent. */
+    const watch = createGameObserver();
+    telemetry.setContext(watch.context);
+    const dropBeatHook = telemetry.addBeatHook(() => {
+      const l = watch.takeLoot();
+      if (l) telemetry.track({ k: "loot", ...l });
+    });
     // Core first, then the whole library behind it: what a cue costs is one
     // fetch, and the only cue that can ever be heard late is the one that is
     // still on the wire when it fires. Both are running under the loading plate.
@@ -370,6 +384,7 @@ export function GameView({
     // the session survives, clear the flag so a later loss can try again.
     const onContextLost = (ev: Event) => {
       ev.preventDefault(); // without this the browser never fires a restore
+      reportError("webgl", "webglcontextlost");
       if (sessionStorage.getItem("gl-reloaded")) return;
       sessionStorage.setItem("gl-reloaded", "1");
       location.reload();
@@ -562,6 +577,7 @@ export function GameView({
         }
         prevTickTime = performance.now();
         soundscape.observe(msg.snapshot);
+        for (const ev of watch.observe(msg.snapshot)) telemetry.track(ev);
         varkis.observe(msg.snapshot);
         debugLog(msg.snapshot);
         // An idle frame moves only `tick`, which nothing in React reads, so it renders nothing.
@@ -608,6 +624,7 @@ export function GameView({
         stoodIn = msg.area;
         // The base also says what the floor is, which is what his boots land on.
         soundscape.reset(base?.biomeId ?? null);
+        watch.area(msg.area, base?.biomeId ?? null);
         setAmbient(base?.biomeId ?? null, grid?.shore ?? null);
         setMusic(base?.biomeId ?? null);
         // Nothing the player had open belongs to the place they just left. The
@@ -709,6 +726,10 @@ export function GameView({
         // this fade costs the player nothing, because the frame behind it is
         // already the one they were waiting for.
         setLeaving(true);
+        if (!gameMsSent) {
+          gameMsSent = true;
+          telemetry.track({ k: "load", gameMs: Math.round(performance.now() - mountedAt) });
+        }
         fadeTimer = setTimeout(() => setLoading(false), FADE_MS);
       }
     };
@@ -817,6 +838,8 @@ export function GameView({
       window.removeEventListener("resize", onResize);
       canvas.removeEventListener("webglcontextlost", onContextLost);
       window.clearTimeout(glGuardTimer);
+      dropBeatHook();
+      telemetry.setContext(null);
       resetPlayerRig(); // containers belong to the scene we are about to dispose
       resetProps();
       resetFireLights();
@@ -854,7 +877,9 @@ export function GameView({
     const timer = window.setInterval(() => {
       const engine = engineRef.current;
       const s = settingsRef.current;
-      if (!engine || !s.graphics.auto || document.hidden) return;
+      if (!engine || document.hidden) return;
+      telemetry.fps(engine.getFps());
+      if (!s.graphics.auto) return;
       if (!guard.sample(engine.getFps())) return;
       const next = stepDown(s.graphics);
       if (!next) return;

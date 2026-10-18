@@ -1,0 +1,13 @@
+{
+  "name": "@exiled/server",
+  "version": "0.3.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build --ssr src/main.ts --outDir dist",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@exiled/telemetry": "*"
+  }
+}

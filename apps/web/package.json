@@ -21,7 +21,8 @@
     "@exiled/simulation": "*",
     "meshoptimizer": "^1.3.0",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "@exiled/telemetry": "*"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^7.0.0",

@@ -1,3 +1,4 @@
+import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -15,10 +16,26 @@ function audioVersion(): string {
   return h.digest("hex").slice(0, 10);
 }
 
+/** `<package version>+<short commit>`, `+dev` when there is no git. */
+function buildId(): string {
+  const { version } = JSON.parse(readFileSync(fileURLToPath(new URL("./package.json", import.meta.url)), "utf8")) as { version: string };
+  try {
+    return `${version}+${execSync("git rev-parse --short HEAD", { stdio: ["ignore", "pipe", "ignore"] }).toString().trim()}`;
+  } catch {
+    return `${version}+dev`;
+  }
+}
+
 export default defineConfig({
   plugins: [react()],
   define: {
     "import.meta.env.VITE_AUDIO_VERSION": JSON.stringify(audioVersion()),
+    "import.meta.env.VITE_EC_BUILD": JSON.stringify(buildId()),
+    "import.meta.env.VITE_EC_BUILT_AT": JSON.stringify(String(Date.now())),
+  },
+  server: {
+    // Telemetry and live ops, when the game server runs beside the dev server.
+    proxy: { "/api": "http://127.0.0.1:8081" },
   },
   worker: {
     format: "es",

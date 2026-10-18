@@ -1,6 +1,10 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
+import { gpuRenderer } from "./gpu";
+import { telemetry } from "./telemetry/client";
+import { installErrorCapture } from "./telemetry/errors";
+import { loadLiveConfig } from "./telemetry/liveops";
 
 /**
  * Arms the gilt focus ring (`body[data-kbd] :focus-visible` in `index.html`) on
@@ -22,6 +26,36 @@ addEventListener(
 // React 19.2's DEV build logs every render as a `performance.measure` with a cloned
 // detail; the HUD renders per snapshot, and the kept timeline grew the tab ~5 GB/h.
 if (import.meta.env.DEV) setInterval(() => performance.clearMeasures(), 5000);
+
+/** Boot-time telemetry: what the device is, never who is on it. Off under GPC/DNT or `telemetry: false`. */
+function startTelemetry(): void {
+  try {
+    installErrorCapture();
+    telemetry.start();
+    let ref = "";
+    try {
+      const host = document.referrer ? new URL(document.referrer).host : "";
+      ref = host === location.host ? "" : host;
+    } catch { /* a malformed referrer is no referrer */ }
+    telemetry.track({
+      k: "start",
+      screen: `${screen.width}x${screen.height}`,
+      dpr: window.devicePixelRatio || 1,
+      gpu: gpuRenderer(),
+      lang: navigator.language || "",
+      ref,
+      pwa: window.matchMedia?.("(display-mode: standalone)").matches === true,
+      cores: navigator.hardwareConcurrency || 0,
+      memGb: (navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 0,
+      touch: navigator.maxTouchPoints > 0,
+    });
+    telemetry.setView("boot");
+    void loadLiveConfig();
+  } catch {
+    /* telemetry never stops the game from booting */
+  }
+}
+startTelemetry();
 
 const root = document.getElementById("root");
 if (!root) throw new Error("no #root element");
@@ -59,6 +93,7 @@ void logoPainted.then(() => {
       <App />
     </StrictMode>,
   );
+  requestAnimationFrame(() => requestAnimationFrame(() => telemetry.track({ k: "load", menuMs: Math.round(performance.now()) })));
   if (!boot) return;
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {

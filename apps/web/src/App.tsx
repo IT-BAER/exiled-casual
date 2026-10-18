@@ -49,6 +49,8 @@ import { preloadSfx } from "./audio/sfx";
 import { MENU_MUSIC, setMusic } from "./audio/music";
 import { warmMenuStage } from "./menu/warm-stage";
 import { gpuRenderer } from "./gpu";
+import { telemetry } from "./telemetry/client";
+import { ageBucket } from "@exiled/telemetry";
 import {
   capFor,
   createCharacter,
@@ -204,6 +206,23 @@ export function App(): React.ReactElement {
     return () => {
       for (const e of WARM_ON) window.removeEventListener(e, warm);
     };
+  }, [screen.kind]);
+
+  // Each screen is a view; entering the game also reports which character and how old,
+  // as a cohort bucket. Names never leave the device.
+  React.useEffect(() => {
+    if (screen.kind === "viewer") return;
+    telemetry.setView(screen.kind);
+    if (screen.kind !== "game") return;
+    const c = roster.characters.find((r) => r.id === screen.characterId);
+    if (c) {
+      telemetry.track({
+        k: "charAge",
+        classId: c.classId,
+        level: c.level,
+        ageDays: ageBucket((Date.now() - c.createdAt) / 86_400_000),
+      });
+    }
   }, [screen.kind]);
 
   const rows = React.useMemo(() => headers(roster), [roster]);

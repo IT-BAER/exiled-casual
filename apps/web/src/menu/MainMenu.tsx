@@ -23,7 +23,9 @@ import { GAME_VERSION } from "../version";
 import { NEWS_ENTRIES } from "../news.generated";
 import { Atmosphere } from "./atmos";
 import { BRAZIERS } from "./braziers";
-import { Divider, FramedPanel, GOLD, GOLD_DIM, MENU_ART, MenuButton, PARCHMENT, DISPLAY, SERIF } from "./frames";
+import { Divider, EMBER, FramedPanel, GOLD, GOLD_DIM, MENU_ART, MenuButton, PARCHMENT, DISPLAY, SERIF } from "./frames";
+import { BUILT_AT } from "../telemetry/client";
+import { useLiveConfig } from "../telemetry/liveops";
 
 export interface MainMenuProps {
   /** How many characters the save holds. Shown in the boot log, like PoE's login log. */
@@ -39,7 +41,8 @@ export function MainMenu({
   onOptions,
   onAbout,
 }: MainMenuProps): React.ReactElement {
-  return (
+  const live = useLiveConfig();
+    return (
     <div data-testid="main-menu" style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
       <Atmosphere backdrop={`${MENU_ART}/menu_backdrop.jpg`} braziers={BRAZIERS} />
 
@@ -60,6 +63,8 @@ export function MainMenu({
         }}
       />
 
+      <LiveNotices />
+
       <FramedPanel
         style={{
           position: "absolute",
@@ -75,7 +80,13 @@ export function MainMenu({
       >
         <LatestPanel />
         <div style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 220 }}>
-          <MenuButton tone="primary" onClick={onPlay} autoFocus>
+          <MenuButton
+            tone="primary"
+            onClick={onPlay}
+            autoFocus
+            disabled={live.maintenance !== undefined}
+            title={live.maintenance?.text}
+          >
             Play
           </MenuButton>
           <MenuButton onClick={onOptions}>Options</MenuButton>
@@ -97,6 +108,9 @@ export function MainMenu({
           color: GOLD_DIM,
         }}
       >
+        <a href="/privacy.html" target="_blank" rel="noopener" style={{ color: GOLD_DIM, marginRight: 14 }}>
+          Privacy
+        </a>
         {GAME_VERSION}
       </div>
     </div>
@@ -177,6 +191,118 @@ function BootLog({ characterCount }: { characterCount: number }): React.ReactEle
       {lines.map((l) => (
         <div key={l}>{l}</div>
       ))}
+    </div>
+  );
+}
+
+const DISMISSED_KEY = "ec-motd-dismissed";
+
+/** Remembered by message id only: UI state for this tab, not tracking. */
+function dismissedId(): string | null {
+  try { return sessionStorage.getItem(DISMISSED_KEY); } catch { return null; }
+}
+
+/**
+ * What the operator can say from the admin console: a message of the day, a
+ * maintenance notice (PLAY is disabled beside it) and a reload nudge for a build
+ * older than the one the server wants. Stacked under the logo, in the panel's voice.
+ */
+function LiveNotices(): React.ReactElement | null {
+  const live = useLiveConfig();
+  const [dismissed, setDismissed] = React.useState<string | null>(dismissedId);
+  const outdated = live.minBuiltAt !== undefined && live.minBuiltAt > BUILT_AT;
+  const motd = live.motd && live.motd.id !== dismissed ? live.motd : null;
+  if (!motd && !live.maintenance && !outdated) return null;
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top: "calc(3.5vh + min(24vw, 400px) * 0.62)",
+        left: "50%",
+        transform: "translateX(-50%)",
+        width: "min(56vw, 820px)",
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+        zIndex: 3,
+      }}
+    >
+      {motd && (
+        <Notice testId="motd" color={motd.level === "warn" ? EMBER : GOLD}>
+          <span style={{ flex: 1 }}>{motd.text}</span>
+          <button
+            type="button"
+            aria-label="Dismiss"
+            onClick={() => {
+              try { sessionStorage.setItem(DISMISSED_KEY, motd.id); } catch { /* private mode */ }
+              setDismissed(motd.id);
+            }}
+            style={noticeButton}
+          >
+            x
+          </button>
+        </Notice>
+      )}
+      {live.maintenance && (
+        <Notice testId="maintenance" color={EMBER}>
+          <span style={{ flex: 1 }}>{live.maintenance.text}</span>
+        </Notice>
+      )}
+      {outdated && (
+        <Notice testId="new-version" color={GOLD}>
+          <span style={{ flex: 1 }}>A new version is available.</span>
+          <button type="button" onClick={() => location.reload()} style={noticeButton}>
+            Reload
+          </button>
+        </Notice>
+      )}
+    </div>
+  );
+}
+
+const noticeButton: React.CSSProperties = {
+  appearance: "none",
+  background: "transparent",
+  border: "1px solid currentColor",
+  color: "inherit",
+  fontFamily: DISPLAY,
+  fontSize: 12,
+  letterSpacing: 2,
+  textTransform: "uppercase",
+  padding: "3px 10px",
+  cursor: "pointer",
+};
+
+function Notice({
+  testId,
+  color,
+  children,
+}: {
+  testId: string;
+  color: string;
+  children: React.ReactNode;
+}): React.ReactElement {
+  return (
+    <div
+      role="status"
+      data-testid={testId}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 14,
+        padding: "9px 16px",
+        background: "linear-gradient(180deg, rgba(10,11,13,0.92), rgba(6,7,9,0.95))",
+        border: `1px solid ${color}`,
+        boxShadow: "0 8px 28px rgba(0,0,0,0.55)",
+        color: PARCHMENT,
+        fontFamily: SERIF,
+        fontSize: 14,
+        lineHeight: 1.4,
+        // The rule is the notice's own colour; the text stays readable parchment.
+        borderLeftWidth: 4,
+      }}
+    >
+      {children}
     </div>
   );
 }

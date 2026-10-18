@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Privacy - Exiled Casual</title>
+<style>
+  @font-face { font-family: "Marcellus SC"; src: url(/fonts/marcellus-sc-latin.woff2) format("woff2"); font-weight: 400; font-display: swap; }
+  @font-face { font-family: "Marcellus"; src: url(/fonts/marcellus-latin.woff2) format("woff2"); font-weight: 400; font-display: swap; }
+  html { background: #07080a; }
+  body {
+    margin: 0 auto; max-width: 760px; padding: 48px 24px 72px;
+    background: linear-gradient(180deg, #0c0d10, #07080a);
+    color: #e8dcc0; font: 17px/1.6 "Marcellus", Georgia, "Times New Roman", serif;
+  }
+  h1, h2 { font-family: "Marcellus SC", Georgia, serif; font-weight: 400; color: #c8a44d; letter-spacing: 2px; text-transform: uppercase; }
+  h1 { font-size: 30px; margin: 0 0 6px; }
+  h2 { font-size: 17px; margin: 36px 0 8px; padding-bottom: 6px; border-bottom: 1px solid #7a5c22; }
+  p, li { color: #e8dcc0; }
+  ul { padding-left: 22px; }
+  a { color: #c8a44d; }
+  .lead { color: #b9ad90; margin-top: 0; }
+  .back { display: inline-block; margin-bottom: 28px; font-family: "Marcellus SC", Georgia, serif; letter-spacing: 2px; text-transform: uppercase; font-size: 13px; }
+</style>
+</head>
+<body>
+<a class="back" href="/">Back to the game</a>
+<h1>Privacy</h1>
+<p class="lead">Exiled Casual counts how the game is doing. It does not keep a file on you.</p>
+
+<h2>What is collected</h2>
+<p>While the game is open it sends small reports to its own server:</p>
+<ul>
+  <li>That a session started, with your screen size, pixel density, graphics card name, browser language, whether it runs as an installed app, the number of processor cores, the approximate memory of the device and whether it has a touch screen.</li>
+  <li>Which website sent you here (the host name only, for example the search engine) and which version of the game you run.</li>
+  <li>Which screen you are on (menu, character select, game and so on) and how long the game stayed visible, reported every 30 seconds while the tab is in front.</li>
+  <li>How smoothly the game runs: the typical and the slowest frame rate, and how long the menu and the world took to appear.</li>
+  <li>For the character you play: its class, its level and how old it is, grouped as 0, 1, 2 to 6, 7 to 29 or 30 and more days. This is how we tell whether people come back.</li>
+  <li>Game events: entering the hideout or a map, finishing a map, gaining a level, dying (and which monster and element did it), and how many items of each rarity dropped.</li>
+  <li>Errors: the error message and where in the code it happened, so it can be fixed.</li>
+</ul>
+<p>When the report arrives, Cloudflare tells the server which country, region and city the request came from and approximate coordinates of that place. Your IP address is shortened (the last part is cut off: to a /24 for IPv4, to a /48 for IPv6) before it is kept. The server also records your browser, operating system and graphics card.</p>
+
+<h2>What is not collected</h2>
+<ul>
+  <li>No cookies and no identifier stored on your device. Nothing is written to local storage, IndexedDB or the cache for this purpose.</li>
+  <li>No names. The names you give your characters, and the names of items, never leave your device.</li>
+  <li>No tracking across days. A random session number exists only in memory for as long as the page stays open. To tell whether a visit is the same as another one on the same day, the server uses a short-lived code made from your shortened address and browser, with a secret that is thrown away every 24 hours. After that it cannot be linked.</li>
+  <li>No third parties, other than Cloudflare, which delivers the site as a content network and therefore sees your requests.</li>
+</ul>
+
+<h2>Why</h2>
+<p>To keep the game healthy: to find and fix errors, to balance the game, to see how many players the server must carry and to see which devices need a lighter picture.</p>
+
+<h2>How long</h2>
+<p>Raw events are kept for 90 days. After that only daily totals remain, which cannot be traced to a session.</p>
+
+<h2>How to opt out</h2>
+<p>Turn on Global Privacy Control or Do Not Track in your browser. The game then sends nothing at all. Nothing else needs to be done, and the game plays the same.</p>
+
+<h2>Legal basis</h2>
+<p>Legitimate interest, Article 6(1)(f) of the GDPR: running and improving a free game, with data kept as small and as short-lived as the above. You may object at any time; see below.</p>
+
+<h2>Contact</h2>
+<p>Questions, requests to see or remove data, and objections: open an issue at <a href="https://github.com/IT-BAER/exiled-casual/issues">github.com/IT-BAER/exiled-casual/issues</a>. Do not post personal details there; say what you need and we will arrange the rest.</p>
+</body>
+</html>
