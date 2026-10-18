@@ -1534,32 +1534,32 @@ def build_materials():
 # the swarm: small, low, four-to-six legged, dies in threes
 # --------------------------------------------------------------------------
 
-IMP_SOURCE = os.path.join(TEX_DIR, "source", "cinder_imp_v2.glb")
-IMP_NORMAL = os.path.join(TEX_DIR, "source", "cinder_imp_v2_n.png")
+IMP_SOURCE = os.path.join(TEX_DIR, "source", "cinder_imp_v3.glb")
+IMP_NORMAL = os.path.join(TEX_DIR, "source", "cinder_imp_v3_n.png")
 
 
 def cinder_imp():
     """A crouched lump of black lava rock split by glowing cracks, horns swept
     back, a tail that curls up into a burning ball. The one everybody meets.
 
-    Generated (review/3d/cinder-imp-v2), volumetric opening res 240 r 2 band 8,
-    4k triangles. TRELLIS stood it nose-down, so the rebuild levelled it
-    (reshape_generated.py --pitch -7). Height 0.7, not 0.85: the body is half
-    again as wide. Joints measured off cinder_imp_v2.glb by
+    Generated (review/3d/cinder-imp-v2, TRELLIS seed 7), volumetric opening res
+    240 r 2 band 8, 4k triangles. TRELLIS stood it nose-down, so the rebuild
+    levelled it (reshape_generated.py --pitch -7). Height 0.7, not 0.85: the body
+    is half again as wide. Joints measured off cinder_imp_v3.glb by
     tools/measure_generated.py --flip 1.
     """
     c = GeneratedSkin("monster.cinder_imp.v1", IMP_SOURCE, IMP_NORMAL,
-                      "cinder", 0.7, (-0.039, -0.076), tex=512, flip=True)
+                      "cinder", 0.7, (0.007, -0.164), tex=512, flip=True)
     spine = c.body.chain([(0, -0.25, 0.40), (0, -0.02, 0.42), (0, 0.18, 0.38)], [0.1] * 3)
     # The head hangs low in front of the shoulders.
     c.body.chain([(0, 0.30, 0.32), (0, 0.42, 0.25)], [0.1] * 2, parent=spine[-1])
-    c.body.chain([(0, -0.40, 0.42), (0, -0.55, 0.52), (0, -0.66, 0.58)],
+    c.body.chain([(0, -0.40, 0.42), (0, -0.55, 0.52), (0, -0.70, 0.58)],
                  [0.05] * 3, parent=spine[0])
     for i, (hip, knee, foot) in enumerate([
-        ((-0.189, 0.178, 0.280), (-0.322, 0.262, 0.120), (-0.265, 0.379, 0.009)),
-        ((0.163, 0.190, 0.286), (0.263, 0.214, 0.201), (0.279, 0.359, 0.010)),
-        ((-0.186, -0.300, 0.325), (-0.285, -0.417, 0.146), (-0.406, -0.364, 0.000)),
-        ((0.184, -0.298, 0.330), (0.261, -0.414, 0.134), (0.392, -0.374, 0.000)),
+        ((-0.168, 0.175, 0.287), (-0.325, 0.237, 0.119), (-0.281, 0.364, 0.000)),
+        ((0.155, 0.190, 0.286), (0.306, 0.206, 0.174), (0.297, 0.346, 0.000)),
+        ((-0.133, -0.298, 0.304), (-0.269, -0.420, 0.170), (-0.406, -0.385, 0.010)),
+        ((0.137, -0.324, 0.316), (0.285, -0.423, 0.115), (0.391, -0.325, 0.011)),
     ]):
         c.leg_through(i, hip, knee, foot)
     return c
@@ -1939,31 +1939,30 @@ def drowned_grubling():
                              normal=GRUBLING_NORMAL, offset=(-0.015, 0.0))
 
 
-BOAR_SOURCE = os.path.join(TEX_DIR, "source", "thornhide_boar_v1.glb")
-BOAR_NORMAL = os.path.join(TEX_DIR, "source", "thornhide_boar_v1_n.png")
+BOAR_SOURCE = os.path.join(TEX_DIR, "source", "thornhide_boar_v2.glb")
+BOAR_NORMAL = os.path.join(TEX_DIR, "source", "thornhide_boar_v2_n.png")
 
 
 def thornhide_boar():
     """Bark plates over a boar's mass, tusks up, head carried low to charge.
 
-    Generated (review/3d/thornhide-boar), thin flaps cut off by a volumetric
-    opening (tools/open_volume.py --res 240 --radius 2), 4k triangles. Joints
-    measured off thornhide_boar_v1.glb by tools/measure_generated.py --flip 1.
+    Generated (review/3d/thornhide-boar-v2), volumetric opening res 240 r 2 band
+    8, 4k triangles. TRELLIS faced this one +Y already, so no flip. Joints
+    measured off thornhide_boar_v2.glb by tools/measure_generated.py --flip 0.
     """
     c = GeneratedSkin("monster.thornhide_boar.v1", BOAR_SOURCE, BOAR_NORMAL,
-                      "forest", 1.4, (-0.017, -0.015), tex=512, flip=True)
-    spine = c.body.chain([(0, -0.50, 0.78), (0, -0.05, 0.82), (0, 0.36, 0.82)], [0.1] * 3)
-    c.body.chain([(0, 0.62, 0.74), (0, 0.86, 0.58)], [0.1] * 2, parent=spine[-1])
-    c.body.chain([(0, -0.70, 0.70), (0, -0.80, 0.62)], [0.05] * 2, parent=spine[0])
-    # The measured knees sit a hand above the hoof, leaving a shin too short to
-    # take any lunge; these are mid-leg. Rooted at the rump, the coil lifts the
-    # near-straight forelegs 29% past reach, so their knees sit at the back of
-    # the leg column.
+                      "forest", 1.4, (-0.017, 0.425), tex=512, flip=False)
+    spine = c.body.chain([(0, -0.55, 0.62), (0, 0.0, 0.64), (0, 0.50, 0.62)], [0.1] * 3)
+    c.body.chain([(0, 0.75, 0.58), (0, 0.95, 0.50)], [0.1] * 2, parent=spine[-1])
+    c.body.chain([(0, -0.75, 0.58)], [0.05], parent=spine[0])
+    # The measured hind knees disagreed (0.37 against 0.19 high); both sit mid-shin.
+    # The forefeet stand ahead of the hips, so the coil pulled the measured fore
+    # legs 20% past reach: their knees sit at the back of the leg column.
     for i, (hip, knee, foot) in enumerate([
-        ((-0.157, 0.295, 0.426), (-0.186, 0.235, 0.215), (-0.215, 0.408, 0.007)),
-        ((0.205, 0.378, 0.426), (0.222, 0.318, 0.215), (0.238, 0.515, 0.004)),
-        ((-0.157, -0.501, 0.431), (-0.192, -0.560, 0.220), (-0.227, -0.489, 0.006)),
-        ((0.138, -0.462, 0.433), (0.170, -0.520, 0.220), (0.203, -0.435, 0.000)),
+        ((-0.348, 0.326, 0.492), (-0.420, 0.300, 0.250), (-0.418, 0.614, 0.016)),
+        ((0.338, 0.391, 0.491), (0.420, 0.340, 0.250), (0.502, 0.629, 0.016)),
+        ((-0.262, -0.514, 0.458), (-0.330, -0.640, 0.250), (-0.340, -0.678, 0.000)),
+        ((0.301, -0.460, 0.471), (0.300, -0.640, 0.240), (0.256, -0.565, 0.000)),
     ]):
         c.leg_through(i, hip, knee, foot)
     return c
@@ -2131,30 +2130,33 @@ def mother_vhal():
     return c
 
 
-GHALTREK_SOURCE = os.path.join(TEX_DIR, "source", "ghaltrek_v1.glb")
-GHALTREK_NORMAL = os.path.join(TEX_DIR, "source", "ghaltrek_v1_n.png")
+GHALTREK_SOURCE = os.path.join(TEX_DIR, "source", "ghaltrek_v2.glb")
+GHALTREK_NORMAL = os.path.join(TEX_DIR, "source", "ghaltrek_v2_n.png")
 
 
 def ghaltrek():
-    """Forest. Antler rack wider than the corridor it comes down, head already low.
+    """Forest. A mossy bark shell on four splayed stone legs, the head slung low
+    in front under an antler rack wider than the corridor it comes down.
 
-    Generated (review/3d/ghaltrek), hanging moss cut off by a
-    volumetric opening (tools/open_volume.py --res 240 --radius 2), 8k triangles on a 1024 sheet. Joints
-    measured off ghaltrek_v1.glb by tools/measure_generated.py --flip 1.
+    Generated (review/3d/ghaltrek-v2), volumetric opening res 240 r 2 band 8, 8k
+    triangles on a 1024 sheet. TRELLIS faced it +X, so the rebuild turned it
+    (reshape_generated.py --yaw -90). The shell is the top at 2.5; the head and
+    antlers hang below it. Joints measured off ghaltrek_v2.glb by
+    tools/measure_generated.py --flip 1.
     """
     c = GeneratedSkin("monster.ghaltrek.v1", GHALTREK_SOURCE, GHALTREK_NORMAL,
-                      "forest", 2.5, (-0.021, 0.923), tex=1024, flip=True)
-    spine = c.body.chain([(0, -0.90, 1.15), (0, 0.0, 1.25), (0, 0.90, 1.35)], [0.1] * 3)
+                      "forest", 2.5, (-0.181, 0.335), tex=1024, flip=True)
+    spine = c.body.chain([(0, -1.10, 1.45), (0, -0.05, 1.55), (0, 1.00, 1.45)], [0.1] * 3)
     # The antlers ride the head bone: nothing else is near them.
-    c.body.chain([(0, 1.35, 1.45), (0, 1.80, 1.40)], [0.1] * 2, parent=spine[-1])
-    c.body.chain([(0, -1.25, 0.95)], [0.1], parent=spine[0])
-    # The measured fore knees sit a hand above the hoof (+35% reach); these are
-    # mid-leg at the back of the leg column.
+    c.body.chain([(0, 1.50, 1.20), (0, 2.00, 1.05)], [0.1] * 2, parent=spine[-1])
+    c.body.chain([(0, -1.75, 1.30)], [0.1], parent=spine[0])
+    # The coil pulled the measured fore legs 13% past reach: their knees sit out
+    # and back at the edge of the leg column.
     for i, (hip, knee, foot) in enumerate([
-        ((-0.268, 0.679, 0.796), (-0.308, 0.560, 0.398), (-0.347, 0.907, 0.000)),
-        ((0.265, 0.740, 0.763), (0.312, 0.560, 0.382), (0.359, 0.860, 0.000)),
-        ((-0.166, -0.774, 0.732), (-0.230, -0.983, 0.504), (-0.340, -0.921, 0.001)),
-        ((0.285, -0.761, 0.722), (0.364, -1.009, 0.345), (0.328, -0.846, 0.001)),
+        ((-0.529, 0.731, 1.132), (-0.980, 0.680, 0.800), (-1.128, 1.155, 0.000)),
+        ((0.537, 0.647, 1.111), (1.000, 0.620, 0.780), (1.129, 1.080, 0.000)),
+        ((-0.617, -0.670, 1.183), (-0.984, -1.057, 0.597), (-1.139, -1.128, 0.000)),
+        ((0.690, -0.722, 1.158), (1.054, -1.096, 0.511), (1.138, -1.107, 0.000)),
     ]):
         c.leg_through(i, hip, knee, foot)
     return c
