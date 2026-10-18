@@ -24,6 +24,7 @@ import { LoadingScreen, LOADING_ART } from "./LoadingScreen";
 import { pickTip } from "./tips";
 import { InfoScreen, CREDITS_TEXT } from "./menu/InfoScreen";
 import { OptionsPanel } from "./menu/OptionsPanel";
+import { reloadOnChunkError } from "./chunk-reload";
 
 /**
  * The two screens that own a Babylon engine, split out of the entry bundle.
@@ -35,8 +36,8 @@ import { OptionsPanel } from "./menu/OptionsPanel";
  *
  * `lazy` wants a default export and both of these are named, hence the unwrap.
  */
-const GameView = React.lazy(() => import("./GameView").then((m) => ({ default: m.GameView })));
-const MenuStage = React.lazy(() => import("./menu/MenuStage").then((m) => ({ default: m.MenuStage })));
+const GameView = React.lazy(reloadOnChunkError(() => import("./GameView").then((m) => ({ default: m.GameView }))));
+const MenuStage = React.lazy(reloadOnChunkError(() => import("./menu/MenuStage").then((m) => ({ default: m.MenuStage }))));
 /** The dev asset viewer. Lazy for the same reason: it owns an engine too. */
 const AssetViewer = React.lazy(() =>
   import("./dev/AssetViewer").then((m) => ({ default: m.AssetViewer })),
