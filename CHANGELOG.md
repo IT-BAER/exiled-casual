@@ -10,6 +10,17 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+### Fixed
+
+- The death music plays. 0.4.0 announced it but shipped without its tracks, so
+  the area music kept playing; now three slow, dark takes fade in when you fall.
+- Monster hitboxes match their bodies. Nine species, the Cinder Warden and
+  Sirrath most of all, could be hit and could hit you well outside their model.
+- Fights no longer stutter when a monster bolt lands on you or many monsters
+  stand near the fire bowls.
+- A tab left open across an update reloads itself instead of failing to start
+  the game.
+
 ## [0.4.0] - 2026-10-18
 
 Alpha. A save may not survive an update yet.
