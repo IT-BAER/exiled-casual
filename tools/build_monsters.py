@@ -1802,10 +1802,12 @@ class GeneratedCreature:
     roster. It faces -Y as imported, where a turned node-graph root ends up."""
 
     def __init__(self, def_id, source, family, height, normal=None, tex=TEX_SIZE,
-                 offset=(0.0, 0.0), carry=None, thigh=None, knee=0.25):
+                 offset=(0.0, 0.0), carry=None, thigh=None, knee=0.25, held=None):
         self.def_id, self.source, self.family, self.height = def_id, source, family, height
         # "l"/"r": the hand carrying a long blade, held low through the walk.
-        self.carry = carry
+        # `held`, a fraction of H: past it from the midline, that side's floor
+        # contact is the carried thing standing on the floor, not the foot.
+        self.carry, self.held = carry, held
         # Fractions of H: the thighs' outer edge, when the fists hang against
         # them, and how low the fists reach.
         self.thigh, self.knee = thigh, knee
@@ -1830,9 +1832,9 @@ class GeneratedCreature:
         mesh.data.update()
         generated_hide(mesh, self.def_id.split(".")[1], self.family, self.normal, self.tex)
 
-        arm = rig.build_armature(self.def_id, rig.landmarks(mesh, self.height))
+        arm = rig.build_armature(self.def_id, rig.landmarks(mesh, self.height, self.carry, self.held))
         mesh.name = mesh.data.name = self.def_id + ".mesh"
-        rig.skin(mesh, arm, self.thigh, self.knee)
+        rig.skin(mesh, arm, self.thigh, self.knee, self.carry, self.held)
         # No baked occlusion: white, so the runtime's multiply leaves the sheet alone.
         layer = mesh.data.color_attributes.new("Col", "BYTE_COLOR", "CORNER")
         layer.data.foreach_set("color", numpy.ones(len(mesh.data.loops) * 4, dtype=numpy.float32))
@@ -2053,18 +2055,23 @@ def rotting_behemoth():
 # the bosses: one per biome, and each one is the room's silhouette
 # --------------------------------------------------------------------------
 
-CINDER_WARDEN_SOURCE = os.path.join(TEX_DIR, "source", "cinder_warden_v1.glb")
-CINDER_WARDEN_NORMAL = os.path.join(TEX_DIR, "source", "cinder_warden_v1_n.png")
+CINDER_WARDEN_SOURCE = os.path.join(TEX_DIR, "source", "cinder_warden_v2.glb")
+CINDER_WARDEN_NORMAL = os.path.join(TEX_DIR, "source", "cinder_warden_v2_n.png")
 
 
 def cinder_warden():
     """Vaal Stone. A furnace on two legs, carrying the slab it slams with.
 
-    Generated (review/3d/cinder-warden), volumetric opening res 240 r 2,
-    8k triangles on a 1024 sheet, rig_humanoid.
+    Generated (review/3d/cinder-warden-v2), volumetric opening res 240 r 2 band
+    8, 8k triangles on a 1024 sheet, rig_humanoid. The slab stands fused to the
+    right shin: past 0.28 H it is the slab, rigid with the hand, its inner face
+    joins it by surface distance, and the faces fused to the leg are cut and
+    capped. Ankles measured at x -0.25 and 0.65 as loaded: the offset centres the
+    stance.
     """
     return GeneratedCreature("monster.cinder_warden.v1", CINDER_WARDEN_SOURCE, "cinder", 2.9,
-                             normal=CINDER_WARDEN_NORMAL, tex=1024)
+                             normal=CINDER_WARDEN_NORMAL, tex=1024, offset=(-0.20, 0.0),
+                             carry="r", held=0.28)
 
 
 SIRRATH_SOURCE = os.path.join(TEX_DIR, "source", "sirrath_v1.glb")

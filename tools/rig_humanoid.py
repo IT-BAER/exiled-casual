@@ -11,9 +11,11 @@ tracks named `<id>|<clip>` exactly as tools/build_monsters.py names them.
 import math
 import sys
 
+import bmesh
 import bpy
 import numpy
 from mathutils import Matrix, Quaternion, Vector
+from mathutils.kdtree import KDTree
 
 FPS = 30
 
@@ -62,8 +64,11 @@ def verts(mesh):
     return a.reshape(-1, 3)
 
 
-def landmarks(mesh, H):
-    """Joint positions, measured where the mesh says and proportioned where it cannot."""
+def landmarks(mesh, H, carry=None, held=None):
+    """Joint positions, measured where the mesh says and proportioned where it cannot.
+
+    `held`: on the `carry` side, floor contact further than this fraction of H
+    from the midline is what the hand rests on the floor, not the foot."""
     v = verts(mesh)
     band = lambda lo, hi: v[(v[:, 2] > lo * H) & (v[:, 2] < hi * H)]
 
@@ -92,6 +97,8 @@ def landmarks(mesh, H):
         j["wrist_" + side] = shoulder.lerp(tip, 0.76)
         j["tip_" + side] = tip
         feet = v[(v[:, 2] < 0.06 * H) & (s * v[:, 0] > 0)]
+        if side == carry and held is not None:
+            feet = feet[s * feet[:, 0] < held * H]
         ankle = Vector((float(numpy.median(feet[:, 0])), float(numpy.percentile(feet[:, 1], 75)), 0.05 * H))
         toe = Vector((ankle.x, float(feet[:, 1].min()), 0.015 * H))
         hip = Vector((s * 0.055 * H, j["hips"].y, 0.49 * H))
@@ -164,7 +171,21 @@ def pieces(inside, ew):
             return label
 
 
-def skin(mesh, arm, thigh=None, knee=0.25):
+def surface_dist(seed, free, ew, p):
+    """Shortest path along the edges from the points flagged `seed`, passing only
+    through points flagged `free`: inf where none reaches."""
+    L = numpy.linalg.norm(p[ew[:, 0]] - p[ew[:, 1]], axis=1)
+    dist = numpy.where(seed, 0.0, numpy.inf)
+    while True:
+        before = dist.copy()
+        for a, b in ((0, 1), (1, 0)):
+            go = free[ew[:, b]]
+            numpy.minimum.at(dist, ew[go, b], dist[ew[go, a]] + L[go])
+        if (dist == before).all():
+            return dist
+
+
+def skin(mesh, arm, thigh=None, knee=0.25, carry=None, held_at=None):
     """Nearest-bone weights, restricted to that bone and its direct neighbours.
 
     Bone heat fails on these generated shells, even on a watertight voxel copy.
@@ -211,12 +232,19 @@ def skin(mesh, arm, thigh=None, knee=0.25):
             run = run + 1 if full[c] == 0 else 0
             if run and (best is None or run > best[0]):
                 best = (run, c)
-        if best is None:
+        fused = None
+        if best is not None:
+            gap = (best[1] - best[0] / 2 + 0.5) * 0.01 * H
+        elif t == carry and held_at is not None:
+            # A slab standing against the leg leaves no empty column: the
+            # declared floor split (see `landmarks`) stands in for the gap.
+            gap = held_at * H
+            fused = bones[index["leg%s_ankle" % t.upper()]].head_local.x
+        else:
             continue
-        gap = (best[1] - best[0] / 2 + 0.5) * 0.01 * H
         print("hand %s: hanging beyond x %.3f" % (t, gap))
         hangs = (s * v[:, 0] > gap) & (v[:, 2] < wrist.z)
-        held.append((hangs, wrist.z, index["hand_" + t]))
+        held.append((hangs, wrist.z, index["hand_" + t], s, fused))
         for i, b in enumerate(bones):
             if b.name not in ("hand_" + t, "arm_lower_" + t):
                 d[hangs, i] *= 3.0
@@ -270,16 +298,34 @@ def skin(mesh, arm, thigh=None, knee=0.25):
     # blade far from both bones bends it like rubber through the walk. Only the
     # pieces that reach up to the wrist are held: a wide foot is also out there.
     # Connectivity runs on welded points: UV seams cut a blade into islands.
-    for hangs, wz, hand in held:
+    slab = None
+    for hangs, wz, hand, s, fused in held:
         hw = numpy.zeros(weld.max() + 1, dtype=bool)
         hw[weld[hangs]] = True
         label = pieces(hw, ew)
         top = numpy.full(len(hw), -numpy.inf)
         numpy.maximum.at(top, label[weld[hangs]], v[hangs, 2])
         grip = hangs & (top[numpy.maximum(label[weld], 0)] > wz - 0.1 * H)
+        if fused is not None:
+            # The declared split cuts through a slab fused to the shin, and its
+            # inner face lies medial of the cut. Below the wrist on that side a
+            # point is held when the grip is nearer along the surface than the
+            # body medial of the ankle.
+            wv = numpy.zeros((len(hw), 3))
+            wv[weld] = v
+            band = numpy.zeros(len(hw), dtype=bool)
+            band[weld[(s * v[:, 0] > 0) & (v[:, 2] < wz)]] = True
+            seed = numpy.zeros(len(hw), dtype=bool)
+            seed[weld[grip]] = True
+            body = ~seed & (~band | (s * wv[:, 0] < s * fused))
+            near = surface_dist(seed, band, ew, wv) < surface_dist(body, band, ew, wv)
+            print("  grown from the grip: %d vertices" % (near[weld] & ~grip).sum())
+            grip |= near[weld]
         print("  held by %s: %d vertices" % (bones[hand].name, grip.sum()))
         W[grip] = 0.0
         W[grip, hand] = 1.0
+        if fused is not None:
+            slab = grip
     keep = numpy.argsort(-W, axis=1)[:, :4]
     groups = [mesh.vertex_groups.new(name=b.name) for b in bones]
     for vi in range(len(v)):
@@ -289,6 +335,39 @@ def skin(mesh, arm, thigh=None, knee=0.25):
             if wt > 0.01:
                 groups[bi].add([vi], float(wt), "REPLACE")
     print("weights: %d vertices, %d bones" % (len(v), len(bones)))
+    if slab is not None:
+        part(mesh, slab, ~slab & (legs | hips)[W.argmax(axis=1)], 1e-4 * H)
+
+
+def part(mesh, held, body, weld):
+    """Cut the faces that join `held` vertices to `body` ones and cap both sides,
+    or the volume fused between a slab and a shin stretches into a sheet when the
+    hand lifts. Seam-split vertices around the cut are merged first, or each hole
+    breaks open at every UV seam it crosses and cannot be filled."""
+    bm = bmesh.new()
+    bm.from_mesh(mesh.data)
+    side = bm.verts.layers.int.new("held")
+    for b in bm.verts:
+        b[side] = int(held[b.index]) + 2 * int(body[b.index])
+    cut = lambda f: {b[side] for b in f.verts} >= {1, 2}
+    tree = KDTree(len(bm.verts))
+    for b in bm.verts:
+        tree.insert(b.co, b.index)
+    tree.balance()
+    bm.verts.ensure_lookup_table()
+    near = {i for f in bm.faces if cut(f) for b in f.verts for _, i, _ in tree.find_range(b.co, weld)}
+    bmesh.ops.remove_doubles(bm, verts=[bm.verts[i] for i in near], dist=weld)
+    faces = [f for f in bm.faces if cut(f)]
+    rim = {e for f in faces for e in f.edges}
+    bmesh.ops.delete(bm, geom=faces, context="FACES")
+    rim = [e for e in rim if e.is_valid and e.is_boundary]
+    caps = bmesh.ops.holes_fill(bm, edges=rim, sides=0)["faces"]
+    bmesh.ops.recalc_face_normals(bm, faces=caps)
+    bmesh.ops.triangulate(bm, faces=caps)
+    print("  parted: %d faces cut, %d rim edges, %d caps" % (len(faces), len(rim), len(caps)))
+    bm.verts.layers.int.remove(side)
+    bm.to_mesh(mesh.data)
+    bm.free()
 
 
 class Keyer:
