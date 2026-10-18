@@ -164,7 +164,7 @@ def pieces(inside, ew):
             return label
 
 
-def skin(mesh, arm, thigh=None):
+def skin(mesh, arm, thigh=None, knee=0.25):
     """Nearest-bone weights, restricted to that bone and its direct neighbours.
 
     Bone heat fails on these generated shells, even on a watertight voxel copy.
@@ -194,11 +194,13 @@ def skin(mesh, arm, thigh=None):
     # Below the wrist, outside the empty gap beside the thigh, is whatever hangs
     # from the hand (net, chain): the widest run of empty 1%-of-H columns.
     # `thigh`: the thighs' outer edge as a fraction of H, for fists that hang
-    # touching them; no leg bone claims anything outside it above the knee.
+    # touching them; between `knee` (of H) and the hip joint neither a leg nor
+    # the hips claims anything outside it: that is a hand.
     if thigh is not None:
-        legs = numpy.array([b.name.startswith("leg") for b in bones])
-        out = (numpy.abs(v[:, 0]) > thigh * H) & (v[:, 2] > 0.25 * H)
-        d[numpy.ix_(out, legs)] = numpy.inf
+        beside = numpy.array([b.name.startswith("leg") or b.name == "hips" for b in bones])
+        out = (numpy.abs(v[:, 0]) > thigh * H) & (v[:, 2] > knee * H) & \
+            (v[:, 2] < bones[index["hips"]].head_local.z)
+        d[numpy.ix_(out, beside)] = numpy.inf
     held = []
     for s, t in ((1, "l"), (-1, "r")):
         wrist = bones[index["hand_" + t]].head_local
@@ -228,7 +230,9 @@ def skin(mesh, arm, thigh=None):
     ew = weld[e]
     # Below the hips a fist hanging to the knee and the thigh beside it are
     # separate pieces of surface, and the shin can still be the nearer bone: a
-    # piece mostly nearest an arm is the arm, and no leg claims any of it.
+    # piece mostly nearest an arm is the arm, and no leg claims any of it. Nor
+    # the hips: claws curled toward the thigh lie medial of the arm, and a hand
+    # half on the pelvis stretches down to it on every swing.
     below = numpy.zeros(weld.max() + 1, dtype=bool)
     below[weld] = v[:, 2] < bones[index["hips"]].head_local.z
     piece = pieces(below, ew)[weld]
@@ -239,7 +243,8 @@ def skin(mesh, arm, thigh=None):
     share /= numpy.maximum(numpy.bincount(piece[inside], minlength=len(below)), 1)
     hung = inside & (share[numpy.maximum(piece, 0)] > 0.5)
     print("arm pieces below the hips: %d vertices" % hung.sum())
-    d[numpy.ix_(hung, legs)] = numpy.inf
+    hips = numpy.array([b.name == "hips" for b in bones])
+    d[numpy.ix_(hung, legs | hips)] = numpy.inf
     W = numpy.zeros_like(d)
     nearest = d.argmin(axis=1)
     for vi, b0 in enumerate(nearest):

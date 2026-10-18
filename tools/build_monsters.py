@@ -1534,31 +1534,32 @@ def build_materials():
 # the swarm: small, low, four-to-six legged, dies in threes
 # --------------------------------------------------------------------------
 
-IMP_SOURCE = os.path.join(TEX_DIR, "source", "cinder_imp_v1.glb")
-IMP_NORMAL = os.path.join(TEX_DIR, "source", "cinder_imp_v1_n.png")
+IMP_SOURCE = os.path.join(TEX_DIR, "source", "cinder_imp_v2.glb")
+IMP_NORMAL = os.path.join(TEX_DIR, "source", "cinder_imp_v2_n.png")
 
 
 def cinder_imp():
-    """Humped quadruped, horns swept back, a whip tail. The one everybody meets.
+    """A crouched lump of black lava rock split by glowing cracks, horns swept
+    back, a tail that curls up into a burning ball. The one everybody meets.
 
-    Generated (review/3d/cinder-imp), thin spikes cut off by a volumetric
-    opening (tools/open_volume.py --res 240 --radius 2), 4k triangles. Joints
-    measured off cinder_imp_v1.glb by tools/measure_generated.py --flip 1.
+    Generated (review/3d/cinder-imp-v2), volumetric opening res 240 r 2 band 8,
+    4k triangles. TRELLIS stood it nose-down, so the rebuild levelled it
+    (reshape_generated.py --pitch -7). Height 0.7, not 0.85: the body is half
+    again as wide. Joints measured off cinder_imp_v2.glb by
+    tools/measure_generated.py --flip 1.
     """
     c = GeneratedSkin("monster.cinder_imp.v1", IMP_SOURCE, IMP_NORMAL,
-                      "cinder", 0.85, (-0.015, -0.032), tex=512, flip=True)
-    spine = c.body.chain([(0, -0.24, 0.50), (0, -0.02, 0.56), (0, 0.18, 0.52)], [0.1] * 3)
-    c.body.chain([(0, 0.30, 0.60), (0, 0.42, 0.63)], [0.1] * 2, parent=spine[-1])
-    # The whip tail curls off to the left as TRELLIS built it.
-    c.body.chain([(0, -0.42, 0.50), (-0.10, -0.58, 0.40), (-0.30, -0.64, 0.30)],
+                      "cinder", 0.7, (-0.039, -0.076), tex=512, flip=True)
+    spine = c.body.chain([(0, -0.25, 0.40), (0, -0.02, 0.42), (0, 0.18, 0.38)], [0.1] * 3)
+    # The head hangs low in front of the shoulders.
+    c.body.chain([(0, 0.30, 0.32), (0, 0.42, 0.25)], [0.1] * 2, parent=spine[-1])
+    c.body.chain([(0, -0.40, 0.42), (0, -0.55, 0.52), (0, -0.66, 0.58)],
                  [0.05] * 3, parent=spine[0])
-    # The right foreleg was measured near straight; its knee sits at the back of
-    # the leg column, or the walk stretches it 21% past reach.
     for i, (hip, knee, foot) in enumerate([
-        ((-0.050, 0.152, 0.396), (-0.074, 0.139, 0.076), (-0.150, 0.205, 0.002)),
-        ((0.085, 0.185, 0.417), (0.145, 0.195, 0.127), (0.159, 0.324, 0.022)),
-        ((-0.066, -0.218, 0.409), (-0.149, -0.343, 0.092), (-0.219, -0.263, 0.000)),
-        ((0.071, -0.233, 0.455), (0.181, -0.293, 0.206), (0.209, -0.267, 0.006)),
+        ((-0.189, 0.178, 0.280), (-0.322, 0.262, 0.120), (-0.265, 0.379, 0.009)),
+        ((0.163, 0.190, 0.286), (0.263, 0.214, 0.201), (0.279, 0.359, 0.010)),
+        ((-0.186, -0.300, 0.325), (-0.285, -0.417, 0.146), (-0.406, -0.364, 0.000)),
+        ((0.184, -0.298, 0.330), (0.261, -0.414, 0.134), (0.392, -0.374, 0.000)),
     ]):
         c.leg_through(i, hip, knee, foot)
     return c
@@ -1627,30 +1628,30 @@ def sand_skitterer():
     return c
 
 
-WHELP_SOURCE = os.path.join(TEX_DIR, "source", "bramble_whelp_v1.glb")
-WHELP_NORMAL = os.path.join(TEX_DIR, "source", "bramble_whelp_v1_n.png")
+WHELP_SOURCE = os.path.join(TEX_DIR, "source", "bramble_whelp_v2.glb")
+WHELP_NORMAL = os.path.join(TEX_DIR, "source", "bramble_whelp_v2_n.png")
 
 
 def bramble_whelp():
-    """Bark hound: long legs, a ridge of thorns from skull to tail.
+    """A stocky hound carved from bark, moss down its back, a row of round
+    knots for a ridge, amber eyes.
 
-    Generated (review/3d/bramble-whelp), thin thorns cut off by a volumetric
-    opening (tools/open_volume.py --res 240 --radius 2), 4k triangles. Joints
-    measured off bramble_whelp_v1.glb by tools/measure_generated.py --flip 1.
+    Generated (review/3d/bramble-whelp-v2), volumetric opening res 240 r 2 band
+    8, 4k triangles. Height 0.75, not 0.95: the body is twice as wide. Joints
+    measured off bramble_whelp_v2.glb by tools/measure_generated.py --flip 1.
     """
     c = GeneratedSkin("monster.bramble_whelp.v1", WHELP_SOURCE, WHELP_NORMAL,
-                      "forest", 0.95, (-0.010, 0.070), tex=512, flip=True)
+                      "forest", 0.75, (0.001, -0.125), tex=512, flip=True)
     # Rooted over the fore hips, the near-straight pair: rooted at the rump the
-    # lunge stretched a leg 24% past reach.
-    spine = c.body.chain([(0, 0.20, 0.64), (0, 0.0, 0.62), (0, -0.25, 0.58)], [0.1] * 3)
-    # The head rides high over the forelegs, the tail hangs low off the rump.
-    c.body.chain([(0, 0.34, 0.76), (0, 0.48, 0.70)], [0.1] * 2, parent=spine[0])
-    c.body.chain([(0, -0.38, 0.40), (0, -0.52, 0.36)], [0.05] * 2, parent=spine[-1])
+    # lunge stretched a leg past reach.
+    spine = c.body.chain([(0, 0.20, 0.45), (0, -0.05, 0.46), (0, -0.32, 0.44)], [0.1] * 3)
+    c.body.chain([(0, 0.40, 0.46), (0, 0.56, 0.40)], [0.1] * 2, parent=spine[0])
+    c.body.chain([(0, -0.50, 0.33)], [0.05], parent=spine[-1])
     for i, (hip, knee, foot) in enumerate([
-        ((-0.137, 0.190, 0.476), (-0.134, 0.210, 0.075), (-0.163, 0.276, 0.000)),
-        ((0.118, 0.193, 0.483), (0.121, 0.201, 0.138), (0.151, 0.261, 0.000)),
-        ((-0.086, -0.223, 0.434), (-0.128, -0.342, 0.200), (-0.185, -0.268, 0.001)),
-        ((0.080, -0.216, 0.439), (0.118, -0.345, 0.202), (0.197, -0.269, 0.002)),
+        ((-0.156, 0.195, 0.299), (-0.238, 0.206, 0.210), (-0.257, 0.392, 0.000)),
+        ((0.162, 0.202, 0.292), (0.220, 0.229, 0.213), (0.238, 0.443, 0.000)),
+        ((-0.178, -0.325, 0.366), (-0.310, -0.524, 0.129), (-0.268, -0.410, 0.000)),
+        ((0.157, -0.319, 0.371), (0.281, -0.497, 0.133), (0.288, -0.425, 0.000)),
     ]):
         c.leg_through(i, hip, knee, foot)
     return c
@@ -1709,17 +1710,21 @@ def fen_wisp():
     return c
 
 
-HOARFROST_SPITTER_SOURCE = os.path.join(TEX_DIR, "source", "hoarfrost_spitter_v1.glb")
-HOARFROST_SPITTER_NORMAL = os.path.join(TEX_DIR, "source", "hoarfrost_spitter_v1_n.png")
+HOARFROST_SPITTER_SOURCE = os.path.join(TEX_DIR, "source", "hoarfrost_spitter_v2.glb")
+HOARFROST_SPITTER_NORMAL = os.path.join(TEX_DIR, "source", "hoarfrost_spitter_v2_n.png")
 
 
 def hoarfrost_spitter():
-    """Antlered biped, frost in the chest cracks, arms long enough to throw with.
+    """A deer-skulled biped of grey driftwood, ice crystals on the shoulders and
+    forearms, frost glowing in the chest, arms long enough to throw with.
 
-    Generated (review/3d/hoarfrost-spitter), 4k triangles, rig_humanoid.
+    Generated (review/3d/hoarfrost-spitter-v2), volumetric opening res 240 r 2
+    band 8, 4k triangles, rig_humanoid. Ankles measured centred within 7 mm.
+    The claws hang to 0.15 H and the left hand touches its thigh, whose outer
+    edge is 0.17 H: one surface piece, so only the thigh rule keeps it a hand.
     """
     return GeneratedCreature("monster.hoarfrost_spitter.v1", HOARFROST_SPITTER_SOURCE, "forest", 2.0,
-                             normal=HOARFROST_SPITTER_NORMAL)
+                             normal=HOARFROST_SPITTER_NORMAL, thigh=0.17, knee=0.15)
 
 
 # --------------------------------------------------------------------------
@@ -1797,12 +1802,13 @@ class GeneratedCreature:
     roster. It faces -Y as imported, where a turned node-graph root ends up."""
 
     def __init__(self, def_id, source, family, height, normal=None, tex=TEX_SIZE,
-                 offset=(0.0, 0.0), carry=None, thigh=None):
+                 offset=(0.0, 0.0), carry=None, thigh=None, knee=0.25):
         self.def_id, self.source, self.family, self.height = def_id, source, family, height
         # "l"/"r": the hand carrying a long blade, held low through the walk.
         self.carry = carry
-        # Fraction of H: the thighs' outer edge, when the fists hang against them.
-        self.thigh = thigh
+        # Fractions of H: the thighs' outer edge, when the fists hang against
+        # them, and how low the fists reach.
+        self.thigh, self.knee = thigh, knee
         self.normal, self.tex = normal, tex
         # load_mesh centres on the mid-height vertex median, which moves with
         # vertex density; the hips are placed at x 0, so the stance must be there.
@@ -1826,7 +1832,7 @@ class GeneratedCreature:
 
         arm = rig.build_armature(self.def_id, rig.landmarks(mesh, self.height))
         mesh.name = mesh.data.name = self.def_id + ".mesh"
-        rig.skin(mesh, arm, self.thigh)
+        rig.skin(mesh, arm, self.thigh, self.knee)
         # No baked occlusion: white, so the runtime's multiply leaves the sheet alone.
         layer = mesh.data.color_attributes.new("Col", "BYTE_COLOR", "CORNER")
         layer.data.foreach_set("color", numpy.ones(len(mesh.data.loops) * 4, dtype=numpy.float32))
