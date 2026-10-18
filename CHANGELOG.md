@@ -10,6 +10,8 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-18
+
 Alpha. A save may not survive an update yet.
 
 ### Added
