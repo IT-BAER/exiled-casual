@@ -348,6 +348,15 @@ const MONSTER_DEFS: MonsterDef[] = [
     defenses: { resPct: resBlock({ cold: 20 }), armourFixed: fp(3) },
     charge: BRUTE_CHARGE,
   },
+  {
+    id: "monster.tide_spitter.v1", name: "Tide Spitter", archetype: "shooter",
+    maxLifeFixed: LIFE.shooter, moveSpeedFixed: fp(1.6), attackRangeFixed: fp(7.5),
+    attackDamage: { type: "cold", amountFixed: HIT.shooter },
+    // The shell is drawn 1.0 across.
+    attackCooldownTicks: 70, radiusFixed: fp(0.5),
+    defenses: { resPct: resBlock({ cold: 30 }), armourFixed: fp(0.5) },
+    ranged: { speedFixed: fp(9), radiusFixed: fp(0.22) },
+  },
 ];
 
 // Validate at module load — bad content is a programmer error, fail fast.
@@ -475,13 +484,13 @@ export const MONSTER_POOLS: Record<BiomeId, readonly PoolEntry[]> = {
     { defId: "monster.thornhide_boar.v1", weight: 2 },
     { defId: "monster.hoarfrost_spitter.v1", weight: 2 },
   ],
-  // Borrowed rather than newly modelled, and all four are things that belong in
-  // wet sand: what lives in it, what wades out of it, what burns over it, and
-  // what came in on the last storm and did not go back out.
+  // All four belong in wet sand: what lives in it, what wades out of it, what
+  // spits from the tide line, and what came in on the last storm and did not go
+  // back out. Only the Behemoth is borrowed.
   coast: [
     { defId: "monster.brine_scuttler.v1", weight: 3 },
     { defId: "monster.wrack_drowned.v1", weight: 2 },
-    { defId: "monster.fen_wisp.v1", weight: 2 },
+    { defId: "monster.tide_spitter.v1", weight: 2 },
     { defId: "monster.rotting_behemoth.v1", weight: 1 },
   ],
 };

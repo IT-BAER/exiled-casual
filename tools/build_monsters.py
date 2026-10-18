@@ -1761,6 +1761,37 @@ def hoarfrost_spitter():
                              normal=HOARFROST_SPITTER_NORMAL, thigh=0.17, knee=0.15)
 
 
+TIDE_SPITTER_SOURCE = os.path.join(TEX_DIR, "source", "tide_spitter_v1.glb")
+TIDE_SPITTER_NORMAL = os.path.join(TEX_DIR, "source", "tide_spitter_v1_n.png")
+
+
+def tide_spitter():
+    """A clam on four stubby legs, blue ribbed shell with orange knobs along the
+    hinge, a glowing core in the open mouth: the Strand's shooter.
+
+    Generated (review/3d/tide-spitter-v2), volumetric opening res 240 r 2, 4k
+    triangles, rebuilt with --pitch -2.9: TRELLIS stood it nose-down, rear feet
+    5% H off the floor. Joints measured off tide_spitter_v1.glb by
+    tools/measure_generated.py --legs 5 --flip 1: the belly rests on the floor
+    and reads as a fifth foot, so it is dropped and the offset centres the four.
+    """
+    c = GeneratedSkin("monster.tide_spitter.v1", TIDE_SPITTER_SOURCE, TIDE_SPITTER_NORMAL,
+                      "coast", 0.65, (-0.024, -0.074), tex=512, flip=True)
+    # One spine bone and no head: a shell does not bend, and a three-bone spine
+    # or a head on the mouth folded it flat at the hit and pulled the front toes.
+    c.body.chain([(0, -0.32, 0.33), (0, 0.20, 0.33)], [0.1] * 2)
+    # The traced knees left the stubs nearly straight and the lunge stretched
+    # them 28.8% past reach: they sit at the outer bend, 0.9 out, 0.85 hip high.
+    for i, (hip, knee, foot) in enumerate([
+        ((-0.291, 0.216, 0.162), (-0.342, 0.358, 0.138), (-0.348, 0.374, 0.016)),
+        ((0.286, 0.229, 0.207), (0.344, 0.404, 0.176), (0.351, 0.424, 0.029)),
+        ((-0.419, -0.320, 0.179), (-0.563, -0.365, 0.152), (-0.579, -0.370, 0.020)),
+        ((0.384, -0.329, 0.193), (0.557, -0.418, 0.164), (0.576, -0.428, 0.009)),
+    ]):
+        c.leg_through(i, hip, knee, foot)
+    return c
+
+
 # --------------------------------------------------------------------------
 # the brutes: mid-sized, slow, and they close on you
 # --------------------------------------------------------------------------
@@ -2233,7 +2264,7 @@ BOSS_FAMILIES = {
 
 SPECIES = [
     cinder_imp, vaal_husk, sand_skitterer, bramble_whelp, brine_scuttler,
-    dune_spitter, fen_wisp, hoarfrost_spitter,
+    dune_spitter, fen_wisp, hoarfrost_spitter, tide_spitter,
     drowned_grubling,
     vaal_construct, bog_drowned, thornhide_boar, wrack_drowned,
     blood_sentinel, sunbaked_colossus, rotting_behemoth,

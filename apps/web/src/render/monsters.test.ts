@@ -377,6 +377,10 @@ describe("monsters asset", () => {
    *
    * 7.25MB and thirty-six images since Mother Vhal did the same: measured
    * 6,623,960 -> 7,050,236 packed.
+   *
+   * 7.5MB and forty-two images since the Tide Spitter became the Strand's third
+   * own species, each 4k triangles with two 512 sheets: measured 7,099,664 ->
+   * 7,375,260 packed.
    */
   /**
    * The shader warm that ends the map-entry stall. Every instance of a species
@@ -420,9 +424,9 @@ describe("monsters asset", () => {
 
   it("embeds compressed textures and stays within budget", () => {
     for (const image of json.images) expect(image.mimeType).toBe("image/jpeg");
-    expect(json.images.length).toBeLessThanOrEqual(40);
+    expect(json.images.length).toBeLessThanOrEqual(42);
     expect(json.extensionsRequired).toContain("EXT_meshopt_compression");
-    expect(glb.byteLength).toBeLessThan(7_250_000);
+    expect(glb.byteLength).toBeLessThan(7_500_000);
   });
 });
 
