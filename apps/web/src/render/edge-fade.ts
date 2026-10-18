@@ -92,12 +92,20 @@ class EdgeFadePlugin extends MaterialPluginBase {
   override getCustomCode(shaderType: string): Record<string, string> | null {
     if (shaderType !== "fragment") return null;
     return {
-      CUSTOM_FRAGMENT_UPDATE_ALPHA: `
-        {
+      CUSTOM_FRAGMENT_DEFINITIONS: `
+        float edgeFadeT() {
           vec2 edgeOut = max(max(edgeRect.xy - vPositionW.xz, vPositionW.xz - edgeRect.zw), vec2(0.0));
-          float edgeT = smoothstep(0.0, 1.0, (length(edgeOut) - ${f3(EDGE_FADE_START)}) / ${f3(EDGE_FADE_LENGTH)});
-          surfaceAlbedo = mix(surfaceAlbedo, toLinearSpace(edgeFog) * ${f3(EDGE_FADE_FLOOR)}, edgeT);
+          return smoothstep(0.0, 1.0, (length(edgeOut) - ${f3(EDGE_FADE_START)}) / ${f3(EDGE_FADE_LENGTH)});
         }
+      `,
+      CUSTOM_FRAGMENT_UPDATE_ALPHA: `
+        surfaceAlbedo = mix(surfaceAlbedo, toLinearSpace(edgeFog) * ${f3(EDGE_FADE_FLOOR)}, edgeFadeT());
+      `,
+      // Albedo alone leaves specular and sky light on the faded rock, a grey
+      // shape on the void. The raw fog colour is what the clear colour shows
+      // as, with or without the image-processing post-process.
+      CUSTOM_FRAGMENT_BEFORE_FRAGCOLOR: `
+        finalColor.rgb = mix(finalColor.rgb, edgeFog, edgeFadeT());
       `,
     };
   }
@@ -110,9 +118,14 @@ class EdgeFadePlugin extends MaterialPluginBase {
 export function edgeFadeMaterial(scene: Scene, rock: PBRMaterial, grid: WalkableGrid): PBRMaterial {
   const name = `${rock.name}-edge`;
   const mat = (scene.getMaterialByName(name) as PBRMaterial | null) ?? rock.clone(name);
+  aimEdgeFade(mat, grid);
+  return mat;
+}
+
+/** Give `mat` the fade if it lacks it, aimed at `grid`'s walkable rim. */
+export function aimEdgeFade(mat: Material, grid: WalkableGrid): void {
   mat.unfreeze();
   const plugin = mat.pluginManager?.getPlugin<EdgeFadePlugin>(EDGE_FADE_PLUGIN) ?? new EdgeFadePlugin(mat);
   const rect = edgeRect(grid);
   if (rect) plugin.rect = rect;
-  return mat;
 }

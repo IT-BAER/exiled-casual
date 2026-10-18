@@ -6,7 +6,8 @@
 // room is held to CLIFF_FRONT by the view rule in `cliffHeights`; whatever still
 // stands between the camera and the player stipples away around him (CliffPlugin),
 // PoE's see-through wall. The same plugin paints the floor plate up the scree so
-// rock and ground meet without a seam.
+// rock and ground meet without a seam. The field runs PAD past the grid as solid
+// rock that the edge fade sinks into the void, so the map's rim has no cut.
 import { Mesh, VertexData, type Material, type Scene } from "@babylonjs/core";
 import type { UniformBuffer } from "@babylonjs/core/Materials/uniformBuffer";
 import type { MaterialDefines } from "@babylonjs/core/Materials/materialDefines";
@@ -21,6 +22,7 @@ import {
   CONTACT_GLSL, CONTACT_SAMPLERS, CONTACT_UBO, CONTACT_UNIFORMS_GLSL,
 } from "./contact-band";
 import { BETA_AT_DEFAULT, BETA_LIMIT, CAMERA_ALPHA, GROUND_SIZE } from "./engine";
+import { aimEdgeFade, EDGE_FADE_LENGTH, EDGE_FADE_START } from "./edge-fade";
 
 export const CLIFF_MESH_NAME = "wallrun-cliff";
 
@@ -29,7 +31,15 @@ const STEP = 0.25;
 /** The tallest the rock gets anywhere: near three times the player. */
 export const CLIFF_MAX = 5;
 /** What a wall in FRONT of a room may reach. Over his head; the fade covers him. */
-export const CLIFF_FRONT = 2.4;
+export const CLIFF_FRONT = 4;
+/** The least any wall face stands once past its scree, thin walls and islands
+ *  included, under the view cap; reached between these two depths into the rock. */
+export const WALL_MIN = 3.5;
+const WALL_MIN_FROM = 0.2;
+const WALL_MIN_AT = 0.9;
+/** Rock the field runs past the grid on every side, so the map's edge ends inside
+ *  the edge fade (edge-fade.ts) instead of on a cut. Whole lattice steps. */
+const PAD = Math.ceil((EDGE_FADE_START + EDGE_FADE_LENGTH + 0.5) / 0.25);
 /** The scree at the foot: how high, and how far into the rock it runs. */
 const SCREE_H = 0.6;
 const SCREE_W = 1.1;
@@ -213,19 +223,19 @@ export interface CliffField {
 export function cliffHeights(grid: WalkableGrid): CliffField {
   const { cols, rows, cellSize, originX, originY, cells } = grid;
   const per = Math.round(cellSize / STEP);
-  const nx = cols * per + 1, nz = rows * per + 1;
-  const x0 = originX - cellSize / 2, z0 = originY - cellSize / 2;
+  const nx = cols * per + 1 + 2 * PAD, nz = rows * per + 1 + 2 * PAD;
+  const x0 = originX - cellSize / 2 - PAD * STEP, z0 = originY - cellSize / 2 - PAD * STEP;
   // Water is wall to the sim only: a pool is open ground the rock stands back from.
   const floorAt = (cx: number, cy: number) =>
     cx >= 0 && cy >= 0 && cx < cols && cy < rows &&
     (cells[cy * cols + cx] === 1 || grid.water?.[cy * cols + cx] === 1);
 
-  // Open: some cell this vertex lies in or on the edge of is floor.
+  // Open: some cell this vertex lies in or on the edge of is floor. Off the grid is rock.
   const open = new Uint8Array(nx * nz);
   for (let j = 0; j < nz; j++) {
-    const cy1 = Math.floor(j / per), cy0 = j % per === 0 ? cy1 - 1 : cy1;
+    const cy1 = Math.floor((j - PAD) / per), cy0 = (j - PAD) % per === 0 ? cy1 - 1 : cy1;
     for (let i = 0; i < nx; i++) {
-      const cx1 = Math.floor(i / per), cx0 = i % per === 0 ? cx1 - 1 : cx1;
+      const cx1 = Math.floor((i - PAD) / per), cx0 = (i - PAD) % per === 0 ? cx1 - 1 : cx1;
       if (floorAt(cx0, cy0) || floorAt(cx1, cy0) || floorAt(cx0, cy1) || floorAt(cx1, cy1)) open[j * nx + i] = 1;
     }
   }
@@ -260,6 +270,8 @@ export function cliffHeights(grid: WalkableGrid): CliffField {
       // alone stays under the floor blend for a unit and reads as ground the sim still blocks.
       const v = Math.min(1, (d + KERB_LEAD) / KERB_RISE);
       h = Math.max(h, Math.min(cap, KERB_PEAK * v * v * (3 - 2 * v) * (0.85 + 0.3 * n)));
+      const m = Math.min(1, Math.max(0, (d - WALL_MIN_FROM) / (WALL_MIN_AT - WALL_MIN_FROM)));
+      h = Math.max(h, Math.min(cap, WALL_MIN * m * m * (3 - 2 * m) * (0.9 + 0.2 * n)));
       const shelf = STRATUM * (0.8 + 0.4 * noise(x, z, 2.2, 3));
       heights[k] = h - (h % shelf) * STRATA;
     }
@@ -530,6 +542,7 @@ export function buildCliffs(scene: Scene, grid: WalkableGrid, material: Material
   // Facets are what make it rock: smooth normals read as a moulded ramp.
   mesh.convertToFlatShadedMesh();
   mesh.material = cliffMaterial(material);
+  aimEdgeFade(mesh.material, grid);
   mesh.receiveShadows = true;
   mesh.isPickable = false;
   mesh.freezeWorldMatrix();

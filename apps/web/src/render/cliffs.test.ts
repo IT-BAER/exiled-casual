@@ -5,6 +5,7 @@ import { NullEngine, VertexBuffer } from "@babylonjs/core";
 import { createScene, BETA_LIMIT, CAMERA_ALPHA } from "./engine";
 import { buildCliffs, cliffHeights, cliffMaterial, cliffVertexData, CLIFF_FRONT, type CliffField } from "./cliffs";
 import { PBRMaterial } from "@babylonjs/core";
+import { edgeDistance, edgeRect, EDGE_FADE_LENGTH, EDGE_FADE_START } from "./edge-fade";
 
 const MAPS: [GrammarId, number][] = [["loop", 1], ["loop", 7], ["sunken-ruins", 3], ["open-field", 5]];
 
@@ -117,7 +118,7 @@ describe("cliffs", () => {
       for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
         if (!water[y * cols + x]) continue;
         wet++;
-        expect(f.heights[(y * 2 + 1) * f.nx + x * 2 + 1]!, `seed ${seed} cell ${x},${y}`).toBeLessThanOrEqual(0);
+        expect(cellHeight(f, grid, x, y), `seed ${seed} cell ${x},${y}`).toBeLessThanOrEqual(0);
       }
     }
     expect(wet).toBeGreaterThan(0);
@@ -147,7 +148,7 @@ describe("cliffs", () => {
         let peak = 0;
         for (const i of comp) {
           const x = i % cols, y = (i - x) / cols;
-          peak = Math.max(peak, f.heights[(y * 2 + 1) * f.nx + x * 2 + 1]!);
+          peak = Math.max(peak, cellHeight(f, grid, x, y));
         }
         expect(peak, `${g} ${seed}: island of ${comp.length} at cell ${comp[0]! % cols},${Math.floor(comp[0]! / cols)}`).toBeGreaterThanOrEqual(1);
       }
@@ -192,6 +193,35 @@ describe("cliffs", () => {
     expect(tall / raised).toBeGreaterThan(0.05);
   });
 
+  it("ends the rock only where the edge fade has already sunk it into the void", () => {
+    for (const [g, seed] of MAPS) {
+      const grid = generateArea(seed, "v", g).grid;
+      const f = cliffHeights(grid);
+      const rect = edgeRect(grid)!;
+      let cut = 0;
+      for (let j = 0; j < f.nz; j++) for (let i = 0; i < f.nx; i++) {
+        if (i > 0 && j > 0 && i < f.nx - 1 && j < f.nz - 1) continue;
+        if (f.heights[j * f.nx + i]! <= 0) continue;
+        if (edgeDistance(rect, f.x0 + i * f.step, f.z0 + j * f.step) < EDGE_FADE_START + EDGE_FADE_LENGTH) cut++;
+      }
+      expect(cut, `${g} ${seed}`).toBe(0);
+    }
+  });
+
+  it("stands even a thin wall at the minimum height past its scree", () => {
+    // A two-unit band through open floor: by depth alone it was a 1.5-unit hump.
+    const grid = gridOf(120, 120, (x) => x >= 58 && x < 62);
+    const f = cliffHeights(grid);
+    let low = 0, deep = 0;
+    for (let k = 0; k < f.heights.length; k++) {
+      if (f.depth[k]! < 0.9) continue;
+      deep++;
+      if (f.heights[k]! < 2.5) low++;
+    }
+    expect(deep).toBeGreaterThan(20);
+    expect(low).toBe(0);
+  });
+
   it("builds a mesh whose rock tops face up", () => {
     const engine = new NullEngine();
     const { scene } = createScene(engine);
@@ -223,6 +253,13 @@ function gridOf(cols: number, rows: number, wall: (x: number, y: number) => bool
   const cells = new Uint8Array(cols * rows);
   for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) cells[y * cols + x] = wall(x, y) ? 0 : 1;
   return { cols, rows, cellSize: 0.5, originX: 0, originY: 0, cells };
+}
+
+/** Height at the centre of grid cell (x, y): its vertex sits past the field's pad. */
+function cellHeight(f: CliffField, grid: WalkableGrid, x: number, y: number): number {
+  const i = Math.round((grid.originX + x * grid.cellSize - f.x0) / f.step);
+  const j = Math.round((grid.originY + y * grid.cellSize - f.z0) / f.step);
+  return f.heights[j * f.nx + i]!;
 }
 
 /** Bilinear height of the field at world (x, z). */
