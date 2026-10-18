@@ -2074,30 +2074,31 @@ def cinder_warden():
                              carry="r", held=0.28)
 
 
-SIRRATH_SOURCE = os.path.join(TEX_DIR, "source", "sirrath_v1.glb")
-SIRRATH_NORMAL = os.path.join(TEX_DIR, "source", "sirrath_v1_n.png")
+SIRRATH_SOURCE = os.path.join(TEX_DIR, "source", "sirrath_v2.glb")
+SIRRATH_NORMAL = os.path.join(TEX_DIR, "source", "sirrath_v2_n.png")
 
 
 def sirrath():
-    """Desert. A hooded sun-priest on six bone stilts, censers hung under the robe.
+    """Desert. A hooded sun-priest on five bone stilts, censers hung under the robe.
 
-    Generated (review/3d/sirrath), volumetric opening res 240 r 2 with --keep 0.01:
-    the left mid stilt and both censers are their own shells (the chains are too
-    thin to survive). 8k triangles on a 1024 sheet. Joints measured off
-    sirrath_v1.glb by tools/measure_generated.py --flip 1; the stilt tips end at
-    different heights as built.
+    Generated (review/3d/sirrath-v2), volumetric opening res 240 r 2, 8k triangles
+    on a 1024 sheet. Five legs because the reference shows five: the sixth hides
+    behind a censer and TRELLIS built what it saw. Joints measured off
+    sirrath_v2.glb by tools/measure_generated.py --legs 5 --flip 1, whose offset is
+    the feet centroid, three feet on one side pulling it 0.17 off the robe: the
+    offset here is the midpoint between the two sides' feet, which puts the hood
+    on the midline.
     """
     c = GeneratedSkin("monster.sirrath.v1", SIRRATH_SOURCE, SIRRATH_NORMAL,
-                      "desert", 2.8, (-0.061, 0.009), flip=True)
-    spine = c.body.chain([(0, -0.52, 2.03), (0, -0.10, 2.10), (0, 0.32, 2.03)], [0.2] * 3)
-    c.body.chain([(0, 0.40, 2.30), (0, 0.46, 2.60)], [0.1] * 2, parent=spine[-1])
+                      "desert", 2.8, (0.19, -0.273), flip=True)
+    spine = c.body.chain([(0, -0.55, 1.60), (0, -0.05, 1.70), (0, 0.45, 1.65)], [0.2] * 3)
+    c.body.chain([(-0.05, 0.10, 2.10), (-0.03, 0.15, 2.50)], [0.1] * 2, parent=spine[-1])
     for i, (hip, knee, foot) in enumerate([
-        ((-0.383, 0.187, 1.996), (-0.569, 0.901, 1.198), (-0.668, 1.233, 0.067)),
-        ((0.218, 0.100, 2.076), (0.510, 0.478, 1.860), (0.800, 1.186, 0.104)),
-        ((-0.451, 0.032, 1.856), (-0.842, 0.025, 1.978), (-1.408, -0.049, 0.139)),
-        ((0.465, -0.118, 1.812), (0.918, -0.119, 1.966), (1.498, -0.031, 0.150)),
-        ((-0.459, -0.274, 2.018), (-0.743, -0.592, 2.082), (-1.139, -0.950, 0.000)),
-        ((0.265, -0.391, 2.050), (0.482, -0.830, 2.167), (0.917, -1.388, 0.033)),
+        ((-0.438, 0.634, 1.047), (-0.706, 0.697, 0.806), (-0.771, 0.680, 0.000)),
+        ((0.575, 0.358, 1.148), (0.895, 0.545, 1.049), (0.736, 1.176, 0.035)),
+        ((-0.499, 0.082, 1.084), (-0.951, -0.001, 0.375), (-1.009, 0.014, 0.119)),
+        ((-0.466, -0.675, 1.228), (-0.781, -0.882, 0.427), (-0.755, -0.864, 0.002)),
+        ((0.451, -0.302, 1.332), (0.794, -0.752, 0.907), (0.939, -1.005, 0.069)),
     ]):
         c.leg_through(i, hip, knee, foot)
     return c
