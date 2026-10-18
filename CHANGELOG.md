@@ -10,6 +10,65 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+Alpha. A save may not survive an update yet.
+
+### Added
+
+- The Strand has its own monsters. The Brine Scuttler is a hermit crab that
+  comes in swarms, the Wrack Drowned a drowned sailor who charges with an anchor
+  in his fist, and the Tide Spitter a clam that spits cold from the tide line.
+  Only the Rotting Behemoth still washes in from the swamp.
+- Vaal Stone, Swamp and Forest maps are dressed: broken columns, a toppled idol,
+  urns and ruin walls in the Vaal stone, lobed trees, stumps, mossy logs and
+  toadstools in the forest, gnarled dead trees and reeds in the swamp. Swamp
+  maps hold standing pools of murky water with duckweed rafts.
+- Every class skill looks and sounds like itself. Each melee skill cuts its own
+  swing and Ground Slam breaks the floor, the three bow skills loose three
+  different arrows on real recorded bow releases, and Ember Bolt sheds flame and
+  lands as a fireball.
+- Poison and bleeding reach the player too, show on the body and in the debuff
+  row, and ignore armour. The Blood Sentinel poisons.
+- Drag an item onto the vendor's shelf to sell it. A Buyback page, from Path of
+  Exile 2, undoes a sale exactly.
+- The Ironsworn Broadsword, a one-handed sword, drops.
+- The passive tree has an outer ring of clusters, bridges between the inner
+  ones and a keystone at the end of every spoke.
+- Dying has its own music, and the area music comes back on revive.
+- The game reports how it runs to its own server, without cookies and without
+  storing anything on your device, and honours Global Privacy Control and Do
+  Not Track. The Privacy page lists exactly what is sent. The main menu can show
+  news and maintenance notices from the server.
+
+### Changed
+
+- The monsters of the Vaal Stone, the swamp and the forest, the Cinder Imp, the
+  Cinder Warden, Sirrath and Ghaltrek have new, chunkier bodies in the style of
+  the desert set.
+- Vaal Stone, Swamp and Forest floors mix in a second ground texture in patches,
+  wet with standing water in the swamp, and the three are lit brighter.
+- The map's edge sinks into black instead of ending on a cut.
+- Poison and bleeding hit harder and carry about a fifth of a pack's damage.
+- The roll has a 1.5 second cooldown, and the first 80% of it dodges slams too.
+- Packs make room for each other and surround the player instead of standing
+  in him, and an attacking monster faces you.
+- Ambience is quieter and swells, and on the Strand the surf comes from the sea.
+- Smoke and impact dust fade out at their edges instead of drawing grey discs.
+- Monsters out of view stop animating, and the game downloads about 13 MB less
+  art.
+- The tower shield's board runs along the forearm.
+
+### Fixed
+
+- Trees no longer stand at the foot of the rock, where they hid the player, and
+  forest canopies read as leaves.
+- Cliff rock stands where the collision edge is, so maps have no invisible walls.
+- A monster no longer freezes in a passage too narrow for it.
+- Swamp duckweed no longer draws a staircase along the bank.
+- A seated waystone never sticks in the map device.
+- A dropped currency stack is picked up whole.
+- Name plates stay on their targets below 100% resolution.
+- Auto graphics no longer switches presets on 60 Hz vsync jitter.
+
 ## [0.3.1] - 2026-10-15
 
 Alpha. A save may not survive an update yet.
