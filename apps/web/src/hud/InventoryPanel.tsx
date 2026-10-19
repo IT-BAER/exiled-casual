@@ -440,6 +440,8 @@ export const InventoryPanel = React.memo(function InventoryPanel({
   const [armedPos, setArmedPos] = React.useState<{ x: number; y: number } | null>(null);
   const armedAt = React.useRef({ x: 0, y: 0 });
   const armedIconRef = React.useRef<HTMLImageElement | null>(null);
+  /** The armed orb has been spent by a shift-click since it was armed. */
+  const shiftSpent = React.useRef(false);
   React.useEffect(() => {
     if (!armed) { setArmedPos(null); return; }
     const onMove = (e: PointerEvent) => {
@@ -457,11 +459,19 @@ export const InventoryPanel = React.memo(function InventoryPanel({
       e.stopPropagation();
       setArmed(null);
     };
+    // PoE: an orb kept on the cursor by shift-clicks goes back when Shift is let
+    // go. A tap of Shift with nothing spent leaves the right-click arming alone.
+    shiftSpent.current = false;
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === "Shift" && shiftSpent.current) setArmed(null);
+    };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("contextmenu", onCtx, true);
+    window.addEventListener("keyup", onKeyUp);
     return () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("contextmenu", onCtx, true);
+      window.removeEventListener("keyup", onKeyUp);
     };
   }, [armed]);
   // A shift-held orb outlives its click, so the stack can run out under it: once
@@ -869,7 +879,8 @@ export const InventoryPanel = React.memo(function InventoryPanel({
                     // snapshot repaints it with what the orb just wrote. Closing it
                     // hid the whole payoff behind a second hover.
                     // PoE: shift held keeps the orb on the cursor for the next item.
-                    if (!e.shiftKey) setArmed(null);
+                    if (e.shiftKey) shiftSpent.current = true;
+                    else setArmed(null);
                     // The outcome is the payoff, so it gets the drop chime at the rarity
                     // the application lands on, which is audible before the new lines are
                     // legible (docs/09 rule 2).

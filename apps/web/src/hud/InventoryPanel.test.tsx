@@ -518,6 +518,26 @@ describe("spending currency on an item", () => {
       expect(seen).toEqual([{ kind: "applyCurrency", fromX: 0, fromY: 0, x: 4, y: 0 }]);
     });
 
+    it("releasing Shift after a shift-click spend lets the orb go", () => {
+      const seen: unknown[] = [];
+      render(<InventoryPanel inventory={twoUnread} onClose={() => {}} onIntent={(i) => seen.push(i)} />);
+      fireEvent.contextMenu(screen.getByTestId("inventory-item-0"));
+      shiftPress(screen.getByTestId("inventory-item-1"));
+      fireEvent.keyUp(window, { key: "Shift" });
+      fireEvent.pointerDown(screen.getByTestId("inventory-item-2"));
+      expect(applied(seen)).toHaveLength(1);
+    });
+
+    it("tapping Shift without spending keeps the orb armed", () => {
+      const seen: unknown[] = [];
+      render(<InventoryPanel inventory={twoUnread} onClose={() => {}} onIntent={(i) => seen.push(i)} />);
+      fireEvent.contextMenu(screen.getByTestId("inventory-item-0"));
+      fireEvent.keyDown(window, { key: "Shift" });
+      fireEvent.keyUp(window, { key: "Shift" });
+      fireEvent.pointerDown(screen.getByTestId("inventory-item-1"));
+      expect(applied(seen)).toHaveLength(1);
+    });
+
     it("lets go once the stack it was holding is gone from its cell", () => {
       const seen: unknown[] = [];
       const { rerender } = render(<InventoryPanel inventory={twoUnread} onClose={() => {}} onIntent={(i) => seen.push(i)} />);

@@ -10,6 +10,11 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+### Changed
+
+- Letting go of Shift after shift-clicking an orb or scroll onto items takes
+  it off the cursor, as in PoE.
+
 ## [0.4.2] - 2026-10-19
 
 ### Added
