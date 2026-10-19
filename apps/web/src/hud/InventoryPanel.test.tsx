@@ -487,6 +487,49 @@ describe("spending currency on an item", () => {
     expect(seen).toEqual([{ kind: "applyCurrency", fromX: 0, fromY: 0, x: 4, y: 0 }]);
   });
 
+  describe("holding shift keeps the armed orb on the cursor, as in PoE", () => {
+    const twoUnread = {
+      ...withScroll,
+      items: [...withScroll.items, { ...withScroll.items[1]!, x: 6, y: 0 }],
+    };
+    const shiftPress = (el: Element) =>
+      fireEvent(el, new MouseEvent("pointerdown", { bubbles: true, shiftKey: true, clientX: 10, clientY: 10 }));
+    const applied = (seen: unknown[]) => seen.filter((i) => (i as { kind: string }).kind === "applyCurrency");
+
+    it("a shift-click spends one and stays armed; a plain click spends one and lets go", () => {
+      const seen: unknown[] = [];
+      render(<InventoryPanel inventory={twoUnread} onClose={() => {}} onIntent={(i) => seen.push(i)} />);
+      fireEvent.contextMenu(screen.getByTestId("inventory-item-0"));
+      shiftPress(screen.getByTestId("inventory-item-1"));
+      fireEvent.pointerDown(screen.getByTestId("inventory-item-2"));
+      fireEvent.pointerDown(screen.getByTestId("inventory-item-1"));
+      expect(applied(seen)).toEqual([
+        { kind: "applyCurrency", fromX: 0, fromY: 0, x: 4, y: 0 },
+        { kind: "applyCurrency", fromX: 0, fromY: 0, x: 6, y: 0 },
+      ]);
+    });
+
+    it("a shift-click with an orb on the cursor spends it, never transfers to the stash", () => {
+      const seen: unknown[] = [];
+      const stash = { cols: 12, rows: 12, items: [] };
+      render(<InventoryPanel inventory={twoUnread} stash={stash} onClose={() => {}} onIntent={(i) => seen.push(i)} />);
+      fireEvent.contextMenu(screen.getByTestId("inventory-item-0"));
+      shiftPress(screen.getByTestId("inventory-item-1"));
+      expect(seen).toEqual([{ kind: "applyCurrency", fromX: 0, fromY: 0, x: 4, y: 0 }]);
+    });
+
+    it("lets go once the stack it was holding is gone from its cell", () => {
+      const seen: unknown[] = [];
+      const { rerender } = render(<InventoryPanel inventory={twoUnread} onClose={() => {}} onIntent={(i) => seen.push(i)} />);
+      fireEvent.contextMenu(screen.getByTestId("inventory-item-0"));
+      shiftPress(screen.getByTestId("inventory-item-1"));
+      // The last scroll was spent: the sim's next snapshot no longer has the stack.
+      rerender(<InventoryPanel inventory={{ ...twoUnread, items: twoUnread.items.slice(1) }} onClose={() => {}} onIntent={(i) => seen.push(i)} />);
+      shiftPress(screen.getByTestId("inventory-item-1"));
+      expect(applied(seen)).toHaveLength(1);
+    });
+  });
+
   it("shift+right-click spends the stack on every item it accepts, without arming", () => {
     const seen: unknown[] = [];
     render(<InventoryPanel inventory={withScroll} onClose={() => {}} onIntent={(i) => seen.push(i)} />);

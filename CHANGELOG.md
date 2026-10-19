@@ -10,6 +10,11 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+### Added
+
+- Hold Shift while you click with an orb or scroll on the cursor, and it stays
+  there for the next item until the stack runs out.
+
 ### Changed
 
 - The dodge roll cooldown is 1 second, down from 1.5.

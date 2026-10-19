@@ -440,6 +440,11 @@ export const InventoryPanel = React.memo(function InventoryPanel({
       window.removeEventListener("contextmenu", onCtx, true);
     };
   }, [armed]);
+  // A shift-held orb outlives its click, so the stack can run out under it: once
+  // the cell no longer holds that currency, nothing is on the cursor any more.
+  const armedGone = armed !== null &&
+    !inventory.items.some((i) => i.x === armed.x && i.y === armed.y && i.baseId === armed.baseId);
+  React.useEffect(() => { if (armedGone) setArmed(null); }, [armedGone]);
   /** The vendor window's keyword box. Local: it dims the shelf, nothing else. */
   const [highlight, setHighlight] = React.useState("");
   // Per grid: the SORT_MODES index its next Sort click will use.
@@ -828,12 +833,8 @@ export const InventoryPanel = React.memo(function InventoryPanel({
                     onSocketWaystone?.(it.x, it.y);
                     return;
                   }
-                  if (e.shiftKey) {
-                    e.preventDefault();
-                    setHover(null);
-                    quickTransfer(container, it);
-                    return;
-                  }
+                  // Ahead of shift's quick transfer: with an orb on the cursor,
+                  // shift means "keep it there", never "send this to the stash".
                   if (armed) {
                     // The hand holds an orb: this click either spends it or does
                     // nothing at all. Falling through to grab was how aiming at
@@ -843,12 +844,19 @@ export const InventoryPanel = React.memo(function InventoryPanel({
                     // The tooltip STAYS: it addresses the cell, so the next
                     // snapshot repaints it with what the orb just wrote. Closing it
                     // hid the whole payoff behind a second hover.
-                    setArmed(null);
+                    // PoE: shift held keeps the orb on the cursor for the next item.
+                    if (!e.shiftKey) setArmed(null);
                     // The outcome is the payoff, so it gets the drop chime at the rarity
                     // the application lands on, which is audible before the new lines are
                     // legible (docs/09 rule 2).
                     playDropSound(currencyResultRarity(armed.baseId ?? "") ?? it.rarity);
                     onIntent?.({ kind: "applyCurrency", fromX: armed.x, fromY: armed.y, x: it.x, y: it.y });
+                    return;
+                  }
+                  if (e.shiftKey) {
+                    e.preventDefault();
+                    setHover(null);
+                    quickTransfer(container, it);
                     return;
                   }
                   grab({ kind: "grid", container, x: it.x, y: it.y }, it, it.w, it.h, e);
