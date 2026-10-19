@@ -49,9 +49,11 @@ describe("CreateCharacter", () => {
     expect(screen.getByTestId("create-character").textContent).toContain(emberbound.blurb);
   });
 
-  it("says out loud that a class is not a build choice yet", () => {
+  it("says what a class decides: look, starting gear and skills", () => {
     view();
-    expect(screen.getByTestId("create-character").textContent).toMatch(/does not change your\s+numbers/i);
+    const text = screen.getByTestId("create-character").textContent!;
+    expect(text).not.toMatch(/does not change your\s+numbers/i);
+    expect(text).toMatch(/skills/i);
   });
 
   describe("the name", () => {

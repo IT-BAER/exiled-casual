@@ -120,8 +120,7 @@ export function CreateCharacter({
           {chosen.blurb}
         </div>
         <div style={{ fontFamily: SERIF, fontSize: 11, color: GOLD_DIM, lineHeight: 1.5 }}>
-          Class picks how you look and what you start in. It does not change your
-          numbers yet.
+          Class picks how you look, what you start in and the skills you learn.
         </div>
 
         <div style={{ flex: 1 }} />
