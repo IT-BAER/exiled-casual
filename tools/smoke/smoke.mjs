@@ -82,7 +82,10 @@ async function runNode(browser, node) {
   const ctx = await browser.newContext({ viewport: VIEWPORT });
   const page = await ctx.newPage();
   page.on("console", (m) => {
-    if (m.type() === "error") errors.console++;
+    // The smoke runs no apps/server, so the dev proxy answers /api/config with a 502;
+    // the client falls back to defaults by design (liveops.ts). Logged, not counted.
+    const noServer = m.location().url.endsWith("/api/config");
+    if (m.type() === "error" && !noServer) errors.console++;
     if (["error", "warning"].includes(m.type())) log.push(`[${m.type()}] ${m.text().slice(0, 300)}`);
   });
   page.on("pageerror", (e) => { errors.page++; log.push(`[pageerror] ${String(e).slice(0, 300)}`); });
