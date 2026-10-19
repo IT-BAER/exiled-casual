@@ -1025,6 +1025,7 @@ export function GameView({
           gold={snapshot.player.gold}
           onCloseVendor={closeVendor}
           equipment={snapshot.equipment}
+          compareKey={settings.ui.compareKey}
           // socketWanted: panel is open and the socket is empty, so ctrl+click / drag sockets a stone.
           socketWanted={panelOpen && socketedStone === null}
           onSocketWaystone={socketWaystone}

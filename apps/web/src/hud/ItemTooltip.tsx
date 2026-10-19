@@ -41,6 +41,54 @@ function Rule() {
   return <div style={{ height: 1, margin: "8px auto", width: "82%", background: "linear-gradient(90deg,transparent,#302f28 18%,#302f28 82%,transparent)" }} />;
 }
 
+/** One tooltip panel's width; a compare row is a multiple of it. */
+const WIDTH = 300;
+/** Space between the panels of a compare row. */
+const ROW_GAP = 6;
+
+/**
+ * Where a `width`-wide panel opens around the pointer at x,y. `x`/`y` are the
+ * TIP of the arrow, and the gap goes on whichever side the panel actually opens
+ * toward. Offsetting the coordinate at the call site instead only worked while
+ * the panel opened down and right; flipped, the same 18px walked it back over
+ * the cursor, and clamped to the right edge it landed under the arrow entirely.
+ */
+function placeAround(x: number, y: number, width: number): React.CSSProperties {
+  const vw = typeof window !== "undefined" ? window.innerWidth : 1920;
+  const vh = typeof window !== "undefined" ? window.innerHeight : 1080;
+  const GAP = 18;
+  // Below the midpoint the tooltip grows upward from the cursor instead of down, so a
+  // tall one (unique, with stats + mods + flavour) cannot run off the bottom edge.
+  // Anchoring an edge avoids measuring the rendered height.
+  const flipUp = y > vh / 2;
+  const flipLeft = x + GAP + width > vw - 8;
+  const left = flipLeft ? Math.max(8, x - GAP - width) : x + GAP;
+  return { position: "fixed", left, zIndex: 50, ...(flipUp ? { bottom: Math.max(8, vh - y + GAP) } : { top: y + GAP }) };
+}
+
+type TooltipItem = Omit<React.ComponentProps<typeof ItemTooltip>, "x" | "y" | "inline">;
+
+/**
+ * The hovered item with what is worn in its slot, side by side the way PoE
+ * compares: worn pieces first, each captioned, the hovered one nearest the cursor.
+ */
+export function ItemCompare({ worn, hovered, x, y }: { worn: TooltipItem[]; hovered: TooltipItem; x: number; y: number }) {
+  const n = worn.length + 1;
+  const place = placeAround(x, y, n * WIDTH + (n - 1) * ROW_GAP);
+  return (
+    <div
+      style={{
+        ...place, display: "flex", gap: ROW_GAP, pointerEvents: "none",
+        // Grown upward, the row hangs from its foot, so the panels share a bottom edge.
+        alignItems: "bottom" in place ? "flex-end" : "flex-start",
+      }}
+    >
+      {worn.map((w, i) => <ItemTooltip key={i} {...w} caption="Equipped" inline />)}
+      <ItemTooltip {...hovered} inline />
+    </div>
+  );
+}
+
 export function ItemTooltip({
   name,
   baseName,
@@ -54,9 +102,15 @@ export function ItemTooltip({
   lines,
   flavour,
   unidentified,
-  x,
-  y,
+  caption,
+  inline = false,
+  x = 0,
+  y = 0,
 }: {
+  /** A line over the header naming what this panel is, e.g. "Equipped" in a compare row. */
+  caption?: string;
+  /** Placed by a parent row rather than around the pointer. */
+  inline?: boolean;
   name: string;
   /** Base type; rendered as a second header line when it differs from the name (rare/unique). */
   baseName?: string;
@@ -73,35 +127,17 @@ export function ItemTooltip({
   flavour?: string;
   /** Unread drop: the mods exist but stay hidden until a Scroll of Wisdom is used. */
   unidentified?: boolean;
-  x: number;
-  y: number;
+  x?: number;
+  y?: number;
 }) {
   const r: Look = RARITY[rarity as keyof typeof RARITY] ?? RARITY.normal;
-  const width = 300;
-  const vw = typeof window !== "undefined" ? window.innerWidth : 1920;
-  const vh = typeof window !== "undefined" ? window.innerHeight : 1080;
-  // `x`/`y` are the pointer, which is the TIP of the arrow, and the panel is
-  // placed around it: the gap goes on whichever side the panel actually opens
-  // toward. Offsetting the coordinate at the call site instead only worked while
-  // the panel opened down and right; flipped, the same 18px walked it back over
-  // the cursor, and clamped to the right edge it landed under the arrow entirely.
-  const GAP = 18;
-  // Below the midpoint the tooltip grows upward from the cursor instead of down, so a
-  // tall one (unique, with stats + mods + flavour) cannot run off the bottom edge.
-  // Anchoring an edge avoids measuring the rendered height.
-  const flipUp = y > vh / 2;
-  const flipLeft = x + GAP + width > vw - 8;
-  const left = flipLeft ? Math.max(8, x - GAP - width) : x + GAP;
-  const place = flipUp ? { bottom: Math.max(8, vh - y + GAP) } : { top: y + GAP };
   return (
     <div
       data-testid="item-tooltip"
       style={{
-        position: "fixed",
-        left,
-        ...place,
-        zIndex: 50,
-        width,
+        ...(inline ? {} : placeAround(x, y, WIDTH)),
+        width: WIDTH,
+        flexShrink: 0,
         pointerEvents: "none",
         fontFamily: SERIF,
         textAlign: "center",
@@ -110,6 +146,11 @@ export function ItemTooltip({
         boxShadow: "0 8px 28px rgba(0,0,0,0.7)",
       }}
     >
+      {caption && (
+        <div style={{ color: LABEL_GREY, fontSize: 11, letterSpacing: 2, textTransform: "uppercase", padding: "4px 0 3px" }}>
+          {caption}
+        </div>
+      )}
       <div
         style={{
           position: "relative",

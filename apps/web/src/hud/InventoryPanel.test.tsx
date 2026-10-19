@@ -853,3 +853,52 @@ describe("InventoryPanel sounds", () => {
     expect(heard()).toEqual([]);
   });
 });
+
+describe("comparing with what is worn", () => {
+  const helm = (name: string) => ({ rarity: "rare" as const, name, itemClass: "helmet", lines: [] as string[] });
+  const bag = { cols: 12, rows: 5, items: [{ x: 0, y: 0, w: 2, h: 2, ...helm("Dread Crown") }] };
+  const worn = { helmet: helm("Old Cowl") };
+  const hoverBagHelm = () => fireEvent.mouseEnter(screen.getByTestId("inventory-item-0"), { clientX: 100, clientY: 100 });
+  const tips = () => screen.queryAllByTestId("item-tooltip").map((t) => t.textContent ?? "");
+
+  it("holding Ctrl over a bag item shows the worn one beside it, marked Equipped", () => {
+    render(<InventoryPanel inventory={bag} equipment={worn} onClose={() => {}} />);
+    hoverBagHelm();
+    expect(tips()).toHaveLength(1);
+    fireEvent.keyDown(window, { key: "Control" });
+    expect(tips()).toHaveLength(2);
+    expect(tips().find((t) => t.includes("Old Cowl"))).toContain("Equipped");
+    expect(tips().find((t) => t.includes("Dread Crown"))).not.toContain("Equipped");
+  });
+
+  it("letting go of the key, or leaving the window, puts it back to one", () => {
+    render(<InventoryPanel inventory={bag} equipment={worn} onClose={() => {}} />);
+    hoverBagHelm();
+    fireEvent.keyDown(window, { key: "Control" });
+    fireEvent.keyUp(window, { key: "Control" });
+    expect(tips()).toHaveLength(1);
+    fireEvent.keyDown(window, { key: "Control" });
+    fireEvent.blur(window);
+    expect(tips()).toHaveLength(1);
+  });
+
+  it("answers to Shift instead when that is the chosen key", () => {
+    render(<InventoryPanel inventory={bag} equipment={worn} compareKey="shift" onClose={() => {}} />);
+    hoverBagHelm();
+    fireEvent.keyDown(window, { key: "Control" });
+    expect(tips()).toHaveLength(1);
+    fireEvent.keyDown(window, { key: "Shift" });
+    expect(tips()).toHaveLength(2);
+  });
+
+  it("shows one tooltip when the slot is empty, or when the hover is the worn piece itself", () => {
+    const { rerender } = render(<InventoryPanel inventory={bag} equipment={{}} onClose={() => {}} />);
+    hoverBagHelm();
+    fireEvent.keyDown(window, { key: "Control" });
+    expect(tips()).toHaveLength(1);
+    rerender(<InventoryPanel inventory={bag} equipment={worn} onClose={() => {}} />);
+    fireEvent.mouseLeave(screen.getByTestId("inventory-item-0"));
+    fireEvent.mouseEnter(screen.getByTestId("equip-slot-helmet"), { clientX: 100, clientY: 100 });
+    expect(tips()).toEqual([expect.stringContaining("Old Cowl")]);
+  });
+});

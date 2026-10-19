@@ -16,7 +16,7 @@
  */
 import React from "react";
 import { DISPLAY, SERIF, Divider, FramedPanel, GOLD, GOLD_DIM, MENU_ART, MenuButton, PARCHMENT } from "./frames";
-import { DEFAULT_KEYBINDS_BY_MODE, DEFAULT_SETTINGS, MOVE_ACTIONS, controlModeOf, type ControlMode, GRAPHICS_PRESETS, MIN_RESOLUTION_SCALE, presetForRenderer, presetOf, type GraphicsPreset, type KeybindAction, type Keybinds, type Settings, type ShadowQuality } from "../settings";
+import { DEFAULT_KEYBINDS_BY_MODE, DEFAULT_SETTINGS, MOVE_ACTIONS, controlModeOf, type CompareKey, type ControlMode, GRAPHICS_PRESETS, MIN_RESOLUTION_SCALE, presetForRenderer, presetOf, type GraphicsPreset, type KeybindAction, type Keybinds, type Settings, type ShadowQuality } from "../settings";
 import { gpuRenderer } from "../gpu";
 import { playSoundPreview, type SoundPreviewCategory } from "../audio/bus";
 // hud/layout.ts imports nothing, so the menu bundle gains two numbers, not the HUD.
@@ -357,6 +357,18 @@ export function OptionsPanel({
                   Reset to Default
                 </MenuButton>
               </div>
+              <Group>Items</Group>
+              <Row label="Compare Items" note="Hold over an item to see what you wear in its slot beside it.">
+                <Choice<CompareKey>
+                  label="Compare Items"
+                  value={settings.ui.compareKey}
+                  options={[
+                    { value: "ctrl", label: "Ctrl" },
+                    { value: "shift", label: "Shift" },
+                  ]}
+                  onPick={(compareKey) => setUi({ compareKey })}
+                />
+              </Row>
             </>
           ) : (
             <>

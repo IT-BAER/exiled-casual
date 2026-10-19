@@ -75,6 +75,8 @@ export interface UiSettings {
   keybinds: Record<ControlMode, Keybinds>;
   /** Each character's control mode by character id. Absent: never chose, plays mouse. */
   controls: Record<string, ControlMode>;
+  /** Held over an item, shows what is worn in its slot beside it. */
+  compareKey: CompareKey;
   /**
    * Print what the sim is doing to the browser console (see debug.ts). Default
    * OFF: it is a firehose, and it is here for the session where something needs
@@ -89,6 +91,10 @@ export interface UiSettings {
  */
 export type ControlMode = "mouse" | "wasd";
 export const CONTROL_MODES: readonly ControlMode[] = ["mouse", "wasd"];
+
+/** The modifier that compares a hovered item with the equipped one. */
+export type CompareKey = "ctrl" | "shift";
+export const COMPARE_KEYS: readonly CompareKey[] = ["ctrl", "shift"];
 
 /** Everything a key can be told to do. Escape stays fixed. */
 export const KEYBIND_ACTIONS = [
@@ -222,6 +228,7 @@ export const DEFAULT_SETTINGS: Settings = {
     monsterHealthBars: true,
     keybinds: { mouse: { ...DEFAULT_KEYBINDS_BY_MODE.mouse }, wasd: { ...DEFAULT_KEYBINDS_BY_MODE.wasd } },
     controls: {},
+    compareKey: "ctrl",
     debugLogging: false,
   },
 };
@@ -347,6 +354,7 @@ export function sanitize(raw: unknown, renderer?: string): Settings {
       monsterHealthBars: bool(u["monsterHealthBars"], d.ui.monsterHealthBars),
       keybinds: keybindProfiles(u["keybinds"]),
       controls: controls(u["controls"]),
+      compareKey: member(u["compareKey"], COMPARE_KEYS, d.ui.compareKey),
       debugLogging: bool(u["debugLogging"], d.ui.debugLogging),
     },
   };

@@ -129,6 +129,12 @@ describe("sanitize", () => {
     expect(sanitize({ ui: { monsterHealthBars: "yes" } }).ui.monsterHealthBars).toBe(true);
   });
 
+  it("compares items on Ctrl by default, keeps a saved Shift, and refuses anything else", () => {
+    expect(sanitize(null).ui.compareKey).toBe("ctrl");
+    expect(sanitize({ ui: { compareKey: "shift" } }).ui.compareKey).toBe("shift");
+    expect(sanitize({ ui: { compareKey: "alt" } }).ui.compareKey).toBe("ctrl");
+  });
+
   it("refuses an enum member it has never heard of", () => {
     const got = sanitize({ graphics: { shadows: "ultra", atmosphere: "swamp" } });
     expect(got.graphics.shadows).toBe(DEFAULT_SETTINGS.graphics.shadows);

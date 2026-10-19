@@ -343,6 +343,15 @@ describe("keybinds tab", () => {
     expect((onChange.mock.calls[0]![0] as Settings).ui.keybinds.mouse.portal).toBe("3");
   });
 
+  it("picks the compare-items key, Ctrl first", () => {
+    const { onChange } = setup();
+    openTab();
+    const group = screen.getByRole("radiogroup", { name: /compare items/i });
+    expect(within(group).getByRole("radio", { name: /ctrl/i }).getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(within(group).getByRole("radio", { name: /shift/i }));
+    expect((onChange.mock.calls[0]![0] as Settings).ui.compareKey).toBe("shift");
+  });
+
   it("resets the keymap shown alone", () => {
     const keybinds = {
       mouse: { ...DEFAULT_SETTINGS.ui.keybinds.mouse, pickup: "v" },

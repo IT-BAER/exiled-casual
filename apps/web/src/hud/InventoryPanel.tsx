@@ -1,9 +1,9 @@
 import React from "react";
 import type { ContainerId, DisplayItem, EquipSlotId, Intent, Snapshot } from "@exiled/protocol";
 import { SORT_MODES } from "@exiled/protocol";
-import { canEquip } from "@exiled/simulation";
+import { canEquip, EQUIP_SLOTS_BY_CLASS } from "@exiled/simulation";
 import { currencyAccepts, currencyResultRarity, SHARDS_PER_ORB } from "@exiled/rules";
-import { ItemTooltip } from "./ItemTooltip";
+import { ItemCompare, ItemTooltip } from "./ItemTooltip";
 import { playDropSound } from "../audio/drop-sound";
 import { playSfx } from "../audio/sfx";
 import { VENDOR_NAME, VENDOR_TITLE } from "../npc";
@@ -323,9 +323,11 @@ function SectionRule({ children }: { children?: React.ReactNode }) {
 // memo: GameView renders at 30 Hz while monsters move; this panel only when its own props change.
 export const InventoryPanel = React.memo(function InventoryPanel({
   inventory, stash, vendor = EMPTY_SHELF, buyback = EMPTY_SHELF, gold = 0, equipment = {}, shards = {}, vendorOpen = false,
-  socketWanted = false,
+  socketWanted = false, compareKey = "ctrl",
   onClose, onCloseStash, onCloseVendor, onIntent, onSocketWaystone,
 }: {
+  /** The modifier that, held over an item, shows what is worn in its slot beside it. */
+  compareKey?: "ctrl" | "shift";
   inventory: Inventory; stash?: Inventory; equipment?: Equipment;
   /** The vendor's shelf, priced per cell. Absent on a snapshot built without a session. */
   vendor?: Snapshot["vendor"];
@@ -398,6 +400,28 @@ export const InventoryPanel = React.memo(function InventoryPanel({
     : "slot" in at
       ? equipment[at.slot]
       : grids[at.grid]?.items.find((i) => i.x === at.ix && i.y === at.iy);
+  // PoE's compare: the key held over a loose item puts what is worn beside it.
+  // Read off key events rather than the mouse's modifiers, so pressing the key
+  // with the cursor already resting on the item shows it without a nudge.
+  const compareName = compareKey === "shift" ? "Shift" : "Control";
+  const [comparing, setComparing] = React.useState(false);
+  React.useEffect(() => {
+    const down = (e: KeyboardEvent) => { if (e.key === compareName) setComparing(true); };
+    const up = (e: KeyboardEvent) => { if (e.key === compareName) setComparing(false); };
+    // Alt-tab away with the key down never delivers its keyup here.
+    const blur = () => setComparing(false);
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    window.addEventListener("blur", blur);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+      window.removeEventListener("blur", blur);
+    };
+  }, [compareName]);
+  const worn: DisplayItem[] = comparing && hoverItem && at !== undefined && !("slot" in at)
+    ? (EQUIP_SLOTS_BY_CLASS[hoverItem.itemClass ?? ""] ?? []).flatMap((s) => equipment[s] ?? [])
+    : [];
   // `w`/`h` are the held piece's footprint in cells, carried on the drag because
   // DisplayItem itself has no size: only the backpack entry that wraps it does.
   // `ox`/`oy` are where the press landed and `carried` says the piece is riding the
@@ -1171,7 +1195,9 @@ export const InventoryPanel = React.memo(function InventoryPanel({
     {/* The tooltip and the drag ghost ride over every panel, the stash layer
         included, or an item picked up in the bag vanishes behind the stash. */}
     <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 60, fontFamily: SERIF, color: PARCHMENT }}>
-      {hoverItem && <ItemTooltip {...hoverItem} x={hover!.x} y={hover!.y} />}
+      {hoverItem && (worn.length > 0
+        ? <ItemCompare worn={worn} hovered={hoverItem} x={hover!.x} y={hover!.y} />
+        : <ItemTooltip {...hoverItem} x={hover!.x} y={hover!.y} />)}
       {armed && armedPos && !drag && armed.icon && (
         <img
           data-testid="armed-icon"

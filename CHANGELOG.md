@@ -12,6 +12,8 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ### Added
 
+- Hold Ctrl over an item to see what you wear in its slot beside it. Options >
+  Keybinds can switch the key to Shift.
 - Hold Shift while you click with an orb or scroll on the cursor, and it stays
   there for the next item until the stack runs out.
 
