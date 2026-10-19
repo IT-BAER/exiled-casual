@@ -268,6 +268,8 @@ export interface MonsterC {
   dashUntilTick?: number;
   /** 1 = rare, 0 = normal */
   rare: 0 | 1;
+  /** 1 = magic. Optional, written only on a magic monster, so older saves and checksums stay as they were. */
+  magic?: 1;
   /** 1 = boss add, 0 = normal spawn */
   summoned: 0 | 1;
 }

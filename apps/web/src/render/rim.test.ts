@@ -3,7 +3,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { FreeCamera, Mesh, MeshBuilder, NullEngine, PBRMaterial, Scene, StandardMaterial, Vector3 } from "@babylonjs/core";
 import type { SubMesh, UniformBuffer } from "@babylonjs/core";
 import { addRim } from "./rim";
-import { setHitFlash } from "./meshes";
+import { setHitFlash, setTier } from "./meshes";
 
 let engine: NullEngine | undefined;
 afterEach(() => {
@@ -175,5 +175,73 @@ describe("hit flash through the rim plugin", () => {
     setHitFlash(root, 1);
     expect(blob.renderOverlay).toBeFalsy();
     expect(aura.renderOverlay).toBeFalsy();
+  });
+});
+
+/**
+ * PoE's rarity shimmer: magic blue, rare yellow, hugging the silhouette. It rides
+ * the same per-mesh metadata as the hit flash, so a species keeps one material
+ * and a magic imp beside a plain one still draws plain.
+ */
+describe("rarity glow through the rim plugin", () => {
+  function fakeUbo(): { floats: Record<string, number>; colors: Record<string, [number, number, number]>; ubo: UniformBuffer } {
+    const floats: Record<string, number> = {};
+    const colors: Record<string, [number, number, number]> = {};
+    const ubo = {
+      updateFloat: (name: string, v: number) => { floats[name] = v; },
+      updateColor3: (name: string, c: { r: number; g: number; b: number }) => { colors[name] = [c.r, c.g, c.b]; },
+    } as unknown as UniformBuffer;
+    return { floats, colors, ubo };
+  }
+
+  it("shimmers in the tier colour after tone mapping, along the outline", () => {
+    const material = new PBRMaterial("hide", scene());
+    addRim(material);
+    const plugin = material.pluginManager!.getPlugin("ExiledRim")!;
+    const names = plugin.getUniforms().ubo!.map((u) => u.name);
+    expect(names).toEqual(expect.arrayContaining(["tierGlow", "tierColor", "glowTime"]));
+    const code = plugin.getCustomCode("fragment")!.CUSTOM_FRAGMENT_BEFORE_FRAGCOLOR!;
+    expect(code).toMatch(/tierColor \* .*rimFacing/);
+    expect(code).toContain("glowTime");
+  });
+
+  it("binds magic blue, rare yellow and nothing for a plain mesh", () => {
+    const s = scene();
+    const material = new PBRMaterial("hide", s);
+    addRim(material);
+    const plugin = material.pluginManager!.getPlugin("ExiledRim")!;
+    const sub = (metadata: unknown) => ({ getMesh: () => ({ metadata }) }) as unknown as SubMesh;
+
+    const magic = fakeUbo();
+    plugin.hardBindForSubMesh(magic.ubo, s, engine!, sub({ tier: "magic" }));
+    expect(magic.floats["tierGlow"]).toBeGreaterThan(0);
+    const [mr, , mb] = magic.colors["tierColor"]!;
+    expect(mb).toBeGreaterThan(mr);
+
+    const rare = fakeUbo();
+    plugin.hardBindForSubMesh(rare.ubo, s, engine!, sub({ tier: "rare" }));
+    const [rr, , rb] = rare.colors["tierColor"]!;
+    expect(rr).toBeGreaterThan(rb);
+
+    const plain = fakeUbo();
+    plugin.hardBindForSubMesh(plain.ubo, s, engine!, sub(null));
+    expect(plain.floats["tierGlow"]).toBe(0);
+  });
+
+  it("setTier marks the body meshes only, never the ground blob or the aura ring", () => {
+    const s = scene();
+    const root = new Mesh("actor", s);
+    const body = new Mesh("body", s);
+    body.parent = root;
+    const hide = new PBRMaterial("hide", s);
+    addRim(hide);
+    body.material = hide;
+    const blob = new Mesh("groundblob-actor", s);
+    blob.parent = root;
+    blob.material = hide;
+
+    setTier(root, "rare");
+    expect((body.metadata as { tier?: string }).tier).toBe("rare");
+    expect((blob.metadata as { tier?: string } | null)?.tier).toBeUndefined();
   });
 });

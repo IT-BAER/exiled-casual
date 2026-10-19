@@ -1,5 +1,22 @@
 import type { MonsterDef, RareModifier } from "@exiled/content-schema";
 
+/** PoE's magic monster carries +30% damage; life is doubled, not PoE's +148%, because a pack here is a handful of bodies. */
+const MAGIC_LIFE_MUL_PCT = 200;
+const MAGIC_DAMAGE_MUL_PCT = 130;
+
+/**
+ * A magic monster: the same creature, tougher and harder-hitting. PoE rolls one
+ * modifier per magic monster; this has none yet, only the stat block, so its
+ * element and resistances stay the base's.
+ */
+export function makeMagic(def: MonsterDef): MonsterDef {
+  return {
+    ...def,
+    maxLifeFixed: Math.trunc(def.maxLifeFixed * MAGIC_LIFE_MUL_PCT / 100),
+    attackDamage: { ...def.attackDamage, amountFixed: Math.trunc(def.attackDamage.amountFixed * MAGIC_DAMAGE_MUL_PCT / 100) },
+  };
+}
+
 /**
  * Apply rare-tier multipliers to a normal MonsterDef. Returns a new object;
  * never mutates the original.

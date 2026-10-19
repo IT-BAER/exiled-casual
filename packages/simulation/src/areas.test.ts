@@ -267,6 +267,37 @@ describe("pool-driven spawning", () => {
     expect(pos.x).toBe(fp(last.x));
     expect(pos.y).toBe(fp(last.y));
   });
+
+  it("one whole pack is magic: one species, never the rare's pack, the same pack for the same seed", () => {
+    const magicOf = (mapSeed: number) => {
+      const { world, session, layout } = mapFixture({ mapSeed });
+      buildArea(world, "map", session, layout);
+      return world.query("monster").filter((e) => world.get<MonsterC>(e, "monster")!.magic === 1)
+        .map((e) => ({ m: world.get<MonsterC>(e, "monster")!, p: world.get<Position>(e, "position")! }));
+    };
+    for (let seed = 1; seed <= 12; seed++) {
+      const magic = magicOf(seed);
+      expect(magic.length, `seed ${seed}`).toBeGreaterThan(0);
+      expect(new Set(magic.map((x) => x.m.defId)).size, `seed ${seed}`).toBe(1);
+      for (const x of magic) expect(x.m.rare).toBe(0);
+      expect(magicOf(seed).map((x) => `${x.p.x},${x.p.y}`)).toEqual(magic.map((x) => `${x.p.x},${x.p.y}`));
+    }
+  });
+
+  it("a magic monster carries twice the life of its normal kin in the same map", () => {
+    for (let seed = 1; seed <= 30; seed++) {
+      const { world, session, layout } = mapFixture({ mapSeed: seed });
+      buildArea(world, "map", session, layout);
+      const mons = world.query("monster").filter((e) => !world.has(e, "boss"))
+        .map((e) => ({ m: world.get<MonsterC>(e, "monster")!, h: world.get<Health>(e, "health")! }));
+      const magic = mons.find((x) => x.m.magic === 1)!;
+      const kin = mons.find((x) => x.m.magic !== 1 && x.m.rare === 0 && x.m.defId === magic.m.defId);
+      if (!kin) continue;
+      expect(magic.h.maxLife).toBe(2 * kin.h.maxLife);
+      return;
+    }
+    throw new Error("no seed in 1..30 fields a magic pack beside a normal pack of its species");
+  });
 });
 
 describe("areaCollision", () => {

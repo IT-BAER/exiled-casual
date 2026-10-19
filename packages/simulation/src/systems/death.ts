@@ -19,12 +19,12 @@ import type { CollisionRef } from "../collision";
 
 /**
  * Monster rarity as the loot math indexes it: 0..3 normal, magic, rare, unique.
- * We have no magic monsters yet; the index exists so adding them is data.
  * A boss is unique, which is 29.5x a normal monster's quantity — that burst is
  * docs/09 rule 3 (intensity beats density) falling out of PoE's own numbers
  * rather than a hardcoded count.
  */
 const MR_NORMAL = 0;
+const MR_MAGIC = 1;
 const MR_RARE = 2;
 const MR_UNIQUE = 3;
 /** Percent of max life each kill heals the player. */
@@ -69,6 +69,7 @@ export function registerDeath(sim: Simulation, collisionRef?: CollisionRef): voi
       const s = sessionE !== undefined ? world.get<SessionC>(sessionE, "session") : undefined;
       const isBoss = world.has(e, "boss");
       const isRare = world.get<MonsterC>(e, "monster")?.rare === 1;
+      const isMagic = world.get<MonsterC>(e, "monster")?.magic === 1;
       const share = isBoss || isRare ? 100 : killSharePct(world.get<MonsterC>(e, "monster")?.defId ?? "");
 
       // A dying map boss completes the active Atlas node before it is destroyed.
@@ -126,7 +127,7 @@ export function registerDeath(sim: Simulation, collisionRef?: CollisionRef): voi
       if (s && s.area === "map") {
         const pos = world.get<Position>(e, "position");
         if (pos) {
-          const mr = isBoss ? MR_UNIQUE : isRare ? MR_RARE : MR_NORMAL;
+          const mr = isBoss ? MR_UNIQUE : isRare ? MR_RARE : isMagic ? MR_MAGIC : MR_NORMAL;
           const ws = waystoneScaleFor(s.waystoneSeed);
           const area = Math.trunc((quantityScaleMilli(MR_NORMAL, ws.quantityPct, 0) * share) / 100);
           // A boss can never pay nothing: docs/09 rule 4, the map closes on a
@@ -165,7 +166,7 @@ export function registerDeath(sim: Simulation, collisionRef?: CollisionRef): voi
       if (s && s.area === "map" && sessionE !== undefined) {
         const prog = world.get<ProgressC>(sessionE, "progress");
         if (prog) {
-          const kind = isBoss ? "boss" : isRare ? "rare" : "normal";
+          const kind = isBoss ? "boss" : isRare ? "rare" : isMagic ? "magic" : "normal";
           // The stone's experience modifier is the last thing applied, so it
           // scales what the kill was actually worth after the level penalty.
           const base = xpAward(prog.level, areaLevel(s.areaTier), kind);

@@ -9,7 +9,7 @@ import { WISDOM_SCROLL_BASE_ID, isCurrency } from "@exiled/content-runtime";
 import { MOVE_SOCKET } from "@exiled/protocol";
 import type { World } from "../ecs";
 import { registerPlayerMovement, ROLL_TICKS } from "./player-movement";
-import type { SessionC, ProgressC, SkillsC, Position, Health, RollC, MoveTarget } from "../components";
+import type { SessionC, ProgressC, SkillsC, Position, Health, RollC, MoveTarget, MonsterC } from "../components";
 
 /** Ground equipment only: any kill can also pay currency. */
 const equipmentDrops = (w: World) =>
@@ -328,7 +328,7 @@ describe("registerDeath", () => {
   })();
 
   /** A dead monster in a tier-5 map, boss or rare, ready for one `sim.step`. */
-  function makeDrop(opts: { boss: boolean; rare?: boolean; mapSeed?: number; waystoneSeed?: number }) {
+  function makeDrop(opts: { boss: boolean; rare?: boolean; magic?: boolean; mapSeed?: number; waystoneSeed?: number }) {
     const sim = new Simulation();
     registerDeath(sim);
     const w = sim.world;
@@ -341,6 +341,7 @@ describe("registerDeath", () => {
     w.set(m, "health", { life: 0, maxLife: 40 });
     w.set(m, "monster", { defId: "d", moveSpeed: 0, bodyRadius: 0, attackRange: 0, attackCooldownTicks: 0, attackDamage: 0, attackType: 1, attackReadyTick: 0, state: "idle", rare: opts.boss || opts.rare === false ? 0 : 1, summoned: 0 });
     if (opts.boss) w.set(m, "boss", { phase: 1, nextAbilityTick: 0, spawnX: 0, spawnY: 0, rootedUntilTick: 0 });
+    if (opts.magic) w.set(m, "monster", { ...w.get<MonsterC>(m, "monster")!, rare: 0, magic: 1 });
     return { sim, w };
   }
 
@@ -394,6 +395,21 @@ describe("registerDeath", () => {
     expect(counts.filter((c) => c === 0).length).toBeGreaterThan(counts.length / 2);
   });
 
+  it("a magic monster pays on the magic channel: nearly always once, gear a level up", () => {
+    // 600% increased quantity against a 14% base is 0.98 expected items.
+    const kills = Array.from({ length: 60 }, (_, i) => {
+      const { sim, w } = makeDrop({ boss: false, magic: true, mapSeed: i + 1 });
+      sim.step([]);
+      return w;
+    });
+    const counts = kills.map((w) => allDrops(w).length);
+    expect(Math.max(...counts)).toBe(1);
+    expect(counts.filter((c) => c === 1).length).toBeGreaterThan(50);
+    const gear = kills.flatMap((w) => equipmentDrops(w).map((e) => (w.get(e, "item") as { item: { itemLevel: number } }).item.itemLevel));
+    expect(gear.length).toBeGreaterThan(0);
+    for (const ilvl of gear) expect(ilvl).toBe(33); // 2 + 6*5, +1 for a magic monster
+  });
+
   it("a richer stone pays more", () => {
     const lean = Array.from({ length: 40 }, (_, i) => {
       const { sim, w } = makeDrop({ boss: false, mapSeed: i + 1 });
@@ -413,7 +429,7 @@ describe("registerDeath", () => {
   /** A world with a session at `area`/`areaTier`, a progress row, and one dead monster. */
   function makeXpKill(opts: {
     area: "hideout" | "map"; areaTier: number; xp: number; level?: number;
-    rare?: 0 | 1; boss?: boolean; defId?: string;
+    rare?: 0 | 1; magic?: boolean; boss?: boolean; defId?: string;
   }) {
     const sim = new Simulation();
     registerDeath(sim);
@@ -436,6 +452,7 @@ describe("registerDeath", () => {
     w.set(m, "monster", { defId: opts.defId ?? "d", moveSpeed: 0, bodyRadius: 0, attackRange: 0, attackCooldownTicks: 0, attackDamage: 0, attackType: 1, attackReadyTick: 0, state: "idle", rare: opts.rare ?? 0, summoned: 0 });
     w.set(m, "health", { life: 0, maxLife: fp(10) });
     if (opts.boss) w.set(m, "boss", { phase: 1, nextAbilityTick: 0, spawnX: 0, spawnY: 0, rootedUntilTick: 0 });
+    if (opts.magic) w.set(m, "monster", { ...w.get<MonsterC>(m, "monster")!, magic: 1 });
 
     return { sim, world: w, sessionE, p };
   }
@@ -464,6 +481,13 @@ describe("registerDeath", () => {
     swarm.sim.step([]);
     expect(swarm.world.get<ProgressC>(swarm.sessionE, "progress")!.xp)
       .toBe(whole.world.get<ProgressC>(whole.sessionE, "progress")!.xp);
+  });
+
+  it("a magic kill banks twice a normal's experience", () => {
+    // monsterXp(20, "magic") = 40 * 1.7 = 68.
+    const { sim, world, sessionE } = makeXpKill({ area: "map", areaTier: 3, xp: 0, level: 20, magic: true });
+    sim.step([]);
+    expect(world.get<ProgressC>(sessionE, "progress")!.xp).toBe(68);
   });
 
   it("a boss is worth forty normals", () => {

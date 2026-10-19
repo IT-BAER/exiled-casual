@@ -193,9 +193,9 @@ export const PICKUP_RADIUS = fp(2.5);
 // ---------------------------------------------------------------------------
 
 /** Lab-only spawn control, so a test arena can start empty and be filled on demand. */
-export type SpawnKind = "imp" | "pack" | "rare" | "boss" | "clear" | "hurtboss" | "item" | "shields" | "levelup";
+export type SpawnKind = "imp" | "pack" | "magic" | "rare" | "boss" | "clear" | "hurtboss" | "item" | "shields" | "levelup";
 
-export const SPAWN_KINDS: readonly SpawnKind[] = ["imp", "pack", "rare", "boss", "clear", "hurtboss", "item", "shields", "levelup"];
+export const SPAWN_KINDS: readonly SpawnKind[] = ["imp", "pack", "magic", "rare", "boss", "clear", "hurtboss", "item", "shields", "levelup"];
 
 /**
  * `characterId` names the roster entry this session plays. Optional so the lab
@@ -228,6 +228,8 @@ export interface SnapshotEntity {
   radius?: number;
   life?: number; maxLife?: number;
   rare?: boolean;
+  /** monster only: PoE's blue tier. Absent on every other monster. */
+  magic?: boolean;
   /**
    * A rare's elemental theme, so the renderer can say which resistance it is
    * about to demand. Present only on rares; normals and bosses hit with what

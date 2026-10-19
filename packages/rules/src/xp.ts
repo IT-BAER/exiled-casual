@@ -41,7 +41,8 @@ export function xpToNext(level: number): number {
  * trash bodies per map measured 53 -> 62.7 (playtest.ts kills, same bot/seeds)
  * against the mapgen density pass, so normal is 1 / 1.18 to keep total XP/map flat.
  */
-const KIND_MULT = { normal: 0.85, rare: 8, boss: 40 } as const;
+// magic is twice a normal: it carries twice the life (rules/rare.ts makeMagic).
+const KIND_MULT = { normal: 0.85, magic: 1.7, rare: 8, boss: 40 } as const;
 const XP_AREA_OFFSET = 20;
 export type MonsterXpKind = keyof typeof KIND_MULT;
 

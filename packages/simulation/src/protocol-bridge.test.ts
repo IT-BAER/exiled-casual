@@ -204,6 +204,16 @@ describe("buildSnapshot", () => {
     }
   });
 
+  it("a magic monster says so in the snapshot, and a normal one carries no flag", () => {
+    const { world, sim } = createCombatSim(42);
+    const normal = addMonster(world, 0, 0);
+    const magic = addMonster(world, 2, 0);
+    world.set<MonsterC>(magic, "monster", { ...world.get<MonsterC>(magic, "monster")!, magic: 1 });
+    const snap = buildSnapshot(world, sim, 0, CONTENT_VERSION);
+    expect(snap.entities.find((e) => e.id === magic)!.magic).toBe(true);
+    expect(snap.entities.find((e) => e.id === normal)!.magic).toBeUndefined();
+  });
+
   it("a monster entity carries its body radius, so the client can measure reach to its surface", () => {
     const { world, sim } = createCombatSim(42);
     const snap = buildSnapshot(world, sim, 0, CONTENT_VERSION);

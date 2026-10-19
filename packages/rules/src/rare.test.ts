@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { fp } from "@exiled/fixed-point";
 import { resBlock, type MonsterDef, type RareModifier } from "@exiled/content-schema";
-import { makeRare } from "./rare.js";
+import { makeMagic, makeRare } from "./rare.js";
 
 const cinderImp: MonsterDef = {
   id: "monster.cinder_imp.v1",
@@ -69,5 +69,23 @@ describe("makeRare", () => {
 
   it("returns a new object (not same reference)", () => {
     expect(makeRare(cinderImp, RARE_TEMPLATE)).not.toBe(cinderImp);
+  });
+});
+
+describe("makeMagic", () => {
+  it("doubles life and adds 30% damage: 40000 -> 80000, 6000 -> 7800", () => {
+    const magic = makeMagic(cinderImp);
+    expect(magic.maxLifeFixed).toBe(80000);
+    expect(magic.attackDamage.amountFixed).toBe(7800);
+  });
+
+  it("keeps its name, element, speed and resistances, and leaves the def alone", () => {
+    const magic = makeMagic(cinderImp);
+    expect(magic.name).toBe("Cinder Imp");
+    expect(magic.attackDamage.type).toBe("physical");
+    expect(magic.moveSpeedFixed).toBe(cinderImp.moveSpeedFixed);
+    expect(magic.defenses).toEqual(cinderImp.defenses);
+    expect(cinderImp.maxLifeFixed).toBe(fp(40));
+    expect(magic).not.toBe(cinderImp);
   });
 });

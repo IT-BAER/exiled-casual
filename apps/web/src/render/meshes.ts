@@ -19,7 +19,7 @@ import { attachRig, rigOf, type Looks, type RigParts } from "./rig";
 import { looksForEquipment } from "./gear-looks";
 import { attachGroundModel, GROUND_LOOK_BASES } from "./ground-looks";
 import { groundMaterial } from "./ground-fx";
-import { hasRim, HIT_TINT, HIT_ALPHA } from "./rim";
+import { hasRim, HIT_TINT, HIT_ALPHA, type Tier } from "./rim";
 import { playSfxAt } from "../audio/sfx";
 
 export type MeshKind = "player" | "monster" | "rare" | "boss" | "projectile" | "groundArea" | "telegraph" | "portal" | "mapDevice" | "stash" | "vendor" | "container" | "groundItem" | "gold";
@@ -351,6 +351,16 @@ export function setHitFlash(root: Mesh, t: number): void {
     m.overlayColor = HIT_TINT;
     m.overlayAlpha = HIT_ALPHA * Math.min(1, t);
     m.renderOverlay = true;
+  }
+}
+
+/** Give a creature its rarity shimmer (rim.ts), body meshes only; null clears it. */
+export function setTier(root: Mesh, tier: Tier | null): void {
+  for (const m of [root, ...root.getChildMeshes(false)]) {
+    if (m.name.startsWith("groundblob-") || m.name === "rare-aura" || !hasRim(m.material)) continue;
+    const meta = (m.metadata ??= {}) as { tier?: Tier };
+    if (tier) meta.tier = tier;
+    else delete meta.tier;
   }
 }
 

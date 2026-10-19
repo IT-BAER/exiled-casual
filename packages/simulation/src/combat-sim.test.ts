@@ -107,6 +107,14 @@ describe("createCombatSim", () => {
     expect(health.maxLife).toBe(wardenDef.maxLifeFixed);
   });
 
+  it("lab 'magic' stands up a whole pack of magic imps", () => {
+    const { world } = createCombatSim(42, { monsters: false });
+    spawnLabActors(world, "magic", 0, 0);
+    const mons = world.query("monster").map((e) => world.get<MonsterC>(e, "monster")!);
+    expect(mons.length).toBeGreaterThan(1);
+    for (const m of mons) expect(m.magic).toBe(1);
+  });
+
   it("lab 'hurtboss' chips 20% of maxLife per call, crosses the phase-2 line, and clamps at 0", () => {
     const { world } = createCombatSim(42, { boss: true });
     const boss = world.query("boss")[0]!;

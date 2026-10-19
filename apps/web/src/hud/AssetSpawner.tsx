@@ -10,6 +10,7 @@ import type { SpawnKind } from "@exiled/protocol";
 const SIM_ACTIONS: { kind: SpawnKind; label: string }[] = [
   { kind: "imp", label: "one imp" },
   { kind: "pack", label: "a pack" },
+  { kind: "magic", label: "a magic pack" },
   { kind: "rare", label: "a rare" },
   { kind: "boss", label: "the boss" },
   { kind: "hurtboss", label: "hurt boss -20%" },

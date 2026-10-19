@@ -5,8 +5,9 @@ import { blinkBurst, fxProfile, groundSlam, meleeImpact, setStreakLength } from 
 import { clearFxPools } from "./fx-pool";
 import { HIT_STOP_SCALE, addTrauma, decayTrauma, hitStopMs, shakeOffset, skillShakeWeight, swingWeight } from "./juice";
 import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
-import { animateActor, keepGroundBlobFlat, makeMesh, setHitFlash, updateTelegraph, updatePortal, updateMapDevice, updateStash, updateVendor, updateContainer, updateGroundItem, updateRareElement, portalAppear, portalVanish, isPortalMesh, PORTAL_STAGGER_MS, Y_LIFT } from "./meshes";
+import { animateActor, keepGroundBlobFlat, makeMesh, setHitFlash, setTier, updateTelegraph, updatePortal, updateMapDevice, updateStash, updateVendor, updateContainer, updateGroundItem, updateRareElement, portalAppear, portalVanish, isPortalMesh, PORTAL_STAGGER_MS, Y_LIFT } from "./meshes";
 import type { MeshKind } from "./meshes";
+import type { Tier } from "./rim";
 import { rigOf } from "./rig";
 import type { ReactionClip } from "./rig";
 import { looksForEquipment } from "./gear-looks";
@@ -350,6 +351,8 @@ export class SnapshotRenderer {
   private readonly fromHand = new Map<number, { offset: Vector3; from: { x: number; y: number }; range: number; join: number }>();
   /** What each entity is drawn as, so a dead one can be told from a closed portal. */
   private readonly kinds = new Map<number, MeshKind>();
+  /** The rarity shimmer each monster was last given, so it is set once, not walked every frame. */
+  private readonly tiers = new Map<number, Tier | null>();
   /** Bodies the sim has forgotten, still falling. `until` is the tick they start
    *  to sink on; `restY` is the height they settled at, the sink measured down
    *  from it. */
@@ -715,6 +718,13 @@ export class SnapshotRenderer {
       if (e.rare) {
         updateRareElement(mesh, e.element);
       }
+      if (e.kind === "monster" && !e.boss) {
+        const tier: Tier | null = e.rare ? "rare" : e.magic ? "magic" : null;
+        if (this.tiers.get(e.id) !== tier) {
+          setTier(mesh, tier);
+          this.tiers.set(e.id, tier);
+        }
+      }
     }
 
     // Crossing an area replaces the whole population at once. A portal that went
@@ -787,6 +797,7 @@ export class SnapshotRenderer {
         }
         this.meshes.delete(id);
         this.kinds.delete(id);
+        this.tiers.delete(id);
         this.gait.delete(id);
         this.tilt.delete(id);
         this.yawVel.delete(id);
@@ -1027,6 +1038,7 @@ export class SnapshotRenderer {
     if (!dropDead(this.scene, mesh, push, at)) return false;
     rigOf(mesh)?.stopForDeath();
     creatureOf(mesh)?.stopForDeath();
+    setTier(mesh, null); // the shimmer is the living monster's, PoE's corpses lose it
     this.corpses.push({ mesh, until: next.tick + CORPSE_TICKS });
     return true;
   }

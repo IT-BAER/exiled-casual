@@ -1,6 +1,6 @@
 import { fp } from "@exiled/fixed-point";
 import {
-  baseCasterStats, makeRare, rollItem, FLASK_MAX_CHARGES, START_LEVEL,
+  baseCasterStats, makeMagic, makeRare, rollItem, FLASK_MAX_CHARGES, START_LEVEL,
   offerWaystones, WAYSTONE_OFFER_COUNT, START_GOLD, gainXp, xpToNext,
 } from "@exiled/rules";
 import { SKILLS, MONSTERS, rareTemplate, CONTENT_VERSION, ITEM_POOLS, baseOf, CURRENCY_DROPS, currencyItem, waystoneItem } from "@exiled/content-runtime";
@@ -229,7 +229,7 @@ let labRareSpawns = 0;
 
 export function spawnLabActors(
   world: World,
-  kind: "imp" | "pack" | "rare" | "boss" | "clear" | "hurtboss" | "item" | "shields" | "levelup",
+  kind: "imp" | "pack" | "magic" | "rare" | "boss" | "clear" | "hurtboss" | "item" | "shields" | "levelup",
   cx: number,
   cy: number,
 ): void {
@@ -307,6 +307,9 @@ export function spawnLabActors(
       break;
     case "pack":
       for (const [dx, dy] of PACK_RING) spawnMonster(world, impDef, cx + dx, cy + dy, false);
+      break;
+    case "magic":
+      for (const [dx, dy] of PACK_RING) spawnMonster(world, makeMagic(impDef), cx + dx, cy + dy, false, undefined, true);
       break;
     case "rare":
       // Lab-only: walk the elemental themes press by press, the way the item

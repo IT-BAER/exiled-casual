@@ -23,6 +23,10 @@ describe("monsterXp", () => {
     expect(monsterXp(79, "normal")).toBeCloseTo(84.15);
   });
 
+  it("pays a magic monster for its doubled life: twice a normal", () => {
+    expect(monsterXp(65, "magic")).toBe(2 * monsterXp(65, "normal"));
+  });
+
   it("front-loads: a tier 1 kill is worth 3.5x its area level, a tier 15 one 1.2x", () => {
     expect(monsterXp(8, "normal")).toBe(23.8);
     expect(monsterXp(92, "normal")).toBe(95.2);

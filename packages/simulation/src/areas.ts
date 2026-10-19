@@ -1,7 +1,7 @@
 import { fp, fpDist2, fpMul } from "@exiled/fixed-point";
 import { blockerCollision, gridCollision, hasLineOfSight } from "./collision";
 import {
-  makeRare, mapBaseIdForNode, monsterTierScale, waystoneScaleFor,
+  makeMagic, makeRare, mapBaseIdForNode, monsterTierScale, waystoneScaleFor,
   areaLevel, dropCount, dropCategory, quantityScaleMilli, rollItem, familyForClass,
   MONSTER_ILVL_OFFSET, DROP_POOL,
 } from "@exiled/rules";
@@ -350,6 +350,12 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
     };
     const live = spawns.map(routes);
     const lastLive = live.lastIndexOf(true);
+    // One whole pack is magic, PoE's blue pack. Its own hash, not the bestiary
+    // stream, so which species stand where is the same with or without it.
+    const magicCandidates = live.flatMap((ok, i) => (ok && i !== lastLive ? [i] : []));
+    const magicSocket = magicCandidates.length > 0
+      ? magicCandidates[fnv1a32(`magic:${session.mapSeed}`) % magicCandidates.length]!
+      : -1;
     // Every body placed so far; a new one keeps a metre from all of them.
     // ponytail: linear scan per body, a spatial hash if a map ever fields thousands.
     const placed: { x: number; y: number }[] = [];
@@ -372,7 +378,8 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
         const rare = i === lastLive && j === 0;
         // The map's own seed picks the rare's element, so a given map always
         // demands the same resistance and a replay of it stays identical.
-        const def = rare ? makeRare(base, rareTemplate(session.mapSeed, base.archetype)) : base;
+        const magic = !rare && i === magicSocket;
+        const def = rare ? makeRare(base, rareTemplate(session.mapSeed, base.archetype)) : magic ? makeMagic(base) : base;
         const ring = PACK_SPREAD[j % PACK_SPREAD.length]!;
         const nearX = sx + ring.dx, nearY = sy + ring.dy;
         const farX = sx - ring.dx, farY = sy - ring.dy;
@@ -393,7 +400,7 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
         const pos = fits(first) ? first : fits(other) ? other : kept();
         if (!pos) continue;
         placed.push(pos);
-        spawnMonster(world, def, pos.x, pos.y, rare, scale);
+        spawnMonster(world, def, pos.x, pos.y, rare, scale, magic);
       }
     }
 
@@ -621,6 +628,7 @@ export function spawnMonster(
   y: number,
   rare: boolean,
   scale: { lifeMilli: number; dmgMilli: number } = { lifeMilli: 1000, dmgMilli: 1000 },
+  magic = false,
 ): Entity {
   const scaledLife = fpMul(def.maxLifeFixed, scale.lifeMilli);
   const scaledDmg = fpMul(def.attackDamage.amountFixed, scale.dmgMilli);
@@ -642,6 +650,7 @@ export function spawnMonster(
     state: "idle",
     rare: rare ? 1 : 0,
     summoned: 0,
+    ...(magic ? { magic: 1 as const } : {}),
   });
   world.set<DefensesC>(e, "defenses", {
     res: def.defenses.resPct,
