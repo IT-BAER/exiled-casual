@@ -49,14 +49,17 @@ function tip(recap: Recap, stats: PlayerStats): string {
     : `${label} did the most, and your ${label.toLowerCase()} resistance is capped: more life or energy shield.${shield}`;
 }
 
-function Portrait({ species }: { species: string }) {
+/** The monster's portrait, or for an ailment (no body to draw) its element's glyph. */
+function Portrait({ species, element }: { species: string; element: MonsterElement }) {
   const src = monsterPortrait(species);
   return (
-    <div style={{
-      width: 40, height: 40, flex: "none", borderRadius: 3,
+    <div data-testid="recap-portrait" style={{
+      width: 40, height: 40, flex: "none", borderRadius: 3, display: "grid", placeItems: "center",
       background: "rgba(0,0,0,0.45)", boxShadow: "inset 0 0 0 1px rgba(160,130,90,0.35)",
     }}>
-      {src && <img src={src} alt="" width={40} height={40} style={{ display: "block" }} />}
+      {src
+        ? <img src={src} alt="" width={40} height={40} style={{ display: "block" }} />
+        : <ElementIcon of={element} size={26} />}
     </div>
   );
 }
@@ -71,7 +74,7 @@ export function DeathRecap({ recap, stats }: { recap: Recap; stats: PlayerStats 
   return (
     <div style={{ fontFamily: SERIF, fontSize: 13, color: "#b8ada0", marginBottom: 16 }}>
       <div data-testid="recap-killing-blow" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-        <Portrait species={kb.species} />
+        <Portrait species={kb.species} element={kb.element} />
         <div>
           <div style={{ color: "#7d7469", fontSize: 11, letterSpacing: 2, textTransform: "uppercase" }}>Killing blow</div>
           <div>
@@ -87,7 +90,7 @@ export function DeathRecap({ recap, stats }: { recap: Recap; stats: PlayerStats 
         return (
           <div key={`${s.species}|${s.rare}`} data-testid="recap-source"
             style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-            <Portrait species={s.species} />
+            <Portrait species={s.species} element={s.element} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
                 <span>{sourceName(s.species, s.rare)} <span style={{ color: "#7d7469" }}>x{s.hits}</span></span>

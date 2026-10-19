@@ -2,7 +2,10 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import type { DeathRecap as Recap } from "@exiled/protocol";
-import { DeathRecap } from "./DeathRecap";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
+import { MONSTERS } from "@exiled/content-runtime";
+import { DeathRecap, monsterPortrait } from "./DeathRecap";
 import { testStats } from "../test-fixtures";
 
 afterEach(cleanup);
@@ -45,6 +48,12 @@ describe("DeathRecap", () => {
     expect(rows.map(icon)).toEqual(["/hud/elements/fire.webp", "/hud/elements/physical.webp", "/hud/elements/fire.webp"]);
   });
 
+  it("has a portrait on disk for every monster that can deal a killing blow", () => {
+    const missing = [...MONSTERS.keys()].filter((id) =>
+      !existsSync(resolve(__dirname, "../../public", monsterPortrait(id)!.slice(1))));
+    expect(missing).toEqual([]);
+  });
+
   it("lists the top sources with hit counts, a rare marked as rare, a burn as Burning", () => {
     render(<DeathRecap recap={recap()} stats={stats()} />);
     const rows = screen.getAllByTestId("recap-source");
@@ -54,6 +63,13 @@ describe("DeathRecap", () => {
     expect(rows[1]!.textContent).toContain("Rare Vaal Husk");
     expect(rows[2]!.textContent).toContain("Burning");
     expect(rows[2]!.querySelector("img:not([data-element])")).toBeNull();
+  });
+
+  it("fills an ailment's portrait box with its element instead of leaving it empty", () => {
+    render(<DeathRecap recap={recap({ killingBlow: { species: "ailment.poison", rare: false, damage: 1, element: "chaos", pctOfLife: 1 } })} stats={stats()} />);
+    const box = (el: Element) => el.querySelector("[data-testid=recap-portrait]")!;
+    expect(box(screen.getByTestId("recap-killing-blow")).querySelector("img")!.getAttribute("src")).toBe("/hud/elements/chaos.webp");
+    expect(box(screen.getAllByTestId("recap-source")[2]!).querySelector("img")!.getAttribute("src")).toBe("/hud/elements/fire.webp");
   });
 
   it("names a poison and a bleed by the ailment, not as Unknown", () => {
