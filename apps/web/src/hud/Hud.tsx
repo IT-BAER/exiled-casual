@@ -2,7 +2,8 @@ import React from "react";
 import type { Snapshot } from "@exiled/protocol";
 import { MAP_PORTALS } from "@exiled/protocol";
 import { MONSTERS } from "@exiled/content-runtime";
-import { DISPLAY, SERIF } from "./ItemTooltip";
+import { DISPLAY, ItemTooltip, SERIF } from "./ItemTooltip";
+import { flaskTooltip } from "./flask-tooltip";
 import { PANEL_W } from "./layout";
 import { SkillTooltip } from "./SkillTooltip";
 import { XpBar } from "./XpBar";
@@ -469,10 +470,14 @@ const FLASKS = [
 function Flask(props: { kind: "life" | "mana"; hotkey: string; charges: number; max: number }) {
   const { kind, hotkey, charges, max } = props;
   const veilPct = max > 0 ? 100 - (charges / max) * 100 : 100;
+  const [tip, setTip] = React.useState<{ x: number; y: number } | null>(null);
   return (
     <div
       data-testid={`flask-${kind}`}
+      onMouseEnter={(e) => setTip({ x: e.clientX, y: e.clientY })}
+      onMouseLeave={() => setTip(null)}
       style={{
+        pointerEvents: "auto",
         position: "relative",
         width: FLASK_W,
         height: FLASK_H,
@@ -526,6 +531,7 @@ function Flask(props: { kind: "life" | "mana"; hotkey: string; charges: number; 
       >
         {hotkey}
       </span>
+      {tip && <ItemTooltip {...flaskTooltip(kind, hotkey, charges, max)} x={tip.x} y={tip.y} />}
     </div>
   );
 }

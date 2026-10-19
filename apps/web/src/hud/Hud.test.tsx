@@ -222,6 +222,20 @@ describe("Hud", () => {
     expect(screen.getByTestId("flask-mana")).toHaveTextContent("2");
   });
 
+  it("hovering a flask reads it like PoE2's flask box, with its live charges and key", () => {
+    render(<Hud snapshot={makeSnap({ flasks: { lifeCharges: 5, lifeMax: 7, manaCharges: 7, manaMax: 7 } })} />);
+    expect(screen.queryByTestId("item-tooltip")).toBeNull();
+    fireEvent.mouseEnter(screen.getByTestId("flask-life"));
+    const tip = screen.getByTestId("item-tooltip");
+    expect(tip).toHaveTextContent("Life Flask");
+    expect(tip).toHaveTextContent("Recovers 30% of maximum Life instantly");
+    expect(tip).toHaveTextContent("Consumes 1 of 7 Charges on use");
+    expect(tip).toHaveTextContent("Currently has 5 Charges");
+    expect(screen.getByTestId("item-help")).toHaveTextContent("Press 1 to drink. Gains 1 Charge per kill. Refills in your hideout.");
+    fireEvent.mouseLeave(screen.getByTestId("flask-life"));
+    expect(screen.queryByTestId("item-tooltip")).toBeNull();
+  });
+
   it("captions each flask and numbered socket with the key bound to it now", () => {
     const keybinds = { ...DEFAULT_KEYBINDS_BY_MODE.wasd, flaskLife: "v" };
     render(<Hud snapshot={makeSnap({})} skillBar={BAR} keybinds={keybinds} controlMode="wasd" />);

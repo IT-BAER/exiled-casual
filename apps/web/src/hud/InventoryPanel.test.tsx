@@ -49,6 +49,18 @@ describe("InventoryPanel", () => {
     expect(screen.getByTestId("inventory-flask-mana").textContent).toBe("2");
   });
 
+  it("hovering a belt flask shows the same flask box as the HUD, with its charges", () => {
+    render(<InventoryPanel inventory={inv} flaskKeys={{ life: "1", mana: "2" }} flasks={{ lifeCharges: 7, lifeMax: 7, manaCharges: 3, manaMax: 7 }} onClose={() => {}} />);
+    fireEvent.mouseEnter(screen.getByTestId("inventory-flask-mana-socket"), { clientX: 100, clientY: 100 });
+    const tip = screen.getByTestId("item-tooltip");
+    expect(tip.textContent).toContain("Mana Flask");
+    expect(tip.textContent).toContain("Recovers 30% of maximum Mana instantly");
+    expect(tip.textContent).toContain("Currently has 3 Charges");
+    expect(screen.getByTestId("item-help").textContent).toBe("Press 2 to drink. Gains 1 Charge per kill. Refills in your hideout.");
+    fireEvent.mouseLeave(screen.getByTestId("inventory-flask-mana-socket"));
+    expect(screen.queryByTestId("item-tooltip")).toBeNull();
+  });
+
   it("shows the PoE2 item tooltip on hover with name, class, base stats, requirements and affixes", () => {
     render(<InventoryPanel inventory={inv} onClose={() => {}} />);
     expect(screen.getByTestId("inventory-panel")).toBeTruthy();

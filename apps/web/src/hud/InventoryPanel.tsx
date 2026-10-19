@@ -4,6 +4,7 @@ import { SORT_MODES } from "@exiled/protocol";
 import { canEquip, EQUIP_SLOTS_BY_CLASS } from "@exiled/simulation";
 import { currencyAccepts, currencyResultRarity, SHARDS_PER_ORB } from "@exiled/rules";
 import { ItemCompare, ItemTooltip } from "./ItemTooltip";
+import { flaskTooltip } from "./flask-tooltip";
 import { playDropSound } from "../audio/drop-sound";
 import { playSfx } from "../audio/sfx";
 import { VENDOR_NAME, VENDOR_TITLE } from "../npc";
@@ -273,11 +274,15 @@ const PAPER_DOLL: { slot: EquipSlotId; x: number; y: number; w: number; h: numbe
 ];
 
 // Life or mana flask, in its socket with the hotkey underneath. Same two flasks the
-// HUD shows, on the keys it drinks them on; charges aren't simulated, so these are static.
-function Flask({ kind, hotkey }: { kind: "life" | "mana"; hotkey: string }) {
+// HUD shows, on the keys it drinks them on; they cannot be moved or swapped.
+function Flask({ kind, hotkey, charges }: { kind: "life" | "mana"; hotkey: string; charges?: { now: number; max: number } }) {
+  const [tip, setTip] = React.useState<{ x: number; y: number } | null>(null);
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
       <div
+        data-testid={`inventory-flask-${kind}-socket`}
+        onMouseEnter={(e) => setTip({ x: e.clientX, y: e.clientY })}
+        onMouseLeave={() => setTip(null)}
         style={{
           width: `calc(${U} - 4px)`,
           height: `calc(${U} * 1.35)`,
@@ -296,6 +301,7 @@ function Flask({ kind, hotkey }: { kind: "life" | "mana"; hotkey: string }) {
         />
       </div>
       <span data-testid={`inventory-flask-${kind}`} style={{ color: GOLD_DIM, fontSize: 10, letterSpacing: 1 }}>{hotkey}</span>
+      {tip && charges && <ItemTooltip {...flaskTooltip(kind, hotkey, charges.now, charges.max)} x={tip.x} y={tip.y} />}
     </div>
   );
 }
@@ -325,13 +331,15 @@ const DEFAULT_FLASK_KEYS = { life: "1", mana: "2" };
 // memo: GameView renders at 30 Hz while monsters move; this panel only when its own props change.
 export const InventoryPanel = React.memo(function InventoryPanel({
   inventory, stash, vendor = EMPTY_SHELF, buyback = EMPTY_SHELF, gold = 0, equipment = {}, shards = {}, vendorOpen = false,
-  socketWanted = false, compareKey = "ctrl", flaskKeys = DEFAULT_FLASK_KEYS,
+  socketWanted = false, compareKey = "ctrl", flaskKeys = DEFAULT_FLASK_KEYS, flasks,
   onClose, onCloseStash, onCloseVendor, onIntent, onSocketWaystone,
 }: {
   /** The modifier that, held over an item, shows what is worn in its slot beside it. */
   compareKey?: "ctrl" | "shift";
   /** The keys the HUD drinks each flask on, for the captions under them. */
   flaskKeys?: { life: string; mana: string };
+  /** Live flask charges, read by their tooltips. */
+  flasks?: Snapshot["player"]["flasks"];
   inventory: Inventory; stash?: Inventory; equipment?: Equipment;
   /** The vendor's shelf, priced per cell. Absent on a snapshot built without a session. */
   vendor?: Snapshot["vendor"];
@@ -1164,8 +1172,8 @@ export const InventoryPanel = React.memo(function InventoryPanel({
                 display: "flex", gap: 4, justifyContent: "center", alignItems: "flex-start",
               }}
             >
-              <Flask kind="life" hotkey={flaskKeys.life.toUpperCase()} />
-              <Flask kind="mana" hotkey={flaskKeys.mana.toUpperCase()} />
+              <Flask kind="life" hotkey={flaskKeys.life.toUpperCase()} {...(flasks ? { charges: { now: flasks.lifeCharges, max: flasks.lifeMax } } : {})} />
+              <Flask kind="mana" hotkey={flaskKeys.mana.toUpperCase()} {...(flasks ? { charges: { now: flasks.manaCharges, max: flasks.manaMax } } : {})} />
             </div>
             {PAPER_DOLL.map((s) => (
               <EquipSlot
