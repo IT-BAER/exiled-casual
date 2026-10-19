@@ -364,6 +364,16 @@ export function setTier(root: Mesh, tier: Tier | null): void {
   }
 }
 
+/** Give the hovered monster its red outline (rim.ts), body meshes only; false clears it. */
+export function setHovered(root: Mesh, on: boolean): void {
+  for (const m of [root, ...root.getChildMeshes(false)]) {
+    if (m.name.startsWith("groundblob-") || m.name === "rare-aura" || !hasRim(m.material)) continue;
+    const meta = (m.metadata ??= {}) as { hovered?: boolean };
+    if (on) meta.hovered = true;
+    else delete meta.hovered;
+  }
+}
+
 /**
  * Flat disc + bright rim ring for a boss telegraph.
  * Built at radius=1 so the renderer can scale it to any real radius.

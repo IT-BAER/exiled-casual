@@ -792,6 +792,64 @@ describe("attachBindings hover", () => {
     }
   });
 
+  describe("monster hover", () => {
+    function bind(scene: Scene = fakeScene()) {
+      const canvas = document.createElement("canvas");
+      document.body.appendChild(canvas);
+      const onHover = vi.fn();
+      const onMonster = vi.fn();
+      const b = attachBindings(
+        canvas, { postMessage: vi.fn() } as unknown as Worker, scene, onHover,
+        undefined, undefined, undefined, undefined, undefined, undefined, undefined, onMonster,
+      );
+      return { canvas, onHover, onMonster, ...b, done: () => { b.detach(); canvas.remove(); } };
+    }
+
+    it("names the monster under the cursor once, and never as an interactable", () => {
+      const t = bind();
+      t.onSnapshot(makeSnap([{ id: 3, kind: "monster", x: 1, y: 2, radius: 0.5 }]));
+      move(t.canvas);
+      move(t.canvas);
+      expect(t.onMonster).toHaveBeenCalledTimes(1);
+      expect(t.onMonster).toHaveBeenCalledWith(3);
+      expect(t.onHover).not.toHaveBeenCalledWith(3);
+      t.done();
+    });
+
+    it("an interactable under the cursor wins over a monster", () => {
+      const t = bind(fakeInteractScene(42));
+      t.onSnapshot(makeSnap([{ id: 3, kind: "monster", x: 5, y: 7, radius: 0.5 }]));
+      move(t.canvas);
+      expect(t.onHover).toHaveBeenCalledWith(42);
+      expect(t.onMonster).not.toHaveBeenCalledWith(3);
+      t.done();
+    });
+
+    it("a monster walking under a still cursor is found, and lost when it leaves the snapshot", () => {
+      const t = bind();
+      t.onSnapshot(makeSnap([{ id: 3, kind: "monster", x: 9, y: 9, radius: 0.5 }]));
+      move(t.canvas);
+      expect(t.onMonster).not.toHaveBeenCalledWith(3);
+      t.onSnapshot(makeSnap([{ id: 3, kind: "monster", x: 1, y: 2, radius: 0.5 }]));
+      expect(t.onMonster).toHaveBeenLastCalledWith(3);
+      t.onSnapshot(makeSnap([]));
+      expect(t.onMonster).toHaveBeenLastCalledWith(null);
+      t.done();
+    });
+
+    it("leaving the canvas clears it, and a later snapshot does not bring it back", () => {
+      const t = bind();
+      const snap = makeSnap([{ id: 3, kind: "monster", x: 1, y: 2, radius: 0.5 }]);
+      t.onSnapshot(snap);
+      move(t.canvas);
+      t.canvas.dispatchEvent(new MouseEvent("pointerleave", { bubbles: false }));
+      t.onSnapshot(snap);
+      expect(t.onMonster).toHaveBeenLastCalledWith(null);
+      expect(t.onMonster).toHaveBeenCalledTimes(2);
+      t.done();
+    });
+  });
+
   it("pointerleave on the canvas fires callback with null", () => {
     const canvas = document.createElement("canvas");
     document.body.appendChild(canvas);

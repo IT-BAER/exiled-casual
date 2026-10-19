@@ -224,6 +224,8 @@ export function attachBindings(
   keybinds?: () => Keybinds,
   /** How this character moves. In WASD mode a click never walks, whatever the bar holds. */
   controlMode?: () => ControlMode,
+  /** The monster under the cursor when no interactable is, fired on change only. Never an interact target. */
+  onHoverMonster?: (id: number | null) => void,
 ): {
   detach: () => void;
   onSnapshot: (snap: Snapshot) => void;
@@ -294,6 +296,9 @@ export function attachBindings(
   // Currently hovered interactable entity id; null when the cursor is over ground.
   // Tracked here so we only fire the callback on actual changes.
   let hoveredEntityId: number | null = null;
+  let hoveredMonsterId: number | null = null;
+  // Where the cursor rests over the canvas; null once it has left, so a snapshot cannot re-hover.
+  let hoverScreen: { x: number; y: number } | null = null;
 
   // Latest snapshot from the worker, so the `g` pickup keybind can find the
   // nearest in-range ground item without waiting on a dedicated intent round-trip.
@@ -377,6 +382,17 @@ export function attachBindings(
     if (id === hoveredEntityId) return; // no change — avoid spurious re-renders
     hoveredEntityId = id;
     onHoverInteractable?.(id);
+  }
+
+  function setMonsterHover(id: number | null) {
+    if (id === hoveredMonsterId) return;
+    hoveredMonsterId = id;
+    onHoverMonster?.(id);
+  }
+
+  /** A monster counts only where no interactable is hovered, so it never becomes an interact target. */
+  function hoverMonsterAt(at: { x: number; y: number } | null): void {
+    setMonsterHover(at && hoveredEntityId === null ? (monsterAt(at.x, at.y)?.id ?? null) : null);
   }
 
   function post(intent: Intent) {
@@ -478,10 +494,14 @@ export function attachBindings(
     // Hover still asks the meshes first — that question really is "what is under
     // the cursor", walls and all — and the columns only after they say nothing.
     setHover(interactAt(e.clientX, e.clientY));
+    hoverScreen = { x: e.clientX, y: e.clientY };
+    hoverMonsterAt(hoverScreen);
   }
 
   function onPointerLeave() {
+    hoverScreen = null;
     setHover(null);
+    setMonsterHover(null);
   }
 
   /** Fire the skill bound to `button` at the given screen point. False when nothing is bound. */
@@ -702,6 +722,8 @@ export function attachBindings(
       const stillExists = snap.entities.some((e) => e.id === hoveredEntityId);
       if (!stillExists) setHover(null);
     }
+    // Monsters move under a still cursor, so the target is re-picked every snapshot.
+    hoverMonsterAt(hoverScreen);
   }
 
   // No browser menu anywhere in the game, HUD included: right-click casts, and an

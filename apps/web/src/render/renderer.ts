@@ -5,7 +5,7 @@ import { blinkBurst, fxProfile, groundSlam, meleeImpact, setStreakLength } from 
 import { clearFxPools } from "./fx-pool";
 import { HIT_STOP_SCALE, addTrauma, decayTrauma, hitStopMs, shakeOffset, skillShakeWeight, swingWeight } from "./juice";
 import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
-import { animateActor, keepGroundBlobFlat, makeMesh, setHitFlash, setTier, updateTelegraph, updatePortal, updateMapDevice, updateStash, updateVendor, updateContainer, updateGroundItem, updateRareElement, portalAppear, portalVanish, isPortalMesh, PORTAL_STAGGER_MS, Y_LIFT } from "./meshes";
+import { animateActor, keepGroundBlobFlat, makeMesh, setHitFlash, setHovered, setTier, updateTelegraph, updatePortal, updateMapDevice, updateStash, updateVendor, updateContainer, updateGroundItem, updateRareElement, portalAppear, portalVanish, isPortalMesh, PORTAL_STAGGER_MS, Y_LIFT } from "./meshes";
 import type { MeshKind } from "./meshes";
 import type { Tier } from "./rim";
 import { rigOf } from "./rig";
@@ -368,6 +368,8 @@ export class SnapshotRenderer {
   private playerId: number | null = null;
   /** Entity id the mouse is hovering; drives mesh highlight, NOT inRange. */
   private hoveredEntityId: number | null = null;
+  /** The monster wearing the red hover outline; cleared before its mesh becomes a corpse. */
+  private outlinedId: number | null = null;
   /** The last snapshot applied, for the DEV handles alone. */
   private lastSnapshot: Snapshot | null = null;
   /** The area the last applied snapshot was of; drives areaChanged. */
@@ -431,6 +433,16 @@ export class SnapshotRenderer {
   /** Set the entity the mouse is hovering; drives portal/device highlight visuals. */
   setHoveredEntity(id: number | null): void {
     this.hoveredEntityId = id;
+  }
+
+  /** Outline the monster under the cursor in red, PoE2-style; null clears it. */
+  setHoveredMonster(id: number | null): void {
+    if (id === this.outlinedId) return;
+    const was = this.outlinedId === null ? undefined : this.meshes.get(this.outlinedId);
+    if (was) setHovered(was, false);
+    const now = id === null ? undefined : this.meshes.get(id);
+    if (now) setHovered(now, true);
+    this.outlinedId = now ? id : null;
   }
 
   apply(prev: Snapshot | null, next: Snapshot, alpha: number): void {
@@ -765,6 +777,10 @@ export class SnapshotRenderer {
     // animation groups that mesh.dispose() would leave behind.
     for (const [id, mesh] of this.meshes) {
       if (!liveIds.has(id)) {
+        if (id === this.outlinedId) {
+          setHovered(mesh, false);
+          this.outlinedId = null;
+        }
         // A body dies at its own size: a squash caught mid-flinch would freeze into the corpse.
         const struck = this.flinch.get(id);
         if (struck) mesh.scaling.setAll(struck.base);

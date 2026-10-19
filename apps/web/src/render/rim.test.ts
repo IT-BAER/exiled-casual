@@ -3,7 +3,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { FreeCamera, Mesh, MeshBuilder, NullEngine, PBRMaterial, Scene, StandardMaterial, Vector3 } from "@babylonjs/core";
 import type { SubMesh, UniformBuffer } from "@babylonjs/core";
 import { addRim } from "./rim";
-import { setHitFlash, setTier } from "./meshes";
+import { setHitFlash, setHovered, setTier } from "./meshes";
 
 let engine: NullEngine | undefined;
 afterEach(() => {
@@ -243,5 +243,61 @@ describe("rarity glow through the rim plugin", () => {
     setTier(root, "rare");
     expect((body.metadata as { tier?: string }).tier).toBe("rare");
     expect((blob.metadata as { tier?: string } | null)?.tier).toBeUndefined();
+  });
+});
+
+describe("hover outline through the rim plugin", () => {
+  function fakeUbo(): { floats: Record<string, number>; colors: Record<string, [number, number, number]>; ubo: UniformBuffer } {
+    const floats: Record<string, number> = {};
+    const colors: Record<string, [number, number, number]> = {};
+    const ubo = {
+      updateFloat: (name: string, v: number) => { floats[name] = v; },
+      updateColor3: (name: string, c: { r: number; g: number; b: number }) => { colors[name] = [c.r, c.g, c.b]; },
+    } as unknown as UniformBuffer;
+    return { floats, colors, ubo };
+  }
+
+  it("draws a tight red edge along the outline after tone mapping", () => {
+    const material = new PBRMaterial("hide", scene());
+    addRim(material);
+    const plugin = material.pluginManager!.getPlugin("ExiledRim")!;
+    expect(plugin.getUniforms().ubo!.map((u) => u.name)).toContain("hoverGlow");
+    const code = plugin.getCustomCode("fragment")!.CUSTOM_FRAGMENT_BEFORE_FRAGCOLOR!;
+    expect(code).toMatch(/vec3\(0\.900, 0\.120, 0\.080\) \* pow\(rimFacing, 2\.50\) \* hoverGlow/);
+  });
+
+  it("binds the hovered mesh's outline and none for any other", () => {
+    const s = scene();
+    const material = new PBRMaterial("hide", s);
+    addRim(material);
+    const plugin = material.pluginManager!.getPlugin("ExiledRim")!;
+    const sub = (metadata: unknown) => ({ getMesh: () => ({ metadata }) }) as unknown as SubMesh;
+
+    const hovered = fakeUbo();
+    plugin.hardBindForSubMesh(hovered.ubo, s, engine!, sub({ hovered: true }));
+    expect(hovered.floats["hoverGlow"]).toBeCloseTo(0.9, 5);
+
+    const plain = fakeUbo();
+    plugin.hardBindForSubMesh(plain.ubo, s, engine!, sub({ tier: "rare" }));
+    expect(plain.floats["hoverGlow"]).toBe(0);
+  });
+
+  it("setHovered marks the body meshes only and clears again", () => {
+    const s = scene();
+    const root = new Mesh("actor", s);
+    const body = new Mesh("body", s);
+    body.parent = root;
+    const hide = new PBRMaterial("hide", s);
+    addRim(hide);
+    body.material = hide;
+    const aura = new Mesh("rare-aura", s);
+    aura.parent = root;
+    aura.material = hide;
+
+    setHovered(root, true);
+    expect((body.metadata as { hovered?: boolean }).hovered).toBe(true);
+    expect((aura.metadata as { hovered?: boolean } | null)?.hovered).toBeUndefined();
+    setHovered(root, false);
+    expect((body.metadata as { hovered?: boolean }).hovered).toBeUndefined();
   });
 });

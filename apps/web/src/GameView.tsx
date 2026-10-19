@@ -98,6 +98,7 @@ export function GameView({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [hoveredEntityId, setHoveredEntityId] = useState<number | null>(null);
+  const [targetId, setTargetId] = useState<number | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const [inventoryOpen, setInventoryOpen] = useState(false);
   // Backpack cell holding the waystone seated in the map-device socket, null while empty.
@@ -450,6 +451,10 @@ export function GameView({
       (button) => skillBarRef.current[MOUSE_SLOT_BASE + button] ?? null,
       () => keybindsRef.current,
       () => controlModeRef.current,
+      (id) => {
+        renderer.setHoveredMonster(id);
+        setTargetId(id);
+      },
     );
 
     // Loot plates are DOM, so their click has to reach the same approach-then-act
@@ -963,6 +968,7 @@ export function GameView({
       <Hud
         snapshot={snapshot}
         hoveredEntityId={hoveredEntityId}
+        targetId={targetId}
         skillBar={snapshot?.skillBar ?? []}
         orbNumbers={settings.ui.orbNumbers}
         onSkillBarChange={(bar) => sendIntent({ kind: "setSkillBar", bar })}

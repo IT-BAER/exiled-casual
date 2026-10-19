@@ -6,6 +6,7 @@ import { DISPLAY, SERIF } from "./ItemTooltip";
 import { PANEL_W } from "./layout";
 import { SkillTooltip } from "./SkillTooltip";
 import { XpBar } from "./XpBar";
+import { TargetFrame } from "./TargetFrame";
 import { playDropSound } from "../audio/drop-sound";
 import { DEFAULT_KEYBINDS_BY_MODE, DEFAULT_SETTINGS, MOUSE_SLOT_BASE, MOVE_SOCKET, SKILL_ACTIONS, SKILL_SLOT_COUNT, type ControlMode, type Keybinds } from "../settings";
 import { VENDOR_NAME, VENDOR_TITLE } from "../npc";
@@ -22,6 +23,8 @@ import { VENDOR_NAME, VENDOR_TITLE } from "../npc";
 // Our frame art is far taller per width (1280x222, window 28.4% of it), so 28vw of frame gives
 // 1.38vw of fill height; matching PoE2's width (35%) instead made the bar twice as tall.
 const BOSS_BAR_W = "28vw";
+/** Just under the boss bar: its top, plus the 1280x222 frame drawn at BOSS_BAR_W, plus a gap. */
+const UNDER_BOSS_BAR = `${(0.6 + (28 * 222) / 1280 + 0.3).toFixed(2)}vw`;
 const ORB_HOLE = 0.869; // ring art: its transparent hole is this fraction of the file
 const ORB_VW = 10.3; // sphere diameter
 const ORB = `${ORB_VW}vw`;
@@ -548,6 +551,8 @@ interface HudProps {
   keybinds?: Keybinds;
   /** Mouse mode keeps left click on Move: that socket is fixed. */
   controlMode?: ControlMode;
+  /** The monster under the cursor, for the target frame. Null = none. */
+  targetId?: number | null;
 }
 
 /**
@@ -782,6 +787,7 @@ export function Hud({
   onPortal,
   keybinds = DEFAULT_KEYBINDS_BY_MODE.mouse,
   controlMode = "mouse",
+  targetId = null,
 }: HudProps) {
   const [hoveredSkill, setHoveredSkill] = React.useState<string | null>(null);
   // Length-normalised here rather than trusted: the bar rides in the save, and a
@@ -1070,6 +1076,7 @@ export function Hud({
           <img src="/hud/boss-bar-frame-v1.webp" alt="" style={{ position: "relative", display: "block", width: "100%" }} />
         </div>
       )}
+      <TargetFrame snapshot={snapshot} targetId={targetId} top={boss ? UNDER_BOSS_BAR : undefined} />
 
       {/* The reward banner: high, centred, over the fight rather than beside it, and
           gone in 2.4s. PoE announces a level with a sound first and text second, so

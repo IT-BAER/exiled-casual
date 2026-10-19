@@ -263,9 +263,20 @@ export function buildSnapshot(
       rare: mon.rare === 1,
       species: mon.defId,
     };
-    // Only a rare carries a theme; makeRare converts its whole hit to one
-    // element, so the attack type IS the theme and nothing has to be stored.
-    if (mon.rare === 1) entry.element = damageTypeOf(mon.attackType) as MonsterElement;
+    // makeRare converts a rare's whole hit to one element, so the attack type IS its theme.
+    const hit = damageTypeOf(mon.attackType);
+    if (hit !== "physical") entry.element = hit as MonsterElement;
+    const def = world.get<DefensesC>(e, "defenses");
+    if (def !== undefined) {
+      const res: NonNullable<SnapshotEntity["res"]> = {};
+      for (const k of ["fire", "cold", "lightning", "chaos"] as const) if (def.res[k] !== 0) res[k] = def.res[k];
+      if (Object.keys(res).length > 0) entry.res = res;
+    }
+    const debuffs: NonNullable<SnapshotEntity["debuffs"]> = [];
+    if (ail !== undefined) debuffs.push("burning");
+    if (world.has(e, "poison")) debuffs.push("poison");
+    if (world.has(e, "bleeding")) debuffs.push("bleeding");
+    if (debuffs.length > 0) entry.debuffs = debuffs;
     if (mon.magic === 1) entry.magic = true;
     if (mon.lastAttackTick !== undefined) entry.attackTick = mon.lastAttackTick;
     if (mon.state === "attack") {

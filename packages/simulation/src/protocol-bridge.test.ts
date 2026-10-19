@@ -214,6 +214,43 @@ describe("buildSnapshot", () => {
     expect(snap.entities.find((e) => e.id === normal)!.magic).toBeUndefined();
   });
 
+  it("any monster whose hit is elemental names that element; a physical hitter names none", () => {
+    const { world, sim } = createCombatSim(42);
+    const fire = addMonster(world, 0, 0);
+    const cold = addMonster(world, 2, 0);
+    world.set<MonsterC>(cold, "monster", { ...world.get<MonsterC>(cold, "monster")!, attackType: 2 });
+    const phys = addMonster(world, 4, 0);
+    world.set<MonsterC>(phys, "monster", { ...world.get<MonsterC>(phys, "monster")!, attackType: 1 });
+    world.set<MonsterC>(fire, "monster", { ...world.get<MonsterC>(fire, "monster")!, attackType: 0 });
+    const snap = buildSnapshot(world, sim, 0, CONTENT_VERSION);
+    expect(snap.entities.find((e) => e.id === fire)!.element).toBe("fire");
+    expect(snap.entities.find((e) => e.id === cold)!.element).toBe("cold");
+    expect(snap.entities.find((e) => e.id === phys)!.element).toBeUndefined();
+  });
+
+  it("a monster carries its nonzero resistances, and none at all when every one is zero", () => {
+    const { world, sim } = createCombatSim(42);
+    const resists = addMonster(world, 0, 0);
+    world.set(resists, "defenses", { res: { fire: 30, cold: 0, lightning: -20, chaos: 0 }, armour: 0 });
+    const bare = addMonster(world, 2, 0);
+    world.set(bare, "defenses", { res: { fire: 0, cold: 0, lightning: 0, chaos: 0 }, armour: 0 });
+    const snap = buildSnapshot(world, sim, 0, CONTENT_VERSION);
+    expect(snap.entities.find((e) => e.id === resists)!.res).toEqual({ fire: 30, lightning: -20 });
+    expect(snap.entities.find((e) => e.id === bare)!.res).toBeUndefined();
+  });
+
+  it("a monster lists the ailments on it, and none when it is clean", () => {
+    const { world, sim } = createCombatSim(42);
+    const sick = addMonster(world, 0, 0);
+    const a: AilmentC = { kind: "burning", stacks: 2, dps: fp(1), expiryTick: 99 };
+    world.set<AilmentC>(sick, "ailment", a);
+    world.set<AilmentC>(sick, "bleeding", { ...a, kind: "bleeding", stacks: 1 });
+    const clean = addMonster(world, 2, 0);
+    const snap = buildSnapshot(world, sim, 0, CONTENT_VERSION);
+    expect(snap.entities.find((e) => e.id === sick)!.debuffs).toEqual(["burning", "bleeding"]);
+    expect(snap.entities.find((e) => e.id === clean)!.debuffs).toBeUndefined();
+  });
+
   it("a monster entity carries its body radius, so the client can measure reach to its surface", () => {
     const { world, sim } = createCombatSim(42);
     const snap = buildSnapshot(world, sim, 0, CONTENT_VERSION);

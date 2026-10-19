@@ -231,11 +231,14 @@ export interface SnapshotEntity {
   /** monster only: PoE's blue tier. Absent on every other monster. */
   magic?: boolean;
   /**
-   * A rare's elemental theme, so the renderer can say which resistance it is
-   * about to demand. Present only on rares; normals and bosses hit with what
-   * their content def says and have no theme to advertise.
+   * The element of the monster's hit whenever that hit is elemental (fire, cold,
+   * lightning, chaos); absent on a physical hitter. On a rare it is also its theme.
    */
   element?: MonsterElement;
+  /** monster only: its effective resistances, integer percent, nonzero entries only; absent when all zero. */
+  res?: Partial<Record<"fire" | "cold" | "lightning" | "chaos", number>>;
+  /** monster only: the ailments on it; absent when clean. */
+  debuffs?: ("burning" | "poison" | "bleeding")[];
   /**
    * Which monster def this is, so the renderer can pick a mesh. A plain string:
    * the wire contract must not depend on content, the same reason `element` and

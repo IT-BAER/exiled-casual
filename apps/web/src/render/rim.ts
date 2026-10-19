@@ -83,6 +83,11 @@ export const TIER_GLOW: Record<Tier, { color: Color3; strength: number }> = {
 const TIER_POWER = 1.6;
 const NO_TIER = new Color3(0, 0, 0);
 
+/** PoE2's hovered-target outline: a tight red edge on the monster under the cursor. */
+export const HOVER_COLOR = new Color3(0.9, 0.12, 0.08);
+export const HOVER_STRENGTH = 0.9;
+const HOVER_POWER = 2.5;
+
 class RimPlugin extends MaterialPluginBase {
   constructor(material: Material) {
     // After lighting and tone mapping, like the dissolve edge: this is its own
@@ -112,6 +117,7 @@ class RimPlugin extends MaterialPluginBase {
         { name: "tierGlow", size: 1, type: "float" },
         { name: "tierColor", size: 3, type: "vec3" },
         { name: "glowTime", size: 1, type: "float" },
+        { name: "hoverGlow", size: 1, type: "float" },
       ],
       fragment: `
         uniform float rimIntensity;
@@ -121,6 +127,7 @@ class RimPlugin extends MaterialPluginBase {
         uniform float tierGlow;
         uniform vec3 tierColor;
         uniform float glowTime;
+        uniform float hoverGlow;
       `,
     };
   }
@@ -134,12 +141,13 @@ class RimPlugin extends MaterialPluginBase {
   // Every draw, not `bindForSubMesh`: PBR skips that one when the same material
   // draws again, and the next mesh would inherit the previous one's flash.
   override hardBindForSubMesh(uniformBuffer: UniformBuffer, _scene: Scene, _engine: AbstractEngine, subMesh: SubMesh): void {
-    const meta = subMesh.getMesh().metadata as { hitFlash?: number; tier?: Tier } | null;
+    const meta = subMesh.getMesh().metadata as { hitFlash?: number; tier?: Tier; hovered?: boolean } | null;
     uniformBuffer.updateFloat("hitFlash", meta?.hitFlash ?? 0);
     const tier = meta?.tier ? TIER_GLOW[meta.tier] : undefined;
     uniformBuffer.updateFloat("tierGlow", tier?.strength ?? 0);
     uniformBuffer.updateColor3("tierColor", tier?.color ?? NO_TIER);
     uniformBuffer.updateFloat("glowTime", tier ? (performance.now() / 1000) % 1000 : 0);
+    uniformBuffer.updateFloat("hoverGlow", meta?.hovered ? HOVER_STRENGTH : 0);
   }
 
   override getCustomCode(shaderType: string): Record<string, string> | null {
@@ -162,6 +170,7 @@ class RimPlugin extends MaterialPluginBase {
             float shimmer = 0.55 + 0.45 * sin(glowTime * 3.2 + (vPositionW.x + vPositionW.z) * 2.2 + vPositionW.y * 5.0);
             finalColor.rgb += tierColor * pow(rimFacing, ${TIER_POWER.toFixed(2)}) * shimmer * tierGlow;
           }
+          finalColor.rgb += vec3(${HOVER_COLOR.r.toFixed(3)}, ${HOVER_COLOR.g.toFixed(3)}, ${HOVER_COLOR.b.toFixed(3)}) * pow(rimFacing, ${HOVER_POWER.toFixed(2)}) * hoverGlow;
         #endif
         finalColor.rgb = mix(finalColor.rgb, vec3(${HIT_TINT.r.toFixed(3)}, ${HIT_TINT.g.toFixed(3)}, ${HIT_TINT.b.toFixed(3)}), hitFlash * ${HIT_ALPHA.toFixed(3)});
       `,
