@@ -134,7 +134,8 @@ export function CreateCharacter({
             autoFocus
             maxLength={NAME_MAX}
             onChange={(e) => setName(e.target.value)}
-            onBlur={() => setTouched(true)}
+            // The field is autofocused, so picking a class blurs it before anything was typed.
+            onBlur={() => { if (name !== "") setTouched(true); }}
             onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
             style={INPUT_STYLE}
           />

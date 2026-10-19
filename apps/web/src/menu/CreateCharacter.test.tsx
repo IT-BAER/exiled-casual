@@ -85,6 +85,19 @@ describe("CreateCharacter", () => {
       expect(screen.getByTestId("name-error").textContent).toBe("");
     });
 
+    it("stays quiet when picking a class takes focus from the still-empty field", () => {
+      view();
+      fireEvent.blur(screen.getByTestId("name-input"));
+      fireEvent.click(screen.getByTestId("class-class.ironsworn"));
+      expect(screen.getByTestId("name-error").textContent).toBe("");
+    });
+
+    it("says why when Enter is pressed on an empty name", () => {
+      view();
+      fireEvent.keyDown(screen.getByTestId("name-input"), { key: "Enter" });
+      expect(screen.getByTestId("name-error").textContent).not.toBe("");
+    });
+
     it("creates on Enter, trimmed, with the chosen class", () => {
       const { onCreate } = view({ classId: "class.ironsworn" });
       fireEvent.change(screen.getByTestId("name-input"), { target: { value: "  Toren  " } });
