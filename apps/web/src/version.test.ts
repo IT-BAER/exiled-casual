@@ -18,8 +18,7 @@ describe("the release number", () => {
     expect(web).toBe(pkg);
   });
 
-  it("is what the player sees, down to major.minor", () => {
-    const [major, minor] = pkg.split(".");
-    expect(GAME_VERSION.startsWith(`v${major}.${minor} `)).toBe(true);
+  it("is what the player sees, in full", () => {
+    expect(GAME_VERSION.startsWith(`v${pkg} `)).toBe(true);
   });
 });

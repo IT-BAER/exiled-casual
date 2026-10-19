@@ -62,13 +62,9 @@ setVersion("apps/web/package.json");
 setVersion("package-lock.json");
 
 const versionTs = join(root, "apps/web/src/version.ts");
-const [major, minor] = version.split(".");
 writeFileSync(
   versionTs,
-  readFileSync(versionTs, "utf8").replace(
-    /GAME_VERSION = "v\d+\.\d+ /,
-    `GAME_VERSION = "v${major}.${minor} `,
-  ),
+  readFileSync(versionTs, "utf8").replace(/GAME_VERSION = "v\S+ /, `GAME_VERSION = "v${version} `),
 );
 
 execFileSync("node", [join(root, "tools/changelog_to_news.mjs")], { cwd: root, stdio: "inherit" });
