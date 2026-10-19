@@ -784,7 +784,7 @@ export const CINDER_FLAME_RATE = 5;
 /** Brightness of the fine crack veins in the disc, of the main fissures, and of the rim line. */
 export const CINDER_GLOW = 0.5;
 export const CINDER_CRACK_GLOW = 0.85;
-export const CINDER_RIM_GLOW = 0.35;
+export const CINDER_RIM_GLOW = 0.15;
 /** Alpha of the additive glow disc, and of the dark scorch under it. */
 export const CINDER_DISC_ALPHA = 0.45;
 export const CINDER_SCORCH_ALPHA = 0.6;

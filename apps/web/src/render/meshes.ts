@@ -283,14 +283,14 @@ function buildRareAura(scene: Scene, root: Mesh): void {
   auraMat.diffuseColor = new Color3(0, 0, 0);
   auraMat.emissiveColor = new Color3(1, 0.55, 0.15).scale(AURA_EMISSIVE); // fire until told otherwise
   auraMat.specularColor = new Color3(0, 0, 0);
-  auraMat.alpha = 0.85;
+  auraMat.alpha = 0.55;
   auraMat.backFaceCulling = false;
 
   // A ring, not a filled disc: a disc that size washes the monster out from
   // above, and two of them overlapping blow straight to white. The torus is
   // already built flat in XZ, so no rotation is needed. Radii are in the root's
   // local space, which the rare scales by 1.7.
-  const ring = MeshBuilder.CreateTorus("rare-aura", { diameter: 1.05, thickness: 0.09, tessellation: 24 }, scene);
+  const ring = MeshBuilder.CreateTorus("rare-aura", { diameter: 1.05, thickness: 0.045, tessellation: 24 }, scene);
   ring.position.y = 0.02; // just off the floor, or it z-fights the ground plane
   ring.parent = root;
   ring.material = auraMat;
@@ -374,8 +374,9 @@ function buildTelegraph(scene: Scene, root: Mesh): void {
 
   const rimMat = new StandardMaterial(`${root.name}-tel-rim`, scene);
   rimMat.diffuseColor = new Color3(0, 0, 0);
-  rimMat.emissiveColor = new Color3(1.0, 0.32, 0.06);
+  rimMat.emissiveColor = new Color3(0.55, 0.16, 0.03);
   rimMat.specularColor = new Color3(0, 0, 0);
+  rimMat.alpha = 0.7;
 
   // diameter=2 → radius=1; renderer scales x/z to match entity.radius
   const fill = MeshBuilder.CreateCylinder("telegraph-fill", { diameter: 2, height: 0.02, tessellation: 32 }, scene);
@@ -383,7 +384,8 @@ function buildTelegraph(scene: Scene, root: Mesh): void {
   fill.material = fillMat;
   fill.receiveShadows = false;
 
-  const rim = MeshBuilder.CreateTorus("telegraph-rim", { diameter: 2, thickness: 0.06, tessellation: 48 }, scene);
+  // The tube scales with the radius, so a 3.5-unit slam at 0.06 drew a 0.2-unit band.
+  const rim = MeshBuilder.CreateTorus("telegraph-rim", { diameter: 2, thickness: 0.025, tessellation: 48 }, scene);
   rim.parent = root;
   rim.material = rimMat;
   rim.receiveShadows = false;
@@ -407,7 +409,8 @@ export function updateTelegraph(root: Mesh, progress: number): void {
   // The rim carries the urgency, and only whitens in the last moment before
   // impact, so the flash reads as "now" instead of a slow fade to white.
   const flash = Math.max(0, (progress - 0.85) / 0.15);
-  parts.rim.emissiveColor.set(1.0, 0.32 + flash * 0.6, 0.06 + flash * 0.7);
+  parts.rim.emissiveColor.set(0.55 + flash * 0.45, 0.16 + flash * 0.76, 0.03 + flash * 0.73);
+  parts.rim.alpha = 0.7 + flash * 0.3;
 }
 
 /**

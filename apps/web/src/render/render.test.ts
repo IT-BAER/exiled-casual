@@ -1092,6 +1092,20 @@ describe("makeMesh kinds", () => {
     updateTelegraph(mesh, 1);
     expect(parts.fill.alpha).toBeCloseTo(0.30, 2);
   });
+
+  it("keeps the telegraph rim a soft line until the impact flash", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const mesh = makeMesh(scene, "telegraph", "tel-rim");
+    const rim = mesh.getChildMeshes().find((m) => m.name === "telegraph-rim")!;
+    const { minimum, maximum } = rim.getBoundingInfo().boundingBox;
+    expect(maximum.y - minimum.y).toBeLessThanOrEqual(0.03);
+    const parts = mesh.metadata as { rim: StandardMaterial };
+    updateTelegraph(mesh, 0);
+    expect(Math.max(parts.rim.emissiveColor.r, parts.rim.emissiveColor.g)).toBeLessThanOrEqual(0.6);
+    updateTelegraph(mesh, 1);
+    expect(parts.rim.emissiveColor.r).toBeGreaterThanOrEqual(0.95);
+  });
 });
 
 describe("SnapshotRenderer — new kinds", () => {
