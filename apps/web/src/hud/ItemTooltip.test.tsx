@@ -20,6 +20,16 @@ describe("ItemTooltip", () => {
     expect(screen.queryByText("It was a torch, once.")).toBeNull();
   });
 
+  it("closes a consumable with its usage line, below the description", () => {
+    render(<ItemTooltip name="Orb of Embers" rarity="normal" lines={["Augments a Rare item with a new random modifier"]} help="Right click this item then left click a rare item to apply it." x={0} y={0} />);
+    const help = screen.getByTestId("item-help");
+    expect(help.textContent).toBe("Right click this item then left click a rare item to apply it.");
+    expect(screen.getByText("Augments a Rare item with a new random modifier").compareDocumentPosition(help) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    cleanup();
+    render(<ItemTooltip name="Ember Wand" rarity="normal" lines={[]} x={0} y={0} />);
+    expect(screen.queryByTestId("item-help")).toBeNull();
+  });
+
   it("renders the implicit in its own block above the rolled mods", () => {
     render(<ItemTooltip name="Ember Wand" rarity="normal" implicit="12% increased Spell Damage" lines={["+24 to maximum Mana"]} x={0} y={0} />);
     // Own block, not folded into the mod list: reference-screenshots/item-rare.png sets the

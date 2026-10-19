@@ -178,6 +178,8 @@ export type EquipSlotId =
 export interface DisplayItem {
   rarity: ItemRarity; name: string; baseName?: string; itemClass?: string; implicit?: string; lines: string[];
   flavour?: string; icon?: string; unidentified?: boolean;
+  /** Consumables only: the usage line, in PoE's grey under everything else. */
+  help?: string;
   /** Which base this is. The client needs it to tell one currency from another. */
   baseId?: string;
   statLines?: ItemStatLine[]; reqLevel?: number; reqAttrValue?: number; reqAttr?: string;
@@ -302,6 +304,8 @@ export interface SnapshotEntity {
   lines?: string[];
   /** groundItem only: unique flavour line, below the mods. */
   flavour?: string;
+  /** groundItem only: consumable usage line. */
+  help?: string;
   /** groundItem only: true while the drop is unread, so name and mods stay hidden. */
   unidentified?: boolean;
   /** groundItem only: base item class label ("wand", "focus") for the tooltip. */

@@ -63,6 +63,33 @@ describe("describeItem", () => {
     // PoE2's base type IS the tiered name, so no second header line repeats "Waystone".
     expect(d.baseName).toBe(d.name);
     expect(d.statLines).toEqual([{ label: "Waystone Tier", value: "2" }, { label: "Area Level", value: String(areaLevel(2)) }]);
+    expect(d.help).toBe("Can be used in a Map Device, allowing you to enter a Map. Waystones can only be used once.");
+  });
+
+  it("the permanent waystone does not claim it is spent", () => {
+    const d = describeItem({ ...waystoneItem(0, 1), waystone: { seed: 0, tier: 1, permanent: true } });
+    expect(d.help).toBe("Can be used in a Map Device, allowing you to enter a Map.");
+  });
+
+  it("every currency says what it does and how to spend it, in PoE2's words", () => {
+    const of = (baseId: string) => {
+      const d = describeItem({ baseId, rarity: "normal", itemLevel: 1, affixes: [] });
+      return [d.lines, d.help];
+    };
+    const apply = (target: string) => `Right click this item then left click ${target} to apply it.`;
+    expect(of("currency.wisdom")).toEqual([["Identifies an item"], apply("an unidentified item")]);
+    expect(of("currency.transmutation")).toEqual([["Upgrades a Normal item to a Magic item with 1 modifier"], apply("a normal item")]);
+    expect(of("currency.augmentation")).toEqual([["Augments a Magic item with a new random modifier"], apply("a magic item")]);
+    expect(of("currency.elevation")).toEqual([["Upgrades a Magic item to a Rare item, adding 1 modifier"], apply("a magic item")]);
+    expect(of("currency.alchemy")).toEqual([["Upgrades a Normal or Magic item to a Rare item with 4 random modifiers"], apply("a normal or magic item")]);
+    expect(of("currency.embers")).toEqual([["Augments a Rare item with a new random modifier"], apply("a rare item")]);
+    expect(of("currency.portal")).toEqual([["Creates a portal to your hideout"], "Right click on this item to use it. Only works inside a map."]);
+    // The legacy id resolves to the same scroll, so an old save reads the same text.
+    expect(of("base.wisdom_scroll")).toEqual(of("currency.wisdom"));
+  });
+
+  it("gear carries no usage line", () => {
+    expect(describeItem({ baseId: "base.ironsworn_helm", rarity: "normal", itemLevel: 1, affixes: [] }).help).toBeUndefined();
   });
 });
 

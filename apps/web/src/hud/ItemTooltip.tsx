@@ -102,6 +102,7 @@ export function ItemTooltip({
   lines,
   flavour,
   unidentified,
+  help,
   caption,
   inline = false,
   x = 0,
@@ -127,6 +128,8 @@ export function ItemTooltip({
   flavour?: string;
   /** Unread drop: the mods exist but stay hidden until a Scroll of Wisdom is used. */
   unidentified?: boolean;
+  /** Consumables: how to spend it, the last line, in grey. */
+  help?: string;
   x?: number;
   y?: number;
 }) {
@@ -255,6 +258,15 @@ export function ItemTooltip({
             <Rule />
             <div style={{ fontFamily: SERIF, color: r.text, fontSize: 13.5, fontStyle: "italic", letterSpacing: 0.3, lineHeight: 1.4, margin: "4px 2px 0" }}>
               {flavour}
+            </div>
+          </>
+        )}
+
+        {help && (
+          <>
+            <Rule />
+            <div data-testid="item-help" style={{ color: LABEL_GREY, fontSize: 12, letterSpacing: 0.3, lineHeight: 1.35, margin: "4px 2px 0" }}>
+              {help}
             </div>
           </>
         )}

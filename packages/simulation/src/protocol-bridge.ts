@@ -370,6 +370,7 @@ export function buildSnapshot(
       implicit: d.implicit,
       lines: d.lines,
       flavour: d.flavour,
+      help: d.help,
       unidentified: d.unidentified,
       baseId: ic.item.baseId,
       inRange: inRangeOf(pp.x, pp.y, ip.x, ip.y, PICKUP_RADIUS),
@@ -391,7 +392,7 @@ export function buildSnapshot(
       const d = describeItem(p.item);
       return {
         x: p.x, y: p.y, w: p.w, h: p.h, count: p.count,
-        rarity: d.rarity, name: d.name, baseName: d.baseName, itemClass: d.itemClass, implicit: d.implicit, lines: d.lines, flavour: d.flavour, icon: d.icon, unidentified: d.unidentified, baseId: p.item.baseId,
+        rarity: d.rarity, name: d.name, baseName: d.baseName, itemClass: d.itemClass, implicit: d.implicit, lines: d.lines, flavour: d.flavour, help: d.help, icon: d.icon, unidentified: d.unidentified, baseId: p.item.baseId,
         statLines: d.statLines, reqLevel: d.reqLevel, reqAttrValue: d.reqAttrValue, reqAttr: d.reqAttr,
         waystone: d.waystone,
       };

@@ -529,6 +529,8 @@ export interface ItemDescription {
   lines: string[];
   /** unique only: italic flavour line below the mods. */
   flavour?: string;
+  /** Consumables only: PoE's grey usage line closing the tooltip. */
+  help?: string;
   /** Inventory art from the base; absent means the UI falls back to the name. */
   icon?: string;
   /** True while the item is unread: name, mods and flavour are withheld above. */
@@ -548,20 +550,25 @@ function affixLine(value: number, label: string): string {
   return `${signed ? "+" : ""}${value}${pct ? "" : " "}${label}`;
 }
 
+const applyHelp = (target: string) => `Right click this item then left click ${target} to apply it.`;
+
 /**
- * What a currency does, on the item, for the ones whose gesture is not obvious.
- *
- * The orbs are dragged onto a piece and the cursor already refuses the ones that
- * do not fit, so they need no line. The Portal Scroll has no target at all — it is
- * right-clicked and a doorway appears — and a consumable nobody can work out how to
- * spend is a consumable that sits in the bag forever.
+ * What each currency does and how it is spent, in poe2db.tw's wording where PoE2
+ * has the same orb (Elevation is its Regal, Embers its Exalted). A consumable
+ * nobody can work out how to spend is one that sits in the bag forever.
  */
-const CURRENCY_LINES: Record<string, readonly string[]> = {
-  [PORTAL_SCROLL_BASE_ID]: [
-    "Right click, or press Y, to open a portal to your hideout",
-    "Only usable inside a map",
-  ],
+const CURRENCY_TEXT: Record<string, { line: string; help: string }> = {
+  [WISDOM_SCROLL_BASE_ID]: { line: "Identifies an item", help: applyHelp("an unidentified item") },
+  "currency.transmutation": { line: "Upgrades a Normal item to a Magic item with 1 modifier", help: applyHelp("a normal item") },
+  "currency.augmentation": { line: "Augments a Magic item with a new random modifier", help: applyHelp("a magic item") },
+  "currency.elevation": { line: "Upgrades a Magic item to a Rare item, adding 1 modifier", help: applyHelp("a magic item") },
+  "currency.alchemy": { line: "Upgrades a Normal or Magic item to a Rare item with 4 random modifiers", help: applyHelp("a normal or magic item") },
+  "currency.embers": { line: "Augments a Rare item with a new random modifier", help: applyHelp("a rare item") },
+  // No key named: the portal key is rebindable (settings.ts), the right click is not.
+  [PORTAL_SCROLL_BASE_ID]: { line: "Creates a portal to your hideout", help: "Right click on this item to use it. Only works inside a map." },
 };
+
+const WAYSTONE_HELP = "Can be used in a Map Device, allowing you to enter a Map.";
 
 export function describeItem(item: Item): ItemDescription {
   const base = baseOf(item.baseId);
@@ -583,6 +590,7 @@ export function describeItem(item: Item): ItemDescription {
         ? ["Not consumed on use", "Cannot be modified"]
         : waystoneMods(seed).map((m) => m.label),
       statLines: [{ label: "Waystone Tier", value: String(tier) }, { label: "Area Level", value: String(areaLevel(tier)) }],
+      help: item.waystone.permanent ? WAYSTONE_HELP : `${WAYSTONE_HELP} Waystones can only be used once.`,
       icon: base.icon,
       waystone: { seed, tier },
     };
@@ -596,8 +604,9 @@ export function describeItem(item: Item): ItemDescription {
   // An unidentified item is a shape, not a promise: its rolled name and mods stay
   // hidden until a Scroll of Wisdom reads them. The base, its stats and its implicit
   // are visible either way, exactly as PoE shows an unread drop.
-  const lines = CURRENCY_LINES[canonicalBaseId(item.baseId)]?.slice()
-    ?? (item.unidentified === true ? [] : item.affixes.map((ia) => {
+  const currency = CURRENCY_TEXT[canonicalBaseId(item.baseId)];
+  const lines = currency ? [currency.line]
+    : (item.unidentified === true ? [] : item.affixes.map((ia) => {
       const a = AFFIX_BY_ID.get(ia.affixId);
       return a ? affixLine(ia.value, a.label) : `+${ia.value} ${ia.affixId}`;
     }));
@@ -612,6 +621,7 @@ export function describeItem(item: Item): ItemDescription {
     reqAttr: s?.reqAttr,
     lines,
   };
+  if (currency) d.help = currency.help;
   if (base.implicit) d.implicit = affixLine(base.implicit.value, base.implicit.label);
   // A unique is its own item, not a re-skin: its art overrides the base's.
   // Looked up by the item's true name, so an unidentified unique still shows its own art.
