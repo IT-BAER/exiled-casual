@@ -30,7 +30,7 @@ self.onmessage = (e: MessageEvent) => {
   } else if (msg.type === "intent" && core) {
     // isToWorker only checks intent is a non-null object — deep-validate its fields.
     core.pushIntent(validateIntent(msg.intent));
-  } else if (msg.type === "spawn" && core) {
+  } else if (msg.type === "spawn" && core && import.meta.env.DEV) {
     core.spawn(msg.what);
   } else if (msg.type === "pause") {
     paused = msg.paused;

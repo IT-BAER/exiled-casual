@@ -391,7 +391,8 @@ export function attachBindings(
     if (isTextEntry(e.target)) return;
     shiftHeld = e.shiftKey;
     // Checked before the skill row, which shares these keys' `key` values.
-    const spawn = SPAWN_KEYS[e.code];
+    // Dev only: in a shipped build these would be free items and bosses on demand.
+    const spawn = import.meta.env.DEV ? SPAWN_KEYS[e.code] : undefined;
     if (spawn) {
       dlog("intent", "spawn", spawn);
       worker.postMessage({ type: "spawn", what: spawn } satisfies ToWorker);

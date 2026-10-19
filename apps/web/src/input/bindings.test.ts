@@ -272,6 +272,16 @@ describe("attachBindings hold-to-move", () => {
     expect(worker.postMessage).toHaveBeenCalledWith({ type: "spawn", what: "clear" });
   });
 
+  it("numpad spawns are dev-only: a shipped build posts nothing", () => {
+    vi.stubEnv("DEV", false);
+    try {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "6", code: "Numpad6", bubbles: true }));
+      expect(worker.postMessage).not.toHaveBeenCalledWith({ type: "spawn", what: "item" });
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("g key picks up the nearest in-range ground item", () => {
     const w = { postMessage: vi.fn() };
     const c = document.createElement("canvas");
