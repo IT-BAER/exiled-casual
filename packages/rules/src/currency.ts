@@ -49,8 +49,8 @@ export function currencyAccepts(
   unidentified: boolean,
   modCount: number,
 ): boolean {
-  if (rarity === "unique") return false;
   if (currencyId === "currency.wisdom") return unidentified;
+  if (rarity === "unique") return false;
   if (unidentified) return false;
   const t = TRANSITIONS[currencyId];
   if (t === undefined || !t.from.includes(rarity)) return false;
@@ -69,17 +69,16 @@ export function currencyResultRarity(currencyId: string): "magic" | "rare" | nul
  * charging for a no-op. `item` is never mutated.
  */
 export function applyCurrency(pools: ItemPools, currencyId: string, item: Item, seed: number): Item | null {
-  // Uniques carry an authored mod list; crafting on them would be inventing content.
-  if (item.rarity === "unique") return null;
-
   // Reading comes before crafting: an unidentified item's mods are already rolled and
   // withheld (docs/02 §2), so touching them before the reveal would spend the
-  // anticipation the reveal exists to pay off.
+  // anticipation the reveal exists to pay off. A unique is read like any other drop.
   if (currencyId === "currency.wisdom") {
     if (item.unidentified !== true) return null;
     const { unidentified: _read, ...revealed } = item;
     return revealed;
   }
+  // Uniques carry an authored mod list; crafting on them would be inventing content.
+  if (item.rarity === "unique") return null;
   if (item.unidentified === true) return null;
 
   const t = TRANSITIONS[currencyId];

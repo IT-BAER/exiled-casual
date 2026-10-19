@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { applyCurrency } from "./currency.js";
+import { applyCurrency, currencyAccepts } from "./currency.js";
 import type { Item, ItemPools } from "@exiled/content-schema";
 
 // Four of each side so a rare can fill its 3+3 and an alchemy can want four.
@@ -119,6 +119,13 @@ describe("applyCurrency", () => {
   it("refuses uniques outright", () => {
     const u: Item = { baseId: "b0", rarity: "unique", itemLevel: 20, name: "Ashmaw", affixes: [] };
     expect(applyCurrency(POOLS, "currency.embers", u, 1)).toBeNull();
+  });
+
+  it("a Scroll of Wisdom still reads an unidentified unique, as in PoE", () => {
+    const u: Item = { baseId: "b0", rarity: "unique", itemLevel: 20, name: "Ashmaw", affixes: [], unidentified: true };
+    expect(currencyAccepts("currency.wisdom", "unique", true, 0)).toBe(true);
+    expect(applyCurrency(POOLS, "currency.wisdom", u, 1)).toEqual({ baseId: "b0", rarity: "unique", itemLevel: 20, name: "Ashmaw", affixes: [] });
+    expect(currencyAccepts("currency.embers", "unique", false, 0)).toBe(false);
   });
 
   it("is deterministic in its seed", () => {
