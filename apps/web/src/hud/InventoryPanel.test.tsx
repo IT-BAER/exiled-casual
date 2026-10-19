@@ -43,6 +43,12 @@ const inv = {
 };
 
 describe("InventoryPanel", () => {
+  it("captions the flasks with the keys the HUD drinks them on", () => {
+    render(<InventoryPanel inventory={inv} flaskKeys={{ life: "1", mana: "2" }} onClose={() => {}} />);
+    expect(screen.getByTestId("inventory-flask-life").textContent).toBe("1");
+    expect(screen.getByTestId("inventory-flask-mana").textContent).toBe("2");
+  });
+
   it("shows the PoE2 item tooltip on hover with name, class, base stats, requirements and affixes", () => {
     render(<InventoryPanel inventory={inv} onClose={() => {}} />);
     expect(screen.getByTestId("inventory-panel")).toBeTruthy();

@@ -273,7 +273,7 @@ const PAPER_DOLL: { slot: EquipSlotId; x: number; y: number; w: number; h: numbe
 ];
 
 // Life or mana flask, in its socket with the hotkey underneath. Same two flasks the
-// HUD shows (life on Q, mana on E); charges aren't simulated, so these are static.
+// HUD shows, on the keys it drinks them on; charges aren't simulated, so these are static.
 function Flask({ kind, hotkey }: { kind: "life" | "mana"; hotkey: string }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
@@ -295,7 +295,7 @@ function Flask({ kind, hotkey }: { kind: "life" | "mana"; hotkey: string }) {
           style={{ width: "100%", height: "100%", objectFit: "contain", filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.8))" }}
         />
       </div>
-      <span style={{ color: GOLD_DIM, fontSize: 10, letterSpacing: 1 }}>{hotkey}</span>
+      <span data-testid={`inventory-flask-${kind}`} style={{ color: GOLD_DIM, fontSize: 10, letterSpacing: 1 }}>{hotkey}</span>
     </div>
   );
 }
@@ -320,14 +320,18 @@ function SectionRule({ children }: { children?: React.ReactNode }) {
   );
 }
 
+const DEFAULT_FLASK_KEYS = { life: "1", mana: "2" };
+
 // memo: GameView renders at 30 Hz while monsters move; this panel only when its own props change.
 export const InventoryPanel = React.memo(function InventoryPanel({
   inventory, stash, vendor = EMPTY_SHELF, buyback = EMPTY_SHELF, gold = 0, equipment = {}, shards = {}, vendorOpen = false,
-  socketWanted = false, compareKey = "ctrl",
+  socketWanted = false, compareKey = "ctrl", flaskKeys = DEFAULT_FLASK_KEYS,
   onClose, onCloseStash, onCloseVendor, onIntent, onSocketWaystone,
 }: {
   /** The modifier that, held over an item, shows what is worn in its slot beside it. */
   compareKey?: "ctrl" | "shift";
+  /** The keys the HUD drinks each flask on, for the captions under them. */
+  flaskKeys?: { life: string; mana: string };
   inventory: Inventory; stash?: Inventory; equipment?: Equipment;
   /** The vendor's shelf, priced per cell. Absent on a snapshot built without a session. */
   vendor?: Snapshot["vendor"];
@@ -1159,8 +1163,8 @@ export const InventoryPanel = React.memo(function InventoryPanel({
                 display: "flex", gap: 4, justifyContent: "center", alignItems: "flex-start",
               }}
             >
-              <Flask kind="life" hotkey="Q" />
-              <Flask kind="mana" hotkey="E" />
+              <Flask kind="life" hotkey={flaskKeys.life.toUpperCase()} />
+              <Flask kind="mana" hotkey={flaskKeys.mana.toUpperCase()} />
             </div>
             {PAPER_DOLL.map((s) => (
               <EquipSlot

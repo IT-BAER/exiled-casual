@@ -1026,6 +1026,7 @@ export function GameView({
           onCloseVendor={closeVendor}
           equipment={snapshot.equipment}
           compareKey={settings.ui.compareKey}
+          flaskKeys={{ life: keybinds.flaskLife, mana: keybinds.flaskMana }}
           // socketWanted: panel is open and the socket is empty, so ctrl+click / drag sockets a stone.
           socketWanted={panelOpen && socketedStone === null}
           onSocketWaystone={socketWaystone}
