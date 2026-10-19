@@ -1,5 +1,5 @@
 import { validateItemBase, validateAffix, type ItemBase, type Affix, type Item, type ItemPools, type Rarity, type UniqueItem } from "@exiled/content-schema";
-import { waystoneRarity, waystoneMods } from "@exiled/rules";
+import { areaLevel, waystoneRarity, waystoneMods } from "@exiled/rules";
 
 // Tiny hand-authored pool for the First Loot slice. Grid dims (w×h) follow the
 // 12×5 inventory. Real 45-base / 120-affix content is Phase 4 proper.
@@ -570,17 +570,19 @@ export function describeItem(item: Item): ItemDescription {
   // rendering them from anywhere else would let the tooltip drift off the map.
   if (item.waystone) {
     const { seed, tier } = item.waystone;
+    // PoE2's base type is the tiered name itself, so it is never a second "Waystone" line.
+    const name = `${base.name} (Tier ${tier})`;
     return {
       rarity: waystoneRarity(seed),
-      name: `${base.name} (Tier ${tier})`,
-      baseName: base.name,
+      name,
+      baseName: name,
       itemClass: base.itemClass,
       // The permanent stone says so on the item, or the one rule that makes it
       // different from the white stone beside it is invisible.
       lines: item.waystone.permanent
         ? ["Not consumed on use", "Cannot be modified"]
         : waystoneMods(seed).map((m) => m.label),
-      statLines: [],
+      statLines: [{ label: "Waystone Tier", value: String(tier) }, { label: "Area Level", value: String(areaLevel(tier)) }],
       icon: base.icon,
       waystone: { seed, tier },
     };

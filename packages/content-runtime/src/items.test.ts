@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { describe, it, expect } from "vitest";
-import { FAMILY_BY_CLASS, familyOf } from "@exiled/rules";
-import { ITEM_POOLS, baseOf, describeItem, itemStatMods } from "./items.js";
+import { FAMILY_BY_CLASS, areaLevel, familyOf } from "@exiled/rules";
+import { ITEM_POOLS, baseOf, describeItem, itemStatMods, waystoneItem } from "./items.js";
 
 describe("ITEM_POOLS", () => {
   it("has bases and affixes with positive base dimensions", () => {
@@ -55,6 +55,14 @@ describe("describeItem", () => {
     const d = describeItem({ baseId: base.id, rarity: "rare", itemLevel: 82, affixes: [], name: "Corpse Husk" });
     expect(d.name).toBe("Corpse Husk");
     expect(d.baseName).toBe(base.name);
+  });
+
+  it("a waystone names itself once and reads its tier and area level, as in PoE2", () => {
+    const d = describeItem(waystoneItem(7, 2));
+    expect(d.name).toBe("Waystone (Tier 2)");
+    // PoE2's base type IS the tiered name, so no second header line repeats "Waystone".
+    expect(d.baseName).toBe(d.name);
+    expect(d.statLines).toEqual([{ label: "Waystone Tier", value: "2" }, { label: "Area Level", value: String(areaLevel(2)) }]);
   });
 });
 
