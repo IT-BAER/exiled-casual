@@ -337,6 +337,25 @@ describe("DEFAULT_ATTACK_BY_CLASS", () => {
       expect(dmg).toBeLessThan(boltDamage / 2);
     }
   });
+
+  // Rate is one hit per max(cooldown, cast), as balance.test.ts paces casts. A
+  // cooldown retune can flip this while every per-hit check above stays green.
+  it("deals less per second than any level-1 mana skill of its class", () => {
+    const perTick = (id: string) => {
+      const def = SKILLS.get(id)!;
+      const eff = def.effects[0]!;
+      const dmg = eff.type === "spawnProjectile" || eff.type === "meleeStrike"
+        ? eff.damage.amountFixed : 0;
+      return dmg / Math.max(def.cooldownTicks, def.castTicks ?? 0);
+    };
+    for (const [classId, freeId] of Object.entries(DEFAULT_ATTACK_BY_CLASS)) {
+      const paid = [...SKILLS.values()].filter(
+        (s) => s.classId === classId && s.unlockLevel === 1 && s.manaCostFixed > 0,
+      );
+      expect(paid.length, classId).toBeGreaterThan(0);
+      for (const s of paid) expect(perTick(s.id), s.id).toBeGreaterThan(perTick(freeId));
+    }
+  });
 });
 
 describe("skill unlocks and growth", () => {

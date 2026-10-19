@@ -89,7 +89,9 @@ const SKILL_DEFS: SkillDef[] = [
    * The other two classes' Ember Bolt: each class's first mana skill, at Ember
    * Bolt's cost and beat. Heavy Strike hits as hard as Ember Bolt because its
    * wedge takes the whole pack: at 56 the Ironsworn cleared a first map 1.44x
-   * faster than the casters (playtest.test.ts). Heavy Strike is PoE1's;
+   * faster than the casters (playtest.test.ts). Piercing Shot matches Ember Bolt
+   * too: at 30 it dealt less per second than the free Snap Shot (content.test.ts).
+   * Heavy Strike is PoE1's;
    * Piercing Shot is a name of our own.
    */
   {
@@ -142,7 +144,7 @@ const SKILL_DEFS: SkillDef[] = [
         speedPerSecFixed: fp(25),
         radiusFixed: fp(0.35),
         maxRangeFixed: fp(20),
-        damage: { type: "physical", amountFixed: fp(30) },
+        damage: { type: "physical", amountFixed: fp(36) },
         // The name is a promise: it goes through the first body from gem level 1.
         pierceCount: 1,
       },
