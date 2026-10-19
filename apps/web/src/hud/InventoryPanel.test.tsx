@@ -397,6 +397,14 @@ describe("InventoryPanel", () => {
     expect(intents).toEqual([{ kind: "moveItem", x: 0, y: 0, toX: 2, toY: 0, to: "stash" }]);
   });
 
+  it("ctrl-clicks an item into the stash too, PoE's own transfer gesture", () => {
+    const intents: unknown[] = [];
+    const stash = { cols: 12, rows: 12, items: [] };
+    render(<InventoryPanel inventory={inv} stash={stash} onIntent={(i) => intents.push(i)} onClose={() => {}} />);
+    fireEvent(screen.getByTestId("inventory-item-0"), new MouseEvent("pointerdown", { bubbles: true, ctrlKey: true, clientX: 10, clientY: 10 }));
+    expect(intents).toEqual([{ kind: "moveItem", x: 0, y: 0, toX: 0, toY: 0, to: "stash" }]);
+  });
+
   it("shift-clicks a stash item back into the backpack", () => {
     const intents: unknown[] = [];
     const stash = { cols: 12, rows: 12, items: [{ x: 4, y: 4, w: 1, h: 1, rarity: "normal" as const, name: "Old Wand", lines: [] }] };

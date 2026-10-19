@@ -664,7 +664,7 @@ export const InventoryPanel = React.memo(function InventoryPanel({
     return canEquip(drag.item.itemClass ?? "", slot) ? "legal" : "illegal";
   };
 
-  // PoE's shift-click: send the piece to the other container without a drag. The
+  // PoE's ctrl-click (shift here too): send the piece to the other container without a drag. The
   // destination cell is picked here rather than by a new intent, because the sim
   // stays the authority — it re-checks the placement and simply refuses a bad one.
   const quickTransfer = (container: ContainerId, it: GridItem) => {
@@ -892,7 +892,8 @@ export const InventoryPanel = React.memo(function InventoryPanel({
                     onIntent?.({ kind: "applyCurrency", fromX: armed.x, fromY: armed.y, x: it.x, y: it.y });
                     return;
                   }
-                  if (e.shiftKey) {
+                  // Ctrl is PoE's transfer; shift stays as well.
+                  if (e.shiftKey || (e.ctrlKey && stash)) {
                     e.preventDefault();
                     setHover(null);
                     quickTransfer(container, it);
