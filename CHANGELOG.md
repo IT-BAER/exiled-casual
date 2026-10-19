@@ -10,6 +10,8 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-10-19
+
 ### Added
 
 - Hold Ctrl over an item to see what you wear in its slot beside it. Options >
