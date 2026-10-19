@@ -10,6 +10,10 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+### Changed
+
+- The dodge roll cooldown is 1 second, down from 1.5.
+
 ## [0.4.1] - 2026-10-18
 
 ### Fixed

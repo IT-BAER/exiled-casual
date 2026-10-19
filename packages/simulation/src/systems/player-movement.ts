@@ -16,11 +16,11 @@ export const ROLL_TICKS = 18;
 /** The opening 80% of a roll, in which melee, projectiles and slams miss him. Ground and ailments still land. */
 export const ROLL_AVOID_TICKS = 14;
 /**
- * Start to start, 1.5 s. A roll outruns a run, so spamming one must not: at this
- * gap Space alone covers 2.5 u/s against a 4.2 run, and the dodge window above
- * stays a fraction of the time rather than a shield.
+ * Start to start, 1.0 s. A roll outruns a run, so spamming one must not: at this
+ * gap Space alone covers 3.7 u/s against a 4.2 run, and the dodge window above
+ * stays a fraction of the time rather than a shield. 24 ticks would break that.
  */
-export const ROLL_COOLDOWN_TICKS = 45;
+export const ROLL_COOLDOWN_TICKS = 30;
 
 /**
  * The distance a roll covers on its tick `i` (1..ROLL_TICKS).

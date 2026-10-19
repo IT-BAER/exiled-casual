@@ -614,7 +614,7 @@ describe("dodge roll", () => {
     registerPlayerMovement(sim);
     const p = makePlayer(sim, 0, 0, Math.trunc(run / 30));
     for (let t = 0; t < ticks; t++) sim.step([dodge(t, p, fp(100), 0)]);
-    expect(ROLL_COOLDOWN_TICKS).toBe(45);
+    expect(ROLL_COOLDOWN_TICKS).toBe(30);
     expect(at(sim, p).x).toBeLessThan(Math.trunc((run * ticks) / 30));
   });
 
