@@ -18,7 +18,7 @@ import { CELL, CELL_VW, PANEL_PAD, PANEL_W } from "./layout";
 const SHARD_ROWS: readonly { orbBaseId: string; label: string }[] = [
   { orbBaseId: "currency.transmutation", label: "Transmutation" },
   { orbBaseId: "currency.elevation", label: "Elevation" },
-  { orbBaseId: "currency.embers", label: "Embers" },
+  { orbBaseId: "currency.embers", label: "Ember" },
 ];
 
 type Inventory = Snapshot["inventory"];
