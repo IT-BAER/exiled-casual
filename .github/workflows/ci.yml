@@ -16,6 +16,7 @@ jobs:
       - run: npm test
       - run: npm run build -w apps/web
       - run: npm run size
+      - run: node tools/check_dev_surface.mjs
   smoke:
     runs-on: ubuntu-latest
     steps:
