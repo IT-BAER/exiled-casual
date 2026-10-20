@@ -62,6 +62,7 @@ import { DEFAULT_SETTINGS, MOUSE_SLOT_BASE, MOVE_SOCKET, SKILL_SLOT_COUNT, contr
 import { enforceMode, socketForKey } from "./controls";
 import { ControlsDialog } from "./menu/ControlsDialog";
 import { FpsGuard } from "./fps-guard";
+import { createDevApi } from "./dev/dev-api";
 import type { FrameHook, Projector } from "./hud/LootLabels";
 import { brazierSpotsFor, fnv1a32, type AreaLayout } from "@exiled/mapgen";
 import { BIOMES, defaultAttackFor, mapBase } from "@exiled/content-runtime";
@@ -571,6 +572,9 @@ export function GameView({
       }
     };
 
+    /** DEV: where a `__dev.dump()` answer goes; null outside a dev build. */
+    let devDumpSink: ((dump: unknown) => void) | null = null;
+
     worker.onmessage = (e: MessageEvent<FromWorker>) => {
       const msg = e.data;
       if (msg.type === "snapshot") {
@@ -601,6 +605,8 @@ export function GameView({
         // Let bindings fire the interact intent once the pending target is inRange.
         onSnapshot(msg.snapshot);
         if (harness !== "done") harnessStep(msg.snapshot);
+      } else if (msg.type === "devDump") {
+        devDumpSink?.(msg.dump);
       } else if (msg.type === "ready") {
         dlog("worker", "ready");
       } else if (msg.type === "area") {
@@ -835,6 +841,25 @@ export function GameView({
       }
     };
     window.addEventListener("keydown", onInvKey);
+
+    if (import.meta.env?.DEV) {
+      const dev = createDevApi({
+        post: (m) => worker.postMessage(m),
+        stopLoop: () => engine.stopRenderLoop(),
+        startLoop: () => engine.runRenderLoop(renderFrame),
+        // Read back in the task that drew it: without preserveDrawingBuffer a later read is black.
+        grab: () => {
+          scene.render(true, true);
+          const out = document.createElement("canvas");
+          out.width = canvas.width;
+          out.height = canvas.height;
+          out.getContext("2d")!.drawImage(canvas, 0, 0);
+          return new Promise<Blob>((ok, fail) => out.toBlob((b) => (b ? ok(b) : fail(new Error("toBlob"))), "image/png"));
+        },
+      });
+      devDumpSink = dev.onDump;
+      (window as unknown as { __dev?: unknown }).__dev = dev.api;
+    }
 
     return () => {
       unmounted = true;

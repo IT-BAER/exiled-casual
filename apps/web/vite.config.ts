@@ -2,8 +2,9 @@ import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
+import { captureHandler } from "./src/dev/capture-endpoint";
 
 /** Hash of every sound and music file's name and bytes: changes exactly when one does. */
 function audioVersion(): string {
@@ -26,8 +27,20 @@ function buildId(): string {
   }
 }
 
+/** DEV: `__dev.capture()` writes the canvas under docs/todo/playtest/. `vite serve` only. */
+function playtestCapture(): Plugin {
+  const root = fileURLToPath(new URL("../../docs/todo/playtest/", import.meta.url));
+  return {
+    name: "playtest-capture",
+    apply: "serve",
+    configureServer(server) {
+      server.middlewares.use("/__capture", captureHandler(root));
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), playtestCapture()],
   define: {
     "import.meta.env.VITE_AUDIO_VERSION": JSON.stringify(audioVersion()),
     "import.meta.env.VITE_EC_BUILD": JSON.stringify(buildId()),
