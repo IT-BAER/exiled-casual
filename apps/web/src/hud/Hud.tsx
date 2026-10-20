@@ -1001,7 +1001,12 @@ export function Hud({
       if (!node || !at) return;
       const p = project(at.x, at.y, at.h);
       node.style.visibility = p.visible ? "visible" : "hidden";
-      if (p.visible) node.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, -100%)`;
+      if (!p.visible) return;
+      // Anchored bottom-centre; held inside the viewport, as PoE pins a name at the screen edge.
+      const w = node.offsetWidth, h = node.offsetHeight, m = 4;
+      const x = Math.min(Math.max(p.x, w / 2 + m), window.innerWidth - w / 2 - m);
+      const y = Math.min(Math.max(p.y, h + m), window.innerHeight - m);
+      node.style.transform = `translate(${x}px, ${y}px) translate(-50%, -100%)`;
     };
     if (afterFrame) return afterFrame(place);
     let raf = 0;

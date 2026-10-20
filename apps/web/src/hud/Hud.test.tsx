@@ -410,6 +410,24 @@ describe("Hud", () => {
     expect(Number(m![2])).toBeLessThan(270);
   });
 
+  /** A portal near the top of the view projects its label above the canvas: it stays readable at the edge. */
+  it("keeps the interact label inside the viewport when the object projects past an edge", () => {
+    const frames: (() => void)[] = [];
+    const project = () => ({ x: -40, y: -30, visible: true });
+    render(
+      <Hud
+        snapshot={makeSnap({ area: "hideout", entities: [{ id: 3, kind: "portal", x: 0, y: 0 }] })}
+        hoveredEntityId={3}
+        project={project}
+        afterFrame={(cb) => { frames.push(cb); return () => {}; }}
+      />,
+    );
+    act(() => { for (const f of frames) f(); });
+    const m = /translate\(([\d.-]+)px, ([\d.-]+)px\)/.exec(screen.getByTestId("interact-label").style.transform);
+    expect(Number(m![1])).toBeGreaterThanOrEqual(0);
+    expect(Number(m![2])).toBeGreaterThanOrEqual(0);
+  });
+
   it("shows no interact label when hoveredEntityId is null", () => {
     render(
       <Hud
