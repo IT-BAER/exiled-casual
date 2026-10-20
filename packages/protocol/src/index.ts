@@ -364,6 +364,8 @@ export interface Snapshot {
   atlasSeed: number;
   /** Atlas node ids already completed this session. */
   completedNodes: string[];
+  /** Atlas node of the open map; absent when none is open. */
+  activeNodeId?: string;
   /** Present only while the player is dead and something hit him before it. */
   deathRecap?: DeathRecap;
   player: {

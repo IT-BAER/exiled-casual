@@ -509,6 +509,7 @@ describe("buildSnapshot — session fields and interactables", () => {
     expect(snap.areaTier).toBe(3);
     expect(snap.atlasSeed).toBe(42);
     expect(snap.completedNodes).toEqual(["node.emberfall"]);
+    expect(snap.activeNodeId).toBe("node.emberfall");
   });
 
   it("defaults areaTier=0, atlasSeed=0, completedNodes=[] when no session (legacy sim)", () => {

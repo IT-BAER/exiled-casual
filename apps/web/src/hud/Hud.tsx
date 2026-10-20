@@ -2,6 +2,7 @@ import React from "react";
 import type { Snapshot } from "@exiled/protocol";
 import { MAP_PORTALS } from "@exiled/protocol";
 import { MONSTERS } from "@exiled/content-runtime";
+import { atlasGraph } from "@exiled/rules";
 import { DISPLAY, ItemTooltip, SERIF } from "./ItemTooltip";
 import { flaskTooltip } from "./flask-tooltip";
 import { PANEL_W } from "./layout";
@@ -823,6 +824,13 @@ export function Hud({
     onSkillBarChange?.(next);
   }, [bar, onSkillBarChange]);
 
+  const atlasSeed = snapshot?.atlasSeed ?? 0;
+  const activeNodeId = snapshot?.activeNodeId;
+  const mapName = React.useMemo(
+    () => (activeNodeId ? atlasGraph(atlasSeed).find((n) => n.id === activeNodeId)?.name : undefined),
+    [atlasSeed, activeNodeId],
+  );
+
   const skillNames = React.useMemo(() => {
     const m = new Map<string, string>();
     for (const s of snapshot?.skills ?? []) m.set(s.id, s.name);
@@ -1147,7 +1155,7 @@ export function Hud({
           textTransform: "uppercase",
         }}
       >
-        {snapshot.area === "hideout" ? "Hideout" : "Map"}
+        {snapshot.area === "hideout" ? "Hideout" : mapName ?? "Map"}
       </div>
 
       {/* Portal budget — shown while a map is open, next to the area label */}

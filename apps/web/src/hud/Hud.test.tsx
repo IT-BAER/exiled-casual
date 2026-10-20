@@ -30,6 +30,7 @@ function makeSnap(overrides: {
   maxLife?: number;
   cooldowns?: Record<string, number>;
   area?: Snapshot["area"];
+  activeNodeId?: string;
   portalsLeft?: number;
   mapOpen?: boolean;
   entities?: Snapshot["entities"];
@@ -56,6 +57,7 @@ function makeSnap(overrides: {
   return {
     tick: 1,
     area: overrides.area ?? "hideout",
+    ...(overrides.activeNodeId ? { activeNodeId: overrides.activeNodeId } : {}),
     portalsLeft: overrides.portalsLeft ?? 0,
     mapOpen: overrides.mapOpen ?? false,
     areaTier: 0,
@@ -329,6 +331,11 @@ describe("Hud", () => {
   it("shows Map label in map area", () => {
     render(<Hud snapshot={makeSnap({ area: "map" })} />);
     expect(screen.getByTestId("area-label")).toHaveTextContent("Map");
+  });
+
+  it("names the atlas node the player is mapping", () => {
+    render(<Hud snapshot={makeSnap({ area: "map", activeNodeId: "node.the_wrackline" })} />);
+    expect(screen.getByTestId("area-label")).toHaveTextContent("The Wrackline");
   });
 
   // --- portal counter ---

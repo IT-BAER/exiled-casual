@@ -449,6 +449,7 @@ export function buildSnapshot(
     areaTier: session?.areaTier ?? 0,
     atlasSeed: session?.atlasSeed ?? 0,
     completedNodes: session?.completedNodes ?? [],
+    ...(session?.activeNodeId ? { activeNodeId: session.activeNodeId } : {}),
     ...(ph.life <= 0 && sim.recentHits.length > 0
       ? { deathRecap: summarizeHits(sim.recentHits, toNumber(ph.maxLife)) }
       : {}),
