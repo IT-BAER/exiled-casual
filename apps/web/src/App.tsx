@@ -405,7 +405,8 @@ export function App(): React.ReactElement {
           data-testid="dev-viewer"
           onClick={() => setScreen({ kind: "viewer" })}
           style={{
-            position: "absolute", right: 8, bottom: 8, zIndex: 40,
+            // Above the footer's Privacy link and version line (MainMenu.tsx).
+            position: "absolute", right: 8, bottom: 36, zIndex: 40,
             padding: "3px 9px", cursor: "pointer",
             background: "rgba(10,10,12,0.8)", border: "1px solid #2b2b31",
             color: "#8a8a95", font: '11px ui-monospace, "Cascadia Mono", monospace',
