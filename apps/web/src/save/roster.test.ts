@@ -20,6 +20,17 @@ describe("portable save files", () => {
     expect(await loadRoster(target)).toEqual(source);
   });
 
+  it("upgrades a pre-roster v2 save file the way storage is upgraded", async () => {
+    const v2 = { version: 2, session: { seed: 7 }, inventory: { items: [] }, progress: { level: 9 }, stash: { tabs: [] } };
+    const target = new MemoryKv();
+    const restored = await importRoster(JSON.stringify(v2), target);
+    expect(restored.characters).toHaveLength(1);
+    expect(restored.characters[0]!.level).toBe(9);
+    expect(restored.characters[0]!.state).not.toHaveProperty("stash");
+    expect(restored.stash).toEqual({ tabs: [] });
+    expect(await loadRoster(target)).toEqual(restored);
+  });
+
   it("rejects an incompatible file before overwriting storage", async () => {
     const target = new MemoryKv();
     await saveRoster(target, emptyRoster());

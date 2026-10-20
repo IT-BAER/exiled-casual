@@ -25,7 +25,7 @@ import {
   saveRoster,
 } from "@exiled/persistence";
 import { sanitize, type Settings } from "../settings";
-import { makeCharacterRecord, openRoster, type NewCharacter } from "@exiled/simulation/roster-io";
+import { makeCharacterRecord, migrateSingleSave, openRoster, type NewCharacter } from "@exiled/simulation/roster-io";
 
 export type Mode = "local" | "online";
 
@@ -89,7 +89,8 @@ export async function importRoster(text: string, target: KvStore = kv()): Promis
   } catch {
     throw new Error("This is not a valid Exiled Casual save file.");
   }
-  const roster = asRoster(parsed);
+  // A pre-roster v2 file is upgraded exactly as openRoster upgrades it from storage.
+  const roster = asRoster(parsed) ?? migrateSingleSave(parsed, Date.now());
   if (!roster) throw new Error("This is not a valid Exiled Casual save file.");
   await saveRoster(target, roster);
   return roster;
