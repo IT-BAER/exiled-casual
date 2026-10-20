@@ -202,7 +202,8 @@ export function ItemTooltip({
         {statLines?.map((s, i) => (
           <div key={i} style={{ fontSize: 13, letterSpacing: 0.3, margin: "1px 0", textTransform: "uppercase" }}>
             <span style={{ color: LABEL_GREY }}>{s.label}: </span>
-            <span style={{ color: VALUE_LIGHT }}>{s.value}</span>
+            {/* PoE draws a value the item's own local mods moved in the magic blue. */}
+            <span style={{ color: s.augmented ? AFFIX_BLUE : VALUE_LIGHT }}>{s.value}</span>
           </div>
         ))}
 

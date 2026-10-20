@@ -12,6 +12,13 @@ describe("ItemTooltip", () => {
     expect(screen.getByText("Ember Wand")).toBeTruthy();
   });
 
+  it("draws a base-stat value its own mods moved in the affix blue, the rest plain", () => {
+    render(<ItemTooltip name="Ironsworn Hammer" rarity="rare" lines={[]} x={0} y={0}
+      statLines={[{ label: "Physical Damage", value: "25-30", augmented: true }, { label: "Attacks per Second", value: "1.45" }]} />);
+    expect(screen.getByText("25-30").style.color).toBe("rgb(143, 151, 255)");
+    expect(screen.getByText("1.45").style.color).not.toBe("rgb(143, 151, 255)");
+  });
+
   it("draws an unmet level requirement in red, as PoE does, and a met one plain", () => {
     render(<ItemTooltip name="Ember Wand" rarity="normal" reqLevel={8} playerLevel={7} lines={[]} x={0} y={0} />);
     expect(screen.getByTestId("item-req-level").style.color).toBe("rgb(208, 32, 32)");
