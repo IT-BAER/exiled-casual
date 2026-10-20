@@ -24,7 +24,7 @@ export function urlVolumeScale(search: string): number {
   if (v !== null && v !== "" && Number.isFinite(Number(v))) return unit(Number(v) / 100);
   return q.has("bot") ? 0.1 : 1;
 }
-const URL_SCALE = typeof location !== "undefined" ? urlVolumeScale(location.search) : 1;
+const URL_SCALE = import.meta.env?.DEV === true && typeof location !== "undefined" ? urlVolumeScale(location.search) : 1;
 let level = 0.8 * URL_SCALE;
 
 /**

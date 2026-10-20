@@ -320,7 +320,7 @@ export function GameView({
     const mountedAt = performance.now();
     let gameMsSent = false;
     const query = new URLSearchParams(window.location.search);
-    const bot = query.has("bot");
+    const bot = import.meta.env?.DEV === true && query.has("bot");
     // ?tour: bot mode's open Atlas and no saving, with the player at the controls.
     const tour = import.meta.env?.DEV === true && query.has("tour");
     worker.postMessage({ type: "init", seed: LAB_SEED, characterId, bot, tour });
