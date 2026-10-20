@@ -100,8 +100,9 @@ const ITEM_BASES: ItemBase[] = [
     stats: { physMin: 5, physMax: 10, critPct: 8, aps: 1.2, reqLevel: 8, reqAttrValue: 29, reqAttr: "Int" },
     // PoE2 wand implicits all grant a skill ("Grants Skill: Power Siphon"), which nothing
     // in the sim can honour, so this borrows the implicit of the base whose stat block the
-    // wand already copies: PoE1's Goat's Horn, (10-15)% increased Spell Damage.
-    implicit: { stat: "spellDamagePct", label: "% increased Spell Damage", value: 12 },
+    // wand already copies: PoE1's Goat's Horn, (10-15)% increased Spell Damage. Here
+    // the stat scales every skill's hit, attacks too, so every line says "Damage".
+    implicit: { stat: "spellDamagePct", label: "% increased Damage", value: 12 },
     icon: "/textures/items/ember_wand.webp",
   },
   // PoE2's Withered Wand asks nothing of its wielder; this is the wand a new
@@ -113,7 +114,7 @@ const ITEM_BASES: ItemBase[] = [
     w: 1,
     h: 2,
     stats: { physMin: 3, physMax: 6, critPct: 7, aps: 1.4, reqLevel: 1 },
-    implicit: { stat: "spellDamagePct", label: "% increased Spell Damage", value: 6 },
+    implicit: { stat: "spellDamagePct", label: "% increased Damage", value: 6 },
     icon: "/textures/items/ember_kindling_wand.webp",
   },
   // Foci carry no implicit: poe2db lists them with energy shield alone.
@@ -303,7 +304,7 @@ const AFFIXES: Affix[] = [
   { id: "affix.mana", kind: "prefix", nameWord: "Beryl", stat: "maxMana", label: "to maximum Mana", minItemLevel: 1, min: 4, max: 30, itemClasses: ["shield", "wand", "focus", "helmet", "body", "gloves", "boots", "belt"] },
   { id: "affix.energy_shield", kind: "prefix", nameWord: "Ghostly", stat: "energyShield", label: "to maximum Energy Shield", minItemLevel: 1, min: 5, max: 35, itemClasses: ["shield", "focus", "helmet", "body", "gloves", "boots"] },
   { id: "affix.increased_armour", kind: "prefix", nameWord: "Reinforced", stat: "armourPct", label: "% increased Armour", minItemLevel: 1, min: 10, max: 30, itemClasses: ["shield", "helmet", "body", "gloves", "boots", "belt"] },
-  { id: "affix.spell_damage", kind: "prefix", nameWord: "Runic", stat: "spellDamagePct", label: "% increased Spell Damage", minItemLevel: 1, min: 10, max: 25, itemClasses: ["wand", "focus"] },
+  { id: "affix.spell_damage", kind: "prefix", nameWord: "Runic", stat: "spellDamagePct", label: "% increased Damage", minItemLevel: 1, min: 10, max: 25, itemClasses: ["wand", "focus"] },
   { id: "affix.fire_dmg", kind: "prefix", nameWord: "Smoldering", stat: "fireDamage", label: "to Fire Damage", minItemLevel: 1, min: 2, max: 18, itemClasses: ["wand", "focus", "mace", "sword", "bow"] },
   { id: "affix.cold_dmg", kind: "prefix", nameWord: "Glacial", stat: "coldDamage", label: "to Cold Damage", minItemLevel: 1, min: 2, max: 16, itemClasses: ["wand", "focus", "mace", "sword", "bow"] },
   { id: "affix.armour", kind: "prefix", nameWord: "Plated", stat: "armour", label: "to Armour", minItemLevel: 8, min: 10, max: 60, itemClasses: ["shield", "helmet", "body", "gloves", "boots", "belt"] },

@@ -324,7 +324,7 @@ export function CharacterPanel({ player, onClose }: { player: Snapshot["player"]
           <DetailSection
             title="Offence"
             rows={[
-              ["Increased Spell Damage", `${s.spellDamagePct}%`],
+              ["Increased Damage", `${s.spellDamagePct}%`],
               ["Increased Cast Speed", `${s.castSpeedPct}%`],
               ["Increased Critical Strike Chance", `${s.critChancePct}%`],
             ]}

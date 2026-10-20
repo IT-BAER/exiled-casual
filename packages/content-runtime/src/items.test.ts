@@ -46,7 +46,7 @@ describe("describeItem", () => {
     const of = (baseId: string) => describeItem({ baseId, rarity: "normal", itemLevel: 65, affixes: [] }).implicit;
     // Ember Wand copies Goat's Horn's stat block (reference-screenshots/item-rare.png), so it
     // carries that base's implicit too. Same value on every drop, unlike an affix.
-    expect(of("base.ember_wand")).toBe("12% increased Spell Damage");
+    expect(of("base.ember_wand")).toBe("12% increased Damage");
     expect(of("base.ironsworn_helm")).toBeUndefined();
   });
 
@@ -207,7 +207,7 @@ describe("unidentified items", () => {
   it("still shows rarity, the base stat block and the implicit", () => {
     const d = describeItem(rare);
     expect(d.rarity).toBe("rare");
-    expect(d.implicit).toBe("12% increased Spell Damage");
+    expect(d.implicit).toBe("12% increased Damage");
     expect(d.statLines.length).toBeGreaterThan(0);
   });
 

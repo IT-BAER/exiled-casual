@@ -59,7 +59,9 @@ describe("CharacterPanel", () => {
     const detail = screen.getByTestId("char-detail");
     expect(detail.textContent).toContain("Mana Regeneration per second");
     expect(detail.textContent).toContain("8.7");
-    expect(detail.textContent).toContain("Increased Spell Damage");
+    // The stat scales every skill, attacks included, so the sheet does not call it spell damage.
+    expect(detail.textContent).toContain("Increased Damage");
+    expect(detail.textContent).not.toContain("Spell Damage");
     expect(detail.textContent).toContain("12%");
     expect(detail.textContent).toContain("Armour");
     expect(detail.textContent).toContain("50");

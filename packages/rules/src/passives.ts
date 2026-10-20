@@ -615,7 +615,7 @@ const STAT_LABEL: Readonly<Record<string, string>> = {
   energyShieldPct: "% increased maximum Energy Shield",
   armourPct: "% increased Armour",
   manaRegenPct: "% increased Mana Regeneration",
-  spellDamagePct: "% increased Spell Damage",
+  spellDamagePct: "% increased Damage",
   castSpeedPct: "% increased Cast Speed",
   critChancePct: "% increased Critical Strike Chance",
   fireResPct: "% to Fire Resistance",
