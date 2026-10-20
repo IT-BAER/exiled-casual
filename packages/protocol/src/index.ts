@@ -216,7 +216,29 @@ export interface ToWorker_Spawn  { type: "spawn"; what: SpawnKind }
  * tick it stopped on. The client sends it when the pause menu opens.
  */
 export interface ToWorker_Pause  { type: "pause"; paused: boolean }
-export type ToWorker = ToWorker_Init | ToWorker_Intent | ToWorker_Spawn | ToWorker_Pause;
+
+/** DEV-only cheats and inspection for the release playtest; the worker refuses them in a production build. */
+export type DevOp =
+  | { op: "setLevel"; level: number }
+  | { op: "setGold"; gold: number }
+  | {
+      op: "grantItem"; baseId: string; rarity: "normal" | "magic" | "rare" | "unique";
+      /** Picks the unique (and its base); `baseId` is then ignored. */
+      uniqueId?: string;
+      /** Exact mods; absent = rolled from the base's pool. */
+      affixes?: { affixId: string; value: number }[];
+      itemLevel?: number; seed?: number;
+    }
+  | { op: "grantCurrency"; baseId: string; count: number }
+  | { op: "grantWaystone"; tier: number; seed?: number }
+  | { op: "openAtlas" }
+  /** From the hideout into any node at any tier, skipping the stone, fog and tier rules. */
+  | { op: "teleport"; atlasNodeId: string; tier?: number; seed?: number }
+  | { op: "toHideout" }
+  /** Answered with a FromWorker_DevDump of the player's and session's components. */
+  | { op: "dump" };
+export interface ToWorker_Dev    { type: "dev"; op: DevOp }
+export type ToWorker = ToWorker_Init | ToWorker_Intent | ToWorker_Spawn | ToWorker_Pause | ToWorker_Dev;
 
 // ---------------------------------------------------------------------------
 // Snapshot types (worker → client); coords are render floats (worker calls toNumber())
@@ -517,7 +539,9 @@ export interface FromWorker_Ready    { type: "ready" }
  *  which tileset to dress it in and which biome to tint the light for. Empty
  *  `mapBaseId` means no map (the hideout), which is dressed neutrally. */
 export interface FromWorker_Area     { type: "area"; area: AreaKind; layout: AreaLayout; mapBaseId: string }
-export type FromWorker = FromWorker_Snapshot | FromWorker_Ready | FromWorker_Area;
+/** DEV only: the answer to a `dump` DevOp, every component on the player and the session. */
+export interface FromWorker_DevDump  { type: "devDump"; dump: unknown }
+export type FromWorker = FromWorker_Snapshot | FromWorker_Ready | FromWorker_Area | FromWorker_DevDump;
 
 // ---------------------------------------------------------------------------
 // Codecs
@@ -714,7 +738,7 @@ export function validateIntent(v: unknown): Intent {
   }
 }
 
-const TO_WORKER_TYPES = new Set(["init", "intent", "spawn", "pause"]);
+const TO_WORKER_TYPES = new Set(["init", "intent", "spawn", "pause", "dev"]);
 
 // Structural type guard for ToWorker messages.
 export function isToWorker(v: unknown): v is ToWorker {
@@ -729,6 +753,7 @@ export function isToWorker(v: unknown): v is ToWorker {
     case "intent": return typeof obj["intent"] === "object" && obj["intent"] !== null;
     case "spawn":  return SPAWN_KINDS.includes(obj["what"] as SpawnKind);
     case "pause":  return typeof obj["paused"] === "boolean";
+    case "dev":    return typeof obj["op"] === "object" && obj["op"] !== null && typeof (obj["op"] as Record<string, unknown>)["op"] === "string";
     default:       return false;
   }
 }

@@ -32,6 +32,9 @@ self.onmessage = (e: MessageEvent) => {
     core.pushIntent(validateIntent(msg.intent));
   } else if (msg.type === "spawn" && core && import.meta.env.DEV) {
     core.spawn(msg.what);
+  } else if (msg.type === "dev" && core && import.meta.env.DEV) {
+    const dump = core.dev(msg.op);
+    if (dump !== undefined) self.postMessage({ type: "devDump", dump } satisfies FromWorker);
   } else if (msg.type === "pause") {
     paused = msg.paused;
   }

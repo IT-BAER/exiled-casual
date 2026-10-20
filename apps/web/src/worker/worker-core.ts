@@ -13,9 +13,11 @@ import {
   Bot,
   areaCollision,
   placeFirstFit,
+  applyDevOp,
+  devDump,
 } from "@exiled/simulation";
 import type { Simulation, World, Entity, Position, SessionC, InventoryC, SkillsC, ProgressC, ShardsC, EquipmentC, KvStore } from "@exiled/simulation";
-import type { Intent, Snapshot, SpawnKind, AreaKind } from "@exiled/protocol";
+import type { Intent, Snapshot, SpawnKind, AreaKind, DevOp } from "@exiled/protocol";
 import { CONTENT_VERSION, waystoneItem } from "@exiled/content-runtime";
 import { generateArea, type AreaLayout } from "@exiled/mapgen";
 import { mapBaseIdForNode, classIdOr, atlasGraph, WAYSTONE_MAX_TIER } from "@exiled/rules";
@@ -154,6 +156,13 @@ export class WorkerCore {
   spawn(what: SpawnKind): void {
     const p = this.world.get<Position>(this.playerEntity, "position");
     spawnLabActors(this.world, what, p?.x ?? 0, p?.y ?? 0);
+  }
+
+  /** DEV: a cheat or inspection op. Returns the dump for `dump`, else undefined. */
+  dev(op: DevOp): unknown {
+    if (op.op === "dump") return devDump(this.world, this.sim.tick);
+    applyDevOp(this.world, op);
+    return undefined;
   }
 
   advance(dtMs: number): Snapshot[] {

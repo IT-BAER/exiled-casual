@@ -30,6 +30,7 @@ export { registerDamageResolve } from "./systems/damage-resolve";
 export { registerDeath } from "./systems/death";
 export { registerExpiry } from "./systems/expiry";
 export { createCombatSim, spawnLabActors } from "./combat-sim";
+export { applyDevOp, devDump } from "./dev-ops";
 export { buildArea, areaCollision } from "./areas";
 export { Bot } from "./bot";
 export type { AreaLayout, WalkableGrid, Socket } from "@exiled/mapgen";
