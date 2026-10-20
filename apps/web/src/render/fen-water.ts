@@ -1,7 +1,7 @@
 // What makes a swamp pool read as WATER from the game camera when there is no
-// sky worth reflecting: duckweed rafts on the surface, a scum line along the
-// bank, and slow glints drifting over the open water. Without them a pool is a
-// dark stain the player mistakes for a shadow and walks into.
+// sky worth reflecting: duckweed rafts on the surface and a scum line along the
+// bank (the open water's glints are the sun's, off the water plugin's normals).
+// Without them a pool is a dark stain the player mistakes for a shadow.
 import type { Material } from "@babylonjs/core";
 import type { UniformBuffer } from "@babylonjs/core/Materials/uniformBuffer";
 import type { MaterialDefines } from "@babylonjs/core/Materials/materialDefines";
@@ -9,8 +9,9 @@ import { MaterialPluginBase } from "@babylonjs/core/Materials/materialPluginBase
 
 export const FEN_PLUGIN = "ExiledFenWater";
 
-/** Linear colours. Duckweed is the brightest thing on the pool by design. */
-const WEED = "vec3(0.11, 0.19, 0.035)";
+/** Linear colours. Duckweed is the brightest thing on the pool by design, but
+ *  under full sun on an upright normal; brighter reads as lime paint. */
+const WEED = "vec3(0.04, 0.062, 0.016)";
 const SCUM = "vec3(0.10, 0.095, 0.05)";
 
 const GLSL = `
@@ -45,7 +46,7 @@ class FenWaterPlugin extends MaterialPluginBase {
     return { ubo: [{ name: "fenTime", size: 1, type: "float" }], fragment: "uniform float fenTime;" };
   }
 
-  // bindForSubMesh, not hardBind: it runs on every draw, and the glints move.
+  // bindForSubMesh, not hardBind: it runs on every draw, and the weed drifts.
   override bindForSubMesh(ubo: UniformBuffer): void {
     // Wrapped so float32 keeps sub-frame precision; the wrap is a 17-minute jump.
     ubo.updateFloat("fenTime", (performance.now() / 1000) % 1000);
@@ -66,24 +67,11 @@ class FenWaterPlugin extends MaterialPluginBase {
           // Off the bank ramp: weed is opaque, and reaching the thin edge it drew
           // the cell staircase the ramp exists to soften.
           fenWeed = smoothstep(0.54, 0.6, raft) * smoothstep(0.25, 0.45, clump) * smoothstep(0.25, 0.6, alpha);
-          // Scum where the water thins out over the bank (the vertex alpha ramp).
+          // Scum where the water thins out over the bank (the water plugin's alpha ramp).
           float ring = smoothstep(0.15, 0.45, alpha) * (1.0 - smoothstep(0.55, 0.9, alpha));
           surfaceAlbedo = mix(surfaceAlbedo, ${SCUM}, ring * (0.5 + 0.5 * fenNoise(q * 4.0)));
           surfaceAlbedo = mix(surfaceAlbedo, ${WEED} * (0.8 + 0.4 * clump), fenWeed);
           alpha = max(alpha, fenWeed);
-        }
-        #endif
-      `,
-      CUSTOM_FRAGMENT_BEFORE_FRAGCOLOR: `
-        #ifdef FEN_WATER
-        {
-          vec2 q = vPositionW.xz;
-          // Two noise fields drifting against each other: where both peak, a
-          // short-lived glint the size of a hand, scattered, never a line.
-          float a1 = fenNoise(q * 9.0 + vec2(fenTime * 0.6, fenTime * 0.4));
-          float a2 = fenNoise(q * 10.5 - vec2(fenTime * 0.5, fenTime * 0.65));
-          float glint = smoothstep(0.78, 0.92, a1 * a2 * 1.6) * (1.0 - fenWeed) * smoothstep(0.6, 0.95, alpha);
-          finalColor.rgb += vec3(0.12, 0.13, 0.1) * glint;
         }
         #endif
       `,

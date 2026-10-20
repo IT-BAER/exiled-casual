@@ -4,12 +4,19 @@ import {
   PBRMaterial,
   Texture,
   VertexData,
-  VertexBuffer,
   type Observer,
   type Scene,
 } from "@babylonjs/core";
 import type { Shoreline, WalkableGrid } from "@exiled/mapgen";
 import { dressFenWater } from "./fen-water";
+import {
+  COAST_WATER,
+  FEN_WATER,
+  WATER_DATA_KIND,
+  dressWater,
+  waterPlugin,
+  type WaterParams,
+} from "./water-surface";
 
 /** The single merged water mesh. Born with this name, never renamed: engine.ts
  *  filters shadow casters on `onNewMeshAddedObservable`, which reads a name ONCE
@@ -29,96 +36,20 @@ const SEA_Y = 0.02;
  *  with opaque mass fading to black, not with a view). */
 const SKIRT_REACH = 60;
 
-/** The surf, in WORLD UNITS out from the waterline: where the white band is
- *  centred and how wide it runs.
- *
- *  It is a band and not a ramp from the edge, and that distinction is the whole
- *  reason the first attempt had no foam in it: the water has to fade to nothing
- *  AT the waterline to hide the geometry, so a foam that peaks there peaks where
- *  the water is invisible. In `reference-screenshots/beach-map.jpg` the white is
- *  a metre or so OUT from the sand, breaking, with wet dark sand between it and
- *  the dry beach. */
-let FOAM_AT = 0.5;
-let FOAM_WIDTH = 0.45;
+/** Cell path: how far out the shore BFS measures, in cells; anything past it
+ *  is drawn at this depth. */
+const DEPTH_CELLS = 14;
 
-/** Kept for the cell path, which shades by distance in cells. */
-const FOAM_CELLS = 4;
-
-/** How far out the water keeps getting deeper, in cells. The colour ramp over
- *  this distance is the single thing that makes it read as sea rather than a
- *  sheet: the reference goes from tan shallows you can see the sand through to
- *  green-grey depth in about ten metres. */
-let DEPTH_CELLS = 14;
-
-/** Cells over which the water fades IN from the shoreline (cell path). */
-const WET_CELLS = 3;
-
-/** World units over which the coast's water fades in. Short: long enough that
- *  no polygon edge is ever the waterline, short enough that the surf band above
- *  is drawn at something like full strength. */
-let WET_UNITS = 0.35;
-
-/** Vertex tint at the shallow and deep ends of that ramp. Multiplies the
- *  material's own albedo, so these are ratios and not colours: warm and pale
- *  over wet sand, cold and dark once the bottom is gone. */
-let SHALLOW_TINT: [number, number, number] = [2.7, 2.5, 1.9];
-let DEEP_TINT: [number, number, number] = [0.85, 1.2, 1.15];
-
-/** White added at the surf line, on top of the tint. */
-let FOAM_ADD = 8;
-
-/** Swell: faint lines of brighter water running PARALLEL to the shore, every
- *  `SWELL_PITCH` metres out. Both references show them — water arrives in
- *  ranks, and without them the shallows are one flat wash of colour no matter
- *  how good the normal map is. Amplitude is deliberately small; this is a tone,
- *  not a stripe. */
-const SWELL_PITCH = 3.1;
-const SWELL_ADD = 0.16;
-/** Metres over which the swell fades IN going out to sea. Without it the first
- *  crest lands on top of the surf band and widens it into one pale wash — the
- *  ranks belong outside the break, not on it. */
-const SWELL_FADE_IN = 4.5;
-
-/** A second, weaker line of broken water further out. Real surf has more than
- *  one breaker, and the reference shows two before the water goes flat; one
- *  line alone reads as a painted border around the sand. */
-let BREAKER_AT = 9.5;
-let BREAKER_WIDTH = 1.6;
-let BREAKER_ADD = 1.1;
-
-/** Wet sand, landward of the waterline: how far it reaches and how much it
- *  darkens the beach. Drawn as part of the water strip (see SHORE_BANDS), so it
- *  follows the same curve and can never drift out of register with it. */
-// Reach and strength of the wet band. At 1.4/0.78 it read as a grey ribbon
-// drawn just inland of the white surf — an outline around the sand rather than
-// sand the tide has been over. Shorter and lighter, it is a tone the eye takes
-// for damp.
-let WET_SAND_REACH = 1.0;
-let WET_SAND_DARKEN = 0.88;
-
-/** World units per texture repeat for the wave normal, and how fast each of the
- *  two layers travels (repeats per second). Different rates in different
- *  directions on purpose: one scrolling normal is a conveyor belt, two crossing
- *  ones are a surface. */
+/** World units per texture repeat for the wave normal, and how fast it travels
+ *  (repeats per second). The second, crossing layer is the water plugin's
+ *  `ripple`: Babylon's detail map wants a packed texture (normal X in alpha),
+ *  and fed this RGB map it tilted every normal the same way. */
 const WAVE_TILE = 9;
 const WAVE_SPEED_U = 0.013;
 const WAVE_SPEED_V = 0.009;
-const DETAIL_TILE = 3.4;
-const DETAIL_SPEED_U = -0.021;
-const DETAIL_SPEED_V = 0.017;
 
-/** The water's own albedo, BEFORE the shallow-to-deep vertex tint above
- *  multiplies it. Held low and slightly green so the shallow end lands on the
- *  reference's wet tan and the deep end on its grey-green, from one material. */
-// Khaki rather than green: PoE1's beach water is the colour of stirred sand,
-// and a green base under the shallow tint came out as pond.
-const SEA_COLOR = new Color3(0.13, 0.125, 0.09);
+/** Low, so the sun breaks into glints on the moving normals. */
 const SEA_ROUGHNESS = 0.2;
-/** Opaque, except where the vertex alpha fades it out at the shore. It was
- *  0.82, and at that value the sand under the water showed through everywhere
- *  — including the boulders' long shadows, which read as dirt floating in the
- *  sea. Only the shallows are meant to be see-through. */
-const SEA_ALPHA = 1;
 
 /** A stand-in for the sky the water has nothing to reflect. Flat water under a
  *  low sun takes almost no diffuse light, so without this the sea is a dark
@@ -130,17 +61,10 @@ const SEA_SKY = new Color3(0.035, 0.06, 0.062);
  *  is still and murky: no surf, no breaker, a slow drift instead of a swell. */
 export type SeaLook = "coast" | "fen";
 const FEN_MAT_NAME = "fen-mat";
-const FEN_COLOR = new Color3(0.06, 0.068, 0.04);
 const FEN_SKY = new Color3(0.012, 0.018, 0.012);
 const FEN_ROUGHNESS = 0.3;
-/** Bank-to-middle tint: silt brown at the edge, black-green where it is deep. */
-const FEN_SHALLOW_TINT: [number, number, number] = [1.6, 1.35, 1.0];
-const FEN_DEEP_TINT: [number, number, number] = [0.6, 0.85, 0.55];
 /** Cells to full depth: pools are a few metres across, not a sea. */
 const FEN_DEPTH_CELLS = 5;
-/** Corner depth past the collision face at which a pool is opaque; a corner
- *  shared by two bank cells reads -1 (see `cornerDepth`). */
-const FEN_BANK = 1.5;
 /** Wave scroll as a share of the sea's: barely moving, so it reads as still. */
 const FEN_SCROLL = 0.2;
 const FEN_BUMP = 0.35;
@@ -163,9 +87,9 @@ function seaMaterial(scene: Scene, look: SeaLook = "coast"): PBRMaterial {
   const mat = new PBRMaterial(name, scene);
   mat.metallic = 0;
   mat.roughness = fen ? FEN_ROUGHNESS : SEA_ROUGHNESS;
-  mat.albedoColor = fen ? FEN_COLOR : SEA_COLOR;
-  mat.alpha = SEA_ALPHA;
   mat.emissiveColor = fen ? FEN_SKY : SEA_SKY;
+  // Colour and opacity come from the plugin, per pixel, off the mesh's water data.
+  dressWater(mat, !fen, fen ? FEN_WATER : COAST_WATER);
   if (fen) dressFenWater(mat);
   // The sand under the shallows has to show through, and the sea is drawn after
   // the ground so back-to-front is already the order it needs.
@@ -176,27 +100,13 @@ function seaMaterial(scene: Scene, look: SeaLook = "coast"): PBRMaterial {
     bump.vScale = 1;
     if (fen) bump.level = FEN_BUMP;
     mat.bumpTexture = bump;
-    // The second wave layer. Babylon's detail map is the only way to get a
-    // second normal onto one PBR material without a custom shader, and it costs
-    // one extra sample rather than a second draw.
-    const detail = new Texture("/textures/water/water_normal.jpg", scene);
-    // Same UVs as the base layer, so the second scale has to come from the
-    // texture: crests of one size marching over crests of another is what reads
-    // as chop rather than a pattern.
-    detail.uScale = WAVE_TILE / DETAIL_TILE;
-    detail.vScale = WAVE_TILE / DETAIL_TILE;
-    mat.detailMap.texture = detail;
-    mat.detailMap.isEnabled = true;
-    mat.detailMap.bumpLevel = fen ? 0.8 * FEN_BUMP : 0.8;
-    mat.detailMap.diffuseBlendLevel = 0;
-    mat.detailMap.roughnessBlendLevel = 0;
   } catch {
     /* no canvas under NullEngine; the untextured material is fine in tests */
   }
   return mat;
 }
 
-/** Drive both normal layers. Registered once per scene and left running: it
+/** Drive the normal layer. Registered once per scene and left running: it
  *  touches only the material, which outlives the mesh. */
 function startScroll(scene: Scene, mat: PBRMaterial, rate = 1): void {
   if (scrollObservers.has(mat.name)) return;
@@ -206,11 +116,6 @@ function startScroll(scene: Scene, mat: PBRMaterial, rate = 1): void {
     if (bump) {
       bump.uOffset = (bump.uOffset + WAVE_SPEED_U * dt) % 1;
       bump.vOffset = (bump.vOffset + WAVE_SPEED_V * dt) % 1;
-    }
-    const detail = mat.detailMap.texture as Texture | null;
-    if (detail) {
-      detail.uOffset = (detail.uOffset + DETAIL_SPEED_U * dt) % 1;
-      detail.vOffset = (detail.vOffset + DETAIL_SPEED_V * dt) % 1;
     }
   }));
 }
@@ -246,69 +151,13 @@ export interface SeaResult {
 }
 
 /**
- * Flood the void outside a map's rim with water.
- *
- * The fill starts from the grid BORDER and spreads over wall cells only, so it
- * reaches everything outside the playable rim and nothing inside it: an interior
- * rock outcrop is a wall pocket the fill can never enter, and without that every
- * boulder mid-map would sit in its own pond.
- *
- * `enabled` is false for every biome but the strand, and then this only clears
- * whatever the last area left behind.
- */
-/** Deterministic 0..1 hash of a sample index, so the surf is not the same all
- *  the way down the beach. No RNG: the same map has to draw the same water. */
-function wobble(i: number, salt: number): number {
-  const x = Math.sin(i * 12.9898 + salt * 78.233) * 43758.5453;
-  return x - Math.floor(x);
-}
-
-/** Shade one vertex of the strip from its distance out to sea, in world units.
- *  `at` and `gain` shift the surf band per sample along the shore: a foam line
- *  of constant width is a painted ribbon, and the reference's is lacy. */
-function shoreColor(
-  outUnits: number,
-  cellSize: number,
-  at = FOAM_AT,
-  gain = 1,
-  phase = 0,
-): [number, number, number, number] {
-  // Inland of the waterline this is not water at all: it is the wet sand the
-  // last wave left, drawn as a dark multiply over the beach. Alpha rises again
-  // going inland, then falls off at the tide's reach.
-  if (outUnits < 0) {
-    const w = Math.max(0, 1 + outUnits / WET_SAND_REACH);
-    return [WET_SAND_DARKEN, WET_SAND_DARKEN * 0.96, WET_SAND_DARKEN * 0.88, w * 0.8];
-  }
-  const d = outUnits;
-  const deep = Math.min(1, d / (DEPTH_CELLS * cellSize));
-  // A band, not a ramp: see FOAM_AT. Gaussian so it has no edges of its own.
-  const t = (d - at) / FOAM_WIDTH;
-  const b = (d - BREAKER_AT) / BREAKER_WIDTH;
-  const foam = Math.exp(-t * t) * FOAM_ADD * gain + Math.exp(-b * b) * BREAKER_ADD * gain;
-  // Swell rides on top, fading out as the water deepens: ranks are a shallow
-  // -water read, and out where the bottom is gone there is nothing to shape them.
-  const swell = Math.sin((d / SWELL_PITCH) * Math.PI * 2 + phase) * SWELL_ADD *
-    (1 - deep) * Math.min(1, d / SWELL_FADE_IN);
-  return [
-    SHALLOW_TINT[0] + (DEEP_TINT[0] - SHALLOW_TINT[0]) * deep + foam + swell,
-    SHALLOW_TINT[1] + (DEEP_TINT[1] - SHALLOW_TINT[1]) * deep + foam + swell,
-    SHALLOW_TINT[2] + (DEEP_TINT[2] - SHALLOW_TINT[2]) * deep + foam + swell,
-    // Zero at and inside the waterline: the edge of the water is a gradient with
-    // no geometry in it, so there is nothing to stair-step.
-    Math.min(1, Math.max(0, outUnits) / WET_UNITS),
-  ];
-}
-
-/**
  * The sea as a strip laid along the shoreline curve.
  *
  * One ring of vertices per band out from the waterline, one column per sample of
  * the curve, and the curve is the generator's own float-per-column shore — so
  * the waterline is exactly as smooth as the sines that drew it, at any zoom.
  */
-function buildShoreSea(scene: Scene, grid: WalkableGrid, shore: Shoreline): SeaResult {
-  const { cellSize } = grid;
+function buildShoreSea(scene: Scene, shore: Shoreline): SeaResult {
   const n = shore.cross.length;
   // The curve, plus one flat sample past each end so the water runs off the map
   // rather than stopping square with it.
@@ -323,19 +172,12 @@ function buildShoreSea(scene: Scene, grid: WalkableGrid, shore: Shoreline): SeaR
   const indices: number[] = [];
   const normals: number[] = [];
   const uvs: number[] = [];
-  const colors: number[] = [];
+  const water: number[] = [];
   const bands = SHORE_BANDS.length;
 
   for (let i = -1; i <= n; i++) {
     const a = alongOf(i);
     const c = crossOf(i);
-    // Two low-frequency wobbles, one for where the surf breaks and one for how
-    // hard, sampled a few metres apart so the band swells and thins the way a
-    // real one does instead of shimmering per vertex.
-    const at_ = FOAM_AT + (wobble(Math.floor(i / 7), 1) - 0.5) * 0.5;
-    const gain_ = 0.55 + wobble(Math.floor(i / 5), 2) * 0.75;
-    // The swell bends with the shore rather than running dead straight down it.
-    const phase_ = wobble(Math.floor(i / 11), 3) * Math.PI * 2;
     for (const band of SHORE_BANDS) {
       const cross = c + shore.seaSide * band;
       const px = shore.along === "x" ? a : cross;
@@ -343,7 +185,8 @@ function buildShoreSea(scene: Scene, grid: WalkableGrid, shore: Shoreline): SeaR
       positions.push(px, SEA_Y, pz);
       normals.push(0, 1, 0);
       uvs.push(px / WAVE_TILE, pz / WAVE_TILE);
-      colors.push(...shoreColor(band, cellSize, at_, gain_, phase_));
+      // Both linear across every quad, so the shader's per-pixel surf is exact.
+      water.push(band, a);
     }
   }
 
@@ -367,10 +210,12 @@ function buildShoreSea(scene: Scene, grid: WalkableGrid, shore: Shoreline): SeaR
   data.indices = indices;
   data.normals = normals;
   data.uvs = uvs;
-  data.colors = colors;
   data.applyToMesh(mesh);
-  mesh.hasVertexAlpha = true;
+  mesh.setVerticesData(WATER_DATA_KIND, water, false, 2);
   const mat = seaMaterial(scene);
+  // The swells' faces tilt toward land: away from the sea side, across the shore.
+  const toLand = -shore.seaSide;
+  waterPlugin(mat)!.shore = shore.along === "x" ? [0, toLand] : [toLand, 0];
   mesh.material = mat;
   mesh.isPickable = false;
   mesh.receiveShadows = false;
@@ -380,7 +225,19 @@ function buildShoreSea(scene: Scene, grid: WalkableGrid, shore: Shoreline): SeaR
   return { mesh, waterCells: n * bands };
 }
 
-/** `true` is the coast's sea; `"fen"` draws `grid.water` as still swamp pools. */
+/**
+ * Flood the void outside a map's rim with water.
+ *
+ * The fill starts from the grid BORDER and spreads over wall cells only, so it
+ * reaches everything outside the playable rim and nothing inside it: an interior
+ * rock outcrop is a wall pocket the fill can never enter, and without that every
+ * boulder mid-map would sit in its own pond.
+ *
+ * `enabled` is false for every biome but the strand, and then this only clears
+ * whatever the last area left behind.
+ *
+ * `true` is the coast's sea; `"fen"` draws `grid.water` as still swamp pools.
+ */
 export function buildSea(
   scene: Scene,
   grid: WalkableGrid | null,
@@ -392,7 +249,7 @@ export function buildSea(
   if (!grid || !enabled) return { mesh: null, waterCells: 0 };
   const look: SeaLook = enabled === true ? "coast" : enabled;
   const fen = look === "fen";
-  lastSeaArgs = { scene, grid, look };
+  lastScene = scene;
   if (import.meta.env?.DEV && typeof window !== "undefined") {
     (window as unknown as { __sea?: unknown }).__sea = tuneSea;
   }
@@ -401,7 +258,7 @@ export function buildSea(
   // involved at all: the sea is a strip laid along it. Everything below this is
   // the older path, which floods the void outside a dungeon rim — there the void
   // has no shape of its own and cell squares are the honest answer.
-  if (grid.shore && !fen) return buildShoreSea(scene, grid, grid.shore);
+  if (grid.shore && !fen) return buildShoreSea(scene, grid.shore);
   // A fen floods only what the generator marked; it has no void to fill.
   if (fen && !grid.water) return { mesh: null, waterCells: 0 };
 
@@ -460,8 +317,6 @@ export function buildSea(
       }
     }
   const depthCells = fen ? FEN_DEPTH_CELLS : DEPTH_CELLS;
-  const shallowTint = fen ? FEN_SHALLOW_TINT : SHALLOW_TINT;
-  const deepTint = fen ? FEN_DEEP_TINT : DEEP_TINT;
   for (let d = 1; d <= depthCells && queue.length; d++) {
     const next: number[] = [];
     for (const i of queue) {
@@ -486,15 +341,15 @@ export function buildSea(
   const indices: number[] = [];
   const normals: number[] = [];
   const uvs: number[] = [];
-  const colors: number[] = [];
+  const waterData: number[] = [];
   const half = cellSize / 2;
 
   // Depth as a CONTINUOUS field sampled at cell corners, not one value per cell.
   // Per-cell it was flat-shaded: every quad took its own depth at all four
   // corners, so the shallows came out as a mosaic of squares and the waterline
   // stepped. A corner value is the mean of the four cells that meet there, land
-  // counted as negative, which is what makes the alpha reach zero smoothly
-  // across the shore instead of at a cell boundary.
+  // counted as negative, which is what lets the water thin to nothing smoothly
+  // across the bank instead of at a cell boundary.
   const LAND_DEPTH = -2;
   const depthOfCell = (x: number, y: number): number => {
     if (x < 0 || y < 0 || x >= cols || y >= rows) return depthCells;
@@ -513,19 +368,8 @@ export function buildSea(
     // World-space UVs, so the wave tile size is constant no matter how the
     // quads are cut up.
     uvs.push(px / WAVE_TILE, pz / WAVE_TILE);
-    const d = Math.max(0, depth);
-    const deep = Math.min(1, d / depthCells);
-    const foam = fen ? 0 : Math.max(0, 1 - d / FOAM_CELLS) ** 1.5 * FOAM_ADD;
-    colors.push(
-      shallowTint[0] + (deepTint[0] - shallowTint[0]) * deep + foam,
-      shallowTint[1] + (deepTint[1] - shallowTint[1]) * deep + foam,
-      shallowTint[2] + (deepTint[2] - shallowTint[2]) * deep + foam,
-      // A pool fades in from its collision face, so the bank is silt-dark water
-      // thinning to nothing, never a polygon edge.
-      fen
-        ? Math.min(1, Math.max(0, depth + 1) / FEN_BANK)
-        : Math.min(1, Math.max(0, depth) / WET_CELLS),
-    );
+    // Metres from the shore, for the shader; a pool has no along-shore axis.
+    waterData.push(depth * cellSize, 0);
   };
 
   /** A quad whose four corners each carry their own depth. */
@@ -592,10 +436,8 @@ export function buildSea(
   data.indices = indices;
   data.normals = normals;
   data.uvs = uvs;
-  data.colors = colors;
   data.applyToMesh(mesh);
-  // The shoreline ramp lives in the vertex alpha, so it has to be read.
-  mesh.hasVertexAlpha = true;
+  mesh.setVerticesData(WATER_DATA_KIND, waterData, false, 2);
   const mat = seaMaterial(scene, look);
   mesh.material = mat;
   // Click-to-move raycasts the floor plane analytically, but a pickable sheet
@@ -610,38 +452,20 @@ export function buildSea(
   return { mesh, waterCells };
 }
 
-/** Vertex colour data of the built mesh, for tests. */
-export function seaColors(mesh: Mesh): Float32Array | null {
-  const data = mesh.getVerticesData(VertexBuffer.ColorKind);
-  return data ? Float32Array.from(data) : null;
-}
-
 /**
- * Live tuning from the devtools console, DEV only:
- * `__sea({ FOAM_ADD: 5, SHALLOW_TINT: [3,2.6,2] })` rebuilds the water in place.
- *
- * The alternative is a page reload per number, and a reload means re-entering
- * the map, which costs a Waystone — so the numbers below were guessed rather
- * than looked at, which is how the first surf ended up invisible.
+ * Live tuning from the devtools console, DEV only, without a rebuild:
+ * `__sea({ coast: { body: [0.02, 0.06, 0.05], swash: [7, 1.6, 5.5, 1] } })`.
+ * Each key replaces that field of the look's `WaterParams`; the plugin reads
+ * them on the next frame. Returns both looks' current values.
  */
-let lastSeaArgs: { scene: Scene; grid: WalkableGrid; look: SeaLook } | null = null;
+let lastScene: Scene | null = null;
 
-export function tuneSea(patch: Record<string, unknown>): string {
-  const table: Record<string, (v: unknown) => void> = {
-    FOAM_AT: (v) => { FOAM_AT = v as number; },
-    FOAM_WIDTH: (v) => { FOAM_WIDTH = v as number; },
-    FOAM_ADD: (v) => { FOAM_ADD = v as number; },
-    WET_UNITS: (v) => { WET_UNITS = v as number; },
-    DEPTH_CELLS: (v) => { DEPTH_CELLS = v as number; },
-    SHALLOW_TINT: (v) => { SHALLOW_TINT = v as [number, number, number]; },
-    WET_SAND_REACH: (v) => { WET_SAND_REACH = v as number; },
-    WET_SAND_DARKEN: (v) => { WET_SAND_DARKEN = v as number; },
-    BREAKER_AT: (v) => { BREAKER_AT = v as number; },
-    BREAKER_WIDTH: (v) => { BREAKER_WIDTH = v as number; },
-    BREAKER_ADD: (v) => { BREAKER_ADD = v as number; },
-    DEEP_TINT: (v) => { DEEP_TINT = v as [number, number, number]; },
-  };
-  for (const [k, v] of Object.entries(patch)) table[k]?.(v);
-  if (lastSeaArgs) buildSea(lastSeaArgs.scene, lastSeaArgs.grid, lastSeaArgs.look);
-  return JSON.stringify({ FOAM_AT, FOAM_WIDTH, FOAM_ADD, WET_UNITS, DEPTH_CELLS, SHALLOW_TINT, DEEP_TINT, WET_SAND_REACH, WET_SAND_DARKEN, BREAKER_AT, BREAKER_WIDTH, BREAKER_ADD });
+export function tuneSea(patch: { coast?: Partial<WaterParams>; fen?: Partial<WaterParams> } = {}): string {
+  const out: Record<string, WaterParams | null> = {};
+  for (const [look, name] of [["coast", SEA_MAT_NAME], ["fen", FEN_MAT_NAME]] as const) {
+    const plugin = waterPlugin(lastScene?.getMaterialByName(name));
+    if (plugin && patch[look]) Object.assign(plugin.params, patch[look]);
+    out[look] = plugin?.params ?? null;
+  }
+  return JSON.stringify(out);
 }

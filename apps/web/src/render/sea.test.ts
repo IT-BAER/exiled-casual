@@ -3,6 +3,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { NullEngine, VertexBuffer, VertexData } from "@babylonjs/core";
 import { createScene } from "./engine";
 import { buildSea, SEA_MESH_NAME } from "./sea";
+import { WATER_DATA_KIND, waterSurf } from "./water-surface";
 import { BIOMES } from "@exiled/content-runtime";
 import type { Shoreline, WalkableGrid } from "@exiled/mapgen";
 
@@ -61,25 +62,22 @@ describe("buildSea", () => {
     expect(scene.meshes.filter((m) => m.name === SEA_MESH_NAME)).toHaveLength(1);
   });
 
-  it("brightens the vertices at the shoreline and leaves open water alone", () => {
-    // Foam is free: the fill already knows which flooded cells touch floor, so
-    // the band is a vertex colour rather than a second texture or a second mesh.
+  it("hands the shader each flooded vertex's distance from the shore", () => {
+    // The fill already knows which flooded cells touch floor, so depth is free:
+    // nothing at the rim, deeper going out.
     engine = new NullEngine();
     const { scene } = createScene(engine);
 
     const { mesh } = buildSea(scene, coveGrid(), true);
-    const colors = mesh!.getVerticesData(VertexBuffer.ColorKind)!;
-    let peak = 0;
-    let open = Infinity;
-    for (let i = 0; i < colors.length; i += 4) {
-      peak = Math.max(peak, colors[i]!);
-      open = Math.min(open, colors[i]!);
+    const water = mesh!.getVerticesData(WATER_DATA_KIND)!;
+    let min = Infinity;
+    let max = -Infinity;
+    for (let i = 0; i < water.length; i += 2) {
+      min = Math.min(min, water[i]!);
+      max = Math.max(max, water[i]!);
     }
-
-    // Surf at the shore, and open water well under it: the ramp between the two
-    // is what stops the sea reading as one flat sheet.
-    expect(peak).toBeGreaterThan(2.5);
-    expect(open).toBeLessThan(1);
+    expect(min).toBeLessThanOrEqual(0);
+    expect(max).toBeGreaterThan(1);
   });
 
   it("sits just over the sand, so the waterline is the shore itself", () => {
@@ -136,7 +134,9 @@ describe("buildSea", () => {
     for (let i = 0; i < n; i++) expect(zs.has(Math.round(cross[i]! * 1000) / 1000)).toBe(true);
   });
 
-  it("fades the coast's water out AT the waterline, so nothing steps", () => {
+  it("hands the shader every coast vertex's distance out from the waterline and along the shore", () => {
+    // The surf, the swash and the depth colour are all computed per pixel from
+    // these two numbers, so they are the whole contract between mesh and shader.
     engine = new NullEngine();
     const { scene } = createScene(engine);
     const grid = coveGrid();
@@ -147,21 +147,56 @@ describe("buildSea", () => {
       true,
     );
     const pos = mesh!.getVerticesData(VertexBuffer.PositionKind)!;
-    const col = mesh!.getVerticesData(VertexBuffer.ColorKind)!;
-    let wetSand = 0;
+    const water = mesh!.getVerticesData(WATER_DATA_KIND)!;
+    expect(water).not.toBeNull();
+    let landward = 0;
+    let seaward = 0;
     for (let v = 0; v < pos.length / 3; v++) {
+      const x = pos[v * 3]!;
       const z = pos[v * 3 + 2]!;
-      // Exactly at the waterline the water has no opacity at all — that is what
-      // leaves the polygon edge with nothing to show.
-      if (Math.abs(z - 2.5) < 1e-6) expect(col[v * 4 + 3]).toBe(0);
-      // Landward is the wet-sand pass, which is a dark multiply and NOT water:
-      // it may be opaque, but it must never be brighter than the beach.
-      if (z < 2.5 - 1e-6) {
-        wetSand++;
-        expect(col[v * 4]).toBeLessThan(1);
-      }
+      // Out is +z here (seaSide 1), so the distance is the offset from the line.
+      expect(water[v * 2]!).toBeCloseTo(z - 2.5, 5);
+      // Along runs with x, the shore's own axis, so foam and phase can vary down
+      // the beach without seams.
+      expect(water[v * 2 + 1]!).toBeCloseTo(x, 5);
+      if (z < 2.5 - 1e-6) landward++;
+      if (z > 2.5 + 1e-6) seaward++;
     }
-    expect(wetSand).toBeGreaterThan(0);
+    // Landward vertices are where the swash runs up the sand and leaves it wet.
+    expect(landward).toBeGreaterThan(0);
+    expect(seaward).toBeGreaterThan(0);
+  });
+
+  it("measures distance on the sea side when the sea lies toward -z", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const grid = coveGrid();
+    const cross = new Float32Array(grid.cols).fill(2.5);
+    const { mesh } = buildSea(
+      scene,
+      { ...grid, shore: { along: "x", start: grid.originX, step: grid.cellSize, cross, seaSide: -1 } },
+      true,
+    );
+    const pos = mesh!.getVerticesData(VertexBuffer.PositionKind)!;
+    const water = mesh!.getVerticesData(WATER_DATA_KIND)!;
+    for (let v = 0; v < pos.length / 3; v++) expect(water[v * 2]!).toBeCloseTo(2.5 - pos[v * 3 + 2]!, 5);
+  });
+
+  it("gives the coast the surf and still pools none", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const grid = coveGrid();
+    const cross = new Float32Array(grid.cols).fill(2.5);
+    const coast = buildSea(
+      scene,
+      { ...grid, shore: { along: "x", start: grid.originX, step: grid.cellSize, cross, seaSide: 1 } },
+      true,
+    ).mesh!;
+    expect(waterSurf(coast)).toBe(true);
+    const water = new Uint8Array(81);
+    water[0] = 1;
+    const pool = buildSea(scene, { ...coveGrid(), water }, "fen").mesh!;
+    expect(waterSurf(pool)).toBe(false);
   });
 
   it("is the strand and only the strand", () => {
@@ -187,22 +222,22 @@ describe("buildSea", () => {
     expect(mesh!.material!.name).toBe("fen-mat");
     expect(mesh!.receiveShadows).toBe(false);
     const pos = mesh!.getVerticesData(VertexBuffer.PositionKind)!;
-    const col = mesh!.getVerticesData(VertexBuffer.ColorKind)!;
-    let opaque = 0;
+    const depth = mesh!.getVerticesData(WATER_DATA_KIND)!;
+    // Murky and still: no surf.
+    expect(waterSurf(mesh!)).toBe(false);
+    let deep = 0;
     for (let v = 0; v < pos.length / 3; v++) {
       expect(pos[v * 3 + 1]).toBeCloseTo(0.02, 6);
-      // No foam: murky, never brighter than the silt tint.
-      expect(col[v * 4]!).toBeLessThan(2);
       const x = pos[v * 3]!, z = pos[v * 3 + 2]!;
       // The pool's outline (cells 4..6 span 1.75..3.25) is the collision face:
-      // transparent there, so the bank is a gradient, not an edge.
+      // no depth there, so the bank is a gradient, not an edge.
       const onEdge = Math.abs(x - 1.75) < 1e-6 || Math.abs(x - 3.25) < 1e-6 ||
         Math.abs(z - 1.75) < 1e-6 || Math.abs(z - 3.25) < 1e-6;
-      if (onEdge) expect(col[v * 4 + 3], `${x},${z}`).toBe(0);
-      if (col[v * 4 + 3]! > 0.6) opaque++;
+      if (onEdge) expect(depth[v * 2]!, `${x},${z}`).toBeLessThanOrEqual(0);
+      if (depth[v * 2]! > 0) deep++;
     }
-    // And it does fill in: the middle reads as water, not a wet stain.
-    expect(opaque).toBeGreaterThan(0);
+    // And it does fill in: the middle has depth, not just a wet stain.
+    expect(deep).toBeGreaterThan(0);
   });
 
   it("draws no fen without a water mask", () => {
