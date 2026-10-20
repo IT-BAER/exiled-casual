@@ -38,10 +38,10 @@ ICON_CELL = 128
 # Alpha at or under this counts as transparent. See the film in `build()`.
 ALPHA_FLOOR = 24
 
-# Currency ships at twice the cell resolution: `portal_scroll.webp` is 256 square in
-# a 1x1 cell, because a 1x1 icon at 128 is the smallest thing in the panel and it
-# was the first to look soft. A new currency icon matches its sibling, not the rule.
-CURRENCY_CELL = 256
+# A 1x1 icon ships at twice the cell resolution: `portal_scroll.webp` is 256 square,
+# because a 1x1 icon at 128 is the smallest thing in the panel and it was the first
+# to look soft. Rings and amulets are 1x1 too and follow the scrolls.
+SMALL_CELL = 256
 
 # master stem -> (output stem, cells wide, cells tall)
 ICONS: list[tuple[str, str, int, int]] = [
@@ -89,6 +89,13 @@ ICONS: list[tuple[str, str, int, int]] = [
     ("unique_quietus_v1", "unique_quietus", 2, 4),
     ("unique_thornward_v1", "unique_thornward", 2, 2),
     ("unique_mossback_v1", "unique_mossback", 2, 3),
+    # Jewellery, one amulet and one ring per family, all 1x1 as in PoE.
+    ("ironsworn_torc_v1", "ironsworn_torc", 1, 1),
+    ("ironsworn_signet_v1", "ironsworn_signet", 1, 1),
+    ("stalker_talisman_v1", "stalker_talisman", 1, 1),
+    ("stalker_band_v1", "stalker_band", 1, 1),
+    ("cinderchoke_amulet_v1", "ember_pendant", 1, 1),
+    ("emberloop_ring_v1", "ember_loop", 1, 1),
     # The scroll replaces the one hand-authored SVG in the pool.
     ("wisdom_scroll_v1", "wisdom_scroll", 1, 1),
 ]
@@ -166,7 +173,7 @@ def main() -> None:
         if not master.exists():
             missing.append(master.name)
             continue
-        cell = CURRENCY_CELL if out_stem.endswith("_scroll") else ICON_CELL
+        cell = SMALL_CELL if (w, h) == (1, 1) else ICON_CELL
         print(build(master, OUT / f"{out_stem}.webp", w, h, cell))
     for name in missing:
         print(f"SKIP (no master yet): {name}")

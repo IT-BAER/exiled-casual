@@ -7,7 +7,7 @@ import { summarizeHits } from "./death-recap";
 import { VENDOR_COLS, VENDOR_ROWS, unpayShards } from "./vendor";
 import { physicalMitigationPct, scalePct, xpToNext, START_LEVEL, vendorBuyPrice, passivePoints, DEFAULT_CLASS_ID, effectiveSkill, reachedBreakpoints, nextBreakpoint, gemXpToNext } from "@exiled/rules";
 import { resBlock } from "@exiled/content-schema";
-import { describeItem, SKILLS, TOWN_PORTAL_SKILL, defaultAttackFor, spellAddedDamage, weaponDamage } from "@exiled/content-runtime";
+import { attackAddedDamage, describeItem, SKILLS, TOWN_PORTAL_SKILL, defaultAttackFor, spellAddedDamage, weaponDamage } from "@exiled/content-runtime";
 import type { Command, Simulation } from "./loop";
 import type { World, Entity } from "./ecs";
 import type {
@@ -221,8 +221,9 @@ function describeSkills(
 
 /**
  * The main hand as the sheet shows it, for a class whose default attack is an
- * attack: the weapon's local numbers (weaponDamage, the same the cast divides by)
- * and its crit after the character's increased crit. Nothing for a caster.
+ * attack: the weapon's local numbers (weaponDamage, the same the cast divides by),
+ * the rings' added fire and cold, and its crit after the character's increased
+ * crit. Nothing for a caster.
  */
 function attackSheet(
   world: World, sessionE: Entity | undefined, classId: string | undefined, critChancePct: number,
@@ -230,9 +231,10 @@ function attackSheet(
   if (SKILLS.get(defaultAttackFor(classId ?? DEFAULT_CLASS_ID))?.kind !== "attack") return {};
   const slots = sessionE !== undefined ? world.get<EquipmentC>(sessionE, "equipment")?.slots : undefined;
   const w = weaponDamage(slots?.["weapon1"]);
+  const rings = attackAddedDamage([slots?.["ring1"], slots?.["ring2"]]);
   return {
     attack: {
-      physMin: w.physMin, physMax: w.physMax, fire: w.fire, cold: w.cold, aps: w.aps,
+      physMin: w.physMin, physMax: w.physMax, fire: w.fire + rings.fire, cold: w.cold + rings.cold, aps: w.aps,
       critPct: (w.critPct * (100 + critChancePct)) / 100,
     },
   };

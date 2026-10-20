@@ -219,6 +219,34 @@ describe("unidentified items", () => {
   });
 });
 
+describe("jewellery", () => {
+  // Each copies one PoE2 base (poe2db): Amber Amulet, Ruby Ring, Pearlescent Amulet,
+  // Sapphire Ring, Azure Amulet, Lazuli Ring, with that base's level requirement.
+  it.each([
+    ["base.ironsworn_torc", "amulet", "+12 to Strength", 8],
+    ["base.ironsworn_signet", "ring", "+25% to Fire Resistance", 8],
+    ["base.stalker_talisman", "amulet", "+8% to all Elemental Resistances", 8],
+    ["base.stalker_band", "ring", "+25% to Cold Resistance", 12],
+    ["base.ember_pendant", "amulet", "25% increased Mana Regeneration Rate", undefined],
+    ["base.ember_loop", "ring", "+25 to maximum Mana", undefined],
+  ] as const)("%s is a 1x1 %s reading %s", (baseId, itemClass, implicit, reqLevel) => {
+    const base = ITEM_POOLS.bases.find((b) => b.id === baseId);
+    expect(base).toMatchObject({ itemClass, w: 1, h: 1 });
+    const d = describeItem({ baseId, rarity: "normal", itemLevel: 1, affixes: [] });
+    expect(d.implicit).toBe(implicit);
+    expect(d.reqLevel).toBe(reqLevel);
+    expect(existsSync(new URL(`../../../apps/web/public${d.icon}`, import.meta.url)), d.icon).toBe(true);
+  });
+
+  it("gives every class family exactly one amulet and one ring", () => {
+    for (const family of Object.values(FAMILY_BY_CLASS)) {
+      const own = ITEM_POOLS.bases.filter((b) => familyOf(b.id) === family);
+      expect(own.filter((b) => b.itemClass === "amulet"), family).toHaveLength(1);
+      expect(own.filter((b) => b.itemClass === "ring"), family).toHaveLength(1);
+    }
+  });
+});
+
 describe("the Ironsworn Broadsword", () => {
   it("is a plate-family one-hand sword on PoE2's Shortsword block", () => {
     const sword = baseOf("base.ironsworn_broadsword");

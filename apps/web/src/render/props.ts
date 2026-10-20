@@ -54,6 +54,7 @@ export const PROP_KINDS = [
   "brazier",
   // What a non-gear drop lies on the floor as (render/ground-looks.ts).
   "beltIronsworn", "beltStalker", "beltEmber", "focusEmber",
+  "ringIronsworn", "ringStalker", "ringEmber", "amuletIronsworn", "amuletStalker", "amuletEmber",
   "scrollWisdom", "scrollPortal", "orbTransmutation", "orbAugmentation",
   "orbElevation", "orbAlchemy", "orbEmbers", "waystone",
   // A gold pile (render/meshes.ts), scaled up for the jackpot.

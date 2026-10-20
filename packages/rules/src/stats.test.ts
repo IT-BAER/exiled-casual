@@ -95,6 +95,14 @@ describe("applyItemMods", () => {
     expect(s.resPct).toEqual({ fire: 0, cold: 12, lightning: 7, chaos: 5 });
   });
 
+  it("all elemental resistances lands on fire, cold and lightning, never chaos", () => {
+    const s = applyItemMods(baseCasterStats(), [
+      { stat: "allElementalResPct", value: 8 },
+      { stat: "coldResPct", value: 4 },
+    ]);
+    expect(s.resPct).toEqual({ fire: 8, cold: 12, lightning: 8, chaos: 0 });
+  });
+
   it("collects spell damage percent", () => {
     const s = applyItemMods(baseCasterStats(), [
       { stat: "spellDamagePct", value: 12 },

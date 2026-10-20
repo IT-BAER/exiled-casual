@@ -23,6 +23,8 @@ export const EQUIP_SLOTS_BY_CLASS: Record<string, EquipSlotId[]> = {
   gloves: ["gloves"],
   boots:  ["boots"],
   belt:   ["belt"],
+  amulet: ["amulet"],
+  ring:   ["ring1", "ring2"],
 };
 
 /** True when itemClass can legally go into slot. Classes absent from the map are not equippable. */

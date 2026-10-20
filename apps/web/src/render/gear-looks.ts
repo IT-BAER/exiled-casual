@@ -7,8 +7,8 @@
  * A base that is not in here shows nothing. That is deliberate: rendering some
  * other piece in its place would tell the player a lie about what dropped, and
  * a drop the player cannot read is a reward that did not happen (docs/09). The
- * belts are the only bases left unmapped - the wardrobe has no belt slot, and a
- * belt under a cuirass or a robe is not seen.
+ * belts, rings and amulets are the only bases left unmapped - the wardrobe has
+ * no slot for them, and at this camera none of them would be seen.
  */
 import { BASE_LOOKS, type Looks, type Slot } from "./rig";
 

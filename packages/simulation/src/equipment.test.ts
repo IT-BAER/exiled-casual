@@ -94,6 +94,14 @@ describe("canEquip", () => {
     expect(canEquip("helmet", "weapon1")).toBe(false);
   });
 
+  it("puts an amulet on the neck and a ring on either hand, and nowhere else", () => {
+    expect(canEquip("amulet", "amulet")).toBe(true);
+    expect(canEquip("ring", "ring1")).toBe(true);
+    expect(canEquip("ring", "ring2")).toBe(true);
+    expect(canEquip("ring", "amulet")).toBe(false);
+    expect(canEquip("amulet", "ring1")).toBe(false);
+  });
+
   it("gives every hand class exactly one hand", () => {
     for (const cls of ["wand", "focus", "shield"]) {
       expect(EQUIP_SLOTS_BY_CLASS[cls]).toHaveLength(1);

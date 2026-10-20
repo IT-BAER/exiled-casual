@@ -1,6 +1,6 @@
 import { fp, type Fixed } from "@exiled/fixed-point";
 import { classIdOr } from "@exiled/rules";
-import { characterClass, spellAddedDamage, weaponDamage } from "@exiled/content-runtime";
+import { attackAddedDamage, characterClass, spellAddedDamage, weaponDamage } from "@exiled/content-runtime";
 import type { SkillDef } from "@exiled/content-schema";
 import type { World } from "./ecs";
 import type { EquipmentC, SessionC } from "./components";
@@ -56,11 +56,12 @@ export function weaponHit(world: World, skill: SkillDef): WeaponHit {
   if (!starterId) return plain;
   const s = weaponDamage({ baseId: starterId, rarity: "normal", itemLevel: 1, affixes: [] });
   const w = weaponDamage(slots["weapon1"]);
+  const rings = attackAddedDamage([slots["ring1"], slots["ring2"]]);
 
   const den = s.physMin + s.physMax;
   const num = w.physMin + w.physMax;
   // A flat fire point is worth what a point of the weapon's own average is: 2 * flat over the starter's min + max.
-  const extra = ([["fire", w.fire], ["cold", w.cold]] as const)
+  const extra = ([["fire", w.fire + rings.fire], ["cold", w.cold + rings.cold]] as const)
     .filter(([, v]) => v > 0)
     .map(([type, v]) => ({ type: damageCode(type), num: 2 * v, flat: 0 }));
   const mod = num === den && extra.length === 0 ? undefined : { num, den, ...(extra.length > 0 ? { extra } : {}) };

@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { fp } from "@exiled/fixed-point";
 import { scalePct, effectiveSkill, applyDamage } from "@exiled/rules";
-import { SKILLS } from "@exiled/content-runtime";
+import { CONTENT_VERSION, SKILLS } from "@exiled/content-runtime";
+import { buildSnapshot } from "./protocol-bridge";
 import { resBlock, type Item } from "@exiled/content-schema";
 import { newCharacter } from "./playtest";
 import { spawnLabActors } from "./combat-sim";
@@ -135,6 +136,39 @@ describe("weapon damage reaches the attack", () => {
     const crit = events[0]!.amountFixed === amount(SNAP) ? 1 : 2;
     // 2 * 6 over the starter bow's 6 + 9.
     expect(events[1]!.amountFixed).toBe(Math.trunc((amount(SNAP) * 12) / 15) * crit);
+  });
+
+  it("both rings' fire to attacks joins the attack's fire part, beside the weapon's own", () => {
+    const g = newCharacter("class.ironsworn", 3);
+    const ring = (affixId: string, value: number): Item =>
+      ({ baseId: "base.ironsworn_signet", rarity: "magic", itemLevel: 1, affixes: [{ affixId, value }] });
+    arm(g, "weapon1", hammer([{ affixId: "affix.fire_dmg", value: 4 }]));
+    arm(g, "ring1", ring("affix.attack_fire", 5));
+    arm(g, "ring2", ring("affix.attack_cold", 3));
+    const imp = target(g);
+    const { events } = castAt(g, STRIKE, imp);
+    expect(events.map((e) => e.type)).toEqual([damageCode("physical"), damageCode("fire"), damageCode("cold")]);
+    const crit = events[0]!.amountFixed === amount(STRIKE) ? 1 : 2;
+    // 2 * (4 + 5) and 2 * 3 over the starter hammer's 6 + 10.
+    expect(events[1]!.amountFixed).toBe(Math.trunc((amount(STRIKE) * 18) / 16) * crit);
+    expect(events[2]!.amountFixed).toBe(Math.trunc((amount(STRIKE) * 6) / 16) * crit);
+  });
+
+  it("the sheet's attack fire is the weapon's plus the rings'", () => {
+    const g = newCharacter("class.ironsworn", 3);
+    arm(g, "weapon1", hammer([{ affixId: "affix.fire_dmg", value: 4 }]));
+    arm(g, "ring2", { baseId: "base.ironsworn_signet", rarity: "magic", itemLevel: 1, affixes: [{ affixId: "affix.attack_fire", value: 5 }] });
+    expect(buildSnapshot(g.world, g.sim, g.sim.tick, CONTENT_VERSION).player.stats.attack).toMatchObject({ fire: 9, cold: 0 });
+  });
+
+  it("a ring's fire to attacks adds nothing to a spell", () => {
+    const g = newCharacter("class.emberbound", 3);
+    arm(g, "ring1", { baseId: "base.ember_loop", rarity: "magic", itemLevel: 1, affixes: [{ affixId: "affix.attack_fire", value: 9 }] });
+    const inc = g.world.get<OffenseC>(g.player, "offense")?.spellDamagePct ?? 0;
+    const imp = target(g);
+    const { events } = castAt(g, BOLT, imp);
+    expect(events).toHaveLength(1);
+    expect(hitOrCrit(scalePct(amount(BOLT), inc))).toContain(events[0]!.amountFixed);
   });
 
   it("a faster weapon shortens an attack's cooldown by the attack-speed ratio, rounded", () => {

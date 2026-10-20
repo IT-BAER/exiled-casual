@@ -1971,6 +1971,77 @@ def build_orbs(mats):
     bpy.data.materials["drop_alchemy"].node_tree.nodes["Principled BSDF"].inputs["Emission Strength"].default_value = 0.3
 
 
+def _torus(name, major, tube, steps=12, segments=24):
+    """A band lying flat on the floor: a circle profile spun about +Z."""
+    prof = [(major + tube * math.cos(a), tube + tube * math.sin(a))
+            for a in (math.pi / 2 - 2 * math.pi * i / steps for i in range(steps + 1))]
+    return mesh_object(name, *lathe(prof, segments))
+
+
+def _gem(name, r, at, segments=8):
+    """A faceted stone sitting at `at`; eight sides keep the cut visible from above."""
+    gem = mesh_object(name, *lathe(_ball(r, 4, 0.75), segments))
+    gem.location = at
+    return gem
+
+
+def build_jewellery(mats):
+    """One ring and one amulet per class family, after their icons.
+
+    BlenderKit's only free match (0b99f826, a single "Fantasy Ring") would bring
+    one texture for three families; at this camera the read is the band and the
+    stone's colour, so these are flat colours like the belts.
+    """
+    steel, rune = mats["drop_steel"], mats["drop_rune"]
+    ruby = flat_material("jewel_ruby", (0.9, 0.1, 0.12), 0.25, emit=0.6)
+    amber = flat_material("jewel_amber", (1.0, 0.62, 0.15), 0.3, emit=0.5)
+    sapphire = flat_material("jewel_sapphire", (0.2, 0.42, 1.0), 0.25, emit=0.6)
+    pearl = flat_material("jewel_pearl", (0.95, 0.92, 1.0), 0.3, emit=0.35)
+    bone = flat_material("jewel_bone", (0.85, 0.8, 0.66), 0.7)
+    cord = flat_material("jewel_cord", (0.45, 0.3, 0.18), 0.9)
+    iron = flat_material("jewel_iron", (0.27, 0.25, 0.24), 0.5)
+
+    def ring(name, band, gem_mat, tube, gem_r, bezel):
+        major = 0.08
+        parts = [(_torus(f"{name}_band", major, tube), band, 0),
+                 (_gem(f"{name}_gem", gem_r, (0.0, -major, tube * 1.6)), gem_mat, 0)]
+        if bezel:
+            parts.append((mesh_object(f"{name}_bezel", *lathe(_hoop(gem_r * 0.6, gem_r * 1.25, 0.0, tube * 2.0), 8)),
+                          band, 0))
+            parts[-1][0].location = (0.0, -major, 0.0)
+        _dress(_root(name), parts, smooth=20)
+
+    ring("ringIronsworn", steel, ruby, 0.024, 0.038, True)
+    ring("ringStalker", bone, sapphire, 0.02, 0.03, True)
+    ring("ringEmber", iron, rune, 0.024, 0.042, False)
+
+    def amulet(name, chain, tube, pendant):
+        major = 0.12
+        loop = _torus(f"{name}_chain", major, tube, steps=8, segments=28)
+        loop.location = (0.0, 0.05, 0.0)
+        parts = [(loop, chain, 0)]
+        for obj, mat in pendant(name, 0.05 - major):
+            parts.append((obj, mat, 0))
+        _dress(_root(name), parts, smooth=20)
+
+    def torc(name, y):
+        disc = mesh_object(f"{name}_mount", *lathe([(0.0, 0.022), (0.055, 0.022), (0.055, 0.0), (0.0, 0.0)], 16))
+        disc.location = (0.0, y - 0.03, 0.0)
+        return [(disc, steel), (_gem(f"{name}_gem", 0.04, (0.0, y - 0.03, 0.02)), amber)]
+
+    def talisman(name, y):
+        claw = cone(f"{name}_claw", (0.0, y - 0.08, 0.03), 0.004, 0.03, 0.12, "y", 8)
+        return [(claw, bone), (_gem(f"{name}_pearl", 0.03, (0.0, y - 0.005, 0.0)), pearl)]
+
+    def shard(name, y):
+        fang = cone(f"{name}_shard", (0.0, y - 0.085, 0.04), 0.004, 0.045, 0.13, "y", 6)
+        return [(fang, bone), (_gem(f"{name}_ember", 0.026, (0.0, y - 0.035, 0.06)), rune)]
+
+    amulet("amuletIronsworn", steel, 0.016, torc)
+    amulet("amuletStalker", cord, 0.008, talisman)
+    amulet("amuletEmber", iron, 0.01, shard)
+
+
 def build_scrolls():
     """Wisdom and Portal share one scroll mesh; the portal adds a violet glow in each end."""
     body, = append_objects("srylized_scroll_with_skull.blend", ["Prop_Scroll"])
@@ -2095,6 +2166,7 @@ def build_drops(mats):
     })
     build_belts(mats)
     build_focus(mats)
+    build_jewellery(mats)
     build_orbs(mats)
     build_scrolls()
     build_waystone(mats)

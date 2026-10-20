@@ -164,6 +164,7 @@ const STAT_WEIGHT: Record<string, number> = {
   maxLife: 1, energyShield: 1, spellDamagePct: 2, castSpeedPct: 2, critChancePct: 0.5,
   fireResPct: 0.5, coldResPct: 0.5, lightningResPct: 0.5, chaosResPct: 0.3,
   armour: 0.1, armourPct: 0.3, maxMana: 0.3, manaRegenPct: 0.3, strength: 0.3,
+  allElementalResPct: 1.5, attackFireDamage: 1, attackColdDamage: 1,
 };
 const score = (item: Item) => itemStatMods(item).reduce((a, m) => a + (STAT_WEIGHT[m.stat] ?? 0) * m.value, 0);
 

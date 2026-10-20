@@ -103,6 +103,8 @@ export function applyItemMods(base: StatBlock, mods: readonly ItemStatMod[]): St
       continue;
     }
     switch (m.stat) {
+      // PoE's "to all Elemental Resistances" never touches chaos.
+      case "allElementalResPct": res.fire += m.value; res.cold += m.value; res.lightning += m.value; break;
       case "maxLife": flat.maxLife += m.value; break;
       // PoE2's own conversion (spec 03: "maximum Life = 28 + 12 * level + 2 *
       // Strength"), not a stand-in — a point of Strength is two Life there too.

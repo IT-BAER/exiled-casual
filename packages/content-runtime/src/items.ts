@@ -29,6 +29,16 @@ const ITEM_BASES: ItemBase[] = [
   { id: "base.ironsworn_gauntlets", name: "Ironsworn Gauntlets", itemClass: "gloves", w: 2, h: 2, stats: { armour: 15 }, icon: "/textures/items/ironsworn_gauntlets.webp" },
   { id: "base.ironsworn_sabatons", name: "Ironsworn Sabatons", itemClass: "boots", w: 2, h: 2, stats: { armour: 22 }, icon: "/textures/items/ironsworn_sabatons.webp" },
   { id: "base.ironsworn_girdle", name: "Ironsworn Girdle", itemClass: "belt", w: 2, h: 1, icon: "/textures/items/ironsworn_girdle.webp" },
+  // Jewellery has no look, like a belt. Each piece copies one PoE2 base's implicit
+  // and level (poe2db), fixed at a value inside its range: Amber Amulet, Ruby Ring.
+  {
+    id: "base.ironsworn_torc", name: "Ironsworn Torc", itemClass: "amulet", w: 1, h: 1, stats: { reqLevel: 8 },
+    implicit: { stat: "strength", label: "to Strength", value: 12 }, icon: "/textures/items/ironsworn_torc.webp",
+  },
+  {
+    id: "base.ironsworn_signet", name: "Ironsworn Signet", itemClass: "ring", w: 1, h: 1, stats: { reqLevel: 8 },
+    implicit: { stat: "fireResPct", label: "% to Fire Resistance", value: 25 }, icon: "/textures/items/ironsworn_signet.webp",
+  },
   // PoE2 gives every shield an implicit block chance and nothing here blocks
   // yet, so the two shields take the armour side of the base instead and roll
   // armour and life like the rest of the armour classes.
@@ -64,6 +74,15 @@ const ITEM_BASES: ItemBase[] = [
   { id: "base.stalker_gloves", name: "Stalker Gloves", itemClass: "gloves", w: 2, h: 2, icon: "/textures/items/stalker_gloves.webp" },
   { id: "base.stalker_boots", name: "Stalker Boots", itemClass: "boots", w: 2, h: 2, icon: "/textures/items/stalker_boots.webp" },
   { id: "base.stalker_strap", name: "Stalker Strap", itemClass: "belt", w: 2, h: 1, icon: "/textures/items/stalker_strap.webp" },
+  // Pearlescent Amulet and Sapphire Ring. Jade's Dexterity would be an inert line.
+  {
+    id: "base.stalker_talisman", name: "Stalker Talisman", itemClass: "amulet", w: 1, h: 1, stats: { reqLevel: 8 },
+    implicit: { stat: "allElementalResPct", label: "% to all Elemental Resistances", value: 8 }, icon: "/textures/items/stalker_talisman.webp",
+  },
+  {
+    id: "base.stalker_band", name: "Stalker Band", itemClass: "ring", w: 1, h: 1, stats: { reqLevel: 12 },
+    implicit: { stat: "coldResPct", label: "% to Cold Resistance", value: 25 }, icon: "/textures/items/stalker_band.webp",
+  },
   { id: "base.stalker_buckler", name: "Stalker Buckler", itemClass: "shield", w: 2, h: 2, icon: "/textures/items/stalker_buckler.webp" },
   {
     id: "base.stalker_bow",
@@ -91,6 +110,15 @@ const ITEM_BASES: ItemBase[] = [
   { id: "base.ember_wraps", name: "Ember Wraps", itemClass: "gloves", w: 2, h: 2, icon: "/textures/items/ember_wraps.webp" },
   { id: "base.ember_slippers", name: "Ember Slippers", itemClass: "boots", w: 2, h: 2, icon: "/textures/items/ember_slippers.webp" },
   { id: "base.ember_sash", name: "Ember Sash", itemClass: "belt", w: 2, h: 1, icon: "/textures/items/ember_sash.webp" },
+  // Azure Amulet and Lazuli Ring, the two PoE2 pieces with no level requirement.
+  {
+    id: "base.ember_pendant", name: "Ember Pendant", itemClass: "amulet", w: 1, h: 1,
+    implicit: { stat: "manaRegenPct", label: "% increased Mana Regeneration Rate", value: 25 }, icon: "/textures/items/ember_pendant.webp",
+  },
+  {
+    id: "base.ember_loop", name: "Ember Loop", itemClass: "ring", w: 1, h: 1,
+    implicit: { stat: "maxMana", label: "to maximum Mana", value: 25 }, icon: "/textures/items/ember_loop.webp",
+  },
   {
     id: "base.ember_wand",
     name: "Ember Wand",
@@ -300,26 +328,29 @@ export function isCurrency(item: Item): boolean {
 // level 1, which is what lets a rare of any base fill its 3+3 at any level; gating a pool
 // that was wide only in total would have starved whichever class lost the coin flip.
 const AFFIXES: Affix[] = [
-  { id: "affix.life", kind: "prefix", nameWord: "Hale", stat: "maxLife", label: "to maximum Life", minItemLevel: 1, min: 5, max: 40, itemClasses: ["shield", "helmet", "body", "gloves", "boots", "belt"] },
-  { id: "affix.mana", kind: "prefix", nameWord: "Beryl", stat: "maxMana", label: "to maximum Mana", minItemLevel: 1, min: 4, max: 30, itemClasses: ["shield", "wand", "focus", "helmet", "body", "gloves", "boots", "belt"] },
-  { id: "affix.energy_shield", kind: "prefix", nameWord: "Ghostly", stat: "energyShield", label: "to maximum Energy Shield", minItemLevel: 1, min: 5, max: 35, itemClasses: ["shield", "focus", "helmet", "body", "gloves", "boots"] },
-  { id: "affix.increased_armour", kind: "prefix", nameWord: "Reinforced", stat: "armourPct", label: "% increased Armour", minItemLevel: 1, min: 10, max: 30, itemClasses: ["shield", "helmet", "body", "gloves", "boots", "belt"] },
-  { id: "affix.spell_damage", kind: "prefix", nameWord: "Runic", stat: "spellDamagePct", label: "% increased Damage", minItemLevel: 1, min: 10, max: 25, itemClasses: ["wand", "focus"] },
+  { id: "affix.life", kind: "prefix", nameWord: "Hale", stat: "maxLife", label: "to maximum Life", minItemLevel: 1, min: 5, max: 40, itemClasses: ["shield", "helmet", "body", "gloves", "boots", "belt", "amulet", "ring"] },
+  { id: "affix.mana", kind: "prefix", nameWord: "Beryl", stat: "maxMana", label: "to maximum Mana", minItemLevel: 1, min: 4, max: 30, itemClasses: ["shield", "wand", "focus", "helmet", "body", "gloves", "boots", "belt", "amulet", "ring"] },
+  { id: "affix.energy_shield", kind: "prefix", nameWord: "Ghostly", stat: "energyShield", label: "to maximum Energy Shield", minItemLevel: 1, min: 5, max: 35, itemClasses: ["shield", "focus", "helmet", "body", "gloves", "boots", "amulet"] },
+  { id: "affix.increased_armour", kind: "prefix", nameWord: "Reinforced", stat: "armourPct", label: "% increased Armour", minItemLevel: 1, min: 10, max: 30, itemClasses: ["shield", "helmet", "body", "gloves", "boots", "belt", "amulet"] },
+  { id: "affix.spell_damage", kind: "prefix", nameWord: "Runic", stat: "spellDamagePct", label: "% increased Damage", minItemLevel: 1, min: 10, max: 25, itemClasses: ["wand", "focus", "amulet"] },
   { id: "affix.fire_dmg", kind: "prefix", nameWord: "Smoldering", stat: "fireDamage", label: "to Fire Damage", minItemLevel: 1, min: 2, max: 18, itemClasses: ["wand", "focus", "mace", "sword", "bow"] },
   { id: "affix.cold_dmg", kind: "prefix", nameWord: "Glacial", stat: "coldDamage", label: "to Cold Damage", minItemLevel: 1, min: 2, max: 16, itemClasses: ["wand", "focus", "mace", "sword", "bow"] },
   { id: "affix.armour", kind: "prefix", nameWord: "Plated", stat: "armour", label: "to Armour", minItemLevel: 8, min: 10, max: 60, itemClasses: ["shield", "helmet", "body", "gloves", "boots", "belt"] },
-  { id: "affix.increased_es", kind: "prefix", nameWord: "Spectral", stat: "energyShieldPct", label: "% increased Energy Shield", minItemLevel: 8, min: 10, max: 30, itemClasses: ["shield", "focus", "helmet", "body", "gloves", "boots"] },
+  { id: "affix.increased_es", kind: "prefix", nameWord: "Spectral", stat: "energyShieldPct", label: "% increased Energy Shield", minItemLevel: 8, min: 10, max: 30, itemClasses: ["shield", "focus", "helmet", "body", "gloves", "boots", "amulet"] },
   { id: "affix.fire_res", kind: "suffix", nameWord: "of the Furnace", stat: "fireResPct", label: "% to Fire Resistance", minItemLevel: 1, min: 5, max: 25 },
   { id: "affix.cold_res", kind: "suffix", nameWord: "of the Yeti", stat: "coldResPct", label: "% to Cold Resistance", minItemLevel: 1, min: 5, max: 25 },
   { id: "affix.lightning_res", kind: "suffix", nameWord: "of the Squall", stat: "lightningResPct", label: "% to Lightning Resistance", minItemLevel: 1, min: 5, max: 25 },
   { id: "affix.strength", kind: "suffix", nameWord: "of the Brute", stat: "strength", label: "to Strength", minItemLevel: 1, min: 5, max: 20 },
   { id: "affix.mana_regen", kind: "suffix", nameWord: "of the Spring", stat: "manaRegenPct", label: "% increased Mana Regeneration Rate", minItemLevel: 4, min: 10, max: 35 },
-  { id: "affix.crit_chance", kind: "suffix", nameWord: "of Menace", stat: "critChancePct", label: "% increased Critical Strike Chance", minItemLevel: 8, min: 8, max: 25, itemClasses: ["wand", "focus", "mace", "sword", "bow"] },
-  { id: "affix.cast_speed", kind: "suffix", nameWord: "of Casting", stat: "castSpeedPct", label: "% increased Cast Speed", minItemLevel: 12, min: 3, max: 12, itemClasses: ["wand", "focus"] },
+  { id: "affix.crit_chance", kind: "suffix", nameWord: "of Menace", stat: "critChancePct", label: "% increased Critical Strike Chance", minItemLevel: 8, min: 8, max: 25, itemClasses: ["wand", "focus", "mace", "sword", "bow", "amulet"] },
+  { id: "affix.cast_speed", kind: "suffix", nameWord: "of Casting", stat: "castSpeedPct", label: "% increased Cast Speed", minItemLevel: 12, min: 3, max: 12, itemClasses: ["wand", "focus", "amulet", "ring"] },
   { id: "affix.chaos_res", kind: "suffix", nameWord: "of the Outcast", stat: "chaosResPct", label: "% to Chaos Resistance", minItemLevel: 15, min: 4, max: 15 },
   // The attack weapons' own prefixes, appended so no earlier roll moves.
   { id: "affix.added_phys", kind: "prefix", nameWord: "Honed", stat: "physicalDamage", label: "to Physical Damage", minItemLevel: 1, min: 1, max: 12, itemClasses: ["mace", "sword", "bow"] },
   { id: "affix.phys_dmg_pct", kind: "prefix", nameWord: "Weighted", stat: "physicalDamagePct", label: "% increased Physical Damage", minItemLevel: 1, min: 15, max: 40, itemClasses: ["mace", "sword", "bow"] },
+  // PoE2's ring prefixes, global: every attack takes them, whatever is in hand.
+  { id: "affix.attack_fire", kind: "prefix", nameWord: "Heated", stat: "attackFireDamage", label: "Fire Damage to Attacks", minItemLevel: 1, min: 1, max: 9, itemClasses: ["ring"] },
+  { id: "affix.attack_cold", kind: "prefix", nameWord: "Frosted", stat: "attackColdDamage", label: "Cold Damage to Attacks", minItemLevel: 1, min: 1, max: 8, itemClasses: ["ring"] },
 ];
 
 // Named items bound to one base each. Mod ranges are the unique's own and deliberately
@@ -577,6 +608,19 @@ export function spellAddedDamage(items: readonly (Item | undefined)[]): { fire: 
       const stat = AFFIX_BY_ID.get(ia.affixId)?.stat;
       if (stat === "fireDamage") out.fire += ia.value;
       else if (stat === "coldDamage") out.cold += ia.value;
+    }
+  }
+  return out;
+}
+
+/** Flat fire and cold every attack takes from worn gear (a ring's prefixes), whatever is in hand. */
+export function attackAddedDamage(items: readonly (Item | undefined)[]): { fire: number; cold: number } {
+  const out = { fire: 0, cold: 0 };
+  for (const item of items) {
+    for (const ia of item?.affixes ?? []) {
+      const stat = AFFIX_BY_ID.get(ia.affixId)?.stat;
+      if (stat === "attackFireDamage") out.fire += ia.value;
+      else if (stat === "attackColdDamage") out.cold += ia.value;
     }
   }
   return out;
