@@ -10,6 +10,7 @@ import type { Position, PlayerC, Mana, Faction, Cooldowns, ProjectileC, GroundAr
 import { damageCode } from "../damage-types";
 import { bodyRadiusOf } from "../body";
 import { canOpenPortal, openPortalAt } from "../areas";
+import { hitParts, weaponHit, type HitMod } from "../weapon";
 
 /** How far in front of the caster the Portal skill opens its doorway, toward the aim. */
 const PORTAL_OFFSET = fp(1.6);
@@ -70,9 +71,15 @@ export function registerSkillCast(
     casterTeam: number,
     collision: Collision | undefined,
     scroll = false,
+    hit?: HitMod,
   ): void {
     const pos = world.get<Position>(caster, "position");
     if (!pos) return;
+    // Every part of a hit takes the same increased damage and the same crit; each
+    // keeps its own type, so resistance and armour read it apart (one event per part).
+    const partsOf = (damage: { type: Parameters<typeof damageCode>[0]; amountFixed: number }) =>
+      hitParts(damage.amountFixed, damageCode(damage.type), hit)
+        .map((p) => ({ type: p.type, amount: scalePct(p.amount, spellDamagePct) * (didCrit ? 2 : 1) }));
 
     for (const effect of skill.effects) {
       if (effect.type === "spawnProjectile") {
@@ -81,6 +88,7 @@ export function registerSkillCast(
         if (step.dx === 0 && step.dy === 0) continue; // aim on top of caster
 
         const n = effect.count ?? 1;
+        const [main, ...extra] = partsOf(effect.damage);
         for (let i = 0; i < n; i++) {
           const off = n > 1 ? ((effect.spreadDegrees ?? 0) * (2 * i - (n - 1))) / (2 * (n - 1)) : 0;
           const [dirx, diry] = off === 0 ? [step.dx, step.dy] : rotate(step.dx, step.dy, off);
@@ -91,12 +99,13 @@ export function registerSkillCast(
             diry,
             remainingRange: effect.maxRangeFixed,
             radius: effect.radiusFixed,
-            damageType: damageCode(effect.damage.type),
-            damageAmount: scalePct(effect.damage.amountFixed, spellDamagePct) * (didCrit ? 2 : 1),
+            damageType: main!.type,
+            damageAmount: main!.amount,
             ownerId: caster,
             team: casterTeam,
             ...(effect.pierceCount ? { pierceLeft: effect.pierceCount, hitIds: [] } : {}),
             skillId: skill.id,
+            ...(extra.length > 0 ? { extraDamage: extra } : {}),
           });
         }
       } else if (effect.type === "spawnGroundArea") {
@@ -138,6 +147,7 @@ export function registerSkillCast(
         // The wedge test is a dot product against cos(half-arc), not atan2, so
         // the comparison stays deterministic fixed-point integer math.
         const cosHalfArc = Math.round(Math.cos((effect.arcDegrees / 2) * Math.PI / 180) * 10000);
+        const parts = partsOf(effect.damage);
         let hits = 0;
         for (const target of world.query("position", "health", "faction")) {
           if (target === caster) continue;
@@ -155,12 +165,7 @@ export function registerSkillCast(
             if (cos < cosHalfArc) continue;
           }
 
-          sim.enqueueDamage({
-            target,
-            source: caster,
-            amountFixed: scalePct(effect.damage.amountFixed, spellDamagePct) * (didCrit ? 2 : 1),
-            type: damageCode(effect.damage.type),
-          });
+          for (const p of parts) sim.enqueueDamage({ target, source: caster, amountFixed: p.amount, type: p.type });
           hits++;
         }
         world.set<StrikeC>(caster, "strike", { tick, hits, skill: skill.id });
@@ -227,6 +232,7 @@ export function registerSkillCast(
             casting.team ?? world.get<Faction>(caster, "faction")?.team ?? 0,
             collision,
             casting.scroll === 1,
+            casting.hit,
           );
         }
       }
@@ -275,6 +281,8 @@ export function registerSkillCast(
       const offense = world.get<OffenseC>(caster, "offense");
       const manaComp = world.get<Mana>(caster, "mana");
       if (!manaComp || manaComp.mana < skill.manaCostFixed) continue; // insufficient mana
+      // What the weapon in hand makes of this cast: its hit, crit and cooldown.
+      const weapon = weaponHit(world, skill);
 
       // Spend mana and set cooldown.
       world.set<Mana>(caster, "mana", {
@@ -284,7 +292,7 @@ export function registerSkillCast(
       });
       world.set<Cooldowns>(caster, "cooldowns", {
         ...cds,
-        [cmd.skillId]: tick + skill.cooldownTicks,
+        [cmd.skillId]: tick + weapon.cooldownTicks,
       });
 
       // The caster is slowed during the wind-up. Instant skills (castTicks
@@ -302,9 +310,9 @@ export function registerSkillCast(
       const tx = cmd.data?.["tx"] ?? 0;
       const ty = cmd.data?.["ty"] ?? 0;
 
-      // Gear's "% increased Spell Damage" scales the hit, and only the hit: in PoE
-      // a damaging ailment scales off its own mods, not the spell damage that lit
-      // it, so Cinder Ground's burning dps below is deliberately left alone.
+      // "% increased Damage" (stat id spellDamagePct) scales every skill's hit, and
+      // only the hit: in PoE a damaging ailment scales off its own mods, not the
+      // damage that lit it, so Cinder Ground's burning dps is deliberately left alone.
       const spellDamagePct = offense?.spellDamagePct ?? 0;
 
       // PoE crit: the skill brings the base chance, gear's "% increased Critical
@@ -313,9 +321,10 @@ export function registerSkillCast(
       // fraction, once per cast, and only for a skill that can crit at all.
       // The bonus is PoE's own base 100% Critical Damage Bonus: a crit is 200%
       // of the hit. Ailments below are left alone, as they are for spell damage.
-      const baseCritPct = skill.critChancePct ?? 0;
-      const didCrit = baseCritPct > 0
-        && critRolls.nextInt(0, 9999) < scalePct(baseCritPct * 100, offense?.critChancePct ?? 0);
+      // An attack's base is the skill's scaled by the weapon against the starter's.
+      const baseCrit100 = weapon.critPct100;
+      const didCrit = baseCrit100 > 0
+        && critRolls.nextInt(0, 9999) < scalePct(baseCrit100, offense?.critChancePct ?? 0);
 
       const castSpeedPct = offense?.castSpeedPct ?? 0;
       const timingScale = 100 + castSpeedPct;
@@ -330,7 +339,7 @@ export function registerSkillCast(
       // through the swing at twice speed and then stood still for the other 8:
       // read as the cast being far too fast. Whichever of the two is longer is
       // the real gap between one release and the next.
-      const beatTicks = Math.max(castTicks, skill.cooldownTicks);
+      const beatTicks = Math.max(castTicks, weapon.cooldownTicks);
       if (castTicks > 0) {
         world.set<CastingC>(caster, "casting", {
           untilTick: tick + castTicks,
@@ -344,12 +353,13 @@ export function registerSkillCast(
           ticks: beatTicks,
           gemLevel,
           ...(scroll ? { scroll: 1 as const } : {}),
+          ...(weapon.mod ? { hit: weapon.mod } : {}),
         });
         continue;
       }
 
       // No wind-up means this is still an instant skill, such as Blink.
-      resolveSkill(world, tick, caster, skill, tx, ty, spellDamagePct, didCrit, casterTeam, collision);
+      resolveSkill(world, tick, caster, skill, tx, ty, spellDamagePct, didCrit, casterTeam, collision, false, weapon.mod);
     }
   });
 }

@@ -359,17 +359,26 @@ export interface PlayerStats {
   res: Resistances;
   /** What the player actually regenerates: the per-tick amount times 30, not the pre-truncation ideal. */
   manaRegenPerSec: number;
+  /** Increased damage of every skill (the stat id keeps its historical spell name). */
   spellDamagePct: number;
   /** Increased cast speed from gear; the sheet prints it beside spell damage. */
   castSpeedPct: number;
   /** Increased critical strike chance from gear; it scales each skill's own base. */
   critChancePct: number;
+  /**
+   * The main hand as attacks read it, for a class whose default attack is an
+   * attack: local damage range, attacks per second, and crit chance after
+   * increased crit. Absent for a caster class.
+   */
+  attack?: { physMin: number; physMax: number; fire: number; cold: number; aps: number; critPct: number };
 }
 
 /** One "label: value" row in an item tooltip's base-stat block. */
 export interface ItemStatLine {
   label: string;
   value: string;
+  /** Moved off the base by the item's own local mods; PoE draws the value in magic blue. */
+  augmented?: boolean;
 }
 
 export interface Snapshot {

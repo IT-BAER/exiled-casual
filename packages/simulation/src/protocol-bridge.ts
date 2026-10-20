@@ -1,12 +1,13 @@
 import { fp, toNumber, fpDist2 } from "@exiled/fixed-point";
 import { PICKUP_RADIUS, SORT_MODES } from "@exiled/protocol";
 import type { DisplaySkill, Intent, Snapshot, SnapshotEntity, MonsterElement } from "@exiled/protocol";
-import { damageTypeOf } from "./damage-types";
+import { damageCode, damageTypeOf } from "./damage-types";
+import { hitParts, weaponHit } from "./weapon";
 import { summarizeHits } from "./death-recap";
 import { VENDOR_COLS, VENDOR_ROWS, unpayShards } from "./vendor";
 import { physicalMitigationPct, scalePct, xpToNext, START_LEVEL, vendorBuyPrice, passivePoints, DEFAULT_CLASS_ID, effectiveSkill, reachedBreakpoints, nextBreakpoint, gemXpToNext } from "@exiled/rules";
 import { resBlock } from "@exiled/content-schema";
-import { describeItem, SKILLS, TOWN_PORTAL_SKILL } from "@exiled/content-runtime";
+import { describeItem, SKILLS, TOWN_PORTAL_SKILL, defaultAttackFor, weaponDamage } from "@exiled/content-runtime";
 import type { Command, Simulation } from "./loop";
 import type { World, Entity } from "./ecs";
 import type {
@@ -144,6 +145,7 @@ const titleCase = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
  * see neither OffenseC nor the fixed-point content.
  */
 function describeSkills(
+  world: World,
   offense: OffenseC | undefined,
   skills: SkillsC | undefined,
 ): DisplaySkill[] {
@@ -166,11 +168,15 @@ function describeSkills(
     const castTimeSec = castTicks / 30;
     const lines: string[] = [];
     let hitDamage = 0;
+    // The same reading of the weapon the cast takes, so the tooltip is the hit.
+    const weapon = weaponHit(world, def);
     for (const effect of def.effects) {
-      if (effect.type === "spawnProjectile" && effect.damage) {
-        const dmg = toNumber(scalePct(effect.damage.amountFixed, spellDamagePct));
-        hitDamage += dmg;
-        lines.push(`Deals ${round1(dmg)} ${titleCase(effect.damage.type)} Damage`);
+      if ((effect.type === "spawnProjectile" || effect.type === "meleeStrike") && effect.damage) {
+        for (const p of hitParts(effect.damage.amountFixed, damageCode(effect.damage.type), weapon.mod)) {
+          const dmg = toNumber(scalePct(p.amount, spellDamagePct));
+          hitDamage += dmg;
+          lines.push(`Deals ${round1(dmg)} ${titleCase(damageTypeOf(p.type))} Damage`);
+        }
       } else if (effect.type === "spawnGroundArea") {
         if (effect.ailment) {
           lines.push(
@@ -189,7 +195,7 @@ function describeSkills(
       description: def.description ?? "",
       manaCost: toNumber(def.manaCostFixed),
       castTimeSec,
-      cooldownSec: def.cooldownTicks / 30,
+      cooldownSec: weapon.cooldownTicks / 30,
       lines,
       gemLevel: gem.level,
       gemXp: gem.xp,
@@ -202,7 +208,7 @@ function describeSkills(
     // a cooldown longer than the cast is what a held button waits on, and dividing
     // by the cast alone claimed a rate the player never gets. Cast speed shortens
     // the wind-up only, so a cooldown-bound skill reads the same at any cast speed.
-    const repeatSec = Math.max(castTicks, def.cooldownTicks) / 30;
+    const repeatSec = Math.max(castTicks, weapon.cooldownTicks) / 30;
     if (hitDamage > 0 && repeatSec > 0) skill.dps = hitDamage / repeatSec;
     out.push(skill);
   }
@@ -211,6 +217,25 @@ function describeSkills(
   const order = [...SKILLS.keys()];
   out.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
   return out;
+}
+
+/**
+ * The main hand as the sheet shows it, for a class whose default attack is an
+ * attack: the weapon's local numbers (weaponDamage, the same the cast divides by)
+ * and its crit after the character's increased crit. Nothing for a caster.
+ */
+function attackSheet(
+  world: World, sessionE: Entity | undefined, classId: string | undefined, critChancePct: number,
+): { attack?: NonNullable<Snapshot["player"]["stats"]["attack"]> } {
+  if (SKILLS.get(defaultAttackFor(classId ?? DEFAULT_CLASS_ID))?.kind !== "attack") return {};
+  const slots = sessionE !== undefined ? world.get<EquipmentC>(sessionE, "equipment")?.slots : undefined;
+  const w = weaponDamage(slots?.["weapon1"]);
+  return {
+    attack: {
+      physMin: w.physMin, physMax: w.physMax, fire: w.fire, cold: w.cold, aps: w.aps,
+      critPct: (w.critPct * (100 + critChancePct)) / 100,
+    },
+  };
 }
 
 // _contentVersion is part of the plan's declared signature but the Snapshot type
@@ -556,6 +581,7 @@ export function buildSnapshot(
           spellDamagePct: world.get<OffenseC>(playerEntity, "offense")?.spellDamagePct ?? 0,
           castSpeedPct: world.get<OffenseC>(playerEntity, "offense")?.castSpeedPct ?? 0,
       critChancePct: world.get<OffenseC>(playerEntity, "offense")?.critChancePct ?? 0,
+          ...attackSheet(world, sessionE, session?.classId, world.get<OffenseC>(playerEntity, "offense")?.critChancePct ?? 0),
         };
       })(),
     },
@@ -567,6 +593,7 @@ export function buildSnapshot(
     equipment,
     shards: (sessionE !== undefined ? world.get<ShardsC>(sessionE, "shards") : undefined)?.counts ?? {},
     skills: describeSkills(
+      world,
       world.get<OffenseC>(playerEntity, "offense"),
       sessionE !== undefined ? world.get<SkillsC>(sessionE, "skills") : undefined,
     ),

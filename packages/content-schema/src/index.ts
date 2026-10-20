@@ -149,6 +149,14 @@ export interface SkillDef {
   critChancePct?: number;
   /** A bow attack (PoE's Bow tag): drawn and loosed from the bow hand, not cast. */
   bow?: boolean;
+  /**
+   * PoE's Attack or Spell tag. An attack's hit, crit and cooldown follow the main
+   * hand; a spell takes a wand's or focus's added fire and cold. Absent = utility
+   * (Portal, Blink): no hit, nothing reads the weapon.
+   */
+  kind?: "attack" | "spell";
+  /** A spell's damage effectiveness: the share of added flat damage its hit takes, whole percent. */
+  addedDamageEffectivenessPct?: number;
   effects: EffectNode[];
 }
 
@@ -506,6 +514,13 @@ export function validateSkillDef(v: unknown): ValidationResult {
   }
   if (!isPosInt(v["unlockLevel"])) {
     errors.push("unlockLevel: must be a positive integer");
+  }
+  if (v["kind"] !== undefined && v["kind"] !== "attack" && v["kind"] !== "spell") {
+    errors.push(`kind: must be "attack" or "spell" when present`);
+  }
+  if (v["addedDamageEffectivenessPct"] !== undefined
+    && (!isNonNegInt(v["addedDamageEffectivenessPct"]) || v["kind"] !== "spell")) {
+    errors.push("addedDamageEffectivenessPct: must be a non-negative integer on a spell");
   }
   if (v["classId"] !== undefined && (typeof v["classId"] !== "string" || v["classId"].length === 0)) {
     errors.push("classId: must be a non-empty string when present");

@@ -20,7 +20,8 @@ import { ElementIcon } from "./ElementIcon";
 //
 // The Offence section is a PoE1 borrow. PoE2 moved offensive stats off the
 // sheet and onto skill tooltips, but we have no skill tooltip yet, so a wand's
-// spell damage would otherwise be invisible everywhere.
+// increased damage would otherwise be invisible everywhere. An attack class also
+// gets its main hand (PoE1's sheet does), the numbers its attacks scale by.
 
 /**
  * The stat icons ship as one 2x2 sheet, so a quadrant is picked by moving a
@@ -308,6 +309,18 @@ export function CharacterPanel({ player, onClose }: { player: Snapshot["player"]
               ["Chaos Resistance", resRow(s.res.chaos)],
             ]}
           />
+          {s.attack && (
+            <DetailSection
+              title="Main Hand"
+              rows={[
+                ["Weapon Physical Damage", `${s.attack.physMin}-${s.attack.physMax}`],
+                ...(s.attack.fire > 0 ? [["Weapon Fire Damage", String(s.attack.fire)] as [string, string]] : []),
+                ...(s.attack.cold > 0 ? [["Weapon Cold Damage", String(s.attack.cold)] as [string, string]] : []),
+                ["Attacks per Second", s.attack.aps.toFixed(2)],
+                ["Weapon Critical Strike Chance", `${s.attack.critPct.toFixed(2)}%`],
+              ]}
+            />
+          )}
           <DetailSection
             title="Offence"
             rows={[

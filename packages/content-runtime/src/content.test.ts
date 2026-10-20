@@ -554,3 +554,28 @@ describe("on-hit ailments", () => {
     ]);
   });
 });
+
+describe("skill kinds", () => {
+  it("tags every attack and every spell, and leaves the utilities untagged", () => {
+    const kinds = Object.fromEntries([...SKILLS.values()].map((s) => [s.id, s.kind ?? null]));
+    expect(kinds).toEqual({
+      "skill.ember_bolt.v1": "spell", "skill.cinder_ground.v1": "spell", "skill.ember_spark.v1": "spell",
+      "skill.strike.v1": "attack", "skill.heavy_strike.v1": "attack", "skill.ground_slam.v1": "attack",
+      "skill.snap_shot.v1": "attack", "skill.piercing_shot.v1": "attack", "skill.split_arrow.v1": "attack",
+      "skill.town_portal.v1": null, "skill.blink.v1": null,
+    });
+  });
+
+  it("gives each spell with a hit its added-damage effectiveness", () => {
+    expect(SKILLS.get("skill.ember_bolt.v1")!.addedDamageEffectivenessPct).toBe(100);
+    expect(SKILLS.get("skill.ember_spark.v1")!.addedDamageEffectivenessPct).toBe(60);
+    // Cinder Ground has no hit, only burning, and ailments do not read added damage.
+    expect(SKILLS.get("skill.cinder_ground.v1")!.addedDamageEffectivenessPct).toBeUndefined();
+  });
+
+  it("the schema refuses an unknown kind and effectiveness on a non-spell", () => {
+    const def = SKILLS.get("skill.strike.v1")!;
+    expect(validateSkillDef({ ...def, kind: "aura" }).ok).toBe(false);
+    expect(validateSkillDef({ ...def, addedDamageEffectivenessPct: 50 }).ok).toBe(false);
+  });
+});

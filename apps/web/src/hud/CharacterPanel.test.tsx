@@ -65,6 +65,19 @@ describe("CharacterPanel", () => {
     expect(detail.textContent).toContain("50");
   });
 
+  it("shows the main hand's attack numbers for an attack class, and none for a caster", () => {
+    render(<CharacterPanel player={player({ attack: { physMin: 25, physMax: 30, fire: 9, cold: 0, aps: 1.45, critPct: 6.25 } })} onClose={() => {}} />);
+    const rows = [...screen.getByTestId("char-detail").querySelectorAll("div")].map((d) => d.textContent ?? "");
+    expect(rows).toContain("Weapon Physical Damage25-30");
+    expect(rows).toContain("Weapon Fire Damage9");
+    expect(rows).toContain("Attacks per Second1.45");
+    expect(rows).toContain("Weapon Critical Strike Chance6.25%");
+    expect(rows.some((r) => r.startsWith("Weapon Cold Damage"))).toBe(false);
+    cleanup();
+    render(<CharacterPanel player={player()} onClose={() => {}} />);
+    expect(screen.getByTestId("char-detail").textContent).not.toContain("Attacks per Second");
+  });
+
   it("closes on the X", () => {
     let closed = false;
     render(<CharacterPanel player={player()} onClose={() => { closed = true; }} />);

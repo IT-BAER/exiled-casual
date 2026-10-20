@@ -8,4 +8,5 @@ export {
   ITEM_POOLS, baseOf, describeItem, itemStatMods, wisdomScroll, currencyItem, isCurrency,
   WISDOM_SCROLL_BASE_ID, PORTAL_SCROLL_BASE_ID, isPortalScroll, CURRENCY_DROPS, currencyForRoll, canonicalBaseId,
   WAYSTONE_BASE_ID, waystoneItem, isWaystone, permanentWaystone, isPermanentWaystone, STARTER_BASE_IDS,
+  weaponDamage, spellAddedDamage, UNARMED, ATTACK_WEAPON_CLASSES, type WeaponDamage,
 } from "./items.js";

@@ -202,6 +202,8 @@ export interface CastingC {
   gemLevel?: number;
   /** A Portal cast from a Portal Scroll's right-click, which spends one at the end. */
   scroll?: 1;
+  /** The weapon's reading of the hit at cast start (weapon.ts). Absent = the hit as authored. */
+  hit?: { num: number; den: number; extra?: { type: number; num: number; flat: Fixed }[] };
 }
 /**
  * A dodge roll in flight. Active while tick < untilTick. dirX/dirY is the unit
@@ -307,6 +309,8 @@ export interface ProjectileC {
   skillId?: string;
   /** Tick it hit or ran out. It lives one tick more, inert, so the snapshot shows where it struck. */
   spentTick?: number;
+  /** Further parts of the same hit in other damage types (a weapon's fire). Absent = one part. */
+  extraDamage?: { type: number; amount: Fixed }[];
 }
 export interface GroundAreaC {
   radius: Fixed;

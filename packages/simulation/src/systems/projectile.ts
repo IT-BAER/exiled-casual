@@ -53,6 +53,9 @@ export function registerProjectileMove(sim: Simulation, collisionRef?: Collision
             type: proj.damageType,
             via: "projectile",
           });
+          for (const x of proj.extraDamage ?? []) {
+            sim.enqueueDamage({ target: m, source: proj.ownerId, amountFixed: x.amount, type: x.type, via: "projectile" });
+          }
           if (pierceLeft > 0) {
             pierceLeft--;
             hitIds = [...(hitIds ?? []), m];

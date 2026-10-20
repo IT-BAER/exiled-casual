@@ -34,8 +34,8 @@ const ITEM_BASES: ItemBase[] = [
   // armour and life like the rest of the armour classes.
   { id: "base.ironsworn_tower_shield", name: "Ironsworn Tower Shield", itemClass: "shield", w: 2, h: 3, icon: "/textures/items/ironsworn_tower_shield.webp" },
   // The starter weapons copy PoE2's own level-1 bases (poe2db): the hammer is the
-  // Wooden Club's block, the bow the Crude Bow's. Weapon damage is tooltip-only
-  // until attacks read the weapon; the default attack is still class-keyed.
+  // Wooden Club's block, the bow the Crude Bow's. Attacks are authored against the
+  // class's starter (simulation/weapon.ts), so another weapon scales them by ratio.
   {
     id: "base.ironsworn_hammer",
     name: "Ironsworn Hammer",
@@ -510,6 +510,77 @@ export function itemStatMods(item: Item): { stat: string; value: number }[] {
   return mods;
 }
 
+/** A weapon as its attack reads it: PoE's local values, after the weapon's own mods. */
+export interface WeaponDamage {
+  physMin: number;
+  physMax: number;
+  fire: number;
+  cold: number;
+  critPct: number;
+  aps: number;
+  /** True when a local mod moved any number off the base block (PoE draws it blue). */
+  modified: boolean;
+}
+
+/** The item classes an attack swings or looses. A wand's or focus's elemental damage is its spells'. */
+export const ATTACK_WEAPON_CLASSES: ReadonlySet<string> = new Set(["mace", "sword", "bow"]);
+
+/**
+ * What an attack uses with weapon1 empty: PoE1's unarmed 2-6 at 1.2 attacks per
+ * second, and the 5% base crit spec 03 gives an unarmed attack.
+ */
+export const UNARMED: WeaponDamage = { physMin: 2, physMax: 6, fire: 0, cold: 0, critPct: 5, aps: 1.2, modified: false };
+
+/**
+ * Local weapon damage (docs/02 "Local and global values"): (base + local added)
+ * * (100 + local increased) / 100, each end truncated, so the tooltip range is
+ * exactly what the sim divides by. Only this item's own mods count.
+ */
+export function weaponDamage(item: Item | undefined): WeaponDamage {
+  if (!item) return UNARMED;
+  const s = baseOf(item.baseId).stats;
+  let added = 0;
+  let inc = 0;
+  let fire = 0;
+  let cold = 0;
+  for (const ia of item.affixes) {
+    const stat = AFFIX_BY_ID.get(ia.affixId)?.stat;
+    if (stat === "physicalDamage") added += ia.value;
+    else if (stat === "physicalDamagePct") inc += ia.value;
+    else if (stat === "fireDamage") fire += ia.value;
+    else if (stat === "coldDamage") cold += ia.value;
+  }
+  if (!ATTACK_WEAPON_CLASSES.has(baseOf(item.baseId).itemClass)) {
+    fire = 0;
+    cold = 0;
+  }
+  const local = (v: number) => Math.trunc(((v + added) * (100 + inc)) / 100);
+  const physMin = local(s?.physMin ?? 0);
+  const physMax = local(s?.physMax ?? 0);
+  return {
+    physMin, physMax, fire, cold,
+    critPct: s?.critPct ?? 0,
+    aps: s?.aps ?? 0,
+    modified: physMin !== (s?.physMin ?? 0) || physMax !== (s?.physMax ?? 0) || fire > 0 || cold > 0,
+  };
+}
+
+/** Flat fire and cold a wand or focus adds to spells. Attack weapons give none: theirs is local. */
+export function spellAddedDamage(items: readonly (Item | undefined)[]): { fire: number; cold: number } {
+  const out = { fire: 0, cold: 0 };
+  for (const item of items) {
+    if (!item) continue;
+    const cls = baseOf(item.baseId).itemClass;
+    if (cls !== "wand" && cls !== "focus") continue;
+    for (const ia of item.affixes) {
+      const stat = AFFIX_BY_ID.get(ia.affixId)?.stat;
+      if (stat === "fireDamage") out.fire += ia.value;
+      else if (stat === "coldDamage") out.cold += ia.value;
+    }
+  }
+  return out;
+}
+
 // Render-ready projection: base name + one line per committed affix roll.
 export interface ItemDescription {
   /** Display name: the item's generated name (rare/unique) or the base name. */
@@ -518,8 +589,8 @@ export interface ItemDescription {
   baseName: string;
   rarity: Rarity;
   itemClass: string;
-  /** base-stat lines rendered "label: value" (empty for bases without stats) */
-  statLines: { label: string; value: string }[];
+  /** base-stat lines rendered "label: value" (empty for bases without stats); augmented = moved by a local mod */
+  statLines: { label: string; value: string; augmented?: true }[];
   reqLevel?: number;
   reqAttrValue?: number;
   reqAttr?: string;
@@ -596,8 +667,18 @@ export function describeItem(item: Item): ItemDescription {
     };
   }
   const s = base.stats;
-  const statLines: { label: string; value: string }[] = [];
-  if (s?.physMin !== undefined && s.physMax !== undefined) statLines.push({ label: "Physical Damage", value: `${s.physMin}-${s.physMax}` });
+  const statLines: { label: string; value: string; augmented?: true }[] = [];
+  if (s?.physMin !== undefined && s.physMax !== undefined) {
+    // The range the attack uses, after the weapon's local mods; an unread item hides them.
+    const w = item.unidentified === true ? undefined : weaponDamage(item);
+    if (w && (w.physMin !== s.physMin || w.physMax !== s.physMax)) {
+      statLines.push({ label: "Physical Damage", value: `${w.physMin}-${w.physMax}`, augmented: true });
+    } else {
+      statLines.push({ label: "Physical Damage", value: `${s.physMin}-${s.physMax}` });
+    }
+    if (w?.fire) statLines.push({ label: "Fire Damage", value: String(w.fire), augmented: true });
+    if (w?.cold) statLines.push({ label: "Cold Damage", value: String(w.cold), augmented: true });
+  }
   if (s?.critPct !== undefined) statLines.push({ label: "Critical Strike Chance", value: `${s.critPct.toFixed(2)}%` });
   if (s?.aps !== undefined) statLines.push({ label: "Attacks per Second", value: s.aps.toFixed(2) });
   if (s?.armour !== undefined) statLines.push({ label: "Armour", value: String(s.armour) });

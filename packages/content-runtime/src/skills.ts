@@ -35,6 +35,8 @@ const SKILL_DEFS: SkillDef[] = [
     cooldownTicks: 30,
     castTicks: 9,
     critChancePct: 7,
+    kind: "spell",
+    addedDamageEffectivenessPct: 100,
     unlockLevel: 1,
     growth: {
       perLevel: { damagePct: 6, manaPct: 4, own: { field: "maxRangeFixed", perMille: 20 } },
@@ -62,6 +64,7 @@ const SKILL_DEFS: SkillDef[] = [
     manaCostFixed: fp(20),
     cooldownTicks: 90,
     castTicks: 9,
+    kind: "spell",
     unlockLevel: 8,
     growth: {
       perLevel: { damagePct: 6, manaPct: 4, own: { field: "durationTicks", perMille: 25 } },
@@ -103,6 +106,7 @@ const SKILL_DEFS: SkillDef[] = [
     cooldownTicks: 30,
     castTicks: 9,
     critChancePct: 5,
+    kind: "attack",
     unlockLevel: 1,
     growth: {
       perLevel: { damagePct: 6, manaPct: 4, own: { field: "reachFixed", perMille: 15 } },
@@ -129,6 +133,7 @@ const SKILL_DEFS: SkillDef[] = [
     cooldownTicks: 30,
     castTicks: 9,
     critChancePct: 7,
+    kind: "attack",
     unlockLevel: 1,
     growth: {
       perLevel: { damagePct: 6, manaPct: 4, own: { field: "maxRangeFixed", perMille: 20 } },
@@ -165,6 +170,7 @@ const SKILL_DEFS: SkillDef[] = [
     cooldownTicks: 90,
     castTicks: 9,
     critChancePct: 5,
+    kind: "attack",
     unlockLevel: 8,
     growth: {
       perLevel: { damagePct: 6, manaPct: 4, own: { field: "reachFixed", perMille: 15 } },
@@ -191,6 +197,7 @@ const SKILL_DEFS: SkillDef[] = [
     cooldownTicks: 30,
     castTicks: 9,
     critChancePct: 7,
+    kind: "attack",
     unlockLevel: 8,
     growth: {
       perLevel: { damagePct: 6, manaPct: 4, own: { field: "maxRangeFixed", perMille: 20 } },
@@ -240,6 +247,7 @@ const SKILL_DEFS: SkillDef[] = [
     cooldownTicks: 21,
     castTicks: 7,
     critChancePct: 5,
+    kind: "attack",
     unlockLevel: 1,
     growth: {
       perLevel: { damagePct: 6, manaPct: 4, own: { field: "reachFixed", perMille: 15 } },
@@ -270,6 +278,7 @@ const SKILL_DEFS: SkillDef[] = [
     cooldownTicks: 15,
     castTicks: 7,
     critChancePct: 5,
+    kind: "attack",
     unlockLevel: 1,
     growth: {
       perLevel: { damagePct: 6, manaPct: 4, own: { field: "maxRangeFixed", perMille: 20 } },
@@ -300,6 +309,8 @@ const SKILL_DEFS: SkillDef[] = [
     cooldownTicks: 15,
     castTicks: 7,
     critChancePct: 5,
+    kind: "spell",
+    addedDamageEffectivenessPct: 60,
     unlockLevel: 1,
     growth: {
       perLevel: { damagePct: 6, manaPct: 4, own: { field: "maxRangeFixed", perMille: 20 } },

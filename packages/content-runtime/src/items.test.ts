@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { describe, it, expect } from "vitest";
 import { FAMILY_BY_CLASS, areaLevel, familyOf } from "@exiled/rules";
-import { ITEM_POOLS, baseOf, describeItem, itemStatMods, waystoneItem } from "./items.js";
+import { ITEM_POOLS, UNARMED, baseOf, describeItem, itemStatMods, spellAddedDamage, waystoneItem, weaponDamage } from "./items.js";
 
 describe("ITEM_POOLS", () => {
   it("has bases and affixes with positive base dimensions", () => {
@@ -242,5 +242,73 @@ describe("affix pools per item class", () => {
       expect(at1.filter((a) => a.kind === "prefix").length, `${cls} prefixes`).toBeGreaterThanOrEqual(3);
       expect(at1.filter((a) => a.kind === "suffix").length, `${cls} suffixes`).toBeGreaterThanOrEqual(3);
     }
+  });
+});
+
+describe("weaponDamage (local, PoE: (base + added) * (1 + increased))", () => {
+  const hammer = (affixes: { affixId: string; value: number }[]) =>
+    ({ baseId: "base.ironsworn_hammer", rarity: "rare" as const, itemLevel: 10, affixes });
+
+  it("is the base block on a plain weapon", () => {
+    expect(weaponDamage(hammer([]))).toEqual({ physMin: 6, physMax: 10, fire: 0, cold: 0, critPct: 5, aps: 1.45, modified: false });
+  });
+
+  it("adds local flat physical before local increased scales it, each end truncated", () => {
+    const w = weaponDamage(hammer([{ affixId: "affix.added_phys", value: 12 }, { affixId: "affix.phys_dmg_pct", value: 40 }]));
+    // (6 + 12) * 1.4 = 25.2, (10 + 12) * 1.4 = 30.8
+    expect([w.physMin, w.physMax, w.modified]).toEqual([25, 30, true]);
+  });
+
+  it("carries an attack weapon's flat fire and cold as its own parts", () => {
+    const w = weaponDamage(hammer([{ affixId: "affix.fire_dmg", value: 9 }, { affixId: "affix.cold_dmg", value: 4 }]));
+    expect([w.physMin, w.physMax, w.fire, w.cold]).toEqual([6, 10, 9, 4]);
+  });
+
+  it("leaves a wand's elemental damage to its spells, not to its attack", () => {
+    const w = weaponDamage({ baseId: "base.ember_wand", rarity: "magic", itemLevel: 10, affixes: [{ affixId: "affix.fire_dmg", value: 9 }] });
+    expect(w.fire).toBe(0);
+  });
+
+  it("falls back to an unarmed fist with no weapon", () => {
+    expect(weaponDamage(undefined)).toEqual(UNARMED);
+    expect(UNARMED).toMatchObject({ physMin: 2, physMax: 6, critPct: 5, aps: 1.2 });
+  });
+});
+
+describe("spellAddedDamage", () => {
+  it("sums fire and cold from a wand and a focus, and nothing from an attack weapon", () => {
+    const wand = { baseId: "base.ember_wand", rarity: "magic" as const, itemLevel: 10, affixes: [{ affixId: "affix.fire_dmg", value: 9 }] };
+    const focus = { baseId: "base.ember_focus", rarity: "magic" as const, itemLevel: 10, affixes: [{ affixId: "affix.cold_dmg", value: 5 }, { affixId: "affix.fire_dmg", value: 2 }] };
+    const mace = { baseId: "base.ironsworn_hammer", rarity: "magic" as const, itemLevel: 10, affixes: [{ affixId: "affix.fire_dmg", value: 7 }] };
+    expect(spellAddedDamage([wand, focus])).toEqual({ fire: 11, cold: 5 });
+    expect(spellAddedDamage([mace, undefined])).toEqual({ fire: 0, cold: 0 });
+  });
+});
+
+describe("a weapon tooltip shows what the attack will use", () => {
+  const stat = (d: ReturnType<typeof describeItem>, label: string) => d.statLines.find((s) => s.label === label);
+
+  it("prints the local range, flagged as modified, once a mod moves it", () => {
+    const d = describeItem({ baseId: "base.ironsworn_hammer", rarity: "rare", itemLevel: 10, affixes: [
+      { affixId: "affix.added_phys", value: 12 }, { affixId: "affix.phys_dmg_pct", value: 40 },
+    ] });
+    expect(stat(d, "Physical Damage")).toEqual({ label: "Physical Damage", value: "25-30", augmented: true });
+  });
+
+  it("an unmodified weapon reads its base range, unflagged", () => {
+    const d = describeItem({ baseId: "base.ironsworn_hammer", rarity: "normal", itemLevel: 1, affixes: [] });
+    expect(stat(d, "Physical Damage")).toEqual({ label: "Physical Damage", value: "6-10" });
+    expect(stat(d, "Fire Damage")).toBeUndefined();
+  });
+
+  it("adds an elemental line for an attack weapon's fire and cold", () => {
+    const d = describeItem({ baseId: "base.stalker_bow", rarity: "magic", itemLevel: 10, affixes: [{ affixId: "affix.cold_dmg", value: 7 }] });
+    expect(stat(d, "Cold Damage")).toEqual({ label: "Cold Damage", value: "7", augmented: true });
+  });
+
+  it("keeps an unread weapon's range at its base, as its mods are hidden", () => {
+    const d = describeItem({ baseId: "base.ironsworn_hammer", rarity: "rare", itemLevel: 10, unidentified: true,
+      affixes: [{ affixId: "affix.added_phys", value: 12 }] });
+    expect(stat(d, "Physical Damage")).toEqual({ label: "Physical Damage", value: "6-10" });
   });
 });
