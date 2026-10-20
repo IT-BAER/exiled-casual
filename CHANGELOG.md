@@ -10,6 +10,8 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-10-20
+
 ### Added
 
 - Hovering a monster shows a target frame at the top of the screen and
