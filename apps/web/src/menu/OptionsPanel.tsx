@@ -59,7 +59,7 @@ const UNBINDABLE = new Set(["escape"]);
 const MOUSE_HIDDEN: ReadonlySet<KeybindAction> = new Set(MOVE_ACTIONS);
 
 /** How a stored key reads on the button. */
-function keyLabel(key: string): string {
+export function keyLabel(key: string): string {
   if (key === "") return "Unbound";
   if (key === " ") return "Space";
   return key.length === 1 ? key.toUpperCase() : key[0]!.toUpperCase() + key.slice(1);

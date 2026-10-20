@@ -1109,6 +1109,7 @@ export function GameView({
       </Presence>
       {fresh && characterId !== "" && !Object.hasOwn(settings.ui.controls, characterId) && (
         <ControlsDialog
+          keybinds={settings.ui.keybinds}
           onPick={(mode) => onSettingsChange?.({
             ...settings,
             ui: { ...settings.ui, controls: { ...settings.ui.controls, [characterId]: mode } },

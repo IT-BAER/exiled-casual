@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { ControlsDialog } from "./ControlsDialog";
+import { DEFAULT_KEYBINDS_BY_MODE } from "../settings";
 
 afterEach(cleanup);
 
@@ -21,6 +22,19 @@ describe("ControlsDialog", () => {
     const wasd = screen.getByTestId("controls-wasd");
     expect(mouse.textContent).toContain("QWERT");
     expect(wasd.textContent).toContain("QERTF");
+  });
+
+  it("names the keys the player bound, not the defaults", () => {
+    const binds = {
+      mouse: { ...DEFAULT_KEYBINDS_BY_MODE.mouse, skill1: "z", skill2: "q" },
+      wasd: { ...DEFAULT_KEYBINDS_BY_MODE.wasd, moveUp: "q", skill1: "w", flaskLife: " " },
+    };
+    render(<ControlsDialog onPick={() => {}} keybinds={binds} />);
+    expect(screen.getByTestId("controls-mouse").textContent).toContain("ZQERT");
+    const wasd = screen.getByTestId("controls-wasd").textContent;
+    expect(wasd).toContain("QASD");
+    expect(wasd).toContain("WERTF");
+    expect(wasd).toContain("Space 2");
   });
 
   it("keeps game keys from walking or casting while the choice is open", () => {

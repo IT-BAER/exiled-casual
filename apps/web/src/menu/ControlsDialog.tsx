@@ -7,33 +7,50 @@
  * player has not given yet. Game keys are swallowed while it is up.
  */
 import React from "react";
-import type { ControlMode } from "../settings";
+import { DEFAULT_KEYBINDS_BY_MODE, SKILL_ACTIONS, type ControlMode, type KeybindAction, type Keybinds } from "../settings";
 import { Divider, FramedPanel, GOLD, GOLD_DIM, MenuButton, PARCHMENT, DISPLAY, SERIF } from "./frames";
+import { keyLabel } from "./OptionsPanel";
+
+/** A run of keys as one keycap: single letters run together (QWERT), named keys keep a space. */
+function keyRun(binds: Keybinds, actions: readonly KeybindAction[]): string {
+  const labels = actions.map((a) => keyLabel(binds[a]));
+  return labels.join(labels.every((l) => l.length === 1) ? "" : " ");
+}
 
 const SCHEMES: readonly {
   mode: ControlMode;
   title: string;
   body: string;
-  keys: readonly [string, string][];
+  keys: (binds: Keybinds) => readonly [string, string][];
   action: string;
 }[] = [
   {
     mode: "mouse",
     title: "Click to move",
     body: "Left click walks, PoE's classic hand. The keyboard is all skills.",
-    keys: [["LMB", "Move"], ["RMB", "Attack"], ["QWERT", "Skills"], ["12", "Flasks"]],
+    keys: (b) => [["LMB", "Move"], ["RMB", "Attack"], [keyRun(b, SKILL_ACTIONS), "Skills"], [keyRun(b, ["flaskLife", "flaskMana"]), "Flasks"]],
     action: "Play with mouse",
   },
   {
     mode: "wasd",
     title: "WASD",
     body: "The keys walk and left click attacks where the cursor points. Skills sit around the movement hand.",
-    keys: [["WASD", "Move"], ["LMB", "Attack"], ["QERTF", "Skills"], ["12", "Flasks"]],
+    keys: (b) => [
+      [keyRun(b, ["moveUp", "moveLeft", "moveDown", "moveRight"]), "Move"], ["LMB", "Attack"],
+      [keyRun(b, SKILL_ACTIONS), "Skills"], [keyRun(b, ["flaskLife", "flaskMana"]), "Flasks"],
+    ],
     action: "Play with WASD",
   },
 ];
 
-export function ControlsDialog({ onPick }: { onPick: (mode: ControlMode) => void }): React.ReactElement {
+export function ControlsDialog({
+  onPick,
+  keybinds = DEFAULT_KEYBINDS_BY_MODE,
+}: {
+  onPick: (mode: ControlMode) => void;
+  /** What Options already bound: a player who rebound before the first entry reads their own keys. */
+  keybinds?: Readonly<Record<ControlMode, Keybinds>>;
+}): React.ReactElement {
   // Capture phase on window runs before the game's own listeners there, so a key
   // pressed while choosing neither walks, casts nor opens a panel.
   React.useEffect(() => {
@@ -96,7 +113,7 @@ export function ControlsDialog({ onPick }: { onPick: (mode: ControlMode) => void
                 {s.body}
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px", marginTop: 8 }}>
-                {s.keys.map(([keys, what]) => (
+                {s.keys(keybinds[s.mode]).map(([keys, what]) => (
                   <span key={what} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                     <Keycap>{keys}</Keycap>
                     <span style={{ fontFamily: SERIF, fontSize: 12, color: "#8f8877" }}>{what}</span>
