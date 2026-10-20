@@ -143,17 +143,19 @@ try {
   await assertPortFree(BASE);
   vite = startVite();
   await waitForServer(BASE, 60000);
-  const browser = await chromium.launch({
-    headless: true,
-    args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist", "--autoplay-policy=no-user-gesture-required"],
-  });
-  try {
-    for (const node of nodes) {
+  // One browser per node: SwiftShader memory grows across maps and one shared
+  // browser crashed around the sixth node.
+  for (const node of nodes) {
+    const browser = await chromium.launch({
+      headless: true,
+      args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist", "--autoplay-policy=no-user-gesture-required"],
+    });
+    try {
       const r = await runNode(browser, node);
       if (!r.ok) failed = true;
+    } finally {
+      await browser.close();
     }
-  } finally {
-    await browser.close();
   }
 } catch (e) {
   failed = true;
