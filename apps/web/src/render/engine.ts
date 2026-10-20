@@ -26,6 +26,7 @@ import { isScatterDressing } from "./rocks";
 import { SPRAY_NAME } from "./hit-spray";
 import { SPARKLE_NAME } from "./hit-sparkle";
 import { SEA_MESH_NAME } from "./sea";
+import { HIDEOUT_EDGE_NAME } from "./hideout";
 import { createHaze, createMotes } from "./haze";
 import { FLAME_MESH } from "./flames";
 import { createFireLights, LIGHT_POOL, setFireLightZoom, updateFireLights } from "./lights";
@@ -835,7 +836,7 @@ export function createScene(engine: Engine): SceneHandle {
       const reach = torch.range + bs.radiusWorld + 2;
       if (dx * dx + dy * dy + dz * dz > reach * reach) return false;
       return !(mesh === ground || mesh.name.startsWith("telegraph-") || mesh.name === FLAME_MESH
-        || mesh.name.startsWith("groundblob-") || isWardrobePart(mesh.name)
+        || mesh.name.startsWith("groundblob-") || mesh.name === HIDEOUT_EDGE_NAME || isWardrobePart(mesh.name)
         // Dressing scatter never casts — see isScatterDressing. The range cull
         // above cannot save it: a thin-instance host's bounding sphere spans
         // every instance, so it is always "in reach".

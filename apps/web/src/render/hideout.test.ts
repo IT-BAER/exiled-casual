@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { Matrix, NullEngine, Scene, Vector3 } from "@babylonjs/core";
-import { HIDEOUT_DECOR, SCREEN_SQUARE, hideoutFootprints } from "@exiled/content-runtime";
-import { buildHideoutDecor, clearHideoutDecor } from "./hideout";
+import { Matrix, NullEngine, Scene, Vector3, VertexBuffer } from "@babylonjs/core";
+import { HIDEOUT_DECOR, HIDEOUT_FLOOR, SCREEN_SQUARE, hideoutFootprints } from "@exiled/content-runtime";
+import { HIDEOUT_EDGE_NAME, buildHideoutDecor, clearHideoutDecor } from "./hideout";
 import { PROP_KINDS } from "./props";
 import { CAMERA_ALPHA } from "./engine";
 
@@ -118,6 +118,39 @@ describe("hideout decor", () => {
     const scene = new Scene(new NullEngine());
     buildHideoutDecor(scene);
     expect(scene.meshes.filter((m) => m.name.startsWith("hideout-decor-"))).toEqual([]);
+  });
+
+  /**
+   * The floor plane runs on into the dark, so a walk away lost the room: the sim
+   * stops the player at HIDEOUT_FLOOR, and this is what shows him where.
+   */
+  it("fades the floor to black past the walkable edge, and never over it", () => {
+    const scene = new Scene(new NullEngine());
+    buildHideoutDecor(scene);
+    const edge = scene.getMeshByName(HIDEOUT_EDGE_NAME)!;
+    expect(edge).not.toBeNull();
+    const pos = edge.getVerticesData(VertexBuffer.PositionKind)!;
+    const col = edge.getVerticesData(VertexBuffer.ColorKind)!;
+    const F = HIDEOUT_FLOOR;
+    let atEdge = 0;
+    let dark = 0;
+    for (let v = 0; v < pos.length / 3; v++) {
+      const { sx, sy } = toScreen(pos[v * 3]!, pos[v * 3 + 2]!);
+      // How far outside the walkable rect this vertex lies, in screen units.
+      const out = Math.max(F.left - sx, sx - F.right, F.bottom - sy, sy - F.top);
+      expect(out, `vertex ${v} inside the floor`).toBeGreaterThan(-1e-4);
+      if (Math.abs(out) < 1e-4) { atEdge++; expect(col[v * 4 + 3]).toBe(0); }
+      if (out >= 3) { dark++; expect(col[v * 4 + 3]).toBe(1); }
+    }
+    expect(atEdge).toBeGreaterThan(0);
+    expect(dark).toBeGreaterThan(0);
+  });
+
+  it("takes the edge away with the decor", () => {
+    const scene = new Scene(new NullEngine());
+    buildHideoutDecor(scene);
+    clearHideoutDecor(scene);
+    expect(scene.getMeshByName(HIDEOUT_EDGE_NAME)).toBeNull();
   });
 
   it("clearing a scene that never had decor is safe", () => {
