@@ -7,7 +7,7 @@ import { summarizeHits } from "./death-recap";
 import { VENDOR_COLS, VENDOR_ROWS, unpayShards } from "./vendor";
 import { physicalMitigationPct, scalePct, xpToNext, START_LEVEL, vendorBuyPrice, passivePoints, DEFAULT_CLASS_ID, effectiveSkill, reachedBreakpoints, nextBreakpoint, gemXpToNext } from "@exiled/rules";
 import { resBlock } from "@exiled/content-schema";
-import { describeItem, SKILLS, TOWN_PORTAL_SKILL, defaultAttackFor, weaponDamage } from "@exiled/content-runtime";
+import { describeItem, SKILLS, TOWN_PORTAL_SKILL, defaultAttackFor, spellAddedDamage, weaponDamage } from "@exiled/content-runtime";
 import type { Command, Simulation } from "./loop";
 import type { World, Entity } from "./ecs";
 import type {
@@ -236,6 +236,13 @@ function attackSheet(
       critPct: (w.critPct * (100 + critChancePct)) / 100,
     },
   };
+}
+
+/** What a wand or focus adds to spells (spellAddedDamage, the same weaponHit reads); nothing without one. */
+function spellAddedSheet(world: World, sessionE: Entity | undefined): Pick<Snapshot["player"]["stats"], "spellAdded"> {
+  const slots = sessionE !== undefined ? world.get<EquipmentC>(sessionE, "equipment")?.slots : undefined;
+  const added = spellAddedDamage([slots?.["weapon1"], slots?.["weapon2"]]);
+  return added.fire > 0 || added.cold > 0 ? { spellAdded: added } : {};
 }
 
 // _contentVersion is part of the plan's declared signature but the Snapshot type
@@ -582,6 +589,7 @@ export function buildSnapshot(
           castSpeedPct: world.get<OffenseC>(playerEntity, "offense")?.castSpeedPct ?? 0,
       critChancePct: world.get<OffenseC>(playerEntity, "offense")?.critChancePct ?? 0,
           ...attackSheet(world, sessionE, session?.classId, world.get<OffenseC>(playerEntity, "offense")?.critChancePct ?? 0),
+          ...spellAddedSheet(world, sessionE),
         };
       })(),
     },

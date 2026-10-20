@@ -327,6 +327,8 @@ export function CharacterPanel({ player, onClose }: { player: Snapshot["player"]
               ["Increased Damage", `${s.spellDamagePct}%`],
               ["Increased Cast Speed", `${s.castSpeedPct}%`],
               ["Increased Critical Strike Chance", `${s.critChancePct}%`],
+              ...(s.spellAdded && s.spellAdded.fire > 0 ? [["Fire Damage added to Spells", String(s.spellAdded.fire)] as [string, string]] : []),
+              ...(s.spellAdded && s.spellAdded.cold > 0 ? [["Cold Damage added to Spells", String(s.spellAdded.cold)] as [string, string]] : []),
             ]}
           />
         </div>

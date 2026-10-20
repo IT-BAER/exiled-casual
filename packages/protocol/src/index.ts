@@ -371,6 +371,8 @@ export interface PlayerStats {
    * increased crit. Absent for a caster class.
    */
   attack?: { physMin: number; physMax: number; fire: number; cold: number; aps: number; critPct: number };
+  /** Flat fire and cold a wand or focus adds to spells. Absent while both are zero. */
+  spellAdded?: { fire: number; cold: number };
 }
 
 /** One "label: value" row in an item tooltip's base-stat block. */

@@ -80,6 +80,16 @@ describe("CharacterPanel", () => {
     expect(screen.getByTestId("char-detail").textContent).not.toContain("Attacks per Second");
   });
 
+  it("shows what a wand or focus adds to spells under Offence, and no row without it", () => {
+    render(<CharacterPanel player={player({ spellAdded: { fire: 32, cold: 0 } })} onClose={() => {}} />);
+    const rows = [...screen.getByTestId("char-detail").querySelectorAll("div")].map((d) => d.textContent ?? "");
+    expect(rows).toContain("Fire Damage added to Spells32");
+    expect(rows.some((r) => r.startsWith("Cold Damage added to Spells"))).toBe(false);
+    cleanup();
+    render(<CharacterPanel player={player()} onClose={() => {}} />);
+    expect(screen.getByTestId("char-detail").textContent).not.toContain("added to Spells");
+  });
+
   it("closes on the X", () => {
     let closed = false;
     render(<CharacterPanel player={player()} onClose={() => { closed = true; }} />);

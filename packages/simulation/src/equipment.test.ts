@@ -507,6 +507,20 @@ describe("derived player stats", () => {
     expect(s.spellDamagePct).toBe(0);
   });
 
+  it("the snapshot carries what a wand or focus adds to spells, and nothing without one", () => {
+    const { world, sim, playerEntity } = makeWorld();
+    expect(buildSnapshot(world, sim, 0, CONTENT_VERSION).player.stats.spellAdded).toBeUndefined();
+    clearInv(world);
+    const WAND: Item = {
+      baseId: "base.ember_kindling_wand", rarity: "magic", itemLevel: 80,
+      affixes: [{ affixId: "affix.fire_dmg", value: 32 }, { affixId: "affix.cold_dmg", value: 5 }],
+    };
+    placeInInv(world, WAND, 0, 0, 1, 2);
+    sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "weapon1" }, playerEntity, 0)]);
+
+    expect(buildSnapshot(world, sim, 1, CONTENT_VERSION).player.stats.spellAdded).toEqual({ fire: 32, cold: 5 });
+  });
+
   it("the sheet's fire resistance is the uncapped total, so overcapping is visible", () => {
     const { world, sim, playerEntity } = makeWorld();
     clearInv(world);
