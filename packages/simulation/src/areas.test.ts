@@ -322,6 +322,37 @@ describe("areaCollision", () => {
     expect(col.isWalkable(fp(2.121), fp(4.95), fp(0.5))).toBe(false);
   });
 
+  it("hideout: the floor ends past the furniture, so a walk away cannot lose the portals", () => {
+    const world = new World();
+    const session: SessionC = {
+      area: "hideout", atlasSeed: 0, mapSeed: 1, waystoneSeed: 0, areaTier: 0,
+      activeNodeId: "", completedNodes: [], portalsLeft: 0, mapOpen: 0, pendingArea: "",
+    };
+    const layout = generateArea(1, CONTENT_VERSION);
+    buildArea(world, "hideout", session, layout);
+    const col = areaCollision(world, "hideout", layout);
+    // Screen (sx, sy) -> world (x, y), the turn hideout.ts composes in.
+    const at = (sx: number, sy: number) => ({ x: fp((sx - sy) * Math.SQRT1_2), y: fp((sx + sy) * Math.SQRT1_2) });
+
+    // Far off in every screen direction is no longer floor.
+    for (const [sx, sy] of [[0, -12], [0, 14], [-14, 0], [14, 0], [45, -45]] as const) {
+      const p = at(sx, sy);
+      expect(col.isWalkable(p.x, p.y, fp(0.5)), `${sx},${sy}`).toBe(false);
+    }
+    // Everything the room is for stays reachable: the spot in front of every portal,
+    // the stash and the vendor (approached from the room's side), and the corners
+    // the columns stand in.
+    for (const e of world.query("interactable")) {
+      const p = world.get<Position>(e, "position")!;
+      const toward = (v: number) => v - Math.sign(v) * fp(1.2);
+      expect(col.isWalkable(toward(p.x), toward(p.y), fp(0.5)), `${p.x},${p.y}`).toBe(true);
+    }
+    for (const [sx, sy] of [[-9.6, 0], [9.6, 0], [0, 8], [0, -5]] as const) {
+      const p = at(sx, sy);
+      expect(col.isWalkable(p.x, p.y, fp(0.5)), `${sx},${sy}`).toBe(true);
+    }
+  });
+
   it("map: a brazier is solid where the renderer stands it", () => {
     const { world, session, layout } = mapFixture({ mapSeed: 7 });
     buildArea(world, "map", session, layout);

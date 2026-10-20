@@ -7,7 +7,7 @@ import {
 } from "@exiled/rules";
 import {
   PACK_COUNT, bossFor, mapBase, pickPack, rareTemplate,
-  ITEM_POOLS, baseOf, currencyItem, currencyForRoll, hideoutFootprints, isPortalScroll,
+  ITEM_POOLS, baseOf, currencyItem, currencyForRoll, hideoutFootprints, HIDEOUT_FLOOR, isPortalScroll,
 } from "@exiled/content-runtime";
 import { ELEMENTS, type MonsterDef } from "@exiled/content-schema";
 import { brazierSpotsFor, shutsFloor, BRAZIER_RADIUS, SPAWN_SAFE_RADIUS, type AreaLayout } from "@exiled/mapgen";
@@ -471,6 +471,22 @@ const BLOCK_RADIUS: Partial<Record<InteractableC["kind"], number>> = {
 };
 
 /**
+ * `HIDEOUT_FLOOR` in the sim's own integers. Screen (sx, sy) is world
+ * ((x + y) / sqrt2, (y - x) / sqrt2), so each bound is compared times sqrt2.
+ */
+const FLOOR_SQRT2 = {
+  left: fp(HIDEOUT_FLOOR.left * Math.SQRT2), right: fp(HIDEOUT_FLOOR.right * Math.SQRT2),
+  bottom: fp(HIDEOUT_FLOOR.bottom * Math.SQRT2), top: fp(HIDEOUT_FLOOR.top * Math.SQRT2),
+};
+
+function onHideoutFloor(x: number, y: number): boolean {
+  const across = x + y;
+  const up = y - x;
+  return across >= FLOOR_SQRT2.left && across <= FLOOR_SQRT2.right
+    && up >= FLOOR_SQRT2.bottom && up <= FLOOR_SQRT2.top;
+}
+
+/**
  * The collision the area is played against: its walls, plus everything standing
  * on the floor.
  *
@@ -492,7 +508,7 @@ export function areaCollision(world: World, area: AreaKind, layout: AreaLayout):
     // Sim (x, y) is Babylon (x, z): the decor list is written in the renderer's
     // axes because that is where it is composed.
     for (const f of hideoutFootprints()) blockers.push({ x: fp(f.x), y: fp(f.z), r: fp(f.r) });
-    return blockerCollision(blockers);
+    return blockerCollision(blockers, onHideoutFloor);
   }
   return gridCollision(layout.grid, [...blockers, ...brazierBlockers(layout)]);
 }

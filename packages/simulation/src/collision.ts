@@ -224,9 +224,13 @@ const BLOCKER_NAV_MARGIN = 3;
  * box has nothing to route around anyway, and `waypoint` answers null there,
  * which hands the walk back to the straight line.
  */
-export function blockerCollision(blockers: readonly Blocker[]): Collision {
+export function blockerCollision(
+  blockers: readonly Blocker[],
+  /** Where the floor is; everywhere when absent. Tested at the body's centre. */
+  onFloor?: (x: Fixed, y: Fixed) => boolean,
+): Collision {
   const isWalkable = (x: Fixed, y: Fixed, bodyRadius: Fixed): boolean =>
-    !hitsBlocker(blockers, x, y, bodyRadius);
+    (onFloor?.(x, y) ?? true) && !hitsBlocker(blockers, x, y, bodyRadius);
   if (blockers.length === 0) return { isWalkable };
 
   let loX = blockers[0]!.x, hiX = loX, loY = blockers[0]!.y, hiY = loY;

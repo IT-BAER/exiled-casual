@@ -138,6 +138,13 @@ const FOOTPRINT: Record<DecorKind, readonly (readonly [number, number, number])[
   brazier: [[0, 0, 0.2]],
 };
 
+/**
+ * The floor the player can walk, in the same screen units as `at`: a step past the
+ * columns on both flanks, the near brazier below and the portal arc above. The
+ * ground plane runs on into the dark, so without an edge a walk away lost the room.
+ */
+export const HIDEOUT_FLOOR = { left: -10, right: 10, bottom: -5.5, top: 8.5 } as const;
+
 /** Every disc the hideout's furniture stands on, in world (x, z) metres. */
 export function hideoutFootprints(): { x: number; z: number; r: number }[] {
   const out: { x: number; z: number; r: number }[] = [];
