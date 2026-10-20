@@ -34,12 +34,6 @@ self.onmessage = (e: MessageEvent) => {
     core.spawn(msg.what);
   } else if (msg.type === "pause") {
     paused = msg.paused;
-  } else if (msg.type === "reset") {
-    // seed preserved across reset is not in the protocol — recreate with seed 42
-    // (lab default). Full seed-carry requires a ToWorker_Reset extension in M3+.
-    // ponytail: hard-coded lab seed; parameterise reset in M3 when needed
-    core = new WorkerCore(42);
-    paused = false;
   }
 };
 

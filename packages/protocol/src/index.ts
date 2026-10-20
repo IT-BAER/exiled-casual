@@ -207,7 +207,6 @@ export const SPAWN_KINDS: readonly SpawnKind[] = ["imp", "pack", "magic", "rare"
  */
 export interface ToWorker_Init   { type: "init"; seed: number; characterId?: string; bot?: boolean; tour?: boolean }
 export interface ToWorker_Intent { type: "intent"; intent: Intent }
-export interface ToWorker_Reset  { type: "reset" }
 export interface ToWorker_Spawn  { type: "spawn"; what: SpawnKind }
 /**
  * Stop and start the sim's clock.
@@ -217,7 +216,7 @@ export interface ToWorker_Spawn  { type: "spawn"; what: SpawnKind }
  * tick it stopped on. The client sends it when the pause menu opens.
  */
 export interface ToWorker_Pause  { type: "pause"; paused: boolean }
-export type ToWorker = ToWorker_Init | ToWorker_Intent | ToWorker_Reset | ToWorker_Spawn | ToWorker_Pause;
+export type ToWorker = ToWorker_Init | ToWorker_Intent | ToWorker_Spawn | ToWorker_Pause;
 
 // ---------------------------------------------------------------------------
 // Snapshot types (worker → client); coords are render floats (worker calls toNumber())
@@ -715,7 +714,7 @@ export function validateIntent(v: unknown): Intent {
   }
 }
 
-const TO_WORKER_TYPES = new Set(["init", "intent", "reset", "spawn", "pause"]);
+const TO_WORKER_TYPES = new Set(["init", "intent", "spawn", "pause"]);
 
 // Structural type guard for ToWorker messages.
 export function isToWorker(v: unknown): v is ToWorker {
@@ -728,7 +727,6 @@ export function isToWorker(v: unknown): v is ToWorker {
       && (obj["bot"] === undefined || typeof obj["bot"] === "boolean")
       && (obj["tour"] === undefined || typeof obj["tour"] === "boolean");
     case "intent": return typeof obj["intent"] === "object" && obj["intent"] !== null;
-    case "reset":  return true;
     case "spawn":  return SPAWN_KINDS.includes(obj["what"] as SpawnKind);
     case "pause":  return typeof obj["paused"] === "boolean";
     default:       return false;

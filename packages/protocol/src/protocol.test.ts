@@ -98,8 +98,8 @@ describe("isToWorker", () => {
     ).toBe(true);
   });
 
-  test("valid reset message", () => {
-    expect(isToWorker({ type: "reset" })).toBe(true);
+  test("the retired reset message is refused", () => {
+    expect(isToWorker({ type: "reset" })).toBe(false);
   });
 
   test("null → false", () => {
