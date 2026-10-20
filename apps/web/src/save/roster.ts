@@ -63,15 +63,24 @@ export async function createCharacter(
   mode: Mode,
 ): Promise<{ roster: RosterBlob; record: CharacterRecord }> {
   const record = makeCharacterRecord(input, newId(), Date.now());
-  const next = addCharacter(roster, record, capFor(mode));
+  const next = addCharacter(await current(roster), record, capFor(mode));
   await saveRoster(kv(), next);
   return { roster: next, record };
 }
 
 export async function deleteCharacter(roster: RosterBlob, id: string): Promise<RosterBlob> {
-  const next = removeCharacter(roster, id);
+  const next = removeCharacter(await current(roster), id);
   await saveRoster(kv(), next);
   return next;
+}
+
+/**
+ * The stored roster, or the caller's copy when nothing is stored yet. The menu's
+ * copy is read at boot and the game saves past it, so writing it back would undo
+ * every save since: the shared stash, and any other character's progress.
+ */
+async function current(roster: RosterBlob): Promise<RosterBlob> {
+  return (await loadRoster(kv())) ?? roster;
 }
 
 export { headers };

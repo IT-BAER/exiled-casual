@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { MemoryKv, emptyRoster, loadRoster, saveRoster } from "@exiled/persistence";
+import { MemoryKv, emptyRoster, loadRoster, putCharacterState, putStash, saveRoster } from "@exiled/persistence";
 import { DEFAULT_SETTINGS } from "../settings";
 import {
   SETTINGS_DEBOUNCE_MS,
+  createCharacter,
+  deleteCharacter,
   exportRoster,
   flushSettingsSave,
   importRoster,
@@ -102,5 +104,35 @@ describe("saveSettingsSoon", () => {
     const saved = await loadRoster(store);
     expect(saved!.characters[0]!.state).toEqual({ played: true });
     expect(saved!.settings).toEqual(DEFAULT_SETTINGS);
+  });
+});
+
+describe("a menu write after a game session", () => {
+  // The menu reads the roster once at boot; the game then saves into the same
+  // store from its worker. A create or delete must not write the boot copy back.
+  afterEach(() => setKv(null));
+
+  async function afterPlaying() {
+    const store = new MemoryKv();
+    setKv(store);
+    const { roster: bootCopy, record } = await createCharacter(emptyRoster(), { name: "Kestrel", classId: "class.emberbound" }, "online");
+    // What the worker writes while the character plays: progress and the shared stash.
+    const played = putStash(putCharacterState(bootCopy, record.id, { life: 42 }, 12), { tabs: ["pendant"] });
+    await saveRoster(store, played);
+    return { store, bootCopy, id: record.id };
+  }
+
+  it("keeps the shared stash when the character is deleted", async () => {
+    const { store, bootCopy, id } = await afterPlaying();
+    await deleteCharacter(bootCopy, id);
+    expect((await loadRoster(store))!.stash).toEqual({ tabs: ["pendant"] });
+  });
+
+  it("keeps another character's progress when a new one is created", async () => {
+    const { store, bootCopy, id } = await afterPlaying();
+    await createCharacter(bootCopy, { name: "Wren", classId: "class.stalker" }, "online");
+    const stored = (await loadRoster(store))!;
+    expect(stored.characters.find((c) => c.id === id)).toMatchObject({ level: 12, state: { life: 42 } });
+    expect(stored.stash).toEqual({ tabs: ["pendant"] });
   });
 });
