@@ -498,3 +498,52 @@ The development viewer (`?viewer`) now covers every mesh and motion in the game:
 mix of looks, every creature with its idle, walk, attack and ragdoll death, every raw library take and
 every skill effect. A timeline pauses, scrubs and steps frame by frame, game light and game camera
 show an asset as the player sees it, and the view lives in the URL so a link reopens it.
+
+## 2026-10-18 · Swamp pools and a new roster
+
+<table>
+<tr>
+<td width="60%"><img src="screenshots/2026-10-18-swamp-pools.jpeg" alt="Swamp map: a murky standing pool with duckweed rafts and a soft bank, ferns and rock around it" width="100%"><br><sub>A standing pool in a swamp map.</sub></td>
+<td width="40%"><img src="screenshots/2026-10-18-drowned-grubling.jpeg" alt="Drowned Grubling in game: a squat toad on two legs with a pot belly and glowing eyes" width="100%"><br><sub>The new Drowned Grubling.</sub></td>
+</tr>
+</table>
+
+About half of a swamp map's obstacle masses are now standing pools instead of rock: murky water with
+duckweed rafts, a scum line at the bank and drifting glints. The sim still treats a pool as wall, so
+routes, spawns and the layout of every seed stay the same. Vaal Stone, Swamp and Forest are dressed
+with props, and most of the roster was regenerated or is new, the Strand's own brine scuttler, wrack
+drowned and tide spitter among them.
+
+## 2026-10-19 · Rock cliffs, readable monster tiers
+
+<table>
+<tr>
+<td width="100%" colspan="3"><img src="screenshots/2026-10-19-vaal-stone-rock.jpeg" alt="Vaal Stone map: grey rock cliffs around a lit floor, the player fighting a stone construct beside a brazier" width="100%"><br><sub>Vaal Stone cliffs in grey rock.</sub></td>
+</tr>
+<tr>
+<td width="33%"><img src="screenshots/2026-10-19-magic-rare-shimmer.jpeg" alt="Cinder imps around the player: magic ones with a blue shimmer, a rare one with a yellow shimmer" width="100%"><br><sub>Magic shimmer blue, rare yellow, as in PoE1.</sub></td>
+<td width="33%"><img src="screenshots/2026-10-19-rare-target-frame.jpeg" alt="Target frame for a rare monster: gold PoE1 frame named Cinder-Touched Cinder Imp, its modifiers listed below" width="100%"><br><sub>A rare's target frame and modifiers.</sub></td>
+<td width="33%"><img src="screenshots/2026-10-19-flask-tooltip.jpeg" alt="Hideout with the life flask tooltip open over the flask bar: recovery, charge cost, current charges and the key to drink it" width="100%"><br><sub>PoE2's flask box.</sub></td>
+</tr>
+</table>
+
+The Vaal Stone cliffs wear a grey rock scan instead of carved masonry, which read as a built brick
+wall. Every map holds one magic pack, and magic and rare monsters shimmer blue and yellow as in PoE1.
+Hovering a monster outlines it in red and shows a target frame at the top of the screen: PoE1's
+frames for magic and rare with their modifiers, PoE2's plain bar for normal. Hovering a flask shows
+its recovery, charge cost, live charges and key. Every currency and waystone now says what it does.
+
+## 2026-10-20 · Shader water
+
+<table>
+<tr>
+<td width="50%"><img src="screenshots/2026-10-20-coast-water-before.jpeg" alt="The Wrackline before: flat grey-green sea with a static white surf band on the sand" width="100%"><br><sub>Before: a static surf band.</sub></td>
+<td width="50%"><img src="screenshots/2026-10-20-coast-water-after.jpeg" alt="The Wrackline after: waves running up the sand with foam, clear shallows over the sand and a sky sheen further out" width="100%"><br><sub>After: swash, foam and clear shallows.</sub></td>
+</tr>
+</table>
+
+The coast's surf was a static band baked into vertex colours. The sea and the fen pools now shade
+every pixel from its distance to the shore: waves run up the sand and drain back, foam tears along
+the front of the wave, colour deepens with depth, caustics move in the shallows and a sky sheen shows
+the ripples. It costs no extra render pass. A wrong normal map input had also tilted every water
+normal sideways, which is part of why the old water looked flat.
