@@ -91,10 +91,28 @@ describe("PassiveTreePanel", () => {
     screen.getByTestId("passive-close");
   });
 
-  it("asks for a full refund when the button is pressed", () => {
+  /** One misclick would otherwise wipe a whole tree: the button only asks. */
+  it("asks before refunding everything", () => {
     const seen = panel({ allocated: [near] });
     fireEvent.click(screen.getByTestId("passive-respec"));
+    expect(seen).toEqual([]);
+    expect(screen.getByTestId("passive-respec-confirm").textContent).toContain("1 passive");
+  });
+
+  it("refunds everything once the refund is confirmed", () => {
+    const seen = panel({ allocated: [near] });
+    fireEvent.click(screen.getByTestId("passive-respec"));
+    fireEvent.click(screen.getByTestId("passive-respec-yes"));
     expect(seen).toEqual([{ kind: "respecPassives" }]);
+    expect(screen.queryByTestId("passive-respec-confirm")).toBeNull();
+  });
+
+  it("keeps the tree when the refund is cancelled", () => {
+    const seen = panel({ allocated: [near] });
+    fireEvent.click(screen.getByTestId("passive-respec"));
+    fireEvent.click(screen.getByTestId("passive-respec-cancel"));
+    expect(seen).toEqual([]);
+    expect(screen.queryByTestId("passive-respec-confirm")).toBeNull();
   });
 
   it("names the node and what it grants on hover", () => {
