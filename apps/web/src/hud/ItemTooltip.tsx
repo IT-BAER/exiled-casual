@@ -19,6 +19,7 @@ const CLASS_TAN = "#8a8065";
 const LABEL_GREY = "#7b7b74"; // stat/requirement words
 const VALUE_LIGHT = "#d2d2c8"; // stat/requirement numbers
 const UNID_RED = "#d02020"; // the unread marker
+const UNMET_RED = UNID_RED; // a requirement the character does not meet
 
 // `band` is a painted header frame (assets/menu -> build_menu_textures.py),
 // drawn as a nine-slice: `cap` is where the ornate end-cap ends and the
@@ -98,6 +99,7 @@ export function ItemTooltip({
   reqLevel,
   reqAttrValue,
   reqAttr,
+  playerLevel,
   implicit,
   lines,
   flavour,
@@ -121,6 +123,8 @@ export function ItemTooltip({
   reqLevel?: number;
   reqAttrValue?: number;
   reqAttr?: string;
+  /** The wearer's level; a higher reqLevel is drawn red. Absent = not checked. */
+  playerLevel?: number;
   /** The base's own mod, above the rolled ones and set off from them. */
   implicit?: string;
   lines: string[];
@@ -207,7 +211,7 @@ export function ItemTooltip({
             <Rule />
             <div style={{ fontSize: 13, letterSpacing: 0.3, textTransform: "uppercase" }}>
               <span style={{ color: LABEL_GREY }}>Requires Level </span>
-              <span style={{ color: VALUE_LIGHT }}>{reqLevel}</span>
+              <span data-testid="item-req-level" style={{ color: playerLevel !== undefined && playerLevel < reqLevel ? UNMET_RED : VALUE_LIGHT }}>{reqLevel}</span>
               {reqAttrValue !== undefined && reqAttr && (
                 <>
                   <span style={{ color: LABEL_GREY }}>, </span>

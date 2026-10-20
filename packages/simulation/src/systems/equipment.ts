@@ -30,6 +30,9 @@ export function registerEquipmentSystem(sim: Simulation): void {
 
         const base = baseOf(placed.item.baseId);
         if (!canEquip(base.itemClass, slot)) continue;
+        // PoE refuses gear above the character's level. Attribute requirements are
+        // shown but cannot be checked: the character has no attribute totals yet.
+        if ((base.stats?.reqLevel ?? 1) > (world.get<ProgressC>(sessionE, "progress")?.level ?? 1)) continue;
 
         const equip = world.get<EquipmentC>(sessionE, "equipment")!;
         const occupant: Item | undefined = equip.slots[slot];

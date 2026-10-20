@@ -12,6 +12,14 @@ describe("ItemTooltip", () => {
     expect(screen.getByText("Ember Wand")).toBeTruthy();
   });
 
+  it("draws an unmet level requirement in red, as PoE does, and a met one plain", () => {
+    render(<ItemTooltip name="Ember Wand" rarity="normal" reqLevel={8} playerLevel={7} lines={[]} x={0} y={0} />);
+    expect(screen.getByTestId("item-req-level").style.color).toBe("rgb(208, 32, 32)");
+    cleanup();
+    render(<ItemTooltip name="Ember Wand" rarity="normal" reqLevel={8} playerLevel={8} lines={[]} x={0} y={0} />);
+    expect(screen.getByTestId("item-req-level").style.color).not.toBe("rgb(208, 32, 32)");
+  });
+
   it("renders a unique's flavour line and omits it when absent", () => {
     render(<ItemTooltip name="Ashmaw" baseName="Ember Wand" rarity="unique" lines={["+30 to Fire Damage"]} flavour="It was a torch, once." x={0} y={0} />);
     expect(screen.getByText("It was a torch, once.")).toBeTruthy();

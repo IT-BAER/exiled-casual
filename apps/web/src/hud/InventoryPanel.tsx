@@ -331,7 +331,7 @@ const DEFAULT_FLASK_KEYS = { life: "1", mana: "2" };
 // memo: GameView renders at 30 Hz while monsters move; this panel only when its own props change.
 export const InventoryPanel = React.memo(function InventoryPanel({
   inventory, stash, vendor = EMPTY_SHELF, buyback = EMPTY_SHELF, gold = 0, equipment = {}, shards = {}, vendorOpen = false,
-  socketWanted = false, compareKey = "ctrl", flaskKeys = DEFAULT_FLASK_KEYS, flasks,
+  socketWanted = false, compareKey = "ctrl", flaskKeys = DEFAULT_FLASK_KEYS, flasks, level,
   onClose, onCloseStash, onCloseVendor, onIntent, onSocketWaystone,
 }: {
   /** The modifier that, held over an item, shows what is worn in its slot beside it. */
@@ -340,6 +340,8 @@ export const InventoryPanel = React.memo(function InventoryPanel({
   flaskKeys?: { life: string; mana: string };
   /** Live flask charges, read by their tooltips. */
   flasks?: Snapshot["player"]["flasks"];
+  /** Character level: the sim refuses gear above it, so the slot does too. Absent = not checked. */
+  level?: number;
   inventory: Inventory; stash?: Inventory; equipment?: Equipment;
   /** The vendor's shelf, priced per cell. Absent on a snapshot built without a session. */
   vendor?: Snapshot["vendor"];
@@ -375,6 +377,9 @@ export const InventoryPanel = React.memo(function InventoryPanel({
   /** A shop cell the click would be refused on: short of gold, or a sale whose orb is spent. */
   const barred = (container: ContainerId, it: GridItem): boolean =>
     isShop(container) && (priceOf(container, it) > gold || (it as ShelfItem).refused === true);
+  /** The slot takes the piece and the character meets its level, the same two checks the sim makes. */
+  const wearable = (it: DisplayItem, slot: EquipSlotId): boolean =>
+    canEquip(it.itemClass ?? "", slot) && (level === undefined || (it.reqLevel ?? 1) <= level);
   // Which of the vendor's pages is showing. Every visit opens on his goods.
   const [vendorPage, setVendorPage] = React.useState<"vendor" | "buyback">("vendor");
   React.useEffect(() => { if (!vendorOpen) setVendorPage("vendor"); }, [vendorOpen]);
@@ -595,7 +600,7 @@ export const InventoryPanel = React.memo(function InventoryPanel({
       const onGrid = !!target?.closest("[data-drop-grid]");
       const insidePanel = !!boxRef.current && !!target && boxRef.current.contains(target);
       if (slot) {
-        if (drag.from.kind === "grid" && drag.from.container === "backpack" && canEquip(drag.item.itemClass ?? "", slot)) {
+        if (drag.from.kind === "grid" && drag.from.container === "backpack" && wearable(drag.item, slot)) {
           onIntent?.({ kind: "equipItem", x: drag.from.x, y: drag.from.y, slot });
         }
         return;
@@ -669,7 +674,7 @@ export const InventoryPanel = React.memo(function InventoryPanel({
   };
   const slotHighlight = (slot: EquipSlotId): "legal" | "illegal" | "none" => {
     if (!drag || drag.from.kind === "slot") return "none";
-    return canEquip(drag.item.itemClass ?? "", slot) ? "legal" : "illegal";
+    return wearable(drag.item, slot) ? "legal" : "illegal";
   };
 
   // PoE's ctrl-click (shift here too): send the piece to the other container without a drag. The
@@ -1220,8 +1225,8 @@ export const InventoryPanel = React.memo(function InventoryPanel({
         included, or an item picked up in the bag vanishes behind the stash. */}
     <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 60, fontFamily: SERIF, color: PARCHMENT }}>
       {hoverItem && (worn.length > 0
-        ? <ItemCompare worn={worn} hovered={hoverItem} x={hover!.x} y={hover!.y} />
-        : <ItemTooltip {...hoverItem} x={hover!.x} y={hover!.y} />)}
+        ? <ItemCompare worn={worn} hovered={{ ...hoverItem, playerLevel: level }} x={hover!.x} y={hover!.y} />
+        : <ItemTooltip {...hoverItem} playerLevel={level} x={hover!.x} y={hover!.y} />)}
       {armed && armedPos && !drag && armed.icon && (
         <img
           data-testid="armed-icon"

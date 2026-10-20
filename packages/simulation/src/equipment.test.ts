@@ -7,7 +7,7 @@ import { intentToCommand, buildSnapshot } from "./protocol-bridge";
 import { saveTo, loadInto, VERSION } from "./persist";
 import { canEquip, EQUIP_SLOTS_BY_CLASS } from "./equipment";
 import { CONTENT_VERSION, wisdomScroll } from "@exiled/content-runtime";
-import type { InventoryC, EquipmentC, Position, Health, Mana, DefensesC, OffenseC } from "./components";
+import type { InventoryC, EquipmentC, Position, Health, Mana, DefensesC, OffenseC, ProgressC } from "./components";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -22,6 +22,12 @@ const FOCUS: Item = { baseId: "base.ember_focus", rarity: "normal", itemLevel: 6
 
 function makeWorld() {
   return createCombatSim(7, { area: "hideout" });
+}
+
+/** Raise the character to `level`; the Ember Wand fixture requires level 8. */
+function atLevel(world: ReturnType<typeof makeWorld>["world"], level: number) {
+  const s = world.query("session")[0]!;
+  world.set<ProgressC>(s, "progress", { ...world.get<ProgressC>(s, "progress")!, level });
 }
 
 function sessionE(world: ReturnType<typeof makeWorld>["world"]) {
@@ -102,12 +108,26 @@ describe("canEquip", () => {
 describe("equipment system — equipItem", () => {
   it("equips a wand from the grid into weapon1: removes from grid, fills slot", () => {
     const { sim, world, playerEntity } = makeWorld();
+    atLevel(world, 8);
     clearInv(world);
     placeInInv(world, WAND, 0, 0, 1, 2);
 
     sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "weapon1" }, playerEntity, 0)]);
 
     expect(getInv(world).items).toHaveLength(0);
+    expect(getEquip(world).slots["weapon1"]?.baseId).toBe("base.ember_wand");
+  });
+
+  it("refuses a base whose level requirement is above the character's, and wears it once he reaches it", () => {
+    const { sim, world, playerEntity } = makeWorld();
+    clearInv(world);
+    placeInInv(world, WAND, 0, 0, 1, 2); // Ember Wand: Requires Level 8
+    atLevel(world, 7);
+    sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "weapon1" }, playerEntity, 0)]);
+    expect(getEquip(world).slots["weapon1"]).toBeUndefined();
+    expect(getInv(world).items).toHaveLength(1);
+    atLevel(world, 8);
+    sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "weapon1" }, playerEntity, 1)]);
     expect(getEquip(world).slots["weapon1"]?.baseId).toBe("base.ember_wand");
   });
 
@@ -132,6 +152,7 @@ describe("equipment system — equipItem", () => {
 
   it("equipping into an occupied slot swaps the occupant back into the grid", () => {
     const { sim, world, playerEntity } = makeWorld();
+    atLevel(world, 8);
     clearInv(world);
 
     // Equip first wand
@@ -178,6 +199,7 @@ describe("equipment system — equipItem", () => {
 describe("equipment system — unequipItem", () => {
   it("unequip returns item to the grid", () => {
     const { sim, world, playerEntity } = makeWorld();
+    atLevel(world, 8);
     clearInv(world);
 
     placeInInv(world, WAND, 0, 0, 1, 2);
@@ -423,6 +445,7 @@ describe("derived player stats", () => {
 
   it("the wand implicit gives the player spell damage", () => {
     const { world, sim, playerEntity } = makeWorld();
+    atLevel(world, 8);
     clearInv(world);
     placeInInv(world, WAND, 0, 0, 1, 2);
     sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "weapon1" }, playerEntity, 0)]);

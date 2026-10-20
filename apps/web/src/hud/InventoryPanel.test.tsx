@@ -167,6 +167,19 @@ describe("InventoryPanel", () => {
     expect(intents[1]).toEqual({ kind: "dropItem", x: 0, y: 0 });
   });
 
+  it("refuses a drop on the slot while the character is below the item's level, like the sim does", () => {
+    const intents: unknown[] = [];
+    render(<InventoryPanel inventory={inv} equipment={{}} level={7} onIntent={(i) => intents.push(i)} onClose={() => {}} />);
+    dragFrom(screen.getByTestId("inventory-item-0"));
+    fireEvent.pointerUp(screen.getByTestId("equip-slot-weapon1"));
+    expect(intents).toEqual([]);
+    cleanup();
+    render(<InventoryPanel inventory={inv} equipment={{}} level={8} onIntent={(i) => intents.push(i)} onClose={() => {}} />);
+    dragFrom(screen.getByTestId("inventory-item-0"));
+    fireEvent.pointerUp(screen.getByTestId("equip-slot-weapon1"));
+    expect(intents).toEqual([{ kind: "equipItem", x: 0, y: 0, slot: "weapon1" }]);
+  });
+
   it("a held drag released before the panel re-rendered its travel still drops, not lifts", async () => {
     // A slow frame (the atlas behind the panel) can deliver the moves and the
     // release before React commits the moved position, so the release must not
