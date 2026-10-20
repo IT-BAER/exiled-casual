@@ -38,10 +38,11 @@ import { reloadOnChunkError } from "./chunk-reload";
  */
 const GameView = React.lazy(reloadOnChunkError(() => import("./GameView").then((m) => ({ default: m.GameView }))));
 const MenuStage = React.lazy(reloadOnChunkError(() => import("./menu/MenuStage").then((m) => ({ default: m.MenuStage }))));
-/** The dev asset viewer. Lazy for the same reason: it owns an engine too. */
-const AssetViewer = React.lazy(() =>
-  import("./dev/AssetViewer").then((m) => ({ default: m.AssetViewer })),
-);
+/** The dev asset viewer. Lazy for the same reason: it owns an engine too. Null in a
+ *  production build, so the chunk (and its `__wear` hook) is never emitted. */
+const AssetViewer = import.meta.env.DEV
+  ? React.lazy(() => import("./dev/AssetViewer").then((m) => ({ default: m.AssetViewer })))
+  : null;
 import { DEFAULT_SETTINGS, type ControlMode, type Settings } from "./settings";
 import { setTitle } from "./title";
 import { setDebugLogging } from "./debug";
@@ -285,7 +286,7 @@ export function App(): React.ReactElement {
     );
   }
 
-  if (screen.kind === "viewer") {
+  if (screen.kind === "viewer" && AssetViewer) {
     return (
       <>
         <React.Suspense fallback={null}>
