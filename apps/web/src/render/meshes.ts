@@ -2,6 +2,7 @@ import {
   Color3,
   DynamicTexture,
   Effect,
+  type GlowLayer,
   Mesh,
   MeshBuilder,
   ShaderMaterial,
@@ -790,39 +791,108 @@ export function beamTransform(): { x: number; y: number; rz: number } {
   };
 }
 
+const BEAM_SHADER = "ecLootBeam";
+const POOL_SHADER = "ecLootPool";
+
+// Value noise that wraps every `period` cells along x, so the shimmer meets
+// itself where the cylinder's UV seam closes instead of drawing a line up it.
+const NOISE_GLSL = `
+  float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  float noise(vec2 p, float period) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    float a = hash(vec2(mod(i.x, period), i.y));
+    float b = hash(vec2(mod(i.x + 1.0, period), i.y));
+    float c = hash(vec2(mod(i.x, period), i.y + 1.0));
+    float d = hash(vec2(mod(i.x + 1.0, period), i.y + 1.0));
+    return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+  }`;
+
 /**
- * Vertical falloff for the loot beam: solid where it meets the floor, gone at the
- * top. One texture shared by every beam — a cylinder UV runs v=0 at the bottom,
- * which is the bottom row of the image.
+ * The loot beam's shader: a hot near-white core inside a sheath of the rarity's
+ * colour (PoE1's filter columns), with a slow shimmer rising through the sheath
+ * (PoE2's wisps). The core is where the shaft faces the camera head on, read
+ * across the shaft only, so a camera looking down still finds it.
  */
-function beamGradient(scene: Scene): DynamicTexture | null {
-  const existing = scene.getTextureByName("loot-beam-falloff");
-  if (existing) return existing as DynamicTexture;
-  // No canvas under NullEngine: headless, the beam is a flat shaft.
-  let tex: DynamicTexture;
-  try {
-    tex = new DynamicTexture("loot-beam-falloff", { width: 4, height: 64 }, scene, false);
-  } catch {
-    // The constructor registers the texture before it throws; a next beam must not find it.
-    scene.getTextureByName("loot-beam-falloff")?.dispose();
-    return null;
-  }
-  const ctx = tex.getContext() as unknown as CanvasRenderingContext2D;
-  const grad = ctx.createLinearGradient(0, 0, 0, 64);
-  grad.addColorStop(0, "#000"); // top of the image = top of the beam
-  // A long taper rather than a short one that stops. The shaft still has to run
-  // out inside the frame, but "runs out" has to be something the eye can watch
-  // happen: gone by half way reads as a beam someone cut, which is the same
-  // complaint as a beam with no end at all.
-  grad.addColorStop(0.22, "#0d0d0d");
-  grad.addColorStop(0.58, "#5a5a5a");
-  grad.addColorStop(0.86, "#c8c8c8");
-  grad.addColorStop(1, "#fff"); // floor end stays bright
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, 4, 64);
-  tex.update();
-  tex.getAlphaFromRGB = true;
-  return tex;
+function registerBeamShaders(): void {
+  if (Effect.ShadersStore[`${BEAM_SHADER}VertexShader`]) return;
+  Effect.ShadersStore[`${BEAM_SHADER}VertexShader`] = `
+    precision highp float;
+    attribute vec3 position;
+    attribute vec3 normal;
+    attribute vec2 uv;
+    uniform mat4 worldViewProjection;
+    uniform mat4 world;
+    uniform vec3 uCam;
+    varying vec2 vUV;
+    varying float vFacing;
+    void main(void) {
+      vec3 wp = (world * vec4(position, 1.0)).xyz;
+      vec3 n = mat3(world) * normal;
+      vec3 v = uCam - wp;
+      vFacing = abs(dot(normalize(vec2(n.x, n.z) + 1e-5), normalize(vec2(v.x, v.z) + 1e-5)));
+      vUV = uv;
+      gl_Position = worldViewProjection * vec4(position, 1.0);
+    }`;
+  Effect.ShadersStore[`${BEAM_SHADER}FragmentShader`] = `
+    precision highp float;
+    uniform vec3 uColor;
+    uniform float uLit;
+    uniform float uTime;
+    uniform float uPhase;
+    varying vec2 vUV;
+    varying float vFacing;
+    ${NOISE_GLSL}
+    void main(void) {
+      float h = vUV.y;
+      // Bright at the floor and run out by the top, slowly enough that the eye
+      // watches it go: a fade done by half way reads as a beam someone cut.
+      float fade = pow(1.0 - h, 1.7);
+      float core = pow(vFacing, 14.0);
+      float sheath = pow(vFacing, 1.4);
+      float rise = noise(vec2(vUV.x * 6.0 + uPhase, h * 7.0 - uTime * 0.6 + uPhase), 6.0);
+      float fine = noise(vec2(vUV.x * 12.0, h * 15.0 - uTime * 1.1 + uPhase), 12.0);
+      float shimmer = 0.7 + 0.45 * rise + 0.15 * fine;
+      float breathe = 0.9 + 0.1 * sin(uTime * 2.4 + uPhase);
+      vec3 col = uColor * sheath * shimmer + vec3(1.0, 0.97, 0.9) * core;
+      gl_FragColor = vec4(col * fade * uLit * breathe * 1.8, 1.0);
+    }`;
+  Effect.ShadersStore[`${POOL_SHADER}VertexShader`] = `
+    precision highp float;
+    attribute vec3 position;
+    attribute vec2 uv;
+    uniform mat4 worldViewProjection;
+    varying vec2 vUV;
+    void main(void) {
+      vUV = uv;
+      gl_Position = worldViewProjection * vec4(position, 1.0);
+    }`;
+  Effect.ShadersStore[`${POOL_SHADER}FragmentShader`] = `
+    precision highp float;
+    uniform vec3 uColor;
+    uniform float uLit;
+    uniform float uTime;
+    uniform float uPhase;
+    varying vec2 vUV;
+    void main(void) {
+      float r = length(vUV - 0.5) * 2.0;
+      float glow = pow(clamp(1.0 - r, 0.0, 1.0), 2.2);
+      float breathe = 0.85 + 0.15 * sin(uTime * 2.4 + uPhase);
+      gl_FragColor = vec4(uColor * glow * uLit * breathe * 1.6, 1.0);
+    }`;
+}
+
+function lootLightMaterial(scene: Scene, name: string, shader: string, attributes: string[]): ShaderMaterial {
+  const mat = new ShaderMaterial(name, scene, shader, {
+    attributes,
+    uniforms: ["worldViewProjection", "world", "uCam", "uColor", "uLit", "uTime", "uPhase"],
+    needAlphaBlending: true,
+  });
+  mat.alphaMode = 1; // ALPHA_ADD: light over the floor, never a mask on it
+  mat.disableDepthWrite = true;
+  mat.backFaceCulling = false;
+  return mat;
 }
 
 /** Beacon colour per rarity, matched to the tooltip palette in hud/ItemTooltip.tsx. */
@@ -833,6 +903,33 @@ const GROUND_ITEM_COLOR: Record<string, [number, number, number]> = {
   unique: [0.69, 0.38, 0.15],
 };
 
+export interface BeamLook {
+  /** Sheath colour; saturated above normal, or the bloom washes it to white. */
+  color: [number, number, number];
+  /** Overall energy. Intensity, not density (docs/09-reward-psychology.md 3):
+   *  a unique is several junk beams, so the tiers spread instead of stepping. */
+  lit: number;
+  /** A pool of the same light on the floor, kept for drops worth turning for. */
+  pool: boolean;
+}
+
+const BEAM_LOOKS: Record<string, BeamLook> = {
+  normal: { color: [0.8, 0.8, 0.8], lit: 0.09, pool: false },
+  magic: { color: [0.3, 0.42, 1.0], lit: 0.24, pool: false },
+  rare: { color: [1.0, 0.84, 0.18], lit: 0.45, pool: true },
+  unique: { color: [1.0, 0.3, 0.05], lit: 0.7, pool: true },
+};
+
+export function beamLook(rarity: string | undefined): BeamLook {
+  return BEAM_LOOKS[rarity ?? "normal"] ?? BEAM_LOOKS["normal"]!;
+}
+
+interface GroundItemParts {
+  beamMat: ShaderMaterial;
+  poolMat: ShaderMaterial;
+  pool: Mesh;
+}
+
 /** Tint a ground-item beacon by rarity, so a drop reads before its plate is. */
 export function updateGroundItem(mesh: Mesh, rarity: string | undefined): void {
   const mat = mesh.material as StandardMaterial | null;
@@ -840,47 +937,24 @@ export function updateGroundItem(mesh: Mesh, rarity: string | undefined): void {
   const [r, g, b] = GROUND_ITEM_COLOR[rarity ?? "normal"] ?? GROUND_ITEM_COLOR["normal"]!;
   mat.diffuseColor = new Color3(r * 0.35, g * 0.35, b * 0.35);
   mat.emissiveColor = new Color3(r, g, b);
-  const beamMat = mesh.getChildMeshes()[0]?.material as StandardMaterial | null;
-  if (beamMat) {
-    // Junk barely glows, a unique is visible across the room. Same idea as a
-    // NeverSink filter turning the beam up with the tier.
-    const lit = BEAM_ALPHA[rarity ?? "normal"] ?? BEAM_ALPHA["normal"]!;
-    // ...and it breathes, shallowly, on a phase of its own.
-    //
-    // A shaft of light that does not move is a prop. Fifteen percent at about
-    // two thirds of a hertz is under what reads as flashing and over what reads
-    // as static, and the phase comes off the mesh's own id so a floor covered in
-    // drops never pulses in unison, which is the thing that WOULD be
-    // distracting.
-    const t = Date.now() / 1000;
-    const phase = (mesh.uniqueId ?? 0) * 1.7;
-    const k = lit * (0.86 + 0.14 * Math.sin(t * 4.2 + phase));
-    // Through the EMISSIVE, not through the alpha, and that is the whole reason
-    // every beam used to be the same blazing white column whatever it stood on.
-    //
-    // The scene has a GlowLayer, and its shader reads a material's emissive
-    // colour, its opacity TEXTURE and its vertex alpha — never `material.alpha`.
-    // So the tier scaling and the breathing were applied in the lit pass and
-    // thrown away in the bloom pass, which then drew all four tiers at full
-    // energy and blurred that over the top of the ramp: a junk shaft and a
-    // unique one differed by nothing, and the fade at the top was buried under
-    // its own halo. Driving brightness through the emissive makes both passes
-    // agree, and leaves the opacity ramp alone to do the one job it CAN do in
-    // both, which is the shape.
-    beamMat.emissiveColor.set(r * k, g * k, b * k);
-    beamMat.alpha = 1;
+  const parts = mesh.metadata as GroundItemParts | null;
+  if (!parts?.beamMat) return;
+  const look = beamLook(rarity);
+  // The phase comes off the mesh's own id, so a floor covered in drops never
+  // shimmers in unison, which is the thing that WOULD be distracting.
+  const t = (Date.now() % 3600000) / 1000;
+  const phase = ((mesh.uniqueId ?? 0) * 1.7) % 6.283;
+  const color = new Color3(...look.color);
+  for (const m of [parts.beamMat, parts.poolMat]) {
+    m.setColor3("uColor", color);
+    m.setFloat("uLit", look.lit);
+    m.setFloat("uTime", t);
+    m.setFloat("uPhase", phase);
   }
+  const cam = parts.beamMat.getScene().activeCamera;
+  if (cam) parts.beamMat.setVector3("uCam", cam.position);
+  parts.pool.setEnabled(look.pool);
 }
-
-// Intensity, not density (docs/09-reward-psychology.md 3): the gap between a junk
-// shaft and a unique one is what makes the unique an event, so the tiers spread
-// rather than sitting evenly.
-const BEAM_ALPHA: Record<string, number> = {
-  normal: 0.09,
-  magic: 0.24,
-  rare: 0.45,
-  unique: 0.7,
-};
 
 /**
  * How long after the portal before it a portal opens. His number: six doorways
@@ -1629,25 +1703,32 @@ export function makeMesh(
     itemMat.specularColor = new Color3(0, 0, 0);
     m.material = itemMat;
     // Light beam standing on the drop, the way PoE marks loot from across a room.
-    // Additive so it glows over the floor instead of masking it, and unlit so it
-    // keeps its rarity colour in a dark map.
-    const beam = MeshBuilder.CreateCylinder(`${name}-beam`, { diameter: 0.12, height: BEAM_H, tessellation: 10 }, scene);
+    // Every look lives in its shader (`registerBeamShaders`); the bloom pass draws
+    // the same shader, so the tier and the colour survive the glow instead of
+    // being blurred into one white column.
+    registerBeamShaders();
+    const beam = MeshBuilder.CreateCylinder(`${name}-beam`, {
+      diameter: 0.09, height: BEAM_H, tessellation: 12, cap: Mesh.NO_CAP,
+    }, scene);
     beam.parent = m;
     const at = beamTransform();
     beam.position.set(at.x, at.y, 0);
     beam.rotation.z = at.rz;
     beam.isPickable = false;
-    const beamMat = new StandardMaterial(`${name}-beam-mat`, scene);
-    beamMat.diffuseColor = new Color3(0, 0, 0);
-    beamMat.specularColor = new Color3(0, 0, 0);
-    // The ramp texture carries the whole shape and `updateGroundItem` carries
-    // the brightness in the emissive; the flat alpha stays out of both.
-    beamMat.alpha = 1;
-    beamMat.alphaMode = 1; // ALPHA_ADD
-    beamMat.disableLighting = true;
-    beamMat.backFaceCulling = false;
-    beamMat.opacityTexture = beamGradient(scene); // bright at the floor, gone at the top
+    const beamMat = lootLightMaterial(scene, `${name}-beam-mat`, BEAM_SHADER, ["position", "normal", "uv"]);
     beam.material = beamMat;
+    // The floor pool: flat on the ground under the drop, not facing the camera.
+    const pool = MeshBuilder.CreateDisc(`${name}-pool`, { radius: 0.7, tessellation: 24 }, scene);
+    pool.parent = m;
+    pool.rotation.x = Math.PI / 2;
+    pool.position.y = -Y_LIFT.groundItem + 0.02;
+    pool.isPickable = false;
+    const poolMat = lootLightMaterial(scene, `${name}-pool-mat`, POOL_SHADER, ["position", "uv"]);
+    pool.material = poolMat;
+    const glow = scene.effectLayers?.find((l) => l.name === "glow") as GlowLayer | undefined;
+    glow?.referenceMeshToUseItsOwnMaterial(beam);
+    glow?.addExcludedMesh(pool);
+    m.metadata = { beamMat, poolMat, pool } satisfies GroundItemParts;
     updateGroundItem(m, "normal");
     // The item itself lies on the floor. The hexagon stays only as the stand-in
     // for a base with no model, or a drop made before the wardrobe loaded.

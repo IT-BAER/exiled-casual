@@ -837,6 +837,8 @@ export function createScene(engine: Engine): SceneHandle {
       if (dx * dx + dy * dy + dz * dz > reach * reach) return false;
       return !(mesh === ground || mesh.name.startsWith("telegraph-") || mesh.name === FLAME_MESH
         || mesh.name.startsWith("groundblob-") || mesh.name === HIDEOUT_EDGE_NAME || isWardrobePart(mesh.name)
+        // A loot beam and its floor pool are light, not things standing in it.
+        || mesh.name.endsWith("-beam") || mesh.name.endsWith("-pool")
         // Dressing scatter never casts — see isScatterDressing. The range cull
         // above cannot save it: a thin-instance host's bounding sphere spans
         // every instance, so it is always "in reach".
