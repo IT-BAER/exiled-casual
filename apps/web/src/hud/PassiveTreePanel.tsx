@@ -6,7 +6,7 @@ import {
 } from "@exiled/rules";
 import { characterClass } from "@exiled/content-runtime";
 import { DISPLAY, GOLD, PARCHMENT, SERIF } from "./InventoryPanel";
-import { Divider, GOLD_DIM, MenuButton } from "../menu/frames";
+import { Divider, FramedPanel, GOLD_DIM, MenuButton } from "../menu/frames";
 
 /**
  * The passive tree, drawn the way `reference-screenshots/skill-tree.png` draws
@@ -310,6 +310,7 @@ export function PassiveTreePanel({
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(OPEN_ZOOM);
   const [hover, setHover] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [askRespec, setAskRespec] = useState(false);
   const drag = useRef<{ x: number; y: number; px: number; py: number } | null>(null);
 
   const taken = useMemo(() => new Set(allocated), [allocated]);
@@ -323,6 +324,7 @@ export function PassiveTreePanel({
       const door = passiveNode(start);
       setPan({ x: door?.x ?? 0, y: door?.y ?? 0 });
       setZoom(OPEN_ZOOM);
+      setAskRespec(false);
     }
     wasOpen.current = open;
   }, [open, start]);
@@ -366,7 +368,7 @@ export function PassiveTreePanel({
         classId={classId}
         points={points}
         allocatedCount={allocated.length}
-        onRespec={() => onIntent?.({ kind: "respecPassives" })}
+        onRespec={() => setAskRespec(true)}
         onClose={onClose}
       />
 
@@ -447,6 +449,16 @@ export function PassiveTreePanel({
             <div style={{ color: "#9a9280" }}>Where this class begins. Costs nothing.</div>
           )}
         </div>
+      )}
+      {askRespec && (
+        <RespecConfirm
+          count={allocated.length}
+          onCancel={() => setAskRespec(false)}
+          onConfirm={() => {
+            setAskRespec(false);
+            onIntent?.({ kind: "respecPassives" });
+          }}
+        />
       )}
     </div>
   );
@@ -562,5 +574,44 @@ function Header({
       </div>
       <Divider style={{ marginTop: "0.9vh" }} />
     </header>
+  );
+}
+
+/**
+ * Refund All is free, but one misclick on it still wipes a tree that took a
+ * whole climb to place, so the button only asks. Same shape as the character
+ * delete prompt, without the typed name: nothing here is lost for good.
+ */
+function RespecConfirm({ count, onCancel, onConfirm }: {
+  count: number;
+  onCancel: () => void;
+  onConfirm: () => void;
+}): React.ReactElement {
+  return (
+    <div
+      data-testid="passive-respec-confirm"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Refund all passives"
+      style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", background: "rgba(3,4,6,0.6)", zIndex: 5 }}
+    >
+      <FramedPanel style={{ width: "min(40vw, 500px)", padding: "16px 22px 18px" }}>
+        <div style={{ fontFamily: DISPLAY, fontSize: 18, letterSpacing: 3, textTransform: "uppercase", color: GOLD, textAlign: "center" }}>
+          Refund All
+        </div>
+        <Divider style={{ margin: "10px 0 14px" }} />
+        <div style={{ fontFamily: SERIF, fontSize: 13, color: "#a9a290", lineHeight: 1.55 }}>
+          {`Return all ${count} passive${count === 1 ? "" : "s"} to the pool? Refunding is free.`}
+        </div>
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 14 }}>
+          <MenuButton data-testid="passive-respec-cancel" height={34} style={{ minWidth: 120 }} onClick={onCancel}>
+            Cancel
+          </MenuButton>
+          <MenuButton data-testid="passive-respec-yes" height={34} style={{ minWidth: 120 }} onClick={onConfirm}>
+            Refund All
+          </MenuButton>
+        </div>
+      </FramedPanel>
+    </div>
   );
 }
