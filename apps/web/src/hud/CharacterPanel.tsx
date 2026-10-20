@@ -13,10 +13,10 @@ import { ElementIcon } from "./ElementIcon";
 // from that carving and no gradient stack was going to stand in for it.
 //
 // The reference's identity row (portrait, "Level 80 Invoker", league) and its
-// Strength/Dexterity/Intelligence plate are left out, as are the Energy Shield,
-// Spirit, Evasion and Block niches and three of the four resistances: none of
-// them exist in the sim, and a row frozen at zero would advertise a mechanic
-// that is not there. What is drawn is what gear can actually move.
+// Strength/Dexterity/Intelligence plate are left out, as are the Spirit, Evasion
+// and Block niches and movement speed: none of them is a total gear can move (a
+// point of Strength is folded into Life), and a row frozen at zero would advertise
+// a mechanic that is not there. Energy Shield is drawn only once gear grants some.
 //
 // The Offence section is a PoE1 borrow. PoE2 moved offensive stats off the
 // sheet and onto skill tooltips, but we have no skill tooltip yet, so a wand's
