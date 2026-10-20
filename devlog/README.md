@@ -518,8 +518,11 @@ drowned and tide spitter among them.
 
 <table>
 <tr>
-<td width="100%" colspan="3"><img src="screenshots/2026-10-19-vaal-stone-rock.jpeg" alt="Vaal Stone map: grey rock cliffs around a lit floor, the player fighting a stone construct beside a brazier" width="100%"><br><sub>Vaal Stone cliffs in grey rock.</sub></td>
+<td width="100%"><img src="screenshots/2026-10-19-vaal-stone-rock.jpeg" alt="Vaal Stone map: grey rock cliffs around a lit floor, the player fighting a stone construct beside a brazier" width="100%"><br><sub>Vaal Stone cliffs in grey rock.</sub></td>
 </tr>
+</table>
+
+<table>
 <tr>
 <td width="33%"><img src="screenshots/2026-10-19-magic-rare-shimmer.jpeg" alt="Cinder imps around the player: magic ones with a blue shimmer, a rare one with a yellow shimmer" width="100%"><br><sub>Magic shimmer blue, rare yellow, as in PoE1.</sub></td>
 <td width="33%"><img src="screenshots/2026-10-19-rare-target-frame.jpeg" alt="Target frame for a rare monster: gold PoE1 frame named Cinder-Touched Cinder Imp, its modifiers listed below" width="100%"><br><sub>A rare's target frame and modifiers.</sub></td>
