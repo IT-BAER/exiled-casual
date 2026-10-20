@@ -235,14 +235,24 @@ export function registerEquipmentSystem(sim: Simulation): void {
 
         // Room before money: a purchase that cannot be carried must not be charged
         // for, and there is no cursor to hold the goods on the way out.
+        // Currency lands on its pile, as a pickup does (pickup.ts), and needs no cell then.
         const inv = world.get<InventoryC>(sessionE, "inventory")!;
-        const fit = placeFirstFit(inv, stocked.w, stocked.h);
-        if (fit === null) continue;
-
-        world.set<InventoryC>(sessionE, "inventory", {
-          ...inv,
-          items: [...inv.items, { x: fit.x, y: fit.y, w: stocked.w, h: stocked.h, item: stocked.item }],
-        });
+        const currency = isCurrency(stocked.item);
+        const pile = currency
+          ? inv.items.findIndex((p) => canonicalBaseId(p.item.baseId) === canonicalBaseId(stocked.item.baseId))
+          : -1;
+        if (pile >= 0) {
+          const items = inv.items.slice();
+          items[pile] = { ...items[pile]!, count: (items[pile]!.count ?? 1) + 1 };
+          world.set<InventoryC>(sessionE, "inventory", { ...inv, items });
+        } else {
+          const fit = placeFirstFit(inv, stocked.w, stocked.h);
+          if (fit === null) continue;
+          world.set<InventoryC>(sessionE, "inventory", {
+            ...inv,
+            items: [...inv.items, { x: fit.x, y: fit.y, w: stocked.w, h: stocked.h, item: stocked.item, ...(currency ? { count: 1 } : {}) }],
+          });
+        }
         // A staple's cell is a price tag, not a unit: buying one leaves it on the
         // shelf, because the shop is where the way home comes from (vendor.ts).
         if (!isStaple(stocked.item)) {

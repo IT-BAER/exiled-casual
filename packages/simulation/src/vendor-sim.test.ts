@@ -141,6 +141,33 @@ describe("buyItem", () => {
     expect(getVendor(world).items.some((p) => p.x === cell.x && p.y === cell.y)).toBe(true);
   });
 
+  it("puts a bought scroll on the pile it belongs to, even with no free cell", () => {
+    const { sim, world, playerEntity } = makeWorld();
+    const cell = getVendor(world).items.find((p) => p.item.baseId === "currency.portal")!;
+    setGold(world, 999_999);
+    const inv = getInv(world);
+    setInv(world, Array.from({ length: inv.cols * inv.rows }, (_, i) => (i === 0
+      ? { x: 0, y: 0, w: 1, h: 1, item: cell.item, count: 2 }
+      : { x: i % inv.cols, y: Math.trunc(i / inv.cols), w: 1, h: 1, item: NORMAL_WAND })));
+
+    sim.step([intentToCommand({ kind: "buyItem", x: cell.x, y: cell.y }, playerEntity, 0)]);
+
+    const piles = getInv(world).items.filter((p) => p.item.baseId === "currency.portal");
+    expect(piles).toEqual([expect.objectContaining({ x: 0, y: 0, count: 3 })]);
+    expect(getGold(world)).toBe(999_999 - vendorBuyPrice(cell.item));
+  });
+
+  it("gives a bought scroll with no pile yet a cell that counts one", () => {
+    const { sim, world, playerEntity } = makeWorld();
+    setInv(world, []);
+    const cell = getVendor(world).items.find((p) => p.item.baseId === "currency.portal")!;
+    setGold(world, 999_999);
+
+    sim.step([intentToCommand({ kind: "buyItem", x: cell.x, y: cell.y }, playerEntity, 0)]);
+
+    expect(getInv(world).items).toEqual([expect.objectContaining({ item: cell.item, count: 1 })]);
+  });
+
   it("ignores an empty shelf cell", () => {
     const { sim, world, playerEntity } = makeWorld();
     setInv(world, []);
