@@ -968,6 +968,8 @@ export function GameView({
       <Hud
         snapshot={snapshot}
         hoveredEntityId={hoveredEntityId}
+        project={project}
+        afterFrame={afterFrame}
         targetId={targetId}
         skillBar={snapshot?.skillBar ?? []}
         orbNumbers={settings.ui.orbNumbers}

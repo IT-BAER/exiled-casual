@@ -12,6 +12,7 @@ import { TargetFrame } from "./TargetFrame";
 import { playDropSound } from "../audio/drop-sound";
 import { DEFAULT_KEYBINDS_BY_MODE, DEFAULT_SETTINGS, MOUSE_SLOT_BASE, MOVE_SOCKET, SKILL_ACTIONS, SKILL_SLOT_COUNT, type ControlMode, type Keybinds } from "../settings";
 import { VENDOR_NAME, VENDOR_TITLE } from "../npc";
+import type { FrameHook, Projector } from "./LootLabels";
 
 // Bottom HUD geometry, measured off reference-screenshots/poe1-lower-bar.png, a 2558x388 crop
 // of Path of Exile **1**'s bottom bar (PoE1, not PoE2 — its globes are bigger and its ring
@@ -541,6 +542,11 @@ interface HudProps {
   snapshot: Snapshot | null;
   /** Entity id the mouse is hovering — drives the name label. Null = no label. */
   hoveredEntityId?: number | null;
+  /** Places the name label over the hovered object; without it the label sits
+   *  in its fixed slot above the skill bar. */
+  project?: Projector | null;
+  /** Placement runs on this when it exists, and on rAF when it does not. */
+  afterFrame?: FrameHook | null;
   /** Which skill sits in which numbered socket. Defaulted so the lab can boot bare. */
   skillBar?: (string | null)[];
   /** Draw `Life 100/100` over the globes at all. */
@@ -782,9 +788,21 @@ function Orb(props: {
   );
 }
 
+/**
+ * World units above the floor where the hovered name's baseline sits: just over
+ * the top of each object, measured on the built meshes (map device 0.95, stash
+ * 0.77, the portal's tear about 2.4). The vendor's is over his own name, which
+ * NpcLabels keeps at 2.15.
+ */
+const LABEL_HEIGHT: Partial<Record<Snapshot["entities"][number]["kind"], number>> = {
+  portal: 2.55, mapDevice: 1.25, stash: 1.05, vendor: 2.7,
+};
+
 export function Hud({
   snapshot,
   hoveredEntityId = null,
+  project = null,
+  afterFrame = null,
   skillBar = [],
   orbNumbers = DEFAULT_SETTINGS.ui.orbNumbers,
   onSkillBarChange,
@@ -963,6 +981,34 @@ export function Hud({
     // Keyed on the HUD existing, not on mount: the first mount has no snapshot,
     // renders nothing, and a measure taken then reads both panels as 0.
   }, [snapshot == null]);
+
+  // The hovered object's name stands over the object, the way PoE labels what is
+  // under the cursor. Placed per frame by transform, like NpcLabels, because the
+  // camera moves every frame and the snapshot lands at 30 Hz.
+  const labelNode = React.useRef<HTMLDivElement | null>(null);
+  const labelAt = React.useRef<{ x: number; y: number; h: number } | null>(null);
+  const labelTarget = hoveredEntityId !== null
+    ? snapshot?.entities.find((e) => e.id === hoveredEntityId)
+    : undefined;
+  labelAt.current = labelTarget && LABEL_HEIGHT[labelTarget.kind] !== undefined
+    ? { x: labelTarget.x, y: labelTarget.y, h: LABEL_HEIGHT[labelTarget.kind]! }
+    : null;
+  React.useEffect(() => {
+    if (!project) return;
+    const place = () => {
+      const node = labelNode.current;
+      const at = labelAt.current;
+      if (!node || !at) return;
+      const p = project(at.x, at.y, at.h);
+      node.style.visibility = p.visible ? "visible" : "hidden";
+      if (p.visible) node.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, -100%)`;
+    };
+    if (afterFrame) return afterFrame(place);
+    let raf = 0;
+    const tick = () => { place(); raf = requestAnimationFrame(tick); };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [project, afterFrame]);
 
   if (!snapshot) return null;
 
@@ -1177,15 +1223,18 @@ export function Hud({
         </div>
       )}
 
-      {/* Hovered interactable name — centered, just above the skill bar */}
+      {/* Hovered interactable name: over the object once the scene can project,
+          else centred above the skill bar. */}
       {hoverLabel && (
         <div
           data-testid="interact-label"
+          ref={labelNode}
           style={{
             position: "absolute",
-            bottom: 100,
-            left: "50%",
-            transform: "translateX(-50%)",
+            ...(project
+              ? { left: 0, top: 0, visibility: "hidden" as const }
+              : { bottom: 100, left: "50%", transform: "translateX(-50%)" }),
+            pointerEvents: "none",
             color: "#f4f0e6",
             fontSize: 14,
             fontWeight: 700,
