@@ -10,10 +10,38 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+### Added
+
+- Hovering a monster shows a target frame at the top of the screen and
+  outlines the monster in red.
+- Every map has a pack of magic monsters, and magic and rare monsters shimmer
+  blue and yellow.
+- Every currency and waystone says what it does and how to use it.
+- Hovering a flask, on the bar or in the inventory, shows its recovery, charge
+  cost, current charges and the key that drinks it.
+
 ### Changed
 
 - Letting go of Shift after shift-clicking an orb or scroll onto items takes
   it off the cursor, as in PoE.
+- Ctrl-click moves an item between backpack and stash, as in PoE. Shift-click
+  still works.
+- Piercing Shot hits for 36, so it out-damages the Stalker's free attack.
+- Vaal Stone cliffs look like grey rock instead of carved masonry.
+- Slam warnings and the rings under rare monsters and Cinder Ground are thinner
+  and dimmer.
+
+### Fixed
+
+- A Scroll of Wisdom identifies an unidentified unique.
+- Waystone tooltips show their name once, plus tier and area level.
+- Flask captions in the inventory show your flask keys, 1 and 2.
+- The Strand's three monsters have portraits on the death screen, and a death
+  by ailment names its element.
+- The class screen no longer marks the empty name field as an error, and it
+  says that the class decides your skills.
+- The third shard pile at the vendor reads Ember Shards.
+- The numpad keys no longer spawn monsters and items.
 
 ## [0.4.2] - 2026-10-19
 
