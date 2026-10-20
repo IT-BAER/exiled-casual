@@ -554,6 +554,25 @@ describe("attachBindings map device", () => {
     detach();
     canvas.remove();
   });
+
+  // The floor under a portal's upper half lies well behind it. Walking there
+  // instead of to the portal kept the trip past the routing cap, so a portal
+  // behind the map device walked the player into the device and left him there.
+  it("walks to the interactable itself, not to the floor behind the clicked pixel", () => {
+    const canvas = document.createElement("canvas");
+    document.body.appendChild(canvas);
+    const worker = { postMessage: vi.fn() };
+    const { detach, onSnapshot } = attachBindings(canvas, worker as unknown as Worker, fakeInteractScene(42));
+    onSnapshot(makeSnap([{ id: 42, kind: "portal", x: 2, y: 3, inRange: false }]));
+
+    canvas.dispatchEvent(new MouseEvent("pointerdown", { button: 0, clientX: 50, clientY: 50, bubbles: true }));
+
+    const moves = worker.postMessage.mock.calls.map((c) => c[0]?.intent).filter((i) => i?.kind === "moveTo");
+    expect(moves.at(-1)).toEqual({ kind: "moveTo", x: fp(2), y: fp(3) });
+
+    detach();
+    canvas.remove();
+  });
 });
 
 describe("attachBindings proximity close", () => {

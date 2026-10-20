@@ -566,7 +566,10 @@ export function attachBindings(
     // NOT start hold-to-move steering for this case.
     const interactable = interactAt(e.clientX, e.clientY);
     if (interactable !== null && floor) {
-      const world = pointerToWorld(floor);
+      // Its own position, not the floor under the pixel: on a tall portal that floor
+      // lies metres behind it, past click-to-move's routing cap.
+      const target = latestSnap?.entities.find((en) => en.id === interactable);
+      const world = pointerToWorld(target ? { x: target.x, z: target.y } : floor);
       post({ kind: "moveTo", x: world.x, y: world.y });
       pendingInteractId = interactable;
       pendingAttack = null;
