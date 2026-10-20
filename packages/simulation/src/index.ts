@@ -14,7 +14,7 @@ export type {
   Cooldowns, MonsterC, DefensesC, OffenseC, ProjectileC, GroundAreaC, AilmentC,
   DamageEvent, BossC, TelegraphC, SessionC, InteractableC, AreaKind,
 } from "./components";
-export type { ItemC, PlacedItem, InventoryC, EquipmentC, FlasksC, SkillsC } from "./components";
+export type { ItemC, PlacedItem, InventoryC, EquipmentC, FlasksC, SkillsC, ProgressC, ShardsC } from "./components";
 export { placeFirstFit } from "./inventory";
 export { canEquip, EQUIP_SLOTS_BY_CLASS } from "./equipment";
 export { registerResourceRegen } from "./systems/resource";

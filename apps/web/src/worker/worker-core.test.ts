@@ -3,10 +3,11 @@ import { WorkerCore } from "./worker-core";
 import type { Intent, Snapshot } from "@exiled/protocol";
 import { fp } from "@exiled/fixed-point";
 import { generateArea } from "@exiled/mapgen";
-import { offerWaystones, mapSeedFor, WAYSTONE_OFFER_COUNT } from "@exiled/rules";
+import { offerWaystones, mapSeedFor, WAYSTONE_OFFER_COUNT, passiveNode, startNodeId } from "@exiled/rules";
 import { CONTENT_VERSION } from "@exiled/content-runtime";
-import { grammarForNode } from "@exiled/simulation";
-import { MemoryKv } from "@exiled/persistence";
+import { grammarForNode, makeCharacterRecord } from "@exiled/simulation";
+import type { World, ProgressC, SessionC } from "@exiled/simulation";
+import { MemoryKv, emptyRoster, addCharacter, saveRoster } from "@exiled/persistence";
 
 function monsters(core: WorkerCore) {
   return core.snapshot()!.entities.filter((e) => e.kind === "monster");
@@ -176,5 +177,58 @@ describe("WorkerCore", () => {
     core.advance(34);
 
     expect(kv.writes).toBeGreaterThan(writesBefore);
+  });
+
+  // Level, xp, gold and the passive tree are in the save but were not in the
+  // fingerprint, so a run that gained levels without moving an item came back
+  // at level 1 after a reload.
+  describe("progress alone survives a reload", () => {
+    const CLASS = "class.stalker";
+    const flush = () => new Promise((r) => setTimeout(r, 0));
+    const sessionOf = (core: WorkerCore) => {
+      const world = (core as unknown as { world: World }).world;
+      return { world, e: world.query("session")[0]! };
+    };
+    async function played() {
+      const kv = new MemoryKv();
+      const record = makeCharacterRecord({ name: "Harness", classId: CLASS }, "c1", 0);
+      await saveRoster(kv, addCharacter(emptyRoster(), record, 1));
+      const core = new WorkerCore(42, kv, "c1");
+      await core.hydrate();
+      core.advance(34);
+      await flush();
+      return { kv, core };
+    }
+    async function reload(kv: MemoryKv) {
+      const core = new WorkerCore(42, kv, "c1");
+      await core.hydrate();
+      return sessionOf(core);
+    }
+
+    it("a level, xp and gold gain", async () => {
+      const { kv, core } = await played();
+      const { world, e } = sessionOf(core);
+      world.set<ProgressC>(e, "progress", { level: 3, xp: 50, gold: 900 });
+      core.advance(34);
+      await flush();
+
+      const { world: w, e: re } = await reload(kv);
+      expect(w.get<ProgressC>(re, "progress")).toEqual({ level: 3, xp: 50, gold: 900 });
+    });
+
+    it("an allocated passive", async () => {
+      const { kv, core } = await played();
+      const { world, e } = sessionOf(core);
+      world.set<ProgressC>(e, "progress", { level: 3, xp: 0, gold: 0 });
+      core.advance(34);
+      await flush();
+      const near = passiveNode(startNodeId(CLASS))!.links[0]!;
+      core.pushIntent({ kind: "allocatePassive", nodeId: near });
+      core.advance(34);
+      await flush();
+
+      const { world: w, e: re } = await reload(kv);
+      expect(w.get<SessionC>(re, "session")!.passives).toEqual([near]);
+    });
   });
 });

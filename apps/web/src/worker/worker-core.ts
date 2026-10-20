@@ -14,7 +14,7 @@ import {
   areaCollision,
   placeFirstFit,
 } from "@exiled/simulation";
-import type { Simulation, World, Entity, Position, SessionC, InventoryC, SkillsC, KvStore } from "@exiled/simulation";
+import type { Simulation, World, Entity, Position, SessionC, InventoryC, SkillsC, ProgressC, ShardsC, EquipmentC, KvStore } from "@exiled/simulation";
 import type { Intent, Snapshot, SpawnKind, AreaKind } from "@exiled/protocol";
 import { CONTENT_VERSION, waystoneItem } from "@exiled/content-runtime";
 import { generateArea, type AreaLayout } from "@exiled/mapgen";
@@ -207,7 +207,15 @@ export class WorkerCore {
     // change since the last save is; a dropped bar swap or reseed stamp is not
     // re-derivable from anything and has to be caught here instead.
     const barSig = skills?.bar.join(",") ?? "";
-    return `${s?.completedNodes.join(",") ?? ""}|${cells(inv)}|${cells(stash)}|${barSig}|${skills?.attackReseeded ? 1 : 0}`;
+    // Character xp is per kill, not per tick, so it belongs here. Every other
+    // field persist.snapshot writes must be folded in too, or changing it alone never saves.
+    const p = this.world.get<ProgressC>(e, "progress");
+    const shards = this.world.get<ShardsC>(e, "shards");
+    const gear = this.world.get<EquipmentC>(e, "equipment");
+    const gearSig = Object.entries(gear?.slots ?? {}).map(([k, v]) => `${k}:${v?.baseId}:${v?.affixes.length}`).join(",");
+    const shardSig = Object.entries(shards?.counts ?? {}).map(([k, n]) => `${k}:${n}`).join(",");
+    return `${s?.completedNodes.join(",") ?? ""}|${cells(inv)}|${cells(stash)}|${barSig}|${skills?.attackReseeded ? 1 : 0}` +
+      `|${p?.level},${p?.xp},${p?.gold}|${s?.passives?.join(",") ?? ""}|${shardSig}|${gearSig}`;
   }
 
   /**
