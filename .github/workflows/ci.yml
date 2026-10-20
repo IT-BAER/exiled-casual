@@ -1,8 +1,9 @@
 name: CI
+# Only a pushed release tag (tools/release.mjs, then git push --follow-tags) runs
+# CI; everyday pushes to main are checked locally. release.yml runs its own tests.
 on:
   push:
-    branches: [main]
-  pull_request:
+    tags: ["v*"]
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
