@@ -63,13 +63,15 @@ import { enforceMode, socketForKey } from "./controls";
 import { ControlsDialog } from "./menu/ControlsDialog";
 import { FpsGuard } from "./fps-guard";
 import type { FrameHook, Projector } from "./hud/LootLabels";
-import { brazierSpotsFor, type AreaLayout } from "@exiled/mapgen";
+import { brazierSpotsFor, fnv1a32, type AreaLayout } from "@exiled/mapgen";
 import { BIOMES, defaultAttackFor, mapBase } from "@exiled/content-runtime";
 import type { Snapshot, FromWorker, Intent, ToWorker, SpawnKind } from "@exiled/protocol";
 import { atlasGraph, atlasNodeTier, isNodeReachable, mapBaseIdForNode, DEFAULT_CLASS_ID } from "@exiled/rules";
 
+/** The lab and harness world, which has no character to seed from. */
 const LAB_SEED = 42;
-// ponytail: fixed seed for the lab; M3 will thread seed from game state
+/** A new character's Atlas, starting stones and vendor derive from its own id; a saved one restores its seed. */
+const worldSeed = (characterId: string): number => (characterId === "" ? LAB_SEED : fnv1a32(characterId));
 const MS_PER_TICK = 1000 / 30;
 
 export interface GameViewProps {
@@ -323,7 +325,7 @@ export function GameView({
     const bot = import.meta.env?.DEV === true && query.has("bot");
     // ?tour: bot mode's open Atlas and no saving, with the player at the controls.
     const tour = import.meta.env?.DEV === true && query.has("tour");
-    worker.postMessage({ type: "init", seed: LAB_SEED, characterId, bot, tour });
+    worker.postMessage({ type: "init", seed: worldSeed(characterId), characterId, bot, tour });
 
     let prevSnap: Snapshot | null = null;
     let curSnap: Snapshot | null = null;

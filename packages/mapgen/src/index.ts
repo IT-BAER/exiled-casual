@@ -17,5 +17,6 @@ export { FIELD_GRAMMAR } from "./field-grammar";
 export { SUNKEN_GRAMMAR } from "./sunken-grammar";
 export { generateCoast, COAST_CELLS } from "./coast";
 export { AREA_TILES } from "./skeleton";
+export { fnv1a32 } from "./rng";
 export { TILE_CELLS, type Chunk } from "./chunks";
 export { brazierSpots, brazierSpotsFor, shutsFloor, BRAZIER_RADIUS, CONTAINER_CLEAR, type BrazierSpot } from "./braziers";

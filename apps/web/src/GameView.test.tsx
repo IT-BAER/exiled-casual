@@ -5,6 +5,7 @@ import { testPlayer } from "./test-fixtures";
 import { DEFAULT_SETTINGS, MOVE_SOCKET, type Settings } from "./settings";
 import { defaultAttackFor } from "@exiled/content-runtime";
 import { DEFAULT_CLASS_ID, atlasGraph } from "@exiled/rules";
+import { fnv1a32 } from "@exiled/mapgen";
 import React from "react";
 import type { Snapshot } from "@exiled/protocol";
 
@@ -575,6 +576,26 @@ describe("GameView", () => {
     expect(screen.queryByTestId("inventory-panel")).toBeNull();
     expect(screen.queryByTestId("game-menu")).toBeNull();
     expect(screen.getByTestId("death-screen")).toBeTruthy();
+  });
+});
+
+/** A new character's Atlas, starting stones and vendor all derive from this seed. */
+describe("GameView world seed", () => {
+  const initSeed = () => (vi.mocked(hoisted.worker!.postMessage).mock.calls
+    .map(([m]) => m as { type: string; seed?: number })
+    .find((m) => m.type === "init"))?.seed;
+
+  it("gives each character his own seed, and the lab its fixed one", () => {
+    const a = render(<GameView characterId="hero" />);
+    const heroSeed = initSeed();
+    a.unmount();
+    const b = render(<GameView characterId="other" />);
+    const otherSeed = initSeed();
+    b.unmount();
+    render(<GameView />);
+    expect(heroSeed).toBe(fnv1a32("hero"));
+    expect(otherSeed).not.toBe(heroSeed);
+    expect(initSeed()).toBe(42);
   });
 });
 
