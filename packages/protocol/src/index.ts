@@ -552,7 +552,9 @@ export interface FromWorker_Ready    { type: "ready" }
 export interface FromWorker_Area     { type: "area"; area: AreaKind; layout: AreaLayout; mapBaseId: string }
 /** DEV only: the answer to a `dump` DevOp, every component on the player and the session. */
 export interface FromWorker_DevDump  { type: "devDump"; dump: unknown }
-export type FromWorker = FromWorker_Snapshot | FromWorker_Ready | FromWorker_Area | FromWorker_DevDump;
+/** The character's save was refused or could not be restored. No world runs and nothing is saved. */
+export interface FromWorker_LoadFailed { type: "loadFailed" }
+export type FromWorker = FromWorker_Snapshot | FromWorker_Ready | FromWorker_Area | FromWorker_DevDump | FromWorker_LoadFailed;
 
 // ---------------------------------------------------------------------------
 // Codecs

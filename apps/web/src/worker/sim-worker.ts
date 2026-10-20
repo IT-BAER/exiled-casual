@@ -20,7 +20,11 @@ self.onmessage = (e: MessageEvent) => {
     // `core` is assigned only once the saved run is in: the interval's `!core`
     // guard is what keeps a pre-hydration world (no skills, empty bar, a dead
     // left click) from ever reaching the renderer as snapshot 1.
-    void c.hydrate().then(() => {
+    void c.hydrate().then((loaded) => {
+      if (!loaded) {
+        self.postMessage({ type: "loadFailed" } satisfies FromWorker);
+        return;
+      }
       core = c;
       const area: FromWorker = { type: "area", area: c.getArea(), layout: c.getAreaLayout(), mapBaseId: c.getMapBaseId() };
       self.postMessage(area);

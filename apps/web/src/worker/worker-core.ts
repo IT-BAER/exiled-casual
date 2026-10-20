@@ -90,12 +90,19 @@ export class WorkerCore {
    * Restore any saved run before the first tick. loadInto abandons an in-flight
    * map back to the hideout, so the cached area stays "hideout" and no layout
    * rebuild is needed. Idempotent: re-hydrating never duplicates progress.
+   *
+   * False when the character's save was refused or threw while restoring. That
+   * world must never run: its first autosave would replace the real character.
    */
-  async hydrate(): Promise<void> {
+  async hydrate(): Promise<boolean> {
     if (this.characterId === "") await loadInto(this.kv, this.world);
-    else await loadCharacterInto(this.kv, this.world, this.characterId);
+    else if (!(await loadCharacterInto(this.kv, this.world, this.characterId).catch((e: unknown) => {
+      console.error("character save could not be restored", e);
+      return false;
+    }))) return false;
     if (this.botMode) this.openAtlasForBot();
     this.lastSig = this.durableSig();
+    return true;
   }
 
   /**

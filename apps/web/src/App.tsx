@@ -279,6 +279,10 @@ export function App(): React.ReactElement {
             settings={settings}
             onSettingsChange={changeSettings}
             onExit={() => setScreen({ kind: "select" })}
+            onLoadFailed={() => {
+              setError("This character's save could not be loaded. Nothing was changed.");
+              setScreen({ kind: "select" });
+            }}
           />
         </React.Suspense>
         {fade}

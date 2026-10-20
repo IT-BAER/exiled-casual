@@ -182,6 +182,30 @@ describe("WorkerCore", () => {
   // Level, xp, gold and the passive tree are in the save but were not in the
   // fingerprint, so a run that gained levels without moving an item came back
   // at level 1 after a reload.
+  describe("a save it cannot load", () => {
+    async function withState(state: unknown) {
+      const kv = new MemoryKv();
+      const record = { ...makeCharacterRecord({ name: "Harness", classId: "class.stalker" }, "c1", 0), state };
+      await saveRoster(kv, addCharacter(emptyRoster(), record, 1));
+      return kv;
+    }
+
+    it("reports a save of another persist version as not loaded", async () => {
+      const core = new WorkerCore(42, await withState({ version: 99, progress: { level: 5 } }), "c1");
+      expect(await core.hydrate()).toBe(false);
+    });
+
+    it("reports a save that throws while restoring as not loaded", async () => {
+      const core = new WorkerCore(42, await withState({ version: 2, progress: { level: 5 } }), "c1");
+      expect(await core.hydrate()).toBe(false);
+    });
+
+    it("reports a never-played character as loaded", async () => {
+      const core = new WorkerCore(42, await withState(null), "c1");
+      expect(await core.hydrate()).toBe(true);
+    });
+  });
+
   describe("progress alone survives a reload", () => {
     const CLASS = "class.stalker";
     const flush = () => new Promise((r) => setTimeout(r, 0));

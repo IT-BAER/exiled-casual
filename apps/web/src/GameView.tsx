@@ -83,6 +83,8 @@ export interface GameViewProps {
   characterId?: string;
   /** Leave the game and go back to character select. */
   onExit?: () => void;
+  /** The worker could not load this character's save; nothing ran and nothing was saved. */
+  onLoadFailed?: () => void;
   /** What the player has set. Defaulted so the lab and the tests can boot bare. */
   settings?: Settings;
   /** Report a change up; App is what applies sound and persists. */
@@ -94,6 +96,7 @@ export interface GameViewProps {
 export function GameView({
   characterId = "",
   onExit,
+  onLoadFailed,
   settings = DEFAULT_SETTINGS,
   onSettingsChange,
   fresh = false,
@@ -607,6 +610,9 @@ export function GameView({
         if (harness !== "done") harnessStep(msg.snapshot);
       } else if (msg.type === "devDump") {
         devDumpSink?.(msg.dump);
+      } else if (msg.type === "loadFailed") {
+        dlog("worker", "loadFailed");
+        onLoadFailed?.();
       } else if (msg.type === "ready") {
         dlog("worker", "ready");
       } else if (msg.type === "area") {
