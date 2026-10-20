@@ -530,7 +530,10 @@ export const InventoryPanel = React.memo(function InventoryPanel({
       const c = r.width / g.cols;
       const x = Math.round((px - r.left - (d.w * c) / 2) / c);
       const y = Math.round((py - r.top - (d.h * c) / 2) / c);
-      return { container: id, x, y, ok: fitsAt(g, d.item, d.w, d.h, x, y) };
+      // Dropped exactly on a pile of the same currency, the sim pours one into the other.
+      const pours = d.item.itemClass === "currency"
+        && g.items.some((p) => p !== d.item && p.x === x && p.y === y && p.baseId === d.item.baseId);
+      return { container: id, x, y, ok: pours || fitsAt(g, d.item, d.w, d.h, x, y) };
     }
     return null;
   };

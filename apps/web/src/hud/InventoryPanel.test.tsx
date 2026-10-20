@@ -320,6 +320,26 @@ describe("InventoryPanel", () => {
     expect(intents).toEqual([{ kind: "moveItem", x: 0, y: 0, toX: 3, toY: 6, to: "stash" }]);
   });
 
+  it("pours a currency pile onto the same currency in the stash rather than refusing the cell", () => {
+    const CELL = 43.008;
+    const intents: unknown[] = [];
+    const scroll = { w: 1, h: 1, rarity: "normal" as const, name: "Portal Scroll", itemClass: "currency", baseId: "currency.portal", lines: [] };
+    const pack = { cols: 12, rows: 5, items: [{ ...scroll, x: 0, y: 0, count: 2 }] };
+    const stash = { cols: 12, rows: 12, items: [{ ...scroll, x: 5, y: 5, count: 3 }] };
+    render(<InventoryPanel inventory={pack} stash={stash} onIntent={(i) => intents.push(i)} onClose={() => {}} />);
+
+    const [stashGrid, packGrid] = Array.from(document.querySelectorAll("[data-drop-grid]")) as HTMLElement[];
+    stashGrid!.getBoundingClientRect = () =>
+      ({ left: 0, top: 100, width: 12 * CELL, height: 12 * CELL, right: 12 * CELL, bottom: 100 + 12 * CELL }) as DOMRect;
+    packGrid!.getBoundingClientRect = () =>
+      ({ left: 1000, top: 500, width: 12 * CELL, height: 5 * CELL, right: 1000 + 12 * CELL, bottom: 500 + 5 * CELL }) as DOMRect;
+
+    press(screen.getByTestId("inventory-item-0"), 10, 10);
+    fireEvent(stashGrid!, new MouseEvent("pointermove", { bubbles: true, clientX: 5.5 * CELL, clientY: 100 + 5.5 * CELL }));
+    fireEvent.pointerUp(stashGrid!);
+    expect(intents).toEqual([{ kind: "moveItem", x: 0, y: 0, toX: 5, toY: 5, to: "stash" }]);
+  });
+
   it("does not drop an item on the floor when it is released over the stash panel", () => {
     const intents: unknown[] = [];
     const stash = { cols: 12, rows: 12, items: [] };
