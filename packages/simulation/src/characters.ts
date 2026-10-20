@@ -21,7 +21,7 @@ import { START_LEVEL, classIdOr } from "@exiled/rules";
 import type { Item } from "@exiled/content-schema";
 import type { World } from "./ecs";
 import type { EquipmentC, ProgressC, SessionC, SkillsC, StashC } from "./components";
-import { EMPTY_STASH, grantSkills, restore, reseedDefaultAttack, snapshot, type PersistedState } from "./persist";
+import { EMPTY_STASH, VERSION, grantSkills, restore, reseedDefaultAttack, snapshot, type PersistedState } from "./persist";
 import { recomputePlayerStats } from "./derived";
 import { openRoster } from "./roster-io";
 
@@ -49,7 +49,7 @@ function applyStash(world: World, stash: unknown): void {
 
 /**
  * Load one character into a freshly built world. Returns false if the roster has
- * no such character, which is the caller's cue to send the player back to select
+ * no such character or its save is another persist version, the caller's cue to send the player back to select
  * rather than drop them into a default game they did not ask for.
  */
 export async function loadCharacterInto(
@@ -66,6 +66,9 @@ export async function loadCharacterInto(
     // The row's class before the save's: restore drops another class's gems, and
     // a save written before the session carried a class would lose its own.
     const state = record.state as PersistedState;
+    // Another persist version is refused, as loadInto refuses it: restoring it
+    // would crash or, worse, autosave a half-read character over the real one.
+    if (state.version !== VERSION) return false;
     restore(world, { ...state, session: { ...state.session, classId: classIdOr(record.classId) } });
   }
   // The roster is the authority on what class this is, not the save: a character

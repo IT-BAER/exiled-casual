@@ -229,6 +229,13 @@ describe("loadCharacterInto / saveCharacterTo", () => {
     expect(await loadCharacterInto(await withOneCharacter(), fresh(), "nobody")).toBe(false);
   });
 
+  it("refuses a character whose save is another persist version, as the lab load does", async () => {
+    const kv = new MemoryKv();
+    const record = { ...makeCharacterRecord({ name: "Vess", classId: DEFAULT_CLASS_ID }, "vess", NOW), state: { version: 999, session: {} } };
+    await saveRoster(kv, addCharacter(emptyRoster(), record, 8));
+    expect(await loadCharacterInto(kv, fresh(), "vess")).toBe(false);
+  });
+
   // The bar is seeded off the roster's classId, never the "" fallback:
   // combat-sim's own initial world seed runs before the roster's classId is
   // known — so every class got the Stalker's Snap Shot in the right-click slot.
