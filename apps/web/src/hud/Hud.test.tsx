@@ -389,6 +389,27 @@ describe("Hud", () => {
     expect(screen.getByTestId("interact-label")).toHaveTextContent("Return to Hideout");
   });
 
+  /** PoE puts the name over the thing under the cursor, not in a fixed slot. */
+  it("floats the interact label over the hovered object once the scene can project", () => {
+    const frames: (() => void)[] = [];
+    const project = (x: number, y: number, h = 0) => ({ x: 100 + x * 10, y: 200 + y * 10 - h * 10, visible: true });
+    render(
+      <Hud
+        snapshot={makeSnap({ area: "map", entities: [{ id: 3, kind: "portal", x: 4, y: 7 }] })}
+        hoveredEntityId={3}
+        project={project}
+        afterFrame={(cb) => { frames.push(cb); return () => {}; }}
+      />,
+    );
+    act(() => { for (const f of frames) f(); });
+    const label = screen.getByTestId("interact-label");
+    const m = /translate\(([\d.-]+)px, ([\d.-]+)px\)/.exec(label.style.transform);
+    expect(m).not.toBeNull();
+    // Centred on the portal's own x, and lifted above its foot point (y 270).
+    expect(Number(m![1])).toBe(140);
+    expect(Number(m![2])).toBeLessThan(270);
+  });
+
   it("shows no interact label when hoveredEntityId is null", () => {
     render(
       <Hud
