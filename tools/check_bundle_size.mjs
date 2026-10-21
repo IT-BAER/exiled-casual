@@ -8,8 +8,13 @@ import { join } from "node:path";
 
 const DIST = "apps/web/dist/assets";
 
-/** kB gzip. `total` covers every emitted .js; `chunk` caps the single biggest one. */
-const BUDGET = { total: 2100, chunk: 900 };
+/**
+ * kB gzip. `total` covers every emitted .js; `chunk` caps the single biggest one.
+ * `chunk` went 900 -> 1250 with rolldown 1.2.14, which inlines the lazy Babylon chunks the
+ * menu stage loads anyway: measured on a preview, the warmed menu fetched 7377 kB raw JS in
+ * 204 files against 7495 kB in 521 before, and the total gzip fell 2081 -> 1942.
+ */
+const BUDGET = { total: 2100, chunk: 1250 };
 
 const files = readdirSync(DIST).filter((f) => f.endsWith(".js"));
 if (files.length === 0) {
