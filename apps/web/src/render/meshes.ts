@@ -1590,6 +1590,24 @@ export function makeMesh(
   species?: string,
   skillId?: string,
 ): Mesh {
+  const mesh = buildMesh(scene, kind, name, at, species, skillId);
+  // A look's own materials are named after it; shared ones (part-, glow-, mat-) are not.
+  // mesh.dispose() leaves materials in the scene, so without this each one outlived its entity.
+  const own = `${name}-`;
+  mesh.onDisposeObservable.addOnce(() => {
+    for (const m of scene.materials.filter((x) => x.name.startsWith(own))) m.dispose();
+  });
+  return mesh;
+}
+
+function buildMesh(
+  scene: Scene,
+  kind: MeshKind,
+  name: string,
+  at?: Vector3,
+  species?: string,
+  skillId?: string,
+): Mesh {
   // ponytail: each actor is assembled from ~10 primitive parts per instance
   // (shared materials, but geometry is not GPU-instanced). Fine for a lab-sized
   // fight; if a large imp swarm tanks FPS, build one template per kind and

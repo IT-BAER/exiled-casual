@@ -23,7 +23,7 @@ import { LIGHT_POOL } from "./lights";
 import { HAZE_HEIGHT, HAZE_MAX_SIZE, HAZE_NAME, MOTES_NAME, moteDrift, moteDriftBasis } from "./haze";
 import { BIOMES } from "@exiled/content-runtime";
 import { blowFrom, cancelTurnedAction, castSkillOf, reactionFor, SnapshotRenderer, syncActionAnimation, syncRollAnimation } from "./renderer";
-import { makeMesh, updateTelegraph, VENDOR_LOOKS } from "./meshes";
+import { makeMesh, updateTelegraph, VENDOR_LOOKS, warmEntityLooks } from "./meshes";
 import { hitSparkle } from "./hit-sparkle";
 import { ARROW_NAME, STRIKE_IMPACT } from "./skill-fx";
 import { fxPools } from "./fx-pool";
@@ -1120,6 +1120,60 @@ describe("makeMesh kinds", () => {
     const rim = mesh.getChildMeshes().find((m) => m.name === "telegraph-rim")!;
     const { minimum, maximum } = rim.getBoundingInfo().boundingBox;
     expect(maximum.y - minimum.y).toBeLessThanOrEqual(0.015);
+  });
+});
+
+describe("an entity's own materials go with it", () => {
+  // Measured live: 245 materials per hideout <-> map crossing, never released.
+  const everything = (base: number) => [
+    { id: base, kind: "groundItem" as const, x: 1, y: 0 },
+    { id: base + 1, kind: "portal" as const, x: 2, y: 0, yaw: 0 },
+    { id: base + 2, kind: "telegraph" as const, x: 3, y: 0, radius: 2, progress: 0 },
+    { id: base + 3, kind: "container" as const, x: 4, y: 0 },
+    { id: base + 4, kind: "stash" as const, x: 5, y: 0 },
+    { id: base + 5, kind: "mapDevice" as const, x: 6, y: 0 },
+    { id: base + 6, kind: "vendor" as const, x: 7, y: 0, inRange: false },
+    { id: base + 7, kind: "monster" as const, x: 8, y: 0, rare: true, element: "cold" as const, life: 10, maxLife: 10 },
+  ];
+
+  it("leaves nothing behind when the area changes", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const renderer = new SnapshotRenderer(scene);
+    const cross = (base: number, tick: number) => {
+      renderer.apply(null, makeSnapshot({ tick, area: "map", entities: everything(base) }), 1);
+      renderer.apply(null, makeSnapshot({ tick: tick + 1, area: "hideout", entities: [] }), 1);
+    };
+    cross(10, 1); // the first pass builds the shared looks every later one reuses
+    const materials = scene.materials.length;
+    cross(30, 3);
+    cross(50, 5);
+    expect(scene.materials.length).toBe(materials);
+  });
+
+  it("leaves nothing behind when a drop is picked up", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const renderer = new SnapshotRenderer(scene);
+    const drop = (id: number, tick: number) => {
+      renderer.apply(null, makeSnapshot({ tick, entities: [{ id, kind: "groundItem", x: 1, y: 0 }] }), 1);
+      renderer.apply(null, makeSnapshot({ tick: tick + 1, entities: [] }), 1);
+    };
+    drop(10, 1);
+    const materials = scene.materials.length;
+    drop(11, 3);
+    drop(12, 5);
+    expect(scene.materials.length).toBe(materials);
+  });
+
+  it("releases the warm-up looks with their materials", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    warmEntityLooks(scene)();
+    const materials = scene.materials.length;
+    warmEntityLooks(scene)();
+    warmEntityLooks(scene)();
+    expect(scene.materials.length).toBe(materials);
   });
 });
 

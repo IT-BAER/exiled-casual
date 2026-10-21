@@ -173,5 +173,9 @@ export function attachProp(
       if (mesh.material) materials[mesh.material.name] = mesh.material;
     }
   }
+  // A copy's materials and their textures are clones of its own, so they go with it.
+  if (!shared) root.onDisposeObservable.addOnce(() => {
+    for (const m of Object.values(materials)) m.dispose(false, true);
+  });
   return materials;
 }

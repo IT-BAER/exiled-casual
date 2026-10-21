@@ -113,7 +113,7 @@ describe("props asset", () => {
  */
 describe("attachProp replication", () => {
   const scene = {} as Scene;
-  const root = {} as Mesh;
+  const root = { onDisposeObservable: { addOnce: () => {} } } as unknown as Mesh;
 
   beforeEach(async () => {
     resetProps();
