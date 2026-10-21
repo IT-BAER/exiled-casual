@@ -69,6 +69,14 @@ export const BAR_H = `${(ORB_VW * 0.72).toFixed(2)}vw`;
  */
 export const ORB_RISE =
   `calc(${ORB_BOTTOM} + ${(ORB_VW + RING_VW).toFixed(2)}vw - ${(ORB_VW * 0.72).toFixed(2)}vw)`;
+const READOUT_LIFT_VW = ORB_VW * 0.04;
+const READOUT_FONT = `clamp(11px, ${(ORB_VW * 0.066).toFixed(2)}vw, 18px)`;
+/**
+ * How far the globe's `Life 140/140` readout reaches above the pane foot: ORB_RISE,
+ * the readout's lift off the ring, and its line with a little air. A pane's
+ * scrolling rows stop under this, or they pass behind the numbers.
+ */
+export const READOUT_RISE = `calc(${ORB_RISE} + ${READOUT_LIFT_VW.toFixed(2)}vw + 1.6 * ${READOUT_FONT})`;
 // PoE1's left panel stands a step shorter than the right one, 162px against 190px on the
 // same crop, but that step leaves a strip of bare world between the flask frame and the
 // foot of the stash pane, which stops on BAR_H the way the inventory does. The panes'
@@ -765,7 +773,7 @@ function Orb(props: {
           // The label sits just off the ring rather than floating clear of it.
           // PoE1's own bar (poe1-lower-bar.png) leaves about 0.26 of a globe
           // diameter of air there, which reads as detached at this scale.
-          bottom: `${(ORB_VW + RING_VW + ORB_VW * 0.04).toFixed(2)}vw`,
+          bottom: `${(ORB_VW + RING_VW + READOUT_LIFT_VW).toFixed(2)}vw`,
           left: `${(-RING_VW).toFixed(3)}vw`,
           right: `${(-RING_VW).toFixed(3)}vw`,
           display: "flex",
@@ -775,7 +783,7 @@ function Orb(props: {
           // Two thirds of what it was: at the old size the pair of readouts was
           // the largest type on the screen, over the one gauge that is already
           // legible as a shape from the corner of the eye.
-          fontSize: `clamp(11px, ${(ORB_VW * 0.066).toFixed(2)}vw, 18px)`,
+          fontSize: READOUT_FONT,
           letterSpacing: 0.5,
           whiteSpace: "nowrap",
           textShadow: "0 1px 4px #000",

@@ -3,7 +3,7 @@ import type { Snapshot } from "@exiled/protocol";
 import { RES_CAP, ES_RECHARGE_PCT_PER_SEC, ES_RECHARGE_DELAY_TICKS } from "@exiled/rules";
 import { SERIF, PARCHMENT, PANE, PaneHeader } from "./InventoryPanel";
 import { PANEL_PAD, CELL_VW } from "./layout";
-import { ORB_RISE } from "./Hud";
+import { READOUT_RISE } from "./Hud";
 import { ElementIcon } from "./ElementIcon";
 
 // PoE2's character sheet (C), matched to reference-screenshots/character-stats.png.
@@ -203,134 +203,136 @@ export function CharacterPanel({ player, onClose }: { player: Snapshot["player"]
       <div
         data-testid="character-panel"
         data-hud-panel=""
-        style={{ ...PANE, padding: PANEL_PAD, overflowY: "auto", scrollbarWidth: "none" }}
+        style={{ ...PANE, padding: PANEL_PAD, overflowY: "hidden" }}
       >
         {/* A default scrollbar cutting down the stone has no counterpart in the
             reference, and this is a pseudo-element, so it cannot be an inline style. */}
-        <style>{`[data-testid="character-panel"]::-webkit-scrollbar{display:none}`}</style>
+        <style>{`[data-testid="char-scroll"]::-webkit-scrollbar{display:none}`}</style>
 
         <PaneHeader title="Character" bleed={PANEL_PAD} onClose={onClose} testId="character-close" />
 
-        {/* The reference's identity row, minus the portrait, the class and the league:
-            "Level 80 Invoker" over a stone plate. There is one class and one league,
-            so only the number carries information. */}
+        {/* The life globe and its readout are meant to overlap the pane's lower
+            corner, not rows the player has to read: on a short window the rows
+            scroll inside this body, which stops READOUT_RISE above the foot. */}
         <div
-          data-testid="char-level"
-          style={{
-            display: "flex", alignItems: "baseline", justifyContent: "center", gap: 8,
-            marginBottom: 8, padding: "5px 0",
-            background: "linear-gradient(180deg,rgba(38,31,20,0.9),rgba(10,8,6,0.9))",
-            border: "1px solid #3a2f1b",
-            boxShadow: "inset 0 1px 0 rgba(200,164,77,0.12)",
-          }}
+          data-testid="char-scroll"
+          style={{ flex: 1, minHeight: 0, overflowY: "auto", scrollbarWidth: "none", marginBottom: `calc(${READOUT_RISE} - ${PANEL_PAD})` }}
         >
-          <span style={{ color: "#d8b866", fontSize: 11, letterSpacing: 1.8, textTransform: "uppercase" }}>Level</span>
-          <span style={{ color: "#fff", fontSize: 19, textShadow: "0 1px 4px #000" }}>{player.level}</span>
-        </div>
+          {/* The reference's identity row, minus the portrait, the class and the league:
+              "Level 80 Invoker" over a stone plate. There is one class and one league,
+              so only the number carries information. */}
+          <div
+            data-testid="char-level"
+            style={{
+              display: "flex", alignItems: "baseline", justifyContent: "center", gap: 8,
+              marginBottom: 8, padding: "5px 0",
+              background: "linear-gradient(180deg,rgba(38,31,20,0.9),rgba(10,8,6,0.9))",
+              border: "1px solid #3a2f1b",
+              boxShadow: "inset 0 1px 0 rgba(200,164,77,0.12)",
+            }}
+          >
+            <span style={{ color: "#d8b866", fontSize: 11, letterSpacing: 1.8, textTransform: "uppercase" }}>Level</span>
+            <span style={{ color: "#fff", fontSize: 19, textShadow: "0 1px 4px #000" }}>{player.level}</span>
+          </div>
 
-        {/* Niches in a band abut, so their pilasters read as one carved plate rather
-            than floating tiles, and the band spans the pane the way every band in
-            character-stats.png does. The reference splits pools from defences over
-            two bands because it has eight stats; with three or four, a second band
-            would be one tile stretched across the whole pane. Energy shield only
-            appears once gear grants a pool — a row frozen at zero would advertise a
-            mechanic that is switched off, which is not what a character with no ES
-            gear has — so the band is three tiles wide or four. */}
-        <div style={{ display: "flex" }}>
-          <Niche id="life" label="Life" value={String(Math.round(player.maxLife))} icon={<Icon of="life" size={glyph} />} w={nicheW} />
-          {hasES && (
-            <Niche
-              id="energy-shield"
-              label="Energy Shield"
-              value={String(Math.round(player.maxEnergyShield))}
-              icon={<ShieldGlyph size={glyph} />}
-              w={nicheW}
-            />
-          )}
-          <Niche id="mana" label="Mana" value={String(Math.round(player.maxMana))} icon={<Icon of="mana" size={glyph} />} w={nicheW} />
-          <Niche id="armour" label="Armour" value={`${s.armourPct}%`} icon={<Icon of="armour" size={glyph} />} w={nicheW} />
-        </div>
+          {/* Niches in a band abut, so their pilasters read as one carved plate rather
+              than floating tiles, and the band spans the pane the way every band in
+              character-stats.png does. The reference splits pools from defences over
+              two bands because it has eight stats; with three or four, a second band
+              would be one tile stretched across the whole pane. Energy shield only
+              appears once gear grants a pool — a row frozen at zero would advertise a
+              mechanic that is switched off, which is not what a character with no ES
+              gear has — so the band is three tiles wide or four. */}
+          <div style={{ display: "flex" }}>
+            <Niche id="life" label="Life" value={String(Math.round(player.maxLife))} icon={<Icon of="life" size={glyph} />} w={nicheW} />
+            {hasES && (
+              <Niche
+                id="energy-shield"
+                label="Energy Shield"
+                value={String(Math.round(player.maxEnergyShield))}
+                icon={<ShieldGlyph size={glyph} />}
+                w={nicheW}
+              />
+            )}
+            <Niche id="mana" label="Mana" value={String(Math.round(player.maxMana))} icon={<Icon of="mana" size={glyph} />} w={nicheW} />
+            <Niche id="armour" label="Armour" value={`${s.armourPct}%`} icon={<Icon of="armour" size={glyph} />} w={nicheW} />
+          </div>
 
-        <BandLabel>Resistances</BandLabel>
-        {/* 2x2, fire/cold over lightning/chaos — the reference's arrangement
-            (reference-screenshots/character-stats.png). */}
-        {/* One column once a pill (Lightning, 172px) no longer fits in half the pane. */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(max(180px, calc(50% - 3px)), 1fr))", gap: 6 }}>
-          <ResPill id="fire" label="Fire" pct={s.res.fire} icon={<ElementIcon of="fire" />} />
-          <ResPill id="cold" label="Cold" pct={s.res.cold} icon={<ElementIcon of="cold" />} />
-          <ResPill id="lightning" label="Lightning" pct={s.res.lightning} icon={<ElementIcon of="lightning" />} />
-          <ResPill id="chaos" label="Chaos" pct={s.res.chaos} icon={<ElementIcon of="chaos" />} />
-        </div>
+          <BandLabel>Resistances</BandLabel>
+          {/* 2x2, fire/cold over lightning/chaos — the reference's arrangement
+              (reference-screenshots/character-stats.png). */}
+          {/* One column once a pill (Lightning, 172px) no longer fits in half the pane. */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(max(180px, calc(50% - 3px)), 1fr))", gap: 6 }}>
+            <ResPill id="fire" label="Fire" pct={s.res.fire} icon={<ElementIcon of="fire" />} />
+            <ResPill id="cold" label="Cold" pct={s.res.cold} icon={<ElementIcon of="cold" />} />
+            <ResPill id="lightning" label="Lightning" pct={s.res.lightning} icon={<ElementIcon of="lightning" />} />
+            <ResPill id="chaos" label="Chaos" pct={s.res.chaos} icon={<ElementIcon of="chaos" />} />
+          </div>
 
-        {/* The reference drops the stone for a flat dark list at the bottom. The
-            life globe is meant to overlap the pane's lower corner, but not to sit
-            on rows the player has to read, so the list ends ORB_RISE above the
-            foot the way the inventory's own content does. */}
-        <div
-          data-testid="char-detail"
-          style={{
-            // The reserve for the globe is margin, not padding: inside the border it
-            // reads as an unfinished box, outside it is the bare pane foot the stash
-            // already ends on.
-            marginTop: 16, marginBottom: ORB_RISE, padding: "12px 12px 2px",
-            background: "rgba(4,3,2,0.82)", border: "1px solid #1e1810",
-            // Two columns because the pane is the stash's width now: in one column
-            // the list is half again taller than the pane, so it scrolled, and the
-            // rows passing the lower-left corner went behind the life globe.
-            columnCount: 2, columnGap: 18,
-          }}
-        >
-          <DetailSection title="Life" rows={[["Maximum Life", String(Math.round(player.maxLife))]]} />
-          {player.maxEnergyShield > 0 && (
+          {/* The reference drops the stone for a flat dark list at the bottom. */}
+          <div
+            data-testid="char-detail"
+            style={{
+              marginTop: 16, padding: "12px 12px 2px",
+              background: "rgba(4,3,2,0.82)", border: "1px solid #1e1810",
+              // Two columns because the pane is the stash's width now: in one column
+              // the list is half again taller than the pane, so it scrolled, and the
+              // rows passing the lower-left corner went behind the life globe.
+              columnCount: 2, columnGap: 18,
+            }}
+          >
+            <DetailSection title="Life" rows={[["Maximum Life", String(Math.round(player.maxLife))]]} />
+            {player.maxEnergyShield > 0 && (
+              <DetailSection
+                title="Energy Shield"
+                rows={[
+                  ["Maximum Energy Shield", String(Math.round(player.maxEnergyShield))],
+                  ["Recharge Rate per second", (player.maxEnergyShield * ES_RECHARGE_PCT_PER_SEC / 1000).toFixed(1)],
+                  ["Recharge Delay", `${(ES_RECHARGE_DELAY_TICKS / 30).toFixed(1)}s`],
+                ]}
+              />
+            )}
             <DetailSection
-              title="Energy Shield"
+              title="Mana"
               rows={[
-                ["Maximum Energy Shield", String(Math.round(player.maxEnergyShield))],
-                ["Recharge Rate per second", (player.maxEnergyShield * ES_RECHARGE_PCT_PER_SEC / 1000).toFixed(1)],
-                ["Recharge Delay", `${(ES_RECHARGE_DELAY_TICKS / 30).toFixed(1)}s`],
+                ["Maximum Mana", String(Math.round(player.maxMana))],
+                ["Mana Regeneration per second", s.manaRegenPerSec.toFixed(1)],
               ]}
             />
-          )}
-          <DetailSection
-            title="Mana"
-            rows={[
-              ["Maximum Mana", String(Math.round(player.maxMana))],
-              ["Mana Regeneration per second", s.manaRegenPerSec.toFixed(1)],
-            ]}
-          />
-          <DetailSection
-            title="Defence"
-            rows={[
-              ["Armour", String(Math.round(s.armour))],
-              ["Physical Damage Reduction", `${s.armourPct}%`],
-              ["Fire Resistance", resRow(s.res.fire)],
-              ["Cold Resistance", resRow(s.res.cold)],
-              ["Lightning Resistance", resRow(s.res.lightning)],
-              ["Chaos Resistance", resRow(s.res.chaos)],
-            ]}
-          />
-          {s.attack && (
             <DetailSection
-              title="Main Hand"
+              title="Defence"
               rows={[
-                ["Weapon Physical Damage", `${s.attack.physMin}-${s.attack.physMax}`],
-                ...(s.attack.fire > 0 ? [["Weapon Fire Damage", String(s.attack.fire)] as [string, string]] : []),
-                ...(s.attack.cold > 0 ? [["Weapon Cold Damage", String(s.attack.cold)] as [string, string]] : []),
-                ["Attacks per Second", s.attack.aps.toFixed(2)],
-                ["Weapon Critical Strike Chance", `${s.attack.critPct.toFixed(2)}%`],
+                ["Armour", String(Math.round(s.armour))],
+                ["Physical Damage Reduction", `${s.armourPct}%`],
+                ["Fire Resistance", resRow(s.res.fire)],
+                ["Cold Resistance", resRow(s.res.cold)],
+                ["Lightning Resistance", resRow(s.res.lightning)],
+                ["Chaos Resistance", resRow(s.res.chaos)],
               ]}
             />
-          )}
-          <DetailSection
-            title="Offence"
-            rows={[
-              ["Increased Damage", `${s.spellDamagePct}%`],
-              ["Increased Cast Speed", `${s.castSpeedPct}%`],
-              ["Increased Critical Strike Chance", `${s.critChancePct}%`],
-              ...(s.spellAdded && s.spellAdded.fire > 0 ? [["Fire Damage added to Spells", String(s.spellAdded.fire)] as [string, string]] : []),
-              ...(s.spellAdded && s.spellAdded.cold > 0 ? [["Cold Damage added to Spells", String(s.spellAdded.cold)] as [string, string]] : []),
-            ]}
-          />
+            {s.attack && (
+              <DetailSection
+                title="Main Hand"
+                rows={[
+                  ["Weapon Physical Damage", `${s.attack.physMin}-${s.attack.physMax}`],
+                  ...(s.attack.fire > 0 ? [["Weapon Fire Damage", String(s.attack.fire)] as [string, string]] : []),
+                  ...(s.attack.cold > 0 ? [["Weapon Cold Damage", String(s.attack.cold)] as [string, string]] : []),
+                  ["Attacks per Second", s.attack.aps.toFixed(2)],
+                  ["Weapon Critical Strike Chance", `${s.attack.critPct.toFixed(2)}%`],
+                ]}
+              />
+            )}
+            <DetailSection
+              title="Offence"
+              rows={[
+                ["Increased Damage", `${s.spellDamagePct}%`],
+                ["Increased Cast Speed", `${s.castSpeedPct}%`],
+                ["Increased Critical Strike Chance", `${s.critChancePct}%`],
+                ...(s.spellAdded && s.spellAdded.fire > 0 ? [["Fire Damage added to Spells", String(s.spellAdded.fire)] as [string, string]] : []),
+                ...(s.spellAdded && s.spellAdded.cold > 0 ? [["Cold Damage added to Spells", String(s.spellAdded.cold)] as [string, string]] : []),
+              ]}
+            />
+          </div>
         </div>
       </div>
     </div>

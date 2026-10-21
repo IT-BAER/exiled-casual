@@ -90,6 +90,18 @@ describe("CharacterPanel", () => {
     expect(screen.getByTestId("char-detail").textContent).not.toContain("added to Spells");
   });
 
+  it("scrolls its rows in a body that stops under the life readout, never behind it", () => {
+    render(<CharacterPanel player={player()} onClose={() => {}} />);
+    const pane = screen.getByTestId("character-panel");
+    const body = screen.getByTestId("char-scroll");
+    expect(pane.style.overflowY).toBe("hidden");
+    expect(pane.contains(screen.getByTestId("char-detail"))).toBe(true);
+    expect(body.contains(screen.getByTestId("char-detail"))).toBe(true);
+    expect(body.style.overflowY).toBe("auto");
+    expect(body.style.marginBottom).toContain("calc(");
+    expect(body.style.marginBottom).toContain("clamp(");
+  });
+
   it("closes on the X", () => {
     let closed = false;
     render(<CharacterPanel player={player()} onClose={() => { closed = true; }} />);
