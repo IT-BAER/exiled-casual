@@ -320,16 +320,16 @@ describe("a monster's hit leaves its ailment on the player", () => {
     return { poison: w.get<AilmentC>(p, "poison"), bleeding: w.get<AilmentC>(p, "bleeding"), sim };
   }
 
-  it("a certain chance poisons for 5 s at 50% of the hit before mitigation", () => {
+  it("a certain chance poisons for 2 s at 50% of the hit before mitigation", () => {
     const r = hits("m.poisoner", [{ amount: fp(10), type: 4 }], (w, p) =>
       w.set<DefensesC>(p, "defenses", { res: resBlock({ chaos: 75 }), armour: 0 }));
-    expect(r.poison).toEqual({ kind: "poison", stacks: 1, dps: fp(5), expiryTick: 150 });
+    expect(r.poison).toEqual({ kind: "poison", stacks: 1, dps: fp(5), expiryTick: 60 });
     expect(r.bleeding).toBeUndefined();
   });
 
-  it("a certain chance bleeds for 7 s at 60% of a physical hit", () => {
+  it("a certain chance bleeds for 5 s at 40% of a physical hit", () => {
     const r = hits("m.bleeder", [{ amount: fp(10), type: 1 }]);
-    expect(r.bleeding).toEqual({ kind: "bleeding", stacks: 1, dps: fp(6), expiryTick: 210 });
+    expect(r.bleeding).toEqual({ kind: "bleeding", stacks: 1, dps: fp(4), expiryTick: 150 });
   });
 
   it("a species without onHit leaves nothing", () => {
@@ -379,11 +379,11 @@ describe("a monster's hit leaves its ailment on the player", () => {
 
   it("a weaker hit never replaces a stronger poison; an equal or stronger one refreshes it", () => {
     const weaker = hits("m.poisoner", [{ tick: 0, amount: fp(20), type: 4 }, { tick: 10, amount: fp(10), type: 4 }]);
-    expect(weaker.poison).toEqual({ kind: "poison", stacks: 1, dps: fp(10), expiryTick: 150 });
+    expect(weaker.poison).toEqual({ kind: "poison", stacks: 1, dps: fp(10), expiryTick: 60 });
     const equal = hits("m.poisoner", [{ tick: 0, amount: fp(20), type: 4 }, { tick: 10, amount: fp(20), type: 4 }]);
-    expect(equal.poison).toEqual({ kind: "poison", stacks: 1, dps: fp(10), expiryTick: 160 });
+    expect(equal.poison).toEqual({ kind: "poison", stacks: 1, dps: fp(10), expiryTick: 70 });
     const stronger = hits("m.poisoner", [{ tick: 0, amount: fp(10), type: 4 }, { tick: 10, amount: fp(30), type: 4 }]);
-    expect(stronger.poison).toEqual({ kind: "poison", stacks: 1, dps: fp(15), expiryTick: 160 });
+    expect(stronger.poison).toEqual({ kind: "poison", stacks: 1, dps: fp(15), expiryTick: 70 });
   });
 
   it("the death recap names each DoT tick by its own ailment", () => {

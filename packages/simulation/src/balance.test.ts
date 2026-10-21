@@ -575,11 +575,11 @@ describe("archetype time-to-kill (Tier 1, reference character)", () => {
   }
 });
 
-it("poison and bleeding deal 12-28% of what kills a stationary character, in every biome", () => {
-  // A debuff on the bar and on the body that deals 3% of the damage is noise.
-  // Averaged over seeds, because one heavy's slam rolling poison or not swings a
-  // single run by 20 points. Measured: vaal_stone 17%, desert 19, swamp 15,
-  // forest 23, coast 16 (poison 50%/s for 5s, bleed 60%/s for 7s).
+it("poison and bleeding deal 4-15% of what kills a stationary character, in every biome", () => {
+  // A debuff on the bar and on the body that deals 3% of the damage is noise; one
+  // that does a third of it was the owner's "too aggressive". Averaged over seeds,
+  // because one heavy's slam rolling poison or not swings a single run by 20 points.
+  // Measured: vaal_stone 11%, desert 8, swamp 7, forest 12, coast 5.
   for (const biome of ["vaal_stone", "desert", "swamp", "forest", "coast"] as const) {
     let dot = 0;
     let all = 0;
@@ -598,12 +598,36 @@ it("poison and bleeding deal 12-28% of what kills a stationary character, in eve
       ticksToDeath({ sim, world, player: playerEntity });
     }
     const pct = (100 * dot) / all;
-    expect(pct, biome).toBeGreaterThanOrEqual(12);
-    expect(pct, biome).toBeLessThanOrEqual(28);
+    expect(pct, biome).toBeGreaterThanOrEqual(4);
+    expect(pct, biome).toBeLessThanOrEqual(15);
   }
 });
 
-it("every full biome pack needs 13-20s to kill a stationary reference character", () => {
+it("a full biome pack keeps a stationary character poisoned or bleeding for at most 60% of the fight", () => {
+  // An ailment is an event, not a state: with every swarm rolling on its chip hits the
+  // player wore one for 77-97% of every fight. Measured: vaal_stone 31%, desert 47,
+  // swamp 24, forest 55, coast 10.
+  for (const biome of ["vaal_stone", "desert", "swamp", "forest", "coast"] as const) {
+    let ailing = 0;
+    let alive = 0;
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+      const { sim, world, playerEntity } = createCombatSim(seed, { monsters: false });
+      spawnBiomePack(world, biome);
+      const life = () => world.get<Health>(playerEntity, "health")!.life;
+      let prev = life();
+      for (let t = 1; t <= 120 * HZ; t++) {
+        sim.step([]);
+        if (life() > prev) break;
+        prev = life();
+        alive++;
+        if (world.has(playerEntity, "poison") || world.has(playerEntity, "bleeding")) ailing++;
+      }
+    }
+    expect((100 * ailing) / alive, biome).toBeLessThanOrEqual(60);
+  }
+});
+
+it("every full biome pack needs 13-21s to kill a stationary reference character", () => {
   // One socket of each species in the pool, no dodge. Measured after the second
   // casual pass (hits ~x0.55): vaal_stone 16.5s, desert 14.5, swamp 13.8, forest
   // 18.0, coast 13.8; before it, 7.8s on the first map. Under 13 is a level-1
@@ -613,10 +637,11 @@ it("every full biome pack needs 13-20s to kill a stationary reference character"
   // and the Behemoth's slam at 6: both packs' edge sockets now wake with them.
   // A pack that queues behind the ring instead of standing in him measured
   // vaal_stone 18.8 (husk hit 0.6), desert 18.5 (skitterer body 0.42), swamp
-  // 17.3, forest 19.6, coast 17.3.
+  // 17.3, forest 19.6, coast 17.3. Swarms without ailments and PoE2's ailment
+  // durations: vaal_stone 16.5, desert 16.5, swamp 15.3, forest 20.1, coast 17.3.
   for (const biome of ["vaal_stone", "desert", "swamp", "forest", "coast"] as const) {
     const seconds = secondsToKillIdlePlayer(biome);
     expect(seconds, biome).toBeGreaterThanOrEqual(13);
-    expect(seconds, biome).toBeLessThanOrEqual(20);
+    expect(seconds, biome).toBeLessThanOrEqual(21);
   }
 });
