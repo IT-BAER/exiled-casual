@@ -302,8 +302,11 @@ export interface ProjectileC {
    *  which is every projectile in the game below gem 5. */
   pierceLeft?: number;
   /** Entities already struck, so a bolt still overlapping a body it pierced does
-   *  not hit it again every tick. Only ever set on a piercing bolt. */
+   *  not hit it again every tick. Set on a piercing bolt, and on a volley's arrows. */
   hitIds?: number[];
+  /** Tick of the cast that loosed several at once. With ownerId it names the
+   *  siblings: one of them strikes each body and the rest pass through (PoE's shotgun rule). */
+  volley?: number;
   /** Which skill spawned this, so the client can pick its look. Absent on a
    *  monster's own projectile, which has no skill behind it. */
   skillId?: string;

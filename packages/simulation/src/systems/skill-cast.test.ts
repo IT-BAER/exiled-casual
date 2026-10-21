@@ -3,6 +3,7 @@ import { fp } from "@exiled/fixed-point";
 import { Simulation } from "../loop";
 import { registerSkillCast } from "./skill-cast";
 import { registerPlayerMovement } from "./player-movement";
+import { registerProjectileMove } from "./projectile";
 import { createCombatSim } from "../combat-sim";
 import { gridCollision } from "../collision";
 import { makeGrid } from "../test-grid";
@@ -296,6 +297,28 @@ describe("registerSkillCast", () => {
     // 400 per tick rotated 15 degrees: cos 0.9659, sin 0.2588.
     expect(dirs[0]).toEqual([386, -103]);
     expect(dirs[2]).toEqual([386, 103]);
+  });
+
+  it("lets one arrow of a fan strike a body, however many of them reach it", () => {
+    const fan: SkillDef = {
+      ...EMBER_BOLT,
+      id: "skill.test_fan.v1",
+      effects: [{ ...EMBER_BOLT.effects[0]!, count: 5, spreadDegrees: 40 } as SkillDef["effects"][0]],
+    };
+    const sim = new Simulation();
+    registerSkillCast(sim, new Map([[fan.id, fan]]));
+    registerProjectileMove(sim);
+    const caster = makeCaster(sim);
+    // A boss-wide body a step away: every arrow of the fan reaches it.
+    const big = makeEnemyForCastTest(sim, fp(2), 0);
+    sim.world.set<PlayerC>(big, "player", { moveSpeed: 0, bodyRadius: fp(1.5) });
+    sim.step([{ tick: 0, entity: caster, type: "useSkill", skillId: fan.id, data: { tx: fp(10), ty: 0 } }]);
+    let hits = 0;
+    for (let i = 0; i < 20; i++) {
+      hits += sim.damageQueue.filter((d) => d.target === big).length;
+      sim.step();
+    }
+    expect(hits).toBe(1);
   });
 
   it("scales a spell's hit by the caster's increased spell damage", () => {

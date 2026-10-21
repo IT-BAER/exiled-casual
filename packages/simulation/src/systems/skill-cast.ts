@@ -104,6 +104,7 @@ export function registerSkillCast(
             ownerId: caster,
             team: casterTeam,
             ...(effect.pierceCount ? { pierceLeft: effect.pierceCount, hitIds: [] } : {}),
+            ...(n > 1 ? { volley: tick } : {}),
             skillId: skill.id,
             ...(extra.length > 0 ? { extraDamage: extra } : {}),
           });

@@ -56,6 +56,13 @@ export function registerProjectileMove(sim: Simulation, collisionRef?: Collision
           for (const x of proj.extraDamage ?? []) {
             sim.enqueueDamage({ target: m, source: proj.ownerId, amountFixed: x.amount, type: x.type, via: "projectile" });
           }
+          if (proj.volley !== undefined) {
+            for (const s of world.query("projectile")) {
+              const sp = world.get<ProjectileC>(s, "projectile")!;
+              if (s === e || sp.volley !== proj.volley || sp.ownerId !== proj.ownerId) continue;
+              world.set<ProjectileC>(s, "projectile", { ...sp, hitIds: [...(sp.hitIds ?? []), m] });
+            }
+          }
           if (pierceLeft > 0) {
             pierceLeft--;
             hitIds = [...(hitIds ?? []), m];
