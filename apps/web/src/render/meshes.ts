@@ -397,7 +397,9 @@ function buildTelegraph(scene: Scene, root: Mesh): void {
   rimMat.diffuseColor = new Color3(0, 0, 0);
   rimMat.emissiveColor = new Color3(0.55, 0.16, 0.03);
   rimMat.specularColor = new Color3(0, 0, 0);
-  rimMat.alpha = 0.7;
+  rimMat.alpha = 0.5;
+  // Additive: a dark red blended over the floor drew a near-black outline.
+  rimMat.alphaMode = 1; // ALPHA_ADD
 
   // diameter=2 → radius=1; renderer scales x/z to match entity.radius
   const fill = MeshBuilder.CreateCylinder("telegraph-fill", { diameter: 2, height: 0.02, tessellation: 32 }, scene);
@@ -406,7 +408,7 @@ function buildTelegraph(scene: Scene, root: Mesh): void {
   fill.receiveShadows = false;
 
   // The tube scales with the radius, so a 3.5-unit slam at 0.06 drew a 0.2-unit band.
-  const rim = MeshBuilder.CreateTorus("telegraph-rim", { diameter: 2, thickness: 0.025, tessellation: 48 }, scene);
+  const rim = MeshBuilder.CreateTorus("telegraph-rim", { diameter: 2, thickness: 0.012, tessellation: 48 }, scene);
   rim.parent = root;
   rim.material = rimMat;
   rim.receiveShadows = false;
@@ -431,7 +433,7 @@ export function updateTelegraph(root: Mesh, progress: number): void {
   // impact, so the flash reads as "now" instead of a slow fade to white.
   const flash = Math.max(0, (progress - 0.85) / 0.15);
   parts.rim.emissiveColor.set(0.55 + flash * 0.45, 0.16 + flash * 0.76, 0.03 + flash * 0.73);
-  parts.rim.alpha = 0.7 + flash * 0.3;
+  parts.rim.alpha = 0.5 + flash * 0.5;
 }
 
 /**

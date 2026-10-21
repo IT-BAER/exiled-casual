@@ -4,6 +4,7 @@ import {
   Animation,
   AnimationGroup,
   Camera,
+  Constants,
   ImageProcessingConfiguration,
   Matrix,
   MeshBuilder,
@@ -1105,6 +1106,20 @@ describe("makeMesh kinds", () => {
     expect(Math.max(parts.rim.emissiveColor.r, parts.rim.emissiveColor.g)).toBeLessThanOrEqual(0.6);
     updateTelegraph(mesh, 1);
     expect(parts.rim.emissiveColor.r).toBeGreaterThanOrEqual(0.95);
+  });
+
+  // Blended normally, a dark-red rim darkened the ground under it: measured on
+  // the Wrackline's sand the ring fell to L 14-34 against a fill of L 45-63, a
+  // near-black outline round every boss slam (owner-reported on Mother Vhal).
+  it("only ever lightens the ground at the rim, on a thin line", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const mesh = makeMesh(scene, "telegraph", "tel-add");
+    const parts = mesh.metadata as { rim: StandardMaterial };
+    expect(parts.rim.alphaMode).toBe(Constants.ALPHA_ADD);
+    const rim = mesh.getChildMeshes().find((m) => m.name === "telegraph-rim")!;
+    const { minimum, maximum } = rim.getBoundingInfo().boundingBox;
+    expect(maximum.y - minimum.y).toBeLessThanOrEqual(0.015);
   });
 });
 
