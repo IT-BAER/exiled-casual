@@ -4,6 +4,7 @@ import { render, screen, fireEvent, cleanup, within } from "@testing-library/rea
 import { playSoundPreview } from "../audio/bus";
 import { OptionsPanel } from "./OptionsPanel";
 import { DEFAULT_SETTINGS, GRAPHICS_PRESETS, presetOf, type Settings } from "../settings";
+import { GUARD_FLOOR_FPS } from "../fps-guard";
 
 vi.mock("../audio/bus", async (importOriginal) => ({
   ...await importOriginal<typeof import("../audio/bus")>(),
@@ -241,6 +242,11 @@ describe("graphics presets", () => {
     setup({ graphics: { ...DEFAULT_SETTINGS.graphics, ...GRAPHICS_PRESETS.high, auto: false } });
     expect(presetRadio(/^high$/i).getAttribute("aria-checked")).toBe("true");
     expect(presetRadio(/^auto$/i).getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("Auto's note names the frame rate the guard actually steps down under", () => {
+    setup({ graphics: { ...DEFAULT_SETTINGS.graphics, auto: true } });
+    expect(screen.getByText(`Steps down by itself if a place runs under ${GUARD_FLOOR_FPS} fps.`)).toBeTruthy();
   });
 
   it("turning a cost knob by hand takes Auto off; a taste knob leaves it", () => {

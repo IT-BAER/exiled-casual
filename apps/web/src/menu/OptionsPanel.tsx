@@ -16,6 +16,7 @@
  */
 import React from "react";
 import { DISPLAY, SERIF, Divider, FramedPanel, GOLD, GOLD_DIM, MENU_ART, MenuButton, PARCHMENT } from "./frames";
+import { GUARD_FLOOR_FPS } from "../fps-guard";
 import { DEFAULT_KEYBINDS_BY_MODE, DEFAULT_SETTINGS, MOVE_ACTIONS, controlModeOf, type CompareKey, type ControlMode, GRAPHICS_PRESETS, MIN_RESOLUTION_SCALE, presetForRenderer, presetOf, type GraphicsPreset, type KeybindAction, type Keybinds, type Settings, type ShadowQuality } from "../settings";
 import { gpuRenderer } from "../gpu";
 import { playSoundPreview, type SoundPreviewCategory } from "../audio/bus";
@@ -172,7 +173,7 @@ export function OptionsPanel({
           {tab === "graphics" ? (
             <>
               <Group>Detail</Group>
-              <Row label="Preset" note={settings.graphics.auto ? "Steps down by itself if a place runs under 55 fps." : undefined}>
+              <Row label="Preset" note={settings.graphics.auto ? `Steps down by itself if a place runs under ${GUARD_FLOOR_FPS} fps.` : undefined}>
                 <Choice<GraphicsPreset | "auto" | "custom">
                   label="Preset"
                   value={settings.graphics.auto ? "auto" : presetOf(settings.graphics) ?? "custom"}
