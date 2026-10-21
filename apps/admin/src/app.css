@@ -288,7 +288,7 @@ meter::-moz-meter-bar { border-radius: 99px; background: var(--rc, var(--gilt));
 .hbars .hb-track .rect { fill: var(--c); }
 .hbars .hb-value { font: 400 13px var(--mono); text-align: right; white-space: nowrap; color: var(--muted); }
 .hbars .hb-value strong { font-weight: 500; color: var(--text); }
-.spark { display: block; width: 120px; height: 28px; }
+svg.spark { display: block; width: 120px; height: 28px; }
 .spark .line { fill: none; stroke: var(--c); stroke-width: 1.4; }
 .spark .area { fill: var(--c); opacity: 0.12; }
 .spark-cell { display: grid; gap: 4px; }
