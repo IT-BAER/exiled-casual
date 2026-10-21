@@ -1,15 +1,18 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
-import { MemoryKv, emptyRoster, addCharacter, saveRoster, loadRoster } from "@exiled/persistence";
+import { MemoryKv, emptyRoster, addCharacter, saveRoster, loadRoster, putCharacterState } from "@exiled/persistence";
 import { setKv } from "./save/roster";
 
 // The game and the 3D stage both build a Babylon engine on mount, and neither
 // exists in jsdom. Stubbing them is also the assertion this file cares about:
 // the router either mounted the game or it did not.
 vi.mock("./GameView", () => ({
-  GameView: ({ characterId, settings }: { characterId?: string; settings?: { ui: { controls: unknown } } }) => (
-    <div data-testid="game-view" data-controls={JSON.stringify(settings?.ui.controls ?? {})}>{characterId}</div>
+  GameView: ({ characterId, settings, onExit }: { characterId?: string; settings?: { ui: { controls: unknown } }; onExit?: () => void }) => (
+    <div data-testid="game-view" data-controls={JSON.stringify(settings?.ui.controls ?? {})}>
+      {characterId}
+      <button data-testid="game-exit" onClick={onExit} />
+    </div>
   ),
 }));
 vi.mock("./menu/MenuStage", () => ({
@@ -87,6 +90,31 @@ describe("App routing", () => {
     expect((await screen.findByTestId("row-vess")).textContent).toMatch(/Level 7 Stalker/);
     fireEvent.click(screen.getByRole("button", { name: /^play$/i }));
     expect((await screen.findByTestId("game-view")).textContent).toBe("vess");
+  });
+
+  it("back from the game, the roster and its Export carry what the game saved", async () => {
+    await withCharacter();
+    await toSelect();
+    fireEvent.click(screen.getByRole("button", { name: /^play$/i }));
+    await screen.findByTestId("game-view");
+    // What the sim worker writes while the game runs: the menu never sees it happen.
+    const stored = await loadRoster(kv);
+    await saveRoster(kv, putCharacterState(stored!, "vess", { gold: 4321 }, 20));
+    fireEvent.click(screen.getByTestId("game-exit"));
+
+    await waitFor(() => expect(screen.getByTestId("row-vess").textContent).toMatch(/Level 20 Stalker/));
+    let exported: Blob | undefined;
+    const create = vi.spyOn(URL, "createObjectURL").mockImplementation((b) => { exported = b as Blob; return "blob:save"; });
+    const revoke = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    try {
+      fireEvent.click(screen.getByRole("button", { name: /^export$/i }));
+      expect(exported).toBeDefined();
+      const file = JSON.parse(await exported!.text()) as { characters: { state: unknown; level: number }[] };
+      expect(file.characters[0]).toMatchObject({ state: { gold: 4321 }, level: 20 });
+    } finally {
+      create.mockRestore();
+      revoke.mockRestore();
+    }
   });
 
   it("creates a character, saves it, and comes back to the roster", async () => {

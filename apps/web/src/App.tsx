@@ -278,7 +278,12 @@ export function App(): React.ReactElement {
             fresh={screen.fresh}
             settings={settings}
             onSettingsChange={changeSettings}
-            onExit={() => setScreen({ kind: "select" })}
+            onExit={() => {
+              // The worker saved past the menu's boot copy; rows and Export read this one.
+              // Settings stay the menu's own: a change from the last 400ms is not on disk yet.
+              void readRoster().then((r) => setRoster((prev) => putSettings(r, prev.settings)));
+              setScreen({ kind: "select" });
+            }}
             onLoadFailed={() => {
               setError("This character's save could not be loaded. Nothing was changed.");
               setScreen({ kind: "select" });
