@@ -13,6 +13,8 @@
  * is the whole difference at this stage.
  */
 import React from "react";
+import { CONTENT_VERSION } from "@exiled/content-runtime";
+import { GAME_VERSION } from "../version";
 import { DISPLAY, SERIF, Divider, FramedPanel, GOLD, GOLD_DIM, MenuButton, PARCHMENT } from "./frames";
 
 const REPO = "https://github.com/IT-BAER/exiled-casual";
@@ -39,6 +41,7 @@ export function reportContext(): string {
   const nav = typeof navigator !== "undefined" ? navigator : undefined;
   const screen = typeof window !== "undefined" ? `${window.innerWidth}x${window.innerHeight}` : "unknown";
   return [
+    `Version: ${GAME_VERSION}, content ${CONTENT_VERSION}`,
     `Build: ${import.meta.env?.MODE ?? "unknown"}`,
     `Platform: ${nav?.platform ?? "unknown"}`,
     `Agent: ${nav?.userAgent ?? "unknown"}`,

@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { CONTENT_VERSION } from "@exiled/content-runtime";
 import { FeedbackDialog, issueUrl } from "./FeedbackDialog";
+import { GAME_VERSION } from "../version";
 
 afterEach(cleanup);
 
@@ -14,6 +16,11 @@ describe("issueUrl", () => {
     expect(url.searchParams.get("title")).toBe("Bug: The portal closed early");
     expect(url.searchParams.get("body")).toContain("and I fell out");
     expect(url.searchParams.get("body")).toContain("Viewport:");
+  });
+
+  it("names the release and the content the report was written against", () => {
+    const body = new URL(issueUrl("bug", "Crashed")).searchParams.get("body") ?? "";
+    expect(body).toContain(`Version: ${GAME_VERSION}, content ${CONTENT_VERSION}`);
   });
 
   it("labels an idea as feedback rather than as a bug", () => {
