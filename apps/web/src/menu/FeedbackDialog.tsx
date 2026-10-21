@@ -15,6 +15,7 @@
 import React from "react";
 import { CONTENT_VERSION } from "@exiled/content-runtime";
 import { GAME_VERSION } from "../version";
+import { isTextEntry } from "../input/text-entry";
 import { DISPLAY, SERIF, Divider, FramedPanel, GOLD, GOLD_DIM, MenuButton, PARCHMENT } from "./frames";
 
 const REPO = "https://github.com/IT-BAER/exiled-casual";
@@ -78,11 +79,25 @@ export function FeedbackDialog({
   const [text, setText] = React.useState("");
   const empty = text.trim().length === 0;
 
+  const closeRef = React.useRef(onClose);
+  closeRef.current = onClose;
+  // Capture on window runs before the game's listeners, so behind this the game hears
+  // nothing: no panel opens and Escape cannot raise the pause menu under the dialog.
+  // Subscribed once: the game re-renders at the tick rate, and a listener swapped
+  // mid-dispatch is skipped for that key.
   React.useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopImmediatePropagation();
+        closeRef.current();
+        return;
+      }
+      if (e.key === "Tab" || e.key === "Enter" || e.key === " ") return; // focus and the buttons
+      if (!isTextEntry(e.target)) e.stopImmediatePropagation();
+    };
+    window.addEventListener("keydown", onKey, { capture: true });
+    return () => window.removeEventListener("keydown", onKey, { capture: true });
+  }, []);
 
   const send = (): void => {
     if (empty) return;
@@ -119,6 +134,7 @@ export function FeedbackDialog({
         <textarea
           id="feedback-text"
           data-testid="feedback-text"
+          autoFocus
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder={c.placeholder}

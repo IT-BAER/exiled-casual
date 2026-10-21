@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import React from "react";
+import { flushSync } from "react-dom";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { CONTENT_VERSION } from "@exiled/content-runtime";
@@ -40,6 +42,41 @@ describe("FeedbackDialog", () => {
     expect(open).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
+  });
+
+  it("takes Escape from the game: it closes, and the pause menu behind never hears it", () => {
+    const game = vi.fn();
+    let bump = (): void => {};
+    // The game's window listener was there first, and its state change re-renders the dialog's parent.
+    const onGameKey = (e: KeyboardEvent): void => { game(e.key); flushSync(() => bump()); };
+    window.addEventListener("keydown", onGameKey);
+    const closed = vi.fn();
+    function Host(): React.ReactElement {
+      const [n, setN] = React.useState(0);
+      bump = () => setN((v) => v + 1);
+      return <FeedbackDialog kind="bug" onClose={() => closed(n)} />;
+    }
+    try {
+      render(<Host />);
+      fireEvent.keyDown(document.body, { key: "Escape" });
+      expect(closed).toHaveBeenCalledTimes(1);
+      expect(game).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener("keydown", onGameKey);
+    }
+  });
+
+  it("holds the game's keys while it is up, and starts with its field focused", () => {
+    const game = vi.fn();
+    window.addEventListener("keydown", game);
+    try {
+      render(<FeedbackDialog kind="bug" onClose={() => {}} />);
+      expect(document.activeElement).toBe(screen.getByTestId("feedback-text"));
+      fireEvent.keyDown(document.body, { key: "i" });
+      expect(game).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener("keydown", game);
+    }
   });
 
   it("opens the issue in a new tab and closes itself", () => {
