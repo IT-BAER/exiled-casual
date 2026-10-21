@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { vendorBuyPrice, vendorSellPrice, rollVendorStock, VENDOR_MARGIN_PCT, VENDOR_STOCK } from "./vendor.js";
+import { vendorBuyPrice, vendorSellPrice, rollVendorStock, VENDOR_MARGIN_PCT, VENDOR_STOCK, START_GOLD } from "./vendor.js";
+import { START_LEVEL } from "./xp.js";
 import type { Item, ItemAffix, ItemPools } from "@exiled/content-schema";
 
 const POOLS: ItemPools = {
@@ -65,6 +66,12 @@ describe("vendor pricing", () => {
   it("keeps a margin the player can feel", () => {
     expect(VENDOR_MARGIN_PCT).toBeGreaterThan(0);
     expect(VENDOR_MARGIN_PCT).toBeLessThan(100);
+  });
+
+  it("starts a character with two magic pieces' worth of gold and short of a rare", () => {
+    const opening = (rarity: Item["rarity"]) => vendorBuyPrice(item({ rarity, itemLevel: START_LEVEL }));
+    expect(START_GOLD).toBeGreaterThanOrEqual(2 * opening("magic"));
+    expect(START_GOLD).toBeLessThan(opening("rare"));
   });
 });
 

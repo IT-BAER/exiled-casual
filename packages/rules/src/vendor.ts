@@ -61,11 +61,11 @@ export function vendorSellPrice(item: Item): number {
 /**
  * Gold a fresh character starts with.
  *
- * Enough for two magic pieces off the opening shelf (256 each at the starting
- * level) and short of a rare, so the shop is worth opening on the first day
- * without answering the question the first map is there to answer.
+ * Enough for two magic pieces off the opening shelf (64 each at the starting
+ * level) and two scrolls, and short of a rare (224), so the shop is worth opening
+ * on the first day without answering the question the first map is there to answer.
  */
-export const START_GOLD = 500;
+export const START_GOLD = 160;
 
 /** How many pieces stand on the shelf at once. One page of the purchase grid. */
 export const VENDOR_STOCK = 12;
