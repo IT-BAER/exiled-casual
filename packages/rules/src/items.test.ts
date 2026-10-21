@@ -246,6 +246,14 @@ describe("rollItem", () => {
     expect(count("unique")).toBeLessThan(count("rare"));
   });
 
+  it("makes about one rare-or-better roll in four a unique, so a map run sees one every few dozen maps", () => {
+    const rarities = Array.from({ length: 100_000 }, (_, s) => rollItem(UNIQUE_POOLS, s + 1, 95, 2).rarity);
+    const count = (r: string) => rarities.filter((x) => x === r).length;
+    const share = count("unique") / (count("unique") + count("rare"));
+    expect(share).toBeGreaterThan(0.18);
+    expect(share).toBeLessThan(0.3);
+  });
+
   it("forceRarity produces exactly that tier, and degrades unique to normal without a unique pool", () => {
     for (const want of ["normal", "magic", "rare", "unique"] as const) {
       for (let s = 1; s <= 50; s++) {
