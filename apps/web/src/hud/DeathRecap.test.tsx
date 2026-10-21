@@ -83,6 +83,18 @@ describe("DeathRecap", () => {
     expect(rows[1]!.textContent).toContain("Bleeding");
   });
 
+  it("shows how long an ailment ticked, not its tick count, which reads as stacks", () => {
+    const base = recap();
+    render(<DeathRecap recap={{ ...base, sources: [
+      { species: "ailment.poison", rare: false, damage: 14, hits: 25, element: "chaos" },
+      { species: "ailment.bleeding", rare: false, damage: 4, hits: 9, element: "physical" },
+    ] }} stats={stats()} />);
+    const rows = screen.getAllByTestId("recap-source");
+    expect(rows[0]!.textContent).toContain("Poison 5s");
+    expect(rows[0]!.textContent).not.toContain("x25");
+    expect(rows[1]!.textContent).toContain("Bleeding 1.8s");
+  });
+
   it("an uncapped fire resistance is the tip when fire did the most", () => {
     render(<DeathRecap recap={recap()} stats={stats()} />);
     const tip = screen.getByTestId("recap-tip").textContent!;

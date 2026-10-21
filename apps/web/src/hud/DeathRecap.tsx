@@ -1,7 +1,7 @@
 import React from "react";
 import type { DeathRecap as Recap, MonsterElement, PlayerStats } from "@exiled/protocol";
 import { MONSTERS } from "@exiled/content-runtime";
-import { RES_CAP } from "@exiled/rules";
+import { RES_CAP, AILMENT_TICK_INTERVAL } from "@exiled/rules";
 import { SERIF } from "../menu/frames";
 import { ElementIcon } from "./ElementIcon";
 
@@ -25,6 +25,11 @@ const ELEMENT: Record<MonsterElement, { label: string; tint: string }> = {
 /** Rendered from monsters.glb by tools/build_monster_portraits.py. */
 export function monsterPortrait(species: string): string | null {
   return MONSTERS.has(species) ? `/hud/monsters/${species.replace(/^monster\./, "").replace(/\.v1$/, "")}.webp` : null;
+}
+
+/** An ailment's "hits" are its ticks, so it reads as how long it ticked: "x25" looked like 25 stacks. */
+function hitsLabel(species: string, hits: number): string {
+  return species in AILMENT_NAME ? `${+(hits * AILMENT_TICK_INTERVAL / 30).toFixed(1)}s` : `x${hits}`;
 }
 
 function sourceName(species: string, rare: boolean): string {
@@ -93,7 +98,7 @@ export function DeathRecap({ recap, stats }: { recap: Recap; stats: PlayerStats 
             <Portrait species={s.species} element={s.element} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-                <span>{sourceName(s.species, s.rare)} <span style={{ color: "#7d7469" }}>x{s.hits}</span></span>
+                <span>{sourceName(s.species, s.rare)} <span style={{ color: "#7d7469" }}>{hitsLabel(s.species, s.hits)}</span></span>
                 <span style={{ color: el.tint, whiteSpace: "nowrap" }}>
                   <ElementIcon of={s.element} size={16} /> {s.damage} {el.label}
                 </span>
