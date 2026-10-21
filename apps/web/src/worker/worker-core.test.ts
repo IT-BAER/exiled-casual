@@ -254,5 +254,35 @@ describe("WorkerCore", () => {
       const { world: w, e: re } = await reload(kv);
       expect(w.get<SessionC>(re, "session")!.passives).toEqual([near]);
     });
+
+    it("a refused write is reported on the snapshot until a later write lands", async () => {
+      class FullKv extends MemoryKv {
+        full = false;
+        override save(value: string): Promise<void> {
+          return this.full ? Promise.reject(new Error("QuotaExceededError")) : super.save(value);
+        }
+      }
+      const kv = new FullKv();
+      const record = makeCharacterRecord({ name: "Harness", classId: CLASS }, "c1", 0);
+      await saveRoster(kv, addCharacter(emptyRoster(), record, 1));
+      const core = new WorkerCore(42, kv, "c1");
+      await core.hydrate();
+      core.advance(34);
+      await flush();
+      expect(core.snapshot()!.saveFailed).toBeUndefined();
+
+      const { world, e } = sessionOf(core);
+      kv.full = true;
+      world.set<ProgressC>(e, "progress", { level: 3, xp: 50, gold: 900 });
+      core.advance(34);
+      await flush();
+      expect(core.snapshot()!.saveFailed).toBe(true);
+
+      kv.full = false;
+      world.set<ProgressC>(e, "progress", { level: 3, xp: 60, gold: 900 });
+      core.advance(34);
+      await flush();
+      expect(core.snapshot()!.saveFailed).toBeUndefined();
+    });
   });
 });

@@ -62,6 +62,8 @@ export class IndexedDbKv implements KvStore {
       tx.objectStore(STORE).put(value, KEY);
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
+      // A quota overrun aborts at commit with no error event; without this the write never settles.
+      tx.onabort = () => reject(tx.error);
     });
   }
 }

@@ -60,6 +60,10 @@ export class WorkerCore {
    */
   private readonly characterId: string;
   private lastSig = "";
+  /** The newest write was refused (storage full or blocked); the HUD says so until one lands. */
+  private saveFailed = false;
+  /** Only the newest write's outcome counts: an older one settling late must not flip the flag. */
+  private saveSeq = 0;
   /** ?bot mode: the playtest bot plays every map. Never saves, so a run cannot touch a real character. */
   private readonly botMode: boolean;
   /** False under ?tour: the Atlas opens as for ?bot, never saves, and the player drives. */
@@ -183,9 +187,7 @@ export class WorkerCore {
       this.sim.step(commands);
       this.accMs -= MS_PER_TICK;
       this.syncArea();
-      out.push(
-        buildSnapshot(this.world, this.sim, this.sim.tick, CONTENT_VERSION),
-      );
+      out.push(this.build());
     }
     this.maybePersist();
     return out;
@@ -239,14 +241,24 @@ export class WorkerCore {
    * or a pickup, not 30x/second.
    * ponytail: fire-and-forget async write; a crash in the ~ms before it lands
    * loses at most that one change (re-earnable). Await it if that ever matters.
+   * A refused write is retried with the next durable change, which writes the whole state.
    */
   private maybePersist(): void {
     if (this.botMode) return;
     const sig = this.durableSig();
     if (sig === this.lastSig) return;
     this.lastSig = sig;
-    if (this.characterId === "") void saveTo(this.kv, this.world);
-    else void saveCharacterTo(this.kv, this.world, this.characterId);
+    const seq = ++this.saveSeq;
+    const write = this.characterId === ""
+      ? saveTo(this.kv, this.world)
+      : saveCharacterTo(this.kv, this.world, this.characterId);
+    write.then(
+      () => { if (seq === this.saveSeq) this.saveFailed = false; },
+      (e: unknown) => {
+        if (seq === this.saveSeq) this.saveFailed = true;
+        console.error("save refused", e);
+      },
+    );
   }
 
   /**
@@ -286,6 +298,12 @@ export class WorkerCore {
   /** Latest snapshot, or null before the first tick. */
   snapshot(): Snapshot | null {
     if (this.sim.tick === 0) return null;
-    return buildSnapshot(this.world, this.sim, this.sim.tick, CONTENT_VERSION);
+    return this.build();
+  }
+
+  private build(): Snapshot {
+    const snap = buildSnapshot(this.world, this.sim, this.sim.tick, CONTENT_VERSION);
+    if (this.saveFailed) snap.saveFailed = true;
+    return snap;
   }
 }

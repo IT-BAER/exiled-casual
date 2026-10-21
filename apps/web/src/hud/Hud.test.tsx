@@ -755,6 +755,15 @@ describe("Hud inventory full message", () => {
       vi.useRealTimers();
     }
   });
+
+  it("says progress is not being saved while the newest save is refused", () => {
+    const { rerender } = render(<Hud snapshot={makeSnap({})} />);
+    expect(screen.queryByTestId("save-failed")).toBeNull();
+    rerender(<Hud snapshot={{ ...makeSnap({}), saveFailed: true }} />);
+    expect(screen.getByTestId("save-failed")).toHaveTextContent("Progress is not being saved");
+    rerender(<Hud snapshot={makeSnap({})} />);
+    expect(screen.queryByTestId("save-failed")).toBeNull();
+  });
 });
 
 describe("Hud gem levels and breakpoints", () => {

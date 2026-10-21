@@ -1,5 +1,36 @@
-import { describe, it, expect } from "vitest";
-import { MemoryKv } from "./index";
+import { describe, it, expect, afterEach } from "vitest";
+import { MemoryKv, IndexedDbKv } from "./index";
+
+/** An indexedDB whose every write transaction aborts with `error`, as a full disk does. */
+function abortingIndexedDb(error: Error) {
+  const db = {
+    transaction: () => {
+      const tx: { error: Error | null; onabort?: () => void; onerror?: () => void; oncomplete?: () => void; objectStore: () => unknown } = {
+        error: null,
+        objectStore: () => ({ put: () => setTimeout(() => { tx.error = error; tx.onabort?.(); }) }),
+      };
+      return tx;
+    },
+  };
+  return {
+    open: () => {
+      const req: { result?: unknown; onsuccess?: () => void } = {};
+      setTimeout(() => { req.result = db; req.onsuccess?.(); });
+      return req;
+    },
+  };
+}
+
+describe("IndexedDbKv", () => {
+  afterEach(() => { delete (globalThis as { indexedDB?: unknown }).indexedDB; });
+
+  it("rejects a write the browser aborts, such as one over the storage quota", async () => {
+    const quota = new Error("QuotaExceededError");
+    (globalThis as { indexedDB?: unknown }).indexedDB = abortingIndexedDb(quota);
+    const settled = new Promise((_, reject) => setTimeout(() => reject(new Error("never settled")), 200));
+    await expect(Promise.race([new IndexedDbKv().save("x"), settled])).rejects.toBe(quota);
+  });
+});
 
 // IndexedDbKv needs a browser and is exercised live; MemoryKv is the seam
 // contract the run-transaction proof relies on.

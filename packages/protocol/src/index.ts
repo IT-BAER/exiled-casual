@@ -400,6 +400,8 @@ export interface Snapshot {
   activeNodeId?: string;
   /** Present only while the player is dead and something hit him before it. */
   deathRecap?: DeathRecap;
+  /** Present while the newest save was refused (storage full or blocked); progress since is not kept. */
+  saveFailed?: true;
   player: {
     id: number; x: number; y: number;
     life: number; maxLife: number; mana: number; maxMana: number;

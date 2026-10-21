@@ -1191,6 +1191,29 @@ export function Hud({
         </div>
       )}
 
+      {/* Stays up while saves are refused: a reload would lose everything since, and the
+          player can only act on that (free storage, stop playing) if told. */}
+      {snapshot.saveFailed && (
+        <div
+          data-testid="save-failed"
+          role="alert"
+          style={{
+            position: "absolute",
+            top: 20,
+            left: 28,
+            maxWidth: 320,
+            color: "#e8743b",
+            fontSize: 13,
+            fontWeight: 700,
+            letterSpacing: 0.5,
+            textShadow: "0 1px 4px #000",
+            pointerEvents: "none",
+          }}
+        >
+          Progress is not being saved. Browser storage is full or blocked.
+        </div>
+      )}
+
       {/* Area label — top-right, matches the gold border language of the orb ring */}
       <div
         data-testid="area-label"
