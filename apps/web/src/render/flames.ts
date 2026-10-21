@@ -9,6 +9,7 @@ import {
   ShaderMaterial,
   SolidParticleSystem,
   StandardMaterial,
+  Vector3,
   type Scene,
   type SolidParticle,
 } from "@babylonjs/core";
@@ -20,7 +21,7 @@ import type { FireSpot } from "./lights";
  * Two populations, as in a real fire: the body of the flame, and the few specks
  * that break off the top and travel until they cool.
  *
- * ## The body is one shader quad per bowl
+ * ## The body is one ray-marched box per bowl
  *
  * It was three hundred solid embers a bowl, each living about a second and a
  * half over a flame under a metre tall. Every one was a bright point the eye
@@ -29,14 +30,15 @@ import type { FireSpot } from "./lights";
  * is a continuous sheet that hardly moves, and only the top half tears into
  * tongues that rise and break off a couple of times a second.
  *
- * So the body is a camera-facing quad (turning about Y only, so it stands up
- * like the props and foreshortens the way they do) and the fire is drawn in its
- * fragment shader: a teardrop the coals' width at the base, torn at the top by
- * two layers of rising noise, coloured by the same white-hot-to-soot ramp the
- * embers used. It costs eight triangles where the embers re-uploaded 1,248
- * particles a frame. What a quad gives up against solids is parallax INSIDE the
- * flame, which at this camera is a few pixels; depth testing still lets a
- * pillar in front of the bowl hide it, and the bowl's rim hides its root.
+ * So the fire is a density field: a teardrop most of the coals' width at the
+ * base, torn at the top by two layers of rising noise, coloured by the same
+ * white-hot-to-soot ramp the embers used. It is marched through a box standing
+ * in the bowl, not painted on an upright quad: the camera looks 53 degrees down
+ * into the bowl, so a sheet showed as a flat triangle whose foot was one straight
+ * line across the coals. In the box the root is a disc over the coal bed, the
+ * core glows brighter than the edges because the eye looks through more of it,
+ * and the flame keeps its shape from every side of the room. Depth testing still
+ * lets a pillar in front of the bowl hide it.
  *
  * ## The sparks stay solid
  *
@@ -83,14 +85,17 @@ const FLAME_H = 0.82;
 const LIP_R = 0.3;
 
 /**
- * The quad the body is drawn on. Wider than the bowl's lip and taller than the
- * flame, because the shader tears the edges and tips in from it and a quad cut
- * at the flame's own size clips a tongue into a straight edge. Its root sits a
- * little under the coal face so the rim, not the quad's edge, is where it starts.
+ * The box the body is marched through. Wider than the bowl's lip and taller than
+ * the flame, because the shader tears the edges and tips in from it and a box
+ * cut at the flame's own size clips a tongue into a straight edge. Its floor sits
+ * a little under the coal face, so the coals, not the box, are where it starts.
  */
 const TONGUE_W = 0.9;
 const TONGUE_H = FLAME_H * 1.3;
 const TONGUE_Y = BASE_Y - 0.03;
+/** March steps through the box. The flame is a few dozen pixels across, so the
+ *  steps are cheap; under about 16 the noise's layers show as bands. */
+const MARCH_STEPS = 24;
 
 /**
  * How hard the fire burns into the frame. Shared by the body and the sparks: the
@@ -99,8 +104,9 @@ const TONGUE_Y = BASE_Y - 0.03;
  */
 const BRIGHT = 0.52;
 /** The body's share of it. One layer of flame, where the embers stacked a dozen
- *  deep at the core. */
-const TONGUE_BRIGHT = 1.4;
+ *  deep at the core, and under what a sheet took: looking down into the bowl,
+ *  every ray finds the root's white core somewhere along it. */
+const TONGUE_BRIGHT = 0.85;
 
 /** Colour of a spark at `u` of the heat ramp, white-hot at the coals to soot at
  *  the tip. The menu's ramp (`menu/atmos.tsx`), in Babylon's 0..1. */
@@ -119,34 +125,51 @@ function emberColour(u: number, out: Color4): void {
 
 const FLAME_SHADER = "brazierFlame";
 
+/** A ray that crosses this much flame, in metres, shows it at full strength;
+ *  one that grazes an edge loses up to `THICK_GAIN` of it. A ray through the
+ *  root's core crosses about 0.7 m, one through a tip a few centimetres. */
+const THICK_M = 0.35;
+const THICK_GAIN = 0.4;
+
+/** A float as a GLSL literal: `1` is an int there, and an int in a float
+ *  expression does not compile on WebGL 1. */
+const glsl = (v: number) => (Number.isInteger(v) ? `${v}.0` : `${v}`);
+
 /**
- * The flame, as a pure function of `uv` and time.
+ * The flame, as a pure function of a point in the bowl and time.
  *
- * A density field, not a sprite: a teardrop the coals' width at the root, less
- * dense with height, with two layers of noise rising through it at 0.5-0.6 m/s
+ * A density field, not a sprite: a teardrop most of the coals' width at the
+ * root, less dense with height, with two layers of noise rising through it at 0.5-0.6 m/s
  * that carve the upper half into tongues. That rise is the pace the eye reads;
  * the old embers left the coals at 0.9 m/s and every one was a point to follow.
  * The heat ramp is the embers' one in four stops, soot red to white-hot, and
  * the tips fade by losing emission, never by turning red.
+ *
+ * The box is marched front to back from the face the fragment is on: the mesh
+ * is neither turned nor scaled, so its local space is the bowl's, and `uEye` is
+ * the camera in that space.
  */
 function registerFlameShader(): void {
   if (Effect.ShadersStore[`${FLAME_SHADER}VertexShader`]) return;
   Effect.ShadersStore[`${FLAME_SHADER}VertexShader`] = `
     precision highp float;
     attribute vec3 position;
-    attribute vec2 uv;
     uniform mat4 worldViewProjection;
-    varying vec2 vUV;
+    varying vec3 vPos;
     void main(void) {
-      vUV = uv;
+      vPos = position;
       gl_Position = worldViewProjection * vec4(position, 1.0);
     }`;
   Effect.ShadersStore[`${FLAME_SHADER}FragmentShader`] = `
     precision highp float;
-    varying vec2 vUV;
+    varying vec3 vPos;
+    uniform vec3 uEye;
     uniform float uTime;
     uniform float uFlick;
     uniform float uBright;
+    const float HALF_W = ${glsl(TONGUE_W / 2)};
+    const float H = ${glsl(TONGUE_H)};
+    const int STEPS = ${MARCH_STEPS};
     float hash(vec2 p) {
       vec3 p3 = fract(vec3(p.xyx) * 0.1031);
       p3 += dot(p3, p3.yzx + 33.33);
@@ -179,26 +202,55 @@ function registerFlameShader(): void {
       if (h < 0.66) return mix(orange, yellow, (h - 0.33) / 0.33);
       return mix(yellow, white, (h - 0.66) / 0.34);
     }
+    // How alight one point of the flame is (x), and how hot (y): xz in
+    // half-widths, y in heights. The tongues are carved across the view, along
+    // \`side\`, and are the same all the way along one ray: carved in 3D they
+    // average out over the ray's depth and the flame melts into a ball.
+    vec2 burn(vec2 xz, float y, vec2 side, float t, float sway) {
+      float lat = dot(xz, side);
+      float n = fbm(vec2(lat * 3.2, y * 2.8 - t * 1.6));
+      float n2 = fbm(vec2(lat * 6.0 + 7.3, y * 5.0 - t * 2.4));
+      vec2 s = xz + side * (-sway + (n - 0.5) * 0.5) * y;
+      // Narrower at the root than a sheet was: in depth too, the foot is a disc
+      // the eye sees whole, and one the coals' full width reads as a lit ball.
+      float w = 0.6 * (1.0 - y * 0.85);
+      float d = length(s) / max(w, 0.001);
+      float dens = (1.0 - d * d) * 1.1 - y * 1.25 + (n - 0.5) * 1.3 * (0.25 + y) + (n2 - 0.5) * 0.45;
+      // The root rises out of the coal bed over its first 13 cm, which from
+      // above is a rounded foot across the coals, not a line.
+      dens *= smoothstep(0.0, 0.12, y);
+      float f = clamp(dens, 0.0, 1.0);
+      return vec2(smoothstep(0.0, 0.3, f), clamp(f * 1.25 - y * 0.3, 0.0, 1.0));
+    }
     void main(void) {
-      float y = vUV.y;
-      float x = vUV.x * 2.0 - 1.0;
       // Wrapped, or the hash loses its low bits an hour into a session; the
       // pattern jumps once every ten minutes, for one frame.
       float t = mod(uTime, 600.0);
-      float sway = (noise(vec2(t * 0.6, 3.1)) - 0.5) * 0.3 * y;
-      float n = fbm(vec2(x * 3.2, y * 2.8 - t * 1.6));
-      float n2 = fbm(vec2(x * 6.0 + 7.3, y * 5.0 - t * 2.4));
-      float xs = x - sway + (n - 0.5) * 0.5 * y;
-      float w = 0.78 * (1.0 - y * 0.9);
-      float d = abs(xs) / max(w, 0.001);
-      float dens = (1.0 - d * d) * 1.1 - y * 1.25 + (n - 0.5) * 1.3 * (0.25 + y) + (n2 - 0.5) * 0.45;
-      dens *= smoothstep(0.0, 0.08, y);
-      float f = clamp(dens, 0.0, 1.0);
-      float shape = smoothstep(0.0, 0.3, f);
-      float heat = clamp(f * 1.25 - y * 0.3, 0.0, 1.0);
-      // Light, not paint: added straight onto the frame, and the thin edges
-      // emit less than the core, which is the only white in it.
-      gl_FragColor = vec4(ramp(heat) * shape * (0.3 + 0.7 * heat) * uBright * uFlick, 1.0);
+      float sway = (noise(vec2(t * 0.6, 3.1)) - 0.5) * 0.3;
+      vec3 rd = normalize(vPos - uEye);
+      vec2 side = normalize(vec2(-rd.z, rd.x) + vec2(1e-6, 0.0));
+      // Where the ray leaves the box: the nearer of the three far faces.
+      vec3 safe = mix(vec3(1e-5), rd, step(1e-5, abs(rd)));
+      vec3 far = (vec3(safe.x > 0.0 ? HALF_W : -HALF_W, safe.y > 0.0 ? H : 0.0, safe.z > 0.0 ? HALF_W : -HALF_W) - vPos) / safe;
+      float len = max(0.0, min(min(far.x, far.y), far.z));
+      float dt = len / float(STEPS);
+      // A fixed per-pixel offset into the first step, so the steps do not
+      // stack into bands of the same depth.
+      float j = hash(gl_FragCoord.xy);
+      // The brightest point on the ray draws the flame; how much of the ray is
+      // inside it lifts the core over the edges, which is the depth a sheet lacked.
+      vec3 peak = vec3(0.0);
+      float inside = 0.0;
+      for (int i = 0; i < STEPS; i++) {
+        vec3 p = vPos + rd * (dt * (float(i) + j));
+        vec2 b = burn(p.xz / HALF_W, p.y / H, side, t, sway);
+        // The thin edges emit less than the core, which is the only white in it.
+        peak = max(peak, ramp(b.y) * b.x * (0.3 + 0.7 * b.y));
+        inside += b.x;
+      }
+      float depth = min(1.0, inside * dt / ${glsl(THICK_M)});
+      // Light, not paint: added straight onto the frame.
+      gl_FragColor = vec4(peak * (${glsl(1 - THICK_GAIN)} + ${glsl(THICK_GAIN)} * depth) * uBright * uFlick, 1.0);
     }`;
 }
 
@@ -206,23 +258,29 @@ function registerFlameShader(): void {
 interface Tongue {
   mesh: Mesh;
   mat: ShaderMaterial;
+  /** The camera in this bowl's local space. Its own vector, because the
+   *  material keeps the reference it is given, not a copy. */
+  eye: Vector3;
 }
 
 function buildTongue(scene: Scene, b: number): Tongue {
-  const mesh = MeshBuilder.CreatePlane(`${FLAME_TONGUE}${b}`, { width: TONGUE_W, height: TONGUE_H }, scene);
-  // Rooted at the coals, so the billboard turns about the flame's foot.
+  const mesh = MeshBuilder.CreateBox(`${FLAME_TONGUE}${b}`, { width: TONGUE_W, height: TONGUE_H, depth: TONGUE_W }, scene);
+  // Floor at the mesh's origin, which the shader's local space depends on.
   mesh.bakeTransformIntoVertices(Matrix.Translation(0, TONGUE_H / 2, 0));
-  mesh.billboardMode = Mesh.BILLBOARDMODE_Y;
   const mat = new ShaderMaterial(`${FLAME_TONGUE}${b}-mat`, scene, FLAME_SHADER, {
-    attributes: ["position", "uv"],
-    uniforms: ["worldViewProjection", "uTime", "uFlick", "uBright"],
+    attributes: ["position"],
+    uniforms: ["worldViewProjection", "uEye", "uTime", "uFlick", "uBright"],
     needAlphaBlending: true,
   });
   mat.alphaMode = Constants.ALPHA_ADD;
-  mat.backFaceCulling = false;
+  // Front faces only: each is where the eye's ray enters the box, and a back
+  // face would march the same flame a second time.
+  mat.backFaceCulling = true;
   // Additive light: a flame that wrote depth would cut out the sparks behind it.
   // Depth TESTING stays on, so a pillar in front of the bowl still hides it.
   mat.disableDepthWrite = true;
+  const eye = new Vector3(0, 10, -10);
+  mat.setVector3("uEye", eye);
   mat.setFloat("uTime", 0);
   mat.setFloat("uFlick", 1);
   mat.setFloat("uBright", TONGUE_BRIGHT);
@@ -230,7 +288,7 @@ function buildTongue(scene: Scene, b: number): Tongue {
   mesh.isPickable = false;
   mesh.receiveShadows = false;
   mesh.setEnabled(false);
-  return { mesh, mat };
+  return { mesh, mat, eye };
 }
 
 interface Spark {
@@ -375,6 +433,8 @@ export function updateFireFlames(near: readonly FireSpot[], now: number): void {
     if (!tongue) continue;
     tongue.mesh.position.set(s.x, TONGUE_Y, s.z);
     tongue.mesh.setEnabled(true);
+    const cam = tongue.mesh.getScene().activeCamera;
+    if (cam) tongue.mat.setVector3("uEye", cam.globalPosition.subtractToRef(tongue.mesh.position, tongue.eye));
     tongue.mat.setFloat("uTime", ph);
     // Half the light's swing: the body is the steady part of a fire.
     tongue.mat.setFloat("uFlick", 0.5 + 0.5 * flicker[b]!);

@@ -306,6 +306,22 @@ describe("the fire in the bowl", () => {
     expect(flame!.isPickable).toBe(false);
   });
 
+  it("stands as a volume round the bowl's axis, not a sheet turned to the camera", () => {
+    const s = scene();
+    createFireLights(s);
+    setFireSpots([{ x: 0, z: 0, phase: 0 }]);
+    updateFireLights(s, Vector3.Zero(), 16);
+    const [flame] = burningTongues(s);
+    // A sheet seen from the 53-degree camera is a flat triangle cut off along its foot.
+    expect(flame!.billboardMode).toBe(Mesh.BILLBOARDMODE_NONE);
+    flame!.computeWorldMatrix(true);
+    const box = flame!.getBoundingInfo().boundingBox;
+    const wide = box.maximumWorld.x - box.minimumWorld.x;
+    const deep = box.maximumWorld.z - box.minimumWorld.z;
+    expect(wide).toBeGreaterThan(0.5);
+    expect(deep).toBeCloseTo(wide, 5);
+  });
+
   it("never stands more flames than the pool lights", () => {
     const s = scene();
     createFireLights(s);
