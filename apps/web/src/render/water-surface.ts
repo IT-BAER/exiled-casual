@@ -129,6 +129,10 @@ const GLSL_SHADE = `
       float cyc = t / waterSwash.x + wNoise(vec2(along * 0.035, 1.7)) * 1.6 + wNoise(vec2(along * 0.13, 5.3)) * 0.3;
       float k = fract(cyc);
       float id = floor(cyc);
+      // The stretch of shore next door may already be on the next wave, so
+      // whatever differs between waves must agree at k = 1 and the next k = 0,
+      // or the foam is cut along a straight line where the two meet.
+      float hand = smoothstep(0.85, 1.0, k);
       // Each wave runs up a different distance; both ends of the cycle sit at
       // the break line, so the per-wave change never shows as a jump.
       float run = waterSwash.y * (0.55 + 0.9 * wNoise(vec2(along * 0.09, id * 1.37)));
@@ -151,13 +155,13 @@ const GLSL_SHADE = `
         float churn = smoothstep(0.35, 0.7, lace * 0.6 + fine * 0.4);
         // The bore: white at the leading edge while the wave climbs, thinning to
         // a drained lace as it falls back.
-        float vigour = k < UP ? 1.0 : exp(-(k - UP) * 4.0);
+        float vigour = (k < UP ? smoothstep(0.0, 0.06, k) : exp(-(k - UP) * 4.0)) * (1.0 - hand);
         float bore = exp(-(off - 0.08) * (off - 0.08) / 0.05);
         float trail = off > 0.0 ? exp(-off / 1.3) : 0.0;
         // Torn by the churn, so the bore breaks into clots and gaps along its length.
         float tear = smoothstep(0.25, 0.6, wFbm(vec2(along * 1.4, t * 0.3) + q * 0.8));
         foam = (bore * (0.2 + 0.9 * churn) * (0.35 + 0.65 * tear) + trail * churn * 0.7) * vigour;
-        foam += step(UP, k) * trail * smoothstep(0.55, 0.75, fine) * 0.45;
+        foam += step(UP, k) * (1.0 - hand) * trail * smoothstep(0.55, 0.75, fine) * 0.45;
         float cap = smoothstep(0.93, 1.0, x) * smoothstep(BREAK + 2.2, BREAK + 0.2, d) * step(BREAK - 0.3, d);
         foam += cap * (0.35 + 0.8 * churn);
       }
