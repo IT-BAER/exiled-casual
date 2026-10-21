@@ -201,8 +201,19 @@ describe("rarity glow through the rim plugin", () => {
     const names = plugin.getUniforms().ubo!.map((u) => u.name);
     expect(names).toEqual(expect.arrayContaining(["tierGlow", "tierColor", "glowTime"]));
     const code = plugin.getCustomCode("fragment")!.CUSTOM_FRAGMENT_BEFORE_FRAGCOLOR!;
-    expect(code).toMatch(/tierColor \* .*rimFacing/);
     expect(code).toContain("glowTime");
+  });
+
+  // Added yellow cannot show on a pale hide: it is already near the top of the
+  // range, and on sand the yellow it reaches is the floor's. Mixed toward the
+  // tier colour, a cream body turns gold where a dark one still lightens
+  // (measured: brightest hide ΔE 6.5 added, 12.1 mixed at the new strength).
+  it("pulls the outline toward the tier colour rather than adding to it", () => {
+    const material = new PBRMaterial("hide", scene());
+    addRim(material);
+    const code = material.pluginManager!.getPlugin("ExiledRim")!.getCustomCode("fragment")!.CUSTOM_FRAGMENT_BEFORE_FRAGCOLOR!;
+    expect(code).toMatch(/finalColor\.rgb = mix\(finalColor\.rgb, tierColor, .*rimFacing/);
+    expect(code).not.toMatch(/\+= tierColor/);
   });
 
   it("binds magic blue, rare yellow and nothing for a plain mesh", () => {

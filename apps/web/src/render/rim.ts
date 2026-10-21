@@ -76,8 +76,8 @@ export const HIT_ALPHA = 0.3;
  */
 export type Tier = "magic" | "rare";
 export const TIER_GLOW: Record<Tier, { color: Color3; strength: number }> = {
-  magic: { color: new Color3(0.35, 0.55, 1.0), strength: 0.3 },
-  rare: { color: new Color3(1.0, 0.8, 0.3), strength: 0.38 },
+  magic: { color: new Color3(0.35, 0.55, 1.0), strength: 0.42 },
+  rare: { color: new Color3(1.0, 0.7, 0.12), strength: 0.6 },
 };
 /** Wider than the rim (3.4): a skin over the body, not a line round it. */
 const TIER_POWER = 1.6;
@@ -168,7 +168,8 @@ class RimPlugin extends MaterialPluginBase {
           if (tierGlow > 0.0) {
             // A slow band travelling up and across the body, never a flat tint.
             float shimmer = 0.55 + 0.45 * sin(glowTime * 3.2 + (vPositionW.x + vPositionW.z) * 2.2 + vPositionW.y * 5.0);
-            finalColor.rgb += tierColor * pow(rimFacing, ${TIER_POWER.toFixed(2)}) * shimmer * tierGlow;
+            // Mixed, not added: added yellow is lost on a pale hide on yellow sand.
+            finalColor.rgb = mix(finalColor.rgb, tierColor, clamp(pow(rimFacing, ${TIER_POWER.toFixed(2)}) * shimmer * tierGlow, 0.0, 1.0));
           }
           finalColor.rgb += vec3(${HOVER_COLOR.r.toFixed(3)}, ${HOVER_COLOR.g.toFixed(3)}, ${HOVER_COLOR.b.toFixed(3)}) * pow(rimFacing, ${HOVER_POWER.toFixed(2)}) * hoverGlow;
         #endif
