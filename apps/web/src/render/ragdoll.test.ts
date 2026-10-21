@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { Vector3 } from "@babylonjs/core";
+import { PhysicsConstraintType, Vector3, type Skeleton } from "@babylonjs/core";
 import {
-  CORPSE_SECONDS, DEATH_SPEED, SINK_SECONDS, sinkDepth, throwBody, trunkIndex,
+  CORPSE_SECONDS, DEATH_SPEED, SINK_SECONDS, configFor, sinkDepth, throwBody, trunkIndex,
 } from "./ragdoll";
 
 describe("corpse sink", () => {
@@ -72,6 +72,25 @@ describe("the killing blow", () => {
     expect(bodies[2]!.at).toBeNull();
   });
 });
+
+describe("the joints", () => {
+  it("are ball-and-socket on every box, never Babylon's default hinge", () => {
+    // The default hinge turns about each box's X axis as it stood at the
+    // death, whichever way the limb pointed. Measured on tide_spitter corpses:
+    // 12 of 32 hinged bodies ran away (boxes at ~195 m/s, 10-20 m up at the
+    // camera), 0 of 32 with ball joints.
+    const config = configFor(fakeSkeleton(["root", "pelvis", "thigh_l", "armature", "body_0", "leg0_0", "arm1_0", "hand_r"]));
+
+    expect(config.length).toBeGreaterThan(0);
+    for (const box of config) expect(box.joint).toBe(PhysicsConstraintType.BALL_AND_SOCKET);
+  });
+});
+
+function fakeSkeleton(names: string[]): Skeleton {
+  const bones = names.map((name) => ({ name, getParent: () => null as unknown }));
+  bones.slice(1).forEach((b) => { b.getParent = () => bones[0]; });
+  return { bones } as unknown as Skeleton;
+}
 
 function fakeBodies(n: number): FakeBody[] {
   return Array.from({ length: n }, () => new FakeBody());

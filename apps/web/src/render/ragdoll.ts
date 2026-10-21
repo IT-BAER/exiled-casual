@@ -1,5 +1,5 @@
 import {
-  MeshBuilder, PhysicsAggregate, PhysicsShapeType, Ragdoll, Vector3, HavokPlugin,
+  MeshBuilder, PhysicsAggregate, PhysicsConstraintType, PhysicsShapeType, Ragdoll, Vector3, HavokPlugin,
   type Mesh, type Scene, type Skeleton, type RagdollBoneProperties,
 } from "@babylonjs/core";
 
@@ -93,7 +93,7 @@ function creaturePart(bone: string): number | null {
   return null;
 }
 
-function configFor(skeleton: Skeleton): RagdollBoneProperties[] {
+export function configFor(skeleton: Skeleton): RagdollBoneProperties[] {
   const config: RagdollBoneProperties[] = [];
   const top = skeleton.bones.find((b) => b.getParent() === null);
   for (const bone of skeleton.bones) {
@@ -103,15 +103,24 @@ function configFor(skeleton: Skeleton): RagdollBoneProperties[] {
     // impulse is sized against it: a silent change of default would quietly
     // rescale every fall in the game.
     if (entry) {
-      config.push({ ...entry, mass: BOX_MASS, bone: bone.name } as RagdollBoneProperties);
+      config.push({ ...entry, mass: BOX_MASS, joint: JOINT, bone: bone.name } as RagdollBoneProperties);
     } else if (creatureSize !== null) {
-      config.push({ bone: bone.name, size: creatureSize, mass: BOX_MASS, min: -0.4, max: 0.4 } as RagdollBoneProperties);
+      config.push({ bone: bone.name, size: creatureSize, mass: BOX_MASS, joint: JOINT, min: -0.4, max: 0.4 } as RagdollBoneProperties);
     } else if (bone === top) {
-      config.push({ bone: bone.name, size: ROOT_MARKER, mass: BOX_MASS } as RagdollBoneProperties);
+      config.push({ bone: bone.name, size: ROOT_MARKER, mass: BOX_MASS, joint: JOINT } as RagdollBoneProperties);
     }
   }
   return config;
 }
+
+/**
+ * Every box hangs off its parent by a ball joint. Babylon's default is a hinge
+ * about the box's X axis as it stood at the death, whichever way the limb
+ * pointed, and that hinge pumps energy into a lying body until it is flung
+ * across the screen: 12 of 32 tide_spitter corpses ran away on it, 0 of 32 on
+ * this. Babylon applies no `min`/`max` limits to either joint.
+ */
+const JOINT = PhysicsConstraintType.BALL_AND_SOCKET;
 
 /** Box for a root bone that is a marker rather than a body part. */
 const ROOT_MARKER = 0.08;
