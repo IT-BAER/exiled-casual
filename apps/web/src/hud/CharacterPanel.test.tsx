@@ -90,6 +90,19 @@ describe("CharacterPanel", () => {
     expect(screen.getByTestId("char-detail").textContent).not.toContain("added to Spells");
   });
 
+  it("keeps every detail value on one line, apart from its label", () => {
+    // At 1280x720 the half-width columns broke "25-30" into "25-" / "30" and ran
+    // labels into values ("ATTACKS PER SECOND1.20"); the label is what may wrap.
+    render(<CharacterPanel player={player({ attack: { physMin: 25, physMax: 30, fire: 0, cold: 0, aps: 1.2, critPct: 5 } })} onClose={() => {}} />);
+    const row = [...screen.getByTestId("char-detail").querySelectorAll("div")]
+      .find((d) => d.textContent === "Weapon Physical Damage25-30")!;
+    const [label, value] = [...row.children] as HTMLElement[];
+    expect(value!.style.whiteSpace).toBe("nowrap");
+    expect(value!.style.flexShrink).toBe("0");
+    expect(label!.style.minWidth).toBe("0px");
+    expect(row.style.gap).not.toBe("");
+  });
+
   it("scrolls its rows in a body that stops under the life readout, never behind it", () => {
     render(<CharacterPanel player={player()} onClose={() => {}} />);
     const pane = screen.getByTestId("character-panel");

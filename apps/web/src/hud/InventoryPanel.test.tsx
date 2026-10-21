@@ -43,6 +43,19 @@ const inv = {
 };
 
 describe("InventoryPanel", () => {
+  it("sizes a one-cell slot's label to the cell, not to the 9px of the wide ones", () => {
+    // At 1280x720 "AMULET" was 41.6px of text in a 26.2px slot and read "AMULE";
+    // its capitals are still 29.9px at 7.6px type, mixed case is 24.9.
+    render(<InventoryPanel inventory={inv} flaskKeys={{ life: "1", mana: "2" }} onClose={() => {}} />);
+    for (const slot of ["amulet", "ring1", "ring2"]) {
+      const style = screen.getByTestId(`equip-slot-${slot}`).style;
+      expect(style.letterSpacing).toBe("0px");
+      expect(style.textTransform).toBe("none");
+      expect(style.fontSize).toContain("vw");
+    }
+    expect(screen.getByTestId("equip-slot-helmet").style.fontSize).toBe("9px");
+  });
+
   it("captions the flasks with the keys the HUD drinks them on", () => {
     render(<InventoryPanel inventory={inv} flaskKeys={{ life: "1", mana: "2" }} onClose={() => {}} />);
     expect(screen.getByTestId("inventory-flask-life").textContent).toBe("1");

@@ -168,9 +168,10 @@ function DetailSection({ title, rows }: { title: string; rows: [string, string][
       <div style={{ color: PARCHMENT, fontSize: 15, letterSpacing: 0.5, paddingBottom: 3 }}>{title}</div>
       <div style={{ height: 1, background: "#2a2317", marginBottom: 5 }} />
       {rows.map(([label, value]) => (
-        <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "2px 0" }}>
-          <span style={{ color: "#9a8a68", fontSize: 11, letterSpacing: 0.8, textTransform: "uppercase" }}>{label}</span>
-          <span style={{ color: "#fff", fontSize: 12 }}>{value}</span>
+        // In a narrow column the label wraps, never the value ("25-30" broke at the dash).
+        <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, padding: "2px 0" }}>
+          <span style={{ color: "#9a8a68", fontSize: 11, letterSpacing: 0.8, textTransform: "uppercase", minWidth: 0 }}>{label}</span>
+          <span style={{ color: "#fff", fontSize: 12, whiteSpace: "nowrap", flexShrink: 0 }}>{value}</span>
         </div>
       ))}
     </div>

@@ -248,6 +248,9 @@ function EquipSlot({
           ? `inset 0 0 10px rgba(0,0,0,0.75), 0 0 10px ${GOLD}88`
           : "inset 0 0 10px rgba(0,0,0,0.75), inset 0 1px 0 rgba(200,164,77,0.08)",
         opacity: highlight === "illegal" ? 0.35 : 1,
+        // One cell is ~26px at 1280 wide, and Marcellus capitals spell "AMULET"
+        // wider than a cell at any readable size: these labels are mixed case.
+        ...(w === 1 ? { letterSpacing: 0, textTransform: "none", fontSize: `${U_VW * 0.24}vw` } : {}),
       }}
     >
       {item?.icon ? (
