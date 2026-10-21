@@ -1,10 +1,14 @@
 import {
   Color3,
   Color4,
+  Constants,
+  Effect,
+  Matrix,
+  Mesh,
   MeshBuilder,
+  ShaderMaterial,
   SolidParticleSystem,
   StandardMaterial,
-  type Mesh,
   type Scene,
   type SolidParticle,
 } from "@babylonjs/core";
@@ -13,60 +17,56 @@ import type { FireSpot } from "./lights";
 /**
  * The fire itself, standing in the bowls that `lights.ts` lights the room from.
  *
- * A brazier used to be a glowing lump of coals under a flickering point light,
- * and that reads as a lamp someone left on the floor: the light says fire and
- * nothing in the bowl agrees with it. The eye takes the glow on trust for about
- * a second and then goes looking for the thing making it.
+ * Two populations, as in a real fire: the body of the flame, and the few specks
+ * that break off the top and travel until they cool.
  *
- * This is the menu's fire (`menu/atmos.tsx`) carried into the world — the same
- * trajectory, the same heat ramp, the same white-hot lip cooling to soot at the
- * tip, the same few sparks that leave the top altogether. What changes is what a
- * particle IS. In the menu it is a pre-rendered dot blitted onto a canvas over a
- * painting, which is legitimate there because the whole screen is 2D. In the
- * world it has to be geometry: a real octahedron in real world units, standing
- * in the room, occluded by whatever is in front of it, seen at whatever angle
- * the camera happens to be at. Nothing here is a billboard, a sprite sheet or a
- * flipbook.
+ * ## The body is one shader quad per bowl
  *
- * ## Why a SolidParticleSystem and not thin instances
+ * It was three hundred solid embers a bowl, each living about a second and a
+ * half over a flame under a metre tall. Every one was a bright point the eye
+ * could follow, so the fire read as a fountain streaming upward, and too fast,
+ * however the lifetimes were tuned. A real flame has no points in it: the base
+ * is a continuous sheet that hardly moves, and only the top half tears into
+ * tongues that rise and break off a couple of times a second.
  *
- * Thin instances were the obvious build — one mesh, one draw, a matrix and a
- * colour per ember — and the colour half of it silently does not work in this
- * scene. The `instanceColor` buffer is attached, the attribute is bound and
- * `INSTANCESCOLOR` is in the effect's defines, and every ember still shades as
- * if `vColor` were `vec4(1.0)`: heat and alpha both gone, so six hundred embers
- * of white at full opacity summed to a white egg that ignored every knob on it.
- * An SPS writes per-particle colour into the mesh's OWN vertex buffer instead,
- * which is the ordinary `VERTEXCOLOR` path every other material in the engine
- * uses, and it costs one draw call the same way.
+ * So the body is a camera-facing quad (turning about Y only, so it stands up
+ * like the props and foreshortens the way they do) and the fire is drawn in its
+ * fragment shader: a teardrop the coals' width at the base, torn at the top by
+ * two layers of rising noise, coloured by the same white-hot-to-soot ramp the
+ * embers used. It costs eight triangles where the embers re-uploaded 1,248
+ * particles a frame. What a quad gives up against solids is parallax INSIDE the
+ * flame, which at this camera is a few pixels; depth testing still lets a
+ * pillar in front of the bowl hide it, and the bowl's rim hides its root.
+ *
+ * ## The sparks stay solid
+ *
+ * A dozen a bowl on a SolidParticleSystem, not thin instances: the thin-instance
+ * `instanceColor` buffer is bound and still shades as `vec4(1.0)` in this scene,
+ * which loses heat and alpha both. An SPS writes colour into the mesh's own
+ * vertex buffer, the ordinary `VERTEXCOLOR` path.
  *
  * ## Why only the near bowls burn
  *
  * An area stands up to ten braziers and the camera shows nineteen units across,
  * so most of them are off screen. Only the `BOWLS` nearest within `FLAME_RANGE`
- * are given particles; the rest of the pool is parked at zero scale. The cut is
- * well outside the frame, so a bowl swapping in never happens where it shows.
+ * burn; the rest of the pool is parked. The cut is well outside the frame, so a
+ * bowl swapping in never happens where it shows.
  */
 
-/** The one mesh, by name, so a rebuild finds it instead of making a second. */
+/** The sparks' mesh, by name, so a rebuild finds it instead of making a second.
+ *  Every flame mesh's name starts with it, which is how filters find them all. */
 export const FLAME_MESH = "fire-flames";
+/** The flame bodies' names: this, then the bowl's slot. */
+export const FLAME_TONGUE = `${FLAME_MESH}-tongue-`;
 
 /**
- * Embers per bowl, and how many bowls may burn at once.
+ * Sparks per bowl, and how many bowls may burn at once.
  *
- * The menu runs 560 per brazier because a canvas particle is nearly free. Here
- * every particle is six vertices rewritten and re-uploaded per frame, and the
- * upload is the whole buffer whether or not a particle moved — so the CAPACITY
- * is the cost, not the number alight. Six bowls of 392 cost fourteen frames a
- * second; four of 312 cost two, and the fire is the same fire.
- *
- * Four is also exactly `LIGHT_POOL`, which is not a coincidence worth breaking:
- * the bowls that burn are then the bowls that light the room, so a brazier can
- * never be lit with nothing in it or alight with no pool under it.
+ * Four is exactly `LIGHT_POOL`, which is not a coincidence worth breaking: the
+ * bowls that burn are then the bowls that light the room, so a brazier can never
+ * be lit with nothing in it or alight with no pool under it.
  */
-const EMBERS = 300;
 const SPARKS = 12;
-const PER_BOWL = EMBERS + SPARKS;
 const BOWLS = 4;
 /** Past this, in world units, a bowl is off screen. The frame's half-diagonal
  *  is about 10.6, so the swap always happens out of sight. */
@@ -76,76 +76,34 @@ export const FLAME_RANGE = 14;
  * The flame, in world units, against the brazier `tools/build_props.py` builds:
  * its rim is at 1.02 and the coals mound just under it, so the fire starts at
  * the coal face and stands about knee-high on the player.
- *
- * Shorter than the 1.2 it was: at that height the plume stood taller than the
- * brazier it burned in, which is a bonfire in a dish rather than a bowl of
- * coals. `EMBER_WIDTH` carries most of the difference back, because the ember
- * radius is a fraction of THIS, and a shorter flame of proportionally thinner
- * embers is a sparser flame rather than a smaller one.
  */
 const BASE_Y = 0.95;
 const FLAME_H = 0.82;
-/** Radius of the lip the embers are born across: the bowl's inner floor. */
+/** Radius of the lip the sparks are born across: the bowl's inner floor. */
 const LIP_R = 0.3;
 
 /**
- * Width of one ember against the flame's height, and how much taller than wide
- * it is drawn at the lip, where the gas is moving fastest.
- *
- * Narrower than the menu's 0.045, because a particle here is a SOLID and not a
- * soft dot: at eight pixels the octahedron's own silhouette is legible and the
- * fire reads as confetti. Half the width and twice the count is the same light
- * through a mass the eye cannot pick individual pieces out of, which is the only
- * softness geometry gets for free.
+ * The quad the body is drawn on. Wider than the bowl's lip and taller than the
+ * flame, because the shader tears the edges and tips in from it and a quad cut
+ * at the flame's own size clips a tongue into a straight edge. Its root sits a
+ * little under the coal face so the rim, not the quad's edge, is where it starts.
  */
-const EMBER_WIDTH = 0.035;
-const EMBER_STRETCH = 2.6;
+const TONGUE_W = 0.9;
+const TONGUE_H = FLAME_H * 1.3;
+const TONGUE_Y = BASE_Y - 0.03;
 
 /**
- * How hard the fire burns into the frame.
- *
- * Lower than the menu's 0.50 because this camera looks DOWN the plume rather
- * than across it, so a pixel near the core takes a dozen embers stacked front to
- * back instead of two or three, and the shape only exists in the range where
- * that sum is still under 1.
+ * How hard the fire burns into the frame. Shared by the body and the sparks: the
+ * camera looks DOWN the plume, so the flame only has a shape in the range where
+ * what it adds to the floor behind it is still under white.
  */
 const BRIGHT = 0.52;
+/** The body's share of it. One layer of flame, where the embers stacked a dozen
+ *  deep at the core. */
+const TONGUE_BRIGHT = 1.4;
 
-/**
- * How fast an ember fades as it climbs.
- *
- * The menu's 1.5 is a side-on view, where the plume gets the full height of the
- * screen to itself. This camera looks down it, so height is foreshortened into
- * the bowl and a fast fade leaves a glowing dish with nothing standing out of
- * it. Slower here, so the tongue survives the projection.
- *
- * But not as slow as 0.8. The last third of the ramp is soot-red, and holding
- * an ember's alpha up through it paints that red across the top of the plume:
- * what makes the tip of a real flame vanish is that it stops emitting, not that
- * it turns crimson.
- */
-const FADE = 1.15;
-
-/**
- * Where on the heat ramp an ember is born.
- *
- * Not at 0. Twenty additive embers of white-hot gas sum to white paint, and a
- * white fire is a lamp — so no single ember here is ever white, and the white
- * core is what the PILE-UP makes, which is where a real fire's core comes from
- * too.
- */
-const RAMP_FLOOR = 0.22;
-
-/** Turbulence, closed form. Two sines whose periods share no small multiple,
- *  one folded through the other, so a particle advects through a field that
- *  never repeats on a count. Same field the menu's embers ride. */
-function swirl(x: number, y: number): number {
-  return Math.sin(x * 2.7 + Math.sin(y * 1.9) * 1.3) * 0.62
-    + Math.sin(x * 5.3 - y * 3.1) * 0.38;
-}
-
-/** Colour of an ember at `u` of its life, white-hot at the coals to soot at the
- *  tip. The menu's ramp, in Babylon's 0..1 rather than in bytes. */
+/** Colour of a spark at `u` of the heat ramp, white-hot at the coals to soot at
+ *  the tip. The menu's ramp (`menu/atmos.tsx`), in Babylon's 0..1. */
 function emberColour(u: number, out: Color4): void {
   if (u < 0.22) {
     const k = u / 0.22;
@@ -159,17 +117,120 @@ function emberColour(u: number, out: Color4): void {
   }
 }
 
-interface Ember {
-  born: number;
-  life: number;
-  laneX: number;
-  laneZ: number;
-  sway: number;
-  size: number;
-  leanX: number;
-  leanZ: number;
-  curl: number;
-  reach: number;
+const FLAME_SHADER = "brazierFlame";
+
+/**
+ * The flame, as a pure function of `uv` and time.
+ *
+ * A density field, not a sprite: a teardrop the coals' width at the root, less
+ * dense with height, with two layers of noise rising through it at 0.5-0.6 m/s
+ * that carve the upper half into tongues. That rise is the pace the eye reads;
+ * the old embers left the coals at 0.9 m/s and every one was a point to follow.
+ * The heat ramp is the embers' one in four stops, soot red to white-hot, and
+ * the tips fade by losing emission, never by turning red.
+ */
+function registerFlameShader(): void {
+  if (Effect.ShadersStore[`${FLAME_SHADER}VertexShader`]) return;
+  Effect.ShadersStore[`${FLAME_SHADER}VertexShader`] = `
+    precision highp float;
+    attribute vec3 position;
+    attribute vec2 uv;
+    uniform mat4 worldViewProjection;
+    varying vec2 vUV;
+    void main(void) {
+      vUV = uv;
+      gl_Position = worldViewProjection * vec4(position, 1.0);
+    }`;
+  Effect.ShadersStore[`${FLAME_SHADER}FragmentShader`] = `
+    precision highp float;
+    varying vec2 vUV;
+    uniform float uTime;
+    uniform float uFlick;
+    uniform float uBright;
+    float hash(vec2 p) {
+      vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+      p3 += dot(p3, p3.yzx + 33.33);
+      return fract((p3.x + p3.y) * p3.z);
+    }
+    float noise(vec2 p) {
+      vec2 i = floor(p);
+      vec2 f = fract(p);
+      vec2 u = f * f * (3.0 - 2.0 * f);
+      return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),
+                 mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
+    }
+    float fbm(vec2 p) {
+      float v = 0.0;
+      float a = 0.5;
+      for (int i = 0; i < 4; i++) {
+        v += a * noise(p);
+        // Turned each octave: value noise left on its grid draws stair steps.
+        p = mat2(0.8, -0.6, 0.6, 0.8) * p * 2.03 + vec2(1.7, 9.2);
+        a *= 0.5;
+      }
+      return v;
+    }
+    vec3 ramp(float h) {
+      vec3 soot = vec3(0.55, 0.10, 0.02);
+      vec3 orange = vec3(1.0, 0.45, 0.10);
+      vec3 yellow = vec3(1.0, 0.80, 0.42);
+      vec3 white = vec3(1.0, 0.96, 0.84);
+      if (h < 0.33) return mix(soot, orange, h / 0.33);
+      if (h < 0.66) return mix(orange, yellow, (h - 0.33) / 0.33);
+      return mix(yellow, white, (h - 0.66) / 0.34);
+    }
+    void main(void) {
+      float y = vUV.y;
+      float x = vUV.x * 2.0 - 1.0;
+      // Wrapped, or the hash loses its low bits an hour into a session; the
+      // pattern jumps once every ten minutes, for one frame.
+      float t = mod(uTime, 600.0);
+      float sway = (noise(vec2(t * 0.6, 3.1)) - 0.5) * 0.3 * y;
+      float n = fbm(vec2(x * 3.2, y * 2.8 - t * 1.6));
+      float n2 = fbm(vec2(x * 6.0 + 7.3, y * 5.0 - t * 2.4));
+      float xs = x - sway + (n - 0.5) * 0.5 * y;
+      float w = 0.78 * (1.0 - y * 0.9);
+      float d = abs(xs) / max(w, 0.001);
+      float dens = (1.0 - d * d) * 1.1 - y * 1.25 + (n - 0.5) * 1.3 * (0.25 + y) + (n2 - 0.5) * 0.45;
+      dens *= smoothstep(0.0, 0.08, y);
+      float f = clamp(dens, 0.0, 1.0);
+      float shape = smoothstep(0.0, 0.3, f);
+      float heat = clamp(f * 1.25 - y * 0.3, 0.0, 1.0);
+      // Light, not paint: added straight onto the frame, and the thin edges
+      // emit less than the core, which is the only white in it.
+      gl_FragColor = vec4(ramp(heat) * shape * (0.3 + 0.7 * heat) * uBright * uFlick, 1.0);
+    }`;
+}
+
+/** One flame body: its mesh and the material its clock is set on. */
+interface Tongue {
+  mesh: Mesh;
+  mat: ShaderMaterial;
+}
+
+function buildTongue(scene: Scene, b: number): Tongue {
+  const mesh = MeshBuilder.CreatePlane(`${FLAME_TONGUE}${b}`, { width: TONGUE_W, height: TONGUE_H }, scene);
+  // Rooted at the coals, so the billboard turns about the flame's foot.
+  mesh.bakeTransformIntoVertices(Matrix.Translation(0, TONGUE_H / 2, 0));
+  mesh.billboardMode = Mesh.BILLBOARDMODE_Y;
+  const mat = new ShaderMaterial(`${FLAME_TONGUE}${b}-mat`, scene, FLAME_SHADER, {
+    attributes: ["position", "uv"],
+    uniforms: ["worldViewProjection", "uTime", "uFlick", "uBright"],
+    needAlphaBlending: true,
+  });
+  mat.alphaMode = Constants.ALPHA_ADD;
+  mat.backFaceCulling = false;
+  // Additive light: a flame that wrote depth would cut out the sparks behind it.
+  // Depth TESTING stays on, so a pillar in front of the bowl still hides it.
+  mat.disableDepthWrite = true;
+  mat.setFloat("uTime", 0);
+  mat.setFloat("uFlick", 1);
+  mat.setFloat("uBright", TONGUE_BRIGHT);
+  mesh.material = mat;
+  mesh.isPickable = false;
+  mesh.receiveShadows = false;
+  mesh.setEnabled(false);
+  return { mesh, mat };
 }
 
 interface Spark {
@@ -185,8 +246,8 @@ interface Spark {
 }
 
 let sps: SolidParticleSystem | null = null;
-let embers: Ember[] = [];
 let sparks: Spark[] = [];
+let tongues: Tongue[] = [];
 
 /** What `updateParticle` needs and cannot be handed: the bowls burning this
  *  frame, and the clock they burn on. */
@@ -196,7 +257,7 @@ let clock = 0;
 let lit = BOWLS;
 
 /**
- * Build the system and the particle table. Call once per scene, with the lights.
+ * Build the flames and the spark table. Call once per scene, with the lights.
  *
  * Idempotent per scene, for the same reason the light pool is: this is cheap to
  * find and expensive to duplicate.
@@ -205,18 +266,18 @@ export function createFireFlames(scene: Scene): Mesh | null {
   const found = scene.getMeshByName(FLAME_MESH) as Mesh | null;
   if (found && sps) return found;
   // A mesh this module has forgotten is a fire that cannot be driven. That is a
-  // scene rebuilt after a reset, and the old mesh goes.
-  found?.dispose();
+  // scene rebuilt after a reset, and the old meshes go.
+  for (const m of scene.meshes.filter((x) => x.name.startsWith(FLAME_MESH))) m.dispose();
+
+  registerFlameShader();
+  tongues = Array.from({ length: BOWLS }, (_, b) => buildTongue(scene, b));
 
   const system = new SolidParticleSystem(FLAME_MESH, scene, { updatable: true });
-  // Eight triangles. At this camera an ember covers three to six pixels, so the
-  // solid's own facets are below what can be resolved — what matters is that it
-  // HAS a shape in the room, and therefore a silhouette, an occlusion and a
-  // parallax that a camera-facing quad would not have.
-  // Shared corners (`flat: false`): 6 vertices instead of 24, and the material
-  // is unlit, so the per-face normals flat shading buys were never drawn.
+  // Eight triangles. At this camera a spark covers a few pixels, so the solid's
+  // own facets are below what can be resolved. Shared corners (`flat: false`):
+  // 6 vertices instead of 24, and the material is unlit.
   const proto = MeshBuilder.CreatePolyhedron("fire-ember-proto", { type: 1, size: 0.5, flat: false }, scene);
-  system.addShape(proto, BOWLS * PER_BOWL);
+  system.addShape(proto, BOWLS * SPARKS);
   proto.dispose();
   const m = system.buildMesh();
 
@@ -227,15 +288,12 @@ export function createFireFlames(scene: Scene): Mesh | null {
   mat.diffuseColor = Color3.Black();
   mat.specularColor = Color3.Black();
   mat.disableLighting = true;
-  mat.alphaMode = 1; // ALPHA_ADD
+  mat.alphaMode = Constants.ALPHA_ADD;
   mat.backFaceCulling = false;
-  // Additive and overlapping: an ember that wrote depth would reject every ember
-  // behind it, and the pile-up IS the flame. Depth TESTING stays on, so a pillar
-  // in front of the bowl still hides the fire behind it.
   mat.disableDepthWrite = true;
   m.material = mat;
   // Puts the mesh in the transparent pass AND turns on the shader's
-  // `alpha *= vColor.a`. Without it the fire renders opaque, in the wrong pass.
+  // `alpha *= vColor.a`. Without it the sparks render opaque, in the wrong pass.
   m.hasVertexAlpha = true;
   m.isPickable = false;
   m.receiveShadows = false;
@@ -257,31 +315,9 @@ export function createFireFlames(scene: Scene): Mesh | null {
     seed = (seed * 1664525 + 1013904223) >>> 0;
     return seed / 0x100000000;
   };
-  /** -1..1, densest at 0. Two samples averaged is a triangle distribution: a
-   *  flat lane fills the bowl edge to edge and burns as a wall. */
-  const lane = () => rnd() + rnd() - 1;
 
-  embers = [];
   sparks = [];
   for (let b = 0; b < BOWLS; b++) {
-    for (let k = 0; k < EMBERS; k++) {
-      embers.push({
-        // Births spread over one lifetime, or the whole cohort dies together
-        // and the flame pulses.
-        born: (k / EMBERS) * 0.8 + b * 0.13,
-        life: 0.95 + rnd() * 0.8,
-        laneX: lane(),
-        laneZ: lane(),
-        sway: rnd() * Math.PI * 2,
-        size: 0.7 + rnd() * 0.6,
-        leanX: (rnd() * 2 - 1) * 0.35,
-        leanZ: (rnd() * 2 - 1) * 0.35,
-        curl: rnd() * 6.28,
-        // A third burn out low. One uniform lifetime draws a plume with a flat
-        // top; real fire is short tongues with a few that carry.
-        reach: rnd() < 0.34 ? 0.45 + rnd() * 0.25 : 0.8 + rnd() * 0.35,
-      });
-    }
     for (let k = 0; k < SPARKS; k++) {
       sparks.push({
         born: (k / SPARKS) * 1.6 + b * 0.21,
@@ -306,16 +342,16 @@ export function createFireFlames(scene: Scene): Mesh | null {
 /** Forget the system. The scene that owned it is going away with it. */
 export function resetFireFlames(): void {
   sps = null;
-  embers = [];
   sparks = [];
+  tongues = [];
   burning = [];
   clock = 0;
   lit = BOWLS;
 }
 
-/** How many embers are alight, for tests. */
+/** How many sparks are alight, for tests. */
 export function flameParticleCount(): number {
-  return Math.min(burning.length, BOWLS) * PER_BOWL;
+  return Math.min(burning.length, BOWLS) * SPARKS;
 }
 
 /**
@@ -326,34 +362,42 @@ export function updateFireFlames(near: readonly FireSpot[], now: number): void {
   if (!sps) return;
   burning = near;
   clock = now;
-  // Once per bowl rather than once per ember: the flicker is the same two
-  // detuned sines for all four hundred of them, and it is the one term in the
-  // loop that does not depend on which particle is being drawn.
   for (let b = 0; b < BOWLS; b++) {
     const s = near[b];
-    if (!s) break;
+    const tongue = tongues[b];
+    if (!s) {
+      tongue?.mesh.setEnabled(false);
+      continue;
+    }
     const ph = now + s.phase;
+    // The same two detuned sines the light's intensity rides.
     flicker[b] = 0.72 + 0.2 * Math.sin(ph * 3.1) + 0.1 * Math.sin(ph * 1.27 + 1.7);
+    if (!tongue) continue;
+    tongue.mesh.position.set(s.x, TONGUE_Y, s.z);
+    tongue.mesh.setEnabled(true);
+    tongue.mat.setFloat("uTime", ph);
+    // Half the light's swing: the body is the steady part of a fire.
+    tongue.mat.setFloat("uFlick", 0.5 + 0.5 * flicker[b]!);
   }
   // Only the bowls alight now, plus any that went out since last frame so their
-  // embers get parked once. Every bowl beyond both is already parked.
+  // sparks get parked once. Every bowl beyond both is already parked.
   const alight = Math.min(near.length, BOWLS);
   const span = Math.max(alight, lit);
   lit = alight;
-  if (span > 0) sps.setParticles(0, span * PER_BOWL - 1);
+  if (span > 0) sps.setParticles(0, span * SPARKS - 1);
 }
 
 /** The flicker each burning bowl is at this frame. See `updateFireFlames`. */
 const flicker: number[] = [];
 
 /**
- * One ember, or one spark, wherever it is in its life.
+ * One spark, wherever it is in its life.
  *
  * A pure function of the clock, like the menu's: no particle carries state
  * between frames, so a frame can be reproduced from its timestamp alone.
  */
 function updateParticle(p: SolidParticle): SolidParticle {
-  const b = (p.idx / PER_BOWL) | 0;
+  const b = (p.idx / SPARKS) | 0;
   const s = burning[b];
   if (!s || b >= BOWLS) {
     // Parked, not merely invisible: a zero-scale particle still has a position,
@@ -364,54 +408,8 @@ function updateParticle(p: SolidParticle): SolidParticle {
     if (anchor) p.position.set(anchor.x, BASE_Y, anchor.z);
     return p;
   }
-  const k = p.idx - b * PER_BOWL;
   const t = clock;
-  const ph = t + s.phase;
-  const flick = flicker[b] ?? 1;
-
-  if (k < EMBERS) {
-    const e = embers[b * EMBERS + k]!;
-    const u = (((t - e.born) / e.life) % 1 + 1) % 1;
-    // Fast off the coals, slowing as it cools and spreads.
-    const rise = u * (1.55 - 0.55 * u) * e.reach;
-    // Three terms, and their order is the flame's shape. The lane converges on
-    // the centre line as it climbs, which is the silhouette; the turbulence is
-    // scaled by height, so the base stays laminar and only the top tears; the
-    // lean is the whole fire's drift.
-    const conv = LIP_R * (1 - u * 0.66);
-    const wander = FLAME_H * 0.20 * rise;
-    p.position.x = s.x
-      + e.laneX * conv
-      + swirl(e.laneX * 2.4 + e.curl, rise * 3.6 - ph * 1.15) * wander
-      + Math.sin(u * 5.5 + e.sway) * FLAME_H * 0.04
-      + e.leanX * FLAME_H * u * 0.25;
-    p.position.z = s.z
-      + e.laneZ * conv
-      + swirl(e.laneZ * 2.4 + e.curl + 2.1, rise * 3.6 - ph * 1.15) * wander
-      + Math.cos(u * 5.5 + e.sway) * FLAME_H * 0.04
-      + e.leanZ * FLAME_H * u * 0.25;
-    p.position.y = BASE_Y + FLAME_H * rise;
-    // Widening, not narrowing: a parcel of burning gas diffuses as it cools.
-    // The silhouette still comes to a point because the alpha falls faster than
-    // the radius grows, so the tips go to filigree rather than to a solid cone
-    // with a rounded cap.
-    const rad = FLAME_H * EMBER_WIDTH * e.size * (1 + 0.9 * u);
-    const stretch = 1.25 + (EMBER_STRETCH - 1.25) * (1 - u);
-    p.scaling.set(rad, rad * stretch, rad);
-    // Hot at the lip, hot in the middle: an ember two thirds out across the
-    // bowl is at the edge of the burn and never was white.
-    emberColour(
-      Math.min(1, RAMP_FLOOR + u ** 0.8 + Math.hypot(e.laneX, e.laneZ) * 0.24),
-      p.color!,
-    );
-    p.color!.a = (1 - u) ** FADE * BRIGHT * flick;
-    return p;
-  }
-
-  // ...and the few that leave the flame altogether. A fire is two populations:
-  // the body of it, and the specks that break off the top and travel until they
-  // cool. The body alone reads as a lamp with a shape.
-  const q = sparks[b * SPARKS + (k - EMBERS)]!;
+  const q = sparks[p.idx]!;
   const u = (((t - q.born) / q.life) % 1 + 1) % 1;
   // Barely over the flame, not two flames above it. At 2.4 a spark climbed to
   // nearly three units off the coals and spent most of that climb at the soot

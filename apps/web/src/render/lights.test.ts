@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { FreeCamera, Mesh, MeshBuilder, NullEngine, Scene, Vector3 } from "@babylonjs/core";
-import { FLAME_MESH, flameParticleCount } from "./flames";
+import { Constants, FreeCamera, Mesh, MeshBuilder, NullEngine, Scene, Vector3 } from "@babylonjs/core";
+import { FLAME_MESH, FLAME_TONGUE, flameParticleCount } from "./flames";
 import {
   BRAZIER_FLAME_Y, BRAZIER_RIM_R, BRAZIER_RIM_Y, LIGHT_POOL,
   createFireLights, fireLightState, resetFireLights, rimShadowRadius, setFireSpots,
@@ -253,45 +253,69 @@ describe("the fires a place is lit by", () => {
 });
 
 describe("the fire in the bowl", () => {
+  /** The flames standing in bowls this frame. */
+  const tongues = (s: Scene) => s.meshes.filter((m) => m.name.startsWith(FLAME_TONGUE)) as Mesh[];
+  const burningTongues = (s: Scene) => tongues(s).filter((m) => m.isEnabled() && m.isVisible);
+
   it("burns over the bowl and nowhere else, and stops burning off screen", () => {
     const s = scene();
     createFireLights(s);
     const mesh = s.getMeshByName(FLAME_MESH) as Mesh;
     expect(mesh).toBeTruthy();
-    // Without this the material's own alpha decides the pass, and a fire drawn
-    // opaque is a cloud of grey pebbles.
+    // Without this the material's own alpha decides the pass, and a spark drawn
+    // opaque is a grey pebble.
     expect(mesh.hasVertexAlpha).toBe(true);
 
     setFireSpots([{ x: 8, z: -3, phase: 0 }]);
     updateFireLights(s, new Vector3(8, 0, -3), 16);
-    const drawn = flameParticleCount();
-    expect(drawn).toBeGreaterThan(0);
+    expect(flameParticleCount()).toBeGreaterThan(0);
 
-    // Read the geometry the GPU would draw, not a bounding box: the system is
-    // marked always-visible, so Babylon stops refreshing the bounds and a box
-    // check would pass on the shape the mesh was BUILT at. Every vertex has to
-    // stand over its own bowl and above the coals — the whole trajectory is
-    // rewritten per frame, and a sign error puts the fire in the next room with
-    // nothing else in the app any the wiser.
+    // The sparks' geometry, as the GPU would draw it: the system is always-visible,
+    // so its bounds are the shape it was BUILT at and prove nothing.
     const pos = mesh.getVerticesData("position")!;
-    let top = 0;
     for (let i = 0; i < pos.length; i += 3) {
       expect(Math.hypot(pos[i]! - 8, pos[i + 2]! + 3)).toBeLessThan(2);
       expect(pos[i + 1]!).toBeGreaterThan(0.5);
-      top = Math.max(top, pos[i + 1]!);
     }
-    // ...and the plume reaches well over the rim, or it is a glow in a bowl.
-    expect(top).toBeGreaterThan(1.6);
-    expect(top).toBeLessThan(4);
+
+    // One flame stands in the bowl, from the coals to well over the rim.
+    const lit = burningTongues(s);
+    expect(lit).toHaveLength(1);
+    lit[0]!.computeWorldMatrix(true);
+    const flame = lit[0]!.getBoundingInfo().boundingBox;
+    expect(Math.hypot(flame.centerWorld.x - 8, flame.centerWorld.z + 3)).toBeLessThan(0.5);
+    expect(flame.minimumWorld.y).toBeGreaterThan(0.8);
+    expect(flame.minimumWorld.y).toBeLessThan(BRAZIER_RIM_Y);
+    expect(flame.maximumWorld.y).toBeGreaterThan(1.6);
+    expect(flame.maximumWorld.y).toBeLessThan(4);
 
     // Walk away past FLAME_RANGE and nothing is alight.
     updateFireLights(s, new Vector3(60, 0, -3), 16);
     expect(flameParticleCount()).toBe(0);
+    expect(burningTongues(s)).toHaveLength(0);
+  });
+
+  it("is light: added onto the frame, never hiding what burns behind it", () => {
+    const s = scene();
+    createFireLights(s);
+    setFireSpots([{ x: 0, z: 0, phase: 0 }]);
+    updateFireLights(s, Vector3.Zero(), 16);
+    const [flame] = burningTongues(s);
+    expect(flame!.material!.alphaMode).toBe(Constants.ALPHA_ADD);
+    expect(flame!.material!.disableDepthWrite).toBe(true);
+    expect(flame!.isPickable).toBe(false);
+  });
+
+  it("never stands more flames than the pool lights", () => {
+    const s = scene();
+    createFireLights(s);
+    setFireSpots([0, 1, 2, 3, 4, 5].map((x, i) => ({ x, z: 0, phase: i })));
+    updateFireLights(s, Vector3.Zero(), 16);
+    expect(tongues(s)).toHaveLength(LIGHT_POOL);
+    expect(burningTongues(s)).toHaveLength(LIGHT_POOL);
   });
 
   it("burns only the bowls the camera can see", () => {
-    // 312 particles a bowl, rewritten every frame: a bowl in range but off
-    // screen cost the frame about 0.3 ms for nothing.
     const s = scene();
     const camera = new FreeCamera("cam", new Vector3(0, 10, 0), s);
     camera.setTarget(new Vector3(0, 0, 10));
@@ -299,14 +323,8 @@ describe("the fire in the bowl", () => {
     // Both within FLAME_RANGE of the player at the origin; one is far off to the side.
     setFireSpots([{ x: 0, z: 6, phase: 0 }, { x: 12, z: 0, phase: 1 }]);
     updateFireLights(s, Vector3.Zero(), 16);
-    const pos = (s.getMeshByName(FLAME_MESH) as Mesh).getVerticesData("position")!;
-    const near = (x: number, z: number) => {
-      let n = 0;
-      for (let i = 0; i < pos.length; i += 3) if (Math.hypot(pos[i]! - x, pos[i + 2]! - z) < 2 && pos[i + 1]! > 0.5) n++;
-      return n;
-    };
-    expect(near(0, 6), "the bowl in view burns").toBeGreaterThan(0);
-    expect(near(12, 0), "vertices burning over the bowl off screen").toBe(0);
+    const lit = burningTongues(s).map((m) => [m.position.x, m.position.z]);
+    expect(lit, "the bowl in view burns").toEqual([[0, 6]]);
     // The light still stands over both: its pool can reach the screen.
     expect(fireLightState().filter((l) => l.on)).toHaveLength(2);
   });

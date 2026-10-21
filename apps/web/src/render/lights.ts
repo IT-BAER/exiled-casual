@@ -234,7 +234,7 @@ function castFrom(scene: Scene, light: PointLight | undefined): void {
     const casts = (mesh: AbstractMesh): boolean =>
       reachesCaster(light, mesh)
       && mesh.name !== "ground"
-      && mesh.name !== FLAME_MESH
+      && !mesh.name.startsWith(FLAME_MESH)
       && !mesh.name.startsWith("telegraph-")
       && !isScatterDressing(mesh.name)
       // The coast's ledge is 900+ thin instances behind one map-wide bounding
@@ -298,12 +298,12 @@ function excludeBowls(scene: Scene): void {
 let viewMatrix: Matrix | undefined;
 let viewPlanes: ReturnType<typeof Frustum.GetPlanes> = [];
 const plumeCentre = new Vector3();
-/** Bounding sphere of a bowl's plume: embers stay within 2 of the bowl and under 4 high. */
+/** Bounding sphere of a bowl's plume: flame and sparks stay within 2 of the bowl and under 4 high. */
 const PLUME_LIFT = 1;
 const PLUME_RADIUS = 3;
 
 /**
- * Whether any of a bowl's fire can be on screen. Its 312 particles are rewritten
+ * Whether any of a bowl's fire can be on screen. Its flame and sparks are redrawn
  * every frame, seen or not; the light is not culled, its pool can reach the screen.
  */
 function plumeInView(s: FireSpot): boolean {

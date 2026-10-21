@@ -835,7 +835,7 @@ export function createScene(engine: Engine): SceneHandle {
       const dz = bs.centerWorld.z - torch.position.z;
       const reach = torch.range + bs.radiusWorld + 2;
       if (dx * dx + dy * dy + dz * dz > reach * reach) return false;
-      return !(mesh === ground || mesh.name.startsWith("telegraph-") || mesh.name === FLAME_MESH
+      return !(mesh === ground || mesh.name.startsWith("telegraph-") || mesh.name.startsWith(FLAME_MESH)
         || mesh.name.startsWith("groundblob-") || mesh.name === HIDEOUT_EDGE_NAME || isWardrobePart(mesh.name)
         // A loot beam and its floor pool are light, not things standing in it.
         || mesh.name.endsWith("-beam") || mesh.name.endsWith("-pool")
@@ -859,9 +859,9 @@ export function createScene(engine: Engine): SceneHandle {
     // change. Both problems disappear with the registration.
     //
     // To put the sun's shadows back: restore this observer against
-    // `isLevelGeometry`, telegraph decals, `groundblob-*` and FLAME_MESH (a
-    // thousand embers a frame, each one light rather than a thing standing in
-    // light), re-enable `sun.shadowEnabled` in `applyGraphics`, and put back the
+    // `isLevelGeometry`, telegraph decals, `groundblob-*` and every FLAME_MESH
+    // mesh (fire is light rather than a thing standing in light), re-enable
+    // `sun.shadowEnabled` in `applyGraphics`, and put back the
     // `cullShadowCasters(shadows)` below. Note the floor was a special case even
     // then: it is registered before that filter exists, and a flat plane with
     // nothing under it can only cast onto ITSELF — at this sun angle that landed
@@ -929,12 +929,12 @@ export function createScene(engine: Engine): SceneHandle {
   // not the alpha, not the per-instance colour. An ember is white emissive at
   // an alpha of a few percent, so the glow pass drew six hundred opaque white
   // solids and the fire came back as a clipped white egg that ignored every
-  // knob on it. Referencing the mesh makes the glow map render it with the
-  // material it actually has, which is the only way an additive particle can be
-  // in a bloom at all.
-  const flame = scene.getMeshByName(FLAME_MESH);
+  // knob on it; the shader flame has no emissive colour at all. Referencing the
+  // meshes makes the glow map render them with the materials they actually have.
   const bloom = scene.effectLayers?.find((l) => l.name === "glow") as GlowLayer | undefined;
-  if (flame && bloom) bloom.referenceMeshToUseItsOwnMaterial(flame);
+  for (const flame of scene.meshes) {
+    if (bloom && flame.name.startsWith(FLAME_MESH)) bloom.referenceMeshToUseItsOwnMaterial(flame);
+  }
   createHaze(scene, camera);
   createMotes(scene, camera);
 
