@@ -41,6 +41,17 @@ describe("first tier-1 map, fresh character (bot)", () => {
     expect(sum[c]!.raresPerMap).toBeGreaterThanOrEqual(1);
     for (const r of runs[c]!) expect(r.levelEnd).toBeGreaterThan(r.levelStart);
   });
+
+  it.each(CLASS_IDS)("%s: a run reports its boss fight, its gold and the affixes it dropped", (c) => {
+    for (const r of runs[c]!) {
+      expect(r.bossId).toMatch(/^monster\./);
+      expect(r.bossSeconds).toBeGreaterThan(0);
+      expect(r.bossSeconds!).toBeLessThan(r.seconds);
+      expect(r.gold).toBeGreaterThan(0);
+      const rolled = Object.values(r.affixes).reduce((a, n) => a + n, 0);
+      expect(rolled).toBeGreaterThanOrEqual(r.drops.magic + r.drops.rare);
+    }
+  });
 });
 
 /** Level 10 holds every class's level-8 area skill, which a level-1 map never sees. */
@@ -86,8 +97,9 @@ describe.skipIf(!FULL)("full playtest report", () => {
 
     lines.push("", "## 2. Five-map campaign (10 seeds; the bot opens the lowest uncleared node its stones allow)", "",
       "| class | map | tier (stone) | clear | deaths/map | clear s | level after |", "|---|---|---|---|---|---|---|");
+    const campaigns: Record<string, MapRun[][]> = {};
     for (const c of CLASS_IDS) {
-      const all = range(10).map((s) => campaign(c, 200 + s, 5));
+      const all = campaigns[c] = range(10).map((s) => campaign(c, 200 + s, 5));
       for (let i = 0; i < 5; i++) {
         const at = all.map((r) => r[i]).filter((r): r is MapRun => !!r);
         if (at.length === 0) continue;
@@ -112,6 +124,33 @@ describe.skipIf(!FULL)("full playtest report", () => {
         lines.push(row(`${short(c)}, ${label}`, summarize(runs)));
       }
     }
+
+    const flat = Object.values(campaigns).flat(2);
+    lines.push("", "## 4. Boss fights (five-map campaign, cleared maps; s from the boss's first lost life to its death)", "",
+      "| class | boss | fights | mean s | min s | max s |", "|---|---|---|---|---|---|");
+    for (const c of CLASS_IDS) {
+      const fights = campaigns[c]!.flat().filter((r) => r.bossSeconds !== null);
+      for (const b of [...new Set(fights.map((r) => r.bossId!))].sort()) {
+        const t = fights.filter((r) => r.bossId === b).map((r) => r.bossSeconds!);
+        lines.push(`| ${short(c)} | ${b.replace(/^monster\.|\.v1$/g, "")} | ${t.length} | ${(t.reduce((a, x) => a + x, 0) / t.length).toFixed(0)} | ${Math.min(...t).toFixed(0)} | ${Math.max(...t).toFixed(0)} |`);
+      }
+    }
+    lines.push("", "## 5. Gold per map (five-map campaign, picked up; the bot never shops)", "",
+      "| class | map 1 | map 2 | map 3 | map 4 | map 5 | total |", "|---|---|---|---|---|---|---|");
+    for (const c of CLASS_IDS) {
+      const per = range(5).map((i) => { const at = campaigns[c]!.map((r) => r[i]).filter((r): r is MapRun => !!r); return at.reduce((a, r) => a + r.gold, 0) / (at.length || 1); });
+      lines.push(`| ${short(c)} | ${per.map((g) => g.toFixed(0)).join(" | ")} | ${per.reduce((a, g) => a + g, 0).toFixed(0)} |`);
+    }
+    const tally = (pick: (r: MapRun) => Record<string, number>) => {
+      const t: Record<string, number> = {};
+      for (const r of flat) for (const [k, n] of Object.entries(pick(r))) t[k] = (t[k] ?? 0) + n;
+      return Object.entries(t).sort((a, b) => b[1] - a[1]);
+    };
+    const affixes = tally((r) => r.affixes);
+    const rolled = affixes.reduce((a, [, n]) => a + n, 0);
+    lines.push("", `## 6. Affix and unique frequency (all campaign drops: ${flat.length} maps, ${rolled} rolled affixes)`, "",
+      "| affix | rolls | share |", "|---|---|---|", ...affixes.map(([k, n]) => `| ${k} | ${n} | ${pct(n / rolled)} |`),
+      "", "| unique | drops |", "|---|---|", ...tally((r) => r.uniques).map(([k, n]) => `| ${k} | ${n} |`));
 
     const out = resolve(__dirname, "../../../review/playtest-report.md");
     mkdirSync(resolve(out, ".."), { recursive: true });

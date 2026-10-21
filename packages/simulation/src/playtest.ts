@@ -21,7 +21,7 @@ import { Bot, type BotOptions, type BotGame as Game } from "./bot";
 import { EQUIP_SLOTS_BY_CLASS } from "./equipment";
 import type { Entity } from "./ecs";
 import type {
-  SessionC, Cooldowns, FlasksC, ProgressC, SkillsC, ItemC, InventoryC, EquipmentC,
+  SessionC, Cooldowns, FlasksC, ProgressC, SkillsC, ItemC, InventoryC, EquipmentC, Health, MonsterC,
 } from "./components";
 
 const HZ = 30;
@@ -46,6 +46,14 @@ export interface MapRun {
   levelEnd: number;
   casts: Record<string, number>;
   flasks: number;
+  /** The boss's def, and seconds from its first lost life to the last boss dying; null if it never died. */
+  bossId: string | null;
+  bossSeconds: number | null;
+  /** Gold picked up in the map (the bot never shops, so this is the map's income). */
+  gold: number;
+  /** Rolled affixes on equipment drops by affix id, and uniques by name. */
+  affixes: Record<string, number>;
+  uniques: Record<string, number>;
 }
 
 export type { BotOptions };
@@ -86,9 +94,13 @@ export function playNextMap(g: Game, opts: BotOptions = {}): MapRun | null {
     seconds: 0, deaths: 0, kills: 0, combatSeconds: 0,
     drops: { normal: 0, magic: 0, rare: 0, unique: 0, currency: 0, waystone: 0 },
     magicPlusAt: [], levelStart: progress(g).level, levelEnd: 0, casts: {}, flasks: 0,
+    bossId: null, bossSeconds: null, gold: 0, affixes: {}, uniques: {},
   };
+  const goldStart = progress(g).gold;
   const seenItems = new Set<Entity>(g.world.query("item"));
   const bosses = g.world.query("boss");
+  run.bossId = bosses.length > 0 ? g.world.get<MonsterC>(bosses[0]!, "monster")!.defId : null;
+  let bossHitAt = -1;
   let monsters = new Set<Entity>(g.world.query("monster"));
   let wasDead = false;
   let clearedAt = -1;
@@ -122,14 +134,22 @@ export function playNextMap(g: Game, opts: BotOptions = {}): MapRun | null {
       else {
         run.drops[item.rarity]++;
         if (item.rarity !== "normal") run.magicPlusAt.push((g.sim.tick - start) / HZ);
+        // A unique's mods are fixed, not rolled from the pool, so it counts by name only.
+        if (item.rarity === "unique") run.uniques[item.name!] = (run.uniques[item.name!] ?? 0) + 1;
+        else for (const a of item.affixes) run.affixes[a.affixId] = (run.affixes[a.affixId] ?? 0) + 1;
       }
     }
     if (t - lastCast < HZ) run.combatSeconds += 1 / HZ;
 
+    if (bossHitAt < 0 && bosses.some((b) => {
+      const h = g.world.alive.has(b) ? g.world.get<Health>(b, "health") : undefined;
+      return !h || h.life < h.maxLife;
+    })) bossHitAt = g.sim.tick;
     if (clearedAt < 0 && bosses.length > 0 && bosses.every((b) => !g.world.alive.has(b))) {
       clearedAt = g.sim.tick;
       run.cleared = true;
       run.seconds = (clearedAt - start) / HZ;
+      run.bossSeconds = (clearedAt - bossHitAt) / HZ;
     }
     // After the boss: a few seconds to sweep the payout off the floor, then home.
     if (clearedAt >= 0 && (g.sim.tick - clearedAt > 60 * HZ || !bot.hasLootLeft())) break;
@@ -139,6 +159,7 @@ export function playNextMap(g: Game, opts: BotOptions = {}): MapRun | null {
     run.stuck = sess(g).area === "map";
   }
   run.levelEnd = progress(g).level;
+  run.gold = progress(g).gold - goldStart;
   // Walking through the return portal: the same session edit the click makes.
   g.world.set<SessionC>(g.session, "session", { ...sess(g), pendingArea: "hideout", mapOpen: 0, dead: 0 });
   g.sim.step([]);
