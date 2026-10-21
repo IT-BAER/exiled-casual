@@ -1,8 +1,9 @@
 // @vitest-environment node
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { NullEngine } from "@babylonjs/core";
+import { NullEngine, type Scene } from "@babylonjs/core";
 import { createScene } from "./engine";
 import { SnapshotRenderer } from "./renderer";
+import { dollMotion, freezeRagdoll } from "./ragdoll";
 import type { Snapshot } from "@exiled/protocol";
 import { testPlayer, testStats } from "../test-fixtures";
 
@@ -13,6 +14,7 @@ import { testPlayer, testStats } from "../test-fixtures";
 vi.mock("./ragdoll", async (importOriginal) => ({
   ...await importOriginal<typeof import("./ragdoll")>(),
   dropDead: () => true,
+  dollMotion: vi.fn(() => "moving"),
   freezeRagdoll: vi.fn(),
   disposeRagdoll: vi.fn(),
 }));
@@ -41,6 +43,8 @@ let engine: InstanceType<typeof NullEngine>;
 
 afterEach(() => {
   engine?.dispose();
+  vi.mocked(dollMotion).mockReset().mockReturnValue("moving");
+  vi.mocked(freezeRagdoll).mockClear();
 });
 
 describe("corpses across an area change", () => {
@@ -104,5 +108,58 @@ describe("corpses across an area change", () => {
     renderer.apply(h1, h2, 1); // the (s0, h1) pair was skipped by a burst
 
     expect(mesh.isDisposed()).toBe(true);
+  });
+});
+
+describe("a corpse's physics", () => {
+  function killOne(): { renderer: SnapshotRenderer; mesh: ReturnType<Scene["getMeshByName"]>; last: Snapshot } {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const renderer = new SnapshotRenderer(scene);
+    const s0 = makeSnapshot({
+      entities: [{ id: 3, kind: "monster", x: 1, y: 1, life: 10, maxLife: 10 }],
+    });
+    renderer.apply(null, s0, 1);
+    const mesh = scene.getMeshByName("entity-3");
+    const last = makeSnapshot({ tick: 2 });
+    renderer.apply(s0, last, 1);
+    return { renderer, mesh, last };
+  }
+
+  function run(renderer: SnapshotRenderer, from: Snapshot, ticks: number): Snapshot {
+    let prev = from;
+    for (let t = 1; t <= ticks; t++) {
+      const next = makeSnapshot({ tick: from.tick + t });
+      renderer.apply(prev, next, 1);
+      prev = next;
+    }
+    return prev;
+  }
+
+  it("is let go the moment a box runs away, long before the corpse would sink", () => {
+    // Mother Vhal's chains still fling her now and then; a frozen body stays
+    // on the floor where the runaway started instead of flying at the camera.
+    const { renderer, mesh, last } = killOne();
+    vi.mocked(dollMotion).mockReturnValue("runaway");
+    run(renderer, last, 1);
+
+    expect(freezeRagdoll).toHaveBeenCalledWith(mesh);
+  });
+
+  it("is let go once the body has lain still for a while", () => {
+    const { renderer, mesh, last } = killOne();
+    vi.mocked(dollMotion).mockReturnValue("still");
+    const after = run(renderer, last, 10);
+    expect(freezeRagdoll).not.toHaveBeenCalled();
+
+    run(renderer, after, 10);
+    expect(freezeRagdoll).toHaveBeenCalledWith(mesh);
+  });
+
+  it("keeps simulating a body that is still falling", () => {
+    const { renderer, last } = killOne();
+    run(renderer, last, 60);
+
+    expect(freezeRagdoll).not.toHaveBeenCalled();
   });
 });

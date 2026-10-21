@@ -215,15 +215,14 @@ export function dropDead(scene: Scene, root: Mesh, push: Vector3 | null, at?: Ve
     // a second, so whatever the blow did was gone before the corpse had left the
     // spot it died on. At 1.2 the throw survives the first half second, which is
     // the part anyone watches, and the limbs still stop instead of ringing.
-    for (let i = 0; i < config.length; i++) {
-      const body = doll.getAggregate(i)?.body;
+    const bodies = config.map((_, i) => doll.getAggregate(i)?.body ?? null);
+    for (const body of bodies) {
       if (body) {
         body.setLinearDamping(LINEAR_DAMPING);
         body.setAngularDamping(ANGULAR_DAMPING);
       }
     }
     if (push) {
-      const bodies = config.map((_, i) => doll.getAggregate(i)?.body ?? null);
       throwBody(
         bodies,
         trunkIndex(config.map((c) => (c as { bone?: string }).bone ?? "")),
@@ -232,8 +231,9 @@ export function dropDead(scene: Scene, root: Mesh, push: Vector3 | null, at?: Ve
       );
     }
     // Onto whatever metadata the actor already carries (the player's holds its
-    // rig), never over it.
-    root.metadata = { ...(root.metadata as object | null), doll };
+    // rig), never over it. The bodies are kept because `getAggregate` hands
+    // back the root's aggregate for an index it does not have.
+    root.metadata = { ...(root.metadata as object | null), doll, bodies };
     return true;
   } catch {
     return false;
@@ -314,6 +314,37 @@ export const DEATH_SPEED = DEATH_IMPULSE / BOX_MASS;
 const LINEAR_DAMPING = 2.5;
 const ANGULAR_DAMPING = 3;
 
+/** Box speed, m/s, under which a body counts as lying still. */
+const STILL_SPEED = 0.5;
+/**
+ * Seconds a body is thrown and falling for. Measured on Mother Vhal: by 1 s
+ * every box is under 2.3 m/s, and a lying limb twitches at up to 1.8.
+ */
+const FALL_SECONDS = 1;
+/** Box speed, m/s, no throw or fall reaches: it leaves at `DEATH_SPEED`. */
+const RUNAWAY_FALLING = 30;
+/**
+ * Box speed, m/s, a body that has landed never reaches again. Mother Vhal's
+ * ball-jointed chains still run away from calm, cause unknown: from 1-2 m/s
+ * at 1.3-1.9 s past 10 m/s within 0.6 s, and on to ~197 m/s, 8-24 m up.
+ */
+const RUNAWAY_LYING = 4;
+
+/**
+ * How a fallen body is moving, from its fastest box, `age` seconds after it
+ * fell; null when it has no physics.
+ */
+export function dollMotion(root: Mesh, age: number): "still" | "moving" | "runaway" | null {
+  const bodies = (root.metadata as { bodies?: readonly (DollBody | null)[] } | null)?.bodies;
+  if (!bodies) return null;
+  let fastest = 0;
+  for (const body of bodies) {
+    if (body) fastest = Math.max(fastest, body.getLinearVelocity().length());
+  }
+  const runaway = age < FALL_SECONDS ? RUNAWAY_FALLING : RUNAWAY_LYING;
+  return fastest > runaway ? "runaway" : fastest < STILL_SPEED ? "still" : "moving";
+}
+
 /**
  * Freeze a settled body in the pose it landed in and hand its physics back.
  *
@@ -328,6 +359,7 @@ export function freezeRagdoll(root: Mesh): void {
   if (!doll) return;
   doll.pauseSync = true;
   disposeRagdoll(root);
+  root.metadata = { ...(root.metadata as object), doll: undefined, bodies: undefined };
 }
 
 /** The physics attached to a corpse, so the renderer can let it go. */

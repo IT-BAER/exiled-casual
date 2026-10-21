@@ -12,7 +12,7 @@ import { rigOf } from "./rig";
 import type { ReactionClip } from "./rig";
 import { looksForEquipment } from "./gear-looks";
 import { creatureOf } from "./meshes";
-import { CORPSE_SECONDS, SINK_SECONDS, disposeRagdoll, dropDead, freezeRagdoll, sinkDepth } from "./ragdoll";
+import { CORPSE_SECONDS, SINK_SECONDS, disposeRagdoll, dollMotion, dropDead, freezeRagdoll, sinkDepth } from "./ragdoll";
 import { CAMERA_ALPHA } from "./engine";
 import { lerp, springAngle } from "./interp";
 import { FLINCH_TICKS, flinchPose, flinchStrength, kick, leanToTilt } from "./hit-reaction";
@@ -100,6 +100,9 @@ const CORPSE_TICKS = Math.round(CORPSE_SECONDS * TICKS_PER_SEC);
 
 /** How long the sink takes, in ticks. */
 const SINK_TICKS = Math.round(SINK_SECONDS * TICKS_PER_SEC);
+
+/** How long a corpse lies still before its physics is let go, in ticks. */
+const SETTLED_TICKS = Math.round(0.6 * TICKS_PER_SEC);
 
 /** Units in front of the player where the slammed weapon meets the floor. */
 const SLAM_FORWARD = 0.9;
@@ -356,7 +359,7 @@ export class SnapshotRenderer {
   /** Bodies the sim has forgotten, still falling. `until` is the tick they start
    *  to sink on; `restY` is the height they settled at, the sink measured down
    *  from it. */
-  private readonly corpses: { mesh: Mesh; until: number; restY?: number }[] = [];
+  private readonly corpses: { mesh: Mesh; until: number; restY?: number; stillSince?: number; frozen?: boolean }[] = [];
   /** Ground patches the sim has removed, burning out from `from` on the `now` clock. */
   private readonly embers: { mesh: Mesh; from: number }[] = [];
   /** When each live ground patch was first drawn, on the `now` clock: it catches from there. */
@@ -830,6 +833,17 @@ export class SnapshotRenderer {
     // that reads as the ground taking the body.
     for (let i = this.corpses.length - 1; i >= 0; i--) {
       const corpse = this.corpses[i]!;
+      if (!corpse.frozen) {
+        // A body that has come to rest stops costing physics, and one whose
+        // joints fling it is pinned where it was before it gets anywhere.
+        const motion = dollMotion(corpse.mesh, (next.tick - corpse.until + CORPSE_TICKS) / TICKS_PER_SEC);
+        if (motion !== "still") corpse.stillSince = undefined;
+        else corpse.stillSince ??= next.tick;
+        if (motion === "runaway" || (corpse.stillSince !== undefined && next.tick - corpse.stillSince >= SETTLED_TICKS)) {
+          freezeRagdoll(corpse.mesh);
+          corpse.frozen = true;
+        }
+      }
       if (next.tick < corpse.until) continue;
       if (corpse.restY === undefined) {
         // Physics has to let go first, or the ragdoll writes the body back to

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { PhysicsConstraintType, Vector3, type Skeleton } from "@babylonjs/core";
+import { PhysicsConstraintType, Vector3, type Mesh, type Skeleton } from "@babylonjs/core";
 import {
-  CORPSE_SECONDS, DEATH_SPEED, SINK_SECONDS, configFor, sinkDepth, throwBody, trunkIndex,
+  CORPSE_SECONDS, DEATH_SPEED, SINK_SECONDS, configFor, dollMotion, sinkDepth, throwBody, trunkIndex,
 } from "./ragdoll";
 
 describe("corpse sink", () => {
@@ -85,6 +85,46 @@ describe("the joints", () => {
     for (const box of config) expect(box.joint).toBe(PhysicsConstraintType.BALL_AND_SOCKET);
   });
 });
+
+describe("a fallen body's motion", () => {
+  it("is still when every box has all but stopped", () => {
+    expect(dollMotion(fakeCorpse([0.02, 0.3, 0]), 3)).toBe("still");
+  });
+
+  it("is moving while it is thrown and falls", () => {
+    expect(dollMotion(fakeCorpse([0, DEATH_SPEED, 0.3]), 0.1)).toBe("moving");
+    expect(dollMotion(fakeCorpse([0, 22, 0]), 0.5)).toBe("moving");
+  });
+
+  it("is moving while a lying limb twitches", () => {
+    // Measured on Mother Vhal: settled bodies twitch at up to 1.8 m/s.
+    expect(dollMotion(fakeCorpse([0.2, 1.8, 0]), 5)).toBe("moving");
+  });
+
+  it("is a runaway once any box goes faster than a body can be thrown", () => {
+    // Mother Vhal's runaway boxes were measured at ~197 m/s, 8-24 m up.
+    expect(dollMotion(fakeCorpse([0.1, 0.1, 40]), 0.2)).toBe("runaway");
+  });
+
+  it("is a runaway once a lying body speeds up again", () => {
+    // Her runaways start from 1-2 m/s at 1.3-1.9 s and pass 10 m/s within
+    // 0.6 s; at 30 m/s the pose is already a metre off the floor.
+    expect(dollMotion(fakeCorpse([0.1, 5, 0.2]), 1.5)).toBe("runaway");
+  });
+
+  it("is nothing for a corpse with no physics", () => {
+    expect(dollMotion({ metadata: null } as unknown as Mesh, 1)).toBeNull();
+  });
+});
+
+function fakeCorpse(speeds: number[]): Mesh {
+  const bodies = speeds.map((v) => {
+    const b = new FakeBody();
+    b.setLinearVelocity(new Vector3(0, -v, 0));
+    return b;
+  });
+  return { metadata: { doll: {}, bodies } } as unknown as Mesh;
+}
 
 function fakeSkeleton(names: string[]): Skeleton {
   const bones = names.map((name) => ({ name, getParent: () => null as unknown }));
