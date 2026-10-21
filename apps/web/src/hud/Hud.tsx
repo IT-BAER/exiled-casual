@@ -929,11 +929,16 @@ export function Hud({
     // sim hands the HUD a fresh snapshot every ~33ms whether or not anything
     // changed, and clearing here killed the flash one tick after it lit.
     // The banner-dismissal effect below already owns turning it off.
-    if (levelledIds.length > 0) setFlashing(new Set(levelledIds));
+    if (levelledIds.length > 0) setFlashing((prev) => new Set([...prev, ...levelledIds]));
     if (lines.length === 0) return;
     // A boss kill can pay both at once. Rule 3 says concentrate rather than spread,
-    // so they share one banner and one sound instead of queueing two.
-    setBanner((prev) => ({ text: lines.join("   ·   "), seq: (prev?.seq ?? 0) + 1 }));
+    // so they share one banner and one sound instead of queueing two. A gem level
+    // often lands a snapshot after the character level: it joins the banner still
+    // up rather than replacing it, and the new seq restarts the dismissal.
+    setBanner((prev) => ({
+      text: [...(prev ? [prev.text] : []), ...lines].join("   ·   "),
+      seq: (prev?.seq ?? 0) + 1,
+    }));
     // A breakpoint or a character level rings the level-up cue; a bare gem level, "rare".
     playDropSound(crossed || level > was.level ? "level-up" : "rare");
   }, [level, stones, gems, snapshot?.skills, skillNames]);

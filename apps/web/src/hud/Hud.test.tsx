@@ -881,6 +881,28 @@ describe("Hud gem levels and breakpoints", () => {
     expect(banners[0]).toHaveTextContent("Ember Bolt");
   });
 
+  it("adds a payout that lands a snapshot later to the banner already up, and restarts its clock", () => {
+    // Measured in play: "Level 2 · Heavy Strike Level 2" was replaced by "Strike
+    // Level 2" a second later, so the character level showed for one second.
+    vi.useFakeTimers();
+    try {
+      const { rerender } = render(<Hud snapshot={makeSnap({ level: 12, skills: [emberBolt] })} />);
+      rerender(<Hud snapshot={makeSnap({ level: 13, skills: [emberBolt] })} />);
+      act(() => { vi.advanceTimersByTime(1000); });
+      rerender(<Hud snapshot={makeSnap({ level: 13, skills: [{ ...emberBolt, gemLevel: 2 }] })} />);
+      const banners = screen.getAllByTestId("reward-banner");
+      expect(banners).toHaveLength(1);
+      expect(banners[0]).toHaveTextContent("Level 13");
+      expect(banners[0]).toHaveTextContent("Ember Bolt Level 2");
+      act(() => { vi.advanceTimersByTime(2000); });
+      expect(screen.getByTestId("reward-banner")).toHaveTextContent("Level 13");
+      act(() => { vi.advanceTimersByTime(500); });
+      expect(screen.queryByTestId("reward-banner")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("flashes the bar slot the gem that levelled sits in, and only that one", () => {
     const { rerender } = render(
       <Hud snapshot={makeSnap({ skills: [emberBolt, blink] })} skillBar={BAR} />,
