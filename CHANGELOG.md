@@ -10,6 +10,70 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+### Added
+
+- Water is a shader with swash, foam, depth colour, caustics and sky sheen.
+- One amulet and one ring per class family, so the jewellery slots can be
+  filled.
+- Attacks use the main-hand weapon's own damage, speed and crit, and a wand or
+  focus adds its fire and cold to spells.
+- Loot beams have a hot core in their rarity's colour, and a rare or unique
+  drop lights the floor around it.
+- Hovering a portal, stash, map device or vendor shows its name over it, as in
+  PoE.
+- Refund All asks before it clears the passive tree.
+- A weapon value that its own mods changed is drawn in the affix blue.
+- Brazier flames burn like real fire, with depth, rising from the coals.
+- The hideout floor fades to black past the walkable edge.
+
+### Changed
+
+- Uniques drop about eight times as often, roughly one every 35 maps.
+- A new character starts with 160 gold, two magic items and two scrolls.
+- A volley such as Split Arrow hits each target with one arrow only, as in
+  PoE.
+- Swarm monsters no longer poison or bleed, and poison lasts 2 s and bleeding
+  5 s, as in PoE2.
+- Gear above your level cannot be equipped, and its tooltip shows the level in
+  red.
+- Each new character gets its own Atlas, starting Waystones and vendor stock.
+- Slam circles have a thin glowing rim instead of a dark outline.
+- The rare monster glow is a deeper gold, so it shows on pale monsters too.
+
+### Fixed
+
+- A save the browser refuses shows on the HUD until a save works, and full
+  browser storage no longer leaves a save hanging.
+- A character whose save cannot be loaded no longer starts, so an empty world
+  cannot overwrite the real one.
+- Creating or deleting a character keeps the shared stash and the other
+  characters' progress.
+- Level, XP, gold, passives, shards and gear are saved as soon as they change.
+- The character list shows the level reached, and Export writes the current
+  progress.
+- Old v2 save files import again, and a save from another version is refused
+  instead of half-loaded.
+- Corpses no longer fly off or towards the camera.
+- Changing area no longer leaves old materials behind, so long sessions stay
+  fast.
+- The death recap shows how long an ailment ticked, such as Poison 5s.
+- A reward that lands while the reward banner is up joins the banner.
+- The character sheet scrolls instead of running behind the life globe, keeps
+  values on one line, fits the Amulet and Ring labels at 1280x720 and lists
+  the fire and cold a wand or focus adds to spells.
+- Escape closes the feedback dialog in one press, keys no longer reach the game
+  behind it, and a report names the game version.
+- The Auto graphics note names the real floor, 45 fps.
+- The controls dialog shows your own key bindings.
+- Dragging currency onto the same currency stacks it, and a bought scroll joins
+  its pile.
+- Clicking a portal walks to the portal, not to the floor behind it.
+- The area label names the map you are in, and a portal name at the top of the
+  view stays on screen.
+- Walking away from the hideout furniture can no longer lose the portals.
+- Water foam no longer cuts off along a straight line.
+- Debug URL switches no longer work in the released game.
+
 ## [0.4.3] - 2026-10-20
 
 ### Added
