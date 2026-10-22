@@ -10,6 +10,8 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+## [0.4.5] - 2026-10-22
+
 ### Fixed
 
 - The character on the select screen is lit from the front by a warm light
