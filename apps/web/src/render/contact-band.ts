@@ -19,6 +19,16 @@ const DARK = 0.45;
 const DUST = 0.55;
 const COAST_DARK = 0.25;
 const COAST_DUST = 0.3;
+/**
+ * Wet stone on a coast, worn by the cliff's scree (cliffs.ts) and nothing else:
+ * sand keeps the flat contact tint. Rock that stands in damp goes darker and
+ * richer rather than merely dimmer, holds a sheen the sun catches, and its tide
+ * line wanders instead of ruling a band. `height` is the line's mean in world
+ * units, `wander` its swing as a fraction of that, `algae` the green-brown at
+ * the very foot. Ref: beach-map.jpg, strand-map-layout.jpg.
+ */
+export const WET_STONE = { albedo: 0.55, saturation: 1.45, roughness: 0.14, height: 0.7, wander: 0.55, algae: 0.4 };
+
 /** World units per repeat of the wall plate: the walls' own TILE (level.ts). */
 const ROCK_TILE = 2;
 
@@ -64,6 +74,8 @@ interface ContactState {
   uv: [number, number, number, number];
   dark: number;
   dust: number;
+  /** 1 on a coast: the cliff's foot is wet stone. Rides contactK.z. */
+  wet: number;
 }
 const states = new WeakMap<Scene, ContactState>();
 
@@ -135,7 +147,7 @@ export function bindContact(ubo: UniformBuffer, scene: Scene): void {
   const s = state(scene);
   if (!s?.field || !s.rock) return;
   ubo.updateFloat4("contactUV", ...s.uv);
-  ubo.updateFloat3("contactK", s.dark, s.dust, 0);
+  ubo.updateFloat3("contactK", s.dark, s.dust, s.wet);
   ubo.updateFloat3("contactRock", ...s.rockTint);
   ubo.setTexture("contactSampler", s.field);
   ubo.setTexture("contactRockSampler", s.rock);
@@ -204,7 +216,7 @@ class GroundContactPlugin extends MaterialPluginBase {
  */
 export function setContactBand(scene: Scene, grid: WalkableGrid | null, rock: PBRMaterial | null, coast = false): void {
   const s: ContactState = states.get(scene) ?? {
-    field: null, rock: null, rockTint: [1, 1, 1], uv: [0, 0, 0, 0], dark: DARK, dust: DUST,
+    field: null, rock: null, rockTint: [1, 1, 1], uv: [0, 0, 0, 0], dark: DARK, dust: DUST, wet: 0,
   };
   states.set(scene, s);
   s.field?.dispose();
@@ -231,5 +243,6 @@ export function setContactBand(scene: Scene, grid: WalkableGrid | null, rock: PB
   s.rockTint = [c.r, c.g, c.b];
   s.dark = coast ? COAST_DARK : DARK;
   s.dust = coast ? COAST_DUST : DUST;
+  s.wet = coast ? 1 : 0;
   plugin?.markAllDefinesAsDirty();
 }

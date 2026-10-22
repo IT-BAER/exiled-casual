@@ -19,7 +19,7 @@ import { MaterialPluginBase } from "@babylonjs/core/Materials/materialPluginBase
 import type { WalkableGrid } from "@exiled/mapgen";
 import {
   bindContact, contactDefines, contactReady, contactTextures,
-  CONTACT_GLSL, CONTACT_SAMPLERS, CONTACT_UBO, CONTACT_UNIFORMS_GLSL,
+  CONTACT_GLSL, CONTACT_SAMPLERS, CONTACT_UBO, CONTACT_UNIFORMS_GLSL, WET_STONE,
 } from "./contact-band";
 import { BETA_AT_DEFAULT, BETA_LIMIT, CAMERA_ALPHA, GROUND_SIZE } from "./engine";
 import { aimEdgeFade, EDGE_FADE_LENGTH, EDGE_FADE_START } from "./edge-fade";
@@ -444,6 +444,7 @@ class CliffPlugin extends MaterialPluginBase {
           uniform sampler2D cliffFloorSampler;
         #endif
         ${CONTACT_GLSL}
+        float cliffWet = 0.0;
         float cliffNoise(vec2 p) {
           vec2 i = floor(p), f = fract(p);
           vec2 s = f * f * (3.0 - 2.0 * f);
@@ -513,6 +514,24 @@ class CliffPlugin extends MaterialPluginBase {
           normalW = normalize(mix(normalW, vec3(0.0, 1.0, 0.0), cliffMix * 0.8));
         }
         #endif
+        #ifdef CONTACT_BAND
+        {
+          // Wet stone on a coast: a tide line that wanders with two noises and the
+          // grain, darker and richer than the sand under it, algae at the very foot.
+          float wetN = cliffNoise(vPositionW.xz * 0.9) * 0.65 + cliffNoise(vPositionW.xz * 3.1) * 0.35;
+          float wetGrain = dot(surfaceAlbedo, vec3(0.333)) / max(dot(vAlbedoColor.rgb, vec3(0.333)), 1e-3);
+          float wetLine = ${f3(WET_STONE.height)} * (1.0 + (wetN - 0.5) * ${f3(2 * WET_STONE.wander)}) + (wetGrain - 0.5) * 0.12;
+          cliffWet = contactK.z * (1.0 - smoothstep(wetLine * 0.55, wetLine, vPositionW.y));
+          float wetLum = dot(surfaceAlbedo, vec3(0.2126, 0.7152, 0.0722));
+          vec3 wetCol = mix(vec3(wetLum), surfaceAlbedo, ${f3(WET_STONE.saturation)}) * ${f3(WET_STONE.albedo)};
+          float wetFoot = cliffWet * (1.0 - smoothstep(0.0, wetLine * 0.35, vPositionW.y)) * wetN;
+          wetCol = mix(wetCol, vec3(0.045, 0.06, 0.02) * (0.6 + wetGrain * 0.4), wetFoot * ${f3(WET_STONE.algae)} * 2.0);
+          surfaceAlbedo = mix(surfaceAlbedo, wetCol, cliffWet);
+        }
+        #endif
+      `,
+      CUSTOM_FRAGMENT_UPDATE_METALLICROUGHNESS: `
+        metallicRoughness.g = mix(metallicRoughness.g, ${f3(WET_STONE.roughness)}, cliffWet);
       `,
     };
   }

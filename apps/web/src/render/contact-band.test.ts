@@ -1,10 +1,11 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { NullEngine } from "@babylonjs/core";
+import { NullEngine, PBRMaterial, RawTexture } from "@babylonjs/core";
 import type { WalkableGrid } from "@exiled/mapgen";
 import { createScene } from "./engine";
 import { buildLevel } from "./level";
-import { contactActive, contactField, CONTACT_PLUGIN } from "./contact-band";
+import { bindContact, contactActive, contactField, CONTACT_PLUGIN, setContactBand, WET_STONE } from "./contact-band";
+import { cliffMaterial } from "./cliffs";
 import { setGroundPatch, PATCH_PLUGIN } from "./ground-patch";
 
 /** 24x12 at 0.5-unit cells: wall in columns 0..3, floor right of it, and `sea`
@@ -65,5 +66,48 @@ describe("contact band", () => {
     expect(extra).toContain(CONTACT_PLUGIN);
     expect(extra).toContain(PATCH_PLUGIN);
     engine.dispose();
+  });
+});
+
+describe("wet stone", () => {
+  const kOf = (coast: boolean): number[] => {
+    const engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const rock = new PBRMaterial("rock", scene);
+    rock.albedoTexture = RawTexture.CreateRGBATexture(new Uint8Array(4), 1, 1, scene);
+    setContactBand(scene, shoreGrid(), rock, coast);
+    let k: number[] = [];
+    bindContact({
+      updateFloat4() {}, setTexture() {},
+      updateFloat3: (n: string, ...v: number[]) => { if (n === "contactK") k = v; },
+    } as never, scene);
+    engine.dispose();
+    return k;
+  };
+
+  it("is its own look, apart from the wet sand's flat tint", () => {
+    expect(WET_STONE.albedo).toBeLessThan(0.7);
+    expect(WET_STONE.saturation).toBeGreaterThan(1);
+    expect(WET_STONE.roughness).toBeLessThan(0.3);
+    expect(WET_STONE.algae).toBeGreaterThan(0);
+    // A flat band is what the owner rejected: the tide line has to wander.
+    expect(WET_STONE.wander).toBeGreaterThan(0.3);
+  });
+
+  it("is switched on by a coast alone, through contactK.z", () => {
+    expect(kOf(true)[2]).toBe(1);
+    expect(kOf(false)[2]).toBe(0);
+  });
+
+  it("is in the cliff shader with the same numbers", () => {
+    const engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const mat = cliffMaterial(new PBRMaterial("w", scene));
+    const plugin = mat.pluginManager!.getPlugin("ExiledCliff")!;
+    const all = Object.values(plugin.getCustomCode("fragment")!).join("\n");
+    engine.dispose();
+    expect(all).toContain("cliffWet");
+    expect(all).toContain(WET_STONE.roughness.toFixed(3));
+    expect(all).toContain(WET_STONE.albedo.toFixed(3));
   });
 });
