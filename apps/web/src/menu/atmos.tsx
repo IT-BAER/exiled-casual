@@ -14,12 +14,26 @@
  * A menu is a place you stand in, not a thing you tilt.
  *
  * Everything here is cheap by construction. The dust is one canvas of ~80
- * specks; the fog is one tiling sheet translated at two speeds; the fire is one
- * canvas of a few dozen embers per brazier. Nothing here is on the sim's clock
+ * specks; the fog is one tiling sheet translated at two speeds; the fire is the
+ * game's flame on one small WebGL pass per bowl. Nothing here is on the sim's clock
  * and nothing here is saved.
  */
 import React from "react";
 import { MENU_ART } from "./frames";
+import {
+  COAL_Y,
+  FLAME_GLSL,
+  FLAME_H,
+  SPARKS,
+  TONGUE_BRIGHT,
+  TONGUE_H,
+  TONGUE_W,
+  fireFlicker,
+  sparkPose,
+  sparkRgb,
+  sparkTable,
+  type SparkPose,
+} from "../render/flame-field";
 
 /**
  * One clock for the whole menu, started when the module is first loaded.
@@ -158,83 +172,43 @@ export interface BrazierSpot {
  */
 const FLAME_OF_GLOW = 0.62;
 /**
- * Live embers per brazier, and how wide each one is against the flame's height.
- *
- * These two trade against each other and only one pairing looks like fire. Few
- * and fat (44 at 0.20) is a cluster of orange bubbles: every particle is legible
- * as a disc, and a flame is never legible as anything. Many and thin, each one
- * faint enough that only the pile-up is bright, is a tongue.
- *
- * 120 at 0.10 was still countable — you could pick out the ellipses in a
- * screenshot, which is the whole difference between fire and a lava lamp. The
- * count is affordable now only because a particle is a pre-rendered dot blitted
- * with `drawImage` rather than a `createRadialGradient` built per particle per
- * frame, which is the expensive half of what this loop used to do.
+ * How far the painting's eye looks down into the bowls, in radians. The hall is
+ * painted from about standing height a few metres off, so the coal bed shows as
+ * a thin ellipse: well under the game's 53 degrees.
  */
-const EMBERS = 560;
-const EMBER_WIDTH = 0.045;
-/**
- * The sparks that leave the flame altogether.
- *
- * A fire is two populations, not one: the body of it, which is the parcels of
- * burning gas above, and the few specks that break off the top and travel until
- * they cool. The body alone reads as a lamp with a shape. These are deliberately
- * few, small and slow — a dozen per bowl, rising two flame-heights, drifting
- * sideways as they go out.
- */
-const SPARKS = 14;
-const SPARK_RISE = 2.4;
-/** Embers are drawn as ellipses this much taller than wide: rising stretches a
- *  parcel of flame vertically, and round ones read as sparks instead. Applied
- *  hardest at the lip, where the gas is moving fastest, and relaxing as it
- *  slows — a constant stretch draws the same lozenge at every height. */
-const EMBER_STRETCH = 2.6;
+const PAINTED_TILT = 0.26;
+const TILT_SIN = Math.sin(PAINTED_TILT);
+const TILT_COS = Math.cos(PAINTED_TILT);
+/** The painted bowls are wider for their flame than the game's prop, so the
+ *  fire is stretched across to fill their coal beds. */
+const BOWL_WIDEN = 1.4;
 
 /**
- * How many colours of the ember ramp get their own pre-rendered dot, and how
- * many pixels one is drawn at.
- *
- * A particle is a `drawImage` of one of these, scaled. Sixteen steps is below
- * what the eye can band on a body this small, and every dot is built once per
- * mount rather than 560 times per frame.
+ * How many colours of the spark ramp get their own pre-rendered dot, and how
+ * many pixels one is drawn at. A spark is a `drawImage` of one of these, scaled;
+ * every dot is built once per mount, never per spark per frame.
  */
 const RAMP_STEPS = 16;
 const DOT_PX = 64;
 
 /**
- * Turbulence, as a closed form rather than a noise table.
- *
- * Fire is laminar for the first inch out of the coals and vortex-shedding above
- * it, and that transition is most of what the eye checks. Two sines whose
- * periods share no small multiple, one folded through the other, give a field
- * smooth enough to advect a particle through without ever repeating on a count.
+ * The spark, drawn once per colour of the ramp. The falloff is deliberately not
+ * linear: a straight ramp reads as a disc with a soft edge, and the steep tail
+ * also means the sprite's own square never shows.
  */
-function swirl(x: number, y: number): number {
-  return Math.sin(x * 2.7 + Math.sin(y * 1.9) * 1.3) * 0.62
-    + Math.sin(x * 5.3 - y * 3.1) * 0.38;
-}
-
-/**
- * The ember, drawn once per colour of the ramp instead of once per particle.
- *
- * The falloff is deliberately not linear: a straight ramp reads as a disc with a
- * soft edge, and a disc is exactly what a parcel of flame must never read as.
- * The steep tail also means the sprite's own square never shows, which the old
- * per-particle `fillRect` did — the top of the flame carried visible boxes.
- */
-function emberDots(): HTMLCanvasElement[] {
+function sparkDots(): HTMLCanvasElement[] {
   return Array.from({ length: RAMP_STEPS }, (_, i) => {
     const c = document.createElement("canvas");
     c.width = DOT_PX;
     c.height = DOT_PX;
     const g = c.getContext("2d");
     if (!g) return c;
-    const [r, gg, b] = emberColour(i / (RAMP_STEPS - 1));
+    const [r, gg, b] = sparkRgb(i / (RAMP_STEPS - 1));
     const half = DOT_PX / 2;
     const grad = g.createRadialGradient(half, half, 0, half, half, half);
     for (let k = 0; k <= 8; k++) {
       const t = k / 8;
-      grad.addColorStop(t, `rgba(${r | 0},${gg | 0},${b | 0},${(1 - t) ** 2.6})`);
+      grad.addColorStop(t, `rgba(${r! | 0},${gg! | 0},${b! | 0},${(1 - t) ** 2.6})`);
     }
     g.fillStyle = grad;
     g.fillRect(0, 0, DOT_PX, DOT_PX);
@@ -242,34 +216,106 @@ function emberDots(): HTMLCanvasElement[] {
   });
 }
 
-/** Colour of an ember at `u` of its life, white-hot at the bowl to soot at the tip. */
-function emberColour(u: number): [number, number, number] {
-  if (u < 0.22) {
-    const k = u / 0.22;
-    return [255, 246 - 60 * k, 214 - 96 * k];
-  }
-  if (u < 0.6) {
-    const k = (u - 0.22) / 0.38;
-    return [255, 186 - 70 * k, 118 - 90 * k];
-  }
-  const k = (u - 0.6) / 0.4;
-  return [255 - 80 * k, 116 - 76 * k, 28 - 20 * k];
+/**
+ * The game's flame (`render/flame-field.ts`), marched over the painted bowls.
+ *
+ * The painting's eye is far enough off to call parallel, so every pixel's ray
+ * has the same direction and starts on a plane through the coal face; where it
+ * enters the flame's box is the slab test, and from there it is the game's march.
+ */
+const MENU_FLAME_VS = `
+  attribute vec2 position;
+  void main(void) { gl_Position = vec4(position, 0.0, 1.0); }`;
+const MENU_FLAME_FS = `
+  precision highp float;
+  uniform vec2 uBase;
+  uniform float uScale;
+  uniform float uTime;
+  uniform float uFlick;
+  uniform vec3 uRd;
+  uniform vec3 uUp;
+  ${FLAME_GLSL}
+  void main(void) {
+    vec2 q = (gl_FragCoord.xy - uBase) / uScale / vec2(${BOWL_WIDEN.toFixed(4)}, 1.0);
+    vec3 o = vec3(q.x, ${COAL_Y.toFixed(4)}, 0.0) + uUp * q.y - uRd * 2.0;
+    vec3 t0 = (vec3(-HALF_W, 0.0, -HALF_W) - o) / uRd;
+    vec3 t1 = (vec3(HALF_W, H, HALF_W) - o) / uRd;
+    vec3 lo = min(t0, t1);
+    vec3 hi = max(t0, t1);
+    float tn = max(max(lo.x, lo.y), lo.z);
+    float tf = min(min(hi.x, hi.y), hi.z);
+    if (tn > tf) discard;
+    vec3 light = marchFlame(o + uRd * tn, uRd, mod(uTime, 600.0)) * ${TONGUE_BRIGHT.toFixed(4)} * uFlick;
+    gl_FragColor = vec4(light, max(light.r, max(light.g, light.b)));
+  }`;
+
+interface MenuFlame {
+  gl: WebGLRenderingContext;
+  base: WebGLUniformLocation | null;
+  scale: WebGLUniformLocation | null;
+  time: WebGLUniformLocation | null;
+  flick: WebGLUniformLocation | null;
+}
+
+/** Per canvas: StrictMode runs the effect twice on one element, and a second
+ *  compile on it would be wasted. */
+const compiled = new WeakMap<HTMLCanvasElement, MenuFlame | null>();
+
+/** Compile the march for one canvas, or null where WebGL is missing: the menu
+ *  then keeps its glow and sparks and burns no body. */
+function menuFlame(canvas: HTMLCanvasElement): MenuFlame | null {
+  if (!compiled.has(canvas)) compiled.set(canvas, compileMenuFlame(canvas));
+  return compiled.get(canvas)!;
+}
+
+function compileMenuFlame(canvas: HTMLCanvasElement): MenuFlame | null {
+  const gl = canvas.getContext("webgl", { premultipliedAlpha: true, antialias: false });
+  if (!gl) return null;
+  const shader = (type: number, src: string) => {
+    const s = gl.createShader(type)!;
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) console.error("menu flame:", gl.getShaderInfoLog(s));
+    return s;
+  };
+  const prog = gl.createProgram()!;
+  gl.attachShader(prog, shader(gl.VERTEX_SHADER, MENU_FLAME_VS));
+  gl.attachShader(prog, shader(gl.FRAGMENT_SHADER, MENU_FLAME_FS));
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return null;
+  gl.useProgram(prog);
+  // One triangle over the whole canvas; the scissor cuts it to each bowl.
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+  const at = gl.getAttribLocation(prog, "position");
+  gl.enableVertexAttribArray(at);
+  gl.vertexAttribPointer(at, 2, gl.FLOAT, false, 0, 0);
+  // A hair of x keeps the slab test off a divide by zero.
+  const rd = [1e-4, -TILT_SIN, TILT_COS];
+  const n = Math.hypot(rd[0]!, rd[1]!, rd[2]!);
+  gl.uniform3f(gl.getUniformLocation(prog, "uRd"), rd[0]! / n, rd[1]! / n, rd[2]! / n);
+  gl.uniform3f(gl.getUniformLocation(prog, "uUp"), 0, TILT_COS, TILT_SIN);
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.ONE, gl.ONE);
+  gl.enable(gl.SCISSOR_TEST);
+  gl.clearColor(0, 0, 0, 0);
+  return {
+    gl,
+    base: gl.getUniformLocation(prog, "uBase"),
+    scale: gl.getUniformLocation(prog, "uScale"),
+    time: gl.getUniformLocation(prog, "uTime"),
+    flick: gl.getUniformLocation(prog, "uFlick"),
+  };
 }
 
 /**
- * A real flame, drawn rather than pulsed.
+ * Fire in the painted braziers: the game's own flame and sparks.
  *
- * The braziers used to be a radial gradient with two sines on its opacity, and
- * a breathing circle is not fire: the eye reads the glow of a fire long before
- * it reads the shape, but it only believes the fire once something is moving
- * UPWARD out of the bowl. So the glow stays, and embers now climb out of it —
- * born wide and white-hot at the lip, drawn inward and cooling as they rise,
- * gone by the top of the flame.
- *
- * One canvas for every brazier on the screen, additively blended, which is what
- * fire does to whatever is behind it. It sits ON the painted flame rather than
- * replacing it: the painting supplies the bowl and the coals, this supplies the
- * only part of a fire that was ever going to look wrong standing still.
+ * Three layers per bowl, all light added onto the painting. The glow the fire
+ * throws and the breathing coal bed are 2D gradients; the body of the flame is
+ * the game's ray-marched field on a WebGL canvas; the sparks are the game's
+ * forty a bowl, projected through the painting's eye. A frame is a pure
+ * function of the clock, so the menu fire never restarts on a navigation.
  */
 export function Braziers({
   spots,
@@ -279,22 +325,30 @@ export function Braziers({
   backdrop: string;
 }): React.ReactElement {
   const ref = React.useRef<HTMLCanvasElement>(null);
+  const bodyRef = React.useRef<HTMLCanvasElement>(null);
   React.useEffect(() => {
     const canvas = ref.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+    const bodyCanvas = bodyRef.current;
+    const body = bodyCanvas ? menuFlame(bodyCanvas) : null;
     const still = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
     let w = 0;
     let h = 0;
+    let dpr = 1;
     const resize = () => {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
       w = canvas.clientWidth;
       h = canvas.clientHeight;
       canvas.width = Math.max(1, Math.round(w * dpr));
       canvas.height = Math.max(1, Math.round(h * dpr));
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (body) {
+        body.gl.canvas.width = canvas.width;
+        body.gl.canvas.height = canvas.height;
+      }
     };
     resize();
     window.addEventListener("resize", resize);
@@ -316,54 +370,9 @@ export function Braziers({
       return { ox: (w - dw) / 2, oy: (h - dh) / 2, dw, dh };
     };
 
-    // Seeded: the fire is decorative, but a deterministic one renders the same
-    // in a captured frame twice running, which is the difference between a
-    // devlog shot you can retake and one you cannot.
-    let seed = 0x6d2b79f5;
-    const rnd = () => {
-      seed = (seed * 1664525 + 1013904223) >>> 0;
-      return seed / 0x100000000;
-    };
-    const dots = emberDots();
-
-    /** Each ember carries its whole trajectory, so a frame is a pure function of `t`. */
-    const embers = spots.map((_, i) =>
-      Array.from({ length: EMBERS }, (_, k) => ({
-        // Spread births evenly over one lifetime, or the flame pulses as a whole
-        // cohort dies together.
-        born: (k / EMBERS) * 0.8 + i * 0.13,
-        // Slower than it was (0.42 + up to 0.5): a parcel of flame that lives
-        // twice as long climbs at half the pace for the same height, and the
-        // eye reads the pace, not the particle.
-        life: 0.95 + rnd() * 0.8,
-        // Biased to the middle rather than flat across the lip: a uniform lane
-        // fills the bowl edge to edge and burns as a wall. Two samples averaged
-        // is a triangle distribution, which is a fire.
-        lane: (rnd() + rnd()) - 1, // -1..1, densest at 0
-        sway: rnd() * Math.PI * 2,
-        size: 0.7 + rnd() * 0.6,
-        lean: (rnd() * 2 - 1) * 0.35,
-        // Where this parcel sits in the turbulence field. Without a per-particle
-        // offset the whole cohort shears together and the flame waves like a flag.
-        curl: rnd() * 6.28,
-        // A third of them burn out low. Real fire is mostly short tongues with a
-        // few that carry: one uniform lifetime draws a plume with a flat top.
-        reach: rnd() < 0.34 ? 0.45 + rnd() * 0.25 : 0.8 + rnd() * 0.35,
-      })),
-    );
-
-    /** The specks that leave the top. Same shape as an ember, longer lived. */
-    const sparks = spots.map((_, i) =>
-      Array.from({ length: SPARKS }, (_, k) => ({
-        born: (k / SPARKS) * 1.6 + i * 0.21,
-        life: 1.7 + rnd() * 1.6,
-        lane: rnd() * 2 - 1,
-        sway: rnd() * Math.PI * 2,
-        drift: (rnd() * 2 - 1) * 0.5,
-        size: 0.5 + rnd() * 0.7,
-        twinkle: 6 + rnd() * 7,
-      })),
-    );
+    const dots = sparkDots();
+    const sparks = sparkTable(spots.length);
+    const pose: SparkPose = { x: 0, y: 0, z: 0, radius: 0, alpha: 0, u: 0 };
 
     let raf = 0;
     const draw = (now: number) => {
@@ -371,6 +380,11 @@ export function Braziers({
       // gutters exactly when the screen changes.
       const t = still ? 1.7 : (now - MENU_CLOCK_START) / 1000;
       ctx.clearRect(0, 0, w, h);
+      if (body) {
+        body.gl.viewport(0, 0, body.gl.canvas.width, body.gl.canvas.height);
+        body.gl.scissor(0, 0, body.gl.canvas.width, body.gl.canvas.height);
+        body.gl.clear(body.gl.COLOR_BUFFER_BIT);
+      }
       const fit = cover();
       if (!fit) {
         raf = requestAnimationFrame(draw);
@@ -380,18 +394,13 @@ export function Braziers({
 
       for (const [i, s] of spots.entries()) {
         const p = t + s.phase;
-        // Two sines whose periods share no small common multiple: the light
-        // never repeats on a count, which is what separates fire from a blinker.
-        // Slower than it was (5.3 and 2.11): a real fire breathes at a couple of
-        // hertz and only its sparks are quick. Still two periods with no small
-        // common multiple, so the light never repeats on a count.
-        const flicker = 0.72 + 0.2 * Math.sin(p * 3.1) + 0.1 * Math.sin(p * 1.27 + 1.7);
+        const flicker = fireFlicker(p);
         const cx = fit.ox + s.x * fit.dw;
         const cy = fit.oy + s.y * fit.dh;
         const glow = s.r * fit.dw;
         const flame = (s.flame ?? s.r * FLAME_OF_GLOW) * fit.dw;
 
-        // The light the fire throws. Same falloff the CSS gradient had.
+        // The light the fire throws.
         const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, glow);
         g.addColorStop(0, `rgba(255,158,66,${0.34 * flicker})`);
         g.addColorStop(0.34, `rgba(217,118,47,${0.16 * flicker})`);
@@ -409,58 +418,36 @@ export function Braziers({
         ctx.fillStyle = coals;
         ctx.fillRect(cx - flame, base - flame, flame * 2, flame * 2);
 
-        for (const e of embers[i]!) {
-          const u = (((t - e.born) / e.life) % 1 + 1) % 1;
-          // Fast off the coals, slowing as it cools and spreads.
-          const rise = u * (1.55 - 0.55 * u) * e.reach;
-          const y = base - flame * rise;
-          // Three terms, and the order of them is the flame's shape. The lane
-          // converges on the centre line as it climbs, which is the silhouette;
-          // the turbulence is scaled by height, so the base stays laminar and
-          // only the top tears; the lean is the whole fire's drift.
-          const turb = swirl(e.lane * 2.4 + e.curl, rise * 3.6 - p * 1.15);
-          const x =
-            cx +
-            e.lane * flame * 0.55 * (1 - u * 0.66) +
-            turb * flame * 0.20 * rise +
-            Math.sin(u * 5.5 + e.sway) * flame * 0.04 +
-            e.lean * flame * u * 0.25;
-          // Widening, not narrowing: a parcel of burning gas diffuses as it
-          // cools. The silhouette still comes to a point because the alpha falls
-          // faster than the radius grows, so the tips go to filigree instead of
-          // to a solid cone with a rounded cap.
-          const rad = flame * EMBER_WIDTH * e.size * (1 + 0.9 * u);
-          // Hot at the lip, hot in the middle: an ember two thirds out across the
-          // bowl is at the edge of the burn and never was white.
-          const cool = Math.min(1, u ** 1.15 + Math.abs(e.lane) * 0.24);
-          const dot = dots[Math.round(cool * (RAMP_STEPS - 1))]!;
-          const stretch = 1.25 + (EMBER_STRETCH - 1.25) * (1 - u);
-          ctx.globalAlpha = (1 - u) ** 1.5 * 0.50 * flicker;
-          ctx.drawImage(dot, x - rad, y - rad * stretch, rad * 2, rad * 2 * stretch);
+        // Pixels per metre: the drawn flame height is the game's flame height.
+        const scale = flame / FLAME_H;
+        if (body) {
+          const { gl } = body;
+          const half = TONGUE_W * scale * 0.65 * BOWL_WIDEN;
+          const top = base - (TONGUE_H * TILT_COS + TONGUE_W * TILT_SIN) * scale;
+          const bottom = base + TONGUE_W * TILT_SIN * scale;
+          // Framebuffer pixels, y up.
+          gl.scissor(
+            Math.floor((cx - half) * dpr), Math.floor((h - bottom) * dpr),
+            Math.ceil(half * 2 * dpr), Math.ceil((bottom - top) * dpr),
+          );
+          gl.uniform2f(body.base, cx * dpr, (h - base) * dpr);
+          gl.uniform1f(body.scale, scale * dpr);
+          gl.uniform1f(body.time, p);
+          // Half the light's swing: the body is the steady part of a fire.
+          gl.uniform1f(body.flick, 0.5 + 0.5 * flicker);
+          gl.drawArrays(gl.TRIANGLES, 0, 3);
+        }
+
+        for (let k = 0; k < SPARKS; k++) {
+          sparkPose(sparks[i * SPARKS + k]!, p, pose);
+          const x = cx + pose.x * scale * BOWL_WIDEN;
+          // Seen from the painting's eye: height foreshortened, depth lifted.
+          const y = base - (pose.y * TILT_COS + pose.z * TILT_SIN) * scale;
+          const rad = pose.radius * scale * 3;
+          ctx.globalAlpha = pose.alpha;
+          ctx.drawImage(dots[Math.round(pose.u * (RAMP_STEPS - 1))]!, x - rad, y - rad, rad * 2, rad * 2);
         }
         ctx.globalAlpha = 1;
-
-        // ...and the few that get away, over the top of the flame.
-        for (const k of sparks[i]!) {
-          const u = (((t - k.born) / k.life) % 1 + 1) % 1;
-          const rise = u * (1.35 - 0.35 * u);
-          const y = base - flame * SPARK_RISE * rise;
-          const x = cx
-            + k.lane * flame * 0.26
-            + k.drift * flame * u
-            + Math.sin(u * 3.1 + k.sway) * flame * 0.05;
-          // A spark is a point of light that gutters, not a parcel that fades:
-          // the twinkle is the whole reason it reads as a spark and not as dust.
-          const gutter = 0.55 + 0.45 * Math.sin(t * k.twinkle + k.sway);
-          const a = (1 - u) ** 2 * 0.5 * gutter;
-          const rad = flame * 0.013 * k.size * (1 - 0.35 * u);
-          const [r, gg, b] = emberColour(Math.min(1, 0.35 + u * 0.65));
-          const gr = ctx.createRadialGradient(x, y, 0, x, y, rad * 3);
-          gr.addColorStop(0, `rgba(${r | 0},${gg | 0},${b | 0},${a})`);
-          gr.addColorStop(1, `rgba(${r | 0},${(gg * 0.4) | 0},0,0)`);
-          ctx.fillStyle = gr;
-          ctx.fillRect(x - rad * 3, y - rad * 3, rad * 6, rad * 6);
-        }
       }
 
       ctx.globalCompositeOperation = "source-over";
@@ -471,23 +458,28 @@ export function Braziers({
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", resize);
+      // Screens mount and unmount the fire, and a browser holds only a few
+      // contexts. Only once the canvas has left the page: StrictMode's re-run
+      // reuses the element, and a lost context composites as white.
+      setTimeout(() => {
+        if (bodyCanvas && !bodyCanvas.isConnected) body?.gl.getExtension("WEBGL_lose_context")?.loseContext();
+      }, 0);
     };
   }, [spots, backdrop]);
 
+  const layer: React.CSSProperties = {
+    position: "absolute",
+    inset: 0,
+    width: "100%",
+    height: "100%",
+    pointerEvents: "none",
+    mixBlendMode: "screen",
+  };
   return (
-    <canvas
-      ref={ref}
-      aria-hidden
-      data-testid="menu-braziers"
-      style={{
-        position: "absolute",
-        inset: 0,
-        width: "100%",
-        height: "100%",
-        pointerEvents: "none",
-        mixBlendMode: "screen",
-      }}
-    />
+    <>
+      <canvas ref={bodyRef} aria-hidden style={layer} />
+      <canvas ref={ref} aria-hidden data-testid="menu-braziers" style={layer} />
+    </>
   );
 }
 
