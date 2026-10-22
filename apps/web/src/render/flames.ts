@@ -42,7 +42,7 @@ import type { FireSpot } from "./lights";
  *
  * ## The sparks stay solid
  *
- * A dozen a bowl on a SolidParticleSystem, not thin instances: the thin-instance
+ * Forty a bowl on a SolidParticleSystem, not thin instances: the thin-instance
  * `instanceColor` buffer is bound and still shades as `vec4(1.0)` in this scene,
  * which loses heat and alpha both. An SPS writes colour into the mesh's own
  * vertex buffer, the ordinary `VERTEXCOLOR` path.
@@ -68,7 +68,7 @@ export const FLAME_TONGUE = `${FLAME_MESH}-tongue-`;
  * bowls that burn are then the bowls that light the room, so a brazier can never
  * be lit with nothing in it or alight with no pool under it.
  */
-const SPARKS = 12;
+export const SPARKS = 40;
 const BOWLS = 4;
 /** Past this, in world units, a bowl is off screen. The frame's half-diagonal
  *  is about 10.6, so the swap always happens out of sight. */
@@ -291,6 +291,52 @@ function buildTongue(scene: Scene, b: number): Tongue {
   return { mesh, mat, eye };
 }
 
+/**
+ * Where along its climb an ember is, as a fraction of `EMBER_TOP` flame heights
+ * over the coal bed, for `u` through its life. The inverse of a density that is
+ * sparse at the coals, fullest in the body of the flame and gone above it, so a
+ * pool spread evenly over `u` thins out by height without any ember carrying
+ * state. Monotone in `u`: embers only ever rise.
+ */
+export const EMBER_TOP = 1.5;
+/** Seconds a climb takes; the pool is staggered evenly across it. */
+export const EMBER_LIFE = 2.4;
+const EMBER_PEAK = 0.55;
+const HEIGHT_LUT = 64;
+const heightLut = (() => {
+  const px = EMBER_PEAK / EMBER_TOP;
+  const dens = (y: number) => {
+    const x = y / EMBER_TOP;
+    const rise = 0.12 + 0.88 * Math.sin((Math.min(x / px, 1) * Math.PI) / 2);
+    const fall = x <= px ? 1 : Math.max(0, 1 - (x - px) / (1 - px)) ** 1.5;
+    return rise * fall;
+  };
+  const n = 512;
+  const cdf = new Float64Array(n + 1);
+  for (let i = 1; i <= n; i++) cdf[i] = cdf[i - 1]! + dens(((i - 0.5) / n) * EMBER_TOP);
+  const lut = new Float64Array(HEIGHT_LUT + 1);
+  let j = 0;
+  for (let i = 0; i <= HEIGHT_LUT; i++) {
+    const target = (i / HEIGHT_LUT) * cdf[n]!;
+    while (j < n - 1 && cdf[j + 1]! < target) j++;
+    const span = cdf[j + 1]! - cdf[j]!;
+    lut[i] = ((j + (span > 0 ? (target - cdf[j]!) / span : 0)) / n) * EMBER_TOP;
+  }
+  return lut;
+})();
+
+/** Height of an ember at `u` (0..1) of its life, in flame heights. */
+export function emberHeight(u: number): number {
+  const f = Math.min(Math.max(u, 0), 1) * HEIGHT_LUT;
+  const i = Math.min(f | 0, HEIGHT_LUT - 1);
+  return heightLut[i]! + (heightLut[i + 1]! - heightLut[i]!) * (f - i);
+}
+
+/** Life fraction of an ember born at `born`, living `life`, at clock `t`. */
+export function emberLife(born: number, life: number, t: number): number {
+  return (((t - born) / life) % 1 + 1) % 1;
+}
+
 interface Spark {
   born: number;
   life: number;
@@ -378,8 +424,8 @@ export function createFireFlames(scene: Scene): Mesh | null {
   for (let b = 0; b < BOWLS; b++) {
     for (let k = 0; k < SPARKS; k++) {
       sparks.push({
-        born: (k / SPARKS) * 1.6 + b * 0.21,
-        life: 1.7 + rnd() * 1.6,
+        born: (k / SPARKS) * EMBER_LIFE + b * 0.21,
+        life: EMBER_LIFE,
         laneX: rnd() * 2 - 1,
         laneZ: rnd() * 2 - 1,
         sway: rnd() * Math.PI * 2,
@@ -470,26 +516,21 @@ function updateParticle(p: SolidParticle): SolidParticle {
   }
   const t = clock;
   const q = sparks[p.idx]!;
-  const u = (((t - q.born) / q.life) % 1 + 1) % 1;
-  // Barely over the flame, not two flames above it. At 2.4 a spark climbed to
-  // nearly three units off the coals and spent most of that climb at the soot
-  // end of the ramp, so the brazier wore a column of red diamonds twice the
-  // height of the fire — the single loudest thing in the frame, and it was the
-  // part that is supposed to be an occasional speck.
-  const rise = u * (1.35 - 0.35 * u) * 1.15;
-  p.position.x = s.x + q.laneX * LIP_R * 0.9 + q.driftX * FLAME_H * u
-    + Math.sin(u * 3.1 + q.sway) * FLAME_H * 0.05;
-  p.position.z = s.z + q.laneZ * LIP_R * 0.9 + q.driftZ * FLAME_H * u
-    + Math.cos(u * 3.1 + q.sway) * FLAME_H * 0.05;
-  p.position.y = BASE_Y + FLAME_H * rise;
-  const rad = FLAME_H * 0.018 * q.size * (1 - 0.35 * u);
-  p.scaling.setAll(rad);
-  // Kept in the yellow-to-orange half of the ramp. A spark is a fleck of fuel
-  // still BURNING; it is the coldest thing in the plume that reaches the soot
-  // end, and a dozen of those over one bowl paint the air above it red.
-  emberColour(Math.min(1, 0.18 + u * 0.42), p.color!);
-  // A spark is a point of light that gutters, not a parcel that fades: the
-  // twinkle is the whole reason it reads as a spark and not as dust.
-  p.color!.a = (1 - u) ** 2 * BRIGHT * 0.9 * (0.55 + 0.45 * Math.sin(t * q.twinkle + q.sway));
+  const u = emberLife(q.born, q.life, t);
+  const y = emberHeight(u);
+  // The teardrop narrows with height, so embers gather over the coals' core as
+  // they climb rather than hanging at the lip.
+  const lane = LIP_R * 0.9 * (1 - 0.55 * Math.min(y, 1));
+  p.position.x = s.x + q.laneX * lane + q.driftX * FLAME_H * u * 0.5
+    + Math.sin(u * 5 + q.sway) * FLAME_H * 0.04;
+  p.position.z = s.z + q.laneZ * lane + q.driftZ * FLAME_H * u * 0.5
+    + Math.cos(u * 5 + q.sway) * FLAME_H * 0.04;
+  p.position.y = BASE_Y + FLAME_H * y;
+  // In over the first tenth of life and out over the last third, so none pops.
+  const env = Math.min(u / 0.1, 1) * Math.min((1 - u) / 0.35, 1);
+  p.scaling.setAll(FLAME_H * 0.026 * q.size * (0.5 + 0.5 * env));
+  // The old stream's whole ramp: white-hot at the coals, soot red at the end.
+  emberColour(u, p.color!);
+  p.color!.a = env * BRIGHT * 0.9 * (0.55 + 0.45 * Math.sin(t * q.twinkle + q.sway));
   return p;
 }
