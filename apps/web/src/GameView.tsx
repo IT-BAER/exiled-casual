@@ -16,7 +16,7 @@ import { clearGallery, spawnAsset } from "./render/gallery";
 import { AssetSpawner } from "./hud/AssetSpawner";
 import { resetFireLights } from "./render/lights";
 import { loadRocks, resetRocks } from "./render/rocks";
-import { loadPlayerRig, resetPlayerRig } from "./render/rig";
+import { loadPlayerRig, resetPlayerRig, type Body } from "./render/rig";
 import {
   buildSkyEnvironment,
   ENVIRONMENT_INTENSITY,
@@ -65,7 +65,7 @@ import { FpsGuard } from "./fps-guard";
 import { createDevApi } from "./dev/dev-api";
 import type { FrameHook, Projector } from "./hud/LootLabels";
 import { brazierSpotsFor, fnv1a32, type AreaLayout } from "@exiled/mapgen";
-import { BIOMES, defaultAttackFor, mapBase } from "@exiled/content-runtime";
+import { BIOMES, characterClass, defaultAttackFor, mapBase } from "@exiled/content-runtime";
 import type { Snapshot, FromWorker, Intent, ToWorker, SpawnKind } from "@exiled/protocol";
 import { atlasGraph, atlasNodeTier, isNodeReachable, mapBaseIdForNode, DEFAULT_CLASS_ID } from "@exiled/rules";
 
@@ -81,6 +81,8 @@ export interface GameViewProps {
    * is what the lab and the tests boot; the worker keeps both paths.
    */
   characterId?: string;
+  /** Its class, known before the first snapshot, so the rig loads its body up front. */
+  classId?: string;
   /** Leave the game and go back to character select. */
   onExit?: () => void;
   /** The worker could not load this character's save; nothing ran and nothing was saved. */
@@ -95,6 +97,7 @@ export interface GameViewProps {
 
 export function GameView({
   characterId = "",
+  classId: playedClassId = DEFAULT_CLASS_ID,
   onExit,
   onLoadFailed,
   settings = DEFAULT_SETTINGS,
@@ -758,7 +761,9 @@ export function GameView({
     // mid-run. A failed load resolves too and leaves the primitive fallback in
     // place.
     let unmounted = false;
-    void Promise.all([loadPlayerRig(scene), loadProps(scene), loadRocks(scene), loadMonsters(scene)]).then(() => {
+    // The vendor is male, so his body always loads; the player's own beside it.
+    const bodies = [...new Set<Body>(["male", characterClass(playedClassId).body])];
+    void Promise.all([loadPlayerRig(scene, bodies), loadProps(scene), loadRocks(scene), loadMonsters(scene)]).then(() => {
       if (!unmounted) engine.runRenderLoop(renderFrame);
       // The worker's hideout area message usually beats props.glb here, and its
       // dressing pass aborted on the missing container with no retry — a bare

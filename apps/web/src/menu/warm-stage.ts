@@ -14,7 +14,7 @@
  */
 
 /** The models `loadPlayerRig` will ask for, by the same URLs, or the cache misses. */
-export const MENU_STAGE_MODELS = ["/models/wardrobe.glb", "/models/anim-library.glb"] as const;
+export const MENU_STAGE_MODELS = ["/models/wardrobe.glb", "/models/wardrobe-female.glb", "/models/anim-library.glb"] as const;
 
 interface Warmers {
   chunk: () => Promise<unknown>;

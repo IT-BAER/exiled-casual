@@ -66,6 +66,8 @@ import {
 } from "./viewer-catalogue";
 import {
   attachRig,
+  BODIES,
+  isRigReady,
   libraryClips,
   loadPlayerRig,
   resetPlayerRig,
@@ -98,13 +100,12 @@ export function looksFromPartNames(names: readonly string[]): Record<string, str
 }
 
 /**
- * The wired body, plus whatever gear the wardrobe ships.
+ * The default body, plus whatever gear the wardrobe ships.
  *
- * The BODY is pinned rather than picked: only `male` is wired (see
- * `BASE_LOOKS`), the wardrobe also ships `female`, and taking "the first look
- * this slot has" would sometimes hand the viewer a body the game never draws.
- * Checked against the vocabulary anyway, so an asset that stopped shipping the
- * male body opens on nothing rather than a silent lie.
+ * The BODY is pinned rather than picked: `BASE_LOOKS`' male, the one the viewer
+ * opens on, while the Inspector switches to any other loaded body. Checked
+ * against the vocabulary anyway, so an asset that stopped shipping the male
+ * body opens on nothing rather than a silent lie.
  *
  * GEAR is picked first-available, because this is the workshop screen and a
  * piece nothing here can put on is a piece nobody can look at. In play a slot
@@ -312,7 +313,7 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
     /* no image processing under NullEngine */
   }
   await Promise.all([
-    loadPlayerRig(scene).catch(() => undefined),
+    loadPlayerRig(scene, BODIES).catch(() => undefined),
     loadProps(scene).catch(() => undefined),
     loadMonsters(scene).catch(() => undefined),
   ]);
@@ -575,7 +576,9 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
       if (toggles.skeleton || toggles.grid) frame();
     },
     vocabulary() {
-      return looksFromPartNames(scene.meshes.map((m) => m.name));
+      // Bodies are their own imports, so only the one standing here has meshes.
+      const vocab = looksFromPartNames(scene.meshes.map((m) => m.name));
+      return { ...vocab, base: BODIES.filter((b) => isRigReady(scene, b)) };
     },
     locomote(speed, rel) {
       moving = { speed, rel };

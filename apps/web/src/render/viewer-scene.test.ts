@@ -12,9 +12,10 @@ import {
 } from "./viewer-scene";
 
 /** Every `slot.look.part` name the wardrobe actually ships. */
-const PART_NAMES = (() => {
+/** Every part name the two body wardrobes ship between them. */
+const PART_NAMES = ["wardrobe.glb", "wardrobe-female.glb"].flatMap((file) => {
   const glb = readFileSync(
-    fileURLToPath(new URL("../../public/models/wardrobe.glb", import.meta.url)),
+    fileURLToPath(new URL(`../../public/models/${file}`, import.meta.url)),
   );
   const jsonLength = glb.readUInt32LE(12);
   const json = JSON.parse(glb.subarray(20, 20 + jsonLength).toString("utf8")) as {
@@ -24,7 +25,7 @@ const PART_NAMES = (() => {
   return [...(json.meshes ?? []), ...(json.nodes ?? [])]
     .map((n) => n.name ?? "")
     .filter((n) => n.length > 0);
-})();
+});
 
 describe("viewer subjects", () => {
   it("offers the character plus every prop and creature the gallery knows", () => {
@@ -42,12 +43,12 @@ describe("viewer subjects", () => {
 
 describe("opening look", () => {
   /**
-   * The body is the wired one and the gear is whatever ships. A workshop screen
-   * that opened on the bare body would hide every piece it exists to show, and
-   * an unwired FEMALE body picked the same way would show a body the game never
-   * draws - hence the two rules rather than one.
+   * The body is the default one and the gear is whatever ships. A workshop
+   * screen that opened on the bare body would hide every piece it exists to
+   * show, and the body is pinned so the screen opens the same way every time -
+   * hence the two rules rather than one.
    */
-  it("opens on the wired body wearing the gear the wardrobe ships", () => {
+  it("opens on the default body wearing the gear the wardrobe ships", () => {
     const vocab = looksFromPartNames(PART_NAMES);
     const looks = dressedFromVocabulary(vocab);
     expect(looks.base).toBe(BASE_LOOKS.base);
@@ -78,7 +79,7 @@ describe("look vocabulary", () => {
     expect(bySlot.base?.length ?? 0).toBeGreaterThan(0);
   });
 
-  it("finds both bodies the wardrobe ships", () => {
+  it("finds both bodies the wardrobes ship", () => {
     const bySlot = looksFromPartNames(PART_NAMES);
     expect(bySlot.base).toContain("male");
     expect(bySlot.base).toContain("female");

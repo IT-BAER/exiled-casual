@@ -10,6 +10,6 @@ import { looksForEquipment } from "../render/gear-looks";
 import type { Looks } from "../render/rig";
 
 export function looksForClass(classId: string): Looks {
-  const gear = characterClass(classId).startingGear;
-  return looksForEquipment(Object.fromEntries(Object.entries(gear).map(([slot, baseId]) => [slot, { baseId }])));
+  const { startingGear: gear, body } = characterClass(classId);
+  return looksForEquipment(Object.fromEntries(Object.entries(gear).map(([slot, baseId]) => [slot, { baseId }])), body);
 }

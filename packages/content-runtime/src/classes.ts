@@ -18,6 +18,7 @@ export const CLASSES: Record<string, CharacterClass> = {
     name: "Ironsworn",
     blurb: "Took the oath at the forge and has not put the hammer down since.",
     archetype: "strength",
+    body: "male",
     startingGear: {
       helmet: "base.ironsworn_helm",
       body: "base.ironsworn_plate",
@@ -33,6 +34,7 @@ export const CLASSES: Record<string, CharacterClass> = {
     name: "Stalker",
     blurb: "Walked out of the treeline one night and never said which one.",
     archetype: "dexterity",
+    body: "male",
     startingGear: {
       helmet: "base.stalker_hood",
       body: "base.stalker_leathers",
@@ -48,6 +50,7 @@ export const CLASSES: Record<string, CharacterClass> = {
     name: "Emberbound",
     blurb: "Carries a fire that was never hers to borrow.",
     archetype: "intellect",
+    body: "female",
     startingGear: {
       helmet: "base.ember_cowl",
       body: "base.ember_robe",

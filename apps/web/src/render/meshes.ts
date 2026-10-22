@@ -16,7 +16,7 @@ import {
 import { attachProp, type PropKind } from "./props";
 import { attachCreature, creatureSpecies, type CreatureRig } from "./monsters";
 import { attachArrowStreak, attachBoltTrail, attachCinderFX, buildArrow, CINDER_DISC_ALPHA, cinderGlow, fxProfile, PROJECTILE_ARROW_SCALE, setStreakLength, SKILL_FX } from "./skill-fx";
-import { attachRig, rigOf, type Looks, type RigParts } from "./rig";
+import { attachRig, isBody, rigOf, type Looks, type RigParts } from "./rig";
 import { looksForEquipment } from "./gear-looks";
 import { attachGroundModel, GROUND_LOOK_BASES } from "./ground-looks";
 import { groundMaterial } from "./ground-fx";
@@ -1622,7 +1622,8 @@ function buildMesh(
     if (kind === "player") {
       // Skinned humanoid when its assets loaded; the primitive caster is the
       // fallback for headless tests and for a failed model fetch.
-      const rig = attachRig(scene, root);
+      // The player's `species` is his class's body.
+      const rig = attachRig(scene, root, isBody(species) ? species : "male");
       if (rig) root.metadata = { rig } satisfies RigParts;
       else buildCaster(scene, root);
       return root;

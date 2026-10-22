@@ -480,16 +480,20 @@ export function speedRatioFor(clip: RigClip, speed: number): number {
 }
 
 /**
- * The character is one asset, `wardrobe.glb`: two base bodies (male, female),
- * each its own skeleton, each carrying its fixed hair, brows and eyes.
- * `tools/build_wardrobe.py` cuts it out of the Quaternius base-character packs.
+ * The character is one wardrobe file per base body, `wardrobe.glb` (male) and
+ * `wardrobe-female.glb`: the body on its own skeleton with its fixed hair, brows
+ * and eyes, and every gear look fitted to that body. `tools/build_wardrobe.py`
+ * cuts each out of the Quaternius base-character packs.
  *
- * Every part is named `slot.look.part`; the one slot is `base` and a look
- * (`male` or `female`) is shown by enabling its parts and hiding every other
- * look's. Nothing is instantiated or rebuilt when the look changes, which is
- * what keeps a mid-stride swap from restarting the walk cycle.
+ * Every part is named `slot.look.part`, and a gear look is shown by enabling its
+ * parts and hiding every other look's. Nothing is instantiated or rebuilt when
+ * gear changes, which is what keeps a mid-stride swap from restarting the walk
+ * cycle; only a change of body (the `base` look) rebuilds.
  */
-const WARDROBE_URL = "/models/wardrobe.glb";
+const WARDROBE_URL: Record<Body, string> = {
+  male: "/models/wardrobe.glb",
+  female: "/models/wardrobe-female.glb",
+};
 
 // The served wardrobe is meshopt-packed (`tools/pack_wardrobe.mjs`). Babylon's
 // default decoder is a script tag off its CDN, which the CSP blocks and node
@@ -501,11 +505,10 @@ const WARDROBE_URL = "/models/wardrobe.glb";
   },
 };
 
-/** The skeleton the runtime drives. The wardrobe also ships `Armature_female`,
- * whose 65 bones carry the same names, and nothing selects her yet. */
-const MALE_RIG = "Armature";
+/** Each body's skeleton root. Both carry the same 65 bone names. */
+const RIG_OF: Record<Body, string> = { male: "Armature", female: "Armature_female" };
 
-/** Every skeleton root the wardrobe ships, wired or not. */
+/** Every skeleton root a wardrobe can ship. */
 const RIG_ROOT = /^Armature(_[a-z]+)?$/;
 
 /**
@@ -531,15 +534,17 @@ export const SLOTS: readonly Slot[] =
 /** A look per slot, or null for "nothing shown there". */
 export type Looks = Record<Slot, string | null>;
 
+/** The base bodies, each its own wardrobe file and skeleton; the `base` slot's looks. */
+export type Body = "male" | "female";
+export const BODIES: readonly Body[] = ["male", "female"];
+export const isBody = (look: string | null | undefined): look is Body => look === "male" || look === "female";
+
 /** Nobody drawn: the menu hall with no character standing in it. */
 export const NO_LOOKS: Looks = {
   base: null, helmet: null, chest: null, boots: null, gloves: null, weapon1: null, weapon2: null,
 };
 
-/**
- * The bare body, carrying nothing. The wardrobe ships a female body on the same
- * skeleton shape, but nothing yet picks her — see `build_wardrobe.py`.
- */
+/** The bare male body, carrying nothing; a class's body replaces `base`. */
 export const BASE_LOOKS: Looks = {
   base: "male", helmet: null, chest: null, boots: null, gloves: null, weapon1: null, weapon2: null,
 };
@@ -1139,7 +1144,7 @@ const RIG_YAW = 0;
 interface LoadedRig {
   scene: Scene;
   anims: AssetContainer;
-  wardrobe: AssetContainer;
+  wardrobes: Map<Body, AssetContainer>;
 }
 
 let loaded: LoadedRig | null = null;
@@ -1154,47 +1159,72 @@ let loaded: LoadedRig | null = null;
  * menu and the game, and in dev it is one screen twice, because StrictMode
  * mounts, unmounts and remounts every effect.
  */
-let pending: { scene: Scene; promise: Promise<void> } | null = null;
+let pending: { scene: Scene; bodies: readonly Body[]; promise: Promise<void> } | null = null;
+
+/** Where the models come from: the served URLs, or files a test hands in. */
+export interface RigSources {
+  anims: string | File;
+  wardrobes: Partial<Record<Body, string | File>>;
+}
 
 /**
- * Fetch the humanoid assets once per scene, before the render loop starts.
+ * Fetch the humanoid assets once per scene, before the render loop starts: the
+ * clips, and the wardrobe of each body asked for. A body asked for later is
+ * added to the same scene's cache.
+ *
+ * Ask for every body the scene can show up front. A texture download across a
+ * wardrobe's glTF import leaves its materials flat white (see menu-scene.ts),
+ * and a later import runs across whatever the scene has built by then.
  *
  * Failure is not fatal: headless tests and offline loads leave `loaded` null and
  * every caller falls back to the primitive actor, so the lab still runs.
  */
 export function loadPlayerRig(
   scene: Scene,
-  sources: { anims: string | File; wardrobe: string | File } = { anims: ANIM_URL, wardrobe: WARDROBE_URL },
+  bodies: readonly Body[] = ["male"],
+  sources: RigSources = { anims: ANIM_URL, wardrobes: WARDROBE_URL },
 ): Promise<void> {
-  if (loaded?.scene === scene) return Promise.resolve();
-  if (pending?.scene === scene) return pending.promise;
+  const missing = () => bodies.filter((b) => loaded?.scene !== scene || !loaded.wardrobes.has(b));
+  if (missing().length === 0) return Promise.resolve();
+  if (pending?.scene === scene && bodies.every((b) => pending!.bodies.includes(b))) return pending.promise;
 
-  // A load already running for a DIFFERENT scene is queued behind rather than
-  // shared, so the containers this caller ends up with are its own.
+  // A load already running is queued behind rather than shared: for a DIFFERENT
+  // scene so the containers this caller ends up with are its own, and for this
+  // one so a body it did not ask for is added after it.
   const prior = pending?.promise ?? Promise.resolve();
   const promise = prior
     .catch(() => undefined)
     .then(async () => {
-      if (loaded?.scene === scene) return;
-      const [anims, wardrobe] = await Promise.all([
-        LoadAssetContainerAsync(sources.anims, scene),
-        LoadAssetContainerAsync(sources.wardrobe, scene),
+      const need = missing();
+      if (need.length === 0) return;
+      const fresh = loaded?.scene !== scene;
+      const [anims, ...wardrobes] = await Promise.all([
+        fresh ? LoadAssetContainerAsync(sources.anims, scene) : loaded!.anims,
+        ...need.map((b) => {
+          const source = sources.wardrobes[b];
+          if (source === undefined) throw new Error(`no wardrobe source for the ${b} body`);
+          return LoadAssetContainerAsync(source, scene);
+        }),
       ]);
-      loaded = { scene, anims, wardrobe };
+      const into: LoadedRig = fresh ? { scene, anims, wardrobes: new Map() } : loaded!;
+      need.forEach((b, i) => into.wardrobes.set(b, wardrobes[i]!));
+      loaded = into;
     })
     .catch(() => {
-      loaded = null;
+      // A body that failed to arrive leaves the ones already here alone.
+      if (loaded?.scene !== scene) loaded = null;
     })
     .finally(() => {
       if (pending?.promise === promise) pending = null;
     });
 
-  pending = { scene, promise };
+  const asked = pending?.scene === scene ? pending.bodies : [];
+  pending = { scene, bodies: [...new Set([...asked, ...bodies])], promise };
   return promise;
 }
 
-export function isRigReady(scene: Scene): boolean {
-  return loaded !== null && loaded.scene === scene;
+export function isRigReady(scene: Scene, body: Body = "male"): boolean {
+  return loaded !== null && loaded.scene === scene && loaded.wardrobes.has(body);
 }
 
 /** Every take in this scene's animation library, by name. Empty before it lands. */
@@ -1202,9 +1232,9 @@ export function libraryClips(scene: Scene): string[] {
   return loaded?.scene === scene ? loaded.anims.animationGroups.map((g) => g.name) : [];
 }
 
-/** This scene's wardrobe import, or null before it lands. Never a second import. */
-export function wardrobeFor(scene: Scene): AssetContainer | null {
-  return loaded?.scene === scene ? loaded.wardrobe : null;
+/** This scene's wardrobe import for a body, or null before it lands. Never a second import. */
+export function wardrobeFor(scene: Scene, body: Body = "male"): AssetContainer | null {
+  return loaded?.scene === scene ? loaded.wardrobes.get(body) ?? null : null;
 }
 
 /**
@@ -1224,14 +1254,13 @@ export function resetPlayerRig(scene?: Scene): void {
 }
 
 /**
- * Index the wired body's skeleton subtree by node name, and switch every other
+ * Index one body's skeleton subtree by node name, and switch every other
  * skeleton in the import off.
  *
- * The wardrobe ships two skeletons ("Armature", "Armature_female") carrying the
- * same 65 bone names, so indexing both into one map would let whichever landed
- * second silently own the animation. A second rig in the same scene clones
- * these nodes and a clone carries a `.001` suffix, so a root is matched on its
- * stem.
+ * Both bodies' skeletons ("Armature", "Armature_female") carry the same 65 bone
+ * names, so indexing two into one map would let whichever landed second
+ * silently own the animation. A second rig in the same scene clones these nodes
+ * and a clone carries a `.001` suffix, so a root is matched on its stem.
  *
  * The skeletons are searched for BELOW the nodes handed in, never among them:
  * Babylon's glTF loader wraps an import in one `__root__` node carrying the
@@ -1239,13 +1268,13 @@ export function resetPlayerRig(scene?: Scene): void {
  * and the armatures are its children. Treating the wrapper as an armature
  * indexes nothing and disables the entire import, silently.
  */
-export function indexRigSubtree(roots: readonly Node[]): Map<string, Node> {
+export function indexRigSubtree(roots: readonly Node[], rig: string = RIG_OF.male): Map<string, Node> {
   const byName = new Map<string, Node>();
   for (const root of roots) {
     for (const node of [root, ...root.getDescendants(false)]) {
       const stem = node.name.replace(/\.\d+$/, "");
       if (!RIG_ROOT.test(stem)) continue;
-      if (stem !== MALE_RIG) {
+      if (stem !== rig) {
         if (node instanceof TransformNode) node.setEnabled(false);
         continue;
       }
@@ -1332,6 +1361,8 @@ export class RigActor {
   /** Every wardrobe part, grouped `slot` -> `look` -> meshes. */
   private readonly parts = new Map<string, Map<string, Mesh[]>>();
   private looks: Looks = { ...NO_LOOKS };
+  /** Whose wardrobe the parts and skeleton were instantiated from. */
+  private body: Body;
 
   /** Coat cloth. Null when the wardrobe has no skirt chains (an older asset). */
   private skirt: SkirtSim | null = null;
@@ -1397,9 +1428,10 @@ export class RigActor {
   private readonly aimed = new Quaternion();
   /** Rotation of the current bone's parent, relative to the pelvis. */
   private readonly cumulative = new Quaternion();
-  constructor(scene: Scene, host: Mesh) {
+  constructor(scene: Scene, host: Mesh, body: Body = "male") {
     this.scene = scene;
     this.host = host;
+    this.body = body;
     this.pivot = new TransformNode(`${host.name}-rig`, scene);
     this.pivot.parent = host;
     this.pivot.rotation.y = RIG_YAW;
@@ -1413,9 +1445,19 @@ export class RigActor {
 
   /**
    * Dress the character. Only visibility moves, so this is safe to call every
-   * frame from the snapshot without disturbing the animation.
+   * frame from the snapshot without disturbing the animation. A `base` naming
+   * another loaded body is the one change that rebuilds: that body is its own
+   * import and its own skeleton, and he stands settled in it.
    */
   setLooks(looks: Looks): void {
+    if (isBody(looks.base) && looks.base !== this.body && isRigReady(this.scene, looks.base)) {
+      this.body = looks.base;
+      this.build();
+      this.looks = { ...looks };
+      this.applyLooks();
+      this.standSettled();
+      return;
+    }
     let changed = false;
     for (const slot of SLOTS) {
       if (this.looks[slot] !== looks[slot]) {
@@ -1838,22 +1880,19 @@ export class RigActor {
     this.teardown();
     if (!loaded) return;
 
+    const wardrobe = loaded.wardrobes.get(this.body);
+    if (!wardrobe) return;
+
     // doNotInstantiate: a skinned mesh needs its own skeleton, not a GPU instance.
-    const entries = loaded.wardrobe.instantiateModelsToScene((n) => n, false, {
+    const entries = wardrobe.instantiateModelsToScene((n) => n, false, {
       doNotInstantiate: true,
     });
     this.entries = entries;
 
-    // The wardrobe ships two skeletons ("Armature", "Armature_female") with the
-    // same 65 bone names, so indexing both into one map by name would let
-    // whichever loaded second silently own the animation. Only the male body is
-    // wired today, so only his skeleton's subtree is read, and the female one is
-    // switched off outright rather than left to whatever visibility it imported
-    // with.
-    // A second rig in the same scene clones these nodes, and a clone carries a
-    // `.001` suffix, so the root is matched on its stem.
+    // Only this body's skeleton subtree is read; a clone's `.001` suffix is
+    // handled by `indexRigSubtree`.
     for (const root of entries.rootNodes) root.parent = this.pivot;
-    const byName = indexRigSubtree(entries.rootNodes);
+    const byName = indexRigSubtree(entries.rootNodes, RIG_OF[this.body]);
 
     // Index the parts by the `slot.look.part` names the builder emits. Cloned
     // instances keep the source name plus a Babylon suffix, so the slot and look
@@ -2422,9 +2461,9 @@ export interface RigParts {
  * Build a skinned player under `host`, or return null when the assets are not
  * loaded (headless tests, a failed fetch) so the caller can fall back.
  */
-export function attachRig(scene: Scene, host: Mesh): RigActor | null {
-  if (!isRigReady(scene)) return null;
-  return new RigActor(scene, host);
+export function attachRig(scene: Scene, host: Mesh, body: Body = "male"): RigActor | null {
+  if (!isRigReady(scene, body)) return null;
+  return new RigActor(scene, host, body);
 }
 
 /** The rig on an actor root, if it has one. */

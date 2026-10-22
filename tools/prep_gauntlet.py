@@ -41,14 +41,15 @@ if "--" in sys.argv:
     for arg in sys.argv[sys.argv.index("--") + 1:]:
         if arg in ("stalker", "ember"):
             LOOK = arg
+# `-- <look> female` builds on her hand (`W.BODY`), into the body's own file.
 STEM = {"ironsworn": "gauntlet-hand-v2", "stalker": "glove-hand-v1",
-        "ember": "wrap-hand-v1"}[LOOK]
+        "ember": "wrap-hand-v1"}[LOOK] + W.SUFFIX
 DONOR = f"D:/VSC/exiled-casual/assets/props/source/trellis_local/{STEM}.glb"
 KEPT = f"D:/VSC/exiled-casual/assets/props/source/{STEM}.glb"
 REPORT = f"D:/VSC/exiled-casual/assets/props/source/{STEM}.json"
 REVIEW = {"ironsworn": "D:/VSC/exiled-casual/review/3d/gauntlets-v1",
           "stalker": "D:/VSC/exiled-casual/review/3d/leather-gloves-v1",
-          "ember": "D:/VSC/exiled-casual/review/3d/ember-wraps-v1"}[LOOK]
+          "ember": "D:/VSC/exiled-casual/review/3d/ember-wraps-v1"}[LOOK] + W.SUFFIX
 
 # Air between skin and the steel's inner face. The fitter re-scales whatever it
 # is handed, so this is the shape's clearance and not the fit's - the sweep
@@ -707,8 +708,8 @@ def main():
     W.clear_scene()
     for spec in W.LOOKS:
         W.build_look(spec)
-    rig = bpy.data.objects[W.MALE_RIG]
-    body = bpy.data.objects["base.male.body"]
+    rig = bpy.data.objects[W.RIG]
+    body = bpy.data.objects[f"base.{W.BODY}.body"]
     pairs, off = W.assert_symmetric(rig)
     print(f"SYMMETRY {pairs} mirrored bone pairs, worst {off * 1000:.4f} mm off centre")
 
@@ -771,7 +772,7 @@ def main():
                   "quarter": os.path.join(REVIEW, "procedural-quarter.png")})
 
     report = {
-        "built_from": "base.male.body hand + forearm weights, cut at the cuff plane",
+        "built_from": f"base.{W.BODY}.body hand + forearm weights, cut at the cuff plane",
         "skin_gap_mm": SKIN_GAP * 1000, "safe_share": SAFE_SHARE,
         "wall_mm": STEEL * 1000, "relax_passes": [in_passes, out_passes, lame_passes], "cuff_up_mm": CUFF_UP * 1000,
         "forearm_section_mm": round(forearm_r * 1000, 2),

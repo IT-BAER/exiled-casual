@@ -1,6 +1,6 @@
 import React from "react";
 import { CLASS_LIST } from "@exiled/content-runtime";
-import { BASE_LOOKS, SLOTS, type Looks, type Slot } from "../../render/rig";
+import { SLOTS, type Looks, type Slot } from "../../render/rig";
 import {
   CAMERAS,
   CREATURE_ACTIONS,
@@ -118,11 +118,7 @@ function CharacterSections(p: InspectorProps): React.ReactElement {
               <select id={`av-look-${slot}`} className="av-select" value={p.looks[slot] ?? ""}
                 onChange={(e) => p.onLooks({ ...p.looks, [slot]: e.target.value === "" ? null : e.target.value })}>
                 <option value="">None</option>
-                {options.map((look) => {
-                  // Only the male skeleton is indexed by the rig (`indexRigSubtree`).
-                  const unwired = slot === "base" && look !== BASE_LOOKS.base;
-                  return <option key={look} value={look} disabled={unwired}>{unwired ? `${look} (unwired)` : look}</option>;
-                })}
+                {options.map((look) => <option key={look} value={look}>{look}</option>)}
               </select>
             </div>
           );

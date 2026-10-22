@@ -11,6 +11,8 @@ import type { Tier } from "./rim";
 import { rigOf } from "./rig";
 import type { ReactionClip } from "./rig";
 import { looksForEquipment } from "./gear-looks";
+import { characterClass } from "@exiled/content-runtime";
+import { DEFAULT_CLASS_ID } from "@exiled/rules";
 import { creatureOf } from "./meshes";
 import { CORPSE_SECONDS, SINK_SECONDS, disposeRagdoll, dollMotion, dropDead, freezeRagdoll, sinkDepth } from "./ragdoll";
 import { CAMERA_ALPHA } from "./engine";
@@ -510,6 +512,7 @@ export class SnapshotRenderer {
     // cancels the cast when he turns away (castDir null).
     const bodyFacing = next.player.casting && next.player.facing && this.castDir
       ? next.player.facing : playerFacing;
+    const body = characterClass(next.player.classId ?? DEFAULT_CLASS_ID).body;
     if (next.player.alive) this.syncMesh(
       next.player.id,
       "player",
@@ -519,7 +522,7 @@ export class SnapshotRenderer {
       next.player.y,
       alpha,
       undefined,
-      undefined,
+      body,
       next.player.heading,
       undefined,
       bodyFacing,
@@ -530,7 +533,7 @@ export class SnapshotRenderer {
     // early when nothing differs, and doing it here self-heals a mesh that was
     // rebuilt underneath us.
     const playerMesh = this.meshes.get(next.player.id);
-    if (playerMesh) rigOf(playerMesh)?.setLooks(looksForEquipment(next.equipment ?? {}));
+    if (playerMesh) rigOf(playerMesh)?.setLooks(looksForEquipment(next.equipment ?? {}, body));
     this.ailmentFx.update(
       next.player.alive && playerMesh ? next.player.buffs : undefined,
       playerMesh?.position.x ?? next.player.x, playerMesh?.position.z ?? next.player.y,

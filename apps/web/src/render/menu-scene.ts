@@ -32,7 +32,7 @@ import {
   Texture,
   Vector3,
 } from "@babylonjs/core";
-import { attachRig, loadPlayerRig, resetPlayerRig, type Looks, type RigActor } from "./rig";
+import { attachRig, BODIES, loadPlayerRig, resetPlayerRig, type Looks, type RigActor } from "./rig";
 import { buildSkyEnvironment, GROUND_COLOR, SKY_COLOR } from "./environment";
 import { dissolveAway, dissolveIn, primeDissolve } from "./dissolve";
 
@@ -419,7 +419,8 @@ export async function createMenuStage(canvas: HTMLCanvasElement): Promise<MenuSt
 
   const lights = lightHall(scene);
 
-  await loadPlayerRig(scene);
+  // Every body, now: a class picked later must not import across the textures below.
+  await loadPlayerRig(scene, BODIES);
 
   // Same ordering rule as the contact shadow below, and for the same reason:
   // anything that starts a texture across the wardrobe's glTF import leaves

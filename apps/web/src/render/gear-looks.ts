@@ -10,7 +10,7 @@
  * belts, rings and amulets are the only bases left unmapped - the wardrobe has
  * no slot for them, and at this camera none of them would be seen.
  */
-import { BASE_LOOKS, type Looks, type Slot } from "./rig";
+import { BASE_LOOKS, type Body, type Looks, type Slot } from "./rig";
 
 export interface GearLook {
   slot: Slot;
@@ -51,8 +51,9 @@ interface Equipped {
 
 export function looksForEquipment(
   equipment: Partial<Record<string, Equipped>>,
+  body: Body = "male",
 ): Looks {
-  const looks: Looks = { ...BASE_LOOKS };
+  const looks: Looks = { ...BASE_LOOKS, base: body };
   for (const item of Object.values(equipment)) {
     const baseId = item?.baseId;
     if (baseId === undefined) continue;

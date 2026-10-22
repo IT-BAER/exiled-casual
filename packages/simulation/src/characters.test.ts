@@ -81,6 +81,14 @@ describe("class content", () => {
     for (const b of bodies) expect(STARTER_BASE_IDS).toContain(b);
   });
 
+  it("plays the Emberbound on the female body and everyone else on the male", () => {
+    expect(Object.fromEntries(Object.values(CLASSES).map((c) => [c.id, c.body]))).toEqual({
+      "class.ironsworn": "male",
+      "class.stalker": "male",
+      "class.emberbound": "female",
+    });
+  });
+
   it("holds one family per class and nothing else", async () => {
     const { ITEM_POOLS } = await import("@exiled/content-runtime");
     const stray = ITEM_POOLS.bases
