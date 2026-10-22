@@ -33,12 +33,7 @@ import {
   Vector3,
 } from "@babylonjs/core";
 import { attachRig, loadPlayerRig, resetPlayerRig, type Looks, type RigActor } from "./rig";
-import {
-  buildSkyEnvironment,
-  ENVIRONMENT_INTENSITY,
-  GROUND_COLOR,
-  SKY_COLOR,
-} from "./environment";
+import { buildSkyEnvironment, GROUND_COLOR, SKY_COLOR } from "./environment";
 import { dissolveAway, dissolveIn, primeDissolve } from "./dissolve";
 
 /**
@@ -165,8 +160,8 @@ const CONTACT_OFFSET = { x: -0.09, z: 0.12 };
  */
 const FACING = -0.15;
 
-/** Cold wash from the dome, and the one knob that says how much of the face you
- *  get. Weak on purpose: this room is lit by fire, not by sky, and the plate
+/** Cold wash from the dome. Weak on purpose: this room is lit by fire, not by
+ *  sky, and the plate
  *  agrees with the braziers rather than with a front key. It used to be weak for
  *  a second reason that is gone — a bright fill was exactly what would have lit
  *  up a featureless head — so the ceiling here is now taste, not the asset. */
@@ -194,6 +189,22 @@ const BRAZIERS: readonly Vector3[] = [
  */
 const RIM_COLOR = new Color3(0.62, 0.74, 0.95);
 const RIM_INTENSITY = 4.6;
+
+/**
+ * The warm key on his front, from the screen-left brazier's side of the room.
+ * Every other light stands behind him, so without it his front was lit by the
+ * flat sky environment alone and read grey and washed out.
+ */
+const KEY_COLOR = new Color3(1.0, 0.66, 0.38);
+const KEY_INTENSITY = 8;
+const KEY_OFFSET = new Vector3(1.6, 2.0, 2.6);
+
+/**
+ * The sky cube's share, lower than the game's: at the game's 1.0 it outweighed
+ * every direct light here and flattened him. It stays above zero because the
+ * plate's metal samples it for its specular lobe.
+ */
+const MENU_ENVIRONMENT_INTENSITY = 0.4;
 
 /** Where a floor-level or body point lands, as a fraction down the backdrop image. */
 function imageY(y: number, z: number): number {
@@ -338,6 +349,44 @@ export function createMenuCamera(scene: Scene): FreeCamera {
 }
 
 /**
+ * The hall's lights: the dome's wash, the two braziers and the rim behind him,
+ * and the warm key in front. Five, one more than a material lights by default,
+ * so the stage raises the limit on whatever he wears (`setLooks`).
+ */
+export function lightHall(scene: Scene): Light[] {
+  const fill = new HemisphericLight("menu-fill", new Vector3(0, 1, 0), scene);
+  fill.intensity = FILL_INTENSITY;
+  fill.diffuse = FILL_SKY;
+  fill.groundColor = FILL_GROUND;
+
+  const braziers = BRAZIERS.map((at, i) => {
+    const b = new PointLight(`menu-brazier-${i}`, at.clone(), scene);
+    b.diffuse = BRAZIER_COLOR;
+    b.specular = BRAZIER_COLOR.scale(0.35);
+    b.intensity = BRAZIER_INTENSITY;
+    b.range = BRAZIER_RANGE;
+    b.falloffType = Light.FALLOFF_GLTF;
+    return b;
+  });
+
+  const rim = new PointLight("menu-rim", new Vector3(FEET.x + 0.4, 2.6, -3.2), scene);
+  rim.diffuse = RIM_COLOR;
+  rim.specular = RIM_COLOR;
+  rim.intensity = RIM_INTENSITY;
+  rim.range = 12;
+  rim.falloffType = Light.FALLOFF_GLTF;
+
+  const key = new PointLight("menu-key", FEET.add(KEY_OFFSET), scene);
+  key.diffuse = KEY_COLOR;
+  key.specular = KEY_COLOR.scale(0.3);
+  key.intensity = KEY_INTENSITY;
+  key.range = 10;
+  key.falloffType = Light.FALLOFF_GLTF;
+
+  return [fill, ...braziers, rim, key];
+}
+
+/**
  * Build the stage on `canvas`, or resolve null when the wardrobe could not be
  * fetched. Null is not an error: the select screen keeps its backdrop and its
  * roster, and loses only the figure — which is exactly what happens headlessly.
@@ -368,26 +417,7 @@ export async function createMenuStage(canvas: HTMLCanvasElement): Promise<MenuSt
     frameCamera(camera, ...sizes, engine.isNDCHalfZRange);
   };
 
-  const fill = new HemisphericLight("menu-fill", new Vector3(0, 1, 0), scene);
-  fill.intensity = FILL_INTENSITY;
-  fill.diffuse = FILL_SKY;
-  fill.groundColor = FILL_GROUND;
-
-  for (const [i, at] of BRAZIERS.entries()) {
-    const b = new PointLight(`menu-brazier-${i}`, at.clone(), scene);
-    b.diffuse = BRAZIER_COLOR;
-    b.specular = BRAZIER_COLOR.scale(0.35);
-    b.intensity = BRAZIER_INTENSITY;
-    b.range = BRAZIER_RANGE;
-    b.falloffType = Light.FALLOFF_GLTF;
-  }
-
-  const rim = new PointLight("menu-rim", new Vector3(FEET.x + 0.4, 2.6, -3.2), scene);
-  rim.diffuse = RIM_COLOR;
-  rim.specular = RIM_COLOR;
-  rim.intensity = RIM_INTENSITY;
-  rim.range = 12;
-  rim.falloffType = Light.FALLOFF_GLTF;
+  const lights = lightHall(scene);
 
   await loadPlayerRig(scene);
 
@@ -398,7 +428,7 @@ export async function createMenuStage(canvas: HTMLCanvasElement): Promise<MenuSt
   buildSkyEnvironment(scene, {
     sky: SKY_COLOR,
     ground: GROUND_COLOR,
-    intensity: ENVIRONMENT_INTENSITY,
+    intensity: MENU_ENVIRONMENT_INTENSITY,
   });
 
   const host = new Mesh("menu-actor", scene);
@@ -529,6 +559,13 @@ export async function createMenuStage(canvas: HTMLCanvasElement): Promise<MenuSt
       // that says "that was loading"; building him is the same wait spent
       // saying the hall meant to do it.
       const dressed = worn();
+      // Before the prime, so the shader compiles once with every hall light.
+      for (const m of dressed) {
+        const mat = m.material as { maxSimultaneousLights?: number } | null;
+        if (mat?.maxSimultaneousLights !== undefined && mat.maxSimultaneousLights < lights.length) {
+          mat.maxSimultaneousLights = lights.length;
+        }
+      }
       if (arrived) {
         void primeDissolve(dressed);
         return;

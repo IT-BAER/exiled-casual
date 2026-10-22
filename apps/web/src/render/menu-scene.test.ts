@@ -1,10 +1,10 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { Matrix, NullEngine, Scene, Vector3 } from "@babylonjs/core";
+import { Matrix, NullEngine, PointLight, Scene, Vector3 } from "@babylonjs/core";
 import { CLASS_IDS } from "@exiled/rules";
 import { BASE_LOOKS, SLOTS, resetPlayerRig } from "./rig";
-import { createMenuCamera, FEET, FEET_IMAGE, floorImageY, frameCamera, shadowReachImageY } from "./menu-scene";
+import { createMenuCamera, FEET, FEET_IMAGE, floorImageY, frameCamera, lightHall, shadowReachImageY } from "./menu-scene";
 import { looksForClass } from "../menu/class-looks";
 
 let engine: InstanceType<typeof NullEngine> | undefined;
@@ -107,6 +107,19 @@ describe("class looks", () => {
       expect(at.x, `${boxW}x${boxH}`).toBeCloseTo((boxW - shown * aspect) / 2 + FEET_IMAGE.x * shown * aspect, 0);
       expect(at.y, `${boxW}x${boxH}`).toBeCloseTo((boxH - shown) / 2 + FEET_IMAGE.y * shown, 0);
     }
+  });
+
+  /**
+   * Braziers and rim stand behind him, so without a light on the camera side his
+   * front is lit by the flat environment alone and reads washed out.
+   */
+  it("lights his front from the camera side, on the painting's lit brazier side", () => {
+    engine = new NullEngine();
+    const scene = new Scene(engine);
+    const front = lightHall(scene).filter((l) => l instanceof PointLight && l.position.z > FEET.z + 1);
+    expect(front).toHaveLength(1);
+    // +X is screen-left, where the painting's lit brazier stands.
+    expect((front[0] as PointLight).position.x).toBeGreaterThan(FEET.x);
   });
 
   it("builds a scene without a wardrobe rather than throwing", async () => {
