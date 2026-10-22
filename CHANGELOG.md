@@ -10,6 +10,8 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+## [0.4.4] - 2026-10-22
+
 ### Added
 
 - Water is a shader with swash, foam, depth colour, caustics and sky sheen.
