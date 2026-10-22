@@ -43,13 +43,16 @@ PACK = "D:/VSC/exiled-casual/assets/props/source/quaternius-fantasy/Male_Ranger_
 KEEP_DIR = C.KEEP_DIR
 REVIEW = "D:/VSC/exiled-casual/review/3d/hood-v2"
 SKIN_SKIP = ("eyes", "brows", "hair")   # body parts that are not a surface to lie on
+# `-- female` drapes them over her wardrobe instead (`W.BODY`), into her own files.
+REVIEW += W.SUFFIX
 LOOKS = {
-    "stalker": {"stem": "hood-stalker-v2", "worn": ("chest.stalker.coat", "chest.stalker.gorget")},
-    "ember": {"stem": "hood-ember-v2", "worn": ("chest.ember.robe", "chest.ember.gorget")},
+    "stalker": {"stem": "hood-stalker-v2" + W.SUFFIX, "worn": ("chest.stalker.coat", "chest.stalker.gorget")},
+    "ember": {"stem": "hood-ember-v2" + W.SUFFIX, "worn": ("chest.ember.robe", "chest.ember.gorget")},
 }
 BONES = W.HOOD_BONES
 
-CUT_Z = 1.545             # the pack's lid and its ragged edge lie below this
+PACK_CUT_Z = 1.545        # the pack's lid and its ragged edge lie below this, on its own rest
+CUT_Z = PACK_CUT_Z        # the same cut on the body being built; `build` moves it with the Head
 CENTRE_DZ = 0.03          # the neck axis point azimuths are read about, over the neck's base
 WALL = 0.004              # solidified inward: the lining's depth under the shell
 GAP = 0.006               # the lining's face off coat, gorget and skin
@@ -114,7 +117,7 @@ def worn_surfaces(names):
         if o is None:
             raise SystemExit(f"{W.OUT} carries no {name}: build the wardrobe first")
         objs.append(o)
-    objs += [o for o in bpy.data.objects if o.type == "MESH" and o.name.startswith("base.male.")
+    objs += [o for o in bpy.data.objects if o.type == "MESH" and o.name.startswith(f"base.{W.BODY}.")
              and o.name.split(".")[2] not in SKIN_SKIP]
     verts, tris, weights, owner = [], [], [], []
     for o in objs:
@@ -130,15 +133,39 @@ def worn_surfaces(names):
                 if not all(weights[base + k].get("Head", 0.0) > 0.5 for k in t.vertices)]
         tris += kept
         owner += [o.name] * len(kept)
-    rig = bpy.data.objects[W.MALE_RIG]
+    rig = bpy.data.objects[W.RIG]
     M, bones = rig.matrix_world, rig.data.bones
     neck, head = M @ bones["neck_01"].head_local, M @ bones["Head"].head_local
     centre = Vector((0.0, (neck.y + head.y) / 2, neck.z + CENTRE_DZ))
+    rest = {b.name: (M @ b.matrix_local).copy() for b in bones}
     skin = garment_maps(objs[0])
     W.clear_scene()
     return {"bvh": BVHTree.FromPolygons(verts, tris), "verts": verts, "tris": tris,
             "weights": weights, "owner": owner, "centre": centre, "head": head.copy(),
-            "skin": skin}
+            "rest": rest, "skin": skin}
+
+
+def retarget(hood, arm, rest):
+    """Carry the pack hood from its own rest pose onto this body's through its
+    own weights: each vertex moves as its bones move between the two rests,
+    which is how the skin under it differs. Returns the largest move."""
+    move = {b.name: rest[b.name] @ (arm.matrix_world @ b.matrix_local).inverted()
+            for b in arm.data.bones if b.name in rest}
+    names = {g.index: g.name for g in hood.vertex_groups}
+    worst = 0.0
+    for v in hood.data.vertices:
+        acc, total = Vector(), 0.0
+        for g in v.groups:
+            m = move.get(names[g.group])
+            if m is not None and g.weight > 0.0:
+                acc += (m @ v.co) * g.weight
+                total += g.weight
+        if total <= 0.0:
+            raise SystemExit(f"{hood.name}: vertex {v.index} rides no bone of {W.RIG}")
+        worst = max(worst, (acc / total - v.co).length)
+        v.co = acc / total
+    hood.data.update()
+    return worst
 
 
 def garment_maps(obj):
@@ -662,14 +689,22 @@ def skin(obj, maps, name, grain):
 
 
 def build(look, spec):
+    global CUT_Z
     surf = worn_surfaces(spec["worn"])
     arm, hood = import_hood()
-    head = arm.matrix_world @ arm.data.bones["Head"].head_local
-    moved = (head - surf["head"]).length
-    if moved > 1e-4:
-        raise SystemExit(f"the pack's Head sits {moved * 1000:.2f} mm off the wardrobe's")
     if hood.matrix_world != hood.matrix_world.Identity(4):
         raise SystemExit(f"{hood.name} is not placed at identity")
+    head = arm.matrix_world @ arm.data.bones["Head"].head_local
+    moved = (head - surf["head"]).length
+    carried = 0.0
+    # The pack is modelled on the male head; any other body takes it through
+    # the skeleton, and the cut rides down with her Head.
+    if W.BODY == "male" and moved > 1e-4:
+        raise SystemExit(f"the pack's Head sits {moved * 1000:.2f} mm off the wardrobe's")
+    if W.BODY != "male":
+        carried = retarget(hood, arm, surf["rest"])
+    CUT_Z = PACK_CUT_Z + surf["head"].z - head.z
+    head = surf["head"]
     groups = {g.name: g.index for g in hood.vertex_groups}
     missing = [b for b in BONES if b not in groups]
     if missing:
@@ -774,7 +809,8 @@ def build(look, spec):
                     "quarter": Vector((-0.62, -0.66, 0.42)).normalized()})
     W.clear_scene()
     return {"source": os.path.relpath(PACK, KEEP_DIR), "worn": list(spec["worn"]),
-            "cut_z": CUT_Z, "lining_and_trim_faces_dropped": dropped,
+            "body": W.BODY, "retarget_max_mm": round(carried * 1000, 2),
+            "cut_z": round(CUT_Z, 4),"lining_and_trim_faces_dropped": dropped,
             "over_collar": collar, "deepest_collar_push_mm": round(deepest * 1000, 2),
             "throat_over_collar": throat_collar, "nudges": nudged,
             "ride_top_m": RIDE_TOP, "ridden": ridden,
