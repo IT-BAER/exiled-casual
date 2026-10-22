@@ -138,8 +138,10 @@ const GLSL_SHADE = `
       float run = waterSwash.y * (0.55 + 0.9 * wNoise(vec2(along * 0.09, id * 1.37)));
       float s = k < UP ? 1.0 - (1.0 - k / UP) * (1.0 - k / UP) : pow((k - UP) / (1.0 - UP), 1.7);
       edge = k < UP ? mix(BREAK, -run, s) : mix(-run, BREAK, s);
-      // A ragged front, wandering as it runs: never a ruled line.
-      edge += (wNoise(vec2(along * 0.9, id * 3.1)) - 0.5) * 0.3 + (wFbm(vec2(along * 2.3, t * 0.4)) - 0.5) * 0.35;
+      // A ragged front, wandering as it runs: never a ruled line. Each wave's
+      // shape hands over into the next one's, so the two agree where they meet.
+      float rag = mix(wNoise(vec2(along * 0.9, id * 3.1)), wNoise(vec2(along * 0.9, (id + 1.0) * 3.1)), hand);
+      edge += (rag - 0.5) * 0.3 + (wFbm(vec2(along * 2.3, t * 0.4)) - 0.5) * 0.35;
       float off = d - edge;
       // Swells marching in, steepening toward the break line, then breaking.
       float x = fract(cyc + (d - BREAK) / L);
