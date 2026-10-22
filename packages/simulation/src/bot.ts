@@ -153,14 +153,16 @@ export class Bot {
       }
       const skill = this.pickSkill(p, target);
       if (skill) out.push(cmd({ type: "useSkill", skillId: skill, data: { tx: target.p.x, ty: target.p.y } }));
+      // Already in a swing's reach with every swing cooling down: walking on
+      // takes him to the target's centre, where the swing has nothing to aim at.
+      const walks = !skill && !(this.melee && (this.hostileFireAt(target.p) || dist(p, target.p) <= this.shortestReach(target.e)));
+      // A swing or a wait is not a stalled walk; a walk at a target that never closes is.
+      if (!walks) { this.goalSince = tick; this.goalFrom = p; }
       this.checkHurting(skill ? target.e : undefined, tick);
       // Backing off is for when it hurts; at health a caster stands and casts.
       if (!this.melee && near && dist(p, near.p) < fp(1.5) && h.life * 2 < h.maxLife && !world.has(near.e, "boss")) {
         out.push(cmd({ type: "moveTo", data: this.escape(p, near.p, fp(2.5)) }));
-      } else if (!skill && !(this.melee && (this.hostileFireAt(target.p)
-        // Already in a swing's reach with every swing cooling down: walking on
-        // takes him to the target's centre, where the swing has nothing to aim at.
-        || dist(p, target.p) <= this.shortestReach(target.e)))) {
+      } else if (walks) {
         const to = this.route(p, target.p);
         if (to) out.push(cmd(this.intoFire(p, to) ? { type: "stop" } : { type: "moveTo", data: to }));
       } else {
@@ -206,10 +208,10 @@ export class Bot {
     const to = this.route(p, goal.p);
     // No route at all: behind water or in a pocket the body does not fit.
     if (!to) { this.skip.set(goal.e, tick + 60 * HZ); return out; }
-    // Waiting out fire over loot is not being stuck: without the reset, a boss's last
-    // burning patch over its drops skips the stone and the run ends with it on the floor.
+    // Waiting out fire is not being stuck: without the reset, a boss's last burning patch
+    // over its drops skipped the stone, and Mother Vhal, renewing hers, was left to leash.
     if (this.intoFire(p, to)) {
-      if (goal.kind === "item") { this.goalSince = tick; this.goalFrom = p; }
+      this.goalSince = tick; this.goalFrom = p;
       out.push(cmd({ type: "stop" }));
     } else out.push(cmd({ type: "moveTo", data: to }));
     return out;

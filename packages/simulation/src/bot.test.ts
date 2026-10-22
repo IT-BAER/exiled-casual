@@ -124,6 +124,44 @@ describe("Bot", () => {
     expect(bot.hasLootLeft()).toBe(true);
   });
 
+  it("waiting at the edge of fire on the way to a monster is not being stuck: he walks on once it burns out", () => {
+    // Mother Vhal renews her fire every slam: given up on after 3 s, she was left
+    // for 30, walked home past her leash and slept, and the fight took minutes.
+    const { g, me, bot } = setupAs("class.ironsworn", [0, 10]);
+    const imp = g.world.query("monster")[0]!;
+    g.world.set<MonsterC>(imp, "monster", { ...g.world.get<MonsterC>(imp, "monster")!, state: "idle" });
+    const fire = g.world.create();
+    g.world.set<Position>(fire, "position", { x: me.x - Math.round(fp(2 / Math.SQRT2)), y: me.y + Math.round(fp(2 / Math.SQRT2)) });
+    g.world.set<GroundAreaC>(fire, "groundArea", {
+      radius: fp(1.2), expiryTick: 9999, nextTick: 0, ailmentKind: "burning", stacksPerApply: 1,
+      dps: fp(3), ailmentDuration: 60, maxStacks: 5, team: 1,
+    });
+    for (let t = 0; t < 4 * 30; t++) g.sim.step(bot.decide(false));
+    g.world.destroy(fire);
+    expect(bot.decide(false).some((c) => c.type === "moveTo")).toBe(true);
+  });
+
+  it("a fight on the way to a goal is not being stuck on it: he walks on to it after", () => {
+    // The goal's 3 s clock kept running through a fight, so the first walk after a long
+    // one read as stuck and dropped its goal for 30 s: the Warden, mid-fight, leashed.
+    const { g, me, bot } = setupAs("class.ironsworn", [0, 12]);
+    const goal = g.world.query("monster")[0]!;
+    g.world.set<MonsterC>(goal, "monster", { ...g.world.get<MonsterC>(goal, "monster")!, state: "idle" });
+    expect(bot.decide(false).some((c) => c.type === "moveTo")).toBe(true);
+    spawnLabActors(g.world, "imp", 0, 0);
+    const foe = g.world.query("monster").at(-1)!;
+    g.world.set<Position>(foe, "position", { x: me.x - Math.round(fp(1.2 / Math.SQRT2)), y: me.y + Math.round(fp(1.2 / Math.SQRT2)) });
+    g.world.set<MonsterC>(foe, "monster", { ...g.world.get<MonsterC>(foe, "monster")!, state: "attack" });
+    // Four seconds of swinging at it, held still: only the bot's choices advance.
+    for (let t = 0; t < 4 * 30; t++) {
+      expect(bot.decide(false).some((c) => c.type === "useSkill" || c.type === "stop")).toBe(true);
+      g.sim.step([]);
+    }
+    g.world.destroy(foe);
+    bot.decide(false);
+    expect(bot.decide(false).some((c) => c.type === "moveTo")).toBe(true);
+  });
+
   /**
    * Mother Vhal's burning ground lands centred on him, so "away from it" has no
    * direction and reads as east. With a wall there he stood in it until he died.
