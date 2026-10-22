@@ -20,6 +20,7 @@ import {
   Vector3,
   type AbstractMesh,
   type Engine,
+  type Mesh,
 } from "@babylonjs/core";
 import { DEFAULT_SETTINGS, type GraphicsSettings } from "../settings";
 import { isScatterDressing } from "./rocks";
@@ -28,7 +29,7 @@ import { SPARKLE_NAME } from "./hit-sparkle";
 import { SEA_MESH_NAME } from "./sea";
 import { HIDEOUT_EDGE_NAME } from "./hideout";
 import { createHaze, createMotes } from "./haze";
-import { FLAME_MESH } from "./flames";
+import { FLAME_MESH, FLAME_TONGUE } from "./flames";
 import { createFireLights, LIGHT_POOL, setFireLightZoom, updateFireLights } from "./lights";
 import { cullShadowCasters } from "./shadow-cull";
 import { glowFollowsErosion } from "./ground-fx";
@@ -931,9 +932,12 @@ export function createScene(engine: Engine): SceneHandle {
   // solids and the fire came back as a clipped white egg that ignored every
   // knob on it; the shader flame has no emissive colour at all. Referencing the
   // meshes makes the glow map render them with the materials they actually have.
+  // The flame bodies stay out: a blurred copy laid over them wipes their licks.
   const bloom = scene.effectLayers?.find((l) => l.name === "glow") as GlowLayer | undefined;
   for (const flame of scene.meshes) {
-    if (bloom && flame.name.startsWith(FLAME_MESH)) bloom.referenceMeshToUseItsOwnMaterial(flame);
+    if (!bloom || !flame.name.startsWith(FLAME_MESH)) continue;
+    if (flame.name.startsWith(FLAME_TONGUE)) bloom.addExcludedMesh(flame as Mesh);
+    else bloom.referenceMeshToUseItsOwnMaterial(flame);
   }
   createHaze(scene, camera);
   createMotes(scene, camera);
