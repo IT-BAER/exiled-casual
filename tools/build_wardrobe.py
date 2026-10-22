@@ -28,13 +28,32 @@ from mathutils import Matrix, Vector
 
 SRC = "D:/VSC/exiled-casual/assets/characters/"
 GEAR_SRC = "D:/VSC/exiled-casual/assets/props/source/trellis_local/"
-OUT = "D:/VSC/exiled-casual/assets/characters/wardrobe.glb"
-FIT_REPORT = "D:/VSC/exiled-casual/assets/characters/gear-fit.json"
 
-# The armature the runtime drives. Only the male is wired today; the female
-# ships beside him so she is one look away rather than one build away.
 MALE_RIG = "Armature"
 FEMALE_RIG = "Armature_female"
+
+# One body per run and per file, `-- female` for hers: any class can wear any
+# armour, so each body carries every gear piece refitted to it, and a player
+# downloads only the body they play. The tools importing this module read the
+# same flag, so a `prep_*` run with `female` builds against her.
+_ARGS = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
+BODY = "female" if "female" in _ARGS else "male"
+RIG = {"male": MALE_RIG, "female": FEMALE_RIG}[BODY]
+SUFFIX = "" if BODY == "male" else f"-{BODY}"
+OUT = f"D:/VSC/exiled-casual/assets/characters/wardrobe{SUFFIX}.glb"
+FIT_REPORT = f"D:/VSC/exiled-casual/assets/characters/gear-fit{SUFFIX}.json"
+# `-- bootstrap`: a first build of a body whose hood donors do not exist yet,
+# made only so `prep_hood.py` has its worn chests to drape over.
+BOOTSTRAP = "bootstrap" in _ARGS
+
+
+def body_src(spec):
+    """A donor built on one body's own rest pose (`as_built`, `hand_authored`)
+    comes in one file per body; every other donor is fitted and shared."""
+    if spec["fit"] not in ("as_built", "hand_authored") or BODY == "male":
+        return spec["src"]
+    stem, ext = os.path.splitext(spec["src"])
+    return f"{stem}{SUFFIX}{ext}"
 
 # A body's glTF carries its body, eyes and brows in one file; hair is separate.
 # Mesh names in the pack are unreliable ('Face', 'Face.001',
@@ -548,6 +567,9 @@ RIGID_GEAR = (
     {
         "slot": "boots", "look": "ember", "part": "slipper",
         "src": "ember-slipper-8k-v1.glb", "bone": "foot_r", "fit": "boot_leg",
+        # A cloth wrap hugs the calf: on the female body no seat or size clears
+        # 0.5 mm, and every point it grazes is in the shin region boots close.
+        "fit_args": {"min_gap": 0.0003},
         "deform": SABATON_BONES, "matte": True, "mirror": True,
     },
     {
@@ -851,7 +873,9 @@ GAUNTLET_WRIST_TO = 0.55    # stretch of its own length and no further
 # line up - every steel finger lands in the gap between two of the body's.
 GAUNTLET_FAN_FROM = 0.80    # of hand length, from the wrist out
 GAUNTLET_CLEAR_FROM = 0.0005  # tightest air between fingers and steel, metres
-GAUNTLET_CLEAR_TO = 0.014     # past this it is a mitt, whatever it measures
+# Past this it is a mitt, whatever it measures. Her hand bone is half his
+# length, so the bands the sweep reads land differently along the fingers.
+GAUNTLET_CLEAR_TO = {"male": 0.014, "female": 0.016}[BODY]
 GAUNTLET_CLEAR_STEP = 0.0005
 # The webs between the fingers are the hand's arm sockets: a glove is cut open
 # there and no shell reaches into them, so a ray fired out of a web leaves
@@ -860,10 +884,10 @@ GAUNTLET_CLEAR_STEP = 0.0005
 # sized by those fingers' own measured radius - all of it read off this body.
 GAUNTLET_WEB_ALONG = 0.6    # of finger length, from the root down
 # Skin with less room than this between itself and the next finger holds no air
-# for a glove: two shell faces share the gap, so half of a millimetre is the
-# most either side can have. Measured per point, not named - the flanks of the
-# ring and pinky run 0.65 mm apart on this body and no geometry changes that.
-GAUNTLET_PINCH = 0.002
+# for a glove: two steel fingers of a 2 mm wall each share the gap. Measured per
+# point, not named - the female ring and pinky roots run 3.5-4.4 mm apart, the
+# male flanks of the same fingers 0.65 mm, and no geometry changes either.
+GAUNTLET_PINCH = 0.004
 GAUNTLET_COVERAGE = 0.90    # fraction of measured hand that must have steel outboard
 GAUNTLET_MIN_GAP = 0.0005   # 1st-percentile air between skin and steel, metres
 GAUNTLET_MAX_MEDIAN = 0.020
@@ -888,6 +912,11 @@ BOOT_LEN_STEP = 0.02
 BOOT_MAX_STRETCH = 2.0      # past this the donor's straps visibly smear
 BOOT_ANKLE_FROM = 0.30      # the ankle is the donor's waist, searched over this
 BOOT_ANKLE_TO = 0.70        # stretch of its own height and no further
+# Fore-aft the seat is the ankle, but a calf need not stand over its own ankle:
+# the female calf sits 13-17 mm behind where the male's does, and a shaft centred
+# on her ankle grazes the back of it at every size. The ankle is tried first,
+# then the seat slides these fractions of the way to the calf belly's centre.
+BOOT_SEAT_SHIFTS = (0.0, 0.25, 0.5, 0.75, 1.0)
 # A standing foot bears on the insole, so there is no air under it to measure
 # and no outboard direction to fire a ray along: sole contact is left out of
 # both gates. Which skin that is comes out of the body - a point is on the sole
@@ -2809,7 +2838,7 @@ def hand_plate_seat(donor, body, rig):
     }
 
 
-def fit_boot_leg(donor, body, rig):
+def fit_boot_leg(donor, body, rig, min_gap=BOOT_MIN_GAP):
     """Grow the boot until the leg inside it is covered, standing on the floor.
 
     The outer sole is the one thing that cannot move: seat it anywhere but the
@@ -2831,6 +2860,7 @@ def fit_boot_leg(donor, body, rig):
     top = knee + BOOT_TOP
     ankle_z = (rig.matrix_world @ rig.data.bones["foot_r"].head_local).z
     seat, _ = band(leg, 2, ankle_z, (top - sole_z) * 0.05)
+    belly, _ = band(leg, 2, (ankle_z + top) / 2, (top - sole_z) * 0.05)
     # Fore-aft the seat is the ankle, but across the body it is the FOOT: this
     # foot stands 13 mm outboard of its own ankle, and a toe box centred on the
     # ankle puts the little-toe side through the wall while the inner side has
@@ -2850,33 +2880,36 @@ def fit_boot_leg(donor, body, rig):
     _, _, _, d_foot_c = bbox([p for p in hp if p.z <= d_lo.z + d_dims.z * BOOT_ANKLE_FROM])
 
     tries = []
-    ratio = BOOT_LEN_FROM
-    while ratio <= BOOT_LEN_TO + 1e-9:
-        scale = (foot_dims.y * ratio) / d_dims.y
-        stretch = min(BOOT_MAX_STRETCH, (top - sole_z) / (d_dims.z * scale))
-        M = seated(donor, sizing(scale, stretch, 2), Matrix.Identity(4),
-                   Vector((d_foot_c.x, ankle_c.y, d_lo.z)),
-                   Vector((foot_c.x, seat.y, sole_z)))
-        bvh = bvh_of(donor, M)
-        p01, med = gap_profile(bvh, sample)
-        cov = covered_radially(bvh, sample, segments)
-        tries.append([round(ratio, 3), round(p01 * 1000, 2), round(med * 1000, 2),
-                      round(cov, 4)])
-        if cov >= BOOT_COVERAGE and p01 >= BOOT_MIN_GAP and med <= BOOT_MAX_MEDIAN:
-            return M, {
-                "foot_length_ratio": round(ratio, 3),
-                "scale": round(scale, 5), "shaft_stretch": round(stretch, 4),
-                "foot_length_m": round(foot_dims.y, 4),
-                "shin_span_m": round(top - sole_z, 4),
-                "donor_ankle_radius": round(ankle_r, 4),
-                "leg_gap_p01_mm": round(p01 * 1000, 2),
-                "leg_gap_median_mm": round(med * 1000, 2),
-                "leg_covered": round(cov, 4),
-                "leg_points": len(sample),
-                "sole_and_rim_points": len(leg) - len(sample),
-                "rim_below_knee_mm": round(-BOOT_TOP * 1000, 1),
-            }
-        ratio += BOOT_LEN_STEP
+    for shift in BOOT_SEAT_SHIFTS:
+        seat_y = seat.y + (belly.y - seat.y) * shift
+        ratio = BOOT_LEN_FROM
+        while ratio <= BOOT_LEN_TO + 1e-9:
+            scale = (foot_dims.y * ratio) / d_dims.y
+            stretch = min(BOOT_MAX_STRETCH, (top - sole_z) / (d_dims.z * scale))
+            M = seated(donor, sizing(scale, stretch, 2), Matrix.Identity(4),
+                       Vector((d_foot_c.x, ankle_c.y, d_lo.z)),
+                       Vector((foot_c.x, seat_y, sole_z)))
+            bvh = bvh_of(donor, M)
+            p01, med = gap_profile(bvh, sample)
+            cov = covered_radially(bvh, sample, segments)
+            tries.append([shift, round(ratio, 3), round(p01 * 1000, 2), round(med * 1000, 2),
+                          round(cov, 4)])
+            if cov >= BOOT_COVERAGE and p01 >= min_gap and med <= BOOT_MAX_MEDIAN:
+                return M, {
+                    "foot_length_ratio": round(ratio, 3),
+                    "scale": round(scale, 5), "shaft_stretch": round(stretch, 4),
+                    "seat_shift_mm": round((seat_y - seat.y) * 1000, 1),
+                    "foot_length_m": round(foot_dims.y, 4),
+                    "shin_span_m": round(top - sole_z, 4),
+                    "donor_ankle_radius": round(ankle_r, 4),
+                    "leg_gap_p01_mm": round(p01 * 1000, 2),
+                    "leg_gap_median_mm": round(med * 1000, 2),
+                    "leg_covered": round(cov, 4),
+                    "leg_points": len(sample),
+                    "sole_and_rim_points": len(leg) - len(sample),
+                    "rim_below_knee_mm": round(-BOOT_TOP * 1000, 1),
+                }
+            ratio += BOOT_LEN_STEP
     raise SystemExit(f"no sabaton size both clears the leg and stays a boot; {tries}")
 
 
@@ -3662,10 +3695,14 @@ def build_rigid_gear(rig, body):
     pairs, off = assert_symmetric(rig)
     print(f"{rig.name}: {pairs} mirrored bone pairs, worst {off * 1000:.4f} mm off centre")
     for spec in RIGID_GEAR:
-        path = os.path.join(GEAR_SRC, spec["src"])
+        src = body_src(spec)
+        path = os.path.join(GEAR_SRC, src)
+        if BOOTSTRAP and spec["fit"] == "as_built":
+            print(f"bootstrap: {spec['slot']}.{spec['look']} skipped, {src} comes after")
+            continue
         if not os.path.exists(path):
             raise SystemExit(f"missing gear source: {path}")
-        objs = import_gltf(spec["src"], root=GEAR_SRC)
+        objs = import_gltf(src, root=GEAR_SRC)
         # A skinned donor comes in with the importer's materialless bone-shape sphere.
         meshes = [o for o in objs if o.type == "MESH" and o.data.materials]
         if len(meshes) != 1:
@@ -3720,7 +3757,7 @@ def build_rigid_gear(rig, body):
             skin_to_bone(piece, rig, bone)
             cap_tris = sum(len(p.vertices) - 2 for p in piece.data.polygons)
             fitted[piece.name] = dict(detail, bone=bone, fit=spec["fit"],
-                                      triangles=cap_tris, source=spec["src"],
+                                      triangles=cap_tris, source=src,
                                       split_from=stem, split_at_weight=PLATE_SPLIT_AT,
                                       overlap_band_mm=PLATE_SPLIT_MARGIN * 2000)
             print(f"fitted {piece.name}: {cap_tris} tris rigid on {bone}")
@@ -3746,7 +3783,7 @@ def build_rigid_gear(rig, body):
             detail.update(cut_greaves(donor, rig, SUIT_GREAVE_BELOW_KNEE, region))
         tris = sum(len(p.vertices) - 2 for p in donor.data.polygons)
         detail.update({"bone": spec["bone"], "fit": spec["fit"], "triangles": tris,
-                       "source": spec["src"]})
+                       "source": src})
         fitted[donor.name] = detail
         print(f"fitted {donor.name}: {tris} tris on {spec['bone']}")
         if spec.get("mirror"):
@@ -4621,7 +4658,7 @@ def build_gorget(rig, body, worn, name="chest.ironsworn.gorget", region="collar"
           f"{capped_by_self} by their own crease, bones {bones}, "
           f"per shell {air_profile}")
     return {name: {
-        "built_from": f"base.male.body {region} region, "
+        "built_from": f"{body.name} {region} region, "
                       + (f"filled out to {BACKING_AIR * 1000:.0f} mm under {fill}" if fill
                          else "offset along its own normals"),
         "source": "body",
@@ -4645,28 +4682,25 @@ def build_gorget(rig, body, worn, name="chest.ironsworn.gorget", region="collar"
 
 def main():
     clear_scene()
-    built = {}
-    for spec in LOOKS:
-        parts = build_look(spec)
-        missing = {"body", "eyes", "brows", "hair"} - set(parts)
-        if missing:
-            raise SystemExit(f"{spec['look']}: missing parts {sorted(missing)}")
-        built[spec["look"]] = spec
+    spec = next(s for s in LOOKS if s["look"] == BODY)
+    parts = build_look(spec)
+    missing = {"body", "eyes", "brows", "hair"} - set(parts)
+    if missing:
+        raise SystemExit(f"{spec['look']}: missing parts {sorted(missing)}")
+    built = {BODY: spec}
 
-    # Gear is fitted to the wired body only. The female ships unwired, and a
-    # second copy of every piece would double the download for a look nothing
-    # can select yet.
-    male_rig = bpy.data.objects[MALE_RIG]
-    male_body = bpy.data.objects["base.male.body"]
-    fitted = build_rigid_gear(male_rig, male_body)
+    rig = bpy.data.objects[RIG]
+    body = bpy.data.objects[f"base.{BODY}.body"]
+    fitted = build_rigid_gear(rig, body)
     # Every helmet hides the hair; the ember cowl is open enough to show it, so
     # a copy tucked inside the cowl ships as a part of that helmet look. It takes
     # the cowl's weights, or Head-rigid tips swing out through the nape while
     # the cowl follows the neck.
-    cowl = bpy.data.objects["helmet.ember.cowl"]
-    locks = import_hair(LOOKS[0]["hair"], "helmet.ember.locks", male_rig)
-    skin_by_transfer(locks, cowl, male_rig, HOOD_BONES)
-    tuck_inside(locks, cowl, male_rig.matrix_world @ male_rig.data.bones["Head"].head_local)
+    cowl = bpy.data.objects.get("helmet.ember.cowl")
+    if cowl is not None:
+        locks = import_hair(spec["hair"], "helmet.ember.locks", rig)
+        skin_by_transfer(locks, cowl, rig, HOOD_BONES)
+        tuck_inside(locks, cowl, rig.matrix_world @ rig.data.bones["Head"].head_local)
     worn = [o for o in bpy.data.objects if o.type == "MESH" and o.name.startswith("chest.")]
     # Each chest look closes the collar and the trunk, so each gets a collar
     # plate and a torso backing of its own colour. The v9 suit is cracked
@@ -4674,14 +4708,14 @@ def main():
     # steel through every crack instead of the void.
     for look, shell in CHEST_SHELLS.items():
         metallic = STEEL_METALLIC if look == "ironsworn" else SOFT_METALLIC
-        fitted.update(build_gorget(male_rig, male_body, worn, f"chest.{look}.gorget", "collar",
+        fitted.update(build_gorget(rig, body, worn, f"chest.{look}.gorget", "collar",
                                    shell=shell, metallic=metallic))
         if look == "ironsworn":
             # A vertex whose own normal leaves through a tear meets no steel at
             # all, and unbacked it is the void the tear shows: the chevron in
             # the back plate. Steel within `BACKING_NEAR` of it is the tear's
             # own rim, so it is backed at the collar plate's offset.
-            fitted.update(build_gorget(male_rig, male_body, worn, "chest.ironsworn.backing", "torso",
+            fitted.update(build_gorget(rig, body, worn, "chest.ironsworn.backing", "torso",
                                        fill=shell, shell=shell, metallic=metallic,
                                        near=BACKING_NEAR_PLATE))
             # And the shoulder. The arm is bare skin under a pauldron, so with
@@ -4692,12 +4726,12 @@ def main():
             arm_edge = fitted[shell]["cut_pauldron_edge_x"] + SUIT_RIM_LIP
             for region in ("arm_l", "arm_r"):
                 fitted.update(build_gorget(
-                    male_rig, male_body, worn, f"chest.ironsworn.backing_{region}", region,
+                    rig, body, worn, f"chest.ironsworn.backing_{region}", region,
                     fill=shell, shell=shell, metallic=metallic, near=BACKING_NEAR,
                     reach=SOFT_BACKING_REACH,
                     keep=lambda co, x=arm_edge: abs(co.x) <= x))
             continue
-        fitted.update(build_gorget(male_rig, male_body, worn, f"chest.{look}.backing", "torso",
+        fitted.update(build_gorget(rig, body, worn, f"chest.{look}.backing", "torso",
                                    fill=shell, shell=shell, metallic=metallic,
                                    near=BACKING_NEAR, reach=SOFT_BACKING_REACH))
         # A decoded coat is holed at the shoulder caps and the crotch, and the
@@ -4712,7 +4746,7 @@ def main():
         # backing rides the trousers over it, or a stride parts the two.
         for region in SOFT_BACKED_REGIONS[1:]:
             keep = (lambda co: abs(co.x) <= edge_x) if region.startswith("arm") else None
-            fitted.update(build_gorget(male_rig, male_body, worn,
+            fitted.update(build_gorget(rig, body, worn,
                                        f"chest.{look}.backing_{region}", region,
                                        fill=shell, shell=shell, metallic=metallic,
                                        near=BACKING_NEAR, reach=SOFT_BACKING_REACH, keep=keep,

@@ -28,7 +28,8 @@ import sys
 import bpy
 from mathutils import Vector
 
-WARDROBE = "D:/VSC/exiled-casual/assets/characters/wardrobe.glb"
+# One body per file: `wardrobe.glb` is the male, `wardrobe-<look>.glb` any other.
+WARDROBE = "D:/VSC/exiled-casual/assets/characters/wardrobe{}.glb"
 
 RIG_OF = {"male": "Armature", "female": "Armature_female"}
 
@@ -88,11 +89,10 @@ def scene_setup(tile):
 def main():
     opts = args()
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    bpy.ops.import_scene.gltf(filepath=WARDROBE)
-
     look = opts["look"]
     if look not in RIG_OF:
         raise SystemExit(f"--look must be one of {sorted(RIG_OF)}")
+    bpy.ops.import_scene.gltf(filepath=WARDROBE.format("" if look == "male" else f"-{look}"))
     shown = [o for o in bpy.data.objects if o.type == "MESH" and f".{look}." in o.name]
     if not shown:
         raise SystemExit(f"wardrobe has no base.{look}.* parts")
