@@ -10,6 +10,11 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+### Fixed
+
+- The character on the select screen is lit from the front by a warm light
+  and no longer looks grey and washed out.
+
 ## [0.4.4] - 2026-10-22
 
 ### Added
