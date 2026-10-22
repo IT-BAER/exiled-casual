@@ -117,6 +117,22 @@ describe("WakeField", () => {
     expect(out.every((v, k) => (k % 4 === 3 ? v === 0 : v === 128))).toBe(true);
     expect(field.pack(out)).toBe(false);
   });
+
+  it("keeps white water it was given until it has faded, then sleeps", () => {
+    const field = new WakeField();
+    const out = new Uint8Array(WAKE_CELLS * WAKE_CELLS * 4);
+    field.follow(0, 0);
+    field.foamAt(0.5, -0.5, 0.3, 0.8);
+    expect(field.asleep).toBe(false);
+    field.step(0.1);
+    field.pack(out);
+    const at = (Math.floor((-0.5 - field.originZ) / WAKE_CELL) * WAKE_CELLS + Math.floor((0.5 - field.originX) / WAKE_CELL)) * 4 + 3;
+    expect(out[at]).toBeGreaterThan(100);
+    field.step(10);
+    expect(field.asleep).toBe(true);
+    field.pack(out);
+    expect(out[at]).toBe(0);
+  });
 });
 
 describe("WakeStirrer", () => {
@@ -132,6 +148,7 @@ describe("WakeStirrer", () => {
     for (let t = 0, x = 0; x <= metres; t += dt, x += speed * dt) {
       field.follow(x, cross);
       stirrer.stir([{ id: 7, x, z: cross, radius: 0.5, player: true }], dt, out);
+      field.step(dt);
       falls.push(...out);
     }
     return { field, falls };
@@ -143,6 +160,18 @@ describe("WakeStirrer", () => {
     expect(falls.length).toBeLessThanOrEqual(6);
     expect(falls.every((f) => f.depth > 0.5 && f.player)).toBe(true);
     expect(field.asleep).toBe(false);
+  });
+
+  it("rings white water round the legs of anything wading, even at a walk", () => {
+    const { field } = walk(1, 3, 1.5);
+    const out = new Uint8Array(WAKE_CELLS * WAKE_CELLS * 4);
+    field.pack(out);
+    const foamAt = (x: number, z: number): number =>
+      out[(Math.floor((z - field.originZ) / WAKE_CELL) * WAKE_CELLS + Math.floor((x - field.originX) / WAKE_CELL)) * 4 + 3]!;
+    expect(foamAt(3, 1)).toBeGreaterThan(150);
+    // A trail that fades: a second behind him it is half gone; well behind, clear.
+    expect(foamAt(1.5, 1)).toBeLessThan(foamAt(2.7, 1) * 0.5);
+    expect(foamAt(0.2, 1)).toBeLessThan(40);
   });
 
   it("leaves the water alone on dry sand", () => {

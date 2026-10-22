@@ -11,7 +11,7 @@ import {
 } from "@babylonjs/core";
 import type { Shoreline, WalkableGrid } from "@exiled/mapgen";
 import { dressFenWater } from "./fen-water";
-import { fxPools } from "./fx-pool";
+import { waterSplash } from "./splash";
 import { WAKE_CELLS, WakeField, WakeStirrer, type Footfall, type WakeBody } from "./wake";
 import {
   COAST_WATER,
@@ -99,30 +99,25 @@ function dropWake(): void {
   coastWake = null;
 }
 
-/** Splash per foot: a few droplets thrown up and forward, falling back in. A
- *  monster's foot throws fewer than the player's; the thin wash throws none. */
-const SPLASH_PLAYER = 4;
-const SPLASH_MONSTER = 2;
+/** The thin wash of the last wave throws no splash, only its foam. */
 const SPLASH_FROM_DEPTH = -0.4;
+/** A drop falling back in: the dent it rings out from (m, and m of depth per m
+ *  of drop), and the fleck of white it leaves. */
+const DROP_RING_RADIUS = 0.06;
+const DROP_DENT = 0.12;
+const DROP_FOAM = 0.3;
 
 function splash(scene: Scene, f: Footfall): void {
   if (f.depth < SPLASH_FROM_DEPTH) return;
-  const shards = fxPools(scene).shards;
-  const n = f.player ? SPLASH_PLAYER : SPLASH_MONSTER;
-  for (let k = 0; k < n; k++) {
-    const a = Math.random() * Math.PI * 2;
-    const out = 0.3 + Math.random() * 0.5;
-    shards.emit({
-      x: f.x, y: SEA_Y + 0.03, z: f.z,
-      vx: f.dirX * f.speed * 0.25 + Math.cos(a) * out,
-      vy: 1.5 + Math.random() * 1.3,
-      vz: f.dirZ * f.speed * 0.25 + Math.sin(a) * out,
-      life: 0.35 + Math.random() * 0.2,
-      size: 0.05, thick: 0.012, stretch: 0.03,
-      r: 0.5, g: 0.58, b: 0.58, a: 0.55,
-      gravity: -9.8, drag: 0.4,
-    });
-  }
+  waterSplash(scene).burst(f, SEA_Y);
+}
+
+/** Ring the coast's water where a drop of its own splash falls back in. */
+function dropLanded(scene: Scene, x: number, z: number, size: number): void {
+  const w = coastWake;
+  if (!w || w.scene !== scene) return;
+  w.field.push(x, z, DROP_RING_RADIUS, -DROP_DENT * size);
+  w.field.foamAt(x, z, DROP_RING_RADIUS * 1.2, DROP_FOAM);
 }
 
 /**
@@ -304,6 +299,8 @@ function buildShoreSea(scene: Scene, shore: Shoreline): SeaResult {
   const wake: WaterWake = { texture, originX: field.originX, originZ: field.originZ };
   plugin.wake = wake;
   coastWake = { scene, field, stirrer: new WakeStirrer(field, shore), bytes, texture, wake, mat };
+  // Built with the coast, so its shaders compile behind the loading plate.
+  waterSplash(scene).onLand = (x, z, size) => dropLanded(scene, x, z, size);
   mesh.material = mat;
   mesh.isPickable = false;
   mesh.receiveShadows = false;

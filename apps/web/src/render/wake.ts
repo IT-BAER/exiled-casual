@@ -156,6 +156,27 @@ export class WakeField {
       }
   }
 
+  /** Whiten the water round a point, up to `amount` at its centre: what legs
+   *  and feet churn up, whether or not the surface is moving fast there. */
+  foamAt(x: number, z: number, radius: number, amount: number): void {
+    const N = WAKE_CELLS;
+    const ci = (x - this.originX) / WAKE_CELL - 0.5;
+    const cj = (z - this.originZ) / WAKE_CELL - 0.5;
+    const reach = Math.ceil(radius / WAKE_CELL);
+    const inv = 1 / (radius * radius);
+    for (let j = Math.max(0, Math.floor(cj) - reach); j <= Math.min(N - 1, Math.ceil(cj) + reach); j++)
+      for (let i = Math.max(0, Math.floor(ci) - reach); i <= Math.min(N - 1, Math.ceil(ci) + reach); i++) {
+        const o = j * N + i;
+        if (this.dry[o]) continue;
+        const dx = (i - ci) * WAKE_CELL, dz = (j - cj) * WAKE_CELL;
+        const q = (dx * dx + dz * dz) * inv;
+        if (q >= 1) continue;
+        this.foam[o] = Math.min(1, this.foam[o]! + amount * (1 - q) * (1 - q));
+        this.stirred = true;
+        this.asleep = false;
+      }
+  }
+
   /** Advance by `dt` seconds in fixed steps. */
   step(dt: number): void {
     if (this.asleep) return;
@@ -217,7 +238,7 @@ export class WakeField {
     const N = WAKE_CELLS;
     const k = (WAKE_SPEED * STEP / WAKE_CELL) ** 2;
     const c = this.cur, p = this.prev;
-    let peak = 0;
+    let peak = 0, white = 0;
     for (let j = 1; j < N - 1; j++)
       for (let i = 1; i < N - 1; i++) {
         const o = j * N + i;
@@ -231,12 +252,15 @@ export class WakeField {
         const n = (h + (h - p[o]!) * DAMP + k * lap) * this.sponge[o]!;
         p[o] = n;
         const churn = Math.abs(n - h) - FOAM_FROM;
-        this.foam[o] = Math.min(1, this.foam[o]! * FOAM_KEEP + (churn > 0 ? churn * FOAM_GAIN : 0));
+        const f = Math.min(1, this.foam[o]! * FOAM_KEEP + (churn > 0 ? churn * FOAM_GAIN : 0));
+        this.foam[o] = f;
         peak = Math.max(peak, Math.abs(n), Math.abs(n - h));
+        white = Math.max(white, f);
       }
     this.cur = p;
     this.prev = c;
-    if (peak < REST && !this.stirred) {
+    // Foam outlives the ripple that made it: sleep only once no byte of it is left.
+    if (peak < REST && white < 1 / 255 && !this.stirred) {
       this.cur.fill(0);
       this.prev.fill(0);
       this.foam.fill(0);
@@ -275,10 +299,19 @@ const WADE_FULL = 0.5;
 /** Further than this in one frame is a portal or a respawn, not a stride. */
 const JUMP = 2;
 /** Depth of the trough a moving body drags along, per m/s of speed per second. */
-const DRAG = 0.06;
+const DRAG = 0.1;
 /** Depth of the crater one foot punches, metres, and its radius. */
-const STEP_DEPTH = 0.012;
+const STEP_DEPTH = 0.025;
 const STEP_RADIUS = 0.12;
+/** Foam round wading legs: radius as a share of the body's, foam per second at
+ *  full speed (it settles near this / 2 against the decay), and the speed (m/s)
+ *  that counts as full. A walk churns less than a run but still shows. */
+const COLLAR_RADIUS = 0.7;
+const COLLAR_RATE = 10;
+const COLLAR_SPEED = 2;
+/** White water a foot punches into, metres, and how white at its centre. */
+const STEP_FOAM_RADIUS = 0.22;
+const STEP_FOAM = 0.7;
 
 /** Feeds a WakeField from the bodies standing in it, one call per frame. */
 export class WakeStirrer {
@@ -313,6 +346,9 @@ export class WakeStirrer {
       // A moving body is a moving trough: the bow wave and the V behind it are
       // what the wave equation makes of that, not something drawn.
       this.field.push(b.x, b.z, b.radius * 0.8, -DRAG * speed * dt * wet);
+      // White water round the legs, laid down where they are and fading behind:
+      // a trail, not a halo that travels with him.
+      this.field.foamAt(b.x, b.z, b.radius * COLLAR_RADIUS, COLLAR_RATE * dt * wet * Math.min(1, speed / COLLAR_SPEED));
       was.walked += moved;
       const stride = Math.max(0.6, b.radius * 2.4);
       if (was.walked < stride) continue;
@@ -322,6 +358,7 @@ export class WakeStirrer {
       const side = (was.left ? 1 : -1) * b.radius * 0.4;
       const fx = b.x - uz * side, fz = b.z + ux * side;
       this.field.push(fx, fz, STEP_RADIUS, -STEP_DEPTH * wet);
+      this.field.foamAt(fx, fz, STEP_FOAM_RADIUS, STEP_FOAM * wet);
       out.push({ x: fx, z: fz, depth, dirX: ux, dirZ: uz, speed, player: b.player });
     }
     for (const id of this.last.keys()) if (!seen.has(id)) this.last.delete(id);

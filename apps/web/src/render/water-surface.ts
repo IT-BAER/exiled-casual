@@ -9,7 +9,7 @@ import type { AbstractMesh, BaseTexture, Material } from "@babylonjs/core";
 import type { UniformBuffer } from "@babylonjs/core/Materials/uniformBuffer";
 import type { MaterialDefines } from "@babylonjs/core/Materials/materialDefines";
 import { MaterialPluginBase } from "@babylonjs/core/Materials/materialPluginBase";
-import { WAKE_CELL, WAKE_CELLS, WAKE_SLOPE_RANGE } from "./wake";
+import { WAKE_CELL, WAKE_CELLS, WAKE_HEIGHT_RANGE, WAKE_SLOPE_RANGE } from "./wake";
 
 export const WATER_PLUGIN = "ExiledWaterSurface";
 
@@ -25,8 +25,15 @@ export interface WaterWake {
 }
 
 /** How hard the wake tilts the surface, and how white its foam goes. */
-const WAKE_TILT = 1.6;
+const WAKE_TILT = 2.4;
 const WAKE_FOAM = 0.9;
+/** Caustic gain per unit of the wake's curvature (1/m): how much a crest
+ *  brightens the pattern already there, and the light it adds on bare sand. */
+const WAKE_FOCUS_SPREAD = 0.35;
+const WAKE_FOCUS_LIGHT = 1.2;
+/** Glint per unit of slope tilted away from the eye. The sky colour is darker
+ *  than sunlit sand, so more sky in a face would dim it: the face glints white. */
+const WAKE_GLINT = 4;
 
 /** Live-tunable look of one water. Colours are linear. */
 export interface WaterParams {
@@ -71,6 +78,7 @@ const GLSL_DEFS = `
     float wFoam = 0.0;
     float wCaust = 0.0;
     float wRefl = 0.0;
+    float wGlint = 0.0;
     float wDry = 0.0;
     #ifdef WATER_WAKE
       uniform sampler2D waterWakeSampler;
@@ -127,6 +135,9 @@ const GLSL_SHADE = `
     }
     #endif
     float wakeFoam = 0.0;
+    float wakeH = 0.0;
+    float wakeFocus = 0.0;
+    float wakeBand = 0.0;
     #ifdef WATER_WAKE
     {
       vec2 wuv = (q - waterWake.xy) * waterWake.z;
@@ -134,10 +145,25 @@ const GLSL_SHADE = `
       vec2 rim = smoothstep(0.0, 0.06, wuv) * smoothstep(1.0, 0.94, wuv);
       float inside = rim.x * rim.y;
       if (inside > 0.0) {
+        const float SR = 2.0 * ${WAKE_SLOPE_RANGE.toFixed(3)};
         vec4 w = texture2D(waterWakeSampler, wuv);
-        vec2 slope = (w.gb - 0.5) * (2.0 * ${WAKE_SLOPE_RANGE.toFixed(3)});
+        vec2 slope = (w.gb - 0.5) * SR;
         normalW = normalize(normalW - vec3(slope.x, 0.0, slope.y) * waterWake.w * inside);
-        wakeFoam = w.a * ${WAKE_FOAM.toFixed(2)} * inside;
+        // How fast the slope turns, one cell on: under a crest the surface is a
+        // converging lens, and the sand below it lights up in moving rings.
+        float g = ${(1 / WAKE_CELLS).toFixed(6)};
+        float sx = texture2D(waterWakeSampler, wuv + vec2(g, 0.0)).g;
+        float sz = texture2D(waterWakeSampler, wuv + vec2(0.0, g)).b;
+        wakeFocus = -((sx - w.g) + (sz - w.b)) * SR / ${WAKE_CELL.toFixed(4)} * inside;
+        wakeH = (w.r - 0.5) * ${(2 * WAKE_HEIGHT_RANGE).toFixed(3)} * inside;
+        // Faces tilted away from the eye mirror the sky, faces tilted toward it
+        // show the water: the light and dark bands that make a ripple a ripple.
+        vec2 eye = vEyePosition.xz - vPositionW.xz;
+        wakeBand = dot(slope, eye / max(length(eye), 1e-3)) * inside;
+        // Torn into lace, so churned water reads as bubbles and gaps, never a
+        // smear: solid where fresh, then only the lace's ridges as it thins.
+        float lace = wFbm(q * 9.0 + vec2(t * 0.3, -t * 0.2));
+        wakeFoam = smoothstep(0.0, 0.2, w.a - (1.0 - lace) * 0.65) * ${WAKE_FOAM.toFixed(2)} * inside;
       }
     }
     #endif
@@ -224,6 +250,8 @@ const GLSL_SHADE = `
       H = max(d + 0.5, 0.0) * waterLook.x;
     }
     #endif
+    // A trough leaves less water over the sand, a crest more.
+    H = max(H + wakeH, 0.0);
     // Beer-Lambert over the view path (down and back up, at about 45 degrees).
     vec3 T = exp(-waterAbsorb * H * 2.4);
     float a = 1.0 - dot(T, vec3(0.3, 0.45, 0.25));
@@ -244,11 +272,15 @@ const GLSL_SHADE = `
     // Light webbing the bottom, strongest where the water is a hand deep.
     wCaust = waterLook.y * inWater * smoothstep(0.0, 0.06, H) * (1.0 - smoothstep(0.35, 1.3, H)) * (1.0 - wFoam);
     if (wCaust > 0.001) wCaust *= wCaustic(q * 0.9 + normalW.xz * 0.4, t * 0.8);
+    // A wake's crests focus and its troughs spread the light on the sand.
+    float shallow = inWater * smoothstep(0.0, 0.04, H) * (1.0 - smoothstep(0.5, 1.5, H)) * (1.0 - wFoam);
+    wCaust = wCaust * max(0.0, 1.0 + wakeFocus * ${WAKE_FOCUS_SPREAD.toFixed(2)}) + max(0.0, wakeFocus) * ${WAKE_FOCUS_LIGHT.toFixed(2)} * shallow;
     // Sky in the ripples. Fresnel at this camera is a few percent, which is
     // exactly what lets the moving normals show: the gain exaggerates it.
     vec3 V = normalize(vEyePosition.xyz - vPositionW);
     float F = 0.02 + 0.98 * pow(1.0 - clamp(dot(normalW, V), 0.0, 1.0), 5.0);
     wRefl = clamp(F * waterSky.w, 0.0, 1.0) * inWater * (1.0 - wFoam);
+    wGlint = clamp(wakeBand * ${WAKE_GLINT.toFixed(2)}, 0.0, 1.0) * inWater * (1.0 - wFoam);
     surfaceAlbedo = col;
     alpha = A;
   }
@@ -379,8 +411,11 @@ class WaterSurfacePlugin extends MaterialPluginBase {
           finalColor.rgb += vec3(0.5, 0.52, 0.42) * wCaust * (1.0 - finalColor.a) / max(finalColor.a, 0.25);
           // Reflection over everything below it, the sand included: widen the
           // blend weight so the sand is dimmed by the same share the sky takes.
-          float aR = finalColor.a + wRefl - finalColor.a * wRefl;
-          finalColor.rgb = (finalColor.rgb * finalColor.a * (1.0 - wRefl) + waterSky.rgb * wRefl) / max(aR, 0.001);
+          // A wake's crest faces glint on top of the sky's sheen.
+          float wR = clamp(wRefl + wGlint, 0.0, 1.0);
+          vec3 rc = (waterSky.rgb * wRefl + vec3(0.95, 0.97, 0.95) * wGlint) / max(wRefl + wGlint, 0.001);
+          float aR = finalColor.a + wR - finalColor.a * wR;
+          finalColor.rgb = (finalColor.rgb * finalColor.a * (1.0 - wR) + rc * wR) / max(aR, 0.001);
           finalColor.a = aR;
         #endif
       `,

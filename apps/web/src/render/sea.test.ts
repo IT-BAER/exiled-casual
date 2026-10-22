@@ -3,6 +3,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { NullEngine, VertexBuffer, VertexData } from "@babylonjs/core";
 import { createScene } from "./engine";
 import { buildSea, SEA_MESH_NAME, stirSea } from "./sea";
+import { waterSplash } from "./splash";
 import { WATER_DATA_KIND, waterPlugin, waterSurf } from "./water-surface";
 import { BIOMES } from "@exiled/content-runtime";
 import type { Shoreline, WalkableGrid } from "@exiled/mapgen";
@@ -225,6 +226,32 @@ describe("buildSea", () => {
     const pool = buildSea(scene, { ...coveGrid(), water }, "fen").mesh!;
     expect(waterPlugin(pool.material)!.wake).toBeNull();
     expect(stirSea(scene, [{ id: 1, x: 0, z: 0, radius: 0.5, player: true }], 1 / 60)).toEqual([]);
+  });
+
+  it("throws a crown of water off every foot that comes down in it, and lets it fall back", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const grid = coveGrid();
+    const cross = new Float32Array(grid.cols).fill(2.5);
+    buildSea(scene, { ...grid, shore: { along: "x", start: grid.originX, step: grid.cellSize, cross, seaSide: 1 } }, true);
+    const splash = waterSplash(scene);
+    const run = (player: boolean, z: number): number => {
+      const before = { drops: splash.emitted, crowns: splash.crowns };
+      let falls = 0;
+      for (let x = 0; x <= 4; x += 4.2 / 60)
+        falls += stirSea(scene, [{ id: player ? 1 : 2, x, z, radius: 0.5, player }], 1 / 60).length;
+      expect(falls).toBeGreaterThan(0);
+      expect(splash.crowns - before.crowns).toBe(falls);
+      return (splash.emitted - before.drops) / falls;
+    };
+    const mine = run(true, 3.5);
+    const theirs = run(false, 3.6);
+    expect(mine).toBeGreaterThanOrEqual(10);
+    expect(theirs).toBeGreaterThanOrEqual(3);
+    expect(theirs).toBeLessThan(mine);
+    expect(splash.live).toBeGreaterThan(0);
+    for (let k = 0; k < 120; k++) splash.step(1 / 60);
+    expect(splash.live).toBe(0);
   });
 
   it("is the strand and only the strand", () => {
