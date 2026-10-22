@@ -214,6 +214,24 @@ describe("Bot", () => {
     expect(out.some((c) => c.type === "moveTo")).toBe(true);
   });
 
+  it("an Ironsworn swings at a monster in reach beside a wall a bolt could not pass", () => {
+    // A swing tests no walls, only the bolt does: by the bolt's test the Warden at a
+    // wall was no target, and standing beside it for a second dropped it for a minute.
+    const { g, me } = setupAs("class.ironsworn");
+    const x0 = me.x + fp(0.5), x1 = me.x + fp(1.5), y1 = me.y - fp(0.3), y0 = me.y - fp(5);
+    const block: Collision = {
+      isWalkable: (x, y, r) => {
+        const gx = Math.max(0, x0 - x, x - x1), gy = Math.max(0, y0 - y, y - y1);
+        return gx * gx + gy * gy >= r * r && (gx > 0 || gy > 0);
+      },
+    };
+    spawnLabActors(g.world, "imp", 0, 0);
+    const imp = g.world.query("monster").at(-1)!;
+    g.world.set<Position>(imp, "position", { x: me.x + fp(1.2), y: me.y });
+    g.world.set<MonsterC>(imp, "monster", { ...g.world.get<MonsterC>(imp, "monster")!, state: "chase" });
+    expect(skillOf(new Bot(g, block, {}).decide(false))).toBe("skill.heavy_strike.v1");
+  });
+
   it("stops beside a monster he walked to rather than walking onto its centre", () => {
     // Only his own body passes, never a bolt: no shot, so step 3 walks to the goal.
     const { g, me } = setupAs("class.emberbound");

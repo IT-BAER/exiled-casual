@@ -307,7 +307,9 @@ export class Bot {
     // With the boss down the map is over: only what comes at him is worth a shot.
     const seen = this.monsters()
       .filter((x) => (this.skip.get(x.e) ?? 0) <= tick)
-      .filter((x) => (!bossDead || x.awake) && this.inSight(p, x.p) && this.clearShot(p, x))
+      // A swing tests no walls: in its reach, the bolt's wall test does not apply.
+      .filter((x) => (!bossDead || x.awake) && this.inSight(p, x.p)
+        && (this.clearShot(p, x) || (this.melee && dist(p, x.p) <= this.shortestReach(x.e))))
       .sort((a, b) => Number(b.awake) - Number(a.awake) || dist(p, a.p) - dist(p, b.p));
     const t = seen[0];
     this.target = t?.e;
