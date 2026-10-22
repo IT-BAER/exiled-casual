@@ -84,8 +84,10 @@ vi.mock("./render/renderer", () => ({
     setHoveredEntity = vi.fn();
     setAim = vi.fn();
     cameraShake = () => ({ x: 0, z: 0 });
+    wadingBodies = () => [];
   },
 }));
+vi.mock("./render/sea", () => ({ buildSea: vi.fn(), stirSea: vi.fn() }));
 vi.mock("./render/rig", () => ({ loadPlayerRig: () => Promise.resolve(), resetPlayerRig: vi.fn() }));
 // PROP_KINDS is the real list: the F4 asset menu builds its rows off it at
 // import time, so a mock without it fails the whole suite at collection.

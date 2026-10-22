@@ -5,7 +5,8 @@ import { applyGraphics, createScene, setMapFill } from "./render/engine";
 import { canvasProjector } from "./render/projector";
 import { buildLevel, applyBiomeTint, applyTilesetFloor, tilesetDir } from "./render/level";
 import { setGroundPatch } from "./render/ground-patch";
-import { buildSea } from "./render/sea";
+import { buildSea, stirSea } from "./render/sea";
+import type { WakeBody } from "./render/wake";
 import { Presence } from "./presence";
 import { buildHideoutDecor, clearHideoutDecor } from "./render/hideout";
 import { SnapshotRenderer } from "./render/renderer";
@@ -706,6 +707,8 @@ export function GameView({
     };
 
     getAimRef.current = getAim;
+    const wading: WakeBody[] = [];
+    let lastFrameMs = 0;
     const renderFrame = () => {
       if (!curSnap) return;
       // ponytail: float alpha for lerp — never fed into sim
@@ -717,6 +720,9 @@ export function GameView({
       const aim = bot && h ? { x: curSnap.player.x + h.x * 6, y: curSnap.player.y + h.y * 6 } : getAim();
       if (aim) renderer.setAim(aim.x, aim.y);
       renderer.apply(prevSnap, curSnap, alpha);
+      const frameMs = performance.now();
+      stirSea(scene, renderer.wadingBodies(wading), lastFrameMs ? (frameMs - lastFrameMs) / 1000 : 0);
+      lastFrameMs = frameMs;
       // Camera follows the player (interpolated) so they stay centred like an ARPG.
       // The 4th arg (cloneAlphaBetaRadius=true) keeps the orbit fixed and moves the
       // camera WITH the target; the default recomputes the angles and drifts.

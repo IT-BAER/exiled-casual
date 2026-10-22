@@ -1,7 +1,9 @@
 import {
   Color3,
+  Constants,
   Mesh,
   PBRMaterial,
+  RawTexture,
   Texture,
   VertexData,
   type Observer,
@@ -9,6 +11,8 @@ import {
 } from "@babylonjs/core";
 import type { Shoreline, WalkableGrid } from "@exiled/mapgen";
 import { dressFenWater } from "./fen-water";
+import { fxPools } from "./fx-pool";
+import { WAKE_CELLS, WakeField, WakeStirrer, type Footfall, type WakeBody } from "./wake";
 import {
   COAST_WATER,
   FEN_WATER,
@@ -16,6 +20,7 @@ import {
   dressWater,
   waterPlugin,
   type WaterParams,
+  type WaterWake,
 } from "./water-surface";
 
 /** The single merged water mesh. Born with this name, never renamed: engine.ts
@@ -70,6 +75,76 @@ const FEN_SCROLL = 0.2;
 const FEN_BUMP = 0.35;
 
 const scrollObservers = new Map<string, Observer<Scene>>();
+
+/** The coast's wake: the field, what stirs it, and the texture it reaches the
+ *  shader through. One per coast build, gone with the sea. */
+interface CoastWake {
+  scene: Scene;
+  field: WakeField;
+  stirrer: WakeStirrer;
+  bytes: Uint8Array;
+  texture: RawTexture;
+  wake: WaterWake;
+  mat: PBRMaterial;
+}
+let coastWake: CoastWake | null = null;
+const footfalls: Footfall[] = [];
+const NO_FOOTFALLS: readonly Footfall[] = [];
+
+function dropWake(): void {
+  if (!coastWake) return;
+  const plugin = waterPlugin(coastWake.mat);
+  if (plugin?.wake === coastWake.wake) plugin.wake = null;
+  coastWake.texture.dispose();
+  coastWake = null;
+}
+
+/** Splash per foot: a few droplets thrown up and forward, falling back in. A
+ *  monster's foot throws fewer than the player's; the thin wash throws none. */
+const SPLASH_PLAYER = 4;
+const SPLASH_MONSTER = 2;
+const SPLASH_FROM_DEPTH = -0.4;
+
+function splash(scene: Scene, f: Footfall): void {
+  if (f.depth < SPLASH_FROM_DEPTH) return;
+  const shards = fxPools(scene).shards;
+  const n = f.player ? SPLASH_PLAYER : SPLASH_MONSTER;
+  for (let k = 0; k < n; k++) {
+    const a = Math.random() * Math.PI * 2;
+    const out = 0.3 + Math.random() * 0.5;
+    shards.emit({
+      x: f.x, y: SEA_Y + 0.03, z: f.z,
+      vx: f.dirX * f.speed * 0.25 + Math.cos(a) * out,
+      vy: 1.5 + Math.random() * 1.3,
+      vz: f.dirZ * f.speed * 0.25 + Math.sin(a) * out,
+      life: 0.35 + Math.random() * 0.2,
+      size: 0.05, thick: 0.012, stretch: 0.03,
+      r: 0.5, g: 0.58, b: 0.58, a: 0.55,
+      gravity: -9.8, drag: 0.4,
+    });
+  }
+}
+
+/**
+ * Let the bodies standing in the coast's water stir it, once per frame: steps
+ * the wave field, uploads it while it moves and splashes each foot that comes
+ * down in water. A no-op off the coast. Returns this frame's footfalls.
+ */
+export function stirSea(scene: Scene, bodies: readonly WakeBody[], dtSeconds: number): readonly Footfall[] {
+  const w = coastWake;
+  if (!w || w.scene !== scene) return NO_FOOTFALLS;
+  // A hitch (a tab in the background) is not ten seconds of physics.
+  const dt = Math.min(dtSeconds, 0.05);
+  const player = bodies.find((b) => b.player);
+  if (player) w.field.follow(player.x, player.z);
+  w.stirrer.stir(bodies, dt, footfalls);
+  w.field.step(dt);
+  if (w.field.pack(w.bytes)) w.texture.update(w.bytes);
+  w.wake.originX = w.field.originX;
+  w.wake.originZ = w.field.originZ;
+  for (const f of footfalls) splash(scene, f);
+  return footfalls;
+}
 
 /**
  * The water material, cached by name across area builds. Deliberately NOT
@@ -215,7 +290,20 @@ function buildShoreSea(scene: Scene, shore: Shoreline): SeaResult {
   const mat = seaMaterial(scene);
   // The swells' faces tilt toward land: away from the sea side, across the shore.
   const toLand = -shore.seaSide;
-  waterPlugin(mat)!.shore = shore.along === "x" ? [0, toLand] : [toLand, 0];
+  const plugin = waterPlugin(mat)!;
+  plugin.shore = shore.along === "x" ? [0, toLand] : [toLand, 0];
+  const field = new WakeField();
+  field.setShore(shore);
+  const bytes = new Uint8Array(WAKE_CELLS * WAKE_CELLS * 4);
+  for (let k = 0; k < bytes.length; k += 4) bytes[k] = bytes[k + 1] = bytes[k + 2] = 128;
+  const texture = new RawTexture(
+    bytes, WAKE_CELLS, WAKE_CELLS, Constants.TEXTUREFORMAT_RGBA, scene,
+    false, false, Texture.BILINEAR_SAMPLINGMODE, Constants.TEXTURETYPE_UNSIGNED_BYTE,
+  );
+  texture.wrapU = texture.wrapV = Texture.CLAMP_ADDRESSMODE;
+  const wake: WaterWake = { texture, originX: field.originX, originZ: field.originZ };
+  plugin.wake = wake;
+  coastWake = { scene, field, stirrer: new WakeStirrer(field, shore), bytes, texture, wake, mat };
   mesh.material = mat;
   mesh.isPickable = false;
   mesh.receiveShadows = false;
@@ -246,6 +334,7 @@ export function buildSea(
   // Disposed per area build, exactly like the wall runs: a mesh left in the
   // render list is the leak the wall boxes already had once.
   scene.getMeshByName(SEA_MESH_NAME)?.dispose();
+  dropWake();
   if (!grid || !enabled) return { mesh: null, waterCells: 0 };
   const look: SeaLook = enabled === true ? "coast" : enabled;
   const fen = look === "fen";

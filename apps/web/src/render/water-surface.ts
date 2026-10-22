@@ -5,16 +5,28 @@
 // sky, and past the rim there is no sky. What reads as water from up here is
 // what the shallows do: sand seen through a colour that deepens, light webbing
 // the bottom, and waves that run up the beach, break white and drain back.
-import type { AbstractMesh, Material } from "@babylonjs/core";
+import type { AbstractMesh, BaseTexture, Material } from "@babylonjs/core";
 import type { UniformBuffer } from "@babylonjs/core/Materials/uniformBuffer";
 import type { MaterialDefines } from "@babylonjs/core/Materials/materialDefines";
 import { MaterialPluginBase } from "@babylonjs/core/Materials/materialPluginBase";
+import { WAKE_CELL, WAKE_CELLS, WAKE_SLOPE_RANGE } from "./wake";
 
 export const WATER_PLUGIN = "ExiledWaterSurface";
 
 /** Vertex buffer kind: [metres out from the waterline (negative inland),
  *  metres along the shore]. A pool has no shore axis and writes 0 there. */
 export const WATER_DATA_KIND = "waterData";
+
+/** What bodies wading through it have done to the water (`wake.ts`). */
+export interface WaterWake {
+  texture: BaseTexture;
+  originX: number;
+  originZ: number;
+}
+
+/** How hard the wake tilts the surface, and how white its foam goes. */
+const WAKE_TILT = 1.6;
+const WAKE_FOAM = 0.9;
 
 /** Live-tunable look of one water. Colours are linear. */
 export interface WaterParams {
@@ -60,6 +72,9 @@ const GLSL_DEFS = `
     float wCaust = 0.0;
     float wRefl = 0.0;
     float wDry = 0.0;
+    #ifdef WATER_WAKE
+      uniform sampler2D waterWakeSampler;
+    #endif
     float wHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
     vec2 wHash2(vec2 p) {
       return fract(sin(vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)))) * 43758.5453);
@@ -109,6 +124,21 @@ const GLSL_SHADE = `
       // heading: one scrolling normal is a conveyor belt, two are a surface.
       vec3 r = texture2D(bumpSampler, q / waterRipple.x + waterRipple.yz * t).xyz * 2.0 - 1.0;
       normalW = normalize(normalW + vec3(r.x, 0.0, r.y) * waterRipple.w);
+    }
+    #endif
+    float wakeFoam = 0.0;
+    #ifdef WATER_WAKE
+    {
+      vec2 wuv = (q - waterWake.xy) * waterWake.z;
+      // The window's own edge fades out; past it the field is not there at all.
+      vec2 rim = smoothstep(0.0, 0.06, wuv) * smoothstep(1.0, 0.94, wuv);
+      float inside = rim.x * rim.y;
+      if (inside > 0.0) {
+        vec4 w = texture2D(waterWakeSampler, wuv);
+        vec2 slope = (w.gb - 0.5) * (2.0 * ${WAKE_SLOPE_RANGE.toFixed(3)});
+        normalW = normalize(normalW - vec3(slope.x, 0.0, slope.y) * waterWake.w * inside);
+        wakeFoam = w.a * ${WAKE_FOAM.toFixed(2)} * inside;
+      }
     }
     #endif
     // Water covers every point seaward of edge; for a still pool that is its bank.
@@ -168,6 +198,7 @@ const GLSL_SHADE = `
         foam += cap * (0.35 + 0.8 * churn);
       }
       foam *= waterSwash.w;
+      foam += wakeFoam;
       // Sand the last wash left dark, drying again behind the draining edge.
       wet = off < 0.0 ? exp(off / 0.8) : 0.0;
       wet = max(wet, smoothstep(-waterSwash.y * 1.35, 0.0, d) * 0.55);
@@ -229,10 +260,12 @@ class WaterSurfacePlugin extends MaterialPluginBase {
   surf: boolean;
   /** Unit xz direction from the sea toward land; zero for a pool. */
   shore: [number, number] = [0, 0];
+  /** Set on a coast while it has a wake field; the define follows it. */
+  wake: WaterWake | null = null;
 
   constructor(material: Material, surf: boolean, params: WaterParams) {
     // Before the fen's own plugin (220): weed floats on this water, not under it.
-    super(material, WATER_PLUGIN, 210, { WATER_SURFACE: false, WATER_SURF: false });
+    super(material, WATER_PLUGIN, 210, { WATER_SURFACE: false, WATER_SURF: false, WATER_WAKE: false });
     this.surf = surf;
     this.params = { ...params };
     this.doNotSerialize = true;
@@ -246,6 +279,23 @@ class WaterSurfacePlugin extends MaterialPluginBase {
   override prepareDefines(defines: MaterialDefines): void {
     defines["WATER_SURFACE"] = true;
     defines["WATER_SURF"] = this.surf;
+    defines["WATER_WAKE"] = this.surf && this.wake !== null;
+  }
+
+  override isReadyForSubMesh(): boolean {
+    return this.wake?.texture.isReady() ?? true;
+  }
+
+  override getSamplers(samplers: string[]): void {
+    samplers.push("waterWakeSampler");
+  }
+
+  override getActiveTextures(active: BaseTexture[]): void {
+    if (this.wake) active.push(this.wake.texture);
+  }
+
+  override hasTexture(texture: BaseTexture): boolean {
+    return texture === this.wake?.texture;
   }
 
   override getAttributes(attributes: string[]): void {
@@ -263,6 +313,7 @@ class WaterSurfacePlugin extends MaterialPluginBase {
         { name: "waterLook", size: 4, type: "vec4" },
         { name: "waterSky", size: 4, type: "vec4" },
         { name: "waterRipple", size: 4, type: "vec4" },
+        { name: "waterWake", size: 4, type: "vec4" },
       ],
       fragment: `uniform float waterTime;
         uniform vec2 waterShore;
@@ -271,7 +322,8 @@ class WaterSurfacePlugin extends MaterialPluginBase {
         uniform vec4 waterSwash;
         uniform vec4 waterLook;
         uniform vec4 waterSky;
-        uniform vec4 waterRipple;`,
+        uniform vec4 waterRipple;
+        uniform vec4 waterWake;`,
     };
   }
 
@@ -287,6 +339,11 @@ class WaterSurfacePlugin extends MaterialPluginBase {
     ubo.updateFloat4("waterLook", p.look[0], p.look[1], p.look[2], p.look[3]);
     ubo.updateFloat4("waterSky", p.sky[0], p.sky[1], p.sky[2], p.sky[3]);
     ubo.updateFloat4("waterRipple", p.ripple[0], p.ripple[1], p.ripple[2], p.ripple[3]);
+    const w = this.wake;
+    if (w) {
+      ubo.updateFloat4("waterWake", w.originX, w.originZ, 1 / (WAKE_CELLS * WAKE_CELL), WAKE_TILT);
+      ubo.setTexture("waterWakeSampler", w.texture);
+    }
   }
 
   override getCustomCode(shaderType: string): Record<string, string> | null {

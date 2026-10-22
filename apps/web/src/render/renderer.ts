@@ -5,6 +5,7 @@ import { blinkBurst, fxProfile, groundSlam, meleeImpact, setStreakLength } from 
 import { clearFxPools } from "./fx-pool";
 import { HIT_STOP_SCALE, addTrauma, decayTrauma, hitStopMs, shakeOffset, skillShakeWeight, swingWeight } from "./juice";
 import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
+import type { WakeBody } from "./wake";
 import { animateActor, keepGroundBlobFlat, makeMesh, setHitFlash, setHovered, setTier, updateTelegraph, updatePortal, updateMapDevice, updateStash, updateVendor, updateContainer, updateGroundItem, updateRareElement, portalAppear, portalVanish, isPortalMesh, PORTAL_STAGGER_MS, Y_LIFT } from "./meshes";
 import type { MeshKind } from "./meshes";
 import type { Tier } from "./rim";
@@ -323,6 +324,9 @@ function kindOf(e: SnapshotEntity): MeshKind {
   return "groundArea";
 }
 
+/** The player's body radius in the sim (`bodyRadius`), which the snapshot does not carry. */
+const PLAYER_WADE_RADIUS = 0.5;
+
 export class SnapshotRenderer {
   private readonly scene: Scene;
   // keyed by entity id (player id = player.id)
@@ -428,6 +432,23 @@ export class SnapshotRenderer {
   entityWorldPos(id: number): { x: number; y: number } | null {
     const mesh = this.meshes.get(id);
     return mesh ? { x: mesh.position.x, y: mesh.position.z } : null;
+  }
+
+  /** The player and every live monster where they are drawn this frame, for
+   *  the water they wade through. Refills `out`. */
+  wadingBodies(out: WakeBody[]): WakeBody[] {
+    out.length = 0;
+    const snap = this.lastSnapshot;
+    if (!snap) return out;
+    const me = this.meshes.get(snap.player.id);
+    if (me && snap.player.alive)
+      out.push({ id: snap.player.id, x: me.position.x, z: me.position.z, radius: PLAYER_WADE_RADIUS, player: true });
+    for (const e of snap.entities) {
+      if (e.kind !== "monster") continue;
+      const m = this.meshes.get(e.id);
+      if (m) out.push({ id: e.id, x: m.position.x, z: m.position.z, radius: e.radius ?? PLAYER_WADE_RADIUS, player: false });
+    }
+    return out;
   }
 
   /** Offset for the camera target this frame: the jolt of a landed swing. */

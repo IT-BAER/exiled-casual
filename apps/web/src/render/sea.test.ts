@@ -2,8 +2,8 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { NullEngine, VertexBuffer, VertexData } from "@babylonjs/core";
 import { createScene } from "./engine";
-import { buildSea, SEA_MESH_NAME } from "./sea";
-import { WATER_DATA_KIND, waterSurf } from "./water-surface";
+import { buildSea, SEA_MESH_NAME, stirSea } from "./sea";
+import { WATER_DATA_KIND, waterPlugin, waterSurf } from "./water-surface";
 import { BIOMES } from "@exiled/content-runtime";
 import type { Shoreline, WalkableGrid } from "@exiled/mapgen";
 
@@ -197,6 +197,34 @@ describe("buildSea", () => {
     water[0] = 1;
     const pool = buildSea(scene, { ...coveGrid(), water }, "fen").mesh!;
     expect(waterSurf(pool)).toBe(false);
+  });
+
+  it("lets bodies wading through a coast stir its water, and nothing else", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const grid = coveGrid();
+    const cross = new Float32Array(grid.cols).fill(2.5);
+    const coast = buildSea(
+      scene,
+      { ...grid, shore: { along: "x", start: grid.originX, step: grid.cellSize, cross, seaSide: 1 } },
+      true,
+    ).mesh!;
+    const wake = waterPlugin(coast.material)!.wake!;
+    expect(wake).not.toBeNull();
+    let falls = 0;
+    // One metre out, walking down the shore at a run.
+    for (let x = 0; x <= 4; x += 4.2 / 60)
+      falls += stirSea(scene, [{ id: 1, x, z: 3.5, radius: 0.5, player: true }], 1 / 60).length;
+    expect(falls).toBeGreaterThan(0);
+    // The window follows him: he stands near its middle, 10 m in from its corner.
+    expect(wake.originX).toBeGreaterThan(4 - 10.5);
+    expect(wake.originX).toBeLessThan(4 - 9.5);
+
+    const water = new Uint8Array(81);
+    water[0] = 1;
+    const pool = buildSea(scene, { ...coveGrid(), water }, "fen").mesh!;
+    expect(waterPlugin(pool.material)!.wake).toBeNull();
+    expect(stirSea(scene, [{ id: 1, x: 0, z: 0, radius: 0.5, player: true }], 1 / 60)).toEqual([]);
   });
 
   it("is the strand and only the strand", () => {
