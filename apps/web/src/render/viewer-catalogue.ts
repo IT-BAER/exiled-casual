@@ -76,6 +76,8 @@ export const ONE_SHOTS: readonly OneShot[] = [
   { id: "cast", label: "Cast", clips: ["cast"] },
   { id: "bow", label: "Bow", clips: ["bow"] },
   { id: "strike", label: "Strike", clips: ["strikeA", "strikeB", "strikeC"] },
+  { id: "heavy", label: "Heavy Strike", clips: ["heavy"] },
+  { id: "slam", label: "Ground Slam", clips: ["slam"] },
   { id: "roll", label: "Roll", clips: ["roll"] },
   { id: "hit", label: "Hit", clips: ["hit"] },
   { id: "drink", label: "Drink", clips: ["drink"] },

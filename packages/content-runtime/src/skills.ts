@@ -29,7 +29,8 @@ const SKILL_DEFS: SkillDef[] = [
      * stopped reading as one — the first bolt looked like it cost time and every
      * bolt after it looked free. Thirty is one second at 30 Hz: a held button
      * fires on a beat the ear can count, which is what the cast animation is now
-     * paced to.
+     * paced to. PoE1 Fireball's 0.75 s (23 ticks) put the Emberbound's clear
+     * outside balance.test.ts's class band, so this stays until a balance pass.
      */
     manaCostFixed: fp(10),
     cooldownTicks: 30,
@@ -104,6 +105,8 @@ const SKILL_DEFS: SkillDef[] = [
     classId: "class.ironsworn",
     manaCostFixed: fp(10),
     cooldownTicks: 30,
+    // PoE1 Heavy Strike's 0.905 s (85% of a Driftwood Maul's 1.30/s, poedb.tw;
+    // 27 ticks) slowed the Ironsworn's clear past balance.test.ts's class band.
     castTicks: 9,
     critChancePct: 5,
     kind: "attack",
@@ -168,7 +171,10 @@ const SKILL_DEFS: SkillDef[] = [
     classId: "class.ironsworn",
     manaCostFixed: fp(20),
     cooldownTicks: 90,
-    castTicks: 9,
+    // PoE1 Ground Slam: 90% of base attack speed on a Driftwood Maul's 1.30/s
+    // (poedb.tw) is 0.855 s, 26 ticks; PoE2 has no Ground Slam. The shockwave
+    // leaves on the last tick, the frame the client's slam meets the floor.
+    castTicks: 26,
     critChancePct: 5,
     kind: "attack",
     unlockLevel: 8,

@@ -8,6 +8,7 @@ import { createCombatSim } from "../combat-sim";
 import { gridCollision } from "../collision";
 import { makeGrid } from "../test-grid";
 import type { SkillDef } from "@exiled/content-schema";
+import { SKILLS } from "@exiled/content-runtime";
 import type { Position, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC, CastingC, OffenseC, Health, SessionC, SkillsC, StrikeC, PlayerC } from "../components";
 
 // Authored skill defs matching the contract tables exactly.
@@ -776,9 +777,52 @@ describe("registerSkillCast", () => {
       tick: sim.tick, entity: playerEntity, type: "useSkill",
       skillId: "skill.ember_bolt.v1", data: { tx: fp(0), ty: fp(6) },
     }]);
-    for (let i = 0; i < 9; i++) sim.step(); // ember_bolt's castTicks wind-up
+    for (let i = 0; i < SKILLS.get("skill.ember_bolt.v1")!.castTicks!; i++) sim.step();
     const proj = world.query("projectile")[0]!;
     expect(world.get<ProjectileC>(proj, "projectile")!.skillId).toBe("skill.ember_bolt.v1");
   });
 
+  /**
+   * The heavy skills wind up for PoE's own time (skills.ts names the source) and
+   * land the whole hit on the LAST tick of it: the press only starts the wind-up.
+   */
+  describe("a heavy skill lands exactly castTicks after the press", () => {
+    const HEAVY: Record<string, number> = { "skill.ground_slam.v1": 26 };
+
+    it.each(Object.entries(HEAVY))("%s winds up %i ticks", (id, ticks) => {
+      expect(SKILLS.get(id)!.castTicks).toBe(ticks);
+    });
+
+    it.each(["skill.ground_slam.v1", "skill.heavy_strike.v1"])("%s deals nothing until its wind-up ends", (id) => {
+      const sim = new Simulation();
+      registerSkillCast(sim, SKILLS);
+      const caster = makeCaster(sim);
+      const foe = makeEnemyForCastTest(sim, fp(1.2), 0);
+      const press = { entity: caster, type: "useSkill", skillId: id, data: { tx: fp(5), ty: 0 } };
+      const cast = SKILLS.get(id)!.castTicks!;
+      for (let tick = 0; tick < cast; tick++) {
+        // Held the whole way: a held button must not resolve it early either.
+        sim.step([{ ...press, tick }]);
+        expect(sim.damageQueue, `tick ${tick}`).toEqual([]);
+        expect(sim.world.has(caster, "strike"), `tick ${tick}`).toBe(false);
+      }
+      sim.step([{ ...press, tick: cast }]);
+      expect(sim.damageQueue.map((d) => d.target)).toContain(foe);
+      expect(sim.world.get<StrikeC>(caster, "strike")).toMatchObject({ tick: cast, skill: id });
+    });
+
+    it("looses Ember Bolt's projectile on the last tick of its cast, not the press", () => {
+      const sim = new Simulation();
+      registerSkillCast(sim, SKILLS);
+      const caster = makeCaster(sim);
+      const cast = SKILLS.get("skill.ember_bolt.v1")!.castTicks!;
+      sim.step([{ tick: 0, entity: caster, type: "useSkill", skillId: "skill.ember_bolt.v1", data: { tx: fp(10), ty: 0 } }]);
+      for (let tick = 1; tick < cast; tick++) {
+        sim.step();
+        expect(sim.world.query("projectile"), `tick ${tick}`).toHaveLength(0);
+      }
+      sim.step();
+      expect(sim.world.query("projectile")).toHaveLength(1);
+    });
+  });
 });

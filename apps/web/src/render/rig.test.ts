@@ -60,6 +60,7 @@ import {
   STRIKE_TIMING,
   type StrikeClip,
   strikePace,
+  strikeClipFor,
   strikeRatioAt,
   spinePitch,
   calmTowardFirst,
@@ -2001,12 +2002,26 @@ describe("a melee swing lands heavy and on the hit", () => {
     }
   });
 
+  it("lands the slam on the floor on the sim's tick: 26 ticks of wind-up over the take the library ships", () => {
+    // STRIKE_TIMING.slam was measured on the 35-frame Sword_GroundPound: hand apex
+    // at 0.143, wrist on the floor at 0.314. Another take fails here first.
+    const clipS = seconds("slam");
+    expect(clipS * 30).toBeCloseTo(35, 1);
+    const windup = 26 / 30;
+    const t = STRIKE_TIMING.slam;
+    const p = strikePace(clipS, t, windup, 90 / 30);
+    const toContact = (clipS * t.drop) / p.raise + (clipS * (t.contact - t.drop)) / p.drop;
+    expect(Math.abs(toContact - windup)).toBeLessThan(1 / 30);
+    // It heaves up slowly and drives down: the drop runs faster than the raise.
+    expect(p.drop).toBeGreaterThan(p.raise * 2);
+  });
+
   it("falls back to one even rate when the sim sent no wind-up", () => {
     const r = actionRatio(1.4, BEAT);
     expect(strikePace(1.4, STRIKE_TIMING.strikeA, undefined, BEAT)).toEqual({ raise: r, drop: r, follow: r });
   });
 
-  it.each(STRIKE_CLIPS)("%s drops and stops where its arm speed says", (clip) => {
+  it.each([...STRIKE_CLIPS, "heavy"] as const)("%s drops and stops where its arm speed says", (clip) => {
     const a = anim(clip);
     let speed: number[] = [];
     let times: number[] = [];
@@ -2365,4 +2380,19 @@ describe("the robe hangs still while he stands and breathes", () => {
       (globalThis as { FileReader?: unknown }).FileReader = original;
     }
   }, 120_000);
+});
+
+describe("each melee skill plays its own take", () => {
+  it("Ground Slam slams, Heavy Strike swings heavy, everything else walks the sword chain", () => {
+    expect(strikeClipFor("skill.ground_slam.v1", 0)).toBe("slam");
+    expect(strikeClipFor("skill.heavy_strike.v1", 2)).toBe("heavy");
+    expect([0, 1, 2, 3].map((i) => strikeClipFor("skill.strike.v1", i))).toEqual(["strikeA", "strikeB", "strikeC", "strikeA"]);
+    expect(strikeClipFor(undefined, 1)).toBe("strikeB");
+    expect(CLIP_NAME.slam).toBe("Rig|Sword_GroundPound");
+    expect(CLIP_NAME.heavy).toBe("Rig|Sword_Heavy_A");
+  });
+
+  it("falls back to the chain while the library lacks the skill's own take", () => {
+    expect(strikeClipFor("skill.ground_slam.v1", 1, (c) => c !== "slam")).toBe("strikeB");
+  });
 });

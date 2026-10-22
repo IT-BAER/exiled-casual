@@ -1,7 +1,7 @@
 import { Frustum, Plane, Vector3 } from "@babylonjs/core";
 import type { Scene } from "@babylonjs/core";
 import type { Mesh } from "@babylonjs/core";
-import { blinkBurst, fxProfile, groundSlam, meleeImpact, setStreakLength } from "./skill-fx";
+import { blinkBurst, fxProfile, groundSlam, meleeImpact, setStreakLength, strikesTheFloor } from "./skill-fx";
 import { clearFxPools } from "./fx-pool";
 import { HIT_STOP_SCALE, addTrauma, decayTrauma, hitStopMs, shakeOffset, skillShakeWeight, swingWeight } from "./juice";
 import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
@@ -902,7 +902,7 @@ export class SnapshotRenderer {
 
     // Ground Slam breaks the floor whether or not anything stood in the cone.
     if (newTick && prev !== null && next.player.strikeTick !== undefined
-      && next.player.strikeTick !== prev.player.strikeTick && next.player.strikeSkill === "skill.ground_slam.v1") {
+      && next.player.strikeTick !== prev.player.strikeTick && strikesTheFloor(next.player.strikeSkill)) {
       const face = next.player.facing ?? next.player.heading ?? { x: 0, y: 1 };
       groundSlam(this.scene, new Vector3(next.player.x + face.x * SLAM_FORWARD, 0, next.player.y + face.y * SLAM_FORWARD), face.x, face.y);
       // The floor itself was struck: a slam into nothing still thumps the camera.

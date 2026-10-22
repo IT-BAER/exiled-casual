@@ -5,7 +5,7 @@ import {
 } from "./sfx";
 import { setRoom, type RoomProfile } from "./bus";
 import { playCoinPickup } from "./drop-sound";
-import { fxProfile } from "../render/skill-fx";
+import { fxProfile, strikesTheFloor } from "../render/skill-fx";
 
 /**
  * The fight, heard rather than described.
@@ -416,11 +416,12 @@ export function createSoundscape(opts: Options = {}): Soundscape {
       }
 
       // A melee swing landing is the one hit the player's own hands made: one thud
-      // per swing however many it caught, and none for a whiff.
+      // per swing however many it caught, and none for a whiff - except a slam,
+      // which always meets the floor (its shockwave FX fires on a whiff too).
       // Which skill swung is `strikeSkill`, stamped by the sim beside the tick it
       // landed on (render-only, outside the checksum), so no cooldown has to be guessed.
       if (snap.player.strikeTick !== undefined && snap.player.strikeTick !== before.player.strikeTick
-        && (snap.player.strikeHits ?? 0) > 0) {
+        && ((snap.player.strikeHits ?? 0) > 0 || strikesTheFloor(snap.player.strikeSkill))) {
         play(STRIKE_IMPACT[snap.player.strikeSkill ?? ""] ?? "skill-strike-impact");
       }
 

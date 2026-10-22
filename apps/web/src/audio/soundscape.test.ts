@@ -214,6 +214,15 @@ describe("createSoundscape", () => {
     expect(landed(undefined)).toEqual(["skill-strike-impact"]);
   });
 
+  it("a slam meets the floor whether or not it caught anything, on the tick the sim landed it", () => {
+    const at = (tick: number, cooldown: number, strikeTick?: number) => snap({ tick, player: {
+      ...testPlayer(), cooldowns: { "skill.ground_slam.v1": cooldown }, strikeTick, strikeHits: 0, strikeSkill: "skill.ground_slam.v1",
+    } });
+    // Press: the wind-up's whoosh. Mid wind-up: nothing. The landing: the slam.
+    expect(run([at(1, 0), at(2, 3)])).toEqual(["skill-ground-slam-swing"]);
+    expect(run([at(1, 0), at(2, 3), at(20, 2.4), at(28, 2.2, 28)])).toEqual(["skill-ground-slam-swing", "skill-ground-slam-impact"]);
+  });
+
   const CLASS_SKILLS = [
     "skill.strike.v1", "skill.heavy_strike.v1", "skill.ground_slam.v1",
     "skill.snap_shot.v1", "skill.piercing_shot.v1", "skill.split_arrow.v1",

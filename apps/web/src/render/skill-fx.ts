@@ -333,6 +333,11 @@ export function fxProfile(skillId: string | undefined): FxProfile {
   return (skillId === undefined ? undefined : SKILL_FX[skillId]) ?? FALLBACK_FX;
 }
 
+/** A strike that meets the floor lands even when its cone caught nothing. */
+export function strikesTheFloor(skillId: string | undefined): boolean {
+  return skillId === "skill.ground_slam.v1";
+}
+
 export const BOLT_TRAIL_NAME = "fx-bolt-trail";
 /** The speed a profile's `emitRate` is quoted at (Ember Bolt's 12 u/s): it sheds per unit flown. */
 const BOLT_NOMINAL_SPEED = 12;

@@ -591,6 +591,8 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
         if (shot.id === "cast") r.playCast();
         else if (shot.id === "bow") r.playBow();
         else if (shot.id === "strike") r.playStrike();
+        else if (shot.id === "heavy") r.playStrike(undefined, undefined, "skill.heavy_strike.v1");
+        else if (shot.id === "slam") r.playStrike(undefined, undefined, "skill.ground_slam.v1");
         else if (shot.id === "roll") r.playRoll();
         else r.playReaction(shot.id as ReactionClip);
       };

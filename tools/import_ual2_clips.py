@@ -43,6 +43,8 @@ CLIPS = {
     "Rig|Sword_Regular_A": ("Sword_Regular_A", "Sword_Regular_A_Rec"),
     "Rig|Sword_Regular_B": ("Sword_Regular_B", "Sword_Regular_B_Rec"),
     "Rig|Sword_Regular_C": "Sword_Regular_C",  # its recovery is in the take
+    "Rig|Sword_Heavy_A": ("Sword_Heavy_A", "Sword_Heavy_A_Rec"),  # Heavy Strike
+    "Rig|Sword_GroundPound": "Sword_GroundPound",  # Ground Slam, recovery in the take
     "Rig|Hit_Knockback": "Hit_Knockback",
     "Rig|Consume": "Consume",
     "Rig|Chest_Open": "Chest_Open",

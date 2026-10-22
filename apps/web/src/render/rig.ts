@@ -36,11 +36,28 @@ export type RigClip =
   | "idle" | "walk" | "run" | "walkBack" | "runBack" | "runBackL" | "runBackR"
   | "walkStrafeL" | "walkStrafeR" | "runStrafeL" | "runStrafeR"
   | "walkFwdL" | "walkFwdR" | "walkBackL" | "walkBackR" | "cast" | "bow" | "strikeA" | "strikeB" | "strikeC"
-  | "hit" | "drink" | "open" | "roll";
-export type StrikeClip = "strikeA" | "strikeB" | "strikeC";
+  | "heavy" | "slam" | "hit" | "drink" | "open" | "roll";
+export type StrikeClip = "strikeA" | "strikeB" | "strikeC" | "heavy" | "slam";
 
 /** Melee takes played in turn: UAL2's regular sword chain, forehand, backhand, finisher. */
 export const STRIKE_CLIPS: readonly StrikeClip[] = ["strikeA", "strikeB", "strikeC"];
+/** Every melee take, the chain and the skills' own. */
+export const MELEE_CLIPS: readonly StrikeClip[] = [...STRIKE_CLIPS, "heavy", "slam"];
+
+/** A skill that owns its take instead of joining the chain. */
+const SKILL_STRIKE: Record<string, StrikeClip> = {
+  "skill.heavy_strike.v1": "heavy",
+  "skill.ground_slam.v1": "slam",
+};
+
+/**
+ * The take a melee skill plays: its own when the library has it, else the
+ * chain's next swing at `chainIndex`.
+ */
+export function strikeClipFor(skillId: string | undefined, chainIndex: number, has: (clip: StrikeClip) => boolean = () => true): StrikeClip {
+  const own = skillId ? SKILL_STRIKE[skillId] : undefined;
+  return own && has(own) ? own : STRIKE_CLIPS[chainIndex % STRIKE_CLIPS.length]!;
+}
 
 /** The player's one-shot reactions: staggered by a heavy blow, a flask drunk, a chest opened. */
 export type ReactionClip = "hit" | "drink" | "open";
@@ -79,6 +96,10 @@ export const CLIP_NAME: Record<RigClip, string> = {
   strikeA: "Rig|Sword_Regular_A",
   strikeB: "Rig|Sword_Regular_B",
   strikeC: "Rig|Sword_Regular_C",
+  // Heavy Strike's coiled two-handed sweep, and Ground Slam's overhead blow
+  // driven down to the floor: UAL2 takes, imported the same way.
+  heavy: "Rig|Sword_Heavy_A",
+  slam: "Rig|Sword_GroundPound",
   hit: "Rig|Hit_Knockback",
   drink: "Rig|Consume",
   open: "Rig|Chest_Open",
@@ -106,6 +127,8 @@ const CLIP_LOOPS: Record<RigClip, boolean> = {
   strikeA: false,
   strikeB: false,
   strikeC: false,
+  heavy: false,
+  slam: false,
   hit: false,
   drink: false,
   open: false,
@@ -310,17 +333,26 @@ export const ACTION_RATIO_MAX = 3;
 /** Where `Rig|Bow_Shoot` looses, as a fraction of it: `RELEASE / LAST` in `tools/build_bow_clip.py`. */
 export const BOW_RELEASE = 12 / 30;
 
-export interface StrikeTiming { drop: number; contact: number }
+/**
+ * `raiseShare` and `raiseMin` override the shared raise for a take whose raise
+ * is short against a long wind-up: it may hang at the top instead of the drop
+ * crawling, so the blow still lands on the sim's tick.
+ */
+export interface StrikeTiming { drop: number; contact: number; raiseShare?: number; raiseMin?: number }
 
 /**
  * Where each sword take starts its drop and where the blade stops, as fractions
  * of the clip, off the arm's angular speed in anim-library.glb (rig.test.ts
- * re-measures them). C opens with a feint, so its raise is the long one.
+ * re-measures them). C opens with a feint, so its raise is the long one. The
+ * slam's fastest motion is its RAISE, so its drop is the hand's apex and its
+ * contact the hand reaching the floor (rig.test.ts pins the take they fit).
  */
 export const STRIKE_TIMING: Record<StrikeClip, StrikeTiming> = {
   strikeA: { drop: 0.143, contact: 0.238 },
   strikeB: { drop: 0.128, contact: 0.213 },
   strikeC: { drop: 0.3, contact: 0.417 },
+  heavy: { drop: 0.25, contact: 0.423 },
+  slam: { drop: 0.143, contact: 0.314, raiseShare: 0.8, raiseMin: 0.2 },
 };
 /** Share of the wind-up the raise gets. The drop gets the rest, so it snaps. */
 const STRIKE_RAISE_SHARE = 0.7;
@@ -343,9 +375,10 @@ export function strikePace(clipSeconds: number, t: StrikeTiming, windupSeconds?:
     const r = actionRatio(clipSeconds, beatSeconds);
     return { raise: r, drop: r, follow: r };
   }
-  const clamp = (v: number, max: number) => Math.min(max, Math.max(ACTION_RATIO_MIN, v));
+  const clamp = (v: number, max: number, min = ACTION_RATIO_MIN) => Math.min(max, Math.max(min, v));
   const rest = (beatSeconds ?? 0) - windupSeconds;
-  const raise = clamp((clipSeconds * t.drop) / (windupSeconds * STRIKE_RAISE_SHARE), ACTION_RATIO_MAX);
+  const raise = clamp((clipSeconds * t.drop) / (windupSeconds * (t.raiseShare ?? STRIKE_RAISE_SHARE)),
+    ACTION_RATIO_MAX, t.raiseMin);
   // The drop gets what the raise left: a capped raise (C's feint) makes it snap harder.
   const left = Math.max(1e-6, windupSeconds - (clipSeconds * t.drop) / raise);
   return {
@@ -927,7 +960,7 @@ const WEAPON_HAND: ReadonlySet<string> = new Set([
 ]);
 
 /** Attacks: a reaction never interrupts one, and one always cuts a reaction short. */
-const ACTION_CLIPS: readonly RigClip[] = ["cast", "bow", ...STRIKE_CLIPS];
+const ACTION_CLIPS: readonly RigClip[] = ["cast", "bow", ...MELEE_CLIPS];
 
 /** Clips that layer over locomotion instead of replacing it. */
 const UPPER_BODY_CLIPS: ReadonlySet<RigClip> = new Set<RigClip>([...ACTION_CLIPS, ...REACTION_CLIPS]);
@@ -960,7 +993,7 @@ export const HIPS_BOB: Record<RigClip, number> = {
   idle: 1, walk: 0.65, run: 0.65, walkBack: 0.65,
   runBack: 0.65, runBackL: 0.65, runBackR: 0.65,
   walkStrafeL: 0.65, walkStrafeR: 0.65, runStrafeL: 0.65, runStrafeR: 0.65,
-  walkFwdL: 0.65, walkFwdR: 0.65, walkBackL: 0.65, walkBackR: 0.65, cast: 1, bow: 1, strikeA: 1, strikeB: 1, strikeC: 1, hit: 1, drink: 1, open: 1, roll: 1,
+  walkFwdL: 0.65, walkFwdR: 0.65, walkBackL: 0.65, walkBackR: 0.65, cast: 1, bow: 1, strikeA: 1, strikeB: 1, strikeC: 1, heavy: 1, slam: 1, hit: 1, drink: 1, open: 1, roll: 1,
 };
 
 /**
@@ -974,6 +1007,11 @@ export const IDLE_LEG_BREATH = 0.4;
  * idle stance (`swayOnto`). The whole take lunges and crouches 30cm deep.
  */
 export const STRIKE_LEG_SHARE = 0.15;
+/**
+ * The slam keeps its whole crouch: the 21cm the pelvis sinks is what puts the
+ * fist on the floor, and at the shared 0.15 it stopped 28cm short of it.
+ */
+const STRIKE_LEG_SHARE_OF: Partial<Record<StrikeClip, number>> = { slam: 1 };
 export const IDLE_CALM_BONES: ReadonlySet<string> = new Set([
   HIPS_BONE, "thigh_l", "calf_l", "foot_l", "ball_l", "thigh_r", "calf_r", "foot_r", "ball_r",
 ]);
@@ -1631,7 +1669,7 @@ export class RigActor {
    */
   playStrike(seconds?: number, releaseSeconds?: number, skillId?: string): void {
     this.strikeSkill = skillId;
-    const clip = STRIKE_CLIPS[this.nextStrikeIndex]!;
+    const clip = strikeClipFor(skillId, this.nextStrikeIndex, (c) => this.groups.has(c));
     const group = this.groups.get(clip);
     if (!group) return;
     this.stopReactions();
@@ -1658,7 +1696,7 @@ export class RigActor {
     });
     this.strike = { clip, group, legs, pace, timing };
     this.strikeObserver ??= this.scene.onBeforeAnimationsObservable.add(this.paceStrike);
-    this.nextStrikeIndex = (this.nextStrikeIndex + 1) % STRIKE_CLIPS.length;
+    if ((STRIKE_CLIPS as readonly StrikeClip[]).includes(clip)) this.nextStrikeIndex = (this.nextStrikeIndex + 1) % STRIKE_CLIPS.length;
   }
 
   /**
@@ -1762,7 +1800,7 @@ export class RigActor {
 
   /** Cancel a strike when the actor is removed or otherwise reset. */
   stopStrike(): void {
-    for (const strike of STRIKE_CLIPS) this.groups.get(strike)?.stop();
+    for (const strike of MELEE_CLIPS) this.groups.get(strike)?.stop();
     this.stopStrikeLegs();
   }
 
@@ -2090,13 +2128,13 @@ export class RigActor {
     // A standing strike sways off the idle's first pose and ends on it; a bone the
     // idle does not key stands at its rest.
     const idleTake = loaded.anims.animationGroups.find((g) => g.name === CLIP_NAME.idle);
-    const strikeSway = (a: Animation, bone: Node): Animation => {
+    const strikeSway = (clip: StrikeClip) => (a: Animation, bone: Node): Animation => {
       const keyed = idleTake?.targetedAnimations.find((t) => t.target === bone && t.animation.targetProperty === a.targetProperty);
       const node = bone as TransformNode;
       const anchor = keyed
         ? keyed.animation.evaluate(idleTake!.from) as Quaternion | Vector3
         : a.targetProperty === ROTATION ? node.rotationQuaternion ?? Quaternion.FromEulerVector(node.rotation) : node.position;
-      return swayOnto(a, anchor, STRIKE_LEG_SHARE);
+      return swayOnto(a, anchor, STRIKE_LEG_SHARE_OF[clip] ?? STRIKE_LEG_SHARE);
     };
     for (const clip of Object.keys(CLIP_NAME) as RigClip[]) {
       const source = loaded.anims.animationGroups.find((g) => g.name === CLIP_NAME[clip]);
@@ -2148,8 +2186,8 @@ export class RigActor {
       const group = retarget(`${this.host.name}-${clip}`, (bone) =>
         !upperOnly || !(LOWER_BODY.has(bone) || (WEAPON_HAND.has(bone) && clip !== "bow")));
       if (group) this.groups.set(clip, group);
-      const legs = (STRIKE_CLIPS as readonly RigClip[]).includes(clip)
-        ? retarget(`${this.host.name}-${clip}-legs`, (bone) => LOWER_BODY.has(bone), strikeSway)
+      const legs = (MELEE_CLIPS as readonly RigClip[]).includes(clip)
+        ? retarget(`${this.host.name}-${clip}-legs`, (bone) => LOWER_BODY.has(bone), strikeSway(clip as StrikeClip))
         : null;
       if (legs) this.strikeLegs.set(clip, legs);
     }
