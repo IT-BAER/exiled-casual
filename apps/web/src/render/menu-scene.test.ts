@@ -3,7 +3,8 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Matrix, NullEngine, PointLight, Scene, Vector3 } from "@babylonjs/core";
 import { CLASS_IDS } from "@exiled/rules";
-import { BASE_LOOKS, SLOTS, resetPlayerRig } from "./rig";
+import { characterClass } from "@exiled/content-runtime";
+import { SLOTS, resetPlayerRig, type Body } from "./rig";
 import { createMenuCamera, FEET, FEET_IMAGE, floorImageY, frameCamera, lightHall, shadowReachImageY } from "./menu-scene";
 import { looksForClass } from "../menu/class-looks";
 
@@ -16,15 +17,16 @@ afterEach(() => {
 });
 
 /**
- * The select screen dresses the rig by class. Every class shares the one
- * wired body, so `rig.test.ts` pinning that look exists in the wardrobe is
- * the whole guarantee; this pins that the menu asks for the same look.
+ * The select screen dresses the rig by class, each on its own body's wardrobe,
+ * so `rig.test.ts` pinning the looks in each file is the whole guarantee; this
+ * pins that the menu asks for the same looks, from the right file.
  */
 describe("class looks", () => {
   const MODELS = fileURLToPath(new URL("../../public/models/", import.meta.url));
-  /** Every `slot.look.part` name the wardrobe actually ships. */
-  const names = (() => {
-    const glb = readFileSync(`${MODELS}wardrobe.glb`);
+  const FILE: Record<Body, string> = { male: "wardrobe.glb", female: "wardrobe-female.glb" };
+  /** Every `slot.look.part` name a body's wardrobe actually ships. */
+  const namesOf = (body: Body) => {
+    const glb = readFileSync(`${MODELS}${FILE[body]}`);
     // The JSON chunk of a binary glTF starts at byte 20 and is length-prefixed.
     const jsonLength = glb.readUInt32LE(12);
     const json = JSON.parse(glb.subarray(20, 20 + jsonLength).toString("utf8")) as {
@@ -34,15 +36,17 @@ describe("class looks", () => {
     return [...(json.meshes ?? []), ...(json.nodes ?? [])]
       .map((n) => n.name ?? "")
       .filter((n) => n.length > 0);
-  })();
+  };
 
-  it("the wardrobe was actually read", () => {
-    expect(names.length).toBeGreaterThan(10);
+  it("the wardrobes were actually read", () => {
+    expect(namesOf("male").length).toBeGreaterThan(10);
+    expect(namesOf("female").length).toBeGreaterThan(10);
   });
 
-  it("every class resolves to geometry the wardrobe ships", () => {
+  it("every class resolves to geometry its body's wardrobe ships", () => {
     for (const classId of CLASS_IDS) {
       const looks = looksForClass(classId);
+      const names = namesOf(characterClass(classId).body);
       for (const slot of SLOTS) {
         const look = looks[slot];
         if (look === null) continue;
@@ -61,7 +65,7 @@ describe("class looks", () => {
       const looks = looksForClass(classId);
       for (const slot of ["helmet", "chest", "gloves", "boots"] as const) expect(looks[slot], classId).toBe(family[classId]);
       expect(looks.weapon1, classId).not.toBeNull();
-      expect(looks.base).toBe(BASE_LOOKS.base);
+      expect(looks.base).toBe(characterClass(classId).body);
     }
   });
 

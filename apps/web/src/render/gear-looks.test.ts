@@ -19,6 +19,12 @@ describe("dressing the character from what he has equipped", () => {
     expect(looks.base).toBe("male");
   });
 
+  it("stands the same gear on whichever body it is handed", () => {
+    const equipment = { body: { baseId: "base.ember_robe" }, helmet: { baseId: "base.ember_cowl" } };
+    const hers = looksForEquipment(equipment, "female");
+    expect(hers).toEqual({ ...looksForEquipment(equipment), base: "female" });
+  });
+
   it("shows the broadsword in the main hand", () => {
     expect(looksForEquipment({ weapon1: { baseId: "base.ironsworn_broadsword" } }).weapon1).toBe("broadsword");
   });

@@ -134,8 +134,8 @@ export const FX_PREVIEWS: readonly FxPreview[] = [...SKILLS.values()].flatMap((s
 
 /** A class head to foot, through the same base -> look table play dresses from. */
 export function classPreset(classId: string): Looks {
-  const gear = characterClass(classId).startingGear;
-  return looksForEquipment(Object.fromEntries(Object.entries(gear).map(([slot, baseId]) => [slot, { baseId }])));
+  const { startingGear: gear, body } = characterClass(classId);
+  return looksForEquipment(Object.fromEntries(Object.entries(gear).map(([slot, baseId]) => [slot, { baseId }])), body);
 }
 
 /** "Rig|Dance_Loop" -> "Dance Loop". */

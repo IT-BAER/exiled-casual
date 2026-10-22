@@ -2,10 +2,11 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect, afterEach } from "vitest";
-import { Animation, FreeCamera, LoadAssetContainerAsync, Mesh, NullEngine, Quaternion, TransformNode, Vector3 } from "@babylonjs/core";
+import { Animation, FreeCamera, LoadAssetContainerAsync, Mesh, NullEngine, Quaternion, TransformNode, Vector3, type Node, type Scene } from "@babylonjs/core";
 import { createScene } from "./engine";
 import { ARROW_LENGTH } from "./skill-fx";
 import { makeMesh } from "./meshes";
+import { GEAR_LOOKS } from "./gear-looks";
 import {
   actionRatio,
   ACTION_RATIO_MAX,
@@ -43,6 +44,7 @@ import {
   attachRig,
   loadPlayerRig,
   resetPlayerRig,
+  BODIES,
   speedRatioFor,
   BASE_LOOKS,
   NO_LOOKS,
@@ -564,10 +566,16 @@ describe("what worn gear hides of the body", () => {
   });
 });
 
-describe("wardrobe asset", () => {
+// One body per file, each on its own skeleton and wearing every gear look.
+const WARDROBES = [
+  { file: "wardrobe.glb", body: "male", root: "Armature" },
+  { file: "wardrobe-female.glb", body: "female", root: "Armature_female" },
+] as const;
+
+describe.each(WARDROBES)("wardrobe asset $file", ({ file, body, root }) => {
   // Blender's unpacked output: this suite reads raw float accessors, and the
   // served copy is meshopt-packed. The loader-driven suites below read that one.
-  const glb = readFileSync(fileURLToPath(new URL("../../../../assets/characters/wardrobe.glb", import.meta.url)));
+  const glb = readFileSync(fileURLToPath(new URL(`../../../../assets/characters/${file}`, import.meta.url)));
   const json = JSON.parse(
     glb.subarray(20, 20 + glb.readUInt32LE(12)).toString("utf8"),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -584,21 +592,11 @@ describe("wardrobe asset", () => {
   json.buffers0Len = (glb.readUInt32LE(12) + 3 & ~3) + 8;
   const skinned = json.nodes.filter((n) => n.skin !== undefined).map((n) => n.name);
 
-  it("ships the two base bodies and the rigid gear, and nothing else", () => {
+  it("ships its one base body and the rigid gear, and nothing else", () => {
     const meshNames = json.meshes.map((m) => m.name).sort();
     expect(meshNames).toEqual([
-      "base.female.body", "base.female.brows", "base.female.eyes", "base.female.hair",
-      "base.female.torso", "base.female.hand_l", "base.female.hand_r",
-      "base.female.foot_l", "base.female.foot_r",
-      "base.female.arm_l", "base.female.arm_r", "base.female.collar",
-      "base.female.neck",
-      "base.female.leg_l", "base.female.leg_r", "base.female.shin_l", "base.female.shin_r",
-      "base.male.body", "base.male.brows", "base.male.eyes", "base.male.hair",
-      "base.male.torso", "base.male.hand_l", "base.male.hand_r",
-      "base.male.foot_l", "base.male.foot_r",
-      "base.male.arm_l", "base.male.arm_r", "base.male.collar",
-      "base.male.neck",
-      "base.male.leg_l", "base.male.leg_r", "base.male.shin_l", "base.male.shin_r",
+      ...["body", "brows", "eyes", "hair", "torso", "hand_l", "hand_r", "foot_l", "foot_r",
+        "arm_l", "arm_r", "collar", "neck", "leg_l", "leg_r", "shin_l", "shin_r"].map((p) => `base.${body}.${p}`),
       "helmet.ironsworn.helm", "helmet.stalker.hood", "helmet.ember.cowl", "helmet.ember.locks", "weapon1.emberwand.mesh", "weapon2.buckler.mesh",
       "weapon1.ironswornhammer.mesh", "weapon1.stalkerbow.mesh", "weapon1.broadsword.mesh", "weapon2.towershield.mesh",
       "chest.ironsworn.cuirass", "chest.ironsworn.gorget", "chest.ironsworn.backing",
@@ -897,15 +895,12 @@ describe("wardrobe asset", () => {
     expect(right.x[1]! * left.x[0]!).toBeLessThan(0);
   });
 
-  it("rides a 65-bone female and a male with 192 skirt joints under his pelvis", () => {
-    expect(json.skins).toHaveLength(2);
-    const chainCounts = json.skins.map((skin) => {
-      const names = skin.joints.map((j) => json.nodes[j]!.name);
-      const chains = names.filter((n) => n.startsWith("skirt_"));
-      expect(names.length - chains.length).toBe(65);
-      return chains.length;
-    });
-    expect(chainCounts.sort((a, b) => a - b)).toEqual([0, SKIRT_CHAINS * SKIRT_JOINTS]);
+  it("rides one 65-bone skeleton with 192 skirt joints under its pelvis", () => {
+    expect(json.skins).toHaveLength(1);
+    const names = json.skins[0]!.joints.map((j) => json.nodes[j]!.name);
+    const chains = names.filter((n) => n.startsWith("skirt_"));
+    expect(names.length - chains.length).toBe(65);
+    expect(chains).toHaveLength(SKIRT_CHAINS * SKIRT_JOINTS);
   });
 
   /**
@@ -1005,8 +1000,9 @@ describe("wardrobe asset", () => {
   /**
    * The robe's generated donor wears trousers under the skirt. Handed to the
    * chains they hang off the pelvis, so a leg steps out of its own trouser
-   * tube and the hem ends beside the foot. Below the knee the two are 15-18 cm
-   * apart at bind with nothing between, so no chained vertex may sit closer.
+   * tube and the hem ends beside the foot. At bind his trouser cloth reaches
+   * 13.8 cm off the shin and her skirt's flank comes to 14.4 cm at the knee, so
+   * no chained vertex may sit within 14 cm.
    * The coat's cloth stops at the knee, where its hem hugs the calf's head.
    */
   it("leaves the trousers under the robe on the legs", () => {
@@ -1029,7 +1025,7 @@ describe("wardrobe asset", () => {
       }
       if (!json.nodes[skin.joints[joints[v * 4 + best]!]!]!.name.startsWith("skirt_")) continue;
       const p = [pos[v * 3]!, pos[v * 3 + 1]!, pos[v * 3 + 2]!];
-      if (shins.some(([a, b]) => toSegment(p, a, b) < 0.15)) onShin += 1;
+      if (shins.some(([a, b]) => toSegment(p, a, b) < 0.14)) onShin += 1;
     }
     expect(onShin, meshName).toBe(0);
   });
@@ -1099,7 +1095,8 @@ describe("wardrobe asset", () => {
 
 
   it("carries every look the code can ask for", () => {
-    for (const looks of [BASE_LOOKS, NO_LOOKS]) {
+    const gear = Object.values(GEAR_LOOKS).map(({ slot, look }) => ({ ...NO_LOOKS, [slot]: look }));
+    for (const looks of [{ ...BASE_LOOKS, base: body }, NO_LOOKS, ...gear]) {
       for (const slot of SLOTS) {
         const look = looks[slot];
         if (look === null) continue;
@@ -1109,9 +1106,9 @@ describe("wardrobe asset", () => {
     }
   });
 
-  it("names the two skeleton roots the loader keys off of", () => {
+  it("names the one skeleton root the loader keys off of", () => {
     const roots = json.nodes.filter((n) => n.name === "Armature" || n.name === "Armature_female");
-    expect(roots.map((n) => n.name).sort()).toEqual(["Armature", "Armature_female"]);
+    expect(roots.map((n) => n.name)).toEqual([root]);
   });
 
   it("skins every part, so no piece floats free of a rig", () => {
@@ -1523,36 +1520,28 @@ class NodeFileReader {
 describe("indexRigSubtree against the real loader", () => {
   const MODELS = fileURLToPath(new URL("../../public/models/", import.meta.url));
 
-  it("indexes the male subtree and switches the female body off", async () => {
+  it.each(WARDROBES)("indexes $body's subtree in $file", async ({ file, body, root }) => {
     const original = (globalThis as { FileReader?: unknown }).FileReader;
     (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
     engine = new NullEngine();
     const { scene } = createScene(engine);
     try {
-      const bytes = readFileSync(`${MODELS}wardrobe.glb`);
-      const file = new File([bytes], "wardrobe.glb", { type: "model/gltf-binary" });
-      const container = await LoadAssetContainerAsync(file, scene);
+      const bytes = readFileSync(`${MODELS}${file}`);
+      const container = await LoadAssetContainerAsync(new File([bytes], file, { type: "model/gltf-binary" }), scene);
       const entries = container.instantiateModelsToScene((n) => n, false, {
         doNotInstantiate: true,
       });
 
-      const byName = indexRigSubtree(entries.rootNodes);
+      const byName = indexRigSubtree(entries.rootNodes, root);
 
-      // The male body's parts and his bones, or the runtime has nothing to
-      // dress and no skeleton to drive.
+      // The body's parts and its bones, or the runtime has nothing to dress and
+      // no skeleton to drive.
       for (const part of ["body", "brows", "eyes", "hair"]) {
-        expect(byName.has(`base.male.${part}`), `base.male.${part}`).toBe(true);
+        expect(byName.has(`base.${body}.${part}`), `base.${body}.${part}`).toBe(true);
       }
       expect(byName.has("pelvis")).toBe(true);
       expect(byName.has("hand_r")).toBe(true);
-      // Her skeleton must not be indexed: both carry the same 65 bone names and
-      // whichever landed second would silently own the animation.
-      expect(byName.has("base.female.body")).toBe(false);
-
-      const enabled = (name: string): boolean =>
-        scene.meshes.find((m) => m.name === name)?.isEnabled() ?? false;
-      expect(enabled("base.male.body")).toBe(true);
-      expect(enabled("base.female.body")).toBe(false);
+      expect(scene.meshes.find((m) => m.name === `base.${body}.body`)?.isEnabled()).toBe(true);
 
       // A skinned piece's bounds are its bind pose: a hanging hand leaves the
       // T-pose box and the gauntlet is culled while the forearm is on screen.
@@ -1567,6 +1556,61 @@ describe("indexRigSubtree against the real loader", () => {
       (globalThis as { FileReader?: unknown }).FileReader = original;
     }
   });
+});
+
+describe("a body is its own wardrobe", () => {
+  const MODELS = fileURLToPath(new URL("../../public/models/", import.meta.url));
+  const file = (name: string) => new File([readFileSync(`${MODELS}${name}`)], name, { type: "model/gltf-binary" });
+  const shown = (scene: Scene, prefix: string) => scene.meshes.some((m) => m.name.startsWith(prefix) && m.isEnabled());
+  /** The skeleton root over a node, by its import name. */
+  const rootOf = (node: Node): string => (node.parent ? rootOf(node.parent) : node.name);
+  const under = (node: Node, name: string): boolean => node.name.startsWith(name) || (node.parent ? under(node.parent, name) : false);
+  async function withFiles<T>(run: () => Promise<T>): Promise<T> {
+    const original = (globalThis as { FileReader?: unknown }).FileReader;
+    (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
+    try {
+      return await run();
+    } finally {
+      (globalThis as { FileReader?: unknown }).FileReader = original;
+    }
+  }
+
+  it("loads only the bodies asked for, and drives hers on her own skeleton", () => withFiles(async () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    await loadPlayerRig(scene, ["female"], { anims: file("anim-library.glb"), wardrobes: { female: file("wardrobe-female.glb") } });
+    expect(isRigReady(scene, "female")).toBe(true);
+    expect(isRigReady(scene, "male")).toBe(false);
+    expect(attachRig(scene, new Mesh("him", scene))).toBeNull();
+
+    const rig = attachRig(scene, new Mesh("her", scene), "female")!;
+    rig.setLooks({ ...BASE_LOOKS, base: "female", helmet: "ember", chest: "ember" });
+    rig.standSettled();
+    expect(shown(scene, "base.female.body")).toBe(true);
+    expect(shown(scene, "chest.ember.robe")).toBe(true);
+    expect(shown(scene, "base.female.torso")).toBe(false);
+    const idle = scene.animationGroups.find((g) => g.name === "her-idle")!;
+    const targets = idle.targetedAnimations.map((t) => t.target as Node);
+    expect(targets.length).toBeGreaterThan(0);
+    for (const t of targets) expect(under(t, "Armature_female"), `${t.name} under ${rootOf(t)}`).toBe(true);
+  }));
+
+  it("re-dresses onto the other body when the base look names it", () => withFiles(async () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    await loadPlayerRig(scene, BODIES, {
+      anims: file("anim-library.glb"),
+      wardrobes: { male: file("wardrobe.glb"), female: file("wardrobe-female.glb") },
+    });
+    const rig = attachRig(scene, new Mesh("hero", scene))!;
+    rig.setLooks({ ...BASE_LOOKS, chest: "stalker" });
+    expect(shown(scene, "base.male.body")).toBe(true);
+
+    rig.setLooks({ ...BASE_LOOKS, base: "female", chest: "stalker" });
+    expect(shown(scene, "base.female.body")).toBe(true);
+    expect(shown(scene, "chest.stalker.coat")).toBe(true);
+    expect(shown(scene, "base.male.body")).toBe(false);
+  }));
 });
 
 describe("a bolt leaves the weapon's tip", () => {
@@ -2009,7 +2053,7 @@ describe("a sword strike moves the legs only while standing", () => {
     scene.useConstantAnimationDeltaTime = true;
     new FreeCamera("eye", new Vector3(0, 2, -6), scene);
     const file = (name: string) => new File([readFileSync(`${MODELS}${name}`)], name, { type: "model/gltf-binary" });
-    await loadPlayerRig(scene, { anims: file("anim-library.glb"), wardrobe: file("wardrobe.glb") });
+    await loadPlayerRig(scene, ["male"], { anims: file("anim-library.glb"), wardrobes: { male: file("wardrobe.glb") } });
     const rig = attachRig(scene, new Mesh("hero", scene));
     expect(rig).not.toBeNull();
     /** How far a bone sits off what a locomotion clip keys for it at that clip's current frame. */
@@ -2234,7 +2278,7 @@ describe("the robe hangs still while he stands and breathes", () => {
     scene.useConstantAnimationDeltaTime = true;
     new FreeCamera("eye", new Vector3(0, 2, -6), scene);
     const file = (name: string) => new File([readFileSync(`${MODELS}${name}`)], name, { type: "model/gltf-binary" });
-    await loadPlayerRig(scene, { anims: file("anim-library.glb"), wardrobe: file("wardrobe.glb") });
+    await loadPlayerRig(scene, ["male"], { anims: file("anim-library.glb"), wardrobes: { male: file("wardrobe.glb") } });
     const rig = attachRig(scene, new Mesh("hero", scene))!;
     rig.setLooks({ ...BASE_LOOKS, helmet: "ember", chest: "ember", boots, gloves: "ember" });
     rig.standSettled();

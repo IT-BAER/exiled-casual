@@ -10,6 +10,15 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+### Changed
+
+- The Emberbound is a woman, as her class card always showed: she has her own
+  body, and every piece of armour is fitted to it.
+
+### Fixed
+
+- Chest armour no longer leaves small loose shards floating beside the arms.
+
 ## [0.4.5] - 2026-10-22
 
 ### Fixed

@@ -166,6 +166,14 @@ ember the BlenderKit "Wool fabric" (`d5ca8a6b-dd40-4f0c-a5c7-e030af0912c5`), bot
 levelled to grey, box-projected at 512 px and tinted by vertex colour (shell, lining,
 hem). Outputs `hood-stalker-v2.glb`, `hood-ember-v2.glb`.
 
+`prep_hood.py -- female` builds the same two hoods over her wardrobe, into
+`hood-stalker-v2-female.glb` and `hood-ember-v2-female.glb`. The pack ships a male
+hood only, so `retarget` carries it from the pack's rest onto hers through its own
+weights (each vertex moves as its bones move between the two rests) before the cut
+and drape run unchanged. Her collar is chest-sized against her neck, so the gorget
+ring is held to `SUIT_GORGET_RING_MIN` (0.13 m) in `build_wardrobe.py`; at 2.2 neck
+radii it missed her collar and left a horn standing over the hood cut.
+
 ## Held weapons (`weapon1.ironswornhammer.mesh`, `weapon1.stalkerbow.mesh`, `weapon1.broadsword.mesh`)
 
 The donors are built by `tools/prep_held_weapons.py` into

@@ -961,10 +961,9 @@ export type ClassArchetype = (typeof CLASS_ARCHETYPES)[number];
 /**
  * A playable class.
  *
- * Cosmetic in this slice: it picks a name, a portrait and starting gear, never
- * a number. The character is one base body on one 65-joint rig, so "class"
- * carries no wardrobe of its own — three classes are three names and three
- * item loadouts on the same figure, not three silhouettes.
+ * Cosmetic in this slice: it picks a name, a body, a portrait and starting gear,
+ * never a number. Both bodies drive the same 65-joint skeleton and wear the same
+ * gear looks, so "class" carries no wardrobe of its own.
  *
  * Borrowed from PoE1's character select, where every roster row carries a class
  * name under it. The names and fiction here are original.
@@ -975,6 +974,8 @@ export interface CharacterClass {
   /** One line of flavour, shown under the name while creating a character. */
   blurb: string;
   archetype: ClassArchetype;
+  /** Which base body the class is played on: its own wardrobe file on the client. */
+  body: "male" | "female";
   /**
    * Item bases the character is created wearing, keyed by equipment slot id.
    * An absent slot means the character starts with that slot empty, which the

@@ -66,7 +66,7 @@ describe("class presets", () => {
         expect(looks[slot], `${cls.id} ${slot}`).not.toBeNull();
         expect(vocab[slot], `${cls.id} ${slot}`).toContain(looks[slot]);
       }
-      expect(looks.base).toBe("male");
+      expect(looks.base).toBe(cls.body);
     }
   });
 });

@@ -275,6 +275,7 @@ export function App(): React.ReactElement {
         >
           <GameView
             characterId={screen.characterId}
+            classId={roster.characters.find((c) => c.id === screen.characterId)?.classId}
             fresh={screen.fresh}
             settings={settings}
             onSettingsChange={changeSettings}
