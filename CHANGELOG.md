@@ -10,14 +10,27 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+### Added
+
+- Wading through the Strand's shallows stirs the sea: waves ring out from every
+  step, foam trails behind the legs, and each footfall throws a splash.
+- Ground Slam winds up and drives its fist into the floor as the shockwave
+  lands, and Heavy Strike and Ground Slam each have their own animation.
+- The braziers on the main menu burn the same flame as the braziers in the game.
+
 ### Changed
 
 - The Emberbound is a woman, as her class card always showed: she has her own
   body, and every piece of armour is fitted to it.
+- Brazier flames burn in visible licks across the coals, with embers rising
+  through them.
 
 ### Fixed
 
 - Chest armour no longer leaves small loose shards floating beside the arms.
+- The surf line no longer shows a straight seam where two stretches of shore
+  meet.
+- The Strand's rocks look like wet stone at the waterline instead of wet sand.
 
 ## [0.4.5] - 2026-10-22
 
