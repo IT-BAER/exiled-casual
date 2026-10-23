@@ -435,6 +435,22 @@ describe("areaCollision", () => {
     }
   });
 
+  it("map: a container steps out of a pool that floods its anchor", () => {
+    const { world, session, layout } = mapFixture({ mapSeed: 7 });
+    const g = layout.grid;
+    const water = new Uint8Array(g.cols * g.rows);
+    const anchor = layout.objectiveAnchors.find((a) => a.id.startsWith("reward."))!;
+    const c0 = Math.round((anchor.x - g.originX) / g.cellSize), r0 = Math.round((anchor.y - g.originY) / g.cellSize);
+    for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) water[(r0 + dr) * g.cols + c0 + dc] = 1;
+    g.water = water;
+    buildArea(world, "map", session, layout);
+    for (const e of world.query("container")) {
+      const p = world.get<Position>(e, "position")!;
+      const cx = Math.round((p.x / 1000 - g.originX) / g.cellSize), cy = Math.round((p.y / 1000 - g.originY) / g.cellSize);
+      expect(water[cy * g.cols + cx], `container at ${cx},${cy}`).toBe(0);
+    }
+  });
+
   /**
    * The containers stand up after the generator picked where the fights are, so
    * one could be dropped on a body — and a body inside a blocker cannot move in

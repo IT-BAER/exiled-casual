@@ -537,7 +537,8 @@ function containerSpots(layout: AreaLayout): Map<string, { x: number; y: number 
     let at = { x: a.x, y: a.y };
     for (const [dc, dr] of RING_NEAREST_FIRST) {
       const cx = c0 + dc, cy = r0 + dr;
-      if (cx < 0 || cy < 0 || cx >= g.cols || cy >= g.rows || g.cells[cy * g.cols + cx] !== 1) continue;
+      // A fen pool is walkable, but no place to stand a chest.
+      if (cx < 0 || cy < 0 || cx >= g.cols || cy >= g.rows || g.cells[cy * g.cols + cx] !== 1 || g.water?.[cy * g.cols + cx]) continue;
       const x = g.originX + cx * g.cellSize, y = g.originY + cy * g.cellSize;
       // The player's body only: a brute going round a crate is fine, a player shut out is not.
       if (shutsFloor(g, cx, cy, x, y, r, placed, [0.5])) continue;
