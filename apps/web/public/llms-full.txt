@@ -25,7 +25,7 @@ installed as a web app from the browser menu.
   prepared with modifiers before it is opened. Unexplored parts of the Atlas are fogged.
 - Procedurally generated maps across several biomes, assembled from authored chunks,
   plus an open coastal map (the Strand) with surf, wet sand, shells and wreckage.
-- Each map ends in a boss arena; one boss fights in two phases.
+- Each map ends in a boss arena; every boss fights in two phases.
 
 ## Combat
 
@@ -44,7 +44,7 @@ installed as a web app from the browser menu.
 
 ## Character growth
 
-- A passive tree of 239 nodes across eight disciplines.
+- A passive tree of 315 nodes across eight disciplines.
 - Each class starts at its own door into the tree. Notables open once most of their
   cluster is taken; travel bridges connect areas; keystones trade one stat for another.
 - Single passive points can be refunded.
