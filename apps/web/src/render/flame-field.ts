@@ -8,8 +8,8 @@
  * on x = z = 0, the coal face `COAL_Y` above the floor.
  */
 
-/** Height of the flame proper, knee-high on the player. */
-export const FLAME_H = 0.82;
+/** Height of the flame proper, below the player's knee. */
+export const FLAME_H = 0.64;
 /** The marched box: wider than the lip and taller than the flame, because the
  *  shader tears the edges and tips in from it and a box cut at the flame's own
  *  size clips a tongue into a straight edge. */
@@ -88,17 +88,17 @@ export const FLAME_GLSL = `
     // average out over the ray's depth and the flame melts into a ball.
     vec2 burn(vec2 xz, float y, vec2 side, float t, float sway) {
       float lat = dot(xz, side);
-      float n = fbm(vec2(lat * 3.2, y * 2.8 - t * 1.6));
-      float n2 = fbm(vec2(lat * 6.0 + 7.3, y * 5.0 - t * 2.4));
-      float wave = sin(y * 8.0 - t * 4.5 + lat * 2.5) * 0.12 * (0.2 + y);
-      vec2 s = xz + side * (-sway + (n - 0.5) * 0.5 + wave) * y;
+      float n = fbm(vec2(lat * 3.2, y * 2.8 - t * 1.1));
+      float n2 = fbm(vec2(lat * 6.0 + 7.3, y * 5.0 - t * 1.6));
+      float wave = sin(y * 8.0 - t * 3.2 + lat * 2.5) * 0.07 * (0.2 + y);
+      vec2 s = xz + side * (-sway + (n - 0.5) * 0.32 + wave) * y;
       // The foot spreads across most of the coal bed and keeps that width through
       // the lower body, narrowing only toward the tip, as a campfire does.
-      float w = 0.8 * (1.0 - y * y * 0.9) + 0.12 * (1.0 - smoothstep(0.0, 0.3, y));
+      float w = 0.7 * (1.0 - y * y * 0.9) + 0.1 * (1.0 - smoothstep(0.0, 0.3, y));
       float d = length(s) / max(w, 0.001);
       // Density falls with height squared, so the lower body stays a full mass
       // over the coals; falling linearly it thinned into a cone from the root.
-      float dens = (1.0 - d * d) * 1.1 - y * y * 1.42 + (n - 0.5) * 1.3 * (0.25 + y) + (n2 - 0.5) * 0.45;
+      float dens = (1.0 - d * d) * 1.1 - y * y * 1.42 + (n - 0.5) * 1.0 * (0.25 + y) + (n2 - 0.5) * 0.32;
       // The root rises out of the coal bed over its first 8 cm, which from above
       // is a rounded foot across the coals, not a line; it is full by the rim.
       dens *= smoothstep(0.0, 0.08, y);
@@ -113,12 +113,12 @@ export const FLAME_GLSL = `
       vec3 up = normalize(vec3(0.0, 1.0, 0.0) - rd * rd.y + vec3(0.0, 1e-4, 0.0));
       float u = dot(p, side) / HALF_W;
       float v = dot(p, up) / H;
-      float wave = sin(v * 6.0 - t * 4.0 + u * 1.5) * 0.45;
-      float r = 1.0 - abs(fbm(vec2(u * 5.0 + wave, v * 2.4 - t * 2.0)) * 2.0 - 1.0);
+      float wave = sin(v * 6.0 - t * 3.0 + u * 1.5) * 0.3;
+      float r = 1.0 - abs(fbm(vec2(u * 5.0 + wave, v * 2.4 - t * 1.4)) * 2.0 - 1.0);
       return r * r;
     }
     vec3 marchFlame(vec3 entry, vec3 rd, float t) {
-      float sway = (noise(vec2(t * 0.6, 3.1)) - 0.5) * 0.3;
+      float sway = (noise(vec2(t * 0.45, 3.1)) - 0.5) * 0.18;
       vec2 side = normalize(vec2(-rd.z, rd.x) + vec2(1e-6, 0.0));
       // Where the ray leaves the box: the nearer of the three far faces.
       vec3 safe = mix(vec3(1e-5), rd, step(1e-5, abs(rd)));
