@@ -48,6 +48,16 @@ const FOAM_GAIN = 60;
 /** A fen pool's share of that churn foam: its waves cannot run off up a beach,
  *  so a pack wading a few square metres would break the whole pool white. */
 export const FEN_CHURN_FOAM = 0.1;
+/** What a monster does to the fen: a pack of forty wades one pool at once. At
+ *  full `stir` its waves band the whole dark pool in glints; its leg foam stops
+ *  at `foam`, lace, because a pack fighting in place would pile it flat white. */
+export const FEN_MONSTER: MonsterWake = { stir: 0.25, foam: 1 };
+
+/** A monster's share of the waves it makes, and the most foam its legs lay. */
+export interface MonsterWake {
+  stir: number;
+  foam: number;
+}
 
 /** How far inland the last wash reaches (the sea strip's first band): sand past
  *  it never carries water, so a wave reflects there. */
@@ -171,8 +181,9 @@ export class WakeField {
   }
 
   /** Whiten the water round a point, up to `amount` at its centre: what legs
-   *  and feet churn up, whether or not the surface is moving fast there. */
-  foamAt(x: number, z: number, radius: number, amount: number): void {
+   *  and feet churn up, whether or not the surface is moving fast there. Never
+   *  past `most`, nor thinner than it already is. */
+  foamAt(x: number, z: number, radius: number, amount: number, most = 1): void {
     const N = WAKE_CELLS;
     const ci = (x - this.originX) / WAKE_CELL - 0.5;
     const cj = (z - this.originZ) / WAKE_CELL - 0.5;
@@ -185,7 +196,7 @@ export class WakeField {
         const dx = (i - ci) * WAKE_CELL, dz = (j - cj) * WAKE_CELL;
         const q = (dx * dx + dz * dz) * inv;
         if (q >= 1) continue;
-        this.foam[o] = Math.min(1, this.foam[o]! + amount * (1 - q) * (1 - q));
+        this.foam[o] = Math.max(this.foam[o]!, Math.min(most, this.foam[o]! + amount * (1 - q) * (1 - q)));
         this.stirred = true;
         this.asleep = false;
       }
@@ -331,7 +342,12 @@ const STEP_FOAM = 0.7;
 export class WakeStirrer {
   private readonly last = new Map<number, { x: number; z: number; walked: number; left: boolean }>();
 
-  constructor(private readonly field: WakeField, private readonly depth: WaterDepth) {}
+  /** `monster` tones down what a monster does to the water; the player's stays whole. */
+  constructor(
+    private readonly field: WakeField,
+    private readonly depth: WaterDepth,
+    private readonly monster: MonsterWake = { stir: 1, foam: 1 },
+  ) {}
 
   /** Stir for this frame; `out` is cleared and receives the feet that came down in water. */
   stir(bodies: readonly WakeBody[], dt: number, out: Footfall[]): void {
@@ -356,13 +372,15 @@ export class WakeStirrer {
       if (depth < WADE_FROM || moved < 1e-4 || dt <= 0) continue;
       const t = Math.min(1, (depth - WADE_FROM) / (WADE_FULL - WADE_FROM));
       const wet = t * t * (3 - 2 * t);
+      const stir = wet * (b.player ? 1 : this.monster.stir);
+      const most = b.player ? 1 : this.monster.foam;
       const speed = moved / dt;
       // A moving body is a moving trough: the bow wave and the V behind it are
       // what the wave equation makes of that, not something drawn.
-      this.field.push(b.x, b.z, b.radius * 0.8, -DRAG * speed * dt * wet);
+      this.field.push(b.x, b.z, b.radius * 0.8, -DRAG * speed * dt * stir);
       // White water round the legs, laid down where they are and fading behind:
       // a trail, not a halo that travels with him.
-      this.field.foamAt(b.x, b.z, b.radius * COLLAR_RADIUS, COLLAR_RATE * dt * wet * Math.min(1, speed / COLLAR_SPEED));
+      this.field.foamAt(b.x, b.z, b.radius * COLLAR_RADIUS, COLLAR_RATE * dt * wet * Math.min(1, speed / COLLAR_SPEED), most);
       was.walked += moved;
       const stride = Math.max(0.6, b.radius * 2.4);
       if (was.walked < stride) continue;
@@ -371,8 +389,8 @@ export class WakeStirrer {
       const ux = dx / moved, uz = dz / moved;
       const side = (was.left ? 1 : -1) * b.radius * 0.4;
       const fx = b.x - uz * side, fz = b.z + ux * side;
-      this.field.push(fx, fz, STEP_RADIUS, -STEP_DEPTH * wet);
-      this.field.foamAt(fx, fz, STEP_FOAM_RADIUS, STEP_FOAM * wet);
+      this.field.push(fx, fz, STEP_RADIUS, -STEP_DEPTH * stir);
+      this.field.foamAt(fx, fz, STEP_FOAM_RADIUS, STEP_FOAM * wet, most);
       out.push({ x: fx, z: fz, depth, dirX: ux, dirZ: uz, speed, player: b.player });
     }
     for (const id of this.last.keys()) if (!seen.has(id)) this.last.delete(id);

@@ -12,7 +12,7 @@ import {
 import type { Shoreline, WalkableGrid } from "@exiled/mapgen";
 import { dressFenWater } from "./fen-water";
 import { waterSplash } from "./splash";
-import { FEN_CHURN_FOAM, WAKE_CELLS, WakeField, WakeStirrer, shoreDepth, type Footfall, type WakeBody, type WaterDepth } from "./wake";
+import { FEN_CHURN_FOAM, FEN_MONSTER, WAKE_CELLS, WakeField, WakeStirrer, shoreDepth, type Footfall, type MonsterWake, type WakeBody, type WaterDepth } from "./wake";
 import {
   COAST_WATER,
   FEN_WATER,
@@ -101,7 +101,7 @@ function dropWake(): void {
 }
 
 /** Give `mat` a wake field over water `depth` deep, stirred by `stirSea`. */
-function attachWake(scene: Scene, mat: PBRMaterial, depth: WaterDepth, churnFoam?: number): void {
+function attachWake(scene: Scene, mat: PBRMaterial, depth: WaterDepth, churnFoam?: number, monster?: MonsterWake): void {
   const field = new WakeField(churnFoam);
   field.setDepth(depth);
   const bytes = new Uint8Array(WAKE_CELLS * WAKE_CELLS * 4);
@@ -113,7 +113,7 @@ function attachWake(scene: Scene, mat: PBRMaterial, depth: WaterDepth, churnFoam
   texture.wrapU = texture.wrapV = Texture.CLAMP_ADDRESSMODE;
   const wake: WaterWake = { texture, originX: field.originX, originZ: field.originZ };
   waterPlugin(mat)!.wake = wake;
-  liveWake = { scene, field, stirrer: new WakeStirrer(field, depth), bytes, texture, wake, mat };
+  liveWake = { scene, field, stirrer: new WakeStirrer(field, depth, monster), bytes, texture, wake, mat };
   // Built with the water, so its shaders compile behind the loading plate.
   waterSplash(scene).onLand = (x, z, size) => dropLanded(scene, x, z, size);
 }
@@ -550,7 +550,7 @@ export function buildSea(
       const cx = Math.round((x - originX) / cellSize), cy = Math.round((z - originY) / cellSize);
       if (cx < 0 || cy < 0 || cx >= cols || cy >= rows || !pool[cy * cols + cx]) return -Infinity;
       return (depthOfCell(cx, cy) + 0.5) * cellSize;
-    }, FEN_CHURN_FOAM);
+    }, FEN_CHURN_FOAM, FEN_MONSTER);
   }
   return { mesh, waterCells };
 }
