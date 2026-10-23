@@ -8,6 +8,7 @@ import { flaskTooltip } from "./flask-tooltip";
 import { playDropSound } from "../audio/drop-sound";
 import { playSfx } from "../audio/sfx";
 import { VENDOR_NAME, VENDOR_TITLE } from "../npc";
+import { keyCap } from "../settings";
 import { BAR_H, ORB_RISE } from "./Hud";
 import { CELL, CELL_VW, PANEL_PAD, PANEL_W } from "./layout";
 
@@ -1183,8 +1184,8 @@ export const InventoryPanel = React.memo(function InventoryPanel({
                 display: "flex", gap: 4, justifyContent: "center", alignItems: "flex-start",
               }}
             >
-              <Flask kind="life" hotkey={flaskKeys.life.toUpperCase()} {...(flasks ? { charges: { now: flasks.lifeCharges, max: flasks.lifeMax } } : {})} />
-              <Flask kind="mana" hotkey={flaskKeys.mana.toUpperCase()} {...(flasks ? { charges: { now: flasks.manaCharges, max: flasks.manaMax } } : {})} />
+              <Flask kind="life" hotkey={keyCap(flaskKeys.life)} {...(flasks ? { charges: { now: flasks.lifeCharges, max: flasks.lifeMax } } : {})} />
+              <Flask kind="mana" hotkey={keyCap(flaskKeys.mana)} {...(flasks ? { charges: { now: flasks.manaCharges, max: flasks.manaMax } } : {})} />
             </div>
             {PAPER_DOLL.map((s) => (
               <EquipSlot

@@ -249,6 +249,14 @@ describe("Hud", () => {
     expect(screen.getByTestId("skill-slot-5")).toHaveTextContent("F");
   });
 
+  it("captions a socket bound to an arrow key with its name, not the raw key", () => {
+    const keybinds = { ...DEFAULT_KEYBINDS_BY_MODE.wasd, skill1: "arrowup", flaskLife: "arrowdown" };
+    render(<Hud snapshot={makeSnap({})} skillBar={BAR} keybinds={keybinds} controlMode="wasd" />);
+    expect(screen.getByTestId("skill-slot-1")).toHaveTextContent("Up");
+    expect(screen.getByTestId("skill-slot-1")).not.toHaveTextContent("ARROWUP");
+    expect(screen.getByTestId("flask-life")).toHaveTextContent("Down");
+  });
+
   it("mouse mode: left click is Move and cannot be reassigned", () => {
     render(<Hud snapshot={makeSnap({})} skillBar={BAR} />);
     fireEvent.click(screen.getByTestId("skill-slot-6"));

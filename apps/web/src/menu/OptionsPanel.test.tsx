@@ -312,6 +312,14 @@ describe("keybinds tab", () => {
     expect(screen.getByRole("button", { name: /dodge roll key/i }).textContent).toBe("Space");
   });
 
+  it("names a two-word key in words, not as KeyboardEvent.key runs them together", () => {
+    const mouse = { ...DEFAULT_SETTINGS.ui.keybinds.mouse, skill1: "arrowup", skill2: "pagedown" };
+    setup({ ui: { ...DEFAULT_SETTINGS.ui, keybinds: { ...DEFAULT_SETTINGS.ui.keybinds, mouse } } });
+    openTab();
+    expect(screen.getByRole("button", { name: /skill 1 key/i }).textContent).toBe("Up");
+    expect(screen.getByRole("button", { name: /skill 2 key/i }).textContent).toBe("Page Down");
+  });
+
   it("rebinds on the next press in the keymap shown, leaving the other alone", () => {
     const { onChange } = setup();
     openTab();

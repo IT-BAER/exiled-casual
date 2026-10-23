@@ -10,7 +10,7 @@ import { SkillTooltip } from "./SkillTooltip";
 import { XpBar } from "./XpBar";
 import { TargetFrame } from "./TargetFrame";
 import { playDropSound } from "../audio/drop-sound";
-import { DEFAULT_KEYBINDS_BY_MODE, DEFAULT_SETTINGS, MOUSE_SLOT_BASE, MOVE_SOCKET, SKILL_ACTIONS, SKILL_SLOT_COUNT, type ControlMode, type Keybinds } from "../settings";
+import { DEFAULT_KEYBINDS_BY_MODE, DEFAULT_SETTINGS, MOUSE_SLOT_BASE, MOVE_SOCKET, SKILL_ACTIONS, SKILL_SLOT_COUNT, keyCap, type ControlMode, type Keybinds } from "../settings";
 import { VENDOR_NAME, VENDOR_TITLE } from "../npc";
 import type { FrameHook, Projector } from "./LootLabels";
 
@@ -181,7 +181,7 @@ function BarIconButton({ testId, art, label, hotkey, onClick }: {
   testId: string; art: string; label: string; hotkey: string; onClick?: () => void;
 }) {
   const [hover, setHover] = React.useState(false);
-  const name = `${label} (${hotkey.toUpperCase()})`;
+  const name = `${label} (${keyCap(hotkey)})`;
   return (
     <button
       type="button"
@@ -365,7 +365,7 @@ const PICK_TILE = 40;
 
 /** The key caption a socket index wears, matching the bar's own two rows. */
 function socketKeyLabel(i: number, keybinds: Keybinds): string {
-  return i >= MOUSE_SLOT_BASE ? MOUSE_KEYS[i - MOUSE_SLOT_BASE]! : keybinds[SKILL_ACTIONS[i]!].toUpperCase();
+  return i >= MOUSE_SLOT_BASE ? MOUSE_KEYS[i - MOUSE_SLOT_BASE]! : keyCap(keybinds[SKILL_ACTIONS[i]!]);
 }
 
 /** One choosable tile in the picker: art if the entry has any, else its initial. */
@@ -1363,7 +1363,7 @@ export function Hud({
           const max = f.kind === "life"
             ? snapshot.player.flasks.lifeMax
             : snapshot.player.flasks.manaMax;
-          return <Flask key={f.kind} kind={f.kind} hotkey={keybinds[f.action].toUpperCase()} charges={charges} max={max} />;
+          return <Flask key={f.kind} kind={f.kind} hotkey={keyCap(keybinds[f.action])} charges={charges} max={max} />;
         })}
       </div>
 

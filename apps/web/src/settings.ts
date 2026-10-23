@@ -133,6 +133,18 @@ export const DEFAULT_KEYBINDS_BY_MODE: Readonly<Record<ControlMode, Keybinds>> =
   },
 };
 
+/** Keys whose `KeyboardEvent.key` runs words together, by the name printed on the keyboard. */
+const KEY_NAMES: Readonly<Record<string, string>> = {
+  " ": "Space", arrowup: "Up", arrowdown: "Down", arrowleft: "Left", arrowright: "Right",
+  pageup: "Page Up", pagedown: "Page Down", capslock: "Caps Lock",
+};
+
+/** How a stored key reads on a keycap; unbound ("") reads as nothing. */
+export function keyCap(key: string): string {
+  if (key === "") return "";
+  return KEY_NAMES[key] ?? (key.length === 1 ? key.toUpperCase() : key[0]!.toUpperCase() + key.slice(1));
+}
+
 /** The map a caller with no settings falls back to. */
 export const DEFAULT_KEYBINDS: Keybinds = DEFAULT_KEYBINDS_BY_MODE.wasd;
 
