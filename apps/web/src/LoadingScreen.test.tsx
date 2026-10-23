@@ -4,6 +4,9 @@ import "@testing-library/jest-dom/vitest";
 import { render, screen, cleanup, fireEvent, act } from "@testing-library/react";
 import { LoadingScreen, axisEnd } from "./LoadingScreen";
 import { TIPS, pickTip } from "./tips";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
+import { BIOMES } from "@exiled/content-runtime";
 
 afterEach(cleanup);
 
@@ -73,6 +76,15 @@ describe("tips", () => {
     // Math.random() never returns 1, but a caller passing its own generator can.
     for (const r of [0, 0.5, 0.999999, 1]) {
       expect(TIPS).toContain(pickTip(() => r));
+    }
+  });
+});
+
+describe("the loading plates", () => {
+  // GameView asks for `<biome>.jpg`; a missing one is a blank screen on the way in.
+  it("ship one per biome and one for the hideout", () => {
+    for (const id of [...Object.keys(BIOMES), "hideout"]) {
+      expect(`${id}: ${existsSync(resolve(__dirname, "../public/textures/loading", `${id}.jpg`))}`).toBe(`${id}: true`);
     }
   });
 });

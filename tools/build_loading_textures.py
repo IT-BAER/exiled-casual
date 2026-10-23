@@ -37,7 +37,7 @@ OUT = ROOT / "apps" / "web" / "public" / "textures" / "loading"
 # Keyed by BIOME id, because that is what the client resolves the filename from
 # (`GameView` reads `base.biomeId`). "hideout" is not a biome and is the one
 # entry that is not in `BIOMES` — it is the area with no map base at all.
-PLATES = ["vaal_stone", "desert", "swamp", "forest", "hideout"]
+PLATES = ["vaal_stone", "desert", "swamp", "forest", "coast", "hideout"]
 
 # 1440p. Above this the file grows faster than the plate improves, and the plate
 # is behind a UI band and a gradient for most of its height.
