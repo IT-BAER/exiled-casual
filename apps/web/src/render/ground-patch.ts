@@ -32,7 +32,9 @@ export interface PatchSpec {
 /** Desert and coast have none: their plates were judged right alone and must not change. */
 export const PATCHES: Readonly<Record<string, PatchSpec>> = {
   "tileset.forest": { file: "patch_color.jpg", tile: 4, freq: 0.09, cover: 0.5, strength: 0.92, wet: 0, puddle: 0, tint: [1, 1, 1] },
-  "tileset.swamp": { file: "patch_color.jpg", tile: 4, freq: 0.08, cover: 0.55, strength: 0.9, wet: 0.7, puddle: 0.2, tint: [0.95, 1, 0.9] },
+  // No puddles: the swamp's standing water is its fen pools (sea.ts), and a
+  // painted mirror beside them reads as a second, older kind of water.
+  "tileset.swamp": { file: "patch_color.jpg", tile: 4, freq: 0.08, cover: 0.55, strength: 0.9, wet: 0.7, puddle: 0, tint: [0.95, 1, 0.9] },
   "tileset.vaal_stone": { file: "patch_color.jpg", tile: 3, freq: 0.13, cover: 0.38, strength: 0.75, wet: 0, puddle: 0, tint: [0.9, 1, 0.92] },
 };
 

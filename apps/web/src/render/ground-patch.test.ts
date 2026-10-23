@@ -21,4 +21,8 @@ describe("ground patches", () => {
     expect(PATCHES["tileset.desert"]).toBeUndefined();
     expect(PATCHES["tileset.coast"]).toBeUndefined();
   });
+
+  it("paints no standing water into a floor: the swamp's water is its fen pools", () => {
+    for (const [id, spec] of Object.entries(PATCHES)) expect(spec.puddle, id).toBe(0);
+  });
 });
