@@ -35,6 +35,8 @@ const REVEAL_RADIUS = 9;
  */
 const CELL_PX = 4;
 const FLOOR = "rgba(38,41,54,0.88)";
+/** A fen pool: walkable, so inside the silhouette, but read as water. */
+export const MINIMAP_WATER = "rgba(46,74,92,0.92)";
 /** The contour, PoE1's lavender rather than PoE2's cyan. */
 const WALL = "#8b8fb8";
 /** Contour thickness and corner rounding, in terrain pixels. */
@@ -53,6 +55,51 @@ function anchorColor(id: string): string {
   return ANCHOR_COLOR[id] ?? "#cfc6b0";
 }
 
+/** The cells `keep` picks as one rounded shape, opaque white; null without a 2D canvas. */
+function silhouette(grid: WalkableGrid, keep: (i: number) => boolean): HTMLCanvasElement | null {
+  const w = grid.cols * CELL_PX, h = grid.rows * CELL_PX;
+  const mask = document.createElement("canvas");
+  mask.width = w;
+  mask.height = h;
+  const mctx = mask.getContext("2d");
+  if (!mctx) return null;
+  mctx.fillStyle = "#fff";
+  for (let i = 0; i < grid.cols * grid.rows; i++) {
+    if (!keep(i)) continue;
+    const x = i % grid.cols, y = (i - (i % grid.cols)) / grid.cols;
+    mctx.fillRect(x * CELL_PX - 0.5, y * CELL_PX - 0.5, CELL_PX + 1, CELL_PX + 1);
+  }
+
+  // Blur, then cut at half alpha: the blur is what rounds the corners and the
+  // cut is what stops the shape fading out into a smudge.
+  const blurred = document.createElement("canvas");
+  blurred.width = w;
+  blurred.height = h;
+  const bctx = blurred.getContext("2d");
+  if (!bctx) return null;
+  bctx.filter = `blur(${ROUNDING}px)`;
+  bctx.drawImage(mask, 0, 0);
+  bctx.filter = "none";
+  const img = bctx.getImageData(0, 0, w, h);
+  for (let i = 3; i < img.data.length; i += 4) img.data[i] = (img.data[i] ?? 0) > 128 ? 255 : 0;
+  bctx.putImageData(img, 0, 0);
+  return blurred;
+}
+
+/** `shape` filled with `color` onto `ctx`, through a scratch canvas. */
+function fillShape(ctx: CanvasRenderingContext2D, shape: HTMLCanvasElement, color: string): void {
+  const tint = document.createElement("canvas");
+  tint.width = shape.width;
+  tint.height = shape.height;
+  const tctx = tint.getContext("2d");
+  if (!tctx) return;
+  tctx.drawImage(shape, 0, 0);
+  tctx.globalCompositeOperation = "source-in";
+  tctx.fillStyle = color;
+  tctx.fillRect(0, 0, tint.width, tint.height);
+  ctx.drawImage(tint, 0, 0);
+}
+
 /**
  * Paint the walkable area once, as one silhouette: the cells are stamped into a
  * mask, blurred and thresholded, so corners come out rounded and organic rather
@@ -64,45 +111,22 @@ function anchorColor(id: string): string {
  * marching-squares outline would be exact; this is two blits and looks the same
  * at 384px.
  */
-function paintTerrain(grid: WalkableGrid): HTMLCanvasElement {
+export function paintTerrain(grid: WalkableGrid): HTMLCanvasElement {
   const w = grid.cols * CELL_PX, h = grid.rows * CELL_PX;
-  const mask = document.createElement("canvas");
-  mask.width = w;
-  mask.height = h;
-  const mctx = mask.getContext("2d");
   const c = document.createElement("canvas");
   c.width = w;
   c.height = h;
   const ctx = c.getContext("2d");
-  if (!mctx || !ctx) return c;
+  if (!ctx) return c;
+  const blurred = silhouette(grid, (i) => grid.cells[i] === 1);
+  if (!blurred) return c;
 
-  mctx.fillStyle = "#fff";
-  for (let i = 0; i < grid.cols * grid.rows; i++) {
-    if (grid.cells[i] !== 1) continue;
-    const x = i % grid.cols, y = (i - (i % grid.cols)) / grid.cols;
-    mctx.fillRect(x * CELL_PX - 0.5, y * CELL_PX - 0.5, CELL_PX + 1, CELL_PX + 1);
-  }
-
-  // Blur, then cut at half alpha: the blur is what rounds the corners and the
-  // cut is what stops the shape fading out into a smudge.
-  const blurred = document.createElement("canvas");
-  blurred.width = w;
-  blurred.height = h;
-  const bctx = blurred.getContext("2d");
-  if (!bctx) return c;
-  bctx.filter = `blur(${ROUNDING}px)`;
-  bctx.drawImage(mask, 0, 0);
-  bctx.filter = "none";
-  const img = bctx.getImageData(0, 0, w, h);
-  for (let i = 3; i < img.data.length; i += 4) img.data[i] = (img.data[i] ?? 0) > 128 ? 255 : 0;
-  bctx.putImageData(img, 0, 0);
-
-  // Floor, then the contour on top of it.
-  ctx.drawImage(blurred, 0, 0);
-  ctx.globalCompositeOperation = "source-in";
-  ctx.fillStyle = FLOOR;
-  ctx.fillRect(0, 0, w, h);
-  ctx.globalCompositeOperation = "source-over";
+  // Floor, the fen's pools on it, then the contour on top. The coast's
+  // shallows stay beach: its map is the strand.
+  fillShape(ctx, blurred, FLOOR);
+  const water = grid.shore ? undefined : grid.water;
+  const pools = water && silhouette(grid, (i) => water[i] === 1 && grid.cells[i] === 1);
+  if (pools) fillShape(ctx, pools, MINIMAP_WATER);
 
   // Erode the silhouette — the INTERSECTION of it nudged each way, which is
   // `destination-in`; the union (`destination-out`, the obvious spelling) eats

@@ -250,8 +250,9 @@ const POOL_MIN_CELLS = 6;
 const LAKE_MIN_CELLS = 48;
 
 /**
- * Flood a `share` of the interior wall components into standing water: still
- * wall to the sim, only the renderer reads the mask. A candidate never touches
+ * Flood a `share` of the interior wall components into standing water the
+ * player wades: each flooded cell turns floor in `cells` and is set in the
+ * returned mask, which only the renderer reads. A candidate never touches
  * the grid border (the rim), the boss block, or a spawn or reward marker's 3x3,
  * and is either a blob of at least POOL_MIN_CELLS or a mass of LAKE_MIN_CELLS.
  */
@@ -286,7 +287,7 @@ function pickPools(
     }
     if (!ok || comp.length < (blob ? POOL_MIN_CELLS : LAKE_MIN_CELLS)) continue;
     if (rng.nextU32() / 0x1_0000_0000 >= share) continue;
-    for (const i of comp) water[i] = 1;
+    for (const i of comp) water[i] = cells[i] = 1;
     any = true;
   }
   return any ? water : null;
@@ -1044,11 +1045,12 @@ export function assembleArea(seed: number, contentVersion: string, grammar: Gram
     spawnSockets: spawnSockets.map(spun),
     chosenVariantIds,
     spawnTarget: grammar.spawnTarget,
+    ...(water ? { water } : {}),
   });
   if (!layout.validationChecks.every((c) => c.passed)) {
     return fallbackLayout(seed, contentVersion, grammar.spawnTarget);
   }
-  // Rides on the grid like the coast's sea; never hashed, since the sim ignores it.
+  // Rides on the grid like the coast's sea; never hashed: the sim walks the pools' floor cells.
   if (water) layout.grid.water = water;
   return layout;
 }

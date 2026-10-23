@@ -45,6 +45,9 @@ export const WAKE_SLOPE_RANGE = 0.6;
 const FOAM_KEEP = 0.965;
 const FOAM_FROM = 0.0012;
 const FOAM_GAIN = 60;
+/** A fen pool's share of that churn foam: its waves cannot run off up a beach,
+ *  so a pack wading a few square metres would break the whole pool white. */
+export const FEN_CHURN_FOAM = 0.1;
 
 /** How far inland the last wash reaches (the sea strip's first band): sand past
  *  it never carries water, so a wave reflects there. */
@@ -62,6 +65,14 @@ export function seaDepth(shore: Shoreline, x: number, z: number): number {
   return (c - line) * shore.seaSide;
 }
 
+/** Metres out into the water at a world point (x, z); negative inland. */
+export type WaterDepth = (x: number, z: number) => number;
+
+/** A coast's depth, off its shore curve. */
+export function shoreDepth(shore: Shoreline): WaterDepth {
+  return (x, z) => seaDepth(shore, x, z);
+}
+
 export class WakeField {
   /** World x/z of cell (0, 0)'s lower corner. */
   originX = 0;
@@ -75,11 +86,14 @@ export class WakeField {
   private packedRest = true;
   /** 1 where the cell is beach the water never reaches; held at rest. */
   private dry = new Uint8Array(WAKE_CELLS * WAKE_CELLS);
-  private shore: Shoreline | null = null;
+  private depth: WaterDepth | null = null;
   private acc = 0;
   private stirred = false;
   /** Nothing moving and nothing stirring it: no steps, nothing to upload. */
   asleep = true;
+
+  /** `churnFoam` scales the white that fast-moving water breaks into. */
+  constructor(private readonly churnFoam = 1) {}
 
   /** Centre the window on a world point. The window moves in whole cells and
    *  its contents move the other way, so a ring stays where it was made. */
@@ -99,23 +113,23 @@ export class WakeField {
     this.foam = this.shift(this.foam, di, dj);
   }
 
-  /** The coast this field lies off; null for open water everywhere. */
-  setShore(shore: Shoreline | null): void {
-    this.shore = shore;
+  /** The depth of the water this field lies on; null for open water everywhere. */
+  setDepth(depth: WaterDepth | null): void {
+    this.depth = depth;
     this.markDry();
   }
 
   private markDry(): void {
     const N = WAKE_CELLS;
-    const shore = this.shore;
-    if (!shore) {
+    const depth = this.depth;
+    if (!depth) {
       this.dry.fill(0);
       return;
     }
     for (let j = 0; j < N; j++) {
       const z = this.originZ + (j + 0.5) * WAKE_CELL;
       for (let i = 0; i < N; i++)
-        this.dry[j * N + i] = seaDepth(shore, this.originX + (i + 0.5) * WAKE_CELL, z) < DRY_BEYOND ? 1 : 0;
+        this.dry[j * N + i] = depth(this.originX + (i + 0.5) * WAKE_CELL, z) < DRY_BEYOND ? 1 : 0;
     }
   }
 
@@ -252,7 +266,7 @@ export class WakeField {
         const n = (h + (h - p[o]!) * DAMP + k * lap) * this.sponge[o]!;
         p[o] = n;
         const churn = Math.abs(n - h) - FOAM_FROM;
-        const f = Math.min(1, this.foam[o]! * FOAM_KEEP + (churn > 0 ? churn * FOAM_GAIN : 0));
+        const f = Math.min(1, this.foam[o]! * FOAM_KEEP + (churn > 0 ? churn * FOAM_GAIN * this.churnFoam : 0));
         this.foam[o] = f;
         peak = Math.max(peak, Math.abs(n), Math.abs(n - h));
         white = Math.max(white, f);
@@ -317,7 +331,7 @@ const STEP_FOAM = 0.7;
 export class WakeStirrer {
   private readonly last = new Map<number, { x: number; z: number; walked: number; left: boolean }>();
 
-  constructor(private readonly field: WakeField, private readonly shore: Shoreline) {}
+  constructor(private readonly field: WakeField, private readonly depth: WaterDepth) {}
 
   /** Stir for this frame; `out` is cleared and receives the feet that came down in water. */
   stir(bodies: readonly WakeBody[], dt: number, out: Footfall[]): void {
@@ -338,7 +352,7 @@ export class WakeStirrer {
         was.walked = 0;
         continue;
       }
-      const depth = seaDepth(this.shore, b.x, b.z);
+      const depth = this.depth(b.x, b.z);
       if (depth < WADE_FROM || moved < 1e-4 || dt <= 0) continue;
       const t = Math.min(1, (depth - WADE_FROM) / (WADE_FULL - WADE_FROM));
       const wet = t * t * (3 - 2 * t);

@@ -1,7 +1,10 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
 import type { Shoreline } from "@exiled/mapgen";
-import { WAKE_CELL, WAKE_CELLS, WAKE_SPEED, WakeField, WakeStirrer, seaDepth, type Footfall } from "./wake";
+import {
+  FEN_CHURN_FOAM, WAKE_CELL, WAKE_CELLS, WAKE_SPEED, WakeField, WakeStirrer, seaDepth, shoreDepth,
+  type Footfall, type WaterDepth,
+} from "./wake";
 
 /** A straight shore: `cross` = 0 along the whole run, from -20 to +20. */
 function straightShore(along: "x" | "y", seaSide: 1 | -1): Shoreline {
@@ -56,7 +59,7 @@ describe("WakeField", () => {
 
   it("keeps waves off the dry beach", () => {
     const field = new WakeField();
-    field.setShore(straightShore("x", 1));
+    field.setDepth(shoreDepth(straightShore("x", 1)));
     field.follow(0, 0);
     field.push(0, 0.5, 0.2, 0.05);
     field.step(1.5);
@@ -140,8 +143,8 @@ describe("WakeStirrer", () => {
   function walk(cross: number, metres: number, speed = 4.2) {
     const field = new WakeField();
     const shore = straightShore("x", 1);
-    field.setShore(shore);
-    const stirrer = new WakeStirrer(field, shore);
+    field.setDepth(shoreDepth(shore));
+    const stirrer = new WakeStirrer(field, shoreDepth(shore));
     const falls: Footfall[] = [];
     const out: Footfall[] = [];
     const dt = 1 / 60;
@@ -183,13 +186,47 @@ describe("WakeStirrer", () => {
   it("does not splash across a jump such as a portal", () => {
     const field = new WakeField();
     const shore = straightShore("x", 1);
-    field.setShore(shore);
+    field.setDepth(shoreDepth(shore));
     field.follow(0, 1);
-    const stirrer = new WakeStirrer(field, shore);
+    const stirrer = new WakeStirrer(field, shoreDepth(shore));
     const out: Footfall[] = [];
     stirrer.stir([{ id: 3, x: -6, z: 1, radius: 0.5, player: true }], 1 / 60, out);
     stirrer.stir([{ id: 3, x: 0, z: 1, radius: 0.5, player: true }], 1 / 60, out);
     expect(out).toEqual([]);
     expect(field.asleep).toBe(true);
+  });
+
+  it("leaves most of a fen pool dark while a pack wades through it", () => {
+    // A 5 by 3.5 m pool, deepening by half a metre per cell in from its bank.
+    const pool: WaterDepth = (x, z) => {
+      const d = Math.min(2.5 - Math.abs(x), 1.75 - Math.abs(z));
+      return d < 0 ? -Infinity : Math.floor(d / 0.5) * 0.5 + 0.25;
+    };
+    const field = new WakeField(FEN_CHURN_FOAM);
+    field.follow(0, 0);
+    field.setDepth(pool);
+    const stirrer = new WakeStirrer(field, pool);
+    const out: Footfall[] = [];
+    const dt = 1 / 60;
+    for (let t = 0; t < 4; t += dt) {
+      // Six of them walking 1.5 m/s circles across the pool.
+      stirrer.stir(Array.from({ length: 6 }, (_, k) => {
+        const a = t * 1.5 / 1.2 + k * Math.PI / 3;
+        return { id: k, x: (k % 2 ? 0.6 : -0.6) + Math.cos(a) * 1.2, z: (k % 3 - 1) * 0.5 + Math.sin(a) * 1.2, radius: 0.5, player: false };
+      }), dt, out);
+      field.step(dt);
+    }
+    const bytes = new Uint8Array(WAKE_CELLS * WAKE_CELLS * 4);
+    field.pack(bytes);
+    let water = 0, white = 0;
+    for (let j = 0; j < WAKE_CELLS; j++)
+      for (let i = 0; i < WAKE_CELLS; i++) {
+        if (pool(field.originX + (i + 0.5) * WAKE_CELL, field.originZ + (j + 0.5) * WAKE_CELL) === -Infinity) continue;
+        water++;
+        if (bytes[(j * WAKE_CELLS + i) * 4 + 3]! > 77) white++;
+      }
+    // White round their legs, but not a pool gone white from bank to bank.
+    expect(white / water).toBeGreaterThan(0.05);
+    expect(white / water).toBeLessThan(0.35);
   });
 });

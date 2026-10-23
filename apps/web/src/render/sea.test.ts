@@ -26,6 +26,16 @@ function coveGrid(): WalkableGrid {
   return { cols: 9, rows: 9, cellSize: 0.5, originX: 0, originY: 0, cells };
 }
 
+/** 11x11 open floor with one 3x3 pool at cells 4..6 the player wades: the grid
+ *  border is wall, but a fen floods only what the generator marked. */
+function fenGrid(): WalkableGrid {
+  const cells = new Uint8Array(121);
+  for (let y = 1; y <= 9; y++) for (let x = 1; x <= 9; x++) cells[y * 11 + x] = 1;
+  const water = new Uint8Array(121);
+  for (let y = 4; y <= 6; y++) for (let x = 4; x <= 6; x++) water[y * 11 + x] = 1;
+  return { cols: 11, rows: 11, cellSize: 0.5, originX: 0, originY: 0, cells, water };
+}
+
 describe("buildSea", () => {
   it("floods the void outside the rim and leaves interior wall pockets dry", () => {
     engine = new NullEngine();
@@ -221,11 +231,33 @@ describe("buildSea", () => {
     expect(wake.originX).toBeGreaterThan(4 - 10.5);
     expect(wake.originX).toBeLessThan(4 - 9.5);
 
-    const water = new Uint8Array(81);
-    water[0] = 1;
-    const pool = buildSea(scene, { ...coveGrid(), water }, "fen").mesh!;
-    expect(waterPlugin(pool.material)!.wake).toBeNull();
+    // A dungeon's void is no water anyone wades.
+    buildSea(scene, coveGrid(), true);
     expect(stirSea(scene, [{ id: 1, x: 0, z: 0, radius: 0.5, player: true }], 1 / 60)).toEqual([]);
+  });
+
+  it("lets a body wading across a fen pool ring it, foam it and splash, and stays still on the bank", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const pool = buildSea(scene, fenGrid(), "fen").mesh!;
+    const wake = waterPlugin(pool.material)!.wake!;
+    expect(wake).not.toBeNull();
+    const splash = waterSplash(scene);
+    const crowns = splash.crowns;
+    let falls = 0;
+    // Across the pool (cells 4..6 span 1.75..3.25) at a walk.
+    for (let x = 0.5; x <= 4.5; x += 2 / 60)
+      for (const f of stirSea(scene, [{ id: 1, x, z: 2.5, radius: 0.3, player: true }], 1 / 60)) {
+        expect(f.x).toBeGreaterThan(1.75);
+        expect(f.x).toBeLessThan(3.25);
+        expect(f.depth).toBeGreaterThan(0);
+        falls++;
+      }
+    expect(falls).toBeGreaterThan(0);
+    expect(splash.crowns - crowns).toBe(falls);
+    // Walking the dry floor beside it stirs nothing.
+    for (let x = 0.5; x <= 4.5; x += 2 / 60)
+      expect(stirSea(scene, [{ id: 1, x, z: 0.75, radius: 0.3, player: true }], 1 / 60)).toEqual([]);
   });
 
   it("throws a crown of water off every foot that comes down in it, and lets it fall back", () => {
@@ -263,15 +295,7 @@ describe("buildSea", () => {
   it("draws a fen's pools as still water: only the marked cells, no surf, faded to nothing at the bank", () => {
     engine = new NullEngine();
     const { scene } = createScene(engine);
-    // 11x11 open floor with one 3x3 interior pool at cells 4..6: the grid border
-    // is wall, but a fen floods only what the generator marked.
-    const cells = new Uint8Array(121);
-    for (let y = 1; y <= 9; y++) for (let x = 1; x <= 9; x++) cells[y * 11 + x] = 1;
-    const water = new Uint8Array(121);
-    for (let y = 4; y <= 6; y++) for (let x = 4; x <= 6; x++) { cells[y * 11 + x] = 0; water[y * 11 + x] = 1; }
-    const grid: WalkableGrid = { cols: 11, rows: 11, cellSize: 0.5, originX: 0, originY: 0, cells, water };
-
-    const { mesh, waterCells } = buildSea(scene, grid, "fen");
+    const { mesh, waterCells } = buildSea(scene, fenGrid(), "fen");
     expect(waterCells).toBe(9);
     expect(mesh!.name).toBe(SEA_MESH_NAME);
     expect(mesh!.material!.name).toBe("fen-mat");
@@ -284,8 +308,8 @@ describe("buildSea", () => {
     for (let v = 0; v < pos.length / 3; v++) {
       expect(pos[v * 3 + 1]).toBeCloseTo(0.02, 6);
       const x = pos[v * 3]!, z = pos[v * 3 + 2]!;
-      // The pool's outline (cells 4..6 span 1.75..3.25) is the collision face:
-      // no depth there, so the bank is a gradient, not an edge.
+      // The pool's outline (cells 4..6 span 1.75..3.25) is its bank: no depth
+      // there, so the bank is a gradient, not an edge.
       const onEdge = Math.abs(x - 1.75) < 1e-6 || Math.abs(x - 3.25) < 1e-6 ||
         Math.abs(z - 1.75) < 1e-6 || Math.abs(z - 3.25) < 1e-6;
       if (onEdge) expect(depth[v * 2]!, `${x},${z}`).toBeLessThanOrEqual(0);

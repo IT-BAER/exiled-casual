@@ -639,20 +639,34 @@ describe("assembleArea, fen pools", () => {
     expect(wet).toBeGreaterThanOrEqual(SEEDS.length * 0.7);
   }, 60_000);
 
-  it("only floods wall cells, never the boss block, never a lone cell, and leaves the sim's grid alone", () => {
+  it("floods only wall cells into walkable water, never the boss block, a marker or a lone cell", () => {
     for (const seed of SEEDS) {
       const wet = assembleArea(seed, V, SUNKEN_GRAMMAR), base = assembleArea(seed, V, dry);
-      expect(Array.from(wet.grid.cells), `seed ${seed}`).toEqual(Array.from(base.grid.cells));
-      expect(wet.hash).toBe(base.hash);
       expect(wet.spawnSockets).toEqual(base.spawnSockets);
       expect(wet.objectiveAnchors).toEqual(base.objectiveAnchors);
       expect(base.grid.water).toBeUndefined();
       const { cells, water, cols } = wet.grid;
-      if (!water) continue;
+      if (!water) {
+        expect(wet.hash).toBe(base.hash);
+        continue;
+      }
+      expect(wet.hash, `seed ${seed}`).not.toBe(base.hash);
       const boss = wet.objectiveAnchors.find((a) => a.id === "boss")!;
+      const near = (i: number, p: { x: number; y: number }): boolean => {
+        const cx = Math.floor((p.x - wet.grid.originX) / wet.grid.cellSize);
+        const cy = Math.floor((p.y - wet.grid.originY) / wet.grid.cellSize);
+        return Math.abs((i % cols) - cx) <= 1 && Math.abs(Math.floor(i / cols) - cy) <= 1;
+      };
       for (let i = 0; i < water.length; i++) {
-        if (!water[i]) continue;
-        expect(cells[i], `seed ${seed} cell ${i}`).toBe(0);
+        if (!water[i]) {
+          expect(cells[i], `seed ${seed} cell ${i}`).toBe(base.grid.cells[i]);
+          continue;
+        }
+        expect(base.grid.cells[i], `seed ${seed} cell ${i} was wall`).toBe(0);
+        expect(cells[i], `seed ${seed} cell ${i} walkable`).toBe(1);
+        for (const m of [...wet.spawnSockets, ...wet.objectiveAnchors]) {
+          expect(near(i, m), `seed ${seed} ${m.id} on water`).toBe(false);
+        }
         // A pool cell has a pool neighbour: no single-cell puddles.
         const x = i % cols;
         const nb = (x > 0 && water[i - 1]) || (x < cols - 1 && water[i + 1]) || water[i - cols] || water[i + cols];
@@ -661,6 +675,22 @@ describe("assembleArea, fen pools", () => {
         const wx = (x + 0.5) * wet.grid.cellSize + wet.grid.originX - 0.25;
         const wz = (Math.floor(i / cols) + 0.5) * wet.grid.cellSize + wet.grid.originY - 0.25;
         expect(Math.hypot(wx - boss.x, wz - boss.y), `seed ${seed} pool by the boss`).toBeGreaterThan(4);
+      }
+      // Every pool is waded into from dry floor.
+      const seen = new Uint8Array(water.length);
+      for (let s = 0; s < water.length; s++) {
+        if (!water[s] || seen[s]) continue;
+        const comp = [s];
+        seen[s] = 1;
+        let shore = false;
+        for (let h = 0; h < comp.length; h++) {
+          const i = comp[h]!;
+          for (const j of [i - 1, i + 1, i - cols, i + cols]) {
+            if (cells[j] === 1 && !water[j]) shore = true;
+            if (water[j] && !seen[j]) { seen[j] = 1; comp.push(j); }
+          }
+        }
+        expect(shore, `seed ${seed} pool at ${s}`).toBe(true);
       }
     }
   }, 60_000);
