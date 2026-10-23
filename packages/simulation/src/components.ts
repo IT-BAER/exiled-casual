@@ -268,6 +268,16 @@ export interface MonsterC {
   dashX?: Fixed;
   dashY?: Fixed;
   dashUntilTick?: number;
+  /**
+   * An idle stroll (monster-ai.ts): round (homeX, homeY), where it stood when a
+   * player first came near; walking to (strollX, strollY), or paused until
+   * `strollAtTick` while those are absent. Written only by a stroll, like the dash.
+   */
+  homeX?: Fixed;
+  homeY?: Fixed;
+  strollX?: Fixed;
+  strollY?: Fixed;
+  strollAtTick?: number;
   /** 1 = rare, 0 = normal */
   rare: 0 | 1;
   /** 1 = magic. Optional, written only on a magic monster, so older saves and checksums stay as they were. */

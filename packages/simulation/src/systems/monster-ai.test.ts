@@ -1004,3 +1004,167 @@ describe("brute charge", () => {
     expect(world.query("telegraph").length).toBe(0);
   });
 });
+
+/**
+ * A pack that stands frozen until it is pulled reads as furniture: idle trash
+ * strolls a few metres round where it spawned while a player is near enough to
+ * see it, and wakes exactly as before.
+ */
+describe("idle wander", () => {
+  const SPEED = Math.trunc(fp(3) / 30);
+  const R = fp(0.5);
+
+  function wanderFixture(playerX: number, rows?: string[], at = { x: fp(0), y: fp(0) }) {
+    const sim = new Simulation();
+    const collision = rows ? gridCollision(makeGrid(rows)) : null;
+    registerMonsterAI(sim, { active: collision });
+    const { world } = sim;
+    const player = world.create();
+    world.set<Position>(player, "position", { x: at.x + fp(playerX), y: at.y });
+    world.set<Faction>(player, "faction", { team: 0 });
+    world.set<PlayerC>(player, "player", { moveSpeed: 0, bodyRadius: R });
+    const m = world.create();
+    world.set<Position>(m, "position", { ...at });
+    world.set<Faction>(m, "faction", { team: 1 });
+    world.set<MonsterC>(m, "monster", {
+      defId: "test", moveSpeed: SPEED, bodyRadius: R,
+      attackRange: fp(1.2), attackCooldownTicks: 45,
+      attackDamage: fp(6), attackType: 1 as const,
+      attackReadyTick: 0, slamReadyTick: 0, rootedUntilTick: 0, state: "idle", rare: 0 as const, summoned: 0 as const,
+    });
+    return { sim, world, player, m, collision };
+  }
+
+  function track(sim: Simulation, m: number, ticks: number): Position[] {
+    const out: Position[] = [];
+    for (let i = 0; i < ticks; i++) {
+      sim.step();
+      out.push({ ...sim.world.get<Position>(m, "position")! });
+    }
+    return out;
+  }
+
+  it("strolls round its spawn at a walk, pausing, and stays asleep", () => {
+    const { sim, world, m } = wanderFixture(15);
+    const path = track(sim, m, 600);
+    const far = Math.max(...path.map((p) => Math.sqrt(fpDist2(p.x, p.y, 0, 0)) / fp(1)));
+    expect(far).toBeGreaterThan(0.5);
+    expect(far).toBeLessThanOrEqual(3);
+    let still = 0;
+    for (let i = 1; i < path.length; i++) {
+      const step = Math.sqrt(fpDist2(path[i]!.x, path[i]!.y, path[i - 1]!.x, path[i - 1]!.y));
+      expect(step).toBeLessThanOrEqual(Math.trunc((SPEED * 40) / 100) + 1);
+      if (step === 0) still++;
+    }
+    expect(still).toBeGreaterThan(path.length / 3);
+    expect(world.get<MonsterC>(m, "monster")!.state).toBe("idle");
+  });
+
+  it("wakes as before when the player comes close", () => {
+    const { sim, world, player, m } = wanderFixture(15);
+    track(sim, m, 200);
+    const p = world.get<Position>(m, "position")!;
+    world.set<Position>(player, "position", { x: p.x + fp(4), y: p.y });
+    sim.step();
+    expect(world.get<MonsterC>(m, "monster")!.state).toBe("chase");
+  });
+
+  it("a room no player is near stays untouched", () => {
+    const { sim, world, m } = wanderFixture(20);
+    const before = structuredClone(world.get<MonsterC>(m, "monster"));
+    track(sim, m, 300);
+    expect(world.get<Position>(m, "position")).toEqual({ x: fp(0), y: fp(0) });
+    expect(world.get<MonsterC>(m, "monster")).toEqual(before);
+  });
+
+  it("is deterministic", () => {
+    const a = wanderFixture(15);
+    const b = wanderFixture(15);
+    const pa = track(a.sim, a.m, 400);
+    expect(pa.some((p) => p.x !== 0 || p.y !== 0)).toBe(true);
+    expect(track(b.sim, b.m, 400)).toEqual(pa);
+  });
+
+  it("gives up a stroll it can only creep along", () => {
+    const { sim, world, m } = wanderFixture(15);
+    // A body that never moves stands on the target: the stroll must end, not
+    // inch toward it a millimetre a tick.
+    const rock = world.create();
+    world.set<Position>(rock, "position", { x: fp(2), y: fp(0) });
+    world.set<Faction>(rock, "faction", { team: 1 });
+    world.set(rock, "boss", {});
+    world.set<MonsterC>(rock, "monster", { ...world.get<MonsterC>(m, "monster")! });
+    world.set<MonsterC>(m, "monster", {
+      ...world.get<MonsterC>(m, "monster")!, homeX: 0, homeY: 0, strollAtTick: 0, strollX: fp(2), strollY: 0,
+    });
+    track(sim, m, 60);
+    expect(world.get<MonsterC>(m, "monster")!.strollX).toBeUndefined();
+  });
+
+  it("gives up a stroll that has stalled against a wall, even while it still moves", () => {
+    // Past a corner, slide runs it along the wall a millimetre a tick: never still,
+    // barely nearer. Only a deflected stroll meets one, since a pick needs sight.
+    const rows = [
+      ".......",
+      ".......",
+      "...#...",
+      ".......",
+      ".......",
+      ".......",
+    ];
+    const { sim, world, m } = wanderFixture(15, rows, { x: fp(3.4), y: fp(4) });
+    world.set<MonsterC>(m, "monster", {
+      ...world.get<MonsterC>(m, "monster")!, homeX: fp(3.4), homeY: fp(4), strollAtTick: 0, strollX: fp(2.6), strollY: fp(0),
+    });
+    let ended = false;
+    for (let i = 0; i < 60 && !ended; i++) {
+      sim.step();
+      ended = world.get<MonsterC>(m, "monster")!.strollX === undefined;
+    }
+    expect(ended).toBe(true);
+  });
+
+  it("forgets where it stood once it falls back to idle, so the next player sets a new home", () => {
+    const { sim, world, player, m } = wanderFixture(15);
+    world.set<MonsterC>(m, "monster", {
+      ...world.get<MonsterC>(m, "monster")!, state: "chase", homeX: fp(-40), homeY: fp(-40), strollAtTick: 0,
+    });
+    world.set<Health>(player, "health", { life: 0, maxLife: fp(100) });
+    sim.step();
+    const mon = world.get<MonsterC>(m, "monster")!;
+    expect(mon.homeX).toBeUndefined();
+    expect(mon.homeY).toBeUndefined();
+  });
+
+  it("forgets its stroll when it falls back to idle", () => {
+    const { sim, world, player, m } = wanderFixture(15);
+    world.set<MonsterC>(m, "monster", {
+      ...world.get<MonsterC>(m, "monster")!, state: "chase", homeX: 0, homeY: 0, strollAtTick: 0, strollX: fp(2), strollY: 0,
+    });
+    world.set<Health>(player, "health", { life: 0, maxLife: fp(100) });
+    sim.step();
+    const mon = world.get<MonsterC>(m, "monster")!;
+    expect(mon.state).toBe("idle");
+    expect(mon.strollX).toBeUndefined();
+  });
+
+  it("never walks into a wall round its spawn", () => {
+    // Rock on three sides inside the stroll radius.
+    const rows = [
+      "###########",
+      "#.........#",
+      "#.........#",
+      "#..##.....#",
+      "#..##..#..#",
+      "#......#..#",
+      "#.........#",
+      "#.........#",
+      "###########",
+    ];
+    const { sim, m, collision } = wanderFixture(15, rows, { x: fp(5), y: fp(6) });
+    expect(collision!.isWalkable(fp(5), fp(6), R)).toBe(true);
+    const path = track(sim, m, 900);
+    for (const p of path) expect(collision!.isWalkable(p.x, p.y, R)).toBe(true);
+    expect(path.some((p) => p.x !== fp(5) || p.y !== fp(6))).toBe(true);
+  });
+});

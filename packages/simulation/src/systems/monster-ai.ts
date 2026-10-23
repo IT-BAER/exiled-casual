@@ -28,6 +28,25 @@ export const AGGRO_RADIUS: number = fp(9);
 export const PACK_ALERT_RADIUS: number = fp(5);
 
 /**
+ * Idle trash strolls within WANDER_RADIUS of where it stood when a player first
+ * came within WANDER_NEAR, at WANDER_PCT of its walk, pausing PAUSE_MIN ticks
+ * plus up to PAUSE_SPAN between strolls. A room farther off stays still and
+ * unwritten, so it costs the checksum nothing, as before.
+ */
+export const WANDER_RADIUS: Fixed = fp(3);
+export const WANDER_NEAR: Fixed = AGGRO_RADIUS * 2;
+const WANDER_PCT = 40;
+const PAUSE_MIN = 45;
+const PAUSE_SPAN = 76;
+
+/** A stroll's dice, off (entity, tick) and no shared RNG stream, so no other roll shifts. */
+function strollHash(a: number, b: number): number {
+  let h = Math.imul(a ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(b + 0x632be5ab, 0xc2b2ae35);
+  h = Math.imul(h ^ (h >>> 16), 0x7feb352d);
+  return (h ^ (h >>> 15)) >>> 0;
+}
+
+/**
  * Wake everything asleep within PACK_ALERT_RADIUS of `origin`, and chain from
  * each one woken, all inside this call: a pack strung out wider than the radius
  * still comes as one. Breadth-first in ascending entity id, so it is
@@ -206,6 +225,51 @@ function shove(
   return slide(collision, x, y, push.dx, push.dy, r);
 }
 
+/**
+ * One tick of an idle monster's stroll. A target is taken only with a clear line
+ * to it at the body's width, so a stroll never needs routing; arrived, or gaining
+ * under a quarter step, it pauses again. Writes only when it starts, picks, moves or stops.
+ */
+function stroll(
+  world: World, collision: Collision | undefined, herd: readonly PackBody[], pack: readonly PackBody[],
+  m: Entity, mpos: Position, mon: MonsterC, tick: number,
+): void {
+  const pause = (): number => tick + PAUSE_MIN + (strollHash(m, tick) % PAUSE_SPAN);
+  if (mon.strollAtTick === undefined || mon.homeX === undefined || mon.homeY === undefined) {
+    // It stands a while first, so a pack coming into view does not set off as one.
+    world.set<MonsterC>(m, "monster", { ...mon, homeX: mpos.x, homeY: mpos.y, strollAtTick: pause() });
+    return;
+  }
+  const r = mon.bodyRadius;
+  let { strollX: tx, strollY: ty } = mon;
+  if (tx === undefined || ty === undefined) {
+    if (tick < mon.strollAtTick) return;
+    const h = strollHash(m, tick);
+    const [bx, by] = BEARINGS[h % 24]!;
+    const reach = Math.trunc((WANDER_RADIUS * (300 + ((h >>> 8) % 701))) / 1000);
+    tx = mon.homeX + Math.trunc((reach * bx) / 1000);
+    ty = mon.homeY + Math.trunc((reach * by) / 1000);
+    if (collision && (!collision.isWalkable(tx, ty, r) || !hasLineOfSight(collision, mpos.x, mpos.y, tx, ty, r))) {
+      world.set<MonsterC>(m, "monster", { ...mon, strollAtTick: pause() });
+      return;
+    }
+  }
+  const speed = Math.trunc((mon.moveSpeed * WANDER_PCT) / 100);
+  const step = fpStepToward(mpos.x, mpos.y, tx, ty, speed);
+  const moved = shove(collision, mpos.x, mpos.y, giveWay(herd, m, mpos.x, mpos.y, r, step.dx, step.dy), r);
+  const out = shove(collision, moved.x, moved.y, packPush(pack, m, mpos.x, mpos.y, r, Math.trunc(speed / 2)), r);
+  if (out.x !== mpos.x || out.y !== mpos.y) {
+    world.set<Position>(m, "position", { x: fpClamp(out.x, WORLD_MIN, WORLD_MAX), y: fpClamp(out.y, WORLD_MIN, WORLD_MAX) });
+  }
+  const gained = isqrt(fpDist2(mpos.x, mpos.y, tx, ty)) - isqrt(fpDist2(out.x, out.y, tx, ty));
+  if ((moved.x === tx && moved.y === ty) || gained * 4 < speed) {
+    const { strollX: _x, strollY: _y, ...rest } = mon;
+    world.set<MonsterC>(m, "monster", { ...rest, strollAtTick: pause() });
+  } else if (tx !== mon.strollX || ty !== mon.strollY) {
+    world.set<MonsterC>(m, "monster", { ...mon, strollX: tx, strollY: ty });
+  }
+}
+
 export function registerMonsterAI(sim: Simulation, collisionRef?: CollisionRef): void {
   sim.register("monsterAI", (world, tick) => {
     const collision = collisionRef?.active ?? undefined;
@@ -249,7 +313,9 @@ export function registerMonsterAI(sim: Simulation, collisionRef?: CollisionRef):
       const mon = world.get<MonsterC>(m, "monster")!;
 
       if (players.length === 0) {
-        world.set<MonsterC>(m, "monster", { ...mon, state: "idle" });
+        // Its home and target date from before it woke; the next player sets both afresh.
+        const { homeX: _hx, homeY: _hy, strollX: _x, strollY: _y, ...rest } = mon;
+        world.set<MonsterC>(m, "monster", { ...rest, state: "idle" });
         continue;
       }
 
@@ -270,9 +336,9 @@ export function registerMonsterAI(sim: Simulation, collisionRef?: CollisionRef):
       const ppos = world.get<Position>(nearest, "position")!;
 
       // Asleep and still out of earshot, or in earshot with a wall in the way:
-      // nothing to do, and nothing written, so an untouched room costs the
-      // checksum nothing either. The sight test runs only for a sleeper already
-      // inside the radius, which is what keeps a ray off every idle monster.
+      // it strolls if a player is near enough to see it, and is otherwise left
+      // unwritten. The sight test runs only for a sleeper already inside the
+      // radius, which is what keeps a ray off every idle monster.
       //
       // Sight gates the WAKE alone. A monster already chasing keeps coming when
       // it loses sight, or every wall in the map would be a place to shake a
@@ -280,7 +346,10 @@ export function registerMonsterAI(sim: Simulation, collisionRef?: CollisionRef):
       // (damage-resolve.ts), because an arrow out of the dark is a fine reason.
       if (mon.state === "idle"
         && (nearestD2 > AGGRO_RADIUS * AGGRO_RADIUS
-          || !hasLineOfSight(collision, mpos.x, mpos.y, ppos.x, ppos.y))) continue;
+          || !hasLineOfSight(collision, mpos.x, mpos.y, ppos.x, ppos.y))) {
+        if (nearestD2 <= WANDER_NEAR * WANDER_NEAR) stroll(world, collision, herd, pack, m, mpos, mon, tick);
+        continue;
+      }
       if (mon.state === "idle") alertPack(world, m);
 
       // Rooted mid-wind-up: hold. Sits above the slam and the melee checks so a

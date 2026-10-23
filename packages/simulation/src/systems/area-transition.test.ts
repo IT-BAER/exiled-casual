@@ -215,7 +215,8 @@ describe("a map with portals left is still standing when you come back", () => {
     const hurt = world.create();
     world.set(hurt, "monster", { defId: "monster.vaal_husk.v1", state: "chase", moveSpeed: fp(2),
       bodyRadius: fp(0.4), attackRange: fp(1), attackCooldownTicks: 40, attackDamage: fp(3),
-      attackType: 1, attackReadyTick: 90, slamReadyTick: 0, rootedUntilTick: 0, rare: 0, summoned: 0 });
+      attackType: 1, attackReadyTick: 90, slamReadyTick: 0, rootedUntilTick: 0, rare: 0, summoned: 0,
+      strollAtTick: 120 });
     world.set<Health>(hurt, "health", { life: fp(12), maxLife: fp(66) });
     world.set<Position>(hurt, "position", { x: fp(11), y: fp(-7) });
     const chest = world.create();
@@ -271,6 +272,12 @@ describe("a map with portals left is still standing when you come back", () => {
     })();
     const ready = monstersOf(world)[0]!.ready;
     expect(ready - sim.tick).toBe(89);
+  });
+
+  it("keeps an idle stroller's pause, so a restored pack does not set off as one", () => {
+    const { sim, world } = roundTrip(200);
+    const mon = world.get<{ strollAtTick: number }>(world.query("monster")[0]!, "monster")!;
+    expect(mon.strollAtTick - sim.tick).toBe(119);
   });
 
   it("rolls a fresh map when the last portal closed it", () => {

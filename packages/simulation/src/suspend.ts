@@ -49,7 +49,7 @@ const TRANSIENT_COMPONENT = ["ailment", "poison", "bleeding"];
  * HAPPENED, and pushing it into the future would replay the swing.
  */
 const REBASED: readonly { comp: string; fields: readonly string[] }[] = [
-  { comp: "monster", fields: ["attackReadyTick", "slamReadyTick", "rootedUntilTick", "chargeReadyTick", "dashUntilTick"] },
+  { comp: "monster", fields: ["attackReadyTick", "slamReadyTick", "rootedUntilTick", "chargeReadyTick", "dashUntilTick", "strollAtTick"] },
   { comp: "boss", fields: ["nextAbilityTick"] },
 ];
 
