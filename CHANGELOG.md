@@ -10,6 +10,8 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+## [0.4.6] - 2026-10-23
+
 ### Added
 
 - Wading through the Strand's shallows stirs the sea: waves ring out from every
