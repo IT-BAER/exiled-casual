@@ -53,8 +53,11 @@ const WAVE_TILE = 9;
 const WAVE_SPEED_U = 0.013;
 const WAVE_SPEED_V = 0.009;
 
-/** Low, so the sun breaks into glints on the moving normals. */
-const SEA_ROUGHNESS = 0.2;
+/** Low, so the sun breaks into glints on the moving normals; at 0.2 each glint
+ *  shrank to a pixel and the sea read as static. */
+const SEA_ROUGHNESS = 0.3;
+/** The wave normal's strength: at full the chop is a field of hard flakes. */
+const WAVE_BUMP = 0.55;
 
 /** A stand-in for the sky the water has nothing to reflect. Flat water under a
  *  low sun takes almost no diffuse light, so without this the sea is a dark
@@ -193,6 +196,7 @@ function seaMaterial(scene: Scene, look: SeaLook = "coast"): PBRMaterial {
     const bump = new Texture("/textures/water/water_normal.jpg", scene);
     bump.uScale = 1;
     bump.vScale = 1;
+    bump.level = WAVE_BUMP;
     mat.bumpTexture = bump;
   } catch {
     /* no canvas under NullEngine; the untextured material is fine in tests */

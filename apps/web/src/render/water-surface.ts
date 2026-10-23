@@ -58,7 +58,7 @@ export const COAST_WATER: WaterParams = {
   swash: [7.5, 1.5, 5.5, 1],
   look: [0.2, 0.55, 0.6, 0.5],
   sky: [0.34, 0.38, 0.4, 1.8],
-  ripple: [3.4, -0.021, 0.017, 0.8],
+  ripple: [3.4, -0.021, 0.017, 0.45],
 };
 
 export const FEN_WATER: WaterParams = {
@@ -170,9 +170,9 @@ const GLSL_SHADE = `
     #endif
     // Water covers every point seaward of edge; for a still pool that is its bank.
     float edge = 0.0;
-    // How far past the edge the water takes to fade in: a ragged surf can be
-    // sharp, a bank drawn off half-metre cells cannot.
-    float soft = 0.08;
+    // How far past the edge the water takes to fade in. Under 0.1 m the surf
+    // front reads as one ruled line drawn round the beach.
+    float soft = 0.3;
     float H = max(d, 0.0) * waterLook.x;
     float foam = 0.0;
     float wet = 0.0;
@@ -198,13 +198,15 @@ const GLSL_SHADE = `
       // A ragged front, wandering as it runs: never a ruled line. Each wave's
       // shape hands over into the next one's, so the two agree where they meet.
       float rag = mix(wNoise(vec2(along * 0.9, id * 3.1)), wNoise(vec2(along * 0.9, (id + 1.0) * 3.1)), hand);
-      edge += (rag - 0.5) * 0.3 + (wFbm(vec2(along * 2.3, t * 0.4)) - 0.5) * 0.35;
+      edge += (rag - 0.5) * 0.3 + (wFbm(vec2(along * 1.1, t * 0.4)) - 0.5) * 0.35;
       float off = d - edge;
       // Swells marching in, steepening toward the break line, then breaking.
       float x = fract(cyc + (d - BREAK) / L);
-      float shoal = smoothstep(BREAK + L * 3.5, BREAK, d) * step(BREAK - 0.3, d);
-      float face = smoothstep(0.86, 0.985, x) * (1.0 - smoothstep(0.985, 1.0, x));
-      float back = exp(-x * 5.0);
+      float shoal = smoothstep(BREAK + L * 3.5, BREAK, d) * smoothstep(BREAK - 0.5, BREAK - 0.1, d);
+      // Both ramp to zero at the crest, where x wraps: a tilt that jumps there
+      // draws every swell as a ruled line.
+      float face = smoothstep(0.84, 0.96, x) * (1.0 - smoothstep(0.96, 1.0, x));
+      float back = exp(-x * 5.0) * smoothstep(0.0, 0.06, x);
       vec3 land = vec3(waterShore.x, 0.0, waterShore.y);
       normalW = normalize(normalW + land * (face * 0.9 - back * 0.25) * shoal * waterLook.w);
       // The noise is the expensive part, and open water past the break has none.
@@ -215,13 +217,14 @@ const GLSL_SHADE = `
         // The bore: white at the leading edge while the wave climbs, thinning to
         // a drained lace as it falls back.
         float vigour = (k < UP ? smoothstep(0.0, 0.06, k) : exp(-(k - UP) * 4.0)) * (1.0 - hand);
-        float bore = exp(-(off - 0.08) * (off - 0.08) / 0.05);
-        float trail = off > 0.0 ? exp(-off / 1.3) : 0.0;
+        float bore = exp(-(off - 0.12) * (off - 0.12) / 0.1);
+        // Gone before the branch's own 3 m cut, or that cut is a ruled line.
+        float trail = off > 0.0 ? exp(-off / 1.3) * smoothstep(3.0, 1.8, off) : 0.0;
         // Torn by the churn, so the bore breaks into clots and gaps along its length.
         float tear = smoothstep(0.25, 0.6, wFbm(vec2(along * 1.4, t * 0.3) + q * 0.8));
-        foam = (bore * (0.2 + 0.9 * churn) * (0.35 + 0.65 * tear) + trail * churn * 0.7) * vigour;
+        foam = (bore * (0.1 + 1.0 * churn) * (0.15 + 0.85 * tear) + trail * churn * 0.7) * vigour;
         foam += step(UP, k) * (1.0 - hand) * trail * smoothstep(0.55, 0.75, fine) * 0.45;
-        float cap = smoothstep(0.93, 1.0, x) * smoothstep(BREAK + 2.2, BREAK + 0.2, d) * step(BREAK - 0.3, d);
+        float cap = smoothstep(0.93, 1.0, x) * smoothstep(BREAK + 2.2, BREAK + 0.2, d) * smoothstep(BREAK - 0.5, BREAK - 0.1, d);
         foam += cap * (0.35 + 0.8 * churn);
       }
       foam *= waterSwash.w;
@@ -246,7 +249,7 @@ const GLSL_SHADE = `
     // Beer-Lambert over the view path (down and back up, at about 45 degrees).
     vec3 T = exp(-waterAbsorb * H * 2.4);
     float a = 1.0 - dot(T, vec3(0.3, 0.45, 0.25));
-    float inWater = smoothstep(edge - 0.03, edge + soft, d);
+    float inWater = smoothstep(edge - 0.05, edge + soft, d);
     vec3 body = waterBody;
     #ifdef WATER_SURF
     // The surf stirs sand into the water nearest the beach.
