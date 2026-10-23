@@ -109,7 +109,8 @@ const BAR_PAD = `calc(${BAR_PAD_EXPR})`;
 // left, middle and right click each hold a skill of their own. The numbered
 // slots' keys come from the keymap: PoE2's QWERT, or QERTF when WASD walks.
 type SkillSlot = {
-  id: string | null; key: string; mouse?: boolean;
+  /** `button`: the PointerEvent.button of a mouse slot, absent on a keyed one. */
+  id: string | null; key: string; button?: number;
   icon?: string; glow?: string; label?: string;
 };
 
@@ -138,10 +139,10 @@ export const SKILL_ART: Record<string, { icon: string; glow: string }> = {
 };
 
 /** The mouse row, in PointerEvent.button order. */
-const MOUSE_KEYS: readonly string[] = ["L", "M", "R"];
+const MOUSE_KEYS: readonly string[] = ["LMB", "MMB", "RMB"];
 
 /** Socket `i` of the bar. Works for both rows: past MOUSE_SLOT_BASE the key is
- *  a mouse letter, and MOVE_SOCKET gets a label instead of an icon. */
+ *  a mouse button name, and MOVE_SOCKET gets a label instead of an icon. */
 function socketFor(
   bar: (string | null)[],
   i: number,
@@ -150,7 +151,7 @@ function socketFor(
 ): SkillSlot {
   const id = bar[i] ?? null;
   const art = id ? SKILL_ART[id] : undefined;
-  const mouse = i >= MOUSE_SLOT_BASE;
+  const button = i >= MOUSE_SLOT_BASE ? i - MOUSE_SLOT_BASE : undefined;
   const key = socketKeyLabel(i, keybinds);
   // A label only stands in for art that does not exist; Move has its own icon now.
   const label = art ? undefined
@@ -158,7 +159,7 @@ function socketFor(
     : id ? (names?.get(id) ?? id) : undefined;
   return {
     id, key, label,
-    ...(mouse ? { mouse: true } : {}),
+    ...(button !== undefined ? { button } : {}),
     ...(art ? { icon: art.icon, glow: art.glow } : {}),
   };
 }
@@ -333,13 +334,30 @@ function SkillTile({ slot, n, cooldowns, onHover, drag, onAssignRequest, flash }
           background: "rgba(4,6,10,0.7)",
           fontSize: `clamp(8px, ${(ORB_VW * 0.062).toFixed(2)}vw, 14px)`,
           fontWeight: 700,
-          color: slot.mouse ? "#d9b04a" : "#c9cdd3",
+          color: "#c9cdd3",
           textShadow: "0 1px 3px #000",
         }}
       >
-        {slot.key}
+        {slot.button === undefined ? slot.key : <MouseIcon button={slot.button} />}
       </span>
     </div>
+  );
+}
+
+const MOUSE_BUTTON_NAMES = ["Left mouse button", "Middle mouse button", "Right mouse button"];
+
+/** A mouse a caption high, with the one button that fires this slot lit gold. */
+function MouseIcon({ button }: { button: number }): React.ReactElement {
+  const fill = (b: number) => (b === button ? "#d9b04a" : "#1a1712");
+  return (
+    <svg role="img" aria-label={MOUSE_BUTTON_NAMES[button]} viewBox="0 0 14 20"
+      style={{ display: "block", height: "1.5em", width: "auto", filter: "drop-shadow(0 1px 2px #000)" }}>
+      <path d="M7 1 C3 1 1 3.5 1 7 V13 C1 16.5 3.5 19 7 19 C10.5 19 13 16.5 13 13 V7 C13 3.5 11 1 7 1 Z"
+        fill="#0c0b09" stroke="#8a7140" strokeWidth="1" />
+      <path d="M6.4 1.6 C3.4 1.9 1.6 4 1.6 7 V8 H6.4 Z" fill={fill(0)} />
+      <path d="M7.6 1.6 C10.6 1.9 12.4 4 12.4 7 V8 H7.6 Z" fill={fill(2)} />
+      <rect x="5.9" y="3" width="2.2" height="4.2" rx="1.1" fill={fill(1)} stroke="#8a7140" strokeWidth="0.6" />
+    </svg>
   );
 }
 

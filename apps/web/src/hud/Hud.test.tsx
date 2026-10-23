@@ -6,7 +6,7 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 vi.mock("../audio/drop-sound", () => ({ playDropSound: vi.fn() }));
 import { playDropSound } from "../audio/drop-sound";
 import "@testing-library/jest-dom/vitest";
-import { render, screen, cleanup, fireEvent, act } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, act, within } from "@testing-library/react";
 import { Hud, SKILL_ART } from "./Hud";
 import { DEFAULT_KEYBINDS_BY_MODE } from "../settings";
 import { SKILLS } from "@exiled/content-runtime";
@@ -166,8 +166,11 @@ describe("Hud", () => {
     for (const [i, label] of [[1, "Q"], [2, "W"], [3, "E"], [4, "R"], [5, "T"]] as const) {
       expect(screen.getByTestId(`skill-slot-${i}`)).toHaveTextContent(label);
     }
-    for (const [i, label] of [[6, "L"], [7, "M"], [8, "R"]] as const) {
-      expect(screen.getByTestId(`skill-slot-${i}`)).toHaveTextContent(label);
+    // A small mouse with its own button lit, not a letter that reads as a skill key.
+    for (const [i, name, text] of [[6, "Left mouse button", "LMB"], [7, "Middle mouse button", "MMB"], [8, "Right mouse button", "RMB"]] as const) {
+      const slot = within(screen.getByTestId(`skill-slot-${i}`));
+      expect(slot.getByRole("img", { name })).toBeInTheDocument();
+      expect(slot.queryByText(text)).toBeNull();
     }
   });
 
