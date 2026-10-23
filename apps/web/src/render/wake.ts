@@ -45,9 +45,37 @@ export const WAKE_SLOPE_RANGE = 0.6;
 const FOAM_KEEP = 0.965;
 const FOAM_FROM = 0.0012;
 const FOAM_GAIN = 60;
-/** A fen pool's share of that churn foam: its waves cannot run off up a beach,
- *  so a pack wading a few square metres would break the whole pool white. */
-export const FEN_CHURN_FOAM = 0.1;
+/** A body's share of the waves it makes, the most foam its legs lay, and
+ *  whether its feet throw a splash. */
+export interface WadeWake {
+  stir: number;
+  foam: number;
+  splash: boolean;
+}
+
+/** How one water takes a wade: its share of the churn foam, the speed its rings
+ *  spread at (m/s), and what the player and what a monster do to it. */
+export interface WakeLook {
+  churnFoam: number;
+  speed: number;
+  player: WadeWake;
+  monster: WadeWake;
+}
+
+const FULL_WADE: WadeWake = { stir: 1, foam: 1, splash: true };
+
+/** A fen pool is near still water, a few square metres a pack of forty wades at
+ *  once. Its waves cannot run off up a beach, so churn would break it white; the
+ *  rings off a step on a pond spread at a few tenths of a metre a second, not a
+ *  swell's speed; and past a tenth of the player's waves a pack bands the dark
+ *  pool in glints. Leg foam stops at faint lace, because a pack fighting in place
+ *  would otherwise pile it white. */
+export const FEN_WAKE: WakeLook = {
+  churnFoam: 0.1,
+  speed: 0.35,
+  player: { stir: 0.3, foam: 0.35, splash: true },
+  monster: { stir: 0.06, foam: 0.15, splash: false },
+};
 
 /** How far inland the last wash reaches (the sea strip's first band): sand past
  *  it never carries water, so a wave reflects there. */
@@ -92,8 +120,9 @@ export class WakeField {
   /** Nothing moving and nothing stirring it: no steps, nothing to upload. */
   asleep = true;
 
-  /** `churnFoam` scales the white that fast-moving water breaks into. */
-  constructor(private readonly churnFoam = 1) {}
+  /** `churnFoam` scales the white that fast-moving water breaks into; `speed`
+   *  is how fast a ring spreads (m/s). */
+  constructor(private readonly churnFoam = 1, private readonly speed = WAKE_SPEED) {}
 
   /** Centre the window on a world point. The window moves in whole cells and
    *  its contents move the other way, so a ring stays where it was made. */
@@ -171,8 +200,9 @@ export class WakeField {
   }
 
   /** Whiten the water round a point, up to `amount` at its centre: what legs
-   *  and feet churn up, whether or not the surface is moving fast there. */
-  foamAt(x: number, z: number, radius: number, amount: number): void {
+   *  and feet churn up, whether or not the surface is moving fast there. Never
+   *  past `most`, nor thinner than it already is. */
+  foamAt(x: number, z: number, radius: number, amount: number, most = 1): void {
     const N = WAKE_CELLS;
     const ci = (x - this.originX) / WAKE_CELL - 0.5;
     const cj = (z - this.originZ) / WAKE_CELL - 0.5;
@@ -185,7 +215,7 @@ export class WakeField {
         const dx = (i - ci) * WAKE_CELL, dz = (j - cj) * WAKE_CELL;
         const q = (dx * dx + dz * dz) * inv;
         if (q >= 1) continue;
-        this.foam[o] = Math.min(1, this.foam[o]! + amount * (1 - q) * (1 - q));
+        this.foam[o] = Math.max(this.foam[o]!, Math.min(most, this.foam[o]! + amount * (1 - q) * (1 - q)));
         this.stirred = true;
         this.asleep = false;
       }
@@ -250,7 +280,7 @@ export class WakeField {
 
   private tick(): void {
     const N = WAKE_CELLS;
-    const k = (WAKE_SPEED * STEP / WAKE_CELL) ** 2;
+    const k = (this.speed * STEP / WAKE_CELL) ** 2;
     const c = this.cur, p = this.prev;
     let peak = 0, white = 0;
     for (let j = 1; j < N - 1; j++)
@@ -331,7 +361,13 @@ const STEP_FOAM = 0.7;
 export class WakeStirrer {
   private readonly last = new Map<number, { x: number; z: number; walked: number; left: boolean }>();
 
-  constructor(private readonly field: WakeField, private readonly depth: WaterDepth) {}
+  /** `player` and `monster` tone down what each does to the water. */
+  constructor(
+    private readonly field: WakeField,
+    private readonly depth: WaterDepth,
+    private readonly monster: WadeWake = FULL_WADE,
+    private readonly player: WadeWake = FULL_WADE,
+  ) {}
 
   /** Stir for this frame; `out` is cleared and receives the feet that came down in water. */
   stir(bodies: readonly WakeBody[], dt: number, out: Footfall[]): void {
@@ -356,13 +392,16 @@ export class WakeStirrer {
       if (depth < WADE_FROM || moved < 1e-4 || dt <= 0) continue;
       const t = Math.min(1, (depth - WADE_FROM) / (WADE_FULL - WADE_FROM));
       const wet = t * t * (3 - 2 * t);
+      const wade = b.player ? this.player : this.monster;
+      const stir = wet * wade.stir;
+      const most = wade.foam;
       const speed = moved / dt;
       // A moving body is a moving trough: the bow wave and the V behind it are
       // what the wave equation makes of that, not something drawn.
-      this.field.push(b.x, b.z, b.radius * 0.8, -DRAG * speed * dt * wet);
+      this.field.push(b.x, b.z, b.radius * 0.8, -DRAG * speed * dt * stir);
       // White water round the legs, laid down where they are and fading behind:
       // a trail, not a halo that travels with him.
-      this.field.foamAt(b.x, b.z, b.radius * COLLAR_RADIUS, COLLAR_RATE * dt * wet * Math.min(1, speed / COLLAR_SPEED));
+      this.field.foamAt(b.x, b.z, b.radius * COLLAR_RADIUS, COLLAR_RATE * dt * wet * Math.min(1, speed / COLLAR_SPEED), most);
       was.walked += moved;
       const stride = Math.max(0.6, b.radius * 2.4);
       if (was.walked < stride) continue;
@@ -371,8 +410,8 @@ export class WakeStirrer {
       const ux = dx / moved, uz = dz / moved;
       const side = (was.left ? 1 : -1) * b.radius * 0.4;
       const fx = b.x - uz * side, fz = b.z + ux * side;
-      this.field.push(fx, fz, STEP_RADIUS, -STEP_DEPTH * wet);
-      this.field.foamAt(fx, fz, STEP_FOAM_RADIUS, STEP_FOAM * wet);
+      this.field.push(fx, fz, STEP_RADIUS, -STEP_DEPTH * stir);
+      this.field.foamAt(fx, fz, STEP_FOAM_RADIUS, STEP_FOAM * wet, most);
       out.push({ x: fx, z: fz, depth, dirX: ux, dirZ: uz, speed, player: b.player });
     }
     for (const id of this.last.keys()) if (!seen.has(id)) this.last.delete(id);

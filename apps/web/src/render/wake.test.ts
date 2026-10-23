@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import type { Shoreline } from "@exiled/mapgen";
 import {
-  FEN_CHURN_FOAM, WAKE_CELL, WAKE_CELLS, WAKE_SPEED, WakeField, WakeStirrer, seaDepth, shoreDepth,
+  FEN_WAKE, WAKE_CELL, WAKE_CELLS, WAKE_SPEED, WakeField, WakeStirrer, seaDepth, shoreDepth,
   type Footfall, type WaterDepth,
 } from "./wake";
 
@@ -32,6 +32,20 @@ describe("WakeField", () => {
     const b = frontOut(field, 10, 4, 6);
     expect(b - a).toBeGreaterThan(WAKE_SPEED * 0.5 * 0.85);
     expect(b - a).toBeLessThan(WAKE_SPEED * 0.5 * 1.15);
+  });
+
+  it("spreads a ring across a fen pool as slowly as a step's ripples on a pond", () => {
+    const field = new WakeField(FEN_WAKE.churnFoam, FEN_WAKE.speed);
+    field.follow(10, 4);
+    field.push(10, 4, 0.2, 0.05);
+    // Past the first second, once the dent itself has spread.
+    field.step(2);
+    const a = frontOut(field, 10, 4, 6);
+    field.step(1);
+    const b = frontOut(field, 10, 4, 6);
+    // A few tenths of a metre a second: no swell running across still water.
+    expect(b - a).toBeGreaterThan(0.2);
+    expect(b - a).toBeLessThan(0.5);
   });
 
   it("keeps a ripple where it is in the world while the window follows the player", () => {
@@ -196,37 +210,70 @@ describe("WakeStirrer", () => {
     expect(field.asleep).toBe(true);
   });
 
-  it("leaves most of a fen pool dark while a pack wades through it", () => {
-    // A 5 by 3.5 m pool, deepening by half a metre per cell in from its bank.
+  /** A pack (or the player alone) in a 6 by 4 m fen pool, in ranks 0.7 m apart,
+   *  walking across it at 1.2 m/s or milling in place (fighting) at the same
+   *  speed; the worst share of the pool laced with foam, gone mostly white, and glinting. */
+  function wadeFen(n: number, player: boolean, mill = false) {
+    // Deepening by half a metre per cell in from its bank.
     const pool: WaterDepth = (x, z) => {
-      const d = Math.min(2.5 - Math.abs(x), 1.75 - Math.abs(z));
+      const d = Math.min(3 - Math.abs(x), 2 - Math.abs(z));
       return d < 0 ? -Infinity : Math.floor(d / 0.5) * 0.5 + 0.25;
     };
-    const field = new WakeField(FEN_CHURN_FOAM);
+    const field = new WakeField(FEN_WAKE.churnFoam, FEN_WAKE.speed);
     field.follow(0, 0);
     field.setDepth(pool);
-    const stirrer = new WakeStirrer(field, pool);
+    const stirrer = new WakeStirrer(field, pool, FEN_WAKE.monster, FEN_WAKE.player);
     const out: Footfall[] = [];
+    const bytes = new Uint8Array(WAKE_CELLS * WAKE_CELLS * 4);
+    for (let k = 0; k < bytes.length; k += 4) bytes[k] = bytes[k + 1] = bytes[k + 2] = 128;
     const dt = 1 / 60;
-    for (let t = 0; t < 4; t += dt) {
-      // Six of them walking 1.5 m/s circles across the pool.
-      stirrer.stir(Array.from({ length: 6 }, (_, k) => {
-        const a = t * 1.5 / 1.2 + k * Math.PI / 3;
-        return { id: k, x: (k % 2 ? 0.6 : -0.6) + Math.cos(a) * 1.2, z: (k % 3 - 1) * 0.5 + Math.sin(a) * 1.2, radius: 0.5, player: false };
+    let foamed = 0, solid = 0, glinting = 0;
+    for (let f = 0; f < 240; f++) {
+      const t = f * dt;
+      stirrer.stir(Array.from({ length: n }, (_, k) => {
+        // Shoulder to shoulder when fighting, looser on the move.
+        const gap = mill ? 0.5 : 0.7;
+        const x = (k % 8 - 3.5) * gap, z = (Math.floor(k / 8) - 2) * gap;
+        return mill
+          ? { id: k, x: x + Math.cos(t * 4 + k) * 0.3, z: z + Math.sin(t * 4 + k) * 0.3, radius: 0.45, player }
+          : { id: k, x: x + t * 1.2 - 4, z, radius: 0.45, player };
       }), dt, out);
       field.step(dt);
+      if (f % 10) continue;
+      field.pack(bytes);
+      let water = 0, foam = 0, white = 0, glint = 0;
+      for (let j = 0; j < WAKE_CELLS; j++)
+        for (let i = 0; i < WAKE_CELLS; i++) {
+          if (pool(field.originX + (i + 0.5) * WAKE_CELL, field.originZ + (j + 0.5) * WAKE_CELL) === -Infinity) continue;
+          water++;
+          const o = (j * WAKE_CELLS + i) * 4;
+          // The shader tears foam into lace: from about 0.1 its highest ridges
+          // show, and past about 0.4 most of the lace is white.
+          if (bytes[o + 3]! > 25) foam++;
+          if (bytes[o + 3]! > 102) white++;
+          // A slope of about 0.04: faint on sand, a white band on dark fen water.
+          if (Math.abs(bytes[o + 1]! - 128) + Math.abs(bytes[o + 2]! - 128) > 8) glint++;
+        }
+      foamed = Math.max(foamed, foam / water);
+      solid = Math.max(solid, white / water);
+      glinting = Math.max(glinting, glint / water);
     }
-    const bytes = new Uint8Array(WAKE_CELLS * WAKE_CELLS * 4);
-    field.pack(bytes);
-    let water = 0, white = 0;
-    for (let j = 0; j < WAKE_CELLS; j++)
-      for (let i = 0; i < WAKE_CELLS; i++) {
-        if (pool(field.originX + (i + 0.5) * WAKE_CELL, field.originZ + (j + 0.5) * WAKE_CELL) === -Infinity) continue;
-        water++;
-        if (bytes[(j * WAKE_CELLS + i) * 4 + 3]! > 77) white++;
-      }
-    // White round their legs, but not a pool gone white from bank to bank.
-    expect(white / water).toBeGreaterThan(0.05);
-    expect(white / water).toBeLessThan(0.35);
+    return { foamed, solid, glinting };
+  }
+
+  it("lets a pack of forty wade a fen pool without whitening it or banding it in glints", () => {
+    for (const pack of [wadeFen(40, false), wadeFen(40, false, true)]) {
+      // Faint lace round their legs, no more: never white, and no bands across the pool.
+      expect(pack.foamed).toBeGreaterThan(0.03);
+      expect(pack.solid).toBeLessThan(0.02);
+      expect(pack.glinting).toBeLessThan(0.05);
+    }
+    // The player alone still leaves a trail and a ring that catches the light,
+    // but calmly: never white, and no bands.
+    const player = wadeFen(1, true);
+    expect(player.foamed).toBeGreaterThan(0.01);
+    expect(player.glinting).toBeGreaterThan(0);
+    expect(player.solid).toBeLessThan(0.02);
+    expect(player.glinting).toBeLessThan(0.05);
   });
 });

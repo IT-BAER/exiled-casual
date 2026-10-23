@@ -3,6 +3,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { NullEngine, VertexBuffer, VertexData } from "@babylonjs/core";
 import { createScene } from "./engine";
 import { buildSea, SEA_MESH_NAME, stirSea } from "./sea";
+import { shoreMask } from "./fen-water";
 import { waterSplash } from "./splash";
 import { WATER_DATA_KIND, waterPlugin, waterSurf } from "./water-surface";
 import { BIOMES } from "@exiled/content-runtime";
@@ -260,6 +261,20 @@ describe("buildSea", () => {
       expect(stirSea(scene, [{ id: 1, x, z: 0.75, radius: 0.3, player: true }], 1 / 60)).toEqual([]);
   });
 
+  it("lets a monster wade a fen pool without a splash: a pack would keep it boiling", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    buildSea(scene, fenGrid(), "fen");
+    const splash = waterSplash(scene);
+    const before = { drops: splash.emitted, crowns: splash.crowns };
+    let falls = 0;
+    for (let x = 0.5; x <= 4.5; x += 2 / 60)
+      falls += stirSea(scene, [{ id: 2, x, z: 2.5, radius: 0.3, player: false }], 1 / 60).length;
+    expect(falls).toBeGreaterThan(0);
+    expect(splash.crowns).toBe(before.crowns);
+    expect(splash.emitted).toBe(before.drops);
+  });
+
   it("throws a crown of water off every foot that comes down in it, and lets it fall back", () => {
     engine = new NullEngine();
     const { scene } = createScene(engine);
@@ -292,7 +307,7 @@ describe("buildSea", () => {
       if (biome.id !== "coast") expect(biome.sea).toBeUndefined();
   });
 
-  it("draws a fen's pools as still water: only the marked cells, no surf, faded to nothing at the bank", () => {
+  it("draws a fen's pools as still water: the marked cells and one ring of bank for the wet mud, no surf", () => {
     engine = new NullEngine();
     const { scene } = createScene(engine);
     const { mesh, waterCells } = buildSea(scene, fenGrid(), "fen");
@@ -304,7 +319,7 @@ describe("buildSea", () => {
     const depth = mesh!.getVerticesData(WATER_DATA_KIND)!;
     // Murky and still: no surf.
     expect(waterSurf(mesh!)).toBe(false);
-    let deep = 0;
+    let deep = 0, banked = 0;
     for (let v = 0; v < pos.length / 3; v++) {
       expect(pos[v * 3 + 1]).toBeCloseTo(0.02, 6);
       const x = pos[v * 3]!, z = pos[v * 3 + 2]!;
@@ -313,10 +328,36 @@ describe("buildSea", () => {
       const onEdge = Math.abs(x - 1.75) < 1e-6 || Math.abs(x - 3.25) < 1e-6 ||
         Math.abs(z - 1.75) < 1e-6 || Math.abs(z - 3.25) < 1e-6;
       if (onEdge) expect(depth[v * 2]!, `${x},${z}`).toBeLessThanOrEqual(0);
+      // One cell of bank round it (1.25..3.75), all of it land.
+      expect(x).toBeGreaterThanOrEqual(1.25 - 1e-6);
+      expect(x).toBeLessThanOrEqual(3.75 + 1e-6);
+      const bank = x < 1.75 - 1e-6 || x > 3.25 + 1e-6 || z < 1.75 - 1e-6 || z > 3.25 + 1e-6;
+      if (bank) {
+        expect(depth[v * 2]!, `${x},${z}`).toBeLessThan(0);
+        banked++;
+      }
       if (depth[v * 2]! > 0) deep++;
     }
+    expect(banked).toBeGreaterThan(0);
     // And it does fill in: the middle has depth, not just a wet stain.
     expect(deep).toBeGreaterThan(0);
+  });
+
+  it("shapes a fen pool's bank off a smoothed mask: on the cell edge where it runs straight, rounded at a corner", () => {
+    const { cols, rows, water } = fenGrid();
+    const mask = shoreMask(water!, cols, rows);
+    // Bilinear, as the shader samples it: texel (x, y) at cell (x, y)'s centre.
+    const at = (x: number, y: number): number => {
+      const x0 = Math.floor(x), y0 = Math.floor(y), u = x - x0, v = y - y0;
+      const t = (i: number, j: number): number => mask[(j * cols + i) * 4]! / 255;
+      return (t(x0, y0) * (1 - u) + t(x0 + 1, y0) * u) * (1 - v) + (t(x0, y0 + 1) * (1 - u) + t(x0 + 1, y0 + 1) * u) * v;
+    };
+    expect(at(5, 5)).toBeCloseTo(1, 2);
+    expect(at(1, 1)).toBe(0);
+    // Halfway between the pool's edge cell and the floor beside it: the bank.
+    expect(at(3.5, 5)).toBeCloseTo(0.5, 1);
+    // The pool's outer corner is cut round, not drawn square.
+    expect(at(3.5, 3.5)).toBeLessThan(0.35);
   });
 
   it("draws no fen without a water mask", () => {

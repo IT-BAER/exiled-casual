@@ -69,7 +69,8 @@ export const FEN_WATER: WaterParams = {
   // A pool lies in shade with nothing bright to reflect; without a strong sheen
   // it renders as a black hole in the ground.
   sky: [0.13, 0.15, 0.145, 22],
-  ripple: [3.4, -0.0042, 0.0034, 0.6],
+  // None: a fen has no normal map to ripple (sea.ts), so any chop reads as sea.
+  ripple: [3.4, 0, 0, 0],
 };
 
 const GLSL_DEFS = `
@@ -233,17 +234,7 @@ const GLSL_SHADE = `
     }
     #else
     {
-      // Still water: a drip ring now and then, so the pool reads as liquid.
-      vec2 cell = floor(q / 1.6);
-      float h = wHash(cell);
-      float period = 3.0 + 5.0 * h;
-      float age = fract(t / period + h) * period;
-      vec2 dv = q - (cell + 0.5 + (wHash2(cell) - 0.5) * 0.3) * 1.6;
-      float dist = length(dv);
-      float r = age * 0.3;
-      float ring = sin((dist - r) * 45.0) * exp(-(dist - r) * (dist - r) / 0.004) * exp(-age * 1.1) * step(h, 0.5);
-      normalW = normalize(normalW + vec3(dv.x, 0.0, dv.y) / max(dist, 0.001) * ring * 0.3);
-      // A bank corner shared with land reads half a metre inside the bank.
+      // Still water. A bank corner shared with land reads half a metre inside the bank.
       edge = -0.5;
       soft = 0.7;
       H = max(d + 0.5, 0.0) * waterLook.x;

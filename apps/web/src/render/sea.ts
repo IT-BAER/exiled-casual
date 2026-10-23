@@ -10,9 +10,9 @@ import {
   type Scene,
 } from "@babylonjs/core";
 import type { Shoreline, WalkableGrid } from "@exiled/mapgen";
-import { dressFenWater } from "./fen-water";
+import { dressFenWater, shapeFenShore } from "./fen-water";
 import { waterSplash } from "./splash";
-import { FEN_CHURN_FOAM, WAKE_CELLS, WakeField, WakeStirrer, shoreDepth, type Footfall, type WakeBody, type WaterDepth } from "./wake";
+import { FEN_WAKE, WAKE_CELLS, WakeField, WakeStirrer, shoreDepth, type Footfall, type WakeBody, type WakeLook, type WaterDepth } from "./wake";
 import {
   COAST_WATER,
   FEN_WATER,
@@ -63,16 +63,14 @@ const SEA_ROUGHNESS = 0.2;
 const SEA_SKY = new Color3(0.035, 0.06, 0.062);
 
 /** Which water: the strand's sea, or the fen's standing pools (swamp). A pool
- *  is still and murky: no surf, no breaker, a slow drift instead of a swell. */
+ *  is still and murky: no surf, no breaker, no swell. */
 export type SeaLook = "coast" | "fen";
 const FEN_MAT_NAME = "fen-mat";
 const FEN_SKY = new Color3(0.012, 0.018, 0.012);
-const FEN_ROUGHNESS = 0.3;
+/** Still water is a mirror: a light shows in it as a small, sharp spot. */
+const FEN_ROUGHNESS = 0.12;
 /** Cells to full depth: pools are a few metres across, not a sea. */
 const FEN_DEPTH_CELLS = 5;
-/** Wave scroll as a share of the sea's: barely moving, so it reads as still. */
-const FEN_SCROLL = 0.2;
-const FEN_BUMP = 0.35;
 
 const scrollObservers = new Map<string, Observer<Scene>>();
 
@@ -87,6 +85,8 @@ interface Wake {
   texture: RawTexture;
   wake: WaterWake;
   mat: PBRMaterial;
+  /** Monsters' feet splash here as well as the player's. */
+  monsterSplash: boolean;
 }
 let liveWake: Wake | null = null;
 const footfalls: Footfall[] = [];
@@ -101,8 +101,8 @@ function dropWake(): void {
 }
 
 /** Give `mat` a wake field over water `depth` deep, stirred by `stirSea`. */
-function attachWake(scene: Scene, mat: PBRMaterial, depth: WaterDepth, churnFoam?: number): void {
-  const field = new WakeField(churnFoam);
+function attachWake(scene: Scene, mat: PBRMaterial, depth: WaterDepth, look?: WakeLook): void {
+  const field = new WakeField(look?.churnFoam, look?.speed);
   field.setDepth(depth);
   const bytes = new Uint8Array(WAKE_CELLS * WAKE_CELLS * 4);
   for (let k = 0; k < bytes.length; k += 4) bytes[k] = bytes[k + 1] = bytes[k + 2] = 128;
@@ -113,7 +113,10 @@ function attachWake(scene: Scene, mat: PBRMaterial, depth: WaterDepth, churnFoam
   texture.wrapU = texture.wrapV = Texture.CLAMP_ADDRESSMODE;
   const wake: WaterWake = { texture, originX: field.originX, originZ: field.originZ };
   waterPlugin(mat)!.wake = wake;
-  liveWake = { scene, field, stirrer: new WakeStirrer(field, depth), bytes, texture, wake, mat };
+  liveWake = {
+    scene, field, stirrer: new WakeStirrer(field, depth, look?.monster, look?.player), bytes, texture, wake, mat,
+    monsterSplash: look?.monster.splash ?? true,
+  };
   // Built with the water, so its shaders compile behind the loading plate.
   waterSplash(scene).onLand = (x, z, size) => dropLanded(scene, x, z, size);
 }
@@ -157,7 +160,7 @@ export function stirSea(scene: Scene, bodies: readonly WakeBody[], dtSeconds: nu
   if (w.field.pack(w.bytes)) w.texture.update(w.bytes);
   w.wake.originX = w.field.originX;
   w.wake.originZ = w.field.originZ;
-  for (const f of footfalls) splash(scene, f);
+  for (const f of footfalls) if (f.player || w.monsterSplash) splash(scene, f);
   return footfalls;
 }
 
@@ -184,11 +187,12 @@ function seaMaterial(scene: Scene, look: SeaLook = "coast"): PBRMaterial {
   // The sand under the shallows has to show through, and the sea is drawn after
   // the ground so back-to-front is already the order it needs.
   mat.transparencyMode = PBRMaterial.MATERIAL_ALPHABLEND;
+  // A pool a few metres across has no chop: any normal map reads as sea.
+  if (fen) return mat;
   try {
     const bump = new Texture("/textures/water/water_normal.jpg", scene);
     bump.uScale = 1;
     bump.vScale = 1;
-    if (fen) bump.level = FEN_BUMP;
     mat.bumpTexture = bump;
   } catch {
     /* no canvas under NullEngine; the untextured material is fine in tests */
@@ -339,6 +343,8 @@ export function buildSea(
   // render list is the leak the wall boxes already had once.
   scene.getMeshByName(SEA_MESH_NAME)?.dispose();
   dropWake();
+  const fenMat = scene.getMaterialByName(FEN_MAT_NAME);
+  if (fenMat) shapeFenShore(scene, fenMat, null);
   if (!grid || !enabled) return { mesh: null, waterCells: 0 };
   const look: SeaLook = enabled === true ? "coast" : enabled;
   const fen = look === "fen";
@@ -487,12 +493,21 @@ export function buildSea(
   const quad = (x0: number, z0: number, x1: number, z1: number, depth: number): void =>
     quadAt(x0, z0, x1, z1, depth, depth, depth, depth);
 
+  /** A fen's bank cell: land touching its water, side or corner, which carries
+   *  the mud the pool keeps wet and the rounded bank the mask draws past the cells. */
+  const bankOf = (x: number, y: number): boolean => {
+    for (let j = Math.max(0, y - 1); j <= Math.min(rows - 1, y + 1); j++)
+      for (let i = Math.max(0, x - 1); i <= Math.min(cols - 1, x + 1); i++)
+        if (water![j * cols + i]) return true;
+    return false;
+  };
+
   let waterCells = 0;
   for (let y = 0; y < rows; y++)
     for (let x = 0; x < cols; x++) {
       const i = y * cols + x;
-      if (!water[i]) continue;
-      waterCells++;
+      if (!water[i] && !(fen && bankOf(x, y))) continue;
+      if (water[i]) waterCells++;
       const cx = originX + x * cellSize;
       const cz = originY + y * cellSize;
       quadAt(
@@ -542,15 +557,16 @@ export function buildSea(
   mesh.receiveShadows = false;
   mesh.freezeWorldMatrix();
   mesh.doNotSyncBoundingInfo = true;
-  startScroll(scene, mat, fen ? FEN_SCROLL : 1);
+  startScroll(scene, mat);
   if (fen) {
+    shapeFenShore(scene, mat, { cols, rows, cellSize, originX, originY, water });
     // Metres in from the bank at a cell's middle; land never carries water.
     const pool = water;
     attachWake(scene, mat, (x, z) => {
       const cx = Math.round((x - originX) / cellSize), cy = Math.round((z - originY) / cellSize);
       if (cx < 0 || cy < 0 || cx >= cols || cy >= rows || !pool[cy * cols + cx]) return -Infinity;
       return (depthOfCell(cx, cy) + 0.5) * cellSize;
-    }, FEN_CHURN_FOAM);
+    }, FEN_WAKE);
   }
   return { mesh, waterCells };
 }
