@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
 import type { Shoreline } from "@exiled/mapgen";
-import { WAKE_CELL, WAKE_CELLS, WAKE_SPEED, WakeField, WakeStirrer, seaDepth, type Footfall } from "./wake";
+import { WAKE_CELL, WAKE_CELLS, WAKE_SPEED, WakeField, WakeStirrer, seaDepth, shoreDepth, type Footfall } from "./wake";
 
 /** A straight shore: `cross` = 0 along the whole run, from -20 to +20. */
 function straightShore(along: "x" | "y", seaSide: 1 | -1): Shoreline {
@@ -56,7 +56,7 @@ describe("WakeField", () => {
 
   it("keeps waves off the dry beach", () => {
     const field = new WakeField();
-    field.setShore(straightShore("x", 1));
+    field.setDepth(shoreDepth(straightShore("x", 1)));
     field.follow(0, 0);
     field.push(0, 0.5, 0.2, 0.05);
     field.step(1.5);
@@ -140,8 +140,8 @@ describe("WakeStirrer", () => {
   function walk(cross: number, metres: number, speed = 4.2) {
     const field = new WakeField();
     const shore = straightShore("x", 1);
-    field.setShore(shore);
-    const stirrer = new WakeStirrer(field, shore);
+    field.setDepth(shoreDepth(shore));
+    const stirrer = new WakeStirrer(field, shoreDepth(shore));
     const falls: Footfall[] = [];
     const out: Footfall[] = [];
     const dt = 1 / 60;
@@ -183,9 +183,9 @@ describe("WakeStirrer", () => {
   it("does not splash across a jump such as a portal", () => {
     const field = new WakeField();
     const shore = straightShore("x", 1);
-    field.setShore(shore);
+    field.setDepth(shoreDepth(shore));
     field.follow(0, 1);
-    const stirrer = new WakeStirrer(field, shore);
+    const stirrer = new WakeStirrer(field, shoreDepth(shore));
     const out: Footfall[] = [];
     stirrer.stir([{ id: 3, x: -6, z: 1, radius: 0.5, player: true }], 1 / 60, out);
     stirrer.stir([{ id: 3, x: 0, z: 1, radius: 0.5, player: true }], 1 / 60, out);

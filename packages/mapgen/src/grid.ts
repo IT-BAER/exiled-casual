@@ -26,9 +26,11 @@ export interface WalkableGrid {
   originY: number;
   /** rows*cols, row-major; 1 = walkable, 0 = wall. */
   cells: Uint8Array;
-  /** rows*cols, 1 = open sea. Only the coast generator sets it, and only it
-   *  can: a wall cell is a cliff on one side of a beach and water on the other,
-   *  and nothing about `cells` tells the two apart. Absent everywhere else. */
+  /** rows*cols, 1 = water. The coast sets it for its sea, whose wall cells are
+   *  a cliff on one side of a beach and water on the other, which `cells` cannot
+   *  tell apart; the swamp sets it for its fen pools, every cell of them walkable.
+   *  A water cell that is also walkable is shallows the player wades. Absent
+   *  everywhere else. */
   water?: Uint8Array;
   /** The waterline as the CURVE it actually is, in world units.
    *
@@ -156,6 +158,8 @@ export interface BuildLayoutParams {
   spawnTarget?: number;
   /** How far, in cells, a reward may move to stand clear of the walls. */
   rewardSearch?: number;
+  /** Walkable water a reward keeps out of and clears like a wall: the fen pools. */
+  water?: Uint8Array;
 }
 
 /**
@@ -266,8 +270,11 @@ export function buildLayout(p: BuildLayoutParams): AreaLayout {
 
   const start = p.objectiveAnchors.find((a) => a.id === "start")!;
   const reached = bfsReachable(cells, size, worldToCell(size, start.x, start.y));
+  const water = p.water;
   const objectiveAnchors = clearRewards(
-    p.objectiveAnchors, cells, size, reached, start, p.rewardSearch ?? REWARD_SEARCH_CELLS, p.spawnSockets,
+    p.objectiveAnchors, water ? cells.map((c, i) => (water[i] ? 0 : c)) : cells, size,
+    water ? reached.map((r, i) => (water[i] ? 0 : r)) : reached, start,
+    p.rewardSearch ?? REWARD_SEARCH_CELLS, p.spawnSockets,
   );
   const targets = [...objectiveAnchors, ...p.spawnSockets];
   const allReached = targets.every((t) => {

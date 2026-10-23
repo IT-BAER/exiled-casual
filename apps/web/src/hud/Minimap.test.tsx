@@ -1,11 +1,14 @@
 // @vitest-environment jsdom
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import "@testing-library/jest-dom/vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import { assembleArea, LOOP_GRAMMAR, type AreaLayout } from "@exiled/mapgen";
-import { Minimap, toCanvas } from "./Minimap";
+import { Minimap, MINIMAP_WATER, paintTerrain, toCanvas } from "./Minimap";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 const layout: AreaLayout = assembleArea(3, "content.test.v1", LOOP_GRAMMAR);
 
@@ -61,5 +64,41 @@ describe("Minimap", () => {
     // the signal, so the hashes have to actually differ.
     const other = assembleArea(4, "content.test.v1", LOOP_GRAMMAR);
     expect(other.hash).not.toBe(layout.hash);
+  });
+
+  it("paints a fen's pools as water inside the walkable silhouette, with no contour round them", () => {
+    // jsdom has no 2D canvas: a stand-in records what each canvas is filled with.
+    const rects = new Map<HTMLCanvasElement, { style: string; x: number; y: number }[]>();
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(function (this: HTMLCanvasElement) {
+      const canvas = this;
+      const log: { style: string; x: number; y: number }[] = [];
+      rects.set(canvas, log);
+      const ctx = {
+        fillStyle: "", filter: "", globalCompositeOperation: "",
+        fillRect: (x: number, y: number) => log.push({ style: String(ctx.fillStyle), x, y }),
+        drawImage: () => {},
+        getImageData: () => ({ data: new Uint8ClampedArray(canvas.width * canvas.height * 4) }),
+        putImageData: () => {},
+      };
+      return ctx as unknown as CanvasRenderingContext2D;
+    });
+    const g = layout.grid;
+    const water = new Uint8Array(g.cells.length);
+    const pool: number[] = [];
+    for (let i = 0; i < g.cells.length && pool.length < 6; i++) if (g.cells[i] === 1) { water[i] = 1; pool.push(i); }
+    paintTerrain({ ...g, water });
+    const at = (i: number): string => `${(i % g.cols) * 4 - 0.5},${Math.floor(i / g.cols) * 4 - 0.5}`;
+    const masks = [...rects.values()].map((log) => new Set(log.filter((r) => r.style === "#fff").map((r) => `${r.x},${r.y}`)));
+    // The walkable silhouette takes the pool in, so the contour cannot run between them.
+    const floor = masks.find((m) => m.size > pool.length)!;
+    for (const i of pool) expect(floor.has(at(i))).toBe(true);
+    // And the pool is its own mask, painted in water.
+    const wet = masks.find((m) => m.size === pool.length)!;
+    expect([...wet].sort()).toEqual(pool.map(at).sort());
+    expect([...rects.values()].flat().some((r) => r.style === MINIMAP_WATER)).toBe(true);
+
+    rects.clear();
+    paintTerrain(g);
+    expect([...rects.values()].flat().some((r) => r.style === MINIMAP_WATER)).toBe(false);
   });
 });

@@ -37,6 +37,15 @@ describe("ControlsDialog", () => {
     expect(wasd).toContain("Space 2");
   });
 
+  it("draws each scheme instead of describing it: a mouse, and the movement keys as a cluster", () => {
+    const binds = { ...DEFAULT_KEYBINDS_BY_MODE, wasd: { ...DEFAULT_KEYBINDS_BY_MODE.wasd, moveUp: "z" } };
+    render(<ControlsDialog onPick={() => {}} keybinds={binds} />);
+    expect(screen.getByTestId("controls-art-mouse").tagName.toLowerCase()).toBe("svg");
+    const keys = [...screen.getByTestId("controls-art-wasd").querySelectorAll("[data-key]")].map((k) => k.textContent);
+    expect(keys).toEqual(["Z", "A", "S", "D"]);
+    expect(screen.getByTestId("controls-mouse").textContent).not.toContain("classic hand");
+  });
+
   it("keeps game keys from walking or casting while the choice is open", () => {
     const game = vi.fn();
     window.addEventListener("keydown", game);

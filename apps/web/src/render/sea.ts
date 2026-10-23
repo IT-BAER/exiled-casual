@@ -12,7 +12,7 @@ import {
 import type { Shoreline, WalkableGrid } from "@exiled/mapgen";
 import { dressFenWater } from "./fen-water";
 import { waterSplash } from "./splash";
-import { WAKE_CELLS, WakeField, WakeStirrer, type Footfall, type WakeBody } from "./wake";
+import { WAKE_CELLS, WakeField, WakeStirrer, shoreDepth, type Footfall, type WakeBody, type WaterDepth } from "./wake";
 import {
   COAST_WATER,
   FEN_WATER,
@@ -76,9 +76,10 @@ const FEN_BUMP = 0.35;
 
 const scrollObservers = new Map<string, Observer<Scene>>();
 
-/** The coast's wake: the field, what stirs it, and the texture it reaches the
- *  shader through. One per coast build, gone with the sea. */
-interface CoastWake {
+/** The wake of the water bodies wade (the coast's sea, the fen's pools): the
+ *  field, what stirs it, and the texture it reaches the shader through. One per
+ *  build, gone with the water. */
+interface Wake {
   scene: Scene;
   field: WakeField;
   stirrer: WakeStirrer;
@@ -87,16 +88,34 @@ interface CoastWake {
   wake: WaterWake;
   mat: PBRMaterial;
 }
-let coastWake: CoastWake | null = null;
+let liveWake: Wake | null = null;
 const footfalls: Footfall[] = [];
 const NO_FOOTFALLS: readonly Footfall[] = [];
 
 function dropWake(): void {
-  if (!coastWake) return;
-  const plugin = waterPlugin(coastWake.mat);
-  if (plugin?.wake === coastWake.wake) plugin.wake = null;
-  coastWake.texture.dispose();
-  coastWake = null;
+  if (!liveWake) return;
+  const plugin = waterPlugin(liveWake.mat);
+  if (plugin?.wake === liveWake.wake) plugin.wake = null;
+  liveWake.texture.dispose();
+  liveWake = null;
+}
+
+/** Give `mat` a wake field over water `depth` deep, stirred by `stirSea`. */
+function attachWake(scene: Scene, mat: PBRMaterial, depth: WaterDepth): void {
+  const field = new WakeField();
+  field.setDepth(depth);
+  const bytes = new Uint8Array(WAKE_CELLS * WAKE_CELLS * 4);
+  for (let k = 0; k < bytes.length; k += 4) bytes[k] = bytes[k + 1] = bytes[k + 2] = 128;
+  const texture = new RawTexture(
+    bytes, WAKE_CELLS, WAKE_CELLS, Constants.TEXTUREFORMAT_RGBA, scene,
+    false, false, Texture.BILINEAR_SAMPLINGMODE, Constants.TEXTURETYPE_UNSIGNED_BYTE,
+  );
+  texture.wrapU = texture.wrapV = Texture.CLAMP_ADDRESSMODE;
+  const wake: WaterWake = { texture, originX: field.originX, originZ: field.originZ };
+  waterPlugin(mat)!.wake = wake;
+  liveWake = { scene, field, stirrer: new WakeStirrer(field, depth), bytes, texture, wake, mat };
+  // Built with the water, so its shaders compile behind the loading plate.
+  waterSplash(scene).onLand = (x, z, size) => dropLanded(scene, x, z, size);
 }
 
 /** The thin wash of the last wave throws no splash, only its foam. */
@@ -112,21 +131,22 @@ function splash(scene: Scene, f: Footfall): void {
   waterSplash(scene).burst(f, SEA_Y);
 }
 
-/** Ring the coast's water where a drop of its own splash falls back in. */
+/** Ring the water where a drop of its own splash falls back in. */
 function dropLanded(scene: Scene, x: number, z: number, size: number): void {
-  const w = coastWake;
+  const w = liveWake;
   if (!w || w.scene !== scene) return;
   w.field.push(x, z, DROP_RING_RADIUS, -DROP_DENT * size);
   w.field.foamAt(x, z, DROP_RING_RADIUS * 1.2, DROP_FOAM);
 }
 
 /**
- * Let the bodies standing in the coast's water stir it, once per frame: steps
- * the wave field, uploads it while it moves and splashes each foot that comes
- * down in water. A no-op off the coast. Returns this frame's footfalls.
+ * Let the bodies standing in the coast's sea or the fen's pools stir it, once
+ * per frame: steps the wave field, uploads it while it moves and splashes each
+ * foot that comes down in water. A no-op without either. Returns this frame's
+ * footfalls.
  */
 export function stirSea(scene: Scene, bodies: readonly WakeBody[], dtSeconds: number): readonly Footfall[] {
-  const w = coastWake;
+  const w = liveWake;
   if (!w || w.scene !== scene) return NO_FOOTFALLS;
   // A hitch (a tab in the background) is not ten seconds of physics.
   const dt = Math.min(dtSeconds, 0.05);
@@ -287,20 +307,7 @@ function buildShoreSea(scene: Scene, shore: Shoreline): SeaResult {
   const toLand = -shore.seaSide;
   const plugin = waterPlugin(mat)!;
   plugin.shore = shore.along === "x" ? [0, toLand] : [toLand, 0];
-  const field = new WakeField();
-  field.setShore(shore);
-  const bytes = new Uint8Array(WAKE_CELLS * WAKE_CELLS * 4);
-  for (let k = 0; k < bytes.length; k += 4) bytes[k] = bytes[k + 1] = bytes[k + 2] = 128;
-  const texture = new RawTexture(
-    bytes, WAKE_CELLS, WAKE_CELLS, Constants.TEXTUREFORMAT_RGBA, scene,
-    false, false, Texture.BILINEAR_SAMPLINGMODE, Constants.TEXTURETYPE_UNSIGNED_BYTE,
-  );
-  texture.wrapU = texture.wrapV = Texture.CLAMP_ADDRESSMODE;
-  const wake: WaterWake = { texture, originX: field.originX, originZ: field.originZ };
-  plugin.wake = wake;
-  coastWake = { scene, field, stirrer: new WakeStirrer(field, shore), bytes, texture, wake, mat };
-  // Built with the coast, so its shaders compile behind the loading plate.
-  waterSplash(scene).onLand = (x, z, size) => dropLanded(scene, x, z, size);
+  attachWake(scene, mat, shoreDepth(shore));
   mesh.material = mat;
   mesh.isPickable = false;
   mesh.receiveShadows = false;
@@ -349,7 +356,8 @@ export function buildSea(
   if (fen && !grid.water) return { mesh: null, waterCells: 0 };
 
   const { cols, rows, cellSize, originX, originY, cells } = grid;
-  const isFloor = (x: number, y: number): boolean => cells[y * cols + x] === 1;
+  // Walkable water (a fen pool) is not its own shore.
+  const isFloor = (x: number, y: number): boolean => cells[y * cols + x] === 1 && !grid.water?.[y * cols + x];
 
   // A coast SAYS which cells are sea, because on a beach it cannot be derived:
   // the cliff behind the player is wall and touches the grid border exactly like
@@ -535,6 +543,15 @@ export function buildSea(
   mesh.freezeWorldMatrix();
   mesh.doNotSyncBoundingInfo = true;
   startScroll(scene, mat, fen ? FEN_SCROLL : 1);
+  if (fen) {
+    // Metres in from the bank at a cell's middle; land never carries water.
+    const pool = water;
+    attachWake(scene, mat, (x, z) => {
+      const cx = Math.round((x - originX) / cellSize), cy = Math.round((z - originY) / cellSize);
+      if (cx < 0 || cy < 0 || cx >= cols || cy >= rows || !pool[cy * cols + cx]) return -Infinity;
+      return (depthOfCell(cx, cy) + 0.5) * cellSize;
+    });
+  }
   return { mesh, waterCells };
 }
 

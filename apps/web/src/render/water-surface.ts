@@ -224,7 +224,6 @@ const GLSL_SHADE = `
         foam += cap * (0.35 + 0.8 * churn);
       }
       foam *= waterSwash.w;
-      foam += wakeFoam;
       // Sand the last wash left dark, drying again behind the draining edge.
       wet = off < 0.0 ? exp(off / 0.8) : 0.0;
       wet = max(wet, smoothstep(-waterSwash.y * 1.35, 0.0, d) * 0.55);
@@ -250,6 +249,7 @@ const GLSL_SHADE = `
       H = max(d + 0.5, 0.0) * waterLook.x;
     }
     #endif
+    foam += wakeFoam;
     // A trough leaves less water over the sand, a crest more.
     H = max(H + wakeH, 0.0);
     // Beer-Lambert over the view path (down and back up, at about 45 degrees).
@@ -292,7 +292,7 @@ class WaterSurfacePlugin extends MaterialPluginBase {
   surf: boolean;
   /** Unit xz direction from the sea toward land; zero for a pool. */
   shore: [number, number] = [0, 0];
-  /** Set on a coast while it has a wake field; the define follows it. */
+  /** Set while the water has a wake field; the define follows it. */
   wake: WaterWake | null = null;
 
   constructor(material: Material, surf: boolean, params: WaterParams) {
@@ -311,7 +311,7 @@ class WaterSurfacePlugin extends MaterialPluginBase {
   override prepareDefines(defines: MaterialDefines): void {
     defines["WATER_SURFACE"] = true;
     defines["WATER_SURF"] = this.surf;
-    defines["WATER_WAKE"] = this.surf && this.wake !== null;
+    defines["WATER_WAKE"] = this.wake !== null;
   }
 
   override isReadyForSubMesh(): boolean {

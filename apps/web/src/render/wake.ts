@@ -62,6 +62,14 @@ export function seaDepth(shore: Shoreline, x: number, z: number): number {
   return (c - line) * shore.seaSide;
 }
 
+/** Metres out into the water at a world point (x, z); negative inland. */
+export type WaterDepth = (x: number, z: number) => number;
+
+/** A coast's depth, off its shore curve. */
+export function shoreDepth(shore: Shoreline): WaterDepth {
+  return (x, z) => seaDepth(shore, x, z);
+}
+
 export class WakeField {
   /** World x/z of cell (0, 0)'s lower corner. */
   originX = 0;
@@ -75,7 +83,7 @@ export class WakeField {
   private packedRest = true;
   /** 1 where the cell is beach the water never reaches; held at rest. */
   private dry = new Uint8Array(WAKE_CELLS * WAKE_CELLS);
-  private shore: Shoreline | null = null;
+  private depth: WaterDepth | null = null;
   private acc = 0;
   private stirred = false;
   /** Nothing moving and nothing stirring it: no steps, nothing to upload. */
@@ -99,23 +107,23 @@ export class WakeField {
     this.foam = this.shift(this.foam, di, dj);
   }
 
-  /** The coast this field lies off; null for open water everywhere. */
-  setShore(shore: Shoreline | null): void {
-    this.shore = shore;
+  /** The depth of the water this field lies on; null for open water everywhere. */
+  setDepth(depth: WaterDepth | null): void {
+    this.depth = depth;
     this.markDry();
   }
 
   private markDry(): void {
     const N = WAKE_CELLS;
-    const shore = this.shore;
-    if (!shore) {
+    const depth = this.depth;
+    if (!depth) {
       this.dry.fill(0);
       return;
     }
     for (let j = 0; j < N; j++) {
       const z = this.originZ + (j + 0.5) * WAKE_CELL;
       for (let i = 0; i < N; i++)
-        this.dry[j * N + i] = seaDepth(shore, this.originX + (i + 0.5) * WAKE_CELL, z) < DRY_BEYOND ? 1 : 0;
+        this.dry[j * N + i] = depth(this.originX + (i + 0.5) * WAKE_CELL, z) < DRY_BEYOND ? 1 : 0;
     }
   }
 
@@ -317,7 +325,7 @@ const STEP_FOAM = 0.7;
 export class WakeStirrer {
   private readonly last = new Map<number, { x: number; z: number; walked: number; left: boolean }>();
 
-  constructor(private readonly field: WakeField, private readonly shore: Shoreline) {}
+  constructor(private readonly field: WakeField, private readonly depth: WaterDepth) {}
 
   /** Stir for this frame; `out` is cleared and receives the feet that came down in water. */
   stir(bodies: readonly WakeBody[], dt: number, out: Footfall[]): void {
@@ -338,7 +346,7 @@ export class WakeStirrer {
         was.walked = 0;
         continue;
       }
-      const depth = seaDepth(this.shore, b.x, b.z);
+      const depth = this.depth(b.x, b.z);
       if (depth < WADE_FROM || moved < 1e-4 || dt <= 0) continue;
       const t = Math.min(1, (depth - WADE_FROM) / (WADE_FULL - WADE_FROM));
       const wet = t * t * (3 - 2 * t);
