@@ -152,6 +152,14 @@ describe("MONSTERS", () => {
     expect(MONSTERS.has("monster.cinder_imp.v1")).toBe(true);
   });
 
+  // A shooter holds at its own range, so that range must sit inside the frame: at the
+  // camera's widest (ORTHO_HALF_HEIGHT 4.75) a 5-unit ring stays on screen, 7.5 did not.
+  it("every shooter attacks from inside the camera frame", () => {
+    const shooters = [...MONSTERS.values()].filter((d) => d.archetype === "shooter");
+    expect(shooters.length).toBeGreaterThan(0);
+    for (const d of shooters) expect(d.attackRangeFixed, d.id).toBeLessThanOrEqual(fp(5));
+  });
+
   it("cinder_imp maxLifeFixed === fp(40)", () => {
     const def = MONSTERS.get("monster.cinder_imp.v1")!;
     expect(def.maxLifeFixed).toBe(fp(40));                   // 40000

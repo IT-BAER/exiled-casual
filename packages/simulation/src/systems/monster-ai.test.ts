@@ -627,7 +627,7 @@ describe("shooters", () => {
     const { sim, world, monster, player } = aiFixture({
       def: MONSTERS.get("monster.dune_spitter.v1")!,
       monsterAt: { x: fp(0), y: fp(0) },
-      playerAt: { x: fp(5), y: fp(0) },   // inside range 7.5
+      playerAt: { x: fp(4), y: fp(0) },   // inside range 5
     });
     const before = world.get<Health>(player, "health")!.life;
 
@@ -645,7 +645,7 @@ describe("shooters", () => {
     const { sim, world } = aiFixture({
       def: MONSTERS.get("monster.dune_spitter.v1")!,
       monsterAt: { x: fp(0), y: fp(0) },
-      playerAt: { x: fp(5), y: fp(0) },
+      playerAt: { x: fp(4), y: fp(0) },
     });
     for (let i = 0; i < 10; i++) sim.step();
     // 70-tick cooldown: ten ticks is exactly one bolt. Zero would mean it never
@@ -657,7 +657,7 @@ describe("shooters", () => {
     const { sim, world } = aiFixture({
       def: MONSTERS.get("monster.dune_spitter.v1")!,
       monsterAt: { x: fp(0), y: fp(0) },
-      playerAt: { x: fp(8.5), y: fp(0) },  // awake (< AGGRO_RADIUS 9), out of range (> 7.5)
+      playerAt: { x: fp(8.5), y: fp(0) },  // awake (< AGGRO_RADIUS 9), out of range (> 5)
     });
     sim.step();
     expect(world.query("projectile").length).toBe(0);

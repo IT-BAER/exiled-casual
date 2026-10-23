@@ -162,7 +162,7 @@ const MONSTER_DEFS: MonsterDef[] = [
     defenses: { resPct: resBlock({ chaos: 30 }), armourFixed: fp(3) },
     boss: {
       phase2AtLifePct: 55,
-      // 5 units across with a 48-tick wind-up: it cannot be dodged by reaction
+      // 10 units across (radius 5), taller than the 9.5-unit view, with a 48-tick wind-up: it cannot be dodged by reaction
       // and does not need to be. It is a question about where you were standing
       // a second and a half ago.
       slam: { windupTicks: 48, radiusFixed: fp(5.0), damageFixed: fp(22), cooldownTicks: 186, rangeFixed: fp(8) },
@@ -245,7 +245,7 @@ const MONSTER_DEFS: MonsterDef[] = [
   },
   {
     id: "monster.dune_spitter.v1", name: "Dune Spitter", archetype: "shooter",
-    maxLifeFixed: LIFE.shooter, moveSpeedFixed: fp(1.6), attackRangeFixed: fp(7.5),
+    maxLifeFixed: LIFE.shooter, moveSpeedFixed: fp(1.6), attackRangeFixed: fp(5),
     attackDamage: { type: "chaos", amountFixed: HIT.shooter },
     attackCooldownTicks: 70, radiusFixed: fp(0.5),
     defenses: { resPct: resBlock({ chaos: 25 }), armourFixed: fp(0.5) },
@@ -283,7 +283,7 @@ const MONSTER_DEFS: MonsterDef[] = [
   },
   {
     id: "monster.fen_wisp.v1", name: "Fen Wisp", archetype: "shooter",
-    maxLifeFixed: LIFE.shooter, moveSpeedFixed: fp(1.6), attackRangeFixed: fp(7.5),
+    maxLifeFixed: LIFE.shooter, moveSpeedFixed: fp(1.6), attackRangeFixed: fp(5),
     // Under HIT.shooter, with the Behemoth's lighter slam: the swamp and coast packs
     // wake whole (pack wake) and must still need 13s to kill an idle player.
     attackDamage: { type: "lightning", amountFixed: fp(1.5) },
@@ -321,7 +321,7 @@ const MONSTER_DEFS: MonsterDef[] = [
   },
   {
     id: "monster.hoarfrost_spitter.v1", name: "Hoarfrost Spitter", archetype: "shooter",
-    maxLifeFixed: LIFE.shooter, moveSpeedFixed: fp(1.6), attackRangeFixed: fp(7.5),
+    maxLifeFixed: LIFE.shooter, moveSpeedFixed: fp(1.6), attackRangeFixed: fp(5),
     attackDamage: { type: "cold", amountFixed: HIT.shooter },
     attackCooldownTicks: 70, radiusFixed: fp(0.35),
     defenses: { resPct: resBlock({ cold: 30 }), armourFixed: fp(0.5) },
@@ -347,7 +347,7 @@ const MONSTER_DEFS: MonsterDef[] = [
   },
   {
     id: "monster.tide_spitter.v1", name: "Tide Spitter", archetype: "shooter",
-    maxLifeFixed: LIFE.shooter, moveSpeedFixed: fp(1.6), attackRangeFixed: fp(7.5),
+    maxLifeFixed: LIFE.shooter, moveSpeedFixed: fp(1.6), attackRangeFixed: fp(5),
     attackDamage: { type: "cold", amountFixed: HIT.shooter },
     // The shell is drawn 1.0 across.
     attackCooldownTicks: 70, radiusFixed: fp(0.5),
