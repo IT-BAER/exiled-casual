@@ -10,6 +10,28 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+### Added
+
+- The Swamp's fen pools are water you wade through instead of a wall at their
+  edge: the minimap shows them as water, and every step stirs rings in them.
+- Monsters that have not noticed you yet stroll a few steps around where they
+  stand, pausing between, instead of waiting frozen until you pull them.
+- "Choose your controls" shows a mouse with its buttons lit and your movement
+  keys as keycaps, instead of paragraphs explaining them.
+- The skill bar's mouse slots show a small mouse with their own button lit,
+  where a bare "L" and "R" looked like keys.
+
+### Changed
+
+- Fen pools are still water with a muddy bank, and you can see the floor
+  through them, clearest at the edge.
+- Brazier flames are fuller at the bottom and narrow only toward the tip.
+
+### Fixed
+
+- A reward chest no longer stands inside a fen pool.
+- The Swamp's floor no longer paints puddles of its own beside the fen pools.
+
 ## [0.4.6] - 2026-10-23
 
 ### Added
