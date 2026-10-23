@@ -20,21 +20,21 @@ function keyRun(binds: Keybinds, actions: readonly KeybindAction[]): string {
 const SCHEMES: readonly {
   mode: ControlMode;
   title: string;
-  body: string;
+  art: (binds: Keybinds) => React.ReactElement;
   keys: (binds: Keybinds) => readonly [string, string][];
   action: string;
 }[] = [
   {
     mode: "mouse",
     title: "Click to move",
-    body: "Left click walks, PoE's classic hand. The keyboard is all skills.",
+    art: () => <MouseArt />,
     keys: (b) => [["LMB", "Move"], ["RMB", "Attack"], [keyRun(b, SKILL_ACTIONS), "Skills"], [keyRun(b, ["flaskLife", "flaskMana"]), "Flasks"]],
     action: "Play with mouse",
   },
   {
     mode: "wasd",
     title: "WASD",
-    body: "The keys walk and left click attacks where the cursor points. Skills sit around the movement hand.",
+    art: (b) => <KeyCluster binds={b} />,
     keys: (b) => [
       [keyRun(b, ["moveUp", "moveLeft", "moveDown", "moveRight"]), "Move"], ["LMB", "Attack"],
       [keyRun(b, SKILL_ACTIONS), "Skills"], [keyRun(b, ["flaskLife", "flaskMana"]), "Flasks"],
@@ -105,14 +105,14 @@ export function ControlsDialog({
               borderTop: `1px solid ${GOLD_DIM}33`,
             }}
           >
+            <div style={{ width: 128, height: 116, flexShrink: 0, display: "grid", placeItems: "center" }}>
+              {s.art(keybinds[s.mode])}
+            </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontFamily: DISPLAY, fontSize: 16, letterSpacing: 2.5, textTransform: "uppercase", color: PARCHMENT }}>
                 {s.title}
               </div>
-              <div style={{ fontFamily: SERIF, fontSize: 13, color: "#a9a290", lineHeight: 1.5, marginTop: 4 }}>
-                {s.body}
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px", marginTop: 8 }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px", marginTop: 10 }}>
                 {s.keys(keybinds[s.mode]).map(([keys, what]) => (
                   <span key={what} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                     <Keycap>{keys}</Keycap>
@@ -138,22 +138,61 @@ export function ControlsDialog({
   );
 }
 
+/** The click-to-move hand: a mouse, its left button lit (move) and its right in gold (attack). */
+function MouseArt(): React.ReactElement {
+  return (
+    <svg data-testid="controls-art-mouse" width="76" height="112" viewBox="0 0 62 92" aria-hidden="true">
+      <defs>
+        <linearGradient id="controls-mouse-body" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#24201a" />
+          <stop offset="1" stopColor="#0c0b09" />
+        </linearGradient>
+      </defs>
+      <path d="M31 3 C14 3 4 15 4 32 V62 C4 79 16 89 31 89 C46 89 58 79 58 62 V32 C58 15 48 3 31 3 Z"
+        fill="url(#controls-mouse-body)" stroke={GOLD_DIM} strokeWidth="2" />
+      <path d="M30 4 C15 5 5 16 5 32 V38 H30 Z" fill={GOLD} fillOpacity="0.85" />
+      <path d="M32 4 C47 5 57 16 57 32 V38 H32 Z" fill={GOLD_DIM} fillOpacity="0.45" />
+      <line x1="31" y1="4" x2="31" y2="38" stroke="#0c0b09" strokeWidth="2" />
+      <line x1="5" y1="38" x2="57" y2="38" stroke={GOLD_DIM} strokeWidth="1.5" />
+      <rect x="28" y="12" width="6" height="14" rx="3" fill="#0c0b09" stroke={GOLD_DIM} strokeWidth="1.2" />
+    </svg>
+  );
+}
+
+/** The WASD hand: the four movement keys as bound, laid out as they sit on the board. */
+function KeyCluster({ binds }: { binds: Keybinds }): React.ReactElement {
+  const key = (action: KeybindAction, gridColumn: number, gridRow: number) => (
+    <span data-key style={{
+      ...KEYCAP, gridColumn, gridRow, width: 36, height: 36, display: "grid", placeItems: "center", fontSize: 17, letterSpacing: 0,
+    }}>
+      {keyLabel(binds[action])}
+    </span>
+  );
+  return (
+    <div data-testid="controls-art-wasd" style={{ display: "grid", gridTemplateColumns: "repeat(3, 36px)", gap: 5 }}>
+      {key("moveUp", 2, 1)}
+      {key("moveLeft", 1, 2)}
+      {key("moveDown", 2, 2)}
+      {key("moveRight", 3, 2)}
+    </div>
+  );
+}
+
+const KEYCAP: React.CSSProperties = {
+  fontFamily: DISPLAY,
+  fontSize: 12,
+  letterSpacing: 2,
+  color: PARCHMENT,
+  border: `1px solid ${GOLD_DIM}`,
+  borderRadius: 2,
+  background: "linear-gradient(180deg,#1d1a15,#0c0b09)",
+  boxShadow: "inset 0 1px 0 rgba(200,164,77,0.18)",
+};
+
 /** A key, or a run of keys read as one block, the way a bar's hotkey reads. */
 function Keycap({ children }: { children: string }): React.ReactElement {
   return (
-    <span
-      style={{
-        fontFamily: DISPLAY,
-        fontSize: 12,
-        letterSpacing: 2,
-        color: PARCHMENT,
-        padding: "1px 6px",
-        border: `1px solid ${GOLD_DIM}`,
-        borderRadius: 2,
-        background: "linear-gradient(180deg,#1d1a15,#0c0b09)",
-        boxShadow: "inset 0 1px 0 rgba(200,164,77,0.18)",
-      }}
-    >
+    <span style={{ ...KEYCAP, padding: "1px 6px" }}>
       {children}
     </span>
   );
