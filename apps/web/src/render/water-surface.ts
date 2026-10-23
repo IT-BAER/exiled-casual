@@ -63,7 +63,7 @@ export const COAST_WATER: WaterParams = {
 
 export const FEN_WATER: WaterParams = {
   body: [0.012, 0.015, 0.009],
-  absorb: [4.5, 3.6, 4.8],
+  absorb: [1.6, 1.3, 1.7],
   swash: [0, 0, 0, 0],
   look: [0.6, 0, 0, 0],
   // A pool lies in shade with nothing bright to reflect; without a strong sheen

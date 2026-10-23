@@ -1,7 +1,7 @@
 // What makes a swamp pool read as still water and not as a dark shape cut out
 // of the floor: a bank shaped off a smoothed mask instead of the cell staircase,
-// mud wet past the edge, a mud bed where it is shallow, and a canopy mirrored in
-// it that slides as the camera moves.
+// mud wet past the edge, the floor seen through it, and a canopy mirrored in it
+// that slides as the camera moves.
 import { Constants, RawTexture, Texture } from "@babylonjs/core";
 import type { BaseTexture, Material, Scene } from "@babylonjs/core";
 import type { UniformBuffer } from "@babylonjs/core/Materials/uniformBuffer";
@@ -10,9 +10,11 @@ import { MaterialPluginBase } from "@babylonjs/core/Materials/materialPluginBase
 
 export const FEN_PLUGIN = "ExiledFenWater";
 
-/** Linear colours: the bed seen through a film of water, and the bank it keeps wet. */
-const MUD = "vec3(0.035, 0.026, 0.016)";
+/** Linear colour of the bank the pool keeps wet. */
 const WET_MUD = "vec3(0.028, 0.021, 0.013)";
+/** Pool opacity at the waterline and where the bed is deepest. */
+const FEN_CLEAR = 0.35;
+const FEN_MURK = 0.8;
 
 /** The water mask blurred once (1 2 1 / 2 4 2 / 1 2 1), as RGBA bytes with the
  *  value in red. Sampled bilinearly, its half-way line runs along the cell edge
@@ -130,10 +132,10 @@ class FenWaterPlugin extends MaterialPluginBase {
             band = smoothstep(0.1, 0.5, m) * (1.0 - shore);
           }
           #endif
-          // Under a film of water the bed is mud, never the floor's sand: the
-          // water's own opacity says how much of the bed still shows.
-          surfaceAlbedo = mix(${WET_MUD}, mix(${MUD}, surfaceAlbedo, alpha), shore);
-          alpha = max(shore * 0.96, band * 0.7);
+          // The floor shows through, clearest at the bank and never quite lost
+          // mid-pool: the water's own depth opacity, held inside a band.
+          surfaceAlbedo = mix(${WET_MUD}, surfaceAlbedo, shore);
+          alpha = max(shore * mix(${FEN_CLEAR.toFixed(2)}, ${FEN_MURK.toFixed(2)}, alpha), band * 0.7);
           wDry = (1.0 - shore) * 0.6;
           wFoam *= shore;
           wCaust *= shore;
