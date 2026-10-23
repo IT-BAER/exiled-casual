@@ -92,14 +92,14 @@ export const FLAME_GLSL = `
       float n2 = fbm(vec2(lat * 6.0 + 7.3, y * 5.0 - t * 2.4));
       float wave = sin(y * 8.0 - t * 4.5 + lat * 2.5) * 0.12 * (0.2 + y);
       vec2 s = xz + side * (-sway + (n - 0.5) * 0.5 + wave) * y;
-      // The foot spreads across most of the coal bed and narrows fast above it,
-      // so the flame stands on the bowl instead of rising out of one point.
-      float w = 0.8 * (1.0 - y * 0.9) + 0.12 * (1.0 - smoothstep(0.0, 0.3, y));
+      // The foot spreads across most of the coal bed and keeps that width through
+      // the lower body, narrowing only toward the tip, as a campfire does.
+      float w = 0.8 * (1.0 - y * y * 0.9) + 0.12 * (1.0 - smoothstep(0.0, 0.3, y));
       float d = length(s) / max(w, 0.001);
       float dens = (1.0 - d * d) * 1.1 - y * 1.25 + (n - 0.5) * 1.3 * (0.25 + y) + (n2 - 0.5) * 0.45;
-      // The root rises out of the coal bed over its first 13 cm, which from
-      // above is a rounded foot across the coals, not a line.
-      dens *= smoothstep(0.0, 0.12, y);
+      // The root rises out of the coal bed over its first 8 cm, which from above
+      // is a rounded foot across the coals, not a line; it is full by the rim.
+      dens *= smoothstep(0.0, 0.08, y);
       float f = clamp(dens, 0.0, 1.0);
       // A harder edge than a blur, and white only at the core: a broad foot hot
       // all the way out reads as a lamp from above.
