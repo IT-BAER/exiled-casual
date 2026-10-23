@@ -10,6 +10,8 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+## [0.4.7] - 2026-10-23
+
 ### Added
 
 - The Swamp's fen pools are water you wade through instead of a wall at their
