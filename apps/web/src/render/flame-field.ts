@@ -96,7 +96,9 @@ export const FLAME_GLSL = `
       // the lower body, narrowing only toward the tip, as a campfire does.
       float w = 0.8 * (1.0 - y * y * 0.9) + 0.12 * (1.0 - smoothstep(0.0, 0.3, y));
       float d = length(s) / max(w, 0.001);
-      float dens = (1.0 - d * d) * 1.1 - y * 1.25 + (n - 0.5) * 1.3 * (0.25 + y) + (n2 - 0.5) * 0.45;
+      // Density falls with height squared, so the lower body stays a full mass
+      // over the coals; falling linearly it thinned into a cone from the root.
+      float dens = (1.0 - d * d) * 1.1 - y * y * 1.42 + (n - 0.5) * 1.3 * (0.25 + y) + (n2 - 0.5) * 0.45;
       // The root rises out of the coal bed over its first 8 cm, which from above
       // is a rounded foot across the coals, not a line; it is full by the rim.
       dens *= smoothstep(0.0, 0.08, y);
