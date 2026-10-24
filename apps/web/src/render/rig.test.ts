@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect, afterEach } from "vitest";
-import { Animation, FreeCamera, LoadAssetContainerAsync, Mesh, NullEngine, Quaternion, TransformNode, Vector3, type Node, type Scene } from "@babylonjs/core";
+import { Animation, FreeCamera, LoadAssetContainerAsync, Mesh, NullEngine, Quaternion, Scene, TransformNode, Vector3, type Node } from "@babylonjs/core";
 import { createScene } from "./engine";
 import { ARROW_LENGTH } from "./skill-fx";
 import { makeMesh } from "./meshes";
@@ -12,6 +12,8 @@ import {
   ACTION_RATIO_MAX,
   ACTION_RATIO_MIN,
   aimAngles,
+  aimBone,
+  AIM_CHAIN,
   ARM_MAX,
   BOW_CARRY,
   SHIELD_CARRY,
@@ -330,9 +332,9 @@ describe("aimAngles", () => {
 
   it("clamps both, so neither the shoulder nor the neck breaks", () => {
     expect(aimAngles(-2, 0).arm).toBe(ARM_MAX);
-    expect(aimAngles(2, 0).arm).toBe(-ARM_MAX);
+    expect(aimAngles(2.6, 0).arm).toBe(-ARM_MAX);
     expect(aimAngles(-2, 0).head).toBeCloseTo(HEAD_MAX * HEAD_FOLLOW, 5);
-    expect(aimAngles(2, 0).head).toBeCloseTo(-HEAD_MAX * HEAD_FOLLOW, 5);
+    expect(aimAngles(2.6, 0).head).toBeCloseTo(-HEAD_MAX * HEAD_FOLLOW, 5);
   });
 
   it("aiming at his own back picks a side rather than tearing", () => {
@@ -340,7 +342,37 @@ describe("aimAngles", () => {
     // the other shoulder. Both ends are the same pose, so either is right; this
     // pins WHICH, because a silent flip here would read as a twitch.
     expect(aimAngles(-Math.PI + 0.1, 0).arm).toBe(-ARM_MAX);
-    expect(aimAngles(-Math.PI + 0.5, 0).arm).toBe(ARM_MAX);
+    expect(aimAngles(-Math.PI + 1.2, 0).arm).toBe(ARM_MAX);
+  });
+
+  it("turns the arm chain as far as asked: the shares add up to one", () => {
+    expect(AIM_CHAIN.reduce((sum, b) => sum + b.weight, 0)).toBeCloseTo(1, 9);
+  });
+});
+
+describe("aimBone", () => {
+  it("swings a bone about world up whatever its own rest rotation: a cast arm turns toward the aim, never up or down", () => {
+    engine = new NullEngine();
+    const scene = new Scene(engine);
+    const parent = new TransformNode("chest", scene);
+    parent.rotationQuaternion = Quaternion.RotationYawPitchRoll(0.3, 0.2, -0.4);
+    const arm = new TransformNode("upperarm", scene);
+    arm.parent = parent;
+    // An upper arm rests far off its parent's axes: this is what turned the yaw into a pitch.
+    arm.rotationQuaternion = Quaternion.RotationYawPitchRoll(1.1, -0.9, 1.4);
+    const hand = new TransformNode("hand", scene);
+    hand.parent = arm;
+    hand.position.set(0, 0.5, 0);
+    const reach = () => {
+      hand.computeWorldMatrix(true);
+      return hand.getAbsolutePosition().subtract(arm.getAbsolutePosition());
+    };
+    const before = reach();
+    aimBone(arm, 0.6);
+    const after = reach();
+    expect(after.y).toBeCloseTo(before.y, 5);
+    const yaw = (v: Vector3) => Math.atan2(v.x, v.z);
+    expect(yaw(after) - yaw(before)).toBeCloseTo(0.6, 5);
   });
 });
 

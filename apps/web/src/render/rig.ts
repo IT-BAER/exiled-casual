@@ -394,10 +394,10 @@ export function strikeRatioAt(frac: number, pace: StrikePace, t: StrikeTiming): 
 }
 
 /**
- * How far the mirrored cast clip bakes the arm off the direction it is meant to
- * point: about 16 degrees to the right. A fact about the ARM, and nothing else.
+ * How far the mirrored cast clip holds the arm off the facing at its hold, measured
+ * shoulder to hand in play: 55 degrees to the right. A fact about the ARM, and nothing else.
  */
-export const CLIP_BIAS = 0.42;
+export const CLIP_BIAS = 0.96;
 /** Shoulder and neck limits, and how much of the residual the head takes. */
 export const ARM_MAX = 1.4;
 export const HEAD_MAX = 0.87;
@@ -434,6 +434,26 @@ export function aimAngles(
     head: Math.max(-HEAD_MAX, Math.min(HEAD_MAX, head)) * HEAD_FOLLOW,
   };
 }
+const AIM_UP = new Vector3(0, 1, 0);
+const aimAxis = new Vector3();
+const aimParentInv = new Matrix();
+const aimDelta = new Quaternion();
+
+/**
+ * Turn `bone` by `angle` radians about world up, the axis carried into its parent's frame.
+ * The turn goes on the parent side (delta * rot): on the bone side it spins about an axis
+ * the bone's own rest rotation has moved, and an upper arm's yaw comes out as a lift.
+ */
+export function aimBone(bone: TransformNode, angle: number): void {
+  const parent = bone.parent as TransformNode | null;
+  const rot = bone.rotationQuaternion;
+  if (!parent || !rot) return;
+  parent.computeWorldMatrix(true).invertToRef(aimParentInv);
+  Vector3.TransformNormalToRef(AIM_UP, aimParentInv, aimAxis);
+  Quaternion.RotationAxisToRef(aimAxis.normalize(), angle, aimDelta);
+  aimDelta.multiplyToRef(rot, rot);
+}
+
 /** Farthest the neck and head turn off the chest together (~85 degrees), and the neck's share. */
 export const LOOK_MAX = 1.48;
 export const NECK_SHARE = 0.4;
@@ -441,6 +461,15 @@ export const NECK_SHARE = 0.4;
 const LOOK_EASE_SEC = 0.1;
 /** The aim chain's share of a cast that the chest carries; the head looks past it. */
 const CHEST_AIM = 0.3;
+/**
+ * Bones a cast's aim turns, each by its share of it. Every share turns about world up and a
+ * child rides its parent's turn, so the shares ADD: they sum to one or the arm overshoots.
+ */
+export const AIM_CHAIN: readonly { name: string; weight: number }[] = [
+  { name: "spine_03", weight: CHEST_AIM },
+  { name: "clavicle_r", weight: 0.2 },
+  { name: "upperarm_r", weight: 0.5 },
+];
 
 /** How far the head turns off the body's facing to look along `lookYaw`, in bone yaw, clamped. */
 /**
@@ -2010,16 +2039,6 @@ export class RigActor {
     if (this.bowString) {
       this.stringObserver = this.scene.onBeforeRenderObservable.add(() => this.bowString?.update(this.bowDraw()));
     }
-    // Bones the aim rotates during a cast: spine, clavicle, upper arm, and head.
-    // Each bone gets a share of the aim so the twist distributes naturally.
-    // Weights are how much of the TOTAL aim each bone carries; they sum > 1
-    // because the child inherits the parent and the clip's own baked direction
-    // already biases the arm, so they have to over-correct.
-    const AIM_CHAIN: { name: string; weight: number }[] = [
-      { name: "spine_03", weight: CHEST_AIM },
-      { name: "clavicle_r", weight: 0.7 },
-      { name: "upperarm_r", weight: 1.2 },
-    ];
     const HEAD_BONE_NAME = "Head";
     this.aimBones = [];
     const aimWeights: number[] = [];
@@ -2042,24 +2061,6 @@ export class RigActor {
     const worldUp = new Vector3(0, 1, 0);
     const localAxis = new Vector3();
     const parentInv = new Matrix();
-
-    // Rotate `bone` by `angle` radians around world Y, expressed in the bone's
-    // parent space. This is the key: `rotationQuaternion` is in PARENT space,
-    // so a world-up yaw has to be transformed into that frame first.
-    const aimBone = (bone: TransformNode, angle: number) => {
-      bone.computeWorldMatrix(true);
-      const parent = bone.parent as TransformNode | null;
-      if (!parent) return;
-      parent.computeWorldMatrix(true);
-      parent.getWorldMatrix().invertToRef(parentInv);
-      Vector3.TransformNormalToRef(worldUp, parentInv, localAxis);
-      localAxis.normalize();
-      const rot = bone.rotationQuaternion;
-      if (rot) {
-        Quaternion.RotationAxisToRef(localAxis, angle, this.delta);
-        rot.multiplyInPlace(this.delta);
-      }
-    };
 
     // Hips toward the move, chest back onto the facing, before the aim reads the
     // chest. Eased, so a backpedal starting or a sidestep flipping sides turns
