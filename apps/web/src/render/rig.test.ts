@@ -314,8 +314,8 @@ describe("spinePitch", () => {
 describe("aimAngles", () => {
   it("leaves the head straight when the body already faces the aim", () => {
     // A standing cast turns the body onto the aim, so the residual angle is
-    // zero. The arm still gets the clip's own bias, because the mirrored cast
-    // bakes it right of where it points; the neck must not inherit that or the
+    // zero. The arm still gets the clip's own bias, because the flick holds the
+    // wand off where the body faces; the neck must not inherit that or the
     // head sits cocked to one side for the whole cast.
     const { arm, head } = aimAngles(1.2, 1.2);
     expect(arm).toBeCloseTo(CLIP_BIAS, 5);
@@ -338,11 +338,11 @@ describe("aimAngles", () => {
   });
 
   it("aiming at his own back picks a side rather than tearing", () => {
-    // Straight behind, the bias pushes the arm past a half turn and it wraps to
-    // the other shoulder. Both ends are the same pose, so either is right; this
-    // pins WHICH, because a silent flip here would read as a twitch.
-    expect(aimAngles(-Math.PI + 0.1, 0).arm).toBe(-ARM_MAX);
-    expect(aimAngles(-Math.PI + 1.2, 0).arm).toBe(ARM_MAX);
+    // Near straight behind, the bias moves the half turn off the back and the arm
+    // wraps to the other shoulder there. Both ends are the same pose, so either is
+    // right; this pins WHICH, because a silent flip here would read as a twitch.
+    expect(aimAngles(-Math.PI + 0.1, 0).arm).toBe(ARM_MAX);
+    expect(aimAngles(Math.PI - 0.3, 0).arm).toBe(-ARM_MAX);
   });
 
   it("turns the arm chain as far as asked: the shares add up to one", () => {
@@ -1318,12 +1318,8 @@ describe("the cast clip drives the weapon arm", () => {
     expect(Math.min(Math.abs(a), Math.abs(b)), `sweeps ${sweep}`).toBeGreaterThan(Math.max(Math.abs(a), Math.abs(b)) * 0.4);
   });
 
-  it("swings the right arm and not the left", () => {
-    for (const bone of ["upperarm", "lowerarm"]) {
-      const right = travel(CLIP_NAME.cast, `${bone}_r`);
-      const left = travel(CLIP_NAME.cast, `${bone}_l`);
-      expect(right, bone).toBeGreaterThan(left * 3);
-    }
+  it("casts with the finisher's flick, the take that ends the blade on the target", () => {
+    expect(CLIP_NAME.cast).toBe(CLIP_NAME.strikeC);
   });
 
   it("keys the bow as a layered rotation-only clip that hooks the string with the empty draw hand", () => {
@@ -2627,7 +2623,7 @@ describe("the tower shield is braced, not swung", () => {
 describe("a cast points the wand at the target", () => {
   const MODELS = fileURLToPath(new URL("../../public/models/", import.meta.url));
 
-  async function aimed(body: "male" | "female", targetYaw: number): Promise<{ yaw: number; pitch: number }> {
+  async function aimed(body: "male" | "female", targetYaw: number): Promise<{ release: number; yaw: number; pitch: number }> {
     const original = (globalThis as { FileReader?: unknown }).FileReader;
     (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
     try {
@@ -2644,19 +2640,22 @@ describe("a cast points the wand at the target", () => {
       const hand = scene.transformNodes.find((t) => t.name === "hand_r" && t.isEnabled())!;
       const frame = () => { rig.setLocomotion(0); rig.setAimTarget(Math.sin(targetYaw) * 5, Math.cos(targetYaw) * 5); scene.render(); };
       for (let i = 0; i < 30; i++) frame();
-      rig.playCast();
-      let yaw = 0, pitch = 0;
-      // The hold: past the 0.28 s blend in, before the clip lets go.
-      for (let i = 0; i <= 30; i++) {
+      // Ember Bolt's 9-tick wind-up: the bolt leaves at 0.3 s (frames 19-21) and the
+      // flick sweeps the wand across the target until ~0.46 s (frame 28).
+      rig.playCast(0.6, 0.3);
+      let release = 0, yaw = 0, pitch = 0;
+      for (let i = 0; i <= 28; i++) {
         frame();
-        if (i < 18) continue;
+        if (i < 19) continue;
         hand.computeWorldMatrix(true);
         const wand = rig.castPoint()!.subtract(hand.getAbsolutePosition()).normalize();
         const off = Math.atan2(wand.x, wand.z) - targetYaw;
-        yaw = Math.max(yaw, Math.abs(Math.atan2(Math.sin(off), Math.cos(off))) * 180 / Math.PI);
+        const deg = Math.abs(Math.atan2(Math.sin(off), Math.cos(off))) * 180 / Math.PI;
+        if (i <= 21) release = Math.max(release, deg);
+        yaw = Math.max(yaw, deg);
         pitch = Math.max(pitch, Math.abs(Math.asin(wand.y)) * 180 / Math.PI);
       }
-      return { yaw, pitch };
+      return { release, yaw, pitch };
     } finally {
       (globalThis as { FileReader?: unknown }).FileReader = original;
     }
@@ -2665,8 +2664,9 @@ describe("a cast points the wand at the target", () => {
   it.each([
     ["female", 0], ["female", 0.5], ["female", -0.35], ["male", 0],
   ] as const)("%s, target at %f rad", async (body, targetYaw) => {
-    const { yaw, pitch } = await aimed(body, targetYaw);
-    expect(yaw).toBeLessThan(15);
+    const { release, yaw, pitch } = await aimed(body, targetYaw);
+    expect(release).toBeLessThan(15);
+    expect(yaw).toBeLessThan(20);
     expect(pitch).toBeLessThan(25);
   }, 60_000);
 });

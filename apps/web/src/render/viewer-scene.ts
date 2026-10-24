@@ -528,7 +528,7 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
   const fireFx = (fx: FxPreview) => {
     const anchor = host?.getAbsolutePosition() ?? Vector3.Zero();
     if (fx.kind === "bolt") {
-      rig?.playCast(0.3);
+      rig?.playCast(0.6, 0.3);
       later(rig ? 300 : 0, () => fly(fx));
     } else if (fx.kind === "arrow") {
       rig?.playBow(0.6, 0.35);
@@ -537,7 +537,7 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
       rig?.playStrike(0.5, 0.3);
       later(rig ? 300 : 0, () => meleeImpact(scene, muzzle(), FACING.x, FACING.z, 1));
     } else if (fx.kind === "ground") {
-      rig?.playCast(0.3);
+      rig?.playCast(0.6, 0.3);
       later(rig ? 300 : 0, () => {
         const at = anchor.add(FACING.scale(2.5));
         const patch = makeMesh(scene, "groundArea", `viewer-fx-ground-${performance.now()}`, at, undefined, fx.skillId);

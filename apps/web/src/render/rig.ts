@@ -65,10 +65,10 @@ export const REACTION_CLIPS: readonly ReactionClip[] = ["hit", "drink", "open"];
 
 /** Clip names inside anim-library.glb — FBX2glTF prefixes every take with "Rig|". */
 /**
- * The cast is the pack's `Spell_Simple_Shoot` mirrored onto the right arm by
- * `tools/build_cast_mirror.py`: the original raises the LEFT hand, but the wand
- * skins to `hand_r` and `castPoint()` bends the bolt to that hand, so unmirrored
- * it throws from the empty hand.
+ * The cast is the sword finisher's flick (`CAST_RANGE`): a held weapon leaves the
+ * thumb side of the fist like a blade, so the take that ends the blade on the
+ * target ends the wand there too. The open-palm `Spell_Simple_Shoot` held it up
+ * and out to the side.
  */
 export const CLIP_NAME: Record<RigClip, string> = {
   idle: "Rig|Idle_Loop",
@@ -89,7 +89,7 @@ export const CLIP_NAME: Record<RigClip, string> = {
   runBack: "Rig|Jog_Back_Loop",
   runBackL: "Rig|Jog_BackDiag_L_Loop",
   runBackR: "Rig|Jog_BackDiag_R_Loop",
-  cast: "Rig|Spell_Simple_Shoot_R",
+  cast: "Rig|Sword_Regular_C",
   // No bow take in the pack: keyed on the wardrobe skeleton by `tools/build_bow_clip.py`.
   bow: "Rig|Bow_Shoot",
   // UAL2's attack takes joined to their `_Rec` recovery (`tools/import_ual2_clips.py`).
@@ -388,16 +388,25 @@ export function strikePace(clipSeconds: number, t: StrikeTiming, windupSeconds?:
   };
 }
 
+/**
+ * The part of the finisher the cast plays, as fractions of the take: from the wind-up
+ * over the shoulder to the recovery. It looses on the take's contact, where the flick
+ * comes down and the wand is on the target until ~0.58.
+ */
+export const CAST_RANGE = { from: 0.1, to: 0.8 } as const;
+export const CAST_RELEASE = (STRIKE_TIMING.strikeC.contact - CAST_RANGE.from) / (CAST_RANGE.to - CAST_RANGE.from);
+
 /** The rate for the phase `frac` (0..1 through the clip) is in. */
 export function strikeRatioAt(frac: number, pace: StrikePace, t: StrikeTiming): number {
   return frac < t.drop ? pace.raise : frac < t.contact ? pace.drop : pace.follow;
 }
 
 /**
- * How far the mirrored cast clip holds the arm off the facing at its hold, measured
- * shoulder to hand in play: 55 degrees to the right. A fact about the ARM, and nothing else.
+ * How far the cast's flick holds the wand off the facing, measured tip from hand
+ * in play: it sweeps ~26 degrees from release to the end of the hold, and this
+ * puts the target inside that sweep while the bolt leaves, for both bodies.
  */
-export const CLIP_BIAS = 0.96;
+export const CLIP_BIAS = -0.15;
 /** Shoulder and neck limits, and how much of the residual the head takes. */
 export const ARM_MAX = 1.4;
 export const HEAD_MAX = 0.87;
@@ -461,16 +470,6 @@ export const NECK_SHARE = 0.4;
 const LOOK_EASE_SEC = 0.1;
 /** The aim chain's share of a cast that the chest carries; the head looks past it. */
 const CHEST_AIM = 0.3;
-/**
- * A cast with a weapon in hand drops the upper arm and the forearm to these pitches (15 and
- * 69 deg below level) in the arm's own heading, and points the weapon this far below level
- * at the target. The wand leaves the thumb side of the fist ~100 deg off the forearm, so the
- * open-palm cast's straight arm held it up and out to the side. A hanging forearm turns the
- * thumb forward with a 25-60 deg roll; a raised one needed 155 and wrung the elbow.
- */
-export const POINT_SHOULDER = -0.25;
-export const POINT_RAISE = -1.2;
-export const POINT_DIP = 0.17;
 /**
  * Bones a cast's aim turns, each by its share of it. Every share turns about world up and a
  * child rides its parent's turn, so the shares ADD: they sum to one or the arm overshoots.
@@ -1005,6 +1004,16 @@ const WEAPON_HAND: ReadonlySet<string> = new Set([
   "pinky_01_r", "pinky_02_r", "pinky_03_r", "pinky_04_end_r",
 ]);
 
+/**
+ * Whether a layered clip drives `bone`. The cast keeps its wrist but not the off
+ * arm: the sword take flings that one overhead as the blade's counterweight.
+ */
+function layerKeys(clip: RigClip, bone: string): boolean {
+  if (LOWER_BODY.has(bone)) return false;
+  if (clip === "cast") return bone === "hand_r" || (!WEAPON_HAND.has(bone) && !bone.endsWith("_l"));
+  return clip === "bow" || !WEAPON_HAND.has(bone);
+}
+
 /** Attacks: a reaction never interrupts one, and one always cuts a reaction short. */
 const ACTION_CLIPS: readonly RigClip[] = ["cast", "bow", ...MELEE_CLIPS];
 
@@ -1132,18 +1141,15 @@ function freshWorld(node: TransformNode): void {
 /**
  * Turn a bone so its world direction `from` points along `to`. Solved in the
  * parent's own frame, so the glTF mirror over the rig cannot flip the turn.
- * `weight` takes that share of the turn's angle.
  */
-function swing(bone: TransformNode, from: Vector3, to: Vector3, weight = 1): void {
+function swing(bone: TransformNode, from: Vector3, to: Vector3): void {
   const parent = bone.parent;
   const rot = bone.rotationQuaternion;
   if (!(parent instanceof TransformNode) || !rot) return;
   const inverse = parent.getWorldMatrix().clone().invert();
   const f = Vector3.TransformNormal(from, inverse).normalize();
   const t = Vector3.TransformNormal(to, inverse).normalize();
-  const turn = Quaternion.FromUnitVectorsToRef(f, t, new Quaternion());
-  if (weight < 1) Quaternion.SlerpToRef(Quaternion.Identity(), turn, weight, turn);
-  turn.multiplyToRef(rot, rot);
+  Quaternion.FromUnitVectorsToRef(f, t, new Quaternion()).multiplyToRef(rot, rot);
   bone.computeWorldMatrix(true);
 }
 
@@ -1521,8 +1527,6 @@ export class RigActor {
   private lookYaw: number | null = null;
   /** The gaze's current turn off the chest, eased (bone yaw, radians). */
   private look = 0;
-  /** How far a cast has the weapon hand raised and pointed, eased 0..1. */
-  private pointing = 0;
   /** Observer that applies aim rotation after the animation system runs. */
   private aimObserver: Observer<Scene> | null = null;
   private legsObserver: Observer<Scene> | null = null;
@@ -1728,10 +1732,14 @@ export class RigActor {
    * whatever the legs are doing: cast while running and the character keeps
    * running, arm outstretched, instead of freezing mid-stride.
    */
-  playCast(seconds?: number): void {
+  playCast(seconds?: number, releaseSeconds?: number): void {
     // A bow tail still playing would keep castPoint() on the bow hand.
     this.groups.get("bow")?.stop();
-    this.playOnce("cast", seconds);
+    const group = this.groups.get("cast");
+    const ratio = group && releaseSeconds !== undefined
+      ? actionRatio(clipSeconds(group) * CAST_RELEASE, releaseSeconds)
+      : undefined;
+    this.playOnce("cast", seconds, ratio);
   }
 
   /**
@@ -2071,11 +2079,6 @@ export class RigActor {
     const gaze = [nb instanceof TransformNode ? nb : null, headBone];
     const ungazed = gaze.map((n) => n?.rotationQuaternion?.clone() ?? null);
     let looked = false;
-    const [armNode, foreNode] = ["upperarm_r", "lowerarm_r"].map((n) => byName.get(n));
-    const pointer = armNode instanceof TransformNode && foreNode instanceof TransformNode && this.hand
-      ? [armNode, foreNode, this.hand] as const : null;
-    const unpointed = pointer?.map((n) => n.rotationQuaternion?.clone() ?? null) ?? [];
-    let pointed = false;
 
     // Scratch vectors for the aim solver.
     const worldUp = new Vector3(0, 1, 0);
@@ -2118,10 +2121,6 @@ export class RigActor {
       if (looked) {
         gaze.forEach((n, i) => { if (ungazed[i]) n?.rotationQuaternion?.copyFrom(ungazed[i]!); });
         looked = false;
-      }
-      if (pointed) {
-        pointer?.forEach((n, i) => { if (unpointed[i]) n.rotationQuaternion?.copyFrom(unpointed[i]!); });
-        pointed = false;
       }
       if (!turned) return;
       twisted.forEach((n, i) => { if (untwisted[i]) n.rotationQuaternion?.copyFrom(untwisted[i]!); });
@@ -2183,15 +2182,6 @@ export class RigActor {
         // The eyes lead: where the body is turning to while it moves, the cursor while it stands.
         const yaw = this.lookYaw ?? aimYaw;
         if (yaw !== null) want = lookOffset(yaw, bodyYaw);
-      }
-      // An empty hand casts open-palmed; a held weapon is raised and pointed. The bow is in the other hand.
-      const armed = casting && this.looks.weapon1 !== null && this.looks.weapon1 !== BOW_LOOK;
-      // Linear, like the clip's own blend.
-      this.pointing = Math.max(0, Math.min(1, this.pointing + (armed ? 1 : -1) * dt / ACTION_BLEND_SEC));
-      if (pointer && this.pointing > 1e-3) {
-        pointer.forEach((n, i) => { if (n.rotationQuaternion) unpointed[i]?.copyFrom(n.rotationQuaternion); });
-        pointed = true;
-        this.pointWeapon(pointer[0], pointer[1], pointer[2], casting ? aimYaw : null, this.pointing);
       }
       this.look += (want - this.look) * (1 - Math.exp(-dt / LOOK_EASE_SEC));
       if (Math.abs(this.look) < 1e-4) return;
@@ -2269,8 +2259,11 @@ export class RigActor {
         group.blendingSpeed = 1 / 60 / (upperOnly ? ACTION_BLEND_SEC : LOCO_BLEND_SEC);
         return group;
       };
-      const group = retarget(`${this.host.name}-${clip}`, (bone) =>
-        !upperOnly || !(LOWER_BODY.has(bone) || (WEAPON_HAND.has(bone) && clip !== "bow")));
+      const group = retarget(`${this.host.name}-${clip}`, (bone) => !upperOnly || layerKeys(clip, bone));
+      if (group && clip === "cast") {
+        const span = source.to - source.from;
+        group.normalize(source.from + span * CAST_RANGE.from, source.from + span * CAST_RANGE.to);
+      }
       if (group) this.groups.set(clip, group);
       const legs = (MELEE_CLIPS as readonly RigClip[]).includes(clip)
         ? retarget(`${this.host.name}-${clip}-legs`, (bone) => LOWER_BODY.has(bone), strikeSway(clip as StrikeClip))
@@ -2540,34 +2533,6 @@ export class RigActor {
    * Read live rather than cached: the arm is mid-animation at the moment of the
    * cast, which is the entire reason the body centre was the wrong answer.
    */
-  /**
-   * Raise the weapon forearm, twist it so the weapon comes round toward `aimYaw`
-   * (the forearm's own heading when null), and bend the wrist the rest of the way.
-   */
-  private pointWeapon(arm: TransformNode, fore: TransformNode, hand: TransformNode, aimYaw: number | null, weight: number): void {
-    const tipLocal = this.tips.get(this.looks.weapon1 ?? "");
-    if (!tipLocal) return;
-    freshWorld(fore);
-    const u = fore.getAbsolutePosition().subtract(arm.getAbsolutePosition()).normalize();
-    const flat = Math.hypot(u.x, u.z);
-    if (flat < 1e-3) return;
-    const heading = new Vector3(u.x / flat, 0, u.z / flat);
-    const pitched = (pitch: number) => heading.scale(Math.cos(pitch)).addInPlaceFromFloats(0, Math.sin(pitch), 0);
-    swing(arm, u, pitched(POINT_SHOULDER), weight);
-    freshWorld(hand);
-    swing(fore, hand.getAbsolutePosition().subtract(fore.getAbsolutePosition()).normalize(), pitched(POINT_RAISE), weight);
-    const yaw = aimYaw ?? Math.atan2(heading.x, heading.z);
-    const want = new Vector3(Math.sin(yaw) * Math.cos(POINT_DIP), -Math.sin(POINT_DIP), Math.cos(yaw) * Math.cos(POINT_DIP));
-    const tip = () => {
-      freshWorld(hand);
-      return Vector3.TransformCoordinates(tipLocal, hand.getWorldMatrix()).subtract(hand.getAbsolutePosition()).normalize();
-    };
-    const lowered = tip();
-    const axis = hand.getAbsolutePosition().subtract(fore.getAbsolutePosition()).normalize();
-    swing(fore, across(lowered, axis), across(want, axis), weight);
-    swing(hand, tip(), want, weight);
-  }
-
   castPoint(): Vector3 | null {
     if (this.bowHand && this.isDrawingBow()) {
       this.bowHand.computeWorldMatrix(true);

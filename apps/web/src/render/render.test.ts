@@ -77,11 +77,11 @@ describe("sustained casting animation", () => {
     // falling edge showed 30% of a 1s swing and the bolt left a lifting hand.
     const rig = { playCast: vi.fn(), playBow: vi.fn(), playStrike: vi.fn(), stopStrike: vi.fn() };
 
-    syncActionAnimation(rig, false, true, undefined, "spell", 1);
+    syncActionAnimation(rig, false, true, undefined, "spell", 1, 0.3);
     syncActionAnimation(rig, true, false, "spell", undefined, 1);
 
     expect(rig.playCast).toHaveBeenCalledTimes(1);
-    expect(rig.playCast).toHaveBeenCalledWith(1);
+    expect(rig.playCast).toHaveBeenCalledWith(1, 0.3);
   });
 
   it("uses the melee action clip for a melee cast and leaves spell casting separate", () => {

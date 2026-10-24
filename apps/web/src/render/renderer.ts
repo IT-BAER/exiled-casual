@@ -117,7 +117,7 @@ const SLAM_WHIFF_SHAKE = 0.5;
 const BODIES = new Set<MeshKind>(["player", "monster", "rare", "boss"]);
 
 export interface ActionAnimation {
-  playCast(seconds?: number): void;
+  playCast(seconds?: number, releaseSeconds?: number): void;
   playBow(seconds?: number, releaseSeconds?: number): void;
   playStrike(seconds?: number, releaseSeconds?: number, skillId?: string): void;
   stopStrike(): void;
@@ -161,7 +161,7 @@ export function syncActionAnimation(
   if (isCasting && (!wasCasting || wasAction !== action)) {
     if (action === "melee") rig.playStrike(seconds, releaseSeconds, skillId);
     else if (action === "bow") rig.playBow(seconds, releaseSeconds);
-    else rig.playCast(seconds);
+    else rig.playCast(seconds, releaseSeconds);
   }
 }
 
